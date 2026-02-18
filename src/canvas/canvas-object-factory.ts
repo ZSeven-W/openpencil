@@ -301,6 +301,74 @@ export function createFabricObject(
       }
       break
     }
+    case 'image': {
+      const w = sizeToNumber(node.width, 200)
+      const h = sizeToNumber(node.height, 200)
+      const r = cornerRadiusValue(node.cornerRadius)
+      const imgEl = new Image()
+      imgEl.src = node.src
+      if (imgEl.complete) {
+        obj = new fabric.FabricImage(imgEl, {
+          ...baseProps,
+          width: imgEl.naturalWidth || w,
+          height: imgEl.naturalHeight || h,
+          scaleX: w / (imgEl.naturalWidth || w),
+          scaleY: h / (imgEl.naturalHeight || h),
+          rx: r,
+          ry: r,
+        }) as unknown as FabricObjectWithPenId
+      } else {
+        // Placeholder while image loads
+        const placeholder = new fabric.Rect({
+          ...baseProps,
+          width: w,
+          height: h,
+          rx: r,
+          ry: r,
+          fill: '#e5e7eb',
+          strokeWidth: 0,
+        }) as FabricObjectWithPenId
+        placeholder.penNodeId = node.id
+        imgEl.onload = () => {
+          const canvas = placeholder.canvas
+          if (!canvas) return
+          const fabricImg = new fabric.FabricImage(imgEl, {
+            ...baseProps,
+            left: placeholder.left,
+            top: placeholder.top,
+            width: imgEl.naturalWidth,
+            height: imgEl.naturalHeight,
+            scaleX: w / imgEl.naturalWidth,
+            scaleY: h / imgEl.naturalHeight,
+            rx: r,
+            ry: r,
+          }) as unknown as FabricObjectWithPenId
+          fabricImg.penNodeId = node.id
+          fabricImg.set({
+            borderColor: SELECTION_BLUE,
+            borderScaleFactor: 2,
+            cornerColor: SELECTION_BLUE,
+            cornerStrokeColor: '#ffffff',
+            cornerStyle: 'rect',
+            cornerSize: 8,
+            transparentCorners: false,
+            borderOpacityWhenMoving: 1,
+            padding: 0,
+          })
+          fabricImg.setControlVisible('mtr', false)
+          applyRotationControls(fabricImg)
+          if (shadow) fabricImg.shadow = shadow
+          fabricImg.visible = visible
+          fabricImg.selectable = !locked
+          fabricImg.evented = !locked
+          canvas.remove(placeholder)
+          canvas.add(fabricImg)
+          canvas.requestRenderAll()
+        }
+        obj = placeholder
+      }
+      break
+    }
     case 'group': {
       const w = sizeToNumber(node.width, 100)
       const h = sizeToNumber(node.height, 100)

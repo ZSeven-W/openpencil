@@ -27,6 +27,7 @@ export type PenNodeType =
   | 'polygon'
   | 'path'
   | 'text'
+  | 'image'
   | 'ref'
 
 export type SizingBehavior = number | 'fit_content' | 'fill_container' | string
@@ -151,6 +152,15 @@ export interface TextNode extends PenNodeBase {
   effects?: PenEffect[]
 }
 
+export interface ImageNode extends PenNodeBase {
+  type: 'image'
+  src: string
+  width?: SizingBehavior
+  height?: SizingBehavior
+  cornerRadius?: number | [number, number, number, number]
+  effects?: PenEffect[]
+}
+
 export interface RefNode extends PenNodeBase {
   type: 'ref'
   ref: string
@@ -169,4 +179,5 @@ export type PenNode =
   | PolygonNode
   | PathNode
   | TextNode
+  | ImageNode
   | RefNode
