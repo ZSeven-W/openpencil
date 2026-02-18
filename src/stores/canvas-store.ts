@@ -15,6 +15,7 @@ interface CanvasStoreState {
   interaction: CanvasInteraction
   fabricCanvas: Canvas | null
   clipboard: PenNode[]
+  layerPanelOpen: boolean
 
   setActiveTool: (tool: ToolType) => void
   setZoom: (zoom: number) => void
@@ -24,6 +25,7 @@ interface CanvasStoreState {
   setInteraction: (partial: Partial<CanvasInteraction>) => void
   setFabricCanvas: (canvas: Canvas | null) => void
   setClipboard: (nodes: PenNode[]) => void
+  toggleLayerPanel: () => void
 }
 
 export const useCanvasStore = create<CanvasStoreState>((set) => ({
@@ -38,6 +40,7 @@ export const useCanvasStore = create<CanvasStoreState>((set) => ({
   },
   fabricCanvas: null,
   clipboard: [],
+  layerPanelOpen: true,
 
   setActiveTool: (tool) => set({ activeTool: tool }),
 
@@ -59,4 +62,6 @@ export const useCanvasStore = create<CanvasStoreState>((set) => ({
   setFabricCanvas: (fabricCanvas) => set({ fabricCanvas }),
 
   setClipboard: (clipboard) => set({ clipboard }),
+
+  toggleLayerPanel: () => set((s) => ({ layerPanelOpen: !s.layerPanelOpen })),
 }))
