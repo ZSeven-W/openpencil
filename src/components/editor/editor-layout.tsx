@@ -1,5 +1,6 @@
 import { lazy, Suspense, useState, useCallback, useEffect } from 'react'
 import { TooltipProvider } from '@/components/ui/tooltip'
+import TopBar from './top-bar'
 import Toolbar from './toolbar'
 import StatusBar from './status-bar'
 import LayerPanel from '@/components/panels/layer-panel'
@@ -9,12 +10,15 @@ import CodePanel from '@/components/panels/code-panel'
 import ExportDialog from '@/components/shared/export-dialog'
 import SaveDialog from '@/components/shared/save-dialog'
 import { useAIStore } from '@/stores/ai-store'
+import { useCanvasStore } from '@/stores/canvas-store'
 import { useDocumentStore } from '@/stores/document-store'
 
 const FabricCanvas = lazy(() => import('@/canvas/fabric-canvas'))
 
 export default function EditorLayout() {
   const toggleMinimize = useAIStore((s) => s.toggleMinimize)
+  const hasSelection = useCanvasStore((s) => s.selection.activeId !== null)
+  const layerPanelOpen = useCanvasStore((s) => s.layerPanelOpen)
   const saveDialogOpen = useDocumentStore((s) => s.saveDialogOpen)
   const closeSaveDialog = useCallback(() => {
     useDocumentStore.getState().setSaveDialogOpen(false)
@@ -62,9 +66,10 @@ export default function EditorLayout() {
   return (
     <TooltipProvider delayDuration={300}>
       <div className="h-screen flex flex-col bg-background">
+        <TopBar />
         <div className="flex-1 flex flex-col overflow-hidden">
           <div className="flex-1 flex overflow-hidden">
-            <LayerPanel />
+            {layerPanelOpen && <LayerPanel />}
             <div className="flex-1 flex flex-col min-w-0 relative">
               <Suspense
                 fallback={
@@ -90,7 +95,7 @@ export default function EditorLayout() {
               {/* Expanded AI panel (floating, draggable) */}
               <AIChatPanel />
             </div>
-            <PropertyPanel />
+            {hasSelection && <PropertyPanel />}
           </div>
           {codePanelOpen && <CodePanel onClose={() => setCodePanelOpen(false)} />}
         </div>
