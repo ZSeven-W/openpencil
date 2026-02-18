@@ -19,7 +19,7 @@ export default function CornerRadiusSection({
 
   return (
     <div className="space-y-2">
-      <h4 className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+      <h4 className="text-xs font-medium text-muted-foreground tracking-wider">
         Corner Radius
       </h4>
       <NumberInput

@@ -13,8 +13,9 @@ import {
   Hexagon,
   Spline,
   Link,
-  GripVertical,
   ImageIcon,
+  ChevronDown,
+  ChevronRight,
 } from 'lucide-react'
 import type { PenNodeType } from '@/types/pen'
 
@@ -39,10 +40,13 @@ interface LayerItemProps {
   selected: boolean
   visible: boolean
   locked: boolean
+  hasChildren: boolean
+  expanded: boolean
   onSelect: (id: string) => void
   onRename: (id: string, name: string) => void
   onToggleVisibility: (id: string) => void
   onToggleLock: (id: string) => void
+  onToggleExpand: (id: string) => void
   onContextMenu: (e: React.MouseEvent, id: string) => void
   onDragStart: (id: string) => void
   onDragOver: (id: string) => void
@@ -57,10 +61,13 @@ export default function LayerItem({
   selected,
   visible,
   locked,
+  hasChildren,
+  expanded,
   onSelect,
   onRename,
   onToggleVisibility,
   onToggleLock,
+  onToggleExpand,
   onContextMenu,
   onDragStart,
   onDragOver,
@@ -91,15 +98,13 @@ export default function LayerItem({
     }
   }
 
-  const handlePointerDown = (e: React.PointerEvent) => {
-    if ((e.target as HTMLElement).closest('[data-drag-handle]')) {
-      onDragStart(id)
-    }
+  const handlePointerDown = () => {
+    onDragStart(id)
   }
 
   return (
     <div
-      className={`flex items-center h-7 px-1 gap-1 cursor-pointer rounded text-xs transition-colors ${
+      className={`group/layer flex items-center h-7 px-1 gap-1 cursor-pointer rounded text-xs transition-colors ${
         selected
           ? 'bg-primary/15 text-primary'
           : 'text-muted-foreground hover:bg-accent/50'
@@ -112,12 +117,20 @@ export default function LayerItem({
       onPointerEnter={() => onDragOver(id)}
       onPointerUp={onDragEnd}
     >
-      <div
-        data-drag-handle
-        className="cursor-grab opacity-0 group-hover:opacity-60 hover:opacity-100 shrink-0"
-      >
-        <GripVertical size={10} />
-      </div>
+      {hasChildren ? (
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation()
+            onToggleExpand(id)
+          }}
+          className="shrink-0 opacity-60 hover:opacity-100"
+        >
+          {expanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
+        </button>
+      ) : (
+        <span className="shrink-0 w-3" />
+      )}
 
       <Icon size={12} className="shrink-0 opacity-60" />
 
@@ -144,7 +157,7 @@ export default function LayerItem({
         className={`p-0.5 transition-opacity ${
           !visible
             ? 'opacity-100 text-yellow-400'
-            : 'opacity-0 group-hover:opacity-100'
+            : 'opacity-0 group-hover/layer:opacity-100'
         }`}
         title={visible ? 'Hide' : 'Show'}
       >
@@ -159,7 +172,7 @@ export default function LayerItem({
         className={`p-0.5 transition-opacity ${
           locked
             ? 'opacity-100 text-orange-400'
-            : 'opacity-0 group-hover:opacity-100'
+            : 'opacity-0 group-hover/layer:opacity-100'
         }`}
         title={locked ? 'Unlock' : 'Lock'}
       >
