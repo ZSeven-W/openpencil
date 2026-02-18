@@ -84,23 +84,50 @@ function parseSizing(value: unknown): number | 'fit' | 'fill' {
   return isNaN(n) ? 0 : n
 }
 
+/** Compute fit-content width from children. */
+function fitContentWidth(node: PenNode): number {
+  if (!('children' in node) || !node.children?.length) return 0
+  const layout = 'layout' in node ? (node as ContainerProps).layout : undefined
+  const pad = resolvePadding('padding' in node ? (node as any).padding : undefined)
+  const gap = 'gap' in node && typeof (node as any).gap === 'number' ? (node as any).gap : 0
+  if (layout === 'horizontal') {
+    const childTotal = node.children.reduce((sum, c) => sum + getNodeWidth(c), 0)
+    const gapTotal = gap * Math.max(0, node.children.length - 1)
+    return childTotal + gapTotal + pad.left + pad.right
+  }
+  const maxChildW = node.children.reduce((max, c) => Math.max(max, getNodeWidth(c)), 0)
+  return maxChildW + pad.left + pad.right
+}
+
+/** Compute fit-content height from children. */
+function fitContentHeight(node: PenNode): number {
+  if (!('children' in node) || !node.children?.length) return 0
+  const layout = 'layout' in node ? (node as ContainerProps).layout : undefined
+  const pad = resolvePadding('padding' in node ? (node as any).padding : undefined)
+  const gap = 'gap' in node && typeof (node as any).gap === 'number' ? (node as any).gap : 0
+  if (layout === 'vertical') {
+    const childTotal = node.children.reduce((sum, c) => sum + getNodeHeight(c), 0)
+    const gapTotal = gap * Math.max(0, node.children.length - 1)
+    return childTotal + gapTotal + pad.top + pad.bottom
+  }
+  const maxChildH = node.children.reduce((max, c) => Math.max(max, getNodeHeight(c)), 0)
+  return maxChildH + pad.top + pad.bottom
+}
+
 function getNodeWidth(node: PenNode, parentAvail?: number): number {
   if ('width' in node) {
     const s = parseSizing(node.width)
-    if (typeof s === 'number') return s
+    if (typeof s === 'number' && s > 0) return s
     if (s === 'fill' && parentAvail) return parentAvail
-    if (s === 'fit' && 'children' in node && node.children?.length) {
-      const layout = 'layout' in node ? (node as ContainerProps).layout : undefined
-      const pad = resolvePadding('padding' in node ? (node as any).padding : undefined)
-      const gap = 'gap' in node && typeof (node as any).gap === 'number' ? (node as any).gap : 0
-      if (layout === 'horizontal') {
-        const childTotal = node.children.reduce((sum, c) => sum + getNodeWidth(c), 0)
-        const gapTotal = gap * Math.max(0, node.children.length - 1)
-        return childTotal + gapTotal + pad.left + pad.right
-      }
-      const maxChildW = node.children.reduce((max, c) => Math.max(max, getNodeWidth(c)), 0)
-      return maxChildW + pad.left + pad.right
+    if (s === 'fit') {
+      const fit = fitContentWidth(node)
+      if (fit > 0) return fit
     }
+  }
+  // Containers without explicit width: compute from children
+  if ('children' in node && node.children?.length) {
+    const fit = fitContentWidth(node)
+    if (fit > 0) return fit
   }
   if (node.type === 'text') {
     const fontSize = node.fontSize ?? 16
@@ -116,20 +143,17 @@ function getNodeWidth(node: PenNode, parentAvail?: number): number {
 function getNodeHeight(node: PenNode, parentAvail?: number): number {
   if ('height' in node) {
     const s = parseSizing(node.height)
-    if (typeof s === 'number') return s
+    if (typeof s === 'number' && s > 0) return s
     if (s === 'fill' && parentAvail) return parentAvail
-    if (s === 'fit' && 'children' in node && node.children?.length) {
-      const layout = 'layout' in node ? (node as ContainerProps).layout : undefined
-      const pad = resolvePadding('padding' in node ? (node as any).padding : undefined)
-      const gap = 'gap' in node && typeof (node as any).gap === 'number' ? (node as any).gap : 0
-      if (layout === 'vertical') {
-        const childTotal = node.children.reduce((sum, c) => sum + getNodeHeight(c), 0)
-        const gapTotal = gap * Math.max(0, node.children.length - 1)
-        return childTotal + gapTotal + pad.top + pad.bottom
-      }
-      const maxChildH = node.children.reduce((max, c) => Math.max(max, getNodeHeight(c)), 0)
-      return maxChildH + pad.top + pad.bottom
+    if (s === 'fit') {
+      const fit = fitContentHeight(node)
+      if (fit > 0) return fit
     }
+  }
+  // Containers without explicit height: compute from children
+  if ('children' in node && node.children?.length) {
+    const fit = fitContentHeight(node)
+    if (fit > 0) return fit
   }
   if (node.type === 'text') {
     const fontSize = node.fontSize ?? 16
@@ -246,14 +270,9 @@ function computeLayoutPositions(
 
     mainPos += (isVertical ? size.h : size.w) + effectiveGap
 
-    // Include resolved pixel sizes so Fabric.js objects get numeric dimensions
-    const out: Record<string, unknown> = { ...child, x, y }
-    if ('width' in child && typeof child.width !== 'number') {
-      out.width = size.w
-    }
-    if ('height' in child && typeof child.height !== 'number') {
-      out.height = size.h
-    }
+    // Always propagate resolved pixel dimensions so nested layout
+    // computations and Fabric.js objects get correct numeric sizes.
+    const out: Record<string, unknown> = { ...child, x, y, width: size.w, height: size.h }
     return out as unknown as PenNode
   })
 }
@@ -520,6 +539,16 @@ export function useCanvasSync() {
 
       canvas.requestRenderAll()
     })
+
+    // Trigger initial sync for the already-existing document.
+    // The subscription only fires on future changes, so force a
+    // re-render by creating a new children reference.
+    const { document: doc } = useDocumentStore.getState()
+    if (doc.children.length > 0) {
+      useDocumentStore.setState({
+        document: { ...doc, children: [...doc.children] },
+      })
+    }
 
     return () => unsub()
   }, [])
