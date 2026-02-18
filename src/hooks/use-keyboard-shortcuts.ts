@@ -13,6 +13,7 @@ import {
   openDocument,
 } from '@/utils/file-operations'
 import { syncCanvasPositionsToStore } from '@/canvas/use-canvas-sync'
+import { zoomToFitContent } from '@/canvas/use-fabric-canvas'
 import type { ToolType } from '@/types/canvas'
 
 const TOOL_KEYS: Record<string, ToolType> = {
@@ -171,6 +172,7 @@ export function useKeyboardShortcuts() {
               useDocumentStore
                 .getState()
                 .loadDocument(result.doc, result.fileName, result.handle)
+              requestAnimationFrame(() => zoomToFitContent())
             }
           })
         } else {
@@ -179,6 +181,7 @@ export function useKeyboardShortcuts() {
               useDocumentStore
                 .getState()
                 .loadDocument(result.doc, result.fileName)
+              requestAnimationFrame(() => zoomToFitContent())
             }
           })
         }
