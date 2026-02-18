@@ -2,7 +2,7 @@ import type { PenNode } from '@/types/pen'
 import type { AIDesignRequest } from './ai-types'
 import { streamChat } from './ai-service'
 import { DESIGN_GENERATOR_PROMPT } from './ai-prompts'
-import { useDocumentStore } from '@/stores/document-store'
+import { useDocumentStore, DEFAULT_FRAME_ID } from '@/stores/document-store'
 
 function extractJsonFromResponse(text: string): PenNode[] | null {
   // Try to extract JSON from markdown code blocks
@@ -70,9 +70,12 @@ export async function generateDesign(
 }
 
 export function applyNodesToCanvas(nodes: PenNode[]): void {
-  const { addNode } = useDocumentStore.getState()
+  const { addNode, getNodeById } = useDocumentStore.getState()
+  // Insert into the root frame if it exists, otherwise at document root
+  const rootFrame = getNodeById(DEFAULT_FRAME_ID)
+  const parentId = rootFrame ? DEFAULT_FRAME_ID : null
   for (const node of nodes) {
-    addNode(null, node)
+    addNode(parentId, node)
   }
 }
 

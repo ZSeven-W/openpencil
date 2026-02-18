@@ -3,10 +3,24 @@ import { nanoid } from 'nanoid'
 import type { PenDocument, PenNode, GroupNode } from '@/types/pen'
 import { useHistoryStore } from '@/stores/history-store'
 
+export const DEFAULT_FRAME_ID = 'root-frame'
+
 function createEmptyDocument(): PenDocument {
   return {
     version: '1.0.0',
-    children: [],
+    children: [
+      {
+        id: DEFAULT_FRAME_ID,
+        type: 'frame',
+        name: 'Frame',
+        x: 0,
+        y: 0,
+        width: 1920,
+        height: 1080,
+        fill: [{ type: 'solid', color: '#FFFFFF' }],
+        children: [],
+      },
+    ],
   }
 }
 
