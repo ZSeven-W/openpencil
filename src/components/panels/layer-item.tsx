@@ -14,6 +14,7 @@ import {
   Spline,
   Link,
   GripVertical,
+  ImageIcon,
 } from 'lucide-react'
 import type { PenNodeType } from '@/types/pen'
 
@@ -26,6 +27,7 @@ const TYPE_ICONS: Record<PenNodeType, typeof Square> = {
   group: FolderOpen,
   polygon: Hexagon,
   path: Spline,
+  image: ImageIcon,
   ref: Link,
 }
 
