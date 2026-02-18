@@ -38,7 +38,6 @@ export default defineEventHandler(async (event) => {
 
 /** Stream via Anthropic SDK (when API key is available) */
 async function streamViaAnthropicSDK(apiKey: string, body: ChatBody, model?: string) {
-  // @ts-expect-error — optional dependency, only used when ANTHROPIC_API_KEY is set
   const { default: Anthropic } = await import('@anthropic-ai/sdk')
   const client = new Anthropic({ apiKey })
 

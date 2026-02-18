@@ -3,7 +3,7 @@ import type { AIModelInfo } from '@/stores/ai-store'
 
 /**
  * Streams a chat response from the server-side AI endpoint.
- * The server uses ANTHROPIC_API_KEY from the environment (no client-side key needed).
+ * The server uses ANTHROPIC_API_KEY or local Agent SDK (no client-side key needed).
  */
 export async function* streamChat(
   systemPrompt: string,
@@ -114,3 +114,4 @@ export async function fetchAvailableModels(): Promise<AIModelInfo[]> {
     return []
   }
 }
+

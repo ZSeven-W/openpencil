@@ -346,7 +346,7 @@ export default function ChatMessage({
         <div className="text-sm leading-relaxed text-foreground">
           {/* Streaming with no content yet → thinking indicator */}
           {isEmpty && isStreaming ? (
-            <div className="flex items-center gap-1.5 bg-secondary/50 rounded-full w-fit py-1 px-2.5">
+            <div className="flex items-center gap-1.5 bg-secondary/50 rounded-full w-fit py-1 px-2.5 mt-2">
               <span className="text-xs text-muted-foreground">Thinking</span>
               <span className="flex gap-0.5">
                 <span className="w-1 h-1 rounded-full bg-muted-foreground/70 animate-bounce" style={{ animationDelay: '0ms' }} />

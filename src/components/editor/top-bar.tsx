@@ -9,6 +9,8 @@ import {
   Maximize,
   Minimize,
 } from 'lucide-react'
+import ClaudeLogo from '@/components/icons/claude-logo'
+import OpenAILogo from '@/components/icons/openai-logo'
 import { Button } from '@/components/ui/button'
 import {
   Tooltip,
@@ -27,6 +29,7 @@ import {
 } from '@/utils/file-operations'
 import { syncCanvasPositionsToStore } from '@/canvas/use-canvas-sync'
 import { zoomToFitContent } from '@/canvas/use-fabric-canvas'
+import { useAgentSettingsStore } from '@/stores/agent-settings-store'
 
 export default function TopBar() {
   const toggleLayerPanel = useCanvasStore((s) => s.toggleLayerPanel)
@@ -196,6 +199,24 @@ export default function TopBar() {
 
       {/* Right section */}
       <div className="flex items-center gap-0.5">
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => useAgentSettingsStore.getState().setDialogOpen(true)}
+              className="h-7 gap-1.5 text-xs text-muted-foreground hover:text-foreground"
+            >
+              <ClaudeLogo className="w-4 h-4" />
+              <OpenAILogo className="w-4 h-4 -ml-1" />
+              <span className="hidden sm:inline">Agents & MCP</span>
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="bottom">Setup Agents & MCP</TooltipContent>
+        </Tooltip>
+
+        <div className="w-px h-4 bg-border mx-1" />
+
         <Tooltip>
           <TooltipTrigger asChild>
             <Button variant="ghost" size="icon-sm" onClick={toggleTheme}>
