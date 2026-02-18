@@ -2,6 +2,17 @@ import { useEffect } from 'react'
 import { ActiveSelection } from 'fabric'
 import { useCanvasStore } from '@/stores/canvas-store'
 import { useDocumentStore } from '@/stores/document-store'
+import { useHistoryStore } from '@/stores/history-store'
+import { cloneNodesWithNewIds } from '@/utils/node-clone'
+import {
+  supportsFileSystemAccess,
+  writeToFileHandle,
+  saveDocumentAs,
+  downloadDocument,
+  openDocumentFS,
+  openDocument,
+} from '@/utils/file-operations'
+import { syncCanvasPositionsToStore } from '@/canvas/use-canvas-sync'
 import type { ToolType } from '@/types/canvas'
 
 const TOOL_KEYS: Record<string, ToolType> = {
@@ -29,6 +40,178 @@ export function useKeyboardShortcuts() {
       }
 
       const isMod = e.metaKey || e.ctrlKey
+
+      // Undo: Cmd/Ctrl+Z
+      if (isMod && e.key === 'z' && !e.shiftKey) {
+        e.preventDefault()
+        const currentDoc = useDocumentStore.getState().document
+        const prev = useHistoryStore.getState().undo(currentDoc)
+        if (prev) {
+          useDocumentStore.getState().applyHistoryState(prev)
+        }
+        return
+      }
+
+      // Redo: Cmd/Ctrl+Shift+Z
+      if (isMod && e.key === 'z' && e.shiftKey) {
+        e.preventDefault()
+        const currentDoc = useDocumentStore.getState().document
+        const next = useHistoryStore.getState().redo(currentDoc)
+        if (next) {
+          useDocumentStore.getState().applyHistoryState(next)
+        }
+        return
+      }
+
+      // Copy: Cmd/Ctrl+C
+      if (isMod && e.key === 'c' && !e.shiftKey) {
+        const { selectedIds } = useCanvasStore.getState().selection
+        if (selectedIds.length > 0) {
+          e.preventDefault()
+          const nodes = selectedIds
+            .map((id) => useDocumentStore.getState().getNodeById(id))
+            .filter((n): n is NonNullable<typeof n> => n != null)
+          useCanvasStore.getState().setClipboard(structuredClone(nodes))
+        }
+        return
+      }
+
+      // Cut: Cmd/Ctrl+X
+      if (isMod && e.key === 'x' && !e.shiftKey) {
+        const { selectedIds } = useCanvasStore.getState().selection
+        if (selectedIds.length > 0) {
+          e.preventDefault()
+          const nodes = selectedIds
+            .map((id) => useDocumentStore.getState().getNodeById(id))
+            .filter((n): n is NonNullable<typeof n> => n != null)
+          useCanvasStore.getState().setClipboard(structuredClone(nodes))
+          for (const id of selectedIds) {
+            useDocumentStore.getState().removeNode(id)
+          }
+          useCanvasStore.getState().clearSelection()
+          const canvas = useCanvasStore.getState().fabricCanvas
+          if (canvas) {
+            canvas.discardActiveObject()
+            canvas.requestRenderAll()
+          }
+        }
+        return
+      }
+
+      // Paste: Cmd/Ctrl+V
+      if (isMod && e.key === 'v' && !e.shiftKey) {
+        const { clipboard } = useCanvasStore.getState()
+        if (clipboard.length > 0) {
+          e.preventDefault()
+          const cloned = cloneNodesWithNewIds(clipboard, 10)
+          const newIds: string[] = []
+          for (const node of cloned) {
+            useDocumentStore.getState().addNode(null, node)
+            newIds.push(node.id)
+          }
+          useCanvasStore.getState().setSelection(newIds, newIds[0] ?? null)
+        }
+        return
+      }
+
+      // Duplicate: Cmd/Ctrl+D
+      if (isMod && e.key === 'd') {
+        const { selectedIds } = useCanvasStore.getState().selection
+        if (selectedIds.length > 0) {
+          e.preventDefault()
+          const nodes = selectedIds
+            .map((id) => useDocumentStore.getState().getNodeById(id))
+            .filter((n): n is NonNullable<typeof n> => n != null)
+          const cloned = cloneNodesWithNewIds(nodes, 10)
+          const newIds: string[] = []
+          for (const node of cloned) {
+            useDocumentStore.getState().addNode(null, node)
+            newIds.push(node.id)
+          }
+          useCanvasStore.getState().setSelection(newIds, newIds[0] ?? null)
+        }
+        return
+      }
+
+      // Save: Cmd/Ctrl+S
+      if (isMod && e.key === 's' && !e.shiftKey) {
+        e.preventDefault()
+        // Force-sync all Fabric object positions to the store before serializing
+        syncCanvasPositionsToStore()
+        const store = useDocumentStore.getState()
+        const { document: doc, fileName, fileHandle } = store
+
+        if (fileHandle) {
+          writeToFileHandle(fileHandle, doc).then(() => store.markClean())
+        } else if (supportsFileSystemAccess()) {
+          saveDocumentAs(doc, fileName ?? 'untitled.pen').then((result) => {
+            if (result) {
+              useDocumentStore.setState({
+                fileName: result.fileName,
+                fileHandle: result.handle,
+                isDirty: false,
+              })
+            }
+          })
+        } else if (fileName) {
+          downloadDocument(doc, fileName)
+          store.markClean()
+        } else {
+          store.setSaveDialogOpen(true)
+        }
+        return
+      }
+
+      // Open: Cmd/Ctrl+O
+      if (isMod && e.key === 'o' && !e.shiftKey) {
+        e.preventDefault()
+        if (supportsFileSystemAccess()) {
+          openDocumentFS().then((result) => {
+            if (result) {
+              useDocumentStore
+                .getState()
+                .loadDocument(result.doc, result.fileName, result.handle)
+            }
+          })
+        } else {
+          openDocument().then((result) => {
+            if (result) {
+              useDocumentStore
+                .getState()
+                .loadDocument(result.doc, result.fileName)
+            }
+          })
+        }
+        return
+      }
+
+      // Group: Cmd/Ctrl+G
+      if (isMod && e.key === 'g' && !e.shiftKey) {
+        const { selectedIds } = useCanvasStore.getState().selection
+        if (selectedIds.length >= 2) {
+          e.preventDefault()
+          const groupId = useDocumentStore.getState().groupNodes(selectedIds)
+          if (groupId) {
+            useCanvasStore.getState().setSelection([groupId], groupId)
+          }
+        }
+        return
+      }
+
+      // Ungroup: Cmd/Ctrl+Shift+G
+      if (isMod && e.shiftKey && e.key.toLowerCase() === 'g') {
+        const { selectedIds } = useCanvasStore.getState().selection
+        if (selectedIds.length === 1) {
+          e.preventDefault()
+          const node = useDocumentStore.getState().getNodeById(selectedIds[0])
+          if (node && node.type === 'group' && 'children' in node && node.children) {
+            const childIds = node.children.map((c) => c.id)
+            useDocumentStore.getState().ungroupNode(selectedIds[0])
+            useCanvasStore.getState().setSelection(childIds, childIds[0] ?? null)
+          }
+        }
+        return
+      }
 
       // Tool shortcuts (single key, no modifier)
       if (!isMod && !e.shiftKey && !e.altKey) {
@@ -58,8 +241,18 @@ export function useKeyboardShortcuts() {
         const { selectedIds } = useCanvasStore.getState().selection
         if (selectedIds.length > 0) {
           e.preventDefault()
+          if (selectedIds.length > 1) {
+            useHistoryStore
+              .getState()
+              .beginBatch(
+                useDocumentStore.getState().document.children,
+              )
+          }
           for (const id of selectedIds) {
             useDocumentStore.getState().removeNode(id)
+          }
+          if (selectedIds.length > 1) {
+            useHistoryStore.getState().endBatch()
           }
           useCanvasStore.getState().clearSelection()
           const canvas = useCanvasStore.getState().fabricCanvas
@@ -93,16 +286,36 @@ export function useKeyboardShortcuts() {
       if (e.key === '[') {
         e.preventDefault()
         const { selectedIds } = useCanvasStore.getState().selection
+        if (selectedIds.length > 1) {
+          useHistoryStore
+            .getState()
+            .beginBatch(
+              useDocumentStore.getState().document.children,
+            )
+        }
         for (const id of selectedIds) {
           useDocumentStore.getState().reorderNode(id, 'down')
+        }
+        if (selectedIds.length > 1) {
+          useHistoryStore.getState().endBatch()
         }
         return
       }
       if (e.key === ']') {
         e.preventDefault()
         const { selectedIds } = useCanvasStore.getState().selection
+        if (selectedIds.length > 1) {
+          useHistoryStore
+            .getState()
+            .beginBatch(
+              useDocumentStore.getState().document.children,
+            )
+        }
         for (const id of selectedIds) {
           useDocumentStore.getState().reorderNode(id, 'up')
+        }
+        if (selectedIds.length > 1) {
+          useHistoryStore.getState().endBatch()
         }
         return
       }
@@ -113,6 +326,13 @@ export function useKeyboardShortcuts() {
         const { selectedIds } = useCanvasStore.getState().selection
         if (selectedIds.length === 0) return
         e.preventDefault()
+        if (selectedIds.length > 1) {
+          useHistoryStore
+            .getState()
+            .beginBatch(
+              useDocumentStore.getState().document.children,
+            )
+        }
         const amount = e.shiftKey ? 10 : 1
         for (const id of selectedIds) {
           const node = useDocumentStore.getState().getNodeById(id)
@@ -123,6 +343,9 @@ export function useKeyboardShortcuts() {
           if (e.key === 'ArrowUp') updates.y = (node.y ?? 0) - amount
           if (e.key === 'ArrowDown') updates.y = (node.y ?? 0) + amount
           useDocumentStore.getState().updateNode(id, updates)
+        }
+        if (selectedIds.length > 1) {
+          useHistoryStore.getState().endBatch()
         }
         return
       }
