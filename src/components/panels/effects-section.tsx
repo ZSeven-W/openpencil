@@ -1,5 +1,8 @@
 import ColorPicker from '@/components/shared/color-picker'
 import NumberInput from '@/components/shared/number-input'
+import SectionHeader from '@/components/shared/section-header'
+import { Button } from '@/components/ui/button'
+import { Plus, Minus } from 'lucide-react'
 import type { PenNode } from '@/types/pen'
 import type { PenEffect, ShadowEffect } from '@/types/styles'
 
@@ -50,30 +53,36 @@ export default function EffectsSection({
   }
 
   return (
-    <div className="space-y-2">
-      <h4 className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-        Effects
-      </h4>
-
-      {!shadow ? (
-        <button
-          type="button"
-          onClick={handleAddShadow}
-          className="text-xs text-primary hover:text-primary/80"
-        >
-          + Add Shadow
-        </button>
-      ) : (
-        <div className="space-y-2 bg-muted/30 rounded p-2">
-          <div className="flex items-center justify-between">
-            <span className="text-xs text-foreground">Shadow</span>
-            <button
-              type="button"
-              onClick={handleRemoveShadow}
-              className="text-xs text-muted-foreground hover:text-destructive"
+    <div className="space-y-1.5">
+      <SectionHeader
+        title="Effects"
+        actions={
+          !shadow ? (
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              onClick={handleAddShadow}
             >
-              Remove
-            </button>
+              <Plus className="w-3.5 h-3.5" />
+            </Button>
+          ) : undefined
+        }
+      />
+
+      {shadow && (
+        <div className="space-y-1 bg-secondary/50 rounded p-1.5">
+          <div className="flex items-center justify-between h-5">
+            <span className="text-[11px] text-foreground">
+              Drop shadow
+            </span>
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              onClick={handleRemoveShadow}
+              className="h-5 w-5"
+            >
+              <Minus className="w-3 h-3" />
+            </Button>
           </div>
 
           <div className="grid grid-cols-2 gap-1">

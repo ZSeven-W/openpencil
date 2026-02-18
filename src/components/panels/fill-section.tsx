@@ -2,6 +2,9 @@ import { useState } from 'react'
 import ColorPicker from '@/components/shared/color-picker'
 import NumberInput from '@/components/shared/number-input'
 import DropdownSelect from '@/components/shared/dropdown-select'
+import SectionHeader from '@/components/shared/section-header'
+import { Button } from '@/components/ui/button'
+import { Plus, X } from 'lucide-react'
 import type { PenNode } from '@/types/pen'
 import type { PenFill, GradientStop } from '@/types/styles'
 
@@ -29,7 +32,7 @@ export default function FillSection({
 }: FillSectionProps) {
   const firstFill = fills?.[0]
   const fillType = firstFill?.type ?? 'solid'
-  const [expanded, setExpanded] = useState(false)
+  const [showTypeSelector, setShowTypeSelector] = useState(false)
 
   const currentColor =
     firstFill?.type === 'solid' ? firstFill.color : '#d1d5db'
@@ -140,20 +143,27 @@ export default function FillSection({
   }
 
   return (
-    <div className="space-y-2">
-      <button
-        type="button"
-        className="text-xs font-medium text-muted-foreground uppercase tracking-wider w-full text-left"
-        onClick={() => setExpanded(!expanded)}
-      >
-        Fill {expanded ? '-' : '+'}
-      </button>
-
-      <DropdownSelect
-        value={fillType}
-        options={FILL_TYPE_OPTIONS}
-        onChange={handleTypeChange}
+    <div className="space-y-1.5">
+      <SectionHeader
+        title="Fill"
+        actions={
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            onClick={() => setShowTypeSelector(!showTypeSelector)}
+          >
+            <Plus className="w-3.5 h-3.5" />
+          </Button>
+        }
       />
+
+      {showTypeSelector && (
+        <DropdownSelect
+          value={fillType}
+          options={FILL_TYPE_OPTIONS}
+          onChange={handleTypeChange}
+        />
+      )}
 
       {fillType === 'solid' && (
         <ColorPicker value={currentColor} onChange={handleColorChange} />
@@ -161,7 +171,7 @@ export default function FillSection({
 
       {(fillType === 'linear_gradient' ||
         fillType === 'radial_gradient') && (
-        <div className="space-y-2">
+        <div className="space-y-1.5">
           {fillType === 'linear_gradient' && (
             <NumberInput
               label="Angle"
@@ -169,12 +179,23 @@ export default function FillSection({
               onChange={handleAngleChange}
               min={0}
               max={360}
-              suffix="deg"
+              suffix="°"
             />
           )}
 
-          <div className="space-y-1.5">
-            <span className="text-xs text-muted-foreground">Color Stops</span>
+          <div className="space-y-1">
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] text-muted-foreground">
+                Stops
+              </span>
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                onClick={handleAddStop}
+              >
+                <Plus className="w-3 h-3" />
+              </Button>
+            </div>
             {currentStops.map((stop, i) => (
               <div key={i} className="flex items-center gap-1">
                 <ColorPicker
@@ -190,23 +211,16 @@ export default function FillSection({
                   className="w-16"
                 />
                 {currentStops.length > 2 && (
-                  <button
-                    type="button"
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
                     onClick={() => handleRemoveStop(i)}
-                    className="text-muted-foreground hover:text-red-400 text-xs px-1"
                   >
-                    x
-                  </button>
+                    <X className="w-3 h-3" />
+                  </Button>
                 )}
               </div>
             ))}
-            <button
-              type="button"
-              onClick={handleAddStop}
-              className="text-xs text-blue-400 hover:text-blue-300"
-            >
-              + Add Stop
-            </button>
           </div>
         </div>
       )}
