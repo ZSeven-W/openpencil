@@ -5,7 +5,15 @@ export const SNAP_THRESHOLD = 5
 export const DEFAULT_FILL = '#d1d5db'
 export const DEFAULT_STROKE = '#374151'
 export const DEFAULT_STROKE_WIDTH = 1
-export const CANVAS_BACKGROUND = '#f5f5f5'
+export const CANVAS_BACKGROUND_LIGHT = '#e5e5e5'
+export const CANVAS_BACKGROUND_DARK = '#1a1a1a'
+
+export function getCanvasBackground(): string {
+  if (typeof document === 'undefined') return CANVAS_BACKGROUND_DARK
+  return document.documentElement.classList.contains('light')
+    ? CANVAS_BACKGROUND_LIGHT
+    : CANVAS_BACKGROUND_DARK
+}
 export const SELECTION_BLUE = '#0d99ff'
 
 // Smart guides

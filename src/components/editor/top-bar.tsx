@@ -26,25 +26,7 @@ import {
   openDocument,
 } from '@/utils/file-operations'
 import { syncCanvasPositionsToStore } from '@/canvas/use-canvas-sync'
-
-function getInitialTheme(): 'dark' | 'light' {
-  if (typeof window === 'undefined') return 'dark'
-  try {
-    const saved = localStorage.getItem('openpencil-theme')
-    if (saved === 'light' || saved === 'dark') return saved
-  } catch {
-    // ignore
-  }
-  return 'dark'
-}
-
-// Apply saved theme before first render to avoid flash
-if (typeof window !== 'undefined') {
-  const saved = getInitialTheme()
-  if (saved === 'light') {
-    document.documentElement.classList.add('light')
-  }
-}
+import { zoomToFitContent } from '@/canvas/use-fabric-canvas'
 
 export default function TopBar() {
   const toggleLayerPanel = useCanvasStore((s) => s.toggleLayerPanel)
@@ -52,8 +34,21 @@ export default function TopBar() {
   const fileName = useDocumentStore((s) => s.fileName)
   const isDirty = useDocumentStore((s) => s.isDirty)
 
-  const [theme, setTheme] = useState<'dark' | 'light'>(getInitialTheme)
+  const [theme, setTheme] = useState<'dark' | 'light'>('dark')
   const [isFullscreen, setIsFullscreen] = useState(false)
+
+  // Restore saved theme after hydration
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem('openpencil-theme')
+      if (saved === 'light') {
+        document.documentElement.classList.add('light')
+        setTheme('light')
+      }
+    } catch {
+      // ignore
+    }
+  }, [])
 
   // Listen to fullscreen changes
   useEffect(() => {
@@ -87,6 +82,7 @@ export default function TopBar() {
 
   const handleNew = useCallback(() => {
     useDocumentStore.getState().newDocument()
+    requestAnimationFrame(() => zoomToFitContent())
   }, [])
 
   const handleSave = useCallback(() => {
@@ -121,12 +117,14 @@ export default function TopBar() {
           useDocumentStore
             .getState()
             .loadDocument(result.doc, result.fileName, result.handle)
+          requestAnimationFrame(() => zoomToFitContent())
         }
       })
     } else {
       openDocument().then((result) => {
         if (result) {
           useDocumentStore.getState().loadDocument(result.doc, result.fileName)
+          requestAnimationFrame(() => zoomToFitContent())
         }
       })
     }
