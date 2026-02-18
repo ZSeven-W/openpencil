@@ -6,6 +6,7 @@ import type {
   SelectionState,
   CanvasInteraction,
 } from '@/types/canvas'
+import type { PenNode } from '@/types/pen'
 
 interface CanvasStoreState {
   activeTool: ToolType
@@ -13,6 +14,7 @@ interface CanvasStoreState {
   selection: SelectionState
   interaction: CanvasInteraction
   fabricCanvas: Canvas | null
+  clipboard: PenNode[]
 
   setActiveTool: (tool: ToolType) => void
   setZoom: (zoom: number) => void
@@ -21,6 +23,7 @@ interface CanvasStoreState {
   clearSelection: () => void
   setInteraction: (partial: Partial<CanvasInteraction>) => void
   setFabricCanvas: (canvas: Canvas | null) => void
+  setClipboard: (nodes: PenNode[]) => void
 }
 
 export const useCanvasStore = create<CanvasStoreState>((set) => ({
@@ -34,6 +37,7 @@ export const useCanvasStore = create<CanvasStoreState>((set) => ({
     drawStartPoint: null,
   },
   fabricCanvas: null,
+  clipboard: [],
 
   setActiveTool: (tool) => set({ activeTool: tool }),
 
@@ -53,4 +57,6 @@ export const useCanvasStore = create<CanvasStoreState>((set) => ({
     set((s) => ({ interaction: { ...s.interaction, ...partial } })),
 
   setFabricCanvas: (fabricCanvas) => set({ fabricCanvas }),
+
+  setClipboard: (clipboard) => set({ clipboard }),
 }))

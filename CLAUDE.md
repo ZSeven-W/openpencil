@@ -76,3 +76,4 @@ Tailwind CSS v4 imported via `src/styles.css`. Icons from `lucide-react`.
 
 - 单个文件不要超过 800 行。超出时应拆分为更小的模块。
 - 每个文件只导出一个组件，每个组件只承担单一职责。
+- `.ts` 和 `.tsx` 文件命名使用 kebab-case（烤肉串风格），例如 `canvas-store.ts`、`use-keyboard-shortcuts.ts`。

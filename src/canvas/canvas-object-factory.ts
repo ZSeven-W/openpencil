@@ -1,17 +1,92 @@
 import * as fabric from 'fabric'
 import type { PenNode } from '@/types/pen'
-import type { PenFill, PenStroke } from '@/types/styles'
+import type {
+  PenFill,
+  PenStroke,
+  PenEffect,
+  LinearGradientFill,
+  RadialGradientFill,
+  ShadowEffect,
+} from '@/types/styles'
 import {
   DEFAULT_FILL,
   DEFAULT_STROKE,
   DEFAULT_STROKE_WIDTH,
+  SELECTION_BLUE,
 } from './canvas-constants'
+import { applyRotationControls } from './canvas-controls'
+
+function angleToCoords(
+  angleDeg: number,
+  width: number,
+  height: number,
+): { x1: number; y1: number; x2: number; y2: number } {
+  const rad = ((angleDeg - 90) * Math.PI) / 180
+  const cos = Math.cos(rad)
+  const sin = Math.sin(rad)
+  return {
+    x1: width / 2 - (cos * width) / 2,
+    y1: height / 2 - (sin * height) / 2,
+    x2: width / 2 + (cos * width) / 2,
+    y2: height / 2 + (sin * height) / 2,
+  }
+}
+
+function createLinearGradient(
+  fill: LinearGradientFill,
+  width: number,
+  height: number,
+): fabric.Gradient<'linear'> {
+  const coords = angleToCoords(fill.angle ?? 0, width, height)
+  return new fabric.Gradient({
+    type: 'linear',
+    coords,
+    colorStops: fill.stops.map((s) => ({
+      offset: s.offset,
+      color: s.color,
+    })),
+  })
+}
+
+function createRadialGradient(
+  fill: RadialGradientFill,
+  width: number,
+  height: number,
+): fabric.Gradient<'radial'> {
+  const cx = (fill.cx ?? 0.5) * width
+  const cy = (fill.cy ?? 0.5) * height
+  const r = (fill.radius ?? 0.5) * Math.max(width, height)
+  return new fabric.Gradient({
+    type: 'radial',
+    coords: { x1: cx, y1: cy, r1: 0, x2: cx, y2: cy, r2: r },
+    colorStops: fill.stops.map((s) => ({
+      offset: s.offset,
+      color: s.color,
+    })),
+  })
+}
+
+export function resolveFill(
+  fills: PenFill[] | undefined,
+  width: number,
+  height: number,
+): string | fabric.Gradient<'linear'> | fabric.Gradient<'radial'> {
+  if (!fills || fills.length === 0) return DEFAULT_FILL
+  const first = fills[0]
+  if (first.type === 'solid') return first.color
+  if (first.type === 'linear_gradient') {
+    return createLinearGradient(first, width, height)
+  }
+  if (first.type === 'radial_gradient') {
+    return createRadialGradient(first, width, height)
+  }
+  return DEFAULT_FILL
+}
 
 export function resolveFillColor(fills?: PenFill[]): string {
   if (!fills || fills.length === 0) return DEFAULT_FILL
   const first = fills[0]
   if (first.type === 'solid') return first.color
-  // Gradients/images: fallback to first color or default
   if (
     first.type === 'linear_gradient' ||
     first.type === 'radial_gradient'
@@ -19,6 +94,22 @@ export function resolveFillColor(fills?: PenFill[]): string {
     return first.stops[0]?.color ?? DEFAULT_FILL
   }
   return DEFAULT_FILL
+}
+
+export function resolveShadow(
+  effects?: PenEffect[],
+): fabric.Shadow | undefined {
+  if (!effects) return undefined
+  const shadow = effects.find(
+    (e): e is ShadowEffect => e.type === 'shadow',
+  )
+  if (!shadow) return undefined
+  return new fabric.Shadow({
+    color: shadow.color,
+    blur: shadow.blur,
+    offsetX: shadow.offsetX,
+    offsetY: shadow.offsetY,
+  })
 }
 
 export function resolveStrokeColor(stroke?: PenStroke): string | undefined {
@@ -47,6 +138,13 @@ function sizeToNumber(
   fallback: number,
 ): number {
   if (typeof val === 'number') return val
+  if (typeof val === 'string') {
+    // Handle "fit_content(N)" / "fill_container(N)"
+    const m = val.match(/\((\d+(?:\.\d+)?)\)/)
+    if (m) return parseFloat(m[1])
+    const n = parseFloat(val)
+    if (!isNaN(n)) return n
+  }
   return fallback
 }
 
@@ -76,17 +174,44 @@ export function createFabricObject(
     opacity: typeof node.opacity === 'number' ? node.opacity : 1,
   }
 
+  // Resolve effects (shadow)
+  const effects = 'effects' in node ? node.effects : undefined
+  const shadow = resolveShadow(effects)
+
+  // Resolve visibility and lock
+  const visible = ('visible' in node ? node.visible : undefined) !== false
+  const locked = ('locked' in node ? node.locked : undefined) === true
+
   switch (node.type) {
-    case 'rectangle':
     case 'frame': {
+      // Frames without explicit fill are transparent containers
       const r = cornerRadiusValue(node.cornerRadius)
+      const w = sizeToNumber(node.width, 100)
+      const h = sizeToNumber(node.height, 100)
+      const hasFill = node.fill && node.fill.length > 0
       obj = new fabric.Rect({
         ...baseProps,
-        width: sizeToNumber(node.width, 100),
-        height: sizeToNumber(node.height, 100),
+        width: w,
+        height: h,
         rx: r,
         ry: r,
-        fill: resolveFillColor(node.fill),
+        fill: hasFill ? resolveFill(node.fill, w, h) : 'transparent',
+        stroke: resolveStrokeColor(node.stroke),
+        strokeWidth: resolveStrokeWidth(node.stroke),
+      }) as FabricObjectWithPenId
+      break
+    }
+    case 'rectangle': {
+      const r = cornerRadiusValue(node.cornerRadius)
+      const w = sizeToNumber(node.width, 100)
+      const h = sizeToNumber(node.height, 100)
+      obj = new fabric.Rect({
+        ...baseProps,
+        width: w,
+        height: h,
+        rx: r,
+        ry: r,
+        fill: resolveFill(node.fill, w, h),
         stroke: resolveStrokeColor(node.stroke),
         strokeWidth: resolveStrokeWidth(node.stroke),
       }) as FabricObjectWithPenId
@@ -99,7 +224,7 @@ export function createFabricObject(
         ...baseProps,
         rx: w / 2,
         ry: h / 2,
-        fill: resolveFillColor(node.fill),
+        fill: resolveFill(node.fill, w, h),
         stroke: resolveStrokeColor(node.stroke),
         strokeWidth: resolveStrokeWidth(node.stroke),
       }) as FabricObjectWithPenId
@@ -135,7 +260,7 @@ export function createFabricObject(
       })
       obj = new fabric.Polygon(points, {
         ...baseProps,
-        fill: resolveFillColor(node.fill),
+        fill: resolveFill(node.fill, w, h),
         stroke: resolveStrokeColor(node.stroke),
         strokeWidth: resolveStrokeWidth(node.stroke),
       }) as FabricObjectWithPenId
@@ -144,16 +269,17 @@ export function createFabricObject(
     case 'path': {
       obj = new fabric.Path(node.d, {
         ...baseProps,
-        fill: resolveFillColor(node.fill),
+        fill: resolveFill(node.fill, sizeToNumber(node.width, 100), sizeToNumber(node.height, 100)),
         stroke: resolveStrokeColor(node.stroke),
         strokeWidth: resolveStrokeWidth(node.stroke),
       }) as FabricObjectWithPenId
       break
     }
     case 'text': {
-      obj = new fabric.IText(resolveTextContent(node.content), {
+      const textContent = resolveTextContent(node.content)
+      const w = sizeToNumber(node.width, 0)
+      const textProps = {
         ...baseProps,
-        width: sizeToNumber(node.width, undefined!),
         fontFamily: node.fontFamily ?? 'Inter, sans-serif',
         fontSize: node.fontSize ?? 16,
         fontWeight: (node.fontWeight as string) ?? 'normal',
@@ -162,16 +288,27 @@ export function createFabricObject(
         textAlign: node.textAlign ?? 'left',
         underline: node.underline ?? false,
         linethrough: node.strikethrough ?? false,
-      }) as FabricObjectWithPenId
+        lineHeight: node.lineHeight ?? 1.2,
+      }
+      // Use Textbox for text with explicit width so textAlign works correctly
+      if (w > 0) {
+        obj = new fabric.Textbox(textContent, {
+          ...textProps,
+          width: w,
+        }) as FabricObjectWithPenId
+      } else {
+        obj = new fabric.IText(textContent, textProps) as FabricObjectWithPenId
+      }
       break
     }
     case 'group': {
-      // Groups are rendered as their children; the group itself is a container
+      const w = sizeToNumber(node.width, 100)
+      const h = sizeToNumber(node.height, 100)
       obj = new fabric.Rect({
         ...baseProps,
-        width: sizeToNumber(node.width, 100),
-        height: sizeToNumber(node.height, 100),
-        fill: resolveFillColor(node.fill),
+        width: w,
+        height: h,
+        fill: resolveFill(node.fill, w, h),
         stroke: resolveStrokeColor(node.stroke),
         strokeWidth: resolveStrokeWidth(node.stroke),
         selectable: true,
@@ -186,6 +323,25 @@ export function createFabricObject(
 
   if (obj) {
     obj.penNodeId = node.id
+    // Selection styling (from HEAD)
+    obj.set({
+      borderColor: SELECTION_BLUE,
+      borderScaleFactor: 2,
+      cornerColor: SELECTION_BLUE,
+      cornerStrokeColor: '#ffffff',
+      cornerStyle: 'rect',
+      cornerSize: 8,
+      transparentCorners: false,
+      borderOpacityWhenMoving: 1,
+      padding: 0,
+    })
+    obj.setControlVisible('mtr', false)
+    applyRotationControls(obj)
+    // Shadow, visibility, lock (from theirs)
+    if (shadow) obj.shadow = shadow
+    obj.visible = visible
+    obj.selectable = !locked
+    obj.evented = !locked
   }
   return obj
 }

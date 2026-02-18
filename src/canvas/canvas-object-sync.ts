@@ -1,7 +1,9 @@
 import type { PenNode } from '@/types/pen'
 import type { FabricObjectWithPenId } from './canvas-object-factory'
 import {
+  resolveFill,
   resolveFillColor,
+  resolveShadow,
   resolveStrokeColor,
   resolveStrokeWidth,
 } from './canvas-object-factory'
@@ -11,6 +13,12 @@ function sizeToNumber(
   fallback: number,
 ): number {
   if (typeof val === 'number') return val
+  if (typeof val === 'string') {
+    const m = val.match(/\((\d+(?:\.\d+)?)\)/)
+    if (m) return parseFloat(m[1])
+    const n = parseFloat(val)
+    if (!isNaN(n)) return n
+  }
   return fallback
 }
 
@@ -26,21 +34,49 @@ export function syncFabricObject(
   obj: FabricObjectWithPenId,
   node: PenNode,
 ) {
+  const visible = ('visible' in node ? node.visible : undefined) !== false
+  const locked = ('locked' in node ? node.locked : undefined) === true
+  const effects = 'effects' in node ? node.effects : undefined
+  const shadow = resolveShadow(effects)
+
   obj.set({
     left: node.x ?? obj.left,
     top: node.y ?? obj.top,
     angle: node.rotation ?? 0,
     opacity: typeof node.opacity === 'number' ? node.opacity : 1,
+    visible,
+    selectable: !locked,
+    evented: !locked,
   })
+  obj.shadow = shadow ?? null
 
   switch (node.type) {
-    case 'rectangle':
-    case 'frame':
-    case 'group': {
+    case 'frame': {
+      // Frames without explicit fill are transparent containers
+      const w = sizeToNumber(node.width, 100)
+      const h = sizeToNumber(node.height, 100)
+      const hasFill = node.fill && node.fill.length > 0
       obj.set({
-        width: sizeToNumber(node.width, 100),
-        height: sizeToNumber(node.height, 100),
-        fill: resolveFillColor(node.fill),
+        width: w,
+        height: h,
+        fill: hasFill ? resolveFill(node.fill, w, h) : 'transparent',
+        stroke: resolveStrokeColor(node.stroke),
+        strokeWidth: resolveStrokeWidth(node.stroke),
+      })
+      if ('rx' in obj) {
+        const r = cornerRadiusValue(node.cornerRadius)
+        obj.set({ rx: r, ry: r })
+      }
+      break
+    }
+    case 'rectangle':
+    case 'group': {
+      const w = sizeToNumber(node.width, 100)
+      const h = sizeToNumber(node.height, 100)
+      obj.set({
+        width: w,
+        height: h,
+        fill: resolveFill(node.fill, w, h),
         stroke: resolveStrokeColor(node.stroke),
         strokeWidth: resolveStrokeWidth(node.stroke),
       })
@@ -56,7 +92,7 @@ export function syncFabricObject(
       obj.set({
         rx: w / 2,
         ry: h / 2,
-        fill: resolveFillColor(node.fill),
+        fill: resolveFill(node.fill, w, h),
         stroke: resolveStrokeColor(node.stroke),
         strokeWidth: resolveStrokeWidth(node.stroke),
       })
@@ -78,6 +114,7 @@ export function syncFabricObject(
         typeof node.content === 'string'
           ? node.content
           : node.content.map((s) => s.text).join('')
+      const w = sizeToNumber(node.width, 0)
       obj.set({
         text: content,
         fontFamily: node.fontFamily ?? 'Inter, sans-serif',
@@ -86,13 +123,17 @@ export function syncFabricObject(
         fontStyle: node.fontStyle ?? 'normal',
         fill: resolveFillColor(node.fill),
         textAlign: node.textAlign ?? 'left',
+        lineHeight: node.lineHeight ?? 1.2,
       })
+      if (w > 0) obj.set({ width: w })
       break
     }
     case 'polygon':
     case 'path': {
+      const w = sizeToNumber('width' in node ? node.width : undefined, 100)
+      const h = sizeToNumber('height' in node ? node.height : undefined, 100)
       obj.set({
-        fill: resolveFillColor(node.fill),
+        fill: resolveFill(node.fill, w, h),
         stroke: resolveStrokeColor(node.stroke),
         strokeWidth: resolveStrokeWidth(node.stroke),
       })

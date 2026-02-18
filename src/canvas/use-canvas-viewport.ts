@@ -1,6 +1,26 @@
 import { useEffect } from 'react'
 import { useCanvasStore } from '@/stores/canvas-store'
 import { MIN_ZOOM, MAX_ZOOM } from './canvas-constants'
+import type { ToolType } from '@/types/canvas'
+
+// Precise crosshair cursor (thin +)
+const CROSSHAIR_CURSOR = (() => {
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"><line x1="12" y1="2" x2="12" y2="10" stroke="%23222" stroke-width="1"/><line x1="12" y1="14" x2="12" y2="22" stroke="%23222" stroke-width="1"/><line x1="2" y1="12" x2="10" y2="12" stroke="%23222" stroke-width="1"/><line x1="14" y1="12" x2="22" y2="12" stroke="%23222" stroke-width="1"/></svg>`
+  return `url("data:image/svg+xml,${svg}") 12 12, crosshair`
+})()
+
+function toolToCursor(tool: ToolType): string {
+  switch (tool) {
+    case 'hand':
+      return 'grab'
+    case 'text':
+      return 'text'
+    case 'select':
+      return 'default'
+    default:
+      return CROSSHAIR_CURSOR
+  }
+}
 
 export function useCanvasViewport() {
   useEffect(() => {
@@ -14,9 +34,12 @@ export function useCanvasViewport() {
         e.preventDefault()
         e.stopPropagation()
 
-        const delta = -e.deltaY
+        // Normalize: trackpads send small pixel deltas, mice send larger line deltas
+        let delta = -e.deltaY
+        if (e.deltaMode === 1) delta *= 40 // line mode → approx pixels
         const zoom = canvas.getZoom()
-        const factor = delta > 0 ? 1.05 : 0.95
+        // Smooth exponential zoom — works naturally for both trackpad and mouse
+        const factor = Math.pow(1.002, delta)
         let newZoom = zoom * factor
 
         newZoom = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, newZoom))
@@ -44,6 +67,9 @@ export function useCanvasViewport() {
       const isHandTool = () =>
         useCanvasStore.getState().activeTool === 'hand'
 
+      const currentToolCursor = () =>
+        toolToCursor(useCanvasStore.getState().activeTool)
+
       const onKeyDown = (e: KeyboardEvent) => {
         if (e.code === 'Space' && !e.repeat) {
           spacePressed = true
@@ -61,25 +87,27 @@ export function useCanvasViewport() {
           isPanning = false
           const canvas = useCanvasStore.getState().fabricCanvas
           if (canvas && !isHandTool()) {
-            canvas.defaultCursor = 'default'
+            canvas.defaultCursor = currentToolCursor()
             canvas.selection = true
           }
         }
       }
 
-      // Keep cursor in sync when switching to/from hand tool
+      // Keep cursor in sync when switching tools
       let prevTool = useCanvasStore.getState().activeTool
       const unsubTool = useCanvasStore.subscribe((state) => {
         if (state.activeTool === prevTool) return
         prevTool = state.activeTool
         const canvas = state.fabricCanvas
         if (!canvas) return
+        const cursor = toolToCursor(state.activeTool)
         if (state.activeTool === 'hand') {
-          canvas.defaultCursor = 'grab'
           canvas.selection = false
         } else if (!spacePressed) {
-          canvas.defaultCursor = 'default'
           canvas.selection = true
+        }
+        if (!spacePressed) {
+          canvas.defaultCursor = cursor
         }
       })
 
@@ -92,6 +120,9 @@ export function useCanvasViewport() {
         if (!canvas) return
 
         clearInterval(interval)
+
+        // Set initial cursor
+        canvas.defaultCursor = currentToolCursor()
 
         canvas.on('mouse:down', (opt) => {
           const e = opt.e as MouseEvent
@@ -125,7 +156,7 @@ export function useCanvasViewport() {
           if (isPanning) {
             isPanning = false
             canvas.defaultCursor =
-              spacePressed || isHandTool() ? 'grab' : 'default'
+              spacePressed || isHandTool() ? 'grab' : currentToolCursor()
             useCanvasStore.getState().setInteraction({ isPanning: false })
           }
         })

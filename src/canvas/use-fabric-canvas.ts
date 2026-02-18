@@ -1,7 +1,7 @@
 import { useEffect, useRef, type RefObject } from 'react'
 import * as fabric from 'fabric'
 import { useCanvasStore } from '@/stores/canvas-store'
-import { CANVAS_BACKGROUND } from './canvas-constants'
+import { CANVAS_BACKGROUND, SELECTION_BLUE } from './canvas-constants'
 
 export function useFabricCanvas(
   canvasRef: RefObject<HTMLCanvasElement | null>,
@@ -26,9 +26,9 @@ export function useFabricCanvas(
       fireRightClick: true,
     })
 
-    // Selection styling
-    canvas.selectionColor = 'rgba(59, 130, 246, 0.1)'
-    canvas.selectionBorderColor = '#3b82f6'
+    // Selection marquee styling
+    canvas.selectionColor = 'rgba(13, 153, 255, 0.06)'
+    canvas.selectionBorderColor = SELECTION_BLUE
     canvas.selectionLineWidth = 1
 
     useCanvasStore.getState().setFabricCanvas(canvas)

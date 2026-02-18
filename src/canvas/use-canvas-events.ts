@@ -2,6 +2,7 @@ import { useEffect } from 'react'
 import * as fabric from 'fabric'
 import { useCanvasStore } from '@/stores/canvas-store'
 import { useDocumentStore, generateId } from '@/stores/document-store'
+import { useHistoryStore } from '@/stores/history-store'
 import type { PenNode } from '@/types/pen'
 import type { ToolType } from '@/types/canvas'
 import {
@@ -11,6 +12,8 @@ import {
 } from './canvas-constants'
 import type { FabricObjectWithPenId } from './canvas-object-factory'
 import { setFabricSyncLock } from './canvas-sync-lock'
+import { nodeRenderInfo, rebuildNodeRenderInfo } from './use-canvas-sync'
+import { calculateAndSnap, clearGuides } from './guide-utils'
 
 function createNodeForTool(
   tool: ToolType,
@@ -300,18 +303,43 @@ export function useCanvasEvents() {
       upperEl.addEventListener('pointermove', onPointerMove)
       upperEl.addEventListener('pointerup', onPointerUp)
 
+      // --- History batching for drag/resize/rotate ---
+      canvas.on('mouse:down', (opt) => {
+        const tool = useCanvasStore.getState().activeTool
+        if (tool !== 'select') return
+        const target = opt.target as FabricObjectWithPenId | null
+        if (!target?.penNodeId) return
+        const currentChildren =
+          useDocumentStore.getState().document.children
+        useHistoryStore.getState().beginBatch(currentChildren)
+      })
+
+      canvas.on('mouse:up', () => {
+        const { batchDepth } = useHistoryStore.getState()
+        if (batchDepth > 0) {
+          useHistoryStore.getState().cancelBatch()
+        }
+      })
+
       // --- Object modifications (drag, resize, rotate) via Fabric events ---
 
+      /** Sync a single Fabric object's transform back to the document store. */
       const syncObjToStore = (obj: FabricObjectWithPenId) => {
         if (!obj?.penNodeId) return
 
+        const info = nodeRenderInfo.get(obj.penNodeId)
         const scaleX = obj.scaleX ?? 1
         const scaleY = obj.scaleY ?? 1
+
+        // Convert Fabric absolute position -> document-tree relative position
+        const offsetX = info?.parentOffsetX ?? 0
+        const offsetY = info?.parentOffsetY ?? 0
         const updates: Partial<PenNode> = {
-          x: obj.left,
-          y: obj.top,
-          rotation: obj.angle,
+          x: (obj.left ?? 0) - offsetX,
+          y: (obj.top ?? 0) - offsetY,
+          rotation: obj.angle ?? 0,
         }
+
         if (obj.width !== undefined) {
           ;(updates as Record<string, unknown>).width = obj.width * scaleX
         }
@@ -324,33 +352,158 @@ export function useCanvasEvents() {
         setFabricSyncLock(false)
       }
 
-      // Real-time sync during drag / resize / rotate
+      /**
+       * Resolve the absolute position of each child inside an ActiveSelection
+       * and sync every child to the document store.
+       */
+      const syncSelectionToStore = (
+        target: fabric.FabricObject,
+      ) => {
+        if (!('getObjects' in target)) return
+        const group = target as fabric.ActiveSelection
+        const groupMatrix = group.calcTransformMatrix()
+
+        setFabricSyncLock(true)
+        for (const child of group.getObjects()) {
+          const obj = child as FabricObjectWithPenId
+          if (!obj.penNodeId) continue
+
+          // Transform the child's local origin into absolute scene coords
+          const childMatrix = child.calcOwnMatrix()
+          const combined = fabric.util.multiplyTransformMatrices(
+            groupMatrix,
+            childMatrix,
+          )
+          // The origin point in local space is (0,0) when originX/Y = 'left'/'top'.
+          // For originX:'left', originY:'top' the top-left is at (-width/2, -height/2)
+          // relative to the object's own center.
+          const halfW =
+            ((child.width ?? 0) * (child.scaleX ?? 1)) / 2
+          const halfH =
+            ((child.height ?? 0) * (child.scaleY ?? 1)) / 2
+          const absCenter = fabric.util.transformPoint(
+            new fabric.Point(0, 0),
+            combined,
+          )
+          const absLeft = absCenter.x - halfW
+          const absTop = absCenter.y - halfH
+
+          const info = nodeRenderInfo.get(obj.penNodeId)
+          const offsetX = info?.parentOffsetX ?? 0
+          const offsetY = info?.parentOffsetY ?? 0
+          const scaleX = child.scaleX ?? 1
+          const scaleY = child.scaleY ?? 1
+
+          const updates: Partial<PenNode> = {
+            x: absLeft - offsetX,
+            y: absTop - offsetY,
+            rotation: child.angle ?? 0,
+          }
+          if (child.width !== undefined) {
+            ;(updates as Record<string, unknown>).width =
+              child.width * scaleX
+          }
+          if (child.height !== undefined) {
+            ;(updates as Record<string, unknown>).height =
+              child.height * scaleY
+          }
+
+          useDocumentStore.getState().updateNode(obj.penNodeId, updates)
+        }
+        setFabricSyncLock(false)
+      }
+
+      /**
+       * Route to the correct sync helper depending on whether the target is a
+       * single object or an ActiveSelection.
+       */
+      const syncTargetToStore = (target: fabric.FabricObject) => {
+        const asPen = target as FabricObjectWithPenId
+        if (asPen.penNodeId) {
+          syncObjToStore(asPen)
+        } else if ('getObjects' in target) {
+          syncSelectionToStore(target)
+        }
+      }
+
+      // History batching: group all intermediate drag/resize/rotate updates
+      // into a single undo entry instead of one per mouse-move event.
+      canvas.on('mouse:down', () => {
+        useHistoryStore
+          .getState()
+          .startBatch(useDocumentStore.getState().document)
+      })
+      canvas.on('mouse:up', () => {
+        useHistoryStore.getState().endBatch()
+      })
+
+      // Real-time sync during drag / resize / rotate (locked to prevent circular sync)
       canvas.on('object:moving', (opt) => {
-        syncObjToStore(opt.target as FabricObjectWithPenId)
+        // Calculate guides + snap BEFORE syncing so the store gets the snapped position
+        calculateAndSnap(opt.target, canvas)
+        syncTargetToStore(opt.target)
       })
       canvas.on('object:scaling', (opt) => {
-        syncObjToStore(opt.target as FabricObjectWithPenId)
+        syncTargetToStore(opt.target)
       })
       canvas.on('object:rotating', (opt) => {
-        syncObjToStore(opt.target as FabricObjectWithPenId)
+        syncTargetToStore(opt.target)
       })
 
       // Final sync: reset scale to 1 and bake into width/height
       canvas.on('object:modified', (opt) => {
+        clearGuides()
+        const target = opt.target
+
+        // Single object -- bake scale and sync
+        const asPen = target as FabricObjectWithPenId
+        if (asPen.penNodeId) {
+          const scaleX = target.scaleX ?? 1
+          const scaleY = target.scaleY ?? 1
+          if (target.width !== undefined) {
+            target.set({ width: target.width * scaleX, scaleX: 1 })
+          }
+          if (target.height !== undefined) {
+            target.set({ height: target.height * scaleY, scaleY: 1 })
+          }
+          target.setCoords()
+          syncObjToStore(asPen)
+        } else if ('getObjects' in target) {
+          // ActiveSelection -- bake scale per child, then sync all
+          const group = target as fabric.ActiveSelection
+          for (const child of group.getObjects()) {
+            const sx = child.scaleX ?? 1
+            const sy = child.scaleY ?? 1
+            if (child.width !== undefined) {
+              child.set({ width: child.width * sx, scaleX: 1 })
+            }
+            if (child.height !== undefined) {
+              child.set({ height: child.height * sy, scaleY: 1 })
+            }
+            child.setCoords()
+          }
+          syncSelectionToStore(target)
+        }
+
+        // Rebuild nodeRenderInfo after locked sync so subsequent property
+        // changes from the panel use fresh parent-offset data.
+        rebuildNodeRenderInfo()
+      })
+
+      // --- Text editing: sync edited content back to document store ---
+      canvas.on('text:editing:exited', (opt) => {
         const obj = opt.target as FabricObjectWithPenId
         if (!obj?.penNodeId) return
 
-        const scaleX = obj.scaleX ?? 1
-        const scaleY = obj.scaleY ?? 1
-        if (obj.width !== undefined) {
-          obj.set({ width: obj.width * scaleX, scaleX: 1 })
-        }
-        if (obj.height !== undefined) {
-          obj.set({ height: obj.height * scaleY, scaleY: 1 })
-        }
-        obj.setCoords()
+        const text =
+          'text' in obj ? (obj as fabric.IText | fabric.Textbox).text : undefined
+        if (text === undefined) return
 
-        syncObjToStore(obj)
+        setFabricSyncLock(true)
+        useDocumentStore.getState().updateNode(obj.penNodeId, {
+          content: text,
+        } as Partial<PenNode>)
+        setFabricSyncLock(false)
       })
 
       return () => {

@@ -42,6 +42,8 @@ export interface PenNodeBase {
   rotation?: number
   opacity?: number | string // number or $variable
   enabled?: boolean | string
+  visible?: boolean // default true
+  locked?: boolean // default false
   flipX?: boolean
   flipY?: boolean
   theme?: Record<string, string>

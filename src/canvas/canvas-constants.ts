@@ -6,3 +6,9 @@ export const DEFAULT_FILL = '#d1d5db'
 export const DEFAULT_STROKE = '#374151'
 export const DEFAULT_STROKE_WIDTH = 1
 export const CANVAS_BACKGROUND = '#f5f5f5'
+export const SELECTION_BLUE = '#0d99ff'
+
+// Smart guides
+export const GUIDE_COLOR = '#FF6B35'
+export const GUIDE_LINE_WIDTH = 1
+export const GUIDE_DASH = [3, 3]
