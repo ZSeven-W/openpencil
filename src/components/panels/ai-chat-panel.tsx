@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
-import { Send, Trash2, Minus, Maximize2, Sparkles, ChevronDown } from 'lucide-react'
+import { Send, Plus, ChevronDown, ChevronUp, Check, MessageSquare } from 'lucide-react'
 import { nanoid } from 'nanoid'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
@@ -7,6 +7,7 @@ import { useAIStore } from '@/stores/ai-store'
 import type { PanelCorner } from '@/stores/ai-store'
 import { useCanvasStore } from '@/stores/canvas-store'
 import { useDocumentStore } from '@/stores/document-store'
+import { useAgentSettingsStore } from '@/stores/agent-settings-store'
 import { streamChat, fetchAvailableModels } from '@/services/ai/ai-service'
 import {
   CHAT_SYSTEM_PROMPT,
@@ -14,23 +15,31 @@ import {
 } from '@/services/ai/ai-prompts'
 import { extractAndApplyDesign } from '@/services/ai/design-generator'
 import type { ChatMessage as ChatMessageType } from '@/services/ai/ai-types'
+import type { AIProviderType } from '@/types/agent-settings'
+import ClaudeLogo from '@/components/icons/claude-logo'
+import OpenAILogo from '@/components/icons/openai-logo'
 import ChatMessage from './chat-message'
+
+const PROVIDER_ICON: Record<AIProviderType, typeof ClaudeLogo> = {
+  anthropic: ClaudeLogo,
+  openai: OpenAILogo,
+}
 
 const QUICK_ACTIONS = [
   {
-    label: '生成登录页',
+    label: 'Design a mobile login screen',
     prompt: 'Design a modern mobile login screen with email input, password input, login button, and social login options',
   },
   {
-    label: '生成卡片',
+    label: 'Create a product card component',
     prompt: 'Create a product card with an image placeholder, title, price, and buy button',
   },
   {
-    label: '生成导航栏',
+    label: 'Design a bottom navigation bar',
     prompt: 'Design a mobile app bottom navigation bar with 5 tabs: Home, Search, Add, Messages, Profile',
   },
   {
-    label: '配色建议',
+    label: 'Suggest a color palette for my app',
     prompt: 'Suggest a modern color palette for a pet care app',
   },
 ]
@@ -213,11 +222,11 @@ export function AIChatMinimizedBar() {
     <button
       type="button"
       onClick={toggleMinimize}
-      className="h-7 bg-card border border-border rounded-lg flex items-center gap-1.5 px-3 shadow-lg hover:bg-accent transition-colors"
+      className="h-8 bg-card border border-border rounded-lg flex items-center gap-1.5 px-3 shadow-lg hover:bg-accent transition-colors"
     >
-      <Sparkles size={12} className="text-purple-400" />
-      <span className="text-xs text-muted-foreground">AI Assistant</span>
-      <Maximize2 size={12} className="text-muted-foreground" />
+      <MessageSquare size={13} className="text-muted-foreground" />
+      <span className="text-xs text-muted-foreground">New Chat</span>
+      <ChevronUp size={12} className="text-muted-foreground" />
     </button>
   )
 }
@@ -244,8 +253,11 @@ export default function AIChatPanel() {
   const setModel = useAIStore((s) => s.setModel)
   const availableModels = useAIStore((s) => s.availableModels)
   const setAvailableModels = useAIStore((s) => s.setAvailableModels)
+  const modelGroups = useAIStore((s) => s.modelGroups)
+  const setModelGroups = useAIStore((s) => s.setModelGroups)
   const isLoadingModels = useAIStore((s) => s.isLoadingModels)
   const setLoadingModels = useAIStore((s) => s.setLoadingModels)
+  const providers = useAgentSettingsStore((s) => s.providers)
   const [modelDropdownOpen, setModelDropdownOpen] = useState(false)
   const { input, setInput, handleSend } = useChatHandlers()
 
@@ -253,21 +265,53 @@ export default function AIChatPanel() {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
 
-  // Fetch available models on mount
+  // Build model list from connected providers in agent-settings-store.
+  // Falls back to Agent SDK legacy fetch when no providers are connected.
   useEffect(() => {
-    if (availableModels.length > 0) return
-    setLoadingModels(true)
-    fetchAvailableModels().then((models) => {
-      if (models.length > 0) {
-        setAvailableModels(models)
-        // Set default model if current model is not in the list
-        if (!models.some((m) => m.value === model)) {
-          setModel(models[0].value)
-        }
+    const connectedProviders = (Object.keys(providers) as AIProviderType[]).filter(
+      (p) => providers[p].isConnected && (providers[p].models?.length ?? 0) > 0,
+    )
+
+    if (connectedProviders.length > 0) {
+      // Build groups + flat list from stored models
+      const providerNames: Record<AIProviderType, string> = {
+        anthropic: 'Anthropic',
+        openai: 'OpenAI',
+      }
+      const groups = connectedProviders.map((p) => ({
+        provider: p,
+        providerName: providerNames[p],
+        models: providers[p].models,
+      }))
+      const flat = groups.flatMap((g) =>
+        g.models.map((m) => ({
+          value: m.value,
+          displayName: m.displayName,
+          description: m.description,
+        })),
+      )
+      setModelGroups(groups)
+      setAvailableModels(flat)
+      // If current model not in list, select first
+      if (!flat.some((m) => m.value === model)) {
+        setModel(flat[0].value)
       }
       setLoadingModels(false)
-    })
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+    } else {
+      // No providers connected — fall back to Agent SDK legacy model list
+      setModelGroups([])
+      setLoadingModels(true)
+      fetchAvailableModels().then((models) => {
+        if (models.length > 0) {
+          setAvailableModels(models)
+          if (!models.some((m) => m.value === model)) {
+            setModel(models[0].value)
+          }
+        }
+        setLoadingModels(false)
+      })
+    }
+  }, [providers]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Close model dropdown when clicking outside
   useEffect(() => {
@@ -391,102 +435,61 @@ export default function AIChatPanel() {
     <div
       ref={panelRef}
       className={cn(
-        'absolute z-50 w-[360px] rounded-xl shadow-2xl border border-border bg-card/95 backdrop-blur-sm flex flex-col overflow-hidden',
+        'absolute z-50 w-[320px] rounded-xl shadow-2xl border border-border bg-card/95 backdrop-blur-sm flex flex-col',
         !dragStyle && CORNER_CLASSES[panelCorner],
       )}
       style={dragStyle ?? undefined}
     >
       {/* --- Header (draggable) --- */}
       <div
-        className="flex items-center justify-between px-3 py-2 border-b border-border cursor-grab active:cursor-grabbing select-none"
+        className="flex items-center justify-between px-1 py-1 border-b border-border cursor-grab active:cursor-grabbing select-none"
         onPointerDown={handleDragStart}
         onPointerMove={handleDragMove}
         onPointerUp={handleDragEnd}
       >
-        <div className="flex items-center gap-2">
-          <Sparkles size={14} className="text-purple-400" />
-          {/* Model selector */}
-          <div className="relative">
-            <button
-              type="button"
-              onClick={() => setModelDropdownOpen((v) => !v)}
-              disabled={isLoadingModels || availableModels.length === 0}
-              className="flex items-center gap-1 text-xs font-medium text-foreground hover:text-accent-foreground transition-colors"
-            >
-              <span className="max-w-[120px] truncate">
-                {availableModels.find((m) => m.value === model)?.displayName ?? model}
-              </span>
-              <ChevronDown size={10} className="text-muted-foreground shrink-0" />
-            </button>
-            {modelDropdownOpen && availableModels.length > 0 && (
-              <div className="absolute top-full left-0 mt-1 z-[60] w-56 rounded-lg border border-border bg-card shadow-xl py-1 max-h-60 overflow-y-auto">
-                {availableModels.map((m) => (
-                  <button
-                    key={m.value}
-                    type="button"
-                    onClick={() => {
-                      setModel(m.value)
-                      setModelDropdownOpen(false)
-                    }}
-                    className={cn(
-                      'w-full text-left px-3 py-1.5 text-xs transition-colors',
-                      m.value === model
-                        ? 'bg-secondary text-foreground'
-                        : 'text-muted-foreground hover:bg-accent hover:text-foreground',
-                    )}
-                  >
-                    <span className="font-medium">{m.displayName}</span>
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
         <div className="flex items-center gap-1">
-          {messages.length > 0 && (
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              onClick={clearMessages}
-              title="Clear chat"
-            >
-              <Trash2 size={12} />
-            </Button>
-          )}
           <Button
             variant="ghost"
             size="icon-sm"
             onClick={toggleMinimize}
-            title="Minimize"
+            title="Collapse"
           >
-            <Minus size={12} />
+            <ChevronDown size={14} />
           </Button>
+          <span className="text-sm font-medium text-foreground">New Chat</span>
         </div>
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          onClick={clearMessages}
+          title="New chat"
+        >
+          <Plus size={14} />
+        </Button>
       </div>
 
       {/* --- Messages --- */}
-      <div className="overflow-y-auto p-3 max-h-[350px]">
+      <div className="flex-1 overflow-y-auto px-3.5 py-3 max-h-[350px] bg-background/80 rounded-b-xl">
         {messages.length === 0 ? (
-          <div className="text-center mt-4">
-            <div className="text-2xl mb-2">🎨</div>
-            <p className="text-sm text-foreground mb-1 font-medium">
-              Design with AI
-            </p>
+          <div className="flex flex-col items-center justify-center py-4">
             <p className="text-xs text-muted-foreground mb-4">
-              Describe any UI and it appears on canvas
+              Try an example to design...
             </p>
-            <div className="flex flex-wrap gap-2 justify-center">
+            <div className="flex flex-col gap-2 w-full px-2">
               {QUICK_ACTIONS.map((action) => (
                 <button
                   key={action.label}
                   type="button"
                   onClick={() => handleSend(action.prompt)}
-                  className="text-xs px-2.5 py-1.5 rounded-full bg-secondary text-secondary-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
+                  className="text-xs text-left px-3.5 py-1 rounded-full bg-secondary/50 border border-border text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors"
                 >
                   {action.label}
                 </button>
               ))}
             </div>
+            <p className="text-[10px] text-muted-foreground/50 mt-5">
+              Tip: Select elements on canvas before chatting for context.
+            </p>
           </div>
         ) : (
           messages.map((msg) => (
@@ -502,30 +505,138 @@ export default function AIChatPanel() {
         <div ref={messagesEndRef} />
       </div>
 
-      {/* --- Input --- */}
-      <div className="p-2 border-t border-border">
-        <div className="flex items-end gap-1.5 bg-background/50 rounded-lg border border-input focus-within:border-ring transition-colors">
-          <textarea
-            ref={inputRef}
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={handleKeyDown}
-            placeholder={isStreaming ? 'Generating...' : 'Ask AI anything...'}
-            disabled={isStreaming}
-            rows={1}
-            className="flex-1 bg-transparent text-sm text-foreground placeholder-muted-foreground px-3 py-2 resize-none outline-none max-h-24 min-h-[36px]"
-          />
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            onClick={() => handleSend()}
-            disabled={isStreaming || !input.trim()}
-            title="Send message"
-            className="shrink-0 m-1"
+      {/* --- Input area --- */}
+      <div className="relative border-t border-border bg-card rounded-b-xl">
+        <textarea
+          ref={inputRef}
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          onKeyDown={handleKeyDown}
+          placeholder={isStreaming ? 'Generating...' : 'Design with Claude or Codex...'}
+          disabled={isStreaming}
+          rows={2}
+          className="w-full bg-transparent text-sm text-foreground placeholder-muted-foreground px-3.5 pt-3 pb-2 resize-none outline-none max-h-28 min-h-[52px]"
+        />
+
+        {/* --- Bottom bar: model selector + actions --- */}
+        <div className="flex items-center justify-between px-2 pb-2">
+          {/* Model selector */}
+          <button
+            type="button"
+            onClick={() => setModelDropdownOpen((v) => !v)}
+            disabled={isLoadingModels || availableModels.length === 0}
+            className="flex items-center gap-1.5 text-[11px] text-muted-foreground hover:text-foreground transition-colors px-1.5 py-1 rounded-md hover:bg-secondary"
           >
-            <Send size={14} />
-          </Button>
+            {(() => {
+              const currentProvider = modelGroups.find((g) =>
+                g.models.some((m) => m.value === model),
+              )?.provider
+              if (currentProvider) {
+                const ProvIcon = PROVIDER_ICON[currentProvider]
+                return <ProvIcon className="w-3.5 h-3.5 shrink-0" />
+              }
+              return null
+            })()}
+            <span className="truncate max-w-[160px]">
+              {isLoadingModels
+                ? 'Loading models...'
+                : availableModels.find((m) => m.value === model)?.displayName ?? model}
+            </span>
+            <ChevronUp size={10} className="shrink-0" />
+          </button>
+
+          {/* Action icons */}
+          <div className="flex items-center gap-0.5">
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              onClick={() => handleSend()}
+              disabled={isStreaming || !input.trim()}
+              title="Send message"
+              className={cn(
+                'shrink-0 rounded-lg h-7 w-7',
+                input.trim() && !isStreaming
+                  ? 'bg-foreground text-background hover:bg-foreground/90'
+                  : '',
+              )}
+            >
+              <Send size={13} />
+            </Button>
+          </div>
         </div>
+
+        {/* Upward model dropdown */}
+        {modelDropdownOpen && availableModels.length > 0 && (
+          <div className="absolute bottom-full left-2 right-2 mb-1 z-[60] rounded-lg border border-border bg-card shadow-xl py-1 max-h-72 overflow-y-auto">
+            {modelGroups.length > 0
+              ? modelGroups.map((group) => {
+                  const GIcon = PROVIDER_ICON[group.provider]
+                  return (
+                    <div key={group.provider}>
+                      <div className="flex items-center gap-1.5 px-3 pt-2.5 pb-1">
+                        <GIcon className="w-3 h-3 text-muted-foreground" />
+                        <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
+                          {group.providerName}
+                        </span>
+                      </div>
+                      {group.models.map((m, idx) => {
+                        const isSelected = m.value === model
+                        return (
+                          <button
+                            key={m.value}
+                            type="button"
+                            onClick={() => {
+                              setModel(m.value)
+                              setModelDropdownOpen(false)
+                            }}
+                            className={cn(
+                              'w-full flex items-center gap-2 px-3 py-1.5 text-xs transition-colors',
+                              isSelected
+                                ? 'bg-secondary text-foreground'
+                                : 'text-muted-foreground hover:bg-accent hover:text-foreground',
+                            )}
+                          >
+                            <span className="w-3.5 shrink-0">
+                              {isSelected && <Check size={12} />}
+                            </span>
+                            <span className="font-medium">{m.displayName}</span>
+                            {idx === 0 && (
+                              <span className="text-[9px] text-muted-foreground bg-secondary px-1 py-0.5 rounded ml-auto">
+                                Best
+                              </span>
+                            )}
+                          </button>
+                        )
+                      })}
+                    </div>
+                  )
+                })
+              : availableModels.map((m) => {
+                  const isSelected = m.value === model
+                  return (
+                    <button
+                      key={m.value}
+                      type="button"
+                      onClick={() => {
+                        setModel(m.value)
+                        setModelDropdownOpen(false)
+                      }}
+                      className={cn(
+                        'w-full flex items-center gap-2 px-3 py-1.5 text-xs transition-colors',
+                        isSelected
+                          ? 'bg-secondary text-foreground'
+                          : 'text-muted-foreground hover:bg-accent hover:text-foreground',
+                      )}
+                    >
+                      <span className="w-3.5 shrink-0">
+                        {isSelected && <Check size={12} />}
+                      </span>
+                      <span className="font-medium">{m.displayName}</span>
+                    </button>
+                  )
+                })}
+          </div>
+        )}
       </div>
     </div>
   )

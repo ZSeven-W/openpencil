@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import type { ChatMessage } from '@/services/ai/ai-types'
+import type { ModelGroup } from '@/types/agent-settings'
 
 export type PanelCorner = 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right'
 
@@ -18,12 +19,14 @@ interface AIState {
   codeFormat: 'react-tailwind' | 'html-css' | 'react-inline'
   model: string
   availableModels: AIModelInfo[]
+  modelGroups: ModelGroup[]
   isLoadingModels: boolean
   panelCorner: PanelCorner
   isMinimized: boolean
 
   setModel: (model: string) => void
   setAvailableModels: (models: AIModelInfo[]) => void
+  setModelGroups: (groups: ModelGroup[]) => void
   setLoadingModels: (v: boolean) => void
   addMessage: (msg: ChatMessage) => void
   updateLastMessage: (content: string) => void
@@ -47,6 +50,7 @@ export const useAIStore = create<AIState>((set) => ({
   codeFormat: 'react-tailwind',
   model: 'claude-sonnet-4-5-20250929',
   availableModels: [],
+  modelGroups: [],
   isLoadingModels: false,
   panelCorner: 'bottom-left',
   isMinimized: false,
@@ -78,6 +82,7 @@ export const useAIStore = create<AIState>((set) => ({
 
   setModel: (model) => set({ model }),
   setAvailableModels: (availableModels) => set({ availableModels }),
+  setModelGroups: (modelGroups) => set({ modelGroups }),
   setLoadingModels: (isLoadingModels) => set({ isLoadingModels }),
   clearMessages: () => set({ messages: [] }),
 

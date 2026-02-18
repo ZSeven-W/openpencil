@@ -33,7 +33,6 @@ export default defineEventHandler(async (event) => {
 /** Generate via Anthropic SDK */
 async function generateViaAnthropicSDK(apiKey: string, body: GenerateBody, model?: string) {
   try {
-    // @ts-expect-error — optional dependency, only used when ANTHROPIC_API_KEY is set
     const { default: Anthropic } = await import('@anthropic-ai/sdk')
     const client = new Anthropic({ apiKey })
     const response = await client.messages.create({
@@ -43,8 +42,8 @@ async function generateViaAnthropicSDK(apiKey: string, body: GenerateBody, model
       messages: [{ role: 'user', content: body.message }],
     })
 
-    const textBlock = response.content.find((b: { type: string }) => b.type === 'text')
-    return { text: textBlock?.text ?? '' }
+    const textBlock = response.content.find((b) => b.type === 'text')
+    return { text: textBlock && 'text' in textBlock ? textBlock.text : '' }
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown error'
     return { error: message }

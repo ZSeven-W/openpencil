@@ -9,8 +9,8 @@ interface ModelInfo {
 let cachedModels: ModelInfo[] | null = null
 
 /**
- * Returns the list of available AI models.
- * Fetches from Claude Agent SDK and caches the result.
+ * Returns the list of available AI models via Claude Agent SDK.
+ * Used as a fallback when no providers are explicitly connected.
  */
 export default defineEventHandler(async () => {
   if (cachedModels) {

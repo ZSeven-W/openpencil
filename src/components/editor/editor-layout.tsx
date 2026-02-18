@@ -9,9 +9,11 @@ import AIChatPanel, { AIChatMinimizedBar } from '@/components/panels/ai-chat-pan
 import CodePanel from '@/components/panels/code-panel'
 import ExportDialog from '@/components/shared/export-dialog'
 import SaveDialog from '@/components/shared/save-dialog'
+import AgentSettingsDialog from '@/components/shared/agent-settings-dialog'
 import { useAIStore } from '@/stores/ai-store'
 import { useCanvasStore } from '@/stores/canvas-store'
 import { useDocumentStore } from '@/stores/document-store'
+import { useAgentSettingsStore } from '@/stores/agent-settings-store'
 
 const FabricCanvas = lazy(() => import('@/canvas/fabric-canvas'))
 
@@ -58,10 +60,22 @@ export default function EditorLayout() {
         setExportOpen((prev) => !prev)
         return
       }
+
+      // Cmd+,: open agent settings
+      if (isMod && e.key === ',') {
+        e.preventDefault()
+        useAgentSettingsStore.getState().setDialogOpen(true)
+        return
+      }
     }
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
   }, [toggleMinimize, toggleCodePanel])
+
+  // Hydrate persisted agent settings
+  useEffect(() => {
+    useAgentSettingsStore.getState().hydrate()
+  }, [])
 
   return (
     <TooltipProvider delayDuration={300}>
@@ -101,6 +115,7 @@ export default function EditorLayout() {
         </div>
         <ExportDialog open={exportOpen} onClose={closeExport} />
         <SaveDialog open={saveDialogOpen} onClose={closeSaveDialog} />
+        <AgentSettingsDialog />
       </div>
     </TooltipProvider>
   )
