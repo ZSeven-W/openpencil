@@ -1,15 +1,18 @@
 import { useState, useRef, useEffect } from 'react'
+import { cn } from '@/lib/utils'
 
 interface ColorPickerProps {
   value: string
   onChange: (color: string) => void
   label?: string
+  className?: string
 }
 
 export default function ColorPicker({
   value,
   onChange,
   label,
+  className,
 }: ColorPickerProps) {
   const [hexInput, setHexInput] = useState(value)
   const inputRef = useRef<HTMLInputElement>(null)
@@ -40,27 +43,31 @@ export default function ColorPicker({
   }
 
   return (
-    <div className="flex items-center gap-2">
+    <div className={cn('flex items-center gap-1.5', className)}>
       {label && (
-        <span className="text-xs text-muted-foreground">{label}</span>
+        <span className="text-[10px] text-muted-foreground shrink-0">
+          {label}
+        </span>
       )}
-      <div className="relative">
+      <div className="flex items-center h-6 bg-secondary rounded border border-transparent hover:border-input focus-within:border-ring transition-colors flex-1">
+        <div className="pl-1 shrink-0">
+          <input
+            type="color"
+            value={value.slice(0, 7)}
+            onChange={handleNativeChange}
+            className="w-4 h-4 rounded border border-input/50 cursor-pointer bg-transparent p-0"
+          />
+        </div>
         <input
-          type="color"
-          value={value.slice(0, 7)}
-          onChange={handleNativeChange}
-          className="w-6 h-6 rounded-md border border-input cursor-pointer bg-transparent p-0"
+          ref={inputRef}
+          type="text"
+          value={hexInput}
+          onChange={handleHexChange}
+          onBlur={handleBlur}
+          className="flex-1 bg-transparent text-foreground text-[11px] px-1.5 py-0.5 focus:outline-none font-mono tabular-nums min-w-0"
+          placeholder="#000000"
         />
       </div>
-      <input
-        ref={inputRef}
-        type="text"
-        value={hexInput}
-        onChange={handleHexChange}
-        onBlur={handleBlur}
-        className="flex-1 bg-secondary text-foreground text-xs px-1.5 py-1 rounded-md border border-input focus:border-ring focus:outline-none font-mono transition-colors"
-        placeholder="#000000"
-      />
     </div>
   )
 }

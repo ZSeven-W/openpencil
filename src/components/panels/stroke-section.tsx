@@ -1,5 +1,6 @@
 import ColorPicker from '@/components/shared/color-picker'
 import NumberInput from '@/components/shared/number-input'
+import SectionHeader from '@/components/shared/section-header'
 import type { PenNode } from '@/types/pen'
 import type { PenStroke, PenFill } from '@/types/styles'
 
@@ -43,19 +44,19 @@ export default function StrokeSection({
   }
 
   return (
-    <div className="space-y-2">
-      <h4 className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-        Stroke
-      </h4>
-      <ColorPicker value={strokeColor} onChange={handleColorChange} />
-      <NumberInput
-        label="W"
-        value={strokeWidth}
-        onChange={handleWidthChange}
-        min={0}
-        max={100}
-        step={1}
-      />
+    <div className="space-y-1.5">
+      <SectionHeader title="Stroke" />
+      <div className="flex items-center gap-1">
+        <ColorPicker value={strokeColor} onChange={handleColorChange} />
+        <NumberInput
+          value={strokeWidth}
+          onChange={handleWidthChange}
+          min={0}
+          max={100}
+          step={1}
+          className="w-14"
+        />
+      </div>
     </div>
   )
 }

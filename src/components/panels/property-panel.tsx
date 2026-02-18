@@ -1,11 +1,11 @@
 import { useCanvasStore } from '@/stores/canvas-store'
 import { useDocumentStore } from '@/stores/document-store'
+import { Separator } from '@/components/ui/separator'
 import type { PenNode } from '@/types/pen'
 import SizeSection from './size-section'
 import FillSection from './fill-section'
 import StrokeSection from './stroke-section'
 import AppearanceSection from './appearance-section'
-import CornerRadiusSection from './corner-radius-section'
 import TextSection from './text-section'
 import EffectsSection from './effects-section'
 
@@ -29,12 +29,12 @@ export default function PropertyPanel() {
     return (
       <div className="w-64 bg-card border-l border-border flex flex-col shrink-0">
         <div className="h-8 flex items-center px-3 border-b border-border">
-          <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-            Properties
+          <span className="text-[11px] font-medium text-muted-foreground">
+            Design
           </span>
         </div>
         <div className="flex-1 flex items-center justify-center">
-          <p className="text-xs text-muted-foreground px-4 text-center">
+          <p className="text-[11px] text-muted-foreground px-4 text-center">
             Select an element to view its properties.
           </p>
         </div>
@@ -53,47 +53,71 @@ export default function PropertyPanel() {
   return (
     <div className="w-64 bg-card border-l border-border flex flex-col shrink-0">
       <div className="h-8 flex items-center px-3 border-b border-border">
-        <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+        <span className="text-[11px] font-medium text-foreground">
           {node.name ?? node.type}
         </span>
       </div>
-      <div className="flex-1 overflow-y-auto p-3 space-y-4">
-        <SizeSection node={node} onUpdate={handleUpdate} />
-
-        {hasFill && (
-          <FillSection
-            fills={'fill' in node ? node.fill : undefined}
+      <div className="flex-1 overflow-y-auto">
+        <div className="px-3 py-2">
+          <SizeSection
+            node={node}
             onUpdate={handleUpdate}
-          />
-        )}
-
-        {hasStroke && (
-          <StrokeSection
-            stroke={'stroke' in node ? node.stroke : undefined}
-            onUpdate={handleUpdate}
-          />
-        )}
-
-        {hasCornerRadius && (
-          <CornerRadiusSection
+            hasCornerRadius={hasCornerRadius}
             cornerRadius={
               'cornerRadius' in node ? node.cornerRadius : undefined
             }
-            onUpdate={handleUpdate}
           />
+        </div>
+
+        <Separator />
+
+        {hasFill && (
+          <>
+            <div className="px-3 py-2">
+              <FillSection
+                fills={'fill' in node ? node.fill : undefined}
+                onUpdate={handleUpdate}
+              />
+            </div>
+            <Separator />
+          </>
         )}
 
-        <AppearanceSection node={node} onUpdate={handleUpdate} />
+        {hasStroke && (
+          <>
+            <div className="px-3 py-2">
+              <StrokeSection
+                stroke={'stroke' in node ? node.stroke : undefined}
+                onUpdate={handleUpdate}
+              />
+            </div>
+            <Separator />
+          </>
+        )}
+
+        <div className="px-3 py-2">
+          <AppearanceSection node={node} onUpdate={handleUpdate} />
+        </div>
 
         {hasEffects && (
-          <EffectsSection
-            effects={'effects' in node ? node.effects : undefined}
-            onUpdate={handleUpdate}
-          />
+          <>
+            <Separator />
+            <div className="px-3 py-2">
+              <EffectsSection
+                effects={'effects' in node ? node.effects : undefined}
+                onUpdate={handleUpdate}
+              />
+            </div>
+          </>
         )}
 
         {isText && node.type === 'text' && (
-          <TextSection node={node} onUpdate={handleUpdate} />
+          <>
+            <Separator />
+            <div className="px-3 py-2">
+              <TextSection node={node} onUpdate={handleUpdate} />
+            </div>
+          </>
         )}
       </div>
     </div>

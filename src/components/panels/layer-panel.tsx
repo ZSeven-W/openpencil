@@ -199,7 +199,7 @@ export default function LayerPanel() {
   return (
     <div className="w-56 bg-card border-r border-border flex flex-col shrink-0">
       <div className="h-8 flex items-center px-3 border-b border-border">
-        <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+        <span className="text-xs font-medium text-muted-foreground  tracking-wider">
           Layers
         </span>
       </div>
