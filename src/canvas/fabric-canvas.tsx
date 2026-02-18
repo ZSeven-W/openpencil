@@ -6,6 +6,7 @@ import { useCanvasViewport } from './use-canvas-viewport'
 import { useCanvasSelection } from './use-canvas-selection'
 import { useCanvasSync } from './use-canvas-sync'
 import { useDimensionLabel } from './use-dimension-label'
+import { useFrameLabels } from './use-frame-labels'
 
 export default function FabricCanvas() {
   const canvasRef = useRef<HTMLCanvasElement>(null)
@@ -18,6 +19,7 @@ export default function FabricCanvas() {
   useCanvasSelection()
   useCanvasSync()
   useDimensionLabel(containerRef)
+  useFrameLabels()
 
   return (
     <div
