@@ -26,20 +26,7 @@ export default function PropertyPanel() {
   }
 
   if (!node) {
-    return (
-      <div className="w-64 bg-card border-l border-border flex flex-col shrink-0">
-        <div className="h-8 flex items-center px-3 border-b border-border">
-          <span className="text-[11px] font-medium text-muted-foreground">
-            Design
-          </span>
-        </div>
-        <div className="flex-1 flex items-center justify-center">
-          <p className="text-[11px] text-muted-foreground px-4 text-center">
-            Select an element to view its properties.
-          </p>
-        </div>
-      </div>
-    )
+    return null
   }
 
   const hasFill =

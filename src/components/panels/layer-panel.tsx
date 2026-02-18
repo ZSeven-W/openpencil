@@ -20,45 +20,57 @@ function renderLayerTree(
     onRename: (id: string, name: string) => void
     onToggleVisibility: (id: string) => void
     onToggleLock: (id: string) => void
+    onToggleExpand: (id: string) => void
     onContextMenu: (e: React.MouseEvent, id: string) => void
     onDragStart: (id: string) => void
     onDragOver: (id: string) => void
     onDragEnd: () => void
   },
   dragOverId: string | null,
+  collapsedIds: Set<string>,
 ) {
-  return [...nodes].reverse().map((node) => (
-    <div key={node.id} className="group">
-      <div
-        className={
-          dragOverId === node.id
-            ? 'border-t-2 border-blue-500'
-            : 'border-t-2 border-transparent'
-        }
-      >
-        <LayerItem
-          id={node.id}
-          name={node.name ?? node.type}
-          type={node.type}
-          depth={depth}
-          selected={selectedIds.includes(node.id)}
-          visible={node.visible !== false}
-          locked={node.locked === true}
-          {...handlers}
-        />
+  return [...nodes].reverse().map((node) => {
+    const nodeChildren =
+      'children' in node && node.children && node.children.length > 0
+        ? node.children
+        : null
+    const isExpanded = !collapsedIds.has(node.id)
+
+    return (
+      <div key={node.id}>
+        <div
+          className={
+            dragOverId === node.id
+              ? 'border-t-2 border-blue-500'
+              : 'border-t-2 border-transparent'
+          }
+        >
+          <LayerItem
+            id={node.id}
+            name={node.name ?? node.type}
+            type={node.type}
+            depth={depth}
+            selected={selectedIds.includes(node.id)}
+            visible={node.visible !== false}
+            locked={node.locked === true}
+            hasChildren={nodeChildren !== null}
+            expanded={isExpanded}
+            {...handlers}
+          />
+        </div>
+        {nodeChildren &&
+          isExpanded &&
+          renderLayerTree(
+            nodeChildren,
+            depth + 1,
+            selectedIds,
+            handlers,
+            dragOverId,
+            collapsedIds,
+          )}
       </div>
-      {'children' in node &&
-        node.children &&
-        node.children.length > 0 &&
-        renderLayerTree(
-          node.children,
-          depth + 1,
-          selectedIds,
-          handlers,
-          dragOverId,
-        )}
-    </div>
-  ))
+    )
+  })
 }
 
 export default function LayerPanel() {
@@ -83,6 +95,19 @@ export default function LayerPanel() {
 
   const dragRef = useRef<DragState>({ dragId: null, overId: null })
   const [dragOverId, setDragOverId] = useState<string | null>(null)
+  const [collapsedIds, setCollapsedIds] = useState<Set<string>>(new Set())
+
+  const handleToggleExpand = useCallback((id: string) => {
+    setCollapsedIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) {
+        next.delete(id)
+      } else {
+        next.add(id)
+      }
+      return next
+    })
+  }, [])
 
   const handleSelect = useCallback(
     (id: string) => {
@@ -190,6 +215,7 @@ export default function LayerPanel() {
     onRename: handleRename,
     onToggleVisibility: toggleVisibility,
     onToggleLock: toggleLock,
+    onToggleExpand: handleToggleExpand,
     onContextMenu: handleContextMenu,
     onDragStart: handleDragStart,
     onDragOver: handleDragOver,
@@ -199,7 +225,7 @@ export default function LayerPanel() {
   return (
     <div className="w-56 bg-card border-r border-border flex flex-col shrink-0">
       <div className="h-8 flex items-center px-3 border-b border-border">
-        <span className="text-xs font-medium text-muted-foreground  tracking-wider">
+        <span className="text-xs font-medium text-muted-foreground tracking-wider">
           Layers
         </span>
       </div>
@@ -209,7 +235,7 @@ export default function LayerPanel() {
             No layers yet. Use the toolbar to draw shapes.
           </p>
         ) : (
-          renderLayerTree(children, 0, selectedIds, handlers, dragOverId)
+          renderLayerTree(children, 0, selectedIds, handlers, dragOverId, collapsedIds)
         )}
       </div>
 
