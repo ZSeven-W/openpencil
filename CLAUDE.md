@@ -14,9 +14,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Architecture
 
-OpenPencil is an open-source vector design tool (alternative to Pencil.dev) with a Design-as-Code philosophy. Built as a **TanStack Start** full-stack React application with Bun runtime.
+OpenPencil is an open-source vector design tool (alternative to Pencil.dev) with a Design-as-Code philosophy. Built as a **TanStack Start** full-stack React application with Bun runtime. Server API powered by **Nitro**.
 
-**Key technologies:** React 19, Fabric.js v7 (canvas engine), Zustand v5 (state management), TanStack Router (file-based routing), Tailwind CSS v4, Vite 7, TypeScript (strict mode).
+**Key technologies:** React 19, Fabric.js v7 (canvas engine), Zustand v5 (state management), TanStack Router (file-based routing), Tailwind CSS v4, shadcn/ui (UI primitives), Vite 7, Nitro (server), TypeScript (strict mode).
 
 ### Data Flow
 
@@ -43,12 +43,19 @@ React Components (Toolbar, LayerPanel, PropertyPanel)
 
 ### Key Modules
 
-- **`src/canvas/`** — Fabric.js integration: canvas init, drawing events, viewport (pan/zoom), selection sync, bidirectional document↔canvas sync, object factory
-- **`src/stores/`** — Zustand stores: `canvas-store` (UI state), `document-store` (PenDocument tree CRUD)
-- **`src/types/`** — Type system: `pen.ts` (PenDocument/PenNode), `canvas.ts` (ToolType), `styles.ts` (Fill/Stroke/Effect)
-- **`src/components/editor/`** — Editor layout, toolbar, tool buttons
-- **`src/components/panels/`** — Layer panel, property panel with section components
-- **`src/components/shared/`** — Reusable UI: ColorPicker, NumberInput, SliderInput
+- **`src/canvas/`** — Fabric.js integration: canvas init, drawing events, viewport (pan/zoom), selection sync, smart guides, bidirectional document↔canvas sync, object factory
+- **`src/stores/`** — Zustand stores: `canvas-store` (UI/tool/selection/viewport), `document-store` (PenDocument tree CRUD), `history-store` (undo/redo), `ai-store` (chat/code generation state)
+- **`src/types/`** — Type system: `pen.ts` (PenDocument/PenNode), `canvas.ts` (ToolType), `styles.ts` (Fill/Stroke/Effect), `variables.ts` (VariableDefinition)
+- **`src/components/editor/`** — Editor layout, toolbar, tool buttons, status bar
+- **`src/components/panels/`** — Layer panel, property panel (fill/stroke/size/corner-radius/effects/text/appearance sections), AI chat panel, code panel
+- **`src/components/shared/`** — Reusable UI: ColorPicker, NumberInput, DropdownSelect, ExportDialog, SaveDialog
+- **`src/components/ui/`** — shadcn/ui primitives: Button, Select, Separator, Slider, Toggle, Tooltip
+- **`src/services/ai/`** — AI chat service, design prompts, design-to-node generation
+- **`src/services/codegen/`** — React+Tailwind and HTML+CSS code generators
+- **`src/hooks/`** — `use-keyboard-shortcuts` (global keyboard event handling)
+- **`src/lib/`** — Utility functions (`utils.ts` with `cn()` for class merging)
+- **`src/utils/`** — File operations (save/open .pen), export (PNG/SVG), node clone, pen file normalization, syntax highlight
+- **`server/api/ai/`** — Nitro server API: `chat.ts` (streaming chat), `generate.ts` (non-streaming generation). Supports Anthropic API key or Claude Agent SDK (local OAuth) as dual providers
 
 ### Fabric.js v7 Gotchas
 
@@ -70,7 +77,7 @@ File-based routing via TanStack Router. Routes in `src/routes/`, auto-generated 
 
 ### Styling
 
-Tailwind CSS v4 imported via `src/styles.css`. Icons from `lucide-react`.
+Tailwind CSS v4 imported via `src/styles.css`. UI primitives from shadcn/ui (`src/components/ui/`). Icons from `lucide-react`. shadcn/ui config in `components.json`.
 
 ## Code Style
 
@@ -109,3 +116,7 @@ Tailwind CSS v4 imported via `src/styles.css`. Icons from `lucide-react`.
 - subject 用英文，小写开头，不加句号，祈使语气（如 `add`、`fix`、`remove`）。
 - body 可选，解释 **why** 而非 what，可用中英文。
 - 一个 commit 只做一件事。不要把不相关的改动混在一起。
+
+## License
+
+MIT License. See [LICENSE](./LICENSE) for details.

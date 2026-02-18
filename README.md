@@ -14,7 +14,7 @@ Open-source vector design tool with a Design-as-Code philosophy. An alternative 
 - **File operations**: Save/open .pen files (JSON-based, Git-friendly), auto-save support
 - **Export**: PNG and SVG export with scale options (Cmd+Shift+E)
 - **Code generation**: Generate React+Tailwind or HTML+CSS code from designs (Cmd+Shift+C)
-- **AI assistant**: Built-in AI chat panel for design assistance (Cmd+J)
+- **AI assistant**: Built-in AI chat panel for design assistance (Cmd+J), supports Anthropic API or local Claude Code
 - **Keyboard shortcuts**: Tool keys (V/R/O/L/T/F/H), Delete, arrow nudge, bracket keys for z-order, Cmd+A select all
 
 ## Tech Stack
@@ -22,8 +22,10 @@ Open-source vector design tool with a Design-as-Code philosophy. An alternative 
 - **Framework:** [TanStack Start](https://tanstack.com/start) (React 19, SSR, file-based routing)
 - **Canvas:** [Fabric.js](http://fabricjs.com/) v7
 - **State:** [Zustand](https://zustand-demo.pmnd.rs/) v5
+- **UI:** [shadcn/ui](https://ui.shadcn.com/) (Radix + Tailwind primitives)
 - **Styling:** [Tailwind CSS](https://tailwindcss.com/) v4
 - **Icons:** [Lucide React](https://lucide.dev/)
+- **Server:** [Nitro](https://nitro.build/) (API routes)
 - **Runtime:** [Bun](https://bun.sh/)
 - **Build:** [Vite](https://vite.dev/) 7
 
@@ -35,6 +37,13 @@ bun --bun run dev
 ```
 
 Open http://localhost:3000 and click "New Design" to enter the editor.
+
+### AI Configuration
+
+The AI assistant works in two modes:
+
+- **Anthropic API**: Set `ANTHROPIC_API_KEY` in `.env`
+- **Local Claude Code**: No config needed — uses Claude Agent SDK with OAuth login as fallback
 
 ## Scripts
 
@@ -49,21 +58,23 @@ Open http://localhost:3000 and click "New Design" to enter the editor.
 
 ```
 src/
-  canvas/          # Fabric.js canvas engine, drawing, sync, guides
+  canvas/            # Fabric.js canvas engine, drawing, sync, guides
   components/
-    editor/        # Editor layout, toolbar
-    panels/        # Layer panel, property panel, AI chat, code panel
-    shared/        # Reusable UI (ColorPicker, NumberInput, ExportDialog, etc.)
-  hooks/           # Keyboard shortcuts
+    editor/          # Editor layout, toolbar, status bar
+    panels/          # Layer panel, property panel, AI chat, code panel
+    shared/          # Reusable UI (ColorPicker, NumberInput, ExportDialog, etc.)
+    ui/              # shadcn/ui primitives (Button, Select, Slider, etc.)
+  hooks/             # Keyboard shortcuts
+  lib/               # Utility functions (cn class merging)
   services/
-    ai/            # AI chat service, prompts, design generation
-    codegen/       # React and HTML code generators
-  stores/          # Zustand stores (canvas, document, history, AI)
-  types/           # PenDocument/PenNode types, style types
-  utils/           # File operations, export, node clone, syntax highlight
-  routes/          # TanStack Router pages (/, /editor)
+    ai/              # AI chat service, prompts, design generation
+    codegen/         # React+Tailwind and HTML+CSS code generators
+  stores/            # Zustand stores (canvas, document, history, AI)
+  types/             # PenDocument/PenNode types, style types, variables
+  utils/             # File operations, export, node clone, syntax highlight
+  routes/            # TanStack Router pages (/, /editor)
 server/
-  api/             # Server-side API endpoints
+  api/ai/            # Nitro API: streaming chat, AI generation
 ```
 
 ## Roadmap
@@ -77,4 +88,4 @@ server/
 
 ## License
 
-MIT
+[MIT](./LICENSE)
