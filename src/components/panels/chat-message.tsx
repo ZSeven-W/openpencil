@@ -1,4 +1,4 @@
-import { useState, useMemo, type ReactNode } from 'react'
+import React, { useState, useMemo, type ReactNode } from 'react'
 import { Copy, Check, Wand2, ChevronDown, ChevronRight } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
@@ -19,6 +19,7 @@ function parseMarkdown(
   text: string,
   onApplyDesign?: (json: string) => void,
   isApplied?: boolean,
+  isStreaming?: boolean,
 ): ReactNode[] {
   const parts: ReactNode[] = []
   const lines = text.split('\n')
@@ -101,7 +102,30 @@ function parseMarkdown(
     }
   }
 
-  return parts
+  // Strip bare '\n' entries adjacent to block-level components (DesignJsonBlock / CodeBlock)
+  const isBlock = (n: ReactNode) =>
+    typeof n === 'object' && n !== null && 'type' in n &&
+    ((n as React.ReactElement).type === DesignJsonBlock || (n as React.ReactElement).type === CodeBlock)
+
+  const cleaned: ReactNode[] = []
+  for (let i = 0; i < parts.length; i++) {
+    if (parts[i] === '\n' && (isBlock(parts[i + 1]) || isBlock(parts[i - 1]))) continue
+    cleaned.push(parts[i])
+  }
+
+  // Append inline streaming cursor — skip if last part is a block component
+  if (isStreaming && cleaned.length > 0) {
+    if (!isBlock(cleaned[cleaned.length - 1])) {
+      cleaned.push(
+        <span
+          key="streaming-cursor"
+          className="inline-block w-1.5 h-3.5 bg-muted-foreground/70 animate-pulse rounded-sm ml-0.5 align-text-bottom"
+        />,
+      )
+    }
+  }
+
+  return cleaned
 }
 
 function parseInlineMarkdown(text: string): ReactNode[] | string {
@@ -230,7 +254,7 @@ function DesignJsonBlock({
   }
 
   return (
-    <div className="my-2 rounded-md bg-background border border-border overflow-hidden">
+    <div className="my-2 rounded-lg border border-border/60 overflow-hidden">
       {/* Header */}
       <button
         type="button"
@@ -244,42 +268,52 @@ function DesignJsonBlock({
             <ChevronRight size={12} className="text-muted-foreground" />
           )}
           <Wand2 size={12} className="text-primary" />
-          <span className="text-xs text-foreground">
+          <span className={cn('text-xs', isStreaming ? 'text-muted-foreground' : 'text-foreground')}>
             {isStreaming
               ? 'Generating design...'
               : `${elementCount} design element${elementCount !== 1 ? 's' : ''}`}
           </span>
         </div>
-        <button
-          type="button"
+        <span
+          role="button"
+          tabIndex={0}
           onClick={(e) => {
             e.stopPropagation()
             handleCopy()
           }}
-          className="text-muted-foreground hover:text-foreground transition-colors p-0.5"
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.stopPropagation()
+              handleCopy()
+            }
+          }}
+          className="text-muted-foreground hover:text-foreground transition-colors p-0.5 cursor-pointer"
           title="Copy JSON"
         >
           {copied ? <Check size={10} /> : <Copy size={10} />}
-        </button>
+        </span>
       </button>
 
       {/* Expandable JSON content */}
       {expanded && (
-        <pre className="p-3 overflow-x-auto text-xs leading-relaxed max-h-48 overflow-y-auto border-t border-border">
-          <code className="text-muted-foreground">{code}</code>
+        <pre className="p-3 overflow-x-auto text-xs leading-relaxed max-h-40 overflow-y-auto border-t border-border/60">
+          <code className="text-muted-foreground/80">{code}</code>
         </pre>
       )}
 
       {/* Apply button (only if not already applied and handler exists) */}
       {onApply && !isApplied && !isStreaming && (
-        <Button
-          onClick={() => onApply(code)}
-          className="w-full rounded-none border-t border-border"
-          size="sm"
-        >
-          <Wand2 size={12} />
-          Apply to Canvas
-        </Button>
+        <div className="px-2.5 py-2 border-t border-border/60">
+          <Button
+            onClick={() => onApply(code)}
+            variant="outline"
+            className="w-full"
+            size="sm"
+          >
+            <Wand2 size={12} />
+            Apply to Canvas
+          </Button>
+        </div>
       )}
     </div>
   )
@@ -303,35 +337,30 @@ export default function ChatMessage({
   if (!isUser && isEmpty && !isStreaming) return null
 
   return (
-    <div className={cn('flex mb-3', isUser ? 'justify-end' : 'justify-start')}>
-      <div
-        className={cn(
-          'max-w-[85%] rounded-lg px-3 py-2 text-sm leading-relaxed whitespace-pre-wrap',
-          isUser
-            ? 'bg-primary text-primary-foreground rounded-br-sm'
-            : 'bg-secondary text-foreground rounded-bl-sm',
-        )}
-      >
-        {/* Streaming with no content yet → thinking indicator */}
-        {!isUser && isEmpty && isStreaming ? (
-          <div className="flex items-center gap-1.5 py-0.5">
-            <span className="text-xs text-muted-foreground">Thinking</span>
-            <span className="flex gap-0.5">
-              <span className="w-1 h-1 rounded-full bg-muted-foreground animate-bounce" style={{ animationDelay: '0ms' }} />
-              <span className="w-1 h-1 rounded-full bg-muted-foreground animate-bounce" style={{ animationDelay: '150ms' }} />
-              <span className="w-1 h-1 rounded-full bg-muted-foreground animate-bounce" style={{ animationDelay: '300ms' }} />
-            </span>
-          </div>
-        ) : isUser ? (
-          content
-        ) : (
-          parseMarkdown(content, onApplyDesign, isApplied)
-        )}
-        {/* Streaming cursor — only when there IS content */}
-        {isStreaming && !isEmpty && (
-          <span className="inline-block w-1.5 h-4 bg-muted-foreground animate-pulse ml-0.5 align-text-bottom" />
-        )}
-      </div>
+    <div className={cn('flex', isUser ? 'justify-end' : 'justify-start')}>
+      {isUser ? (
+        <div className="max-w-[85%] rounded-lg px-3 py-2 text-sm leading-relaxed whitespace-pre-wrap bg-primary text-primary-foreground rounded-br-sm">
+          {content}
+        </div>
+      ) : (
+        <div className="text-sm leading-relaxed text-foreground">
+          {/* Streaming with no content yet → thinking indicator */}
+          {isEmpty && isStreaming ? (
+            <div className="flex items-center gap-1.5 bg-secondary/50 rounded-full w-fit py-1 px-2.5">
+              <span className="text-xs text-muted-foreground">Thinking</span>
+              <span className="flex gap-0.5">
+                <span className="w-1 h-1 rounded-full bg-muted-foreground/70 animate-bounce" style={{ animationDelay: '0ms' }} />
+                <span className="w-1 h-1 rounded-full bg-muted-foreground/70 animate-bounce" style={{ animationDelay: '150ms' }} />
+                <span className="w-1 h-1 rounded-full bg-muted-foreground/70 animate-bounce" style={{ animationDelay: '300ms' }} />
+              </span>
+            </div>
+          ) : (
+            <div className="whitespace-pre-wrap">
+              {parseMarkdown(content, onApplyDesign, isApplied, isStreaming && !isEmpty)}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   )
 }
