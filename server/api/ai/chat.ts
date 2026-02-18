@@ -3,6 +3,7 @@ import { defineEventHandler, readBody, setResponseHeaders } from 'h3'
 interface ChatBody {
   system: string
   messages: Array<{ role: 'user' | 'assistant'; content: string }>
+  model?: string
 }
 
 /**
@@ -27,16 +28,16 @@ export default defineEventHandler(async (event) => {
   const apiKey = process.env.ANTHROPIC_API_KEY
   if (apiKey) {
     try {
-      return await streamViaAnthropicSDK(apiKey, body)
+      return await streamViaAnthropicSDK(apiKey, body, body.model)
     } catch {
       // SDK not installed or failed — fall back to Agent SDK
     }
   }
-  return streamViaAgentSDK(body)
+  return streamViaAgentSDK(body, body.model)
 })
 
 /** Stream via Anthropic SDK (when API key is available) */
-async function streamViaAnthropicSDK(apiKey: string, body: ChatBody) {
+async function streamViaAnthropicSDK(apiKey: string, body: ChatBody, model?: string) {
   // @ts-expect-error — optional dependency, only used when ANTHROPIC_API_KEY is set
   const { default: Anthropic } = await import('@anthropic-ai/sdk')
   const client = new Anthropic({ apiKey })
@@ -46,7 +47,7 @@ async function streamViaAnthropicSDK(apiKey: string, body: ChatBody) {
       const encoder = new TextEncoder()
       try {
         const messageStream = client.messages.stream({
-          model: 'claude-sonnet-4-5-20250929',
+          model: model || 'claude-sonnet-4-5-20250929',
           max_tokens: 16384,
           system: body.system,
           messages: body.messages,
@@ -80,7 +81,7 @@ async function streamViaAnthropicSDK(apiKey: string, body: ChatBody) {
 }
 
 /** Stream via Claude Agent SDK (uses local Claude Code OAuth login, no API key needed) */
-function streamViaAgentSDK(body: ChatBody) {
+function streamViaAgentSDK(body: ChatBody, model?: string) {
   const stream = new ReadableStream({
     async start(controller) {
       const encoder = new TextEncoder()
@@ -100,7 +101,7 @@ function streamViaAgentSDK(body: ChatBody) {
           prompt,
           options: {
             systemPrompt: body.system,
-            model: 'claude-sonnet-4-6',
+            model: model || 'claude-sonnet-4-6',
             maxTurns: 1,
             includePartialMessages: true,
             tools: [],

@@ -3,6 +3,7 @@ import { defineEventHandler, readBody, setResponseHeaders } from 'h3'
 interface GenerateBody {
   system: string
   message: string
+  model?: string
 }
 
 /**
@@ -21,22 +22,22 @@ export default defineEventHandler(async (event) => {
   const apiKey = process.env.ANTHROPIC_API_KEY
   if (apiKey) {
     try {
-      return await generateViaAnthropicSDK(apiKey, body)
+      return await generateViaAnthropicSDK(apiKey, body, body.model)
     } catch {
       // SDK not installed or failed — fall back to Agent SDK
     }
   }
-  return generateViaAgentSDK(body)
+  return generateViaAgentSDK(body, body.model)
 })
 
 /** Generate via Anthropic SDK */
-async function generateViaAnthropicSDK(apiKey: string, body: GenerateBody) {
+async function generateViaAnthropicSDK(apiKey: string, body: GenerateBody, model?: string) {
   try {
     // @ts-expect-error — optional dependency, only used when ANTHROPIC_API_KEY is set
     const { default: Anthropic } = await import('@anthropic-ai/sdk')
     const client = new Anthropic({ apiKey })
     const response = await client.messages.create({
-      model: 'claude-sonnet-4-5-20250929',
+      model: model || 'claude-sonnet-4-5-20250929',
       max_tokens: 4096,
       system: body.system,
       messages: [{ role: 'user', content: body.message }],
@@ -51,7 +52,7 @@ async function generateViaAnthropicSDK(apiKey: string, body: GenerateBody) {
 }
 
 /** Generate via Claude Agent SDK (uses local Claude Code OAuth login, no API key needed) */
-async function generateViaAgentSDK(body: GenerateBody): Promise<{ text?: string; error?: string }> {
+async function generateViaAgentSDK(body: GenerateBody, model?: string): Promise<{ text?: string; error?: string }> {
   try {
     const { query } = await import('@anthropic-ai/claude-agent-sdk')
 
@@ -63,7 +64,7 @@ async function generateViaAgentSDK(body: GenerateBody): Promise<{ text?: string;
       prompt: body.message,
       options: {
         systemPrompt: body.system,
-        model: 'claude-sonnet-4-6',
+        model: model || 'claude-sonnet-4-6',
         maxTurns: 1,
         tools: [],
         permissionMode: 'plan',

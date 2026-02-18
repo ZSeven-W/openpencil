@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
-import { Send, Trash2, Minus, Maximize2, Sparkles } from 'lucide-react'
+import { Send, Trash2, Minus, Maximize2, Sparkles, ChevronDown } from 'lucide-react'
 import { nanoid } from 'nanoid'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
@@ -7,7 +7,7 @@ import { useAIStore } from '@/stores/ai-store'
 import type { PanelCorner } from '@/stores/ai-store'
 import { useCanvasStore } from '@/stores/canvas-store'
 import { useDocumentStore } from '@/stores/document-store'
-import { streamChat } from '@/services/ai/ai-service'
+import { streamChat, fetchAvailableModels } from '@/services/ai/ai-service'
 import {
   CHAT_SYSTEM_PROMPT,
   DESIGN_GENERATOR_PROMPT,
@@ -90,6 +90,7 @@ function useChatHandlers() {
   const [input, setInput] = useState('')
   const messages = useAIStore((s) => s.messages)
   const isStreaming = useAIStore((s) => s.isStreaming)
+  const model = useAIStore((s) => s.model)
   const addMessage = useAIStore((s) => s.addMessage)
   const updateLastMessage = useAIStore((s) => s.updateLastMessage)
   const setStreaming = useAIStore((s) => s.setStreaming)
@@ -138,7 +139,7 @@ function useChatHandlers() {
 
       let accumulated = ''
       try {
-        for await (const chunk of streamChat(effectivePrompt, chatHistory)) {
+        for await (const chunk of streamChat(effectivePrompt, chatHistory, model)) {
           if (chunk.type === 'text') {
             accumulated += chunk.content
             updateLastMessage(accumulated)
@@ -165,7 +166,7 @@ function useChatHandlers() {
         updateLastMessage(accumulated)
 
         try {
-          for await (const chunk of streamChat(effectivePrompt, retryHistory)) {
+          for await (const chunk of streamChat(effectivePrompt, retryHistory, model)) {
             if (chunk.type === 'text') {
               accumulated += chunk.content
               updateLastMessage(accumulated)
@@ -192,7 +193,7 @@ function useChatHandlers() {
         return { messages: msgs }
       })
     },
-    [input, isStreaming, messages, addMessage, updateLastMessage, setStreaming],
+    [input, isStreaming, model, messages, addMessage, updateLastMessage, setStreaming],
   )
 
   return { input, setInput, handleSend, isStreaming }
@@ -239,11 +240,47 @@ export default function AIChatPanel() {
   const isMinimized = useAIStore((s) => s.isMinimized)
   const setPanelCorner = useAIStore((s) => s.setPanelCorner)
   const toggleMinimize = useAIStore((s) => s.toggleMinimize)
+  const model = useAIStore((s) => s.model)
+  const setModel = useAIStore((s) => s.setModel)
+  const availableModels = useAIStore((s) => s.availableModels)
+  const setAvailableModels = useAIStore((s) => s.setAvailableModels)
+  const isLoadingModels = useAIStore((s) => s.isLoadingModels)
+  const setLoadingModels = useAIStore((s) => s.setLoadingModels)
+  const [modelDropdownOpen, setModelDropdownOpen] = useState(false)
   const { input, setInput, handleSend } = useChatHandlers()
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
+
+  // Fetch available models on mount
+  useEffect(() => {
+    if (availableModels.length > 0) return
+    setLoadingModels(true)
+    fetchAvailableModels().then((models) => {
+      if (models.length > 0) {
+        setAvailableModels(models)
+        // Set default model if current model is not in the list
+        if (!models.some((m) => m.value === model)) {
+          setModel(models[0].value)
+        }
+      }
+      setLoadingModels(false)
+    })
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Close model dropdown when clicking outside
+  useEffect(() => {
+    if (!modelDropdownOpen) return
+    const handler = (e: MouseEvent) => {
+      const panel = panelRef.current
+      if (panel && !panel.contains(e.target as Node)) {
+        setModelDropdownOpen(false)
+      }
+    }
+    document.addEventListener('pointerdown', handler)
+    return () => document.removeEventListener('pointerdown', handler)
+  }, [modelDropdownOpen])
 
   // Auto-expand when streaming starts while minimized
   useEffect(() => {
@@ -255,7 +292,7 @@ export default function AIChatPanel() {
   /* --- Drag-to-snap handlers --- */
 
   const handleDragStart = useCallback((e: React.PointerEvent) => {
-    if ((e.target as HTMLElement).closest('button, input, textarea')) return
+    if ((e.target as HTMLElement).closest('button, input, textarea, select')) return
 
     const panel = panelRef.current
     if (!panel) return
@@ -368,9 +405,42 @@ export default function AIChatPanel() {
       >
         <div className="flex items-center gap-2">
           <Sparkles size={14} className="text-purple-400" />
-          <span className="text-xs font-medium text-foreground">
-            AI Assistant
-          </span>
+          {/* Model selector */}
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => setModelDropdownOpen((v) => !v)}
+              disabled={isLoadingModels || availableModels.length === 0}
+              className="flex items-center gap-1 text-xs font-medium text-foreground hover:text-accent-foreground transition-colors"
+            >
+              <span className="max-w-[120px] truncate">
+                {availableModels.find((m) => m.value === model)?.displayName ?? model}
+              </span>
+              <ChevronDown size={10} className="text-muted-foreground shrink-0" />
+            </button>
+            {modelDropdownOpen && availableModels.length > 0 && (
+              <div className="absolute top-full left-0 mt-1 z-[60] w-56 rounded-lg border border-border bg-card shadow-xl py-1 max-h-60 overflow-y-auto">
+                {availableModels.map((m) => (
+                  <button
+                    key={m.value}
+                    type="button"
+                    onClick={() => {
+                      setModel(m.value)
+                      setModelDropdownOpen(false)
+                    }}
+                    className={cn(
+                      'w-full text-left px-3 py-1.5 text-xs transition-colors',
+                      m.value === model
+                        ? 'bg-secondary text-foreground'
+                        : 'text-muted-foreground hover:bg-accent hover:text-foreground',
+                    )}
+                  >
+                    <span className="font-medium">{m.displayName}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
         <div className="flex items-center gap-1">
           {messages.length > 0 && (

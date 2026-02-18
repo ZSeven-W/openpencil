@@ -1,4 +1,5 @@
 import type { AIStreamChunk } from './ai-types'
+import type { AIModelInfo } from '@/stores/ai-store'
 
 /**
  * Streams a chat response from the server-side AI endpoint.
@@ -7,12 +8,13 @@ import type { AIStreamChunk } from './ai-types'
 export async function* streamChat(
   systemPrompt: string,
   messages: Array<{ role: 'user' | 'assistant'; content: string }>,
+  model?: string,
 ): AsyncGenerator<AIStreamChunk> {
   try {
     const response = await fetch('/api/ai/chat', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ system: systemPrompt, messages }),
+      body: JSON.stringify({ system: systemPrompt, messages, model }),
     })
 
     if (!response.ok) {
@@ -79,11 +81,12 @@ export async function* streamChat(
 export async function generateCompletion(
   systemPrompt: string,
   userMessage: string,
+  model?: string,
 ): Promise<string> {
   const response = await fetch('/api/ai/generate', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ system: systemPrompt, message: userMessage }),
+    body: JSON.stringify({ system: systemPrompt, message: userMessage, model }),
   })
 
   if (!response.ok) {
@@ -95,4 +98,19 @@ export async function generateCompletion(
     throw new Error(data.error)
   }
   return data.text ?? ''
+}
+
+/**
+ * Fetches available AI models from the server.
+ * The server queries Claude Agent SDK for the supported model list.
+ */
+export async function fetchAvailableModels(): Promise<AIModelInfo[]> {
+  try {
+    const response = await fetch('/api/ai/models')
+    if (!response.ok) return []
+    const data = await response.json()
+    return data.models ?? []
+  } catch {
+    return []
+  }
 }
