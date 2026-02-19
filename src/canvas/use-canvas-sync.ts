@@ -40,6 +40,17 @@ export const nodeRenderInfo = new Map<string, NodeRenderInfo>()
 /** Maps root-frame IDs to their absolute bounds. Rebuilt every sync cycle. */
 export const rootFrameBounds = new Map<string, { x: number; y: number; w: number; h: number }>()
 
+/** Info for layout containers — used by drag-into-layout for hit detection. */
+export interface LayoutContainerInfo {
+  x: number; y: number; w: number; h: number
+  layout: 'vertical' | 'horizontal'
+  padding: Padding
+  gap: number
+}
+
+/** Maps layout container IDs to their absolute bounds + layout info. Rebuilt every sync cycle. */
+export const layoutContainerBounds = new Map<string, LayoutContainerInfo>()
+
 // ---------------------------------------------------------------------------
 // Layout engine — resolves vertical/horizontal auto-layout to absolute x/y
 // ---------------------------------------------------------------------------
@@ -291,16 +302,13 @@ function computeLayoutPositions(
 
     mainPos += (isVertical ? size.h : size.w) + effectiveGap
 
-    // Always propagate resolved pixel dimensions so nested layout
-    // computations and Fabric.js objects get correct numeric sizes.
-    // If the child already has explicit coordinates (e.g. user dragged it),
-    // preserve that manual position instead of forcing layout coordinates.
-    const hasManualX = typeof child.x === 'number'
-    const hasManualY = typeof child.y === 'number'
+    // Always use computed positions for layout children — this function
+    // is only called when layout !== 'none', so all children here are
+    // layout-managed and should not retain manual x/y values.
     const out: Record<string, unknown> = {
       ...child,
-      x: hasManualX ? child.x : computedX,
-      y: hasManualY ? child.y : computedY,
+      x: computedX,
+      y: computedY,
       width: size.w,
       height: size.h,
     }
@@ -421,6 +429,16 @@ function flattenNodes(
         rootFrameBounds.set(node.id, { x: parentAbsX, y: parentAbsY, w: nodeW, h: nodeH })
       }
 
+      // Track layout container bounds for drag-into detection
+      if (layout && layout !== 'none') {
+        const gap = 'gap' in node && typeof (node as any).gap === 'number' ? (node as any).gap : 0
+        layoutContainerBounds.set(node.id, {
+          x: parentAbsX, y: parentAbsY, w: nodeW, h: nodeH,
+          layout: layout as 'vertical' | 'horizontal',
+          padding: pad, gap,
+        })
+      }
+
       // Children inside layout containers are layout-controlled (position not manually editable)
       const childIsLayoutChild = !!(layout && layout !== 'none')
 
@@ -441,6 +459,7 @@ export function rebuildNodeRenderInfo() {
   const state = useDocumentStore.getState()
   nodeRenderInfo.clear()
   rootFrameBounds.clear()
+  layoutContainerBounds.clear()
   flattenNodes(state.document.children, 0, 0, undefined, undefined, undefined, new Map())
 }
 
@@ -523,6 +542,7 @@ export function useCanvasSync() {
       const clipMap = new Map<string, ClipInfo>()
       nodeRenderInfo.clear()
       rootFrameBounds.clear()
+      layoutContainerBounds.clear()
       const flatNodes = flattenNodes(
         state.document.children, 0, 0, undefined, undefined, undefined, clipMap,
       )

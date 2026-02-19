@@ -41,6 +41,12 @@ import {
 } from './layout-reorder'
 import { isEnterableContainer, resolveTargetAtDepth } from './selection-context'
 import { checkDragReparent } from './drag-reparent'
+import {
+  checkDragIntoTarget,
+  commitDragInto,
+  cancelDragInto,
+  isDragIntoActive,
+} from './drag-into-layout'
 
 function createNodeForTool(
   tool: ToolType,
@@ -405,6 +411,7 @@ export function useCanvasEvents() {
 
       // --- History batching for drag/resize/rotate ---
       canvas.on('mouse:down', (opt) => {
+        clipPathsCleared = false
         const tool = useCanvasStore.getState().activeTool
         if (tool !== 'select') return
         const target = opt.target as FabricObjectWithPenId | null
@@ -422,6 +429,9 @@ export function useCanvasEvents() {
 
       canvas.on('mouse:up', () => {
         cancelLayoutDrag()
+        // NOTE: do NOT cancelDragInto() here — object:modified handles the
+        // commit and cleanup.  In Fabric.js v7 mouse:up can fire before
+        // object:modified, which would clear the session prematurely.
         endParentDrag()
         useHistoryStore.getState().endBatch()
       })
@@ -530,7 +540,24 @@ export function useCanvasEvents() {
       })
 
       // Real-time sync during drag / resize / rotate (locked to prevent circular sync)
+      let clipPathsCleared = false
+
       canvas.on('object:moving', (opt) => {
+        // Clear clip paths on first move so content isn't clipped by stale
+        // ancestor frame bounds during drag.  Restored by post-drag re-sync.
+        if (!clipPathsCleared) {
+          clipPathsCleared = true
+          const movingObj = opt.target as FabricObjectWithPenId
+          if (movingObj.clipPath) movingObj.clipPath = undefined
+          // Also clear descendants' clip paths
+          const session = getActiveDragSession()
+          if (session) {
+            for (const [, descObj] of session.descendantObjects) {
+              if (descObj.clipPath) descObj.clipPath = undefined
+            }
+          }
+        }
+
         if (isLayoutDragActive()) {
           // Layout reorder mode: update insertion indicator, still propagate children
           updateLayoutDrag(opt.target as FabricObjectWithPenId, canvas)
@@ -539,6 +566,9 @@ export function useCanvasEvents() {
           }
           return
         }
+
+        // Check drag-into for non-layout-child nodes
+        checkDragIntoTarget(opt.target as FabricObjectWithPenId, canvas)
 
         // Calculate guides + snap BEFORE syncing so the store gets the snapped position
         calculateAndSnap(opt.target, canvas)
@@ -586,6 +616,14 @@ export function useCanvasEvents() {
             rebuildNodeRenderInfo()
             return
           }
+
+          // Drag-into layout container: reparent into target container
+          if (isDragIntoActive()) {
+            commitDragInto(asPen, canvas)
+            rebuildNodeRenderInfo()
+            return
+          }
+
           const scaleX = target.scaleX ?? 1
           const scaleY = target.scaleY ?? 1
           // Path/Polygon dimensions are derived from their data, so we can't
@@ -644,9 +682,18 @@ export function useCanvasEvents() {
           syncSelectionToStore(target)
         }
 
-        // Rebuild nodeRenderInfo after locked sync so subsequent property
-        // changes from the panel use fresh parent-offset data.
+        // Safety cleanup: clear any leftover drag-into session that wasn't
+        // committed (e.g. cursor left the container on the final move frame).
+        cancelDragInto()
+
+        // Force re-sync so clip paths (which use absolute coordinates) are
+        // recomputed from the new node positions.  Without this, children of
+        // a dragged frame stay clipped to the old parent frame bounds.
         rebuildNodeRenderInfo()
+        const currentDoc = useDocumentStore.getState().document
+        useDocumentStore.setState({
+          document: { ...currentDoc, children: [...currentDoc.children] },
+        })
       })
 
       // --- Text editing: sync edited content back to document store ---

@@ -1,6 +1,6 @@
 import { useEffect } from 'react'
 import { useCanvasStore } from '@/stores/canvas-store'
-import { activeInsertionIndicator } from './layout-reorder'
+import { activeInsertionIndicator, activeContainerHighlight } from './insertion-indicator'
 
 /**
  * Renders the layout reorder insertion indicator on the canvas overlay
@@ -14,7 +14,7 @@ export function useLayoutIndicator() {
       clearInterval(interval)
 
       const onAfterRender = () => {
-        if (!activeInsertionIndicator) return
+        if (!activeInsertionIndicator && !activeContainerHighlight) return
 
         const el = canvas.lowerCanvasEl
         const ctx = el?.getContext('2d')
@@ -27,36 +27,48 @@ export function useLayoutIndicator() {
         ctx.save()
         ctx.transform(vpt[0], vpt[1], vpt[2], vpt[3], vpt[4], vpt[5])
 
-        const { x, y, length, orientation } = activeInsertionIndicator
-
-        // Draw indicator line
-        ctx.strokeStyle = '#3B82F6'
-        ctx.lineWidth = 2 / zoom
-        ctx.setLineDash([])
-        ctx.beginPath()
-        if (orientation === 'horizontal') {
-          ctx.moveTo(x, y)
-          ctx.lineTo(x + length, y)
-        } else {
-          ctx.moveTo(x, y)
-          ctx.lineTo(x, y + length)
+        // Draw container highlight (dashed blue rectangle)
+        if (activeContainerHighlight) {
+          const { x: cx, y: cy, w: cw, h: ch } = activeContainerHighlight
+          ctx.strokeStyle = '#3B82F6'
+          ctx.lineWidth = 2 / zoom
+          ctx.setLineDash([6 / zoom, 4 / zoom])
+          ctx.strokeRect(cx, cy, cw, ch)
+          ctx.setLineDash([])
         }
-        ctx.stroke()
 
-        // Small circles at endpoints
-        ctx.fillStyle = '#3B82F6'
-        const r = 3 / zoom
-        ctx.beginPath()
-        if (orientation === 'horizontal') {
-          ctx.arc(x, y, r, 0, Math.PI * 2)
-          ctx.moveTo(x + length + r, y)
-          ctx.arc(x + length, y, r, 0, Math.PI * 2)
-        } else {
-          ctx.arc(x, y, r, 0, Math.PI * 2)
-          ctx.moveTo(x + r, y + length)
-          ctx.arc(x, y + length, r, 0, Math.PI * 2)
+        // Draw insertion indicator line
+        if (activeInsertionIndicator) {
+          const { x, y, length, orientation } = activeInsertionIndicator
+
+          ctx.strokeStyle = '#3B82F6'
+          ctx.lineWidth = 2 / zoom
+          ctx.setLineDash([])
+          ctx.beginPath()
+          if (orientation === 'horizontal') {
+            ctx.moveTo(x, y)
+            ctx.lineTo(x + length, y)
+          } else {
+            ctx.moveTo(x, y)
+            ctx.lineTo(x, y + length)
+          }
+          ctx.stroke()
+
+          // Small circles at endpoints
+          ctx.fillStyle = '#3B82F6'
+          const r = 3 / zoom
+          ctx.beginPath()
+          if (orientation === 'horizontal') {
+            ctx.arc(x, y, r, 0, Math.PI * 2)
+            ctx.moveTo(x + length + r, y)
+            ctx.arc(x + length, y, r, 0, Math.PI * 2)
+          } else {
+            ctx.arc(x, y, r, 0, Math.PI * 2)
+            ctx.moveTo(x + r, y + length)
+            ctx.arc(x, y + length, r, 0, Math.PI * 2)
+          }
+          ctx.fill()
         }
-        ctx.fill()
 
         ctx.restore()
       }
