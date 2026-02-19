@@ -23,6 +23,9 @@ interface AIState {
   isLoadingModels: boolean
   panelCorner: PanelCorner
   isMinimized: boolean
+  chatTitle: string
+
+  setChatTitle: (title: string) => void
 
   setModel: (model: string) => void
   setAvailableModels: (models: AIModelInfo[]) => void
@@ -54,6 +57,9 @@ export const useAIStore = create<AIState>((set) => ({
   isLoadingModels: false,
   panelCorner: 'bottom-left',
   isMinimized: false,
+  chatTitle: 'New Chat',
+
+  setChatTitle: (chatTitle) => set({ chatTitle }),
 
   addMessage: (msg) =>
     set((s) => ({ messages: [...s.messages, msg] })),
@@ -84,7 +90,7 @@ export const useAIStore = create<AIState>((set) => ({
   setAvailableModels: (availableModels) => set({ availableModels }),
   setModelGroups: (modelGroups) => set({ modelGroups }),
   setLoadingModels: (isLoadingModels) => set({ isLoadingModels }),
-  clearMessages: () => set({ messages: [] }),
+  clearMessages: () => set({ messages: [], chatTitle: 'New Chat' }),
 
   setPanelCorner: (panelCorner) => set({ panelCorner }),
   toggleMinimize: () => set((s) => ({ isMinimized: !s.isMinimized })),
