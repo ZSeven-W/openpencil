@@ -14,6 +14,16 @@ import type { FabricObjectWithPenId } from './canvas-object-factory'
 import { setFabricSyncLock } from './canvas-sync-lock'
 import { nodeRenderInfo, rebuildNodeRenderInfo } from './use-canvas-sync'
 import { calculateAndSnap, clearGuides } from './guide-utils'
+import {
+  beginParentDrag,
+  endParentDrag,
+  getActiveDragSession,
+  moveDescendants,
+  scaleDescendants,
+  rotateDescendants,
+  finalizeParentTransform,
+  finalizeParentRotation,
+} from './parent-child-transform'
 
 function createNodeForTool(
   tool: ToolType,
@@ -312,9 +322,13 @@ export function useCanvasEvents() {
         const currentChildren =
           useDocumentStore.getState().document.children
         useHistoryStore.getState().beginBatch(currentChildren)
+
+        // Start parent-child drag session if this is a container
+        beginParentDrag(target.penNodeId, canvas)
       })
 
       canvas.on('mouse:up', () => {
+        endParentDrag()
         const { batchDepth } = useHistoryStore.getState()
         if (batchDepth > 0) {
           useHistoryStore.getState().cancelBatch()
@@ -442,12 +456,27 @@ export function useCanvasEvents() {
         // Calculate guides + snap BEFORE syncing so the store gets the snapped position
         calculateAndSnap(opt.target, canvas)
         syncTargetToStore(opt.target)
+
+        // Propagate move to descendants (visual only, no store sync needed)
+        if (getActiveDragSession()) {
+          moveDescendants(opt.target as FabricObjectWithPenId, canvas)
+        }
       })
       canvas.on('object:scaling', (opt) => {
         syncTargetToStore(opt.target)
+
+        // Propagate scale to descendants (visual only)
+        if (getActiveDragSession()) {
+          scaleDescendants(opt.target as FabricObjectWithPenId, canvas)
+        }
       })
       canvas.on('object:rotating', (opt) => {
         syncTargetToStore(opt.target)
+
+        // Propagate rotation to descendants (visual only)
+        if (getActiveDragSession()) {
+          rotateDescendants(opt.target as FabricObjectWithPenId, canvas)
+        }
       })
 
       // Final sync: reset scale to 1 and bake into width/height
@@ -468,6 +497,14 @@ export function useCanvasEvents() {
           }
           target.setCoords()
           syncObjToStore(asPen)
+
+          // Finalize children: bake their scale + update store positions
+          if (getActiveDragSession()) {
+            if (scaleX !== 1 || scaleY !== 1) {
+              finalizeParentTransform(asPen, canvas, scaleX, scaleY)
+            }
+            finalizeParentRotation(asPen)
+          }
         } else if ('getObjects' in target) {
           // ActiveSelection -- bake scale per child, then sync all
           const group = target as fabric.ActiveSelection

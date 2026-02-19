@@ -131,6 +131,51 @@ function insertNodeInTree(
   })
 }
 
+/** Recursively scale all children's relative positions and sizes. */
+function scaleChildrenInPlace(
+  children: PenNode[],
+  scaleX: number,
+  scaleY: number,
+): PenNode[] {
+  return children.map((child) => {
+    const updated: Record<string, unknown> = { ...child }
+    if (child.x !== undefined) updated.x = child.x * scaleX
+    if (child.y !== undefined) updated.y = child.y * scaleY
+    if ('width' in child && typeof child.width === 'number') {
+      updated.width = child.width * scaleX
+    }
+    if ('height' in child && typeof child.height === 'number') {
+      updated.height = child.height * scaleY
+    }
+    if ('children' in child && child.children) {
+      updated.children = scaleChildrenInPlace(child.children, scaleX, scaleY)
+    }
+    return updated as unknown as PenNode
+  })
+}
+
+/** Recursively rotate all children's relative positions and angles. */
+function rotateChildrenInPlace(
+  children: PenNode[],
+  angleDeltaDeg: number,
+): PenNode[] {
+  const rad = (angleDeltaDeg * Math.PI) / 180
+  const cos = Math.cos(rad)
+  const sin = Math.sin(rad)
+  return children.map((child) => {
+    const x = child.x ?? 0
+    const y = child.y ?? 0
+    const updated: Record<string, unknown> = { ...child }
+    updated.x = x * cos - y * sin
+    updated.y = x * sin + y * cos
+    updated.rotation = ((child.rotation ?? 0) + angleDeltaDeg) % 360
+    if ('children' in child && child.children) {
+      updated.children = rotateChildrenInPlace(child.children, angleDeltaDeg)
+    }
+    return updated as unknown as PenNode
+  })
+}
+
 interface DocumentStoreState {
   document: PenDocument
   fileName: string | null
@@ -158,6 +203,15 @@ interface DocumentStoreState {
   duplicateNode: (id: string) => string | null
   groupNodes: (nodeIds: string[]) => string | null
   ungroupNode: (groupId: string) => void
+  scaleDescendantsInStore: (
+    parentId: string,
+    scaleX: number,
+    scaleY: number,
+  ) => void
+  rotateDescendantsInStore: (
+    parentId: string,
+    angleDeltaDeg: number,
+  ) => void
   getNodeById: (id: string) => PenNode | undefined
   getParentOf: (id: string) => PenNode | undefined
   getFlatNodes: () => PenNode[]
@@ -463,6 +517,49 @@ export const useDocumentStore = create<DocumentStoreState>(
         document: { ...state.document, children: newChildren },
         isDirty: true,
       })
+    },
+
+    scaleDescendantsInStore: (parentId, scaleX, scaleY) => {
+      if (scaleX === 1 && scaleY === 1) return
+      const state = get()
+      const parent = findNodeInTree(state.document.children, parentId)
+      if (!parent || !('children' in parent) || !parent.children) return
+
+      const scaledChildren = scaleChildrenInPlace(
+        parent.children,
+        scaleX,
+        scaleY,
+      )
+      set((s) => ({
+        document: {
+          ...s.document,
+          children: updateNodeInTree(s.document.children, parentId, {
+            children: scaledChildren,
+          } as Partial<PenNode>),
+        },
+        isDirty: true,
+      }))
+    },
+
+    rotateDescendantsInStore: (parentId, angleDeltaDeg) => {
+      if (angleDeltaDeg === 0) return
+      const state = get()
+      const parent = findNodeInTree(state.document.children, parentId)
+      if (!parent || !('children' in parent) || !parent.children) return
+
+      const rotatedChildren = rotateChildrenInPlace(
+        parent.children,
+        angleDeltaDeg,
+      )
+      set((s) => ({
+        document: {
+          ...s.document,
+          children: updateNodeInTree(s.document.children, parentId, {
+            children: rotatedChildren,
+          } as Partial<PenNode>),
+        },
+        isDirty: true,
+      }))
     },
 
     getNodeById: (id) =>
