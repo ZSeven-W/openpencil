@@ -66,9 +66,23 @@ async function connectClaudeCode(): Promise<ConnectResult> {
 
     return { connected: true, models }
   } catch (error) {
-    const msg = error instanceof Error ? error.message : 'Failed to connect'
-    return { connected: false, models: [], error: msg }
+    const raw = error instanceof Error ? error.message : 'Failed to connect'
+    return { connected: false, models: [], error: friendlyClaudeError(raw) }
   }
+}
+
+/** Map raw Agent SDK errors to user-friendly messages */
+function friendlyClaudeError(raw: string): string {
+  if (/exited with code/i.test(raw)) {
+    return 'Unable to connect. Please run "claude login" in your terminal first.'
+  }
+  if (/not found|ENOENT/i.test(raw)) {
+    return 'Claude Code CLI not found. Please install it first.'
+  }
+  if (/timed?\s*out/i.test(raw)) {
+    return 'Connection timed out. Please try again.'
+  }
+  return raw
 }
 
 /** Connect to Codex CLI and fetch its supported models from the local cache */

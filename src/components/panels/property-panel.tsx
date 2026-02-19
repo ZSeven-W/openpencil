@@ -1,8 +1,9 @@
 import { useCanvasStore } from '@/stores/canvas-store'
 import { useDocumentStore } from '@/stores/document-store'
 import { Separator } from '@/components/ui/separator'
-import type { PenNode } from '@/types/pen'
+import type { PenNode, ContainerProps } from '@/types/pen'
 import SizeSection from './size-section'
+import LayoutSection from './layout-section'
 import FillSection from './fill-section'
 import StrokeSection from './stroke-section'
 import AppearanceSection from './appearance-section'
@@ -29,6 +30,8 @@ export default function PropertyPanel() {
     return null
   }
 
+  const hasLayout =
+    node.type === 'frame' || node.type === 'group' || node.type === 'rectangle'
   const hasFill =
     node.type !== 'line' && node.type !== 'ref'
   const hasStroke = node.type !== 'ref'
@@ -55,6 +58,15 @@ export default function PropertyPanel() {
             }
           />
         </div>
+
+        {hasLayout && (
+          <>
+            <Separator />
+            <div className="px-3 py-2">
+              <LayoutSection node={node as PenNode & ContainerProps} onUpdate={handleUpdate} />
+            </div>
+          </>
+        )}
 
         <Separator />
 

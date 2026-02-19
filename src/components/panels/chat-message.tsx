@@ -10,6 +10,17 @@ interface ChatMessageProps {
   onApplyDesign?: (json: string) => void
 }
 
+/** Strip raw tool-call / function-call XML that should never be shown to users */
+function stripToolCallXml(text: string): string {
+  // Remove <function_calls>…</function_calls> blocks (including nested <invoke>)
+  let cleaned = text.replace(/<function_calls>[\s\S]*?<\/function_calls>/g, '')
+  // Remove standalone <invoke …>…</invoke> blocks
+  cleaned = cleaned.replace(/<invoke\s+[\s\S]*?<\/invoke>/g, '')
+  // Collapse leftover blank lines into at most one
+  cleaned = cleaned.replace(/\n{3,}/g, '\n\n')
+  return cleaned.trim()
+}
+
 /** Check if a JSON string looks like PenNode data */
 function isDesignJson(code: string): boolean {
   return /^\s*[\[{]/.test(code) && /"type"\s*:/.test(code) && /"id"\s*:/.test(code)
@@ -330,8 +341,11 @@ export default function ChatMessage({
     [role, content],
   )
 
+
   const isUser = role === 'user'
-  const isEmpty = !content.trim()
+  // Strip raw tool-call XML that the model may emit (should never be visible)
+  const displayContent = isUser ? content : stripToolCallXml(content)
+  const isEmpty = !displayContent.trim()
 
   // Don't render an empty non-streaming assistant message
   if (!isUser && isEmpty && !isStreaming) return null
@@ -356,7 +370,7 @@ export default function ChatMessage({
             </div>
           ) : (
             <div className="whitespace-pre-wrap">
-              {parseMarkdown(content, onApplyDesign, isApplied, isStreaming && !isEmpty)}
+              {parseMarkdown(displayContent, onApplyDesign, isApplied, isStreaming && !isEmpty)}
             </div>
           )}
         </div>

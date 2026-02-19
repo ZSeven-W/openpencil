@@ -42,7 +42,7 @@ async function generateViaAnthropicSDK(apiKey: string, body: GenerateBody, model
       messages: [{ role: 'user', content: body.message }],
     })
 
-    const textBlock = response.content.find((b) => b.type === 'text')
+    const textBlock = response.content.find((b: { type: string }) => b.type === 'text')
     return { text: textBlock && 'text' in textBlock ? textBlock.text : '' }
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown error'
