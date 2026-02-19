@@ -36,6 +36,9 @@ export default defineEventHandler(async (event) => {
   return streamViaAgentSDK(body, body.model)
 })
 
+// Keep-alive ping interval (ms) — prevents client timeout while waiting for API TTFT
+const KEEPALIVE_INTERVAL_MS = 15_000
+
 /** Stream via Anthropic SDK (when API key is available) */
 async function streamViaAnthropicSDK(apiKey: string, body: ChatBody, model?: string) {
   const { default: Anthropic } = await import('@anthropic-ai/sdk')
@@ -44,6 +47,12 @@ async function streamViaAnthropicSDK(apiKey: string, body: ChatBody, model?: str
   const stream = new ReadableStream({
     async start(controller) {
       const encoder = new TextEncoder()
+      // Send keep-alive pings until the first real chunk arrives
+      const pingTimer = setInterval(() => {
+        try {
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: 'ping', content: '' })}\n\n`))
+        } catch { /* stream already closed */ }
+      }, KEEPALIVE_INTERVAL_MS)
       try {
         const messageStream = client.messages.stream({
           model: model || 'claude-sonnet-4-5-20250929',
@@ -55,7 +64,12 @@ async function streamViaAnthropicSDK(apiKey: string, body: ChatBody, model?: str
         for await (const ev of messageStream) {
           if (ev.type === 'content_block_delta') {
             if (ev.delta.type === 'text_delta') {
+              clearInterval(pingTimer)
               const data = JSON.stringify({ type: 'text', content: ev.delta.text })
+              controller.enqueue(encoder.encode(`data: ${data}\n\n`))
+            } else if (ev.delta.type === 'thinking_delta') {
+              clearInterval(pingTimer)
+              const data = JSON.stringify({ type: 'thinking', content: ev.delta.thinking })
               controller.enqueue(encoder.encode(`data: ${data}\n\n`))
             }
           }
@@ -70,6 +84,7 @@ async function streamViaAnthropicSDK(apiKey: string, body: ChatBody, model?: str
           encoder.encode(`data: ${JSON.stringify({ type: 'error', content: msg })}\n\n`),
         )
       } finally {
+        clearInterval(pingTimer)
         controller.close()
       }
     },
@@ -83,6 +98,12 @@ function streamViaAgentSDK(body: ChatBody, model?: string) {
   const stream = new ReadableStream({
     async start(controller) {
       const encoder = new TextEncoder()
+      // Send keep-alive pings until the first real chunk arrives
+      const pingTimer = setInterval(() => {
+        try {
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: 'ping', content: '' })}\n\n`))
+        } catch { /* stream already closed */ }
+      }, KEEPALIVE_INTERVAL_MS)
 
       try {
         const { query } = await import('@anthropic-ai/claude-agent-sdk')
@@ -114,7 +135,12 @@ function streamViaAgentSDK(body: ChatBody, model?: string) {
             const ev = message.event
             if (ev.type === 'content_block_delta') {
               if (ev.delta.type === 'text_delta') {
+                clearInterval(pingTimer)
                 const data = JSON.stringify({ type: 'text', content: ev.delta.text })
+                controller.enqueue(encoder.encode(`data: ${data}\n\n`))
+              } else if (ev.delta.type === 'thinking_delta') {
+                clearInterval(pingTimer)
+                const data = JSON.stringify({ type: 'thinking', content: (ev.delta as any).thinking })
                 controller.enqueue(encoder.encode(`data: ${data}\n\n`))
               }
             }
@@ -138,6 +164,7 @@ function streamViaAgentSDK(body: ChatBody, model?: string) {
           encoder.encode(`data: ${JSON.stringify({ type: 'error', content })}\n\n`),
         )
       } finally {
+        clearInterval(pingTimer)
         controller.close()
       }
     },

@@ -275,17 +275,30 @@ export function createFabricObject(
     case 'path': {
       const pw = sizeToNumber(node.width, 0)
       const ph = sizeToNumber(node.height, 0)
+      const hasExplicitFill = node.fill && node.fill.length > 0
+      const hasStroke = !!node.stroke
+      // Stroke-only icons (e.g. Lucide-style) must not get a default fill.
+      // Use 'transparent' (not 'none' — Fabric.js ignores 'none' and falls back to black).
+      const pathFill = hasExplicitFill
+        ? resolveFill(node.fill, pw || 100, ph || 100)
+        : hasStroke
+          ? 'transparent'
+          : DEFAULT_FILL
       obj = new fabric.Path(node.d, {
         ...baseProps,
-        fill: resolveFill(node.fill, pw || 100, ph || 100),
+        fill: pathFill,
         stroke: resolveStrokeColor(node.stroke),
         strokeWidth: resolveStrokeWidth(node.stroke),
+        strokeUniform: true,
+        fillRule: 'evenodd', // Compound paths: inner sub-paths become transparent cutouts
       }) as FabricObjectWithPenId
       // Cache native dimensions before scaling (Path width/height is derived from d)
       ;(obj as any).__nativeWidth = obj.width
       ;(obj as any).__nativeHeight = obj.height
       if (pw > 0 && ph > 0 && obj.width && obj.height) {
-        obj.set({ scaleX: pw / obj.width, scaleY: ph / obj.height })
+        // Uniform scale — preserve aspect ratio so icons don't get squished
+        const uniformScale = Math.min(pw / obj.width, ph / obj.height)
+        obj.set({ scaleX: uniformScale, scaleY: uniformScale })
       }
       break
     }

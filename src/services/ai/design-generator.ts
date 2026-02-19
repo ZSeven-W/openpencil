@@ -1,6 +1,6 @@
 import type { PenNode } from '@/types/pen'
 import type { AIDesignRequest } from './ai-types'
-import { streamChat, generateCompletion } from './ai-service'
+import { streamChat } from './ai-service'
 import { DESIGN_GENERATOR_PROMPT, DESIGN_MODIFIER_PROMPT } from './ai-prompts'
 import { useDocumentStore, DEFAULT_FRAME_ID } from '@/stores/document-store'
 import { useHistoryStore } from '@/stores/history-store'
@@ -143,11 +143,6 @@ function scoreNodeSet(nodes: PenNode[]): number {
   return score
 }
 
-function isTimeoutError(content: string): boolean {
-  const lower = content.toLowerCase()
-  return lower.includes('timed out') || lower.includes('thinking too long')
-}
-
 export async function generateDesign(
   request: AIDesignRequest,
   callbacks?: {
@@ -232,18 +227,6 @@ export async function generateDesign(
   }
 
   if (streamError) {
-    if (isTimeoutError(streamError)) {
-      // Fallback path: one non-streaming generation attempt.
-      const fallbackResponse = await generateCompletion(
-        DESIGN_GENERATOR_PROMPT,
-        userMessage,
-      )
-      const fallbackNodes = extractJsonFromResponse(fallbackResponse)
-      if (fallbackNodes && fallbackNodes.length > 0) {
-        return { nodes: fallbackNodes, rawResponse: fallbackResponse }
-      }
-      return { nodes: [], rawResponse: fallbackResponse }
-    }
     throw new Error(streamError)
   }
 
@@ -296,17 +279,6 @@ export async function generateDesignModification(
   }
 
   if (streamError) {
-    if (isTimeoutError(streamError)) {
-      const fallbackResponse = await generateCompletion(
-        DESIGN_MODIFIER_PROMPT,
-        userMessage,
-      )
-      const fallbackNodes = extractJsonFromResponse(fallbackResponse)
-      if (fallbackNodes && fallbackNodes.length > 0) {
-        return { nodes: fallbackNodes, rawResponse: fallbackResponse }
-      }
-      throw new Error('Failed to parse modified nodes from AI fallback response')
-    }
     throw new Error(streamError)
   }
 

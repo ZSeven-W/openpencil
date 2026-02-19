@@ -132,17 +132,30 @@ export function syncFabricObject(
     case 'path': {
       const w = sizeToNumber('width' in node ? node.width : undefined, 100)
       const h = sizeToNumber('height' in node ? node.height : undefined, 100)
+      const hasExplicitFill = node.type === 'path' && 'fill' in node && node.fill && node.fill.length > 0
+      const hasStroke = 'stroke' in node && !!node.stroke
+      // For path nodes: stroke-only icons must not get a default fill
+      const fill = node.type === 'path' && !hasExplicitFill && hasStroke
+        ? 'transparent'
+        : resolveFill('fill' in node ? node.fill : undefined, w, h)
       obj.set({
-        fill: resolveFill(node.fill, w, h),
-        stroke: resolveStrokeColor(node.stroke),
-        strokeWidth: resolveStrokeWidth(node.stroke),
+        fill,
+        stroke: resolveStrokeColor('stroke' in node ? node.stroke : undefined),
+        strokeWidth: resolveStrokeWidth('stroke' in node ? node.stroke : undefined),
+        ...(node.type === 'path' ? { strokeUniform: true, fillRule: 'evenodd' } : {}),
       })
       // Use cached native dimensions (from path/points data) to compute correct
       // scale, even if obj.width was previously corrupted by scale baking.
       const nw = (obj as any).__nativeWidth || obj.width
       const nh = (obj as any).__nativeHeight || obj.height
       if (w > 0 && h > 0 && nw && nh) {
-        obj.set({ width: nw, height: nh, scaleX: w / nw, scaleY: h / nh })
+        if (node.type === 'path') {
+          // Uniform scale — preserve aspect ratio so icons don't get squished
+          const uniformScale = Math.min(w / nw, h / nh)
+          obj.set({ width: nw, height: nh, scaleX: uniformScale, scaleY: uniformScale })
+        } else {
+          obj.set({ width: nw, height: nh, scaleX: w / nw, scaleY: h / nh })
+        }
       }
       break
     }

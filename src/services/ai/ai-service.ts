@@ -100,11 +100,24 @@ export async function* streamChat(
               return
             }
 
+            // Keep-alive pings from server — reset timeout but don't yield
+            if (chunk.type === 'ping') {
+              clearNoTextTimeout()
+              noTextTimeout = setTimeout(() => {
+                if (!hasNonEmptyText) {
+                  abortReason = 'no_text_timeout'
+                  controller.abort()
+                }
+              }, noTextTimeoutMs)
+              continue
+            }
+
             if (chunk.type === 'thinking' && !chunk.content) {
               continue
             }
 
-            if (chunk.type === 'text' && chunk.content.trim().length > 0) {
+            // Any non-empty content (text or thinking) counts as activity
+            if ((chunk.type === 'text' || chunk.type === 'thinking') && chunk.content.trim().length > 0) {
               hasNonEmptyText = true
               clearNoTextTimeout()
             }
@@ -143,7 +156,7 @@ export async function* streamChat(
             clearNoTextTimeout()
             return
           }
-          if (chunk.type === 'text' && chunk.content.trim().length > 0) {
+          if ((chunk.type === 'text' || chunk.type === 'thinking') && chunk.content.trim().length > 0) {
             hasNonEmptyText = true
             clearNoTextTimeout()
           }
@@ -194,16 +207,33 @@ export async function* streamChat(
  * Non-streaming completion for design/code generation.
  * Calls the server-side endpoint which reads ANTHROPIC_API_KEY from env.
  */
+const DEFAULT_GENERATE_TIMEOUT_MS = 180_000
+
 export async function generateCompletion(
   systemPrompt: string,
   userMessage: string,
   model?: string,
 ): Promise<string> {
-  const response = await fetch('/api/ai/generate', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ system: systemPrompt, message: userMessage, model }),
-  })
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), DEFAULT_GENERATE_TIMEOUT_MS)
+
+  let response: Response
+  try {
+    response = await fetch('/api/ai/generate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ system: systemPrompt, message: userMessage, model }),
+      signal: controller.signal,
+    })
+  } catch (error) {
+    clearTimeout(timeout)
+    if (controller.signal.aborted) {
+      throw new Error('AI generation request timed out. Please retry.')
+    }
+    throw error
+  } finally {
+    clearTimeout(timeout)
+  }
 
   if (!response.ok) {
     throw new Error(`Server error: ${response.status}`)
