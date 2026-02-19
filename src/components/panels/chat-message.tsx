@@ -1,5 +1,5 @@
 import React, { useState, useMemo, type ReactNode } from 'react'
-import { Copy, Check, Wand2, ChevronDown, ChevronRight } from 'lucide-react'
+import { Copy, Check, Wand2, ChevronDown, ChevronRight, ListOrdered, FileJson, Palette, LayoutTemplate, ScanSearch } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 
@@ -11,14 +11,142 @@ interface ChatMessageProps {
 }
 
 /** Strip raw tool-call / function-call XML that should never be shown to users */
+/** Strip raw tool-call / function-call XML that should never be shown to users */
 function stripToolCallXml(text: string): string {
-  // Remove <function_calls>…</function_calls> blocks (including nested <invoke>)
-  let cleaned = text.replace(/<function_calls>[\s\S]*?<\/function_calls>/g, '')
-  // Remove standalone <invoke …>…</invoke> blocks
-  cleaned = cleaned.replace(/<invoke\s+[\s\S]*?<\/invoke>/g, '')
+  let cleaned = text
+
+  // Remove <function_calls> blocks
+  cleaned = cleaned.replace(/<function_calls>[\s\S]*?<\/function_calls>/g, '')
+  
+  // Remove <result> blocks (often tool outputs)
+  cleaned = cleaned.replace(/<result>[\s\S]*?<\/result>/g, '')
+
+  // Remove <inference_process> or similar internal blocks if they appear
+  cleaned = cleaned.replace(/<inference_process>[\s\S]*?<\/inference_process>/g, '')
+
+  // Remove <invoke> blocks (tool usage) - handle both closed and streaming/unclosed
+  cleaned = cleaned.replace(/<invoke[\s\S]*?<\/invoke>/g, '')
+  cleaned = cleaned.replace(/<invoke[\s\S]*?$/g, '') // Hide unclosed invoke at end of stream
+
+  // Remove <parameter> blocks if they appear outside invoke for some reason
+  cleaned = cleaned.replace(/<parameter[\s\S]*?<\/parameter>/g, '')
+
+  // Remove stray tags
+  cleaned = cleaned.replace(/<\/?invoke.*?>/g, '')
+  cleaned = cleaned.replace(/<\/?parameter.*?>/g, '')
+  cleaned = cleaned.replace(/<\/?function_calls>/g, '')
+  cleaned = cleaned.replace(/<\/?search_quality_reflection>/g, '') // Sometimes this appears too
+  cleaned = cleaned.replace(/<\/?thought_process>/g, '') // And this
+
+  // Remove the hidden marker so it doesn't show up in UI even as whitespace
+  cleaned = cleaned.replace(/<!-- APPLIED -->/g, '')
+  
   // Collapse leftover blank lines into at most one
   cleaned = cleaned.replace(/\n{3,}/g, '\n\n')
   return cleaned.trim()
+}
+
+/** Check if a line is a step action */
+function isActionStep(line: string): boolean {
+  return /<step.*<\/step>/.test(line) || line.trim().startsWith('<step')
+}
+
+function parseStepTitle(step: string): string {
+  const match = step.match(/title="([^"]+)"/)
+  return match ? match[1] : 'Processing'
+}
+
+function parseStepContent(step: string): string {
+  return step.replace(/<step[^>]*>/, '').replace(/<\/step>/, '').trim()
+}
+
+/** Component for rendering a list of action steps as accordions */
+function ActionSteps({ steps }: { steps: string[] }) {
+  if (steps.length === 0) return null
+  
+  return (
+    <div className="flex flex-col gap-2 my-1 w-full">
+      {steps.map((step, i) => {
+        const title = parseStepTitle(step)
+        const content = parseStepContent(step)
+        const isDesign = title.toLowerCase() === 'design'
+        
+        // Icon mapping based on step title
+        let Icon = ScanSearch
+        if (title.toLowerCase().includes('guidelines')) Icon = FileJson
+        if (title.toLowerCase().includes('state')) Icon = ListOrdered
+        if (title.toLowerCase().includes('styleguide')) Icon = Palette
+        if (isDesign) Icon = LayoutTemplate
+
+        return (
+          <ActionStepItem 
+            key={i} 
+            title={title} 
+            content={content} 
+            icon={Icon}
+            defaultOpen={isDesign}
+            isLast={i === steps.length - 1}
+          />
+        )
+      })}
+    </div>
+  )
+}
+
+function ActionStepItem({ 
+  title, 
+  content, 
+  icon: Icon, 
+  defaultOpen = false,
+  isLast 
+}: { 
+  title: string
+  content: string
+  icon: any
+  defaultOpen?: boolean 
+  isLast?: boolean
+}) {
+  const [isOpen, setIsOpen] = useState(defaultOpen)
+
+  return (
+    <div className="border-b border-border/40 last:border-0 bg-transparent">
+      <button 
+        onClick={() => setIsOpen(!isOpen)}
+        className="flex items-center gap-3 w-full px-2 py-2 text-left hover:bg-secondary/30 transition-colors group"
+      >
+        <div className={cn(
+          "w-4 h-4 rounded-full flex items-center justify-center shrink-0 transition-colors",
+          isLast 
+            ? "bg-primary/10 text-primary" 
+            : "text-muted-foreground/40 group-hover:text-muted-foreground/80"
+        )}>
+          {isLast ? (
+             <div className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse shadow-[0_0_8px_rgba(34,197,94,0.5)]" />
+          ) : (
+             <Check size={10} />
+          )}
+        </div>
+        
+        <span title={title} className={cn(
+          "text-[11px] font-medium flex-1 transition-colors truncate",
+          isLast ? "text-foreground" : "text-muted-foreground"
+        )}>
+          {title}
+        </span>
+        
+        <Icon size={12} className={cn(
+          "transition-opacity",
+          isOpen ? "text-foreground opacity-100" : "text-muted-foreground opacity-0 group-hover:opacity-50"
+        )} />
+      </button>
+
+      {isOpen && (
+        <div className="px-2 pb-2 pl-[34px] text-[10px] text-muted-foreground/80 leading-relaxed font-mono animate-in slide-in-from-top-0.5 duration-200 whitespace-pre-wrap break-words">
+           {content}
+        </div>
+      )}
+    </div>
+  )
 }
 
 /** Check if a JSON string looks like PenNode data */
@@ -39,7 +167,42 @@ function parseMarkdown(
   let codeLang = ''
   let blockKey = 0
 
+  // Pre-process: extract sequential steps at the start or throughout?
+  // Our prompt puts them at the start. Let's process line by line.
+  // If we encounter steps, we collect them. If we encounter non-step content, we flush steps.
+
+  // Actually, simpler: Treat <step> lines as special blocks.
+  
+  let currentSteps: string[] = []
+  
+  const flushSteps = () => {
+    if (currentSteps.length > 0) {
+      parts.push(<ActionSteps key={`steps-${blockKey++}`} steps={[...currentSteps]} />)
+      currentSteps = []
+    }
+  }
+
   for (const line of lines) {
+    if (isActionStep(line)) {
+      // Check if it's a complete step or partial (streaming)
+      // For now assume complete lines or handle partials if needed
+      // If valid step line, add to current buffer
+      currentSteps.push(line)
+      continue
+    }
+
+    // specific hack for streaming partially completed step
+    if (line.trim().startsWith('<step') && !line.trim().includes('</step>')) {
+       // It's a streaming step, possibly unfinished. 
+       // We can show it as "Working..." or just text. 
+       // Let's just treat it as a step for now?
+       currentSteps.push(line + '</step>') // Auto-close for display
+       continue
+    }
+
+    // Not a step -> flush any pending steps
+    flushSteps()
+
     if (line.startsWith('```') && !inCodeBlock) {
       inCodeBlock = true
       codeLang = line.slice(3).trim()
@@ -90,6 +253,9 @@ function parseMarkdown(
       </span>,
     )
   }
+
+  // Flush remaining steps at the end
+  flushSteps()
 
   // Handle unclosed code block (streaming)
   if (inCodeBlock && codeContent) {
@@ -265,23 +431,25 @@ function DesignJsonBlock({
   }
 
   return (
-    <div className="my-2 rounded-lg border border-border/60 overflow-hidden">
+    <div className="my-1.5 rounded border border-border/30 overflow-hidden bg-background/50 backdrop-blur-[1px]">
       {/* Header */}
       <button
         type="button"
         onClick={() => setExpanded(!expanded)}
-        className="flex items-center justify-between w-full px-3 py-1.5 bg-card hover:bg-accent transition-colors text-left"
+        className="flex items-center justify-between w-full px-2 py-1.5 hover:bg-secondary/30 transition-colors text-left group"
       >
-        <div className="flex items-center gap-1.5">
+        <div className="flex items-center gap-2">
           {expanded ? (
-            <ChevronDown size={12} className="text-muted-foreground" />
+            <ChevronDown size={10} className="text-muted-foreground/50" />
           ) : (
-            <ChevronRight size={12} className="text-muted-foreground" />
+            <ChevronRight size={10} className="text-muted-foreground/50" />
           )}
-          <Wand2 size={12} className="text-primary" />
-          <span className={cn('text-xs', isStreaming ? 'text-muted-foreground' : 'text-foreground')}>
+          <div className="w-4 h-4 rounded flex items-center justify-center bg-primary/5 text-primary">
+             <Wand2 size={9} />
+          </div>
+          <span className={cn('text-[10px] font-medium tracking-tight', isStreaming ? 'text-muted-foreground animate-pulse' : 'text-muted-foreground/80 group-hover:text-foreground')}>
             {isStreaming
-              ? 'Generating design...'
+              ? 'Generating...'
               : `${elementCount} design element${elementCount !== 1 ? 's' : ''}`}
           </span>
         </div>
@@ -292,36 +460,29 @@ function DesignJsonBlock({
             e.stopPropagation()
             handleCopy()
           }}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' || e.key === ' ') {
-              e.stopPropagation()
-              handleCopy()
-            }
-          }}
-          className="text-muted-foreground hover:text-foreground transition-colors p-0.5 cursor-pointer"
+          className="text-muted-foreground/30 hover:text-foreground transition-colors p-1 opacity-0 group-hover:opacity-100"
           title="Copy JSON"
         >
-          {copied ? <Check size={10} /> : <Copy size={10} />}
+          {copied ? <Check size={9} /> : <Copy size={9} />}
         </span>
       </button>
 
       {/* Expandable JSON content */}
       {expanded && (
-        <pre className="p-3 overflow-x-auto text-xs leading-relaxed max-h-40 overflow-y-auto border-t border-border/60">
-          <code className="text-muted-foreground/80">{code}</code>
+        <pre className="p-2 overflow-x-auto text-[9px] leading-relaxed max-h-32 overflow-y-auto border-t border-border/30 font-mono bg-card/30">
+          <code className="text-muted-foreground">{code}</code>
         </pre>
       )}
 
-      {/* Apply button (only if not already applied and handler exists) */}
+      {/* Apply button - hidden if applied or streaming */}
       {onApply && !isApplied && !isStreaming && (
-        <div className="px-2.5 py-2 border-t border-border/60">
+        <div className="px-2 py-1.5 border-t border-border/30 bg-secondary/10">
           <Button
             onClick={() => onApply(code)}
-            variant="outline"
-            className="w-full"
+            variant="ghost"
+            className="w-full h-6 text-[10px] font-medium text-muted-foreground hover:text-primary hover:bg-primary/5"
             size="sm"
           >
-            <Wand2 size={12} />
             Apply to Canvas
           </Button>
         </div>
@@ -337,7 +498,7 @@ export default function ChatMessage({
   onApplyDesign,
 }: ChatMessageProps) {
   const isApplied = useMemo(
-    () => role === 'assistant' && content.includes('\u2705'),
+    () => role === 'assistant' && (content.includes('\u2705') || content.includes('<!-- APPLIED -->')),
     [role, content],
   )
 
@@ -348,7 +509,21 @@ export default function ChatMessage({
   const isEmpty = !displayContent.trim()
 
   // Don't render an empty non-streaming assistant message
-  if (!isUser && isEmpty && !isStreaming) return null
+  // UNLESS we stripped something out (meaning the AI did something, but we hid it).
+  // In that case, show a generic "Design generated" message or similar to avoid confusion?
+  // Or better, if it's empty, it means we probably just suppressed a tool call.
+  // Let's show a "Processing..." or "Action completed" placeholder if it's empty but had content.
+  const hadContent = content.trim().length > 0
+  if (!isUser && isEmpty && !isStreaming) {
+     if (hadContent) {
+       return (
+         <div className="text-xs text-muted-foreground italic px-2 py-1">
+           (Automated action completed)
+         </div>
+       )
+     }
+     return null
+  }
 
   return (
     <div className={cn('flex', isUser ? 'justify-end' : 'justify-start')}>
@@ -369,7 +544,7 @@ export default function ChatMessage({
               </span>
             </div>
           ) : (
-            <div className="whitespace-pre-wrap">
+            <div className="whitespace-pre-wrap mb-2">
               {parseMarkdown(displayContent, onApplyDesign, isApplied, isStreaming && !isEmpty)}
             </div>
           )}
