@@ -39,12 +39,13 @@ export function useCanvasViewport() {
           let delta = -e.deltaY
           if (e.deltaMode === 1) delta *= 40 // line mode → approx pixels
           const zoom = canvas.getZoom()
-          const factor = Math.pow(1.002, delta)
+          const factor = Math.pow(1.005, delta)
           let newZoom = zoom * factor
 
           newZoom = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, newZoom))
 
-          const point = canvas.getScenePoint(e)
+          const rect = canvas.upperCanvasEl.getBoundingClientRect()
+          const point = { x: e.clientX - rect.left, y: e.clientY - rect.top }
           canvas.zoomToPoint(point, newZoom)
 
           const vpt = canvas.viewportTransform
