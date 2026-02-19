@@ -265,14 +265,24 @@ function computeLayoutPositions(
         break
     }
 
-    const x = isVertical ? pad.left + crossPos : pad.left + mainPos
-    const y = isVertical ? pad.top + mainPos : pad.top + crossPos
+    const computedX = isVertical ? pad.left + crossPos : pad.left + mainPos
+    const computedY = isVertical ? pad.top + mainPos : pad.top + crossPos
 
     mainPos += (isVertical ? size.h : size.w) + effectiveGap
 
     // Always propagate resolved pixel dimensions so nested layout
     // computations and Fabric.js objects get correct numeric sizes.
-    const out: Record<string, unknown> = { ...child, x, y, width: size.w, height: size.h }
+    // If the child already has explicit coordinates (e.g. user dragged it),
+    // preserve that manual position instead of forcing layout coordinates.
+    const hasManualX = typeof child.x === 'number'
+    const hasManualY = typeof child.y === 'number'
+    const out: Record<string, unknown> = {
+      ...child,
+      x: hasManualX ? child.x : computedX,
+      y: hasManualY ? child.y : computedY,
+      width: size.w,
+      height: size.h,
+    }
     return out as unknown as PenNode
   })
 }
