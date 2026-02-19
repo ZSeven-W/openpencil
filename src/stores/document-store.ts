@@ -95,6 +95,20 @@ function flattenNodes(nodes: PenNode[]): PenNode[] {
   return result
 }
 
+function isDescendantOf(
+  nodes: PenNode[],
+  nodeId: string,
+  ancestorId: string,
+): boolean {
+  const ancestor = findNodeInTree(nodes, ancestorId)
+  if (!ancestor || !('children' in ancestor) || !ancestor.children) return false
+  for (const child of ancestor.children) {
+    if (child.id === nodeId) return true
+    if (isDescendantOf([child], nodeId, child.id)) return true
+  }
+  return false
+}
+
 function insertNodeInTree(
   nodes: PenNode[],
   parentId: string | null,
@@ -215,6 +229,7 @@ interface DocumentStoreState {
   getNodeById: (id: string) => PenNode | undefined
   getParentOf: (id: string) => PenNode | undefined
   getFlatNodes: () => PenNode[]
+  isDescendantOf: (nodeId: string, ancestorId: string) => boolean
 
   applyHistoryState: (doc: PenDocument) => void
   loadDocument: (
@@ -569,6 +584,8 @@ export const useDocumentStore = create<DocumentStoreState>(
       findParentInTree(get().document.children, id),
 
     getFlatNodes: () => flattenNodes(get().document.children),
+    isDescendantOf: (nodeId, ancestorId) =>
+      isDescendantOf(get().document.children, nodeId, ancestorId),
 
     applyHistoryState: (doc) =>
       set({ document: doc, isDirty: true }),

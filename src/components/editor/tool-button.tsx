@@ -1,7 +1,6 @@
 import type { ReactNode } from 'react'
 import type { ToolType } from '@/types/canvas'
 import { useCanvasStore } from '@/stores/canvas-store'
-import { Toggle } from '@/components/ui/toggle'
 import {
   Tooltip,
   TooltipContent,
@@ -28,15 +27,19 @@ export default function ToolButton({
   return (
     <Tooltip>
       <TooltipTrigger asChild>
-        <Toggle
-          size="sm"
-          pressed={isActive}
-          onPressedChange={() => setActiveTool(tool)}
+        <button
+          type="button"
+          onClick={() => setActiveTool(tool)}
           aria-label={label}
-          className="data-[state=on]:bg-primary/15 data-[state=on]:text-primary [&_svg]:size-5"
+          aria-pressed={isActive}
+          className={`inline-flex items-center justify-center h-8 min-w-8 px-1.5 rounded-lg transition-colors [&_svg]:size-5 [&_svg]:shrink-0 ${
+            isActive
+              ? 'bg-primary text-primary-foreground'
+              : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+          }`}
         >
           {icon}
-        </Toggle>
+        </button>
       </TooltipTrigger>
       <TooltipContent side="right">
         {label}

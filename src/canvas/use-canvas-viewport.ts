@@ -77,6 +77,7 @@ export function useCanvasViewport() {
           if (canvas) {
             canvas.defaultCursor = 'grab'
             canvas.selection = false
+            canvas.skipTargetFind = true
           }
         }
       }
@@ -86,9 +87,13 @@ export function useCanvasViewport() {
           spacePressed = false
           isPanning = false
           const canvas = useCanvasStore.getState().fabricCanvas
+          const tool = useCanvasStore.getState().activeTool
           if (canvas && !isHandTool()) {
             canvas.defaultCursor = currentToolCursor()
-            canvas.selection = true
+            if (tool === 'select') {
+              canvas.selection = true
+              canvas.skipTargetFind = false
+            }
           }
         }
       }
@@ -101,10 +106,12 @@ export function useCanvasViewport() {
         const canvas = state.fabricCanvas
         if (!canvas) return
         const cursor = toolToCursor(state.activeTool)
-        if (state.activeTool === 'hand') {
-          canvas.selection = false
-        } else if (!spacePressed) {
+        if (state.activeTool === 'select' && !spacePressed) {
           canvas.selection = true
+          canvas.skipTargetFind = false
+        } else {
+          canvas.selection = false
+          canvas.skipTargetFind = true
         }
         if (!spacePressed) {
           canvas.defaultCursor = cursor

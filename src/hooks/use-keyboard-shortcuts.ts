@@ -13,6 +13,7 @@ import {
   openDocument,
 } from '@/utils/file-operations'
 import { syncCanvasPositionsToStore } from '@/canvas/use-canvas-sync'
+import type { FabricObjectWithPenId } from '@/canvas/canvas-object-factory'
 import { zoomToFitContent } from '@/canvas/use-fabric-canvas'
 import { isPenToolActive, penToolKeyDown } from '@/canvas/pen-tool'
 import type { ToolType } from '@/types/canvas'
@@ -277,16 +278,22 @@ export function useKeyboardShortcuts() {
         return
       }
 
-      // Cmd+A: select all
+      // Cmd+A: select all (top-level nodes only, matching manual selection behavior)
       if (isMod && e.key === 'a') {
         e.preventDefault()
-        const allNodes = useDocumentStore.getState().getFlatNodes()
-        const ids = allNodes.map((n) => n.id)
+        const topLevelNodes = useDocumentStore.getState().document.children
+        const ids = topLevelNodes.map((n) => n.id)
         useCanvasStore.getState().setSelection(ids, ids[0] ?? null)
         const canvas = useCanvasStore.getState().fabricCanvas
         if (canvas) {
-          const objects = canvas.getObjects()
-          if (objects.length > 0) {
+          const topLevelSet = new Set(ids)
+          const objects = (
+            canvas.getObjects() as FabricObjectWithPenId[]
+          ).filter((obj) => obj.penNodeId && topLevelSet.has(obj.penNodeId))
+          if (objects.length === 1) {
+            canvas.setActiveObject(objects[0])
+            canvas.requestRenderAll()
+          } else if (objects.length > 1) {
             const sel = new ActiveSelection(objects, { canvas })
             canvas.setActiveObject(sel)
             canvas.requestRenderAll()
