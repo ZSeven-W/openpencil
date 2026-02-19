@@ -15,6 +15,7 @@ import {
 import { 
   generateDesign, 
   generateDesignModification,
+  applyNodesToCanvas,
   extractAndApplyDesign, 
   extractAndApplyDesignModification 
 } from '@/services/ai/design-generator'
@@ -178,8 +179,8 @@ function useChatHandlers() {
                const count = extractAndApplyDesignModification(JSON.stringify(nodes))
                appliedCount += count
              } else {
-               // --- GENERATION MODE (Iterative) ---
-               const { rawResponse } = await generateDesign({
+               // --- GENERATION MODE ---
+               const { rawResponse, nodes } = await generateDesign({
                  prompt: fullUserMessage,
                  context: {
                    canvasSize: { width: 1200, height: 800 }, 
@@ -187,7 +188,7 @@ function useChatHandlers() {
                  },
                }, {
                  onApplyPartial: (partialCount: number) => {
-                    appliedCount += partialCount
+                   appliedCount += partialCount
                  },
                  onTextUpdate: (text: string) => {
                     accumulated = text
@@ -196,6 +197,10 @@ function useChatHandlers() {
                })
                // Ensure final text is captured
                accumulated = rawResponse
+               if (appliedCount === 0 && nodes.length > 0) {
+                 applyNodesToCanvas(nodes)
+                 appliedCount += nodes.length
+               }
              }
         } else {
             // --- CHAT MODE ---

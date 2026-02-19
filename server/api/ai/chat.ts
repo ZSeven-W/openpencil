@@ -57,9 +57,6 @@ async function streamViaAnthropicSDK(apiKey: string, body: ChatBody, model?: str
             if (ev.delta.type === 'text_delta') {
               const data = JSON.stringify({ type: 'text', content: ev.delta.text })
               controller.enqueue(encoder.encode(`data: ${data}\n\n`))
-            } else if (ev.delta.type === 'thinking_delta') {
-              const data = JSON.stringify({ type: 'thinking', content: '' })
-              controller.enqueue(encoder.encode(`data: ${data}\n\n`))
             }
           }
         }
@@ -118,9 +115,6 @@ function streamViaAgentSDK(body: ChatBody, model?: string) {
             if (ev.type === 'content_block_delta') {
               if (ev.delta.type === 'text_delta') {
                 const data = JSON.stringify({ type: 'text', content: ev.delta.text })
-                controller.enqueue(encoder.encode(`data: ${data}\n\n`))
-              } else if (ev.delta.type === 'thinking_delta') {
-                const data = JSON.stringify({ type: 'thinking', content: '' })
                 controller.enqueue(encoder.encode(`data: ${data}\n\n`))
               }
             }
