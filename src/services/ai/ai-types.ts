@@ -22,6 +22,6 @@ export interface AICodeRequest {
 }
 
 export interface AIStreamChunk {
-  type: 'text' | 'done' | 'error'
+  type: 'text' | 'thinking' | 'done' | 'error'
   content: string
 }

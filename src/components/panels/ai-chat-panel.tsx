@@ -152,6 +152,8 @@ function useChatHandlers() {
           if (chunk.type === 'text') {
             accumulated += chunk.content
             updateLastMessage(accumulated)
+          } else if (chunk.type === 'thinking') {
+            // Model is in extended thinking phase — SSE heartbeat, no display update needed
           } else if (chunk.type === 'error') {
             accumulated += `\n\n**Error:** ${chunk.content}`
             updateLastMessage(accumulated)

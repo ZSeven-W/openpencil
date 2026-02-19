@@ -14,6 +14,7 @@ import {
 import ToolButton from './tool-button'
 import { useCanvasStore } from '@/stores/canvas-store'
 import { useDocumentStore, generateId } from '@/stores/document-store'
+import { parseSvgToNodes } from '@/utils/svg-parser'
 import { useHistoryStore } from '@/stores/history-store'
 import { Button } from '@/components/ui/button'
 import { Separator } from '@/components/ui/separator'
@@ -66,43 +67,71 @@ export default function Toolbar() {
     // Reset input so the same file can be re-selected
     e.target.value = ''
 
-    const reader = new FileReader()
-    reader.onload = () => {
-      const dataUrl = reader.result as string
-      const img = new Image()
-      img.onload = () => {
+    const isSvg = file.type === 'image/svg+xml'
+
+    if (isSvg) {
+      // SVG → parse into editable path/shape nodes
+      const reader = new FileReader()
+      reader.onload = () => {
+        const svgText = reader.result as string
+        const nodes = parseSvgToNodes(svgText)
+        if (nodes.length === 0) return
+
         const { viewport, fabricCanvas } = useCanvasStore.getState()
-        // Place image at center of current viewport
         const canvasEl = fabricCanvas?.getElement()
         const canvasW = canvasEl?.clientWidth ?? 800
         const canvasH = canvasEl?.clientHeight ?? 600
         const centerX = (-viewport.panX + canvasW / 2) / viewport.zoom
         const centerY = (-viewport.panY + canvasH / 2) / viewport.zoom
 
-        // Scale down large images to fit reasonably on canvas
-        let w = img.naturalWidth
-        let h = img.naturalHeight
-        const maxDim = 400
-        if (w > maxDim || h > maxDim) {
-          const scale = maxDim / Math.max(w, h)
-          w = Math.round(w * scale)
-          h = Math.round(h * scale)
+        for (const node of nodes) {
+          const w = ('width' in node ? (typeof node.width === 'number' ? node.width : 100) : 100)
+          const h = ('height' in node ? (typeof node.height === 'number' ? node.height : 100) : 100)
+          node.x = centerX - w / 2
+          node.y = centerY - h / 2
+          node.name = file.name.replace(/\.[^.]+$/, '')
+          useDocumentStore.getState().addNode(null, node)
         }
-
-        useDocumentStore.getState().addNode(null, {
-          id: generateId(),
-          type: 'image',
-          name: file.name.replace(/\.[^.]+$/, ''),
-          src: dataUrl,
-          x: centerX - w / 2,
-          y: centerY - h / 2,
-          width: w,
-          height: h,
-        })
       }
-      img.src = dataUrl
+      reader.readAsText(file)
+    } else {
+      // Raster image → ImageNode with data URL
+      const reader = new FileReader()
+      reader.onload = () => {
+        const dataUrl = reader.result as string
+        const img = new Image()
+        img.onload = () => {
+          const { viewport, fabricCanvas } = useCanvasStore.getState()
+          const canvasEl = fabricCanvas?.getElement()
+          const canvasW = canvasEl?.clientWidth ?? 800
+          const canvasH = canvasEl?.clientHeight ?? 600
+          const centerX = (-viewport.panX + canvasW / 2) / viewport.zoom
+          const centerY = (-viewport.panY + canvasH / 2) / viewport.zoom
+
+          let w = img.naturalWidth
+          let h = img.naturalHeight
+          const maxDim = 400
+          if (w > maxDim || h > maxDim) {
+            const scale = maxDim / Math.max(w, h)
+            w = Math.round(w * scale)
+            h = Math.round(h * scale)
+          }
+
+          useDocumentStore.getState().addNode(null, {
+            id: generateId(),
+            type: 'image',
+            name: file.name.replace(/\.[^.]+$/, ''),
+            src: dataUrl,
+            x: centerX - w / 2,
+            y: centerY - h / 2,
+            width: w,
+            height: h,
+          })
+        }
+        img.src = dataUrl
+      }
+      reader.readAsDataURL(file)
     }
-    reader.readAsDataURL(file)
   }, [])
 
   return (

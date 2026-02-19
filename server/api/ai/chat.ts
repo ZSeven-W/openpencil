@@ -53,12 +53,14 @@ async function streamViaAnthropicSDK(apiKey: string, body: ChatBody, model?: str
         })
 
         for await (const ev of messageStream) {
-          if (
-            ev.type === 'content_block_delta' &&
-            ev.delta.type === 'text_delta'
-          ) {
-            const data = JSON.stringify({ type: 'text', content: ev.delta.text })
-            controller.enqueue(encoder.encode(`data: ${data}\n\n`))
+          if (ev.type === 'content_block_delta') {
+            if (ev.delta.type === 'text_delta') {
+              const data = JSON.stringify({ type: 'text', content: ev.delta.text })
+              controller.enqueue(encoder.encode(`data: ${data}\n\n`))
+            } else if (ev.delta.type === 'thinking_delta') {
+              const data = JSON.stringify({ type: 'thinking', content: '' })
+              controller.enqueue(encoder.encode(`data: ${data}\n\n`))
+            }
           }
         }
 
@@ -113,12 +115,14 @@ function streamViaAgentSDK(body: ChatBody, model?: string) {
         for await (const message of q) {
           if (message.type === 'stream_event') {
             const ev = message.event
-            if (
-              ev.type === 'content_block_delta' &&
-              ev.delta.type === 'text_delta'
-            ) {
-              const data = JSON.stringify({ type: 'text', content: ev.delta.text })
-              controller.enqueue(encoder.encode(`data: ${data}\n\n`))
+            if (ev.type === 'content_block_delta') {
+              if (ev.delta.type === 'text_delta') {
+                const data = JSON.stringify({ type: 'text', content: ev.delta.text })
+                controller.enqueue(encoder.encode(`data: ${data}\n\n`))
+              } else if (ev.delta.type === 'thinking_delta') {
+                const data = JSON.stringify({ type: 'thinking', content: '' })
+                controller.enqueue(encoder.encode(`data: ${data}\n\n`))
+              }
             }
           } else if (message.type === 'result') {
             if (message.subtype !== 'success') {
