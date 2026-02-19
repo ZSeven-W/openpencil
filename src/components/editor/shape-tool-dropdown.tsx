@@ -10,7 +10,6 @@ import {
 } from 'lucide-react'
 import type { ToolType } from '@/types/canvas'
 import { useCanvasStore } from '@/stores/canvas-store'
-import { Toggle } from '@/components/ui/toggle'
 import {
   Tooltip,
   TooltipContent,
@@ -109,15 +108,19 @@ export default function ShapeToolDropdown({
       {/* Main shape tool button */}
       <Tooltip>
         <TooltipTrigger asChild>
-          <Toggle
-            size="sm"
-            pressed={isGroupActive}
-            onPressedChange={() => setActiveTool(lastShapeTool.current)}
+          <button
+            type="button"
+            onClick={() => setActiveTool(lastShapeTool.current)}
             aria-label="Shape tools"
-            className="data-[state=on]:bg-primary/15 data-[state=on]:text-primary [&_svg]:size-5"
+            aria-pressed={isGroupActive}
+            className={`inline-flex items-center justify-center h-8 min-w-8 px-1.5 rounded-lg transition-colors [&_svg]:size-5 [&_svg]:shrink-0 ${
+              isGroupActive
+                ? 'bg-primary text-primary-foreground'
+                : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+            }`}
           >
             {displayIcon}
-          </Toggle>
+          </button>
         </TooltipTrigger>
         <TooltipContent side="right">
           Shape tools

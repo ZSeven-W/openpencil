@@ -159,10 +159,12 @@ export function useCanvasEvents() {
         if (!state.fabricCanvas) return
         if (isDrawingTool(state.activeTool)) {
           state.fabricCanvas.selection = false
+          state.fabricCanvas.skipTargetFind = true
           state.fabricCanvas.discardActiveObject()
           state.fabricCanvas.requestRenderAll()
         } else if (state.activeTool === 'select') {
           state.fabricCanvas.selection = true
+          state.fabricCanvas.skipTargetFind = false
         }
       })
 

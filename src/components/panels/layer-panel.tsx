@@ -4,11 +4,15 @@ import { useCanvasStore } from '@/stores/canvas-store'
 import type { FabricObjectWithPenId } from '@/canvas/canvas-object-factory'
 import type { PenNode } from '@/types/pen'
 import LayerItem from './layer-item'
+import type { DropPosition } from './layer-item'
 import LayerContextMenu from './layer-context-menu'
+
+const CONTAINER_TYPES = new Set(['frame', 'group', 'ref'])
 
 interface DragState {
   dragId: string | null
   overId: string | null
+  dropPosition: DropPosition
 }
 
 function renderLayerTree(
@@ -23,10 +27,11 @@ function renderLayerTree(
     onToggleExpand: (id: string) => void
     onContextMenu: (e: React.MouseEvent, id: string) => void
     onDragStart: (id: string) => void
-    onDragOver: (id: string) => void
+    onDragOver: (id: string, e: React.PointerEvent) => void
     onDragEnd: () => void
   },
   dragOverId: string | null,
+  dropPosition: DropPosition,
   collapsedIds: Set<string>,
 ) {
   return [...nodes].reverse().map((node) => {
@@ -35,29 +40,23 @@ function renderLayerTree(
         ? node.children
         : null
     const isExpanded = !collapsedIds.has(node.id)
+    const isDropTarget = dragOverId === node.id
 
     return (
       <div key={node.id}>
-        <div
-          className={
-            dragOverId === node.id
-              ? 'border-t-2 border-blue-500'
-              : 'border-t-2 border-transparent'
-          }
-        >
-          <LayerItem
-            id={node.id}
-            name={node.name ?? node.type}
-            type={node.type}
-            depth={depth}
-            selected={selectedIds.includes(node.id)}
-            visible={node.visible !== false}
-            locked={node.locked === true}
-            hasChildren={nodeChildren !== null}
-            expanded={isExpanded}
-            {...handlers}
-          />
-        </div>
+        <LayerItem
+          id={node.id}
+          name={node.name ?? node.type}
+          type={node.type}
+          depth={depth}
+          selected={selectedIds.includes(node.id)}
+          visible={node.visible !== false}
+          locked={node.locked === true}
+          hasChildren={nodeChildren !== null}
+          expanded={isExpanded}
+          dropPosition={isDropTarget ? dropPosition : null}
+          {...handlers}
+        />
         {nodeChildren &&
           isExpanded &&
           renderLayerTree(
@@ -66,6 +65,7 @@ function renderLayerTree(
             selectedIds,
             handlers,
             dragOverId,
+            dropPosition,
             collapsedIds,
           )}
       </div>
@@ -83,6 +83,8 @@ export default function LayerPanel() {
   const groupNodes = useDocumentStore((s) => s.groupNodes)
   const moveNode = useDocumentStore((s) => s.moveNode)
   const getParentOf = useDocumentStore((s) => s.getParentOf)
+  const getNodeById = useDocumentStore((s) => s.getNodeById)
+  const isDescendantOf = useDocumentStore((s) => s.isDescendantOf)
   const selectedIds = useCanvasStore((s) => s.selection.selectedIds)
   const setSelection = useCanvasStore((s) => s.setSelection)
   const fabricCanvas = useCanvasStore((s) => s.fabricCanvas)
@@ -93,8 +95,13 @@ export default function LayerPanel() {
     nodeId: string
   } | null>(null)
 
-  const dragRef = useRef<DragState>({ dragId: null, overId: null })
+  const dragRef = useRef<DragState>({
+    dragId: null,
+    overId: null,
+    dropPosition: null,
+  })
   const [dragOverId, setDragOverId] = useState<string | null>(null)
+  const [dropPosition, setDropPosition] = useState<DropPosition>(null)
   const [collapsedIds, setCollapsedIds] = useState<Set<string>>(new Set())
 
   const handleToggleExpand = useCallback((id: string) => {
@@ -146,28 +153,65 @@ export default function LayerPanel() {
     dragRef.current.dragId = id
   }, [])
 
-  const handleDragOver = useCallback((id: string) => {
-    if (dragRef.current.dragId && dragRef.current.dragId !== id) {
+  const handleDragOver = useCallback(
+    (id: string, e: React.PointerEvent) => {
+      const { dragId } = dragRef.current
+      if (!dragId || dragId === id) return
+
+      // Prevent dropping into own descendants
+      if (isDescendantOf(id, dragId)) return
+
+      const rect = e.currentTarget.getBoundingClientRect()
+      const y = e.clientY - rect.top
+      const ratio = y / rect.height
+      const targetNode = getNodeById(id)
+      const canBeParent = targetNode
+        ? CONTAINER_TYPES.has(targetNode.type)
+        : false
+
+      let pos: DropPosition
+      if (canBeParent) {
+        if (ratio < 0.25) pos = 'above'
+        else if (ratio > 0.75) pos = 'below'
+        else pos = 'inside'
+      } else {
+        pos = ratio < 0.5 ? 'above' : 'below'
+      }
+
       dragRef.current.overId = id
+      dragRef.current.dropPosition = pos
       setDragOverId(id)
-    }
-  }, [])
+      setDropPosition(pos)
+    },
+    [getNodeById, isDescendantOf],
+  )
 
   const handleDragEnd = useCallback(() => {
-    const { dragId, overId } = dragRef.current
-    if (dragId && overId && dragId !== overId) {
+    const { dragId, overId, dropPosition: pos } = dragRef.current
+    if (dragId && overId && dragId !== overId && pos) {
       const parent = getParentOf(overId)
       const parentId = parent ? parent.id : null
       const siblings = parent
         ? ('children' in parent ? parent.children ?? [] : [])
         : children
       const targetIdx = siblings.findIndex((n) => n.id === overId)
-      if (targetIdx !== -1) {
-        moveNode(dragId, parentId, targetIdx)
+
+      if (pos === 'inside') {
+        moveNode(dragId, overId, 0)
+        // Auto-expand the target so the dropped item is visible
+        setCollapsedIds((prev) => {
+          const next = new Set(prev)
+          next.delete(overId)
+          return next
+        })
+      } else if (targetIdx !== -1) {
+        const insertIdx = pos === 'above' ? targetIdx : targetIdx + 1
+        moveNode(dragId, parentId, insertIdx)
       }
     }
-    dragRef.current = { dragId: null, overId: null }
+    dragRef.current = { dragId: null, overId: null, dropPosition: null }
     setDragOverId(null)
+    setDropPosition(null)
   }, [children, getParentOf, moveNode])
 
   const handleContextAction = useCallback(
@@ -235,7 +279,15 @@ export default function LayerPanel() {
             No layers yet. Use the toolbar to draw shapes.
           </p>
         ) : (
-          renderLayerTree(children, 0, selectedIds, handlers, dragOverId, collapsedIds)
+          renderLayerTree(
+            children,
+            0,
+            selectedIds,
+            handlers,
+            dragOverId,
+            dropPosition,
+            collapsedIds,
+          )
         )}
       </div>
 

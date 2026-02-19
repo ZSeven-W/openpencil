@@ -43,19 +43,57 @@ React Components (Toolbar, LayerPanel, PropertyPanel)
 
 ### Key Modules
 
-- **`src/canvas/`** — Fabric.js integration: canvas init, drawing events, viewport (pan/zoom), selection sync, smart guides, bidirectional document↔canvas sync, object factory
-- **`src/stores/`** — Zustand stores: `canvas-store` (UI/tool/selection/viewport), `document-store` (PenDocument tree CRUD), `history-store` (undo/redo), `ai-store` (chat/code generation state)
-- **`src/types/`** — Type system: `pen.ts` (PenDocument/PenNode), `canvas.ts` (ToolType), `styles.ts` (Fill/Stroke/Effect), `variables.ts` (VariableDefinition)
-- **`src/components/editor/`** — Editor layout, toolbar, tool buttons, status bar
-- **`src/components/panels/`** — Layer panel, property panel (fill/stroke/size/corner-radius/effects/text/appearance sections), AI chat panel, code panel
-- **`src/components/shared/`** — Reusable UI: ColorPicker, NumberInput, DropdownSelect, ExportDialog, SaveDialog
+- **`src/canvas/`** — Fabric.js integration (16 files):
+  - `fabric-canvas.tsx` — Canvas component initialization
+  - `canvas-object-factory.ts` — Creates Fabric objects from PenNodes (rect, ellipse, line, polygon, path, text, image, frame, group)
+  - `canvas-object-sync.ts` — Syncs individual object properties between Fabric and store
+  - `canvas-sync-lock.ts` — Prevents circular sync loops
+  - `canvas-controls.ts` — Custom rotation controls and cursor styling
+  - `canvas-constants.ts` — Default colors, zoom limits, stroke widths
+  - `use-canvas-events.ts` — Drawing events, shape creation, smart guides activation, tool-based `skipTargetFind` management
+  - `use-canvas-sync.ts` — Bidirectional PenDocument ↔ Fabric.js sync, node flattening with parent offsets
+  - `use-canvas-viewport.ts` — Wheel zoom, space+drag panning, tool cursor switching, selection toggling per tool
+  - `use-canvas-selection.ts` — Selection sync between Fabric objects and canvas-store
+  - `use-canvas-guides.ts` — Smart alignment guides with snapping
+  - `guide-utils.ts` — Guide calculation and rendering
+  - `pen-tool.ts` — Bezier pen tool: anchor points, control handles, path closure, preview rendering
+  - `parent-child-transform.ts` — Propagates parent transforms (move/scale/rotate) to children proportionally
+  - `use-dimension-label.ts` — Shows size/position labels during object manipulation
+  - `use-frame-labels.ts` — Renders frame names and boundaries on canvas
+- **`src/stores/`** — Zustand stores (5 files):
+  - `canvas-store.ts` — UI/tool/selection/viewport/clipboard/interaction state
+  - `document-store.ts` — PenDocument tree CRUD: `addNode`, `updateNode`, `removeNode`, `moveNode`, `reorderNode`, `duplicateNode`, `groupNodes`, `ungroupNode`, `toggleVisibility`, `toggleLock`, `scaleDescendantsInStore`, `rotateDescendantsInStore`, `getNodeById`, `getParentOf`, `getFlatNodes`, `isDescendantOf`
+  - `history-store.ts` — Undo/redo (max 100 states), batch mode for grouped operations
+  - `ai-store.ts` — Chat messages, streaming state, generated code, model selection
+  - `agent-settings-store.ts` — AI provider config (Anthropic/OpenAI), MCP CLI integrations, localStorage persistence
+- **`src/types/`** — Type system:
+  - `pen.ts` — PenDocument/PenNode (frame, group, rectangle, ellipse, line, polygon, path, text, image, ref), ContainerProps
+  - `canvas.ts` — ToolType (select, frame, rectangle, ellipse, line, polygon, path, text, hand), ViewportState, SelectionState
+  - `styles.ts` — PenFill (solid, linear_gradient, radial_gradient), PenStroke, PenEffect (shadow, blur)
+  - `variables.ts` — VariableDefinition for design tokens
+  - `agent-settings.ts` — AI provider config types
+- **`src/components/editor/`** — Editor UI (6 files): editor-layout, toolbar, tool-button, shape-tool-dropdown (rectangle/ellipse/line/path + icon picker + image import), top-bar, status-bar
+- **`src/components/panels/`** — Panels (15 files):
+  - `layer-panel.tsx` / `layer-item.tsx` / `layer-context-menu.tsx` — Tree view with drag-and-drop reordering and drop-into-children (above/below/inside), visibility/lock toggles, context menu, rename
+  - `property-panel.tsx` — Unified property panel
+  - `fill-section.tsx` — Solid + gradient fill
+  - `stroke-section.tsx` — Stroke color/width/dash
+  - `corner-radius-section.tsx` — Unified or 4-point corner radius
+  - `size-section.tsx` — Position, size, rotation
+  - `text-section.tsx` — Font, size, weight, spacing, alignment
+  - `effects-section.tsx` — Shadow and blur
+  - `layout-section.tsx` — Auto-layout (none/vertical/horizontal), gap, padding, justify, align
+  - `appearance-section.tsx` — Opacity, visibility, lock, flip
+  - `ai-chat-panel.tsx` / `chat-message.tsx` — AI chat with markdown, design block collapse, apply design
+  - `code-panel.tsx` — Code generation output (React/Tailwind and HTML/CSS)
+- **`src/components/shared/`** — Reusable UI (8 files): ColorPicker, NumberInput, DropdownSelect, SectionHeader, ExportDialog, SaveDialog, AgentSettingsDialog, IconPickerDialog
 - **`src/components/ui/`** — shadcn/ui primitives: Button, Select, Separator, Slider, Toggle, Tooltip
-- **`src/services/ai/`** — AI chat service, design prompts, design-to-node generation
+- **`src/services/ai/`** — AI chat service, design prompts, design-to-node generation, AI types
 - **`src/services/codegen/`** — React+Tailwind and HTML+CSS code generators
-- **`src/hooks/`** — `use-keyboard-shortcuts` (global keyboard event handling)
+- **`src/hooks/`** — `use-keyboard-shortcuts` (global keyboard event handling: tools, clipboard, undo/redo, save, select all, delete, arrow nudge, z-order)
 - **`src/lib/`** — Utility functions (`utils.ts` with `cn()` for class merging)
-- **`src/utils/`** — File operations (save/open .pen), export (PNG/SVG), node clone, pen file normalization, syntax highlight
-- **`server/api/ai/`** — Nitro server API: `chat.ts` (streaming chat), `generate.ts` (non-streaming generation). Supports Anthropic API key or Claude Agent SDK (local OAuth) as dual providers
+- **`src/utils/`** — File operations (save/open .pen), export (PNG/SVG), node clone, pen file normalization, SVG parser (import SVG to editable PenNodes), syntax highlight
+- **`server/api/ai/`** — Nitro server API: `chat.ts` (streaming SSE with thinking state), `generate.ts` (non-streaming generation), `connect-agent.ts` (Claude Code/Codex CLI connection), `models.ts` (model definitions). Supports Anthropic API key or Claude Agent SDK (local OAuth) as dual providers
 
 ### Fabric.js v7 Gotchas
 
@@ -63,6 +101,16 @@ React Components (Toolbar, LayerPanel, PropertyPanel)
 - **Pointer capture** — Fabric captures pointers on `upperCanvasEl`; attach pointer listeners there, not on `document`
 - **Coordinate conversion** — use `canvas.getScenePoint(e)` with `canvas.calcOffset()` for accurate pointer-to-scene mapping
 - **Default strokeWidth is 1** — explicitly set `strokeWidth: 0` when no stroke is desired
+- **Tool isolation** — when a drawing tool is active, set both `canvas.selection = false` and `canvas.skipTargetFind = true` to prevent Fabric from selecting existing objects during draw. Restore both when switching back to select tool.
+- **Parent-child transforms** — nodes are flattened to absolute coordinates for Fabric; `nodeRenderInfo` stores parent offsets for converting back to relative coordinates. `parent-child-transform.ts` handles propagating transforms to descendants during drag/scale/rotate.
+
+### Canvas Tool State Management
+
+When switching tools, **two subscribers** manage canvas state:
+- `use-canvas-events.ts` — sets `selection`/`skipTargetFind` based on drawing vs select tool
+- `use-canvas-viewport.ts` — also manages `selection`/`skipTargetFind` for tool switches and space-key panning
+
+Both must stay consistent: only `select` tool (without space pressed) should have `selection = true` and `skipTargetFind = false`.
 
 ### Routing
 
@@ -85,6 +133,7 @@ Tailwind CSS v4 imported via `src/styles.css`. UI primitives from shadcn/ui (`sr
 - 每个文件只导出一个组件，每个组件只承担单一职责。
 - `.ts` 和 `.tsx` 文件命名使用 kebab-case（烤肉串风格），例如 `canvas-store.ts`、`use-keyboard-shortcuts.ts`。
 - UI 组件统一使用 shadcn/ui 设计令牌（`bg-card`、`text-foreground`、`border-border` 等），禁止使用硬编码的 `gray-*`、`blue-*` 等 Tailwind 颜色。
+- 工具栏按钮激活状态直接用 `isActive` 条件 className（`bg-primary text-primary-foreground`），不使用 Radix Toggle 的 `data-[state=on]:` 选择器（存在 twMerge 冲突）。
 
 ## Git Commit 规范
 
