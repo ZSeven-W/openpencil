@@ -34,23 +34,40 @@ export function useCanvasViewport() {
         e.preventDefault()
         e.stopPropagation()
 
-        // Normalize: trackpads send small pixel deltas, mice send larger line deltas
-        let delta = -e.deltaY
-        if (e.deltaMode === 1) delta *= 40 // line mode → approx pixels
-        const zoom = canvas.getZoom()
-        // Smooth exponential zoom — works naturally for both trackpad and mouse
-        const factor = Math.pow(1.002, delta)
-        let newZoom = zoom * factor
+        if (e.ctrlKey || e.metaKey) {
+          // Pinch-to-zoom (trackpad) or Ctrl/Cmd + scroll (mouse) → Zoom
+          let delta = -e.deltaY
+          if (e.deltaMode === 1) delta *= 40 // line mode → approx pixels
+          const zoom = canvas.getZoom()
+          const factor = Math.pow(1.002, delta)
+          let newZoom = zoom * factor
 
-        newZoom = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, newZoom))
+          newZoom = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, newZoom))
 
-        const point = canvas.getScenePoint(e)
-        canvas.zoomToPoint(point, newZoom)
+          const point = canvas.getScenePoint(e)
+          canvas.zoomToPoint(point, newZoom)
 
-        const vpt = canvas.viewportTransform
-        if (vpt) {
-          useCanvasStore.getState().setZoom(newZoom)
-          useCanvasStore.getState().setPan(vpt[4], vpt[5])
+          const vpt = canvas.viewportTransform
+          if (vpt) {
+            useCanvasStore.getState().setZoom(newZoom)
+            useCanvasStore.getState().setPan(vpt[4], vpt[5])
+          }
+        } else {
+          // Two-finger scroll (trackpad) or plain scroll (mouse) → Pan
+          let dx = -e.deltaX
+          let dy = -e.deltaY
+          if (e.deltaMode === 1) {
+            dx *= 40
+            dy *= 40
+          }
+
+          const vpt = canvas.viewportTransform
+          if (vpt) {
+            vpt[4] += dx
+            vpt[5] += dy
+            canvas.setViewportTransform(vpt)
+            useCanvasStore.getState().setPan(vpt[4], vpt[5])
+          }
         }
 
         canvas.requestRenderAll()
