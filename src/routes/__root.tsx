@@ -1,5 +1,6 @@
 import {
   HeadContent,
+  Outlet,
   Scripts,
   createRootRoute,
 } from '@tanstack/react-router'
@@ -27,8 +28,18 @@ export const Route = createRootRoute({
       },
     ],
   }),
+  component: RootComponent,
+  notFoundComponent: () => (
+    <div className="min-h-screen flex items-center justify-center text-muted-foreground">
+      <p>Page not found</p>
+    </div>
+  ),
   shellComponent: RootDocument,
 })
+
+function RootComponent() {
+  return <Outlet />
+}
 
 function RootDocument({ children }: { children: React.ReactNode }) {
   return (
