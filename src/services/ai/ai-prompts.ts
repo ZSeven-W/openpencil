@@ -4,7 +4,7 @@ PenNode types (the ONLY format you output for designs):
 - rectangle: Props: width, height, cornerRadius, fill, stroke, effects
 - ellipse: Props: width, height, fill, stroke, effects
 - text: Props: content (string), fontFamily, fontSize, fontWeight, fill, width, height, textAlign
-- path: SVG icon/shape. Props: d (SVG path string), width, height, fill, stroke, effects
+- path: SVG icon/shape. Props: d (SVG path string), width, height, fill, stroke, effects. IMPORTANT: width and height must match the natural aspect ratio of the SVG path — do NOT force 1:1 for non-square icons/logos
 - image: Raster image. Props: src (URL string), width, height, cornerRadius, effects
 
 All nodes share: id (string), type, name, x, y, rotation, opacity
@@ -32,7 +32,7 @@ Card with image:
 { "id": "card-1", "type": "frame", "name": "Card", "x": 50, "y": 50, "width": 320, "height": 340, "cornerRadius": 12, "layout": "vertical", "gap": 0, "fill": [{ "type": "solid", "color": "#FFFFFF" }], "effects": [{ "type": "shadow", "offsetX": 0, "offsetY": 4, "blur": 12, "spread": 0, "color": "rgba(0,0,0,0.1)" }], "children": [{ "id": "card-img", "type": "image", "name": "Cover", "src": "https://picsum.photos/320/180", "width": 320, "height": 180 }, { "id": "card-body", "type": "frame", "name": "Body", "width": 320, "height": 140, "layout": "vertical", "padding": 20, "gap": 8, "children": [{ "id": "card-title", "type": "text", "name": "Title", "content": "Card Title", "fontSize": 20, "fontWeight": 700, "width": 280, "height": 28, "fill": [{ "type": "solid", "color": "#111827" }] }, { "id": "card-desc", "type": "text", "name": "Description", "content": "Some description text here", "fontSize": 14, "width": 280, "height": 20, "fill": [{ "type": "solid", "color": "#6B7280" }] }] }] }
 
 ICONS & IMAGES:
-- Icons: Use "path" nodes with Lucide-style SVG d attribute (24x24 viewBox). Use stroke for line icons, fill for solid icons. Size 16-24px.
+- Icons: Use "path" nodes with SVG d attribute. Use stroke for line icons, fill for solid icons. Size 16-24px for UI icons. IMPORTANT: width and height must match the SVG path's natural aspect ratio — symmetric icons like arrows are square, but brand logos (Apple, Meta, etc.) are often taller than wide or vice versa. Never force all icons to 1:1.
 - Images: Use "image" nodes. src = "https://picsum.photos/{width}/{height}" for placeholders. Set explicit width/height.
 - You know many Lucide icon SVG paths — use them freely. Always give icon nodes descriptive names.
 `
@@ -123,7 +123,7 @@ DESIGN GUIDELINES:
 - Buttons: height 44-48px, cornerRadius 8-12
 - Inputs: height 44px, light bg, subtle border
 - Consistent color palette
-- Use path nodes for icons (SVG d path data, Lucide-style 24x24 viewBox). Size icons 16-24px in UI elements
+- Use path nodes for icons (SVG d path data). Size icons 16-24px. Preserve the natural aspect ratio of the SVG path — do NOT force all icons to square
 - Use image nodes for photos/illustrations with picsum.photos placeholder URLs
 - Buttons, nav items, and list items should include icons when appropriate for better UX`
 
@@ -172,7 +172,7 @@ SIZING:
 - All colors as fill arrays: [{ "type": "solid", "color": "#hex" }]
 
 ICONS & IMAGES:
-- Use "path" nodes for icons: provide SVG d attribute, set width/height (16-24px for UI icons), use stroke for line icons or fill for solid icons
+- Use "path" nodes for icons: provide SVG d attribute, set width/height (16-24px for UI icons), use stroke for line icons or fill for solid icons. Width and height MUST match the natural aspect ratio of the SVG path data — do not squeeze non-square logos into square dimensions
 - Use "image" nodes for photos/illustrations: set src to "https://picsum.photos/{width}/{height}" as placeholder, set explicit width/height
 - Include icons in buttons, nav items, list items, cards for professional polish
 - Reference the icon patterns in the examples section for common icons

@@ -161,7 +161,8 @@ function getNodeHeight(node: PenNode, parentAvail?: number): number {
   }
   if (node.type === 'text') {
     const fontSize = node.fontSize ?? 16
-    return fontSize * 1.4
+    const lineHeight = ('lineHeight' in node ? node.lineHeight : undefined) ?? 1.2
+    return fontSize * lineHeight
   }
   return 0
 }
@@ -258,9 +259,25 @@ function computeLayoutPositions(
     const childCross = isVertical ? size.w : size.h
     let crossPos = 0
 
+    // For text nodes, use the actual Fabric-rendered height for cross-axis
+    // centering instead of the declared height. Fabric.js text height =
+    // fontSize * lineHeight, which is typically smaller than the AI-declared
+    // height, causing text to appear shifted upward when centered.
+    let effectiveChildCross = childCross
+    if (align === 'center' && child.type === 'text') {
+      const fontSize = child.fontSize ?? 16
+      const lineHeight = ('lineHeight' in child ? child.lineHeight : undefined) ?? 1.2
+      const visualH = fontSize * lineHeight
+      if (!isVertical && visualH < childCross) {
+        effectiveChildCross = visualH
+      } else if (isVertical && visualH < childCross) {
+        // vertical layout: cross axis is width, not applicable
+      }
+    }
+
     switch (align) {
       case 'center':
-        crossPos = (crossAvail - childCross) / 2
+        crossPos = (crossAvail - effectiveChildCross) / 2
         break
       case 'end':
         crossPos = crossAvail - childCross
