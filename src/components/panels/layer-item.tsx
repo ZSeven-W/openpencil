@@ -102,7 +102,10 @@ export default function LayerItem({
     }
   }
 
-  const handlePointerDown = () => {
+  const handlePointerDown = (e: React.PointerEvent) => {
+    if (isEditing) return
+    // Prevent browser text selection during drag
+    e.preventDefault()
     onDragStart(id)
   }
 

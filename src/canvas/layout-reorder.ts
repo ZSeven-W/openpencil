@@ -4,6 +4,7 @@ import type { PenNode, ContainerProps } from '@/types/pen'
 import type { FabricObjectWithPenId } from './canvas-object-factory'
 import { setFabricSyncLock } from './canvas-sync-lock'
 import { nodeRenderInfo } from './use-canvas-sync'
+import { setInsertionIndicator } from './insertion-indicator'
 
 // ---------------------------------------------------------------------------
 // Session state
@@ -18,14 +19,6 @@ interface LayoutDragSession {
 }
 
 let activeSession: LayoutDragSession | null = null
-
-/** Insertion indicator state — read by use-layout-indicator.ts */
-export let activeInsertionIndicator: {
-  x: number
-  y: number
-  length: number
-  orientation: 'vertical' | 'horizontal'
-} | null = null
 
 // ---------------------------------------------------------------------------
 // Padding helper (duplicated from use-canvas-sync to avoid circular deps)
@@ -205,12 +198,12 @@ export function updateLayoutDrag(
       indicatorY = (prevBottom + nextTop) / 2
     }
 
-    activeInsertionIndicator = {
+    setInsertionIndicator({
       x: parentAbsX + pad.left,
       y: indicatorY,
       length: parentW - pad.left - pad.right,
       orientation: 'horizontal',
-    }
+    })
   } else {
     let indicatorX: number
     if (siblingIds.length === 0) {
@@ -237,12 +230,12 @@ export function updateLayoutDrag(
       indicatorX = (prevRight + nextLeft) / 2
     }
 
-    activeInsertionIndicator = {
+    setInsertionIndicator({
       x: indicatorX,
       y: parentAbsY + pad.top,
       length: parentH - pad.top - pad.bottom,
       orientation: 'vertical',
-    }
+    })
   }
 
   canvas.requestRenderAll()
@@ -283,14 +276,14 @@ export function endLayoutDrag(
   })
 
   activeSession = null
-  activeInsertionIndicator = null
+  setInsertionIndicator(null)
   canvas.requestRenderAll()
 }
 
 /** Cancel the layout drag session (safety cleanup). */
 export function cancelLayoutDrag(): void {
   activeSession = null
-  activeInsertionIndicator = null
+  setInsertionIndicator(null)
 }
 
 /** Check if a layout drag session is currently active. */
