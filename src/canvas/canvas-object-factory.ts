@@ -264,15 +264,29 @@ export function createFabricObject(
         stroke: resolveStrokeColor(node.stroke),
         strokeWidth: resolveStrokeWidth(node.stroke),
       }) as FabricObjectWithPenId
+      // Cache native dimensions before scaling (Polygon width/height is derived from points)
+      ;(obj as any).__nativeWidth = obj.width
+      ;(obj as any).__nativeHeight = obj.height
+      if (w > 0 && h > 0 && obj.width && obj.height) {
+        obj.set({ scaleX: w / obj.width, scaleY: h / obj.height })
+      }
       break
     }
     case 'path': {
+      const pw = sizeToNumber(node.width, 0)
+      const ph = sizeToNumber(node.height, 0)
       obj = new fabric.Path(node.d, {
         ...baseProps,
-        fill: resolveFill(node.fill, sizeToNumber(node.width, 100), sizeToNumber(node.height, 100)),
+        fill: resolveFill(node.fill, pw || 100, ph || 100),
         stroke: resolveStrokeColor(node.stroke),
         strokeWidth: resolveStrokeWidth(node.stroke),
       }) as FabricObjectWithPenId
+      // Cache native dimensions before scaling (Path width/height is derived from d)
+      ;(obj as any).__nativeWidth = obj.width
+      ;(obj as any).__nativeHeight = obj.height
+      if (pw > 0 && ph > 0 && obj.width && obj.height) {
+        obj.set({ scaleX: pw / obj.width, scaleY: ph / obj.height })
+      }
       break
     }
     case 'text': {

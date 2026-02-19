@@ -26,8 +26,12 @@ export function useFrameLabels() {
         const dpr = el.width / el.offsetWidth
 
         const store = useDocumentStore.getState()
-        // Only top-level document children show labels
-        const topIds = new Set(store.document.children.map((c) => c.id))
+        // Only top-level frame nodes show labels
+        const topFrameIds = new Set(
+          store.document.children
+            .filter((c) => c.type === 'frame')
+            .map((c) => c.id),
+        )
         const objects = canvas.getObjects() as FabricObjectWithPenId[]
 
         ctx.save()
@@ -37,7 +41,7 @@ export function useFrameLabels() {
 
         for (const obj of objects) {
           if (!obj.penNodeId) continue
-          if (!topIds.has(obj.penNodeId)) continue
+          if (!topFrameIds.has(obj.penNodeId)) continue
 
           const node = store.getNodeById(obj.penNodeId)
           if (!node) continue
