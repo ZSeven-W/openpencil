@@ -1,5 +1,5 @@
 import React, { useState, useMemo, type ReactNode } from 'react'
-import { Copy, Check, Wand2, ChevronDown, ChevronRight, ListOrdered, FileJson, Palette, LayoutTemplate, ScanSearch } from 'lucide-react'
+import { Copy, Check, Wand2, ChevronDown, ScanSearch, FileJson, ListOrdered, Palette, LayoutTemplate } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 
@@ -96,7 +96,7 @@ function ActionSteps({ steps }: { steps: string[] }) {
 function ActionStepItem({ 
   title, 
   content, 
-  icon: Icon, 
+  icon: _Icon, 
   defaultOpen = false,
   isLast 
 }: { 
@@ -108,40 +108,51 @@ function ActionStepItem({
 }) {
   const [isOpen, setIsOpen] = useState(defaultOpen)
 
+  // Pencil-like style: Rounded pill/card with subtle border
   return (
-    <div className="border-b border-border/40 last:border-0 bg-transparent">
+    <div className="group mb-1.5 last:mb-0">
       <button 
         onClick={() => setIsOpen(!isOpen)}
-        className="flex items-center gap-3 w-full px-2 py-2 text-left hover:bg-secondary/30 transition-colors group"
+        className={cn(
+          "flex items-center justify-between w-full px-3 py-2 text-left transition-all rounded-md border",
+          isOpen 
+            ? "bg-secondary/40 border-border/60" 
+            : "bg-background/40 hover:bg-secondary/20 border-border/30 hover:border-border/50"
+        )}
       >
-        <div className={cn(
-          "w-4 h-4 rounded-full flex items-center justify-center shrink-0 transition-colors",
-          isLast 
-            ? "bg-primary/10 text-primary" 
-            : "text-muted-foreground/40 group-hover:text-muted-foreground/80"
-        )}>
-          {isLast ? (
-             <div className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse shadow-[0_0_8px_rgba(34,197,94,0.5)]" />
-          ) : (
-             <Check size={10} />
-          )}
+        <div className="flex items-center gap-2.5 overflow-hidden">
+           {/* Status Icon - Pencil puts it on the right usually, but we can keep left for flow or move right */}
+           {/* Actually looking at Pencil screenshot: Text is left, checkmark is INLINE or right. */}
+           {/* Let's keep consistent icon on left for now, but style it like a status indicator */}
+           
+          <div className={cn(
+            "w-4 h-4 rounded-full flex items-center justify-center shrink-0 transition-colors",
+            isLast 
+              ? "text-primary scale-110" 
+              : "text-emerald-500/80" // Green for completed steps like Pencil
+          )}>
+            {isLast ? (
+               <div className="w-2 h-2 rounded-full bg-primary animate-pulse shadow-[0_0_8px_rgba(34,197,94,0.5)]" />
+            ) : (
+               <Check size={12} strokeWidth={2.5} />
+            )}
+          </div>
+          
+          <span title={title} className={cn(
+            "text-[11px] font-medium transition-colors truncate select-none",
+             isLast ? "text-foreground" : "text-muted-foreground/90"
+          )}>
+            {title}
+          </span>
         </div>
         
-        <span title={title} className={cn(
-          "text-[11px] font-medium flex-1 transition-colors truncate",
-          isLast ? "text-foreground" : "text-muted-foreground"
-        )}>
-          {title}
-        </span>
-        
-        <Icon size={12} className={cn(
-          "transition-opacity",
-          isOpen ? "text-foreground opacity-100" : "text-muted-foreground opacity-0 group-hover:opacity-50"
-        )} />
+        <div className="flex items-center text-muted-foreground/30">
+          <ChevronDown size={12} className={cn("transition-transform duration-200", isOpen ? "rotate-180" : "")} />
+        </div>
       </button>
 
       {isOpen && (
-        <div className="px-2 pb-2 pl-[34px] text-[10px] text-muted-foreground/80 leading-relaxed font-mono animate-in slide-in-from-top-0.5 duration-200 whitespace-pre-wrap break-words">
+        <div className="px-3 py-2 mx-1 mt-0.5 border-l border-border/30 text-[10px] text-muted-foreground/80 leading-relaxed font-mono animate-in slide-in-from-top-0.5 duration-200 whitespace-pre-wrap break-words">
            {content}
         </div>
       )}
@@ -431,60 +442,68 @@ function DesignJsonBlock({
   }
 
   return (
-    <div className="my-1.5 rounded border border-border/30 overflow-hidden bg-background/50 backdrop-blur-[1px]">
-      {/* Header */}
+    <div className="group my-1.5 first:mt-0 last:mb-0">
       <button
         type="button"
         onClick={() => setExpanded(!expanded)}
-        className="flex items-center justify-between w-full px-2 py-1.5 hover:bg-secondary/30 transition-colors text-left group"
+        className={cn(
+          "flex items-center justify-between w-full px-3 py-2 text-left transition-all rounded-md border",
+          expanded 
+            ? "bg-secondary/40 border-border/60" 
+            : "bg-background/40 hover:bg-secondary/20 border-border/30 hover:border-border/50"
+        )}
       >
-        <div className="flex items-center gap-2">
-          {expanded ? (
-            <ChevronDown size={10} className="text-muted-foreground/50" />
-          ) : (
-            <ChevronRight size={10} className="text-muted-foreground/50" />
-          )}
-          <div className="w-4 h-4 rounded flex items-center justify-center bg-primary/5 text-primary">
-             <Wand2 size={9} />
+        <div className="flex items-center gap-2.5">
+          <div className="w-4 h-4 rounded-full flex items-center justify-center bg-primary/10 text-primary shrink-0">
+             <Wand2 size={10} />
           </div>
-          <span className={cn('text-[10px] font-medium tracking-tight', isStreaming ? 'text-muted-foreground animate-pulse' : 'text-muted-foreground/80 group-hover:text-foreground')}>
+          <span className={cn(
+            "text-[11px] font-medium tracking-tight", 
+            isStreaming ? "text-muted-foreground animate-pulse" : "text-foreground/90 group-hover:text-foreground"
+          )}>
             {isStreaming
-              ? 'Generating...'
+              ? 'Generating design...'
               : `${elementCount} design element${elementCount !== 1 ? 's' : ''}`}
           </span>
         </div>
-        <span
-          role="button"
-          tabIndex={0}
-          onClick={(e) => {
-            e.stopPropagation()
-            handleCopy()
-          }}
-          className="text-muted-foreground/30 hover:text-foreground transition-colors p-1 opacity-0 group-hover:opacity-100"
-          title="Copy JSON"
-        >
-          {copied ? <Check size={9} /> : <Copy size={9} />}
-        </span>
+        
+        <div className="flex items-center gap-1">
+          <span
+            role="button"
+            tabIndex={0}
+            onClick={(e) => {
+              e.stopPropagation()
+              handleCopy()
+            }}
+            className="text-muted-foreground/30 hover:text-foreground transition-colors p-1 opacity-0 group-hover:opacity-100 mr-1"
+            title="Copy JSON"
+          >
+            {copied ? <Check size={10} /> : <Copy size={10} />}
+          </span>
+          <ChevronDown size={12} className={cn("text-muted-foreground/30 transition-transform duration-200", expanded ? "rotate-180" : "")} />
+        </div>
       </button>
 
       {/* Expandable JSON content */}
       {expanded && (
-        <pre className="p-2 overflow-x-auto text-[9px] leading-relaxed max-h-32 overflow-y-auto border-t border-border/30 font-mono bg-card/30">
-          <code className="text-muted-foreground">{code}</code>
-        </pre>
-      )}
-
-      {/* Apply button - hidden if applied or streaming */}
-      {onApply && !isApplied && !isStreaming && (
-        <div className="px-2 py-1.5 border-t border-border/30 bg-secondary/10">
-          <Button
-            onClick={() => onApply(code)}
-            variant="ghost"
-            className="w-full h-6 text-[10px] font-medium text-muted-foreground hover:text-primary hover:bg-primary/5"
-            size="sm"
-          >
-            Apply to Canvas
-          </Button>
+        <div className="mt-1 rounded-md border border-border/30 overflow-hidden bg-card/50">
+           <pre className="p-3 overflow-x-auto text-[9px] leading-relaxed max-h-48 overflow-y-auto font-mono text-muted-foreground/80">
+            <code>{code}</code>
+          </pre>
+          
+          {/* Apply button - hidden if applied or streaming */}
+          {onApply && !isApplied && !isStreaming && (
+            <div className="px-2 py-1.5 border-t border-border/30 bg-secondary/10">
+              <Button
+                onClick={() => onApply(code)}
+                variant="ghost"
+                className="w-full h-7 text-[10px] font-medium text-muted-foreground hover:text-primary hover:bg-primary/5"
+                size="sm"
+              >
+                Apply to Canvas
+              </Button>
+            </div>
+          )}
         </div>
       )}
     </div>
