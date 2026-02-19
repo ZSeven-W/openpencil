@@ -137,6 +137,13 @@ export function syncFabricObject(
         stroke: resolveStrokeColor(node.stroke),
         strokeWidth: resolveStrokeWidth(node.stroke),
       })
+      // Use cached native dimensions (from path/points data) to compute correct
+      // scale, even if obj.width was previously corrupted by scale baking.
+      const nw = (obj as any).__nativeWidth || obj.width
+      const nh = (obj as any).__nativeHeight || obj.height
+      if (w > 0 && h > 0 && nw && nh) {
+        obj.set({ width: nw, height: nh, scaleX: w / nw, scaleY: h / nh })
+      }
       break
     }
   }

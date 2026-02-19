@@ -24,6 +24,14 @@ import {
   finalizeParentTransform,
   finalizeParentRotation,
 } from './parent-child-transform'
+import {
+  isPenToolActive,
+  penToolPointerDown,
+  penToolPointerMove,
+  penToolPointerUp,
+  penToolDoubleClick,
+  cancelPenTool,
+} from './pen-tool'
 
 function createNodeForTool(
   tool: ToolType,
@@ -143,6 +151,10 @@ export function useCanvasEvents() {
       let prevTool = useCanvasStore.getState().activeTool
       const unsubTool = useCanvasStore.subscribe((state) => {
         if (state.activeTool === prevTool) return
+        // Cancel pen tool if switching away mid-drawing
+        if (prevTool === 'path' && isPenToolActive() && state.fabricCanvas) {
+          cancelPenTool(state.fabricCanvas)
+        }
         prevTool = state.activeTool
         if (!state.fabricCanvas) return
         if (isDrawingTool(state.activeTool)) {
@@ -163,6 +175,13 @@ export function useCanvasEvents() {
         if (isPanning) return
 
         const pointer = toScene(canvas, e)
+
+        // Pen tool: delegate to state machine
+        if (tool === 'path') {
+          penToolPointerDown(canvas, pointer)
+          return
+        }
+
         startPoint = { x: pointer.x, y: pointer.y }
         drawing = true
 
@@ -229,6 +248,13 @@ export function useCanvasEvents() {
       }
 
       const onPointerMove = (e: PointerEvent) => {
+        // Pen tool has its own move handling
+        if (isPenToolActive()) {
+          const pointer = toScene(canvas, e)
+          penToolPointerMove(canvas, pointer)
+          return
+        }
+
         if (!drawing || !tempObj || !startPoint) return
 
         const tool = useCanvasStore.getState().activeTool
@@ -267,6 +293,12 @@ export function useCanvasEvents() {
       }
 
       const onPointerUp = (_e: PointerEvent) => {
+        // Pen tool: end handle drag
+        if (isPenToolActive()) {
+          penToolPointerUp(canvas)
+          return
+        }
+
         if (!drawing || !tempObj || !startPoint) {
           drawing = false
           startPoint = null
@@ -307,11 +339,20 @@ export function useCanvasEvents() {
         useCanvasStore.getState().setActiveTool('select')
       }
 
+      const onDoubleClick = (e: MouseEvent) => {
+        if (isPenToolActive()) {
+          e.preventDefault()
+          e.stopPropagation()
+          penToolDoubleClick(canvas)
+        }
+      }
+
       // All listeners on upperEl because Fabric.js captures the pointer
       // to this element, so pointermove/pointerup won't reach document.
       upperEl.addEventListener('pointerdown', onPointerDown)
       upperEl.addEventListener('pointermove', onPointerMove)
       upperEl.addEventListener('pointerup', onPointerUp)
+      upperEl.addEventListener('dblclick', onDoubleClick)
 
       // --- History batching for drag/resize/rotate ---
       canvas.on('mouse:down', (opt) => {
@@ -489,11 +530,19 @@ export function useCanvasEvents() {
         if (asPen.penNodeId) {
           const scaleX = target.scaleX ?? 1
           const scaleY = target.scaleY ?? 1
-          if (target.width !== undefined) {
-            target.set({ width: target.width * scaleX, scaleX: 1 })
-          }
-          if (target.height !== undefined) {
-            target.set({ height: target.height * scaleY, scaleY: 1 })
+          // Path/Polygon dimensions are derived from their data, so we can't
+          // bake scale into width/height. Keep scaleX/scaleY on the Fabric
+          // object and let syncObjToStore compute the stored dimensions.
+          const isPathLike =
+            target.type === 'path' ||
+            target.type === 'polygon'
+          if (!isPathLike) {
+            if (target.width !== undefined) {
+              target.set({ width: target.width * scaleX, scaleX: 1 })
+            }
+            if (target.height !== undefined) {
+              target.set({ height: target.height * scaleY, scaleY: 1 })
+            }
           }
           target.setCoords()
           syncObjToStore(asPen)
@@ -511,11 +560,16 @@ export function useCanvasEvents() {
           for (const child of group.getObjects()) {
             const sx = child.scaleX ?? 1
             const sy = child.scaleY ?? 1
-            if (child.width !== undefined) {
-              child.set({ width: child.width * sx, scaleX: 1 })
-            }
-            if (child.height !== undefined) {
-              child.set({ height: child.height * sy, scaleY: 1 })
+            const childIsPathLike =
+              child.type === 'path' ||
+              child.type === 'polygon'
+            if (!childIsPathLike) {
+              if (child.width !== undefined) {
+                child.set({ width: child.width * sx, scaleX: 1 })
+              }
+              if (child.height !== undefined) {
+                child.set({ height: child.height * sy, scaleY: 1 })
+              }
             }
             child.setCoords()
           }
@@ -548,6 +602,7 @@ export function useCanvasEvents() {
         upperEl.removeEventListener('pointerdown', onPointerDown)
         upperEl.removeEventListener('pointermove', onPointerMove)
         upperEl.removeEventListener('pointerup', onPointerUp)
+        upperEl.removeEventListener('dblclick', onDoubleClick)
       }
     }, 100)
 

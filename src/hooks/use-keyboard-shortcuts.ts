@@ -14,6 +14,7 @@ import {
 } from '@/utils/file-operations'
 import { syncCanvasPositionsToStore } from '@/canvas/use-canvas-sync'
 import { zoomToFitContent } from '@/canvas/use-fabric-canvas'
+import { isPenToolActive, penToolKeyDown } from '@/canvas/pen-tool'
 import type { ToolType } from '@/types/canvas'
 
 const TOOL_KEYS: Record<string, ToolType> = {
@@ -38,6 +39,15 @@ export function useKeyboardShortcuts() {
         target.isContentEditable
       ) {
         return
+      }
+
+      // During pen tool drawing, handle Enter/Escape/Backspace specially
+      if (isPenToolActive()) {
+        const canvas = useCanvasStore.getState().fabricCanvas
+        if (canvas && penToolKeyDown(canvas, e.key)) {
+          e.preventDefault()
+          return
+        }
       }
 
       const isMod = e.metaKey || e.ctrlKey

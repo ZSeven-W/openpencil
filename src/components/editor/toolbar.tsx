@@ -1,17 +1,14 @@
-import { useRef, useCallback } from 'react'
+import { useState, useRef, useCallback } from 'react'
 import {
   MousePointer2,
-  Square,
-  Circle,
-  Minus,
   Type,
   Frame,
   Hand,
   Undo2,
   Redo2,
-  ImagePlus,
 } from 'lucide-react'
 import ToolButton from './tool-button'
+import ShapeToolDropdown from './shape-tool-dropdown'
 import { useCanvasStore } from '@/stores/canvas-store'
 import { useDocumentStore, generateId } from '@/stores/document-store'
 import { parseSvgToNodes } from '@/utils/svg-parser'
@@ -23,11 +20,35 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from '@/components/ui/tooltip'
+import IconPickerDialog from '@/components/shared/icon-picker-dialog'
 
 export default function Toolbar() {
   const canUndo = useHistoryStore((s) => s.undoStack.length > 0)
   const canRedo = useHistoryStore((s) => s.redoStack.length > 0)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const [iconPickerOpen, setIconPickerOpen] = useState(false)
+
+  const handleIconSelect = useCallback((svgText: string, iconName: string) => {
+    const nodes = parseSvgToNodes(svgText)
+    if (nodes.length === 0) return
+
+    const { viewport, fabricCanvas } = useCanvasStore.getState()
+    const canvasEl = fabricCanvas?.getElement()
+    const canvasW = canvasEl?.clientWidth ?? 800
+    const canvasH = canvasEl?.clientHeight ?? 600
+    const centerX = (-viewport.panX + canvasW / 2) / viewport.zoom
+    const centerY = (-viewport.panY + canvasH / 2) / viewport.zoom
+
+    for (const node of nodes) {
+      const w = ('width' in node ? (typeof node.width === 'number' ? node.width : 100) : 100)
+      const h = ('height' in node ? (typeof node.height === 'number' ? node.height : 100) : 100)
+      node.x = centerX - w / 2
+      node.y = centerY - h / 2
+      node.name = iconName
+      useDocumentStore.getState().addNode(null, node)
+    }
+    setIconPickerOpen(false)
+  }, [])
 
   const handleUndo = () => {
     const currentDoc = useDocumentStore.getState().document
@@ -136,30 +157,15 @@ export default function Toolbar() {
 
   return (
     <div className="absolute top-2 left-2 z-10 w-10 bg-card border border-border rounded-xl flex flex-col items-center py-2 gap-1 shadow-lg">
-      {/* Drawing Tools */}
       <ToolButton
         tool="select"
         icon={<MousePointer2 size={20} />}
         label="Select"
         shortcut="V"
       />
-      <ToolButton
-        tool="rectangle"
-        icon={<Square size={20} />}
-        label="Rectangle"
-        shortcut="R"
-      />
-      <ToolButton
-        tool="ellipse"
-        icon={<Circle size={20} />}
-        label="Ellipse"
-        shortcut="O"
-      />
-      <ToolButton
-        tool="line"
-        icon={<Minus size={20} />}
-        label="Line"
-        shortcut="L"
+      <ShapeToolDropdown
+        onIconPickerOpen={() => setIconPickerOpen(true)}
+        onImageImport={handleAddImage}
       />
       <ToolButton
         tool="text"
@@ -179,29 +185,6 @@ export default function Toolbar() {
         label="Hand"
         shortcut="H"
       />
-
-      <Separator className="my-1 w-8" />
-
-      {/* Add Image */}
-      <input
-        ref={fileInputRef}
-        type="file"
-        accept="image/png,image/jpeg,image/svg+xml,image/webp,image/gif"
-        className="hidden"
-        onChange={handleFileSelected}
-      />
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            onClick={handleAddImage}
-          >
-            <ImagePlus size={18} />
-          </Button>
-        </TooltipTrigger>
-        <TooltipContent side="right">Add Image</TooltipContent>
-      </Tooltip>
 
       <Separator className="my-1 w-8" />
 
@@ -242,6 +225,20 @@ export default function Toolbar() {
           </kbd>
         </TooltipContent>
       </Tooltip>
+
+      {/* Hidden file input + icon picker dialog */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/png,image/jpeg,image/svg+xml,image/webp,image/gif"
+        className="hidden"
+        onChange={handleFileSelected}
+      />
+      <IconPickerDialog
+        open={iconPickerOpen}
+        onClose={() => setIconPickerOpen(false)}
+        onSelect={handleIconSelect}
+      />
     </div>
   )
 }
