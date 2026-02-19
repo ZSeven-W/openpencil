@@ -3,10 +3,27 @@ import type { AIDesignRequest } from './ai-types'
 import { streamChat, generateCompletion } from './ai-service'
 import { DESIGN_GENERATOR_PROMPT, DESIGN_MODIFIER_PROMPT } from './ai-prompts'
 import { useDocumentStore, DEFAULT_FRAME_ID } from '@/stores/document-store'
+import { useHistoryStore } from '@/stores/history-store'
+import {
+  markNodesForAnimation,
+  startNewAnimationBatch,
+  resetAnimationState,
+} from './design-animation'
 
 const DESIGN_STREAM_TIMEOUTS = {
   hardTimeoutMs: 300_000,
   noTextTimeoutMs: 120_000,
+}
+
+// ---------------------------------------------------------------------------
+// Cross-phase ID remapping — tracks replaceEmptyFrame mappings so that
+// later phases recognise the root frame ID has been remapped to DEFAULT_FRAME_ID.
+// ---------------------------------------------------------------------------
+
+const generationRemappedIds = new Map<string, string>()
+
+function resetGenerationRemapping(): void {
+  generationRemappedIds.clear()
 }
 
 // Helper to find all complete JSON blocks in text
@@ -136,13 +153,30 @@ export async function generateDesign(
   callbacks?: {
     onApplyPartial?: (count: number) => void
     onTextUpdate?: (text: string) => void
+    /** When true, nodes are inserted with staggered fade-in animation. */
+    animated?: boolean
   }
 ): Promise<{ nodes: PenNode[]; rawResponse: string }> {
   const userMessage = buildContextMessage(request)
   let fullResponse = ''
   let processedBlockCount = 0
   let streamError: string | null = null
+  const animated = callbacks?.animated ?? false
 
+  // Reset cross-phase ID remapping so that replaceEmptyFrame mappings
+  // from a previous generation don't leak into this one.
+  resetGenerationRemapping()
+
+  // Animation setup: single history batch + stagger state.
+  // Nodes are inserted immediately (sync) via upsertNodesToCanvas.
+  // Canvas-sync creates Fabric objects at opacity 0 and schedules
+  // staggered fade-in via fire-and-forget setTimeout — no stream blocking.
+  if (animated) {
+    resetAnimationState()
+    useHistoryStore.getState().startBatch(useDocumentStore.getState().document)
+  }
+
+  try {
   for await (const chunk of streamChat(DESIGN_GENERATOR_PROMPT, [
     { role: 'user', content: userMessage },
   ], undefined, DESIGN_STREAM_TIMEOUTS)) {
@@ -161,7 +195,18 @@ export async function generateDesign(
           for (const blockJson of newBlocks) {
             const blockNodes = tryParseNodes(blockJson)
             if (!blockNodes || blockNodes.length === 0) continue
-            applied += upsertNodesToCanvas(blockNodes)
+
+            if (animated) {
+              // Mark sanitized IDs for animation, then upsert (sync).
+              // Canvas-sync will create objects at opacity 0 and schedule
+              // staggered fade-in via setTimeout — does NOT block the stream.
+              const prepared = sanitizeNodesForUpsert(blockNodes)
+              startNewAnimationBatch()
+              markNodesForAnimation(prepared)
+              applied += upsertPreparedNodes(prepared)
+            } else {
+              applied += upsertNodesToCanvas(blockNodes)
+            }
           }
 
           if (applied > 0) {
@@ -173,6 +218,11 @@ export async function generateDesign(
     } else if (chunk.type === 'error') {
       streamError = chunk.content
       break
+    }
+  }
+  } finally {
+    if (animated) {
+      useHistoryStore.getState().endBatch()
     }
   }
 
@@ -280,6 +330,8 @@ function isCanvasOnlyEmptyFrame(): boolean {
  */
 function replaceEmptyFrame(generatedFrame: PenNode): void {
   const { updateNode } = useDocumentStore.getState()
+  // Record the remapping so subsequent phases can find this node by its original ID
+  generationRemappedIds.set(generatedFrame.id, DEFAULT_FRAME_ID)
   // Keep root frame ID and position (x=0, y=0), take everything else from generated frame
   const { id: _id, x: _x, y: _y, ...rest } = generatedFrame
   updateNode(DEFAULT_FRAME_ID, rest)
@@ -319,10 +371,13 @@ export function upsertNodesToCanvas(nodes: PenNode[]): number {
   let count = 0
 
   for (const node of preparedNodes) {
-    const existing = getNodeById(node.id)
+    // Resolve remapped IDs (e.g., root frame that was mapped to DEFAULT_FRAME_ID in Phase 1)
+    const resolvedId = generationRemappedIds.get(node.id) ?? node.id
+    const existing = getNodeById(resolvedId)
     if (existing) {
-      const merged = mergeNodeForProgressiveUpsert(existing, node)
-      updateNode(node.id, merged)
+      const remappedNode = resolvedId !== node.id ? { ...node, id: resolvedId } : node
+      const merged = mergeNodeForProgressiveUpsert(existing, remappedNode)
+      updateNode(resolvedId, merged)
     } else {
       addNode(parentId, node)
     }
@@ -330,6 +385,52 @@ export function upsertNodesToCanvas(nodes: PenNode[]): number {
   }
 
   return count
+}
+
+/** Same as upsertNodesToCanvas but skips sanitization (caller already did it). */
+function upsertPreparedNodes(preparedNodes: PenNode[]): number {
+  if (isCanvasOnlyEmptyFrame() && preparedNodes.length === 1 && preparedNodes[0].type === 'frame') {
+    replaceEmptyFrame(preparedNodes[0])
+    return 1
+  }
+
+  const { addNode, updateNode, getNodeById } = useDocumentStore.getState()
+  const rootFrame = getNodeById(DEFAULT_FRAME_ID)
+  const parentId = rootFrame ? DEFAULT_FRAME_ID : null
+  let count = 0
+
+  for (const node of preparedNodes) {
+    // Resolve remapped IDs (e.g., root frame that was mapped to DEFAULT_FRAME_ID in Phase 1)
+    const resolvedId = generationRemappedIds.get(node.id) ?? node.id
+    const existing = getNodeById(resolvedId)
+    if (existing) {
+      const remappedNode = resolvedId !== node.id ? { ...node, id: resolvedId } : node
+      const merged = mergeNodeForProgressiveUpsert(existing, remappedNode)
+      updateNode(resolvedId, merged)
+    } else {
+      addNode(parentId, node)
+    }
+    count++
+  }
+
+  return count
+}
+
+/**
+ * Animate nodes onto the canvas with a staggered fade-in effect.
+ * Synchronous — nodes are inserted immediately, and canvas-sync
+ * schedules fire-and-forget staggered opacity animations.
+ */
+export function animateNodesToCanvas(nodes: PenNode[]): void {
+  resetGenerationRemapping()
+  resetAnimationState()
+  const prepared = sanitizeNodesForUpsert(nodes)
+  startNewAnimationBatch()
+  markNodesForAnimation(prepared)
+
+  useHistoryStore.getState().startBatch(useDocumentStore.getState().document)
+  upsertPreparedNodes(prepared)
+  useHistoryStore.getState().endBatch()
 }
 
 function sanitizeNodesForInsert(

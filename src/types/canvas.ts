@@ -18,6 +18,9 @@ export interface ViewportState {
 export interface SelectionState {
   selectedIds: string[]
   activeId: string | null
+  hoveredId: string | null
+  enteredFrameId: string | null
+  enteredFrameStack: string[]
 }
 
 export interface CanvasInteraction {

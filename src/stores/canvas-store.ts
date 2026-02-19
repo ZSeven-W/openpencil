@@ -22,6 +22,10 @@ interface CanvasStoreState {
   setPan: (x: number, y: number) => void
   setSelection: (ids: string[], activeId: string | null) => void
   clearSelection: () => void
+  setHoveredId: (id: string | null) => void
+  enterFrame: (frameId: string) => void
+  exitFrame: () => void
+  exitAllFrames: () => void
   setInteraction: (partial: Partial<CanvasInteraction>) => void
   setFabricCanvas: (canvas: Canvas | null) => void
   setClipboard: (nodes: PenNode[]) => void
@@ -31,7 +35,7 @@ interface CanvasStoreState {
 export const useCanvasStore = create<CanvasStoreState>((set) => ({
   activeTool: 'select',
   viewport: { zoom: 1, panX: 0, panY: 0 },
-  selection: { selectedIds: [], activeId: null },
+  selection: { selectedIds: [], activeId: null, hoveredId: null, enteredFrameId: null, enteredFrameStack: [] },
   interaction: {
     isDrawing: false,
     isPanning: false,
@@ -51,10 +55,52 @@ export const useCanvasStore = create<CanvasStoreState>((set) => ({
     set((s) => ({ viewport: { ...s.viewport, panX, panY } })),
 
   setSelection: (selectedIds, activeId) =>
-    set({ selection: { selectedIds, activeId } }),
+    set((s) => ({ selection: { ...s.selection, selectedIds, activeId } })),
 
   clearSelection: () =>
-    set({ selection: { selectedIds: [], activeId: null } }),
+    set((s) => ({ selection: { ...s.selection, selectedIds: [], activeId: null } })),
+
+  setHoveredId: (hoveredId) =>
+    set((s) => ({ selection: { ...s.selection, hoveredId } })),
+
+  enterFrame: (frameId) =>
+    set((s) => ({
+      selection: {
+        ...s.selection,
+        enteredFrameId: frameId,
+        enteredFrameStack: [...s.selection.enteredFrameStack, frameId],
+        hoveredId: null,
+        selectedIds: [],
+        activeId: null,
+      },
+    })),
+
+  exitFrame: () =>
+    set((s) => {
+      const stack = s.selection.enteredFrameStack.slice(0, -1)
+      return {
+        selection: {
+          ...s.selection,
+          enteredFrameId: stack[stack.length - 1] ?? null,
+          enteredFrameStack: stack,
+          hoveredId: null,
+          selectedIds: [],
+          activeId: null,
+        },
+      }
+    }),
+
+  exitAllFrames: () =>
+    set((s) => ({
+      selection: {
+        ...s.selection,
+        enteredFrameId: null,
+        enteredFrameStack: [],
+        hoveredId: null,
+        selectedIds: [],
+        activeId: null,
+      },
+    })),
 
   setInteraction: (partial) =>
     set((s) => ({ interaction: { ...s.interaction, ...partial } })),

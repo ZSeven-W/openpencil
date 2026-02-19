@@ -9,6 +9,7 @@ import {
 } from './canvas-object-factory'
 import { syncFabricObject } from './canvas-object-sync'
 import { isFabricSyncLocked, setFabricSyncLock } from './canvas-sync-lock'
+import { pendingAnimationNodes, getNextStaggerDelay } from '@/services/ai/design-animation'
 
 // ---------------------------------------------------------------------------
 // Clip info — tracks parent frame bounds for child clipping
@@ -35,6 +36,9 @@ export interface NodeRenderInfo {
 
 /** Rebuilt every sync cycle. Maps nodeId → parent offset + layout child status. */
 export const nodeRenderInfo = new Map<string, NodeRenderInfo>()
+
+/** Maps root-frame IDs to their absolute bounds. Rebuilt every sync cycle. */
+export const rootFrameBounds = new Map<string, { x: number; y: number; w: number; h: number }>()
 
 // ---------------------------------------------------------------------------
 // Layout engine — resolves vertical/horizontal auto-layout to absolute x/y
@@ -308,6 +312,7 @@ function flattenNodes(
   clipCtx?: ClipInfo,
   clipMap?: Map<string, ClipInfo>,
   isLayoutChild = false,
+  depth = 0,
 ): PenNode[] {
   const result: PenNode[] = []
   for (const node of nodes) {
@@ -384,18 +389,26 @@ function flattenNodes(
           ? computeLayoutPositions(resolved, children)
           : children
 
-      // Compute clip context for children: if this frame has cornerRadius, clip children to it
+      // Compute clip context for children:
+      // - Root frames (depth 0, type frame) always clip their children
+      // - Non-root frames clip only when they have cornerRadius
       let childClip = clipCtx
       const cr = 'cornerRadius' in node ? cornerRadiusVal(node.cornerRadius) : 0
-      if (cr > 0) {
+      const isRootFrame = node.type === 'frame' && depth === 0
+      if (isRootFrame || cr > 0) {
         childClip = { x: parentAbsX, y: parentAbsY, w: nodeW, h: nodeH, rx: cr }
+      }
+
+      // Track root frame bounds for drag-out reparenting
+      if (isRootFrame) {
+        rootFrameBounds.set(node.id, { x: parentAbsX, y: parentAbsY, w: nodeW, h: nodeH })
       }
 
       // Children inside layout containers are layout-controlled (position not manually editable)
       const childIsLayoutChild = !!(layout && layout !== 'none')
 
       result.push(
-        ...flattenNodes(positioned, parentAbsX, parentAbsY, childAvailW, childAvailH, childClip, clipMap, childIsLayoutChild),
+        ...flattenNodes(positioned, parentAbsX, parentAbsY, childAvailW, childAvailH, childClip, clipMap, childIsLayoutChild, depth + 1),
       )
     }
   }
@@ -410,6 +423,7 @@ function flattenNodes(
 export function rebuildNodeRenderInfo() {
   const state = useDocumentStore.getState()
   nodeRenderInfo.clear()
+  rootFrameBounds.clear()
   flattenNodes(state.document.children, 0, 0, undefined, undefined, undefined, new Map())
 }
 
@@ -491,6 +505,7 @@ export function useCanvasSync() {
 
       const clipMap = new Map<string, ClipInfo>()
       nodeRenderInfo.clear()
+      rootFrameBounds.clear()
       const flatNodes = flattenNodes(
         state.document.children, 0, 0, undefined, undefined, undefined, clipMap,
       )
@@ -521,7 +536,25 @@ export function useCanvasSync() {
         } else {
           const newObj = createFabricObject(node)
           if (newObj) {
-            canvas.add(newObj)
+            const shouldAnimate = pendingAnimationNodes.has(node.id)
+            if (shouldAnimate) {
+              const targetOpacity = newObj.opacity ?? 1
+              const delay = getNextStaggerDelay()
+              newObj.set({ opacity: 0 })
+              canvas.add(newObj)
+              // Fire-and-forget: the setTimeout yields to the macrotask queue,
+              // so it runs between SSE stream chunks without blocking the stream.
+              setTimeout(() => {
+                newObj.animate({ opacity: targetOpacity }, {
+                  duration: 250,
+                  easing: fabric.util.ease.easeOutCubic,
+                  onChange: () => canvas.requestRenderAll(),
+                  onComplete: () => pendingAnimationNodes.delete(node.id),
+                })
+              }, delay)
+            } else {
+              canvas.add(newObj)
+            }
             obj = newObj
           }
         }

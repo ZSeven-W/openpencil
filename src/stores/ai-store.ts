@@ -24,8 +24,10 @@ interface AIState {
   panelCorner: PanelCorner
   isMinimized: boolean
   chatTitle: string
+  generationProgress: { current: number; total: number } | null
 
   setChatTitle: (title: string) => void
+  setGenerationProgress: (progress: { current: number; total: number } | null) => void
 
   setModel: (model: string) => void
   setAvailableModels: (models: AIModelInfo[]) => void
@@ -58,8 +60,10 @@ export const useAIStore = create<AIState>((set) => ({
   panelCorner: 'bottom-left',
   isMinimized: false,
   chatTitle: 'New Chat',
+  generationProgress: null,
 
   setChatTitle: (chatTitle) => set({ chatTitle }),
+  setGenerationProgress: (generationProgress) => set({ generationProgress }),
 
   addMessage: (msg) =>
     set((s) => ({ messages: [...s.messages, msg] })),

@@ -7,6 +7,9 @@ import { useCanvasSelection } from './use-canvas-selection'
 import { useCanvasSync } from './use-canvas-sync'
 import { useDimensionLabel } from './use-dimension-label'
 import { useFrameLabels } from './use-frame-labels'
+import { useLayoutIndicator } from './use-layout-indicator'
+import { useCanvasHover } from './use-canvas-hover'
+import { useEnteredFrameOverlay } from './use-entered-frame-overlay'
 
 export default function FabricCanvas() {
   const canvasRef = useRef<HTMLCanvasElement>(null)
@@ -18,8 +21,11 @@ export default function FabricCanvas() {
   useCanvasViewport()
   useCanvasSelection()
   useCanvasSync()
+  useCanvasHover()
+  useEnteredFrameOverlay()
   useDimensionLabel(containerRef)
   useFrameLabels()
+  useLayoutIndicator()
 
   return (
     <div
