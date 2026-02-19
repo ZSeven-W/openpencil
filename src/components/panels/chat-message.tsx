@@ -251,10 +251,14 @@ function parseMarkdown(
       continue
     }
 
-    // Empty lines → plain newline (parent has whitespace-pre-wrap)
+    // Empty lines
     if (!line) {
-      parts.push('\n')
-      continue
+       // If we're inside a sequence of steps, just ignore the blank line to group them together
+       if (currentSteps.length > 0) continue
+       
+       // Otherwise render as newline
+       parts.push('\n')
+       continue
     }
 
     parts.push(
@@ -442,7 +446,7 @@ function DesignJsonBlock({
   }
 
   return (
-    <div className="group my-1.5 first:mt-0 last:mb-0">
+    <div className="group my-1.5 first:mt-0 last:mb-0 w-full">
       <button
         type="button"
         onClick={() => setExpanded(!expanded)}
@@ -551,7 +555,7 @@ export default function ChatMessage({
           {content}
         </div>
       ) : (
-        <div className="text-sm leading-relaxed text-foreground">
+        <div className="text-sm leading-relaxed text-foreground min-w-0 w-full overflow-hidden">
           {/* Streaming with no content yet → thinking indicator */}
           {isEmpty && isStreaming ? (
             <div className="flex items-center gap-1.5 bg-secondary/50 rounded-full w-fit py-1 px-2.5 mt-2">
