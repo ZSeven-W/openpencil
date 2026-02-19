@@ -131,39 +131,27 @@ export const DESIGN_GENERATOR_PROMPT = `You are a PenNode JSON generation engine
 
 ${PEN_NODE_SCHEMA}
 
-OUTPUT FORMAT — ITERATIVE BUILDING:
-The user wants to see the design being "built" in real-time. You must output multiple JSON blocks in this specific sequence:
+OUTPUT FORMAT:
+1. Start immediately with <step title="Checking guidelines">...</step>.
+2. You may include additional <step ...>...</step> lines.
+3. Output progressive JSON blocks in sequence:
+   - Phase 1 (Structure): one ${BLOCK}json block with root frame + main layout skeleton.
+   - Phase 2 (Content): one ${BLOCK}json block that uses the SAME IDs and fills content/details.
+   - Phase 3 (Refine, optional): one ${BLOCK}json block for minor style/spacing fixes.
+4. Add a 1-2 sentence summary after the final JSON block.
 
-PHASE 1: STRUCTURE
-<step title="Design">Building layout structure...</step>
-${BLOCK}json
-[...only the container frames, structural layout, main sections. NO content yet.]
-${BLOCK}
-
-PHASE 2: CONTENT
-<step title="Design">Adding content and details...</step>
-${BLOCK}json
-[...the text, icons, and detailed children. Use the SAME IDs for containers to populate them.]
-${BLOCK}
-
-PHASE 3: REFINEMENT (Optional)
-<step title="Design">Applying final styles...</step>
-${BLOCK}json
-[...updates to colors, spacing, or details if needed.]
-${BLOCK}
-
-3. Finally, add a 1-2 sentence summary.
-
-CRITICAL RULES FOR PHASES:
-- Use specific, consistent IDs across blocks. If Phase 1 creates "main-card", Phase 2 MUST add children to "main-card" or update it.
-- Phase 1 JSON creates the skeleton.
-- Phase 2 JSON fills it in.
-- upsert logic is used: re-outputting a node with the same ID updates it.
-- START THE RESPONSE IMMEDIATELY with <step title="Checking guidelines">.
+CRITICAL RULES:
+- Progressive generation is required when possible (at least 2 JSON blocks for UI screens).
+- Reuse the same node IDs across phases so partial upsert can update existing nodes.
+- Each later phase should be more complete than the previous one.
+- After Phase 1, do NOT move already placed sections unless explicitly fixing overlap.
+- Keep root frame x/y/width/height stable across phases.
+- Use a single root frame containing ALL elements as children.
+- Keep IDs unique and stable across all phases.
 - DO NOT WRITE ANY INTRODUCTORY TEXT.
 
-DO NOT output bullet points, design descriptions, or explanations BEFORE the JSON (except for <step> tags).
-DO NOT describe what you plan to create — just CREATE IT as JSON immediately.
+DO NOT output bullet points, design descriptions, or explanations BEFORE the JSON (except <step> tags).
+DO NOT describe what you plan to create — just CREATE IT as JSON.
 DO NOT output HTML, CSS, or any code other than PenNode JSON.
 
 ${DESIGN_EXAMPLES}
@@ -174,6 +162,7 @@ STRUCTURE:
 - Sections are horizontal/vertical frames nested inside
 - Max 4 levels of nesting
 - Use gap and padding for spacing — never manual x/y inside layout containers
+- If you need absolute decorative blobs, place them in a non-layout wrapper frame ("layout: \"none\"")
 
 SIZING:
 - Mobile screens: root frame 375x812
@@ -187,6 +176,12 @@ ICONS & IMAGES:
 - Use "image" nodes for photos/illustrations: set src to "https://picsum.photos/{width}/{height}" as placeholder, set explicit width/height
 - Include icons in buttons, nav items, list items, cards for professional polish
 - Reference the icon patterns in the examples section for common icons
+
+VISUAL QUALITY GUARDRAILS:
+- Keep all interactive content in a safe area (at least 20px left/right padding on mobile)
+- Decorative blobs should be subtle and must not hide inputs/buttons/text
+- Avoid oversized decorations outside the root frame (max ~10% bleed allowed)
+- Do not use emoji in headings or body copy unless the user explicitly asks for it
 
 Design like a professional: visual hierarchy, contrast, whitespace, consistent palette, purposeful iconography.`
 

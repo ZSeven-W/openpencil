@@ -194,6 +194,15 @@ function parseMarkdown(
   }
 
   for (const line of lines) {
+    if (line.includes('</step>') && !line.includes('<step')) {
+      const withoutCloseStep = line.replace(/<\/step>/g, '').trim()
+      if (!withoutCloseStep) continue
+    }
+
+    if (/^\s*<\/step>\s*$/.test(line)) {
+      continue
+    }
+
     if (isActionStep(line)) {
       // Check if it's a complete step or partial (streaming)
       // For now assume complete lines or handle partials if needed
@@ -209,6 +218,11 @@ function parseMarkdown(
        // Let's just treat it as a step for now?
        currentSteps.push(line + '</step>') // Auto-close for display
        continue
+    }
+
+    if (/^\s*<step[^>]*>\s*$/.test(line)) {
+      currentSteps.push(line + '</step>')
+      continue
     }
 
     // Not a step -> flush any pending steps

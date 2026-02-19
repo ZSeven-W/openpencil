@@ -1,37 +1,40 @@
 import type { PenNode } from '@/types/pen'
 import type { AIDesignRequest } from './ai-types'
-import { streamChat } from './ai-service'
+import { streamChat, generateCompletion } from './ai-service'
 import { DESIGN_GENERATOR_PROMPT, DESIGN_MODIFIER_PROMPT } from './ai-prompts'
 import { useDocumentStore, DEFAULT_FRAME_ID } from '@/stores/document-store'
 
-const JSON_BLOCK_REGEX = /```(?:json)?\s*\n?([\s\S]*?)\n?\s*```/
+const DESIGN_STREAM_TIMEOUTS = {
+  hardTimeoutMs: 300_000,
+  noTextTimeoutMs: 120_000,
+}
+
+// Helper to find all complete JSON blocks in text
 
 function extractJsonFromResponse(text: string): PenNode[] | null {
-  // Try to extract JSON from any code block
-  let jsonBlockMatch = text.match(JSON_BLOCK_REGEX)
-  let rawJson = jsonBlockMatch ? jsonBlockMatch[1].trim() : text.trim()
+  const parsedBlocks = extractAllJsonBlocks(text)
+    .map((block) => tryParseNodes(block))
+    .filter(Boolean) as PenNode[][]
 
-  // Use fallback if block failed to parse or was missing
-  if (!jsonBlockMatch) {
-    // If no block found, maybe the text contains just JSON?
-    // But text might contain <step> tags.
-    // Try to find the first array-like structure.
-    const arrayMatch = text.match(/\[\s*\{[\s\S]*\}\s*\]/)
-    if (arrayMatch) {
-        rawJson = arrayMatch[0]
-    } else {
-        // Remove <step> tags before parsing?
-        rawJson = text.replace(/<step[\s\S]*?<\/step>/g, '').trim()
-    }
+  if (parsedBlocks.length > 0) {
+    return selectBestNodeSet(parsedBlocks)
   }
 
-  try {
-    const parsed = JSON.parse(rawJson)
-    const nodes: PenNode[] = Array.isArray(parsed) ? parsed : [parsed]
-    return validateNodes(nodes) ? nodes : null
-  } catch {
-    return null
+  // Fallback: try to find a single JSON array if no blocks found
+  const arrayMatch = text.match(/\[\s*\{[\s\S]*\}\s*\]/)
+  if (arrayMatch) {
+     const nodes = tryParseNodes(arrayMatch[0])
+     return nodes
   }
+
+  // Fallback: try parsing raw text after removing <step> tags.
+  const stripped = text.replace(/<step[\s\S]*?<\/step>/g, '').trim()
+  const directNodes = tryParseNodes(stripped)
+  if (directNodes) {
+    return directNodes
+  }
+  
+  return null
 }
 
 function validateNodes(nodes: unknown[]): nodes is PenNode[] {
@@ -82,6 +85,52 @@ function extractAllJsonBlocks(text: string): string[] {
   return blocks
 }
 
+function selectBestNodeSet(candidates: PenNode[][]): PenNode[] {
+  let best = candidates[candidates.length - 1]
+  let bestScore = scoreNodeSet(best)
+
+  for (const candidate of candidates) {
+    const score = scoreNodeSet(candidate)
+    // Favor later blocks on ties to keep the most recent complete output.
+    if (score >= bestScore) {
+      best = candidate
+      bestScore = score
+    }
+  }
+
+  return best
+}
+
+function scoreNodeSet(nodes: PenNode[]): number {
+  let score = nodes.length
+
+  if (nodes.length === 1 && nodes[0].type === 'frame') {
+    score += 1000
+    const root = nodes[0]
+    if ((root.x ?? 0) === 0 && (root.y ?? 0) === 0) score += 50
+    if ('children' in root && Array.isArray(root.children)) {
+      score += root.children.length * 10
+    }
+  }
+
+  if (nodes.length > 1) {
+    score -= 200
+  }
+
+  for (const node of nodes) {
+    if ('children' in node && Array.isArray(node.children)) {
+      score += node.children.length * 2
+    }
+  }
+
+  return score
+}
+
+function isTimeoutError(content: string): boolean {
+  const lower = content.toLowerCase()
+  return lower.includes('timed out') || lower.includes('thinking too long')
+}
+
 export async function generateDesign(
   request: AIDesignRequest,
   callbacks?: {
@@ -92,73 +141,67 @@ export async function generateDesign(
   const userMessage = buildContextMessage(request)
   let fullResponse = ''
   let processedBlockCount = 0
+  let streamError: string | null = null
 
   for await (const chunk of streamChat(DESIGN_GENERATOR_PROMPT, [
     { role: 'user', content: userMessage },
-  ])) {
+  ], undefined, DESIGN_STREAM_TIMEOUTS)) {
     if (chunk.type === 'text') {
       fullResponse += chunk.content
       if (callbacks?.onTextUpdate) {
         callbacks.onTextUpdate(fullResponse)
       }
-      
-      // Check for new complete JSON blocks
-      // We do this inside the loop to support "live" updates
+
       if (callbacks?.onApplyPartial) {
         const allBlocks = extractAllJsonBlocks(fullResponse)
         if (allBlocks.length > processedBlockCount) {
-          // New block(s) found!
           const newBlocks = allBlocks.slice(processedBlockCount)
-          let newNodesApplied = 0
-          
+          let applied = 0
+
           for (const blockJson of newBlocks) {
-             const nodes = tryParseNodes(blockJson)
-             if (nodes) {
-               // We use the "modification" logic (upsert) for all phases
-               // so subsequent phases can update earlier nodes
-               const { addNode, updateNode, getNodeById } = useDocumentStore.getState()
-               
-               for (const node of nodes) {
-                 const existing = getNodeById(node.id)
-                 if (existing) {
-                   updateNode(node.id, node)
-                 } else {
-                   const rootFrame = getNodeById(DEFAULT_FRAME_ID)
-                   const parentId = rootFrame ? DEFAULT_FRAME_ID : null
-                   addNode(parentId, node)
-                 }
-                 newNodesApplied++
-               }
-             }
+            const blockNodes = tryParseNodes(blockJson)
+            if (!blockNodes || blockNodes.length === 0) continue
+            applied += upsertNodesToCanvas(blockNodes)
           }
 
-          if (newNodesApplied > 0) {
-            callbacks.onApplyPartial(newNodesApplied)
+          if (applied > 0) {
+            callbacks.onApplyPartial(applied)
           }
           processedBlockCount = allBlocks.length
         }
       }
-
     } else if (chunk.type === 'error') {
-      throw new Error(chunk.content)
+      streamError = chunk.content
+      break
     }
   }
 
-  const nodes = extractJsonFromResponse(fullResponse)
-  // strict check only if NO partials were applied? 
-  // or just return what we have. 
-  // If we processed blocks incrementally, we might want to return the final state.
-  
-  // Check if we found ANY nodes at all (either via partials or final extraction)
-  if ((!nodes || nodes.length === 0) && processedBlockCount === 0) {
-     // If no JSON found, return empty nodes but valid response.
-     // This allows the "chatty" response ("I'll create a plan...") to be shown to the user
-     // instead of an ugly "Failed to parse" error.
-     // The UI will just show the text and appliedCount will be 0.
-     return { nodes: [], rawResponse: fullResponse }
+  const streamedNodes = extractJsonFromResponse(fullResponse)
+  if (streamedNodes && streamedNodes.length > 0) {
+    return { nodes: streamedNodes, rawResponse: fullResponse }
   }
 
-  return { nodes: nodes || [], rawResponse: fullResponse }
+  if (streamError) {
+    if (isTimeoutError(streamError)) {
+      // Fallback path: one non-streaming generation attempt.
+      const fallbackResponse = await generateCompletion(
+        DESIGN_GENERATOR_PROMPT,
+        userMessage,
+      )
+      const fallbackNodes = extractJsonFromResponse(fallbackResponse)
+      if (fallbackNodes && fallbackNodes.length > 0) {
+        return { nodes: fallbackNodes, rawResponse: fallbackResponse }
+      }
+      return { nodes: [], rawResponse: fallbackResponse }
+    }
+    throw new Error(streamError)
+  }
+
+  // If no JSON found, return empty nodes but valid response.
+  // This allows the "chatty" response ("I'll create a plan...") to be shown to the user
+  // instead of an ugly "Failed to parse" error.
+  // The UI will just show the text and appliedCount will be 0.
+  return { nodes: [], rawResponse: fullResponse }
 }
 
 function tryParseNodes(json: string): PenNode[] | null {
@@ -184,33 +227,317 @@ export async function generateDesignModification(
   // We use standard string concatenation to avoid backtick issues in tool calls
   const userMessage = "CONTEXT NODES:\n" + contextJson + "\n\nINSTRUCTION:\n" + instruction
   let fullResponse = ''
+  let streamError: string | null = null
 
   for await (const chunk of streamChat(DESIGN_MODIFIER_PROMPT, [
     { role: 'user', content: userMessage },
-  ])) {
+  ], undefined, DESIGN_STREAM_TIMEOUTS)) {
     if (chunk.type === 'text') {
       fullResponse += chunk.content
     } else if (chunk.type === 'error') {
-      throw new Error(chunk.content)
+      streamError = chunk.content
+      break
     }
   }
 
-  const nodes = extractJsonFromResponse(fullResponse)
-  if (!nodes || nodes.length === 0) {
-    throw new Error('Failed to parse modified nodes from AI response')
+  const streamedNodes = extractJsonFromResponse(fullResponse)
+  if (streamedNodes && streamedNodes.length > 0) {
+    return { nodes: streamedNodes, rawResponse: fullResponse }
   }
 
-  return { nodes, rawResponse: fullResponse }
+  if (streamError) {
+    if (isTimeoutError(streamError)) {
+      const fallbackResponse = await generateCompletion(
+        DESIGN_MODIFIER_PROMPT,
+        userMessage,
+      )
+      const fallbackNodes = extractJsonFromResponse(fallbackResponse)
+      if (fallbackNodes && fallbackNodes.length > 0) {
+        return { nodes: fallbackNodes, rawResponse: fallbackResponse }
+      }
+      throw new Error('Failed to parse modified nodes from AI fallback response')
+    }
+    throw new Error(streamError)
+  }
+
+  throw new Error('Failed to parse modified nodes from AI response')
+}
+
+/**
+ * Check if the canvas only has the default empty frame (no children).
+ */
+function isCanvasOnlyEmptyFrame(): boolean {
+  const { document, getNodeById } = useDocumentStore.getState()
+  if (document.children.length !== 1) return false
+  const rootFrame = getNodeById(DEFAULT_FRAME_ID)
+  if (!rootFrame) return false
+  return !('children' in rootFrame) || !rootFrame.children || rootFrame.children.length === 0
+}
+
+/**
+ * Replace the default empty frame with the generated frame node,
+ * preserving the root frame ID so canvas sync continues to work.
+ */
+function replaceEmptyFrame(generatedFrame: PenNode): void {
+  const { updateNode } = useDocumentStore.getState()
+  // Keep root frame ID and position (x=0, y=0), take everything else from generated frame
+  const { id: _id, x: _x, y: _y, ...rest } = generatedFrame
+  updateNode(DEFAULT_FRAME_ID, rest)
 }
 
 export function applyNodesToCanvas(nodes: PenNode[]): void {
+  const { getFlatNodes } = useDocumentStore.getState()
+  const existingIds = new Set(getFlatNodes().map((n) => n.id))
+  const preparedNodes = sanitizeNodesForInsert(nodes, existingIds)
+
+  // If canvas only has one empty frame, replace it with the generated content
+  if (isCanvasOnlyEmptyFrame() && preparedNodes.length === 1 && preparedNodes[0].type === 'frame') {
+    replaceEmptyFrame(preparedNodes[0])
+    return
+  }
+
   const { addNode, getNodeById } = useDocumentStore.getState()
   // Insert into the root frame if it exists, otherwise at document root
   const rootFrame = getNodeById(DEFAULT_FRAME_ID)
   const parentId = rootFrame ? DEFAULT_FRAME_ID : null
-  for (const node of nodes) {
+  for (const node of preparedNodes) {
     addNode(parentId, node)
   }
+}
+
+export function upsertNodesToCanvas(nodes: PenNode[]): number {
+  const preparedNodes = sanitizeNodesForUpsert(nodes)
+
+  if (isCanvasOnlyEmptyFrame() && preparedNodes.length === 1 && preparedNodes[0].type === 'frame') {
+    replaceEmptyFrame(preparedNodes[0])
+    return 1
+  }
+
+  const { addNode, updateNode, getNodeById } = useDocumentStore.getState()
+  const rootFrame = getNodeById(DEFAULT_FRAME_ID)
+  const parentId = rootFrame ? DEFAULT_FRAME_ID : null
+  let count = 0
+
+  for (const node of preparedNodes) {
+    const existing = getNodeById(node.id)
+    if (existing) {
+      const merged = mergeNodeForProgressiveUpsert(existing, node)
+      updateNode(node.id, merged)
+    } else {
+      addNode(parentId, node)
+    }
+    count++
+  }
+
+  return count
+}
+
+function sanitizeNodesForInsert(
+  nodes: PenNode[],
+  existingIds: Set<string>,
+): PenNode[] {
+  const cloned = nodes.map((n) => deepCloneNode(n))
+
+  for (const node of cloned) {
+    sanitizeLayoutChildPositions(node, false)
+    sanitizeScreenFrameBounds(node)
+  }
+
+  const counters = new Map<string, number>()
+  const used = new Set(existingIds)
+  for (const node of cloned) {
+    ensureUniqueNodeIds(node, used, counters)
+  }
+
+  return cloned
+}
+
+function sanitizeNodesForUpsert(nodes: PenNode[]): PenNode[] {
+  const cloned = nodes.map((n) => deepCloneNode(n))
+
+  for (const node of cloned) {
+    sanitizeLayoutChildPositions(node, false)
+    sanitizeScreenFrameBounds(node)
+  }
+
+  const counters = new Map<string, number>()
+  const used = new Set<string>()
+  for (const node of cloned) {
+    ensureUniqueNodeIds(node, used, counters)
+  }
+
+  return cloned
+}
+
+function mergeNodeForProgressiveUpsert(
+  existing: PenNode,
+  incoming: PenNode,
+): PenNode {
+  const merged: PenNode = { ...existing, ...incoming } as PenNode
+  const existingChildren = 'children' in existing && Array.isArray(existing.children)
+    ? existing.children
+    : undefined
+  const incomingChildren = 'children' in incoming && Array.isArray(incoming.children)
+    ? incoming.children
+    : undefined
+
+  if (!existingChildren && !incomingChildren) return merged
+  if (!incomingChildren) {
+    if ('children' in merged && Array.isArray(existingChildren)) {
+      setNodeChildren(merged, existingChildren)
+    }
+    return merged
+  }
+  if (!existingChildren) {
+    setNodeChildren(merged, incomingChildren)
+    return merged
+  }
+
+  const existingById = new Map(existingChildren.map((c) => [c.id, c] as const))
+  const incomingIds = new Set(incomingChildren.map((c) => c.id))
+  const mergedChildren: PenNode[] = []
+
+  for (const child of incomingChildren) {
+    const ex = existingById.get(child.id)
+    mergedChildren.push(ex ? mergeNodeForProgressiveUpsert(ex, child) : child)
+  }
+
+  // Keep existing children that are not mentioned in this phase.
+  for (const ex of existingChildren) {
+    if (!incomingIds.has(ex.id)) mergedChildren.push(ex)
+  }
+
+  setNodeChildren(merged, mergedChildren)
+  return merged
+}
+
+function setNodeChildren(node: PenNode, children: PenNode[]): void {
+  ;(node as PenNode & { children?: PenNode[] }).children = children
+}
+
+function deepCloneNode(node: PenNode): PenNode {
+  return JSON.parse(JSON.stringify(node)) as PenNode
+}
+
+function hasActiveLayout(node: PenNode): boolean {
+  if (!('layout' in node)) return false
+  return node.layout === 'vertical' || node.layout === 'horizontal'
+}
+
+function sanitizeLayoutChildPositions(
+  node: PenNode,
+  parentHasLayout: boolean,
+): void {
+  if (parentHasLayout) {
+    if ('x' in node) delete (node as { x?: number }).x
+    if ('y' in node) delete (node as { y?: number }).y
+  }
+
+  if (!('children' in node) || !Array.isArray(node.children)) return
+
+  const currentHasLayout = hasActiveLayout(node)
+  for (const child of node.children) {
+    sanitizeLayoutChildPositions(child, currentHasLayout)
+  }
+}
+
+function sanitizeScreenFrameBounds(node: PenNode): void {
+  if ('children' in node && Array.isArray(node.children)) {
+    if (isScreenFrame(node)) {
+      clampChildrenIntoScreen(node)
+    }
+    for (const child of node.children) {
+      sanitizeScreenFrameBounds(child)
+    }
+  }
+}
+
+function isScreenFrame(node: PenNode): boolean {
+  if (node.type !== 'frame') return false
+  if (typeof node.width !== 'number' || typeof node.height !== 'number') return false
+  const w = node.width
+  const h = node.height
+  const isMobileLike = w >= 320 && w <= 480 && h >= 640
+  const isDesktopLike = w >= 900 && h >= 600
+  return isMobileLike || isDesktopLike
+}
+
+function clampChildrenIntoScreen(frame: PenNode): void {
+  if (!('children' in frame) || !Array.isArray(frame.children)) return
+  if ('layout' in frame && frame.layout && frame.layout !== 'none') return
+  if (typeof frame.width !== 'number' || typeof frame.height !== 'number') return
+
+  const maxBleedX = frame.width * 0.1
+  const maxBleedY = frame.height * 0.1
+
+  for (const child of frame.children) {
+    const childWidth = 'width' in child && typeof child.width === 'number' ? child.width : null
+    const childHeight = 'height' in child && typeof child.height === 'number' ? child.height : null
+    if (
+      typeof child.x !== 'number' ||
+      typeof child.y !== 'number' ||
+      childWidth === null ||
+      childHeight === null
+    ) {
+      continue
+    }
+
+    const minX = -maxBleedX
+    const maxX = frame.width - childWidth + maxBleedX
+    const minY = -maxBleedY
+    const maxY = frame.height - childHeight + maxBleedY
+
+    child.x = clamp(child.x, minX, maxX)
+    child.y = clamp(child.y, minY, maxY)
+  }
+}
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.min(max, Math.max(min, value))
+}
+
+function ensureUniqueNodeIds(
+  node: PenNode,
+  used: Set<string>,
+  counters: Map<string, number>,
+): void {
+  const base = normalizeIdBase(node.id, node.type)
+  let finalId = base
+
+  if (used.has(finalId)) {
+    finalId = makeUniqueId(base, used, counters)
+  }
+
+  if (finalId !== node.id) {
+    node.id = finalId
+  }
+
+  used.add(finalId)
+
+  if (!('children' in node) || !Array.isArray(node.children)) return
+  for (const child of node.children) {
+    ensureUniqueNodeIds(child, used, counters)
+  }
+}
+
+function normalizeIdBase(id: string | undefined, type: PenNode['type']): string {
+  const trimmed = id?.trim()
+  return trimmed && trimmed.length > 0 ? trimmed : `${type}-node`
+}
+
+function makeUniqueId(
+  base: string,
+  used: Set<string>,
+  counters: Map<string, number>,
+): string {
+  let next = counters.get(base) ?? 2
+  let candidate = `${base}-${next}`
+  while (used.has(candidate)) {
+    next += 1
+    candidate = `${base}-${next}`
+  }
+  counters.set(base, next + 1)
+  return candidate
 }
 
 /**
