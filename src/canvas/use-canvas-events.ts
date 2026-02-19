@@ -32,6 +32,15 @@ import {
   penToolDoubleClick,
   cancelPenTool,
 } from './pen-tool'
+import {
+  beginLayoutDrag,
+  updateLayoutDrag,
+  endLayoutDrag,
+  cancelLayoutDrag,
+  isLayoutDragActive,
+} from './layout-reorder'
+import { isEnterableContainer, resolveTargetAtDepth } from './selection-context'
+import { checkDragReparent } from './drag-reparent'
 
 function createNodeForTool(
   tool: ToolType,
@@ -346,6 +355,44 @@ export function useCanvasEvents() {
           e.preventDefault()
           e.stopPropagation()
           penToolDoubleClick(canvas)
+          return
+        }
+
+        const tool = useCanvasStore.getState().activeTool
+        if (tool !== 'select') return
+
+        const { activeId } = useCanvasStore.getState().selection
+        if (!activeId) return
+
+        if (isEnterableContainer(activeId)) {
+          canvas.discardActiveObject()
+          useCanvasStore.getState().enterFrame(activeId)
+
+          // Find and select the child under the cursor (Figma-style)
+          canvas.calcOffset()
+          const pointer = canvas.getScenePoint(e as unknown as PointerEvent)
+          const objects = canvas.getObjects() as FabricObjectWithPenId[]
+
+          // Iterate topmost-first to find the child under the cursor
+          for (let i = objects.length - 1; i >= 0; i--) {
+            const obj = objects[i]
+            if (!obj.penNodeId) continue
+            if (!obj.containsPoint(pointer)) continue
+
+            // Resolve to a selectable node at the new (entered) depth
+            const resolved = resolveTargetAtDepth(obj.penNodeId)
+            if (!resolved) continue
+
+            // Find the Fabric object for the resolved target
+            const resolvedObj = objects.find((o) => o.penNodeId === resolved)
+            if (resolvedObj) {
+              canvas.setActiveObject(resolvedObj)
+              useCanvasStore.getState().setSelection([resolved], resolved)
+            }
+            break
+          }
+
+          canvas.requestRenderAll()
         }
       }
 
@@ -362,20 +409,21 @@ export function useCanvasEvents() {
         if (tool !== 'select') return
         const target = opt.target as FabricObjectWithPenId | null
         if (!target?.penNodeId) return
-        const currentChildren =
-          useDocumentStore.getState().document.children
-        useHistoryStore.getState().beginBatch(currentChildren)
+        useHistoryStore
+          .getState()
+          .startBatch(useDocumentStore.getState().document)
 
-        // Start parent-child drag session if this is a container
+        // Try to start layout reorder drag first
+        beginLayoutDrag(target.penNodeId)
+
+        // Start parent-child drag session (still needed for child propagation)
         beginParentDrag(target.penNodeId, canvas)
       })
 
       canvas.on('mouse:up', () => {
+        cancelLayoutDrag()
         endParentDrag()
-        const { batchDepth } = useHistoryStore.getState()
-        if (batchDepth > 0) {
-          useHistoryStore.getState().cancelBatch()
-        }
+        useHistoryStore.getState().endBatch()
       })
 
       // --- Object modifications (drag, resize, rotate) via Fabric events ---
@@ -483,6 +531,15 @@ export function useCanvasEvents() {
 
       // Real-time sync during drag / resize / rotate (locked to prevent circular sync)
       canvas.on('object:moving', (opt) => {
+        if (isLayoutDragActive()) {
+          // Layout reorder mode: update insertion indicator, still propagate children
+          updateLayoutDrag(opt.target as FabricObjectWithPenId, canvas)
+          if (getActiveDragSession()) {
+            moveDescendants(opt.target as FabricObjectWithPenId, canvas)
+          }
+          return
+        }
+
         // Calculate guides + snap BEFORE syncing so the store gets the snapped position
         calculateAndSnap(opt.target, canvas)
 
@@ -512,6 +569,23 @@ export function useCanvasEvents() {
         // Single object -- bake scale and sync
         const asPen = target as FabricObjectWithPenId
         if (asPen.penNodeId) {
+          // Layout reorder: skip normal sync, reorder instead
+          // BUT first check if the node was dragged outside its root frame
+          if (isLayoutDragActive()) {
+            if (checkDragReparent(asPen)) {
+              // Dragged outside parent — cancel layout reorder and detach
+              cancelLayoutDrag()
+              rebuildNodeRenderInfo()
+              const doc = useDocumentStore.getState().document
+              useDocumentStore.setState({
+                document: { ...doc, children: [...doc.children] },
+              })
+              return
+            }
+            endLayoutDrag(asPen, canvas)
+            rebuildNodeRenderInfo()
+            return
+          }
           const scaleX = target.scaleX ?? 1
           const scaleY = target.scaleY ?? 1
           // Path/Polygon dimensions are derived from their data, so we can't
@@ -537,6 +611,16 @@ export function useCanvasEvents() {
               finalizeParentTransform(asPen, canvas, scaleX, scaleY)
             }
             finalizeParentRotation(asPen)
+          }
+
+          // Check if the node was dragged out of / into a root frame
+          if (checkDragReparent(asPen)) {
+            // Force re-sync since tree structure changed
+            rebuildNodeRenderInfo()
+            const doc = useDocumentStore.getState().document
+            useDocumentStore.setState({
+              document: { ...doc, children: [...doc.children] },
+            })
           }
         } else if ('getObjects' in target) {
           // ActiveSelection -- bake scale per child, then sync all

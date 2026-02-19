@@ -12,12 +12,12 @@ import { streamChat, fetchAvailableModels } from '@/services/ai/ai-service'
 import {
   CHAT_SYSTEM_PROMPT,
 } from '@/services/ai/ai-prompts'
-import { 
-  generateDesign, 
+import {
+  generateDesign,
   generateDesignModification,
-  applyNodesToCanvas,
-  extractAndApplyDesign, 
-  extractAndApplyDesignModification 
+  animateNodesToCanvas,
+  extractAndApplyDesign,
+  extractAndApplyDesignModification
 } from '@/services/ai/design-generator'
 import type { ChatMessage as ChatMessageType } from '@/services/ai/ai-types'
 import type { AIProviderType } from '@/types/agent-settings'
@@ -179,26 +179,27 @@ function useChatHandlers() {
                const count = extractAndApplyDesignModification(JSON.stringify(nodes))
                appliedCount += count
              } else {
-               // --- GENERATION MODE ---
+               // --- GENERATION MODE (animated) ---
                const { rawResponse, nodes } = await generateDesign({
                  prompt: fullUserMessage,
                  context: {
-                   canvasSize: { width: 1200, height: 800 }, 
+                   canvasSize: { width: 1200, height: 800 },
                    documentSummary: `Current selection: ${hasSelection ? selectedIds.length + ' items' : 'Empty'}`,
                  },
                }, {
+                 animated: true,
                  onApplyPartial: (partialCount: number) => {
                    appliedCount += partialCount
                  },
                  onTextUpdate: (text: string) => {
                     accumulated = text
                     updateLastMessage(text)
-                 }
+                 },
                })
                // Ensure final text is captured
                accumulated = rawResponse
                if (appliedCount === 0 && nodes.length > 0) {
-                 applyNodesToCanvas(nodes)
+                 animateNodesToCanvas(nodes)
                  appliedCount += nodes.length
                }
              }
@@ -689,7 +690,7 @@ export default function AIChatPanel() {
 
           <div className="flex items-center gap-1 justify-between w-full">
             {selectedIds.length > 0 && (
-              <span className="text-[10px] text-muted-foreground ml-2 select-none">
+              <span className="flex text-[10px] text-muted-foreground ml-2 select-none overflow-hidden text-ellipsis ">
                 {selectedIds.length} object{selectedIds.length > 1 ? 's' : ''}
               </span>
             )}

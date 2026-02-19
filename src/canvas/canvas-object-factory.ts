@@ -368,6 +368,7 @@ export function createFabricObject(
             transparentCorners: false,
             borderOpacityWhenMoving: 1,
             padding: 0,
+            hoverCursor: 'default',
           })
           fabricImg.setControlVisible('mtr', false)
           applyRotationControls(fabricImg)
@@ -416,6 +417,7 @@ export function createFabricObject(
       transparentCorners: false,
       borderOpacityWhenMoving: 1,
       padding: 0,
+      hoverCursor: 'default',
     })
     obj.setControlVisible('mtr', false)
     applyRotationControls(obj)

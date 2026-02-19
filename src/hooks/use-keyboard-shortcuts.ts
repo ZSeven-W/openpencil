@@ -237,15 +237,33 @@ export function useKeyboardShortcuts() {
         }
       }
 
-      // Escape: deselect all
+      // Escape: 1) clear selection, 2) exit frame, 3) switch to select tool
       if (e.key === 'Escape') {
         e.preventDefault()
-        useCanvasStore.getState().clearSelection()
-        useCanvasStore.getState().setActiveTool('select')
+        const { selectedIds, enteredFrameId } = useCanvasStore.getState().selection
         const canvas = useCanvasStore.getState().fabricCanvas
-        if (canvas) {
-          canvas.discardActiveObject()
-          canvas.requestRenderAll()
+
+        if (selectedIds.length > 0) {
+          // Step 1: clear current selection
+          useCanvasStore.getState().clearSelection()
+          if (canvas) {
+            canvas.discardActiveObject()
+            canvas.requestRenderAll()
+          }
+        } else if (enteredFrameId) {
+          // Step 2: exit entered frame
+          useCanvasStore.getState().exitFrame()
+          if (canvas) {
+            canvas.discardActiveObject()
+            canvas.requestRenderAll()
+          }
+        } else {
+          // Step 3: switch to select tool
+          useCanvasStore.getState().setActiveTool('select')
+          if (canvas) {
+            canvas.discardActiveObject()
+            canvas.requestRenderAll()
+          }
         }
         return
       }
