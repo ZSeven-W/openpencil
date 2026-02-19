@@ -470,19 +470,6 @@ export function useCanvasEvents() {
         setFabricSyncLock(false)
       }
 
-      /**
-       * Route to the correct sync helper depending on whether the target is a
-       * single object or an ActiveSelection.
-       */
-      const syncTargetToStore = (target: fabric.FabricObject) => {
-        const asPen = target as FabricObjectWithPenId
-        if (asPen.penNodeId) {
-          syncObjToStore(asPen)
-        } else if ('getObjects' in target) {
-          syncSelectionToStore(target)
-        }
-      }
-
       // History batching: group all intermediate drag/resize/rotate updates
       // into a single undo entry instead of one per mouse-move event.
       canvas.on('mouse:down', () => {
@@ -498,7 +485,6 @@ export function useCanvasEvents() {
       canvas.on('object:moving', (opt) => {
         // Calculate guides + snap BEFORE syncing so the store gets the snapped position
         calculateAndSnap(opt.target, canvas)
-        syncTargetToStore(opt.target)
 
         // Propagate move to descendants (visual only, no store sync needed)
         if (getActiveDragSession()) {
@@ -506,16 +492,12 @@ export function useCanvasEvents() {
         }
       })
       canvas.on('object:scaling', (opt) => {
-        syncTargetToStore(opt.target)
-
         // Propagate scale to descendants (visual only)
         if (getActiveDragSession()) {
           scaleDescendants(opt.target as FabricObjectWithPenId, canvas)
         }
       })
       canvas.on('object:rotating', (opt) => {
-        syncTargetToStore(opt.target)
-
         // Propagate rotation to descendants (visual only)
         if (getActiveDragSession()) {
           rotateDescendants(opt.target as FabricObjectWithPenId, canvas)
