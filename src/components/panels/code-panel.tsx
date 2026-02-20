@@ -6,10 +6,11 @@ import { useCanvasStore } from '@/stores/canvas-store'
 import { useDocumentStore } from '@/stores/document-store'
 import { generateReactCode } from '@/services/codegen/react-generator'
 import { generateHTMLCode } from '@/services/codegen/html-generator'
+import { generateCSSVariables } from '@/services/codegen/css-variables-generator'
 import { highlightCode } from '@/utils/syntax-highlight'
 import type { PenNode } from '@/types/pen'
 
-type CodeTab = 'react' | 'html'
+type CodeTab = 'react' | 'html' | 'css-vars'
 
 export default function CodePanel({ onClose }: { onClose: () => void }) {
   const [activeTab, setActiveTab] = useState<CodeTab>('react')
@@ -31,15 +32,23 @@ export default function CodePanel({ onClose }: { onClose: () => void }) {
     return children
   }, [selectedIds, children, getNodeById])
 
+  const document = useDocumentStore((s) => s.document)
+
   const generatedCode = useMemo(() => {
+    if (activeTab === 'css-vars') {
+      return generateCSSVariables(document)
+    }
     if (activeTab === 'react') {
       return generateReactCode(targetNodes)
     }
     const { html, css } = generateHTMLCode(targetNodes)
     return `<!-- HTML -->\n${html}\n\n/* CSS */\n${css}`
-  }, [activeTab, targetNodes])
+  }, [activeTab, targetNodes, document])
 
   const highlightedHTML = useMemo(() => {
+    if (activeTab === 'css-vars') {
+      return highlightCode(generatedCode, 'css')
+    }
     if (activeTab === 'react') {
       return highlightCode(generatedCode, 'jsx')
     }
@@ -68,6 +77,7 @@ export default function CodePanel({ onClose }: { onClose: () => void }) {
   const tabs: { key: CodeTab; label: string }[] = [
     { key: 'react', label: 'React + Tailwind' },
     { key: 'html', label: 'HTML + CSS' },
+    { key: 'css-vars', label: 'CSS Variables' },
   ]
 
   return (
@@ -121,9 +131,11 @@ export default function CodePanel({ onClose }: { onClose: () => void }) {
       {/* Footer info */}
       <div className="h-6 flex items-center px-3 border-t border-border shrink-0">
         <span className="text-[10px] text-muted-foreground">
-          {selectedIds.length > 0
-            ? `Generating code for ${selectedIds.length} selected element${selectedIds.length > 1 ? 's' : ''}`
-            : 'Generating code for entire document'}
+          {activeTab === 'css-vars'
+            ? 'Generating CSS variables for entire document'
+            : selectedIds.length > 0
+              ? `Generating code for ${selectedIds.length} selected element${selectedIds.length > 1 ? 's' : ''}`
+              : 'Generating code for entire document'}
         </span>
       </div>
     </div>

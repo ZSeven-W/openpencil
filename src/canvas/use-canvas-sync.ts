@@ -10,6 +10,7 @@ import {
 import { syncFabricObject } from './canvas-object-sync'
 import { isFabricSyncLocked, setFabricSyncLock } from './canvas-sync-lock'
 import { pendingAnimationNodes, getNextStaggerDelay } from '@/services/ai/design-animation'
+import { resolveNodeForCanvas, getDefaultTheme } from '@/variables/resolve-variables'
 
 // ---------------------------------------------------------------------------
 // Clip info — tracks parent frame bounds for child clipping
@@ -523,21 +524,31 @@ export function useCanvasSync() {
     // changes (drag positions, edited text) with stale store data if those
     // changes failed to write back to the store for any reason.
     let prevChildren = useDocumentStore.getState().document.children
+    let prevVariables = useDocumentStore.getState().document.variables
+    let prevThemes = useDocumentStore.getState().document.themes
 
     const unsub = useDocumentStore.subscribe((state) => {
-      // Always track the latest children reference — even when the sync lock
+      // Always track the latest references — even when the sync lock
       // is active — so that unrelated store updates (e.g. markClean setting
       // isDirty) don't trigger a stale re-sync that overwrites canvas state.
       const childrenChanged = state.document.children !== prevChildren
+      const variablesChanged = state.document.variables !== prevVariables
+      const themesChanged = state.document.themes !== prevThemes
       prevChildren = state.document.children
+      prevVariables = state.document.variables
+      prevThemes = state.document.themes
 
       if (isFabricSyncLocked()) return
 
       // Skip re-sync when only non-document fields changed (isDirty, fileName, etc.)
-      if (!childrenChanged) return
+      if (!childrenChanged && !variablesChanged && !themesChanged) return
 
       const canvas = useCanvasStore.getState().fabricCanvas
       if (!canvas) return
+
+      // Build variable resolution context
+      const variables = state.document.variables ?? {}
+      const activeTheme = getDefaultTheme(state.document.themes)
 
       const clipMap = new Map<string, ClipInfo>()
       nodeRenderInfo.clear()
@@ -545,7 +556,7 @@ export function useCanvasSync() {
       layoutContainerBounds.clear()
       const flatNodes = flattenNodes(
         state.document.children, 0, 0, undefined, undefined, undefined, clipMap,
-      )
+      ).map((node) => resolveNodeForCanvas(node, variables, activeTheme))
       const nodeMap = new Map(flatNodes.map((n) => [n.id, n]))
       const objects = canvas.getObjects() as FabricObjectWithPenId[]
       const objMap = new Map(

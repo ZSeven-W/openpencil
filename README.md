@@ -29,6 +29,17 @@ Open-source vector design tool with a Design-as-Code philosophy. An alternative 
 - Opacity, visibility, lock, flip (horizontal/vertical)
 - Effects: shadow and blur
 - Auto-layout: direction, gap, padding, justify-content, align-items
+- Variable binding: bind any property to a design variable via variable picker
+
+### Design Variables & Tokens
+
+- **Variables panel**: Floating resizable panel with theme management (Cmd+Shift+V)
+- **Variable types**: Color (picker + hex + opacity), Number, String
+- **Multi-theme support**: Create multiple theme axes (e.g. Theme-1, Theme-2), each with variants (e.g. Default, Dark, High Contrast)
+- **`$variable` references**: Bind node properties (fill, stroke, opacity, gap, padding) to variables
+- **CSS sync**: Auto-generate CSS custom properties (`:root { --color-1: #fff; }`) with per-theme variant blocks
+- **Code generation**: React/Tailwind and HTML/CSS output uses `var(--name)` for variable-bound properties
+- **Live resolution**: Variables resolved on-the-fly for canvas rendering, preserved as `$refs` in document
 
 ### Layer Panel
 
@@ -65,6 +76,7 @@ Open-source vector design tool with a Design-as-Code philosophy. An alternative 
 
 - React + Tailwind CSS code from designs
 - HTML + CSS code from designs
+- CSS Variables from design tokens
 - View in code panel (Cmd+Shift+C)
 
 ### AI Assistant
@@ -103,6 +115,7 @@ Open-source vector design tool with a Design-as-Code philosophy. An alternative 
 | Cmd+S | Save |
 | Cmd+Shift+E | Export |
 | Cmd+Shift+C | Code panel |
+| Cmd+Shift+V | Variables panel |
 | Cmd+J | AI chat |
 | Cmd+, | Agent settings |
 | Delete/Backspace | Delete selected |
@@ -161,7 +174,7 @@ src/
     canvas-controls        Custom rotation controls and cursors
     canvas-constants       Default colors, zoom limits
     use-canvas-events      Drawing events, tool management
-    use-canvas-sync        Bidirectional PenDocument ↔ Fabric sync
+    use-canvas-sync        Bidirectional PenDocument ↔ Fabric sync + variable resolution
     use-canvas-viewport    Zoom, pan, tool cursor switching
     use-canvas-selection   Selection sync Fabric ↔ store
     use-canvas-guides      Smart alignment guides
@@ -170,17 +183,21 @@ src/
     parent-child-transform Parent transform propagation to children
     use-dimension-label    Size/position labels during manipulation
     use-frame-labels       Frame name/boundary rendering
+  variables/           # Design variables/tokens system
+    resolve-variables      Core $variable resolution for canvas rendering
+    replace-refs           Replace/resolve $refs on rename/delete
   components/
     editor/            # Editor layout, toolbar, tool buttons, status bar
-    panels/            # Layer panel, property panel (15 files), AI chat, code panel
-    shared/            # ColorPicker, NumberInput, ExportDialog, AgentSettingsDialog, etc.
+    panels/            # Layer panel, property panel (17 files), AI chat, code panel,
+                       # variables panel, variable row
+    shared/            # ColorPicker, NumberInput, VariablePicker, ExportDialog, etc.
     icons/             # Provider logos (Claude, OpenAI)
     ui/                # shadcn/ui primitives (Button, Select, Slider, Switch, etc.)
   hooks/               # Keyboard shortcuts
   lib/                 # Utility functions (cn class merging)
   services/
     ai/                # AI chat service, prompts, design generation
-    codegen/           # React+Tailwind and HTML+CSS code generators
+    codegen/           # React+Tailwind, HTML+CSS, and CSS variables generators
   stores/              # Zustand stores (canvas, document, history, AI, agent-settings)
   types/               # PenDocument/PenNode types, style types, variables, agent settings
   utils/               # File operations, export, node clone, SVG parser, syntax highlight
@@ -192,7 +209,7 @@ server/
 ## Roadmap
 
 - [ ] Component system (reusable components with instances & overrides)
-- [ ] Design variables/tokens with CSS sync
+- [x] Design variables/tokens with CSS sync
 - [ ] Boolean operations (union, subtract, intersect)
 - [ ] Multi-page support
 - [ ] Collaborative editing
