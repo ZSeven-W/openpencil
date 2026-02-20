@@ -711,15 +711,18 @@ export default function AIChatPanel() {
             <ChevronUp size={10} className="shrink-0" />
           </button>
 
-          <div className="flex items-center gap-1 justify-between w-full">
-            {selectedIds.length > 0 && (
-              <span className="flex text-[10px] text-muted-foreground ml-2 select-none overflow-hidden text-ellipsis ">
-                {selectedIds.length} object{selectedIds.length > 1 ? 's' : ''}
-              </span>
-            )}
+          <div className="flex items-center gap-1 w-full">
+            <span
+              className={cn(
+                'ml-1 shrink-0 whitespace-nowrap text-[10px] select-none',
+                selectedIds.length > 0 ? 'text-muted-foreground/80' : 'text-muted-foreground/40',
+              )}
+            >
+              {selectedIds.length} selected
+            </span>
 
             {/* Action icons */}
-            <div className="flex items-center gap-0.5 w-full justify-end">
+            <div className="ml-auto flex items-center gap-0.5">
               <Button
                 variant="ghost"
                 size="icon-sm"
