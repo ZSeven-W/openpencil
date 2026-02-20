@@ -226,7 +226,7 @@ export async function generateDesign(
   }
   } finally {
     if (animated) {
-      useHistoryStore.getState().endBatch()
+      useHistoryStore.getState().endBatch(useDocumentStore.getState().document)
     }
   }
 
@@ -413,7 +413,7 @@ export function animateNodesToCanvas(nodes: PenNode[]): void {
 
   useHistoryStore.getState().startBatch(useDocumentStore.getState().document)
   upsertPreparedNodes(prepared)
-  useHistoryStore.getState().endBatch()
+  useHistoryStore.getState().endBatch(useDocumentStore.getState().document)
 }
 
 function sanitizeNodesForInsert(
@@ -538,7 +538,8 @@ function sanitizeScreenFrameBounds(node: PenNode): void {
 
 function isScreenFrame(node: PenNode): boolean {
   if (node.type !== 'frame') return false
-  if (typeof node.width !== 'number' || typeof node.height !== 'number') return false
+  if (!('width' in node) || typeof node.width !== 'number') return false
+  if (!('height' in node) || typeof node.height !== 'number') return false
   const w = node.width
   const h = node.height
   const isMobileLike = w >= 320 && w <= 480 && h >= 640
@@ -549,10 +550,13 @@ function isScreenFrame(node: PenNode): boolean {
 function clampChildrenIntoScreen(frame: PenNode): void {
   if (!('children' in frame) || !Array.isArray(frame.children)) return
   if ('layout' in frame && frame.layout && frame.layout !== 'none') return
-  if (typeof frame.width !== 'number' || typeof frame.height !== 'number') return
+  if (!('width' in frame) || typeof frame.width !== 'number') return
+  if (!('height' in frame) || typeof frame.height !== 'number') return
 
-  const maxBleedX = frame.width * 0.1
-  const maxBleedY = frame.height * 0.1
+  const frameW = frame.width
+  const frameH = frame.height
+  const maxBleedX = frameW * 0.1
+  const maxBleedY = frameH * 0.1
 
   for (const child of frame.children) {
     const childWidth = 'width' in child && typeof child.width === 'number' ? child.width : null
@@ -567,9 +571,9 @@ function clampChildrenIntoScreen(frame: PenNode): void {
     }
 
     const minX = -maxBleedX
-    const maxX = frame.width - childWidth + maxBleedX
+    const maxX = frameW - childWidth + maxBleedX
     const minY = -maxBleedY
-    const maxY = frame.height - childHeight + maxBleedY
+    const maxY = frameH - childHeight + maxBleedY
 
     child.x = clamp(child.x, minX, maxX)
     child.y = clamp(child.y, minY, maxY)
@@ -632,7 +636,12 @@ export function extractAndApplyDesign(responseText: string): number {
   const nodes = extractJsonFromResponse(responseText)
   if (!nodes || nodes.length === 0) return 0
 
-  applyNodesToCanvas(nodes)
+  useHistoryStore.getState().startBatch(useDocumentStore.getState().document)
+  try {
+    applyNodesToCanvas(nodes)
+  } finally {
+    useHistoryStore.getState().endBatch(useDocumentStore.getState().document)
+  }
   return nodes.length
 }
 
@@ -647,19 +656,24 @@ export function extractAndApplyDesignModification(responseText: string): number 
   const { addNode, updateNode, getNodeById } = useDocumentStore.getState()
   let count = 0
 
-  for (const node of nodes) {
-    const existing = getNodeById(node.id)
-    if (existing) {
-      // Update existing node
-      updateNode(node.id, node)
-      count++
-    } else {
-      // It's a new node implied by the modification (e.g. "add a button")
-       const rootFrame = getNodeById(DEFAULT_FRAME_ID)
-       const parentId = rootFrame ? DEFAULT_FRAME_ID : null
-       addNode(parentId, node)
-       count++
+  useHistoryStore.getState().startBatch(useDocumentStore.getState().document)
+  try {
+    for (const node of nodes) {
+      const existing = getNodeById(node.id)
+      if (existing) {
+        // Update existing node
+        updateNode(node.id, node)
+        count++
+      } else {
+        // It's a new node implied by the modification (e.g. "add a button")
+        const rootFrame = getNodeById(DEFAULT_FRAME_ID)
+        const parentId = rootFrame ? DEFAULT_FRAME_ID : null
+        addNode(parentId, node)
+        count++
+      }
     }
+  } finally {
+    useHistoryStore.getState().endBatch(useDocumentStore.getState().document)
   }
   return count
 }

@@ -1,6 +1,6 @@
 import { useDocumentStore } from '@/stores/document-store'
 import { setFabricSyncLock } from './canvas-sync-lock'
-import { rootFrameBounds } from './use-canvas-sync'
+import { nodeRenderInfo, rootFrameBounds, layoutContainerBounds } from './use-canvas-sync'
 import type { FabricObjectWithPenId } from './canvas-object-factory'
 
 interface Bounds {
@@ -31,11 +31,48 @@ function overlapArea(a: Bounds, b: Bounds): number {
   return overlapX * overlapY
 }
 
+function toNumber(value: unknown): number {
+  if (typeof value === 'number') return value
+  if (typeof value === 'string') {
+    const n = parseFloat(value)
+    return Number.isFinite(n) ? n : 0
+  }
+  return 0
+}
+
+function getParentBounds(parentId: string, parentNode: unknown): Bounds | null {
+  const root = rootFrameBounds.get(parentId)
+  if (root) return root
+
+  const layout = layoutContainerBounds.get(parentId)
+  if (layout) {
+    return { x: layout.x, y: layout.y, w: layout.w, h: layout.h }
+  }
+
+  if (
+    !parentNode ||
+    typeof parentNode !== 'object' ||
+    !('x' in parentNode) ||
+    !('y' in parentNode)
+  ) {
+    return null
+  }
+
+  const parentInfo = nodeRenderInfo.get(parentId)
+  const x = toNumber((parentNode as { x?: unknown }).x) + (parentInfo?.parentOffsetX ?? 0)
+  const y = toNumber((parentNode as { y?: unknown }).y) + (parentInfo?.parentOffsetY ?? 0)
+  const w = toNumber((parentNode as { width?: unknown }).width)
+  const h = toNumber((parentNode as { height?: unknown }).height)
+
+  if (w <= 0 || h <= 0) return null
+  return { x, y, w, h }
+}
+
 /**
- * Check if a Fabric object was dragged outside its parent root frame.
- * If so, reparent it to the overlapping root frame or to the root level.
+ * Check if a Fabric object was dragged outside its current parent container.
+ * If so, reparent it to the overlapping root frame (if any), or to root level.
  *
- * Only triggers for direct children of root frames (MVP scope).
+ * Works for layout and non-layout containers.
  * Returns true if reparenting occurred.
  */
 export function checkDragReparent(obj: FabricObjectWithPenId): boolean {
@@ -46,9 +83,8 @@ export function checkDragReparent(obj: FabricObjectWithPenId): boolean {
   const parent = store.getParentOf(nodeId)
   if (!parent) return false // Already root-level
 
-  // Only handle direct children of root frames
-  const parentBounds = rootFrameBounds.get(parent.id)
-  if (!parentBounds) return false // Parent is not a root frame
+  const parentBounds = getParentBounds(parent.id, parent)
+  if (!parentBounds) return false
 
   // Compute object's absolute bounds from Fabric
   const objBounds: Bounds = {
@@ -66,7 +102,6 @@ export function checkDragReparent(obj: FabricObjectWithPenId): boolean {
   let bestOverlap = 0
 
   for (const [frameId, frameBounds] of rootFrameBounds) {
-    if (frameId === parent.id) continue // Skip current parent
     const area = overlapArea(objBounds, frameBounds)
     if (area > bestOverlap) {
       bestOverlap = area
