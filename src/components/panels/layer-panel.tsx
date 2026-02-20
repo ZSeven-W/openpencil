@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback } from 'react'
-import { useDocumentStore } from '@/stores/document-store'
+import { useDocumentStore, findNodeInTree } from '@/stores/document-store'
 import { useCanvasStore } from '@/stores/canvas-store'
 import type { FabricObjectWithPenId } from '@/canvas/canvas-object-factory'
 import type { PenNode } from '@/types/pen'
@@ -13,6 +13,28 @@ interface DragState {
   dragId: string | null
   overId: string | null
   dropPosition: DropPosition
+}
+
+function isNodeReusable(node: PenNode, parentReusable: boolean): boolean {
+  if (parentReusable) return true
+  return 'reusable' in node && node.reusable === true
+}
+
+/** Get effective children for a node, resolving RefNode instances. */
+function getEffectiveChildren(
+  node: PenNode,
+  allChildren: PenNode[],
+): PenNode[] | null {
+  if (node.type === 'ref') {
+    const component = findNodeInTree(allChildren, node.ref)
+    if (component && 'children' in component && component.children?.length) {
+      return component.children
+    }
+    return null
+  }
+  return 'children' in node && node.children && node.children.length > 0
+    ? node.children
+    : null
 }
 
 function renderLayerTree(
@@ -33,14 +55,16 @@ function renderLayerTree(
   dragOverId: string | null,
   dropPosition: DropPosition,
   collapsedIds: Set<string>,
+  allChildren: PenNode[],
+  parentReusable = false,
+  parentIsInstance = false,
 ) {
   return [...nodes].reverse().map((node) => {
-    const nodeChildren =
-      'children' in node && node.children && node.children.length > 0
-        ? node.children
-        : null
+    const nodeChildren = getEffectiveChildren(node, allChildren)
     const isExpanded = !collapsedIds.has(node.id)
     const isDropTarget = dragOverId === node.id
+    const isInstance = node.type === 'ref' || parentIsInstance
+    const reusable = isNodeReusable(node, parentReusable)
 
     return (
       <div key={node.id}>
@@ -54,6 +78,8 @@ function renderLayerTree(
           locked={node.locked === true}
           hasChildren={nodeChildren !== null}
           expanded={isExpanded}
+          isReusable={reusable}
+          isInstance={isInstance}
           dropPosition={isDropTarget ? dropPosition : null}
           {...handlers}
         />
@@ -67,6 +93,9 @@ function renderLayerTree(
             dragOverId,
             dropPosition,
             collapsedIds,
+            allChildren,
+            reusable,
+            isInstance,
           )}
       </div>
     )
@@ -214,6 +243,9 @@ export default function LayerPanel() {
     setDropPosition(null)
   }, [children, getParentOf, moveNode])
 
+  const makeReusable = useDocumentStore((s) => s.makeReusable)
+  const detachComponent = useDocumentStore((s) => s.detachComponent)
+
   const handleContextAction = useCallback(
     (action: string) => {
       if (!contextMenu) return
@@ -239,6 +271,12 @@ export default function LayerPanel() {
         case 'hide':
           toggleVisibility(nodeId)
           break
+        case 'make-component':
+          makeReusable(nodeId)
+          break
+        case 'detach-component':
+          detachComponent(nodeId)
+          break
       }
       setContextMenu(null)
     },
@@ -251,6 +289,8 @@ export default function LayerPanel() {
       toggleLock,
       toggleVisibility,
       setSelection,
+      makeReusable,
+      detachComponent,
     ],
   )
 
@@ -287,20 +327,34 @@ export default function LayerPanel() {
             dragOverId,
             dropPosition,
             collapsedIds,
+            children,
           )
         )}
       </div>
 
-      {contextMenu && (
-        <LayerContextMenu
-          x={contextMenu.x}
-          y={contextMenu.y}
-          nodeId={contextMenu.nodeId}
-          canGroup={selectedIds.length >= 2}
-          onAction={handleContextAction}
-          onClose={() => setContextMenu(null)}
-        />
-      )}
+      {contextMenu && (() => {
+        const contextNode = getNodeById(contextMenu.nodeId)
+        const isContainer = contextNode
+          ? contextNode.type === 'frame' || contextNode.type === 'group' || contextNode.type === 'rectangle'
+          : false
+        const nodeIsReusable = contextNode
+          ? 'reusable' in contextNode && contextNode.reusable === true
+          : false
+        const nodeIsInstance = contextNode?.type === 'ref'
+        return (
+          <LayerContextMenu
+            x={contextMenu.x}
+            y={contextMenu.y}
+            nodeId={contextMenu.nodeId}
+            canGroup={selectedIds.length >= 2}
+            canCreateComponent={isContainer && !nodeIsReusable}
+            isReusable={nodeIsReusable}
+            isInstance={nodeIsInstance}
+            onAction={handleContextAction}
+            onClose={() => setContextMenu(null)}
+          />
+        )
+      })()}
     </div>
   )
 }
