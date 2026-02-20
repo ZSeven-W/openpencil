@@ -1,5 +1,7 @@
 import { useState, useRef, useCallback, useEffect } from 'react'
 import { cn } from '@/lib/utils'
+import { useHistoryStore } from '@/stores/history-store'
+import { useDocumentStore } from '@/stores/document-store'
 
 interface NumberInputProps {
   value: number
@@ -72,6 +74,9 @@ export default function NumberInput({
     dragStartY.current = e.clientY
     dragStartValue.current = value
 
+    // Batch all scrub-drag onChange calls into a single undo entry
+    useHistoryStore.getState().startBatch(useDocumentStore.getState().document)
+
     const handleMouseMove = (ev: MouseEvent) => {
       const delta = dragStartY.current - ev.clientY
       const newValue = clamp(dragStartValue.current + delta * step)
@@ -80,6 +85,7 @@ export default function NumberInput({
 
     const handleMouseUp = () => {
       setIsDragging(false)
+      useHistoryStore.getState().endBatch()
       document.removeEventListener('mousemove', handleMouseMove)
       document.removeEventListener('mouseup', handleMouseUp)
     }

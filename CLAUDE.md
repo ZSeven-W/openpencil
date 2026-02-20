@@ -87,7 +87,8 @@ React Components (Toolbar, LayerPanel, PropertyPanel)
   - `ai-chat-panel.tsx` / `chat-message.tsx` — AI chat with markdown, design block collapse, apply design
   - `code-panel.tsx` — Code generation output (React/Tailwind and HTML/CSS)
 - **`src/components/shared/`** — Reusable UI (8 files): ColorPicker, NumberInput, DropdownSelect, SectionHeader, ExportDialog, SaveDialog, AgentSettingsDialog, IconPickerDialog
-- **`src/components/ui/`** — shadcn/ui primitives: Button, Select, Separator, Slider, Toggle, Tooltip
+- **`src/components/icons/`** — Provider logos: ClaudeLogo, OpenAILogo
+- **`src/components/ui/`** — shadcn/ui primitives: Button, Select, Separator, Slider, Switch, Toggle, Tooltip
 - **`src/services/ai/`** — AI chat service, design prompts, design-to-node generation, AI types
 - **`src/services/codegen/`** — React+Tailwind and HTML+CSS code generators
 - **`src/hooks/`** — `use-keyboard-shortcuts` (global keyboard event handling: tools, clipboard, undo/redo, save, select all, delete, arrow nudge, z-order)
