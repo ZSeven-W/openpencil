@@ -1,4 +1,5 @@
 import { defineEventHandler, readBody, setResponseHeaders } from 'h3'
+import { resolveClaudeCli } from '../../utils/resolve-claude-cli'
 
 interface ChatBody {
   system: string
@@ -123,6 +124,8 @@ function streamViaAgentSDK(body: ChatBody, model?: string) {
         const env = { ...process.env } as Record<string, string | undefined>
         delete env.CLAUDECODE
 
+        const claudePath = resolveClaudeCli()
+
         const q = query({
           prompt,
           options: {
@@ -134,6 +137,7 @@ function streamViaAgentSDK(body: ChatBody, model?: string) {
             permissionMode: 'plan',
             persistSession: false,
             env,
+            ...(claudePath ? { pathToClaudeCodeExecutable: claudePath } : {}),
           },
         })
 
@@ -200,12 +204,13 @@ function streamViaOpenCode(body: ChatBody, model?: string) {
 
       let ocServer: { close(): void } | undefined
       try {
-        const { createOpencode } = await import('@opencode-ai/sdk/v2')
-        const oc = await createOpencode()
+        const { getOpencodeClient } = await import('../../utils/opencode-client')
+        const oc = await getOpencodeClient()
+        const ocClient = oc.client
         ocServer = oc.server
 
         // Create a session for this conversation
-        const { data: session, error: sessionError } = await oc.client.session.create({
+        const { data: session, error: sessionError } = await ocClient.session.create({
           title: 'OpenPencil Chat',
         })
         if (sessionError || !session) {
@@ -213,7 +218,7 @@ function streamViaOpenCode(body: ChatBody, model?: string) {
         }
 
         // Inject system prompt as context (no AI reply)
-        await oc.client.session.prompt({
+        await ocClient.session.prompt({
           sessionID: session.id,
           noReply: true,
           parts: [{ type: 'text', text: body.system }],
@@ -226,7 +231,7 @@ function streamViaOpenCode(body: ChatBody, model?: string) {
         const parsed = parseOpenCodeModel(model)
 
         // Send prompt and await full response
-        const { data: result, error: promptError } = await oc.client.session.prompt({
+        const { data: result, error: promptError } = await ocClient.session.prompt({
           sessionID: session.id,
           ...(parsed ? { model: parsed } : {}),
           parts: [{ type: 'text', text: prompt }],
@@ -256,7 +261,8 @@ function streamViaOpenCode(body: ChatBody, model?: string) {
           encoder.encode(`data: ${JSON.stringify({ type: 'error', content })}\n\n`),
         )
       } finally {
-        ocServer?.close()
+        const { releaseOpencodeServer } = await import('../../utils/opencode-client')
+        releaseOpencodeServer(ocServer)
         clearInterval(pingTimer)
         controller.close()
       }
