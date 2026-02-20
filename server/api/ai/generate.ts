@@ -1,4 +1,5 @@
 import { defineEventHandler, readBody, setResponseHeaders } from 'h3'
+import { resolveClaudeCli } from '../../utils/resolve-claude-cli'
 
 interface GenerateBody {
   system: string
@@ -66,6 +67,8 @@ async function generateViaAgentSDK(body: GenerateBody, model?: string): Promise<
     const env = { ...process.env } as Record<string, string | undefined>
     delete env.CLAUDECODE
 
+    const claudePath = resolveClaudeCli()
+
     const q = query({
       prompt: body.message,
       options: {
@@ -76,6 +79,7 @@ async function generateViaAgentSDK(body: GenerateBody, model?: string): Promise<
         permissionMode: 'plan',
         persistSession: false,
         env,
+        ...(claudePath ? { pathToClaudeCodeExecutable: claudePath } : {}),
       },
     })
 
@@ -100,11 +104,12 @@ async function generateViaAgentSDK(body: GenerateBody, model?: string): Promise<
 async function generateViaOpenCode(body: GenerateBody, model?: string): Promise<{ text?: string; error?: string }> {
   let ocServer: { close(): void } | undefined
   try {
-    const { createOpencode } = await import('@opencode-ai/sdk/v2')
-    const oc = await createOpencode()
+    const { getOpencodeClient } = await import('../../utils/opencode-client')
+    const oc = await getOpencodeClient()
+    const ocClient = oc.client
     ocServer = oc.server
 
-    const { data: session, error: sessionError } = await oc.client.session.create({
+    const { data: session, error: sessionError } = await ocClient.session.create({
       title: 'OpenPencil Generate',
     })
     if (sessionError || !session) {
@@ -112,7 +117,7 @@ async function generateViaOpenCode(body: GenerateBody, model?: string): Promise<
     }
 
     // Inject system prompt as context (no AI reply)
-    await oc.client.session.prompt({
+    await ocClient.session.prompt({
       sessionID: session.id,
       noReply: true,
       parts: [{ type: 'text', text: body.system }],
@@ -126,7 +131,7 @@ async function generateViaOpenCode(body: GenerateBody, model?: string): Promise<
     }
 
     // Send main prompt and await full response
-    const { data: result, error: promptError } = await oc.client.session.prompt({
+    const { data: result, error: promptError } = await ocClient.session.prompt({
       sessionID: session.id,
       ...(modelOption ? { model: modelOption } : {}),
       parts: [{ type: 'text', text: body.message }],
@@ -151,6 +156,7 @@ async function generateViaOpenCode(body: GenerateBody, model?: string): Promise<
     const message = error instanceof Error ? error.message : 'Unknown error'
     return { error: message }
   } finally {
-    ocServer?.close()
+    const { releaseOpencodeServer } = await import('../../utils/opencode-client')
+    releaseOpencodeServer(ocServer)
   }
 }

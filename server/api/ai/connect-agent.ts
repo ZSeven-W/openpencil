@@ -1,5 +1,6 @@
 import { defineEventHandler, readBody, setResponseHeaders } from 'h3'
 import type { GroupedModel } from '../../../src/types/agent-settings'
+import { resolveClaudeCli } from '../../utils/resolve-claude-cli'
 
 interface ConnectBody {
   agent: 'claude-code' | 'codex-cli' | 'opencode'
@@ -46,6 +47,8 @@ async function connectClaudeCode(): Promise<ConnectResult> {
     const env = { ...process.env } as Record<string, string | undefined>
     delete env.CLAUDECODE
 
+    const claudePath = resolveClaudeCli()
+
     const q = query({
       prompt: '',
       options: {
@@ -55,6 +58,7 @@ async function connectClaudeCode(): Promise<ConnectResult> {
         permissionMode: 'plan',
         persistSession: false,
         env,
+        ...(claudePath ? { pathToClaudeCodeExecutable: claudePath } : {}),
       },
     })
 
@@ -156,14 +160,14 @@ async function connectCodexCli(): Promise<ConnectResult> {
   }
 }
 
-/** Connect to OpenCode via createOpencode() and fetch its configured providers/models */
+/** Connect to OpenCode and fetch its configured providers/models. */
 async function connectOpenCode(): Promise<ConnectResult> {
   try {
-    const { createOpencode } = await import('@opencode-ai/sdk/v2')
-    const oc = await createOpencode()
+    const { getOpencodeClient, releaseOpencodeServer } = await import('../../utils/opencode-client')
+    const { client, server } = await getOpencodeClient()
 
-    const { data, error } = await oc.client.config.providers()
-    oc.server.close()
+    const { data, error } = await client.config.providers()
+    releaseOpencodeServer(server)
 
     if (error) {
       return { connected: false, models: [], error: 'Failed to fetch providers from OpenCode server.' }

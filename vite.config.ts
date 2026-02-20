@@ -7,6 +7,8 @@ import { fileURLToPath, URL } from 'node:url'
 import tailwindcss from '@tailwindcss/vite'
 import { nitro } from 'nitro/vite'
 
+const isElectronBuild = process.env.BUILD_TARGET === 'electron'
+
 const config = defineConfig({
   resolve: {
     alias: {
@@ -21,6 +23,7 @@ const config = defineConfig({
     nitro({
       rollupConfig: { external: [/^@sentry\//, /^@opencode-ai\//] },
       serverDir: './server',
+      ...(isElectronBuild ? { preset: 'node-server' } : {}),
     }),
     // this is the plugin that enables path aliases
     viteTsConfigPaths({

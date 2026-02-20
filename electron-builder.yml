@@ -1,0 +1,51 @@
+appId: dev.openpencil.app
+productName: OpenPencil
+copyright: Copyright (c) 2024-2026 OpenPencil contributors
+
+directories:
+  output: dist-electron
+  buildResources: build
+
+files:
+  - electron-dist/**/*
+  - "!node_modules"
+
+extraResources:
+  - from: .output/server
+    to: server
+  - from: .output/public
+    to: public
+
+mac:
+  category: public.app-category.graphics-design
+  icon: build/icon.icns
+  target:
+    - dmg
+    - zip
+  hardenedRuntime: true
+  gatekeeperAssess: false
+
+dmg:
+  title: "${productName} ${version}"
+
+win:
+  icon: build/icon.ico
+  target:
+    - nsis
+    - portable
+
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+
+linux:
+  icon: build/icon.png
+  category: Graphics
+  target:
+    - AppImage
+    - deb
+
+asar: true
+
+publish: null
