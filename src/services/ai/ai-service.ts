@@ -18,6 +18,7 @@ export async function* streamChat(
   messages: Array<{ role: 'user' | 'assistant'; content: string }>,
   model?: string,
   options?: StreamChatOptions,
+  provider?: string,
 ): AsyncGenerator<AIStreamChunk> {
   const hardTimeoutMs = Math.max(10_000, options?.hardTimeoutMs ?? DEFAULT_STREAM_HARD_TIMEOUT_MS)
   const noTextTimeoutMs = Math.max(10_000, options?.noTextTimeoutMs ?? DEFAULT_STREAM_NO_TEXT_TIMEOUT_MS)
@@ -50,7 +51,7 @@ export async function* streamChat(
     const response = await fetch('/api/ai/chat', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ system: systemPrompt, messages, model }),
+      body: JSON.stringify({ system: systemPrompt, messages, model, provider }),
       signal: controller.signal,
     })
 
@@ -213,6 +214,7 @@ export async function generateCompletion(
   systemPrompt: string,
   userMessage: string,
   model?: string,
+  provider?: string,
 ): Promise<string> {
   const controller = new AbortController()
   const timeout = setTimeout(() => controller.abort(), DEFAULT_GENERATE_TIMEOUT_MS)
@@ -222,7 +224,7 @@ export async function generateCompletion(
     response = await fetch('/api/ai/generate', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ system: systemPrompt, message: userMessage, model }),
+      body: JSON.stringify({ system: systemPrompt, message: userMessage, model, provider }),
       signal: controller.signal,
     })
   } catch (error) {

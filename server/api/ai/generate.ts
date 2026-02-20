@@ -4,6 +4,7 @@ interface GenerateBody {
   system: string
   message: string
   model?: string
+  provider?: string
 }
 
 /**
@@ -19,6 +20,12 @@ export default defineEventHandler(async (event) => {
     return { error: 'Missing required fields: system, message' }
   }
 
+  // Explicit provider routing
+  if (body.provider === 'opencode') {
+    return generateViaOpenCode(body, body.model)
+  }
+
+  // Default: existing behavior (backward-compatible)
   const apiKey = process.env.ANTHROPIC_API_KEY
   if (apiKey) {
     try {
@@ -86,5 +93,64 @@ async function generateViaAgentSDK(body: GenerateBody, model?: string): Promise<
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown error'
     return { error: message }
+  }
+}
+
+/** Generate via OpenCode SDK (connects to a running OpenCode server) */
+async function generateViaOpenCode(body: GenerateBody, model?: string): Promise<{ text?: string; error?: string }> {
+  let ocServer: { close(): void } | undefined
+  try {
+    const { createOpencode } = await import('@opencode-ai/sdk/v2')
+    const oc = await createOpencode()
+    ocServer = oc.server
+
+    const { data: session, error: sessionError } = await oc.client.session.create({
+      title: 'OpenPencil Generate',
+    })
+    if (sessionError || !session) {
+      return { error: 'Failed to create OpenCode session' }
+    }
+
+    // Inject system prompt as context (no AI reply)
+    await oc.client.session.prompt({
+      sessionID: session.id,
+      noReply: true,
+      parts: [{ type: 'text', text: body.system }],
+    })
+
+    // Parse model string ("providerID/modelID")
+    let modelOption: { providerID: string; modelID: string } | undefined
+    if (model && model.includes('/')) {
+      const idx = model.indexOf('/')
+      modelOption = { providerID: model.slice(0, idx), modelID: model.slice(idx + 1) }
+    }
+
+    // Send main prompt and await full response
+    const { data: result, error: promptError } = await oc.client.session.prompt({
+      sessionID: session.id,
+      ...(modelOption ? { model: modelOption } : {}),
+      parts: [{ type: 'text', text: body.message }],
+    })
+
+    if (promptError) {
+      return { error: 'OpenCode generation failed' }
+    }
+
+    // Extract text from response parts
+    const texts: string[] = []
+    if (result?.parts) {
+      for (const part of result.parts) {
+        if (part.type === 'text' && part.text) {
+          texts.push(part.text)
+        }
+      }
+    }
+
+    return { text: texts.join('') }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unknown error'
+    return { error: message }
+  } finally {
+    ocServer?.close()
   }
 }

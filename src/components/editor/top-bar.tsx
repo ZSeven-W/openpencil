@@ -11,6 +11,7 @@ import {
 } from 'lucide-react'
 import ClaudeLogo from '@/components/icons/claude-logo'
 import OpenAILogo from '@/components/icons/openai-logo'
+import OpenCodeLogo from '@/components/icons/opencode-logo'
 import { Button } from '@/components/ui/button'
 import {
   Tooltip,
@@ -209,6 +210,7 @@ export default function TopBar() {
             >
               <ClaudeLogo className="w-4 h-4" />
               <OpenAILogo className="w-4 h-4 -ml-1" />
+              <OpenCodeLogo className="w-4 h-4 -ml-1" />
               <span className="hidden sm:inline">Agents & MCP</span>
             </Button>
           </TooltipTrigger>

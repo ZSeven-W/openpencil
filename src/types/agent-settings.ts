@@ -1,10 +1,10 @@
-export type AIProviderType = 'anthropic' | 'openai'
+export type AIProviderType = 'anthropic' | 'openai' | 'opencode'
 
 export interface AIProviderConfig {
   type: AIProviderType
   displayName: string
   isConnected: boolean
-  connectionMethod: 'claude-code' | 'codex-cli' | null
+  connectionMethod: 'claude-code' | 'codex-cli' | 'opencode' | null
   /** Models fetched when the user connects this provider */
   models: GroupedModel[]
 }
