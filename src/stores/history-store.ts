@@ -1,7 +1,11 @@
 import { create } from 'zustand'
 import type { PenDocument, PenNode } from '@/types/pen'
 
-const MAX_HISTORY = 100
+const MAX_HISTORY = 300
+
+function areDocumentsEqual(a: PenDocument, b: PenDocument): boolean {
+  return JSON.stringify(a) === JSON.stringify(b)
+}
 
 interface HistoryStoreState {
   undoStack: PenDocument[]
@@ -16,7 +20,7 @@ interface HistoryStoreState {
   canRedo: () => boolean
   clear: () => void
   startBatch: (doc: PenDocument) => void
-  endBatch: () => void
+  endBatch: (currentDoc?: PenDocument) => void
 
   // Legacy API compatibility (used by some canvas event handlers)
   beginBatch: (currentChildren: PenNode[]) => void
@@ -34,11 +38,17 @@ export const useHistoryStore = create<HistoryStoreState>(
       const { batchDepth } = get()
       if (batchDepth > 0) return
 
-      const clone = structuredClone(doc)
-      set((s) => ({
-        undoStack: [...s.undoStack.slice(-(MAX_HISTORY - 1)), clone],
-        redoStack: [],
-      }))
+      set((s) => {
+        const last = s.undoStack[s.undoStack.length - 1]
+        if (last && areDocumentsEqual(last, doc)) {
+          return { redoStack: [] }
+        }
+
+        return {
+          undoStack: [...s.undoStack.slice(-(MAX_HISTORY - 1)), structuredClone(doc)],
+          redoStack: [],
+        }
+      })
     },
 
     undo: (currentDoc) => {
@@ -81,11 +91,20 @@ export const useHistoryStore = create<HistoryStoreState>(
       }
     },
 
-    endBatch: () => {
+    endBatch: (currentDoc) => {
       const { batchDepth, batchBaseState } = get()
       if (batchDepth <= 0) return
 
       if (batchDepth === 1 && batchBaseState) {
+        const hasNoChanges = currentDoc
+          ? areDocumentsEqual(batchBaseState, currentDoc)
+          : false
+
+        if (hasNoChanges) {
+          set({ batchDepth: 0, batchBaseState: null })
+          return
+        }
+
         set((s) => ({
           undoStack: [...s.undoStack.slice(-(MAX_HISTORY - 1)), batchBaseState],
           redoStack: [],

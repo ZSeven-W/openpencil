@@ -284,7 +284,9 @@ export function useKeyboardShortcuts() {
             useDocumentStore.getState().removeNode(id)
           }
           if (selectedIds.length > 1) {
-            useHistoryStore.getState().endBatch()
+            useHistoryStore
+              .getState()
+              .endBatch(useDocumentStore.getState().document)
           }
           useCanvasStore.getState().clearSelection()
           const canvas = useCanvasStore.getState().fabricCanvas
@@ -335,7 +337,9 @@ export function useKeyboardShortcuts() {
           useDocumentStore.getState().reorderNode(id, 'down')
         }
         if (selectedIds.length > 1) {
-          useHistoryStore.getState().endBatch()
+          useHistoryStore
+            .getState()
+            .endBatch(useDocumentStore.getState().document)
         }
         return
       }
@@ -353,7 +357,9 @@ export function useKeyboardShortcuts() {
           useDocumentStore.getState().reorderNode(id, 'up')
         }
         if (selectedIds.length > 1) {
-          useHistoryStore.getState().endBatch()
+          useHistoryStore
+            .getState()
+            .endBatch(useDocumentStore.getState().document)
         }
         return
       }
@@ -383,7 +389,9 @@ export function useKeyboardShortcuts() {
           useDocumentStore.getState().updateNode(id, updates)
         }
         if (selectedIds.length > 1) {
-          useHistoryStore.getState().endBatch()
+          useHistoryStore
+            .getState()
+            .endBatch(useDocumentStore.getState().document)
         }
         return
       }
