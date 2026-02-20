@@ -41,6 +41,28 @@ React Components (Toolbar, LayerPanel, PropertyPanel)
 - User edits in panels → update document-store → `use-canvas-sync` updates Fabric
 - `canvas-sync-lock.ts` prevents circular updates when Fabric events write to the store
 
+### Design Variables Architecture
+
+```
+PenDocument (source of truth)
+  ├── variables: Record<string, VariableDefinition>   ($color-1, $spacing-md, ...)
+  ├── themes: Record<string, string[]>                ({Theme-1: ["Default","Dark"]})
+  └── children: PenNode[]                             (nodes with $variable refs)
+                │
+     ┌──────────┴──────────┐
+     ▼                      ▼
+  Canvas Sync             Code Generation
+  resolveNodeForCanvas()  $ref → var(--name)
+  $ref → concrete value   CSS Variables block
+```
+
+- **`$variable` references are preserved** in the document store (e.g. `$color-1` in fill color)
+- `normalize-pen-file.ts` does NOT resolve `$refs` — only fixes format issues
+- `resolveNodeForCanvas()` resolves `$refs` on-the-fly before Fabric.js rendering
+- Code generators output `var(--name)` for `$ref` values
+- Multiple theme axes supported (e.g. Theme-1 with Light/Dark, Theme-2 with Compact/Comfortable)
+- Each theme axis has variants; variables can have per-variant values (`ThemedValue[]`)
+
 ### Key Modules
 
 - **`src/canvas/`** — Fabric.js integration (16 files):
@@ -51,7 +73,7 @@ React Components (Toolbar, LayerPanel, PropertyPanel)
   - `canvas-controls.ts` — Custom rotation controls and cursor styling
   - `canvas-constants.ts` — Default colors, zoom limits, stroke widths
   - `use-canvas-events.ts` — Drawing events, shape creation, smart guides activation, tool-based `skipTargetFind` management
-  - `use-canvas-sync.ts` — Bidirectional PenDocument ↔ Fabric.js sync, node flattening with parent offsets
+  - `use-canvas-sync.ts` — Bidirectional PenDocument ↔ Fabric.js sync, node flattening with parent offsets, variable resolution via `resolveNodeForCanvas()`
   - `use-canvas-viewport.ts` — Wheel zoom, space+drag panning, tool cursor switching, selection toggling per tool
   - `use-canvas-selection.ts` — Selection sync between Fabric objects and canvas-store
   - `use-canvas-guides.ts` — Smart alignment guides with snapping
@@ -60,40 +82,45 @@ React Components (Toolbar, LayerPanel, PropertyPanel)
   - `parent-child-transform.ts` — Propagates parent transforms (move/scale/rotate) to children proportionally
   - `use-dimension-label.ts` — Shows size/position labels during object manipulation
   - `use-frame-labels.ts` — Renders frame names and boundaries on canvas
+- **`src/variables/`** — Design variables system (2 files):
+  - `resolve-variables.ts` — Core resolution utilities: `resolveVariableRef`, `resolveNodeForCanvas`, `getDefaultTheme`, `isVariableRef`; resolves `$variable` references to concrete values for canvas rendering with circular reference guards
+  - `replace-refs.ts` — `replaceVariableRefsInTree`: recursively walk node tree to replace/resolve `$refs` when renaming or deleting variables (covers opacity, gap, padding, fills, strokes, effects, text)
 - **`src/stores/`** — Zustand stores (5 files):
-  - `canvas-store.ts` — UI/tool/selection/viewport/clipboard/interaction state
-  - `document-store.ts` — PenDocument tree CRUD: `addNode`, `updateNode`, `removeNode`, `moveNode`, `reorderNode`, `duplicateNode`, `groupNodes`, `ungroupNode`, `toggleVisibility`, `toggleLock`, `scaleDescendantsInStore`, `rotateDescendantsInStore`, `getNodeById`, `getParentOf`, `getFlatNodes`, `isDescendantOf`
+  - `canvas-store.ts` — UI/tool/selection/viewport/clipboard/interaction state, `variablesPanelOpen` toggle
+  - `document-store.ts` — PenDocument tree CRUD: `addNode`, `updateNode`, `removeNode`, `moveNode`, `reorderNode`, `duplicateNode`, `groupNodes`, `ungroupNode`, `toggleVisibility`, `toggleLock`, `scaleDescendantsInStore`, `rotateDescendantsInStore`, `getNodeById`, `getParentOf`, `getFlatNodes`, `isDescendantOf`; Variable CRUD: `setVariable`, `removeVariable`, `renameVariable`, `setThemes` (all with history support)
   - `history-store.ts` — Undo/redo (max 100 states), batch mode for grouped operations
   - `ai-store.ts` — Chat messages, streaming state, generated code, model selection
   - `agent-settings-store.ts` — AI provider config (Anthropic/OpenAI), MCP CLI integrations, localStorage persistence
 - **`src/types/`** — Type system:
-  - `pen.ts` — PenDocument/PenNode (frame, group, rectangle, ellipse, line, polygon, path, text, image, ref), ContainerProps
+  - `pen.ts` — PenDocument/PenNode (frame, group, rectangle, ellipse, line, polygon, path, text, image, ref), ContainerProps; `PenDocument.variables` and `PenDocument.themes`
   - `canvas.ts` — ToolType (select, frame, rectangle, ellipse, line, polygon, path, text, hand), ViewportState, SelectionState
   - `styles.ts` — PenFill (solid, linear_gradient, radial_gradient), PenStroke, PenEffect (shadow, blur)
-  - `variables.ts` — VariableDefinition for design tokens
+  - `variables.ts` — `VariableDefinition` (type + value), `ThemedValue` (value per theme), `VariableValue`
   - `agent-settings.ts` — AI provider config types
-- **`src/components/editor/`** — Editor UI (6 files): editor-layout, toolbar, tool-button, shape-tool-dropdown (rectangle/ellipse/line/path + icon picker + image import), top-bar, status-bar
-- **`src/components/panels/`** — Panels (15 files):
+- **`src/components/editor/`** — Editor UI (6 files): editor-layout, toolbar (with variables panel toggle), tool-button, shape-tool-dropdown (rectangle/ellipse/line/path + icon picker + image import), top-bar, status-bar
+- **`src/components/panels/`** — Panels (17 files):
   - `layer-panel.tsx` / `layer-item.tsx` / `layer-context-menu.tsx` — Tree view with drag-and-drop reordering and drop-into-children (above/below/inside), visibility/lock toggles, context menu, rename
   - `property-panel.tsx` — Unified property panel
-  - `fill-section.tsx` — Solid + gradient fill
-  - `stroke-section.tsx` — Stroke color/width/dash
+  - `fill-section.tsx` — Solid + gradient fill, variable picker integration for color binding
+  - `stroke-section.tsx` — Stroke color/width/dash, variable picker for stroke color binding
   - `corner-radius-section.tsx` — Unified or 4-point corner radius
   - `size-section.tsx` — Position, size, rotation
   - `text-section.tsx` — Font, size, weight, spacing, alignment
   - `effects-section.tsx` — Shadow and blur
-  - `layout-section.tsx` — Auto-layout (none/vertical/horizontal), gap, padding, justify, align
-  - `appearance-section.tsx` — Opacity, visibility, lock, flip
+  - `layout-section.tsx` — Auto-layout (none/vertical/horizontal), gap, padding, justify, align; variable picker for gap/padding binding
+  - `appearance-section.tsx` — Opacity, visibility, lock, flip; variable picker for opacity binding
   - `ai-chat-panel.tsx` / `chat-message.tsx` — AI chat with markdown, design block collapse, apply design
-  - `code-panel.tsx` — Code generation output (React/Tailwind and HTML/CSS)
-- **`src/components/shared/`** — Reusable UI (8 files): ColorPicker, NumberInput, DropdownSelect, SectionHeader, ExportDialog, SaveDialog, AgentSettingsDialog, IconPickerDialog
+  - `code-panel.tsx` — Code generation output (React/Tailwind, HTML/CSS, CSS Variables)
+  - `variables-panel.tsx` — Design variables management: theme axes as tabs, variant columns, resizable floating panel, add/rename/delete themes and variants
+  - `variable-row.tsx` — Individual variable row: type icon, editable name, per-theme-variant value cells (color picker, number input, text input), context menu
+- **`src/components/shared/`** — Reusable UI (9 files): ColorPicker, NumberInput, DropdownSelect, SectionHeader, ExportDialog, SaveDialog, AgentSettingsDialog, IconPickerDialog, VariablePicker
 - **`src/components/icons/`** — Provider logos: ClaudeLogo, OpenAILogo
 - **`src/components/ui/`** — shadcn/ui primitives: Button, Select, Separator, Slider, Switch, Toggle, Tooltip
 - **`src/services/ai/`** — AI chat service, design prompts, design-to-node generation, AI types
-- **`src/services/codegen/`** — React+Tailwind and HTML+CSS code generators
+- **`src/services/codegen/`** — React+Tailwind and HTML+CSS code generators (output `var(--name)` for `$variable` refs), CSS variables generator
 - **`src/hooks/`** — `use-keyboard-shortcuts` (global keyboard event handling: tools, clipboard, undo/redo, save, select all, delete, arrow nudge, z-order)
 - **`src/lib/`** — Utility functions (`utils.ts` with `cn()` for class merging)
-- **`src/utils/`** — File operations (save/open .pen), export (PNG/SVG), node clone, pen file normalization, SVG parser (import SVG to editable PenNodes), syntax highlight
+- **`src/utils/`** — File operations (save/open .pen), export (PNG/SVG), node clone, pen file normalization (format fixes only, preserves `$variable` refs), SVG parser (import SVG to editable PenNodes), syntax highlight
 - **`server/api/ai/`** — Nitro server API: `chat.ts` (streaming SSE with thinking state), `generate.ts` (non-streaming generation), `connect-agent.ts` (Claude Code/Codex CLI connection), `models.ts` (model definitions). Supports Anthropic API key or Claude Agent SDK (local OAuth) as dual providers
 
 ### Fabric.js v7 Gotchas
@@ -159,7 +186,7 @@ Tailwind CSS v4 imported via `src/styles.css`. UI primitives from shadcn/ui (`sr
 
 ### Scope
 
-按模块划分：`editor`、`canvas`、`panels`、`history`、`ai`、`codegen`、`store`、`types`。
+按模块划分：`editor`、`canvas`、`panels`、`history`、`ai`、`codegen`、`store`、`types`、`variables`。
 
 ### 规则
 

@@ -1,5 +1,7 @@
 import NumberInput from '@/components/shared/number-input'
 import DropdownSelect from '@/components/shared/dropdown-select'
+import VariablePicker from '@/components/shared/variable-picker'
+import { isVariableRef } from '@/variables/resolve-variables'
 import type { PenNode, ContainerProps } from '@/types/pen'
 import { cn } from '@/lib/utils'
 import {
@@ -63,11 +65,15 @@ function ToggleButton({
 
 export default function LayoutSection({ node, onUpdate }: LayoutSectionProps) {
   const layout = node.layout ?? 'none'
-  const gap = typeof node.gap === 'number' ? node.gap : 0
-  const padding = typeof node.padding === 'number'
-    ? node.padding
-    : Array.isArray(node.padding)
-      ? node.padding[0]
+  const rawGap = node.gap
+  const rawPadding = node.padding
+  const gapIsBound = typeof rawGap === 'string' && isVariableRef(rawGap)
+  const paddingIsBound = typeof rawPadding === 'string' && isVariableRef(rawPadding)
+  const gap = typeof rawGap === 'number' ? rawGap : 0
+  const padding = typeof rawPadding === 'number'
+    ? rawPadding
+    : Array.isArray(rawPadding)
+      ? rawPadding[0]
       : 0
   const justifyContent = node.justifyContent ?? 'start'
   const alignItems = node.alignItems ?? 'start'
@@ -110,19 +116,51 @@ export default function LayoutSection({ node, onUpdate }: LayoutSectionProps) {
       {hasLayout && (
         <>
           {/* Gap & Padding */}
-          <div className="grid grid-cols-2 gap-1">
-            <NumberInput
-              label="Gap"
-              value={gap}
-              onChange={(v) => onUpdate({ gap: v } as Partial<PenNode>)}
-              min={0}
-            />
-            <NumberInput
-              label="Pad"
-              value={padding}
-              onChange={(v) => onUpdate({ padding: v } as Partial<PenNode>)}
-              min={0}
-            />
+          <div className="space-y-1">
+            <div className="flex items-center gap-1">
+              <div className="flex-1">
+                {gapIsBound ? (
+                  <div className="h-6 flex items-center px-2 bg-secondary rounded text-[11px] font-mono text-muted-foreground">
+                    {String(rawGap)}
+                  </div>
+                ) : (
+                  <NumberInput
+                    label="Gap"
+                    value={gap}
+                    onChange={(v) => onUpdate({ gap: v } as Partial<PenNode>)}
+                    min={0}
+                  />
+                )}
+              </div>
+              <VariablePicker
+                type="number"
+                currentValue={gapIsBound ? String(rawGap) : undefined}
+                onBind={(ref) => onUpdate({ gap: ref as unknown as number } as Partial<PenNode>)}
+                onUnbind={(val) => onUpdate({ gap: Number(val) } as Partial<PenNode>)}
+              />
+            </div>
+            <div className="flex items-center gap-1">
+              <div className="flex-1">
+                {paddingIsBound ? (
+                  <div className="h-6 flex items-center px-2 bg-secondary rounded text-[11px] font-mono text-muted-foreground">
+                    {String(rawPadding)}
+                  </div>
+                ) : (
+                  <NumberInput
+                    label="Pad"
+                    value={padding}
+                    onChange={(v) => onUpdate({ padding: v } as Partial<PenNode>)}
+                    min={0}
+                  />
+                )}
+              </div>
+              <VariablePicker
+                type="number"
+                currentValue={paddingIsBound ? String(rawPadding) : undefined}
+                onBind={(ref) => onUpdate({ padding: ref as unknown as number } as Partial<PenNode>)}
+                onUnbind={(val) => onUpdate({ padding: Number(val) } as Partial<PenNode>)}
+              />
+            </div>
           </div>
 
           {/* Justify Content */}

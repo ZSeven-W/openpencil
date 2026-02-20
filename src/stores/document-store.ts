@@ -1,7 +1,10 @@
 import { create } from 'zustand'
 import { nanoid } from 'nanoid'
 import type { PenDocument, PenNode, GroupNode } from '@/types/pen'
+import type { VariableDefinition } from '@/types/variables'
 import { useHistoryStore } from '@/stores/history-store'
+import { getDefaultTheme } from '@/variables/resolve-variables'
+import { replaceVariableRefsInTree } from '@/variables/replace-refs'
 
 export const DEFAULT_FRAME_ID = 'root-frame'
 
@@ -230,6 +233,12 @@ interface DocumentStoreState {
   getParentOf: (id: string) => PenNode | undefined
   getFlatNodes: () => PenNode[]
   isDescendantOf: (nodeId: string, ancestorId: string) => boolean
+
+  // Variable management
+  setVariable: (name: string, definition: VariableDefinition) => void
+  removeVariable: (name: string) => void
+  renameVariable: (oldName: string, newName: string) => void
+  setThemes: (themes: Record<string, string[]>) => void
 
   applyHistoryState: (doc: PenDocument) => void
   loadDocument: (
@@ -586,6 +595,78 @@ export const useDocumentStore = create<DocumentStoreState>(
     getFlatNodes: () => flattenNodes(get().document.children),
     isDescendantOf: (nodeId, ancestorId) =>
       isDescendantOf(get().document.children, nodeId, ancestorId),
+
+    // --- Variable management ---
+
+    setVariable: (name, definition) => {
+      useHistoryStore.getState().pushState(get().document)
+      set((s) => ({
+        document: {
+          ...s.document,
+          variables: { ...(s.document.variables ?? {}), [name]: definition },
+        },
+        isDirty: true,
+      }))
+    },
+
+    removeVariable: (name) => {
+      const state = get()
+      const vars = state.document.variables
+      if (!vars || !(name in vars)) return
+      useHistoryStore.getState().pushState(state.document)
+      const { [name]: _removed, ...rest } = vars
+      const activeTheme = getDefaultTheme(state.document.themes)
+      const newChildren = replaceVariableRefsInTree(
+        state.document.children,
+        name,
+        null,
+        vars,
+        activeTheme,
+      )
+      set({
+        document: {
+          ...state.document,
+          variables: Object.keys(rest).length > 0 ? rest : undefined,
+          children: newChildren,
+        },
+        isDirty: true,
+      })
+    },
+
+    renameVariable: (oldName, newName) => {
+      if (oldName === newName) return
+      const state = get()
+      const vars = state.document.variables
+      if (!vars || !(oldName in vars)) return
+      useHistoryStore.getState().pushState(state.document)
+      const def = vars[oldName]
+      const { [oldName]: _removed, ...rest } = vars
+      const newVars = { ...rest, [newName]: def }
+      const activeTheme = getDefaultTheme(state.document.themes)
+      const newChildren = replaceVariableRefsInTree(
+        state.document.children,
+        oldName,
+        newName,
+        vars,
+        activeTheme,
+      )
+      set({
+        document: {
+          ...state.document,
+          variables: newVars,
+          children: newChildren,
+        },
+        isDirty: true,
+      })
+    },
+
+    setThemes: (themes) => {
+      useHistoryStore.getState().pushState(get().document)
+      set((s) => ({
+        document: { ...s.document, themes },
+        isDirty: true,
+      }))
+    },
 
     applyHistoryState: (doc) =>
       set({ document: doc, isDirty: true }),

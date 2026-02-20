@@ -6,6 +6,7 @@ import {
   Hand,
   Undo2,
   Redo2,
+  SlidersHorizontal,
 } from 'lucide-react'
 import ToolButton from './tool-button'
 import ShapeToolDropdown from './shape-tool-dropdown'
@@ -25,6 +26,8 @@ import IconPickerDialog from '@/components/shared/icon-picker-dialog'
 export default function Toolbar() {
   const canUndo = useHistoryStore((s) => s.undoStack.length > 0)
   const canRedo = useHistoryStore((s) => s.redoStack.length > 0)
+  const variablesPanelOpen = useCanvasStore((s) => s.variablesPanelOpen)
+  const toggleVariablesPanel = useCanvasStore((s) => s.toggleVariablesPanel)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [iconPickerOpen, setIconPickerOpen] = useState(false)
 
@@ -222,6 +225,33 @@ export default function Toolbar() {
           Redo
           <kbd className="ml-1.5 inline-flex h-4 items-center rounded border border-border/50 bg-muted px-1 font-mono text-[10px] text-muted-foreground">
             {'\u2318\u21e7'}Z
+          </kbd>
+        </TooltipContent>
+      </Tooltip>
+
+      <Separator className="my-1 w-8" />
+
+      {/* Variables */}
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <button
+            type="button"
+            onClick={toggleVariablesPanel}
+            aria-label="Variables"
+            aria-pressed={variablesPanelOpen}
+            className={`inline-flex items-center justify-center h-8 min-w-8 px-1.5 rounded-lg transition-colors [&_svg]:size-5 [&_svg]:shrink-0 ${
+              variablesPanelOpen
+                ? 'bg-primary text-primary-foreground'
+                : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+            }`}
+          >
+            <SlidersHorizontal size={20} />
+          </button>
+        </TooltipTrigger>
+        <TooltipContent side="right">
+          Variables
+          <kbd className="ml-1.5 inline-flex h-4 items-center rounded border border-border/50 bg-muted px-1 font-mono text-[10px] text-muted-foreground">
+            {'\u2318\u21e7'}V
           </kbd>
         </TooltipContent>
       </Tooltip>
