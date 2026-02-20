@@ -74,7 +74,8 @@ function isDesignRequest(text: string): boolean {
 
 function buildContextString(): string {
   const selectedIds = useCanvasStore.getState().selection.selectedIds
-  const flatNodes = useDocumentStore.getState().getFlatNodes()
+  const { getFlatNodes, document: doc } = useDocumentStore.getState()
+  const flatNodes = getFlatNodes()
 
   const parts: string[] = []
 
@@ -94,6 +95,14 @@ function buildContextString(): string {
       .map((n) => `${n!.type}:${n!.name ?? n!.id}`)
       .join(', ')
     parts.push(`Selected: ${selectedSummary}`)
+  }
+
+  // Include variable summary so chat mode also knows about design tokens
+  if (doc.variables && Object.keys(doc.variables).length > 0) {
+    const varNames = Object.entries(doc.variables)
+      .map(([n, d]) => `$${n}(${d.type})`)
+      .join(', ')
+    parts.push(`Variables: ${varNames}`)
   }
 
   return parts.length > 0 ? `\n\n[Canvas context: ${parts.join('. ')}]` : ''
@@ -164,14 +173,17 @@ function useChatHandlers() {
         if (isDesign) {
              if (isModification) {
                // --- MODIFICATION MODE ---
-               const { getNodeById } = useDocumentStore.getState()
+               const { getNodeById, document: modDoc } = useDocumentStore.getState()
                const selectedNodes = selectedIds.map(id => getNodeById(id)).filter(Boolean) as any[]
-               
+
                // We update the UI to show we are working
                accumulated = '<step title="Checking guidelines">Analyzing modification request...</step>'
                updateLastMessage(accumulated)
 
-               const { rawResponse, nodes } = await generateDesignModification(selectedNodes, messageText)
+               const { rawResponse, nodes } = await generateDesignModification(selectedNodes, messageText, {
+                 variables: modDoc.variables,
+                 themes: modDoc.themes,
+               })
                accumulated = rawResponse
                updateLastMessage(accumulated)
                
@@ -180,11 +192,14 @@ function useChatHandlers() {
                appliedCount += count
              } else {
                // --- GENERATION MODE (animated) ---
+               const doc = useDocumentStore.getState().document
                const { rawResponse, nodes } = await generateDesign({
                  prompt: fullUserMessage,
                  context: {
                    canvasSize: { width: 1200, height: 800 },
                    documentSummary: `Current selection: ${hasSelection ? selectedIds.length + ' items' : 'Empty'}`,
+                   variables: doc.variables,
+                   themes: doc.themes,
                  },
                }, {
                  animated: true,

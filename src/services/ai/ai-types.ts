@@ -12,6 +12,8 @@ export interface AIDesignRequest {
     selectedNodes?: string[]
     documentSummary?: string
     canvasSize?: { width: number; height: number }
+    variables?: Record<string, import('@/types/variables').VariableDefinition>
+    themes?: Record<string, string[]>
   }
 }
 
