@@ -128,11 +128,23 @@ export function useKeyboardShortcuts() {
         const { clipboard } = useCanvasStore.getState()
         if (clipboard.length > 0) {
           e.preventDefault()
-          const cloned = cloneNodesWithNewIds(clipboard, 10)
           const newIds: string[] = []
-          for (const node of cloned) {
-            useDocumentStore.getState().addNode(null, node)
-            newIds.push(node.id)
+          for (const original of clipboard) {
+            // Pasting a reusable component creates an instance (RefNode)
+            if ('reusable' in original && original.reusable) {
+              const component = useDocumentStore.getState().getNodeById(original.id)
+              if (component && 'reusable' in component && component.reusable) {
+                const newId = useDocumentStore.getState().duplicateNode(original.id)
+                if (newId) {
+                  newIds.push(newId)
+                  continue
+                }
+              }
+            }
+            // Regular paste for non-reusable nodes
+            const [cloned] = cloneNodesWithNewIds([original], 10)
+            useDocumentStore.getState().addNode(null, cloned)
+            newIds.push(cloned.id)
           }
           useCanvasStore.getState().setSelection(newIds, newIds[0] ?? null)
         }
@@ -144,16 +156,14 @@ export function useKeyboardShortcuts() {
         const { selectedIds } = useCanvasStore.getState().selection
         if (selectedIds.length > 0) {
           e.preventDefault()
-          const nodes = selectedIds
-            .map((id) => useDocumentStore.getState().getNodeById(id))
-            .filter((n): n is NonNullable<typeof n> => n != null)
-          const cloned = cloneNodesWithNewIds(nodes, 10)
           const newIds: string[] = []
-          for (const node of cloned) {
-            useDocumentStore.getState().addNode(null, node)
-            newIds.push(node.id)
+          for (const id of selectedIds) {
+            const newId = useDocumentStore.getState().duplicateNode(id)
+            if (newId) newIds.push(newId)
           }
-          useCanvasStore.getState().setSelection(newIds, newIds[0] ?? null)
+          if (newIds.length > 0) {
+            useCanvasStore.getState().setSelection(newIds, newIds[0])
+          }
         }
         return
       }
@@ -168,8 +178,11 @@ export function useKeyboardShortcuts() {
 
         if (fileHandle) {
           writeToFileHandle(fileHandle, doc).then(() => store.markClean())
+        } else if (fileName) {
+          downloadDocument(doc, fileName)
+          store.markClean()
         } else if (supportsFileSystemAccess()) {
-          saveDocumentAs(doc, fileName ?? 'untitled.pen').then((result) => {
+          saveDocumentAs(doc, 'untitled.pen').then((result) => {
             if (result) {
               useDocumentStore.setState({
                 fileName: result.fileName,
@@ -178,9 +191,6 @@ export function useKeyboardShortcuts() {
               })
             }
           })
-        } else if (fileName) {
-          downloadDocument(doc, fileName)
-          store.markClean()
         } else {
           store.setSaveDialogOpen(true)
         }
@@ -221,6 +231,16 @@ export function useKeyboardShortcuts() {
           if (groupId) {
             useCanvasStore.getState().setSelection([groupId], groupId)
           }
+        }
+        return
+      }
+
+      // Create Component: Cmd/Ctrl+Alt+K
+      if (isMod && e.altKey && e.key.toLowerCase() === 'k') {
+        const { selectedIds } = useCanvasStore.getState().selection
+        if (selectedIds.length === 1) {
+          e.preventDefault()
+          useDocumentStore.getState().makeReusable(selectedIds[0])
         }
         return
       }

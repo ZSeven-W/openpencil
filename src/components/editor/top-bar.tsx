@@ -96,8 +96,11 @@ export default function TopBar() {
 
     if (fileHandle) {
       writeToFileHandle(fileHandle, doc).then(() => store.markClean())
+    } else if (fn) {
+      downloadDocument(doc, fn)
+      store.markClean()
     } else if (supportsFileSystemAccess()) {
-      saveDocumentAs(doc, fn ?? 'untitled.pen').then((result) => {
+      saveDocumentAs(doc, 'untitled.pen').then((result) => {
         if (result) {
           useDocumentStore.setState({
             fileName: result.fileName,
@@ -106,9 +109,6 @@ export default function TopBar() {
           })
         }
       })
-    } else if (fn) {
-      downloadDocument(doc, fn)
-      store.markClean()
     } else {
       store.setSaveDialogOpen(true)
     }
