@@ -24,6 +24,7 @@ import {
   rotateDescendants,
   finalizeParentTransform,
   finalizeParentRotation,
+  collectDescendantIds,
 } from './parent-child-transform'
 import {
   isPenToolActive,
@@ -41,12 +42,14 @@ import {
   isLayoutDragActive,
 } from './layout-reorder'
 import { isEnterableContainer, resolveTargetAtDepth } from './selection-context'
-import { checkDragReparent } from './drag-reparent'
+import { checkDragReparent, checkDragReparentByBounds, checkReparentIntoFrame } from './drag-reparent'
 import {
   checkDragIntoTarget,
   commitDragInto,
   cancelDragInto,
   isDragIntoActive,
+  checkDragIntoTargetMulti,
+  commitDragIntoMulti,
 } from './drag-into-layout'
 
 function createNodeForTool(
@@ -452,6 +455,17 @@ export function useCanvasEvents() {
       // modification never creates a no-op undo entry.
       let preModificationDoc: PenDocument | null = null
 
+      // --- ActiveSelection descendant tracking ---
+      // When dragging an ActiveSelection, children of selected objects are
+      // separate Fabric objects (due to tree flattening) and are NOT part of
+      // the selection group. We track them here so they follow the group drag.
+      interface SelectionDescInfo {
+        initGroupLeft: number
+        initGroupTop: number
+        descendants: Map<string, { obj: FabricObjectWithPenId; initLeft: number; initTop: number }>
+      }
+      let selectionDragInfo: SelectionDescInfo | null = null
+
       // --- History batching for drag/resize/rotate ---
       let transformBatchActive = false
       let pendingBatchCloseRaf: number | null = null
@@ -520,8 +534,83 @@ export function useCanvasEvents() {
 
         // ActiveSelection move/scale/rotate: batch + final sync in object:modified.
         // Layout/parent-child single-node logic does not apply here.
+        // However, we must track descendants of selected objects so they
+        // visually follow the group during drag.
         if ('getObjects' in activeTarget) {
+          // Fix: if Fabric's _currentTransform targets a single object
+          // inside the selection (happens when handleSelection creates
+          // the ActiveSelection during selection:updated, after Fabric
+          // already set up the transform for the clicked single object),
+          // redirect the transform to the ActiveSelection so the whole
+          // group moves/scales/rotates together.
+          const ct = (canvas as unknown as { _currentTransform?: {
+            target: fabric.FabricObject
+            offsetX: number
+            offsetY: number
+            original?: Record<string, unknown>
+          } })._currentTransform
+          if (ct && ct.target !== activeTarget) {
+            const pointerEvt = opt.e as PointerEvent | undefined
+            if (pointerEvt) {
+              canvas.calcOffset()
+              const pointer = canvas.getScenePoint(pointerEvt)
+              ct.target = activeTarget
+              ct.offsetX = pointer.x - (activeTarget.left ?? 0)
+              ct.offsetY = pointer.y - (activeTarget.top ?? 0)
+              if (ct.original) {
+                ct.original = {
+                  ...ct.original,
+                  left: activeTarget.left,
+                  top: activeTarget.top,
+                  scaleX: activeTarget.scaleX,
+                  scaleY: activeTarget.scaleY,
+                }
+              }
+            }
+          }
+
           cancelLayoutDrag()
+
+          const group = activeTarget as fabric.ActiveSelection
+          const selObjs = group.getObjects() as FabricObjectWithPenId[]
+          const selIds = new Set(
+            selObjs.map((o) => o.penNodeId).filter(Boolean) as string[],
+          )
+
+          // Collect descendants of all selected objects that are NOT in the selection
+          const allCanvasObjs = canvas.getObjects() as FabricObjectWithPenId[]
+          const canvasObjMap = new Map(
+            allCanvasObjs.filter((o) => o.penNodeId).map((o) => [o.penNodeId!, o]),
+          )
+          const descendants = new Map<
+            string,
+            { obj: FabricObjectWithPenId; initLeft: number; initTop: number }
+          >()
+
+          for (const selObj of selObjs) {
+            if (!selObj.penNodeId) continue
+            for (const descId of collectDescendantIds(selObj.penNodeId)) {
+              if (selIds.has(descId) || descendants.has(descId)) continue
+              const descObj = canvasObjMap.get(descId)
+              if (descObj) {
+                descendants.set(descId, {
+                  obj: descObj,
+                  initLeft: descObj.left ?? 0,
+                  initTop: descObj.top ?? 0,
+                })
+              }
+            }
+          }
+
+          selectionDragInfo =
+            descendants.size > 0
+              ? {
+                  initGroupLeft: group.left ?? 0,
+                  initGroupTop: group.top ?? 0,
+                  descendants,
+                }
+              : null
+
           return
         }
 
@@ -555,6 +644,7 @@ export function useCanvasEvents() {
         // commit and cleanup.  In Fabric.js v7 mouse:up can fire before
         // object:modified, which would clear the session prematurely.
         endParentDrag()
+        selectionDragInfo = null
 
         // Defer batch close one frame so object:modified can run first.
         if (transformBatchActive) {
@@ -599,14 +689,25 @@ export function useCanvasEvents() {
         setFabricSyncLock(false)
       }
 
+      /** Absolute bounds for each child computed during syncSelectionToStore. */
+      interface ChildAbsBounds {
+        nodeId: string
+        x: number
+        y: number
+        w: number
+        h: number
+      }
+
       /**
        * Resolve the absolute position of each child inside an ActiveSelection
        * and sync every child to the document store.
+       * Returns an array of absolute bounds (for subsequent reparent checks).
        */
       const syncSelectionToStore = (
         target: fabric.FabricObject,
-      ) => {
-        if (!('getObjects' in target)) return
+      ): ChildAbsBounds[] => {
+        const boundsOut: ChildAbsBounds[] = []
+        if (!('getObjects' in target)) return boundsOut
         const group = target as fabric.ActiveSelection
         const groupMatrix = group.calcTransformMatrix()
 
@@ -641,23 +742,32 @@ export function useCanvasEvents() {
           const scaleX = child.scaleX ?? 1
           const scaleY = child.scaleY ?? 1
 
+          const absW = (child.width ?? 0) * scaleX
+          const absH = (child.height ?? 0) * scaleY
+
           const updates: Partial<PenNode> = {
             x: absLeft - offsetX,
             y: absTop - offsetY,
             rotation: child.angle ?? 0,
           }
           if (child.width !== undefined) {
-            ;(updates as Record<string, unknown>).width =
-              child.width * scaleX
+            ;(updates as Record<string, unknown>).width = absW
           }
           if (child.height !== undefined) {
-            ;(updates as Record<string, unknown>).height =
-              child.height * scaleY
+            ;(updates as Record<string, unknown>).height = absH
           }
 
           useDocumentStore.getState().updateNode(obj.penNodeId, updates)
+          boundsOut.push({
+            nodeId: obj.penNodeId,
+            x: absLeft,
+            y: absTop,
+            w: absW,
+            h: absH,
+          })
         }
         setFabricSyncLock(false)
+        return boundsOut
       }
 
       // Real-time sync during drag / resize / rotate (locked to prevent circular sync)
@@ -670,6 +780,12 @@ export function useCanvasEvents() {
           clipPathsCleared = true
           const movingObj = opt.target as FabricObjectWithPenId
           if (movingObj.clipPath) movingObj.clipPath = undefined
+          // Clear clip paths on objects INSIDE the ActiveSelection
+          if ('getObjects' in opt.target) {
+            for (const child of (opt.target as fabric.ActiveSelection).getObjects()) {
+              if (child.clipPath) child.clipPath = undefined
+            }
+          }
           // Also clear descendants' clip paths
           const session = getActiveDragSession()
           if (session) {
@@ -677,6 +793,46 @@ export function useCanvasEvents() {
               if (descObj.clipPath) descObj.clipPath = undefined
             }
           }
+          // Clear clip paths on ActiveSelection descendants too
+          if (selectionDragInfo) {
+            for (const [, { obj }] of selectionDragInfo.descendants) {
+              if (obj.clipPath) obj.clipPath = undefined
+            }
+          }
+        }
+
+        // ActiveSelection drag: snap + move descendants + drag-into detection
+        if ('getObjects' in opt.target) {
+          const group = opt.target as fabric.ActiveSelection
+
+          // Smart guides + snapping for the whole selection bounding box
+          calculateAndSnap(opt.target, canvas)
+
+          // Move descendants based on the (possibly snapped) group position
+          if (selectionDragInfo) {
+            const deltaX = (group.left ?? 0) - selectionDragInfo.initGroupLeft
+            const deltaY = (group.top ?? 0) - selectionDragInfo.initGroupTop
+            for (const [, { obj, initLeft, initTop }] of selectionDragInfo.descendants) {
+              obj.set({ left: initLeft + deltaX, top: initTop + deltaY })
+              obj.setCoords()
+            }
+          }
+
+          // Drag-into layout container detection (using selection center)
+          const selObjs = group.getObjects() as FabricObjectWithPenId[]
+          const selNodeIds = selObjs
+            .map((o) => o.penNodeId)
+            .filter(Boolean) as string[]
+          // ActiveSelection uses center origin — left/top IS the center
+          const cx = group.originX === 'center'
+            ? (group.left ?? 0)
+            : (group.left ?? 0) + ((group.width ?? 0) * (group.scaleX ?? 1)) / 2
+          const cy = group.originY === 'center'
+            ? (group.top ?? 0)
+            : (group.top ?? 0) + ((group.height ?? 0) * (group.scaleY ?? 1)) / 2
+          checkDragIntoTargetMulti(cx, cy, selNodeIds, canvas)
+
+          return
         }
 
         if (isLayoutDragActive()) {
@@ -717,7 +873,14 @@ export function useCanvasEvents() {
       // click-to-select without modification never creates a no-op undo
       // entry.  We use the pre-modification snapshot captured in mouse:down
       // as the batch base to guarantee a correct undo point.
+      let inModifiedHandler = false
       canvas.on('object:modified', (opt) => {
+        // Guard against re-entry: discardActiveObject() fires
+        // _finalizeCurrentTransform → object:modified recursively.
+        if (inModifiedHandler) return
+        inModifiedHandler = true
+        try {
+
         if (pendingBatchCloseRaf !== null) {
           cancelAnimationFrame(pendingBatchCloseRaf)
           pendingBatchCloseRaf = null
@@ -737,6 +900,9 @@ export function useCanvasEvents() {
         if (needsBatch) {
           useHistoryStore.getState().startBatch(baseDoc)
         }
+
+        let isSelectionModification = false
+        let selectionReparented = false
 
         try {
         // Single object -- bake scale and sync
@@ -798,7 +964,22 @@ export function useCanvasEvents() {
           }
 
           // Check if the node was dragged out of / into a root frame
-          if (checkDragReparent(asPen)) {
+          const didReparentOut = checkDragReparent(asPen)
+          // Fallback: check if a root-level node should be reparented INTO a frame
+          const didReparentIn = !didReparentOut && asPen.penNodeId
+            ? (() => {
+                setFabricSyncLock(true)
+                const result = checkReparentIntoFrame(asPen.penNodeId!, {
+                  x: asPen.left ?? 0,
+                  y: asPen.top ?? 0,
+                  w: (asPen.width ?? 0) * (asPen.scaleX ?? 1),
+                  h: (asPen.height ?? 0) * (asPen.scaleY ?? 1),
+                })
+                setFabricSyncLock(false)
+                return result
+              })()
+            : false
+          if (didReparentOut || didReparentIn) {
             // Force re-sync since tree structure changed
             rebuildNodeRenderInfo()
             const doc = useDocumentStore.getState().document
@@ -807,6 +988,7 @@ export function useCanvasEvents() {
             })
           }
         } else if ('getObjects' in target) {
+          isSelectionModification = true
           // ActiveSelection -- bake scale per child, then sync all
           const group = target as fabric.ActiveSelection
           for (const child of group.getObjects()) {
@@ -825,7 +1007,42 @@ export function useCanvasEvents() {
             }
             child.setCoords()
           }
-          syncSelectionToStore(target)
+          // Drag-into container: reparent all selected objects
+          if (isDragIntoActive()) {
+            canvas.discardActiveObject()
+            commitDragIntoMulti(canvas)
+            rebuildNodeRenderInfo()
+            closeTransformBatch()
+            return
+          }
+
+          const childBounds = syncSelectionToStore(target)
+
+          // Check reparenting for each child based on final positions:
+          // 1. Objects with a parent that are dragged completely outside → detach
+          // 2. Root-level objects whose center is inside a frame → reparent into it
+          let anyReparented = false
+          const selNodeIdSet = new Set(childBounds.map((b) => b.nodeId))
+          setFabricSyncLock(true)
+          for (const b of childBounds) {
+            const bounds = { x: b.x, y: b.y, w: b.w, h: b.h }
+            if (checkDragReparentByBounds(b.nodeId, bounds)) {
+              anyReparented = true
+            } else if (
+              checkReparentIntoFrame(b.nodeId, bounds, selNodeIdSet)
+            ) {
+              anyReparented = true
+            }
+          }
+          setFabricSyncLock(false)
+
+          if (anyReparented) {
+            // Tree structure changed — force full re-sync after the
+            // ActiveSelection is disbanded so clip paths and positions
+            // are recomputed correctly.
+            isSelectionModification = false
+            selectionReparented = true
+          }
         }
 
         // Safety cleanup: clear any leftover drag-into session that wasn't
@@ -841,13 +1058,39 @@ export function useCanvasEvents() {
         // Force re-sync so clip paths (which use absolute coordinates) are
         // recomputed from the new node positions.  Without this, children of
         // a dragged frame stay clipped to the old parent frame bounds.
+        // Skip the forced setState for ActiveSelection modifications — the
+        // positions were already written by syncSelectionToStore(), and
+        // re-syncing absolute coords onto group-relative objects would undo
+        // the move.
         rebuildNodeRenderInfo()
-        const currentDoc = useDocumentStore.getState().document
-        useDocumentStore.setState({
-          document: { ...currentDoc, children: [...currentDoc.children] },
-        })
+        if (selectionReparented) {
+          // Disband the ActiveSelection so objects become individual canvas
+          // items.  Then defer the full re-sync to the next frame — Fabric
+          // needs a render cycle to fully restore the objects' transforms
+          // and properties from the disbanded group.  Without this delay,
+          // the subscriber re-syncs while objects are in a transitional
+          // state and visual properties (fill, clip paths) get lost.
+          canvas.discardActiveObject()
+          canvas.requestRenderAll()
+          requestAnimationFrame(() => {
+            rebuildNodeRenderInfo()
+            const doc = useDocumentStore.getState().document
+            useDocumentStore.setState({
+              document: { ...doc, children: [...doc.children] },
+            })
+          })
+        } else if (!isSelectionModification) {
+          const currentDoc = useDocumentStore.getState().document
+          useDocumentStore.setState({
+            document: { ...currentDoc, children: [...currentDoc.children] },
+          })
+        }
 
         closeTransformBatch()
+
+        } finally {
+          inModifiedHandler = false
+        }
       })
 
       // --- Text editing: sync edited content back to document store ---

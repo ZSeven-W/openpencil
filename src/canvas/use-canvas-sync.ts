@@ -579,6 +579,12 @@ export function useCanvasSync() {
         let obj: FabricObjectWithPenId | undefined
         const existingObj = objMap.get(node.id)
         if (existingObj) {
+          // Skip objects inside an ActiveSelection — their left/top are
+          // group-relative, not absolute.  Setting absolute values from
+          // the store would move them to wrong positions (snap-back bug).
+          if (existingObj.group instanceof fabric.ActiveSelection) {
+            continue
+          }
           syncFabricObject(existingObj, node)
           obj = existingObj
         } else {
