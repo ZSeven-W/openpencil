@@ -5,7 +5,7 @@ import type { ToolType } from '@/types/canvas'
 
 // Precise crosshair cursor (thin +)
 const CROSSHAIR_CURSOR = (() => {
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"><line x1="12" y1="2" x2="12" y2="10" stroke="%23222" stroke-width="1"/><line x1="12" y1="14" x2="12" y2="22" stroke="%23222" stroke-width="1"/><line x1="2" y1="12" x2="10" y2="12" stroke="%23222" stroke-width="1"/><line x1="14" y1="12" x2="22" y2="12" stroke="%23222" stroke-width="1"/></svg>`
+  const svg = `<svg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24'><line x1='12' y1='2' x2='12' y2='10' stroke='%23222' stroke-width='1'/><line x1='12' y1='14' x2='12' y2='22' stroke='%23222' stroke-width='1'/><line x1='2' y1='12' x2='10' y2='12' stroke='%23222' stroke-width='1'/><line x1='14' y1='12' x2='22' y2='12' stroke='%23222' stroke-width='1'/></svg>`
   return `url("data:image/svg+xml,${svg}") 12 12, crosshair`
 })()
 
