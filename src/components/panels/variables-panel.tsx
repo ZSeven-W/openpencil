@@ -240,7 +240,7 @@ export default function VariablesPanel() {
       <div className="absolute inset-0 bg-card/95 backdrop-blur-sm border border-border/80 rounded-2xl shadow-2xl pointer-events-none" />
 
       {/* ── Header: Theme-1 | Theme-2 | ... | + | spacer | X ── */}
-      <div className="relative h-11 flex items-center px-4 shrink-0 gap-1 z-10">
+      <div className="relative h-11 flex items-center px-4 shrink-0 gap-1 z-20">
         {/* Theme tabs — all equal, active one has chevron dropdown */}
         {themeAxes.map((axis) => (
           <div key={axis} className="relative shrink-0" ref={activeThemeMenu === axis ? themeMenuRef : undefined}>
