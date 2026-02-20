@@ -125,7 +125,13 @@ DESIGN GUIDELINES:
 - Consistent color palette
 - Use path nodes for icons (SVG d path data). Size icons 16-24px. Preserve the natural aspect ratio of the SVG path — do NOT force all icons to square
 - Use image nodes for photos/illustrations with picsum.photos placeholder URLs
-- Buttons, nav items, and list items should include icons when appropriate for better UX`
+- Buttons, nav items, and list items should include icons when appropriate for better UX
+
+DESIGN VARIABLES:
+- When the user message includes a DOCUMENT VARIABLES section, use "$variableName" references instead of hardcoded values wherever a matching variable exists.
+- Color variables: use in fill color, stroke color, shadow color. Example: [{ "type": "solid", "color": "$primary" }]
+- Number variables: use for gap, padding, opacity. Example: "gap": "$spacing-md"
+- Only reference variables that are listed — do NOT invent new variable names.`
 
 export const DESIGN_GENERATOR_PROMPT = `You are a PenNode JSON generation engine. Your ONLY job is to convert design descriptions into PenNode JSON.
 
@@ -183,6 +189,13 @@ VISUAL QUALITY GUARDRAILS:
 - Avoid oversized decorations outside the root frame (max ~10% bleed allowed)
 - Do not use emoji in headings or body copy unless the user explicitly asks for it
 
+DESIGN VARIABLES:
+- When the user message includes a DOCUMENT VARIABLES section, use "$variableName" references instead of hardcoded values wherever a matching variable exists.
+- Color variables: use in fill color, stroke color, shadow color. Example: [{ "type": "solid", "color": "$primary" }]
+- Number variables: use for gap, padding, opacity. Example: "gap": "$spacing-md"
+- Only reference variables that are listed — do NOT invent new variable names.
+- If no variables are provided, use hardcoded values as usual.
+
 Design like a professional: visual hierarchy, contrast, whitespace, consistent palette, purposeful iconography.`
 
 export const CODE_GENERATOR_PROMPT = `You are a code generation engine for OpenPencil. Convert PenNode design descriptions into clean, production-ready code.
@@ -214,6 +227,7 @@ RULES:
 - PRESERVE IDs: The most important rule. If you return a node with a new ID, it will be treated as a new object. To update, you MUST match the input ID.
 - PARTIAL UPDATES: You can return the full node object with updated fields.
 - DO NOT CHANGE UNRELATED PROPS: If the user says "change color", do not change the x/y position unless necessary.
+- DESIGN VARIABLES: When the user message includes a DOCUMENT VARIABLES section, prefer "$variableName" references over hardcoded values for matching properties. Only reference listed variables.
 
 RESPONSE FORMAT:
 1. <step title="Checking guidelines">...</step>

@@ -1,4 +1,5 @@
 import type { PenNode } from '@/types/pen'
+import type { VariableDefinition, ThemedValue } from '@/types/variables'
 import type { AIDesignRequest } from './ai-types'
 import { streamChat } from './ai-service'
 import { DESIGN_GENERATOR_PROMPT, DESIGN_MODIFIER_PROMPT } from './ai-prompts'
@@ -78,10 +79,46 @@ function buildContextMessage(request: AIDesignRequest): string {
     message += `\n\nCurrent document: ${request.context.documentSummary}`
   }
 
+  // Append variable context so AI can use $variable references
+  const varContext = buildVariableContext(request.context?.variables, request.context?.themes)
+  if (varContext) {
+    message += `\n\n${varContext}`
+  }
+
   // FORCE override to prevent tool usage
   message += `\n\nIMPORTANT: You remain in DIRECT RESPONSE MODE. Do NOT use the "Write" tool or any other function. I cannot see tool outputs. Just write the JSON response directly.`
 
   return message
+}
+
+/** Build a concise summary of document variables for AI context. */
+function buildVariableContext(
+  variables?: Record<string, VariableDefinition>,
+  themes?: Record<string, string[]>,
+): string | null {
+  if (!variables || Object.keys(variables).length === 0) return null
+
+  const lines: string[] = ['DOCUMENT VARIABLES (use "$name" to reference, e.g. fill color "$color-1"):']
+
+  for (const [name, def] of Object.entries(variables)) {
+    const val = def.value
+    if (Array.isArray(val)) {
+      // Themed variable — show default value
+      const defaultVal = (val as ThemedValue[])[0]?.value ?? '?'
+      lines.push(`  - ${name} (${def.type}): ${defaultVal} [themed]`)
+    } else {
+      lines.push(`  - ${name} (${def.type}): ${val}`)
+    }
+  }
+
+  if (themes && Object.keys(themes).length > 0) {
+    const themeSummary = Object.entries(themes)
+      .map(([axis, values]) => `${axis}: [${values.join(', ')}]`)
+      .join('; ')
+    lines.push(`Themes: ${themeSummary}`)
+  }
+
+  return lines.join('\n')
 }
 
 /**
@@ -259,6 +296,10 @@ function tryParseNodes(json: string): PenNode[] | null {
 export async function generateDesignModification(
   nodesToModify: PenNode[],
   instruction: string,
+  options?: {
+    variables?: Record<string, VariableDefinition>
+    themes?: Record<string, string[]>
+  },
 ): Promise<{ nodes: PenNode[]; rawResponse: string }> {
   // Build context from selected nodes
   const contextJson = JSON.stringify(nodesToModify, (_key, value) => {
@@ -267,7 +308,13 @@ export async function generateDesignModification(
   })
 
   // We use standard string concatenation to avoid backtick issues in tool calls
-  const userMessage = "CONTEXT NODES:\n" + contextJson + "\n\nINSTRUCTION:\n" + instruction
+  let userMessage = "CONTEXT NODES:\n" + contextJson + "\n\nINSTRUCTION:\n" + instruction
+
+  // Append variable context so AI can use $variable references
+  const varContext = buildVariableContext(options?.variables, options?.themes)
+  if (varContext) {
+    userMessage += "\n\n" + varContext
+  }
   let fullResponse = ''
   let streamError: string | null = null
 
