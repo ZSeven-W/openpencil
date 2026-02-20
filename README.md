@@ -76,6 +76,12 @@ Open-source vector design tool with a Design-as-Code philosophy. An alternative 
 - Dual provider: Anthropic API or local Claude Code (OAuth)
 - Multi-provider settings: Claude Code, Codex CLI
 
+### Editor UI
+
+- Dark / light theme toggle (persisted to localStorage)
+- Fullscreen mode
+- Draggable, snap-to-corner AI chat panel
+
 ### Keyboard Shortcuts
 
 | Shortcut | Action |
@@ -86,6 +92,7 @@ Open-source vector design tool with a Design-as-Code philosophy. An alternative 
 | L | Line |
 | T | Text |
 | F | Frame |
+| P | Path (pen tool) |
 | H | Hand (pan) |
 | Cmd+A | Select all |
 | Cmd+Z | Undo |
@@ -97,6 +104,7 @@ Open-source vector design tool with a Design-as-Code philosophy. An alternative 
 | Cmd+Shift+E | Export |
 | Cmd+Shift+C | Code panel |
 | Cmd+J | AI chat |
+| Cmd+, | Agent settings |
 | Delete/Backspace | Delete selected |
 | Arrow keys | Nudge (1px, +Shift = 10px) |
 | [ / ] | Reorder layers |
@@ -165,8 +173,9 @@ src/
   components/
     editor/            # Editor layout, toolbar, tool buttons, status bar
     panels/            # Layer panel, property panel (15 files), AI chat, code panel
-    shared/            # ColorPicker, NumberInput, ExportDialog, IconPickerDialog, etc.
-    ui/                # shadcn/ui primitives (Button, Select, Slider, etc.)
+    shared/            # ColorPicker, NumberInput, ExportDialog, AgentSettingsDialog, etc.
+    icons/             # Provider logos (Claude, OpenAI)
+    ui/                # shadcn/ui primitives (Button, Select, Slider, Switch, etc.)
   hooks/               # Keyboard shortcuts
   lib/                 # Utility functions (cn class merging)
   services/

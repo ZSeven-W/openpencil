@@ -61,6 +61,13 @@ export function useKeyboardShortcuts() {
         if (prev) {
           useDocumentStore.getState().applyHistoryState(prev)
         }
+        // Deselect so Fabric re-renders objects at their restored dimensions
+        useCanvasStore.getState().clearSelection()
+        const canvas = useCanvasStore.getState().fabricCanvas
+        if (canvas) {
+          canvas.discardActiveObject()
+          canvas.requestRenderAll()
+        }
         return
       }
 
@@ -71,6 +78,12 @@ export function useKeyboardShortcuts() {
         const next = useHistoryStore.getState().redo(currentDoc)
         if (next) {
           useDocumentStore.getState().applyHistoryState(next)
+        }
+        useCanvasStore.getState().clearSelection()
+        const canvas = useCanvasStore.getState().fabricCanvas
+        if (canvas) {
+          canvas.discardActiveObject()
+          canvas.requestRenderAll()
         }
         return
       }

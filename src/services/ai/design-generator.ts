@@ -171,11 +171,20 @@ export async function generateDesign(
     useHistoryStore.getState().startBatch(useDocumentStore.getState().document)
   }
 
+  let isThinking = false
+
   try {
   for await (const chunk of streamChat(DESIGN_GENERATOR_PROMPT, [
     { role: 'user', content: userMessage },
   ], undefined, DESIGN_STREAM_TIMEOUTS)) {
-    if (chunk.type === 'text') {
+    if (chunk.type === 'thinking') {
+      // Show a "Thinking" step so the UI isn't stuck on the empty indicator
+      if (!isThinking && !fullResponse) {
+        isThinking = true
+        callbacks?.onTextUpdate?.('<step title="Thinking">Analyzing your design request...</step>')
+      }
+    } else if (chunk.type === 'text') {
+      isThinking = false
       fullResponse += chunk.content
       if (callbacks?.onTextUpdate) {
         callbacks.onTextUpdate(fullResponse)
@@ -265,7 +274,9 @@ export async function generateDesignModification(
   for await (const chunk of streamChat(DESIGN_MODIFIER_PROMPT, [
     { role: 'user', content: userMessage },
   ], undefined, DESIGN_STREAM_TIMEOUTS)) {
-    if (chunk.type === 'text') {
+    if (chunk.type === 'thinking') {
+      // Ignore thinking chunks for modification — caller already shows progress
+    } else if (chunk.type === 'text') {
       fullResponse += chunk.content
     } else if (chunk.type === 'error') {
       streamError = chunk.content
