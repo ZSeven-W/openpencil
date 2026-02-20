@@ -4,6 +4,7 @@ interface ChatBody {
   system: string
   messages: Array<{ role: 'user' | 'assistant'; content: string }>
   model?: string
+  provider?: string
 }
 
 /**
@@ -25,6 +26,12 @@ export default defineEventHandler(async (event) => {
     Connection: 'keep-alive',
   })
 
+  // Explicit provider routing
+  if (body.provider === 'opencode') {
+    return streamViaOpenCode(body, body.model)
+  }
+
+  // Default: existing behavior (backward-compatible)
   const apiKey = process.env.ANTHROPIC_API_KEY
   if (apiKey) {
     try {
@@ -164,6 +171,92 @@ function streamViaAgentSDK(body: ChatBody, model?: string) {
           encoder.encode(`data: ${JSON.stringify({ type: 'error', content })}\n\n`),
         )
       } finally {
+        clearInterval(pingTimer)
+        controller.close()
+      }
+    },
+  })
+
+  return new Response(stream)
+}
+
+/** Parse an OpenCode model string ("providerID/modelID") into its parts */
+function parseOpenCodeModel(model?: string): { providerID: string; modelID: string } | undefined {
+  if (!model || !model.includes('/')) return undefined
+  const idx = model.indexOf('/')
+  return { providerID: model.slice(0, idx), modelID: model.slice(idx + 1) }
+}
+
+/** Stream via OpenCode SDK (connects to a running OpenCode server) */
+function streamViaOpenCode(body: ChatBody, model?: string) {
+  const stream = new ReadableStream({
+    async start(controller) {
+      const encoder = new TextEncoder()
+      const pingTimer = setInterval(() => {
+        try {
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: 'ping', content: '' })}\n\n`))
+        } catch { /* stream already closed */ }
+      }, KEEPALIVE_INTERVAL_MS)
+
+      let ocServer: { close(): void } | undefined
+      try {
+        const { createOpencode } = await import('@opencode-ai/sdk/v2')
+        const oc = await createOpencode()
+        ocServer = oc.server
+
+        // Create a session for this conversation
+        const { data: session, error: sessionError } = await oc.client.session.create({
+          title: 'OpenPencil Chat',
+        })
+        if (sessionError || !session) {
+          throw new Error('Failed to create OpenCode session')
+        }
+
+        // Inject system prompt as context (no AI reply)
+        await oc.client.session.prompt({
+          sessionID: session.id,
+          noReply: true,
+          parts: [{ type: 'text', text: body.system }],
+        })
+
+        // Build prompt from the last user message
+        const lastUserMsg = [...body.messages].reverse().find((m) => m.role === 'user')
+        const prompt = lastUserMsg?.content ?? ''
+
+        const parsed = parseOpenCodeModel(model)
+
+        // Send prompt and await full response
+        const { data: result, error: promptError } = await oc.client.session.prompt({
+          sessionID: session.id,
+          ...(parsed ? { model: parsed } : {}),
+          parts: [{ type: 'text', text: prompt }],
+        })
+
+        if (promptError) {
+          throw new Error('OpenCode prompt failed')
+        }
+
+        // Extract text from response parts
+        clearInterval(pingTimer)
+        if (result?.parts) {
+          for (const part of result.parts) {
+            if (part.type === 'text' && 'text' in part) {
+              const data = JSON.stringify({ type: 'text', content: part.text })
+              controller.enqueue(encoder.encode(`data: ${data}\n\n`))
+            }
+          }
+        }
+
+        controller.enqueue(
+          encoder.encode(`data: ${JSON.stringify({ type: 'done', content: '' })}\n\n`),
+        )
+      } catch (error) {
+        const content = error instanceof Error ? error.message : 'Unknown error'
+        controller.enqueue(
+          encoder.encode(`data: ${JSON.stringify({ type: 'error', content })}\n\n`),
+        )
+      } finally {
+        ocServer?.close()
         clearInterval(pingTimer)
         controller.close()
       }

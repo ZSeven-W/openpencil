@@ -8,11 +8,12 @@ import { useAgentSettingsStore } from '@/stores/agent-settings-store'
 import type { AIProviderType, GroupedModel } from '@/types/agent-settings'
 import ClaudeLogo from '@/components/icons/claude-logo'
 import OpenAILogo from '@/components/icons/openai-logo'
+import OpenCodeLogo from '@/components/icons/opencode-logo'
 
 /** Provider display metadata */
 const PROVIDER_META: Record<
   AIProviderType,
-  { label: string; description: string; agent: 'claude-code' | 'codex-cli'; Icon: ComponentType<SVGProps<SVGSVGElement>> }
+  { label: string; description: string; agent: 'claude-code' | 'codex-cli' | 'opencode'; Icon: ComponentType<SVGProps<SVGSVGElement>> }
 > = {
   anthropic: {
     label: 'Claude Code',
@@ -26,10 +27,16 @@ const PROVIDER_META: Record<
     agent: 'codex-cli',
     Icon: OpenAILogo,
   },
+  opencode: {
+    label: 'OpenCode',
+    description: 'Connect to local OpenCode server to use 75+ LLM providers',
+    agent: 'opencode',
+    Icon: OpenCodeLogo,
+  },
 }
 
 async function connectAgent(
-  agent: 'claude-code' | 'codex-cli',
+  agent: 'claude-code' | 'codex-cli' | 'opencode',
 ): Promise<{ connected: boolean; models: GroupedModel[]; error?: string }> {
   try {
     const res = await fetch('/api/ai/connect-agent', {
@@ -194,6 +201,7 @@ export default function AgentSettingsDialog() {
           <div className="space-y-2">
             <ProviderCard type="anthropic" />
             <ProviderCard type="openai" />
+            <ProviderCard type="opencode" />
           </div>
         </div>
 

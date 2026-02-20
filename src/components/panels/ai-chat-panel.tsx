@@ -23,11 +23,13 @@ import type { ChatMessage as ChatMessageType } from '@/services/ai/ai-types'
 import type { AIProviderType } from '@/types/agent-settings'
 import ClaudeLogo from '@/components/icons/claude-logo'
 import OpenAILogo from '@/components/icons/openai-logo'
+import OpenCodeLogo from '@/components/icons/opencode-logo'
 import ChatMessage from './chat-message'
 
 const PROVIDER_ICON: Record<AIProviderType, typeof ClaudeLogo> = {
   anthropic: ClaudeLogo,
   openai: OpenAILogo,
+  opencode: OpenCodeLogo,
 }
 
 const QUICK_ACTIONS = [
@@ -221,8 +223,12 @@ function useChatHandlers() {
         } else {
             // --- CHAT MODE ---
             chatHistory.push({ role: 'user', content: fullUserMessage })
+            // Resolve which provider the currently selected model belongs to
+            const currentProvider = useAIStore.getState().modelGroups.find((g) =>
+              g.models.some((m) => m.value === model),
+            )?.provider
             let chatThinking = false
-            for await (const chunk of streamChat(CHAT_SYSTEM_PROMPT, chatHistory, model)) {
+            for await (const chunk of streamChat(CHAT_SYSTEM_PROMPT, chatHistory, model, undefined, currentProvider)) {
                if (chunk.type === 'thinking') {
                  // Show a brief thinking indicator so the UI isn't stuck on empty
                  if (!chatThinking && !accumulated) {
@@ -343,6 +349,7 @@ export default function AIChatPanel() {
       const providerNames: Record<AIProviderType, string> = {
         anthropic: 'Anthropic',
         openai: 'OpenAI',
+        opencode: 'OpenCode',
       }
       const groups = connectedProviders.map((p) => ({
         provider: p,
