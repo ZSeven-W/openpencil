@@ -1,5 +1,5 @@
 import React, { useState, useMemo, type ReactNode } from 'react'
-import { Copy, Check, Wand2, ChevronDown, ScanSearch, FileJson, ListOrdered, Palette, LayoutTemplate } from 'lucide-react'
+import { Copy, Check, Wand2, ChevronDown } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 
@@ -46,46 +46,122 @@ function stripToolCallXml(text: string): string {
   return cleaned.trim()
 }
 
-/** Check if a line is a step action */
-function isActionStep(line: string): boolean {
-  return /<step.*<\/step>/.test(line) || line.trim().startsWith('<step')
+interface ParsedStep {
+  title: string
+  content: string
 }
 
-function parseStepTitle(step: string): string {
-  const match = step.match(/title="([^"]+)"/)
-  return match ? match[1] : 'Processing'
+const DESIGN_PIPELINE_TASKS = [
+  'Create sidebar navigation with mission control sections',
+  'Add system status panel with telemetry data',
+  'Build main header with launch controls',
+  'Create mission metrics cards row',
+  'Add rocket visualization with futuristic image',
+  'Build launch sequence panel',
+  'Add mission timeline/countdown section',
+  'Final spacing and visual consistency pass',
+]
+
+function parseStepBlocks(text: string, isStreaming?: boolean): ParsedStep[] {
+  const stepRegex = /<step(?:[^>]*title="([^"]+)")?[^>]*>([\s\S]*?)<\/step>/gi
+  const parsed: ParsedStep[] = []
+  let match: RegExpExecArray | null
+
+  while ((match = stepRegex.exec(text)) !== null) {
+    parsed.push({
+      title: (match[1] ?? 'Processing').trim() || 'Processing',
+      content: (match[2] ?? '').trim(),
+    })
+  }
+
+  const lastOpen = text.lastIndexOf('<step')
+  const lastClose = text.lastIndexOf('</step>')
+  if (isStreaming && lastOpen > lastClose) {
+    const partial = text.slice(lastOpen)
+    const titleMatch = partial.match(/title="([^"]+)"/i)
+    const contentStart = partial.indexOf('>')
+    parsed.push({
+      title: (titleMatch?.[1] ?? 'Design').trim() || 'Design',
+      content:
+        contentStart >= 0
+          ? partial
+              .slice(contentStart + 1)
+              .replace(/<\/step>$/i, '')
+              .trim()
+          : '',
+    })
+  }
+
+  return parsed
 }
 
-function parseStepContent(step: string): string {
-  return step.replace(/<step[^>]*>/, '').replace(/<\/step>/, '').trim()
+function stripStepBlocks(text: string): string {
+  return text
+    .replace(/<step(?:[^>]*title="[^"]*")?[^>]*>[\s\S]*?<\/step>/gi, '')
+    .replace(/<step(?:[^>]*title="[^"]*")?[^>]*>[\s\S]*$/gi, '')
+    .trim()
+}
+
+function countDesignJsonBlocks(text: string): number {
+  const blockRegex = /```(?:json)?\s*([\s\S]*?)```/gi
+  let count = 0
+  let match: RegExpExecArray | null
+  while ((match = blockRegex.exec(text)) !== null) {
+    if (isDesignJson(match[1])) count += 1
+  }
+  return count
+}
+
+function buildPipelineProgress(
+  steps: ParsedStep[],
+  jsonBlockCount: number,
+  isStreaming: boolean,
+  isApplied: boolean,
+  hasError: boolean,
+): Array<{ label: string; done: boolean; active: boolean }> {
+  const hasTerminalResult = !isStreaming && !hasError && (isApplied || jsonBlockCount > 0)
+  if (hasTerminalResult) {
+    return DESIGN_PIPELINE_TASKS.map((label) => ({ label, done: true, active: false }))
+  }
+
+  const lowerTitles = new Set(steps.map((s) => s.title.toLowerCase()))
+  const hasGuidelines = [...lowerTitles].some((t) => t.includes('guidelines'))
+  const hasEditorState = [...lowerTitles].some((t) => t.includes('editor state') || t.includes('state'))
+  const hasStyleGuide = [...lowerTitles].some((t) => t.includes('styleguide') || t.includes('style guide'))
+
+  const doneCount = Math.min(
+    DESIGN_PIPELINE_TASKS.length,
+    (hasGuidelines ? 1 : 0) +
+      (hasEditorState ? 1 : 0) +
+      (hasStyleGuide ? 1 : 0) +
+      Math.min(4, jsonBlockCount) +
+      (isApplied ? 1 : 0),
+  )
+
+  return DESIGN_PIPELINE_TASKS.map((label, index) => {
+    const done = index < doneCount
+    const active = isStreaming && !done && index === doneCount
+    return { label, done, active }
+  })
 }
 
 /** Component for rendering a list of action steps as accordions */
-function ActionSteps({ steps }: { steps: string[] }) {
+function ActionSteps({ steps, isStreaming }: { steps: ParsedStep[]; isStreaming?: boolean }) {
   if (steps.length === 0) return null
-  
+
   return (
     <div className="flex flex-col gap-1 w-full">
       {steps.map((step, i) => {
-        const title = parseStepTitle(step)
-        const content = parseStepContent(step)
-        const isDesign = title.toLowerCase() === 'design'
-        
-        // Icon mapping based on step title
-        let Icon = ScanSearch
-        if (title.toLowerCase().includes('guidelines')) Icon = FileJson
-        if (title.toLowerCase().includes('state')) Icon = ListOrdered
-        if (title.toLowerCase().includes('styleguide')) Icon = Palette
-        if (isDesign) Icon = LayoutTemplate
-
+        const isDone = !isStreaming || i < steps.length - 1
+        const isActive = !!isStreaming && i === steps.length - 1
         return (
-          <ActionStepItem 
-            key={i} 
-            title={title} 
-            content={content} 
-            icon={Icon}
-            defaultOpen={isDesign}
-            isLast={i === steps.length - 1}
+          <ActionStepItem
+            key={`${step.title}-${i}`}
+            title={step.title}
+            content={step.content}
+            defaultOpen={isActive}
+            isDone={isDone}
+            isActive={isActive}
           />
         )
       })}
@@ -93,69 +169,102 @@ function ActionSteps({ steps }: { steps: string[] }) {
   )
 }
 
-function ActionStepItem({ 
-  title, 
-  content, 
-  icon: _Icon, 
+function ActionStepItem({
+  title,
+  content,
   defaultOpen = false,
-  isLast 
-}: { 
+  isDone,
+  isActive,
+}: {
   title: string
   content: string
-  icon: any
-  defaultOpen?: boolean 
-  isLast?: boolean
+  defaultOpen?: boolean
+  isDone: boolean
+  isActive: boolean
 }) {
   const [isOpen, setIsOpen] = useState(defaultOpen)
 
-  // Pencil-like style: Rounded pill/card with subtle border
   return (
     <div className="group">
-      <button 
+      <button
         onClick={() => setIsOpen(!isOpen)}
         className={cn(
-          "flex items-center justify-between w-full px-3 py-2 text-left transition-all rounded-md border",
-          isOpen 
-            ? "bg-secondary/40 border-border/60" 
-            : "bg-background/40 hover:bg-secondary/20 border-border/30 hover:border-border/50"
+          'flex items-center justify-between w-full px-3 py-2 text-left transition-all rounded-md border',
+          isOpen
+            ? 'bg-secondary/40 border-border/60'
+            : 'bg-background/40 hover:bg-secondary/20 border-border/30 hover:border-border/50',
         )}
       >
         <div className="flex items-center gap-2.5 overflow-hidden">
-           {/* Status Icon - Pencil puts it on the right usually, but we can keep left for flow or move right */}
-           {/* Actually looking at Pencil screenshot: Text is left, checkmark is INLINE or right. */}
-           {/* Let's keep consistent icon on left for now, but style it like a status indicator */}
-           
-          <div className={cn(
-            "w-4 h-4 rounded-full flex items-center justify-center shrink-0 transition-colors",
-            isLast 
-              ? "text-primary scale-110" 
-              : "text-emerald-500/80" // Green for completed steps like Pencil
-          )}>
-            {isLast ? (
-               <div className="w-2 h-2 rounded-full bg-primary animate-pulse shadow-[0_0_8px_rgba(34,197,94,0.5)]" />
+          <div
+            className={cn(
+              'w-4 h-4 rounded-full flex items-center justify-center shrink-0 transition-colors',
+              isDone ? 'text-emerald-500/80' : isActive ? 'text-primary' : 'text-muted-foreground/50',
+            )}
+          >
+            {isDone ? (
+              <Check size={12} strokeWidth={2.5} />
             ) : (
-               <Check size={12} strokeWidth={2.5} />
+              <div className={cn('w-2 h-2 rounded-full', isActive ? 'bg-primary animate-pulse' : 'bg-muted-foreground/60')} />
             )}
           </div>
-          
-          <span title={title} className={cn(
-            "text-[11px] font-medium transition-colors truncate select-none",
-             isLast ? "text-foreground" : "text-muted-foreground/90"
-          )}>
+
+          <span
+            title={title}
+            className={cn(
+              'text-[11px] font-medium transition-colors truncate select-none',
+              isDone ? 'text-muted-foreground/90' : isActive ? 'text-foreground' : 'text-muted-foreground/70',
+            )}
+          >
             {title}
           </span>
         </div>
-        
+
         <div className="flex items-center text-muted-foreground/30">
-          <ChevronDown size={12} className={cn("transition-transform duration-200", isOpen ? "rotate-180" : "")} />
+          <ChevronDown size={12} className={cn('transition-transform duration-200', isOpen ? 'rotate-180' : '')} />
         </div>
       </button>
 
-      {isOpen && (
+      {isOpen && content && (
         <div className="px-3 py-2 mx-1 mt-0.5 border-l border-border/30 text-[10px] text-muted-foreground/80 leading-relaxed font-mono animate-in slide-in-from-top-0.5 duration-200 whitespace-pre-wrap break-words">
-           {content}
+          {content}
         </div>
       )}
+    </div>
+  )
+}
+
+function PipelineChecklist({
+  items,
+}: {
+  items: Array<{ label: string; done: boolean; active: boolean }>
+}) {
+  const completed = items.filter((item) => item.done).length
+  return (
+    <div className="mt-2 border-t border-border/40 pt-2">
+      <div className="flex items-center justify-between mb-1.5">
+        <span className="text-[10px] uppercase tracking-wide text-muted-foreground">Pencil it out</span>
+        <span className="text-[10px] text-muted-foreground">{completed}/{items.length}</span>
+      </div>
+      <div className="flex flex-col gap-1">
+        {items.map((item, index) => (
+          <div key={`${item.label}-${index}`} className="flex items-center gap-1.5 text-[10px] text-muted-foreground/90">
+            <span
+              className={cn(
+                'w-3 h-3 rounded-full border flex items-center justify-center shrink-0',
+                item.done
+                  ? 'border-emerald-500/70 text-emerald-500/80'
+                  : item.active
+                    ? 'border-primary/70 text-primary'
+                    : 'border-border/70 text-muted-foreground/50',
+              )}
+            >
+              {item.done ? <Check size={9} strokeWidth={2.5} /> : <span className={cn('w-1.5 h-1.5 rounded-full', item.active ? 'bg-primary animate-pulse' : 'bg-muted-foreground/60')} />}
+            </span>
+            <span className={cn(item.active ? 'text-foreground' : '')}>{item.label}</span>
+          </div>
+        ))}
+      </div>
     </div>
   )
 }
@@ -178,56 +287,7 @@ function parseMarkdown(
   let codeLang = ''
   let blockKey = 0
 
-  // Pre-process: extract sequential steps at the start or throughout?
-  // Our prompt puts them at the start. Let's process line by line.
-  // If we encounter steps, we collect them. If we encounter non-step content, we flush steps.
-
-  // Actually, simpler: Treat <step> lines as special blocks.
-  
-  let currentSteps: string[] = []
-  
-  const flushSteps = () => {
-    if (currentSteps.length > 0) {
-      parts.push(<ActionSteps key={`steps-${blockKey++}`} steps={[...currentSteps]} />)
-      currentSteps = []
-    }
-  }
-
   for (const line of lines) {
-    if (line.includes('</step>') && !line.includes('<step')) {
-      const withoutCloseStep = line.replace(/<\/step>/g, '').trim()
-      if (!withoutCloseStep) continue
-    }
-
-    if (/^\s*<\/step>\s*$/.test(line)) {
-      continue
-    }
-
-    if (isActionStep(line)) {
-      // Check if it's a complete step or partial (streaming)
-      // For now assume complete lines or handle partials if needed
-      // If valid step line, add to current buffer
-      currentSteps.push(line)
-      continue
-    }
-
-    // specific hack for streaming partially completed step
-    if (line.trim().startsWith('<step') && !line.trim().includes('</step>')) {
-       // It's a streaming step, possibly unfinished. 
-       // We can show it as "Working..." or just text. 
-       // Let's just treat it as a step for now?
-       currentSteps.push(line + '</step>') // Auto-close for display
-       continue
-    }
-
-    if (/^\s*<step[^>]*>\s*$/.test(line)) {
-      currentSteps.push(line + '</step>')
-      continue
-    }
-
-    // Not a step -> flush any pending steps
-    flushSteps()
-
     if (line.startsWith('```') && !inCodeBlock) {
       inCodeBlock = true
       codeLang = line.slice(3).trim()
@@ -267,12 +327,8 @@ function parseMarkdown(
 
     // Empty lines
     if (!line) {
-       // If we're inside a sequence of steps, just ignore the blank line to group them together
-       if (currentSteps.length > 0) continue
-       
-       // Otherwise render as newline
-       parts.push('\n')
-       continue
+      parts.push('\n')
+      continue
     }
 
     parts.push(
@@ -282,9 +338,6 @@ function parseMarkdown(
       </span>,
     )
   }
-
-  // Flush remaining steps at the end
-  flushSteps()
 
   // Handle unclosed code block (streaming)
   if (inCodeBlock && codeContent) {
@@ -543,7 +596,31 @@ export default function ChatMessage({
   const isUser = role === 'user'
   // Strip raw tool-call XML that the model may emit (should never be visible)
   const displayContent = isUser ? content : stripToolCallXml(content)
-  const isEmpty = !displayContent.trim()
+  const steps = useMemo(
+    () => (isUser ? [] : parseStepBlocks(displayContent, isStreaming)),
+    [isUser, displayContent, isStreaming],
+  )
+  const hasFlow = !isUser && steps.length > 0
+  const contentWithoutSteps = useMemo(
+    () => (isUser ? displayContent : stripStepBlocks(displayContent)),
+    [isUser, displayContent],
+  )
+  const jsonBlockCount = useMemo(
+    () => (isUser ? 0 : countDesignJsonBlocks(displayContent)),
+    [isUser, displayContent],
+  )
+  const checklistItems = useMemo(
+    () =>
+      buildPipelineProgress(
+        steps,
+        jsonBlockCount,
+        !!isStreaming,
+        isApplied,
+        /\*\*Error:\*\*/i.test(content),
+      ),
+    [steps, jsonBlockCount, isStreaming, isApplied, content],
+  )
+  const isEmpty = !contentWithoutSteps.trim() && !hasFlow
 
   // Don't render an empty non-streaming assistant message
   // UNLESS we stripped something out (meaning the AI did something, but we hid it).
@@ -581,9 +658,24 @@ export default function ChatMessage({
               </span>
             </div>
           ) : (
-            <div className="whitespace-pre-wrap">
-              {parseMarkdown(displayContent, onApplyDesign, isApplied, isStreaming && !isEmpty)}
-            </div>
+            <>
+              {hasFlow && (
+                <div className="mb-2">
+                  <ActionSteps steps={steps} isStreaming={isStreaming} />
+                  <PipelineChecklist items={checklistItems} />
+                </div>
+              )}
+              {contentWithoutSteps.trim() ? (
+                <div className="whitespace-pre-wrap">
+                  {parseMarkdown(
+                    contentWithoutSteps,
+                    onApplyDesign,
+                    isApplied,
+                    isStreaming && !!contentWithoutSteps.trim(),
+                  )}
+                </div>
+              ) : null}
+            </>
           )}
         </div>
       )}

@@ -43,10 +43,50 @@ export function useCanvasSelection() {
       const canvas = useCanvasStore.getState().fabricCanvas
       if (!canvas) return
       clearInterval(interval)
+      let restoringMultiSelection = false
 
-      const handleSelection = (e: { selected?: FabricObject[] }) => {
-        const selected = e.selected ?? []
-        const ids = resolveIds(selected)
+      const handleSelection = (e: { selected?: FabricObject[]; e?: unknown }) => {
+        if (restoringMultiSelection) return
+
+        // `selection:updated` payload `selected` may contain only delta objects.
+        // Always read the full active selection from canvas for accurate multi-select.
+        const selected = canvas.getActiveObjects()
+        const fallbackSelected = e.selected ?? []
+        const effectiveSelected = selected.length > 0 ? selected : fallbackSelected
+        const prevIds = useCanvasStore.getState().selection.selectedIds
+        const mouseEvent = e.e as MouseEvent | undefined
+
+        // If user already has a multi-selection and clicks one selected object
+        // (without Shift), keep the whole selection so dragging moves all.
+        if (!mouseEvent?.shiftKey && prevIds.length > 1 && effectiveSelected.length === 1) {
+          const clicked = effectiveSelected[0] as FabricObjectWithPenId
+          const resolvedClicked = clicked?.penNodeId
+            ? resolveTargetAtDepth(clicked.penNodeId)
+            : null
+
+          if (resolvedClicked && prevIds.includes(resolvedClicked)) {
+            const objects = canvas.getObjects() as FabricObjectWithPenId[]
+            const prevSet = new Set(prevIds)
+            const restoredObjects = objects.filter(
+              (o) => o.penNodeId && prevSet.has(o.penNodeId),
+            )
+
+            if (restoredObjects.length > 1) {
+              restoringMultiSelection = true
+              try {
+                const restored = new ActiveSelection(restoredObjects, { canvas })
+                canvas.setActiveObject(restored)
+                canvas.requestRenderAll()
+                useCanvasStore.getState().setSelection(prevIds, prevIds[0] ?? null)
+              } finally {
+                restoringMultiSelection = false
+              }
+              return
+            }
+          }
+        }
+
+        const ids = resolveIds(effectiveSelected)
         useCanvasStore.getState().setSelection(ids, ids[0] ?? null)
 
         // Correct Fabric's active object to match the depth-resolved target.
@@ -57,7 +97,7 @@ export function useCanvasSelection() {
         const objects = canvas.getObjects() as FabricObjectWithPenId[]
 
         if (ids.length === 1) {
-          const currentActive = selected[0] as FabricObjectWithPenId
+          const currentActive = effectiveSelected[0] as FabricObjectWithPenId
           if (currentActive?.penNodeId !== ids[0]) {
             const correctObj = objects.find((o) => o.penNodeId === ids[0])
             if (correctObj) {

@@ -475,8 +475,39 @@ export function useCanvasEvents() {
         preModificationDoc = null
         const tool = useCanvasStore.getState().activeTool
         if (tool !== 'select') return
-        const target = opt.target as FabricObjectWithPenId | null
-        if (!target?.penNodeId) return
+        const e = opt.e as MouseEvent | undefined
+
+        // Keep multi-selection active when clicking one of its selected objects
+        // so users can drag the whole set without needing Shift on drag start.
+        if (!e?.shiftKey) {
+          const { selectedIds } = useCanvasStore.getState().selection
+          const clicked = opt.target as FabricObjectWithPenId | null
+          const clickedResolved = clicked?.penNodeId
+            ? resolveTargetAtDepth(clicked.penNodeId)
+            : null
+          const activeObj = canvas.getActiveObject()
+          const isActiveSelection = !!activeObj?.isType?.('activeSelection')
+          if (
+            !isActiveSelection &&
+            clickedResolved &&
+            selectedIds.length > 1 &&
+            selectedIds.includes(clickedResolved)
+          ) {
+            const objects = canvas.getObjects() as FabricObjectWithPenId[]
+            const selectedSet = new Set(selectedIds)
+            const selectedObjs = objects.filter(
+              (o) => o.penNodeId && selectedSet.has(o.penNodeId),
+            )
+            if (selectedObjs.length > 1) {
+              const sel = new fabric.ActiveSelection(selectedObjs, { canvas })
+              canvas.setActiveObject(sel)
+              canvas.requestRenderAll()
+            }
+          }
+        }
+
+        const activeTarget = canvas.getActiveObject() ?? opt.target
+        if (!activeTarget) return
 
 
         // Snapshot the document BEFORE any drag/resize/rotate begins.
@@ -486,6 +517,16 @@ export function useCanvasEvents() {
           .getState()
           .startBatch(useDocumentStore.getState().document)
         transformBatchActive = true
+
+        // ActiveSelection move/scale/rotate: batch + final sync in object:modified.
+        // Layout/parent-child single-node logic does not apply here.
+        if ('getObjects' in activeTarget) {
+          cancelLayoutDrag()
+          return
+        }
+
+        const target = activeTarget as FabricObjectWithPenId
+        if (!target.penNodeId) return
 
         // Only start layout reorder for actual move drags.
         // Scale/rotate handles on layout children should follow normal transform sync.
