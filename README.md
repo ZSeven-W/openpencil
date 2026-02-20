@@ -59,7 +59,7 @@ Open-source vector design tool with a Design-as-Code philosophy. An alternative 
 ### History
 
 - Undo/Redo with batched drag operations (Cmd+Z / Cmd+Shift+Z)
-- Up to 100 history states
+- Up to 300 history states
 
 ### Clipboard & Grouping
 

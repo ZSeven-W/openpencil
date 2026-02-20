@@ -1,4 +1,5 @@
 import { useEffect } from 'react'
+import { Point } from 'fabric'
 import { useCanvasStore } from '@/stores/canvas-store'
 import { MIN_ZOOM, MAX_ZOOM } from './canvas-constants'
 import type { ToolType } from '@/types/canvas'
@@ -45,7 +46,7 @@ export function useCanvasViewport() {
           newZoom = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, newZoom))
 
           const rect = canvas.upperCanvasEl.getBoundingClientRect()
-          const point = { x: e.clientX - rect.left, y: e.clientY - rect.top }
+          const point = new Point(e.clientX - rect.left, e.clientY - rect.top)
           canvas.zoomToPoint(point, newZoom)
 
           const vpt = canvas.viewportTransform
