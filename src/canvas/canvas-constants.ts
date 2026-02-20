@@ -15,6 +15,8 @@ export function getCanvasBackground(): string {
     : CANVAS_BACKGROUND_DARK
 }
 export const SELECTION_BLUE = '#0d99ff'
+export const COMPONENT_COLOR = '#a855f7'
+export const INSTANCE_COLOR = '#9281f7'
 
 // Smart guides
 export const GUIDE_COLOR = '#FF6B35'

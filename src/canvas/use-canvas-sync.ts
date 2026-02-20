@@ -11,6 +11,8 @@ import { syncFabricObject } from './canvas-object-sync'
 import { isFabricSyncLocked, setFabricSyncLock } from './canvas-sync-lock'
 import { pendingAnimationNodes, getNextStaggerDelay } from '@/services/ai/design-animation'
 import { resolveNodeForCanvas, getDefaultTheme } from '@/variables/resolve-variables'
+import { findNodeInTree } from '@/stores/document-store'
+import { COMPONENT_COLOR, INSTANCE_COLOR, SELECTION_BLUE } from './canvas-constants'
 
 // ---------------------------------------------------------------------------
 // Clip info — tracks parent frame bounds for child clipping
@@ -318,6 +320,92 @@ function computeLayoutPositions(
 }
 
 // ---------------------------------------------------------------------------
+// Resolve RefNodes — expand instances by looking up their referenced component
+// ---------------------------------------------------------------------------
+
+/** Give children unique IDs scoped to the instance, apply overrides from descendants. */
+function remapInstanceChildIds(
+  children: PenNode[],
+  refId: string,
+  overrides?: Record<string, Partial<PenNode>>,
+): PenNode[] {
+  return children.map((child) => {
+    const virtualId = `${refId}__${child.id}`
+    const ov = overrides?.[child.id] ?? {}
+    const mapped = { ...child, ...ov, id: virtualId } as PenNode
+    if ('children' in mapped && mapped.children) {
+      ;(mapped as PenNode & { children: PenNode[] }).children =
+        remapInstanceChildIds(mapped.children, refId, overrides)
+    }
+    return mapped
+  })
+}
+
+/**
+ * Recursively resolve all RefNodes in the tree by expanding them
+ * with their referenced component's structure.
+ */
+function resolveRefs(
+  nodes: PenNode[],
+  rootNodes: PenNode[],
+  visited = new Set<string>(),
+): PenNode[] {
+  return nodes.flatMap((node) => {
+    if (node.type !== 'ref') {
+      if ('children' in node && node.children) {
+        return [
+          {
+            ...node,
+            children: resolveRefs(node.children, rootNodes, visited),
+          } as PenNode,
+        ]
+      }
+      return [node]
+    }
+
+    // Resolve RefNode
+    if (visited.has(node.ref)) return [] // circular reference guard
+    const component = findNodeInTree(rootNodes, node.ref)
+    if (!component) return []
+
+    visited.add(node.ref)
+
+    const refNode = node as PenNode & { descendants?: Record<string, Partial<PenNode>> }
+    // Apply top-level visual overrides from descendants[componentId]
+    const topOverrides = refNode.descendants?.[node.ref] ?? {}
+
+    // Build resolved node: component base → overrides → RefNode's own properties
+    const resolved: Record<string, unknown> = { ...component, ...topOverrides }
+    // Apply all explicitly-defined RefNode properties (position, size, opacity, etc.)
+    for (const [key, val] of Object.entries(node)) {
+      if (key === 'type' || key === 'ref' || key === 'descendants' || key === 'children') continue
+      if (val !== undefined) {
+        resolved[key] = val
+      }
+    }
+    // Use component's type (not 'ref') and ensure name fallback
+    resolved.type = component.type
+    if (!resolved.name) resolved.name = component.name
+    // Clear the reusable flag — this is an instance, not the component
+    delete resolved.reusable
+    const resolvedNode = resolved as unknown as PenNode
+
+    // Remap children IDs to avoid clashes with the original component
+    if ('children' in resolvedNode && resolvedNode.children) {
+      ;(resolvedNode as PenNode & { children: PenNode[] }).children =
+        remapInstanceChildIds(
+          resolvedNode.children,
+          node.id,
+          refNode.descendants,
+        )
+    }
+
+    visited.delete(node.ref)
+    return [resolvedNode]
+  })
+}
+
+// ---------------------------------------------------------------------------
 // Flatten document tree → absolute-positioned list for Fabric.js
 // ---------------------------------------------------------------------------
 
@@ -461,7 +549,8 @@ export function rebuildNodeRenderInfo() {
   nodeRenderInfo.clear()
   rootFrameBounds.clear()
   layoutContainerBounds.clear()
-  flattenNodes(state.document.children, 0, 0, undefined, undefined, undefined, new Map())
+  const resolvedTree = resolveRefs(state.document.children, state.document.children)
+  flattenNodes(resolvedTree, 0, 0, undefined, undefined, undefined, new Map())
 }
 
 /**
@@ -554,8 +643,10 @@ export function useCanvasSync() {
       nodeRenderInfo.clear()
       rootFrameBounds.clear()
       layoutContainerBounds.clear()
+      // Resolve RefNodes before flattening so instances render as their component
+      const resolvedTree = resolveRefs(state.document.children, state.document.children)
       const flatNodes = flattenNodes(
-        state.document.children, 0, 0, undefined, undefined, undefined, clipMap,
+        resolvedTree, 0, 0, undefined, undefined, undefined, clipMap,
       ).map((node) => resolveNodeForCanvas(node, variables, activeTheme))
       const nodeMap = new Map(flatNodes.map((n) => [n.id, n]))
       const objects = canvas.getObjects() as FabricObjectWithPenId[]
@@ -564,6 +655,17 @@ export function useCanvasSync() {
           .filter((o) => o.penNodeId)
           .map((o) => [o.penNodeId!, o]),
       )
+
+      // Collect component and instance IDs for selection styling
+      const reusableIds = new Set<string>()
+      const instanceIds = new Set<string>()
+      ;(function collectComponentIds(nodes: PenNode[]) {
+        for (const n of nodes) {
+          if ('reusable' in n && n.reusable === true) reusableIds.add(n.id)
+          if (n.type === 'ref') instanceIds.add(n.id)
+          if ('children' in n && n.children) collectComponentIds(n.children)
+        }
+      })(state.document.children)
 
       // Remove objects that no longer exist in the document
       for (const obj of objects) {
@@ -613,8 +715,23 @@ export function useCanvasSync() {
           }
         }
 
-        // Apply clip path from parent frame with cornerRadius
         if (obj) {
+          // Component/instance selection border styling
+          if (reusableIds.has(node.id)) {
+            obj.borderColor = COMPONENT_COLOR
+            obj.cornerColor = COMPONENT_COLOR
+            obj.borderDashArray = []
+          } else if (instanceIds.has(node.id)) {
+            obj.borderColor = INSTANCE_COLOR
+            obj.cornerColor = INSTANCE_COLOR
+            obj.borderDashArray = [4, 4]
+          } else if (obj.borderColor === COMPONENT_COLOR || obj.borderColor === INSTANCE_COLOR) {
+            obj.borderColor = SELECTION_BLUE
+            obj.cornerColor = SELECTION_BLUE
+            obj.borderDashArray = []
+          }
+
+          // Apply clip path from parent frame with cornerRadius
           const clip = clipMap.get(node.id)
           if (clip) {
             obj.clipPath = new fabric.Rect({
