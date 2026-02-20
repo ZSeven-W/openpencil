@@ -44,12 +44,18 @@ export function useDimensionLabel(
 
       const bound = active.getBoundingRect()
 
-      // Detect if the user is actively dragging (moving)
+      // Detect active interaction (dragging or scaling)
       const transform = (canvas as unknown as { _currentTransform?: { action?: string } })
         ._currentTransform
-      const isMoving = transform?.action === 'drag'
+      const action = transform?.action
 
-      if (isMoving) {
+      if (!action) {
+        // No active interaction — hide the label
+        label.style.display = 'none'
+        return
+      }
+
+      if (action === 'drag') {
         // Show position in scene coordinates during drag
         const vpt = canvas.viewportTransform
         const zoom = vpt[0]
@@ -57,12 +63,10 @@ export function useDimensionLabel(
         const panY = vpt[5]
 
         if (active instanceof fabric.ActiveSelection) {
-          // ActiveSelection: show bounding box top-left in scene coords
           const sceneX = Math.round(((bound.left - panX) / zoom))
           const sceneY = Math.round(((bound.top - panY) / zoom))
           label.textContent = `X: ${sceneX}  Y: ${sceneY}`
         } else {
-          // Single object: show position relative to parent (document coords)
           const obj = active as FabricObjectWithPenId
           const info = obj.penNodeId ? nodeRenderInfo.get(obj.penNodeId) : null
           const offsetX = info?.parentOffsetX ?? 0
@@ -72,7 +76,7 @@ export function useDimensionLabel(
           label.textContent = `X: ${relX}  Y: ${relY}`
         }
       } else {
-        // Show dimensions when not moving (selected, scaling, etc.)
+        // Show dimensions during scale/resize
         const w = Math.round(active.getScaledWidth())
         const h = Math.round(active.getScaledHeight())
         label.textContent = `${w} \u00d7 ${h}`
