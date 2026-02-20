@@ -43,10 +43,14 @@ export function useCanvasSelection() {
       const canvas = useCanvasStore.getState().fabricCanvas
       if (!canvas) return
       clearInterval(interval)
-      let restoringMultiSelection = false
+
+      // Guard against re-entry: setActiveObject fires selection events
+      // synchronously, which would call handleSelection again and cause
+      // infinite recursion.
+      let updatingSelection = false
 
       const handleSelection = (e: { selected?: FabricObject[]; e?: unknown }) => {
-        if (restoringMultiSelection) return
+        if (updatingSelection) return
 
         // `selection:updated` payload `selected` may contain only delta objects.
         // Always read the full active selection from canvas for accurate multi-select.
@@ -72,14 +76,14 @@ export function useCanvasSelection() {
             )
 
             if (restoredObjects.length > 1) {
-              restoringMultiSelection = true
+              updatingSelection = true
               try {
                 const restored = new ActiveSelection(restoredObjects, { canvas })
                 canvas.setActiveObject(restored)
                 canvas.requestRenderAll()
                 useCanvasStore.getState().setSelection(prevIds, prevIds[0] ?? null)
               } finally {
-                restoringMultiSelection = false
+                updatingSelection = false
               }
               return
             }
@@ -96,29 +100,34 @@ export function useCanvasSelection() {
 
         const objects = canvas.getObjects() as FabricObjectWithPenId[]
 
-        if (ids.length === 1) {
-          const currentActive = effectiveSelected[0] as FabricObjectWithPenId
-          if (currentActive?.penNodeId !== ids[0]) {
-            const correctObj = objects.find((o) => o.penNodeId === ids[0])
-            if (correctObj) {
-              canvas.setActiveObject(correctObj)
+        updatingSelection = true
+        try {
+          if (ids.length === 1) {
+            const currentActive = effectiveSelected[0] as FabricObjectWithPenId
+            if (currentActive?.penNodeId !== ids[0]) {
+              const correctObj = objects.find((o) => o.penNodeId === ids[0])
+              if (correctObj) {
+                canvas.setActiveObject(correctObj)
+                canvas.requestRenderAll()
+              }
+            }
+          } else {
+            // Multi-select: build an ActiveSelection from the resolved objects
+            const resolvedSet = new Set(ids)
+            const resolvedObjs = objects.filter(
+              (o) => o.penNodeId && resolvedSet.has(o.penNodeId),
+            )
+            if (resolvedObjs.length > 1) {
+              const sel = new ActiveSelection(resolvedObjs, { canvas })
+              canvas.setActiveObject(sel)
+              canvas.requestRenderAll()
+            } else if (resolvedObjs.length === 1) {
+              canvas.setActiveObject(resolvedObjs[0])
               canvas.requestRenderAll()
             }
           }
-        } else {
-          // Multi-select: build an ActiveSelection from the resolved objects
-          const resolvedSet = new Set(ids)
-          const resolvedObjs = objects.filter(
-            (o) => o.penNodeId && resolvedSet.has(o.penNodeId),
-          )
-          if (resolvedObjs.length > 1) {
-            const sel = new ActiveSelection(resolvedObjs, { canvas })
-            canvas.setActiveObject(sel)
-            canvas.requestRenderAll()
-          } else if (resolvedObjs.length === 1) {
-            canvas.setActiveObject(resolvedObjs[0])
-            canvas.requestRenderAll()
-          }
+        } finally {
+          updatingSelection = false
         }
       }
 
