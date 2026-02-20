@@ -3,6 +3,7 @@ import * as fabric from 'fabric'
 import { useCanvasStore } from '@/stores/canvas-store'
 import { useDocumentStore, generateId } from '@/stores/document-store'
 import { useHistoryStore } from '@/stores/history-store'
+import { useAIStore } from '@/stores/ai-store'
 import type { PenNode } from '@/types/pen'
 import type { ToolType } from '@/types/canvas'
 import {
@@ -163,6 +164,30 @@ export function useCanvasEvents() {
       if (!upperEl) return
 
       // --- Tool change: toggle selection ---
+      const applyInteractivityState = () => {
+        const tool = useCanvasStore.getState().activeTool
+        const isStreaming = useAIStore.getState().isStreaming
+
+        if (isStreaming) {
+          canvas.selection = false
+          canvas.skipTargetFind = true
+          canvas.discardActiveObject()
+          useCanvasStore.getState().clearSelection()
+          canvas.requestRenderAll()
+          return
+        }
+
+        if (isDrawingTool(tool)) {
+          canvas.selection = false
+          canvas.skipTargetFind = true
+          canvas.discardActiveObject()
+          canvas.requestRenderAll()
+        } else if (tool === 'select') {
+          canvas.selection = true
+          canvas.skipTargetFind = false
+        }
+      }
+
       let prevTool = useCanvasStore.getState().activeTool
       const unsubTool = useCanvasStore.subscribe((state) => {
         if (state.activeTool === prevTool) return
@@ -172,20 +197,19 @@ export function useCanvasEvents() {
         }
         prevTool = state.activeTool
         if (!state.fabricCanvas) return
-        if (isDrawingTool(state.activeTool)) {
-          state.fabricCanvas.selection = false
-          state.fabricCanvas.skipTargetFind = true
-          state.fabricCanvas.discardActiveObject()
-          state.fabricCanvas.requestRenderAll()
-        } else if (state.activeTool === 'select') {
-          state.fabricCanvas.selection = true
-          state.fabricCanvas.skipTargetFind = false
-        }
+        applyInteractivityState()
       })
+      const unsubStreaming = useAIStore.subscribe((state) => {
+        void state.isStreaming
+        applyInteractivityState()
+      })
+      applyInteractivityState()
 
       // --- Drawing via native pointer events on the upper canvas ---
 
       const onPointerDown = (e: PointerEvent) => {
+        if (useAIStore.getState().isStreaming) return
+
         const tool = useCanvasStore.getState().activeTool
         if (!isDrawingTool(tool)) return
         const { isPanning } = useCanvasStore.getState().interaction
@@ -265,6 +289,8 @@ export function useCanvasEvents() {
       }
 
       const onPointerMove = (e: PointerEvent) => {
+        if (useAIStore.getState().isStreaming) return
+
         // Pen tool has its own move handling
         if (isPenToolActive()) {
           const pointer = toScene(canvas, e)
@@ -310,6 +336,14 @@ export function useCanvasEvents() {
       }
 
       const onPointerUp = (_e: PointerEvent) => {
+        if (useAIStore.getState().isStreaming) {
+          if (tempObj) canvas.remove(tempObj)
+          tempObj = null
+          drawing = false
+          startPoint = null
+          return
+        }
+
         // Pen tool: end handle drag
         if (isPenToolActive()) {
           penToolPointerUp(canvas)
@@ -357,6 +391,8 @@ export function useCanvasEvents() {
       }
 
       const onDoubleClick = (e: MouseEvent) => {
+        if (useAIStore.getState().isStreaming) return
+
         if (isPenToolActive()) {
           e.preventDefault()
           e.stopPropagation()
@@ -410,7 +446,24 @@ export function useCanvasEvents() {
       upperEl.addEventListener('dblclick', onDoubleClick)
 
       // --- History batching for drag/resize/rotate ---
+      let transformBatchActive = false
+      let pendingBatchCloseRaf: number | null = null
+      const closeTransformBatch = () => {
+        if (!transformBatchActive) return
+        useHistoryStore
+          .getState()
+          .endBatch(useDocumentStore.getState().document)
+        transformBatchActive = false
+      }
+
       canvas.on('mouse:down', (opt) => {
+        if (useAIStore.getState().isStreaming) return
+
+        if (pendingBatchCloseRaf !== null) {
+          cancelAnimationFrame(pendingBatchCloseRaf)
+          pendingBatchCloseRaf = null
+        }
+
         clipPathsCleared = false
         const tool = useCanvasStore.getState().activeTool
         if (tool !== 'select') return
@@ -419,9 +472,24 @@ export function useCanvasEvents() {
         useHistoryStore
           .getState()
           .startBatch(useDocumentStore.getState().document)
+        transformBatchActive = true
 
-        // Try to start layout reorder drag first
-        beginLayoutDrag(target.penNodeId)
+        // Only start layout reorder for actual move drags.
+        // Scale/rotate handles on layout children should follow normal transform sync.
+        const transform = (opt as unknown as {
+          transform?: { action?: string; corner?: string | null }
+        }).transform
+        const action = transform?.action
+        const corner = transform?.corner
+        const isHandleTransform = typeof corner === 'string' && corner.length > 0
+        const isMoveAction =
+          !isHandleTransform &&
+          (action === undefined || action === 'drag' || action === 'move')
+        if (isMoveAction) {
+          beginLayoutDrag(target.penNodeId)
+        } else {
+          cancelLayoutDrag()
+        }
 
         // Start parent-child drag session (still needed for child propagation)
         beginParentDrag(target.penNodeId, canvas)
@@ -433,7 +501,16 @@ export function useCanvasEvents() {
         // commit and cleanup.  In Fabric.js v7 mouse:up can fire before
         // object:modified, which would clear the session prematurely.
         endParentDrag()
-        useHistoryStore.getState().endBatch()
+        // Defer batch close one frame so object:modified can run first.
+        if (transformBatchActive) {
+          if (pendingBatchCloseRaf !== null) {
+            cancelAnimationFrame(pendingBatchCloseRaf)
+          }
+          pendingBatchCloseRaf = requestAnimationFrame(() => {
+            pendingBatchCloseRaf = null
+            closeTransformBatch()
+          })
+        }
       })
 
       // --- Object modifications (drag, resize, rotate) via Fabric events ---
@@ -528,17 +605,6 @@ export function useCanvasEvents() {
         setFabricSyncLock(false)
       }
 
-      // History batching: group all intermediate drag/resize/rotate updates
-      // into a single undo entry instead of one per mouse-move event.
-      canvas.on('mouse:down', () => {
-        useHistoryStore
-          .getState()
-          .startBatch(useDocumentStore.getState().document)
-      })
-      canvas.on('mouse:up', () => {
-        useHistoryStore.getState().endBatch()
-      })
-
       // Real-time sync during drag / resize / rotate (locked to prevent circular sync)
       let clipPathsCleared = false
 
@@ -593,6 +659,11 @@ export function useCanvasEvents() {
 
       // Final sync: reset scale to 1 and bake into width/height
       canvas.on('object:modified', (opt) => {
+        if (pendingBatchCloseRaf !== null) {
+          cancelAnimationFrame(pendingBatchCloseRaf)
+          pendingBatchCloseRaf = null
+        }
+
         clearGuides()
         const target = opt.target
 
@@ -610,10 +681,12 @@ export function useCanvasEvents() {
               useDocumentStore.setState({
                 document: { ...doc, children: [...doc.children] },
               })
+              closeTransformBatch()
               return
             }
             endLayoutDrag(asPen, canvas)
             rebuildNodeRenderInfo()
+            closeTransformBatch()
             return
           }
 
@@ -621,6 +694,7 @@ export function useCanvasEvents() {
           if (isDragIntoActive()) {
             commitDragInto(asPen, canvas)
             rebuildNodeRenderInfo()
+            closeTransformBatch()
             return
           }
 
@@ -694,6 +768,8 @@ export function useCanvasEvents() {
         useDocumentStore.setState({
           document: { ...currentDoc, children: [...currentDoc.children] },
         })
+
+        closeTransformBatch()
       })
 
       // --- Text editing: sync edited content back to document store ---
@@ -713,7 +789,12 @@ export function useCanvasEvents() {
       })
 
       return () => {
+        if (pendingBatchCloseRaf !== null) {
+          cancelAnimationFrame(pendingBatchCloseRaf)
+        }
+        closeTransformBatch()
         unsubTool()
+        unsubStreaming()
         upperEl.removeEventListener('pointerdown', onPointerDown)
         upperEl.removeEventListener('pointermove', onPointerMove)
         upperEl.removeEventListener('pointerup', onPointerUp)

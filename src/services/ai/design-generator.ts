@@ -217,7 +217,7 @@ export async function generateDesign(
   }
   } finally {
     if (animated) {
-      useHistoryStore.getState().endBatch()
+      useHistoryStore.getState().endBatch(useDocumentStore.getState().document)
     }
   }
 
@@ -402,7 +402,7 @@ export function animateNodesToCanvas(nodes: PenNode[]): void {
 
   useHistoryStore.getState().startBatch(useDocumentStore.getState().document)
   upsertPreparedNodes(prepared)
-  useHistoryStore.getState().endBatch()
+  useHistoryStore.getState().endBatch(useDocumentStore.getState().document)
 }
 
 function sanitizeNodesForInsert(
@@ -621,7 +621,12 @@ export function extractAndApplyDesign(responseText: string): number {
   const nodes = extractJsonFromResponse(responseText)
   if (!nodes || nodes.length === 0) return 0
 
-  applyNodesToCanvas(nodes)
+  useHistoryStore.getState().startBatch(useDocumentStore.getState().document)
+  try {
+    applyNodesToCanvas(nodes)
+  } finally {
+    useHistoryStore.getState().endBatch(useDocumentStore.getState().document)
+  }
   return nodes.length
 }
 
@@ -636,19 +641,24 @@ export function extractAndApplyDesignModification(responseText: string): number 
   const { addNode, updateNode, getNodeById } = useDocumentStore.getState()
   let count = 0
 
-  for (const node of nodes) {
-    const existing = getNodeById(node.id)
-    if (existing) {
-      // Update existing node
-      updateNode(node.id, node)
-      count++
-    } else {
-      // It's a new node implied by the modification (e.g. "add a button")
-       const rootFrame = getNodeById(DEFAULT_FRAME_ID)
-       const parentId = rootFrame ? DEFAULT_FRAME_ID : null
-       addNode(parentId, node)
-       count++
+  useHistoryStore.getState().startBatch(useDocumentStore.getState().document)
+  try {
+    for (const node of nodes) {
+      const existing = getNodeById(node.id)
+      if (existing) {
+        // Update existing node
+        updateNode(node.id, node)
+        count++
+      } else {
+        // It's a new node implied by the modification (e.g. "add a button")
+        const rootFrame = getNodeById(DEFAULT_FRAME_ID)
+        const parentId = rootFrame ? DEFAULT_FRAME_ID : null
+        addNode(parentId, node)
+        count++
+      }
     }
+  } finally {
+    useHistoryStore.getState().endBatch(useDocumentStore.getState().document)
   }
   return count
 }

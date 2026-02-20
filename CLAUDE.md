@@ -63,7 +63,7 @@ React Components (Toolbar, LayerPanel, PropertyPanel)
 - **`src/stores/`** — Zustand stores (5 files):
   - `canvas-store.ts` — UI/tool/selection/viewport/clipboard/interaction state
   - `document-store.ts` — PenDocument tree CRUD: `addNode`, `updateNode`, `removeNode`, `moveNode`, `reorderNode`, `duplicateNode`, `groupNodes`, `ungroupNode`, `toggleVisibility`, `toggleLock`, `scaleDescendantsInStore`, `rotateDescendantsInStore`, `getNodeById`, `getParentOf`, `getFlatNodes`, `isDescendantOf`
-  - `history-store.ts` — Undo/redo (max 100 states), batch mode for grouped operations
+  - `history-store.ts` — Undo/redo (max 300 states), batch mode for grouped operations
   - `ai-store.ts` — Chat messages, streaming state, generated code, model selection
   - `agent-settings-store.ts` — AI provider config (Anthropic/OpenAI), MCP CLI integrations, localStorage persistence
 - **`src/types/`** — Type system:
