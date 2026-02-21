@@ -11,7 +11,6 @@ import {
   startNewAnimationBatch,
   resetAnimationState,
 } from './design-animation'
-import { assessComplexity } from './complexity-classifier'
 import { executeOrchestration } from './orchestrator'
 
 const DESIGN_STREAM_TIMEOUTS = {
@@ -344,15 +343,11 @@ export async function generateDesign(
     animated?: boolean
   }
 ): Promise<{ nodes: PenNode[]; rawResponse: string }> {
-  // Route complex prompts through orchestrator for parallel generation
-  const { isComplex } = assessComplexity(request.prompt)
-  if (isComplex) {
-    try {
-      return await executeOrchestration(request, callbacks)
-    } catch (err) {
-      // Orchestrator failed — silently fall back to single-call generation
-      console.warn('Orchestrator failed, falling back to direct generation:', err)
-    }
+  // Always route through orchestrator (fallback to direct generation on failure)
+  try {
+    return await executeOrchestration(request, callbacks)
+  } catch (err) {
+    console.error('[Orchestrator] Failed, falling back to direct generation:', err)
   }
 
   const userMessage = buildContextMessage(request)

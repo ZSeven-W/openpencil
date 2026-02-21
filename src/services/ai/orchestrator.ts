@@ -20,8 +20,7 @@ import type {
   SubAgentResult,
 } from './ai-types'
 import { streamChat } from './ai-service'
-import { DESIGN_GENERATOR_PROMPT } from './ai-prompts'
-import { ORCHESTRATOR_PROMPT, ORCHESTRATOR_TIMEOUTS } from './orchestrator-prompts'
+import { ORCHESTRATOR_PROMPT, ORCHESTRATOR_TIMEOUTS, SUB_AGENT_PROMPT } from './orchestrator-prompts'
 import {
   extractStreamingNodes,
   extractJsonFromResponse,
@@ -37,8 +36,8 @@ import {
 } from './design-animation'
 
 const SUB_AGENT_TIMEOUTS = {
-  hardTimeoutMs: 120_000,
-  noTextTimeoutMs: 45_000,
+  hardTimeoutMs: 60_000,
+  noTextTimeoutMs: 30_000,
   thinkingResetsTimeout: true,
 }
 
@@ -56,13 +55,12 @@ export async function executeOrchestration(
 ): Promise<{ nodes: PenNode[]; rawResponse: string }> {
   const animated = callbacks?.animated ?? false
 
-  // -- Phase 1: Planning --
+  // -- Phase 1: Planning (streaming) --
   callbacks?.onTextUpdate?.(
     '<step title="Planning layout" status="streaming">Analyzing design structure...</step>',
   )
 
   const plan = await callOrchestrator(request.prompt, (thinking) => {
-    // Forward thinking progress to UI so user sees activity
     const truncated = thinking.length > 200
       ? thinking.slice(-200) + '...'
       : thinking
@@ -165,29 +163,22 @@ export async function executeOrchestration(
 // Orchestrator call — fast decomposition
 // ---------------------------------------------------------------------------
 
-/** Max prompt length for the orchestrator — it only needs structure, not full detail */
-const MAX_ORCHESTRATOR_PROMPT_CHARS = 2000
-
 async function callOrchestrator(
   prompt: string,
   onThinking?: (thinking: string) => void,
 ): Promise<OrchestratorPlan> {
-  // Truncate long prompts — the orchestrator only needs high-level structure
-  const truncatedPrompt = prompt.length > MAX_ORCHESTRATOR_PROMPT_CHARS
-    ? prompt.slice(0, MAX_ORCHESTRATOR_PROMPT_CHARS) + '\n\n[... prompt truncated for planning — full details will be sent to each section agent]'
-    : prompt
+  console.log('[Orchestrator] Calling streamChat...')
 
   let rawResponse = ''
   let thinkingContent = ''
 
   for await (const chunk of streamChat(
     ORCHESTRATOR_PROMPT,
-    [{ role: 'user', content: truncatedPrompt }],
+    [{ role: 'user', content: prompt }],
     undefined,
     {
       ...ORCHESTRATOR_TIMEOUTS,
-      // Don't let thinking indefinitely extend the no-text timeout
-      thinkingResetsTimeout: false,
+      thinkingResetsTimeout: true,
     },
   )) {
     if (chunk.type === 'text') {
@@ -200,11 +191,15 @@ async function callOrchestrator(
     }
   }
 
+  console.log('[Orchestrator] Raw response:', rawResponse.slice(0, 500))
+
   const plan = parseOrchestratorResponse(rawResponse)
   if (!plan) {
+    console.error('[Orchestrator] Failed to parse plan from:', rawResponse.slice(0, 500))
     throw new Error('Failed to parse orchestrator plan')
   }
 
+  console.log('[Orchestrator] Plan:', plan.subtasks.length, 'subtasks')
   return plan
 }
 
@@ -253,7 +248,7 @@ function tryParsePlan(text: string): OrchestratorPlan | null {
 }
 
 // ---------------------------------------------------------------------------
-// Parallel sub-agent execution
+// Sequential sub-agent execution
 // ---------------------------------------------------------------------------
 
 async function executeSubAgentsSequentially(
@@ -268,7 +263,9 @@ async function executeSubAgentsSequentially(
 ): Promise<SubAgentResult[]> {
   const results: SubAgentResult[] = []
   for (let i = 0; i < plan.subtasks.length; i++) {
-    const result = await executeSubAgent(plan.subtasks[i], plan, request, progress, i, callbacks)
+    const result = await executeSubAgent(
+      plan.subtasks[i], plan, request, progress, i, callbacks,
+    )
     results.push(result)
   }
   return results
@@ -293,6 +290,7 @@ async function executeSubAgent(
 
   const userPrompt = buildSubAgentUserPrompt(
     subtask,
+    plan,
     request.prompt,
     request.context?.variables,
     request.context?.themes,
@@ -304,13 +302,16 @@ async function executeSubAgent(
 
   try {
     for await (const chunk of streamChat(
-      DESIGN_GENERATOR_PROMPT,
+      SUB_AGENT_PROMPT,
       [{ role: 'user', content: userPrompt }],
       undefined,
       SUB_AGENT_TIMEOUTS,
     )) {
       if (chunk.type === 'text') {
         rawResponse += chunk.content
+
+        // Forward streaming text to panel
+        emitProgress(plan, progress, callbacks, rawResponse)
 
         if (animated) {
           const { results, newOffset } = extractStreamingNodes(
@@ -340,7 +341,7 @@ async function executeSubAgent(
               progress.totalNodes++
             }
             callbacks?.onApplyPartial?.(progress.totalNodes)
-            emitProgress(plan, progress, callbacks)
+            emitProgress(plan, progress, callbacks, rawResponse)
           }
         }
       } else if (chunk.type === 'thinking') {
@@ -386,23 +387,19 @@ async function executeSubAgent(
 
 function buildSubAgentUserPrompt(
   subtask: SubTask,
+  plan: OrchestratorPlan,
   originalPrompt: string,
   variables?: Record<string, VariableDefinition>,
   themes?: Record<string, string[]>,
 ): string {
   const { region } = subtask
 
-  // Extract a brief context line from the original prompt (first 200 chars)
-  const briefContext = originalPrompt.length > 200
-    ? originalPrompt.slice(0, 200) + '...'
-    : originalPrompt
+  // Show all sections so the model knows scope — only generate THIS one
+  const sectionList = plan.subtasks
+    .map((st) => `- ${st.label} (${st.region.width}x${st.region.height})${st.id === subtask.id ? ' ← YOU' : ''}`)
+    .join('\n')
 
-  let prompt = `Design: "${subtask.label}"
-Context: ${briefContext}
-Canvas: ${region.width}x${region.height}px
-Root frame: id="${subtask.idPrefix}-root", width=${region.width}, height=${region.height}
-All node IDs MUST start with "${subtask.idPrefix}-".
-Generate ONLY this section, not the full page.`
+  let prompt = `Page sections:\n${sectionList}\n\nGenerate ONLY "${subtask.label}" (${region.width}x${region.height}px).\n${originalPrompt}\nRoot: id="${subtask.idPrefix}-root", width="fill_container", height=${region.height}. IDs prefix="${subtask.idPrefix}-". No <step> tags. Output \`\`\`json immediately.`
 
   const varContext = buildVariableContext(variables, themes)
   if (varContext) {
@@ -419,6 +416,12 @@ Generate ONLY this section, not the full page.`
 function ensureIdPrefix(node: PenNode, prefix: string): void {
   if (!node.id.startsWith(`${prefix}-`)) {
     node.id = `${prefix}-${node.id}`
+  }
+  // Recursively prefix children (for fallback tree extraction)
+  if ('children' in node && Array.isArray(node.children)) {
+    for (const child of node.children) {
+      ensureIdPrefix(child, prefix)
+    }
   }
 }
 
@@ -437,6 +440,7 @@ function emitProgress(
   callbacks?: {
     onTextUpdate?: (text: string) => void
   },
+  streamingText?: string,
 ): void {
   if (!callbacks?.onTextUpdate) return
 
@@ -455,7 +459,11 @@ function emitProgress(
     })
     .join('\n')
 
-  callbacks.onTextUpdate(`${planningStep}\n${subtaskSteps}`)
+  let output = `${planningStep}\n${subtaskSteps}`
+  if (streamingText) {
+    output += '\n\n' + streamingText
+  }
+  callbacks.onTextUpdate(output)
 }
 
 /** Build step tags for the final rawResponse (shown in message after streaming ends) */
