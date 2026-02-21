@@ -19,6 +19,7 @@ import {
   extractAndApplyDesign,
   extractAndApplyDesignModification
 } from '@/services/ai/design-generator'
+import { trimChatHistory } from '@/services/ai/context-optimizer'
 import type { ChatMessage as ChatMessageType } from '@/services/ai/ai-types'
 import type { AIProviderType } from '@/types/agent-settings'
 import ClaudeLogo from '@/components/icons/claude-logo'
@@ -227,12 +228,14 @@ function useChatHandlers() {
         } else {
             // --- CHAT MODE ---
             chatHistory.push({ role: 'user', content: fullUserMessage })
+            // Trim history to prevent unbounded context growth
+            const trimmedHistory = trimChatHistory(chatHistory)
             // Resolve which provider the currently selected model belongs to
             const currentProvider = useAIStore.getState().modelGroups.find((g) =>
               g.models.some((m) => m.value === model),
             )?.provider
             let chatThinking = false
-            for await (const chunk of streamChat(CHAT_SYSTEM_PROMPT, chatHistory, model, undefined, currentProvider)) {
+            for await (const chunk of streamChat(CHAT_SYSTEM_PROMPT, trimmedHistory, model, undefined, currentProvider)) {
                if (chunk.type === 'thinking') {
                  // Show a brief thinking indicator so the UI isn't stuck on empty
                  if (!chatThinking && !accumulated) {

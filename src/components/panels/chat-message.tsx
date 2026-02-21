@@ -49,16 +49,22 @@ function stripToolCallXml(text: string): string {
 export interface ParsedStep {
   title: string
   content: string
+  /** Explicit status from orchestrator steps (undefined for normal steps) */
+  status?: 'pending' | 'streaming' | 'done' | 'error'
 }
 
 export function parseStepBlocks(text: string, isStreaming?: boolean): ParsedStep[] {
-  const stepRegex = /<step(?:[^>]*title="([^"]+)")?[^>]*>([\s\S]*?)<\/step>/gi
+  const stepRegex = /<step([^>]*)>([\s\S]*?)<\/step>/gi
   const parsed: ParsedStep[] = []
   let match: RegExpExecArray | null
 
   while ((match = stepRegex.exec(text)) !== null) {
+    const attrs = match[1]
+    const titleMatch = attrs.match(/title="([^"]+)"/)
+    const statusMatch = attrs.match(/status="([^"]+)"/)
     parsed.push({
-      title: (match[1] ?? 'Processing').trim() || 'Processing',
+      title: (titleMatch?.[1] ?? 'Processing').trim() || 'Processing',
+      status: (statusMatch?.[1] as ParsedStep['status']) ?? undefined,
       content: (match[2] ?? '').trim(),
     })
   }
@@ -68,9 +74,11 @@ export function parseStepBlocks(text: string, isStreaming?: boolean): ParsedStep
   if (isStreaming && lastOpen > lastClose) {
     const partial = text.slice(lastOpen)
     const titleMatch = partial.match(/title="([^"]+)"/i)
+    const statusMatch = partial.match(/status="([^"]+)"/i)
     const contentStart = partial.indexOf('>')
     parsed.push({
       title: (titleMatch?.[1] ?? 'Design').trim() || 'Design',
+      status: (statusMatch?.[1] as ParsedStep['status']) ?? undefined,
       content:
         contentStart >= 0
           ? partial
@@ -149,7 +157,17 @@ export function buildPipelineProgress(
     return steps.map((s) => ({ label: s.title, done: true, active: false }))
   }
 
-  // Map each step to done/active/pending based on completed JSON blocks.
+  // If steps have explicit status (orchestrator mode), use that directly
+  const hasExplicitStatus = steps.some((s) => s.status !== undefined)
+  if (hasExplicitStatus) {
+    return steps.map((s) => ({
+      label: s.title,
+      done: s.status === 'done',
+      active: s.status === 'streaming',
+    }))
+  }
+
+  // Fallback: Map each step to done/active/pending based on completed JSON blocks.
   // Step[i] is done when jsonBlockCount > i.
   // The step at jsonBlockCount is active (currently being generated).
   return steps.map((s, index) => {
