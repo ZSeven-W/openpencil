@@ -76,7 +76,7 @@ async function streamViaAnthropicSDK(apiKey: string, body: ChatBody, model?: str
               const data = JSON.stringify({ type: 'text', content: ev.delta.text })
               controller.enqueue(encoder.encode(`data: ${data}\n\n`))
             } else if (ev.delta.type === 'thinking_delta') {
-              clearInterval(pingTimer)
+              // Keep pings alive during thinking — only stop on text output
               const data = JSON.stringify({ type: 'thinking', content: ev.delta.thinking })
               controller.enqueue(encoder.encode(`data: ${data}\n\n`))
             }
@@ -150,7 +150,7 @@ function streamViaAgentSDK(body: ChatBody, model?: string) {
                 const data = JSON.stringify({ type: 'text', content: ev.delta.text })
                 controller.enqueue(encoder.encode(`data: ${data}\n\n`))
               } else if (ev.delta.type === 'thinking_delta') {
-                clearInterval(pingTimer)
+                // Keep pings alive during thinking — only stop on text output
                 const data = JSON.stringify({ type: 'thinking', content: (ev.delta as any).thinking })
                 controller.enqueue(encoder.encode(`data: ${data}\n\n`))
               }
