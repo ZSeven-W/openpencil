@@ -2,6 +2,8 @@ name: Build Electron
 
 on:
   push:
+    branches:
+      - main
     tags:
       - 'v*'
   workflow_dispatch:
