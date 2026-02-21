@@ -6,6 +6,7 @@ import { DESIGN_GENERATOR_PROMPT, DESIGN_MODIFIER_PROMPT } from './ai-prompts'
 import { useDocumentStore, DEFAULT_FRAME_ID } from '@/stores/document-store'
 import { useHistoryStore } from '@/stores/history-store'
 import {
+  pendingAnimationNodes,
   markNodesForAnimation,
   startNewAnimationBatch,
   resetAnimationState,
@@ -38,6 +39,10 @@ function extractJsonFromResponse(text: string): PenNode[] | null {
     return selectBestNodeSet(parsedBlocks)
   }
 
+  // Try JSONL format (flat nodes with _parent field)
+  const jsonlTree = parseJsonlToTree(text)
+  if (jsonlTree) return jsonlTree
+
   // Fallback: try to find a single JSON array if no blocks found
   const arrayMatch = text.match(/\[\s*\{[\s\S]*\}\s*\]/)
   if (arrayMatch) {
@@ -51,7 +56,7 @@ function extractJsonFromResponse(text: string): PenNode[] | null {
   if (directNodes) {
     return directNodes
   }
-  
+
   return null
 }
 
@@ -139,6 +144,153 @@ function extractAllJsonBlocks(text: string): string[] {
   return blocks
 }
 
+// ---------------------------------------------------------------------------
+// Streaming JSONL parser — extracts completed JSON objects from within
+// a ```json block as they stream in, enabling element-by-element rendering.
+// ---------------------------------------------------------------------------
+
+interface StreamingNodeResult {
+  node: PenNode
+  parentId: string | null
+}
+
+/**
+ * Extract completed JSON objects from streaming text (within a ```json block).
+ * Uses brace-counting to detect complete objects before the block closes.
+ * Each object is expected to have a `_parent` field for tree insertion.
+ */
+function extractStreamingNodes(
+  text: string,
+  processedOffset: number,
+): { results: StreamingNodeResult[]; newOffset: number } {
+  // Find the start of the json block
+  const jsonBlockStart = text.indexOf('```json')
+  if (jsonBlockStart === -1) return { results: [], newOffset: processedOffset }
+
+  const contentStart = text.indexOf('\n', jsonBlockStart)
+  if (contentStart === -1) return { results: [], newOffset: processedOffset }
+
+  const startPos = Math.max(processedOffset, contentStart + 1)
+
+  // Check if the block has ended (stop before closing ```)
+  const blockEnd = text.indexOf('\n```', contentStart + 1)
+  const searchEnd = blockEnd > 0 ? blockEnd : text.length
+
+  const results: StreamingNodeResult[] = []
+  let i = startPos
+
+  while (i < searchEnd) {
+    // Skip to next '{' character
+    while (i < searchEnd && text[i] !== '{') i++
+    if (i >= searchEnd) break
+
+    // Brace-counting to find matching '}'
+    const objStart = i
+    let depth = 0
+    let inString = false
+    let escaped = false
+    let j = i
+
+    while (j < searchEnd) {
+      const ch = text[j]
+      if (escaped) { escaped = false; j++; continue }
+      if (ch === '\\' && inString) { escaped = true; j++; continue }
+      if (ch === '"') { inString = !inString; j++; continue }
+      if (inString) { j++; continue }
+      if (ch === '{') depth++
+      else if (ch === '}') {
+        depth--
+        if (depth === 0) {
+          // Complete object found
+          const objStr = text.slice(objStart, j + 1)
+          try {
+            const obj = JSON.parse(objStr) as Record<string, unknown>
+            if (obj.id && obj.type) {
+              const parentId = (obj._parent as string | null) ?? null
+              delete obj._parent
+              results.push({ node: obj as unknown as PenNode, parentId })
+            }
+          } catch { /* malformed JSON, skip */ }
+          i = j + 1
+          break
+        }
+      }
+      j++
+    }
+
+    if (depth > 0) break // Incomplete object, wait for more data
+  }
+
+  return { results, newOffset: i }
+}
+
+/**
+ * Parse JSONL-format response (flat nodes with _parent field) into a tree.
+ * Used by extractAndApplyDesign for batch apply of JSONL content.
+ */
+function parseJsonlToTree(text: string): PenNode[] | null {
+  const { results } = extractStreamingNodes(text, 0)
+  if (results.length === 0) return null
+
+  const nodeMap = new Map<string, PenNode>()
+  const roots: PenNode[] = []
+
+  for (const { node, parentId } of results) {
+    nodeMap.set(node.id, node)
+
+    if (parentId === null) {
+      roots.push(node)
+    } else {
+      const parent = nodeMap.get(parentId)
+      if (parent) {
+        if (!('children' in parent) || !Array.isArray((parent as PenNode & { children?: PenNode[] }).children)) {
+          ;(parent as PenNode & { children?: PenNode[] }).children = []
+        }
+        ;(parent as PenNode & { children: PenNode[] }).children.push(node)
+      } else {
+        roots.push(node) // Parent not found, treat as root
+      }
+    }
+  }
+
+  return roots.length > 0 ? roots : null
+}
+
+/**
+ * Insert a single streaming node into the canvas with animation.
+ * Handles root frame replacement and parent ID remapping.
+ */
+function insertStreamingNode(
+  node: PenNode,
+  parentId: string | null,
+): void {
+  const { addNode, getNodeById } = useDocumentStore.getState()
+
+  // Ensure container nodes have children array for later child insertions
+  if ((node.type === 'frame' || node.type === 'group') && !('children' in node)) {
+    ;(node as PenNode & { children: PenNode[] }).children = []
+  }
+
+  // Resolve remapped parent IDs (e.g., root frame → DEFAULT_FRAME_ID)
+  const resolvedParent = parentId
+    ? (generationRemappedIds.get(parentId) ?? parentId)
+    : null
+
+  // Mark node for fade-in animation
+  pendingAnimationNodes.add(node.id)
+  startNewAnimationBatch()
+
+  if (resolvedParent === null && isCanvasOnlyEmptyFrame() && node.type === 'frame') {
+    // Root frame replaces the default empty frame
+    replaceEmptyFrame(node)
+  } else {
+    const effectiveParent = resolvedParent ?? DEFAULT_FRAME_ID
+    // Verify parent exists, fall back to root frame
+    const parent = getNodeById(effectiveParent)
+    addNode(parent ? effectiveParent : DEFAULT_FRAME_ID, node)
+  }
+}
+
 function selectBestNodeSet(candidates: PenNode[][]): PenNode[] {
   let best = candidates[candidates.length - 1]
   let bestScore = scoreNodeSet(best)
@@ -191,69 +343,47 @@ export async function generateDesign(
 ): Promise<{ nodes: PenNode[]; rawResponse: string }> {
   const userMessage = buildContextMessage(request)
   let fullResponse = ''
-  let processedBlockCount = 0
+  let streamingOffset = 0 // Tracks how far we've parsed in the streaming text
+  let appliedCount = 0
   let streamError: string | null = null
   const animated = callbacks?.animated ?? false
 
-  // Reset cross-phase ID remapping so that replaceEmptyFrame mappings
-  // from a previous generation don't leak into this one.
   resetGenerationRemapping()
 
-  // Animation setup: single history batch + stagger state.
-  // Nodes are inserted immediately (sync) via upsertNodesToCanvas.
-  // Canvas-sync creates Fabric objects at opacity 0 and schedules
-  // staggered fade-in via fire-and-forget setTimeout — no stream blocking.
   if (animated) {
     resetAnimationState()
     useHistoryStore.getState().startBatch(useDocumentStore.getState().document)
   }
 
-  let isThinking = false
+  let thinkingContent = ''
 
   try {
   for await (const chunk of streamChat(DESIGN_GENERATOR_PROMPT, [
     { role: 'user', content: userMessage },
   ], undefined, DESIGN_STREAM_TIMEOUTS)) {
     if (chunk.type === 'thinking') {
-      // Show a "Thinking" step so the UI isn't stuck on the empty indicator
-      if (!isThinking && !fullResponse) {
-        isThinking = true
-        callbacks?.onTextUpdate?.('<step title="Thinking">Analyzing your design request...</step>')
-      }
+      thinkingContent += chunk.content
+      // Stream actual thinking content to UI in real-time
+      callbacks?.onTextUpdate?.(`<step title="Thinking">${thinkingContent}</step>`)
     } else if (chunk.type === 'text') {
-      isThinking = false
       fullResponse += chunk.content
-      if (callbacks?.onTextUpdate) {
-        callbacks.onTextUpdate(fullResponse)
-      }
+      // Prepend thinking step so it stays visible after text starts
+      const thinkingPrefix = thinkingContent
+        ? `<step title="Thinking">${thinkingContent}</step>\n`
+        : ''
+      callbacks?.onTextUpdate?.(thinkingPrefix + fullResponse)
 
-      if (callbacks?.onApplyPartial) {
-        const allBlocks = extractAllJsonBlocks(fullResponse)
-        if (allBlocks.length > processedBlockCount) {
-          const newBlocks = allBlocks.slice(processedBlockCount)
-          let applied = 0
-
-          for (const blockJson of newBlocks) {
-            const blockNodes = tryParseNodes(blockJson)
-            if (!blockNodes || blockNodes.length === 0) continue
-
-            if (animated) {
-              // Mark sanitized IDs for animation, then upsert (sync).
-              // Canvas-sync will create objects at opacity 0 and schedule
-              // staggered fade-in via setTimeout — does NOT block the stream.
-              const prepared = sanitizeNodesForUpsert(blockNodes)
-              startNewAnimationBatch()
-              markNodesForAnimation(prepared)
-              applied += upsertPreparedNodes(prepared)
-            } else {
-              applied += upsertNodesToCanvas(blockNodes)
-            }
+      if (animated) {
+        // Element-by-element streaming: extract completed JSON objects
+        // from the JSONL block as they finish generating.
+        const { results, newOffset } = extractStreamingNodes(fullResponse, streamingOffset)
+        if (results.length > 0) {
+          streamingOffset = newOffset
+          for (const { node, parentId } of results) {
+            insertStreamingNode(node, parentId)
+            appliedCount++
           }
-
-          if (applied > 0) {
-            callbacks.onApplyPartial(applied)
-          }
-          processedBlockCount = allBlocks.length
+          callbacks?.onApplyPartial?.(appliedCount)
         }
       }
     } else if (chunk.type === 'error') {
@@ -267,8 +397,13 @@ export async function generateDesign(
     }
   }
 
+  // Build final tree from response for return value
   const streamedNodes = extractJsonFromResponse(fullResponse)
   if (streamedNodes && streamedNodes.length > 0) {
+    // If nothing was applied during streaming, apply now as fallback
+    if (appliedCount === 0) {
+      return { nodes: streamedNodes, rawResponse: fullResponse }
+    }
     return { nodes: streamedNodes, rawResponse: fullResponse }
   }
 
@@ -276,10 +411,6 @@ export async function generateDesign(
     throw new Error(streamError)
   }
 
-  // If no JSON found, return empty nodes but valid response.
-  // This allows the "chatty" response ("I'll create a plan...") to be shown to the user
-  // instead of an ugly "Failed to parse" error.
-  // The UI will just show the text and appliedCount will be 0.
   return { nodes: [], rawResponse: fullResponse }
 }
 
@@ -525,17 +656,18 @@ function mergeNodeForProgressiveUpsert(
   }
 
   const existingById = new Map(existingChildren.map((c) => [c.id, c] as const))
-  const incomingIds = new Set(incomingChildren.map((c) => c.id))
+  const incomingById = new Map(incomingChildren.map((c) => [c.id, c] as const))
   const mergedChildren: PenNode[] = []
 
-  for (const child of incomingChildren) {
-    const ex = existingById.get(child.id)
-    mergedChildren.push(ex ? mergeNodeForProgressiveUpsert(ex, child) : child)
+  // 1. Existing children first (preserves already-built order)
+  for (const ex of existingChildren) {
+    const inc = incomingById.get(ex.id)
+    mergedChildren.push(inc ? mergeNodeForProgressiveUpsert(ex, inc) : ex)
   }
 
-  // Keep existing children that are not mentioned in this phase.
-  for (const ex of existingChildren) {
-    if (!incomingIds.has(ex.id)) mergedChildren.push(ex)
+  // 2. Append new incoming children (progressive sections added at end)
+  for (const child of incomingChildren) {
+    if (!existingById.has(child.id)) mergedChildren.push(child)
   }
 
   setNodeChildren(merged, mergedChildren)

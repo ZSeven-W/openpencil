@@ -46,23 +46,12 @@ function stripToolCallXml(text: string): string {
   return cleaned.trim()
 }
 
-interface ParsedStep {
+export interface ParsedStep {
   title: string
   content: string
 }
 
-const DESIGN_PIPELINE_TASKS = [
-  'Create sidebar navigation with mission control sections',
-  'Add system status panel with telemetry data',
-  'Build main header with launch controls',
-  'Create mission metrics cards row',
-  'Add rocket visualization with futuristic image',
-  'Build launch sequence panel',
-  'Add mission timeline/countdown section',
-  'Final spacing and visual consistency pass',
-]
-
-function parseStepBlocks(text: string, isStreaming?: boolean): ParsedStep[] {
+export function parseStepBlocks(text: string, isStreaming?: boolean): ParsedStep[] {
   const stepRegex = /<step(?:[^>]*title="([^"]+)")?[^>]*>([\s\S]*?)<\/step>/gi
   const parsed: ParsedStep[] = []
   let match: RegExpExecArray | null
@@ -102,58 +91,87 @@ function stripStepBlocks(text: string): string {
     .trim()
 }
 
-function countDesignJsonBlocks(text: string): number {
-  const blockRegex = /```(?:json)?\s*([\s\S]*?)```/gi
+/** Count completed sections in JSONL content (direct children of root frame). */
+function countJsonlSections(content: string): number {
+  const lines = content.split('\n')
+  let rootId: string | null = null
+  let sectionCount = 0
+
+  for (const line of lines) {
+    const trimmed = line.trim()
+    if (!trimmed.startsWith('{')) continue
+
+    const parentMatch = trimmed.match(/"_parent"\s*:\s*(null|"([^"]*)")/)
+    if (!parentMatch) continue
+
+    if (parentMatch[1] === 'null') {
+      const idMatch = trimmed.match(/"id"\s*:\s*"([^"]*)"/)
+      if (idMatch) rootId = idMatch[1]
+    } else if (rootId && parentMatch[2] === rootId) {
+      sectionCount++
+    }
+  }
+
+  return sectionCount
+}
+
+export function countDesignJsonBlocks(text: string): number {
+  const blockRegex = /```(?:json)?\s*\n?([\s\S]*?)(?:\n?```|$)/gi
   let count = 0
   let match: RegExpExecArray | null
   while ((match = blockRegex.exec(text)) !== null) {
-    if (isDesignJson(match[1])) count += 1
+    const content = match[1].trim()
+    if (!isDesignJson(content)) continue
+
+    // JSONL format: count direct children of root as sections
+    if (/"_parent"\s*:/.test(content)) {
+      count += countJsonlSections(content)
+    } else {
+      count += 1
+    }
   }
   return count
 }
 
-function buildPipelineProgress(
+export function buildPipelineProgress(
   steps: ParsedStep[],
   jsonBlockCount: number,
   isStreaming: boolean,
   isApplied: boolean,
   hasError: boolean,
 ): Array<{ label: string; done: boolean; active: boolean }> {
+  // No steps = no checklist
+  if (steps.length === 0) return []
+
+  // If generation is complete and applied, mark all steps done
   const hasTerminalResult = !isStreaming && !hasError && (isApplied || jsonBlockCount > 0)
   if (hasTerminalResult) {
-    return DESIGN_PIPELINE_TASKS.map((label) => ({ label, done: true, active: false }))
+    return steps.map((s) => ({ label: s.title, done: true, active: false }))
   }
 
-  const lowerTitles = new Set(steps.map((s) => s.title.toLowerCase()))
-  const hasGuidelines = [...lowerTitles].some((t) => t.includes('guidelines'))
-  const hasEditorState = [...lowerTitles].some((t) => t.includes('editor state') || t.includes('state'))
-  const hasStyleGuide = [...lowerTitles].some((t) => t.includes('styleguide') || t.includes('style guide'))
-
-  const doneCount = Math.min(
-    DESIGN_PIPELINE_TASKS.length,
-    (hasGuidelines ? 1 : 0) +
-      (hasEditorState ? 1 : 0) +
-      (hasStyleGuide ? 1 : 0) +
-      Math.min(4, jsonBlockCount) +
-      (isApplied ? 1 : 0),
-  )
-
-  return DESIGN_PIPELINE_TASKS.map((label, index) => {
-    const done = index < doneCount
-    const active = isStreaming && !done && index === doneCount
-    return { label, done, active }
+  // Map each step to done/active/pending based on completed JSON blocks.
+  // Step[i] is done when jsonBlockCount > i.
+  // The step at jsonBlockCount is active (currently being generated).
+  return steps.map((s, index) => {
+    const done = index < jsonBlockCount
+    const active = isStreaming && !done && index === jsonBlockCount
+    return { label: s.title, done, active }
   })
 }
 
-/** Component for rendering a list of action steps as accordions */
+/** Component for rendering a list of action steps as accordions.
+ *  Only shows steps with non-empty content (e.g. thinking, analysis).
+ *  Empty plan steps are shown in PipelineChecklist instead. */
 function ActionSteps({ steps, isStreaming }: { steps: ParsedStep[]; isStreaming?: boolean }) {
-  if (steps.length === 0) return null
+  // Filter to only show steps with actual content (not empty plan steps)
+  const stepsWithContent = steps.filter((s) => s.content.trim())
+  if (stepsWithContent.length === 0) return null
 
   return (
     <div className="flex flex-col gap-1 w-full">
-      {steps.map((step, i) => {
-        const isDone = !isStreaming || i < steps.length - 1
-        const isActive = !!isStreaming && i === steps.length - 1
+      {stepsWithContent.map((step, i) => {
+        const isDone = !isStreaming || i < stepsWithContent.length - 1
+        const isActive = !!isStreaming && i === stepsWithContent.length - 1
         return (
           <ActionStepItem
             key={`${step.title}-${i}`}
@@ -230,41 +248,6 @@ function ActionStepItem({
           {content}
         </div>
       )}
-    </div>
-  )
-}
-
-function PipelineChecklist({
-  items,
-}: {
-  items: Array<{ label: string; done: boolean; active: boolean }>
-}) {
-  const completed = items.filter((item) => item.done).length
-  return (
-    <div className="mt-2 border-t border-border/40 pt-2">
-      <div className="flex items-center justify-between mb-1.5">
-        <span className="text-[10px] uppercase tracking-wide text-muted-foreground">Pencil it out</span>
-        <span className="text-[10px] text-muted-foreground">{completed}/{items.length}</span>
-      </div>
-      <div className="flex flex-col gap-1">
-        {items.map((item, index) => (
-          <div key={`${item.label}-${index}`} className="flex items-center gap-1.5 text-[10px] text-muted-foreground/90">
-            <span
-              className={cn(
-                'w-3 h-3 rounded-full border flex items-center justify-center shrink-0',
-                item.done
-                  ? 'border-emerald-500/70 text-emerald-500/80'
-                  : item.active
-                    ? 'border-primary/70 text-primary'
-                    : 'border-border/70 text-muted-foreground/50',
-              )}
-            >
-              {item.done ? <Check size={9} strokeWidth={2.5} /> : <span className={cn('w-1.5 h-1.5 rounded-full', item.active ? 'bg-primary animate-pulse' : 'bg-muted-foreground/60')} />}
-            </span>
-            <span className={cn(item.active ? 'text-foreground' : '')}>{item.label}</span>
-          </div>
-        ))}
-      </div>
     </div>
   )
 }
@@ -502,6 +485,10 @@ function DesignJsonBlock({
       if (Array.isArray(parsed)) return parsed.length
       return 1
     } catch {
+      // JSONL format: count lines that look like JSON objects
+      if (/"_parent"\s*:/.test(code)) {
+        return code.split('\n').filter(line => line.trim().startsWith('{')).length
+      }
       return 0
     }
   }, [code])
@@ -605,21 +592,6 @@ export default function ChatMessage({
     () => (isUser ? displayContent : stripStepBlocks(displayContent)),
     [isUser, displayContent],
   )
-  const jsonBlockCount = useMemo(
-    () => (isUser ? 0 : countDesignJsonBlocks(displayContent)),
-    [isUser, displayContent],
-  )
-  const checklistItems = useMemo(
-    () =>
-      buildPipelineProgress(
-        steps,
-        jsonBlockCount,
-        !!isStreaming,
-        isApplied,
-        /\*\*Error:\*\*/i.test(content),
-      ),
-    [steps, jsonBlockCount, isStreaming, isApplied, content],
-  )
   const isEmpty = !contentWithoutSteps.trim() && !hasFlow
 
   // Don't render an empty non-streaming assistant message
@@ -662,7 +634,6 @@ export default function ChatMessage({
               {hasFlow && (
                 <div className="mb-2">
                   <ActionSteps steps={steps} isStreaming={isStreaming} />
-                  <PipelineChecklist items={checklistItems} />
                 </div>
               )}
               {contentWithoutSteps.trim() ? (
