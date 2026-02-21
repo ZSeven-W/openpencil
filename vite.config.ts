@@ -10,6 +10,9 @@ import { nitro } from 'nitro/vite'
 const isElectronBuild = process.env.BUILD_TARGET === 'electron'
 
 const config = defineConfig({
+  test: {
+    teardownTimeout: 1000,
+  },
   resolve: {
     alias: {
       '@': fileURLToPath(new URL('./src', import.meta.url)),

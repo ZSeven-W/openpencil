@@ -155,11 +155,26 @@ function createWindow(): void {
     if (!mainWindow) return
     if (process.platform === 'darwin') {
       await mainWindow.webContents.insertCSS(
-        '.electron-traffic-light-pad { margin-left: 74px; }',
+        '.electron-traffic-light-pad { margin-left: 74px; }' +
+        '.electron-fullscreen .electron-traffic-light-pad { margin-left: 0; }',
       )
     }
     mainWindow.show()
   })
+
+  // Toggle fullscreen class to remove traffic-light padding in fullscreen
+  if (process.platform === 'darwin') {
+    mainWindow.on('enter-full-screen', () => {
+      mainWindow?.webContents.executeJavaScript(
+        'document.body.classList.add("electron-fullscreen")',
+      )
+    })
+    mainWindow.on('leave-full-screen', () => {
+      mainWindow?.webContents.executeJavaScript(
+        'document.body.classList.remove("electron-fullscreen")',
+      )
+    })
+  }
 
   mainWindow.loadURL(url)
 

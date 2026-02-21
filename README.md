@@ -12,6 +12,8 @@ Available as a **web app** and **desktop app** (macOS / Windows / Linux via Elec
 - Smart alignment guides with edge, center, and distance snapping
 - Dimension labels during object manipulation
 - Frame labels and boundary visualization
+- Double-click to enter frames with visual overlay
+- Advanced drag-and-drop: drag into auto-layout frames with insertion indicators, reparenting, reorder within layout
 
 ### Drawing Tools
 
@@ -32,6 +34,7 @@ Available as a **web app** and **desktop app** (macOS / Windows / Linux via Elec
 - Effects: shadow and blur
 - Auto-layout: direction, gap, padding, justify-content, align-items
 - Variable binding: bind any property to a design variable via variable picker
+- Per-layer export: export individual layers to PNG/SVG with scale options (1x/2x/3x)
 
 ### Design Variables & Tokens
 
@@ -85,10 +88,12 @@ Available as a **web app** and **desktop app** (macOS / Windows / Linux via Elec
 
 - Built-in AI chat panel (Cmd+J)
 - AI-powered design generation from text prompts
+- Orchestrator-based parallel design generation: decomposes requests into spatial sub-tasks for faster output
 - Design block preview with "Apply Design" action
-- Streaming responses with thinking state
+- Streaming responses with thinking state and JSONL real-time canvas insertion
+- Context optimizer: sliding window history trimming to prevent unbounded context growth
 - Dual provider: Anthropic API or local Claude Code (OAuth)
-- Multi-provider settings: Claude Code, Codex CLI
+- Multi-provider settings: Claude Code, Codex CLI, OpenCode
 
 ### Editor UI
 
@@ -135,7 +140,7 @@ Available as a **web app** and **desktop app** (macOS / Windows / Linux via Elec
 - **Icons:** [Lucide React](https://lucide.dev/)
 - **Server:** [Nitro](https://nitro.build/) (API routes)
 - **Desktop:** [Electron](https://www.electronjs.org/) 35 + [electron-builder](https://www.electron.build/)
-- **AI:** [Anthropic SDK](https://docs.anthropic.com/) + [Claude Agent SDK](https://github.com/anthropics/claude-agent-sdk)
+- **AI:** [Anthropic SDK](https://docs.anthropic.com/) + [Claude Agent SDK](https://github.com/anthropics/claude-agent-sdk) + [OpenCode SDK](https://github.com/opencode-ai/sdk)
 - **Runtime:** [Bun](https://bun.sh/)
 - **Build:** [Vite](https://vite.dev/) 7
 - **CI/CD:** GitHub Actions
@@ -163,10 +168,11 @@ bun run electron:build
 
 ### AI Configuration
 
-The AI assistant works in two modes:
+The AI assistant works in multiple modes:
 
 - **Anthropic API**: Set `ANTHROPIC_API_KEY` in `.env`
 - **Local Claude Code**: No config needed — uses Claude Agent SDK with OAuth login as fallback
+- **OpenCode**: Connect via OpenCode SDK for additional model support
 
 ## Scripts
 
@@ -211,28 +217,29 @@ git push origin v0.1.0
 
 ```text
 src/
-  canvas/              # Fabric.js canvas engine
-  variables/           # Design variables/tokens system
+  canvas/              # Fabric.js canvas engine (25 files: sync, events, guides, drag-drop, pen tool, etc.)
+  variables/           # Design variables/tokens system (resolve, replace refs)
   components/
-    editor/            # Editor layout, toolbar, tool buttons, status bar
-    panels/            # Layer panel, property panel, AI chat, code panel, variables panel
+    editor/            # Editor layout, toolbar, tool buttons, top bar, status bar
+    panels/            # Layer panel, property panel, AI chat, code panel, variables panel, export section
     shared/            # ColorPicker, NumberInput, VariablePicker, ExportDialog, etc.
-    icons/             # Provider logos (Claude, OpenAI)
+    icons/             # Provider logos (Claude, OpenAI, OpenCode)
     ui/                # shadcn/ui primitives (Button, Select, Slider, Switch, etc.)
   hooks/               # Keyboard shortcuts
   lib/                 # Utility functions (cn class merging)
   services/
-    ai/                # AI chat service, prompts, design generation
+    ai/                # AI chat, orchestrator, context optimizer, design generation, prompts
     codegen/           # React+Tailwind, HTML+CSS, and CSS variables generators
   stores/              # Zustand stores (canvas, document, history, AI, agent-settings)
-  types/               # PenDocument/PenNode types, style types, variables, agent settings
+  types/               # PenDocument/PenNode types, style types, variables, agent settings, Electron IPC
   utils/               # File operations, export, node clone, SVG parser, syntax highlight
   routes/              # TanStack Router pages (/, /editor)
 electron/
-  main.ts              # Electron main process (window, Nitro server, IPC)
+  main.ts              # Electron main process (window, Nitro server, IPC, fullscreen handling)
   preload.ts           # Context bridge for renderer ↔ main IPC
 server/
   api/ai/              # Nitro API: streaming chat, generation, agent connection, models
+  utils/               # Server utilities: Claude CLI resolver, OpenCode client manager
 .github/
   workflows/
     ci.yml             # CI: type check, test, web build

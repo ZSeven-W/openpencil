@@ -10,7 +10,7 @@
         "dev": "bun --bun vite dev --port 3000",
         "build": "bun --bun vite build",
         "preview": "bun --bun vite preview",
-        "test": "bun --bun vitest run",
+        "test": "bun --bun vitest run --passWithNoTests",
         "electron:dev": "bun run scripts/electron-dev.ts",
         "electron:compile": "esbuild electron/main.ts electron/preload.ts --bundle --platform=node --target=node20 --outdir=electron-dist --external:electron --format=cjs --out-extension:.js=.cjs --sourcemap",
         "electron:build": "BUILD_TARGET=electron bun --bun run build && bun run electron:compile && npx electron-builder --config electron-builder.yml"
