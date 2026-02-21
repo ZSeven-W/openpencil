@@ -12,8 +12,8 @@ import {
 } from './design-animation'
 
 const DESIGN_STREAM_TIMEOUTS = {
-  hardTimeoutMs: 300_000,
-  noTextTimeoutMs: 120_000,
+  hardTimeoutMs: 180_000,
+  noTextTimeoutMs: 60_000,
 }
 
 // ---------------------------------------------------------------------------

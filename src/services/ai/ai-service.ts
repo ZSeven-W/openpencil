@@ -25,7 +25,6 @@ export async function* streamChat(
 
   const controller = new AbortController()
   let abortReason: 'hard_timeout' | 'no_text_timeout' | null = null
-  let hasNonEmptyText = false
   let noTextTimeout: ReturnType<typeof setTimeout> | null = null
 
   const clearNoTextTimeout = () => {
@@ -35,17 +34,20 @@ export async function* streamChat(
     }
   }
 
+  const resetActivityTimeout = () => {
+    clearNoTextTimeout()
+    noTextTimeout = setTimeout(() => {
+      abortReason = 'no_text_timeout'
+      controller.abort()
+    }, noTextTimeoutMs)
+  }
+
   const hardTimeout = setTimeout(() => {
     abortReason = 'hard_timeout'
     controller.abort()
   }, hardTimeoutMs)
 
-  noTextTimeout = setTimeout(() => {
-    if (!hasNonEmptyText) {
-      abortReason = 'no_text_timeout'
-      controller.abort()
-    }
-  }, noTextTimeoutMs)
+  resetActivityTimeout()
 
   try {
     const response = await fetch('/api/ai/chat', {
@@ -101,15 +103,9 @@ export async function* streamChat(
               return
             }
 
-            // Keep-alive pings from server — reset timeout but don't yield
+            // Keep-alive pings from server — reset activity timeout but don't yield
             if (chunk.type === 'ping') {
-              clearNoTextTimeout()
-              noTextTimeout = setTimeout(() => {
-                if (!hasNonEmptyText) {
-                  abortReason = 'no_text_timeout'
-                  controller.abort()
-                }
-              }, noTextTimeoutMs)
+              resetActivityTimeout()
               continue
             }
 
@@ -119,8 +115,7 @@ export async function* streamChat(
 
             // Any non-empty content (text or thinking) counts as activity
             if ((chunk.type === 'text' || chunk.type === 'thinking') && chunk.content.trim().length > 0) {
-              hasNonEmptyText = true
-              clearNoTextTimeout()
+              resetActivityTimeout()
             }
 
             yield chunk
@@ -157,14 +152,10 @@ export async function* streamChat(
             clearNoTextTimeout()
             return
           }
-          if ((chunk.type === 'text' || chunk.type === 'thinking') && chunk.content.trim().length > 0) {
-            hasNonEmptyText = true
-            clearNoTextTimeout()
-          }
+          clearTimeout(hardTimeout)
+          clearNoTextTimeout()
           yield chunk
           if (chunk.type === 'error') {
-            clearTimeout(hardTimeout)
-            clearNoTextTimeout()
             return
           }
         } catch {
