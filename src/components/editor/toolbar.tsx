@@ -6,7 +6,7 @@ import {
   Hand,
   Undo2,
   Redo2,
-  SlidersHorizontal,
+  Braces,
 } from 'lucide-react'
 import ToolButton from './tool-button'
 import ShapeToolDropdown from './shape-tool-dropdown'
@@ -245,7 +245,7 @@ export default function Toolbar() {
                 : 'text-muted-foreground hover:bg-muted hover:text-foreground'
             }`}
           >
-            <SlidersHorizontal size={20} />
+            <Braces size={20} />
           </button>
         </TooltipTrigger>
         <TooltipContent side="right">

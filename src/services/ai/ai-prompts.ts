@@ -34,7 +34,7 @@ Card with image:
 ICONS & IMAGES:
 - Icons: Use "path" nodes with SVG d attribute. Use stroke for line icons, fill for solid icons. Size 16-24px for UI icons. IMPORTANT: width and height must match the SVG path's natural aspect ratio — symmetric icons like arrows are square, but brand logos (Apple, Meta, etc.) are often taller than wide or vice versa. Never force all icons to 1:1.
 - Images: Use "image" nodes. src = "https://picsum.photos/{width}/{height}" for placeholders. Set explicit width/height.
-- You know many Lucide icon SVG paths — use them freely. Always give icon nodes descriptive names.
+- You know many icon SVG paths from popular Iconify collections — use them freely: Lucide, Material Design Icons (mdi), Phosphor, Tabler Icons, Heroicons, Carbon, etc. Always give icon nodes descriptive names (e.g. "SearchIcon", "MenuIcon").
 `
 
 const INDUSTRIAL_DESIGN_SYSTEM = `
@@ -123,7 +123,7 @@ DESIGN GUIDELINES:
 - Buttons: height 44-48px, cornerRadius 8-12
 - Inputs: height 44px, light bg, subtle border
 - Consistent color palette
-- Use path nodes for icons (SVG d path data). Size icons 16-24px. Preserve the natural aspect ratio of the SVG path — do NOT force all icons to square
+- Use path nodes for icons (SVG d path data). Size icons 16-24px. Preserve the natural aspect ratio of the SVG path — do NOT force all icons to square. You can use icons from any popular Iconify collection: Lucide, Material Design Icons, Phosphor, Tabler, Heroicons, Carbon, etc.
 - Use image nodes for photos/illustrations with picsum.photos placeholder URLs
 - Buttons, nav items, and list items should include icons when appropriate for better UX
 
@@ -179,6 +179,7 @@ SIZING:
 
 ICONS & IMAGES:
 - Use "path" nodes for icons: provide SVG d attribute, set width/height (16-24px for UI icons), use stroke for line icons or fill for solid icons. Width and height MUST match the natural aspect ratio of the SVG path data — do not squeeze non-square logos into square dimensions
+- You can use icons from any popular Iconify collection: Lucide, Material Design Icons (mdi), Phosphor, Tabler Icons, Heroicons, Carbon, etc. Use the SVG path data you know from these icon sets
 - Use "image" nodes for photos/illustrations: set src to "https://picsum.photos/{width}/{height}" as placeholder, set explicit width/height
 - Include icons in buttons, nav items, list items, cards for professional polish
 - Reference the icon patterns in the examples section for common icons

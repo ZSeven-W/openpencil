@@ -13,6 +13,7 @@ import StrokeSection from './stroke-section'
 import AppearanceSection from './appearance-section'
 import TextSection from './text-section'
 import EffectsSection from './effects-section'
+import ExportSection from './export-section'
 
 /** Properties stored directly on the RefNode (instance-level), not as overrides. */
 const INSTANCE_DIRECT_PROPS = new Set([
@@ -316,6 +317,11 @@ export default function PropertyPanel() {
             </div>
           </>
         )}
+
+        <Separator />
+        <div className="px-3 py-2">
+          <ExportSection nodeId={node.id} nodeName={node.name ?? node.type} />
+        </div>
       </div>
     </div>
   )
