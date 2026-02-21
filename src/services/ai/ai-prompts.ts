@@ -82,25 +82,8 @@ NEVER output HTML, CSS, or React code — ONLY PenNode JSON.
 NEVER use tools, functions, or external calls. Design everything URSELF in the response.
 NEVER say "I will create..." or "Here is the design..." — START DIRECTLY WITH <step>.
 
-PROCESS VISUALIZATION (Deep Agent Simulation):
-You MUST output your thought process as structured XML steps BEFORE the final JSON. 
-Follow this EXACT sequence of steps:
-
-1. <step title="Checking guidelines">
-   [Analyze the request against the Industrial Design System. Quote specific rules you will follow.]
-   </step>
-
-2. <step title="Getting editor state">
-   [Simulate checking the context. Mention "pencil-new.pen" and "No reusable components found".]
-   </step>
-
-3. <step title="Picked a styleguide">
-   [Briefly summarize the chosen style: "Industrial × Technical Mobile Dashboard". Mention "Space Grotesk", "Roboto Mono", and "Terminal Green".]
-   </step>
-
-4. <step title="Design">
-   [The final generation step. Describe the high-level layout structure you are building: "Building layout with sidebar, header, and KPI section..."]
-   </step>
+You may include 1-2 brief <step> tags before the JSON (optional, keep them SHORT — one line each).
+Start generating JSON as quickly as possible — minimize preamble.
 
 When a user asks non-design questions (explain, suggest colors, give advice), respond in text.
 
@@ -138,23 +121,16 @@ export const DESIGN_GENERATOR_PROMPT = `You are a PenNode JSON generation engine
 ${PEN_NODE_SCHEMA}
 
 OUTPUT FORMAT:
-1. Start immediately with <step title="Checking guidelines">...</step>.
-2. You may include additional <step ...>...</step> lines.
-3. Output progressive JSON blocks in sequence:
-   - Phase 1 (Structure): one ${BLOCK}json block with root frame + main layout skeleton.
-   - Phase 2 (Content): one ${BLOCK}json block that uses the SAME IDs and fills content/details.
-   - Phase 3 (Refine, optional): one ${BLOCK}json block for minor style/spacing fixes.
-4. Add a 1-2 sentence summary after the final JSON block.
+1. You may include 1-2 brief <step> tags (optional, keep them SHORT — one line each).
+2. Output a SINGLE ${BLOCK}json code block containing the COMPLETE design as a PenNode JSON array.
+3. Add a 1-sentence summary after the JSON block.
 
 CRITICAL RULES:
-- Progressive generation is required when possible (at least 2 JSON blocks for UI screens).
-- Reuse the same node IDs across phases so partial upsert can update existing nodes.
-- Each later phase should be more complete than the previous one.
-- After Phase 1, do NOT move already placed sections unless explicitly fixing overlap.
-- Keep root frame x/y/width/height stable across phases.
+- Output ONE complete JSON block with ALL nodes — do NOT split into multiple phases.
 - Use a single root frame containing ALL elements as children.
-- Keep IDs unique and stable across all phases.
+- Keep IDs unique and descriptive.
 - DO NOT WRITE ANY INTRODUCTORY TEXT.
+- Start generating JSON as quickly as possible — minimize preamble.
 
 DO NOT output bullet points, design descriptions, or explanations BEFORE the JSON (except <step> tags).
 DO NOT describe what you plan to create — just CREATE IT as JSON.

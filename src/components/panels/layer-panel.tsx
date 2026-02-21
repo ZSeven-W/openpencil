@@ -1,6 +1,7 @@
 import { useState, useRef, useCallback } from 'react'
 import { useDocumentStore, findNodeInTree } from '@/stores/document-store'
 import { useCanvasStore } from '@/stores/canvas-store'
+import { setSkipNextDepthResolve } from '@/canvas/use-canvas-selection'
 import type { FabricObjectWithPenId } from '@/canvas/canvas-object-factory'
 import type { PenNode } from '@/types/pen'
 import LayerItem from './layer-item'
@@ -154,6 +155,7 @@ export default function LayerPanel() {
           (o) => (o as FabricObjectWithPenId).penNodeId === id,
         )
         if (target) {
+          setSkipNextDepthResolve()
           fabricCanvas.setActiveObject(target)
           fabricCanvas.requestRenderAll()
         }

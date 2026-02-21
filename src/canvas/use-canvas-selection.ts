@@ -6,6 +6,16 @@ import type { FabricObjectWithPenId } from './canvas-object-factory'
 import { resolveTargetAtDepth } from './selection-context'
 
 /**
+ * When true, the next selection event will skip depth-resolution and
+ * pass through as-is. Used by the layer panel to programmatically select
+ * children without the handler resolving them back to their parent.
+ */
+let skipNextDepthResolve = false
+export function setSkipNextDepthResolve() {
+  skipNextDepthResolve = true
+}
+
+/**
  * Resolve a list of Fabric selected objects to node IDs at the current
  * entered-frame depth. If any target falls outside the current context,
  * exits all frames and retries at root level.
@@ -51,6 +61,12 @@ export function useCanvasSelection() {
 
       const handleSelection = (e: { selected?: FabricObject[]; e?: unknown }) => {
         if (updatingSelection) return
+
+        // Programmatic selection from layer panel — skip depth resolution
+        if (skipNextDepthResolve) {
+          skipNextDepthResolve = false
+          return
+        }
 
         // `selection:updated` payload `selected` may contain only delta objects.
         // Always read the full active selection from canvas for accurate multi-select.
