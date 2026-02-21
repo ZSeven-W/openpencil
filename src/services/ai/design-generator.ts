@@ -11,10 +11,13 @@ import {
   startNewAnimationBatch,
   resetAnimationState,
 } from './design-animation'
+import { assessComplexity } from './complexity-classifier'
+import { executeOrchestration } from './orchestrator'
 
 const DESIGN_STREAM_TIMEOUTS = {
   hardTimeoutMs: 180_000,
   noTextTimeoutMs: 60_000,
+  thinkingResetsTimeout: false,
 }
 
 // ---------------------------------------------------------------------------
@@ -24,13 +27,13 @@ const DESIGN_STREAM_TIMEOUTS = {
 
 const generationRemappedIds = new Map<string, string>()
 
-function resetGenerationRemapping(): void {
+export function resetGenerationRemapping(): void {
   generationRemappedIds.clear()
 }
 
 // Helper to find all complete JSON blocks in text
 
-function extractJsonFromResponse(text: string): PenNode[] | null {
+export function extractJsonFromResponse(text: string): PenNode[] | null {
   const parsedBlocks = extractAllJsonBlocks(text)
     .map((block) => tryParseNodes(block))
     .filter(Boolean) as PenNode[][]
@@ -97,7 +100,7 @@ function buildContextMessage(request: AIDesignRequest): string {
 }
 
 /** Build a concise summary of document variables for AI context. */
-function buildVariableContext(
+export function buildVariableContext(
   variables?: Record<string, VariableDefinition>,
   themes?: Record<string, string[]>,
 ): string | null {
@@ -159,7 +162,7 @@ interface StreamingNodeResult {
  * Uses brace-counting to detect complete objects before the block closes.
  * Each object is expected to have a `_parent` field for tree insertion.
  */
-function extractStreamingNodes(
+export function extractStreamingNodes(
   text: string,
   processedOffset: number,
 ): { results: StreamingNodeResult[]; newOffset: number } {
@@ -260,7 +263,7 @@ function parseJsonlToTree(text: string): PenNode[] | null {
  * Insert a single streaming node into the canvas with animation.
  * Handles root frame replacement and parent ID remapping.
  */
-function insertStreamingNode(
+export function insertStreamingNode(
   node: PenNode,
   parentId: string | null,
 ): void {
@@ -341,6 +344,17 @@ export async function generateDesign(
     animated?: boolean
   }
 ): Promise<{ nodes: PenNode[]; rawResponse: string }> {
+  // Route complex prompts through orchestrator for parallel generation
+  const { isComplex } = assessComplexity(request.prompt)
+  if (isComplex) {
+    try {
+      return await executeOrchestration(request, callbacks)
+    } catch (err) {
+      // Orchestrator failed — silently fall back to single-call generation
+      console.warn('Orchestrator failed, falling back to direct generation:', err)
+    }
+  }
+
   const userMessage = buildContextMessage(request)
   let fullResponse = ''
   let streamingOffset = 0 // Tracks how far we've parsed in the streaming text

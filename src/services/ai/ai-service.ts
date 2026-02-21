@@ -7,6 +7,12 @@ const DEFAULT_STREAM_NO_TEXT_TIMEOUT_MS = 75_000
 interface StreamChatOptions {
   hardTimeoutMs?: number
   noTextTimeoutMs?: number
+  /**
+   * Whether thinking events should reset the no-text timeout.
+   * Default: true (backward compatible). Set to false for fast calls
+   * where thinking should NOT prevent the no-text timeout from firing.
+   */
+  thinkingResetsTimeout?: boolean
 }
 
 /**
@@ -22,6 +28,7 @@ export async function* streamChat(
 ): AsyncGenerator<AIStreamChunk> {
   const hardTimeoutMs = Math.max(10_000, options?.hardTimeoutMs ?? DEFAULT_STREAM_HARD_TIMEOUT_MS)
   const noTextTimeoutMs = Math.max(10_000, options?.noTextTimeoutMs ?? DEFAULT_STREAM_NO_TEXT_TIMEOUT_MS)
+  const thinkingResetsTimeout = options?.thinkingResetsTimeout ?? true
 
   const controller = new AbortController()
   let abortReason: 'hard_timeout' | 'no_text_timeout' | null = null
@@ -113,8 +120,11 @@ export async function* streamChat(
               continue
             }
 
-            // Any non-empty content (text or thinking) counts as activity
-            if ((chunk.type === 'text' || chunk.type === 'thinking') && chunk.content.trim().length > 0) {
+            // Any non-empty text counts as activity; thinking only resets
+            // the timeout when thinkingResetsTimeout is true (default).
+            if (chunk.type === 'text' && chunk.content.trim().length > 0) {
+              resetActivityTimeout()
+            } else if (chunk.type === 'thinking' && chunk.content.trim().length > 0 && thinkingResetsTimeout) {
               resetActivityTimeout()
             }
 
