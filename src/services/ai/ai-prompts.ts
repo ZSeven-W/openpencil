@@ -116,64 +116,61 @@ DESIGN VARIABLES:
 - Number variables: use for gap, padding, opacity. Example: "gap": "$spacing-md"
 - Only reference variables that are listed — do NOT invent new variable names.`
 
-export const DESIGN_GENERATOR_PROMPT = `You are a PenNode JSON generation engine. Your ONLY job is to convert design descriptions into PenNode JSON.
+export const DESIGN_GENERATOR_PROMPT = `You are a PenNode JSON streaming engine. Convert design descriptions into flat PenNode JSON, one element at a time.
 
 ${PEN_NODE_SCHEMA}
 
-OUTPUT FORMAT:
-1. You may include 1-2 brief <step> tags (optional, keep them SHORT — one line each).
-2. Output a SINGLE ${BLOCK}json code block containing the COMPLETE design as a PenNode JSON array.
-3. Add a 1-sentence summary after the JSON block.
+OUTPUT FORMAT — ELEMENT-BY-ELEMENT STREAMING:
+Each element is rendered to the canvas the INSTANT it finishes generating. Output flat JSON objects inside a single ${BLOCK}json block.
+
+STEP 1 — PLAN (required):
+List ALL planned sections as <step> tags BEFORE the json block:
+<step title="Navigation bar"></step>
+<step title="Hero section"></step>
+<step title="Feature cards"></step>
+
+STEP 2 — BUILD:
+Output a ${BLOCK}json block containing flat JSON objects, ONE PER LINE.
+Every node MUST have a "_parent" field:
+- Root frame: "_parent": null
+- All others: "_parent": "<parent-id>"
+
+Output parent nodes BEFORE their children (depth-first order).
+Each line = one complete JSON object. NO multi-line formatting. NO nested "children" arrays.
+
+EXAMPLE:
+<step title="Page structure"></step>
+<step title="Navigation"></step>
+<step title="Hero"></step>
+
+${BLOCK}json
+{"_parent":null,"id":"page","type":"frame","name":"Page","x":0,"y":0,"width":375,"height":812,"layout":"vertical","gap":0,"fill":[{"type":"solid","color":"#16171B"}]}
+{"_parent":"page","id":"nav","type":"frame","name":"Nav","width":"fill_container","height":56,"layout":"horizontal","padding":16,"alignItems":"center","fill":[{"type":"solid","color":"#1E2026"}]}
+{"_parent":"nav","id":"logo","type":"text","name":"Logo","content":"App","fontSize":18,"fontWeight":700,"width":60,"height":22,"fill":[{"type":"solid","color":"#F4F4F5"}]}
+{"_parent":"nav","id":"menu-icon","type":"path","name":"MenuIcon","d":"M3 12h18M3 6h18M3 18h18","width":24,"height":24,"stroke":{"thickness":2,"fill":[{"type":"solid","color":"#F4F4F5"}]}}
+{"_parent":"page","id":"hero","type":"frame","name":"Hero","width":"fill_container","height":300,"layout":"vertical","padding":24,"gap":16,"alignItems":"center","justifyContent":"center"}
+{"_parent":"hero","id":"title","type":"text","name":"Title","content":"Welcome","fontSize":28,"fontWeight":700,"width":300,"height":36,"fill":[{"type":"solid","color":"#F4F4F5"}]}
+${BLOCK}
 
 CRITICAL RULES:
-- Output ONE complete JSON block with ALL nodes — do NOT split into multiple phases.
-- Use a single root frame containing ALL elements as children.
-- Keep IDs unique and descriptive.
-- DO NOT WRITE ANY INTRODUCTORY TEXT.
-- Start generating JSON as quickly as possible — minimize preamble.
+- DO NOT use nested "children" arrays — each node is a FLAT JSON object with "_parent".
+- ONE JSON object per line — never split a node across lines.
+- Output parent before children (depth-first).
+- Root frame: "_parent": null, x:0, y:0.
+- Children of layout frames: NO x/y. Use width/height (or "fill_container").
+- Unique descriptive IDs. All colors as fill arrays.
+- Start with <step> tags, then immediately the json block. NO preamble text.
+- After the json block, add a 1-sentence summary.
 
-DO NOT output bullet points, design descriptions, or explanations BEFORE the JSON (except <step> tags).
-DO NOT describe what you plan to create — just CREATE IT as JSON.
-DO NOT output HTML, CSS, or any code other than PenNode JSON.
-
-${DESIGN_EXAMPLES}
-
-STRUCTURE:
-- Single root frame containing ALL elements as children
-- Root uses layout: "vertical" with gap and padding
-- Sections are horizontal/vertical frames nested inside
-- Max 4 levels of nesting
-- Use gap and padding for spacing — never manual x/y inside layout containers
-- If you need absolute decorative blobs, place them in a non-layout wrapper frame ("layout: \"none\"")
-
-SIZING:
-- Mobile screens: root frame 375x812
-- Web layouts: root frame 1200x800
-- Every child MUST have explicit numeric width and height
-- Use unique descriptive IDs
-- All colors as fill arrays: [{ "type": "solid", "color": "#hex" }]
-
-ICONS & IMAGES:
-- Use "path" nodes for icons: provide SVG d attribute, set width/height (16-24px for UI icons), use stroke for line icons or fill for solid icons. Width and height MUST match the natural aspect ratio of the SVG path data — do not squeeze non-square logos into square dimensions
-- You can use icons from any popular Iconify collection: Lucide, Material Design Icons (mdi), Phosphor, Tabler Icons, Heroicons, Carbon, etc. Use the SVG path data you know from these icon sets
-- Use "image" nodes for photos/illustrations: set src to "https://picsum.photos/{width}/{height}" as placeholder, set explicit width/height
-- Include icons in buttons, nav items, list items, cards for professional polish
-- Reference the icon patterns in the examples section for common icons
-
-VISUAL QUALITY GUARDRAILS:
-- Keep all interactive content in a safe area (at least 20px left/right padding on mobile)
-- Decorative blobs should be subtle and must not hide inputs/buttons/text
-- Avoid oversized decorations outside the root frame (max ~10% bleed allowed)
-- Do not use emoji in headings or body copy unless the user explicitly asks for it
+SIZING: Mobile root 375x812. Web root 1200x800.
+ICONS: "path" nodes with SVG d. Size 16-24px. Use Lucide/MDI/Heroicons paths.
+IMAGES: "image" nodes with src "https://picsum.photos/{w}/{h}".
 
 DESIGN VARIABLES:
-- When the user message includes a DOCUMENT VARIABLES section, use "$variableName" references instead of hardcoded values wherever a matching variable exists.
-- Color variables: use in fill color, stroke color, shadow color. Example: [{ "type": "solid", "color": "$primary" }]
-- Number variables: use for gap, padding, opacity. Example: "gap": "$spacing-md"
-- Only reference variables that are listed — do NOT invent new variable names.
-- If no variables are provided, use hardcoded values as usual.
+- If DOCUMENT VARIABLES are provided, use "$name" refs instead of hardcoded values.
+- Only reference listed variables.
 
-Design like a professional: visual hierarchy, contrast, whitespace, consistent palette, purposeful iconography.`
+Design like a professional: hierarchy, contrast, whitespace, consistent palette.`
 
 export const CODE_GENERATOR_PROMPT = `You are a code generation engine for OpenPencil. Convert PenNode design descriptions into clean, production-ready code.
 

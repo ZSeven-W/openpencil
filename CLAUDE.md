@@ -11,16 +11,19 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **Run a single test:** `bun --bun vitest run path/to/test.ts`
 - **Type check:** `npx tsc --noEmit`
 - **Install dependencies:** `bun install`
+- **Electron dev:** `bun run electron:dev` (starts Vite + Electron together)
+- **Electron compile:** `bun run electron:compile` (esbuild electron/ to electron-dist/)
+- **Electron build:** `bun run electron:build` (full web build + compile + electron-builder package)
 
 ## Architecture
 
-OpenPencil is an open-source vector design tool (alternative to Pencil.dev) with a Design-as-Code philosophy. Built as a **TanStack Start** full-stack React application with Bun runtime. Server API powered by **Nitro**.
+OpenPencil is an open-source vector design tool (alternative to Pencil.dev) with a Design-as-Code philosophy. Built as a **TanStack Start** full-stack React application with Bun runtime. Server API powered by **Nitro**. Also ships as an **Electron** desktop app for macOS, Windows, and Linux.
 
-**Key technologies:** React 19, Fabric.js v7 (canvas engine), Zustand v5 (state management), TanStack Router (file-based routing), Tailwind CSS v4, shadcn/ui (UI primitives), Vite 7, Nitro (server), TypeScript (strict mode).
+**Key technologies:** React 19, Fabric.js v7 (canvas engine), Zustand v5 (state management), TanStack Router (file-based routing), Tailwind CSS v4, shadcn/ui (UI primitives), Vite 7, Nitro (server), Electron 35 (desktop), TypeScript (strict mode).
 
 ### Data Flow
 
-```
+```text
 React Components (Toolbar, LayerPanel, PropertyPanel)
         │ Zustand hooks
         ▼
@@ -43,7 +46,7 @@ React Components (Toolbar, LayerPanel, PropertyPanel)
 
 ### Design Variables Architecture
 
-```
+```text
 PenDocument (source of truth)
   ├── variables: Record<string, VariableDefinition>   ($color-1, $spacing-md, ...)
   ├── themes: Record<string, string[]>                ({Theme-1: ["Default","Dark"]})
@@ -154,6 +157,20 @@ File-based routing via TanStack Router. Routes in `src/routes/`, auto-generated 
 ### Styling
 
 Tailwind CSS v4 imported via `src/styles.css`. UI primitives from shadcn/ui (`src/components/ui/`). Icons from `lucide-react`. shadcn/ui config in `components.json`.
+
+### Electron Desktop App
+
+- **`electron/main.ts`** — Main process: window creation, Nitro server fork, IPC for native file dialogs, macOS traffic-light padding
+- **`electron/preload.ts`** — Context bridge for renderer ↔ main IPC
+- **`electron-builder.yml`** — Packaging config: macOS (dmg/zip), Windows (nsis/portable), Linux (AppImage/deb)
+- **`scripts/electron-dev.ts`** — Dev workflow: starts Vite → waits for port 3000 → compiles electron/ with esbuild → launches Electron
+- Build flow: `BUILD_TARGET=electron bun run build` → `bun run electron:compile` → `npx electron-builder`
+- In production, Nitro server is forked as a child process on a random port; Electron loads `http://127.0.0.1:{port}/editor`
+
+### CI / CD
+
+- **`.github/workflows/ci.yml`** — Push/PR: type check (`tsc --noEmit`), tests (`vitest`), web build
+- **`.github/workflows/build-electron.yml`** — Tag push (`v*`) or manual: builds Electron for macOS, Windows, Linux in parallel, creates draft GitHub Release with all artifacts
 
 ## Code Style
 

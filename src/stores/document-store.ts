@@ -194,8 +194,8 @@ function insertNodeInTree(
   }
 
   return nodes.map((n) => {
-    if (n.id === parentId && 'children' in n) {
-      const children = [...(n.children ?? [])]
+    if (n.id === parentId) {
+      const children = 'children' in n && n.children ? [...n.children] : []
       if (index !== undefined) {
         children.splice(index, 0, node)
       } else {

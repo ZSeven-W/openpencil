@@ -2,6 +2,8 @@
 
 Open-source vector design tool with a Design-as-Code philosophy. An alternative to [Pencil.dev](https://pencil.dev).
 
+Available as a **web app** and **desktop app** (macOS / Windows / Linux via Electron).
+
 ## Features
 
 ### Canvas
@@ -132,11 +134,15 @@ Open-source vector design tool with a Design-as-Code philosophy. An alternative 
 - **Styling:** [Tailwind CSS](https://tailwindcss.com/) v4
 - **Icons:** [Lucide React](https://lucide.dev/)
 - **Server:** [Nitro](https://nitro.build/) (API routes)
+- **Desktop:** [Electron](https://www.electronjs.org/) 35 + [electron-builder](https://www.electron.build/)
 - **AI:** [Anthropic SDK](https://docs.anthropic.com/) + [Claude Agent SDK](https://github.com/anthropics/claude-agent-sdk)
 - **Runtime:** [Bun](https://bun.sh/)
 - **Build:** [Vite](https://vite.dev/) 7
+- **CI/CD:** GitHub Actions
 
 ## Getting Started
+
+### Web (Development)
 
 ```bash
 bun install
@@ -144,6 +150,16 @@ bun --bun run dev
 ```
 
 Open http://localhost:3000 and click "New Design" to enter the editor.
+
+### Electron (Desktop)
+
+```bash
+# Development: starts Vite dev server + Electron
+bun run electron:dev
+
+# Production build (current platform)
+bun run electron:build
+```
 
 ### AI Configuration
 
@@ -156,40 +172,50 @@ The AI assistant works in two modes:
 
 | Command | Description |
 |---|---|
-| `bun --bun run dev` | Start dev server on port 3000 |
-| `bun --bun run build` | Production build |
+| `bun --bun run dev` | Start web dev server on port 3000 |
+| `bun --bun run build` | Production web build |
 | `bun --bun run preview` | Preview production build |
 | `bun --bun run test` | Run tests (Vitest) |
 | `npx tsc --noEmit` | Type check |
+| `bun run electron:dev` | Start Vite + Electron for desktop dev |
+| `bun run electron:compile` | Compile electron/ with esbuild |
+| `bun run electron:build` | Full Electron package (web build + compile + electron-builder) |
+
+## CI / CD
+
+### CI (`ci.yml`)
+
+Runs on every push and PR to `main` / `v0.0.1`:
+
+1. **Lint & Test** — type check (`tsc --noEmit`) + unit tests (`vitest`)
+2. **Build Web** — production web build, uploads `.output/` as artifact
+
+### Build Electron (`build-electron.yml`)
+
+Triggered by version tags (`v*`) or manual dispatch:
+
+1. **Build** — parallel matrix across macOS, Windows, Linux
+   - macOS: `.dmg` + `.zip`
+   - Windows: `.exe` (NSIS installer + portable)
+   - Linux: `.AppImage` + `.deb`
+2. **Release** — creates a draft GitHub Release with all platform artifacts
+
+To create a release:
+
+```bash
+git tag v0.1.0
+git push origin v0.1.0
+```
 
 ## Project Structure
 
-```
+```text
 src/
-  canvas/              # Fabric.js canvas engine (16 files)
-    fabric-canvas.tsx      Canvas component initialization
-    canvas-object-factory  Creates Fabric objects from PenNodes
-    canvas-object-sync     Syncs object properties Fabric ↔ store
-    canvas-sync-lock       Prevents circular sync loops
-    canvas-controls        Custom rotation controls and cursors
-    canvas-constants       Default colors, zoom limits
-    use-canvas-events      Drawing events, tool management
-    use-canvas-sync        Bidirectional PenDocument ↔ Fabric sync + variable resolution
-    use-canvas-viewport    Zoom, pan, tool cursor switching
-    use-canvas-selection   Selection sync Fabric ↔ store
-    use-canvas-guides      Smart alignment guides
-    guide-utils            Guide calculation and rendering
-    pen-tool               Bezier pen tool with anchors/handles
-    parent-child-transform Parent transform propagation to children
-    use-dimension-label    Size/position labels during manipulation
-    use-frame-labels       Frame name/boundary rendering
+  canvas/              # Fabric.js canvas engine
   variables/           # Design variables/tokens system
-    resolve-variables      Core $variable resolution for canvas rendering
-    replace-refs           Replace/resolve $refs on rename/delete
   components/
     editor/            # Editor layout, toolbar, tool buttons, status bar
-    panels/            # Layer panel, property panel (17 files), AI chat, code panel,
-                       # variables panel, variable row
+    panels/            # Layer panel, property panel, AI chat, code panel, variables panel
     shared/            # ColorPicker, NumberInput, VariablePicker, ExportDialog, etc.
     icons/             # Provider logos (Claude, OpenAI)
     ui/                # shadcn/ui primitives (Button, Select, Slider, Switch, etc.)
@@ -202,8 +228,15 @@ src/
   types/               # PenDocument/PenNode types, style types, variables, agent settings
   utils/               # File operations, export, node clone, SVG parser, syntax highlight
   routes/              # TanStack Router pages (/, /editor)
+electron/
+  main.ts              # Electron main process (window, Nitro server, IPC)
+  preload.ts           # Context bridge for renderer ↔ main IPC
 server/
   api/ai/              # Nitro API: streaming chat, generation, agent connection, models
+.github/
+  workflows/
+    ci.yml             # CI: type check, test, web build
+    build-electron.yml # Electron build for macOS/Windows/Linux + GitHub Release
 ```
 
 ## Roadmap
