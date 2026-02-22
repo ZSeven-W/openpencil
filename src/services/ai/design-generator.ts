@@ -625,7 +625,13 @@ function equalizeHorizontalSiblings(parentId: string): void {
 
   // Count frame children with fixed pixel widths
   const fixedFrames = parent.children.filter(
-    (c) => c.type === 'frame' && typeof c.width === 'number' && (c.width as number) > 0,
+    (c) => c.type === 'frame'
+      && !isPhonePlaceholderFrame(c)
+      && !isDividerLikeFrame(c)
+      && !isCompactControlFrame(c)
+      && toSizeNumber('height' in c ? c.height : undefined, 0) > 88
+      && typeof c.width === 'number'
+      && (c.width as number) > 0,
   )
   if (fixedFrames.length < 2) return
 
@@ -764,6 +770,8 @@ function applyGenerationHeuristics(node: PenNode): void {
   applyNoEmojiIconHeuristic(node)
   applyImagePlaceholderHeuristic(node)
   applyScreenshotFramePlaceholderHeuristic(node)
+  applyPhonePlaceholderSizingHeuristic(node)
+  applyDividerSizingHeuristic(node)
   applyNavbarHeuristic(node)
   applyHorizontalAlignCenterHeuristic(node)
   applyIconButtonSizing(node)
@@ -774,12 +782,19 @@ function applyGenerationHeuristics(node: PenNode): void {
   applyClipContentHeuristic(node)
 
   if (!('children' in node) || !Array.isArray(node.children)) return
+  // Flatten redundant single "Inner" wrapper layers to keep hierarchy shallow.
+  const flattenUpdates = getSingleInnerWrapperFlattenUpdates(node)
+  if (flattenUpdates) {
+    Object.assign(node as unknown as Record<string, unknown>, flattenUpdates as unknown as Record<string, unknown>)
+  }
   // Ensure section-level frames have minimum horizontal padding
   applySectionPaddingHeuristic(node)
   // Tree-aware: fix text widths relative to parent layout
   applyTextFillContainerInLayout(node)
   // Card row equalization: horizontal rows of cards → fill_container
   applyCardRowEqualization(node)
+  // Dense card rows (>=5 cards): compact internal content for layout stability
+  applyDenseCardRowCompaction(node)
   // Form/card children: convert fixed-width buttons/inputs to fill_container
   applyFormChildFillContainer(node)
   for (const child of node.children) {
@@ -818,11 +833,42 @@ function applyTreeFixesRecursive(
   removeNode: (id: string) => void,
 ): void {
   if (node.type !== 'frame') return
+
+  // Normalize phone placeholder frames even when they have no children.
+  const phoneUpdates = getPhonePlaceholderNormalizationUpdates(node)
+  if (phoneUpdates) {
+    updateNode(node.id, phoneUpdates as Partial<PenNode>)
+    const refreshed = getNodeById(node.id)
+    if (!refreshed || refreshed.type !== 'frame') return
+    node = refreshed
+  }
+
+  const dividerUpdates = getDividerNormalizationUpdates(node)
+  if (dividerUpdates) {
+    updateNode(node.id, dividerUpdates as Partial<PenNode>)
+    const refreshed = getNodeById(node.id)
+    if (!refreshed || refreshed.type !== 'frame') return
+    node = refreshed
+  }
   if (!Array.isArray(node.children) || node.children.length === 0) return
 
   // Keep a mutable reference to the current children list.
   // This gets refreshed after removals so subsequent fixes see the up-to-date tree.
   let children: PenNode[] = node.children
+
+  // --- Fix 14: Flatten redundant single "Inner" wrappers ---
+  {
+    const flattenUpdates = getSingleInnerWrapperFlattenUpdates(node)
+    if (flattenUpdates) {
+      updateNode(node.id, flattenUpdates as Partial<PenNode>)
+      const refreshed = getNodeById(node.id)
+      if (!refreshed || refreshed.type !== 'frame' || !Array.isArray(refreshed.children) || refreshed.children.length === 0) {
+        return
+      }
+      node = refreshed
+      children = refreshed.children
+    }
+  }
 
   // --- Fix 5: Remove decorative glow/shadow siblings of phone placeholders ---
   const hasPhone = children.some(
@@ -873,10 +919,13 @@ function applyTreeFixesRecursive(
       // Ensure inner phone children are styled as placeholders
       for (const child of phoneChildren) {
         if (child.name !== 'Phone Placeholder') {
+          const normalizedSize = resolvePhonePlaceholderSize(child)
           const colors = getPlaceholderColors('fill' in child ? child.fill : undefined)
           updateNode(child.id, {
             name: 'Phone Placeholder',
             layout: 'none',
+            width: normalizedSize?.width ?? 260,
+            height: normalizedSize?.height ?? 520,
             cornerRadius: Math.max(24, toCornerRadiusNumber(
               'cornerRadius' in child ? child.cornerRadius : undefined, 32)),
             fill: [{ type: 'solid', color: colors.fillColor }],
@@ -899,8 +948,8 @@ function applyTreeFixesRecursive(
     }
   }
 
-  // --- Fix 6: Section padding for fill_container frames ---
-  if (node.width === 'fill_container' && node.layout && node.layout !== 'none') {
+  // --- Fix 6: Section padding for wide fill_container frames ---
+  if (isLikelyWideSectionFrame(node) && node.layout && node.layout !== 'none') {
     const marker = `${node.name ?? ''} ${node.id}`.toLowerCase()
     if (!/(nav|navbar|navigation|header|footer|导航|顶部|底部)/.test(marker)) {
       const hasContent = children.some((c: PenNode) =>
@@ -911,7 +960,7 @@ function applyTreeFixesRecursive(
       if (hasContent) {
         const pad = parsePaddingValues('padding' in node ? node.padding : undefined)
         const isMobile = generationCanvasWidth <= 480
-        const minH = isMobile ? 16 : 40
+        const minH = isMobile ? 16 : (generationCanvasWidth <= 1024 ? 20 : 24)
         if (pad.left < minH || pad.right < minH) {
           const newL = Math.max(pad.left, minH)
           const newR = Math.max(pad.right, minH)
@@ -924,28 +973,34 @@ function applyTreeFixesRecursive(
 
   // --- Fix 1: Text in layout frames → Fill Width + Auto Height ---
   // Skip if parent is fit_content (hug) — fill_container child breaks hug parent layout
-  const parentIsHug1 = node.width === 'fit_content'
   if (node.layout && node.layout !== 'none' && !isBadgeLikeFrame(node)) {
     // Compute parent content width for accurate text height estimation
     const nodeW = toSizeNumber(node.width, 0)
-    const nodePad = parsePaddingValues('padding' in node ? node.padding : undefined)
-    const nodeContentW = nodeW > 0 ? nodeW - nodePad.left - nodePad.right : 0
+    let nodePad = parsePaddingValues('padding' in node ? node.padding : undefined)
+    const adjustedPad = getLongTextPaddingAdjustment(node, nodePad, nodeW)
+    if (adjustedPad) {
+      updateNode(node.id, { padding: adjustedPad } as Partial<PenNode>)
+      nodePad = parsePaddingValues(adjustedPad)
+    }
+    const nodeContentW = estimateParentContentWidthForText(node, nodePad, nodeW)
     for (const child of children) {
       if (child.type !== 'text') continue
-      const needsWidthFix = typeof child.width === 'number' && !parentIsHug1
-      const needsGrowthFix = !child.textGrowth
+      const needsWidthFix = shouldPromoteTextWidthToFillInLayout(node, child)
+      const needsGrowthFix = shouldUseFixedWidthTextGrowthInLayout(node, child)
       if (needsWidthFix || needsGrowthFix) {
         const updates: Record<string, unknown> = {}
         if (needsWidthFix) updates.width = 'fill_container'
         if (needsGrowthFix) updates.textGrowth = 'fixed-width'
         // Estimate auto-height based on content and parent width
-        const text = typeof child.content === 'string'
-          ? child.content : Array.isArray(child.content)
-            ? child.content.map((s: { text: string }) => s.text).join('') : ''
+        const text = getTextContentForNode(child)
+        const nextGrowth = needsGrowthFix ? 'fixed-width' : child.textGrowth
         if (text) {
           const fs = child.fontSize ?? 16
-          const lh = child.lineHeight ?? 1.2
-          updates.height = estimateAutoHeight(text, fs, lh, nodeContentW || undefined)
+          const hasCjk = /[\u4E00-\u9FFF\u3400-\u4DBF]/.test(text)
+          const lh = child.lineHeight ?? (hasCjk ? 1.5 : 1.4)
+          if (nextGrowth === 'fixed-width' || nextGrowth === 'fixed-width-height') {
+            updates.height = estimateAutoHeight(text, fs, lh, nodeContentW || undefined)
+          }
         }
         updateNode(child.id, updates as Partial<PenNode>)
       }
@@ -959,7 +1014,7 @@ function applyTreeFixesRecursive(
   if (node.layout && node.layout !== 'none') {
     const nodeW8 = toSizeNumber(node.width, 0)
     const nodePad8 = parsePaddingValues('padding' in node ? node.padding : undefined)
-    const nodeContentW8 = nodeW8 > 0 ? nodeW8 - nodePad8.left - nodePad8.right : 0
+    const nodeContentW8 = estimateParentContentWidthForText(node, nodePad8, nodeW8)
     for (const child of children) {
       if (child.type !== 'text') continue
       const fs = child.fontSize ?? 16
@@ -972,7 +1027,7 @@ function applyTreeFixesRecursive(
         const text = typeof child.content === 'string'
           ? child.content : Array.isArray(child.content)
             ? child.content.map((s: { text: string }) => s.text).join('') : ''
-        if (text && child.textGrowth === 'fixed-width') {
+        if (text && (child.textGrowth === 'fixed-width' || child.textGrowth === 'fixed-width-height')) {
           const estimated = estimateAutoHeight(text, fs, lh, nodeContentW8 || undefined)
           updateNode(child.id, { height: Math.max(estimated, singleLineMin) } as Partial<PenNode>)
         } else {
@@ -1021,7 +1076,13 @@ function applyTreeFixesRecursive(
   // Skip if parent is fit_content (hug) — fill_container children break hug layout.
   if (node.layout === 'horizontal' && node.width !== 'fit_content' && children.length >= 2) {
     const fixedFrames = children.filter((c: PenNode) =>
-      c.type === 'frame' && typeof c.width === 'number' && (c.width as number) > 0,
+      c.type === 'frame'
+      && !isPhonePlaceholderFrame(c)
+      && !isDividerLikeFrame(c)
+      && !isCompactControlFrame(c)
+      && toSizeNumber('height' in c ? c.height : undefined, 0) > 88
+      && typeof c.width === 'number'
+      && (c.width as number) > 0,
     )
     if (fixedFrames.length >= 2) {
       const heights = fixedFrames.map((c: PenNode) =>
@@ -1035,6 +1096,20 @@ function applyTreeFixesRecursive(
           updateNode(child.id, { width: 'fill_container', height: 'fill_container' } as Partial<PenNode>)
         }
       }
+    }
+  }
+
+  // --- Fix 7.5: Dense card rows (>=5) need compact content to avoid overflow ---
+  {
+    const denseChanged = compactDenseCardRowInPlace(node)
+    if (denseChanged) {
+      updateNode(node.id, node as Partial<PenNode>)
+      const refreshedDense = getNodeById(node.id)
+      if (!refreshedDense || refreshedDense.type !== 'frame' || !Array.isArray(refreshedDense.children) || refreshedDense.children.length === 0) {
+        return
+      }
+      node = refreshedDense
+      children = refreshedDense.children
     }
   }
 
@@ -1072,6 +1147,9 @@ function applyTreeFixesRecursive(
         const fs13 = t13.fontSize ?? 14
         if (txt13.length > 0 && txt13.length <= 28 && fs13 <= 18 && isBadgeLikeFrame(node)) {
           const frameUpdates13: Record<string, unknown> = {}
+          if (typeof node.width === 'string' && node.width.startsWith('fill_container')) {
+            frameUpdates13.width = 'fit_content'
+          }
           if (!node.layout || node.layout === 'none') frameUpdates13.layout = 'horizontal'
           if (node.alignItems !== 'center') frameUpdates13.alignItems = 'center'
           if (!node.justifyContent) frameUpdates13.justifyContent = 'center'
@@ -1201,14 +1279,34 @@ function applyTreeFixesRecursive(
     // Check if any sibling already uses fill_container —
     // if so, fixed-width siblings should align by also using fill_container.
     const hasFillSibling11 = children.some((c: PenNode) =>
-      c.type === 'frame' && c.width === 'fill_container',
+      c.type === 'frame'
+      && c.width === 'fill_container'
+      && !isPhonePlaceholderFrame(c)
+      && !isDividerLikeFrame(c),
     )
 
     for (const child of children) {
       if (child.type !== 'frame') continue
-      if (typeof child.width !== 'number') continue
-      const childW = toSizeNumber(child.width, 0)
+      if (isPhonePlaceholderFrame(child)) continue
+      if (isDividerLikeFrame(child)) continue
+      const childWidthValue = child.width
+      const childWidthIsNumber = typeof childWidthValue === 'number'
+      const childWidthIsFit = typeof childWidthValue === 'string' && childWidthValue.startsWith('fit_content')
+      if (!childWidthIsNumber && !childWidthIsFit) continue
+      const childW = childWidthIsNumber ? toSizeNumber(childWidthValue, 0) : 0
       const childH = toSizeNumber('height' in child ? child.height : undefined, 0)
+
+      // Text wrappers should not stay fit_content in wide vertical containers;
+      // it creates narrow columns even when parent has enough room.
+      if (
+        childWidthIsFit
+        && !isBadgeLikeFrame(child)
+        && !isCompactButtonLikeFrame(child)
+        && frameNeedsFillWidthForTextContent(child)
+      ) {
+        updateNode(child.id, { width: 'fill_container' } as Partial<PenNode>)
+        continue
+      }
 
       // Overflow: child wider than parent content area
       if (contentW11 > 0 && childW > contentW11) {
@@ -1216,8 +1314,23 @@ function applyTreeFixesRecursive(
         continue
       }
 
+      // Narrow fixed-width text wrappers in wide vertical containers cause
+      // severe over-wrapping and "squeezed" cards. Promote them to fill width.
+      if (
+        contentW11 > 0
+        && childWidthIsNumber
+        && childW > 0
+        && childW < contentW11 * 0.72
+        && !isBadgeLikeFrame(child)
+        && !isCompactButtonLikeFrame(child)
+        && frameNeedsFillWidthForTextContent(child)
+      ) {
+        updateNode(child.id, { width: 'fill_container' } as Partial<PenNode>)
+        continue
+      }
+
       // Consistency: if a sibling uses fill_container, match it
-      if (hasFillSibling11 && childH > 0 && childH <= 72) {
+      if (hasFillSibling11 && childH > 0 && childH <= 72 && !isCompactControlFrame(child)) {
         const hasContent = 'children' in child && Array.isArray(child.children)
           && child.children.some((gc: PenNode) => gc.type === 'text' || gc.type === 'path')
         if (hasContent) {
@@ -1226,22 +1339,13 @@ function applyTreeFixesRecursive(
         }
       }
 
-      // Horizontal button row → row fills parent, buttons use fit_content
+      // Horizontal button row → row fills parent
       if (child.layout === 'horizontal'
         && 'children' in child && Array.isArray(child.children)
         && child.children.length >= 2) {
-        const allBtnLike = child.children.every((gc: PenNode) =>
-          gc.type === 'frame'
-          && 'children' in gc && Array.isArray(gc.children)
-          && gc.children.some((ggc: PenNode) => ggc.type === 'text' || ggc.type === 'path'),
-        )
+        const allBtnLike = child.children.every((gc: PenNode) => isCompactButtonLikeFrame(gc))
         if (allBtnLike) {
           updateNode(child.id, { width: 'fill_container' } as Partial<PenNode>)
-          for (const btn of child.children) {
-            if (btn.type === 'frame' && typeof btn.width === 'number') {
-              updateNode(btn.id, { width: 'fit_content' } as Partial<PenNode>)
-            }
-          }
           const childGap = toGapNumber('gap' in child ? child.gap : undefined)
           const updates11: Record<string, unknown> = {}
           if (!child.justifyContent || child.justifyContent === 'start') {
@@ -1261,7 +1365,7 @@ function applyTreeFixesRecursive(
     applyTreeFixesRecursive(child, getNodeById, updateNode, removeNode)
   }
 
-  // --- Fix 10: Horizontal overflow — try gap reduction, fit_content, then expand ---
+  // --- Fix 10: Horizontal overflow — reduce gap, then expand parent ---
   if (node.layout === 'horizontal' && typeof node.width === 'number' && children.length >= 2) {
     const parentW2 = toSizeNumber(node.width, 0)
     const pad2 = parsePaddingValues('padding' in node ? node.padding : undefined)
@@ -1269,12 +1373,10 @@ function applyTreeFixesRecursive(
     const availW2 = parentW2 - pad2.left - pad2.right
 
     let childrenTotalW = 0
-    const fixedFrames: PenNode[] = []
     for (const child of children) {
       const cw = toSizeNumber('width' in child ? (child as { width?: number | string }).width : undefined, 0)
       if ('width' in child && typeof (child as { width?: number | string }).width === 'number' && cw > 0) {
         childrenTotalW += cw
-        if (child.type === 'frame') fixedFrames.push(child)
       } else {
         childrenTotalW += 80
       }
@@ -1295,30 +1397,13 @@ function applyTreeFixesRecursive(
         }
       }
 
-      // Strategy 2: fit_content for button-like rows
-      if (childrenTotalW > availW2 && fixedFrames.length >= 2) {
-        const heights2 = fixedFrames.map((c: PenNode) => toSizeNumber('height' in c ? c.height : undefined, 0))
-        const maxH2 = Math.max(...heights2, 0)
-        const minH2 = Math.min(...heights2, Infinity)
-        if (maxH2 > 0 && maxH2 <= 80 && minH2 / maxH2 > 0.5) {
-          for (const child of fixedFrames) {
-            updateNode(child.id, { width: 'fit_content' } as Partial<PenNode>)
-          }
-          const updates10: Record<string, unknown> = {}
-          if (!node.justifyContent || node.justifyContent === 'start') {
-            updates10.justifyContent = 'center'
-          }
-          if (Object.keys(updates10).length > 0) {
-            updateNode(node.id, updates10 as Partial<PenNode>)
-          }
-        } else {
-          // Strategy 3: Expand parent to fit
-          const neededW2 = Math.round(childrenTotalW + pad2.left + pad2.right)
-          if (neededW2 > parentW2 && neededW2 <= generationCanvasWidth) {
-            updateNode(node.id, { width: neededW2 } as Partial<PenNode>)
-          } else if (neededW2 > generationCanvasWidth * 0.8) {
-            updateNode(node.id, { width: 'fill_container' } as Partial<PenNode>)
-          }
+      // Strategy 2: Expand parent to fit
+      if (childrenTotalW > availW2) {
+        const neededW2 = Math.round(childrenTotalW + pad2.left + pad2.right)
+        if (neededW2 > parentW2 && neededW2 <= generationCanvasWidth) {
+          updateNode(node.id, { width: neededW2 } as Partial<PenNode>)
+        } else if (neededW2 > generationCanvasWidth * 0.8) {
+          updateNode(node.id, { width: 'fill_container' } as Partial<PenNode>)
         }
       }
     }
@@ -1350,7 +1435,13 @@ function applyCardRowEqualization(parent: PenNode): void {
   if (!Array.isArray(parent.children) || parent.children.length < 2) return
 
   const fixedFrames = parent.children.filter(
-    (c) => c.type === 'frame' && typeof c.width === 'number' && (c.width as number) > 0,
+    (c) => c.type === 'frame'
+      && !isPhonePlaceholderFrame(c)
+      && !isDividerLikeFrame(c)
+      && !isCompactControlFrame(c)
+      && toSizeNumber('height' in c ? c.height : undefined, 0) > 88
+      && typeof c.width === 'number'
+      && (c.width as number) > 0,
   )
   if (fixedFrames.length < 2) return
 
@@ -1363,6 +1454,347 @@ function applyCardRowEqualization(parent: PenNode): void {
       ;(child as unknown as Record<string, unknown>).width = 'fill_container'
     }
   }
+}
+
+type DenseCardTextRole = 'title' | 'meta' | 'desc'
+
+function isDenseCardRowFrame(node: PenNode): node is FrameNode {
+  if (node.type !== 'frame') return false
+  if (node.layout !== 'horizontal') return false
+  if (!Array.isArray(node.children) || node.children.length < 5) return false
+  return true
+}
+
+function isDenseRowCardFrame(node: PenNode): node is FrameNode {
+  if (node.type !== 'frame') return false
+  if (isPhonePlaceholderFrame(node) || isDividerLikeFrame(node)) return false
+  if (isBadgeLikeFrame(node) || isCompactButtonLikeFrame(node)) return false
+  if (!Array.isArray(node.children) || node.children.length === 0) return false
+
+  const marker = `${node.name ?? ''} ${node.id}`.toLowerCase()
+  if (/(button|btn|cta|badge|tag|chip|pill|nav|navbar|menu|tab|divider|separator|按钮|标签|导航|分隔)/.test(marker)) {
+    return false
+  }
+
+  const h = toSizeNumber(node.height, 0)
+  if (h > 0 && h < 88) return false
+  if (h > 0 && h > 460) return false
+
+  const directTextCount = node.children.filter(
+    (c) => c.type === 'text' && getTextContentForNode(c).trim().length > 0,
+  ).length
+  return directTextCount >= 1
+}
+
+function getDenseCardSortKey(node: PenNode, fallback: number): number {
+  const y = typeof node.y === 'number' ? node.y : fallback * 1000
+  const x = typeof node.x === 'number' ? node.x : 0
+  return y * 10000 + x
+}
+
+function getDenseCardMaxChars(
+  role: DenseCardTextRole,
+  aggressive: boolean,
+  hasCjk: boolean,
+): number {
+  if (role === 'title') return hasCjk ? (aggressive ? 6 : 8) : (aggressive ? 12 : 16)
+  if (role === 'meta') return hasCjk ? (aggressive ? 8 : 10) : (aggressive ? 14 : 18)
+  return hasCjk ? (aggressive ? 12 : 16) : (aggressive ? 24 : 34)
+}
+
+function denseCardTextLength(value: string): number {
+  return [...value].length
+}
+
+function cleanDenseCardPhrase(value: string): string {
+  let next = value
+    .replace(/[()（）[\]【】]/g, ' ')
+    .replace(/[“”"']/g, '')
+    .replace(/\s{2,}/g, ' ')
+    .trim()
+  next = next.replace(
+    /^(?:支持|自动识别|自动|帮助|让你|为你|通过|结合|进行|用于|提供|实现|打造|助你|能够|可以|全面|深度|专注|聚焦|系统化|针对|面向|快速|高效|轻松)\s*/u,
+    '',
+  ).trim()
+  next = next.replace(/[，。；;！!？?]+$/g, '').trim()
+  return next
+}
+
+function extractDenseCardKeywordCandidates(text: string): string[] {
+  const keywords = new Set<string>()
+
+  const knownTerms = text.match(
+    /(词根拆解|谐音联想|故事记忆|手写拼写|拼写练习|易混词对比|分级词库|智能助记|科学复习|词汇学习|错词强化|发音训练|语法解析|例句跟读|记忆方案|复习计划|母语级表达|核心词汇|词库覆盖|AI助记|AI驱动)/g,
+  )
+  if (knownTerms) {
+    for (const term of knownTerms) keywords.add(term)
+  }
+
+  const cefr = text.match(/CEFR\s*[A-C]\d(?:\s*[-~]\s*[A-C]\d)?/i)
+  if (cefr) keywords.add(cefr[0].replace(/\s+/g, ''))
+
+  const levelRange = text.match(/[A-C]\d(?:\s*[-~]\s*[A-C]\d)/i)
+  if (levelRange) keywords.add(levelRange[0].replace(/\s+/g, ''))
+
+  const cjkMetric = text.match(/~?\d{1,3}(?:,\d{3})?\s*词/)
+  if (cjkMetric) keywords.add(cjkMetric[0].replace(/\s+/g, ''))
+
+  const latinMetric = text.match(/\d+(?:\.\d+)?\s*(?:k|K|w|W)\+?/)
+  if (latinMetric) keywords.add(latinMetric[0])
+
+  return [...keywords]
+}
+
+function extractDenseCardPhrases(text: string): string[] {
+  const pieces = text
+    .replace(/\r?\n+/g, '|')
+    .replace(/[，。；;！!？?]/g, '|')
+    .replace(/[、/＋+·•,:：]/g, '|')
+    .split('|')
+    .map((piece) => cleanDenseCardPhrase(piece))
+    .filter((piece) => piece.length > 0)
+
+  const deduped: string[] = []
+  const seen = new Set<string>()
+  for (const piece of pieces) {
+    if (seen.has(piece)) continue
+    seen.add(piece)
+    deduped.push(piece)
+  }
+
+  for (const keyword of extractDenseCardKeywordCandidates(text)) {
+    if (!seen.has(keyword)) {
+      seen.add(keyword)
+      deduped.push(keyword)
+    }
+  }
+
+  return deduped
+}
+
+function buildDenseCardSummary(
+  normalized: string,
+  role: DenseCardTextRole,
+  maxChars: number,
+  hasCjk: boolean,
+): string {
+  const phrases = extractDenseCardPhrases(normalized)
+  if (phrases.length === 0) return ''
+
+  const fitting = phrases.filter((phrase) => denseCardTextLength(phrase) <= maxChars)
+  if (role === 'title') {
+    if (fitting.length === 0) return ''
+    return [...fitting].sort((a, b) => denseCardTextLength(b) - denseCardTextLength(a))[0]
+  }
+
+  const joiner = hasCjk ? '·' : ' / '
+  let summary = ''
+  const source = fitting.length > 0 ? fitting : phrases
+  for (const phrase of source) {
+    if (denseCardTextLength(phrase) > maxChars) continue
+    const next = summary ? `${summary}${joiner}${phrase}` : phrase
+    if (denseCardTextLength(next) <= maxChars) {
+      summary = next
+    }
+  }
+
+  return summary
+}
+
+function compactDenseCardText(
+  text: string,
+  role: DenseCardTextRole,
+  aggressive: boolean,
+): string {
+  const normalized = text.replace(/\r?\n+/g, ' ').replace(/\s{2,}/g, ' ').trim()
+  if (!normalized) return normalized
+  const hasCjk = /[\u3400-\u4DBF\u4E00-\u9FFF\u3040-\u30FF\uAC00-\uD7AF]/.test(normalized)
+  const maxChars = getDenseCardMaxChars(role, aggressive, hasCjk)
+  if (denseCardTextLength(normalized) <= maxChars) return normalized
+
+  const refined = buildDenseCardSummary(normalized, role, maxChars, hasCjk)
+  if (refined) return refined
+
+  // Dense rows should prefer dropping secondary copy over hard truncation.
+  if (role !== 'title') return ''
+
+  // Title fallback: pick a whole phrase token that fits instead of slicing chars.
+  const tokens = normalized
+    .split(/[，。；;！!？?\s、/＋+·•,:：]/)
+    .map((token) => cleanDenseCardPhrase(token))
+    .filter((token) => token.length > 0)
+  const firstFitting = tokens.find((token) => denseCardTextLength(token) <= maxChars)
+  return firstFitting ?? normalized
+}
+
+function applyDenseCardTextCompaction(
+  node: PenNode,
+  role: DenseCardTextRole,
+  aggressive: boolean,
+): boolean {
+  if (node.type !== 'text') return false
+  const original = getTextContentForNode(node)
+  const compacted = compactDenseCardText(original, role, aggressive)
+  let changed = false
+
+  if (compacted !== original) {
+    node.content = compacted
+    changed = true
+  }
+
+  const fontSize = node.fontSize ?? 16
+  const maxFontSize = role === 'title'
+    ? (aggressive ? 20 : 22)
+    : role === 'meta'
+      ? (aggressive ? 15 : 16)
+      : (aggressive ? 13 : 14)
+  if (fontSize > maxFontSize) {
+    node.fontSize = maxFontSize
+    changed = true
+  }
+
+  const targetLineHeight = role === 'title' ? 1.25 : 1.35
+  if (!node.lineHeight || node.lineHeight > (role === 'title' ? 1.4 : 1.6)) {
+    node.lineHeight = targetLineHeight
+    changed = true
+  }
+
+  if (typeof node.width === 'number' && node.width > 0) {
+    node.width = 'fill_container'
+    changed = true
+  }
+
+  if (role === 'desc') {
+    if (node.textGrowth !== 'fixed-width') {
+      node.textGrowth = 'fixed-width'
+      changed = true
+    }
+  } else if (node.textGrowth === 'fixed-width-height') {
+    node.textGrowth = 'auto'
+    changed = true
+  }
+
+  return changed
+}
+
+function nodeHasTextDescendant(node: PenNode): boolean {
+  if (node.type === 'text') return true
+  if (!('children' in node) || !Array.isArray(node.children)) return false
+  return node.children.some((child) => nodeHasTextDescendant(child))
+}
+
+function isDenseCardRemovableDecorative(node: PenNode): boolean {
+  if (node.type === 'text') return false
+  if (isPhonePlaceholderFrame(node) || isDividerLikeFrame(node)) return false
+  if (node.type === 'frame' && nodeHasTextDescendant(node)) return false
+  return node.type === 'frame'
+    || node.type === 'path'
+    || node.type === 'rectangle'
+    || node.type === 'ellipse'
+    || node.type === 'image'
+    || node.type === 'line'
+}
+
+function compactDenseCardFrameInPlace(
+  card: FrameNode,
+  aggressive: boolean,
+): boolean {
+  if (!Array.isArray(card.children) || card.children.length === 0) return false
+  let changed = false
+
+  const pad = parsePaddingValues(card.padding)
+  const maxHorizontalPad = aggressive ? 12 : 14
+  const maxVerticalPad = aggressive ? 10 : 12
+  const nextTop = Math.min(pad.top, maxVerticalPad)
+  const nextRight = Math.min(pad.right, maxHorizontalPad)
+  const nextBottom = Math.min(pad.bottom, maxVerticalPad)
+  const nextLeft = Math.min(pad.left, maxHorizontalPad)
+  if (nextTop !== pad.top || nextRight !== pad.right || nextBottom !== pad.bottom || nextLeft !== pad.left) {
+    card.padding = [nextTop, nextRight, nextBottom, nextLeft]
+    changed = true
+  }
+
+  const gap = toGapNumber(card.gap)
+  const targetGap = aggressive ? 6 : 8
+  if (gap > targetGap) {
+    card.gap = targetGap
+    changed = true
+  }
+
+  const textEntries = card.children
+    .map((child, index) => ({ child, index, sortKey: getDenseCardSortKey(child, index) }))
+    .filter((entry) => entry.child.type === 'text' && getTextContentForNode(entry.child).trim().length > 0)
+    .sort((a, b) => a.sortKey - b.sortKey)
+
+  const keepTextCount = 2
+  const removeIndexes = new Set<number>()
+  for (let i = 0; i < textEntries.length; i += 1) {
+    const entry = textEntries[i]
+    if (i >= keepTextCount) {
+      removeIndexes.add(entry.index)
+      changed = true
+      continue
+    }
+    const role: DenseCardTextRole = i === 0 ? 'title' : i === 1 ? 'meta' : 'desc'
+    if (applyDenseCardTextCompaction(entry.child, role, aggressive)) {
+      changed = true
+    }
+    if (getTextContentForNode(entry.child).trim().length === 0) {
+      removeIndexes.add(entry.index)
+      changed = true
+    }
+  }
+
+  const decorativeEntries = card.children
+    .map((child, index) => ({ child, index, sortKey: getDenseCardSortKey(child, index) }))
+    .filter((entry) => isDenseCardRemovableDecorative(entry.child))
+    .sort((a, b) => a.sortKey - b.sortKey)
+  const keepDecorCount = aggressive ? 1 : 2
+  for (let i = keepDecorCount; i < decorativeEntries.length; i += 1) {
+    removeIndexes.add(decorativeEntries[i].index)
+    changed = true
+  }
+
+  if (removeIndexes.size > 0) {
+    card.children = card.children.filter((_, index) => !removeIndexes.has(index))
+  }
+
+  return changed
+}
+
+function compactDenseCardRowInPlace(row: PenNode): boolean {
+  if (!isDenseCardRowFrame(row)) return false
+
+  const rowChildren = row.children ?? []
+  const cards = rowChildren.filter((child): child is FrameNode => isDenseRowCardFrame(child))
+  if (cards.length < 5) return false
+
+  const pad = parsePaddingValues(row.padding)
+  const rowGap = toGapNumber(row.gap)
+  const rowW = toSizeNumber(row.width, 0)
+  const perCardW = rowW > 0
+    ? (rowW - pad.left - pad.right - rowGap * Math.max(0, cards.length - 1)) / cards.length
+    : 0
+  const aggressive = cards.length >= 6 || (perCardW > 0 && perCardW < 170)
+
+  let changed = false
+  const targetGap = aggressive ? 8 : 10
+  if (rowGap > targetGap) {
+    row.gap = targetGap
+    changed = true
+  }
+
+  for (const card of cards) {
+    if (compactDenseCardFrameInPlace(card, aggressive)) {
+      changed = true
+    }
+  }
+
+  return changed
+}
+
+function applyDenseCardRowCompaction(parent: PenNode): void {
+  compactDenseCardRowInPlace(parent)
 }
 
 function applyTextFillContainerInLayout(parent: PenNode): void {
@@ -1378,8 +1810,13 @@ function applyTextFillContainerInLayout(parent: PenNode): void {
 
   // Compute parent's actual content width for accurate text height estimation
   const parentW = toSizeNumber(parent.width, 0)
-  const pad = parsePaddingValues('padding' in parent ? parent.padding : undefined)
-  const contentW = parentW > 0 ? parentW - pad.left - pad.right : 0
+  let pad = parsePaddingValues('padding' in parent ? parent.padding : undefined)
+  const adjustedPad = getLongTextPaddingAdjustment(parent, pad, parentW)
+  if (adjustedPad) {
+    parent.padding = adjustedPad
+    pad = parsePaddingValues(adjustedPad)
+  }
+  const contentW = estimateParentContentWidthForText(parent, pad, parentW)
 
   for (const child of parent.children) {
     if (child.type === 'text') {
@@ -1402,25 +1839,31 @@ function applyTextFillContainerInLayout(parent: PenNode): void {
         continue
       }
 
-      // Convert fixed-pixel text to fill_container, BUT NOT if parent is fit_content
-      if (typeof child.width === 'number' && !parentIsHug) {
+      const shouldFillWidth = shouldPromoteTextWidthToFillInLayout(parent, child)
+      if (shouldFillWidth) {
         child.width = 'fill_container'
       }
-      if (!child.textGrowth) child.textGrowth = 'fixed-width'
+      const shouldFixGrowth = shouldUseFixedWidthTextGrowthInLayout(parent, child)
+      if (shouldFixGrowth) child.textGrowth = 'fixed-width'
       if (!child.lineHeight) {
         const fs = child.fontSize ?? 16
         const hasCjk = /[\u4E00-\u9FFF\u3400-\u4DBF]/.test(
           typeof child.content === 'string' ? child.content : '',
         )
         child.lineHeight = hasCjk
-          ? (fs >= 28 ? 1.4 : 1.7)
+          ? (fs >= 28 ? 1.35 : 1.55)
           : (fs >= 28 ? 1.2 : 1.5)
       }
       // Re-estimate height based on parent's actual content width (not canvas width)
-      if (contentW > 0 && child.textGrowth === 'fixed-width' && typeof child.content === 'string' && child.content.trim()) {
+      const textContent = getTextContentForNode(child).trim()
+      if (
+        contentW > 0
+        && (child.textGrowth === 'fixed-width' || child.textGrowth === 'fixed-width-height')
+        && textContent
+      ) {
         const fs = child.fontSize ?? 16
         const lh = child.lineHeight ?? 1.5
-        child.height = estimateAutoHeight(child.content.trim(), fs, lh, contentW)
+        child.height = estimateAutoHeight(textContent, fs, lh, contentW)
       }
     }
     // Also fix image children in vertical layout — images should fill parent width
@@ -1503,6 +1946,137 @@ function getPlaceholderColors(fill: unknown): {
     return { fillColor: '#111627', strokeColor: '#1E2440', textColor: '#2A3050' }
   }
   return { fillColor: '#F1F5F9', strokeColor: '#D1D5DB', textColor: '#C0C4CC' }
+}
+
+function isDividerMarker(text: string): boolean {
+  return /(divider|separator|splitter|rule|(^|[\s_-])hr([\s_-]|$)|分隔|分割|分界)/.test(text)
+}
+
+function isDividerLikeFrame(node: PenNode): boolean {
+  if (node.type !== 'frame') return false
+  const marker = `${node.name ?? ''} ${node.id}`.toLowerCase()
+  const markerMatch = isDividerMarker(marker)
+
+  const w = toSizeNumber('width' in node ? node.width : undefined, 0)
+  const h = toSizeNumber('height' in node ? node.height : undefined, 0)
+  const thinVertical = w > 0 && w <= 6 && h >= 18
+  const thinHorizontal = h > 0 && h <= 6 && w >= 18
+  if (!markerMatch && !thinVertical && !thinHorizontal) return false
+
+  if (Array.isArray(node.children) && node.children.some((c) => c.type === 'text')) return false
+  if (!markerMatch && w > 0 && h > 0 && w <= 20 && h <= 20) return false
+  return true
+}
+
+function getDividerNormalizationUpdates(node: PenNode): Record<string, unknown> | null {
+  if (!isDividerLikeFrame(node)) return null
+  const frame = node as FrameNode
+
+  const marker = `${frame.name ?? ''} ${frame.id}`.toLowerCase()
+  const w = toSizeNumber(frame.width, 0)
+  const h = toSizeNumber(frame.height, 0)
+  const strokeW = toStrokeThicknessNumber(frame.stroke, 1)
+  const thickness = clamp(Math.round(strokeW > 0 ? strokeW : 1), 1, 4)
+
+  const explicitVertical = /(vertical|竖)/.test(marker)
+  const explicitHorizontal = /(horizontal|横)/.test(marker)
+  const isVertical = explicitVertical
+    || (!explicitHorizontal && ((h > 0 && w > 0 && h >= w) || (h > 0 && w <= 0)))
+
+  const updates: Record<string, unknown> = {}
+  if (isVertical) {
+    if (typeof frame.width !== 'number' || w <= 0 || w > 6) {
+      updates.width = thickness
+    }
+  } else if (typeof frame.height !== 'number' || h <= 0 || h > 6) {
+    updates.height = thickness
+  }
+
+  if (frame.layout && frame.layout !== 'none') updates.layout = 'none'
+  if (Array.isArray(frame.children) && frame.children.length > 0) updates.children = []
+
+  return Object.keys(updates).length > 0 ? updates : null
+}
+
+function applyDividerSizingHeuristic(node: PenNode): void {
+  const updates = getDividerNormalizationUpdates(node)
+  if (!updates) return
+  Object.assign(node as unknown as Record<string, unknown>, updates)
+}
+
+function isPhonePlaceholderFrame(node: PenNode): boolean {
+  if (node.type !== 'frame') return false
+  if (node.name === 'Phone Placeholder') return true
+
+  const marker = `${node.name ?? ''} ${node.id}`.toLowerCase()
+  if (/(phone[-_\s]*(placeholder|mockup)|手机占位|手机示意|手机模型)/.test(marker)) return true
+  if (!isExplicitPlaceholderMarker(marker)) return false
+
+  const w = toSizeNumber('width' in node ? node.width : undefined, 0)
+  const h = toSizeNumber('height' in node ? node.height : undefined, 0)
+  if (w <= 0 || h <= 0) return false
+  return h / Math.max(1, w) > 1.2 && h >= 260
+}
+
+function resolvePhonePlaceholderSize(node: PenNode): { width: number; height: number } | null {
+  if (node.type !== 'frame') return null
+  if (!isPhonePlaceholderFrame(node) && !isPhoneShaped(node)) return null
+
+  const rawWidth = 'width' in node ? node.width : undefined
+  const rawHeight = 'height' in node ? node.height : undefined
+  const parsedWidth = toSizeNumber(rawWidth, 0)
+  const parsedHeight = toSizeNumber(rawHeight, 0)
+
+  const widthValid = parsedWidth >= 220 && parsedWidth <= 360
+  const heightValid = parsedHeight >= 440 && parsedHeight <= 760
+  const ratio = parsedHeight > 0 && parsedWidth > 0 ? parsedHeight / parsedWidth : 0
+  const ratioValid = ratio >= 1.45 && ratio <= 2.7
+
+  let width = 260
+  let height = 520
+  if (widthValid && heightValid && ratioValid) {
+    width = parsedWidth
+    height = parsedHeight
+  } else if (parsedWidth > 0 && (parsedHeight <= 0 || !heightValid || !ratioValid)) {
+    width = clamp(parsedWidth, 240, 320)
+    height = clamp(Math.round(width * 2), 500, 620)
+  } else if (parsedHeight > 0 && (parsedWidth <= 0 || !widthValid || !ratioValid)) {
+    height = clamp(parsedHeight, 500, 620)
+    width = clamp(Math.round(height / 2), 240, 320)
+  }
+
+  return { width: Math.round(width), height: Math.round(height) }
+}
+
+function getPhonePlaceholderNormalizationUpdates(node: PenNode): Record<string, unknown> | null {
+  if (node.type !== 'frame') return null
+  const normalizedSize = resolvePhonePlaceholderSize(node)
+  if (!normalizedSize) return null
+
+  const updates: Record<string, unknown> = {}
+  if (node.name !== 'Phone Placeholder') updates.name = 'Phone Placeholder'
+  if (node.layout !== 'none') updates.layout = 'none'
+
+  const currentWidth = toSizeNumber('width' in node ? node.width : undefined, 0)
+  const currentHeight = toSizeNumber('height' in node ? node.height : undefined, 0)
+  if (typeof node.width !== 'number' || Math.abs(currentWidth - normalizedSize.width) > 0.5) {
+    updates.width = normalizedSize.width
+  }
+  if (typeof node.height !== 'number' || Math.abs(currentHeight - normalizedSize.height) > 0.5) {
+    updates.height = normalizedSize.height
+  }
+
+  if (Array.isArray(node.children) && node.children.length > 0) {
+    updates.children = []
+  }
+
+  return Object.keys(updates).length > 0 ? updates : null
+}
+
+function applyPhonePlaceholderSizingHeuristic(node: PenNode): void {
+  const updates = getPhonePlaceholderNormalizationUpdates(node)
+  if (!updates) return
+  Object.assign(node as unknown as Record<string, unknown>, updates)
 }
 
 function applyScreenshotFramePlaceholderHeuristic(node: PenNode): void {
@@ -1594,6 +2168,103 @@ function applyNavbarHeuristic(node: PenNode): void {
   if (!node.justifyContent) node.justifyContent = 'space_between'
 }
 
+function isInnerWrapperMarker(node: PenNode): boolean {
+  const marker = `${node.name ?? ''} ${node.id}`.toLowerCase()
+  return /(^|[\s_-])inner([\s_-]|$)|内层/.test(marker)
+}
+
+function hasMeaningfulFrameVisualStyle(node: PenNode): boolean {
+  if (node.type !== 'frame') return false
+
+  const hasFill = Array.isArray(node.fill) && node.fill.length > 0
+  if (hasFill) return true
+
+  const strokeW = toStrokeThicknessNumber(node.stroke, 0)
+  if (strokeW > 0) return true
+
+  const cr = toCornerRadiusNumber(node.cornerRadius, 0)
+  if (cr > 0) return true
+
+  if (Array.isArray(node.effects) && node.effects.length > 0) return true
+  if (node.clipContent === true) return true
+  if (typeof node.opacity === 'number' && node.opacity < 0.999) return true
+  if (typeof node.rotation === 'number' && Math.abs(node.rotation) > 0.01) return true
+
+  return false
+}
+
+interface InnerWrapperFlattenUpdates {
+  children: PenNode[]
+  layout?: FrameNode['layout']
+  alignItems?: FrameNode['alignItems']
+  justifyContent?: FrameNode['justifyContent']
+  gap?: FrameNode['gap']
+  padding?: FrameNode['padding']
+}
+
+function getSingleInnerWrapperFlattenUpdates(
+  parent: PenNode,
+): InnerWrapperFlattenUpdates | null {
+  if (parent.type !== 'frame') return null
+  if (!Array.isArray(parent.children) || parent.children.length !== 1) return null
+  if (isBadgeLikeFrame(parent) || isCompactButtonLikeFrame(parent)) return null
+
+  const inner = parent.children[0]
+  if (inner.type !== 'frame') return null
+  if (!Array.isArray(inner.children) || inner.children.length === 0) return null
+  if (!isInnerWrapperMarker(inner)) return null
+  if (isPhoneShaped(inner) || inner.name === 'Phone Placeholder') return null
+  if (hasMeaningfulFrameVisualStyle(inner)) return null
+
+  // Keep explicit fixed-width wrappers: they often act as deliberate content max-width containers.
+  if (typeof inner.width === 'number' && inner.width > 0) return null
+
+  const parentLayout = parent.layout
+  const innerLayout = inner.layout
+  if (parentLayout && parentLayout !== 'none' && innerLayout && innerLayout !== 'none' && parentLayout !== innerLayout) {
+    return null
+  }
+
+  const updates: InnerWrapperFlattenUpdates = {
+    children: inner.children,
+  }
+
+  if ((!parentLayout || parentLayout === 'none') && innerLayout && innerLayout !== 'none') {
+    updates.layout = innerLayout
+  }
+  if (!parent.alignItems && inner.alignItems) updates.alignItems = inner.alignItems
+  if (!parent.justifyContent && inner.justifyContent) updates.justifyContent = inner.justifyContent
+
+  const parentGap = toGapNumber('gap' in parent ? parent.gap : undefined)
+  const innerGap = toGapNumber('gap' in inner ? inner.gap : undefined)
+  if (parentGap <= 0 && innerGap > 0) updates.gap = inner.gap
+
+  const parentPad = parsePaddingValues('padding' in parent ? parent.padding : undefined)
+  const innerPad = parsePaddingValues('padding' in inner ? inner.padding : undefined)
+  const parentPadEmpty = parentPad.top === 0 && parentPad.right === 0 && parentPad.bottom === 0 && parentPad.left === 0
+  const innerPadNonEmpty = innerPad.top !== 0 || innerPad.right !== 0 || innerPad.bottom !== 0 || innerPad.left !== 0
+  if (parentPadEmpty && innerPadNonEmpty) updates.padding = inner.padding
+
+  // For non-layout parents, preserve absolute positioning of promoted children.
+  const parentIsLayout = !!(updates.layout ?? parent.layout) && (updates.layout ?? parent.layout) !== 'none'
+  if (!parentIsLayout) {
+    const ox = typeof inner.x === 'number' ? inner.x : 0
+    const oy = typeof inner.y === 'number' ? inner.y : 0
+    if (ox !== 0 || oy !== 0) {
+      updates.children = inner.children.map((child) => {
+        const lifted: PenNode = { ...child }
+        if (typeof child.x === 'number') lifted.x = child.x + ox
+        else if (ox !== 0) lifted.x = ox
+        if (typeof child.y === 'number') lifted.y = child.y + oy
+        else if (oy !== 0) lifted.y = oy
+        return lifted
+      })
+    }
+  }
+
+  return updates
+}
+
 function isBadgeLikeFrame(node: PenNode): boolean {
   if (node.type !== 'frame') return false
   if (!Array.isArray(node.children) || node.children.length === 0 || node.children.length > 3) return false
@@ -1613,6 +2284,9 @@ function isBadgeLikeFrame(node: PenNode): boolean {
   const textNode = textChildren[0]
   if (textNode.type !== 'text' || typeof textNode.content !== 'string') return false
   const label = textNode.content.trim()
+  const lowerLabel = label.toLowerCase()
+  const ctaLikeLabel = /(download|get\s*it\s*on|learn\s*more|start|continue|open|install|try|buy|sign\s*in|log\s*in|register|submit|app\s*store|google\s*play|免费下载|立即下载|下载|了解|查看|开始|继续|进入|安装|试用|购买|登录|注册|提交|前往|打开)/.test(lowerLabel)
+  if (ctaLikeLabel && !explicitBadgeMarker) return false
   const charCount = [...label].length
   const hasCjk = /[\u3400-\u4DBF\u4E00-\u9FFF\u3040-\u30FF\uAC00-\uD7AF]/.test(label)
   const fontSize = textNode.fontSize ?? 14
@@ -1628,9 +2302,20 @@ function isBadgeLikeFrame(node: PenNode): boolean {
     c.type === 'path' || c.type === 'ellipse' || c.type === 'rectangle',
   ).length
   if (iconCount > 1) return false
+  const hasLargeIcon = node.children.some((c) => {
+    if (!(c.type === 'path' || c.type === 'ellipse' || c.type === 'rectangle')) return false
+    const iw = toSizeNumber('width' in c ? c.width : undefined, 0)
+    const ih = toSizeNumber('height' in c ? c.height : undefined, 0)
+    return Math.max(iw, ih) >= 16
+  })
+  if (hasLargeIcon && !explicitBadgeMarker) return false
 
   const w = toSizeNumber(node.width, 0)
   if (w > 0 && w > 260) return false
+  const looksButtonByWidth = w >= 140 && (
+    node.layout === 'horizontal' || node.alignItems === 'center' || node.justifyContent === 'center'
+  )
+  if (looksButtonByWidth && ctaLikeLabel && !explicitBadgeMarker) return false
 
   const pad = parsePaddingValues('padding' in node ? node.padding : undefined)
   const inferredH = h > 0 ? h : Math.round(fontSize * 1.2 + pad.top + pad.bottom)
@@ -1639,6 +2324,115 @@ function isBadgeLikeFrame(node: PenNode): boolean {
   return node.layout === 'horizontal'
     || node.alignItems === 'center'
     || node.justifyContent === 'center'
+}
+
+function isCompactButtonLikeFrame(node: PenNode): boolean {
+  if (node.type !== 'frame') return false
+  if (!Array.isArray(node.children) || node.children.length === 0 || node.children.length > 4) return false
+  if (isBadgeLikeFrame(node)) return false
+
+  const marker = `${node.name ?? ''} ${node.id}`.toLowerCase()
+  if (/(card|panel|section|container|feature|service|list|item|卡片|面板|容器|功能)/.test(marker)) return false
+
+  const h = toSizeNumber(node.height, 0)
+  if (h <= 0 || h > 72) return false
+  if (node.layout === 'vertical') return false
+
+  const textChildren = node.children.filter(
+    (c) => c.type === 'text' && typeof c.content === 'string' && c.content.trim().length > 0,
+  )
+  if (textChildren.length === 0 || textChildren.length > 2) return false
+  for (const textNode of textChildren) {
+    if (textNode.type !== 'text') return false
+    const content = getTextContentForNode(textNode).trim()
+    const fs = textNode.fontSize ?? 16
+    const hasCjk = /[\u3400-\u4DBF\u4E00-\u9FFF\u3040-\u30FF\uAC00-\uD7AF]/.test(content)
+    const compactLen = content.replace(/\s+/g, '').length
+    if (fs > 24) return false
+    if (/[\n\r]/.test(content)) return false
+    if (compactLen > (hasCjk ? 14 : 26)) return false
+  }
+
+  const hasNestedFrames = node.children.some((c) => c.type === 'frame')
+  if (hasNestedFrames) return false
+
+  const centeredLike = node.layout === 'horizontal'
+    || node.alignItems === 'center'
+    || node.justifyContent === 'center'
+  if (!centeredLike) return false
+
+  const hasIcon = node.children.some((c) =>
+    c.type === 'path' || c.type === 'ellipse' || c.type === 'rectangle' || c.type === 'image',
+  )
+  const explicitButtonMarker = /(^|[\s_-])(button|btn|cta|submit|download|install|signup|sign[-_\s]*in|login|register)([\s_-]|$)|按钮|下载|立即|开始|购买|了解|进入|登录|注册|提交|继续|安装|试用|app\s*store|google\s*play/.test(marker)
+  return explicitButtonMarker || hasIcon || textChildren.length === 1
+}
+
+function isCompactControlFrame(node: PenNode): boolean {
+  return isBadgeLikeFrame(node) || isCompactButtonLikeFrame(node)
+}
+
+function isLongTextLikeForLayout(node: PenNode): boolean {
+  if (node.type !== 'text') return false
+  const text = getTextContentForNode(node).trim()
+  if (!text) return false
+  if (/[\n\r]/.test(text)) return true
+  if (node.textGrowth === 'fixed-width' || node.textGrowth === 'fixed-width-height') return true
+  const hasCjk = /[\u3400-\u4DBF\u4E00-\u9FFF\u3040-\u30FF\uAC00-\uD7AF]/.test(text)
+  const compactLen = text.replace(/\s+/g, '').length
+  return compactLen >= (hasCjk ? 9 : 18)
+}
+
+function shouldPromoteTextWidthToFillInLayout(parent: PenNode, child: PenNode): boolean {
+  if (parent.type !== 'frame' || child.type !== 'text') return false
+  if (parent.layout !== 'vertical') return false
+  if (parent.width === 'fit_content') return false
+  if (isBadgeLikeFrame(parent) || isCompactButtonLikeFrame(parent)) return false
+
+  const widthValue = child.width
+  if (typeof widthValue === 'string' && widthValue.startsWith('fill_container')) return false
+
+  // fixed-width text must have a usable width constraint in vertical layouts
+  if (child.textGrowth === 'fixed-width' || child.textGrowth === 'fixed-width-height') {
+    return true
+  }
+
+  if (isLongTextLikeForLayout(child)) {
+    return true
+  }
+
+  // Narrow explicit widths in vertical cards frequently cause over-wrapping.
+  if (typeof widthValue === 'number' && widthValue > 0) {
+    const content = getTextContentForNode(child).trim()
+    if (!content) return false
+    const hasCjk = /[\u3400-\u4DBF\u4E00-\u9FFF\u3040-\u30FF\uAC00-\uD7AF]/.test(content)
+    const compactLen = content.replace(/\s+/g, '').length
+    return compactLen >= (hasCjk ? 7 : 14)
+  }
+
+  return false
+}
+
+function shouldUseFixedWidthTextGrowthInLayout(parent: PenNode, child: PenNode): boolean {
+  if (child.type !== 'text') return false
+  if (child.textGrowth === 'fixed-width' || child.textGrowth === 'fixed-width-height') return false
+  return shouldPromoteTextWidthToFillInLayout(parent, child) || isLongTextLikeForLayout(child)
+}
+
+function frameNeedsFillWidthForTextContent(node: PenNode, depth = 0): boolean {
+  if (node.type !== 'frame') return false
+  if (isBadgeLikeFrame(node) || isCompactButtonLikeFrame(node)) return false
+  if (!Array.isArray(node.children) || node.children.length === 0) return false
+
+  for (const child of node.children) {
+    if (child.type === 'text' && isLongTextLikeForLayout(child)) {
+      return true
+    }
+    if (depth < 2 && child.type === 'frame' && frameNeedsFillWidthForTextContent(child, depth + 1)) {
+      return true
+    }
+  }
+  return false
 }
 
 /**
@@ -1700,6 +2494,10 @@ function applyBadgeSizing(node: PenNode): void {
   if (node.type !== 'frame') return
   if (!isBadgeLikeFrame(node)) return
   if (!Array.isArray(node.children)) return
+
+  if (typeof node.width === 'string' && node.width.startsWith('fill_container')) {
+    node.width = 'fit_content'
+  }
 
   const textNode = node.children.find(
     (c: PenNode) => c.type === 'text' && typeof c.content === 'string' && c.content.trim().length > 0,
@@ -1908,6 +2706,93 @@ function applyButtonWidthHeuristic(node: PenNode): void {
   }
 }
 
+function getTextContentForNode(node: PenNode): string {
+  if (node.type !== 'text') return ''
+  return typeof node.content === 'string'
+    ? node.content
+    : Array.isArray(node.content)
+      ? node.content.map((s: { text: string }) => s.text).join('')
+      : ''
+}
+
+function isLongBodyTextNode(node: PenNode): boolean {
+  if (node.type !== 'text') return false
+  const text = getTextContentForNode(node).trim()
+  if (!text) return false
+  const fontSize = node.fontSize ?? 16
+  if (fontSize > 24) return false
+  const hasCjk = /[\u4E00-\u9FFF\u3400-\u4DBF\u3000-\u303F\uFF00-\uFFEF]/.test(text)
+  const compactLen = text.replace(/\s+/g, '').length
+  return compactLen >= (hasCjk ? 14 : 28)
+}
+
+function estimateParentContentWidthForText(
+  parent: PenNode,
+  padding: { top: number; right: number; bottom: number; left: number },
+  parentWidth: number,
+): number {
+  if (parentWidth > 0) {
+    return Math.max(0, parentWidth - padding.left - padding.right)
+  }
+
+  const parentWidthValue = 'width' in parent ? parent.width : undefined
+  const isFillContainer = typeof parentWidthValue === 'string'
+    && parentWidthValue.startsWith('fill_container')
+  if (!isFillContainer) return 0
+
+  const isMobile = generationCanvasWidth <= 520
+  const estimatedParentW = isMobile
+    ? Math.max(260, generationCanvasWidth - 32)
+    : Math.max(360, generationCanvasWidth * 0.68)
+  const safePadL = Math.min(padding.left, Math.round(estimatedParentW * 0.2))
+  const safePadR = Math.min(padding.right, Math.round(estimatedParentW * 0.2))
+  return Math.max(120, estimatedParentW - safePadL - safePadR)
+}
+
+function getLongTextPaddingAdjustment(
+  parent: PenNode,
+  padding: { top: number; right: number; bottom: number; left: number },
+  parentWidth: number,
+): [number, number, number, number] | null {
+  if (parent.type !== 'frame') return null
+  if (parent.layout !== 'vertical') return null
+  if (!Array.isArray(parent.children) || parent.children.length === 0) return null
+  if (isBadgeLikeFrame(parent)) return null
+
+  const frameH = toSizeNumber('height' in parent ? parent.height : undefined, 0)
+  if (frameH > 0 && frameH <= 120) return null
+  if (!parent.children.some((child) => isLongBodyTextNode(child))) return null
+
+  const effectiveParentW = parentWidth > 0
+    ? parentWidth
+    : estimateParentContentWidthForText(parent, { top: 0, right: 0, bottom: 0, left: 0 }, 0)
+  if (effectiveParentW <= 0) return null
+
+  const contentW = Math.max(0, effectiveParentW - padding.left - padding.right)
+  const minContentW = Math.max(170, Math.round(effectiveParentW * 0.72))
+  if (contentW >= minContentW) return null
+
+  const maxHorizontalPad = clamp(Math.round(effectiveParentW * 0.1), 14, 24)
+  const newLeft = Math.min(padding.left, maxHorizontalPad)
+  const newRight = Math.min(padding.right, maxHorizontalPad)
+  if (newLeft === padding.left && newRight === padding.right) return null
+  return [padding.top, newRight, padding.bottom, newLeft]
+}
+
+function estimateWrappingLineWidth(text: string, fontSize: number): number {
+  let width = 0
+  for (const char of text) {
+    if (/[\u4E00-\u9FFF\u3400-\u4DBF\u3000-\u303F\uFF00-\uFFEF\uFE30-\uFE4F]/.test(char)) {
+      width += fontSize * 1.12
+    } else if (char === ' ') {
+      width += fontSize * 0.3
+    } else {
+      width += fontSize * 0.58
+    }
+  }
+  return width
+}
+
 /** Estimate pixel width of text on a single line, with per-character width factors.
  *  CJK characters use 1.15× fontSize (not 1.0×) because actual font metrics,
  *  letter-spacing, and rendering variations make CJK glyphs slightly wider
@@ -1916,7 +2801,8 @@ function applyButtonWidthHeuristic(node: PenNode): void {
 /**
  * Estimate auto-height for text with fill_container width.
  * When parentContentWidth is provided, uses it directly for accurate wrapping.
- * Otherwise falls back to generationCanvasWidth * 0.45 (conservative for nested layouts).
+ * Otherwise uses a canvas-aware fallback width (mobile/desktop tuned) to avoid
+ * over-estimating line count when parent width is still unresolved.
  */
 function estimateAutoHeight(
   text: string,
@@ -1927,19 +2813,25 @@ function estimateAutoHeight(
   // CJK text needs larger minimum lineHeight — CJK characters are taller
   const hasCjk = /[\u4E00-\u9FFF\u3400-\u4DBF\u3000-\u303F]/.test(text)
   const minLh = hasCjk
-    ? (fontSize >= 28 ? 1.3 : 1.6)
-    : (fontSize >= 28 ? 1.15 : 1.4)
+    ? (fontSize >= 28 ? 1.28 : 1.5)
+    : (fontSize >= 28 ? 1.15 : 1.35)
   const effectiveLh = Math.max(lineHeight, minLh)
 
-  const totalTextWidth = estimateSingleLineTextWidth(text, fontSize)
-  // Use parent width if known, otherwise conservative fallback (45% of canvas
-  // accounts for two-column layouts, padding, and nesting)
-  const availW = parentContentWidth
-    ? Math.max(100, parentContentWidth)
-    : Math.max(200, generationCanvasWidth * 0.45)
-  const lines = Math.max(1, Math.ceil(totalTextWidth / availW))
-  // Add 15% safety margin to prevent tight clipping
-  return Math.round(lines * fontSize * effectiveLh * 1.15)
+  const availW = parentContentWidth && parentContentWidth > 0
+    ? Math.max(120, parentContentWidth)
+    : (
+        generationCanvasWidth <= 520
+          ? Math.max(220, generationCanvasWidth * 0.74)
+          : Math.max(260, generationCanvasWidth * 0.5)
+      )
+
+  const logicalLines = text.split(/\r?\n/)
+  const wrappedLineCount = logicalLines.reduce((sum, line) => {
+    const lineWidth = estimateWrappingLineWidth(line, fontSize)
+    return sum + Math.max(1, Math.ceil(lineWidth / availW))
+  }, 0)
+  // Add 10% safety margin to prevent tight clipping without making boxes too tall.
+  return Math.round(Math.max(1, wrappedLineCount) * fontSize * effectiveLh * 1.1)
 }
 
 function estimateSingleLineTextWidth(text: string, fontSize: number): number {
@@ -1959,8 +2851,7 @@ function estimateSingleLineTextWidth(text: string, fontSize: number): number {
 /**
  * In vertical layout containers (forms, cards, panels):
  * 1. Primary action buttons that clearly overflow → fill_container
- * 2. Horizontal button rows (social login etc.) → row gets fill_container,
- *    individual buttons get fit_content + row uses justifyContent to distribute
+ * 2. Horizontal button rows (social login etc.) → row gets fill_container
  * 3. Only touch children that actually overflow — respect the AI's sizing choices
  */
 function applyFormChildFillContainer(node: PenNode): void {
@@ -1977,16 +2868,35 @@ function applyFormChildFillContainer(node: PenNode): void {
   // Check if any sibling frame already uses fill_container —
   // if so, fixed-width siblings should align by also using fill_container.
   const hasFillSibling = node.children.some((c) =>
-    c.type === 'frame' && c.width === 'fill_container',
+    c.type === 'frame'
+    && c.width === 'fill_container'
+    && !isPhonePlaceholderFrame(c)
+    && !isDividerLikeFrame(c),
   )
 
   for (const child of node.children) {
     if (child.type !== 'frame') continue
+    if (isPhonePlaceholderFrame(child)) continue
+    if (isDividerLikeFrame(child)) continue
     if (!('width' in child)) continue
-    if (typeof (child as { width?: number | string }).width !== 'number') continue
+    const childWidthValue = (child as { width?: number | string }).width
+    const childWidthIsNumber = typeof childWidthValue === 'number'
+    const childWidthIsFit = typeof childWidthValue === 'string' && childWidthValue.startsWith('fit_content')
+    if (!childWidthIsNumber && !childWidthIsFit) continue
 
-    const childW = toSizeNumber((child as { width?: number | string }).width, 0)
+    const childW = childWidthIsNumber ? toSizeNumber(childWidthValue, 0) : 0
     const childH = toSizeNumber('height' in child ? child.height : undefined, 0)
+
+    // Long-text wrappers should use fill_container, otherwise they collapse to content width.
+    if (
+      childWidthIsFit
+      && !isBadgeLikeFrame(child)
+      && !isCompactButtonLikeFrame(child)
+      && frameNeedsFillWidthForTextContent(child)
+    ) {
+      ;(child as unknown as Record<string, unknown>).width = 'fill_container'
+      continue
+    }
 
     // Overflow: child wider than parent content area
     if (contentW > 0 && childW > contentW) {
@@ -1994,9 +2904,24 @@ function applyFormChildFillContainer(node: PenNode): void {
       continue
     }
 
+    // Narrow fixed-width text wrappers in wide vertical containers cause
+    // severe over-wrapping and "squeezed" cards. Promote them to fill width.
+    if (
+      contentW > 0
+      && childWidthIsNumber
+      && childW > 0
+      && childW < contentW * 0.72
+      && !isBadgeLikeFrame(child)
+      && !isCompactButtonLikeFrame(child)
+      && frameNeedsFillWidthForTextContent(child)
+    ) {
+      ;(child as unknown as Record<string, unknown>).width = 'fill_container'
+      continue
+    }
+
     // Consistency: if a sibling already uses fill_container,
     // convert input/button-like children (short height, has content) too
-    if (hasFillSibling && childH > 0 && childH <= 72) {
+    if (hasFillSibling && childH > 0 && childH <= 72 && !isCompactControlFrame(child)) {
       const hasContent = 'children' in child && Array.isArray(child.children)
         && child.children.some((gc) => gc.type === 'text' || gc.type === 'path')
       if (hasContent) {
@@ -2009,20 +2934,10 @@ function applyFormChildFillContainer(node: PenNode): void {
     if (child.layout === 'horizontal'
       && 'children' in child && Array.isArray(child.children)
       && child.children.length >= 2) {
-      const allButtonLike = child.children.every((gc) =>
-        gc.type === 'frame'
-        && 'children' in gc && Array.isArray(gc.children)
-        && gc.children.some((ggc) => ggc.type === 'text' || ggc.type === 'path'),
-      )
+      const allButtonLike = child.children.every((gc) => isCompactButtonLikeFrame(gc))
       if (allButtonLike) {
         // Row should fill parent width
         ;(child as unknown as Record<string, unknown>).width = 'fill_container'
-        // Individual buttons → fit_content so they hug their content
-        for (const btn of child.children) {
-          if (btn.type === 'frame' && typeof btn.width === 'number') {
-            ;(btn as unknown as Record<string, unknown>).width = 'fit_content'
-          }
-        }
         // Ensure the row has proper distribution
         if (!child.justifyContent || child.justifyContent === 'start') {
           child.justifyContent = 'center'
@@ -2038,9 +2953,8 @@ function applyFormChildFillContainer(node: PenNode): void {
 /**
  * When children of a horizontal layout overflow the parent's width:
  * 1. Try reducing gap first (minimal visual change)
- * 2. Try fit_content on children (let them hug content)
- * 3. Expand parent if still fixable
- * 4. Switch parent to fill_container as last resort
+ * 2. Expand parent if still fixable
+ * 3. Switch parent to fill_container as last resort
  */
 function applyHorizontalOverflowFix(node: PenNode): void {
   if (node.type !== 'frame') return
@@ -2057,12 +2971,10 @@ function applyHorizontalOverflowFix(node: PenNode): void {
 
   // Sum up children's widths (estimate intrinsic width for each)
   let childrenTotalW = 0
-  const fixedFrames: PenNode[] = []
   for (const child of node.children) {
     const cw = toSizeNumber('width' in child ? (child as { width?: number | string }).width : undefined, 0)
     if ('width' in child && typeof (child as { width?: number | string }).width === 'number' && cw > 0) {
       childrenTotalW += cw
-      if (child.type === 'frame') fixedFrames.push(child)
     } else {
       childrenTotalW += 80
     }
@@ -2083,34 +2995,14 @@ function applyHorizontalOverflowFix(node: PenNode): void {
     }
   }
 
-  // Strategy 2: Convert fixed-width button children to fit_content
-  // This lets them shrink to their natural content width
-  if (fixedFrames.length >= 2) {
-    const heights = fixedFrames.map((c) => toSizeNumber('height' in c ? c.height : undefined, 0))
-    const maxH = Math.max(...heights, 0)
-    const minH = Math.min(...heights, Infinity)
-    // Only for button-like rows (similar height, short frames)
-    if (maxH > 0 && maxH <= 80 && minH / maxH > 0.5) {
-      for (const child of fixedFrames) {
-        ;(child as unknown as Record<string, unknown>).width = 'fit_content'
-      }
-      // Also ensure proper distribution
-      if (!node.justifyContent || node.justifyContent === 'start') {
-        node.justifyContent = 'center'
-      }
-      if (gap < 8) node.gap = 8
-      return
-    }
-  }
-
-  // Strategy 3: Expand parent width to fit children
+  // Strategy 2: Expand parent width to fit children
   const neededW = Math.round(childrenTotalW + pad.left + pad.right)
   if (neededW > parentW && neededW <= generationCanvasWidth) {
     node.width = neededW
     return
   }
 
-  // Strategy 4: Parent is too narrow for expansion → fill_container
+  // Strategy 3: Parent is too narrow for expansion → fill_container
   if (neededW > generationCanvasWidth * 0.8) {
     node.width = 'fill_container' as unknown as number
   }
@@ -2143,7 +3035,7 @@ function applyFrameHeightExpansion(node: PenNode): void {
  */
 function applySectionPaddingHeuristic(node: PenNode): void {
   if (node.type !== 'frame') return
-  if (node.width !== 'fill_container') return
+  if (!isLikelyWideSectionFrame(node)) return
   if (!node.layout || node.layout === 'none') return
   if (!Array.isArray(node.children) || node.children.length === 0) return
 
@@ -2161,7 +3053,7 @@ function applySectionPaddingHeuristic(node: PenNode): void {
 
   const pad = parsePaddingValues('padding' in node ? node.padding : undefined)
   const isMobile = generationCanvasWidth <= 480
-  const minHorizontal = isMobile ? 16 : 40
+  const minHorizontal = isMobile ? 16 : (generationCanvasWidth <= 1024 ? 20 : 24)
 
   if (pad.left < minHorizontal || pad.right < minHorizontal) {
     const newLeft = Math.max(pad.left, minHorizontal)
@@ -2173,6 +3065,23 @@ function applySectionPaddingHeuristic(node: PenNode): void {
       node.padding = [pad.top, newRight, pad.bottom, newLeft]
     }
   }
+}
+
+function isLikelyWideSectionFrame(node: PenNode): boolean {
+  if (node.type !== 'frame') return false
+  if (node.width !== 'fill_container') return false
+
+  const marker = `${node.name ?? ''} ${node.id}`.toLowerCase()
+  if (/(card|panel|tile|feature|service|item|badge|chip|pill|tag|button|cta|modal|dialog|toast|tooltip|tab|卡片|面板|徽章|标签|按钮|弹窗)/.test(marker)) {
+    return false
+  }
+
+  const h = toSizeNumber(node.height, 0)
+  if (h > 0 && h < 220 && Array.isArray(node.children) && node.children.length <= 2) {
+    return false
+  }
+
+  return true
 }
 
 /**
@@ -2413,13 +3322,13 @@ function applyTextWrappingHeuristic(node: PenNode): void {
     // lineHeight is a MULTIPLIER (e.g., 1.45 means 145% of fontSize), NOT absolute pixels.
     if (len >= (hasCjk ? 12 : 26) && fontSize <= 24) {
       node.textGrowth = 'fixed-width'
-      if (!node.lineHeight) node.lineHeight = hasCjk ? 1.7 : 1.45
+      if (!node.lineHeight) node.lineHeight = hasCjk ? 1.55 : 1.45
     } else if (len >= (hasCjk ? 8 : 16) && fontSize > 24) {
       node.textGrowth = 'fixed-width'
       if (!node.lineHeight) node.lineHeight = hasCjk ? 1.4 : 1.2
     }
     // Auto Height: estimate a real height value (like Pencil's panel shows).
-    const lh = node.lineHeight ?? (hasCjk ? (fontSize >= 28 ? 1.3 : 1.6) : 1.2)
+    const lh = node.lineHeight ?? (hasCjk ? (fontSize >= 28 ? 1.3 : 1.5) : 1.2)
     node.height = estimateAutoHeight(text, fontSize, lh)
     return
   }
@@ -2441,7 +3350,7 @@ function applyTextWrappingHeuristic(node: PenNode): void {
   if (willWrap) {
     node.textGrowth = 'fixed-width'
     if (!node.lineHeight) node.lineHeight = hasCjk
-      ? (looksBody ? 1.7 : 1.4)
+      ? (looksBody ? 1.55 : 1.4)
       : (looksBody ? 1.45 : 1.2)
     // Only force fill_container for clearly long text (>60 chars body or >30 chars heading)
     const longBodyThreshold = hasCjk ? 30 : 60
