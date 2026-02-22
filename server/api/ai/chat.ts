@@ -1,11 +1,15 @@
 import { defineEventHandler, readBody, setResponseHeaders } from 'h3'
 import { resolveClaudeCli } from '../../utils/resolve-claude-cli'
+import { runCodexExec } from '../../utils/codex-client'
 
 interface ChatBody {
   system: string
   messages: Array<{ role: 'user' | 'assistant'; content: string }>
   model?: string
   provider?: string
+  thinkingMode?: 'adaptive' | 'disabled' | 'enabled'
+  thinkingBudgetTokens?: number
+  effort?: 'low' | 'medium' | 'high' | 'max'
 }
 
 /**
@@ -31,6 +35,9 @@ export default defineEventHandler(async (event) => {
   if (body.provider === 'opencode') {
     return streamViaOpenCode(body, body.model)
   }
+  if (body.provider === 'openai') {
+    return streamViaCodex(body, body.model)
+  }
 
   // Default: existing behavior (backward-compatible)
   const apiKey = process.env.ANTHROPIC_API_KEY
@@ -47,6 +54,29 @@ export default defineEventHandler(async (event) => {
 // Keep-alive ping interval (ms) — prevents client timeout while waiting for API TTFT
 const KEEPALIVE_INTERVAL_MS = 15_000
 
+function getAnthropicThinkingConfig(body: ChatBody):
+  | { type: 'adaptive' | 'disabled' }
+  | { type: 'enabled'; budget_tokens: number }
+  | undefined {
+  if (!body.thinkingMode) return undefined
+  if (body.thinkingMode === 'enabled') {
+    const budget = Math.max(1024, body.thinkingBudgetTokens ?? 1024)
+    return { type: 'enabled', budget_tokens: budget }
+  }
+  return { type: body.thinkingMode }
+}
+
+function getAgentThinkingConfig(body: ChatBody):
+  | { type: 'adaptive' | 'disabled' }
+  | { type: 'enabled'; budgetTokens?: number }
+  | undefined {
+  if (!body.thinkingMode) return undefined
+  if (body.thinkingMode === 'enabled') {
+    return { type: 'enabled', budgetTokens: body.thinkingBudgetTokens }
+  }
+  return { type: body.thinkingMode }
+}
+
 /** Stream via Anthropic SDK (when API key is available) */
 async function streamViaAnthropicSDK(apiKey: string, body: ChatBody, model?: string) {
   const { default: Anthropic } = await import('@anthropic-ai/sdk')
@@ -62,11 +92,14 @@ async function streamViaAnthropicSDK(apiKey: string, body: ChatBody, model?: str
         } catch { /* stream already closed */ }
       }, KEEPALIVE_INTERVAL_MS)
       try {
+        const thinking = getAnthropicThinkingConfig(body)
         const messageStream = client.messages.stream({
           model: model || 'claude-sonnet-4-5-20250929',
           max_tokens: 16384,
           system: body.system,
           messages: body.messages,
+          ...(body.effort ? { effort: body.effort } : {}),
+          ...(thinking ? { thinking } : {}),
         })
 
         for await (const ev of messageStream) {
@@ -118,13 +151,14 @@ function streamViaAgentSDK(body: ChatBody, model?: string) {
 
         // Build prompt from the last user message
         const lastUserMsg = [...body.messages].reverse().find((m) => m.role === 'user')
-        const prompt = lastUserMsg?.content ?? ''
+        let prompt = lastUserMsg?.content ?? ''
 
         // Remove CLAUDECODE env to allow running from within a CC terminal
         const env = { ...process.env } as Record<string, string | undefined>
         delete env.CLAUDECODE
 
         const claudePath = resolveClaudeCli()
+        const thinking = getAgentThinkingConfig(body)
 
         const q = query({
           prompt,
@@ -134,8 +168,11 @@ function streamViaAgentSDK(body: ChatBody, model?: string) {
             maxTurns: 1,
             includePartialMessages: true,
             tools: [],
+            plugins: [],
             permissionMode: 'plan',
             persistSession: false,
+            ...(body.effort ? { effort: body.effort } : {}),
+            ...(thinking ? { thinking } : {}),
             env,
             ...(claudePath ? { pathToClaudeCodeExecutable: claudePath } : {}),
           },
@@ -191,6 +228,106 @@ function parseOpenCodeModel(model?: string): { providerID: string; modelID: stri
   return { providerID: model.slice(0, idx), modelID: model.slice(idx + 1) }
 }
 
+function mapOpenCodeEffort(
+  effort?: 'low' | 'medium' | 'high' | 'max',
+): 'low' | 'medium' | 'high' | undefined {
+  if (!effort) return undefined
+  if (effort === 'max') return 'high'
+  return effort
+}
+
+function buildOpenCodeReasoning(
+  body: ChatBody,
+): Record<string, unknown> | undefined {
+  const reasoning: Record<string, unknown> = {}
+  const effort = mapOpenCodeEffort(body.effort)
+  if (effort) {
+    reasoning.effort = effort
+  }
+  if (body.thinkingMode === 'enabled') {
+    reasoning.enabled = true
+  } else if (body.thinkingMode === 'disabled') {
+    reasoning.enabled = false
+  }
+  if (typeof body.thinkingBudgetTokens === 'number' && body.thinkingBudgetTokens > 0) {
+    reasoning.budgetTokens = body.thinkingBudgetTokens
+  }
+  return Object.keys(reasoning).length > 0 ? reasoning : undefined
+}
+
+async function promptOpenCodeWithThinking(
+  ocClient: any,
+  basePayload: Record<string, unknown>,
+  body: ChatBody,
+): Promise<{ data: any; error: any }> {
+  const reasoning = buildOpenCodeReasoning(body)
+  if (!reasoning) {
+    return await ocClient.session.prompt(basePayload)
+  }
+
+  const enhanced = { ...basePayload, reasoning }
+  const firstTry = await ocClient.session.prompt(enhanced)
+  if (!firstTry.error) {
+    return firstTry
+  }
+
+  console.warn('[AI] OpenCode reasoning options rejected, retrying without reasoning.')
+  return await ocClient.session.prompt(basePayload)
+}
+
+function streamViaCodex(body: ChatBody, model?: string) {
+  const stream = new ReadableStream({
+    async start(controller) {
+      const encoder = new TextEncoder()
+      const pingTimer = setInterval(() => {
+        try {
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: 'ping', content: '' })}\n\n`))
+        } catch { /* stream already closed */ }
+      }, KEEPALIVE_INTERVAL_MS)
+
+      try {
+        const lastUserMsg = [...body.messages].reverse().find((m) => m.role === 'user')
+        const prompt = lastUserMsg?.content ?? ''
+        const result = await runCodexExec(prompt, {
+          model,
+          systemPrompt: body.system,
+          thinkingMode: body.thinkingMode,
+          thinkingBudgetTokens: body.thinkingBudgetTokens,
+          effort: body.effort,
+        })
+
+        clearInterval(pingTimer)
+        if (result.error) {
+          controller.enqueue(
+            encoder.encode(`data: ${JSON.stringify({ type: 'error', content: result.error })}\n\n`),
+          )
+          return
+        }
+
+        if (result.text) {
+          controller.enqueue(
+            encoder.encode(`data: ${JSON.stringify({ type: 'text', content: result.text })}\n\n`),
+          )
+        }
+
+        controller.enqueue(
+          encoder.encode(`data: ${JSON.stringify({ type: 'done', content: '' })}\n\n`),
+        )
+      } catch (error) {
+        const content = error instanceof Error ? error.message : 'Unknown error'
+        controller.enqueue(
+          encoder.encode(`data: ${JSON.stringify({ type: 'error', content })}\n\n`),
+        )
+      } finally {
+        clearInterval(pingTimer)
+        controller.close()
+      }
+    },
+  })
+
+  return new Response(stream)
+}
+
 /** Stream via OpenCode SDK (connects to a running OpenCode server) */
 function streamViaOpenCode(body: ChatBody, model?: string) {
   const stream = new ReadableStream({
@@ -231,11 +368,17 @@ function streamViaOpenCode(body: ChatBody, model?: string) {
         const parsed = parseOpenCodeModel(model)
 
         // Send prompt and await full response
-        const { data: result, error: promptError } = await ocClient.session.prompt({
+        const promptPayload: Record<string, unknown> = {
           sessionID: session.id,
           ...(parsed ? { model: parsed } : {}),
           parts: [{ type: 'text', text: prompt }],
-        })
+        }
+
+        const { data: result, error: promptError } = await promptOpenCodeWithThinking(
+          ocClient,
+          promptPayload,
+          body,
+        )
 
         if (promptError) {
           throw new Error('OpenCode prompt failed')
