@@ -69,6 +69,7 @@ export interface ContainerProps {
     | 'space_between'
     | 'space_around'
   alignItems?: 'start' | 'center' | 'end'
+  clipContent?: boolean
   children?: PenNode[]
   cornerRadius?: number | [number, number, number, number]
   fill?: PenFill[]
