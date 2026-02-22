@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import type { ComponentType, SVGProps } from 'react'
-import { X, Check, Loader2, Unplug } from 'lucide-react'
+import { X, Check, Loader2, Unplug, AlertCircle } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Switch } from '@/components/ui/switch'
@@ -154,12 +154,37 @@ export default function AgentSettingsDialog() {
     return () => document.removeEventListener('keydown', handler)
   }, [open, setDialogOpen])
 
+  const [mcpInstalling, setMcpInstalling] = useState<string | null>(null)
+  const [mcpError, setMcpError] = useState<string | null>(null)
+
   const handleToggleMCP = useCallback(
-    (tool: string) => {
-      toggleMCP(tool)
-      persist()
+    async (tool: string) => {
+      const current = mcpIntegrations.find((m) => m.tool === tool)
+      if (!current) return
+      const action = current.enabled ? 'uninstall' : 'install'
+
+      setMcpInstalling(tool)
+      setMcpError(null)
+      try {
+        const res = await fetch('/api/ai/mcp-install', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ tool, action }),
+        })
+        const result = await res.json()
+        if (result.success) {
+          toggleMCP(tool)
+          persist()
+        } else {
+          setMcpError(result.error ?? `Failed to ${action}`)
+        }
+      } catch {
+        setMcpError(`Failed to ${action} MCP server`)
+      } finally {
+        setMcpInstalling(null)
+      }
     },
-    [toggleMCP, persist],
+    [mcpIntegrations, toggleMCP, persist],
   )
 
   if (!open) return null
@@ -216,21 +241,33 @@ export default function AgentSettingsDialog() {
                 key={m.tool}
                 className="flex items-center justify-between py-2 px-1"
               >
-                <span
-                  className={cn(
-                    'text-xs',
-                    m.enabled ? 'text-foreground' : 'text-muted-foreground',
+                <div className="flex items-center gap-1.5">
+                  <span
+                    className={cn(
+                      'text-xs',
+                      m.enabled ? 'text-foreground' : 'text-muted-foreground',
+                    )}
+                  >
+                    {m.displayName}
+                  </span>
+                  {mcpInstalling === m.tool && (
+                    <Loader2 size={11} className="animate-spin text-muted-foreground" />
                   )}
-                >
-                  {m.displayName}
-                </span>
+                </div>
                 <Switch
                   checked={m.enabled}
+                  disabled={mcpInstalling !== null}
                   onCheckedChange={() => handleToggleMCP(m.tool)}
                 />
               </div>
             ))}
           </div>
+          {mcpError && (
+            <div className="flex items-center gap-1.5 mt-1.5 px-1">
+              <AlertCircle size={11} className="text-destructive shrink-0" />
+              <p className="text-[10px] text-destructive">{mcpError}</p>
+            </div>
+          )}
           <p className="text-[10px] text-muted-foreground mt-2">
             MCP integrations will take effect after restarting the terminal.
           </p>

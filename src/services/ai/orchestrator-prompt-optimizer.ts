@@ -100,20 +100,32 @@ export function prepareDesignPrompt(prompt: string): PreparedDesignPrompt {
     )
   }
   conciseParts.push(
-    'Icon rule: never use emoji glyphs as icons; always use SVG path icon nodes.',
+    'Icon rule: never use emoji glyphs as icons; always use path nodes with descriptive icon names (e.g. "SearchIcon", "MenuIcon"). System auto-resolves to verified SVG paths.',
   )
 
   conciseParts.push(
-    'Scope guardrails: single marketing page, clear hierarchy, avoid over-detailed micro-content.',
+    'Scope guardrails: clear hierarchy, avoid over-detailed micro-content.',
   )
   conciseParts.push(
-    'Layout guardrails: keep a stable centered content width and avoid inserting extra full-width CTA stripes unless explicitly requested.',
+    'Layout guardrails: keep a stable centered content width.',
   )
-  conciseParts.push(
-    'Navbar guardrails: keep logo/links/CTA horizontally aligned; links should be evenly distributed in the center group.',
-  )
+
+  // Only add landing-page-specific guardrails if the prompt looks like a landing page
+  const isLandingPage = /(?:landing\s*page|website|官网|首页|marketing)/i.test(normalized)
+  if (isLandingPage) {
+    conciseParts.push(
+      'CTA guardrails: avoid inserting extra full-width CTA stripes unless explicitly requested.',
+    )
+    conciseParts.push(
+      'Navbar guardrails: keep logo/links/CTA horizontally aligned; links should be evenly distributed in the center group.',
+    )
+  }
+
   conciseParts.push(
     'Typography guardrails: long subtitle/body text should use constrained width so lines wrap naturally.',
+  )
+  conciseParts.push(
+    'Overflow prevention: ALL text inside layout frames must use width="fill_container" (never fixed pixel widths). Buttons/badges with CJK text must be wide enough for character count × fontSize + padding.',
   )
 
   const concise = conciseParts.join('\n\n')
@@ -130,23 +142,32 @@ export function prepareDesignPrompt(prompt: string): PreparedDesignPrompt {
 export function buildFallbackPlanFromPrompt(prompt: string): OrchestratorPlan {
   const labels = extractFallbackSectionLabels(prompt)
   const sectionCount = Math.max(1, labels.length)
-  // Landing pages are tall scrollable documents — allocate more vertical space
-  const totalHeight = sectionCount >= 4 ? 4000 : 800
+
+  const isMobile = /(?:mobile|手机|phone|app\s*screen|登录|注册|login|signup)/i.test(prompt)
+  const isAppScreen = /(?:login|signup|register|登录|注册|settings|设置|profile|个人|form|表单|dashboard|modal|dialog)/i.test(prompt)
+
+  const width = isMobile ? 375 : 1200
+  // Mobile app screens: fixed 812px viewport. Desktop landing pages: auto-expand. Desktop app screens: fixed height.
+  const totalHeight = isMobile
+    ? 812
+    : isAppScreen
+      ? 800
+      : sectionCount >= 4 ? 4000 : 800
   const heights = allocateSectionHeights(totalHeight, sectionCount)
 
   return {
     rootFrame: {
       id: 'page',
       name: 'Page',
-      width: 1200,
-      height: totalHeight,
+      width,
+      height: isMobile ? 812 : (isAppScreen ? totalHeight : 0),
       layout: 'vertical',
       fill: [{ type: 'solid', color: '#F8FAFC' }],
     },
     subtasks: labels.map((label, index) => ({
       id: makeSafeSectionId(label, index),
       label,
-      region: { width: 1200, height: heights[index] ?? 120 },
+      region: { width, height: heights[index] ?? 120 },
       idPrefix: '',
       parentFrameId: null,
     })),
@@ -279,13 +300,22 @@ function extractFallbackSectionLabels(prompt: string): string[] {
 
   if (labels.length > 0) return labels
 
+  // Detect design type to provide appropriate fallback labels
+  const isAppScreen = /(?:login|signup|register|登录|注册|settings|设置|profile|个人|form|表单|dashboard|modal|dialog)/i.test(prompt)
+  if (isAppScreen) {
+    return [
+      'Header',
+      'Main Content',
+      'Actions',
+    ]
+  }
+
   return [
     'Navigation',
     'Hero',
     'Core Highlights',
     'Feature Showcase',
-    'Learning Plan',
-    'Download CTA',
+    'CTA',
     'Footer',
   ]
 }

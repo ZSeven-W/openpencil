@@ -34,11 +34,11 @@ export async function saveDocumentAs(
         showSaveFilePicker: (opts: unknown) => Promise<FileSystemFileHandle>
       }
     ).showSaveFilePicker({
-      suggestedName: suggestedName || 'untitled.pen',
+      suggestedName: suggestedName || 'untitled.op',
       types: [
         {
-          description: 'Pen Design File',
-          accept: { 'application/json': ['.pen'] },
+          description: 'OpenPencil File',
+          accept: { 'application/json': ['.op'] },
         },
       ],
     })
@@ -66,8 +66,8 @@ export async function openDocumentFS(): Promise<{
     ).showOpenFilePicker({
       types: [
         {
-          description: 'Pen Design File',
-          accept: { 'application/json': ['.pen', '.json'] },
+          description: 'OpenPencil File',
+          accept: { 'application/json': ['.op', '.pen', '.json'] },
         },
       ],
     })
@@ -108,7 +108,7 @@ export function openDocument(): Promise<{
   return new Promise((resolve) => {
     const input = document.createElement('input')
     input.type = 'file'
-    input.accept = '.pen,.json'
+    input.accept = '.op,.pen,.json'
     input.onchange = async () => {
       const file = input.files?.[0]
       if (!file) {

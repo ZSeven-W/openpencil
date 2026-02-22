@@ -39,23 +39,32 @@ RULES:
 - Use "fill_container" to stretch, "fit_content" to shrink-wrap
 - Use clipContent: true on cards/containers with cornerRadius + image children to prevent overflow
 - Use justifyContent="space_between" to spread items across full width (great for navbars, footers)
+
+OVERFLOW PREVENTION (CRITICAL — violations cause visual glitches):
+- TEXT WIDTH: text nodes inside layout frames MUST use width="fill_container" + textGrowth="fixed-width". NEVER set a fixed pixel width on text inside a layout — it WILL overflow. The layout engine auto-constrains fill_container text to the parent's available content area.
+  BAD:  {"type":"text","width":378,"textGrowth":"fixed-width"} inside a 195px card with 80px padding → overflows!
+  GOOD: {"type":"text","width":"fill_container","textGrowth":"fixed-width"} → auto-fits to 115px available space.
+- CHILD SIZE: any child with a fixed pixel width must be ≤ parent's content area (parent width − total horizontal padding). If unsure, use "fill_container".
+- CJK TEXT (Chinese/Japanese/Korean): each character renders at ~1.0× fontSize width. For buttons/badges containing CJK text, ensure: container width ≥ (charCount × fontSize) + total horizontal padding. Example: "免费下载" (4 chars) at fontSize 15 → needs ~60px content + padding → button width ≥ 104px with padding [8,22].
+- BADGES: when badge text is long or CJK, use width="fit_content" on the badge frame so it auto-sizes to its text content.
 `
 
 const DESIGN_EXAMPLES = `
 EXAMPLES:
 
 Button with icon:
-{ "id": "btn-1", "type": "frame", "name": "Button", "x": 100, "y": 100, "width": 180, "height": 44, "cornerRadius": 8, "layout": "horizontal", "gap": 8, "justifyContent": "center", "alignItems": "center", "fill": [{ "type": "solid", "color": "#3B82F6" }], "children": [{ "id": "btn-icon", "type": "path", "name": "ArrowIcon", "d": "M5 12h14M12 5l7 7-7 7", "width": 20, "height": 20, "stroke": { "thickness": 2, "fill": [{ "type": "solid", "color": "#FFFFFF" }] } }, { "id": "btn-text", "type": "text", "name": "Label", "content": "Continue", "fontSize": 16, "fontWeight": 600, "width": 80, "height": 22, "fill": [{ "type": "solid", "color": "#FFFFFF" }] }] }
+{ "id": "btn-1", "type": "frame", "name": "Button", "x": 100, "y": 100, "width": 180, "height": 48, "cornerRadius": 8, "layout": "horizontal", "gap": 8, "padding": [12, 24], "justifyContent": "center", "alignItems": "center", "fill": [{ "type": "solid", "color": "#3B82F6" }], "children": [{ "id": "btn-icon", "type": "path", "name": "ArrowRightIcon", "d": "M5 12h14m-7-7 7 7-7 7", "width": 20, "height": 20, "stroke": { "thickness": 2, "fill": [{ "type": "solid", "color": "#FFFFFF" }] } }, { "id": "btn-text", "type": "text", "name": "Label", "content": "Continue", "fontSize": 16, "fontWeight": 600, "fill": [{ "type": "solid", "color": "#FFFFFF" }] }] }
 
 Card with image (clipContent prevents image from poking out of rounded corners):
 { "id": "card-1", "type": "frame", "name": "Card", "x": 50, "y": 50, "width": 320, "height": 340, "cornerRadius": 12, "clipContent": true, "layout": "vertical", "gap": 0, "fill": [{ "type": "solid", "color": "#FFFFFF" }], "effects": [{ "type": "shadow", "offsetX": 0, "offsetY": 4, "blur": 12, "spread": 0, "color": "rgba(0,0,0,0.1)" }], "children": [{ "id": "card-img", "type": "image", "name": "Cover", "src": "https://picsum.photos/320/180", "width": "fill_container", "height": 180 }, { "id": "card-body", "type": "frame", "name": "Body", "width": "fill_container", "height": "fit_content", "layout": "vertical", "padding": 20, "gap": 8, "children": [{ "id": "card-title", "type": "text", "name": "Title", "content": "Card Title", "fontSize": 20, "fontWeight": 700, "lineHeight": 1.2, "textGrowth": "fixed-width", "width": "fill_container", "fill": [{ "type": "solid", "color": "#111827" }] }, { "id": "card-desc", "type": "text", "name": "Description", "content": "Some description text here", "fontSize": 14, "lineHeight": 1.5, "textGrowth": "fixed-width", "width": "fill_container", "fill": [{ "type": "solid", "color": "#6B7280" }] }] }] }
 
 ICONS & IMAGES:
-- Icons: Use "path" nodes with SVG d attribute. Use stroke for line icons, fill for solid icons. Size 16-24px for UI icons. IMPORTANT: width and height must match the SVG path's natural aspect ratio — symmetric icons like arrows are square, but brand logos (Apple, Meta, etc.) are often taller than wide or vice versa. Never force all icons to 1:1.
-- Never use emoji characters as icons (e.g. 🧠✨📱✅). Always use "path" icon nodes.
+- Icons: Use "path" nodes with SVG d attribute. Size 16-24px for UI icons. Use stroke for line icons (Lucide-style), fill for solid icons.
+  IMPORTANT: Give icon nodes a descriptive name matching standard icon names (e.g. "SearchIcon", "MenuIcon", "ArrowRightIcon", "CheckIcon", "StarIcon", "DownloadIcon", "PlayIcon", "ShieldIcon", "ZapIcon", "HeartIcon", "UserIcon", "HomeIcon", "MailIcon", "BellIcon", "SettingsIcon", "PlusIcon", "EyeIcon", "LockIcon", "PhoneIcon", "ChevronRightIcon", "ChevronDownIcon", "XIcon").
+  The system will auto-resolve icon names to verified SVG paths, so the name is more important than the d data.
+- Never use emoji characters as icons (e.g. 🧠✨📱✅). Always use path nodes for icons.
 - For app screenshot/mockup areas, use a phone placeholder frame with solid fill matching the page theme + 1px subtle stroke. cornerRadius ~32. No text inside — just a clean phone shape.
 - Do NOT use random real-world app screenshots or dense mini-app simulations for showcase sections.
-- You know many icon SVG paths from popular Iconify collections — use them freely: Lucide, Material Design Icons (mdi), Phosphor, Tabler Icons, Heroicons, Carbon, etc. Always give icon nodes descriptive names (e.g. "SearchIcon", "MenuIcon").
 `
 
 const ADAPTIVE_STYLE_POLICY = `
@@ -82,6 +91,15 @@ TYPOGRAPHY SCALE (always set lineHeight on text nodes):
 - Caption: 13-14px — "Inter" (400), lineHeight: 1.4
 - Labels/Numbers: "Inter" or "Roboto Mono" as needed
 - Uppercase labels: letterSpacing: 1-2
+
+CJK TYPOGRAPHY (Chinese/Japanese/Korean content):
+- When the design content is in Chinese/Japanese/Korean, use CJK-compatible fonts:
+  - Headings: "Noto Sans SC" (Chinese), "Noto Sans JP" (Japanese), "Noto Sans KR" (Korean)
+  - Body/UI: "Inter" (has system CJK fallback) or "Noto Sans SC"
+  - DO NOT use "Space Grotesk" or "Manrope" for CJK text — these fonts have NO CJK glyphs and will render inconsistently.
+- CJK lineHeight: use 1.3-1.4 for headings (not 1.1), 1.6-1.8 for body. CJK characters are taller and need more line spacing.
+- CJK letterSpacing: use 0 for body, 0.5-1 for headings. Do NOT use negative letterSpacing on CJK — it causes characters to overlap.
+- Detect language from the user's request content: if the prompt or product description is in Chinese/Japanese/Korean, use CJK fonts for ALL text nodes.
 
 SHAPES & EFFECTS:
 - Corner Radius: 8-14 for modern product UI
@@ -135,10 +153,13 @@ LAYOUT ENGINE (flexbox-based):
   "center" = center-pack items
   "start"/"end" = pack to start/end
 - ALL nodes must be descendants of the root frame — no floating/orphan elements
+- WIDTH CONSISTENCY: siblings in a vertical layout must use the SAME width strategy. If one input/button uses "fill_container", ALL sibling inputs/buttons must also use "fill_container". Mixing fixed-px and fill_container causes misalignment.
+- NEVER use "fill_container" on children of a "fit_content" parent — circular dependency breaks layout.
 - For two-column layouts: root (vertical) → content row (horizontal) → left column + right column. Each column uses "fill_container" width.
-- TEXT IN LAYOUTS: text inside layout frames MUST use textGrowth="fixed-width" + width="fill_container". This makes text wrap within the parent and auto-size height. NEVER use fixed pixel widths for text in layout containers — it causes clipping.
+- TEXT IN LAYOUTS (MOST COMMON BUG — read carefully): text inside layout frames MUST use textGrowth="fixed-width" + width="fill_container". NEVER use a fixed pixel width (e.g. width:378) on text inside a layout — the text WILL overflow its parent. "fill_container" auto-constrains to available space.
 - SHORT TEXT: buttons, labels, single-line text can use textGrowth="auto" (or omit it) — text expands horizontally to fit content.
-- NEVER set fixed pixel height on text nodes — let textGrowth handle height automatically.
+- TEXT HEIGHT: NEVER set explicit pixel height on text nodes (e.g. height:22, height:44). OMIT the height property entirely — the layout engine auto-calculates height from textGrowth + content. Setting a small height causes text clipping and overlap with siblings below.
+- CJK BUTTONS/BADGES: Chinese/Japanese/Korean characters are wider. For a button with CJK text, ensure container width ≥ (charCount × fontSize) + horizontal padding. Example: "免费下载" (4 chars) at 15px → min content width ~60px → button width ≥ 60 + left padding + right padding.
 - Use nested frames for complex layouts
 
 DESIGN GUIDELINES:
@@ -148,20 +169,26 @@ DESIGN GUIDELINES:
 - For web pages, use a consistent centered content container (~1040-1160px) across sections to keep alignment stable
 - Max 3-4 levels of nesting
 - Text: titles 22-28px bold, body 14-16px, captions 12px
-- Buttons: height 44-48px, cornerRadius 8-12
-- Inputs: height 44px, light bg, subtle border
+- Buttons: height 44-52px, cornerRadius 8-12, padding [12, 24] (vertical, horizontal). With icon+text: layout="horizontal", gap=8, alignItems="center". Width: "fill_container" (stretch), "fit_content" (hug), or fixed px — choose per context.
+- Icon-only buttons (heart, bookmark, share, etc.): square frame 44x44px, justifyContent="center", alignItems="center", path icon 20-24px inside.
+- Badges/tags ("NEW", "SALE", "PRO"): frame with padding [4, 12], cornerRadius 4-6, height="fit_content". Small text (11-13px), no textGrowth. Never clip badge text.
+- Button + icon-button row: horizontal, gap=8-12. Primary button width="fill_container"; icon-only button fixed square 44-48px.
+- Inputs: height 44px, light bg, subtle border. Use width="fill_container" in form contexts.
+- Fixed-width children must NOT exceed their parent's content area (parent width minus padding).
 - Consistent color palette
 - Default to light neutral styling unless user explicitly asks for dark/neon/terminal
 - Avoid repeating the exact same palette across unrelated designs
-- Navigation bars: use justifyContent="space_between" with 3 child groups (logo-group | links-group | cta-button), padding=[0,80], alignItems="center". This auto-distributes them perfectly across the full width.
-- Use path nodes for icons (SVG d path data). Size icons 16-24px. Preserve the natural aspect ratio of the SVG path — do NOT force all icons to square. You can use icons from any popular Iconify collection: Lucide, Material Design Icons, Phosphor, Tabler, Heroicons, Carbon, etc.
-- Never use emoji glyphs as icon substitutes. If an icon is needed, create a path node.
+- Navigation bars (when designing landing pages/websites): use justifyContent="space_between" with 3 child groups (logo-group | links-group | cta-button), padding=[0,80], alignItems="center". This auto-distributes them perfectly across the full width.
+- Icons: use "path" nodes with descriptive names matching standard icon names (e.g. "SearchIcon", "MenuIcon", "ArrowRightIcon"). The system auto-resolves names to verified SVG paths. Size 16-24px.
+- Never use emoji glyphs as icon substitutes. If an icon is needed, use a path node with a descriptive icon name.
 - Use image nodes for generic photos/illustrations only; for app preview areas prefer phone mockup placeholders
 - Phone mockup/screenshot placeholder: exactly ONE "frame" node, width 260-300, height 520-580, cornerRadius 32, solid fill matching theme + 1px subtle stroke. NEVER use ellipse or circle for mockups. NEVER add any children inside (no text, no frames, no images). All mockups must look identical.
 - NEVER use ellipse nodes for decorative/placeholder shapes. Use frame or rectangle with cornerRadius instead.
 - Avoid adding an extra full-width CTA strip directly under navigation unless the prompt explicitly asks for that section.
 - Buttons, nav items, and list items should include icons when appropriate for better UX
 - Long subtitles/body copy should use fixed-width text blocks so lines wrap naturally instead of becoming a single very long line.
+- CARD ROW ALIGNMENT: when cards are siblings in a horizontal layout, ALL cards MUST use height="fill_container". This makes all cards match the tallest card's height, creating a visually aligned row. Never use different fixed heights on sibling cards.
+- TEXT WRAPPING: any text content longer than ~15 characters MUST have textGrowth="fixed-width". Without it, text expands horizontally in a single line and overflows. Only omit textGrowth for very short labels (1-3 words) like button text or nav links.
 
 DESIGN VARIABLES:
 - When the user message includes a DOCUMENT VARIABLES section, use "$variableName" references instead of hardcoded values wherever a matching variable exists.
@@ -199,8 +226,8 @@ EXAMPLE:
 ${BLOCK}json
 {"_parent":null,"id":"page","type":"frame","name":"Page","x":0,"y":0,"width":375,"height":812,"layout":"vertical","gap":0,"fill":[{"type":"solid","color":"#F8FAFC"}]}
 {"_parent":"page","id":"nav","type":"frame","name":"Nav","width":"fill_container","height":56,"layout":"horizontal","padding":16,"alignItems":"center","fill":[{"type":"solid","color":"#FFFFFF"}]}
-{"_parent":"nav","id":"logo","type":"text","name":"Logo","content":"App","fontSize":18,"fontWeight":700,"width":"fit_content","height":22,"fill":[{"type":"solid","color":"#0F172A"}]}
-{"_parent":"nav","id":"menu-icon","type":"path","name":"MenuIcon","d":"M3 12h18M3 6h18M3 18h18","width":24,"height":24,"stroke":{"thickness":2,"fill":[{"type":"solid","color":"#0F172A"}]}}
+{"_parent":"nav","id":"logo","type":"text","name":"Logo","content":"App","fontSize":18,"fontWeight":700,"fill":[{"type":"solid","color":"#0F172A"}]}
+{"_parent":"nav","id":"menu-icon","type":"path","name":"MenuIcon","d":"M4 6h16M4 12h16M4 18h16","width":24,"height":24,"stroke":{"thickness":2,"fill":[{"type":"solid","color":"#0F172A"}]}}
 {"_parent":"page","id":"hero","type":"frame","name":"Hero","width":"fill_container","height":300,"layout":"vertical","padding":24,"gap":16,"alignItems":"center","justifyContent":"center"}
 {"_parent":"hero","id":"title","type":"text","name":"Title","content":"Welcome","fontSize":28,"fontWeight":700,"textGrowth":"fixed-width","width":"fill_container","fill":[{"type":"solid","color":"#0F172A"}]}
 ${BLOCK}
@@ -213,6 +240,8 @@ CRITICAL RULES:
 - NEVER set x/y on children inside layout frames — the layout engine positions them automatically.
 - ALL nodes must be descendants of the root frame — no floating/orphan elements.
 - Section frames must use width="fill_container" to span full page width.
+- WIDTH CONSISTENCY: siblings in a vertical layout must use the SAME width strategy. If one input uses "fill_container", ALL sibling inputs/buttons in that container must also use "fill_container". Never mix fixed-px and fill_container in form layouts.
+- NEVER use "fill_container" on children of "fit_content" parent — circular dependency breaks layout.
 - For two-column content: use a horizontal frame parent with two child frames.
 - Use clipContent: true on cards/containers with cornerRadius + image/overflow content. Essential for clean rounded corners.
 - Use width/height (or "fill_container") on all children. Unique descriptive IDs. All colors as fill arrays.
@@ -220,14 +249,23 @@ CRITICAL RULES:
 - After the json block, add a 1-sentence summary.
 - Phone mockup: exactly ONE "frame" node, width 260-300, height 520-580, cornerRadius 32, solid fill + 1px stroke. NEVER use ellipse. NEVER add any children inside (no text, no frames, no images). All mockups identical.
 - NEVER use ellipse for decorative/placeholder shapes — use frame or rectangle with cornerRadius.
-- Navigation bars: justifyContent="space_between", 3 groups (logo | links | CTA), padding=[0,80], alignItems="center".
-- Never use emoji as icons; use path nodes only.
-- TEXT IN LAYOUTS: text inside layout frames MUST use textGrowth="fixed-width" + width="fill_container". NEVER use fixed pixel widths/heights for text — let textGrowth auto-size. Short labels/buttons can omit textGrowth.
+- Navigation bars (when applicable): justifyContent="space_between", 3 groups (logo | links | CTA), padding=[0,80], alignItems="center".
+- Never use emoji as icons; use path nodes with descriptive icon names (system auto-resolves to verified SVG paths).
+- TEXT IN LAYOUTS: text inside layout frames MUST use textGrowth="fixed-width" + width="fill_container". NEVER use fixed pixel widths on text. Short labels/buttons can omit textGrowth.
+- TEXT HEIGHT: NEVER set explicit pixel height on text nodes (e.g. height:22). OMIT the height property — the engine auto-calculates from textGrowth + content. A small explicit height causes text clipping and overlap.
 - Cards with images: ALWAYS set clipContent: true + cornerRadius. Use "fill_container" width on image/body/text children inside the card.
+- CARD ROW ALIGNMENT: cards in a horizontal row MUST ALL use width="fill_container" + height="fill_container" for even distribution and equal height. Never use different fixed heights on sibling cards — it creates an ugly uneven row.
+- TEXT WRAPPING: any text content longer than ~15 characters MUST have textGrowth="fixed-width" + width="fill_container". Without textGrowth, long text renders as ONE single line and overflows. Only omit textGrowth for very short labels (1-3 words).
 - Keep section rhythm consistent (80-120px vertical padding) and preserve alignment between sections.
 
+OVERFLOW PREVENTION (CRITICAL — #1 source of visual bugs):
+- ALL text nodes inside layout frames → width="fill_container" + textGrowth="fixed-width". No exceptions. NEVER width:378 or width:224 on text inside a layout frame.
+- Fixed-width children must be ≤ parent content area (parent width − horizontal padding). Example: a card width=195 with padding=[24,40,24,40] has 115px available — a child with width=378 causes severe overflow.
+- CJK (Chinese/Japanese/Korean) text in buttons: each CJK char ≈ fontSize wide. "免费下载" (4 chars) at fontSize 15 = ~60px minimum content width. Button must be ≥ 60 + horizontal padding.
+- Badges with dynamic text: use width="fit_content" so the badge auto-expands to fit its text.
+
 SIZING: Mobile root 375x812. Web root 1200x800 (single screen) or 1200x3000-5000 (landing page).
-ICONS: "path" nodes with SVG d. Size 16-24px. Use Lucide/MDI/Heroicons paths.
+ICONS: "path" nodes with descriptive names (e.g. "SearchIcon", "MenuIcon"). System auto-resolves to verified SVG paths. Size 16-24px.
 IMAGES: for app showcase sections, prefer phone mockup placeholders over real screenshots.
 STYLE: Default to light neutral palette unless user explicitly asks for dark/terminal/cyber. Avoid always reusing black+green.
 
