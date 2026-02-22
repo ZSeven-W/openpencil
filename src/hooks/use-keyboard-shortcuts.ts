@@ -182,7 +182,7 @@ export function useKeyboardShortcuts() {
           downloadDocument(doc, fileName)
           store.markClean()
         } else if (supportsFileSystemAccess()) {
-          saveDocumentAs(doc, 'untitled.pen').then((result) => {
+          saveDocumentAs(doc, 'untitled.op').then((result) => {
             if (result) {
               useDocumentStore.setState({
                 fileName: result.fileName,

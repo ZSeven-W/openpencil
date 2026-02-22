@@ -6,16 +6,22 @@
     "private": true,
     "type": "module",
     "main": "electron-dist/main.cjs",
+    "bin": {
+        "openpencil-mcp": "dist/mcp-server.cjs"
+    },
     "scripts": {
         "dev": "bun --bun vite dev --port 3000",
         "build": "bun --bun vite build",
         "preview": "bun --bun vite preview",
         "test": "bun --bun vitest run --passWithNoTests",
+        "mcp:compile": "esbuild src/mcp/server.ts --bundle --platform=node --target=node20 --outfile=dist/mcp-server.cjs --format=cjs --sourcemap --alias:@=src",
+        "mcp:dev": "bun run src/mcp/server.ts",
         "electron:dev": "bun run scripts/electron-dev.ts",
         "electron:compile": "esbuild electron/main.ts electron/preload.ts --bundle --platform=node --target=node20 --outdir=electron-dist --external:electron --format=cjs --out-extension:.js=.cjs --sourcemap",
         "electron:build": "BUILD_TARGET=electron bun --bun run build && bun run electron:compile && npx electron-builder --config electron-builder.yml"
     },
     "dependencies": {
+        "@modelcontextprotocol/sdk": "^1.12.1",
         "@anthropic-ai/claude-agent-sdk": "^0.2.47",
         "@anthropic-ai/sdk": "^0.77.0",
         "@opencode-ai/sdk": "1.2.6",

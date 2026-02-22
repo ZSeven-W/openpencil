@@ -195,8 +195,8 @@ function setupIPC(): void {
   ipcMain.handle('dialog:openFile', async () => {
     if (!mainWindow) return null
     const result = await dialog.showOpenDialog(mainWindow, {
-      title: 'Open .pen file',
-      filters: [{ name: 'Pen Files', extensions: ['pen'] }],
+      title: 'Open .op file',
+      filters: [{ name: 'OpenPencil Files', extensions: ['op', 'pen'] }],
       properties: ['openFile'],
     })
     if (result.canceled || result.filePaths.length === 0) return null
@@ -210,9 +210,9 @@ function setupIPC(): void {
     async (_event, payload: { content: string; defaultPath?: string }) => {
       if (!mainWindow) return null
       const result = await dialog.showSaveDialog(mainWindow, {
-        title: 'Save .pen file',
+        title: 'Save .op file',
         defaultPath: payload.defaultPath,
-        filters: [{ name: 'Pen Files', extensions: ['pen'] }],
+        filters: [{ name: 'OpenPencil Files', extensions: ['op'] }],
       })
       if (result.canceled || !result.filePath) return null
       await writeFile(result.filePath, payload.content, 'utf-8')

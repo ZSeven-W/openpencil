@@ -81,7 +81,7 @@ export async function exportKit(
     kitDoc.themes = structuredClone(sourceDoc.themes)
   }
 
-  const fileName = `${kitName.replace(/[^a-zA-Z0-9-_ ]/g, '').trim() || 'kit'}.pen`
+  const fileName = `${kitName.replace(/[^a-zA-Z0-9-_ ]/g, '').trim() || 'kit'}.op`
 
   if (supportsFileSystemAccess()) {
     const result = await saveDocumentAs(kitDoc, fileName)
@@ -111,8 +111,8 @@ async function pickFileSystemAccess(): Promise<PenDocument | null> {
     ).showOpenFilePicker({
       types: [
         {
-          description: 'Pen Design File',
-          accept: { 'application/json': ['.pen', '.json'] },
+          description: 'OpenPencil File',
+          accept: { 'application/json': ['.op', '.pen', '.json'] },
         },
       ],
     })
@@ -128,7 +128,7 @@ function pickFallback(): Promise<PenDocument | null> {
   return new Promise((resolve) => {
     const input = document.createElement('input')
     input.type = 'file'
-    input.accept = '.pen,.json'
+    input.accept = '.op,.pen,.json'
     input.onchange = async () => {
       const file = input.files?.[0]
       if (!file) { resolve(null); return }
