@@ -8,6 +8,7 @@ interface SizeSectionProps {
   onUpdate: (updates: Partial<PenNode>) => void
   hasCornerRadius?: boolean
   cornerRadius?: number | [number, number, number, number]
+  hideWH?: boolean
 }
 
 export default function SizeSection({
@@ -15,6 +16,7 @@ export default function SizeSection({
   onUpdate,
   hasCornerRadius,
   cornerRadius,
+  hideWH,
 }: SizeSectionProps) {
   const info = nodeRenderInfo.get(node.id)
   const offsetX = info?.parentOffsetX ?? 0
@@ -40,7 +42,12 @@ export default function SizeSection({
         : 0
 
   return (
+    <div className="space-y-3">
+    <span className=" text-[11px] font-medium text-foreground ">
+          Position
+      </span>
     <div className="grid grid-cols-2 gap-1">
+      
       <NumberInput
         label="X"
         value={Math.round(x)}
@@ -51,7 +58,7 @@ export default function SizeSection({
         value={Math.round(y)}
         onChange={(v) => onUpdate({ y: v - offsetY })}
       />
-      {width !== undefined && (
+      {!hideWH && width !== undefined && (
         <NumberInput
           label="W"
           value={Math.round(width)}
@@ -61,7 +68,7 @@ export default function SizeSection({
           min={1}
         />
       )}
-      {height !== undefined && (
+      {!hideWH && height !== undefined && (
         <NumberInput
           label="H"
           value={Math.round(height)}
@@ -87,6 +94,7 @@ export default function SizeSection({
           min={0}
         />
       )}
+    </div>
     </div>
   )
 }

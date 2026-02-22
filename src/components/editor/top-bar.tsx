@@ -11,6 +11,7 @@ import {
 } from 'lucide-react'
 import ClaudeLogo from '@/components/icons/claude-logo'
 import OpenAILogo from '@/components/icons/openai-logo'
+import OpenCodeLogo from '@/components/icons/opencode-logo'
 import { Button } from '@/components/ui/button'
 import {
   Tooltip,
@@ -95,8 +96,11 @@ export default function TopBar() {
 
     if (fileHandle) {
       writeToFileHandle(fileHandle, doc).then(() => store.markClean())
+    } else if (fn) {
+      downloadDocument(doc, fn)
+      store.markClean()
     } else if (supportsFileSystemAccess()) {
-      saveDocumentAs(doc, fn ?? 'untitled.pen').then((result) => {
+      saveDocumentAs(doc, 'untitled.op').then((result) => {
         if (result) {
           useDocumentStore.setState({
             fileName: result.fileName,
@@ -105,9 +109,6 @@ export default function TopBar() {
           })
         }
       })
-    } else if (fn) {
-      downloadDocument(doc, fn)
-      store.markClean()
     } else {
       store.setSaveDialogOpen(true)
     }
@@ -136,9 +137,9 @@ export default function TopBar() {
   const displayName = fileName ?? 'Untitled'
 
   return (
-    <div className="h-10 bg-card border-b border-border flex items-center px-2 shrink-0 select-none">
+    <div className="h-10 bg-card border-b border-border flex items-center px-2 shrink-0 select-none app-region-drag">
       {/* Left section */}
-      <div className="flex items-center gap-0.5">
+      <div className="flex items-center gap-0.5 app-region-no-drag electron-traffic-light-pad">
         <Tooltip>
           <TooltipTrigger asChild>
             <Button
@@ -198,7 +199,7 @@ export default function TopBar() {
       </div>
 
       {/* Right section */}
-      <div className="flex items-center gap-0.5">
+      <div className="flex items-center gap-0.5 app-region-no-drag">
         <Tooltip>
           <TooltipTrigger asChild>
             <Button
@@ -209,6 +210,7 @@ export default function TopBar() {
             >
               <ClaudeLogo className="w-4 h-4" />
               <OpenAILogo className="w-4 h-4 -ml-1" />
+              <OpenCodeLogo className="w-4 h-4 -ml-1" />
               <span className="hidden sm:inline">Agents & MCP</span>
             </Button>
           </TooltipTrigger>

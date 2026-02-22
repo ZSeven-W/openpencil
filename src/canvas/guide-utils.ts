@@ -45,10 +45,15 @@ export function clearGuides() {
 // ---------------------------------------------------------------------------
 
 function getEdges(obj: fabric.FabricObject): Edges {
-  const left = obj.left ?? 0
-  const top = obj.top ?? 0
+  let left = obj.left ?? 0
+  let top = obj.top ?? 0
   const w = (obj.width ?? 0) * (obj.scaleX ?? 1)
   const h = (obj.height ?? 0) * (obj.scaleY ?? 1)
+
+  // ActiveSelection / Group uses center origin — adjust to top-left
+  if (obj.originX === 'center') left -= w / 2
+  if (obj.originY === 'center') top -= h / 2
+
   return {
     left,
     right: left + w,

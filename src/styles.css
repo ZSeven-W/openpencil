@@ -108,3 +108,8 @@ code {
 .syn-comment { color: #546e7a; font-style: italic; }
 .syn-number { color: #f78c6c; }
 .syn-bracket { color: #89ddff; }
+
+/* Electron window drag regions */
+.app-region-drag { -webkit-app-region: drag; }
+.app-region-no-drag { -webkit-app-region: no-drag; }
+

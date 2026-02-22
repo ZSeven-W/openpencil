@@ -1,5 +1,8 @@
 import { useEffect, useRef, type RefObject } from 'react'
+import * as fabric from 'fabric'
 import { useCanvasStore } from '@/stores/canvas-store'
+import { nodeRenderInfo } from './use-canvas-sync'
+import type { FabricObjectWithPenId } from './canvas-object-factory'
 
 export function useDimensionLabel(
   containerRef: RefObject<HTMLDivElement | null>,
@@ -40,10 +43,45 @@ export function useDimensionLabel(
       }
 
       const bound = active.getBoundingRect()
-      const w = Math.round(active.getScaledWidth())
-      const h = Math.round(active.getScaledHeight())
 
-      label.textContent = `${w} \u00d7 ${h}`
+      // Detect active interaction (dragging or scaling)
+      const transform = (canvas as unknown as { _currentTransform?: { action?: string } })
+        ._currentTransform
+      const action = transform?.action
+
+      if (!action) {
+        // No active interaction — hide the label
+        label.style.display = 'none'
+        return
+      }
+
+      if (action === 'drag') {
+        // Show position in scene coordinates during drag
+        const vpt = canvas.viewportTransform
+        const zoom = vpt[0]
+        const panX = vpt[4]
+        const panY = vpt[5]
+
+        if (active instanceof fabric.ActiveSelection) {
+          const sceneX = Math.round(((bound.left - panX) / zoom))
+          const sceneY = Math.round(((bound.top - panY) / zoom))
+          label.textContent = `X: ${sceneX}  Y: ${sceneY}`
+        } else {
+          const obj = active as FabricObjectWithPenId
+          const info = obj.penNodeId ? nodeRenderInfo.get(obj.penNodeId) : null
+          const offsetX = info?.parentOffsetX ?? 0
+          const offsetY = info?.parentOffsetY ?? 0
+          const relX = Math.round((active.left ?? 0) - offsetX)
+          const relY = Math.round((active.top ?? 0) - offsetY)
+          label.textContent = `X: ${relX}  Y: ${relY}`
+        }
+      } else {
+        // Show dimensions during scale/resize
+        const w = Math.round(active.getScaledWidth())
+        const h = Math.round(active.getScaledHeight())
+        label.textContent = `${w} \u00d7 ${h}`
+      }
+
       label.style.display = 'block'
       label.style.left = `${bound.left + bound.width / 2}px`
       label.style.top = `${bound.top + bound.height + 8}px`

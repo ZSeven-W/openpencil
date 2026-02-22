@@ -2,6 +2,8 @@
 
 Open-source vector design tool with a Design-as-Code philosophy. An alternative to [Pencil.dev](https://pencil.dev).
 
+Available as a **web app** and **desktop app** (macOS / Windows / Linux via Electron).
+
 ## Features
 
 ### Canvas
@@ -10,6 +12,8 @@ Open-source vector design tool with a Design-as-Code philosophy. An alternative 
 - Smart alignment guides with edge, center, and distance snapping
 - Dimension labels during object manipulation
 - Frame labels and boundary visualization
+- Double-click to enter frames with visual overlay
+- Advanced drag-and-drop: drag into auto-layout frames with insertion indicators, reparenting, reorder within layout
 
 ### Drawing Tools
 
@@ -30,6 +34,7 @@ Open-source vector design tool with a Design-as-Code philosophy. An alternative 
 - Effects: shadow and blur
 - Auto-layout: direction, gap, padding, justify-content, align-items
 - Variable binding: bind any property to a design variable via variable picker
+- Per-layer export: export individual layers to PNG/SVG with scale options (1x/2x/3x)
 
 ### Design Variables & Tokens
 
@@ -83,10 +88,12 @@ Open-source vector design tool with a Design-as-Code philosophy. An alternative 
 
 - Built-in AI chat panel (Cmd+J)
 - AI-powered design generation from text prompts
+- Orchestrator-based parallel design generation: decomposes requests into spatial sub-tasks for faster output
 - Design block preview with "Apply Design" action
-- Streaming responses with thinking state
+- Streaming responses with thinking state and JSONL real-time canvas insertion
+- Context optimizer: sliding window history trimming to prevent unbounded context growth
 - Dual provider: Anthropic API or local Claude Code (OAuth)
-- Multi-provider settings: Claude Code, Codex CLI
+- Multi-provider settings: Claude Code, Codex CLI, OpenCode
 
 ### Editor UI
 
@@ -132,11 +139,15 @@ Open-source vector design tool with a Design-as-Code philosophy. An alternative 
 - **Styling:** [Tailwind CSS](https://tailwindcss.com/) v4
 - **Icons:** [Lucide React](https://lucide.dev/)
 - **Server:** [Nitro](https://nitro.build/) (API routes)
-- **AI:** [Anthropic SDK](https://docs.anthropic.com/) + [Claude Agent SDK](https://github.com/anthropics/claude-agent-sdk)
+- **Desktop:** [Electron](https://www.electronjs.org/) 35 + [electron-builder](https://www.electron.build/)
+- **AI:** [Anthropic SDK](https://docs.anthropic.com/) + [Claude Agent SDK](https://github.com/anthropics/claude-agent-sdk) + [OpenCode SDK](https://github.com/opencode-ai/sdk)
 - **Runtime:** [Bun](https://bun.sh/)
 - **Build:** [Vite](https://vite.dev/) 7
+- **CI/CD:** GitHub Actions
 
 ## Getting Started
+
+### Web (Development)
 
 ```bash
 bun install
@@ -145,65 +156,94 @@ bun --bun run dev
 
 Open http://localhost:3000 and click "New Design" to enter the editor.
 
+### Electron (Desktop)
+
+```bash
+# Development: starts Vite dev server + Electron
+bun run electron:dev
+
+# Production build (current platform)
+bun run electron:build
+```
+
 ### AI Configuration
 
-The AI assistant works in two modes:
+The AI assistant works in multiple modes:
 
 - **Anthropic API**: Set `ANTHROPIC_API_KEY` in `.env`
 - **Local Claude Code**: No config needed — uses Claude Agent SDK with OAuth login as fallback
+- **OpenCode**: Connect via OpenCode SDK for additional model support
 
 ## Scripts
 
 | Command | Description |
 |---|---|
-| `bun --bun run dev` | Start dev server on port 3000 |
-| `bun --bun run build` | Production build |
+| `bun --bun run dev` | Start web dev server on port 3000 |
+| `bun --bun run build` | Production web build |
 | `bun --bun run preview` | Preview production build |
 | `bun --bun run test` | Run tests (Vitest) |
 | `npx tsc --noEmit` | Type check |
+| `bun run electron:dev` | Start Vite + Electron for desktop dev |
+| `bun run electron:compile` | Compile electron/ with esbuild |
+| `bun run electron:build` | Full Electron package (web build + compile + electron-builder) |
+
+## CI / CD
+
+### CI (`ci.yml`)
+
+Runs on every push and PR to `main` / `v0.0.1`:
+
+1. **Lint & Test** — type check (`tsc --noEmit`) + unit tests (`vitest`)
+2. **Build Web** — production web build, uploads `.output/` as artifact
+
+### Build Electron (`build-electron.yml`)
+
+Triggered by version tags (`v*`) or manual dispatch:
+
+1. **Build** — parallel matrix across macOS, Windows, Linux
+   - macOS: `.dmg` + `.zip`
+   - Windows: `.exe` (NSIS installer + portable)
+   - Linux: `.AppImage` + `.deb`
+2. **Release** — creates a draft GitHub Release with all platform artifacts
+
+To create a release:
+
+```bash
+git tag v0.1.0
+git push origin v0.1.0
+```
 
 ## Project Structure
 
-```
+```text
 src/
-  canvas/              # Fabric.js canvas engine (16 files)
-    fabric-canvas.tsx      Canvas component initialization
-    canvas-object-factory  Creates Fabric objects from PenNodes
-    canvas-object-sync     Syncs object properties Fabric ↔ store
-    canvas-sync-lock       Prevents circular sync loops
-    canvas-controls        Custom rotation controls and cursors
-    canvas-constants       Default colors, zoom limits
-    use-canvas-events      Drawing events, tool management
-    use-canvas-sync        Bidirectional PenDocument ↔ Fabric sync + variable resolution
-    use-canvas-viewport    Zoom, pan, tool cursor switching
-    use-canvas-selection   Selection sync Fabric ↔ store
-    use-canvas-guides      Smart alignment guides
-    guide-utils            Guide calculation and rendering
-    pen-tool               Bezier pen tool with anchors/handles
-    parent-child-transform Parent transform propagation to children
-    use-dimension-label    Size/position labels during manipulation
-    use-frame-labels       Frame name/boundary rendering
-  variables/           # Design variables/tokens system
-    resolve-variables      Core $variable resolution for canvas rendering
-    replace-refs           Replace/resolve $refs on rename/delete
+  canvas/              # Fabric.js canvas engine (25 files: sync, events, guides, drag-drop, pen tool, etc.)
+  variables/           # Design variables/tokens system (resolve, replace refs)
   components/
-    editor/            # Editor layout, toolbar, tool buttons, status bar
-    panels/            # Layer panel, property panel (17 files), AI chat, code panel,
-                       # variables panel, variable row
+    editor/            # Editor layout, toolbar, tool buttons, top bar, status bar
+    panels/            # Layer panel, property panel, AI chat, code panel, variables panel, export section
     shared/            # ColorPicker, NumberInput, VariablePicker, ExportDialog, etc.
-    icons/             # Provider logos (Claude, OpenAI)
+    icons/             # Provider logos (Claude, OpenAI, OpenCode)
     ui/                # shadcn/ui primitives (Button, Select, Slider, Switch, etc.)
   hooks/               # Keyboard shortcuts
   lib/                 # Utility functions (cn class merging)
   services/
-    ai/                # AI chat service, prompts, design generation
+    ai/                # AI chat, orchestrator, context optimizer, design generation, prompts
     codegen/           # React+Tailwind, HTML+CSS, and CSS variables generators
   stores/              # Zustand stores (canvas, document, history, AI, agent-settings)
-  types/               # PenDocument/PenNode types, style types, variables, agent settings
+  types/               # PenDocument/PenNode types, style types, variables, agent settings, Electron IPC
   utils/               # File operations, export, node clone, SVG parser, syntax highlight
   routes/              # TanStack Router pages (/, /editor)
+electron/
+  main.ts              # Electron main process (window, Nitro server, IPC, fullscreen handling)
+  preload.ts           # Context bridge for renderer ↔ main IPC
 server/
   api/ai/              # Nitro API: streaming chat, generation, agent connection, models
+  utils/               # Server utilities: Claude CLI resolver, OpenCode client manager
+.github/
+  workflows/
+    ci.yml             # CI: type check, test, web build
+    build-electron.yml # Electron build for macOS/Windows/Linux + GitHub Release
 ```
 
 ## Roadmap

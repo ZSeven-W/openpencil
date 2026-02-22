@@ -12,3 +12,5 @@ count.txt
 .vinxi
 __unconfig*
 todos.json
+electron-dist/
+dist-electron/

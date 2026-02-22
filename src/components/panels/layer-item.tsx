@@ -16,6 +16,7 @@ import {
   ImageIcon,
   ChevronDown,
   ChevronRight,
+  Diamond,
 } from 'lucide-react'
 import type { PenNodeType } from '@/types/pen'
 
@@ -44,6 +45,8 @@ interface LayerItemProps {
   locked: boolean
   hasChildren: boolean
   expanded: boolean
+  isReusable: boolean
+  isInstance: boolean
   dropPosition: DropPosition
   onSelect: (id: string) => void
   onRename: (id: string, name: string) => void
@@ -66,6 +69,8 @@ export default function LayerItem({
   locked,
   hasChildren,
   expanded,
+  isReusable,
+  isInstance,
   dropPosition,
   onSelect,
   onRename,
@@ -80,7 +85,7 @@ export default function LayerItem({
   const [isEditing, setIsEditing] = useState(false)
   const [editName, setEditName] = useState(name)
 
-  const Icon = TYPE_ICONS[type] ?? Square
+  const Icon = isReusable || isInstance ? Diamond : (TYPE_ICONS[type] ?? Square)
 
   const handleDoubleClick = () => {
     setEditName(name)
@@ -113,15 +118,23 @@ export default function LayerItem({
     dropPosition === 'inside' ? 'ring-2 ring-inset ring-blue-500 bg-blue-500/10' : ''
 
   return (
-    <div className="relative">
+    <div className="relative" data-layer-id={id}>
       {dropPosition === 'above' && (
         <div className="absolute top-0 left-2 right-2 h-0.5 bg-blue-500 rounded-full z-10" />
       )}
       <div
         className={`group/layer flex items-center h-7 px-1 gap-1 cursor-pointer rounded text-xs transition-colors ${
           selected
-            ? 'bg-primary/15 text-primary'
-            : 'text-muted-foreground hover:bg-accent/50'
+            ? isReusable
+              ? 'bg-purple-500/15 text-purple-400'
+              : isInstance
+                ? 'bg-[#9281f7]/10 text-[#9281f7]'
+                : 'bg-primary/15 text-primary'
+            : isReusable
+              ? 'text-purple-400 hover:bg-purple-500/10'
+              : isInstance
+                ? 'text-[#9281f7] hover:bg-[#9281f7]/10'
+                : 'text-muted-foreground hover:bg-accent/50'
         } ${!visible ? 'opacity-40' : ''} ${dropInsideHighlight}`}
         style={{ paddingLeft: `${depth * 12 + 4}px` }}
         onClick={() => onSelect(id)}
@@ -146,7 +159,7 @@ export default function LayerItem({
           <span className="shrink-0 w-3" />
         )}
 
-        <Icon size={12} className="shrink-0 opacity-60" />
+        <Icon size={12} className={`shrink-0 ${isReusable ? 'text-purple-400' : isInstance ? 'text-[#9281f7]' : 'opacity-60'}`} />
 
         {isEditing ? (
           <input
