@@ -135,6 +135,9 @@ function layoutToTailwind(node: ContainerProps): string[] {
     }
     if (aiMap[node.alignItems]) classes.push(aiMap[node.alignItems])
   }
+  if (node.clipContent) {
+    classes.push('overflow-hidden')
+  }
   return classes
 }
 
@@ -193,6 +196,10 @@ function textToTailwind(node: TextNode): string[] {
   if (node.fontFamily) classes.push(`font-['${node.fontFamily.replace(/\s/g, '_')}']`)
   if (node.lineHeight) classes.push(`leading-[${node.lineHeight}]`)
   if (node.letterSpacing) classes.push(`tracking-[${node.letterSpacing}px]`)
+  if (node.textAlignVertical === 'middle') classes.push('align-middle')
+  else if (node.textAlignVertical === 'bottom') classes.push('align-bottom')
+  if (node.textGrowth === 'auto') classes.push('whitespace-nowrap')
+  else if (node.textGrowth === 'fixed-width-height') classes.push('overflow-hidden')
   if (node.underline) classes.push('underline')
   if (node.strikethrough) classes.push('line-through')
   return classes
