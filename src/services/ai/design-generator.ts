@@ -766,7 +766,8 @@ export function animateNodesToCanvas(nodes: PenNode[]): void {
   useHistoryStore.getState().endBatch(useDocumentStore.getState().document)
 }
 
-function applyGenerationHeuristics(node: PenNode): void {
+function applyGenerationHeuristics(node: PenNode, inTableContext = false): void {
+  const tableContext = inTableContext || isTableLikeFrame(node)
   applyIconPathResolution(node)
   applyNoEmojiIconHeuristic(node)
   applyImagePlaceholderHeuristic(node)
@@ -777,6 +778,7 @@ function applyGenerationHeuristics(node: PenNode): void {
   applyHorizontalAlignCenterHeuristic(node)
   applyIconButtonSizing(node)
   applyBadgeSizing(node)
+  applyInlineInfoPillSizing(node)
   applyButtonSpacingHeuristic(node)
   applyButtonWidthHeuristic(node)
   applyTextWrappingHeuristic(node)
@@ -791,15 +793,19 @@ function applyGenerationHeuristics(node: PenNode): void {
   // Ensure section-level frames have minimum horizontal padding
   applySectionPaddingHeuristic(node)
   // Tree-aware: fix text widths relative to parent layout
-  applyTextFillContainerInLayout(node)
+  if (!tableContext) {
+    applyTextFillContainerInLayout(node)
+  }
   // Card row equalization: horizontal rows of cards → fill_container
   applyCardRowEqualization(node)
   // Dense card rows (>=5 cards): compact internal content for layout stability
   applyDenseCardRowCompaction(node)
   // Form/card children: convert fixed-width buttons/inputs to fill_container
-  applyFormChildFillContainer(node)
+  if (!tableContext) {
+    applyFormChildFillContainer(node)
+  }
   for (const child of node.children) {
-    applyGenerationHeuristics(child)
+    applyGenerationHeuristics(child, tableContext)
   }
   // Remove decorative glow/shadow frames next to phone placeholders
   applyRemoveDecorativeGlowSiblings(node)
@@ -832,6 +838,7 @@ function applyTreeFixesRecursive(
   getNodeById: (id: string) => PenNode | undefined,
   updateNode: (id: string, updates: Partial<PenNode>) => void,
   removeNode: (id: string) => void,
+  inheritedTableContext = false,
 ): void {
   if (node.type !== 'frame') return
 
@@ -856,6 +863,7 @@ function applyTreeFixesRecursive(
   // Keep a mutable reference to the current children list.
   // This gets refreshed after removals so subsequent fixes see the up-to-date tree.
   let children: PenNode[] = node.children
+  const tableLikeNode = inheritedTableContext || isTableLikeFrame(node)
 
   // --- Fix 14: Flatten redundant single "Inner" wrappers ---
   {
@@ -1026,7 +1034,7 @@ function applyTreeFixesRecursive(
 
   // --- Fix 1: Text in layout frames → Fill Width + Auto Height ---
   // Skip if parent is fit_content (hug) — fill_container child breaks hug parent layout
-  if (node.layout && node.layout !== 'none' && !isBadgeLikeFrame(node)) {
+  if (node.layout && node.layout !== 'none' && !isBadgeLikeFrame(node) && !tableLikeNode) {
     // Compute parent content width for accurate text height estimation
     const nodeW = toSizeNumber(node.width, 0)
     let nodePad = parsePaddingValues('padding' in node ? node.padding : undefined)
@@ -1277,6 +1285,57 @@ function applyTreeFixesRecursive(
     }
   }
 
+  // --- Fix 13.5: Inline info pill sizing (post-tree safety pass) ---
+  {
+    if (isInlineInfoPillLikeFrame(node)) {
+      const frameUpdates13b: Record<string, unknown> = {}
+      if (typeof node.width === 'string' && node.width.startsWith('fill_container')) {
+        frameUpdates13b.width = 'fit_content'
+      } else if (typeof node.width === 'number') {
+        const nodeW13b = toSizeNumber(node.width, 0)
+        const maxW13b = generationCanvasWidth <= 520 ? Math.round(generationCanvasWidth * 0.9) : 420
+        if (nodeW13b > maxW13b) frameUpdates13b.width = 'fit_content'
+      }
+      if (!node.layout || node.layout === 'none') frameUpdates13b.layout = 'horizontal'
+      if (!node.alignItems) frameUpdates13b.alignItems = 'center'
+      if (!node.justifyContent || node.justifyContent === 'center') frameUpdates13b.justifyContent = 'start'
+      const gap13b = toGapNumber('gap' in node ? node.gap : undefined)
+      if (gap13b < 6) frameUpdates13b.gap = 8
+      if (Object.keys(frameUpdates13b).length > 0) {
+        updateNode(node.id, frameUpdates13b as Partial<PenNode>)
+        const refreshed13b = getNodeById(node.id)
+        if (refreshed13b && refreshed13b.type === 'frame' && Array.isArray(refreshed13b.children)) {
+          node = refreshed13b
+          children = refreshed13b.children
+        }
+      }
+    }
+  }
+
+  // --- Fix 13.6: Compact controls should not be auto-stretched to full width ---
+  {
+    if (isCompactControlFrame(node)) {
+      const frameUpdates13c: Record<string, unknown> = {}
+      if (typeof node.width === 'string' && node.width.startsWith('fill_container')) {
+        frameUpdates13c.width = 'fit_content'
+      } else if (typeof node.width === 'number') {
+        const controlMinW = estimateCompactControlMinWidth(node)
+        const controlW = toSizeNumber(node.width, 0)
+        if (controlMinW > 0 && controlW > Math.max(240, controlMinW * 1.9)) {
+          frameUpdates13c.width = 'fit_content'
+        }
+      }
+      if (Object.keys(frameUpdates13c).length > 0) {
+        updateNode(node.id, frameUpdates13c as Partial<PenNode>)
+        const refreshed13c = getNodeById(node.id)
+        if (refreshed13c && refreshed13c.type === 'frame' && Array.isArray(refreshed13c.children)) {
+          node = refreshed13c
+          children = refreshed13c.children
+        }
+      }
+    }
+  }
+
   // --- Fix 9: Button spacing (padding/gap/height) ---
   {
     const nodeH = toSizeNumber(node.height, 0)
@@ -1285,7 +1344,15 @@ function applyTreeFixesRecursive(
     const hasTextChild = children.some(
       (c: PenNode) => c.type === 'text' && typeof c.content === 'string' && c.content.trim().length > 0,
     )
-    if (nodeH > 0 && nodeH <= 72 && (isHorizontal || isCentered) && hasTextChild && !isBadgeLikeFrame(node)) {
+    if (
+      nodeH > 0
+      && nodeH <= 72
+      && (isHorizontal || isCentered)
+      && hasTextChild
+      && !isBadgeLikeFrame(node)
+      && !isInlineInfoPillLikeFrame(node)
+      && (isCompactButtonLikeFrame(node) || isLikelyActionFrame(node))
+    ) {
       const pad = parsePaddingValues('padding' in node ? node.padding : undefined)
       const minV = 8
       const minH2 = 16
@@ -1324,7 +1391,7 @@ function applyTreeFixesRecursive(
 
   // --- Fix 11: Form children alignment & button row layout ---
   // Skip if parent is fit_content (hug) — fill_container children break hug layout
-  if (node.layout === 'vertical' && node.width !== 'fit_content' && children.length >= 2) {
+  if (node.layout === 'vertical' && node.width !== 'fit_content' && children.length >= 2 && !tableLikeNode) {
     const parentW11 = toSizeNumber(node.width, 0)
     const pad11 = parsePaddingValues('padding' in node ? node.padding : undefined)
     const contentW11 = parentW11 > 0 ? parentW11 - pad11.left - pad11.right : 0
@@ -1353,8 +1420,7 @@ function applyTreeFixesRecursive(
       // it creates narrow columns even when parent has enough room.
       if (
         childWidthIsFit
-        && !isBadgeLikeFrame(child)
-        && !isCompactButtonLikeFrame(child)
+        && !isCompactControlFrame(child)
         && frameNeedsFillWidthForTextContent(child)
       ) {
         updateNode(child.id, { width: 'fill_container' } as Partial<PenNode>)
@@ -1363,7 +1429,11 @@ function applyTreeFixesRecursive(
 
       // Overflow: child wider than parent content area
       if (contentW11 > 0 && childW > contentW11) {
-        updateNode(child.id, { width: 'fill_container' } as Partial<PenNode>)
+        if (isCompactControlFrame(child)) {
+          updateNode(child.id, { width: 'fit_content' } as Partial<PenNode>)
+        } else {
+          updateNode(child.id, { width: 'fill_container' } as Partial<PenNode>)
+        }
         continue
       }
 
@@ -1374,16 +1444,21 @@ function applyTreeFixesRecursive(
         && childWidthIsNumber
         && childW > 0
         && childW < contentW11 * 0.72
-        && !isBadgeLikeFrame(child)
-        && !isCompactButtonLikeFrame(child)
+        && !isCompactControlFrame(child)
         && frameNeedsFillWidthForTextContent(child)
       ) {
         updateNode(child.id, { width: 'fill_container' } as Partial<PenNode>)
         continue
       }
 
-      // Consistency: if a sibling uses fill_container, match it
-      if (hasFillSibling11 && childH > 0 && childH <= 72 && !isCompactControlFrame(child)) {
+      // Consistency: if a sibling uses fill_container, only expand likely action controls.
+      if (
+        hasFillSibling11
+        && childH > 0
+        && childH <= 72
+        && !isCompactControlFrame(child)
+        && isLikelyActionFrame(child)
+      ) {
         const hasContent = 'children' in child && Array.isArray(child.children)
           && child.children.some((gc: PenNode) => gc.type === 'text' || gc.type === 'path')
         if (hasContent) {
@@ -1413,9 +1488,21 @@ function applyTreeFixesRecursive(
     }
   }
 
+  // --- Fix 11.5: Horizontal content rows — long-text fit_content columns should fill ---
+  if (node.layout === 'horizontal' && !tableLikeNode && children.length >= 2) {
+    for (const child of children) {
+      if (child.type !== 'frame') continue
+      if (typeof child.width !== 'string' || !child.width.startsWith('fit_content')) continue
+      if (isPhonePlaceholderFrame(child) || isDividerLikeFrame(child)) continue
+      if (isCompactControlFrame(child)) continue
+      if (!frameNeedsFillWidthForTextContent(child)) continue
+      updateNode(child.id, { width: 'fill_container' } as Partial<PenNode>)
+    }
+  }
+
   // Recurse into child frames
   for (const child of children) {
-    applyTreeFixesRecursive(child, getNodeById, updateNode, removeNode)
+    applyTreeFixesRecursive(child, getNodeById, updateNode, removeNode, tableLikeNode)
   }
 
   // --- Fix 10: Horizontal overflow — reduce gap, then expand parent ---
@@ -2444,17 +2531,186 @@ function getSingleInnerWrapperFlattenUpdates(
   return updates
 }
 
+function isTableMarker(text: string): boolean {
+  return /(^|[\s_-])(table|datatable|gridtable|tabular|thead|tbody|tableheader|tablebody|table-row)([\s_-]|$)|表格|数据表|表头|表体|级别表|词汇量表|对应考试/.test(text)
+}
+
+function isTableRowLikeFrame(node: PenNode): boolean {
+  if (node.type !== 'frame') return false
+  if (!Array.isArray(node.children) || node.children.length < 2) return false
+  const marker = `${node.name ?? ''} ${node.id}`.toLowerCase()
+  const explicitRowMarker = /(^|[\s_-])(row|table-row|tr)([\s_-]|$)|表行/.test(marker)
+  const horizontalRowLike = node.layout === 'horizontal'
+  if (!explicitRowMarker && !horizontalRowLike) return false
+  if (/(button|btn|cta|badge|chip|pill|tag|nav|menu|hero|card|panel|按钮|标签|导航|卡片)/.test(marker)) return false
+  const textCount = node.children.filter(
+    (child) => child.type === 'text' && getTextContentForNode(child).trim().length > 0,
+  ).length
+  const frameCount = node.children.filter((child) => child.type === 'frame').length
+  return textCount + frameCount >= 2
+}
+
+function isTableLikeFrame(node: PenNode): boolean {
+  if (node.type !== 'frame') return false
+  const marker = `${node.name ?? ''} ${node.id}`.toLowerCase()
+  if (isTableMarker(marker)) return true
+  if (!Array.isArray(node.children) || node.children.length < 2) return false
+  const rowLikeChildren = node.children.filter((child): child is FrameNode => isTableRowLikeFrame(child))
+  if (rowLikeChildren.length < 3) return false
+  const colCounts = rowLikeChildren
+    .map((row) => row.children?.length ?? 0)
+    .filter((count) => count >= 2)
+  if (colCounts.length < 3) return false
+  const maxCols = Math.max(...colCounts)
+  const minCols = Math.min(...colCounts)
+  return maxCols >= 2 && maxCols - minCols <= 1
+}
+
+const BUTTON_MARKER_REGEX = /(^|[\s_-])(button|btn|cta|submit|download|install|signup|sign[-_\s]*in|login|register)([\s_-]|$)|按钮|下载|立即|开始|购买|了解|进入|登录|注册|提交|继续|安装|试用|app\s*store|google\s*play/
+const CTA_LABEL_REGEX = /(download|get\s*it\s*on|learn\s*more|start|continue|open|install|try|buy|sign\s*in|log\s*in|register|submit|app\s*store|google\s*play|免费下载|立即下载|下载|了解|查看|开始|继续|进入|安装|试用|购买|登录|注册|提交|前往|打开|立即体验|了解更多|马上体验)/
+
+function isExplicitButtonMarker(marker: string): boolean {
+  return BUTTON_MARKER_REGEX.test(marker)
+}
+
+function isCtaLikeLabel(text: string): boolean {
+  return CTA_LABEL_REGEX.test(text.toLowerCase().trim())
+}
+
+function isLikelyActionFrame(node: PenNode): boolean {
+  if (node.type !== 'frame') return false
+  if (!Array.isArray(node.children) || node.children.length === 0) return false
+  const marker = `${node.name ?? ''} ${node.id}`.toLowerCase()
+  if (isExplicitButtonMarker(marker)) return true
+  return node.children.some((child) =>
+    child.type === 'text'
+    && typeof child.content === 'string'
+    && isCtaLikeLabel(child.content),
+  )
+}
+
+function isInlineInfoPillFrame(node: PenNode): boolean {
+  if (node.type !== 'frame') return false
+  if (!Array.isArray(node.children) || node.children.length === 0 || node.children.length > 5) return false
+  if (isTableLikeFrame(node)) return false
+  if (isBadgeLikeFrame(node) || isCompactButtonLikeFrame(node)) return false
+
+  const marker = `${node.name ?? ''} ${node.id}`.toLowerCase()
+  if (/(button|btn|cta|submit|download|install|card|panel|table|表格|按钮|下载|卡片)/.test(marker)) return false
+
+  const h = toSizeNumber(node.height, 0)
+  if (h > 0 && h > 56) return false
+
+  const textChildren = node.children.filter(
+    (child) => child.type === 'text' && typeof child.content === 'string' && child.content.trim().length > 0,
+  )
+  if (textChildren.length !== 1) return false
+  const text = getTextContentForNode(textChildren[0]).trim()
+  if (!text) return false
+  if (/[\n\r]/.test(text)) return false
+  const hasClauseSeparator = /[，,。；;:：]/.test(text)
+  if (hasClauseSeparator) return false
+  const hasCjk = /[\u3400-\u4DBF\u4E00-\u9FFF\u3040-\u30FF\uAC00-\uD7AF]/.test(text)
+  const compactCharCount = text.replace(/\s+/g, '').length
+  const maxInlineChars = hasCjk ? 14 : 28
+  if (compactCharCount > maxInlineChars) return false
+
+  const hasNestedFrame = node.children.some((child) => child.type === 'frame')
+  if (hasNestedFrame) return false
+
+  const iconChildren = node.children.filter((child) =>
+    child.type === 'path' || child.type === 'ellipse' || child.type === 'rectangle',
+  )
+  if (iconChildren.length > 2) return false
+  if (iconChildren.some((child) => !isInlinePillIconCandidate(child))) return false
+
+  return node.layout === 'horizontal'
+    || node.alignItems === 'center'
+    || node.justifyContent === 'center'
+}
+
+function isInlinePillIconCandidate(node: PenNode): boolean {
+  if (!(node.type === 'path' || node.type === 'ellipse' || node.type === 'rectangle')) return false
+  const w = toSizeNumber('width' in node ? node.width : undefined, 0)
+  const h = toSizeNumber('height' in node ? node.height : undefined, 0)
+  if (w <= 0 || h <= 0) {
+    // Path nodes can miss explicit box sizing before path normalization.
+    return node.type === 'path'
+  }
+  return Math.max(w, h) <= 20
+}
+
+function isInlineInfoPillLikeFrame(node: PenNode): boolean {
+  if (node.type !== 'frame') return false
+  if (isInlineInfoPillFrame(node)) return true
+  if (!Array.isArray(node.children) || node.children.length === 0 || node.children.length > 6) return false
+  if (isTableLikeFrame(node)) return false
+
+  const marker = `${node.name ?? ''} ${node.id}`.toLowerCase()
+  if (/(button|btn|cta|submit|download|install|card|panel|table|表格|按钮|下载|卡片)/.test(marker)) return false
+
+  const h = toSizeNumber(node.height, 0)
+  if (h > 0 && h > 60) return false
+  const centeredLike = node.layout === 'horizontal' || node.alignItems === 'center' || node.justifyContent === 'center'
+  if (!centeredLike) return false
+
+  const textChildren = node.children.filter(
+    (child) => child.type === 'text' && typeof child.content === 'string' && child.content.trim().length > 0,
+  )
+  if (textChildren.length !== 1) return false
+  const text = getTextContentForNode(textChildren[0]).trim()
+  if (!text) return false
+  if (/[\n\r]/.test(text) || /[，,。；;:：]/.test(text)) return false
+  const hasCjk = /[\u3400-\u4DBF\u4E00-\u9FFF\u3040-\u30FF\uAC00-\uD7AF]/.test(text)
+  const compactLen = text.replace(/\s+/g, '').length
+  if (compactLen > (hasCjk ? 20 : 36)) return false
+
+  const frameChildren = node.children.filter((child) => child.type === 'frame')
+  if (frameChildren.length > 1) return false
+  for (const frameChild of frameChildren) {
+    if (!Array.isArray(frameChild.children)) return false
+    if (frameChild.children.some((child) => child.type === 'text' && getTextContentForNode(child).trim().length > 0)) return false
+    const fw = toSizeNumber('width' in frameChild ? frameChild.width : undefined, 0)
+    const fh = toSizeNumber('height' in frameChild ? frameChild.height : undefined, 0)
+    if ((fw > 0 && fw > 24) || (fh > 0 && fh > 24)) return false
+    const onlyIconChildren = frameChild.children.every(
+      (child) => child.type === 'path' || child.type === 'ellipse' || child.type === 'rectangle' || child.type === 'image',
+    )
+    if (!onlyIconChildren) return false
+  }
+
+  const iconChildren = node.children.filter((child) =>
+    child.type === 'path' || child.type === 'ellipse' || child.type === 'rectangle' || child.type === 'image',
+  )
+  let iconCount = iconChildren.length
+  for (const frameChild of frameChildren) {
+    iconCount += frameChild.children?.length ?? 0
+  }
+  if (iconCount > 2) return false
+
+  return true
+}
+
+function isTinyDotLikeIconNode(node: PenNode): boolean {
+  if (!(node.type === 'path' || node.type === 'ellipse' || node.type === 'rectangle')) return false
+  const w = toSizeNumber('width' in node ? node.width : undefined, 0)
+  const h = toSizeNumber('height' in node ? node.height : undefined, 0)
+  if (w <= 0 || h <= 0) return false
+  return Math.max(w, h) <= 12
+}
+
 function isBadgeLikeFrame(node: PenNode): boolean {
   if (node.type !== 'frame') return false
   if (!Array.isArray(node.children) || node.children.length === 0 || node.children.length > 3) return false
 
   const marker = `${node.name ?? ''} ${node.id}`.toLowerCase()
+  if (isTableMarker(marker)) return false
   const explicitBadgeMarker = /(badge|tag|chip|pill|label|徽章|标签|状态|模式)/.test(marker)
-  const explicitButtonMarker = /(^|[\s_-])(button|btn|cta|submit|download|install|signup|sign[-_\s]*in|login|register)([\s_-]|$)|按钮|下载|立即|开始|购买|了解|进入|登录|注册|提交|继续|安装|试用/.test(marker)
+  const explicitButtonMarker = isExplicitButtonMarker(marker)
   if (explicitButtonMarker && !explicitBadgeMarker) return false
 
   const h = toSizeNumber(node.height, 0)
-  if (h > 0 && h > 40) return false
+  if (h > 0 && h > 56) return false
 
   const textChildren = node.children.filter(
     (c) => c.type === 'text' && typeof c.content === 'string' && c.content.trim().length > 0,
@@ -2463,14 +2719,16 @@ function isBadgeLikeFrame(node: PenNode): boolean {
   const textNode = textChildren[0]
   if (textNode.type !== 'text' || typeof textNode.content !== 'string') return false
   const label = textNode.content.trim()
-  const lowerLabel = label.toLowerCase()
-  const ctaLikeLabel = /(download|get\s*it\s*on|learn\s*more|start|continue|open|install|try|buy|sign\s*in|log\s*in|register|submit|app\s*store|google\s*play|免费下载|立即下载|下载|了解|查看|开始|继续|进入|安装|试用|购买|登录|注册|提交|前往|打开)/.test(lowerLabel)
+  if (!label) return false
+  const hasClauseSeparator = /[，,。；;:：]|(?:\s[—-]\s)/.test(label)
+  if (hasClauseSeparator && !explicitBadgeMarker) return false
+  const ctaLikeLabel = isCtaLikeLabel(label)
   if (ctaLikeLabel && !explicitBadgeMarker) return false
-  const charCount = [...label].length
+  const compactCharCount = label.replace(/\s+/g, '').length
   const hasCjk = /[\u3400-\u4DBF\u4E00-\u9FFF\u3040-\u30FF\uAC00-\uD7AF]/.test(label)
   const fontSize = textNode.fontSize ?? 14
-  const maxLabelChars = hasCjk ? 10 : 18
-  if (charCount > maxLabelChars || fontSize > 16) return false
+  const maxLabelChars = hasCjk ? 8 : 16
+  if (compactCharCount > maxLabelChars || fontSize > 16) return false
 
   const allowedChildren = node.children.every((c) =>
     c.type === 'text' || c.type === 'path' || c.type === 'ellipse' || c.type === 'rectangle',
@@ -2490,7 +2748,7 @@ function isBadgeLikeFrame(node: PenNode): boolean {
   if (hasLargeIcon && !explicitBadgeMarker) return false
 
   const w = toSizeNumber(node.width, 0)
-  if (w > 0 && w > 260) return false
+  if (w > 0 && w > 300 && !explicitBadgeMarker) return false
   const looksButtonByWidth = w >= 140 && (
     node.layout === 'horizontal' || node.alignItems === 'center' || node.justifyContent === 'center'
   )
@@ -2498,7 +2756,7 @@ function isBadgeLikeFrame(node: PenNode): boolean {
 
   const pad = parsePaddingValues('padding' in node ? node.padding : undefined)
   const inferredH = h > 0 ? h : Math.round(fontSize * 1.2 + pad.top + pad.bottom)
-  if (inferredH > 40) return false
+  if (inferredH > 56) return false
 
   return node.layout === 'horizontal'
     || node.alignItems === 'center'
@@ -2521,6 +2779,10 @@ function isCompactButtonLikeFrame(node: PenNode): boolean {
     (c) => c.type === 'text' && typeof c.content === 'string' && c.content.trim().length > 0,
   )
   if (textChildren.length === 0 || textChildren.length > 2) return false
+  const ctaLikeByLabel = textChildren.some((textNode) =>
+    textNode.type === 'text'
+      && isCtaLikeLabel(getTextContentForNode(textNode)),
+  )
   for (const textNode of textChildren) {
     if (textNode.type !== 'text') return false
     const content = getTextContentForNode(textNode).trim()
@@ -2540,15 +2802,112 @@ function isCompactButtonLikeFrame(node: PenNode): boolean {
     || node.justifyContent === 'center'
   if (!centeredLike) return false
 
-  const hasIcon = node.children.some((c) =>
+  const iconChildren = node.children.filter((c) =>
     c.type === 'path' || c.type === 'ellipse' || c.type === 'rectangle' || c.type === 'image',
   )
-  const explicitButtonMarker = /(^|[\s_-])(button|btn|cta|submit|download|install|signup|sign[-_\s]*in|login|register)([\s_-]|$)|按钮|下载|立即|开始|购买|了解|进入|登录|注册|提交|继续|安装|试用|app\s*store|google\s*play/.test(marker)
-  return explicitButtonMarker || hasIcon || textChildren.length === 1
+  const hasIcon = iconChildren.length > 0
+  const explicitButtonMarker = isExplicitButtonMarker(marker)
+  const hasOnlyTinyDotIcon = hasIcon
+    && iconChildren.every((iconNode) => isTinyDotLikeIconNode(iconNode))
+
+  if (!explicitButtonMarker && !ctaLikeByLabel) {
+    if (textChildren.length === 1 && hasIcon) {
+      const singleText = textChildren[0]
+      const label = singleText.type === 'text' ? getTextContentForNode(singleText).trim() : ''
+      if (label) {
+        const hasCjk = /[\u3400-\u4DBF\u4E00-\u9FFF\u3040-\u30FF\uAC00-\uD7AF]/.test(label)
+        const compactLen = label.replace(/\s+/g, '').length
+        const sentenceLike = /[，,。；;:：]/.test(label)
+        const maxIconSize = iconChildren.reduce((max, iconNode) => {
+          const iw = toSizeNumber('width' in iconNode ? iconNode.width : undefined, 0)
+          const ih = toSizeNumber('height' in iconNode ? iconNode.height : undefined, 0)
+          return Math.max(max, iw, ih)
+        }, 0)
+        const nonActionInfoPillLike = !sentenceLike
+          && compactLen <= (hasCjk ? 20 : 36)
+          && iconChildren.length <= 2
+          && maxIconSize <= 20
+        if (nonActionInfoPillLike) return false
+      }
+    }
+    if (!hasIcon) return false
+    if (hasOnlyTinyDotIcon && textChildren.length === 1) return false
+  }
+
+  return explicitButtonMarker || ctaLikeByLabel || hasIcon
 }
 
 function isCompactControlFrame(node: PenNode): boolean {
-  return isBadgeLikeFrame(node) || isCompactButtonLikeFrame(node)
+  if (isBadgeLikeFrame(node) || isCompactButtonLikeFrame(node) || isInlineInfoPillLikeFrame(node)) {
+    return true
+  }
+  if (node.type !== 'frame') return false
+  if (!Array.isArray(node.children) || node.children.length === 0 || node.children.length > 6) return false
+  if (isTableLikeFrame(node) || isPhonePlaceholderFrame(node) || isDividerLikeFrame(node)) return false
+
+  const marker = `${node.name ?? ''} ${node.id}`.toLowerCase()
+  if (/(card|panel|section|container|feature|service|list|item|table|grid|row|卡片|面板|容器|表格|列表|行)/.test(marker)) {
+    return false
+  }
+
+  const h = toSizeNumber(node.height, 0)
+  if (h <= 0 || h > 76) return false
+  const centeredLike = node.layout === 'horizontal'
+    || node.alignItems === 'center'
+    || node.justifyContent === 'center'
+  if (!centeredLike) return false
+
+  const textChildren = node.children.filter(
+    (child): child is PenNode => child.type === 'text' && getTextContentForNode(child).trim().length > 0,
+  )
+  if (textChildren.length === 0 || textChildren.length > 2) return false
+
+  for (const textNode of textChildren) {
+    if (textNode.type !== 'text') return false
+    const text = getTextContentForNode(textNode).trim()
+    const hasCjk = /[\u3400-\u4DBF\u4E00-\u9FFF\u3040-\u30FF\uAC00-\uD7AF]/.test(text)
+    const compactLen = text.replace(/\s+/g, '').length
+    if (!text || /[\n\r]/.test(text)) return false
+    if (compactLen > (hasCjk ? 22 : 40)) return false
+  }
+
+  return true
+}
+
+function estimateCompactControlMinWidth(node: PenNode): number {
+  if (node.type !== 'frame' || !Array.isArray(node.children) || node.children.length === 0) return 0
+  const padding = parsePaddingValues('padding' in node ? node.padding : undefined)
+  const gap = toGapNumber('gap' in node ? node.gap : undefined)
+
+  let contentWidth = 0
+  let itemCount = 0
+  for (const child of node.children) {
+    if (child.type === 'text') {
+      const text = getTextContentForNode(child).trim()
+      if (!text) continue
+      contentWidth += estimateSingleLineTextWidth(text, child.fontSize ?? 16)
+      itemCount += 1
+      continue
+    }
+    if (child.type === 'frame' && Array.isArray(child.children)) {
+      const frameHasText = child.children.some((gc) => gc.type === 'text' && getTextContentForNode(gc).trim().length > 0)
+      if (!frameHasText) {
+        const fw = toSizeNumber('width' in child ? child.width : undefined, 0)
+        const fh = toSizeNumber('height' in child ? child.height : undefined, 0)
+        const fallback = Math.max(fw, fh, 14)
+        contentWidth += fallback
+        itemCount += 1
+        continue
+      }
+    }
+    const genericW = toSizeNumber('width' in child ? child.width : undefined, 0)
+    if (genericW > 0) {
+      contentWidth += genericW
+      itemCount += 1
+    }
+  }
+  if (itemCount > 1) contentWidth += gap * (itemCount - 1)
+  return Math.max(0, Math.round(contentWidth + padding.left + padding.right + 20))
 }
 
 function isLongTextLikeForLayout(node: PenNode): boolean {
@@ -2672,6 +3031,7 @@ function applyIconButtonSizing(node: PenNode): void {
 function applyBadgeSizing(node: PenNode): void {
   if (node.type !== 'frame') return
   if (!isBadgeLikeFrame(node)) return
+  if (isTableLikeFrame(node)) return
   if (!Array.isArray(node.children)) return
 
   if (typeof node.width === 'string' && node.width.startsWith('fill_container')) {
@@ -2728,6 +3088,9 @@ function applyBadgeSizing(node: PenNode): void {
   const frameW = toSizeNumber(node.width, 0)
   const newPad = parsePaddingValues(node.padding)
   const minFrameW = Math.round(estimatedW + newPad.left + newPad.right + 8)
+  if (typeof node.width === 'number' && frameW > Math.max(220, minFrameW * 1.6)) {
+    node.width = 'fit_content'
+  }
   if (typeof node.width === 'number' && frameW > 0 && frameW < minFrameW) {
     node.width = minFrameW
   }
@@ -2781,6 +3144,39 @@ function applyBadgeSizing(node: PenNode): void {
   }
 }
 
+function applyInlineInfoPillSizing(node: PenNode): void {
+  if (node.type !== 'frame') return
+  if (!isInlineInfoPillLikeFrame(node)) return
+  if (!Array.isArray(node.children)) return
+
+  const w = toSizeNumber(node.width, 0)
+  const maxW = generationCanvasWidth <= 520 ? Math.round(generationCanvasWidth * 0.9) : 420
+  if (typeof node.width === 'string' && node.width.startsWith('fill_container')) {
+    node.width = 'fit_content'
+  } else if (typeof node.width === 'number' && w > maxW) {
+    node.width = 'fit_content'
+  }
+
+  if (!node.layout || node.layout === 'none') node.layout = 'horizontal'
+  if (!node.alignItems) node.alignItems = 'center'
+  if (!node.justifyContent) node.justifyContent = 'start'
+  if (!node.gap || toGapNumber(node.gap) < 6) node.gap = 8
+
+  const textNode = node.children.find(
+    (child): child is PenNode => child.type === 'text' && getTextContentForNode(child).trim().length > 0,
+  )
+  if (!textNode || textNode.type !== 'text') return
+  const text = getTextContentForNode(textNode).trim()
+  const hasCjk = /[\u4E00-\u9FFF\u3400-\u4DBF\u3000-\u303F\uFF00-\uFFEF]/.test(text)
+  if (!textNode.lineHeight || textNode.lineHeight > 1.4 || textNode.lineHeight < 1.1) {
+    textNode.lineHeight = hasCjk ? 1.25 : 1.2
+  }
+  textNode.textAlignVertical = 'middle'
+  if (!textNode.textGrowth || textNode.textGrowth === 'fixed-width') {
+    textNode.textGrowth = 'auto'
+  }
+}
+
 /**
  * Ensure button-like frames have minimum internal padding and gap.
  * AI often generates buttons with padding: 0 or tiny padding, causing cramped text.
@@ -2791,6 +3187,9 @@ function applyButtonSpacingHeuristic(node: PenNode): void {
   if (!Array.isArray(node.children) || node.children.length === 0) return
   // Badge chips use tighter spacing; button defaults make them look oversized.
   if (isBadgeLikeFrame(node)) return
+  if (isInlineInfoPillLikeFrame(node)) return
+  if (isTableLikeFrame(node)) return
+  if (!isCompactButtonLikeFrame(node) && !isLikelyActionFrame(node)) return
   const h = toSizeNumber(node.height, 0)
   // Only target small frames that look like buttons/badges (height ≤ 72px)
   if (h <= 0 || h > 72) return
@@ -2846,6 +3245,9 @@ function applyButtonSpacingHeuristic(node: PenNode): void {
 function applyButtonWidthHeuristic(node: PenNode): void {
   if (node.type !== 'frame') return
   if (!Array.isArray(node.children) || node.children.length === 0) return
+  if (isInlineInfoPillLikeFrame(node)) return
+  if (isTableLikeFrame(node)) return
+  if (!isCompactControlFrame(node) && !isLikelyActionFrame(node)) return
   // Only target fixed-width frames (buttons/badges/tags/feature cards)
   if (typeof node.width !== 'number') return
   const w = node.width
@@ -3036,6 +3438,7 @@ function estimateSingleLineTextWidth(text: string, fontSize: number): number {
 function applyFormChildFillContainer(node: PenNode): void {
   if (node.type !== 'frame') return
   if (node.layout !== 'vertical') return
+  if (isTableLikeFrame(node)) return
   // Never convert children when parent is fit_content (hug) — breaks layout
   if (node.width === 'fit_content') return
   if (!Array.isArray(node.children) || node.children.length < 2) return
@@ -3069,8 +3472,7 @@ function applyFormChildFillContainer(node: PenNode): void {
     // Long-text wrappers should use fill_container, otherwise they collapse to content width.
     if (
       childWidthIsFit
-      && !isBadgeLikeFrame(child)
-      && !isCompactButtonLikeFrame(child)
+      && !isCompactControlFrame(child)
       && frameNeedsFillWidthForTextContent(child)
     ) {
       ;(child as unknown as Record<string, unknown>).width = 'fill_container'
@@ -3079,7 +3481,11 @@ function applyFormChildFillContainer(node: PenNode): void {
 
     // Overflow: child wider than parent content area
     if (contentW > 0 && childW > contentW) {
-      ;(child as unknown as Record<string, unknown>).width = 'fill_container'
+      if (isCompactControlFrame(child)) {
+        ;(child as unknown as Record<string, unknown>).width = 'fit_content'
+      } else {
+        ;(child as unknown as Record<string, unknown>).width = 'fill_container'
+      }
       continue
     }
 
@@ -3090,8 +3496,7 @@ function applyFormChildFillContainer(node: PenNode): void {
       && childWidthIsNumber
       && childW > 0
       && childW < contentW * 0.72
-      && !isBadgeLikeFrame(child)
-      && !isCompactButtonLikeFrame(child)
+      && !isCompactControlFrame(child)
       && frameNeedsFillWidthForTextContent(child)
     ) {
       ;(child as unknown as Record<string, unknown>).width = 'fill_container'
@@ -3099,8 +3504,14 @@ function applyFormChildFillContainer(node: PenNode): void {
     }
 
     // Consistency: if a sibling already uses fill_container,
-    // convert input/button-like children (short height, has content) too
-    if (hasFillSibling && childH > 0 && childH <= 72 && !isCompactControlFrame(child)) {
+    // only convert likely action controls (avoid stretching badges/chips).
+    if (
+      hasFillSibling
+      && childH > 0
+      && childH <= 72
+      && !isCompactControlFrame(child)
+      && isLikelyActionFrame(child)
+    ) {
       const hasContent = 'children' in child && Array.isArray(child.children)
         && child.children.some((gc) => gc.type === 'text' || gc.type === 'path')
       if (hasContent) {
