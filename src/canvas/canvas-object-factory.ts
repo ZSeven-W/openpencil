@@ -316,12 +316,18 @@ export function createFabricObject(
         underline: node.underline ?? false,
         linethrough: node.strikethrough ?? false,
         lineHeight: node.lineHeight ?? 1.2,
+        charSpacing: node.letterSpacing
+          ? (node.letterSpacing / (node.fontSize || 16)) * 1000
+          : 0,
       }
-      // Use Textbox for text with explicit width so textAlign works correctly
-      if (w > 0) {
+      // Use Textbox for fixed-width / fixed-size modes (word wrapping).
+      // Use IText for auto-width mode (no wrapping, expands horizontally).
+      const growth = node.textGrowth
+      const useTextbox = growth === 'fixed-width' || growth === 'fixed-width-height' || w > 0
+      if (useTextbox) {
         obj = new fabric.Textbox(textContent, {
           ...textProps,
-          width: w,
+          width: w > 0 ? w : 200,
         }) as FabricObjectWithPenId
       } else {
         obj = new fabric.IText(textContent, textProps) as FabricObjectWithPenId

@@ -118,17 +118,20 @@ function fitContentWidth(node: PenNode): number {
 }
 
 /** Compute fit-content height from children. */
-function fitContentHeight(node: PenNode): number {
+function fitContentHeight(node: PenNode, parentAvailW?: number): number {
   if (!('children' in node) || !node.children?.length) return 0
   const layout = 'layout' in node ? (node as ContainerProps).layout : undefined
   const pad = resolvePadding('padding' in node ? (node as any).padding : undefined)
   const gap = 'gap' in node && typeof (node as any).gap === 'number' ? (node as any).gap : 0
+  // Compute available width for children (used by text height estimation)
+  const nodeW = getNodeWidth(node, parentAvailW)
+  const childAvailW = nodeW > 0 ? Math.max(0, nodeW - pad.left - pad.right) : parentAvailW
   if (layout === 'vertical') {
-    const childTotal = node.children.reduce((sum, c) => sum + getNodeHeight(c), 0)
+    const childTotal = node.children.reduce((sum, c) => sum + getNodeHeight(c, undefined, childAvailW), 0)
     const gapTotal = gap * Math.max(0, node.children.length - 1)
     return childTotal + gapTotal + pad.top + pad.bottom
   }
-  const maxChildH = node.children.reduce((max, c) => Math.max(max, getNodeHeight(c)), 0)
+  const maxChildH = node.children.reduce((max, c) => Math.max(max, getNodeHeight(c, undefined, childAvailW)), 0)
   return maxChildH + pad.top + pad.bottom
 }
 
@@ -158,27 +161,69 @@ function getNodeWidth(node: PenNode, parentAvail?: number): number {
   return 0
 }
 
-function getNodeHeight(node: PenNode, parentAvail?: number): number {
+function getNodeHeight(node: PenNode, parentAvail?: number, parentAvailW?: number): number {
   if ('height' in node) {
     const s = parseSizing(node.height)
     if (typeof s === 'number' && s > 0) return s
     if (s === 'fill' && parentAvail) return parentAvail
     if (s === 'fit') {
-      const fit = fitContentHeight(node)
+      const fit = fitContentHeight(node, parentAvailW)
       if (fit > 0) return fit
     }
   }
   // Containers without explicit height: compute from children
   if ('children' in node && node.children?.length) {
-    const fit = fitContentHeight(node)
+    const fit = fitContentHeight(node, parentAvailW)
     if (fit > 0) return fit
   }
   if (node.type === 'text') {
-    const fontSize = node.fontSize ?? 16
-    const lineHeight = ('lineHeight' in node ? node.lineHeight : undefined) ?? 1.2
-    return fontSize * lineHeight
+    return estimateTextHeight(node, parentAvailW)
   }
   return 0
+}
+
+/** Estimate text height including multi-line wrapping when available width is known. */
+function estimateTextHeight(node: PenNode, availableWidth?: number): number {
+  // Access text-specific properties via Record to avoid union type issues
+  const n = node as unknown as Record<string, unknown>
+  const fontSize = (typeof n.fontSize === 'number' ? n.fontSize : 16)
+  const lineHeight = (typeof n.lineHeight === 'number' ? n.lineHeight : 1.2)
+  const singleLineH = fontSize * lineHeight
+
+  // Get text content
+  const rawContent = n.content
+  const content = typeof rawContent === 'string'
+    ? rawContent
+    : Array.isArray(rawContent)
+      ? rawContent.map((s: { text: string }) => s.text).join('')
+      : ''
+  if (!content) return singleLineH
+
+  // Determine the effective text width for wrapping estimation
+  let textWidth = 0
+  if ('width' in node) {
+    const w = parseSizing(node.width)
+    if (typeof w === 'number' && w > 0) textWidth = w
+    else if (w === 'fill' && availableWidth && availableWidth > 0) textWidth = availableWidth
+  }
+
+  // If no width constraint is known, return single-line height
+  if (textWidth <= 0) return singleLineH
+
+  // Estimate wrapped lines using per-character width estimation
+  // CJK characters are roughly 1em wide; Latin characters ~0.55em
+  let totalTextWidth = 0
+  for (const ch of content) {
+    const code = ch.codePointAt(0) ?? 0
+    const isCjk = (code >= 0x4E00 && code <= 0x9FFF)
+      || (code >= 0x3000 && code <= 0x30FF)
+      || (code >= 0xFF00 && code <= 0xFFEF)
+      || (code >= 0xAC00 && code <= 0xD7AF)
+    totalTextWidth += isCjk ? fontSize : fontSize * 0.55
+  }
+
+  const lines = Math.max(1, Math.ceil(totalTextWidth / textWidth))
+  return Math.round(lines * singleLineH)
 }
 
 /** Compute child positions according to the parent's layout rules. */
@@ -213,7 +258,7 @@ function computeLayoutPositions(
       const s = parseSizing((ch as any)[prop])
       if (s === 'fill') return 'fill' as const
     }
-    return isVertical ? getNodeHeight(ch, availH) : getNodeWidth(ch, availW)
+    return isVertical ? getNodeHeight(ch, availH, availW) : getNodeWidth(ch, availW)
   })
   const fixedTotal = mainSizing.reduce<number>(
     (sum, s) => sum + (typeof s === 'number' ? s : 0),
@@ -227,7 +272,7 @@ function computeLayoutPositions(
     const mainSize = mainSizing[i] === 'fill' ? fillSize : (mainSizing[i] as number)
     return {
       w: isVertical ? getNodeWidth(ch, availW) : mainSize,
-      h: isVertical ? mainSize : getNodeHeight(ch, availH),
+      h: isVertical ? mainSize : getNodeHeight(ch, availH, availW),
     }
   })
 
@@ -458,7 +503,7 @@ function flattenNodes(
           r.height = parentAvailH
           changed = true
         } else if (s === 'fit') {
-          r.height = getNodeHeight(node, parentAvailH)
+          r.height = getNodeHeight(node, parentAvailH, parentAvailW)
           changed = true
         }
       }
@@ -509,7 +554,8 @@ function flattenNodes(
       let childClip = clipCtx
       const cr = 'cornerRadius' in node ? cornerRadiusVal(node.cornerRadius) : 0
       const isRootFrame = node.type === 'frame' && depth === 0
-      if (isRootFrame || cr > 0) {
+      const hasClipContent = 'clipContent' in node && (node as ContainerProps).clipContent === true
+      if (isRootFrame || cr > 0 || hasClipContent) {
         childClip = { x: parentAbsX, y: parentAbsY, w: nodeW, h: nodeH, rx: cr }
       }
 
@@ -679,7 +725,23 @@ export function useCanvasSync() {
         if (node.type === 'ref') continue // Skip unresolved refs
 
         let obj: FabricObjectWithPenId | undefined
-        const existingObj = objMap.get(node.id)
+        let existingObj = objMap.get(node.id)
+
+        // Text nodes may need recreation when textGrowth mode changes
+        // (IText ↔ Textbox are different Fabric classes).
+        let textRecreated = false
+        if (existingObj && node.type === 'text') {
+          const growth = node.textGrowth
+          const w = typeof node.width === 'number' ? node.width : 0
+          const needsTextbox = growth === 'fixed-width' || growth === 'fixed-width-height' || w > 0
+          const isTextbox = existingObj instanceof fabric.Textbox
+          if (needsTextbox !== isTextbox) {
+            canvas.remove(existingObj)
+            existingObj = undefined
+            textRecreated = true
+          }
+        }
+
         if (existingObj) {
           // Skip objects inside an ActiveSelection — their left/top are
           // group-relative, not absolute.  Setting absolute values from
@@ -710,6 +772,13 @@ export function useCanvasSync() {
               }, delay)
             } else {
               canvas.add(newObj)
+            }
+            // Restore Fabric selection when text object was recreated
+            if (textRecreated) {
+              const { activeId } = useCanvasStore.getState().selection
+              if (activeId === node.id) {
+                canvas.setActiveObject(newObj)
+              }
             }
             obj = newObj
           }
