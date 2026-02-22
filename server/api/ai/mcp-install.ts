@@ -23,7 +23,13 @@ const MCP_SERVER_NAME = 'openpencil'
  * In production (Electron): <resources>/mcp-server.cjs
  */
 function resolveMcpServerPath(): string {
-  // Try dist/ in the project root first (dev + compiled)
+  // Electron production: extraResources places it in resourcesPath
+  const electronResources = process.env.ELECTRON_RESOURCES_PATH
+  if (electronResources) {
+    const electronPath = join(electronResources, 'mcp-server.cjs')
+    if (existsSync(electronPath)) return electronPath
+  }
+  // Try dist/ in the project root (dev + web build)
   const projectDist = resolve(process.cwd(), 'dist', 'mcp-server.cjs')
   if (existsSync(projectDist)) return projectDist
   // Fallback: try relative to this file

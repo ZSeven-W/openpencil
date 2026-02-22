@@ -86,6 +86,7 @@ async function startNitroServer(): Promise<number> {
         PORT: String(port),
         NITRO_HOST: '127.0.0.1',
         NITRO_PORT: String(port),
+        ELECTRON_RESOURCES_PATH: process.resourcesPath,
       },
       stdio: 'pipe',
     })

@@ -18,7 +18,7 @@
         "mcp:dev": "bun run src/mcp/server.ts",
         "electron:dev": "bun run scripts/electron-dev.ts",
         "electron:compile": "esbuild electron/main.ts electron/preload.ts --bundle --platform=node --target=node20 --outdir=electron-dist --external:electron --format=cjs --out-extension:.js=.cjs --sourcemap",
-        "electron:build": "BUILD_TARGET=electron bun --bun run build && bun run electron:compile && npx electron-builder --config electron-builder.yml"
+        "electron:build": "BUILD_TARGET=electron bun --bun run build && bun run electron:compile && bun run mcp:compile && npx electron-builder --config electron-builder.yml"
     },
     "dependencies": {
         "@modelcontextprotocol/sdk": "^1.12.1",
