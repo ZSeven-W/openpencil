@@ -301,11 +301,24 @@ export function insertStreamingNode(
   if (parentNode && hasActiveLayout(parentNode)) {
     if ('x' in node) delete (node as { x?: number }).x
     if ('y' in node) delete (node as { y?: number }).y
-    // ALL text inside layout frames: Fill Width + Auto Height.
-    // Set width/textGrowth here; height will be estimated by applyTextWrappingHeuristic.
+    // Text defaults inside layout frames:
+    // - vertical layout: body text prefers fill width for wrapping
+    // - horizontal layout: short labels should hug content to avoid squeezing siblings
     if (node.type === 'text') {
-      if (typeof node.width === 'number') node.width = 'fill_container'
-      if (!node.textGrowth) node.textGrowth = 'fixed-width'
+      const parentLayout = ('layout' in parentNode ? parentNode.layout : undefined)
+      if (parentLayout === 'vertical') {
+        if (typeof node.width === 'number') node.width = 'fill_container'
+        if (!node.textGrowth) node.textGrowth = 'fixed-width'
+      } else if (parentLayout === 'horizontal') {
+        if (typeof node.width === 'string' && node.width.startsWith('fill_container')) {
+          node.width = 'fit_content'
+        }
+        if (!node.textGrowth || node.textGrowth === 'fixed-width' || node.textGrowth === 'fixed-width-height') {
+          node.textGrowth = 'auto'
+        }
+      } else if (!node.textGrowth) {
+        node.textGrowth = 'fixed-width'
+      }
       // Default lineHeight based on text role (heading vs body)
       if (!node.lineHeight) {
         const fs = node.fontSize ?? 16
@@ -1044,16 +1057,30 @@ function applyTreeFixesRecursive(
       nodePad = parsePaddingValues(adjustedPad)
     }
     const nodeContentW = estimateParentContentWidthForText(node, nodePad, nodeW)
+    const visibleChildCount1 = children.filter(
+      (c: PenNode) => ('visible' in c ? c.visible : undefined) !== false,
+    ).length
     for (const child of children) {
       if (child.type !== 'text') continue
+      if (shouldDemoteHorizontalTextFillInLayout(node, child, visibleChildCount1)) {
+        const demoteUpdates: Record<string, unknown> = { width: 'fit_content' }
+        if (child.textGrowth === 'fixed-width' || child.textGrowth === 'fixed-width-height') {
+          demoteUpdates.textGrowth = 'auto'
+        }
+        updateNode(child.id, demoteUpdates as Partial<PenNode>)
+        continue
+      }
       const needsWidthFix = shouldPromoteTextWidthToFillInLayout(node, child)
       const needsGrowthFix = shouldUseFixedWidthTextGrowthInLayout(node, child)
-      if (needsWidthFix || needsGrowthFix) {
-        const updates: Record<string, unknown> = {}
-        if (needsWidthFix) updates.width = 'fill_container'
-        if (needsGrowthFix) updates.textGrowth = 'fixed-width'
-        // Estimate auto-height based on content and parent width
-        const text = getTextContentForNode(child)
+        if (needsWidthFix || needsGrowthFix) {
+          const updates: Record<string, unknown> = {}
+          if (needsWidthFix) updates.width = 'fill_container'
+          if (needsGrowthFix) updates.textGrowth = 'fixed-width'
+          if (shouldCenterTextInCenteredColumn(node, child)) {
+            updates.textAlign = 'center'
+          }
+          // Estimate auto-height based on content and parent width
+          const text = getTextContentForNode(child)
         const nextGrowth = needsGrowthFix ? 'fixed-width' : child.textGrowth
         if (text) {
           const fs = child.fontSize ?? 16
@@ -1473,12 +1500,13 @@ function applyTreeFixesRecursive(
         && child.children.length >= 2) {
         const allBtnLike = child.children.every((gc: PenNode) => isCompactButtonLikeFrame(gc))
         if (allBtnLike) {
-          updateNode(child.id, { width: 'fill_container' } as Partial<PenNode>)
+          const rowUpdates11: Record<string, unknown> = { width: 'fill_container' }
+          if (shouldCenterButtonRowInContext(node, child)) {
+            rowUpdates11.justifyContent = 'center'
+          }
+          updateNode(child.id, rowUpdates11 as Partial<PenNode>)
           const childGap = toGapNumber('gap' in child ? child.gap : undefined)
           const updates11: Record<string, unknown> = {}
-          if (!child.justifyContent || child.justifyContent === 'start') {
-            updates11.justifyContent = 'center'
-          }
           if (childGap < 8) updates11.gap = 12
           if (Object.keys(updates11).length > 0) {
             updateNode(child.id, updates11 as Partial<PenNode>)
@@ -1835,6 +1863,28 @@ function isDenseCardRemovableDecorative(node: PenNode): boolean {
     || node.type === 'line'
 }
 
+function isDenseCardPrimaryVisualCandidate(node: PenNode): boolean {
+  if (node.type === 'path' || node.type === 'image') {
+    const w = toSizeNumber('width' in node ? node.width : undefined, 0)
+    const h = toSizeNumber('height' in node ? node.height : undefined, 0)
+    return Math.max(w, h) > 0 && Math.max(w, h) <= 56
+  }
+  if (node.type === 'frame') {
+    if (!Array.isArray(node.children) || node.children.length === 0) return false
+    if (nodeHasTextDescendant(node)) return false
+    const w = toSizeNumber(node.width, 0)
+    const h = toSizeNumber(node.height, 0)
+    if (Math.max(w, h) <= 0 || Math.max(w, h) > 72) return false
+    return node.children.some((child) =>
+      child.type === 'path'
+      || child.type === 'image'
+      || child.type === 'ellipse'
+      || child.type === 'rectangle',
+    )
+  }
+  return false
+}
+
 function compactDenseCardFrameInPlace(
   card: FrameNode,
   aggressive: boolean,
@@ -1889,8 +1939,10 @@ function compactDenseCardFrameInPlace(
     .map((child, index) => ({ child, index, sortKey: getDenseCardSortKey(child, index) }))
     .filter((entry) => isDenseCardRemovableDecorative(entry.child))
     .sort((a, b) => a.sortKey - b.sortKey)
+  const primaryVisualIndex = card.children.findIndex((child) => isDenseCardPrimaryVisualCandidate(child))
   const keepDecorCount = aggressive ? 1 : 2
   for (let i = keepDecorCount; i < decorativeEntries.length; i += 1) {
+    if (decorativeEntries[i].index === primaryVisualIndex) continue
     removeIndexes.add(decorativeEntries[i].index)
     changed = true
   }
@@ -1937,16 +1989,66 @@ function applyDenseCardRowCompaction(parent: PenNode): void {
   compactDenseCardRowInPlace(parent)
 }
 
+function isLikelyCenteredColumnContext(parent: PenNode): boolean {
+  if (parent.type !== 'frame') return false
+  if (parent.layout !== 'vertical') return false
+  if (!Array.isArray(parent.children) || parent.children.length === 0) return false
+  if (parent.alignItems === 'center') return true
+
+  const textChildren = parent.children.filter(
+    (child): child is PenNode => child.type === 'text' && getTextContentForNode(child).trim().length > 0,
+  )
+  if (textChildren.length < 2) return false
+
+  const centeredCount = textChildren.filter(
+    (textNode) => textNode.type === 'text' && textNode.textAlign === 'center',
+  ).length
+  if (centeredCount < Math.max(2, Math.ceil(textChildren.length * 0.6))) return false
+
+  return textChildren.some(
+    (textNode) => textNode.type === 'text'
+      && (textNode.fontSize ?? 16) >= 28
+      && textNode.textAlign === 'center',
+  )
+}
+
+function shouldCenterTextInCenteredColumn(parent: PenNode, child: PenNode): boolean {
+  if (parent.type !== 'frame' || child.type !== 'text') return false
+  if (parent.layout !== 'vertical') return false
+  if (!isLikelyCenteredColumnContext(parent)) return false
+
+  const marker = `${child.name ?? ''} ${child.id}`.toLowerCase()
+  const fs = child.fontSize ?? 16
+  const text = getTextContentForNode(child).trim()
+  if (!text) return false
+  const hasBreak = /[\n\r]/.test(text)
+  const hasCjk = /[\u3400-\u4DBF\u4E00-\u9FFF\u3040-\u30FF\uAC00-\uD7AF]/.test(text)
+  const compactLen = text.replace(/\s+/g, '').length
+  const headingLike = fs >= 28 || /(title|headline|heading|hero|主标题|标题)/.test(marker)
+  if (!headingLike || hasBreak) return false
+  if (compactLen > (hasCjk ? 28 : 72)) return false
+  return true
+}
+
+function shouldCenterButtonRowInContext(parent: PenNode, row: PenNode): boolean {
+  if (parent.type !== 'frame' || row.type !== 'frame') return false
+  if (parent.layout !== 'vertical' || row.layout !== 'horizontal') return false
+  if (!Array.isArray(row.children) || row.children.length < 2) return false
+  return isLikelyCenteredColumnContext(parent)
+}
+
 function applyTextFillContainerInLayout(parent: PenNode): void {
   if (parent.type !== 'frame') return
   const layout = parent.layout
   if (!layout || layout === 'none') return
   if (!Array.isArray(parent.children)) return
+  if (isTableLikeFrame(parent)) return
 
   // NEVER convert children to fill_container when parent is fit_content (hug width).
   // fill_container child + fit_content parent = circular dependency → layout breaks.
   const parentIsHug = parent.width === 'fit_content'
   const badgeLikeParent = isBadgeLikeFrame(parent)
+  const visibleChildCount = countVisibleChildren(parent)
 
   // Compute parent's actual content width for accurate text height estimation
   const parentW = toSizeNumber(parent.width, 0)
@@ -1979,12 +2081,26 @@ function applyTextFillContainerInLayout(parent: PenNode): void {
         continue
       }
 
-      const shouldFillWidth = shouldPromoteTextWidthToFillInLayout(parent, child)
-      if (shouldFillWidth) {
-        child.width = 'fill_container'
+      const demoteHorizontalFill = shouldDemoteHorizontalTextFillInLayout(
+        parent,
+        child,
+        visibleChildCount,
+      )
+      if (demoteHorizontalFill) {
+        child.width = 'fit_content'
+        if (child.textGrowth === 'fixed-width' || child.textGrowth === 'fixed-width-height' || !child.textGrowth) {
+          child.textGrowth = 'auto'
+        }
       }
-      const shouldFixGrowth = shouldUseFixedWidthTextGrowthInLayout(parent, child)
-      if (shouldFixGrowth) child.textGrowth = 'fixed-width'
+
+      if (!demoteHorizontalFill) {
+        const shouldFillWidth = shouldPromoteTextWidthToFillInLayout(parent, child)
+        if (shouldFillWidth) {
+          child.width = 'fill_container'
+        }
+        const shouldFixGrowth = shouldUseFixedWidthTextGrowthInLayout(parent, child)
+        if (shouldFixGrowth) child.textGrowth = 'fixed-width'
+      }
       if (!child.lineHeight) {
         const fs = child.fontSize ?? 16
         const hasCjk = /[\u4E00-\u9FFF\u3400-\u4DBF]/.test(
@@ -1994,10 +2110,14 @@ function applyTextFillContainerInLayout(parent: PenNode): void {
           ? (fs >= 28 ? 1.35 : 1.55)
           : (fs >= 28 ? 1.2 : 1.5)
       }
+      if (shouldCenterTextInCenteredColumn(parent, child)) {
+        child.textAlign = 'center'
+      }
       // Re-estimate height based on parent's actual content width (not canvas width)
       const textContent = getTextContentForNode(child).trim()
       if (
         contentW > 0
+        && !demoteHorizontalFill
         && (child.textGrowth === 'fixed-width' || child.textGrowth === 'fixed-width-height')
         && textContent
       ) {
@@ -2957,6 +3077,36 @@ function shouldUseFixedWidthTextGrowthInLayout(parent: PenNode, child: PenNode):
   return shouldPromoteTextWidthToFillInLayout(parent, child) || isLongTextLikeForLayout(child)
 }
 
+function countVisibleChildren(node: PenNode): number {
+  if (!('children' in node) || !Array.isArray(node.children)) return 0
+  return node.children.filter((child) => ('visible' in child ? child.visible : undefined) !== false).length
+}
+
+function shouldDemoteHorizontalTextFillInLayout(
+  parent: PenNode,
+  child: PenNode,
+  visibleChildCount?: number,
+): boolean {
+  if (parent.type !== 'frame' || child.type !== 'text') return false
+  if (parent.layout !== 'horizontal') return false
+
+  const widthValue = child.width
+  if (typeof widthValue !== 'string' || !widthValue.startsWith('fill_container')) return false
+
+  const visibleCount = visibleChildCount ?? countVisibleChildren(parent)
+  if (visibleCount <= 1) return false
+
+  const text = getTextContentForNode(child).trim()
+  if (!text) return true
+  const hasBreak = /[\n\r]/.test(text)
+  const hasCjk = /[\u3400-\u4DBF\u4E00-\u9FFF\u3040-\u30FF\uAC00-\uD7AF]/.test(text)
+  const compactLen = text.replace(/\s+/g, '').length
+  const paragraphLike = hasBreak || compactLen >= (hasCjk ? 36 : 72)
+
+  // Keep fill only for truly paragraph-like text rows.
+  return !paragraphLike
+}
+
 function frameNeedsFillWidthForTextContent(node: PenNode, depth = 0): boolean {
   if (node.type !== 'frame') return false
   if (isBadgeLikeFrame(node) || isCompactButtonLikeFrame(node)) return false
@@ -3528,10 +3678,10 @@ function applyFormChildFillContainer(node: PenNode): void {
       if (allButtonLike) {
         // Row should fill parent width
         ;(child as unknown as Record<string, unknown>).width = 'fill_container'
-        // Ensure the row has proper distribution
-        if (!child.justifyContent || child.justifyContent === 'start') {
-          child.justifyContent = 'center'
+        if (shouldCenterButtonRowInContext(node, child)) {
+          ;(child as unknown as Record<string, unknown>).justifyContent = 'center'
         }
+        // Ensure the row has proper distribution
         if (!child.gap || toGapNumber(child.gap) < 8) {
           child.gap = 12
         }
