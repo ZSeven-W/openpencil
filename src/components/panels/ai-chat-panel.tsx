@@ -22,6 +22,7 @@ import {
 import { trimChatHistory } from '@/services/ai/context-optimizer'
 import type { ChatMessage as ChatMessageType } from '@/services/ai/ai-types'
 import type { AIProviderType } from '@/types/agent-settings'
+import { CHAT_STREAM_THINKING_CONFIG } from '@/services/ai/ai-runtime-config'
 import ClaudeLogo from '@/components/icons/claude-logo'
 import OpenAILogo from '@/components/icons/openai-logo'
 import OpenCodeLogo from '@/components/icons/opencode-logo'
@@ -124,7 +125,6 @@ function useChatHandlers() {
   const addMessage = useAIStore((s) => s.addMessage)
   const updateLastMessage = useAIStore((s) => s.updateLastMessage)
   const setStreaming = useAIStore((s) => s.setStreaming)
-
   const handleSend = useCallback(
     async (text?: string) => {
       const messageText = text ?? input.trim()
@@ -235,7 +235,13 @@ function useChatHandlers() {
               g.models.some((m) => m.value === model),
             )?.provider
             let chatThinking = false
-            for await (const chunk of streamChat(CHAT_SYSTEM_PROMPT, trimmedHistory, model, undefined, currentProvider)) {
+            for await (const chunk of streamChat(
+              CHAT_SYSTEM_PROMPT,
+              trimmedHistory,
+              model,
+              CHAT_STREAM_THINKING_CONFIG,
+              currentProvider,
+            )) {
                if (chunk.type === 'thinking') {
                  // Show a brief thinking indicator so the UI isn't stuck on empty
                  if (!chatThinking && !accumulated) {
@@ -310,7 +316,7 @@ function FixedChecklist({ messages, isStreaming }: { messages: ChatMessageType[]
   const completed = items.filter((item) => item.done).length
 
   return (
-    <div className="border-t border-border bg-card/95">
+    <div className="shrink-0 border-t border-border bg-card/95">
       <button
         type="button"
         onClick={() => setCollapsed(!collapsed)}
@@ -332,7 +338,7 @@ function FixedChecklist({ messages, isStreaming }: { messages: ChatMessageType[]
         </div>
       </button>
       {!collapsed && (
-        <div className="px-3 pb-2.5 flex flex-col gap-1">
+        <div className="px-3 pb-2.5 flex max-h-44 flex-col gap-1 overflow-y-auto">
           {items.map((item, index) => (
             <div key={`${item.label}-${index}`} className="flex items-center gap-2 text-[11px] text-muted-foreground/90">
               <span
@@ -683,7 +689,7 @@ export default function AIChatPanel() {
     <div
       ref={panelRef}
       className={cn(
-        'absolute z-50 w-[320px] rounded-xl shadow-2xl border border-border bg-card/95 backdrop-blur-sm flex flex-col',
+        'absolute z-50 flex w-[320px] flex-col overflow-hidden rounded-xl border border-border bg-card/95 shadow-2xl backdrop-blur-sm',
         !dragStyle && CORNER_CLASSES[panelCorner],
       )}
         style={{ ...dragStyle, height: panelHeight }}
@@ -731,7 +737,7 @@ export default function AIChatPanel() {
       </div>
 
       {/* --- Messages --- */}
-      <div className="flex-1 overflow-y-auto px-3.5 py-3 bg-background/80 rounded-b-xl">
+      <div className="min-h-0 flex-1 overflow-y-auto rounded-b-xl bg-background/80 px-3.5 py-3">
         {messages.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-4">
             <p className="text-xs text-muted-foreground mb-4">

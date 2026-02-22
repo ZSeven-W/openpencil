@@ -55,7 +55,7 @@ export default function ColorPicker({
             type="color"
             value={value.slice(0, 7)}
             onChange={handleNativeChange}
-            className="w-4 h-4 rounded border border-input/50 cursor-pointer bg-transparent p-0"
+            className="w-4 h-5 rounded  cursor-pointer bg-transparent p-0"
           />
         </div>
         <input
@@ -64,7 +64,7 @@ export default function ColorPicker({
           value={hexInput}
           onChange={handleHexChange}
           onBlur={handleBlur}
-          className="flex-1 bg-transparent text-foreground text-[11px] px-1.5 py-0.5 focus:outline-none font-mono tabular-nums min-w-0"
+          className="flex-1 bg-transparent text-foreground text-[11px] px-1.5 h-5 focus:outline-none font-mono tabular-nums min-w-0"
           placeholder="#000000"
         />
       </div>
