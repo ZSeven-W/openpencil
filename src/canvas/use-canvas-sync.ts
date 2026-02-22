@@ -102,6 +102,52 @@ function parseSizing(value: unknown): number | 'fit' | 'fill' {
   return isNaN(n) ? 0 : n
 }
 
+function isCjkCodePoint(code: number): boolean {
+  return (code >= 0x4E00 && code <= 0x9FFF) // CJK Unified Ideographs
+    || (code >= 0x3400 && code <= 0x4DBF) // CJK Extension A
+    || (code >= 0x3040 && code <= 0x30FF) // Hiragana + Katakana
+    || (code >= 0xAC00 && code <= 0xD7AF) // Hangul
+    || (code >= 0x3000 && code <= 0x303F) // CJK symbols/punctuation
+    || (code >= 0xFF00 && code <= 0xFFEF) // Full-width forms
+}
+
+function estimateGlyphWidth(ch: string, fontSize: number): number {
+  if (ch === '\n' || ch === '\r') return 0
+  if (ch === '\t') return fontSize * 1.2
+  if (ch === ' ') return fontSize * 0.33
+
+  const code = ch.codePointAt(0) ?? 0
+  if (isCjkCodePoint(code)) return fontSize * 1.08
+  if (/[A-Z]/.test(ch)) return fontSize * 0.62
+  if (/[a-z]/.test(ch)) return fontSize * 0.56
+  if (/[0-9]/.test(ch)) return fontSize * 0.56
+  return fontSize * 0.58
+}
+
+function estimateLineWidth(
+  text: string,
+  fontSize: number,
+  letterSpacing = 0,
+): number {
+  let width = 0
+  let visibleChars = 0
+  for (const ch of text) {
+    width += estimateGlyphWidth(ch, fontSize)
+    if (ch !== '\n' && ch !== '\r') visibleChars += 1
+  }
+  if (visibleChars > 1 && letterSpacing !== 0) {
+    width += (visibleChars - 1) * letterSpacing
+  }
+  return Math.max(0, width)
+}
+
+function estimateTextWidth(text: string, fontSize: number, letterSpacing = 0): number {
+  const lines = text.split(/\r?\n/)
+  const maxLine = lines.reduce((max, line) =>
+    Math.max(max, estimateLineWidth(line, fontSize, letterSpacing)), 0)
+  return maxLine
+}
+
 /** Compute fit-content width from children. */
 function fitContentWidth(node: PenNode): number {
   if (!('children' in node) || !node.children?.length) return 0
@@ -152,11 +198,12 @@ function getNodeWidth(node: PenNode, parentAvail?: number): number {
   }
   if (node.type === 'text') {
     const fontSize = node.fontSize ?? 16
+    const letterSpacing = node.letterSpacing ?? 0
     const content =
       typeof node.content === 'string'
         ? node.content
         : node.content.map((s) => s.text).join('')
-    return Math.max(content.length * fontSize * 0.55, 20)
+    return Math.max(Math.ceil(estimateTextWidth(content, fontSize, letterSpacing)), 20)
   }
   return 0
 }
@@ -210,20 +257,16 @@ function estimateTextHeight(node: PenNode, availableWidth?: number): number {
   // If no width constraint is known, return single-line height
   if (textWidth <= 0) return singleLineH
 
-  // Estimate wrapped lines using per-character width estimation
-  // CJK characters are roughly 1em wide; Latin characters ~0.55em
-  let totalTextWidth = 0
-  for (const ch of content) {
-    const code = ch.codePointAt(0) ?? 0
-    const isCjk = (code >= 0x4E00 && code <= 0x9FFF)
-      || (code >= 0x3000 && code <= 0x30FF)
-      || (code >= 0xFF00 && code <= 0xFFEF)
-      || (code >= 0xAC00 && code <= 0xD7AF)
-    totalTextWidth += isCjk ? fontSize : fontSize * 0.55
-  }
+  // Estimate wrapped lines per paragraph line, then sum.
+  // This preserves explicit newlines and avoids under-estimating CJK widths.
+  const letterSpacing = (typeof n.letterSpacing === 'number' ? n.letterSpacing : 0)
+  const rawLines = content.split(/\r?\n/)
+  const wrappedLineCount = rawLines.reduce((sum, line) => {
+    const lineWidth = estimateLineWidth(line, fontSize, letterSpacing)
+    return sum + Math.max(1, Math.ceil(lineWidth / textWidth))
+  }, 0)
 
-  const lines = Math.max(1, Math.ceil(totalTextWidth / textWidth))
-  return Math.round(lines * singleLineH)
+  return Math.round(Math.max(1, wrappedLineCount) * singleLineH)
 }
 
 /** Compute child positions according to the parent's layout rules. */
