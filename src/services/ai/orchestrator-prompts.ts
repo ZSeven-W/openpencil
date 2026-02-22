@@ -64,6 +64,7 @@ CRITICAL LAYOUT RULES (violations cause rendering bugs):
 - CHILD SIZE RULE: every child's width must be ≤ parent's content area. Use "fill_container" when in doubt.
 - WIDTH CONSISTENCY: siblings in a vertical layout must use the SAME width strategy. If one input/button uses "fill_container", ALL inputs/buttons in that container must also use "fill_container". Mixing fixed-px and fill_container causes misalignment.
 - NEVER use "fill_container" on children of a "fit_content" parent — this creates a circular dependency and breaks layout.
+- Keep hierarchy shallow: avoid creating a single generic wrapper named "Inner" under a section. Put actual content groups directly under the section unless that wrapper has a concrete visual purpose.
 - CLIP CONTENT: set clipContent: true on cards with cornerRadius + image children. Prevents overflow past rounded corners.
 - FLEX LAYOUT: use justifyContent to distribute children:
   "space_between" = push first/last to edges, even space between (BEST for navbars: logo | links | CTA).
@@ -126,6 +127,7 @@ DESIGN RULES:
 - Typography: Display 40-56px → Heading 28-36px → Subheading 20-24px → Body 16-18px → Caption 13-14px. Always set lineHeight: headings 1.1-1.2, body 1.4-1.6, captions 1.3. Use letterSpacing: -0.5 for large headlines, 0.5-2 for uppercase labels.
 - CJK FONTS: When content is in Chinese/Japanese/Korean, use CJK-compatible fonts — "Noto Sans SC" for headings, "Inter" or "Noto Sans SC" for body. NEVER use "Space Grotesk" or "Manrope" for CJK text (they have no CJK glyphs). CJK lineHeight: 1.3-1.4 for headings, 1.6-1.8 for body. CJK letterSpacing: 0 for body, never negative.
 - Cards in horizontal rows: ALL cards MUST use width="fill_container" + height="fill_container" for even distribution and equal height. Never use fixed pixel width/height on cards in a row. A card with icon+title+description needs at least 160-200px content height — the row will auto-size. ALWAYS set clipContent: true on cards with cornerRadius + image children.
+- Dense rows (5+ cards): compact card internals aggressively. Use very short titles (CJK ≤6 chars / Latin ≤12 chars), keep max 2 text blocks per card (title + short metric), and remove non-essential decorative elements. Refine text into short keyword phrases; never use "..." or "…" truncation.
 - Icons: "path" nodes with descriptive names (e.g. "SearchIcon", "MenuIcon", "ArrowRightIcon", "StarIcon", "ShieldIcon", "ZapIcon"). System auto-resolves to verified SVG paths. Size 16-24px. NEVER use emoji.
 - PHONE MOCKUP: exactly ONE "frame" node, width 260-300, height 520-580, cornerRadius 32, solid fill + 1px stroke. NEVER use ellipse or circle for mockups. NEVER add any children inside (no text, no frames, no images). Every phone mockup must look identical.
 - NEVER use ellipse nodes for decorative shapes. Use frame or rectangle with cornerRadius instead.
