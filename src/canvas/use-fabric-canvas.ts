@@ -27,6 +27,8 @@ function computeDocBounds(nodes: PenNode[], ox = 0, oy = 0) {
   let maxY = -Infinity
 
   for (const node of nodes) {
+    if (('visible' in node ? node.visible : undefined) === false) continue
+
     const nx = (node.x ?? 0) + ox
     const ny = (node.y ?? 0) + oy
     const nw = 'width' in node ? nodeSize(node.width) : 0
