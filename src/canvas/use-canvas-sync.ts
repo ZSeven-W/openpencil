@@ -825,9 +825,11 @@ export function useCanvasSync() {
         let obj: FabricObjectWithPenId | undefined
         let existingObj = objMap.get(node.id)
 
+        // Some object types require recreation when their underlying Fabric
+        // class/shape data changes (e.g. IText↔Textbox or Path.d changes).
+        let objectRecreated = false
         // Text nodes may need recreation when textGrowth mode changes
         // (IText ↔ Textbox are different Fabric classes).
-        let textRecreated = false
         if (existingObj && node.type === 'text') {
           const growth = node.textGrowth
           const w = typeof node.width === 'number' ? node.width : 0
@@ -836,7 +838,23 @@ export function useCanvasSync() {
           if (needsTextbox !== isTextbox) {
             canvas.remove(existingObj)
             existingObj = undefined
-            textRecreated = true
+            objectRecreated = true
+          }
+        }
+
+        // Path nodes need recreation when `d` changes, because syncFabricObject
+        // updates paint/size but not the underlying path commands.
+        if (existingObj && node.type === 'path' && existingObj instanceof fabric.Path) {
+          const nextD = typeof node.d === 'string' ? node.d.trim() : ''
+          const tracked = (existingObj as any).__sourceD
+          const hasTrackedD = typeof tracked === 'string'
+          const prevD = hasTrackedD ? tracked.trim() : ''
+          const shouldRecreatePath =
+            (nextD.length > 0 && !hasTrackedD) || (hasTrackedD && prevD !== nextD)
+          if (shouldRecreatePath) {
+            canvas.remove(existingObj)
+            existingObj = undefined
+            objectRecreated = true
           }
         }
 
@@ -871,8 +889,8 @@ export function useCanvasSync() {
             } else {
               canvas.add(newObj)
             }
-            // Restore Fabric selection when text object was recreated
-            if (textRecreated) {
+            // Restore Fabric selection when an object was recreated
+            if (objectRecreated) {
               const { activeId } = useCanvasStore.getState().selection
               if (activeId === node.id) {
                 canvas.setActiveObject(newObj)
