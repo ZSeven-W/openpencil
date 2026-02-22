@@ -60,7 +60,7 @@ function renderLayerTree(
   parentReusable = false,
   parentIsInstance = false,
 ) {
-  return [...nodes].reverse().map((node) => {
+  return nodes.map((node) => {
     const nodeChildren = getEffectiveChildren(node, allChildren)
     const isExpanded = !collapsedIds.has(node.id)
     const isDropTarget = dragOverId === node.id

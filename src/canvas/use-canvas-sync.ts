@@ -1,7 +1,7 @@
 import { useEffect } from 'react'
 import * as fabric from 'fabric'
 import { useCanvasStore } from '@/stores/canvas-store'
-import { useDocumentStore } from '@/stores/document-store'
+import { useDocumentStore, findNodeInTree, DEFAULT_FRAME_ID } from '@/stores/document-store'
 import type { PenNode, ContainerProps } from '@/types/pen'
 import {
   createFabricObject,
@@ -11,7 +11,6 @@ import { syncFabricObject } from './canvas-object-sync'
 import { isFabricSyncLocked, setFabricSyncLock } from './canvas-sync-lock'
 import { pendingAnimationNodes, getNextStaggerDelay } from '@/services/ai/design-animation'
 import { resolveNodeForCanvas, getDefaultTheme } from '@/variables/resolve-variables'
-import { findNodeInTree } from '@/stores/document-store'
 import { COMPONENT_COLOR, INSTANCE_COLOR, SELECTION_BLUE } from './canvas-constants'
 
 // ---------------------------------------------------------------------------
@@ -65,6 +64,10 @@ interface Padding {
   left: number
 }
 
+function isNodeVisible(node: PenNode): boolean {
+  return ('visible' in node ? node.visible : undefined) !== false
+}
+
 function resolvePadding(
   padding:
     | number
@@ -102,6 +105,27 @@ function parseSizing(value: unknown): number | 'fit' | 'fill' {
   return isNaN(n) ? 0 : n
 }
 
+function getRootFillWidthFallback(): number {
+  const roots = useDocumentStore.getState().document.children
+  const rootFrame = roots.find(
+    (n) => n.type === 'frame'
+      && n.id === DEFAULT_FRAME_ID
+      && 'width' in n
+      && typeof n.width === 'number'
+      && n.width > 0,
+  )
+  if (rootFrame && 'width' in rootFrame && typeof rootFrame.width === 'number' && rootFrame.width > 0) {
+    return rootFrame.width
+  }
+  const anyTopFrame = roots.find(
+    (n) => n.type === 'frame' && 'width' in n && typeof n.width === 'number' && n.width > 0,
+  )
+  if (anyTopFrame && 'width' in anyTopFrame && typeof anyTopFrame.width === 'number' && anyTopFrame.width > 0) {
+    return anyTopFrame.width
+  }
+  return 1200
+}
+
 function isCjkCodePoint(code: number): boolean {
   return (code >= 0x4E00 && code <= 0x9FFF) // CJK Unified Ideographs
     || (code >= 0x3400 && code <= 0x4DBF) // CJK Extension A
@@ -117,7 +141,7 @@ function estimateGlyphWidth(ch: string, fontSize: number): number {
   if (ch === ' ') return fontSize * 0.33
 
   const code = ch.codePointAt(0) ?? 0
-  if (isCjkCodePoint(code)) return fontSize * 1.08
+  if (isCjkCodePoint(code)) return fontSize * 1.12
   if (/[A-Z]/.test(ch)) return fontSize * 0.62
   if (/[a-z]/.test(ch)) return fontSize * 0.56
   if (/[0-9]/.test(ch)) return fontSize * 0.56
@@ -190,23 +214,33 @@ function getTextOpticalCenterYOffset(node: PenNode): number {
 }
 
 /** Compute fit-content width from children. */
-function fitContentWidth(node: PenNode): number {
+function fitContentWidth(node: PenNode, parentAvail?: number): number {
   if (!('children' in node) || !node.children?.length) return 0
+  const visibleChildren = node.children.filter((child) => isNodeVisible(child))
+  if (visibleChildren.length === 0) return 0
   const layout = 'layout' in node ? (node as ContainerProps).layout : undefined
   const pad = resolvePadding('padding' in node ? (node as any).padding : undefined)
   const gap = 'gap' in node && typeof (node as any).gap === 'number' ? (node as any).gap : 0
   if (layout === 'horizontal') {
-    const childTotal = node.children.reduce((sum, c) => sum + getNodeWidth(c), 0)
-    const gapTotal = gap * Math.max(0, node.children.length - 1)
+    const gapTotal = gap * Math.max(0, visibleChildren.length - 1)
+    const childAvail = parentAvail !== undefined
+      ? Math.max(0, parentAvail - pad.left - pad.right - gapTotal)
+      : undefined
+    const childTotal = visibleChildren.reduce((sum, c) => sum + getNodeWidth(c, childAvail), 0)
     return childTotal + gapTotal + pad.left + pad.right
   }
-  const maxChildW = node.children.reduce((max, c) => Math.max(max, getNodeWidth(c)), 0)
+  const childAvail = parentAvail !== undefined
+    ? Math.max(0, parentAvail - pad.left - pad.right)
+    : undefined
+  const maxChildW = visibleChildren.reduce((max, c) => Math.max(max, getNodeWidth(c, childAvail)), 0)
   return maxChildW + pad.left + pad.right
 }
 
 /** Compute fit-content height from children. */
 function fitContentHeight(node: PenNode, parentAvailW?: number): number {
   if (!('children' in node) || !node.children?.length) return 0
+  const visibleChildren = node.children.filter((child) => isNodeVisible(child))
+  if (visibleChildren.length === 0) return 0
   const layout = 'layout' in node ? (node as ContainerProps).layout : undefined
   const pad = resolvePadding('padding' in node ? (node as any).padding : undefined)
   const gap = 'gap' in node && typeof (node as any).gap === 'number' ? (node as any).gap : 0
@@ -214,11 +248,11 @@ function fitContentHeight(node: PenNode, parentAvailW?: number): number {
   const nodeW = getNodeWidth(node, parentAvailW)
   const childAvailW = nodeW > 0 ? Math.max(0, nodeW - pad.left - pad.right) : parentAvailW
   if (layout === 'vertical') {
-    const childTotal = node.children.reduce((sum, c) => sum + getNodeHeight(c, undefined, childAvailW), 0)
-    const gapTotal = gap * Math.max(0, node.children.length - 1)
+    const childTotal = visibleChildren.reduce((sum, c) => sum + getNodeHeight(c, undefined, childAvailW), 0)
+    const gapTotal = gap * Math.max(0, visibleChildren.length - 1)
     return childTotal + gapTotal + pad.top + pad.bottom
   }
-  const maxChildH = node.children.reduce((max, c) => Math.max(max, getNodeHeight(c, undefined, childAvailW)), 0)
+  const maxChildH = visibleChildren.reduce((max, c) => Math.max(max, getNodeHeight(c, undefined, childAvailW)), 0)
   return maxChildH + pad.top + pad.bottom
 }
 
@@ -226,15 +260,38 @@ function getNodeWidth(node: PenNode, parentAvail?: number): number {
   if ('width' in node) {
     const s = parseSizing(node.width)
     if (typeof s === 'number' && s > 0) return s
-    if (s === 'fill' && parentAvail) return parentAvail
+    if (s === 'fill') {
+      if (parentAvail && parentAvail > 0) return parentAvail
+      // Unresolved fill width (no parent available): use root viewport width
+      // to avoid collapsing frames to content width and causing squeeze.
+      if (node.type !== 'text') {
+        const fallbackFillW = getRootFillWidthFallback()
+        if (fallbackFillW > 0) return fallbackFillW
+      }
+      // If fill width cannot be resolved yet, prefer intrinsic content width
+      // over collapsing to 0. This prevents accidental narrowing cascades.
+      if ('children' in node && node.children?.length) {
+        const intrinsic = fitContentWidth(node)
+        if (intrinsic > 0) return intrinsic
+      }
+      if (node.type === 'text') {
+        const fontSize = node.fontSize ?? 16
+        const letterSpacing = node.letterSpacing ?? 0
+        const content =
+          typeof node.content === 'string'
+            ? node.content
+            : node.content.map((s2) => s2.text).join('')
+        return Math.max(Math.ceil(estimateTextWidth(content, fontSize, letterSpacing)), 20)
+      }
+    }
     if (s === 'fit') {
-      const fit = fitContentWidth(node)
+      const fit = fitContentWidth(node, parentAvail)
       if (fit > 0) return fit
     }
   }
   // Containers without explicit width: compute from children
   if ('children' in node && node.children?.length) {
-    const fit = fitContentWidth(node)
+    const fit = fitContentWidth(node, parentAvail)
     if (fit > 0) return fit
   }
   if (node.type === 'text') {
@@ -316,9 +373,11 @@ function computeLayoutPositions(
   children: PenNode[],
 ): PenNode[] {
   if (children.length === 0) return children
+  const visibleChildren = children.filter((child) => isNodeVisible(child))
+  if (visibleChildren.length === 0) return []
   const c = parent as PenNode & ContainerProps
   const layout = c.layout
-  if (!layout || layout === 'none') return children
+  if (!layout || layout === 'none') return visibleChildren
 
   const pW = parseSizing(c.width)
   const pH = parseSizing(c.height)
@@ -333,10 +392,10 @@ function computeLayoutPositions(
   const availW = parentW - pad.left - pad.right
   const availH = parentH - pad.top - pad.bottom
   const availMain = isVertical ? availH : availW
-  const totalGapSpace = gap * Math.max(0, children.length - 1)
+  const totalGapSpace = gap * Math.max(0, visibleChildren.length - 1)
 
   // Two-pass sizing: first compute fixed sizes, then allocate remaining space for fill children
-  const mainSizing = children.map((ch) => {
+  const mainSizing = visibleChildren.map((ch) => {
     const prop = isVertical ? 'height' : 'width'
     if (prop in ch) {
       const s = parseSizing((ch as any)[prop])
@@ -352,7 +411,7 @@ function computeLayoutPositions(
   const remainingMain = Math.max(0, availMain - fixedTotal - totalGapSpace)
   const fillSize = fillCount > 0 ? remainingMain / fillCount : 0
 
-  const sizes = children.map((ch, i) => {
+  const sizes = visibleChildren.map((ch, i) => {
     const mainSize = mainSizing[i] === 'fill' ? fillSize : (mainSizing[i] as number)
     return {
       w: isVertical ? getNodeWidth(ch, availW) : mainSize,
@@ -378,14 +437,14 @@ function computeLayoutPositions(
       break
     case 'space_between':
       effectiveGap =
-        children.length > 1
-          ? (availMain - totalMain) / (children.length - 1)
+        visibleChildren.length > 1
+          ? (availMain - totalMain) / (visibleChildren.length - 1)
           : 0
       break
     case 'space_around': {
       const spacing =
-        children.length > 0
-          ? (availMain - totalMain) / children.length
+        visibleChildren.length > 0
+          ? (availMain - totalMain) / visibleChildren.length
           : 0
       mainPos = spacing / 2
       effectiveGap = spacing
@@ -396,7 +455,7 @@ function computeLayoutPositions(
       break
   }
 
-  return children.map((child, i) => {
+  return visibleChildren.map((child, i) => {
     const size = sizes[i]
     const crossAvail = isVertical ? availW : availH
     const childCross = isVertical ? size.w : size.h
@@ -573,6 +632,8 @@ function flattenNodes(
 ): PenNode[] {
   const result: PenNode[] = []
   for (const node of nodes) {
+    if (!isNodeVisible(node)) continue
+
     // Store render info for position conversion in canvas events
     nodeRenderInfo.set(node.id, {
       parentOffsetX: offsetX,
