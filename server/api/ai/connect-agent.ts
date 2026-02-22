@@ -1,8 +1,9 @@
 import { defineEventHandler, readBody, setResponseHeaders } from 'h3'
 import type { GroupedModel } from '../../../src/types/agent-settings'
+import { resolveClaudeCli } from '../../utils/resolve-claude-cli'
 
 interface ConnectBody {
-  agent: 'claude-code' | 'codex-cli'
+  agent: 'claude-code' | 'codex-cli' | 'opencode'
 }
 
 interface ConnectResult {
@@ -31,6 +32,10 @@ export default defineEventHandler(async (event) => {
     return connectCodexCli()
   }
 
+  if (body.agent === 'opencode') {
+    return connectOpenCode()
+  }
+
   return { connected: false, models: [], error: `Unknown agent: ${body.agent}` } satisfies ConnectResult
 })
 
@@ -42,6 +47,8 @@ async function connectClaudeCode(): Promise<ConnectResult> {
     const env = { ...process.env } as Record<string, string | undefined>
     delete env.CLAUDECODE
 
+    const claudePath = resolveClaudeCli()
+
     const q = query({
       prompt: '',
       options: {
@@ -51,6 +58,7 @@ async function connectClaudeCode(): Promise<ConnectResult> {
         permissionMode: 'plan',
         persistSession: false,
         env,
+        ...(claudePath ? { pathToClaudeCodeExecutable: claudePath } : {}),
       },
     })
 
@@ -150,4 +158,55 @@ async function connectCodexCli(): Promise<ConnectResult> {
     const msg = error instanceof Error ? error.message : 'Failed to connect'
     return { connected: false, models: [], error: msg }
   }
+}
+
+/** Connect to OpenCode and fetch its configured providers/models. */
+async function connectOpenCode(): Promise<ConnectResult> {
+  try {
+    const { getOpencodeClient, releaseOpencodeServer } = await import('../../utils/opencode-client')
+    const { client, server } = await getOpencodeClient()
+
+    const { data, error } = await client.config.providers()
+    releaseOpencodeServer(server)
+
+    if (error) {
+      return { connected: false, models: [], error: 'Failed to fetch providers from OpenCode server.' }
+    }
+
+    const models: GroupedModel[] = []
+    for (const provider of data?.providers ?? []) {
+      if (!provider.models) continue
+      for (const [, model] of Object.entries(provider.models)) {
+        models.push({
+          value: `${provider.id}/${model.id}`,
+          displayName: model.name || model.id,
+          description: `via ${provider.name || provider.id}`,
+          provider: 'opencode' as const,
+        })
+      }
+    }
+
+    if (models.length === 0) {
+      return { connected: false, models: [], error: 'No models configured in OpenCode. Run "opencode" to set up providers.' }
+    }
+
+    return { connected: true, models }
+  } catch (error) {
+    const raw = error instanceof Error ? error.message : 'Failed to connect'
+    return { connected: false, models: [], error: friendlyOpenCodeError(raw) }
+  }
+}
+
+/** Map OpenCode connection errors to user-friendly messages */
+function friendlyOpenCodeError(raw: string): string {
+  if (/ECONNREFUSED/i.test(raw)) {
+    return 'OpenCode server not running. Start it with "opencode" in your terminal first.'
+  }
+  if (/not found|ENOENT/i.test(raw)) {
+    return 'OpenCode CLI not found. Please install it first.'
+  }
+  if (/timed?\s*out/i.test(raw)) {
+    return 'Connection timed out. Please try again.'
+  }
+  return raw
 }

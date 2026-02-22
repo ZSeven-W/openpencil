@@ -6,6 +6,16 @@ import type { FabricObjectWithPenId } from './canvas-object-factory'
 import { resolveTargetAtDepth } from './selection-context'
 
 /**
+ * When true, the next selection event will skip depth-resolution and
+ * pass through as-is. Used by the layer panel to programmatically select
+ * children without the handler resolving them back to their parent.
+ */
+let skipNextDepthResolve = false
+export function setSkipNextDepthResolve() {
+  skipNextDepthResolve = true
+}
+
+/**
  * Resolve a list of Fabric selected objects to node IDs at the current
  * entered-frame depth. If any target falls outside the current context,
  * exits all frames and retries at root level.
@@ -44,9 +54,59 @@ export function useCanvasSelection() {
       if (!canvas) return
       clearInterval(interval)
 
-      const handleSelection = (e: { selected?: FabricObject[] }) => {
-        const selected = e.selected ?? []
-        const ids = resolveIds(selected)
+      // Guard against re-entry: setActiveObject fires selection events
+      // synchronously, which would call handleSelection again and cause
+      // infinite recursion.
+      let updatingSelection = false
+
+      const handleSelection = (e: { selected?: FabricObject[]; e?: unknown }) => {
+        if (updatingSelection) return
+
+        // Programmatic selection from layer panel — skip depth resolution
+        if (skipNextDepthResolve) {
+          skipNextDepthResolve = false
+          return
+        }
+
+        // `selection:updated` payload `selected` may contain only delta objects.
+        // Always read the full active selection from canvas for accurate multi-select.
+        const selected = canvas.getActiveObjects()
+        const fallbackSelected = e.selected ?? []
+        const effectiveSelected = selected.length > 0 ? selected : fallbackSelected
+        const prevIds = useCanvasStore.getState().selection.selectedIds
+        const mouseEvent = e.e as MouseEvent | undefined
+
+        // If user already has a multi-selection and clicks one selected object
+        // (without Shift), keep the whole selection so dragging moves all.
+        if (!mouseEvent?.shiftKey && prevIds.length > 1 && effectiveSelected.length === 1) {
+          const clicked = effectiveSelected[0] as FabricObjectWithPenId
+          const resolvedClicked = clicked?.penNodeId
+            ? resolveTargetAtDepth(clicked.penNodeId)
+            : null
+
+          if (resolvedClicked && prevIds.includes(resolvedClicked)) {
+            const objects = canvas.getObjects() as FabricObjectWithPenId[]
+            const prevSet = new Set(prevIds)
+            const restoredObjects = objects.filter(
+              (o) => o.penNodeId && prevSet.has(o.penNodeId),
+            )
+
+            if (restoredObjects.length > 1) {
+              updatingSelection = true
+              try {
+                const restored = new ActiveSelection(restoredObjects, { canvas })
+                canvas.setActiveObject(restored)
+                canvas.requestRenderAll()
+                useCanvasStore.getState().setSelection(prevIds, prevIds[0] ?? null)
+              } finally {
+                updatingSelection = false
+              }
+              return
+            }
+          }
+        }
+
+        const ids = resolveIds(effectiveSelected)
         useCanvasStore.getState().setSelection(ids, ids[0] ?? null)
 
         // Correct Fabric's active object to match the depth-resolved target.
@@ -56,29 +116,34 @@ export function useCanvasSelection() {
 
         const objects = canvas.getObjects() as FabricObjectWithPenId[]
 
-        if (ids.length === 1) {
-          const currentActive = selected[0] as FabricObjectWithPenId
-          if (currentActive?.penNodeId !== ids[0]) {
-            const correctObj = objects.find((o) => o.penNodeId === ids[0])
-            if (correctObj) {
-              canvas.setActiveObject(correctObj)
+        updatingSelection = true
+        try {
+          if (ids.length === 1) {
+            const currentActive = effectiveSelected[0] as FabricObjectWithPenId
+            if (currentActive?.penNodeId !== ids[0]) {
+              const correctObj = objects.find((o) => o.penNodeId === ids[0])
+              if (correctObj) {
+                canvas.setActiveObject(correctObj)
+                canvas.requestRenderAll()
+              }
+            }
+          } else {
+            // Multi-select: build an ActiveSelection from the resolved objects
+            const resolvedSet = new Set(ids)
+            const resolvedObjs = objects.filter(
+              (o) => o.penNodeId && resolvedSet.has(o.penNodeId),
+            )
+            if (resolvedObjs.length > 1) {
+              const sel = new ActiveSelection(resolvedObjs, { canvas })
+              canvas.setActiveObject(sel)
+              canvas.requestRenderAll()
+            } else if (resolvedObjs.length === 1) {
+              canvas.setActiveObject(resolvedObjs[0])
               canvas.requestRenderAll()
             }
           }
-        } else {
-          // Multi-select: build an ActiveSelection from the resolved objects
-          const resolvedSet = new Set(ids)
-          const resolvedObjs = objects.filter(
-            (o) => o.penNodeId && resolvedSet.has(o.penNodeId),
-          )
-          if (resolvedObjs.length > 1) {
-            const sel = new ActiveSelection(resolvedObjs, { canvas })
-            canvas.setActiveObject(sel)
-            canvas.requestRenderAll()
-          } else if (resolvedObjs.length === 1) {
-            canvas.setActiveObject(resolvedObjs[0])
-            canvas.requestRenderAll()
-          }
+        } finally {
+          updatingSelection = false
         }
       }
 

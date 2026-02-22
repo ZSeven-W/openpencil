@@ -5,6 +5,8 @@ import {
   Group,
   Lock,
   EyeOff,
+  Component,
+  Unlink,
 } from 'lucide-react'
 
 interface LayerContextMenuProps {
@@ -12,6 +14,9 @@ interface LayerContextMenuProps {
   y: number
   nodeId: string
   canGroup: boolean
+  canCreateComponent: boolean
+  isReusable: boolean
+  isInstance: boolean
   onAction: (action: string) => void
   onClose: () => void
 }
@@ -20,6 +25,9 @@ const MENU_ITEMS = [
   { action: 'duplicate', label: 'Duplicate', icon: Copy },
   { action: 'delete', label: 'Delete', icon: Trash2 },
   { action: 'group', label: 'Group Selection', icon: Group, requireGroup: true },
+  { action: 'make-component', label: 'Create Component', icon: Component, requireCreateComponent: true },
+  { action: 'detach-component', label: 'Detach Component', icon: Unlink, requireReusable: true },
+  { action: 'detach-component', label: 'Detach Instance', icon: Unlink, requireInstance: true },
   { action: 'lock', label: 'Toggle Lock', icon: Lock },
   { action: 'hide', label: 'Toggle Visibility', icon: EyeOff },
 ]
@@ -28,6 +36,9 @@ export default function LayerContextMenu({
   x,
   y,
   canGroup,
+  canCreateComponent,
+  isReusable,
+  isInstance,
   onAction,
   onClose,
 }: LayerContextMenuProps) {
@@ -57,7 +68,11 @@ export default function LayerContextMenu({
       style={{ left: x, top: y }}
     >
       {MENU_ITEMS.filter(
-        (item) => !item.requireGroup || canGroup,
+        (item) =>
+          (!item.requireGroup || canGroup) &&
+          (!('requireCreateComponent' in item) || canCreateComponent) &&
+          (!('requireReusable' in item) || isReusable) &&
+          (!('requireInstance' in item) || isInstance),
       ).map((item) => (
         <button
           key={item.action}

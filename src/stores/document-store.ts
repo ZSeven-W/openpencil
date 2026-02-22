@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import { nanoid } from 'nanoid'
-import type { PenDocument, PenNode, GroupNode } from '@/types/pen'
+import type { PenDocument, PenNode, GroupNode, RefNode } from '@/types/pen'
 import type { VariableDefinition } from '@/types/variables'
 import { useHistoryStore } from '@/stores/history-store'
 import { getDefaultTheme } from '@/variables/resolve-variables'
@@ -98,6 +98,71 @@ function flattenNodes(nodes: PenNode[]): PenNode[] {
   return result
 }
 
+/** Resolve the bounding box of a node, falling back to its referenced component for RefNodes. */
+function getNodeBounds(
+  node: PenNode,
+  allNodes: PenNode[],
+): { x: number; y: number; w: number; h: number } {
+  const x = node.x ?? 0
+  const y = node.y ?? 0
+  let w = ('width' in node && typeof node.width === 'number') ? node.width : 0
+  let h = ('height' in node && typeof node.height === 'number') ? node.height : 0
+  if (node.type === 'ref' && !w) {
+    const refComp = findNodeInTree(allNodes, (node as RefNode).ref)
+    if (refComp) {
+      w = ('width' in refComp && typeof refComp.width === 'number') ? refComp.width : 100
+      h = ('height' in refComp && typeof refComp.height === 'number') ? refComp.height : 100
+    }
+  }
+  return { x, y, w: w || 100, h: h || 100 }
+}
+
+/**
+ * Find a clear X position to the right of `sourceX + sourceW` that doesn't
+ * overlap any sibling (excluding `excludeId`) on the same vertical band.
+ */
+function findClearX(
+  sourceX: number,
+  sourceW: number,
+  proposedY: number,
+  proposedH: number,
+  siblings: PenNode[],
+  excludeId: string,
+  allNodes: PenNode[],
+  gap = 20,
+): number {
+  const proposedW = sourceW
+  let proposedX = sourceX + sourceW + gap
+
+  const siblingBounds: { x: number; y: number; w: number; h: number }[] = []
+  for (const sib of siblings) {
+    if (sib.id === excludeId) continue
+    const b = getNodeBounds(sib, allNodes)
+    if (b.w > 0 && b.h > 0) siblingBounds.push(b)
+  }
+
+  let maxAttempts = 100
+  while (maxAttempts-- > 0) {
+    const hasOverlap = siblingBounds.some((b) => {
+      const overlapX = proposedX < b.x + b.w && proposedX + proposedW > b.x
+      const overlapY = proposedY < b.y + b.h && proposedY + proposedH > b.y
+      return overlapX && overlapY
+    })
+    if (!hasOverlap) break
+    let maxRight = proposedX
+    for (const b of siblingBounds) {
+      const overlapX = proposedX < b.x + b.w && proposedX + proposedW > b.x
+      const overlapY = proposedY < b.y + b.h && proposedY + proposedH > b.y
+      if (overlapX && overlapY && b.x + b.w > maxRight) {
+        maxRight = b.x + b.w
+      }
+    }
+    proposedX = maxRight + gap
+  }
+
+  return proposedX
+}
+
 function isDescendantOf(
   nodes: PenNode[],
   nodeId: string,
@@ -129,8 +194,8 @@ function insertNodeInTree(
   }
 
   return nodes.map((n) => {
-    if (n.id === parentId && 'children' in n) {
-      const children = [...(n.children ?? [])]
+    if (n.id === parentId) {
+      const children = 'children' in n && n.children ? [...n.children] : []
       if (index !== undefined) {
         children.splice(index, 0, node)
       } else {
@@ -233,6 +298,10 @@ interface DocumentStoreState {
   getParentOf: (id: string) => PenNode | undefined
   getFlatNodes: () => PenNode[]
   isDescendantOf: (nodeId: string, ancestorId: string) => boolean
+
+  // Component management
+  makeReusable: (nodeId: string) => void
+  detachComponent: (nodeId: string) => string | undefined
 
   // Variable management
   setVariable: (name: string, definition: VariableDefinition) => void
@@ -398,6 +467,47 @@ export const useDocumentStore = create<DocumentStoreState>(
       const node = findNodeInTree(state.document.children, id)
       if (!node) return null
 
+      // Duplicating a reusable component creates an instance (RefNode)
+      if ('reusable' in node && node.reusable === true) {
+        const bounds = getNodeBounds(node, state.document.children)
+        const parent = findParentInTree(state.document.children, id)
+        const parentId = parent ? parent.id : null
+        const siblings = parent
+          ? ('children' in parent ? parent.children ?? [] : [])
+          : state.document.children
+        const idx = siblings.findIndex((n) => n.id === id)
+
+        const clearX = findClearX(
+          bounds.x, bounds.w, bounds.y, bounds.h,
+          siblings, id, state.document.children,
+        )
+
+        const refNode: RefNode = {
+          id: nanoid(),
+          type: 'ref',
+          ref: node.id,
+          name: node.name ?? node.type,
+          x: clearX,
+          y: bounds.y,
+        }
+
+        useHistoryStore.getState().pushState(state.document)
+        set((s) => ({
+          document: {
+            ...s.document,
+            children: insertNodeInTree(
+              s.document.children,
+              parentId,
+              refNode as PenNode,
+              idx + 1,
+            ),
+          },
+          isDirty: true,
+        }))
+        return refNode.id
+      }
+
+      // Regular duplication for non-reusable nodes
       const cloneWithNewIds = (n: PenNode): PenNode => {
         const cloned = { ...n, id: nanoid() } as PenNode
         if ('children' in cloned && cloned.children) {
@@ -408,8 +518,6 @@ export const useDocumentStore = create<DocumentStoreState>(
 
       const clone = cloneWithNewIds(node)
       clone.name = (clone.name ?? clone.type) + ' copy'
-      if (clone.x !== undefined) clone.x += 10
-      if (clone.y !== undefined) clone.y += 10
 
       const parent = findParentInTree(state.document.children, id)
       const parentId = parent ? parent.id : null
@@ -417,6 +525,13 @@ export const useDocumentStore = create<DocumentStoreState>(
         ? ('children' in parent ? parent.children ?? [] : [])
         : state.document.children
       const idx = siblings.findIndex((n) => n.id === id)
+
+      const bounds = getNodeBounds(node, state.document.children)
+      clone.x = findClearX(
+        bounds.x, bounds.w, bounds.y, bounds.h,
+        siblings, id, state.document.children,
+      )
+      clone.y = bounds.y
 
       useHistoryStore.getState().pushState(state.document)
       set((s) => ({
@@ -595,6 +710,113 @@ export const useDocumentStore = create<DocumentStoreState>(
     getFlatNodes: () => flattenNodes(get().document.children),
     isDescendantOf: (nodeId, ancestorId) =>
       isDescendantOf(get().document.children, nodeId, ancestorId),
+
+    // --- Component management ---
+
+    makeReusable: (nodeId) => {
+      const state = get()
+      const node = findNodeInTree(state.document.children, nodeId)
+      if (!node) return
+      // Only container types (frame, group, rectangle) can be made reusable
+      if (node.type !== 'frame' && node.type !== 'group' && node.type !== 'rectangle') return
+      if ('reusable' in node && node.reusable) return
+      useHistoryStore.getState().pushState(state.document)
+      set((s) => ({
+        document: {
+          ...s.document,
+          children: updateNodeInTree(s.document.children, nodeId, {
+            reusable: true,
+          } as Partial<PenNode>),
+        },
+        isDirty: true,
+      }))
+    },
+
+    detachComponent: (nodeId) => {
+      const state = get()
+      const node = findNodeInTree(state.document.children, nodeId)
+      if (!node) return
+
+      // Case 1: Detach a reusable component (remove reusable flag)
+      if ('reusable' in node && node.reusable) {
+        useHistoryStore.getState().pushState(state.document)
+        set((s) => ({
+          document: {
+            ...s.document,
+            children: updateNodeInTree(s.document.children, nodeId, {
+              reusable: undefined,
+            } as Partial<PenNode>),
+          },
+          isDirty: true,
+        }))
+        return nodeId
+      }
+
+      // Case 2: Detach an instance (RefNode → independent node tree)
+      if (node.type === 'ref') {
+        const component = findNodeInTree(state.document.children, node.ref)
+        if (!component) return
+
+        useHistoryStore.getState().pushState(state.document)
+
+        // Apply overrides to a copy of the component before cloning IDs
+        const source = structuredClone(component)
+        // Apply top-level visual overrides (fill, stroke, etc.)
+        const topOverrides = node.descendants?.[node.ref]
+        if (topOverrides) {
+          Object.assign(source, topOverrides)
+        }
+        // Apply child-level overrides
+        if (node.descendants && 'children' in source && source.children) {
+          source.children = source.children.map((child: PenNode) => {
+            const override = node.descendants?.[child.id]
+            return override ? ({ ...child, ...override } as PenNode) : child
+          })
+        }
+
+        // Clone with new IDs
+        const cloneWithNewIds = (n: PenNode): PenNode => {
+          const cloned = { ...n, id: nanoid() } as PenNode
+          if ('children' in cloned && cloned.children) {
+            cloned.children = cloned.children.map(cloneWithNewIds)
+          }
+          return cloned
+        }
+        const detached = cloneWithNewIds(source)
+        // Apply all direct instance properties (position, size, meta)
+        const detachedRecord = detached as unknown as Record<string, unknown>
+        for (const [key, val] of Object.entries(node)) {
+          if (key === 'type' || key === 'ref' || key === 'descendants' || key === 'children' || key === 'id') continue
+          if (val !== undefined) {
+            detachedRecord[key] = val
+          }
+        }
+        if (!detached.name) detached.name = source.name
+        delete detachedRecord.reusable
+
+        // Replace the RefNode with the detached tree
+        const parent = findParentInTree(state.document.children, nodeId)
+        const parentId = parent ? parent.id : null
+        const siblings = parent
+          ? ('children' in parent ? parent.children ?? [] : [])
+          : state.document.children
+        const idx = siblings.findIndex((n) => n.id === nodeId)
+
+        let newChildren = removeNodeFromTree(state.document.children, nodeId)
+        newChildren = insertNodeInTree(
+          newChildren,
+          parentId,
+          detached,
+          idx >= 0 ? idx : undefined,
+        )
+
+        set({
+          document: { ...state.document, children: newChildren },
+          isDirty: true,
+        })
+        return detached.id
+      }
+    },
 
     // --- Variable management ---
 

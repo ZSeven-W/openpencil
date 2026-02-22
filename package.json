@@ -1,16 +1,30 @@
 {
     "name": "openpencil",
+    "version": "0.0.1",
+    "description": "Open-source vector design tool with Design-as-Code philosophy",
+    "author": "ZSeven-W",
     "private": true,
     "type": "module",
+    "main": "electron-dist/main.cjs",
+    "bin": {
+        "openpencil-mcp": "dist/mcp-server.cjs"
+    },
     "scripts": {
         "dev": "bun --bun vite dev --port 3000",
         "build": "bun --bun vite build",
         "preview": "bun --bun vite preview",
-        "test": "bun --bun vitest run"
+        "test": "bun --bun vitest run --passWithNoTests",
+        "mcp:compile": "esbuild src/mcp/server.ts --bundle --platform=node --target=node20 --outfile=dist/mcp-server.cjs --format=cjs --sourcemap --alias:@=src",
+        "mcp:dev": "bun run src/mcp/server.ts",
+        "electron:dev": "bun run scripts/electron-dev.ts",
+        "electron:compile": "esbuild electron/main.ts electron/preload.ts --bundle --platform=node --target=node20 --outdir=electron-dist --external:electron --format=cjs --out-extension:.js=.cjs --sourcemap",
+        "electron:build": "BUILD_TARGET=electron bun --bun run build && bun run electron:compile && bun run mcp:compile && npx electron-builder --config electron-builder.yml"
     },
     "dependencies": {
+        "@modelcontextprotocol/sdk": "^1.12.1",
         "@anthropic-ai/claude-agent-sdk": "^0.2.47",
         "@anthropic-ai/sdk": "^0.77.0",
+        "@opencode-ai/sdk": "1.2.6",
         "@radix-ui/react-select": "^2.2.6",
         "@radix-ui/react-separator": "^1.1.8",
         "@radix-ui/react-slider": "^1.3.6",
@@ -45,6 +59,9 @@
         "@types/react": "^19.2.0",
         "@types/react-dom": "^19.2.0",
         "@vitejs/plugin-react": "^5.0.4",
+        "electron": "^35.0.0",
+        "electron-builder": "^26.0.0",
+        "esbuild": "^0.25.0",
         "jsdom": "^27.0.0",
         "typescript": "^5.7.2",
         "vite": "^7.1.7",

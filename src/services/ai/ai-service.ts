@@ -1,12 +1,43 @@
 import type { AIStreamChunk } from './ai-types'
 import type { AIModelInfo } from '@/stores/ai-store'
-
-const DEFAULT_STREAM_HARD_TIMEOUT_MS = 180_000
-const DEFAULT_STREAM_NO_TEXT_TIMEOUT_MS = 75_000
+import {
+  DEFAULT_GENERATE_TIMEOUT_MS,
+  DEFAULT_STREAM_HARD_TIMEOUT_MS,
+  DEFAULT_STREAM_NO_TEXT_TIMEOUT_MS,
+  STREAM_TIMEOUT_MIN_MS,
+} from './ai-runtime-config'
 
 interface StreamChatOptions {
   hardTimeoutMs?: number
   noTextTimeoutMs?: number
+  /**
+   * Whether thinking events should reset the no-text timeout.
+   * Default: true (backward compatible). Set to false for fast calls
+   * where thinking should NOT prevent the no-text timeout from firing.
+   */
+  thinkingResetsTimeout?: boolean
+  /**
+   * Whether keep-alive ping events reset the no-text timeout.
+   * Default: true (backward compatible). Set to false to avoid endless
+   * waiting when the server only emits pings.
+   */
+  pingResetsTimeout?: boolean
+  /**
+   * Max time to wait for the first non-empty text token.
+   * This timeout is independent from keep-alive pings/thinking chunks.
+   */
+  firstTextTimeoutMs?: number
+  /**
+   * Controls provider thinking mode.
+   * - adaptive: model decides thinking depth
+   * - disabled: disable extended thinking for faster first text
+   * - enabled: explicitly enable extended thinking
+   */
+  thinkingMode?: 'adaptive' | 'disabled' | 'enabled'
+  /** Thinking budget (used when thinkingMode === 'enabled'). */
+  thinkingBudgetTokens?: number
+  /** Model effort level (low is usually faster). */
+  effort?: 'low' | 'medium' | 'high' | 'max'
 }
 
 /**
@@ -18,14 +49,21 @@ export async function* streamChat(
   messages: Array<{ role: 'user' | 'assistant'; content: string }>,
   model?: string,
   options?: StreamChatOptions,
+  provider?: string,
 ): AsyncGenerator<AIStreamChunk> {
-  const hardTimeoutMs = Math.max(10_000, options?.hardTimeoutMs ?? DEFAULT_STREAM_HARD_TIMEOUT_MS)
-  const noTextTimeoutMs = Math.max(10_000, options?.noTextTimeoutMs ?? DEFAULT_STREAM_NO_TEXT_TIMEOUT_MS)
+  const hardTimeoutMs = Math.max(STREAM_TIMEOUT_MIN_MS, options?.hardTimeoutMs ?? DEFAULT_STREAM_HARD_TIMEOUT_MS)
+  const noTextTimeoutMs = Math.max(STREAM_TIMEOUT_MIN_MS, options?.noTextTimeoutMs ?? DEFAULT_STREAM_NO_TEXT_TIMEOUT_MS)
+  const thinkingResetsTimeout = options?.thinkingResetsTimeout ?? true
+  const pingResetsTimeout = options?.pingResetsTimeout ?? true
+  const firstTextTimeoutMs = options?.firstTextTimeoutMs
+    ? Math.max(STREAM_TIMEOUT_MIN_MS, options.firstTextTimeoutMs)
+    : null
 
   const controller = new AbortController()
-  let abortReason: 'hard_timeout' | 'no_text_timeout' | null = null
-  let hasNonEmptyText = false
+  let abortReason: 'hard_timeout' | 'no_text_timeout' | 'first_text_timeout' | null = null
   let noTextTimeout: ReturnType<typeof setTimeout> | null = null
+  let firstTextTimeout: ReturnType<typeof setTimeout> | null = null
+  let sawText = false
 
   const clearNoTextTimeout = () => {
     if (noTextTimeout) {
@@ -34,23 +72,49 @@ export async function* streamChat(
     }
   }
 
+  const clearFirstTextTimeout = () => {
+    if (firstTextTimeout) {
+      clearTimeout(firstTextTimeout)
+      firstTextTimeout = null
+    }
+  }
+
+  const resetActivityTimeout = () => {
+    clearNoTextTimeout()
+    noTextTimeout = setTimeout(() => {
+      abortReason = 'no_text_timeout'
+      controller.abort()
+    }, noTextTimeoutMs)
+  }
+
   const hardTimeout = setTimeout(() => {
     abortReason = 'hard_timeout'
     controller.abort()
   }, hardTimeoutMs)
 
-  noTextTimeout = setTimeout(() => {
-    if (!hasNonEmptyText) {
-      abortReason = 'no_text_timeout'
+  if (firstTextTimeoutMs) {
+    firstTextTimeout = setTimeout(() => {
+      if (sawText) return
+      abortReason = 'first_text_timeout'
       controller.abort()
-    }
-  }, noTextTimeoutMs)
+    }, firstTextTimeoutMs)
+  }
+
+  resetActivityTimeout()
 
   try {
     const response = await fetch('/api/ai/chat', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ system: systemPrompt, messages, model }),
+      body: JSON.stringify({
+        system: systemPrompt,
+        messages,
+        model,
+        provider,
+        thinkingMode: options?.thinkingMode,
+        thinkingBudgetTokens: options?.thinkingBudgetTokens,
+        effort: options?.effort,
+      }),
       signal: controller.signal,
     })
 
@@ -59,6 +123,7 @@ export async function* streamChat(
       yield { type: 'error', content: `Server error: ${response.status} ${errBody}` }
       clearTimeout(hardTimeout)
       clearNoTextTimeout()
+      clearFirstTextTimeout()
       return
     }
 
@@ -67,6 +132,7 @@ export async function* streamChat(
       yield { type: 'error', content: 'No response stream available' }
       clearTimeout(hardTimeout)
       clearNoTextTimeout()
+      clearFirstTextTimeout()
       return
     }
 
@@ -92,6 +158,7 @@ export async function* streamChat(
             if (chunk.type === 'done') {
               clearTimeout(hardTimeout)
               clearNoTextTimeout()
+              clearFirstTextTimeout()
               try {
                 await reader.cancel()
               } catch {
@@ -100,15 +167,11 @@ export async function* streamChat(
               return
             }
 
-            // Keep-alive pings from server — reset timeout but don't yield
+            // Keep-alive pings from server — reset activity timeout but don't yield
             if (chunk.type === 'ping') {
-              clearNoTextTimeout()
-              noTextTimeout = setTimeout(() => {
-                if (!hasNonEmptyText) {
-                  abortReason = 'no_text_timeout'
-                  controller.abort()
-                }
-              }, noTextTimeoutMs)
+              if (pingResetsTimeout) {
+                resetActivityTimeout()
+              }
               continue
             }
 
@@ -116,16 +179,21 @@ export async function* streamChat(
               continue
             }
 
-            // Any non-empty content (text or thinking) counts as activity
-            if ((chunk.type === 'text' || chunk.type === 'thinking') && chunk.content.trim().length > 0) {
-              hasNonEmptyText = true
-              clearNoTextTimeout()
+            // Any non-empty text counts as activity; thinking only resets
+            // the timeout when thinkingResetsTimeout is true (default).
+            if (chunk.type === 'text' && chunk.content.trim().length > 0) {
+              sawText = true
+              clearFirstTextTimeout()
+              resetActivityTimeout()
+            } else if (chunk.type === 'thinking' && chunk.content.trim().length > 0 && thinkingResetsTimeout) {
+              resetActivityTimeout()
             }
 
             yield chunk
             if (chunk.type === 'error') {
               clearTimeout(hardTimeout)
               clearNoTextTimeout()
+              clearFirstTextTimeout()
               try {
                 await reader.cancel()
               } catch {
@@ -149,21 +217,24 @@ export async function* streamChat(
           if (chunk.type === 'done') {
             clearTimeout(hardTimeout)
             clearNoTextTimeout()
+            clearFirstTextTimeout()
             return
           }
           if (chunk.type === 'thinking' && !chunk.content) {
             clearTimeout(hardTimeout)
             clearNoTextTimeout()
+            clearFirstTextTimeout()
             return
           }
-          if ((chunk.type === 'text' || chunk.type === 'thinking') && chunk.content.trim().length > 0) {
-            hasNonEmptyText = true
-            clearNoTextTimeout()
+          if (chunk.type === 'text' && chunk.content.trim().length > 0) {
+            sawText = true
+            clearFirstTextTimeout()
           }
+          clearTimeout(hardTimeout)
+          clearNoTextTimeout()
+          clearFirstTextTimeout()
           yield chunk
           if (chunk.type === 'error') {
-            clearTimeout(hardTimeout)
-            clearNoTextTimeout()
             return
           }
         } catch {
@@ -183,6 +254,11 @@ export async function* streamChat(
           type: 'error',
           content: 'AI request timed out. Please retry.',
         }
+      } else if (abortReason === 'first_text_timeout') {
+        yield {
+          type: 'error',
+          content: 'AI spent too long thinking without producing output. Request stopped, please retry.',
+        }
       } else {
         yield {
           type: 'error',
@@ -191,6 +267,7 @@ export async function* streamChat(
       }
       clearTimeout(hardTimeout)
       clearNoTextTimeout()
+      clearFirstTextTimeout()
       return
     }
 
@@ -200,6 +277,7 @@ export async function* streamChat(
   } finally {
     clearTimeout(hardTimeout)
     clearNoTextTimeout()
+    clearFirstTextTimeout()
   }
 }
 
@@ -207,12 +285,11 @@ export async function* streamChat(
  * Non-streaming completion for design/code generation.
  * Calls the server-side endpoint which reads ANTHROPIC_API_KEY from env.
  */
-const DEFAULT_GENERATE_TIMEOUT_MS = 180_000
-
 export async function generateCompletion(
   systemPrompt: string,
   userMessage: string,
   model?: string,
+  provider?: string,
 ): Promise<string> {
   const controller = new AbortController()
   const timeout = setTimeout(() => controller.abort(), DEFAULT_GENERATE_TIMEOUT_MS)
@@ -222,7 +299,7 @@ export async function generateCompletion(
     response = await fetch('/api/ai/generate', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ system: systemPrompt, message: userMessage, model }),
+      body: JSON.stringify({ system: systemPrompt, message: userMessage, model, provider }),
       signal: controller.signal,
     })
   } catch (error) {

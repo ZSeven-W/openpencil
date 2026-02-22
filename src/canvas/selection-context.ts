@@ -38,6 +38,20 @@ export function resolveTargetAtDepth(nodeId: string): string | null {
   // Direct match
   if (selectableIds.has(nodeId)) return nodeId
 
+  // Handle virtual instance child IDs (refId__childId)
+  if (nodeId.includes('__')) {
+    const refId = nodeId.substring(0, nodeId.indexOf('__'))
+    if (selectableIds.has(refId)) return refId
+    // Walk up from the RefNode
+    let cur: string | undefined = refId
+    while (cur) {
+      const parent = useDocumentStore.getState().getParentOf(cur)
+      if (!parent) break
+      if (selectableIds.has(parent.id)) return parent.id
+      cur = parent.id
+    }
+  }
+
   // Walk up parent chain
   let currentId: string | undefined = nodeId
   while (currentId) {

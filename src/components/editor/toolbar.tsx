@@ -6,7 +6,8 @@ import {
   Hand,
   Undo2,
   Redo2,
-  SlidersHorizontal,
+  Braces,
+  LayoutGrid,
 } from 'lucide-react'
 import ToolButton from './tool-button'
 import ShapeToolDropdown from './shape-tool-dropdown'
@@ -14,6 +15,7 @@ import { useCanvasStore } from '@/stores/canvas-store'
 import { useDocumentStore, generateId } from '@/stores/document-store'
 import { parseSvgToNodes } from '@/utils/svg-parser'
 import { useHistoryStore } from '@/stores/history-store'
+import { useUIKitStore } from '@/stores/uikit-store'
 import { Button } from '@/components/ui/button'
 import { Separator } from '@/components/ui/separator'
 import {
@@ -28,6 +30,8 @@ export default function Toolbar() {
   const canRedo = useHistoryStore((s) => s.redoStack.length > 0)
   const variablesPanelOpen = useCanvasStore((s) => s.variablesPanelOpen)
   const toggleVariablesPanel = useCanvasStore((s) => s.toggleVariablesPanel)
+  const browserOpen = useUIKitStore((s) => s.browserOpen)
+  const toggleBrowser = useUIKitStore((s) => s.toggleBrowser)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [iconPickerOpen, setIconPickerOpen] = useState(false)
 
@@ -245,13 +249,38 @@ export default function Toolbar() {
                 : 'text-muted-foreground hover:bg-muted hover:text-foreground'
             }`}
           >
-            <SlidersHorizontal size={20} />
+            <Braces size={20} />
           </button>
         </TooltipTrigger>
         <TooltipContent side="right">
           Variables
           <kbd className="ml-1.5 inline-flex h-4 items-center rounded border border-border/50 bg-muted px-1 font-mono text-[10px] text-muted-foreground">
             {'\u2318\u21e7'}V
+          </kbd>
+        </TooltipContent>
+      </Tooltip>
+
+      {/* UIKit Browser */}
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <button
+            type="button"
+            onClick={toggleBrowser}
+            aria-label="UIKit Browser"
+            aria-pressed={browserOpen}
+            className={`inline-flex items-center justify-center h-8 min-w-8 px-1.5 rounded-lg transition-colors [&_svg]:size-5 [&_svg]:shrink-0 ${
+              browserOpen
+                ? 'bg-primary text-primary-foreground'
+                : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+            }`}
+          >
+            <LayoutGrid size={20} />
+          </button>
+        </TooltipTrigger>
+        <TooltipContent side="right">
+          UIKit Browser
+          <kbd className="ml-1.5 inline-flex h-4 items-center rounded border border-border/50 bg-muted px-1 font-mono text-[10px] text-muted-foreground">
+            {'\u2318\u21e7'}K
           </kbd>
         </TooltipContent>
       </Tooltip>

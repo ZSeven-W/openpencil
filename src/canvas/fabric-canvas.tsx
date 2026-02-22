@@ -5,7 +5,6 @@ import { useCanvasEvents } from './use-canvas-events'
 import { useCanvasViewport } from './use-canvas-viewport'
 import { useCanvasSelection } from './use-canvas-selection'
 import { useCanvasSync } from './use-canvas-sync'
-import { useDimensionLabel } from './use-dimension-label'
 import { useFrameLabels } from './use-frame-labels'
 import { useLayoutIndicator } from './use-layout-indicator'
 import { useCanvasHover } from './use-canvas-hover'
@@ -23,7 +22,7 @@ export default function FabricCanvas() {
   useCanvasSync()
   useCanvasHover()
   useEnteredFrameOverlay()
-  useDimensionLabel(containerRef)
+
   useFrameLabels()
   useLayoutIndicator()
 
