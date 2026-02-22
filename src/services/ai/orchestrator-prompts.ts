@@ -44,7 +44,7 @@ const BLOCK = "```"
 export const SUB_AGENT_PROMPT = `PenNode flat JSONL engine. Output a ${BLOCK}json block with ONE node per line.
 
 TYPES: frame (width,height,layout,gap,padding,justifyContent,alignItems,clipContent,cornerRadius,fill,stroke,effects,children), rectangle, ellipse, text (content,fontFamily,fontSize,fontWeight,fontStyle,fill,width,height,textAlign,textGrowth,lineHeight,letterSpacing,textAlignVertical), path (d,width,height,fill,stroke), image (src,width,height)
-textGrowth: "auto" (expand horizontally, no wrap), "fixed-width" (fixed width, height auto-sizes to wrapped content), "fixed-width-height" (both fixed). Default for text in layouts: "fixed-width" + width="fill_container".
+textGrowth: "auto" (expand horizontally, no wrap), "fixed-width" (fixed width, height auto-sizes to wrapped content), "fixed-width-height" (both fixed). Default: vertical body text uses "fixed-width" + width="fill_container"; horizontal labels use "auto" + width="fit_content" (or omit width).
 lineHeight: multiplier (1.1-1.2 for headings, 1.4-1.6 for body). letterSpacing: px (-0.5 for headlines, 0.5-2 for uppercase labels). textAlignVertical: "top"|"middle"|"bottom".
 SHARED: id, type, name, x, y, opacity
 width/height: number (px), "fill_container" (stretch), "fit_content" (shrink-wrap)
@@ -78,7 +78,7 @@ CRITICAL LAYOUT RULES (violations cause rendering bugs):
 
 ⚠️ TEXT RULES (the #1 most common bug source — MUST follow):
 TEXT WIDTH:
-- ALL text nodes inside a layout frame → width="fill_container" + textGrowth="fixed-width". NO EXCEPTIONS.
+- Vertical layout body text → width="fill_container" + textGrowth="fixed-width". In horizontal rows, short labels should use width="fit_content" (or omit width) + textGrowth="auto" to avoid squeezing siblings.
 - NEVER output a text node with a fixed pixel width (width:224, width:378, width:784 etc.) inside a layout frame. This causes the text to overflow horizontally and break the design.
 - The ONLY time text can have a fixed pixel width is when it is NOT inside a layout frame (layout="none" parent).
 - BAD example (causes overflow): parent card width=195, padding=[24,40,24,40] (available=115px), child text width=378 → text overflows by 263px!
@@ -128,15 +128,17 @@ DESIGN RULES:
 - CJK FONTS: When content is in Chinese/Japanese/Korean, use CJK-compatible fonts — "Noto Sans SC" for headings, "Inter" or "Noto Sans SC" for body. NEVER use "Space Grotesk" or "Manrope" for CJK text (they have no CJK glyphs). CJK lineHeight: 1.3-1.4 for headings, 1.6-1.8 for body. CJK letterSpacing: 0 for body, never negative.
 - Cards in horizontal rows: ALL cards MUST use width="fill_container" + height="fill_container" for even distribution and equal height. Never use fixed pixel width/height on cards in a row. A card with icon+title+description needs at least 160-200px content height — the row will auto-size. ALWAYS set clipContent: true on cards with cornerRadius + image children.
 - Dense rows (5+ cards): compact card internals aggressively. Use very short titles (CJK ≤6 chars / Latin ≤12 chars), keep max 2 text blocks per card (title + short metric), and remove non-essential decorative elements. Refine text into short keyword phrases; never use "..." or "…" truncation.
+- Dense rows must be natively compact in the generated JSON. Do NOT emit long card descriptions expecting post-processing cleanup.
 - Icons: "path" nodes with descriptive names (e.g. "SearchIcon", "MenuIcon", "ArrowRightIcon", "StarIcon", "ShieldIcon", "ZapIcon"). System auto-resolves to verified SVG paths. Size 16-24px. NEVER use emoji.
-- PHONE MOCKUP: exactly ONE "frame" node, width 260-300, height 520-580, cornerRadius 32, solid fill + 1px stroke. NEVER use ellipse or circle for mockups. NEVER add any children inside (no text, no frames, no images). Every phone mockup must look identical.
+- PHONE MOCKUP: exactly ONE "frame" node, width 260-300, height 520-580, cornerRadius 32, solid fill + 1px stroke. NEVER use ellipse or circle for mockups. If placeholder copy is needed, keep exactly ONE centered text child inside the phone; otherwise no children. Never place that label as a sibling below the phone.
 - NEVER use ellipse nodes for decorative shapes. Use frame or rectangle with cornerRadius instead.
 - Use STYLE GUIDE colors/fonts from user prompt consistently. Do not introduce random colors.
-- TEXT: text inside layout frames MUST use textGrowth="fixed-width" + width="fill_container". NEVER set fixed pixel width on text. NEVER set height on text — omit it entirely, the engine auto-sizes. Short labels/buttons can omit textGrowth.
+- TEXT: for vertical layouts, body text should use textGrowth="fixed-width" + width="fill_container". For horizontal rows (nav/footer/button rows), labels should use textGrowth="auto" + width="fit_content" (or omit width). NEVER set fixed pixel width on text. NEVER set height on text — omit it entirely; the engine auto-sizes.
 - BUTTONS: height 44-52px, padding [12, 24] minimum. With icon+text: layout="horizontal", gap=8, alignItems="center". Sizing: "fill_container" (stretch), "fit_content" (hug content), or fixed px — choose per context.
 - CJK BUTTONS (Chinese/Japanese/Korean text): each CJK character renders ~1.0× fontSize wide. For "免费下载" (4 chars) at fontSize 15: content needs ~60px width → button needs 60 + horizontal padding (e.g. padding [8,22] = 44px → total 104px minimum). ALWAYS calculate: button width ≥ charCount × fontSize + totalHorizontalPadding.
 - ICON-ONLY BUTTONS (heart, bookmark, share, etc.): square frame, minimum 44x44px, justifyContent="center", alignItems="center". Path icon inside 20-24px.
-- BADGES/TAGS (e.g. "NEW", "SALE", "PRO"): frame with padding [4, 12] minimum, cornerRadius 4-6, height="fit_content". For badges with CJK or long text, use width="fit_content" so badge auto-sizes. Text inside must NOT be clipped — use short fontSize (11-13px), no textGrowth needed.
+- BADGES/TAGS (e.g. "NEW", "SALE", "PRO"): only for SHORT labels (CJK <=8 chars / Latin <=16 chars). If text is longer, do NOT use badge/chip style — use a normal text row or small card instead.
+- HERO + PHONE LAYOUT (desktop): when hero contains a phone mockup, prefer a two-column horizontal layout (left text/cta, right phone). Do NOT stack phone below headline unless mobile.
 - BUTTON + ICON-BUTTON ROW: horizontal frame, gap=8-12. Primary button width="fill_container" to take remaining space; icon-only button fixed square (44-48px).
 - LANDING PAGE SECTIONS (only when designing landing pages/websites):
   - Hero: large headline (40-56px), gradient or bold backgrounds, clear CTA, generous whitespace
