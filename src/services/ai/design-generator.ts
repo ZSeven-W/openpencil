@@ -925,7 +925,7 @@ function applyTreeFixesRecursive(
   // --- Fix 1: Text in layout frames → Fill Width + Auto Height ---
   // Skip if parent is fit_content (hug) — fill_container child breaks hug parent layout
   const parentIsHug1 = node.width === 'fit_content'
-  if (node.layout && node.layout !== 'none') {
+  if (node.layout && node.layout !== 'none' && !isBadgeLikeFrame(node)) {
     // Compute parent content width for accurate text height estimation
     const nodeW = toSizeNumber(node.width, 0)
     const nodePad = parsePaddingValues('padding' in node ? node.padding : undefined)
@@ -1070,16 +1070,75 @@ function applyTreeFixesRecursive(
       if (t13.type === 'text' && typeof t13.content === 'string') {
         const txt13 = t13.content.trim()
         const fs13 = t13.fontSize ?? 14
-        if (txt13.length > 0 && txt13.length <= 20 && fs13 <= 16) {
+        if (txt13.length > 0 && txt13.length <= 28 && fs13 <= 18 && isBadgeLikeFrame(node)) {
+          const frameUpdates13: Record<string, unknown> = {}
+          if (!node.layout || node.layout === 'none') frameUpdates13.layout = 'horizontal'
+          if (node.alignItems !== 'center') frameUpdates13.alignItems = 'center'
+          if (!node.justifyContent) frameUpdates13.justifyContent = 'center'
+
+          const iconKids13 = children.filter((c: PenNode) =>
+            c.type === 'path' || c.type === 'ellipse' || c.type === 'rectangle',
+          )
+          const minGap13 = iconKids13.length > 0 ? 6 : 4
+          const currentGap13 = toGapNumber('gap' in node ? node.gap : undefined)
+          if (currentGap13 < minGap13) frameUpdates13.gap = minGap13
+
+          const pad13 = parsePaddingValues('padding' in node ? node.padding : undefined)
+          const minPadH13 = iconKids13.length > 0 ? 14 : 12
+          if (pad13.top < 6 || pad13.bottom < 6 || pad13.left < minPadH13 || pad13.right < minPadH13) {
+            frameUpdates13.padding = [
+              Math.max(pad13.top, 6), Math.max(pad13.right, minPadH13),
+              Math.max(pad13.bottom, 6), Math.max(pad13.left, minPadH13),
+            ] as [number, number, number, number]
+          }
+
           const h13 = toSizeNumber(node.height, 0)
-          if (h13 > 0 && h13 <= 48) {
-            const pad13 = parsePaddingValues('padding' in node ? node.padding : undefined)
-            if (pad13.top < 4 || pad13.bottom < 4 || pad13.left < 10 || pad13.right < 10) {
-              const newPad13: [number, number, number, number] = [
-                Math.max(pad13.top, 4), Math.max(pad13.right, 10),
-                Math.max(pad13.bottom, 4), Math.max(pad13.left, 10),
-              ]
-              updateNode(node.id, { padding: newPad13 } as Partial<PenNode>)
+          if (h13 > 0) {
+            const minCr13 = Math.max(6, Math.round(h13 * 0.22))
+            const maxCr13 = Math.max(minCr13, Math.min(14, Math.round(h13 * 0.4)))
+            const cr13 = toCornerRadiusNumber(node.cornerRadius, 0)
+            if (cr13 <= 0) frameUpdates13.cornerRadius = maxCr13
+            else if (cr13 > maxCr13) frameUpdates13.cornerRadius = maxCr13
+            else if (cr13 < minCr13) frameUpdates13.cornerRadius = minCr13
+          }
+
+          if (Object.keys(frameUpdates13).length > 0) {
+            updateNode(node.id, frameUpdates13 as Partial<PenNode>)
+          }
+
+          const hasCjk13 = /[\u4E00-\u9FFF\u3400-\u4DBF\u3000-\u303F\uFF00-\uFFEF]/.test(txt13)
+          const targetLh13 = hasCjk13 ? 1.25 : 1.2
+          const textUpdates13: Record<string, unknown> = {}
+          if (!t13.lineHeight || t13.lineHeight > 1.35 || t13.lineHeight < 1.05) {
+            textUpdates13.lineHeight = targetLh13
+          }
+          if (t13.textAlignVertical !== 'middle') textUpdates13.textAlignVertical = 'middle'
+          if (!t13.textGrowth || t13.textGrowth === 'fixed-width') textUpdates13.textGrowth = 'auto'
+          if (Object.keys(textUpdates13).length > 0) {
+            updateNode(t13.id, textUpdates13 as Partial<PenNode>)
+          }
+
+          const iconColor13 = extractPrimaryColor(t13.fill) ?? '#4C72DF'
+          for (const icon13 of iconKids13) {
+            if (icon13.type !== 'path') continue
+            const iconUpdates13: Record<string, unknown> = {}
+            const iw13 = toSizeNumber(icon13.width, 0)
+            const ih13 = toSizeNumber(icon13.height, 0)
+            const targetIcon13 = clamp(toSizeNumber(icon13.width, toSizeNumber(icon13.height, Math.round(fs13 * 0.95))), 10, 16)
+            if (iw13 <= 0 || iw13 > 20) iconUpdates13.width = targetIcon13
+            if (ih13 <= 0 || ih13 > 20) iconUpdates13.height = targetIcon13
+
+            const strokeW13 = toStrokeThicknessNumber(icon13.stroke, 0)
+            const hasFill13 = Array.isArray(icon13.fill) && icon13.fill.length > 0
+            if (!hasFill13 && strokeW13 <= 0) {
+              iconUpdates13.fill = [{ type: 'solid', color: iconColor13 }]
+            }
+            if (icon13.stroke && strokeW13 <= 0) {
+              iconUpdates13.stroke = { thickness: 1.8, fill: [{ type: 'solid', color: iconColor13 }] }
+            }
+
+            if (Object.keys(iconUpdates13).length > 0) {
+              updateNode(icon13.id, iconUpdates13 as Partial<PenNode>)
             }
           }
         }
@@ -1095,7 +1154,7 @@ function applyTreeFixesRecursive(
     const hasTextChild = children.some(
       (c: PenNode) => c.type === 'text' && typeof c.content === 'string' && c.content.trim().length > 0,
     )
-    if (nodeH > 0 && nodeH <= 72 && (isHorizontal || isCentered) && hasTextChild) {
+    if (nodeH > 0 && nodeH <= 72 && (isHorizontal || isCentered) && hasTextChild && !isBadgeLikeFrame(node)) {
       const pad = parsePaddingValues('padding' in node ? node.padding : undefined)
       const minV = 8
       const minH2 = 16
@@ -1315,6 +1374,7 @@ function applyTextFillContainerInLayout(parent: PenNode): void {
   // NEVER convert children to fill_container when parent is fit_content (hug width).
   // fill_container child + fit_content parent = circular dependency → layout breaks.
   const parentIsHug = parent.width === 'fit_content'
+  const badgeLikeParent = isBadgeLikeFrame(parent)
 
   // Compute parent's actual content width for accurate text height estimation
   const parentW = toSizeNumber(parent.width, 0)
@@ -1323,6 +1383,25 @@ function applyTextFillContainerInLayout(parent: PenNode): void {
 
   for (const child of parent.children) {
     if (child.type === 'text') {
+      if (badgeLikeParent) {
+        const fs = child.fontSize ?? 14
+        const hasCjk = /[\u4E00-\u9FFF\u3400-\u4DBF\u3000-\u303F\uFF00-\uFFEF]/.test(
+          typeof child.content === 'string' ? child.content : '',
+        )
+        if (!child.textGrowth || child.textGrowth === 'fixed-width') child.textGrowth = 'auto'
+        if (!child.lineHeight || child.lineHeight > 1.35 || child.lineHeight < 1.05) {
+          child.lineHeight = hasCjk ? 1.25 : 1.2
+        }
+        child.textAlignVertical = 'middle'
+        if (typeof child.height === 'number') {
+          const targetTextH = Math.round(fs * (child.lineHeight ?? 1.2) * 1.08)
+          if (child.height > targetTextH * 1.6 || child.height < targetTextH * 0.85) {
+            child.height = targetTextH
+          }
+        }
+        continue
+      }
+
       // Convert fixed-pixel text to fill_container, BUT NOT if parent is fit_content
       if (typeof child.width === 'number' && !parentIsHug) {
         child.width = 'fill_container'
@@ -1515,6 +1594,33 @@ function applyNavbarHeuristic(node: PenNode): void {
   if (!node.justifyContent) node.justifyContent = 'space_between'
 }
 
+function isBadgeLikeFrame(node: PenNode): boolean {
+  if (node.type !== 'frame') return false
+  if (!Array.isArray(node.children) || node.children.length === 0 || node.children.length > 4) return false
+
+  const h = toSizeNumber(node.height, 0)
+  if (h > 0 && h > 60) return false
+
+  const textChildren = node.children.filter(
+    (c) => c.type === 'text' && typeof c.content === 'string' && c.content.trim().length > 0,
+  )
+  if (textChildren.length !== 1) return false
+  const textNode = textChildren[0]
+  if (textNode.type !== 'text' || typeof textNode.content !== 'string') return false
+  const label = textNode.content.trim()
+  const fontSize = textNode.fontSize ?? 14
+  if (label.length > 28 || fontSize > 18) return false
+
+  const allowedChildren = node.children.every((c) =>
+    c.type === 'text' || c.type === 'path' || c.type === 'ellipse' || c.type === 'rectangle',
+  )
+  if (!allowedChildren) return false
+
+  return node.layout === 'horizontal'
+    || node.alignItems === 'center'
+    || node.justifyContent === 'center'
+}
+
 /**
  * Horizontal inline rows (icon + text, badges, tag rows) should default to
  * alignItems="center" for vertical centering. Without this, AI sometimes
@@ -1572,29 +1678,45 @@ function applyIconButtonSizing(node: PenNode): void {
  */
 function applyBadgeSizing(node: PenNode): void {
   if (node.type !== 'frame') return
+  if (!isBadgeLikeFrame(node)) return
   if (!Array.isArray(node.children)) return
-  // Badge = small frame with 1 short text child
-  const textChildren = node.children.filter(
-    (c) => c.type === 'text' && typeof c.content === 'string',
+
+  const textNode = node.children.find(
+    (c: PenNode) => c.type === 'text' && typeof c.content === 'string' && c.content.trim().length > 0,
   )
-  if (textChildren.length !== 1) return
-  const textNode = textChildren[0]
-  if (textNode.type !== 'text' || typeof textNode.content !== 'string') return
+  if (!textNode || textNode.type !== 'text' || typeof textNode.content !== 'string') return
+
   const text = textNode.content.trim()
-  // Only for short text (badges, tags) — max ~20 chars
-  if (text.length === 0 || text.length > 20) return
   const fontSize = textNode.fontSize ?? 14
-  // Only for small text (badge-sized)
-  if (fontSize > 16) return
+  const hasCjk = /[\u4E00-\u9FFF\u3400-\u4DBF\u3000-\u303F\uFF00-\uFFEF]/.test(text)
+  const textColor = extractPrimaryColor(textNode.fill) ?? '#4C72DF'
+  const iconChildren = node.children.filter((c: PenNode) =>
+    c.type === 'path' || c.type === 'ellipse' || c.type === 'rectangle',
+  )
 
-  const h = toSizeNumber(node.height, 0)
-  // Frame should be small (badge-like), not a full section
-  if (h > 48) return
+  if (!node.layout || node.layout === 'none') node.layout = 'horizontal'
+  node.alignItems = 'center'
+  if (!node.justifyContent) node.justifyContent = 'center'
 
-  // Ensure minimum padding so text isn't clipped
+  const currentGap = toGapNumber('gap' in node ? node.gap : undefined)
+  const minGap = iconChildren.length > 0 ? 6 : 4
+  if (currentGap < minGap) node.gap = minGap
+  else if (currentGap > 14) node.gap = 8
+
+  // Badge text should remain single-line and optically centered.
+  const targetLineHeight = hasCjk ? 1.25 : 1.2
+  if (!textNode.lineHeight || textNode.lineHeight < 1.05 || textNode.lineHeight > 1.35) {
+    textNode.lineHeight = targetLineHeight
+  }
+  textNode.textAlignVertical = 'middle'
+  if (!textNode.textGrowth || textNode.textGrowth === 'fixed-width') {
+    textNode.textGrowth = 'auto'
+  }
+
+  // Ensure minimum padding so text/icon never clips in capsules.
   const pad = parsePaddingValues('padding' in node ? node.padding : undefined)
-  const minV = 4
-  const minH = 10
+  const minV = 6
+  const minH = iconChildren.length > 0 ? 14 : 12
   if (pad.top < minV || pad.bottom < minV || pad.left < minH || pad.right < minH) {
     node.padding = [
       Math.max(pad.top, minV),
@@ -1604,19 +1726,66 @@ function applyBadgeSizing(node: PenNode): void {
     ]
   }
 
-  // Ensure text has proper sizing — don't clip
+  // Ensure text has proper sizing — don't clip.
   const estimatedW = estimateSingleLineTextWidth(text, fontSize)
   const frameW = toSizeNumber(node.width, 0)
   const newPad = parsePaddingValues(node.padding)
-  const minFrameW = Math.round(estimatedW + newPad.left + newPad.right + 4)
+  const minFrameW = Math.round(estimatedW + newPad.left + newPad.right + 8)
   if (typeof node.width === 'number' && frameW > 0 && frameW < minFrameW) {
     node.width = minFrameW
   }
 
-  // Ensure minimum height for badge
-  const minFrameH = Math.round(fontSize * 1.4 + newPad.top + newPad.bottom)
+  // Keep badge height compact and stable.
+  const h = toSizeNumber(node.height, 0)
+  const minFrameH = Math.round(fontSize * (textNode.lineHeight ?? targetLineHeight) + newPad.top + newPad.bottom)
   if (typeof node.height === 'number' && h > 0 && h < minFrameH) {
     node.height = minFrameH
+  }
+
+  // Avoid over-rounded pill corners on small badges.
+  const effectiveH = toSizeNumber(node.height, h > 0 ? h : minFrameH)
+  if (effectiveH > 0) {
+    const minCr = Math.max(6, Math.round(effectiveH * 0.22))
+    const maxCr = Math.max(minCr, Math.min(14, Math.round(effectiveH * 0.4)))
+    const currentCr = toCornerRadiusNumber(node.cornerRadius, 0)
+    if (currentCr <= 0) node.cornerRadius = maxCr
+    else if (currentCr > maxCr) node.cornerRadius = maxCr
+    else if (currentCr < minCr) node.cornerRadius = minCr
+  }
+
+  // Normalize icon children so they always render and stay visually balanced.
+  for (const child of iconChildren) {
+    if (child.type === 'path') {
+      const target = clamp(
+        toSizeNumber(child.width, toSizeNumber(child.height, Math.round(fontSize * 0.95))),
+        10,
+        16,
+      )
+      const cw = toSizeNumber(child.width, 0)
+      const ch = toSizeNumber(child.height, 0)
+      if (cw <= 0 || cw > 20) child.width = target
+      if (ch <= 0 || ch > 20) child.height = target
+
+      const strokeWidth = toStrokeThicknessNumber(child.stroke, 0)
+      const hasFill = Array.isArray(child.fill) && child.fill.length > 0
+      if (!hasFill && strokeWidth <= 0) {
+        child.fill = [{ type: 'solid', color: textColor }]
+      }
+      if (child.stroke && strokeWidth <= 0) {
+        child.stroke = { thickness: 1.8, fill: [{ type: 'solid', color: textColor }] }
+      } else if (child.stroke && !extractPrimaryColor(child.stroke.fill)) {
+        child.stroke.fill = [{ type: 'solid', color: textColor }]
+      }
+    } else {
+      const cw = toSizeNumber('width' in child ? child.width : undefined, 0)
+      const ch = toSizeNumber('height' in child ? child.height : undefined, 0)
+      const dotSize = clamp(Math.round(fontSize * 0.72), 8, 12)
+      if ('width' in child && (cw <= 0 || cw > 16)) child.width = dotSize
+      if ('height' in child && (ch <= 0 || ch > 16)) child.height = dotSize
+      if (!('fill' in child) || !Array.isArray(child.fill) || child.fill.length === 0) {
+        ;(child as unknown as { fill?: Array<{ type: 'solid'; color: string }> }).fill = [{ type: 'solid', color: textColor }]
+      }
+    }
   }
 }
 
@@ -1628,6 +1797,8 @@ function applyBadgeSizing(node: PenNode): void {
 function applyButtonSpacingHeuristic(node: PenNode): void {
   if (node.type !== 'frame') return
   if (!Array.isArray(node.children) || node.children.length === 0) return
+  // Badge chips use tighter spacing; button defaults make them look oversized.
+  if (isBadgeLikeFrame(node)) return
   const h = toSizeNumber(node.height, 0)
   // Only target small frames that look like buttons/badges (height ≤ 72px)
   if (h <= 0 || h > 72) return
@@ -2108,6 +2279,10 @@ const ICON_PATH_MAP: Record<string, { d: string; style: 'stroke' | 'fill' }> = {
   helpCircle:     { d: 'M12 22a10 10 0 100-20 10 10 0 000 20zM9.09 9a3 3 0 015.83 1c0 2-3 3-3 3M12 17h.01', style: 'stroke' },
   apple:          { d: 'M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.81-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.8-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z', style: 'fill' },
   googleplay:     { d: 'M3 20.5V3.5c0-.85.54-1.23 1.09-.81L20 12 4.09 21.31c-.55.42-1.09.04-1.09-.81zM14.5 12L4 3.5M14.5 12L4 20.5M14.5 12l6-3.5M14.5 12l6 3.5', style: 'stroke' },
+  dot:            { d: 'M12 12m-3 0a3 3 0 1 0 6 0a3 3 0 1 0 -6 0', style: 'fill' },
+  bullet:         { d: 'M12 12m-3 0a3 3 0 1 0 6 0a3 3 0 1 0 -6 0', style: 'fill' },
+  point:          { d: 'M12 12m-3 0a3 3 0 1 0 6 0a3 3 0 1 0 -6 0', style: 'fill' },
+  circlefill:     { d: 'M12 12m-4 0a4 4 0 1 0 8 0a4 4 0 1 0 -8 0', style: 'fill' },
 }
 
 /**
@@ -2129,12 +2304,16 @@ function applyIconPathResolution(node: PenNode): void {
 
   // Apply correct styling (stroke-based vs fill-based)
   if (match.style === 'stroke') {
-    // Ensure stroke is set for line icons
-    if (!node.stroke) {
-      const existingColor = extractPrimaryColor('fill' in node ? node.fill : undefined)
+    const existingColor = extractPrimaryColor('fill' in node ? node.fill : undefined)
+      ?? extractPrimaryColor(node.stroke?.fill)
+      ?? '#64748B'
+    const strokeWidth = toStrokeThicknessNumber(node.stroke, 0)
+    const strokeColor = extractPrimaryColor(node.stroke?.fill)
+    // Ensure stroke is renderable for line icons
+    if (!node.stroke || strokeWidth <= 0 || !strokeColor) {
       node.stroke = {
-        thickness: 2,
-        fill: [{ type: 'solid', color: existingColor ?? '#64748B' }],
+        thickness: strokeWidth > 0 ? strokeWidth : 2,
+        fill: [{ type: 'solid', color: existingColor }],
       }
     }
     // Line icons should NOT have opaque fill (transparent to show stroke only)
@@ -2145,6 +2324,16 @@ function applyIconPathResolution(node: PenNode): void {
         node.stroke.fill = [{ type: 'solid', color: fillColor }]
       }
       node.fill = []
+    }
+  } else {
+    // Fill icons must always keep a visible fill.
+    const fillColor = extractPrimaryColor('fill' in node ? node.fill : undefined)
+      ?? extractPrimaryColor(node.stroke?.fill)
+      ?? '#64748B'
+    node.fill = [{ type: 'solid', color: fillColor }]
+    // Remove non-renderable stroke definitions to avoid transparent-only paths.
+    if (node.stroke && toStrokeThicknessNumber(node.stroke, 0) <= 0) {
+      node.stroke = undefined
     }
   }
 }
@@ -2484,6 +2673,17 @@ function toGapNumber(value: number | string | undefined): number {
     if (Number.isFinite(parsed)) return parsed
   }
   return 0
+}
+
+function toStrokeThicknessNumber(
+  stroke: { thickness?: number | [number, number, number, number] } | undefined,
+  fallback: number,
+): number {
+  if (!stroke) return fallback
+  const t = stroke.thickness
+  if (typeof t === 'number' && Number.isFinite(t)) return t
+  if (Array.isArray(t) && t.length > 0 && Number.isFinite(t[0])) return t[0]
+  return fallback
 }
 
 function toCornerRadiusNumber(

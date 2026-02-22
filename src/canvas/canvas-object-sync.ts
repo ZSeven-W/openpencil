@@ -1,3 +1,4 @@
+import * as fabric from 'fabric'
 import type { PenNode } from '@/types/pen'
 import type { FabricObjectWithPenId } from './canvas-object-factory'
 import {
@@ -28,6 +29,12 @@ function cornerRadiusValue(
   if (cr === undefined) return 0
   if (typeof cr === 'number') return cr
   return cr[0]
+}
+
+function shouldSplitByGrapheme(text: string): boolean {
+  const hasCjk = /[\u3400-\u4DBF\u4E00-\u9FFF\u3040-\u30FF\uAC00-\uD7AF]/.test(text)
+  const hasLongCjkRun = /[\u3400-\u4DBF\u4E00-\u9FFF\u3040-\u30FF\uAC00-\uD7AF]{4,}/.test(text)
+  return hasCjk && hasLongCjkRun
 }
 
 export function syncFabricObject(
@@ -116,6 +123,7 @@ export function syncFabricObject(
           : node.content.map((s) => s.text).join('')
       const w = sizeToNumber(node.width, 0)
       const fontSize = node.fontSize ?? 16
+      const splitByGrapheme = shouldSplitByGrapheme(content)
       obj.set({
         text: content,
         fontFamily: node.fontFamily ?? 'Inter, sans-serif',
@@ -129,6 +137,9 @@ export function syncFabricObject(
           ? (node.letterSpacing / fontSize) * 1000
           : 0,
       })
+      if (obj instanceof fabric.Textbox) {
+        obj.set({ splitByGrapheme } as Partial<fabric.Textbox>)
+      }
       if (w > 0) obj.set({ width: w })
       break
     }
@@ -137,15 +148,17 @@ export function syncFabricObject(
       const w = sizeToNumber('width' in node ? node.width : undefined, 100)
       const h = sizeToNumber('height' in node ? node.height : undefined, 100)
       const hasExplicitFill = node.type === 'path' && 'fill' in node && node.fill && node.fill.length > 0
-      const hasStroke = 'stroke' in node && !!node.stroke
+      const strokeColor = resolveStrokeColor('stroke' in node ? node.stroke : undefined)
+      const strokeWidth = resolveStrokeWidth('stroke' in node ? node.stroke : undefined)
+      const hasVisibleStroke = node.type === 'path' && strokeWidth > 0 && !!strokeColor
       // For path nodes: stroke-only icons must not get a default fill
-      const fill = node.type === 'path' && !hasExplicitFill && hasStroke
+      const fill = node.type === 'path' && !hasExplicitFill && hasVisibleStroke
         ? 'transparent'
         : resolveFill('fill' in node ? node.fill : undefined, w, h)
       obj.set({
         fill,
-        stroke: resolveStrokeColor('stroke' in node ? node.stroke : undefined),
-        strokeWidth: resolveStrokeWidth('stroke' in node ? node.stroke : undefined),
+        stroke: hasVisibleStroke ? strokeColor : undefined,
+        strokeWidth: hasVisibleStroke ? strokeWidth : 0,
         ...(node.type === 'path' ? { strokeUniform: true, fillRule: 'evenodd' } : {}),
       })
       // Use cached native dimensions (from path/points data) to compute correct
