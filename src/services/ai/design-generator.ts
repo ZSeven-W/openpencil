@@ -1092,22 +1092,22 @@ function applyTreeFixesRecursive(
             ] as [number, number, number, number]
           }
 
+          const hasCjk13 = /[\u4E00-\u9FFF\u3400-\u4DBF\u3000-\u303F\uFF00-\uFFEF]/.test(txt13)
+          const targetLh13 = hasCjk13 ? 1.25 : 1.2
+          const targetPad13 = parsePaddingValues(
+            (frameUpdates13.padding as number | [number, number] | [number, number, number, number] | string | undefined)
+              ?? ('padding' in node ? node.padding : undefined),
+          )
           const h13 = toSizeNumber(node.height, 0)
-          if (h13 > 0) {
-            const minCr13 = Math.max(6, Math.round(h13 * 0.22))
-            const maxCr13 = Math.max(minCr13, Math.min(14, Math.round(h13 * 0.4)))
-            const cr13 = toCornerRadiusNumber(node.cornerRadius, 0)
-            if (cr13 <= 0) frameUpdates13.cornerRadius = maxCr13
-            else if (cr13 > maxCr13) frameUpdates13.cornerRadius = maxCr13
-            else if (cr13 < minCr13) frameUpdates13.cornerRadius = minCr13
-          }
+          const effectiveH13 = h13 > 0
+            ? h13
+            : Math.round(fs13 * targetLh13 + targetPad13.top + targetPad13.bottom)
+          frameUpdates13.cornerRadius = Math.max(1, Math.round(effectiveH13 / 2))
 
           if (Object.keys(frameUpdates13).length > 0) {
             updateNode(node.id, frameUpdates13 as Partial<PenNode>)
           }
 
-          const hasCjk13 = /[\u4E00-\u9FFF\u3400-\u4DBF\u3000-\u303F\uFF00-\uFFEF]/.test(txt13)
-          const targetLh13 = hasCjk13 ? 1.25 : 1.2
           const textUpdates13: Record<string, unknown> = {}
           if (!t13.lineHeight || t13.lineHeight > 1.35 || t13.lineHeight < 1.05) {
             textUpdates13.lineHeight = targetLh13
@@ -1596,10 +1596,15 @@ function applyNavbarHeuristic(node: PenNode): void {
 
 function isBadgeLikeFrame(node: PenNode): boolean {
   if (node.type !== 'frame') return false
-  if (!Array.isArray(node.children) || node.children.length === 0 || node.children.length > 4) return false
+  if (!Array.isArray(node.children) || node.children.length === 0 || node.children.length > 3) return false
+
+  const marker = `${node.name ?? ''} ${node.id}`.toLowerCase()
+  const explicitBadgeMarker = /(badge|tag|chip|pill|label|徽章|标签|状态|模式)/.test(marker)
+  const explicitButtonMarker = /(^|[\s_-])(button|btn|cta|submit|download|install|signup|sign[-_\s]*in|login|register)([\s_-]|$)|按钮|下载|立即|开始|购买|了解|进入|登录|注册|提交|继续|安装|试用/.test(marker)
+  if (explicitButtonMarker && !explicitBadgeMarker) return false
 
   const h = toSizeNumber(node.height, 0)
-  if (h > 0 && h > 60) return false
+  if (h > 0 && h > 40) return false
 
   const textChildren = node.children.filter(
     (c) => c.type === 'text' && typeof c.content === 'string' && c.content.trim().length > 0,
@@ -1608,13 +1613,28 @@ function isBadgeLikeFrame(node: PenNode): boolean {
   const textNode = textChildren[0]
   if (textNode.type !== 'text' || typeof textNode.content !== 'string') return false
   const label = textNode.content.trim()
+  const charCount = [...label].length
+  const hasCjk = /[\u3400-\u4DBF\u4E00-\u9FFF\u3040-\u30FF\uAC00-\uD7AF]/.test(label)
   const fontSize = textNode.fontSize ?? 14
-  if (label.length > 28 || fontSize > 18) return false
+  const maxLabelChars = hasCjk ? 10 : 18
+  if (charCount > maxLabelChars || fontSize > 16) return false
 
   const allowedChildren = node.children.every((c) =>
     c.type === 'text' || c.type === 'path' || c.type === 'ellipse' || c.type === 'rectangle',
   )
   if (!allowedChildren) return false
+
+  const iconCount = node.children.filter((c) =>
+    c.type === 'path' || c.type === 'ellipse' || c.type === 'rectangle',
+  ).length
+  if (iconCount > 1) return false
+
+  const w = toSizeNumber(node.width, 0)
+  if (w > 0 && w > 260) return false
+
+  const pad = parsePaddingValues('padding' in node ? node.padding : undefined)
+  const inferredH = h > 0 ? h : Math.round(fontSize * 1.2 + pad.top + pad.bottom)
+  if (inferredH > 40) return false
 
   return node.layout === 'horizontal'
     || node.alignItems === 'center'
@@ -1742,15 +1762,10 @@ function applyBadgeSizing(node: PenNode): void {
     node.height = minFrameH
   }
 
-  // Avoid over-rounded pill corners on small badges.
+  // Capsule radius: half of badge height.
   const effectiveH = toSizeNumber(node.height, h > 0 ? h : minFrameH)
   if (effectiveH > 0) {
-    const minCr = Math.max(6, Math.round(effectiveH * 0.22))
-    const maxCr = Math.max(minCr, Math.min(14, Math.round(effectiveH * 0.4)))
-    const currentCr = toCornerRadiusNumber(node.cornerRadius, 0)
-    if (currentCr <= 0) node.cornerRadius = maxCr
-    else if (currentCr > maxCr) node.cornerRadius = maxCr
-    else if (currentCr < minCr) node.cornerRadius = minCr
+    node.cornerRadius = Math.max(1, Math.round(effectiveH / 2))
   }
 
   // Normalize icon children so they always render and stay visually balanced.

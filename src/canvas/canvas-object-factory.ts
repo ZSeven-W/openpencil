@@ -286,7 +286,7 @@ export function createFabricObject(
       const safePathData =
         typeof node.d === 'string' && node.d.trim().length > 0
           ? node.d
-          : 'M12 12m-3 0a3 3 0 1 0 6 0a3 3 0 1 0 -6 0'
+          : 'M0 0 L0 0'
       const hasExplicitFill = node.fill && node.fill.length > 0
       const strokeColor = resolveStrokeColor(node.stroke)
       const strokeWidth = resolveStrokeWidth(node.stroke)
@@ -306,6 +306,7 @@ export function createFabricObject(
         strokeUniform: true,
         fillRule: 'evenodd', // Compound paths: inner sub-paths become transparent cutouts
       }) as FabricObjectWithPenId
+      ;(obj as any).__sourceD = safePathData
       // Cache native dimensions before scaling (Path width/height is derived from d)
       ;(obj as any).__nativeWidth = obj.width
       ;(obj as any).__nativeHeight = obj.height
