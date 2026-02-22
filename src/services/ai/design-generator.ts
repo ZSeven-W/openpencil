@@ -316,8 +316,9 @@ export function insertStreamingNode(
 
   applyGenerationHeuristics(node)
 
-  // Skip ALL children being streamed into a phone placeholder — it must stay empty.
-  // Also skip if the parent node doesn't exist on canvas (was itself blocked as a phone child).
+  // Skip AI-streamed children under phone placeholders. Placeholder internals are
+  // normalized post-streaming (at most one centered label text is allowed).
+  // Also skip if the parent node doesn't exist on canvas (was itself blocked).
   if (resolvedParent !== null && !parentNode) {
     return
   }
@@ -944,6 +945,58 @@ function applyTreeFixesRecursive(
       const refreshed2 = getNodeById(node.id)
       if (refreshed2 && refreshed2.type === 'frame' && Array.isArray(refreshed2.children)) {
         children = refreshed2.children
+      }
+    }
+  }
+
+  // --- Fix 8.5: Keep screenshot placeholder label inside phone center ---
+  {
+    const phoneFrames = children.filter(
+      (c: PenNode): c is FrameNode => c.type === 'frame' && (isPhonePlaceholderFrame(c) || isPhoneShaped(c)),
+    )
+    if (phoneFrames.length > 0) {
+      const labelSiblings = children.filter((c: PenNode) => isPhonePlaceholderLabelNode(c))
+      if (labelSiblings.length > 0) {
+        const labelByPhone = new Map<string, PenNode>()
+        for (const label of labelSiblings) {
+          const phone = pickClosestPhonePlaceholderFrame(label, phoneFrames)
+          if (!phone) continue
+          if (!labelByPhone.has(phone.id)) {
+            labelByPhone.set(phone.id, label)
+          }
+        }
+
+        for (const [phoneId, labelNode] of labelByPhone.entries()) {
+          const refreshedPhone = getNodeById(phoneId)
+          if (!refreshedPhone || refreshedPhone.type !== 'frame') continue
+          const content = getTextContentForNode(labelNode).trim()
+          if (!content) continue
+          const existingText = Array.isArray(refreshedPhone.children)
+            ? refreshedPhone.children.find((child) => child.type === 'text')
+            : undefined
+          const labelId = existingText?.id
+            ?? buildPhonePlaceholderLabelId(phoneId, getNodeById)
+          const centeredLabel = createCenteredPhonePlaceholderLabelNode(
+            refreshedPhone,
+            content,
+            existingText ?? labelNode,
+            labelId,
+          )
+          updateNode(phoneId, {
+            layout: 'none',
+            children: [centeredLabel],
+          } as Partial<PenNode>)
+        }
+
+        for (const label of labelSiblings) {
+          removeNode(label.id)
+        }
+
+        const refreshed = getNodeById(node.id)
+        if (refreshed && refreshed.type === 'frame' && Array.isArray(refreshed.children) && refreshed.children.length > 0) {
+          node = refreshed
+          children = refreshed.children
+        }
       }
     }
   }
@@ -2018,6 +2071,126 @@ function isPhonePlaceholderFrame(node: PenNode): boolean {
   return h / Math.max(1, w) > 1.2 && h >= 260
 }
 
+function isPhonePlaceholderLabelContent(text: string): boolean {
+  const normalized = text.trim().toLowerCase()
+  if (!normalized) return false
+  return /(app\s*截图|截图(占位|预览)|应用截图|屏幕预览|screenshot\s*(placeholder|preview)|screen\s*(placeholder|preview)|app\s*(screen|screenshot)\s*(placeholder|preview)?|mockup\s*(placeholder|preview)?)/.test(normalized)
+}
+
+function isPhonePlaceholderLabelNode(node: PenNode): boolean {
+  if (node.type !== 'text') return false
+  return isPhonePlaceholderLabelContent(getTextContentForNode(node))
+}
+
+function resolveNodeCenter(node: PenNode): { x: number; y: number } {
+  const x = typeof node.x === 'number' ? node.x : 0
+  const y = typeof node.y === 'number' ? node.y : 0
+  const w = toSizeNumber('width' in node ? node.width : undefined, 0)
+  const h = toSizeNumber('height' in node ? node.height : undefined, 0)
+  return { x: x + w / 2, y: y + h / 2 }
+}
+
+function pickClosestPhonePlaceholderFrame(
+  node: PenNode,
+  phoneFrames: FrameNode[],
+): FrameNode | null {
+  if (phoneFrames.length === 0) return null
+  if (phoneFrames.length === 1) return phoneFrames[0]
+  const center = resolveNodeCenter(node)
+  let best: FrameNode | null = null
+  let bestScore = Number.POSITIVE_INFINITY
+  for (const phone of phoneFrames) {
+    const pc = resolveNodeCenter(phone)
+    const score = Math.abs(center.x - pc.x) + Math.abs(center.y - pc.y)
+    if (score < bestScore) {
+      bestScore = score
+      best = phone
+    }
+  }
+  return best
+}
+
+function buildPhonePlaceholderLabelId(
+  phoneId: string,
+  getNodeById: (id: string) => PenNode | undefined,
+): string {
+  const base = `${phoneId}-placeholder-label`
+  if (!getNodeById(base)) return base
+  let idx = 2
+  while (idx < 1000) {
+    const candidate = `${base}-${idx}`
+    if (!getNodeById(candidate)) return candidate
+    idx += 1
+  }
+  return `${base}-${Date.now()}`
+}
+
+function createCenteredPhonePlaceholderLabelNode(
+  phone: FrameNode,
+  content: string,
+  source?: PenNode,
+  forcedId?: string,
+): PenNode {
+  const text = content.trim()
+  const phoneW = toSizeNumber(phone.width, 260)
+  const phoneH = toSizeNumber(phone.height, 520)
+  const sourceText = source?.type === 'text' ? source : undefined
+  const hasCjk = /[\u4E00-\u9FFF\u3400-\u4DBF\u3000-\u303F\uFF00-\uFFEF]/.test(text)
+  const sourceFs = sourceText?.fontSize
+  const fontSize = clamp(
+    Math.round(typeof sourceFs === 'number' ? sourceFs : Math.max(18, phoneW * 0.075)),
+    16,
+    36,
+  )
+  const lineHeight = sourceText?.lineHeight
+    ? clamp(sourceText.lineHeight, 1.2, 1.6)
+    : (hasCjk ? 1.32 : 1.26)
+  const width = Math.max(120, Math.round(Math.min(phoneW - 40, Math.max(160, phoneW * 0.76))))
+  const height = Math.max(
+    Math.round(fontSize * lineHeight),
+    estimateAutoHeight(text, fontSize, lineHeight, width),
+  )
+  const x = Math.round((phoneW - width) / 2)
+  const y = Math.round((phoneH - height) / 2)
+  const colors = getPlaceholderColors(phone.fill)
+
+  return {
+    id: forcedId ?? `${phone.id}-placeholder-label`,
+    type: 'text',
+    name: 'Phone Placeholder Label',
+    x,
+    y,
+    width,
+    height,
+    content: text,
+    fontFamily: sourceText?.fontFamily ?? (hasCjk ? 'Noto Sans SC' : 'Inter'),
+    fontSize,
+    fontWeight: sourceText?.fontWeight ?? 500,
+    lineHeight,
+    textAlign: 'center',
+    textAlignVertical: 'middle',
+    textGrowth: 'fixed-width',
+    fill: sourceText?.fill ?? [{ type: 'solid', color: colors.textColor }],
+  }
+}
+
+function getNormalizedPhonePlaceholderChildren(node: FrameNode): PenNode[] | null {
+  if (!Array.isArray(node.children) || node.children.length === 0) return null
+  const textChildren = node.children.filter((child) => child.type === 'text')
+  if (textChildren.length === 0) return []
+  const primary = textChildren.find((child) => isPhonePlaceholderLabelNode(child)) ?? textChildren[0]
+  const content = getTextContentForNode(primary).trim()
+  if (!content) return []
+  return [
+    createCenteredPhonePlaceholderLabelNode(
+      node,
+      content,
+      primary,
+      primary.id,
+    ),
+  ]
+}
+
 function resolvePhonePlaceholderSize(node: PenNode): { width: number; height: number } | null {
   if (node.type !== 'frame') return null
   if (!isPhonePlaceholderFrame(node) && !isPhoneShaped(node)) return null
@@ -2066,8 +2239,9 @@ function getPhonePlaceholderNormalizationUpdates(node: PenNode): Record<string, 
     updates.height = normalizedSize.height
   }
 
-  if (Array.isArray(node.children) && node.children.length > 0) {
-    updates.children = []
+  const normalizedChildren = getNormalizedPhonePlaceholderChildren(node)
+  if (normalizedChildren) {
+    updates.children = normalizedChildren
   }
 
   return Object.keys(updates).length > 0 ? updates : null
@@ -2135,8 +2309,13 @@ function applyScreenshotFramePlaceholderHeuristic(node: PenNode): void {
   }
   node.effects = [{ type: 'shadow', offsetX: 0, offsetY: 4, blur: 24, spread: 0, color: 'rgba(0,0,0,0.12)' }]
 
-  // Remove all children — clean phone shape only, no text labels
-  setNodeChildren(node, [])
+  // Keep at most one centered label text node inside phone placeholders.
+  const normalizedChildren = getNormalizedPhonePlaceholderChildren(node)
+  if (normalizedChildren) {
+    setNodeChildren(node, normalizedChildren)
+  } else {
+    setNodeChildren(node, [])
+  }
 }
 
 function isExplicitPlaceholderMarker(text: string): boolean {
