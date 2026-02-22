@@ -46,6 +46,9 @@ jobs:
       - name: Compile electron
         run: bun run electron:compile
 
+      - name: Compile MCP server
+        run: bun run mcp:compile
+
       - name: Build Electron app
         run: npx electron-builder --config electron-builder.yml --${{ matrix.platform }}
         env:
