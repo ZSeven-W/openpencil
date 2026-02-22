@@ -115,6 +115,13 @@ ${BLOCK}json
 {"_parent":"content","id":"phone","type":"frame","name":"Phone Mockup","width":280,"height":560,"cornerRadius":32,"fill":[{"type":"solid","color":"#141D33"}],"stroke":{"thickness":1,"fill":[{"type":"solid","color":"#1E293B"}]}}
 ${BLOCK}
 
+COPYWRITING (concise text = better design):
+- Headlines: 2-6 words, punchy and direct. Subtitles: 1 sentence, ≤15 words.
+- Feature titles: 2-4 words. Descriptions: 1 sentence, ≤20 words. Buttons: 1-3 words.
+- Card text: ≤2 short sentences. Stats: number + 1-3 word label.
+- NEVER write 3+ sentence paragraphs. Distill long user-provided copy to its core message.
+- Design mockups are not documents — every word must earn its place.
+
 DESIGN RULES:
 - Typography: Display 40-56px → Heading 28-36px → Subheading 20-24px → Body 16-18px → Caption 13-14px. Always set lineHeight: headings 1.1-1.2, body 1.4-1.6, captions 1.3. Use letterSpacing: -0.5 for large headlines, 0.5-2 for uppercase labels.
 - CJK FONTS: When content is in Chinese/Japanese/Korean, use CJK-compatible fonts — "Noto Sans SC" for headings, "Inter" or "Noto Sans SC" for body. NEVER use "Space Grotesk" or "Manrope" for CJK text (they have no CJK glyphs). CJK lineHeight: 1.3-1.4 for headings, 1.6-1.8 for body. CJK letterSpacing: 0 for body, never negative.
