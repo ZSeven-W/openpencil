@@ -138,6 +138,9 @@ function layoutToCSS(node: ContainerProps): Record<string, string> {
     }
     css['align-items'] = map[node.alignItems] ?? node.alignItems
   }
+  if (node.clipContent) {
+    css.overflow = 'hidden'
+  }
   return css
 }
 
@@ -240,6 +243,10 @@ function generateNodeHTML(
       if (node.fontFamily) css['font-family'] = `'${node.fontFamily}', sans-serif`
       if (node.lineHeight) css['line-height'] = String(node.lineHeight)
       if (node.letterSpacing) css['letter-spacing'] = `${node.letterSpacing}px`
+      if (node.textAlignVertical === 'middle') css['vertical-align'] = 'middle'
+      else if (node.textAlignVertical === 'bottom') css['vertical-align'] = 'bottom'
+      if (node.textGrowth === 'auto') css['white-space'] = 'nowrap'
+      else if (node.textGrowth === 'fixed-width-height') css.overflow = 'hidden'
       if (node.underline) css['text-decoration'] = 'underline'
       if (node.strikethrough) css['text-decoration'] = 'line-through'
       Object.assign(css, effectsToCSS(node.effects))
