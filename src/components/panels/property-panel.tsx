@@ -12,6 +12,7 @@ import FillSection from './fill-section'
 import StrokeSection from './stroke-section'
 import AppearanceSection from './appearance-section'
 import TextSection from './text-section'
+import TextLayoutSection from './text-layout-section'
 import EffectsSection from './effects-section'
 import ExportSection from './export-section'
 
@@ -255,6 +256,7 @@ export default function PropertyPanel() {
             cornerRadius={
               'cornerRadius' in displayNode ? displayNode.cornerRadius : undefined
             }
+            hideWH={hasLayout || isText}
           />
         </div>
 
@@ -266,6 +268,21 @@ export default function PropertyPanel() {
             </div>
           </>
         )}
+
+        {isText && displayNode.type === 'text' && (
+          <>
+            <Separator />
+            <div className="px-3 py-2">
+              <TextLayoutSection node={displayNode} onUpdate={handleUpdate} />
+            </div>
+          </>
+        )}
+
+        <Separator />
+
+        <div className="px-3 py-2">
+          <AppearanceSection node={displayNode} onUpdate={handleUpdate} />
+        </div>
 
         <Separator />
 
@@ -293,9 +310,11 @@ export default function PropertyPanel() {
           </>
         )}
 
-        <div className="px-3 py-2">
-          <AppearanceSection node={displayNode} onUpdate={handleUpdate} />
-        </div>
+        {isText && displayNode.type === 'text' && (
+          <div className="px-3 py-2">
+            <TextSection node={displayNode} onUpdate={handleUpdate} />
+          </div>
+        )}
 
         {hasEffects && (
           <>
@@ -305,15 +324,6 @@ export default function PropertyPanel() {
                 effects={'effects' in displayNode ? displayNode.effects : undefined}
                 onUpdate={handleUpdate}
               />
-            </div>
-          </>
-        )}
-
-        {isText && displayNode.type === 'text' && (
-          <>
-            <Separator />
-            <div className="px-3 py-2">
-              <TextSection node={displayNode} onUpdate={handleUpdate} />
             </div>
           </>
         )}
