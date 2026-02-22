@@ -33,7 +33,7 @@ let activeDragSession: DragSession | null = null
 // ---------------------------------------------------------------------------
 
 /** Recursively collect all descendant node IDs from the document tree. */
-function collectDescendantIds(nodeId: string): Set<string> {
+export function collectDescendantIds(nodeId: string): Set<string> {
   const result = new Set<string>()
   const node = useDocumentStore.getState().getNodeById(nodeId)
   if (!node) return result

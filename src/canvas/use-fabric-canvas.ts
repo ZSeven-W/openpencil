@@ -110,6 +110,7 @@ export function useFabricCanvas(
       height: container.clientHeight,
       backgroundColor: getCanvasBackground(),
       selection: true,
+      selectionKey: 'shiftKey',
       preserveObjectStacking: true,
       stopContextMenu: true,
       fireRightClick: true,

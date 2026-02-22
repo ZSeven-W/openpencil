@@ -115,15 +115,19 @@ export function syncFabricObject(
           ? node.content
           : node.content.map((s) => s.text).join('')
       const w = sizeToNumber(node.width, 0)
+      const fontSize = node.fontSize ?? 16
       obj.set({
         text: content,
         fontFamily: node.fontFamily ?? 'Inter, sans-serif',
-        fontSize: node.fontSize ?? 16,
+        fontSize,
         fontWeight: (node.fontWeight as string) ?? 'normal',
         fontStyle: node.fontStyle ?? 'normal',
         fill: resolveFillColor(node.fill),
         textAlign: node.textAlign ?? 'left',
         lineHeight: node.lineHeight ?? 1.2,
+        charSpacing: node.letterSpacing
+          ? (node.letterSpacing / fontSize) * 1000
+          : 0,
       })
       if (w > 0) obj.set({ width: w })
       break

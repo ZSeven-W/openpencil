@@ -1,5 +1,5 @@
-import { useState, useRef, useEffect, useCallback } from 'react'
-import { Send, Plus, ChevronDown, ChevronUp, Check, MessageSquare, Loader2 } from 'lucide-react'
+import { useState, useRef, useEffect, useCallback, useMemo } from 'react'
+import { Send, Plus, ChevronDown, ChevronUp, Check, MessageSquare, Loader2, Pencil } from 'lucide-react'
 import { nanoid } from 'nanoid'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
@@ -19,15 +19,23 @@ import {
   extractAndApplyDesign,
   extractAndApplyDesignModification
 } from '@/services/ai/design-generator'
+import { trimChatHistory } from '@/services/ai/context-optimizer'
 import type { ChatMessage as ChatMessageType } from '@/services/ai/ai-types'
 import type { AIProviderType } from '@/types/agent-settings'
+import { CHAT_STREAM_THINKING_CONFIG } from '@/services/ai/ai-runtime-config'
 import ClaudeLogo from '@/components/icons/claude-logo'
 import OpenAILogo from '@/components/icons/openai-logo'
-import ChatMessage from './chat-message'
+import OpenCodeLogo from '@/components/icons/opencode-logo'
+import ChatMessage, {
+  parseStepBlocks,
+  countDesignJsonBlocks,
+  buildPipelineProgress,
+} from './chat-message'
 
 const PROVIDER_ICON: Record<AIProviderType, typeof ClaudeLogo> = {
   anthropic: ClaudeLogo,
   openai: OpenAILogo,
+  opencode: OpenCodeLogo,
 }
 
 const QUICK_ACTIONS = [
@@ -117,7 +125,6 @@ function useChatHandlers() {
   const addMessage = useAIStore((s) => s.addMessage)
   const updateLastMessage = useAIStore((s) => s.updateLastMessage)
   const setStreaming = useAIStore((s) => s.setStreaming)
-
   const handleSend = useCallback(
     async (text?: string) => {
       const messageText = text ?? input.trim()
@@ -221,8 +228,20 @@ function useChatHandlers() {
         } else {
             // --- CHAT MODE ---
             chatHistory.push({ role: 'user', content: fullUserMessage })
+            // Trim history to prevent unbounded context growth
+            const trimmedHistory = trimChatHistory(chatHistory)
+            // Resolve which provider the currently selected model belongs to
+            const currentProvider = useAIStore.getState().modelGroups.find((g) =>
+              g.models.some((m) => m.value === model),
+            )?.provider
             let chatThinking = false
-            for await (const chunk of streamChat(CHAT_SYSTEM_PROMPT, chatHistory, model)) {
+            for await (const chunk of streamChat(
+              CHAT_SYSTEM_PROMPT,
+              trimmedHistory,
+              model,
+              CHAT_STREAM_THINKING_CONFIG,
+              currentProvider,
+            )) {
                if (chunk.type === 'thinking') {
                  // Show a brief thinking indicator so the UI isn't stuck on empty
                  if (!chatThinking && !accumulated) {
@@ -266,6 +285,88 @@ function useChatHandlers() {
   )
 
   return { input, setInput, handleSend, isStreaming }
+}
+
+/** Fixed collapsible checklist pinned between messages and input */
+function FixedChecklist({ messages, isStreaming }: { messages: ChatMessageType[]; isStreaming: boolean }) {
+  const [collapsed, setCollapsed] = useState(false)
+
+  // Find the last assistant message to extract checklist data
+  const lastAssistant = useMemo(() => {
+    for (let i = messages.length - 1; i >= 0; i--) {
+      if (messages[i].role === 'assistant') return messages[i]
+    }
+    return null
+  }, [messages])
+
+  const items = useMemo(() => {
+    if (!lastAssistant) return []
+    const content = lastAssistant.content
+    const steps = parseStepBlocks(content, isStreaming)
+    const planSteps = steps.filter((s) => s.title !== 'Thinking')
+    if (planSteps.length === 0) return []
+    const jsonCount = countDesignJsonBlocks(content)
+    const isApplied = content.includes('\u2705') || content.includes('<!-- APPLIED -->')
+    const hasError = /\*\*Error:\*\*/i.test(content)
+    return buildPipelineProgress(planSteps, jsonCount, isStreaming, isApplied, hasError)
+  }, [lastAssistant, isStreaming])
+
+  if (items.length === 0) return null
+
+  const completed = items.filter((item) => item.done).length
+
+  return (
+    <div className="shrink-0 border-t border-border bg-card/95">
+      <button
+        type="button"
+        onClick={() => setCollapsed(!collapsed)}
+        className="flex items-center justify-between w-full px-3 py-2 hover:bg-secondary/30 transition-colors"
+      >
+        <div className="flex items-center gap-2">
+          <Pencil size={13} className="text-muted-foreground shrink-0" />
+          <span className="text-xs font-medium text-foreground">Pencil it out</span>
+        </div>
+        <div className="flex items-center gap-1.5">
+          <span className="text-xs text-muted-foreground">{completed}/{items.length}</span>
+          <ChevronDown
+            size={12}
+            className={cn(
+              'text-muted-foreground transition-transform duration-200',
+              collapsed ? '' : 'rotate-180',
+            )}
+          />
+        </div>
+      </button>
+      {!collapsed && (
+        <div className="px-3 pb-2.5 flex max-h-44 flex-col gap-1 overflow-y-auto">
+          {items.map((item, index) => (
+            <div key={`${item.label}-${index}`} className="flex items-center gap-2 text-[11px] text-muted-foreground/90">
+              <span
+                className={cn(
+                  'w-3.5 h-3.5 rounded-full border flex items-center justify-center shrink-0',
+                  item.done
+                    ? 'border-emerald-500/70 text-emerald-500/80'
+                    : item.active
+                      ? 'border-primary/70 text-primary'
+                      : 'border-border/70 text-muted-foreground/50',
+                )}
+              >
+                {item.done ? (
+                  <Check size={9} strokeWidth={2.5} />
+                ) : (
+                  <span className={cn(
+                    'w-1.5 h-1.5 rounded-full',
+                    item.active ? 'bg-primary animate-pulse' : 'bg-muted-foreground/60',
+                  )} />
+                )}
+              </span>
+              <span className={cn(item.active ? 'text-foreground' : '')}>{item.label}</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
 }
 
 /**
@@ -343,6 +444,7 @@ export default function AIChatPanel() {
       const providerNames: Record<AIProviderType, string> = {
         anthropic: 'Anthropic',
         openai: 'OpenAI',
+        opencode: 'OpenCode',
       }
       const groups = connectedProviders.map((p) => ({
         provider: p,
@@ -587,7 +689,7 @@ export default function AIChatPanel() {
     <div
       ref={panelRef}
       className={cn(
-        'absolute z-50 w-[320px] rounded-xl shadow-2xl border border-border bg-card/95 backdrop-blur-sm flex flex-col',
+        'absolute z-50 flex w-[320px] flex-col overflow-hidden rounded-xl border border-border bg-card/95 shadow-2xl backdrop-blur-sm',
         !dragStyle && CORNER_CLASSES[panelCorner],
       )}
         style={{ ...dragStyle, height: panelHeight }}
@@ -635,7 +737,7 @@ export default function AIChatPanel() {
       </div>
 
       {/* --- Messages --- */}
-      <div className="flex-1 overflow-y-auto px-3.5 py-3 bg-background/80 rounded-b-xl">
+      <div className="min-h-0 flex-1 overflow-y-auto rounded-b-xl bg-background/80 px-3.5 py-3">
         {messages.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-4">
             <p className="text-xs text-muted-foreground mb-4">
@@ -670,6 +772,9 @@ export default function AIChatPanel() {
         )}
         <div ref={messagesEndRef} />
       </div>
+
+      {/* --- Fixed Checklist --- */}
+      <FixedChecklist messages={messages} isStreaming={isStreaming} />
 
       {/* --- Input area --- */}
       <div className="relative border-t border-border bg-card rounded-b-xl">
@@ -711,15 +816,18 @@ export default function AIChatPanel() {
             <ChevronUp size={10} className="shrink-0" />
           </button>
 
-          <div className="flex items-center gap-1 justify-between w-full">
-            {selectedIds.length > 0 && (
-              <span className="flex text-[10px] text-muted-foreground ml-2 select-none overflow-hidden text-ellipsis ">
-                {selectedIds.length} object{selectedIds.length > 1 ? 's' : ''}
-              </span>
-            )}
+          <div className="flex items-center gap-1 w-full">
+            <span
+              className={cn(
+                'ml-1 shrink-0 whitespace-nowrap text-[10px] select-none',
+                selectedIds.length > 0 ? 'text-muted-foreground/80' : 'text-muted-foreground/40',
+              )}
+            >
+              {selectedIds.length} selected
+            </span>
 
             {/* Action icons */}
-            <div className="flex items-center gap-0.5 w-full justify-end">
+            <div className="ml-auto flex items-center gap-0.5">
               <Button
                 variant="ghost"
                 size="icon-sm"
