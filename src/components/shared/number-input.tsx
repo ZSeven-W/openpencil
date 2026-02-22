@@ -13,6 +13,7 @@ interface NumberInputProps {
   icon?: React.ReactNode
   suffix?: string
   className?: string
+  readOnly?: boolean
 }
 
 export default function NumberInput({
@@ -25,6 +26,7 @@ export default function NumberInput({
   icon,
   suffix,
   className = '',
+  readOnly = false,
 }: NumberInputProps) {
   const [localValue, setLocalValue] = useState(String(value))
   const [isDragging, setIsDragging] = useState(false)
@@ -69,6 +71,7 @@ export default function NumberInput({
   }
 
   const handleMouseDown = (e: React.MouseEvent) => {
+    if (readOnly) return
     if (e.target instanceof HTMLInputElement) return
     setIsDragging(true)
     dragStartY.current = e.clientY
@@ -116,10 +119,14 @@ export default function NumberInput({
       <input
         type="text"
         value={localValue}
-        onChange={(e) => setLocalValue(e.target.value)}
-        onBlur={handleBlur}
-        onKeyDown={handleKeyDown}
-        className="w-full bg-transparent text-foreground text-[11px] px-1 py-0.5 focus:outline-none tabular-nums"
+        onChange={(e) => !readOnly && setLocalValue(e.target.value)}
+        onBlur={readOnly ? undefined : handleBlur}
+        onKeyDown={readOnly ? undefined : handleKeyDown}
+        readOnly={readOnly}
+        className={cn(
+          'w-full bg-transparent text-[11px] px-1 py-0.5 focus:outline-none tabular-nums',
+          readOnly ? 'text-muted-foreground cursor-default' : 'text-foreground',
+        )}
       />
       {suffix && (
         <span className="text-[10px] text-muted-foreground pr-1.5 shrink-0">
