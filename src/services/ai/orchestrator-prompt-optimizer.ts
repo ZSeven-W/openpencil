@@ -68,6 +68,9 @@ export function prepareDesignPrompt(prompt: string): PreparedDesignPrompt {
   const sectionLines = extractWebsiteSectionLines(sections).slice(0, PROMPT_OPTIMIZER_LIMITS.maxSectionLines)
   const highlightLines = extractCoreHighlightLines(sections).slice(0, 6)
   const needsScreenshotPlaceholder = hasScreenshotRequirements(normalized)
+  const needsDenseCardCompaction = hasDenseCardRequirements(normalized)
+  const needsTableStructure = hasTableStructureRequirements(normalized)
+  const needsHeroPhoneTwoColumn = hasHeroPhoneTwoColumnRequirements(normalized)
 
   const sloganLines = extractSloganCandidates(sections).slice(0, 4)
   const personalityHint = extractProductPersonality(normalized)
@@ -97,6 +100,21 @@ export function prepareDesignPrompt(prompt: string): PreparedDesignPrompt {
   if (needsScreenshotPlaceholder) {
     conciseParts.push(
       'Screenshot rule: for sections like "App截图"/"XX截图"/"screenshot", use a minimal phone placeholder (outline + short label), avoid random real screenshots, and do not recreate detailed mini-app internals.',
+    )
+  }
+  if (needsDenseCardCompaction) {
+    conciseParts.push(
+      'Dense-card rule: if a horizontal row has 5+ cards (or very narrow cards), cards must be natively compact at generation time: keep max 2 text blocks per card (title + metric), rewrite copy into concise keyword phrases, remove non-essential decorative elements, and never output truncation marks ("..." / "…").',
+    )
+  }
+  if (needsTableStructure) {
+    conciseParts.push(
+      'Table rule: render table as explicit header/body grid rows with aligned cells. Never collapse multiple columns into a single long text line.',
+    )
+  }
+  if (needsHeroPhoneTwoColumn) {
+    conciseParts.push(
+      'Hero phone layout rule (desktop): use a horizontal two-column hero (left text/cta, right phone mockup). Do not stack the phone below headline unless mobile.',
     )
   }
   conciseParts.push(
@@ -278,6 +296,26 @@ function extractCoreHighlightLines(sections: Map<string, string>): string[] {
 
 function hasScreenshotRequirements(text: string): boolean {
   return /(截图|screenshot|mockup)/i.test(text)
+}
+
+function hasDenseCardRequirements(text: string): boolean {
+  if (/(dense|密集|多卡片|卡片过多|超过\s*4\s*个|5\+\s*cards?|cards?\s*row|一行.*卡片|横排.*卡片)/i.test(text)) {
+    return true
+  }
+  if (/(cefr|a1[\s-]*c2|a1|a2|b1|b2|c1|c2|词库分级|分级词库|学习阶段|等级)/i.test(text)) {
+    return true
+  }
+  return false
+}
+
+function hasTableStructureRequirements(text: string): boolean {
+  return /(table|grid|tabular|表格|表头|表体|列|行|字段|等级|级别|词汇量|适用人群|对应考试)/i.test(text)
+}
+
+function hasHeroPhoneTwoColumnRequirements(text: string): boolean {
+  const heroLike = /(hero|首页首屏|首屏|横幅|banner)/i.test(text)
+  const phoneLike = /(phone|mockup|screenshot|截图|手机|app\s*screen|应用截图)/i.test(text)
+  return heroLike && phoneLike
 }
 
 function extractFallbackSectionLabels(prompt: string): string[] {

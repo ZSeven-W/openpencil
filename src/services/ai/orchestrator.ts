@@ -445,6 +445,7 @@ async function executeSubAgent(
     subtask,
     plan,
     promptOverride ?? preparedPrompt.subAgentPrompt,
+    request.prompt,
     request.context?.variables,
     request.context?.themes,
   )
@@ -627,6 +628,7 @@ function buildSubAgentUserPrompt(
   subtask: SubTask,
   plan: OrchestratorPlan,
   compactPrompt: string,
+  fullPrompt: string,
   variables?: Record<string, VariableDefinition>,
   themes?: Record<string, string[]>,
 ): string {
@@ -647,9 +649,32 @@ CRITICAL LAYOUT CONSTRAINTS:
 - Use "fill_container" for children that stretch, "fit_content" for shrink-wrap sizing.
 - Use justifyContent="space_between" to distribute items (e.g. navbar: logo | links | CTA). Use padding=[0,80] for horizontal page margins.
 - For side-by-side layouts, nest a horizontal frame with child frames using "fill_container" width.
-- Phone mockup = ONE frame node, cornerRadius 32, NO children inside. NEVER use ellipse.
+- Phone mockup = ONE frame node, cornerRadius 32. If a placeholder label is needed, allow exactly ONE centered text child inside the phone; otherwise no children. Never place placeholder text below the phone as a sibling. NEVER use ellipse.
 - Text height must fit content: estimate lines × fontSize × 1.4.
 - IDs prefix="${subtask.idPrefix}-". No <step> tags. Output \`\`\`json immediately.`
+
+  if (needsNativeDenseCardInstruction(subtask.label, compactPrompt, fullPrompt)) {
+    prompt += `\n\nNATIVE DENSE-CARD MODE (must be solved during generation):
+- If you create a horizontal row with 5+ cards (or cards become narrow), compact each card natively BEFORE output.
+- Each card: max 2 text blocks only (title + one short metric). Remove long descriptions.
+- Rewrite long copy into concise keyword phrases. Never use truncation marks ("..." or "…").
+- Prefer removing non-essential decorative elements before shrinking readability.
+- Do NOT rely on post-processing to prune card content.`
+  }
+  if (needsTableStructureInstruction(subtask.label, compactPrompt, fullPrompt)) {
+    prompt += `\n\nTABLE MODE (must be structured natively):
+- Build table as explicit grid frames, NOT a single long text line.
+- Header must be its own horizontal row with separate cell frames for each column.
+- Body rows must align to the same column structure as header.
+- Keep level badge/chip inside the level cell; do not merge multiple columns into one text node.
+- In table rows, avoid badge/button auto-style patterns unless the node is explicitly a chip.`
+  }
+  if (needsHeroPhoneTwoColumnInstruction(subtask.label, compactPrompt, fullPrompt)) {
+    prompt += `\n\nHERO PHONE LAYOUT MODE (desktop):
+- Use a horizontal two-column hero layout: left = headline/subtitle/CTA, right = phone mockup.
+- Keep phone as a sibling in the same horizontal row, NOT stacked below the headline.
+- Only use stacked layout for mobile/narrow viewport sections.`
+  }
 
   // Inject style guide so sub-agent uses consistent colors/fonts
   if (plan.styleGuide) {
@@ -669,6 +694,50 @@ CRITICAL LAYOUT CONSTRAINTS:
   }
 
   return prompt
+}
+
+function needsNativeDenseCardInstruction(
+  subtaskLabel: string,
+  compactPrompt: string,
+  fullPrompt: string,
+): boolean {
+  const text = `${subtaskLabel}\n${compactPrompt}\n${fullPrompt}`.toLowerCase()
+  if (/(dense|密集|多卡片|卡片过多|超过\s*4\s*个|5\+\s*cards?|cards?\s*row|一行.*卡片|横排.*卡片)/.test(text)) {
+    return true
+  }
+  if (/(cefr|a1[\s-]*c2|a1|a2|b1|b2|c1|c2|词库分级|分级词库|学习阶段|等级)/.test(text)) {
+    return true
+  }
+  if (/(feature\s*cards?|cards?\s*section|词库|词汇|card)/.test(text) && /(a1|b1|c1|c2|cefr|等级|阶段)/.test(text)) {
+    return true
+  }
+  return false
+}
+
+function needsTableStructureInstruction(
+  subtaskLabel: string,
+  compactPrompt: string,
+  fullPrompt: string,
+): boolean {
+  const text = `${subtaskLabel}\n${compactPrompt}\n${fullPrompt}`.toLowerCase()
+  if (/(table|grid|tabular|表格|表头|表体|列|行|字段|等级|级别|词汇量|适用人群|对应考试)/.test(text)) {
+    return true
+  }
+  if (/(cefr|a1[\s-]*c2|a1|a2|b1|b2|c1|c2)/.test(text) && /(level|table|表格|等级)/.test(text)) {
+    return true
+  }
+  return false
+}
+
+function needsHeroPhoneTwoColumnInstruction(
+  subtaskLabel: string,
+  compactPrompt: string,
+  fullPrompt: string,
+): boolean {
+  const text = `${subtaskLabel}\n${compactPrompt}\n${fullPrompt}`.toLowerCase()
+  const heroLike = /(hero|首页首屏|首屏|横幅|banner)/.test(text)
+  const phoneLike = /(phone|mockup|screenshot|截图|手机|app\s*screen|应用截图)/.test(text)
+  return heroLike && phoneLike
 }
 
 // ---------------------------------------------------------------------------
