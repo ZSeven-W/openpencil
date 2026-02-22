@@ -148,6 +148,47 @@ function estimateTextWidth(text: string, fontSize: number, letterSpacing = 0): n
   return maxLine
 }
 
+function resolveTextContent(node: PenNode): string {
+  if (node.type !== 'text') return ''
+  return typeof node.content === 'string'
+    ? node.content
+    : node.content.map((s) => s.text).join('')
+}
+
+function countExplicitTextLines(text: string): number {
+  if (!text) return 1
+  return Math.max(1, text.split(/\r?\n/).length)
+}
+
+function hasCjkText(text: string): boolean {
+  for (const ch of text) {
+    const code = ch.codePointAt(0) ?? 0
+    if (isCjkCodePoint(code)) return true
+  }
+  return false
+}
+
+/**
+ * Optical vertical correction for centered single-line text.
+ * Font line boxes are mathematically centered but glyph ink tends to look
+ * slightly top-heavy, especially for CJK, so we nudge down by 1-3px.
+ */
+function getTextOpticalCenterYOffset(node: PenNode): number {
+  if (node.type !== 'text') return 0
+  const text = resolveTextContent(node).trim()
+  if (!text) return 0
+  if (countExplicitTextLines(text) > 1) return 0
+
+  const fontSize = node.fontSize ?? 16
+  const lineHeight = node.lineHeight ?? 1.2
+  const hasCjk = hasCjkText(text)
+
+  const ratio = hasCjk ? 0.16 : 0.1
+  const compactLineBoost = lineHeight <= 1.35 ? 1 : 0.7
+  const offset = fontSize * ratio * compactLineBoost
+  return Math.max(1, Math.min(5, Math.round(offset)))
+}
+
 /** Compute fit-content width from children. */
 function fitContentWidth(node: PenNode): number {
   if (!('children' in node) || !node.children?.length) return 0
@@ -380,12 +421,26 @@ function computeLayoutPositions(
     switch (align) {
       case 'center':
         crossPos = (crossAvail - effectiveChildCross) / 2
+        // Optical correction: centered text in horizontal layouts tends to
+        // look slightly too high; nudge it down a bit for visual centering.
+        if (!isVertical && child.type === 'text') {
+          crossPos += getTextOpticalCenterYOffset(child)
+        }
         break
       case 'end':
         crossPos = crossAvail - childCross
         break
       default:
         break
+    }
+
+    // Keep child within cross-axis bounds after optical correction.
+    const clampCrossSize =
+      (!isVertical && align === 'center' && child.type === 'text')
+        ? effectiveChildCross
+        : childCross
+    if (crossAvail >= clampCrossSize) {
+      crossPos = Math.max(0, Math.min(crossPos, crossAvail - clampCrossSize))
     }
 
     const computedX = isVertical ? pad.left + crossPos : pad.left + mainPos

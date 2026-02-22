@@ -133,6 +133,14 @@ function resolveTextContent(
   return content.map((s) => s.text).join('')
 }
 
+function shouldSplitByGrapheme(text: string): boolean {
+  // Mixed CJK content (especially with a long CJK run) wraps poorly with word-based splitting.
+  // Enable grapheme splitting so Textbox can break between CJK characters naturally.
+  const hasCjk = /[\u3400-\u4DBF\u4E00-\u9FFF\u3040-\u30FF\uAC00-\uD7AF]/.test(text)
+  const hasLongCjkRun = /[\u3400-\u4DBF\u4E00-\u9FFF\u3040-\u30FF\uAC00-\uD7AF]{4,}/.test(text)
+  return hasCjk && hasLongCjkRun
+}
+
 function sizeToNumber(
   val: number | string | undefined,
   fallback: number,
@@ -275,20 +283,26 @@ export function createFabricObject(
     case 'path': {
       const pw = sizeToNumber(node.width, 0)
       const ph = sizeToNumber(node.height, 0)
+      const safePathData =
+        typeof node.d === 'string' && node.d.trim().length > 0
+          ? node.d
+          : 'M12 12m-3 0a3 3 0 1 0 6 0a3 3 0 1 0 -6 0'
       const hasExplicitFill = node.fill && node.fill.length > 0
-      const hasStroke = !!node.stroke
+      const strokeColor = resolveStrokeColor(node.stroke)
+      const strokeWidth = resolveStrokeWidth(node.stroke)
+      const hasVisibleStroke = strokeWidth > 0 && !!strokeColor
       // Stroke-only icons (e.g. Lucide-style) must not get a default fill.
       // Use 'transparent' (not 'none' — Fabric.js ignores 'none' and falls back to black).
       const pathFill = hasExplicitFill
         ? resolveFill(node.fill, pw || 100, ph || 100)
-        : hasStroke
+        : hasVisibleStroke
           ? 'transparent'
           : DEFAULT_FILL
-      obj = new fabric.Path(node.d, {
+      obj = new fabric.Path(safePathData, {
         ...baseProps,
         fill: pathFill,
-        stroke: resolveStrokeColor(node.stroke),
-        strokeWidth: resolveStrokeWidth(node.stroke),
+        stroke: hasVisibleStroke ? strokeColor : undefined,
+        strokeWidth: hasVisibleStroke ? strokeWidth : 0,
         strokeUniform: true,
         fillRule: 'evenodd', // Compound paths: inner sub-paths become transparent cutouts
       }) as FabricObjectWithPenId
@@ -305,6 +319,7 @@ export function createFabricObject(
     case 'text': {
       const textContent = resolveTextContent(node.content)
       const w = sizeToNumber(node.width, 0)
+      const splitByGrapheme = shouldSplitByGrapheme(textContent)
       const textProps = {
         ...baseProps,
         fontFamily: node.fontFamily ?? 'Inter, sans-serif',
@@ -328,6 +343,7 @@ export function createFabricObject(
         obj = new fabric.Textbox(textContent, {
           ...textProps,
           width: w > 0 ? w : 200,
+          splitByGrapheme,
         }) as FabricObjectWithPenId
       } else {
         obj = new fabric.IText(textContent, textProps) as FabricObjectWithPenId
