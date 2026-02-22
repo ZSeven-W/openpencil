@@ -46,6 +46,24 @@ export interface SubTask {
   parentFrameId: string | null
 }
 
+/** Style guide produced by the orchestrator for visual consistency */
+export interface StyleGuide {
+  palette: {
+    background: string
+    surface: string
+    text: string
+    secondary: string
+    accent: string
+    accent2: string
+    border: string
+  }
+  fonts: {
+    heading: string
+    body: string
+  }
+  aesthetic: string
+}
+
 /** Plan produced by the orchestrator (lightweight — only structure) */
 export interface OrchestratorPlan {
   rootFrame: {
@@ -57,6 +75,7 @@ export interface OrchestratorPlan {
     gap?: number
     fill?: Array<{ type: string; color: string }>
   }
+  styleGuide?: StyleGuide
   subtasks: SubTask[]
 }
 
