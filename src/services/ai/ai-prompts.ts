@@ -161,6 +161,7 @@ LAYOUT ENGINE (flexbox-based):
 - TEXT HEIGHT: NEVER set explicit pixel height on text nodes (e.g. height:22, height:44). OMIT the height property entirely — the layout engine auto-calculates height from textGrowth + content. Setting a small height causes text clipping and overlap with siblings below.
 - CJK BUTTONS/BADGES: Chinese/Japanese/Korean characters are wider. For a button with CJK text, ensure container width ≥ (charCount × fontSize) + horizontal padding. Example: "免费下载" (4 chars) at 15px → min content width ~60px → button width ≥ 60 + left padding + right padding.
 - Use nested frames for complex layouts
+- Keep hierarchy shallow: DO NOT add a single redundant wrapper named "Inner" under a section. Place real content frames directly under the section unless the wrapper has a clear visual role.
 
 COPYWRITING (text content in designs must be concise and polished):
 - Headlines: 2-6 words max. Punchy and direct. e.g. "Ship Faster" not "Build and ship your products faster than ever before".
@@ -201,6 +202,7 @@ DESIGN GUIDELINES:
 - Buttons, nav items, and list items should include icons when appropriate for better UX
 - Long subtitles/body copy should use fixed-width text blocks so lines wrap naturally instead of becoming a single very long line.
 - CARD ROW ALIGNMENT: when cards are siblings in a horizontal layout, ALL cards MUST use height="fill_container". This makes all cards match the tallest card's height, creating a visually aligned row. Never use different fixed heights on sibling cards.
+- DENSE CARD ROWS: if a horizontal row has 5+ cards, aggressively compact each card: title must be very short (CJK ≤6 chars / Latin ≤12 chars), keep at most 2 text blocks (title + one short metric), and remove non-essential decorative elements. Rewrite copy into concise keyword phrases; NEVER output truncated text with "..." or "…".
 - TEXT WRAPPING: any text content longer than ~15 characters MUST have textGrowth="fixed-width". Without it, text expands horizontally in a single line and overflows. Only omit textGrowth for very short labels (1-3 words) like button text or nav links.
 
 DESIGN VARIABLES:
