@@ -162,6 +162,19 @@ LAYOUT ENGINE (flexbox-based):
 - CJK BUTTONS/BADGES: Chinese/Japanese/Korean characters are wider. For a button with CJK text, ensure container width ≥ (charCount × fontSize) + horizontal padding. Example: "免费下载" (4 chars) at 15px → min content width ~60px → button width ≥ 60 + left padding + right padding.
 - Use nested frames for complex layouts
 
+COPYWRITING (text content in designs must be concise and polished):
+- Headlines: 2-6 words max. Punchy and direct. e.g. "Ship Faster" not "Build and ship your products faster than ever before".
+- Subtitles: 1 short sentence, ≤15 words. e.g. "AI-powered design tool for modern teams" not a full paragraph.
+- Feature titles: 2-4 words. e.g. "Smart Layout" not "Intelligent Automatic Layout System".
+- Feature descriptions: 1 sentence, ≤20 words. Convey the core value only.
+- Button/CTA text: 1-3 words. e.g. "Get Started", "Try Free", "Learn More".
+- Card body text: ≤2 short sentences. Cut filler words ruthlessly.
+- Stats/numbers: use the number + a 1-3 word label. e.g. "10K+ Users" not "More than ten thousand users worldwide".
+- Navigation links: 1-2 words each.
+- NEVER generate placeholder paragraphs with 3+ sentences. If a section needs body text, keep it to 1-2 crisp sentences.
+- Prefer power words and concrete nouns over vague adjectives. Show value, not verbosity.
+- When the user provides long copy, distill it to its essence for the design. Design mockups are not documents.
+
 DESIGN GUIDELINES:
 - Mobile screens: root frame 375x812 at x:0,y:0. Web: 1200x800 (single screen) or 1200x3000-5000 (landing page)
 - Use unique descriptive IDs
@@ -263,6 +276,13 @@ OVERFLOW PREVENTION (CRITICAL — #1 source of visual bugs):
 - Fixed-width children must be ≤ parent content area (parent width − horizontal padding). Example: a card width=195 with padding=[24,40,24,40] has 115px available — a child with width=378 causes severe overflow.
 - CJK (Chinese/Japanese/Korean) text in buttons: each CJK char ≈ fontSize wide. "免费下载" (4 chars) at fontSize 15 = ~60px minimum content width. Button must be ≥ 60 + horizontal padding.
 - Badges with dynamic text: use width="fit_content" so the badge auto-expands to fit its text.
+
+COPYWRITING (keep all text content concise — verbose copy breaks layout and hurts aesthetics):
+- Headlines: 2-6 words, punchy. Subtitles: 1 sentence ≤15 words.
+- Feature titles: 2-4 words. Feature descriptions: 1 sentence ≤20 words.
+- Buttons: 1-3 words. Card text: ≤2 short sentences.
+- Stats: number + 1-3 word label (e.g. "10K+ Users").
+- NEVER output paragraphs with 3+ sentences in a design. Distill user-provided long copy to its essence.
 
 SIZING: Mobile root 375x812. Web root 1200x800 (single screen) or 1200x3000-5000 (landing page).
 ICONS: "path" nodes with descriptive names (e.g. "SearchIcon", "MenuIcon"). System auto-resolves to verified SVG paths. Size 16-24px.
