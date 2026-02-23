@@ -186,6 +186,37 @@ function featherBodyToPathD(body: string): string | null {
     }
   }
 
+  // <line x1="x1" y1="y1" x2="x2" y2="y2"> → M x1 y1 L x2 y2
+  const lineRe = /<line[^>]+>/g
+  while ((m = lineRe.exec(body)) !== null) {
+    const tag = m[0]
+    const x1 = parseFloat(tag.match(/\bx1="([^"]+)"/)?.[1] ?? 'NaN')
+    const y1 = parseFloat(tag.match(/\by1="([^"]+)"/)?.[1] ?? 'NaN')
+    const x2 = parseFloat(tag.match(/\bx2="([^"]+)"/)?.[1] ?? 'NaN')
+    const y2 = parseFloat(tag.match(/\by2="([^"]+)"/)?.[1] ?? 'NaN')
+    if (!isNaN(x1) && !isNaN(y1) && !isNaN(x2) && !isNaN(y2)) {
+      parts.push(`M ${x1} ${y1} L ${x2} ${y2}`)
+    }
+  }
+
+  // <polyline points="x1,y1 x2,y2 ..."> → M x1 y1 L x2 y2 ...
+  // <polygon points="..."> → same but closed with Z
+  const polyRe = /<(polyline|polygon)([^>]+)>/g
+  while ((m = polyRe.exec(body)) !== null) {
+    const tag = m[0]
+    const closed = m[1] === 'polygon'
+    const pointsAttr = tag.match(/\bpoints="([^"]+)"/)?.[1]
+    if (!pointsAttr) continue
+    const coords = pointsAttr.trim().split(/[\s,]+/).map(Number)
+    if (coords.length < 4 || coords.some(isNaN)) continue
+    const cmds: string[] = [`M ${coords[0]} ${coords[1]}`]
+    for (let i = 2; i + 1 < coords.length; i += 2) {
+      cmds.push(`L ${coords[i]} ${coords[i + 1]}`)
+    }
+    if (closed) cmds.push('Z')
+    parts.push(cmds.join(' '))
+  }
+
   return parts.length > 0 ? parts.join(' ') : null
 }
 
