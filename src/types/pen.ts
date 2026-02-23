@@ -38,6 +38,7 @@ export interface PenNodeBase {
   id: string
   type: PenNodeType
   name?: string
+  role?: string // semantic role for AI generation ("button", "card", "heading", etc.)
   x?: number
   y?: number
   rotation?: number

@@ -105,6 +105,8 @@ export const DESIGN_STREAM_TIMEOUTS = {
   effort: DEFAULT_THINKING_EFFORT,
 } as const
 
+export const VALIDATION_TIMEOUT_MS = 30_000
+
 export const RETRY_TIMEOUT_CONFIG = {
   multiplier: 2,
   hardTimeoutMaxMs: 1_200_000,

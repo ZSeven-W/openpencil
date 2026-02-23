@@ -161,9 +161,9 @@ function normalizeGradientStops(
     const stop = s as Record<string, unknown>
     return {
       offset:
-        typeof stop.offset === 'number'
+        typeof stop.offset === 'number' && Number.isFinite(stop.offset)
           ? stop.offset
-          : typeof stop.position === 'number'
+          : typeof stop.position === 'number' && Number.isFinite(stop.position)
             ? stop.position
             : 0,
       color: typeof stop.color === 'string' ? stop.color : '#000000',

@@ -7,7 +7,20 @@ PenNode types (the ONLY format you output for designs):
 - path: SVG icon/shape. Props: d (SVG path string), width, height, fill, stroke, effects. IMPORTANT: width and height must match the natural aspect ratio of the SVG path — do NOT force 1:1 for non-square icons/logos
 - image: Raster image. Props: src (URL string), width, height, cornerRadius, effects
 
-All nodes share: id (string), type, name, x, y, rotation, opacity
+All nodes share: id (string), type, name, role, x, y, rotation, opacity
+
+SEMANTIC ROLES (add "role" field to declare intent — the system applies smart defaults for unset properties):
+Layout: "section", "row", "column", "centered-content", "form-group", "divider", "spacer"
+Navigation: "navbar", "nav-links", "nav-link"
+Interactive: "button", "icon-button", "badge", "tag", "pill", "input", "form-input", "search-bar"
+Display: "card", "stat-card", "pricing-card", "image-card"
+Media: "phone-mockup", "screenshot-frame", "avatar", "icon"
+Typography: "heading", "subheading", "body-text", "caption", "label"
+Content: "hero", "feature-grid", "feature-card", "testimonial", "cta-section", "footer", "stats-section"
+Table: "table", "table-row", "table-header", "table-cell"
+You can also invent new roles — unknown roles pass through unchanged.
+Your explicit properties ALWAYS override role defaults. Only unset properties get filled in.
+Example: {"type":"frame","role":"button","fill":[...]} → system adds padding, height, layout, alignItems IF you didn't set them.
 
 SIZING: width/height accept number (px), "fill_container" (stretch to fill parent), or "fit_content" (shrink to content).
   - In vertical layout: "fill_container" width = stretch horizontally, "fill_container" height = grow to fill remaining vertical space.
@@ -52,11 +65,11 @@ OVERFLOW PREVENTION (CRITICAL — violations cause visual glitches):
 const DESIGN_EXAMPLES = `
 EXAMPLES:
 
-Button with icon:
-{ "id": "btn-1", "type": "frame", "name": "Button", "x": 100, "y": 100, "width": 180, "height": 48, "cornerRadius": 8, "layout": "horizontal", "gap": 8, "padding": [12, 24], "justifyContent": "center", "alignItems": "center", "fill": [{ "type": "solid", "color": "#3B82F6" }], "children": [{ "id": "btn-icon", "type": "path", "name": "ArrowRightIcon", "d": "M5 12h14m-7-7 7 7-7 7", "width": 20, "height": 20, "stroke": { "thickness": 2, "fill": [{ "type": "solid", "color": "#FFFFFF" }] } }, { "id": "btn-text", "type": "text", "name": "Label", "content": "Continue", "fontSize": 16, "fontWeight": 600, "fill": [{ "type": "solid", "color": "#FFFFFF" }] }] }
+Button with icon (role="button" auto-adds padding, height, layout, alignItems if not set):
+{ "id": "btn-1", "type": "frame", "name": "Button", "role": "button", "x": 100, "y": 100, "width": 180, "cornerRadius": 8, "fill": [{ "type": "solid", "color": "#3B82F6" }], "children": [{ "id": "btn-icon", "type": "path", "name": "ArrowRightIcon", "role": "icon", "d": "M5 12h14m-7-7 7 7-7 7", "width": 20, "height": 20, "stroke": { "thickness": 2, "fill": [{ "type": "solid", "color": "#FFFFFF" }] } }, { "id": "btn-text", "type": "text", "name": "Label", "role": "label", "content": "Continue", "fontSize": 16, "fontWeight": 600, "fill": [{ "type": "solid", "color": "#FFFFFF" }] }] }
 
-Card with image (clipContent prevents image from poking out of rounded corners):
-{ "id": "card-1", "type": "frame", "name": "Card", "x": 50, "y": 50, "width": 320, "height": 340, "cornerRadius": 12, "clipContent": true, "layout": "vertical", "gap": 0, "fill": [{ "type": "solid", "color": "#FFFFFF" }], "effects": [{ "type": "shadow", "offsetX": 0, "offsetY": 4, "blur": 12, "spread": 0, "color": "rgba(0,0,0,0.1)" }], "children": [{ "id": "card-img", "type": "image", "name": "Cover", "src": "https://picsum.photos/320/180", "width": "fill_container", "height": 180 }, { "id": "card-body", "type": "frame", "name": "Body", "width": "fill_container", "height": "fit_content", "layout": "vertical", "padding": 20, "gap": 8, "children": [{ "id": "card-title", "type": "text", "name": "Title", "content": "Card Title", "fontSize": 20, "fontWeight": 700, "lineHeight": 1.2, "textGrowth": "fixed-width", "width": "fill_container", "fill": [{ "type": "solid", "color": "#111827" }] }, { "id": "card-desc", "type": "text", "name": "Description", "content": "Some description text here", "fontSize": 14, "lineHeight": 1.5, "textGrowth": "fixed-width", "width": "fill_container", "fill": [{ "type": "solid", "color": "#6B7280" }] }] }] }
+Card with image (role="card" auto-adds layout, cornerRadius, clipContent):
+{ "id": "card-1", "type": "frame", "name": "Card", "role": "card", "x": 50, "y": 50, "width": 320, "height": 340, "fill": [{ "type": "solid", "color": "#FFFFFF" }], "effects": [{ "type": "shadow", "offsetX": 0, "offsetY": 4, "blur": 12, "spread": 0, "color": "rgba(0,0,0,0.1)" }], "children": [{ "id": "card-img", "type": "image", "name": "Cover", "src": "https://picsum.photos/320/180", "width": "fill_container", "height": 180 }, { "id": "card-body", "type": "frame", "name": "Body", "width": "fill_container", "height": "fit_content", "layout": "vertical", "padding": 20, "gap": 8, "children": [{ "id": "card-title", "type": "text", "name": "Title", "role": "heading", "content": "Card Title", "fontSize": 20, "fontWeight": 700, "fill": [{ "type": "solid", "color": "#111827" }] }, { "id": "card-desc", "type": "text", "name": "Description", "role": "body-text", "content": "Some description text here", "fontSize": 14, "fill": [{ "type": "solid", "color": "#6B7280" }] }] }] }
 
 ICONS & IMAGES:
 - Icons: Use "path" nodes with SVG d attribute. Size 16-24px for UI icons. Use stroke for line icons (Lucide-style), fill for solid icons.
@@ -241,11 +254,11 @@ EXAMPLE:
 
 ${BLOCK}json
 {"_parent":null,"id":"page","type":"frame","name":"Page","x":0,"y":0,"width":375,"height":812,"layout":"vertical","gap":0,"fill":[{"type":"solid","color":"#F8FAFC"}]}
-{"_parent":"page","id":"nav","type":"frame","name":"Nav","width":"fill_container","height":56,"layout":"horizontal","padding":16,"alignItems":"center","fill":[{"type":"solid","color":"#FFFFFF"}]}
-{"_parent":"nav","id":"logo","type":"text","name":"Logo","content":"App","fontSize":18,"fontWeight":700,"fill":[{"type":"solid","color":"#0F172A"}]}
-{"_parent":"nav","id":"menu-icon","type":"path","name":"MenuIcon","d":"M4 6h16M4 12h16M4 18h16","width":24,"height":24,"stroke":{"thickness":2,"fill":[{"type":"solid","color":"#0F172A"}]}}
-{"_parent":"page","id":"hero","type":"frame","name":"Hero","width":"fill_container","height":300,"layout":"vertical","padding":24,"gap":16,"alignItems":"center","justifyContent":"center"}
-{"_parent":"hero","id":"title","type":"text","name":"Title","content":"Welcome","fontSize":28,"fontWeight":700,"textGrowth":"fixed-width","width":"fill_container","fill":[{"type":"solid","color":"#0F172A"}]}
+{"_parent":"page","id":"nav","type":"frame","name":"Nav","role":"navbar","width":"fill_container","fill":[{"type":"solid","color":"#FFFFFF"}]}
+{"_parent":"nav","id":"logo","type":"text","name":"Logo","role":"label","content":"App","fontSize":18,"fontWeight":700,"fill":[{"type":"solid","color":"#0F172A"}]}
+{"_parent":"nav","id":"menu-icon","type":"path","name":"MenuIcon","role":"icon","d":"M4 6h16M4 12h16M4 18h16","width":24,"height":24,"stroke":{"thickness":2,"fill":[{"type":"solid","color":"#0F172A"}]}}
+{"_parent":"page","id":"hero","type":"frame","name":"Hero","role":"hero","width":"fill_container","padding":24,"gap":16,"justifyContent":"center"}
+{"_parent":"hero","id":"title","type":"text","name":"Title","role":"heading","content":"Welcome","fontSize":28,"fontWeight":700,"fill":[{"type":"solid","color":"#0F172A"}]}
 ${BLOCK}
 
 CRITICAL RULES:

@@ -1,36 +1,22 @@
-import { useState, useRef, useEffect, useCallback, useMemo } from 'react'
-import { Send, Plus, ChevronDown, ChevronUp, Check, MessageSquare, Loader2, Pencil } from 'lucide-react'
-import { nanoid } from 'nanoid'
+import { useState, useRef, useEffect, useCallback } from 'react'
+import { Send, Plus, ChevronDown, ChevronUp, Check, MessageSquare, Loader2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { useAIStore } from '@/stores/ai-store'
 import type { PanelCorner } from '@/stores/ai-store'
 import { useCanvasStore } from '@/stores/canvas-store'
-import { useDocumentStore } from '@/stores/document-store'
 import { useAgentSettingsStore } from '@/stores/agent-settings-store'
-import { streamChat, fetchAvailableModels } from '@/services/ai/ai-service'
+import { fetchAvailableModels } from '@/services/ai/ai-service'
 import {
-  CHAT_SYSTEM_PROMPT,
-} from '@/services/ai/ai-prompts'
-import {
-  generateDesign,
-  generateDesignModification,
-  animateNodesToCanvas,
   extractAndApplyDesign,
-  extractAndApplyDesignModification
 } from '@/services/ai/design-generator'
-import { trimChatHistory } from '@/services/ai/context-optimizer'
-import type { ChatMessage as ChatMessageType } from '@/services/ai/ai-types'
 import type { AIProviderType } from '@/types/agent-settings'
-import { CHAT_STREAM_THINKING_CONFIG } from '@/services/ai/ai-runtime-config'
 import ClaudeLogo from '@/components/icons/claude-logo'
 import OpenAILogo from '@/components/icons/openai-logo'
 import OpenCodeLogo from '@/components/icons/opencode-logo'
-import ChatMessage, {
-  parseStepBlocks,
-  countDesignJsonBlocks,
-  buildPipelineProgress,
-} from './chat-message'
+import ChatMessage from './chat-message'
+import { useChatHandlers } from './ai-chat-handlers'
+import { FixedChecklist } from './ai-chat-checklist'
 
 const PROVIDER_ICON: Record<AIProviderType, typeof ClaudeLogo> = {
   anthropic: ClaudeLogo,
@@ -62,311 +48,6 @@ const CORNER_CLASSES: Record<PanelCorner, string> = {
   'top-right': 'top-3 right-3',
   'bottom-left': 'bottom-3 left-3',
   'bottom-right': 'bottom-3 right-3',
-}
-
-/** Detect if a message is a design generation request */
-function isDesignRequest(text: string): boolean {
-  const lower = text.toLowerCase()
-  const designKeywords = [
-    '生成', '设计', '创建', '画', '做一个', '来一个', '弄一个',
-    'generate', 'create', 'design', 'make', 'build', 'draw',
-    'add a', 'add an', 'place a', 'insert',
-    '界面', '页面', 'screen', 'page', 'layout', 'component',
-    '按钮', '卡片', '导航', '表单', '输入框', '列表',
-    'button', 'card', 'nav', 'form', 'input', 'list',
-    'header', 'footer', 'sidebar', 'modal', 'dialog',
-    'login', 'signup', 'dashboard', 'profile',
-  ]
-  return designKeywords.some((kw) => lower.includes(kw))
-}
-
-function buildContextString(): string {
-  const selectedIds = useCanvasStore.getState().selection.selectedIds
-  const { getFlatNodes, document: doc } = useDocumentStore.getState()
-  const flatNodes = getFlatNodes()
-
-  const parts: string[] = []
-
-  if (flatNodes.length > 0) {
-    const summary = flatNodes
-      .slice(0, 20)
-      .map((n) => `${n.type}:${n.name ?? n.id}`)
-      .join(', ')
-    parts.push(`Document has ${flatNodes.length} nodes: ${summary}`)
-  }
-
-  if (selectedIds.length > 0) {
-    const selectedNodes = selectedIds
-      .map((id) => useDocumentStore.getState().getNodeById(id))
-      .filter(Boolean)
-    const selectedSummary = selectedNodes
-      .map((n) => `${n!.type}:${n!.name ?? n!.id}`)
-      .join(', ')
-    parts.push(`Selected: ${selectedSummary}`)
-  }
-
-  // Include variable summary so chat mode also knows about design tokens
-  if (doc.variables && Object.keys(doc.variables).length > 0) {
-    const varNames = Object.entries(doc.variables)
-      .map(([n, d]) => `$${n}(${d.type})`)
-      .join(', ')
-    parts.push(`Variables: ${varNames}`)
-  }
-
-  return parts.length > 0 ? `\n\n[Canvas context: ${parts.join('. ')}]` : ''
-}
-
-/** Shared chat logic hook */
-function useChatHandlers() {
-  const [input, setInput] = useState('')
-  const messages = useAIStore((s) => s.messages)
-  const isStreaming = useAIStore((s) => s.isStreaming)
-  const model = useAIStore((s) => s.model)
-  const addMessage = useAIStore((s) => s.addMessage)
-  const updateLastMessage = useAIStore((s) => s.updateLastMessage)
-  const setStreaming = useAIStore((s) => s.setStreaming)
-  const handleSend = useCallback(
-    async (text?: string) => {
-      const messageText = text ?? input.trim()
-      if (!messageText || isStreaming) return
-
-      setInput('')
-      
-      // Determine context and mode
-      const selectedIds = useCanvasStore.getState().selection.selectedIds
-      const hasSelection = selectedIds.length > 0
-      const isDesign = isDesignRequest(messageText)
-      const isModification = isDesign && hasSelection
-
-      const context = buildContextString()
-      const fullUserMessage = messageText + context
-
-      const userMsg: ChatMessageType = {
-        id: nanoid(),
-        role: 'user',
-        content: messageText,
-        timestamp: Date.now(),
-      }
-      addMessage(userMsg)
-
-      const assistantMsg: ChatMessageType = {
-        id: nanoid(),
-        role: 'assistant',
-        content: '',
-        timestamp: Date.now(),
-        isStreaming: true,
-      }
-      addMessage(assistantMsg)
-      setStreaming(true)
-
-      // Set chat title if it's the first message
-      if (messages.length === 0) {
-        // Simple heuristic: Take first ~4 words or up to 25 chars
-        const cleanText = messageText.replace(/^(Design|Create|Generate|Make)\s+/i, '')
-        const words = cleanText.split(' ').slice(0, 4).join(' ')
-        const title = words.length > 30 ? words.slice(0, 30) + '...' : words
-        useAIStore.getState().setChatTitle(title || 'New Chat')
-      }
-
-      const chatHistory = messages.map((m) => ({
-        role: m.role,
-        content: m.content,
-      }))
-
-      let accumulated = ''
-      let appliedCount = 0
-
-      try {
-        if (isDesign) {
-             if (isModification) {
-               // --- MODIFICATION MODE ---
-               const { getNodeById, document: modDoc } = useDocumentStore.getState()
-               const selectedNodes = selectedIds.map(id => getNodeById(id)).filter(Boolean) as any[]
-
-               // We update the UI to show we are working
-               accumulated = '<step title="Checking guidelines">Analyzing modification request...</step>'
-               updateLastMessage(accumulated)
-
-               const { rawResponse, nodes } = await generateDesignModification(selectedNodes, messageText, {
-                 variables: modDoc.variables,
-                 themes: modDoc.themes,
-               })
-               accumulated = rawResponse
-               updateLastMessage(accumulated)
-               
-               // Apply all changes
-               const count = extractAndApplyDesignModification(JSON.stringify(nodes))
-               appliedCount += count
-             } else {
-               // --- GENERATION MODE (animated) ---
-               const doc = useDocumentStore.getState().document
-               const { rawResponse, nodes } = await generateDesign({
-                 prompt: fullUserMessage,
-                 context: {
-                   canvasSize: { width: 1200, height: 800 },
-                   documentSummary: `Current selection: ${hasSelection ? selectedIds.length + ' items' : 'Empty'}`,
-                   variables: doc.variables,
-                   themes: doc.themes,
-                 },
-               }, {
-                 animated: true,
-                 onApplyPartial: (partialCount: number) => {
-                   appliedCount += partialCount
-                 },
-                 onTextUpdate: (text: string) => {
-                    accumulated = text
-                    updateLastMessage(text)
-                 },
-               })
-               // Ensure final text is captured
-               accumulated = rawResponse
-               if (appliedCount === 0 && nodes.length > 0) {
-                 animateNodesToCanvas(nodes)
-                 appliedCount += nodes.length
-               }
-             }
-        } else {
-            // --- CHAT MODE ---
-            chatHistory.push({ role: 'user', content: fullUserMessage })
-            // Trim history to prevent unbounded context growth
-            const trimmedHistory = trimChatHistory(chatHistory)
-            // Resolve which provider the currently selected model belongs to
-            const currentProvider = useAIStore.getState().modelGroups.find((g) =>
-              g.models.some((m) => m.value === model),
-            )?.provider
-            let chatThinking = false
-            for await (const chunk of streamChat(
-              CHAT_SYSTEM_PROMPT,
-              trimmedHistory,
-              model,
-              CHAT_STREAM_THINKING_CONFIG,
-              currentProvider,
-            )) {
-               if (chunk.type === 'thinking') {
-                 // Show a brief thinking indicator so the UI isn't stuck on empty
-                 if (!chatThinking && !accumulated) {
-                   chatThinking = true
-                   updateLastMessage('*Thinking...*')
-                 }
-               } else if (chunk.type === 'text') {
-                 chatThinking = false
-                 accumulated += chunk.content
-                 updateLastMessage(accumulated)
-               } else if (chunk.type === 'error') {
-                 accumulated += `\n\n**Error:** ${chunk.content}`
-                 updateLastMessage(accumulated)
-               }
-            }
-        }
-      } catch (error) {
-         const errMsg = error instanceof Error ? error.message : 'Unknown error'
-         accumulated += `\n\n**Error:** ${errMsg}`
-      } finally {
-         setStreaming(false)
-      }
-
-      // Final update - mark as applied (hidden) so the "Apply" button doesn't show up
-      if (isDesign && appliedCount > 0) {
-        accumulated += `\n\n<!-- APPLIED -->`
-      }
-      
-      // Force update the last message state to ensure sync
-      useAIStore.setState((s) => {
-        const msgs = [...s.messages]
-        const last = msgs.find(m => m.id === assistantMsg.id)
-        if (last) {
-           last.content = accumulated
-           last.isStreaming = false
-        }
-        return { messages: msgs }
-      })
-    },
-    [input, isStreaming, model, messages, addMessage, updateLastMessage, setStreaming],
-  )
-
-  return { input, setInput, handleSend, isStreaming }
-}
-
-/** Fixed collapsible checklist pinned between messages and input */
-function FixedChecklist({ messages, isStreaming }: { messages: ChatMessageType[]; isStreaming: boolean }) {
-  const [collapsed, setCollapsed] = useState(false)
-
-  // Find the last assistant message to extract checklist data
-  const lastAssistant = useMemo(() => {
-    for (let i = messages.length - 1; i >= 0; i--) {
-      if (messages[i].role === 'assistant') return messages[i]
-    }
-    return null
-  }, [messages])
-
-  const items = useMemo(() => {
-    if (!lastAssistant) return []
-    const content = lastAssistant.content
-    const steps = parseStepBlocks(content, isStreaming)
-    const planSteps = steps.filter((s) => s.title !== 'Thinking')
-    if (planSteps.length === 0) return []
-    const jsonCount = countDesignJsonBlocks(content)
-    const isApplied = content.includes('\u2705') || content.includes('<!-- APPLIED -->')
-    const hasError = /\*\*Error:\*\*/i.test(content)
-    return buildPipelineProgress(planSteps, jsonCount, isStreaming, isApplied, hasError)
-  }, [lastAssistant, isStreaming])
-
-  if (items.length === 0) return null
-
-  const completed = items.filter((item) => item.done).length
-
-  return (
-    <div className="shrink-0 border-t border-border bg-card/95">
-      <button
-        type="button"
-        onClick={() => setCollapsed(!collapsed)}
-        className="flex items-center justify-between w-full px-3 py-2 hover:bg-secondary/30 transition-colors"
-      >
-        <div className="flex items-center gap-2">
-          <Pencil size={13} className="text-muted-foreground shrink-0" />
-          <span className="text-xs font-medium text-foreground">Pencil it out</span>
-        </div>
-        <div className="flex items-center gap-1.5">
-          <span className="text-xs text-muted-foreground">{completed}/{items.length}</span>
-          <ChevronDown
-            size={12}
-            className={cn(
-              'text-muted-foreground transition-transform duration-200',
-              collapsed ? '' : 'rotate-180',
-            )}
-          />
-        </div>
-      </button>
-      {!collapsed && (
-        <div className="px-3 pb-2.5 flex max-h-44 flex-col gap-1 overflow-y-auto">
-          {items.map((item, index) => (
-            <div key={`${item.label}-${index}`} className="flex items-center gap-2 text-[11px] text-muted-foreground/90">
-              <span
-                className={cn(
-                  'w-3.5 h-3.5 rounded-full border flex items-center justify-center shrink-0',
-                  item.done
-                    ? 'border-emerald-500/70 text-emerald-500/80'
-                    : item.active
-                      ? 'border-primary/70 text-primary'
-                      : 'border-border/70 text-muted-foreground/50',
-                )}
-              >
-                {item.done ? (
-                  <Check size={9} strokeWidth={2.5} />
-                ) : (
-                  <span className={cn(
-                    'w-1.5 h-1.5 rounded-full',
-                    item.active ? 'bg-primary animate-pulse' : 'bg-muted-foreground/60',
-                  )} />
-                )}
-              </span>
-              <span className={cn(item.active ? 'text-foreground' : '')}>{item.label}</span>
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  )
 }
 
 /**
@@ -595,7 +276,7 @@ export default function AIChatPanel() {
       startHeight: rect.height,
       startTop: rect.top - container.top,
     }
-    
+
     e.currentTarget.setPointerCapture(e.pointerId)
   }, [dragStyle])
 
@@ -607,7 +288,7 @@ export default function AIChatPanel() {
     const deltaY = e.clientY - resizeRef.current.startY
     // Dragging top handle up (negative delta) -> increase height, decrease top
     // Dragging top handle down (positive delta) -> decrease height, increase top
-    
+
     let newHeight = resizeRef.current.startHeight - deltaY
     let newTop = resizeRef.current.startTop + deltaY
 
@@ -640,17 +321,17 @@ export default function AIChatPanel() {
   }, [])
 
   const handleApplyDesign = useCallback((jsonString: string) => {
-    // For manual apply, we always use the "add/create" logic for now, 
+    // For manual apply, we always use the "add/create" logic for now,
     // unless we want to try to infer if it's a modification.
     // But usually applying a block from history is "add this snippet".
     // If the snippet has IDs that exist, addNode might duplicate or error?
-    // addNode usually generates new ID if we don't handle it, 
+    // addNode usually generates new ID if we don't handle it,
     // but our validateNodes checks for IDs.
     // `applyNodesToCanvas` (called by extractAndApplyDesign) calls `addNode`.
     // `addNode` in document-store generates new IDs?
     // Let's check `addNode` implementation.
     // It pushes to children. If ID exists, it might duplicate ID in tree (bad).
-    
+
     // For safety, `extractAndApplyDesign` creates new nodes with same IDs?
     // No, it passes nodes as is.
     // We should probably regenerate IDs when applying from history to avoid ID conflicts.
@@ -661,7 +342,7 @@ export default function AIChatPanel() {
         const msgs = [...s.messages]
         for (let i = msgs.length - 1; i >= 0; i--) {
           if (msgs[i].role === 'assistant' && msgs[i].content.includes(jsonString.slice(0, 50))) {
-            if (!msgs[i].content.includes('✅') && !msgs[i].content.includes('<!-- APPLIED -->')) {
+            if (!msgs[i].content.includes('\u2705') && !msgs[i].content.includes('<!-- APPLIED -->')) {
               msgs[i] = {
                 ...msgs[i],
                 content: msgs[i].content + `\n\n<!-- APPLIED -->`,

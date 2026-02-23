@@ -68,7 +68,7 @@ PenDocument (source of truth)
 
 ### Key Modules
 
-- **`src/canvas/`** — Fabric.js integration (25 files):
+- **`src/canvas/`** — Fabric.js integration (29 files):
   - `fabric-canvas.tsx` — Canvas component initialization
   - `use-fabric-canvas.ts` — Canvas initialization hook
   - `canvas-object-factory.ts` — Creates Fabric objects from PenNodes (rect, ellipse, line, polygon, path, text, image, frame, group)
@@ -77,7 +77,11 @@ PenDocument (source of truth)
   - `canvas-controls.ts` — Custom rotation controls and cursor styling
   - `canvas-constants.ts` — Default colors, zoom limits, stroke widths
   - `use-canvas-events.ts` — Drawing events, shape creation, smart guides activation, tool-based `skipTargetFind` management
+  - `canvas-node-creator.ts` — `createNodeForTool`, `isDrawingTool`, `toScene` helpers extracted from use-canvas-events
+  - `canvas-object-modified.ts` — `syncObjToStore`, `syncSelectionToStore`, `handleObjectModified` — Fabric `object:modified` handler logic
   - `use-canvas-sync.ts` — Bidirectional PenDocument ↔ Fabric.js sync, node flattening with parent offsets, variable resolution via `resolveNodeForCanvas()`
+  - `canvas-layout-engine.ts` — Auto-layout computation: `resolvePadding`, `getNodeWidth/Height`, `computeLayoutPositions`, `Padding` interface
+  - `canvas-text-measure.ts` — Text width/height estimation, CJK detection, `parseSizing`, `getTextOpticalCenterYOffset`
   - `use-canvas-viewport.ts` — Wheel zoom, space+drag panning, tool cursor switching, selection toggling per tool
   - `use-canvas-selection.ts` — Selection sync between Fabric objects and canvas-store
   - `use-canvas-hover.ts` — Hover state management for objects
@@ -97,22 +101,25 @@ PenDocument (source of truth)
 - **`src/variables/`** — Design variables system (2 files):
   - `resolve-variables.ts` — Core resolution utilities: `resolveVariableRef`, `resolveNodeForCanvas`, `getDefaultTheme`, `isVariableRef`; resolves `$variable` references to concrete values for canvas rendering with circular reference guards
   - `replace-refs.ts` — `replaceVariableRefsInTree`: recursively walk node tree to replace/resolve `$refs` when renaming or deleting variables (covers opacity, gap, padding, fills, strokes, effects, text)
-- **`src/stores/`** — Zustand stores (5 files):
+- **`src/stores/`** — Zustand stores (7 files):
   - `canvas-store.ts` — UI/tool/selection/viewport/clipboard/interaction state, `variablesPanelOpen` toggle
   - `document-store.ts` — PenDocument tree CRUD: `addNode`, `updateNode`, `removeNode`, `moveNode`, `reorderNode`, `duplicateNode`, `groupNodes`, `ungroupNode`, `toggleVisibility`, `toggleLock`, `scaleDescendantsInStore`, `rotateDescendantsInStore`, `getNodeById`, `getParentOf`, `getFlatNodes`, `isDescendantOf`; Variable CRUD: `setVariable`, `removeVariable`, `renameVariable`, `setThemes` (all with history support)
+  - `document-tree-utils.ts` — Pure tree helpers extracted from document-store: `findNodeInTree`, `findParentInTree`, `removeNodeFromTree`, `updateNodeInTree`, `flattenNodes`, `insertNodeInTree`, `isDescendantOf`, `getNodeBounds`, `findClearX`, `scaleChildrenInPlace`, `rotateChildrenInPlace`, `createEmptyDocument`, `DEFAULT_FRAME_ID`
   - `history-store.ts` — Undo/redo (max 300 states), batch mode for grouped operations
   - `ai-store.ts` — Chat messages, streaming state, generated code, model selection
   - `agent-settings-store.ts` — AI provider config (Anthropic/OpenAI), MCP CLI integrations, localStorage persistence
-- **`src/types/`** — Type system (7 files):
+  - `uikit-store.ts` — UIKit management: imported kits, component browser state (search, category filters), localStorage persistence
+- **`src/types/`** — Type system (8 files):
   - `pen.ts` — PenDocument/PenNode (frame, group, rectangle, ellipse, line, polygon, path, text, image, ref), ContainerProps; `PenDocument.variables` and `PenDocument.themes`
   - `canvas.ts` — ToolType (select, frame, rectangle, ellipse, line, polygon, path, text, hand), ViewportState, SelectionState, CanvasInteraction
   - `styles.ts` — PenFill (solid, linear_gradient, radial_gradient), PenStroke, PenEffect (shadow, blur), BlendMode, StyledTextSegment
   - `variables.ts` — `VariableDefinition` (type + value), `ThemedValue` (value per theme), `VariableValue`
+  - `uikit.ts` — UIKit, KitComponent, ComponentCategory types for reusable component organization and browsing
   - `agent-settings.ts` — AI provider config types (`AIProviderType`, `AIProviderConfig`, `MCPCliIntegration`, `GroupedModel`)
   - `electron.d.ts` — Electron IPC bridge types (file dialogs, save operations)
   - `opencode-sdk.d.ts` — Type declarations for @opencode-ai/sdk
 - **`src/components/editor/`** — Editor UI (6 files): editor-layout, toolbar (with variables panel toggle), tool-button, shape-tool-dropdown (rectangle/ellipse/line/path + icon picker + image import), top-bar, status-bar
-- **`src/components/panels/`** — Panels (18 files):
+- **`src/components/panels/`** — Panels (24 files):
   - `layer-panel.tsx` / `layer-item.tsx` / `layer-context-menu.tsx` — Tree view with drag-and-drop reordering and drop-into-children (above/below/inside), visibility/lock toggles, context menu, rename
   - `property-panel.tsx` — Unified property panel
   - `fill-section.tsx` — Solid + gradient fill, variable picker integration for color binding
@@ -120,34 +127,57 @@ PenDocument (source of truth)
   - `corner-radius-section.tsx` — Unified or 4-point corner radius
   - `size-section.tsx` — Position, size, rotation
   - `text-section.tsx` — Font, size, weight, spacing, alignment
+  - `text-layout-section.tsx` — Text node layout controls (auto/fixed-width/fixed-height modes, fill width/height)
   - `effects-section.tsx` — Shadow and blur
   - `export-section.tsx` — Per-layer export to PNG/SVG with scale options (1x/2x/3x)
   - `layout-section.tsx` — Auto-layout (none/vertical/horizontal), gap, padding, justify, align; variable picker for gap/padding binding
   - `appearance-section.tsx` — Opacity, visibility, lock, flip; variable picker for opacity binding
   - `ai-chat-panel.tsx` / `chat-message.tsx` — AI chat with markdown, design block collapse, apply design
+  - `ai-chat-handlers.ts` — `useChatHandlers` hook, `isDesignRequest`, `buildContextString` helpers extracted from ai-chat-panel
+  - `ai-chat-checklist.tsx` — `FixedChecklist` component for AI generation progress display
   - `code-panel.tsx` — Code generation output (React/Tailwind, HTML/CSS, CSS Variables)
+  - `component-browser-panel.tsx` / `component-browser-grid.tsx` / `component-browser-card.tsx` — Resizable floating panel for browsing, importing, and inserting UIKit components with category tabs and search
   - `variables-panel.tsx` — Design variables management: theme axes as tabs, variant columns, resizable floating panel, add/rename/delete themes and variants
   - `variable-row.tsx` — Individual variable row: type icon, editable name, per-theme-variant value cells (color picker, number input, text input), context menu
 - **`src/components/shared/`** — Reusable UI (9 files): ColorPicker, NumberInput, DropdownSelect, SectionHeader, ExportDialog, SaveDialog, AgentSettingsDialog, IconPickerDialog, VariablePicker
 - **`src/components/icons/`** — Provider logos: ClaudeLogo, OpenAILogo, OpenCodeLogo
 - **`src/components/ui/`** — shadcn/ui primitives: Button, Select, Separator, Slider, Switch, Toggle, Tooltip
-- **`src/services/ai/`** — AI services (8 files):
+- **`src/services/ai/`** — AI services (18 files):
   - `ai-service.ts` — Main AI chat API wrapper, model negotiation, provider selection
   - `ai-prompts.ts` — System prompts for design generation, context building
-  - `ai-types.ts` — `ChatMessage`, `AIDesignRequest`, streaming response types
-  - `design-generator.ts` — Converts AI JSONL to PenNodes, applies variables, animation coordination
+  - `ai-types.ts` — `ChatMessage`, `AIDesignRequest`, `OrchestratorPlan`, streaming response types
+  - `ai-runtime-config.ts` — Configuration constants for AI timeouts, thinking modes, effort levels, prompt length limits
+  - `design-generator.ts` — Top-level `generateDesign`/`generateDesignModification` with orchestrator fallback, re-exports from design-parser and design-canvas-ops
+  - `design-parser.ts` — Pure JSON/JSONL parsing: `extractJsonFromResponse`, `extractStreamingNodes`, `parseJsonlToTree`, node validation and scoring
+  - `design-canvas-ops.ts` — Canvas mutation operations: `insertStreamingNode`, `applyNodesToCanvas`, `upsertNodesToCanvas`, `animateNodesToCanvas`, generation state management, sanitization and heuristics
   - `design-animation.ts` — Fade-in animation coordination for generated design nodes
-  - `orchestrator.ts` — Parallel design generation: decomposes requests into spatial sub-tasks, JSONL streaming, fallback to single-call
+  - `design-validation.ts` — Post-generation screenshot validation using vision API to detect and auto-fix visual issues
+  - `generation-utils.ts` — Pure utilities for text measurement, size/padding parsing, phone placeholder generation, color extraction
+  - `icon-resolver.ts` — Auto-resolves AI-generated icon path nodes by name to verified Lucide SVG paths
+  - `role-resolver.ts` — Registry-based system for applying role-specific defaults (button padding, card gaps) and tree post-pass fixes
+  - `role-definitions/` — Modular role definition files: content, display, interactive, layout, navigation, media, typography, table
+  - `orchestrator.ts` — Orchestrator entry point: `executeOrchestration`, `callOrchestrator`, plan parsing
+  - `orchestrator-sub-agent.ts` — Sub-agent execution: `executeSubAgentsSequentially`, `executeSubAgent`, prompt building, retry/fallback logic
+  - `orchestrator-progress.ts` — `emitProgress`, `buildFinalStepTags` for streaming progress updates
   - `orchestrator-prompts.ts` — Ultra-lightweight orchestrator prompt for spatial decomposition
+  - `orchestrator-prompt-optimizer.ts` — Prompt preparation, compression, timeout calculation, fallback plan generation
   - `context-optimizer.ts` — Chat history trimming, sliding window to prevent unbounded context growth
 - **`src/services/codegen/`** — React+Tailwind and HTML+CSS code generators (output `var(--name)` for `$variable` refs), CSS variables generator
 - **`src/hooks/`** — `use-keyboard-shortcuts` (global keyboard event handling: tools, clipboard, undo/redo, save, select all, delete, arrow nudge, z-order)
 - **`src/lib/`** — Utility functions (`utils.ts` with `cn()` for class merging)
+- **`src/uikit/`** — UI kit system (3 files):
+  - `built-in-registry.ts` — Default built-in UIKit with standard UI components
+  - `kit-import-export.ts` — Import/export UIKits from .pen files with variable reference collection
+  - `kit-utils.ts` — UIKit utilities: extract components from documents, find reusable nodes, deep clone
+- **`src/mcp/`** — MCP server integration (2 files):
+  - `server.ts` — MCP server providing tools for design automation: open_document, batch_get, batch_design, get/set_variables, snapshot_layout
+  - `document-manager.ts` — MCP utility for reading, writing, and caching PenDocuments from disk
 - **`src/utils/`** — File operations (save/open .pen), export (PNG/SVG), node clone, pen file normalization (format fixes only, preserves `$variable` refs), SVG parser (import SVG to editable PenNodes), syntax highlight
-- **`server/api/ai/`** — Nitro server API: `chat.ts` (streaming SSE with thinking state), `generate.ts` (non-streaming generation), `connect-agent.ts` (Claude Code/Codex CLI/OpenCode connection), `models.ts` (model definitions). Supports Anthropic API key or Claude Agent SDK (local OAuth) as dual providers
-- **`server/utils/`** — Server utilities:
+- **`server/api/ai/`** — Nitro server API (6 files): `chat.ts` (streaming SSE with thinking state), `generate.ts` (non-streaming generation), `connect-agent.ts` (Claude Code/Codex CLI/OpenCode connection), `models.ts` (model definitions), `validate.ts` (vision-based post-generation validation), `mcp-install.ts` (MCP server install/uninstall into CLI tool configs). Supports Anthropic API key or Claude Agent SDK (local OAuth) as dual providers
+- **`server/utils/`** — Server utilities (3 files):
   - `resolve-claude-cli.ts` — Resolves standalone `claude` binary path (handles Nitro bundling issues with SDK's `import.meta.url`)
   - `opencode-client.ts` — Shared OpenCode client manager, reuses server on port 4096 with random port fallback
+  - `codex-client.ts` — Codex CLI client wrapper with JSON streaming, thinking mode support, timeout handling
 
 ### Fabric.js v7 Gotchas
 
