@@ -68,6 +68,7 @@ export default function IconPickerDialog({
   // Load all icons for the active collection
   useEffect(() => {
     if (!activeCollection) return
+
     setCollectionLoading(true)
     setAllIcons([])
     setTotalCount(null)
@@ -278,7 +279,7 @@ export default function IconPickerDialog({
               return (
                 <button
                   key={iconId}
-                  title={name}
+                  title={iconId}
                   onClick={() => handleSelect(iconId)}
                   disabled={isFetching}
                   className={`w-10 h-10 flex items-center justify-center rounded transition-colors disabled:opacity-50 ${
