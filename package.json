@@ -27,6 +27,8 @@
         "@anthropic-ai/claude-agent-sdk": "^0.2.47",
         "@anthropic-ai/sdk": "^0.77.0",
         "@iconify-json/feather": "^1.2.1",
+        "@iconify-json/lucide": "^1.2.93",
+        "@iconify-json/simple-icons": "^1.2.71",
         "@modelcontextprotocol/sdk": "^1.12.1",
         "@opencode-ai/sdk": "1.2.6",
         "@radix-ui/react-select": "^2.2.6",

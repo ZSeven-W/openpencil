@@ -8,6 +8,8 @@
         "@anthropic-ai/claude-agent-sdk": "^0.2.47",
         "@anthropic-ai/sdk": "^0.77.0",
         "@iconify-json/feather": "^1.2.1",
+        "@iconify-json/lucide": "^1.2.93",
+        "@iconify-json/simple-icons": "^1.2.71",
         "@modelcontextprotocol/sdk": "^1.12.1",
         "@opencode-ai/sdk": "1.2.6",
         "@radix-ui/react-select": "^2.2.6",
@@ -214,6 +216,10 @@
     "@hono/node-server": ["@hono/node-server@1.19.9", "https://registry.npmmirror.com/@hono/node-server/-/node-server-1.19.9.tgz", { "peerDependencies": { "hono": "^4" } }, "sha512-vHL6w3ecZsky+8P5MD+eFfaGTyCeOHUIFYMGpQGbrBTSmNNoxv0if69rEZ5giu36weC5saFuznL411gRX7bJDw=="],
 
     "@iconify-json/feather": ["@iconify-json/feather@1.2.1", "https://registry.npmmirror.com/@iconify-json/feather/-/feather-1.2.1.tgz", { "dependencies": { "@iconify/types": "*" } }, "sha512-gURNg2TJYuO1U7DoOGCylm9TwkMfzjOH2BHdWsE0IXLXj/MNkFIJu56Wu1xRws27M8hzDzUDt/biGUa/LfAjdg=="],
+
+    "@iconify-json/lucide": ["@iconify-json/lucide@1.2.93", "https://registry.npmmirror.com/@iconify-json/lucide/-/lucide-1.2.93.tgz", { "dependencies": { "@iconify/types": "*" } }, "sha512-xMbNHP3uS0c/jkgmj6k/9DcuqW7Ey88R0bM2hV5rOJ8wDARql6kM0UC/WCHOyfjh+7OIJnRuDqUvvStx2NHbNw=="],
+
+    "@iconify-json/simple-icons": ["@iconify-json/simple-icons@1.2.71", "https://registry.npmmirror.com/@iconify-json/simple-icons/-/simple-icons-1.2.71.tgz", { "dependencies": { "@iconify/types": "*" } }, "sha512-rNoDFbq1fAYiEexBvrw613/xiUOPEu5MKVV/X8lI64AgdTzLQUUemr9f9fplxUMPoxCBP2rWzlhOEeTHk/Sf0Q=="],
 
     "@iconify/types": ["@iconify/types@2.0.0", "https://registry.npmmirror.com/@iconify/types/-/types-2.0.0.tgz", {}, "sha512-+wluvCrRhXrhyOmRDJ3q8mux9JkKy5SJ/v8ol2tu4FVjyYvtEzkc/3pK15ET6RKg4b4w4BmTk1+gsCUhf21Ykg=="],
 
