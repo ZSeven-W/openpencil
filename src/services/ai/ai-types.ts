@@ -87,6 +87,8 @@ export interface OrchestrationProgress {
     label: string
     status: 'pending' | 'streaming' | 'done' | 'error'
     nodeCount: number
+    /** Accumulated thinking content from the sub-agent */
+    thinking?: string
   }>
   totalNodes: number
 }

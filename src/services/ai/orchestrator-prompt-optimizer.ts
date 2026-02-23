@@ -50,109 +50,19 @@ export function getOrchestratorTimeouts(promptLength: number): {
   return { ...ORCHESTRATOR_TIMEOUT_PROFILES.long }
 }
 
+/**
+ * Prepare a user prompt for the orchestrator and sub-agents.
+ * Simply normalizes whitespace and truncates if too long.
+ * No lossy "intelligent" extraction — the user's original intent is preserved.
+ */
 export function prepareDesignPrompt(prompt: string): PreparedDesignPrompt {
   const normalized = normalizePromptText(prompt)
-  if (normalized.length <= PROMPT_OPTIMIZER_LIMITS.longPromptCharThreshold) {
-    return {
-      original: prompt,
-      orchestratorPrompt: normalized,
-      subAgentPrompt: normalized,
-      wasCompressed: false,
-      originalLength: normalized.length,
-    }
-  }
-
-  const sections = parseTopLevelSections(prompt)
-  const overview = extractOverviewLine(normalized)
-  const featureLines = extractFeatureHeadings(prompt).slice(0, PROMPT_OPTIMIZER_LIMITS.maxFeatureLines)
-  const sectionLines = extractWebsiteSectionLines(sections).slice(0, PROMPT_OPTIMIZER_LIMITS.maxSectionLines)
-  const highlightLines = extractCoreHighlightLines(sections).slice(0, 6)
-  const needsScreenshotPlaceholder = hasScreenshotRequirements(normalized)
-  const needsDenseCardCompaction = hasDenseCardRequirements(normalized)
-  const needsTableStructure = hasTableStructureRequirements(normalized)
-  const needsHeroPhoneTwoColumn = hasHeroPhoneTwoColumnRequirements(normalized)
-
-  const sloganLines = extractSloganCandidates(sections).slice(0, 4)
-  const personalityHint = extractProductPersonality(normalized)
-
-  const conciseParts: string[] = [
-    'Design brief (auto-condensed from a long product document):',
-  ]
-
-  if (overview) {
-    conciseParts.push(`Product: ${overview}`)
-  }
-  if (personalityHint) {
-    conciseParts.push(`Product personality: ${personalityHint}`)
-  }
-  if (sloganLines.length > 0) {
-    conciseParts.push(`Slogan candidates:\n${sloganLines.join('\n')}`)
-  }
-  if (sectionLines.length > 0) {
-    conciseParts.push(`Preferred landing page sections:\n${sectionLines.join('\n')}`)
-  }
-  if (featureLines.length > 0) {
-    conciseParts.push(`Core capabilities to reflect visually:\n${featureLines.join('\n')}`)
-  }
-  if (highlightLines.length > 0) {
-    conciseParts.push(`Key product highlights:\n${highlightLines.join('\n')}`)
-  }
-  if (needsScreenshotPlaceholder) {
-    conciseParts.push(
-      'Screenshot rule: for sections like "App截图"/"XX截图"/"screenshot", use a minimal phone placeholder (outline + short label), avoid random real screenshots, and do not recreate detailed mini-app internals.',
-    )
-  }
-  if (needsDenseCardCompaction) {
-    conciseParts.push(
-      'Dense-card rule: if a horizontal row has 5+ cards (or very narrow cards), cards must be natively compact at generation time: keep max 2 text blocks per card (title + metric), rewrite copy into concise keyword phrases, remove non-essential decorative elements, and never output truncation marks ("..." / "…").',
-    )
-  }
-  if (needsTableStructure) {
-    conciseParts.push(
-      'Table rule: render table as explicit header/body grid rows with aligned cells. Never collapse multiple columns into a single long text line.',
-    )
-  }
-  if (needsHeroPhoneTwoColumn) {
-    conciseParts.push(
-      'Hero phone layout rule (desktop): use a horizontal two-column hero (left text/cta, right phone mockup). Do not stack the phone below headline unless mobile.',
-    )
-  }
-  conciseParts.push(
-    'Icon rule: never use emoji glyphs as icons; always use path nodes with descriptive icon names (e.g. "SearchIcon", "MenuIcon"). System auto-resolves to verified SVG paths.',
-  )
-
-  conciseParts.push(
-    'Scope guardrails: clear hierarchy, avoid over-detailed micro-content.',
-  )
-  conciseParts.push(
-    'Layout guardrails: keep a stable centered content width.',
-  )
-
-  // Only add landing-page-specific guardrails if the prompt looks like a landing page
-  const isLandingPage = /(?:landing\s*page|website|官网|首页|marketing)/i.test(normalized)
-  if (isLandingPage) {
-    conciseParts.push(
-      'CTA guardrails: avoid inserting extra full-width CTA stripes unless explicitly requested.',
-    )
-    conciseParts.push(
-      'Navbar guardrails: keep logo/links/CTA horizontally aligned; links should be evenly distributed in the center group.',
-    )
-  }
-
-  conciseParts.push(
-    'Typography guardrails: long subtitle/body text should use constrained width so lines wrap naturally.',
-  )
-  conciseParts.push(
-    'Overflow prevention: ALL text inside layout frames must use width="fill_container" (never fixed pixel widths). Buttons/badges with CJK text must be wide enough for character count × fontSize + padding.',
-  )
-
-  const concise = conciseParts.join('\n\n')
 
   return {
     original: prompt,
-    orchestratorPrompt: truncateByCharCount(concise, PROMPT_OPTIMIZER_LIMITS.maxPromptCharsForOrchestrator),
-    subAgentPrompt: truncateByCharCount(concise, PROMPT_OPTIMIZER_LIMITS.maxPromptCharsForSubAgent),
-    wasCompressed: true,
+    orchestratorPrompt: truncateByCharCount(normalized, PROMPT_OPTIMIZER_LIMITS.maxPromptCharsForOrchestrator),
+    subAgentPrompt: truncateByCharCount(normalized, PROMPT_OPTIMIZER_LIMITS.maxPromptCharsForSubAgent),
+    wasCompressed: normalized.length > PROMPT_OPTIMIZER_LIMITS.maxPromptCharsForOrchestrator,
     originalLength: normalized.length,
   }
 }
@@ -192,6 +102,10 @@ export function buildFallbackPlanFromPrompt(prompt: string): OrchestratorPlan {
   }
 }
 
+// ---------------------------------------------------------------------------
+// Internal helpers
+// ---------------------------------------------------------------------------
+
 function normalizePromptText(text: string): string {
   return text
     .replace(/\r/g, '')
@@ -214,120 +128,33 @@ function truncateByCharCount(text: string, maxChars: number): string {
   return `${truncated.trim()}\n\n[truncated]`
 }
 
-function parseTopLevelSections(markdown: string): Map<string, string> {
-  const lines = markdown.replace(/\r/g, '').split('\n')
-  const sections = new Map<string, string>()
-  let currentTitle: string | null = null
-  let currentLines: string[] = []
-
-  const flush = () => {
-    if (!currentTitle) return
-    const content = currentLines.join('\n').trim()
-    if (content) sections.set(currentTitle, content)
-  }
-
-  for (const line of lines) {
-    const headingMatch = line.match(/^##\s+(.+)$/)
-    if (headingMatch) {
-      flush()
-      currentTitle = headingMatch[1].trim()
-      currentLines = []
-      continue
-    }
-    if (currentTitle) {
-      currentLines.push(line)
-    }
-  }
-  flush()
-
-  return sections
-}
-
-function extractOverviewLine(text: string): string | null {
-  const lines = text.split('\n')
-  for (const raw of lines) {
-    const line = raw.trim()
-    if (!line) continue
-    if (line.startsWith('#')) continue
-    if (line.startsWith('|')) continue
-    if (line === '---') continue
-    return line.replace(/\*\*/g, '')
-  }
-  return null
-}
-
-function extractFeatureHeadings(text: string): string[] {
-  return text
-    .split('\n')
-    .map((line) => line.match(/^###\s+\d+\.\s+(.+)$/)?.[1]?.trim())
-    .filter((line): line is string => Boolean(line))
-    .map((line) => `- ${line}`)
-}
-
-function extractWebsiteSectionLines(sections: Map<string, string>): string[] {
-  const content = sections.get('推荐的官网结构')
-  if (!content) return []
-
-  return content
-    .split('\n')
-    .map((line) => line.trim())
-    .filter((line) => /^\d+\./.test(line))
-    .map((line) => `- ${line.replace(/^\d+\.\s*/, '')}`)
-}
-
-function extractCoreHighlightLines(sections: Map<string, string>): string[] {
-  const content = sections.get('核心亮点')
-  if (!content) return []
-
-  const lines = content
-    .split('\n')
-    .map((line) => line.trim())
-    .filter((line) => line.startsWith('|') && !line.includes('|------|'))
-
-  const result: string[] = []
-  for (const line of lines) {
-    const columns = line.split('|').map((cell) => cell.trim()).filter(Boolean)
-    if (columns.length >= 2) {
-      result.push(`- ${columns[0]}: ${columns[1]}`)
-    }
-  }
-  return result
-}
-
-function hasScreenshotRequirements(text: string): boolean {
-  return /(截图|screenshot|mockup)/i.test(text)
-}
-
-function hasDenseCardRequirements(text: string): boolean {
-  if (/(dense|密集|多卡片|卡片过多|超过\s*4\s*个|5\+\s*cards?|cards?\s*row|一行.*卡片|横排.*卡片)/i.test(text)) {
-    return true
-  }
-  if (/(cefr|a1[\s-]*c2|a1|a2|b1|b2|c1|c2|词库分级|分级词库|学习阶段|等级)/i.test(text)) {
-    return true
-  }
-  return false
-}
-
-function hasTableStructureRequirements(text: string): boolean {
-  return /(table|grid|tabular|表格|表头|表体|列|行|字段|等级|级别|词汇量|适用人群|对应考试)/i.test(text)
-}
-
-function hasHeroPhoneTwoColumnRequirements(text: string): boolean {
-  const heroLike = /(hero|首页首屏|首屏|横幅|banner)/i.test(text)
-  const phoneLike = /(phone|mockup|screenshot|截图|手机|app\s*screen|应用截图)/i.test(text)
-  return heroLike && phoneLike
-}
-
 function extractFallbackSectionLabels(prompt: string): string[] {
   const lines = prompt.replace(/\r/g, '').split('\n')
   const labels: string[] = []
   const seen = new Set<string>()
 
+  // Try bullet points first
   for (const raw of lines) {
     const line = raw.trim()
     const bulletMatch = line.match(/^- (.+)$/)
     if (!bulletMatch) continue
     const cleaned = sanitizePlanSectionLabel(bulletMatch[1])
+    if (!cleaned) continue
+    const key = cleaned.toLowerCase()
+    if (seen.has(key)) continue
+    seen.add(key)
+    labels.push(cleaned)
+    if (labels.length >= PROMPT_OPTIMIZER_LIMITS.maxFallbackSections) break
+  }
+
+  if (labels.length > 0) return labels
+
+  // Try ## headings (h2) as section labels
+  for (const raw of lines) {
+    const line = raw.trim()
+    const headingMatch = line.match(/^##\s+(.+)$/)
+    if (!headingMatch) continue
+    const cleaned = sanitizePlanSectionLabel(headingMatch[1])
     if (!cleaned) continue
     const key = cleaned.toLowerCase()
     if (seen.has(key)) continue
@@ -380,19 +207,26 @@ function makeSafeSectionId(label: string, index: number): string {
 
 function allocateSectionHeights(totalHeight: number, count: number): number[] {
   if (count <= 0) return []
+  if (count === 1) return [totalHeight]
 
   const minHeight = 80
-  const base = Math.max(minHeight, Math.floor(totalHeight / count))
-  const heights = Array.from({ length: count }, () => base)
-  let allocated = base * count
+  // Weighted allocation: first section (hero/header) gets 1.4×, last (footer) gets 0.6×, rest even
+  const weights = Array.from({ length: count }, (_, i) => {
+    if (i === 0) return 1.4 // hero/header
+    if (i === count - 1 && count >= 3) return 0.6 // footer
+    return 1.0
+  })
+  const totalWeight = weights.reduce((sum, w) => sum + w, 0)
+  const heights = weights.map((w) => Math.max(minHeight, Math.round((totalHeight * w) / totalWeight)))
 
-  let idx = 0
+  // Adjust to match total exactly
+  let allocated = heights.reduce((sum, h) => sum + h, 0)
+  let idx = Math.floor(count / 2) // adjust middle sections first
   while (allocated < totalHeight) {
     heights[idx] += 1
     allocated += 1
     idx = (idx + 1) % count
   }
-
   idx = count - 1
   while (allocated > totalHeight) {
     if (heights[idx] > minHeight) {
@@ -404,44 +238,4 @@ function allocateSectionHeights(totalHeight: number, count: number): number[] {
   }
 
   return heights
-}
-
-function extractSloganCandidates(sections: Map<string, string>): string[] {
-  const content = sections.get('Slogan 候选') ?? sections.get('slogan') ?? sections.get('标语')
-  if (!content) return []
-
-  return content
-    .split('\n')
-    .map((line) => line.trim())
-    .filter((line) => /^\d+\./.test(line) || line.startsWith('-') || line.startsWith('"'))
-    .map((line) => `- ${line.replace(/^\d+\.\s*/, '').replace(/^-\s*/, '')}`)
-}
-
-function extractProductPersonality(text: string): string | null {
-  // Look for personality/tone hints in the document
-  const patterns = [
-    /(?:风格|tone|style|personality)[：:]\s*(.+)/i,
-    /(?:品牌调性|brand\s*tone)[：:]\s*(.+)/i,
-    /(?:设计风格|design\s*style)[：:]\s*(.+)/i,
-  ]
-  for (const pattern of patterns) {
-    const match = text.match(pattern)
-    if (match) return match[1].trim().slice(0, 100)
-  }
-
-  // Infer from keywords in the text
-  const hasKids = /(?:kids|children|儿童|少儿|幼儿)/i.test(text)
-  const hasTech = /(?:AI|developer|API|tech|code|engineering)/i.test(text)
-  const hasLuxury = /(?:premium|luxury|奢华|高端)/i.test(text)
-  const hasFun = /(?:game|fun|play|趣味|游戏|娱乐)/i.test(text)
-  const hasEducation = /(?:learn|study|education|学习|教育|vocabulary)/i.test(text)
-
-  const traits: string[] = []
-  if (hasKids) traits.push('playful, colorful')
-  if (hasTech) traits.push('modern, technical')
-  if (hasLuxury) traits.push('premium, elegant')
-  if (hasFun) traits.push('energetic, vibrant')
-  if (hasEducation) traits.push('trustworthy, encouraging')
-
-  return traits.length > 0 ? traits.join(', ') : null
 }

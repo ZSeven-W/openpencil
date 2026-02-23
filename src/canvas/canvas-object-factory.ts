@@ -32,6 +32,17 @@ function angleToCoords(
   }
 }
 
+function sanitizeColorStops(
+  stops: { offset: number; color: string }[],
+): { offset: number; color: string }[] {
+  return stops.map((s) => ({
+    offset: Number.isFinite(s.offset)
+      ? Math.max(0, Math.min(1, s.offset))
+      : 0,
+    color: s.color,
+  }))
+}
+
 function createLinearGradient(
   fill: LinearGradientFill,
   width: number,
@@ -41,10 +52,7 @@ function createLinearGradient(
   return new fabric.Gradient({
     type: 'linear',
     coords,
-    colorStops: fill.stops.map((s) => ({
-      offset: s.offset,
-      color: s.color,
-    })),
+    colorStops: sanitizeColorStops(fill.stops),
   })
 }
 
@@ -59,10 +67,7 @@ function createRadialGradient(
   return new fabric.Gradient({
     type: 'radial',
     coords: { x1: cx, y1: cy, r1: 0, x2: cx, y2: cy, r2: r },
-    colorStops: fill.stops.map((s) => ({
-      offset: s.offset,
-      color: s.color,
-    })),
+    colorStops: sanitizeColorStops(fill.stops),
   })
 }
 
@@ -75,9 +80,11 @@ export function resolveFill(
   const first = fills[0]
   if (first.type === 'solid') return first.color
   if (first.type === 'linear_gradient') {
+    if (!first.stops || first.stops.length === 0) return DEFAULT_FILL
     return createLinearGradient(first, width, height)
   }
   if (first.type === 'radial_gradient') {
+    if (!first.stops || first.stops.length === 0) return DEFAULT_FILL
     return createRadialGradient(first, width, height)
   }
   return DEFAULT_FILL
