@@ -221,7 +221,7 @@ export default function FillSection({
                   onChange={(c) => handleStopColorChange(i, c)}
                 />
                 <NumberInput
-                  value={Math.round(stop.offset * 100)}
+                  value={Math.round((Number.isFinite(stop.offset) ? stop.offset : i / Math.max(currentStops.length - 1, 1)) * 100)}
                   onChange={(v) => handleStopOffsetChange(i, v)}
                   min={0}
                   max={100}
