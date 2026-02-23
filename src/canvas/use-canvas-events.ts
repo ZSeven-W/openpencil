@@ -1,20 +1,13 @@
 import { useEffect } from 'react'
 import * as fabric from 'fabric'
 import { useCanvasStore } from '@/stores/canvas-store'
-import { useDocumentStore, generateId } from '@/stores/document-store'
+import { useDocumentStore } from '@/stores/document-store'
 import { useHistoryStore } from '@/stores/history-store'
 import { useAIStore } from '@/stores/ai-store'
 import type { PenDocument, PenNode } from '@/types/pen'
-import type { ToolType } from '@/types/canvas'
-import {
-  DEFAULT_FILL,
-  DEFAULT_STROKE,
-  DEFAULT_STROKE_WIDTH,
-} from './canvas-constants'
 import type { FabricObjectWithPenId } from './canvas-object-factory'
 import { setFabricSyncLock } from './canvas-sync-lock'
-import { nodeRenderInfo, rebuildNodeRenderInfo } from './use-canvas-sync'
-import { calculateAndSnap, clearGuides } from './guide-utils'
+import { calculateAndSnap } from './guide-utils'
 import {
   beginParentDrag,
   endParentDrag,
@@ -22,8 +15,6 @@ import {
   moveDescendants,
   scaleDescendants,
   rotateDescendants,
-  finalizeParentTransform,
-  finalizeParentRotation,
   collectDescendantIds,
 } from './parent-child-transform'
 import {
@@ -37,120 +28,16 @@ import {
 import {
   beginLayoutDrag,
   updateLayoutDrag,
-  endLayoutDrag,
   cancelLayoutDrag,
   isLayoutDragActive,
 } from './layout-reorder'
 import { isEnterableContainer, resolveTargetAtDepth } from './selection-context'
-import { checkDragReparent, checkDragReparentByBounds, checkReparentIntoFrame } from './drag-reparent'
 import {
   checkDragIntoTarget,
-  commitDragInto,
-  cancelDragInto,
-  isDragIntoActive,
   checkDragIntoTargetMulti,
-  commitDragIntoMulti,
 } from './drag-into-layout'
-
-function createNodeForTool(
-  tool: ToolType,
-  x: number,
-  y: number,
-  width: number,
-  height: number,
-): PenNode | null {
-  const id = generateId()
-
-  switch (tool) {
-    case 'rectangle':
-      return {
-        id,
-        type: 'rectangle',
-        name: 'Rectangle',
-        x,
-        y,
-        width: Math.abs(width),
-        height: Math.abs(height),
-        fill: [{ type: 'solid', color: DEFAULT_FILL }],
-        stroke: {
-          thickness: DEFAULT_STROKE_WIDTH,
-          fill: [{ type: 'solid', color: DEFAULT_STROKE }],
-        },
-      }
-    case 'frame':
-      return {
-        id,
-        type: 'frame',
-        name: 'Frame',
-        x,
-        y,
-        width: Math.abs(width),
-        height: Math.abs(height),
-        fill: [{ type: 'solid', color: '#ffffff' }],
-        children: [],
-      }
-    case 'ellipse':
-      return {
-        id,
-        type: 'ellipse',
-        name: 'Ellipse',
-        x,
-        y,
-        width: Math.abs(width),
-        height: Math.abs(height),
-        fill: [{ type: 'solid', color: DEFAULT_FILL }],
-        stroke: {
-          thickness: DEFAULT_STROKE_WIDTH,
-          fill: [{ type: 'solid', color: DEFAULT_STROKE }],
-        },
-      }
-    case 'line':
-      return {
-        id,
-        type: 'line',
-        name: 'Line',
-        x,
-        y,
-        x2: x + width,
-        y2: y + height,
-        stroke: {
-          thickness: DEFAULT_STROKE_WIDTH,
-          fill: [{ type: 'solid', color: DEFAULT_STROKE }],
-        },
-      }
-    case 'text':
-      return {
-        id,
-        type: 'text',
-        name: 'Text',
-        x,
-        y,
-        content: 'Type here',
-        fontSize: 16,
-        fontFamily: 'Inter, sans-serif',
-        fill: [{ type: 'solid', color: '#000000' }],
-      }
-    default:
-      return null
-  }
-}
-
-function isDrawingTool(tool: ToolType): boolean {
-  return tool !== 'select' && tool !== 'hand'
-}
-
-/**
- * Convert a pointer event to scene coordinates using Fabric's own method
- * which correctly handles DPR / retina scaling and viewport transform.
- */
-function toScene(
-  canvas: fabric.Canvas,
-  e: PointerEvent,
-): { x: number; y: number } {
-  canvas.calcOffset()
-  const point = canvas.getScenePoint(e)
-  return { x: point.x, y: point.y }
-}
+import { createNodeForTool, isDrawingTool, toScene } from './canvas-node-creator'
+import { handleObjectModified } from './canvas-object-modified'
 
 export function useCanvasEvents() {
   useEffect(() => {
@@ -451,7 +338,7 @@ export function useCanvasEvents() {
       // --- Drag session setup (layout reorder + parent-child propagation) ---
       // We capture the document snapshot here (before any modification) so that
       // `object:modified` can use it as the undo base state.  History batching
-      // lives in `object:modified` — NOT here — so that click-to-select without
+      // lives in `object:modified` -- NOT here -- so that click-to-select without
       // modification never creates a no-op undo entry.
       let preModificationDoc: PenDocument | null = null
 
@@ -640,7 +527,7 @@ export function useCanvasEvents() {
 
       canvas.on('mouse:up', () => {
         cancelLayoutDrag()
-        // NOTE: do NOT cancelDragInto() here — object:modified handles the
+        // NOTE: do NOT cancelDragInto() here -- object:modified handles the
         // commit and cleanup.  In Fabric.js v7 mouse:up can fire before
         // object:modified, which would clear the session prematurely.
         endParentDrag()
@@ -659,116 +546,6 @@ export function useCanvasEvents() {
       })
 
       // --- Object modifications (drag, resize, rotate) via Fabric events ---
-
-      /** Sync a single Fabric object's transform back to the document store. */
-      const syncObjToStore = (obj: FabricObjectWithPenId) => {
-        if (!obj?.penNodeId) return
-
-        const info = nodeRenderInfo.get(obj.penNodeId)
-        const scaleX = obj.scaleX ?? 1
-        const scaleY = obj.scaleY ?? 1
-
-        // Convert Fabric absolute position -> document-tree relative position
-        const offsetX = info?.parentOffsetX ?? 0
-        const offsetY = info?.parentOffsetY ?? 0
-        const updates: Partial<PenNode> = {
-          x: (obj.left ?? 0) - offsetX,
-          y: (obj.top ?? 0) - offsetY,
-          rotation: obj.angle ?? 0,
-        }
-
-        if (obj.width !== undefined) {
-          ;(updates as Record<string, unknown>).width = obj.width * scaleX
-        }
-        if (obj.height !== undefined) {
-          ;(updates as Record<string, unknown>).height = obj.height * scaleY
-        }
-
-        setFabricSyncLock(true)
-        useDocumentStore.getState().updateNode(obj.penNodeId, updates)
-        setFabricSyncLock(false)
-      }
-
-      /** Absolute bounds for each child computed during syncSelectionToStore. */
-      interface ChildAbsBounds {
-        nodeId: string
-        x: number
-        y: number
-        w: number
-        h: number
-      }
-
-      /**
-       * Resolve the absolute position of each child inside an ActiveSelection
-       * and sync every child to the document store.
-       * Returns an array of absolute bounds (for subsequent reparent checks).
-       */
-      const syncSelectionToStore = (
-        target: fabric.FabricObject,
-      ): ChildAbsBounds[] => {
-        const boundsOut: ChildAbsBounds[] = []
-        if (!('getObjects' in target)) return boundsOut
-        const group = target as fabric.ActiveSelection
-        const groupMatrix = group.calcTransformMatrix()
-
-        setFabricSyncLock(true)
-        for (const child of group.getObjects()) {
-          const obj = child as FabricObjectWithPenId
-          if (!obj.penNodeId) continue
-
-          // Transform the child's local origin into absolute scene coords
-          const childMatrix = child.calcOwnMatrix()
-          const combined = fabric.util.multiplyTransformMatrices(
-            groupMatrix,
-            childMatrix,
-          )
-          // The origin point in local space is (0,0) when originX/Y = 'left'/'top'.
-          // For originX:'left', originY:'top' the top-left is at (-width/2, -height/2)
-          // relative to the object's own center.
-          const halfW =
-            ((child.width ?? 0) * (child.scaleX ?? 1)) / 2
-          const halfH =
-            ((child.height ?? 0) * (child.scaleY ?? 1)) / 2
-          const absCenter = fabric.util.transformPoint(
-            new fabric.Point(0, 0),
-            combined,
-          )
-          const absLeft = absCenter.x - halfW
-          const absTop = absCenter.y - halfH
-
-          const info = nodeRenderInfo.get(obj.penNodeId)
-          const offsetX = info?.parentOffsetX ?? 0
-          const offsetY = info?.parentOffsetY ?? 0
-          const scaleX = child.scaleX ?? 1
-          const scaleY = child.scaleY ?? 1
-
-          const absW = (child.width ?? 0) * scaleX
-          const absH = (child.height ?? 0) * scaleY
-
-          const updates: Partial<PenNode> = {
-            x: absLeft - offsetX,
-            y: absTop - offsetY,
-            rotation: child.angle ?? 0,
-          }
-          if (child.width !== undefined) {
-            ;(updates as Record<string, unknown>).width = absW
-          }
-          if (child.height !== undefined) {
-            ;(updates as Record<string, unknown>).height = absH
-          }
-
-          useDocumentStore.getState().updateNode(obj.penNodeId, updates)
-          boundsOut.push({
-            nodeId: obj.penNodeId,
-            x: absLeft,
-            y: absTop,
-            w: absW,
-            h: absH,
-          })
-        }
-        setFabricSyncLock(false)
-        return boundsOut
-      }
 
       // Real-time sync during drag / resize / rotate (locked to prevent circular sync)
       let clipPathsCleared = false
@@ -823,7 +600,7 @@ export function useCanvasEvents() {
           const selNodeIds = selObjs
             .map((o) => o.penNodeId)
             .filter(Boolean) as string[]
-          // ActiveSelection uses center origin — left/top IS the center
+          // ActiveSelection uses center origin -- left/top IS the center
           const cx = group.originX === 'center'
             ? (group.left ?? 0)
             : (group.left ?? 0) + ((group.width ?? 0) * (group.scaleX ?? 1)) / 2
@@ -873,224 +650,18 @@ export function useCanvasEvents() {
       // click-to-select without modification never creates a no-op undo
       // entry.  We use the pre-modification snapshot captured in mouse:down
       // as the batch base to guarantee a correct undo point.
-      let inModifiedHandler = false
       canvas.on('object:modified', (opt) => {
-        // Guard against re-entry: discardActiveObject() fires
-        // _finalizeCurrentTransform → object:modified recursively.
-        if (inModifiedHandler) return
-        inModifiedHandler = true
-        try {
-
         if (pendingBatchCloseRaf !== null) {
           cancelAnimationFrame(pendingBatchCloseRaf)
           pendingBatchCloseRaf = null
         }
-
-        clearGuides()
-        const target = opt.target
-
-        // Use the snapshot from mouse:down if available; otherwise fall back
-        // to the current document (e.g. programmatic modifications).
-        const baseDoc = preModificationDoc ?? useDocumentStore.getState().document
-        preModificationDoc = null
-
-        // Open a history batch for this modification when no outer batch
-        // (e.g. AI generation) is active.
-        const needsBatch = useHistoryStore.getState().batchDepth === 0
-        if (needsBatch) {
-          useHistoryStore.getState().startBatch(baseDoc)
-        }
-
-        let isSelectionModification = false
-        let selectionReparented = false
-
-        try {
-        // Single object -- bake scale and sync
-        const asPen = target as FabricObjectWithPenId
-        if (asPen.penNodeId) {
-          // Layout reorder: skip normal sync, reorder instead
-          // BUT first check if the node was dragged outside its root frame
-          if (isLayoutDragActive()) {
-            if (checkDragReparent(asPen)) {
-              // Dragged outside parent — cancel layout reorder and detach
-              cancelLayoutDrag()
-              rebuildNodeRenderInfo()
-              const doc = useDocumentStore.getState().document
-              useDocumentStore.setState({
-                document: { ...doc, children: [...doc.children] },
-              })
-              closeTransformBatch()
-              return
-            }
-            endLayoutDrag(asPen, canvas)
-            rebuildNodeRenderInfo()
-            closeTransformBatch()
-            return
-          }
-
-          // Drag-into layout container: reparent into target container
-          if (isDragIntoActive()) {
-            commitDragInto(asPen, canvas)
-            rebuildNodeRenderInfo()
-            closeTransformBatch()
-            return
-          }
-
-          const scaleX = target.scaleX ?? 1
-          const scaleY = target.scaleY ?? 1
-          // Path/Polygon dimensions are derived from their data, so we can't
-          // bake scale into width/height. Keep scaleX/scaleY on the Fabric
-          // object and let syncObjToStore compute the stored dimensions.
-          const isPathLike =
-            target.type === 'path' ||
-            target.type === 'polygon'
-          if (!isPathLike) {
-            if (target.width !== undefined) {
-              target.set({ width: target.width * scaleX, scaleX: 1 })
-            }
-            if (target.height !== undefined) {
-              target.set({ height: target.height * scaleY, scaleY: 1 })
-            }
-          }
-          target.setCoords()
-          syncObjToStore(asPen)
-
-          // Finalize children: bake their scale + update store positions
-          if (getActiveDragSession()) {
-            if (scaleX !== 1 || scaleY !== 1) {
-              finalizeParentTransform(asPen, canvas, scaleX, scaleY)
-            }
-            finalizeParentRotation(asPen)
-          }
-
-          // Check if the node was dragged out of / into a root frame
-          const didReparentOut = checkDragReparent(asPen)
-          // Fallback: check if a root-level node should be reparented INTO a frame
-          const didReparentIn = !didReparentOut && asPen.penNodeId
-            ? (() => {
-                setFabricSyncLock(true)
-                const result = checkReparentIntoFrame(asPen.penNodeId!, {
-                  x: asPen.left ?? 0,
-                  y: asPen.top ?? 0,
-                  w: (asPen.width ?? 0) * (asPen.scaleX ?? 1),
-                  h: (asPen.height ?? 0) * (asPen.scaleY ?? 1),
-                })
-                setFabricSyncLock(false)
-                return result
-              })()
-            : false
-          if (didReparentOut || didReparentIn) {
-            // Force re-sync since tree structure changed
-            rebuildNodeRenderInfo()
-            const doc = useDocumentStore.getState().document
-            useDocumentStore.setState({
-              document: { ...doc, children: [...doc.children] },
-            })
-          }
-        } else if ('getObjects' in target) {
-          isSelectionModification = true
-          // ActiveSelection -- bake scale per child, then sync all
-          const group = target as fabric.ActiveSelection
-          for (const child of group.getObjects()) {
-            const sx = child.scaleX ?? 1
-            const sy = child.scaleY ?? 1
-            const childIsPathLike =
-              child.type === 'path' ||
-              child.type === 'polygon'
-            if (!childIsPathLike) {
-              if (child.width !== undefined) {
-                child.set({ width: child.width * sx, scaleX: 1 })
-              }
-              if (child.height !== undefined) {
-                child.set({ height: child.height * sy, scaleY: 1 })
-              }
-            }
-            child.setCoords()
-          }
-          // Drag-into container: reparent all selected objects
-          if (isDragIntoActive()) {
-            canvas.discardActiveObject()
-            commitDragIntoMulti(canvas)
-            rebuildNodeRenderInfo()
-            closeTransformBatch()
-            return
-          }
-
-          const childBounds = syncSelectionToStore(target)
-
-          // Check reparenting for each child based on final positions:
-          // 1. Objects with a parent that are dragged completely outside → detach
-          // 2. Root-level objects whose center is inside a frame → reparent into it
-          let anyReparented = false
-          const selNodeIdSet = new Set(childBounds.map((b) => b.nodeId))
-          setFabricSyncLock(true)
-          for (const b of childBounds) {
-            const bounds = { x: b.x, y: b.y, w: b.w, h: b.h }
-            if (checkDragReparentByBounds(b.nodeId, bounds)) {
-              anyReparented = true
-            } else if (
-              checkReparentIntoFrame(b.nodeId, bounds, selNodeIdSet)
-            ) {
-              anyReparented = true
-            }
-          }
-          setFabricSyncLock(false)
-
-          if (anyReparented) {
-            // Tree structure changed — force full re-sync after the
-            // ActiveSelection is disbanded so clip paths and positions
-            // are recomputed correctly.
-            isSelectionModification = false
-            selectionReparented = true
-          }
-        }
-
-        // Safety cleanup: clear any leftover drag-into session that wasn't
-        // committed (e.g. cursor left the container on the final move frame).
-        cancelDragInto()
-
-        } finally {
-          if (needsBatch) {
-            useHistoryStore.getState().endBatch()
-          }
-        }
-
-        // Force re-sync so clip paths (which use absolute coordinates) are
-        // recomputed from the new node positions.  Without this, children of
-        // a dragged frame stay clipped to the old parent frame bounds.
-        // Skip the forced setState for ActiveSelection modifications — the
-        // positions were already written by syncSelectionToStore(), and
-        // re-syncing absolute coords onto group-relative objects would undo
-        // the move.
-        rebuildNodeRenderInfo()
-        if (selectionReparented) {
-          // Disband the ActiveSelection so objects become individual canvas
-          // items.  Then defer the full re-sync to the next frame — Fabric
-          // needs a render cycle to fully restore the objects' transforms
-          // and properties from the disbanded group.  Without this delay,
-          // the subscriber re-syncs while objects are in a transitional
-          // state and visual properties (fill, clip paths) get lost.
-          canvas.discardActiveObject()
-          canvas.requestRenderAll()
-          requestAnimationFrame(() => {
-            rebuildNodeRenderInfo()
-            const doc = useDocumentStore.getState().document
-            useDocumentStore.setState({
-              document: { ...doc, children: [...doc.children] },
-            })
-          })
-        } else if (!isSelectionModification) {
-          const currentDoc = useDocumentStore.getState().document
-          useDocumentStore.setState({
-            document: { ...currentDoc, children: [...currentDoc.children] },
-          })
-        }
-
-        closeTransformBatch()
-
-        } finally {
-          inModifiedHandler = false
-        }
+        handleObjectModified(
+          opt,
+          canvas,
+          () => preModificationDoc,
+          () => { preModificationDoc = null },
+          closeTransformBatch,
+        )
       })
 
       // --- Text editing: sync edited content back to document store ---
