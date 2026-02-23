@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { useCanvasStore } from '@/stores/canvas-store'
 import { useDocumentStore } from '@/stores/document-store'
 import { Separator } from '@/components/ui/separator'
-import type { PenNode, ContainerProps, RefNode } from '@/types/pen'
+import type { PenNode, ContainerProps, RefNode, PathNode } from '@/types/pen'
 import { Component, Diamond, ArrowUpRight, Unlink } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import type { FabricObjectWithPenId } from '@/canvas/canvas-object-factory'
@@ -15,6 +15,7 @@ import TextSection from './text-section'
 import TextLayoutSection from './text-layout-section'
 import EffectsSection from './effects-section'
 import ExportSection from './export-section'
+import IconSection from './icon-section'
 
 /** Properties stored directly on the RefNode (instance-level), not as overrides. */
 const INSTANCE_DIRECT_PROPS = new Set([
@@ -121,6 +122,7 @@ export default function PropertyPanel() {
     displayNode.type === 'rectangle' || displayNode.type === 'frame'
   const hasEffects = true
   const isText = displayNode.type === 'text'
+  const isIcon = displayNode.type === 'path' && !!(displayNode as PathNode).iconId
 
   const [isEditingName, setIsEditingName] = useState(false)
   const [editName, setEditName] = useState('')
@@ -274,6 +276,18 @@ export default function PropertyPanel() {
             <Separator />
             <div className="px-3 py-2">
               <TextLayoutSection node={displayNode} onUpdate={handleUpdate} />
+            </div>
+          </>
+        )}
+
+        {isIcon && (
+          <>
+            <Separator />
+            <div className="px-3 py-2">
+              <IconSection
+                node={displayNode as PathNode}
+                onUpdate={(updates) => handleUpdate(updates as Partial<PenNode>)}
+              />
             </div>
           </>
         )}
