@@ -5,6 +5,7 @@ interface IconResult {
   style: 'stroke' | 'fill'
   width: number
   height: number
+  iconId?: string // Iconify icon ID, e.g. "lucide:home"
 }
 
 // In-memory cache: icon name → result (null = confirmed miss)
@@ -79,7 +80,9 @@ async function tryDirectLookup(
     if (!res.ok) return null
     const data = (await res.json()) as { body?: string; width?: number; height?: number }
     if (!data.body) return null
-    return parseIconBody(data.body, data.width ?? 24, data.height ?? 24)
+    const result = parseIconBody(data.body, data.width ?? 24, data.height ?? 24)
+    if (result) result.iconId = `${collection}:${iconName}`
+    return result
   } catch {
     return null
   }
@@ -98,7 +101,10 @@ async function trySearchApi(query: string): Promise<IconResult | null> {
       const [collection, iconName] = fullName.split(':')
       if (!collection || !iconName) continue
       const result = await tryDirectLookup(collection, iconName)
-      if (result) return result
+      if (result) {
+        result.iconId = fullName
+        return result
+      }
     }
     return null
   } catch {

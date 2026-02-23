@@ -52,6 +52,7 @@ export default function Toolbar() {
       node.x = centerX - w / 2
       node.y = centerY - h / 2
       node.name = iconName
+      if (node.type === 'path') node.iconId = iconName
       useDocumentStore.getState().addNode(null, node)
     }
     setIconPickerOpen(false)
