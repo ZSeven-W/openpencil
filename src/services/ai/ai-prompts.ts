@@ -1,3 +1,9 @@
+import { AVAILABLE_FEATHER_ICONS } from './icon-resolver'
+
+// Comma-separated list of all bundled Feather icons — guaranteed to resolve
+// instantly from the local icon map without any network request.
+const FEATHER_ICON_NAMES = AVAILABLE_FEATHER_ICONS.join(', ')
+
 const PEN_NODE_SCHEMA = `
 PenNode types (the ONLY format you output for designs):
 - frame: Container. Props: width, height, layout ('none'|'vertical'|'horizontal'), gap, padding, justifyContent ('start'|'center'|'end'|'space_between'|'space_around'), alignItems ('start'|'center'|'end'), clipContent (boolean, clips overflowing children), children[], cornerRadius, fill, stroke, effects
@@ -72,9 +78,9 @@ Card with image (role="card" auto-adds layout, cornerRadius, clipContent):
 { "id": "card-1", "type": "frame", "name": "Card", "role": "card", "x": 50, "y": 50, "width": 320, "height": 340, "fill": [{ "type": "solid", "color": "#FFFFFF" }], "effects": [{ "type": "shadow", "offsetX": 0, "offsetY": 4, "blur": 12, "spread": 0, "color": "rgba(0,0,0,0.1)" }], "children": [{ "id": "card-img", "type": "image", "name": "Cover", "src": "https://picsum.photos/320/180", "width": "fill_container", "height": 180 }, { "id": "card-body", "type": "frame", "name": "Body", "width": "fill_container", "height": "fit_content", "layout": "vertical", "padding": 20, "gap": 8, "children": [{ "id": "card-title", "type": "text", "name": "Title", "role": "heading", "content": "Card Title", "fontSize": 20, "fontWeight": 700, "fill": [{ "type": "solid", "color": "#111827" }] }, { "id": "card-desc", "type": "text", "name": "Description", "role": "body-text", "content": "Some description text here", "fontSize": 14, "fill": [{ "type": "solid", "color": "#6B7280" }] }] }] }
 
 ICONS & IMAGES:
-- Icons: Use "path" nodes with SVG d attribute. Size 16-24px for UI icons. Use stroke for line icons (Lucide-style), fill for solid icons.
-  IMPORTANT: Give icon nodes a descriptive name matching standard icon names (e.g. "SearchIcon", "MenuIcon", "ArrowRightIcon", "CheckIcon", "StarIcon", "DownloadIcon", "PlayIcon", "ShieldIcon", "ZapIcon", "HeartIcon", "UserIcon", "HomeIcon", "MailIcon", "BellIcon", "SettingsIcon", "PlusIcon", "EyeIcon", "LockIcon", "PhoneIcon", "ChevronRightIcon", "ChevronDownIcon", "XIcon").
-  The system will auto-resolve icon names to verified SVG paths, so the name is more important than the d data.
+- Icons: Use "path" nodes. Size 16-24px. CRITICAL: ONLY use names from the Feather icon library below — these are bundled locally and render instantly. Convert the icon name to PascalCase + "Icon" suffix (e.g. "search" → "SearchIcon", "arrow-right" → "ArrowRightIcon"). Do NOT invent names outside this list.
+  The system auto-resolves icon names to verified SVG paths — the "name" field is what matters; "d" is replaced automatically.
+  Available Feather icons: ${FEATHER_ICON_NAMES}
 - Never use emoji characters as icons (e.g. 🧠✨📱✅). Always use path nodes for icons.
 - For app screenshot/mockup areas, use a phone placeholder frame with solid fill matching the page theme + 1px subtle stroke. cornerRadius ~32. Prefer no inner content; if a placeholder copy is needed (e.g. "APP截图占位"), keep exactly one centered text node INSIDE the phone frame (never as a sibling below it).
 - Do NOT use random real-world app screenshots or dense mini-app simulations for showcase sections.
@@ -206,7 +212,7 @@ DESIGN GUIDELINES:
 - Default to light neutral styling unless user explicitly asks for dark/neon/terminal
 - Avoid repeating the exact same palette across unrelated designs
 - Navigation bars (when designing landing pages/websites): use justifyContent="space_between" with 3 child groups (logo-group | links-group | cta-button), padding=[0,80], alignItems="center". This auto-distributes them perfectly across the full width.
-- Icons: use "path" nodes with descriptive names matching standard icon names (e.g. "SearchIcon", "MenuIcon", "ArrowRightIcon"). The system auto-resolves names to verified SVG paths. Size 16-24px.
+- Icons: use "path" nodes with Feather icon names only (full list in the ICONS & IMAGES section above). Size 16-24px.
 - Never use emoji glyphs as icon substitutes. If an icon is needed, use a path node with a descriptive icon name.
 - Use image nodes for generic photos/illustrations only; for app preview areas prefer phone mockup placeholders
 - Phone mockup/screenshot placeholder: exactly ONE "frame" node, width 260-300, height 520-580, cornerRadius 32, solid fill matching theme + 1px subtle stroke. NEVER use ellipse or circle for mockups. If a placeholder label is used, keep exactly ONE centered text child inside the phone frame; otherwise no children. Never put the label as a sibling below the phone.
@@ -301,7 +307,7 @@ COPYWRITING (keep all text content concise — verbose copy breaks layout and hu
 - NEVER output paragraphs with 3+ sentences in a design. Distill user-provided long copy to its essence.
 
 SIZING: Mobile root 375x812. Web root 1200x800 (single screen) or 1200x3000-5000 (landing page).
-ICONS: "path" nodes with descriptive names (e.g. "SearchIcon", "MenuIcon"). System auto-resolves to verified SVG paths. Size 16-24px.
+ICONS: "path" nodes, size 16-24px. ONLY use Feather icon names — PascalCase + "Icon" suffix (e.g. "SearchIcon", "ArrowRightIcon", "CheckIcon"). System auto-resolves name to verified SVG path; "d" is replaced automatically. Available Feather icons: ${FEATHER_ICON_NAMES}
 IMAGES: for app showcase sections, prefer phone mockup placeholders over real screenshots.
 STYLE: Default to light neutral palette unless user explicitly asks for dark/terminal/cyber. Avoid always reusing black+green.
 

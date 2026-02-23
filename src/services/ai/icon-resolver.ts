@@ -228,11 +228,18 @@ export function applyIconPathResolution(node: PenNode): void {
     .replace(/[-_\s]+/g, '')       // normalize separators
     .replace(/(icon|logo)$/, '')   // strip trailing "icon" or "logo"
 
-  const match = ICON_PATH_MAP[rawName]
+  let match = ICON_PATH_MAP[rawName]
+
   if (!match) {
-    // Icon-like name but no local match — set placeholder and queue for async.
+    // 1. Try prefix fallback: "arrowdowncircle" → "arrowdown", "shieldcheck" → "shield"
+    const prefixKey = findPrefixFallback(rawName)
+    if (prefixKey) match = ICON_PATH_MAP[prefixKey]
+  }
+
+  if (!match) {
+    // 2. Still no match — set placeholder and queue for async.
     // Use rawName if non-empty, else fall back to the full normalized name (handles
-    // edge case where stripping "icon"/"logo" suffix leaves an empty string, e.g. "Icon").
+    // edge case where stripping "icon"/"logo" suffix leaves empty string, e.g. "Icon").
     const originalNormalized = (node.name ?? node.id ?? '').toLowerCase().replace(/[-_\s]+/g, '')
     const queueName = rawName || originalNormalized
     if (isIconLikeName(node.name ?? '', queueName)) {
@@ -248,7 +255,7 @@ export function applyIconPathResolution(node: PenNode): void {
 
   // Replace with verified path data and mark as resolved icon
   node.d = match.d
-  node.iconId = match.iconId ?? `lucide:${rawName}`
+  node.iconId = match.iconId ?? `feather:${rawName}`
   applyIconStyle(node, match.style)
 }
 
@@ -427,4 +434,33 @@ function replaceNode(target: PenNode, replacement: PenNode): void {
     delete targetRecord[key]
   }
   Object.assign(targetRecord, replacement as unknown as Record<string, unknown>)
+}
+
+// ---------------------------------------------------------------------------
+// Available icon names export — used by AI prompts to constrain icon selection
+// ---------------------------------------------------------------------------
+
+/**
+ * Sorted list of all available Feather icon names (kebab-case).
+ * These are guaranteed to resolve instantly without any network request.
+ */
+export const AVAILABLE_FEATHER_ICONS: readonly string[] = Object.keys(
+  (featherData as { icons: Record<string, unknown> }).icons,
+).sort()
+
+/**
+ * Try to resolve an unknown normalized icon name by finding the longest
+ * known icon key that the name starts with (prefix match, min 4 chars).
+ * e.g. "arrowdowncircle" → "arrowdown", "shieldcheck" → "shield"
+ */
+function findPrefixFallback(normalizedName: string): string | null {
+  let best: string | null = null
+  let bestLen = 3 // require at least 4-char match
+  for (const key of Object.keys(ICON_PATH_MAP)) {
+    if (key.length > bestLen && normalizedName.startsWith(key)) {
+      best = key
+      bestLen = key.length
+    }
+  }
+  return best
 }
