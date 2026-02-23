@@ -156,19 +156,31 @@ function normalizeSingleFill(
 function normalizeGradientStops(
   raw: unknown[] | undefined,
 ): GradientStop[] {
-  if (!Array.isArray(raw)) return []
-  return raw.map((s: unknown) => {
+  if (!Array.isArray(raw) || raw.length === 0) return []
+
+  // First pass: parse offsets, collecting which ones are explicitly set
+  const parsed = raw.map((s: unknown) => {
     const stop = s as Record<string, unknown>
+    const rawOffset =
+      typeof stop.offset === 'number' && Number.isFinite(stop.offset)
+        ? stop.offset
+        : typeof stop.position === 'number' && Number.isFinite(stop.position)
+          ? stop.position
+          : null
+    // Normalize percentage-format offsets (AI sometimes outputs 0-100 instead of 0-1)
+    const offset = rawOffset !== null && rawOffset > 1 ? rawOffset / 100 : rawOffset
     return {
-      offset:
-        typeof stop.offset === 'number' && Number.isFinite(stop.offset)
-          ? stop.offset
-          : typeof stop.position === 'number' && Number.isFinite(stop.position)
-            ? stop.position
-            : 0,
+      offset,
       color: typeof stop.color === 'string' ? stop.color : '#000000',
     }
   })
+
+  // Second pass: auto-distribute any stops that are missing an offset
+  const n = parsed.length
+  return parsed.map((s, i) => ({
+    color: s.color,
+    offset: s.offset !== null ? Math.max(0, Math.min(1, s.offset!)) : i / Math.max(n - 1, 1),
+  }))
 }
 
 // ---------------------------------------------------------------------------
