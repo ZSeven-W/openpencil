@@ -13,7 +13,7 @@ import {
   createPhonePlaceholderDataUri,
   estimateNodeIntrinsicHeight,
 } from './generation-utils'
-import { applyIconPathResolution, applyNoEmojiIconHeuristic, resolveAsyncIcons } from './icon-resolver'
+import { applyIconPathResolution, applyNoEmojiIconHeuristic, resolveAsyncIcons, resolveAllPendingIcons } from './icon-resolver'
 import {
   resolveNodeRole,
   resolveTreeRoles,
@@ -67,11 +67,42 @@ export function getGenerationRemappedIds(): Map<string, string> {
  * cannot run here because the node has no children yet during streaming.
  * Use applyPostStreamingTreeHeuristics() after all subtask nodes are inserted.
  */
+/**
+ * Normalize gradient stop offsets in all fills on a node (in-place).
+ * Handles stops without an offset field by auto-distributing them evenly.
+ * Also normalizes percentage-format offsets (>1) to the 0-1 range.
+ */
+function normalizeNodeFills(node: PenNode): void {
+  const fills = 'fill' in node ? (node as { fill?: unknown }).fill : undefined
+  if (!Array.isArray(fills)) return
+  for (const fill of fills) {
+    if (!fill || typeof fill !== 'object') continue
+    const f = fill as { type?: string; stops?: unknown[] }
+    if ((f.type === 'linear_gradient' || f.type === 'radial_gradient') && Array.isArray(f.stops)) {
+      const n = f.stops.length
+      f.stops = f.stops.map((s: unknown, i: number) => {
+        const stop = s as Record<string, unknown>
+        let offset = typeof stop.offset === 'number' && Number.isFinite(stop.offset)
+          ? stop.offset
+          : typeof stop.position === 'number' && Number.isFinite(stop.position)
+            ? (stop.position as number)
+            : null
+        if (offset !== null && offset > 1) offset = offset / 100
+        return {
+          color: typeof stop.color === 'string' ? stop.color : '#000000',
+          offset: offset !== null ? Math.max(0, Math.min(1, offset)) : i / Math.max(n - 1, 1),
+        }
+      })
+    }
+  }
+}
+
 export function insertStreamingNode(
   node: PenNode,
   parentId: string | null,
 ): void {
   const { addNode, getNodeById } = useDocumentStore.getState()
+  normalizeNodeFills(node)
 
   // Ensure container nodes have children array for later child insertions
   if ((node.type === 'frame' || node.type === 'group') && !('children' in node)) {
@@ -185,6 +216,7 @@ export function applyNodesToCanvas(nodes: PenNode[]): void {
   // If canvas only has one empty frame, replace it with the generated content
   if (isCanvasOnlyEmptyFrame() && preparedNodes.length === 1 && preparedNodes[0].type === 'frame') {
     replaceEmptyFrame(preparedNodes[0])
+    resolveAllPendingIcons().catch(console.warn)
     return
   }
 
@@ -196,6 +228,7 @@ export function applyNodesToCanvas(nodes: PenNode[]): void {
     addNode(parentId, node)
   }
   adjustRootFrameHeightToContent()
+  resolveAllPendingIcons().catch(console.warn)
 }
 
 export function upsertNodesToCanvas(nodes: PenNode[]): number {
@@ -274,6 +307,9 @@ export function animateNodesToCanvas(nodes: PenNode[]): void {
   useHistoryStore.getState().startBatch(useDocumentStore.getState().document)
   upsertPreparedNodes(prepared)
   useHistoryStore.getState().endBatch(useDocumentStore.getState().document)
+
+  // Resolve any icons queued for async (brand logos etc.) after nodes are in the store
+  resolveAllPendingIcons().catch(console.warn)
 }
 
 // ---------------------------------------------------------------------------
