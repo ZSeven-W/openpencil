@@ -1,5 +1,6 @@
 import type { PenNode, PathNode } from '@/types/pen'
 import { useDocumentStore } from '@/stores/document-store'
+import featherData from '@iconify-json/feather/icons.json'
 import {
   clamp,
   toSizeNumber,
@@ -9,8 +10,8 @@ import {
 
 // ---------------------------------------------------------------------------
 // Core UI icon paths (Lucide-style, 24×24 viewBox)
-// Only ~30 high-frequency icons for instant sync resolution during streaming.
-// All other icons are resolved asynchronously via the Iconify API proxy.
+// Hand-picked high-frequency icons for guaranteed instant sync resolution.
+// Feather icons are added at module init from the bundled @iconify-json/feather.
 // ---------------------------------------------------------------------------
 const ICON_PATH_MAP: Record<string, { d: string; style: 'stroke' | 'fill'; iconId?: string }> = {
   // Navigation & actions
@@ -117,6 +118,94 @@ const ICON_PATH_MAP: Record<string, { d: string; style: 'stroke' | 'fill'; iconI
   point:          { d: 'M12 12m-3 0a3 3 0 1 0 6 0a3 3 0 1 0 -6 0', style: 'fill', iconId: 'lucide:circle' },
   circlefill:     { d: 'M12 12m-4 0a4 4 0 1 0 8 0a4 4 0 1 0 -8 0', style: 'fill', iconId: 'lucide:circle' },
 }
+
+// ---------------------------------------------------------------------------
+// Feather icon set — bundled from @iconify-json/feather (286 icons, all stroke)
+// Populated at module init so AI-generated designs never need async network fetches
+// for standard Feather icons.
+// ---------------------------------------------------------------------------
+
+/**
+ * Parse a Feather SVG body string into a compound SVG path `d` string.
+ * Feather uses <path>, <circle>, <rect>, <ellipse> (all inside optional <g>).
+ * All elements are converted to equivalent path commands and joined.
+ */
+function featherBodyToPathD(body: string): string | null {
+  const parts: string[] = []
+
+  // <path d="...">
+  const pathRe = /\bd="([^"]+)"/g
+  let m: RegExpExecArray | null
+  while ((m = pathRe.exec(body)) !== null) parts.push(m[1])
+
+  // <circle cx="x" cy="y" r="r"> → two half-arcs forming a closed circle
+  const circleRe = /<circle[^>]+>/g
+  while ((m = circleRe.exec(body)) !== null) {
+    const tag = m[0]
+    const cx = parseFloat(tag.match(/\bcx="([^"]+)"/)?.[1] ?? 'NaN')
+    const cy = parseFloat(tag.match(/\bcy="([^"]+)"/)?.[1] ?? 'NaN')
+    const r  = parseFloat(tag.match(/\br="([^"]+)"/)?.[1] ?? 'NaN')
+    if (!isNaN(cx) && !isNaN(cy) && !isNaN(r)) {
+      parts.push(`M ${cx - r} ${cy} a ${r} ${r} 0 1 0 ${r * 2} 0 a ${r} ${r} 0 1 0 ${-r * 2} 0 Z`)
+    }
+  }
+
+  // <ellipse cx="x" cy="y" rx="rx" ry="ry">
+  const ellipseRe = /<ellipse[^>]+>/g
+  while ((m = ellipseRe.exec(body)) !== null) {
+    const tag = m[0]
+    const cx = parseFloat(tag.match(/\bcx="([^"]+)"/)?.[1] ?? 'NaN')
+    const cy = parseFloat(tag.match(/\bcy="([^"]+)"/)?.[1] ?? 'NaN')
+    const rx = parseFloat(tag.match(/\brx="([^"]+)"/)?.[1] ?? 'NaN')
+    const ry = parseFloat(tag.match(/\bry="([^"]+)"/)?.[1] ?? 'NaN')
+    if (!isNaN(cx) && !isNaN(cy) && !isNaN(rx) && !isNaN(ry)) {
+      parts.push(`M ${cx - rx} ${cy} a ${rx} ${ry} 0 1 0 ${rx * 2} 0 a ${rx} ${ry} 0 1 0 ${-rx * 2} 0 Z`)
+    }
+  }
+
+  // <rect x="x" y="y" width="w" height="h" rx="r">
+  const rectRe = /<rect[^>]+>/g
+  while ((m = rectRe.exec(body)) !== null) {
+    const tag = m[0]
+    const x  = parseFloat(tag.match(/\bx="([^"]+)"/)?.[1] ?? '0') || 0
+    const y  = parseFloat(tag.match(/\by="([^"]+)"/)?.[1] ?? '0') || 0
+    const w  = parseFloat(tag.match(/\bwidth="([^"]+)"/)?.[1] ?? 'NaN')
+    const h  = parseFloat(tag.match(/\bheight="([^"]+)"/)?.[1] ?? 'NaN')
+    if (!isNaN(w) && !isNaN(h)) {
+      const rx = parseFloat(tag.match(/\brx="([^"]+)"/)?.[1] ?? '0') || 0
+      if (rx > 0) {
+        parts.push(
+          `M ${x + rx} ${y} L ${x + w - rx} ${y} Q ${x + w} ${y} ${x + w} ${y + rx}` +
+          ` L ${x + w} ${y + h - rx} Q ${x + w} ${y + h} ${x + w - rx} ${y + h}` +
+          ` L ${x + rx} ${y + h} Q ${x} ${y + h} ${x} ${y + h - rx}` +
+          ` L ${x} ${y + rx} Q ${x} ${y} ${x + rx} ${y} Z`,
+        )
+      } else {
+        parts.push(`M ${x} ${y} L ${x + w} ${y} L ${x + w} ${y + h} L ${x} ${y + h} Z`)
+      }
+    }
+  }
+
+  return parts.length > 0 ? parts.join(' ') : null
+}
+
+// Populate ICON_PATH_MAP with all 286 Feather icons at module load time.
+// Keys are stored both in original kebab-case and normalized (no separator)
+// form to match the icon resolver's name normalization.
+;(function initFeatherIcons() {
+  const icons = (featherData as { icons: Record<string, { body: string }> }).icons
+  for (const [name, icon] of Object.entries(icons)) {
+    const d = featherBodyToPathD(icon.body)
+    if (!d) continue
+    const iconId = `feather:${name}`
+    const entry = { d, style: 'stroke' as const, iconId }
+    // kebab-case key (e.g. "arrow-right") — for direct lookup in icon picker
+    if (!ICON_PATH_MAP[name]) ICON_PATH_MAP[name] = entry
+    // normalized key (e.g. "arrowright") — matches applyIconPathResolution normalization
+    const normalized = name.replace(/-/g, '')
+    if (!ICON_PATH_MAP[normalized]) ICON_PATH_MAP[normalized] = entry
+  }
+})()
 
 // ---------------------------------------------------------------------------
 // Pending async icon resolution tracking

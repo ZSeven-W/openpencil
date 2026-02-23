@@ -24,9 +24,10 @@
         "electron:build": "BUILD_TARGET=electron bun --bun run build && bun run electron:compile && bun run mcp:compile && npx electron-builder --config electron-builder.yml"
     },
     "dependencies": {
-        "@modelcontextprotocol/sdk": "^1.12.1",
         "@anthropic-ai/claude-agent-sdk": "^0.2.47",
         "@anthropic-ai/sdk": "^0.77.0",
+        "@iconify-json/feather": "^1.2.1",
+        "@modelcontextprotocol/sdk": "^1.12.1",
         "@opencode-ai/sdk": "1.2.6",
         "@radix-ui/react-select": "^2.2.6",
         "@radix-ui/react-separator": "^1.1.8",
