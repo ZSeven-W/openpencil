@@ -320,7 +320,14 @@ export function createFabricObject(
       if (pw > 0 && ph > 0 && obj.width && obj.height) {
         // Uniform scale — preserve aspect ratio so icons don't get squished
         const uniformScale = Math.min(pw / obj.width, ph / obj.height)
-        obj.set({ scaleX: uniformScale, scaleY: uniformScale })
+        if (node.iconId) {
+          // For icon nodes: expand the Fabric bounding box to pw×ph so the selection
+          // handles always form a perfect square. The path content is naturally centered
+          // by Fabric's pathOffset (center of path's bbox).
+          obj.set({ width: pw / uniformScale, height: ph / uniformScale, scaleX: uniformScale, scaleY: uniformScale })
+        } else {
+          obj.set({ scaleX: uniformScale, scaleY: uniformScale })
+        }
       }
       break
     }

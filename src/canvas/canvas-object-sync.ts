@@ -187,7 +187,13 @@ export function syncFabricObject(
         if (node.type === 'path') {
           // Uniform scale — preserve aspect ratio so icons don't get squished
           const uniformScale = Math.min(w / nw, h / nh)
-          obj.set({ width: nw, height: nh, scaleX: uniformScale, scaleY: uniformScale })
+          if (node.iconId) {
+            // Expand bounding box to w×h so selection handles form a perfect square.
+            // Path content is centered automatically by Fabric's pathOffset.
+            obj.set({ width: w / uniformScale, height: h / uniformScale, scaleX: uniformScale, scaleY: uniformScale })
+          } else {
+            obj.set({ width: nw, height: nh, scaleX: uniformScale, scaleY: uniformScale })
+          }
         } else {
           obj.set({ width: nw, height: nh, scaleX: w / nw, scaleY: h / nh })
         }
