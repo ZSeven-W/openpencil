@@ -126,6 +126,7 @@ export interface PolygonNode extends PenNodeBase {
 
 export interface PathNode extends PenNodeBase {
   type: 'path'
+  iconId?: string // Iconify icon ID, e.g. "lucide:home"
   d: string
   width?: SizingBehavior
   height?: SizingBehavior

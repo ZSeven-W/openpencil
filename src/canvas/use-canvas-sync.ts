@@ -428,7 +428,8 @@ export function useCanvasSync() {
         let existingObj = objMap.get(node.id)
 
         // Some object types require recreation when their underlying Fabric
-        // class/shape data changes (e.g. IText↔Textbox or Path.d changes).
+        // class/shape data changes (e.g. IText↔Textbox).
+        // Path `d` changes are handled in-place by syncFabricObject.
         let objectRecreated = false
         // Text nodes may need recreation when textGrowth mode changes
         // (IText ↔ Textbox are different Fabric classes).
@@ -438,22 +439,6 @@ export function useCanvasSync() {
           const needsTextbox = growth === 'fixed-width' || growth === 'fixed-width-height' || w > 0
           const isTextbox = existingObj instanceof fabric.Textbox
           if (needsTextbox !== isTextbox) {
-            canvas.remove(existingObj)
-            existingObj = undefined
-            objectRecreated = true
-          }
-        }
-
-        // Path nodes need recreation when `d` changes, because syncFabricObject
-        // updates paint/size but not the underlying path commands.
-        if (existingObj && node.type === 'path' && existingObj instanceof fabric.Path) {
-          const nextD = typeof node.d === 'string' ? node.d.trim() : ''
-          const tracked = (existingObj as any).__sourceD
-          const hasTrackedD = typeof tracked === 'string'
-          const prevD = hasTrackedD ? tracked.trim() : ''
-          const shouldRecreatePath =
-            (nextD.length > 0 && !hasTrackedD) || (hasTrackedD && prevD !== nextD)
-          if (shouldRecreatePath) {
             canvas.remove(existingObj)
             existingObj = undefined
             objectRecreated = true

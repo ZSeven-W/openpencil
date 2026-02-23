@@ -145,6 +145,24 @@ export function syncFabricObject(
     }
     case 'polygon':
     case 'path': {
+      // Update path data in-place when `d` changes — avoids object recreation
+      // and preserves selection, position, and Fabric object identity.
+      if (obj instanceof fabric.Path && node.type === 'path') {
+        const nextD = typeof node.d === 'string' ? node.d.trim() : ''
+        const trackedD = typeof (obj as any).__sourceD === 'string' ? (obj as any).__sourceD.trim() : ''
+        if (nextD && nextD !== trackedD) {
+          // Parse into a temporary Path to get the new internal representation
+          const tmp = new fabric.Path(nextD)
+          ;(obj as any).path = (tmp as any).path
+          obj.width = tmp.width
+          obj.height = tmp.height
+          ;(obj as any).pathOffset = (tmp as any).pathOffset
+          ;(obj as any).__sourceD = nextD
+          ;(obj as any).__nativeWidth = tmp.width
+          ;(obj as any).__nativeHeight = tmp.height
+        }
+      }
+
       const w = sizeToNumber('width' in node ? node.width : undefined, 100)
       const h = sizeToNumber('height' in node ? node.height : undefined, 100)
       const hasExplicitFill = node.type === 'path' && 'fill' in node && node.fill && node.fill.length > 0

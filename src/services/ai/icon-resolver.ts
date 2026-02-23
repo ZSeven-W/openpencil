@@ -12,28 +12,28 @@ import {
 // Only ~30 high-frequency icons for instant sync resolution during streaming.
 // All other icons are resolved asynchronously via the Iconify API proxy.
 // ---------------------------------------------------------------------------
-const ICON_PATH_MAP: Record<string, { d: string; style: 'stroke' | 'fill' }> = {
+const ICON_PATH_MAP: Record<string, { d: string; style: 'stroke' | 'fill'; iconId?: string }> = {
   menu:           { d: 'M4 6h16M4 12h16M4 18h16', style: 'stroke' },
   x:              { d: 'M18 6L6 18M6 6l12 12', style: 'stroke' },
-  close:          { d: 'M18 6L6 18M6 6l12 12', style: 'stroke' },
+  close:          { d: 'M18 6L6 18M6 6l12 12', style: 'stroke', iconId: 'lucide:x' },
   check:          { d: 'M20 6L9 17l-5-5', style: 'stroke' },
   plus:           { d: 'M12 5v14M5 12h14', style: 'stroke' },
   minus:          { d: 'M5 12h14', style: 'stroke' },
   search:         { d: 'M11 19a8 8 0 100-16 8 8 0 000 16zM21 21l-4.35-4.35', style: 'stroke' },
-  arrowright:     { d: 'M5 12h14M12 5l7 7-7 7', style: 'stroke' },
-  arrowleft:      { d: 'M19 12H5M12 19l-7-7 7-7', style: 'stroke' },
-  arrowup:        { d: 'M12 19V5M5 12l7-7 7 7', style: 'stroke' },
-  arrowdown:      { d: 'M12 5v14M19 12l-7 7-7-7', style: 'stroke' },
-  chevronright:   { d: 'M9 18l6-6-6-6', style: 'stroke' },
-  chevronleft:    { d: 'M15 18l-6-6 6-6', style: 'stroke' },
-  chevrondown:    { d: 'M6 9l6 6 6-6', style: 'stroke' },
-  chevronup:      { d: 'M18 15l-6-6-6 6', style: 'stroke' },
+  arrowright:     { d: 'M5 12h14M12 5l7 7-7 7', style: 'stroke', iconId: 'lucide:arrow-right' },
+  arrowleft:      { d: 'M19 12H5M12 19l-7-7 7-7', style: 'stroke', iconId: 'lucide:arrow-left' },
+  arrowup:        { d: 'M12 19V5M5 12l7-7 7 7', style: 'stroke', iconId: 'lucide:arrow-up' },
+  arrowdown:      { d: 'M12 5v14M19 12l-7 7-7-7', style: 'stroke', iconId: 'lucide:arrow-down' },
+  chevronright:   { d: 'M9 18l6-6-6-6', style: 'stroke', iconId: 'lucide:chevron-right' },
+  chevronleft:    { d: 'M15 18l-6-6 6-6', style: 'stroke', iconId: 'lucide:chevron-left' },
+  chevrondown:    { d: 'M6 9l6 6 6-6', style: 'stroke', iconId: 'lucide:chevron-down' },
+  chevronup:      { d: 'M18 15l-6-6-6 6', style: 'stroke', iconId: 'lucide:chevron-up' },
   star:           { d: 'M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z', style: 'fill' },
   heart:          { d: 'M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z', style: 'stroke' },
   home:           { d: 'M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2V9zM9 22V12h6v10', style: 'stroke' },
   user:           { d: 'M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2M16 7a4 4 0 11-8 0 4 4 0 018 0z', style: 'stroke' },
   settings:       { d: 'M12.22 2h-.44a2 2 0 00-2 2v.18a2 2 0 01-1 1.73l-.43.25a2 2 0 01-2 0l-.15-.08a2 2 0 00-2.73.73l-.22.38a2 2 0 00.73 2.73l.15.1a2 2 0 011 1.72v.51a2 2 0 01-1 1.74l-.15.09a2 2 0 00-.73 2.73l.22.38a2 2 0 002.73.73l.15-.08a2 2 0 012 0l.43.25a2 2 0 011 1.73V20a2 2 0 002 2h.44a2 2 0 002-2v-.18a2 2 0 011-1.73l.43-.25a2 2 0 012 0l.15.08a2 2 0 002.73-.73l.22-.39a2 2 0 00-.73-2.73l-.15-.08a2 2 0 01-1-1.74v-.5a2 2 0 011-1.74l.15-.09a2 2 0 00.73-2.73l-.22-.38a2 2 0 00-2.73-.73l-.15.08a2 2 0 01-2 0l-.43-.25a2 2 0 01-1-1.73V4a2 2 0 00-2-2zM15 12a3 3 0 11-6 0 3 3 0 016 0z', style: 'stroke' },
-  gear:           { d: 'M12.22 2h-.44a2 2 0 00-2 2v.18a2 2 0 01-1 1.73l-.43.25a2 2 0 01-2 0l-.15-.08a2 2 0 00-2.73.73l-.22.38a2 2 0 00.73 2.73l.15.1a2 2 0 011 1.72v.51a2 2 0 01-1 1.74l-.15.09a2 2 0 00-.73 2.73l.22.38a2 2 0 002.73.73l.15-.08a2 2 0 012 0l.43.25a2 2 0 011 1.73V20a2 2 0 002 2h.44a2 2 0 002-2v-.18a2 2 0 011-1.73l.43-.25a2 2 0 012 0l.15.08a2 2 0 002.73-.73l.22-.39a2 2 0 00-.73-2.73l-.15-.08a2 2 0 01-1-1.74v-.5a2 2 0 011-1.74l.15-.09a2 2 0 00.73-2.73l-.22-.38a2 2 0 00-2.73-.73l-.15.08a2 2 0 01-2 0l-.43-.25a2 2 0 01-1-1.73V4a2 2 0 00-2-2zM15 12a3 3 0 11-6 0 3 3 0 016 0z', style: 'stroke' },
+  gear:           { d: 'M12.22 2h-.44a2 2 0 00-2 2v.18a2 2 0 01-1 1.73l-.43.25a2 2 0 01-2 0l-.15-.08a2 2 0 00-2.73.73l-.22.38a2 2 0 00.73 2.73l.15.1a2 2 0 011 1.72v.51a2 2 0 01-1 1.74l-.15.09a2 2 0 00-.73 2.73l.22.38a2 2 0 002.73.73l.15-.08a2 2 0 012 0l.43.25a2 2 0 011 1.73V20a2 2 0 002 2h.44a2 2 0 002-2v-.18a2 2 0 011-1.73l.43-.25a2 2 0 012 0l.15.08a2 2 0 002.73-.73l.22-.39a2 2 0 00-.73-2.73l-.15-.08a2 2 0 01-1-1.74v-.5a2 2 0 011-1.74l.15-.09a2 2 0 00.73-2.73l-.22-.38a2 2 0 00-2.73-.73l-.15.08a2 2 0 01-2 0l-.43-.25a2 2 0 01-1-1.73V4a2 2 0 00-2-2zM15 12a3 3 0 11-6 0 3 3 0 016 0z', style: 'stroke', iconId: 'lucide:settings' },
   mail:           { d: 'M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2zm16 2l-10 7L2 6', style: 'stroke' },
   eye:            { d: 'M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8zM15 12a3 3 0 11-6 0 3 3 0 016 0z', style: 'stroke' },
   lock:           { d: 'M19 11H5a2 2 0 00-2 2v7a2 2 0 002 2h14a2 2 0 002-2v-7a2 2 0 00-2-2zM7 11V7a5 5 0 0110 0v4', style: 'stroke' },
@@ -45,10 +45,10 @@ const ICON_PATH_MAP: Record<string, { d: string; style: 'stroke' | 'fill' }> = {
   globe:          { d: 'M12 22a10 10 0 100-20 10 10 0 000 20zM2 12h20M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z', style: 'stroke' },
   send:           { d: 'M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z', style: 'stroke' },
   code:           { d: 'M16 18l6-6-6-6M8 6l-6 6 6 6', style: 'stroke' },
-  dot:            { d: 'M12 12m-3 0a3 3 0 1 0 6 0a3 3 0 1 0 -6 0', style: 'fill' },
-  bullet:         { d: 'M12 12m-3 0a3 3 0 1 0 6 0a3 3 0 1 0 -6 0', style: 'fill' },
-  point:          { d: 'M12 12m-3 0a3 3 0 1 0 6 0a3 3 0 1 0 -6 0', style: 'fill' },
-  circlefill:     { d: 'M12 12m-4 0a4 4 0 1 0 8 0a4 4 0 1 0 -8 0', style: 'fill' },
+  dot:            { d: 'M12 12m-3 0a3 3 0 1 0 6 0a3 3 0 1 0 -6 0', style: 'fill', iconId: 'lucide:circle' },
+  bullet:         { d: 'M12 12m-3 0a3 3 0 1 0 6 0a3 3 0 1 0 -6 0', style: 'fill', iconId: 'lucide:circle' },
+  point:          { d: 'M12 12m-3 0a3 3 0 1 0 6 0a3 3 0 1 0 -6 0', style: 'fill', iconId: 'lucide:circle' },
+  circlefill:     { d: 'M12 12m-4 0a4 4 0 1 0 8 0a4 4 0 1 0 -8 0', style: 'fill', iconId: 'lucide:circle' },
 }
 
 // ---------------------------------------------------------------------------
@@ -86,8 +86,9 @@ export function applyIconPathResolution(node: PenNode): void {
     return
   }
 
-  // Replace with verified path data
+  // Replace with verified path data and mark as resolved icon
   node.d = match.d
+  node.iconId = match.iconId ?? `lucide:${rawName}`
   applyIconStyle(node, match.style)
 }
 
@@ -151,7 +152,7 @@ export async function resolveAsyncIcons(rootNodeId: string): Promise<void> {
       const res = await fetch(`/api/ai/icon?name=${encodeURIComponent(iconName)}`)
       if (!res.ok) return { nodeId, icon: null }
       const data = (await res.json()) as {
-        icon: { d: string; style: 'stroke' | 'fill'; width: number; height: number } | null
+        icon: { d: string; style: 'stroke' | 'fill'; width: number; height: number; iconId?: string } | null
       }
       return { nodeId, icon: data.icon }
     }),
@@ -169,6 +170,7 @@ export async function resolveAsyncIcons(rootNodeId: string): Promise<void> {
 
     // Build update payload with resolved path + correct styling
     const update: Partial<PenNode> = { d: icon.d }
+    if (icon.iconId) (update as Partial<PathNode>).iconId = icon.iconId
     const existingColor = extractPrimaryColor('fill' in node ? node.fill : undefined)
       ?? extractPrimaryColor(node.stroke?.fill)
       ?? '#64748B'
