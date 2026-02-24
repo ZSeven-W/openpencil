@@ -1,6 +1,6 @@
 <p align="center">
-  <img src="https://img.shields.io/github/license/nicepkg/openpencil" alt="License" />
-  <img src="https://img.shields.io/github/actions/workflow/status/nicepkg/openpencil/ci.yml?label=CI" alt="CI" />
+  <img src="https://img.shields.io/github/license/ZSeven-W/openpencil" alt="License" />
+  <img src="https://img.shields.io/github/actions/workflow/status/ZSeven-W/openpencil/ci.yml?branch=main&label=CI" alt="CI" />
   <img src="https://img.shields.io/badge/runtime-Bun-f472b6" alt="Bun" />
   <img src="https://img.shields.io/badge/platform-Web%20%7C%20macOS%20%7C%20Windows%20%7C%20Linux-blue" alt="Platform" />
 </p>
@@ -11,8 +11,7 @@ Open-source vector design tool with a **Design-as-Code** philosophy. An alternat
 
 Design visually on an infinite canvas, generate code from designs, and let AI build entire screens from a single prompt — all in one tool that runs in your browser or as a native desktop app.
 
-<!-- TODO: add screenshot -->
-<!-- ![OpenPencil Editor](./docs/screenshot.png) -->
+![OpenPencil Editor](./screenshot/demo.png)
 
 ## Highlights
 
