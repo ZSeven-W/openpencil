@@ -227,15 +227,15 @@ Tailwind CSS v4 imported via `src/styles.css`. UI primitives from shadcn/ui (`sr
 
 ## Code Style
 
-- 单个文件不要超过 800 行。超出时应拆分为更小的模块。
-- 每个文件只导出一个组件，每个组件只承担单一职责。
-- `.ts` 和 `.tsx` 文件命名使用 kebab-case（烤肉串风格），例如 `canvas-store.ts`、`use-keyboard-shortcuts.ts`。
-- UI 组件统一使用 shadcn/ui 设计令牌（`bg-card`、`text-foreground`、`border-border` 等），禁止使用硬编码的 `gray-*`、`blue-*` 等 Tailwind 颜色。
-- 工具栏按钮激活状态直接用 `isActive` 条件 className（`bg-primary text-primary-foreground`），不使用 Radix Toggle 的 `data-[state=on]:` 选择器（存在 twMerge 冲突）。
+- Single files must not exceed 800 lines. Split into smaller modules when they grow beyond this limit.
+- One component per file, each with a single responsibility.
+- `.ts` and `.tsx` files use kebab-case naming, e.g. `canvas-store.ts`, `use-keyboard-shortcuts.ts`.
+- UI components must use shadcn/ui design tokens (`bg-card`, `text-foreground`, `border-border`, etc.). No hardcoded Tailwind colors like `gray-*`, `blue-*`.
+- Toolbar button active state uses `isActive` conditional className (`bg-primary text-primary-foreground`), not Radix Toggle's `data-[state=on]:` selector (has twMerge conflicts).
 
-## Git Commit 规范
+## Git Commit Convention
 
-使用 [Conventional Commits](https://www.conventionalcommits.org/) 格式：
+Use [Conventional Commits](https://www.conventionalcommits.org/) format:
 
 ```
 <type>(<scope>): <subject>
@@ -245,24 +245,24 @@ Tailwind CSS v4 imported via `src/styles.css`. UI primitives from shadcn/ui (`sr
 
 ### Type
 
-- `feat` — 新功能
-- `fix` — Bug 修复
-- `refactor` — 重构（不改变行为）
-- `perf` — 性能优化
-- `style` — 代码格式（不影响逻辑）
-- `docs` — 文档
-- `test` — 测试
-- `chore` — 构建/工具/依赖变更
+- `feat` — New feature
+- `fix` — Bug fix
+- `refactor` — Refactoring (no behavior change)
+- `perf` — Performance optimization
+- `style` — Code formatting (no logic change)
+- `docs` — Documentation
+- `test` — Tests
+- `chore` — Build / tooling / dependency changes
 
 ### Scope
 
-按模块划分：`editor`、`canvas`、`panels`、`history`、`ai`、`codegen`、`store`、`types`、`variables`。
+By module: `editor`, `canvas`, `panels`, `history`, `ai`, `codegen`, `store`, `types`, `variables`.
 
-### 规则
+### Rules
 
-- subject 用英文，小写开头，不加句号，祈使语气（如 `add`、`fix`、`remove`）。
-- body 可选，解释 **why** 而非 what，可用中英文。
-- 一个 commit 只做一件事。不要把不相关的改动混在一起。
+- Subject in English, lowercase start, no period, imperative mood (e.g. `add`, `fix`, `remove`).
+- Body is optional; explain **why** not what.
+- One commit per change. Do not mix unrelated changes in a single commit.
 
 ## License
 
