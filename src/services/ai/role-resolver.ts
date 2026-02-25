@@ -203,6 +203,11 @@ export function resolveTreePostPass(
     normalizeFormInputWidths(root, children)
   }
 
+  // --- Input trailing icon alignment ---
+  if (root.layout === 'horizontal' && children.length >= 2) {
+    normalizeInputTrailingIconAlignment(root, children)
+  }
+
   // --- Text height estimation ---
   if (root.layout && root.layout !== 'none') {
     fixTextHeights(root, children, canvasWidth)
@@ -359,6 +364,40 @@ function normalizeFormInputWidths(
     if (typeof child.width !== 'number') continue
     ;(child as unknown as Record<string, unknown>).width = 'fill_container'
   }
+}
+
+function normalizeInputTrailingIconAlignment(
+  parent: FrameNode,
+  children: PenNode[],
+): void {
+  if (parent.role !== 'input' && parent.role !== 'form-input') return
+  if (parent.justifyContent && parent.justifyContent !== 'start') return
+
+  const visibleChildren = children.filter((c) => c.visible !== false)
+  if (visibleChildren.length < 2) return
+
+  const trailing = visibleChildren[visibleChildren.length - 1]
+  if (!isIconLikeNode(trailing)) return
+
+  const hasTextBeforeTrailing = visibleChildren
+    .slice(0, -1)
+    .some((child) => child.type === 'text')
+  if (!hasTextBeforeTrailing) return
+
+  ;(parent as unknown as Record<string, unknown>).justifyContent = 'space_between'
+}
+
+function isIconLikeNode(node: PenNode): boolean {
+  if (node.type === 'path' || node.type === 'image') return true
+
+  if (node.type === 'frame') {
+    if (node.role === 'icon' || node.role === 'icon-button') return true
+    const w = toSizeNumber(node.width, 0)
+    const h = toSizeNumber(node.height, 0)
+    if (w > 0 && h > 0 && Math.max(w, h) <= 32) return true
+  }
+
+  return false
 }
 
 function fixTextHeights(

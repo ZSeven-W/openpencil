@@ -97,6 +97,10 @@ DESIGN RULES:
 - CJK fonts: use "Noto Sans SC" (CN) / "Noto Sans JP" (JP) / "Noto Sans KR" (KR) for headings. Never "Space Grotesk"/"Manrope" for CJK. CJK lineHeight: 1.3-1.4 headings, 1.6-1.8 body. CJK letterSpacing: 0, never negative.
 - Card rows: ALL cards use width="fill_container" + height="fill_container" for even distribution and equal height. Dense rows (5+): use short titles, max 2 text blocks per card.
 - Icons: "path" nodes with descriptive names ("SearchIcon", "MenuIcon" etc.). System auto-resolves to SVG. Size 16-24px. Never use emoji as icons.
+- Semantic inputs should include affordance icons when appropriate:
+  - search bars: leading SearchIcon
+  - password fields: trailing EyeIcon or EyeOffIcon (use justifyContent="space_between")
+  - email/account fields: leading MailIcon or UserIcon
 - Phone mockup: ONE frame, width 260-300, height 520-580, cornerRadius 32, solid fill + 1px stroke. No ellipse for mockups. At most ONE centered text child inside.
 - Never ellipse for decorative shapes — use frame/rectangle with cornerRadius.
 - Use style guide colors/fonts consistently. No random colors.
