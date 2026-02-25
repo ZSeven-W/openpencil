@@ -15,6 +15,7 @@ interface PersistedState {
 
 interface AgentSettingsState extends PersistedState {
   dialogOpen: boolean
+  isHydrated: boolean
 
   connectProvider: (
     provider: AIProviderType,
@@ -64,6 +65,7 @@ export const useAgentSettingsStore = create<AgentSettingsState>((set, get) => ({
   providers: { ...DEFAULT_PROVIDERS },
   mcpIntegrations: [...DEFAULT_MCP_INTEGRATIONS],
   dialogOpen: false,
+  isHydrated: false,
 
   connectProvider: (provider, method, models) =>
     set((s) => ({
@@ -126,6 +128,8 @@ export const useAgentSettingsStore = create<AgentSettingsState>((set, get) => ({
       if (data.mcpIntegrations) set({ mcpIntegrations: data.mcpIntegrations })
     } catch {
       // ignore
+    } finally {
+      set({ isHydrated: true })
     }
   },
 }))
