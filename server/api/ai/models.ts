@@ -1,4 +1,8 @@
 import { defineEventHandler } from 'h3'
+import {
+  buildClaudeAgentEnv,
+  getClaudeAgentDebugFilePath,
+} from '../../utils/resolve-claude-agent-env'
 
 interface ModelInfo {
   value: string
@@ -20,18 +24,18 @@ export default defineEventHandler(async () => {
   try {
     const { query } = await import('@anthropic-ai/claude-agent-sdk')
 
-    const env = { ...process.env } as Record<string, string | undefined>
-    delete env.CLAUDECODE
+    const env = buildClaudeAgentEnv()
+    const debugFile = getClaudeAgentDebugFilePath()
 
     const q = query({
       prompt: '',
       options: {
-        model: 'claude-sonnet-4-6',
         maxTurns: 1,
         tools: [],
         permissionMode: 'plan',
         persistSession: false,
         env,
+        ...(debugFile ? { debugFile } : {}),
       },
     })
 

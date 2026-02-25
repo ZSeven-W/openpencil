@@ -1,5 +1,9 @@
 import { defineEventHandler, readBody, setResponseHeaders } from 'h3'
 import { resolveClaudeCli } from '../../utils/resolve-claude-cli'
+import {
+  buildClaudeAgentEnv,
+  getClaudeAgentDebugFilePath,
+} from '../../utils/resolve-claude-agent-env'
 import { writeFile, unlink, mkdtemp } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -10,6 +14,10 @@ interface ValidateBody {
   imageBase64: string
   model?: string
   provider?: string
+}
+
+function shouldRetryClaudeWithoutModel(raw: string): boolean {
+  return /process exited with code 1|invalid model|unknown model|model.*not/i.test(raw)
 }
 
 /**
@@ -111,8 +119,8 @@ async function validateViaAgentSDK(
 
     const { query } = await import('@anthropic-ai/claude-agent-sdk')
 
-    const env = { ...process.env } as Record<string, string | undefined>
-    delete env.CLAUDECODE
+    const env = buildClaudeAgentEnv()
+    const debugFile = getClaudeAgentDebugFilePath()
 
     const claudePath = resolveClaudeCli()
 
@@ -125,31 +133,59 @@ ${body.system}
 
 Output ONLY the JSON object, no markdown fences, no explanation.`
 
-    const q = query({
-      prompt,
-      options: {
-        model: model || 'claude-sonnet-4-6',
-        maxTurns: 2,
-        tools: [],
-        plugins: [],
-        permissionMode: 'plan',
-        persistSession: false,
-        env,
-        ...(claudePath ? { pathToClaudeCodeExecutable: claudePath } : {}),
-      },
-    })
+    const runQuery = async (modelOverride?: string): Promise<{ text: string; skipped?: boolean; error?: string }> => {
+      const q = query({
+        prompt,
+        options: {
+          ...(modelOverride ? { model: modelOverride } : {}),
+          maxTurns: 2,
+          tools: [],
+          plugins: [],
+          permissionMode: 'plan',
+          persistSession: false,
+          env,
+          ...(debugFile ? { debugFile } : {}),
+          ...(claudePath ? { pathToClaudeCodeExecutable: claudePath } : {}),
+        },
+      })
 
-    for await (const message of q) {
-      if (message.type === 'result') {
-        if (message.subtype === 'success') {
-          return { text: message.result }
+      try {
+        for await (const message of q) {
+          if (message.type === 'result') {
+            const isErrorResult = 'is_error' in message && Boolean((message as { is_error?: boolean }).is_error)
+            if (message.subtype === 'success' && !isErrorResult) {
+              return { text: message.result }
+            }
+            const errors = 'errors' in message ? (message.errors as string[]) : []
+            const resultText = 'result' in message ? String(message.result ?? '') : ''
+            return { error: errors.join('; ') || resultText || `Query ended with: ${message.subtype}`, text: '' }
+          }
         }
-        const errors = 'errors' in message ? (message.errors as string[]) : []
-        return { error: errors.join('; ') || `Query ended with: ${message.subtype}`, text: '' }
+      } finally {
+        q.close()
       }
+
+      return { text: '', skipped: true }
     }
 
-    return { text: '', skipped: true }
+    try {
+      const first = await runQuery(model)
+      if (model && first.error && shouldRetryClaudeWithoutModel(first.error)) {
+        return await runQuery(undefined)
+      }
+      return first
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      if (model && shouldRetryClaudeWithoutModel(message)) {
+        try {
+          return await runQuery(undefined)
+        } catch (retryError) {
+          const retryMessage = retryError instanceof Error ? retryError.message : String(retryError)
+          return { error: retryMessage, text: '' }
+        }
+      }
+      return { error: message, text: '' }
+    }
   } finally {
     // Clean up temp file
     try {
