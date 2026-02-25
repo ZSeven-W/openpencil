@@ -223,8 +223,8 @@ export function computeLayoutPositions(
   const parentH = typeof pH === 'number' ? pH : 100
   const pad = resolvePadding(c.padding)
   const gap = typeof c.gap === 'number' ? c.gap : 0
-  const justify = c.justifyContent ?? 'start'
-  const align = c.alignItems ?? 'start'
+  const justify = normalizeJustifyContent(c.justifyContent)
+  const align = normalizeAlignItems(c.alignItems)
 
   const isVertical = layout === 'vertical'
   const availW = parentW - pad.left - pad.right
@@ -357,6 +357,58 @@ export function computeLayoutPositions(
     }
     return out as unknown as PenNode
   })
+}
+
+function normalizeJustifyContent(
+  value: unknown,
+): 'start' | 'center' | 'end' | 'space_between' | 'space_around' {
+  if (typeof value !== 'string') return 'start'
+  const v = value.trim().toLowerCase()
+  switch (v) {
+    case 'start':
+    case 'flex-start':
+    case 'left':
+    case 'top':
+      return 'start'
+    case 'center':
+    case 'middle':
+      return 'center'
+    case 'end':
+    case 'flex-end':
+    case 'right':
+    case 'bottom':
+      return 'end'
+    case 'space_between':
+    case 'space-between':
+      return 'space_between'
+    case 'space_around':
+    case 'space-around':
+      return 'space_around'
+    default:
+      return 'start'
+  }
+}
+
+function normalizeAlignItems(value: unknown): 'start' | 'center' | 'end' {
+  if (typeof value !== 'string') return 'start'
+  const v = value.trim().toLowerCase()
+  switch (v) {
+    case 'start':
+    case 'flex-start':
+    case 'left':
+    case 'top':
+      return 'start'
+    case 'center':
+    case 'middle':
+      return 'center'
+    case 'end':
+    case 'flex-end':
+    case 'right':
+    case 'bottom':
+      return 'end'
+    default:
+      return 'start'
+  }
 }
 
 // Re-export estimateLineWidth for convenience (used by drag-into-layout etc.)
