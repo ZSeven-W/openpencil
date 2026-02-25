@@ -148,6 +148,11 @@ function shouldSplitByGrapheme(text: string): boolean {
   return hasCjk && hasLongCjkRun
 }
 
+function isFixedWidthText(node: PenNode): boolean {
+  if (node.type !== 'text') return false
+  return node.textGrowth === 'fixed-width' || node.textGrowth === 'fixed-width-height'
+}
+
 function sizeToNumber(
   val: number | string | undefined,
   fallback: number,
@@ -320,14 +325,9 @@ export function createFabricObject(
       if (pw > 0 && ph > 0 && obj.width && obj.height) {
         // Uniform scale — preserve aspect ratio so icons don't get squished
         const uniformScale = Math.min(pw / obj.width, ph / obj.height)
-        if (node.iconId) {
-          // For icon nodes: expand the Fabric bounding box to pw×ph so the selection
-          // handles always form a perfect square. The path content is naturally centered
-          // by Fabric's pathOffset (center of path's bbox).
-          obj.set({ width: pw / uniformScale, height: ph / uniformScale, scaleX: uniformScale, scaleY: uniformScale })
-        } else {
-          obj.set({ scaleX: uniformScale, scaleY: uniformScale })
-        }
+        // Keep native path width/height. Overriding width/height can shift pathOffset
+        // and make icons appear visually off-center in logos.
+        obj.set({ scaleX: uniformScale, scaleY: uniformScale })
       }
       break
     }
@@ -352,8 +352,7 @@ export function createFabricObject(
       }
       // Use Textbox for fixed-width / fixed-size modes (word wrapping).
       // Use IText for auto-width mode (no wrapping, expands horizontally).
-      const growth = node.textGrowth
-      const useTextbox = growth === 'fixed-width' || growth === 'fixed-width-height' || w > 0
+      const useTextbox = isFixedWidthText(node)
       if (useTextbox) {
         obj = new fabric.Textbox(textContent, {
           ...textProps,

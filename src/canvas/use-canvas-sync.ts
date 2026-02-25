@@ -435,8 +435,7 @@ export function useCanvasSync() {
         // (IText ↔ Textbox are different Fabric classes).
         if (existingObj && node.type === 'text') {
           const growth = node.textGrowth
-          const w = typeof node.width === 'number' ? node.width : 0
-          const needsTextbox = growth === 'fixed-width' || growth === 'fixed-width-height' || w > 0
+          const needsTextbox = growth === 'fixed-width' || growth === 'fixed-width-height'
           const isTextbox = existingObj instanceof fabric.Textbox
           if (needsTextbox !== isTextbox) {
             canvas.remove(existingObj)
