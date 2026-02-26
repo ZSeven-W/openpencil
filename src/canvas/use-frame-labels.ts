@@ -35,6 +35,8 @@ function collectInstanceIds(nodes: PenNode[], result: Set<string>) {
 
 export function useFrameLabels() {
   useEffect(() => {
+    let detach: (() => void) | null = null
+
     const interval = setInterval(() => {
       const canvas = useCanvasStore.getState().fabricCanvas
       if (!canvas) return
@@ -49,6 +51,8 @@ export function useFrameLabels() {
         const vpt = canvas.viewportTransform
         if (!vpt) return
         const zoom = vpt[0]
+        if (!Number.isFinite(zoom) || zoom <= 0) return
+        if (!el.offsetWidth) return
         const dpr = el.width / el.offsetWidth
 
         const store = useDocumentStore.getState()
@@ -68,8 +72,13 @@ export function useFrameLabels() {
         const objects = canvas.getObjects() as FabricObjectWithPenId[]
 
         ctx.save()
-        const fontSize = LABEL_FONT_SIZE * dpr
-        ctx.font = `500 ${fontSize}px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif`
+        ctx.setTransform(
+          vpt[0] * dpr, vpt[1] * dpr,
+          vpt[2] * dpr, vpt[3] * dpr,
+          vpt[4] * dpr, vpt[5] * dpr,
+        )
+        ctx.font = `500 ${LABEL_FONT_SIZE / zoom}px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif`
+        ctx.textBaseline = 'bottom'
 
         for (const obj of objects) {
           if (!obj.penNodeId) continue
@@ -84,27 +93,30 @@ export function useFrameLabels() {
           if (!node) continue
 
           const name = node.name ?? node.type
-          const x = ((obj.left ?? 0) * zoom + vpt[4]) * dpr
-          const y = ((obj.top ?? 0) * zoom + vpt[5]) * dpr
+          const corners = obj.getCoords()
+          const x = Math.min(...corners.map((p) => p.x))
+          const y = Math.min(...corners.map((p) => p.y))
 
           ctx.fillStyle = isReusable
             ? COMPONENT_COLOR
             : isInstance
               ? INSTANCE_COLOR
               : LABEL_COLOR
-          ctx.fillText(name, x, y - LABEL_OFFSET_Y * dpr)
+          ctx.fillText(name, x, y - LABEL_OFFSET_Y / zoom)
         }
 
         ctx.restore()
       }
 
       canvas.on('after:render', onAfterRender)
-
-      return () => {
+      detach = () => {
         canvas.off('after:render', onAfterRender)
       }
     }, 100)
 
-    return () => clearInterval(interval)
+    return () => {
+      clearInterval(interval)
+      detach?.()
+    }
   }, [])
 }

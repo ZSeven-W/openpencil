@@ -1,6 +1,6 @@
 {
     "name": "openpencil",
-    "version": "0.0.2",
+    "version": "0.0.3",
     "description": "Open-source vector design tool with Design-as-Code philosophy",
     "author": {
         "name": "ZSeven-W",
@@ -24,7 +24,8 @@
         "electron:build": "BUILD_TARGET=electron bun --bun run build && bun run electron:compile && bun run mcp:compile && npx electron-builder --config electron-builder.yml",
         "electron:build:mac-arm64": "BUILD_TARGET=electron bun --bun run build && bun run electron:compile && bun run mcp:compile && npx electron-builder --config electron-builder.yml --mac --arm64",
         "electron:build:mac-x64": "BUILD_TARGET=electron bun --bun run build && bun run electron:compile && bun run mcp:compile && npx electron-builder --config electron-builder.yml --mac --x64",
-        "electron:build:mac-universal": "BUILD_TARGET=electron bun --bun run build && bun run electron:compile && bun run mcp:compile && npx electron-builder --config electron-builder.yml --mac --arm64 --x64"
+        "electron:build:mac-universal": "BUILD_TARGET=electron bun --bun run build && bun run electron:compile && bun run mcp:compile && npx electron-builder --config electron-builder.yml --mac --arm64 --x64",
+        "electron:build:mac-both": "bun run electron:build:mac-arm64 && if [ -f dist-electron/latest-mac.yml ]; then mv dist-electron/latest-mac.yml dist-electron/latest-mac-arm64.yml; fi && bun run electron:build:mac-x64"
     },
     "dependencies": {
         "@anthropic-ai/claude-agent-sdk": "^0.2.47",
@@ -49,6 +50,7 @@
         "@tanstack/router-plugin": "^1.132.0",
         "class-variance-authority": "^0.7.1",
         "clsx": "^2.1.1",
+        "electron-updater": "^6.6.2",
         "fabric": "^7.1.0",
         "lucide-react": "^0.545.0",
         "nanoid": "^5.1.6",

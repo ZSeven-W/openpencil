@@ -1,4 +1,23 @@
-import { contextBridge, ipcRenderer } from 'electron'
+import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron'
+
+export type UpdaterStatus =
+  | 'disabled'
+  | 'idle'
+  | 'checking'
+  | 'available'
+  | 'downloading'
+  | 'downloaded'
+  | 'not-available'
+  | 'error'
+
+export interface UpdaterState {
+  status: UpdaterStatus
+  currentVersion: string
+  latestVersion?: string
+  downloadProgress?: number
+  releaseDate?: string
+  error?: string
+}
 
 export interface ElectronAPI {
   isElectron: true
@@ -8,6 +27,12 @@ export interface ElectronAPI {
     defaultPath?: string,
   ) => Promise<string | null>
   saveToPath: (filePath: string, content: string) => Promise<string>
+  updater: {
+    getState: () => Promise<UpdaterState>
+    checkForUpdates: () => Promise<UpdaterState>
+    quitAndInstall: () => Promise<boolean>
+    onStateChange: (callback: (state: UpdaterState) => void) => () => void
+  }
 }
 
 const api: ElectronAPI = {
@@ -20,6 +45,21 @@ const api: ElectronAPI = {
 
   saveToPath: (filePath: string, content: string) =>
     ipcRenderer.invoke('dialog:saveToPath', { filePath, content }),
+
+  updater: {
+    getState: () => ipcRenderer.invoke('updater:getState'),
+    checkForUpdates: () => ipcRenderer.invoke('updater:checkForUpdates'),
+    quitAndInstall: () => ipcRenderer.invoke('updater:quitAndInstall'),
+    onStateChange: (callback: (state: UpdaterState) => void) => {
+      const listener = (_event: IpcRendererEvent, state: UpdaterState) => {
+        callback(state)
+      }
+      ipcRenderer.on('updater:state', listener)
+      return () => {
+        ipcRenderer.removeListener('updater:state', listener)
+      }
+    },
+  },
 }
 
 contextBridge.exposeInMainWorld('electronAPI', api)
