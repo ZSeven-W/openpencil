@@ -1,6 +1,11 @@
 import { defineEventHandler, readBody, setResponseHeaders } from 'h3'
+import { readFile } from 'node:fs/promises'
 import { resolveClaudeCli } from '../../utils/resolve-claude-cli'
 import { runCodexExec } from '../../utils/codex-client'
+import {
+  buildClaudeAgentEnv,
+  getClaudeAgentDebugFilePath,
+} from '../../utils/resolve-claude-agent-env'
 
 interface ChatBody {
   system: string
@@ -10,6 +15,41 @@ interface ChatBody {
   thinkingMode?: 'adaptive' | 'disabled' | 'enabled'
   thinkingBudgetTokens?: number
   effort?: 'low' | 'medium' | 'high' | 'max'
+}
+
+async function readDebugTail(path?: string, maxLines = 40): Promise<string[] | undefined> {
+  if (!path) return undefined
+  try {
+    const raw = await readFile(path, 'utf-8')
+    const lines = raw.split('\n').filter((l) => l.trim().length > 0)
+    return lines.slice(-maxLines)
+  } catch {
+    return undefined
+  }
+}
+
+function shouldRetryClaudeWithoutModel(raw: string): boolean {
+  return /process exited with code 1|invalid model|unknown model|model.*not/i.test(raw)
+}
+
+function buildClaudeExitHint(rawError: string, debugTail?: string[]): string | undefined {
+  if (!/process exited with code 1/i.test(rawError)) return undefined
+  if (!debugTail || debugTail.length === 0) return undefined
+  const text = debugTail.join('\n')
+
+  const hints: string[] = []
+  if (/Failed to save config with lock: Error: EPERM|operation not permitted, .*\.claude\.json/i.test(text)) {
+    hints.push('Claude Code cannot write ~/.claude.json in the current runtime (permission denied).')
+  }
+  if (/Connection error|Could not resolve host|Failed to connect/i.test(text)) {
+    hints.push('Upstream API connection failed (check proxy/DNS/network reachability to your ANTHROPIC_BASE_URL).')
+  }
+  if (/ANTHROPIC_CUSTOM_HEADERS present: false, has Authorization header: false/i.test(text)) {
+    hints.push('No API auth header detected by Claude runtime; verify token/header env mapping.')
+  }
+
+  if (hints.length === 0) return undefined
+  return `${rawError}\n${hints.join(' ')}`
 }
 
 /**
@@ -145,6 +185,8 @@ function streamViaAgentSDK(body: ChatBody, model?: string) {
           controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: 'ping', content: '' })}\n\n`))
         } catch { /* stream already closed */ }
       }, KEEPALIVE_INTERVAL_MS)
+      let emittedText = false
+      let debugFile: string | undefined
 
       try {
         const { query } = await import('@anthropic-ai/claude-agent-sdk')
@@ -154,52 +196,76 @@ function streamViaAgentSDK(body: ChatBody, model?: string) {
         let prompt = lastUserMsg?.content ?? ''
 
         // Remove CLAUDECODE env to allow running from within a CC terminal
-        const env = { ...process.env } as Record<string, string | undefined>
-        delete env.CLAUDECODE
+        const env = buildClaudeAgentEnv()
+        debugFile = getClaudeAgentDebugFilePath()
 
         const claudePath = resolveClaudeCli()
         const thinking = getAgentThinkingConfig(body)
 
-        const q = query({
-          prompt,
-          options: {
-            systemPrompt: body.system,
-            model: model || 'claude-sonnet-4-6',
-            maxTurns: 1,
-            includePartialMessages: true,
-            tools: [],
-            plugins: [],
-            permissionMode: 'plan',
-            persistSession: false,
-            ...(body.effort ? { effort: body.effort } : {}),
-            ...(thinking ? { thinking } : {}),
-            env,
-            ...(claudePath ? { pathToClaudeCodeExecutable: claudePath } : {}),
-          },
-        })
+        const runQuery = async (modelOverride?: string) => {
+          const q = query({
+            prompt,
+            options: {
+              systemPrompt: body.system,
+              ...(modelOverride ? { model: modelOverride } : {}),
+              maxTurns: 1,
+              includePartialMessages: true,
+              tools: [],
+              plugins: [],
+              permissionMode: 'plan',
+              persistSession: false,
+              ...(body.effort ? { effort: body.effort } : {}),
+              ...(thinking ? { thinking } : {}),
+              env,
+              ...(debugFile ? { debugFile } : {}),
+              ...(claudePath ? { pathToClaudeCodeExecutable: claudePath } : {}),
+            },
+          })
 
-        for await (const message of q) {
-          if (message.type === 'stream_event') {
-            const ev = message.event
-            if (ev.type === 'content_block_delta') {
-              if (ev.delta.type === 'text_delta') {
-                clearInterval(pingTimer)
-                const data = JSON.stringify({ type: 'text', content: ev.delta.text })
-                controller.enqueue(encoder.encode(`data: ${data}\n\n`))
-              } else if (ev.delta.type === 'thinking_delta') {
-                // Keep pings alive during thinking — only stop on text output
-                const data = JSON.stringify({ type: 'thinking', content: (ev.delta as any).thinking })
-                controller.enqueue(encoder.encode(`data: ${data}\n\n`))
+          try {
+            for await (const message of q) {
+              if (message.type === 'stream_event') {
+                const ev = message.event
+                if (ev.type === 'content_block_delta') {
+                  if (ev.delta.type === 'text_delta') {
+                    emittedText = true
+                    clearInterval(pingTimer)
+                    const data = JSON.stringify({ type: 'text', content: ev.delta.text })
+                    controller.enqueue(encoder.encode(`data: ${data}\n\n`))
+                  } else if (ev.delta.type === 'thinking_delta') {
+                    // Keep pings alive during thinking — only stop on text output
+                    const data = JSON.stringify({ type: 'thinking', content: (ev.delta as any).thinking })
+                    controller.enqueue(encoder.encode(`data: ${data}\n\n`))
+                  }
+                }
+              } else if (message.type === 'result') {
+                const isErrorResult = 'is_error' in message && Boolean((message as { is_error?: boolean }).is_error)
+                if (message.subtype !== 'success' || isErrorResult) {
+                  const errors = 'errors' in message ? (message.errors as string[]) : []
+                  const resultText = 'result' in message ? String(message.result ?? '') : ''
+                  const content = errors.join('; ') || resultText || `Query ended with: ${message.subtype}`
+                  if (modelOverride && !emittedText && shouldRetryClaudeWithoutModel(content)) {
+                    throw new Error(content)
+                  }
+                  controller.enqueue(
+                    encoder.encode(`data: ${JSON.stringify({ type: 'error', content })}\n\n`),
+                  )
+                }
               }
             }
-          } else if (message.type === 'result') {
-            if (message.subtype !== 'success') {
-              const errors = 'errors' in message ? (message.errors as string[]) : []
-              const content = errors.join('; ') || `Query ended with: ${message.subtype}`
-              controller.enqueue(
-                encoder.encode(`data: ${JSON.stringify({ type: 'error', content })}\n\n`),
-              )
-            }
+          } finally {
+            q.close()
+          }
+        }
+
+        try {
+          await runQuery(model)
+        } catch (error) {
+          const raw = error instanceof Error ? error.message : String(error)
+          if (model && !emittedText && shouldRetryClaudeWithoutModel(raw)) {
+            await runQuery(undefined)
+          } else {
+            throw error
           }
         }
 
@@ -207,7 +273,10 @@ function streamViaAgentSDK(body: ChatBody, model?: string) {
           encoder.encode(`data: ${JSON.stringify({ type: 'done', content: '' })}\n\n`),
         )
       } catch (error) {
-        const content = error instanceof Error ? error.message : 'Unknown error'
+        const rawContent = error instanceof Error ? error.message : 'Unknown error'
+        const tail = await readDebugTail(debugFile)
+        const hintedContent = buildClaudeExitHint(rawContent, tail)
+        const content = hintedContent ?? rawContent
         controller.enqueue(
           encoder.encode(`data: ${JSON.stringify({ type: 'error', content })}\n\n`),
         )

@@ -1,6 +1,10 @@
 import { defineEventHandler, readBody, setResponseHeaders } from 'h3'
 import { resolveClaudeCli } from '../../utils/resolve-claude-cli'
 import { runCodexExec } from '../../utils/codex-client'
+import {
+  buildClaudeAgentEnv,
+  getClaudeAgentDebugFilePath,
+} from '../../utils/resolve-claude-agent-env'
 
 interface GenerateBody {
   system: string
@@ -10,6 +14,10 @@ interface GenerateBody {
   thinkingMode?: 'adaptive' | 'disabled' | 'enabled'
   thinkingBudgetTokens?: number
   effort?: 'low' | 'medium' | 'high' | 'max'
+}
+
+function shouldRetryClaudeWithoutModel(raw: string): boolean {
+  return /process exited with code 1|invalid model|unknown model|model.*not/i.test(raw)
 }
 
 /**
@@ -67,12 +75,12 @@ async function generateViaAnthropicSDK(apiKey: string, body: GenerateBody, model
 
 /** Generate via Claude Agent SDK (uses local Claude Code OAuth login, no API key needed) */
 async function generateViaAgentSDK(body: GenerateBody, model?: string): Promise<{ text?: string; error?: string }> {
-  try {
+  const runQuery = async (modelOverride?: string): Promise<{ text?: string; error?: string }> => {
     const { query } = await import('@anthropic-ai/claude-agent-sdk')
 
     // Remove CLAUDECODE env to allow running from within a CC terminal
-    const env = { ...process.env } as Record<string, string | undefined>
-    delete env.CLAUDECODE
+    const env = buildClaudeAgentEnv()
+    const debugFile = getClaudeAgentDebugFilePath()
 
     const claudePath = resolveClaudeCli()
 
@@ -80,30 +88,53 @@ async function generateViaAgentSDK(body: GenerateBody, model?: string): Promise<
       prompt: body.message,
       options: {
         systemPrompt: body.system,
-        model: model || 'claude-sonnet-4-6',
+        ...(modelOverride ? { model: modelOverride } : {}),
         maxTurns: 1,
         tools: [],
         plugins: [],
         permissionMode: 'plan',
         persistSession: false,
         env,
+        ...(debugFile ? { debugFile } : {}),
         ...(claudePath ? { pathToClaudeCodeExecutable: claudePath } : {}),
       },
     })
 
-    for await (const message of q) {
-      if (message.type === 'result') {
-        if (message.subtype === 'success') {
-          return { text: message.result }
+    try {
+      for await (const message of q) {
+        if (message.type === 'result') {
+          const isErrorResult = 'is_error' in message && Boolean((message as { is_error?: boolean }).is_error)
+          if (message.subtype === 'success' && !isErrorResult) {
+            return { text: message.result }
+          }
+          const errors = 'errors' in message ? (message.errors as string[]) : []
+          const resultText = 'result' in message ? String(message.result ?? '') : ''
+          return { error: errors.join('; ') || resultText || `Query ended with: ${message.subtype}` }
         }
-        const errors = 'errors' in message ? (message.errors as string[]) : []
-        return { error: errors.join('; ') || `Query ended with: ${message.subtype}` }
       }
+    } finally {
+      q.close()
     }
 
     return { error: 'No result received from Claude Agent SDK' }
+  }
+
+  try {
+    const first = await runQuery(model)
+    if (model && first.error && shouldRetryClaudeWithoutModel(first.error)) {
+      return await runQuery(undefined)
+    }
+    return first
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'Unknown error'
+    const message = error instanceof Error ? error.message : String(error)
+    if (model && shouldRetryClaudeWithoutModel(message)) {
+      try {
+        return await runQuery(undefined)
+      } catch (retryError) {
+        const retryMessage = retryError instanceof Error ? retryError.message : String(retryError)
+        return { error: retryMessage }
+      }
+    }
     return { error: message }
   }
 }

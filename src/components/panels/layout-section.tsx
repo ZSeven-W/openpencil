@@ -19,6 +19,58 @@ const POSITIONS = ['start', 'center', 'end'] as const
 
 type GapMode = 'numeric' | 'space_between' | 'space_around'
 type PaddingMode = 'single' | 'axis' | 'individual'
+type JustifyValue = 'start' | 'center' | 'end' | 'space_between' | 'space_around'
+type AlignValue = 'start' | 'center' | 'end'
+
+function normalizeJustifyValue(value: unknown): JustifyValue {
+  if (typeof value !== 'string') return 'start'
+  const v = value.trim().toLowerCase()
+  switch (v) {
+    case 'start':
+    case 'flex-start':
+    case 'left':
+    case 'top':
+      return 'start'
+    case 'center':
+    case 'middle':
+      return 'center'
+    case 'end':
+    case 'flex-end':
+    case 'right':
+    case 'bottom':
+      return 'end'
+    case 'space_between':
+    case 'space-between':
+      return 'space_between'
+    case 'space_around':
+    case 'space-around':
+      return 'space_around'
+    default:
+      return 'start'
+  }
+}
+
+function normalizeAlignValue(value: unknown): AlignValue {
+  if (typeof value !== 'string') return 'start'
+  const v = value.trim().toLowerCase()
+  switch (v) {
+    case 'start':
+    case 'flex-start':
+    case 'left':
+    case 'top':
+      return 'start'
+    case 'center':
+    case 'middle':
+      return 'center'
+    case 'end':
+    case 'flex-end':
+    case 'right':
+    case 'bottom':
+      return 'end'
+    default:
+      return 'start'
+  }
+}
 
 // ---------------------------------------------------------------------------
 // Padding Icons (small SVG indicators for V/H padding)
@@ -109,8 +161,8 @@ function AlignmentGrid({
   onUpdate,
 }: {
   layout: 'none' | 'vertical' | 'horizontal'
-  justifyContent: string
-  alignItems: string
+  justifyContent: JustifyValue
+  alignItems: AlignValue
   isSpaceMode: boolean
   onUpdate: (updates: Partial<PenNode>) => void
 }) {
@@ -615,8 +667,8 @@ export default function LayoutSection({
   const layout = node.layout ?? 'none'
   const hasLayout = layout !== 'none'
 
-  const justifyContent = node.justifyContent ?? 'start'
-  const alignItems = node.alignItems ?? 'start'
+  const justifyContent = normalizeJustifyValue(node.justifyContent)
+  const alignItems = normalizeAlignValue(node.alignItems)
   const rawGap = node.gap
   const gap = typeof rawGap === 'number' ? rawGap : 0
 

@@ -37,6 +37,11 @@ function shouldSplitByGrapheme(text: string): boolean {
   return hasCjk && hasLongCjkRun
 }
 
+function isFixedWidthText(node: PenNode): boolean {
+  if (node.type !== 'text') return false
+  return node.textGrowth === 'fixed-width' || node.textGrowth === 'fixed-width-height'
+}
+
 export function syncFabricObject(
   obj: FabricObjectWithPenId,
   node: PenNode,
@@ -122,6 +127,7 @@ export function syncFabricObject(
           ? node.content
           : node.content.map((s) => s.text).join('')
       const w = sizeToNumber(node.width, 0)
+      const fixedWidthText = isFixedWidthText(node)
       const fontSize = node.fontSize ?? 16
       const splitByGrapheme = shouldSplitByGrapheme(content)
       obj.set({
@@ -139,8 +145,8 @@ export function syncFabricObject(
       })
       if (obj instanceof fabric.Textbox) {
         obj.set({ splitByGrapheme } as Partial<fabric.Textbox>)
+        if (fixedWidthText && w > 0) obj.set({ width: w })
       }
-      if (w > 0) obj.set({ width: w })
       break
     }
     case 'polygon':
@@ -187,13 +193,9 @@ export function syncFabricObject(
         if (node.type === 'path') {
           // Uniform scale — preserve aspect ratio so icons don't get squished
           const uniformScale = Math.min(w / nw, h / nh)
-          if (node.iconId) {
-            // Expand bounding box to w×h so selection handles form a perfect square.
-            // Path content is centered automatically by Fabric's pathOffset.
-            obj.set({ width: w / uniformScale, height: h / uniformScale, scaleX: uniformScale, scaleY: uniformScale })
-          } else {
-            obj.set({ width: nw, height: nh, scaleX: uniformScale, scaleY: uniformScale })
-          }
+          // Keep native width/height to avoid pathOffset drift that can visually
+          // offset icons inside logo containers.
+          obj.set({ width: nw, height: nh, scaleX: uniformScale, scaleY: uniformScale })
         } else {
           obj.set({ width: nw, height: nh, scaleX: w / nw, scaleY: h / nh })
         }
