@@ -6,7 +6,6 @@ import { useAIStore } from '@/stores/ai-store'
 import type { PanelCorner } from '@/stores/ai-store'
 import { useCanvasStore } from '@/stores/canvas-store'
 import { useAgentSettingsStore } from '@/stores/agent-settings-store'
-import { fetchAvailableModels } from '@/services/ai/ai-service'
 import {
   extractAndApplyDesign,
 } from '@/services/ai/design-generator'
@@ -122,6 +121,10 @@ export default function AIChatPanel() {
   const providersHydrated = useAgentSettingsStore((s) => s.isHydrated)
   const [modelDropdownOpen, setModelDropdownOpen] = useState(false)
   const { input, setInput, handleSend } = useChatHandlers()
+  const noAvailableModels = !isLoadingModels && availableModels.length === 0
+  const canUseModel = !isLoadingModels && availableModels.length > 0
+  const canSendMessage = canUseModel && !isStreaming && !!input.trim()
+  const quickActionsDisabled = !canUseModel || isStreaming
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -132,15 +135,14 @@ export default function AIChatPanel() {
     hydrateModelPreference()
   }, [hydrateModelPreference])
 
-  // Build model list from connected providers in agent-settings-store.
-  // Falls back to Agent SDK legacy fetch when no providers are connected.
+  // Build model list strictly from connected providers in agent-settings-store.
+  // If none are connected, model list is empty.
   useEffect(() => {
     if (!providersHydrated) {
       setLoadingModels(true)
       return
     }
 
-    let cancelled = false
     const connectedProviders = (Object.keys(providers) as AIProviderType[]).filter(
       (p) => providers[p].isConnected && (providers[p].models?.length ?? 0) > 0,
     )
@@ -176,38 +178,10 @@ export default function AIChatPanel() {
       return
     }
 
-    // No providers connected — fall back to Agent SDK legacy model list.
+    // No providers connected — no available models.
     setModelGroups([])
-    setLoadingModels(true)
-    fetchAvailableModels()
-      .then((models) => {
-        if (cancelled) return
-
-        // Provider state might have changed while request was in flight.
-        const latestProviders = useAgentSettingsStore.getState().providers
-        const stillNoConnected = (Object.keys(latestProviders) as AIProviderType[]).every(
-          (p) => !(latestProviders[p].isConnected && (latestProviders[p].models?.length ?? 0) > 0),
-        )
-        if (!stillNoConnected) return
-
-        if (models.length > 0) {
-          setAvailableModels(models)
-          const { model: currentModel, preferredModel } = useAIStore.getState()
-          const nextModel = resolveNextModel(models, currentModel, preferredModel)
-          if (nextModel && nextModel !== currentModel) {
-            setModel(nextModel)
-          }
-        }
-      })
-      .finally(() => {
-        if (!cancelled) {
-          setLoadingModels(false)
-        }
-      })
-
-    return () => {
-      cancelled = true
-    }
+    setAvailableModels([])
+    setLoadingModels(false)
   }, [providers, providersHydrated]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Close model dropdown when clicking outside
@@ -478,7 +452,12 @@ export default function AIChatPanel() {
                   key={action.label}
                   type="button"
                   onClick={() => handleSend(action.prompt)}
-                  className="text-xs text-left px-3.5 py-1 rounded-full bg-secondary/50 border border-border text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors"
+                  className={cn(
+                    'text-xs text-left px-3.5 py-1 rounded-full bg-secondary/50 border border-border text-muted-foreground transition-colors',
+                    quickActionsDisabled
+                      ? 'cursor-default'
+                      : 'hover:bg-secondary hover:text-foreground',
+                  )}
                 >
                   {action.label}
                 </button>
@@ -540,7 +519,9 @@ export default function AIChatPanel() {
             <span className="truncate max-w-[160px]">
               {isLoadingModels
                 ? 'Loading models...'
-                : availableModels.find((m) => m.value === model)?.displayName ?? model}
+                : noAvailableModels
+                  ? 'No models connected'
+                  : availableModels.find((m) => m.value === model)?.displayName ?? model}
             </span>
             <ChevronUp size={10} className="shrink-0" />
           </button>
@@ -561,11 +542,11 @@ export default function AIChatPanel() {
                 variant="ghost"
                 size="icon-sm"
                 onClick={() => handleSend()}
-                disabled={isStreaming || !input.trim()}
+                disabled={!canSendMessage}
                 title="Send message"
                 className={cn(
                   'shrink-0 rounded-lg h-7 w-7',
-                  input.trim() && !isStreaming
+                  canSendMessage
                     ? 'bg-foreground text-background hover:bg-foreground/90'
                     : '',
                 )}
