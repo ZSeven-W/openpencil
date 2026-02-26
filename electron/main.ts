@@ -6,6 +6,7 @@ import {
   type BrowserWindowConstructorOptions,
 } from 'electron'
 import { autoUpdater } from 'electron-updater'
+import { GitHubProvider } from 'electron-updater/out/providers/GitHubProvider'
 import { execSync } from 'node:child_process'
 import { fork, type ChildProcess } from 'node:child_process'
 import { createServer } from 'node:net'
@@ -40,6 +41,18 @@ interface UpdaterState {
 let updaterState: UpdaterState = {
   status: isDev ? 'disabled' : 'idle',
   currentVersion: app.getVersion(),
+}
+
+const MacGitHubUpdateProvider = class {
+  constructor(options: unknown, updater: unknown, runtimeOptions: unknown) {
+    const provider = new (GitHubProvider as any)(options, updater, runtimeOptions) as any
+    if (process.platform === 'darwin') {
+      provider.getDefaultChannelName = () =>
+        process.arch === 'arm64' ? 'latest-mac-arm64' : 'latest-mac'
+      provider.getCustomChannelName = (channel: string) => channel
+    }
+    return provider
+  }
 }
 
 let lastUpdateCheckAt = 0
@@ -80,6 +93,16 @@ async function checkForAppUpdates(force = false): Promise<void> {
 
 function setupAutoUpdater(): void {
   if (isDev) return
+
+  if (process.platform === 'darwin') {
+    autoUpdater.setFeedURL({
+      provider: 'custom',
+      updateProvider: MacGitHubUpdateProvider as any,
+      owner: 'ZSeven-W',
+      repo: 'openpencil',
+      releaseType: 'release',
+    } as any)
+  }
 
   autoUpdater.autoDownload = true
   autoUpdater.autoInstallOnAppQuit = true
