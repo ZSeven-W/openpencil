@@ -18,13 +18,10 @@ const config = defineConfig({
       '@': fileURLToPath(new URL('./src', import.meta.url)),
     },
   },
-  ssr: {
-    external: ['@opencode-ai/sdk'],
-  },
   plugins: [
     devtools(),
     nitro({
-      rollupConfig: { external: [/^@sentry\//, /^@opencode-ai\//] },
+      rollupConfig: { external: [/^@sentry\//] },
       serverDir: './server',
       ...(isElectronBuild ? { preset: 'node-server' } : {}),
     }),

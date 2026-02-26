@@ -18,11 +18,17 @@ jobs:
       matrix:
         include:
           - os: macos-latest
-            platform: mac
+            platform: mac-arm64
+            build_args: --mac --arm64
+          - os: macos-latest
+            platform: mac-x64
+            build_args: --mac --x64
           - os: windows-latest
             platform: win
+            build_args: --win
           - os: ubuntu-latest
             platform: linux
+            build_args: --linux
 
     steps:
       - uses: actions/checkout@v4
@@ -50,9 +56,16 @@ jobs:
         run: bun run mcp:compile
 
       - name: Build Electron app
-        run: npx electron-builder --config electron-builder.yml --${{ matrix.platform }}
+        run: npx electron-builder --config electron-builder.yml ${{ matrix.build_args }}
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Rename arm64 update metadata
+        if: matrix.platform == 'mac-arm64'
+        run: |
+          if [ -f dist-electron/latest-mac.yml ]; then
+            mv dist-electron/latest-mac.yml dist-electron/latest-mac-arm64.yml
+          fi
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
@@ -64,6 +77,9 @@ jobs:
             dist-electron/*.exe
             dist-electron/*.AppImage
             dist-electron/*.deb
+            dist-electron/latest*.yml
+            dist-electron/*.blockmap
+            !dist-electron/builder-debug.yml
           retention-days: 30
 
   release:
@@ -86,7 +102,7 @@ jobs:
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          draft: true
+          draft: false
           generate_release_notes: true
           files: artifacts/*
         env:
