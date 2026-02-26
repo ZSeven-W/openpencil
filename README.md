@@ -18,9 +18,12 @@ Open-source vector design tool with a **Design-as-Code** philosophy. An alternat
 Design visually on an infinite canvas, generate code from designs, and let AI build entire screens from a single prompt — all in one tool that runs in your browser or as a native desktop app.
 
 <p align="center">
-  <video controls playsinline preload="metadata" poster="./screenshot/op-cover.png" width="100%">
-    <source src="https://i.imgur.com/yiu2GTt_lq.mp4" type="video/mp4" />
-  </video>
+  <a href="https://oss.ioa.tech/zseven/openpencil/a46e24733239ce24de36702342201033.mp4">
+    <img src="./screenshot/op-cover.png" alt="OpenPencil demo video (click to play)" width="100%" />
+  </a>
+</p>
+<p align="center">
+  <a href="https://oss.ioa.tech/zseven/openpencil/a46e24733239ce24de36702342201033.mp4"><strong>▶ Watch demo video</strong></a>
 </p>
 
 ## Highlights
