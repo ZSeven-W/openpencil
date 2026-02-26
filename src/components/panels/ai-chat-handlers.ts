@@ -73,13 +73,15 @@ export function useChatHandlers() {
   const messages = useAIStore((s) => s.messages)
   const isStreaming = useAIStore((s) => s.isStreaming)
   const model = useAIStore((s) => s.model)
+  const availableModels = useAIStore((s) => s.availableModels)
+  const isLoadingModels = useAIStore((s) => s.isLoadingModels)
   const addMessage = useAIStore((s) => s.addMessage)
   const updateLastMessage = useAIStore((s) => s.updateLastMessage)
   const setStreaming = useAIStore((s) => s.setStreaming)
   const handleSend = useCallback(
     async (text?: string) => {
       const messageText = text ?? input.trim()
-      if (!messageText || isStreaming) return
+      if (!messageText || isStreaming || isLoadingModels || availableModels.length === 0) return
 
       setInput('')
 
@@ -234,7 +236,7 @@ export function useChatHandlers() {
         return { messages: msgs }
       })
     },
-    [input, isStreaming, model, messages, addMessage, updateLastMessage, setStreaming],
+    [input, isStreaming, isLoadingModels, model, availableModels, messages, addMessage, updateLastMessage, setStreaming],
   )
 
   return { input, setInput, handleSend, isStreaming }

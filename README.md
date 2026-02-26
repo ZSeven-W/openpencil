@@ -4,16 +4,24 @@
   <img src="https://img.shields.io/badge/runtime-Bun-f472b6" alt="Bun" />
   <img src="https://img.shields.io/badge/platform-Web%20%7C%20macOS%20%7C%20Windows%20%7C%20Linux-blue" alt="Platform" />
 </p>
+<p align="center">
+  <a href="https://discord.gg/fE9STbMG">
+    <img src="./public/logo-discord.svg" alt="Discord" width="18" />
+    <strong> Join the OpenPencil Discord Community</strong>
+  </a>
+</p>
 
 # OpenPencil
 
-Open-source vector design tool with a **Design-as-Code** philosophy. An alternative to [Pencil.dev](https://pencil.dev).
+Open-source vector design tool with a **Design-as-Code** philosophy. An alternative to Pencil.
 
 Design visually on an infinite canvas, generate code from designs, and let AI build entire screens from a single prompt — all in one tool that runs in your browser or as a native desktop app.
 
-![OpenPencil Editor](./screenshot/demo.png)
-
-<video src="https://github.com/user-attachments/assets/5bf66acb-724f-4f7e-9f9b-cc219ce8f484" controls width="800"></video>
+<p align="center">
+  <video controls playsinline preload="metadata" poster="./screenshot/op-cover.png" width="100%">
+    <source src="https://i.imgur.com/yiu2GTt_lq.mp4" type="video/mp4" />
+  </video>
+</p>
 
 ## Highlights
 
@@ -51,6 +59,12 @@ bun run electron:dev
 # Production build (current platform)
 bun run electron:build
 ```
+
+### Desktop Auto Update (GitHub Releases)
+
+- The packaged app checks GitHub Releases automatically on startup and every hour.
+- When a new version finishes downloading, the app shows a **Restart & Install** prompt.
+- Releases must be **published (not draft)** and include update metadata (`latest*.yml`, `*.blockmap`).
 
 ### AI Configuration
 
