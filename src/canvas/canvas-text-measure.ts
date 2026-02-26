@@ -69,10 +69,19 @@ export function estimateLineWidth(
   return Math.max(0, width)
 }
 
+function widthSafetyFactor(text: string): number {
+  // Latin fonts vary a lot by weight/family; use a larger safety margin to
+  // avoid underestimating width and causing accidental wraps.
+  return hasCjkText(text) ? 1.06 : 1.14
+}
+
 export function estimateTextWidth(text: string, fontSize: number, letterSpacing = 0): number {
   const lines = text.split(/\r?\n/)
-  const maxLine = lines.reduce((max, line) =>
-    Math.max(max, estimateLineWidth(line, fontSize, letterSpacing)), 0)
+  const maxLine = lines.reduce((max, line) => {
+    const lineWidth = estimateLineWidth(line, fontSize, letterSpacing)
+    const safeLineWidth = lineWidth * widthSafetyFactor(line)
+    return Math.max(max, safeLineWidth)
+  }, 0)
   return maxLine
 }
 
@@ -154,7 +163,7 @@ export function estimateTextHeight(node: PenNode, availableWidth?: number): numb
   const letterSpacing = (typeof n.letterSpacing === 'number' ? n.letterSpacing : 0)
   const rawLines = content.split(/\r?\n/)
   const wrappedLineCount = rawLines.reduce((sum, line) => {
-    const lineWidth = estimateLineWidth(line, fontSize, letterSpacing)
+    const lineWidth = estimateLineWidth(line, fontSize, letterSpacing) * widthSafetyFactor(line)
     return sum + Math.max(1, Math.ceil(lineWidth / textWidth))
   }, 0)
 

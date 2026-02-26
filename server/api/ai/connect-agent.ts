@@ -1,6 +1,10 @@
 import { defineEventHandler, readBody, setResponseHeaders } from 'h3'
 import type { GroupedModel } from '../../../src/types/agent-settings'
 import { resolveClaudeCli } from '../../utils/resolve-claude-cli'
+import {
+  buildClaudeAgentEnv,
+  getClaudeAgentDebugFilePath,
+} from '../../utils/resolve-claude-agent-env'
 
 interface ConnectBody {
   agent: 'claude-code' | 'codex-cli' | 'opencode'
@@ -44,20 +48,20 @@ async function connectClaudeCode(): Promise<ConnectResult> {
   try {
     const { query } = await import('@anthropic-ai/claude-agent-sdk')
 
-    const env = { ...process.env } as Record<string, string | undefined>
-    delete env.CLAUDECODE
+    const env = buildClaudeAgentEnv()
+    const debugFile = getClaudeAgentDebugFilePath()
 
     const claudePath = resolveClaudeCli()
 
     const q = query({
       prompt: '',
       options: {
-        model: 'claude-sonnet-4-6',
         maxTurns: 1,
         tools: [],
         permissionMode: 'plan',
         persistSession: false,
         env,
+        ...(debugFile ? { debugFile } : {}),
         ...(claudePath ? { pathToClaudeCodeExecutable: claudePath } : {}),
       },
     })
@@ -81,8 +85,11 @@ async function connectClaudeCode(): Promise<ConnectResult> {
 
 /** Map raw Agent SDK errors to user-friendly messages */
 function friendlyClaudeError(raw: string): string {
+  if (/process exited with code 1|invalid model|unknown model|model.*not/i.test(raw)) {
+    return 'Claude Code exited with code 1. Check your model mapping (e.g. ANTHROPIC_MODEL / default Sonnet model) and run "claude login" if needed.'
+  }
   if (/exited with code/i.test(raw)) {
-    return 'Unable to connect. Please run "claude login" in your terminal first.'
+    return 'Unable to connect. Claude Code process exited unexpectedly.'
   }
   if (/not found|ENOENT/i.test(raw)) {
     return 'Claude Code CLI not found. Please install it first.'

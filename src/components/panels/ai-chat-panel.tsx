@@ -50,6 +50,17 @@ const CORNER_CLASSES: Record<PanelCorner, string> = {
   'bottom-right': 'bottom-3 right-3',
 }
 
+function resolveNextModel(
+  models: Array<{ value: string }>,
+  currentModel: string,
+  preferredModel: string,
+): string | null {
+  if (models.length === 0) return null
+  if (models.some((m) => m.value === currentModel)) return currentModel
+  if (models.some((m) => m.value === preferredModel)) return preferredModel
+  return models[0].value
+}
+
 /**
  * Minimized AI bar — a compact clickable pill.
  * Parent is responsible for placing it in the layout.
@@ -97,8 +108,10 @@ export default function AIChatPanel() {
   const chatTitle = useAIStore((s) => s.chatTitle)
   const selectedIds = useCanvasStore((s) => s.selection.selectedIds)
   const toggleMinimize = useAIStore((s) => s.toggleMinimize)
+  const hydrateModelPreference = useAIStore((s) => s.hydrateModelPreference)
   const model = useAIStore((s) => s.model)
   const setModel = useAIStore((s) => s.setModel)
+  const selectModel = useAIStore((s) => s.selectModel)
   const availableModels = useAIStore((s) => s.availableModels)
   const setAvailableModels = useAIStore((s) => s.setAvailableModels)
   const modelGroups = useAIStore((s) => s.modelGroups)
@@ -106,6 +119,7 @@ export default function AIChatPanel() {
   const isLoadingModels = useAIStore((s) => s.isLoadingModels)
   const setLoadingModels = useAIStore((s) => s.setLoadingModels)
   const providers = useAgentSettingsStore((s) => s.providers)
+  const providersHydrated = useAgentSettingsStore((s) => s.isHydrated)
   const [modelDropdownOpen, setModelDropdownOpen] = useState(false)
   const { input, setInput, handleSend } = useChatHandlers()
 
@@ -113,9 +127,20 @@ export default function AIChatPanel() {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
 
+  // Ensure model preference is restored from localStorage on page refresh.
+  useEffect(() => {
+    hydrateModelPreference()
+  }, [hydrateModelPreference])
+
   // Build model list from connected providers in agent-settings-store.
   // Falls back to Agent SDK legacy fetch when no providers are connected.
   useEffect(() => {
+    if (!providersHydrated) {
+      setLoadingModels(true)
+      return
+    }
+
+    let cancelled = false
     const connectedProviders = (Object.keys(providers) as AIProviderType[]).filter(
       (p) => providers[p].isConnected && (providers[p].models?.length ?? 0) > 0,
     )
@@ -141,26 +166,49 @@ export default function AIChatPanel() {
       )
       setModelGroups(groups)
       setAvailableModels(flat)
-      // If current model not in list, select first
-      if (!flat.some((m) => m.value === model)) {
-        setModel(flat[0].value)
+      // Keep current when valid; otherwise restore remembered model; otherwise fallback to first.
+      const { model: currentModel, preferredModel } = useAIStore.getState()
+      const nextModel = resolveNextModel(flat, currentModel, preferredModel)
+      if (nextModel && nextModel !== currentModel) {
+        setModel(nextModel)
       }
       setLoadingModels(false)
-    } else {
-      // No providers connected — fall back to Agent SDK legacy model list
-      setModelGroups([])
-      setLoadingModels(true)
-      fetchAvailableModels().then((models) => {
+      return
+    }
+
+    // No providers connected — fall back to Agent SDK legacy model list.
+    setModelGroups([])
+    setLoadingModels(true)
+    fetchAvailableModels()
+      .then((models) => {
+        if (cancelled) return
+
+        // Provider state might have changed while request was in flight.
+        const latestProviders = useAgentSettingsStore.getState().providers
+        const stillNoConnected = (Object.keys(latestProviders) as AIProviderType[]).every(
+          (p) => !(latestProviders[p].isConnected && (latestProviders[p].models?.length ?? 0) > 0),
+        )
+        if (!stillNoConnected) return
+
         if (models.length > 0) {
           setAvailableModels(models)
-          if (!models.some((m) => m.value === model)) {
-            setModel(models[0].value)
+          const { model: currentModel, preferredModel } = useAIStore.getState()
+          const nextModel = resolveNextModel(models, currentModel, preferredModel)
+          if (nextModel && nextModel !== currentModel) {
+            setModel(nextModel)
           }
         }
-        setLoadingModels(false)
       })
+      .finally(() => {
+        if (!cancelled) {
+          setLoadingModels(false)
+        }
+      })
+
+    return () => {
+      cancelled = true
     }
-  }, [providers]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [providers, providersHydrated]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Close model dropdown when clicking outside
   useEffect(() => {
@@ -549,7 +597,7 @@ export default function AIChatPanel() {
                             key={m.value}
                             type="button"
                             onClick={() => {
-                              setModel(m.value)
+                              selectModel(m.value)
                               setModelDropdownOpen(false)
                             }}
                             className={cn(
@@ -581,7 +629,7 @@ export default function AIChatPanel() {
                       key={m.value}
                       type="button"
                       onClick={() => {
-                        setModel(m.value)
+                        selectModel(m.value)
                         setModelDropdownOpen(false)
                       }}
                       className={cn(
