@@ -1,6 +1,6 @@
 {
     "name": "openpencil",
-    "version": "0.0.2",
+    "version": "0.0.3",
     "description": "Open-source vector design tool with Design-as-Code philosophy",
     "author": {
         "name": "ZSeven-W",
@@ -49,6 +49,7 @@
         "@tanstack/router-plugin": "^1.132.0",
         "class-variance-authority": "^0.7.1",
         "clsx": "^2.1.1",
+        "electron-updater": "^6.6.2",
         "fabric": "^7.1.0",
         "lucide-react": "^0.545.0",
         "nanoid": "^5.1.6",

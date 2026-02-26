@@ -5,6 +5,7 @@ import {
   dialog,
   type BrowserWindowConstructorOptions,
 } from 'electron'
+import { autoUpdater } from 'electron-updater'
 import { execSync } from 'node:child_process'
 import { fork, type ChildProcess } from 'node:child_process'
 import { createServer } from 'node:net'
@@ -16,6 +17,131 @@ let nitroProcess: ChildProcess | null = null
 let serverPort = 0
 
 const isDev = !app.isPackaged
+
+type UpdaterStatus =
+  | 'disabled'
+  | 'idle'
+  | 'checking'
+  | 'available'
+  | 'downloading'
+  | 'downloaded'
+  | 'not-available'
+  | 'error'
+
+interface UpdaterState {
+  status: UpdaterStatus
+  currentVersion: string
+  latestVersion?: string
+  downloadProgress?: number
+  releaseDate?: string
+  error?: string
+}
+
+let updaterState: UpdaterState = {
+  status: isDev ? 'disabled' : 'idle',
+  currentVersion: app.getVersion(),
+}
+
+let lastUpdateCheckAt = 0
+
+function broadcastUpdaterState(): void {
+  for (const win of BrowserWindow.getAllWindows()) {
+    if (!win.isDestroyed()) {
+      win.webContents.send('updater:state', updaterState)
+    }
+  }
+}
+
+function setUpdaterState(next: Partial<UpdaterState>): void {
+  updaterState = {
+    ...updaterState,
+    ...next,
+    currentVersion: app.getVersion(),
+  }
+  broadcastUpdaterState()
+}
+
+async function checkForAppUpdates(force = false): Promise<void> {
+  if (isDev) return
+
+  const now = Date.now()
+  if (!force && now - lastUpdateCheckAt < 60 * 1000) {
+    return
+  }
+  lastUpdateCheckAt = now
+
+  try {
+    await autoUpdater.checkForUpdates()
+  } catch (err) {
+    const error = err instanceof Error ? err.message : String(err)
+    setUpdaterState({ status: 'error', error })
+  }
+}
+
+function setupAutoUpdater(): void {
+  if (isDev) return
+
+  autoUpdater.autoDownload = true
+  autoUpdater.autoInstallOnAppQuit = true
+  autoUpdater.allowPrerelease = true
+
+  autoUpdater.on('checking-for-update', () => {
+    setUpdaterState({ status: 'checking', error: undefined, downloadProgress: undefined })
+  })
+
+  autoUpdater.on('update-available', (info) => {
+    setUpdaterState({
+      status: 'available',
+      latestVersion: info.version,
+      releaseDate: info.releaseDate,
+      error: undefined,
+    })
+  })
+
+  autoUpdater.on('download-progress', (progress) => {
+    setUpdaterState({
+      status: 'downloading',
+      downloadProgress: Math.round(progress.percent),
+      error: undefined,
+    })
+  })
+
+  autoUpdater.on('update-downloaded', (info) => {
+    setUpdaterState({
+      status: 'downloaded',
+      latestVersion: info.version,
+      releaseDate: info.releaseDate,
+      downloadProgress: 100,
+      error: undefined,
+    })
+  })
+
+  autoUpdater.on('update-not-available', (info) => {
+    setUpdaterState({
+      status: 'not-available',
+      latestVersion: info.version,
+      downloadProgress: undefined,
+      error: undefined,
+    })
+  })
+
+  autoUpdater.on('error', (err) => {
+    setUpdaterState({
+      status: 'error',
+      error: err?.message ?? String(err),
+    })
+  })
+
+  // Delay first check until app startup work is done.
+  setTimeout(() => {
+    void checkForAppUpdates(true)
+  }, 5000)
+
+  // Poll for new versions while app is running.
+  setInterval(() => {
+    void checkForAppUpdates(false)
+  }, 60 * 60 * 1000).unref()
+}
 
 // ---------------------------------------------------------------------------
 // Fix PATH for macOS GUI apps (Finder doesn't inherit shell PATH)
@@ -161,6 +287,7 @@ function createWindow(): void {
       )
     }
     mainWindow.show()
+    broadcastUpdaterState()
   })
 
   // Toggle fullscreen class to remove traffic-light padding in fullscreen
@@ -228,6 +355,21 @@ function setupIPC(): void {
       return payload.filePath
     },
   )
+
+  ipcMain.handle('updater:getState', () => updaterState)
+
+  ipcMain.handle('updater:checkForUpdates', async () => {
+    await checkForAppUpdates(true)
+    return updaterState
+  })
+
+  ipcMain.handle('updater:quitAndInstall', () => {
+    if (!isDev && updaterState.status === 'downloaded') {
+      autoUpdater.quitAndInstall()
+      return true
+    }
+    return false
+  })
 }
 
 // ---------------------------------------------------------------------------
@@ -250,6 +392,10 @@ app.on('ready', async () => {
   }
 
   createWindow()
+
+  if (!isDev) {
+    setupAutoUpdater()
+  }
 })
 
 app.on('window-all-closed', () => {

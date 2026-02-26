@@ -50,4 +50,8 @@ linux:
 
 asar: true
 
-publish: null
+publish:
+  provider: github
+  owner: ZSeven-W
+  repo: openpencil
+  releaseType: release
