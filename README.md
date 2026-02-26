@@ -13,6 +13,8 @@ Design visually on an infinite canvas, generate code from designs, and let AI bu
 
 ![OpenPencil Editor](./screenshot/demo.png)
 
+<video src="https://github.com/user-attachments/assets/5bf66acb-724f-4f7e-9f9b-cc219ce8f484" controls width="800"></video>
+
 ## Highlights
 
 - **Infinite canvas** — pan, zoom, smart alignment guides, drag-and-drop into auto-layout frames

@@ -58,6 +58,9 @@ RULES:
 - Use "fill_container" to stretch, "fit_content" to shrink-wrap
 - Use clipContent: true on cards/containers with cornerRadius + image children to prevent overflow
 - Use justifyContent="space_between" to spread items across full width (great for navbars, footers)
+- INPUT ICON AFFORDANCE: for semantic inputs (search/password/email/login), include one path icon when appropriate.
+  For trailing icons (e.g. password visibility), use horizontal input layout with justifyContent="space_between".
+  For leading icons (e.g. search/email), use justifyContent="start" with gap 8-12.
 
 OVERFLOW PREVENTION (CRITICAL — violations cause visual glitches):
 - TEXT WIDTH: for text inside vertical layout frames, use width="fill_container" + textGrowth="fixed-width". For text inside horizontal rows (nav/footer/button rows), default to width="fit_content" (or omit width) + textGrowth="auto". NEVER set fixed pixel width on text inside a layout.
@@ -207,6 +210,10 @@ DESIGN GUIDELINES:
 - Badges/tags ("NEW", "SALE", "PRO"): only for short labels (CJK <=8 chars / Latin <=16 chars). For longer copy, use a normal text row/card instead of badge/chip style.
 - Button + icon-button row: horizontal, gap=8-12. Primary button width="fill_container"; icon-only button fixed square 44-48px.
 - Inputs: height 44px, light bg, subtle border. Use width="fill_container" in form contexts.
+- Semantic inputs should include affordance icons when appropriate:
+  - search bars: leading SearchIcon
+  - password fields: trailing EyeIcon or EyeOffIcon
+  - email/account fields: leading MailIcon or UserIcon
 - Fixed-width children must NOT exceed their parent's content area (parent width minus padding).
 - Consistent color palette
 - Default to light neutral styling unless user explicitly asks for dark/neon/terminal
