@@ -216,6 +216,7 @@ export function useChatHandlers() {
       } catch (error) {
          const errMsg = error instanceof Error ? error.message : 'Unknown error'
          accumulated += `\n\n**Error:** ${errMsg}`
+         updateLastMessage(accumulated)
       } finally {
          setStreaming(false)
       }

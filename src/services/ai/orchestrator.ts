@@ -21,7 +21,6 @@ import type {
 import { streamChat } from './ai-service'
 import { ORCHESTRATOR_PROMPT } from './orchestrator-prompts'
 import {
-  buildFallbackPlanFromPrompt,
   getOrchestratorTimeouts,
   prepareDesignPrompt,
 } from './orchestrator-prompt-optimizer'
@@ -62,32 +61,17 @@ export async function executeOrchestration(
     )
   }
 
-  if (preparedPrompt.wasCompressed) {
-    console.log(
-      '[Orchestrator] Compressed long prompt:',
-      `${preparedPrompt.originalLength} -> ${preparedPrompt.subAgentPrompt.length} chars`,
-    )
-  }
-
   try {
     // -- Phase 1: Planning (streaming) --
     renderPlanningStatus('Analyzing design structure...')
 
-    let plan: OrchestratorPlan
-    try {
-      plan = await callOrchestrator(
-        preparedPrompt.orchestratorPrompt,
-        preparedPrompt.originalLength,
-        (thinking) => {
-          renderPlanningStatus(thinking)
-        },
-      )
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Unknown orchestrator error'
-      console.warn('[Orchestrator] Planner failed, using fallback plan:', message)
-      renderPlanningStatus('Planner timeout, switching to fallback layout plan...')
-      plan = buildFallbackPlanFromPrompt(preparedPrompt.orchestratorPrompt)
-    }
+    const plan = await callOrchestrator(
+      preparedPrompt.orchestratorPrompt,
+      preparedPrompt.originalLength,
+      (thinking) => {
+        renderPlanningStatus(thinking)
+      },
+    )
 
     // Assign ID prefixes
     for (const st of plan.subtasks) {
@@ -236,8 +220,7 @@ export async function executeOrchestration(
         validationEntry.nodeCount = validationResult.applied
       }
       validationEntry.status = 'done'
-    } catch (err) {
-      console.warn('[Orchestrator] Validation failed (non-blocking):', err instanceof Error ? err.message : err)
+    } catch {
       validationEntry.status = 'done'
       validationEntry.thinking = 'Skipped'
     }
@@ -263,8 +246,6 @@ async function callOrchestrator(
   timeoutHintLength: number,
   onThinking?: (thinking: string) => void,
 ): Promise<OrchestratorPlan> {
-  console.log('[Orchestrator] Calling streamChat...')
-
   let rawResponse = ''
   let thinkingContent = ''
 
@@ -280,19 +261,15 @@ async function callOrchestrator(
       thinkingContent += chunk.content
       onThinking?.(thinkingContent)
     } else if (chunk.type === 'error') {
-      throw new Error(`Orchestrator failed: ${chunk.content}`)
+      throw new Error(chunk.content)
     }
   }
 
-  console.log('[Orchestrator] Raw response:', rawResponse.slice(0, 500))
-
   const plan = parseOrchestratorResponse(rawResponse)
   if (!plan) {
-    console.error('[Orchestrator] Failed to parse plan from:', rawResponse.slice(0, 500))
     throw new Error('Failed to parse orchestrator plan')
   }
 
-  console.log('[Orchestrator] Plan:', plan.subtasks.length, 'subtasks')
   return plan
 }
 

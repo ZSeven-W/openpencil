@@ -3,10 +3,9 @@
  *
  * Each sub-agent is responsible for generating one spatial section of the
  * design (e.g. "Hero", "Features", "Footer"). This module handles:
- * - Sequential execution with retry logic
+ * - Sequential execution
  * - Streaming JSONL parsing and real-time canvas insertion
  * - ID namespace isolation via prefixes
- * - Fallback placeholder generation when a sub-agent fails
  */
 
 import type { PenNode } from '@/types/pen'
@@ -36,7 +35,6 @@ import {
 import {
   startNewAnimationBatch,
 } from './design-animation'
-import { RETRY_TIMEOUT_CONFIG } from './ai-runtime-config'
 import { emitProgress } from './orchestrator-progress'
 
 // ---------------------------------------------------------------------------
@@ -92,57 +90,14 @@ export async function executeSubAgentsSequentially(
 ): Promise<SubAgentResult[]> {
   const results: SubAgentResult[] = []
   const timeoutOptions = getSubAgentTimeouts(preparedPrompt.originalLength)
-  const retryTimeoutOptions = getRetrySubAgentTimeouts(timeoutOptions)
 
   for (let i = 0; i < plan.subtasks.length; i++) {
-    let result = await executeSubAgent(
+    const result = await executeSubAgent(
       plan.subtasks[i], plan, request, preparedPrompt, timeoutOptions, progress, i, callbacks,
     )
-    if (shouldRetrySubtask(result)) {
-      console.warn(
-        `[Orchestrator] Retrying subtask "${plan.subtasks[i].label}" with extended timeout after: ${result.error}`,
-      )
-      result = await executeSubAgent(
-        plan.subtasks[i], plan, request, preparedPrompt, retryTimeoutOptions, progress, i, callbacks,
-      )
-    }
 
-    if (result.nodes.length === 0) {
-      const minimalPrompt = buildMinimalFallbackPrompt(preparedPrompt.subAgentPrompt, plan.subtasks[i].label)
-      console.warn(
-        `[Orchestrator] Retrying subtask "${plan.subtasks[i].label}" in minimal mode because no nodes were produced.`,
-      )
-      result = await executeSubAgent(
-        plan.subtasks[i],
-        plan,
-        request,
-        preparedPrompt,
-        retryTimeoutOptions,
-        progress,
-        i,
-        callbacks,
-        minimalPrompt,
-      )
-    }
-
-    if (result.nodes.length === 0) {
-      const placeholderNodes = insertLocalSubtaskPlaceholder(
-        plan.subtasks[i],
-        plan,
-        progress.subtasks[i],
-        progress,
-      )
-      if (placeholderNodes.length > 0) {
-        callbacks?.onApplyPartial?.(progress.totalNodes)
-        emitProgress(plan, progress, callbacks)
-        result = {
-          ...result,
-          nodes: placeholderNodes,
-          error: result.error
-            ? `${result.error}; local placeholder inserted`
-            : 'Local placeholder inserted after repeated empty output',
-        }
-      }
+    if (result.error && result.nodes.length === 0) {
+      throw new Error(result.error)
     }
 
     results.push(result)
@@ -254,19 +209,6 @@ async function executeSubAgent(
         progressEntry.thinking = (progressEntry.thinking ?? '') + chunk.content
         emitProgress(plan, progress, callbacks)
       } else if (chunk.type === 'error') {
-        if (rawResponse.trim().length > 0) {
-          const { recovered } = recoverNodesFromRawResponse(rawResponse, subtask, plan, nodes, progressEntry, progress)
-          if (recovered > 0) {
-            progressEntry.status = 'done'
-            emitProgress(plan, progress, callbacks)
-            return {
-              subtaskId: subtask.id,
-              nodes,
-              rawResponse,
-              error: `partial recovery after error: ${chunk.content}`,
-            }
-          }
-        }
         progressEntry.status = 'error'
         emitProgress(plan, progress, callbacks)
         return { subtaskId: subtask.id, nodes, rawResponse, error: chunk.content }
@@ -293,9 +235,6 @@ async function executeSubAgent(
     if (nodes.length === 0) {
       progressEntry.status = 'error'
       emitProgress(plan, progress, callbacks)
-      console.warn(
-        `[Orchestrator] Subtask "${subtask.label}" produced no parseable nodes. Raw length=${rawResponse.length}`,
-      )
       return {
         subtaskId: subtask.id,
         nodes,
@@ -316,56 +255,10 @@ async function executeSubAgent(
     return { subtaskId: subtask.id, nodes, rawResponse }
   } catch (err) {
     const msg = err instanceof Error ? err.message : 'Unknown error'
-    if (rawResponse.trim().length > 0) {
-      const { recovered } = recoverNodesFromRawResponse(rawResponse, subtask, plan, nodes, progressEntry, progress)
-      if (recovered > 0) {
-        progressEntry.status = 'done'
-        emitProgress(plan, progress, callbacks)
-        return {
-          subtaskId: subtask.id,
-          nodes,
-          rawResponse,
-          error: `partial recovery after exception: ${msg}`,
-        }
-      }
-    }
     progressEntry.status = 'error'
     emitProgress(plan, progress, callbacks)
     return { subtaskId: subtask.id, nodes, rawResponse, error: msg }
   }
-}
-
-// ---------------------------------------------------------------------------
-// Node recovery from partial responses
-// ---------------------------------------------------------------------------
-
-function recoverNodesFromRawResponse(
-  rawResponse: string,
-  subtask: SubTask,
-  plan: OrchestratorPlan,
-  targetNodes: PenNode[],
-  progressEntry: OrchestrationProgress['subtasks'][number],
-  progress: OrchestrationProgress,
-): { recovered: number; rootId: string | null } {
-  const fallbackNodes = extractJsonFromResponse(rawResponse)
-  if (!fallbackNodes || fallbackNodes.length === 0) return { recovered: 0, rootId: null }
-
-  let recovered = 0
-  let rootId: string | null = null
-  startNewAnimationBatch()
-  for (const node of fallbackNodes) {
-    ensureIdPrefix(node, subtask.idPrefix)
-    insertStreamingNode(node, plan.rootFrame.id)
-    if (!rootId) rootId = node.id
-    targetNodes.push(node)
-    progressEntry.nodeCount++
-    progress.totalNodes++
-    recovered++
-  }
-  if (rootId) {
-    applyPostStreamingTreeHeuristics(rootId)
-  }
-  return { recovered, rootId }
 }
 
 // ---------------------------------------------------------------------------
@@ -492,148 +385,3 @@ function needsHeroPhoneTwoColumnInstruction(
   return heroLike && phoneLike
 }
 
-// ---------------------------------------------------------------------------
-// Retry & fallback helpers
-// ---------------------------------------------------------------------------
-
-export function getRetrySubAgentTimeouts(base: StreamTimeoutConfig): StreamTimeoutConfig {
-  return {
-    ...base,
-    hardTimeoutMs: Math.min(
-      base.hardTimeoutMs * RETRY_TIMEOUT_CONFIG.multiplier,
-      RETRY_TIMEOUT_CONFIG.hardTimeoutMaxMs,
-    ),
-    noTextTimeoutMs: Math.min(
-      base.noTextTimeoutMs * RETRY_TIMEOUT_CONFIG.multiplier,
-      RETRY_TIMEOUT_CONFIG.noTextTimeoutMaxMs,
-    ),
-    firstTextTimeoutMs: base.firstTextTimeoutMs
-      ? Math.min(
-        base.firstTextTimeoutMs * RETRY_TIMEOUT_CONFIG.multiplier,
-        RETRY_TIMEOUT_CONFIG.firstTextTimeoutMaxMs,
-      )
-      : undefined,
-  }
-}
-
-function shouldRetrySubtask(result: SubAgentResult): boolean {
-  if (result.nodes.length > 0) return false
-  if (!result.error) return false
-  const error = result.error.toLowerCase()
-  return error.includes('timed out') || error.includes('thinking too long')
-}
-
-function buildMinimalFallbackPrompt(basePrompt: string, label: string): string {
-  return `${basePrompt}
-
-Fallback mode for section "${label}":
-- Prioritize completion over detail.
-- Output a minimal skeleton only (4-8 nodes).
-- Include: section container, heading, short description, and 1-2 placeholder blocks.
-- Avoid complex SVG/icon/path details.`
-}
-
-function insertLocalSubtaskPlaceholder(
-  subtask: SubTask,
-  plan: OrchestratorPlan,
-  progressEntry: OrchestrationProgress['subtasks'][number],
-  progress: OrchestrationProgress,
-): PenNode[] {
-  const sectionId = `${subtask.idPrefix}-fallback-section`
-  const titleId = `${subtask.idPrefix}-fallback-title`
-  const descId = `${subtask.idPrefix}-fallback-desc`
-  const rowId = `${subtask.idPrefix}-fallback-row`
-  const cardAId = `${subtask.idPrefix}-fallback-card-a`
-  const cardBId = `${subtask.idPrefix}-fallback-card-b`
-
-  const sectionNode: PenNode = {
-    id: sectionId,
-    type: 'frame',
-    name: `${subtask.label} (Fallback)`,
-    width: 'fill_container',
-    height: Math.max(120, subtask.region.height),
-    layout: 'vertical',
-    padding: 24,
-    gap: 12,
-    fill: [{ type: 'solid', color: '#FFFFFF' }],
-    stroke: { thickness: 1, fill: [{ type: 'solid', color: '#E2E8F0' }] },
-    children: [],
-  }
-
-  const titleNode: PenNode = {
-    id: titleId,
-    type: 'text',
-    name: 'Fallback Title',
-    content: subtask.label,
-    fontSize: 24,
-    fontWeight: 700,
-    width: 'fill_container',
-    height: 32,
-    fill: [{ type: 'solid', color: '#0F172A' }],
-  }
-
-  const descNode: PenNode = {
-    id: descId,
-    type: 'text',
-    name: 'Fallback Description',
-    content: 'Content is loading from a complex generation task. This placeholder keeps layout continuity.',
-    fontSize: 14,
-    fontWeight: 400,
-    width: 'fill_container',
-    height: 40,
-    fill: [{ type: 'solid', color: '#64748B' }],
-  }
-
-  const rowNode: PenNode = {
-    id: rowId,
-    type: 'frame',
-    name: 'Fallback Row',
-    width: 'fill_container',
-    height: 120,
-    layout: 'horizontal',
-    gap: 12,
-    children: [],
-  }
-
-  const cardANode: PenNode = {
-    id: cardAId,
-    type: 'rectangle',
-    name: 'Fallback Card A',
-    width: 'fill_container',
-    height: 120,
-    cornerRadius: 8,
-    fill: [{ type: 'solid', color: '#F1F5F9' }],
-    stroke: { thickness: 1, fill: [{ type: 'solid', color: '#CBD5E1' }] },
-  }
-
-  const cardBNode: PenNode = {
-    id: cardBId,
-    type: 'rectangle',
-    name: 'Fallback Card B',
-    width: 'fill_container',
-    height: 120,
-    cornerRadius: 8,
-    fill: [{ type: 'solid', color: '#F1F5F9' }],
-    stroke: { thickness: 1, fill: [{ type: 'solid', color: '#CBD5E1' }] },
-  }
-
-  const insertedNodes = [sectionNode, titleNode, descNode, rowNode, cardANode, cardBNode]
-
-  startNewAnimationBatch()
-  insertStreamingNode(sectionNode, plan.rootFrame.id)
-  insertStreamingNode(titleNode, sectionId)
-  insertStreamingNode(descNode, sectionId)
-  insertStreamingNode(rowNode, sectionId)
-  insertStreamingNode(cardANode, rowId)
-  insertStreamingNode(cardBNode, rowId)
-
-  progressEntry.nodeCount += insertedNodes.length
-  progress.totalNodes += insertedNodes.length
-  progressEntry.status = 'done'
-
-  console.warn(
-    `[Orchestrator] Inserted local placeholder for subtask "${subtask.label}" after repeated empty output.`,
-  )
-
-  return insertedNodes
-}
