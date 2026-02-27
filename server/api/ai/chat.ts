@@ -93,6 +93,10 @@ export default defineEventHandler(async (event) => {
 
 // Keep-alive ping interval (ms) — prevents client timeout while waiting for API TTFT
 const KEEPALIVE_INTERVAL_MS = 15_000
+// Max time to wait for the first SDK event (text/thinking/error).
+// If the API provider doesn't respond within this window, abort and surface
+// a clear error instead of letting the client wait minutes for a timeout.
+const API_CONNECT_TIMEOUT_MS = 30_000
 
 function getAnthropicThinkingConfig(body: ChatBody):
   | { type: 'adaptive' | 'disabled' }
@@ -120,17 +124,28 @@ function getAgentThinkingConfig(body: ChatBody):
 /** Stream via Anthropic SDK (when API key is available) */
 async function streamViaAnthropicSDK(apiKey: string, body: ChatBody, model?: string) {
   const { default: Anthropic } = await import('@anthropic-ai/sdk')
-  const client = new Anthropic({ apiKey })
+  // Disable automatic retries so auth/balance errors (429) surface immediately
+  // instead of waiting through exponential backoff retry cycles.
+  const client = new Anthropic({ apiKey, maxRetries: 0 })
 
   const stream = new ReadableStream({
     async start(controller) {
       const encoder = new TextEncoder()
-      // Send keep-alive pings until the first real chunk arrives
-      const pingTimer = setInterval(() => {
+      const send = (type: string, content: string) => {
         try {
-          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: 'ping', content: '' })}\n\n`))
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type, content })}\n\n`))
         } catch { /* stream already closed */ }
-      }, KEEPALIVE_INTERVAL_MS)
+      }
+      const pingTimer = setInterval(() => send('ping', ''), KEEPALIVE_INTERVAL_MS)
+
+      // Abort if the API provider doesn't produce any event within the timeout.
+      // Catches slow proxies, invalid keys on slow endpoints, etc.
+      const connectAbort = new AbortController()
+      let gotSdkEvent = false
+      const connectTimer = setTimeout(() => {
+        if (!gotSdkEvent) connectAbort.abort()
+      }, API_CONNECT_TIMEOUT_MS)
+
       try {
         const thinking = getAnthropicThinkingConfig(body)
         const messageStream = client.messages.stream({
@@ -140,31 +155,32 @@ async function streamViaAnthropicSDK(apiKey: string, body: ChatBody, model?: str
           messages: body.messages,
           ...(body.effort ? { effort: body.effort } : {}),
           ...(thinking ? { thinking } : {}),
-        })
+        }, { signal: connectAbort.signal })
 
         for await (const ev of messageStream) {
+          if (!gotSdkEvent) {
+            gotSdkEvent = true
+            clearTimeout(connectTimer)
+          }
           if (ev.type === 'content_block_delta') {
             if (ev.delta.type === 'text_delta') {
               clearInterval(pingTimer)
-              const data = JSON.stringify({ type: 'text', content: ev.delta.text })
-              controller.enqueue(encoder.encode(`data: ${data}\n\n`))
+              send('text', ev.delta.text)
             } else if (ev.delta.type === 'thinking_delta') {
-              // Keep pings alive during thinking — only stop on text output
-              const data = JSON.stringify({ type: 'thinking', content: ev.delta.thinking })
-              controller.enqueue(encoder.encode(`data: ${data}\n\n`))
+              send('thinking', ev.delta.thinking)
             }
           }
         }
 
-        controller.enqueue(
-          encoder.encode(`data: ${JSON.stringify({ type: 'done', content: '' })}\n\n`),
-        )
+        send('done', '')
       } catch (error) {
-        const msg = error instanceof Error ? error.message : 'Unknown error'
-        controller.enqueue(
-          encoder.encode(`data: ${JSON.stringify({ type: 'error', content: msg })}\n\n`),
-        )
+        clearTimeout(connectTimer)
+        const content = connectAbort.signal.aborted && !gotSdkEvent
+          ? 'API connection timed out (30s). Check your API key and network configuration.'
+          : error instanceof Error ? error.message : 'Unknown error'
+        send('error', content)
       } finally {
+        clearTimeout(connectTimer)
         clearInterval(pingTimer)
         controller.close()
       }
