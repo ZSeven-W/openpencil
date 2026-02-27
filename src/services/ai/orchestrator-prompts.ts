@@ -34,6 +34,7 @@ RULES:
 - For landing pages: navigation sections should preserve good horizontal balance, links evenly distributed in the center group.
 - Regions tile to fill rootFrame. vertical = top-to-bottom.
 - Mobile: 375x812 (both width AND height are fixed). Desktop: 1200x0 (width fixed, height auto-expands).
+- WIDTH SELECTION: App screens (login, signup, register, settings, profile, forms, modals, dialogs, onboarding) → ALWAYS use width=375, height=812 (mobile). Landing pages, websites, dashboards → use width=1200, height=0 (desktop). This is mandatory.
 - NO explanation. NO markdown. JUST the JSON object.`
 
 // Safe code block delimiter

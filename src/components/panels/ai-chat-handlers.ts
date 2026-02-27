@@ -51,7 +51,12 @@ export function buildContextString(): string {
       .map((id) => useDocumentStore.getState().getNodeById(id))
       .filter(Boolean)
     const selectedSummary = selectedNodes
-      .map((n) => `${n!.type}:${n!.name ?? n!.id}`)
+      .map((n) => {
+        const dims = 'width' in n! && 'height' in n!
+          ? ` (${n!.width}x${n!.height})`
+          : ''
+        return `${n!.type}:${n!.name ?? n!.id}${dims}`
+      })
       .join(', ')
     parts.push(`Selected: ${selectedSummary}`)
   }

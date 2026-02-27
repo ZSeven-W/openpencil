@@ -1,5 +1,6 @@
 import type { PenNode } from '@/types/pen'
-import { useDocumentStore, DEFAULT_FRAME_ID } from '@/stores/document-store'
+import { useDocumentStore, DEFAULT_FRAME_ID, getActivePageChildren } from '@/stores/document-store'
+import { useCanvasStore } from '@/stores/canvas-store'
 import { useHistoryStore } from '@/stores/history-store'
 import {
   pendingAnimationNodes,
@@ -33,9 +34,13 @@ const generationRemappedIds = new Map<string, string>()
 let generationContextHint = ''
 /** Root frame width for the current generation (1200 desktop, 375 mobile) */
 let generationCanvasWidth = 1200
+/** Root frame ID for the current generation — may differ from DEFAULT_FRAME_ID
+ *  when canvas already has content and new content is placed beside it. */
+let generationRootFrameId: string = DEFAULT_FRAME_ID
 
 export function resetGenerationRemapping(): void {
   generationRemappedIds.clear()
+  generationRootFrameId = DEFAULT_FRAME_ID
 }
 
 export function setGenerationContextHint(hint?: string): void {
@@ -49,6 +54,11 @@ export function setGenerationCanvasWidth(width: number): void {
 /** Expose the current canvas width for use by other modules (read-only). */
 export function getGenerationCanvasWidth(): number {
   return generationCanvasWidth
+}
+
+/** Expose the root frame ID for the current generation (read-only). */
+export function getGenerationRootFrameId(): string {
+  return generationRootFrameId
 }
 
 /** Expose the current remapped IDs map for use by other modules (read-only). */
@@ -167,14 +177,32 @@ export function insertStreamingNode(
     return
   }
 
-  if (resolvedParent === null && isCanvasOnlyEmptyFrame() && node.type === 'frame') {
-    // Root frame replaces the default empty frame -- no animation needed
-    replaceEmptyFrame(node)
+  if (resolvedParent === null && node.type === 'frame') {
+    if (isCanvasOnlyEmptyFrame()) {
+      // Root frame replaces the default empty frame -- no animation needed
+      replaceEmptyFrame(node)
+      generationRootFrameId = DEFAULT_FRAME_ID
+    } else {
+      // Canvas already has content — add as new top-level frame beside existing ones
+      const { document: doc } = useDocumentStore.getState()
+      const activePageId = useCanvasStore.getState().activePageId
+      const pageChildren = getActivePageChildren(doc, activePageId)
+      let maxRight = 0
+      for (const child of pageChildren) {
+        const cx = child.x ?? 0
+        const cw = ('width' in child && typeof child.width === 'number') ? child.width : 0
+        maxRight = Math.max(maxRight, cx + cw)
+      }
+      node.x = maxRight + 100
+      node.y = 0
+      generationRootFrameId = node.id
+      addNode(null, node)
+    }
   } else {
-    const effectiveParent = resolvedParent ?? DEFAULT_FRAME_ID
-    // Verify parent exists, fall back to root frame
+    const effectiveParent = resolvedParent ?? generationRootFrameId
+    // Verify parent exists, fall back to generation root frame
     const parent = getNodeById(effectiveParent)
-    const insertParent = parent ? effectiveParent : DEFAULT_FRAME_ID
+    const insertParent = parent ? effectiveParent : generationRootFrameId
 
     // Frames with fills appear instantly (background context for children).
     // All other nodes fade in with staggered animation.
@@ -196,9 +224,9 @@ export function insertStreamingNode(
       equalizeHorizontalSiblings(insertParent)
     }
 
-    // When a top-level section is added directly under the root frame,
+    // When a top-level section is added directly under the generation root frame,
     // progressively expand root height to fit the new content.
-    if (insertParent === DEFAULT_FRAME_ID) {
+    if (insertParent === generationRootFrameId) {
       expandRootFrameHeight()
     }
   }
@@ -414,7 +442,8 @@ export function applyPostStreamingTreeHeuristics(rootNodeId: string): void {
 
 export function adjustRootFrameHeightToContent(): void {
   const { getNodeById, updateNode } = useDocumentStore.getState()
-  const root = getNodeById(DEFAULT_FRAME_ID)
+  const rootId = generationRootFrameId
+  const root = getNodeById(rootId)
   if (!root || root.type !== 'frame') return
   if (!Array.isArray(root.children) || root.children.length === 0) return
 
@@ -424,7 +453,7 @@ export function adjustRootFrameHeightToContent(): void {
   if (currentHeight <= 0) return
   if (Math.abs(currentHeight - targetHeight) < 8) return
 
-  updateNode(DEFAULT_FRAME_ID, { height: targetHeight })
+  updateNode(rootId, { height: targetHeight })
 }
 
 /**
@@ -438,7 +467,8 @@ export function adjustRootFrameHeightToContent(): void {
  */
 export function expandRootFrameHeight(): void {
   const { getNodeById, updateNode } = useDocumentStore.getState()
-  const root = getNodeById(DEFAULT_FRAME_ID)
+  const rootId = generationRootFrameId
+  const root = getNodeById(rootId)
   if (!root || root.type !== 'frame') return
   if (!Array.isArray(root.children) || root.children.length === 0) return
 
@@ -452,7 +482,7 @@ export function expandRootFrameHeight(): void {
   // Only grow -- never shrink during progressive generation
   if (currentHeight > 0 && targetHeight <= currentHeight) return
 
-  updateNode(DEFAULT_FRAME_ID, { height: targetHeight })
+  updateNode(rootId, { height: targetHeight })
 }
 
 // ---------------------------------------------------------------------------
@@ -461,10 +491,13 @@ export function expandRootFrameHeight(): void {
 
 /**
  * Check if the canvas only has the default empty frame (no children).
+ * Uses active page children (not document.children) to support page migration.
  */
 function isCanvasOnlyEmptyFrame(): boolean {
   const { document, getNodeById } = useDocumentStore.getState()
-  if (document.children.length !== 1) return false
+  const activePageId = useCanvasStore.getState().activePageId
+  const pageChildren = getActivePageChildren(document, activePageId)
+  if (pageChildren.length !== 1) return false
   const rootFrame = getNodeById(DEFAULT_FRAME_ID)
   if (!rootFrame) return false
   return !('children' in rootFrame) || !rootFrame.children || rootFrame.children.length === 0

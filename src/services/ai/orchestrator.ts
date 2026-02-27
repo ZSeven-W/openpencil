@@ -30,8 +30,9 @@ import {
   resetGenerationRemapping,
   setGenerationContextHint,
   setGenerationCanvasWidth,
+  getGenerationRootFrameId,
 } from './design-generator'
-import { DEFAULT_FRAME_ID, useDocumentStore } from '@/stores/document-store'
+import { useDocumentStore } from '@/stores/document-store'
 import { useHistoryStore } from '@/stores/history-store'
 import { zoomToFitContent } from '@/canvas/use-fabric-canvas'
 import { resetAnimationState } from './design-animation'
@@ -185,7 +186,7 @@ export async function executeOrchestration(
     if (!animated) {
       adjustRootFrameHeightToContent()
     }
-    const adjustedRoot = useDocumentStore.getState().getNodeById(DEFAULT_FRAME_ID)
+    const adjustedRoot = useDocumentStore.getState().getNodeById(getGenerationRootFrameId())
     if (adjustedRoot && adjustedRoot.type === 'frame') {
       rootNode.height = adjustedRoot.height
     }
