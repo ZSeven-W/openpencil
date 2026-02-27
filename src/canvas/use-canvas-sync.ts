@@ -532,7 +532,7 @@ export function useCanvasSync() {
             obj.borderDashArray = []
           }
 
-          // Apply clip path from parent frame with cornerRadius
+          // Apply clip path from parent frame with clipContent / cornerRadius
           const clip = clipMap.get(node.id)
           if (clip) {
             obj.clipPath = new fabric.Rect({
@@ -546,8 +546,13 @@ export function useCanvasSync() {
               originY: 'top',
               absolutePositioned: true,
             })
+            // Invalidate the object cache so the clipPath takes effect on next render.
+            // Without this, canvas.add() caches the object without the clip and
+            // requestRenderAll() reuses the stale cache.
+            obj.dirty = true
           } else if (obj.clipPath) {
             obj.clipPath = undefined
+            obj.dirty = true
           }
         }
       }

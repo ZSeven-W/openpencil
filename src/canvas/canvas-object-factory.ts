@@ -425,6 +425,11 @@ export function createFabricObject(
           fabricImg.visible = visible
           fabricImg.selectable = !locked
           fabricImg.evented = !locked
+          // Preserve clipPath from placeholder so clipped-frame children stay clipped
+          if (placeholder.clipPath) {
+            fabricImg.clipPath = placeholder.clipPath
+            fabricImg.dirty = true
+          }
           canvas.remove(placeholder)
           canvas.add(fabricImg)
           canvas.requestRenderAll()
