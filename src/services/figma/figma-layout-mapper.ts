@@ -36,8 +36,9 @@ export function mapFigmaLayout(
     result.alignItems = mapAlignItems(node.stackCounterAlignItems)
   }
 
-  // frameMaskDisabled=false means clipping is enabled
-  if (node.frameMaskDisabled === false) {
+  // Frames clip by default in Figma (frameMaskDisabled defaults to false).
+  // Only skip clipContent when explicitly disabled.
+  if (node.frameMaskDisabled !== true) {
     result.clipContent = true
   }
 

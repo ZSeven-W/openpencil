@@ -63,11 +63,16 @@ function mapSingleFill(paint: FigmaPaint): PenFill | null {
     }
 
     case 'IMAGE': {
-      // Image fills reference blobs; we'll resolve them later
-      const blobIndex = paint.image?.dataBlob
+      // Image fills reference blobs or ZIP image files; we'll resolve them later
+      let url = ''
+      if (paint.image?.hash && paint.image.hash.length > 0) {
+        url = `__hash:${Array.from(paint.image.hash).map(b => b.toString(16).padStart(2, '0')).join('')}`
+      } else if (paint.image?.dataBlob !== undefined) {
+        url = `__blob:${paint.image.dataBlob}`
+      }
       return {
         type: 'image',
-        url: blobIndex !== undefined ? `__blob:${blobIndex}` : '',
+        url,
         mode: mapScaleMode(paint.imageScaleMode),
         opacity: paint.opacity,
       }

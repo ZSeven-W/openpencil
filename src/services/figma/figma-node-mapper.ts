@@ -10,6 +10,7 @@ import { mapFigmaStroke } from './figma-stroke-mapper'
 import { mapFigmaEffects } from './figma-effect-mapper'
 import { mapFigmaLayout, mapWidthSizing, mapHeightSizing } from './figma-layout-mapper'
 import { mapFigmaTextProps } from './figma-text-mapper'
+import { lookupIconByName } from '@/services/ai/icon-resolver'
 
 const SKIPPED_TYPES = new Set([
   'SLICE', 'CONNECTOR', 'SHAPE_WITH_TEXT', 'STICKY', 'STAMP',
@@ -65,6 +66,7 @@ export function figmaToPenDocument(
     componentMap,
     warnings,
     generateId: () => `fig_${idCounter++}`,
+    blobs: decoded.blobs,
   }
 
   const children = convertChildren(page, ctx)
@@ -135,6 +137,7 @@ export function figmaAllPagesToPenDocument(
       componentMap,
       warnings,
       generateId: genId,
+      blobs: decoded.blobs,
     }
 
     const pageChildren = convertChildren(page, ctx)
@@ -230,7 +233,11 @@ function sortChildrenRecursive(node: TreeNode): void {
   node.children.sort((a, b) => {
     const posA = a.figma.parentIndex?.position ?? ''
     const posB = b.figma.parentIndex?.position ?? ''
-    return posA.localeCompare(posB)
+    // Use raw code-point comparison, not localeCompare.
+    // Figma fractional index strings use characters like $ (36), % (37), & (38)
+    // where lower code points = further back in z-stack. localeCompare sorts
+    // these symbols incorrectly, causing background elements to render on top.
+    return posA < posB ? -1 : posA > posB ? 1 : 0
   })
   for (const child of node.children) {
     sortChildrenRecursive(child)
@@ -259,6 +266,7 @@ interface ConversionContext {
   componentMap: Map<string, string>
   warnings: string[]
   generateId: () => string
+  blobs: (Uint8Array | string)[]
 }
 
 function convertChildren(
@@ -526,6 +534,20 @@ function convertEllipse(
 ): PenNode {
   const figma = treeNode.figma
   const id = ctx.generateId()
+
+  // Ellipse with image-only fill → convert to image node (e.g. circular avatar)
+  if (hasOnlyImageFill(figma)) {
+    return {
+      type: 'image',
+      ...commonProps(figma, id),
+      src: getImageFillUrl(figma),
+      width: mapWidthSizing(figma, parentStackMode),
+      height: mapHeightSizing(figma, parentStackMode),
+      cornerRadius: Math.round((figma.size?.x ?? 100) / 2),
+      effects: mapFigmaEffects(figma.effects),
+    }
+  }
+
   return {
     type: 'ellipse',
     ...commonProps(figma, id),
@@ -568,14 +590,45 @@ function convertVector(
 ): PenNode {
   const figma = treeNode.figma
   const id = ctx.generateId()
+  const name = figma.name ?? ''
 
-  // Try to get path data from fillGeometry blobs
-  // Since blob data is binary, we can't easily extract SVG paths
-  // Fall back to a rectangle placeholder
+  // 1. Try matching node name to a known icon (Lucide/Feather library)
+  const iconMatch = lookupIconByName(name)
+  if (iconMatch) {
+    return {
+      type: 'path',
+      ...commonProps(figma, id),
+      d: iconMatch.d,
+      iconId: iconMatch.iconId,
+      width: mapWidthSizing(figma, parentStackMode),
+      height: mapHeightSizing(figma, parentStackMode),
+      fill: iconMatch.style === 'fill' ? mapFigmaFills(figma.fillPaints) : undefined,
+      stroke: iconMatch.style === 'stroke'
+        ? mapFigmaStroke(figma) ?? { thickness: 2, fill: [{ type: 'solid', color: figmaFillColor(figma) ?? '#000000' }] }
+        : mapFigmaStroke(figma),
+      effects: mapFigmaEffects(figma.effects),
+    }
+  }
+
+  // 2. Try decoding binary path data from fillGeometry / strokeGeometry blobs
+  const pathD = decodeFigmaVectorPath(figma, ctx.blobs)
+  if (pathD) {
+    return {
+      type: 'path',
+      ...commonProps(figma, id),
+      d: pathD,
+      width: mapWidthSizing(figma, parentStackMode),
+      height: mapHeightSizing(figma, parentStackMode),
+      fill: mapFigmaFills(figma.fillPaints),
+      stroke: mapFigmaStroke(figma),
+      effects: mapFigmaEffects(figma.effects),
+    }
+  }
+
+  // 3. Fall back to rectangle if path decoding fails
   ctx.warnings.push(
-    `Vector node "${figma.name}" converted as rectangle (binary path data not extractable from .fig format)`
+    `Vector node "${figma.name}" converted as rectangle (path data not decodable)`
   )
-
   return {
     type: 'rectangle',
     ...commonProps(figma, id),
@@ -607,6 +660,168 @@ function convertText(
   }
 }
 
+// --- Vector path decoding ---
+
+/**
+ * Decode Figma binary path blob to SVG path `d` string.
+ * Binary format: sequence of commands, each starting with a command byte:
+ *   0x00 = closePath (Z) — 0 floats
+ *   0x01 = moveTo (M)    — 2 float32 LE (x, y)
+ *   0x02 = lineTo (L)    — 2 float32 LE (x, y)
+ *   0x04 = cubicTo (C)   — 6 float32 LE (cp1x, cp1y, cp2x, cp2y, x, y)
+ *   0x03 = quadTo (Q)    — 4 float32 LE (cpx, cpy, x, y)
+ */
+function decodeFigmaPathBlob(blob: Uint8Array): string | null {
+  if (blob.length < 9) return null // minimum: 1 cmd byte + 2 float32
+
+  const buf = new ArrayBuffer(blob.byteLength)
+  new Uint8Array(buf).set(blob)
+  const view = new DataView(buf)
+
+  const parts: string[] = []
+  let offset = 0
+
+  while (offset < blob.length) {
+    const cmd = blob[offset]
+    offset += 1
+
+    switch (cmd) {
+      case 0x00: // close
+        parts.push('Z')
+        break
+      case 0x01: { // moveTo
+        if (offset + 8 > blob.length) return joinParts(parts)
+        const x = view.getFloat32(offset, true); offset += 4
+        const y = view.getFloat32(offset, true); offset += 4
+        parts.push(`M${r(x)} ${r(y)}`)
+        break
+      }
+      case 0x02: { // lineTo
+        if (offset + 8 > blob.length) return joinParts(parts)
+        const x = view.getFloat32(offset, true); offset += 4
+        const y = view.getFloat32(offset, true); offset += 4
+        parts.push(`L${r(x)} ${r(y)}`)
+        break
+      }
+      case 0x03: { // quadTo
+        if (offset + 16 > blob.length) return joinParts(parts)
+        const cpx = view.getFloat32(offset, true); offset += 4
+        const cpy = view.getFloat32(offset, true); offset += 4
+        const x   = view.getFloat32(offset, true); offset += 4
+        const y   = view.getFloat32(offset, true); offset += 4
+        parts.push(`Q${r(cpx)} ${r(cpy)} ${r(x)} ${r(y)}`)
+        break
+      }
+      case 0x04: { // cubicTo
+        if (offset + 24 > blob.length) return joinParts(parts)
+        const cp1x = view.getFloat32(offset, true); offset += 4
+        const cp1y = view.getFloat32(offset, true); offset += 4
+        const cp2x = view.getFloat32(offset, true); offset += 4
+        const cp2y = view.getFloat32(offset, true); offset += 4
+        const x    = view.getFloat32(offset, true); offset += 4
+        const y    = view.getFloat32(offset, true); offset += 4
+        parts.push(`C${r(cp1x)} ${r(cp1y)} ${r(cp2x)} ${r(cp2y)} ${r(x)} ${r(y)}`)
+        break
+      }
+      default:
+        // Unknown command — stop decoding
+        return joinParts(parts)
+    }
+  }
+
+  return joinParts(parts)
+}
+
+/** Round to 2 decimal places for compact SVG path data. */
+function r(n: number): string {
+  return Math.abs(n) < 0.005 ? '0' : parseFloat(n.toFixed(2)).toString()
+}
+
+function joinParts(parts: string[]): string | null {
+  return parts.length > 1 ? parts.join(' ') : null
+}
+
+/**
+ * Try to decode vector path data from a Figma node's fill/stroke geometry blobs.
+ * Scales coordinates from normalizedSize to actual node size if needed.
+ */
+function decodeFigmaVectorPath(
+  figma: FigmaNodeChange,
+  blobs: (Uint8Array | string)[],
+): string | null {
+  // Try fillGeometry first, then strokeGeometry
+  const geometries = figma.fillGeometry ?? figma.strokeGeometry
+  if (!geometries || geometries.length === 0) return null
+
+  const pathParts: string[] = []
+
+  for (const geom of geometries) {
+    if (geom.commandsBlob == null) continue
+    const blob = blobs[geom.commandsBlob]
+    if (!blob || typeof blob === 'string') continue
+    const decoded = decodeFigmaPathBlob(blob)
+    if (decoded) pathParts.push(decoded)
+  }
+
+  if (pathParts.length === 0) return null
+
+  const rawPath = pathParts.join(' ')
+
+  // Scale from normalizedSize to actual node size if they differ
+  const normSize = figma.vectorData?.normalizedSize
+  const actualSize = figma.size
+  if (normSize && actualSize) {
+    const sx = actualSize.x / normSize.x
+    const sy = actualSize.y / normSize.y
+    if (Math.abs(sx - 1) > 0.01 || Math.abs(sy - 1) > 0.01) {
+      return scaleSvgPath(rawPath, sx, sy)
+    }
+  }
+
+  return rawPath
+}
+
+/** Scale all coordinates in an SVG path string. */
+function scaleSvgPath(d: string, sx: number, sy: number): string {
+  // Tokenize: commands and numbers
+  const tokens = d.match(/[MLCQZmlcqz]|-?\d+\.?\d*/g)
+  if (!tokens) return d
+
+  const result: string[] = []
+  let i = 0
+
+  while (i < tokens.length) {
+    const token = tokens[i]
+    if (/^[MLCQZmlcqz]$/.test(token)) {
+      result.push(token)
+      i++
+      const cmd = token.toUpperCase()
+      const count = cmd === 'M' || cmd === 'L' ? 2 : cmd === 'Q' ? 4 : cmd === 'C' ? 6 : 0
+      for (let j = 0; j < count && i < tokens.length; j++) {
+        const val = parseFloat(tokens[i])
+        result.push(r(j % 2 === 0 ? val * sx : val * sy))
+        i++
+      }
+    } else {
+      result.push(token)
+      i++
+    }
+  }
+
+  return result.join(' ')
+}
+
+/**
+ * Extract the primary fill color from a Figma node's fillPaints.
+ */
+function figmaFillColor(figma: FigmaNodeChange): string | undefined {
+  const paint = figma.fillPaints?.find((f) => f.visible !== false && f.type === 'SOLID')
+  if (!paint?.color) return undefined
+  const { r: cr, g: cg, b: cb } = paint.color
+  const toHex = (v: number) => Math.round(v * 255).toString(16).padStart(2, '0')
+  return `#${toHex(cr)}${toHex(cg)}${toHex(cb)}`
+}
+
 // --- Helpers ---
 
 function hasOnlyImageFill(figma: FigmaNodeChange): boolean {
@@ -615,10 +830,25 @@ function hasOnlyImageFill(figma: FigmaNodeChange): boolean {
   return visible.length === 1 && visible[0].type === 'IMAGE'
 }
 
+function hashToHex(hash: Uint8Array): string {
+  return Array.from(hash).map(b => b.toString(16).padStart(2, '0')).join('')
+}
+
 function getImageFillUrl(figma: FigmaNodeChange): string {
   const paint = figma.fillPaints?.find((f) => f.type === 'IMAGE' && f.visible !== false)
-  if (!paint?.image?.dataBlob && paint?.image?.dataBlob !== 0) return ''
-  return `__blob:${paint.image.dataBlob}`
+  if (!paint?.image) return ''
+
+  // Prefer hash-based reference (resolves from ZIP image files)
+  if (paint.image.hash && paint.image.hash.length > 0) {
+    return `__hash:${hashToHex(paint.image.hash)}`
+  }
+
+  // Fall back to blob index reference
+  if (paint.image.dataBlob !== undefined && paint.image.dataBlob !== null) {
+    return `__blob:${paint.image.dataBlob}`
+  }
+
+  return ''
 }
 
 function collectImageBlobs(blobs: (Uint8Array | string)[]): Map<number, Uint8Array> {

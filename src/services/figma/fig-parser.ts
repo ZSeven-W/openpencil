@@ -75,11 +75,18 @@ function decompressChunk(bytes: Uint8Array): Uint8Array {
   }
 }
 
+interface FigBinaryResult {
+  parts: Uint8Array[]
+  imageFiles: Map<string, Uint8Array>
+}
+
 /**
  * Split a .fig file buffer into schema and data binary parts.
+ * Also extracts image files from the ZIP archive if present.
  */
-function figToBinaryParts(fileBuffer: ArrayBuffer): Uint8Array[] {
+function figToBinaryParts(fileBuffer: ArrayBuffer): FigBinaryResult {
   let fileByte = new Uint8Array(fileBuffer)
+  const imageFiles = new Map<string, Uint8Array>()
 
   // If not starting with "fig-kiwi", it's a ZIP archive containing canvas.fig
   if (!hasFigKiwiMagic(fileByte)) {
@@ -91,6 +98,15 @@ function figToBinaryParts(fileBuffer: ArrayBuffer): Uint8Array[] {
         `Invalid .fig file: could not unzip (${e instanceof Error ? e.message : 'unknown error'})`
       )
     }
+
+    // Extract image files stored under images/ directory (keyed by hex hash)
+    for (const [path, bytes] of Object.entries(unzipped)) {
+      if (path.startsWith('images/') && bytes.length > 0) {
+        const key = path.slice(7) // Remove "images/" prefix
+        imageFiles.set(key, bytes)
+      }
+    }
+
     const canvasFile = unzipped['canvas.fig']
     if (!canvasFile) {
       const keys = Object.keys(unzipped)
@@ -111,7 +127,7 @@ function figToBinaryParts(fileBuffer: ArrayBuffer): Uint8Array[] {
   readUint32(fileByte, start)
   start += 4
 
-  const result: Uint8Array[] = []
+  const parts: Uint8Array[] = []
   while (start < fileByte.length) {
     const chunkSize = readUint32(fileByte, start)
     start += 4
@@ -120,11 +136,11 @@ function figToBinaryParts(fileBuffer: ArrayBuffer): Uint8Array[] {
 
     const rawChunk = fileByte.slice(start, start + chunkSize)
     const decompressed = decompressChunk(rawChunk)
-    result.push(decompressed)
+    parts.push(decompressed)
     start += chunkSize
   }
 
-  return result
+  return { parts, imageFiles }
 }
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -158,7 +174,7 @@ function findDecoder(
  * Parse a .fig file ArrayBuffer into decoded JSON.
  */
 export function parseFigFile(fileBuffer: ArrayBuffer): FigmaDecodedFile {
-  const parts = figToBinaryParts(fileBuffer)
+  const { parts, imageFiles } = figToBinaryParts(fileBuffer)
 
   if (parts.length < 2) {
     throw new Error(
@@ -212,6 +228,7 @@ export function parseFigFile(fileBuffer: ArrayBuffer): FigmaDecodedFile {
         return {
           nodeChanges: raw[key],
           blobs: extractBlobs(raw),
+          imageFiles,
         }
       }
     }
@@ -220,6 +237,7 @@ export function parseFigFile(fileBuffer: ArrayBuffer): FigmaDecodedFile {
   return {
     nodeChanges,
     blobs: extractBlobs(raw),
+    imageFiles,
   }
 }
 

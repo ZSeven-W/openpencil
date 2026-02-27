@@ -198,6 +198,7 @@ export interface FigmaNodeChange {
   letterSpacing?: FigmaNumber
   textAutoResize?: 'NONE' | 'WIDTH_AND_HEIGHT' | 'HEIGHT'
   textDecoration?: 'NONE' | 'UNDERLINE' | 'STRIKETHROUGH'
+  textCase?: 'ORIGINAL' | 'UPPER' | 'LOWER' | 'TITLE'
   textData?: FigmaTextData
 
   // Auto-layout (stack)
@@ -236,6 +237,7 @@ export interface FigmaNodeChange {
 export interface FigmaDecodedFile {
   nodeChanges: FigmaNodeChange[]
   blobs: (Uint8Array | string)[]
+  imageFiles: Map<string, Uint8Array>
 }
 
 export interface FigmaPage {

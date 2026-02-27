@@ -24,7 +24,7 @@ export function mapFigmaTextProps(
   | 'strikethrough'
 > {
   const result: ReturnType<typeof mapFigmaTextProps> = {
-    content: buildContent(node),
+    content: applyTextCase(buildContent(node), node.textCase),
     fontFamily: node.fontName?.family,
     fontSize: node.fontSize,
     fontWeight: parseFontWeight(node.fontName?.style),
@@ -40,6 +40,28 @@ export function mapFigmaTextProps(
   if (node.textDecoration === 'STRIKETHROUGH') result.strikethrough = true
 
   return result
+}
+
+function applyTextCase(
+  content: string | StyledTextSegment[],
+  textCase?: string,
+): string | StyledTextSegment[] {
+  if (!textCase || textCase === 'ORIGINAL') return content
+
+  const transform = (text: string): string => {
+    switch (textCase) {
+      case 'UPPER': return text.toUpperCase()
+      case 'LOWER': return text.toLowerCase()
+      case 'TITLE': return text.replace(/\b\w/g, c => c.toUpperCase())
+      default: return text
+    }
+  }
+
+  if (typeof content === 'string') {
+    return transform(content)
+  }
+
+  return content.map(seg => ({ ...seg, text: transform(seg.text) }))
 }
 
 function buildContent(node: FigmaNodeChange): string | StyledTextSegment[] {

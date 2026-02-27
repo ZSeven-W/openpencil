@@ -108,14 +108,14 @@ export default function FigmaImportDialog({ open, onClose }: FigmaImportDialogPr
         : figmaToPenDocument(decodedFile, name, pageIndex)
       setProgress(80)
 
-      // Resolve image blobs to data URLs across all pages
+      // Resolve image blobs and hash-based images to data URLs across all pages
       let unresolved = 0
       if (doc.pages && doc.pages.length > 0) {
         for (const page of doc.pages) {
-          unresolved += resolveImageBlobs(page.children, imageBlobs)
+          unresolved += resolveImageBlobs(page.children, imageBlobs, decodedFile.imageFiles)
         }
       } else {
-        unresolved = resolveImageBlobs(doc.children, imageBlobs)
+        unresolved = resolveImageBlobs(doc.children, imageBlobs, decodedFile.imageFiles)
       }
       if (unresolved > 0) {
         warns.push(`${unresolved} images could not be resolved`)
