@@ -21,10 +21,18 @@ import type { PenFill, PenStroke, GradientStop } from '@/types/styles'
 // ---------------------------------------------------------------------------
 
 export function normalizePenDocument(doc: PenDocument): PenDocument {
-  return {
+  const normalized = {
     ...doc,
     children: doc.children.map((n) => normalizeNode(n)),
   }
+  // Normalize all pages' children too
+  if (normalized.pages && normalized.pages.length > 0) {
+    normalized.pages = normalized.pages.map((p) => ({
+      ...p,
+      children: p.children.map((n) => normalizeNode(n)),
+    }))
+  }
+  return normalized
 }
 
 // ---------------------------------------------------------------------------

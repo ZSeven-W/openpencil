@@ -1,4 +1,5 @@
-import { useDocumentStore } from '@/stores/document-store'
+import { useDocumentStore, getActivePageChildren } from '@/stores/document-store'
+import { useCanvasStore } from '@/stores/canvas-store'
 import { setFabricSyncLock } from './canvas-sync-lock'
 import { nodeRenderInfo, rootFrameBounds, layoutContainerBounds } from './use-canvas-sync'
 import type { FabricObjectWithPenId } from './canvas-object-factory'
@@ -126,7 +127,7 @@ export function checkDragReparentByBounds(
       x: objBounds.x,
       y: objBounds.y,
     })
-    const rootCount = store.document.children.length
+    const rootCount = getActivePageChildren(store.document, useCanvasStore.getState().activePageId).length
     store.moveNode(nodeId, null, rootCount)
   }
 
@@ -293,7 +294,7 @@ export function checkDragReparent(obj: FabricObjectWithPenId): boolean {
         x: objBounds.x,
         y: objBounds.y,
       })
-      const rootCount = store.document.children.length
+      const rootCount = getActivePageChildren(store.document, useCanvasStore.getState().activePageId).length
       store.moveNode(nodeId, null, rootCount)
     }
   } finally {

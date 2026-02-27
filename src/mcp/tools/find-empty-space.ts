@@ -1,6 +1,6 @@
 import { resolve } from 'node:path'
 import { openDocument } from '../document-manager'
-import { getNodeBounds, findNodeInTree } from '../utils/node-operations'
+import { getNodeBounds, findNodeInTree, getDocChildren } from '../utils/node-operations'
 import type { PenNode } from '../../types/pen'
 
 export interface FindEmptySpaceParams {
@@ -25,13 +25,14 @@ export async function handleFindEmptySpace(
   const padding = params.padding ?? 50
 
   // Compute bounding box of reference content
+  const docChildren = getDocChildren(doc)
   let nodes: PenNode[]
   if (params.nodeId) {
-    const node = findNodeInTree(doc.children, params.nodeId)
+    const node = findNodeInTree(docChildren, params.nodeId)
     if (!node) throw new Error(`Node not found: ${params.nodeId}`)
     nodes = [node]
   } else {
-    nodes = doc.children
+    nodes = docChildren
   }
 
   if (nodes.length === 0) {
@@ -44,7 +45,7 @@ export async function handleFindEmptySpace(
   let maxX = -Infinity
   let maxY = -Infinity
   for (const node of nodes) {
-    const b = getNodeBounds(node, doc.children)
+    const b = getNodeBounds(node, docChildren)
     minX = Math.min(minX, b.x)
     minY = Math.min(minY, b.y)
     maxX = Math.max(maxX, b.x + b.w)

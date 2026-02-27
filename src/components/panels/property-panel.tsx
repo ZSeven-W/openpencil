@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useCanvasStore } from '@/stores/canvas-store'
-import { useDocumentStore } from '@/stores/document-store'
+import { useDocumentStore, getActivePageChildren } from '@/stores/document-store'
 import { Separator } from '@/components/ui/separator'
 import type { PenNode, ContainerProps, RefNode, PathNode } from '@/types/pen'
 import { Component, Diamond, ArrowUpRight, Unlink } from 'lucide-react'
@@ -26,7 +26,8 @@ export default function PropertyPanel() {
   const activeId = useCanvasStore((s) => s.selection.activeId)
   const setSelection = useCanvasStore((s) => s.setSelection)
   const fabricCanvas = useCanvasStore((s) => s.fabricCanvas)
-  const children = useDocumentStore((s) => s.document.children)
+  const activePageId = useCanvasStore((s) => s.activePageId)
+  const children = useDocumentStore((s) => getActivePageChildren(s.document, activePageId))
   const getNodeById = useDocumentStore((s) => s.getNodeById)
   const updateNode = useDocumentStore((s) => s.updateNode)
   const makeReusable = useDocumentStore((s) => s.makeReusable)

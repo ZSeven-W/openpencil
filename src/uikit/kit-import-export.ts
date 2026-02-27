@@ -47,7 +47,10 @@ export async function exportKit(
   componentIds: string[],
   kitName: string,
 ): Promise<boolean> {
-  const reusableNodes = collectReusableNodes(sourceDoc.children)
+  const allNodes = sourceDoc.pages
+    ? sourceDoc.pages.flatMap((p) => p.children)
+    : sourceDoc.children
+  const reusableNodes = collectReusableNodes(allNodes)
   const selected =
     componentIds.length > 0
       ? reusableNodes.filter((n) => componentIds.includes(n.id))

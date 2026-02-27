@@ -8,6 +8,7 @@ import {
   Moon,
   Maximize,
   Minimize,
+  Import,
 } from 'lucide-react'
 import ClaudeLogo from '@/components/icons/claude-logo'
 import OpenAILogo from '@/components/icons/openai-logo'
@@ -183,6 +184,21 @@ export default function TopBar() {
             </Button>
           </TooltipTrigger>
           <TooltipContent side="bottom">Save</TooltipContent>
+        </Tooltip>
+
+        <div className="w-px h-4 bg-border mx-1" />
+
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              onClick={() => useCanvasStore.getState().setFigmaImportDialogOpen(true)}
+            >
+              <Import size={16} />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="bottom">Import .fig file</TooltipContent>
         </Tooltip>
       </div>
 
