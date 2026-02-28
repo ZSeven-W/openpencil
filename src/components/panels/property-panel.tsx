@@ -117,10 +117,11 @@ export default function PropertyPanel() {
   const isContainer =
     displayNode.type === 'frame' || displayNode.type === 'group' || displayNode.type === 'rectangle'
   const hasLayout = isContainer
-  const hasFill = displayNode.type !== 'line'
-  const hasStroke = true
+  const isImage = displayNode.type === 'image'
+  const hasFill = displayNode.type !== 'line' && !isImage
+  const hasStroke = !isImage
   const hasCornerRadius =
-    displayNode.type === 'rectangle' || displayNode.type === 'frame'
+    displayNode.type === 'rectangle' || displayNode.type === 'frame' || isImage
   const hasEffects = true
   const isText = displayNode.type === 'text'
   const isIcon = displayNode.type === 'path' && !!(displayNode as PathNode).iconId

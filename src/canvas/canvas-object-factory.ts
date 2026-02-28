@@ -370,15 +370,32 @@ export function createFabricObject(
       const r = cornerRadiusValue(node.cornerRadius)
       const imgEl = new Image()
       imgEl.src = node.src
+
+      // Build a rounded-rect clipPath for corner radius
+      const makeImageClip = (cw: number, ch: number, cr: number) => {
+        if (cr <= 0) return undefined
+        return new fabric.Rect({
+          width: cw,
+          height: ch,
+          rx: cr,
+          ry: cr,
+          originX: 'center',
+          originY: 'center',
+        })
+      }
+
       if (imgEl.complete) {
+        const nw = imgEl.naturalWidth || w
+        const nh = imgEl.naturalHeight || h
+        const clip = makeImageClip(nw, nh, r * nw / w)
         obj = new fabric.FabricImage(imgEl, {
           ...baseProps,
-          width: imgEl.naturalWidth || w,
-          height: imgEl.naturalHeight || h,
-          scaleX: w / (imgEl.naturalWidth || w),
-          scaleY: h / (imgEl.naturalHeight || h),
-          rx: r,
-          ry: r,
+          width: nw,
+          height: nh,
+          scaleX: w / nw,
+          scaleY: h / nh,
+          clipPath: clip ?? undefined,
+          objectCaching: !clip,
         }) as unknown as FabricObjectWithPenId
       } else {
         // Placeholder while image loads
@@ -395,16 +412,16 @@ export function createFabricObject(
         imgEl.onload = () => {
           const canvas = placeholder.canvas
           if (!canvas) return
+          const nw = imgEl.naturalWidth
+          const nh = imgEl.naturalHeight
           const fabricImg = new fabric.FabricImage(imgEl, {
             ...baseProps,
             left: placeholder.left,
             top: placeholder.top,
-            width: imgEl.naturalWidth,
-            height: imgEl.naturalHeight,
-            scaleX: w / imgEl.naturalWidth,
-            scaleY: h / imgEl.naturalHeight,
-            rx: r,
-            ry: r,
+            width: nw,
+            height: nh,
+            scaleX: w / nw,
+            scaleY: h / nh,
           }) as unknown as FabricObjectWithPenId
           fabricImg.penNodeId = node.id
           fabricImg.set({
@@ -425,8 +442,14 @@ export function createFabricObject(
           fabricImg.visible = visible
           fabricImg.selectable = !locked
           fabricImg.evented = !locked
+          // Apply rounded-rect clip for corner radius
+          const clip = makeImageClip(nw, nh, r * nw / w)
+          if (clip) {
+            fabricImg.clipPath = clip
+            fabricImg.objectCaching = false
+          }
           // Preserve clipPath from placeholder so clipped-frame children stay clipped
-          if (placeholder.clipPath) {
+          if (!clip && placeholder.clipPath) {
             fabricImg.clipPath = placeholder.clipPath
             fabricImg.dirty = true
           }
