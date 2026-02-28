@@ -76,7 +76,7 @@ export function syncFabricObject(
         strokeWidth: resolveStrokeWidth(node.stroke),
       })
       if ('rx' in obj) {
-        const r = cornerRadiusValue(node.cornerRadius)
+        const r = Math.min(cornerRadiusValue(node.cornerRadius), h / 2)
         obj.set({ rx: r, ry: r })
       }
       break
@@ -93,7 +93,7 @@ export function syncFabricObject(
         strokeWidth: resolveStrokeWidth(node.stroke),
       })
       if ('rx' in obj) {
-        const r = cornerRadiusValue(node.cornerRadius)
+        const r = Math.min(cornerRadiusValue(node.cornerRadius), h / 2)
         obj.set({ rx: r, ry: r })
       }
       break
@@ -152,7 +152,7 @@ export function syncFabricObject(
     case 'image': {
       const w = sizeToNumber(node.width, 200)
       const h = sizeToNumber(node.height, 200)
-      const r = cornerRadiusValue(node.cornerRadius)
+      const r = Math.min(cornerRadiusValue(node.cornerRadius), h / 2)
       // Update scale to reflect target size over natural dimensions
       const nw = obj.width || w
       const nh = obj.height || h

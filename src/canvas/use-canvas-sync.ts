@@ -256,7 +256,8 @@ function flattenNodes(
       // - Root frames (depth 0, type frame) always clip their children
       // - Non-root frames clip only when they have cornerRadius
       let childClip = clipCtx
-      const cr = 'cornerRadius' in node ? cornerRadiusVal(node.cornerRadius) : 0
+      const crRaw = 'cornerRadius' in node ? cornerRadiusVal(node.cornerRadius) : 0
+      const cr = Math.min(crRaw, nodeH / 2)
       const isRootFrame = node.type === 'frame' && depth === 0
       const hasClipContent = 'clipContent' in node && (node as ContainerProps).clipContent === true
       if (isRootFrame || cr > 0 || hasClipContent) {

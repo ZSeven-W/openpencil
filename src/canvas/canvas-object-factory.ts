@@ -205,9 +205,9 @@ export function createFabricObject(
   switch (node.type) {
     case 'frame': {
       // Frames without explicit fill are transparent containers
-      const r = cornerRadiusValue(node.cornerRadius)
       const w = sizeToNumber(node.width, 100)
       const h = sizeToNumber(node.height, 100)
+      const r = Math.min(cornerRadiusValue(node.cornerRadius), h / 2)
       const hasFill = node.fill && node.fill.length > 0
       obj = new fabric.Rect({
         ...baseProps,
@@ -222,9 +222,9 @@ export function createFabricObject(
       break
     }
     case 'rectangle': {
-      const r = cornerRadiusValue(node.cornerRadius)
       const w = sizeToNumber(node.width, 100)
       const h = sizeToNumber(node.height, 100)
+      const r = Math.min(cornerRadiusValue(node.cornerRadius), h / 2)
       obj = new fabric.Rect({
         ...baseProps,
         width: w,
@@ -367,7 +367,7 @@ export function createFabricObject(
     case 'image': {
       const w = sizeToNumber(node.width, 200)
       const h = sizeToNumber(node.height, 200)
-      const r = cornerRadiusValue(node.cornerRadius)
+      const r = Math.min(cornerRadiusValue(node.cornerRadius), h / 2)
       const imgEl = new Image()
       imgEl.src = node.src
 
