@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
+import type { ComponentType, SVGProps } from 'react'
 import {
   PanelLeft,
   Plus,
@@ -8,11 +9,13 @@ import {
   Moon,
   Maximize,
   Minimize,
+  Blocks,
 } from 'lucide-react'
 import ClaudeLogo from '@/components/icons/claude-logo'
 import OpenAILogo from '@/components/icons/openai-logo'
 import OpenCodeLogo from '@/components/icons/opencode-logo'
 import FigmaLogo from '@/components/icons/figma-logo'
+import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import {
   Tooltip,
@@ -32,6 +35,78 @@ import {
 import { syncCanvasPositionsToStore } from '@/canvas/use-canvas-sync'
 import { zoomToFitContent } from '@/canvas/use-fabric-canvas'
 import { useAgentSettingsStore } from '@/stores/agent-settings-store'
+import type { AIProviderType } from '@/types/agent-settings'
+
+const PROVIDER_ICONS: Record<AIProviderType, ComponentType<SVGProps<SVGSVGElement>>> = {
+  anthropic: ClaudeLogo,
+  openai: OpenAILogo,
+  opencode: OpenCodeLogo,
+}
+
+const PROVIDER_ORDER: AIProviderType[] = ['anthropic', 'openai', 'opencode']
+
+function AgentStatusButton() {
+  const providers = useAgentSettingsStore((s) => s.providers)
+  const mcpIntegrations = useAgentSettingsStore((s) => s.mcpIntegrations)
+  const connectedTypes = PROVIDER_ORDER.filter((t) => providers[t].isConnected)
+  const agentCount = connectedTypes.length
+  const mcpCount = mcpIntegrations.filter((m) => m.enabled).length
+  const hasAny = agentCount > 0 || mcpCount > 0
+
+  const tooltipParts: string[] = []
+  if (agentCount > 0) tooltipParts.push(`${agentCount} agent${agentCount !== 1 ? 's' : ''}`)
+  if (mcpCount > 0) tooltipParts.push(`${mcpCount} MCP`)
+
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => useAgentSettingsStore.getState().setDialogOpen(true)}
+          className="h-7 px-2 text-muted-foreground hover:text-foreground"
+        >
+          {hasAny ? (
+            <div className="flex items-center gap-1.5">
+              {agentCount > 0 && (
+                <div className="flex items-center -space-x-1.5">
+                  {connectedTypes.map((type) => {
+                    const Icon = PROVIDER_ICONS[type]
+                    return (
+                      <div
+                        key={type}
+                        className="w-5 h-5 rounded-md bg-foreground/10 flex items-center justify-center ring-1 ring-card"
+                      >
+                        <Icon className="w-3 h-3" />
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+              {agentCount === 0 && (
+                <Blocks size={14} strokeWidth={1.5} />
+              )}
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
+              <span className="text-[11px] text-muted-foreground hidden sm:inline">
+                {tooltipParts.join(' · ')}
+              </span>
+            </div>
+          ) : (
+            <div className="flex items-center gap-1.5">
+              <Blocks size={14} strokeWidth={1.5} />
+              <span className={cn('text-[11px]', 'hidden sm:inline')}>
+                Agents & MCP
+              </span>
+            </div>
+          )}
+        </Button>
+      </TooltipTrigger>
+      <TooltipContent side="bottom">
+        {hasAny ? tooltipParts.join(' · ') + ' connected' : 'Setup Agents & MCP'}
+      </TooltipContent>
+    </Tooltip>
+  )
+}
 
 export default function TopBar() {
   const toggleLayerPanel = useCanvasStore((s) => s.toggleLayerPanel)
@@ -217,22 +292,7 @@ export default function TopBar() {
 
       {/* Right section */}
       <div className="flex items-center gap-0.5 app-region-no-drag">
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => useAgentSettingsStore.getState().setDialogOpen(true)}
-              className="h-7 gap-1.5 text-xs text-muted-foreground hover:text-foreground"
-            >
-              <ClaudeLogo className="w-4 h-4" />
-              <OpenAILogo className="w-4 h-4 -ml-1" />
-              <OpenCodeLogo className="w-4 h-4 -ml-1" />
-              <span className="hidden sm:inline">Agents & MCP</span>
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent side="bottom">Setup Agents & MCP</TooltipContent>
-        </Tooltip>
+        <AgentStatusButton />
 
         <div className="w-px h-3.5 bg-border/60 mx-1" />
 
