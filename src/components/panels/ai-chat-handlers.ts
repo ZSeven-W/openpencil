@@ -139,6 +139,9 @@ export function useChatHandlers() {
       let accumulated = ''
       let appliedCount = 0
 
+      const abortController = new AbortController()
+      useAIStore.getState().setAbortController(abortController)
+
       try {
         if (isDesign) {
              if (isModification) {
@@ -153,7 +156,7 @@ export function useChatHandlers() {
                const { rawResponse, nodes } = await generateDesignModification(selectedNodes, messageText, {
                  variables: modDoc.variables,
                  themes: modDoc.themes,
-               })
+               }, abortController.signal)
                accumulated = rawResponse
                updateLastMessage(accumulated)
 
@@ -180,7 +183,7 @@ export function useChatHandlers() {
                     accumulated = text
                     updateLastMessage(text)
                  },
-               })
+               }, abortController.signal)
                // Ensure final text is captured
                accumulated = rawResponse
                if (appliedCount === 0 && nodes.length > 0) {
@@ -208,6 +211,7 @@ export function useChatHandlers() {
               model,
               CHAT_STREAM_THINKING_CONFIG,
               currentProvider,
+              abortController.signal,
             )) {
                if (chunk.type === 'thinking') {
                  chatThinking += chunk.content
@@ -228,10 +232,16 @@ export function useChatHandlers() {
             }
         }
       } catch (error) {
-         const errMsg = error instanceof Error ? error.message : 'Unknown error'
-         accumulated += `\n\n**Error:** ${errMsg}`
-         updateLastMessage(accumulated)
+         // Silently handle user-initiated stop
+         if (abortController.signal.aborted) {
+           // Keep partial content, don't show error
+         } else {
+           const errMsg = error instanceof Error ? error.message : 'Unknown error'
+           accumulated += `\n\n**Error:** ${errMsg}`
+           updateLastMessage(accumulated)
+         }
       } finally {
+         useAIStore.getState().setAbortController(null)
          setStreaming(false)
       }
 

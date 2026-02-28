@@ -51,6 +51,7 @@ export async function executeOrchestration(
     onTextUpdate?: (text: string) => void
     animated?: boolean
   },
+  abortSignal?: AbortSignal,
 ): Promise<{ nodes: PenNode[]; rawResponse: string }> {
   setGenerationContextHint(request.prompt)
   const animated = callbacks?.animated ?? false
@@ -72,6 +73,7 @@ export async function executeOrchestration(
       (thinking) => {
         renderPlanningStatus(thinking)
       },
+      abortSignal,
     )
 
     // Assign ID prefixes
@@ -153,6 +155,7 @@ export async function executeOrchestration(
         preparedPrompt,
         progress,
         callbacks,
+        abortSignal,
       )
       if (animated) {
         adjustRootFrameHeightToContent()
@@ -164,13 +167,25 @@ export async function executeOrchestration(
     }
 
     // -- Phase 4: Collect results --
-    // Mark all completed subtasks as done in final progress
-    for (const entry of progress.subtasks) {
-      if (entry.status !== 'error') {
-        entry.status = 'done'
+    const aborted = abortSignal?.aborted ?? false
+
+    if (!aborted) {
+      // Only mark all as done when generation completed naturally
+      for (const entry of progress.subtasks) {
+        if (entry.status !== 'error') {
+          entry.status = 'done'
+        }
       }
+      progress.phase = 'done'
+    } else {
+      // User stopped: keep actual per-step status, mark streaming steps as pending
+      for (const entry of progress.subtasks) {
+        if (entry.status === 'streaming') {
+          entry.status = 'pending'
+        }
+      }
+      progress.phase = 'done'
     }
-    progress.phase = 'done'
     emitProgress(plan, progress, callbacks)
 
     const allNodes: PenNode[] = [rootNode]
@@ -179,7 +194,7 @@ export async function executeOrchestration(
     }
 
     const generatedNodeCount = allNodes.length - 1
-    if (generatedNodeCount === 0) {
+    if (generatedNodeCount === 0 && !aborted) {
       throw new Error('Orchestration produced no nodes beyond root frame')
     }
 
@@ -191,41 +206,43 @@ export async function executeOrchestration(
       rootNode.height = adjustedRoot.height
     }
 
-    // -- Phase 5: Visual validation (optional, non-blocking) --
-    const validationEntry: OrchestrationProgress['subtasks'][number] = {
-      id: '_validation',
-      label: 'Validating design',
-      status: 'pending',
-      nodeCount: 0,
-    }
-    progress.subtasks.push(validationEntry)
-    // Also add to plan.subtasks so buildFinalStepTags includes it
-    plan.subtasks.push({
-      id: '_validation',
-      label: 'Validating design',
-      region: { width: 0, height: 0 },
-      idPrefix: '_validation',
-      parentFrameId: null,
-    })
-    emitProgress(plan, progress, callbacks)
-
-    try {
-      const validationResult = await runPostGenerationValidation({
-        onStatusUpdate: (status, message) => {
-          validationEntry.status = status === 'streaming' ? 'streaming' : status === 'done' ? 'done' : status === 'error' ? 'error' : 'pending'
-          validationEntry.thinking = message
-          emitProgress(plan, progress, callbacks)
-        },
-      })
-      if (validationResult.applied > 0) {
-        validationEntry.nodeCount = validationResult.applied
+    // -- Phase 5: Visual validation (skip if user stopped) --
+    if (!aborted) {
+      const validationEntry: OrchestrationProgress['subtasks'][number] = {
+        id: '_validation',
+        label: 'Validating design',
+        status: 'pending',
+        nodeCount: 0,
       }
-      validationEntry.status = 'done'
-    } catch {
-      validationEntry.status = 'done'
-      validationEntry.thinking = 'Skipped'
+      progress.subtasks.push(validationEntry)
+      // Also add to plan.subtasks so buildFinalStepTags includes it
+      plan.subtasks.push({
+        id: '_validation',
+        label: 'Validating design',
+        region: { width: 0, height: 0 },
+        idPrefix: '_validation',
+        parentFrameId: null,
+      })
+      emitProgress(plan, progress, callbacks)
+
+      try {
+        const validationResult = await runPostGenerationValidation({
+          onStatusUpdate: (status, message) => {
+            validationEntry.status = status === 'streaming' ? 'streaming' : status === 'done' ? 'done' : status === 'error' ? 'error' : 'pending'
+            validationEntry.thinking = message
+            emitProgress(plan, progress, callbacks)
+          },
+        })
+        if (validationResult.applied > 0) {
+          validationEntry.nodeCount = validationResult.applied
+        }
+        validationEntry.status = 'done'
+      } catch {
+        validationEntry.status = 'done'
+        validationEntry.thinking = 'Skipped'
+      }
+      emitProgress(plan, progress, callbacks)
     }
-    emitProgress(plan, progress, callbacks)
 
     // Build final rawResponse that includes step tags so the chat message
     // shows the complete pipeline progress after streaming ends
@@ -246,6 +263,7 @@ async function callOrchestrator(
   prompt: string,
   timeoutHintLength: number,
   onThinking?: (thinking: string) => void,
+  abortSignal?: AbortSignal,
 ): Promise<OrchestratorPlan> {
   let rawResponse = ''
   let thinkingContent = ''
@@ -255,6 +273,8 @@ async function callOrchestrator(
     [{ role: 'user', content: prompt }],
     undefined,
     getOrchestratorTimeouts(timeoutHintLength),
+    undefined,
+    abortSignal,
   )) {
     if (chunk.type === 'text') {
       rawResponse += chunk.content

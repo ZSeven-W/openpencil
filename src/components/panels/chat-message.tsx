@@ -153,20 +153,22 @@ export function buildPipelineProgress(
   // No steps = no checklist
   if (steps.length === 0) return []
 
-  // If generation is complete and applied, mark all steps done
-  const hasTerminalResult = !isStreaming && !hasError && (isApplied || jsonBlockCount > 0)
-  if (hasTerminalResult) {
-    return steps.map((s) => ({ label: s.title, done: true, active: false }))
-  }
-
-  // If steps have explicit status (orchestrator mode), use that directly
+  // If steps have explicit status (orchestrator mode), use that directly.
+  // Check this BEFORE terminal result logic so that user-stopped generations
+  // preserve the actual per-step status instead of marking everything done.
   const hasExplicitStatus = steps.some((s) => s.status !== undefined)
   if (hasExplicitStatus) {
     return steps.map((s) => ({
       label: s.title,
       done: s.status === 'done',
-      active: s.status === 'streaming',
+      active: isStreaming && s.status === 'streaming',
     }))
+  }
+
+  // If generation is complete and applied, mark all steps done
+  const hasTerminalResult = !isStreaming && !hasError && (isApplied || jsonBlockCount > 0)
+  if (hasTerminalResult) {
+    return steps.map((s) => ({ label: s.title, done: true, active: false }))
   }
 
   // Fallback: Map each step to done/active/pending based on completed JSON blocks.

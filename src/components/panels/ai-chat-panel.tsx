@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
-import { Send, Plus, ChevronDown, ChevronUp, Check, MessageSquare, Loader2, Paperclip, X } from 'lucide-react'
+import { Send, Plus, ChevronDown, ChevronUp, Check, MessageSquare, Loader2, Paperclip, X, Square } from 'lucide-react'
 import { nanoid } from 'nanoid'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
@@ -108,6 +108,7 @@ export default function AIChatPanel() {
   const setPanelCorner = useAIStore((s) => s.setPanelCorner)
   const chatTitle = useAIStore((s) => s.chatTitle)
   const selectedIds = useCanvasStore((s) => s.selection.selectedIds)
+  const stopStreaming = useAIStore((s) => s.stopStreaming)
   const toggleMinimize = useAIStore((s) => s.toggleMinimize)
   const hydrateModelPreference = useAIStore((s) => s.hydrateModelPreference)
   const model = useAIStore((s) => s.model)
@@ -558,7 +559,7 @@ export default function AIChatPanel() {
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={handleKeyDown}
-          placeholder={isStreaming ? 'Generating...' : 'Design with Claude or Codex...'}
+          placeholder={isStreaming ? 'Generating...' : 'Design with Agent...'}
           disabled={isStreaming}
           rows={2}
           className="w-full bg-transparent text-sm text-foreground placeholder-muted-foreground px-3.5 pt-3 pb-2 resize-none outline-none max-h-28 min-h-[52px]"
@@ -615,21 +616,33 @@ export default function AIChatPanel() {
               >
                 <Paperclip size={13} />
               </Button>
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                onClick={() => handleSend()}
-                disabled={!canSendMessage}
-                title="Send message"
-                className={cn(
-                  'shrink-0 rounded-lg h-7 w-7',
-                  canSendMessage
-                    ? 'bg-foreground text-background hover:bg-foreground/90'
-                    : '',
-                )}
-              >
-                <Send size={13} />
-              </Button>
+              {isStreaming ? (
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  onClick={stopStreaming}
+                  title="Stop generating"
+                  className="shrink-0 rounded-lg h-7 w-7 bg-foreground text-background hover:bg-foreground/90"
+                >
+                  <Square size={10} fill="currentColor" />
+                </Button>
+              ) : (
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  onClick={() => handleSend()}
+                  disabled={!canSendMessage}
+                  title="Send message"
+                  className={cn(
+                    'shrink-0 rounded-lg h-7 w-7',
+                    canSendMessage
+                      ? 'bg-foreground text-background hover:bg-foreground/90'
+                      : '',
+                  )}
+                >
+                  <Send size={13} />
+                </Button>
+              )}
             </div>
           </div>
         </div>

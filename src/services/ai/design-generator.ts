@@ -75,9 +75,10 @@ export async function generateDesign(
     onTextUpdate?: (text: string) => void
     /** When true, nodes are inserted with staggered fade-in animation. */
     animated?: boolean
-  }
+  },
+  abortSignal?: AbortSignal,
 ): Promise<{ nodes: PenNode[]; rawResponse: string }> {
-  return executeOrchestration(request, callbacks)
+  return executeOrchestration(request, callbacks, abortSignal)
 }
 
 // ---------------------------------------------------------------------------
@@ -91,6 +92,7 @@ export async function generateDesignModification(
     variables?: Record<string, VariableDefinition>
     themes?: Record<string, string[]>
   },
+  abortSignal?: AbortSignal,
 ): Promise<{ nodes: PenNode[]; rawResponse: string }> {
   // Build context from selected nodes
   const contextJson = JSON.stringify(nodesToModify, (_key, value) => {
@@ -111,7 +113,7 @@ export async function generateDesignModification(
 
   for await (const chunk of streamChat(DESIGN_MODIFIER_PROMPT, [
     { role: 'user', content: userMessage },
-  ], undefined, DESIGN_STREAM_TIMEOUTS)) {
+  ], undefined, DESIGN_STREAM_TIMEOUTS, undefined, abortSignal)) {
     if (chunk.type === 'thinking') {
       // Ignore thinking chunks for modification -- caller already shows progress
     } else if (chunk.type === 'text') {

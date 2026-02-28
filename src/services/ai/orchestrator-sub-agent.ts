@@ -87,13 +87,16 @@ export async function executeSubAgentsSequentially(
     onTextUpdate?: (text: string) => void
     animated?: boolean
   },
+  abortSignal?: AbortSignal,
 ): Promise<SubAgentResult[]> {
   const results: SubAgentResult[] = []
   const timeoutOptions = getSubAgentTimeouts(preparedPrompt.originalLength)
 
   for (let i = 0; i < plan.subtasks.length; i++) {
+    if (abortSignal?.aborted) break
     const result = await executeSubAgent(
       plan.subtasks[i], plan, request, preparedPrompt, timeoutOptions, progress, i, callbacks,
+      undefined, abortSignal,
     )
 
     if (result.error && result.nodes.length === 0) {
@@ -129,6 +132,7 @@ async function executeSubAgent(
     animated?: boolean
   },
   promptOverride?: string,
+  abortSignal?: AbortSignal,
 ): Promise<SubAgentResult> {
   const animated = callbacks?.animated ?? false
   const progressEntry = progress.subtasks[index]
@@ -159,6 +163,8 @@ async function executeSubAgent(
       [{ role: 'user', content: userPrompt }],
       undefined,
       timeoutOptions,
+      undefined,
+      abortSignal,
     )) {
       if (chunk.type === 'text') {
         rawResponse += chunk.content

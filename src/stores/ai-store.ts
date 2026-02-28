@@ -54,6 +54,7 @@ interface AIState {
   chatTitle: string
   generationProgress: { current: number; total: number } | null
   pendingAttachments: ChatAttachment[]
+  abortController: AbortController | null
 
   setChatTitle: (title: string) => void
   setGenerationProgress: (progress: { current: number; total: number } | null) => void
@@ -78,6 +79,8 @@ interface AIState {
   addPendingAttachment: (attachment: ChatAttachment) => void
   removePendingAttachment: (id: string) => void
   clearPendingAttachments: () => void
+  setAbortController: (c: AbortController | null) => void
+  stopStreaming: () => void
 }
 
 export const useAIStore = create<AIState>((set) => ({
@@ -97,6 +100,7 @@ export const useAIStore = create<AIState>((set) => ({
   chatTitle: 'New Chat',
   generationProgress: null,
   pendingAttachments: [],
+  abortController: null,
 
   setChatTitle: (chatTitle) => set({ chatTitle }),
   setGenerationProgress: (generationProgress) => set({ generationProgress }),
@@ -150,4 +154,11 @@ export const useAIStore = create<AIState>((set) => ({
   removePendingAttachment: (id) =>
     set((s) => ({ pendingAttachments: s.pendingAttachments.filter((a) => a.id !== id) })),
   clearPendingAttachments: () => set({ pendingAttachments: [] }),
+
+  setAbortController: (abortController) => set({ abortController }),
+  stopStreaming: () =>
+    set((s) => {
+      s.abortController?.abort()
+      return { isStreaming: false, abortController: null }
+    }),
 }))
