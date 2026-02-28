@@ -46,10 +46,11 @@ interface StreamChatOptions {
  */
 export async function* streamChat(
   systemPrompt: string,
-  messages: Array<{ role: 'user' | 'assistant'; content: string }>,
+  messages: Array<{ role: 'user' | 'assistant'; content: string; attachments?: Array<{ name: string; mediaType: string; data: string }> }>,
   model?: string,
   options?: StreamChatOptions,
   provider?: string,
+  abortSignal?: AbortSignal,
 ): AsyncGenerator<AIStreamChunk> {
   const hardTimeoutMs = Math.max(STREAM_TIMEOUT_MIN_MS, options?.hardTimeoutMs ?? DEFAULT_STREAM_HARD_TIMEOUT_MS)
   const noTextTimeoutMs = Math.max(STREAM_TIMEOUT_MIN_MS, options?.noTextTimeoutMs ?? DEFAULT_STREAM_NO_TEXT_TIMEOUT_MS)
@@ -103,19 +104,27 @@ export async function* streamChat(
   resetActivityTimeout()
 
   try {
+    const fetchSignal = abortSignal
+      ? AbortSignal.any([controller.signal, abortSignal])
+      : controller.signal
+
     const response = await fetch('/api/ai/chat', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         system: systemPrompt,
-        messages,
+        messages: messages.map((m) => ({
+          role: m.role,
+          content: m.content,
+          ...(m.attachments?.length ? { attachments: m.attachments } : {}),
+        })),
         model,
         provider,
         thinkingMode: options?.thinkingMode,
         thinkingBudgetTokens: options?.thinkingBudgetTokens,
         effort: options?.effort,
       }),
-      signal: controller.signal,
+      signal: fetchSignal,
     })
 
     if (!response.ok) {
@@ -243,6 +252,14 @@ export async function* streamChat(
       }
     }
   } catch (error) {
+    // User-initiated stop via external abort signal
+    if (abortSignal?.aborted && !abortReason) {
+      clearTimeout(hardTimeout)
+      clearNoTextTimeout()
+      clearFirstTextTimeout()
+      return
+    }
+
     if (controller.signal.aborted) {
       if (abortReason === 'no_text_timeout') {
         yield {

@@ -1,9 +1,18 @@
+export interface ChatAttachment {
+  id: string
+  name: string
+  mediaType: string    // 'image/png', 'image/jpeg', etc.
+  data: string         // base64-encoded (no data URL prefix)
+  size: number         // bytes
+}
+
 export interface ChatMessage {
   id: string
   role: 'user' | 'assistant'
   content: string
   timestamp: number
   isStreaming?: boolean
+  attachments?: ChatAttachment[]
 }
 
 export interface AIDesignRequest {

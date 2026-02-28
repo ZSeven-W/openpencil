@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import type { ComponentType, SVGProps } from 'react'
-import { X, Check, Loader2, Unplug, AlertCircle } from 'lucide-react'
+import { X, Check, Loader2, Unplug, AlertCircle, Zap, Terminal } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Switch } from '@/components/ui/switch'
@@ -17,19 +17,19 @@ const PROVIDER_META: Record<
 > = {
   anthropic: {
     label: 'Claude Code',
-    description: 'Connect to local Claude Code CLI to use Claude models',
+    description: 'Claude models',
     agent: 'claude-code',
     Icon: ClaudeLogo,
   },
   openai: {
     label: 'Codex CLI',
-    description: 'Connect to local Codex CLI to use OpenAI models',
+    description: 'OpenAI models',
     agent: 'codex-cli',
     Icon: OpenAILogo,
   },
   opencode: {
     label: 'OpenCode',
-    description: 'Connect to local OpenCode server to use 75+ LLM providers',
+    description: '75+ LLM providers',
     agent: 'opencode',
     Icon: OpenCodeLogo,
   },
@@ -51,7 +51,7 @@ async function connectAgent(
   }
 }
 
-function ProviderCard({ type }: { type: AIProviderType }) {
+function ProviderRow({ type }: { type: AIProviderType }) {
   const provider = useAgentSettingsStore((s) => s.providers[type])
   const connect = useAgentSettingsStore((s) => s.connectProvider)
   const disconnect = useAgentSettingsStore((s) => s.disconnectProvider)
@@ -84,55 +84,68 @@ function ProviderCard({ type }: { type: AIProviderType }) {
   const { Icon } = meta
 
   return (
-    <div className="rounded-lg border border-border bg-background/50 p-3">
-      <div className="flex items-center gap-2 mb-1">
-        <div className="w-8 h-8 rounded-md bg-secondary flex items-center justify-center text-foreground">
-          <Icon className="w-5 h-5" />
+    <div className="group">
+      <div
+        className={cn(
+          'flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors',
+          provider.isConnected
+            ? 'bg-secondary/40'
+            : 'hover:bg-secondary/30',
+        )}
+      >
+        {/* Icon */}
+        <div
+          className={cn(
+            'w-7 h-7 rounded-md flex items-center justify-center shrink-0 transition-colors',
+            provider.isConnected ? 'bg-foreground/10 text-foreground' : 'bg-secondary text-muted-foreground',
+          )}
+        >
+          <Icon className="w-4 h-4" />
         </div>
-        <span className="text-sm font-medium text-foreground">{meta.label}</span>
-      </div>
-      <p className="text-[11px] text-muted-foreground mb-2.5">{meta.description}</p>
 
-      {provider.isConnected ? (
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-1.5">
-            <Check size={13} className="text-green-500" />
-            <span className="text-xs text-green-500">
-              Connected — {provider.models.length} model{provider.models.length !== 1 ? 's' : ''}
-            </span>
+        {/* Name + description */}
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2">
+            <span className="text-[13px] font-medium text-foreground leading-tight">{meta.label}</span>
+            <span className="text-[10px] text-muted-foreground leading-tight hidden sm:inline">{meta.description}</span>
           </div>
+          {provider.isConnected && (
+            <span className="text-[11px] text-green-500 leading-tight flex items-center gap-1 mt-0.5">
+              <Check size={10} strokeWidth={2.5} />
+              {provider.models.length} model{provider.models.length !== 1 ? 's' : ''}
+            </span>
+          )}
+          {error && (
+            <span className="text-[10px] text-destructive leading-tight mt-0.5 block">{error}</span>
+          )}
+        </div>
+
+        {/* Action */}
+        {provider.isConnected ? (
           <Button
             variant="ghost"
             size="sm"
             onClick={handleDisconnect}
-            className="h-7 text-xs text-muted-foreground hover:text-destructive"
+            className="h-7 px-2.5 text-[11px] text-muted-foreground hover:text-destructive shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"
           >
-            <Unplug size={12} className="mr-1" />
+            <Unplug size={11} className="mr-1" />
             Disconnect
           </Button>
-        </div>
-      ) : (
-        <>
+        ) : (
           <Button
             size="sm"
             onClick={handleConnect}
             disabled={isConnecting}
-            className="h-7 text-xs"
+            className="h-7 px-3 text-[11px] shrink-0"
           >
             {isConnecting ? (
-              <>
-                <Loader2 size={12} className="animate-spin mr-1" />
-                Connecting...
-              </>
+              <Loader2 size={11} className="animate-spin" />
             ) : (
               'Connect'
             )}
           </Button>
-          {error && (
-            <p className="text-xs text-destructive mt-1.5">{error}</p>
-          )}
-        </>
-      )}
+        )}
+      </div>
     </div>
   )
 }
@@ -197,10 +210,10 @@ export default function AgentSettingsDialog() {
       />
       <div
         ref={dialogRef}
-        className="relative bg-card rounded-lg border border-border p-5 w-[420px] max-h-[80vh] overflow-y-auto shadow-xl"
+        className="relative bg-card rounded-xl border border-border w-[480px] max-h-[80vh] overflow-hidden shadow-xl flex flex-col"
       >
         {/* Header */}
-        <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center justify-between px-5 pt-4 pb-3">
           <h3 className="text-sm font-semibold text-foreground">
             Setup Agents & MCP
           </h3>
@@ -213,64 +226,75 @@ export default function AgentSettingsDialog() {
           </Button>
         </div>
 
-        {/* Agents section */}
-        <div className="mb-5">
-          <div className="flex items-center mb-2">
-            <h4 className="text-xs font-medium text-foreground">
-              Agents on Canvas
-            </h4>
-            <span className="text-[10px] text-muted-foreground bg-secondary px-1.5 py-0.5 ml-2 rounded">
-              Recommended
-            </span>
-          </div>
-          <div className="space-y-2">
-            <ProviderCard type="anthropic" />
-            <ProviderCard type="openai" />
-            <ProviderCard type="opencode" />
-          </div>
-        </div>
-
-        {/* MCP integrations section */}
-        <div>
-          <h4 className="text-xs font-medium text-foreground mb-2">
-            MCP Integrations in Terminal
-          </h4>
-          <div className="space-y-1">
-            {mcpIntegrations.map((m) => (
-              <div
-                key={m.tool}
-                className="flex items-center justify-between py-2 px-1"
-              >
-                <div className="flex items-center gap-1.5">
-                  <span
-                    className={cn(
-                      'text-xs',
-                      m.enabled ? 'text-foreground' : 'text-muted-foreground',
-                    )}
-                  >
-                    {m.displayName}
-                  </span>
-                  {mcpInstalling === m.tool && (
-                    <Loader2 size={11} className="animate-spin text-muted-foreground" />
-                  )}
-                </div>
-                <Switch
-                  checked={m.enabled}
-                  disabled={mcpInstalling !== null}
-                  onCheckedChange={() => handleToggleMCP(m.tool)}
-                />
-              </div>
-            ))}
-          </div>
-          {mcpError && (
-            <div className="flex items-center gap-1.5 mt-1.5 px-1">
-              <AlertCircle size={11} className="text-destructive shrink-0" />
-              <p className="text-[10px] text-destructive">{mcpError}</p>
+        {/* Scrollable content */}
+        <div className="flex-1 overflow-y-auto px-5 pb-5">
+          {/* Agents section */}
+          <div className="mb-5">
+            <div className="flex items-center gap-2 mb-2 px-1">
+              <Zap size={12} className="text-muted-foreground" />
+              <h4 className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">
+                Agents on Canvas
+              </h4>
             </div>
-          )}
-          <p className="text-[10px] text-muted-foreground mt-2">
-            MCP integrations will take effect after restarting the terminal.
-          </p>
+            <div className="space-y-0.5">
+              <ProviderRow type="anthropic" />
+              <ProviderRow type="openai" />
+              <ProviderRow type="opencode" />
+            </div>
+          </div>
+
+          {/* Divider */}
+          <div className="h-px bg-border mb-5" />
+
+          {/* MCP integrations section */}
+          <div>
+            <div className="flex items-center gap-2 mb-3 px-1">
+              <Terminal size={12} className="text-muted-foreground" />
+              <h4 className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">
+                MCP Integrations in Terminal
+              </h4>
+            </div>
+            <div className="grid grid-cols-2 gap-x-2 gap-y-0.5">
+              {mcpIntegrations.map((m) => (
+                <div
+                  key={m.tool}
+                  className={cn(
+                    'flex items-center justify-between py-2 px-3 rounded-lg transition-colors',
+                    m.enabled ? 'bg-secondary/40' : 'hover:bg-secondary/20',
+                  )}
+                >
+                  <div className="flex items-center gap-1.5 min-w-0">
+                    <span
+                      className={cn(
+                        'text-[12px] truncate',
+                        m.enabled ? 'text-foreground' : 'text-muted-foreground',
+                      )}
+                    >
+                      {m.displayName}
+                    </span>
+                    {mcpInstalling === m.tool && (
+                      <Loader2 size={10} className="animate-spin text-muted-foreground shrink-0" />
+                    )}
+                  </div>
+                  <Switch
+                    checked={m.enabled}
+                    disabled={mcpInstalling !== null}
+                    onCheckedChange={() => handleToggleMCP(m.tool)}
+                    className="shrink-0 ml-2"
+                  />
+                </div>
+              ))}
+            </div>
+            {mcpError && (
+              <div className="flex items-center gap-1.5 mt-2 px-1">
+                <AlertCircle size={11} className="text-destructive shrink-0" />
+                <p className="text-[10px] text-destructive">{mcpError}</p>
+              </div>
+            )}
+            <p className="text-[10px] text-muted-foreground/60 mt-3 px-1">
+              MCP integrations will take effect after restarting the terminal.
+            </p>
+          </div>
         </div>
       </div>
     </div>
