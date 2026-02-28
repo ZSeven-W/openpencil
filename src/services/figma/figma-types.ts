@@ -245,3 +245,5 @@ export interface FigmaPage {
   name: string
   childCount: number
 }
+
+export type FigmaImportLayoutMode = 'preserve' | 'openpencil'

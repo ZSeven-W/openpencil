@@ -6,7 +6,7 @@ import { zoomToFitContent } from '@/canvas/use-fabric-canvas'
 import { parseFigFile } from '@/services/figma/fig-parser'
 import { figmaToPenDocument, figmaAllPagesToPenDocument, getFigmaPages } from '@/services/figma/figma-node-mapper'
 import { resolveImageBlobs } from '@/services/figma/figma-image-resolver'
-import type { FigmaDecodedFile } from '@/services/figma/figma-types'
+import type { FigmaDecodedFile, FigmaImportLayoutMode } from '@/services/figma/figma-types'
 
 type ImportState = 'idle' | 'parsing' | 'page-select' | 'converting' | 'done' | 'error'
 
@@ -24,6 +24,7 @@ export default function FigmaImportDialog({ open, onClose }: FigmaImportDialogPr
   const [fileName, setFileName] = useState('')
   const [pages, setPages] = useState<{ id: string; name: string; childCount: number }[]>([])
   const [isDragging, setIsDragging] = useState(false)
+  const [layoutMode, setLayoutMode] = useState<FigmaImportLayoutMode>('preserve')
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   // Reset state when dialog opens
@@ -36,6 +37,7 @@ export default function FigmaImportDialog({ open, onClose }: FigmaImportDialogPr
       setDecoded(null)
       setFileName('')
       setPages([])
+      setLayoutMode('preserve')
     }
   }, [open])
 
@@ -76,14 +78,9 @@ export default function FigmaImportDialog({ open, onClose }: FigmaImportDialogPr
         return
       }
 
-      if (figmaPages.length > 1) {
-        setPages(figmaPages)
-        setState('page-select')
-        return
-      }
-
-      // Single page — convert directly
-      await convertAndLoad(decodedFile, file.name.replace(/\.fig$/, ''), 0)
+      // Always show page-select to let user choose layout mode
+      setPages(figmaPages)
+      setState('page-select')
     } catch (err) {
       console.error('[Figma Import] Parse error:', err)
       setError(err instanceof Error ? err.message : 'Failed to parse .fig file')
@@ -104,8 +101,8 @@ export default function FigmaImportDialog({ open, onClose }: FigmaImportDialogPr
       await new Promise((r) => requestAnimationFrame(r))
 
       const { document: doc, warnings: warns, imageBlobs } = pageIndex === 'all'
-        ? figmaAllPagesToPenDocument(decodedFile, name)
-        : figmaToPenDocument(decodedFile, name, pageIndex)
+        ? figmaAllPagesToPenDocument(decodedFile, name, layoutMode)
+        : figmaToPenDocument(decodedFile, name, pageIndex, layoutMode)
       setProgress(80)
 
       // Resolve image blobs and hash-based images to data URLs across all pages
@@ -140,7 +137,7 @@ export default function FigmaImportDialog({ open, onClose }: FigmaImportDialogPr
       setError(err instanceof Error ? err.message : 'Failed to convert Figma file')
       setState('error')
     }
-  }, [onClose])
+  }, [onClose, layoutMode])
 
   const handlePageSelect = useCallback((pageIndex: number | 'all') => {
     if (!decoded) return
@@ -241,30 +238,74 @@ export default function FigmaImportDialog({ open, onClose }: FigmaImportDialogPr
         {/* Page selection */}
         {state === 'page-select' && (
           <div className="py-2">
-            <p className="text-xs text-muted-foreground mb-3">
-              This file has {pages.length} pages. Select which to import:
-            </p>
-            <div className="max-h-48 overflow-y-auto space-y-1 mb-3">
-              {pages.map((page, i) => (
+            {/* Layout mode toggle */}
+            <div className="mb-3">
+              <p className="text-xs text-muted-foreground mb-2">Layout mode:</p>
+              <div className="flex gap-1">
                 <button
-                  key={page.id}
-                  className="w-full text-left px-3 py-2 rounded text-sm hover:bg-secondary transition-colors flex items-center justify-between"
-                  onClick={() => handlePageSelect(i)}
+                  className={`flex-1 px-3 py-1.5 rounded text-xs transition-colors ${
+                    layoutMode === 'preserve'
+                      ? 'bg-primary text-primary-foreground'
+                      : 'bg-secondary text-foreground hover:bg-secondary/80'
+                  }`}
+                  onClick={() => setLayoutMode('preserve')}
                 >
-                  <span className="text-foreground truncate">{page.name}</span>
-                  <span className="text-xs text-muted-foreground ml-2 shrink-0">
-                    {page.childCount} layers
-                  </span>
+                  保持 Figma 布局
                 </button>
-              ))}
+                <button
+                  className={`flex-1 px-3 py-1.5 rounded text-xs transition-colors ${
+                    layoutMode === 'openpencil'
+                      ? 'bg-primary text-primary-foreground'
+                      : 'bg-secondary text-foreground hover:bg-secondary/80'
+                  }`}
+                  onClick={() => setLayoutMode('openpencil')}
+                >
+                  OpenPencil 自动布局
+                </button>
+              </div>
             </div>
-            <Button
-              size="sm"
-              className="w-full"
-              onClick={() => handlePageSelect('all')}
-            >
-              Import All Pages
-            </Button>
+
+            {pages.length > 1 ? (
+              <>
+                <p className="text-xs text-muted-foreground mb-3">
+                  This file has {pages.length} pages. Select which to import:
+                </p>
+                <div className="max-h-48 overflow-y-auto space-y-1 mb-3">
+                  {pages.map((page, i) => (
+                    <button
+                      key={page.id}
+                      className="w-full text-left px-3 py-2 rounded text-sm hover:bg-secondary transition-colors flex items-center justify-between"
+                      onClick={() => handlePageSelect(i)}
+                    >
+                      <span className="text-foreground truncate">{page.name}</span>
+                      <span className="text-xs text-muted-foreground ml-2 shrink-0">
+                        {page.childCount} layers
+                      </span>
+                    </button>
+                  ))}
+                </div>
+                <Button
+                  size="sm"
+                  className="w-full"
+                  onClick={() => handlePageSelect('all')}
+                >
+                  Import All Pages
+                </Button>
+              </>
+            ) : (
+              <>
+                <p className="text-xs text-muted-foreground mb-3">
+                  {pages[0]?.name} &middot; {pages[0]?.childCount} layers
+                </p>
+                <Button
+                  size="sm"
+                  className="w-full"
+                  onClick={() => handlePageSelect(0)}
+                >
+                  Import
+                </Button>
+              </>
+            )}
           </div>
         )}
 

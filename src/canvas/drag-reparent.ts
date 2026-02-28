@@ -1,5 +1,4 @@
-import { useDocumentStore, getActivePageChildren } from '@/stores/document-store'
-import { useCanvasStore } from '@/stores/canvas-store'
+import { useDocumentStore } from '@/stores/document-store'
 import { setFabricSyncLock } from './canvas-sync-lock'
 import { nodeRenderInfo, rootFrameBounds, layoutContainerBounds } from './use-canvas-sync'
 import type { FabricObjectWithPenId } from './canvas-object-factory'
@@ -115,20 +114,16 @@ export function checkDragReparentByBounds(
       x: objBounds.x - targetBounds.x,
       y: objBounds.y - targetBounds.y,
     })
-    const targetChildren = store.getNodeById(bestFrameId)
-    const childCount =
-      targetChildren && 'children' in targetChildren && targetChildren.children
-        ? targetChildren.children.length
-        : 0
-    store.moveNode(nodeId, bestFrameId, childCount)
+    // Insert at index 0 = top of layer panel = frontmost
+    store.moveNode(nodeId, bestFrameId, 0)
   } else {
     // No overlapping frame — make it a root-level node
     store.updateNode(nodeId, {
       x: objBounds.x,
       y: objBounds.y,
     })
-    const rootCount = getActivePageChildren(store.document, useCanvasStore.getState().activePageId).length
-    store.moveNode(nodeId, null, rootCount)
+    // Insert at index 0 = top of layer panel = frontmost
+    store.moveNode(nodeId, null, 0)
   }
 
   return true
@@ -222,12 +217,8 @@ export function checkReparentIntoFrame(
     }
   }
 
-  const targetChildren = store.getNodeById(bestFrameId)
-  const childCount =
-    targetChildren && 'children' in targetChildren && targetChildren.children
-      ? targetChildren.children.length
-      : 0
-  store.moveNode(nodeId, bestFrameId, childCount)
+  // Insert at index 0 = top of layer panel = frontmost
+  store.moveNode(nodeId, bestFrameId, 0)
 
   return true
 }
@@ -282,20 +273,16 @@ export function checkDragReparent(obj: FabricObjectWithPenId): boolean {
         x: objBounds.x - targetBounds.x,
         y: objBounds.y - targetBounds.y,
       })
-      const targetChildren = store.getNodeById(bestFrameId)
-      const childCount =
-        targetChildren && 'children' in targetChildren && targetChildren.children
-          ? targetChildren.children.length
-          : 0
-      store.moveNode(nodeId, bestFrameId, childCount)
+      // Insert at index 0 = top of layer panel = frontmost
+      store.moveNode(nodeId, bestFrameId, 0)
     } else {
       // No overlapping frame — make it a root-level node
       store.updateNode(nodeId, {
         x: objBounds.x,
         y: objBounds.y,
       })
-      const rootCount = getActivePageChildren(store.document, useCanvasStore.getState().activePageId).length
-      store.moveNode(nodeId, null, rootCount)
+      // Insert at index 0 = top of layer panel = frontmost
+      store.moveNode(nodeId, null, 0)
     }
   } finally {
     setFabricSyncLock(false)

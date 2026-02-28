@@ -120,7 +120,10 @@ export const useDocumentStore = create<DocumentStoreState>(
       set((s) => ({
         document: _setChildren(
           s.document,
-          insertNodeInTree(_children(s), parentId, node, index),
+          // Default to index 0 (prepend) so new items appear at the top of
+          // the layer panel = frontmost on canvas. Callers can pass an
+          // explicit index to override.
+          insertNodeInTree(_children(s), parentId, node, index ?? 0),
         ),
         isDirty: true,
       }))
@@ -266,7 +269,7 @@ export const useDocumentStore = create<DocumentStoreState>(
         set((s) => ({
           document: _setChildren(
             s.document,
-            insertNodeInTree(_children(s), parentId, refNode as PenNode, idx + 1),
+            insertNodeInTree(_children(s), parentId, refNode as PenNode, idx),
           ),
           isDirty: true,
         }))
@@ -303,7 +306,7 @@ export const useDocumentStore = create<DocumentStoreState>(
       set((s) => ({
         document: _setChildren(
           s.document,
-          insertNodeInTree(_children(s), parentId, clone, idx + 1),
+          insertNodeInTree(_children(s), parentId, clone, idx),
         ),
         isDirty: true,
       }))

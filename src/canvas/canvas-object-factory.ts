@@ -453,8 +453,15 @@ export function createFabricObject(
             fabricImg.clipPath = placeholder.clipPath
             fabricImg.dirty = true
           }
+          // Preserve z-order: insert at placeholder's index instead of
+          // appending to end (which would put the image on top of everything)
+          const idx = canvas.getObjects().indexOf(placeholder)
           canvas.remove(placeholder)
-          canvas.add(fabricImg)
+          if (idx >= 0) {
+            canvas.insertAt(idx, fabricImg)
+          } else {
+            canvas.add(fabricImg)
+          }
           canvas.requestRenderAll()
         }
         obj = placeholder

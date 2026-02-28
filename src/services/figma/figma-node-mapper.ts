@@ -3,8 +3,9 @@ import type {
   FigmaGUID,
   FigmaDecodedFile,
   FigmaMatrix,
+  FigmaImportLayoutMode,
 } from './figma-types'
-import type { PenNode, PenPage, PenDocument } from '@/types/pen'
+import type { PenNode, PenPage, PenDocument, SizingBehavior } from '@/types/pen'
 import { mapFigmaFills } from './figma-fill-mapper'
 import { mapFigmaStroke } from './figma-stroke-mapper'
 import { mapFigmaEffects } from './figma-effect-mapper'
@@ -37,6 +38,7 @@ export function figmaToPenDocument(
   decoded: FigmaDecodedFile,
   fileName: string,
   pageIndex: number = 0,
+  layoutMode: FigmaImportLayoutMode = 'openpencil',
 ): { document: PenDocument; warnings: string[]; imageBlobs: Map<number, Uint8Array> } {
   const warnings: string[] = []
 
@@ -74,6 +76,7 @@ export function figmaToPenDocument(
     warnings,
     generateId: () => `fig_${idCounter++}`,
     blobs: decoded.blobs,
+    layoutMode,
   }
 
   const children = convertChildren(page, ctx)
@@ -107,6 +110,7 @@ export function figmaToPenDocument(
 export function figmaAllPagesToPenDocument(
   decoded: FigmaDecodedFile,
   fileName: string,
+  layoutMode: FigmaImportLayoutMode = 'openpencil',
 ): { document: PenDocument; warnings: string[]; imageBlobs: Map<number, Uint8Array> } {
   const warnings: string[] = []
 
@@ -146,6 +150,7 @@ export function figmaAllPagesToPenDocument(
       warnings,
       generateId: genId,
       blobs: decoded.blobs,
+      layoutMode,
     }
 
     const pageChildren = convertChildren(page, ctx)
@@ -241,11 +246,11 @@ function sortChildrenRecursive(node: TreeNode): void {
   node.children.sort((a, b) => {
     const posA = a.figma.parentIndex?.position ?? ''
     const posB = b.figma.parentIndex?.position ?? ''
-    // Use raw code-point comparison, not localeCompare.
-    // Figma fractional index strings use characters like $ (36), % (37), & (38)
-    // where lower code points = further back in z-stack. localeCompare sorts
-    // these symbols incorrectly, causing background elements to render on top.
-    return posA < posB ? -1 : posA > posB ? 1 : 0
+    // Figma children are back-to-front: higher parentIndex.position =
+    // topmost layer (per Figma Plugin API docs).  Sort DESCENDING so that
+    // the frontmost elements are at children[0] — matching OpenPencil's
+    // convention where children[0] = top of layer panel = frontmost.
+    return posA < posB ? 1 : posA > posB ? -1 : 0
   })
   for (const child of node.children) {
     sortChildrenRecursive(child)
@@ -275,13 +280,25 @@ interface ConversionContext {
   warnings: string[]
   generateId: () => string
   blobs: (Uint8Array | string)[]
+  layoutMode: FigmaImportLayoutMode
+}
+
+function resolveWidth(figma: FigmaNodeChange, parentStackMode: string | undefined, ctx: ConversionContext): SizingBehavior {
+  if (ctx.layoutMode === 'preserve') return figma.size?.x ?? 100
+  return mapWidthSizing(figma, parentStackMode)
+}
+
+function resolveHeight(figma: FigmaNodeChange, parentStackMode: string | undefined, ctx: ConversionContext): SizingBehavior {
+  if (ctx.layoutMode === 'preserve') return figma.size?.y ?? 100
+  return mapHeightSizing(figma, parentStackMode)
 }
 
 function convertChildren(
   parent: TreeNode,
   ctx: ConversionContext,
 ): PenNode[] {
-  const parentStackMode = parent.figma.stackMode
+  // In preserve mode, force no parent stack mode so children get absolute numeric sizes
+  const parentStackMode = ctx.layoutMode === 'preserve' ? undefined : parent.figma.stackMode
   const result: PenNode[] = []
 
   for (const child of parent.children) {
@@ -405,7 +422,6 @@ function convertFrame(
 ): PenNode {
   const figma = treeNode.figma
   const id = ctx.generateId()
-  const layout = mapFigmaLayout(figma)
   const children = convertChildren(treeNode, ctx)
 
   // Check for image-only fill
@@ -414,18 +430,25 @@ function convertFrame(
       type: 'image',
       ...commonProps(figma, id),
       src: getImageFillUrl(figma),
-      width: mapWidthSizing(figma, parentStackMode),
-      height: mapHeightSizing(figma, parentStackMode),
+      width: resolveWidth(figma, parentStackMode, ctx),
+      height: resolveHeight(figma, parentStackMode, ctx),
       cornerRadius: mapCornerRadius(figma),
       effects: mapFigmaEffects(figma.effects),
     }
   }
 
+  // In preserve mode: skip auto-layout mapping, only keep clipContent.
+  // Also force clipContent for frames that had auto-layout (stackMode) because
+  // removing auto-layout loses the constraint that kept children within bounds.
+  const layout = ctx.layoutMode === 'preserve'
+    ? ((figma.frameMaskDisabled !== true || figma.stackMode) ? { clipContent: true } : {})
+    : mapFigmaLayout(figma)
+
   return {
     type: 'frame',
     ...commonProps(figma, id),
-    width: mapWidthSizing(figma, parentStackMode),
-    height: mapHeightSizing(figma, parentStackMode),
+    width: resolveWidth(figma, parentStackMode, ctx),
+    height: resolveHeight(figma, parentStackMode, ctx),
     ...layout,
     cornerRadius: mapCornerRadius(figma),
     fill: mapFigmaFills(figma.fillPaints),
@@ -447,8 +470,8 @@ function convertGroup(
   return {
     type: 'group',
     ...commonProps(figma, id),
-    width: mapWidthSizing(figma, parentStackMode),
-    height: mapHeightSizing(figma, parentStackMode),
+    width: resolveWidth(figma, parentStackMode, ctx),
+    height: resolveHeight(figma, parentStackMode, ctx),
     children: children.length > 0 ? children : undefined,
   }
 }
@@ -461,15 +484,18 @@ function convertComponent(
   const figma = treeNode.figma
   const figmaId = figma.guid ? guidToString(figma.guid) : ''
   const id = ctx.componentMap.get(figmaId) ?? ctx.generateId()
-  const layout = mapFigmaLayout(figma)
   const children = convertChildren(treeNode, ctx)
+
+  const layout = ctx.layoutMode === 'preserve'
+    ? ((figma.frameMaskDisabled !== true || figma.stackMode) ? { clipContent: true } : {})
+    : mapFigmaLayout(figma)
 
   return {
     type: 'frame',
     ...commonProps(figma, id),
     reusable: true,
-    width: mapWidthSizing(figma, parentStackMode),
-    height: mapHeightSizing(figma, parentStackMode),
+    width: resolveWidth(figma, parentStackMode, ctx),
+    height: resolveHeight(figma, parentStackMode, ctx),
     ...layout,
     cornerRadius: mapCornerRadius(figma),
     fill: mapFigmaFills(figma.fillPaints),
@@ -516,8 +542,8 @@ function convertRectangle(
       type: 'image',
       ...commonProps(figma, id),
       src: getImageFillUrl(figma),
-      width: mapWidthSizing(figma, parentStackMode),
-      height: mapHeightSizing(figma, parentStackMode),
+      width: resolveWidth(figma, parentStackMode, ctx),
+      height: resolveHeight(figma, parentStackMode, ctx),
       cornerRadius: mapCornerRadius(figma),
       effects: mapFigmaEffects(figma.effects),
     }
@@ -526,8 +552,8 @@ function convertRectangle(
   return {
     type: 'rectangle',
     ...commonProps(figma, id),
-    width: mapWidthSizing(figma, parentStackMode),
-    height: mapHeightSizing(figma, parentStackMode),
+    width: resolveWidth(figma, parentStackMode, ctx),
+    height: resolveHeight(figma, parentStackMode, ctx),
     cornerRadius: mapCornerRadius(figma),
     fill: mapFigmaFills(figma.fillPaints),
     stroke: mapFigmaStroke(figma),
@@ -549,8 +575,8 @@ function convertEllipse(
       type: 'image',
       ...commonProps(figma, id),
       src: getImageFillUrl(figma),
-      width: mapWidthSizing(figma, parentStackMode),
-      height: mapHeightSizing(figma, parentStackMode),
+      width: resolveWidth(figma, parentStackMode, ctx),
+      height: resolveHeight(figma, parentStackMode, ctx),
       cornerRadius: Math.round((figma.size?.x ?? 100) / 2),
       effects: mapFigmaEffects(figma.effects),
     }
@@ -559,8 +585,8 @@ function convertEllipse(
   return {
     type: 'ellipse',
     ...commonProps(figma, id),
-    width: mapWidthSizing(figma, parentStackMode),
-    height: mapHeightSizing(figma, parentStackMode),
+    width: resolveWidth(figma, parentStackMode, ctx),
+    height: resolveHeight(figma, parentStackMode, ctx),
     fill: mapFigmaFills(figma.fillPaints),
     stroke: mapFigmaStroke(figma),
     effects: mapFigmaEffects(figma.effects),
@@ -608,8 +634,8 @@ function convertVector(
       ...commonProps(figma, id),
       d: iconMatch.d,
       iconId: iconMatch.iconId,
-      width: mapWidthSizing(figma, parentStackMode),
-      height: mapHeightSizing(figma, parentStackMode),
+      width: resolveWidth(figma, parentStackMode, ctx),
+      height: resolveHeight(figma, parentStackMode, ctx),
       fill: iconMatch.style === 'fill' ? mapFigmaFills(figma.fillPaints) : undefined,
       stroke: iconMatch.style === 'stroke'
         ? mapFigmaStroke(figma) ?? { thickness: 2, fill: [{ type: 'solid', color: figmaFillColor(figma) ?? '#000000' }] }
@@ -625,8 +651,8 @@ function convertVector(
       type: 'path',
       ...commonProps(figma, id),
       d: pathD,
-      width: mapWidthSizing(figma, parentStackMode),
-      height: mapHeightSizing(figma, parentStackMode),
+      width: resolveWidth(figma, parentStackMode, ctx),
+      height: resolveHeight(figma, parentStackMode, ctx),
       fill: mapFigmaFills(figma.fillPaints),
       stroke: mapFigmaStroke(figma),
       effects: mapFigmaEffects(figma.effects),
@@ -640,8 +666,8 @@ function convertVector(
   return {
     type: 'rectangle',
     ...commonProps(figma, id),
-    width: mapWidthSizing(figma, parentStackMode),
-    height: mapHeightSizing(figma, parentStackMode),
+    width: resolveWidth(figma, parentStackMode, ctx),
+    height: resolveHeight(figma, parentStackMode, ctx),
     fill: mapFigmaFills(figma.fillPaints),
     stroke: mapFigmaStroke(figma),
     effects: mapFigmaEffects(figma.effects),
@@ -660,8 +686,8 @@ function convertText(
   return {
     type: 'text',
     ...commonProps(figma, id),
-    width: mapWidthSizing(figma, parentStackMode),
-    height: mapHeightSizing(figma, parentStackMode),
+    width: resolveWidth(figma, parentStackMode, ctx),
+    height: resolveHeight(figma, parentStackMode, ctx),
     ...textProps,
     fill: mapFigmaFills(figma.fillPaints),
     effects: mapFigmaEffects(figma.effects),

@@ -172,7 +172,11 @@ function flattenNodes(
   depth = 0,
 ): PenNode[] {
   const result: PenNode[] = []
-  for (const node of nodes) {
+  // Iterate children in REVERSE so that children[0] (top of layer panel)
+  // is added to the canvas LAST → renders in front. This matches the
+  // standard design tool convention: top of layer panel = frontmost element.
+  for (let i = nodes.length - 1; i >= 0; i--) {
+    const node = nodes[i]
     if (!isNodeVisible(node)) continue
 
     // Store render info for position conversion in canvas events
@@ -560,6 +564,23 @@ export function useCanvasSync() {
             obj.clipPath = undefined
             obj.dirty = true
           }
+        }
+      }
+
+      // Z-order reconciliation: ensure Fabric object order matches the
+      // flatNodes order.  When the user reorders layers in the panel the
+      // document children change, but existing Fabric objects keep their
+      // old canvas indices.  Reconcile once after every sync pass.
+      const expectedOrder: FabricObjectWithPenId[] = []
+      for (const node of flatNodes) {
+        if (node.type === 'ref') continue
+        const o = objMap.get(node.id)
+        if (o) expectedOrder.push(o)
+      }
+      for (let i = 0; i < expectedOrder.length; i++) {
+        const current = canvas.getObjects().indexOf(expectedOrder[i])
+        if (current !== i) {
+          canvas.moveObjectTo(expectedOrder[i], i)
         }
       }
 
