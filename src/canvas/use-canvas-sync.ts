@@ -532,9 +532,13 @@ export function useCanvasSync() {
             obj.borderDashArray = []
           }
 
-          // Apply clip path from parent frame with clipContent / cornerRadius
+          // Apply clip path from parent frame with clipContent / cornerRadius.
+          // Skip if the object already has a self-contained clip (e.g. image
+          // corner radius, absolutePositioned: false) — overwriting it with
+          // the frame clip would erase the corner radius.
           const clip = clipMap.get(node.id)
-          if (clip) {
+          const hasOwnClip = obj.clipPath && !obj.clipPath.absolutePositioned
+          if (clip && !hasOwnClip) {
             obj.clipPath = new fabric.Rect({
               left: clip.x,
               top: clip.y,
@@ -550,7 +554,9 @@ export function useCanvasSync() {
             // Without this, canvas.add() caches the object without the clip and
             // requestRenderAll() reuses the stale cache.
             obj.dirty = true
-          } else if (obj.clipPath) {
+          } else if (obj.clipPath && obj.clipPath.absolutePositioned) {
+            // Only clear frame-level clips (absolutePositioned: true).
+            // Preserve object-level clips like image corner radius (absolutePositioned: false).
             obj.clipPath = undefined
             obj.dirty = true
           }
