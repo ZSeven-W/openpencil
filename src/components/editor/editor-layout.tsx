@@ -19,6 +19,7 @@ import { useCanvasStore } from '@/stores/canvas-store'
 import { useDocumentStore } from '@/stores/document-store'
 import { useAgentSettingsStore } from '@/stores/agent-settings-store'
 import { useUIKitStore } from '@/stores/uikit-store'
+import { useElectronMenu } from '@/hooks/use-electron-menu'
 
 const FabricCanvas = lazy(() => import('@/canvas/fabric-canvas'))
 
@@ -103,6 +104,9 @@ export default function EditorLayout() {
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
   }, [toggleMinimize, toggleCodePanel])
+
+  // Handle Electron native menu actions
+  useElectronMenu()
 
   // Hydrate persisted settings
   useEffect(() => {
