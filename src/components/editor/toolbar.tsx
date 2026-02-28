@@ -167,7 +167,7 @@ export default function Toolbar() {
     <div className="absolute top-2 left-2 z-10 w-10 bg-card border border-border rounded-xl flex flex-col items-center py-2 gap-1 shadow-lg">
       <ToolButton
         tool="select"
-        icon={<MousePointer2 size={20} />}
+        icon={<MousePointer2 size={20} strokeWidth={1.5} />}
         label="Select"
         shortcut="V"
       />
@@ -177,19 +177,19 @@ export default function Toolbar() {
       />
       <ToolButton
         tool="text"
-        icon={<Type size={20} />}
+        icon={<Type size={20} strokeWidth={1.5} />}
         label="Text"
         shortcut="T"
       />
       <ToolButton
         tool="frame"
-        icon={<Frame size={20} />}
+        icon={<Frame size={20} strokeWidth={1.5} />}
         label="Frame"
         shortcut="F"
       />
       <ToolButton
         tool="hand"
-        icon={<Hand size={20} />}
+        icon={<Hand size={20} strokeWidth={1.5} />}
         label="Hand"
         shortcut="H"
       />
@@ -205,7 +205,7 @@ export default function Toolbar() {
             onClick={handleUndo}
             disabled={!canUndo}
           >
-            <Undo2 size={18} />
+            <Undo2 size={18} strokeWidth={1.5} />
           </Button>
         </TooltipTrigger>
         <TooltipContent side="right">
@@ -223,7 +223,7 @@ export default function Toolbar() {
             onClick={handleRedo}
             disabled={!canRedo}
           >
-            <Redo2 size={18} />
+            <Redo2 size={18} strokeWidth={1.5} />
           </Button>
         </TooltipTrigger>
         <TooltipContent side="right">
@@ -250,7 +250,7 @@ export default function Toolbar() {
                 : 'text-muted-foreground hover:bg-muted hover:text-foreground'
             }`}
           >
-            <Braces size={20} />
+            <Braces size={20} strokeWidth={1.5} />
           </button>
         </TooltipTrigger>
         <TooltipContent side="right">
@@ -275,7 +275,7 @@ export default function Toolbar() {
                 : 'text-muted-foreground hover:bg-muted hover:text-foreground'
             }`}
           >
-            <LayoutGrid size={20} />
+            <LayoutGrid size={20} strokeWidth={1.5} />
           </button>
         </TooltipTrigger>
         <TooltipContent side="right">

@@ -1,18 +1,18 @@
 import { useCallback, useEffect, useState } from 'react'
 import {
   PanelLeft,
-  FilePlus,
-  FolderOpen,
+  Plus,
+  Folder,
   Save,
   Sun,
   Moon,
   Maximize,
   Minimize,
-  Import,
 } from 'lucide-react'
 import ClaudeLogo from '@/components/icons/claude-logo'
 import OpenAILogo from '@/components/icons/openai-logo'
 import OpenCodeLogo from '@/components/icons/opencode-logo'
+import FigmaLogo from '@/components/icons/figma-logo'
 import { Button } from '@/components/ui/button'
 import {
   Tooltip,
@@ -149,7 +149,7 @@ export default function TopBar() {
               onClick={toggleLayerPanel}
               className={layerPanelOpen ? 'text-foreground' : 'text-muted-foreground'}
             >
-              <PanelLeft size={16} />
+              <PanelLeft size={15} strokeWidth={1.5} />
             </Button>
           </TooltipTrigger>
           <TooltipContent side="bottom">
@@ -157,21 +157,21 @@ export default function TopBar() {
           </TooltipContent>
         </Tooltip>
 
-        <div className="w-px h-4 bg-border mx-1" />
+        <div className="w-px h-3.5 bg-border/60 mx-1" />
 
         <Tooltip>
           <TooltipTrigger asChild>
-            <Button variant="ghost" size="icon-sm" onClick={handleNew}>
-              <FilePlus size={16} />
+            <Button variant="ghost" size="icon-sm" className="text-muted-foreground" onClick={handleNew}>
+              <Plus size={16} strokeWidth={1.5} />
             </Button>
           </TooltipTrigger>
-          <TooltipContent side="bottom">New document</TooltipContent>
+          <TooltipContent side="bottom">New</TooltipContent>
         </Tooltip>
 
         <Tooltip>
           <TooltipTrigger asChild>
-            <Button variant="ghost" size="icon-sm" onClick={handleOpen}>
-              <FolderOpen size={16} />
+            <Button variant="ghost" size="icon-sm" className="text-muted-foreground" onClick={handleOpen}>
+              <Folder size={15} strokeWidth={1.5} />
             </Button>
           </TooltipTrigger>
           <TooltipContent side="bottom">Open</TooltipContent>
@@ -179,26 +179,27 @@ export default function TopBar() {
 
         <Tooltip>
           <TooltipTrigger asChild>
-            <Button variant="ghost" size="icon-sm" onClick={handleSave}>
-              <Save size={16} />
+            <Button variant="ghost" size="icon-sm" className="text-muted-foreground" onClick={handleSave}>
+              <Save size={15} strokeWidth={1.5} />
             </Button>
           </TooltipTrigger>
           <TooltipContent side="bottom">Save</TooltipContent>
         </Tooltip>
 
-        <div className="w-px h-4 bg-border mx-1" />
+        <div className="w-px h-3.5 bg-border/60 mx-1" />
 
         <Tooltip>
           <TooltipTrigger asChild>
             <Button
               variant="ghost"
               size="icon-sm"
+              className="text-muted-foreground"
               onClick={() => useCanvasStore.getState().setFigmaImportDialogOpen(true)}
             >
-              <Import size={16} />
+              <FigmaLogo className="w-3.5 h-3.5" />
             </Button>
           </TooltipTrigger>
-          <TooltipContent side="bottom">Import .fig file</TooltipContent>
+          <TooltipContent side="bottom">Import Figma</TooltipContent>
         </Tooltip>
       </div>
 
@@ -233,12 +234,12 @@ export default function TopBar() {
           <TooltipContent side="bottom">Setup Agents & MCP</TooltipContent>
         </Tooltip>
 
-        <div className="w-px h-4 bg-border mx-1" />
+        <div className="w-px h-3.5 bg-border/60 mx-1" />
 
         <Tooltip>
           <TooltipTrigger asChild>
-            <Button variant="ghost" size="icon-sm" onClick={toggleTheme}>
-              {theme === 'dark' ? <Sun size={16} /> : <Moon size={16} />}
+            <Button variant="ghost" size="icon-sm" className="text-muted-foreground" onClick={toggleTheme}>
+              {theme === 'dark' ? <Sun size={15} strokeWidth={1.5} /> : <Moon size={15} strokeWidth={1.5} />}
             </Button>
           </TooltipTrigger>
           <TooltipContent side="bottom">
@@ -248,8 +249,8 @@ export default function TopBar() {
 
         <Tooltip>
           <TooltipTrigger asChild>
-            <Button variant="ghost" size="icon-sm" onClick={toggleFullscreen}>
-              {isFullscreen ? <Minimize size={16} /> : <Maximize size={16} />}
+            <Button variant="ghost" size="icon-sm" className="text-muted-foreground" onClick={toggleFullscreen}>
+              {isFullscreen ? <Minimize size={15} strokeWidth={1.5} /> : <Maximize size={15} strokeWidth={1.5} />}
             </Button>
           </TooltipTrigger>
           <TooltipContent side="bottom">

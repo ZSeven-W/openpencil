@@ -41,10 +41,10 @@ interface ShapeToolDropdownProps {
 }
 
 const TOOL_ICON_MAP: Record<string, ReactNode> = {
-  rectangle: <Square size={20} />,
-  ellipse: <Circle size={20} />,
-  line: <Minus size={20} />,
-  path: <PenTool size={20} />,
+  rectangle: <Square size={20} strokeWidth={1.5} />,
+  ellipse: <Circle size={20} strokeWidth={1.5} />,
+  line: <Minus size={20} strokeWidth={1.5} />,
+  path: <PenTool size={20} strokeWidth={1.5} />,
 }
 
 export default function ShapeToolDropdown({
@@ -86,12 +86,12 @@ export default function ShapeToolDropdown({
       : TOOL_ICON_MAP[lastShapeTool.current]
 
   const items: DropdownItem[] = [
-    { type: 'tool', tool: 'rectangle', icon: <Square size={18} />, label: 'Rectangle' },
-    { type: 'tool', tool: 'ellipse', icon: <Circle size={18} />, label: 'Ellipse' },
-    { type: 'tool', tool: 'line', icon: <Minus size={18} />, label: 'Line' },
-    { type: 'action', key: 'icon', icon: <Sparkles size={18} />, label: 'Icon', onAction: onIconPickerOpen },
-    { type: 'action', key: 'image', icon: <ImagePlus size={18} />, label: 'Import Image or SVG…', onAction: onImageImport },
-    { type: 'tool', tool: 'path', icon: <PenTool size={18} />, label: 'Pen' },
+    { type: 'tool', tool: 'rectangle', icon: <Square size={18} strokeWidth={1.5} />, label: 'Rectangle' },
+    { type: 'tool', tool: 'ellipse', icon: <Circle size={18} strokeWidth={1.5} />, label: 'Ellipse' },
+    { type: 'tool', tool: 'line', icon: <Minus size={18} strokeWidth={1.5} />, label: 'Line' },
+    { type: 'action', key: 'icon', icon: <Sparkles size={18} strokeWidth={1.5} />, label: 'Icon', onAction: onIconPickerOpen },
+    { type: 'action', key: 'image', icon: <ImagePlus size={18} strokeWidth={1.5} />, label: 'Import Image or SVG…', onAction: onImageImport },
+    { type: 'tool', tool: 'path', icon: <PenTool size={18} strokeWidth={1.5} />, label: 'Pen' },
   ]
 
   const handleSelect = (item: DropdownItem) => {
