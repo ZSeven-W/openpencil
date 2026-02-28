@@ -181,6 +181,12 @@ Contributions are welcome! See [CLAUDE.md](./CLAUDE.md) for architecture details
 - [ ] Collaborative editing
 - [ ] Plugin system
 
+## Contributors
+
+<a href="https://github.com/ZSeven-W/openpencil/graphs/contributors">
+  <img src="https://contrib.rocks/image?repo=ZSeven-W/openpencil" alt="Contributors" />
+</a>
+
 ## Community
 
 <a href="https://discord.gg/fE9STbMG">
