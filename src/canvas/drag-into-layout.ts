@@ -1,5 +1,6 @@
 import type * as fabric from 'fabric'
 import { useDocumentStore } from '@/stores/document-store'
+import { forcePageResync } from './canvas-sync-utils'
 import type { FabricObjectWithPenId } from './canvas-object-factory'
 import { setFabricSyncLock } from './canvas-sync-lock'
 import { layoutContainerBounds, rootFrameBounds } from './use-canvas-sync'
@@ -330,10 +331,7 @@ export function commitDragInto(
 
   // Force re-sync: must re-read state after mutations (getState() above
   // returned snapshots that are now stale).
-  const doc = useDocumentStore.getState().document
-  useDocumentStore.setState({
-    document: { ...doc, children: [...doc.children] },
-  })
+  forcePageResync()
 
   // Clean up
   activeSession = null
@@ -559,10 +557,7 @@ export function commitDragIntoMulti(
   setFabricSyncLock(false)
 
   // Force re-sync
-  const doc = useDocumentStore.getState().document
-  useDocumentStore.setState({
-    document: { ...doc, children: [...doc.children] },
-  })
+  forcePageResync()
 
   // Clean up
   activeSession = null

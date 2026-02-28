@@ -1,6 +1,7 @@
 import * as fabric from 'fabric'
 import type { PenDocument, PenNode } from '@/types/pen'
 import { useDocumentStore } from '@/stores/document-store'
+import { forcePageResync } from './canvas-sync-utils'
 import { useHistoryStore } from '@/stores/history-store'
 import type { FabricObjectWithPenId } from './canvas-object-factory'
 import { setFabricSyncLock } from './canvas-sync-lock'
@@ -192,10 +193,7 @@ export function handleObjectModified(
             // Dragged outside parent -- cancel layout reorder and detach
             cancelLayoutDrag()
             rebuildNodeRenderInfo()
-            const doc = useDocumentStore.getState().document
-            useDocumentStore.setState({
-              document: { ...doc, children: [...doc.children] },
-            })
+            forcePageResync()
             closeTransformBatch()
             return
           }
@@ -215,13 +213,16 @@ export function handleObjectModified(
 
         const scaleX = target.scaleX ?? 1
         const scaleY = target.scaleY ?? 1
-        // Path/Polygon dimensions are derived from their data, so we can't
-        // bake scale into width/height. Keep scaleX/scaleY on the Fabric
-        // object and let syncObjToStore compute the stored dimensions.
-        const isPathLike =
+        // Path/Polygon dimensions are derived from their geometry data, and
+        // Image dimensions represent the source element's natural size.
+        // Baking scale into width/height would corrupt their internal state.
+        // Keep scaleX/scaleY on the Fabric object and let syncObjToStore
+        // compute the stored dimensions (width * scaleX).
+        const skipScaleBake =
           target.type === 'path' ||
-          target.type === 'polygon'
-        if (!isPathLike) {
+          target.type === 'polygon' ||
+          target.type === 'image'
+        if (!skipScaleBake) {
           if (target.width !== undefined) {
             target.set({ width: target.width * scaleX, scaleX: 1 })
           }
@@ -259,10 +260,7 @@ export function handleObjectModified(
         if (didReparentOut || didReparentIn) {
           // Force re-sync since tree structure changed
           rebuildNodeRenderInfo()
-          const doc = useDocumentStore.getState().document
-          useDocumentStore.setState({
-            document: { ...doc, children: [...doc.children] },
-          })
+          forcePageResync()
         }
       } else if ('getObjects' in target) {
         isSelectionModification = true
@@ -271,10 +269,11 @@ export function handleObjectModified(
         for (const child of group.getObjects()) {
           const sx = child.scaleX ?? 1
           const sy = child.scaleY ?? 1
-          const childIsPathLike =
+          const childSkipScaleBake =
             child.type === 'path' ||
-            child.type === 'polygon'
-          if (!childIsPathLike) {
+            child.type === 'polygon' ||
+            child.type === 'image'
+          if (!childSkipScaleBake) {
             if (child.width !== undefined) {
               child.set({ width: child.width * sx, scaleX: 1 })
             }
@@ -350,16 +349,10 @@ export function handleObjectModified(
       canvas.requestRenderAll()
       requestAnimationFrame(() => {
         rebuildNodeRenderInfo()
-        const doc = useDocumentStore.getState().document
-        useDocumentStore.setState({
-          document: { ...doc, children: [...doc.children] },
-        })
+        forcePageResync()
       })
     } else if (!isSelectionModification) {
-      const currentDoc = useDocumentStore.getState().document
-      useDocumentStore.setState({
-        document: { ...currentDoc, children: [...currentDoc.children] },
-      })
+      forcePageResync()
     }
 
     closeTransformBatch()
