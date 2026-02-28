@@ -86,9 +86,12 @@ export function useChatHandlers() {
   const handleSend = useCallback(
     async (text?: string) => {
       const messageText = text ?? input.trim()
-      if (!messageText || isStreaming || isLoadingModels || availableModels.length === 0) return
+      const pendingAttachments = useAIStore.getState().pendingAttachments
+      const hasAttachments = pendingAttachments.length > 0
+      if ((!messageText && !hasAttachments) || isStreaming || isLoadingModels || availableModels.length === 0) return
 
       setInput('')
+      useAIStore.getState().clearPendingAttachments()
 
       // Determine context and mode
       const selectedIds = useCanvasStore.getState().selection.selectedIds
@@ -102,8 +105,9 @@ export function useChatHandlers() {
       const userMsg: ChatMessageType = {
         id: nanoid(),
         role: 'user',
-        content: messageText,
+        content: messageText || '',
         timestamp: Date.now(),
+        ...(hasAttachments ? { attachments: pendingAttachments } : {}),
       }
       addMessage(userMsg)
 
@@ -129,6 +133,7 @@ export function useChatHandlers() {
       const chatHistory = messages.map((m) => ({
         role: m.role,
         content: m.content,
+        ...(m.attachments?.length ? { attachments: m.attachments } : {}),
       }))
 
       let accumulated = ''
@@ -185,7 +190,11 @@ export function useChatHandlers() {
              }
         } else {
             // --- CHAT MODE ---
-            chatHistory.push({ role: 'user', content: fullUserMessage })
+            chatHistory.push({
+              role: 'user',
+              content: fullUserMessage,
+              ...(hasAttachments ? { attachments: pendingAttachments } : {}),
+            })
             // Trim history to prevent unbounded context growth
             const trimmedHistory = trimChatHistory(chatHistory)
             // Resolve which provider the currently selected model belongs to

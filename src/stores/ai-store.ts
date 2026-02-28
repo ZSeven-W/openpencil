@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import type { ChatMessage } from '@/services/ai/ai-types'
+import type { ChatMessage, ChatAttachment } from '@/services/ai/ai-types'
 import type { ModelGroup } from '@/types/agent-settings'
 
 export type PanelCorner = 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right'
@@ -53,6 +53,7 @@ interface AIState {
   isMinimized: boolean
   chatTitle: string
   generationProgress: { current: number; total: number } | null
+  pendingAttachments: ChatAttachment[]
 
   setChatTitle: (title: string) => void
   setGenerationProgress: (progress: { current: number; total: number } | null) => void
@@ -74,6 +75,9 @@ interface AIState {
   clearMessages: () => void
   setPanelCorner: (corner: PanelCorner) => void
   toggleMinimize: () => void
+  addPendingAttachment: (attachment: ChatAttachment) => void
+  removePendingAttachment: (id: string) => void
+  clearPendingAttachments: () => void
 }
 
 export const useAIStore = create<AIState>((set) => ({
@@ -92,6 +96,7 @@ export const useAIStore = create<AIState>((set) => ({
   isMinimized: false,
   chatTitle: 'New Chat',
   generationProgress: null,
+  pendingAttachments: [],
 
   setChatTitle: (chatTitle) => set({ chatTitle }),
   setGenerationProgress: (generationProgress) => set({ generationProgress }),
@@ -139,4 +144,10 @@ export const useAIStore = create<AIState>((set) => ({
 
   setPanelCorner: (panelCorner) => set({ panelCorner }),
   toggleMinimize: () => set((s) => ({ isMinimized: !s.isMinimized })),
+
+  addPendingAttachment: (attachment) =>
+    set((s) => ({ pendingAttachments: [...s.pendingAttachments, attachment] })),
+  removePendingAttachment: (id) =>
+    set((s) => ({ pendingAttachments: s.pendingAttachments.filter((a) => a.id !== id) })),
+  clearPendingAttachments: () => set({ pendingAttachments: [] }),
 }))

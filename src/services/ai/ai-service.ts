@@ -46,7 +46,7 @@ interface StreamChatOptions {
  */
 export async function* streamChat(
   systemPrompt: string,
-  messages: Array<{ role: 'user' | 'assistant'; content: string }>,
+  messages: Array<{ role: 'user' | 'assistant'; content: string; attachments?: Array<{ name: string; mediaType: string; data: string }> }>,
   model?: string,
   options?: StreamChatOptions,
   provider?: string,
@@ -108,7 +108,11 @@ export async function* streamChat(
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         system: systemPrompt,
-        messages,
+        messages: messages.map((m) => ({
+          role: m.role,
+          content: m.content,
+          ...(m.attachments?.length ? { attachments: m.attachments } : {}),
+        })),
         model,
         provider,
         thinkingMode: options?.thinkingMode,

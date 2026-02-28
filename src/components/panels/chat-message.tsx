@@ -2,12 +2,14 @@ import React, { useState, useMemo, type ReactNode } from 'react'
 import { Copy, Check, Wand2, ChevronDown } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
+import type { ChatAttachment } from '@/services/ai/ai-types'
 
 interface ChatMessageProps {
   role: 'user' | 'assistant'
   content: string
   isStreaming?: boolean
   onApplyDesign?: (json: string) => void
+  attachments?: ChatAttachment[]
 }
 
 /** Strip raw tool-call / function-call XML that should never be shown to users */
@@ -591,6 +593,7 @@ export default function ChatMessage({
   content,
   isStreaming,
   onApplyDesign,
+  attachments,
 }: ChatMessageProps) {
   const isApplied = useMemo(
     () => role === 'assistant' && (content.includes('\u2705') || content.includes('<!-- APPLIED -->')),
@@ -633,6 +636,18 @@ export default function ChatMessage({
     <div className={cn('flex', isUser ? 'justify-end' : 'justify-start mt-2')}>
       {isUser ? (
         <div className="max-w-[85%] rounded-lg px-3 py-2 text-sm leading-relaxed whitespace-pre-wrap bg-primary text-primary-foreground rounded-br-sm">
+          {attachments && attachments.length > 0 && (
+            <div className="flex flex-wrap gap-1 mb-1.5">
+              {attachments.map((att) => (
+                <img
+                  key={att.id}
+                  src={`data:${att.mediaType};base64,${att.data}`}
+                  alt={att.name}
+                  className="max-h-20 rounded object-cover"
+                />
+              ))}
+            </div>
+          )}
           {content}
         </div>
       ) : (
