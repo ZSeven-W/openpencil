@@ -39,7 +39,10 @@ function computeDocBounds(nodes: PenNode[], ox = 0, oy = 0) {
     maxX = Math.max(maxX, nx + (nw || 100))
     maxY = Math.max(maxY, ny + (nh || 100))
 
-    if ('children' in node && node.children && node.children.length > 0) {
+    // Only recurse into groups (their bounds come from children).
+    // Frames/rectangles have explicit width/height and clip children,
+    // so including children would inflate bounds beyond the visible area.
+    if (node.type === 'group' && 'children' in node && node.children && node.children.length > 0) {
       const child = computeDocBounds(node.children, nx, ny)
       minX = Math.min(minX, child.minX)
       minY = Math.min(minY, child.minY)

@@ -123,7 +123,8 @@ export default function FigmaImportDialog({ open, onClose }: FigmaImportDialogPr
 
       // Load into the document store
       useDocumentStore.getState().loadDocument(doc, `${name}.op`)
-      requestAnimationFrame(() => zoomToFitContent())
+      // Double-RAF ensures React effects (canvas sync) complete before fitting
+      requestAnimationFrame(() => requestAnimationFrame(() => zoomToFitContent()))
 
       setProgress(100)
       setState('done')
