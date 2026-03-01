@@ -114,20 +114,16 @@ export function checkDragReparentByBounds(
       x: objBounds.x - targetBounds.x,
       y: objBounds.y - targetBounds.y,
     })
-    const targetChildren = store.getNodeById(bestFrameId)
-    const childCount =
-      targetChildren && 'children' in targetChildren && targetChildren.children
-        ? targetChildren.children.length
-        : 0
-    store.moveNode(nodeId, bestFrameId, childCount)
+    // Insert at index 0 = top of layer panel = frontmost
+    store.moveNode(nodeId, bestFrameId, 0)
   } else {
     // No overlapping frame — make it a root-level node
     store.updateNode(nodeId, {
       x: objBounds.x,
       y: objBounds.y,
     })
-    const rootCount = store.document.children.length
-    store.moveNode(nodeId, null, rootCount)
+    // Insert at index 0 = top of layer panel = frontmost
+    store.moveNode(nodeId, null, 0)
   }
 
   return true
@@ -221,12 +217,8 @@ export function checkReparentIntoFrame(
     }
   }
 
-  const targetChildren = store.getNodeById(bestFrameId)
-  const childCount =
-    targetChildren && 'children' in targetChildren && targetChildren.children
-      ? targetChildren.children.length
-      : 0
-  store.moveNode(nodeId, bestFrameId, childCount)
+  // Insert at index 0 = top of layer panel = frontmost
+  store.moveNode(nodeId, bestFrameId, 0)
 
   return true
 }
@@ -281,20 +273,16 @@ export function checkDragReparent(obj: FabricObjectWithPenId): boolean {
         x: objBounds.x - targetBounds.x,
         y: objBounds.y - targetBounds.y,
       })
-      const targetChildren = store.getNodeById(bestFrameId)
-      const childCount =
-        targetChildren && 'children' in targetChildren && targetChildren.children
-          ? targetChildren.children.length
-          : 0
-      store.moveNode(nodeId, bestFrameId, childCount)
+      // Insert at index 0 = top of layer panel = frontmost
+      store.moveNode(nodeId, bestFrameId, 0)
     } else {
       // No overlapping frame — make it a root-level node
       store.updateNode(nodeId, {
         x: objBounds.x,
         y: objBounds.y,
       })
-      const rootCount = store.document.children.length
-      store.moveNode(nodeId, null, rootCount)
+      // Insert at index 0 = top of layer panel = frontmost
+      store.moveNode(nodeId, null, 0)
     }
   } finally {
     setFabricSyncLock(false)

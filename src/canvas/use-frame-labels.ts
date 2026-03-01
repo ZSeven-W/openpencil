@@ -1,6 +1,6 @@
 import { useEffect } from 'react'
 import { useCanvasStore } from '@/stores/canvas-store'
-import { useDocumentStore } from '@/stores/document-store'
+import { useDocumentStore, getActivePageChildren } from '@/stores/document-store'
 import { COMPONENT_COLOR, INSTANCE_COLOR } from './canvas-constants'
 import type { FabricObjectWithPenId } from './canvas-object-factory'
 import type { PenNode } from '@/types/pen'
@@ -56,18 +56,19 @@ export function useFrameLabels() {
         const dpr = el.width / el.offsetWidth
 
         const store = useDocumentStore.getState()
+        const pageChildren = getActivePageChildren(store.document, useCanvasStore.getState().activePageId)
         // Top-level frame nodes show labels
         const topFrameIds = new Set(
-          store.document.children
+          pageChildren
             .filter((c) => c.type === 'frame')
             .map((c) => c.id),
         )
         // Reusable component IDs (at any depth)
         const reusableIds = new Set<string>()
-        collectReusableIds(store.document.children, reusableIds)
+        collectReusableIds(pageChildren, reusableIds)
         // Instance (RefNode) IDs
         const instanceIds = new Set<string>()
-        collectInstanceIds(store.document.children, instanceIds)
+        collectInstanceIds(pageChildren, instanceIds)
 
         const objects = canvas.getObjects() as FabricObjectWithPenId[]
 

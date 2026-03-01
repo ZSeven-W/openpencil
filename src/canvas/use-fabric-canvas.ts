@@ -1,7 +1,7 @@
 import { useEffect, useRef, type RefObject } from 'react'
 import * as fabric from 'fabric'
 import { useCanvasStore } from '@/stores/canvas-store'
-import { useDocumentStore } from '@/stores/document-store'
+import { useDocumentStore, getActivePageChildren } from '@/stores/document-store'
 import type { PenNode } from '@/types/pen'
 import { getCanvasBackground, SELECTION_BLUE, MIN_ZOOM, MAX_ZOOM } from './canvas-constants'
 import { setupRotationCursorHandler } from './canvas-controls'
@@ -59,7 +59,8 @@ export function zoomToFitContent() {
   const canvas = useCanvasStore.getState().fabricCanvas
   if (!canvas) return
 
-  const children = useDocumentStore.getState().document.children
+  const activePageId = useCanvasStore.getState().activePageId
+  const children = getActivePageChildren(useDocumentStore.getState().document, activePageId)
   if (children.length === 0) return
 
   const { minX, minY, maxX, maxY } = computeDocBounds(children)

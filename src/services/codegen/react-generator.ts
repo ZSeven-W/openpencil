@@ -1,4 +1,5 @@
 import type { PenDocument, PenNode, ContainerProps, TextNode } from '@/types/pen'
+import { getActivePageChildren } from '@/stores/document-tree-utils'
 import type { PenFill, PenStroke, PenEffect, ShadowEffect } from '@/types/styles'
 import { isVariableRef } from '@/variables/resolve-variables'
 import { variableNameToCSS } from '@/services/codegen/css-variables-generator'
@@ -361,6 +362,9 @@ ${childrenJSX}
 `
 }
 
-export function generateReactFromDocument(doc: PenDocument): string {
-  return generateReactCode(doc.children, 'GeneratedDesign')
+export function generateReactFromDocument(doc: PenDocument, activePageId?: string | null): string {
+  const children = activePageId !== undefined
+    ? getActivePageChildren(doc, activePageId)
+    : doc.children
+  return generateReactCode(children, 'GeneratedDesign')
 }

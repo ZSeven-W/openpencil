@@ -44,6 +44,19 @@ React Components (Toolbar, LayerPanel, PropertyPanel)
 - User edits in panels → update document-store → `use-canvas-sync` updates Fabric
 - `canvas-sync-lock.ts` prevents circular updates when Fabric events write to the store
 
+### Multi-Page Architecture
+
+```text
+PenDocument
+  ├── pages?: PenPage[]   (id, name, children)
+  └── children: PenNode[] (default/single-page fallback)
+```
+
+- `document-store-pages.ts` — page CRUD actions: `addPage`, `removePage`, `renamePage`, `reorderPage`, `duplicatePage`
+- `canvas-store.ts` — `activePageId` state, `setActivePageId` action
+- `canvas-sync-utils.ts` — `forcePageResync()` triggers page-aware canvas re-sync
+- `page-tabs.tsx` — tab bar UI for multi-page navigation with context menu
+
 ### Design Variables Architecture
 
 ```text
@@ -68,12 +81,13 @@ PenDocument (source of truth)
 
 ### Key Modules
 
-- **`src/canvas/`** — Fabric.js integration (29 files):
+- **`src/canvas/`** — Fabric.js integration (30 files):
   - `fabric-canvas.tsx` — Canvas component initialization
   - `use-fabric-canvas.ts` — Canvas initialization hook
   - `canvas-object-factory.ts` — Creates Fabric objects from PenNodes (rect, ellipse, line, polygon, path, text, image, frame, group)
   - `canvas-object-sync.ts` — Syncs individual object properties between Fabric and store
   - `canvas-sync-lock.ts` — Prevents circular sync loops
+  - `canvas-sync-utils.ts` — `forcePageResync()` utility for page-aware canvas re-sync
   - `canvas-controls.ts` — Custom rotation controls and cursor styling
   - `canvas-constants.ts` — Default colors, zoom limits, stroke widths
   - `use-canvas-events.ts` — Drawing events, shape creation, smart guides activation, tool-based `skipTargetFind` management
@@ -101,25 +115,26 @@ PenDocument (source of truth)
 - **`src/variables/`** — Design variables system (2 files):
   - `resolve-variables.ts` — Core resolution utilities: `resolveVariableRef`, `resolveNodeForCanvas`, `getDefaultTheme`, `isVariableRef`; resolves `$variable` references to concrete values for canvas rendering with circular reference guards
   - `replace-refs.ts` — `replaceVariableRefsInTree`: recursively walk node tree to replace/resolve `$refs` when renaming or deleting variables (covers opacity, gap, padding, fills, strokes, effects, text)
-- **`src/stores/`** — Zustand stores (7 files):
-  - `canvas-store.ts` — UI/tool/selection/viewport/clipboard/interaction state, `variablesPanelOpen` toggle
+- **`src/stores/`** — Zustand stores (8 files):
+  - `canvas-store.ts` — UI/tool/selection/viewport/clipboard/interaction state, `variablesPanelOpen` toggle, `activePageId`, `figmaImportDialogOpen`
   - `document-store.ts` — PenDocument tree CRUD: `addNode`, `updateNode`, `removeNode`, `moveNode`, `reorderNode`, `duplicateNode`, `groupNodes`, `ungroupNode`, `toggleVisibility`, `toggleLock`, `scaleDescendantsInStore`, `rotateDescendantsInStore`, `getNodeById`, `getParentOf`, `getFlatNodes`, `isDescendantOf`; Variable CRUD: `setVariable`, `removeVariable`, `renameVariable`, `setThemes` (all with history support)
+  - `document-store-pages.ts` — Page actions extracted from document-store: `addPage`, `removePage`, `renamePage`, `reorderPage`, `duplicatePage`
   - `document-tree-utils.ts` — Pure tree helpers extracted from document-store: `findNodeInTree`, `findParentInTree`, `removeNodeFromTree`, `updateNodeInTree`, `flattenNodes`, `insertNodeInTree`, `isDescendantOf`, `getNodeBounds`, `findClearX`, `scaleChildrenInPlace`, `rotateChildrenInPlace`, `createEmptyDocument`, `DEFAULT_FRAME_ID`
   - `history-store.ts` — Undo/redo (max 300 states), batch mode for grouped operations
-  - `ai-store.ts` — Chat messages, streaming state, generated code, model selection
-  - `agent-settings-store.ts` — AI provider config (Anthropic/OpenAI), MCP CLI integrations, localStorage persistence
+  - `ai-store.ts` — Chat messages, streaming state, generated code, model selection, `pendingAttachments` for image uploads
+  - `agent-settings-store.ts` — AI provider config (Anthropic/OpenAI/OpenCode), MCP CLI integrations (Claude Code, Codex CLI, Gemini CLI, OpenCode CLI, Kiro CLI), localStorage persistence
   - `uikit-store.ts` — UIKit management: imported kits, component browser state (search, category filters), localStorage persistence
 - **`src/types/`** — Type system (8 files):
-  - `pen.ts` — PenDocument/PenNode (frame, group, rectangle, ellipse, line, polygon, path, text, image, ref), ContainerProps; `PenDocument.variables` and `PenDocument.themes`
+  - `pen.ts` — PenDocument/PenNode (frame, group, rectangle, ellipse, line, polygon, path, text, image, ref), ContainerProps, `PenPage`; `PenDocument.variables`, `PenDocument.themes`, `PenDocument.pages`
   - `canvas.ts` — ToolType (select, frame, rectangle, ellipse, line, polygon, path, text, hand), ViewportState, SelectionState, CanvasInteraction
   - `styles.ts` — PenFill (solid, linear_gradient, radial_gradient), PenStroke, PenEffect (shadow, blur), BlendMode, StyledTextSegment
   - `variables.ts` — `VariableDefinition` (type + value), `ThemedValue` (value per theme), `VariableValue`
   - `uikit.ts` — UIKit, KitComponent, ComponentCategory types for reusable component organization and browsing
   - `agent-settings.ts` — AI provider config types (`AIProviderType`, `AIProviderConfig`, `MCPCliIntegration`, `GroupedModel`)
-  - `electron.d.ts` — Electron IPC bridge types (file dialogs, save operations)
+  - `electron.d.ts` — Electron IPC bridge types (file dialogs, save operations, updater: `UpdaterState`/`UpdaterStatus`, `getState`/`checkForUpdates`/`quitAndInstall`/`onStateChange`)
   - `opencode-sdk.d.ts` — Type declarations for @opencode-ai/sdk
-- **`src/components/editor/`** — Editor UI (6 files): editor-layout, toolbar (with variables panel toggle), tool-button, shape-tool-dropdown (rectangle/ellipse/line/path + icon picker + image import), top-bar, status-bar
-- **`src/components/panels/`** — Panels (24 files):
+- **`src/components/editor/`** — Editor UI (8 files): editor-layout, toolbar (with variables panel toggle), tool-button, shape-tool-dropdown (rectangle/ellipse/line/path + icon picker + image import), top-bar (with `AgentStatusButton`), status-bar, page-tabs (multi-page navigation with context menu), update-ready-banner (Electron auto-updater notification)
+- **`src/components/panels/`** — Panels (26 files):
   - `layer-panel.tsx` / `layer-item.tsx` / `layer-context-menu.tsx` — Tree view with drag-and-drop reordering and drop-into-children (above/below/inside), visibility/lock toggles, context menu, rename
   - `property-panel.tsx` — Unified property panel
   - `fill-section.tsx` — Solid + gradient fill, variable picker integration for color binding
@@ -128,56 +143,77 @@ PenDocument (source of truth)
   - `size-section.tsx` — Position, size, rotation
   - `text-section.tsx` — Font, size, weight, spacing, alignment
   - `text-layout-section.tsx` — Text node layout controls (auto/fixed-width/fixed-height modes, fill width/height)
+  - `icon-section.tsx` — Icon property panel section: current icon name, library dropdown, icon picker
   - `effects-section.tsx` — Shadow and blur
   - `export-section.tsx` — Per-layer export to PNG/SVG with scale options (1x/2x/3x)
   - `layout-section.tsx` — Auto-layout (none/vertical/horizontal), gap, padding, justify, align; variable picker for gap/padding binding
+  - `layout-padding-section.tsx` — Extracted padding controls: single/axis/T-R-B-L modes with popover mode switcher
   - `appearance-section.tsx` — Opacity, visibility, lock, flip; variable picker for opacity binding
-  - `ai-chat-panel.tsx` / `chat-message.tsx` — AI chat with markdown, design block collapse, apply design
+  - `ai-chat-panel.tsx` / `chat-message.tsx` — AI chat with markdown, design block collapse, apply design, image attachment upload (paperclip button, preview strip, 5MB/4-image limit)
   - `ai-chat-handlers.ts` — `useChatHandlers` hook, `isDesignRequest`, `buildContextString` helpers extracted from ai-chat-panel
   - `ai-chat-checklist.tsx` — `FixedChecklist` component for AI generation progress display
   - `code-panel.tsx` — Code generation output (React/Tailwind, HTML/CSS, CSS Variables)
   - `component-browser-panel.tsx` / `component-browser-grid.tsx` / `component-browser-card.tsx` — Resizable floating panel for browsing, importing, and inserting UIKit components with category tabs and search
   - `variables-panel.tsx` — Design variables management: theme axes as tabs, variant columns, resizable floating panel, add/rename/delete themes and variants
   - `variable-row.tsx` — Individual variable row: type icon, editable name, per-theme-variant value cells (color picker, number input, text input), context menu
-- **`src/components/shared/`** — Reusable UI (9 files): ColorPicker, NumberInput, DropdownSelect, SectionHeader, ExportDialog, SaveDialog, AgentSettingsDialog, IconPickerDialog, VariablePicker
-- **`src/components/icons/`** — Provider logos: ClaudeLogo, OpenAILogo, OpenCodeLogo
+- **`src/components/shared/`** — Reusable UI (10 files): ColorPicker, NumberInput, DropdownSelect, SectionHeader, ExportDialog, SaveDialog, AgentSettingsDialog, IconPickerDialog, VariablePicker, FigmaImportDialog
+- **`src/components/icons/`** — Provider/brand logos: ClaudeLogo, OpenAILogo, OpenCodeLogo, FigmaLogo
 - **`src/components/ui/`** — shadcn/ui primitives: Button, Select, Separator, Slider, Switch, Toggle, Tooltip
-- **`src/services/ai/`** — AI services (18 files):
+- **`src/services/ai/`** — AI services (20 files):
   - `ai-service.ts` — Main AI chat API wrapper, model negotiation, provider selection
   - `ai-prompts.ts` — System prompts for design generation, context building
-  - `ai-types.ts` — `ChatMessage`, `AIDesignRequest`, `OrchestratorPlan`, streaming response types
+  - `ai-types.ts` — `ChatMessage` (with `attachments?: ChatAttachment[]`), `ChatAttachment` (id, name, mediaType, data, size), `AIDesignRequest`, `OrchestratorPlan`, streaming response types
   - `ai-runtime-config.ts` — Configuration constants for AI timeouts, thinking modes, effort levels, prompt length limits
   - `design-generator.ts` — Top-level `generateDesign`/`generateDesignModification` with orchestrator fallback, re-exports from design-parser and design-canvas-ops
   - `design-parser.ts` — Pure JSON/JSONL parsing: `extractJsonFromResponse`, `extractStreamingNodes`, `parseJsonlToTree`, node validation and scoring
   - `design-canvas-ops.ts` — Canvas mutation operations: `insertStreamingNode`, `applyNodesToCanvas`, `upsertNodesToCanvas`, `animateNodesToCanvas`, generation state management, sanitization and heuristics
+  - `design-node-sanitization.ts` — Node cloning and merging utilities: `deepCloneNode`, `setNodeChildren`, `mergeNodeForProgressiveUpsert` (extracted from design-canvas-ops)
   - `design-animation.ts` — Fade-in animation coordination for generated design nodes
   - `design-validation.ts` — Post-generation screenshot validation using vision API to detect and auto-fix visual issues
   - `generation-utils.ts` — Pure utilities for text measurement, size/padding parsing, phone placeholder generation, color extraction
   - `icon-resolver.ts` — Auto-resolves AI-generated icon path nodes by name to verified Lucide SVG paths
   - `role-resolver.ts` — Registry-based system for applying role-specific defaults (button padding, card gaps) and tree post-pass fixes
-  - `role-definitions/` — Modular role definition files: content, display, interactive, layout, navigation, media, typography, table
+  - `role-definitions/` — Modular role definition files: index, content, display, interactive, layout, navigation, media, typography, table
   - `orchestrator.ts` — Orchestrator entry point: `executeOrchestration`, `callOrchestrator`, plan parsing
   - `orchestrator-sub-agent.ts` — Sub-agent execution: `executeSubAgentsSequentially`, `executeSubAgent`, prompt building, retry/fallback logic
   - `orchestrator-progress.ts` — `emitProgress`, `buildFinalStepTags` for streaming progress updates
   - `orchestrator-prompts.ts` — Ultra-lightweight orchestrator prompt for spatial decomposition
   - `orchestrator-prompt-optimizer.ts` — Prompt preparation, compression, timeout calculation, fallback plan generation
   - `context-optimizer.ts` — Chat history trimming, sliding window to prevent unbounded context growth
+- **`src/services/figma/`** — Figma `.fig` file import pipeline (11 files):
+  - `fig-parser.ts` — Binary `.fig` file parser
+  - `figma-types.ts` — Figma internal type definitions
+  - `figma-node-mapper.ts` — Maps Figma nodes to PenNodes
+  - `figma-fill-mapper.ts` — Converts Figma fills to PenFill
+  - `figma-stroke-mapper.ts` — Converts Figma strokes to PenStroke
+  - `figma-effect-mapper.ts` — Converts Figma effects to PenEffect
+  - `figma-layout-mapper.ts` — Maps Figma auto-layout to PenNode layout props
+  - `figma-text-mapper.ts` — Converts Figma text styles
+  - `figma-vector-decoder.ts` — Decodes Figma vector geometry
+  - `figma-color-utils.ts` — Color space conversion utilities
+  - `figma-image-resolver.ts` — Resolves image blob references
 - **`src/services/codegen/`** — React+Tailwind and HTML+CSS code generators (output `var(--name)` for `$variable` refs), CSS variables generator
-- **`src/hooks/`** — `use-keyboard-shortcuts` (global keyboard event handling: tools, clipboard, undo/redo, save, select all, delete, arrow nudge, z-order)
+- **`src/hooks/`** — Hooks (2 files):
+  - `use-keyboard-shortcuts.ts` — Global keyboard event handling: tools, clipboard, undo/redo, save, select all, delete, arrow nudge, z-order
+  - `use-electron-menu.ts` — Electron native menu IPC listener: dispatches menu actions (new, open, save, save-as, undo, redo, etc.) to Zustand stores
 - **`src/lib/`** — Utility functions (`utils.ts` with `cn()` for class merging)
-- **`src/uikit/`** — UI kit system (3 files):
+- **`src/uikit/`** — UI kit system (3 files + `kits/` subdir):
   - `built-in-registry.ts` — Default built-in UIKit with standard UI components
   - `kit-import-export.ts` — Import/export UIKits from .pen files with variable reference collection
   - `kit-utils.ts` — UIKit utilities: extract components from documents, find reusable nodes, deep clone
-- **`src/mcp/`** — MCP server integration (2 files):
-  - `server.ts` — MCP server providing tools for design automation: open_document, batch_get, batch_design, get/set_variables, snapshot_layout
+  - `kits/` — Default kit data: `default-kit.ts`, `default-kit-meta.ts`
+- **`src/mcp/`** — MCP server integration (2 files + `tools/` and `utils/` subdirs):
+  - `server.ts` — MCP server entry point, tool registration
   - `document-manager.ts` — MCP utility for reading, writing, and caching PenDocuments from disk
+  - `tools/` — Individual MCP tool implementations: `batch-design.ts`, `batch-get.ts`, `find-empty-space.ts`, `open-document.ts`, `snapshot-layout.ts`, `variables.ts`
+  - `utils/` — Shared utilities: `id.ts`, `node-operations.ts`
 - **`src/utils/`** — File operations (save/open .pen), export (PNG/SVG), node clone, pen file normalization (format fixes only, preserves `$variable` refs), SVG parser (import SVG to editable PenNodes), syntax highlight
-- **`server/api/ai/`** — Nitro server API (6 files): `chat.ts` (streaming SSE with thinking state), `generate.ts` (non-streaming generation), `connect-agent.ts` (Claude Code/Codex CLI/OpenCode connection), `models.ts` (model definitions), `validate.ts` (vision-based post-generation validation), `mcp-install.ts` (MCP server install/uninstall into CLI tool configs). Supports Anthropic API key or Claude Agent SDK (local OAuth) as dual providers
-- **`server/utils/`** — Server utilities (3 files):
+- **`server/api/ai/`** — Nitro server API (7 files): `chat.ts` (streaming SSE with thinking state, multimodal image attachments per provider), `generate.ts` (non-streaming generation), `connect-agent.ts` (Claude Code/Codex CLI/OpenCode connection), `models.ts` (model definitions), `validate.ts` (vision-based post-generation validation), `mcp-install.ts` (MCP server install/uninstall into CLI tool configs), `icon.ts` (icon name → SVG path resolution via local Iconify sets). Supports Anthropic API key or Claude Agent SDK (local OAuth) as dual providers
+- **`server/utils/`** — Server utilities (4 files):
   - `resolve-claude-cli.ts` — Resolves standalone `claude` binary path (handles Nitro bundling issues with SDK's `import.meta.url`)
+  - `resolve-claude-agent-env.ts` — Builds Claude Agent SDK environment: merges `~/.claude/settings.json` env, validates `ANTHROPIC_CUSTOM_HEADERS`, handles auth token compat
   - `opencode-client.ts` — Shared OpenCode client manager, reuses server on port 4096 with random port fallback
-  - `codex-client.ts` — Codex CLI client wrapper with JSON streaming, thinking mode support, timeout handling
+  - `codex-client.ts` — Codex CLI client wrapper with JSON streaming, thinking mode support, timeout handling, optional `imageFiles` for vision queries
 
 ### Fabric.js v7 Gotchas
 
@@ -213,12 +249,13 @@ Tailwind CSS v4 imported via `src/styles.css`. UI primitives from shadcn/ui (`sr
 
 ### Electron Desktop App
 
-- **`electron/main.ts`** — Main process: window creation, Nitro server fork, IPC for native file dialogs, macOS traffic-light padding (auto-hidden in fullscreen)
-- **`electron/preload.ts`** — Context bridge for renderer ↔ main IPC
+- **`electron/main.ts`** — Main process: window creation, Nitro server fork, IPC for native file dialogs, native application menu, auto-updater, macOS traffic-light padding (auto-hidden in fullscreen)
+- **`electron/preload.ts`** — Context bridge for renderer ↔ main IPC (file dialogs, menu actions, updater state)
 - **`electron-builder.yml`** — Packaging config: macOS (dmg/zip), Windows (nsis/portable), Linux (AppImage/deb)
 - **`scripts/electron-dev.ts`** — Dev workflow: starts Vite → waits for port 3000 → compiles electron/ with esbuild → launches Electron
 - Build flow: `BUILD_TARGET=electron bun run build` → `bun run electron:compile` → `npx electron-builder`
 - In production, Nitro server is forked as a child process on a random port; Electron loads `http://127.0.0.1:{port}/editor`
+- Auto-updater checks GitHub Releases on startup and every hour; `update-ready-banner.tsx` shows download progress and "Restart & Install" prompt
 
 ### CI / CD
 
@@ -256,7 +293,7 @@ Use [Conventional Commits](https://www.conventionalcommits.org/) format:
 
 ### Scope
 
-By module: `editor`, `canvas`, `panels`, `history`, `ai`, `codegen`, `store`, `types`, `variables`.
+By module: `editor`, `canvas`, `panels`, `history`, `ai`, `codegen`, `store`, `types`, `variables`, `figma`, `mcp`, `electron`.
 
 ### Rules
 

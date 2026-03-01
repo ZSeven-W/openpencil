@@ -1,7 +1,7 @@
 import { useEffect } from 'react'
 import * as fabric from 'fabric'
 import { useCanvasStore } from '@/stores/canvas-store'
-import { useDocumentStore, findNodeInTree } from '@/stores/document-store'
+import { useDocumentStore, findNodeInTree, getActivePageChildren, setActivePageChildren, getAllChildren } from '@/stores/document-store'
 import type { PenNode, ContainerProps } from '@/types/pen'
 import {
   createFabricObject,
@@ -172,7 +172,11 @@ function flattenNodes(
   depth = 0,
 ): PenNode[] {
   const result: PenNode[] = []
-  for (const node of nodes) {
+  // Iterate children in REVERSE so that children[0] (top of layer panel)
+  // is added to the canvas LAST → renders in front. This matches the
+  // standard design tool convention: top of layer panel = frontmost element.
+  for (let i = nodes.length - 1; i >= 0; i--) {
+    const node = nodes[i]
     if (!isNodeVisible(node)) continue
 
     // Store render info for position conversion in canvas events
@@ -252,7 +256,8 @@ function flattenNodes(
       // - Root frames (depth 0, type frame) always clip their children
       // - Non-root frames clip only when they have cornerRadius
       let childClip = clipCtx
-      const cr = 'cornerRadius' in node ? cornerRadiusVal(node.cornerRadius) : 0
+      const crRaw = 'cornerRadius' in node ? cornerRadiusVal(node.cornerRadius) : 0
+      const cr = Math.min(crRaw, nodeH / 2)
       const isRootFrame = node.type === 'frame' && depth === 0
       const hasClipContent = 'clipContent' in node && (node as ContainerProps).clipContent === true
       if (isRootFrame || cr > 0 || hasClipContent) {
@@ -292,10 +297,13 @@ function flattenNodes(
  */
 export function rebuildNodeRenderInfo() {
   const state = useDocumentStore.getState()
+  const activePageId = useCanvasStore.getState().activePageId
+  const pageChildren = getActivePageChildren(state.document, activePageId)
+  const allNodes = getAllChildren(state.document)
   nodeRenderInfo.clear()
   rootFrameBounds.clear()
   layoutContainerBounds.clear()
-  const resolvedTree = resolveRefs(state.document.children, state.document.children)
+  const resolvedTree = resolveRefs(pageChildren, allNodes)
   flattenNodes(resolvedTree, 0, 0, undefined, undefined, undefined, new Map())
 }
 
@@ -358,18 +366,42 @@ export function useCanvasSync() {
     // `markClean()` trigger a full re-sync that overwrites canvas-side
     // changes (drag positions, edited text) with stale store data if those
     // changes failed to write back to the store for any reason.
-    let prevChildren = useDocumentStore.getState().document.children
+    let prevPageChildren = getActivePageChildren(
+      useDocumentStore.getState().document,
+      useCanvasStore.getState().activePageId,
+    )
     let prevVariables = useDocumentStore.getState().document.variables
     let prevThemes = useDocumentStore.getState().document.themes
+    let prevActivePageId = useCanvasStore.getState().activePageId
+
+    // Subscribe to page switches
+    const unsubCanvas = useCanvasStore.subscribe((cs) => {
+      if (cs.activePageId !== prevActivePageId) {
+        prevActivePageId = cs.activePageId
+        // Force a full re-sync by resetting prevPageChildren
+        prevPageChildren = null as unknown as PenNode[]
+        // Trigger document subscription by creating a new reference
+        const { document: doc } = useDocumentStore.getState()
+        const pageChildren = getActivePageChildren(doc, cs.activePageId)
+        if (pageChildren.length > 0) {
+          useDocumentStore.setState({
+            document: setActivePageChildren(doc, cs.activePageId, [...pageChildren]),
+          })
+        }
+      }
+    })
 
     const unsub = useDocumentStore.subscribe((state) => {
+      const activePageId = useCanvasStore.getState().activePageId
+      const pageChildren = getActivePageChildren(state.document, activePageId)
+
       // Always track the latest references — even when the sync lock
       // is active — so that unrelated store updates (e.g. markClean setting
       // isDirty) don't trigger a stale re-sync that overwrites canvas state.
-      const childrenChanged = state.document.children !== prevChildren
+      const childrenChanged = pageChildren !== prevPageChildren
       const variablesChanged = state.document.variables !== prevVariables
       const themesChanged = state.document.themes !== prevThemes
-      prevChildren = state.document.children
+      prevPageChildren = pageChildren
       prevVariables = state.document.variables
       prevThemes = state.document.themes
 
@@ -385,12 +417,15 @@ export function useCanvasSync() {
       const variables = state.document.variables ?? {}
       const activeTheme = getDefaultTheme(state.document.themes)
 
+      // Use active page children for rendering, all children for ref resolution
+      const allNodes = getAllChildren(state.document)
+
       const clipMap = new Map<string, ClipInfo>()
       nodeRenderInfo.clear()
       rootFrameBounds.clear()
       layoutContainerBounds.clear()
       // Resolve RefNodes before flattening so instances render as their component
-      const resolvedTree = resolveRefs(state.document.children, state.document.children)
+      const resolvedTree = resolveRefs(pageChildren, allNodes)
       const flatNodes = flattenNodes(
         resolvedTree, 0, 0, undefined, undefined, undefined, clipMap,
       ).map((node) => resolveNodeForCanvas(node, variables, activeTheme))
@@ -411,7 +446,7 @@ export function useCanvasSync() {
           if (n.type === 'ref') instanceIds.add(n.id)
           if ('children' in n && n.children) collectComponentIds(n.children)
         }
-      })(state.document.children)
+      })(pageChildren)
 
       // Remove objects that no longer exist in the document
       for (const obj of objects) {
@@ -502,9 +537,13 @@ export function useCanvasSync() {
             obj.borderDashArray = []
           }
 
-          // Apply clip path from parent frame with cornerRadius
+          // Apply clip path from parent frame with clipContent / cornerRadius.
+          // Skip if the object already has a self-contained clip (e.g. image
+          // corner radius, absolutePositioned: false) — overwriting it with
+          // the frame clip would erase the corner radius.
           const clip = clipMap.get(node.id)
-          if (clip) {
+          const hasOwnClip = obj.clipPath && !obj.clipPath.absolutePositioned
+          if (clip && !hasOwnClip) {
             obj.clipPath = new fabric.Rect({
               left: clip.x,
               top: clip.y,
@@ -516,9 +555,33 @@ export function useCanvasSync() {
               originY: 'top',
               absolutePositioned: true,
             })
-          } else if (obj.clipPath) {
+            // Invalidate the object cache so the clipPath takes effect on next render.
+            // Without this, canvas.add() caches the object without the clip and
+            // requestRenderAll() reuses the stale cache.
+            obj.dirty = true
+          } else if (obj.clipPath && obj.clipPath.absolutePositioned) {
+            // Only clear frame-level clips (absolutePositioned: true).
+            // Preserve object-level clips like image corner radius (absolutePositioned: false).
             obj.clipPath = undefined
+            obj.dirty = true
           }
+        }
+      }
+
+      // Z-order reconciliation: ensure Fabric object order matches the
+      // flatNodes order.  When the user reorders layers in the panel the
+      // document children change, but existing Fabric objects keep their
+      // old canvas indices.  Reconcile once after every sync pass.
+      const expectedOrder: FabricObjectWithPenId[] = []
+      for (const node of flatNodes) {
+        if (node.type === 'ref') continue
+        const o = objMap.get(node.id)
+        if (o) expectedOrder.push(o)
+      }
+      for (let i = 0; i < expectedOrder.length; i++) {
+        const current = canvas.getObjects().indexOf(expectedOrder[i])
+        if (current !== i) {
+          canvas.moveObjectTo(expectedOrder[i], i)
         }
       }
 
@@ -529,12 +592,17 @@ export function useCanvasSync() {
     // The subscription only fires on future changes, so force a
     // re-render by creating a new children reference.
     const { document: doc } = useDocumentStore.getState()
-    if (doc.children.length > 0) {
+    const initActivePageId = useCanvasStore.getState().activePageId
+    const initChildren = getActivePageChildren(doc, initActivePageId)
+    if (initChildren.length > 0) {
       useDocumentStore.setState({
-        document: { ...doc, children: [...doc.children] },
+        document: setActivePageChildren(doc, initActivePageId, [...initChildren]),
       })
     }
 
-    return () => unsub()
+    return () => {
+      unsub()
+      unsubCanvas()
+    }
   }, [])
 }

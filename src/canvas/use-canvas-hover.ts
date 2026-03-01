@@ -1,6 +1,6 @@
 import { useEffect } from 'react'
 import { useCanvasStore } from '@/stores/canvas-store'
-import { useDocumentStore } from '@/stores/document-store'
+import { useDocumentStore, getActivePageChildren } from '@/stores/document-store'
 import type { FabricObjectWithPenId } from './canvas-object-factory'
 import { resolveTargetAtDepth, getChildIds } from './selection-context'
 import { COMPONENT_COLOR, INSTANCE_COLOR } from './canvas-constants'
@@ -83,7 +83,7 @@ export function useCanvasHover() {
         const zoom = vpt[0]
         const dpr = el.width / el.offsetWidth
 
-        const docChildren = useDocumentStore.getState().document.children
+        const docChildren = getActivePageChildren(useDocumentStore.getState().document, useCanvasStore.getState().activePageId)
         const reusableIds = new Set<string>()
         const instanceIds = new Set<string>()
         collectReusableIds(docChildren, reusableIds)

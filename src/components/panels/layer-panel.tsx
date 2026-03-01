@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from 'react'
-import { useDocumentStore, findNodeInTree } from '@/stores/document-store'
+import { useDocumentStore, findNodeInTree, getActivePageChildren } from '@/stores/document-store'
 import { useCanvasStore } from '@/stores/canvas-store'
 import { setSkipNextDepthResolve } from '@/canvas/use-canvas-selection'
 import type { FabricObjectWithPenId } from '@/canvas/canvas-object-factory'
@@ -7,6 +7,7 @@ import type { PenNode } from '@/types/pen'
 import LayerItem from './layer-item'
 import type { DropPosition } from './layer-item'
 import LayerContextMenu from './layer-context-menu'
+import PageTabs from '@/components/editor/page-tabs'
 
 const CONTAINER_TYPES = new Set(['frame', 'group', 'ref'])
 
@@ -118,7 +119,8 @@ function collectCollapsibleNodeIds(
 }
 
 export default function LayerPanel() {
-  const children = useDocumentStore((s) => s.document.children)
+  const activePageId = useCanvasStore((s) => s.activePageId)
+  const children = useDocumentStore((s) => getActivePageChildren(s.document, activePageId))
   const updateNode = useDocumentStore((s) => s.updateNode)
   const removeNode = useDocumentStore((s) => s.removeNode)
   const duplicateNode = useDocumentStore((s) => s.duplicateNode)
@@ -382,6 +384,7 @@ export default function LayerPanel() {
 
   return (
     <div className="w-56 bg-card border-r border-border flex flex-col shrink-0">
+      <PageTabs />
       <div className="h-8 flex items-center px-3 border-b border-border">
         <span className="text-xs font-medium text-muted-foreground tracking-wider">
           Layers

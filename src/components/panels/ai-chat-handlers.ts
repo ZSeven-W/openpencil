@@ -51,7 +51,12 @@ export function buildContextString(): string {
       .map((id) => useDocumentStore.getState().getNodeById(id))
       .filter(Boolean)
     const selectedSummary = selectedNodes
-      .map((n) => `${n!.type}:${n!.name ?? n!.id}`)
+      .map((n) => {
+        const dims = 'width' in n! && 'height' in n!
+          ? ` (${n!.width}x${n!.height})`
+          : ''
+        return `${n!.type}:${n!.name ?? n!.id}${dims}`
+      })
       .join(', ')
     parts.push(`Selected: ${selectedSummary}`)
   }
@@ -81,9 +86,12 @@ export function useChatHandlers() {
   const handleSend = useCallback(
     async (text?: string) => {
       const messageText = text ?? input.trim()
-      if (!messageText || isStreaming || isLoadingModels || availableModels.length === 0) return
+      const pendingAttachments = useAIStore.getState().pendingAttachments
+      const hasAttachments = pendingAttachments.length > 0
+      if ((!messageText && !hasAttachments) || isStreaming || isLoadingModels || availableModels.length === 0) return
 
       setInput('')
+      useAIStore.getState().clearPendingAttachments()
 
       // Determine context and mode
       const selectedIds = useCanvasStore.getState().selection.selectedIds
@@ -97,8 +105,9 @@ export function useChatHandlers() {
       const userMsg: ChatMessageType = {
         id: nanoid(),
         role: 'user',
-        content: messageText,
+        content: messageText || '',
         timestamp: Date.now(),
+        ...(hasAttachments ? { attachments: pendingAttachments } : {}),
       }
       addMessage(userMsg)
 
@@ -124,10 +133,14 @@ export function useChatHandlers() {
       const chatHistory = messages.map((m) => ({
         role: m.role,
         content: m.content,
+        ...(m.attachments?.length ? { attachments: m.attachments } : {}),
       }))
 
       let accumulated = ''
       let appliedCount = 0
+
+      const abortController = new AbortController()
+      useAIStore.getState().setAbortController(abortController)
 
       try {
         if (isDesign) {
@@ -143,7 +156,7 @@ export function useChatHandlers() {
                const { rawResponse, nodes } = await generateDesignModification(selectedNodes, messageText, {
                  variables: modDoc.variables,
                  themes: modDoc.themes,
-               })
+               }, abortController.signal)
                accumulated = rawResponse
                updateLastMessage(accumulated)
 
@@ -170,7 +183,7 @@ export function useChatHandlers() {
                     accumulated = text
                     updateLastMessage(text)
                  },
-               })
+               }, abortController.signal)
                // Ensure final text is captured
                accumulated = rawResponse
                if (appliedCount === 0 && nodes.length > 0) {
@@ -180,7 +193,11 @@ export function useChatHandlers() {
              }
         } else {
             // --- CHAT MODE ---
-            chatHistory.push({ role: 'user', content: fullUserMessage })
+            chatHistory.push({
+              role: 'user',
+              content: fullUserMessage,
+              ...(hasAttachments ? { attachments: pendingAttachments } : {}),
+            })
             // Trim history to prevent unbounded context growth
             const trimmedHistory = trimChatHistory(chatHistory)
             // Resolve which provider the currently selected model belongs to
@@ -194,6 +211,7 @@ export function useChatHandlers() {
               model,
               CHAT_STREAM_THINKING_CONFIG,
               currentProvider,
+              abortController.signal,
             )) {
                if (chunk.type === 'thinking') {
                  chatThinking += chunk.content
@@ -214,9 +232,16 @@ export function useChatHandlers() {
             }
         }
       } catch (error) {
-         const errMsg = error instanceof Error ? error.message : 'Unknown error'
-         accumulated += `\n\n**Error:** ${errMsg}`
+         // Silently handle user-initiated stop
+         if (abortController.signal.aborted) {
+           // Keep partial content, don't show error
+         } else {
+           const errMsg = error instanceof Error ? error.message : 'Unknown error'
+           accumulated += `\n\n**Error:** ${errMsg}`
+           updateLastMessage(accumulated)
+         }
       } finally {
+         useAIStore.getState().setAbortController(null)
          setStreaming(false)
       }
 

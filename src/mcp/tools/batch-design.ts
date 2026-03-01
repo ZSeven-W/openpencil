@@ -6,6 +6,8 @@ import {
   updateNodeInTree,
   removeNodeFromTree,
   cloneNodeWithNewIds,
+  getDocChildren,
+  setDocChildren,
 } from '../utils/node-operations'
 import { generateId } from '../utils/id'
 import type { PenDocument, PenNode } from '../../types/pen'
@@ -59,7 +61,7 @@ export async function handleBatchDesign(
 
   return {
     results,
-    nodeCount: countNodes(doc.children),
+    nodeCount: countNodes(getDocChildren(doc)),
   }
 }
 
@@ -79,14 +81,14 @@ function executeLine(
       case 'I': {
         const { parent, data } = parseInsertArgs(argsStr, bindings)
         const node = { ...data, id: generateId() } as PenNode
-        doc.children = insertNodeInTree(doc.children, parent, node)
+        setDocChildren(doc, insertNodeInTree(getDocChildren(doc), parent, node))
         bindings.set(binding, node.id)
         results.push({ binding, nodeId: node.id })
         break
       }
       case 'C': {
         const { sourceId, parent, data } = parseCopyArgs(argsStr, bindings)
-        const source = findNodeInTree(doc.children, sourceId)
+        const source = findNodeInTree(getDocChildren(doc), sourceId)
         if (!source) throw new Error(`Copy source not found: ${sourceId}`)
         const cloned = cloneNodeWithNewIds(source, generateId)
         // Apply override properties
@@ -99,7 +101,7 @@ function executeLine(
         if (data?.descendants) {
           applyDescendantOverrides(cloned, data.descendants)
         }
-        doc.children = insertNodeInTree(doc.children, parent, cloned)
+        setDocChildren(doc, insertNodeInTree(getDocChildren(doc), parent, cloned))
         bindings.set(binding, cloned.id)
         results.push({ binding, nodeId: cloned.id })
         break
@@ -116,20 +118,22 @@ function executeLine(
         const parentId = parent ? parent.id : null
         const siblings = parent
           ? ('children' in parent ? parent.children ?? [] : [])
-          : doc.children
+          : getDocChildren(doc)
         const idx = siblings.findIndex((n) => n.id === oldNode.id)
-        doc.children = removeNodeFromTree(doc.children, oldNode.id)
-        doc.children = insertNodeInTree(doc.children, parentId, newNode, idx)
+        let children = removeNodeFromTree(getDocChildren(doc), oldNode.id)
+        children = insertNodeInTree(children, parentId, newNode, idx)
+        setDocChildren(doc, children)
         bindings.set(binding, newNode.id)
         results.push({ binding, nodeId: newNode.id })
         break
       }
       case 'M': {
         const { nodeId, parent, index } = parseMoveArgs(argsStr, bindings)
-        const node = findNodeInTree(doc.children, nodeId)
+        const node = findNodeInTree(getDocChildren(doc), nodeId)
         if (!node) throw new Error(`Move target not found: ${nodeId}`)
-        doc.children = removeNodeFromTree(doc.children, nodeId)
-        doc.children = insertNodeInTree(doc.children, parent, node, index)
+        let children = removeNodeFromTree(getDocChildren(doc), nodeId)
+        children = insertNodeInTree(children, parent, node, index)
+        setDocChildren(doc, children)
         bindings.set(binding, nodeId)
         results.push({ binding, nodeId })
         break
@@ -145,20 +149,21 @@ function executeLine(
         if (!targetNode)
           throw new Error(`Update target not found: ${path}`)
         // Update the node in-place
-        doc.children = updateNodeInTree(doc.children, targetNode.id, data)
+        setDocChildren(doc, updateNodeInTree(getDocChildren(doc), targetNode.id, data))
         break
       }
       case 'D': {
         const nodeId = resolveRef(argsStr.trim().replace(/^"|"$/g, ''), bindings)
-        doc.children = removeNodeFromTree(doc.children, nodeId)
+        setDocChildren(doc, removeNodeFromTree(getDocChildren(doc), nodeId))
         break
       }
       case 'M': {
         const { nodeId, parent, index } = parseMoveArgs(argsStr, bindings)
-        const node = findNodeInTree(doc.children, nodeId)
+        const node = findNodeInTree(getDocChildren(doc), nodeId)
         if (!node) throw new Error(`Move target not found: ${nodeId}`)
-        doc.children = removeNodeFromTree(doc.children, nodeId)
-        doc.children = insertNodeInTree(doc.children, parent, node, index)
+        let children = removeNodeFromTree(getDocChildren(doc), nodeId)
+        children = insertNodeInTree(children, parent, node, index)
+        setDocChildren(doc, children)
         break
       }
     }
@@ -290,13 +295,14 @@ function resolveSlashPath(
 }
 
 function findNodeByPath(path: string, doc: PenDocument): PenNode | undefined {
+  const children = getDocChildren(doc)
   const parts = path.split('/')
   if (parts.length === 1) {
-    return findNodeInTree(doc.children, parts[0])
+    return findNodeInTree(children, parts[0])
   }
   // For paths like "instanceId/childId", resolve through the tree
   // First find the instance, then look for child
-  let current = findNodeInTree(doc.children, parts[0])
+  let current = findNodeInTree(children, parts[0])
   for (let i = 1; i < parts.length && current; i++) {
     if ('children' in current && current.children) {
       current = current.children.find((c) => c.id === parts[i])
@@ -315,7 +321,7 @@ function findParentByPath(
   const parts = path.split('/')
   if (parts.length <= 1) {
     // Top-level or simple ID — find parent in tree
-    return findParentInTree(doc.children, parts[0])
+    return findParentInTree(getDocChildren(doc), parts[0])
   }
   // Parent is the second-to-last part
   const parentPath = parts.slice(0, -1).join('/')
