@@ -3,6 +3,7 @@ import { nanoid } from 'nanoid'
 import type { PenDocument, PenNode, GroupNode, RefNode } from '@/types/pen'
 import type { VariableDefinition } from '@/types/variables'
 import { useHistoryStore } from '@/stores/history-store'
+import { useCanvasStore } from '@/stores/canvas-store'
 import { getDefaultTheme } from '@/variables/resolve-variables'
 import { replaceVariableRefsInTree } from '@/variables/replace-refs'
 import {
@@ -18,7 +19,13 @@ import {
   findClearX,
   scaleChildrenInPlace,
   rotateChildrenInPlace,
+  getActivePageChildren,
+  setActivePageChildren,
+  getAllChildren,
+  migrateToPages,
+  DEFAULT_PAGE_ID,
 } from './document-tree-utils'
+import { createPageActions } from './document-store-pages'
 
 interface DocumentStoreState {
   document: PenDocument
@@ -71,6 +78,13 @@ interface DocumentStoreState {
   renameVariable: (oldName: string, newName: string) => void
   setThemes: (themes: Record<string, string[]>) => void
 
+  // Page management
+  addPage: () => string
+  removePage: (pageId: string) => void
+  renamePage: (pageId: string, name: string) => void
+  reorderPage: (pageId: string, direction: 'left' | 'right') => void
+  duplicatePage: (pageId: string) => string | null
+
   applyHistoryState: (doc: PenDocument) => void
   loadDocument: (
     doc: PenDocument,
@@ -81,6 +95,16 @@ interface DocumentStoreState {
   markClean: () => void
   setFileHandle: (handle: FileSystemFileHandle | null) => void
   setSaveDialogOpen: (open: boolean) => void
+}
+
+/** Shortcut: get the active page's children from the current state. */
+function _children(s: { document: PenDocument }): PenNode[] {
+  return getActivePageChildren(s.document, useCanvasStore.getState().activePageId)
+}
+
+/** Shortcut: return a new document with active page's children replaced. */
+function _setChildren(doc: PenDocument, children: PenNode[]): PenDocument {
+  return setActivePageChildren(doc, useCanvasStore.getState().activePageId, children)
 }
 
 export const useDocumentStore = create<DocumentStoreState>(
@@ -94,15 +118,13 @@ export const useDocumentStore = create<DocumentStoreState>(
     addNode: (parentId, node, index) => {
       useHistoryStore.getState().pushState(get().document)
       set((s) => ({
-        document: {
-          ...s.document,
-          children: insertNodeInTree(
-            s.document.children,
-            parentId,
-            node,
-            index,
-          ),
-        },
+        document: _setChildren(
+          s.document,
+          // Default to index 0 (prepend) so new items appear at the top of
+          // the layer panel = frontmost on canvas. Callers can pass an
+          // explicit index to override.
+          insertNodeInTree(_children(s), parentId, node, index ?? 0),
+        ),
         isDirty: true,
       }))
     },
@@ -110,14 +132,10 @@ export const useDocumentStore = create<DocumentStoreState>(
     updateNode: (id, updates) => {
       useHistoryStore.getState().pushState(get().document)
       set((s) => ({
-        document: {
-          ...s.document,
-          children: updateNodeInTree(
-            s.document.children,
-            id,
-            updates,
-          ),
-        },
+        document: _setChildren(
+          s.document,
+          updateNodeInTree(_children(s), id, updates),
+        ),
         isDirty: true,
       }))
     },
@@ -125,41 +143,35 @@ export const useDocumentStore = create<DocumentStoreState>(
     removeNode: (id) => {
       useHistoryStore.getState().pushState(get().document)
       set((s) => ({
-        document: {
-          ...s.document,
-          children: removeNodeFromTree(s.document.children, id),
-        },
+        document: _setChildren(
+          s.document,
+          removeNodeFromTree(_children(s), id),
+        ),
         isDirty: true,
       }))
     },
 
     moveNode: (id, newParentId, index) => {
       const state = get()
-      const node = findNodeInTree(state.document.children, id)
+      const children = _children(state)
+      const node = findNodeInTree(children, id)
       if (!node) return
       useHistoryStore.getState().pushState(state.document)
-      const withoutNode = removeNodeFromTree(
-        state.document.children,
-        id,
-      )
-      const withNode = insertNodeInTree(
-        withoutNode,
-        newParentId,
-        node,
-        index,
-      )
+      const withoutNode = removeNodeFromTree(children, id)
+      const withNode = insertNodeInTree(withoutNode, newParentId, node, index)
       set({
-        document: { ...state.document, children: withNode },
+        document: _setChildren(state.document, withNode),
         isDirty: true,
       })
     },
 
     reorderNode: (id, direction) => {
       const state = get()
-      const parent = findParentInTree(state.document.children, id)
+      const children = _children(state)
+      const parent = findParentInTree(children, id)
       const siblings = parent
         ? ('children' in parent ? parent.children ?? [] : [])
-        : state.document.children
+        : children
       const idx = siblings.findIndex((n) => n.id === id)
       if (idx === -1) return
       const newIdx =
@@ -174,74 +186,74 @@ export const useDocumentStore = create<DocumentStoreState>(
 
       if (parent && 'children' in parent) {
         set((s) => ({
-          document: {
-            ...s.document,
-            children: updateNodeInTree(
-              s.document.children,
-              parent.id,
-              { children: newSiblings } as Partial<PenNode>,
-            ),
-          },
+          document: _setChildren(
+            s.document,
+            updateNodeInTree(_children(s), parent.id, {
+              children: newSiblings,
+            } as Partial<PenNode>),
+          ),
           isDirty: true,
         }))
       } else {
         set((s) => ({
-          document: { ...s.document, children: newSiblings },
+          document: _setChildren(s.document, newSiblings),
           isDirty: true,
         }))
       }
     },
 
     toggleVisibility: (id) => {
-      const node = findNodeInTree(get().document.children, id)
+      const node = findNodeInTree(_children(get()), id)
       if (!node) return
       useHistoryStore.getState().pushState(get().document)
       const currentVisible = node.visible !== false
       set((s) => ({
-        document: {
-          ...s.document,
-          children: updateNodeInTree(s.document.children, id, {
+        document: _setChildren(
+          s.document,
+          updateNodeInTree(_children(s), id, {
             visible: !currentVisible,
           } as Partial<PenNode>),
-        },
+        ),
         isDirty: true,
       }))
     },
 
     toggleLock: (id) => {
-      const node = findNodeInTree(get().document.children, id)
+      const node = findNodeInTree(_children(get()), id)
       if (!node) return
       useHistoryStore.getState().pushState(get().document)
       const currentLocked = node.locked === true
       set((s) => ({
-        document: {
-          ...s.document,
-          children: updateNodeInTree(s.document.children, id, {
+        document: _setChildren(
+          s.document,
+          updateNodeInTree(_children(s), id, {
             locked: !currentLocked,
           } as Partial<PenNode>),
-        },
+        ),
         isDirty: true,
       }))
     },
 
     duplicateNode: (id) => {
       const state = get()
-      const node = findNodeInTree(state.document.children, id)
+      const children = _children(state)
+      const allNodes = getAllChildren(state.document)
+      const node = findNodeInTree(children, id)
       if (!node) return null
 
       // Duplicating a reusable component creates an instance (RefNode)
       if ('reusable' in node && node.reusable === true) {
-        const bounds = getNodeBounds(node, state.document.children)
-        const parent = findParentInTree(state.document.children, id)
+        const bounds = getNodeBounds(node, allNodes)
+        const parent = findParentInTree(children, id)
         const parentId = parent ? parent.id : null
         const siblings = parent
           ? ('children' in parent ? parent.children ?? [] : [])
-          : state.document.children
+          : children
         const idx = siblings.findIndex((n) => n.id === id)
 
         const clearX = findClearX(
           bounds.x, bounds.w, bounds.y, bounds.h,
-          siblings, id, state.document.children,
+          siblings, id, allNodes,
         )
 
         const refNode: RefNode = {
@@ -255,15 +267,10 @@ export const useDocumentStore = create<DocumentStoreState>(
 
         useHistoryStore.getState().pushState(state.document)
         set((s) => ({
-          document: {
-            ...s.document,
-            children: insertNodeInTree(
-              s.document.children,
-              parentId,
-              refNode as PenNode,
-              idx + 1,
-            ),
-          },
+          document: _setChildren(
+            s.document,
+            insertNodeInTree(_children(s), parentId, refNode as PenNode, idx),
+          ),
           isDirty: true,
         }))
         return refNode.id
@@ -281,31 +288,26 @@ export const useDocumentStore = create<DocumentStoreState>(
       const clone = cloneWithNewIds(node)
       clone.name = (clone.name ?? clone.type) + ' copy'
 
-      const parent = findParentInTree(state.document.children, id)
+      const parent = findParentInTree(children, id)
       const parentId = parent ? parent.id : null
       const siblings = parent
         ? ('children' in parent ? parent.children ?? [] : [])
-        : state.document.children
+        : children
       const idx = siblings.findIndex((n) => n.id === id)
 
-      const bounds = getNodeBounds(node, state.document.children)
+      const bounds = getNodeBounds(node, allNodes)
       clone.x = findClearX(
         bounds.x, bounds.w, bounds.y, bounds.h,
-        siblings, id, state.document.children,
+        siblings, id, allNodes,
       )
       clone.y = bounds.y
 
       useHistoryStore.getState().pushState(state.document)
       set((s) => ({
-        document: {
-          ...s.document,
-          children: insertNodeInTree(
-            s.document.children,
-            parentId,
-            clone,
-            idx + 1,
-          ),
-        },
+        document: _setChildren(
+          s.document,
+          insertNodeInTree(_children(s), parentId, clone, idx),
+        ),
         isDirty: true,
       }))
       return clone.id
@@ -314,8 +316,9 @@ export const useDocumentStore = create<DocumentStoreState>(
     groupNodes: (nodeIds) => {
       if (nodeIds.length < 2) return null
       const state = get()
+      const children = _children(state)
       const nodes = nodeIds
-        .map((id) => findNodeInTree(state.document.children, id))
+        .map((id) => findNodeInTree(children, id))
         .filter(Boolean) as PenNode[]
       if (nodes.length < 2) return null
 
@@ -352,17 +355,17 @@ export const useDocumentStore = create<DocumentStoreState>(
       }
 
       // Find insertion position (position of first selected node)
-      const firstParent = findParentInTree(state.document.children, nodeIds[0])
+      const firstParent = findParentInTree(children, nodeIds[0])
       const parentId = firstParent ? firstParent.id : null
       const siblings = firstParent
         ? ('children' in firstParent ? firstParent.children ?? [] : [])
-        : state.document.children
+        : children
       const firstIdx = siblings.findIndex((n) => nodeIds.includes(n.id))
 
       useHistoryStore.getState().pushState(state.document)
 
       // Remove all selected nodes
-      let newChildren = state.document.children
+      let newChildren = children
       for (const id of nodeIds) {
         newChildren = removeNodeFromTree(newChildren, id)
       }
@@ -371,7 +374,7 @@ export const useDocumentStore = create<DocumentStoreState>(
       newChildren = insertNodeInTree(newChildren, parentId, group, firstIdx)
 
       set({
-        document: { ...state.document, children: newChildren },
+        document: _setChildren(state.document, newChildren),
         isDirty: true,
       })
       return groupId
@@ -379,15 +382,16 @@ export const useDocumentStore = create<DocumentStoreState>(
 
     ungroupNode: (groupId) => {
       const state = get()
-      const group = findNodeInTree(state.document.children, groupId)
+      const children = _children(state)
+      const group = findNodeInTree(children, groupId)
       if (!group || group.type !== 'group') return
       if (!('children' in group) || !group.children) return
 
-      const parent = findParentInTree(state.document.children, groupId)
+      const parent = findParentInTree(children, groupId)
       const parentId = parent ? parent.id : null
       const siblings = parent
         ? ('children' in parent ? parent.children ?? [] : [])
-        : state.document.children
+        : children
       const groupIdx = siblings.findIndex((n) => n.id === groupId)
 
       // Adjust children coordinates to parent space
@@ -402,7 +406,7 @@ export const useDocumentStore = create<DocumentStoreState>(
       useHistoryStore.getState().pushState(state.document)
 
       // Remove group
-      let newChildren = removeNodeFromTree(state.document.children, groupId)
+      let newChildren = removeNodeFromTree(children, groupId)
 
       // Insert children at group's position (in reverse to maintain order)
       for (let i = adjustedChildren.length - 1; i >= 0; i--) {
@@ -415,7 +419,7 @@ export const useDocumentStore = create<DocumentStoreState>(
       }
 
       set({
-        document: { ...state.document, children: newChildren },
+        document: _setChildren(state.document, newChildren),
         isDirty: true,
       })
     },
@@ -423,7 +427,8 @@ export const useDocumentStore = create<DocumentStoreState>(
     scaleDescendantsInStore: (parentId, scaleX, scaleY) => {
       if (scaleX === 1 && scaleY === 1) return
       const state = get()
-      const parent = findNodeInTree(state.document.children, parentId)
+      const children = _children(state)
+      const parent = findNodeInTree(children, parentId)
       if (!parent || !('children' in parent) || !parent.children) return
 
       const scaledChildren = scaleChildrenInPlace(
@@ -432,12 +437,12 @@ export const useDocumentStore = create<DocumentStoreState>(
         scaleY,
       )
       set((s) => ({
-        document: {
-          ...s.document,
-          children: updateNodeInTree(s.document.children, parentId, {
+        document: _setChildren(
+          s.document,
+          updateNodeInTree(_children(s), parentId, {
             children: scaledChildren,
           } as Partial<PenNode>),
-        },
+        ),
         isDirty: true,
       }))
     },
@@ -445,7 +450,8 @@ export const useDocumentStore = create<DocumentStoreState>(
     rotateDescendantsInStore: (parentId, angleDeltaDeg) => {
       if (angleDeltaDeg === 0) return
       const state = get()
-      const parent = findNodeInTree(state.document.children, parentId)
+      const children = _children(state)
+      const parent = findNodeInTree(children, parentId)
       if (!parent || !('children' in parent) || !parent.children) return
 
       const rotatedChildren = rotateChildrenInPlace(
@@ -453,62 +459,65 @@ export const useDocumentStore = create<DocumentStoreState>(
         angleDeltaDeg,
       )
       set((s) => ({
-        document: {
-          ...s.document,
-          children: updateNodeInTree(s.document.children, parentId, {
+        document: _setChildren(
+          s.document,
+          updateNodeInTree(_children(s), parentId, {
             children: rotatedChildren,
           } as Partial<PenNode>),
-        },
+        ),
         isDirty: true,
       }))
     },
 
     getNodeById: (id) =>
-      findNodeInTree(get().document.children, id),
+      findNodeInTree(_children(get()), id),
 
     getParentOf: (id) =>
-      findParentInTree(get().document.children, id),
+      findParentInTree(_children(get()), id),
 
-    getFlatNodes: () => flattenNodes(get().document.children),
+    getFlatNodes: () => flattenNodes(_children(get())),
     isDescendantOf: (nodeId, ancestorId) =>
-      isDescendantOf(get().document.children, nodeId, ancestorId),
+      isDescendantOf(_children(get()), nodeId, ancestorId),
 
     // --- Component management ---
 
     makeReusable: (nodeId) => {
       const state = get()
-      const node = findNodeInTree(state.document.children, nodeId)
+      const children = _children(state)
+      const node = findNodeInTree(children, nodeId)
       if (!node) return
       // Only container types (frame, group, rectangle) can be made reusable
       if (node.type !== 'frame' && node.type !== 'group' && node.type !== 'rectangle') return
       if ('reusable' in node && node.reusable) return
       useHistoryStore.getState().pushState(state.document)
       set((s) => ({
-        document: {
-          ...s.document,
-          children: updateNodeInTree(s.document.children, nodeId, {
+        document: _setChildren(
+          s.document,
+          updateNodeInTree(_children(s), nodeId, {
             reusable: true,
           } as Partial<PenNode>),
-        },
+        ),
         isDirty: true,
       }))
     },
 
     detachComponent: (nodeId) => {
       const state = get()
-      const node = findNodeInTree(state.document.children, nodeId)
+      const children = _children(state)
+      const allNodes = getAllChildren(state.document)
+      const node = findNodeInTree(children, nodeId)
       if (!node) return
 
       // Case 1: Detach a reusable component (remove reusable flag)
       if ('reusable' in node && node.reusable) {
         useHistoryStore.getState().pushState(state.document)
         set((s) => ({
-          document: {
-            ...s.document,
-            children: updateNodeInTree(s.document.children, nodeId, {
+          document: _setChildren(
+            s.document,
+            updateNodeInTree(_children(s), nodeId, {
               reusable: undefined,
             } as Partial<PenNode>),
-          },
+          ),
           isDirty: true,
         }))
         return nodeId
@@ -516,7 +525,7 @@ export const useDocumentStore = create<DocumentStoreState>(
 
       // Case 2: Detach an instance (RefNode -> independent node tree)
       if (node.type === 'ref') {
-        const component = findNodeInTree(state.document.children, node.ref)
+        const component = findNodeInTree(allNodes, node.ref)
         if (!component) return
 
         useHistoryStore.getState().pushState(state.document)
@@ -557,14 +566,14 @@ export const useDocumentStore = create<DocumentStoreState>(
         delete detachedRecord.reusable
 
         // Replace the RefNode with the detached tree
-        const parent = findParentInTree(state.document.children, nodeId)
+        const parent = findParentInTree(children, nodeId)
         const parentId = parent ? parent.id : null
         const siblings = parent
           ? ('children' in parent ? parent.children ?? [] : [])
-          : state.document.children
+          : children
         const idx = siblings.findIndex((n) => n.id === nodeId)
 
-        let newChildren = removeNodeFromTree(state.document.children, nodeId)
+        let newChildren = removeNodeFromTree(children, nodeId)
         newChildren = insertNodeInTree(
           newChildren,
           parentId,
@@ -573,7 +582,7 @@ export const useDocumentStore = create<DocumentStoreState>(
         )
 
         set({
-          document: { ...state.document, children: newChildren },
+          document: _setChildren(state.document, newChildren),
           isDirty: true,
         })
         return detached.id
@@ -600,21 +609,34 @@ export const useDocumentStore = create<DocumentStoreState>(
       useHistoryStore.getState().pushState(state.document)
       const { [name]: _removed, ...rest } = vars
       const activeTheme = getDefaultTheme(state.document.themes)
-      const newChildren = replaceVariableRefsInTree(
-        state.document.children,
-        name,
-        null,
-        vars,
-        activeTheme,
-      )
-      set({
-        document: {
-          ...state.document,
-          variables: Object.keys(rest).length > 0 ? rest : undefined,
-          children: newChildren,
-        },
-        isDirty: true,
-      })
+      // Replace variable refs across all pages
+      const doc = state.document
+      if (doc.pages && doc.pages.length > 0) {
+        const newPages = doc.pages.map((p) => ({
+          ...p,
+          children: replaceVariableRefsInTree(p.children, name, null, vars, activeTheme),
+        }))
+        set({
+          document: {
+            ...doc,
+            variables: Object.keys(rest).length > 0 ? rest : undefined,
+            pages: newPages,
+          },
+          isDirty: true,
+        })
+      } else {
+        const newChildren = replaceVariableRefsInTree(
+          doc.children, name, null, vars, activeTheme,
+        )
+        set({
+          document: {
+            ...doc,
+            variables: Object.keys(rest).length > 0 ? rest : undefined,
+            children: newChildren,
+          },
+          isDirty: true,
+        })
+      }
     },
 
     renameVariable: (oldName, newName) => {
@@ -627,21 +649,26 @@ export const useDocumentStore = create<DocumentStoreState>(
       const { [oldName]: _removed, ...rest } = vars
       const newVars = { ...rest, [newName]: def }
       const activeTheme = getDefaultTheme(state.document.themes)
-      const newChildren = replaceVariableRefsInTree(
-        state.document.children,
-        oldName,
-        newName,
-        vars,
-        activeTheme,
-      )
-      set({
-        document: {
-          ...state.document,
-          variables: newVars,
-          children: newChildren,
-        },
-        isDirty: true,
-      })
+      // Rename variable refs across all pages
+      const doc = state.document
+      if (doc.pages && doc.pages.length > 0) {
+        const newPages = doc.pages.map((p) => ({
+          ...p,
+          children: replaceVariableRefsInTree(p.children, oldName, newName, vars, activeTheme),
+        }))
+        set({
+          document: { ...doc, variables: newVars, pages: newPages },
+          isDirty: true,
+        })
+      } else {
+        const newChildren = replaceVariableRefsInTree(
+          doc.children, oldName, newName, vars, activeTheme,
+        )
+        set({
+          document: { ...doc, variables: newVars, children: newChildren },
+          isDirty: true,
+        })
+      }
     },
 
     setThemes: (themes) => {
@@ -652,27 +679,36 @@ export const useDocumentStore = create<DocumentStoreState>(
       }))
     },
 
+    // --- Page management (extracted to document-store-pages.ts) ---
+    ...createPageActions(set, get),
+
     applyHistoryState: (doc) =>
       set({ document: doc, isDirty: true }),
 
     loadDocument: (doc, fileName, fileHandle) => {
       useHistoryStore.getState().clear()
+      const migrated = migrateToPages(doc)
       set({
-        document: doc,
+        document: migrated,
         fileName: fileName ?? null,
         fileHandle: fileHandle ?? null,
         isDirty: false,
       })
+      // Set active page to the first page
+      const firstPageId = migrated.pages?.[0]?.id ?? null
+      useCanvasStore.getState().setActivePageId(firstPageId)
     },
 
     newDocument: () => {
       useHistoryStore.getState().clear()
+      const doc = createEmptyDocument()
       set({
-        document: createEmptyDocument(),
+        document: doc,
         fileName: null,
         fileHandle: null,
         isDirty: false,
       })
+      useCanvasStore.getState().setActivePageId(doc.pages?.[0]?.id ?? DEFAULT_PAGE_ID)
     },
 
     markClean: () => set({ isDirty: false }),
@@ -681,5 +717,14 @@ export const useDocumentStore = create<DocumentStoreState>(
   }),
 )
 
-export { createEmptyDocument, findNodeInTree, DEFAULT_FRAME_ID } from './document-tree-utils'
+export {
+  createEmptyDocument,
+  findNodeInTree,
+  DEFAULT_FRAME_ID,
+  DEFAULT_PAGE_ID,
+  getActivePageChildren,
+  setActivePageChildren,
+  getAllChildren,
+  migrateToPages,
+} from './document-tree-utils'
 export { nanoid as generateId } from 'nanoid'

@@ -1,5 +1,6 @@
 import type * as fabric from 'fabric'
 import { useDocumentStore } from '@/stores/document-store'
+import { forcePageResync } from './canvas-sync-utils'
 import type { PenNode, ContainerProps } from '@/types/pen'
 import type { FabricObjectWithPenId } from './canvas-object-factory'
 import { setFabricSyncLock } from './canvas-sync-lock'
@@ -270,10 +271,7 @@ export function endLayoutDrag(
   setFabricSyncLock(false)
 
   // Force re-sync: create new children reference so the subscription fires
-  const doc = useDocumentStore.getState().document
-  useDocumentStore.setState({
-    document: { ...doc, children: [...doc.children] },
-  })
+  forcePageResync()
 
   activeSession = null
   setInsertionIndicator(null)

@@ -14,3 +14,5 @@ __unconfig*
 todos.json
 electron-dist/
 dist-electron/
+.openpencil-tmp/
+scripts/figma-*

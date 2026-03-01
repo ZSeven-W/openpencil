@@ -1,5 +1,5 @@
 import { useCanvasStore } from '@/stores/canvas-store'
-import { useDocumentStore } from '@/stores/document-store'
+import { useDocumentStore, getActivePageChildren } from '@/stores/document-store'
 import type { PenNode } from '@/types/pen'
 
 /**
@@ -13,8 +13,10 @@ export function getSelectableNodeIds(): Set<string> {
   const doc = useDocumentStore.getState().document
 
   if (!enteredFrameId) {
-    // Root level: only top-level children are selectable
-    return new Set(doc.children.map((n) => n.id))
+    // Root level: only top-level children of the active page are selectable
+    const activePageId = useCanvasStore.getState().activePageId
+    const children = getActivePageChildren(doc, activePageId)
+    return new Set(children.map((n) => n.id))
   }
 
   const frame = useDocumentStore.getState().getNodeById(enteredFrameId)

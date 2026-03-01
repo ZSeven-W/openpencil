@@ -1,23 +1,93 @@
-import type { PenDocument, PenNode, RefNode } from '@/types/pen'
+import type { PenDocument, PenNode, PenPage, RefNode } from '@/types/pen'
 
 export const DEFAULT_FRAME_ID = 'root-frame'
+export const DEFAULT_PAGE_ID = 'page-1'
 
 export function createEmptyDocument(): PenDocument {
+  const children: PenNode[] = [
+    {
+      id: DEFAULT_FRAME_ID,
+      type: 'frame',
+      name: 'Frame',
+      x: 0,
+      y: 0,
+      width: 1200,
+      height: 800,
+      fill: [{ type: 'solid', color: '#FFFFFF' }],
+      children: [],
+    },
+  ]
   return {
     version: '1.0.0',
-    children: [
+    pages: [{ id: DEFAULT_PAGE_ID, name: 'Page 1', children }],
+    children: [],
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Page helpers — centralize page-aware children access
+// ---------------------------------------------------------------------------
+
+/** Get the active page object. */
+export function getActivePage(
+  doc: PenDocument,
+  activePageId: string | null,
+): PenPage | undefined {
+  if (!doc.pages || doc.pages.length === 0) return undefined
+  if (!activePageId) return doc.pages[0]
+  return doc.pages.find((p) => p.id === activePageId) ?? doc.pages[0]
+}
+
+/** Get children for the active page (falls back to doc.children for legacy docs). */
+export function getActivePageChildren(
+  doc: PenDocument,
+  activePageId: string | null,
+): PenNode[] {
+  const page = getActivePage(doc, activePageId)
+  if (page) return page.children
+  return doc.children
+}
+
+/** Return a new document with the active page's children replaced. */
+export function setActivePageChildren(
+  doc: PenDocument,
+  activePageId: string | null,
+  children: PenNode[],
+): PenDocument {
+  if (doc.pages && doc.pages.length > 0) {
+    const page = getActivePage(doc, activePageId)
+    if (!page) return { ...doc, children }
+    return {
+      ...doc,
+      pages: doc.pages.map((p) =>
+        p.id === page.id ? { ...p, children } : p,
+      ),
+    }
+  }
+  return { ...doc, children }
+}
+
+/** Get all children across all pages (for cross-page component resolution). */
+export function getAllChildren(doc: PenDocument): PenNode[] {
+  if (doc.pages && doc.pages.length > 0) {
+    return doc.pages.flatMap((p) => p.children)
+  }
+  return doc.children
+}
+
+/** Migrate a legacy document (no pages) to page-based format. */
+export function migrateToPages(doc: PenDocument): PenDocument {
+  if (doc.pages && doc.pages.length > 0) return doc
+  return {
+    ...doc,
+    pages: [
       {
-        id: DEFAULT_FRAME_ID,
-        type: 'frame',
-        name: 'Frame',
-        x: 0,
-        y: 0,
-        width: 1200,
-        height: 800,
-        fill: [{ type: 'solid', color: '#FFFFFF' }],
-        children: [],
+        id: DEFAULT_PAGE_ID,
+        name: 'Page 1',
+        children: doc.children,
       },
     ],
+    children: [],
   }
 }
 

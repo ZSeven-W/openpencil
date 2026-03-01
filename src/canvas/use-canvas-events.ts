@@ -551,29 +551,32 @@ export function useCanvasEvents() {
       let clipPathsCleared = false
 
       canvas.on('object:moving', (opt) => {
-        // Clear clip paths on first move so content isn't clipped by stale
-        // ancestor frame bounds during drag.  Restored by post-drag re-sync.
+        // Clear frame-level clip paths (absolutePositioned: true) on first
+        // move so content isn't clipped by stale ancestor frame bounds
+        // during drag.  Restored by post-drag re-sync.
+        // Preserve object-level clips (absolutePositioned: false) like
+        // image corner radius — these are self-contained and stay valid.
         if (!clipPathsCleared) {
           clipPathsCleared = true
           const movingObj = opt.target as FabricObjectWithPenId
-          if (movingObj.clipPath) movingObj.clipPath = undefined
+          if (movingObj.clipPath?.absolutePositioned) movingObj.clipPath = undefined
           // Clear clip paths on objects INSIDE the ActiveSelection
           if ('getObjects' in opt.target) {
             for (const child of (opt.target as fabric.ActiveSelection).getObjects()) {
-              if (child.clipPath) child.clipPath = undefined
+              if (child.clipPath?.absolutePositioned) child.clipPath = undefined
             }
           }
           // Also clear descendants' clip paths
           const session = getActiveDragSession()
           if (session) {
             for (const [, descObj] of session.descendantObjects) {
-              if (descObj.clipPath) descObj.clipPath = undefined
+              if (descObj.clipPath?.absolutePositioned) descObj.clipPath = undefined
             }
           }
           // Clear clip paths on ActiveSelection descendants too
           if (selectionDragInfo) {
             for (const [, { obj }] of selectionDragInfo.descendants) {
-              if (obj.clipPath) obj.clipPath = undefined
+              if (obj.clipPath?.absolutePositioned) obj.clipPath = undefined
             }
           }
         }

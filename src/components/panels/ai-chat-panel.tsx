@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
-import { Send, Plus, ChevronDown, ChevronUp, Check, MessageSquare, Loader2 } from 'lucide-react'
+import { Send, Plus, ChevronDown, ChevronUp, Check, MessageSquare, Loader2, Paperclip, X, Square } from 'lucide-react'
+import { nanoid } from 'nanoid'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { useAIStore } from '@/stores/ai-store'
@@ -93,6 +94,7 @@ export default function AIChatPanel() {
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
   const panelRef = useRef<HTMLDivElement>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
   const dragRef = useRef<{ offsetX: number; offsetY: number } | null>(null)
   const resizeRef = useRef<{ startY: number; startHeight: number; startTop: number } | null>(null)
   const [dragStyle, setDragStyle] = useState<React.CSSProperties | null>(null)
@@ -106,6 +108,7 @@ export default function AIChatPanel() {
   const setPanelCorner = useAIStore((s) => s.setPanelCorner)
   const chatTitle = useAIStore((s) => s.chatTitle)
   const selectedIds = useCanvasStore((s) => s.selection.selectedIds)
+  const stopStreaming = useAIStore((s) => s.stopStreaming)
   const toggleMinimize = useAIStore((s) => s.toggleMinimize)
   const hydrateModelPreference = useAIStore((s) => s.hydrateModelPreference)
   const model = useAIStore((s) => s.model)
@@ -120,10 +123,13 @@ export default function AIChatPanel() {
   const providers = useAgentSettingsStore((s) => s.providers)
   const providersHydrated = useAgentSettingsStore((s) => s.isHydrated)
   const [modelDropdownOpen, setModelDropdownOpen] = useState(false)
+  const pendingAttachments = useAIStore((s) => s.pendingAttachments)
+  const addPendingAttachment = useAIStore((s) => s.addPendingAttachment)
+  const removePendingAttachment = useAIStore((s) => s.removePendingAttachment)
   const { input, setInput, handleSend } = useChatHandlers()
   const noAvailableModels = !isLoadingModels && availableModels.length === 0
   const canUseModel = !isLoadingModels && availableModels.length > 0
-  const canSendMessage = canUseModel && !isStreaming && !!input.trim()
+  const canSendMessage = canUseModel && !isStreaming && (!!input.trim() || pendingAttachments.length > 0)
   const quickActionsDisabled = !canUseModel || isStreaming
 
   useEffect(() => {
@@ -378,6 +384,36 @@ export default function AIChatPanel() {
     }
   }, [])
 
+  const handleFileSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files
+    if (!files) return
+    const maxSize = 5 * 1024 * 1024 // 5MB
+    const maxCount = 4
+    const currentCount = useAIStore.getState().pendingAttachments.length
+    const remaining = maxCount - currentCount
+
+    Array.from(files).slice(0, remaining).forEach((file) => {
+      if (file.size > maxSize) return
+      if (!file.type.startsWith('image/')) return
+      const reader = new FileReader()
+      reader.onload = () => {
+        const dataUrl = reader.result as string
+        const base64 = dataUrl.split(',')[1]
+        if (!base64) return
+        addPendingAttachment({
+          id: nanoid(),
+          name: file.name,
+          mediaType: file.type,
+          data: base64,
+          size: file.size,
+        })
+      }
+      reader.readAsDataURL(file)
+    })
+    // Reset so the same file can be re-selected
+    e.target.value = ''
+  }, [addPendingAttachment])
+
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault()
@@ -475,6 +511,7 @@ export default function AIChatPanel() {
               content={msg.content}
               isStreaming={msg.isStreaming && isStreaming}
               onApplyDesign={handleApplyDesign}
+              attachments={msg.attachments}
             />
           ))
         )}
@@ -486,12 +523,43 @@ export default function AIChatPanel() {
 
       {/* --- Input area --- */}
       <div className="relative border-t border-border bg-card rounded-b-xl">
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/*"
+          multiple
+          className="hidden"
+          onChange={handleFileSelect}
+        />
+
+        {/* Attachment preview strip */}
+        {pendingAttachments.length > 0 && (
+          <div className="flex items-center gap-1.5 px-3 pt-2 pb-1 overflow-x-auto">
+            {pendingAttachments.map((att) => (
+              <div key={att.id} className="relative group shrink-0">
+                <img
+                  src={`data:${att.mediaType};base64,${att.data}`}
+                  alt={att.name}
+                  className="w-8 h-8 rounded object-cover border border-border"
+                />
+                <button
+                  type="button"
+                  onClick={() => removePendingAttachment(att.id)}
+                  className="absolute -top-1 -right-1 w-3.5 h-3.5 rounded-full bg-foreground text-background flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                >
+                  <X size={8} />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+
         <textarea
           ref={inputRef}
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={handleKeyDown}
-          placeholder={isStreaming ? 'Generating...' : 'Design with Claude or Codex...'}
+          placeholder={isStreaming ? 'Generating...' : 'Design with Agent...'}
           disabled={isStreaming}
           rows={2}
           className="w-full bg-transparent text-sm text-foreground placeholder-muted-foreground px-3.5 pt-3 pb-2 resize-none outline-none max-h-28 min-h-[52px]"
@@ -541,18 +609,40 @@ export default function AIChatPanel() {
               <Button
                 variant="ghost"
                 size="icon-sm"
-                onClick={() => handleSend()}
-                disabled={!canSendMessage}
-                title="Send message"
-                className={cn(
-                  'shrink-0 rounded-lg h-7 w-7',
-                  canSendMessage
-                    ? 'bg-foreground text-background hover:bg-foreground/90'
-                    : '',
-                )}
+                onClick={() => fileInputRef.current?.click()}
+                disabled={isStreaming || pendingAttachments.length >= 4}
+                title="Attach image"
+                className="shrink-0 rounded-lg h-7 w-7"
               >
-                <Send size={13} />
+                <Paperclip size={13} />
               </Button>
+              {isStreaming ? (
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  onClick={stopStreaming}
+                  title="Stop generating"
+                  className="shrink-0 rounded-lg h-7 w-7 bg-foreground text-background hover:bg-foreground/90"
+                >
+                  <Square size={10} fill="currentColor" />
+                </Button>
+              ) : (
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  onClick={() => handleSend()}
+                  disabled={!canSendMessage}
+                  title="Send message"
+                  className={cn(
+                    'shrink-0 rounded-lg h-7 w-7',
+                    canSendMessage
+                      ? 'bg-foreground text-background hover:bg-foreground/90'
+                      : '',
+                  )}
+                >
+                  <Send size={13} />
+                </Button>
+              )}
             </div>
           </div>
         </div>

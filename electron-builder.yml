@@ -21,6 +21,7 @@ extraResources:
 mac:
   category: public.app-category.graphics-design
   icon: build/icon.icns
+  artifactName: "${productName}-${version}-${arch}-mac.${ext}"
   target:
     - dmg
     - zip

@@ -1,4 +1,19 @@
-import type { PenNode, RefNode } from '../../types/pen'
+import type { PenDocument, PenNode, RefNode } from '../../types/pen'
+
+/** Get the working children for an MCP operation (first page or doc.children). */
+export function getDocChildren(doc: PenDocument): PenNode[] {
+  if (doc.pages && doc.pages.length > 0) return doc.pages[0].children
+  return doc.children
+}
+
+/** Set the working children for an MCP operation (first page or doc.children). */
+export function setDocChildren(doc: PenDocument, children: PenNode[]): void {
+  if (doc.pages && doc.pages.length > 0) {
+    doc.pages[0].children = children
+  } else {
+    doc.children = children
+  }
+}
 
 export function findNodeInTree(
   nodes: PenNode[],

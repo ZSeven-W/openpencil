@@ -1,7 +1,7 @@
 import { useEffect } from 'react'
 import { ActiveSelection } from 'fabric'
 import { useCanvasStore } from '@/stores/canvas-store'
-import { useDocumentStore } from '@/stores/document-store'
+import { useDocumentStore, getActivePageChildren } from '@/stores/document-store'
 import { useHistoryStore } from '@/stores/history-store'
 import { cloneNodesWithNewIds } from '@/utils/node-clone'
 import {
@@ -334,7 +334,7 @@ export function useKeyboardShortcuts() {
       // Cmd+A: select all (top-level nodes only, matching manual selection behavior)
       if (isMod && e.key === 'a') {
         e.preventDefault()
-        const topLevelNodes = useDocumentStore.getState().document.children
+        const topLevelNodes = getActivePageChildren(useDocumentStore.getState().document, useCanvasStore.getState().activePageId)
         const ids = topLevelNodes.map((n) => n.id)
         useCanvasStore.getState().setSelection(ids, ids[0] ?? null)
         const canvas = useCanvasStore.getState().fabricCanvas

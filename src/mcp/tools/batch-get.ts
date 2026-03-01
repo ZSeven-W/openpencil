@@ -4,6 +4,7 @@ import {
   findNodeInTree,
   searchNodes,
   readNodeWithDepth,
+  getDocChildren,
 } from '../utils/node-operations'
 import type { PenNode } from '../../types/pen'
 
@@ -35,12 +36,12 @@ export async function handleBatchGet(
   if (!params.patterns?.length && !params.nodeIds?.length) {
     const rootNodes = params.parentId
       ? (() => {
-          const parent = findNodeInTree(doc.children, params.parentId)
+          const parent = findNodeInTree(getDocChildren(doc), params.parentId)
           return parent && 'children' in parent && parent.children
             ? parent.children
             : []
         })()
-      : doc.children
+      : getDocChildren(doc)
     return {
       nodes: rootNodes.map((n) => readNodeWithDepth(n, readDepth)),
     }
@@ -53,12 +54,12 @@ export async function handleBatchGet(
   if (params.patterns?.length) {
     const searchRoot = params.parentId
       ? (() => {
-          const parent = findNodeInTree(doc.children, params.parentId)
+          const parent = findNodeInTree(getDocChildren(doc), params.parentId)
           return parent && 'children' in parent && parent.children
             ? parent.children
             : []
         })()
-      : doc.children
+      : getDocChildren(doc)
 
     for (const pattern of params.patterns) {
       const found = searchNodes(searchRoot, pattern, searchDepth)
@@ -75,7 +76,7 @@ export async function handleBatchGet(
   if (params.nodeIds?.length) {
     for (const id of params.nodeIds) {
       if (seen.has(id)) continue
-      const node = findNodeInTree(doc.children, id)
+      const node = findNodeInTree(getDocChildren(doc), id)
       if (node) {
         seen.add(id)
         results.push(node)
