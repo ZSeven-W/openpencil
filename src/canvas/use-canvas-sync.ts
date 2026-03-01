@@ -487,8 +487,19 @@ export function useCanvasSync() {
             continue
           }
           syncFabricObject(existingObj, node)
-          obj = existingObj
-        } else {
+
+          // Check if sync flagged this object for recreation (e.g. image
+          // fit mode changed between tile ↔ non-tile, requiring a different
+          // Fabric class).
+          if ((existingObj as any).__needsRecreation) {
+            canvas.remove(existingObj)
+            existingObj = undefined
+            objectRecreated = true
+          } else {
+            obj = existingObj
+          }
+        }
+        if (!existingObj) {
           const newObj = createFabricObject(node)
           if (newObj) {
             const shouldAnimate = pendingAnimationNodes.has(node.id)

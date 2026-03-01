@@ -1,5 +1,5 @@
 import * as fabric from 'fabric'
-import type { PenNode } from '@/types/pen'
+import type { PenNode, ImageFitMode } from '@/types/pen'
 import type {
   PenFill,
   PenStroke,
@@ -174,6 +174,86 @@ function cornerRadiusValue(
   if (cr === undefined) return 0
   if (typeof cr === 'number') return cr
   return cr[0]
+}
+
+/**
+ * Compute image scale, crop, and clip for a given fit mode.
+ *
+ * Fill/Crop uses FabricImage's native cropX/cropY to trim source pixels,
+ * avoiding a self-clipPath that would conflict with parent frame clipping.
+ * Corner radius is handled via a separate clipPath when needed.
+ */
+export function computeImageTransform(
+  nw: number,
+  nh: number,
+  w: number,
+  h: number,
+  mode: ImageFitMode = 'fill',
+  cornerRadius = 0,
+): {
+  scaleX: number
+  scaleY: number
+  cropX: number
+  cropY: number
+  cropWidth: number
+  cropHeight: number
+  clipPath?: fabric.Rect
+} {
+  switch (mode) {
+    case 'fill':
+    case 'crop': {
+      const ratio = Math.max(w / nw, h / nh)
+      // Crop dimensions in source pixels (center crop)
+      const cropW = w / ratio
+      const cropH = h / ratio
+      const cropX = (nw - cropW) / 2
+      const cropY = (nh - cropH) / 2
+      const clipR = cornerRadius > 0 ? cornerRadius / ratio : 0
+      return {
+        scaleX: ratio,
+        scaleY: ratio,
+        cropX,
+        cropY,
+        cropWidth: cropW,
+        cropHeight: cropH,
+        clipPath: clipR > 0
+          ? new fabric.Rect({
+              width: cropW,
+              height: cropH,
+              rx: clipR,
+              ry: clipR,
+              originX: 'center',
+              originY: 'center',
+            })
+          : undefined,
+      }
+    }
+    case 'fit': {
+      const ratio = Math.min(w / nw, h / nh)
+      const clipR = cornerRadius > 0 ? cornerRadius / ratio : 0
+      return {
+        scaleX: ratio,
+        scaleY: ratio,
+        cropX: 0,
+        cropY: 0,
+        cropWidth: nw,
+        cropHeight: nh,
+        clipPath: clipR > 0
+          ? new fabric.Rect({
+              width: nw,
+              height: nh,
+              rx: clipR,
+              ry: clipR,
+              originX: 'center',
+              originY: 'center',
+            })
+          : undefined,
+      }
+    }
+    default:
+      // 'tile' is handled at call site — fall through to stretch
+      return { scaleX: w / nw, scaleY: h / nh, cropX: 0, cropY: 0, cropWidth: nw, cropHeight: nh }
+  }
 }
 
 export interface FabricObjectWithPenId extends fabric.FabricObject {
@@ -368,35 +448,61 @@ export function createFabricObject(
       const w = sizeToNumber(node.width, 200)
       const h = sizeToNumber(node.height, 200)
       const r = Math.min(cornerRadiusValue(node.cornerRadius), h / 2)
+      const fitMode = node.objectFit ?? 'fill'
       const imgEl = new Image()
       imgEl.src = node.src
 
-      // Build a rounded-rect clipPath for corner radius
-      const makeImageClip = (cw: number, ch: number, cr: number) => {
-        if (cr <= 0) return undefined
-        return new fabric.Rect({
-          width: cw,
-          height: ch,
-          rx: cr,
-          ry: cr,
-          originX: 'center',
-          originY: 'center',
-        })
+      // Tile mode: use a Rect with a Pattern fill instead of FabricImage
+      if (fitMode === 'tile') {
+        const tileRect = new fabric.Rect({
+          ...baseProps,
+          width: w,
+          height: h,
+          rx: r,
+          ry: r,
+          fill: '#e5e7eb',
+          strokeWidth: 0,
+        }) as FabricObjectWithPenId
+        ;(tileRect as any).__objectFit = 'tile'
+        const applyTilePattern = () => {
+          const canvas = tileRect.canvas
+          tileRect.set({
+            fill: new fabric.Pattern({
+              source: imgEl,
+              repeat: 'repeat',
+            }),
+            dirty: true,
+          })
+          canvas?.requestRenderAll()
+        }
+        if (imgEl.complete) {
+          applyTilePattern()
+        } else {
+          tileRect.penNodeId = node.id
+          imgEl.onload = applyTilePattern
+        }
+        obj = tileRect
+        break
       }
 
       if (imgEl.complete) {
         const nw = imgEl.naturalWidth || w
         const nh = imgEl.naturalHeight || h
-        const clip = makeImageClip(nw, nh, r * nw / w)
+        const transform = computeImageTransform(nw, nh, w, h, fitMode, r)
         obj = new fabric.FabricImage(imgEl, {
           ...baseProps,
-          width: nw,
-          height: nh,
-          scaleX: w / nw,
-          scaleY: h / nh,
-          clipPath: clip ?? undefined,
-          objectCaching: !clip,
+          cropX: transform.cropX,
+          cropY: transform.cropY,
+          width: transform.cropWidth,
+          height: transform.cropHeight,
+          scaleX: transform.scaleX,
+          scaleY: transform.scaleY,
+          clipPath: transform.clipPath ?? undefined,
+          objectCaching: !transform.clipPath,
         }) as unknown as FabricObjectWithPenId
+        ;(obj as any).__objectFit = fitMode
+        ;(obj as any).__nativeWidth = nw
+        ;(obj as any).__nativeHeight = nh
       } else {
         // Placeholder while image loads
         const placeholder = new fabric.Rect({
@@ -409,21 +515,28 @@ export function createFabricObject(
           strokeWidth: 0,
         }) as FabricObjectWithPenId
         placeholder.penNodeId = node.id
+        ;(placeholder as any).__objectFit = fitMode
         imgEl.onload = () => {
           const canvas = placeholder.canvas
           if (!canvas) return
           const nw = imgEl.naturalWidth
           const nh = imgEl.naturalHeight
+          const transform = computeImageTransform(nw, nh, w, h, fitMode, r)
           const fabricImg = new fabric.FabricImage(imgEl, {
             ...baseProps,
             left: placeholder.left,
             top: placeholder.top,
-            width: nw,
-            height: nh,
-            scaleX: w / nw,
-            scaleY: h / nh,
+            cropX: transform.cropX,
+            cropY: transform.cropY,
+            width: transform.cropWidth,
+            height: transform.cropHeight,
+            scaleX: transform.scaleX,
+            scaleY: transform.scaleY,
           }) as unknown as FabricObjectWithPenId
           fabricImg.penNodeId = node.id
+          ;(fabricImg as any).__objectFit = fitMode
+          ;(fabricImg as any).__nativeWidth = nw
+          ;(fabricImg as any).__nativeHeight = nh
           fabricImg.set({
             borderColor: SELECTION_BLUE,
             borderScaleFactor: 2,
@@ -442,14 +555,13 @@ export function createFabricObject(
           fabricImg.visible = visible
           fabricImg.selectable = !locked
           fabricImg.evented = !locked
-          // Apply rounded-rect clip for corner radius
-          const clip = makeImageClip(nw, nh, r * nw / w)
-          if (clip) {
-            fabricImg.clipPath = clip
+          // Apply clipPath from transform (corner radius only)
+          if (transform.clipPath) {
+            fabricImg.clipPath = transform.clipPath
             fabricImg.objectCaching = false
           }
           // Preserve clipPath from placeholder so clipped-frame children stay clipped
-          if (!clip && placeholder.clipPath) {
+          if (!transform.clipPath && placeholder.clipPath) {
             fabricImg.clipPath = placeholder.clipPath
             fabricImg.dirty = true
           }
