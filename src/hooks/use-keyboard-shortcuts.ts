@@ -5,6 +5,11 @@ import { useDocumentStore } from '@/stores/document-store'
 import { useHistoryStore } from '@/stores/history-store'
 import { cloneNodesWithNewIds } from '@/utils/node-clone'
 import {
+  isFigmaHTML,
+  parseFigmaClipboard,
+  offsetToViewportCenter,
+} from '@/utils/figma-paste'
+import {
   supportsFileSystemAccess,
   writeToFileHandle,
   saveDocumentAs,
@@ -123,33 +128,7 @@ export function useKeyboardShortcuts() {
         return
       }
 
-      // Paste: Cmd/Ctrl+V
-      if (isMod && e.key === 'v' && !e.shiftKey) {
-        const { clipboard } = useCanvasStore.getState()
-        if (clipboard.length > 0) {
-          e.preventDefault()
-          const newIds: string[] = []
-          for (const original of clipboard) {
-            // Pasting a reusable component creates an instance (RefNode)
-            if ('reusable' in original && original.reusable) {
-              const component = useDocumentStore.getState().getNodeById(original.id)
-              if (component && 'reusable' in component && component.reusable) {
-                const newId = useDocumentStore.getState().duplicateNode(original.id)
-                if (newId) {
-                  newIds.push(newId)
-                  continue
-                }
-              }
-            }
-            // Regular paste for non-reusable nodes
-            const [cloned] = cloneNodesWithNewIds([original], 10)
-            useDocumentStore.getState().addNode(null, cloned)
-            newIds.push(cloned.id)
-          }
-          useCanvasStore.getState().setSelection(newIds, newIds[0] ?? null)
-        }
-        return
-      }
+      // Paste is handled by the 'paste' event listener below
 
       // Duplicate: Cmd/Ctrl+D
       if (isMod && e.key === 'd') {
@@ -182,7 +161,7 @@ export function useKeyboardShortcuts() {
           downloadDocument(doc, fileName)
           store.markClean()
         } else if (supportsFileSystemAccess()) {
-          saveDocumentAs(doc, 'untitled.op').then((result) => {
+          saveDocumentAs(doc, 'untitled.design').then((result) => {
             if (result) {
               useDocumentStore.setState({
                 fileName: result.fileName,
@@ -430,7 +409,82 @@ export function useKeyboardShortcuts() {
       }
     }
 
+    const handlePaste = (e: ClipboardEvent) => {
+      const target = e.target as HTMLElement
+      if (
+        target.tagName === 'INPUT' ||
+        target.tagName === 'TEXTAREA' ||
+        target.isContentEditable
+      ) {
+        return // let native paste work in text fields
+      }
+
+      const html = e.clipboardData?.getData('text/html') ?? ''
+
+      // Figma clipboard paste
+      if (isFigmaHTML(html)) {
+        e.preventDefault()
+        let nodes: ReturnType<typeof parseFigmaClipboard>
+        try {
+          nodes = parseFigmaClipboard(html)
+        } catch (err) {
+          console.error('[figma-paste] decode error:', err)
+          return
+        }
+        if (nodes.length === 0) return
+
+        // Center pasted content in the current viewport
+        const canvas = useCanvasStore.getState().fabricCanvas
+        if (canvas) {
+          const vpt = canvas.viewportTransform
+          const zoom = canvas.getZoom()
+          const cx = (-vpt[4] + canvas.getWidth() / 2) / zoom
+          const cy = (-vpt[5] + canvas.getHeight() / 2) / zoom
+          offsetToViewportCenter(nodes, cx, cy)
+        }
+
+        const newIds: string[] = []
+        for (const node of nodes) {
+          useDocumentStore.getState().addNode(null, node)
+          newIds.push(node.id)
+        }
+        useCanvasStore.getState().setSelection(newIds, newIds[0] ?? null)
+        return
+      }
+
+      // Internal clipboard paste (fallback)
+      const { clipboard } = useCanvasStore.getState()
+      if (clipboard.length > 0) {
+        e.preventDefault()
+        const newIds: string[] = []
+        for (const original of clipboard) {
+          if ('reusable' in original && original.reusable) {
+            const component = useDocumentStore
+              .getState()
+              .getNodeById(original.id)
+            if (component && 'reusable' in component && component.reusable) {
+              const newId = useDocumentStore
+                .getState()
+                .duplicateNode(original.id)
+              if (newId) {
+                newIds.push(newId)
+                continue
+              }
+            }
+          }
+          const [cloned] = cloneNodesWithNewIds([original], 10)
+          useDocumentStore.getState().addNode(null, cloned)
+          newIds.push(cloned.id)
+        }
+        useCanvasStore.getState().setSelection(newIds, newIds[0] ?? null)
+      }
+    }
+
     document.addEventListener('keydown', handleKeyDown)
-    return () => document.removeEventListener('keydown', handleKeyDown)
+    document.addEventListener('paste', handlePaste)
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown)
+      document.removeEventListener('paste', handlePaste)
+    }
   }, [])
 }
