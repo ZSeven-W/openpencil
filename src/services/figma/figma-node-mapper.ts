@@ -5,7 +5,7 @@ import type {
   FigmaMatrix,
   FigmaImportLayoutMode,
 } from './figma-types'
-import type { PenNode, PenPage, PenDocument, SizingBehavior } from '@/types/pen'
+import type { PenNode, PenPage, PenDocument, SizingBehavior, ImageFitMode } from '@/types/pen'
 import { mapFigmaFills } from './figma-fill-mapper'
 import { mapFigmaStroke } from './figma-stroke-mapper'
 import { mapFigmaEffects } from './figma-effect-mapper'
@@ -430,6 +430,7 @@ function convertFrame(
       type: 'image',
       ...commonProps(figma, id),
       src: getImageFillUrl(figma),
+      objectFit: getImageFitMode(figma),
       width: resolveWidth(figma, parentStackMode, ctx),
       height: resolveHeight(figma, parentStackMode, ctx),
       cornerRadius: mapCornerRadius(figma),
@@ -542,6 +543,7 @@ function convertRectangle(
       type: 'image',
       ...commonProps(figma, id),
       src: getImageFillUrl(figma),
+      objectFit: getImageFitMode(figma),
       width: resolveWidth(figma, parentStackMode, ctx),
       height: resolveHeight(figma, parentStackMode, ctx),
       cornerRadius: mapCornerRadius(figma),
@@ -575,6 +577,7 @@ function convertEllipse(
       type: 'image',
       ...commonProps(figma, id),
       src: getImageFillUrl(figma),
+      objectFit: getImageFitMode(figma),
       width: resolveWidth(figma, parentStackMode, ctx),
       height: resolveHeight(figma, parentStackMode, ctx),
       cornerRadius: Math.round((figma.size?.x ?? 100) / 2),
@@ -706,6 +709,19 @@ function figmaFillColor(figma: FigmaNodeChange): string | undefined {
 }
 
 // --- Helpers ---
+
+function getImageFitMode(figma: FigmaNodeChange): ImageFitMode | undefined {
+  const paint = figma.fillPaints?.find(
+    (f) => f.visible !== false && f.type === 'IMAGE',
+  )
+  if (!paint?.imageScaleMode) return undefined
+  switch (paint.imageScaleMode) {
+    case 'FIT': return 'fit'
+    case 'FILL': return 'fill'
+    case 'TILE': return 'tile'
+    default: return undefined
+  }
+}
 
 function hasOnlyImageFill(figma: FigmaNodeChange): boolean {
   if (!figma.fillPaints || figma.fillPaints.length === 0) return false
