@@ -666,3 +666,25 @@ function findSubstringFallback(normalizedName: string): string | null {
   }
   return best
 }
+
+/**
+ * Look up an icon by Figma node name. Returns { d, iconId, style } if matched.
+ * Uses exact match, prefix fallback, and substring fallback (same strategy as AI icon resolution).
+ */
+export function lookupIconByName(
+  name: string,
+): { d: string; iconId: string; style: 'stroke' | 'fill' } | null {
+  const normalized = name
+    .replace(/[-_\s/]+/g, '')
+    .replace(/icon$/i, '')
+    .toLowerCase()
+  if (!normalized) return null
+
+  const entry =
+    ICON_PATH_MAP[normalized] ??
+    ICON_PATH_MAP[findPrefixFallback(normalized) ?? ''] ??
+    ICON_PATH_MAP[findSubstringFallback(normalized) ?? '']
+
+  if (!entry) return null
+  return { d: entry.d, iconId: entry.iconId, style: entry.style }
+}

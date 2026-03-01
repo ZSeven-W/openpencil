@@ -7,6 +7,7 @@ import type {
   CanvasInteraction,
 } from '@/types/canvas'
 import type { PenNode } from '@/types/pen'
+import { DEFAULT_PAGE_ID } from '@/stores/document-tree-utils'
 
 interface CanvasStoreState {
   activeTool: ToolType
@@ -17,6 +18,8 @@ interface CanvasStoreState {
   clipboard: PenNode[]
   layerPanelOpen: boolean
   variablesPanelOpen: boolean
+  figmaImportDialogOpen: boolean
+  activePageId: string | null
 
   setActiveTool: (tool: ToolType) => void
   setZoom: (zoom: number) => void
@@ -32,6 +35,8 @@ interface CanvasStoreState {
   setClipboard: (nodes: PenNode[]) => void
   toggleLayerPanel: () => void
   toggleVariablesPanel: () => void
+  setFigmaImportDialogOpen: (open: boolean) => void
+  setActivePageId: (pageId: string | null) => void
 }
 
 export const useCanvasStore = create<CanvasStoreState>((set) => ({
@@ -48,6 +53,8 @@ export const useCanvasStore = create<CanvasStoreState>((set) => ({
   clipboard: [],
   layerPanelOpen: true,
   variablesPanelOpen: false,
+  figmaImportDialogOpen: false,
+  activePageId: DEFAULT_PAGE_ID,
 
   setActiveTool: (tool) => set({ activeTool: tool }),
 
@@ -114,4 +121,6 @@ export const useCanvasStore = create<CanvasStoreState>((set) => ({
 
   toggleLayerPanel: () => set((s) => ({ layerPanelOpen: !s.layerPanelOpen })),
   toggleVariablesPanel: () => set((s) => ({ variablesPanelOpen: !s.variablesPanelOpen })),
+  setFigmaImportDialogOpen: (open) => set({ figmaImportDialogOpen: open }),
+  setActivePageId: (activePageId) => set({ activePageId }),
 }))

@@ -1,4 +1,5 @@
 import type { PenDocument, PenNode } from '@/types/pen'
+import { getAllChildren } from '@/stores/document-tree-utils'
 import type { ComponentCategory, KitComponent } from '@/types/uikit'
 
 /**
@@ -9,7 +10,7 @@ export function extractComponentsFromDocument(
   metaOverrides?: Record<string, { category: ComponentCategory; tags: string[] }>,
 ): KitComponent[] {
   const components: KitComponent[] = []
-  walkTree(doc.children, (node) => {
+  walkTree(getAllChildren(doc), (node) => {
     if ('reusable' in node && node.reusable) {
       const w = 'width' in node && typeof node.width === 'number' ? node.width : 100
       const h = 'height' in node && typeof node.height === 'number' ? node.height : 100
@@ -31,7 +32,7 @@ export function extractComponentsFromDocument(
  * Find a specific node in a document tree by ID.
  */
 export function findReusableNode(doc: PenDocument, nodeId: string): PenNode | undefined {
-  return findInTree(doc.children, nodeId)
+  return findInTree(getAllChildren(doc), nodeId)
 }
 
 /**

@@ -13,6 +13,8 @@ interface CodexExecOptions {
   thinkingBudgetTokens?: number
   effort?: ThinkingEffort
   timeoutMs?: number
+  /** Paths to temporary image files to reference in the prompt */
+  imageFiles?: string[]
 }
 
 interface CodexCliResult {
@@ -28,7 +30,7 @@ export async function runCodexExec(
 ): Promise<CodexCliResult> {
   const tempDir = await mkdtemp(join(tmpdir(), 'openpencil-codex-'))
   const outputPath = join(tempDir, 'last-message.txt')
-  const prompt = buildPrompt(options.systemPrompt, userPrompt)
+  const prompt = buildPrompt(options.systemPrompt, userPrompt, options.imageFiles)
   const codexEffort = resolveCodexEffort(options.thinkingMode, options.effort)
 
   const args = [
@@ -75,10 +77,14 @@ export async function runCodexExec(
   }
 }
 
-function buildPrompt(systemPrompt: string | undefined, userPrompt: string): string {
+function buildPrompt(systemPrompt: string | undefined, userPrompt: string, imageFiles?: string[]): string {
   const userText = userPrompt.trim()
+  const imageSection = imageFiles && imageFiles.length > 0
+    ? '\n' + imageFiles.map((f) => `[Attached image: ${f} — read this file to see the image]`).join('\n')
+    : ''
+
   if (!systemPrompt?.trim()) {
-    return userText
+    return userText + imageSection
   }
 
   return [
@@ -86,7 +92,7 @@ function buildPrompt(systemPrompt: string | undefined, userPrompt: string): stri
     systemPrompt.trim(),
     '',
     'USER REQUEST:',
-    userText,
+    userText + imageSection,
   ].join('\n')
 }
 

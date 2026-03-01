@@ -8,7 +8,8 @@ const cache = new Map<string, { doc: PenDocument; mtime: number }>()
 function validate(doc: unknown): doc is PenDocument {
   if (!doc || typeof doc !== 'object') return false
   const d = doc as Record<string, unknown>
-  return typeof d.version === 'string' && Array.isArray(d.children)
+  // Accept docs with children array or pages array
+  return typeof d.version === 'string' && (Array.isArray(d.children) || Array.isArray(d.pages))
 }
 
 /** Read and parse a .op / .pen file, returning a PenDocument. Uses cache. */

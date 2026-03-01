@@ -1,4 +1,5 @@
 import type { PenDocument, PenNode, ContainerProps, TextNode } from '@/types/pen'
+import { getActivePageChildren } from '@/stores/document-tree-utils'
 import type { PenFill, PenStroke, PenEffect, ShadowEffect } from '@/types/styles'
 import { isVariableRef } from '@/variables/resolve-variables'
 import { variableNameToCSS, generateCSSVariables } from '@/services/codegen/css-variables-generator'
@@ -352,8 +353,11 @@ export function generateHTMLCode(nodes: PenNode[]): { html: string; css: string 
   return { html, css }
 }
 
-export function generateHTMLFromDocument(doc: PenDocument): { html: string; css: string } {
-  const result = generateHTMLCode(doc.children)
+export function generateHTMLFromDocument(doc: PenDocument, activePageId?: string | null): { html: string; css: string } {
+  const children = activePageId !== undefined
+    ? getActivePageChildren(doc, activePageId)
+    : doc.children
+  const result = generateHTMLCode(children)
   const varsCSS = doc.variables && Object.keys(doc.variables).length > 0
     ? generateCSSVariables(doc)
     : ''

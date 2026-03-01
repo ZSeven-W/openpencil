@@ -27,6 +27,7 @@ export interface ElectronAPI {
     defaultPath?: string,
   ) => Promise<string | null>
   saveToPath: (filePath: string, content: string) => Promise<string>
+  onMenuAction: (callback: (action: string) => void) => () => void
   updater: {
     getState: () => Promise<UpdaterState>
     checkForUpdates: () => Promise<UpdaterState>
@@ -45,6 +46,16 @@ const api: ElectronAPI = {
 
   saveToPath: (filePath: string, content: string) =>
     ipcRenderer.invoke('dialog:saveToPath', { filePath, content }),
+
+  onMenuAction: (callback: (action: string) => void) => {
+    const listener = (_event: IpcRendererEvent, action: string) => {
+      callback(action)
+    }
+    ipcRenderer.on('menu:action', listener)
+    return () => {
+      ipcRenderer.removeListener('menu:action', listener)
+    }
+  },
 
   updater: {
     getState: () => ipcRenderer.invoke('updater:getState'),

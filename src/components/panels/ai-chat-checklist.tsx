@@ -36,6 +36,9 @@ export function FixedChecklist({ messages, isStreaming }: { messages: ChatMessag
 
   const completed = items.filter((item) => item.done).length
 
+  // Hide checklist when streaming stopped with nothing completed
+  if (!isStreaming && completed === 0) return null
+
   return (
     <div className="shrink-0 border-t border-border bg-card/95">
       <button

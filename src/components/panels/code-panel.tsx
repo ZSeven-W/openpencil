@@ -3,7 +3,7 @@ import { Copy, Check, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { useCanvasStore } from '@/stores/canvas-store'
-import { useDocumentStore } from '@/stores/document-store'
+import { useDocumentStore, getActivePageChildren } from '@/stores/document-store'
 import { generateReactCode } from '@/services/codegen/react-generator'
 import { generateHTMLCode } from '@/services/codegen/html-generator'
 import { generateCSSVariables } from '@/services/codegen/css-variables-generator'
@@ -17,7 +17,8 @@ export default function CodePanel({ onClose }: { onClose: () => void }) {
   const [copied, setCopied] = useState(false)
   const copyTimeoutRef = useRef<ReturnType<typeof setTimeout>>(null)
   const selectedIds = useCanvasStore((s) => s.selection.selectedIds)
-  const children = useDocumentStore((s) => s.document.children)
+  const activePageId = useCanvasStore((s) => s.activePageId)
+  const children = useDocumentStore((s) => getActivePageChildren(s.document, activePageId))
   const getNodeById = useDocumentStore((s) => s.getNodeById)
 
   // Force re-render when document changes

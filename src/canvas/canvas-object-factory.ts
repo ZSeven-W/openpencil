@@ -205,9 +205,9 @@ export function createFabricObject(
   switch (node.type) {
     case 'frame': {
       // Frames without explicit fill are transparent containers
-      const r = cornerRadiusValue(node.cornerRadius)
       const w = sizeToNumber(node.width, 100)
       const h = sizeToNumber(node.height, 100)
+      const r = Math.min(cornerRadiusValue(node.cornerRadius), h / 2)
       const hasFill = node.fill && node.fill.length > 0
       obj = new fabric.Rect({
         ...baseProps,
@@ -222,9 +222,9 @@ export function createFabricObject(
       break
     }
     case 'rectangle': {
-      const r = cornerRadiusValue(node.cornerRadius)
       const w = sizeToNumber(node.width, 100)
       const h = sizeToNumber(node.height, 100)
+      const r = Math.min(cornerRadiusValue(node.cornerRadius), h / 2)
       obj = new fabric.Rect({
         ...baseProps,
         width: w,
@@ -367,18 +367,35 @@ export function createFabricObject(
     case 'image': {
       const w = sizeToNumber(node.width, 200)
       const h = sizeToNumber(node.height, 200)
-      const r = cornerRadiusValue(node.cornerRadius)
+      const r = Math.min(cornerRadiusValue(node.cornerRadius), h / 2)
       const imgEl = new Image()
       imgEl.src = node.src
+
+      // Build a rounded-rect clipPath for corner radius
+      const makeImageClip = (cw: number, ch: number, cr: number) => {
+        if (cr <= 0) return undefined
+        return new fabric.Rect({
+          width: cw,
+          height: ch,
+          rx: cr,
+          ry: cr,
+          originX: 'center',
+          originY: 'center',
+        })
+      }
+
       if (imgEl.complete) {
+        const nw = imgEl.naturalWidth || w
+        const nh = imgEl.naturalHeight || h
+        const clip = makeImageClip(nw, nh, r * nw / w)
         obj = new fabric.FabricImage(imgEl, {
           ...baseProps,
-          width: imgEl.naturalWidth || w,
-          height: imgEl.naturalHeight || h,
-          scaleX: w / (imgEl.naturalWidth || w),
-          scaleY: h / (imgEl.naturalHeight || h),
-          rx: r,
-          ry: r,
+          width: nw,
+          height: nh,
+          scaleX: w / nw,
+          scaleY: h / nh,
+          clipPath: clip ?? undefined,
+          objectCaching: !clip,
         }) as unknown as FabricObjectWithPenId
       } else {
         // Placeholder while image loads
@@ -395,16 +412,16 @@ export function createFabricObject(
         imgEl.onload = () => {
           const canvas = placeholder.canvas
           if (!canvas) return
+          const nw = imgEl.naturalWidth
+          const nh = imgEl.naturalHeight
           const fabricImg = new fabric.FabricImage(imgEl, {
             ...baseProps,
             left: placeholder.left,
             top: placeholder.top,
-            width: imgEl.naturalWidth,
-            height: imgEl.naturalHeight,
-            scaleX: w / imgEl.naturalWidth,
-            scaleY: h / imgEl.naturalHeight,
-            rx: r,
-            ry: r,
+            width: nw,
+            height: nh,
+            scaleX: w / nw,
+            scaleY: h / nh,
           }) as unknown as FabricObjectWithPenId
           fabricImg.penNodeId = node.id
           fabricImg.set({
@@ -425,8 +442,26 @@ export function createFabricObject(
           fabricImg.visible = visible
           fabricImg.selectable = !locked
           fabricImg.evented = !locked
+          // Apply rounded-rect clip for corner radius
+          const clip = makeImageClip(nw, nh, r * nw / w)
+          if (clip) {
+            fabricImg.clipPath = clip
+            fabricImg.objectCaching = false
+          }
+          // Preserve clipPath from placeholder so clipped-frame children stay clipped
+          if (!clip && placeholder.clipPath) {
+            fabricImg.clipPath = placeholder.clipPath
+            fabricImg.dirty = true
+          }
+          // Preserve z-order: insert at placeholder's index instead of
+          // appending to end (which would put the image on top of everything)
+          const idx = canvas.getObjects().indexOf(placeholder)
           canvas.remove(placeholder)
-          canvas.add(fabricImg)
+          if (idx >= 0) {
+            canvas.insertAt(idx, fabricImg)
+          } else {
+            canvas.add(fabricImg)
+          }
           canvas.requestRenderAll()
         }
         obj = placeholder

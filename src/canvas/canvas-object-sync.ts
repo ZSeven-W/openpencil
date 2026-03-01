@@ -76,7 +76,7 @@ export function syncFabricObject(
         strokeWidth: resolveStrokeWidth(node.stroke),
       })
       if ('rx' in obj) {
-        const r = cornerRadiusValue(node.cornerRadius)
+        const r = Math.min(cornerRadiusValue(node.cornerRadius), h / 2)
         obj.set({ rx: r, ry: r })
       }
       break
@@ -93,7 +93,7 @@ export function syncFabricObject(
         strokeWidth: resolveStrokeWidth(node.stroke),
       })
       if ('rx' in obj) {
-        const r = cornerRadiusValue(node.cornerRadius)
+        const r = Math.min(cornerRadiusValue(node.cornerRadius), h / 2)
         obj.set({ rx: r, ry: r })
       }
       break
@@ -146,6 +146,43 @@ export function syncFabricObject(
       if (obj instanceof fabric.Textbox) {
         obj.set({ splitByGrapheme } as Partial<fabric.Textbox>)
         if (fixedWidthText && w > 0) obj.set({ width: w })
+      }
+      break
+    }
+    case 'image': {
+      const w = sizeToNumber(node.width, 200)
+      const h = sizeToNumber(node.height, 200)
+      const r = Math.min(cornerRadiusValue(node.cornerRadius), h / 2)
+      // Update scale to reflect target size over natural dimensions
+      const nw = obj.width || w
+      const nh = obj.height || h
+      obj.set({
+        scaleX: w / nw,
+        scaleY: h / nh,
+      })
+      // Apply or remove rounded-rect clipPath for corner radius.
+      // Disable objectCaching so clipPath updates render immediately
+      // without relying on Fabric's cache invalidation.
+      if (r > 0) {
+        const clipR = r * nw / w
+        obj.set({
+          clipPath: new fabric.Rect({
+            width: nw,
+            height: nh,
+            rx: clipR,
+            ry: clipR,
+            originX: 'center',
+            originY: 'center',
+          }),
+          objectCaching: false,
+          dirty: true,
+        })
+      } else {
+        obj.set({
+          clipPath: undefined,
+          objectCaching: true,
+          dirty: true,
+        })
       }
       break
     }

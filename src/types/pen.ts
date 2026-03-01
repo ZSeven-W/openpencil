@@ -6,6 +6,14 @@ import type {
 } from './styles'
 import type { VariableDefinition } from './variables'
 
+// --- Page ---
+
+export interface PenPage {
+  id: string
+  name: string
+  children: PenNode[]
+}
+
 // --- Document Root ---
 
 export interface PenDocument {
@@ -13,6 +21,7 @@ export interface PenDocument {
   name?: string
   themes?: Record<string, string[]>
   variables?: Record<string, VariableDefinition>
+  pages?: PenPage[]
   children: PenNode[]
 }
 

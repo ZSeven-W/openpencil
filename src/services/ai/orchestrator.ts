@@ -21,7 +21,6 @@ import type {
 import { streamChat } from './ai-service'
 import { ORCHESTRATOR_PROMPT } from './orchestrator-prompts'
 import {
-  buildFallbackPlanFromPrompt,
   getOrchestratorTimeouts,
   prepareDesignPrompt,
 } from './orchestrator-prompt-optimizer'
@@ -31,8 +30,9 @@ import {
   resetGenerationRemapping,
   setGenerationContextHint,
   setGenerationCanvasWidth,
+  getGenerationRootFrameId,
 } from './design-generator'
-import { DEFAULT_FRAME_ID, useDocumentStore } from '@/stores/document-store'
+import { useDocumentStore } from '@/stores/document-store'
 import { useHistoryStore } from '@/stores/history-store'
 import { zoomToFitContent } from '@/canvas/use-fabric-canvas'
 import { resetAnimationState } from './design-animation'
@@ -51,6 +51,7 @@ export async function executeOrchestration(
     onTextUpdate?: (text: string) => void
     animated?: boolean
   },
+  abortSignal?: AbortSignal,
 ): Promise<{ nodes: PenNode[]; rawResponse: string }> {
   setGenerationContextHint(request.prompt)
   const animated = callbacks?.animated ?? false
@@ -62,32 +63,18 @@ export async function executeOrchestration(
     )
   }
 
-  if (preparedPrompt.wasCompressed) {
-    console.log(
-      '[Orchestrator] Compressed long prompt:',
-      `${preparedPrompt.originalLength} -> ${preparedPrompt.subAgentPrompt.length} chars`,
-    )
-  }
-
   try {
     // -- Phase 1: Planning (streaming) --
     renderPlanningStatus('Analyzing design structure...')
 
-    let plan: OrchestratorPlan
-    try {
-      plan = await callOrchestrator(
-        preparedPrompt.orchestratorPrompt,
-        preparedPrompt.originalLength,
-        (thinking) => {
-          renderPlanningStatus(thinking)
-        },
-      )
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Unknown orchestrator error'
-      console.warn('[Orchestrator] Planner failed, using fallback plan:', message)
-      renderPlanningStatus('Planner timeout, switching to fallback layout plan...')
-      plan = buildFallbackPlanFromPrompt(preparedPrompt.orchestratorPrompt)
-    }
+    const plan = await callOrchestrator(
+      preparedPrompt.orchestratorPrompt,
+      preparedPrompt.originalLength,
+      (thinking) => {
+        renderPlanningStatus(thinking)
+      },
+      abortSignal,
+    )
 
     // Assign ID prefixes
     for (const st of plan.subtasks) {
@@ -168,6 +155,7 @@ export async function executeOrchestration(
         preparedPrompt,
         progress,
         callbacks,
+        abortSignal,
       )
       if (animated) {
         adjustRootFrameHeightToContent()
@@ -179,13 +167,25 @@ export async function executeOrchestration(
     }
 
     // -- Phase 4: Collect results --
-    // Mark all completed subtasks as done in final progress
-    for (const entry of progress.subtasks) {
-      if (entry.status !== 'error') {
-        entry.status = 'done'
+    const aborted = abortSignal?.aborted ?? false
+
+    if (!aborted) {
+      // Only mark all as done when generation completed naturally
+      for (const entry of progress.subtasks) {
+        if (entry.status !== 'error') {
+          entry.status = 'done'
+        }
       }
+      progress.phase = 'done'
+    } else {
+      // User stopped: keep actual per-step status, mark streaming steps as pending
+      for (const entry of progress.subtasks) {
+        if (entry.status === 'streaming') {
+          entry.status = 'pending'
+        }
+      }
+      progress.phase = 'done'
     }
-    progress.phase = 'done'
     emitProgress(plan, progress, callbacks)
 
     const allNodes: PenNode[] = [rootNode]
@@ -194,54 +194,55 @@ export async function executeOrchestration(
     }
 
     const generatedNodeCount = allNodes.length - 1
-    if (generatedNodeCount === 0) {
+    if (generatedNodeCount === 0 && !aborted) {
       throw new Error('Orchestration produced no nodes beyond root frame')
     }
 
     if (!animated) {
       adjustRootFrameHeightToContent()
     }
-    const adjustedRoot = useDocumentStore.getState().getNodeById(DEFAULT_FRAME_ID)
+    const adjustedRoot = useDocumentStore.getState().getNodeById(getGenerationRootFrameId())
     if (adjustedRoot && adjustedRoot.type === 'frame') {
       rootNode.height = adjustedRoot.height
     }
 
-    // -- Phase 5: Visual validation (optional, non-blocking) --
-    const validationEntry: OrchestrationProgress['subtasks'][number] = {
-      id: '_validation',
-      label: 'Validating design',
-      status: 'pending',
-      nodeCount: 0,
-    }
-    progress.subtasks.push(validationEntry)
-    // Also add to plan.subtasks so buildFinalStepTags includes it
-    plan.subtasks.push({
-      id: '_validation',
-      label: 'Validating design',
-      region: { width: 0, height: 0 },
-      idPrefix: '_validation',
-      parentFrameId: null,
-    })
-    emitProgress(plan, progress, callbacks)
-
-    try {
-      const validationResult = await runPostGenerationValidation({
-        onStatusUpdate: (status, message) => {
-          validationEntry.status = status === 'streaming' ? 'streaming' : status === 'done' ? 'done' : status === 'error' ? 'error' : 'pending'
-          validationEntry.thinking = message
-          emitProgress(plan, progress, callbacks)
-        },
-      })
-      if (validationResult.applied > 0) {
-        validationEntry.nodeCount = validationResult.applied
+    // -- Phase 5: Visual validation (skip if user stopped) --
+    if (!aborted) {
+      const validationEntry: OrchestrationProgress['subtasks'][number] = {
+        id: '_validation',
+        label: 'Validating design',
+        status: 'pending',
+        nodeCount: 0,
       }
-      validationEntry.status = 'done'
-    } catch (err) {
-      console.warn('[Orchestrator] Validation failed (non-blocking):', err instanceof Error ? err.message : err)
-      validationEntry.status = 'done'
-      validationEntry.thinking = 'Skipped'
+      progress.subtasks.push(validationEntry)
+      // Also add to plan.subtasks so buildFinalStepTags includes it
+      plan.subtasks.push({
+        id: '_validation',
+        label: 'Validating design',
+        region: { width: 0, height: 0 },
+        idPrefix: '_validation',
+        parentFrameId: null,
+      })
+      emitProgress(plan, progress, callbacks)
+
+      try {
+        const validationResult = await runPostGenerationValidation({
+          onStatusUpdate: (status, message) => {
+            validationEntry.status = status === 'streaming' ? 'streaming' : status === 'done' ? 'done' : status === 'error' ? 'error' : 'pending'
+            validationEntry.thinking = message
+            emitProgress(plan, progress, callbacks)
+          },
+        })
+        if (validationResult.applied > 0) {
+          validationEntry.nodeCount = validationResult.applied
+        }
+        validationEntry.status = 'done'
+      } catch {
+        validationEntry.status = 'done'
+        validationEntry.thinking = 'Skipped'
+      }
+      emitProgress(plan, progress, callbacks)
     }
-    emitProgress(plan, progress, callbacks)
 
     // Build final rawResponse that includes step tags so the chat message
     // shows the complete pipeline progress after streaming ends
@@ -262,9 +263,8 @@ async function callOrchestrator(
   prompt: string,
   timeoutHintLength: number,
   onThinking?: (thinking: string) => void,
+  abortSignal?: AbortSignal,
 ): Promise<OrchestratorPlan> {
-  console.log('[Orchestrator] Calling streamChat...')
-
   let rawResponse = ''
   let thinkingContent = ''
 
@@ -273,6 +273,8 @@ async function callOrchestrator(
     [{ role: 'user', content: prompt }],
     undefined,
     getOrchestratorTimeouts(timeoutHintLength),
+    undefined,
+    abortSignal,
   )) {
     if (chunk.type === 'text') {
       rawResponse += chunk.content
@@ -280,19 +282,15 @@ async function callOrchestrator(
       thinkingContent += chunk.content
       onThinking?.(thinkingContent)
     } else if (chunk.type === 'error') {
-      throw new Error(`Orchestrator failed: ${chunk.content}`)
+      throw new Error(chunk.content)
     }
   }
 
-  console.log('[Orchestrator] Raw response:', rawResponse.slice(0, 500))
-
   const plan = parseOrchestratorResponse(rawResponse)
   if (!plan) {
-    console.error('[Orchestrator] Failed to parse plan from:', rawResponse.slice(0, 500))
     throw new Error('Failed to parse orchestrator plan')
   }
 
-  console.log('[Orchestrator] Plan:', plan.subtasks.length, 'subtasks')
   return plan
 }
 

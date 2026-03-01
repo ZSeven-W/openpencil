@@ -1,6 +1,6 @@
 import { resolve } from 'node:path'
 import { openDocument } from '../document-manager'
-import { computeLayoutTree, type LayoutEntry } from '../utils/node-operations'
+import { computeLayoutTree, getDocChildren, type LayoutEntry } from '../utils/node-operations'
 
 export interface SnapshotLayoutParams {
   filePath: string
@@ -16,7 +16,8 @@ export async function handleSnapshotLayout(
 
   const maxDepth = params.maxDepth ?? 1
 
-  let nodes = doc.children
+  const docChildren = getDocChildren(doc)
+  let nodes = docChildren
   if (params.parentId) {
     const findNode = (
       list: typeof nodes,
@@ -31,7 +32,7 @@ export async function handleSnapshotLayout(
       }
       return undefined
     }
-    const parent = findNode(doc.children, params.parentId)
+    const parent = findNode(docChildren, params.parentId)
     if (!parent) {
       throw new Error(`Node not found: ${params.parentId}`)
     }
@@ -39,6 +40,6 @@ export async function handleSnapshotLayout(
       'children' in parent && parent.children ? parent.children : []
   }
 
-  const layout = computeLayoutTree(nodes, doc.children, maxDepth)
+  const layout = computeLayoutTree(nodes, docChildren, maxDepth)
   return { layout }
 }
