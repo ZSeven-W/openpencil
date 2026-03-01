@@ -27,6 +27,7 @@ mac:
     - zip
   hardenedRuntime: true
   gatekeeperAssess: false
+  notarize: true
 
 dmg:
   title: "${productName} ${version}"
