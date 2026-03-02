@@ -254,12 +254,9 @@ export default function FigmaImportDialog({ open, onClose }: FigmaImportDialogPr
                   保持 Figma 布局
                 </button>
                 <button
-                  className={`flex-1 px-3 py-1.5 rounded text-xs transition-colors ${
-                    layoutMode === 'openpencil'
-                      ? 'bg-primary text-primary-foreground'
-                      : 'bg-secondary text-foreground hover:bg-secondary/80'
-                  }`}
-                  onClick={() => setLayoutMode('openpencil')}
+                  className="flex-1 px-3 py-1.5 rounded text-xs transition-colors bg-secondary text-muted-foreground cursor-not-allowed opacity-50"
+                  disabled
+                  title="即将支持"
                 >
                   OpenPencil 自动布局
                 </button>
