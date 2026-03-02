@@ -30,7 +30,10 @@ async function readDebugTail(path?: string, maxLines = 40): Promise<string[] | u
   try {
     const raw = await readFile(path, 'utf-8')
     const lines = raw.split('\n').filter((l) => l.trim().length > 0)
-    return lines.slice(-maxLines)
+    const sanitized = lines.filter(l =>
+      !/ANTHROPIC_API_KEY=|Authorization:\s*Bearer|api[_-]?key\s*[:=]/i.test(l)
+    )
+    return sanitized.slice(-maxLines)
   } catch {
     return undefined
   }
@@ -118,16 +121,18 @@ async function saveAttachmentsToTempFiles(
 ): Promise<{ tempDir: string; files: string[] }> {
   let tempDir: string
   if (insideProject) {
-    const { mkdirSync } = await import('node:fs')
+    const { mkdirSync, chmodSync } = await import('node:fs')
     const baseDir = join(process.cwd(), '.openpencil-tmp')
-    mkdirSync(baseDir, { recursive: true })
+    mkdirSync(baseDir, { recursive: true, mode: 0o700 })
+    chmodSync(baseDir, 0o700)
     tempDir = await mkdtemp(join(baseDir, 'attach-'))
   } else {
     tempDir = await mkdtemp(join(tmpdir(), 'openpencil-attach-'))
   }
+  const ALLOWED_MEDIA = new Set(['image/png', 'image/jpeg', 'image/gif', 'image/webp'])
   const files: string[] = []
   for (const att of attachments) {
-    const ext = att.mediaType.split('/')[1] || 'png'
+    const ext = ALLOWED_MEDIA.has(att.mediaType) ? att.mediaType.split('/')[1] : 'png'
     const filePath = join(tempDir, `${files.length}.${ext}`)
     await writeFile(filePath, Buffer.from(att.data, 'base64'))
     files.push(filePath)
