@@ -125,7 +125,11 @@ async function executeCodexCommand(
 ): Promise<{ text: string; errors: string[] }> {
   return await new Promise((resolve, reject) => {
     const child = spawn('codex', args, {
-      env: process.env,
+      env: Object.fromEntries(
+        Object.entries(process.env).filter(([k]) =>
+          !k.startsWith('ANTHROPIC_') && !k.startsWith('CLAUDE_')
+        ),
+      ),
       stdio: ['ignore', 'pipe', 'pipe'],
     })
 
