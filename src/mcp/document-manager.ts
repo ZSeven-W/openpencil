@@ -1,6 +1,7 @@
 import { readFile, writeFile, access } from 'node:fs/promises'
 import { constants } from 'node:fs'
 import type { PenDocument } from '../types/pen'
+import { sanitizeObject } from './utils/sanitize'
 
 const cache = new Map<string, { doc: PenDocument; mtime: number }>()
 
@@ -20,11 +21,12 @@ export async function openDocument(filePath: string): Promise<PenDocument> {
   await access(filePath, constants.R_OK)
   const text = await readFile(filePath, 'utf-8')
   const raw = JSON.parse(text)
-  if (!validate(raw)) {
+  const sanitized = sanitizeObject(raw)
+  if (!validate(sanitized)) {
     throw new Error(`Invalid document format: ${filePath}`)
   }
-  cache.set(filePath, { doc: raw, mtime: Date.now() })
-  return raw
+  cache.set(filePath, { doc: sanitized, mtime: Date.now() })
+  return sanitized
 }
 
 /** Create a new empty document (not saved to disk yet). */
