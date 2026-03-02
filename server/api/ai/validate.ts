@@ -23,11 +23,10 @@ function shouldRetryClaudeWithoutModel(raw: string): boolean {
 /**
  * Vision-based validation endpoint.
  * Accepts a base64 PNG screenshot and a text prompt, sends multimodal
- * content blocks for analysis.
+ * content blocks for analysis via Agent SDK.
  *
- * - Anthropic API key: uses SDK multimodal content blocks directly.
- * - Agent SDK fallback: saves screenshot to temp file, asks Claude Code
- *   to read it via its built-in Read tool.
+ * Saves screenshot to temp file, asks Claude Code to read it via its
+ * built-in Read tool.
  */
 export default defineEventHandler(async (event) => {
   const body = await readBody<ValidateBody>(event)
@@ -37,17 +36,6 @@ export default defineEventHandler(async (event) => {
     return { error: 'Missing required fields: system, message, imageBase64' }
   }
 
-  // Try Anthropic SDK first (direct multimodal support)
-  const apiKey = process.env.ANTHROPIC_API_KEY
-  if (apiKey) {
-    try {
-      return await validateViaAnthropicSDK(apiKey, body, body.model)
-    } catch {
-      // Fall through to Agent SDK
-    }
-  }
-
-  // Fallback: Agent SDK — save screenshot to temp file, let Claude read it
   try {
     return await validateViaAgentSDK(body, body.model)
   } catch (error) {
@@ -55,46 +43,6 @@ export default defineEventHandler(async (event) => {
     return { error: message }
   }
 })
-
-async function validateViaAnthropicSDK(
-  apiKey: string,
-  body: ValidateBody,
-  model?: string,
-): Promise<{ text: string; skipped?: boolean }> {
-  const { default: Anthropic } = await import('@anthropic-ai/sdk')
-  const client = new Anthropic({ apiKey })
-
-  // Strip data URL prefix if present
-  let base64Data = body.imageBase64
-  const dataUrlPrefix = 'data:image/png;base64,'
-  if (base64Data.startsWith(dataUrlPrefix)) {
-    base64Data = base64Data.slice(dataUrlPrefix.length)
-  }
-
-  const response = await client.messages.create({
-    model: model || 'claude-sonnet-4-5-20250929',
-    max_tokens: 4096,
-    system: body.system,
-    messages: [
-      {
-        role: 'user',
-        content: [
-          {
-            type: 'image',
-            source: { type: 'base64', media_type: 'image/png', data: base64Data },
-          },
-          {
-            type: 'text',
-            text: body.message,
-          },
-        ],
-      },
-    ],
-  })
-
-  const textBlock = response.content.find((b: { type: string }) => b.type === 'text')
-  return { text: textBlock && 'text' in textBlock ? textBlock.text : '' }
-}
 
 /**
  * Agent SDK fallback: save screenshot to a temp PNG file, then ask Claude

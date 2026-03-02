@@ -22,8 +22,8 @@ function shouldRetryClaudeWithoutModel(raw: string): boolean {
 
 /**
  * Non-streaming AI generation endpoint.
- * Tries ANTHROPIC_API_KEY first (via Anthropic SDK);
- * falls back to local Claude Code (via Agent SDK, uses OAuth login).
+ * Routes to the appropriate provider SDK based on the `provider` field.
+ * Default: Claude Code (via Agent SDK, uses OAuth login).
  */
 export default defineEventHandler(async (event) => {
   const body = await readBody<GenerateBody>(event)
@@ -41,37 +41,8 @@ export default defineEventHandler(async (event) => {
     return generateViaCodex(body, body.model)
   }
 
-  // Default: existing behavior (backward-compatible)
-  const apiKey = process.env.ANTHROPIC_API_KEY
-  if (apiKey) {
-    try {
-      return await generateViaAnthropicSDK(apiKey, body, body.model)
-    } catch {
-      // SDK not installed or failed — fall back to Agent SDK
-    }
-  }
   return generateViaAgentSDK(body, body.model)
 })
-
-/** Generate via Anthropic SDK */
-async function generateViaAnthropicSDK(apiKey: string, body: GenerateBody, model?: string) {
-  try {
-    const { default: Anthropic } = await import('@anthropic-ai/sdk')
-    const client = new Anthropic({ apiKey })
-    const response = await client.messages.create({
-      model: model || 'claude-sonnet-4-5-20250929',
-      max_tokens: 4096,
-      system: body.system,
-      messages: [{ role: 'user', content: body.message }],
-    })
-
-    const textBlock = response.content.find((b: { type: string }) => b.type === 'text')
-    return { text: textBlock && 'text' in textBlock ? textBlock.text : '' }
-  } catch (error) {
-    const message = error instanceof Error ? error.message : 'Unknown error'
-    return { error: message }
-  }
-}
 
 /** Generate via Claude Agent SDK (uses local Claude Code OAuth login, no API key needed) */
 async function generateViaAgentSDK(body: GenerateBody, model?: string): Promise<{ text?: string; error?: string }> {

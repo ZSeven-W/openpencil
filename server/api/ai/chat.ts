@@ -62,8 +62,8 @@ function buildClaudeExitHint(rawError: string, debugTail?: string[]): string | u
 
 /**
  * Streaming chat endpoint.
- * Tries ANTHROPIC_API_KEY first (via Anthropic SDK);
- * falls back to local Claude Code (via Agent SDK, uses OAuth login).
+ * Routes to the appropriate provider SDK based on the `provider` field.
+ * Default: Claude Code (via Agent SDK, uses OAuth login).
  */
 export default defineEventHandler(async (event) => {
   const body = await readBody<ChatBody>(event)
@@ -87,37 +87,11 @@ export default defineEventHandler(async (event) => {
     return streamViaCodex(body, body.model)
   }
 
-  // Default: existing behavior (backward-compatible)
-  const apiKey = process.env.ANTHROPIC_API_KEY
-  if (apiKey) {
-    try {
-      return await streamViaAnthropicSDK(apiKey, body, body.model)
-    } catch {
-      // SDK not installed or failed — fall back to Agent SDK
-    }
-  }
   return streamViaAgentSDK(body, body.model)
 })
 
 // Keep-alive ping interval (ms) — prevents client timeout while waiting for API TTFT
 const KEEPALIVE_INTERVAL_MS = 15_000
-// Max time to wait for the first SDK event (text/thinking/error).
-// If the API provider doesn't respond within this window, abort and surface
-// a clear error instead of letting the client wait minutes for a timeout.
-const API_CONNECT_TIMEOUT_MS = 30_000
-
-function getAnthropicThinkingConfig(body: ChatBody):
-  | { type: 'adaptive' | 'disabled' }
-  | { type: 'enabled'; budget_tokens: number }
-  | undefined {
-  if (!body.thinkingMode) return undefined
-  if (body.thinkingMode === 'enabled') {
-    const budget = Math.max(1024, body.thinkingBudgetTokens ?? 1024)
-    return { type: 'enabled', budget_tokens: budget }
-  }
-  return { type: body.thinkingMode }
-}
-
 function getAgentThinkingConfig(body: ChatBody):
   | { type: 'adaptive' | 'disabled' }
   | { type: 'enabled'; budgetTokens?: number }
@@ -173,93 +147,6 @@ function stripNoToolsRestriction(systemPrompt: string): string {
   return systemPrompt
     .replace(/^.*NEVER use tools.*$/gim, '')
     .replace(/\n{3,}/g, '\n\n')
-}
-
-/** Build Anthropic SDK multimodal messages from ChatBody messages */
-function buildAnthropicMessages(body: ChatBody): Array<{ role: string; content: unknown }> {
-  return body.messages.map((m) => {
-    const attachments = m.attachments ?? []
-    if (attachments.length === 0) {
-      return { role: m.role, content: m.content }
-    }
-    const content: Array<Record<string, unknown>> = [
-      ...attachments.map((a) => ({
-        type: 'image',
-        source: { type: 'base64', media_type: a.mediaType, data: a.data },
-      })),
-      { type: 'text', text: m.content || 'Analyze these images.' },
-    ]
-    return { role: m.role, content }
-  })
-}
-
-/** Stream via Anthropic SDK (when API key is available) */
-async function streamViaAnthropicSDK(apiKey: string, body: ChatBody, model?: string) {
-  const { default: Anthropic } = await import('@anthropic-ai/sdk')
-  // Disable automatic retries so auth/balance errors (429) surface immediately
-  // instead of waiting through exponential backoff retry cycles.
-  const client = new Anthropic({ apiKey, maxRetries: 0 })
-
-  const stream = new ReadableStream({
-    async start(controller) {
-      const encoder = new TextEncoder()
-      const send = (type: string, content: string) => {
-        try {
-          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type, content })}\n\n`))
-        } catch { /* stream already closed */ }
-      }
-      const pingTimer = setInterval(() => send('ping', ''), KEEPALIVE_INTERVAL_MS)
-
-      // Abort if the API provider doesn't produce any event within the timeout.
-      // Catches slow proxies, invalid keys on slow endpoints, etc.
-      const connectAbort = new AbortController()
-      let gotSdkEvent = false
-      const connectTimer = setTimeout(() => {
-        if (!gotSdkEvent) connectAbort.abort()
-      }, API_CONNECT_TIMEOUT_MS)
-
-      try {
-        const thinking = getAnthropicThinkingConfig(body)
-        const messageStream = client.messages.stream({
-          model: model || 'claude-sonnet-4-5-20250929',
-          max_tokens: 16384,
-          system: body.system,
-          messages: buildAnthropicMessages(body) as any,
-          ...(body.effort ? { effort: body.effort } : {}),
-          ...(thinking ? { thinking } : {}),
-        }, { signal: connectAbort.signal })
-
-        for await (const ev of messageStream) {
-          if (!gotSdkEvent) {
-            gotSdkEvent = true
-            clearTimeout(connectTimer)
-          }
-          if (ev.type === 'content_block_delta') {
-            if (ev.delta.type === 'text_delta') {
-              clearInterval(pingTimer)
-              send('text', ev.delta.text)
-            } else if (ev.delta.type === 'thinking_delta') {
-              send('thinking', ev.delta.thinking)
-            }
-          }
-        }
-
-        send('done', '')
-      } catch (error) {
-        clearTimeout(connectTimer)
-        const content = connectAbort.signal.aborted && !gotSdkEvent
-          ? 'API connection timed out (30s). Check your API key and network configuration.'
-          : error instanceof Error ? error.message : 'Unknown error'
-        send('error', content)
-      } finally {
-        clearTimeout(connectTimer)
-        clearInterval(pingTimer)
-        controller.close()
-      }
-    },
-  })
-
-  return new Response(stream)
 }
 
 /** Stream via Claude Agent SDK (uses local Claude Code OAuth login, no API key needed) */
