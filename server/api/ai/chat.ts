@@ -19,7 +19,7 @@ interface ChatBody {
   system: string
   messages: Array<{ role: 'user' | 'assistant'; content: string; attachments?: ChatAttachmentWire[] }>
   model?: string
-  provider?: string
+  provider?: 'anthropic' | 'openai' | 'opencode'
   thinkingMode?: 'adaptive' | 'disabled' | 'enabled'
   thinkingBudgetTokens?: number
   effort?: 'low' | 'medium' | 'high' | 'max'
@@ -34,10 +34,6 @@ async function readDebugTail(path?: string, maxLines = 40): Promise<string[] | u
   } catch {
     return undefined
   }
-}
-
-function shouldRetryClaudeWithoutModel(raw: string): boolean {
-  return /process exited with code 1|invalid model|unknown model|model.*not/i.test(raw)
 }
 
 function buildClaudeExitHint(rawError: string, debugTail?: string[]): string | undefined {
@@ -63,7 +59,7 @@ function buildClaudeExitHint(rawError: string, debugTail?: string[]): string | u
 /**
  * Streaming chat endpoint.
  * Routes to the appropriate provider SDK based on the `provider` field.
- * Default: Claude Code (via Agent SDK, uses OAuth login).
+ * Requires explicit provider and model; no fallback routing.
  */
 export default defineEventHandler(async (event) => {
   const body = await readBody<ChatBody>(event)
@@ -72,6 +68,18 @@ export default defineEventHandler(async (event) => {
     setResponseHeaders(event, { 'Content-Type': 'application/json' })
     return { error: 'Missing required fields: system, messages' }
   }
+  if (!body.provider) {
+    setResponseHeaders(event, { 'Content-Type': 'application/json' })
+    return { error: 'Missing provider. Provider fallback is disabled.' }
+  }
+  if (!body.model?.trim()) {
+    setResponseHeaders(event, { 'Content-Type': 'application/json' })
+    return { error: 'Missing model. Model fallback is disabled.' }
+  }
+  if (body.provider !== 'anthropic' && body.provider !== 'openai' && body.provider !== 'opencode') {
+    setResponseHeaders(event, { 'Content-Type': 'application/json' })
+    return { error: 'Missing or unsupported provider. Provider fallback is disabled.' }
+  }
 
   setResponseHeaders(event, {
     'Content-Type': 'text/event-stream',
@@ -79,15 +87,9 @@ export default defineEventHandler(async (event) => {
     Connection: 'keep-alive',
   })
 
-  // Explicit provider routing
-  if (body.provider === 'opencode') {
-    return streamViaOpenCode(body, body.model)
-  }
-  if (body.provider === 'openai') {
-    return streamViaCodex(body, body.model)
-  }
-
-  return streamViaAgentSDK(body, body.model)
+  if (body.provider === 'anthropic') return streamViaAgentSDK(body, body.model)
+  if (body.provider === 'opencode') return streamViaOpenCode(body, body.model)
+  return streamViaCodex(body, body.model)
 })
 
 // Keep-alive ping interval (ms) — prevents client timeout while waiting for API TTFT
@@ -160,7 +162,6 @@ function streamViaAgentSDK(body: ChatBody, model?: string) {
           controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: 'ping', content: '' })}\n\n`))
         } catch { /* stream already closed */ }
       }, KEEPALIVE_INTERVAL_MS)
-      let emittedText = false
       let debugFile: string | undefined
       let attachTempDir: string | undefined
 
@@ -202,12 +203,12 @@ function streamViaAgentSDK(body: ChatBody, model?: string) {
         // only emit the final result text. This avoids streaming intermediate
         // tool-use preamble like "I need to read the file first".
         if (hasImageAttachments) {
-          const runImageQuery = async (modelOverride?: string): Promise<string> => {
+          const runImageQuery = async (): Promise<string> => {
             const q = query({
               prompt,
               options: {
                 systemPrompt: effectiveSystemPrompt,
-                ...(modelOverride ? { model: modelOverride } : {}),
+                ...(model ? { model } : {}),
                 maxTurns: 3,
                 plugins: [],
                 permissionMode: 'plan',
@@ -230,9 +231,6 @@ function streamViaAgentSDK(body: ChatBody, model?: string) {
                   const errors = 'errors' in message ? (message.errors as string[]) : []
                   const resultText = 'result' in message ? String(message.result ?? '') : ''
                   const errContent = errors.join('; ') || resultText || `Query ended with: ${message.subtype}`
-                  if (modelOverride && shouldRetryClaudeWithoutModel(errContent)) {
-                    throw new Error(errContent)
-                  }
                   throw new Error(errContent)
                 }
               }
@@ -242,33 +240,22 @@ function streamViaAgentSDK(body: ChatBody, model?: string) {
             }
           }
 
-          let resultText: string
-          try {
-            resultText = await runImageQuery(model)
-          } catch (error) {
-            const raw = error instanceof Error ? error.message : String(error)
-            if (model && shouldRetryClaudeWithoutModel(raw)) {
-              resultText = await runImageQuery(undefined)
-            } else {
-              throw error
-            }
-          }
+          const resultText = await runImageQuery()
 
           clearInterval(pingTimer)
           if (resultText) {
-            emittedText = true
             controller.enqueue(
               encoder.encode(`data: ${JSON.stringify({ type: 'text', content: resultText })}\n\n`),
             )
           }
         } else {
           // Normal text-only chat: stream partial messages as before
-          const runQuery = async (modelOverride?: string) => {
+          const runQuery = async () => {
             const q = query({
               prompt,
               options: {
                 systemPrompt: effectiveSystemPrompt,
-                ...(modelOverride ? { model: modelOverride } : {}),
+                ...(model ? { model } : {}),
                 maxTurns: 1,
                 includePartialMessages: true,
                 tools: [],
@@ -289,7 +276,6 @@ function streamViaAgentSDK(body: ChatBody, model?: string) {
                   const ev = message.event
                   if (ev.type === 'content_block_delta') {
                     if (ev.delta.type === 'text_delta') {
-                      emittedText = true
                       clearInterval(pingTimer)
                       const data = JSON.stringify({ type: 'text', content: ev.delta.text })
                       controller.enqueue(encoder.encode(`data: ${data}\n\n`))
@@ -300,17 +286,14 @@ function streamViaAgentSDK(body: ChatBody, model?: string) {
                     }
                   }
                 } else if (message.type === 'result') {
-                  const isErrorResult = 'is_error' in message && Boolean((message as { is_error?: boolean }).is_error)
-                  if (message.subtype !== 'success' || isErrorResult) {
-                    const errors = 'errors' in message ? (message.errors as string[]) : []
-                    const resultText = 'result' in message ? String(message.result ?? '') : ''
-                    const content = errors.join('; ') || resultText || `Query ended with: ${message.subtype}`
-                    if (modelOverride && !emittedText && shouldRetryClaudeWithoutModel(content)) {
-                      throw new Error(content)
-                    }
-                    controller.enqueue(
-                      encoder.encode(`data: ${JSON.stringify({ type: 'error', content })}\n\n`),
-                    )
+                    const isErrorResult = 'is_error' in message && Boolean((message as { is_error?: boolean }).is_error)
+                    if (message.subtype !== 'success' || isErrorResult) {
+                      const errors = 'errors' in message ? (message.errors as string[]) : []
+                      const resultText = 'result' in message ? String(message.result ?? '') : ''
+                      const content = errors.join('; ') || resultText || `Query ended with: ${message.subtype}`
+                      controller.enqueue(
+                        encoder.encode(`data: ${JSON.stringify({ type: 'error', content })}\n\n`),
+                      )
                   }
                 }
               }
@@ -319,16 +302,7 @@ function streamViaAgentSDK(body: ChatBody, model?: string) {
             }
           }
 
-          try {
-            await runQuery(model)
-          } catch (error) {
-            const raw = error instanceof Error ? error.message : String(error)
-            if (model && !emittedText && shouldRetryClaudeWithoutModel(raw)) {
-              await runQuery(undefined)
-            } else {
-              throw error
-            }
-          }
+          await runQuery()
         }
 
         controller.enqueue(

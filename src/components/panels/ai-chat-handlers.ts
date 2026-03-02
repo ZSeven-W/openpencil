@@ -135,6 +135,9 @@ export function useChatHandlers() {
         content: m.content,
         ...(m.attachments?.length ? { attachments: m.attachments } : {}),
       }))
+      const currentProvider = useAIStore.getState().modelGroups.find((g) =>
+        g.models.some((m) => m.value === model),
+      )?.provider
 
       let accumulated = ''
       let appliedCount = 0
@@ -156,6 +159,8 @@ export function useChatHandlers() {
                const { rawResponse, nodes } = await generateDesignModification(selectedNodes, messageText, {
                  variables: modDoc.variables,
                  themes: modDoc.themes,
+                 model,
+                 provider: currentProvider,
                }, abortController.signal)
                accumulated = rawResponse
                updateLastMessage(accumulated)
@@ -168,6 +173,8 @@ export function useChatHandlers() {
                const doc = useDocumentStore.getState().document
                const { rawResponse, nodes } = await generateDesign({
                  prompt: fullUserMessage,
+                 model,
+                 provider: currentProvider,
                  context: {
                    canvasSize: { width: 1200, height: 800 },
                    documentSummary: `Current selection: ${hasSelection ? selectedIds.length + ' items' : 'Empty'}`,
@@ -200,10 +207,6 @@ export function useChatHandlers() {
             })
             // Trim history to prevent unbounded context growth
             const trimmedHistory = trimChatHistory(chatHistory)
-            // Resolve which provider the currently selected model belongs to
-            const currentProvider = useAIStore.getState().modelGroups.find((g) =>
-              g.models.some((m) => m.value === model),
-            )?.provider
             let chatThinking = ''
             for await (const chunk of streamChat(
               CHAT_SYSTEM_PROMPT,

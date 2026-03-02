@@ -11,6 +11,7 @@ import { DEFAULT_FRAME_ID, useDocumentStore } from '@/stores/document-store'
 import { VALIDATION_TIMEOUT_MS } from './ai-runtime-config'
 import type { PenNode } from '@/types/pen'
 import type { FabricObjectWithPenId } from '@/canvas/canvas-object-factory'
+import type { AIProviderType } from '@/types/agent-settings'
 
 // ---------------------------------------------------------------------------
 // System prompt for the vision validator
@@ -175,6 +176,8 @@ interface ValidationResult {
 async function validateDesignScreenshot(
   imageBase64: string,
   nodeTreeDump: string,
+  model?: string,
+  provider?: AIProviderType,
 ): Promise<ValidationResult> {
   const controller = new AbortController()
   const timeout = setTimeout(() => controller.abort(), VALIDATION_TIMEOUT_MS)
@@ -195,6 +198,8 @@ Cross-reference visual issues with the node IDs above. Return JSON fixes using r
         system: VALIDATION_SYSTEM_PROMPT,
         message,
         imageBase64,
+        model,
+        provider,
       }),
       signal: controller.signal,
     })
@@ -293,11 +298,13 @@ function applyValidationFixes(result: ValidationResult): number {
 // ---------------------------------------------------------------------------
 
 export async function runPostGenerationValidation(
-  callbacks?: {
+  options?: {
     onStatusUpdate?: (status: 'pending' | 'streaming' | 'done' | 'error', message?: string) => void
+    model?: string
+    provider?: AIProviderType
   },
 ): Promise<{ applied: number; skipped: boolean }> {
-  callbacks?.onStatusUpdate?.('streaming', 'Capturing screenshot...')
+  options?.onStatusUpdate?.('streaming', 'Capturing screenshot...')
 
   // Wait for canvas render to stabilize
   await new Promise<void>((resolve) => {
@@ -309,19 +316,24 @@ export async function runPostGenerationValidation(
   const imageBase64 = captureRootFrameScreenshot()
   if (!imageBase64) {
     console.warn('[Validation] Could not capture screenshot — skipping')
-    callbacks?.onStatusUpdate?.('done', 'Skipped (no screenshot)')
+    options?.onStatusUpdate?.('done', 'Skipped (no screenshot)')
     return { applied: 0, skipped: true }
   }
 
   // Build simplified node tree for LLM context
   const nodeTreeDump = buildNodeTreeDump(DEFAULT_FRAME_ID)
 
-  callbacks?.onStatusUpdate?.('streaming', 'Analyzing design...')
-  const result = await validateDesignScreenshot(imageBase64, nodeTreeDump)
+  options?.onStatusUpdate?.('streaming', 'Analyzing design...')
+  const result = await validateDesignScreenshot(
+    imageBase64,
+    nodeTreeDump,
+    options?.model,
+    options?.provider,
+  )
 
   if (result.skipped) {
     console.log('[Validation] Skipped (provider unsupported)')
-    callbacks?.onStatusUpdate?.('done', 'Skipped')
+    options?.onStatusUpdate?.('done', 'Skipped')
     return { applied: 0, skipped: true }
   }
 
@@ -331,13 +343,13 @@ export async function runPostGenerationValidation(
 
   if (result.fixes.length === 0) {
     console.log('[Validation] No fixes needed')
-    callbacks?.onStatusUpdate?.('done', 'No issues found')
+    options?.onStatusUpdate?.('done', 'No issues found')
     return { applied: 0, skipped: false }
   }
 
-  callbacks?.onStatusUpdate?.('streaming', `Applying ${result.fixes.length} fixes...`)
+  options?.onStatusUpdate?.('streaming', `Applying ${result.fixes.length} fixes...`)
   const applied = applyValidationFixes(result)
   console.log(`[Validation] Applied ${applied} fixes:`, result.fixes)
-  callbacks?.onStatusUpdate?.('done', `Applied ${applied} fixes`)
+  options?.onStatusUpdate?.('done', `Applied ${applied} fixes`)
   return { applied, skipped: false }
 }

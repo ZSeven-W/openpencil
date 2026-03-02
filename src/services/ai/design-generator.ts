@@ -1,5 +1,6 @@
 import type { PenNode } from '@/types/pen'
 import type { VariableDefinition, ThemedValue } from '@/types/variables'
+import type { AIProviderType } from '@/types/agent-settings'
 import type { AIDesignRequest } from './ai-types'
 import { streamChat } from './ai-service'
 import { DESIGN_MODIFIER_PROMPT } from './ai-prompts'
@@ -91,6 +92,8 @@ export async function generateDesignModification(
   options?: {
     variables?: Record<string, VariableDefinition>
     themes?: Record<string, string[]>
+    model?: string
+    provider?: AIProviderType
   },
   abortSignal?: AbortSignal,
 ): Promise<{ nodes: PenNode[]; rawResponse: string }> {
@@ -113,7 +116,7 @@ export async function generateDesignModification(
 
   for await (const chunk of streamChat(DESIGN_MODIFIER_PROMPT, [
     { role: 'user', content: userMessage },
-  ], undefined, DESIGN_STREAM_TIMEOUTS, undefined, abortSignal)) {
+  ], options?.model, DESIGN_STREAM_TIMEOUTS, options?.provider, abortSignal)) {
     if (chunk.type === 'thinking') {
       // Ignore thinking chunks for modification -- caller already shows progress
     } else if (chunk.type === 'text') {
