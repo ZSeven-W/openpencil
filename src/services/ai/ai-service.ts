@@ -42,7 +42,7 @@ interface StreamChatOptions {
 
 /**
  * Streams a chat response from the server-side AI endpoint.
- * The server uses ANTHROPIC_API_KEY or local Agent SDK (no client-side key needed).
+ * The server routes to the appropriate provider SDK (no client-side key needed).
  */
 export async function* streamChat(
   systemPrompt: string,
@@ -300,7 +300,7 @@ export async function* streamChat(
 
 /**
  * Non-streaming completion for design/code generation.
- * Calls the server-side endpoint which reads ANTHROPIC_API_KEY from env.
+ * Calls the server-side endpoint which routes to the appropriate provider SDK.
  */
 export async function generateCompletion(
   systemPrompt: string,

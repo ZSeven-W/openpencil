@@ -763,3 +763,8 @@ function collectImageBlobs(blobs: (Uint8Array | string)[]): Map<number, Uint8Arr
   }
   return map
 }
+
+// --- Clipboard support exports ---
+
+export { buildTree, guidToString, sortChildrenRecursive, isUserPage, collectComponents, convertNode, collectImageBlobs }
+export type { TreeNode, ConversionContext }
