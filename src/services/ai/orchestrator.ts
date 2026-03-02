@@ -70,6 +70,8 @@ export async function executeOrchestration(
     const plan = await callOrchestrator(
       preparedPrompt.orchestratorPrompt,
       preparedPrompt.originalLength,
+      request.model,
+      request.provider,
       (thinking) => {
         renderPlanningStatus(thinking)
       },
@@ -232,6 +234,8 @@ export async function executeOrchestration(
             validationEntry.thinking = message
             emitProgress(plan, progress, callbacks)
           },
+          model: request.model,
+          provider: request.provider,
         })
         if (validationResult.applied > 0) {
           validationEntry.nodeCount = validationResult.applied
@@ -262,6 +266,8 @@ export async function executeOrchestration(
 async function callOrchestrator(
   prompt: string,
   timeoutHintLength: number,
+  model?: string,
+  provider?: AIDesignRequest['provider'],
   onThinking?: (thinking: string) => void,
   abortSignal?: AbortSignal,
 ): Promise<OrchestratorPlan> {
@@ -271,9 +277,9 @@ async function callOrchestrator(
   for await (const chunk of streamChat(
     ORCHESTRATOR_PROMPT,
     [{ role: 'user', content: prompt }],
-    undefined,
+    model,
     getOrchestratorTimeouts(timeoutHintLength),
-    undefined,
+    provider,
     abortSignal,
   )) {
     if (chunk.type === 'text') {

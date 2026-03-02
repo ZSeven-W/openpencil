@@ -7,6 +7,7 @@ import {
   resolveShadow,
   resolveStrokeColor,
   resolveStrokeWidth,
+  computeImageTransform,
 } from './canvas-object-factory'
 
 function sizeToNumber(
@@ -153,27 +154,37 @@ export function syncFabricObject(
       const w = sizeToNumber(node.width, 200)
       const h = sizeToNumber(node.height, 200)
       const r = Math.min(cornerRadiusValue(node.cornerRadius), h / 2)
-      // Update scale to reflect target size over natural dimensions
-      const nw = obj.width || w
-      const nh = obj.height || h
+      const fitMode = node.objectFit ?? 'fill'
+
+      // Detect mode changes that require object recreation (e.g. tile ↔ non-tile)
+      const prevMode = (obj as any).__objectFit ?? 'fill'
+      if (prevMode !== fitMode) {
+        ;(obj as any).__needsRecreation = true
+        return
+      }
+
+      // Tile mode: update pattern fill on the Rect
+      if (fitMode === 'tile') {
+        obj.set({ width: w, height: h, rx: r, ry: r, dirty: true })
+        break
+      }
+
+      // Fill/Fit/Crop: use computeImageTransform with native (source) dimensions
+      const nw = (obj as any).__nativeWidth || obj.width || w
+      const nh = (obj as any).__nativeHeight || obj.height || h
+      const transform = computeImageTransform(nw, nh, w, h, fitMode, r)
       obj.set({
-        scaleX: w / nw,
-        scaleY: h / nh,
+        cropX: transform.cropX,
+        cropY: transform.cropY,
+        width: transform.cropWidth,
+        height: transform.cropHeight,
+        scaleX: transform.scaleX,
+        scaleY: transform.scaleY,
       })
-      // Apply or remove rounded-rect clipPath for corner radius.
-      // Disable objectCaching so clipPath updates render immediately
-      // without relying on Fabric's cache invalidation.
-      if (r > 0) {
-        const clipR = r * nw / w
+      // clipPath only for corner radius (fill/crop overflow handled by cropX/cropY)
+      if (transform.clipPath) {
         obj.set({
-          clipPath: new fabric.Rect({
-            width: nw,
-            height: nh,
-            rx: clipR,
-            ry: clipR,
-            originX: 'center',
-            originY: 'center',
-          }),
+          clipPath: transform.clipPath,
           objectCaching: false,
           dirty: true,
         })

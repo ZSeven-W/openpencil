@@ -5,7 +5,7 @@ import type {
   FigmaMatrix,
   FigmaImportLayoutMode,
 } from './figma-types'
-import type { PenNode, PenPage, PenDocument, SizingBehavior } from '@/types/pen'
+import type { PenNode, PenPage, PenDocument, SizingBehavior, ImageFitMode } from '@/types/pen'
 import { mapFigmaFills } from './figma-fill-mapper'
 import { mapFigmaStroke } from './figma-stroke-mapper'
 import { mapFigmaEffects } from './figma-effect-mapper'
@@ -242,6 +242,52 @@ function buildTree(nodeChanges: FigmaNodeChange[]): TreeNode | null {
   return root
 }
 
+/**
+ * Build a tree from clipboard nodeChanges that may lack a DOCUMENT wrapper.
+ * Collects orphan nodes (whose parent is not in the data) as roots.
+ */
+function buildTreeForClipboard(nodeChanges: FigmaNodeChange[]): TreeNode[] {
+  const nodeMap = new Map<string, TreeNode>()
+  const childKeys = new Set<string>()
+
+  for (const nc of nodeChanges) {
+    if (!nc.guid) continue
+    if (nc.phase === 'REMOVED') continue
+    const key = guidToString(nc.guid)
+    nodeMap.set(key, { figma: nc, children: [] })
+  }
+
+  for (const nc of nodeChanges) {
+    if (!nc.guid || nc.phase === 'REMOVED') continue
+    const key = guidToString(nc.guid)
+    const treeNode = nodeMap.get(key)
+    if (!treeNode) continue
+
+    if (nc.parentIndex?.guid) {
+      const parentKey = guidToString(nc.parentIndex.guid)
+      const parent = nodeMap.get(parentKey)
+      if (parent) {
+        parent.children.push(treeNode)
+        childKeys.add(key)
+      }
+    }
+  }
+
+  // Roots = nodes that are not children of any other node in the data
+  const roots: TreeNode[] = []
+  for (const [key, node] of nodeMap) {
+    if (!childKeys.has(key) && node.figma.type !== 'DOCUMENT') {
+      roots.push(node)
+    }
+  }
+
+  for (const root of roots) {
+    sortChildrenRecursive(root)
+  }
+
+  return roots
+}
+
 function sortChildrenRecursive(node: TreeNode): void {
   node.children.sort((a, b) => {
     const posA = a.figma.parentIndex?.position ?? ''
@@ -430,6 +476,7 @@ function convertFrame(
       type: 'image',
       ...commonProps(figma, id),
       src: getImageFillUrl(figma),
+      objectFit: getImageFitMode(figma),
       width: resolveWidth(figma, parentStackMode, ctx),
       height: resolveHeight(figma, parentStackMode, ctx),
       cornerRadius: mapCornerRadius(figma),
@@ -542,6 +589,7 @@ function convertRectangle(
       type: 'image',
       ...commonProps(figma, id),
       src: getImageFillUrl(figma),
+      objectFit: getImageFitMode(figma),
       width: resolveWidth(figma, parentStackMode, ctx),
       height: resolveHeight(figma, parentStackMode, ctx),
       cornerRadius: mapCornerRadius(figma),
@@ -575,6 +623,7 @@ function convertEllipse(
       type: 'image',
       ...commonProps(figma, id),
       src: getImageFillUrl(figma),
+      objectFit: getImageFitMode(figma),
       width: resolveWidth(figma, parentStackMode, ctx),
       height: resolveHeight(figma, parentStackMode, ctx),
       cornerRadius: Math.round((figma.size?.x ?? 100) / 2),
@@ -707,6 +756,19 @@ function figmaFillColor(figma: FigmaNodeChange): string | undefined {
 
 // --- Helpers ---
 
+function getImageFitMode(figma: FigmaNodeChange): ImageFitMode | undefined {
+  const paint = figma.fillPaints?.find(
+    (f) => f.visible !== false && f.type === 'IMAGE',
+  )
+  if (!paint?.imageScaleMode) return undefined
+  switch (paint.imageScaleMode) {
+    case 'FIT': return 'fit'
+    case 'FILL': return 'fill'
+    case 'TILE': return 'tile'
+    default: return undefined
+  }
+}
+
 function hasOnlyImageFill(figma: FigmaNodeChange): boolean {
   if (!figma.fillPaints || figma.fillPaints.length === 0) return false
   const visible = figma.fillPaints.filter((f) => f.visible !== false)
@@ -746,4 +808,67 @@ function collectImageBlobs(blobs: (Uint8Array | string)[]): Map<number, Uint8Arr
     }
   }
   return map
+}
+
+/**
+ * Convert decoded Figma nodeChanges directly to PenNodes (without wrapping in a PenDocument).
+ * Used for clipboard paste where the data may lack a DOCUMENT+CANVAS wrapper.
+ */
+export function figmaNodeChangesToPenNodes(
+  decoded: FigmaDecodedFile,
+  layoutMode: FigmaImportLayoutMode = 'openpencil',
+): { nodes: PenNode[]; warnings: string[]; imageBlobs: Map<number, Uint8Array> } {
+  const warnings: string[] = []
+
+  // Try full tree first (clipboard may include DOCUMENT+CANVAS)
+  const tree = buildTree(decoded.nodeChanges)
+  let topNodes: TreeNode[]
+
+  if (tree) {
+    // Has a DOCUMENT root — find CANVAS pages and use the first one's children
+    const pages = tree.children.filter(isUserPage)
+    const page = pages[0]
+    if (page) {
+      topNodes = page.children
+    } else if (tree.children.length > 0) {
+      // DOCUMENT exists but no CANVAS — use direct children
+      topNodes = tree.children
+    } else {
+      topNodes = []
+    }
+  } else {
+    // No DOCUMENT root — collect orphan nodes as roots
+    topNodes = buildTreeForClipboard(decoded.nodeChanges)
+  }
+
+  if (topNodes.length === 0) {
+    return { nodes: [], warnings: ['No convertible nodes found'], imageBlobs: new Map() }
+  }
+
+  // Collect components for instance resolution
+  const componentMap = new Map<string, string>()
+  let idCounter = 1
+  const genId = () => `fig_${idCounter++}`
+  for (const node of topNodes) {
+    collectComponents(node, componentMap, genId)
+  }
+
+  const ctx: ConversionContext = {
+    componentMap,
+    warnings,
+    generateId: genId,
+    blobs: decoded.blobs,
+    layoutMode,
+  }
+
+  const nodes: PenNode[] = []
+  for (const treeNode of topNodes) {
+    if (treeNode.figma.visible === false) continue
+    const node = convertNode(treeNode, undefined, ctx)
+    if (node) nodes.push(node)
+  }
+
+  const imageBlobs = collectImageBlobs(decoded.blobs)
+
+  return { nodes, warnings, imageBlobs }
 }

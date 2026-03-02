@@ -223,7 +223,8 @@ export function insertStreamingNode(
       startNewAnimationBatch()
     }
 
-    addNode(insertParent, node)
+    // Append (not prepend) so auto-layout children stay in generation order
+    addNode(insertParent, node, Infinity)
 
     // When a frame is inserted into a horizontal layout, equalize sibling card widths
     // to prevent overflow when multiple cards are placed in the same row.
@@ -260,7 +261,7 @@ export function applyNodesToCanvas(nodes: PenNode[]): void {
   const rootFrame = getNodeById(DEFAULT_FRAME_ID)
   const parentId = rootFrame ? DEFAULT_FRAME_ID : null
   for (const node of preparedNodes) {
-    addNode(parentId, node)
+    addNode(parentId, node, Infinity)
   }
   adjustRootFrameHeightToContent()
   resolveAllPendingIcons().catch(console.warn)
@@ -288,7 +289,7 @@ export function upsertNodesToCanvas(nodes: PenNode[]): number {
       const merged = mergeNodeForProgressiveUpsert(existing, remappedNode)
       updateNode(resolvedId, merged)
     } else {
-      addNode(parentId, node)
+      addNode(parentId, node, Infinity)
     }
     count++
   }
@@ -318,7 +319,7 @@ function upsertPreparedNodes(preparedNodes: PenNode[]): number {
       const merged = mergeNodeForProgressiveUpsert(existing, remappedNode)
       updateNode(resolvedId, merged)
     } else {
-      addNode(parentId, node)
+      addNode(parentId, node, Infinity)
     }
     count++
   }

@@ -1,3 +1,5 @@
+import type { AIProviderType } from '@/types/agent-settings'
+
 export interface ChatAttachment {
   id: string
   name: string
@@ -17,6 +19,8 @@ export interface ChatMessage {
 
 export interface AIDesignRequest {
   prompt: string
+  model?: string
+  provider?: AIProviderType
   context?: {
     selectedNodes?: string[]
     documentSummary?: string

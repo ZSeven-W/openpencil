@@ -161,9 +161,9 @@ async function executeSubAgent(
     for await (const chunk of streamChat(
       SUB_AGENT_PROMPT,
       [{ role: 'user', content: userPrompt }],
-      undefined,
+      request.model,
       timeoutOptions,
-      undefined,
+      request.provider,
       abortSignal,
     )) {
       if (chunk.type === 'text') {
@@ -390,4 +390,3 @@ function needsHeroPhoneTwoColumnInstruction(
   const phoneLike = /(phone|mockup|screenshot|截图|手机|app\s*screen|应用截图)/.test(text)
   return heroLike && phoneLike
 }
-
