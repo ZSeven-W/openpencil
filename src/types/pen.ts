@@ -164,9 +164,12 @@ export interface TextNode extends PenNodeBase {
   effects?: PenEffect[]
 }
 
+export type ImageFitMode = 'fill' | 'fit' | 'crop' | 'tile'
+
 export interface ImageNode extends PenNodeBase {
   type: 'image'
   src: string
+  objectFit?: ImageFitMode
   width?: SizingBehavior
   height?: SizingBehavior
   cornerRadius?: number | [number, number, number, number]

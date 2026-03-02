@@ -19,7 +19,7 @@ interface ChatBody {
   system: string
   messages: Array<{ role: 'user' | 'assistant'; content: string; attachments?: ChatAttachmentWire[] }>
   model?: string
-  provider?: string
+  provider?: 'anthropic' | 'openai' | 'opencode'
   thinkingMode?: 'adaptive' | 'disabled' | 'enabled'
   thinkingBudgetTokens?: number
   effort?: 'low' | 'medium' | 'high' | 'max'
@@ -34,10 +34,6 @@ async function readDebugTail(path?: string, maxLines = 40): Promise<string[] | u
   } catch {
     return undefined
   }
-}
-
-function shouldRetryClaudeWithoutModel(raw: string): boolean {
-  return /process exited with code 1|invalid model|unknown model|model.*not/i.test(raw)
 }
 
 function buildClaudeExitHint(rawError: string, debugTail?: string[]): string | undefined {
@@ -62,8 +58,8 @@ function buildClaudeExitHint(rawError: string, debugTail?: string[]): string | u
 
 /**
  * Streaming chat endpoint.
- * Tries ANTHROPIC_API_KEY first (via Anthropic SDK);
- * falls back to local Claude Code (via Agent SDK, uses OAuth login).
+ * Routes to the appropriate provider SDK based on the `provider` field.
+ * Requires explicit provider and model; no fallback routing.
  */
 export default defineEventHandler(async (event) => {
   const body = await readBody<ChatBody>(event)
@@ -72,6 +68,18 @@ export default defineEventHandler(async (event) => {
     setResponseHeaders(event, { 'Content-Type': 'application/json' })
     return { error: 'Missing required fields: system, messages' }
   }
+  if (!body.provider) {
+    setResponseHeaders(event, { 'Content-Type': 'application/json' })
+    return { error: 'Missing provider. Provider fallback is disabled.' }
+  }
+  if (!body.model?.trim()) {
+    setResponseHeaders(event, { 'Content-Type': 'application/json' })
+    return { error: 'Missing model. Model fallback is disabled.' }
+  }
+  if (body.provider !== 'anthropic' && body.provider !== 'openai' && body.provider !== 'opencode') {
+    setResponseHeaders(event, { 'Content-Type': 'application/json' })
+    return { error: 'Missing or unsupported provider. Provider fallback is disabled.' }
+  }
 
   setResponseHeaders(event, {
     'Content-Type': 'text/event-stream',
@@ -79,45 +87,13 @@ export default defineEventHandler(async (event) => {
     Connection: 'keep-alive',
   })
 
-  // Explicit provider routing
-  if (body.provider === 'opencode') {
-    return streamViaOpenCode(body, body.model)
-  }
-  if (body.provider === 'openai') {
-    return streamViaCodex(body, body.model)
-  }
-
-  // Default: existing behavior (backward-compatible)
-  const apiKey = process.env.ANTHROPIC_API_KEY
-  if (apiKey) {
-    try {
-      return await streamViaAnthropicSDK(apiKey, body, body.model)
-    } catch {
-      // SDK not installed or failed — fall back to Agent SDK
-    }
-  }
-  return streamViaAgentSDK(body, body.model)
+  if (body.provider === 'anthropic') return streamViaAgentSDK(body, body.model)
+  if (body.provider === 'opencode') return streamViaOpenCode(body, body.model)
+  return streamViaCodex(body, body.model)
 })
 
 // Keep-alive ping interval (ms) — prevents client timeout while waiting for API TTFT
 const KEEPALIVE_INTERVAL_MS = 15_000
-// Max time to wait for the first SDK event (text/thinking/error).
-// If the API provider doesn't respond within this window, abort and surface
-// a clear error instead of letting the client wait minutes for a timeout.
-const API_CONNECT_TIMEOUT_MS = 30_000
-
-function getAnthropicThinkingConfig(body: ChatBody):
-  | { type: 'adaptive' | 'disabled' }
-  | { type: 'enabled'; budget_tokens: number }
-  | undefined {
-  if (!body.thinkingMode) return undefined
-  if (body.thinkingMode === 'enabled') {
-    const budget = Math.max(1024, body.thinkingBudgetTokens ?? 1024)
-    return { type: 'enabled', budget_tokens: budget }
-  }
-  return { type: body.thinkingMode }
-}
-
 function getAgentThinkingConfig(body: ChatBody):
   | { type: 'adaptive' | 'disabled' }
   | { type: 'enabled'; budgetTokens?: number }
@@ -175,93 +151,6 @@ function stripNoToolsRestriction(systemPrompt: string): string {
     .replace(/\n{3,}/g, '\n\n')
 }
 
-/** Build Anthropic SDK multimodal messages from ChatBody messages */
-function buildAnthropicMessages(body: ChatBody): Array<{ role: string; content: unknown }> {
-  return body.messages.map((m) => {
-    const attachments = m.attachments ?? []
-    if (attachments.length === 0) {
-      return { role: m.role, content: m.content }
-    }
-    const content: Array<Record<string, unknown>> = [
-      ...attachments.map((a) => ({
-        type: 'image',
-        source: { type: 'base64', media_type: a.mediaType, data: a.data },
-      })),
-      { type: 'text', text: m.content || 'Analyze these images.' },
-    ]
-    return { role: m.role, content }
-  })
-}
-
-/** Stream via Anthropic SDK (when API key is available) */
-async function streamViaAnthropicSDK(apiKey: string, body: ChatBody, model?: string) {
-  const { default: Anthropic } = await import('@anthropic-ai/sdk')
-  // Disable automatic retries so auth/balance errors (429) surface immediately
-  // instead of waiting through exponential backoff retry cycles.
-  const client = new Anthropic({ apiKey, maxRetries: 0 })
-
-  const stream = new ReadableStream({
-    async start(controller) {
-      const encoder = new TextEncoder()
-      const send = (type: string, content: string) => {
-        try {
-          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type, content })}\n\n`))
-        } catch { /* stream already closed */ }
-      }
-      const pingTimer = setInterval(() => send('ping', ''), KEEPALIVE_INTERVAL_MS)
-
-      // Abort if the API provider doesn't produce any event within the timeout.
-      // Catches slow proxies, invalid keys on slow endpoints, etc.
-      const connectAbort = new AbortController()
-      let gotSdkEvent = false
-      const connectTimer = setTimeout(() => {
-        if (!gotSdkEvent) connectAbort.abort()
-      }, API_CONNECT_TIMEOUT_MS)
-
-      try {
-        const thinking = getAnthropicThinkingConfig(body)
-        const messageStream = client.messages.stream({
-          model: model || 'claude-sonnet-4-5-20250929',
-          max_tokens: 16384,
-          system: body.system,
-          messages: buildAnthropicMessages(body) as any,
-          ...(body.effort ? { effort: body.effort } : {}),
-          ...(thinking ? { thinking } : {}),
-        }, { signal: connectAbort.signal })
-
-        for await (const ev of messageStream) {
-          if (!gotSdkEvent) {
-            gotSdkEvent = true
-            clearTimeout(connectTimer)
-          }
-          if (ev.type === 'content_block_delta') {
-            if (ev.delta.type === 'text_delta') {
-              clearInterval(pingTimer)
-              send('text', ev.delta.text)
-            } else if (ev.delta.type === 'thinking_delta') {
-              send('thinking', ev.delta.thinking)
-            }
-          }
-        }
-
-        send('done', '')
-      } catch (error) {
-        clearTimeout(connectTimer)
-        const content = connectAbort.signal.aborted && !gotSdkEvent
-          ? 'API connection timed out (30s). Check your API key and network configuration.'
-          : error instanceof Error ? error.message : 'Unknown error'
-        send('error', content)
-      } finally {
-        clearTimeout(connectTimer)
-        clearInterval(pingTimer)
-        controller.close()
-      }
-    },
-  })
-
-  return new Response(stream)
-}
-
 /** Stream via Claude Agent SDK (uses local Claude Code OAuth login, no API key needed) */
 function streamViaAgentSDK(body: ChatBody, model?: string) {
   const stream = new ReadableStream({
@@ -273,7 +162,6 @@ function streamViaAgentSDK(body: ChatBody, model?: string) {
           controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: 'ping', content: '' })}\n\n`))
         } catch { /* stream already closed */ }
       }, KEEPALIVE_INTERVAL_MS)
-      let emittedText = false
       let debugFile: string | undefined
       let attachTempDir: string | undefined
 
@@ -315,12 +203,12 @@ function streamViaAgentSDK(body: ChatBody, model?: string) {
         // only emit the final result text. This avoids streaming intermediate
         // tool-use preamble like "I need to read the file first".
         if (hasImageAttachments) {
-          const runImageQuery = async (modelOverride?: string): Promise<string> => {
+          const runImageQuery = async (): Promise<string> => {
             const q = query({
               prompt,
               options: {
                 systemPrompt: effectiveSystemPrompt,
-                ...(modelOverride ? { model: modelOverride } : {}),
+                ...(model ? { model } : {}),
                 maxTurns: 3,
                 plugins: [],
                 permissionMode: 'plan',
@@ -343,9 +231,6 @@ function streamViaAgentSDK(body: ChatBody, model?: string) {
                   const errors = 'errors' in message ? (message.errors as string[]) : []
                   const resultText = 'result' in message ? String(message.result ?? '') : ''
                   const errContent = errors.join('; ') || resultText || `Query ended with: ${message.subtype}`
-                  if (modelOverride && shouldRetryClaudeWithoutModel(errContent)) {
-                    throw new Error(errContent)
-                  }
                   throw new Error(errContent)
                 }
               }
@@ -355,33 +240,22 @@ function streamViaAgentSDK(body: ChatBody, model?: string) {
             }
           }
 
-          let resultText: string
-          try {
-            resultText = await runImageQuery(model)
-          } catch (error) {
-            const raw = error instanceof Error ? error.message : String(error)
-            if (model && shouldRetryClaudeWithoutModel(raw)) {
-              resultText = await runImageQuery(undefined)
-            } else {
-              throw error
-            }
-          }
+          const resultText = await runImageQuery()
 
           clearInterval(pingTimer)
           if (resultText) {
-            emittedText = true
             controller.enqueue(
               encoder.encode(`data: ${JSON.stringify({ type: 'text', content: resultText })}\n\n`),
             )
           }
         } else {
           // Normal text-only chat: stream partial messages as before
-          const runQuery = async (modelOverride?: string) => {
+          const runQuery = async () => {
             const q = query({
               prompt,
               options: {
                 systemPrompt: effectiveSystemPrompt,
-                ...(modelOverride ? { model: modelOverride } : {}),
+                ...(model ? { model } : {}),
                 maxTurns: 1,
                 includePartialMessages: true,
                 tools: [],
@@ -402,7 +276,6 @@ function streamViaAgentSDK(body: ChatBody, model?: string) {
                   const ev = message.event
                   if (ev.type === 'content_block_delta') {
                     if (ev.delta.type === 'text_delta') {
-                      emittedText = true
                       clearInterval(pingTimer)
                       const data = JSON.stringify({ type: 'text', content: ev.delta.text })
                       controller.enqueue(encoder.encode(`data: ${data}\n\n`))
@@ -413,17 +286,14 @@ function streamViaAgentSDK(body: ChatBody, model?: string) {
                     }
                   }
                 } else if (message.type === 'result') {
-                  const isErrorResult = 'is_error' in message && Boolean((message as { is_error?: boolean }).is_error)
-                  if (message.subtype !== 'success' || isErrorResult) {
-                    const errors = 'errors' in message ? (message.errors as string[]) : []
-                    const resultText = 'result' in message ? String(message.result ?? '') : ''
-                    const content = errors.join('; ') || resultText || `Query ended with: ${message.subtype}`
-                    if (modelOverride && !emittedText && shouldRetryClaudeWithoutModel(content)) {
-                      throw new Error(content)
-                    }
-                    controller.enqueue(
-                      encoder.encode(`data: ${JSON.stringify({ type: 'error', content })}\n\n`),
-                    )
+                    const isErrorResult = 'is_error' in message && Boolean((message as { is_error?: boolean }).is_error)
+                    if (message.subtype !== 'success' || isErrorResult) {
+                      const errors = 'errors' in message ? (message.errors as string[]) : []
+                      const resultText = 'result' in message ? String(message.result ?? '') : ''
+                      const content = errors.join('; ') || resultText || `Query ended with: ${message.subtype}`
+                      controller.enqueue(
+                        encoder.encode(`data: ${JSON.stringify({ type: 'error', content })}\n\n`),
+                      )
                   }
                 }
               }
@@ -432,16 +302,7 @@ function streamViaAgentSDK(body: ChatBody, model?: string) {
             }
           }
 
-          try {
-            await runQuery(model)
-          } catch (error) {
-            const raw = error instanceof Error ? error.message : String(error)
-            if (model && !emittedText && shouldRetryClaudeWithoutModel(raw)) {
-              await runQuery(undefined)
-            } else {
-              throw error
-            }
-          }
+          await runQuery()
         }
 
         controller.enqueue(

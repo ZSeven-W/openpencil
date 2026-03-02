@@ -4,6 +4,7 @@ import { useCanvasStore } from '@/stores/canvas-store'
 import { useDocumentStore, getActivePageChildren } from '@/stores/document-store'
 import { useHistoryStore } from '@/stores/history-store'
 import { cloneNodesWithNewIds } from '@/utils/node-clone'
+import { tryPasteFigmaFromClipboard } from '@/hooks/use-figma-paste'
 import {
   supportsFileSystemAccess,
   writeToFileHandle,
@@ -147,6 +148,12 @@ export function useKeyboardShortcuts() {
             newIds.push(cloned.id)
           }
           useCanvasStore.getState().setSelection(newIds, newIds[0] ?? null)
+        } else {
+          // Internal clipboard empty — try reading Figma data from system clipboard.
+          // The native `paste` event may not fire when a non-editable element (canvas)
+          // has focus, so we also read via the Clipboard API as a fallback.
+          e.preventDefault()
+          tryPasteFigmaFromClipboard()
         }
         return
       }

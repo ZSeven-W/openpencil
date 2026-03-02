@@ -87,7 +87,6 @@ OpenPencil integrates with multiple AI coding agents to generate full-page desig
 
 | Agent | Setup |
 | --- | --- |
-| **Anthropic API** | Set `ANTHROPIC_API_KEY` in `.env` |
 | **Claude Code** | No config — uses Claude Agent SDK with local OAuth |
 | **Codex CLI** | Connect in Agent Settings (`Cmd+,`) |
 | **OpenCode** | Connect in Agent Settings (`Cmd+,`) |
@@ -109,7 +108,7 @@ OpenPencil integrates with multiple AI coding agents to generate full-page desig
 | **Desktop** | Electron 35 |
 | **AI** | Anthropic SDK · Claude Agent SDK · OpenCode SDK |
 | **Runtime** | Bun · Vite 7 |
-| **File format** | `.pen` — JSON-based, human-readable, Git-friendly |
+| **File format** | `.op` — JSON-based, human-readable, Git-friendly |
 
 ## Project Structure
 

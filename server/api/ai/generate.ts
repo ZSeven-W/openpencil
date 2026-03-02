@@ -10,20 +10,16 @@ interface GenerateBody {
   system: string
   message: string
   model?: string
-  provider?: string
+  provider?: 'anthropic' | 'openai' | 'opencode'
   thinkingMode?: 'adaptive' | 'disabled' | 'enabled'
   thinkingBudgetTokens?: number
   effort?: 'low' | 'medium' | 'high' | 'max'
 }
 
-function shouldRetryClaudeWithoutModel(raw: string): boolean {
-  return /process exited with code 1|invalid model|unknown model|model.*not/i.test(raw)
-}
-
 /**
  * Non-streaming AI generation endpoint.
- * Tries ANTHROPIC_API_KEY first (via Anthropic SDK);
- * falls back to local Claude Code (via Agent SDK, uses OAuth login).
+ * Routes to the appropriate provider SDK based on the `provider` field.
+ * Requires explicit provider and model; no fallback routing.
  */
 export default defineEventHandler(async (event) => {
   const body = await readBody<GenerateBody>(event)
@@ -32,50 +28,30 @@ export default defineEventHandler(async (event) => {
     setResponseHeaders(event, { 'Content-Type': 'application/json' })
     return { error: 'Missing required fields: system, message' }
   }
+  if (!body.provider) {
+    setResponseHeaders(event, { 'Content-Type': 'application/json' })
+    return { error: 'Missing provider. Provider fallback is disabled.' }
+  }
+  if (!body.model?.trim()) {
+    setResponseHeaders(event, { 'Content-Type': 'application/json' })
+    return { error: 'Missing model. Model fallback is disabled.' }
+  }
 
-  // Explicit provider routing
+  if (body.provider === 'anthropic') {
+    return generateViaAgentSDK(body, body.model)
+  }
   if (body.provider === 'opencode') {
     return generateViaOpenCode(body, body.model)
   }
   if (body.provider === 'openai') {
     return generateViaCodex(body, body.model)
   }
-
-  // Default: existing behavior (backward-compatible)
-  const apiKey = process.env.ANTHROPIC_API_KEY
-  if (apiKey) {
-    try {
-      return await generateViaAnthropicSDK(apiKey, body, body.model)
-    } catch {
-      // SDK not installed or failed — fall back to Agent SDK
-    }
-  }
-  return generateViaAgentSDK(body, body.model)
+  return { error: 'Missing or unsupported provider. Provider fallback is disabled.' }
 })
-
-/** Generate via Anthropic SDK */
-async function generateViaAnthropicSDK(apiKey: string, body: GenerateBody, model?: string) {
-  try {
-    const { default: Anthropic } = await import('@anthropic-ai/sdk')
-    const client = new Anthropic({ apiKey })
-    const response = await client.messages.create({
-      model: model || 'claude-sonnet-4-5-20250929',
-      max_tokens: 4096,
-      system: body.system,
-      messages: [{ role: 'user', content: body.message }],
-    })
-
-    const textBlock = response.content.find((b: { type: string }) => b.type === 'text')
-    return { text: textBlock && 'text' in textBlock ? textBlock.text : '' }
-  } catch (error) {
-    const message = error instanceof Error ? error.message : 'Unknown error'
-    return { error: message }
-  }
-}
 
 /** Generate via Claude Agent SDK (uses local Claude Code OAuth login, no API key needed) */
 async function generateViaAgentSDK(body: GenerateBody, model?: string): Promise<{ text?: string; error?: string }> {
-  const runQuery = async (modelOverride?: string): Promise<{ text?: string; error?: string }> => {
+  const runQuery = async (): Promise<{ text?: string; error?: string }> => {
     const { query } = await import('@anthropic-ai/claude-agent-sdk')
 
     // Remove CLAUDECODE env to allow running from within a CC terminal
@@ -88,7 +64,7 @@ async function generateViaAgentSDK(body: GenerateBody, model?: string): Promise<
       prompt: body.message,
       options: {
         systemPrompt: body.system,
-        ...(modelOverride ? { model: modelOverride } : {}),
+        ...(model ? { model } : {}),
         maxTurns: 1,
         tools: [],
         plugins: [],
@@ -120,21 +96,9 @@ async function generateViaAgentSDK(body: GenerateBody, model?: string): Promise<
   }
 
   try {
-    const first = await runQuery(model)
-    if (model && first.error && shouldRetryClaudeWithoutModel(first.error)) {
-      return await runQuery(undefined)
-    }
-    return first
+    return await runQuery()
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
-    if (model && shouldRetryClaudeWithoutModel(message)) {
-      try {
-        return await runQuery(undefined)
-      } catch (retryError) {
-        const retryMessage = retryError instanceof Error ? retryError.message : String(retryError)
-        return { error: retryMessage }
-      }
-    }
     return { error: message }
   }
 }

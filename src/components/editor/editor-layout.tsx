@@ -20,6 +20,7 @@ import { useDocumentStore } from '@/stores/document-store'
 import { useAgentSettingsStore } from '@/stores/agent-settings-store'
 import { useUIKitStore } from '@/stores/uikit-store'
 import { useElectronMenu } from '@/hooks/use-electron-menu'
+import { useFigmaPaste } from '@/hooks/use-figma-paste'
 
 const FabricCanvas = lazy(() => import('@/canvas/fabric-canvas'))
 
@@ -107,6 +108,9 @@ export default function EditorLayout() {
 
   // Handle Electron native menu actions
   useElectronMenu()
+
+  // Handle Figma clipboard paste
+  useFigmaPaste()
 
   // Hydrate persisted settings
   useEffect(() => {
