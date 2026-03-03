@@ -11,7 +11,7 @@ import { GitHubProvider } from 'electron-updater/out/providers/GitHubProvider'
 import { execSync } from 'node:child_process'
 import { fork, type ChildProcess } from 'node:child_process'
 import { createServer } from 'node:net'
-import { join } from 'node:path'
+import { join, resolve, extname } from 'node:path'
 import { readFile, writeFile } from 'node:fs/promises'
 
 let mainWindow: BrowserWindow | null = null
@@ -375,8 +375,16 @@ function setupIPC(): void {
   ipcMain.handle(
     'dialog:saveToPath',
     async (_event, payload: { filePath: string; content: string }) => {
-      await writeFile(payload.filePath, payload.content, 'utf-8')
-      return payload.filePath
+      const resolved = resolve(payload.filePath)
+      if (resolved.includes('\0')) {
+        throw new Error('Invalid file path')
+      }
+      const ext = extname(resolved).toLowerCase()
+      if (ext !== '.op' && ext !== '.pen') {
+        throw new Error('Only .op and .pen file extensions are allowed')
+      }
+      await writeFile(resolved, payload.content, 'utf-8')
+      return resolved
     },
   )
 

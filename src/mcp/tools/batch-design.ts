@@ -10,6 +10,7 @@ import {
   setDocChildren,
 } from '../utils/node-operations'
 import { generateId } from '../utils/id'
+import { sanitizeObject } from '../utils/sanitize'
 import type { PenDocument, PenNode } from '../../types/pen'
 
 export interface BatchDesignParams {
@@ -369,7 +370,7 @@ function parseJsonArg(str: string): Record<string, any> {
   // Handle single-quoted strings → double-quoted
   normalized = normalized.replace(/'/g, '"')
   try {
-    return JSON.parse(normalized)
+    return sanitizeObject(JSON.parse(normalized))
   } catch {
     throw new Error(`Failed to parse JSON: ${str}`)
   }

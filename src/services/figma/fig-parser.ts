@@ -11,6 +11,9 @@ const ZSTD_MAGIC = [0x28, 0xB5, 0x2F, 0xFD]
 const PNG_MAGIC_0 = 137
 const PNG_MAGIC_1 = 80
 
+const MAX_UNZIPPED_SIZE = 100 * 1024 * 1024 // 100MB total
+const MAX_IMAGE_SIZE = 50 * 1024 * 1024 // 50MB per image
+
 const int32 = new Int32Array(1)
 const uint8 = new Uint8Array(int32.buffer)
 const uint32 = new Uint32Array(int32.buffer)
@@ -100,8 +103,16 @@ function figToBinaryParts(fileBuffer: ArrayBuffer): FigBinaryResult {
     }
 
     // Extract image files stored under images/ directory (keyed by hex hash)
+    let totalSize = 0
     for (const [path, bytes] of Object.entries(unzipped)) {
+      totalSize += bytes.length
+      if (totalSize > MAX_UNZIPPED_SIZE) {
+        throw new Error('Decompressed file exceeds maximum size limit (100MB)')
+      }
       if (path.startsWith('images/') && bytes.length > 0) {
+        if (bytes.length > MAX_IMAGE_SIZE) {
+          throw new Error('Image exceeds maximum size limit (50MB)')
+        }
         const key = path.slice(7) // Remove "images/" prefix
         imageFiles.set(key, bytes)
       }
