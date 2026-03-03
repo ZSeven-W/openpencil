@@ -21,6 +21,7 @@ import { useAgentSettingsStore } from '@/stores/agent-settings-store'
 import { useUIKitStore } from '@/stores/uikit-store'
 import { useElectronMenu } from '@/hooks/use-electron-menu'
 import { useFigmaPaste } from '@/hooks/use-figma-paste'
+import { useMcpSync } from '@/hooks/use-mcp-sync'
 
 const FabricCanvas = lazy(() => import('@/canvas/fabric-canvas'))
 
@@ -111,6 +112,9 @@ export default function EditorLayout() {
 
   // Handle Figma clipboard paste
   useFigmaPaste()
+
+  // MCP ↔ canvas real-time sync
+  useMcpSync()
 
   // Hydrate persisted settings
   useEffect(() => {

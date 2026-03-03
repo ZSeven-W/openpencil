@@ -85,6 +85,7 @@ interface DocumentStoreState {
   reorderPage: (pageId: string, direction: 'left' | 'right') => void
   duplicatePage: (pageId: string) => string | null
 
+  applyExternalDocument: (doc: PenDocument) => void
   applyHistoryState: (doc: PenDocument) => void
   loadDocument: (
     doc: PenDocument,
@@ -681,6 +682,19 @@ export const useDocumentStore = create<DocumentStoreState>(
 
     // --- Page management (extracted to document-store-pages.ts) ---
     ...createPageActions(set, get),
+
+    applyExternalDocument: (doc) => {
+      // Push current state to history so MCP changes are undoable
+      useHistoryStore.getState().pushState(get().document)
+      const migrated = migrateToPages(doc)
+      set({ document: migrated, isDirty: true })
+      // Preserve activePageId if page still exists
+      const activePageId = useCanvasStore.getState().activePageId
+      const pageExists = migrated.pages?.some((p) => p.id === activePageId)
+      if (!pageExists && migrated.pages && migrated.pages.length > 0) {
+        useCanvasStore.getState().setActivePageId(migrated.pages[0].id)
+      }
+    },
 
     applyHistoryState: (doc) =>
       set({ document: doc, isDirty: true }),

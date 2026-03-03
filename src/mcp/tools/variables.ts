@@ -1,5 +1,4 @@
-import { resolve } from 'node:path'
-import { openDocument, saveDocument } from '../document-manager'
+import { openDocument, saveDocument, resolveDocPath } from '../document-manager'
 import type { VariableDefinition } from '../../types/variables'
 
 export interface GetVariablesParams {
@@ -15,7 +14,7 @@ export interface SetVariablesParams {
 export async function handleGetVariables(
   params: GetVariablesParams,
 ): Promise<{ variables: Record<string, VariableDefinition>; themes: Record<string, string[]> }> {
-  const filePath = resolve(params.filePath)
+  const filePath = resolveDocPath(params.filePath)
   const doc = await openDocument(filePath)
   return {
     variables: doc.variables ?? {},
@@ -26,7 +25,7 @@ export async function handleGetVariables(
 export async function handleSetVariables(
   params: SetVariablesParams,
 ): Promise<{ variables: Record<string, VariableDefinition> }> {
-  const filePath = resolve(params.filePath)
+  const filePath = resolveDocPath(params.filePath)
   const doc = await openDocument(filePath)
 
   if (params.replace) {

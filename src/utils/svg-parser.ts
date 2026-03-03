@@ -65,6 +65,7 @@ const SKIP_TAGS = new Set([
   'defs', 'style', 'title', 'desc', 'metadata',
   'clippath', 'mask', 'filter', 'lineargradient', 'radialgradient',
   'symbol', 'marker', 'pattern',
+  'script', 'foreignobject', 'animate', 'animatemotion', 'set',
 ])
 
 function parseChildren(
@@ -234,7 +235,8 @@ function getAttr(el: Element, name: string): string | null {
   // Check inline style first (higher priority)
   const style = el.getAttribute('style')
   if (style) {
-    const m = style.match(new RegExp(`${name}\\s*:\\s*([^;]+)`))
+    const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    const m = style.match(new RegExp(`${escaped}\\s*:\\s*([^;]+)`))
     if (m) return m[1].trim()
   }
   return el.getAttribute(name)
