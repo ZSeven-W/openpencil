@@ -11,8 +11,9 @@ import { GitHubProvider } from 'electron-updater/out/providers/GitHubProvider'
 import { execSync } from 'node:child_process'
 import { fork, type ChildProcess } from 'node:child_process'
 import { createServer } from 'node:net'
-import { join } from 'node:path'
-import { readFile, writeFile } from 'node:fs/promises'
+import { join, resolve, extname } from 'node:path'
+import { homedir } from 'node:os'
+import { readFile, writeFile, mkdir, unlink } from 'node:fs/promises'
 
 let mainWindow: BrowserWindow | null = null
 let nitroProcess: ChildProcess | null = null
@@ -188,6 +189,34 @@ function fixPath(): void {
     }
   } catch {
     // Packaged app may not have a login shell — ignore
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Port file for MCP sync discovery (~/.openpencil/.port)
+// ---------------------------------------------------------------------------
+
+const PORT_FILE_DIR = join(homedir(), '.openpencil')
+const PORT_FILE_PATH = join(PORT_FILE_DIR, '.port')
+
+async function writePortFile(port: number): Promise<void> {
+  try {
+    await mkdir(PORT_FILE_DIR, { recursive: true })
+    await writeFile(
+      PORT_FILE_PATH,
+      JSON.stringify({ port, pid: process.pid, timestamp: Date.now() }),
+      'utf-8',
+    )
+  } catch {
+    // Non-critical — MCP sync will fall back to file I/O
+  }
+}
+
+async function cleanupPortFile(): Promise<void> {
+  try {
+    await unlink(PORT_FILE_PATH)
+  } catch {
+    // Ignore if already removed
   }
 }
 
@@ -375,8 +404,24 @@ function setupIPC(): void {
   ipcMain.handle(
     'dialog:saveToPath',
     async (_event, payload: { filePath: string; content: string }) => {
-      await writeFile(payload.filePath, payload.content, 'utf-8')
-      return payload.filePath
+      const resolved = resolve(payload.filePath)
+      if (resolved.includes('\0')) {
+        throw new Error('Invalid file path')
+      }
+      const ext = extname(resolved).toLowerCase()
+      if (ext !== '.op' && ext !== '.pen') {
+        throw new Error('Only .op and .pen file extensions are allowed')
+      }
+      // Directory allowlist: only allow writes under user home or OS temp
+      const allowedRoots = [app.getPath('home'), app.getPath('temp')]
+      const inAllowedDir = allowedRoots.some(
+        (root) => resolved === root || resolved.startsWith(root + '/') || resolved.startsWith(root + '\\'),
+      )
+      if (!inAllowedDir) {
+        throw new Error('File path must be within the user home or temp directory')
+      }
+      await writeFile(resolved, payload.content, 'utf-8')
+      return resolved
     },
   )
 
@@ -532,11 +577,15 @@ app.on('ready', async () => {
     try {
       serverPort = await startNitroServer()
       console.log(`Nitro server started on port ${serverPort}`)
+      await writePortFile(serverPort)
     } catch (err) {
       console.error('Failed to start Nitro server:', err)
       app.quit()
       return
     }
+  } else {
+    // Dev mode: Vite dev server runs on port 3000
+    await writePortFile(3000)
   }
 
   createWindow()
@@ -558,7 +607,8 @@ app.on('activate', () => {
   }
 })
 
-app.on('before-quit', () => {
+app.on('before-quit', async () => {
+  await cleanupPortFile()
   if (nitroProcess) {
     nitroProcess.kill()
     nitroProcess = null

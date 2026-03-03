@@ -9,6 +9,17 @@ import {
   getClaudeAgentDebugFilePath,
 } from '../../utils/resolve-claude-agent-env'
 
+/** Pattern for detecting sensitive data in debug log output */
+export const SENSITIVE_LOG_PATTERN = /ANTHROPIC_API_KEY=|Authorization:\s*Bearer|api[_-]?key\s*[:=]/i
+
+/** Allowed media types for image attachments */
+export const ALLOWED_MEDIA_TYPES = new Set(['image/png', 'image/jpeg', 'image/gif', 'image/webp'])
+
+/** Resolve file extension from media type, falling back to 'png' for disallowed types */
+export function resolveMediaExtension(mediaType: string): string {
+  return ALLOWED_MEDIA_TYPES.has(mediaType) ? mediaType.split('/')[1] : 'png'
+}
+
 interface ChatAttachmentWire {
   name: string
   mediaType: string
@@ -30,7 +41,8 @@ async function readDebugTail(path?: string, maxLines = 40): Promise<string[] | u
   try {
     const raw = await readFile(path, 'utf-8')
     const lines = raw.split('\n').filter((l) => l.trim().length > 0)
-    return lines.slice(-maxLines)
+    const sanitized = lines.filter(l => !SENSITIVE_LOG_PATTERN.test(l))
+    return sanitized.slice(-maxLines)
   } catch {
     return undefined
   }
@@ -118,16 +130,17 @@ async function saveAttachmentsToTempFiles(
 ): Promise<{ tempDir: string; files: string[] }> {
   let tempDir: string
   if (insideProject) {
-    const { mkdirSync } = await import('node:fs')
+    const { mkdirSync, chmodSync } = await import('node:fs')
     const baseDir = join(process.cwd(), '.openpencil-tmp')
-    mkdirSync(baseDir, { recursive: true })
+    mkdirSync(baseDir, { recursive: true, mode: 0o700 })
+    chmodSync(baseDir, 0o700)
     tempDir = await mkdtemp(join(baseDir, 'attach-'))
   } else {
     tempDir = await mkdtemp(join(tmpdir(), 'openpencil-attach-'))
   }
   const files: string[] = []
   for (const att of attachments) {
-    const ext = att.mediaType.split('/')[1] || 'png'
+    const ext = resolveMediaExtension(att.mediaType)
     const filePath = join(tempDir, `${files.length}.${ext}`)
     await writeFile(filePath, Buffer.from(att.data, 'base64'))
     files.push(filePath)

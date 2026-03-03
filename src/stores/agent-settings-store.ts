@@ -3,6 +3,7 @@ import type {
   AIProviderType,
   AIProviderConfig,
   MCPCliIntegration,
+  MCPTransportMode,
   GroupedModel,
 } from '@/types/agent-settings'
 
@@ -11,6 +12,8 @@ const STORAGE_KEY = 'openpencil-agent-settings'
 interface PersistedState {
   providers: Record<AIProviderType, AIProviderConfig>
   mcpIntegrations: MCPCliIntegration[]
+  mcpTransportMode: MCPTransportMode
+  mcpHttpPort: number
 }
 
 interface AgentSettingsState extends PersistedState {
@@ -24,6 +27,7 @@ interface AgentSettingsState extends PersistedState {
   ) => void
   disconnectProvider: (provider: AIProviderType) => void
   toggleMCPIntegration: (tool: string) => void
+  setMCPTransport: (mode: MCPTransportMode, port?: number) => void
   setDialogOpen: (open: boolean) => void
   persist: () => void
   hydrate: () => void
@@ -64,6 +68,8 @@ const DEFAULT_MCP_INTEGRATIONS: MCPCliIntegration[] = [
 export const useAgentSettingsStore = create<AgentSettingsState>((set, get) => ({
   providers: { ...DEFAULT_PROVIDERS },
   mcpIntegrations: [...DEFAULT_MCP_INTEGRATIONS],
+  mcpTransportMode: 'stdio',
+  mcpHttpPort: 3100,
   dialogOpen: false,
   isHydrated: false,
 
@@ -97,12 +103,21 @@ export const useAgentSettingsStore = create<AgentSettingsState>((set, get) => ({
       ),
     })),
 
+  setMCPTransport: (mode, port) =>
+    set({
+      mcpTransportMode: mode,
+      ...(port != null && { mcpHttpPort: port }),
+    }),
+
   setDialogOpen: (dialogOpen) => set({ dialogOpen }),
 
   persist: () => {
     try {
-      const { providers, mcpIntegrations } = get()
-      localStorage.setItem(STORAGE_KEY, JSON.stringify({ providers, mcpIntegrations }))
+      const { providers, mcpIntegrations, mcpTransportMode, mcpHttpPort } = get()
+      localStorage.setItem(
+        STORAGE_KEY,
+        JSON.stringify({ providers, mcpIntegrations, mcpTransportMode, mcpHttpPort }),
+      )
     } catch {
       // ignore
     }
@@ -125,7 +140,15 @@ export const useAgentSettingsStore = create<AgentSettingsState>((set, get) => ({
         }
         set({ providers: merged })
       }
-      if (data.mcpIntegrations) set({ mcpIntegrations: data.mcpIntegrations })
+      if (data.mcpIntegrations) {
+        const mergedMcp = DEFAULT_MCP_INTEGRATIONS.map((def) => {
+          const saved = data.mcpIntegrations!.find((m) => m.tool === def.tool)
+          return saved ? { ...def, ...saved } : def
+        })
+        set({ mcpIntegrations: mergedMcp })
+      }
+      if (data.mcpTransportMode) set({ mcpTransportMode: data.mcpTransportMode })
+      if (data.mcpHttpPort) set({ mcpHttpPort: data.mcpHttpPort })
     } catch {
       // ignore
     } finally {

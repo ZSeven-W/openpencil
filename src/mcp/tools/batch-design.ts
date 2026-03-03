@@ -1,20 +1,34 @@
-import { resolve } from 'node:path'
-import { openDocument, saveDocument } from '../document-manager'
+import { openDocument, saveDocument, resolveDocPath } from '../document-manager'
 import {
   findNodeInTree,
   insertNodeInTree,
   updateNodeInTree,
   removeNodeFromTree,
   cloneNodeWithNewIds,
+  flattenNodes,
   getDocChildren,
   setDocChildren,
 } from '../utils/node-operations'
 import { generateId } from '../utils/id'
+import { sanitizeObject } from '../utils/sanitize'
+import { resolveTreeRoles, resolveTreePostPass } from '../../services/ai/role-resolver'
+import '../../services/ai/role-definitions/index'
+import {
+  applyIconPathResolution,
+  applyNoEmojiIconHeuristic,
+} from '../../services/ai/icon-resolver'
+import {
+  ensureUniqueNodeIds,
+  sanitizeLayoutChildPositions,
+  sanitizeScreenFrameBounds,
+} from '../../services/ai/design-node-sanitization'
 import type { PenDocument, PenNode } from '../../types/pen'
 
 export interface BatchDesignParams {
   filePath: string
   operations: string
+  postProcess?: boolean
+  canvasWidth?: number
 }
 
 interface OpResult {
@@ -35,8 +49,8 @@ interface OpResult {
  */
 export async function handleBatchDesign(
   params: BatchDesignParams,
-): Promise<{ results: OpResult[]; nodeCount: number }> {
-  const filePath = resolve(params.filePath)
+): Promise<{ results: OpResult[]; nodeCount: number; postProcessed?: boolean }> {
+  const filePath = resolveDocPath(params.filePath)
   let doc = await openDocument(filePath)
   doc = structuredClone(doc)
 
@@ -57,11 +71,53 @@ export async function handleBatchDesign(
     }
   }
 
+  // --- Post-processing ---
+  let postProcessed = false
+  if (params.postProcess) {
+    const canvasWidth = params.canvasWidth ?? 1200
+    const children = getDocChildren(doc)
+
+    // Find root nodes that were inserted (first binding is typically the root)
+    const insertedIds = new Set(results.map((r) => r.nodeId))
+    const rootTargets: PenNode[] = []
+    for (const id of insertedIds) {
+      const node = findNodeInTree(children, id)
+      if (node) rootTargets.push(node)
+    }
+
+    // If no specific roots found, process all top-level children
+    const targets = rootTargets.length > 0 ? rootTargets : children
+
+    for (const target of targets) {
+      // 1. Role resolution
+      resolveTreeRoles(target, canvasWidth)
+      // 2. Tree post-pass (cross-node fixes)
+      resolveTreePostPass(target, canvasWidth)
+
+      // 3. Icon resolution + emoji removal
+      const flat = flattenNodes([target])
+      for (const node of flat) {
+        if (node.type === 'path') applyIconPathResolution(node)
+        if (node.type === 'text') applyNoEmojiIconHeuristic(node)
+      }
+
+      // 4. Sanitization
+      const usedIds = new Set<string>()
+      const idCounters = new Map<string, number>()
+      ensureUniqueNodeIds(target, usedIds, idCounters)
+      sanitizeLayoutChildPositions(target, false)
+      sanitizeScreenFrameBounds(target)
+    }
+
+    postProcessed = true
+  }
+
   await saveDocument(filePath, doc)
 
   return {
     results,
     nodeCount: countNodes(getDocChildren(doc)),
+    postProcessed: postProcessed || undefined,
   }
 }
 
@@ -81,6 +137,26 @@ function executeLine(
       case 'I': {
         const { parent, data } = parseInsertArgs(argsStr, bindings)
         const node = { ...data, id: generateId() } as PenNode
+
+        // Auto-replace: when inserting a frame at root level and an empty
+        // root frame exists, replace it instead of creating a sibling.
+        if (parent === null && data.type === 'frame') {
+          const children = getDocChildren(doc)
+          const emptyIdx = children.findIndex((n) => isEmptyFrame(n))
+          if (emptyIdx !== -1) {
+            const emptyFrame = children[emptyIdx]
+            // Inherit position from the empty frame so the design lands in the right spot
+            if (emptyFrame.x !== undefined) (node as any).x = emptyFrame.x
+            if (emptyFrame.y !== undefined) (node as any).y = emptyFrame.y
+            let updated = removeNodeFromTree(children, emptyFrame.id)
+            updated = insertNodeInTree(updated, null, node, emptyIdx)
+            setDocChildren(doc, updated)
+            bindings.set(binding, node.id)
+            results.push({ binding, nodeId: node.id })
+            break
+          }
+        }
+
         setDocChildren(doc, insertNodeInTree(getDocChildren(doc), parent, node))
         bindings.set(binding, node.id)
         results.push({ binding, nodeId: node.id })
@@ -369,7 +445,7 @@ function parseJsonArg(str: string): Record<string, any> {
   // Handle single-quoted strings → double-quoted
   normalized = normalized.replace(/'/g, '"')
   try {
-    return JSON.parse(normalized)
+    return sanitizeObject(JSON.parse(normalized))
   } catch {
     throw new Error(`Failed to parse JSON: ${str}`)
   }
@@ -443,5 +519,13 @@ function countNodes(nodes: PenNode[]): number {
     }
   }
   return count
+}
+
+/** A root frame is "empty" if it has no children. */
+function isEmptyFrame(node: PenNode): boolean {
+  return (
+    node.type === 'frame' &&
+    (!('children' in node) || !node.children || node.children.length === 0)
+  )
 }
 

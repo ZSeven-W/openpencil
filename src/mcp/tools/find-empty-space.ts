@@ -1,5 +1,4 @@
-import { resolve } from 'node:path'
-import { openDocument } from '../document-manager'
+import { openDocument, resolveDocPath } from '../document-manager'
 import { getNodeBounds, findNodeInTree, getDocChildren } from '../utils/node-operations'
 import type { PenNode } from '../../types/pen'
 
@@ -20,7 +19,7 @@ export interface FindEmptySpaceResult {
 export async function handleFindEmptySpace(
   params: FindEmptySpaceParams,
 ): Promise<FindEmptySpaceResult> {
-  const filePath = resolve(params.filePath)
+  const filePath = resolveDocPath(params.filePath)
   const doc = await openDocument(filePath)
   const padding = params.padding ?? 50
 

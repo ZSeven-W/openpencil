@@ -5,8 +5,8 @@
 <h1 align="center">OpenPencil</h1>
 
 <p align="center">
-  <strong>Open-source design tool with a Design-as-Code philosophy.</strong><br />
-  Design on canvas. Generate code. Let AI build screens from a prompt.
+  <strong>AI-native open-source design tool. Design-as-Code.</strong><br />
+  Prompt to UI on canvas. Multi-agent orchestration. Built-in MCP server. Code generation.
 </p>
 
 <p align="center">
@@ -18,8 +18,8 @@
 
 <p align="center">
   <a href="#quick-start">Quick Start</a> ·
+  <a href="#ai-native-design">AI</a> ·
   <a href="#features">Features</a> ·
-  <a href="#ai-agents">AI Agents</a> ·
   <a href="https://discord.gg/fE9STbMG">Discord</a> ·
   <a href="#contributing">Contributing</a>
 </p>
@@ -53,6 +53,33 @@ bun run electron:dev
 
 > **Prerequisites:** [Bun](https://bun.sh/) >= 1.0 and [Node.js](https://nodejs.org/) >= 18
 
+## AI-Native Design
+
+OpenPencil is built around AI from the ground up — not as a plugin, but as a core workflow.
+
+**Prompt to UI**
+- **Text-to-design** — describe a page, get it generated on canvas in real-time with streaming animation
+- **Orchestrator** — decomposes complex pages into spatial sub-tasks for parallel generation
+- **Design modification** — select elements, then describe changes in natural language
+- **Vision input** — attach screenshots or mockups for reference-based design
+
+**Multi-Agent Support**
+
+| Agent | Setup |
+| --- | --- |
+| **Claude Code** | No config — uses Claude Agent SDK with local OAuth |
+| **Codex CLI** | Connect in Agent Settings (`Cmd+,`) |
+| **OpenCode** | Connect in Agent Settings (`Cmd+,`) |
+
+**MCP Server**
+- Built-in MCP server — one-click install into Claude Code / Codex / Gemini / OpenCode / Kiro CLIs
+- Design automation from terminal: read, create, and modify `.op` files via any MCP-compatible agent
+
+**Code Generation**
+- React + Tailwind CSS
+- HTML + CSS
+- CSS Variables from design tokens
+
 ## Features
 
 **Canvas & Drawing**
@@ -68,11 +95,6 @@ bun run electron:dev
 - Component system — reusable components with instances and overrides
 - CSS sync — auto-generated custom properties, `var(--name)` in code output
 
-**Code Generation**
-- React + Tailwind CSS
-- HTML + CSS
-- CSS Variables from design tokens
-
 **Figma Import**
 - Import `.fig` files with layout, fills, strokes, effects, text, images, and vectors preserved
 
@@ -80,22 +102,6 @@ bun run electron:dev
 - Native macOS, Windows, and Linux via Electron
 - Auto-update from GitHub Releases
 - Native application menu and file dialogs
-
-## AI Agents
-
-OpenPencil integrates with multiple AI coding agents to generate full-page designs from a single prompt — directly on canvas with streaming animation.
-
-| Agent | Setup |
-| --- | --- |
-| **Claude Code** | No config — uses Claude Agent SDK with local OAuth |
-| **Codex CLI** | Connect in Agent Settings (`Cmd+,`) |
-| **OpenCode** | Connect in Agent Settings (`Cmd+,`) |
-
-- **Text-to-design** — describe a page, get it generated on canvas in real-time
-- **Image attachments** — attach screenshots or mockups for vision-based analysis
-- **Orchestrator** — decomposes complex pages into spatial sub-tasks for parallel generation
-- **Design modification** — select elements, then describe changes in natural language
-- **MCP server** — install into Claude Code / Codex / Gemini / OpenCode / Kiro CLIs for design automation from terminal
 
 ## Tech Stack
 
