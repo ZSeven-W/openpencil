@@ -16,6 +16,8 @@ export type MCPCliTool =
   | 'opencode-cli'
   | 'kiro-cli'
 
+export type MCPTransportMode = 'stdio' | 'http' | 'both'
+
 export interface MCPCliIntegration {
   tool: MCPCliTool
   displayName: string

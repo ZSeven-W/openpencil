@@ -11,8 +11,10 @@ const ZSTD_MAGIC = [0x28, 0xB5, 0x2F, 0xFD]
 const PNG_MAGIC_0 = 137
 const PNG_MAGIC_1 = 80
 
-const MAX_UNZIPPED_SIZE = 100 * 1024 * 1024 // 100MB total
+const MAX_COMPRESSED_SIZE = 50 * 1024 * 1024 // 50MB compressed input — guard against oversized uploads before decompression
+const MAX_UNZIPPED_SIZE = 100 * 1024 * 1024 // 100MB total decompressed
 const MAX_IMAGE_SIZE = 50 * 1024 * 1024 // 50MB per image
+const MAX_ZIP_ENTRIES = 10_000 // guard against zip bombs with many small entries
 
 const int32 = new Int32Array(1)
 const uint8 = new Uint8Array(int32.buffer)
@@ -93,6 +95,12 @@ function figToBinaryParts(fileBuffer: ArrayBuffer): FigBinaryResult {
 
   // If not starting with "fig-kiwi", it's a ZIP archive containing canvas.fig
   if (!hasFigKiwiMagic(fileByte)) {
+    // Pre-decompression size check: reject oversized compressed input before
+    // UZIP.parse loads the full archive into memory (mitigates zip bombs).
+    if (fileBuffer.byteLength > MAX_COMPRESSED_SIZE) {
+      throw new Error('Compressed .fig file exceeds maximum size limit (50MB)')
+    }
+
     let unzipped: Record<string, Uint8Array>
     try {
       unzipped = UZIP.parse(fileBuffer)
@@ -100,6 +108,11 @@ function figToBinaryParts(fileBuffer: ArrayBuffer): FigBinaryResult {
       throw new Error(
         `Invalid .fig file: could not unzip (${e instanceof Error ? e.message : 'unknown error'})`
       )
+    }
+
+    const entryCount = Object.keys(unzipped).length
+    if (entryCount > MAX_ZIP_ENTRIES) {
+      throw new Error(`ZIP archive contains too many entries (${entryCount})`)
     }
 
     // Extract image files stored under images/ directory (keyed by hex hash)

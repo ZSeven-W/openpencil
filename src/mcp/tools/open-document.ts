@@ -1,11 +1,15 @@
-import { resolve } from 'node:path'
 import {
   openDocument,
   createEmptyDocument,
   saveDocument,
   fileExists,
+  getSyncUrl,
+  resolveDocPath,
+  LIVE_CANVAS_PATH,
 } from '../document-manager'
-import type { PenDocument } from '../../types/pen'
+import { flattenNodes, getDocChildren } from '../utils/node-operations'
+import { buildDesignPrompt } from './design-prompt'
+import type { PenDocument, PenNode } from '../../types/pen'
 
 export interface OpenDocumentParams {
   filePath?: string
@@ -22,6 +26,8 @@ export interface OpenDocumentResult {
     hasVariables: boolean
     hasThemes: boolean
   }
+  context: string
+  designPrompt: string
 }
 
 export async function handleOpenDocument(
@@ -30,8 +36,23 @@ export async function handleOpenDocument(
   let filePath: string
   let doc: PenDocument
 
-  if (params.filePath) {
-    filePath = resolve(params.filePath)
+  if (!params.filePath || params.filePath === LIVE_CANVAS_PATH) {
+    // Live canvas mode: connect to the running Electron/dev server
+    const syncUrl = await getSyncUrl()
+    if (syncUrl) {
+      filePath = LIVE_CANVAS_PATH
+      doc = await openDocument(LIVE_CANVAS_PATH)
+    } else if (params.filePath === LIVE_CANVAS_PATH) {
+      throw new Error(
+        'No running OpenPencil instance found. Start the Electron app or dev server first.',
+      )
+    } else {
+      throw new Error(
+        'filePath is required when no OpenPencil instance is running. Provide a path to an existing .op file or a new file to create.',
+      )
+    }
+  } else {
+    filePath = resolveDocPath(params.filePath)
     const exists = await fileExists(filePath)
     if (exists) {
       doc = await openDocument(filePath)
@@ -40,10 +61,6 @@ export async function handleOpenDocument(
       doc = createEmptyDocument()
       await saveDocument(filePath, doc)
     }
-  } else {
-    throw new Error(
-      'filePath is required. Provide a path to an existing .op file or a new file to create.',
-    )
   }
 
   const pages = doc.pages?.map((p) => ({
@@ -66,5 +83,116 @@ export async function handleOpenDocument(
       hasVariables: !!doc.variables && Object.keys(doc.variables).length > 0,
       hasThemes: !!doc.themes && Object.keys(doc.themes).length > 0,
     },
+    context: buildDocumentContext(doc),
+    designPrompt: buildDesignPrompt(),
   }
+}
+
+// ---------------------------------------------------------------------------
+// Document context builder (merged from document-context.ts)
+// ---------------------------------------------------------------------------
+
+function buildDocumentContext(doc: PenDocument): string {
+  const children = getDocChildren(doc)
+  const allNodes = flattenNodes(children)
+
+  if (allNodes.length === 0) {
+    return 'Empty document. No existing nodes.'
+  }
+
+  const nodeSummary = allNodes
+    .slice(0, 20)
+    .map((n) => `${n.type}:${n.name ?? n.id}`)
+    .join(', ')
+
+  const canvasSize = estimateCanvasSize(children)
+
+  const parts: string[] = []
+  parts.push(`DOCUMENT SUMMARY:`)
+  parts.push(`- Total nodes: ${allNodes.length}`)
+  parts.push(`- Canvas size: ${canvasSize.width}x${canvasSize.height}`)
+  if (nodeSummary) {
+    parts.push(`- Nodes (first 20): ${nodeSummary}`)
+  }
+
+  // Hint about empty root frames that will be auto-replaced
+  const emptyRootFrames = children.filter(
+    (n) =>
+      n.type === 'frame' &&
+      (!('children' in n) || !(n as any).children || (n as any).children.length === 0),
+  )
+  if (emptyRootFrames.length > 0) {
+    const info = emptyRootFrames
+      .map((f) => {
+        const w = typeof (f as any).width === 'number' ? (f as any).width : 1200
+        const h = typeof (f as any).height === 'number' ? (f as any).height : 800
+        return `"${f.name ?? f.id}" (id: ${f.id}, ${w}x${h})`
+      })
+      .join(', ')
+    parts.push(
+      `- Empty root frame(s): ${info} — will be auto-replaced when you insert a root-level frame via I(null, ...)`,
+    )
+  }
+
+  const pageLines = buildPageContext(doc)
+  if (pageLines) parts.push('', pageLines)
+
+  const variableLines = buildVariableContext(doc)
+  if (variableLines) parts.push('', variableLines)
+
+  const themeLines = buildThemeContext(doc)
+  if (themeLines) parts.push('', themeLines)
+
+  return parts.join('\n')
+}
+
+function estimateCanvasSize(children: PenNode[]): {
+  width: number
+  height: number
+} {
+  for (const node of children) {
+    if (
+      node.type === 'frame' &&
+      typeof node.width === 'number' &&
+      typeof node.height === 'number'
+    ) {
+      if (node.width <= 500 && node.height >= 700) {
+        return { width: 375, height: 812 }
+      }
+      return { width: node.width, height: node.height }
+    }
+  }
+  return { width: 1200, height: 800 }
+}
+
+function buildVariableContext(doc: PenDocument): string {
+  if (!doc.variables || Object.keys(doc.variables).length === 0) return ''
+
+  const lines = ['DOCUMENT VARIABLES (use "$name" to reference):']
+  for (const [name, def] of Object.entries(doc.variables)) {
+    const themed = Array.isArray(def.value) ? ' [themed]' : ''
+    const displayValue = Array.isArray(def.value)
+      ? String(def.value[0]?.value ?? '')
+      : String(def.value)
+    lines.push(`  - ${name} (${def.type}): ${displayValue}${themed}`)
+  }
+  return lines.join('\n')
+}
+
+function buildThemeContext(doc: PenDocument): string {
+  if (!doc.themes || Object.keys(doc.themes).length === 0) return ''
+
+  const entries = Object.entries(doc.themes)
+    .map(([axis, variants]) => `${axis}: [${variants.join(',')}]`)
+    .join('; ')
+  return `Themes: ${entries}`
+}
+
+function buildPageContext(doc: PenDocument): string {
+  if (!doc.pages || doc.pages.length <= 1) return ''
+
+  const pageList = doc.pages
+    .map((p) => `${p.name} (${p.children.length} nodes)`)
+    .join(', ')
+  return `Pages: ${pageList}`
 }

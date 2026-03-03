@@ -1,9 +1,85 @@
 import { readFile, writeFile, access } from 'node:fs/promises'
 import { constants } from 'node:fs'
+import { homedir } from 'node:os'
+import { join, resolve } from 'node:path'
 import type { PenDocument } from '../types/pen'
 import { sanitizeObject } from './utils/sanitize'
 
 const cache = new Map<string, { doc: PenDocument; mtime: number }>()
+
+/** Special path indicating the MCP should operate on the live Electron canvas. */
+export const LIVE_CANVAS_PATH = 'live://canvas'
+
+/** Resolve filePath for MCP tools — passes through live://canvas, resolves file paths normally. */
+export function resolveDocPath(filePath: string): string {
+  if (filePath === LIVE_CANVAS_PATH) return LIVE_CANVAS_PATH
+  return resolve(filePath)
+}
+
+const PORT_FILE_PATH = join(homedir(), '.openpencil', '.port')
+
+// ---------------------------------------------------------------------------
+// Sync URL discovery
+// ---------------------------------------------------------------------------
+
+function isPidAlive(pid: number): boolean {
+  try {
+    process.kill(pid, 0)
+    return true
+  } catch (err: any) {
+    return err.code === 'EPERM' // process exists but we lack permission
+  }
+}
+
+/** Read the port file and return the Nitro sync base URL, or null if unavailable. */
+export async function getSyncUrl(): Promise<string | null> {
+  try {
+    const raw = await readFile(PORT_FILE_PATH, 'utf-8')
+    const { port, pid } = JSON.parse(raw) as { port: number; pid: number }
+    if (!isPidAlive(pid)) return null
+    return `http://127.0.0.1:${port}`
+  } catch {
+    return null
+  }
+}
+
+/** Fetch the current document from the live Electron canvas. */
+async function fetchLiveDocument(): Promise<PenDocument> {
+  const syncUrl = await getSyncUrl()
+  if (!syncUrl) {
+    throw new Error(
+      'No running OpenPencil instance found. Start the Electron app or dev server first.',
+    )
+  }
+  const res = await fetch(`${syncUrl}/api/mcp/document`)
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({} as Record<string, unknown>))
+    throw new Error(
+      (body as { error?: string }).error ?? `Failed to fetch live document: ${res.status}`,
+    )
+  }
+  const data = (await res.json()) as { document: PenDocument }
+  return data.document
+}
+
+/** Push document to the live Electron canvas. Fails silently if unavailable. */
+async function pushLiveDocument(doc: PenDocument): Promise<void> {
+  const syncUrl = await getSyncUrl()
+  if (!syncUrl) return
+  try {
+    await fetch(`${syncUrl}/api/mcp/document`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ document: doc }),
+    })
+  } catch {
+    // Network error — Electron might have quit between check and request
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Validation
+// ---------------------------------------------------------------------------
 
 /** Validate that a parsed object looks like a PenDocument. */
 function validate(doc: unknown): doc is PenDocument {
@@ -13,8 +89,21 @@ function validate(doc: unknown): doc is PenDocument {
   return typeof d.version === 'string' && (Array.isArray(d.children) || Array.isArray(d.pages))
 }
 
+// ---------------------------------------------------------------------------
+// Public API
+// ---------------------------------------------------------------------------
+
 /** Read and parse a .op / .pen file, returning a PenDocument. Uses cache. */
 export async function openDocument(filePath: string): Promise<PenDocument> {
+  // Live canvas mode: fetch from running Electron/dev server
+  if (filePath === LIVE_CANVAS_PATH) {
+    const cached = cache.get(LIVE_CANVAS_PATH)
+    if (cached) return cached.doc
+    const doc = await fetchLiveDocument()
+    cache.set(LIVE_CANVAS_PATH, { doc, mtime: Date.now() })
+    return doc
+  }
+
   const cached = cache.get(filePath)
   if (cached) return cached.doc
 
@@ -37,14 +126,25 @@ export function createEmptyDocument(): PenDocument {
   }
 }
 
-/** Write a PenDocument to disk and update cache. */
+/** Write a PenDocument to disk and update cache. Also pushes to live canvas if available. */
 export async function saveDocument(
   filePath: string,
   doc: PenDocument,
 ): Promise<void> {
+  if (filePath === LIVE_CANVAS_PATH) {
+    // Live canvas mode: push to Electron, no disk write
+    cache.set(LIVE_CANVAS_PATH, { doc, mtime: Date.now() })
+    await pushLiveDocument(doc)
+    return
+  }
+
+  // File-based: write to disk
   const json = JSON.stringify(doc, null, 2)
   await writeFile(filePath, json, 'utf-8')
   cache.set(filePath, { doc, mtime: Date.now() })
+
+  // Also push to live canvas (dual-write so canvas updates even for file-based MCP use)
+  await pushLiveDocument(doc)
 }
 
 /** Get document from cache (for tools that operate on the active doc). */

@@ -3,7 +3,7 @@ import { useCanvasStore } from '@/stores/canvas-store'
 import { useDocumentStore } from '@/stores/document-store'
 import { exportLayerToRaster, type RasterFormat } from '@/utils/export'
 import SectionHeader from '@/components/shared/section-header'
-import DropdownSelect from '@/components/shared/dropdown-select'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Button } from '@/components/ui/button'
 
 const SCALE_OPTIONS = [
@@ -53,18 +53,30 @@ export default function ExportSection({ nodeId, nodeName }: ExportSectionProps) 
     <div className="space-y-1.5">
       <SectionHeader title="Export" />
       <div className="flex gap-1.5">
-        <DropdownSelect
-          value={scale}
-          options={SCALE_OPTIONS}
-          onChange={setScale}
-          className="flex-1"
-        />
-        <DropdownSelect
-          value={format}
-          options={FORMAT_OPTIONS}
-          onChange={setFormat}
-          className="flex-1"
-        />
+        <Select value={scale} onValueChange={setScale}>
+          <SelectTrigger className="flex-1 h-6 text-[11px]">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {SCALE_OPTIONS.map((opt) => (
+              <SelectItem key={opt.value} value={opt.value}>
+                {opt.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Select value={format} onValueChange={setFormat}>
+          <SelectTrigger className="flex-1 h-6 text-[11px]">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {FORMAT_OPTIONS.map((opt) => (
+              <SelectItem key={opt.value} value={opt.value}>
+                {opt.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </div>
       <Button
         variant="outline"

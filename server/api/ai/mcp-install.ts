@@ -7,6 +7,8 @@ import { existsSync } from 'node:fs'
 interface InstallBody {
   tool: string
   action: 'install' | 'uninstall'
+  transportMode?: 'stdio' | 'http' | 'both'
+  httpPort?: number
 }
 
 interface InstallResult {
@@ -38,107 +40,74 @@ function resolveMcpServerPath(): string {
   return projectDist // Return expected path even if not yet compiled
 }
 
-/** Config file locations and formats for each CLI tool. */
-const CLI_CONFIGS: Record<
-  string,
-  {
-    configPath: () => string
-    read: (filePath: string) => Promise<Record<string, any>>
-    write: (filePath: string, config: Record<string, any>) => Promise<void>
-    install: (config: Record<string, any>, serverPath: string) => Record<string, any>
-    uninstall: (config: Record<string, any>) => Record<string, any>
+function buildMcpServerEntry(
+  serverPath: string,
+  transportMode: 'stdio' | 'http' | 'both' = 'stdio',
+  httpPort = 3100,
+): { command: string; args: string[] } {
+  switch (transportMode) {
+    case 'http':
+      return { command: 'node', args: [serverPath, '--http', '--port', String(httpPort)] }
+    case 'both':
+      return { command: 'node', args: [serverPath, '--http', '--port', String(httpPort), '--stdio'] }
+    default:
+      return { command: 'node', args: [serverPath] }
   }
-> = {
+}
+
+/** Config file locations and formats for each CLI tool. */
+interface CliConfigDef {
+  configPath: () => string
+  read: (filePath: string) => Promise<Record<string, any>>
+  write: (filePath: string, config: Record<string, any>) => Promise<void>
+}
+
+function installMcpServer(
+  config: Record<string, any>,
+  serverPath: string,
+  transportMode?: 'stdio' | 'http' | 'both',
+  httpPort?: number,
+): Record<string, any> {
+  return {
+    ...config,
+    mcpServers: {
+      ...(config.mcpServers ?? {}),
+      [MCP_SERVER_NAME]: buildMcpServerEntry(serverPath, transportMode, httpPort),
+    },
+  }
+}
+
+function uninstallMcpServer(config: Record<string, any>): Record<string, any> {
+  const servers = { ...(config.mcpServers ?? {}) }
+  delete servers[MCP_SERVER_NAME]
+  return { ...config, mcpServers: Object.keys(servers).length > 0 ? servers : undefined }
+}
+
+const CLI_CONFIGS: Record<string, CliConfigDef> = {
   'claude-code': {
     configPath: () => join(homedir(), '.claude.json'),
     read: readJsonConfig,
     write: writeJsonConfig,
-    install: (config, serverPath) => ({
-      ...config,
-      mcpServers: {
-        ...(config.mcpServers ?? {}),
-        [MCP_SERVER_NAME]: { command: 'node', args: [serverPath] },
-      },
-    }),
-    uninstall: (config) => {
-      const servers = { ...(config.mcpServers ?? {}) }
-      delete servers[MCP_SERVER_NAME]
-      return {
-        ...config,
-        mcpServers: Object.keys(servers).length > 0 ? servers : undefined,
-      }
-    },
   },
   'codex-cli': {
     configPath: () => join(homedir(), '.codex', 'config.json'),
     read: readJsonConfig,
     write: writeJsonConfig,
-    install: (config, serverPath) => ({
-      ...config,
-      mcpServers: {
-        ...(config.mcpServers ?? {}),
-        [MCP_SERVER_NAME]: { command: 'node', args: [serverPath] },
-      },
-    }),
-    uninstall: (config) => {
-      const servers = { ...(config.mcpServers ?? {}) }
-      delete servers[MCP_SERVER_NAME]
-      return { ...config, mcpServers: Object.keys(servers).length > 0 ? servers : undefined }
-    },
   },
   'gemini-cli': {
     configPath: () => join(homedir(), '.gemini', 'settings.json'),
     read: readJsonConfig,
     write: writeJsonConfig,
-    install: (config, serverPath) => ({
-      ...config,
-      mcpServers: {
-        ...(config.mcpServers ?? {}),
-        [MCP_SERVER_NAME]: {
-          command: 'node',
-          args: [serverPath],
-        },
-      },
-    }),
-    uninstall: (config) => {
-      const servers = { ...(config.mcpServers ?? {}) }
-      delete servers[MCP_SERVER_NAME]
-      return { ...config, mcpServers: Object.keys(servers).length > 0 ? servers : undefined }
-    },
   },
   'opencode-cli': {
     configPath: () => join(homedir(), '.opencode', 'config.json'),
     read: readJsonConfig,
     write: writeJsonConfig,
-    install: (config, serverPath) => ({
-      ...config,
-      mcpServers: {
-        ...(config.mcpServers ?? {}),
-        [MCP_SERVER_NAME]: { command: 'node', args: [serverPath] },
-      },
-    }),
-    uninstall: (config) => {
-      const servers = { ...(config.mcpServers ?? {}) }
-      delete servers[MCP_SERVER_NAME]
-      return { ...config, mcpServers: Object.keys(servers).length > 0 ? servers : undefined }
-    },
   },
   'kiro-cli': {
     configPath: () => join(homedir(), '.kiro', 'settings.json'),
     read: readJsonConfig,
     write: writeJsonConfig,
-    install: (config, serverPath) => ({
-      ...config,
-      mcpServers: {
-        ...(config.mcpServers ?? {}),
-        [MCP_SERVER_NAME]: { command: 'node', args: [serverPath] },
-      },
-    }),
-    uninstall: (config) => {
-      const servers = { ...(config.mcpServers ?? {}) }
-      delete servers[MCP_SERVER_NAME]
-      return { ...config, mcpServers: Object.keys(servers).length > 0 ? servers : undefined }
-    },
   },
 }
 
@@ -186,8 +155,8 @@ export default defineEventHandler(async (event) => {
 
     const updated =
       body.action === 'install'
-        ? cliConfig.install(config, serverPath)
-        : cliConfig.uninstall(config)
+        ? installMcpServer(config, serverPath, body.transportMode, body.httpPort)
+        : uninstallMcpServer(config)
 
     await cliConfig.write(configPath, updated)
 

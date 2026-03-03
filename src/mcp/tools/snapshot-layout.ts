@@ -1,5 +1,4 @@
-import { resolve } from 'node:path'
-import { openDocument } from '../document-manager'
+import { openDocument, resolveDocPath } from '../document-manager'
 import { computeLayoutTree, getDocChildren, type LayoutEntry } from '../utils/node-operations'
 
 export interface SnapshotLayoutParams {
@@ -11,7 +10,7 @@ export interface SnapshotLayoutParams {
 export async function handleSnapshotLayout(
   params: SnapshotLayoutParams,
 ): Promise<{ layout: LayoutEntry[] }> {
-  const filePath = resolve(params.filePath)
+  const filePath = resolveDocPath(params.filePath)
   const doc = await openDocument(filePath)
 
   const maxDepth = params.maxDepth ?? 1

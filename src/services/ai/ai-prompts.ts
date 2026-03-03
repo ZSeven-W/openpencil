@@ -4,7 +4,7 @@ import { AVAILABLE_FEATHER_ICONS } from './icon-resolver'
 // instantly from the local icon map without any network request.
 const FEATHER_ICON_NAMES = AVAILABLE_FEATHER_ICONS.join(', ')
 
-const PEN_NODE_SCHEMA = `
+export const PEN_NODE_SCHEMA = `
 PenNode types (the ONLY format you output for designs):
 - frame: Container. Props: width, height, layout ('none'|'vertical'|'horizontal'), gap, padding, justifyContent ('start'|'center'|'end'|'space_between'|'space_around'), alignItems ('start'|'center'|'end'), clipContent (boolean, clips overflowing children), children[], cornerRadius, fill, stroke, effects
 - rectangle: Props: width, height, cornerRadius, fill, stroke, effects
@@ -71,7 +71,7 @@ OVERFLOW PREVENTION (CRITICAL — violations cause visual glitches):
 - BADGES: use badge/chip style only for short labels (CJK <=8 chars / Latin <=16 chars). If text is longer, do NOT use badge style; use a normal text row or small card.
 `
 
-const DESIGN_EXAMPLES = `
+export const DESIGN_EXAMPLES = `
 EXAMPLES:
 
 Button with icon (role="button" auto-adds padding, height, layout, alignItems if not set):
@@ -89,7 +89,7 @@ ICONS & IMAGES:
 - Do NOT use random real-world app screenshots or dense mini-app simulations for showcase sections.
 `
 
-const ADAPTIVE_STYLE_POLICY = `
+export const ADAPTIVE_STYLE_POLICY = `
 VISUAL STYLE POLICY:
 - Do NOT force a dark black+green palette unless the user explicitly asks for it.
 - Infer style from user intent and content:

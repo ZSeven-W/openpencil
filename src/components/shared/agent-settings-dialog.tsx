@@ -3,9 +3,10 @@ import type { ComponentType, SVGProps } from 'react'
 import { X, Check, Loader2, Unplug, AlertCircle, Zap, Terminal } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
+import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select'
 import { Switch } from '@/components/ui/switch'
 import { useAgentSettingsStore } from '@/stores/agent-settings-store'
-import type { AIProviderType, GroupedModel } from '@/types/agent-settings'
+import type { AIProviderType, MCPTransportMode, GroupedModel } from '@/types/agent-settings'
 import ClaudeLogo from '@/components/icons/claude-logo'
 import OpenAILogo from '@/components/icons/openai-logo'
 import OpenCodeLogo from '@/components/icons/opencode-logo'
@@ -49,6 +50,20 @@ async function connectAgent(
   } catch {
     return { connected: false, models: [], error: 'Connection failed' }
   }
+}
+
+async function callMcpInstall(
+  tool: string,
+  action: 'install' | 'uninstall',
+  transportMode?: MCPTransportMode,
+  httpPort?: number,
+): Promise<{ success: boolean; error?: string }> {
+  const res = await fetch('/api/ai/mcp-install', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ tool, action, transportMode, httpPort }),
+  })
+  return res.json()
 }
 
 function ProviderRow({ type }: { type: AIProviderType }) {
@@ -150,11 +165,20 @@ function ProviderRow({ type }: { type: AIProviderType }) {
   )
 }
 
+const TRANSPORT_OPTIONS: { value: MCPTransportMode; label: string }[] = [
+  { value: 'stdio', label: 'stdio' },
+  { value: 'http', label: 'http' },
+  { value: 'both', label: 'stdio + http' },
+]
+
 export default function AgentSettingsDialog() {
   const open = useAgentSettingsStore((s) => s.dialogOpen)
   const setDialogOpen = useAgentSettingsStore((s) => s.setDialogOpen)
   const mcpIntegrations = useAgentSettingsStore((s) => s.mcpIntegrations)
+  const mcpTransportMode = useAgentSettingsStore((s) => s.mcpTransportMode)
+  const mcpHttpPort = useAgentSettingsStore((s) => s.mcpHttpPort)
   const toggleMCP = useAgentSettingsStore((s) => s.toggleMCPIntegration)
+  const setMCPTransport = useAgentSettingsStore((s) => s.setMCPTransport)
   const persist = useAgentSettingsStore((s) => s.persist)
   const dialogRef = useRef<HTMLDivElement>(null)
 
@@ -170,6 +194,35 @@ export default function AgentSettingsDialog() {
   const [mcpInstalling, setMcpInstalling] = useState<string | null>(null)
   const [mcpError, setMcpError] = useState<string | null>(null)
 
+  /** Re-install all enabled CLIs with the current global transport settings */
+  const reinstallEnabled = useCallback(
+    async (mode: MCPTransportMode, port: number) => {
+      const enabled = mcpIntegrations.filter((m) => m.enabled)
+      if (enabled.length === 0) return
+      setMcpError(null)
+      setMcpInstalling('__transport__')
+      try {
+        for (const m of enabled) {
+          const result = await callMcpInstall(
+            m.tool,
+            'install',
+            mode,
+            mode !== 'stdio' ? port : undefined,
+          )
+          if (!result.success) {
+            setMcpError(result.error ?? 'Failed to update transport')
+            return
+          }
+        }
+      } catch {
+        setMcpError('Failed to update MCP transport')
+      } finally {
+        setMcpInstalling(null)
+      }
+    },
+    [mcpIntegrations],
+  )
+
   const handleToggleMCP = useCallback(
     async (tool: string) => {
       const current = mcpIntegrations.find((m) => m.tool === tool)
@@ -179,12 +232,12 @@ export default function AgentSettingsDialog() {
       setMcpInstalling(tool)
       setMcpError(null)
       try {
-        const res = await fetch('/api/ai/mcp-install', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ tool, action }),
-        })
-        const result = await res.json()
+        const result = await callMcpInstall(
+          tool,
+          action,
+          action === 'install' ? mcpTransportMode : undefined,
+          action === 'install' && mcpTransportMode !== 'stdio' ? mcpHttpPort : undefined,
+        )
         if (result.success) {
           toggleMCP(tool)
           persist()
@@ -197,10 +250,33 @@ export default function AgentSettingsDialog() {
         setMcpInstalling(null)
       }
     },
-    [mcpIntegrations, toggleMCP, persist],
+    [mcpIntegrations, mcpTransportMode, mcpHttpPort, toggleMCP, persist],
+  )
+
+  const handleTransportChange = useCallback(
+    async (mode: MCPTransportMode) => {
+      if (mode === mcpTransportMode) return
+      setMCPTransport(mode)
+      persist()
+      await reinstallEnabled(mode, mcpHttpPort)
+    },
+    [mcpTransportMode, mcpHttpPort, setMCPTransport, persist, reinstallEnabled],
+  )
+
+  const handlePortBlur = useCallback(
+    async (value: string) => {
+      const port = parseInt(value, 10)
+      if (isNaN(port) || port < 1 || port > 65535 || port === mcpHttpPort) return
+      setMCPTransport(mcpTransportMode, port)
+      persist()
+      await reinstallEnabled(mcpTransportMode, port)
+    },
+    [mcpTransportMode, mcpHttpPort, setMCPTransport, persist, reinstallEnabled],
   )
 
   if (!open) return null
+
+  const isBusy = mcpInstalling !== null
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
@@ -254,6 +330,45 @@ export default function AgentSettingsDialog() {
                 MCP Integrations in Terminal
               </h4>
             </div>
+
+            {/* Global transport selector */}
+            <div className="flex items-center gap-2 mb-3 px-1">
+              <span className="text-[11px] text-muted-foreground shrink-0">Transport</span>
+              <Select
+                value={mcpTransportMode}
+                onValueChange={(v) => handleTransportChange(v as MCPTransportMode)}
+                disabled={isBusy}
+              >
+                <SelectTrigger className="h-6 w-[100px] text-[11px]">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {TRANSPORT_OPTIONS.map((opt) => (
+                    <SelectItem key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {mcpTransportMode !== 'stdio' && (
+                <>
+                  <span className="text-[11px] text-muted-foreground shrink-0">Port</span>
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    defaultValue={mcpHttpPort}
+                    key={mcpHttpPort}
+                    onBlur={(e) => handlePortBlur(e.target.value)}
+                    disabled={isBusy}
+                    className="h-6 w-[52px] text-[11px] text-center tabular-nums bg-secondary text-foreground rounded border border-input focus:border-ring outline-none transition-colors"
+                  />
+                </>
+              )}
+              {mcpInstalling === '__transport__' && (
+                <Loader2 size={10} className="animate-spin text-muted-foreground shrink-0" />
+              )}
+            </div>
+
             <div className="grid grid-cols-2 gap-x-2 gap-y-0.5">
               {mcpIntegrations.map((m) => (
                 <div
@@ -278,7 +393,7 @@ export default function AgentSettingsDialog() {
                   </div>
                   <Switch
                     checked={m.enabled}
-                    disabled={mcpInstalling !== null}
+                    disabled={isBusy}
                     onCheckedChange={() => handleToggleMCP(m.tool)}
                     className="shrink-0 ml-2"
                   />

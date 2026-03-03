@@ -156,7 +156,7 @@ PenDocument (source of truth)
   - `component-browser-panel.tsx` / `component-browser-grid.tsx` / `component-browser-card.tsx` — Resizable floating panel for browsing, importing, and inserting UIKit components with category tabs and search
   - `variables-panel.tsx` — Design variables management: theme axes as tabs, variant columns, resizable floating panel, add/rename/delete themes and variants
   - `variable-row.tsx` — Individual variable row: type icon, editable name, per-theme-variant value cells (color picker, number input, text input), context menu
-- **`src/components/shared/`** — Reusable UI (10 files): ColorPicker, NumberInput, DropdownSelect, SectionHeader, ExportDialog, SaveDialog, AgentSettingsDialog, IconPickerDialog, VariablePicker, FigmaImportDialog
+- **`src/components/shared/`** — Reusable UI (9 files): ColorPicker, NumberInput, SectionHeader, ExportDialog, SaveDialog, AgentSettingsDialog, IconPickerDialog, VariablePicker, FigmaImportDialog
 - **`src/components/icons/`** — Provider/brand logos: ClaudeLogo, OpenAILogo, OpenCodeLogo, FigmaLogo
 - **`src/components/ui/`** — shadcn/ui primitives: Button, Select, Separator, Slider, Switch, Toggle, Tooltip
 - **`src/services/ai/`** — AI services (20 files):

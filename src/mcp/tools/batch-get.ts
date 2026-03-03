@@ -1,5 +1,4 @@
-import { resolve } from 'node:path'
-import { openDocument } from '../document-manager'
+import { openDocument, resolveDocPath } from '../document-manager'
 import {
   findNodeInTree,
   searchNodes,
@@ -26,7 +25,7 @@ export interface BatchGetParams {
 export async function handleBatchGet(
   params: BatchGetParams,
 ): Promise<{ nodes: Record<string, unknown>[] }> {
-  const filePath = resolve(params.filePath)
+  const filePath = resolveDocPath(params.filePath)
   const doc = await openDocument(filePath)
 
   const readDepth = params.readDepth ?? 1

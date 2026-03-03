@@ -9,6 +9,17 @@ import {
   getClaudeAgentDebugFilePath,
 } from '../../utils/resolve-claude-agent-env'
 
+/** Pattern for detecting sensitive data in debug log output */
+export const SENSITIVE_LOG_PATTERN = /ANTHROPIC_API_KEY=|Authorization:\s*Bearer|api[_-]?key\s*[:=]/i
+
+/** Allowed media types for image attachments */
+export const ALLOWED_MEDIA_TYPES = new Set(['image/png', 'image/jpeg', 'image/gif', 'image/webp'])
+
+/** Resolve file extension from media type, falling back to 'png' for disallowed types */
+export function resolveMediaExtension(mediaType: string): string {
+  return ALLOWED_MEDIA_TYPES.has(mediaType) ? mediaType.split('/')[1] : 'png'
+}
+
 interface ChatAttachmentWire {
   name: string
   mediaType: string
@@ -30,9 +41,7 @@ async function readDebugTail(path?: string, maxLines = 40): Promise<string[] | u
   try {
     const raw = await readFile(path, 'utf-8')
     const lines = raw.split('\n').filter((l) => l.trim().length > 0)
-    const sanitized = lines.filter(l =>
-      !/ANTHROPIC_API_KEY=|Authorization:\s*Bearer|api[_-]?key\s*[:=]/i.test(l)
-    )
+    const sanitized = lines.filter(l => !SENSITIVE_LOG_PATTERN.test(l))
     return sanitized.slice(-maxLines)
   } catch {
     return undefined
@@ -129,10 +138,9 @@ async function saveAttachmentsToTempFiles(
   } else {
     tempDir = await mkdtemp(join(tmpdir(), 'openpencil-attach-'))
   }
-  const ALLOWED_MEDIA = new Set(['image/png', 'image/jpeg', 'image/gif', 'image/webp'])
   const files: string[] = []
   for (const att of attachments) {
-    const ext = ALLOWED_MEDIA.has(att.mediaType) ? att.mediaType.split('/')[1] : 'png'
+    const ext = resolveMediaExtension(att.mediaType)
     const filePath = join(tempDir, `${files.length}.${ext}`)
     await writeFile(filePath, Buffer.from(att.data, 'base64'))
     files.push(filePath)

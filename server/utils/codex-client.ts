@@ -24,6 +24,25 @@ interface CodexCliResult {
 
 const DEFAULT_CODEX_TIMEOUT_MS = 15 * 60 * 1000
 
+/**
+ * Allowlist-based env filter for Codex CLI subprocess.
+ * Only passes through safe system vars and provider-specific prefixes.
+ * Prevents leaking secrets like ANTHROPIC_API_KEY, AWS_SECRET_KEY, GITHUB_TOKEN, etc.
+ */
+const CODEX_ENV_ALLOWLIST = new Set(['PATH', 'HOME', 'TERM', 'LANG', 'SHELL', 'TMPDIR'])
+
+export function filterCodexEnv(
+  env: Record<string, string | undefined>,
+): Record<string, string | undefined> {
+  const result: Record<string, string | undefined> = {}
+  for (const [k, v] of Object.entries(env)) {
+    if (CODEX_ENV_ALLOWLIST.has(k) || k.startsWith('OPENAI_') || k.startsWith('CODEX_')) {
+      result[k] = v
+    }
+  }
+  return result
+}
+
 export async function runCodexExec(
   userPrompt: string,
   options: CodexExecOptions = {},
@@ -125,11 +144,7 @@ async function executeCodexCommand(
 ): Promise<{ text: string; errors: string[] }> {
   return await new Promise((resolve, reject) => {
     const child = spawn('codex', args, {
-      env: Object.fromEntries(
-        Object.entries(process.env).filter(([k]) =>
-          !k.startsWith('ANTHROPIC_') && !k.startsWith('CLAUDE_')
-        ),
-      ),
+      env: filterCodexEnv(process.env as Record<string, string | undefined>),
       stdio: ['ignore', 'pipe', 'pipe'],
     })
 

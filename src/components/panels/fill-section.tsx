@@ -1,9 +1,9 @@
 import { useState } from 'react'
 import ColorPicker from '@/components/shared/color-picker'
 import NumberInput from '@/components/shared/number-input'
-import DropdownSelect from '@/components/shared/dropdown-select'
 import SectionHeader from '@/components/shared/section-header'
 import VariablePicker from '@/components/shared/variable-picker'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Button } from '@/components/ui/button'
 import { Plus, X } from 'lucide-react'
 import { isVariableRef } from '@/variables/resolve-variables'
@@ -160,11 +160,18 @@ export default function FillSection({
       />
 
       {showTypeSelector && (
-        <DropdownSelect
-          value={fillType}
-          options={FILL_TYPE_OPTIONS}
-          onChange={handleTypeChange}
-        />
+        <Select value={fillType} onValueChange={handleTypeChange}>
+          <SelectTrigger className="h-6 text-[11px]">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {FILL_TYPE_OPTIONS.map((opt) => (
+              <SelectItem key={opt.value} value={opt.value}>
+                {opt.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       )}
 
       {fillType === 'solid' && (
