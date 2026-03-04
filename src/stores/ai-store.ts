@@ -6,6 +6,7 @@ export type PanelCorner = 'top-left' | 'top-right' | 'bottom-left' | 'bottom-rig
 
 const DEFAULT_MODEL = 'claude-sonnet-4-5-20250929'
 const MODEL_PREFERENCE_STORAGE_KEY = 'openpencil-ai-model-preference'
+const CONCURRENCY_STORAGE_KEY = 'openpencil-ai-concurrency'
 
 function readStoredModelPreference(): string | null {
   if (typeof window === 'undefined') return null
@@ -24,6 +25,27 @@ function writeStoredModelPreference(model: string): void {
     window.localStorage.setItem(MODEL_PREFERENCE_STORAGE_KEY, model)
   } catch {
     // Ignore storage failures (private mode, quota, etc.)
+  }
+}
+
+function readStoredConcurrency(): number {
+  if (typeof window === 'undefined') return 1
+  try {
+    const value = window.localStorage.getItem(CONCURRENCY_STORAGE_KEY)
+    if (!value) return 1
+    const n = parseInt(value, 10)
+    return n >= 1 && n <= 6 ? n : 1
+  } catch {
+    return 1
+  }
+}
+
+function writeStoredConcurrency(n: number): void {
+  if (typeof window === 'undefined') return
+  try {
+    window.localStorage.setItem(CONCURRENCY_STORAGE_KEY, String(n))
+  } catch {
+    // Ignore storage failures
   }
 }
 
@@ -53,9 +75,11 @@ interface AIState {
   isMinimized: boolean
   chatTitle: string
   generationProgress: { current: number; total: number } | null
+  concurrency: number
   pendingAttachments: ChatAttachment[]
   abortController: AbortController | null
 
+  setConcurrency: (n: number) => void
   setChatTitle: (title: string) => void
   setGenerationProgress: (progress: { current: number; total: number } | null) => void
 
@@ -98,17 +122,24 @@ export const useAIStore = create<AIState>((set) => ({
   panelCorner: 'bottom-left',
   isMinimized: false,
   chatTitle: 'New Chat',
+  concurrency: 1,
   generationProgress: null,
   pendingAttachments: [],
   abortController: null,
 
+  setConcurrency: (n) => {
+    const clamped = Math.max(1, Math.min(6, n))
+    writeStoredConcurrency(clamped)
+    set({ concurrency: clamped })
+  },
   setChatTitle: (chatTitle) => set({ chatTitle }),
   setGenerationProgress: (generationProgress) => set({ generationProgress }),
 
   hydrateModelPreference: () => {
     const stored = readStoredModelPreference()
-    if (!stored) return
-    set({ model: stored, preferredModel: stored })
+    if (stored) set({ model: stored, preferredModel: stored })
+    const storedConcurrency = readStoredConcurrency()
+    if (storedConcurrency !== 1) set({ concurrency: storedConcurrency })
   },
 
   addMessage: (msg) =>

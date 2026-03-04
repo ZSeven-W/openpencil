@@ -171,10 +171,12 @@ export function useChatHandlers() {
              } else {
                // --- GENERATION MODE (animated) ---
                const doc = useDocumentStore.getState().document
+               const concurrency = useAIStore.getState().concurrency
                const { rawResponse, nodes } = await generateDesign({
                  prompt: fullUserMessage,
                  model,
                  provider: currentProvider,
+                 concurrency,
                  context: {
                    canvasSize: { width: 1200, height: 800 },
                    documentSummary: `Current selection: ${hasSelection ? selectedIds.length + ' items' : 'Empty'}`,

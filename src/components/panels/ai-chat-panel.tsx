@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
-import { Send, Plus, ChevronDown, ChevronUp, Check, MessageSquare, Loader2, Paperclip, X, Square } from 'lucide-react'
+import { Send, Plus, ChevronDown, ChevronUp, Check, MessageSquare, Loader2, Paperclip, X, Square, Zap } from 'lucide-react'
 import { nanoid } from 'nanoid'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
@@ -59,6 +59,39 @@ function resolveNextModel(
   if (models.some((m) => m.value === currentModel)) return currentModel
   if (models.some((m) => m.value === preferredModel)) return preferredModel
   return models[0].value
+}
+
+/**
+ * Compact concurrency selector — cycles 1x through 6x on click.
+ * Only visually prominent when concurrency > 1.
+ */
+function ConcurrencyButton() {
+  const concurrency = useAIStore((s) => s.concurrency)
+  const setConcurrency = useAIStore((s) => s.setConcurrency)
+  const isStreaming = useAIStore((s) => s.isStreaming)
+
+  const handleClick = () => {
+    // Cycle: 1 → 2 → 3 → 4 → 5 → 6 → 1
+    setConcurrency(concurrency >= 6 ? 1 : concurrency + 1)
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={handleClick}
+      disabled={isStreaming}
+      title={`Parallel sub-agents: ${concurrency}x (click to cycle)`}
+      className={cn(
+        'flex items-center gap-0.5 text-[10px] px-1.5 py-0.5 rounded-md transition-colors shrink-0',
+        concurrency > 1
+          ? 'text-primary bg-primary/10 hover:bg-primary/20'
+          : 'text-muted-foreground/50 hover:text-muted-foreground hover:bg-secondary',
+      )}
+    >
+      <Zap size={10} />
+      <span>{concurrency}x</span>
+    </button>
+  )
 }
 
 /**
@@ -595,6 +628,9 @@ export default function AIChatPanel() {
           </button>
 
           <div className="flex items-center gap-1 w-full">
+            {/* Concurrency selector */}
+            <ConcurrencyButton />
+
             <span
               className={cn(
                 'ml-1 shrink-0 whitespace-nowrap text-[10px] select-none',
@@ -622,7 +658,7 @@ export default function AIChatPanel() {
                   size="icon-sm"
                   onClick={stopStreaming}
                   title="Stop generating"
-                  className="shrink-0 rounded-lg h-7 w-7 bg-foreground text-background hover:bg-foreground/90"
+                  className="shrink-0 rounded-lg h-7 w-7 text-destructive hover:text-destructive hover:scale-110 active:scale-95 transition-all duration-150"
                 >
                   <Square size={10} fill="currentColor" />
                 </Button>
@@ -634,10 +670,10 @@ export default function AIChatPanel() {
                   disabled={!canSendMessage}
                   title="Send message"
                   className={cn(
-                    'shrink-0 rounded-lg h-7 w-7',
+                    'shrink-0 rounded-lg h-7 w-7 transition-all duration-150',
                     canSendMessage
-                      ? 'bg-foreground text-background hover:bg-foreground/90'
-                      : '',
+                      ? 'text-foreground hover:text-primary hover:scale-110 active:scale-95'
+                      : 'text-muted-foreground/30',
                   )}
                 >
                   <Send size={13} />

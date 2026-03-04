@@ -29,13 +29,13 @@ import {
   extractJsonFromResponse,
   insertStreamingNode,
   buildVariableContext,
-  setGenerationContextHint,
   applyPostStreamingTreeHeuristics,
 } from './design-generator'
 import {
   startNewAnimationBatch,
 } from './design-animation'
 import { emitProgress } from './orchestrator-progress'
+import { addAgentIndicator, addPreviewNode, removeAgentIndicatorsByPrefix } from '@/canvas/agent-indicator'
 
 // ---------------------------------------------------------------------------
 // Stream timeout configuration (shared with orchestrator.ts)
@@ -74,14 +74,15 @@ export function ensurePrefixStr(id: string, prefix: string): string {
 }
 
 // ---------------------------------------------------------------------------
-// Sequential sub-agent execution
+// Sub-agent execution (sequential or concurrent)
 // ---------------------------------------------------------------------------
 
-export async function executeSubAgentsSequentially(
+export async function executeSubAgents(
   plan: OrchestratorPlan,
   request: AIDesignRequest,
   preparedPrompt: PreparedDesignPrompt,
   progress: OrchestrationProgress,
+  concurrency: number = 1,
   callbacks?: {
     onApplyPartial?: (count: number) => void
     onTextUpdate?: (text: string) => void
@@ -89,29 +90,112 @@ export async function executeSubAgentsSequentially(
   },
   abortSignal?: AbortSignal,
 ): Promise<SubAgentResult[]> {
-  const results: SubAgentResult[] = []
   const timeoutOptions = getSubAgentTimeouts(preparedPrompt.originalLength)
 
-  for (let i = 0; i < plan.subtasks.length; i++) {
-    if (abortSignal?.aborted) break
-    const result = await executeSubAgent(
-      plan.subtasks[i], plan, request, preparedPrompt, timeoutOptions, progress, i, callbacks,
-      undefined, abortSignal,
-    )
+  // Sequential path — identical to previous behavior
+  if (concurrency <= 1) {
+    const results: SubAgentResult[] = []
+    for (let i = 0; i < plan.subtasks.length; i++) {
+      if (abortSignal?.aborted) break
+      const result = await executeSubAgent(
+        plan.subtasks[i], plan, request, preparedPrompt, timeoutOptions, progress, i, callbacks,
+        undefined, abortSignal,
+      )
 
-    if (result.error && result.nodes.length === 0) {
-      throw new Error(result.error)
+      if (result.error && result.nodes.length === 0) {
+        throw new Error(result.error)
+      }
+
+      results.push(result)
+
+      if (result.nodes.length > 0 && plan.rootFrame.width > 480) {
+        expandRootFrameHeight()
+      }
     }
+    return results
+  }
 
-    results.push(result)
+  // Concurrent path — screen-grouped parallelism.
+  // Subtasks sharing the same screen run sequentially (preserves section order).
+  // Different screen groups run in parallel, limited by `concurrency`.
+  const total = plan.subtasks.length
+  const results: (SubAgentResult | null)[] = new Array(total).fill(null)
 
-    // Progressively expand root frame after each subtask is done (desktop only).
-    // Mobile has a fixed viewport height so no progressive expansion is needed.
-    if (result.nodes.length > 0 && plan.rootFrame.width > 480) {
-      expandRootFrameHeight()
+  // Group subtasks by screen (same logic as orchestrator.ts)
+  const screenGroups: number[][] = []
+  const screenMap = new Map<string, number>()
+  for (let i = 0; i < total; i++) {
+    const screen = plan.subtasks[i].screen ?? plan.subtasks[i].id
+    if (screenMap.has(screen)) {
+      screenGroups[screenMap.get(screen)!].push(i)
+    } else {
+      screenMap.set(screen, screenGroups.length)
+      screenGroups.push([i])
     }
   }
-  return results
+
+  // Semaphore to limit total concurrent API calls
+  let activeSlots = 0
+  const waitQueue: (() => void)[] = []
+
+  async function acquireSlot() {
+    if (activeSlots < concurrency) {
+      activeSlots++
+      return
+    }
+    await new Promise<void>((resolve) => waitQueue.push(resolve))
+    activeSlots++
+  }
+
+  function releaseSlot() {
+    activeSlots--
+    if (waitQueue.length > 0) {
+      waitQueue.shift()!()
+    }
+  }
+
+  // Each screen group runs its subtasks sequentially
+  const workers = screenGroups.map(async (indices) => {
+    for (const idx of indices) {
+      if (abortSignal?.aborted) return
+
+      await acquireSlot()
+      try {
+        const result = await executeSubAgent(
+          plan.subtasks[idx], plan, request, preparedPrompt, timeoutOptions, progress, idx, callbacks,
+          undefined, abortSignal,
+        )
+        results[idx] = result
+
+        if (result.nodes.length > 0 && plan.rootFrame.width > 480) {
+          expandRootFrameHeight(plan.subtasks[idx].parentFrameId ?? undefined)
+        }
+      } catch (err) {
+        results[idx] = {
+          subtaskId: plan.subtasks[idx].id,
+          nodes: [],
+          rawResponse: '',
+          error: err instanceof Error ? err.message : 'Unknown error',
+        }
+      } finally {
+        releaseSlot()
+      }
+    }
+  })
+
+  await Promise.all(workers)
+
+  // Collect non-null results
+  const collected = results.filter((r): r is SubAgentResult => r !== null)
+
+  // If ALL failed with zero nodes, throw
+  const totalNodes = collected.reduce((sum, r) => sum + r.nodes.length, 0)
+  if (totalNodes === 0 && collected.length > 0) {
+    const firstError = collected.find((r) => r.error)?.error ?? 'All sub-agents failed'
+    throw new Error(firstError)
+  }
+
+  return collected
 }
 
 // ---------------------------------------------------------------------------
@@ -139,9 +223,12 @@ async function executeSubAgent(
   progressEntry.status = 'streaming'
   emitProgress(plan, progress, callbacks)
 
-  // Update context hint with subtask label so heuristics can detect
-  // screenshot/mockup context even when the user prompt doesn't mention it
-  setGenerationContextHint(`${request.prompt} ${subtask.label}`)
+  // Agent identity for canvas indicators (concurrent mode only)
+  const agentColor = progressEntry.agentColor
+  const agentName = progressEntry.agentName
+
+  // Context hint is set once at orchestrator level (combining all subtask labels)
+  // to avoid race conditions during concurrent execution
 
   const userPrompt = buildSubAgentUserPrompt(
     subtask,
@@ -192,20 +279,26 @@ async function executeSubAgent(
                 )
                 insertStreamingNode(node, prefixedParent)
               } else {
-                // Sub-agent root → insert under the orchestrator root frame
-                insertStreamingNode(node, plan.rootFrame.id)
+                // Sub-agent root → insert under subtask's parent frame
+                // In concurrent mode, each subtask has its own root frame;
+                // in sequential mode, all share plan.rootFrame.id
+                const targetParent = subtask.parentFrameId ?? plan.rootFrame.id
+                insertStreamingNode(node, targetParent)
                 if (!subtaskRootId) subtaskRootId = node.id
               }
               nodes.push(node)
               progressEntry.nodeCount++
               progress.totalNodes++
+              // Tag node for canvas indicator + preview delay
+              if (agentColor && agentName) {
+                addAgentIndicator(node.id, agentColor, agentName)
+                addPreviewNode(node.id)
+              }
             }
             callbacks?.onApplyPartial?.(progress.totalNodes)
-            // Expand root frame as content grows — children inside sections
-            // don't trigger expandRootFrameHeight from insertStreamingNode
-            // because they insert under the section root, not DEFAULT_FRAME_ID.
+            // Expand the subtask's root frame as content grows
             if (plan.rootFrame.width > 480) {
-              expandRootFrameHeight()
+              expandRootFrameHeight(subtask.parentFrameId ?? undefined)
             }
             emitProgress(plan, progress, callbacks, rawResponse)
           }
@@ -228,11 +321,18 @@ async function executeSubAgent(
         startNewAnimationBatch()
         for (const node of fallbackNodes) {
           ensureIdPrefix(node, subtask.idPrefix)
-          insertStreamingNode(node, plan.rootFrame.id)
+          const targetParent = subtaskRootId
+            ? subtaskRootId
+            : (subtask.parentFrameId ?? plan.rootFrame.id)
+          insertStreamingNode(node, targetParent)
           if (!subtaskRootId) subtaskRootId = node.id
           nodes.push(node)
           progressEntry.nodeCount++
           progress.totalNodes++
+          if (agentColor && agentName) {
+            addAgentIndicator(node.id, agentColor, agentName)
+            addPreviewNode(node.id)
+          }
         }
         callbacks?.onApplyPartial?.(progress.totalNodes)
       }
@@ -257,11 +357,13 @@ async function executeSubAgent(
     }
 
     progressEntry.status = 'done'
+    removeAgentIndicatorsByPrefix(subtask.idPrefix)
     emitProgress(plan, progress, callbacks)
     return { subtaskId: subtask.id, nodes, rawResponse }
   } catch (err) {
     const msg = err instanceof Error ? err.message : 'Unknown error'
     progressEntry.status = 'error'
+    removeAgentIndicatorsByPrefix(subtask.idPrefix)
     emitProgress(plan, progress, callbacks)
     return { subtaskId: subtask.id, nodes, rawResponse, error: msg }
   }
