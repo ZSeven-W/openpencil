@@ -23,6 +23,7 @@ export {
   setGenerationContextHint,
   setGenerationCanvasWidth,
   getGenerationRootFrameId,
+  getGenerationRemappedIds,
   insertStreamingNode,
   applyNodesToCanvas,
   upsertNodesToCanvas,

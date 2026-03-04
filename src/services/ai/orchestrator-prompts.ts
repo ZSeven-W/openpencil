@@ -35,6 +35,7 @@ RULES:
 - Regions tile to fill rootFrame. vertical = top-to-bottom.
 - Mobile: 375x812 (both width AND height are fixed). Desktop: 1200x0 (width fixed, height auto-expands).
 - WIDTH SELECTION: App screens (login, signup, register, settings, profile, forms, modals, dialogs, onboarding) → ALWAYS use width=375, height=812 (mobile). Landing pages, websites, dashboards → use width=1200, height=0 (desktop). This is mandatory.
+- MULTI-SCREEN APPS: When the request involves multiple distinct screens/pages (e.g. "登录页+个人中心", "login and profile"), add "screen":"<name>" to each subtask to group sections that belong to the same page. Use a concise page name (e.g. "登录", "Profile"). Subtasks sharing the same "screen" are placed in one root frame. Single-screen requests don't need "screen". Example: [{"id":"brand","label":"Brand Area","screen":"Login","region":{...}},{"id":"form","label":"Login Form","screen":"Login","region":{...}},{"id":"card","label":"User Card","screen":"Profile","region":{...}}]
 - NO explanation. NO markdown. JUST the JSON object.`
 
 // Safe code block delimiter

@@ -448,9 +448,9 @@ export function applyPostStreamingTreeHeuristics(rootNodeId: string): void {
 // Root frame height management
 // ---------------------------------------------------------------------------
 
-export function adjustRootFrameHeightToContent(): void {
+export function adjustRootFrameHeightToContent(frameId?: string): void {
   const { getNodeById, updateNode } = useDocumentStore.getState()
-  const rootId = generationRootFrameId
+  const rootId = frameId ?? generationRootFrameId
   const root = getNodeById(rootId)
   if (!root || root.type !== 'frame') return
   if (!Array.isArray(root.children) || root.children.length === 0) return
@@ -473,9 +473,9 @@ export function adjustRootFrameHeightToContent(): void {
  * frame children should be equalized to fill_container to prevent overflow.
  * This runs DURING streaming so cards distribute evenly as they arrive.
  */
-export function expandRootFrameHeight(): void {
+export function expandRootFrameHeight(frameId?: string): void {
   const { getNodeById, updateNode } = useDocumentStore.getState()
-  const rootId = generationRootFrameId
+  const rootId = frameId ?? generationRootFrameId
   const root = getNodeById(rootId)
   if (!root || root.type !== 'frame') return
   if (!Array.isArray(root.children) || root.children.length === 0) return

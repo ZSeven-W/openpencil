@@ -21,6 +21,7 @@ export interface AIDesignRequest {
   prompt: string
   model?: string
   provider?: AIProviderType
+  concurrency?: number
   context?: {
     selectedNodes?: string[]
     documentSummary?: string
@@ -57,6 +58,8 @@ export interface SubTask {
   idPrefix: string
   /** Parent frame ID to insert into (assigned at runtime) */
   parentFrameId: string | null
+  /** Screen/page grouping — subtasks with the same screen share one root frame */
+  screen?: string
 }
 
 /** Style guide produced by the orchestrator for visual consistency */
@@ -102,6 +105,9 @@ export interface OrchestrationProgress {
     nodeCount: number
     /** Accumulated thinking content from the sub-agent */
     thinking?: string
+    /** Agent identity for visual indicators (concurrent mode only) */
+    agentColor?: string
+    agentName?: string
   }>
   totalNodes: number
 }

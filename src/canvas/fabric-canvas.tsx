@@ -9,6 +9,7 @@ import { useFrameLabels } from './use-frame-labels'
 import { useLayoutIndicator } from './use-layout-indicator'
 import { useCanvasHover } from './use-canvas-hover'
 import { useEnteredFrameOverlay } from './use-entered-frame-overlay'
+import { useAgentIndicators } from './use-agent-indicators'
 
 export default function FabricCanvas() {
   const canvasRef = useRef<HTMLCanvasElement>(null)
@@ -25,6 +26,7 @@ export default function FabricCanvas() {
 
   useFrameLabels()
   useLayoutIndicator()
+  useAgentIndicators()
 
   return (
     <div
