@@ -1,6 +1,7 @@
 import { useState, useMemo, useCallback, useRef, useEffect } from 'react'
 import { X, Plus, ChevronDown, Search, Pencil, Trash2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { useTranslation } from 'react-i18next'
 import { useDocumentStore } from '@/stores/document-store'
 import { useCanvasStore } from '@/stores/canvas-store'
 import VariableRow from './variable-row'
@@ -14,6 +15,7 @@ const DEFAULT_WIDTH = 820
 const DEFAULT_HEIGHT = 480
 
 export default function VariablesPanel() {
+  const { t } = useTranslation()
   const variables = useDocumentStore((s) => s.document.variables)
   const themes = useDocumentStore((s) => s.document.themes)
   const setVariable = useDocumentStore((s) => s.setVariable)
@@ -295,7 +297,7 @@ export default function VariablesPanel() {
                   className="w-full text-left flex items-center gap-2.5 px-3 py-2 text-[13px] hover:bg-secondary/60 rounded-lg transition-colors"
                 >
                   <Pencil size={14} className="text-muted-foreground" />
-                  Rename
+                  {t('common.rename')}
                 </button>
                 {themeAxes.length > 1 && (
                   <button
@@ -304,7 +306,7 @@ export default function VariablesPanel() {
                     className="w-full text-left flex items-center gap-2.5 px-3 py-2 text-[13px] hover:bg-secondary/60 rounded-lg transition-colors"
                   >
                     <Trash2 size={14} className="text-muted-foreground" />
-                    Delete
+                    {t('common.delete')}
                   </button>
                 )}
               </div>
@@ -317,7 +319,7 @@ export default function VariablesPanel() {
           type="button"
           onClick={handleAddTheme}
           className="p-1 rounded-lg text-muted-foreground hover:text-foreground hover:bg-secondary/60 transition-colors shrink-0"
-          title="Add theme"
+          title={t('variables.addTheme')}
         >
           <Plus size={15} />
         </button>
@@ -328,7 +330,7 @@ export default function VariablesPanel() {
           type="button"
           onClick={toggleVariablesPanel}
           className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-secondary/60 transition-colors shrink-0"
-          title="Close (⌘⇧V)"
+          title={t('variables.closeShortcut')}
         >
           <X size={16} />
         </button>
@@ -337,7 +339,7 @@ export default function VariablesPanel() {
       {/* ── Column headers: Name | Default | Variant-1 | ... | + ── */}
       <div className="relative flex items-center px-4 h-9 shrink-0 border-t border-b border-border/40 z-10">
         <div className="w-[220px] shrink-0">
-          <span className="text-[13px] font-medium text-muted-foreground">Name</span>
+          <span className="text-[13px] font-medium text-muted-foreground">{t('common.name')}</span>
         </div>
         {themeValues.map((tv) => (
           <div key={tv} className="flex-1 min-w-0 pl-4 relative" ref={activeColumnMenu === tv ? columnMenuRef : undefined}>
@@ -375,7 +377,7 @@ export default function VariablesPanel() {
                   className="w-full text-left flex items-center gap-2.5 px-3 py-2 text-[13px] hover:bg-secondary/60 rounded-lg transition-colors"
                 >
                   <Pencil size={14} className="text-muted-foreground" />
-                  Rename
+                  {t('common.rename')}
                 </button>
                 {themeValues.length > 1 && (
                   <button
@@ -384,7 +386,7 @@ export default function VariablesPanel() {
                     className="w-full text-left flex items-center gap-2.5 px-3 py-2 text-[13px] hover:bg-secondary/60 rounded-lg transition-colors"
                   >
                     <Trash2 size={14} className="text-muted-foreground" />
-                    Delete
+                    {t('common.delete')}
                   </button>
                 )}
               </div>
@@ -396,7 +398,7 @@ export default function VariablesPanel() {
             type="button"
             onClick={handleAddVariant}
             className="p-1 rounded text-muted-foreground/50 hover:text-foreground transition-colors"
-            title="Add variant"
+            title={t('variables.addVariant')}
           >
             <Plus size={14} />
           </button>
@@ -410,7 +412,7 @@ export default function VariablesPanel() {
             <Search size={13} className="text-muted-foreground/60 shrink-0" />
             <input
               type="text"
-              placeholder="Search variables..."
+              placeholder={t('variables.searchVariables')}
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="flex-1 bg-transparent text-foreground text-[12px] focus:outline-none placeholder:text-muted-foreground/40"
@@ -424,7 +426,7 @@ export default function VariablesPanel() {
         {entries.length === 0 && (
           <div className="flex flex-col items-center justify-center h-full gap-1.5">
             <span className="text-[13px] text-muted-foreground/50">
-              {search ? 'No variables match your search' : 'No variables defined'}
+              {search ? t('variables.noMatch') : t('variables.noDefined')}
             </span>
           </div>
         )}
@@ -453,7 +455,7 @@ export default function VariablesPanel() {
           )}
         >
           <Plus size={14} />
-          Add variable
+          {t('variables.addVariable')}
           <ChevronDown size={11} className={cn('transition-transform', showAddMenu && 'rotate-180')} />
         </button>
         {showAddMenu && (

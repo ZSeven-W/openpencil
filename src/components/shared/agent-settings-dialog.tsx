@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import type { ComponentType, SVGProps } from 'react'
+import { useTranslation } from 'react-i18next'
 import { X, Check, Loader2, Unplug, AlertCircle, Zap, Terminal } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
@@ -11,26 +12,26 @@ import ClaudeLogo from '@/components/icons/claude-logo'
 import OpenAILogo from '@/components/icons/openai-logo'
 import OpenCodeLogo from '@/components/icons/opencode-logo'
 
-/** Provider display metadata */
+/** Provider display metadata — labels/descriptions are i18n keys resolved at render time */
 const PROVIDER_META: Record<
   AIProviderType,
-  { label: string; description: string; agent: 'claude-code' | 'codex-cli' | 'opencode'; Icon: ComponentType<SVGProps<SVGSVGElement>> }
+  { labelKey: string; descriptionKey: string; agent: 'claude-code' | 'codex-cli' | 'opencode'; Icon: ComponentType<SVGProps<SVGSVGElement>> }
 > = {
   anthropic: {
-    label: 'Claude Code',
-    description: 'Claude models',
+    labelKey: 'agents.claudeCode',
+    descriptionKey: 'agents.claudeModels',
     agent: 'claude-code',
     Icon: ClaudeLogo,
   },
   openai: {
-    label: 'Codex CLI',
-    description: 'OpenAI models',
+    labelKey: 'agents.codexCli',
+    descriptionKey: 'agents.openaiModels',
     agent: 'codex-cli',
     Icon: OpenAILogo,
   },
   opencode: {
-    label: 'OpenCode',
-    description: '75+ LLM providers',
+    labelKey: 'agents.opencode',
+    descriptionKey: 'agents.opencodeDesc',
     agent: 'opencode',
     Icon: OpenCodeLogo,
   },
@@ -45,10 +46,10 @@ async function connectAgent(
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ agent }),
     })
-    if (!res.ok) return { connected: false, models: [], error: `Server error ${res.status}` }
+    if (!res.ok) return { connected: false, models: [], error: `server_error_${res.status}` }
     return await res.json()
   } catch {
-    return { connected: false, models: [], error: 'Connection failed' }
+    return { connected: false, models: [], error: 'connection_failed' }
   }
 }
 
@@ -67,6 +68,7 @@ async function callMcpInstall(
 }
 
 function ProviderRow({ type }: { type: AIProviderType }) {
+  const { t } = useTranslation()
   const provider = useAgentSettingsStore((s) => s.providers[type])
   const connect = useAgentSettingsStore((s) => s.connectProvider)
   const disconnect = useAgentSettingsStore((s) => s.disconnectProvider)
@@ -85,10 +87,15 @@ function ProviderRow({ type }: { type: AIProviderType }) {
       connect(type, meta.agent, result.models)
       persist()
     } else {
-      setError(result.error ?? 'Connection failed')
+      if (result.error?.startsWith('server_error_')) {
+        const status = result.error.replace('server_error_', '')
+        setError(t('agents.serverError', { status }))
+      } else {
+        setError(t('agents.connectionFailed'))
+      }
     }
     setIsConnecting(false)
-  }, [type, meta.agent, connect, persist])
+  }, [type, meta.agent, connect, persist, t])
 
   const handleDisconnect = useCallback(() => {
     disconnect(type)
@@ -121,13 +128,13 @@ function ProviderRow({ type }: { type: AIProviderType }) {
         {/* Name + description */}
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
-            <span className="text-[13px] font-medium text-foreground leading-tight">{meta.label}</span>
-            <span className="text-[10px] text-muted-foreground leading-tight hidden sm:inline">{meta.description}</span>
+            <span className="text-[13px] font-medium text-foreground leading-tight">{t(meta.labelKey)}</span>
+            <span className="text-[10px] text-muted-foreground leading-tight hidden sm:inline">{t(meta.descriptionKey)}</span>
           </div>
           {provider.isConnected && (
             <span className="text-[11px] text-green-500 leading-tight flex items-center gap-1 mt-0.5">
               <Check size={10} strokeWidth={2.5} />
-              {provider.models.length} model{provider.models.length !== 1 ? 's' : ''}
+              {t('agents.modelCount', { count: provider.models.length })}
             </span>
           )}
           {error && (
@@ -144,7 +151,7 @@ function ProviderRow({ type }: { type: AIProviderType }) {
             className="h-7 px-2.5 text-[11px] text-muted-foreground hover:text-destructive shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"
           >
             <Unplug size={11} className="mr-1" />
-            Disconnect
+            {t('common.disconnect')}
           </Button>
         ) : (
           <Button
@@ -156,7 +163,7 @@ function ProviderRow({ type }: { type: AIProviderType }) {
             {isConnecting ? (
               <Loader2 size={11} className="animate-spin" />
             ) : (
-              'Connect'
+              t('common.connect')
             )}
           </Button>
         )}
@@ -165,13 +172,14 @@ function ProviderRow({ type }: { type: AIProviderType }) {
   )
 }
 
-const TRANSPORT_OPTIONS: { value: MCPTransportMode; label: string }[] = [
-  { value: 'stdio', label: 'stdio' },
-  { value: 'http', label: 'http' },
-  { value: 'both', label: 'stdio + http' },
+const TRANSPORT_OPTIONS: { value: MCPTransportMode; labelKey: string }[] = [
+  { value: 'stdio', labelKey: 'agents.stdio' },
+  { value: 'http', labelKey: 'agents.http' },
+  { value: 'both', labelKey: 'agents.stdioHttp' },
 ]
 
 export default function AgentSettingsDialog() {
+  const { t } = useTranslation()
   const open = useAgentSettingsStore((s) => s.dialogOpen)
   const setDialogOpen = useAgentSettingsStore((s) => s.setDialogOpen)
   const mcpIntegrations = useAgentSettingsStore((s) => s.mcpIntegrations)
@@ -210,12 +218,12 @@ export default function AgentSettingsDialog() {
             mode !== 'stdio' ? port : undefined,
           )
           if (!result.success) {
-            setMcpError(result.error ?? 'Failed to update transport')
+            setMcpError(result.error ?? t('agents.failedTransport'))
             return
           }
         }
       } catch {
-        setMcpError('Failed to update MCP transport')
+        setMcpError(t('agents.failedMcpTransport'))
       } finally {
         setMcpInstalling(null)
       }
@@ -242,10 +250,10 @@ export default function AgentSettingsDialog() {
           toggleMCP(tool)
           persist()
         } else {
-          setMcpError(result.error ?? `Failed to ${action}`)
+          setMcpError(result.error ?? t('agents.failedTo', { action }))
         }
       } catch {
-        setMcpError(`Failed to ${action} MCP server`)
+        setMcpError(t('agents.failedToMcp', { action }))
       } finally {
         setMcpInstalling(null)
       }
@@ -291,7 +299,7 @@ export default function AgentSettingsDialog() {
         {/* Header */}
         <div className="flex items-center justify-between px-5 pt-4 pb-3">
           <h3 className="text-sm font-semibold text-foreground">
-            Setup Agents & MCP
+            {t('agents.title')}
           </h3>
           <Button
             variant="ghost"
@@ -309,7 +317,7 @@ export default function AgentSettingsDialog() {
             <div className="flex items-center gap-2 mb-2 px-1">
               <Zap size={12} className="text-muted-foreground" />
               <h4 className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">
-                Agents on Canvas
+                {t('agents.agentsOnCanvas')}
               </h4>
             </div>
             <div className="space-y-0.5">
@@ -327,13 +335,13 @@ export default function AgentSettingsDialog() {
             <div className="flex items-center gap-2 mb-3 px-1">
               <Terminal size={12} className="text-muted-foreground" />
               <h4 className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">
-                MCP Integrations in Terminal
+                {t('agents.mcpIntegrations')}
               </h4>
             </div>
 
             {/* Global transport selector */}
             <div className="flex items-center gap-2 mb-3 px-1">
-              <span className="text-[11px] text-muted-foreground shrink-0">Transport</span>
+              <span className="text-[11px] text-muted-foreground shrink-0">{t('agents.transport')}</span>
               <Select
                 value={mcpTransportMode}
                 onValueChange={(v) => handleTransportChange(v as MCPTransportMode)}
@@ -345,14 +353,14 @@ export default function AgentSettingsDialog() {
                 <SelectContent>
                   {TRANSPORT_OPTIONS.map((opt) => (
                     <SelectItem key={opt.value} value={opt.value}>
-                      {opt.label}
+                      {t(opt.labelKey)}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
               {mcpTransportMode !== 'stdio' && (
                 <>
-                  <span className="text-[11px] text-muted-foreground shrink-0">Port</span>
+                  <span className="text-[11px] text-muted-foreground shrink-0">{t('agents.port')}</span>
                   <input
                     type="text"
                     inputMode="numeric"
@@ -407,7 +415,7 @@ export default function AgentSettingsDialog() {
               </div>
             )}
             <p className="text-[10px] text-muted-foreground/60 mt-3 px-1">
-              MCP integrations will take effect after restarting the terminal.
+              {t('agents.mcpRestart')}
             </p>
           </div>
         </div>

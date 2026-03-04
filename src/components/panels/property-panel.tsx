@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useCanvasStore } from '@/stores/canvas-store'
 import { useDocumentStore, getActivePageChildren } from '@/stores/document-store'
 import { Separator } from '@/components/ui/separator'
@@ -24,6 +25,7 @@ const INSTANCE_DIRECT_PROPS = new Set([
 ])
 
 export default function PropertyPanel() {
+  const { t } = useTranslation()
   const activeId = useCanvasStore((s) => s.selection.activeId)
   const setSelection = useCanvasStore((s) => s.setSelection)
   const fabricCanvas = useCanvasStore((s) => s.fabricCanvas)
@@ -197,7 +199,7 @@ export default function PropertyPanel() {
           <>
             <button
               type="button"
-              title="Go to component"
+              title={t('property.goToComponent')}
               className="p-1 rounded hover:bg-accent/50 text-muted-foreground hover:text-foreground shrink-0"
               onClick={handleGoToComponent}
             >
@@ -205,7 +207,7 @@ export default function PropertyPanel() {
             </button>
             <button
               type="button"
-              title="Detach instance"
+              title={t('property.detachInstance')}
               className="p-1 rounded hover:bg-accent/50 text-muted-foreground hover:text-foreground shrink-0"
               onClick={() => activeId && detachComponent(activeId)}
             >
@@ -226,7 +228,7 @@ export default function PropertyPanel() {
                 onClick={() => activeId && detachComponent(activeId)}
               >
                 <Unlink size={12} />
-                Detach Component
+                {t('property.detachComponent')}
               </Button>
             ) : (
               <Button
@@ -247,7 +249,7 @@ export default function PropertyPanel() {
                 }}
               >
                 <Component size={12} />
-                Create Component
+                {t('property.createComponent')}
               </Button>
             )}
           </div>

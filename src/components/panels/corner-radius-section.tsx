@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next'
 import NumberInput from '@/components/shared/number-input'
 import type { PenNode } from '@/types/pen'
 
@@ -10,6 +11,7 @@ export default function CornerRadiusSection({
   cornerRadius,
   onUpdate,
 }: CornerRadiusSectionProps) {
+  const { t } = useTranslation()
   const value =
     typeof cornerRadius === 'number'
       ? cornerRadius
@@ -20,7 +22,7 @@ export default function CornerRadiusSection({
   return (
     <div className="space-y-2">
       <h4 className="text-xs font-medium text-muted-foreground tracking-wider">
-        Corner Radius
+        {t('cornerRadius.title')}
       </h4>
       <NumberInput
         value={value}

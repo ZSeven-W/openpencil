@@ -7,6 +7,7 @@ import {
   Check,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { useTranslation } from 'react-i18next'
 import type { PenNode, TextNode, SizingBehavior } from '@/types/pen'
 
 interface TextLayoutSectionProps {
@@ -99,6 +100,7 @@ export default function TextLayoutSection({
   node,
   onUpdate,
 }: TextLayoutSectionProps) {
+  const { t } = useTranslation()
   const resizing = resolveTextGrowth(node)
   const widthStr = typeof node.width === 'string' ? node.width : ''
   const heightStr = typeof node.height === 'string' ? node.height : ''
@@ -145,12 +147,12 @@ export default function TextLayoutSection({
 
   return (
     <div className="space-y-1.5">
-      <SectionHeader title="Layout" />
+      <SectionHeader title={t('textLayout.title')} />
 
       {/* Dimensions — always visible, read-only when auto/fill */}
       <div>
         <span className="text-[10px] text-muted-foreground mb-1 block">
-          Dimensions
+          {t('textLayout.dimensions')}
         </span>
         <div className="grid grid-cols-2 gap-1">
           <NumberInput
@@ -178,7 +180,7 @@ export default function TextLayoutSection({
       {resizing !== 'auto' && (
         <div className="grid grid-cols-2 gap-y-1.5">
           <SizingCheckbox
-            label="Fill Width"
+            label={t('textLayout.fillWidth')}
             checked={fillWidth}
             onChange={(v) =>
               onUpdate({
@@ -187,7 +189,7 @@ export default function TextLayoutSection({
             }
           />
           <SizingCheckbox
-            label="Fill Height"
+            label={t('textLayout.fillHeight')}
             checked={fillHeight}
             onChange={(v) =>
               onUpdate({
@@ -201,32 +203,32 @@ export default function TextLayoutSection({
       {/* Resizing mode */}
       <div>
         <span className="text-[10px] text-muted-foreground mb-1 block">
-          Resizing
+          {t('textLayout.resizing')}
         </span>
         <div className="flex gap-0.5">
           <ResizingToggle
             active={resizing === 'auto'}
             onClick={() => handleResizingChange('auto')}
-            title="Auto Width — text expands horizontally"
+            title={t('textLayout.autoWidthDesc')}
           >
             <MoveHorizontal className="w-3 h-3" />
-            <span>Auto W</span>
+            <span>{t('textLayout.autoWidth')}</span>
           </ResizingToggle>
           <ResizingToggle
             active={resizing === 'fixed-width'}
             onClick={() => handleResizingChange('fixed-width')}
-            title="Auto Height — fixed width, height auto-sizes"
+            title={t('textLayout.autoHeightDesc')}
           >
             <WrapText className="w-3 h-3" />
-            <span>Auto H</span>
+            <span>{t('textLayout.autoHeight')}</span>
           </ResizingToggle>
           <ResizingToggle
             active={resizing === 'fixed-width-height'}
             onClick={() => handleResizingChange('fixed-width-height')}
-            title="Fixed Size — both width and height are fixed"
+            title={t('textLayout.fixedDesc')}
           >
             <Maximize2 className="w-3 h-3" />
-            <span>Fixed</span>
+            <span>{t('textLayout.fixed')}</span>
           </ResizingToggle>
         </div>
       </div>
