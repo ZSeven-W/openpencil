@@ -1,6 +1,8 @@
 // ---------------------------------------------------------------------------
 // Agent indicator state — tracks which nodes have active agent overlays.
-// Module-level mutable state, same pattern as insertion-indicator.ts.
+//
+// Uses globalThis to guarantee a single shared instance across all module
+// chunks — eliminates Vite module-splitting isolation issues.
 // ---------------------------------------------------------------------------
 
 export interface AgentIndicatorEntry {
@@ -9,51 +11,64 @@ export interface AgentIndicatorEntry {
   name: string
 }
 
-/** Active agent indicators, keyed by nodeId. */
-const activeAgentIndicators = new Map<string, AgentIndicatorEntry>()
+const INDICATORS_KEY = '__openpencil_agent_indicators__'
+const PREVIEWS_KEY = '__openpencil_agent_previews__'
 
-/** Nodes in "preview" phase — outline shown, waiting to materialize. */
-const previewNodes = new Set<string>()
+function getIndicatorMap(): Map<string, AgentIndicatorEntry> {
+  const g = globalThis as Record<string, unknown>
+  if (!g[INDICATORS_KEY]) {
+    g[INDICATORS_KEY] = new Map<string, AgentIndicatorEntry>()
+  }
+  return g[INDICATORS_KEY] as Map<string, AgentIndicatorEntry>
+}
 
-/** Getter for cross-module access — more robust than exporting the let binding. */
+function getPreviewSet(): Set<string> {
+  const g = globalThis as Record<string, unknown>
+  if (!g[PREVIEWS_KEY]) {
+    g[PREVIEWS_KEY] = new Set<string>()
+  }
+  return g[PREVIEWS_KEY] as Set<string>
+}
+
 export function getActiveAgentIndicators(): Map<string, AgentIndicatorEntry> {
-  return activeAgentIndicators
+  return getIndicatorMap()
 }
 
 export function addAgentIndicator(nodeId: string, color: string, name: string): void {
-  activeAgentIndicators.set(nodeId, { nodeId, color, name })
+  getIndicatorMap().set(nodeId, { nodeId, color, name })
 }
 
 export function removeAgentIndicator(nodeId: string): void {
-  activeAgentIndicators.delete(nodeId)
-  previewNodes.delete(nodeId)
+  getIndicatorMap().delete(nodeId)
+  getPreviewSet().delete(nodeId)
 }
 
-/** Mark a node as in preview phase (outline visible, content hidden). */
 export function addPreviewNode(nodeId: string): void {
-  previewNodes.add(nodeId)
+  getPreviewSet().add(nodeId)
 }
 
 export function removePreviewNode(nodeId: string): void {
-  previewNodes.delete(nodeId)
+  getPreviewSet().delete(nodeId)
 }
 
 export function isPreviewNode(nodeId: string): boolean {
-  return previewNodes.has(nodeId)
+  return getPreviewSet().has(nodeId)
 }
 
 /** Remove all indicators whose nodeId starts with the given prefix. */
 export function removeAgentIndicatorsByPrefix(prefix: string): void {
+  const map = getIndicatorMap()
+  const set = getPreviewSet()
   const prefixDash = `${prefix}-`
-  for (const key of [...activeAgentIndicators.keys()]) {
+  for (const key of [...map.keys()]) {
     if (key.startsWith(prefixDash)) {
-      activeAgentIndicators.delete(key)
-      previewNodes.delete(key)
+      map.delete(key)
+      set.delete(key)
     }
   }
 }
 
 export function clearAgentIndicators(): void {
-  activeAgentIndicators.clear()
-  previewNodes.clear()
+  getIndicatorMap().clear()
+  getPreviewSet().clear()
 }
