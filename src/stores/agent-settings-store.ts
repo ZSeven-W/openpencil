@@ -19,6 +19,8 @@ interface PersistedState {
 interface AgentSettingsState extends PersistedState {
   dialogOpen: boolean
   isHydrated: boolean
+  mcpServerRunning: boolean
+  mcpServerLocalIp: string | null
 
   connectProvider: (
     provider: AIProviderType,
@@ -28,6 +30,7 @@ interface AgentSettingsState extends PersistedState {
   disconnectProvider: (provider: AIProviderType) => void
   toggleMCPIntegration: (tool: string) => void
   setMCPTransport: (mode: MCPTransportMode, port?: number) => void
+  setMcpServerStatus: (running: boolean, localIp?: string | null) => void
   setDialogOpen: (open: boolean) => void
   persist: () => void
   hydrate: () => void
@@ -72,6 +75,8 @@ export const useAgentSettingsStore = create<AgentSettingsState>((set, get) => ({
   mcpHttpPort: 3100,
   dialogOpen: false,
   isHydrated: false,
+  mcpServerRunning: false,
+  mcpServerLocalIp: null,
 
   connectProvider: (provider, method, models) =>
     set((s) => ({
@@ -108,6 +113,9 @@ export const useAgentSettingsStore = create<AgentSettingsState>((set, get) => ({
       mcpTransportMode: mode,
       ...(port != null && { mcpHttpPort: port }),
     }),
+
+  setMcpServerStatus: (running, localIp) =>
+    set({ mcpServerRunning: running, mcpServerLocalIp: localIp ?? null }),
 
   setDialogOpen: (dialogOpen) => set({ dialogOpen }),
 

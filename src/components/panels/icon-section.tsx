@@ -5,6 +5,7 @@ import type { PenFill, PenStroke } from '@/types/styles'
 import SectionHeader from '@/components/shared/section-header'
 import IconPickerDialog, { type IconPickerPosition } from '@/components/shared/icon-picker-dialog'
 import { parseSvgToNodes } from '@/utils/svg-parser'
+import { useTranslation } from 'react-i18next'
 
 const POPULAR_COLLECTIONS = [
   { id: 'feather', name: 'Feather' },
@@ -55,6 +56,7 @@ function nodeToPathD(node: PenNode): string | null {
 }
 
 export default function IconSection({ node, onUpdate }: IconSectionProps) {
+  const { t } = useTranslation()
   const [pickerOpen, setPickerOpen] = useState(false)
   const [pickerInitialQuery, setPickerInitialQuery] = useState('')
   const [pickerCollection, setPickerCollection] = useState<string | undefined>(undefined)
@@ -180,7 +182,7 @@ export default function IconSection({ node, onUpdate }: IconSectionProps) {
 
   return (
     <div className="space-y-1.5">
-      <SectionHeader title="Icon" />
+      <SectionHeader title={t('icon.title')} />
 
       {/* Icon name row — opens full picker */}
       <button

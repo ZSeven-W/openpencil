@@ -1,11 +1,12 @@
 import type { PenDocument, PenNode } from '@/types/pen'
+import { extraComponents } from './shadcn-kit-extra'
 
 // ---------------------------------------------------------------------------
 // Buttons
 // ---------------------------------------------------------------------------
 
 const btnPrimary: PenNode = {
-  id: 'uikit-btn-primary',
+  id: 'shadcn-btn-primary',
   type: 'frame',
   name: 'Primary Button',
   reusable: true,
@@ -18,22 +19,22 @@ const btnPrimary: PenNode = {
   alignItems: 'center',
   padding: [0, 20, 0, 20],
   cornerRadius: 8,
-  fill: [{ type: 'solid', color: '#2563EB' }],
+  fill: [{ type: 'solid', color: '#18181B' }],
   children: [
     {
-      id: 'uikit-btn-primary-label',
+      id: 'shadcn-btn-primary-label',
       type: 'text',
       name: 'Label',
       content: 'Button',
       fontSize: 14,
       fontWeight: 600,
-      fill: [{ type: 'solid', color: '#FFFFFF' }],
+      fill: [{ type: 'solid', color: '#FAFAFA' }],
     },
   ],
 }
 
 const btnSecondary: PenNode = {
-  id: 'uikit-btn-secondary',
+  id: 'shadcn-btn-secondary',
   type: 'frame',
   name: 'Secondary Button',
   reusable: true,
@@ -46,23 +47,23 @@ const btnSecondary: PenNode = {
   alignItems: 'center',
   padding: [0, 20, 0, 20],
   cornerRadius: 8,
-  fill: [{ type: 'solid', color: '#FFFFFF' }],
-  stroke: { thickness: 1, fill: [{ type: 'solid', color: '#D1D5DB' }] },
+  fill: [{ type: 'solid', color: '#F4F4F5' }],
+  stroke: { thickness: 1, fill: [{ type: 'solid', color: '#E4E4E7' }] },
   children: [
     {
-      id: 'uikit-btn-secondary-label',
+      id: 'shadcn-btn-secondary-label',
       type: 'text',
       name: 'Label',
       content: 'Button',
       fontSize: 14,
       fontWeight: 600,
-      fill: [{ type: 'solid', color: '#374151' }],
+      fill: [{ type: 'solid', color: '#18181B' }],
     },
   ],
 }
 
 const btnGhost: PenNode = {
-  id: 'uikit-btn-ghost',
+  id: 'shadcn-btn-ghost',
   type: 'frame',
   name: 'Ghost Button',
   reusable: true,
@@ -77,19 +78,19 @@ const btnGhost: PenNode = {
   cornerRadius: 8,
   children: [
     {
-      id: 'uikit-btn-ghost-label',
+      id: 'shadcn-btn-ghost-label',
       type: 'text',
       name: 'Label',
       content: 'Button',
       fontSize: 14,
       fontWeight: 600,
-      fill: [{ type: 'solid', color: '#2563EB' }],
+      fill: [{ type: 'solid', color: '#18181B' }],
     },
   ],
 }
 
 const btnDestructive: PenNode = {
-  id: 'uikit-btn-destructive',
+  id: 'shadcn-btn-destructive',
   type: 'frame',
   name: 'Destructive Button',
   reusable: true,
@@ -102,16 +103,16 @@ const btnDestructive: PenNode = {
   alignItems: 'center',
   padding: [0, 20, 0, 20],
   cornerRadius: 8,
-  fill: [{ type: 'solid', color: '#DC2626' }],
+  fill: [{ type: 'solid', color: '#EF4444' }],
   children: [
     {
-      id: 'uikit-btn-destructive-label',
+      id: 'shadcn-btn-destructive-label',
       type: 'text',
       name: 'Label',
       content: 'Delete',
       fontSize: 14,
       fontWeight: 600,
-      fill: [{ type: 'solid', color: '#FFFFFF' }],
+      fill: [{ type: 'solid', color: '#FAFAFA' }],
     },
   ],
 }
@@ -121,7 +122,7 @@ const btnDestructive: PenNode = {
 // ---------------------------------------------------------------------------
 
 const inputText: PenNode = {
-  id: 'uikit-input-text',
+  id: 'shadcn-input-text',
   type: 'frame',
   name: 'Text Input',
   reusable: true,
@@ -134,21 +135,21 @@ const inputText: PenNode = {
   padding: [0, 12, 0, 12],
   cornerRadius: 8,
   fill: [{ type: 'solid', color: '#FFFFFF' }],
-  stroke: { thickness: 1, fill: [{ type: 'solid', color: '#D1D5DB' }] },
+  stroke: { thickness: 1, fill: [{ type: 'solid', color: '#E4E4E7' }] },
   children: [
     {
-      id: 'uikit-input-text-placeholder',
+      id: 'shadcn-input-text-placeholder',
       type: 'text',
       name: 'Placeholder',
       content: 'Enter text...',
       fontSize: 14,
-      fill: [{ type: 'solid', color: '#9CA3AF' }],
+      fill: [{ type: 'solid', color: '#A1A1AA' }],
     },
   ],
 }
 
 const inputTextarea: PenNode = {
-  id: 'uikit-input-textarea',
+  id: 'shadcn-input-textarea',
   type: 'frame',
   name: 'Textarea',
   reusable: true,
@@ -160,22 +161,22 @@ const inputTextarea: PenNode = {
   padding: 12,
   cornerRadius: 8,
   fill: [{ type: 'solid', color: '#FFFFFF' }],
-  stroke: { thickness: 1, fill: [{ type: 'solid', color: '#D1D5DB' }] },
+  stroke: { thickness: 1, fill: [{ type: 'solid', color: '#E4E4E7' }] },
   children: [
     {
-      id: 'uikit-input-textarea-placeholder',
+      id: 'shadcn-input-textarea-placeholder',
       type: 'text',
       name: 'Placeholder',
       content: 'Enter description...',
       fontSize: 14,
-      fill: [{ type: 'solid', color: '#9CA3AF' }],
+      fill: [{ type: 'solid', color: '#A1A1AA' }],
       width: 'fill_container',
     },
   ],
 }
 
 const inputCheckbox: PenNode = {
-  id: 'uikit-input-checkbox',
+  id: 'shadcn-input-checkbox',
   type: 'frame',
   name: 'Checkbox',
   reusable: true,
@@ -188,28 +189,28 @@ const inputCheckbox: PenNode = {
   alignItems: 'center',
   children: [
     {
-      id: 'uikit-input-checkbox-box',
+      id: 'shadcn-input-checkbox-box',
       type: 'rectangle',
       name: 'Box',
       width: 18,
       height: 18,
       cornerRadius: 4,
-      fill: [{ type: 'solid', color: '#2563EB' }],
-      stroke: { thickness: 1, fill: [{ type: 'solid', color: '#2563EB' }] },
+      fill: [{ type: 'solid', color: '#18181B' }],
+      stroke: { thickness: 1, fill: [{ type: 'solid', color: '#18181B' }] },
     },
     {
-      id: 'uikit-input-checkbox-label',
+      id: 'shadcn-input-checkbox-label',
       type: 'text',
       name: 'Label',
       content: 'Checkbox label',
       fontSize: 14,
-      fill: [{ type: 'solid', color: '#374151' }],
+      fill: [{ type: 'solid', color: '#18181B' }],
     },
   ],
 }
 
 const inputToggle: PenNode = {
-  id: 'uikit-input-toggle',
+  id: 'shadcn-input-toggle',
   type: 'frame',
   name: 'Toggle Switch',
   reusable: true,
@@ -218,10 +219,10 @@ const inputToggle: PenNode = {
   width: 44,
   height: 24,
   cornerRadius: 12,
-  fill: [{ type: 'solid', color: '#2563EB' }],
+  fill: [{ type: 'solid', color: '#18181B' }],
   children: [
     {
-      id: 'uikit-input-toggle-thumb',
+      id: 'shadcn-input-toggle-thumb',
       type: 'ellipse',
       name: 'Thumb',
       x: 22,
@@ -234,7 +235,7 @@ const inputToggle: PenNode = {
 }
 
 const inputRadio: PenNode = {
-  id: 'uikit-input-radio',
+  id: 'shadcn-input-radio',
   type: 'frame',
   name: 'Radio Button',
   reusable: true,
@@ -247,21 +248,21 @@ const inputRadio: PenNode = {
   alignItems: 'center',
   children: [
     {
-      id: 'uikit-input-radio-circle',
+      id: 'shadcn-input-radio-circle',
       type: 'ellipse',
       name: 'Circle',
       width: 18,
       height: 18,
       fill: [{ type: 'solid', color: '#FFFFFF' }],
-      stroke: { thickness: 2, fill: [{ type: 'solid', color: '#2563EB' }] },
+      stroke: { thickness: 2, fill: [{ type: 'solid', color: '#18181B' }] },
     },
     {
-      id: 'uikit-input-radio-label',
+      id: 'shadcn-input-radio-label',
       type: 'text',
       name: 'Label',
       content: 'Radio label',
       fontSize: 14,
-      fill: [{ type: 'solid', color: '#374151' }],
+      fill: [{ type: 'solid', color: '#18181B' }],
     },
   ],
 }
@@ -271,7 +272,7 @@ const inputRadio: PenNode = {
 // ---------------------------------------------------------------------------
 
 const cardBasic: PenNode = {
-  id: 'uikit-card-basic',
+  id: 'shadcn-card-basic',
   type: 'frame',
   name: 'Basic Card',
   reusable: true,
@@ -284,33 +285,33 @@ const cardBasic: PenNode = {
   padding: 20,
   cornerRadius: 12,
   fill: [{ type: 'solid', color: '#FFFFFF' }],
-  stroke: { thickness: 1, fill: [{ type: 'solid', color: '#E5E7EB' }] },
-  effects: [{ type: 'shadow', offsetX: 0, offsetY: 1, blur: 3, spread: 0, color: 'rgba(0,0,0,0.1)' }],
+  stroke: { thickness: 1, fill: [{ type: 'solid', color: '#E4E4E7' }] },
+  effects: [{ type: 'shadow', offsetX: 0, offsetY: 1, blur: 3, spread: 0, color: 'rgba(0,0,0,0.05)' }],
   children: [
     {
-      id: 'uikit-card-basic-title',
+      id: 'shadcn-card-basic-title',
       type: 'text',
       name: 'Title',
       content: 'Card Title',
       fontSize: 18,
       fontWeight: 600,
-      fill: [{ type: 'solid', color: '#111827' }],
+      fill: [{ type: 'solid', color: '#18181B' }],
     },
     {
-      id: 'uikit-card-basic-desc',
+      id: 'shadcn-card-basic-desc',
       type: 'text',
       name: 'Description',
       content: 'Card description goes here with some supporting text.',
       fontSize: 14,
       lineHeight: 1.5,
-      fill: [{ type: 'solid', color: '#6B7280' }],
+      fill: [{ type: 'solid', color: '#71717A' }],
       width: 'fill_container',
     },
   ],
 }
 
 const cardStats: PenNode = {
-  id: 'uikit-card-stats',
+  id: 'shadcn-card-stats',
   type: 'frame',
   name: 'Stats Card',
   reusable: true,
@@ -323,29 +324,29 @@ const cardStats: PenNode = {
   padding: 20,
   cornerRadius: 12,
   fill: [{ type: 'solid', color: '#FFFFFF' }],
-  stroke: { thickness: 1, fill: [{ type: 'solid', color: '#E5E7EB' }] },
-  effects: [{ type: 'shadow', offsetX: 0, offsetY: 1, blur: 3, spread: 0, color: 'rgba(0,0,0,0.1)' }],
+  stroke: { thickness: 1, fill: [{ type: 'solid', color: '#E4E4E7' }] },
+  effects: [{ type: 'shadow', offsetX: 0, offsetY: 1, blur: 3, spread: 0, color: 'rgba(0,0,0,0.05)' }],
   children: [
     {
-      id: 'uikit-card-stats-label',
+      id: 'shadcn-card-stats-label',
       type: 'text',
       name: 'Label',
       content: 'Total Revenue',
       fontSize: 12,
       fontWeight: 500,
-      fill: [{ type: 'solid', color: '#6B7280' }],
+      fill: [{ type: 'solid', color: '#71717A' }],
     },
     {
-      id: 'uikit-card-stats-value',
+      id: 'shadcn-card-stats-value',
       type: 'text',
       name: 'Value',
       content: '$45,231',
       fontSize: 28,
       fontWeight: 700,
-      fill: [{ type: 'solid', color: '#111827' }],
+      fill: [{ type: 'solid', color: '#18181B' }],
     },
     {
-      id: 'uikit-card-stats-change',
+      id: 'shadcn-card-stats-change',
       type: 'text',
       name: 'Change',
       content: '+20.1% from last month',
@@ -356,7 +357,7 @@ const cardStats: PenNode = {
 }
 
 const cardImage: PenNode = {
-  id: 'uikit-card-image',
+  id: 'shadcn-card-image',
   type: 'frame',
   name: 'Image Card',
   reusable: true,
@@ -367,20 +368,20 @@ const cardImage: PenNode = {
   layout: 'vertical',
   cornerRadius: 12,
   fill: [{ type: 'solid', color: '#FFFFFF' }],
-  stroke: { thickness: 1, fill: [{ type: 'solid', color: '#E5E7EB' }] },
-  effects: [{ type: 'shadow', offsetX: 0, offsetY: 1, blur: 3, spread: 0, color: 'rgba(0,0,0,0.1)' }],
+  stroke: { thickness: 1, fill: [{ type: 'solid', color: '#E4E4E7' }] },
+  effects: [{ type: 'shadow', offsetX: 0, offsetY: 1, blur: 3, spread: 0, color: 'rgba(0,0,0,0.05)' }],
   children: [
     {
-      id: 'uikit-card-image-placeholder',
+      id: 'shadcn-card-image-placeholder',
       type: 'rectangle',
       name: 'Image',
       width: 'fill_container',
       height: 140,
-      fill: [{ type: 'solid', color: '#F3F4F6' }],
+      fill: [{ type: 'solid', color: '#F4F4F5' }],
       cornerRadius: [12, 12, 0, 0],
     },
     {
-      id: 'uikit-card-image-body',
+      id: 'shadcn-card-image-body',
       type: 'frame',
       name: 'Body',
       width: 'fill_container',
@@ -389,21 +390,21 @@ const cardImage: PenNode = {
       padding: [12, 16, 16, 16],
       children: [
         {
-          id: 'uikit-card-image-title',
+          id: 'shadcn-card-image-title',
           type: 'text',
           name: 'Title',
           content: 'Card Title',
           fontSize: 16,
           fontWeight: 600,
-          fill: [{ type: 'solid', color: '#111827' }],
+          fill: [{ type: 'solid', color: '#18181B' }],
         },
         {
-          id: 'uikit-card-image-desc',
+          id: 'shadcn-card-image-desc',
           type: 'text',
           name: 'Description',
           content: 'Brief description text.',
           fontSize: 13,
-          fill: [{ type: 'solid', color: '#6B7280' }],
+          fill: [{ type: 'solid', color: '#71717A' }],
         },
       ],
     },
@@ -415,7 +416,7 @@ const cardImage: PenNode = {
 // ---------------------------------------------------------------------------
 
 const navbar: PenNode = {
-  id: 'uikit-nav-bar',
+  id: 'shadcn-nav-bar',
   type: 'frame',
   name: 'Navbar',
   reusable: true,
@@ -428,19 +429,19 @@ const navbar: PenNode = {
   justifyContent: 'space_between',
   padding: [0, 24, 0, 24],
   fill: [{ type: 'solid', color: '#FFFFFF' }],
-  stroke: { thickness: 1, fill: [{ type: 'solid', color: '#E5E7EB' }] },
+  stroke: { thickness: 1, fill: [{ type: 'solid', color: '#E4E4E7' }] },
   children: [
     {
-      id: 'uikit-nav-bar-brand',
+      id: 'shadcn-nav-bar-brand',
       type: 'text',
       name: 'Brand',
       content: 'Brand',
       fontSize: 18,
       fontWeight: 700,
-      fill: [{ type: 'solid', color: '#111827' }],
+      fill: [{ type: 'solid', color: '#18181B' }],
     },
     {
-      id: 'uikit-nav-bar-links',
+      id: 'shadcn-nav-bar-links',
       type: 'frame',
       name: 'Links',
       layout: 'horizontal',
@@ -448,31 +449,31 @@ const navbar: PenNode = {
       alignItems: 'center',
       children: [
         {
-          id: 'uikit-nav-bar-link-1',
+          id: 'shadcn-nav-bar-link-1',
           type: 'text',
           name: 'Link',
           content: 'Home',
           fontSize: 14,
           fontWeight: 500,
-          fill: [{ type: 'solid', color: '#374151' }],
+          fill: [{ type: 'solid', color: '#18181B' }],
         },
         {
-          id: 'uikit-nav-bar-link-2',
+          id: 'shadcn-nav-bar-link-2',
           type: 'text',
           name: 'Link',
           content: 'Products',
           fontSize: 14,
           fontWeight: 500,
-          fill: [{ type: 'solid', color: '#6B7280' }],
+          fill: [{ type: 'solid', color: '#71717A' }],
         },
         {
-          id: 'uikit-nav-bar-link-3',
+          id: 'shadcn-nav-bar-link-3',
           type: 'text',
           name: 'Link',
           content: 'About',
           fontSize: 14,
           fontWeight: 500,
-          fill: [{ type: 'solid', color: '#6B7280' }],
+          fill: [{ type: 'solid', color: '#71717A' }],
         },
       ],
     },
@@ -480,7 +481,7 @@ const navbar: PenNode = {
 }
 
 const tabBar: PenNode = {
-  id: 'uikit-tab-bar',
+  id: 'shadcn-tab-bar',
   type: 'frame',
   name: 'Tab Bar',
   reusable: true,
@@ -492,11 +493,11 @@ const tabBar: PenNode = {
   gap: 0,
   alignItems: 'center',
   fill: [{ type: 'solid', color: '#FFFFFF' }],
-  stroke: { thickness: 1, fill: [{ type: 'solid', color: '#E5E7EB' }] },
+  stroke: { thickness: 1, fill: [{ type: 'solid', color: '#E4E4E7' }] },
   cornerRadius: 8,
   children: [
     {
-      id: 'uikit-tab-bar-tab-1',
+      id: 'shadcn-tab-bar-tab-1',
       type: 'frame',
       name: 'Tab Active',
       height: 'fill_container',
@@ -504,22 +505,22 @@ const tabBar: PenNode = {
       layout: 'horizontal',
       justifyContent: 'center',
       alignItems: 'center',
-      fill: [{ type: 'solid', color: '#EFF6FF' }],
+      fill: [{ type: 'solid', color: '#18181B' }],
       cornerRadius: [8, 0, 0, 8],
       children: [
         {
-          id: 'uikit-tab-bar-tab-1-label',
+          id: 'shadcn-tab-bar-tab-1-label',
           type: 'text',
           name: 'Label',
           content: 'Tab 1',
           fontSize: 13,
           fontWeight: 600,
-          fill: [{ type: 'solid', color: '#2563EB' }],
+          fill: [{ type: 'solid', color: '#FAFAFA' }],
         },
       ],
     },
     {
-      id: 'uikit-tab-bar-tab-2',
+      id: 'shadcn-tab-bar-tab-2',
       type: 'frame',
       name: 'Tab',
       height: 'fill_container',
@@ -529,18 +530,18 @@ const tabBar: PenNode = {
       alignItems: 'center',
       children: [
         {
-          id: 'uikit-tab-bar-tab-2-label',
+          id: 'shadcn-tab-bar-tab-2-label',
           type: 'text',
           name: 'Label',
           content: 'Tab 2',
           fontSize: 13,
           fontWeight: 500,
-          fill: [{ type: 'solid', color: '#6B7280' }],
+          fill: [{ type: 'solid', color: '#71717A' }],
         },
       ],
     },
     {
-      id: 'uikit-tab-bar-tab-3',
+      id: 'shadcn-tab-bar-tab-3',
       type: 'frame',
       name: 'Tab',
       height: 'fill_container',
@@ -551,13 +552,13 @@ const tabBar: PenNode = {
       cornerRadius: [0, 8, 8, 0],
       children: [
         {
-          id: 'uikit-tab-bar-tab-3-label',
+          id: 'shadcn-tab-bar-tab-3-label',
           type: 'text',
           name: 'Label',
           content: 'Tab 3',
           fontSize: 13,
           fontWeight: 500,
-          fill: [{ type: 'solid', color: '#6B7280' }],
+          fill: [{ type: 'solid', color: '#71717A' }],
         },
       ],
     },
@@ -565,7 +566,7 @@ const tabBar: PenNode = {
 }
 
 const breadcrumb: PenNode = {
-  id: 'uikit-breadcrumb',
+  id: 'shadcn-breadcrumb',
   type: 'frame',
   name: 'Breadcrumb',
   reusable: true,
@@ -578,45 +579,45 @@ const breadcrumb: PenNode = {
   alignItems: 'center',
   children: [
     {
-      id: 'uikit-breadcrumb-home',
+      id: 'shadcn-breadcrumb-home',
       type: 'text',
       name: 'Home',
       content: 'Home',
       fontSize: 13,
-      fill: [{ type: 'solid', color: '#6B7280' }],
+      fill: [{ type: 'solid', color: '#71717A' }],
     },
     {
-      id: 'uikit-breadcrumb-sep-1',
+      id: 'shadcn-breadcrumb-sep-1',
       type: 'text',
       name: 'Separator',
       content: '/',
       fontSize: 13,
-      fill: [{ type: 'solid', color: '#D1D5DB' }],
+      fill: [{ type: 'solid', color: '#E4E4E7' }],
     },
     {
-      id: 'uikit-breadcrumb-section',
+      id: 'shadcn-breadcrumb-section',
       type: 'text',
       name: 'Section',
       content: 'Section',
       fontSize: 13,
-      fill: [{ type: 'solid', color: '#6B7280' }],
+      fill: [{ type: 'solid', color: '#71717A' }],
     },
     {
-      id: 'uikit-breadcrumb-sep-2',
+      id: 'shadcn-breadcrumb-sep-2',
       type: 'text',
       name: 'Separator',
       content: '/',
       fontSize: 13,
-      fill: [{ type: 'solid', color: '#D1D5DB' }],
+      fill: [{ type: 'solid', color: '#E4E4E7' }],
     },
     {
-      id: 'uikit-breadcrumb-current',
+      id: 'shadcn-breadcrumb-current',
       type: 'text',
       name: 'Current',
       content: 'Current Page',
       fontSize: 13,
       fontWeight: 500,
-      fill: [{ type: 'solid', color: '#111827' }],
+      fill: [{ type: 'solid', color: '#18181B' }],
     },
   ],
 }
@@ -626,7 +627,7 @@ const breadcrumb: PenNode = {
 // ---------------------------------------------------------------------------
 
 const alertBanner: PenNode = {
-  id: 'uikit-alert-banner',
+  id: 'shadcn-alert-banner',
   type: 'frame',
   name: 'Alert Banner',
   reusable: true,
@@ -639,30 +640,30 @@ const alertBanner: PenNode = {
   alignItems: 'center',
   padding: [0, 16, 0, 16],
   cornerRadius: 8,
-  fill: [{ type: 'solid', color: '#EFF6FF' }],
-  stroke: { thickness: 1, fill: [{ type: 'solid', color: '#BFDBFE' }] },
+  fill: [{ type: 'solid', color: '#F4F4F5' }],
+  stroke: { thickness: 1, fill: [{ type: 'solid', color: '#E4E4E7' }] },
   children: [
     {
-      id: 'uikit-alert-banner-icon',
+      id: 'shadcn-alert-banner-icon',
       type: 'ellipse',
       name: 'Icon',
       width: 8,
       height: 8,
-      fill: [{ type: 'solid', color: '#2563EB' }],
+      fill: [{ type: 'solid', color: '#18181B' }],
     },
     {
-      id: 'uikit-alert-banner-text',
+      id: 'shadcn-alert-banner-text',
       type: 'text',
       name: 'Message',
       content: 'This is an informational alert message.',
       fontSize: 14,
-      fill: [{ type: 'solid', color: '#1E40AF' }],
+      fill: [{ type: 'solid', color: '#18181B' }],
     },
   ],
 }
 
 const badge: PenNode = {
-  id: 'uikit-badge',
+  id: 'shadcn-badge',
   type: 'frame',
   name: 'Badge',
   reusable: true,
@@ -675,22 +676,22 @@ const badge: PenNode = {
   alignItems: 'center',
   padding: [0, 10, 0, 10],
   cornerRadius: 12,
-  fill: [{ type: 'solid', color: '#DBEAFE' }],
+  fill: [{ type: 'solid', color: '#F4F4F5' }],
   children: [
     {
-      id: 'uikit-badge-label',
+      id: 'shadcn-badge-label',
       type: 'text',
       name: 'Label',
       content: 'Badge',
       fontSize: 12,
       fontWeight: 500,
-      fill: [{ type: 'solid', color: '#1D4ED8' }],
+      fill: [{ type: 'solid', color: '#18181B' }],
     },
   ],
 }
 
 const avatar: PenNode = {
-  id: 'uikit-avatar',
+  id: 'shadcn-avatar',
   type: 'frame',
   name: 'Avatar',
   reusable: true,
@@ -699,19 +700,19 @@ const avatar: PenNode = {
   width: 40,
   height: 40,
   cornerRadius: 20,
-  fill: [{ type: 'solid', color: '#DBEAFE' }],
+  fill: [{ type: 'solid', color: '#F4F4F5' }],
   layout: 'horizontal',
   justifyContent: 'center',
   alignItems: 'center',
   children: [
     {
-      id: 'uikit-avatar-initials',
+      id: 'shadcn-avatar-initials',
       type: 'text',
       name: 'Initials',
       content: 'JD',
       fontSize: 14,
       fontWeight: 600,
-      fill: [{ type: 'solid', color: '#2563EB' }],
+      fill: [{ type: 'solid', color: '#18181B' }],
     },
   ],
 }
@@ -721,7 +722,7 @@ const avatar: PenNode = {
 // ---------------------------------------------------------------------------
 
 const divider: PenNode = {
-  id: 'uikit-divider',
+  id: 'shadcn-divider',
   type: 'frame',
   name: 'Divider',
   reusable: true,
@@ -729,16 +730,16 @@ const divider: PenNode = {
   y: 692,
   width: 400,
   height: 1,
-  fill: [{ type: 'solid', color: '#E5E7EB' }],
+  fill: [{ type: 'solid', color: '#E4E4E7' }],
 }
 
 // ---------------------------------------------------------------------------
 // Document
 // ---------------------------------------------------------------------------
 
-export const DEFAULT_KIT_DOCUMENT: PenDocument = {
+export const SHADCN_KIT_DOCUMENT: PenDocument = {
   version: '1.0.0',
-  name: 'Default UIKit',
+  name: 'shadcn UI',
   children: [
     btnPrimary,
     btnSecondary,
@@ -759,5 +760,6 @@ export const DEFAULT_KIT_DOCUMENT: PenDocument = {
     badge,
     avatar,
     divider,
+    ...extraComponents,
   ],
 }

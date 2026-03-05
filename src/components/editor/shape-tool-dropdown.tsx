@@ -8,6 +8,7 @@ import {
   ImagePlus,
   ChevronDown,
 } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import type { ToolType } from '@/types/canvas'
 import { useCanvasStore } from '@/stores/canvas-store'
 import {
@@ -51,6 +52,7 @@ export default function ShapeToolDropdown({
   onIconPickerOpen,
   onImageImport,
 }: ShapeToolDropdownProps) {
+  const { t } = useTranslation()
   const [open, setOpen] = useState(false)
   const lastShapeTool = useRef<ToolType>('rectangle')
   const wrapperRef = useRef<HTMLDivElement>(null)
@@ -86,12 +88,12 @@ export default function ShapeToolDropdown({
       : TOOL_ICON_MAP[lastShapeTool.current]
 
   const items: DropdownItem[] = [
-    { type: 'tool', tool: 'rectangle', icon: <Square size={18} strokeWidth={1.5} />, label: 'Rectangle' },
-    { type: 'tool', tool: 'ellipse', icon: <Circle size={18} strokeWidth={1.5} />, label: 'Ellipse' },
-    { type: 'tool', tool: 'line', icon: <Minus size={18} strokeWidth={1.5} />, label: 'Line' },
-    { type: 'action', key: 'icon', icon: <Sparkles size={18} strokeWidth={1.5} />, label: 'Icon', onAction: onIconPickerOpen },
-    { type: 'action', key: 'image', icon: <ImagePlus size={18} strokeWidth={1.5} />, label: 'Import Image or SVG…', onAction: onImageImport },
-    { type: 'tool', tool: 'path', icon: <PenTool size={18} strokeWidth={1.5} />, label: 'Pen' },
+    { type: 'tool', tool: 'rectangle', icon: <Square size={18} strokeWidth={1.5} />, label: t('shapes.rectangle') },
+    { type: 'tool', tool: 'ellipse', icon: <Circle size={18} strokeWidth={1.5} />, label: t('shapes.ellipse') },
+    { type: 'tool', tool: 'line', icon: <Minus size={18} strokeWidth={1.5} />, label: t('shapes.line') },
+    { type: 'action', key: 'icon', icon: <Sparkles size={18} strokeWidth={1.5} />, label: t('shapes.icon'), onAction: onIconPickerOpen },
+    { type: 'action', key: 'image', icon: <ImagePlus size={18} strokeWidth={1.5} />, label: t('shapes.importImageSvg'), onAction: onImageImport },
+    { type: 'tool', tool: 'path', icon: <PenTool size={18} strokeWidth={1.5} />, label: t('shapes.pen') },
   ]
 
   const handleSelect = (item: DropdownItem) => {
@@ -111,7 +113,7 @@ export default function ShapeToolDropdown({
           <button
             type="button"
             onClick={() => setActiveTool(lastShapeTool.current)}
-            aria-label="Shape tools"
+            aria-label={t('shapes.shapeTools')}
             aria-pressed={isGroupActive}
             className={`inline-flex items-center justify-center h-8 min-w-8 px-1.5 rounded-lg transition-colors [&_svg]:size-5 [&_svg]:shrink-0 ${
               isGroupActive
@@ -123,7 +125,7 @@ export default function ShapeToolDropdown({
           </button>
         </TooltipTrigger>
         <TooltipContent side="right">
-          Shape tools
+          {t('shapes.shapeTools')}
         </TooltipContent>
       </Tooltip>
 
@@ -131,7 +133,7 @@ export default function ShapeToolDropdown({
       <button
         onClick={() => setOpen((v) => !v)}
         className="flex items-center justify-center w-5 h-3 rounded-sm hover:bg-muted text-muted-foreground transition-colors cursor-pointer"
-        aria-label="More shape tools"
+        aria-label={t('shapes.moreShapeTools')}
       >
         <ChevronDown size={10} />
       </button>

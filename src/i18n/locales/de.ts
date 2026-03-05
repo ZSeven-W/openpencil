@@ -1,0 +1,372 @@
+import type { TranslationKeys } from './en'
+
+const de: TranslationKeys = {
+  // ── Common ──
+  'common.rename': 'Umbenennen',
+  'common.duplicate': 'Duplizieren',
+  'common.delete': 'Löschen',
+  'common.cancel': 'Abbrechen',
+  'common.save': 'Speichern',
+  'common.close': 'Schließen',
+  'common.connect': 'Verbinden',
+  'common.disconnect': 'Trennen',
+  'common.import': 'Importieren',
+  'common.export': 'Exportieren',
+  'common.name': 'Name',
+  'common.untitled': 'Unbenannt',
+  'common.best': 'Beste',
+  'common.selected': '{{count}} ausgewählt',
+
+  // ── Toolbar ──
+  'toolbar.select': 'Auswählen',
+  'toolbar.text': 'Text',
+  'toolbar.frame': 'Rahmen',
+  'toolbar.hand': 'Hand',
+  'toolbar.undo': 'Rückgängig',
+  'toolbar.redo': 'Wiederherstellen',
+  'toolbar.variables': 'Variablen',
+  'toolbar.uikitBrowser': 'UIKit-Browser',
+
+  // ── Shapes ──
+  'shapes.rectangle': 'Rechteck',
+  'shapes.ellipse': 'Ellipse',
+  'shapes.line': 'Linie',
+  'shapes.icon': 'Symbol',
+  'shapes.importImageSvg': 'Bild oder SVG importieren\u2026',
+  'shapes.pen': 'Stift',
+  'shapes.shapeTools': 'Formwerkzeuge',
+  'shapes.moreShapeTools': 'Weitere Formwerkzeuge',
+
+  // ── Top Bar ──
+  'topbar.hideLayers': 'Ebenen ausblenden',
+  'topbar.showLayers': 'Ebenen einblenden',
+  'topbar.new': 'Neu',
+  'topbar.open': 'Öffnen',
+  'topbar.save': 'Speichern',
+  'topbar.importFigma': 'Figma importieren',
+  'topbar.lightMode': 'Heller Modus',
+  'topbar.darkMode': 'Dunkler Modus',
+  'topbar.fullscreen': 'Vollbild',
+  'topbar.exitFullscreen': 'Vollbild beenden',
+  'topbar.edited': '— Bearbeitet',
+  'topbar.agentsAndMcp': 'Agenten & MCP',
+  'topbar.setupAgentsMcp': 'Agenten & MCP einrichten',
+  'topbar.connected': 'verbunden',
+  'topbar.agentStatus': '{{agents}} Agent{{agentSuffix}} · {{mcp}} MCP',
+
+  // ── Pages ──
+  'pages.title': 'Seiten',
+  'pages.addPage': 'Seite hinzufügen',
+  'pages.moveUp': 'Nach oben',
+  'pages.moveDown': 'Nach unten',
+
+  // ── Status Bar ──
+  'statusbar.zoomOut': 'Herauszoomen',
+  'statusbar.zoomIn': 'Hineinzoomen',
+  'statusbar.resetZoom': 'Zoom zurücksetzen',
+
+  // ── Updater ──
+  'updater.softwareUpdate': 'Software-Update',
+  'updater.dismiss': 'Schließen',
+  'updater.current': 'Aktuell',
+  'updater.latest': 'Neueste',
+  'updater.unknown': 'Unbekannt',
+  'updater.checking': 'Prüfe...',
+  'updater.downloadProgress': 'Downloadfortschritt',
+  'updater.checkAgain': 'Erneut prüfen',
+  'updater.restartInstall': 'Neustart & Installieren',
+  'updater.installing': 'Installiere...',
+  'updater.releaseDate': 'Veröffentlichungsdatum: {{date}}',
+  'updater.restartHint':
+    'Neustart zum Anwenden des Updates. Der Neustart dauert in der Regel 10–15 Sekunden.',
+  'updater.unknownError': 'Unbekannter Updater-Fehler.',
+  'updater.title.checking': 'Suche nach Updates',
+  'updater.title.available': 'Update gefunden',
+  'updater.title.downloading': 'Update wird heruntergeladen',
+  'updater.title.downloaded': 'Bereit zur Installation',
+  'updater.title.error': 'Update fehlgeschlagen',
+  'updater.subtitle.checking': 'Suche nach der neuesten Version...',
+  'updater.subtitle.available': 'Version {{version}} ist verfügbar.',
+  'updater.subtitle.availableGeneric': 'Eine neue Version ist verfügbar.',
+  'updater.subtitle.downloading':
+    'Version {{version}} wird im Hintergrund heruntergeladen.',
+  'updater.subtitle.downloadingGeneric':
+    'Update-Paket wird im Hintergrund heruntergeladen.',
+  'updater.subtitle.downloaded': 'Version {{version}} wurde heruntergeladen.',
+  'updater.subtitle.downloadedGeneric': 'Das Update wurde heruntergeladen.',
+  'updater.subtitle.error':
+    'Das Update konnte nicht geprüft oder heruntergeladen werden.',
+
+  // ── Layers ──
+  'layers.title': 'Ebenen',
+  'layers.empty':
+    'Noch keine Ebenen. Verwende die Werkzeugleiste, um Formen zu zeichnen.',
+
+  // ── Layer Context Menu ──
+  'layerMenu.groupSelection': 'Auswahl gruppieren',
+  'layerMenu.createComponent': 'Komponente erstellen',
+  'layerMenu.detachComponent': 'Komponente lösen',
+  'layerMenu.detachInstance': 'Instanz lösen',
+  'layerMenu.toggleLock': 'Sperren umschalten',
+  'layerMenu.toggleVisibility': 'Sichtbarkeit umschalten',
+
+  // ── Property Panel ──
+  'property.createComponent': 'Komponente erstellen',
+  'property.detachComponent': 'Komponente lösen',
+  'property.goToComponent': 'Zur Komponente gehen',
+  'property.detachInstance': 'Instanz lösen',
+
+  // ── Fill ──
+  'fill.title': 'Füllung',
+  'fill.solid': 'Vollton',
+  'fill.linear': 'Linear',
+  'fill.radial': 'Radial',
+  'fill.stops': 'Stops',
+  'fill.angle': 'Winkel',
+
+  // ── Stroke ──
+  'stroke.title': 'Kontur',
+
+  // ── Appearance ──
+  'appearance.layer': 'Ebene',
+  'appearance.opacity': 'Deckkraft',
+
+  // ── Layout ──
+  'layout.flexLayout': 'Flex-Layout',
+  'layout.freedom': 'Frei (kein Layout)',
+  'layout.vertical': 'Vertikales Layout',
+  'layout.horizontal': 'Horizontales Layout',
+  'layout.alignment': 'Ausrichtung',
+  'layout.gap': 'Abstand',
+  'layout.spaceBetween': 'Zwischenraum',
+  'layout.spaceAround': 'Umgebungsraum',
+  'layout.dimensions': 'Abmessungen',
+  'layout.fillWidth': 'Breite füllen',
+  'layout.fillHeight': 'Höhe füllen',
+  'layout.hugWidth': 'Breite anpassen',
+  'layout.hugHeight': 'Höhe anpassen',
+  'layout.clipContent': 'Inhalt beschneiden',
+
+  // ── Padding ──
+  'padding.title': 'Innenabstand',
+  'padding.paddingMode': 'Innenabstandmodus',
+  'padding.paddingValues': 'Innenabstandwerte',
+  'padding.oneValue': 'Ein Wert für alle Seiten',
+  'padding.horizontalVertical': 'Horizontal/Vertikal',
+  'padding.topRightBottomLeft': 'Oben/Rechts/Unten/Links',
+
+  // ── Typography ──
+  'text.typography': 'Typografie',
+  'text.lineHeight': 'Zeilenhöhe',
+  'text.letterSpacing': 'Zeichenabstand',
+  'text.horizontal': 'Horizontal',
+  'text.vertical': 'Vertikal',
+  'text.alignLeft': 'Linksbündig',
+  'text.alignCenter': 'Zentriert',
+  'text.alignRight': 'Rechtsbündig',
+  'text.justify': 'Blocksatz',
+  'text.top': 'Oben',
+  'text.middle': 'Mitte',
+  'text.bottom': 'Unten',
+  'text.weight.thin': 'Dünn',
+  'text.weight.light': 'Leicht',
+  'text.weight.regular': 'Normal',
+  'text.weight.medium': 'Mittel',
+  'text.weight.semibold': 'Halbfett',
+  'text.weight.bold': 'Fett',
+  'text.weight.black': 'Schwarz',
+
+  // ── Text Layout ──
+  'textLayout.title': 'Layout',
+  'textLayout.dimensions': 'Abmessungen',
+  'textLayout.resizing': 'Größenanpassung',
+  'textLayout.autoWidth': 'Auto B',
+  'textLayout.autoWidthDesc': 'Auto Breite — Text dehnt sich horizontal aus',
+  'textLayout.autoHeight': 'Auto H',
+  'textLayout.autoHeightDesc':
+    'Auto Höhe — feste Breite, Höhe passt sich an',
+  'textLayout.fixed': 'Fest',
+  'textLayout.fixedDesc':
+    'Feste Größe — Breite und Höhe sind festgelegt',
+  'textLayout.fillWidth': 'Breite füllen',
+  'textLayout.fillHeight': 'Höhe füllen',
+
+  // ── Effects ──
+  'effects.title': 'Effekte',
+  'effects.dropShadow': 'Schlagschatten',
+  'effects.blur': 'Unschärfe',
+  'effects.spread': 'Ausdehnung',
+  'effects.color': 'Farbe',
+
+  // ── Export ──
+  'export.title': 'Exportieren',
+  'export.format': 'Format',
+  'export.scale': 'Skalierung',
+  'export.selectedOnly': 'Nur Auswahl exportieren',
+  'export.exportFormat': '{{format}} exportieren',
+  'export.exportLayer': 'Ebene exportieren',
+
+  // ── Corner Radius ──
+  'cornerRadius.title': 'Eckenradius',
+
+  // ── Size / Position ──
+  'size.position': 'Position',
+
+  // ── Icon ──
+  'icon.title': 'Symbol',
+  'icon.searchIcons': 'Symbole suchen...',
+  'icon.noIconsFound': 'Keine Symbole gefunden',
+  'icon.typeToSearch': 'Tippen, um Iconify-Symbole zu suchen',
+  'icon.iconsCount': '{{count}} Symbole',
+
+  // ── Variables Panel ──
+  'variables.addTheme': 'Theme hinzufügen',
+  'variables.addVariant': 'Variante hinzufügen',
+  'variables.addVariable': 'Variable hinzufügen',
+  'variables.searchVariables': 'Variablen suchen...',
+  'variables.noMatch': 'Keine Variablen entsprechen Ihrer Suche',
+  'variables.noDefined': 'Keine Variablen definiert',
+  'variables.closeShortcut': 'Schließen (\u2318\u21e7V)',
+  'variables.presets': 'Vorlagen',
+  'variables.savePreset': 'Aktuelles als Vorlage speichern…',
+  'variables.loadPreset': 'Vorlage laden',
+  'variables.importPreset': 'Aus Datei importieren…',
+  'variables.exportPreset': 'In Datei exportieren…',
+  'variables.presetName': 'Vorlagenname',
+  'variables.noPresets': 'Keine gespeicherten Vorlagen',
+
+  // ── AI Chat ──
+  'ai.newChat': 'Neuer Chat',
+  'ai.collapse': 'Einklappen',
+  'ai.tryExample': 'Probiere ein Beispiel zum Gestalten...',
+  'ai.tipSelectElements':
+    'Tipp: Wähle Elemente auf der Arbeitsfläche aus, bevor du chattest, um Kontext zu geben.',
+  'ai.generating': 'Generiere...',
+  'ai.designWithAgent': 'Mit Agent gestalten...',
+  'ai.attachImage': 'Bild anhängen',
+  'ai.stopGenerating': 'Generierung stoppen',
+  'ai.sendMessage': 'Nachricht senden',
+  'ai.loadingModels': 'Modelle werden geladen...',
+  'ai.noModelsConnected': 'Keine Modelle verbunden',
+  'ai.quickAction.loginScreen': 'Einen mobilen Anmeldebildschirm gestalten',
+  'ai.quickAction.loginScreenPrompt':
+    'Design a modern mobile login screen with email input, password input, login button, and social login options',
+  'ai.quickAction.productCard': 'Eine Produktkarte erstellen',
+  'ai.quickAction.productCardPrompt':
+    'Create a product card with an image placeholder, title, price, and buy button',
+  'ai.quickAction.bottomNav': 'Eine untere Navigationsleiste gestalten',
+  'ai.quickAction.bottomNavPrompt':
+    'Design a mobile app bottom navigation bar with 5 tabs: Home, Search, Add, Messages, Profile',
+  'ai.quickAction.colorPalette': 'Eine Farbpalette für meine App vorschlagen',
+  'ai.quickAction.colorPalettePrompt':
+    'Suggest a modern color palette for a pet care app',
+
+  // ── Code Panel ──
+  'code.reactTailwind': 'React + Tailwind',
+  'code.htmlCss': 'HTML + CSS',
+  'code.cssVariables': 'CSS Variables',
+  'code.copyClipboard': 'In Zwischenablage kopieren',
+  'code.closeCodePanel': 'Code-Panel schließen',
+  'code.genCssVars': 'CSS-Variablen für das gesamte Dokument generieren',
+  'code.genSelected':
+    'Code für {{count}} ausgewählte(s) Element(e) generieren',
+  'code.genDocument': 'Code für das gesamte Dokument generieren',
+
+  // ── Save Dialog ──
+  'save.saveAs': 'Speichern unter',
+  'save.fileName': 'Dateiname',
+
+  // ── Agent Settings ──
+  'agents.title': 'Agenten & MCP einrichten',
+  'agents.agentsOnCanvas': 'Agenten auf der Arbeitsfläche',
+  'agents.mcpIntegrations': 'MCP-Integrationen im Terminal',
+  'agents.transport': 'Transport',
+  'agents.port': 'Port',
+  'agents.mcpRestart':
+    'MCP-Integrationen werden nach einem Neustart des Terminals wirksam.',
+  'agents.modelCount': '{{count}} Modell(e)',
+  'agents.connectionFailed': 'Verbindung fehlgeschlagen',
+  'agents.serverError': 'Serverfehler {{status}}',
+  'agents.failedTo': '{{action}} fehlgeschlagen',
+  'agents.failedToMcp': 'MCP-Server {{action}} fehlgeschlagen',
+  'agents.failedTransport': 'Transport konnte nicht aktualisiert werden',
+  'agents.failedMcpTransport': 'MCP-Transport konnte nicht aktualisiert werden',
+  'agents.claudeCode': 'Claude Code',
+  'agents.claudeModels': 'Claude-Modelle',
+  'agents.codexCli': 'Codex CLI',
+  'agents.openaiModels': 'OpenAI-Modelle',
+  'agents.opencode': 'OpenCode',
+  'agents.opencodeDesc': '75+ LLM-Anbieter',
+  'agents.mcpServer': 'MCP-Server',
+  'agents.mcpServerStart': 'Starten',
+  'agents.mcpServerStop': 'Stoppen',
+  'agents.mcpServerRunning': 'Läuft',
+  'agents.mcpServerStopped': 'Gestoppt',
+  'agents.mcpLanAccess': 'LAN-Zugriff',
+  'agents.stdio': 'stdio',
+  'agents.http': 'http',
+  'agents.stdioHttp': 'stdio + http',
+  'agents.autoUpdate': 'Automatisch nach Updates suchen',
+
+  // ── Figma Import ──
+  'figma.title': 'Aus Figma importieren',
+  'figma.dropFile': '.fig-Datei hier ablegen',
+  'figma.orBrowse': 'oder zum Durchsuchen klicken',
+  'figma.exportTip': 'Aus Figma exportieren: Datei \u2192 Lokale Kopie speichern (.fig)',
+  'figma.selectFigFile': 'Bitte eine .fig-Datei auswählen',
+  'figma.noPages': 'Keine Seiten in der .fig-Datei gefunden',
+  'figma.parseFailed': '.fig-Datei konnte nicht gelesen werden',
+  'figma.convertFailed': 'Figma-Datei konnte nicht konvertiert werden',
+  'figma.parsing': '.fig-Datei wird gelesen...',
+  'figma.converting': 'Knoten werden konvertiert...',
+  'figma.selectPage':
+    'Diese Datei hat {{count}} Seiten. Wähle, welche importiert werden sollen:',
+  'figma.layers': '{{count}} Ebenen',
+  'figma.importAll': 'Alle Seiten importieren',
+  'figma.importComplete': 'Import abgeschlossen!',
+  'figma.moreWarnings': '...und {{count}} weitere Warnungen',
+  'figma.tryAgain': 'Erneut versuchen',
+  'figma.layoutMode': 'Layout-Modus:',
+  'figma.preserveLayout': 'Figma-Layout beibehalten',
+  'figma.autoLayout': 'OpenPencil Auto-Layout',
+  'figma.comingSoon': 'Demnächst',
+
+  // ── Landing Page ──
+  'landing.open': 'Open',
+  'landing.pencil': 'Pencil',
+  'landing.tagline':
+    'Open-Source-Vektordesign-Werkzeug. Design as Code.',
+  'landing.newDesign': 'Neues Design',
+  'landing.shortcutHint': 'Drücke {{key1}} + {{key2}} für ein neues Design',
+
+  // ── 404 ──
+  'notFound.message': 'Seite nicht gefunden',
+
+  // ── Component Browser ──
+  'componentBrowser.title': 'UIKit-Browser',
+  'componentBrowser.exportKit': 'Kit exportieren',
+  'componentBrowser.importKit': 'Kit importieren',
+  'componentBrowser.kit': 'Kit:',
+  'componentBrowser.all': 'Alle',
+  'componentBrowser.imported': '(importiert)',
+  'componentBrowser.components': 'Komponenten',
+  'componentBrowser.searchComponents': 'Komponenten suchen...',
+  'componentBrowser.deleteKit': '{{name}} löschen',
+  'componentBrowser.category.all': 'Alle',
+  'componentBrowser.category.buttons': 'Schaltflächen',
+  'componentBrowser.category.inputs': 'Eingabefelder',
+  'componentBrowser.category.cards': 'Karten',
+  'componentBrowser.category.nav': 'Navigation',
+  'componentBrowser.category.layout': 'Layout',
+  'componentBrowser.category.feedback': 'Feedback',
+  'componentBrowser.category.data': 'Daten',
+  'componentBrowser.category.other': 'Sonstige',
+
+  // ── Variable Picker ──
+  'variablePicker.boundTo': 'Gebunden an --{{name}}',
+  'variablePicker.bindToVariable': 'An Variable binden',
+  'variablePicker.unbind': 'Variable lösen',
+  'variablePicker.noVariables': 'Keine {{type}}-Variablen definiert',
+} as const
+
+export default de

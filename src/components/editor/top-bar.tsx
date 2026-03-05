@@ -11,10 +11,12 @@ import {
   Minimize,
   Blocks,
 } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import ClaudeLogo from '@/components/icons/claude-logo'
 import OpenAILogo from '@/components/icons/openai-logo'
 import OpenCodeLogo from '@/components/icons/opencode-logo'
 import FigmaLogo from '@/components/icons/figma-logo'
+import LanguageSelector from '@/components/shared/language-selector'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import {
@@ -46,9 +48,10 @@ const PROVIDER_ICONS: Record<AIProviderType, ComponentType<SVGProps<SVGSVGElemen
 const PROVIDER_ORDER: AIProviderType[] = ['anthropic', 'openai', 'opencode']
 
 function AgentStatusButton() {
+  const { t } = useTranslation()
   const providers = useAgentSettingsStore((s) => s.providers)
   const mcpIntegrations = useAgentSettingsStore((s) => s.mcpIntegrations)
-  const connectedTypes = PROVIDER_ORDER.filter((t) => providers[t].isConnected)
+  const connectedTypes = PROVIDER_ORDER.filter((tp) => providers[tp].isConnected)
   const agentCount = connectedTypes.length
   const mcpCount = mcpIntegrations.filter((m) => m.enabled).length
   const hasAny = agentCount > 0 || mcpCount > 0
@@ -95,20 +98,21 @@ function AgentStatusButton() {
             <div className="flex items-center gap-1.5">
               <Blocks size={14} strokeWidth={1.5} />
               <span className={cn('text-[11px]', 'hidden sm:inline')}>
-                Agents & MCP
+                {t('topbar.agentsAndMcp')}
               </span>
             </div>
           )}
         </Button>
       </TooltipTrigger>
       <TooltipContent side="bottom">
-        {hasAny ? tooltipParts.join(' · ') + ' connected' : 'Setup Agents & MCP'}
+        {hasAny ? tooltipParts.join(' · ') + ' ' + t('topbar.connected') : t('topbar.setupAgentsMcp')}
       </TooltipContent>
     </Tooltip>
   )
 }
 
 export default function TopBar() {
+  const { t } = useTranslation()
   const toggleLayerPanel = useCanvasStore((s) => s.toggleLayerPanel)
   const layerPanelOpen = useCanvasStore((s) => s.layerPanelOpen)
   const fileName = useDocumentStore((s) => s.fileName)
@@ -210,7 +214,7 @@ export default function TopBar() {
     }
   }, [])
 
-  const displayName = fileName ?? 'Untitled'
+  const displayName = fileName ?? t('common.untitled')
 
   return (
     <div className="h-10 bg-card border-b border-border flex items-center px-2 shrink-0 select-none app-region-drag">
@@ -228,7 +232,7 @@ export default function TopBar() {
             </Button>
           </TooltipTrigger>
           <TooltipContent side="bottom">
-            {layerPanelOpen ? 'Hide layers' : 'Show layers'}
+            {layerPanelOpen ? t('topbar.hideLayers') : t('topbar.showLayers')}
           </TooltipContent>
         </Tooltip>
 
@@ -240,7 +244,7 @@ export default function TopBar() {
               <Plus size={16} strokeWidth={1.5} />
             </Button>
           </TooltipTrigger>
-          <TooltipContent side="bottom">New</TooltipContent>
+          <TooltipContent side="bottom">{t('topbar.new')}</TooltipContent>
         </Tooltip>
 
         <Tooltip>
@@ -249,7 +253,7 @@ export default function TopBar() {
               <Folder size={15} strokeWidth={1.5} />
             </Button>
           </TooltipTrigger>
-          <TooltipContent side="bottom">Open</TooltipContent>
+          <TooltipContent side="bottom">{t('topbar.open')}</TooltipContent>
         </Tooltip>
 
         <Tooltip>
@@ -258,7 +262,7 @@ export default function TopBar() {
               <Save size={15} strokeWidth={1.5} />
             </Button>
           </TooltipTrigger>
-          <TooltipContent side="bottom">Save</TooltipContent>
+          <TooltipContent side="bottom">{t('topbar.save')}</TooltipContent>
         </Tooltip>
 
         <div className="w-px h-3.5 bg-border/60 mx-1" />
@@ -274,7 +278,7 @@ export default function TopBar() {
               <FigmaLogo className="w-3.5 h-3.5" />
             </Button>
           </TooltipTrigger>
-          <TooltipContent side="bottom">Import Figma</TooltipContent>
+          <TooltipContent side="bottom">{t('topbar.importFigma')}</TooltipContent>
         </Tooltip>
       </div>
 
@@ -285,7 +289,7 @@ export default function TopBar() {
         </span>
         {isDirty && (
           <span className="text-xs text-muted-foreground ml-1.5">
-            — Edited
+            {t('topbar.edited')}
           </span>
         )}
       </div>
@@ -296,6 +300,8 @@ export default function TopBar() {
 
         <div className="w-px h-3.5 bg-border/60 mx-1" />
 
+        <LanguageSelector />
+
         <Tooltip>
           <TooltipTrigger asChild>
             <Button variant="ghost" size="icon-sm" className="text-muted-foreground" onClick={toggleTheme}>
@@ -303,7 +309,7 @@ export default function TopBar() {
             </Button>
           </TooltipTrigger>
           <TooltipContent side="bottom">
-            {theme === 'dark' ? 'Light mode' : 'Dark mode'}
+            {theme === 'dark' ? t('topbar.lightMode') : t('topbar.darkMode')}
           </TooltipContent>
         </Tooltip>
 
@@ -314,7 +320,7 @@ export default function TopBar() {
             </Button>
           </TooltipTrigger>
           <TooltipContent side="bottom">
-            {isFullscreen ? 'Exit fullscreen' : 'Fullscreen'}
+            {isFullscreen ? t('topbar.exitFullscreen') : t('topbar.fullscreen')}
           </TooltipContent>
         </Tooltip>
       </div>

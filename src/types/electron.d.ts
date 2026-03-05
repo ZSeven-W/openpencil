@@ -30,6 +30,8 @@ interface ElectronAPI {
     getState: () => Promise<UpdaterState>
     checkForUpdates: () => Promise<UpdaterState>
     quitAndInstall: () => Promise<boolean>
+    getAutoCheck: () => Promise<boolean>
+    setAutoCheck: (enabled: boolean) => Promise<boolean>
     onStateChange: (callback: (state: UpdaterState) => void) => () => void
   }
 }

@@ -7,6 +7,7 @@ import {
   LayoutGrid,
   Check,
 } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import PaddingSection from './layout-padding-section'
 import { RadioCircle } from './layout-padding-section'
 
@@ -203,6 +204,7 @@ function GapSection({
   onGapModeChange: (mode: GapMode) => void
   onUpdate: (updates: Partial<PenNode>) => void
 }) {
+  const { t } = useTranslation()
   return (
     <div className="space-y-1.5">
       <div
@@ -229,7 +231,7 @@ function GapSection({
       >
         <RadioCircle selected={gapMode === 'space_between'} />
         <span className="text-[10px] text-muted-foreground select-none">
-          Space Between
+          {t('layout.spaceBetween')}
         </span>
       </div>
       <div
@@ -238,7 +240,7 @@ function GapSection({
       >
         <RadioCircle selected={gapMode === 'space_around'} />
         <span className="text-[10px] text-muted-foreground select-none">
-          Space Around
+          {t('layout.spaceAround')}
         </span>
       </div>
     </div>
@@ -305,6 +307,7 @@ function SizingCheckboxes({
   node: PenNode & ContainerProps
   onUpdate: (updates: Partial<PenNode>) => void
 }) {
+  const { t } = useTranslation()
   const widthStr =
     typeof node.width === 'string' ? node.width : ''
   const heightStr =
@@ -321,7 +324,7 @@ function SizingCheckboxes({
     <div className="space-y-1.5">
       <div className="grid grid-cols-2 gap-y-1.5">
         <SizingCheckbox
-          label="Fill Width"
+          label={t('layout.fillWidth')}
           checked={fillWidth}
           onChange={(v) =>
             onUpdate({
@@ -330,7 +333,7 @@ function SizingCheckboxes({
           }
         />
         <SizingCheckbox
-          label="Fill Height"
+          label={t('layout.fillHeight')}
           checked={fillHeight}
           onChange={(v) =>
             onUpdate({
@@ -339,7 +342,7 @@ function SizingCheckboxes({
           }
         />
         <SizingCheckbox
-          label="Hug Width"
+          label={t('layout.hugWidth')}
           checked={hugWidth}
           onChange={(v) =>
             onUpdate({
@@ -348,7 +351,7 @@ function SizingCheckboxes({
           }
         />
         <SizingCheckbox
-          label="Hug Height"
+          label={t('layout.hugHeight')}
           checked={hugHeight}
           onChange={(v) =>
             onUpdate({
@@ -358,7 +361,7 @@ function SizingCheckboxes({
         />
       </div>
       <SizingCheckbox
-        label="Clip Content"
+        label={t('layout.clipContent')}
         checked={clipContent}
         onChange={(v) =>
           onUpdate({ clipContent: v } as Partial<PenNode>)
@@ -376,6 +379,7 @@ export default function LayoutSection({
   node,
   onUpdate,
 }: LayoutSectionProps) {
+  const { t } = useTranslation()
   const layout = node.layout ?? 'none'
   const hasLayout = layout !== 'none'
 
@@ -423,7 +427,7 @@ export default function LayoutSection({
     <div className="space-y-3">
       {/* Header */}
       <span className="text-[11px] font-medium text-foreground">
-        Flex Layout
+        {t('layout.flexLayout')}
       </span>
 
       {/* Direction row — no label, just buttons */}
@@ -433,7 +437,7 @@ export default function LayoutSection({
           onClick={() =>
             onUpdate({ layout: 'none' } as Partial<PenNode>)
           }
-          title="Freedom (no layout)"
+          title={t('layout.freedom')}
         >
           <LayoutGrid className="w-3.5 h-3.5" />
         </ToggleButton>
@@ -442,7 +446,7 @@ export default function LayoutSection({
           onClick={() =>
             onUpdate({ layout: 'vertical' } as Partial<PenNode>)
           }
-          title="Vertical layout"
+          title={t('layout.vertical')}
         >
           <Rows3 className="w-3.5 h-3.5" />
         </ToggleButton>
@@ -453,7 +457,7 @@ export default function LayoutSection({
               layout: 'horizontal',
             } as Partial<PenNode>)
           }
-          title="Horizontal layout"
+          title={t('layout.horizontal')}
         >
           <Columns3 className="w-3.5 h-3.5" />
         </ToggleButton>
@@ -466,7 +470,7 @@ export default function LayoutSection({
             {/* Left: Alignment */}
             <div className="w-[160px]">
               <span className="text-[10px] w-full text-muted-foreground mb-1.5 block">
-                Alignment
+                {t('layout.alignment')}
               </span>
               <AlignmentGrid
                 layout={layout}
@@ -479,7 +483,7 @@ export default function LayoutSection({
             {/* Right: Gap */}
             <div>
               <span className="text-[10px] text-muted-foreground mb-1.5 block">
-                Gap
+                {t('layout.gap')}
               </span>
               <GapSection
                 gap={gap}
@@ -502,7 +506,7 @@ export default function LayoutSection({
       {(width !== undefined || height !== undefined) && (
         <div>
           <span className="text-[10px] text-muted-foreground mb-1.5 block">
-            Dimensions
+            {t('layout.dimensions')}
           </span>
           <div className="grid grid-cols-2 gap-1">
             {width !== undefined && (

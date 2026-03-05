@@ -9,6 +9,14 @@ import type {
 import type { PenNode } from '@/types/pen'
 import { DEFAULT_PAGE_ID } from '@/stores/document-tree-utils'
 
+const PREFS_KEY = 'openpencil-canvas-preferences'
+
+interface CanvasPreferences {
+  layerPanelOpen: boolean
+  variablesPanelOpen: boolean
+  codePanelOpen: boolean
+}
+
 interface CanvasStoreState {
   activeTool: ToolType
   viewport: ViewportState
@@ -18,6 +26,7 @@ interface CanvasStoreState {
   clipboard: PenNode[]
   layerPanelOpen: boolean
   variablesPanelOpen: boolean
+  codePanelOpen: boolean
   figmaImportDialogOpen: boolean
   activePageId: string | null
 
@@ -35,11 +44,20 @@ interface CanvasStoreState {
   setClipboard: (nodes: PenNode[]) => void
   toggleLayerPanel: () => void
   toggleVariablesPanel: () => void
+  toggleCodePanel: () => void
+  setCodePanelOpen: (open: boolean) => void
   setFigmaImportDialogOpen: (open: boolean) => void
   setActivePageId: (pageId: string | null) => void
+  hydrate: () => void
 }
 
-export const useCanvasStore = create<CanvasStoreState>((set) => ({
+function persistPrefs(prefs: CanvasPreferences) {
+  try {
+    localStorage.setItem(PREFS_KEY, JSON.stringify(prefs))
+  } catch { /* ignore */ }
+}
+
+export const useCanvasStore = create<CanvasStoreState>((set, get) => ({
   activeTool: 'select',
   viewport: { zoom: 1, panX: 0, panY: 0 },
   selection: { selectedIds: [], activeId: null, hoveredId: null, enteredFrameId: null, enteredFrameStack: [] },
@@ -53,6 +71,7 @@ export const useCanvasStore = create<CanvasStoreState>((set) => ({
   clipboard: [],
   layerPanelOpen: true,
   variablesPanelOpen: false,
+  codePanelOpen: false,
   figmaImportDialogOpen: false,
   activePageId: DEFAULT_PAGE_ID,
 
@@ -119,8 +138,40 @@ export const useCanvasStore = create<CanvasStoreState>((set) => ({
 
   setClipboard: (clipboard) => set({ clipboard }),
 
-  toggleLayerPanel: () => set((s) => ({ layerPanelOpen: !s.layerPanelOpen })),
-  toggleVariablesPanel: () => set((s) => ({ variablesPanelOpen: !s.variablesPanelOpen })),
+  toggleLayerPanel: () => {
+    const next = !get().layerPanelOpen
+    set({ layerPanelOpen: next })
+    const { variablesPanelOpen, codePanelOpen } = get()
+    persistPrefs({ layerPanelOpen: next, variablesPanelOpen, codePanelOpen })
+  },
+  toggleVariablesPanel: () => {
+    const next = !get().variablesPanelOpen
+    set({ variablesPanelOpen: next })
+    const { layerPanelOpen, codePanelOpen } = get()
+    persistPrefs({ layerPanelOpen, variablesPanelOpen: next, codePanelOpen })
+  },
+  toggleCodePanel: () => {
+    const next = !get().codePanelOpen
+    set({ codePanelOpen: next })
+    const { layerPanelOpen, variablesPanelOpen } = get()
+    persistPrefs({ layerPanelOpen, variablesPanelOpen, codePanelOpen: next })
+  },
+  setCodePanelOpen: (open) => {
+    set({ codePanelOpen: open })
+    const { layerPanelOpen, variablesPanelOpen } = get()
+    persistPrefs({ layerPanelOpen, variablesPanelOpen, codePanelOpen: open })
+  },
   setFigmaImportDialogOpen: (open) => set({ figmaImportDialogOpen: open }),
   setActivePageId: (activePageId) => set({ activePageId }),
+
+  hydrate: () => {
+    try {
+      const raw = localStorage.getItem(PREFS_KEY)
+      if (!raw) return
+      const data = JSON.parse(raw) as Partial<CanvasPreferences>
+      if (typeof data.layerPanelOpen === 'boolean') set({ layerPanelOpen: data.layerPanelOpen })
+      if (typeof data.variablesPanelOpen === 'boolean') set({ variablesPanelOpen: data.variablesPanelOpen })
+      if (typeof data.codePanelOpen === 'boolean') set({ codePanelOpen: data.codePanelOpen })
+    } catch { /* ignore */ }
+  },
 }))

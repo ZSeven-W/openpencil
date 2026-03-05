@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
+import { useTranslation } from 'react-i18next'
 import { X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useDocumentStore } from '@/stores/document-store'
@@ -11,7 +12,8 @@ interface SaveDialogProps {
 }
 
 export default function SaveDialog({ open, onClose }: SaveDialogProps) {
-  const [name, setName] = useState('untitled')
+  const { t } = useTranslation()
+  const [name, setName] = useState(t('common.untitled'))
   const inputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -21,7 +23,7 @@ export default function SaveDialog({ open, onClose }: SaveDialogProps) {
     if (fn) {
       setName(fn.replace(/\.op$|\.pen$|\.json$/, ''))
     } else {
-      setName('untitled')
+      setName(t('common.untitled'))
     }
     // Focus + select on open
     requestAnimationFrame(() => inputRef.current?.select())
@@ -55,13 +57,13 @@ export default function SaveDialog({ open, onClose }: SaveDialogProps) {
       <div className="absolute inset-0 bg-background/80" onClick={onClose} />
       <div className="relative bg-card rounded-lg border border-border p-4 w-72 shadow-xl">
         <div className="flex items-center justify-between mb-4">
-          <h3 className="text-sm font-medium text-foreground">Save As</h3>
+          <h3 className="text-sm font-medium text-foreground">{t('save.saveAs')}</h3>
           <Button variant="ghost" size="icon-sm" onClick={onClose}>
             <X size={14} />
           </Button>
         </div>
 
-        <label className="text-xs text-muted-foreground block mb-1">File name</label>
+        <label className="text-xs text-muted-foreground block mb-1">{t('save.fileName')}</label>
         <div className="flex items-center gap-1 mb-4">
           <input
             ref={inputRef}
@@ -84,7 +86,7 @@ export default function SaveDialog({ open, onClose }: SaveDialogProps) {
             onClick={onClose}
             className="flex-1"
           >
-            Cancel
+            {t('common.cancel')}
           </Button>
           <Button
             size="sm"
@@ -92,7 +94,7 @@ export default function SaveDialog({ open, onClose }: SaveDialogProps) {
             disabled={!name.trim()}
             className="flex-1"
           >
-            Save
+            {t('common.save')}
           </Button>
         </div>
       </div>

@@ -19,6 +19,7 @@ import { useCanvasStore } from '@/stores/canvas-store'
 import { useDocumentStore } from '@/stores/document-store'
 import { useAgentSettingsStore } from '@/stores/agent-settings-store'
 import { useUIKitStore } from '@/stores/uikit-store'
+import { useThemePresetStore } from '@/stores/theme-preset-store'
 import { useElectronMenu } from '@/hooks/use-electron-menu'
 import { useFigmaPaste } from '@/hooks/use-figma-paste'
 import { useMcpSync } from '@/hooks/use-mcp-sync'
@@ -35,15 +36,15 @@ export default function EditorLayout() {
     useCanvasStore.getState().setFigmaImportDialogOpen(false)
   }, [])
   const browserOpen = useUIKitStore((s) => s.browserOpen)
+  const codePanelOpen = useCanvasStore((s) => s.codePanelOpen)
   const saveDialogOpen = useDocumentStore((s) => s.saveDialogOpen)
   const closeSaveDialog = useCallback(() => {
     useDocumentStore.getState().setSaveDialogOpen(false)
   }, [])
-  const [codePanelOpen, setCodePanelOpen] = useState(false)
   const [exportOpen, setExportOpen] = useState(false)
 
   const toggleCodePanel = useCallback(() => {
-    setCodePanelOpen((prev) => !prev)
+    useCanvasStore.getState().toggleCodePanel()
   }, [])
 
   const closeExport = useCallback(() => {
@@ -120,6 +121,8 @@ export default function EditorLayout() {
   useEffect(() => {
     useAgentSettingsStore.getState().hydrate()
     useUIKitStore.getState().hydrate()
+    useCanvasStore.getState().hydrate()
+    useThemePresetStore.getState().hydrate()
   }, [])
 
   return (
@@ -163,7 +166,7 @@ export default function EditorLayout() {
             </div>
             {hasSelection && <PropertyPanel />}
           </div>
-          {codePanelOpen && <CodePanel onClose={() => setCodePanelOpen(false)} />}
+          {codePanelOpen && <CodePanel onClose={() => useCanvasStore.getState().setCodePanelOpen(false)} />}
         </div>
         <ExportDialog open={exportOpen} onClose={closeExport} />
         <SaveDialog open={saveDialogOpen} onClose={closeSaveDialog} />

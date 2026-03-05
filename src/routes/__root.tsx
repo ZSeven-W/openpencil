@@ -1,10 +1,14 @@
+import { useEffect } from 'react'
 import {
   HeadContent,
   Outlet,
   Scripts,
   createRootRoute,
 } from '@tanstack/react-router'
+import { useTranslation } from 'react-i18next'
 
+import '@/i18n'
+import { detectLanguagePostHydration } from '@/i18n'
 import appCss from '../styles.css?url'
 
 export const Route = createRootRoute({
@@ -29,21 +33,32 @@ export const Route = createRootRoute({
     ],
   }),
   component: RootComponent,
-  notFoundComponent: () => (
-    <div className="min-h-screen flex items-center justify-center text-muted-foreground">
-      <p>Page not found</p>
-    </div>
-  ),
+  notFoundComponent: NotFoundComponent,
   shellComponent: RootDocument,
 })
+
+function NotFoundComponent() {
+  const { t } = useTranslation()
+  return (
+    <div className="min-h-screen flex items-center justify-center text-muted-foreground">
+      <p>{t('notFound.message')}</p>
+    </div>
+  )
+}
 
 function RootComponent() {
   return <Outlet />
 }
 
 function RootDocument({ children }: { children: React.ReactNode }) {
+  const { i18n } = useTranslation()
+
+  useEffect(() => {
+    detectLanguagePostHydration()
+  }, [])
+
   return (
-    <html lang="en">
+    <html lang={i18n.language} suppressHydrationWarning>
       <head>
         <HeadContent />
       </head>

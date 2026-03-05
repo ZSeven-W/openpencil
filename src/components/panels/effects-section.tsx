@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next'
 import ColorPicker from '@/components/shared/color-picker'
 import NumberInput from '@/components/shared/number-input'
 import SectionHeader from '@/components/shared/section-header'
@@ -19,6 +20,7 @@ export default function EffectsSection({
   effects,
   onUpdate,
 }: EffectsSectionProps) {
+  const { t } = useTranslation()
   const shadow = findShadow(effects)
 
   const handleAddShadow = () => {
@@ -55,7 +57,7 @@ export default function EffectsSection({
   return (
     <div className="space-y-1.5">
       <SectionHeader
-        title="Effects"
+        title={t('effects.title')}
         actions={
           !shadow ? (
             <Button
@@ -73,7 +75,7 @@ export default function EffectsSection({
         <div className="space-y-1 bg-secondary/50 rounded p-1.5">
           <div className="flex items-center justify-between h-5">
             <span className="text-[11px] text-foreground">
-              Drop shadow
+              {t('effects.dropShadow')}
             </span>
             <Button
               variant="ghost"
@@ -97,13 +99,13 @@ export default function EffectsSection({
               onChange={(v) => handleUpdateShadow({ offsetY: v })}
             />
             <NumberInput
-              label="Blur"
+              label={t('effects.blur')}
               value={shadow.blur}
               onChange={(v) => handleUpdateShadow({ blur: v })}
               min={0}
             />
             <NumberInput
-              label="Spread"
+              label={t('effects.spread')}
               value={shadow.spread}
               onChange={(v) => handleUpdateShadow({ spread: v })}
               min={0}
@@ -111,7 +113,7 @@ export default function EffectsSection({
           </div>
 
           <ColorPicker
-            label="Color"
+            label={t('effects.color')}
             value={shadow.color}
             onChange={(c) => handleUpdateShadow({ color: c })}
           />

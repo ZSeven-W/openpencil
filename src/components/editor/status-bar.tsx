@@ -1,9 +1,11 @@
 import { Minus, Plus } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import { useCanvasStore } from '@/stores/canvas-store'
 import { MIN_ZOOM, MAX_ZOOM } from '@/canvas/canvas-constants'
 import { Button } from '@/components/ui/button'
 
 export default function StatusBar() {
+  const { t } = useTranslation()
   const zoom = useCanvasStore((s) => s.viewport.zoom)
   const fabricCanvas = useCanvasStore((s) => s.fabricCanvas)
 
@@ -35,14 +37,14 @@ export default function StatusBar() {
         variant="ghost"
         size="icon-sm"
         onClick={handleZoomOut}
-        aria-label="Zoom out"
+        aria-label={t('statusbar.zoomOut')}
       >
         <Minus size={14} />
       </Button>
       <button
         onClick={handleZoomReset}
         className="min-w-[48px] h-5 text-[11px] text-muted-foreground hover:text-foreground tabular-nums text-center cursor-pointer bg-transparent border-none"
-        aria-label="Reset zoom"
+        aria-label={t('statusbar.resetZoom')}
       >
         {zoomPercent}%
       </button>
@@ -50,7 +52,7 @@ export default function StatusBar() {
         variant="ghost"
         size="icon-sm"
         onClick={handleZoomIn}
-        aria-label="Zoom in"
+        aria-label={t('statusbar.zoomIn')}
       >
         <Plus size={14} />
       </Button>

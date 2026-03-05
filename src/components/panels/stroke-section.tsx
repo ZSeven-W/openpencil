@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next'
 import ColorPicker from '@/components/shared/color-picker'
 import NumberInput from '@/components/shared/number-input'
 import SectionHeader from '@/components/shared/section-header'
@@ -15,6 +16,7 @@ export default function StrokeSection({
   stroke,
   onUpdate,
 }: StrokeSectionProps) {
+  const { t } = useTranslation()
   const strokeColor =
     stroke?.fill && stroke.fill.length > 0 && stroke.fill[0].type === 'solid'
       ? stroke.fill[0].color
@@ -47,7 +49,7 @@ export default function StrokeSection({
 
   return (
     <div className="space-y-1.5">
-      <SectionHeader title="Stroke" />
+      <SectionHeader title={t('stroke.title')} />
       <div className="flex items-center gap-1">
         <div className="flex-1">
           {isVariableRef(strokeColor) ? (
