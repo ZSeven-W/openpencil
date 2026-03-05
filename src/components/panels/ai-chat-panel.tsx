@@ -617,7 +617,7 @@ export default function AIChatPanel() {
               }
               return null
             })()}
-            <span className="truncate max-w-[160px]">
+            <span className="truncate max-w-[100px]">
               {isLoadingModels
                 ? 'Loading models...'
                 : noAvailableModels

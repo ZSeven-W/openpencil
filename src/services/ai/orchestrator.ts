@@ -31,6 +31,7 @@ import {
   setGenerationContextHint,
   setGenerationCanvasWidth,
   getGenerationRemappedIds,
+  getGenerationRootFrameId,
 } from './design-generator'
 import { useDocumentStore } from '@/stores/document-store'
 import { useHistoryStore } from '@/stores/history-store'
@@ -40,7 +41,7 @@ import { runPostGenerationValidation } from './design-validation'
 import { executeSubAgents } from './orchestrator-sub-agent'
 import { emitProgress, buildFinalStepTags } from './orchestrator-progress'
 import { assignAgentIdentities } from './agent-identity'
-import { clearAgentIndicators } from '@/canvas/agent-indicator'
+import { addAgentFrame, clearAgentIndicators } from '@/canvas/agent-indicator'
 
 // ---------------------------------------------------------------------------
 // Public API
@@ -109,33 +110,46 @@ export async function executeOrchestration(
     const concurrency = request.concurrency ?? 1
 
     // Group subtasks by screen for concurrent mode.
-    // Subtasks sharing the same screen share one root frame.
-    // Subtasks without a screen field each get their own group (backwards-compatible).
+    // Only use concurrent path when there are MULTIPLE distinct screens.
+    // Single-page designs always use the sequential path (proven, simpler).
     const screenGroups: { screen: string; indices: number[] }[] = []
     if (concurrency > 1) {
-      const screenMap = new Map<string, number>()
-      for (let i = 0; i < plan.subtasks.length; i++) {
-        const screen = plan.subtasks[i].screen ?? plan.subtasks[i].id
-        if (screenMap.has(screen)) {
-          screenGroups[screenMap.get(screen)!].indices.push(i)
-        } else {
-          screenMap.set(screen, screenGroups.length)
-          screenGroups.push({ screen, indices: [i] })
+      const hasAnyScreen = plan.subtasks.some((st) => st.screen)
+      if (hasAnyScreen) {
+        const screenMap = new Map<string, number>()
+        const firstScreen = plan.subtasks.find((st) => st.screen)?.screen ?? 'page'
+        for (let i = 0; i < plan.subtasks.length; i++) {
+          const screen = plan.subtasks[i].screen ?? firstScreen
+          if (screenMap.has(screen)) {
+            screenGroups[screenMap.get(screen)!].indices.push(i)
+          } else {
+            screenMap.set(screen, screenGroups.length)
+            screenGroups.push({ screen, indices: [i] })
+          }
         }
       }
     }
 
-    // Assign agent identities — one per screen group in concurrent mode
-    const agentIdentities = concurrency > 1
-      ? assignAgentIdentities(screenGroups.length)
-      : []
+    // Effective concurrency: only parallel when there are multiple screen groups
+    const effectiveConcurrency = screenGroups.length > 1 ? concurrency : 1
 
-    // Map subtask index → identity (all subtasks in the same screen share an identity)
+    // Assign agent identities — one per screen group (concurrent) or per subtask (sequential)
     const subtaskIdentity = new Map<number, { color: string; name: string }>()
-    for (let g = 0; g < screenGroups.length; g++) {
-      if (agentIdentities[g]) {
-        for (const idx of screenGroups[g].indices) {
-          subtaskIdentity.set(idx, agentIdentities[g])
+    if (effectiveConcurrency > 1) {
+      const agentIdentities = assignAgentIdentities(screenGroups.length)
+      for (let g = 0; g < screenGroups.length; g++) {
+        if (agentIdentities[g]) {
+          for (const idx of screenGroups[g].indices) {
+            subtaskIdentity.set(idx, agentIdentities[g])
+          }
+        }
+      }
+    } else {
+      // Sequential mode: single agent handles all subtasks
+      const [identity] = assignAgentIdentities(1)
+      if (identity) {
+        for (let i = 0; i < plan.subtasks.length; i++) {
+          subtaskIdentity.set(i, identity)
         }
       }
     }
@@ -153,7 +167,7 @@ export async function executeOrchestration(
     // Track all root frame nodes for result collection
     const rootNodes: FrameNode[] = []
 
-    if (concurrency > 1) {
+    if (effectiveConcurrency > 1) {
       // Concurrent mode: create one root frame per screen group.
       // Subtasks sharing the same screen insert into the same root frame.
       //
@@ -216,6 +230,13 @@ export async function executeOrchestration(
         }
 
         rootNodes.push(rootNode)
+
+        // Register agent badge on the root frame immediately
+        const identity = subtaskIdentity.get(group.indices[0])
+        if (identity) {
+          addAgentFrame(rootNode.id, identity.color, identity.name)
+        }
+
         nextX += plan.rootFrame.width + gap
       }
     } else {
@@ -238,7 +259,16 @@ export async function executeOrchestration(
         children: [],
       }
       insertStreamingNode(rootNode, null)
+      // insertStreamingNode may remap ID (e.g. replacing empty frame)
+      const actualRootId = getGenerationRootFrameId()
+      rootNode.id = actualRootId
       rootNodes.push(rootNode)
+
+      // Register agent badge on the actual root frame
+      const firstIdentity = subtaskIdentity.get(0)
+      if (firstIdentity) {
+        addAgentFrame(actualRootId, firstIdentity.color, firstIdentity.name)
+      }
     }
 
     if (typeof window !== 'undefined') {
@@ -270,12 +300,12 @@ export async function executeOrchestration(
         request,
         preparedPrompt,
         progress,
-        concurrency,
+        effectiveConcurrency,
         callbacks,
         abortSignal,
       )
       if (animated) {
-        if (concurrency > 1) {
+        if (effectiveConcurrency > 1) {
           for (const rn of rootNodes) {
             adjustRootFrameHeightToContent(rn.id)
           }
@@ -320,7 +350,7 @@ export async function executeOrchestration(
     }
 
     if (!animated) {
-      if (concurrency > 1) {
+      if (effectiveConcurrency > 1) {
         for (const rn of rootNodes) {
           adjustRootFrameHeightToContent(rn.id)
         }

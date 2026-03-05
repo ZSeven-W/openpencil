@@ -35,7 +35,8 @@ import {
   startNewAnimationBatch,
 } from './design-animation'
 import { emitProgress } from './orchestrator-progress'
-import { addAgentIndicator, addPreviewNode, removeAgentIndicatorsByPrefix } from '@/canvas/agent-indicator'
+import { addAgentIndicatorRecursive, removeAgentIndicatorsByPrefix } from '@/canvas/agent-indicator'
+import { markNodesForAnimation } from './design-animation'
 
 // ---------------------------------------------------------------------------
 // Stream timeout configuration (shared with orchestrator.ts)
@@ -92,11 +93,12 @@ export async function executeSubAgents(
 ): Promise<SubAgentResult[]> {
   const timeoutOptions = getSubAgentTimeouts(preparedPrompt.originalLength)
 
-  // Sequential path — identical to previous behavior
+  // Sequential path — each subtask runs one at a time
   if (concurrency <= 1) {
     const results: SubAgentResult[] = []
     for (let i = 0; i < plan.subtasks.length; i++) {
       if (abortSignal?.aborted) break
+
       const result = await executeSubAgent(
         plan.subtasks[i], plan, request, preparedPrompt, timeoutOptions, progress, i, callbacks,
         undefined, abortSignal,
@@ -271,6 +273,18 @@ async function executeSubAgent(
             for (const { node, parentId } of results) {
               // Enforce ID prefix
               ensureIdPrefix(node, subtask.idPrefix)
+
+              // Tag node AND all descendants for canvas indicator + preview
+              // delay BEFORE insert. insertStreamingNode triggers synchronous
+              // canvas sync which checks isPreviewNode — must be set first.
+              if (agentColor && agentName) {
+                addAgentIndicatorRecursive(node, agentColor, agentName)
+              }
+              // Pre-populate pendingAnimationNodes for all descendants so
+              // canvas-sync animates them (insertStreamingNode only marks the
+              // root and skips background frames).
+              markNodesForAnimation([node])
+
               if (parentId !== null) {
                 // Prefix the parent reference too
                 const prefixedParent = ensurePrefixStr(
@@ -289,11 +303,6 @@ async function executeSubAgent(
               nodes.push(node)
               progressEntry.nodeCount++
               progress.totalNodes++
-              // Tag node for canvas indicator + preview delay
-              if (agentColor && agentName) {
-                addAgentIndicator(node.id, agentColor, agentName)
-                addPreviewNode(node.id)
-              }
             }
             callbacks?.onApplyPartial?.(progress.totalNodes)
             // Expand the subtask's root frame as content grows
@@ -321,6 +330,13 @@ async function executeSubAgent(
         startNewAnimationBatch()
         for (const node of fallbackNodes) {
           ensureIdPrefix(node, subtask.idPrefix)
+
+          // Tag ALL descendants BEFORE insert — same reason as streaming path
+          if (agentColor && agentName) {
+            addAgentIndicatorRecursive(node, agentColor, agentName)
+          }
+          markNodesForAnimation([node])
+
           const targetParent = subtaskRootId
             ? subtaskRootId
             : (subtask.parentFrameId ?? plan.rootFrame.id)
@@ -329,10 +345,6 @@ async function executeSubAgent(
           nodes.push(node)
           progressEntry.nodeCount++
           progress.totalNodes++
-          if (agentColor && agentName) {
-            addAgentIndicator(node.id, agentColor, agentName)
-            addPreviewNode(node.id)
-          }
         }
         callbacks?.onApplyPartial?.(progress.totalNodes)
       }
@@ -357,13 +369,15 @@ async function executeSubAgent(
     }
 
     progressEntry.status = 'done'
-    removeAgentIndicatorsByPrefix(subtask.idPrefix)
+    // Delay indicator removal so the glow effect is visible even when the
+    // subtask finishes quickly (e.g. model outputs everything in one chunk).
+    setTimeout(() => removeAgentIndicatorsByPrefix(subtask.idPrefix), 1500)
     emitProgress(plan, progress, callbacks)
     return { subtaskId: subtask.id, nodes, rawResponse }
   } catch (err) {
     const msg = err instanceof Error ? err.message : 'Unknown error'
     progressEntry.status = 'error'
-    removeAgentIndicatorsByPrefix(subtask.idPrefix)
+    setTimeout(() => removeAgentIndicatorsByPrefix(subtask.idPrefix), 1500)
     emitProgress(plan, progress, callbacks)
     return { subtaskId: subtask.id, nodes, rawResponse, error: msg }
   }
@@ -383,12 +397,21 @@ function buildSubAgentUserPrompt(
 ): string {
   const { region } = subtask
 
-  // Show all sections so the model knows scope — only generate THIS one
+  // Show all sections with their element boundaries so the model knows exact scope
   const sectionList = plan.subtasks
-    .map((st) => `- ${st.label} (${st.region.width}x${st.region.height})${st.id === subtask.id ? ' ← YOU' : ''}`)
+    .map((st) => {
+      const marker = st.id === subtask.id ? ' ← YOU' : ''
+      const elems = st.elements ? ` [${st.elements}]` : ''
+      return `- ${st.label}${elems} (${st.region.width}x${st.region.height})${marker}`
+    })
     .join('\n')
 
-  let prompt = `Page sections:\n${sectionList}\n\nGenerate ONLY "${subtask.label}" (~${region.height}px of content).\n${compactPrompt}
+  // Build explicit boundary instruction when elements are specified
+  const myElements = subtask.elements
+    ? `\nYOUR ELEMENTS: ${subtask.elements}\nDo NOT generate elements listed in other sections — they handle their own content.`
+    : ''
+
+  let prompt = `Page sections:\n${sectionList}\n\nGenerate ONLY "${subtask.label}" (~${region.height}px of content).${myElements}\n${compactPrompt}
 
 CRITICAL LAYOUT CONSTRAINTS:
 - Root frame: id="${subtask.idPrefix}-root", width="fill_container", height="fit_content", layout="vertical". NEVER use fixed pixel height on root — let content determine height.

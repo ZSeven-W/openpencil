@@ -10,7 +10,7 @@ import {
 import { syncFabricObject } from './canvas-object-sync'
 import { isFabricSyncLocked, setFabricSyncLock } from './canvas-sync-lock'
 import { pendingAnimationNodes, getNextStaggerDelay } from '@/services/ai/design-animation'
-import { isPreviewNode, removePreviewNode, removeAgentIndicator } from './agent-indicator'
+import { removePreviewNode, removeAgentIndicator } from './agent-indicator'
 import { resolveNodeForCanvas, getDefaultTheme } from '@/variables/resolve-variables'
 import { COMPONENT_COLOR, INSTANCE_COLOR, SELECTION_BLUE } from './canvas-constants'
 import {
@@ -506,23 +506,19 @@ export function useCanvasSync() {
             const shouldAnimate = pendingAnimationNodes.has(node.id)
             if (shouldAnimate) {
               const targetOpacity = newObj.opacity ?? 1
-              const staggerDelay = getNextStaggerDelay()
-              const hasPreview = isPreviewNode(node.id)
-              // Preview nodes: show glow outline for 500ms before materializing
-              const totalDelay = staggerDelay + (hasPreview ? 500 : 0)
+              // Sequential queue delay: includes BORDER_LEAD (border shows first)
+              const totalDelay = getNextStaggerDelay(node.id)
               newObj.set({ opacity: 0 })
               canvas.add(newObj)
-              // Fire-and-forget: the setTimeout yields to the macrotask queue,
-              // so it runs between SSE stream chunks without blocking the stream.
               setTimeout(() => {
-                if (hasPreview) removePreviewNode(node.id)
+                removePreviewNode(node.id)
                 newObj.animate({ opacity: targetOpacity }, {
-                  duration: 250,
+                  duration: 300,
                   easing: fabric.util.ease.easeOutCubic,
                   onChange: () => canvas.requestRenderAll(),
                   onComplete: () => {
                     pendingAnimationNodes.delete(node.id)
-                    if (hasPreview) removeAgentIndicator(node.id)
+                    removeAgentIndicator(node.id)
                   },
                 })
               }, totalDelay)
