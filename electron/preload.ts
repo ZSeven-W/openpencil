@@ -32,6 +32,8 @@ export interface ElectronAPI {
     getState: () => Promise<UpdaterState>
     checkForUpdates: () => Promise<UpdaterState>
     quitAndInstall: () => Promise<boolean>
+    getAutoCheck: () => Promise<boolean>
+    setAutoCheck: (enabled: boolean) => Promise<boolean>
     onStateChange: (callback: (state: UpdaterState) => void) => () => void
   }
 }
@@ -61,6 +63,8 @@ const api: ElectronAPI = {
     getState: () => ipcRenderer.invoke('updater:getState'),
     checkForUpdates: () => ipcRenderer.invoke('updater:checkForUpdates'),
     quitAndInstall: () => ipcRenderer.invoke('updater:quitAndInstall'),
+    getAutoCheck: () => ipcRenderer.invoke('updater:getAutoCheck'),
+    setAutoCheck: (enabled: boolean) => ipcRenderer.invoke('updater:setAutoCheck', enabled),
     onStateChange: (callback: (state: UpdaterState) => void) => {
       const listener = (_event: IpcRendererEvent, state: UpdaterState) => {
         callback(state)

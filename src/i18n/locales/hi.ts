@@ -225,6 +225,13 @@ const hi: TranslationKeys = {
   'variables.noMatch': 'आपकी खोज से कोई वेरिएबल मेल नहीं खाता',
   'variables.noDefined': 'कोई वेरिएबल परिभाषित नहीं है',
   'variables.closeShortcut': 'बंद करें (\u2318\u21e7V)',
+  'variables.presets': 'प्रीसेट',
+  'variables.savePreset': 'वर्तमान को प्रीसेट के रूप में सहेजें…',
+  'variables.loadPreset': 'प्रीसेट लोड करें',
+  'variables.importPreset': 'फ़ाइल से आयात करें…',
+  'variables.exportPreset': 'फ़ाइल में निर्यात करें…',
+  'variables.presetName': 'प्रीसेट का नाम',
+  'variables.noPresets': 'कोई सहेजा गया प्रीसेट नहीं',
 
   // ── AI Chat ──
   'ai.newChat': 'नई चैट',
@@ -288,9 +295,16 @@ const hi: TranslationKeys = {
   'agents.openaiModels': 'OpenAI मॉडल',
   'agents.opencode': 'OpenCode',
   'agents.opencodeDesc': '75+ LLM प्रदाता',
+  'agents.mcpServer': 'MCP सर्वर',
+  'agents.mcpServerStart': 'शुरू करें',
+  'agents.mcpServerStop': 'रोकें',
+  'agents.mcpServerRunning': 'चल रहा है',
+  'agents.mcpServerStopped': 'रुका हुआ',
+  'agents.mcpLanAccess': 'LAN एक्सेस',
   'agents.stdio': 'stdio',
   'agents.http': 'http',
   'agents.stdioHttp': 'stdio + http',
+  'agents.autoUpdate': 'स्वचालित अपडेट जाँच',
 
   // ── Figma Import ──
   'figma.title': 'Figma से आयात करें',

@@ -220,6 +220,13 @@ const zh: TranslationKeys = {
   'variables.noMatch': '没有匹配的变量',
   'variables.noDefined': '暂无定义的变量',
   'variables.closeShortcut': '关闭 (\u2318\u21e7V)',
+  'variables.presets': '预设',
+  'variables.savePreset': '保存为预设…',
+  'variables.loadPreset': '加载预设',
+  'variables.importPreset': '从文件导入…',
+  'variables.exportPreset': '导出到文件…',
+  'variables.presetName': '预设名称',
+  'variables.noPresets': '没有保存的预设',
 
   // ── AI Chat ──
   'ai.newChat': '新对话',
@@ -280,9 +287,16 @@ const zh: TranslationKeys = {
   'agents.openaiModels': 'OpenAI 模型',
   'agents.opencode': 'OpenCode',
   'agents.opencodeDesc': '75+ LLM 提供商',
+  'agents.mcpServer': 'MCP 服务器',
+  'agents.mcpServerStart': '启动',
+  'agents.mcpServerStop': '停止',
+  'agents.mcpServerRunning': '运行中',
+  'agents.mcpServerStopped': '已停止',
+  'agents.mcpLanAccess': '局域网访问',
   'agents.stdio': 'stdio',
   'agents.http': 'http',
   'agents.stdioHttp': 'stdio + http',
+  'agents.autoUpdate': '自动检查更新',
 
   // ── Figma Import ──
   'figma.title': '从 Figma 导入',

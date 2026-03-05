@@ -227,6 +227,13 @@ const ru: TranslationKeys = {
   'variables.noMatch': 'Нет переменных, соответствующих вашему запросу',
   'variables.noDefined': 'Переменные не определены',
   'variables.closeShortcut': 'Закрыть (\u2318\u21e7V)',
+  'variables.presets': 'Пресеты',
+  'variables.savePreset': 'Сохранить текущее как пресет…',
+  'variables.loadPreset': 'Загрузить пресет',
+  'variables.importPreset': 'Импорт из файла…',
+  'variables.exportPreset': 'Экспорт в файл…',
+  'variables.presetName': 'Название пресета',
+  'variables.noPresets': 'Нет сохранённых пресетов',
 
   // ── AI Chat ──
   'ai.newChat': 'Новый чат',
@@ -290,9 +297,16 @@ const ru: TranslationKeys = {
   'agents.openaiModels': 'Модели OpenAI',
   'agents.opencode': 'OpenCode',
   'agents.opencodeDesc': '75+ провайдеров LLM',
+  'agents.mcpServer': 'MCP Сервер',
+  'agents.mcpServerStart': 'Запустить',
+  'agents.mcpServerStop': 'Остановить',
+  'agents.mcpServerRunning': 'Работает',
+  'agents.mcpServerStopped': 'Остановлен',
+  'agents.mcpLanAccess': 'Доступ по LAN',
   'agents.stdio': 'stdio',
   'agents.http': 'http',
   'agents.stdioHttp': 'stdio + http',
+  'agents.autoUpdate': 'Автоматически проверять обновления',
 
   // ── Figma Import ──
   'figma.title': 'Импорт из Figma',

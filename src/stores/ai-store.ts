@@ -7,6 +7,32 @@ export type PanelCorner = 'top-left' | 'top-right' | 'bottom-left' | 'bottom-rig
 const DEFAULT_MODEL = 'claude-sonnet-4-5-20250929'
 const MODEL_PREFERENCE_STORAGE_KEY = 'openpencil-ai-model-preference'
 const CONCURRENCY_STORAGE_KEY = 'openpencil-ai-concurrency'
+const UI_PREFS_KEY = 'openpencil-ai-ui-preferences'
+
+interface AIUIPrefs {
+  isPanelOpen?: boolean
+  panelCorner?: PanelCorner
+  isMinimized?: boolean
+  codeFormat?: 'react-tailwind' | 'html-css' | 'react-inline'
+}
+
+function readUIPrefs(): AIUIPrefs {
+  if (typeof window === 'undefined') return {}
+  try {
+    const raw = window.localStorage.getItem(UI_PREFS_KEY)
+    return raw ? JSON.parse(raw) : {}
+  } catch {
+    return {}
+  }
+}
+
+function writeUIPrefs(partial: AIUIPrefs): void {
+  if (typeof window === 'undefined') return
+  try {
+    const current = readUIPrefs()
+    window.localStorage.setItem(UI_PREFS_KEY, JSON.stringify({ ...current, ...partial }))
+  } catch { /* ignore */ }
+}
 
 function readStoredModelPreference(): string | null {
   if (typeof window === 'undefined') return null
@@ -107,7 +133,7 @@ interface AIState {
   stopStreaming: () => void
 }
 
-export const useAIStore = create<AIState>((set) => ({
+export const useAIStore = create<AIState>((set, get) => ({
   messages: [],
   isStreaming: false,
   isPanelOpen: true,
@@ -140,6 +166,11 @@ export const useAIStore = create<AIState>((set) => ({
     if (stored) set({ model: stored, preferredModel: stored })
     const storedConcurrency = readStoredConcurrency()
     if (storedConcurrency !== 1) set({ concurrency: storedConcurrency })
+    const prefs = readUIPrefs()
+    if (typeof prefs.isPanelOpen === 'boolean') set({ isPanelOpen: prefs.isPanelOpen })
+    if (prefs.panelCorner) set({ panelCorner: prefs.panelCorner })
+    if (typeof prefs.isMinimized === 'boolean') set({ isMinimized: prefs.isMinimized })
+    if (prefs.codeFormat) set({ codeFormat: prefs.codeFormat })
   },
 
   addMessage: (msg) =>
@@ -157,15 +188,25 @@ export const useAIStore = create<AIState>((set) => ({
 
   setStreaming: (isStreaming) => set({ isStreaming }),
 
-  togglePanel: () => set((s) => ({ isPanelOpen: !s.isPanelOpen })),
+  togglePanel: () => {
+    const next = !get().isPanelOpen
+    set({ isPanelOpen: next })
+    writeUIPrefs({ isPanelOpen: next })
+  },
 
-  setPanelOpen: (isPanelOpen) => set({ isPanelOpen }),
+  setPanelOpen: (isPanelOpen) => {
+    set({ isPanelOpen })
+    writeUIPrefs({ isPanelOpen })
+  },
 
   setActiveTab: (activeTab) => set({ activeTab }),
 
   setGeneratedCode: (generatedCode) => set({ generatedCode }),
 
-  setCodeFormat: (codeFormat) => set({ codeFormat }),
+  setCodeFormat: (codeFormat) => {
+    set({ codeFormat })
+    writeUIPrefs({ codeFormat })
+  },
 
   selectModel: (model) => {
     writeStoredModelPreference(model)
@@ -177,8 +218,15 @@ export const useAIStore = create<AIState>((set) => ({
   setLoadingModels: (isLoadingModels) => set({ isLoadingModels }),
   clearMessages: () => set({ messages: [], chatTitle: 'New Chat' }),
 
-  setPanelCorner: (panelCorner) => set({ panelCorner }),
-  toggleMinimize: () => set((s) => ({ isMinimized: !s.isMinimized })),
+  setPanelCorner: (panelCorner) => {
+    set({ panelCorner })
+    writeUIPrefs({ panelCorner })
+  },
+  toggleMinimize: () => {
+    const next = !get().isMinimized
+    set({ isMinimized: next })
+    writeUIPrefs({ isMinimized: next })
+  },
 
   addPendingAttachment: (attachment) =>
     set((s) => ({ pendingAttachments: [...s.pendingAttachments, attachment] })),

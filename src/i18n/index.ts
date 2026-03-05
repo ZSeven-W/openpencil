@@ -1,6 +1,5 @@
 import i18n from 'i18next'
 import { initReactI18next } from 'react-i18next'
-import LanguageDetector from 'i18next-browser-languagedetector'
 
 import en from '@/i18n/locales/en'
 import zh from '@/i18n/locales/zh'
@@ -18,10 +17,14 @@ import th from '@/i18n/locales/th'
 import vi from '@/i18n/locales/vi'
 import id from '@/i18n/locales/id'
 
+export const SUPPORTED_LANGS = ['en', 'zh', 'zh-TW', 'ja', 'ko', 'fr', 'es', 'de', 'pt', 'ru', 'hi', 'tr', 'th', 'vi', 'id']
+
+// Initialize with 'en' for SSR hydration safety.
+// Language detection is deferred to post-hydration via detectLanguagePostHydration().
 i18n
-  .use(LanguageDetector)
   .use(initReactI18next)
   .init({
+    lng: 'en',
     resources: {
       en: { translation: en },
       zh: { translation: zh },
@@ -39,16 +42,38 @@ i18n
       vi: { translation: vi },
       id: { translation: id },
     },
-    supportedLngs: ['en', 'zh', 'zh-TW', 'ja', 'ko', 'fr', 'es', 'de', 'pt', 'ru', 'hi', 'tr', 'th', 'vi', 'id'],
+    supportedLngs: SUPPORTED_LANGS,
     fallbackLng: 'en',
     interpolation: {
       escapeValue: false,
     },
-    detection: {
-      order: ['localStorage', 'navigator'],
-      lookupLocalStorage: 'openpencil-language',
-      caches: ['localStorage'],
-    },
   })
+
+// Persist language changes to localStorage
+i18n.on('languageChanged', (lng) => {
+  if (typeof localStorage !== 'undefined') {
+    localStorage.setItem('openpencil-language', lng)
+  }
+})
+
+/** Detect user language from localStorage or navigator, after hydration. */
+export function detectLanguagePostHydration() {
+  const stored = typeof localStorage !== 'undefined'
+    ? localStorage.getItem('openpencil-language')
+    : null
+  if (stored && SUPPORTED_LANGS.includes(stored)) {
+    i18n.changeLanguage(stored)
+    return
+  }
+  const nav = typeof navigator !== 'undefined' ? navigator.language : 'en'
+  if (SUPPORTED_LANGS.includes(nav)) {
+    i18n.changeLanguage(nav)
+  } else {
+    const base = nav.split('-')[0]
+    if (SUPPORTED_LANGS.includes(base)) {
+      i18n.changeLanguage(base)
+    }
+  }
+}
 
 export default i18n

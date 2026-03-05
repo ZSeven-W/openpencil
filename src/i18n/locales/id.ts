@@ -225,6 +225,13 @@ const id: TranslationKeys = {
   'variables.noMatch': 'Tidak ada variabel yang cocok dengan pencarian',
   'variables.noDefined': 'Belum ada variabel yang didefinisikan',
   'variables.closeShortcut': 'Tutup (\u2318\u21e7V)',
+  'variables.presets': 'Preset',
+  'variables.savePreset': 'Simpan saat ini sebagai preset…',
+  'variables.loadPreset': 'Muat preset',
+  'variables.importPreset': 'Impor dari file…',
+  'variables.exportPreset': 'Ekspor ke file…',
+  'variables.presetName': 'Nama preset',
+  'variables.noPresets': 'Tidak ada preset tersimpan',
 
   // ── AI Chat ──
   'ai.newChat': 'Chat baru',
@@ -288,9 +295,16 @@ const id: TranslationKeys = {
   'agents.openaiModels': 'Model OpenAI',
   'agents.opencode': 'OpenCode',
   'agents.opencodeDesc': '75+ penyedia LLM',
+  'agents.mcpServer': 'Server MCP',
+  'agents.mcpServerStart': 'Mulai',
+  'agents.mcpServerStop': 'Hentikan',
+  'agents.mcpServerRunning': 'Berjalan',
+  'agents.mcpServerStopped': 'Berhenti',
+  'agents.mcpLanAccess': 'Akses LAN',
   'agents.stdio': 'stdio',
   'agents.http': 'http',
   'agents.stdioHttp': 'stdio + http',
+  'agents.autoUpdate': 'Periksa pembaruan otomatis',
 
   // ── Figma Import ──
   'figma.title': 'Impor dari Figma',

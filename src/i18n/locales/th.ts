@@ -225,6 +225,13 @@ const th: TranslationKeys = {
   'variables.noMatch': 'ไม่มีตัวแปรที่ตรงกับการค้นหาของคุณ',
   'variables.noDefined': 'ยังไม่มีตัวแปรที่กำหนดไว้',
   'variables.closeShortcut': 'ปิด (\u2318\u21e7V)',
+  'variables.presets': 'พรีเซ็ต',
+  'variables.savePreset': 'บันทึกเป็นพรีเซ็ต…',
+  'variables.loadPreset': 'โหลดพรีเซ็ต',
+  'variables.importPreset': 'นำเข้าจากไฟล์…',
+  'variables.exportPreset': 'ส่งออกเป็นไฟล์…',
+  'variables.presetName': 'ชื่อพรีเซ็ต',
+  'variables.noPresets': 'ไม่มีพรีเซ็ตที่บันทึกไว้',
 
   // ── AI Chat ──
   'ai.newChat': 'แชทใหม่',
@@ -288,9 +295,16 @@ const th: TranslationKeys = {
   'agents.openaiModels': 'โมเดล OpenAI',
   'agents.opencode': 'OpenCode',
   'agents.opencodeDesc': '75+ ผู้ให้บริการ LLM',
+  'agents.mcpServer': 'เซิร์ฟเวอร์ MCP',
+  'agents.mcpServerStart': 'เริ่ม',
+  'agents.mcpServerStop': 'หยุด',
+  'agents.mcpServerRunning': 'กำลังทำงาน',
+  'agents.mcpServerStopped': 'หยุดแล้ว',
+  'agents.mcpLanAccess': 'เข้าถึง LAN',
   'agents.stdio': 'stdio',
   'agents.http': 'http',
   'agents.stdioHttp': 'stdio + http',
+  'agents.autoUpdate': 'ตรวจสอบอัปเดตอัตโนมัติ',
 
   // ── Figma Import ──
   'figma.title': 'นำเข้าจาก Figma',

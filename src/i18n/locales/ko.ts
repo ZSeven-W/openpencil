@@ -225,6 +225,13 @@ const ko: TranslationKeys = {
   'variables.noMatch': '검색과 일치하는 변수가 없습니다',
   'variables.noDefined': '정의된 변수가 없습니다',
   'variables.closeShortcut': '닫기 (⌘⇧V)',
+  'variables.presets': '프리셋',
+  'variables.savePreset': '현재 설정을 프리셋으로 저장…',
+  'variables.loadPreset': '프리셋 불러오기',
+  'variables.importPreset': '파일에서 가져오기…',
+  'variables.exportPreset': '파일로 내보내기…',
+  'variables.presetName': '프리셋 이름',
+  'variables.noPresets': '저장된 프리셋 없음',
 
   // ── AI Chat ──
   'ai.newChat': '새 대화',
@@ -288,9 +295,16 @@ const ko: TranslationKeys = {
   'agents.openaiModels': 'OpenAI 모델',
   'agents.opencode': 'OpenCode',
   'agents.opencodeDesc': '75개 이상의 LLM 제공자',
+  'agents.mcpServer': 'MCP 서버',
+  'agents.mcpServerStart': '시작',
+  'agents.mcpServerStop': '정지',
+  'agents.mcpServerRunning': '실행 중',
+  'agents.mcpServerStopped': '정지됨',
+  'agents.mcpLanAccess': 'LAN 접근',
   'agents.stdio': 'stdio',
   'agents.http': 'http',
   'agents.stdioHttp': 'stdio + http',
+  'agents.autoUpdate': '자동 업데이트 확인',
 
   // ── Figma Import ──
   'figma.title': 'Figma에서 가져오기',

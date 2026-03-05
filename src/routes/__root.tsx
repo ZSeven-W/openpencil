@@ -1,3 +1,4 @@
+import { useEffect } from 'react'
 import {
   HeadContent,
   Outlet,
@@ -7,6 +8,7 @@ import {
 import { useTranslation } from 'react-i18next'
 
 import '@/i18n'
+import { detectLanguagePostHydration } from '@/i18n'
 import appCss from '../styles.css?url'
 
 export const Route = createRootRoute({
@@ -50,8 +52,13 @@ function RootComponent() {
 
 function RootDocument({ children }: { children: React.ReactNode }) {
   const { i18n } = useTranslation()
+
+  useEffect(() => {
+    detectLanguagePostHydration()
+  }, [])
+
   return (
-    <html lang={i18n.language}>
+    <html lang={i18n.language} suppressHydrationWarning>
       <head>
         <HeadContent />
       </head>

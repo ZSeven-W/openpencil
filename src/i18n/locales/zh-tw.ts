@@ -220,6 +220,13 @@ const zhTW: TranslationKeys = {
   'variables.noMatch': '沒有符合的變數',
   'variables.noDefined': '尚未定義變數',
   'variables.closeShortcut': '關閉 (\u2318\u21e7V)',
+  'variables.presets': '預設',
+  'variables.savePreset': '儲存為預設…',
+  'variables.loadPreset': '載入預設',
+  'variables.importPreset': '從檔案匯入…',
+  'variables.exportPreset': '匯出到檔案…',
+  'variables.presetName': '預設名稱',
+  'variables.noPresets': '沒有儲存的預設',
 
   // ── AI Chat ──
   'ai.newChat': '新對話',
@@ -280,9 +287,16 @@ const zhTW: TranslationKeys = {
   'agents.openaiModels': 'OpenAI 模型',
   'agents.opencode': 'OpenCode',
   'agents.opencodeDesc': '75+ LLM 供應商',
+  'agents.mcpServer': 'MCP 伺服器',
+  'agents.mcpServerStart': '啟動',
+  'agents.mcpServerStop': '停止',
+  'agents.mcpServerRunning': '執行中',
+  'agents.mcpServerStopped': '已停止',
+  'agents.mcpLanAccess': '區域網路存取',
   'agents.stdio': 'stdio',
   'agents.http': 'http',
   'agents.stdioHttp': 'stdio + http',
+  'agents.autoUpdate': '自動檢查更新',
 
   // ── Figma Import ──
   'figma.title': '從 Figma 匯入',

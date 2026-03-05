@@ -225,6 +225,13 @@ const tr: TranslationKeys = {
   'variables.noMatch': 'Aramanızla eşleşen değişken yok',
   'variables.noDefined': 'Tanımlanmış değişken yok',
   'variables.closeShortcut': 'Kapat (\u2318\u21e7V)',
+  'variables.presets': 'Ön Ayarlar',
+  'variables.savePreset': 'Mevcut ayarları ön ayar olarak kaydet…',
+  'variables.loadPreset': 'Ön ayar yükle',
+  'variables.importPreset': 'Dosyadan içe aktar…',
+  'variables.exportPreset': 'Dosyaya dışa aktar…',
+  'variables.presetName': 'Ön ayar adı',
+  'variables.noPresets': 'Kayıtlı ön ayar yok',
 
   // ── AI Chat ──
   'ai.newChat': 'Yeni sohbet',
@@ -288,9 +295,16 @@ const tr: TranslationKeys = {
   'agents.openaiModels': 'OpenAI modelleri',
   'agents.opencode': 'OpenCode',
   'agents.opencodeDesc': '75+ LLM sağlayıcı',
+  'agents.mcpServer': 'MCP Sunucu',
+  'agents.mcpServerStart': 'Başlat',
+  'agents.mcpServerStop': 'Durdur',
+  'agents.mcpServerRunning': 'Çalışıyor',
+  'agents.mcpServerStopped': 'Durduruldu',
+  'agents.mcpLanAccess': 'LAN Erişimi',
   'agents.stdio': 'stdio',
   'agents.http': 'http',
   'agents.stdioHttp': 'stdio + http',
+  'agents.autoUpdate': 'Otomatik güncelleme kontrolü',
 
   // ── Figma Import ──
   'figma.title': 'Figma\'dan İçe Aktar',

@@ -223,6 +223,13 @@ const en = {
   'variables.noMatch': 'No variables match your search',
   'variables.noDefined': 'No variables defined',
   'variables.closeShortcut': 'Close (\u2318\u21e7V)',
+  'variables.presets': 'Presets',
+  'variables.savePreset': 'Save Current as Preset\u2026',
+  'variables.loadPreset': 'Load Preset',
+  'variables.importPreset': 'Import from File\u2026',
+  'variables.exportPreset': 'Export to File\u2026',
+  'variables.presetName': 'Preset name',
+  'variables.noPresets': 'No saved presets',
 
   // ── AI Chat ──
   'ai.newChat': 'New chat',
@@ -286,9 +293,16 @@ const en = {
   'agents.openaiModels': 'OpenAI models',
   'agents.opencode': 'OpenCode',
   'agents.opencodeDesc': '75+ LLM providers',
+  'agents.mcpServer': 'MCP Server',
+  'agents.mcpServerStart': 'Start',
+  'agents.mcpServerStop': 'Stop',
+  'agents.mcpServerRunning': 'Running',
+  'agents.mcpServerStopped': 'Stopped',
+  'agents.mcpLanAccess': 'LAN Access',
   'agents.stdio': 'stdio',
   'agents.http': 'http',
   'agents.stdioHttp': 'stdio + http',
+  'agents.autoUpdate': 'Auto-check for updates',
 
   // ── Figma Import ──
   'figma.title': 'Import from Figma',

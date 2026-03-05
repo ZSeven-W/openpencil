@@ -6,6 +6,7 @@ const STORAGE_KEY = 'openpencil-uikits'
 
 interface PersistedState {
   importedKits: UIKit[]
+  browserOpen?: boolean
 }
 
 interface UIKitStoreState {
@@ -38,8 +39,15 @@ export const useUIKitStore = create<UIKitStoreState>((set, get) => ({
   activeCategory: null,
   activeKitId: null,
 
-  toggleBrowser: () => set((s) => ({ browserOpen: !s.browserOpen })),
-  setBrowserOpen: (open) => set({ browserOpen: open }),
+  toggleBrowser: () => {
+    const next = !get().browserOpen
+    set({ browserOpen: next })
+    get().persist()
+  },
+  setBrowserOpen: (open) => {
+    set({ browserOpen: open })
+    get().persist()
+  },
   setSearchQuery: (searchQuery) => set({ searchQuery }),
   setActiveCategory: (activeCategory) => set({ activeCategory }),
   setActiveKitId: (activeKitId) => set({ activeKitId }),
@@ -61,8 +69,9 @@ export const useUIKitStore = create<UIKitStoreState>((set, get) => ({
 
   persist: () => {
     try {
-      const imported = get().kits.filter((k) => !k.builtIn)
-      localStorage.setItem(STORAGE_KEY, JSON.stringify({ importedKits: imported }))
+      const { kits, browserOpen } = get()
+      const imported = kits.filter((k) => !k.builtIn)
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({ importedKits: imported, browserOpen }))
     } catch {
       // ignore — localStorage may be full
     }
@@ -80,6 +89,7 @@ export const useUIKitStore = create<UIKitStoreState>((set, get) => ({
         const imported = data.importedKits.filter((k) => !builtInIds.has(k.id))
         set({ kits: [...builtIn, ...imported] })
       }
+      if (typeof data.browserOpen === 'boolean') set({ browserOpen: data.browserOpen })
     } catch {
       // ignore
     }

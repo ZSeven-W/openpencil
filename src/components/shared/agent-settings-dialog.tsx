@@ -1,10 +1,9 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import type { ComponentType, SVGProps } from 'react'
 import { useTranslation } from 'react-i18next'
-import { X, Check, Loader2, Unplug, AlertCircle, Zap, Terminal } from 'lucide-react'
+import { X, Check, Loader2, Unplug, AlertCircle, Zap, Terminal, Play, Square, Globe, Copy, RefreshCw } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
-import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select'
 import { Switch } from '@/components/ui/switch'
 import { useAgentSettingsStore } from '@/stores/agent-settings-store'
 import type { AIProviderType, MCPTransportMode, GroupedModel } from '@/types/agent-settings'
@@ -172,22 +171,18 @@ function ProviderRow({ type }: { type: AIProviderType }) {
   )
 }
 
-const TRANSPORT_OPTIONS: { value: MCPTransportMode; labelKey: string }[] = [
-  { value: 'stdio', labelKey: 'agents.stdio' },
-  { value: 'http', labelKey: 'agents.http' },
-  { value: 'both', labelKey: 'agents.stdioHttp' },
-]
-
 export default function AgentSettingsDialog() {
   const { t } = useTranslation()
   const open = useAgentSettingsStore((s) => s.dialogOpen)
   const setDialogOpen = useAgentSettingsStore((s) => s.setDialogOpen)
   const mcpIntegrations = useAgentSettingsStore((s) => s.mcpIntegrations)
-  const mcpTransportMode = useAgentSettingsStore((s) => s.mcpTransportMode)
   const mcpHttpPort = useAgentSettingsStore((s) => s.mcpHttpPort)
   const toggleMCP = useAgentSettingsStore((s) => s.toggleMCPIntegration)
   const setMCPTransport = useAgentSettingsStore((s) => s.setMCPTransport)
   const persist = useAgentSettingsStore((s) => s.persist)
+  const mcpServerRunning = useAgentSettingsStore((s) => s.mcpServerRunning)
+  const mcpServerLocalIp = useAgentSettingsStore((s) => s.mcpServerLocalIp)
+  const setMcpServerStatus = useAgentSettingsStore((s) => s.setMcpServerStatus)
   const dialogRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -201,35 +196,73 @@ export default function AgentSettingsDialog() {
 
   const [mcpInstalling, setMcpInstalling] = useState<string | null>(null)
   const [mcpError, setMcpError] = useState<string | null>(null)
+  const [mcpServerLoading, setMcpServerLoading] = useState(false)
+  const [mcpServerError, setMcpServerError] = useState<string | null>(null)
+  const [copied, setCopied] = useState(false)
+  const [autoUpdateEnabled, setAutoUpdateEnabled] = useState(true)
+  const [isElectron, setIsElectron] = useState(false)
 
-  /** Re-install all enabled CLIs with the current global transport settings */
-  const reinstallEnabled = useCallback(
-    async (mode: MCPTransportMode, port: number) => {
-      const enabled = mcpIntegrations.filter((m) => m.enabled)
-      if (enabled.length === 0) return
-      setMcpError(null)
-      setMcpInstalling('__transport__')
-      try {
-        for (const m of enabled) {
-          const result = await callMcpInstall(
-            m.tool,
-            'install',
-            mode,
-            mode !== 'stdio' ? port : undefined,
-          )
-          if (!result.success) {
-            setMcpError(result.error ?? t('agents.failedTransport'))
-            return
-          }
-        }
-      } catch {
-        setMcpError(t('agents.failedMcpTransport'))
-      } finally {
-        setMcpInstalling(null)
+  useEffect(() => {
+    setIsElectron(!!window.electronAPI)
+  }, [])
+
+  // Fetch MCP server status on dialog open
+  useEffect(() => {
+    if (!open) return
+    fetch('/api/mcp/server')
+      .then((r) => r.json())
+      .then((data: { running: boolean; port: number | null; localIp: string | null }) => {
+        setMcpServerStatus(data.running, data.localIp)
+      })
+      .catch(() => {})
+  }, [open, setMcpServerStatus])
+
+  // Fetch auto-update setting on dialog open (Electron only)
+  useEffect(() => {
+    if (!open || !window.electronAPI?.updater?.getAutoCheck) return
+    window.electronAPI.updater.getAutoCheck()
+      .then(setAutoUpdateEnabled)
+      .catch((err) => console.error('[auto-update getAutoCheck]', err))
+  }, [open])
+
+  const handleAutoUpdateToggle = useCallback(async (enabled: boolean) => {
+    setAutoUpdateEnabled(enabled)
+    try {
+      await window.electronAPI?.updater?.setAutoCheck?.(enabled)
+    } catch (err) {
+      console.error('[auto-update toggle]', err)
+    }
+  }, [])
+
+  const handleMcpServerToggle = useCallback(async () => {
+    setMcpServerLoading(true)
+    setMcpServerError(null)
+    try {
+      const action = mcpServerRunning ? 'stop' : 'start'
+      const res = await fetch('/api/mcp/server', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action, port: mcpHttpPort }),
+      })
+      const data = await res.json()
+      if (data.error) {
+        setMcpServerError(data.error)
+      } else {
+        setMcpServerStatus(data.running ?? false, data.localIp)
       }
-    },
-    [mcpIntegrations],
-  )
+    } catch {
+      setMcpServerError(t('agents.failedToMcp', { action: mcpServerRunning ? 'stop' : 'start' }))
+    } finally {
+      setMcpServerLoading(false)
+    }
+  }, [mcpServerRunning, mcpHttpPort, setMcpServerStatus, t])
+
+  const handleCopyLanUrl = useCallback(() => {
+    if (!mcpServerLocalIp) return
+    navigator.clipboard.writeText(`http://${mcpServerLocalIp}:${mcpHttpPort}/mcp`)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
+  }, [mcpServerLocalIp, mcpHttpPort])
 
   const handleToggleMCP = useCallback(
     async (tool: string) => {
@@ -240,12 +273,7 @@ export default function AgentSettingsDialog() {
       setMcpInstalling(tool)
       setMcpError(null)
       try {
-        const result = await callMcpInstall(
-          tool,
-          action,
-          action === 'install' ? mcpTransportMode : undefined,
-          action === 'install' && mcpTransportMode !== 'stdio' ? mcpHttpPort : undefined,
-        )
+        const result = await callMcpInstall(tool, action)
         if (result.success) {
           toggleMCP(tool)
           persist()
@@ -258,28 +286,17 @@ export default function AgentSettingsDialog() {
         setMcpInstalling(null)
       }
     },
-    [mcpIntegrations, mcpTransportMode, mcpHttpPort, toggleMCP, persist],
-  )
-
-  const handleTransportChange = useCallback(
-    async (mode: MCPTransportMode) => {
-      if (mode === mcpTransportMode) return
-      setMCPTransport(mode)
-      persist()
-      await reinstallEnabled(mode, mcpHttpPort)
-    },
-    [mcpTransportMode, mcpHttpPort, setMCPTransport, persist, reinstallEnabled],
+    [mcpIntegrations, toggleMCP, persist],
   )
 
   const handlePortBlur = useCallback(
     async (value: string) => {
       const port = parseInt(value, 10)
       if (isNaN(port) || port < 1 || port > 65535 || port === mcpHttpPort) return
-      setMCPTransport(mcpTransportMode, port)
+      setMCPTransport('stdio', port)
       persist()
-      await reinstallEnabled(mcpTransportMode, port)
     },
-    [mcpTransportMode, mcpHttpPort, setMCPTransport, persist, reinstallEnabled],
+    [mcpHttpPort, setMCPTransport, persist],
   )
 
   if (!open) return null
@@ -330,6 +347,84 @@ export default function AgentSettingsDialog() {
           {/* Divider */}
           <div className="h-px bg-border mb-5" />
 
+          {/* MCP Server section */}
+          <div className="mb-5">
+            <div className="flex items-center gap-2 mb-3 px-1">
+              <Globe size={12} className="text-muted-foreground" />
+              <h4 className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">
+                {t('agents.mcpServer')}
+              </h4>
+            </div>
+            <div className="flex items-center gap-2 px-3 py-2.5 rounded-lg bg-secondary/30">
+              {/* Status indicator */}
+              <div
+                className={cn(
+                  'w-2 h-2 rounded-full shrink-0',
+                  mcpServerRunning ? 'bg-green-500' : 'bg-muted-foreground/30',
+                )}
+              />
+              <span className="text-[12px] text-foreground flex-1">
+                {mcpServerRunning ? t('agents.mcpServerRunning') : t('agents.mcpServerStopped')}
+              </span>
+              <span className="text-[11px] text-muted-foreground shrink-0">{t('agents.port')}</span>
+              <input
+                type="text"
+                inputMode="numeric"
+                defaultValue={mcpHttpPort}
+                key={mcpHttpPort}
+                onBlur={(e) => handlePortBlur(e.target.value)}
+                disabled={mcpServerRunning || mcpServerLoading}
+                className="h-6 w-[52px] text-[11px] text-center tabular-nums bg-secondary text-foreground rounded border border-input focus:border-ring outline-none transition-colors disabled:opacity-50"
+              />
+              <Button
+                size="sm"
+                variant={mcpServerRunning ? 'outline' : 'default'}
+                onClick={handleMcpServerToggle}
+                disabled={mcpServerLoading}
+                className="h-7 px-3 text-[11px] shrink-0"
+              >
+                {mcpServerLoading ? (
+                  <Loader2 size={11} className="animate-spin" />
+                ) : mcpServerRunning ? (
+                  <>
+                    <Square size={10} className="mr-1" />
+                    {t('agents.mcpServerStop')}
+                  </>
+                ) : (
+                  <>
+                    <Play size={10} className="mr-1" />
+                    {t('agents.mcpServerStart')}
+                  </>
+                )}
+              </Button>
+            </div>
+            {mcpServerRunning && mcpServerLocalIp && (
+              <div className="flex items-center gap-2 mt-2 px-3 py-2 rounded-lg bg-secondary/20">
+                <span className="text-[10px] text-muted-foreground shrink-0">{t('agents.mcpLanAccess')}</span>
+                <code className="text-[11px] text-foreground font-mono flex-1 truncate">
+                  http://{mcpServerLocalIp}:{mcpHttpPort}/mcp
+                </code>
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  onClick={handleCopyLanUrl}
+                  className="shrink-0 h-6 w-6"
+                >
+                  {copied ? <Check size={10} className="text-green-500" /> : <Copy size={10} />}
+                </Button>
+              </div>
+            )}
+            {mcpServerError && (
+              <div className="flex items-center gap-1.5 mt-2 px-1">
+                <AlertCircle size={11} className="text-destructive shrink-0" />
+                <p className="text-[10px] text-destructive">{mcpServerError}</p>
+              </div>
+            )}
+          </div>
+
+          {/* Divider */}
+          <div className="h-px bg-border mb-5" />
+
           {/* MCP integrations section */}
           <div>
             <div className="flex items-center gap-2 mb-3 px-1">
@@ -337,44 +432,6 @@ export default function AgentSettingsDialog() {
               <h4 className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">
                 {t('agents.mcpIntegrations')}
               </h4>
-            </div>
-
-            {/* Global transport selector */}
-            <div className="flex items-center gap-2 mb-3 px-1">
-              <span className="text-[11px] text-muted-foreground shrink-0">{t('agents.transport')}</span>
-              <Select
-                value={mcpTransportMode}
-                onValueChange={(v) => handleTransportChange(v as MCPTransportMode)}
-                disabled={isBusy}
-              >
-                <SelectTrigger className="h-6 w-[100px] text-[11px]">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {TRANSPORT_OPTIONS.map((opt) => (
-                    <SelectItem key={opt.value} value={opt.value}>
-                      {t(opt.labelKey)}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              {mcpTransportMode !== 'stdio' && (
-                <>
-                  <span className="text-[11px] text-muted-foreground shrink-0">{t('agents.port')}</span>
-                  <input
-                    type="text"
-                    inputMode="numeric"
-                    defaultValue={mcpHttpPort}
-                    key={mcpHttpPort}
-                    onBlur={(e) => handlePortBlur(e.target.value)}
-                    disabled={isBusy}
-                    className="h-6 w-[52px] text-[11px] text-center tabular-nums bg-secondary text-foreground rounded border border-input focus:border-ring outline-none transition-colors"
-                  />
-                </>
-              )}
-              {mcpInstalling === '__transport__' && (
-                <Loader2 size={10} className="animate-spin text-muted-foreground shrink-0" />
-              )}
             </div>
 
             <div className="grid grid-cols-2 gap-x-2 gap-y-0.5">
@@ -418,6 +475,23 @@ export default function AgentSettingsDialog() {
               {t('agents.mcpRestart')}
             </p>
           </div>
+
+          {/* Auto-update toggle (Electron only) */}
+          {isElectron && (
+            <>
+              <div className="h-px bg-border my-5" />
+              <div className="flex items-center justify-between px-1">
+                <div className="flex items-center gap-2">
+                  <RefreshCw size={12} className="text-muted-foreground" />
+                  <span className="text-[12px] text-foreground">{t('agents.autoUpdate')}</span>
+                </div>
+                <Switch
+                  checked={autoUpdateEnabled}
+                  onCheckedChange={handleAutoUpdateToggle}
+                />
+              </div>
+            </>
+          )}
         </div>
       </div>
     </div>

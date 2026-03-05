@@ -228,6 +228,13 @@ const es: TranslationKeys = {
   'variables.noMatch': 'Ninguna variable coincide con su búsqueda',
   'variables.noDefined': 'No hay variables definidas',
   'variables.closeShortcut': 'Cerrar (⌘⇧V)',
+  'variables.presets': 'Preajustes',
+  'variables.savePreset': 'Guardar actual como preajuste…',
+  'variables.loadPreset': 'Cargar preajuste',
+  'variables.importPreset': 'Importar desde archivo…',
+  'variables.exportPreset': 'Exportar a archivo…',
+  'variables.presetName': 'Nombre del preajuste',
+  'variables.noPresets': 'No hay preajustes guardados',
 
   // ── AI Chat ──
   'ai.newChat': 'Nueva conversación',
@@ -295,9 +302,16 @@ const es: TranslationKeys = {
   'agents.openaiModels': 'Modelos OpenAI',
   'agents.opencode': 'OpenCode',
   'agents.opencodeDesc': '75+ proveedores LLM',
+  'agents.mcpServer': 'Servidor MCP',
+  'agents.mcpServerStart': 'Iniciar',
+  'agents.mcpServerStop': 'Detener',
+  'agents.mcpServerRunning': 'En ejecución',
+  'agents.mcpServerStopped': 'Detenido',
+  'agents.mcpLanAccess': 'Acceso LAN',
   'agents.stdio': 'stdio',
   'agents.http': 'http',
   'agents.stdioHttp': 'stdio + http',
+  'agents.autoUpdate': 'Buscar actualizaciones automáticamente',
 
   // ── Figma Import ──
   'figma.title': 'Importar desde Figma',

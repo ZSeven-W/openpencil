@@ -5,6 +5,7 @@ import type { PenNode } from '@/types/pen'
 import { useDocumentStore } from '@/stores/document-store'
 import { useCanvasStore } from '@/stores/canvas-store'
 import { findReusableNode, deepCloneNode, collectVariableRefs } from '@/uikit/kit-utils'
+import NodePreviewSvg from './node-preview-svg'
 
 interface ComponentBrowserCardProps {
   component: KitComponent
@@ -61,22 +62,7 @@ export default function ComponentBrowserCard({ component, kit }: ComponentBrowse
     useCanvasStore.getState().setSelection([cloned.id], cloned.id)
   }, [component, kit])
 
-  // Compute preview aspect ratio
-  const maxPreviewW = 120
-  const maxPreviewH = 64
-  const scale = Math.min(maxPreviewW / component.width, maxPreviewH / component.height, 1)
-  const previewW = Math.round(component.width * scale)
-  const previewH = Math.round(component.height * scale)
-
-  // Extract primary fill color from the kit node for preview
   const kitNode = findReusableNode(kit.document, component.id)
-  let fillColor = '#E5E7EB'
-  if (kitNode && 'fill' in kitNode && Array.isArray(kitNode.fill) && kitNode.fill.length > 0) {
-    const f = kitNode.fill[0]
-    if (f.type === 'solid' && !f.color.startsWith('$')) {
-      fillColor = f.color
-    }
-  }
 
   return (
     <button
@@ -85,14 +71,11 @@ export default function ComponentBrowserCard({ component, kit }: ComponentBrowse
       className="flex flex-col items-center gap-2 p-3 rounded-lg border border-border bg-card hover:bg-muted transition-colors cursor-pointer group"
     >
       <div className="flex items-center justify-center w-full h-16">
-        <div
-          className="rounded transition-transform group-hover:scale-105"
-          style={{
-            width: previewW,
-            height: previewH,
-            backgroundColor: fillColor,
-          }}
-        />
+        {kitNode ? (
+          <NodePreviewSvg node={kitNode} maxWidth={120} maxHeight={64} variables={kit.document.variables} />
+        ) : (
+          <div className="w-16 h-8 rounded bg-muted" />
+        )}
       </div>
       <span className="text-xs text-foreground truncate w-full text-center">
         {component.name}

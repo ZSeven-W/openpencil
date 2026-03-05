@@ -225,6 +225,13 @@ const vi: TranslationKeys = {
   'variables.noMatch': 'Không có biến nào khớp với tìm kiếm',
   'variables.noDefined': 'Chưa có biến nào được định nghĩa',
   'variables.closeShortcut': 'Đóng (\u2318\u21e7V)',
+  'variables.presets': 'Mẫu cài sẵn',
+  'variables.savePreset': 'Lưu hiện tại làm mẫu…',
+  'variables.loadPreset': 'Tải mẫu cài sẵn',
+  'variables.importPreset': 'Nhập từ tệp…',
+  'variables.exportPreset': 'Xuất ra tệp…',
+  'variables.presetName': 'Tên mẫu',
+  'variables.noPresets': 'Chưa có mẫu nào được lưu',
 
   // ── AI Chat ──
   'ai.newChat': 'Cuộc trò chuyện mới',
@@ -288,9 +295,16 @@ const vi: TranslationKeys = {
   'agents.openaiModels': 'Các mô hình OpenAI',
   'agents.opencode': 'OpenCode',
   'agents.opencodeDesc': '75+ nhà cung cấp LLM',
+  'agents.mcpServer': 'Máy chủ MCP',
+  'agents.mcpServerStart': 'Khởi động',
+  'agents.mcpServerStop': 'Dừng',
+  'agents.mcpServerRunning': 'Đang chạy',
+  'agents.mcpServerStopped': 'Đã dừng',
+  'agents.mcpLanAccess': 'Truy cập LAN',
   'agents.stdio': 'stdio',
   'agents.http': 'http',
   'agents.stdioHttp': 'stdio + http',
+  'agents.autoUpdate': 'Tự động kiểm tra cập nhật',
 
   // ── Figma Import ──
   'figma.title': 'Nhập từ Figma',
