@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react'
 import { AlertCircle, CheckCircle2, Download, Loader2, RefreshCw, Sparkles } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import { Button } from '@/components/ui/button'
 
 export default function UpdateReadyBanner() {
+  const { t } = useTranslation()
   const [updateState, setUpdateState] = useState<UpdaterState | null>(null)
   const [isInstalling, setIsInstalling] = useState(false)
   const [isChecking, setIsChecking] = useState(false)
@@ -81,23 +83,23 @@ export default function UpdateReadyBanner() {
     : null
 
   const titleByStatus: Partial<Record<UpdaterStatus, string>> = {
-    checking: 'Checking for updates',
-    available: 'Update found',
-    downloading: 'Downloading update',
-    downloaded: 'Ready to install',
-    error: 'Update failed',
+    checking: t('updater.title.checking'),
+    available: t('updater.title.available'),
+    downloading: t('updater.title.downloading'),
+    downloaded: t('updater.title.downloaded'),
+    error: t('updater.title.error'),
   }
 
   const subtitleByStatus: Partial<Record<UpdaterStatus, string>> = {
-    checking: 'Looking for the latest release...',
-    available: updateState.latestVersion ? `Version ${updateState.latestVersion} is available.` : 'A new version is available.',
+    checking: t('updater.subtitle.checking'),
+    available: updateState.latestVersion ? t('updater.subtitle.available', { version: updateState.latestVersion }) : t('updater.subtitle.availableGeneric'),
     downloading: updateState.latestVersion
-      ? `Version ${updateState.latestVersion} is downloading in the background.`
-      : 'Downloading update package in the background.',
+      ? t('updater.subtitle.downloading', { version: updateState.latestVersion })
+      : t('updater.subtitle.downloadingGeneric'),
     downloaded: updateState.latestVersion
-      ? `Version ${updateState.latestVersion} has been downloaded.`
-      : 'The update has been downloaded.',
-    error: updateState.error || 'Unable to check or download the update.',
+      ? t('updater.subtitle.downloaded', { version: updateState.latestVersion })
+      : t('updater.subtitle.downloadedGeneric'),
+    error: updateState.error || t('updater.subtitle.error'),
   }
 
   return (
@@ -108,10 +110,10 @@ export default function UpdateReadyBanner() {
             <div className="min-w-0">
               <div className="inline-flex items-center gap-2 text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
                 <Sparkles className="h-3.5 w-3.5" />
-                Software Update
+                {t('updater.softwareUpdate')}
               </div>
               <p className="mt-1 text-base font-semibold text-card-foreground">
-                {titleByStatus[updateState.status] || 'Software Update'}
+                {titleByStatus[updateState.status] || t('updater.softwareUpdate')}
               </p>
               <p className="mt-1 text-sm text-muted-foreground leading-relaxed break-words">
                 {subtitleByStatus[updateState.status]}
@@ -122,7 +124,7 @@ export default function UpdateReadyBanner() {
               onClick={() => setDismissed(true)}
               className="h-7 px-2 rounded-md text-xs text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
             >
-              Dismiss
+              {t('updater.dismiss')}
             </button>
           </div>
         </div>
@@ -130,12 +132,12 @@ export default function UpdateReadyBanner() {
         <div className="px-5 py-4 space-y-3">
           <div className="grid grid-cols-2 gap-2 text-xs text-muted-foreground">
             <div className="rounded-lg border border-border/70 px-3 py-2">
-              <span className="block text-[10px] uppercase tracking-wider mb-1">Current</span>
-              <span className="text-foreground font-medium">{updateState.currentVersion || 'Unknown'}</span>
+              <span className="block text-[10px] uppercase tracking-wider mb-1">{t('updater.current')}</span>
+              <span className="text-foreground font-medium">{updateState.currentVersion || t('updater.unknown')}</span>
             </div>
             <div className="rounded-lg border border-border/70 px-3 py-2">
-              <span className="block text-[10px] uppercase tracking-wider mb-1">Latest</span>
-              <span className="text-foreground font-medium">{updateState.latestVersion || 'Checking...'}</span>
+              <span className="block text-[10px] uppercase tracking-wider mb-1">{t('updater.latest')}</span>
+              <span className="text-foreground font-medium">{updateState.latestVersion || t('updater.checking')}</span>
             </div>
           </div>
 
@@ -144,7 +146,7 @@ export default function UpdateReadyBanner() {
               <div className="flex items-center justify-between text-xs text-muted-foreground mb-2">
                 <span className="inline-flex items-center gap-1.5">
                   <Download className="h-3.5 w-3.5" />
-                  Download Progress
+                  {t('updater.downloadProgress')}
                 </span>
                 <span className="font-medium text-foreground">{progress}%</span>
               </div>
@@ -160,20 +162,20 @@ export default function UpdateReadyBanner() {
           {updateState.status === 'error' && (
             <div className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-700 dark:text-red-300 inline-flex items-start gap-2">
               <AlertCircle className="h-4 w-4 mt-0.5 shrink-0" />
-              <span className="leading-relaxed break-words">{updateState.error || 'Unknown updater error.'}</span>
+              <span className="leading-relaxed break-words">{updateState.error || t('updater.unknownError')}</span>
             </div>
           )}
 
           {updateState.status === 'downloaded' && (
             <div className="rounded-lg border border-emerald-500/25 bg-emerald-500/10 px-3 py-2 text-xs text-emerald-700 dark:text-emerald-300 inline-flex items-center gap-2">
               <CheckCircle2 className="h-4 w-4 shrink-0" />
-              <span>Restart to apply update. Relaunch usually takes 10-15 seconds.</span>
+              <span>{t('updater.restartHint')}</span>
             </div>
           )}
 
           {releaseDate && (
             <p className="text-[11px] text-muted-foreground">
-              Release date: {releaseDate}
+              {t('updater.releaseDate', { date: releaseDate })}
             </p>
           )}
 
@@ -188,13 +190,13 @@ export default function UpdateReadyBanner() {
                 ? (
                   <>
                     <Loader2 className="h-4 w-4 animate-spin" />
-                    Checking...
+                    {t('updater.checking')}
                   </>
                 )
                 : (
                   <>
                     <RefreshCw className="h-4 w-4" />
-                    Check Again
+                    {t('updater.checkAgain')}
                   </>
                 )}
             </Button>
@@ -208,10 +210,10 @@ export default function UpdateReadyBanner() {
                 ? (
                   <>
                     <Loader2 className="h-4 w-4 animate-spin" />
-                    Installing...
+                    {t('updater.installing')}
                   </>
                 )
-                : 'Restart & Install'}
+                : t('updater.restartInstall')}
             </Button>
           </div>
         </div>

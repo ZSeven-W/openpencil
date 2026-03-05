@@ -1,0 +1,369 @@
+import type { TranslationKeys } from './en'
+
+const id: TranslationKeys = {
+  // ── Common ──
+  'common.rename': 'Ubah Nama',
+  'common.duplicate': 'Duplikat',
+  'common.delete': 'Hapus',
+  'common.cancel': 'Batal',
+  'common.save': 'Simpan',
+  'common.close': 'Tutup',
+  'common.connect': 'Hubungkan',
+  'common.disconnect': 'Putuskan',
+  'common.import': 'Impor',
+  'common.export': 'Ekspor',
+  'common.name': 'Nama',
+  'common.untitled': 'Tanpa Judul',
+  'common.best': 'Terbaik',
+  'common.selected': '{{count}} dipilih',
+
+  // ── Toolbar ──
+  'toolbar.select': 'Pilih',
+  'toolbar.text': 'Teks',
+  'toolbar.frame': 'Frame',
+  'toolbar.hand': 'Tangan',
+  'toolbar.undo': 'Urungkan',
+  'toolbar.redo': 'Ulangi',
+  'toolbar.variables': 'Variabel',
+  'toolbar.uikitBrowser': 'Penjelajah UIKit',
+
+  // ── Shapes ──
+  'shapes.rectangle': 'Persegi Panjang',
+  'shapes.ellipse': 'Elips',
+  'shapes.line': 'Garis',
+  'shapes.icon': 'Ikon',
+  'shapes.importImageSvg': 'Impor Gambar atau SVG\u2026',
+  'shapes.pen': 'Pena',
+  'shapes.shapeTools': 'Alat bentuk',
+  'shapes.moreShapeTools': 'Alat bentuk lainnya',
+
+  // ── Top Bar ──
+  'topbar.hideLayers': 'Sembunyikan layer',
+  'topbar.showLayers': 'Tampilkan layer',
+  'topbar.new': 'Baru',
+  'topbar.open': 'Buka',
+  'topbar.save': 'Simpan',
+  'topbar.importFigma': 'Impor Figma',
+  'topbar.lightMode': 'Mode terang',
+  'topbar.darkMode': 'Mode gelap',
+  'topbar.fullscreen': 'Layar penuh',
+  'topbar.exitFullscreen': 'Keluar layar penuh',
+  'topbar.edited': '— Diedit',
+  'topbar.agentsAndMcp': 'Agent & MCP',
+  'topbar.setupAgentsMcp': 'Pengaturan Agent & MCP',
+  'topbar.connected': 'terhubung',
+  'topbar.agentStatus': '{{agents}} agent{{agentSuffix}} · {{mcp}} MCP',
+
+  // ── Pages ──
+  'pages.title': 'Halaman',
+  'pages.addPage': 'Tambah halaman',
+  'pages.moveUp': 'Pindah ke Atas',
+  'pages.moveDown': 'Pindah ke Bawah',
+
+  // ── Status Bar ──
+  'statusbar.zoomOut': 'Perkecil',
+  'statusbar.zoomIn': 'Perbesar',
+  'statusbar.resetZoom': 'Atur ulang zoom',
+
+  // ── Updater ──
+  'updater.softwareUpdate': 'Pembaruan Perangkat Lunak',
+  'updater.dismiss': 'Tutup',
+  'updater.current': 'Saat ini',
+  'updater.latest': 'Terbaru',
+  'updater.unknown': 'Tidak diketahui',
+  'updater.checking': 'Memeriksa...',
+  'updater.downloadProgress': 'Progres Unduhan',
+  'updater.checkAgain': 'Periksa Lagi',
+  'updater.restartInstall': 'Mulai Ulang & Pasang',
+  'updater.installing': 'Memasang...',
+  'updater.releaseDate': 'Tanggal rilis: {{date}}',
+  'updater.restartHint':
+    'Mulai ulang untuk menerapkan pembaruan. Proses mulai ulang biasanya memakan waktu 10-15 detik.',
+  'updater.unknownError': 'Kesalahan pembaruan tidak diketahui.',
+  'updater.title.checking': 'Memeriksa pembaruan',
+  'updater.title.available': 'Pembaruan ditemukan',
+  'updater.title.downloading': 'Mengunduh pembaruan',
+  'updater.title.downloaded': 'Siap dipasang',
+  'updater.title.error': 'Pembaruan gagal',
+  'updater.subtitle.checking': 'Mencari rilis terbaru...',
+  'updater.subtitle.available': 'Versi {{version}} tersedia.',
+  'updater.subtitle.availableGeneric': 'Versi baru tersedia.',
+  'updater.subtitle.downloading':
+    'Versi {{version}} sedang diunduh di latar belakang.',
+  'updater.subtitle.downloadingGeneric':
+    'Paket pembaruan sedang diunduh di latar belakang.',
+  'updater.subtitle.downloaded': 'Versi {{version}} telah diunduh.',
+  'updater.subtitle.downloadedGeneric': 'Pembaruan telah diunduh.',
+  'updater.subtitle.error': 'Tidak dapat memeriksa atau mengunduh pembaruan.',
+
+  // ── Layers ──
+  'layers.title': 'Layer',
+  'layers.empty': 'Belum ada layer. Gunakan toolbar untuk menggambar bentuk.',
+
+  // ── Layer Context Menu ──
+  'layerMenu.groupSelection': 'Kelompokkan Pilihan',
+  'layerMenu.createComponent': 'Buat Komponen',
+  'layerMenu.detachComponent': 'Lepaskan Komponen',
+  'layerMenu.detachInstance': 'Lepaskan Instance',
+  'layerMenu.toggleLock': 'Alihkan Kunci',
+  'layerMenu.toggleVisibility': 'Alihkan Visibilitas',
+
+  // ── Property Panel ──
+  'property.createComponent': 'Buat Komponen',
+  'property.detachComponent': 'Lepaskan Komponen',
+  'property.goToComponent': 'Buka komponen',
+  'property.detachInstance': 'Lepaskan instance',
+
+  // ── Fill ──
+  'fill.title': 'Isi',
+  'fill.solid': 'Solid',
+  'fill.linear': 'Linear',
+  'fill.radial': 'Radial',
+  'fill.stops': 'Titik warna',
+  'fill.angle': 'Sudut',
+
+  // ── Stroke ──
+  'stroke.title': 'Garis Tepi',
+
+  // ── Appearance ──
+  'appearance.layer': 'Layer',
+  'appearance.opacity': 'Opasitas',
+
+  // ── Layout ──
+  'layout.flexLayout': 'Tata Letak Flex',
+  'layout.freedom': 'Bebas (tanpa tata letak)',
+  'layout.vertical': 'Tata letak vertikal',
+  'layout.horizontal': 'Tata letak horizontal',
+  'layout.alignment': 'Perataan',
+  'layout.gap': 'Jarak',
+  'layout.spaceBetween': 'Space Between',
+  'layout.spaceAround': 'Space Around',
+  'layout.dimensions': 'Dimensi',
+  'layout.fillWidth': 'Isi Lebar',
+  'layout.fillHeight': 'Isi Tinggi',
+  'layout.hugWidth': 'Rangkul Lebar',
+  'layout.hugHeight': 'Rangkul Tinggi',
+  'layout.clipContent': 'Potong Konten',
+
+  // ── Padding ──
+  'padding.title': 'Padding',
+  'padding.paddingMode': 'Mode padding',
+  'padding.paddingValues': 'Nilai Padding',
+  'padding.oneValue': 'Satu nilai untuk semua sisi',
+  'padding.horizontalVertical': 'Horizontal/Vertikal',
+  'padding.topRightBottomLeft': 'Atas/Kanan/Bawah/Kiri',
+
+  // ── Typography ──
+  'text.typography': 'Tipografi',
+  'text.lineHeight': 'Tinggi baris',
+  'text.letterSpacing': 'Jarak huruf',
+  'text.horizontal': 'Horizontal',
+  'text.vertical': 'Vertikal',
+  'text.alignLeft': 'Rata kiri',
+  'text.alignCenter': 'Rata tengah',
+  'text.alignRight': 'Rata kanan',
+  'text.justify': 'Rata kiri-kanan',
+  'text.top': 'Atas',
+  'text.middle': 'Tengah',
+  'text.bottom': 'Bawah',
+  'text.weight.thin': 'Tipis',
+  'text.weight.light': 'Ringan',
+  'text.weight.regular': 'Reguler',
+  'text.weight.medium': 'Sedang',
+  'text.weight.semibold': 'Semi Tebal',
+  'text.weight.bold': 'Tebal',
+  'text.weight.black': 'Sangat Tebal',
+
+  // ── Text Layout ──
+  'textLayout.title': 'Tata Letak',
+  'textLayout.dimensions': 'Dimensi',
+  'textLayout.resizing': 'Pengubahan ukuran',
+  'textLayout.autoWidth': 'Auto L',
+  'textLayout.autoWidthDesc': 'Lebar Otomatis \u2014 teks meluas secara horizontal',
+  'textLayout.autoHeight': 'Auto T',
+  'textLayout.autoHeightDesc':
+    'Tinggi Otomatis \u2014 lebar tetap, tinggi menyesuaikan otomatis',
+  'textLayout.fixed': 'Tetap',
+  'textLayout.fixedDesc':
+    'Ukuran Tetap \u2014 lebar dan tinggi tetap',
+  'textLayout.fillWidth': 'Isi Lebar',
+  'textLayout.fillHeight': 'Isi Tinggi',
+
+  // ── Effects ──
+  'effects.title': 'Efek',
+  'effects.dropShadow': 'Bayangan jatuh',
+  'effects.blur': 'Blur',
+  'effects.spread': 'Sebaran',
+  'effects.color': 'Warna',
+
+  // ── Export ──
+  'export.title': 'Ekspor',
+  'export.format': 'Format',
+  'export.scale': 'Skala',
+  'export.selectedOnly': 'Ekspor pilihan saja',
+  'export.exportFormat': 'Ekspor {{format}}',
+  'export.exportLayer': 'Ekspor layer',
+
+  // ── Corner Radius ──
+  'cornerRadius.title': 'Radius Sudut',
+
+  // ── Size / Position ──
+  'size.position': 'Posisi',
+
+  // ── Icon ──
+  'icon.title': 'Ikon',
+  'icon.searchIcons': 'Cari ikon...',
+  'icon.noIconsFound': 'Ikon tidak ditemukan',
+  'icon.typeToSearch': 'Ketik untuk mencari ikon Iconify',
+  'icon.iconsCount': '{{count}} ikon',
+
+  // ── Variables Panel ──
+  'variables.addTheme': 'Tambah tema',
+  'variables.addVariant': 'Tambah varian',
+  'variables.addVariable': 'Tambah variabel',
+  'variables.searchVariables': 'Cari variabel...',
+  'variables.noMatch': 'Tidak ada variabel yang cocok dengan pencarian',
+  'variables.noDefined': 'Belum ada variabel yang didefinisikan',
+  'variables.closeShortcut': 'Tutup (\u2318\u21e7V)',
+  'variables.presets': 'Preset',
+  'variables.savePreset': 'Simpan saat ini sebagai preset…',
+  'variables.loadPreset': 'Muat preset',
+  'variables.importPreset': 'Impor dari file…',
+  'variables.exportPreset': 'Ekspor ke file…',
+  'variables.presetName': 'Nama preset',
+  'variables.noPresets': 'Tidak ada preset tersimpan',
+
+  // ── AI Chat ──
+  'ai.newChat': 'Chat baru',
+  'ai.collapse': 'Ciutkan',
+  'ai.tryExample': 'Coba contoh untuk mendesain...',
+  'ai.tipSelectElements':
+    'Tips: Pilih elemen di canvas sebelum chat untuk memberikan konteks.',
+  'ai.generating': 'Membuat...',
+  'ai.designWithAgent': 'Desain dengan Agent...',
+  'ai.attachImage': 'Lampirkan gambar',
+  'ai.stopGenerating': 'Hentikan pembuatan',
+  'ai.sendMessage': 'Kirim pesan',
+  'ai.loadingModels': 'Memuat model...',
+  'ai.noModelsConnected': 'Tidak ada model terhubung',
+  'ai.quickAction.loginScreen': 'Desain layar login mobile',
+  'ai.quickAction.loginScreenPrompt':
+    'Desain layar login mobile modern dengan input email, input kata sandi, tombol login, dan opsi login sosial',
+  'ai.quickAction.productCard': 'Buat komponen kartu produk',
+  'ai.quickAction.productCardPrompt':
+    'Buat kartu produk dengan placeholder gambar, judul, harga, dan tombol beli',
+  'ai.quickAction.bottomNav': 'Desain bilah navigasi bawah',
+  'ai.quickAction.bottomNavPrompt':
+    'Desain bilah navigasi bawah aplikasi mobile dengan 5 tab: Beranda, Cari, Tambah, Pesan, Profil',
+  'ai.quickAction.colorPalette': 'Sarankan palet warna untuk aplikasi saya',
+  'ai.quickAction.colorPalettePrompt':
+    'Sarankan palet warna modern untuk aplikasi perawatan hewan peliharaan',
+
+  // ── Code Panel ──
+  'code.reactTailwind': 'React + Tailwind',
+  'code.htmlCss': 'HTML + CSS',
+  'code.cssVariables': 'CSS Variables',
+  'code.copyClipboard': 'Salin ke papan klip',
+  'code.closeCodePanel': 'Tutup panel kode',
+  'code.genCssVars': 'Membuat CSS variables untuk seluruh dokumen',
+  'code.genSelected':
+    'Membuat kode untuk {{count}} elemen yang dipilih',
+  'code.genDocument': 'Membuat kode untuk seluruh dokumen',
+
+  // ── Save Dialog ──
+  'save.saveAs': 'Simpan Sebagai',
+  'save.fileName': 'Nama file',
+
+  // ── Agent Settings ──
+  'agents.title': 'Pengaturan Agent & MCP',
+  'agents.agentsOnCanvas': 'Agent di Canvas',
+  'agents.mcpIntegrations': 'Integrasi MCP di Terminal',
+  'agents.transport': 'Transport',
+  'agents.port': 'Port',
+  'agents.mcpRestart':
+    'Integrasi MCP akan berlaku setelah terminal dimulai ulang.',
+  'agents.modelCount': '{{count}} model',
+  'agents.connectionFailed': 'Koneksi gagal',
+  'agents.serverError': 'Kesalahan server {{status}}',
+  'agents.failedTo': 'Gagal {{action}}',
+  'agents.failedToMcp': 'Gagal {{action}} server MCP',
+  'agents.failedTransport': 'Gagal memperbarui transport',
+  'agents.failedMcpTransport': 'Gagal memperbarui transport MCP',
+  'agents.claudeCode': 'Claude Code',
+  'agents.claudeModels': 'Model Claude',
+  'agents.codexCli': 'Codex CLI',
+  'agents.openaiModels': 'Model OpenAI',
+  'agents.opencode': 'OpenCode',
+  'agents.opencodeDesc': '75+ penyedia LLM',
+  'agents.mcpServer': 'Server MCP',
+  'agents.mcpServerStart': 'Mulai',
+  'agents.mcpServerStop': 'Hentikan',
+  'agents.mcpServerRunning': 'Berjalan',
+  'agents.mcpServerStopped': 'Berhenti',
+  'agents.mcpLanAccess': 'Akses LAN',
+  'agents.stdio': 'stdio',
+  'agents.http': 'http',
+  'agents.stdioHttp': 'stdio + http',
+  'agents.autoUpdate': 'Periksa pembaruan otomatis',
+
+  // ── Figma Import ──
+  'figma.title': 'Impor dari Figma',
+  'figma.dropFile': 'Letakkan file .fig di sini',
+  'figma.orBrowse': 'atau klik untuk menjelajah',
+  'figma.exportTip': 'Ekspor dari Figma: File \u2192 Save local copy (.fig)',
+  'figma.selectFigFile': 'Silakan pilih file .fig',
+  'figma.noPages': 'Tidak ada halaman ditemukan di file .fig',
+  'figma.parseFailed': 'Gagal mengurai file .fig',
+  'figma.convertFailed': 'Gagal mengonversi file Figma',
+  'figma.parsing': 'Mengurai file .fig...',
+  'figma.converting': 'Mengonversi node...',
+  'figma.selectPage':
+    'File ini memiliki {{count}} halaman. Pilih yang akan diimpor:',
+  'figma.layers': '{{count}} layer',
+  'figma.importAll': 'Impor Semua Halaman',
+  'figma.importComplete': 'Impor selesai!',
+  'figma.moreWarnings': '...dan {{count}} peringatan lainnya',
+  'figma.tryAgain': 'Coba Lagi',
+  'figma.layoutMode': 'Mode tata letak:',
+  'figma.preserveLayout': 'Pertahankan tata letak Figma',
+  'figma.autoLayout': 'Tata letak otomatis OpenPencil',
+  'figma.comingSoon': 'Segera hadir',
+
+  // ── Landing Page ──
+  'landing.open': 'Open',
+  'landing.pencil': 'Pencil',
+  'landing.tagline': 'Alat desain vektor open-source. Desain sebagai Kode.',
+  'landing.newDesign': 'Desain Baru',
+  'landing.shortcutHint': 'Tekan {{key1}} + {{key2}} untuk membuat desain baru',
+
+  // ── 404 ──
+  'notFound.message': 'Halaman tidak ditemukan',
+
+  // ── Component Browser ──
+  'componentBrowser.title': 'Penjelajah UIKit',
+  'componentBrowser.exportKit': 'Ekspor kit',
+  'componentBrowser.importKit': 'Impor kit',
+  'componentBrowser.kit': 'Kit:',
+  'componentBrowser.all': 'Semua',
+  'componentBrowser.imported': '(diimpor)',
+  'componentBrowser.components': 'komponen',
+  'componentBrowser.searchComponents': 'Cari komponen...',
+  'componentBrowser.deleteKit': 'Hapus {{name}}',
+  'componentBrowser.category.all': 'Semua',
+  'componentBrowser.category.buttons': 'Tombol',
+  'componentBrowser.category.inputs': 'Input',
+  'componentBrowser.category.cards': 'Kartu',
+  'componentBrowser.category.nav': 'Navigasi',
+  'componentBrowser.category.layout': 'Tata Letak',
+  'componentBrowser.category.feedback': 'Umpan Balik',
+  'componentBrowser.category.data': 'Data',
+  'componentBrowser.category.other': 'Lainnya',
+
+  // ── Variable Picker ──
+  'variablePicker.boundTo': 'Terikat ke --{{name}}',
+  'variablePicker.bindToVariable': 'Ikat ke variabel',
+  'variablePicker.unbind': 'Lepaskan variabel',
+  'variablePicker.noVariables': 'Belum ada variabel {{type}} yang didefinisikan',
+} as const
+
+export default id

@@ -13,10 +13,19 @@ import {
 import pkg from '../../package.json'
 import { handleOpenDocument } from './tools/open-document'
 import { handleBatchGet } from './tools/batch-get'
-import { handleBatchDesign } from './tools/batch-design'
-import { handleGetVariables, handleSetVariables } from './tools/variables'
+import {
+  handleInsertNode,
+  handleUpdateNode,
+  handleDeleteNode,
+  handleMoveNode,
+  handleCopyNode,
+  handleReplaceNode,
+} from './tools/node-crud'
+import { handleGetVariables, handleSetVariables, handleSetThemes } from './tools/variables'
+import { handleImportSvg } from './tools/import-svg'
 import { handleSnapshotLayout } from './tools/snapshot-layout'
 import { handleFindEmptySpace } from './tools/find-empty-space'
+import { handleSaveThemePreset, handleLoadThemePreset, handleListThemePresets } from './tools/theme-presets'
 
 // --- Tool definitions (shared across all Server instances) ---
 
@@ -66,33 +75,166 @@ const TOOL_DEFINITIONS = [
     },
   },
   {
-    name: 'batch_design',
-    description: `Execute design operations on an .op file using a DSL. Each line is one operation:
-- Insert: binding=I(parent, { type: "frame", ... })
-- Copy: binding=C(sourceId, parent, { ...overrides })
-- Update: U(nodeId, { fill: [...] })
-- Replace: binding=R(nodeId, { type: "text", ... })
-- Move: M(nodeId, newParent, index)
-- Delete: D(nodeId)
-
-Bindings can reference earlier results: U(myFrame+"/childId", { ... })
-
-Set postProcess=true to automatically apply role defaults, icon resolution, and sanitization after operations complete.`,
+    name: 'insert_node',
+    description:
+      'Insert a new node into an .op file. The node data is standard JSON (type, name, width, height, fill, children, etc.). When inserting a frame at root level and an empty root frame exists, it will be auto-replaced.',
     inputSchema: {
       type: 'object' as const,
       properties: {
         filePath: { type: 'string', description: 'Absolute path to the .op file' },
-        operations: { type: 'string', description: 'Operations DSL (one operation per line)' },
+        parent: {
+          type: ['string', 'null'] as any,
+          description: 'Parent node ID, or null for root level',
+        },
+        data: {
+          type: 'object',
+          description: 'PenNode data (type, name, width, height, fill, children, ...)',
+        },
         postProcess: {
           type: 'boolean',
-          description: 'Apply post-processing (role defaults, icon resolution, sanitization) after operations. Always use when generating designs.',
+          description:
+            'Apply post-processing (role defaults, icon resolution, sanitization). Always use when generating designs.',
         },
         canvasWidth: {
           type: 'number',
-          description: 'Canvas width for post-processing layout calculations (default 1200, use 375 for mobile). Only used when postProcess=true.',
+          description:
+            'Canvas width for post-processing layout (default 1200, use 375 for mobile).',
         },
       },
-      required: ['filePath', 'operations'],
+      required: ['filePath', 'parent', 'data'],
+    },
+  },
+  {
+    name: 'update_node',
+    description:
+      'Update properties of an existing node in an .op file. Only the provided properties are merged; others remain unchanged.',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        filePath: { type: 'string', description: 'Absolute path to the .op file' },
+        nodeId: { type: 'string', description: 'ID of the node to update' },
+        data: {
+          type: 'object',
+          description: 'Properties to merge into the node (fill, width, name, etc.)',
+        },
+        postProcess: {
+          type: 'boolean',
+          description: 'Apply post-processing after update.',
+        },
+        canvasWidth: {
+          type: 'number',
+          description: 'Canvas width for post-processing layout (default 1200).',
+        },
+      },
+      required: ['filePath', 'nodeId', 'data'],
+    },
+  },
+  {
+    name: 'delete_node',
+    description: 'Delete a node (and all its children) from an .op file.',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        filePath: { type: 'string', description: 'Absolute path to the .op file' },
+        nodeId: { type: 'string', description: 'ID of the node to delete' },
+      },
+      required: ['filePath', 'nodeId'],
+    },
+  },
+  {
+    name: 'move_node',
+    description:
+      'Move a node to a new parent (or root level) in an .op file. Optionally specify insertion index.',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        filePath: { type: 'string', description: 'Absolute path to the .op file' },
+        nodeId: { type: 'string', description: 'ID of the node to move' },
+        parent: {
+          type: ['string', 'null'] as any,
+          description: 'New parent node ID, or null for root level',
+        },
+        index: {
+          type: 'number',
+          description: 'Insertion index within the parent (default: append at end)',
+        },
+      },
+      required: ['filePath', 'nodeId', 'parent'],
+    },
+  },
+  {
+    name: 'copy_node',
+    description:
+      'Deep-copy an existing node (with new IDs) and insert the clone under a parent. Optionally apply property overrides.',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        filePath: { type: 'string', description: 'Absolute path to the .op file' },
+        sourceId: { type: 'string', description: 'ID of the node to copy' },
+        parent: {
+          type: ['string', 'null'] as any,
+          description: 'Parent node ID for the clone, or null for root level',
+        },
+        overrides: {
+          type: 'object',
+          description: 'Properties to override on the cloned node (name, x, y, etc.)',
+        },
+      },
+      required: ['filePath', 'sourceId', 'parent'],
+    },
+  },
+  {
+    name: 'replace_node',
+    description:
+      'Replace a node with entirely new data. The old node is removed and a new node is inserted at the same position.',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        filePath: { type: 'string', description: 'Absolute path to the .op file' },
+        nodeId: { type: 'string', description: 'ID of the node to replace' },
+        data: {
+          type: 'object',
+          description: 'Complete new PenNode data (type, name, width, height, fill, children, ...)',
+        },
+        postProcess: {
+          type: 'boolean',
+          description: 'Apply post-processing after replacement.',
+        },
+        canvasWidth: {
+          type: 'number',
+          description: 'Canvas width for post-processing layout (default 1200).',
+        },
+      },
+      required: ['filePath', 'nodeId', 'data'],
+    },
+  },
+  {
+    name: 'import_svg',
+    description:
+      'Import a local SVG file into an .op document as editable PenNodes. Supports path, rect, circle, ellipse, line, polygon, polyline, and nested groups. No network access required.',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        filePath: { type: 'string', description: 'Absolute path to the .op file' },
+        svgPath: { type: 'string', description: 'Absolute path to a local .svg file' },
+        parent: {
+          type: ['string', 'null'] as any,
+          description: 'Parent node ID, or null/omit for root level',
+        },
+        maxDim: {
+          type: 'number',
+          description: 'Max dimension to scale SVG to (default 400)',
+        },
+        postProcess: {
+          type: 'boolean',
+          description: 'Apply post-processing (role defaults, icon resolution, sanitization).',
+        },
+        canvasWidth: {
+          type: 'number',
+          description: 'Canvas width for post-processing layout (default 1200).',
+        },
+      },
+      required: ['filePath', 'svgPath'],
     },
   },
   {
@@ -117,6 +259,27 @@ Set postProcess=true to automatically apply role defaults, icon resolution, and 
         replace: { type: 'boolean', description: 'Replace all variables instead of merging (default false)' },
       },
       required: ['filePath', 'variables'],
+    },
+  },
+  {
+    name: 'set_themes',
+    description:
+      'Create or update theme axes and their variants in an .op file. Each theme axis (e.g. "Color Scheme") has an array of variant names (e.g. ["Light", "Dark"]). Multiple independent axes are supported. By default merges with existing themes.',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        filePath: { type: 'string', description: 'Absolute path to the .op file' },
+        themes: {
+          type: 'object',
+          description:
+            'Theme axes to set (axis name → variant names array). Example: { "Color": ["Light", "Dark"], "Density": ["Compact", "Comfortable"] }',
+        },
+        replace: {
+          type: 'boolean',
+          description: 'Replace all themes instead of merging (default false)',
+        },
+      },
+      required: ['filePath', 'themes'],
     },
   },
   {
@@ -148,6 +311,42 @@ Set postProcess=true to automatically apply role defaults, icon resolution, and 
       required: ['filePath', 'width', 'height', 'direction'],
     },
   },
+  {
+    name: 'save_theme_preset',
+    description: 'Save the themes and variables from an .op document as a reusable .optheme preset file.',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        filePath: { type: 'string', description: 'Absolute path to the .op file to extract themes from' },
+        presetPath: { type: 'string', description: 'Absolute path for the output .optheme file' },
+        name: { type: 'string', description: 'Display name for the preset (defaults to file name)' },
+      },
+      required: ['filePath', 'presetPath'],
+    },
+  },
+  {
+    name: 'load_theme_preset',
+    description: 'Load a .optheme preset file and merge its themes and variables into an .op document.',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        filePath: { type: 'string', description: 'Absolute path to the .op file to update' },
+        presetPath: { type: 'string', description: 'Absolute path to the .optheme file to load' },
+      },
+      required: ['filePath', 'presetPath'],
+    },
+  },
+  {
+    name: 'list_theme_presets',
+    description: 'List all .optheme preset files in a directory.',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        directory: { type: 'string', description: 'Absolute path to the directory to scan' },
+      },
+      required: ['directory'],
+    },
+  },
 ]
 
 // --- Tool execution handler ---
@@ -158,16 +357,36 @@ async function handleToolCall(name: string, args: any) {
       return JSON.stringify(await handleOpenDocument(args), null, 2)
     case 'batch_get':
       return JSON.stringify(await handleBatchGet(args), null, 2)
-    case 'batch_design':
-      return JSON.stringify(await handleBatchDesign(args), null, 2)
+    case 'insert_node':
+      return JSON.stringify(await handleInsertNode(args), null, 2)
+    case 'update_node':
+      return JSON.stringify(await handleUpdateNode(args), null, 2)
+    case 'delete_node':
+      return JSON.stringify(await handleDeleteNode(args), null, 2)
+    case 'move_node':
+      return JSON.stringify(await handleMoveNode(args), null, 2)
+    case 'copy_node':
+      return JSON.stringify(await handleCopyNode(args), null, 2)
+    case 'replace_node':
+      return JSON.stringify(await handleReplaceNode(args), null, 2)
+    case 'import_svg':
+      return JSON.stringify(await handleImportSvg(args), null, 2)
     case 'get_variables':
       return JSON.stringify(await handleGetVariables(args), null, 2)
     case 'set_variables':
       return JSON.stringify(await handleSetVariables(args), null, 2)
+    case 'set_themes':
+      return JSON.stringify(await handleSetThemes(args), null, 2)
     case 'snapshot_layout':
       return JSON.stringify(await handleSnapshotLayout(args), null, 2)
     case 'find_empty_space':
       return JSON.stringify(await handleFindEmptySpace(args), null, 2)
+    case 'save_theme_preset':
+      return JSON.stringify(await handleSaveThemePreset(args), null, 2)
+    case 'load_theme_preset':
+      return JSON.stringify(await handleLoadThemePreset(args), null, 2)
+    case 'list_theme_presets':
+      return JSON.stringify(await handleListThemePresets(args), null, 2)
     default:
       throw new Error(`Unknown tool: ${name}`)
   }
@@ -229,8 +448,8 @@ function startHttpServer(server: Server, port: number): void {
     }
   })
 
-  httpServer.listen(port, '127.0.0.1', () => {
-    console.error(`OpenPencil MCP server listening on http://127.0.0.1:${port}/mcp`)
+  httpServer.listen(port, '0.0.0.0', () => {
+    console.error(`OpenPencil MCP server listening on http://0.0.0.0:${port}/mcp`)
   })
 }
 

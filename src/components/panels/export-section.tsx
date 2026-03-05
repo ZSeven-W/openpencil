@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useCanvasStore } from '@/stores/canvas-store'
 import { useDocumentStore } from '@/stores/document-store'
 import { exportLayerToRaster, type RasterFormat } from '@/utils/export'
@@ -24,6 +25,7 @@ interface ExportSectionProps {
 }
 
 export default function ExportSection({ nodeId, nodeName }: ExportSectionProps) {
+  const { t } = useTranslation()
   const [scale, setScale] = useState('1')
   const [format, setFormat] = useState('png')
   const fabricCanvas = useCanvasStore((s) => s.fabricCanvas)
@@ -51,7 +53,7 @@ export default function ExportSection({ nodeId, nodeName }: ExportSectionProps) 
 
   return (
     <div className="space-y-1.5">
-      <SectionHeader title="Export" />
+      <SectionHeader title={t('export.title')} />
       <div className="flex gap-1.5">
         <Select value={scale} onValueChange={setScale}>
           <SelectTrigger className="flex-1 h-6 text-[11px]">
@@ -84,7 +86,7 @@ export default function ExportSection({ nodeId, nodeName }: ExportSectionProps) 
         className="w-full text-xs"
         onClick={handleExport}
       >
-        Export layer
+        {t('export.exportLayer')}
       </Button>
     </div>
   )

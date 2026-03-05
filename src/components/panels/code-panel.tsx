@@ -1,6 +1,7 @@
 import { useState, useMemo, useCallback, useRef, useEffect } from 'react'
 import { Copy, Check, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { useTranslation } from 'react-i18next'
 import { Button } from '@/components/ui/button'
 import { useCanvasStore } from '@/stores/canvas-store'
 import { useDocumentStore, getActivePageChildren } from '@/stores/document-store'
@@ -13,6 +14,7 @@ import type { PenNode } from '@/types/pen'
 type CodeTab = 'react' | 'html' | 'css-vars'
 
 export default function CodePanel({ onClose }: { onClose: () => void }) {
+  const { t } = useTranslation()
   const [activeTab, setActiveTab] = useState<CodeTab>('react')
   const [copied, setCopied] = useState(false)
   const copyTimeoutRef = useRef<ReturnType<typeof setTimeout>>(null)
@@ -75,10 +77,10 @@ export default function CodePanel({ onClose }: { onClose: () => void }) {
     }
   }, [])
 
-  const tabs: { key: CodeTab; label: string }[] = [
-    { key: 'react', label: 'React + Tailwind' },
-    { key: 'html', label: 'HTML + CSS' },
-    { key: 'css-vars', label: 'CSS Variables' },
+  const tabs: { key: CodeTab; labelKey: string }[] = [
+    { key: 'react', labelKey: 'code.reactTailwind' },
+    { key: 'html', labelKey: 'code.htmlCss' },
+    { key: 'css-vars', labelKey: 'code.cssVariables' },
   ]
 
   return (
@@ -98,7 +100,7 @@ export default function CodePanel({ onClose }: { onClose: () => void }) {
                   : 'text-muted-foreground hover:text-foreground',
               )}
             >
-              {tab.label}
+              {t(tab.labelKey)}
             </button>
           ))}
         </div>
@@ -107,7 +109,7 @@ export default function CodePanel({ onClose }: { onClose: () => void }) {
             variant="ghost"
             size="icon-sm"
             onClick={handleCopy}
-            title="Copy to clipboard"
+            title={t('code.copyClipboard')}
           >
             {copied ? <Check size={14} className="text-green-400" /> : <Copy size={14} />}
           </Button>
@@ -115,7 +117,7 @@ export default function CodePanel({ onClose }: { onClose: () => void }) {
             variant="ghost"
             size="icon-sm"
             onClick={onClose}
-            title="Close code panel"
+            title={t('code.closeCodePanel')}
           >
             <X size={14} />
           </Button>
@@ -133,10 +135,10 @@ export default function CodePanel({ onClose }: { onClose: () => void }) {
       <div className="h-6 flex items-center px-3 border-t border-border shrink-0">
         <span className="text-[10px] text-muted-foreground">
           {activeTab === 'css-vars'
-            ? 'Generating CSS variables for entire document'
+            ? t('code.genCssVars')
             : selectedIds.length > 0
-              ? `Generating code for ${selectedIds.length} selected element${selectedIds.length > 1 ? 's' : ''}`
-              : 'Generating code for entire document'}
+              ? t('code.genSelected', { count: selectedIds.length })
+              : t('code.genDocument')}
         </span>
       </div>
     </div>

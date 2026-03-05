@@ -37,3 +37,40 @@ export async function handleSetVariables(
   await saveDocument(filePath, doc)
   return { variables: doc.variables }
 }
+
+// ---------------------------------------------------------------------------
+// set_themes
+// ---------------------------------------------------------------------------
+
+export interface SetThemesParams {
+  filePath: string
+  themes: Record<string, string[]>
+  replace?: boolean
+}
+
+/**
+ * Create, update, or replace theme axes and their variants.
+ *
+ * Data model: `doc.themes` is `Record<string, string[]>` where
+ *   key = theme axis name (e.g. "Color Scheme")
+ *   value = variant names (e.g. ["Light", "Dark"])
+ *
+ * With `replace: false` (default), provided axes are merged into existing
+ * themes — existing axes not mentioned are preserved.
+ * With `replace: true`, existing themes are fully replaced.
+ */
+export async function handleSetThemes(
+  params: SetThemesParams,
+): Promise<{ themes: Record<string, string[]> }> {
+  const filePath = resolveDocPath(params.filePath)
+  const doc = await openDocument(filePath)
+
+  if (params.replace) {
+    doc.themes = params.themes
+  } else {
+    doc.themes = { ...(doc.themes ?? {}), ...params.themes }
+  }
+
+  await saveDocument(filePath, doc)
+  return { themes: doc.themes }
+}

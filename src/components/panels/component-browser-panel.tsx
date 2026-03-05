@@ -1,6 +1,7 @@
 import { useState, useRef, useCallback, useMemo } from 'react'
 import { X, Search, Upload, Download, Trash2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { useTranslation } from 'react-i18next'
 import { useUIKitStore } from '@/stores/uikit-store'
 import { useDocumentStore } from '@/stores/document-store'
 import { importKitFromFile, exportKit } from '@/uikit/kit-import-export'
@@ -12,19 +13,20 @@ const MIN_HEIGHT = 300
 const DEFAULT_WIDTH = 520
 const DEFAULT_HEIGHT = 460
 
-const CATEGORIES: { value: ComponentCategory | null; label: string }[] = [
-  { value: null, label: 'All' },
-  { value: 'buttons', label: 'Buttons' },
-  { value: 'inputs', label: 'Inputs' },
-  { value: 'cards', label: 'Cards' },
-  { value: 'navigation', label: 'Nav' },
-  { value: 'layout', label: 'Layout' },
-  { value: 'feedback', label: 'Feedback' },
-  { value: 'data-display', label: 'Data' },
-  { value: 'other', label: 'Other' },
+const CATEGORIES: { value: ComponentCategory | null; labelKey: string }[] = [
+  { value: null, labelKey: 'componentBrowser.category.all' },
+  { value: 'buttons', labelKey: 'componentBrowser.category.buttons' },
+  { value: 'inputs', labelKey: 'componentBrowser.category.inputs' },
+  { value: 'cards', labelKey: 'componentBrowser.category.cards' },
+  { value: 'navigation', labelKey: 'componentBrowser.category.nav' },
+  { value: 'layout', labelKey: 'componentBrowser.category.layout' },
+  { value: 'feedback', labelKey: 'componentBrowser.category.feedback' },
+  { value: 'data-display', labelKey: 'componentBrowser.category.data' },
+  { value: 'other', labelKey: 'componentBrowser.category.other' },
 ]
 
 export default function ComponentBrowserPanel() {
+  const { t } = useTranslation()
   const kits = useUIKitStore((s) => s.kits)
   const searchQuery = useUIKitStore((s) => s.searchQuery)
   const setSearchQuery = useUIKitStore((s) => s.setSearchQuery)
@@ -131,13 +133,13 @@ export default function ComponentBrowserPanel() {
 
       {/* Header */}
       <div className="relative h-10 flex items-center justify-between px-3 border-b border-border shrink-0">
-        <span className="text-sm font-medium text-foreground">UIKit Browser</span>
+        <span className="text-sm font-medium text-foreground">{t('componentBrowser.title')}</span>
         <div className="flex items-center gap-1">
           <button
             type="button"
             onClick={handleExport}
             className="inline-flex items-center justify-center h-6 w-6 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
-            title="Export kit"
+            title={t('componentBrowser.exportKit')}
           >
             <Download size={14} />
           </button>
@@ -145,7 +147,7 @@ export default function ComponentBrowserPanel() {
             type="button"
             onClick={handleImport}
             className="inline-flex items-center justify-center h-6 w-6 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
-            title="Import kit"
+            title={t('componentBrowser.importKit')}
           >
             <Upload size={14} />
           </button>
@@ -163,16 +165,16 @@ export default function ComponentBrowserPanel() {
       <div className="relative shrink-0">
         {/* Kit selector row */}
         <div className="flex items-center gap-1.5 px-3 py-1.5 border-b border-border">
-          <span className="text-xs text-muted-foreground shrink-0">Kit:</span>
+          <span className="text-xs text-muted-foreground shrink-0">{t('componentBrowser.kit')}</span>
           <select
             value={activeKitId ?? ''}
             onChange={(e) => setActiveKitId(e.target.value || null)}
             className="text-xs bg-transparent border border-border rounded px-1.5 py-0.5 text-foreground outline-none min-w-0"
           >
-            <option value="">All</option>
+            <option value="">{t('componentBrowser.all')}</option>
             {kits.map((k) => (
               <option key={k.id} value={k.id}>
-                {k.name}{k.builtIn ? '' : ' (imported)'}
+                {k.name}{k.builtIn ? '' : ` ${t('componentBrowser.imported')}`}
               </option>
             ))}
           </select>
@@ -188,7 +190,7 @@ export default function ComponentBrowserPanel() {
               >
                 <span className="text-xs text-foreground truncate flex-1">{kit.name}</span>
                 <span className="text-[10px] text-muted-foreground shrink-0">
-                  {kit.components.length} components
+                  {kit.components.length} {t('componentBrowser.components')}
                 </span>
                 {confirmDeleteKitId === kit.id ? (
                   <div className="flex items-center gap-1 shrink-0">
@@ -197,14 +199,14 @@ export default function ComponentBrowserPanel() {
                       onClick={() => handleDeleteKit(kit.id)}
                       className="text-[10px] px-1.5 py-0.5 rounded bg-destructive text-destructive-foreground hover:bg-destructive/90 transition-colors"
                     >
-                      Delete
+                      {t('common.delete')}
                     </button>
                     <button
                       type="button"
                       onClick={() => setConfirmDeleteKitId(null)}
                       className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground hover:text-foreground transition-colors"
                     >
-                      Cancel
+                      {t('common.cancel')}
                     </button>
                   </div>
                 ) : (
@@ -212,7 +214,7 @@ export default function ComponentBrowserPanel() {
                     type="button"
                     onClick={() => setConfirmDeleteKitId(kit.id)}
                     className="inline-flex items-center justify-center h-5 w-5 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors shrink-0"
-                    title={`Delete ${kit.name}`}
+                    title={t('componentBrowser.deleteKit', { name: kit.name })}
                   >
                     <Trash2 size={12} />
                   </button>
@@ -226,7 +228,7 @@ export default function ComponentBrowserPanel() {
         <div className="flex items-center gap-1 px-3 py-1.5 border-b border-border overflow-x-auto">
           {visibleCategories.map((cat) => (
             <button
-              key={cat.label}
+              key={cat.labelKey}
               type="button"
               onClick={() => setActiveCategory(cat.value)}
               className={cn(
@@ -236,7 +238,7 @@ export default function ComponentBrowserPanel() {
                   : 'bg-muted text-muted-foreground hover:text-foreground',
               )}
             >
-              {cat.label}
+              {t(cat.labelKey)}
             </button>
           ))}
         </div>
@@ -248,7 +250,7 @@ export default function ComponentBrowserPanel() {
           <Search size={14} className="text-muted-foreground shrink-0" />
           <input
             type="text"
-            placeholder="Search components..."
+            placeholder={t('componentBrowser.searchComponents')}
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground outline-none"

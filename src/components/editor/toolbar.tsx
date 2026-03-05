@@ -9,6 +9,7 @@ import {
   Braces,
   LayoutGrid,
 } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import ToolButton from './tool-button'
 import ShapeToolDropdown from './shape-tool-dropdown'
 import { useCanvasStore } from '@/stores/canvas-store'
@@ -26,6 +27,7 @@ import {
 import IconPickerDialog from '@/components/shared/icon-picker-dialog'
 
 export default function Toolbar() {
+  const { t } = useTranslation()
   const canUndo = useHistoryStore((s) => s.undoStack.length > 0)
   const canRedo = useHistoryStore((s) => s.redoStack.length > 0)
   const variablesPanelOpen = useCanvasStore((s) => s.variablesPanelOpen)
@@ -168,7 +170,7 @@ export default function Toolbar() {
       <ToolButton
         tool="select"
         icon={<MousePointer2 size={20} strokeWidth={1.5} />}
-        label="Select"
+        label={t('toolbar.select')}
         shortcut="V"
       />
       <ShapeToolDropdown
@@ -178,19 +180,19 @@ export default function Toolbar() {
       <ToolButton
         tool="text"
         icon={<Type size={20} strokeWidth={1.5} />}
-        label="Text"
+        label={t('toolbar.text')}
         shortcut="T"
       />
       <ToolButton
         tool="frame"
         icon={<Frame size={20} strokeWidth={1.5} />}
-        label="Frame"
+        label={t('toolbar.frame')}
         shortcut="F"
       />
       <ToolButton
         tool="hand"
         icon={<Hand size={20} strokeWidth={1.5} />}
-        label="Hand"
+        label={t('toolbar.hand')}
         shortcut="H"
       />
 
@@ -209,7 +211,7 @@ export default function Toolbar() {
           </Button>
         </TooltipTrigger>
         <TooltipContent side="right">
-          Undo
+          {t('toolbar.undo')}
           <kbd className="ml-1.5 inline-flex h-4 items-center rounded border border-border/50 bg-muted px-1 font-mono text-[10px] text-muted-foreground">
             {'\u2318'}Z
           </kbd>
@@ -227,7 +229,7 @@ export default function Toolbar() {
           </Button>
         </TooltipTrigger>
         <TooltipContent side="right">
-          Redo
+          {t('toolbar.redo')}
           <kbd className="ml-1.5 inline-flex h-4 items-center rounded border border-border/50 bg-muted px-1 font-mono text-[10px] text-muted-foreground">
             {'\u2318\u21e7'}Z
           </kbd>
@@ -242,7 +244,7 @@ export default function Toolbar() {
           <button
             type="button"
             onClick={toggleVariablesPanel}
-            aria-label="Variables"
+            aria-label={t('toolbar.variables')}
             aria-pressed={variablesPanelOpen}
             className={`inline-flex items-center justify-center h-8 min-w-8 px-1.5 rounded-lg transition-colors [&_svg]:size-5 [&_svg]:shrink-0 ${
               variablesPanelOpen
@@ -254,7 +256,7 @@ export default function Toolbar() {
           </button>
         </TooltipTrigger>
         <TooltipContent side="right">
-          Variables
+          {t('toolbar.variables')}
           <kbd className="ml-1.5 inline-flex h-4 items-center rounded border border-border/50 bg-muted px-1 font-mono text-[10px] text-muted-foreground">
             {'\u2318\u21e7'}V
           </kbd>
@@ -267,7 +269,7 @@ export default function Toolbar() {
           <button
             type="button"
             onClick={toggleBrowser}
-            aria-label="UIKit Browser"
+            aria-label={t('toolbar.uikitBrowser')}
             aria-pressed={browserOpen}
             className={`inline-flex items-center justify-center h-8 min-w-8 px-1.5 rounded-lg transition-colors [&_svg]:size-5 [&_svg]:shrink-0 ${
               browserOpen
@@ -279,7 +281,7 @@ export default function Toolbar() {
           </button>
         </TooltipTrigger>
         <TooltipContent side="right">
-          UIKit Browser
+          {t('toolbar.uikitBrowser')}
           <kbd className="ml-1.5 inline-flex h-4 items-center rounded border border-border/50 bg-muted px-1 font-mono text-[10px] text-muted-foreground">
             {'\u2318\u21e7'}K
           </kbd>

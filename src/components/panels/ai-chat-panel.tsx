@@ -1,7 +1,8 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
-import { Send, Plus, ChevronDown, ChevronUp, Check, MessageSquare, Loader2, Paperclip, X, Square } from 'lucide-react'
+import { Send, Plus, ChevronDown, ChevronUp, Check, MessageSquare, Loader2, Paperclip, X, Square, Zap } from 'lucide-react'
 import { nanoid } from 'nanoid'
 import { cn } from '@/lib/utils'
+import { useTranslation } from 'react-i18next'
 import { Button } from '@/components/ui/button'
 import { useAIStore } from '@/stores/ai-store'
 import type { PanelCorner } from '@/stores/ai-store'
@@ -26,19 +27,19 @@ const PROVIDER_ICON: Record<AIProviderType, typeof ClaudeLogo> = {
 
 const QUICK_ACTIONS = [
   {
-    label: 'Design a mobile login screen',
+    labelKey: 'ai.quickAction.loginScreen',
     prompt: 'Design a modern mobile login screen with email input, password input, login button, and social login options',
   },
   {
-    label: 'Create a product card component',
+    labelKey: 'ai.quickAction.productCard',
     prompt: 'Create a product card with an image placeholder, title, price, and buy button',
   },
   {
-    label: 'Design a bottom navigation bar',
+    labelKey: 'ai.quickAction.bottomNav',
     prompt: 'Design a mobile app bottom navigation bar with 5 tabs: Home, Search, Add, Messages, Profile',
   },
   {
-    label: 'Suggest a color palette for my app',
+    labelKey: 'ai.quickAction.colorPalette',
     prompt: 'Suggest a modern color palette for a pet care app',
   },
 ]
@@ -59,6 +60,39 @@ function resolveNextModel(
   if (models.some((m) => m.value === currentModel)) return currentModel
   if (models.some((m) => m.value === preferredModel)) return preferredModel
   return models[0].value
+}
+
+/**
+ * Compact concurrency selector — cycles 1x through 6x on click.
+ * Only visually prominent when concurrency > 1.
+ */
+function ConcurrencyButton() {
+  const concurrency = useAIStore((s) => s.concurrency)
+  const setConcurrency = useAIStore((s) => s.setConcurrency)
+  const isStreaming = useAIStore((s) => s.isStreaming)
+
+  const handleClick = () => {
+    // Cycle: 1 → 2 → 3 → 4 → 5 → 6 → 1
+    setConcurrency(concurrency >= 6 ? 1 : concurrency + 1)
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={handleClick}
+      disabled={isStreaming}
+      title={`Parallel sub-agents: ${concurrency}x (click to cycle)`}
+      className={cn(
+        'flex items-center gap-0.5 text-[10px] px-1.5 py-0.5 rounded-md transition-colors shrink-0',
+        concurrency > 1
+          ? 'text-primary bg-primary/10 hover:bg-primary/20'
+          : 'text-muted-foreground/50 hover:text-muted-foreground hover:bg-secondary',
+      )}
+    >
+      <Zap size={10} />
+      <span>{concurrency}x</span>
+    </button>
+  )
 }
 
 /**
@@ -91,6 +125,7 @@ export function AIChatMinimizedBar() {
  * Only renders when NOT minimized.
  */
 export default function AIChatPanel() {
+  const { t } = useTranslation()
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
   const panelRef = useRef<HTMLDivElement>(null)
@@ -456,7 +491,7 @@ export default function AIChatPanel() {
             variant="ghost"
             size="icon-sm"
             onClick={toggleMinimize}
-            title="Collapse"
+            title={t('ai.collapse')}
           >
             <ChevronDown size={14} />
           </Button>
@@ -469,7 +504,7 @@ export default function AIChatPanel() {
           variant="ghost"
           size="icon-sm"
           onClick={clearMessages}
-          title="New chat"
+          title={t('ai.newChat')}
         >
           <Plus size={14} />
         </Button>
@@ -480,12 +515,12 @@ export default function AIChatPanel() {
         {messages.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-4">
             <p className="text-xs text-muted-foreground mb-4">
-              Try an example to design...
+              {t('ai.tryExample')}
             </p>
             <div className="flex flex-col gap-2 w-full px-2">
               {QUICK_ACTIONS.map((action) => (
                 <button
-                  key={action.label}
+                  key={action.labelKey}
                   type="button"
                   onClick={() => handleSend(action.prompt)}
                   className={cn(
@@ -495,12 +530,12 @@ export default function AIChatPanel() {
                       : 'hover:bg-secondary hover:text-foreground',
                   )}
                 >
-                  {action.label}
+                  {t(action.labelKey)}
                 </button>
               ))}
             </div>
             <p className="text-[10px] text-muted-foreground/50 mt-5">
-              Tip: Select elements on canvas before chatting for context.
+              {t('ai.tipSelectElements')}
             </p>
           </div>
         ) : (
@@ -559,7 +594,7 @@ export default function AIChatPanel() {
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={handleKeyDown}
-          placeholder={isStreaming ? 'Generating...' : 'Design with Agent...'}
+          placeholder={isStreaming ? t('ai.generating') : t('ai.designWithAgent')}
           disabled={isStreaming}
           rows={2}
           className="w-full bg-transparent text-sm text-foreground placeholder-muted-foreground px-3.5 pt-3 pb-2 resize-none outline-none max-h-28 min-h-[52px]"
@@ -584,24 +619,27 @@ export default function AIChatPanel() {
               }
               return null
             })()}
-            <span className="truncate max-w-[160px]">
+            <span className="truncate max-w-[100px]">
               {isLoadingModels
-                ? 'Loading models...'
+                ? t('ai.loadingModels')
                 : noAvailableModels
-                  ? 'No models connected'
+                  ? t('ai.noModelsConnected')
                   : availableModels.find((m) => m.value === model)?.displayName ?? model}
             </span>
             <ChevronUp size={10} className="shrink-0" />
           </button>
 
           <div className="flex items-center gap-1 w-full">
+            {/* Concurrency selector */}
+            <ConcurrencyButton />
+
             <span
               className={cn(
                 'ml-1 shrink-0 whitespace-nowrap text-[10px] select-none',
                 selectedIds.length > 0 ? 'text-muted-foreground/80' : 'text-muted-foreground/40',
               )}
             >
-              {selectedIds.length} selected
+              {t('common.selected', { count: selectedIds.length })}
             </span>
 
             {/* Action icons */}
@@ -611,7 +649,7 @@ export default function AIChatPanel() {
                 size="icon-sm"
                 onClick={() => fileInputRef.current?.click()}
                 disabled={isStreaming || pendingAttachments.length >= 4}
-                title="Attach image"
+                title={t('ai.attachImage')}
                 className="shrink-0 rounded-lg h-7 w-7"
               >
                 <Paperclip size={13} />
@@ -621,8 +659,8 @@ export default function AIChatPanel() {
                   variant="ghost"
                   size="icon-sm"
                   onClick={stopStreaming}
-                  title="Stop generating"
-                  className="shrink-0 rounded-lg h-7 w-7 bg-foreground text-background hover:bg-foreground/90"
+                  title={t('ai.stopGenerating')}
+                  className="shrink-0 rounded-lg h-7 w-7 text-destructive hover:text-destructive hover:scale-110 active:scale-95 transition-all duration-150"
                 >
                   <Square size={10} fill="currentColor" />
                 </Button>
@@ -632,12 +670,12 @@ export default function AIChatPanel() {
                   size="icon-sm"
                   onClick={() => handleSend()}
                   disabled={!canSendMessage}
-                  title="Send message"
+                  title={t('ai.sendMessage')}
                   className={cn(
-                    'shrink-0 rounded-lg h-7 w-7',
+                    'shrink-0 rounded-lg h-7 w-7 transition-all duration-150',
                     canSendMessage
-                      ? 'bg-foreground text-background hover:bg-foreground/90'
-                      : '',
+                      ? 'text-foreground hover:text-primary hover:scale-110 active:scale-95'
+                      : 'text-muted-foreground/30',
                   )}
                 >
                   <Send size={13} />
@@ -684,7 +722,7 @@ export default function AIChatPanel() {
                             <span className="font-medium">{m.displayName}</span>
                             {idx === 0 && (
                               <span className="text-[9px] text-muted-foreground bg-secondary px-1 py-0.5 rounded ml-auto">
-                                Best
+                                {t('common.best')}
                               </span>
                             )}
                           </button>

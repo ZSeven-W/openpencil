@@ -17,6 +17,7 @@ import {
   AlignVerticalJustifyEnd,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { useTranslation } from 'react-i18next'
 import type { PenNode, TextNode } from '@/types/pen'
 
 interface TextSectionProps {
@@ -34,26 +35,26 @@ const FONT_OPTIONS = [
 ]
 
 const WEIGHT_OPTIONS = [
-  { value: '100', label: 'Thin' },
-  { value: '300', label: 'Light' },
-  { value: '400', label: 'Regular' },
-  { value: '500', label: 'Medium' },
-  { value: '600', label: 'Semibold' },
-  { value: '700', label: 'Bold' },
-  { value: '900', label: 'Black' },
+  { value: '100', labelKey: 'text.weight.thin' },
+  { value: '300', labelKey: 'text.weight.light' },
+  { value: '400', labelKey: 'text.weight.regular' },
+  { value: '500', labelKey: 'text.weight.medium' },
+  { value: '600', labelKey: 'text.weight.semibold' },
+  { value: '700', labelKey: 'text.weight.bold' },
+  { value: '900', labelKey: 'text.weight.black' },
 ]
 
 const H_ALIGN_OPTIONS = [
-  { value: 'left', icon: AlignLeft, label: 'Align left' },
-  { value: 'center', icon: AlignCenter, label: 'Align center' },
-  { value: 'right', icon: AlignRight, label: 'Align right' },
-  { value: 'justify', icon: AlignJustify, label: 'Justify' },
+  { value: 'left', icon: AlignLeft, labelKey: 'text.alignLeft' },
+  { value: 'center', icon: AlignCenter, labelKey: 'text.alignCenter' },
+  { value: 'right', icon: AlignRight, labelKey: 'text.alignRight' },
+  { value: 'justify', icon: AlignJustify, labelKey: 'text.justify' },
 ]
 
 const V_ALIGN_OPTIONS = [
-  { value: 'top', icon: AlignVerticalJustifyStart, label: 'Top' },
-  { value: 'middle', icon: AlignVerticalJustifyCenter, label: 'Middle' },
-  { value: 'bottom', icon: AlignVerticalJustifyEnd, label: 'Bottom' },
+  { value: 'top', icon: AlignVerticalJustifyStart, labelKey: 'text.top' },
+  { value: 'middle', icon: AlignVerticalJustifyCenter, labelKey: 'text.middle' },
+  { value: 'bottom', icon: AlignVerticalJustifyEnd, labelKey: 'text.bottom' },
 ]
 
 const LineHeightIcon = (
@@ -99,6 +100,7 @@ export default function TextSection({
   node,
   onUpdate,
 }: TextSectionProps) {
+  const { t } = useTranslation()
   const fontFamily = node.fontFamily ?? 'Inter, sans-serif'
   const fontSize = node.fontSize ?? 16
   const fontWeight = String(node.fontWeight ?? '400')
@@ -109,7 +111,7 @@ export default function TextSection({
 
   return (
     <div className="space-y-1.5">
-      <SectionHeader title="Typography" />
+      <SectionHeader title={t('text.typography')} />
 
       {/* Font family */}
       <Select
@@ -144,7 +146,7 @@ export default function TextSection({
           <SelectContent>
             {WEIGHT_OPTIONS.map((opt) => (
               <SelectItem key={opt.value} value={opt.value}>
-                {opt.label}
+                {t(opt.labelKey)}
               </SelectItem>
             ))}
           </SelectContent>
@@ -162,8 +164,8 @@ export default function TextSection({
 
       {/* Line height + Letter spacing */}
       <div className="flex items-center justify-between text-[9px] text-muted-foreground px-0.5">
-        <span>Line height</span>
-        <span>Letter spacing</span>
+        <span>{t('text.lineHeight')}</span>
+        <span>{t('text.letterSpacing')}</span>
       </div>
       <div className="grid grid-cols-2 gap-1">
         <NumberInput
@@ -187,9 +189,9 @@ export default function TextSection({
 
       {/* Horizontal alignment */}
       <div className="space-y-0.5">
-        <span className="text-[10px] text-muted-foreground">Horizontal</span>
+        <span className="text-[10px] text-muted-foreground">{t('text.horizontal')}</span>
         <div className="flex items-center gap-0.5">
-          {H_ALIGN_OPTIONS.map(({ value, icon, label }) => (
+          {H_ALIGN_OPTIONS.map(({ value, icon, labelKey }) => (
             <AlignButton
               key={value}
               active={textAlign === value}
@@ -199,7 +201,7 @@ export default function TextSection({
                 } as Partial<PenNode>)
               }
               icon={icon}
-              label={label}
+              label={t(labelKey)}
             />
           ))}
         </div>
@@ -207,9 +209,9 @@ export default function TextSection({
 
       {/* Vertical alignment */}
       <div className="space-y-0.5">
-        <span className="text-[10px] text-muted-foreground">Vertical</span>
+        <span className="text-[10px] text-muted-foreground">{t('text.vertical')}</span>
         <div className="flex items-center gap-0.5">
-          {V_ALIGN_OPTIONS.map(({ value, icon, label }) => (
+          {V_ALIGN_OPTIONS.map(({ value, icon, labelKey }) => (
             <AlignButton
               key={value}
               active={textAlignVertical === value}
@@ -219,7 +221,7 @@ export default function TextSection({
                 } as Partial<PenNode>)
               }
               icon={icon}
-              label={label}
+              label={t(labelKey)}
             />
           ))}
         </div>

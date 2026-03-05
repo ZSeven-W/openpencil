@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next'
 import NumberInput from '@/components/shared/number-input'
 import type { PenNode } from '@/types/pen'
 import { nodeRenderInfo } from '@/canvas/use-canvas-sync'
@@ -18,6 +19,7 @@ export default function SizeSection({
   cornerRadius,
   hideWH,
 }: SizeSectionProps) {
+  const { t } = useTranslation()
   const info = nodeRenderInfo.get(node.id)
   const offsetX = info?.parentOffsetX ?? 0
   const offsetY = info?.parentOffsetY ?? 0
@@ -44,7 +46,7 @@ export default function SizeSection({
   return (
     <div className="space-y-3">
     <span className=" text-[11px] font-medium text-foreground ">
-          Position
+          {t('size.position')}
       </span>
     <div className="grid grid-cols-2 gap-1">
       
