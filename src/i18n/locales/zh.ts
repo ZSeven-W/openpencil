@@ -1,0 +1,360 @@
+import type { TranslationKeys } from './en'
+
+const zh: TranslationKeys = {
+  // ── Common ──
+  'common.rename': '重命名',
+  'common.duplicate': '复制',
+  'common.delete': '删除',
+  'common.cancel': '取消',
+  'common.save': '保存',
+  'common.close': '关闭',
+  'common.connect': '连接',
+  'common.disconnect': '断开连接',
+  'common.import': '导入',
+  'common.export': '导出',
+  'common.name': '名称',
+  'common.untitled': '未命名',
+  'common.best': '最佳',
+  'common.selected': '已选择 {{count}} 个',
+
+  // ── Toolbar ──
+  'toolbar.select': '选择',
+  'toolbar.text': '文本',
+  'toolbar.frame': '画框',
+  'toolbar.hand': '抓手',
+  'toolbar.undo': '撤销',
+  'toolbar.redo': '重做',
+  'toolbar.variables': '变量',
+  'toolbar.uikitBrowser': 'UIKit 浏览器',
+
+  // ── Shapes ──
+  'shapes.rectangle': '矩形',
+  'shapes.ellipse': '椭圆',
+  'shapes.line': '线条',
+  'shapes.icon': '图标',
+  'shapes.importImageSvg': '导入图片或 SVG\u2026',
+  'shapes.pen': '钢笔',
+  'shapes.shapeTools': '形状工具',
+  'shapes.moreShapeTools': '更多形状工具',
+
+  // ── Top Bar ──
+  'topbar.hideLayers': '隐藏图层',
+  'topbar.showLayers': '显示图层',
+  'topbar.new': '新建',
+  'topbar.open': '打开',
+  'topbar.save': '保存',
+  'topbar.importFigma': '导入 Figma',
+  'topbar.lightMode': '浅色模式',
+  'topbar.darkMode': '深色模式',
+  'topbar.fullscreen': '全屏',
+  'topbar.exitFullscreen': '退出全屏',
+  'topbar.edited': '— 已编辑',
+  'topbar.agentsAndMcp': 'Agents 与 MCP',
+  'topbar.setupAgentsMcp': '设置 Agents 与 MCP',
+  'topbar.connected': '已连接',
+  'topbar.agentStatus': '{{agents}} 个 Agent{{agentSuffix}} · {{mcp}} 个 MCP',
+
+  // ── Pages ──
+  'pages.title': '页面',
+  'pages.addPage': '添加页面',
+  'pages.moveUp': '上移',
+  'pages.moveDown': '下移',
+
+  // ── Status Bar ──
+  'statusbar.zoomOut': '缩小',
+  'statusbar.zoomIn': '放大',
+  'statusbar.resetZoom': '重置缩放',
+
+  // ── Updater ──
+  'updater.softwareUpdate': '软件更新',
+  'updater.dismiss': '关闭',
+  'updater.current': '当前版本',
+  'updater.latest': '最新版本',
+  'updater.unknown': '未知',
+  'updater.checking': '检查中...',
+  'updater.downloadProgress': '下载进度',
+  'updater.checkAgain': '再次检查',
+  'updater.restartInstall': '重启并安装',
+  'updater.installing': '安装中...',
+  'updater.releaseDate': '发布日期：{{date}}',
+  'updater.restartHint': '重启以应用更新。重启通常需要 10-15 秒。',
+  'updater.unknownError': '未知更新错误。',
+  'updater.title.checking': '正在检查更新',
+  'updater.title.available': '发现新版本',
+  'updater.title.downloading': '正在下载更新',
+  'updater.title.downloaded': '准备安装',
+  'updater.title.error': '更新失败',
+  'updater.subtitle.checking': '正在查找最新版本...',
+  'updater.subtitle.available': '版本 {{version}} 已可用。',
+  'updater.subtitle.availableGeneric': '有新版本可用。',
+  'updater.subtitle.downloading': '版本 {{version}} 正在后台下载。',
+  'updater.subtitle.downloadingGeneric': '正在后台下载更新包。',
+  'updater.subtitle.downloaded': '版本 {{version}} 已下载完成。',
+  'updater.subtitle.downloadedGeneric': '更新已下载完成。',
+  'updater.subtitle.error': '无法检查或下载更新。',
+
+  // ── Layers ──
+  'layers.title': '图层',
+  'layers.empty': '暂无图层。使用工具栏绘制形状。',
+
+  // ── Layer Context Menu ──
+  'layerMenu.groupSelection': '编组选中项',
+  'layerMenu.createComponent': '创建组件',
+  'layerMenu.detachComponent': '分离组件',
+  'layerMenu.detachInstance': '分离实例',
+  'layerMenu.toggleLock': '切换锁定',
+  'layerMenu.toggleVisibility': '切换可见性',
+
+  // ── Property Panel ──
+  'property.createComponent': '创建组件',
+  'property.detachComponent': '分离组件',
+  'property.goToComponent': '跳转到组件',
+  'property.detachInstance': '分离实例',
+
+  // ── Fill ──
+  'fill.title': '填充',
+  'fill.solid': '纯色',
+  'fill.linear': '线性渐变',
+  'fill.radial': '径向渐变',
+  'fill.stops': '色标',
+  'fill.angle': '角度',
+
+  // ── Stroke ──
+  'stroke.title': '描边',
+
+  // ── Appearance ──
+  'appearance.layer': '图层',
+  'appearance.opacity': '不透明度',
+
+  // ── Layout ──
+  'layout.flexLayout': '弹性布局',
+  'layout.freedom': '自由（无布局）',
+  'layout.vertical': '垂直布局',
+  'layout.horizontal': '水平布局',
+  'layout.alignment': '对齐',
+  'layout.gap': '间距',
+  'layout.spaceBetween': '两端对齐',
+  'layout.spaceAround': '均匀分布',
+  'layout.dimensions': '尺寸',
+  'layout.fillWidth': '填充宽度',
+  'layout.fillHeight': '填充高度',
+  'layout.hugWidth': '适应宽度',
+  'layout.hugHeight': '适应高度',
+  'layout.clipContent': '裁剪内容',
+
+  // ── Padding ──
+  'padding.title': '内边距',
+  'padding.paddingMode': '内边距模式',
+  'padding.paddingValues': '内边距值',
+  'padding.oneValue': '四边统一值',
+  'padding.horizontalVertical': '水平/垂直',
+  'padding.topRightBottomLeft': '上/右/下/左',
+
+  // ── Typography ──
+  'text.typography': '排版',
+  'text.lineHeight': '行高',
+  'text.letterSpacing': '字间距',
+  'text.horizontal': '水平',
+  'text.vertical': '垂直',
+  'text.alignLeft': '左对齐',
+  'text.alignCenter': '居中对齐',
+  'text.alignRight': '右对齐',
+  'text.justify': '两端对齐',
+  'text.top': '顶部',
+  'text.middle': '居中',
+  'text.bottom': '底部',
+  'text.weight.thin': '极细',
+  'text.weight.light': '细体',
+  'text.weight.regular': '常规',
+  'text.weight.medium': '中等',
+  'text.weight.semibold': '半粗',
+  'text.weight.bold': '粗体',
+  'text.weight.black': '极粗',
+
+  // ── Text Layout ──
+  'textLayout.title': '布局',
+  'textLayout.dimensions': '尺寸',
+  'textLayout.resizing': '调整方式',
+  'textLayout.autoWidth': '自动 W',
+  'textLayout.autoWidthDesc': '自动宽度 \u2014 文本水平扩展',
+  'textLayout.autoHeight': '自动 H',
+  'textLayout.autoHeightDesc': '自动高度 \u2014 固定宽度，高度自适应',
+  'textLayout.fixed': '固定',
+  'textLayout.fixedDesc': '固定尺寸 \u2014 宽度和高度均固定',
+  'textLayout.fillWidth': '填充宽度',
+  'textLayout.fillHeight': '填充高度',
+
+  // ── Effects ──
+  'effects.title': '效果',
+  'effects.dropShadow': '投影',
+  'effects.blur': '模糊',
+  'effects.spread': '扩展',
+  'effects.color': '颜色',
+
+  // ── Export ──
+  'export.title': '导出',
+  'export.format': '格式',
+  'export.scale': '缩放',
+  'export.selectedOnly': '仅导出选中项',
+  'export.exportFormat': '导出 {{format}}',
+  'export.exportLayer': '导出图层',
+
+  // ── Corner Radius ──
+  'cornerRadius.title': '圆角',
+
+  // ── Size / Position ──
+  'size.position': '位置',
+
+  // ── Icon ──
+  'icon.title': '图标',
+  'icon.searchIcons': '搜索图标...',
+  'icon.noIconsFound': '未找到图标',
+  'icon.typeToSearch': '输入以搜索 Iconify 图标',
+  'icon.iconsCount': '{{count}} 个图标',
+
+  // ── Variables Panel ──
+  'variables.addTheme': '添加主题',
+  'variables.addVariant': '添加变体',
+  'variables.addVariable': '添加变量',
+  'variables.searchVariables': '搜索变量...',
+  'variables.noMatch': '没有匹配的变量',
+  'variables.noDefined': '暂无定义的变量',
+  'variables.closeShortcut': '关闭 (\u2318\u21e7V)',
+  'variables.presets': '预设',
+  'variables.savePreset': '保存为预设…',
+  'variables.loadPreset': '加载预设',
+  'variables.importPreset': '从文件导入…',
+  'variables.exportPreset': '导出到文件…',
+  'variables.presetName': '预设名称',
+  'variables.noPresets': '没有保存的预设',
+
+  // ── AI Chat ──
+  'ai.newChat': '新对话',
+  'ai.collapse': '收起',
+  'ai.tryExample': '尝试一个示例来设计...',
+  'ai.tipSelectElements': '提示：在对话前选中画布上的元素以提供上下文。',
+  'ai.generating': '生成中...',
+  'ai.designWithAgent': '用 Agent 设计...',
+  'ai.attachImage': '附加图片',
+  'ai.stopGenerating': '停止生成',
+  'ai.sendMessage': '发送消息',
+  'ai.loadingModels': '正在加载模型...',
+  'ai.noModelsConnected': '未连接模型',
+  'ai.quickAction.loginScreen': '设计一个移动端登录页面',
+  'ai.quickAction.loginScreenPrompt':
+    '设计一个现代的移动端登录页面，包含邮箱输入框、密码输入框、登录按钮和社交登录选项',
+  'ai.quickAction.productCard': '创建一个产品卡片组件',
+  'ai.quickAction.productCardPrompt':
+    '创建一个包含图片占位符、标题、价格和购买按钮的产品卡片',
+  'ai.quickAction.bottomNav': '设计一个底部导航栏',
+  'ai.quickAction.bottomNavPrompt':
+    '设计一个包含 5 个标签的移动应用底部导航栏：首页、搜索、添加、消息、个人',
+  'ai.quickAction.colorPalette': '为我的应用推荐配色方案',
+  'ai.quickAction.colorPalettePrompt':
+    '为一个宠物护理应用推荐一套现代配色方案',
+
+  // ── Code Panel ──
+  'code.reactTailwind': 'React + Tailwind',
+  'code.htmlCss': 'HTML + CSS',
+  'code.cssVariables': 'CSS Variables',
+  'code.copyClipboard': '复制到剪贴板',
+  'code.closeCodePanel': '关闭代码面板',
+  'code.genCssVars': '正在为整个文档生成 CSS 变量',
+  'code.genSelected': '正在为 {{count}} 个选中元素生成代码',
+  'code.genDocument': '正在为整个文档生成代码',
+
+  // ── Save Dialog ──
+  'save.saveAs': '另存为',
+  'save.fileName': '文件名',
+
+  // ── Agent Settings ──
+  'agents.title': '设置 Agents 与 MCP',
+  'agents.agentsOnCanvas': '画布上的 Agents',
+  'agents.mcpIntegrations': '终端中的 MCP 集成',
+  'agents.transport': '传输方式',
+  'agents.port': '端口',
+  'agents.mcpRestart': 'MCP 集成将在重启终端后生效。',
+  'agents.modelCount': '{{count}} 个模型',
+  'agents.connectionFailed': '连接失败',
+  'agents.serverError': '服务器错误 {{status}}',
+  'agents.failedTo': '{{action}}失败',
+  'agents.failedToMcp': '{{action}} MCP 服务器失败',
+  'agents.failedTransport': '更新传输方式失败',
+  'agents.failedMcpTransport': '更新 MCP 传输方式失败',
+  'agents.claudeCode': 'Claude Code',
+  'agents.claudeModels': 'Claude 模型',
+  'agents.codexCli': 'Codex CLI',
+  'agents.openaiModels': 'OpenAI 模型',
+  'agents.opencode': 'OpenCode',
+  'agents.opencodeDesc': '75+ LLM 提供商',
+  'agents.mcpServer': 'MCP 服务器',
+  'agents.mcpServerStart': '启动',
+  'agents.mcpServerStop': '停止',
+  'agents.mcpServerRunning': '运行中',
+  'agents.mcpServerStopped': '已停止',
+  'agents.mcpLanAccess': '局域网访问',
+  'agents.stdio': 'stdio',
+  'agents.http': 'http',
+  'agents.stdioHttp': 'stdio + http',
+  'agents.autoUpdate': '自动检查更新',
+
+  // ── Figma Import ──
+  'figma.title': '从 Figma 导入',
+  'figma.dropFile': '将 .fig 文件拖放到此处',
+  'figma.orBrowse': '或点击浏览',
+  'figma.exportTip': '从 Figma 导出：文件 \u2192 保存本地副本 (.fig)',
+  'figma.selectFigFile': '请选择一个 .fig 文件',
+  'figma.noPages': '.fig 文件中未找到页面',
+  'figma.parseFailed': '解析 .fig 文件失败',
+  'figma.convertFailed': '转换 Figma 文件失败',
+  'figma.parsing': '正在解析 .fig 文件...',
+  'figma.converting': '正在转换节点...',
+  'figma.selectPage': '此文件包含 {{count}} 个页面。选择要导入的页面：',
+  'figma.layers': '{{count}} 个图层',
+  'figma.importAll': '导入所有页面',
+  'figma.importComplete': '导入完成！',
+  'figma.moreWarnings': '...以及另外 {{count}} 条警告',
+  'figma.tryAgain': '重试',
+  'figma.layoutMode': '布局模式：',
+  'figma.preserveLayout': '保留 Figma 布局',
+  'figma.autoLayout': 'OpenPencil 自动布局',
+  'figma.comingSoon': '即将推出',
+
+  // ── Landing Page ──
+  'landing.open': 'Open',
+  'landing.pencil': 'Pencil',
+  'landing.tagline': '开源矢量设计工具。设计即代码。',
+  'landing.newDesign': '新建设计',
+  'landing.shortcutHint': '按 {{key1}} + {{key2}} 创建新设计',
+
+  // ── 404 ──
+  'notFound.message': '页面未找到',
+
+  // ── Component Browser ──
+  'componentBrowser.title': 'UIKit 浏览器',
+  'componentBrowser.exportKit': '导出套件',
+  'componentBrowser.importKit': '导入套件',
+  'componentBrowser.kit': '套件：',
+  'componentBrowser.all': '全部',
+  'componentBrowser.imported': '（已导入）',
+  'componentBrowser.components': '组件',
+  'componentBrowser.searchComponents': '搜索组件...',
+  'componentBrowser.deleteKit': '删除 {{name}}',
+  'componentBrowser.category.all': '全部',
+  'componentBrowser.category.buttons': '按钮',
+  'componentBrowser.category.inputs': '输入框',
+  'componentBrowser.category.cards': '卡片',
+  'componentBrowser.category.nav': '导航',
+  'componentBrowser.category.layout': '布局',
+  'componentBrowser.category.feedback': '反馈',
+  'componentBrowser.category.data': '数据',
+  'componentBrowser.category.other': '其他',
+
+  // ── Variable Picker ──
+  'variablePicker.boundTo': '已绑定到 --{{name}}',
+  'variablePicker.bindToVariable': '绑定到变量',
+  'variablePicker.unbind': '解除绑定',
+  'variablePicker.noVariables': '未定义 {{type}} 类型的变量',
+} as const
+
+export default zh

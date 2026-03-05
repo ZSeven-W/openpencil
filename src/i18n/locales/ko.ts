@@ -1,0 +1,369 @@
+import type { TranslationKeys } from './en'
+
+const ko: TranslationKeys = {
+  // ── Common ──
+  'common.rename': '이름 변경',
+  'common.duplicate': '복제',
+  'common.delete': '삭제',
+  'common.cancel': '취소',
+  'common.save': '저장',
+  'common.close': '닫기',
+  'common.connect': '연결',
+  'common.disconnect': '연결 해제',
+  'common.import': '가져오기',
+  'common.export': '내보내기',
+  'common.name': '이름',
+  'common.untitled': '제목 없음',
+  'common.best': '추천',
+  'common.selected': '{{count}}개 선택됨',
+
+  // ── Toolbar ──
+  'toolbar.select': '선택',
+  'toolbar.text': '텍스트',
+  'toolbar.frame': '프레임',
+  'toolbar.hand': '손',
+  'toolbar.undo': '실행 취소',
+  'toolbar.redo': '다시 실행',
+  'toolbar.variables': '변수',
+  'toolbar.uikitBrowser': 'UIKit 브라우저',
+
+  // ── Shapes ──
+  'shapes.rectangle': '사각형',
+  'shapes.ellipse': '타원',
+  'shapes.line': '선',
+  'shapes.icon': '아이콘',
+  'shapes.importImageSvg': '이미지 또는 SVG 가져오기\u2026',
+  'shapes.pen': '펜',
+  'shapes.shapeTools': '도형 도구',
+  'shapes.moreShapeTools': '더 많은 도형 도구',
+
+  // ── Top Bar ──
+  'topbar.hideLayers': '레이어 숨기기',
+  'topbar.showLayers': '레이어 표시',
+  'topbar.new': '새로 만들기',
+  'topbar.open': '열기',
+  'topbar.save': '저장',
+  'topbar.importFigma': 'Figma 가져오기',
+  'topbar.lightMode': '라이트 모드',
+  'topbar.darkMode': '다크 모드',
+  'topbar.fullscreen': '전체 화면',
+  'topbar.exitFullscreen': '전체 화면 종료',
+  'topbar.edited': '— 수정됨',
+  'topbar.agentsAndMcp': '에이전트 & MCP',
+  'topbar.setupAgentsMcp': '에이전트 & MCP 설정',
+  'topbar.connected': '연결됨',
+  'topbar.agentStatus': '에이전트 {{agents}}개{{agentSuffix}} · MCP {{mcp}}개',
+
+  // ── Pages ──
+  'pages.title': '페이지',
+  'pages.addPage': '페이지 추가',
+  'pages.moveUp': '위로 이동',
+  'pages.moveDown': '아래로 이동',
+
+  // ── Status Bar ──
+  'statusbar.zoomOut': '축소',
+  'statusbar.zoomIn': '확대',
+  'statusbar.resetZoom': '확대/축소 초기화',
+
+  // ── Updater ──
+  'updater.softwareUpdate': '소프트웨어 업데이트',
+  'updater.dismiss': '닫기',
+  'updater.current': '현재 버전',
+  'updater.latest': '최신 버전',
+  'updater.unknown': '알 수 없음',
+  'updater.checking': '확인 중...',
+  'updater.downloadProgress': '다운로드 진행률',
+  'updater.checkAgain': '다시 확인',
+  'updater.restartInstall': '재시작 및 설치',
+  'updater.installing': '설치 중...',
+  'updater.releaseDate': '출시일: {{date}}',
+  'updater.restartHint':
+    '업데이트를 적용하려면 재시작하세요. 재실행은 보통 10~15초 소요됩니다.',
+  'updater.unknownError': '알 수 없는 업데이트 오류입니다.',
+  'updater.title.checking': '업데이트 확인 중',
+  'updater.title.available': '업데이트 발견',
+  'updater.title.downloading': '업데이트 다운로드 중',
+  'updater.title.downloaded': '설치 준비 완료',
+  'updater.title.error': '업데이트 실패',
+  'updater.subtitle.checking': '최신 릴리스를 확인하고 있습니다...',
+  'updater.subtitle.available': '버전 {{version}}을 사용할 수 있습니다.',
+  'updater.subtitle.availableGeneric': '새 버전을 사용할 수 있습니다.',
+  'updater.subtitle.downloading':
+    '버전 {{version}}을 백그라운드에서 다운로드 중입니다.',
+  'updater.subtitle.downloadingGeneric':
+    '업데이트 패키지를 백그라운드에서 다운로드 중입니다.',
+  'updater.subtitle.downloaded': '버전 {{version}}이 다운로드되었습니다.',
+  'updater.subtitle.downloadedGeneric': '업데이트가 다운로드되었습니다.',
+  'updater.subtitle.error': '업데이트를 확인하거나 다운로드할 수 없습니다.',
+
+  // ── Layers ──
+  'layers.title': '레이어',
+  'layers.empty': '레이어가 없습니다. 툴바에서 도형을 그려보세요.',
+
+  // ── Layer Context Menu ──
+  'layerMenu.groupSelection': '선택 항목 그룹화',
+  'layerMenu.createComponent': '컴포넌트 만들기',
+  'layerMenu.detachComponent': '컴포넌트 분리',
+  'layerMenu.detachInstance': '인스턴스 분리',
+  'layerMenu.toggleLock': '잠금 전환',
+  'layerMenu.toggleVisibility': '표시 전환',
+
+  // ── Property Panel ──
+  'property.createComponent': '컴포넌트 만들기',
+  'property.detachComponent': '컴포넌트 분리',
+  'property.goToComponent': '컴포넌트로 이동',
+  'property.detachInstance': '인스턴스 분리',
+
+  // ── Fill ──
+  'fill.title': '채우기',
+  'fill.solid': '단색',
+  'fill.linear': '선형',
+  'fill.radial': '방사형',
+  'fill.stops': '정지점',
+  'fill.angle': '각도',
+
+  // ── Stroke ──
+  'stroke.title': '선',
+
+  // ── Appearance ──
+  'appearance.layer': '레이어',
+  'appearance.opacity': '불투명도',
+
+  // ── Layout ──
+  'layout.flexLayout': '플렉스 레이아웃',
+  'layout.freedom': '자유 (레이아웃 없음)',
+  'layout.vertical': '세로 레이아웃',
+  'layout.horizontal': '가로 레이아웃',
+  'layout.alignment': '정렬',
+  'layout.gap': '간격',
+  'layout.spaceBetween': '균등 배치',
+  'layout.spaceAround': '균등 여백',
+  'layout.dimensions': '크기',
+  'layout.fillWidth': '너비 채우기',
+  'layout.fillHeight': '높이 채우기',
+  'layout.hugWidth': '너비 맞춤',
+  'layout.hugHeight': '높이 맞춤',
+  'layout.clipContent': '콘텐츠 잘라내기',
+
+  // ── Padding ──
+  'padding.title': '패딩',
+  'padding.paddingMode': '패딩 모드',
+  'padding.paddingValues': '패딩 값',
+  'padding.oneValue': '모든 면에 동일한 값',
+  'padding.horizontalVertical': '가로/세로',
+  'padding.topRightBottomLeft': '위/오른쪽/아래/왼쪽',
+
+  // ── Typography ──
+  'text.typography': '타이포그래피',
+  'text.lineHeight': '줄 높이',
+  'text.letterSpacing': '자간',
+  'text.horizontal': '가로',
+  'text.vertical': '세로',
+  'text.alignLeft': '왼쪽 정렬',
+  'text.alignCenter': '가운데 정렬',
+  'text.alignRight': '오른쪽 정렬',
+  'text.justify': '양쪽 정렬',
+  'text.top': '위',
+  'text.middle': '중간',
+  'text.bottom': '아래',
+  'text.weight.thin': 'Thin',
+  'text.weight.light': 'Light',
+  'text.weight.regular': 'Regular',
+  'text.weight.medium': 'Medium',
+  'text.weight.semibold': 'Semibold',
+  'text.weight.bold': 'Bold',
+  'text.weight.black': 'Black',
+
+  // ── Text Layout ──
+  'textLayout.title': '레이아웃',
+  'textLayout.dimensions': '크기',
+  'textLayout.resizing': '크기 조절',
+  'textLayout.autoWidth': '자동 W',
+  'textLayout.autoWidthDesc': '자동 너비 — 텍스트가 가로로 확장됩니다',
+  'textLayout.autoHeight': '자동 H',
+  'textLayout.autoHeightDesc':
+    '자동 높이 — 고정 너비, 높이가 자동 조절됩니다',
+  'textLayout.fixed': '고정',
+  'textLayout.fixedDesc':
+    '고정 크기 — 너비와 높이가 모두 고정됩니다',
+  'textLayout.fillWidth': '너비 채우기',
+  'textLayout.fillHeight': '높이 채우기',
+
+  // ── Effects ──
+  'effects.title': '효과',
+  'effects.dropShadow': '그림자',
+  'effects.blur': '블러',
+  'effects.spread': '확산',
+  'effects.color': '색상',
+
+  // ── Export ──
+  'export.title': '내보내기',
+  'export.format': '형식',
+  'export.scale': '배율',
+  'export.selectedOnly': '선택 항목만 내보내기',
+  'export.exportFormat': '{{format}} 내보내기',
+  'export.exportLayer': '레이어 내보내기',
+
+  // ── Corner Radius ──
+  'cornerRadius.title': '모서리 반경',
+
+  // ── Size / Position ──
+  'size.position': '위치',
+
+  // ── Icon ──
+  'icon.title': '아이콘',
+  'icon.searchIcons': '아이콘 검색...',
+  'icon.noIconsFound': '아이콘을 찾을 수 없습니다',
+  'icon.typeToSearch': 'Iconify 아이콘을 검색하려면 입력하세요',
+  'icon.iconsCount': '아이콘 {{count}}개',
+
+  // ── Variables Panel ──
+  'variables.addTheme': '테마 추가',
+  'variables.addVariant': '변형 추가',
+  'variables.addVariable': '변수 추가',
+  'variables.searchVariables': '변수 검색...',
+  'variables.noMatch': '검색과 일치하는 변수가 없습니다',
+  'variables.noDefined': '정의된 변수가 없습니다',
+  'variables.closeShortcut': '닫기 (⌘⇧V)',
+  'variables.presets': '프리셋',
+  'variables.savePreset': '현재 설정을 프리셋으로 저장…',
+  'variables.loadPreset': '프리셋 불러오기',
+  'variables.importPreset': '파일에서 가져오기…',
+  'variables.exportPreset': '파일로 내보내기…',
+  'variables.presetName': '프리셋 이름',
+  'variables.noPresets': '저장된 프리셋 없음',
+
+  // ── AI Chat ──
+  'ai.newChat': '새 대화',
+  'ai.collapse': '접기',
+  'ai.tryExample': '예시로 디자인 해보세요...',
+  'ai.tipSelectElements':
+    '팁: 대화 전에 캔버스에서 요소를 선택하면 컨텍스트를 제공할 수 있습니다.',
+  'ai.generating': '생성 중...',
+  'ai.designWithAgent': '에이전트로 디자인...',
+  'ai.attachImage': '이미지 첨부',
+  'ai.stopGenerating': '생성 중지',
+  'ai.sendMessage': '메시지 보내기',
+  'ai.loadingModels': '모델 로딩 중...',
+  'ai.noModelsConnected': '연결된 모델 없음',
+  'ai.quickAction.loginScreen': '모바일 로그인 화면 디자인',
+  'ai.quickAction.loginScreenPrompt':
+    '이메일 입력, 비밀번호 입력, 로그인 버튼, 소셜 로그인 옵션이 있는 모던 모바일 로그인 화면을 디자인해 주세요',
+  'ai.quickAction.productCard': '상품 카드 컴포넌트 만들기',
+  'ai.quickAction.productCardPrompt':
+    '이미지 플레이스홀더, 제목, 가격, 구매 버튼이 있는 상품 카드를 만들어 주세요',
+  'ai.quickAction.bottomNav': '하단 네비게이션 바 디자인',
+  'ai.quickAction.bottomNavPrompt':
+    '홈, 검색, 추가, 메시지, 프로필 5개 탭이 있는 모바일 앱 하단 네비게이션 바를 디자인해 주세요',
+  'ai.quickAction.colorPalette': '앱에 맞는 색상 팔레트 추천',
+  'ai.quickAction.colorPalettePrompt':
+    '반려동물 관리 앱에 어울리는 모던한 색상 팔레트를 추천해 주세요',
+
+  // ── Code Panel ──
+  'code.reactTailwind': 'React + Tailwind',
+  'code.htmlCss': 'HTML + CSS',
+  'code.cssVariables': 'CSS Variables',
+  'code.copyClipboard': '클립보드에 복사',
+  'code.closeCodePanel': '코드 패널 닫기',
+  'code.genCssVars': '전체 문서의 CSS 변수를 생성 중',
+  'code.genSelected':
+    '선택한 요소 {{count}}개의 코드를 생성 중',
+  'code.genDocument': '전체 문서의 코드를 생성 중',
+
+  // ── Save Dialog ──
+  'save.saveAs': '다른 이름으로 저장',
+  'save.fileName': '파일 이름',
+
+  // ── Agent Settings ──
+  'agents.title': '에이전트 & MCP 설정',
+  'agents.agentsOnCanvas': '캔버스 에이전트',
+  'agents.mcpIntegrations': '터미널 MCP 연동',
+  'agents.transport': '전송 방식',
+  'agents.port': '포트',
+  'agents.mcpRestart':
+    'MCP 연동은 터미널을 재시작한 후 적용됩니다.',
+  'agents.modelCount': '모델 {{count}}개',
+  'agents.connectionFailed': '연결 실패',
+  'agents.serverError': '서버 오류 {{status}}',
+  'agents.failedTo': '{{action}} 실패',
+  'agents.failedToMcp': 'MCP 서버 {{action}} 실패',
+  'agents.failedTransport': '전송 방식 업데이트 실패',
+  'agents.failedMcpTransport': 'MCP 전송 방식 업데이트 실패',
+  'agents.claudeCode': 'Claude Code',
+  'agents.claudeModels': 'Claude 모델',
+  'agents.codexCli': 'Codex CLI',
+  'agents.openaiModels': 'OpenAI 모델',
+  'agents.opencode': 'OpenCode',
+  'agents.opencodeDesc': '75개 이상의 LLM 제공자',
+  'agents.mcpServer': 'MCP 서버',
+  'agents.mcpServerStart': '시작',
+  'agents.mcpServerStop': '정지',
+  'agents.mcpServerRunning': '실행 중',
+  'agents.mcpServerStopped': '정지됨',
+  'agents.mcpLanAccess': 'LAN 접근',
+  'agents.stdio': 'stdio',
+  'agents.http': 'http',
+  'agents.stdioHttp': 'stdio + http',
+  'agents.autoUpdate': '자동 업데이트 확인',
+
+  // ── Figma Import ──
+  'figma.title': 'Figma에서 가져오기',
+  'figma.dropFile': '.fig 파일을 여기에 놓으세요',
+  'figma.orBrowse': '또는 클릭하여 찾아보기',
+  'figma.exportTip': 'Figma에서 내보내기: 파일 → 로컬 사본 저장 (.fig)',
+  'figma.selectFigFile': '.fig 파일을 선택해 주세요',
+  'figma.noPages': '.fig 파일에서 페이지를 찾을 수 없습니다',
+  'figma.parseFailed': '.fig 파일 파싱에 실패했습니다',
+  'figma.convertFailed': 'Figma 파일 변환에 실패했습니다',
+  'figma.parsing': '.fig 파일 파싱 중...',
+  'figma.converting': '노드 변환 중...',
+  'figma.selectPage':
+    '이 파일에는 {{count}}개의 페이지가 있습니다. 가져올 페이지를 선택하세요:',
+  'figma.layers': '{{count}}개 레이어',
+  'figma.importAll': '모든 페이지 가져오기',
+  'figma.importComplete': '가져오기 완료!',
+  'figma.moreWarnings': '...외 {{count}}개의 경고',
+  'figma.tryAgain': '다시 시도',
+  'figma.layoutMode': '레이아웃 모드:',
+  'figma.preserveLayout': 'Figma 레이아웃 유지',
+  'figma.autoLayout': 'OpenPencil 자동 레이아웃',
+  'figma.comingSoon': '출시 예정',
+
+  // ── Landing Page ──
+  'landing.open': 'Open',
+  'landing.pencil': 'Pencil',
+  'landing.tagline': '오픈소스 벡터 디자인 도구. Design as Code.',
+  'landing.newDesign': '새 디자인',
+  'landing.shortcutHint': '{{key1}} + {{key2}} 키를 눌러 새 디자인을 만드세요',
+
+  // ── 404 ──
+  'notFound.message': '페이지를 찾을 수 없습니다',
+
+  // ── Component Browser ──
+  'componentBrowser.title': 'UIKit 브라우저',
+  'componentBrowser.exportKit': '키트 내보내기',
+  'componentBrowser.importKit': '키트 가져오기',
+  'componentBrowser.kit': '키트:',
+  'componentBrowser.all': '전체',
+  'componentBrowser.imported': '(가져옴)',
+  'componentBrowser.components': '컴포넌트',
+  'componentBrowser.searchComponents': '컴포넌트 검색...',
+  'componentBrowser.deleteKit': '{{name}} 삭제',
+  'componentBrowser.category.all': '전체',
+  'componentBrowser.category.buttons': '버튼',
+  'componentBrowser.category.inputs': '입력',
+  'componentBrowser.category.cards': '카드',
+  'componentBrowser.category.nav': '내비게이션',
+  'componentBrowser.category.layout': '레이아웃',
+  'componentBrowser.category.feedback': '피드백',
+  'componentBrowser.category.data': '데이터',
+  'componentBrowser.category.other': '기타',
+
+  // ── Variable Picker ──
+  'variablePicker.boundTo': '--{{name}}에 바인딩됨',
+  'variablePicker.bindToVariable': '변수에 바인딩',
+  'variablePicker.unbind': '변수 바인딩 해제',
+  'variablePicker.noVariables': '{{type}} 변수가 정의되지 않았습니다',
+} as const
+
+export default ko

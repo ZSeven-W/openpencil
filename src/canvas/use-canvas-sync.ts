@@ -10,6 +10,7 @@ import {
 import { syncFabricObject } from './canvas-object-sync'
 import { isFabricSyncLocked, setFabricSyncLock } from './canvas-sync-lock'
 import { pendingAnimationNodes, getNextStaggerDelay } from '@/services/ai/design-animation'
+import { removePreviewNode, removeAgentIndicator } from './agent-indicator'
 import { resolveNodeForCanvas, getDefaultTheme } from '@/variables/resolve-variables'
 import { COMPONENT_COLOR, INSTANCE_COLOR, SELECTION_BLUE } from './canvas-constants'
 import {
@@ -505,19 +506,22 @@ export function useCanvasSync() {
             const shouldAnimate = pendingAnimationNodes.has(node.id)
             if (shouldAnimate) {
               const targetOpacity = newObj.opacity ?? 1
-              const delay = getNextStaggerDelay()
+              // Sequential queue delay: includes BORDER_LEAD (border shows first)
+              const totalDelay = getNextStaggerDelay(node.id)
               newObj.set({ opacity: 0 })
               canvas.add(newObj)
-              // Fire-and-forget: the setTimeout yields to the macrotask queue,
-              // so it runs between SSE stream chunks without blocking the stream.
               setTimeout(() => {
+                removePreviewNode(node.id)
                 newObj.animate({ opacity: targetOpacity }, {
-                  duration: 250,
+                  duration: 300,
                   easing: fabric.util.ease.easeOutCubic,
                   onChange: () => canvas.requestRenderAll(),
-                  onComplete: () => pendingAnimationNodes.delete(node.id),
+                  onComplete: () => {
+                    pendingAnimationNodes.delete(node.id)
+                    removeAgentIndicator(node.id)
+                  },
                 })
-              }, delay)
+              }, totalDelay)
             } else {
               canvas.add(newObj)
             }

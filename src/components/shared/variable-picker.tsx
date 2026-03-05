@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useMemo } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Braces, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useDocumentStore } from '@/stores/document-store'
@@ -24,6 +25,7 @@ export default function VariablePicker({
   onUnbind,
   className,
 }: VariablePickerProps) {
+  const { t } = useTranslation()
   const [open, setOpen] = useState(false)
   const popoverRef = useRef<HTMLDivElement>(null)
   const variables = useDocumentStore((s) => s.document.variables)
@@ -83,7 +85,7 @@ export default function VariablePicker({
           type="button"
           onClick={() => setOpen(!open)}
           className="flex items-center gap-1 h-5 px-1.5 rounded bg-primary/15 text-primary text-[10px] font-mono hover:bg-primary/25 transition-colors"
-          title={`Bound to --${boundName}`}
+          title={t('variablePicker.boundTo', { name: boundName })}
         >
           <Braces size={10} />
           <span className="truncate max-w-[80px]">--{boundName}</span>
@@ -93,7 +95,7 @@ export default function VariablePicker({
           type="button"
           onClick={() => setOpen(!open)}
           className="flex items-center justify-center w-5 h-5 rounded text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
-          title="Bind to variable"
+          title={t('variablePicker.bindToVariable')}
         >
           <Braces size={12} />
         </button>
@@ -112,14 +114,14 @@ export default function VariablePicker({
                 className="w-full text-left px-3 py-1.5 text-xs text-destructive hover:bg-secondary flex items-center gap-1.5"
               >
                 <X size={12} />
-                Unbind variable
+                {t('variablePicker.unbind')}
               </button>
               <div className="border-t border-border my-1" />
             </>
           )}
           {matchingVars.length === 0 ? (
             <div className="px-3 py-2 text-xs text-muted-foreground">
-              No {type} variables defined
+              {t('variablePicker.noVariables', { type })}
             </div>
           ) : (
             matchingVars.map(([name, def]) => (

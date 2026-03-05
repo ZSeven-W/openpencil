@@ -18,8 +18,11 @@ import { readFile, writeFile, mkdir, unlink } from 'node:fs/promises'
 let mainWindow: BrowserWindow | null = null
 let nitroProcess: ChildProcess | null = null
 let serverPort = 0
+let autoUpdateEnabled = true
+let updateCheckTimer: ReturnType<typeof setInterval> | null = null
 
 const isDev = !app.isPackaged
+const SETTINGS_PATH = join(homedir(), '.openpencil', 'settings.json')
 
 type UpdaterStatus =
   | 'disabled'
@@ -157,15 +160,18 @@ function setupAutoUpdater(): void {
     })
   })
 
-  // Delay first check until app startup work is done.
-  setTimeout(() => {
-    void checkForAppUpdates(true)
-  }, 5000)
+  if (autoUpdateEnabled) {
+    // Delay first check until app startup work is done.
+    setTimeout(() => {
+      void checkForAppUpdates(true)
+    }, 5000)
 
-  // Poll for new versions while app is running.
-  setInterval(() => {
-    void checkForAppUpdates(false)
-  }, 60 * 60 * 1000).unref()
+    // Poll for new versions while app is running.
+    updateCheckTimer = setInterval(() => {
+      void checkForAppUpdates(false)
+    }, 60 * 60 * 1000)
+    updateCheckTimer.unref()
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -190,6 +196,30 @@ function fixPath(): void {
   } catch {
     // Packaged app may not have a login shell — ignore
   }
+}
+
+// ---------------------------------------------------------------------------
+// App settings (~/.openpencil/settings.json)
+// ---------------------------------------------------------------------------
+
+interface AppSettings {
+  autoUpdate?: boolean
+}
+
+async function readAppSettings(): Promise<AppSettings> {
+  try {
+    const raw = await readFile(SETTINGS_PATH, 'utf-8')
+    return JSON.parse(raw)
+  } catch {
+    return {}
+  }
+}
+
+async function writeAppSettings(patch: Partial<AppSettings>): Promise<void> {
+  const current = await readAppSettings()
+  const merged = { ...current, ...patch }
+  await mkdir(PORT_FILE_DIR, { recursive: true })
+  await writeFile(SETTINGS_PATH, JSON.stringify(merged, null, 2), 'utf-8')
 }
 
 // ---------------------------------------------------------------------------
@@ -439,6 +469,32 @@ function setupIPC(): void {
     }
     return false
   })
+
+  ipcMain.handle('updater:getAutoCheck', () => autoUpdateEnabled)
+
+  ipcMain.handle('updater:setAutoCheck', async (_event, enabled: boolean) => {
+    autoUpdateEnabled = enabled
+    await writeAppSettings({ autoUpdate: enabled })
+
+    if (enabled) {
+      // Start polling if not already running
+      if (!updateCheckTimer) {
+        updateCheckTimer = setInterval(() => {
+          void checkForAppUpdates(false)
+        }, 60 * 60 * 1000)
+        updateCheckTimer.unref()
+      }
+      setUpdaterState({ status: 'idle' })
+    } else {
+      // Stop polling
+      if (updateCheckTimer) {
+        clearInterval(updateCheckTimer)
+        updateCheckTimer = null
+      }
+      setUpdaterState({ status: 'disabled' })
+    }
+    return enabled
+  })
 }
 
 // ---------------------------------------------------------------------------
@@ -591,7 +647,13 @@ app.on('ready', async () => {
   createWindow()
 
   if (!isDev) {
-    setupAutoUpdater()
+    const settings = await readAppSettings()
+    autoUpdateEnabled = settings.autoUpdate !== false
+    if (autoUpdateEnabled) {
+      setupAutoUpdater()
+    } else {
+      setUpdaterState({ status: 'disabled' })
+    }
   }
 })
 

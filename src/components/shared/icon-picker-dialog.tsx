@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
+import { useTranslation } from 'react-i18next'
 import { createPortal } from 'react-dom'
 import { Loader2, Search } from 'lucide-react'
 
@@ -45,6 +46,7 @@ export default function IconPickerDialog({
   currentIconId,
   position,
 }: IconPickerDialogProps) {
+  const { t } = useTranslation()
   const [query, setQuery] = useState('')
   const [allIcons, setAllIcons] = useState<string[]>([])
   const [totalCount, setTotalCount] = useState<number | null>(null)
@@ -208,9 +210,7 @@ export default function IconPickerDialog({
   }
 
   const countLabel = activeCollection
-    ? trimmedQuery
-      ? `${displayIcons.length} icons`
-      : `${totalCount ?? displayIcons.length} icons`
+    ? t('icon.iconsCount', { count: trimmedQuery ? displayIcons.length : (totalCount ?? displayIcons.length) })
     : null
 
   // Compute popover position: anchored to the left of the property panel
@@ -254,7 +254,7 @@ export default function IconPickerDialog({
           type="text"
           value={query}
           onChange={(e) => handleQueryChange(e.target.value)}
-          placeholder="Search icons..."
+          placeholder={t('icon.searchIcons')}
           className="w-full bg-secondary border border-transparent rounded pl-7 pr-3 py-1.5 text-[12px] text-foreground placeholder:text-muted-foreground outline-none focus:border-ring"
         />
       </div>
@@ -304,10 +304,10 @@ export default function IconPickerDialog({
             })}
           </div>
         ) : searched && !activeCollection ? (
-          <p className="text-xs text-muted-foreground text-center py-8">No icons found</p>
+          <p className="text-xs text-muted-foreground text-center py-8">{t('icon.noIconsFound')}</p>
         ) : !activeCollection && !trimmedQuery ? (
           <p className="text-xs text-muted-foreground text-center py-8">
-            Type to search Iconify icons
+            {t('icon.typeToSearch')}
           </p>
         ) : null}
       </div>

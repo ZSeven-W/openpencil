@@ -8,51 +8,81 @@ import type { PenNode } from '@/types/pen'
 export const pendingAnimationNodes = new Set<string>()
 
 // ---------------------------------------------------------------------------
-// Stagger counter — determines delay per node within a batch
+// Sequential reveal queue — all nodes follow a single ordered queue.
+// Each node: border appears at its scheduled time, content fades in
+// BORDER_LEAD ms later. No two nodes reveal simultaneously.
 // ---------------------------------------------------------------------------
 
-/** Index of the next animated object across all batches in a generation. */
-let currentIndex = 0
-/** Index where the current batch started (reset per JSON block). */
-let batchStartIndex = 0
+/** Interval between each node's border reveal (ms). */
+const REVEAL_INTERVAL = 300
+/** Delay between border appearing and content fade-in (ms). */
+const BORDER_LEAD = 400
+
+/** Maps nodeId → absolute timestamp when its border should appear. */
+const nodeRevealTime = new Map<string, number>()
+
+/** The next available reveal timestamp (advances as nodes are queued). */
+let nextRevealAt = 0
 
 /**
  * Mark all node IDs in the tree for fade-in animation.
- * When canvas-sync creates Fabric objects for these IDs, it will set
- * opacity to 0 and schedule a delayed fade-in.
+ * Assigns sequential reveal timestamps via BFS order (parent → children).
+ * New nodes are always scheduled AFTER previously queued nodes,
+ * even if they arrive in a later streaming chunk.
  */
 export function markNodesForAnimation(nodes: PenNode[]): void {
-  for (const node of nodes) {
+  // Ensure new nodes start no earlier than now
+  const now = Date.now()
+  if (nextRevealAt < now) nextRevealAt = now
+
+  // BFS to ensure parent before children, level by level
+  const queue: PenNode[] = [...nodes]
+  while (queue.length > 0) {
+    const node = queue.shift()!
     pendingAnimationNodes.add(node.id)
+    nodeRevealTime.set(node.id, nextRevealAt)
+    nextRevealAt += REVEAL_INTERVAL
     if ('children' in node && Array.isArray(node.children)) {
-      markNodesForAnimation(node.children)
+      for (const child of node.children) {
+        queue.push(child)
+      }
     }
   }
 }
 
 /**
- * Start a new animation batch. Resets the relative stagger so that the
- * first node in this batch starts fading in immediately (delay 0).
- * Call this before each JSON block's upsert.
+ * Start a new animation batch. No-op — queue continuity is maintained.
  */
 export function startNewAnimationBatch(): void {
-  batchStartIndex = currentIndex
+  // intentionally no-op for queue continuity
 }
 
 /**
- * Get the stagger delay (ms) for the next animated object.
- * Called by canvas-sync each time it creates a new Fabric object
- * whose ID is in `pendingAnimationNodes`.
+ * Get the total delay (ms) before this node's content should start fading in.
+ * = time until border reveal + BORDER_LEAD
  */
-export function getNextStaggerDelay(): number {
-  const relativeIndex = currentIndex - batchStartIndex
-  currentIndex++
-  return relativeIndex * 60
+export function getNextStaggerDelay(nodeId?: string): number {
+  if (!nodeId) return 0
+  const revealAt = nodeRevealTime.get(nodeId)
+  if (revealAt === undefined) return 0
+  const now = Date.now()
+  const waitForBorder = Math.max(0, revealAt - now)
+  return waitForBorder + BORDER_LEAD
+}
+
+/**
+ * Check if a node's border should be visible yet.
+ * Returns true when the current time has reached the node's scheduled reveal.
+ */
+export function isNodeBorderReady(nodeId: string): boolean {
+  const revealAt = nodeRevealTime.get(nodeId)
+  if (revealAt === undefined) return false
+  return Date.now() >= revealAt
 }
 
 /** Reset all animation state. Call once at the start of a generation. */
 export function resetAnimationState(): void {
   pendingAnimationNodes.clear()
-  batchStartIndex = 0
-  currentIndex = 0
+  nodeRevealTime.clear()
+  nextRevealAt = 0
 }

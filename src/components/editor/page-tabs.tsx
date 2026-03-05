@@ -1,11 +1,13 @@
 import { useState, useRef, useEffect } from 'react'
 import { Plus, X } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import { cn } from '@/lib/utils'
 import { useCanvasStore } from '@/stores/canvas-store'
 import { useDocumentStore } from '@/stores/document-store'
 import { zoomToFitContent } from '@/canvas/use-fabric-canvas'
 
 export default function PageTabs() {
+  const { t } = useTranslation()
   const pages = useDocumentStore((s) => s.document.pages)
   const activePageId = useCanvasStore((s) => s.activePageId)
   const setActivePageId = useCanvasStore((s) => s.setActivePageId)
@@ -76,12 +78,12 @@ export default function PageTabs() {
         {/* Header */}
         <div className="h-8 flex items-center justify-between px-3 border-b border-border">
           <span className="text-xs font-medium text-muted-foreground tracking-wider">
-            Pages
+            {t('pages.title')}
           </span>
           <button
             className="w-5 h-5 flex items-center justify-center text-muted-foreground hover:text-foreground rounded transition-colors"
             onClick={handleAdd}
-            title="Add page"
+            title={t('pages.addPage')}
           >
             <Plus className="w-3.5 h-3.5" />
           </button>
@@ -199,6 +201,7 @@ function PageContextMenu({
   onMoveRight: () => void
   onClose: () => void
 }) {
+  const { t } = useTranslation()
   const menuRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -219,12 +222,12 @@ function PageContextMenu({
   }, [onClose])
 
   const items = [
-    { label: 'Rename', action: onRename },
-    { label: 'Duplicate', action: onDuplicate },
-    { label: 'Move Up', action: onMoveLeft },
-    { label: 'Move Down', action: onMoveRight },
+    { label: 'common.rename', action: onRename },
+    { label: 'common.duplicate', action: onDuplicate },
+    { label: 'pages.moveUp', action: onMoveLeft },
+    { label: 'pages.moveDown', action: onMoveRight },
     ...(canDelete
-      ? [{ label: 'Delete', action: onDelete, danger: true }]
+      ? [{ label: 'common.delete', action: onDelete, danger: true }]
       : []),
   ]
 
@@ -245,7 +248,7 @@ function PageContextMenu({
           )}
           onClick={item.action}
         >
-          {item.label}
+          {t(item.label)}
         </button>
       ))}
     </div>

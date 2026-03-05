@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import ColorPicker from '@/components/shared/color-picker'
 import NumberInput from '@/components/shared/number-input'
 import SectionHeader from '@/components/shared/section-header'
@@ -11,9 +12,9 @@ import type { PenNode } from '@/types/pen'
 import type { PenFill, GradientStop } from '@/types/styles'
 
 const FILL_TYPE_OPTIONS = [
-  { value: 'solid', label: 'Solid' },
-  { value: 'linear_gradient', label: 'Linear' },
-  { value: 'radial_gradient', label: 'Radial' },
+  { value: 'solid', labelKey: 'fill.solid' },
+  { value: 'linear_gradient', labelKey: 'fill.linear' },
+  { value: 'radial_gradient', labelKey: 'fill.radial' },
 ]
 
 function defaultStops(): GradientStop[] {
@@ -32,6 +33,7 @@ export default function FillSection({
   fills,
   onUpdate,
 }: FillSectionProps) {
+  const { t } = useTranslation()
   const firstFill = fills?.[0]
   const fillType = firstFill?.type ?? 'solid'
   const [showTypeSelector, setShowTypeSelector] = useState(false)
@@ -147,7 +149,7 @@ export default function FillSection({
   return (
     <div className="space-y-1.5">
       <SectionHeader
-        title="Fill"
+        title={t('fill.title')}
         actions={
           <Button
             variant="ghost"
@@ -167,7 +169,7 @@ export default function FillSection({
           <SelectContent>
             {FILL_TYPE_OPTIONS.map((opt) => (
               <SelectItem key={opt.value} value={opt.value}>
-                {opt.label}
+                {t(opt.labelKey)}
               </SelectItem>
             ))}
           </SelectContent>
@@ -199,7 +201,7 @@ export default function FillSection({
         <div className="space-y-1.5">
           {fillType === 'linear_gradient' && (
             <NumberInput
-              label="Angle"
+              label={t('fill.angle')}
               value={currentAngle}
               onChange={handleAngleChange}
               min={0}
@@ -211,7 +213,7 @@ export default function FillSection({
           <div className="space-y-1">
             <div className="flex items-center justify-between">
               <span className="text-[10px] text-muted-foreground">
-                Stops
+                {t('fill.stops')}
               </span>
               <Button
                 variant="ghost"

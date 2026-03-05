@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
+import { useTranslation } from 'react-i18next'
 import { X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
@@ -11,6 +12,7 @@ interface ExportDialogProps {
 }
 
 export default function ExportDialog({ open, onClose }: ExportDialogProps) {
+  const { t } = useTranslation()
   const [format, setFormat] = useState<'png' | 'svg'>('png')
   const [scale, setScale] = useState(2)
   const [selectedOnly, setSelectedOnly] = useState(false)
@@ -52,7 +54,7 @@ export default function ExportDialog({ open, onClose }: ExportDialogProps) {
         className="relative bg-card rounded-lg border border-border p-4 w-72 shadow-xl"
       >
         <div className="flex items-center justify-between mb-4">
-          <h3 className="text-sm font-medium text-foreground">Export</h3>
+          <h3 className="text-sm font-medium text-foreground">{t('export.title')}</h3>
           <Button variant="ghost" size="icon-sm" onClick={onClose}>
             <X size={14} />
           </Button>
@@ -60,7 +62,7 @@ export default function ExportDialog({ open, onClose }: ExportDialogProps) {
 
         {/* Format */}
         <div className="mb-3">
-          <label className="text-xs text-muted-foreground block mb-1">Format</label>
+          <label className="text-xs text-muted-foreground block mb-1">{t('export.format')}</label>
           <div className="flex gap-2">
             {(['png', 'svg'] as const).map((f) => (
               <button
@@ -83,7 +85,7 @@ export default function ExportDialog({ open, onClose }: ExportDialogProps) {
         {/* Scale (PNG only) */}
         {format === 'png' && (
           <div className="mb-3">
-            <label className="text-xs text-muted-foreground block mb-1">Scale</label>
+            <label className="text-xs text-muted-foreground block mb-1">{t('export.scale')}</label>
             <div className="flex gap-2">
               {[1, 2, 3].map((s) => (
                 <button
@@ -113,7 +115,7 @@ export default function ExportDialog({ open, onClose }: ExportDialogProps) {
               onChange={(e) => setSelectedOnly(e.target.checked)}
               className="rounded border-input bg-secondary text-primary focus:ring-ring focus:ring-offset-0"
             />
-            <span className="text-xs text-foreground">Export selected only</span>
+            <span className="text-xs text-foreground">{t('export.selectedOnly')}</span>
           </label>
         )}
 
@@ -124,7 +126,7 @@ export default function ExportDialog({ open, onClose }: ExportDialogProps) {
           className="w-full"
           size="sm"
         >
-          Export {format.toUpperCase()}
+          {t('export.exportFormat', { format: format.toUpperCase() })}
         </Button>
       </div>
     </div>

@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
+import { useTranslation } from 'react-i18next'
 import { X, Upload, AlertCircle, Loader2, FileUp } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useDocumentStore } from '@/stores/document-store'
@@ -16,6 +17,7 @@ interface FigmaImportDialogProps {
 }
 
 export default function FigmaImportDialog({ open, onClose }: FigmaImportDialogProps) {
+  const { t } = useTranslation()
   const [state, setState] = useState<ImportState>('idle')
   const [progress, setProgress] = useState(0)
   const [error, setError] = useState('')
@@ -53,7 +55,7 @@ export default function FigmaImportDialog({ open, onClose }: FigmaImportDialogPr
 
   const processFile = useCallback(async (file: File) => {
     if (!file.name.endsWith('.fig')) {
-      setError('Please select a .fig file')
+      setError(t('figma.selectFigFile'))
       setState('error')
       return
     }
@@ -73,7 +75,7 @@ export default function FigmaImportDialog({ open, onClose }: FigmaImportDialogPr
       const figmaPages = getFigmaPages(decodedFile)
 
       if (figmaPages.length === 0) {
-        setError('No pages found in the .fig file')
+        setError(t('figma.noPages'))
         setState('error')
         return
       }
@@ -83,10 +85,10 @@ export default function FigmaImportDialog({ open, onClose }: FigmaImportDialogPr
       setState('page-select')
     } catch (err) {
       console.error('[Figma Import] Parse error:', err)
-      setError(err instanceof Error ? err.message : 'Failed to parse .fig file')
+      setError(err instanceof Error ? err.message : t('figma.parseFailed'))
       setState('error')
     }
-  }, [])
+  }, [t])
 
   const convertAndLoad = useCallback(async (
     decodedFile: FigmaDecodedFile,
@@ -135,10 +137,10 @@ export default function FigmaImportDialog({ open, onClose }: FigmaImportDialogPr
       }, 800)
     } catch (err) {
       console.error('[Figma Import] Convert error:', err)
-      setError(err instanceof Error ? err.message : 'Failed to convert Figma file')
+      setError(err instanceof Error ? err.message : t('figma.convertFailed'))
       setState('error')
     }
-  }, [onClose, layoutMode])
+  }, [onClose, layoutMode, t])
 
   const handlePageSelect = useCallback((pageIndex: number | 'all') => {
     if (!decoded) return
@@ -174,7 +176,7 @@ export default function FigmaImportDialog({ open, onClose }: FigmaImportDialogPr
       <div className="relative bg-card rounded-lg border border-border p-5 w-96 shadow-xl">
         {/* Header */}
         <div className="flex items-center justify-between mb-4">
-          <h3 className="text-sm font-medium text-foreground">Import from Figma</h3>
+          <h3 className="text-sm font-medium text-foreground">{t('figma.title')}</h3>
           <Button variant="ghost" size="icon-sm" onClick={onClose}>
             <X size={14} />
           </Button>
@@ -196,10 +198,10 @@ export default function FigmaImportDialog({ open, onClose }: FigmaImportDialogPr
             >
               <FileUp size={32} className="mx-auto mb-3 text-muted-foreground" />
               <p className="text-sm text-foreground mb-1">
-                Drop a .fig file here
+                {t('figma.dropFile')}
               </p>
               <p className="text-xs text-muted-foreground">
-                or click to browse
+                {t('figma.orBrowse')}
               </p>
             </div>
             <input
@@ -210,7 +212,7 @@ export default function FigmaImportDialog({ open, onClose }: FigmaImportDialogPr
               onChange={handleFileInput}
             />
             <p className="text-[10px] text-muted-foreground mt-3">
-              Export from Figma: File &rarr; Save local copy (.fig)
+              {t('figma.exportTip')}
             </p>
           </>
         )}
@@ -221,7 +223,7 @@ export default function FigmaImportDialog({ open, onClose }: FigmaImportDialogPr
             <div className="flex items-center gap-2 mb-3">
               <Loader2 size={16} className="animate-spin text-primary" />
               <span className="text-sm text-foreground">
-                {state === 'parsing' ? 'Parsing .fig file...' : 'Converting nodes...'}
+                {state === 'parsing' ? t('figma.parsing') : t('figma.converting')}
               </span>
             </div>
             <div className="w-full bg-secondary rounded-full h-1.5">
@@ -241,7 +243,7 @@ export default function FigmaImportDialog({ open, onClose }: FigmaImportDialogPr
           <div className="py-2">
             {/* Layout mode toggle */}
             <div className="mb-3">
-              <p className="text-xs text-muted-foreground mb-2">Layout mode:</p>
+              <p className="text-xs text-muted-foreground mb-2">{t('figma.layoutMode')}</p>
               <div className="flex gap-1">
                 <button
                   className={`flex-1 px-3 py-1.5 rounded text-xs transition-colors ${
@@ -251,14 +253,14 @@ export default function FigmaImportDialog({ open, onClose }: FigmaImportDialogPr
                   }`}
                   onClick={() => setLayoutMode('preserve')}
                 >
-                  保持 Figma 布局
+                  {t('figma.preserveLayout')}
                 </button>
                 <button
                   className="flex-1 px-3 py-1.5 rounded text-xs transition-colors bg-secondary text-muted-foreground cursor-not-allowed opacity-50"
                   disabled
-                  title="即将支持"
+                  title={t('figma.comingSoon')}
                 >
-                  OpenPencil 自动布局
+                  {t('figma.autoLayout')}
                 </button>
               </div>
             </div>
@@ -266,7 +268,7 @@ export default function FigmaImportDialog({ open, onClose }: FigmaImportDialogPr
             {pages.length > 1 ? (
               <>
                 <p className="text-xs text-muted-foreground mb-3">
-                  This file has {pages.length} pages. Select which to import:
+                  {t('figma.selectPage', { count: pages.length })}
                 </p>
                 <div className="max-h-48 overflow-y-auto space-y-1 mb-3">
                   {pages.map((page, i) => (
@@ -277,7 +279,7 @@ export default function FigmaImportDialog({ open, onClose }: FigmaImportDialogPr
                     >
                       <span className="text-foreground truncate">{page.name}</span>
                       <span className="text-xs text-muted-foreground ml-2 shrink-0">
-                        {page.childCount} layers
+                        {t('figma.layers', { count: page.childCount })}
                       </span>
                     </button>
                   ))}
@@ -287,20 +289,20 @@ export default function FigmaImportDialog({ open, onClose }: FigmaImportDialogPr
                   className="w-full"
                   onClick={() => handlePageSelect('all')}
                 >
-                  Import All Pages
+                  {t('figma.importAll')}
                 </Button>
               </>
             ) : (
               <>
                 <p className="text-xs text-muted-foreground mb-3">
-                  {pages[0]?.name} &middot; {pages[0]?.childCount} layers
+                  {pages[0]?.name} &middot; {t('figma.layers', { count: pages[0]?.childCount })}
                 </p>
                 <Button
                   size="sm"
                   className="w-full"
                   onClick={() => handlePageSelect(0)}
                 >
-                  Import
+                  {t('common.import')}
                 </Button>
               </>
             )}
@@ -311,7 +313,7 @@ export default function FigmaImportDialog({ open, onClose }: FigmaImportDialogPr
         {state === 'done' && (
           <div className="py-4 text-center">
             <Upload size={24} className="mx-auto mb-2 text-primary" />
-            <p className="text-sm text-foreground">Import complete!</p>
+            <p className="text-sm text-foreground">{t('figma.importComplete')}</p>
             {warnings.length > 0 && (
               <div className="mt-3 text-left max-h-24 overflow-y-auto">
                 {warnings.slice(0, 10).map((w, i) => (
@@ -321,7 +323,7 @@ export default function FigmaImportDialog({ open, onClose }: FigmaImportDialogPr
                 ))}
                 {warnings.length > 10 && (
                   <p className="text-[10px] text-muted-foreground">
-                    ...and {warnings.length - 10} more warnings
+                    {t('figma.moreWarnings', { count: warnings.length - 10 })}
                   </p>
                 )}
               </div>
@@ -345,7 +347,7 @@ export default function FigmaImportDialog({ open, onClose }: FigmaImportDialogPr
                 setError('')
               }}
             >
-              Try Again
+              {t('figma.tryAgain')}
             </Button>
           </div>
         )}

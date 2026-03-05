@@ -1,0 +1,38 @@
+import type { ComponentCategory } from '@/types/uikit'
+
+export const SHADCN_KIT_META: Record<
+  string,
+  { category: ComponentCategory; tags: string[] }
+> = {
+  'shadcn-btn-primary': { category: 'buttons', tags: ['button', 'primary', 'cta', 'action'] },
+  'shadcn-btn-secondary': { category: 'buttons', tags: ['button', 'secondary', 'outline'] },
+  'shadcn-btn-ghost': { category: 'buttons', tags: ['button', 'ghost', 'text', 'link'] },
+  'shadcn-btn-destructive': { category: 'buttons', tags: ['button', 'destructive', 'danger', 'delete'] },
+  'shadcn-input-text': { category: 'inputs', tags: ['input', 'text', 'field', 'form'] },
+  'shadcn-input-textarea': { category: 'inputs', tags: ['textarea', 'multiline', 'text', 'form'] },
+  'shadcn-input-checkbox': { category: 'inputs', tags: ['checkbox', 'check', 'toggle', 'form'] },
+  'shadcn-input-toggle': { category: 'inputs', tags: ['toggle', 'switch', 'on', 'off'] },
+  'shadcn-input-radio': { category: 'inputs', tags: ['radio', 'option', 'select', 'form'] },
+  'shadcn-card-basic': { category: 'cards', tags: ['card', 'container', 'surface', 'basic'] },
+  'shadcn-card-stats': { category: 'cards', tags: ['card', 'stats', 'metric', 'dashboard', 'kpi'] },
+  'shadcn-card-image': { category: 'cards', tags: ['card', 'image', 'media', 'thumbnail'] },
+  'shadcn-nav-bar': { category: 'navigation', tags: ['navbar', 'header', 'navigation', 'top'] },
+  'shadcn-tab-bar': { category: 'navigation', tags: ['tab', 'tabs', 'navigation', 'segment'] },
+  'shadcn-breadcrumb': { category: 'navigation', tags: ['breadcrumb', 'navigation', 'path'] },
+  'shadcn-alert-banner': { category: 'feedback', tags: ['alert', 'banner', 'notification', 'info'] },
+  'shadcn-badge': { category: 'feedback', tags: ['badge', 'tag', 'chip', 'label', 'status'] },
+  'shadcn-avatar': { category: 'feedback', tags: ['avatar', 'user', 'profile', 'icon'] },
+  'shadcn-divider': { category: 'layout', tags: ['divider', 'separator', 'line', 'hr'] },
+  'shadcn-btn-outline': { category: 'buttons', tags: ['button', 'outline', 'border'] },
+  'shadcn-btn-link': { category: 'buttons', tags: ['button', 'link', 'text', 'anchor'] },
+  'shadcn-input-select': { category: 'inputs', tags: ['select', 'dropdown', 'picker', 'form'] },
+  'shadcn-input-slider': { category: 'inputs', tags: ['slider', 'range', 'input', 'form'] },
+  'shadcn-dialog': { category: 'cards', tags: ['dialog', 'modal', 'popup', 'alert'] },
+  'shadcn-dropdown-menu': { category: 'navigation', tags: ['dropdown', 'menu', 'context', 'popover'] },
+  'shadcn-pagination': { category: 'navigation', tags: ['pagination', 'pager', 'pages', 'navigation'] },
+  'shadcn-toast': { category: 'feedback', tags: ['toast', 'notification', 'snackbar', 'message'] },
+  'shadcn-progress': { category: 'feedback', tags: ['progress', 'bar', 'loading', 'indicator'] },
+  'shadcn-skeleton': { category: 'feedback', tags: ['skeleton', 'loading', 'placeholder', 'shimmer'] },
+  'shadcn-tooltip': { category: 'feedback', tags: ['tooltip', 'hint', 'popover', 'info'] },
+  'shadcn-table': { category: 'layout', tags: ['table', 'data', 'grid', 'rows', 'columns'] },
+}

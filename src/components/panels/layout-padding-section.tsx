@@ -3,6 +3,7 @@ import NumberInput from '@/components/shared/number-input'
 import type { PenNode } from '@/types/pen'
 import { cn } from '@/lib/utils'
 import { Settings } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 
 type PaddingMode = 'single' | 'axis' | 'individual'
 
@@ -150,10 +151,12 @@ export default function PaddingSection({
     }
   }
 
+  const { t } = useTranslation()
+
   const MODES = [
-    { value: 'single' as const, label: 'One value for all sides' },
-    { value: 'axis' as const, label: 'Horizontal/Vertical' },
-    { value: 'individual' as const, label: 'Top/Right/Bottom/Left' },
+    { value: 'single' as const, labelKey: 'padding.oneValue' },
+    { value: 'axis' as const, labelKey: 'padding.horizontalVertical' },
+    { value: 'individual' as const, labelKey: 'padding.topRightBottomLeft' },
   ]
 
   return (
@@ -161,12 +164,12 @@ export default function PaddingSection({
       {/* Label row: "Padding" left, gear right */}
       <div className="flex items-center justify-between">
         <span className="text-[10px] text-muted-foreground">
-          Padding
+          {t('padding.title')}
         </span>
         <div ref={popoverRef} className="relative">
           <button
             type="button"
-            title="Padding mode"
+            title={t('padding.paddingMode')}
             onClick={() => setPopoverOpen(!popoverOpen)}
             className="h-5 w-5 flex items-center justify-center rounded text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
           >
@@ -174,7 +177,7 @@ export default function PaddingSection({
           </button>
           {popoverOpen && (
             <div className="absolute right-0 top-full mt-1 z-50 bg-popover border border-border rounded-lg shadow-md p-3 min-w-[190px]">
-              <div className="text-[12px] font-medium mb-3 text-foreground">Padding Values</div>
+              <div className="text-[12px] font-medium mb-3 text-foreground">{t('padding.paddingValues')}</div>
               <div className="space-y-2.5">
                 {MODES.map((opt) => (
                   <div
@@ -183,7 +186,7 @@ export default function PaddingSection({
                     onClick={() => handleModeChange(opt.value)}
                   >
                     <RadioCircle selected={mode === opt.value} />
-                    <span className="text-[12px] text-foreground leading-none">{opt.label}</span>
+                    <span className="text-[12px] text-foreground leading-none">{t(opt.labelKey)}</span>
                   </div>
                 ))}
               </div>

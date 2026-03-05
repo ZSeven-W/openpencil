@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next'
 import NumberInput from '@/components/shared/number-input'
 import SectionHeader from '@/components/shared/section-header'
 import VariablePicker from '@/components/shared/variable-picker'
@@ -13,13 +14,14 @@ export default function AppearanceSection({
   node,
   onUpdate,
 }: AppearanceSectionProps) {
+  const { t } = useTranslation()
   const rawOpacity = node.opacity
   const isBound = typeof rawOpacity === 'string' && isVariableRef(rawOpacity)
   const opacity = typeof rawOpacity === 'number' ? rawOpacity * 100 : 100
 
   return (
     <div className="space-y-1.5">
-      <SectionHeader title="Layer" />
+      <SectionHeader title={t('appearance.layer')} />
       <div className="flex items-center gap-1">
         <div className="flex-1">
           {isBound ? (
@@ -28,7 +30,7 @@ export default function AppearanceSection({
             </div>
           ) : (
             <NumberInput
-              label="Opacity"
+              label={t('appearance.opacity')}
               value={Math.round(opacity)}
               onChange={(v) => onUpdate({ opacity: v / 100 })}
               min={0}

@@ -1,4 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useDocumentStore, findNodeInTree, getActivePageChildren } from '@/stores/document-store'
 import { useCanvasStore } from '@/stores/canvas-store'
 import { setSkipNextDepthResolve } from '@/canvas/use-canvas-selection'
@@ -119,6 +120,7 @@ function collectCollapsibleNodeIds(
 }
 
 export default function LayerPanel() {
+  const { t } = useTranslation()
   const activePageId = useCanvasStore((s) => s.activePageId)
   const children = useDocumentStore((s) => getActivePageChildren(s.document, activePageId))
   const updateNode = useDocumentStore((s) => s.updateNode)
@@ -387,13 +389,13 @@ export default function LayerPanel() {
       <PageTabs />
       <div className="h-8 flex items-center px-3 border-b border-border">
         <span className="text-xs font-medium text-muted-foreground tracking-wider">
-          Layers
+          {t('layers.title')}
         </span>
       </div>
       <div ref={scrollContainerRef} className="flex-1 overflow-y-auto py-1 px-1">
         {children.length === 0 ? (
           <p className="text-xs text-muted-foreground text-center mt-4 px-2">
-            No layers yet. Use the toolbar to draw shapes.
+            {t('layers.empty')}
           </p>
         ) : (
           renderLayerTree(

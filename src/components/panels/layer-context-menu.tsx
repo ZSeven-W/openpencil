@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react'
+import { useTranslation } from 'react-i18next'
 import {
   Trash2,
   Copy,
@@ -22,14 +23,14 @@ interface LayerContextMenuProps {
 }
 
 const MENU_ITEMS = [
-  { action: 'duplicate', label: 'Duplicate', icon: Copy },
-  { action: 'delete', label: 'Delete', icon: Trash2 },
-  { action: 'group', label: 'Group Selection', icon: Group, requireGroup: true },
-  { action: 'make-component', label: 'Create Component', icon: Component, requireCreateComponent: true },
-  { action: 'detach-component', label: 'Detach Component', icon: Unlink, requireReusable: true },
-  { action: 'detach-component', label: 'Detach Instance', icon: Unlink, requireInstance: true },
-  { action: 'lock', label: 'Toggle Lock', icon: Lock },
-  { action: 'hide', label: 'Toggle Visibility', icon: EyeOff },
+  { action: 'duplicate', labelKey: 'common.duplicate', icon: Copy },
+  { action: 'delete', labelKey: 'common.delete', icon: Trash2 },
+  { action: 'group', labelKey: 'layerMenu.groupSelection', icon: Group, requireGroup: true },
+  { action: 'make-component', labelKey: 'layerMenu.createComponent', icon: Component, requireCreateComponent: true },
+  { action: 'detach-component', labelKey: 'layerMenu.detachComponent', icon: Unlink, requireReusable: true },
+  { action: 'detach-component', labelKey: 'layerMenu.detachInstance', icon: Unlink, requireInstance: true },
+  { action: 'lock', labelKey: 'layerMenu.toggleLock', icon: Lock },
+  { action: 'hide', labelKey: 'layerMenu.toggleVisibility', icon: EyeOff },
 ]
 
 export default function LayerContextMenu({
@@ -42,6 +43,7 @@ export default function LayerContextMenu({
   onAction,
   onClose,
 }: LayerContextMenuProps) {
+  const { t } = useTranslation()
   const menuRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -81,7 +83,7 @@ export default function LayerContextMenu({
           onClick={() => onAction(item.action)}
         >
           <item.icon size={12} />
-          {item.label}
+          {t(item.labelKey)}
         </button>
       ))}
     </div>
