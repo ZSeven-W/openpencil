@@ -28,6 +28,7 @@ export interface ElectronAPI {
   ) => Promise<string | null>
   saveToPath: (filePath: string, content: string) => Promise<string>
   onMenuAction: (callback: (action: string) => void) => () => void
+  setTheme: (theme: 'dark' | 'light') => void
   updater: {
     getState: () => Promise<UpdaterState>
     checkForUpdates: () => Promise<UpdaterState>
@@ -48,6 +49,8 @@ const api: ElectronAPI = {
 
   saveToPath: (filePath: string, content: string) =>
     ipcRenderer.invoke('dialog:saveToPath', { filePath, content }),
+
+  setTheme: (theme: 'dark' | 'light') => ipcRenderer.invoke('theme:set', theme),
 
   onMenuAction: (callback: (action: string) => void) => {
     const listener = (_event: IpcRendererEvent, action: string) => {

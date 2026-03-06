@@ -130,6 +130,9 @@ export default function TopBar() {
       if (saved === 'light') {
         document.documentElement.classList.add('light')
         setTheme('light')
+        window.electronAPI?.setTheme?.('light')
+      } else {
+        window.electronAPI?.setTheme?.('dark')
       }
     } catch {
       // ignore
@@ -151,6 +154,7 @@ export default function TopBar() {
       document.documentElement.classList.remove('light')
     }
     setTheme(next)
+    window.electronAPI?.setTheme?.(next)
     try {
       localStorage.setItem('openpencil-theme', next)
     } catch {

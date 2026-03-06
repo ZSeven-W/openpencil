@@ -333,13 +333,24 @@ async function startNitroServer(): Promise<number> {
 // ---------------------------------------------------------------------------
 
 function createWindow(): void {
+  const isWinOrLinux = process.platform === 'win32' || process.platform === 'linux'
+
   const windowOptions: BrowserWindowConstructorOptions = {
     width: 1440,
     height: 900,
     minWidth: 1024,
     minHeight: 600,
     title: 'OpenPencil',
-    titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'default',
+    titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'hidden',
+    ...(isWinOrLinux
+      ? {
+          titleBarOverlay: {
+            color: '#09090b',
+            symbolColor: '#a1a1aa',
+            height: 40,
+          },
+        }
+      : {}),
     webPreferences: {
       preload: join(__dirname, 'preload.cjs'),
       contextIsolation: true,
@@ -355,6 +366,12 @@ function createWindow(): void {
   windowOptions.show = false
 
   mainWindow = new BrowserWindow(windowOptions)
+
+  // Hide native menu bar on Windows/Linux (shortcuts still work via Alt key)
+  if (isWinOrLinux) {
+    mainWindow.setAutoHideMenuBar(true)
+    mainWindow.setMenuBarVisibility(false)
+  }
 
   const url = isDev
     ? 'http://localhost:3000/editor'
@@ -454,6 +471,17 @@ function setupIPC(): void {
       return resolved
     },
   )
+
+  // Theme sync for Windows/Linux title bar overlay
+  ipcMain.handle('theme:set', (_event, theme: 'dark' | 'light') => {
+    if (!mainWindow || mainWindow.isDestroyed()) return
+    const isWinOrLinux = process.platform === 'win32' || process.platform === 'linux'
+    if (!isWinOrLinux) return
+    mainWindow.setTitleBarOverlay({
+      color: theme === 'dark' ? '#09090b' : '#ffffff',
+      symbolColor: theme === 'dark' ? '#a1a1aa' : '#71717a',
+    })
+  })
 
   ipcMain.handle('updater:getState', () => updaterState)
 
