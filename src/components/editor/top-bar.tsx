@@ -301,7 +301,7 @@ export default function TopBar() {
       </div>
 
       {/* Right section */}
-      <div className="flex items-center gap-0.5 app-region-no-drag">
+      <div className="flex items-center gap-0.5 app-region-no-drag electron-win-controls-pad">
         <AgentStatusButton />
 
         <div className="w-px h-3.5 bg-border/60 mx-1" />

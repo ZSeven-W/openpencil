@@ -329,6 +329,40 @@ async function startNitroServer(): Promise<number> {
 }
 
 // ---------------------------------------------------------------------------
+// Linux window-controls side detection
+// ---------------------------------------------------------------------------
+
+/**
+ * Detect whether Linux DE places window controls on the left or right.
+ * Uses gsettings (GNOME/Cinnamon/MATE) as primary check, defaults to right
+ * for KDE/XFCE and when detection fails.
+ */
+function getLinuxControlsSide(): 'left' | 'right' {
+  try {
+    const layout = execSync(
+      'gsettings get org.gnome.desktop.wm.preferences button-layout',
+      { encoding: 'utf-8', timeout: 3000 },
+    )
+      .trim()
+      .replace(/'/g, '')
+    // Format: "close,minimize,maximize:" → left, ":minimize,maximize,close" → right
+    const colonIndex = layout.indexOf(':')
+    if (colonIndex < 0) return 'right'
+    const beforeColon = layout.slice(0, colonIndex)
+    if (
+      beforeColon.includes('close') ||
+      beforeColon.includes('minimize') ||
+      beforeColon.includes('maximize')
+    ) {
+      return 'left'
+    }
+    return 'right'
+  } catch {
+    return 'right'
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Window
 // ---------------------------------------------------------------------------
 
@@ -385,6 +419,23 @@ function createWindow(): void {
         '.electron-traffic-light-pad { margin-left: 74px; }' +
         '.electron-fullscreen .electron-traffic-light-pad { margin-left: 0; }',
       )
+    }
+    if (process.platform === 'win32') {
+      await mainWindow.webContents.insertCSS(
+        '.electron-win-controls-pad { margin-right: 140px; }',
+      )
+    }
+    if (process.platform === 'linux') {
+      const side = getLinuxControlsSide()
+      if (side === 'left') {
+        await mainWindow.webContents.insertCSS(
+          '.electron-traffic-light-pad { margin-left: 140px; }',
+        )
+      } else {
+        await mainWindow.webContents.insertCSS(
+          '.electron-win-controls-pad { margin-right: 140px; }',
+        )
+      }
     }
     mainWindow.show()
     broadcastUpdaterState()
