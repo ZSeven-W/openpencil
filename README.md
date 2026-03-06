@@ -74,10 +74,12 @@ OpenPencil is built around AI from the ground up — not as a plugin, but as a c
 | **Claude Code** | No config — uses Claude Agent SDK with local OAuth |
 | **Codex CLI** | Connect in Agent Settings (`Cmd+,`) |
 | **OpenCode** | Connect in Agent Settings (`Cmd+,`) |
+| **GitHub Copilot** | `copilot login` then connect in Agent Settings (`Cmd+,`) |
 
 **MCP Server**
-- Built-in MCP server — one-click install into Claude Code / Codex / Gemini / OpenCode / Kiro CLIs
+- Built-in MCP server — one-click install into Claude Code / Codex / Gemini / OpenCode / Kiro / Copilot CLIs
 - Design automation from terminal: read, create, and modify `.op` files via any MCP-compatible agent
+- Multi-page support — create, rename, reorder, and duplicate pages via MCP tools
 
 **Code Generation**
 - React + Tailwind CSS
@@ -116,7 +118,7 @@ OpenPencil is built around AI from the ground up — not as a plugin, but as a c
 | **State** | Zustand v5 |
 | **Server** | Nitro |
 | **Desktop** | Electron 35 |
-| **AI** | Anthropic SDK · Claude Agent SDK · OpenCode SDK |
+| **AI** | Anthropic SDK · Claude Agent SDK · OpenCode SDK · Copilot SDK |
 | **Runtime** | Bun · Vite 7 |
 | **File format** | `.op` — JSON-based, human-readable, Git-friendly |
 
@@ -135,7 +137,7 @@ src/
   uikit/           Reusable component kit system
 server/
   api/ai/          Nitro API — streaming chat, generation, validation
-  utils/           Claude CLI, OpenCode, Codex client wrappers
+  utils/           Claude CLI, OpenCode, Codex, Copilot client wrappers
 electron/
   main.ts          Window, Nitro fork, native menu, auto-updater
   preload.ts       IPC bridge

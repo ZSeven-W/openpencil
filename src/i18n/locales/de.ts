@@ -297,6 +297,8 @@ const de: TranslationKeys = {
   'agents.openaiModels': 'OpenAI-Modelle',
   'agents.opencode': 'OpenCode',
   'agents.opencodeDesc': '75+ LLM-Anbieter',
+  'agents.copilot': 'GitHub Copilot',
+  'agents.copilotDesc': 'GitHub Copilot-Modelle',
   'agents.mcpServer': 'MCP-Server',
   'agents.mcpServerStart': 'Starten',
   'agents.mcpServerStop': 'Stoppen',
@@ -307,6 +309,11 @@ const de: TranslationKeys = {
   'agents.http': 'http',
   'agents.stdioHttp': 'stdio + http',
   'agents.autoUpdate': 'Automatisch nach Updates suchen',
+  'agents.notInstalled': 'Nicht installiert',
+  'agents.install': 'Installieren',
+  'agents.installing': 'Installiere...',
+  'agents.installFailed': 'Installation fehlgeschlagen',
+  'agents.viewDocs': 'Doku',
 
   // ── Figma Import ──
   'figma.title': 'Aus Figma importieren',

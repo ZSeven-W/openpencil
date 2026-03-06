@@ -295,6 +295,8 @@ const th: TranslationKeys = {
   'agents.openaiModels': 'โมเดล OpenAI',
   'agents.opencode': 'OpenCode',
   'agents.opencodeDesc': '75+ ผู้ให้บริการ LLM',
+  'agents.copilot': 'GitHub Copilot',
+  'agents.copilotDesc': 'โมเดล GitHub Copilot',
   'agents.mcpServer': 'เซิร์ฟเวอร์ MCP',
   'agents.mcpServerStart': 'เริ่ม',
   'agents.mcpServerStop': 'หยุด',
@@ -305,6 +307,11 @@ const th: TranslationKeys = {
   'agents.http': 'http',
   'agents.stdioHttp': 'stdio + http',
   'agents.autoUpdate': 'ตรวจสอบอัปเดตอัตโนมัติ',
+  'agents.notInstalled': 'ยังไม่ได้ติดตั้ง',
+  'agents.install': 'ติดตั้ง',
+  'agents.installing': 'กำลังติดตั้ง...',
+  'agents.installFailed': 'การติดตั้งล้มเหลว',
+  'agents.viewDocs': 'เอกสาร',
 
   // ── Figma Import ──
   'figma.title': 'นำเข้าจาก Figma',

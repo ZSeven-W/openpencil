@@ -17,6 +17,7 @@ export interface ImportSvgParams {
   maxDim?: number
   postProcess?: boolean
   canvasWidth?: number
+  pageId?: string
 }
 
 export async function handleImportSvg(
@@ -36,19 +37,20 @@ export async function handleImportSvg(
   const filePath = resolveDocPath(params.filePath)
   let doc = await openDocument(filePath)
   doc = structuredClone(doc)
+  const pageId = params.pageId
 
   const parent = params.parent ?? null
-  let children = getDocChildren(doc)
+  let children = getDocChildren(doc, pageId)
   for (const node of nodes) {
     children = insertNodeInTree(children, parent, node)
   }
-  setDocChildren(doc, children)
+  setDocChildren(doc, children, pageId)
 
-  if (params.postProcess) postProcessNode(doc, params.canvasWidth ?? 1200)
+  if (params.postProcess) postProcessNode(doc, params.canvasWidth ?? 1200, pageId)
   await saveDocument(filePath, doc)
 
   const nodeIds = nodes.map((n) => n.id)
-  const totalCount = flattenNodes(getDocChildren(doc)).length
+  const totalCount = flattenNodes(getDocChildren(doc, pageId)).length
   return {
     nodeIds,
     nodeCount: totalCount,

@@ -297,6 +297,8 @@ const ru: TranslationKeys = {
   'agents.openaiModels': 'Модели OpenAI',
   'agents.opencode': 'OpenCode',
   'agents.opencodeDesc': '75+ провайдеров LLM',
+  'agents.copilot': 'GitHub Copilot',
+  'agents.copilotDesc': 'Модели GitHub Copilot',
   'agents.mcpServer': 'MCP Сервер',
   'agents.mcpServerStart': 'Запустить',
   'agents.mcpServerStop': 'Остановить',
@@ -307,6 +309,11 @@ const ru: TranslationKeys = {
   'agents.http': 'http',
   'agents.stdioHttp': 'stdio + http',
   'agents.autoUpdate': 'Автоматически проверять обновления',
+  'agents.notInstalled': 'Не установлено',
+  'agents.install': 'Установить',
+  'agents.installing': 'Установка...',
+  'agents.installFailed': 'Ошибка установки',
+  'agents.viewDocs': 'Документация',
 
   // ── Figma Import ──
   'figma.title': 'Импорт из Figma',

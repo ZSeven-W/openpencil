@@ -295,6 +295,8 @@ const ko: TranslationKeys = {
   'agents.openaiModels': 'OpenAI 모델',
   'agents.opencode': 'OpenCode',
   'agents.opencodeDesc': '75개 이상의 LLM 제공자',
+  'agents.copilot': 'GitHub Copilot',
+  'agents.copilotDesc': 'GitHub Copilot 모델',
   'agents.mcpServer': 'MCP 서버',
   'agents.mcpServerStart': '시작',
   'agents.mcpServerStop': '정지',
@@ -305,6 +307,11 @@ const ko: TranslationKeys = {
   'agents.http': 'http',
   'agents.stdioHttp': 'stdio + http',
   'agents.autoUpdate': '자동 업데이트 확인',
+  'agents.notInstalled': '설치되지 않음',
+  'agents.install': '설치',
+  'agents.installing': '설치 중...',
+  'agents.installFailed': '설치 실패',
+  'agents.viewDocs': '문서',
 
   // ── Figma Import ──
   'figma.title': 'Figma에서 가져오기',
