@@ -2,6 +2,7 @@ import { lazy, Suspense, useState, useCallback, useEffect } from 'react'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import TopBar from './top-bar'
 import Toolbar from './toolbar'
+import BooleanToolbar from './boolean-toolbar'
 import StatusBar from './status-bar'
 import LayerPanel from '@/components/panels/layer-panel'
 import PropertyPanel from '@/components/panels/property-panel'
@@ -144,6 +145,7 @@ export default function EditorLayout() {
                 <FabricCanvas />
               </Suspense>
               <Toolbar />
+              <BooleanToolbar />
 
               {/* Floating variables panel — anchored to the right of the toolbar */}
               {variablesPanelOpen && <VariablesPanel />}

@@ -89,6 +89,7 @@ OpenPencil wurde von Grund auf mit KI im Kern aufgebaut — nicht als Plugin, so
 **Canvas und Zeichnen**
 - Unendliche Canvas mit Pan, Zoom, intelligenten Ausrichtungshilfslinien und Einrasten
 - Rechteck, Ellipse, Linie, Polygon, Stift (Bezier), Frame, Text
+- Boolesche Operationen — Vereinigung, Subtraktion, Schnittmenge mit kontextbezogener Werkzeugleiste
 - Icon-Auswahl (Iconify) und Bildimport (PNG/JPEG/SVG/WebP/GIF)
 - Auto-Layout — vertikal/horizontal mit Gap, Padding, Justify, Align
 - Mehrseitige Dokumente mit Tab-Navigation
@@ -156,6 +157,8 @@ electron/
 | `Del` | Löschen | | `Cmd+Shift+V` | Variablen-Panel |
 | `[ / ]` | Reihenfolge ändern | | `Cmd+J` | KI-Chat |
 | Pfeiltasten | 1px verschieben | | `Cmd+,` | Agenteneinstellungen |
+| `Cmd+Alt+U` | Boolesche Vereinigung | | `Cmd+Alt+S` | Boolesche Subtraktion |
+| `Cmd+Alt+I` | Boolesche Schnittmenge | | | |
 
 ## Skripte
 
@@ -186,7 +189,7 @@ Beiträge sind willkommen! Siehe [CLAUDE.md](./CLAUDE.md) für Architekturdetail
 - [x] MCP-Server-Integration
 - [x] Mehrseitige Unterstützung
 - [x] Figma-`.fig`-Import
-- [ ] Boolesche Operationen (Vereinigung, Subtraktion, Schnittmenge)
+- [x] Boolesche Operationen (Vereinigung, Subtraktion, Schnittmenge)
 - [ ] Kollaboratives Bearbeiten
 - [ ] Plugin-System
 

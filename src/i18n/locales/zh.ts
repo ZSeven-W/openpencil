@@ -102,6 +102,9 @@ const zh: TranslationKeys = {
   'layerMenu.createComponent': '创建组件',
   'layerMenu.detachComponent': '分离组件',
   'layerMenu.detachInstance': '分离实例',
+  'layerMenu.booleanUnion': '联合',
+  'layerMenu.booleanSubtract': '减去',
+  'layerMenu.booleanIntersect': '交集',
   'layerMenu.toggleLock': '切换锁定',
   'layerMenu.toggleVisibility': '切换可见性',
 

@@ -105,6 +105,9 @@ const tr: TranslationKeys = {
   'layerMenu.createComponent': 'Bileşen Oluştur',
   'layerMenu.detachComponent': 'Bileşeni Ayır',
   'layerMenu.detachInstance': 'Örneği Ayır',
+  'layerMenu.booleanUnion': 'Birleştir',
+  'layerMenu.booleanSubtract': 'Çıkar',
+  'layerMenu.booleanIntersect': 'Kesiştir',
   'layerMenu.toggleLock': 'Kilidi Aç/Kapat',
   'layerMenu.toggleVisibility': 'Görünürlüğü Aç/Kapat',
 

@@ -89,6 +89,7 @@ OpenPencil được xây dựng xung quanh AI từ nền tảng — không phả
 **Canvas và Vẽ**
 - Canvas vô hạn với pan, zoom, hướng dẫn căn chỉnh thông minh và snapping
 - Hình chữ nhật, Hình ellipse, Đường thẳng, Đa giác, Bút (Bezier), Frame, Văn bản
+- Phép toán Boolean — hợp nhất, trừ, giao nhau với thanh công cụ ngữ cảnh
 - Trình chọn icon (Iconify) và nhập hình ảnh (PNG/JPEG/SVG/WebP/GIF)
 - Auto-layout — dọc/ngang với gap, padding, justify, align
 - Tài liệu nhiều trang với điều hướng bằng tab
@@ -156,6 +157,8 @@ electron/
 | `Del` | Xóa | | `Cmd+Shift+V` | Bảng biến |
 | `[ / ]` | Sắp xếp lại | | `Cmd+J` | AI chat |
 | Mũi tên | Dịch chuyển 1px | | `Cmd+,` | Cài đặt tác nhân |
+| `Cmd+Alt+U` | Hợp nhất Boolean | | `Cmd+Alt+S` | Trừ Boolean |
+| `Cmd+Alt+I` | Giao nhau Boolean | | | |
 
 ## Scripts
 
@@ -186,7 +189,7 @@ Chào mừng đóng góp! Xem [CLAUDE.md](./CLAUDE.md) để biết chi tiết v
 - [x] Tích hợp máy chủ MCP
 - [x] Hỗ trợ nhiều trang
 - [x] Nhập Figma `.fig`
-- [ ] Phép toán Boolean (hợp nhất, trừ, giao)
+- [x] Phép toán Boolean (hợp nhất, trừ, giao)
 - [ ] Chỉnh sửa cộng tác
 - [ ] Hệ thống plugin
 

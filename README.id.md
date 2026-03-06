@@ -89,6 +89,7 @@ OpenPencil dibangun dengan AI sebagai inti — bukan sebagai plugin, melainkan s
 **Kanvas & Menggambar**
 - Kanvas tak terbatas dengan pan, zoom, panduan perataan cerdas, dan snapping
 - Persegi panjang, Elips, Garis, Poligon, Pen (Bezier), Frame, Teks
+- Operasi Boolean — gabungan, kurangi, irisan dengan toolbar kontekstual
 - Pemilih ikon (Iconify) dan impor gambar (PNG/JPEG/SVG/WebP/GIF)
 - Auto-layout — vertikal/horizontal dengan gap, padding, justify, align
 - Dokumen multi-halaman dengan navigasi tab
@@ -156,6 +157,8 @@ electron/
 | `Del` | Hapus | | `Cmd+Shift+V` | Panel variabel |
 | `[ / ]` | Ubah urutan | | `Cmd+J` | Chat AI |
 | Panah | Geser 1px | | `Cmd+,` | Pengaturan agen |
+| `Cmd+Alt+U` | Union Boolean | | `Cmd+Alt+S` | Subtract Boolean |
+| `Cmd+Alt+I` | Intersect Boolean | | | |
 
 ## Skrip
 
@@ -186,7 +189,7 @@ Kontribusi sangat disambut! Lihat [CLAUDE.md](./CLAUDE.md) untuk detail arsitekt
 - [x] Integrasi server MCP
 - [x] Dukungan multi-halaman
 - [x] Impor Figma `.fig`
-- [ ] Operasi boolean (gabung, kurangi, potong)
+- [x] Operasi boolean (gabung, kurangi, potong)
 - [ ] Pengeditan kolaboratif
 - [ ] Sistem plugin
 

@@ -5,6 +5,8 @@ import { useCanvasStore } from '@/stores/canvas-store'
 import { setSkipNextDepthResolve } from '@/canvas/use-canvas-selection'
 import type { FabricObjectWithPenId } from '@/canvas/canvas-object-factory'
 import type { PenNode } from '@/types/pen'
+import { useHistoryStore } from '@/stores/history-store'
+import { canBooleanOp, executeBooleanOp, type BooleanOpType } from '@/utils/boolean-ops'
 import LayerItem from './layer-item'
 import type { DropPosition } from './layer-item'
 import LayerContextMenu from './layer-context-menu'
@@ -355,6 +357,24 @@ export default function LayerPanel() {
         case 'detach-component':
           detachComponent(nodeId)
           break
+        case 'boolean-union':
+        case 'boolean-subtract':
+        case 'boolean-intersect': {
+          const opType = action.replace('boolean-', '') as BooleanOpType
+          const nodes = selectedIds
+            .map((id) => getNodeById(id))
+            .filter((n): n is PenNode => n != null)
+          if (canBooleanOp(nodes)) {
+            const result = executeBooleanOp(nodes, opType)
+            if (result) {
+              useHistoryStore.getState().pushState(useDocumentStore.getState().document)
+              for (const id of selectedIds) removeNode(id)
+              useDocumentStore.getState().addNode(null, result)
+              setSelection([result.id], result.id)
+            }
+          }
+          break
+        }
       }
       setContextMenu(null)
     },
@@ -369,6 +389,7 @@ export default function LayerPanel() {
       setSelection,
       makeReusable,
       detachComponent,
+      getNodeById,
     ],
   )
 
@@ -420,12 +441,16 @@ export default function LayerPanel() {
           ? 'reusable' in contextNode && contextNode.reusable === true
           : false
         const nodeIsInstance = contextNode?.type === 'ref'
+        const booleanNodes = selectedIds
+          .map((id) => getNodeById(id))
+          .filter((n): n is PenNode => n != null)
         return (
           <LayerContextMenu
             x={contextMenu.x}
             y={contextMenu.y}
             nodeId={contextMenu.nodeId}
             canGroup={selectedIds.length >= 2}
+            canBoolean={canBooleanOp(booleanNodes)}
             canCreateComponent={isContainer && !nodeIsReusable}
             isReusable={nodeIsReusable}
             isInstance={nodeIsInstance}

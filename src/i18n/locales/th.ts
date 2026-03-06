@@ -105,6 +105,9 @@ const th: TranslationKeys = {
   'layerMenu.createComponent': 'สร้างคอมโพเนนต์',
   'layerMenu.detachComponent': 'แยกคอมโพเนนต์',
   'layerMenu.detachInstance': 'แยกอินสแตนซ์',
+  'layerMenu.booleanUnion': 'รวม',
+  'layerMenu.booleanSubtract': 'ลบ',
+  'layerMenu.booleanIntersect': 'ตัดกัน',
   'layerMenu.toggleLock': 'สลับล็อก',
   'layerMenu.toggleVisibility': 'สลับการมองเห็น',
 

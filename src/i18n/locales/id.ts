@@ -105,6 +105,9 @@ const id: TranslationKeys = {
   'layerMenu.createComponent': 'Buat Komponen',
   'layerMenu.detachComponent': 'Lepaskan Komponen',
   'layerMenu.detachInstance': 'Lepaskan Instance',
+  'layerMenu.booleanUnion': 'Gabungan',
+  'layerMenu.booleanSubtract': 'Kurangi',
+  'layerMenu.booleanIntersect': 'Irisan',
   'layerMenu.toggleLock': 'Alihkan Kunci',
   'layerMenu.toggleVisibility': 'Alihkan Visibilitas',
 

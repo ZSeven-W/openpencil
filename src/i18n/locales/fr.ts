@@ -107,6 +107,9 @@ const fr: TranslationKeys = {
   'layerMenu.createComponent': 'Créer un composant',
   'layerMenu.detachComponent': 'Détacher le composant',
   'layerMenu.detachInstance': 'Détacher l\u2019instance',
+  'layerMenu.booleanUnion': 'Union',
+  'layerMenu.booleanSubtract': 'Soustraire',
+  'layerMenu.booleanIntersect': 'Intersection',
   'layerMenu.toggleLock': 'Verrouiller / Déverrouiller',
   'layerMenu.toggleVisibility': 'Afficher / Masquer',
 

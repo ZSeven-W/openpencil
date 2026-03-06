@@ -109,6 +109,9 @@ const ja: TranslationKeys = {
   'layerMenu.createComponent': 'コンポーネントを作成',
   'layerMenu.detachComponent': 'コンポーネントを解除',
   'layerMenu.detachInstance': 'インスタンスを解除',
+  'layerMenu.booleanUnion': '合体',
+  'layerMenu.booleanSubtract': '前面で型抜き',
+  'layerMenu.booleanIntersect': '交差',
   'layerMenu.toggleLock': 'ロックの切り替え',
   'layerMenu.toggleVisibility': '表示の切り替え',
 

@@ -107,6 +107,9 @@ const ru: TranslationKeys = {
   'layerMenu.createComponent': 'Создать компонент',
   'layerMenu.detachComponent': 'Отсоединить компонент',
   'layerMenu.detachInstance': 'Отсоединить экземпляр',
+  'layerMenu.booleanUnion': 'Объединение',
+  'layerMenu.booleanSubtract': 'Вычитание',
+  'layerMenu.booleanIntersect': 'Пересечение',
   'layerMenu.toggleLock': 'Переключить блокировку',
   'layerMenu.toggleVisibility': 'Переключить видимость',
 

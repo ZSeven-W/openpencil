@@ -89,6 +89,7 @@ OpenPencil, AI'yi bir eklenti olarak değil, temel iş akışı olarak sıfırda
 **Kanvas ve Çizim**
 - Kaydırma, yakınlaştırma, akıllı hizalama kılavuzları ve yakalamayı destekleyen sonsuz kanvas
 - Dikdörtgen, Elips, Çizgi, Çokgen, Kalem (Bezier), Frame, Metin
+- Boolean işlemler — birleştir, çıkar, kesiştir bağlamsal araç çubuğuyla
 - Simge seçici (Iconify) ve görsel içe aktarma (PNG/JPEG/SVG/WebP/GIF)
 - Otomatik düzen — boşluk, dolgu, justify, align ile dikey/yatay
 - Sekme navigasyonlu çok sayfalı belgeler
@@ -156,6 +157,8 @@ electron/
 | `Del` | Sil | | `Cmd+Shift+V` | Değişkenler paneli |
 | `[ / ]` | Yeniden sırala | | `Cmd+J` | AI sohbet |
 | Oklar | 1px kaydır | | `Cmd+,` | Ajan ayarları |
+| `Cmd+Alt+U` | Boolean birleştir | | `Cmd+Alt+S` | Boolean çıkar |
+| `Cmd+Alt+I` | Boolean kesiştir | | | |
 
 ## Betikler
 
@@ -186,7 +189,7 @@ Katkılarınızı bekliyoruz! Mimari ayrıntılar ve kod stili için [CLAUDE.md]
 - [x] MCP sunucu entegrasyonu
 - [x] Çok sayfa desteği
 - [x] Figma `.fig` içe aktarma
-- [ ] Boolean işlemler (birleştirme, çıkarma, kesişim)
+- [x] Boolean işlemler (birleştirme, çıkarma, kesişim)
 - [ ] Ortak düzenleme
 - [ ] Eklenti sistemi
 

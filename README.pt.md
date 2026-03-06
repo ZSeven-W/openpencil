@@ -89,6 +89,7 @@ O OpenPencil é construído com IA desde o início — não como um plugin, mas 
 **Canvas e Desenho**
 - Canvas infinito com pan, zoom, guias de alinhamento inteligentes e snapping
 - Retângulo, Elipse, Linha, Polígono, Caneta (Bezier), Frame, Texto
+- Operações booleanas — união, subtração, interseção com barra de ferramentas contextual
 - Seletor de ícones (Iconify) e importação de imagens (PNG/JPEG/SVG/WebP/GIF)
 - Auto-layout — vertical/horizontal com gap, padding, justify, align
 - Documentos com múltiplas páginas e navegação por abas
@@ -156,6 +157,8 @@ electron/
 | `Del` | Excluir | | `Cmd+Shift+V` | Painel de variáveis |
 | `[ / ]` | Reordenar | | `Cmd+J` | Chat IA |
 | Setas | Mover 1px | | `Cmd+,` | Configurações do agente |
+| `Cmd+Alt+U` | União booleana | | `Cmd+Alt+S` | Subtração booleana |
+| `Cmd+Alt+I` | Interseção booleana | | | |
 
 ## Scripts
 
@@ -186,7 +189,7 @@ Contribuições são bem-vindas! Consulte o [CLAUDE.md](./CLAUDE.md) para detalh
 - [x] Integração com servidor MCP
 - [x] Suporte a múltiplas páginas
 - [x] Importação do Figma `.fig`
-- [ ] Operações booleanas (união, subtração, interseção)
+- [x] Operações booleanas (união, subtração, interseção)
 - [ ] Edição colaborativa
 - [ ] Sistema de plugins
 

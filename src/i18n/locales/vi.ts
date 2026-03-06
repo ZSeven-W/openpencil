@@ -105,6 +105,9 @@ const vi: TranslationKeys = {
   'layerMenu.createComponent': 'Tạo thành phần',
   'layerMenu.detachComponent': 'Tách thành phần',
   'layerMenu.detachInstance': 'Tách bản thể',
+  'layerMenu.booleanUnion': 'Hợp nhất',
+  'layerMenu.booleanSubtract': 'Trừ',
+  'layerMenu.booleanIntersect': 'Giao nhau',
   'layerMenu.toggleLock': 'Bật/Tắt khoá',
   'layerMenu.toggleVisibility': 'Bật/Tắt hiển thị',
 

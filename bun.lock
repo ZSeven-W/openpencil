@@ -37,6 +37,7 @@
         "lucide-react": "^0.545.0",
         "nanoid": "^5.1.6",
         "nitro": "npm:nitro-nightly@latest",
+        "paper": "^0.12.18",
         "react": "^19.2.0",
         "react-dom": "^19.2.0",
         "react-i18next": "^16.5.4",
@@ -1301,6 +1302,8 @@
     "p-map": ["p-map@7.0.4", "https://registry.npmmirror.com/p-map/-/p-map-7.0.4.tgz", {}, "sha512-tkAQEw8ysMzmkhgw8k+1U/iPhWNhykKnSk4Rd5zLoPJCuJaGRPo6YposrZgaxHKzDHdDWWZvE/Sk7hsL2X/CpQ=="],
 
     "package-json-from-dist": ["package-json-from-dist@1.0.1", "https://registry.npmmirror.com/package-json-from-dist/-/package-json-from-dist-1.0.1.tgz", {}, "sha512-UEZIS3/by4OC8vL3P2dTXRETpebLI2NiI5vIrjaD/5UtrkFX/tNbwjTSRAGC/+7CAo2pIcBaRgWmcBBHcsaCIw=="],
+
+    "paper": ["paper@0.12.18", "https://registry.npmmirror.com/paper/-/paper-0.12.18.tgz", {}, "sha512-ZSLIEejQTJZuYHhSSqAf4jXOnii0kPhCJGAnYAANtdS72aNwXJ9cP95tZHgq1tnNpvEwgQhggy+4OarviqTCGw=="],
 
     "parse5": ["parse5@8.0.0", "https://registry.npmmirror.com/parse5/-/parse5-8.0.0.tgz", { "dependencies": { "entities": "^6.0.0" } }, "sha512-9m4m5GSgXjL4AjumKzq1Fgfp3Z8rsvjRNbnkVwfu2ImRqE5D0LnY2QfDen18FSY9C573YU5XxSapdHZTZ2WolA=="],
 

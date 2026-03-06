@@ -102,6 +102,9 @@ const zhTW: TranslationKeys = {
   'layerMenu.createComponent': '建立元件',
   'layerMenu.detachComponent': '分離元件',
   'layerMenu.detachInstance': '分離實例',
+  'layerMenu.booleanUnion': '聯合',
+  'layerMenu.booleanSubtract': '減去',
+  'layerMenu.booleanIntersect': '交集',
   'layerMenu.toggleLock': '切換鎖定',
   'layerMenu.toggleVisibility': '切換可見性',
 

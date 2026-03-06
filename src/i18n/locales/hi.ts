@@ -105,6 +105,9 @@ const hi: TranslationKeys = {
   'layerMenu.createComponent': 'कंपोनेंट बनाएँ',
   'layerMenu.detachComponent': 'कंपोनेंट अलग करें',
   'layerMenu.detachInstance': 'इंस्टेंस अलग करें',
+  'layerMenu.booleanUnion': 'संयोजन',
+  'layerMenu.booleanSubtract': 'घटाना',
+  'layerMenu.booleanIntersect': 'प्रतिच्छेदन',
   'layerMenu.toggleLock': 'लॉक टॉगल करें',
   'layerMenu.toggleVisibility': 'दृश्यता टॉगल करें',
 

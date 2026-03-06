@@ -89,6 +89,7 @@ OpenPencil está construido desde cero con IA en su núcleo — no como un plugi
 **Lienzo y Dibujo**
 - Lienzo infinito con panorámica, zoom, guías de alineación inteligentes y ajuste
 - Rectángulo, Elipse, Línea, Polígono, Pluma (Bezier), Frame, Texto
+- Operaciones booleanas — unión, resta, intersección con barra de herramientas contextual
 - Selector de iconos (Iconify) e importación de imágenes (PNG/JPEG/SVG/WebP/GIF)
 - Diseño automático — vertical/horizontal con gap, padding, justify, align
 - Documentos multipágina con navegación por pestañas
@@ -156,6 +157,8 @@ electron/
 | `Del` | Eliminar | | `Cmd+Shift+V` | Panel de variables |
 | `[ / ]` | Reordenar | | `Cmd+J` | Chat de IA |
 | Flechas | Mover 1px | | `Cmd+,` | Configuración de agente |
+| `Cmd+Alt+U` | Unión booleana | | `Cmd+Alt+S` | Resta booleana |
+| `Cmd+Alt+I` | Intersección booleana | | | |
 
 ## Scripts
 
@@ -186,7 +189,7 @@ bun run electron:build     # Empaquetado de Electron
 - [x] Integración con servidor MCP
 - [x] Soporte multipágina
 - [x] Importación de Figma `.fig`
-- [ ] Operaciones booleanas (unión, sustracción, intersección)
+- [x] Operaciones booleanas (unión, sustracción, intersección)
 - [ ] Edición colaborativa
 - [ ] Sistema de plugins
 

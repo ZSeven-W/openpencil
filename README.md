@@ -91,6 +91,7 @@ OpenPencil is built around AI from the ground up — not as a plugin, but as a c
 **Canvas & Drawing**
 - Infinite canvas with pan, zoom, smart alignment guides, and snapping
 - Rectangle, Ellipse, Line, Polygon, Pen (Bezier), Frame, Text
+- Boolean operations — union, subtract, intersect with contextual toolbar
 - Icon picker (Iconify) and image import (PNG/JPEG/SVG/WebP/GIF)
 - Auto-layout — vertical/horizontal with gap, padding, justify, align
 - Multi-page documents with tab navigation
@@ -158,6 +159,8 @@ electron/
 | `Del` | Delete | | `Cmd+Shift+V` | Variables panel |
 | `[ / ]` | Reorder | | `Cmd+J` | AI chat |
 | Arrows | Nudge 1px | | `Cmd+,` | Agent settings |
+| `Cmd+Alt+U` | Boolean union | | `Cmd+Alt+S` | Boolean subtract |
+| `Cmd+Alt+I` | Boolean intersect | | | |
 
 ## Scripts
 
@@ -188,7 +191,7 @@ Contributions are welcome! See [CLAUDE.md](./CLAUDE.md) for architecture details
 - [x] MCP server integration
 - [x] Multi-page support
 - [x] Figma `.fig` import
-- [ ] Boolean operations (union, subtract, intersect)
+- [x] Boolean operations (union, subtract, intersect)
 - [ ] Collaborative editing
 - [ ] Plugin system
 

@@ -105,6 +105,9 @@ const ko: TranslationKeys = {
   'layerMenu.createComponent': '컴포넌트 만들기',
   'layerMenu.detachComponent': '컴포넌트 분리',
   'layerMenu.detachInstance': '인스턴스 분리',
+  'layerMenu.booleanUnion': '합치기',
+  'layerMenu.booleanSubtract': '빼기',
+  'layerMenu.booleanIntersect': '교차',
   'layerMenu.toggleLock': '잠금 전환',
   'layerMenu.toggleVisibility': '표시 전환',
 

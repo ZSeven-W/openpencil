@@ -103,6 +103,9 @@ const en = {
   'layerMenu.createComponent': 'Create Component',
   'layerMenu.detachComponent': 'Detach Component',
   'layerMenu.detachInstance': 'Detach Instance',
+  'layerMenu.booleanUnion': 'Union',
+  'layerMenu.booleanSubtract': 'Subtract',
+  'layerMenu.booleanIntersect': 'Intersect',
   'layerMenu.toggleLock': 'Toggle Lock',
   'layerMenu.toggleVisibility': 'Toggle Visibility',
 
