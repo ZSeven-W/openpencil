@@ -298,6 +298,8 @@ const ja: TranslationKeys = {
   'agents.openaiModels': 'OpenAI モデル',
   'agents.opencode': 'OpenCode',
   'agents.opencodeDesc': '75 以上の LLM プロバイダー',
+  'agents.copilot': 'GitHub Copilot',
+  'agents.copilotDesc': 'GitHub Copilot モデル',
   'agents.mcpServer': 'MCP サーバー',
   'agents.mcpServerStart': '開始',
   'agents.mcpServerStop': '停止',
@@ -308,6 +310,11 @@ const ja: TranslationKeys = {
   'agents.http': 'http',
   'agents.stdioHttp': 'stdio + http',
   'agents.autoUpdate': '自動アップデート確認',
+  'agents.notInstalled': '未インストール',
+  'agents.install': 'インストール',
+  'agents.installing': 'インストール中...',
+  'agents.installFailed': 'インストール失敗',
+  'agents.viewDocs': 'ドキュメント',
 
   // ── Figma Import ──
   'figma.title': 'Figma からインポート',

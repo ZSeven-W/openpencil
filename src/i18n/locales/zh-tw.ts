@@ -287,6 +287,8 @@ const zhTW: TranslationKeys = {
   'agents.openaiModels': 'OpenAI 模型',
   'agents.opencode': 'OpenCode',
   'agents.opencodeDesc': '75+ LLM 供應商',
+  'agents.copilot': 'GitHub Copilot',
+  'agents.copilotDesc': 'GitHub Copilot 模型',
   'agents.mcpServer': 'MCP 伺服器',
   'agents.mcpServerStart': '啟動',
   'agents.mcpServerStop': '停止',
@@ -297,6 +299,11 @@ const zhTW: TranslationKeys = {
   'agents.http': 'http',
   'agents.stdioHttp': 'stdio + http',
   'agents.autoUpdate': '自動檢查更新',
+  'agents.notInstalled': '未安裝',
+  'agents.install': '安裝',
+  'agents.installing': '安裝中...',
+  'agents.installFailed': '安裝失敗',
+  'agents.viewDocs': '文件',
 
   // ── Figma Import ──
   'figma.title': '從 Figma 匯入',

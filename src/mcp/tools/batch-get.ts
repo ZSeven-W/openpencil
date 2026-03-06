@@ -20,6 +20,7 @@ export interface BatchGetParams {
   parentId?: string
   readDepth?: number
   searchDepth?: number
+  pageId?: string
 }
 
 export async function handleBatchGet(
@@ -27,6 +28,7 @@ export async function handleBatchGet(
 ): Promise<{ nodes: Record<string, unknown>[] }> {
   const filePath = resolveDocPath(params.filePath)
   const doc = await openDocument(filePath)
+  const pageId = params.pageId
 
   const readDepth = params.readDepth ?? 1
   const searchDepth = params.searchDepth ?? Infinity
@@ -35,12 +37,12 @@ export async function handleBatchGet(
   if (!params.patterns?.length && !params.nodeIds?.length) {
     const rootNodes = params.parentId
       ? (() => {
-          const parent = findNodeInTree(getDocChildren(doc), params.parentId)
+          const parent = findNodeInTree(getDocChildren(doc, pageId), params.parentId)
           return parent && 'children' in parent && parent.children
             ? parent.children
             : []
         })()
-      : getDocChildren(doc)
+      : getDocChildren(doc, pageId)
     return {
       nodes: rootNodes.map((n) => readNodeWithDepth(n, readDepth)),
     }
@@ -53,12 +55,12 @@ export async function handleBatchGet(
   if (params.patterns?.length) {
     const searchRoot = params.parentId
       ? (() => {
-          const parent = findNodeInTree(getDocChildren(doc), params.parentId)
+          const parent = findNodeInTree(getDocChildren(doc, pageId), params.parentId)
           return parent && 'children' in parent && parent.children
             ? parent.children
             : []
         })()
-      : getDocChildren(doc)
+      : getDocChildren(doc, pageId)
 
     for (const pattern of params.patterns) {
       const found = searchNodes(searchRoot, pattern, searchDepth)
@@ -75,7 +77,7 @@ export async function handleBatchGet(
   if (params.nodeIds?.length) {
     for (const id of params.nodeIds) {
       if (seen.has(id)) continue
-      const node = findNodeInTree(getDocChildren(doc), id)
+      const node = findNodeInTree(getDocChildren(doc, pageId), id)
       if (node) {
         seen.add(id)
         results.push(node)

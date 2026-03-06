@@ -15,6 +15,7 @@ import { useTranslation } from 'react-i18next'
 import ClaudeLogo from '@/components/icons/claude-logo'
 import OpenAILogo from '@/components/icons/openai-logo'
 import OpenCodeLogo from '@/components/icons/opencode-logo'
+import CopilotLogo from '@/components/icons/copilot-logo'
 import FigmaLogo from '@/components/icons/figma-logo'
 import LanguageSelector from '@/components/shared/language-selector'
 import { cn } from '@/lib/utils'
@@ -43,9 +44,10 @@ const PROVIDER_ICONS: Record<AIProviderType, ComponentType<SVGProps<SVGSVGElemen
   anthropic: ClaudeLogo,
   openai: OpenAILogo,
   opencode: OpenCodeLogo,
+  copilot: CopilotLogo,
 }
 
-const PROVIDER_ORDER: AIProviderType[] = ['anthropic', 'openai', 'opencode']
+const PROVIDER_ORDER: AIProviderType[] = ['anthropic', 'openai', 'opencode', 'copilot']
 
 function AgentStatusButton() {
   const { t } = useTranslation()
@@ -128,6 +130,9 @@ export default function TopBar() {
       if (saved === 'light') {
         document.documentElement.classList.add('light')
         setTheme('light')
+        window.electronAPI?.setTheme?.('light')
+      } else {
+        window.electronAPI?.setTheme?.('dark')
       }
     } catch {
       // ignore
@@ -149,6 +154,7 @@ export default function TopBar() {
       document.documentElement.classList.remove('light')
     }
     setTheme(next)
+    window.electronAPI?.setTheme?.(next)
     try {
       localStorage.setItem('openpencil-theme', next)
     } catch {
@@ -295,7 +301,7 @@ export default function TopBar() {
       </div>
 
       {/* Right section */}
-      <div className="flex items-center gap-0.5 app-region-no-drag">
+      <div className="flex items-center gap-0.5 app-region-no-drag electron-win-controls-pad">
         <AgentStatusButton />
 
         <div className="w-px h-3.5 bg-border/60 mx-1" />

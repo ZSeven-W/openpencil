@@ -302,6 +302,8 @@ const es: TranslationKeys = {
   'agents.openaiModels': 'Modelos OpenAI',
   'agents.opencode': 'OpenCode',
   'agents.opencodeDesc': '75+ proveedores LLM',
+  'agents.copilot': 'GitHub Copilot',
+  'agents.copilotDesc': 'Modelos GitHub Copilot',
   'agents.mcpServer': 'Servidor MCP',
   'agents.mcpServerStart': 'Iniciar',
   'agents.mcpServerStop': 'Detener',
@@ -312,6 +314,11 @@ const es: TranslationKeys = {
   'agents.http': 'http',
   'agents.stdioHttp': 'stdio + http',
   'agents.autoUpdate': 'Buscar actualizaciones automáticamente',
+  'agents.notInstalled': 'No instalado',
+  'agents.install': 'Instalar',
+  'agents.installing': 'Instalando...',
+  'agents.installFailed': 'Instalación fallida',
+  'agents.viewDocs': 'Docs',
 
   // ── Figma Import ──
   'figma.title': 'Importar desde Figma',

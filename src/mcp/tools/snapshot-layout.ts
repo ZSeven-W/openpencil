@@ -5,6 +5,7 @@ export interface SnapshotLayoutParams {
   filePath: string
   parentId?: string
   maxDepth?: number
+  pageId?: string
 }
 
 export async function handleSnapshotLayout(
@@ -15,7 +16,7 @@ export async function handleSnapshotLayout(
 
   const maxDepth = params.maxDepth ?? 1
 
-  const docChildren = getDocChildren(doc)
+  const docChildren = getDocChildren(doc, params.pageId)
   let nodes = docChildren
   if (params.parentId) {
     const findNode = (

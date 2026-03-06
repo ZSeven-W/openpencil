@@ -329,17 +329,62 @@ async function startNitroServer(): Promise<number> {
 }
 
 // ---------------------------------------------------------------------------
+// Linux window-controls side detection
+// ---------------------------------------------------------------------------
+
+/**
+ * Detect whether Linux DE places window controls on the left or right.
+ * Uses gsettings (GNOME/Cinnamon/MATE) as primary check, defaults to right
+ * for KDE/XFCE and when detection fails.
+ */
+function getLinuxControlsSide(): 'left' | 'right' {
+  try {
+    const layout = execSync(
+      'gsettings get org.gnome.desktop.wm.preferences button-layout',
+      { encoding: 'utf-8', timeout: 3000 },
+    )
+      .trim()
+      .replace(/'/g, '')
+    // Format: "close,minimize,maximize:" → left, ":minimize,maximize,close" → right
+    const colonIndex = layout.indexOf(':')
+    if (colonIndex < 0) return 'right'
+    const beforeColon = layout.slice(0, colonIndex)
+    if (
+      beforeColon.includes('close') ||
+      beforeColon.includes('minimize') ||
+      beforeColon.includes('maximize')
+    ) {
+      return 'left'
+    }
+    return 'right'
+  } catch {
+    return 'right'
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Window
 // ---------------------------------------------------------------------------
 
 function createWindow(): void {
+  const isWinOrLinux = process.platform === 'win32' || process.platform === 'linux'
+
   const windowOptions: BrowserWindowConstructorOptions = {
     width: 1440,
     height: 900,
     minWidth: 1024,
     minHeight: 600,
     title: 'OpenPencil',
-    titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'default',
+    titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'hidden',
+    ...(isWinOrLinux
+      ? {
+          titleBarOverlay: {
+            color: 'rgba(0,0,0,0)',
+            symbolColor: '#a1a1aa',
+            height: 36,
+          },
+        }
+      : {}),
     webPreferences: {
       preload: join(__dirname, 'preload.cjs'),
       contextIsolation: true,
@@ -356,6 +401,12 @@ function createWindow(): void {
 
   mainWindow = new BrowserWindow(windowOptions)
 
+  // Hide native menu bar on Windows/Linux (shortcuts still work via Alt key)
+  if (isWinOrLinux) {
+    mainWindow.setAutoHideMenuBar(true)
+    mainWindow.setMenuBarVisibility(false)
+  }
+
   const url = isDev
     ? 'http://localhost:3000/editor'
     : `http://127.0.0.1:${serverPort}/editor`
@@ -368,6 +419,23 @@ function createWindow(): void {
         '.electron-traffic-light-pad { margin-left: 74px; }' +
         '.electron-fullscreen .electron-traffic-light-pad { margin-left: 0; }',
       )
+    }
+    if (process.platform === 'win32') {
+      await mainWindow.webContents.insertCSS(
+        '.electron-win-controls-pad { margin-right: 140px; }',
+      )
+    }
+    if (process.platform === 'linux') {
+      const side = getLinuxControlsSide()
+      if (side === 'left') {
+        await mainWindow.webContents.insertCSS(
+          '.electron-traffic-light-pad { margin-left: 140px; }',
+        )
+      } else {
+        await mainWindow.webContents.insertCSS(
+          '.electron-win-controls-pad { margin-right: 140px; }',
+        )
+      }
     }
     mainWindow.show()
     broadcastUpdaterState()
@@ -454,6 +522,17 @@ function setupIPC(): void {
       return resolved
     },
   )
+
+  // Theme sync for Windows/Linux title bar overlay
+  ipcMain.handle('theme:set', (_event, theme: 'dark' | 'light') => {
+    if (!mainWindow || mainWindow.isDestroyed()) return
+    const isWinOrLinux = process.platform === 'win32' || process.platform === 'linux'
+    if (!isWinOrLinux) return
+    mainWindow.setTitleBarOverlay({
+      color: 'rgba(0,0,0,0)',
+      symbolColor: theme === 'dark' ? '#a1a1aa' : '#71717a',
+    })
+  })
 
   ipcMain.handle('updater:getState', () => updaterState)
 

@@ -58,6 +58,13 @@ const DEFAULT_PROVIDERS: Record<AIProviderType, AIProviderConfig> = {
     connectionMethod: null,
     models: [],
   },
+  copilot: {
+    type: 'copilot',
+    displayName: 'GitHub Copilot',
+    isConnected: false,
+    connectionMethod: null,
+    models: [],
+  },
 }
 
 const DEFAULT_MCP_INTEGRATIONS: MCPCliIntegration[] = [
@@ -66,6 +73,7 @@ const DEFAULT_MCP_INTEGRATIONS: MCPCliIntegration[] = [
   { tool: 'gemini-cli', displayName: 'Gemini CLI', enabled: false, installed: false },
   { tool: 'opencode-cli', displayName: 'OpenCode CLI', enabled: false, installed: false },
   { tool: 'kiro-cli', displayName: 'Kiro CLI', enabled: false, installed: false },
+  { tool: 'copilot-cli', displayName: 'GitHub Copilot CLI', enabled: false, installed: false },
 ]
 
 export const useAgentSettingsStore = create<AgentSettingsState>((set, get) => ({

@@ -122,7 +122,7 @@ PenDocument (source of truth)
   - `document-tree-utils.ts` — Pure tree helpers extracted from document-store: `findNodeInTree`, `findParentInTree`, `removeNodeFromTree`, `updateNodeInTree`, `flattenNodes`, `insertNodeInTree`, `isDescendantOf`, `getNodeBounds`, `findClearX`, `scaleChildrenInPlace`, `rotateChildrenInPlace`, `createEmptyDocument`, `DEFAULT_FRAME_ID`
   - `history-store.ts` — Undo/redo (max 300 states), batch mode for grouped operations
   - `ai-store.ts` — Chat messages, streaming state, generated code, model selection, `pendingAttachments` for image uploads
-  - `agent-settings-store.ts` — AI provider config (Anthropic/OpenAI/OpenCode), MCP CLI integrations (Claude Code, Codex CLI, Gemini CLI, OpenCode CLI, Kiro CLI), localStorage persistence
+  - `agent-settings-store.ts` — AI provider config (Anthropic/OpenAI/OpenCode/Copilot), MCP CLI integrations (Claude Code, Codex CLI, Gemini CLI, OpenCode CLI, Kiro CLI, Copilot CLI), localStorage persistence
   - `uikit-store.ts` — UIKit management: imported kits, component browser state (search, category filters), localStorage persistence
 - **`src/types/`** — Type system (8 files):
   - `pen.ts` — PenDocument/PenNode (frame, group, rectangle, ellipse, line, polygon, path, text, image, ref), ContainerProps, `PenPage`; `PenDocument.variables`, `PenDocument.themes`, `PenDocument.pages`
@@ -130,7 +130,7 @@ PenDocument (source of truth)
   - `styles.ts` — PenFill (solid, linear_gradient, radial_gradient), PenStroke, PenEffect (shadow, blur), BlendMode, StyledTextSegment
   - `variables.ts` — `VariableDefinition` (type + value), `ThemedValue` (value per theme), `VariableValue`
   - `uikit.ts` — UIKit, KitComponent, ComponentCategory types for reusable component organization and browsing
-  - `agent-settings.ts` — AI provider config types (`AIProviderType`, `AIProviderConfig`, `MCPCliIntegration`, `GroupedModel`)
+  - `agent-settings.ts` — AI provider config types (`AIProviderType`: anthropic/openai/opencode/copilot, `AIProviderConfig`, `MCPCliIntegration`, `GroupedModel`)
   - `electron.d.ts` — Electron IPC bridge types (file dialogs, save operations, updater: `UpdaterState`/`UpdaterStatus`, `getState`/`checkForUpdates`/`quitAndInstall`/`onStateChange`)
   - `opencode-sdk.d.ts` — Type declarations for @opencode-ai/sdk
 - **`src/components/editor/`** — Editor UI (8 files): editor-layout, toolbar (with variables panel toggle), tool-button, shape-tool-dropdown (rectangle/ellipse/line/path + icon picker + image import), top-bar (with `AgentStatusButton`), status-bar, page-tabs (multi-page navigation with context menu), update-ready-banner (Electron auto-updater notification)
@@ -157,7 +157,7 @@ PenDocument (source of truth)
   - `variables-panel.tsx` — Design variables management: theme axes as tabs, variant columns, resizable floating panel, add/rename/delete themes and variants
   - `variable-row.tsx` — Individual variable row: type icon, editable name, per-theme-variant value cells (color picker, number input, text input), context menu
 - **`src/components/shared/`** — Reusable UI (9 files): ColorPicker, NumberInput, SectionHeader, ExportDialog, SaveDialog, AgentSettingsDialog, IconPickerDialog, VariablePicker, FigmaImportDialog
-- **`src/components/icons/`** — Provider/brand logos: ClaudeLogo, OpenAILogo, OpenCodeLogo, FigmaLogo
+- **`src/components/icons/`** — Provider/brand logos: ClaudeLogo, OpenAILogo, OpenCodeLogo, CopilotLogo, FigmaLogo
 - **`src/components/ui/`** — shadcn/ui primitives: Button, Select, Separator, Slider, Switch, Toggle, Tooltip
 - **`src/services/ai/`** — AI services (20 files):
   - `ai-service.ts` — Main AI chat API wrapper, model negotiation, provider selection
@@ -205,15 +205,16 @@ PenDocument (source of truth)
 - **`src/mcp/`** — MCP server integration (2 files + `tools/` and `utils/` subdirs):
   - `server.ts` — MCP server entry point, tool registration
   - `document-manager.ts` — MCP utility for reading, writing, and caching PenDocuments from disk
-  - `tools/` — Individual MCP tool implementations: `batch-design.ts`, `batch-get.ts`, `find-empty-space.ts`, `open-document.ts`, `snapshot-layout.ts`, `variables.ts`
-  - `utils/` — Shared utilities: `id.ts`, `node-operations.ts`
+  - `tools/` — Individual MCP tool implementations: `batch-design.ts`, `batch-get.ts`, `find-empty-space.ts`, `open-document.ts`, `snapshot-layout.ts`, `variables.ts`, `pages.ts` (page CRUD: add/remove/rename/reorder/duplicate)
+  - `utils/` — Shared utilities: `id.ts`, `node-operations.ts` (page-aware `getDocChildren`/`setDocChildren`)
 - **`src/utils/`** — File operations (save/open .pen), export (PNG/SVG), node clone, pen file normalization (format fixes only, preserves `$variable` refs), SVG parser (import SVG to editable PenNodes), syntax highlight
-- **`server/api/ai/`** — Nitro server API (7 files): `chat.ts` (streaming SSE with thinking state, multimodal image attachments per provider), `generate.ts` (non-streaming generation), `connect-agent.ts` (Claude Code/Codex CLI/OpenCode connection), `models.ts` (model definitions), `validate.ts` (vision-based post-generation validation), `mcp-install.ts` (MCP server install/uninstall into CLI tool configs), `icon.ts` (icon name → SVG path resolution via local Iconify sets). Supports Anthropic API key or Claude Agent SDK (local OAuth) as dual providers
-- **`server/utils/`** — Server utilities (4 files):
+- **`server/api/ai/`** — Nitro server API (7 files): `chat.ts` (streaming SSE with thinking state, multimodal image attachments per provider), `generate.ts` (non-streaming generation), `connect-agent.ts` (Claude Code/Codex CLI/OpenCode/Copilot connection), `models.ts` (model definitions), `validate.ts` (vision-based post-generation validation), `mcp-install.ts` (MCP server install/uninstall into CLI tool configs), `icon.ts` (icon name → SVG path resolution via local Iconify sets). Supports Anthropic API key or Claude Agent SDK (local OAuth) as dual providers
+- **`server/utils/`** — Server utilities (5 files):
   - `resolve-claude-cli.ts` — Resolves standalone `claude` binary path (handles Nitro bundling issues with SDK's `import.meta.url`)
   - `resolve-claude-agent-env.ts` — Builds Claude Agent SDK environment: merges `~/.claude/settings.json` env, validates `ANTHROPIC_CUSTOM_HEADERS`, handles auth token compat
   - `opencode-client.ts` — Shared OpenCode client manager, reuses server on port 4096 with random port fallback
   - `codex-client.ts` — Codex CLI client wrapper with JSON streaming, thinking mode support, timeout handling, optional `imageFiles` for vision queries
+  - `copilot-client.ts` — Resolves standalone `copilot` binary path to avoid Bun's `node:sqlite` incompatibility with bundled CLI
 
 ### Fabric.js v7 Gotchas
 

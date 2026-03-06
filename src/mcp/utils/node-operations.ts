@@ -1,15 +1,28 @@
 import type { PenDocument, PenNode, RefNode } from '../../types/pen'
 
-/** Get the working children for an MCP operation (first page or doc.children). */
-export function getDocChildren(doc: PenDocument): PenNode[] {
-  if (doc.pages && doc.pages.length > 0) return doc.pages[0].children
+/** Get the working children for an MCP operation. When pageId is given, targets that page; otherwise targets the first page (or doc.children). */
+export function getDocChildren(doc: PenDocument, pageId?: string): PenNode[] {
+  if (doc.pages && doc.pages.length > 0) {
+    if (pageId) {
+      const page = doc.pages.find((p) => p.id === pageId)
+      if (!page) throw new Error(`Page not found: ${pageId}`)
+      return page.children
+    }
+    return doc.pages[0].children
+  }
   return doc.children
 }
 
-/** Set the working children for an MCP operation (first page or doc.children). */
-export function setDocChildren(doc: PenDocument, children: PenNode[]): void {
+/** Set the working children for an MCP operation. When pageId is given, targets that page; otherwise targets the first page (or doc.children). */
+export function setDocChildren(doc: PenDocument, children: PenNode[], pageId?: string): void {
   if (doc.pages && doc.pages.length > 0) {
-    doc.pages[0].children = children
+    if (pageId) {
+      const page = doc.pages.find((p) => p.id === pageId)
+      if (!page) throw new Error(`Page not found: ${pageId}`)
+      page.children = children
+    } else {
+      doc.pages[0].children = children
+    }
   } else {
     doc.children = children
   }
