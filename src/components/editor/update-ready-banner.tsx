@@ -103,7 +103,7 @@ export default function UpdateReadyBanner() {
   }
 
   return (
-    <div className="fixed top-5 right-5 z-50 app-region-no-drag">
+    <div className="fixed top-12 right-5 z-50 app-region-no-drag">
       <div className="w-[460px] max-w-[calc(100vw-24px)] rounded-2xl border border-border/80 bg-card/95 backdrop-blur-md shadow-2xl overflow-hidden">
         <div className="px-5 py-4 border-b border-border/70 bg-gradient-to-r from-foreground/5 to-transparent">
           <div className="flex items-start justify-between gap-3">
