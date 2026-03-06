@@ -15,6 +15,7 @@ import { useTranslation } from 'react-i18next'
 import ClaudeLogo from '@/components/icons/claude-logo'
 import OpenAILogo from '@/components/icons/openai-logo'
 import OpenCodeLogo from '@/components/icons/opencode-logo'
+import CopilotLogo from '@/components/icons/copilot-logo'
 import FigmaLogo from '@/components/icons/figma-logo'
 import LanguageSelector from '@/components/shared/language-selector'
 import { cn } from '@/lib/utils'
@@ -43,9 +44,10 @@ const PROVIDER_ICONS: Record<AIProviderType, ComponentType<SVGProps<SVGSVGElemen
   anthropic: ClaudeLogo,
   openai: OpenAILogo,
   opencode: OpenCodeLogo,
+  copilot: CopilotLogo,
 }
 
-const PROVIDER_ORDER: AIProviderType[] = ['anthropic', 'openai', 'opencode']
+const PROVIDER_ORDER: AIProviderType[] = ['anthropic', 'openai', 'opencode', 'copilot']
 
 function AgentStatusButton() {
   const { t } = useTranslation()

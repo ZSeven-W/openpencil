@@ -29,8 +29,8 @@ import type { PenDocument, PenNode } from '../../types/pen'
 // Shared post-processing (extracted from batch-design.ts)
 // ---------------------------------------------------------------------------
 
-export function postProcessNode(doc: PenDocument, canvasWidth: number): void {
-  const children = getDocChildren(doc)
+export function postProcessNode(doc: PenDocument, canvasWidth: number, pageId?: string): void {
+  const children = getDocChildren(doc, pageId)
   for (const target of children) {
     resolveTreeRoles(target, canvasWidth)
     resolveTreePostPass(target, canvasWidth)
@@ -78,6 +78,7 @@ export interface InsertNodeParams {
   data: Record<string, any>
   postProcess?: boolean
   canvasWidth?: number
+  pageId?: string
 }
 
 export async function handleInsertNode(
@@ -86,6 +87,7 @@ export async function handleInsertNode(
   const filePath = resolveDocPath(params.filePath)
   let doc = await openDocument(filePath)
   doc = structuredClone(doc)
+  const pageId = params.pageId
 
   const data = sanitizeObject(params.data)
   const node = { ...data, id: generateId() } as PenNode
@@ -94,7 +96,7 @@ export async function handleInsertNode(
   // Auto-replace: when inserting a frame at root level and an empty
   // root frame exists, replace it instead of creating a sibling.
   if (parent === null && data.type === 'frame') {
-    const children = getDocChildren(doc)
+    const children = getDocChildren(doc, pageId)
     const emptyIdx = children.findIndex((n) => isEmptyFrame(n))
     if (emptyIdx !== -1) {
       const emptyFrame = children[emptyIdx]
@@ -102,25 +104,25 @@ export async function handleInsertNode(
       if (emptyFrame.y !== undefined) (node as any).y = emptyFrame.y
       let updated = removeNodeFromTree(children, emptyFrame.id)
       updated = insertNodeInTree(updated, null, node, emptyIdx)
-      setDocChildren(doc, updated)
+      setDocChildren(doc, updated, pageId)
 
-      if (params.postProcess) postProcessNode(doc, params.canvasWidth ?? 1200)
+      if (params.postProcess) postProcessNode(doc, params.canvasWidth ?? 1200, pageId)
       await saveDocument(filePath, doc)
       return {
         nodeId: node.id,
-        nodeCount: countNodes(getDocChildren(doc)),
+        nodeCount: countNodes(getDocChildren(doc, pageId)),
         postProcessed: params.postProcess || undefined,
       }
     }
   }
 
-  setDocChildren(doc, insertNodeInTree(getDocChildren(doc), parent, node))
+  setDocChildren(doc, insertNodeInTree(getDocChildren(doc, pageId), parent, node), pageId)
 
-  if (params.postProcess) postProcessNode(doc, params.canvasWidth ?? 1200)
+  if (params.postProcess) postProcessNode(doc, params.canvasWidth ?? 1200, pageId)
   await saveDocument(filePath, doc)
   return {
     nodeId: node.id,
-    nodeCount: countNodes(getDocChildren(doc)),
+    nodeCount: countNodes(getDocChildren(doc, pageId)),
     postProcessed: params.postProcess || undefined,
   }
 }
@@ -135,6 +137,7 @@ export interface UpdateNodeParams {
   data: Record<string, any>
   postProcess?: boolean
   canvasWidth?: number
+  pageId?: string
 }
 
 export async function handleUpdateNode(
@@ -143,14 +146,15 @@ export async function handleUpdateNode(
   const filePath = resolveDocPath(params.filePath)
   let doc = await openDocument(filePath)
   doc = structuredClone(doc)
+  const pageId = params.pageId
 
   const data = sanitizeObject(params.data)
-  const target = findNodeInTree(getDocChildren(doc), params.nodeId)
+  const target = findNodeInTree(getDocChildren(doc, pageId), params.nodeId)
   if (!target) throw new Error(`Node not found: ${params.nodeId}`)
 
-  setDocChildren(doc, updateNodeInTree(getDocChildren(doc), params.nodeId, data))
+  setDocChildren(doc, updateNodeInTree(getDocChildren(doc, pageId), params.nodeId, data), pageId)
 
-  if (params.postProcess) postProcessNode(doc, params.canvasWidth ?? 1200)
+  if (params.postProcess) postProcessNode(doc, params.canvasWidth ?? 1200, pageId)
   await saveDocument(filePath, doc)
   return { ok: true, postProcessed: params.postProcess || undefined }
 }
@@ -162,6 +166,7 @@ export async function handleUpdateNode(
 export interface DeleteNodeParams {
   filePath: string
   nodeId: string
+  pageId?: string
 }
 
 export async function handleDeleteNode(
@@ -170,11 +175,12 @@ export async function handleDeleteNode(
   const filePath = resolveDocPath(params.filePath)
   let doc = await openDocument(filePath)
   doc = structuredClone(doc)
+  const pageId = params.pageId
 
-  const target = findNodeInTree(getDocChildren(doc), params.nodeId)
+  const target = findNodeInTree(getDocChildren(doc, pageId), params.nodeId)
   if (!target) throw new Error(`Node not found: ${params.nodeId}`)
 
-  setDocChildren(doc, removeNodeFromTree(getDocChildren(doc), params.nodeId))
+  setDocChildren(doc, removeNodeFromTree(getDocChildren(doc, pageId), params.nodeId), pageId)
   await saveDocument(filePath, doc)
   return { ok: true }
 }
@@ -188,6 +194,7 @@ export interface MoveNodeParams {
   nodeId: string
   parent: string | null
   index?: number
+  pageId?: string
 }
 
 export async function handleMoveNode(
@@ -196,13 +203,14 @@ export async function handleMoveNode(
   const filePath = resolveDocPath(params.filePath)
   let doc = await openDocument(filePath)
   doc = structuredClone(doc)
+  const pageId = params.pageId
 
-  const node = findNodeInTree(getDocChildren(doc), params.nodeId)
+  const node = findNodeInTree(getDocChildren(doc, pageId), params.nodeId)
   if (!node) throw new Error(`Node not found: ${params.nodeId}`)
 
-  let children = removeNodeFromTree(getDocChildren(doc), params.nodeId)
+  let children = removeNodeFromTree(getDocChildren(doc, pageId), params.nodeId)
   children = insertNodeInTree(children, params.parent, node, params.index)
-  setDocChildren(doc, children)
+  setDocChildren(doc, children, pageId)
 
   await saveDocument(filePath, doc)
   return { ok: true }
@@ -217,6 +225,7 @@ export interface CopyNodeParams {
   sourceId: string
   parent: string | null
   overrides?: Record<string, any>
+  pageId?: string
 }
 
 export async function handleCopyNode(
@@ -225,8 +234,9 @@ export async function handleCopyNode(
   const filePath = resolveDocPath(params.filePath)
   let doc = await openDocument(filePath)
   doc = structuredClone(doc)
+  const pageId = params.pageId
 
-  const source = findNodeInTree(getDocChildren(doc), params.sourceId)
+  const source = findNodeInTree(getDocChildren(doc, pageId), params.sourceId)
   if (!source) throw new Error(`Source node not found: ${params.sourceId}`)
 
   const cloned = cloneNodeWithNewIds(source, generateId)
@@ -237,11 +247,11 @@ export async function handleCopyNode(
     if (safe.id) delete (cloned as any).id
   }
 
-  setDocChildren(doc, insertNodeInTree(getDocChildren(doc), params.parent, cloned))
+  setDocChildren(doc, insertNodeInTree(getDocChildren(doc, pageId), params.parent, cloned), pageId)
   await saveDocument(filePath, doc)
   return {
     nodeId: cloned.id,
-    nodeCount: countNodes(getDocChildren(doc)),
+    nodeCount: countNodes(getDocChildren(doc, pageId)),
   }
 }
 
@@ -255,6 +265,7 @@ export interface ReplaceNodeParams {
   data: Record<string, any>
   postProcess?: boolean
   canvasWidth?: number
+  pageId?: string
 }
 
 export async function handleReplaceNode(
@@ -263,30 +274,31 @@ export async function handleReplaceNode(
   const filePath = resolveDocPath(params.filePath)
   let doc = await openDocument(filePath)
   doc = structuredClone(doc)
+  const pageId = params.pageId
 
   const data = sanitizeObject(params.data)
-  const oldNode = findNodeInTree(getDocChildren(doc), params.nodeId)
+  const oldNode = findNodeInTree(getDocChildren(doc, pageId), params.nodeId)
   if (!oldNode) throw new Error(`Node not found: ${params.nodeId}`)
 
   const newNode = { ...data, id: generateId() } as PenNode
 
   // Find parent to determine insertion index
-  const parent = findParentInTree(getDocChildren(doc), params.nodeId)
+  const parent = findParentInTree(getDocChildren(doc, pageId), params.nodeId)
   const parentId = parent ? parent.id : null
   const siblings = parent
     ? ('children' in parent ? parent.children ?? [] : [])
-    : getDocChildren(doc)
+    : getDocChildren(doc, pageId)
   const idx = siblings.findIndex((n) => n.id === oldNode.id)
 
-  let children = removeNodeFromTree(getDocChildren(doc), oldNode.id)
+  let children = removeNodeFromTree(getDocChildren(doc, pageId), oldNode.id)
   children = insertNodeInTree(children, parentId, newNode, idx)
-  setDocChildren(doc, children)
+  setDocChildren(doc, children, pageId)
 
-  if (params.postProcess) postProcessNode(doc, params.canvasWidth ?? 1200)
+  if (params.postProcess) postProcessNode(doc, params.canvasWidth ?? 1200, pageId)
   await saveDocument(filePath, doc)
   return {
     nodeId: newNode.id,
-    nodeCount: countNodes(getDocChildren(doc)),
+    nodeCount: countNodes(getDocChildren(doc, pageId)),
     postProcessed: params.postProcess || undefined,
   }
 }

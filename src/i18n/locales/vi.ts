@@ -295,6 +295,8 @@ const vi: TranslationKeys = {
   'agents.openaiModels': 'Các mô hình OpenAI',
   'agents.opencode': 'OpenCode',
   'agents.opencodeDesc': '75+ nhà cung cấp LLM',
+  'agents.copilot': 'GitHub Copilot',
+  'agents.copilotDesc': 'Các mô hình GitHub Copilot',
   'agents.mcpServer': 'Máy chủ MCP',
   'agents.mcpServerStart': 'Khởi động',
   'agents.mcpServerStop': 'Dừng',
@@ -305,6 +307,11 @@ const vi: TranslationKeys = {
   'agents.http': 'http',
   'agents.stdioHttp': 'stdio + http',
   'agents.autoUpdate': 'Tự động kiểm tra cập nhật',
+  'agents.notInstalled': 'Chưa cài đặt',
+  'agents.install': 'Cài đặt',
+  'agents.installing': 'Đang cài đặt...',
+  'agents.installFailed': 'Cài đặt thất bại',
+  'agents.viewDocs': 'Tài liệu',
 
   // ── Figma Import ──
   'figma.title': 'Nhập từ Figma',

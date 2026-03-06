@@ -109,6 +109,11 @@ const CLI_CONFIGS: Record<string, CliConfigDef> = {
     read: readJsonConfig,
     write: writeJsonConfig,
   },
+  'copilot-cli': {
+    configPath: () => join(homedir(), '.config', 'github-copilot', 'mcp.json'),
+    read: readJsonConfig,
+    write: writeJsonConfig,
+  },
 }
 
 async function readJsonConfig(filePath: string): Promise<Record<string, any>> {

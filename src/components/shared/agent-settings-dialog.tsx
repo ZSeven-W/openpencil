@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import type { ComponentType, SVGProps } from 'react'
 import { useTranslation } from 'react-i18next'
-import { X, Check, Loader2, Unplug, AlertCircle, Zap, Terminal, Play, Square, Globe, Copy, RefreshCw } from 'lucide-react'
+import { X, Check, Loader2, Unplug, AlertCircle, Zap, Terminal, Play, Square, Globe, Copy, RefreshCw, Download, ExternalLink } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Switch } from '@/components/ui/switch'
@@ -10,11 +10,12 @@ import type { AIProviderType, MCPTransportMode, GroupedModel } from '@/types/age
 import ClaudeLogo from '@/components/icons/claude-logo'
 import OpenAILogo from '@/components/icons/openai-logo'
 import OpenCodeLogo from '@/components/icons/opencode-logo'
+import CopilotLogo from '@/components/icons/copilot-logo'
 
 /** Provider display metadata — labels/descriptions are i18n keys resolved at render time */
 const PROVIDER_META: Record<
   AIProviderType,
-  { labelKey: string; descriptionKey: string; agent: 'claude-code' | 'codex-cli' | 'opencode'; Icon: ComponentType<SVGProps<SVGSVGElement>> }
+  { labelKey: string; descriptionKey: string; agent: 'claude-code' | 'codex-cli' | 'opencode' | 'copilot'; Icon: ComponentType<SVGProps<SVGSVGElement>> }
 > = {
   anthropic: {
     labelKey: 'agents.claudeCode',
@@ -34,11 +35,17 @@ const PROVIDER_META: Record<
     agent: 'opencode',
     Icon: OpenCodeLogo,
   },
+  copilot: {
+    labelKey: 'agents.copilot',
+    descriptionKey: 'agents.copilotDesc',
+    agent: 'copilot',
+    Icon: CopilotLogo,
+  },
 }
 
 async function connectAgent(
-  agent: 'claude-code' | 'codex-cli' | 'opencode',
-): Promise<{ connected: boolean; models: GroupedModel[]; error?: string }> {
+  agent: 'claude-code' | 'codex-cli' | 'opencode' | 'copilot',
+): Promise<{ connected: boolean; models: GroupedModel[]; error?: string; notInstalled?: boolean }> {
   try {
     const res = await fetch('/api/ai/connect-agent', {
       method: 'POST',
@@ -49,6 +56,22 @@ async function connectAgent(
     return await res.json()
   } catch {
     return { connected: false, models: [], error: 'connection_failed' }
+  }
+}
+
+async function installAgent(
+  agent: 'claude-code' | 'codex-cli' | 'opencode' | 'copilot',
+): Promise<{ success: boolean; error?: string; command?: string; docsUrl?: string }> {
+  try {
+    const res = await fetch('/api/ai/install-agent', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ agent }),
+    })
+    if (!res.ok) return { success: false, error: `Server error ${res.status}` }
+    return await res.json()
+  } catch {
+    return { success: false, error: 'Request failed' }
   }
 }
 
@@ -75,20 +98,29 @@ function ProviderRow({ type }: { type: AIProviderType }) {
 
   const [isConnecting, setIsConnecting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [notInstalled, setNotInstalled] = useState(false)
+  const [isInstalling, setIsInstalling] = useState(false)
+  const [installInfo, setInstallInfo] = useState<{ command: string; docsUrl: string } | null>(null)
 
   const meta = PROVIDER_META[type]
 
   const handleConnect = useCallback(async () => {
     setIsConnecting(true)
     setError(null)
+    setNotInstalled(false)
+    setInstallInfo(null)
     const result = await connectAgent(meta.agent)
     if (result.connected) {
       connect(type, meta.agent, result.models)
       persist()
+    } else if (result.notInstalled) {
+      setNotInstalled(true)
     } else {
       if (result.error?.startsWith('server_error_')) {
         const status = result.error.replace('server_error_', '')
         setError(t('agents.serverError', { status }))
+      } else if (result.error && result.error !== 'connection_failed') {
+        setError(result.error)
       } else {
         setError(t('agents.connectionFailed'))
       }
@@ -96,13 +128,84 @@ function ProviderRow({ type }: { type: AIProviderType }) {
     setIsConnecting(false)
   }, [type, meta.agent, connect, persist, t])
 
+  const handleInstall = useCallback(async () => {
+    setIsInstalling(true)
+    setError(null)
+    setInstallInfo(null)
+    const result = await installAgent(meta.agent)
+    if (result.success) {
+      // Auto-connect after successful install
+      setIsInstalling(false)
+      setNotInstalled(false)
+      handleConnect()
+    } else {
+      setIsInstalling(false)
+      setError(result.error || t('agents.installFailed'))
+      if (result.command || result.docsUrl) {
+        setInstallInfo({
+          command: result.command || '',
+          docsUrl: result.docsUrl || '',
+        })
+      }
+    }
+  }, [meta.agent, handleConnect, t])
+
   const handleDisconnect = useCallback(() => {
     disconnect(type)
     setError(null)
+    setNotInstalled(false)
+    setInstallInfo(null)
     persist()
   }, [type, disconnect, persist])
 
   const { Icon } = meta
+
+  // Button logic: connected → Disconnect, installing → spinner, notInstalled (no instructions yet) → Install, else → Connect
+  const renderAction = () => {
+    if (provider.isConnected) {
+      return (
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={handleDisconnect}
+          className="h-7 px-2.5 text-[11px] text-muted-foreground hover:text-destructive shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"
+        >
+          <Unplug size={11} className="mr-1" />
+          {t('common.disconnect')}
+        </Button>
+      )
+    }
+    if (isInstalling) {
+      return (
+        <Button size="sm" disabled className="h-7 px-3 text-[11px] shrink-0">
+          <Loader2 size={11} className="animate-spin mr-1" />
+          {t('agents.installing')}
+        </Button>
+      )
+    }
+    if (notInstalled && !installInfo) {
+      return (
+        <Button size="sm" onClick={handleInstall} className="h-7 px-3 text-[11px] shrink-0">
+          <Download size={11} className="mr-1" />
+          {t('agents.install')}
+        </Button>
+      )
+    }
+    return (
+      <Button
+        size="sm"
+        onClick={handleConnect}
+        disabled={isConnecting}
+        className="h-7 px-3 text-[11px] shrink-0"
+      >
+        {isConnecting ? (
+          <Loader2 size={11} className="animate-spin" />
+        ) : (
+          t('common.connect')
+        )}
+      </Button>
+    )
+  }
 
   return (
     <div className="group">
@@ -136,37 +239,41 @@ function ProviderRow({ type }: { type: AIProviderType }) {
               {t('agents.modelCount', { count: provider.models.length })}
             </span>
           )}
+          {notInstalled && !isInstalling && !error && (
+            <span className="text-[10px] text-amber-500 leading-tight mt-0.5 block">
+              {t('agents.notInstalled')}
+            </span>
+          )}
           {error && (
             <span className="text-[10px] text-destructive leading-tight mt-0.5 block">{error}</span>
           )}
         </div>
 
         {/* Action */}
-        {provider.isConnected ? (
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={handleDisconnect}
-            className="h-7 px-2.5 text-[11px] text-muted-foreground hover:text-destructive shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"
-          >
-            <Unplug size={11} className="mr-1" />
-            {t('common.disconnect')}
-          </Button>
-        ) : (
-          <Button
-            size="sm"
-            onClick={handleConnect}
-            disabled={isConnecting}
-            className="h-7 px-3 text-[11px] shrink-0"
-          >
-            {isConnecting ? (
-              <Loader2 size={11} className="animate-spin" />
-            ) : (
-              t('common.connect')
-            )}
-          </Button>
-        )}
+        {renderAction()}
       </div>
+
+      {/* Install instructions (shown after install failure) */}
+      {installInfo && (
+        <div className="mx-3 mt-1 mb-1 px-2.5 py-2 rounded-md bg-secondary/30 flex items-center gap-2">
+          {installInfo.command && (
+            <code className="text-[10px] text-foreground font-mono flex-1 truncate select-all">
+              {installInfo.command}
+            </code>
+          )}
+          {installInfo.docsUrl && (
+            <a
+              href={installInfo.docsUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-[10px] text-blue-500 hover:underline inline-flex items-center gap-0.5 shrink-0"
+            >
+              {t('agents.viewDocs')}
+              <ExternalLink size={9} />
+            </a>
+          )}
+        </div>
+      )}
     </div>
   )
 }
@@ -341,6 +448,7 @@ export default function AgentSettingsDialog() {
               <ProviderRow type="anthropic" />
               <ProviderRow type="openai" />
               <ProviderRow type="opencode" />
+              <ProviderRow type="copilot" />
             </div>
           </div>
 

@@ -30,7 +30,7 @@ interface ChatBody {
   system: string
   messages: Array<{ role: 'user' | 'assistant'; content: string; attachments?: ChatAttachmentWire[] }>
   model?: string
-  provider?: 'anthropic' | 'openai' | 'opencode'
+  provider?: 'anthropic' | 'openai' | 'opencode' | 'copilot'
   thinkingMode?: 'adaptive' | 'disabled' | 'enabled'
   thinkingBudgetTokens?: number
   effort?: 'low' | 'medium' | 'high' | 'max'
@@ -88,7 +88,7 @@ export default defineEventHandler(async (event) => {
     setResponseHeaders(event, { 'Content-Type': 'application/json' })
     return { error: 'Missing model. Model fallback is disabled.' }
   }
-  if (body.provider !== 'anthropic' && body.provider !== 'openai' && body.provider !== 'opencode') {
+  if (body.provider !== 'anthropic' && body.provider !== 'openai' && body.provider !== 'opencode' && body.provider !== 'copilot') {
     setResponseHeaders(event, { 'Content-Type': 'application/json' })
     return { error: 'Missing or unsupported provider. Provider fallback is disabled.' }
   }
@@ -101,6 +101,7 @@ export default defineEventHandler(async (event) => {
 
   if (body.provider === 'anthropic') return streamViaAgentSDK(body, body.model)
   if (body.provider === 'opencode') return streamViaOpenCode(body, body.model)
+  if (body.provider === 'copilot') return streamViaCopilot(body, body.model)
   return streamViaCodex(body, body.model)
 })
 
@@ -553,6 +554,87 @@ function streamViaOpenCode(body: ChatBody, model?: string) {
         const { releaseOpencodeServer } = await import('../../utils/opencode-client')
         releaseOpencodeServer(ocServer)
         clearInterval(pingTimer)
+        controller.close()
+      }
+    },
+  })
+
+  return new Response(stream)
+}
+
+/** Map ChatBody effort to Copilot SDK ReasoningEffort */
+function mapCopilotReasoningEffort(
+  effort?: 'low' | 'medium' | 'high' | 'max',
+): 'low' | 'medium' | 'high' | 'xhigh' | undefined {
+  if (!effort) return undefined
+  if (effort === 'max') return 'xhigh'
+  return effort
+}
+
+/** Stream via GitHub Copilot SDK (@github/copilot-sdk) */
+function streamViaCopilot(body: ChatBody, model?: string) {
+  const stream = new ReadableStream({
+    async start(controller) {
+      const encoder = new TextEncoder()
+      const pingTimer = setInterval(() => {
+        try {
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: 'ping', content: '' })}\n\n`))
+        } catch { /* stream already closed */ }
+      }, KEEPALIVE_INTERVAL_MS)
+
+      let copilotClient: { stop(): Promise<unknown> } | undefined
+      try {
+        const { CopilotClient, approveAll } = await import('@github/copilot-sdk')
+        // Use standalone copilot binary to avoid Bun's node:sqlite issue
+        const { resolveCopilotCli } = await import('../../utils/copilot-client')
+        const cliPath = resolveCopilotCli()
+        const client = new CopilotClient({
+          autoStart: true,
+          ...(cliPath ? { cliPath } : {}),
+        })
+        copilotClient = client
+        await client.start()
+
+        const session = await client.createSession({
+          ...(model ? { model } : {}),
+          streaming: true,
+          onPermissionRequest: approveAll,
+          systemMessage: { mode: 'replace', content: body.system },
+          ...(body.effort ? { reasoningEffort: mapCopilotReasoningEffort(body.effort) } : {}),
+        })
+
+        const lastUserMsg = [...body.messages].reverse().find((m) => m.role === 'user')
+        const prompt = lastUserMsg?.content ?? ''
+
+        // Subscribe to streaming deltas
+        session.on('assistant.message_delta', (event) => {
+          clearInterval(pingTimer)
+          const deltaContent = (event as any).data?.deltaContent ?? ''
+          if (deltaContent) {
+            const data = JSON.stringify({ type: 'text', content: deltaContent })
+            try {
+              controller.enqueue(encoder.encode(`data: ${data}\n\n`))
+            } catch { /* stream closed */ }
+          }
+        })
+
+        // Wait for completion
+        await session.sendAndWait({ prompt }, 120_000)
+        await session.destroy()
+
+        controller.enqueue(
+          encoder.encode(`data: ${JSON.stringify({ type: 'done', content: '' })}\n\n`),
+        )
+      } catch (error) {
+        const content = error instanceof Error ? error.message : 'Unknown error'
+        controller.enqueue(
+          encoder.encode(`data: ${JSON.stringify({ type: 'error', content })}\n\n`),
+        )
+      } finally {
+        clearInterval(pingTimer)
+        if (copilotClient) {
+          copilotClient.stop().catch(() => {})
+        }
         controller.close()
       }
     },

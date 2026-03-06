@@ -9,6 +9,7 @@ export interface FindEmptySpaceParams {
   padding?: number
   direction: 'top' | 'right' | 'bottom' | 'left'
   nodeId?: string
+  pageId?: string
 }
 
 export interface FindEmptySpaceResult {
@@ -24,7 +25,7 @@ export async function handleFindEmptySpace(
   const padding = params.padding ?? 50
 
   // Compute bounding box of reference content
-  const docChildren = getDocChildren(doc)
+  const docChildren = getDocChildren(doc, params.pageId)
   let nodes: PenNode[]
   if (params.nodeId) {
     const node = findNodeInTree(docChildren, params.nodeId)

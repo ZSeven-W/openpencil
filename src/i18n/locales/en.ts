@@ -293,6 +293,8 @@ const en = {
   'agents.openaiModels': 'OpenAI models',
   'agents.opencode': 'OpenCode',
   'agents.opencodeDesc': '75+ LLM providers',
+  'agents.copilot': 'GitHub Copilot',
+  'agents.copilotDesc': 'GitHub Copilot models',
   'agents.mcpServer': 'MCP Server',
   'agents.mcpServerStart': 'Start',
   'agents.mcpServerStop': 'Stop',
@@ -303,6 +305,11 @@ const en = {
   'agents.http': 'http',
   'agents.stdioHttp': 'stdio + http',
   'agents.autoUpdate': 'Auto-check for updates',
+  'agents.notInstalled': 'Not installed',
+  'agents.install': 'Install',
+  'agents.installing': 'Installing...',
+  'agents.installFailed': 'Installation failed',
+  'agents.viewDocs': 'Docs',
 
   // ── Figma Import ──
   'figma.title': 'Import from Figma',

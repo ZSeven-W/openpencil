@@ -26,6 +26,13 @@ import { handleImportSvg } from './tools/import-svg'
 import { handleSnapshotLayout } from './tools/snapshot-layout'
 import { handleFindEmptySpace } from './tools/find-empty-space'
 import { handleSaveThemePreset, handleLoadThemePreset, handleListThemePresets } from './tools/theme-presets'
+import {
+  handleAddPage,
+  handleRemovePage,
+  handleRenamePage,
+  handleReorderPage,
+  handleDuplicatePage,
+} from './tools/pages'
 
 // --- Tool definitions (shared across all Server instances) ---
 
@@ -70,6 +77,7 @@ const TOOL_DEFINITIONS = [
         parentId: { type: 'string', description: 'Limit search to children of this parent node' },
         readDepth: { type: 'number', description: 'How deep to include children in results (default 1)' },
         searchDepth: { type: 'number', description: 'How deep to search for matching nodes (default unlimited)' },
+        pageId: { type: 'string', description: 'Target page ID (defaults to first page)' },
       },
       required: ['filePath'],
     },
@@ -100,6 +108,7 @@ const TOOL_DEFINITIONS = [
           description:
             'Canvas width for post-processing layout (default 1200, use 375 for mobile).',
         },
+        pageId: { type: 'string', description: 'Target page ID (defaults to first page)' },
       },
       required: ['filePath', 'parent', 'data'],
     },
@@ -125,6 +134,7 @@ const TOOL_DEFINITIONS = [
           type: 'number',
           description: 'Canvas width for post-processing layout (default 1200).',
         },
+        pageId: { type: 'string', description: 'Target page ID (defaults to first page)' },
       },
       required: ['filePath', 'nodeId', 'data'],
     },
@@ -137,6 +147,7 @@ const TOOL_DEFINITIONS = [
       properties: {
         filePath: { type: 'string', description: 'Absolute path to the .op file' },
         nodeId: { type: 'string', description: 'ID of the node to delete' },
+        pageId: { type: 'string', description: 'Target page ID (defaults to first page)' },
       },
       required: ['filePath', 'nodeId'],
     },
@@ -158,6 +169,7 @@ const TOOL_DEFINITIONS = [
           type: 'number',
           description: 'Insertion index within the parent (default: append at end)',
         },
+        pageId: { type: 'string', description: 'Target page ID (defaults to first page)' },
       },
       required: ['filePath', 'nodeId', 'parent'],
     },
@@ -179,6 +191,7 @@ const TOOL_DEFINITIONS = [
           type: 'object',
           description: 'Properties to override on the cloned node (name, x, y, etc.)',
         },
+        pageId: { type: 'string', description: 'Target page ID (defaults to first page)' },
       },
       required: ['filePath', 'sourceId', 'parent'],
     },
@@ -204,6 +217,7 @@ const TOOL_DEFINITIONS = [
           type: 'number',
           description: 'Canvas width for post-processing layout (default 1200).',
         },
+        pageId: { type: 'string', description: 'Target page ID (defaults to first page)' },
       },
       required: ['filePath', 'nodeId', 'data'],
     },
@@ -233,6 +247,7 @@ const TOOL_DEFINITIONS = [
           type: 'number',
           description: 'Canvas width for post-processing layout (default 1200).',
         },
+        pageId: { type: 'string', description: 'Target page ID (defaults to first page)' },
       },
       required: ['filePath', 'svgPath'],
     },
@@ -291,6 +306,7 @@ const TOOL_DEFINITIONS = [
         filePath: { type: 'string', description: 'Absolute path to the .op file' },
         parentId: { type: 'string', description: 'Only return layout under this parent node' },
         maxDepth: { type: 'number', description: 'Max depth to traverse (default 1)' },
+        pageId: { type: 'string', description: 'Target page ID (defaults to first page)' },
       },
       required: ['filePath'],
     },
@@ -307,6 +323,7 @@ const TOOL_DEFINITIONS = [
         padding: { type: 'number', description: 'Minimum padding from other elements (default 50)' },
         direction: { type: 'string', enum: ['top', 'right', 'bottom', 'left'], description: 'Direction to search for empty space' },
         nodeId: { type: 'string', description: 'Search relative to this node (default: entire canvas)' },
+        pageId: { type: 'string', description: 'Target page ID (defaults to first page)' },
       },
       required: ['filePath', 'width', 'height', 'direction'],
     },
@@ -345,6 +362,77 @@ const TOOL_DEFINITIONS = [
         directory: { type: 'string', description: 'Absolute path to the directory to scan' },
       },
       required: ['directory'],
+    },
+  },
+  {
+    name: 'add_page',
+    description:
+      'Add a new page to an .op file. If the document has no pages yet, the existing children are migrated to the first page automatically.',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        filePath: { type: 'string', description: 'Absolute path to the .op file' },
+        name: { type: 'string', description: 'Page name (default: "Page N")' },
+        children: {
+          type: 'array',
+          description:
+            'Initial child nodes for the page. Defaults to a single empty 1200×800 white frame.',
+          items: { type: 'object' },
+        },
+      },
+      required: ['filePath'],
+    },
+  },
+  {
+    name: 'remove_page',
+    description: 'Remove a page from an .op file. Cannot remove the last remaining page.',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        filePath: { type: 'string', description: 'Absolute path to the .op file' },
+        pageId: { type: 'string', description: 'ID of the page to remove' },
+      },
+      required: ['filePath', 'pageId'],
+    },
+  },
+  {
+    name: 'rename_page',
+    description: 'Rename a page in an .op file.',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        filePath: { type: 'string', description: 'Absolute path to the .op file' },
+        pageId: { type: 'string', description: 'ID of the page to rename' },
+        name: { type: 'string', description: 'New page name' },
+      },
+      required: ['filePath', 'pageId', 'name'],
+    },
+  },
+  {
+    name: 'reorder_page',
+    description: 'Move a page to a new position (index) in an .op file.',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        filePath: { type: 'string', description: 'Absolute path to the .op file' },
+        pageId: { type: 'string', description: 'ID of the page to move' },
+        index: { type: 'number', description: 'New zero-based index for the page' },
+      },
+      required: ['filePath', 'pageId', 'index'],
+    },
+  },
+  {
+    name: 'duplicate_page',
+    description:
+      'Duplicate a page (deep-clone with new IDs) and insert the copy right after the original.',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        filePath: { type: 'string', description: 'Absolute path to the .op file' },
+        pageId: { type: 'string', description: 'ID of the page to duplicate' },
+        name: { type: 'string', description: 'Name for the duplicated page (default: "original copy")' },
+      },
+      required: ['filePath', 'pageId'],
     },
   },
 ]
@@ -387,6 +475,16 @@ async function handleToolCall(name: string, args: any) {
       return JSON.stringify(await handleLoadThemePreset(args), null, 2)
     case 'list_theme_presets':
       return JSON.stringify(await handleListThemePresets(args), null, 2)
+    case 'add_page':
+      return JSON.stringify(await handleAddPage(args), null, 2)
+    case 'remove_page':
+      return JSON.stringify(await handleRemovePage(args), null, 2)
+    case 'rename_page':
+      return JSON.stringify(await handleRenamePage(args), null, 2)
+    case 'reorder_page':
+      return JSON.stringify(await handleReorderPage(args), null, 2)
+    case 'duplicate_page':
+      return JSON.stringify(await handleDuplicatePage(args), null, 2)
     default:
       throw new Error(`Unknown tool: ${name}`)
   }

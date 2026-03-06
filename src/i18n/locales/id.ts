@@ -295,6 +295,8 @@ const id: TranslationKeys = {
   'agents.openaiModels': 'Model OpenAI',
   'agents.opencode': 'OpenCode',
   'agents.opencodeDesc': '75+ penyedia LLM',
+  'agents.copilot': 'GitHub Copilot',
+  'agents.copilotDesc': 'Model GitHub Copilot',
   'agents.mcpServer': 'Server MCP',
   'agents.mcpServerStart': 'Mulai',
   'agents.mcpServerStop': 'Hentikan',
@@ -305,6 +307,11 @@ const id: TranslationKeys = {
   'agents.http': 'http',
   'agents.stdioHttp': 'stdio + http',
   'agents.autoUpdate': 'Periksa pembaruan otomatis',
+  'agents.notInstalled': 'Belum terpasang',
+  'agents.install': 'Pasang',
+  'agents.installing': 'Memasang...',
+  'agents.installFailed': 'Pemasangan gagal',
+  'agents.viewDocs': 'Dokumen',
 
   // ── Figma Import ──
   'figma.title': 'Impor dari Figma',
