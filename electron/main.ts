@@ -379,9 +379,9 @@ function createWindow(): void {
     ...(isWinOrLinux
       ? {
           titleBarOverlay: {
-            color: '#09090b',
+            color: 'rgba(0,0,0,0)',
             symbolColor: '#a1a1aa',
-            height: 40,
+            height: 36,
           },
         }
       : {}),
@@ -529,7 +529,7 @@ function setupIPC(): void {
     const isWinOrLinux = process.platform === 'win32' || process.platform === 'linux'
     if (!isWinOrLinux) return
     mainWindow.setTitleBarOverlay({
-      color: theme === 'dark' ? '#09090b' : '#ffffff',
+      color: 'rgba(0,0,0,0)',
       symbolColor: theme === 'dark' ? '#a1a1aa' : '#71717a',
     })
   })
