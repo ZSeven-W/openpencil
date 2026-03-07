@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react'
-import { Pencil, ChevronDown, Check } from 'lucide-react'
+import { Pencil, ChevronDown, Check, AlertTriangle } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import type { ChatMessage as ChatMessageType } from '@/services/ai/ai-types'
 import {
@@ -7,6 +7,13 @@ import {
   countDesignJsonBlocks,
   buildPipelineProgress,
 } from './chat-message'
+
+/** Parse [done]/[pending]/[error] prefix from a detail line */
+function parseDetailStatus(line: string): { status: 'done' | 'pending' | 'error' | null; text: string } {
+  const match = line.match(/^\[(done|pending|error)\]\s*(.*)$/)
+  if (match) return { status: match[1] as 'done' | 'pending' | 'error', text: match[2] }
+  return { status: null, text: line }
+}
 
 /** Fixed collapsible checklist pinned between messages and input */
 export function FixedChecklist({ messages, isStreaming }: { messages: ChatMessageType[]; isStreaming: boolean }) {
@@ -27,7 +34,7 @@ export function FixedChecklist({ messages, isStreaming }: { messages: ChatMessag
     const planSteps = steps.filter((s) => s.title !== 'Thinking')
     if (planSteps.length === 0) return []
     const jsonCount = countDesignJsonBlocks(content)
-    const isApplied = content.includes('\u2705') || content.includes('<!-- APPLIED -->')
+    const isApplied = content.includes('\u2705') || content.includes('<!-- APPLIED -->') || content.includes('[done] Applied')
     const hasError = /\*\*Error:\*\*/i.test(content)
     return buildPipelineProgress(planSteps, jsonCount, isStreaming, isApplied, hasError)
   }, [lastAssistant, isStreaming])
@@ -89,9 +96,27 @@ export function FixedChecklist({ messages, isStreaming }: { messages: ChatMessag
               </div>
               {item.details && item.details.length > 0 && (
                 <div className="ml-[22px] flex flex-col gap-px">
-                  {item.details.map((line, di) => (
-                    <span key={di} className="text-[10px] text-muted-foreground/70">{line}</span>
-                  ))}
+                  {item.details.map((line, di) => {
+                    const { status, text } = parseDetailStatus(line)
+                    return (
+                      <span key={di} className="flex items-center gap-1.5 text-[10px] text-muted-foreground/70">
+                        {status === 'done' && (
+                          <span className="w-2.5 h-2.5 rounded-full border border-emerald-500/70 text-emerald-500/80 flex items-center justify-center shrink-0">
+                            <Check size={7} strokeWidth={2.5} />
+                          </span>
+                        )}
+                        {status === 'pending' && (
+                          <span className="w-2.5 h-2.5 rounded-full border border-primary/70 flex items-center justify-center shrink-0">
+                            <span className="w-1 h-1 rounded-full bg-primary animate-pulse" />
+                          </span>
+                        )}
+                        {status === 'error' && (
+                          <AlertTriangle size={10} className="text-amber-500/80 shrink-0" />
+                        )}
+                        <span>{text}</span>
+                      </span>
+                    )
+                  })}
                 </div>
               )}
             </div>

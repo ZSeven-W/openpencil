@@ -521,9 +521,9 @@ export async function runPostGenerationValidation(
 
     // Replace "Applying..." with result
     if (applied > 0) {
-      log[log.length - 1] = `✅ Applied ${applied} fix${applied > 1 ? 'es' : ''}`
+      log[log.length - 1] = `[done] Applied ${applied} fix${applied > 1 ? 'es' : ''}`
     } else {
-      log[log.length - 1] = '⚠️ No fixes could be applied'
+      log[log.length - 1] = '[error] No fixes could be applied'
       console.log(`[Validation] Round ${round}: no fixes could be applied, stopping`)
       break
     }
@@ -536,9 +536,9 @@ export async function runPostGenerationValidation(
   // Final summary line
   const qualityInfo = lastQualityScore > 0 ? ` — quality: ${lastQualityScore}/10` : ''
   if (totalApplied > 0) {
-    emit('done', `✨ Done: ${totalApplied} fix${totalApplied > 1 ? 'es' : ''} applied${qualityInfo}`)
+    emit('done', `[done] Done: ${totalApplied} fix${totalApplied > 1 ? 'es' : ''} applied${qualityInfo}`)
   } else if (lastQualityScore > 0) {
-    emit('done', `✨ Done: no fixes needed${qualityInfo}`)
+    emit('done', `[done] Done: no fixes needed${qualityInfo}`)
   } else {
     emit('done')
   }
