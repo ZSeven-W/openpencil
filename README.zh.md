@@ -196,6 +196,10 @@ bun run electron:build     # Electron 打包
 </a>
 — 提问、分享设计、提出功能建议。
 
+**飞书交流群**
+
+<img src="https://github.com/user-attachments/assets/62010928-d91a-4223-bc10-9ee7a4fbf043" alt="飞书交流群" width="240" />
+
 ## 许可证
 
 [MIT](./LICENSE) — Copyright (c) 2026 ZSeven-W
