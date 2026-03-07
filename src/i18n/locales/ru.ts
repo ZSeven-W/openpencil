@@ -44,6 +44,7 @@ const ru: TranslationKeys = {
   'topbar.open': 'Открыть',
   'topbar.save': 'Сохранить',
   'topbar.importFigma': 'Импорт из Figma',
+  'topbar.codePanel': 'Код',
   'topbar.lightMode': 'Светлая тема',
   'topbar.darkMode': 'Тёмная тема',
   'topbar.fullscreen': 'Полный экран',
@@ -53,6 +54,11 @@ const ru: TranslationKeys = {
   'topbar.setupAgentsMcp': 'Настройка агентов и MCP',
   'topbar.connected': 'подключено',
   'topbar.agentStatus': '{{agents}} агент{{agentSuffix}} · {{mcp}} MCP',
+
+  // ── Right Panel ──
+  'rightPanel.design': 'Дизайн',
+  'rightPanel.code': 'Код',
+  'rightPanel.noSelection': 'Выберите элемент',
 
   // ── Pages ──
   'pages.title': 'Страницы',
@@ -269,11 +275,18 @@ const ru: TranslationKeys = {
   'code.htmlCss': 'HTML + CSS',
   'code.cssVariables': 'CSS Variables',
   'code.copyClipboard': 'Копировать в буфер обмена',
+  'code.copied': 'Скопировано!',
+  'code.download': 'Скачать файл с кодом',
   'code.closeCodePanel': 'Закрыть панель кода',
   'code.genCssVars': 'Генерация CSS-переменных для всего документа',
   'code.genSelected':
     'Генерация кода для {{count}} выделенных элементов',
   'code.genDocument': 'Генерация кода для всего документа',
+  'code.aiEnhance': 'Улучшить с ИИ',
+  'code.cancelEnhance': 'Отменить улучшение',
+  'code.resetEnhance': 'Сбросить',
+  'code.enhancing': 'ИИ улучшает код...',
+  'code.enhanced': 'Улучшено ИИ',
 
   // ── Save Dialog ──
   'save.saveAs': 'Сохранить как',

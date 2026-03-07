@@ -123,10 +123,54 @@ function renderTokens(code: string, tokens: Token[]): string {
   return result
 }
 
-export type SyntaxLanguage = 'jsx' | 'html' | 'css'
+const SWIFT_RULES: TokenRule[] = [
+  { pattern: /\/\/.*/g, className: 'syn-comment' },
+  { pattern: /\/\*[\s\S]*?\*\//g, className: 'syn-comment' },
+  { pattern: /"(?:[^"\\]|\\.)*"/g, className: 'syn-string' },
+  { pattern: /\b(import|struct|var|let|func|return|if|else|for|in|while|switch|case|break|some|self|true|false|nil|class|enum|protocol|extension|guard|throw|try|catch|async|await|private|public|internal|static|mutating|typealias|associatedtype|where)\b/g, className: 'syn-keyword' },
+  { pattern: /\b(View|Text|VStack|HStack|ZStack|Color|Font|Image|Rectangle|RoundedRectangle|Circle|Ellipse|Capsule|Path|Spacer|Divider|GeometryReader|ScrollView|Button|AsyncImage|LinearGradient|RadialGradient|Shape|some)\b/g, className: 'syn-tag' },
+  { pattern: /\.[a-zA-Z]+(?=\()/g, className: 'syn-attr' },
+  { pattern: /\b\d+\.?\d*\b/g, className: 'syn-number' },
+  { pattern: /[{}()]/g, className: 'syn-bracket' },
+]
+
+const KOTLIN_RULES: TokenRule[] = [
+  { pattern: /\/\/.*/g, className: 'syn-comment' },
+  { pattern: /\/\*[\s\S]*?\*\//g, className: 'syn-comment' },
+  { pattern: /"(?:[^"\\]|\\.)*"/g, className: 'syn-string' },
+  { pattern: /\b(package|import|fun|val|var|return|if|else|for|in|while|when|is|class|object|interface|override|private|public|internal|companion|data|sealed|abstract|open|suspend|inline|annotation|true|false|null)\b/g, className: 'syn-keyword' },
+  { pattern: /\b(Composable|Modifier|Column|Row|Box|Text|Image|Icon|Canvas|Divider|Spacer|Surface|Card|Scaffold|LazyColumn|LazyRow|Color|FontWeight|FontStyle|TextAlign|TextDecoration|Arrangement|Alignment|RoundedCornerShape|CircleShape|Dp|ContentScale)\b/g, className: 'syn-tag' },
+  { pattern: /\.[a-zA-Z]+(?=\()/g, className: 'syn-attr' },
+  { pattern: /\b\d+\.?\d*(f|dp|sp)?\b/g, className: 'syn-number' },
+  { pattern: /@[A-Za-z]+/g, className: 'syn-attr' },
+  { pattern: /[{}()]/g, className: 'syn-bracket' },
+]
+
+const DART_RULES: TokenRule[] = [
+  { pattern: /\/\/.*/g, className: 'syn-comment' },
+  { pattern: /\/\*[\s\S]*?\*\//g, className: 'syn-comment' },
+  { pattern: /"(?:[^"\\]|\\.)*"/g, className: 'syn-string' },
+  { pattern: /'(?:[^'\\]|\\.)*'/g, className: 'syn-string' },
+  { pattern: /\b(import|class|extends|implements|with|mixin|abstract|final|const|var|void|return|if|else|for|in|while|switch|case|break|continue|new|this|super|true|false|null|async|await|static|late|required|override|enum|typedef|try|catch|throw|dynamic)\b/g, className: 'syn-keyword' },
+  { pattern: /\b(Widget|StatelessWidget|StatefulWidget|State|BuildContext|Container|Column|Row|Stack|Positioned|Text|Image|SizedBox|Padding|Center|Expanded|Flexible|Scaffold|AppBar|Material|BoxDecoration|BorderRadius|Border|EdgeInsets|Color|TextStyle|FontWeight|FontStyle|TextAlign|BoxFit|MainAxisAlignment|CrossAxisAlignment|CustomPaint|ClipPath|Opacity|Transform|LinearGradient|RadialGradient)\b/g, className: 'syn-tag' },
+  { pattern: /\.[a-zA-Z]+(?=\()/g, className: 'syn-attr' },
+  { pattern: /@[a-zA-Z]+/g, className: 'syn-attr' },
+  { pattern: /\b\d+\.?\d*\b/g, className: 'syn-number' },
+  { pattern: /[{}()]/g, className: 'syn-bracket' },
+]
+
+export type SyntaxLanguage = 'jsx' | 'html' | 'css' | 'swift' | 'kotlin' | 'dart'
 
 export function highlightCode(code: string, language: SyntaxLanguage): string {
-  const rules = language === 'jsx' ? JSX_RULES : language === 'html' ? HTML_RULES : CSS_RULES
+  const ruleMap: Record<SyntaxLanguage, TokenRule[]> = {
+    jsx: JSX_RULES,
+    html: HTML_RULES,
+    css: CSS_RULES,
+    swift: SWIFT_RULES,
+    kotlin: KOTLIN_RULES,
+    dart: DART_RULES,
+  }
+  const rules = ruleMap[language]
   const tokens = tokenize(code, rules)
   return renderTokens(code, tokens)
 }

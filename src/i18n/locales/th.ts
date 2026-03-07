@@ -44,6 +44,7 @@ const th: TranslationKeys = {
   'topbar.open': 'เปิด',
   'topbar.save': 'บันทึก',
   'topbar.importFigma': 'นำเข้า Figma',
+  'topbar.codePanel': 'โค้ด',
   'topbar.lightMode': 'โหมดสว่าง',
   'topbar.darkMode': 'โหมดมืด',
   'topbar.fullscreen': 'เต็มหน้าจอ',
@@ -53,6 +54,11 @@ const th: TranslationKeys = {
   'topbar.setupAgentsMcp': 'ตั้งค่าเอเจนต์และ MCP',
   'topbar.connected': 'เชื่อมต่อแล้ว',
   'topbar.agentStatus': '{{agents}} เอเจนต์{{agentSuffix}} · {{mcp}} MCP',
+
+  // ── Right Panel ──
+  'rightPanel.design': 'ออกแบบ',
+  'rightPanel.code': 'โค้ด',
+  'rightPanel.noSelection': 'เลือกองค์ประกอบ',
 
   // ── Pages ──
   'pages.title': 'หน้า',
@@ -267,11 +273,18 @@ const th: TranslationKeys = {
   'code.htmlCss': 'HTML + CSS',
   'code.cssVariables': 'CSS Variables',
   'code.copyClipboard': 'คัดลอกไปยังคลิปบอร์ด',
+  'code.copied': 'คัดลอกแล้ว!',
+  'code.download': 'ดาวน์โหลดไฟล์โค้ด',
   'code.closeCodePanel': 'ปิดแผงโค้ด',
   'code.genCssVars': 'กำลังสร้าง CSS Variables สำหรับเอกสารทั้งหมด',
   'code.genSelected':
     'กำลังสร้างโค้ดสำหรับ {{count}} องค์ประกอบที่เลือก',
   'code.genDocument': 'กำลังสร้างโค้ดสำหรับเอกสารทั้งหมด',
+  'code.aiEnhance': 'ปรับปรุงด้วย AI',
+  'code.cancelEnhance': 'ยกเลิกการปรับปรุง',
+  'code.resetEnhance': 'กลับเป็นต้นฉบับ',
+  'code.enhancing': 'AI กำลังปรับปรุงโค้ด...',
+  'code.enhanced': 'ปรับปรุงแล้วโดย AI',
 
   // ── Save Dialog ──
   'save.saveAs': 'บันทึกเป็น',

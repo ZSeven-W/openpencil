@@ -44,6 +44,7 @@ const de: TranslationKeys = {
   'topbar.open': 'Öffnen',
   'topbar.save': 'Speichern',
   'topbar.importFigma': 'Figma importieren',
+  'topbar.codePanel': 'Code',
   'topbar.lightMode': 'Heller Modus',
   'topbar.darkMode': 'Dunkler Modus',
   'topbar.fullscreen': 'Vollbild',
@@ -53,6 +54,11 @@ const de: TranslationKeys = {
   'topbar.setupAgentsMcp': 'Agenten & MCP einrichten',
   'topbar.connected': 'verbunden',
   'topbar.agentStatus': '{{agents}} Agent{{agentSuffix}} · {{mcp}} MCP',
+
+  // ── Right Panel ──
+  'rightPanel.design': 'Design',
+  'rightPanel.code': 'Code',
+  'rightPanel.noSelection': 'Element auswählen',
 
   // ── Pages ──
   'pages.title': 'Seiten',
@@ -269,11 +275,18 @@ const de: TranslationKeys = {
   'code.htmlCss': 'HTML + CSS',
   'code.cssVariables': 'CSS Variables',
   'code.copyClipboard': 'In Zwischenablage kopieren',
+  'code.copied': 'Kopiert!',
+  'code.download': 'Code-Datei herunterladen',
   'code.closeCodePanel': 'Code-Panel schließen',
   'code.genCssVars': 'CSS-Variablen für das gesamte Dokument generieren',
   'code.genSelected':
     'Code für {{count}} ausgewählte(s) Element(e) generieren',
   'code.genDocument': 'Code für das gesamte Dokument generieren',
+  'code.aiEnhance': 'KI-Verbesserung',
+  'code.cancelEnhance': 'Verbesserung abbrechen',
+  'code.resetEnhance': 'Zurücksetzen',
+  'code.enhancing': 'KI verbessert den Code...',
+  'code.enhanced': 'Von KI verbessert',
 
   // ── Save Dialog ──
   'save.saveAs': 'Speichern unter',

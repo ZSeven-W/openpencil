@@ -44,6 +44,7 @@ const zh: TranslationKeys = {
   'topbar.open': '打开',
   'topbar.save': '保存',
   'topbar.importFigma': '导入 Figma',
+  'topbar.codePanel': '代码',
   'topbar.lightMode': '浅色模式',
   'topbar.darkMode': '深色模式',
   'topbar.fullscreen': '全屏',
@@ -53,6 +54,11 @@ const zh: TranslationKeys = {
   'topbar.setupAgentsMcp': '设置 Agents 与 MCP',
   'topbar.connected': '已连接',
   'topbar.agentStatus': '{{agents}} 个 Agent{{agentSuffix}} · {{mcp}} 个 MCP',
+
+  // ── Right Panel ──
+  'rightPanel.design': '设计',
+  'rightPanel.code': '代码',
+  'rightPanel.noSelection': '选择一个元素',
 
   // ── Pages ──
   'pages.title': '页面',
@@ -261,10 +267,17 @@ const zh: TranslationKeys = {
   'code.htmlCss': 'HTML + CSS',
   'code.cssVariables': 'CSS Variables',
   'code.copyClipboard': '复制到剪贴板',
+  'code.copied': '已复制！',
+  'code.download': '下载代码文件',
   'code.closeCodePanel': '关闭代码面板',
   'code.genCssVars': '正在为整个文档生成 CSS 变量',
   'code.genSelected': '正在为 {{count}} 个选中元素生成代码',
   'code.genDocument': '正在为整个文档生成代码',
+  'code.aiEnhance': 'AI 优化',
+  'code.cancelEnhance': '取消优化',
+  'code.resetEnhance': '恢复原始代码',
+  'code.enhancing': 'AI 正在优化代码...',
+  'code.enhanced': '已由 AI 优化',
 
   // ── Save Dialog ──
   'save.saveAs': '另存为',

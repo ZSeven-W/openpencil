@@ -2,41 +2,30 @@ import type { PenDocument, PenNode, ContainerProps, TextNode } from '@/types/pen
 import { getActivePageChildren } from '@/stores/document-tree-utils'
 import type { PenFill, PenStroke, PenEffect, ShadowEffect } from '@/types/styles'
 import { isVariableRef } from '@/variables/resolve-variables'
-import { variableNameToCSS, generateCSSVariables } from '@/services/codegen/css-variables-generator'
+import { variableNameToCSS } from '@/services/codegen/css-variables-generator'
 
 /**
- * Converts PenDocument nodes to HTML + CSS.
- * $variable references are output as var(--name) CSS custom properties.
+ * Converts PenDocument nodes to Svelte component code.
+ * Generates a single .svelte file with markup + scoped <style>.
  */
 
 function varOrLiteral(value: string): string {
-  if (isVariableRef(value)) {
-    return `var(${variableNameToCSS(value.slice(1))})`
-  }
+  if (isVariableRef(value)) return `var(${variableNameToCSS(value.slice(1))})`
   return value
-}
-
-let classCounter = 0
-
-function resetClassCounter() {
-  classCounter = 0
-}
-
-function nextClassName(prefix: string): string {
-  classCounter++
-  return `${prefix}-${classCounter}`
 }
 
 function indent(depth: number): string {
   return '  '.repeat(depth)
 }
 
+// ---------------------------------------------------------------------------
+// CSS helpers
+// ---------------------------------------------------------------------------
+
 function fillToCSS(fills: PenFill[] | undefined): Record<string, string> {
   if (!fills || fills.length === 0) return {}
   const fill = fills[0]
-  if (fill.type === 'solid') {
-    return { background: varOrLiteral(fill.color) }
-  }
+  if (fill.type === 'solid') return { background: varOrLiteral(fill.color) }
   if (fill.type === 'linear_gradient') {
     if (!fill.stops?.length) return {}
     const angle = fill.angle ?? 180
@@ -57,18 +46,11 @@ function strokeToCSS(stroke: PenStroke | undefined): Record<string, string> {
   if (typeof stroke.thickness === 'string' && isVariableRef(stroke.thickness)) {
     css['border-width'] = varOrLiteral(stroke.thickness)
   } else {
-    const thickness = typeof stroke.thickness === 'number'
-      ? stroke.thickness
-      : stroke.thickness[0]
-    css['border-width'] = `${thickness}px`
+    const t = typeof stroke.thickness === 'number' ? stroke.thickness : stroke.thickness[0]
+    css['border-width'] = `${t}px`
   }
   css['border-style'] = 'solid'
-  if (stroke.fill && stroke.fill.length > 0) {
-    const sf = stroke.fill[0]
-    if (sf.type === 'solid') {
-      css['border-color'] = varOrLiteral(sf.color)
-    }
-  }
+  if (stroke.fill?.[0]?.type === 'solid') css['border-color'] = varOrLiteral(stroke.fill[0].color)
   return css
 }
 
@@ -78,78 +60,56 @@ function effectsToCSS(effects: PenEffect[] | undefined): Record<string, string> 
   for (const effect of effects) {
     if (effect.type === 'shadow') {
       const s = effect as ShadowEffect
-      const inset = s.inner ? 'inset ' : ''
-      shadows.push(`${inset}${s.offsetX}px ${s.offsetY}px ${s.blur}px ${s.spread}px ${s.color}`)
+      shadows.push(`${s.inner ? 'inset ' : ''}${s.offsetX}px ${s.offsetY}px ${s.blur}px ${s.spread}px ${s.color}`)
     }
   }
-  if (shadows.length > 0) {
-    return { 'box-shadow': shadows.join(', ') }
-  }
-  return {}
+  return shadows.length > 0 ? { 'box-shadow': shadows.join(', ') } : {}
 }
 
-function cornerRadiusToCSS(
-  cr: number | [number, number, number, number] | undefined,
-): Record<string, string> {
+function cornerRadiusToCSS(cr: number | [number, number, number, number] | undefined): Record<string, string> {
   if (cr === undefined) return {}
-  if (typeof cr === 'number') {
-    return cr === 0 ? {} : { 'border-radius': `${cr}px` }
-  }
+  if (typeof cr === 'number') return cr === 0 ? {} : { 'border-radius': `${cr}px` }
   return { 'border-radius': `${cr[0]}px ${cr[1]}px ${cr[2]}px ${cr[3]}px` }
 }
 
 function layoutToCSS(node: ContainerProps): Record<string, string> {
   const css: Record<string, string> = {}
-  if (node.layout === 'vertical') {
-    css.display = 'flex'
-    css['flex-direction'] = 'column'
-  } else if (node.layout === 'horizontal') {
-    css.display = 'flex'
-    css['flex-direction'] = 'row'
-  }
+  if (node.layout === 'vertical') { css.display = 'flex'; css['flex-direction'] = 'column' }
+  else if (node.layout === 'horizontal') { css.display = 'flex'; css['flex-direction'] = 'row' }
   if (node.gap !== undefined) {
-    if (typeof node.gap === 'string' && isVariableRef(node.gap)) {
-      css.gap = varOrLiteral(node.gap)
-    } else if (typeof node.gap === 'number') {
-      css.gap = `${node.gap}px`
-    }
+    css.gap = typeof node.gap === 'string' && isVariableRef(node.gap)
+      ? varOrLiteral(node.gap)
+      : typeof node.gap === 'number' ? `${node.gap}px` : ''
   }
   if (node.padding !== undefined) {
-    if (typeof node.padding === 'string' && isVariableRef(node.padding)) {
-      css.padding = varOrLiteral(node.padding)
-    } else if (typeof node.padding === 'number') {
-      css.padding = `${node.padding}px`
-    } else if (Array.isArray(node.padding)) {
-      css.padding = node.padding.map((p) => `${p}px`).join(' ')
-    }
+    if (typeof node.padding === 'string' && isVariableRef(node.padding)) css.padding = varOrLiteral(node.padding)
+    else if (typeof node.padding === 'number') css.padding = `${node.padding}px`
+    else if (Array.isArray(node.padding)) css.padding = node.padding.map((p) => `${p}px`).join(' ')
   }
   if (node.justifyContent) {
-    const map: Record<string, string> = {
-      start: 'flex-start',
-      center: 'center',
-      end: 'flex-end',
-      space_between: 'space-between',
-      space_around: 'space-around',
-    }
+    const map: Record<string, string> = { start: 'flex-start', center: 'center', end: 'flex-end', space_between: 'space-between', space_around: 'space-around' }
     css['justify-content'] = map[node.justifyContent] ?? node.justifyContent
   }
   if (node.alignItems) {
-    const map: Record<string, string> = {
-      start: 'flex-start',
-      center: 'center',
-      end: 'flex-end',
-    }
+    const map: Record<string, string> = { start: 'flex-start', center: 'center', end: 'flex-end' }
     css['align-items'] = map[node.alignItems] ?? node.alignItems
   }
-  if (node.clipContent) {
-    css.overflow = 'hidden'
-  }
+  if (node.clipContent) css.overflow = 'hidden'
   return css
 }
 
-interface CSSRule {
-  className: string
-  properties: Record<string, string>
+// ---------------------------------------------------------------------------
+// Node → markup + CSS rules
+// ---------------------------------------------------------------------------
+
+interface CSSRule { className: string; properties: Record<string, string> }
+
+let classCounter = 0
+function resetClassCounter() { classCounter = 0 }
+function nextClassName(prefix: string): string { return `${prefix}-${++classCounter}` }
+
+function escapeHTML(text: string): string {
+  return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
 }
 
 function getTextContent(node: TextNode): string {
@@ -157,42 +117,20 @@ function getTextContent(node: TextNode): string {
   return node.content.map((s) => s.text).join('')
 }
 
-function escapeHTML(text: string): string {
-  return text
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-}
-
-function generateNodeHTML(
-  node: PenNode,
-  depth: number,
-  rules: CSSRule[],
-): string {
+function generateNodeMarkup(node: PenNode, depth: number, rules: CSSRule[]): string {
   const pad = indent(depth)
   const css: Record<string, string> = {}
 
-  // Position
   if (node.x !== undefined || node.y !== undefined) {
     css.position = 'absolute'
     if (node.x !== undefined) css.left = `${node.x}px`
     if (node.y !== undefined) css.top = `${node.y}px`
   }
-
-  // Opacity
   if (node.opacity !== undefined && node.opacity !== 1) {
-    if (typeof node.opacity === 'string' && isVariableRef(node.opacity)) {
-      css.opacity = varOrLiteral(node.opacity)
-    } else if (typeof node.opacity === 'number') {
-      css.opacity = String(node.opacity)
-    }
+    if (typeof node.opacity === 'string' && isVariableRef(node.opacity)) css.opacity = varOrLiteral(node.opacity)
+    else if (typeof node.opacity === 'number') css.opacity = String(node.opacity)
   }
-
-  // Rotation
-  if (node.rotation) {
-    css.transform = `rotate(${node.rotation}deg)`
-  }
+  if (node.rotation) css.transform = `rotate(${node.rotation}deg)`
 
   switch (node.type) {
     case 'frame':
@@ -200,45 +138,29 @@ function generateNodeHTML(
     case 'group': {
       if (typeof node.width === 'number') css.width = `${node.width}px`
       if (typeof node.height === 'number') css.height = `${node.height}px`
-      Object.assign(css, fillToCSS(node.fill))
-      Object.assign(css, strokeToCSS(node.stroke))
-      Object.assign(css, cornerRadiusToCSS(node.cornerRadius))
-      Object.assign(css, effectsToCSS(node.effects))
-      Object.assign(css, layoutToCSS(node))
-
+      Object.assign(css, fillToCSS(node.fill), strokeToCSS(node.stroke), cornerRadiusToCSS(node.cornerRadius), effectsToCSS(node.effects), layoutToCSS(node))
       const className = nextClassName(node.name?.replace(/\s+/g, '-').toLowerCase() ?? node.type)
       rules.push({ className, properties: css })
-
       const children = node.children ?? []
-      if (children.length === 0) {
-        return `${pad}<div class="${className}"></div>`
-      }
-      const childrenHTML = children
-        .map((c) => generateNodeHTML(c, depth + 1, rules))
-        .join('\n')
-      return `${pad}<div class="${className}">\n${childrenHTML}\n${pad}</div>`
+      if (children.length === 0) return `${pad}<div class="${className}" />`
+      const childrenMarkup = children.map((c) => generateNodeMarkup(c, depth + 1, rules)).join('\n')
+      return `${pad}<div class="${className}">\n${childrenMarkup}\n${pad}</div>`
     }
 
     case 'ellipse': {
       if (typeof node.width === 'number') css.width = `${node.width}px`
       if (typeof node.height === 'number') css.height = `${node.height}px`
       css['border-radius'] = '50%'
-      Object.assign(css, fillToCSS(node.fill))
-      Object.assign(css, strokeToCSS(node.stroke))
-      Object.assign(css, effectsToCSS(node.effects))
-
+      Object.assign(css, fillToCSS(node.fill), strokeToCSS(node.stroke), effectsToCSS(node.effects))
       const className = nextClassName(node.name?.replace(/\s+/g, '-').toLowerCase() ?? 'ellipse')
       rules.push({ className, properties: css })
-      return `${pad}<div class="${className}"></div>`
+      return `${pad}<div class="${className}" />`
     }
 
     case 'text': {
       if (typeof node.width === 'number') css.width = `${node.width}px`
       if (typeof node.height === 'number') css.height = `${node.height}px`
-      if (node.fill) {
-        const fill = node.fill[0]
-        if (fill?.type === 'solid') css.color = varOrLiteral(fill.color)
-      }
+      if (node.fill) { const f = node.fill[0]; if (f?.type === 'solid') css.color = varOrLiteral(f.color) }
       if (node.fontSize) css['font-size'] = `${node.fontSize}px`
       if (node.fontWeight) css['font-weight'] = String(node.fontWeight)
       if (node.fontStyle === 'italic') css['font-style'] = 'italic'
@@ -246,36 +168,24 @@ function generateNodeHTML(
       if (node.fontFamily) css['font-family'] = `'${node.fontFamily}', sans-serif`
       if (node.lineHeight) css['line-height'] = String(node.lineHeight)
       if (node.letterSpacing) css['letter-spacing'] = `${node.letterSpacing}px`
-      if (node.textAlignVertical === 'middle') css['vertical-align'] = 'middle'
-      else if (node.textAlignVertical === 'bottom') css['vertical-align'] = 'bottom'
-      if (node.textGrowth === 'auto') css['white-space'] = 'nowrap'
-      else if (node.textGrowth === 'fixed-width-height') css.overflow = 'hidden'
       if (node.underline) css['text-decoration'] = 'underline'
       if (node.strikethrough) css['text-decoration'] = 'line-through'
       Object.assign(css, effectsToCSS(node.effects))
-
       const className = nextClassName(node.name?.replace(/\s+/g, '-').toLowerCase() ?? 'text')
       rules.push({ className, properties: css })
-
       const size = node.fontSize ?? 16
       const tag = size >= 32 ? 'h1' : size >= 24 ? 'h2' : size >= 20 ? 'h3' : 'p'
-      const text = escapeHTML(getTextContent(node))
-      return `${pad}<${tag} class="${className}">${text}</${tag}>`
+      return `${pad}<${tag} class="${className}">${escapeHTML(getTextContent(node))}</${tag}>`
     }
 
     case 'line': {
       const w = node.x2 !== undefined ? Math.abs(node.x2 - (node.x ?? 0)) : 0
       css.width = `${w}px`
       if (node.stroke) {
-        const thickness = typeof node.stroke.thickness === 'number'
-          ? node.stroke.thickness
-          : node.stroke.thickness[0]
-        css['border-top-width'] = `${thickness}px`
+        const t = typeof node.stroke.thickness === 'number' ? node.stroke.thickness : node.stroke.thickness[0]
+        css['border-top-width'] = `${t}px`
         css['border-top-style'] = 'solid'
-        if (node.stroke.fill && node.stroke.fill.length > 0) {
-          const sf = node.stroke.fill[0]
-          if (sf.type === 'solid') css['border-top-color'] = varOrLiteral(sf.color)
-        }
+        if (node.stroke.fill?.[0]?.type === 'solid') css['border-top-color'] = varOrLiteral(node.stroke.fill[0].color)
       }
       const className = nextClassName(node.name?.replace(/\s+/g, '-').toLowerCase() ?? 'line')
       rules.push({ className, properties: css })
@@ -295,19 +205,17 @@ function generateNodeHTML(
         const fillColor = node.fill?.[0]?.type === 'solid' ? varOrLiteral(node.fill[0].color) : 'currentColor'
         return `${pad}<svg class="${className}" viewBox="0 0 ${w} ${h}">\n${pad}  <path d="${node.d}" fill="${fillColor}" />\n${pad}</svg>`
       }
-      return `${pad}<div class="${className}"></div>`
+      return `${pad}<div class="${className}" />`
     }
 
     case 'image': {
       if (typeof node.width === 'number') css.width = `${node.width}px`
       if (typeof node.height === 'number') css.height = `${node.height}px`
-      const fit = node.objectFit === 'fit' ? 'contain' : node.objectFit === 'crop' ? 'cover' : 'fill'
-      css['object-fit'] = fit
+      css['object-fit'] = node.objectFit ?? 'fill'
       Object.assign(css, cornerRadiusToCSS(node.cornerRadius))
-      Object.assign(css, effectsToCSS(node.effects))
       const className = nextClassName(node.name?.replace(/\s+/g, '-').toLowerCase() ?? 'image')
       rules.push({ className, properties: css })
-      return `${pad}<img class="${className}" src="${node.src}" alt="${escapeHTML(node.name ?? 'image')}" />`
+      return `${pad}<img class="${className}" src="${escapeHTML(node.src)}" alt="${escapeHTML(node.name ?? '')}" />`
     }
 
     case 'ref':
@@ -319,33 +227,23 @@ function generateNodeHTML(
 }
 
 function cssRulesToString(rules: CSSRule[]): string {
-  return rules
-    .map((r) => {
-      const props = Object.entries(r.properties)
-        .map(([k, v]) => `  ${k}: ${v};`)
-        .join('\n')
-      return `.${r.className} {\n${props}\n}`
-    })
-    .join('\n\n')
+  return rules.map((r) => {
+    const props = Object.entries(r.properties).map(([k, v]) => `  ${k}: ${v};`).join('\n')
+    return `.${r.className} {\n${props}\n}`
+  }).join('\n\n')
 }
 
-export function generateHTMLCode(nodes: PenNode[]): { html: string; css: string } {
+// ---------------------------------------------------------------------------
+// Public API
+// ---------------------------------------------------------------------------
+
+export function generateSvelteCode(nodes: PenNode[]): string {
   resetClassCounter()
   const rules: CSSRule[] = []
 
-  if (nodes.length === 0) {
-    return {
-      html: '<div class="container"></div>',
-      css: '.container {\n  position: relative;\n}',
-    }
-  }
-
-  // Compute wrapper size
-  let maxW = 0
-  let maxH = 0
+  let maxW = 0, maxH = 0
   for (const node of nodes) {
-    const x = node.x ?? 0
-    const y = node.y ?? 0
+    const x = node.x ?? 0, y = node.y ?? 0
     const w = 'width' in node && typeof node.width === 'number' ? node.width : 0
     const h = 'height' in node && typeof node.height === 'number' ? node.height : 0
     maxW = Math.max(maxW, x + w)
@@ -357,26 +255,21 @@ export function generateHTMLCode(nodes: PenNode[]): { html: string; css: string 
   if (maxH > 0) containerCSS.height = `${maxH}px`
   rules.push({ className: 'container', properties: containerCSS })
 
-  const childrenHTML = nodes
-    .map((n) => generateNodeHTML(n, 1, rules))
-    .join('\n')
+  const markup = nodes.length === 0
+    ? '<div class="container" />'
+    : `<div class="container">\n${nodes.map((n) => generateNodeMarkup(n, 1, rules)).join('\n')}\n</div>`
 
-  const html = `<div class="container">\n${childrenHTML}\n</div>`
   const css = cssRulesToString(rules)
 
-  return { html, css }
+  return `${markup}
+
+<style>
+${css}
+</style>
+`
 }
 
-export function generateHTMLFromDocument(doc: PenDocument, activePageId?: string | null): { html: string; css: string } {
-  const children = activePageId !== undefined
-    ? getActivePageChildren(doc, activePageId)
-    : doc.children
-  const result = generateHTMLCode(children)
-  const varsCSS = doc.variables && Object.keys(doc.variables).length > 0
-    ? generateCSSVariables(doc)
-    : ''
-  return {
-    html: result.html,
-    css: varsCSS ? `${varsCSS}\n${result.css}` : result.css,
-  }
+export function generateSvelteFromDocument(doc: PenDocument, activePageId?: string | null): string {
+  const children = activePageId !== undefined ? getActivePageChildren(doc, activePageId) : doc.children
+  return generateSvelteCode(children)
 }

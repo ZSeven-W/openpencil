@@ -307,6 +307,16 @@ function generateNodeJSX(node: PenNode, depth: number): string {
       return `${pad}<div className="${classes.join(' ')}" />`
     }
 
+    case 'image': {
+      classes.push(...sizeToTailwind(node.width, node.height))
+      if (node.cornerRadius) classes.push(...cornerRadiusToTailwind(node.cornerRadius))
+      classes.push(...effectsToTailwind(node.effects))
+      const fit = node.objectFit === 'fit' ? 'object-contain' : node.objectFit === 'crop' ? 'object-cover' : 'object-fill'
+      classes.push(fit)
+      const src = node.src
+      return `${pad}<img className="${classes.join(' ')}" src="${src}" alt="${node.name ?? 'image'}" />`
+    }
+
     case 'ref':
       return `${pad}{/* Ref: ${node.ref} */}`
 

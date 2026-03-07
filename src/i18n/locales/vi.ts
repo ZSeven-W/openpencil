@@ -44,6 +44,7 @@ const vi: TranslationKeys = {
   'topbar.open': 'Mở',
   'topbar.save': 'Lưu',
   'topbar.importFigma': 'Nhập từ Figma',
+  'topbar.codePanel': 'Mã',
   'topbar.lightMode': 'Chế độ sáng',
   'topbar.darkMode': 'Chế độ tối',
   'topbar.fullscreen': 'Toàn màn hình',
@@ -53,6 +54,11 @@ const vi: TranslationKeys = {
   'topbar.setupAgentsMcp': 'Thiết lập Agent & MCP',
   'topbar.connected': 'đã kết nối',
   'topbar.agentStatus': '{{agents}} agent{{agentSuffix}} · {{mcp}} MCP',
+
+  // ── Right Panel ──
+  'rightPanel.design': 'Thiết kế',
+  'rightPanel.code': 'Mã',
+  'rightPanel.noSelection': 'Chọn một phần tử',
 
   // ── Pages ──
   'pages.title': 'Trang',
@@ -267,11 +273,18 @@ const vi: TranslationKeys = {
   'code.htmlCss': 'HTML + CSS',
   'code.cssVariables': 'CSS Variables',
   'code.copyClipboard': 'Sao chép vào bộ nhớ tạm',
+  'code.copied': 'Đã sao chép!',
+  'code.download': 'Tải xuống tệp mã',
   'code.closeCodePanel': 'Đóng bảng mã',
   'code.genCssVars': 'Đang tạo CSS variables cho toàn bộ tài liệu',
   'code.genSelected':
     'Đang tạo mã cho {{count}} phần tử đã chọn',
   'code.genDocument': 'Đang tạo mã cho toàn bộ tài liệu',
+  'code.aiEnhance': 'Cải thiện bằng AI',
+  'code.cancelEnhance': 'Hủy cải thiện',
+  'code.resetEnhance': 'Khôi phục gốc',
+  'code.enhancing': 'AI đang cải thiện mã...',
+  'code.enhanced': 'Đã cải thiện bởi AI',
 
   // ── Save Dialog ──
   'save.saveAs': 'Lưu thành',

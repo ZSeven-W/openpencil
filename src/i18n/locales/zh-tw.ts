@@ -44,6 +44,7 @@ const zhTW: TranslationKeys = {
   'topbar.open': '開啟',
   'topbar.save': '儲存',
   'topbar.importFigma': '匯入 Figma',
+  'topbar.codePanel': '程式碼',
   'topbar.lightMode': '淺色模式',
   'topbar.darkMode': '深色模式',
   'topbar.fullscreen': '全螢幕',
@@ -53,6 +54,11 @@ const zhTW: TranslationKeys = {
   'topbar.setupAgentsMcp': '設定 Agents 與 MCP',
   'topbar.connected': '已連線',
   'topbar.agentStatus': '{{agents}} 個 Agent{{agentSuffix}} · {{mcp}} 個 MCP',
+
+  // ── Right Panel ──
+  'rightPanel.design': '設計',
+  'rightPanel.code': '程式碼',
+  'rightPanel.noSelection': '選擇一個元素',
 
   // ── Pages ──
   'pages.title': '頁面',
@@ -261,10 +267,17 @@ const zhTW: TranslationKeys = {
   'code.htmlCss': 'HTML + CSS',
   'code.cssVariables': 'CSS Variables',
   'code.copyClipboard': '複製到剪貼簿',
+  'code.copied': '已複製！',
+  'code.download': '下載程式碼檔案',
   'code.closeCodePanel': '關閉程式碼面板',
   'code.genCssVars': '正在為整份文件產生 CSS 變數',
   'code.genSelected': '正在為 {{count}} 個選取元素產生程式碼',
   'code.genDocument': '正在為整份文件產生程式碼',
+  'code.aiEnhance': 'AI 優化',
+  'code.cancelEnhance': '取消優化',
+  'code.resetEnhance': '恢復原始程式碼',
+  'code.enhancing': 'AI 正在優化程式碼...',
+  'code.enhanced': '已由 AI 優化',
 
   // ── Save Dialog ──
   'save.saveAs': '另存新檔',

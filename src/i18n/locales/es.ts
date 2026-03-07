@@ -44,6 +44,7 @@ const es: TranslationKeys = {
   'topbar.open': 'Abrir',
   'topbar.save': 'Guardar',
   'topbar.importFigma': 'Importar Figma',
+  'topbar.codePanel': 'Código',
   'topbar.lightMode': 'Modo claro',
   'topbar.darkMode': 'Modo oscuro',
   'topbar.fullscreen': 'Pantalla completa',
@@ -53,6 +54,11 @@ const es: TranslationKeys = {
   'topbar.setupAgentsMcp': 'Configurar Agentes y MCP',
   'topbar.connected': 'conectado',
   'topbar.agentStatus': '{{agents}} agente{{agentSuffix}} · {{mcp}} MCP',
+
+  // ── Right Panel ──
+  'rightPanel.design': 'Diseño',
+  'rightPanel.code': 'Código',
+  'rightPanel.noSelection': 'Selecciona un elemento',
 
   // ── Pages ──
   'pages.title': 'Páginas',
@@ -273,12 +279,19 @@ const es: TranslationKeys = {
   'code.htmlCss': 'HTML + CSS',
   'code.cssVariables': 'CSS Variables',
   'code.copyClipboard': 'Copiar al portapapeles',
+  'code.copied': '¡Copiado!',
+  'code.download': 'Descargar archivo de código',
   'code.closeCodePanel': 'Cerrar panel de código',
   'code.genCssVars':
     'Generando variables CSS para todo el documento',
   'code.genSelected':
     'Generando código para {{count}} elemento(s) seleccionado(s)',
   'code.genDocument': 'Generando código para todo el documento',
+  'code.aiEnhance': 'Mejorar con IA',
+  'code.cancelEnhance': 'Cancelar mejora',
+  'code.resetEnhance': 'Restablecer original',
+  'code.enhancing': 'La IA está mejorando el código...',
+  'code.enhanced': 'Mejorado por IA',
 
   // ── Save Dialog ──
   'save.saveAs': 'Guardar como',
