@@ -319,6 +319,7 @@ const tr: TranslationKeys = {
   'agents.mcpServerRunning': 'Çalışıyor',
   'agents.mcpServerStopped': 'Durduruldu',
   'agents.mcpLanAccess': 'LAN Erişimi',
+  'agents.mcpClientConfig': 'İstemci yapılandırması',
   'agents.stdio': 'stdio',
   'agents.http': 'http',
   'agents.stdioHttp': 'stdio + http',

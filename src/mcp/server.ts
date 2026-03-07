@@ -512,12 +512,9 @@ function registerTools(server: Server): void {
 
 // --- HTTP server helper ---
 
-function startHttpServer(server: Server, port: number): void {
-  const transport = new StreamableHTTPServerTransport({
-    sessionIdGenerator: () => randomUUID(),
-  })
-
-  server.connect(transport)
+function startHttpServer(port: number): void {
+  // Per-session transport map: each client gets its own Server + Transport
+  const sessions = new Map<string, { transport: StreamableHTTPServerTransport; server: Server }>()
 
   const httpServer = createServer(async (req, res) => {
     res.setHeader('Access-Control-Allow-Origin', '*')
@@ -531,19 +528,62 @@ function startHttpServer(server: Server, port: number): void {
       return
     }
 
-    if (req.url === '/mcp') {
+    if (req.url !== '/mcp') {
+      res.writeHead(404, { 'Content-Type': 'application/json' })
+      res.end(JSON.stringify({ error: 'Not found. Use /mcp endpoint.' }))
+      return
+    }
+
+    const sessionId = req.headers['mcp-session-id'] as string | undefined
+
+    // Route to existing session
+    if (sessionId && sessions.has(sessionId)) {
+      const session = sessions.get(sessionId)!
       if (req.method === 'POST') {
         const chunks: Buffer[] = []
         for await (const chunk of req) chunks.push(chunk as Buffer)
         const body = JSON.parse(Buffer.concat(chunks).toString())
-        await transport.handleRequest(req, res, body)
+        await session.transport.handleRequest(req, res, body)
       } else {
-        await transport.handleRequest(req, res)
+        await session.transport.handleRequest(req, res)
       }
-    } else {
-      res.writeHead(404, { 'Content-Type': 'application/json' })
-      res.end(JSON.stringify({ error: 'Not found. Use /mcp endpoint.' }))
+      return
     }
+
+    // New session — only POST (initialize) is valid without session ID
+    if (req.method === 'POST') {
+      const mcpServer = new Server(
+        { name: pkg.name, version: pkg.version },
+        { capabilities: { tools: {} } },
+      )
+      registerTools(mcpServer)
+
+      const transport = new StreamableHTTPServerTransport({
+        sessionIdGenerator: () => randomUUID(),
+        onsessioninitialized: (sid: string) => {
+          sessions.set(sid, { transport, server: mcpServer })
+        },
+        onsessionclosed: (sid: string) => {
+          sessions.delete(sid)
+        },
+      })
+
+      transport.onclose = () => {
+        if (transport.sessionId) sessions.delete(transport.sessionId)
+      }
+
+      await mcpServer.connect(transport)
+
+      const chunks: Buffer[] = []
+      for await (const chunk of req) chunks.push(chunk as Buffer)
+      const body = JSON.parse(Buffer.concat(chunks).toString())
+      await transport.handleRequest(req, res, body)
+      return
+    }
+
+    // Invalid: GET/DELETE without valid session ID
+    res.writeHead(400, { 'Content-Type': 'application/json' })
+    res.end(JSON.stringify({ jsonrpc: '2.0', error: { code: -32000, message: 'Invalid or missing session ID' }, id: null }))
   })
 
   httpServer.listen(port, '0.0.0.0', () => {
@@ -569,7 +609,7 @@ async function main() {
   const { stdio, http, port } = parseArgs()
 
   if (stdio && http) {
-    // Both: two Server instances sharing the same tool handlers
+    // Both: stdio server + HTTP server (per-session)
     const stdioServer = new Server(
       { name: pkg.name, version: pkg.version },
       { capabilities: { tools: {} } },
@@ -577,19 +617,9 @@ async function main() {
     registerTools(stdioServer)
     await stdioServer.connect(new StdioServerTransport())
 
-    const httpServer = new Server(
-      { name: pkg.name, version: pkg.version },
-      { capabilities: { tools: {} } },
-    )
-    registerTools(httpServer)
-    startHttpServer(httpServer, port)
+    startHttpServer(port)
   } else if (http) {
-    const server = new Server(
-      { name: pkg.name, version: pkg.version },
-      { capabilities: { tools: {} } },
-    )
-    registerTools(server)
-    startHttpServer(server, port)
+    startHttpServer(port)
   } else {
     const server = new Server(
       { name: pkg.name, version: pkg.version },

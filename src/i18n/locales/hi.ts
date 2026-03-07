@@ -319,6 +319,7 @@ const hi: TranslationKeys = {
   'agents.mcpServerRunning': 'चल रहा है',
   'agents.mcpServerStopped': 'रुका हुआ',
   'agents.mcpLanAccess': 'LAN एक्सेस',
+  'agents.mcpClientConfig': 'क्लाइंट कॉन्फ़िग',
   'agents.stdio': 'stdio',
   'agents.http': 'http',
   'agents.stdioHttp': 'stdio + http',

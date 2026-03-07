@@ -319,6 +319,7 @@ const th: TranslationKeys = {
   'agents.mcpServerRunning': 'กำลังทำงาน',
   'agents.mcpServerStopped': 'หยุดแล้ว',
   'agents.mcpLanAccess': 'เข้าถึง LAN',
+  'agents.mcpClientConfig': 'การตั้งค่าไคลเอนต์',
   'agents.stdio': 'stdio',
   'agents.http': 'http',
   'agents.stdioHttp': 'stdio + http',

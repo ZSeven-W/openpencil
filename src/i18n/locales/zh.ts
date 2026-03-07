@@ -311,6 +311,7 @@ const zh: TranslationKeys = {
   'agents.mcpServerRunning': '运行中',
   'agents.mcpServerStopped': '已停止',
   'agents.mcpLanAccess': '局域网访问',
+  'agents.mcpClientConfig': '客户端配置',
   'agents.stdio': 'stdio',
   'agents.http': 'http',
   'agents.stdioHttp': 'stdio + http',

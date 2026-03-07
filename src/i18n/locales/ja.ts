@@ -322,6 +322,7 @@ const ja: TranslationKeys = {
   'agents.mcpServerRunning': '実行中',
   'agents.mcpServerStopped': '停止中',
   'agents.mcpLanAccess': 'LAN アクセス',
+  'agents.mcpClientConfig': 'クライアント設定',
   'agents.stdio': 'stdio',
   'agents.http': 'http',
   'agents.stdioHttp': 'stdio + http',

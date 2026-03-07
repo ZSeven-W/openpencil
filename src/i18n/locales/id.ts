@@ -319,6 +319,7 @@ const id: TranslationKeys = {
   'agents.mcpServerRunning': 'Berjalan',
   'agents.mcpServerStopped': 'Berhenti',
   'agents.mcpLanAccess': 'Akses LAN',
+  'agents.mcpClientConfig': 'Konfigurasi klien',
   'agents.stdio': 'stdio',
   'agents.http': 'http',
   'agents.stdioHttp': 'stdio + http',

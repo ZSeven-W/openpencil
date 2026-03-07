@@ -321,6 +321,7 @@ const ru: TranslationKeys = {
   'agents.mcpServerRunning': 'Работает',
   'agents.mcpServerStopped': 'Остановлен',
   'agents.mcpLanAccess': 'Доступ по LAN',
+  'agents.mcpClientConfig': 'Конфиг клиента',
   'agents.stdio': 'stdio',
   'agents.http': 'http',
   'agents.stdioHttp': 'stdio + http',

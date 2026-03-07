@@ -311,6 +311,7 @@ const zhTW: TranslationKeys = {
   'agents.mcpServerRunning': '執行中',
   'agents.mcpServerStopped': '已停止',
   'agents.mcpLanAccess': '區域網路存取',
+  'agents.mcpClientConfig': '客戶端配置',
   'agents.stdio': 'stdio',
   'agents.http': 'http',
   'agents.stdioHttp': 'stdio + http',

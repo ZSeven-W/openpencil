@@ -23,7 +23,7 @@ export function useElectronMenu() {
     const api = window.electronAPI
     if (!api?.onMenuAction) return
 
-    const cleanupOpenFile = api.onOpenFile?.((filePath: string) => {
+    const loadFileFromPath = (filePath: string) => {
       api.readFile?.(filePath).then((result) => {
         if (!result) return
         try {
@@ -37,6 +37,13 @@ export function useElectronMenu() {
           // Invalid file — ignore
         }
       })
+    }
+
+    const cleanupOpenFile = api.onOpenFile?.(loadFileFromPath)
+
+    // Pull any pending file from cold start (double-click .op to launch app)
+    api.getPendingFile?.().then((filePath) => {
+      if (filePath) loadFileFromPath(filePath)
     })
 
     const cleanup = api.onMenuAction((action: string) => {
