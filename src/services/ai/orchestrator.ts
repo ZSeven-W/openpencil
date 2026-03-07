@@ -42,6 +42,7 @@ import { executeSubAgents } from './orchestrator-sub-agent'
 import { emitProgress, buildFinalStepTags } from './orchestrator-progress'
 import { assignAgentIdentities } from './agent-identity'
 import { addAgentFrame, clearAgentIndicators } from '@/canvas/agent-indicator'
+import { enrichSubtasksWithHtmlReference } from './visual-ref-orchestrator'
 
 // ---------------------------------------------------------------------------
 // Public API
@@ -86,6 +87,9 @@ export async function executeOrchestration(
       st.idPrefix = st.id
       st.parentFrameId = plan.rootFrame.id
     }
+
+    // Enrich subtasks with HTML references from visual reference pipeline (if active)
+    enrichSubtasksWithHtmlReference(plan.subtasks)
 
     // Set canvas width hint for accurate text height estimation
     setGenerationCanvasWidth(plan.rootFrame.width)

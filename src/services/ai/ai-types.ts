@@ -22,6 +22,8 @@ export interface AIDesignRequest {
   model?: string
   provider?: AIProviderType
   concurrency?: number
+  /** Generation mode: 'direct' uses current pipeline, 'visual-ref' uses visual reference pipeline */
+  mode?: 'direct' | 'visual-ref'
   context?: {
     selectedNodes?: string[]
     documentSummary?: string
@@ -29,6 +31,49 @@ export interface AIDesignRequest {
     variables?: Record<string, import('@/types/variables').VariableDefinition>
     themes?: Record<string, string[]>
   }
+}
+
+// ---------------------------------------------------------------------------
+// Design System types — generated design tokens for consistency
+// ---------------------------------------------------------------------------
+
+export interface DesignSystem {
+  palette: {
+    background: string
+    surface: string
+    text: string
+    textSecondary: string
+    primary: string
+    primaryLight: string
+    accent: string
+    border: string
+  }
+  typography: {
+    headingFont: string
+    bodyFont: string
+    scale: number[]
+  }
+  spacing: {
+    unit: number
+    scale: number[]
+  }
+  radius: number[]
+  aesthetic: string
+}
+
+// ---------------------------------------------------------------------------
+// Visual Reference types — for the visual reference pipeline
+// ---------------------------------------------------------------------------
+
+export interface VisualReference {
+  /** Generated HTML/CSS code */
+  html: string
+  /** Screenshot of the rendered HTML (base64 PNG, no data: prefix) */
+  screenshot: string
+  /** Design system tokens used */
+  designSystem: DesignSystem
+  /** Structural summary extracted from the HTML */
+  structureSummary: string
 }
 
 export interface AICodeRequest {
@@ -62,6 +107,8 @@ export interface SubTask {
   parentFrameId: string | null
   /** Screen/page grouping — subtasks with the same screen share one root frame */
   screen?: string
+  /** HTML reference snippet for this section (from visual reference pipeline) */
+  htmlReference?: string
 }
 
 /** Style guide produced by the orchestrator for visual consistency */

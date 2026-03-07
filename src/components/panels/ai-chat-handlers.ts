@@ -15,6 +15,12 @@ import { trimChatHistory } from '@/services/ai/context-optimizer'
 import type { ChatMessage as ChatMessageType } from '@/services/ai/ai-types'
 import { CHAT_STREAM_THINKING_CONFIG } from '@/services/ai/ai-runtime-config'
 
+/** Detect if a request is comprehensive enough to benefit from visual reference pipeline */
+export function isVisualRefCandidate(text: string): boolean {
+  const lower = text.toLowerCase()
+  return /landing\s*page|website|官网|首页|full.*(page|site)|完整.*页|web\s*app|webapp|pricing\s*page|portfolio|saas|homepage|主页|产品页/i.test(lower)
+}
+
 /** Detect if a message is a design generation request */
 export function isDesignRequest(text: string): boolean {
   const lower = text.toLowerCase()
@@ -172,11 +178,13 @@ export function useChatHandlers() {
                // --- GENERATION MODE (animated) ---
                const doc = useDocumentStore.getState().document
                const concurrency = useAIStore.getState().concurrency
+               const useVisualRef = isVisualRefCandidate(messageText)
                const { rawResponse, nodes } = await generateDesign({
                  prompt: fullUserMessage,
                  model,
                  provider: currentProvider,
                  concurrency,
+                 mode: useVisualRef ? 'visual-ref' : 'direct',
                  context: {
                    canvasSize: { width: 1200, height: 800 },
                    documentSummary: `Current selection: ${hasSelection ? selectedIds.length + ' items' : 'Empty'}`,
