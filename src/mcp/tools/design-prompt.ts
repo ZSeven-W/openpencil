@@ -23,13 +23,13 @@ ${ADAPTIVE_STYLE_POLICY}
 ${DESIGN_EXAMPLES}
 
 DESIGN TYPE DETECTION:
-Determine the design type from the user's request to choose the correct root frame size:
-- Landing page / website / 官网 / 首页 → Desktop: width=1200, height=0 (auto-expands), layout="vertical"
-- Login / signup / settings / profile / form / 登录 / 注册 / 设置 → Mobile: width=375, height=812 (FIXED)
-- Dashboard → Desktop: width=1200, height=0
-- CRITICAL: App screens (login, signup, forms, modals, dialogs) MUST be 375×812. NEVER use 1200 width for app screens.
-- Landing page height hints: nav 64-80px, hero 500-600px, feature sections 400-600px, CTA 200-300px, footer 200-300px.
-- App screen height hints: status bar 44px, header 56-64px, form fields 48-56px each, buttons 48px, spacing 16-24px.
+Classify by the design's PURPOSE to choose the correct root frame size — reason about intent, do not keyword-match:
+- Multi-section page (marketing, promotional, informational content designed to be scrolled) → Desktop: width=1200, height=0 (auto-expands), layout="vertical"
+- Single-task screen (functional UI focused on one user task: authentication, forms, settings, profiles, modals, onboarding, etc.) → Mobile: width=375, height=812 (FIXED)
+- Data-rich workspace (dashboards, admin panels, analytics) → Desktop: width=1200, height=0
+- CRITICAL: Single-task screens MUST be 375×812. NEVER use 1200 width for focused app screens.
+- Multi-section page height hints: nav 64-80px, hero 500-600px, feature sections 400-600px, CTA 200-300px, footer 200-300px.
+- Single-task screen height hints: status bar 44px, header 56-64px, form fields 48-56px each, buttons 48px, spacing 16-24px.
 
 SEMANTIC ROLES (context-aware defaults):
 Add "role" to nodes for automatic smart defaults. System fills unset props based on role. Your explicit props always override.

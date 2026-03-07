@@ -5,7 +5,7 @@ import {
   PROMPT_OPTIMIZER_LIMITS,
   SUB_AGENT_TIMEOUT_PROFILES,
 } from './ai-runtime-config'
-import { selectPrinciples } from './design-principles'
+import { getAllPrinciples } from './design-principles'
 
 export interface PreparedDesignPrompt {
   original: string
@@ -67,7 +67,7 @@ export function prepareDesignPrompt(prompt: string): PreparedDesignPrompt {
     subAgentPrompt: truncateByCharCount(normalized, PROMPT_OPTIMIZER_LIMITS.maxPromptCharsForSubAgent),
     wasCompressed: normalized.length > PROMPT_OPTIMIZER_LIMITS.maxPromptCharsForOrchestrator,
     originalLength: normalized.length,
-    designPrinciples: selectPrinciples(prompt),
+    designPrinciples: getAllPrinciples(),
   }
 }
 

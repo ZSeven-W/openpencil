@@ -15,26 +15,48 @@ import { trimChatHistory } from '@/services/ai/context-optimizer'
 import type { ChatMessage as ChatMessageType } from '@/services/ai/ai-types'
 import { CHAT_STREAM_THINKING_CONFIG } from '@/services/ai/ai-runtime-config'
 
-/** Detect if a request is comprehensive enough to benefit from visual reference pipeline */
-export function isVisualRefCandidate(text: string): boolean {
-  const lower = text.toLowerCase()
-  return /landing\s*page|website|官网|首页|full.*(page|site)|完整.*页|web\s*app|webapp|pricing\s*page|portfolio|saas|homepage|主页|产品页/i.test(lower)
-}
+/** Intent classification prompt — lightweight LLM call to determine message routing */
+const CLASSIFY_PROMPT = `You are a UI design tool assistant. Classify the user's message intent.
+Reply with EXACTLY one of these tags, nothing else:
+- DESIGN_COMPLEX — user wants a full page, website, or multi-section scrollable layout
+- DESIGN_SIMPLE — user wants a single screen, component, or focused UI element
+- CHAT — user is asking a question, seeking help, or having a conversation`
 
-/** Detect if a message is a design generation request */
-export function isDesignRequest(text: string): boolean {
-  const lower = text.toLowerCase()
-  const designKeywords = [
-    '生成', '设计', '创建', '画', '做一个', '来一个', '弄一个',
-    'generate', 'create', 'design', 'make', 'build', 'draw',
-    'add a', 'add an', 'place a', 'insert',
-    '界面', '页面', 'screen', 'page', 'layout', 'component',
-    '按钮', '卡片', '导航', '表单', '输入框', '列表',
-    'button', 'card', 'nav', 'form', 'input', 'list',
-    'header', 'footer', 'sidebar', 'modal', 'dialog',
-    'login', 'signup', 'dashboard', 'profile',
-  ]
-  return designKeywords.some((kw) => lower.includes(kw))
+/** Classify user intent via a lightweight LLM call instead of hardcoded keyword matching */
+async function classifyIntent(
+  text: string,
+  model: string,
+  provider?: string,
+): Promise<{ isDesign: boolean; isVisualRef: boolean }> {
+  try {
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), 8_000)
+
+    const response = await fetch('/api/ai/generate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        system: CLASSIFY_PROMPT,
+        message: text,
+        model,
+        provider,
+      }),
+      signal: controller.signal,
+    })
+    clearTimeout(timeout)
+
+    if (!response.ok) throw new Error('classify failed')
+    const data = await response.json()
+    const upper = (data.text ?? '').trim().toUpperCase()
+
+    return {
+      isDesign: upper.includes('DESIGN'),
+      isVisualRef: upper.includes('COMPLEX'),
+    }
+  } catch {
+    // Fallback: in a design tool, default to design mode
+    return { isDesign: true, isVisualRef: false }
+  }
 }
 
 export function buildContextString(): string {
@@ -102,8 +124,6 @@ export function useChatHandlers() {
       // Determine context and mode
       const selectedIds = useCanvasStore.getState().selection.selectedIds
       const hasSelection = selectedIds.length > 0
-      const isDesign = isDesignRequest(messageText)
-      const isModification = isDesign && hasSelection
 
       const context = buildContextString()
       const fullUserMessage = messageText + context
@@ -147,11 +167,20 @@ export function useChatHandlers() {
 
       let accumulated = ''
       let appliedCount = 0
+      let isDesign = false
 
       const abortController = new AbortController()
       useAIStore.getState().setAbortController(abortController)
 
       try {
+        // Classify intent via lightweight LLM call
+        const classified = await classifyIntent(
+          messageText, model, currentProvider,
+        )
+        isDesign = classified.isDesign
+        const isVisualRef = classified.isVisualRef
+        const isModification = isDesign && hasSelection
+
         if (isDesign) {
              if (isModification) {
                // --- MODIFICATION MODE ---
@@ -178,7 +207,7 @@ export function useChatHandlers() {
                // --- GENERATION MODE (animated) ---
                const doc = useDocumentStore.getState().document
                const concurrency = useAIStore.getState().concurrency
-               const useVisualRef = isVisualRefCandidate(messageText)
+               const useVisualRef = isVisualRef
                const { rawResponse, nodes } = await generateDesign({
                  prompt: fullUserMessage,
                  model,

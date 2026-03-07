@@ -3,8 +3,7 @@
  *
  * Generates self-contained HTML/CSS code using the model's strongest design
  * capability. The output is a visual reference that guides PenNode generation.
- * Design principles from the skill system are selectively injected based on
- * the request context to avoid context bloat.
+ * Design principles are included to ensure consistent visual quality.
  */
 
 import type { DesignSystem } from './ai-types'
@@ -14,7 +13,7 @@ import {
   DESIGN_CODE_SYSTEM_PROMPT,
   buildCodeGenUserPrompt,
 } from './design-code-prompts'
-import { selectPrinciples } from './design-principles'
+import { getAllPrinciples } from './design-principles'
 import { designSystemToPromptContext } from './design-system-generator'
 
 interface CodeGenOptions {
@@ -33,8 +32,7 @@ export async function generateDesignCode(
   designSystem: DesignSystem,
   options: CodeGenOptions,
 ): Promise<string> {
-  // Selectively load design principles based on request context
-  const principles = selectPrinciples(prompt)
+  const principles = getAllPrinciples()
 
   // Build the system prompt with principles injected
   const systemPrompt = principles
