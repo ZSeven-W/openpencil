@@ -96,17 +96,13 @@ async function validateViaAgentSDK(
   body: ValidateBody,
   model?: string,
 ): Promise<{ text: string; skipped?: boolean; error?: string }> {
-  // insideProject=true so Claude Code in plan mode can read the file
   return await withTempImageFile(body.imageBase64, async (tempPath) => {
     const { query } = await import('@anthropic-ai/claude-agent-sdk')
 
     const env = buildClaudeAgentEnv()
     const debugFile = getClaudeAgentDebugFilePath()
-
     const claudePath = resolveClaudeCli()
 
-    // Explicit prompt: read the image file, analyze it, return ONLY JSON.
-    // The system prompt and message are appended as context.
     const prompt = `IMPORTANT: First, use the Read tool to read the image file at "${tempPath}". This is a PNG screenshot of a UI design.
 
 After viewing the image, analyze it according to these instructions:

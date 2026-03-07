@@ -330,12 +330,17 @@ function parseValidationResponse(text: string): ValidationResult {
     }
   }
 
+  // Strip Agent SDK tool_use XML blocks that may precede the JSON response.
+  // The Agent SDK sometimes includes raw tool call XML (e.g. <tool_use>...<input>{...}</input></tool_use>)
+  // which confuses the JSON extraction regex.
+  const cleaned = text.replace(/<tool_use>[\s\S]*?<\/tool_use>/g, '').trim()
+
   // Try direct parse
-  const direct = tryParse(text.trim())
+  const direct = tryParse(cleaned)
   if (direct) return direct
 
   // Try extracting JSON from text
-  const match = text.match(/\{[\s\S]*\}/)
+  const match = cleaned.match(/\{[\s\S]*\}/)
   if (match) {
     const extracted = tryParse(match[0])
     if (extracted) return extracted
