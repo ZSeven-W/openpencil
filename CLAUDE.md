@@ -195,7 +195,7 @@ PenDocument (source of truth)
 - **`src/services/codegen/`** — React+Tailwind and HTML+CSS code generators (output `var(--name)` for `$variable` refs), CSS variables generator
 - **`src/hooks/`** — Hooks (2 files):
   - `use-keyboard-shortcuts.ts` — Global keyboard event handling: tools, clipboard, undo/redo, save, select all, delete, arrow nudge, z-order, boolean operations (Cmd+Alt+U/S/I)
-  - `use-electron-menu.ts` — Electron native menu IPC listener: dispatches menu actions (new, open, save, save-as, undo, redo, etc.) to Zustand stores
+  - `use-electron-menu.ts` — Electron native menu IPC listener: dispatches menu actions (new, open, save, save-as, undo, redo, etc.) to Zustand stores; also handles `onOpenFile` for `.op` file association
 - **`src/lib/`** — Utility functions (`utils.ts` with `cn()` for class merging)
 - **`src/uikit/`** — UI kit system (3 files + `kits/` subdir):
   - `built-in-registry.ts` — Default built-in UIKit with standard UI components
@@ -250,13 +250,14 @@ Tailwind CSS v4 imported via `src/styles.css`. UI primitives from shadcn/ui (`sr
 
 ### Electron Desktop App
 
-- **`electron/main.ts`** — Main process: window creation, Nitro server fork, IPC for native file dialogs, native application menu, auto-updater, macOS traffic-light padding (auto-hidden in fullscreen)
-- **`electron/preload.ts`** — Context bridge for renderer ↔ main IPC (file dialogs, menu actions, updater state)
-- **`electron-builder.yml`** — Packaging config: macOS (dmg/zip), Windows (nsis/portable), Linux (AppImage/deb)
+- **`electron/main.ts`** — Main process: window creation, Nitro server fork, IPC for native file dialogs, native application menu, auto-updater, macOS traffic-light padding (auto-hidden in fullscreen), `.op` file association handling (`open-file` event on macOS, CLI args + single-instance lock on Windows/Linux)
+- **`electron/preload.ts`** — Context bridge for renderer ↔ main IPC (file dialogs, menu actions, updater state, `onOpenFile`/`readFile` for file association)
+- **`electron-builder.yml`** — Packaging config: macOS (dmg/zip), Windows (nsis/portable), Linux (AppImage/deb), `.op` file association (`fileAssociations`)
 - **`scripts/electron-dev.ts`** — Dev workflow: starts Vite → waits for port 3000 → compiles electron/ with esbuild → launches Electron
 - Build flow: `BUILD_TARGET=electron bun run build` → `bun run electron:compile` → `npx electron-builder`
 - In production, Nitro server is forked as a child process on a random port; Electron loads `http://127.0.0.1:{port}/editor`
 - Auto-updater checks GitHub Releases on startup and every hour; `update-ready-banner.tsx` shows download progress and "Restart & Install" prompt
+- **File association:** `.op` files are registered as OpenPencil documents via `fileAssociations` in `electron-builder.yml`. On macOS the `open-file` app event handles double-click/drag; on Windows/Linux `requestSingleInstanceLock` + `second-instance` event forwards CLI args to the existing window. Pending file paths are queued until the renderer is ready, then sent via `file:open` IPC channel. The renderer (`use-electron-menu.ts`) listens via `onOpenFile`, reads the file through `file:read` IPC, and calls `loadDocument`.
 
 ### CI / CD
 

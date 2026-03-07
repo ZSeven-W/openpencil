@@ -107,6 +107,7 @@ OpenPencil is built around AI from the ground up — not as a plugin, but as a c
 
 **Desktop App**
 - Native macOS, Windows, and Linux via Electron
+- `.op` file association — double-click to open, single-instance lock
 - Auto-update from GitHub Releases
 - Native application menu and file dialogs
 

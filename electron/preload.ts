@@ -28,6 +28,8 @@ export interface ElectronAPI {
   ) => Promise<string | null>
   saveToPath: (filePath: string, content: string) => Promise<string>
   onMenuAction: (callback: (action: string) => void) => () => void
+  onOpenFile: (callback: (filePath: string) => void) => () => void
+  readFile: (filePath: string) => Promise<{ filePath: string; content: string } | null>
   setTheme: (theme: 'dark' | 'light') => void
   updater: {
     getState: () => Promise<UpdaterState>
@@ -61,6 +63,18 @@ const api: ElectronAPI = {
       ipcRenderer.removeListener('menu:action', listener)
     }
   },
+
+  onOpenFile: (callback: (filePath: string) => void) => {
+    const listener = (_event: IpcRendererEvent, filePath: string) => {
+      callback(filePath)
+    }
+    ipcRenderer.on('file:open', listener)
+    return () => {
+      ipcRenderer.removeListener('file:open', listener)
+    }
+  },
+
+  readFile: (filePath: string) => ipcRenderer.invoke('file:read', filePath),
 
   updater: {
     getState: () => ipcRenderer.invoke('updater:getState'),

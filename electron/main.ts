@@ -20,6 +20,7 @@ let nitroProcess: ChildProcess | null = null
 let serverPort = 0
 let autoUpdateEnabled = true
 let updateCheckTimer: ReturnType<typeof setInterval> | null = null
+let pendingFilePath: string | null = null
 
 const isDev = !app.isPackaged
 const SETTINGS_PATH = join(homedir(), '.openpencil', 'settings.json')
@@ -523,6 +524,18 @@ function setupIPC(): void {
     },
   )
 
+  ipcMain.handle('file:read', async (_event, filePath: string) => {
+    const resolved = resolve(filePath)
+    const ext = extname(resolved).toLowerCase()
+    if (ext !== '.op' && ext !== '.pen') return null
+    try {
+      const content = await readFile(resolved, 'utf-8')
+      return { filePath: resolved, content }
+    } catch {
+      return null
+    }
+  })
+
   // Theme sync for Windows/Linux title bar overlay
   ipcMain.handle('theme:set', (_event, theme: 'dark' | 'light') => {
     if (!mainWindow || mainWindow.isDestroyed()) return
@@ -700,6 +713,58 @@ function buildAppMenu(): void {
 }
 
 // ---------------------------------------------------------------------------
+// File association: open .op files
+// ---------------------------------------------------------------------------
+
+/** Extract .op file path from command-line arguments. */
+function getFilePathFromArgs(args: string[]): string | null {
+  for (const arg of args) {
+    if (arg.endsWith('.op') || arg.endsWith('.pen')) {
+      return arg
+    }
+  }
+  return null
+}
+
+/** Send a file path to the renderer for loading. */
+function sendOpenFile(filePath: string): void {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send('file:open', filePath)
+  } else {
+    pendingFilePath = filePath
+  }
+}
+
+// macOS: open-file fires when user double-clicks a .op file
+app.on('open-file', (event, filePath) => {
+  event.preventDefault()
+  if (app.isReady()) {
+    sendOpenFile(filePath)
+  } else {
+    pendingFilePath = filePath
+  }
+})
+
+// Single instance lock (Windows/Linux: second instance passes file path as arg)
+const gotTheLock = app.requestSingleInstanceLock()
+
+if (!gotTheLock) {
+  app.quit()
+} else {
+  app.on('second-instance', (_event, argv) => {
+    const filePath = getFilePathFromArgs(argv)
+    if (filePath) {
+      sendOpenFile(filePath)
+    }
+    // Focus existing window
+    if (mainWindow) {
+      if (mainWindow.isMinimized()) mainWindow.restore()
+      mainWindow.focus()
+    }
+  })
+}
+
+// ---------------------------------------------------------------------------
 // App lifecycle
 // ---------------------------------------------------------------------------
 
@@ -724,6 +789,19 @@ app.on('ready', async () => {
   }
 
   createWindow()
+
+  // Check for file to open: pending open-file event or CLI args (Windows/Linux)
+  if (!pendingFilePath) {
+    pendingFilePath = getFilePathFromArgs(process.argv)
+  }
+  if (pendingFilePath) {
+    const fileToOpen = pendingFilePath
+    pendingFilePath = null
+    // Wait for renderer to be ready, then send
+    mainWindow?.webContents.once('did-finish-load', () => {
+      mainWindow?.webContents.send('file:open', fileToOpen)
+    })
+  }
 
   if (!isDev) {
     const settings = await readAppSettings()
