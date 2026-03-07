@@ -398,11 +398,18 @@ export async function runPostGenerationValidation(
   let totalApplied = 0
   let lastQualityScore = 0
 
+  // Accumulate a log so the final status retains all validation steps
+  const log: string[] = []
+  function emit(status: 'pending' | 'streaming' | 'done' | 'error', line?: string) {
+    if (line) log.push(line)
+    options?.onStatusUpdate?.(status, log.join('\n'))
+  }
+
   for (let round = 1; round <= MAX_VALIDATION_ROUNDS; round++) {
     const isFirstRound = round === 1
 
-    options?.onStatusUpdate?.('streaming',
-      isFirstRound ? 'Capturing screenshot...' : `Re-capturing screenshot (round ${round})...`,
+    emit('streaming',
+      isFirstRound ? '📸 Capturing screenshot...' : `📸 Re-capturing screenshot (round ${round})...`,
     )
 
     // Wait for canvas render to stabilize.
@@ -422,12 +429,16 @@ export async function runPostGenerationValidation(
     if (!imageBase64) {
       console.warn(`[Validation] Round ${round}: could not capture screenshot — stopping`)
       if (isFirstRound) {
-        options?.onStatusUpdate?.('done', 'Skipped (no screenshot)')
+        emit('done', '❌ Screenshot failed')
         clearVisualReference()
         return { applied: 0, skipped: true }
       }
       break
     }
+
+    // Replace the "Capturing..." line with success
+    log[log.length - 1] = isFirstRound ? '✅ Screenshot captured' : `✅ Screenshot captured (round ${round})`
+    emit('streaming')
 
     const nodeTreeDump = buildNodeTreeDump(DEFAULT_FRAME_ID)
     if (isFirstRound) {
@@ -438,13 +449,11 @@ export async function runPostGenerationValidation(
     const visualRef = isFirstRound ? getCurrentVisualReference() : null
     const hasReference = visualRef?.screenshot && visualRef.screenshot.length > 0
 
-    if (isFirstRound && hasReference) {
-      options?.onStatusUpdate?.('streaming', 'Comparing with design reference...')
-    } else {
-      options?.onStatusUpdate?.('streaming',
-        isFirstRound ? 'Analyzing design...' : `Validating fixes (round ${round})...`,
-      )
-    }
+    emit('streaming',
+      hasReference && isFirstRound
+        ? '🔍 Comparing with design reference...'
+        : isFirstRound ? '🔍 Analyzing design...' : `🔍 Analyzing (round ${round})...`,
+    )
 
     const result = await validateDesignScreenshot(
       imageBase64,
@@ -457,19 +466,27 @@ export async function runPostGenerationValidation(
 
     if (result.skipped) {
       console.log(`[Validation] Round ${round}: skipped (see warnings above for details; provider=${options?.provider}, model=${options?.model})`)
+      // Replace "Analyzing..." with skipped reason
+      log[log.length - 1] = '⚠️ Analysis skipped (timeout or provider error)'
       if (isFirstRound) {
         clearVisualReference()
-        options?.onStatusUpdate?.('done', 'Skipped')
+        emit('done')
         return { applied: 0, skipped: true }
       }
+      emit('streaming')
       break
     }
 
     lastQualityScore = result.qualityScore
 
+    // Replace "Analyzing..." with result
     if (result.issues.length > 0) {
+      log[log.length - 1] = `🔍 Found ${result.issues.length} issue${result.issues.length > 1 ? 's' : ''} (quality: ${result.qualityScore}/10)`
       console.log(`[Validation] Round ${round}: issues found:`, result.issues)
+    } else {
+      log[log.length - 1] = `✅ No issues (quality: ${result.qualityScore}/10)`
     }
+    emit('streaming')
 
     // Quality threshold reached — design is good enough
     if (result.qualityScore >= VALIDATION_QUALITY_THRESHOLD) {
@@ -482,32 +499,34 @@ export async function runPostGenerationValidation(
       break
     }
 
-    options?.onStatusUpdate?.('streaming',
-      round > 1
-        ? `Applying ${result.fixes.length} fixes (round ${round})...`
-        : `Applying ${result.fixes.length} fixes...`,
-    )
+    emit('streaming', `🔧 Applying ${result.fixes.length} fix${result.fixes.length > 1 ? 'es' : ''}...`)
 
     const applied = applyValidationFixes(result)
     totalApplied += applied
     console.log(`[Validation] Round ${round}: applied ${applied} fixes (quality: ${result.qualityScore}/10):`, result.fixes)
 
-    if (applied === 0) {
+    // Replace "Applying..." with result
+    if (applied > 0) {
+      log[log.length - 1] = `✅ Applied ${applied} fix${applied > 1 ? 'es' : ''}`
+    } else {
+      log[log.length - 1] = '⚠️ No fixes could be applied'
       console.log(`[Validation] Round ${round}: no fixes could be applied, stopping`)
       break
     }
+    emit('streaming')
   }
 
   // Cleanup visual reference after all rounds
   clearVisualReference()
 
-  const qualityInfo = lastQualityScore > 0 ? ` (quality: ${lastQualityScore}/10)` : ''
+  // Final summary line
+  const qualityInfo = lastQualityScore > 0 ? ` — quality: ${lastQualityScore}/10` : ''
   if (totalApplied > 0) {
-    options?.onStatusUpdate?.('done', `Applied ${totalApplied} fixes${qualityInfo}`)
+    emit('done', `✨ Done: ${totalApplied} fix${totalApplied > 1 ? 'es' : ''} applied${qualityInfo}`)
   } else if (lastQualityScore > 0) {
-    options?.onStatusUpdate?.('done', `No fixes needed${qualityInfo}`)
+    emit('done', `✨ Done: no fixes needed${qualityInfo}`)
   } else {
-    options?.onStatusUpdate?.('done', 'No issues found')
+    emit('done')
   }
 
   return { applied: totalApplied, skipped: false }

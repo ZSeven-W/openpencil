@@ -143,15 +143,30 @@ export function countDesignJsonBlocks(text: string): number {
   return count
 }
 
+export interface PipelineItem {
+  label: string
+  done: boolean
+  active: boolean
+  /** Optional detail lines (e.g. validation log) */
+  details?: string[]
+}
+
 export function buildPipelineProgress(
   steps: ParsedStep[],
   jsonBlockCount: number,
   isStreaming: boolean,
   isApplied: boolean,
   hasError: boolean,
-): Array<{ label: string; done: boolean; active: boolean }> {
+): PipelineItem[] {
   // No steps = no checklist
   if (steps.length === 0) return []
+
+  // Parse detail lines from step content (one line per entry)
+  function extractDetails(content: string): string[] | undefined {
+    if (!content) return undefined
+    const lines = content.split('\n').map((l) => l.trim()).filter(Boolean)
+    return lines.length > 0 ? lines : undefined
+  }
 
   // If steps have explicit status (orchestrator mode), use that directly.
   // Check this BEFORE terminal result logic so that user-stopped generations
@@ -162,13 +177,14 @@ export function buildPipelineProgress(
       label: s.title,
       done: s.status === 'done',
       active: isStreaming && s.status === 'streaming',
+      details: extractDetails(s.content),
     }))
   }
 
   // If generation is complete and applied, mark all steps done
   const hasTerminalResult = !isStreaming && !hasError && (isApplied || jsonBlockCount > 0)
   if (hasTerminalResult) {
-    return steps.map((s) => ({ label: s.title, done: true, active: false }))
+    return steps.map((s) => ({ label: s.title, done: true, active: false, details: extractDetails(s.content) }))
   }
 
   // Fallback: Map each step to done/active/pending based on completed JSON blocks.
@@ -177,7 +193,7 @@ export function buildPipelineProgress(
   return steps.map((s, index) => {
     const done = index < jsonBlockCount
     const active = isStreaming && !done && index === jsonBlockCount
-    return { label: s.title, done, active }
+    return { label: s.title, done, active, details: extractDetails(s.content) }
   })
 }
 
