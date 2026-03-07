@@ -4,7 +4,8 @@
  * Inspired by Pencil's search_all_unique_properties + replace_all_matching_properties.
  * Runs before vision API validation to fix obvious inconsistencies:
  *   1. Invisible containers — frame with same fill as parent → add border
- *   2. Sibling consistency — majority-rule for height, cornerRadius among same-type siblings
+ *   2. Empty icons — path nodes without geometry data
+ *   3. Sibling consistency — majority-rule for height, cornerRadius, fontSize
  */
 
 import { DEFAULT_FRAME_ID, useDocumentStore } from '@/stores/document-store'
@@ -31,7 +32,10 @@ export function runPreValidationFixes(): number {
   // Pass 1: Find invisible containers (same fill as parent → needs border)
   detectInvisibleContainers(root, null, fixes, store)
 
-  // Pass 2: Find sibling property inconsistencies
+  // Pass 2: Find empty path/icon nodes (missing geometry)
+  detectEmptyPaths(root, fixes)
+
+  // Pass 3: Find sibling property inconsistencies
   detectSiblingInconsistencies(root, fixes)
 
   // Deduplicate (a node might get multiple fixes for same property)
@@ -45,10 +49,15 @@ export function runPreValidationFixes(): number {
 
   // Apply
   for (const fix of uniqueFixes) {
-    store.updateNode(fix.nodeId, { [fix.property]: fix.value })
-    console.log(
-      `[Pre-validation] ${fix.nodeId}: ${fix.property} → ${JSON.stringify(fix.value)} (${fix.reason})`,
-    )
+    if (fix.property === '__remove') {
+      store.removeNode(fix.nodeId)
+      console.log(`[Pre-validation] ${fix.nodeId}: removed (${fix.reason})`)
+    } else {
+      store.updateNode(fix.nodeId, { [fix.property]: fix.value })
+      console.log(
+        `[Pre-validation] ${fix.nodeId}: ${fix.property} → ${JSON.stringify(fix.value)} (${fix.reason})`,
+      )
+    }
   }
 
   return uniqueFixes.length
@@ -129,11 +138,40 @@ function detectInvisibleContainers(
 }
 
 // ---------------------------------------------------------------------------
-// Pass 2: Sibling property consistency
+// Pass 2: Empty path/icon detection
+// ---------------------------------------------------------------------------
+
+/**
+ * Detect path nodes without geometry data.
+ * These render as invisible empty rectangles on canvas.
+ */
+function detectEmptyPaths(node: PenNode, fixes: PreValidationFix[]): void {
+  if (node.type === 'path') {
+    const hasD = 'd' in node && (node as unknown as Record<string, unknown>).d
+    if (!hasD) {
+      fixes.push({
+        nodeId: node.id,
+        property: '__remove',
+        value: true,
+        reason: 'path node without geometry (renders invisible)',
+      })
+    }
+  }
+
+  if ('children' in node && node.children) {
+    for (const child of node.children) {
+      detectEmptyPaths(child, fixes)
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Pass 3: Sibling property consistency
 // ---------------------------------------------------------------------------
 
 /** Properties to check for consistency among same-type siblings */
-const CONSISTENCY_PROPS = ['height', 'cornerRadius'] as const
+const FRAME_CONSISTENCY_PROPS = ['height', 'cornerRadius'] as const
+const TEXT_CONSISTENCY_PROPS = ['fontSize'] as const
 
 /**
  * Detect property inconsistencies among siblings.
@@ -153,9 +191,10 @@ function detectSiblingInconsistencies(node: PenNode, fixes: PreValidationFix[]):
       groups.get(child.type)!.push(child)
     }
 
-    for (const siblings of groups.values()) {
+    for (const [type, siblings] of groups) {
       if (siblings.length < 3) continue
-      for (const prop of CONSISTENCY_PROPS) {
+      const props = type === 'text' ? TEXT_CONSISTENCY_PROPS : FRAME_CONSISTENCY_PROPS
+      for (const prop of props) {
         checkConsistency(siblings, prop, fixes)
       }
     }

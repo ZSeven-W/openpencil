@@ -7,15 +7,14 @@
  */
 
 import { nanoid } from 'nanoid'
-import { useCanvasStore } from '@/stores/canvas-store'
 import { DEFAULT_FRAME_ID, useDocumentStore } from '@/stores/document-store'
 import { VALIDATION_TIMEOUT_MS, MAX_VALIDATION_ROUNDS, VALIDATION_QUALITY_THRESHOLD } from './ai-runtime-config'
 import type { PenNode } from '@/types/pen'
-import type { FabricObjectWithPenId } from '@/canvas/canvas-object-factory'
 import type { AIProviderType } from '@/types/agent-settings'
 import { getCurrentVisualReference, clearVisualReference } from './visual-ref-orchestrator'
 import { lookupIconByName } from './icon-resolver'
 import { runPreValidationFixes } from './design-pre-validation'
+import { captureRootFrameScreenshot } from './design-screenshot'
 
 // ---------------------------------------------------------------------------
 // System prompt for the vision validator
@@ -84,7 +83,8 @@ IMPORTANT:
 - Keep fixes minimal — only fix clear visual bugs, not stylistic preferences.
 - Focus on the most impactful issues first.
 - For structuralFixes, only add elements that are clearly needed for consistency or completeness. Do not add decorative elements unless they are present in the reference.
-- CRITICAL: When using addChild, ALWAYS include companion property fixes for the parent node to maintain correct layout. For example, if the parent has justifyContent="space_between" and adding a child would break the spacing, also add a property fix to change justifyContent and/or add a gap value. Look at sibling elements with the same pattern and match the parent's layout properties to theirs.`
+- CRITICAL: When using addChild, ALWAYS include companion property fixes for the parent node to maintain correct layout. For example, if the parent has justifyContent="space_between" and adding a child would break the spacing, also add a property fix to change justifyContent and/or add a gap value. Look at sibling elements with the same pattern and match the parent's layout properties to theirs.
+- CRITICAL: NEVER change height or width from "fit_content" to a fixed pixel value on a frame that has layout (auto-layout). This creates empty whitespace. If a container appears invisible, fix its opacity, fill color, or border instead — not its height.`
 
 // Properties that are safe to auto-fix, with allowed value types
 const SAFE_FIX_PROPERTIES: Record<string, 'number' | 'sizing' | 'number_or_array' | 'enum_align' | 'enum_justify' | 'enum_text_align' | 'color' | 'font_weight'> = {
@@ -136,9 +136,11 @@ function buildNodeTreeDump(rootId: string): string {
       const firstFill = node.fill[0]
       if (firstFill && 'color' in firstFill && firstFill.color) props.push(`fill="${firstFill.color}"`)
     }
-    if ('stroke' in node && Array.isArray(node.stroke) && node.stroke.length > 0) {
-      const firstStroke = node.stroke[0]
-      if (firstStroke && 'color' in firstStroke) props.push(`stroke="${firstStroke.color}"`)
+    if ('stroke' in node && node.stroke) {
+      const s = node.stroke as { thickness?: number | number[]; fill?: Array<{ color?: string }> }
+      const strokeColor = s.fill?.[0]?.color
+      const strokeW = typeof s.thickness === 'number' ? s.thickness : (Array.isArray(s.thickness) ? s.thickness[0] : 0)
+      if (strokeColor) props.push(`stroke="${strokeColor}" strokeW=${strokeW ?? 0}`)
     }
     if (node.type === 'text') {
       if ('fontSize' in node && node.fontSize) props.push(`fontSize=${node.fontSize}`)
@@ -162,59 +164,6 @@ function buildNodeTreeDump(rootId: string): string {
   const rootNode = store.getNodeById(rootId)
   if (rootNode) walk(rootNode, 0)
   return lines.join('\n')
-}
-
-// ---------------------------------------------------------------------------
-// Screenshot capture
-// ---------------------------------------------------------------------------
-
-export function captureRootFrameScreenshot(): string | null {
-  const canvas = useCanvasStore.getState().fabricCanvas
-  if (!canvas) return null
-
-  const store = useDocumentStore.getState()
-  const rootNode = store.getNodeById(DEFAULT_FRAME_ID)
-  if (!rootNode) return null
-
-  const allFlat = store.getFlatNodes()
-  const descendantIds = new Set<string>()
-  for (const node of allFlat) {
-    if (node.id !== DEFAULT_FRAME_ID && store.isDescendantOf(node.id, DEFAULT_FRAME_ID)) {
-      descendantIds.add(node.id)
-    }
-  }
-
-  const allObjects = canvas.getObjects() as FabricObjectWithPenId[]
-  const rootObj = allObjects.find((obj) => obj.penNodeId === DEFAULT_FRAME_ID)
-  if (!rootObj) return null
-
-  const originX = rootObj.left ?? 0
-  const originY = rootObj.top ?? 0
-  const w = (rootObj.width ?? 0) * (rootObj.scaleX ?? 1)
-  const h = (rootObj.height ?? 0) * (rootObj.scaleY ?? 1)
-
-  if (w <= 0 || h <= 0) return null
-
-  const allIds = new Set(descendantIds)
-  allIds.add(DEFAULT_FRAME_ID)
-
-  const layerObjects = allObjects.filter(
-    (obj) => obj.penNodeId && allIds.has(obj.penNodeId),
-  )
-
-  const offscreen = document.createElement('canvas')
-  offscreen.width = Math.ceil(w)
-  offscreen.height = Math.ceil(h)
-  const ctx = offscreen.getContext('2d')
-  if (!ctx) return null
-
-  ctx.translate(-originX, -originY)
-
-  for (const obj of layerObjects) {
-    obj.render(ctx)
-  }
-
-  return offscreen.toDataURL('image/png')
 }
 
 // ---------------------------------------------------------------------------
@@ -453,6 +402,19 @@ async function applyValidationFixes(result: ValidationResult): Promise<number> {
     }
 
     const oldValue = (node as unknown as Record<string, unknown>)[fix.property]
+
+    // Safety guard: never change fit_content → fixed pixel on layout containers.
+    if (
+      (fix.property === 'height' || fix.property === 'width') &&
+      typeof fix.value === 'number' &&
+      oldValue === 'fit_content' &&
+      'layout' in node && node.layout &&
+      'children' in node && Array.isArray(node.children) && node.children.length > 1
+    ) {
+      skipped.push(`${fix.nodeId}.${fix.property} (refusing fit_content→${fix.value}px on layout container)`)
+      console.warn(`[Validation] Blocked: ${fix.nodeId}.${fix.property} fit_content→${fix.value}px (layout container with ${node.children.length} children)`)
+      continue
+    }
 
     // fillColor is a virtual property — translate to PenFill array
     if (fix.property === 'fillColor' && typeof fix.value === 'string') {
@@ -700,6 +662,7 @@ export async function runPostGenerationValidation(
 ): Promise<{ applied: number; skipped: boolean }> {
   let totalApplied = 0
   let lastQualityScore = 0
+  const fixHistory = new Map<string, number>() // "nodeId:property" → round count
 
   // Accumulate a log so the final status retains all validation steps
   const log: string[] = []
@@ -797,7 +760,12 @@ export async function runPostGenerationValidation(
 
     // Replace "Analyzing..." with result
     const scoreLabel = result.qualityScore > 0 ? ` (quality: ${result.qualityScore}/10)` : ''
-    if (result.issues.length > 0) {
+    if (result.qualityScore === 0 && result.issues.length === 0) {
+      // Parsing failed — not a clean pass
+      log[log.length - 1] = `[error] Analysis incomplete (round ${round})`
+      console.warn(`[Validation] Round ${round}: qualityScore=0 with no issues — likely parse failure`)
+      break
+    } else if (result.issues.length > 0) {
       log[log.length - 1] = `[done] Found ${result.issues.length} issue${result.issues.length > 1 ? 's' : ''}${scoreLabel}`
       console.log(`[Validation] Round ${round}: issues found:`, result.issues)
     } else {
@@ -809,6 +777,21 @@ export async function runPostGenerationValidation(
     if (result.qualityScore >= VALIDATION_QUALITY_THRESHOLD) {
       console.log(`[Validation] Round ${round}: quality ${result.qualityScore}/10 >= threshold, stopping`)
       break
+    }
+
+    // Track fixes for repeated-fix detection
+    for (const f of result.fixes) {
+      const key = `${f.nodeId}:${f.property}`
+      fixHistory.set(key, (fixHistory.get(key) ?? 0) + 1)
+    }
+
+    // Filter out repeated fixes that already failed in previous rounds
+    if (round > 1) {
+      const preFilterLen = result.fixes.length
+      result.fixes = result.fixes.filter(f => (fixHistory.get(`${f.nodeId}:${f.property}`) ?? 0) <= 1)
+      if (result.fixes.length < preFilterLen) {
+        console.log(`[Validation] Round ${round}: filtered ${preFilterLen - result.fixes.length} repeated fix(es)`)
+      }
     }
 
     if (result.fixes.length === 0 && result.structuralFixes.length === 0) {
