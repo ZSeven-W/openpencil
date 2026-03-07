@@ -18,8 +18,7 @@ import { CHAT_STREAM_THINKING_CONFIG } from '@/services/ai/ai-runtime-config'
 /** Intent classification prompt — lightweight LLM call to determine message routing */
 const CLASSIFY_PROMPT = `You are a UI design tool assistant. Classify the user's message intent.
 Reply with EXACTLY one of these tags, nothing else:
-- DESIGN_COMPLEX — user wants a full page, website, or multi-section scrollable layout
-- DESIGN_SIMPLE — user wants a single screen, component, or focused UI element
+- DESIGN — user wants to create, generate, or modify any UI element, component, screen, or page
 - CHAT — user is asking a question, seeking help, or having a conversation`
 
 /** Classify user intent via a lightweight LLM call instead of hardcoded keyword matching */
@@ -27,7 +26,7 @@ async function classifyIntent(
   text: string,
   model: string,
   provider?: string,
-): Promise<{ isDesign: boolean; isVisualRef: boolean }> {
+): Promise<{ isDesign: boolean }> {
   try {
     const controller = new AbortController()
     const timeout = setTimeout(() => controller.abort(), 8_000)
@@ -49,13 +48,10 @@ async function classifyIntent(
     const data = await response.json()
     const upper = (data.text ?? '').trim().toUpperCase()
 
-    return {
-      isDesign: upper.includes('DESIGN'),
-      isVisualRef: upper.includes('COMPLEX'),
-    }
+    return { isDesign: upper.includes('DESIGN') }
   } catch {
     // Fallback: in a design tool, default to design mode
-    return { isDesign: true, isVisualRef: false }
+    return { isDesign: true }
   }
 }
 
@@ -178,7 +174,6 @@ export function useChatHandlers() {
           messageText, model, currentProvider,
         )
         isDesign = classified.isDesign
-        const isVisualRef = classified.isVisualRef
         const isModification = isDesign && hasSelection
 
         if (isDesign) {
@@ -207,13 +202,12 @@ export function useChatHandlers() {
                // --- GENERATION MODE (animated) ---
                const doc = useDocumentStore.getState().document
                const concurrency = useAIStore.getState().concurrency
-               const useVisualRef = isVisualRef
                const { rawResponse, nodes } = await generateDesign({
                  prompt: fullUserMessage,
                  model,
                  provider: currentProvider,
                  concurrency,
-                 mode: useVisualRef ? 'visual-ref' : 'direct',
+                 mode: 'visual-ref',
                  context: {
                    canvasSize: { width: 1200, height: 800 },
                    documentSummary: `Current selection: ${hasSelection ? selectedIds.length + ' items' : 'Empty'}`,
