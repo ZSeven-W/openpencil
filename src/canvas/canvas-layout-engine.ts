@@ -373,6 +373,20 @@ export function computeLayoutPositions(
       }
     }
 
+    // For fit-content text nodes in horizontal layouts, set textAlign:'center'
+    // to compensate for width estimation inaccuracy. The estimated box is
+    // typically slightly wider than the actual rendered text, so left-aligned
+    // text appears visually shifted left. Centering the text within its box
+    // distributes the error evenly on both sides.
+    if (!isVertical && child.type === 'text') {
+      const hasExplicitAlign = 'textAlign' in child && child.textAlign && child.textAlign !== 'left'
+      const widthMode = 'width' in child ? parseSizing(child.width) : 0
+      const isFitContent = widthMode === 'fit' || widthMode === 0
+      if (!hasExplicitAlign && isFitContent) {
+        out.textAlign = 'center'
+      }
+    }
+
     return out as unknown as PenNode
   })
 }
