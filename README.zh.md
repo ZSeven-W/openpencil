@@ -198,7 +198,7 @@ bun run electron:build     # Electron 打包
 
 **飞书交流群**
 
-<img src="https://github.com/user-attachments/assets/62010928-d91a-4223-bc10-9ee7a4fbf043" alt="飞书交流群" width="240" />
+<img src="./screenshot/557517811-62010928-d91a-4223-bc10-9ee7a4fbf043.jpg" alt="飞书交流群" width="240" />
 
 ## 许可证
 
