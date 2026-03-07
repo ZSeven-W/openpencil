@@ -1,4 +1,4 @@
-import { fork, type ChildProcess } from 'node:child_process'
+import { fork, execSync, type ChildProcess } from 'node:child_process'
 import { networkInterfaces } from 'node:os'
 import { resolve } from 'node:path'
 
@@ -60,7 +60,17 @@ export function startMcpHttpServer(port: number): { running: boolean; port: numb
 
 export function stopMcpHttpServer(): { running: false } {
   if (mcpProcess) {
-    mcpProcess.kill('SIGTERM')
+    if (process.platform === 'win32') {
+      // SIGTERM is unreliable on Windows; use taskkill for proper cleanup
+      try {
+        const pid = mcpProcess.pid
+        if (pid) {
+          execSync(`taskkill /pid ${pid} /T /F`, { stdio: 'ignore' })
+        }
+      } catch { /* ignore */ }
+    } else {
+      mcpProcess.kill('SIGTERM')
+    }
     mcpProcess = null
     mcpPort = null
   }

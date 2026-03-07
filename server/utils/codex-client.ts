@@ -29,7 +29,12 @@ const DEFAULT_CODEX_TIMEOUT_MS = 15 * 60 * 1000
  * Only passes through safe system vars and provider-specific prefixes.
  * Prevents leaking secrets like ANTHROPIC_API_KEY, AWS_SECRET_KEY, GITHUB_TOKEN, etc.
  */
-const CODEX_ENV_ALLOWLIST = new Set(['PATH', 'HOME', 'TERM', 'LANG', 'SHELL', 'TMPDIR'])
+const CODEX_ENV_ALLOWLIST = new Set([
+  'PATH', 'HOME', 'TERM', 'LANG', 'SHELL', 'TMPDIR',
+  // Windows-essential vars
+  'SYSTEMROOT', 'COMSPEC', 'USERPROFILE', 'APPDATA', 'LOCALAPPDATA',
+  'PATHEXT', 'SYSTEMDRIVE', 'TEMP', 'TMP', 'HOMEDRIVE', 'HOMEPATH',
+])
 
 export function filterCodexEnv(
   env: Record<string, string | undefined>,
@@ -146,6 +151,8 @@ async function executeCodexCommand(
     const child = spawn('codex', args, {
       env: filterCodexEnv(process.env as Record<string, string | undefined>),
       stdio: ['ignore', 'pipe', 'pipe'],
+      // On Windows, npm-installed CLIs are .cmd scripts — need shell to resolve them
+      ...(process.platform === 'win32' && { shell: true }),
     })
 
     let stdoutBuffer = ''

@@ -380,8 +380,9 @@ function createWindow(): void {
     ...(isWinOrLinux
       ? {
           titleBarOverlay: {
-            color: 'rgba(0,0,0,0)',
-            symbolColor: '#a1a1aa',
+            // Windows supports transparent overlay; Linux needs solid color
+            color: process.platform === 'win32' ? 'rgba(0,0,0,0)' : '#111',
+            symbolColor: '#d4d4d8',
             height: 36,
           },
         }
@@ -537,15 +538,22 @@ function setupIPC(): void {
   })
 
   // Theme sync for Windows/Linux title bar overlay
-  ipcMain.handle('theme:set', (_event, theme: 'dark' | 'light') => {
-    if (!mainWindow || mainWindow.isDestroyed()) return
-    const isWinOrLinux = process.platform === 'win32' || process.platform === 'linux'
-    if (!isWinOrLinux) return
-    mainWindow.setTitleBarOverlay({
-      color: 'rgba(0,0,0,0)',
-      symbolColor: theme === 'dark' ? '#a1a1aa' : '#71717a',
-    })
-  })
+  ipcMain.handle(
+    'theme:set',
+    (_event, theme: 'dark' | 'light', colors?: { bg: string; fg: string }) => {
+      if (!mainWindow || mainWindow.isDestroyed()) return
+      const isWinOrLinux = process.platform === 'win32' || process.platform === 'linux'
+      if (!isWinOrLinux) return
+      const isLinux = process.platform === 'linux'
+      const fallbackBg = theme === 'dark' ? '#111' : '#fff'
+      const fallbackFg = theme === 'dark' ? '#d4d4d8' : '#3f3f46'
+      mainWindow.setTitleBarOverlay({
+        // Windows supports transparent overlay; Linux uses actual CSS card color
+        color: isLinux ? (colors?.bg || fallbackBg) : 'rgba(0,0,0,0)',
+        symbolColor: colors?.fg || fallbackFg,
+      })
+    },
+  )
 
   ipcMain.handle('updater:getState', () => updaterState)
 

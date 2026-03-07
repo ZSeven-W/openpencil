@@ -40,6 +40,21 @@ import { zoomToFitContent } from '@/canvas/use-fabric-canvas'
 import { useAgentSettingsStore } from '@/stores/agent-settings-store'
 import type { AIProviderType } from '@/types/agent-settings'
 
+/** Convert a computed CSS color value (oklch/rgb/etc.) to #rrggbb via an offscreen canvas. */
+function cssToHex(raw: string): string | null {
+  const v = raw.trim()
+  if (!v) return null
+  try {
+    const ctx = document.createElement('canvas').getContext('2d')
+    if (!ctx) return null
+    ctx.fillStyle = v
+    const hex = ctx.fillStyle // browser normalises to #rrggbb
+    return hex.startsWith('#') ? hex : null
+  } catch {
+    return null
+  }
+}
+
 const PROVIDER_ICONS: Record<AIProviderType, ComponentType<SVGProps<SVGSVGElement>>> = {
   anthropic: ClaudeLogo,
   openai: OpenAILogo,
@@ -123,6 +138,18 @@ export default function TopBar() {
   const [theme, setTheme] = useState<'dark' | 'light'>('dark')
   const [isFullscreen, setIsFullscreen] = useState(false)
 
+  // Read computed CSS --card and --card-foreground as hex for Electron overlay
+  const syncOverlayColors = useCallback((t: 'dark' | 'light') => {
+    if (!window.electronAPI?.setTheme) return
+    // Allow a frame for CSS to apply after class toggle
+    requestAnimationFrame(() => {
+      const s = getComputedStyle(document.documentElement)
+      const bg = cssToHex(s.getPropertyValue('--card'))
+      const fg = cssToHex(s.getPropertyValue('--card-foreground'))
+      window.electronAPI!.setTheme(t, bg && fg ? { bg, fg } : undefined)
+    })
+  }, [])
+
   // Restore saved theme after hydration
   useEffect(() => {
     try {
@@ -130,14 +157,14 @@ export default function TopBar() {
       if (saved === 'light') {
         document.documentElement.classList.add('light')
         setTheme('light')
-        window.electronAPI?.setTheme?.('light')
+        syncOverlayColors('light')
       } else {
-        window.electronAPI?.setTheme?.('dark')
+        syncOverlayColors('dark')
       }
     } catch {
       // ignore
     }
-  }, [])
+  }, [syncOverlayColors])
 
   // Listen to fullscreen changes
   useEffect(() => {
@@ -154,13 +181,13 @@ export default function TopBar() {
       document.documentElement.classList.remove('light')
     }
     setTheme(next)
-    window.electronAPI?.setTheme?.(next)
+    syncOverlayColors(next)
     try {
       localStorage.setItem('openpencil-theme', next)
     } catch {
       // ignore
     }
-  }, [theme])
+  }, [theme, syncOverlayColors])
 
   const toggleFullscreen = useCallback(() => {
     if (document.fullscreenElement) {

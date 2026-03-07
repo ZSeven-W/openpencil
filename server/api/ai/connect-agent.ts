@@ -117,10 +117,11 @@ async function connectCodexCli(): Promise<ConnectResult> {
     const { join } = await import('node:path')
 
     // Check if codex binary exists
-    const which = execSync('which codex 2>/dev/null || echo ""', {
+    const whichCmd = process.platform === 'win32' ? 'where codex 2>nul' : 'which codex 2>/dev/null || echo ""'
+    const which = execSync(whichCmd, {
       encoding: 'utf-8',
       timeout: 5000,
-    }).trim()
+    }).trim().split(/\r?\n/)[0]?.trim() ?? ''
 
     if (!which) {
       return { connected: false, models: [], notInstalled: true, error: 'Codex CLI not found' }
