@@ -151,7 +151,13 @@ function shouldSplitByGrapheme(text: string): boolean {
 
 function isFixedWidthText(node: PenNode): boolean {
   if (node.type !== 'text') return false
-  return node.textGrowth === 'fixed-width' || node.textGrowth === 'fixed-width-height'
+  if (node.textGrowth === 'fixed-width' || node.textGrowth === 'fixed-width-height') return true
+  // When textAlign is not 'left', the layout engine injected centering.
+  // IText ignores width and computes its own, making textAlign ineffective
+  // for single-line text. Use Textbox so the width is respected and
+  // textAlign:'center' actually centers the text within the box.
+  if (node.textAlign && node.textAlign !== 'left') return true
+  return false
 }
 
 function sizeToNumber(

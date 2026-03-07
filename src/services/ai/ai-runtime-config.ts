@@ -106,6 +106,8 @@ export const DESIGN_STREAM_TIMEOUTS = {
 } as const
 
 export const VALIDATION_TIMEOUT_MS = 30_000
+export const MAX_VALIDATION_ROUNDS = 3
+export const VALIDATION_QUALITY_THRESHOLD = 8
 
 export const RETRY_TIMEOUT_CONFIG = {
   multiplier: 2,

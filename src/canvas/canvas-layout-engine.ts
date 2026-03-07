@@ -300,10 +300,9 @@ export function computeLayoutPositions(
     const childCross = isVertical ? size.w : size.h
     let crossPos = 0
 
-    // For text nodes, use the actual Fabric-rendered height for cross-axis
-    // centering instead of the declared height. Fabric.js text height =
-    // fontSize * lineHeight, which is typically smaller than the AI-declared
-    // height, causing text to appear shifted upward when centered.
+    // For text nodes in horizontal layout with center alignment, use the actual
+    // Fabric-rendered height (fontSize * lineHeight) instead of the declared
+    // height, since Fabric text is shorter than AI-declared height.
     let effectiveChildCross = childCross
     if (align === 'center' && child.type === 'text') {
       const fontSize = child.fontSize ?? 16
@@ -311,8 +310,6 @@ export function computeLayoutPositions(
       const visualH = fontSize * lineHeight
       if (!isVertical && visualH < childCross) {
         effectiveChildCross = visualH
-      } else if (isVertical && visualH < childCross) {
-        // vertical layout: cross axis is width, not applicable
       }
     }
 
@@ -356,6 +353,21 @@ export function computeLayoutPositions(
       width: size.w,
       height: size.h,
     }
+
+    // For text nodes centered in a vertical layout, expand to full available
+    // width and set textAlign:'center'. This avoids width estimation inaccuracy:
+    // IText ignores our width and computes its own, so textAlign has no effect.
+    // By using full width (which triggers Textbox in the factory) + center align,
+    // the text is precisely centered regardless of glyph estimation error.
+    if (isVertical && align === 'center' && child.type === 'text') {
+      const hasExplicitAlign = 'textAlign' in child && child.textAlign && child.textAlign !== 'left'
+      if (!hasExplicitAlign) {
+        out.width = availW
+        out.x = Math.round(pad.left)
+        out.textAlign = 'center'
+      }
+    }
+
     return out as unknown as PenNode
   })
 }

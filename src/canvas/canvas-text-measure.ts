@@ -99,6 +99,19 @@ export function estimateTextWidth(text: string, fontSize: number, letterSpacing 
   return maxLine
 }
 
+/**
+ * Estimate text width WITHOUT safety factor.
+ * Used for layout centering where the safety margin causes text to appear
+ * off-center (the overestimated width shifts the text box left when centered).
+ * For wrapping/sizing decisions, use estimateTextWidth() which includes the safety factor.
+ */
+export function estimateTextWidthPrecise(text: string, fontSize: number, letterSpacing = 0): number {
+  const lines = text.split(/\r?\n/)
+  return lines.reduce((max, line) => {
+    return Math.max(max, estimateLineWidth(line, fontSize, letterSpacing))
+  }, 0)
+}
+
 // ---------------------------------------------------------------------------
 // Text content helpers
 // ---------------------------------------------------------------------------

@@ -63,8 +63,20 @@ function toImageBase64(data: string): string {
 async function withTempImageFile<T>(
   imageBase64: string,
   run: (tempPath: string) => Promise<T>,
+  insideProject = false,
 ): Promise<T> {
-  const tempDir = await mkdtemp(join(tmpdir(), 'openpencil-validate-'))
+  let tempDir: string
+  if (insideProject) {
+    // Save inside the project directory so Claude Code Agent SDK (plan mode)
+    // can read the file — it restricts reads to the project directory.
+    const { mkdirSync, chmodSync } = await import('node:fs')
+    const baseDir = join(process.cwd(), '.openpencil-tmp')
+    mkdirSync(baseDir, { recursive: true })
+    chmodSync(baseDir, 0o700)
+    tempDir = await mkdtemp(join(baseDir, 'validate-'))
+  } else {
+    tempDir = await mkdtemp(join(tmpdir(), 'openpencil-validate-'))
+  }
   const tempPath = join(tempDir, 'screenshot.png')
   try {
     await writeFile(tempPath, Buffer.from(toImageBase64(imageBase64), 'base64'))
@@ -75,13 +87,16 @@ async function withTempImageFile<T>(
 }
 
 /**
- * Agent SDK fallback: save screenshot to a temp PNG file, then ask Claude
- * Code to read it (Claude Code's Read tool supports images natively).
+ * Agent SDK: save screenshot to a temp PNG file inside the project directory,
+ * then ask Claude Code to read it (Claude Code's Read tool supports images
+ * natively). Must use insideProject=true because plan mode restricts reads
+ * to the project directory.
  */
 async function validateViaAgentSDK(
   body: ValidateBody,
   model?: string,
 ): Promise<{ text: string; skipped?: boolean; error?: string }> {
+  // insideProject=true so Claude Code in plan mode can read the file
   return await withTempImageFile(body.imageBase64, async (tempPath) => {
     const { query } = await import('@anthropic-ai/claude-agent-sdk')
 
@@ -90,20 +105,23 @@ async function validateViaAgentSDK(
 
     const claudePath = resolveClaudeCli()
 
-    // Prompt Claude Code to read the temp image and analyze it
-    const prompt = `Read the image file at "${tempPath}" and analyze it as a UI design screenshot.
+    // Explicit prompt: read the image file, analyze it, return ONLY JSON.
+    // The system prompt and message are appended as context.
+    const prompt = `IMPORTANT: First, use the Read tool to read the image file at "${tempPath}". This is a PNG screenshot of a UI design.
 
-${body.message}
+After viewing the image, analyze it according to these instructions:
 
 ${body.system}
 
-Output ONLY the JSON object, no markdown fences, no explanation.`
+${body.message}
+
+CRITICAL: Your ENTIRE response must be a single JSON object. No markdown, no explanation, no tool calls after reading the image. Just the JSON.`
 
     const q = query({
       prompt,
       options: {
         ...(model ? { model } : {}),
-        maxTurns: 2,
+        maxTurns: 3,
         tools: [],
         plugins: [],
         permissionMode: 'plan',
@@ -131,7 +149,7 @@ Output ONLY the JSON object, no markdown fences, no explanation.`
     }
 
     return { text: '', skipped: true }
-  })
+  }, true)
 }
 
 async function validateViaCodex(
