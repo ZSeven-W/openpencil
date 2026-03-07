@@ -266,7 +266,11 @@ Cross-reference visual issues with the node IDs above. Return JSON fixes using r
       return { issues: [], fixes: [], qualityScore: 0, skipped: true }
     }
 
-    return parseValidationResponse(data.text)
+    const parsed = parseValidationResponse(data.text)
+    if (parsed.qualityScore === 0) {
+      console.warn(`[Validation] qualityScore=0, raw response (first 500 chars):`, data.text.slice(0, 500))
+    }
+    return parsed
   } catch (err) {
     console.warn(`[Validation] Fetch error:`, err)
     return { issues: [], fixes: [], qualityScore: 0, skipped: true }
@@ -313,8 +317,12 @@ function parseValidationResponse(text: string): ValidationResult {
       parsed.fixes = parsed.fixes.filter(
         (f) => f.nodeId && f.property in SAFE_FIX_PROPERTIES && isValidFixValue(f.property, f.value),
       )
-      parsed.qualityScore = typeof parsed.qualityScore === 'number'
-        ? Math.max(1, Math.min(10, Math.round(parsed.qualityScore)))
+      const rawScore = parsed.qualityScore
+      const numScore = typeof rawScore === 'number' ? rawScore
+        : typeof rawScore === 'string' ? Number(rawScore)
+        : 0
+      parsed.qualityScore = numScore > 0
+        ? Math.max(1, Math.min(10, Math.round(numScore)))
         : 0
       return parsed
     } catch {
@@ -322,12 +330,17 @@ function parseValidationResponse(text: string): ValidationResult {
     }
   }
 
+  // Strip Agent SDK tool_use XML blocks that may precede the JSON response.
+  // The Agent SDK sometimes includes raw tool call XML (e.g. <tool_use>...<input>{...}</input></tool_use>)
+  // which confuses the JSON extraction regex.
+  const cleaned = text.replace(/<tool_use>[\s\S]*?<\/tool_use>/g, '').trim()
+
   // Try direct parse
-  const direct = tryParse(text.trim())
+  const direct = tryParse(cleaned)
   if (direct) return direct
 
   // Try extracting JSON from text
-  const match = text.match(/\{[\s\S]*\}/)
+  const match = cleaned.match(/\{[\s\S]*\}/)
   if (match) {
     const extracted = tryParse(match[0])
     if (extracted) return extracted
@@ -409,7 +422,7 @@ export async function runPostGenerationValidation(
     const isFirstRound = round === 1
 
     emit('streaming',
-      isFirstRound ? '📸 Capturing screenshot...' : `📸 Re-capturing screenshot (round ${round})...`,
+      isFirstRound ? '[pending] Capturing screenshot...' : `[pending] Re-capturing screenshot (round ${round})...`,
     )
 
     // Wait for canvas render to stabilize.
@@ -429,7 +442,7 @@ export async function runPostGenerationValidation(
     if (!imageBase64) {
       console.warn(`[Validation] Round ${round}: could not capture screenshot — stopping`)
       if (isFirstRound) {
-        emit('done', '❌ Screenshot failed')
+        emit('done', '[error] Screenshot failed')
         clearVisualReference()
         return { applied: 0, skipped: true }
       }
@@ -437,7 +450,7 @@ export async function runPostGenerationValidation(
     }
 
     // Replace the "Capturing..." line with success
-    log[log.length - 1] = isFirstRound ? '✅ Screenshot captured' : `✅ Screenshot captured (round ${round})`
+    log[log.length - 1] = isFirstRound ? '[done] Screenshot captured' : `[done] Screenshot captured (round ${round})`
     emit('streaming')
 
     const nodeTreeDump = buildNodeTreeDump(DEFAULT_FRAME_ID)
@@ -451,8 +464,8 @@ export async function runPostGenerationValidation(
 
     emit('streaming',
       hasReference && isFirstRound
-        ? '🔍 Comparing with design reference...'
-        : isFirstRound ? '🔍 Analyzing design...' : `🔍 Analyzing (round ${round})...`,
+        ? '[pending] Comparing with design reference...'
+        : isFirstRound ? '[pending] Analyzing design...' : `[pending] Analyzing (round ${round})...`,
     )
 
     const result = await validateDesignScreenshot(
@@ -467,7 +480,7 @@ export async function runPostGenerationValidation(
     if (result.skipped) {
       console.log(`[Validation] Round ${round}: skipped (see warnings above for details; provider=${options?.provider}, model=${options?.model})`)
       // Replace "Analyzing..." with skipped reason
-      log[log.length - 1] = '⚠️ Analysis skipped (timeout or provider error)'
+      log[log.length - 1] = '[error] Analysis skipped (timeout or provider error)'
       if (isFirstRound) {
         clearVisualReference()
         emit('done')
@@ -480,11 +493,12 @@ export async function runPostGenerationValidation(
     lastQualityScore = result.qualityScore
 
     // Replace "Analyzing..." with result
+    const scoreLabel = result.qualityScore > 0 ? ` (quality: ${result.qualityScore}/10)` : ''
     if (result.issues.length > 0) {
-      log[log.length - 1] = `🔍 Found ${result.issues.length} issue${result.issues.length > 1 ? 's' : ''} (quality: ${result.qualityScore}/10)`
+      log[log.length - 1] = `[pending] Found ${result.issues.length} issue${result.issues.length > 1 ? 's' : ''}${scoreLabel}`
       console.log(`[Validation] Round ${round}: issues found:`, result.issues)
     } else {
-      log[log.length - 1] = `✅ No issues (quality: ${result.qualityScore}/10)`
+      log[log.length - 1] = `[done] No issues found${scoreLabel}`
     }
     emit('streaming')
 
@@ -499,7 +513,7 @@ export async function runPostGenerationValidation(
       break
     }
 
-    emit('streaming', `🔧 Applying ${result.fixes.length} fix${result.fixes.length > 1 ? 'es' : ''}...`)
+    emit('streaming', `[pending] Applying ${result.fixes.length} fix${result.fixes.length > 1 ? 'es' : ''}...`)
 
     const applied = applyValidationFixes(result)
     totalApplied += applied

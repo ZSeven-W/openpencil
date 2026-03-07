@@ -32,7 +32,7 @@ RULES:
 - FORM INTEGRITY: Keep a form's core elements (inputs + submit button) in the same subtask. Splitting inputs into one subtask and the button into another causes duplicate buttons.
 - Combine related elements: "Hero with title + image + CTA" = ONE subtask, not three.
 - Each subtask generates a meaningful section (~10-30 nodes). Only split if it would exceed 40 nodes.
-- Choose a visual direction (palette, fonts, aesthetic) that matches the product personality and target audience. Output it in "styleGuide".
+- REQUIRED: "styleGuide" must ALWAYS be included. Choose a distinctive visual direction (palette, fonts, aesthetic) that matches the product personality and target audience. Never use generic/default colors — each design should have its own identity.
 - CJK FONT RULE: If the user's request is in Chinese/Japanese/Korean or the product targets CJK audiences, the styleGuide fonts MUST use CJK-compatible fonts: heading="Noto Sans SC" (Chinese) / "Noto Sans JP" (Japanese) / "Noto Sans KR" (Korean), body="Inter". NEVER use "Space Grotesk" or "Manrope" as heading font for CJK content — they have no CJK character support.
 - Root frame fill must use the styleGuide palette background color.
 - Root frame height: Mobile (width=375) → set height=812 (fixed viewport). Desktop (width=1200) → set height=0 (auto-expands as sections are generated).

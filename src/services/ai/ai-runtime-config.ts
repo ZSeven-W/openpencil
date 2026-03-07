@@ -105,7 +105,7 @@ export const DESIGN_STREAM_TIMEOUTS = {
   effort: DEFAULT_THINKING_EFFORT,
 } as const
 
-export const VALIDATION_TIMEOUT_MS = 30_000
+export const VALIDATION_TIMEOUT_MS = 180_000
 export const MAX_VALIDATION_ROUNDS = 3
 export const VALIDATION_QUALITY_THRESHOLD = 8
 
