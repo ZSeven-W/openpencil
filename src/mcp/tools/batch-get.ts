@@ -14,7 +14,7 @@ export interface SearchPattern {
 }
 
 export interface BatchGetParams {
-  filePath: string
+  filePath?: string
   patterns?: SearchPattern[]
   nodeIds?: string[]
   parentId?: string

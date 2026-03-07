@@ -10,9 +10,9 @@ const cache = new Map<string, { doc: PenDocument; mtime: number }>()
 /** Special path indicating the MCP should operate on the live Electron canvas. */
 export const LIVE_CANVAS_PATH = 'live://canvas'
 
-/** Resolve filePath for MCP tools — passes through live://canvas, resolves file paths normally. */
-export function resolveDocPath(filePath: string): string {
-  if (filePath === LIVE_CANVAS_PATH) return LIVE_CANVAS_PATH
+/** Resolve filePath for MCP tools — defaults to live canvas when omitted. */
+export function resolveDocPath(filePath?: string): string {
+  if (!filePath || filePath === LIVE_CANVAS_PATH) return LIVE_CANVAS_PATH
   return resolve(filePath)
 }
 

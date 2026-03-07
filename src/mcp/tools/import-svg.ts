@@ -11,7 +11,7 @@ import { parseSvgToNodesServer } from '../utils/svg-node-parser'
 import { postProcessNode } from './node-crud'
 
 export interface ImportSvgParams {
-  filePath: string
+  filePath?: string
   svgPath: string
   parent?: string | null
   maxDim?: number
