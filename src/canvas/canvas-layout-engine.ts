@@ -3,6 +3,7 @@ import { useDocumentStore, DEFAULT_FRAME_ID } from '@/stores/document-store'
 import {
   parseSizing,
   estimateTextWidth,
+  estimateTextWidthPrecise,
   estimateTextHeight,
   estimateLineWidth,
   getTextOpticalCenterYOffset,
@@ -176,7 +177,11 @@ export function getNodeWidth(node: PenNode, parentAvail?: number): number {
       typeof node.content === 'string'
         ? node.content
         : node.content.map((s) => s.text).join('')
-    return Math.max(Math.ceil(estimateTextWidth(content, fontSize, letterSpacing)), 20)
+    // Use precise estimation (no safety factor) for fit-content / natural-width
+    // text. IText auto-computes its own width and ignores ours, so the safety
+    // margin only inflates the layout allocation, making the text appear
+    // left-shifted within its overwide box.
+    return Math.max(Math.ceil(estimateTextWidthPrecise(content, fontSize, letterSpacing)), 20)
   }
   return 0
 }
