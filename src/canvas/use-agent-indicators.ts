@@ -3,13 +3,13 @@
  *
  * Visual effects:
  * 1. Soft colored border on nodes being generated (breathing opacity)
- * 2. Agent badge next to the frame name with a spinning dot animation
- * 3. Preview fill tint on nodes that haven't materialized yet
+ * 2. Breathing glow border around agent-owned frames (same color as badge)
+ * 3. Agent badge right-aligned above the frame with a spinning dot animation
+ * 4. Preview fill tint on nodes that haven't materialized yet
  */
 
 import { useEffect } from 'react'
 import { useCanvasStore } from '@/stores/canvas-store'
-import { useDocumentStore } from '@/stores/document-store'
 import {
   getActiveAgentIndicators,
   getActiveAgentFrames,
@@ -23,7 +23,6 @@ const BADGE_FONT_SIZE = 11
 const BADGE_PAD_X = 6
 const BADGE_PAD_Y = 3
 const BADGE_RADIUS = 4
-const BADGE_GAP = 6
 const DOT_RADIUS = 3
 
 export function useAgentIndicators() {
@@ -106,25 +105,39 @@ export function useAgentIndicators() {
           }
         }
 
-        // ---- Draw agent badges next to frame names ----
+        // ---- Draw agent frame glow borders + badges ----
         for (const frame of agentFrames.values()) {
           const obj = objMap.get(frame.frameId)
           if (!obj) continue
 
           const corners = obj.getCoords()
-          const x = Math.min(...corners.map((p) => p.x))
-          const y = Math.min(...corners.map((p) => p.y))
+          const xs = corners.map((p) => p.x)
+          const ys = corners.map((p) => p.y)
+          const fx = Math.min(...xs)
+          const fy = Math.min(...ys)
+          const fw = Math.max(...xs) - fx
+          const fh = Math.max(...ys) - fy
+          if (fw < 1 || fh < 1) continue
 
-          // Measure the existing frame label width to position badge after it
+          // --- Breathing glow border around the frame ---
+          const glowWidth = 1.5 / zoom
+          ctx.save()
+          ctx.strokeStyle = frame.color
+          ctx.lineWidth = glowWidth
+          ctx.globalAlpha = breath * 0.8
+          // Outer glow (wider, more transparent)
+          ctx.shadowColor = frame.color
+          ctx.shadowBlur = 8 / zoom
+          ctx.strokeRect(fx, fy, fw, fh)
+          // Inner crisp border (no shadow)
+          ctx.shadowColor = 'transparent'
+          ctx.shadowBlur = 0
+          ctx.globalAlpha = breath
+          ctx.strokeRect(fx, fy, fw, fh)
+          ctx.restore()
+
+          // --- Badge: right-aligned above the frame ---
           const fontSize = BADGE_FONT_SIZE / zoom
-          const labelFontSize = 12 / zoom
-          ctx.font = `500 ${labelFontSize}px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif`
-          const docStore = useDocumentStore.getState()
-          const frameNode = docStore.getNodeById(frame.frameId)
-          const frameName = frameNode?.name ?? frameNode?.type ?? ''
-          const labelWidth = frameName ? ctx.measureText(frameName).width + BADGE_GAP / zoom : 0
-
-          // Badge position: right of frame label, above frame
           const padX = BADGE_PAD_X / zoom
           const padY = BADGE_PAD_Y / zoom
           const radius = BADGE_RADIUS / zoom
@@ -133,12 +146,12 @@ export function useAgentIndicators() {
 
           ctx.font = `600 ${fontSize}px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif`
           const textWidth = ctx.measureText(frame.name).width
-          // Space for spinning dot + text
           const dotSpace = dotR * 2 + 4 / zoom
           const badgeW = dotSpace + textWidth + padX * 2
           const badgeH = fontSize + padY * 2
-          const badgeX = x + labelWidth
-          const badgeY = y - labelOffsetY - badgeH
+          // Right-align badge to frame's right edge
+          const badgeX = fx + fw - badgeW
+          const badgeY = fy - labelOffsetY - badgeH
 
           // Badge background (pill shape)
           ctx.globalAlpha = 0.9
