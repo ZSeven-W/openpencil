@@ -211,7 +211,7 @@ function ProviderRow({ type }: { type: AIProviderType }) {
     <div className="group">
       <div
         className={cn(
-          'flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors',
+          'flex items-center gap-2.5 px-3 py-1.5 rounded-lg transition-colors',
           provider.isConnected
             ? 'bg-secondary/40'
             : 'hover:bg-secondary/30',
@@ -220,11 +220,11 @@ function ProviderRow({ type }: { type: AIProviderType }) {
         {/* Icon */}
         <div
           className={cn(
-            'w-7 h-7 rounded-md flex items-center justify-center shrink-0 transition-colors',
+            'w-6 h-6 rounded-md flex items-center justify-center shrink-0 transition-colors',
             provider.isConnected ? 'bg-foreground/10 text-foreground' : 'bg-secondary text-muted-foreground',
           )}
         >
-          <Icon className="w-4 h-4" />
+          <Icon className="w-3.5 h-3.5" />
         </div>
 
         {/* Name + description */}
@@ -305,7 +305,7 @@ export default function AgentSettingsDialog() {
   const [mcpError, setMcpError] = useState<string | null>(null)
   const [mcpServerLoading, setMcpServerLoading] = useState(false)
   const [mcpServerError, setMcpServerError] = useState<string | null>(null)
-  const [copied, setCopied] = useState(false)
+  const [configCopied, setConfigCopied] = useState(false)
   const [autoUpdateEnabled, setAutoUpdateEnabled] = useState(true)
   const [isElectron, setIsElectron] = useState(false)
 
@@ -364,11 +364,16 @@ export default function AgentSettingsDialog() {
     }
   }, [mcpServerRunning, mcpHttpPort, setMcpServerStatus, t])
 
-  const handleCopyLanUrl = useCallback(() => {
+  const handleCopyConfig = useCallback(() => {
     if (!mcpServerLocalIp) return
-    navigator.clipboard.writeText(`http://${mcpServerLocalIp}:${mcpHttpPort}/mcp`)
-    setCopied(true)
-    setTimeout(() => setCopied(false), 2000)
+    const config = JSON.stringify(
+      { type: 'http', url: `http://${mcpServerLocalIp}:${mcpHttpPort}/mcp` },
+      null,
+      2,
+    )
+    navigator.clipboard.writeText(config)
+    setConfigCopied(true)
+    setTimeout(() => setConfigCopied(false), 2000)
   }, [mcpServerLocalIp, mcpHttpPort])
 
   const handleToggleMCP = useCallback(
@@ -421,7 +426,7 @@ export default function AgentSettingsDialog() {
         className="relative bg-card rounded-xl border border-border w-[480px] max-h-[80vh] overflow-hidden shadow-xl flex flex-col"
       >
         {/* Header */}
-        <div className="flex items-center justify-between px-5 pt-4 pb-3">
+        <div className="flex items-center justify-between px-5 pt-3 pb-2">
           <h3 className="text-sm font-semibold text-foreground">
             {t('agents.title')}
           </h3>
@@ -435,10 +440,10 @@ export default function AgentSettingsDialog() {
         </div>
 
         {/* Scrollable content */}
-        <div className="flex-1 overflow-y-auto px-5 pb-5">
+        <div className="flex-1 overflow-y-auto px-5 pb-4">
           {/* Agents section */}
-          <div className="mb-5">
-            <div className="flex items-center gap-2 mb-2 px-1">
+          <div className="mb-3">
+            <div className="flex items-center gap-2 mb-1 px-1">
               <Zap size={12} className="text-muted-foreground" />
               <h4 className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">
                 {t('agents.agentsOnCanvas')}
@@ -453,17 +458,17 @@ export default function AgentSettingsDialog() {
           </div>
 
           {/* Divider */}
-          <div className="h-px bg-border mb-5" />
+          <div className="h-px bg-border mb-3" />
 
           {/* MCP Server section */}
-          <div className="mb-5">
-            <div className="flex items-center gap-2 mb-3 px-1">
+          <div className="mb-3">
+            <div className="flex items-center gap-2 mb-1.5 px-1">
               <Globe size={12} className="text-muted-foreground" />
               <h4 className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">
                 {t('agents.mcpServer')}
               </h4>
             </div>
-            <div className="flex items-center gap-2 px-3 py-2.5 rounded-lg bg-secondary/30">
+            <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-secondary/30">
               {/* Status indicator */}
               <div
                 className={cn(
@@ -507,19 +512,19 @@ export default function AgentSettingsDialog() {
               </Button>
             </div>
             {mcpServerRunning && mcpServerLocalIp && (
-              <div className="flex items-center gap-2 mt-2 px-3 py-2 rounded-lg bg-secondary/20">
-                <span className="text-[10px] text-muted-foreground shrink-0">{t('agents.mcpLanAccess')}</span>
-                <code className="text-[11px] text-foreground font-mono flex-1 truncate">
-                  http://{mcpServerLocalIp}:{mcpHttpPort}/mcp
-                </code>
-                <Button
-                  variant="ghost"
-                  size="icon-sm"
-                  onClick={handleCopyLanUrl}
-                  className="shrink-0 h-6 w-6"
-                >
-                  {copied ? <Check size={10} className="text-green-500" /> : <Copy size={10} />}
-                </Button>
+              <div className="mt-1.5 px-3 py-1.5 rounded-lg bg-secondary/20">
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] text-muted-foreground">{t('agents.mcpClientConfig')}</span>
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    onClick={handleCopyConfig}
+                    className="shrink-0 h-5 w-5"
+                  >
+                    {configCopied ? <Check size={9} className="text-green-500" /> : <Copy size={9} />}
+                  </Button>
+                </div>
+                <code className="text-[10px] text-muted-foreground font-mono select-all leading-none">{`{ "type": "http", "url": "http://${mcpServerLocalIp}:${mcpHttpPort}/mcp" }`}</code>
               </div>
             )}
             {mcpServerError && (
@@ -531,23 +536,23 @@ export default function AgentSettingsDialog() {
           </div>
 
           {/* Divider */}
-          <div className="h-px bg-border mb-5" />
+          <div className="h-px bg-border mb-3" />
 
           {/* MCP integrations section */}
           <div>
-            <div className="flex items-center gap-2 mb-3 px-1">
+            <div className="flex items-center gap-2 mb-1.5 px-1">
               <Terminal size={12} className="text-muted-foreground" />
               <h4 className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">
                 {t('agents.mcpIntegrations')}
               </h4>
             </div>
 
-            <div className="grid grid-cols-2 gap-x-2 gap-y-0.5">
+            <div className="grid grid-cols-2 gap-x-2 gap-y-0">
               {mcpIntegrations.map((m) => (
                 <div
                   key={m.tool}
                   className={cn(
-                    'flex items-center justify-between py-2 px-3 rounded-lg transition-colors',
+                    'flex items-center justify-between py-1.5 px-3 rounded-lg transition-colors',
                     m.enabled ? 'bg-secondary/40' : 'hover:bg-secondary/20',
                   )}
                 >
@@ -579,7 +584,7 @@ export default function AgentSettingsDialog() {
                 <p className="text-[10px] text-destructive">{mcpError}</p>
               </div>
             )}
-            <p className="text-[10px] text-muted-foreground/60 mt-3 px-1">
+            <p className="text-[10px] text-muted-foreground/60 mt-2 px-1">
               {t('agents.mcpRestart')}
             </p>
           </div>
@@ -587,7 +592,7 @@ export default function AgentSettingsDialog() {
           {/* Auto-update toggle (Electron only) */}
           {isElectron && (
             <>
-              <div className="h-px bg-border my-5" />
+              <div className="h-px bg-border my-3" />
               <div className="flex items-center justify-between px-1">
                 <div className="flex items-center gap-2">
                   <RefreshCw size={12} className="text-muted-foreground" />

@@ -525,6 +525,15 @@ function setupIPC(): void {
     },
   )
 
+  ipcMain.handle('file:getPending', () => {
+    if (pendingFilePath) {
+      const filePath = pendingFilePath
+      pendingFilePath = null
+      return filePath
+    }
+    return null
+  })
+
   ipcMain.handle('file:read', async (_event, filePath: string) => {
     const resolved = resolve(filePath)
     const ext = extname(resolved).toLowerCase()
@@ -798,17 +807,11 @@ app.on('ready', async () => {
 
   createWindow()
 
-  // Check for file to open: pending open-file event or CLI args (Windows/Linux)
+  // Check for file to open: pending open-file event or CLI args (Windows/Linux).
+  // The file path is stored in pendingFilePath and pulled by the renderer
+  // via file:getPending IPC when the React app mounts (useElectronMenu hook).
   if (!pendingFilePath) {
     pendingFilePath = getFilePathFromArgs(process.argv)
-  }
-  if (pendingFilePath) {
-    const fileToOpen = pendingFilePath
-    pendingFilePath = null
-    // Wait for renderer to be ready, then send
-    mainWindow?.webContents.once('did-finish-load', () => {
-      mainWindow?.webContents.send('file:open', fileToOpen)
-    })
   }
 
   if (!isDev) {

@@ -319,6 +319,7 @@ const ko: TranslationKeys = {
   'agents.mcpServerRunning': '실행 중',
   'agents.mcpServerStopped': '정지됨',
   'agents.mcpLanAccess': 'LAN 접근',
+  'agents.mcpClientConfig': '클라이언트 설정',
   'agents.stdio': 'stdio',
   'agents.http': 'http',
   'agents.stdioHttp': 'stdio + http',

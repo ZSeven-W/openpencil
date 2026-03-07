@@ -317,6 +317,7 @@ const en = {
   'agents.mcpServerRunning': 'Running',
   'agents.mcpServerStopped': 'Stopped',
   'agents.mcpLanAccess': 'LAN Access',
+  'agents.mcpClientConfig': 'Client Config',
   'agents.stdio': 'stdio',
   'agents.http': 'http',
   'agents.stdioHttp': 'stdio + http',

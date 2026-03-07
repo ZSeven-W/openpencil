@@ -319,6 +319,7 @@ const vi: TranslationKeys = {
   'agents.mcpServerRunning': 'Đang chạy',
   'agents.mcpServerStopped': 'Đã dừng',
   'agents.mcpLanAccess': 'Truy cập LAN',
+  'agents.mcpClientConfig': 'Cấu hình client',
   'agents.stdio': 'stdio',
   'agents.http': 'http',
   'agents.stdioHttp': 'stdio + http',
