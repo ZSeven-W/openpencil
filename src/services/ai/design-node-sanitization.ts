@@ -153,7 +153,9 @@ export function ensureUniqueNodeIds(
   node: PenNode,
   used: Set<string>,
   counters: Map<string, number>,
+  remapping?: Map<string, string>,
 ): void {
+  const originalId = node.id
   const base = normalizeIdBase(node.id, node.type)
   let finalId = base
 
@@ -165,11 +167,16 @@ export function ensureUniqueNodeIds(
     node.id = finalId
   }
 
+  // Track original→new mapping so progressive upsert can resolve IDs
+  if (remapping && originalId && finalId !== originalId) {
+    remapping.set(originalId, finalId)
+  }
+
   used.add(finalId)
 
   if (!('children' in node) || !Array.isArray(node.children)) return
   for (const child of node.children) {
-    ensureUniqueNodeIds(child, used, counters)
+    ensureUniqueNodeIds(child, used, counters, remapping)
   }
 }
 
