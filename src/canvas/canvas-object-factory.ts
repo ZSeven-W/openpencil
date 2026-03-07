@@ -14,6 +14,7 @@ import {
   DEFAULT_STROKE_WIDTH,
   SELECTION_BLUE,
 } from './canvas-constants'
+import { defaultLineHeight } from './canvas-text-measure'
 import { applyRotationControls } from './canvas-controls'
 
 function angleToCoords(
@@ -425,7 +426,7 @@ export function createFabricObject(
         textAlign: node.textAlign ?? 'left',
         underline: node.underline ?? false,
         linethrough: node.strikethrough ?? false,
-        lineHeight: node.lineHeight ?? 1.2,
+        lineHeight: node.lineHeight ?? defaultLineHeight(node.fontSize ?? 16),
         charSpacing: node.letterSpacing
           ? (node.letterSpacing / (node.fontSize || 16)) * 1000
           : 0,

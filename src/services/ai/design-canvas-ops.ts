@@ -13,6 +13,7 @@ import {
   createPhonePlaceholderDataUri,
   estimateNodeIntrinsicHeight,
 } from './generation-utils'
+import { defaultLineHeight } from '@/canvas/canvas-text-measure'
 import { applyIconPathResolution, applyNoEmojiIconHeuristic, resolveAsyncIcons, resolveAllPendingIcons } from './icon-resolver'
 import {
   resolveNodeRole,
@@ -158,8 +159,7 @@ export function insertStreamingNode(
       }
       // Default lineHeight based on text role (heading vs body)
       if (!node.lineHeight) {
-        const fs = node.fontSize ?? 16
-        node.lineHeight = fs >= 28 ? 1.2 : 1.5
+        node.lineHeight = defaultLineHeight(node.fontSize ?? 16)
       }
     }
   }
@@ -173,6 +173,11 @@ export function insertStreamingNode(
   resolveNodeRole(node, roleCtx)
 
   applyGenerationHeuristics(node)
+
+  // Recursively remove x/y from children inside layout containers so the
+  // layout engine can position them correctly during canvas sync.
+  const parentHasLayout = parentNode ? hasActiveLayout(parentNode) : false
+  sanitizeLayoutChildPositions(node, parentHasLayout)
 
   // Skip AI-streamed children under phone placeholders. Placeholder internals are
   // normalized post-streaming (at most one centered label text is allowed).

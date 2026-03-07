@@ -1,4 +1,9 @@
 import type { PenNode } from '@/types/pen'
+import {
+  defaultLineHeight,
+  estimateLineWidth,
+  hasCjkText as _hasCjkText,
+} from '@/canvas/canvas-text-measure'
 
 // ---------------------------------------------------------------------------
 // Pure utility functions extracted from design-generator.ts
@@ -93,50 +98,6 @@ export function parsePaddingValues(
 // Text measurement utilities
 // ---------------------------------------------------------------------------
 
-export function estimateWrappingLineWidth(
-  text: string,
-  fontSize: number,
-): number {
-  let width = 0
-  for (const char of text) {
-    if (
-      /[\u4E00-\u9FFF\u3400-\u4DBF\u3000-\u303F\uFF00-\uFFEF\uFE30-\uFE4F]/.test(
-        char,
-      )
-    ) {
-      width += fontSize * 1.12
-    } else if (char === ' ') {
-      width += fontSize * 0.3
-    } else if (/[A-Z]/.test(char)) {
-      width += fontSize * 0.72
-    } else {
-      width += fontSize * 0.58
-    }
-  }
-  return width
-}
-
-export function estimateSingleLineTextWidth(
-  text: string,
-  fontSize: number,
-): number {
-  let width = 0
-  for (const char of text) {
-    if (
-      /[\u4E00-\u9FFF\u3400-\u4DBF\u3000-\u303F\uFF00-\uFFEF\uFE30-\uFE4F]/.test(
-        char,
-      )
-    ) {
-      width += fontSize * 1.35
-    } else if (char === ' ') {
-      width += fontSize * 0.3
-    } else {
-      width += fontSize * 0.6
-    }
-  }
-  return width
-}
-
 /**
  * Estimate auto-height for text with wrapping.
  * `canvasWidth` is used as fallback when parentContentWidth is unavailable.
@@ -148,7 +109,7 @@ export function estimateAutoHeight(
   parentContentWidth?: number,
   canvasWidth = 1200,
 ): number {
-  const hasCjk = /[\u4E00-\u9FFF\u3400-\u4DBF\u3000-\u303F]/.test(text)
+  const hasCjk = _hasCjkText(text)
   const minLh = hasCjk
     ? fontSize >= 28
       ? 1.28
@@ -167,7 +128,10 @@ export function estimateAutoHeight(
 
   const logicalLines = text.split(/\r?\n/)
   const wrappedLineCount = logicalLines.reduce((sum, line) => {
-    const lineWidth = estimateWrappingLineWidth(line, fontSize)
+    // Use the canonical estimateLineWidth from canvas-text-measure with
+    // a safety factor to avoid underestimating wrapping.
+    const safetyW = _hasCjkText(line) ? 1.06 : 1.14
+    const lineWidth = estimateLineWidth(line, fontSize) * safetyW
     return sum + Math.max(1, Math.ceil(lineWidth / availW))
   }, 0)
   const safetyMargin = fontSize >= 28 ? 1.15 : 1.1
@@ -192,7 +156,7 @@ export function estimateNodeIntrinsicHeight(
   let textHeight = 0
   if (node.type === 'text') {
     const fs = node.fontSize ?? 16
-    const lh = node.lineHeight ?? (fs >= 28 ? 1.2 : 1.5)
+    const lh = node.lineHeight ?? defaultLineHeight(fs)
     if (
       typeof node.content === 'string' &&
       node.content.trim() &&
@@ -353,9 +317,9 @@ export function getTextContentForNode(node: PenNode): string {
       : ''
 }
 
-export function hasCjkText(text: string): boolean {
-  return /[\u4E00-\u9FFF\u3400-\u4DBF\u3000-\u303F\uFF00-\uFFEF]/.test(text)
-}
+// Re-export canonical hasCjkText from canvas-text-measure so existing
+// importers (role-resolver, typography roles) continue to work.
+export const hasCjkText = _hasCjkText
 
 // ---------------------------------------------------------------------------
 // Phone placeholder SVG

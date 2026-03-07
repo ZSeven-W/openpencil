@@ -6,6 +6,7 @@ import {
   estimateTextHeight,
   estimateLineWidth,
   getTextOpticalCenterYOffset,
+  defaultLineHeight,
 } from './canvas-text-measure'
 
 // ---------------------------------------------------------------------------
@@ -306,7 +307,7 @@ export function computeLayoutPositions(
     let effectiveChildCross = childCross
     if (align === 'center' && child.type === 'text') {
       const fontSize = child.fontSize ?? 16
-      const lineHeight = ('lineHeight' in child ? child.lineHeight : undefined) ?? 1.2
+      const lineHeight = ('lineHeight' in child ? child.lineHeight : undefined) ?? defaultLineHeight(fontSize)
       const visualH = fontSize * lineHeight
       if (!isVertical && visualH < childCross) {
         effectiveChildCross = visualH
@@ -340,8 +341,8 @@ export function computeLayoutPositions(
       crossPos = Math.max(0, Math.min(crossPos, crossAvail - clampCrossSize))
     }
 
-    const computedX = isVertical ? pad.left + crossPos : pad.left + mainPos
-    const computedY = isVertical ? pad.top + mainPos : pad.top + crossPos
+    const computedX = Math.round(isVertical ? pad.left + crossPos : pad.left + mainPos)
+    const computedY = Math.round(isVertical ? pad.top + mainPos : pad.top + crossPos)
 
     mainPos += (isVertical ? size.h : size.w) + effectiveGap
 

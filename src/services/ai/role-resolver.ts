@@ -8,6 +8,7 @@ import {
   getTextContentForNode,
   hasCjkText,
 } from './generation-utils'
+import { defaultLineHeight } from '@/canvas/canvas-text-measure'
 
 // ---------------------------------------------------------------------------
 // Context passed to each role rule function
@@ -379,12 +380,22 @@ function normalizeInputTrailingIconAlignment(
   const trailing = visibleChildren[visibleChildren.length - 1]
   if (!isIconLikeNode(trailing)) return
 
-  const hasTextBeforeTrailing = visibleChildren
+  const textChildren = visibleChildren
     .slice(0, -1)
-    .some((child) => child.type === 'text')
-  if (!hasTextBeforeTrailing) return
+    .filter((child) => child.type === 'text')
+  if (textChildren.length === 0) return
 
-  ;(parent as unknown as Record<string, unknown>).justifyContent = 'space_between'
+  // Make text children fill available space so trailing icon is pushed to the
+  // right edge while text stays left-aligned. This avoids the centering effect
+  // that space_between causes with [icon, text, icon] layouts.
+  for (const textChild of textChildren) {
+    if (textChild.width !== 'fill_container') {
+      ;(textChild as unknown as Record<string, unknown>).width = 'fill_container'
+    }
+    if (!textChild.textGrowth) {
+      ;(textChild as unknown as Record<string, unknown>).textGrowth = 'fixed-width'
+    }
+  }
 }
 
 function isIconLikeNode(node: PenNode): boolean {
@@ -412,7 +423,7 @@ function fixTextHeights(
   for (const child of children) {
     if (child.type !== 'text') continue
     const fs = child.fontSize ?? 16
-    const lh = child.lineHeight ?? (fs >= 28 ? 1.2 : 1.5)
+    const lh = child.lineHeight ?? defaultLineHeight(fs)
     const currentH = toSizeNumber(child.height, 0)
     const singleLineMin = Math.round(fs * Math.max(lh, 1.2) * 1.15)
 
