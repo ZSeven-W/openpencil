@@ -23,7 +23,11 @@ let updateCheckTimer: ReturnType<typeof setInterval> | null = null
 let pendingFilePath: string | null = null
 
 const isDev = !app.isPackaged
-const SETTINGS_PATH = join(homedir(), '.openpencil', 'settings.json')
+// Settings stored in platform-standard app data dir (Electron-managed):
+// macOS: ~/Library/Application Support/OpenPencil/
+// Windows: %APPDATA%\OpenPencil\
+// Linux: ~/.config/OpenPencil/
+const SETTINGS_PATH = join(app.getPath('userData'), 'settings.json')
 
 type UpdaterStatus =
   | 'disabled'
@@ -219,7 +223,7 @@ async function readAppSettings(): Promise<AppSettings> {
 async function writeAppSettings(patch: Partial<AppSettings>): Promise<void> {
   const current = await readAppSettings()
   const merged = { ...current, ...patch }
-  await mkdir(PORT_FILE_DIR, { recursive: true })
+  await mkdir(app.getPath('userData'), { recursive: true })
   await writeFile(SETTINGS_PATH, JSON.stringify(merged, null, 2), 'utf-8')
 }
 
@@ -391,6 +395,9 @@ function createWindow(): void {
       preload: join(__dirname, 'preload.cjs'),
       contextIsolation: true,
       nodeIntegration: false,
+      // Persist localStorage/cookies in a fixed partition so data survives
+      // across random Nitro server port changes (origin-independent storage).
+      partition: 'persist:openpencil',
     },
   }
 
