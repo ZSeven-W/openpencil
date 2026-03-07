@@ -238,8 +238,8 @@ async function writePortFile(port: number): Promise<void> {
       JSON.stringify({ port, pid: process.pid, timestamp: Date.now() }),
       'utf-8',
     )
-  } catch {
-    // Non-critical — MCP sync will fall back to file I/O
+  } catch (err) {
+    console.error('[port-file] Failed to write port file:', err)
   }
 }
 

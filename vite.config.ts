@@ -21,7 +21,7 @@ const config = defineConfig({
   plugins: [
     devtools(),
     nitro({
-      rollupConfig: { external: [/^@sentry\//] },
+      rollupConfig: { external: [/^@sentry\//, 'canvas', 'jsdom', 'cssstyle'] },
       serverDir: './server',
       ...(isElectronBuild ? { preset: 'node-server' } : {}),
     }),
