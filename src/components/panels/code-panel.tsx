@@ -22,7 +22,7 @@ import type { PenNode } from '@/types/pen'
 
 type CodeTab = 'react' | 'vue' | 'svelte' | 'html' | 'swiftui' | 'compose' | 'flutter' | 'react-native' | 'css-vars'
 
-const ENHANCE_SYSTEM_PROMPT = `You are a code rewriter. You receive auto-generated UI code and rewrite it to be idiomatic and production-ready.
+const ENHANCE_SYSTEM_PROMPT = `You are a code rewriter. You receive auto-generated UI code and rewrite it to be idiomatic, production-ready, and RESPONSIVE.
 
 CRITICAL: Your ENTIRE response must be ONLY the improved source code. Nothing else.
 - Do NOT include explanations, commentary, reasoning, or thinking.
@@ -31,15 +31,29 @@ CRITICAL: Your ENTIRE response must be ONLY the improved source code. Nothing el
 - Start your response with the first line of code and end with the last line.
 
 Rewriting rules:
-- Preserve visual fidelity — the output must look identical to the input design.
+- Preserve visual fidelity — the output must look identical to the input design on desktop.
 - Use semantic HTML where appropriate (nav, header, main, section, article, etc.).
 - Replace absolute pixel positioning with proper layout (flexbox/grid) where possible.
 - Use meaningful class/variable names derived from the node names.
 - Keep the same framework and language as the input.
 - For CSS-in-JS or scoped styles, keep styles co-located.
-- For SwiftUI/Compose/Flutter, use idiomatic patterns.
+- For SwiftUI/Compose/Flutter, use idiomatic patterns (SwiftUI: adaptive stacks, Compose: adaptive layouts, Flutter: LayoutBuilder/MediaQuery).
 - Do not add functionality, interactivity, or state beyond what exists.
-- If design variables are present as var(--name), preserve them.`
+- If design variables are present as var(--name), preserve them.
+
+RESPONSIVE DESIGN (CRITICAL — make the output adapt gracefully across screen sizes):
+- Convert fixed pixel widths to relative units (%, max-w-*, flex-1, w-full) where appropriate. Keep max-width constraints for readability.
+- Use responsive Tailwind breakpoints (sm:, md:, lg:) for layout changes:
+  - Multi-column rows (horizontal layouts) should stack vertically on small screens (flex-col → sm:flex-row or md:flex-row).
+  - Grid layouts: use responsive column counts (grid-cols-1 sm:grid-cols-2 lg:grid-cols-3).
+  - Adjust padding/gap with responsive variants (p-4 md:p-8 lg:p-12).
+  - Font sizes: scale down on mobile (text-2xl md:text-4xl lg:text-5xl).
+- Images: use w-full max-w-* with aspect ratio preservation, never fixed px width.
+- Container: use max-w-7xl mx-auto px-4 (or similar) for centered content with side padding.
+- Navigation: consider collapsible patterns on small screens.
+- For HTML+CSS: use @media queries with mobile-first breakpoints (min-width: 640px, 768px, 1024px).
+- For Vue/Svelte: apply the same responsive CSS/class strategies.
+- Do NOT break the design on desktop while making it responsive — desktop must remain visually faithful.`
 
 /** Strip markdown fences, reasoning preamble, and tool-call XML from AI output. */
 function cleanEnhancedResult(raw: string): string {
