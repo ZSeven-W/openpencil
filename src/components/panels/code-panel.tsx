@@ -1,5 +1,5 @@
 import { useState, useMemo, useCallback, useRef, useEffect } from 'react'
-import { Copy, Check, Sparkles, Loader2, RotateCcw, Download } from 'lucide-react'
+import { Copy, Check, Sparkles, Loader2, RotateCcw, Download, ChevronLeft, ChevronRight } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useTranslation } from 'react-i18next'
 import { Button } from '@/components/ui/button'
@@ -298,18 +298,51 @@ ${generatedCode}`
     { key: 'css-vars', label: t('code.cssVariables') },
   ]
 
+  const tabsScrollRef = useRef<HTMLDivElement>(null)
+  const [canScrollLeft, setCanScrollLeft] = useState(false)
+  const [canScrollRight, setCanScrollRight] = useState(false)
+
+  const updateScrollState = useCallback(() => {
+    const el = tabsScrollRef.current
+    if (!el) return
+    setCanScrollLeft(el.scrollLeft > 1)
+    setCanScrollRight(el.scrollLeft + el.clientWidth < el.scrollWidth - 1)
+  }, [])
+
+  useEffect(() => {
+    const el = tabsScrollRef.current
+    if (!el) return
+    updateScrollState()
+    el.addEventListener('scroll', updateScrollState, { passive: true })
+    const ro = new ResizeObserver(updateScrollState)
+    ro.observe(el)
+    return () => {
+      el.removeEventListener('scroll', updateScrollState)
+      ro.disconnect()
+    }
+  }, [updateScrollState])
+
+  const scrollTabs = useCallback((dir: 'left' | 'right') => {
+    tabsScrollRef.current?.scrollBy({ left: dir === 'left' ? -80 : 80, behavior: 'smooth' })
+  }, [])
+
   return (
     <div className="flex flex-col flex-1 min-h-0">
       {/* Framework tabs + action buttons */}
-      <div className="flex items-center px-2 py-1 border-b border-border shrink-0 gap-1 flex-wrap">
-        <div className="flex items-center gap-1 flex-1 flex-wrap">
+      <div className="flex items-center pl-1 pr-2 py-1 border-b border-border shrink-0 gap-0.5">
+        {canScrollLeft && (
+          <button type="button" onClick={() => scrollTabs('left')} className="shrink-0 p-0.5 text-muted-foreground hover:text-foreground">
+            <ChevronLeft size={10} />
+          </button>
+        )}
+        <div ref={tabsScrollRef} className="flex items-center gap-1 flex-1 min-w-0 overflow-x-auto scrollbar-none px-1">
           {tabs.map((tab) => (
             <button
               key={tab.key}
               type="button"
               onClick={() => setActiveTab(tab.key)}
               className={cn(
-                'text-[10px] px-1.5 py-0.5 rounded transition-colors',
+                'text-[10px] px-1.5 py-0.5 rounded transition-colors shrink-0 whitespace-nowrap',
                 activeTab === tab.key
                   ? 'bg-secondary text-foreground'
                   : 'text-muted-foreground hover:text-foreground',
@@ -319,6 +352,11 @@ ${generatedCode}`
             </button>
           ))}
         </div>
+        {canScrollRight && (
+          <button type="button" onClick={() => scrollTabs('right')} className="shrink-0 p-0.5 text-muted-foreground hover:text-foreground">
+            <ChevronRight size={10} />
+          </button>
+        )}
         <div className="flex items-center gap-0.5 shrink-0">
           {hasAI && activeTab !== 'css-vars' && (
             <>
@@ -387,7 +425,7 @@ ${generatedCode}`
 
       {/* Code content */}
       <div className="flex-1 overflow-auto p-2">
-        <pre className="text-[10px] leading-relaxed font-mono text-foreground/80 whitespace-pre">
+        <pre className="text-[10px] leading-relaxed font-mono text-foreground/80 whitespace-pre-wrap break-all">
           <code dangerouslySetInnerHTML={{ __html: highlightedHTML }} />
         </pre>
       </div>
