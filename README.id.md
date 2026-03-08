@@ -17,14 +17,14 @@
   <a href="https://github.com/ZSeven-W/openpencil/stargazers"><img src="https://img.shields.io/github/stars/ZSeven-W/openpencil?style=flat" alt="Stars" /></a>
   <a href="https://github.com/ZSeven-W/openpencil/blob/main/LICENSE"><img src="https://img.shields.io/github/license/ZSeven-W/openpencil" alt="License" /></a>
   <a href="https://github.com/ZSeven-W/openpencil/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/ZSeven-W/openpencil/ci.yml?branch=main&label=CI" alt="CI" /></a>
-  <a href="https://discord.gg/fE9STbMG"><img src="https://img.shields.io/discord/1476517942949580952?label=Discord&logo=discord&logoColor=white" alt="Discord" /></a>
+  <a href="https://discord.gg/KwXp6BJD"><img src="https://img.shields.io/discord/1476517942949580952?label=Discord&logo=discord&logoColor=white" alt="Discord" /></a>
 </p>
 
 <p align="center">
   <a href="#mulai-cepat">Mulai Cepat</a> ·
   <a href="#desain-berbasis-ai">AI</a> ·
   <a href="#fitur">Fitur</a> ·
-  <a href="https://discord.gg/fE9STbMG">Discord</a> ·
+  <a href="https://discord.gg/KwXp6BJD">Discord</a> ·
   <a href="#berkontribusi">Berkontribusi</a>
 </p>
 
@@ -89,6 +89,7 @@ OpenPencil dibangun dengan AI sebagai inti — bukan sebagai plugin, melainkan s
 **Kanvas & Menggambar**
 - Kanvas tak terbatas dengan pan, zoom, panduan perataan cerdas, dan snapping
 - Persegi panjang, Elips, Garis, Poligon, Pen (Bezier), Frame, Teks
+- Operasi Boolean — gabungan, kurangi, irisan dengan toolbar kontekstual
 - Pemilih ikon (Iconify) dan impor gambar (PNG/JPEG/SVG/WebP/GIF)
 - Auto-layout — vertikal/horizontal dengan gap, padding, justify, align
 - Dokumen multi-halaman dengan navigasi tab
@@ -156,6 +157,8 @@ electron/
 | `Del` | Hapus | | `Cmd+Shift+V` | Panel variabel |
 | `[ / ]` | Ubah urutan | | `Cmd+J` | Chat AI |
 | Panah | Geser 1px | | `Cmd+,` | Pengaturan agen |
+| `Cmd+Alt+U` | Union Boolean | | `Cmd+Alt+S` | Subtract Boolean |
+| `Cmd+Alt+I` | Intersect Boolean | | | |
 
 ## Skrip
 
@@ -186,7 +189,7 @@ Kontribusi sangat disambut! Lihat [CLAUDE.md](./CLAUDE.md) untuk detail arsitekt
 - [x] Integrasi server MCP
 - [x] Dukungan multi-halaman
 - [x] Impor Figma `.fig`
-- [ ] Operasi boolean (gabung, kurangi, potong)
+- [x] Operasi boolean (gabung, kurangi, potong)
 - [ ] Pengeditan kolaboratif
 - [ ] Sistem plugin
 
@@ -198,7 +201,7 @@ Kontribusi sangat disambut! Lihat [CLAUDE.md](./CLAUDE.md) untuk detail arsitekt
 
 ## Komunitas
 
-<a href="https://discord.gg/fE9STbMG">
+<a href="https://discord.gg/KwXp6BJD">
   <img src="./public/logo-discord.svg" alt="Discord" width="16" />
   <strong> Bergabung dengan Discord kami</strong>
 </a>

@@ -5,12 +5,18 @@ import { useCanvasStore } from '@/stores/canvas-store'
 import { setSkipNextDepthResolve } from '@/canvas/use-canvas-selection'
 import type { FabricObjectWithPenId } from '@/canvas/canvas-object-factory'
 import type { PenNode } from '@/types/pen'
+import { useHistoryStore } from '@/stores/history-store'
+import { canBooleanOp, executeBooleanOp, type BooleanOpType } from '@/utils/boolean-ops'
 import LayerItem from './layer-item'
 import type { DropPosition } from './layer-item'
 import LayerContextMenu from './layer-context-menu'
 import PageTabs from '@/components/editor/page-tabs'
 
 const CONTAINER_TYPES = new Set(['frame', 'group', 'ref'])
+
+const LAYER_MIN_WIDTH = 180
+const LAYER_MAX_WIDTH = 480
+const LAYER_DEFAULT_WIDTH = 224 // w-56
 
 interface DragState {
   dragId: string | null
@@ -121,6 +127,38 @@ function collectCollapsibleNodeIds(
 
 export default function LayerPanel() {
   const { t } = useTranslation()
+  const [panelWidth, setPanelWidth] = useState(LAYER_DEFAULT_WIDTH)
+  const isDraggingResize = useRef(false)
+  const resizeStartX = useRef(0)
+  const resizeStartWidth = useRef(0)
+
+  const handleResizeMouseDown = useCallback((e: React.MouseEvent) => {
+    e.preventDefault()
+    isDraggingResize.current = true
+    resizeStartX.current = e.clientX
+    resizeStartWidth.current = panelWidth
+
+    const handleMouseMove = (ev: MouseEvent) => {
+      if (!isDraggingResize.current) return
+      const delta = ev.clientX - resizeStartX.current
+      const newWidth = Math.max(LAYER_MIN_WIDTH, Math.min(LAYER_MAX_WIDTH, resizeStartWidth.current + delta))
+      setPanelWidth(newWidth)
+    }
+
+    const handleMouseUp = () => {
+      isDraggingResize.current = false
+      document.removeEventListener('mousemove', handleMouseMove)
+      document.removeEventListener('mouseup', handleMouseUp)
+      document.body.style.cursor = ''
+      document.body.style.userSelect = ''
+    }
+
+    document.body.style.cursor = 'col-resize'
+    document.body.style.userSelect = 'none'
+    document.addEventListener('mousemove', handleMouseMove)
+    document.addEventListener('mouseup', handleMouseUp)
+  }, [panelWidth])
+
   const activePageId = useCanvasStore((s) => s.activePageId)
   const children = useDocumentStore((s) => getActivePageChildren(s.document, activePageId))
   const updateNode = useDocumentStore((s) => s.updateNode)
@@ -355,6 +393,24 @@ export default function LayerPanel() {
         case 'detach-component':
           detachComponent(nodeId)
           break
+        case 'boolean-union':
+        case 'boolean-subtract':
+        case 'boolean-intersect': {
+          const opType = action.replace('boolean-', '') as BooleanOpType
+          const nodes = selectedIds
+            .map((id) => getNodeById(id))
+            .filter((n): n is PenNode => n != null)
+          if (canBooleanOp(nodes)) {
+            const result = executeBooleanOp(nodes, opType)
+            if (result) {
+              useHistoryStore.getState().pushState(useDocumentStore.getState().document)
+              for (const id of selectedIds) removeNode(id)
+              useDocumentStore.getState().addNode(null, result)
+              setSelection([result.id], result.id)
+            }
+          }
+          break
+        }
       }
       setContextMenu(null)
     },
@@ -369,6 +425,7 @@ export default function LayerPanel() {
       setSelection,
       makeReusable,
       detachComponent,
+      getNodeById,
     ],
   )
 
@@ -385,7 +442,12 @@ export default function LayerPanel() {
   }
 
   return (
-    <div className="w-56 bg-card border-r border-border flex flex-col shrink-0">
+    <div className="bg-card border-r border-border flex flex-col shrink-0 relative" style={{ width: panelWidth }}>
+      {/* Resize handle */}
+      <div
+        className="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-primary/30 active:bg-primary/50 z-10"
+        onMouseDown={handleResizeMouseDown}
+      />
       <PageTabs />
       <div className="h-8 flex items-center px-3 border-b border-border">
         <span className="text-xs font-medium text-muted-foreground tracking-wider">
@@ -420,12 +482,16 @@ export default function LayerPanel() {
           ? 'reusable' in contextNode && contextNode.reusable === true
           : false
         const nodeIsInstance = contextNode?.type === 'ref'
+        const booleanNodes = selectedIds
+          .map((id) => getNodeById(id))
+          .filter((n): n is PenNode => n != null)
         return (
           <LayerContextMenu
             x={contextMenu.x}
             y={contextMenu.y}
             nodeId={contextMenu.nodeId}
             canGroup={selectedIds.length >= 2}
+            canBoolean={canBooleanOp(booleanNodes)}
             canCreateComponent={isContainer && !nodeIsReusable}
             isReusable={nodeIsReusable}
             isInstance={nodeIsInstance}

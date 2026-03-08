@@ -467,11 +467,13 @@ export function useCanvasSync() {
         // class/shape data changes (e.g. IText↔Textbox).
         // Path `d` changes are handled in-place by syncFabricObject.
         let objectRecreated = false
-        // Text nodes may need recreation when textGrowth mode changes
+        // Text nodes may need recreation when textGrowth mode or textAlign changes
         // (IText ↔ Textbox are different Fabric classes).
+        // Must match isFixedWidthText() in canvas-object-factory.ts.
         if (existingObj && node.type === 'text') {
           const growth = node.textGrowth
           const needsTextbox = growth === 'fixed-width' || growth === 'fixed-width-height'
+            || (node.textAlign != null && node.textAlign !== 'left')
           const isTextbox = existingObj instanceof fabric.Textbox
           if (needsTextbox !== isTextbox) {
             canvas.remove(existingObj)

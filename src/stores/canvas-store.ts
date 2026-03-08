@@ -11,10 +11,13 @@ import { DEFAULT_PAGE_ID } from '@/stores/document-tree-utils'
 
 const PREFS_KEY = 'openpencil-canvas-preferences'
 
+export type RightPanelTab = 'design' | 'code'
+
 interface CanvasPreferences {
   layerPanelOpen: boolean
   variablesPanelOpen: boolean
   codePanelOpen: boolean
+  rightPanelTab?: RightPanelTab
 }
 
 interface CanvasStoreState {
@@ -27,6 +30,7 @@ interface CanvasStoreState {
   layerPanelOpen: boolean
   variablesPanelOpen: boolean
   codePanelOpen: boolean
+  rightPanelTab: RightPanelTab
   figmaImportDialogOpen: boolean
   activePageId: string | null
 
@@ -46,6 +50,7 @@ interface CanvasStoreState {
   toggleVariablesPanel: () => void
   toggleCodePanel: () => void
   setCodePanelOpen: (open: boolean) => void
+  setRightPanelTab: (tab: RightPanelTab) => void
   setFigmaImportDialogOpen: (open: boolean) => void
   setActivePageId: (pageId: string | null) => void
   hydrate: () => void
@@ -72,6 +77,7 @@ export const useCanvasStore = create<CanvasStoreState>((set, get) => ({
   layerPanelOpen: true,
   variablesPanelOpen: false,
   codePanelOpen: false,
+  rightPanelTab: 'design',
   figmaImportDialogOpen: false,
   activePageId: DEFAULT_PAGE_ID,
 
@@ -161,6 +167,11 @@ export const useCanvasStore = create<CanvasStoreState>((set, get) => ({
     const { layerPanelOpen, variablesPanelOpen } = get()
     persistPrefs({ layerPanelOpen, variablesPanelOpen, codePanelOpen: open })
   },
+  setRightPanelTab: (tab) => {
+    set({ rightPanelTab: tab })
+    const { layerPanelOpen, variablesPanelOpen, codePanelOpen } = get()
+    persistPrefs({ layerPanelOpen, variablesPanelOpen, codePanelOpen, rightPanelTab: tab })
+  },
   setFigmaImportDialogOpen: (open) => set({ figmaImportDialogOpen: open }),
   setActivePageId: (activePageId) => set({ activePageId }),
 
@@ -172,6 +183,7 @@ export const useCanvasStore = create<CanvasStoreState>((set, get) => ({
       if (typeof data.layerPanelOpen === 'boolean') set({ layerPanelOpen: data.layerPanelOpen })
       if (typeof data.variablesPanelOpen === 'boolean') set({ variablesPanelOpen: data.variablesPanelOpen })
       if (typeof data.codePanelOpen === 'boolean') set({ codePanelOpen: data.codePanelOpen })
+      if (data.rightPanelTab === 'design' || data.rightPanelTab === 'code') set({ rightPanelTab: data.rightPanelTab })
     } catch { /* ignore */ }
   },
 }))

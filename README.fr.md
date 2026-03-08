@@ -17,14 +17,14 @@
   <a href="https://github.com/ZSeven-W/openpencil/stargazers"><img src="https://img.shields.io/github/stars/ZSeven-W/openpencil?style=flat" alt="Stars" /></a>
   <a href="https://github.com/ZSeven-W/openpencil/blob/main/LICENSE"><img src="https://img.shields.io/github/license/ZSeven-W/openpencil" alt="License" /></a>
   <a href="https://github.com/ZSeven-W/openpencil/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/ZSeven-W/openpencil/ci.yml?branch=main&label=CI" alt="CI" /></a>
-  <a href="https://discord.gg/fE9STbMG"><img src="https://img.shields.io/discord/1476517942949580952?label=Discord&logo=discord&logoColor=white" alt="Discord" /></a>
+  <a href="https://discord.gg/KwXp6BJD"><img src="https://img.shields.io/discord/1476517942949580952?label=Discord&logo=discord&logoColor=white" alt="Discord" /></a>
 </p>
 
 <p align="center">
   <a href="#quick-start">Démarrage rapide</a> ·
   <a href="#ai-native-design">IA</a> ·
   <a href="#features">Fonctionnalités</a> ·
-  <a href="https://discord.gg/fE9STbMG">Discord</a> ·
+  <a href="https://discord.gg/KwXp6BJD">Discord</a> ·
   <a href="#contributing">Contribuer</a>
 </p>
 
@@ -89,6 +89,7 @@ OpenPencil est conçu autour de l'IA dès le départ — non pas comme un plugin
 **Canevas et dessin**
 - Canevas infini avec panoramique, zoom, guides d'alignement intelligents et magnétisme
 - Rectangle, Ellipse, Ligne, Polygone, Plume (Bézier), Frame, Texte
+- Opérations booléennes — union, soustraction, intersection avec barre d'outils contextuelle
 - Sélecteur d'icônes (Iconify) et import d'images (PNG/JPEG/SVG/WebP/GIF)
 - Auto-layout — vertical/horizontal avec gap, padding, justify, align
 - Documents multi-pages avec navigation par onglets
@@ -156,6 +157,8 @@ electron/
 | `Del` | Supprimer | | `Cmd+Shift+V` | Panneau des variables |
 | `[ / ]` | Réordonner | | `Cmd+J` | Chat IA |
 | Flèches | Déplacer de 1px | | `Cmd+,` | Paramètres de l'agent |
+| `Cmd+Alt+U` | Union booléenne | | `Cmd+Alt+S` | Soustraction booléenne |
+| `Cmd+Alt+I` | Intersection booléenne | | | |
 
 ## Scripts
 
@@ -186,7 +189,7 @@ Les contributions sont les bienvenues ! Consultez [CLAUDE.md](./CLAUDE.md) pour 
 - [x] Intégration du serveur MCP
 - [x] Support multi-pages
 - [x] Import Figma `.fig`
-- [ ] Opérations booléennes (union, soustraction, intersection)
+- [x] Opérations booléennes (union, soustraction, intersection)
 - [ ] Édition collaborative
 - [ ] Système de plugins
 
@@ -198,7 +201,7 @@ Les contributions sont les bienvenues ! Consultez [CLAUDE.md](./CLAUDE.md) pour 
 
 ## Communauté
 
-<a href="https://discord.gg/fE9STbMG">
+<a href="https://discord.gg/KwXp6BJD">
   <img src="./public/logo-discord.svg" alt="Discord" width="16" />
   <strong> Rejoindre notre Discord</strong>
 </a>

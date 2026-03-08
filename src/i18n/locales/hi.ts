@@ -44,6 +44,7 @@ const hi: TranslationKeys = {
   'topbar.open': 'खोलें',
   'topbar.save': 'सहेजें',
   'topbar.importFigma': 'Figma आयात करें',
+  'topbar.codePanel': 'कोड',
   'topbar.lightMode': 'लाइट मोड',
   'topbar.darkMode': 'डार्क मोड',
   'topbar.fullscreen': 'पूर्ण स्क्रीन',
@@ -53,6 +54,11 @@ const hi: TranslationKeys = {
   'topbar.setupAgentsMcp': 'एजेंट और MCP सेटअप करें',
   'topbar.connected': 'कनेक्टेड',
   'topbar.agentStatus': '{{agents}} एजेंट{{agentSuffix}} · {{mcp}} MCP',
+
+  // ── Right Panel ──
+  'rightPanel.design': 'डिज़ाइन',
+  'rightPanel.code': 'कोड',
+  'rightPanel.noSelection': 'एक तत्व चुनें',
 
   // ── Pages ──
   'pages.title': 'पेज',
@@ -105,6 +111,9 @@ const hi: TranslationKeys = {
   'layerMenu.createComponent': 'कंपोनेंट बनाएँ',
   'layerMenu.detachComponent': 'कंपोनेंट अलग करें',
   'layerMenu.detachInstance': 'इंस्टेंस अलग करें',
+  'layerMenu.booleanUnion': 'संयोजन',
+  'layerMenu.booleanSubtract': 'घटाना',
+  'layerMenu.booleanIntersect': 'प्रतिच्छेदन',
   'layerMenu.toggleLock': 'लॉक टॉगल करें',
   'layerMenu.toggleVisibility': 'दृश्यता टॉगल करें',
 
@@ -264,11 +273,18 @@ const hi: TranslationKeys = {
   'code.htmlCss': 'HTML + CSS',
   'code.cssVariables': 'CSS Variables',
   'code.copyClipboard': 'क्लिपबोर्ड पर कॉपी करें',
+  'code.copied': 'कॉपी हो गया!',
+  'code.download': 'कोड फ़ाइल डाउनलोड करें',
   'code.closeCodePanel': 'कोड पैनल बंद करें',
   'code.genCssVars': 'संपूर्ण डॉक्यूमेंट के लिए CSS वेरिएबल जनरेट हो रहे हैं',
   'code.genSelected':
     '{{count}} चयनित तत्व(ओं) के लिए कोड जनरेट हो रहा है',
   'code.genDocument': 'संपूर्ण डॉक्यूमेंट के लिए कोड जनरेट हो रहा है',
+  'code.aiEnhance': 'AI से सुधारें',
+  'code.cancelEnhance': 'सुधार रद्द करें',
+  'code.resetEnhance': 'मूल पर वापस जाएं',
+  'code.enhancing': 'AI कोड सुधार रहा है...',
+  'code.enhanced': 'AI द्वारा सुधारा गया',
 
   // ── Save Dialog ──
   'save.saveAs': 'इस रूप में सहेजें',
@@ -303,6 +319,7 @@ const hi: TranslationKeys = {
   'agents.mcpServerRunning': 'चल रहा है',
   'agents.mcpServerStopped': 'रुका हुआ',
   'agents.mcpLanAccess': 'LAN एक्सेस',
+  'agents.mcpClientConfig': 'क्लाइंट कॉन्फ़िग',
   'agents.stdio': 'stdio',
   'agents.http': 'http',
   'agents.stdioHttp': 'stdio + http',

@@ -4,6 +4,7 @@ import { useDocumentStore } from '@/stores/document-store'
 import { useHistoryStore } from '@/stores/history-store'
 import { zoomToFitContent } from '@/canvas/use-fabric-canvas'
 import { syncCanvasPositionsToStore } from '@/canvas/use-canvas-sync'
+import { normalizePenDocument } from '@/utils/normalize-pen-file'
 import {
   supportsFileSystemAccess,
   writeToFileHandle,
@@ -21,6 +22,29 @@ export function useElectronMenu() {
   useEffect(() => {
     const api = window.electronAPI
     if (!api?.onMenuAction) return
+
+    const loadFileFromPath = (filePath: string) => {
+      api.readFile?.(filePath).then((result) => {
+        if (!result) return
+        try {
+          const raw = JSON.parse(result.content)
+          if (!raw.version || !Array.isArray(raw.children)) return
+          const doc = normalizePenDocument(raw)
+          const name = filePath.split(/[/\\]/).pop() || 'untitled.op'
+          useDocumentStore.getState().loadDocument(doc, name)
+          requestAnimationFrame(() => zoomToFitContent())
+        } catch {
+          // Invalid file — ignore
+        }
+      })
+    }
+
+    const cleanupOpenFile = api.onOpenFile?.(loadFileFromPath)
+
+    // Pull any pending file from cold start (double-click .op to launch app)
+    api.getPendingFile?.().then((filePath) => {
+      if (filePath) loadFileFromPath(filePath)
+    })
 
     const cleanup = api.onMenuAction((action: string) => {
       switch (action) {
@@ -113,6 +137,9 @@ export function useElectronMenu() {
       }
     })
 
-    return cleanup
+    return () => {
+      cleanup()
+      cleanupOpenFile?.()
+    }
   }, [])
 }

@@ -19,7 +19,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 OpenPencil is an open-source vector design tool (alternative to Pencil.dev) with a Design-as-Code philosophy. Built as a **TanStack Start** full-stack React application with Bun runtime. Server API powered by **Nitro**. Also ships as an **Electron** desktop app for macOS, Windows, and Linux.
 
-**Key technologies:** React 19, Fabric.js v7 (canvas engine), Zustand v5 (state management), TanStack Router (file-based routing), Tailwind CSS v4, shadcn/ui (UI primitives), Vite 7, Nitro (server), Electron 35 (desktop), TypeScript (strict mode).
+**Key technologies:** React 19, Fabric.js v7 (canvas engine), Paper.js (boolean path operations), Zustand v5 (state management), TanStack Router (file-based routing), Tailwind CSS v4, shadcn/ui (UI primitives), Vite 7, Nitro (server), Electron 35 (desktop), TypeScript (strict mode).
 
 ### Data Flow
 
@@ -133,7 +133,7 @@ PenDocument (source of truth)
   - `agent-settings.ts` — AI provider config types (`AIProviderType`: anthropic/openai/opencode/copilot, `AIProviderConfig`, `MCPCliIntegration`, `GroupedModel`)
   - `electron.d.ts` — Electron IPC bridge types (file dialogs, save operations, updater: `UpdaterState`/`UpdaterStatus`, `getState`/`checkForUpdates`/`quitAndInstall`/`onStateChange`)
   - `opencode-sdk.d.ts` — Type declarations for @opencode-ai/sdk
-- **`src/components/editor/`** — Editor UI (8 files): editor-layout, toolbar (with variables panel toggle), tool-button, shape-tool-dropdown (rectangle/ellipse/line/path + icon picker + image import), top-bar (with `AgentStatusButton`), status-bar, page-tabs (multi-page navigation with context menu), update-ready-banner (Electron auto-updater notification)
+- **`src/components/editor/`** — Editor UI (9 files): editor-layout, toolbar (with variables panel toggle), boolean-toolbar (contextual floating toolbar for union/subtract/intersect, shown when 2+ compatible shapes selected), tool-button, shape-tool-dropdown (rectangle/ellipse/line/path + icon picker + image import), top-bar (with `AgentStatusButton`), status-bar, page-tabs (multi-page navigation with context menu), update-ready-banner (Electron auto-updater notification)
 - **`src/components/panels/`** — Panels (26 files):
   - `layer-panel.tsx` / `layer-item.tsx` / `layer-context-menu.tsx` — Tree view with drag-and-drop reordering and drop-into-children (above/below/inside), visibility/lock toggles, context menu, rename
   - `property-panel.tsx` — Unified property panel
@@ -194,8 +194,8 @@ PenDocument (source of truth)
   - `figma-image-resolver.ts` — Resolves image blob references
 - **`src/services/codegen/`** — React+Tailwind and HTML+CSS code generators (output `var(--name)` for `$variable` refs), CSS variables generator
 - **`src/hooks/`** — Hooks (2 files):
-  - `use-keyboard-shortcuts.ts` — Global keyboard event handling: tools, clipboard, undo/redo, save, select all, delete, arrow nudge, z-order
-  - `use-electron-menu.ts` — Electron native menu IPC listener: dispatches menu actions (new, open, save, save-as, undo, redo, etc.) to Zustand stores
+  - `use-keyboard-shortcuts.ts` — Global keyboard event handling: tools, clipboard, undo/redo, save, select all, delete, arrow nudge, z-order, boolean operations (Cmd+Alt+U/S/I)
+  - `use-electron-menu.ts` — Electron native menu IPC listener: dispatches menu actions (new, open, save, save-as, undo, redo, etc.) to Zustand stores; also handles `onOpenFile` for `.op` file association
 - **`src/lib/`** — Utility functions (`utils.ts` with `cn()` for class merging)
 - **`src/uikit/`** — UI kit system (3 files + `kits/` subdir):
   - `built-in-registry.ts` — Default built-in UIKit with standard UI components
@@ -207,7 +207,7 @@ PenDocument (source of truth)
   - `document-manager.ts` — MCP utility for reading, writing, and caching PenDocuments from disk
   - `tools/` — Individual MCP tool implementations: `batch-design.ts`, `batch-get.ts`, `find-empty-space.ts`, `open-document.ts`, `snapshot-layout.ts`, `variables.ts`, `pages.ts` (page CRUD: add/remove/rename/reorder/duplicate)
   - `utils/` — Shared utilities: `id.ts`, `node-operations.ts` (page-aware `getDocChildren`/`setDocChildren`)
-- **`src/utils/`** — File operations (save/open .pen), export (PNG/SVG), node clone, pen file normalization (format fixes only, preserves `$variable` refs), SVG parser (import SVG to editable PenNodes), syntax highlight
+- **`src/utils/`** — File operations (save/open .pen), export (PNG/SVG), node clone, pen file normalization (format fixes only, preserves `$variable` refs), SVG parser (import SVG to editable PenNodes), syntax highlight, boolean operations (union/subtract/intersect via Paper.js)
 - **`server/api/ai/`** — Nitro server API (7 files): `chat.ts` (streaming SSE with thinking state, multimodal image attachments per provider), `generate.ts` (non-streaming generation), `connect-agent.ts` (Claude Code/Codex CLI/OpenCode/Copilot connection), `models.ts` (model definitions), `validate.ts` (vision-based post-generation validation), `mcp-install.ts` (MCP server install/uninstall into CLI tool configs), `icon.ts` (icon name → SVG path resolution via local Iconify sets). Supports Anthropic API key or Claude Agent SDK (local OAuth) as dual providers
 - **`server/utils/`** — Server utilities (5 files):
   - `resolve-claude-cli.ts` — Resolves standalone `claude` binary path (handles Nitro bundling issues with SDK's `import.meta.url`)
@@ -250,13 +250,14 @@ Tailwind CSS v4 imported via `src/styles.css`. UI primitives from shadcn/ui (`sr
 
 ### Electron Desktop App
 
-- **`electron/main.ts`** — Main process: window creation, Nitro server fork, IPC for native file dialogs, native application menu, auto-updater, macOS traffic-light padding (auto-hidden in fullscreen)
-- **`electron/preload.ts`** — Context bridge for renderer ↔ main IPC (file dialogs, menu actions, updater state)
-- **`electron-builder.yml`** — Packaging config: macOS (dmg/zip), Windows (nsis/portable), Linux (AppImage/deb)
+- **`electron/main.ts`** — Main process: window creation, Nitro server fork, IPC for native file dialogs, native application menu, auto-updater, macOS traffic-light padding (auto-hidden in fullscreen), `.op` file association handling (`open-file` event on macOS, CLI args + single-instance lock on Windows/Linux)
+- **`electron/preload.ts`** — Context bridge for renderer ↔ main IPC (file dialogs, menu actions, updater state, `onOpenFile`/`readFile` for file association)
+- **`electron-builder.yml`** — Packaging config: macOS (dmg/zip), Windows (nsis/portable), Linux (AppImage/deb), `.op` file association (`fileAssociations`)
 - **`scripts/electron-dev.ts`** — Dev workflow: starts Vite → waits for port 3000 → compiles electron/ with esbuild → launches Electron
 - Build flow: `BUILD_TARGET=electron bun run build` → `bun run electron:compile` → `npx electron-builder`
 - In production, Nitro server is forked as a child process on a random port; Electron loads `http://127.0.0.1:{port}/editor`
 - Auto-updater checks GitHub Releases on startup and every hour; `update-ready-banner.tsx` shows download progress and "Restart & Install" prompt
+- **File association:** `.op` files are registered as OpenPencil documents via `fileAssociations` in `electron-builder.yml`. On macOS the `open-file` app event handles double-click/drag; on Windows/Linux `requestSingleInstanceLock` + `second-instance` event forwards CLI args to the existing window. Pending file paths are queued until the renderer is ready, then sent via `file:open` IPC channel. The renderer (`use-electron-menu.ts`) listens via `onOpenFile`, reads the file through `file:read` IPC, and calls `loadDocument`.
 
 ### CI / CD
 

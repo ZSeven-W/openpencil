@@ -42,6 +42,7 @@ import { executeSubAgents } from './orchestrator-sub-agent'
 import { emitProgress, buildFinalStepTags } from './orchestrator-progress'
 import { assignAgentIdentities } from './agent-identity'
 import { addAgentFrame, clearAgentIndicators } from '@/canvas/agent-indicator'
+import { enrichSubtasksWithHtmlReference } from './visual-ref-orchestrator'
 
 // ---------------------------------------------------------------------------
 // Public API
@@ -86,6 +87,9 @@ export async function executeOrchestration(
       st.idPrefix = st.id
       st.parentFrameId = plan.rootFrame.id
     }
+
+    // Enrich subtasks with HTML references from visual reference pipeline (if active)
+    enrichSubtasksWithHtmlReference(plan.subtasks)
 
     // Set canvas width hint for accurate text height estimation
     setGenerationCanvasWidth(plan.rootFrame.width)
@@ -499,11 +503,29 @@ function tryParsePlan(text: string): OrchestratorPlan | null {
 
     const plan = obj as unknown as OrchestratorPlan
 
-    // Extract optional styleGuide if present and well-formed
+    // Extract styleGuide — required for consistent visual output
     if (obj.styleGuide && typeof obj.styleGuide === 'object') {
       const sg = obj.styleGuide as Record<string, unknown>
       if (sg.palette && typeof sg.palette === 'object' && sg.fonts && typeof sg.fonts === 'object') {
         plan.styleGuide = sg as unknown as import('./ai-types').StyleGuide
+      }
+    }
+
+    // Fallback: always provide a style guide so sub-agents have consistent styling
+    if (!plan.styleGuide) {
+      const bg = (plan.rootFrame.fill as Array<{ color?: string }> | undefined)?.[0]?.color ?? '#F8FAFC'
+      plan.styleGuide = {
+        palette: {
+          background: bg,
+          surface: '#FFFFFF',
+          text: '#0F172A',
+          secondary: '#64748B',
+          accent: '#6366F1',
+          accent2: '#8B5CF6',
+          border: '#E2E8F0',
+        },
+        fonts: { heading: 'Space Grotesk', body: 'Inter' },
+        aesthetic: 'clean modern',
       }
     }
 

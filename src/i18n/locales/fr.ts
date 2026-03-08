@@ -44,6 +44,7 @@ const fr: TranslationKeys = {
   'topbar.open': 'Ouvrir',
   'topbar.save': 'Enregistrer',
   'topbar.importFigma': 'Importer Figma',
+  'topbar.codePanel': 'Code',
   'topbar.lightMode': 'Mode clair',
   'topbar.darkMode': 'Mode sombre',
   'topbar.fullscreen': 'Plein écran',
@@ -53,6 +54,11 @@ const fr: TranslationKeys = {
   'topbar.setupAgentsMcp': 'Configurer Agents & MCP',
   'topbar.connected': 'connecté',
   'topbar.agentStatus': '{{agents}} agent{{agentSuffix}} · {{mcp}} MCP',
+
+  // ── Right Panel ──
+  'rightPanel.design': 'Design',
+  'rightPanel.code': 'Code',
+  'rightPanel.noSelection': 'Sélectionnez un élément',
 
   // ── Pages ──
   'pages.title': 'Pages',
@@ -107,6 +113,9 @@ const fr: TranslationKeys = {
   'layerMenu.createComponent': 'Créer un composant',
   'layerMenu.detachComponent': 'Détacher le composant',
   'layerMenu.detachInstance': 'Détacher l\u2019instance',
+  'layerMenu.booleanUnion': 'Union',
+  'layerMenu.booleanSubtract': 'Soustraire',
+  'layerMenu.booleanIntersect': 'Intersection',
   'layerMenu.toggleLock': 'Verrouiller / Déverrouiller',
   'layerMenu.toggleVisibility': 'Afficher / Masquer',
 
@@ -268,12 +277,19 @@ const fr: TranslationKeys = {
   'code.htmlCss': 'HTML + CSS',
   'code.cssVariables': 'CSS Variables',
   'code.copyClipboard': 'Copier dans le presse-papiers',
+  'code.copied': 'Copié !',
+  'code.download': 'Télécharger le fichier de code',
   'code.closeCodePanel': 'Fermer le panneau de code',
   'code.genCssVars':
     'Génération des variables CSS pour l\u2019ensemble du document',
   'code.genSelected':
     'Génération du code pour {{count}} élément(s) sélectionné(s)',
   'code.genDocument': 'Génération du code pour l\u2019ensemble du document',
+  'code.aiEnhance': 'Améliorer par IA',
+  'code.cancelEnhance': 'Annuler l\u2019amélioration',
+  'code.resetEnhance': 'Réinitialiser',
+  'code.enhancing': 'L\u2019IA améliore le code...',
+  'code.enhanced': 'Amélioré par IA',
 
   // ── Save Dialog ──
   'save.saveAs': 'Enregistrer sous',
@@ -308,6 +324,7 @@ const fr: TranslationKeys = {
   'agents.mcpServerRunning': 'En cours',
   'agents.mcpServerStopped': 'Arrêté',
   'agents.mcpLanAccess': 'Accès LAN',
+  'agents.mcpClientConfig': 'Config. client',
   'agents.stdio': 'stdio',
   'agents.http': 'http',
   'agents.stdioHttp': 'stdio + http',

@@ -15,6 +15,20 @@ export function parseSizing(value: unknown): number | 'fit' | 'fill' {
 }
 
 // ---------------------------------------------------------------------------
+// Default line height — single source of truth for all modules
+// ---------------------------------------------------------------------------
+
+/**
+ * Canonical default lineHeight when a text node has no explicit value.
+ * Display/heading text (>=28px) gets tighter spacing; body text gets looser.
+ * All modules (factory, layout engine, text estimation, AI generation)
+ * MUST use this function instead of hardcoded fallbacks.
+ */
+export function defaultLineHeight(fontSize: number): number {
+  return fontSize >= 28 ? 1.2 : 1.5
+}
+
+// ---------------------------------------------------------------------------
 // CJK detection
 // ---------------------------------------------------------------------------
 
@@ -85,6 +99,19 @@ export function estimateTextWidth(text: string, fontSize: number, letterSpacing 
   return maxLine
 }
 
+/**
+ * Estimate text width WITHOUT safety factor.
+ * Used for layout centering where the safety margin causes text to appear
+ * off-center (the overestimated width shifts the text box left when centered).
+ * For wrapping/sizing decisions, use estimateTextWidth() which includes the safety factor.
+ */
+export function estimateTextWidthPrecise(text: string, fontSize: number, letterSpacing = 0): number {
+  const lines = text.split(/\r?\n/)
+  return lines.reduce((max, line) => {
+    return Math.max(max, estimateLineWidth(line, fontSize, letterSpacing))
+  }, 0)
+}
+
 // ---------------------------------------------------------------------------
 // Text content helpers
 // ---------------------------------------------------------------------------
@@ -108,7 +135,8 @@ export function countExplicitTextLines(text: string): number {
 /**
  * Optical vertical correction for centered single-line text.
  * Font line boxes are mathematically centered but glyph ink tends to look
- * slightly top-heavy, especially for CJK, so we nudge down by 1-3px.
+ * slightly top-heavy, especially for CJK, so we nudge down proportionally.
+ * The offset scales with fontSize (no fixed cap) so large text stays centered.
  */
 export function getTextOpticalCenterYOffset(node: PenNode): number {
   if (node.type !== 'text') return 0
@@ -117,13 +145,16 @@ export function getTextOpticalCenterYOffset(node: PenNode): number {
   if (countExplicitTextLines(text) > 1) return 0
 
   const fontSize = node.fontSize ?? 16
-  const lineHeight = node.lineHeight ?? 1.2
+  const lineHeight = node.lineHeight ?? defaultLineHeight(fontSize)
   const hasCjk = hasCjkText(text)
 
-  const ratio = hasCjk ? 0.16 : 0.1
-  const compactLineBoost = lineHeight <= 1.35 ? 1 : 0.7
+  // Base ratio: CJK glyphs sit higher in the em box than Latin
+  const ratio = hasCjk ? 0.12 : 0.07
+  // When lineHeight is compact (≤1.35), the visual offset is more pronounced
+  const compactLineBoost = lineHeight <= 1.35 ? 1 : 0.65
   const offset = fontSize * ratio * compactLineBoost
-  return Math.max(1, Math.min(5, Math.round(offset)))
+  // Proportional cap: never exceed 8% of fontSize, minimum 1px
+  return Math.max(1, Math.min(Math.round(fontSize * 0.08), Math.round(offset)))
 }
 
 // ---------------------------------------------------------------------------
@@ -135,7 +166,7 @@ export function estimateTextHeight(node: PenNode, availableWidth?: number): numb
   // Access text-specific properties via Record to avoid union type issues
   const n = node as unknown as Record<string, unknown>
   const fontSize = (typeof n.fontSize === 'number' ? n.fontSize : 16)
-  const lineHeight = (typeof n.lineHeight === 'number' ? n.lineHeight : 1.2)
+  const lineHeight = (typeof n.lineHeight === 'number' ? n.lineHeight : defaultLineHeight(fontSize))
   const singleLineH = fontSize * lineHeight
 
   // Get text content

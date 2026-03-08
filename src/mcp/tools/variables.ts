@@ -2,11 +2,11 @@ import { openDocument, saveDocument, resolveDocPath } from '../document-manager'
 import type { VariableDefinition } from '../../types/variables'
 
 export interface GetVariablesParams {
-  filePath: string
+  filePath?: string
 }
 
 export interface SetVariablesParams {
-  filePath: string
+  filePath?: string
   variables: Record<string, VariableDefinition>
   replace?: boolean
 }
@@ -43,7 +43,7 @@ export async function handleSetVariables(
 // ---------------------------------------------------------------------------
 
 export interface SetThemesParams {
-  filePath: string
+  filePath?: string
   themes: Record<string, string[]>
   replace?: boolean
 }

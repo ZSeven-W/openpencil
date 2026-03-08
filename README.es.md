@@ -17,14 +17,14 @@
   <a href="https://github.com/ZSeven-W/openpencil/stargazers"><img src="https://img.shields.io/github/stars/ZSeven-W/openpencil?style=flat" alt="Stars" /></a>
   <a href="https://github.com/ZSeven-W/openpencil/blob/main/LICENSE"><img src="https://img.shields.io/github/license/ZSeven-W/openpencil" alt="License" /></a>
   <a href="https://github.com/ZSeven-W/openpencil/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/ZSeven-W/openpencil/ci.yml?branch=main&label=CI" alt="CI" /></a>
-  <a href="https://discord.gg/fE9STbMG"><img src="https://img.shields.io/discord/1476517942949580952?label=Discord&logo=discord&logoColor=white" alt="Discord" /></a>
+  <a href="https://discord.gg/KwXp6BJD"><img src="https://img.shields.io/discord/1476517942949580952?label=Discord&logo=discord&logoColor=white" alt="Discord" /></a>
 </p>
 
 <p align="center">
   <a href="#inicio-rápido">Inicio Rápido</a> ·
   <a href="#diseño-nativo-de-ia">IA</a> ·
   <a href="#características">Características</a> ·
-  <a href="https://discord.gg/fE9STbMG">Discord</a> ·
+  <a href="https://discord.gg/KwXp6BJD">Discord</a> ·
   <a href="#contribuir">Contribuir</a>
 </p>
 
@@ -89,6 +89,7 @@ OpenPencil está construido desde cero con IA en su núcleo — no como un plugi
 **Lienzo y Dibujo**
 - Lienzo infinito con panorámica, zoom, guías de alineación inteligentes y ajuste
 - Rectángulo, Elipse, Línea, Polígono, Pluma (Bezier), Frame, Texto
+- Operaciones booleanas — unión, resta, intersección con barra de herramientas contextual
 - Selector de iconos (Iconify) e importación de imágenes (PNG/JPEG/SVG/WebP/GIF)
 - Diseño automático — vertical/horizontal con gap, padding, justify, align
 - Documentos multipágina con navegación por pestañas
@@ -156,6 +157,8 @@ electron/
 | `Del` | Eliminar | | `Cmd+Shift+V` | Panel de variables |
 | `[ / ]` | Reordenar | | `Cmd+J` | Chat de IA |
 | Flechas | Mover 1px | | `Cmd+,` | Configuración de agente |
+| `Cmd+Alt+U` | Unión booleana | | `Cmd+Alt+S` | Resta booleana |
+| `Cmd+Alt+I` | Intersección booleana | | | |
 
 ## Scripts
 
@@ -186,7 +189,7 @@ bun run electron:build     # Empaquetado de Electron
 - [x] Integración con servidor MCP
 - [x] Soporte multipágina
 - [x] Importación de Figma `.fig`
-- [ ] Operaciones booleanas (unión, sustracción, intersección)
+- [x] Operaciones booleanas (unión, sustracción, intersección)
 - [ ] Edición colaborativa
 - [ ] Sistema de plugins
 
@@ -198,7 +201,7 @@ bun run electron:build     # Empaquetado de Electron
 
 ## Comunidad
 
-<a href="https://discord.gg/fE9STbMG">
+<a href="https://discord.gg/KwXp6BJD">
   <img src="./public/logo-discord.svg" alt="Discord" width="16" />
   <strong> Únete a nuestro Discord</strong>
 </a>

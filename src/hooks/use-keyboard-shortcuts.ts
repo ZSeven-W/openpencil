@@ -4,6 +4,7 @@ import { useCanvasStore } from '@/stores/canvas-store'
 import { useDocumentStore, getActivePageChildren } from '@/stores/document-store'
 import { useHistoryStore } from '@/stores/history-store'
 import { cloneNodesWithNewIds } from '@/utils/node-clone'
+import { canBooleanOp, executeBooleanOp, type BooleanOpType } from '@/utils/boolean-ops'
 import { tryPasteFigmaFromClipboard } from '@/hooks/use-figma-paste'
 import {
   supportsFileSystemAccess,
@@ -265,6 +266,40 @@ export function useKeyboardShortcuts() {
           }
         }
         return
+      }
+
+      // Boolean operations: Cmd/Ctrl+Alt+U (union), Cmd/Ctrl+Alt+S (subtract), Cmd/Ctrl+Alt+I (intersect)
+      if (isMod && e.altKey && !e.shiftKey) {
+        const booleanOps: Record<string, BooleanOpType> = {
+          u: 'union',
+          s: 'subtract',
+          i: 'intersect',
+        }
+        const opType = booleanOps[e.key.toLowerCase()]
+        if (opType) {
+          const { selectedIds } = useCanvasStore.getState().selection
+          const nodes = selectedIds
+            .map((id) => useDocumentStore.getState().getNodeById(id))
+            .filter((n): n is NonNullable<typeof n> => n != null)
+          if (canBooleanOp(nodes)) {
+            e.preventDefault()
+            const result = executeBooleanOp(nodes, opType)
+            if (result) {
+              useHistoryStore.getState().pushState(useDocumentStore.getState().document)
+              for (const id of selectedIds) {
+                useDocumentStore.getState().removeNode(id)
+              }
+              useDocumentStore.getState().addNode(null, result)
+              useCanvasStore.getState().setSelection([result.id], result.id)
+              const canvas = useCanvasStore.getState().fabricCanvas
+              if (canvas) {
+                canvas.discardActiveObject()
+                canvas.requestRenderAll()
+              }
+            }
+          }
+          return
+        }
       }
 
       // Tool shortcuts (single key, no modifier)

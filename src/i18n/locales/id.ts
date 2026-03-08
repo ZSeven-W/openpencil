@@ -44,6 +44,7 @@ const id: TranslationKeys = {
   'topbar.open': 'Buka',
   'topbar.save': 'Simpan',
   'topbar.importFigma': 'Impor Figma',
+  'topbar.codePanel': 'Kode',
   'topbar.lightMode': 'Mode terang',
   'topbar.darkMode': 'Mode gelap',
   'topbar.fullscreen': 'Layar penuh',
@@ -53,6 +54,11 @@ const id: TranslationKeys = {
   'topbar.setupAgentsMcp': 'Pengaturan Agent & MCP',
   'topbar.connected': 'terhubung',
   'topbar.agentStatus': '{{agents}} agent{{agentSuffix}} · {{mcp}} MCP',
+
+  // ── Right Panel ──
+  'rightPanel.design': 'Desain',
+  'rightPanel.code': 'Kode',
+  'rightPanel.noSelection': 'Pilih sebuah elemen',
 
   // ── Pages ──
   'pages.title': 'Halaman',
@@ -105,6 +111,9 @@ const id: TranslationKeys = {
   'layerMenu.createComponent': 'Buat Komponen',
   'layerMenu.detachComponent': 'Lepaskan Komponen',
   'layerMenu.detachInstance': 'Lepaskan Instance',
+  'layerMenu.booleanUnion': 'Gabungan',
+  'layerMenu.booleanSubtract': 'Kurangi',
+  'layerMenu.booleanIntersect': 'Irisan',
   'layerMenu.toggleLock': 'Alihkan Kunci',
   'layerMenu.toggleVisibility': 'Alihkan Visibilitas',
 
@@ -264,11 +273,18 @@ const id: TranslationKeys = {
   'code.htmlCss': 'HTML + CSS',
   'code.cssVariables': 'CSS Variables',
   'code.copyClipboard': 'Salin ke papan klip',
+  'code.copied': 'Tersalin!',
+  'code.download': 'Unduh file kode',
   'code.closeCodePanel': 'Tutup panel kode',
   'code.genCssVars': 'Membuat CSS variables untuk seluruh dokumen',
   'code.genSelected':
     'Membuat kode untuk {{count}} elemen yang dipilih',
   'code.genDocument': 'Membuat kode untuk seluruh dokumen',
+  'code.aiEnhance': 'Tingkatkan dengan AI',
+  'code.cancelEnhance': 'Batalkan peningkatan',
+  'code.resetEnhance': 'Kembalikan ke asli',
+  'code.enhancing': 'AI sedang meningkatkan kode...',
+  'code.enhanced': 'Ditingkatkan oleh AI',
 
   // ── Save Dialog ──
   'save.saveAs': 'Simpan Sebagai',
@@ -303,6 +319,7 @@ const id: TranslationKeys = {
   'agents.mcpServerRunning': 'Berjalan',
   'agents.mcpServerStopped': 'Berhenti',
   'agents.mcpLanAccess': 'Akses LAN',
+  'agents.mcpClientConfig': 'Konfigurasi klien',
   'agents.stdio': 'stdio',
   'agents.http': 'http',
   'agents.stdioHttp': 'stdio + http',

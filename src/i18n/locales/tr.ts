@@ -44,6 +44,7 @@ const tr: TranslationKeys = {
   'topbar.open': 'Aç',
   'topbar.save': 'Kaydet',
   'topbar.importFigma': 'Figma İçe Aktar',
+  'topbar.codePanel': 'Kod',
   'topbar.lightMode': 'Açık mod',
   'topbar.darkMode': 'Koyu mod',
   'topbar.fullscreen': 'Tam ekran',
@@ -53,6 +54,11 @@ const tr: TranslationKeys = {
   'topbar.setupAgentsMcp': 'Ajanları ve MCP Kur',
   'topbar.connected': 'bağlı',
   'topbar.agentStatus': '{{agents}} ajan{{agentSuffix}} · {{mcp}} MCP',
+
+  // ── Right Panel ──
+  'rightPanel.design': 'Tasarım',
+  'rightPanel.code': 'Kod',
+  'rightPanel.noSelection': 'Bir öğe seçin',
 
   // ── Pages ──
   'pages.title': 'Sayfalar',
@@ -105,6 +111,9 @@ const tr: TranslationKeys = {
   'layerMenu.createComponent': 'Bileşen Oluştur',
   'layerMenu.detachComponent': 'Bileşeni Ayır',
   'layerMenu.detachInstance': 'Örneği Ayır',
+  'layerMenu.booleanUnion': 'Birleştir',
+  'layerMenu.booleanSubtract': 'Çıkar',
+  'layerMenu.booleanIntersect': 'Kesiştir',
   'layerMenu.toggleLock': 'Kilidi Aç/Kapat',
   'layerMenu.toggleVisibility': 'Görünürlüğü Aç/Kapat',
 
@@ -264,11 +273,18 @@ const tr: TranslationKeys = {
   'code.htmlCss': 'HTML + CSS',
   'code.cssVariables': 'CSS Variables',
   'code.copyClipboard': 'Panoya kopyala',
+  'code.copied': 'Kopyalandı!',
+  'code.download': 'Kod dosyasını indir',
   'code.closeCodePanel': 'Kod panelini kapat',
   'code.genCssVars': 'Tüm belge için CSS değişkenleri oluşturuluyor',
   'code.genSelected':
     '{{count}} seçili öge için kod oluşturuluyor',
   'code.genDocument': 'Tüm belge için kod oluşturuluyor',
+  'code.aiEnhance': 'AI ile geliştir',
+  'code.cancelEnhance': 'Geliştirmeyi iptal et',
+  'code.resetEnhance': 'Orijinale sıfırla',
+  'code.enhancing': 'AI kodu geliştiriyor...',
+  'code.enhanced': 'AI tarafından geliştirildi',
 
   // ── Save Dialog ──
   'save.saveAs': 'Farklı Kaydet',
@@ -303,6 +319,7 @@ const tr: TranslationKeys = {
   'agents.mcpServerRunning': 'Çalışıyor',
   'agents.mcpServerStopped': 'Durduruldu',
   'agents.mcpLanAccess': 'LAN Erişimi',
+  'agents.mcpClientConfig': 'İstemci yapılandırması',
   'agents.stdio': 'stdio',
   'agents.http': 'http',
   'agents.stdioHttp': 'stdio + http',

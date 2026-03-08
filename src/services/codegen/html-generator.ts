@@ -38,11 +38,13 @@ function fillToCSS(fills: PenFill[] | undefined): Record<string, string> {
     return { background: varOrLiteral(fill.color) }
   }
   if (fill.type === 'linear_gradient') {
+    if (!fill.stops?.length) return {}
     const angle = fill.angle ?? 180
     const stops = fill.stops.map((s) => `${varOrLiteral(s.color)} ${Math.round(s.offset * 100)}%`).join(', ')
     return { background: `linear-gradient(${angle}deg, ${stops})` }
   }
   if (fill.type === 'radial_gradient') {
+    if (!fill.stops?.length) return {}
     const stops = fill.stops.map((s) => `${varOrLiteral(s.color)} ${Math.round(s.offset * 100)}%`).join(', ')
     return { background: `radial-gradient(circle, ${stops})` }
   }
@@ -294,6 +296,18 @@ function generateNodeHTML(
         return `${pad}<svg class="${className}" viewBox="0 0 ${w} ${h}">\n${pad}  <path d="${node.d}" fill="${fillColor}" />\n${pad}</svg>`
       }
       return `${pad}<div class="${className}"></div>`
+    }
+
+    case 'image': {
+      if (typeof node.width === 'number') css.width = `${node.width}px`
+      if (typeof node.height === 'number') css.height = `${node.height}px`
+      const fit = node.objectFit === 'fit' ? 'contain' : node.objectFit === 'crop' ? 'cover' : 'fill'
+      css['object-fit'] = fit
+      Object.assign(css, cornerRadiusToCSS(node.cornerRadius))
+      Object.assign(css, effectsToCSS(node.effects))
+      const className = nextClassName(node.name?.replace(/\s+/g, '-').toLowerCase() ?? 'image')
+      rules.push({ className, properties: css })
+      return `${pad}<img class="${className}" src="${node.src}" alt="${escapeHTML(node.name ?? 'image')}" />`
     }
 
     case 'ref':

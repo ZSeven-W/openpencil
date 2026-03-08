@@ -8,7 +8,7 @@ import type { PenPage, PenNode } from '../../types/pen'
 // ---------------------------------------------------------------------------
 
 export interface AddPageParams {
-  filePath: string
+  filePath?: string
   name?: string
   children?: Record<string, any>[]
 }
@@ -62,7 +62,7 @@ export async function handleAddPage(
 // ---------------------------------------------------------------------------
 
 export interface RemovePageParams {
-  filePath: string
+  filePath?: string
   pageId: string
 }
 
@@ -91,7 +91,7 @@ export async function handleRemovePage(
 // ---------------------------------------------------------------------------
 
 export interface RenamePageParams {
-  filePath: string
+  filePath?: string
   pageId: string
   name: string
 }
@@ -118,7 +118,7 @@ export async function handleRenamePage(
 // ---------------------------------------------------------------------------
 
 export interface ReorderPageParams {
-  filePath: string
+  filePath?: string
   pageId: string
   index: number
 }
@@ -147,7 +147,7 @@ export async function handleReorderPage(
 // ---------------------------------------------------------------------------
 
 export interface DuplicatePageParams {
-  filePath: string
+  filePath?: string
   pageId: string
   name?: string
 }

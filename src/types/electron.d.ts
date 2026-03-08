@@ -26,7 +26,10 @@ interface ElectronAPI {
   ) => Promise<string | null>
   saveToPath: (filePath: string, content: string) => Promise<string>
   onMenuAction: (callback: (action: string) => void) => () => void
-  setTheme: (theme: 'dark' | 'light') => void
+  onOpenFile: (callback: (filePath: string) => void) => () => void
+  readFile: (filePath: string) => Promise<{ filePath: string; content: string } | null>
+  getPendingFile: () => Promise<string | null>
+  setTheme: (theme: 'dark' | 'light', colors?: { bg: string; fg: string }) => void
   updater: {
     getState: () => Promise<UpdaterState>
     checkForUpdates: () => Promise<UpdaterState>

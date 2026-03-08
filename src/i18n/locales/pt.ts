@@ -44,6 +44,7 @@ const pt: TranslationKeys = {
   'topbar.open': 'Abrir',
   'topbar.save': 'Salvar',
   'topbar.importFigma': 'Importar Figma',
+  'topbar.codePanel': 'Código',
   'topbar.lightMode': 'Modo claro',
   'topbar.darkMode': 'Modo escuro',
   'topbar.fullscreen': 'Tela cheia',
@@ -53,6 +54,11 @@ const pt: TranslationKeys = {
   'topbar.setupAgentsMcp': 'Configurar Agentes & MCP',
   'topbar.connected': 'conectado',
   'topbar.agentStatus': '{{agents}} agente{{agentSuffix}} · {{mcp}} MCP',
+
+  // ── Right Panel ──
+  'rightPanel.design': 'Design',
+  'rightPanel.code': 'Código',
+  'rightPanel.noSelection': 'Selecione um elemento',
 
   // ── Pages ──
   'pages.title': 'Páginas',
@@ -107,6 +113,9 @@ const pt: TranslationKeys = {
   'layerMenu.createComponent': 'Criar componente',
   'layerMenu.detachComponent': 'Desanexar componente',
   'layerMenu.detachInstance': 'Desanexar instância',
+  'layerMenu.booleanUnion': 'União',
+  'layerMenu.booleanSubtract': 'Subtrair',
+  'layerMenu.booleanIntersect': 'Interseção',
   'layerMenu.toggleLock': 'Alternar bloqueio',
   'layerMenu.toggleVisibility': 'Alternar visibilidade',
 
@@ -266,11 +275,18 @@ const pt: TranslationKeys = {
   'code.htmlCss': 'HTML + CSS',
   'code.cssVariables': 'CSS Variables',
   'code.copyClipboard': 'Copiar para a área de transferência',
+  'code.copied': 'Copiado!',
+  'code.download': 'Baixar arquivo de código',
   'code.closeCodePanel': 'Fechar painel de código',
   'code.genCssVars': 'Gerando variáveis CSS para o documento inteiro',
   'code.genSelected':
     'Gerando código para {{count}} elemento(s) selecionado(s)',
   'code.genDocument': 'Gerando código para o documento inteiro',
+  'code.aiEnhance': 'Melhorar com IA',
+  'code.cancelEnhance': 'Cancelar melhoria',
+  'code.resetEnhance': 'Restaurar original',
+  'code.enhancing': 'A IA está melhorando o código...',
+  'code.enhanced': 'Melhorado por IA',
 
   // ── Save Dialog ──
   'save.saveAs': 'Salvar como',
@@ -305,6 +321,7 @@ const pt: TranslationKeys = {
   'agents.mcpServerRunning': 'Em execução',
   'agents.mcpServerStopped': 'Parado',
   'agents.mcpLanAccess': 'Acesso LAN',
+  'agents.mcpClientConfig': 'Config. do cliente',
   'agents.stdio': 'stdio',
   'agents.http': 'http',
   'agents.stdioHttp': 'stdio + http',

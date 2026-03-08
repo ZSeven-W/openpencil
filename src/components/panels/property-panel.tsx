@@ -24,7 +24,7 @@ const INSTANCE_DIRECT_PROPS = new Set([
   'x', 'y', 'width', 'height', 'name', 'visible', 'locked', 'rotation', 'opacity', 'flipX', 'flipY', 'enabled', 'theme',
 ])
 
-export default function PropertyPanel() {
+export default function PropertyPanel({ embedded }: { embedded?: boolean } = {}) {
   const { t } = useTranslation()
   const activeId = useCanvasStore((s) => s.selection.activeId)
   const setSelection = useCanvasStore((s) => s.setSelection)
@@ -158,10 +158,10 @@ export default function PropertyPanel() {
     }
   }
 
-  return (
-    <div className="w-64 bg-card border-l border-border flex flex-col shrink-0">
+  const content = (
+    <>
       {/* Header */}
-      <div className="h-8 flex items-center px-2 border-b border-border gap-1">
+      <div className="h-8 flex items-center px-2 border-b border-border gap-1 shrink-0">
         {(nodeIsReusable || nodeIsInstance) && (
           <Diamond size={12} className={`shrink-0 ${nodeIsReusable ? 'text-purple-400' : 'text-[#9281f7]'}`} />
         )}
@@ -364,6 +364,14 @@ export default function PropertyPanel() {
           <ExportSection nodeId={node.id} nodeName={node.name ?? node.type} />
         </div>
       </div>
+    </>
+  )
+
+  if (embedded) return content
+
+  return (
+    <div className="w-64 bg-card border-l border-border flex flex-col shrink-0">
+      {content}
     </div>
   )
 }
