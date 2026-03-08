@@ -7,8 +7,14 @@ import {
   estimateTextHeight,
   estimateLineWidth,
   getTextOpticalCenterYOffset,
-  defaultLineHeight,
+  resolveTextContent,
+  countExplicitTextLines,
 } from './canvas-text-measure'
+
+// Fabric.js internal constant: single-line text height = fontSize * _fontSizeMult.
+// The lineHeight property only adds spacing BETWEEN lines in multi-line text;
+// for single-line text, Fabric always renders height as fontSize * 1.13.
+const FABRIC_FONT_SIZE_MULT = 1.13
 
 // ---------------------------------------------------------------------------
 // Padding
@@ -82,6 +88,34 @@ export function getRootFillWidthFallback(): number {
 }
 
 // ---------------------------------------------------------------------------
+// Layout inference — shared logic for detecting implicit layout
+// ---------------------------------------------------------------------------
+
+/**
+ * Infer layout direction for a frame that has no explicit `layout` property.
+ * Pencil treats frames as horizontal layout (CSS flexbox default = row) when:
+ * - gap, justifyContent, or alignItems are set, OR
+ * - padding is set (CSS flexbox respects padding for child positioning), OR
+ * - any child uses `fill_container` sizing (only meaningful in a layout context)
+ */
+export function inferLayout(node: PenNode): 'horizontal' | undefined {
+  if (node.type !== 'frame') return undefined
+  const c = node as PenNode & ContainerProps
+  if (c.gap != null || c.justifyContent || c.alignItems) return 'horizontal'
+  // Padding implies layout context: in Pencil (CSS flexbox), padding offsets
+  // child content. Without layout inference, children sit at (0,0) ignoring padding.
+  if (c.padding != null) return 'horizontal'
+  // Check if any child uses fill_container, implying layout context
+  if ('children' in node && node.children?.length) {
+    for (const child of node.children) {
+      if ('width' in child && child.width === 'fill_container') return 'horizontal'
+      if ('height' in child && (child as any).height === 'fill_container') return 'horizontal'
+    }
+  }
+  return undefined
+}
+
+// ---------------------------------------------------------------------------
 // Fit-content size computation
 // ---------------------------------------------------------------------------
 
@@ -90,7 +124,8 @@ export function fitContentWidth(node: PenNode, parentAvail?: number): number {
   if (!('children' in node) || !node.children?.length) return 0
   const visibleChildren = node.children.filter((child) => isNodeVisible(child))
   if (visibleChildren.length === 0) return 0
-  const layout = 'layout' in node ? (node as ContainerProps).layout : undefined
+  const c = node as PenNode & ContainerProps
+  const layout = c.layout || inferLayout(node)
   const pad = resolvePadding('padding' in node ? (node as any).padding : undefined)
   const gap = 'gap' in node && typeof (node as any).gap === 'number' ? (node as any).gap : 0
   if (layout === 'horizontal') {
@@ -113,7 +148,8 @@ export function fitContentHeight(node: PenNode, parentAvailW?: number): number {
   if (!('children' in node) || !node.children?.length) return 0
   const visibleChildren = node.children.filter((child) => isNodeVisible(child))
   if (visibleChildren.length === 0) return 0
-  const layout = 'layout' in node ? (node as ContainerProps).layout : undefined
+  const c = node as PenNode & ContainerProps
+  const layout = c.layout || inferLayout(node)
   const pad = resolvePadding('padding' in node ? (node as any).padding : undefined)
   const gap = 'gap' in node && typeof (node as any).gap === 'number' ? (node as any).gap : 0
   // Compute available width for children (used by text height estimation)
@@ -153,11 +189,12 @@ export function getNodeWidth(node: PenNode, parentAvail?: number): number {
       if (node.type === 'text') {
         const fontSize = node.fontSize ?? 16
         const letterSpacing = node.letterSpacing ?? 0
+        const fontWeight = node.fontWeight
         const content =
           typeof node.content === 'string'
             ? node.content
             : node.content.map((s2) => s2.text).join('')
-        return Math.max(Math.ceil(estimateTextWidth(content, fontSize, letterSpacing)), 20)
+        return Math.max(Math.ceil(estimateTextWidth(content, fontSize, letterSpacing, fontWeight)), 1)
       }
     }
     if (s === 'fit') {
@@ -173,15 +210,16 @@ export function getNodeWidth(node: PenNode, parentAvail?: number): number {
   if (node.type === 'text') {
     const fontSize = node.fontSize ?? 16
     const letterSpacing = node.letterSpacing ?? 0
+    const fontWeight = node.fontWeight
     const content =
       typeof node.content === 'string'
         ? node.content
         : node.content.map((s) => s.text).join('')
     // Use precise estimation (no safety factor) for fit-content / natural-width
-    // text. IText auto-computes its own width and ignores ours, so the safety
-    // margin only inflates the layout allocation, making the text appear
-    // left-shifted within its overwide box.
-    return Math.max(Math.ceil(estimateTextWidthPrecise(content, fontSize, letterSpacing)), 20)
+    // text.  Fabric IText auto-computes its own width, so overestimating only
+    // inflates the layout allocation and creates visible gaps.  The space_between
+    // overflow issue is handled by correct layout inference in inferLayout().
+    return Math.max(Math.ceil(estimateTextWidthPrecise(content, fontSize, letterSpacing, fontWeight)), 1)
   }
   return 0
 }
@@ -220,13 +258,18 @@ export function computeLayoutPositions(
   const visibleChildren = children.filter((child) => isNodeVisible(child))
   if (visibleChildren.length === 0) return []
   const c = parent as PenNode & ContainerProps
-  const layout = c.layout
+  // Infer layout when gap/justifyContent/alignItems are set but layout is not.
+  // Pencil treats these frames as horizontal layout (CSS flexbox default = row).
+  const layout = c.layout || inferLayout(parent)
   if (!layout || layout === 'none') return visibleChildren
 
   const pW = parseSizing(c.width)
   const pH = parseSizing(c.height)
-  const parentW = typeof pW === 'number' ? pW : 100
-  const parentH = typeof pH === 'number' ? pH : 100
+  // When parent has no explicit dimensions (fit_content), resolve actual size
+  // from children. parseSizing(undefined) returns 0 which would make available
+  // space negative after subtracting padding, breaking all child positioning.
+  const parentW = (typeof pW === 'number' && pW > 0) ? pW : (getNodeWidth(parent) || 100)
+  const parentH = (typeof pH === 'number' && pH > 0) ? pH : (getNodeHeight(parent) || 100)
   const pad = resolvePadding(c.padding)
   const gap = typeof c.gap === 'number' ? c.gap : 0
   const justify = normalizeJustifyContent(c.justifyContent)
@@ -256,7 +299,17 @@ export function computeLayoutPositions(
   const fillSize = fillCount > 0 ? remainingMain / fillCount : 0
 
   const sizes = visibleChildren.map((ch, i) => {
-    const mainSize = mainSizing[i] === 'fill' ? fillSize : (mainSizing[i] as number)
+    let mainSize = mainSizing[i] === 'fill' ? fillSize : (mainSizing[i] as number)
+    // For single-line text in vertical layouts, use Fabric's actual rendered
+    // height (fontSize * 1.13) instead of fontSize * lineHeight.  This ensures
+    // justify:center/end position the text correctly on the main axis.
+    if (isVertical && ch.type === 'text' && mainSizing[i] !== 'fill') {
+      const content = resolveTextContent(ch)
+      if (countExplicitTextLines(content) <= 1) {
+        const fontSize = (ch as any).fontSize ?? 16
+        mainSize = fontSize * FABRIC_FONT_SIZE_MULT
+      }
+    }
     return {
       w: isVertical ? getNodeWidth(ch, availW) : mainSize,
       h: isVertical ? mainSize : getNodeHeight(ch, availH, availW),
@@ -305,16 +358,18 @@ export function computeLayoutPositions(
     const childCross = isVertical ? size.w : size.h
     let crossPos = 0
 
-    // For text nodes in horizontal layout with center alignment, use the actual
-    // Fabric-rendered height (fontSize * lineHeight) instead of the declared
-    // height, since Fabric text is shorter than AI-declared height.
+    // For single-line text centered in horizontal layouts, use the actual
+    // Fabric-rendered height (fontSize * 1.13) instead of fontSize * lineHeight.
+    // Fabric.js strips lineHeight from the last (only) line, so single-line text
+    // height is always fontSize * _fontSizeMult regardless of lineHeight.
+    // Using fontSize * lineHeight overestimates the height, shifting text upward.
     let effectiveChildCross = childCross
-    if (align === 'center' && child.type === 'text') {
+    if (align === 'center' && !isVertical && child.type === 'text') {
       const fontSize = child.fontSize ?? 16
-      const lineHeight = ('lineHeight' in child ? child.lineHeight : undefined) ?? defaultLineHeight(fontSize)
-      const visualH = fontSize * lineHeight
-      if (!isVertical && visualH < childCross) {
-        effectiveChildCross = visualH
+      const content = resolveTextContent(child)
+      const isSingleLine = countExplicitTextLines(content) <= 1
+      if (isSingleLine) {
+        effectiveChildCross = fontSize * FABRIC_FONT_SIZE_MULT
       }
     }
 
@@ -369,20 +424,6 @@ export function computeLayoutPositions(
       if (!hasExplicitAlign) {
         out.width = availW
         out.x = Math.round(pad.left)
-        out.textAlign = 'center'
-      }
-    }
-
-    // For fit-content text nodes in horizontal layouts, set textAlign:'center'
-    // to compensate for width estimation inaccuracy. The estimated box is
-    // typically slightly wider than the actual rendered text, so left-aligned
-    // text appears visually shifted left. Centering the text within its box
-    // distributes the error evenly on both sides.
-    if (!isVertical && child.type === 'text') {
-      const hasExplicitAlign = 'textAlign' in child && child.textAlign && child.textAlign !== 'left'
-      const widthMode = 'width' in child ? parseSizing(child.width) : 0
-      const isFitContent = widthMode === 'fit' || widthMode === 0
-      if (!hasExplicitAlign && isFitContent) {
         out.textAlign = 'center'
       }
     }

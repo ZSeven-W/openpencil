@@ -121,11 +121,12 @@ export function resolveNumericRef(
 // ---------------------------------------------------------------------------
 
 function resolveFillsForCanvas(
-  fills: PenFill[] | undefined,
+  fills: PenFill[] | string | undefined,
   vars: Vars,
   theme?: Theme,
-): PenFill[] | undefined {
+): PenFill[] | string | undefined {
   if (!fills) return fills
+  if (typeof fills === 'string') return fills
   return fills.map((fill) => {
     if (fill.type === 'solid') {
       const color = resolveColorRef(fill.color, vars, theme)
@@ -242,7 +243,7 @@ export function resolveNodeForCanvas(
 
   // Fill
   if ('fill' in node && (node as unknown as Record<string, unknown>).fill) {
-    const fills = (node as unknown as Record<string, unknown>).fill as PenFill[]
+    const fills = (node as unknown as Record<string, unknown>).fill as PenFill[] | string
     const resolved = resolveFillsForCanvas(fills, variables, activeTheme)
     if (resolved !== fills) {
       out.fill = resolved

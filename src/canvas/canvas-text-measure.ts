@@ -25,7 +25,10 @@ export function parseSizing(value: unknown): number | 'fit' | 'fill' {
  * MUST use this function instead of hardcoded fallbacks.
  */
 export function defaultLineHeight(fontSize: number): number {
-  return fontSize >= 28 ? 1.2 : 1.5
+  if (fontSize >= 40) return 1.0   // Display text: tight leading (matches Pencil 0.9-1.0)
+  if (fontSize >= 28) return 1.15  // Heading text: moderate (matches Pencil 1.0-1.2)
+  if (fontSize >= 20) return 1.2   // Subheading
+  return 1.5                       // Body text: comfortable reading
 }
 
 // ---------------------------------------------------------------------------
@@ -53,28 +56,43 @@ export function hasCjkText(text: string): boolean {
 // Glyph / line width estimation
 // ---------------------------------------------------------------------------
 
-export function estimateGlyphWidth(ch: string, fontSize: number): number {
+/**
+ * Font weight multiplier — bold/semibold text is wider than regular text.
+ * Values based on typical proportional font width scaling.
+ */
+function fontWeightFactor(fontWeight?: string | number): number {
+  const w = typeof fontWeight === 'string' ? parseInt(fontWeight, 10) : (fontWeight ?? 400)
+  if (isNaN(w) || w <= 400) return 1.0
+  if (w <= 500) return 1.03
+  if (w <= 600) return 1.06
+  if (w <= 700) return 1.09
+  return 1.12
+}
+
+export function estimateGlyphWidth(ch: string, fontSize: number, fontWeight?: string | number): number {
   if (ch === '\n' || ch === '\r') return 0
   if (ch === '\t') return fontSize * 1.2
   if (ch === ' ') return fontSize * 0.33
 
+  const wf = fontWeightFactor(fontWeight)
   const code = ch.codePointAt(0) ?? 0
-  if (isCjkCodePoint(code)) return fontSize * 1.12
-  if (/[A-Z]/.test(ch)) return fontSize * 0.62
-  if (/[a-z]/.test(ch)) return fontSize * 0.56
-  if (/[0-9]/.test(ch)) return fontSize * 0.56
-  return fontSize * 0.58
+  if (isCjkCodePoint(code)) return fontSize * 1.12 * wf
+  if (/[A-Z]/.test(ch)) return fontSize * 0.62 * wf
+  if (/[a-z]/.test(ch)) return fontSize * 0.56 * wf
+  if (/[0-9]/.test(ch)) return fontSize * 0.56 * wf
+  return fontSize * 0.58 * wf
 }
 
 export function estimateLineWidth(
   text: string,
   fontSize: number,
   letterSpacing = 0,
+  fontWeight?: string | number,
 ): number {
   let width = 0
   let visibleChars = 0
   for (const ch of text) {
-    width += estimateGlyphWidth(ch, fontSize)
+    width += estimateGlyphWidth(ch, fontSize, fontWeight)
     if (ch !== '\n' && ch !== '\r') visibleChars += 1
   }
   if (visibleChars > 1 && letterSpacing !== 0) {
@@ -89,10 +107,10 @@ function widthSafetyFactor(text: string): number {
   return hasCjkText(text) ? 1.06 : 1.14
 }
 
-export function estimateTextWidth(text: string, fontSize: number, letterSpacing = 0): number {
+export function estimateTextWidth(text: string, fontSize: number, letterSpacing = 0, fontWeight?: string | number): number {
   const lines = text.split(/\r?\n/)
   const maxLine = lines.reduce((max, line) => {
-    const lineWidth = estimateLineWidth(line, fontSize, letterSpacing)
+    const lineWidth = estimateLineWidth(line, fontSize, letterSpacing, fontWeight)
     const safeLineWidth = lineWidth * widthSafetyFactor(line)
     return Math.max(max, safeLineWidth)
   }, 0)
@@ -105,10 +123,10 @@ export function estimateTextWidth(text: string, fontSize: number, letterSpacing 
  * off-center (the overestimated width shifts the text box left when centered).
  * For wrapping/sizing decisions, use estimateTextWidth() which includes the safety factor.
  */
-export function estimateTextWidthPrecise(text: string, fontSize: number, letterSpacing = 0): number {
+export function estimateTextWidthPrecise(text: string, fontSize: number, letterSpacing = 0, fontWeight?: string | number): number {
   const lines = text.split(/\r?\n/)
   return lines.reduce((max, line) => {
-    return Math.max(max, estimateLineWidth(line, fontSize, letterSpacing))
+    return Math.max(max, estimateLineWidth(line, fontSize, letterSpacing, fontWeight))
   }, 0)
 }
 
@@ -134,9 +152,9 @@ export function countExplicitTextLines(text: string): number {
 
 /**
  * Optical vertical correction for centered single-line text.
- * Font line boxes are mathematically centered but glyph ink tends to look
- * slightly top-heavy, especially for CJK, so we nudge down proportionally.
- * The offset scales with fontSize (no fixed cap) so large text stays centered.
+ * Within the Fabric text bounding box (fontSize * 1.13), glyph ink sits
+ * slightly above the mathematical center due to ascent/descent asymmetry.
+ * We nudge down proportionally to compensate.
  */
 export function getTextOpticalCenterYOffset(node: PenNode): number {
   if (node.type !== 'text') return 0
@@ -145,16 +163,12 @@ export function getTextOpticalCenterYOffset(node: PenNode): number {
   if (countExplicitTextLines(text) > 1) return 0
 
   const fontSize = node.fontSize ?? 16
-  const lineHeight = node.lineHeight ?? defaultLineHeight(fontSize)
   const hasCjk = hasCjkText(text)
 
-  // Base ratio: CJK glyphs sit higher in the em box than Latin
-  const ratio = hasCjk ? 0.12 : 0.07
-  // When lineHeight is compact (≤1.35), the visual offset is more pronounced
-  const compactLineBoost = lineHeight <= 1.35 ? 1 : 0.65
-  const offset = fontSize * ratio * compactLineBoost
-  // Proportional cap: never exceed 8% of fontSize, minimum 1px
-  return Math.max(1, Math.min(Math.round(fontSize * 0.08), Math.round(offset)))
+  // CJK glyphs sit higher in the em box than Latin glyphs
+  const ratio = hasCjk ? 0.06 : 0.03
+  const offset = fontSize * ratio
+  return Math.max(0, Math.min(Math.round(fontSize * 0.05), Math.round(offset)))
 }
 
 // ---------------------------------------------------------------------------
@@ -186,15 +200,19 @@ export function estimateTextHeight(node: PenNode, availableWidth?: number): numb
     else if (w === 'fill' && availableWidth && availableWidth > 0) textWidth = availableWidth
   }
 
-  // If no width constraint is known, return single-line height
-  if (textWidth <= 0) return singleLineH
+  // If no width constraint is known, still count explicit newlines
+  if (textWidth <= 0) {
+    const explicitLines = content.split(/\r?\n/).length
+    return Math.round(Math.max(1, explicitLines) * singleLineH)
+  }
 
   // Estimate wrapped lines per paragraph line, then sum.
   // This preserves explicit newlines and avoids under-estimating CJK widths.
   const letterSpacing = (typeof n.letterSpacing === 'number' ? n.letterSpacing : 0)
+  const fontWeight = n.fontWeight as string | number | undefined
   const rawLines = content.split(/\r?\n/)
   const wrappedLineCount = rawLines.reduce((sum, line) => {
-    const lineWidth = estimateLineWidth(line, fontSize, letterSpacing) * widthSafetyFactor(line)
+    const lineWidth = estimateLineWidth(line, fontSize, letterSpacing, fontWeight) * widthSafetyFactor(line)
     return sum + Math.max(1, Math.ceil(lineWidth / textWidth))
   }, 0)
 
