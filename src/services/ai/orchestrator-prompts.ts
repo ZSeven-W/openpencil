@@ -20,6 +20,9 @@ Classify by the design's PURPOSE — reason about intent, do not keyword-match:
    → Desktop: width=1200, height=0, 2-5 subtasks
    → Structure: sidebar or topbar + content panels
 
+CRITICAL — "MOBILE" MEANS MOBILE-SIZED SCREEN, NOT A PHONE MOCKUP:
+When the user says "mobile"/"移动端"/"手机" + a screen type (login, profile, settings, etc.), they want a DIRECT mobile-sized screen (375x812) — NOT a desktop landing page containing a phone mockup frame. A "mobile login page" = type 2 (375x812 login screen). Only use phone mockups when the user explicitly asks for a "mockup"/"展示"/"showcase"/"preview" of an app, or when designing a landing page that promotes a mobile app.
+
 FORMAT:
 {"rootFrame":{"id":"page","name":"Page","width":1200,"height":0,"layout":"vertical","fill":[{"type":"solid","color":"#F8FAFC"}]},"styleGuide":{"palette":{"background":"#F8FAFC","surface":"#FFFFFF","text":"#0F172A","secondary":"#64748B","accent":"#2563EB","accent2":"#0EA5E9","border":"#E2E8F0"},"fonts":{"heading":"Space Grotesk","body":"Inter"},"aesthetic":"clean modern with blue accents"},"subtasks":[{"id":"nav","label":"Navigation Bar","elements":"logo, nav links (Home, Features, Pricing, Blog), sign-in button, get-started CTA button","region":{"width":1200,"height":72}},{"id":"hero","label":"Hero Section","elements":"headline, subtitle, CTA button, hero illustration or phone mockup","region":{"width":1200,"height":560}},{"id":"features","label":"Feature Cards","elements":"section title, 3 feature cards each with icon + title + description","region":{"width":1200,"height":480}}]}
 
@@ -111,7 +114,7 @@ DESIGN RULES:
   - search bars: leading SearchIcon
   - password fields: trailing EyeIcon or EyeOffIcon (use justifyContent="space_between")
   - email/account fields: leading MailIcon or UserIcon
-- Phone mockup: ONE frame, width 260-300, height 520-580, cornerRadius 32, solid fill + 1px stroke. No ellipse for mockups. At most ONE centered text child inside.
+- Phone mockup: ONE frame, width 260-300, height 520-580, cornerRadius 32, solid fill + 1px stroke. No ellipse for mockups. At most ONE centered text child inside. ONLY use phone mockups when the user explicitly asks for a showcase/preview/mockup of an app. When the user says "mobile screen" / "移动端页面", generate the actual mobile UI directly (375x812), NOT a desktop page with a phone mockup inside.
 - Never ellipse for decorative shapes — use frame/rectangle with cornerRadius.
 - Use style guide colors/fonts consistently. No random colors.
 - Buttons: height 44-52px, padding [12,24] min. Icon+text: layout="horizontal", gap=8, alignItems="center".
