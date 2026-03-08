@@ -37,6 +37,7 @@ export type PenNodeType =
   | 'path'
   | 'text'
   | 'image'
+  | 'icon_font'
   | 'ref'
 
 export type SizingBehavior = number | 'fit_content' | 'fill_container' | string
@@ -176,6 +177,16 @@ export interface ImageNode extends PenNodeBase {
   effects?: PenEffect[]
 }
 
+export interface IconFontNode extends PenNodeBase {
+  type: 'icon_font'
+  iconFontName: string
+  iconFontFamily?: string
+  width?: SizingBehavior
+  height?: SizingBehavior
+  fill?: PenFill[]
+  stroke?: PenStroke
+}
+
 export interface RefNode extends PenNodeBase {
   type: 'ref'
   ref: string
@@ -195,4 +206,5 @@ export type PenNode =
   | PathNode
   | TextNode
   | ImageNode
+  | IconFontNode
   | RefNode

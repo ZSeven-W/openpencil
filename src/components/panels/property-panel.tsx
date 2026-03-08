@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { useCanvasStore } from '@/stores/canvas-store'
 import { useDocumentStore, getActivePageChildren } from '@/stores/document-store'
 import { Separator } from '@/components/ui/separator'
-import type { PenNode, ContainerProps, RefNode, PathNode, ImageNode } from '@/types/pen'
+import type { PenNode, ContainerProps, RefNode, PathNode, ImageNode, IconFontNode } from '@/types/pen'
 import { Component, Diamond, ArrowUpRight, Unlink } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import type { FabricObjectWithPenId } from '@/canvas/canvas-object-factory'
@@ -127,7 +127,8 @@ export default function PropertyPanel({ embedded }: { embedded?: boolean } = {})
     displayNode.type === 'rectangle' || displayNode.type === 'frame' || isImage
   const hasEffects = true
   const isText = displayNode.type === 'text'
-  const isIcon = displayNode.type === 'path' && !!(displayNode as PathNode).iconId
+  const isIcon = (displayNode.type === 'path' && !!(displayNode as PathNode).iconId)
+    || displayNode.type === 'icon_font'
 
   const [isEditingName, setIsEditingName] = useState(false)
   const [editName, setEditName] = useState('')
@@ -290,7 +291,7 @@ export default function PropertyPanel({ embedded }: { embedded?: boolean } = {})
             <Separator />
             <div className="px-3 py-2">
               <IconSection
-                node={displayNode as PathNode}
+                node={displayNode as PathNode | IconFontNode}
                 onUpdate={(updates) => handleUpdate(updates as Partial<PenNode>)}
               />
             </div>

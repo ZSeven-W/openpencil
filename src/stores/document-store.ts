@@ -23,6 +23,7 @@ import {
   setActivePageChildren,
   getAllChildren,
   migrateToPages,
+  ensureDocumentNodeIds,
   DEFAULT_PAGE_ID,
 } from './document-tree-utils'
 import { createPageActions } from './document-store-pages'
@@ -686,7 +687,7 @@ export const useDocumentStore = create<DocumentStoreState>(
     applyExternalDocument: (doc) => {
       // Push current state to history so MCP changes are undoable
       useHistoryStore.getState().pushState(get().document)
-      const migrated = migrateToPages(doc)
+      const migrated = ensureDocumentNodeIds(migrateToPages(doc))
       // Preserve activePageId if page still exists
       const activePageId = useCanvasStore.getState().activePageId
       const pageExists = migrated.pages?.some((p) => p.id === activePageId)
@@ -709,7 +710,7 @@ export const useDocumentStore = create<DocumentStoreState>(
 
     loadDocument: (doc, fileName, fileHandle) => {
       useHistoryStore.getState().clear()
-      const migrated = migrateToPages(doc)
+      const migrated = ensureDocumentNodeIds(migrateToPages(doc))
       set({
         document: migrated,
         fileName: fileName ?? null,
@@ -750,3 +751,9 @@ export {
   migrateToPages,
 } from './document-tree-utils'
 export { nanoid as generateId } from 'nanoid'
+
+// Expose stores on window in dev mode for testing/debugging
+if (import.meta.env.DEV && typeof window !== 'undefined') {
+  ;(window as unknown as Record<string, unknown>).__documentStore = useDocumentStore
+  ;(window as unknown as Record<string, unknown>).__canvasStore = useCanvasStore
+}
