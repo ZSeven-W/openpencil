@@ -17,14 +17,14 @@
   <a href="https://github.com/ZSeven-W/openpencil/stargazers"><img src="https://img.shields.io/github/stars/ZSeven-W/openpencil?style=flat" alt="Stars" /></a>
   <a href="https://github.com/ZSeven-W/openpencil/blob/main/LICENSE"><img src="https://img.shields.io/github/license/ZSeven-W/openpencil" alt="License" /></a>
   <a href="https://github.com/ZSeven-W/openpencil/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/ZSeven-W/openpencil/ci.yml?branch=main&label=CI" alt="CI" /></a>
-  <a href="https://discord.gg/fE9STbMG"><img src="https://img.shields.io/discord/1476517942949580952?label=Discord&logo=discord&logoColor=white" alt="Discord" /></a>
+  <a href="https://discord.gg/KwXp6BJD"><img src="https://img.shields.io/discord/1476517942949580952?label=Discord&logo=discord&logoColor=white" alt="Discord" /></a>
 </p>
 
 <p align="center">
   <a href="#schnellstart">Schnellstart</a> ·
   <a href="#ki-natives-design">KI</a> ·
   <a href="#funktionen">Funktionen</a> ·
-  <a href="https://discord.gg/fE9STbMG">Discord</a> ·
+  <a href="https://discord.gg/KwXp6BJD">Discord</a> ·
   <a href="#mitwirken">Mitwirken</a>
 </p>
 
@@ -89,6 +89,7 @@ OpenPencil wurde von Grund auf mit KI im Kern aufgebaut — nicht als Plugin, so
 **Canvas und Zeichnen**
 - Unendliche Canvas mit Pan, Zoom, intelligenten Ausrichtungshilfslinien und Einrasten
 - Rechteck, Ellipse, Linie, Polygon, Stift (Bezier), Frame, Text
+- Boolesche Operationen — Vereinigung, Subtraktion, Schnittmenge mit kontextbezogener Werkzeugleiste
 - Icon-Auswahl (Iconify) und Bildimport (PNG/JPEG/SVG/WebP/GIF)
 - Auto-Layout — vertikal/horizontal mit Gap, Padding, Justify, Align
 - Mehrseitige Dokumente mit Tab-Navigation
@@ -156,6 +157,8 @@ electron/
 | `Del` | Löschen | | `Cmd+Shift+V` | Variablen-Panel |
 | `[ / ]` | Reihenfolge ändern | | `Cmd+J` | KI-Chat |
 | Pfeiltasten | 1px verschieben | | `Cmd+,` | Agenteneinstellungen |
+| `Cmd+Alt+U` | Boolesche Vereinigung | | `Cmd+Alt+S` | Boolesche Subtraktion |
+| `Cmd+Alt+I` | Boolesche Schnittmenge | | | |
 
 ## Skripte
 
@@ -186,7 +189,7 @@ Beiträge sind willkommen! Siehe [CLAUDE.md](./CLAUDE.md) für Architekturdetail
 - [x] MCP-Server-Integration
 - [x] Mehrseitige Unterstützung
 - [x] Figma-`.fig`-Import
-- [ ] Boolesche Operationen (Vereinigung, Subtraktion, Schnittmenge)
+- [x] Boolesche Operationen (Vereinigung, Subtraktion, Schnittmenge)
 - [ ] Kollaboratives Bearbeiten
 - [ ] Plugin-System
 
@@ -198,7 +201,7 @@ Beiträge sind willkommen! Siehe [CLAUDE.md](./CLAUDE.md) für Architekturdetail
 
 ## Community
 
-<a href="https://discord.gg/fE9STbMG">
+<a href="https://discord.gg/KwXp6BJD">
   <img src="./public/logo-discord.svg" alt="Discord" width="16" />
   <strong> Unserem Discord beitreten</strong>
 </a>

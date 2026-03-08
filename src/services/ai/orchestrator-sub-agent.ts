@@ -241,6 +241,11 @@ async function executeSubAgent(
     request.context?.themes,
   )
 
+  // Inject design principles into the system prompt (selective, not all at once)
+  const systemPrompt = preparedPrompt.designPrinciples
+    ? `${SUB_AGENT_PROMPT}\n\n${preparedPrompt.designPrinciples}`
+    : SUB_AGENT_PROMPT
+
   let rawResponse = ''
   const nodes: PenNode[] = []
   let streamOffset = 0
@@ -248,7 +253,7 @@ async function executeSubAgent(
 
   try {
     for await (const chunk of streamChat(
-      SUB_AGENT_PROMPT,
+      systemPrompt,
       [{ role: 'user', content: userPrompt }],
       request.model,
       timeoutOptions,
@@ -463,6 +468,11 @@ CRITICAL LAYOUT CONSTRAINTS:
   const varContext = buildVariableContext(variables, themes)
   if (varContext) {
     prompt += '\n\n' + varContext
+  }
+
+  // Inject HTML reference from visual reference pipeline (if available)
+  if (subtask.htmlReference) {
+    prompt += `\n\n${subtask.htmlReference}\nUse this HTML structure as guidance for layout and content placement. Match the visual hierarchy and component structure.`
   }
 
   return prompt

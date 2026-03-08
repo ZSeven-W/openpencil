@@ -50,6 +50,14 @@ linux:
     - AppImage
     - deb
 
+fileAssociations:
+  - ext: op
+    name: OpenPencil Document
+    description: OpenPencil Design File
+    mimeType: application/x-openpencil
+    role: Editor
+    icon: build/icon
+
 asar: true
 
 publish:

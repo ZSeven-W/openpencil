@@ -5,6 +5,7 @@ import {
   PROMPT_OPTIMIZER_LIMITS,
   SUB_AGENT_TIMEOUT_PROFILES,
 } from './ai-runtime-config'
+import { getAllPrinciples } from './design-principles'
 
 export interface PreparedDesignPrompt {
   original: string
@@ -12,6 +13,8 @@ export interface PreparedDesignPrompt {
   subAgentPrompt: string
   wasCompressed: boolean
   originalLength: number
+  /** Selectively loaded design principles for sub-agent context */
+  designPrinciples: string
 }
 
 export function getSubAgentTimeouts(promptLength: number): {
@@ -64,6 +67,7 @@ export function prepareDesignPrompt(prompt: string): PreparedDesignPrompt {
     subAgentPrompt: truncateByCharCount(normalized, PROMPT_OPTIMIZER_LIMITS.maxPromptCharsForSubAgent),
     wasCompressed: normalized.length > PROMPT_OPTIMIZER_LIMITS.maxPromptCharsForOrchestrator,
     originalLength: normalized.length,
+    designPrinciples: getAllPrinciples(),
   }
 }
 

@@ -3,9 +3,11 @@ import { useDocumentStore, DEFAULT_FRAME_ID } from '@/stores/document-store'
 import {
   parseSizing,
   estimateTextWidth,
+  estimateTextWidthPrecise,
   estimateTextHeight,
   estimateLineWidth,
   getTextOpticalCenterYOffset,
+  defaultLineHeight,
 } from './canvas-text-measure'
 
 // ---------------------------------------------------------------------------
@@ -175,7 +177,11 @@ export function getNodeWidth(node: PenNode, parentAvail?: number): number {
       typeof node.content === 'string'
         ? node.content
         : node.content.map((s) => s.text).join('')
-    return Math.max(Math.ceil(estimateTextWidth(content, fontSize, letterSpacing)), 20)
+    // Use precise estimation (no safety factor) for fit-content / natural-width
+    // text. IText auto-computes its own width and ignores ours, so the safety
+    // margin only inflates the layout allocation, making the text appear
+    // left-shifted within its overwide box.
+    return Math.max(Math.ceil(estimateTextWidthPrecise(content, fontSize, letterSpacing)), 20)
   }
   return 0
 }
@@ -299,19 +305,16 @@ export function computeLayoutPositions(
     const childCross = isVertical ? size.w : size.h
     let crossPos = 0
 
-    // For text nodes, use the actual Fabric-rendered height for cross-axis
-    // centering instead of the declared height. Fabric.js text height =
-    // fontSize * lineHeight, which is typically smaller than the AI-declared
-    // height, causing text to appear shifted upward when centered.
+    // For text nodes in horizontal layout with center alignment, use the actual
+    // Fabric-rendered height (fontSize * lineHeight) instead of the declared
+    // height, since Fabric text is shorter than AI-declared height.
     let effectiveChildCross = childCross
     if (align === 'center' && child.type === 'text') {
       const fontSize = child.fontSize ?? 16
-      const lineHeight = ('lineHeight' in child ? child.lineHeight : undefined) ?? 1.2
+      const lineHeight = ('lineHeight' in child ? child.lineHeight : undefined) ?? defaultLineHeight(fontSize)
       const visualH = fontSize * lineHeight
       if (!isVertical && visualH < childCross) {
         effectiveChildCross = visualH
-      } else if (isVertical && visualH < childCross) {
-        // vertical layout: cross axis is width, not applicable
       }
     }
 
@@ -340,8 +343,8 @@ export function computeLayoutPositions(
       crossPos = Math.max(0, Math.min(crossPos, crossAvail - clampCrossSize))
     }
 
-    const computedX = isVertical ? pad.left + crossPos : pad.left + mainPos
-    const computedY = isVertical ? pad.top + mainPos : pad.top + crossPos
+    const computedX = Math.round(isVertical ? pad.left + crossPos : pad.left + mainPos)
+    const computedY = Math.round(isVertical ? pad.top + mainPos : pad.top + crossPos)
 
     mainPos += (isVertical ? size.h : size.w) + effectiveGap
 
@@ -355,6 +358,35 @@ export function computeLayoutPositions(
       width: size.w,
       height: size.h,
     }
+
+    // For text nodes centered in a vertical layout, expand to full available
+    // width and set textAlign:'center'. This avoids width estimation inaccuracy:
+    // IText ignores our width and computes its own, so textAlign has no effect.
+    // By using full width (which triggers Textbox in the factory) + center align,
+    // the text is precisely centered regardless of glyph estimation error.
+    if (isVertical && align === 'center' && child.type === 'text') {
+      const hasExplicitAlign = 'textAlign' in child && child.textAlign && child.textAlign !== 'left'
+      if (!hasExplicitAlign) {
+        out.width = availW
+        out.x = Math.round(pad.left)
+        out.textAlign = 'center'
+      }
+    }
+
+    // For fit-content text nodes in horizontal layouts, set textAlign:'center'
+    // to compensate for width estimation inaccuracy. The estimated box is
+    // typically slightly wider than the actual rendered text, so left-aligned
+    // text appears visually shifted left. Centering the text within its box
+    // distributes the error evenly on both sides.
+    if (!isVertical && child.type === 'text') {
+      const hasExplicitAlign = 'textAlign' in child && child.textAlign && child.textAlign !== 'left'
+      const widthMode = 'width' in child ? parseSizing(child.width) : 0
+      const isFitContent = widthMode === 'fit' || widthMode === 0
+      if (!hasExplicitAlign && isFitContent) {
+        out.textAlign = 'center'
+      }
+    }
+
     return out as unknown as PenNode
   })
 }

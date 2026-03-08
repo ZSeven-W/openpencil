@@ -44,6 +44,7 @@ const ja: TranslationKeys = {
   'topbar.open': '開く',
   'topbar.save': '保存',
   'topbar.importFigma': 'Figma をインポート',
+  'topbar.codePanel': 'コード',
   'topbar.lightMode': 'ライトモード',
   'topbar.darkMode': 'ダークモード',
   'topbar.fullscreen': 'フルスクリーン',
@@ -53,6 +54,11 @@ const ja: TranslationKeys = {
   'topbar.setupAgentsMcp': 'Agents & MCP を設定',
   'topbar.connected': '接続済み',
   'topbar.agentStatus': '{{agents}} Agent{{agentSuffix}} · {{mcp}} MCP',
+
+  // ── Right Panel ──
+  'rightPanel.design': 'デザイン',
+  'rightPanel.code': 'コード',
+  'rightPanel.noSelection': '要素を選択してください',
 
   // ── Pages ──
   'pages.title': 'ページ',
@@ -109,6 +115,9 @@ const ja: TranslationKeys = {
   'layerMenu.createComponent': 'コンポーネントを作成',
   'layerMenu.detachComponent': 'コンポーネントを解除',
   'layerMenu.detachInstance': 'インスタンスを解除',
+  'layerMenu.booleanUnion': '合体',
+  'layerMenu.booleanSubtract': '前面で型抜き',
+  'layerMenu.booleanIntersect': '交差',
   'layerMenu.toggleLock': 'ロックの切り替え',
   'layerMenu.toggleVisibility': '表示の切り替え',
 
@@ -268,10 +277,17 @@ const ja: TranslationKeys = {
   'code.htmlCss': 'HTML + CSS',
   'code.cssVariables': 'CSS Variables',
   'code.copyClipboard': 'クリップボードにコピー',
+  'code.copied': 'コピーしました！',
+  'code.download': 'コードファイルをダウンロード',
   'code.closeCodePanel': 'コードパネルを閉じる',
   'code.genCssVars': 'ドキュメント全体の CSS 変数を生成中',
   'code.genSelected': '{{count}} 個の選択要素のコードを生成中',
   'code.genDocument': 'ドキュメント全体のコードを生成中',
+  'code.aiEnhance': 'AI で改善',
+  'code.cancelEnhance': '改善をキャンセル',
+  'code.resetEnhance': '元に戻す',
+  'code.enhancing': 'AI がコードを改善中...',
+  'code.enhanced': 'AI により改善済み',
 
   // ── Save Dialog ──
   'save.saveAs': '名前を付けて保存',
@@ -306,6 +322,7 @@ const ja: TranslationKeys = {
   'agents.mcpServerRunning': '実行中',
   'agents.mcpServerStopped': '停止中',
   'agents.mcpLanAccess': 'LAN アクセス',
+  'agents.mcpClientConfig': 'クライアント設定',
   'agents.stdio': 'stdio',
   'agents.http': 'http',
   'agents.stdioHttp': 'stdio + http',

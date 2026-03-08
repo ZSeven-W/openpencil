@@ -17,14 +17,14 @@
   <a href="https://github.com/ZSeven-W/openpencil/stargazers"><img src="https://img.shields.io/github/stars/ZSeven-W/openpencil?style=flat" alt="Stars" /></a>
   <a href="https://github.com/ZSeven-W/openpencil/blob/main/LICENSE"><img src="https://img.shields.io/github/license/ZSeven-W/openpencil" alt="License" /></a>
   <a href="https://github.com/ZSeven-W/openpencil/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/ZSeven-W/openpencil/ci.yml?branch=main&label=CI" alt="CI" /></a>
-  <a href="https://discord.gg/fE9STbMG"><img src="https://img.shields.io/discord/1476517942949580952?label=Discord&logo=discord&logoColor=white" alt="Discord" /></a>
+  <a href="https://discord.gg/KwXp6BJD"><img src="https://img.shields.io/discord/1476517942949580952?label=Discord&logo=discord&logoColor=white" alt="Discord" /></a>
 </p>
 
 <p align="center">
   <a href="#quick-start">त्वरित शुरुआत</a> ·
   <a href="#ai-native-design">AI</a> ·
   <a href="#features">विशेषताएँ</a> ·
-  <a href="https://discord.gg/fE9STbMG">Discord</a> ·
+  <a href="https://discord.gg/KwXp6BJD">Discord</a> ·
   <a href="#contributing">योगदान</a>
 </p>
 
@@ -89,6 +89,7 @@ OpenPencil को AI के इर्द-गिर्द शुरू से ब
 **कैनवास और ड्रॉइंग**
 - पैन, ज़ूम, स्मार्ट अलाइनमेंट गाइड और स्नैपिंग के साथ अनंत कैनवास
 - Rectangle, Ellipse, Line, Polygon, Pen (Bezier), Frame, Text
+- बूलियन ऑपरेशन — संयोजन, घटाना, प्रतिच्छेदन संदर्भ टूलबार के साथ
 - आइकन पिकर (Iconify) और इमेज इम्पोर्ट (PNG/JPEG/SVG/WebP/GIF)
 - ऑटो-लेआउट — gap, padding, justify, align के साथ वर्टिकल/हॉरिज़ॉन्टल
 - टैब नेवीगेशन के साथ मल्टी-पेज दस्तावेज़
@@ -156,6 +157,8 @@ electron/
 | `Del` | हटाएँ | | `Cmd+Shift+V` | वेरिएबल पैनल |
 | `[ / ]` | क्रम बदलें | | `Cmd+J` | AI चैट |
 | Arrows | 1px नज | | `Cmd+,` | एजेंट सेटिंग्स |
+| `Cmd+Alt+U` | बूलियन संयोजन | | `Cmd+Alt+S` | बूलियन घटाना |
+| `Cmd+Alt+I` | बूलियन प्रतिच्छेदन | | | |
 
 ## स्क्रिप्ट
 
@@ -186,7 +189,7 @@ bun run electron:build     # Electron पैकेज
 - [x] MCP सर्वर इंटीग्रेशन
 - [x] मल्टी-पेज सपोर्ट
 - [x] Figma `.fig` इम्पोर्ट
-- [ ] बूलियन ऑपरेशन (यूनियन, सबट्रैक्ट, इंटरसेक्ट)
+- [x] बूलियन ऑपरेशन (यूनियन, सबट्रैक्ट, इंटरसेक्ट)
 - [ ] सहयोगी संपादन
 - [ ] प्लगइन सिस्टम
 
@@ -198,7 +201,7 @@ bun run electron:build     # Electron पैकेज
 
 ## समुदाय
 
-<a href="https://discord.gg/fE9STbMG">
+<a href="https://discord.gg/KwXp6BJD">
   <img src="./public/logo-discord.svg" alt="Discord" width="16" />
   <strong> हमारे Discord में शामिल हों</strong>
 </a>

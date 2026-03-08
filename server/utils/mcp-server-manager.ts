@@ -1,9 +1,27 @@
-import { fork, type ChildProcess } from 'node:child_process'
+import { fork, execSync, type ChildProcess } from 'node:child_process'
+import { existsSync } from 'node:fs'
 import { networkInterfaces } from 'node:os'
-import { resolve } from 'node:path'
+import { join, resolve } from 'node:path'
 
 let mcpProcess: ChildProcess | null = null
 let mcpPort: number | null = null
+
+/** Resolve the MCP server script path across dev, web build, and Electron production. */
+function resolveMcpServerScript(): string {
+  // Electron production: extraResources
+  const electronResources = process.env.ELECTRON_RESOURCES_PATH
+  if (electronResources) {
+    const p = join(electronResources, 'mcp-server.cjs')
+    if (existsSync(p)) return p
+  }
+  // dev + web build
+  const fromCwd = resolve(process.cwd(), 'dist', 'mcp-server.cjs')
+  if (existsSync(fromCwd)) return fromCwd
+  // Fallback: relative to this file (Nitro bundled output)
+  const fromFile = resolve(__dirname, '..', '..', '..', 'dist', 'mcp-server.cjs')
+  if (existsSync(fromFile)) return fromFile
+  return fromCwd
+}
 
 /** Get the first non-internal IPv4 address (LAN IP). */
 export function getLocalIp(): string | null {
@@ -32,7 +50,7 @@ export function startMcpHttpServer(port: number): { running: boolean; port: numb
     return { running: true, port: mcpPort!, localIp: getLocalIp() }
   }
 
-  const serverScript = resolve(process.cwd(), 'dist/mcp-server.cjs')
+  const serverScript = resolveMcpServerScript()
 
   try {
     mcpProcess = fork(serverScript, ['--http', '--port', String(port)], {
@@ -60,7 +78,17 @@ export function startMcpHttpServer(port: number): { running: boolean; port: numb
 
 export function stopMcpHttpServer(): { running: false } {
   if (mcpProcess) {
-    mcpProcess.kill('SIGTERM')
+    if (process.platform === 'win32') {
+      // SIGTERM is unreliable on Windows; use taskkill for proper cleanup
+      try {
+        const pid = mcpProcess.pid
+        if (pid) {
+          execSync(`taskkill /pid ${pid} /T /F`, { stdio: 'ignore' })
+        }
+      } catch { /* ignore */ }
+    } else {
+      mcpProcess.kill('SIGTERM')
+    }
     mcpProcess = null
     mcpPort = null
   }

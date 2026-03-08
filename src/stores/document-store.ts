@@ -687,12 +687,20 @@ export const useDocumentStore = create<DocumentStoreState>(
       // Push current state to history so MCP changes are undoable
       useHistoryStore.getState().pushState(get().document)
       const migrated = migrateToPages(doc)
-      set({ document: migrated, isDirty: true })
       // Preserve activePageId if page still exists
       const activePageId = useCanvasStore.getState().activePageId
       const pageExists = migrated.pages?.some((p) => p.id === activePageId)
-      if (!pageExists && migrated.pages && migrated.pages.length > 0) {
-        useCanvasStore.getState().setActivePageId(migrated.pages[0].id)
+      const targetPageId = pageExists
+        ? activePageId
+        : migrated.pages?.[0]?.id
+      // Force new children reference so canvas sync subscriber always detects the change
+      if (targetPageId && migrated.pages) {
+        const page = migrated.pages.find((p) => p.id === targetPageId)
+        if (page) page.children = [...page.children]
+      }
+      set({ document: migrated, isDirty: true })
+      if (!pageExists && targetPageId) {
+        useCanvasStore.getState().setActivePageId(targetPageId)
       }
     },
 

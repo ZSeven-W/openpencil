@@ -2,7 +2,7 @@ import { openDocument, resolveDocPath } from '../document-manager'
 import { computeLayoutTree, getDocChildren, type LayoutEntry } from '../utils/node-operations'
 
 export interface SnapshotLayoutParams {
-  filePath: string
+  filePath?: string
   parentId?: string
   maxDepth?: number
   pageId?: string

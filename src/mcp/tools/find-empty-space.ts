@@ -3,7 +3,7 @@ import { getNodeBounds, findNodeInTree, getDocChildren } from '../utils/node-ope
 import type { PenNode } from '../../types/pen'
 
 export interface FindEmptySpaceParams {
-  filePath: string
+  filePath?: string
   width: number
   height: number
   padding?: number

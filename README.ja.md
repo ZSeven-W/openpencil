@@ -17,14 +17,14 @@
   <a href="https://github.com/ZSeven-W/openpencil/stargazers"><img src="https://img.shields.io/github/stars/ZSeven-W/openpencil?style=flat" alt="Stars" /></a>
   <a href="https://github.com/ZSeven-W/openpencil/blob/main/LICENSE"><img src="https://img.shields.io/github/license/ZSeven-W/openpencil" alt="License" /></a>
   <a href="https://github.com/ZSeven-W/openpencil/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/ZSeven-W/openpencil/ci.yml?branch=main&label=CI" alt="CI" /></a>
-  <a href="https://discord.gg/fE9STbMG"><img src="https://img.shields.io/discord/1476517942949580952?label=Discord&logo=discord&logoColor=white" alt="Discord" /></a>
+  <a href="https://discord.gg/KwXp6BJD"><img src="https://img.shields.io/discord/1476517942949580952?label=Discord&logo=discord&logoColor=white" alt="Discord" /></a>
 </p>
 
 <p align="center">
   <a href="#quick-start">クイックスタート</a> ·
   <a href="#ai-native-design">AI</a> ·
   <a href="#features">機能</a> ·
-  <a href="https://discord.gg/fE9STbMG">Discord</a> ·
+  <a href="https://discord.gg/KwXp6BJD">Discord</a> ·
   <a href="#contributing">コントリビュート</a>
 </p>
 
@@ -89,6 +89,7 @@ OpenPencil はプラグインとしてではなく、コアワークフローと
 **キャンバスと描画**
 - パン、ズーム、スマートアライメントガイド、スナッピング対応の無限キャンバス
 - 矩形、楕円、直線、多角形、ペン（ベジェ）、Frame、テキスト
+- ブーリアン演算 — 合体、型抜き、交差（コンテキストツールバー付き）
 - アイコンピッカー（Iconify）と画像インポート（PNG/JPEG/SVG/WebP/GIF）
 - オートレイアウト — 垂直/水平方向、ギャップ・パディング・justify・align 対応
 - タブナビゲーション付きマルチページドキュメント
@@ -156,6 +157,8 @@ electron/
 | `Del` | 削除 | | `Cmd+Shift+V` | 変数パネル |
 | `[ / ]` | 重ね順の変更 | | `Cmd+J` | AI チャット |
 | 矢印キー | 1px 微調整 | | `Cmd+,` | エージェント設定 |
+| `Cmd+Alt+U` | ブーリアン合体 | | `Cmd+Alt+S` | ブーリアン型抜き |
+| `Cmd+Alt+I` | ブーリアン交差 | | | |
 
 ## スクリプト
 
@@ -186,7 +189,7 @@ bun run electron:build     # Electron パッケージング
 - [x] MCP サーバー統合
 - [x] マルチページサポート
 - [x] Figma `.fig` インポート
-- [ ] ブール演算（結合、減算、交差）
+- [x] ブール演算（結合、減算、交差）
 - [ ] 共同編集
 - [ ] プラグインシステム
 
@@ -198,7 +201,7 @@ bun run electron:build     # Electron パッケージング
 
 ## コミュニティ
 
-<a href="https://discord.gg/fE9STbMG">
+<a href="https://discord.gg/KwXp6BJD">
   <img src="./public/logo-discord.svg" alt="Discord" width="16" />
   <strong> Discord に参加する</strong>
 </a>

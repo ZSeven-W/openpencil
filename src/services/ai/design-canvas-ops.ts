@@ -13,6 +13,7 @@ import {
   createPhonePlaceholderDataUri,
   estimateNodeIntrinsicHeight,
 } from './generation-utils'
+import { defaultLineHeight } from '@/canvas/canvas-text-measure'
 import { applyIconPathResolution, applyNoEmojiIconHeuristic, resolveAsyncIcons, resolveAllPendingIcons } from './icon-resolver'
 import {
   resolveNodeRole,
@@ -44,10 +45,15 @@ let generationCanvasWidth = 1200
 /** Root frame ID for the current generation — may differ from DEFAULT_FRAME_ID
  *  when canvas already has content and new content is placed beside it. */
 let generationRootFrameId: string = DEFAULT_FRAME_ID
+/** Node IDs that existed on canvas before the current generation started.
+ *  Used by upsert sanitization to avoid ID collisions with pre-existing content. */
+let preExistingNodeIds = new Set<string>()
 
 export function resetGenerationRemapping(): void {
   generationRemappedIds.clear()
   generationRootFrameId = DEFAULT_FRAME_ID
+  // Snapshot all existing node IDs so upsert can avoid collisions
+  preExistingNodeIds = new Set(useDocumentStore.getState().getFlatNodes().map((n) => n.id))
 }
 
 export function setGenerationContextHint(hint?: string): void {
@@ -158,8 +164,7 @@ export function insertStreamingNode(
       }
       // Default lineHeight based on text role (heading vs body)
       if (!node.lineHeight) {
-        const fs = node.fontSize ?? 16
-        node.lineHeight = fs >= 28 ? 1.2 : 1.5
+        node.lineHeight = defaultLineHeight(node.fontSize ?? 16)
       }
     }
   }
@@ -173,6 +178,11 @@ export function insertStreamingNode(
   resolveNodeRole(node, roleCtx)
 
   applyGenerationHeuristics(node)
+
+  // Recursively remove x/y from children inside layout containers so the
+  // layout engine can position them correctly during canvas sync.
+  const parentHasLayout = parentNode ? hasActiveLayout(parentNode) : false
+  sanitizeLayoutChildPositions(node, parentHasLayout)
 
   // Skip AI-streamed children under phone placeholders. Placeholder internals are
   // normalized post-streaming (at most one centered label text is allowed).
@@ -624,10 +634,20 @@ function sanitizeNodesForUpsert(nodes: PenNode[]): PenNode[] {
     sanitizeScreenFrameBounds(node)
   }
 
+  // Start with pre-existing node IDs to avoid collisions with content
+  // that was on canvas before this generation started. IDs generated
+  // within the current batch are also tracked so siblings stay unique.
+  // Record remappings so progressive upsert can resolve renamed IDs.
   const counters = new Map<string, number>()
-  const used = new Set<string>()
+  const used = new Set(preExistingNodeIds)
+  const newRemaps = new Map<string, string>()
   for (const node of cloned) {
-    ensureUniqueNodeIds(node, used, counters)
+    ensureUniqueNodeIds(node, used, counters, newRemaps)
+  }
+
+  // Merge new remappings into the generation-wide remap table
+  for (const [from, to] of newRemaps) {
+    generationRemappedIds.set(from, to)
   }
 
   return cloned

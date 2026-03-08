@@ -44,6 +44,7 @@ const ko: TranslationKeys = {
   'topbar.open': '열기',
   'topbar.save': '저장',
   'topbar.importFigma': 'Figma 가져오기',
+  'topbar.codePanel': '코드',
   'topbar.lightMode': '라이트 모드',
   'topbar.darkMode': '다크 모드',
   'topbar.fullscreen': '전체 화면',
@@ -53,6 +54,11 @@ const ko: TranslationKeys = {
   'topbar.setupAgentsMcp': '에이전트 & MCP 설정',
   'topbar.connected': '연결됨',
   'topbar.agentStatus': '에이전트 {{agents}}개{{agentSuffix}} · MCP {{mcp}}개',
+
+  // ── Right Panel ──
+  'rightPanel.design': '디자인',
+  'rightPanel.code': '코드',
+  'rightPanel.noSelection': '요소를 선택하세요',
 
   // ── Pages ──
   'pages.title': '페이지',
@@ -105,6 +111,9 @@ const ko: TranslationKeys = {
   'layerMenu.createComponent': '컴포넌트 만들기',
   'layerMenu.detachComponent': '컴포넌트 분리',
   'layerMenu.detachInstance': '인스턴스 분리',
+  'layerMenu.booleanUnion': '합치기',
+  'layerMenu.booleanSubtract': '빼기',
+  'layerMenu.booleanIntersect': '교차',
   'layerMenu.toggleLock': '잠금 전환',
   'layerMenu.toggleVisibility': '표시 전환',
 
@@ -264,11 +273,18 @@ const ko: TranslationKeys = {
   'code.htmlCss': 'HTML + CSS',
   'code.cssVariables': 'CSS Variables',
   'code.copyClipboard': '클립보드에 복사',
+  'code.copied': '복사됨!',
+  'code.download': '코드 파일 다운로드',
   'code.closeCodePanel': '코드 패널 닫기',
   'code.genCssVars': '전체 문서의 CSS 변수를 생성 중',
   'code.genSelected':
     '선택한 요소 {{count}}개의 코드를 생성 중',
   'code.genDocument': '전체 문서의 코드를 생성 중',
+  'code.aiEnhance': 'AI 개선',
+  'code.cancelEnhance': '개선 취소',
+  'code.resetEnhance': '원본으로 복원',
+  'code.enhancing': 'AI가 코드를 개선 중...',
+  'code.enhanced': 'AI로 개선됨',
 
   // ── Save Dialog ──
   'save.saveAs': '다른 이름으로 저장',
@@ -303,6 +319,7 @@ const ko: TranslationKeys = {
   'agents.mcpServerRunning': '실행 중',
   'agents.mcpServerStopped': '정지됨',
   'agents.mcpLanAccess': 'LAN 접근',
+  'agents.mcpClientConfig': '클라이언트 설정',
   'agents.stdio': 'stdio',
   'agents.http': 'http',
   'agents.stdioHttp': 'stdio + http',

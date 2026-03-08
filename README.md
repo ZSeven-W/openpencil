@@ -17,14 +17,14 @@
   <a href="https://github.com/ZSeven-W/openpencil/stargazers"><img src="https://img.shields.io/github/stars/ZSeven-W/openpencil?style=flat" alt="Stars" /></a>
   <a href="https://github.com/ZSeven-W/openpencil/blob/main/LICENSE"><img src="https://img.shields.io/github/license/ZSeven-W/openpencil" alt="License" /></a>
   <a href="https://github.com/ZSeven-W/openpencil/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/ZSeven-W/openpencil/ci.yml?branch=main&label=CI" alt="CI" /></a>
-  <a href="https://discord.gg/fE9STbMG"><img src="https://img.shields.io/discord/1476517942949580952?label=Discord&logo=discord&logoColor=white" alt="Discord" /></a>
+  <a href="https://discord.gg/KwXp6BJD"><img src="https://img.shields.io/discord/1476517942949580952?label=Discord&logo=discord&logoColor=white" alt="Discord" /></a>
 </p>
 
 <p align="center">
   <a href="#quick-start">Quick Start</a> ·
   <a href="#ai-native-design">AI</a> ·
   <a href="#features">Features</a> ·
-  <a href="https://discord.gg/fE9STbMG">Discord</a> ·
+  <a href="https://discord.gg/KwXp6BJD">Discord</a> ·
   <a href="#contributing">Contributing</a>
 </p>
 
@@ -91,6 +91,7 @@ OpenPencil is built around AI from the ground up — not as a plugin, but as a c
 **Canvas & Drawing**
 - Infinite canvas with pan, zoom, smart alignment guides, and snapping
 - Rectangle, Ellipse, Line, Polygon, Pen (Bezier), Frame, Text
+- Boolean operations — union, subtract, intersect with contextual toolbar
 - Icon picker (Iconify) and image import (PNG/JPEG/SVG/WebP/GIF)
 - Auto-layout — vertical/horizontal with gap, padding, justify, align
 - Multi-page documents with tab navigation
@@ -106,6 +107,7 @@ OpenPencil is built around AI from the ground up — not as a plugin, but as a c
 
 **Desktop App**
 - Native macOS, Windows, and Linux via Electron
+- `.op` file association — double-click to open, single-instance lock
 - Auto-update from GitHub Releases
 - Native application menu and file dialogs
 
@@ -158,6 +160,8 @@ electron/
 | `Del` | Delete | | `Cmd+Shift+V` | Variables panel |
 | `[ / ]` | Reorder | | `Cmd+J` | AI chat |
 | Arrows | Nudge 1px | | `Cmd+,` | Agent settings |
+| `Cmd+Alt+U` | Boolean union | | `Cmd+Alt+S` | Boolean subtract |
+| `Cmd+Alt+I` | Boolean intersect | | | |
 
 ## Scripts
 
@@ -188,7 +192,7 @@ Contributions are welcome! See [CLAUDE.md](./CLAUDE.md) for architecture details
 - [x] MCP server integration
 - [x] Multi-page support
 - [x] Figma `.fig` import
-- [ ] Boolean operations (union, subtract, intersect)
+- [x] Boolean operations (union, subtract, intersect)
 - [ ] Collaborative editing
 - [ ] Plugin system
 
@@ -200,7 +204,7 @@ Contributions are welcome! See [CLAUDE.md](./CLAUDE.md) for architecture details
 
 ## Community
 
-<a href="https://discord.gg/fE9STbMG">
+<a href="https://discord.gg/KwXp6BJD">
   <img src="./public/logo-discord.svg" alt="Discord" width="16" />
   <strong> Join our Discord</strong>
 </a>

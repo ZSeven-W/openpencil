@@ -17,14 +17,14 @@
   <a href="https://github.com/ZSeven-W/openpencil/stargazers"><img src="https://img.shields.io/github/stars/ZSeven-W/openpencil?style=flat" alt="Stars" /></a>
   <a href="https://github.com/ZSeven-W/openpencil/blob/main/LICENSE"><img src="https://img.shields.io/github/license/ZSeven-W/openpencil" alt="License" /></a>
   <a href="https://github.com/ZSeven-W/openpencil/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/ZSeven-W/openpencil/ci.yml?branch=main&label=CI" alt="CI" /></a>
-  <a href="https://discord.gg/fE9STbMG"><img src="https://img.shields.io/discord/1476517942949580952?label=Discord&logo=discord&logoColor=white" alt="Discord" /></a>
+  <a href="https://discord.gg/KwXp6BJD"><img src="https://img.shields.io/discord/1476517942949580952?label=Discord&logo=discord&logoColor=white" alt="Discord" /></a>
 </p>
 
 <p align="center">
   <a href="#hızlı-başlangıç">Hızlı Başlangıç</a> ·
   <a href="#ai-destekli-tasarım">AI</a> ·
   <a href="#özellikler">Özellikler</a> ·
-  <a href="https://discord.gg/fE9STbMG">Discord</a> ·
+  <a href="https://discord.gg/KwXp6BJD">Discord</a> ·
   <a href="#katkıda-bulunma">Katkıda Bulunma</a>
 </p>
 
@@ -89,6 +89,7 @@ OpenPencil, AI'yi bir eklenti olarak değil, temel iş akışı olarak sıfırda
 **Kanvas ve Çizim**
 - Kaydırma, yakınlaştırma, akıllı hizalama kılavuzları ve yakalamayı destekleyen sonsuz kanvas
 - Dikdörtgen, Elips, Çizgi, Çokgen, Kalem (Bezier), Frame, Metin
+- Boolean işlemler — birleştir, çıkar, kesiştir bağlamsal araç çubuğuyla
 - Simge seçici (Iconify) ve görsel içe aktarma (PNG/JPEG/SVG/WebP/GIF)
 - Otomatik düzen — boşluk, dolgu, justify, align ile dikey/yatay
 - Sekme navigasyonlu çok sayfalı belgeler
@@ -156,6 +157,8 @@ electron/
 | `Del` | Sil | | `Cmd+Shift+V` | Değişkenler paneli |
 | `[ / ]` | Yeniden sırala | | `Cmd+J` | AI sohbet |
 | Oklar | 1px kaydır | | `Cmd+,` | Ajan ayarları |
+| `Cmd+Alt+U` | Boolean birleştir | | `Cmd+Alt+S` | Boolean çıkar |
+| `Cmd+Alt+I` | Boolean kesiştir | | | |
 
 ## Betikler
 
@@ -186,7 +189,7 @@ Katkılarınızı bekliyoruz! Mimari ayrıntılar ve kod stili için [CLAUDE.md]
 - [x] MCP sunucu entegrasyonu
 - [x] Çok sayfa desteği
 - [x] Figma `.fig` içe aktarma
-- [ ] Boolean işlemler (birleştirme, çıkarma, kesişim)
+- [x] Boolean işlemler (birleştirme, çıkarma, kesişim)
 - [ ] Ortak düzenleme
 - [ ] Eklenti sistemi
 
@@ -198,7 +201,7 @@ Katkılarınızı bekliyoruz! Mimari ayrıntılar ve kod stili için [CLAUDE.md]
 
 ## Topluluk
 
-<a href="https://discord.gg/fE9STbMG">
+<a href="https://discord.gg/KwXp6BJD">
   <img src="./public/logo-discord.svg" alt="Discord" width="16" />
   <strong> Discord'umuza katılın</strong>
 </a>

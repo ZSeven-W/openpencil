@@ -17,14 +17,14 @@
   <a href="https://github.com/ZSeven-W/openpencil/stargazers"><img src="https://img.shields.io/github/stars/ZSeven-W/openpencil?style=flat" alt="Stars" /></a>
   <a href="https://github.com/ZSeven-W/openpencil/blob/main/LICENSE"><img src="https://img.shields.io/github/license/ZSeven-W/openpencil" alt="License" /></a>
   <a href="https://github.com/ZSeven-W/openpencil/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/ZSeven-W/openpencil/ci.yml?branch=main&label=CI" alt="CI" /></a>
-  <a href="https://discord.gg/fE9STbMG"><img src="https://img.shields.io/discord/1476517942949580952?label=Discord&logo=discord&logoColor=white" alt="Discord" /></a>
+  <a href="https://discord.gg/KwXp6BJD"><img src="https://img.shields.io/discord/1476517942949580952?label=Discord&logo=discord&logoColor=white" alt="Discord" /></a>
 </p>
 
 <p align="center">
   <a href="#quick-start">Bắt đầu nhanh</a> ·
   <a href="#ai-native-design">AI</a> ·
   <a href="#features">Tính năng</a> ·
-  <a href="https://discord.gg/fE9STbMG">Discord</a> ·
+  <a href="https://discord.gg/KwXp6BJD">Discord</a> ·
   <a href="#contributing">Đóng góp</a>
 </p>
 
@@ -89,6 +89,7 @@ OpenPencil được xây dựng xung quanh AI từ nền tảng — không phả
 **Canvas và Vẽ**
 - Canvas vô hạn với pan, zoom, hướng dẫn căn chỉnh thông minh và snapping
 - Hình chữ nhật, Hình ellipse, Đường thẳng, Đa giác, Bút (Bezier), Frame, Văn bản
+- Phép toán Boolean — hợp nhất, trừ, giao nhau với thanh công cụ ngữ cảnh
 - Trình chọn icon (Iconify) và nhập hình ảnh (PNG/JPEG/SVG/WebP/GIF)
 - Auto-layout — dọc/ngang với gap, padding, justify, align
 - Tài liệu nhiều trang với điều hướng bằng tab
@@ -156,6 +157,8 @@ electron/
 | `Del` | Xóa | | `Cmd+Shift+V` | Bảng biến |
 | `[ / ]` | Sắp xếp lại | | `Cmd+J` | AI chat |
 | Mũi tên | Dịch chuyển 1px | | `Cmd+,` | Cài đặt tác nhân |
+| `Cmd+Alt+U` | Hợp nhất Boolean | | `Cmd+Alt+S` | Trừ Boolean |
+| `Cmd+Alt+I` | Giao nhau Boolean | | | |
 
 ## Scripts
 
@@ -186,7 +189,7 @@ Chào mừng đóng góp! Xem [CLAUDE.md](./CLAUDE.md) để biết chi tiết v
 - [x] Tích hợp máy chủ MCP
 - [x] Hỗ trợ nhiều trang
 - [x] Nhập Figma `.fig`
-- [ ] Phép toán Boolean (hợp nhất, trừ, giao)
+- [x] Phép toán Boolean (hợp nhất, trừ, giao)
 - [ ] Chỉnh sửa cộng tác
 - [ ] Hệ thống plugin
 
@@ -198,7 +201,7 @@ Chào mừng đóng góp! Xem [CLAUDE.md](./CLAUDE.md) để biết chi tiết v
 
 ## Cộng đồng
 
-<a href="https://discord.gg/fE9STbMG">
+<a href="https://discord.gg/KwXp6BJD">
   <img src="./public/logo-discord.svg" alt="Discord" width="16" />
   <strong> Tham gia Discord của chúng tôi</strong>
 </a>

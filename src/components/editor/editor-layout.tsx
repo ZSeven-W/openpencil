@@ -2,11 +2,11 @@ import { lazy, Suspense, useState, useCallback, useEffect } from 'react'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import TopBar from './top-bar'
 import Toolbar from './toolbar'
+import BooleanToolbar from './boolean-toolbar'
 import StatusBar from './status-bar'
 import LayerPanel from '@/components/panels/layer-panel'
-import PropertyPanel from '@/components/panels/property-panel'
+import RightPanel from '@/components/panels/right-panel'
 import AIChatPanel, { AIChatMinimizedBar } from '@/components/panels/ai-chat-panel'
-import CodePanel from '@/components/panels/code-panel'
 import VariablesPanel from '@/components/panels/variables-panel'
 import ComponentBrowserPanel from '@/components/panels/component-browser-panel'
 import ExportDialog from '@/components/shared/export-dialog'
@@ -36,16 +36,11 @@ export default function EditorLayout() {
     useCanvasStore.getState().setFigmaImportDialogOpen(false)
   }, [])
   const browserOpen = useUIKitStore((s) => s.browserOpen)
-  const codePanelOpen = useCanvasStore((s) => s.codePanelOpen)
   const saveDialogOpen = useDocumentStore((s) => s.saveDialogOpen)
   const closeSaveDialog = useCallback(() => {
     useDocumentStore.getState().setSaveDialogOpen(false)
   }, [])
   const [exportOpen, setExportOpen] = useState(false)
-
-  const toggleCodePanel = useCallback(() => {
-    useCanvasStore.getState().toggleCodePanel()
-  }, [])
 
   const closeExport = useCallback(() => {
     setExportOpen(false)
@@ -62,10 +57,10 @@ export default function EditorLayout() {
         return
       }
 
-      // Cmd+Shift+C: toggle code panel
+      // Cmd+Shift+C: switch right panel to code tab
       if (isMod && e.shiftKey && e.key.toLowerCase() === 'c') {
         e.preventDefault()
-        toggleCodePanel()
+        useCanvasStore.getState().setRightPanelTab('code')
         return
       }
 
@@ -106,7 +101,7 @@ export default function EditorLayout() {
     }
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
-  }, [toggleMinimize, toggleCodePanel])
+  }, [toggleMinimize])
 
   // Handle Electron native menu actions
   useElectronMenu()
@@ -144,6 +139,7 @@ export default function EditorLayout() {
                 <FabricCanvas />
               </Suspense>
               <Toolbar />
+              <BooleanToolbar />
 
               {/* Floating variables panel — anchored to the right of the toolbar */}
               {variablesPanelOpen && <VariablesPanel />}
@@ -164,9 +160,8 @@ export default function EditorLayout() {
               {/* Expanded AI panel (floating, draggable) */}
               <AIChatPanel />
             </div>
-            {hasSelection && <PropertyPanel />}
+            {hasSelection && <RightPanel />}
           </div>
-          {codePanelOpen && <CodePanel onClose={() => useCanvasStore.getState().setCodePanelOpen(false)} />}
         </div>
         <ExportDialog open={exportOpen} onClose={closeExport} />
         <SaveDialog open={saveDialogOpen} onClose={closeSaveDialog} />

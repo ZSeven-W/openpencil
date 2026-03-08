@@ -9,7 +9,7 @@ import type { VariableDefinition } from '../../types/variables'
 // ---------------------------------------------------------------------------
 
 export interface SaveThemePresetParams {
-  filePath: string
+  filePath?: string
   presetPath: string
   name?: string
 }
@@ -38,7 +38,7 @@ export async function handleSaveThemePreset(
 // ---------------------------------------------------------------------------
 
 export interface LoadThemePresetParams {
-  filePath: string
+  filePath?: string
   presetPath: string
 }
 

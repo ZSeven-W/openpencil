@@ -5,6 +5,7 @@ import type { AIDesignRequest } from './ai-types'
 import { streamChat } from './ai-service'
 import { DESIGN_MODIFIER_PROMPT } from './ai-prompts'
 import { executeOrchestration } from './orchestrator'
+import { executeVisualRefOrchestration } from './visual-ref-orchestrator'
 import { DESIGN_STREAM_TIMEOUTS } from './ai-runtime-config'
 import { extractJsonFromResponse } from './design-parser'
 
@@ -80,6 +81,9 @@ export async function generateDesign(
   },
   abortSignal?: AbortSignal,
 ): Promise<{ nodes: PenNode[]; rawResponse: string }> {
+  if (request.mode === 'visual-ref') {
+    return executeVisualRefOrchestration(request, callbacks, abortSignal)
+  }
   return executeOrchestration(request, callbacks, abortSignal)
 }
 

@@ -73,7 +73,7 @@ function isEmptyFrame(node: PenNode): boolean {
 // ---------------------------------------------------------------------------
 
 export interface InsertNodeParams {
-  filePath: string
+  filePath?: string
   parent: string | null
   data: Record<string, any>
   postProcess?: boolean
@@ -132,7 +132,7 @@ export async function handleInsertNode(
 // ---------------------------------------------------------------------------
 
 export interface UpdateNodeParams {
-  filePath: string
+  filePath?: string
   nodeId: string
   data: Record<string, any>
   postProcess?: boolean
@@ -164,7 +164,7 @@ export async function handleUpdateNode(
 // ---------------------------------------------------------------------------
 
 export interface DeleteNodeParams {
-  filePath: string
+  filePath?: string
   nodeId: string
   pageId?: string
 }
@@ -190,7 +190,7 @@ export async function handleDeleteNode(
 // ---------------------------------------------------------------------------
 
 export interface MoveNodeParams {
-  filePath: string
+  filePath?: string
   nodeId: string
   parent: string | null
   index?: number
@@ -221,7 +221,7 @@ export async function handleMoveNode(
 // ---------------------------------------------------------------------------
 
 export interface CopyNodeParams {
-  filePath: string
+  filePath?: string
   sourceId: string
   parent: string | null
   overrides?: Record<string, any>
@@ -260,7 +260,7 @@ export async function handleCopyNode(
 // ---------------------------------------------------------------------------
 
 export interface ReplaceNodeParams {
-  filePath: string
+  filePath?: string
   nodeId: string
   data: Record<string, any>
   postProcess?: boolean

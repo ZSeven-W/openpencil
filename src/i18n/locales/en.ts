@@ -42,6 +42,7 @@ const en = {
   'topbar.open': 'Open',
   'topbar.save': 'Save',
   'topbar.importFigma': 'Import Figma',
+  'topbar.codePanel': 'Code',
   'topbar.lightMode': 'Light mode',
   'topbar.darkMode': 'Dark mode',
   'topbar.fullscreen': 'Fullscreen',
@@ -51,6 +52,11 @@ const en = {
   'topbar.setupAgentsMcp': 'Setup Agents & MCP',
   'topbar.connected': 'connected',
   'topbar.agentStatus': '{{agents}} agent{{agentSuffix}} · {{mcp}} MCP',
+
+  // ── Right Panel ──
+  'rightPanel.design': 'Design',
+  'rightPanel.code': 'Code',
+  'rightPanel.noSelection': 'Select an element',
 
   // ── Pages ──
   'pages.title': 'Pages',
@@ -103,6 +109,9 @@ const en = {
   'layerMenu.createComponent': 'Create Component',
   'layerMenu.detachComponent': 'Detach Component',
   'layerMenu.detachInstance': 'Detach Instance',
+  'layerMenu.booleanUnion': 'Union',
+  'layerMenu.booleanSubtract': 'Subtract',
+  'layerMenu.booleanIntersect': 'Intersect',
   'layerMenu.toggleLock': 'Toggle Lock',
   'layerMenu.toggleVisibility': 'Toggle Visibility',
 
@@ -262,11 +271,18 @@ const en = {
   'code.htmlCss': 'HTML + CSS',
   'code.cssVariables': 'CSS Variables',
   'code.copyClipboard': 'Copy to clipboard',
+  'code.copied': 'Copied!',
+  'code.download': 'Download code file',
   'code.closeCodePanel': 'Close code panel',
   'code.genCssVars': 'Generating CSS variables for entire document',
   'code.genSelected':
     'Generating code for {{count}} selected element(s)',
   'code.genDocument': 'Generating code for entire document',
+  'code.aiEnhance': 'AI Enhance',
+  'code.cancelEnhance': 'Cancel enhancement',
+  'code.resetEnhance': 'Reset to original',
+  'code.enhancing': 'AI is enhancing code...',
+  'code.enhanced': 'Enhanced by AI',
 
   // ── Save Dialog ──
   'save.saveAs': 'Save As',
@@ -301,6 +317,7 @@ const en = {
   'agents.mcpServerRunning': 'Running',
   'agents.mcpServerStopped': 'Stopped',
   'agents.mcpLanAccess': 'LAN Access',
+  'agents.mcpClientConfig': 'Client Config',
   'agents.stdio': 'stdio',
   'agents.http': 'http',
   'agents.stdioHttp': 'stdio + http',

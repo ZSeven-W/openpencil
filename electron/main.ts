@@ -20,9 +20,14 @@ let nitroProcess: ChildProcess | null = null
 let serverPort = 0
 let autoUpdateEnabled = true
 let updateCheckTimer: ReturnType<typeof setInterval> | null = null
+let pendingFilePath: string | null = null
 
 const isDev = !app.isPackaged
-const SETTINGS_PATH = join(homedir(), '.openpencil', 'settings.json')
+// Settings stored in platform-standard app data dir (Electron-managed):
+// macOS: ~/Library/Application Support/OpenPencil/
+// Windows: %APPDATA%\OpenPencil\
+// Linux: ~/.config/OpenPencil/
+const SETTINGS_PATH = join(app.getPath('userData'), 'settings.json')
 
 type UpdaterStatus =
   | 'disabled'
@@ -218,7 +223,7 @@ async function readAppSettings(): Promise<AppSettings> {
 async function writeAppSettings(patch: Partial<AppSettings>): Promise<void> {
   const current = await readAppSettings()
   const merged = { ...current, ...patch }
-  await mkdir(PORT_FILE_DIR, { recursive: true })
+  await mkdir(app.getPath('userData'), { recursive: true })
   await writeFile(SETTINGS_PATH, JSON.stringify(merged, null, 2), 'utf-8')
 }
 
@@ -237,8 +242,8 @@ async function writePortFile(port: number): Promise<void> {
       JSON.stringify({ port, pid: process.pid, timestamp: Date.now() }),
       'utf-8',
     )
-  } catch {
-    // Non-critical — MCP sync will fall back to file I/O
+  } catch (err) {
+    console.error('[port-file] Failed to write port file:', err)
   }
 }
 
@@ -379,8 +384,9 @@ function createWindow(): void {
     ...(isWinOrLinux
       ? {
           titleBarOverlay: {
-            color: 'rgba(0,0,0,0)',
-            symbolColor: '#a1a1aa',
+            // Windows supports transparent overlay; Linux needs solid color
+            color: process.platform === 'win32' ? 'rgba(0,0,0,0)' : '#111',
+            symbolColor: '#d4d4d8',
             height: 36,
           },
         }
@@ -389,6 +395,9 @@ function createWindow(): void {
       preload: join(__dirname, 'preload.cjs'),
       contextIsolation: true,
       nodeIntegration: false,
+      // Persist localStorage/cookies in a fixed partition so data survives
+      // across random Nitro server port changes (origin-independent storage).
+      partition: 'persist:openpencil',
     },
   }
 
@@ -523,16 +532,44 @@ function setupIPC(): void {
     },
   )
 
-  // Theme sync for Windows/Linux title bar overlay
-  ipcMain.handle('theme:set', (_event, theme: 'dark' | 'light') => {
-    if (!mainWindow || mainWindow.isDestroyed()) return
-    const isWinOrLinux = process.platform === 'win32' || process.platform === 'linux'
-    if (!isWinOrLinux) return
-    mainWindow.setTitleBarOverlay({
-      color: 'rgba(0,0,0,0)',
-      symbolColor: theme === 'dark' ? '#a1a1aa' : '#71717a',
-    })
+  ipcMain.handle('file:getPending', () => {
+    if (pendingFilePath) {
+      const filePath = pendingFilePath
+      pendingFilePath = null
+      return filePath
+    }
+    return null
   })
+
+  ipcMain.handle('file:read', async (_event, filePath: string) => {
+    const resolved = resolve(filePath)
+    const ext = extname(resolved).toLowerCase()
+    if (ext !== '.op' && ext !== '.pen') return null
+    try {
+      const content = await readFile(resolved, 'utf-8')
+      return { filePath: resolved, content }
+    } catch {
+      return null
+    }
+  })
+
+  // Theme sync for Windows/Linux title bar overlay
+  ipcMain.handle(
+    'theme:set',
+    (_event, theme: 'dark' | 'light', colors?: { bg: string; fg: string }) => {
+      if (!mainWindow || mainWindow.isDestroyed()) return
+      const isWinOrLinux = process.platform === 'win32' || process.platform === 'linux'
+      if (!isWinOrLinux) return
+      const isLinux = process.platform === 'linux'
+      const fallbackBg = theme === 'dark' ? '#111' : '#fff'
+      const fallbackFg = theme === 'dark' ? '#d4d4d8' : '#3f3f46'
+      mainWindow.setTitleBarOverlay({
+        // Windows supports transparent overlay; Linux uses actual CSS card color
+        color: isLinux ? (colors?.bg || fallbackBg) : 'rgba(0,0,0,0)',
+        symbolColor: colors?.fg || fallbackFg,
+      })
+    },
+  )
 
   ipcMain.handle('updater:getState', () => updaterState)
 
@@ -700,6 +737,58 @@ function buildAppMenu(): void {
 }
 
 // ---------------------------------------------------------------------------
+// File association: open .op files
+// ---------------------------------------------------------------------------
+
+/** Extract .op file path from command-line arguments. */
+function getFilePathFromArgs(args: string[]): string | null {
+  for (const arg of args) {
+    if (arg.endsWith('.op') || arg.endsWith('.pen')) {
+      return arg
+    }
+  }
+  return null
+}
+
+/** Send a file path to the renderer for loading. */
+function sendOpenFile(filePath: string): void {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send('file:open', filePath)
+  } else {
+    pendingFilePath = filePath
+  }
+}
+
+// macOS: open-file fires when user double-clicks a .op file
+app.on('open-file', (event, filePath) => {
+  event.preventDefault()
+  if (app.isReady()) {
+    sendOpenFile(filePath)
+  } else {
+    pendingFilePath = filePath
+  }
+})
+
+// Single instance lock (Windows/Linux: second instance passes file path as arg)
+const gotTheLock = app.requestSingleInstanceLock()
+
+if (!gotTheLock) {
+  app.quit()
+} else {
+  app.on('second-instance', (_event, argv) => {
+    const filePath = getFilePathFromArgs(argv)
+    if (filePath) {
+      sendOpenFile(filePath)
+    }
+    // Focus existing window
+    if (mainWindow) {
+      if (mainWindow.isMinimized()) mainWindow.restore()
+      mainWindow.focus()
+    }
+  })
+}
+
+// ---------------------------------------------------------------------------
 // App lifecycle
 // ---------------------------------------------------------------------------
 
@@ -724,6 +813,13 @@ app.on('ready', async () => {
   }
 
   createWindow()
+
+  // Check for file to open: pending open-file event or CLI args (Windows/Linux).
+  // The file path is stored in pendingFilePath and pulled by the renderer
+  // via file:getPending IPC when the React app mounts (useElectronMenu hook).
+  if (!pendingFilePath) {
+    pendingFilePath = getFilePathFromArgs(process.argv)
+  }
 
   if (!isDev) {
     const settings = await readAppSettings()

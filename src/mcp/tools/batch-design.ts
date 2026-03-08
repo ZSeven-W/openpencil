@@ -25,7 +25,7 @@ import {
 import type { PenDocument, PenNode } from '../../types/pen'
 
 export interface BatchDesignParams {
-  filePath: string
+  filePath?: string
   operations: string
   postProcess?: boolean
   canvasWidth?: number

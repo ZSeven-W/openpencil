@@ -60,7 +60,7 @@ const TOOL_DEFINITIONS = [
     inputSchema: {
       type: 'object' as const,
       properties: {
-        filePath: { type: 'string', description: 'Absolute path to the .op file' },
+        filePath: { type: 'string', description: 'Path to .op file, or omit to use the live canvas (default)' },
         patterns: {
           type: 'array',
           description: 'Search patterns to match nodes',
@@ -79,7 +79,7 @@ const TOOL_DEFINITIONS = [
         searchDepth: { type: 'number', description: 'How deep to search for matching nodes (default unlimited)' },
         pageId: { type: 'string', description: 'Target page ID (defaults to first page)' },
       },
-      required: ['filePath'],
+      required: [],
     },
   },
   {
@@ -89,7 +89,7 @@ const TOOL_DEFINITIONS = [
     inputSchema: {
       type: 'object' as const,
       properties: {
-        filePath: { type: 'string', description: 'Absolute path to the .op file' },
+        filePath: { type: 'string', description: 'Path to .op file, or omit to use the live canvas (default)' },
         parent: {
           type: ['string', 'null'] as any,
           description: 'Parent node ID, or null for root level',
@@ -110,7 +110,7 @@ const TOOL_DEFINITIONS = [
         },
         pageId: { type: 'string', description: 'Target page ID (defaults to first page)' },
       },
-      required: ['filePath', 'parent', 'data'],
+      required: ['parent', 'data'],
     },
   },
   {
@@ -120,7 +120,7 @@ const TOOL_DEFINITIONS = [
     inputSchema: {
       type: 'object' as const,
       properties: {
-        filePath: { type: 'string', description: 'Absolute path to the .op file' },
+        filePath: { type: 'string', description: 'Path to .op file, or omit to use the live canvas (default)' },
         nodeId: { type: 'string', description: 'ID of the node to update' },
         data: {
           type: 'object',
@@ -136,7 +136,7 @@ const TOOL_DEFINITIONS = [
         },
         pageId: { type: 'string', description: 'Target page ID (defaults to first page)' },
       },
-      required: ['filePath', 'nodeId', 'data'],
+      required: ['nodeId', 'data'],
     },
   },
   {
@@ -145,11 +145,11 @@ const TOOL_DEFINITIONS = [
     inputSchema: {
       type: 'object' as const,
       properties: {
-        filePath: { type: 'string', description: 'Absolute path to the .op file' },
+        filePath: { type: 'string', description: 'Path to .op file, or omit to use the live canvas (default)' },
         nodeId: { type: 'string', description: 'ID of the node to delete' },
         pageId: { type: 'string', description: 'Target page ID (defaults to first page)' },
       },
-      required: ['filePath', 'nodeId'],
+      required: ['nodeId'],
     },
   },
   {
@@ -159,7 +159,7 @@ const TOOL_DEFINITIONS = [
     inputSchema: {
       type: 'object' as const,
       properties: {
-        filePath: { type: 'string', description: 'Absolute path to the .op file' },
+        filePath: { type: 'string', description: 'Path to .op file, or omit to use the live canvas (default)' },
         nodeId: { type: 'string', description: 'ID of the node to move' },
         parent: {
           type: ['string', 'null'] as any,
@@ -171,7 +171,7 @@ const TOOL_DEFINITIONS = [
         },
         pageId: { type: 'string', description: 'Target page ID (defaults to first page)' },
       },
-      required: ['filePath', 'nodeId', 'parent'],
+      required: ['nodeId', 'parent'],
     },
   },
   {
@@ -181,7 +181,7 @@ const TOOL_DEFINITIONS = [
     inputSchema: {
       type: 'object' as const,
       properties: {
-        filePath: { type: 'string', description: 'Absolute path to the .op file' },
+        filePath: { type: 'string', description: 'Path to .op file, or omit to use the live canvas (default)' },
         sourceId: { type: 'string', description: 'ID of the node to copy' },
         parent: {
           type: ['string', 'null'] as any,
@@ -193,7 +193,7 @@ const TOOL_DEFINITIONS = [
         },
         pageId: { type: 'string', description: 'Target page ID (defaults to first page)' },
       },
-      required: ['filePath', 'sourceId', 'parent'],
+      required: ['sourceId', 'parent'],
     },
   },
   {
@@ -203,7 +203,7 @@ const TOOL_DEFINITIONS = [
     inputSchema: {
       type: 'object' as const,
       properties: {
-        filePath: { type: 'string', description: 'Absolute path to the .op file' },
+        filePath: { type: 'string', description: 'Path to .op file, or omit to use the live canvas (default)' },
         nodeId: { type: 'string', description: 'ID of the node to replace' },
         data: {
           type: 'object',
@@ -219,7 +219,7 @@ const TOOL_DEFINITIONS = [
         },
         pageId: { type: 'string', description: 'Target page ID (defaults to first page)' },
       },
-      required: ['filePath', 'nodeId', 'data'],
+      required: ['nodeId', 'data'],
     },
   },
   {
@@ -229,7 +229,7 @@ const TOOL_DEFINITIONS = [
     inputSchema: {
       type: 'object' as const,
       properties: {
-        filePath: { type: 'string', description: 'Absolute path to the .op file' },
+        filePath: { type: 'string', description: 'Path to .op file, or omit to use the live canvas (default)' },
         svgPath: { type: 'string', description: 'Absolute path to a local .svg file' },
         parent: {
           type: ['string', 'null'] as any,
@@ -249,7 +249,7 @@ const TOOL_DEFINITIONS = [
         },
         pageId: { type: 'string', description: 'Target page ID (defaults to first page)' },
       },
-      required: ['filePath', 'svgPath'],
+      required: ['svgPath'],
     },
   },
   {
@@ -258,9 +258,9 @@ const TOOL_DEFINITIONS = [
     inputSchema: {
       type: 'object' as const,
       properties: {
-        filePath: { type: 'string', description: 'Absolute path to the .op file' },
+        filePath: { type: 'string', description: 'Path to .op file, or omit to use the live canvas (default)' },
       },
-      required: ['filePath'],
+      required: [],
     },
   },
   {
@@ -269,11 +269,11 @@ const TOOL_DEFINITIONS = [
     inputSchema: {
       type: 'object' as const,
       properties: {
-        filePath: { type: 'string', description: 'Absolute path to the .op file' },
+        filePath: { type: 'string', description: 'Path to .op file, or omit to use the live canvas (default)' },
         variables: { type: 'object', description: 'Variables to set (name → { type, value })' },
         replace: { type: 'boolean', description: 'Replace all variables instead of merging (default false)' },
       },
-      required: ['filePath', 'variables'],
+      required: ['variables'],
     },
   },
   {
@@ -283,7 +283,7 @@ const TOOL_DEFINITIONS = [
     inputSchema: {
       type: 'object' as const,
       properties: {
-        filePath: { type: 'string', description: 'Absolute path to the .op file' },
+        filePath: { type: 'string', description: 'Path to .op file, or omit to use the live canvas (default)' },
         themes: {
           type: 'object',
           description:
@@ -294,7 +294,7 @@ const TOOL_DEFINITIONS = [
           description: 'Replace all themes instead of merging (default false)',
         },
       },
-      required: ['filePath', 'themes'],
+      required: ['themes'],
     },
   },
   {
@@ -303,12 +303,12 @@ const TOOL_DEFINITIONS = [
     inputSchema: {
       type: 'object' as const,
       properties: {
-        filePath: { type: 'string', description: 'Absolute path to the .op file' },
+        filePath: { type: 'string', description: 'Path to .op file, or omit to use the live canvas (default)' },
         parentId: { type: 'string', description: 'Only return layout under this parent node' },
         maxDepth: { type: 'number', description: 'Max depth to traverse (default 1)' },
         pageId: { type: 'string', description: 'Target page ID (defaults to first page)' },
       },
-      required: ['filePath'],
+      required: [],
     },
   },
   {
@@ -317,7 +317,7 @@ const TOOL_DEFINITIONS = [
     inputSchema: {
       type: 'object' as const,
       properties: {
-        filePath: { type: 'string', description: 'Absolute path to the .op file' },
+        filePath: { type: 'string', description: 'Path to .op file, or omit to use the live canvas (default)' },
         width: { type: 'number', description: 'Required width of empty space' },
         height: { type: 'number', description: 'Required height of empty space' },
         padding: { type: 'number', description: 'Minimum padding from other elements (default 50)' },
@@ -325,7 +325,7 @@ const TOOL_DEFINITIONS = [
         nodeId: { type: 'string', description: 'Search relative to this node (default: entire canvas)' },
         pageId: { type: 'string', description: 'Target page ID (defaults to first page)' },
       },
-      required: ['filePath', 'width', 'height', 'direction'],
+      required: ['width', 'height', 'direction'],
     },
   },
   {
@@ -334,11 +334,11 @@ const TOOL_DEFINITIONS = [
     inputSchema: {
       type: 'object' as const,
       properties: {
-        filePath: { type: 'string', description: 'Absolute path to the .op file to extract themes from' },
+        filePath: { type: 'string', description: 'Path to .op file, or omit to use the live canvas (default)' },
         presetPath: { type: 'string', description: 'Absolute path for the output .optheme file' },
         name: { type: 'string', description: 'Display name for the preset (defaults to file name)' },
       },
-      required: ['filePath', 'presetPath'],
+      required: ['presetPath'],
     },
   },
   {
@@ -347,10 +347,10 @@ const TOOL_DEFINITIONS = [
     inputSchema: {
       type: 'object' as const,
       properties: {
-        filePath: { type: 'string', description: 'Absolute path to the .op file to update' },
+        filePath: { type: 'string', description: 'Path to .op file, or omit to use the live canvas (default)' },
         presetPath: { type: 'string', description: 'Absolute path to the .optheme file to load' },
       },
-      required: ['filePath', 'presetPath'],
+      required: ['presetPath'],
     },
   },
   {
@@ -371,7 +371,7 @@ const TOOL_DEFINITIONS = [
     inputSchema: {
       type: 'object' as const,
       properties: {
-        filePath: { type: 'string', description: 'Absolute path to the .op file' },
+        filePath: { type: 'string', description: 'Path to .op file, or omit to use the live canvas (default)' },
         name: { type: 'string', description: 'Page name (default: "Page N")' },
         children: {
           type: 'array',
@@ -380,7 +380,7 @@ const TOOL_DEFINITIONS = [
           items: { type: 'object' },
         },
       },
-      required: ['filePath'],
+      required: [],
     },
   },
   {
@@ -389,10 +389,10 @@ const TOOL_DEFINITIONS = [
     inputSchema: {
       type: 'object' as const,
       properties: {
-        filePath: { type: 'string', description: 'Absolute path to the .op file' },
+        filePath: { type: 'string', description: 'Path to .op file, or omit to use the live canvas (default)' },
         pageId: { type: 'string', description: 'ID of the page to remove' },
       },
-      required: ['filePath', 'pageId'],
+      required: ['pageId'],
     },
   },
   {
@@ -401,11 +401,11 @@ const TOOL_DEFINITIONS = [
     inputSchema: {
       type: 'object' as const,
       properties: {
-        filePath: { type: 'string', description: 'Absolute path to the .op file' },
+        filePath: { type: 'string', description: 'Path to .op file, or omit to use the live canvas (default)' },
         pageId: { type: 'string', description: 'ID of the page to rename' },
         name: { type: 'string', description: 'New page name' },
       },
-      required: ['filePath', 'pageId', 'name'],
+      required: ['pageId', 'name'],
     },
   },
   {
@@ -414,11 +414,11 @@ const TOOL_DEFINITIONS = [
     inputSchema: {
       type: 'object' as const,
       properties: {
-        filePath: { type: 'string', description: 'Absolute path to the .op file' },
+        filePath: { type: 'string', description: 'Path to .op file, or omit to use the live canvas (default)' },
         pageId: { type: 'string', description: 'ID of the page to move' },
         index: { type: 'number', description: 'New zero-based index for the page' },
       },
-      required: ['filePath', 'pageId', 'index'],
+      required: ['pageId', 'index'],
     },
   },
   {
@@ -428,11 +428,11 @@ const TOOL_DEFINITIONS = [
     inputSchema: {
       type: 'object' as const,
       properties: {
-        filePath: { type: 'string', description: 'Absolute path to the .op file' },
+        filePath: { type: 'string', description: 'Path to .op file, or omit to use the live canvas (default)' },
         pageId: { type: 'string', description: 'ID of the page to duplicate' },
         name: { type: 'string', description: 'Name for the duplicated page (default: "original copy")' },
       },
-      required: ['filePath', 'pageId'],
+      required: ['pageId'],
     },
   },
 ]
@@ -512,12 +512,9 @@ function registerTools(server: Server): void {
 
 // --- HTTP server helper ---
 
-function startHttpServer(server: Server, port: number): void {
-  const transport = new StreamableHTTPServerTransport({
-    sessionIdGenerator: () => randomUUID(),
-  })
-
-  server.connect(transport)
+function startHttpServer(port: number): void {
+  // Per-session transport map: each client gets its own Server + Transport
+  const sessions = new Map<string, { transport: StreamableHTTPServerTransport; server: Server }>()
 
   const httpServer = createServer(async (req, res) => {
     res.setHeader('Access-Control-Allow-Origin', '*')
@@ -531,19 +528,62 @@ function startHttpServer(server: Server, port: number): void {
       return
     }
 
-    if (req.url === '/mcp') {
+    if (req.url !== '/mcp') {
+      res.writeHead(404, { 'Content-Type': 'application/json' })
+      res.end(JSON.stringify({ error: 'Not found. Use /mcp endpoint.' }))
+      return
+    }
+
+    const sessionId = req.headers['mcp-session-id'] as string | undefined
+
+    // Route to existing session
+    if (sessionId && sessions.has(sessionId)) {
+      const session = sessions.get(sessionId)!
       if (req.method === 'POST') {
         const chunks: Buffer[] = []
         for await (const chunk of req) chunks.push(chunk as Buffer)
         const body = JSON.parse(Buffer.concat(chunks).toString())
-        await transport.handleRequest(req, res, body)
+        await session.transport.handleRequest(req, res, body)
       } else {
-        await transport.handleRequest(req, res)
+        await session.transport.handleRequest(req, res)
       }
-    } else {
-      res.writeHead(404, { 'Content-Type': 'application/json' })
-      res.end(JSON.stringify({ error: 'Not found. Use /mcp endpoint.' }))
+      return
     }
+
+    // New session — only POST (initialize) is valid without session ID
+    if (req.method === 'POST') {
+      const mcpServer = new Server(
+        { name: pkg.name, version: pkg.version },
+        { capabilities: { tools: {} } },
+      )
+      registerTools(mcpServer)
+
+      const transport = new StreamableHTTPServerTransport({
+        sessionIdGenerator: () => randomUUID(),
+        onsessioninitialized: (sid: string) => {
+          sessions.set(sid, { transport, server: mcpServer })
+        },
+        onsessionclosed: (sid: string) => {
+          sessions.delete(sid)
+        },
+      })
+
+      transport.onclose = () => {
+        if (transport.sessionId) sessions.delete(transport.sessionId)
+      }
+
+      await mcpServer.connect(transport)
+
+      const chunks: Buffer[] = []
+      for await (const chunk of req) chunks.push(chunk as Buffer)
+      const body = JSON.parse(Buffer.concat(chunks).toString())
+      await transport.handleRequest(req, res, body)
+      return
+    }
+
+    // Invalid: GET/DELETE without valid session ID
+    res.writeHead(400, { 'Content-Type': 'application/json' })
+    res.end(JSON.stringify({ jsonrpc: '2.0', error: { code: -32000, message: 'Invalid or missing session ID' }, id: null }))
   })
 
   httpServer.listen(port, '0.0.0.0', () => {
@@ -569,7 +609,7 @@ async function main() {
   const { stdio, http, port } = parseArgs()
 
   if (stdio && http) {
-    // Both: two Server instances sharing the same tool handlers
+    // Both: stdio server + HTTP server (per-session)
     const stdioServer = new Server(
       { name: pkg.name, version: pkg.version },
       { capabilities: { tools: {} } },
@@ -577,19 +617,9 @@ async function main() {
     registerTools(stdioServer)
     await stdioServer.connect(new StdioServerTransport())
 
-    const httpServer = new Server(
-      { name: pkg.name, version: pkg.version },
-      { capabilities: { tools: {} } },
-    )
-    registerTools(httpServer)
-    startHttpServer(httpServer, port)
+    startHttpServer(port)
   } else if (http) {
-    const server = new Server(
-      { name: pkg.name, version: pkg.version },
-      { capabilities: { tools: {} } },
-    )
-    registerTools(server)
-    startHttpServer(server, port)
+    startHttpServer(port)
   } else {
     const server = new Server(
       { name: pkg.name, version: pkg.version },
