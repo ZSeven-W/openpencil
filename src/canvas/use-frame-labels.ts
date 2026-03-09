@@ -1,13 +1,9 @@
 import { useEffect } from 'react'
 import { useCanvasStore } from '@/stores/canvas-store'
 import { useDocumentStore, getActivePageChildren } from '@/stores/document-store'
-import { COMPONENT_COLOR, INSTANCE_COLOR } from './canvas-constants'
+import { COMPONENT_COLOR, INSTANCE_COLOR, FRAME_LABEL_FONT_SIZE, FRAME_LABEL_OFFSET_Y, FRAME_LABEL_COLOR } from './canvas-constants'
 import type { FabricObjectWithPenId } from './canvas-object-factory'
 import type { PenNode } from '@/types/pen'
-
-const LABEL_FONT_SIZE = 12
-const LABEL_OFFSET_Y = 6
-const LABEL_COLOR = '#999999'
 
 /** Collect IDs of all nodes with reusable: true in the tree. */
 function collectReusableIds(nodes: PenNode[], result: Set<string>) {
@@ -78,7 +74,7 @@ export function useFrameLabels() {
           vpt[2] * dpr, vpt[3] * dpr,
           vpt[4] * dpr, vpt[5] * dpr,
         )
-        ctx.font = `500 ${LABEL_FONT_SIZE / zoom}px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif`
+        ctx.font = `500 ${FRAME_LABEL_FONT_SIZE / zoom}px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif`
         ctx.textBaseline = 'bottom'
 
         for (const obj of objects) {
@@ -102,8 +98,8 @@ export function useFrameLabels() {
             ? COMPONENT_COLOR
             : isInstance
               ? INSTANCE_COLOR
-              : LABEL_COLOR
-          ctx.fillText(name, x, y - LABEL_OFFSET_Y / zoom)
+              : FRAME_LABEL_COLOR
+          ctx.fillText(name, x, y - FRAME_LABEL_OFFSET_Y / zoom)
         }
 
         ctx.restore()

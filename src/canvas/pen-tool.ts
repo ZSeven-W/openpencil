@@ -5,6 +5,14 @@ import {
   DEFAULT_STROKE,
   DEFAULT_STROKE_WIDTH,
   SELECTION_BLUE,
+  PEN_ANCHOR_FILL,
+  PEN_ANCHOR_RADIUS,
+  PEN_ANCHOR_FIRST_RADIUS,
+  PEN_HANDLE_DOT_RADIUS,
+  PEN_HANDLE_LINE_STROKE,
+  PEN_RUBBER_BAND_STROKE,
+  PEN_RUBBER_BAND_DASH,
+  PEN_CLOSE_HIT_THRESHOLD,
 } from './canvas-constants'
 
 // ---------------------------------------------------------------------------
@@ -51,15 +59,7 @@ let handleDots: fabric.FabricObject[] = []
 
 const PREVIEW_STROKE = SELECTION_BLUE
 const PREVIEW_STROKE_WIDTH = 1.5
-const RUBBER_BAND_STROKE = 'rgba(13, 153, 255, 0.5)'
-const RUBBER_BAND_DASH = [4, 4]
-const ANCHOR_RADIUS = 4
-const ANCHOR_FILL = '#ffffff'
 const ANCHOR_STROKE = SELECTION_BLUE
-const ANCHOR_FIRST_RADIUS = 5
-const HANDLE_DOT_RADIUS = 3
-const HANDLE_LINE_STROKE = '#888888'
-const CLOSE_HIT_THRESHOLD = 8 // screen pixels
 
 // ---------------------------------------------------------------------------
 // Exported query
@@ -93,7 +93,7 @@ export function penToolPointerDown(
   if (state.points.length >= 3) {
     const first = state.points[0]
     const zoom = useCanvasStore.getState().viewport.zoom || 1
-    const threshold = CLOSE_HIT_THRESHOLD / zoom
+    const threshold = PEN_CLOSE_HIT_THRESHOLD / zoom
     const dist = Math.hypot(
       scenePoint.x - first.x,
       scenePoint.y - first.y,
@@ -415,9 +415,9 @@ function renderPreview(canvas: fabric.Canvas): void {
       {
         ...baseProps,
         fill: '',
-        stroke: RUBBER_BAND_STROKE,
+        stroke: PEN_RUBBER_BAND_STROKE,
         strokeWidth: 1,
-        strokeDashArray: RUBBER_BAND_DASH,
+        strokeDashArray: PEN_RUBBER_BAND_DASH,
         strokeUniform: true,
       },
     )
@@ -428,13 +428,13 @@ function renderPreview(canvas: fabric.Canvas): void {
   for (let i = 0; i < points.length; i++) {
     const pt = points[i]
     const isFirst = i === 0
-    const r = isFirst ? ANCHOR_FIRST_RADIUS : ANCHOR_RADIUS
+    const r = isFirst ? PEN_ANCHOR_FIRST_RADIUS : PEN_ANCHOR_RADIUS
     const circle = new fabric.Circle({
       ...baseProps,
       left: pt.x - r,
       top: pt.y - r,
       radius: r,
-      fill: ANCHOR_FILL,
+      fill: PEN_ANCHOR_FILL,
       stroke: ANCHOR_STROKE,
       strokeWidth: 1.5,
       strokeUniform: true,
@@ -451,7 +451,7 @@ function renderPreview(canvas: fabric.Canvas): void {
       const line = new fabric.Line([pt.x, pt.y, hx, hy], {
         ...baseProps,
         fill: '',
-        stroke: HANDLE_LINE_STROKE,
+        stroke: PEN_HANDLE_LINE_STROKE,
         strokeWidth: 1,
         strokeUniform: true,
       })
@@ -460,9 +460,9 @@ function renderPreview(canvas: fabric.Canvas): void {
 
       const dot = new fabric.Circle({
         ...baseProps,
-        left: hx - HANDLE_DOT_RADIUS,
-        top: hy - HANDLE_DOT_RADIUS,
-        radius: HANDLE_DOT_RADIUS,
+        left: hx - PEN_HANDLE_DOT_RADIUS,
+        top: hy - PEN_HANDLE_DOT_RADIUS,
+        radius: PEN_HANDLE_DOT_RADIUS,
         fill: SELECTION_BLUE,
         stroke: '#ffffff',
         strokeWidth: 1,
@@ -478,7 +478,7 @@ function renderPreview(canvas: fabric.Canvas): void {
       const line = new fabric.Line([pt.x, pt.y, hx, hy], {
         ...baseProps,
         fill: '',
-        stroke: HANDLE_LINE_STROKE,
+        stroke: PEN_HANDLE_LINE_STROKE,
         strokeWidth: 1,
         strokeUniform: true,
       })
@@ -487,9 +487,9 @@ function renderPreview(canvas: fabric.Canvas): void {
 
       const dot = new fabric.Circle({
         ...baseProps,
-        left: hx - HANDLE_DOT_RADIUS,
-        top: hy - HANDLE_DOT_RADIUS,
-        radius: HANDLE_DOT_RADIUS,
+        left: hx - PEN_HANDLE_DOT_RADIUS,
+        top: hy - PEN_HANDLE_DOT_RADIUS,
+        radius: PEN_HANDLE_DOT_RADIUS,
         fill: SELECTION_BLUE,
         stroke: '#ffffff',
         strokeWidth: 1,

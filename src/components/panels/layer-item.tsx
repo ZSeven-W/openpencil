@@ -17,6 +17,7 @@ import {
   ChevronDown,
   ChevronRight,
   Diamond,
+  Smile,
 } from 'lucide-react'
 import type { PenNodeType } from '@/types/pen'
 
@@ -30,6 +31,7 @@ const TYPE_ICONS: Record<PenNodeType, typeof Square> = {
   polygon: Hexagon,
   path: Spline,
   image: ImageIcon,
+  icon_font: Smile,
   ref: Link,
 }
 

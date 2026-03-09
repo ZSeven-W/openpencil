@@ -4,6 +4,8 @@ import { join, resolve } from 'node:path'
 import { readFile, writeFile, mkdir } from 'node:fs/promises'
 import { existsSync } from 'node:fs'
 
+const MCP_DEFAULT_PORT = 3100
+
 interface InstallBody {
   tool: string
   action: 'install' | 'uninstall'
@@ -43,7 +45,7 @@ function resolveMcpServerPath(): string {
 function buildMcpServerEntry(
   serverPath: string,
   transportMode: 'stdio' | 'http' | 'both' = 'stdio',
-  httpPort = 3100,
+  httpPort = MCP_DEFAULT_PORT,
 ): { command: string; args: string[] } {
   switch (transportMode) {
     case 'http':

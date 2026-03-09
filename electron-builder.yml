@@ -34,6 +34,7 @@ dmg:
 
 win:
   icon: build/icon.ico
+  artifactName: "${productName}-${version}-${arch}-win.${ext}"
   target:
     - nsis
     - portable
@@ -42,10 +43,15 @@ nsis:
   oneClick: false
   perMachine: false
   allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
 
 linux:
   icon: build/icon.png
   category: Graphics
+  artifactName: "${productName}-${version}-${arch}-linux.${ext}"
+  desktop:
+    StartupWMClass: openpencil
   target:
     - AppImage
     - deb

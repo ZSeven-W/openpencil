@@ -1,10 +1,7 @@
 import { useEffect } from 'react'
 import { useCanvasStore } from '@/stores/canvas-store'
 import type { FabricObjectWithPenId } from './canvas-object-factory'
-
-const FRAME_OVERLAY_COLOR = '#3b82f6'
-const FRAME_OVERLAY_DASH = [6, 4]
-const FRAME_OVERLAY_WIDTH = 2
+import { HOVER_BLUE, INDICATOR_LINE_WIDTH, INDICATOR_DASH } from './canvas-constants'
 
 /**
  * Renders a dashed border around the currently entered frame
@@ -57,9 +54,9 @@ export function useEnteredFrameOverlay() {
           ctx.translate(-cx, -cy)
         }
 
-        ctx.strokeStyle = FRAME_OVERLAY_COLOR
-        ctx.lineWidth = FRAME_OVERLAY_WIDTH / zoom
-        ctx.setLineDash(FRAME_OVERLAY_DASH.map((d) => d / zoom))
+        ctx.strokeStyle = HOVER_BLUE
+        ctx.lineWidth = INDICATOR_LINE_WIDTH / zoom
+        ctx.setLineDash(INDICATOR_DASH.map((d) => d / zoom))
         ctx.strokeRect(left, top, w, h)
 
         ctx.restore()

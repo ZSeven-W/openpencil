@@ -268,6 +268,14 @@ function generateNodeSwiftUI(node: PenNode, depth: number): string {
       return generateImageSwiftUI(node, depth)
     }
 
+    case 'icon_font': {
+      const size = typeof node.width === 'number' ? node.width : 24
+      const color = node.fill?.[0]?.type === 'solid' ? node.fill[0].color : null
+      const iconName = (node.iconFontName || 'circle').replace(/-/g, '.')
+      const colorMod = color ? `\n${pad}    .foregroundColor(Color(hex: "${color}"))` : ''
+      return `${pad}Image("${iconName}")\n${pad}    .resizable()\n${pad}    .frame(width: ${size}, height: ${size})${colorMod}`
+    }
+
     case 'ref':
       return `${pad}// Ref: ${node.ref}`
 

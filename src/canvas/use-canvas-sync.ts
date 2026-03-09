@@ -6,6 +6,9 @@ import type { PenNode, ContainerProps } from '@/types/pen'
 import {
   createFabricObject,
   type FabricObjectWithPenId,
+  isDirectionalStroke,
+  getDirectionalStrokeThicknesses,
+  resolveStrokeColor,
 } from './canvas-object-factory'
 import { syncFabricObject } from './canvas-object-sync'
 import { isFabricSyncLocked, setFabricSyncLock } from './canvas-sync-lock'
@@ -20,6 +23,7 @@ import {
   getNodeWidth,
   getNodeHeight,
   computeLayoutPositions,
+  inferLayout,
 } from './canvas-layout-engine'
 import { parseSizing } from './canvas-text-measure'
 
@@ -161,6 +165,42 @@ function cornerRadiusVal(
   return cr[0]
 }
 
+/** Create thin rectangle PenNodes for directional border sides. */
+function createDirectionalBorderNodes(
+  parentId: string,
+  x: number, y: number, w: number, h: number,
+  sides: { top: number; right: number; bottom: number; left: number },
+  color: string,
+): PenNode[] {
+  const nodes: PenNode[] = []
+  const fill = [{ type: 'solid' as const, color }]
+  if (sides.top > 0) {
+    nodes.push({
+      id: `${parentId}__border_top`, type: 'rectangle', name: '_border',
+      x, y, width: w, height: sides.top, fill,
+    } as unknown as PenNode)
+  }
+  if (sides.bottom > 0) {
+    nodes.push({
+      id: `${parentId}__border_bottom`, type: 'rectangle', name: '_border',
+      x, y: y + h - sides.bottom, width: w, height: sides.bottom, fill,
+    } as unknown as PenNode)
+  }
+  if (sides.left > 0) {
+    nodes.push({
+      id: `${parentId}__border_left`, type: 'rectangle', name: '_border',
+      x, y, width: sides.left, height: h, fill,
+    } as unknown as PenNode)
+  }
+  if (sides.right > 0) {
+    nodes.push({
+      id: `${parentId}__border_right`, type: 'rectangle', name: '_border',
+      x: x + w - sides.right, y, width: sides.right, height: h, fill,
+    } as unknown as PenNode)
+  }
+  return nodes
+}
+
 function flattenNodes(
   nodes: PenNode[],
   offsetX = 0,
@@ -215,6 +255,20 @@ function flattenNodes(
       if (changed) resolved = r as unknown as PenNode
     }
 
+    // For frames without explicit numeric height (especially root frames),
+    // compute height from children so the frame isn't collapsed to fallback.
+    if (
+      node.type === 'frame'
+      && 'children' in node
+      && node.children?.length
+      && (!('height' in resolved) || typeof resolved.height !== 'number')
+    ) {
+      const computedH = getNodeHeight(resolved, parentAvailH, parentAvailW)
+      if (computedH > 0) {
+        resolved = { ...resolved, height: computedH } as unknown as PenNode
+      }
+    }
+
     // Apply parent offset to get absolute position for rendering
     const absoluteNode =
       offsetX !== 0 || offsetY !== 0
@@ -232,6 +286,26 @@ function flattenNodes(
 
     result.push(absoluteNode as PenNode)
 
+    // Inject synthetic border rectangles for directional strokes.
+    // Fabric.js doesn't support per-side strokes, so we render them as
+    // thin rectangles positioned at the specified edges.
+    if ('stroke' in node && isDirectionalStroke(node.stroke)) {
+      const strokeColor = resolveStrokeColor(node.stroke)
+      // Only render directional borders when the stroke has an explicit fill color.
+      // Pencil uses fill-less directional strokes for internal spacing, not visible borders.
+      if (strokeColor) {
+        const absX = (absoluteNode as PenNode).x ?? 0
+        const absY = (absoluteNode as PenNode).y ?? 0
+        const nodeW = getNodeWidth(resolved, parentAvailW)
+        const nodeH = getNodeHeight(resolved, parentAvailH, parentAvailW)
+        const sides = getDirectionalStrokeThicknesses(node.stroke!)
+        const borderNodes = createDirectionalBorderNodes(
+          node.id, absX, absY, nodeW, nodeH, sides, strokeColor,
+        )
+        for (const bn of borderNodes) result.push(bn)
+      }
+    }
+
     const children = 'children' in node ? node.children : undefined
     if (children && children.length > 0) {
       const parentAbsX = (resolved.x ?? 0) + offsetX
@@ -239,15 +313,18 @@ function flattenNodes(
 
       // Compute available dimensions for children
       const nodeW = getNodeWidth(resolved, parentAvailW)
-      const nodeH = getNodeHeight(resolved, parentAvailH)
+      const nodeH = getNodeHeight(resolved, parentAvailH, parentAvailW)
       const pad = resolvePadding(
         'padding' in resolved ? (resolved as any).padding : undefined,
       )
       const childAvailW = Math.max(0, nodeW - pad.left - pad.right)
       const childAvailH = Math.max(0, nodeH - pad.top - pad.bottom)
 
-      // If the parent has an auto-layout, compute child positions first
-      const layout = 'layout' in node ? (node as ContainerProps).layout : undefined
+      // If the parent has an auto-layout, compute child positions first.
+      // Infer horizontal layout when gap/justifyContent/alignItems are set
+      // but layout is not — matches the inference in computeLayoutPositions.
+      const layout = ('layout' in node ? (node as ContainerProps).layout : undefined)
+        || inferLayout(node)
       const positioned =
         layout && layout !== 'none'
           ? computeLayoutPositions(resolved, children)
@@ -375,13 +452,26 @@ export function useCanvasSync() {
     let prevThemes = useDocumentStore.getState().document.themes
     let prevActivePageId = useCanvasStore.getState().activePageId
 
-    // Subscribe to page switches
+    // Subscribe to page switches and canvas initialization
+    let prevFabricCanvas = useCanvasStore.getState().fabricCanvas
     const unsubCanvas = useCanvasStore.subscribe((cs) => {
       if (cs.activePageId !== prevActivePageId) {
         prevActivePageId = cs.activePageId
         // Force a full re-sync by resetting prevPageChildren
         prevPageChildren = null as unknown as PenNode[]
-        // Trigger document subscription by creating a new reference
+        // Trigger document subscription by creating a new reference.
+        // Always call setState — even for empty pages — so old canvas
+        // objects are cleared and the sync runs unconditionally.
+        const { document: doc } = useDocumentStore.getState()
+        const pageChildren = getActivePageChildren(doc, cs.activePageId)
+        useDocumentStore.setState({
+          document: setActivePageChildren(doc, cs.activePageId, [...pageChildren]),
+        })
+      }
+      // When fabricCanvas transitions from null → ready, force a full re-sync
+      // so that documents loaded before the canvas was ready get rendered.
+      if (cs.fabricCanvas && !prevFabricCanvas) {
+        prevPageChildren = null as unknown as PenNode[]
         const { document: doc } = useDocumentStore.getState()
         const pageChildren = getActivePageChildren(doc, cs.activePageId)
         if (pageChildren.length > 0) {
@@ -390,29 +480,37 @@ export function useCanvasSync() {
           })
         }
       }
+      prevFabricCanvas = cs.fabricCanvas
     })
 
     const unsub = useDocumentStore.subscribe((state) => {
       const activePageId = useCanvasStore.getState().activePageId
       const pageChildren = getActivePageChildren(state.document, activePageId)
 
-      // Always track the latest references — even when the sync lock
-      // is active — so that unrelated store updates (e.g. markClean setting
-      // isDirty) don't trigger a stale re-sync that overwrites canvas state.
       const childrenChanged = pageChildren !== prevPageChildren
       const variablesChanged = state.document.variables !== prevVariables
       const themesChanged = state.document.themes !== prevThemes
-      prevPageChildren = pageChildren
-      prevVariables = state.document.variables
-      prevThemes = state.document.themes
 
-      if (isFabricSyncLocked()) return
+      // When the sync lock is active, track references so that unrelated
+      // store updates (e.g. markClean) don't trigger stale re-syncs.
+      if (isFabricSyncLocked()) {
+        prevPageChildren = pageChildren
+        prevVariables = state.document.variables
+        prevThemes = state.document.themes
+        return
+      }
 
       // Skip re-sync when only non-document fields changed (isDirty, fileName, etc.)
       if (!childrenChanged && !variablesChanged && !themesChanged) return
 
       const canvas = useCanvasStore.getState().fabricCanvas
+      // Don't update prev references when canvas isn't ready — otherwise
+      // the change is "consumed" without syncing and won't trigger again.
       if (!canvas) return
+
+      prevPageChildren = pageChildren
+      prevVariables = state.document.variables
+      prevThemes = state.document.themes
 
       // Build variable resolution context
       const variables = state.document.variables ?? {}
@@ -589,10 +687,18 @@ export function useCanvasSync() {
       // flatNodes order.  When the user reorders layers in the panel the
       // document children change, but existing Fabric objects keep their
       // old canvas indices.  Reconcile once after every sync pass.
+      // Rebuild mapping from CURRENT canvas objects (not the pre-update objMap)
+      // because text objects may have been recreated (IText↔Textbox swap),
+      // leaving stale references in objMap.
+      const freshObjMap = new Map(
+        (canvas.getObjects() as FabricObjectWithPenId[])
+          .filter((o) => o.penNodeId)
+          .map((o) => [o.penNodeId!, o]),
+      )
       const expectedOrder: FabricObjectWithPenId[] = []
       for (const node of flatNodes) {
         if (node.type === 'ref') continue
-        const o = objMap.get(node.id)
+        const o = freshObjMap.get(node.id)
         if (o) expectedOrder.push(o)
       }
       for (let i = 0; i < expectedOrder.length; i++) {

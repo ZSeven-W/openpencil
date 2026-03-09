@@ -14,7 +14,9 @@ import {
  */
 export function buildDesignPrompt(): string {
   return `You are generating designs for OpenPencil, a vector design tool.
-Use the batch_design tool to insert nodes. Each node must follow the PenNode schema below.
+Use batch_design (for multi-node designs with DSL) or insert_node (for single node trees with JSON).
+Both support postProcess=true for automatic role defaults, icon resolution, and layout sanitization.
+Each node must follow the PenNode schema below.
 
 ${PEN_NODE_SCHEMA}
 

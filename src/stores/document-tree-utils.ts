@@ -1,3 +1,4 @@
+import { nanoid } from 'nanoid'
 import type { PenDocument, PenNode, PenPage, RefNode } from '@/types/pen'
 
 export const DEFAULT_FRAME_ID = 'root-frame'
@@ -89,6 +90,30 @@ export function migrateToPages(doc: PenDocument): PenDocument {
     ],
     children: [],
   }
+}
+
+/** Recursively ensure all nodes in the tree have an `id`. */
+function ensureNodeIdsInTree(nodes: PenNode[]): void {
+  for (const node of nodes) {
+    if (!node.id) {
+      ;(node as any).id = nanoid()
+    }
+    if ('children' in node && node.children) {
+      ensureNodeIdsInTree(node.children)
+    }
+  }
+}
+
+/** Ensure all nodes in a document have IDs (mutates in place). */
+export function ensureDocumentNodeIds(doc: PenDocument): PenDocument {
+  if (doc.pages) {
+    for (const page of doc.pages) {
+      if (!page.id) page.id = nanoid()
+      ensureNodeIdsInTree(page.children)
+    }
+  }
+  ensureNodeIdsInTree(doc.children)
+  return doc
 }
 
 export function findNodeInTree(

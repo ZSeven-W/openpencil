@@ -28,7 +28,7 @@ export function useElectronMenu() {
         if (!result) return
         try {
           const raw = JSON.parse(result.content)
-          if (!raw.version || !Array.isArray(raw.children)) return
+          if (!raw.version || (!Array.isArray(raw.children) && !Array.isArray(raw.pages))) return
           const doc = normalizePenDocument(raw)
           const name = filePath.split(/[/\\]/).pop() || 'untitled.op'
           useDocumentStore.getState().loadDocument(doc, name)

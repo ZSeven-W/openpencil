@@ -10,7 +10,6 @@
 import { writeFile, mkdir, unlink } from 'node:fs/promises'
 import { join } from 'node:path'
 import { homedir } from 'node:os'
-
 const PORT_FILE_DIR = join(homedir(), '.openpencil')
 const PORT_FILE_PATH = join(PORT_FILE_DIR, '.port')
 

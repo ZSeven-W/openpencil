@@ -1,6 +1,7 @@
 import { useEffect } from 'react'
 import { useCanvasStore } from '@/stores/canvas-store'
 import { activeInsertionIndicator, activeContainerHighlight } from './insertion-indicator'
+import { INDICATOR_BLUE, INDICATOR_LINE_WIDTH, INDICATOR_DASH, INDICATOR_ENDPOINT_RADIUS } from './canvas-constants'
 
 /**
  * Renders the layout reorder insertion indicator on the canvas overlay
@@ -30,9 +31,9 @@ export function useLayoutIndicator() {
         // Draw container highlight (dashed blue rectangle)
         if (activeContainerHighlight) {
           const { x: cx, y: cy, w: cw, h: ch } = activeContainerHighlight
-          ctx.strokeStyle = '#3B82F6'
-          ctx.lineWidth = 2 / zoom
-          ctx.setLineDash([6 / zoom, 4 / zoom])
+          ctx.strokeStyle = INDICATOR_BLUE
+          ctx.lineWidth = INDICATOR_LINE_WIDTH / zoom
+          ctx.setLineDash(INDICATOR_DASH.map((d) => d / zoom))
           ctx.strokeRect(cx, cy, cw, ch)
           ctx.setLineDash([])
         }
@@ -41,8 +42,8 @@ export function useLayoutIndicator() {
         if (activeInsertionIndicator) {
           const { x, y, length, orientation } = activeInsertionIndicator
 
-          ctx.strokeStyle = '#3B82F6'
-          ctx.lineWidth = 2 / zoom
+          ctx.strokeStyle = INDICATOR_BLUE
+          ctx.lineWidth = INDICATOR_LINE_WIDTH / zoom
           ctx.setLineDash([])
           ctx.beginPath()
           if (orientation === 'horizontal') {
@@ -55,8 +56,8 @@ export function useLayoutIndicator() {
           ctx.stroke()
 
           // Small circles at endpoints
-          ctx.fillStyle = '#3B82F6'
-          const r = 3 / zoom
+          ctx.fillStyle = INDICATOR_BLUE
+          const r = INDICATOR_ENDPOINT_RADIUS / zoom
           ctx.beginPath()
           if (orientation === 'horizontal') {
             ctx.arc(x, y, r, 0, Math.PI * 2)

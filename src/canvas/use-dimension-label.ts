@@ -3,6 +3,7 @@ import * as fabric from 'fabric'
 import { useCanvasStore } from '@/stores/canvas-store'
 import { nodeRenderInfo } from './use-canvas-sync'
 import type { FabricObjectWithPenId } from './canvas-object-factory'
+import { SELECTION_BLUE, DIMENSION_LABEL_OFFSET_Y } from './canvas-constants'
 
 export function useDimensionLabel(
   containerRef: RefObject<HTMLDivElement | null>,
@@ -19,7 +20,7 @@ export function useDimensionLabel(
       position: absolute;
       pointer-events: none;
       z-index: 5;
-      background: #0d99ff;
+      background: ${SELECTION_BLUE};
       color: #fff;
       font-size: 11px;
       font-weight: 500;
@@ -84,7 +85,7 @@ export function useDimensionLabel(
 
       label.style.display = 'block'
       label.style.left = `${bound.left + bound.width / 2}px`
-      label.style.top = `${bound.top + bound.height + 8}px`
+      label.style.top = `${bound.top + bound.height + DIMENSION_LABEL_OFFSET_Y}px`
       label.style.transform = 'translateX(-50%)'
     }
 

@@ -199,7 +199,8 @@ COPYWRITING (text content in designs must be concise and polished):
 - When the user provides long copy, distill it to its essence for the design. Design mockups are not documents.
 
 DESIGN GUIDELINES:
-- Mobile screens: root frame 375x812 at x:0,y:0. Web: 1200x800 (single screen) or 1200x3000-5000 (landing page)
+- Mobile screens: root frame 375x812 at x:0,y:0. Web: 1200x800 (single screen) or 1200x3000-5000 (landing page).
+  IMPORTANT: When the user requests a "mobile login page" / "移动端登录页" / "手机注册页" etc., generate the ACTUAL mobile UI (375x812 root frame) — do NOT create a desktop page containing a phone mockup. Phone mockups are only for marketing/showcase pages that preview an app.
 - Use unique descriptive IDs
 - All elements INSIDE root frame as children — no floating elements
 - For web pages, use a consistent centered content container (~1040-1160px) across sections to keep alignment stable
@@ -224,6 +225,7 @@ DESIGN GUIDELINES:
 - Use image nodes for generic photos/illustrations only; for app preview areas prefer phone mockup placeholders
 - Phone mockup/screenshot placeholder: exactly ONE "frame" node, width 260-300, height 520-580, cornerRadius 32, solid fill matching theme + 1px subtle stroke. NEVER use ellipse or circle for mockups. If a placeholder label is used, keep exactly ONE centered text child inside the phone frame; otherwise no children. Never put the label as a sibling below the phone.
 - Hero with phone mockup (desktop): prefer a two-column horizontal layout (left text/cta, right phone). Do NOT stack the phone below headline unless mobile.
+- CRITICAL: "mobile"/"移动端"/"手机" + screen type (login, profile, settings, etc.) = design the ACTUAL mobile screen at 375x812. Do NOT wrap it in a desktop landing page with a phone mockup frame. Phone mockups are ONLY for app showcase/preview sections on marketing pages.
 - NEVER use ellipse nodes for decorative/placeholder shapes. Use frame or rectangle with cornerRadius instead.
 - Avoid adding an extra full-width CTA strip directly under navigation unless the prompt explicitly asks for that section.
 - Buttons, nav items, and list items should include icons when appropriate for better UX
@@ -289,7 +291,7 @@ CRITICAL RULES:
 - Use width/height (or "fill_container") on all children. Unique descriptive IDs. All colors as fill arrays.
 - Start with <step> tags, then immediately the json block. NO preamble text.
 - After the json block, add a 1-sentence summary.
-- Phone mockup: exactly ONE "frame" node, width 260-300, height 520-580, cornerRadius 32, solid fill + 1px stroke. NEVER use ellipse. If a placeholder label is needed, allow exactly ONE centered text child inside the phone; otherwise no children. Never put placeholder text below the phone as a sibling.
+- Phone mockup: exactly ONE "frame" node, width 260-300, height 520-580, cornerRadius 32, solid fill + 1px stroke. NEVER use ellipse. If a placeholder label is needed, allow exactly ONE centered text child inside the phone; otherwise no children. Never put placeholder text below the phone as a sibling. ONLY use phone mockups for app showcase/marketing sections. When the user says "mobile screen" / "移动端" / "手机页面", build the ACTUAL mobile UI at 375x812 — NOT a desktop page with a phone mockup.
 - NEVER use ellipse for decorative/placeholder shapes — use frame or rectangle with cornerRadius.
 - Navigation bars (when applicable): justifyContent="space_between", 3 groups (logo | links | CTA), padding=[0,80], alignItems="center".
 - Never use emoji as icons; use path nodes with descriptive icon names (system auto-resolves to verified SVG paths).
@@ -313,7 +315,7 @@ COPYWRITING (keep all text content concise — verbose copy breaks layout and hu
 - Stats: number + 1-3 word label (e.g. "10K+ Users").
 - NEVER output paragraphs with 3+ sentences in a design. Distill user-provided long copy to its essence.
 
-SIZING: Mobile root 375x812. Web root 1200x800 (single screen) or 1200x3000-5000 (landing page).
+SIZING: Mobile root 375x812. Web root 1200x800 (single screen) or 1200x3000-5000 (landing page). "Mobile login/signup/settings" = 375x812 actual screen, NOT a desktop page with phone mockup.
 ICONS: "path" nodes, size 16-24px. ONLY use Feather icon names — PascalCase + "Icon" suffix (e.g. "SearchIcon", "ArrowRightIcon", "CheckIcon"). System auto-resolves name to verified SVG path; "d" is replaced automatically. Available Feather icons: ${FEATHER_ICON_NAMES}
 IMAGES: for app showcase sections, prefer phone mockup placeholders over real screenshots.
 STYLE: Default to light neutral palette unless user explicitly asks for dark/terminal/cyber. Avoid always reusing black+green.

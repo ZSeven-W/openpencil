@@ -7,6 +7,7 @@ import {
   removeNodeFromTree,
   cloneNodeWithNewIds,
   flattenNodes,
+  readNodeWithDepth,
   getDocChildren,
   setDocChildren,
 } from '../utils/node-operations'
@@ -24,6 +25,42 @@ import {
   sanitizeScreenFrameBounds,
 } from '../../services/ai/design-node-sanitization'
 import type { PenDocument, PenNode } from '../../types/pen'
+
+// ---------------------------------------------------------------------------
+// Node data validation
+// ---------------------------------------------------------------------------
+
+const VALID_NODE_TYPES = new Set([
+  'frame', 'group', 'rectangle', 'ellipse', 'line', 'polygon', 'path', 'text', 'image', 'ref',
+])
+
+function validateNodeData(data: Record<string, any>): void {
+  if (!data.type) throw new Error('Node data must include a "type" field')
+  if (!VALID_NODE_TYPES.has(data.type)) {
+    throw new Error(
+      `Invalid node type: "${data.type}". Valid types: ${[...VALID_NODE_TYPES].join(', ')}`,
+    )
+  }
+  if (data.type === 'text' && data.content == null) {
+    throw new Error('Text nodes must include a "content" field')
+  }
+  if (data.fill && !Array.isArray(data.fill)) {
+    throw new Error('Fill must be an array, e.g. [{ type: "solid", color: "#hex" }]')
+  }
+  if (data.stroke && data.stroke.fill && !Array.isArray(data.stroke.fill)) {
+    throw new Error('Stroke fill must be an array, e.g. { thickness: 1, fill: [{ type: "solid", color: "#hex" }] }')
+  }
+}
+
+/** Recursively validate node data including children. */
+function validateNodeTree(data: Record<string, any>): void {
+  validateNodeData(data)
+  if (Array.isArray(data.children)) {
+    for (const child of data.children) {
+      if (child && typeof child === 'object') validateNodeTree(child)
+    }
+  }
+}
 
 // ---------------------------------------------------------------------------
 // Shared post-processing (extracted from batch-design.ts)
@@ -83,13 +120,14 @@ export interface InsertNodeParams {
 
 export async function handleInsertNode(
   params: InsertNodeParams,
-): Promise<{ nodeId: string; nodeCount: number; postProcessed?: boolean }> {
+): Promise<{ nodeId: string; nodeCount: number; postProcessed?: boolean; node?: Record<string, unknown> }> {
   const filePath = resolveDocPath(params.filePath)
   let doc = await openDocument(filePath)
   doc = structuredClone(doc)
   const pageId = params.pageId
 
   const data = sanitizeObject(params.data)
+  validateNodeTree(data)
   const node = { ...data, id: generateId() } as PenNode
   const parent = params.parent
 
@@ -108,10 +146,12 @@ export async function handleInsertNode(
 
       if (params.postProcess) postProcessNode(doc, params.canvasWidth ?? 1200, pageId)
       await saveDocument(filePath, doc)
+      const finalNode = findNodeInTree(getDocChildren(doc, pageId), node.id)
       return {
         nodeId: node.id,
         nodeCount: countNodes(getDocChildren(doc, pageId)),
         postProcessed: params.postProcess || undefined,
+        node: finalNode ? readNodeWithDepth(finalNode, 1) : undefined,
       }
     }
   }
@@ -120,10 +160,12 @@ export async function handleInsertNode(
 
   if (params.postProcess) postProcessNode(doc, params.canvasWidth ?? 1200, pageId)
   await saveDocument(filePath, doc)
+  const finalNode = findNodeInTree(getDocChildren(doc, pageId), node.id)
   return {
     nodeId: node.id,
     nodeCount: countNodes(getDocChildren(doc, pageId)),
     postProcessed: params.postProcess || undefined,
+    node: finalNode ? readNodeWithDepth(finalNode, 1) : undefined,
   }
 }
 
@@ -142,13 +184,20 @@ export interface UpdateNodeParams {
 
 export async function handleUpdateNode(
   params: UpdateNodeParams,
-): Promise<{ ok: true; postProcessed?: boolean }> {
+): Promise<{ ok: true; postProcessed?: boolean; node?: Record<string, unknown> }> {
   const filePath = resolveDocPath(params.filePath)
   let doc = await openDocument(filePath)
   doc = structuredClone(doc)
   const pageId = params.pageId
 
   const data = sanitizeObject(params.data)
+  // Validate type if being changed
+  if (data.type && !VALID_NODE_TYPES.has(data.type)) {
+    throw new Error(`Invalid node type: "${data.type}". Valid types: ${[...VALID_NODE_TYPES].join(', ')}`)
+  }
+  if (data.fill && !Array.isArray(data.fill)) {
+    throw new Error('Fill must be an array, e.g. [{ type: "solid", color: "#hex" }]')
+  }
   const target = findNodeInTree(getDocChildren(doc, pageId), params.nodeId)
   if (!target) throw new Error(`Node not found: ${params.nodeId}`)
 
@@ -156,7 +205,12 @@ export async function handleUpdateNode(
 
   if (params.postProcess) postProcessNode(doc, params.canvasWidth ?? 1200, pageId)
   await saveDocument(filePath, doc)
-  return { ok: true, postProcessed: params.postProcess || undefined }
+  const updatedNode = findNodeInTree(getDocChildren(doc, pageId), params.nodeId)
+  return {
+    ok: true,
+    postProcessed: params.postProcess || undefined,
+    node: updatedNode ? readNodeWithDepth(updatedNode, 0) : undefined,
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -171,7 +225,7 @@ export interface DeleteNodeParams {
 
 export async function handleDeleteNode(
   params: DeleteNodeParams,
-): Promise<{ ok: true }> {
+): Promise<{ ok: true; remainingNodes: number }> {
   const filePath = resolveDocPath(params.filePath)
   let doc = await openDocument(filePath)
   doc = structuredClone(doc)
@@ -182,7 +236,7 @@ export async function handleDeleteNode(
 
   setDocChildren(doc, removeNodeFromTree(getDocChildren(doc, pageId), params.nodeId), pageId)
   await saveDocument(filePath, doc)
-  return { ok: true }
+  return { ok: true, remainingNodes: countNodes(getDocChildren(doc, pageId)) }
 }
 
 // ---------------------------------------------------------------------------
@@ -199,7 +253,7 @@ export interface MoveNodeParams {
 
 export async function handleMoveNode(
   params: MoveNodeParams,
-): Promise<{ ok: true }> {
+): Promise<{ ok: true; nodeId: string; parentId: string | null }> {
   const filePath = resolveDocPath(params.filePath)
   let doc = await openDocument(filePath)
   doc = structuredClone(doc)
@@ -213,7 +267,8 @@ export async function handleMoveNode(
   setDocChildren(doc, children, pageId)
 
   await saveDocument(filePath, doc)
-  return { ok: true }
+  const parentNode = findParentInTree(getDocChildren(doc, pageId), params.nodeId)
+  return { ok: true, nodeId: params.nodeId, parentId: parentNode?.id ?? null }
 }
 
 // ---------------------------------------------------------------------------
@@ -270,13 +325,14 @@ export interface ReplaceNodeParams {
 
 export async function handleReplaceNode(
   params: ReplaceNodeParams,
-): Promise<{ nodeId: string; nodeCount: number; postProcessed?: boolean }> {
+): Promise<{ nodeId: string; nodeCount: number; postProcessed?: boolean; node?: Record<string, unknown> }> {
   const filePath = resolveDocPath(params.filePath)
   let doc = await openDocument(filePath)
   doc = structuredClone(doc)
   const pageId = params.pageId
 
   const data = sanitizeObject(params.data)
+  validateNodeTree(data)
   const oldNode = findNodeInTree(getDocChildren(doc, pageId), params.nodeId)
   if (!oldNode) throw new Error(`Node not found: ${params.nodeId}`)
 
@@ -296,9 +352,11 @@ export async function handleReplaceNode(
 
   if (params.postProcess) postProcessNode(doc, params.canvasWidth ?? 1200, pageId)
   await saveDocument(filePath, doc)
+  const finalNode = findNodeInTree(getDocChildren(doc, pageId), newNode.id)
   return {
     nodeId: newNode.id,
     nodeCount: countNodes(getDocChildren(doc, pageId)),
     postProcessed: params.postProcess || undefined,
+    node: finalNode ? readNodeWithDepth(finalNode, 1) : undefined,
   }
 }

@@ -22,8 +22,6 @@ export interface AIDesignRequest {
   model?: string
   provider?: AIProviderType
   concurrency?: number
-  /** Generation mode: 'direct' uses current pipeline, 'visual-ref' uses visual reference pipeline */
-  mode?: 'direct' | 'visual-ref'
   context?: {
     selectedNodes?: string[]
     documentSummary?: string

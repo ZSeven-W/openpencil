@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
+import { appStorage, initAppStorage } from '@/utils/app-storage'
 import type { ComponentType, SVGProps } from 'react'
 import {
   PanelLeft,
@@ -150,10 +151,13 @@ export default function TopBar() {
     })
   }, [])
 
-  // Restore saved theme after hydration
+  // Restore saved theme after hydration.
+  // initAppStorage() must run first in Electron to populate the IPC cache,
+  // since appStorage.getItem is synchronous.
   useEffect(() => {
-    try {
-      const saved = localStorage.getItem('openpencil-theme')
+    const restore = async () => {
+      await initAppStorage()
+      const saved = appStorage.getItem('openpencil-theme')
       if (saved === 'light') {
         document.documentElement.classList.add('light')
         setTheme('light')
@@ -161,9 +165,8 @@ export default function TopBar() {
       } else {
         syncOverlayColors('dark')
       }
-    } catch {
-      // ignore
     }
+    restore()
   }, [syncOverlayColors])
 
   // Listen to fullscreen changes
@@ -182,11 +185,7 @@ export default function TopBar() {
     }
     setTheme(next)
     syncOverlayColors(next)
-    try {
-      localStorage.setItem('openpencil-theme', next)
-    } catch {
-      // ignore
-    }
+    appStorage.setItem('openpencil-theme', next)
   }, [theme, syncOverlayColors])
 
   const toggleFullscreen = useCallback(() => {

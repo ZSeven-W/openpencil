@@ -3,12 +3,10 @@ import {
   toSizeNumber,
   toGapNumber,
   parsePaddingValues,
-  estimateAutoHeight,
   estimateNodeIntrinsicHeight,
   getTextContentForNode,
   hasCjkText,
 } from './generation-utils'
-import { defaultLineHeight } from '@/canvas/canvas-text-measure'
 
 // ---------------------------------------------------------------------------
 // Context passed to each role rule function
@@ -412,35 +410,17 @@ function isIconLikeNode(node: PenNode): boolean {
 }
 
 function fixTextHeights(
-  parent: FrameNode,
+  _parent: FrameNode,
   children: PenNode[],
-  canvasWidth: number,
+  _canvasWidth: number,
 ): void {
-  const nodeW = toSizeNumber(parent.width, 0)
-  const nodePad = parsePaddingValues(parent.padding)
-  const contentW = nodeW > 0 ? nodeW - nodePad.left - nodePad.right : 0
-
   for (const child of children) {
     if (child.type !== 'text') continue
-    const fs = child.fontSize ?? 16
-    const lh = child.lineHeight ?? defaultLineHeight(fs)
-    const currentH = toSizeNumber(child.height, 0)
-    const singleLineMin = Math.round(fs * Math.max(lh, 1.2) * 1.15)
-
-    if (currentH > 0 && currentH < singleLineMin) {
-      const text = getTextContentForNode(child)
-      if (
-        text &&
-        (child.textGrowth === 'fixed-width' ||
-          child.textGrowth === 'fixed-width-height')
-      ) {
-        child.height = Math.max(
-          estimateAutoHeight(text, fs, lh, contentW || undefined, canvasWidth),
-          singleLineMin,
-        )
-      } else {
-        child.height = singleLineMin
-      }
+    // Strip explicit pixel heights from text nodes — the layout engine auto-calculates
+    // height from content + fontSize + lineHeight. Explicit heights always cause
+    // clipping (height too small) or wasted space (height too large).
+    if (typeof child.height === 'number' && child.textGrowth !== 'fixed-width-height') {
+      delete (child as { height?: unknown }).height
     }
   }
 }

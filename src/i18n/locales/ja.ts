@@ -262,9 +262,9 @@ const ja: TranslationKeys = {
   'ai.quickAction.loginScreen': 'モバイルログイン画面をデザイン',
   'ai.quickAction.loginScreenPrompt':
     'メール入力、パスワード入力、ログインボタン、ソーシャルログインオプションを含む、モダンなモバイルログイン画面をデザインしてください',
-  'ai.quickAction.productCard': '商品カードコンポーネントを作成',
-  'ai.quickAction.productCardPrompt':
-    '画像プレースホルダー、タイトル、価格、購入ボタンを含む商品カードを作成してください',
+  'ai.quickAction.foodApp': 'フードアプリのホームページ',
+  'ai.quickAction.foodAppPrompt':
+    'Generate a well-designed food mobile app homepage',
   'ai.quickAction.bottomNav': 'ボトムナビゲーションバーをデザイン',
   'ai.quickAction.bottomNavPrompt':
     'ホーム、検索、追加、メッセージ、プロフィールの 5 つのタブを含むモバイルアプリのボトムナビゲーションバーをデザインしてください',

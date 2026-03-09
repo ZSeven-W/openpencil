@@ -3,12 +3,8 @@ import { useCanvasStore } from '@/stores/canvas-store'
 import { useDocumentStore, getActivePageChildren } from '@/stores/document-store'
 import type { FabricObjectWithPenId } from './canvas-object-factory'
 import { resolveTargetAtDepth, getChildIds } from './selection-context'
-import { COMPONENT_COLOR, INSTANCE_COLOR } from './canvas-constants'
+import { COMPONENT_COLOR, INSTANCE_COLOR, HOVER_BLUE, HOVER_LINE_WIDTH, HOVER_DASH } from './canvas-constants'
 import type { PenNode } from '@/types/pen'
-
-const HOVER_COLOR = '#3b82f6'
-const HOVER_LINE_WIDTH = 1.5
-const CHILD_DASH = [4, 4]
 
 function collectReusableIds(nodes: PenNode[], result: Set<string>) {
   for (const node of nodes) {
@@ -146,12 +142,12 @@ export function useCanvasHover() {
           ? COMPONENT_COLOR
           : isInstance
             ? INSTANCE_COLOR
-            : HOVER_COLOR
+            : HOVER_BLUE
         ctx.lineWidth = HOVER_LINE_WIDTH / zoom
         if (isInstance) {
-          ctx.setLineDash(CHILD_DASH.map((d) => d / zoom))
+          ctx.setLineDash(HOVER_DASH.map((d) => d / zoom))
         } else if (dashed) {
-          ctx.setLineDash(CHILD_DASH.map((d) => d / zoom))
+          ctx.setLineDash(HOVER_DASH.map((d) => d / zoom))
         } else {
           ctx.setLineDash([])
         }

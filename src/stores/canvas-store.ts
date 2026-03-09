@@ -8,6 +8,7 @@ import type {
 } from '@/types/canvas'
 import type { PenNode } from '@/types/pen'
 import { DEFAULT_PAGE_ID } from '@/stores/document-tree-utils'
+import { appStorage } from '@/utils/app-storage'
 
 const PREFS_KEY = 'openpencil-canvas-preferences'
 
@@ -58,7 +59,7 @@ interface CanvasStoreState {
 
 function persistPrefs(prefs: CanvasPreferences) {
   try {
-    localStorage.setItem(PREFS_KEY, JSON.stringify(prefs))
+    appStorage.setItem(PREFS_KEY, JSON.stringify(prefs))
   } catch { /* ignore */ }
 }
 
@@ -177,7 +178,7 @@ export const useCanvasStore = create<CanvasStoreState>((set, get) => ({
 
   hydrate: () => {
     try {
-      const raw = localStorage.getItem(PREFS_KEY)
+      const raw = appStorage.getItem(PREFS_KEY)
       if (!raw) return
       const data = JSON.parse(raw) as Partial<CanvasPreferences>
       if (typeof data.layerPanelOpen === 'boolean') set({ layerPanelOpen: data.layerPanelOpen })

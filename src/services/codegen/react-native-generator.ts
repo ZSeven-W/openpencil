@@ -21,6 +21,10 @@ function indent(depth: number): string {
   return '  '.repeat(depth)
 }
 
+function kebabToPascal(name: string): string {
+  return name.split('-').map(s => s.charAt(0).toUpperCase() + s.slice(1)).join('')
+}
+
 /** Return a hex color string, or a comment for variable refs. */
 function hexColor(value: string): string {
   if (isVariableRef(value)) {
@@ -417,6 +421,13 @@ function generateNodeRN(node: PenNode, depth: number): string {
         return `${pad}<Image source={{ uri: '${src}' }} style=${formatStyle(styles)} />`
       }
       return `${pad}<Image source={require('${src}')} style=${formatStyle(styles)} />`
+    }
+
+    case 'icon_font': {
+      const size = typeof node.width === 'number' ? node.width : 24
+      const color = node.fill?.[0]?.type === 'solid' ? varOrLiteral(node.fill[0].color) : 'currentColor'
+      const iconComp = kebabToPascal(node.iconFontName || 'circle')
+      return `${pad}<${iconComp} size={${size}} color="${color}" />`
     }
 
     case 'ref':

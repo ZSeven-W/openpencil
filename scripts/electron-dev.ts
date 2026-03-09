@@ -7,11 +7,12 @@
  * 4. Launch Electron pointing at the dev server
  */
 
-import { spawn, type ChildProcess } from 'node:child_process'
+import { spawn, execSync, type ChildProcess } from 'node:child_process'
 import { build } from 'esbuild'
 import { join } from 'node:path'
 
 const ROOT = join(import.meta.dirname, '..')
+const VITE_DEV_PORT = 3000
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -75,15 +76,22 @@ async function main(): Promise<void> {
 
   // Ensure cleanup on exit
   const cleanup = () => {
-    vite.kill()
+    if (process.platform === 'win32' && vite.pid) {
+      // SIGTERM is unreliable on Windows; use taskkill for proper tree-kill
+      try {
+        execSync(`taskkill /pid ${vite.pid} /T /F`, { stdio: 'ignore' })
+      } catch { /* ignore */ }
+    } else {
+      vite.kill()
+    }
     process.exit()
   }
   process.on('SIGINT', cleanup)
   process.on('SIGTERM', cleanup)
 
   // 2. Wait for Vite to be ready
-  console.log('[electron-dev] Waiting for Vite on port 3000...')
-  await waitForServer('http://localhost:3000')
+  console.log(`[electron-dev] Waiting for Vite on port ${VITE_DEV_PORT}...`)
+  await waitForServer(`http://localhost:${VITE_DEV_PORT}`)
   console.log('[electron-dev] Vite is ready')
 
   // 3. Compile Electron files
@@ -99,7 +107,13 @@ async function main(): Promise<void> {
   }) as ChildProcess
 
   electron.on('exit', () => {
-    vite.kill()
+    if (process.platform === 'win32' && vite.pid) {
+      try {
+        execSync(`taskkill /pid ${vite.pid} /T /F`, { stdio: 'ignore' })
+      } catch { /* ignore */ }
+    } else {
+      vite.kill()
+    }
     process.exit()
   })
 }
