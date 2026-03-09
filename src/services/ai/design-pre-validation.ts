@@ -35,7 +35,10 @@ export function runPreValidationFixes(): number {
   // Pass 2: Find empty path/icon nodes (missing geometry)
   detectEmptyPaths(root, fixes)
 
-  // Pass 3: Find sibling property inconsistencies
+  // Pass 3: Strip explicit pixel heights from text nodes (causes clipping/overlap)
+  detectTextExplicitHeights(root, fixes)
+
+  // Pass 4: Find sibling property inconsistencies
   detectSiblingInconsistencies(root, fixes)
 
   // Deduplicate (a node might get multiple fixes for same property)
@@ -166,7 +169,36 @@ function detectEmptyPaths(node: PenNode, fixes: PreValidationFix[]): void {
 }
 
 // ---------------------------------------------------------------------------
-// Pass 3: Sibling property consistency
+// Pass 3: Text explicit height detection
+// ---------------------------------------------------------------------------
+
+/**
+ * Detect text nodes with explicit pixel heights.
+ * Explicit heights on text always cause clipping or overlap — the layout
+ * engine should auto-calculate height from content + fontSize + lineHeight.
+ */
+function detectTextExplicitHeights(node: PenNode, fixes: PreValidationFix[]): void {
+  if (node.type === 'text') {
+    const textNode = node as PenNode & { height?: unknown; textGrowth?: string }
+    if (typeof textNode.height === 'number' && textNode.textGrowth !== 'fixed-width-height') {
+      fixes.push({
+        nodeId: node.id,
+        property: 'height',
+        value: 'fit_content',
+        reason: `text node has explicit height=${textNode.height}px — causes clipping`,
+      })
+    }
+  }
+
+  if ('children' in node && node.children) {
+    for (const child of node.children) {
+      detectTextExplicitHeights(child, fixes)
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Pass 4: Sibling property consistency
 // ---------------------------------------------------------------------------
 
 /** Properties to check for consistency among same-type siblings */

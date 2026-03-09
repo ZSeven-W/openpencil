@@ -258,9 +258,9 @@ const ko: TranslationKeys = {
   'ai.quickAction.loginScreen': '모바일 로그인 화면 디자인',
   'ai.quickAction.loginScreenPrompt':
     '이메일 입력, 비밀번호 입력, 로그인 버튼, 소셜 로그인 옵션이 있는 모던 모바일 로그인 화면을 디자인해 주세요',
-  'ai.quickAction.productCard': '상품 카드 컴포넌트 만들기',
-  'ai.quickAction.productCardPrompt':
-    '이미지 플레이스홀더, 제목, 가격, 구매 버튼이 있는 상품 카드를 만들어 주세요',
+  'ai.quickAction.foodApp': '음식 앱 홈페이지',
+  'ai.quickAction.foodAppPrompt':
+    'Generate a well-designed food mobile app homepage',
   'ai.quickAction.bottomNav': '하단 네비게이션 바 디자인',
   'ai.quickAction.bottomNavPrompt':
     '홈, 검색, 추가, 메시지, 프로필 5개 탭이 있는 모바일 앱 하단 네비게이션 바를 디자인해 주세요',

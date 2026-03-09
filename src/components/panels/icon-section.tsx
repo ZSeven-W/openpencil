@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
 import { ChevronDown } from 'lucide-react'
-import type { PenNode, PathNode } from '@/types/pen'
+import type { PenNode, PathNode, IconFontNode } from '@/types/pen'
 import type { PenFill, PenStroke } from '@/types/styles'
 import SectionHeader from '@/components/shared/section-header'
 import IconPickerDialog, { type IconPickerPosition } from '@/components/shared/icon-picker-dialog'
@@ -20,8 +20,8 @@ const POPULAR_COLLECTIONS = [
 ]
 
 interface IconSectionProps {
-  node: PathNode
-  onUpdate: (updates: Partial<PathNode>) => void
+  node: PathNode | IconFontNode
+  onUpdate: (updates: Partial<PathNode> | Partial<IconFontNode>) => void
 }
 
 /**
@@ -65,8 +65,12 @@ export default function IconSection({ node, onUpdate }: IconSectionProps) {
   const [displayCollection, setDisplayCollection] = useState<string>('')
 
   const triggerRef = useRef<HTMLButtonElement>(null)
+  const isIconFont = node.type === 'icon_font'
 
-  const iconId = node.iconId!
+  // Derive iconId from either PathNode.iconId or IconFontNode fields
+  const iconId = isIconFont
+    ? `${(node as IconFontNode).iconFontFamily || 'lucide'}:${(node as IconFontNode).iconFontName}`
+    : (node as PathNode).iconId!
   const colonIdx = iconId.indexOf(':')
   const collection = colonIdx >= 0 ? iconId.slice(0, colonIdx) : ''
   const iconName = colonIdx >= 0 ? iconId.slice(colonIdx + 1) : iconId
@@ -96,13 +100,22 @@ export default function IconSection({ node, onUpdate }: IconSectionProps) {
    * skipped. Width/height are preserved so the icon stays in its layout slot.
    */
   const handleIconSelect = (svgText: string, newIconId: string) => {
+    // For icon_font nodes, just update the name/family — no SVG parsing needed
+    if (isIconFont) {
+      const colonIdx2 = newIconId.indexOf(':')
+      const newFamily = colonIdx2 >= 0 ? newIconId.slice(0, colonIdx2) : 'lucide'
+      const newName = colonIdx2 >= 0 ? newIconId.slice(colonIdx2 + 1) : newIconId
+      onUpdate({ iconFontName: newName, iconFontFamily: newFamily, name: newIconId } as Partial<IconFontNode>)
+      return
+    }
+
     const nodes = parseSvgToNodes(svgText)
     if (nodes.length === 0) return
 
     const first = nodes[0]
     let d: string
-    let fill: PenFill[] | undefined = node.fill
-    let stroke: PenStroke | undefined = node.stroke
+    let fill: PenFill[] | undefined = (node as PathNode).fill
+    let stroke: PenStroke | undefined = (node as PathNode).stroke
 
     if (first.type === 'path') {
       d = first.d
@@ -142,13 +155,13 @@ export default function IconSection({ node, onUpdate }: IconSectionProps) {
     // Carry over the old icon's display color to the new icon.
     // Check stroke first (stroke-based icons like Feather/Lucide), then fill.
     const oldColor = (() => {
-      if (node.stroke?.fill?.[0]?.type === 'solid') {
-        const c = node.stroke.fill[0].color
-        if (c !== 'transparent') return c
+      const strokeFill0 = (node as PathNode).stroke?.fill?.[0]
+      if (strokeFill0?.type === 'solid') {
+        if (strokeFill0.color !== 'transparent') return strokeFill0.color
       }
-      if (node.fill?.[0]?.type === 'solid') {
-        const c = node.fill[0].color
-        if (c !== 'transparent') return c
+      const fill0 = (node as PathNode).fill?.[0]
+      if (fill0?.type === 'solid') {
+        if (fill0.color !== 'transparent') return fill0.color
       }
       return null
     })()

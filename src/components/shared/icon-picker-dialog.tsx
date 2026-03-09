@@ -2,8 +2,9 @@ import { useState, useEffect, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import { createPortal } from 'react-dom'
 import { Loader2, Search } from 'lucide-react'
+import { ICONIFY_API_URL } from '@/constants/app'
 
-const ICONIFY_API = 'https://api.iconify.design'
+const ICONIFY_API = ICONIFY_API_URL
 const DEBOUNCE_MS = 250
 
 function getIconColor(): string {

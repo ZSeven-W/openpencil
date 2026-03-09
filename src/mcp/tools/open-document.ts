@@ -72,6 +72,15 @@ export async function handleOpenDocument(
     ? doc.pages.reduce((sum, p) => sum + p.children.length, 0)
     : doc.children.length
 
+  // Only include full design prompt when document is empty or has only empty frames.
+  // For non-empty documents, include a brief note to reduce context window waste.
+  const children = getDocChildren(doc)
+  const isEmpty =
+    totalChildren === 0 ||
+    (children.length === 1 &&
+      children[0].type === 'frame' &&
+      (!('children' in children[0]) || !(children[0] as any).children?.length))
+
   return {
     filePath,
     document: {
@@ -84,7 +93,9 @@ export async function handleOpenDocument(
       hasThemes: !!doc.themes && Object.keys(doc.themes).length > 0,
     },
     context: buildDocumentContext(doc),
-    designPrompt: buildDesignPrompt(),
+    designPrompt: isEmpty
+      ? buildDesignPrompt()
+      : 'Document has existing content. Use batch_design or insert_node with postProcess=true to add/modify designs. Call get_design_prompt for full design guidelines if needed.',
   }
 }
 

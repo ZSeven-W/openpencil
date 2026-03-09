@@ -207,7 +207,6 @@ export function useChatHandlers() {
                  model,
                  provider: currentProvider,
                  concurrency,
-                 mode: 'visual-ref',
                  context: {
                    canvasSize: { width: 1200, height: 800 },
                    documentSummary: `Current selection: ${hasSelection ? selectedIds.length + ' items' : 'Empty'}`,

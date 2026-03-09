@@ -1,6 +1,8 @@
 import { defineEventHandler, readBody, setResponseHeaders } from 'h3'
 import { startMcpHttpServer, stopMcpHttpServer } from '../../utils/mcp-server-manager'
 
+const MCP_DEFAULT_PORT = 3100
+
 interface PostBody {
   action: 'start' | 'stop'
   port?: number
@@ -16,7 +18,7 @@ export default defineEventHandler(async (event) => {
   }
 
   if (body.action === 'start') {
-    const port = body.port ?? 3100
+    const port = body.port ?? MCP_DEFAULT_PORT
     return startMcpHttpServer(port)
   }
 

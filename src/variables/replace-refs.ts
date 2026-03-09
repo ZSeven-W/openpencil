@@ -37,8 +37,8 @@ export function replaceVariableRefsInTree(
     return typeof resolved === 'number' ? resolved : val
   }
 
-  function replaceFills(fills: PenFill[] | undefined): PenFill[] | undefined {
-    if (!fills) return fills
+  function replaceFills(fills: PenFill[] | string | undefined): PenFill[] | string | undefined {
+    if (!fills || typeof fills === 'string') return fills
     return fills.map((f) => {
       if (f.type === 'solid' && f.color === oldToken) {
         return { ...f, color: resolveOrReplace(f.color) }

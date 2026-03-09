@@ -258,9 +258,9 @@ const th: TranslationKeys = {
   'ai.quickAction.loginScreen': 'ออกแบบหน้าจอเข้าสู่ระบบมือถือ',
   'ai.quickAction.loginScreenPrompt':
     'ออกแบบหน้าจอเข้าสู่ระบบมือถือที่ทันสมัย พร้อมช่องกรอกอีเมล รหัสผ่าน ปุ่มเข้าสู่ระบบ และตัวเลือกเข้าสู่ระบบผ่านโซเชียล',
-  'ai.quickAction.productCard': 'สร้างคอมโพเนนต์การ์ดสินค้า',
-  'ai.quickAction.productCardPrompt':
-    'สร้างการ์ดสินค้าพร้อมที่วางรูปภาพ ชื่อ ราคา และปุ่มซื้อ',
+  'ai.quickAction.foodApp': 'หน้าแรกแอปอาหาร',
+  'ai.quickAction.foodAppPrompt':
+    'Generate a well-designed food mobile app homepage',
   'ai.quickAction.bottomNav': 'ออกแบบแถบนำทางด้านล่าง',
   'ai.quickAction.bottomNavPrompt':
     'ออกแบบแถบนำทางด้านล่างของแอปมือถือ 5 แท็บ: หน้าแรก, ค้นหา, เพิ่ม, ข้อความ, โปรไฟล์',

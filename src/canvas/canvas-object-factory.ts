@@ -16,6 +16,7 @@ import {
 } from './canvas-constants'
 import { defaultLineHeight } from './canvas-text-measure'
 import { applyRotationControls } from './canvas-controls'
+import { lookupIconByName } from '@/services/ai/icon-resolver'
 
 function angleToCoords(
   angleDeg: number,
@@ -73,10 +74,12 @@ function createRadialGradient(
 }
 
 export function resolveFill(
-  fills: PenFill[] | undefined,
+  fills: PenFill[] | string | undefined,
   width: number,
   height: number,
 ): string | fabric.Gradient<'linear'> | fabric.Gradient<'radial'> {
+  // Pencil format may use a plain color string instead of PenFill[]
+  if (typeof fills === 'string') return fills
   if (!fills || fills.length === 0) return DEFAULT_FILL
   const first = fills[0]
   if (first.type === 'solid') return first.color
@@ -91,7 +94,8 @@ export function resolveFill(
   return DEFAULT_FILL
 }
 
-export function resolveFillColor(fills?: PenFill[]): string {
+export function resolveFillColor(fills?: PenFill[] | string): string {
+  if (typeof fills === 'string') return fills
   if (!fills || fills.length === 0) return DEFAULT_FILL
   const first = fills[0]
   if (first.type === 'solid') return first.color
@@ -122,16 +126,49 @@ export function resolveShadow(
 
 export function resolveStrokeColor(stroke?: PenStroke): string | undefined {
   if (!stroke) return undefined
+  if (typeof stroke.fill === 'string') return stroke.fill
   if (stroke.fill && stroke.fill.length > 0) {
     return resolveFillColor(stroke.fill)
   }
-  return DEFAULT_STROKE
+  // No explicit fill color → stroke should be invisible (not default black).
+  // Pencil uses fill-less strokes for internal layout spacing.
+  return undefined
 }
 
 export function resolveStrokeWidth(stroke?: PenStroke): number {
   if (!stroke) return 0
   if (typeof stroke.thickness === 'number') return stroke.thickness
-  return stroke.thickness[0] ?? DEFAULT_STROKE_WIDTH
+  // Directional strokes (e.g. { top: 1 } or { bottom: 1 }) should NOT
+  // render as a full border. Return 0 so the main rect has no stroke;
+  // directional borders are rendered as separate synthetic nodes in canvas-sync.
+  if (typeof stroke.thickness === 'object' && !Array.isArray(stroke.thickness)) {
+    return 0
+  }
+  return stroke.thickness?.[0] ?? DEFAULT_STROKE_WIDTH
+}
+
+/** Check if a stroke is directional (top/right/bottom/left specific). */
+export function isDirectionalStroke(stroke?: PenStroke): boolean {
+  if (!stroke) return false
+  return (
+    typeof stroke.thickness === 'object'
+    && !Array.isArray(stroke.thickness)
+    && ('top' in stroke.thickness || 'right' in stroke.thickness
+      || 'bottom' in stroke.thickness || 'left' in stroke.thickness)
+  )
+}
+
+/** Get directional stroke thicknesses. */
+export function getDirectionalStrokeThicknesses(stroke: PenStroke): {
+  top: number; right: number; bottom: number; left: number
+} {
+  const t = stroke.thickness as unknown as Record<string, number>
+  return {
+    top: t.top ?? 0,
+    right: t.right ?? 0,
+    bottom: t.bottom ?? 0,
+    left: t.left ?? 0,
+  }
 }
 
 function resolveTextContent(
@@ -281,8 +318,11 @@ export function createFabricObject(
     opacity: typeof node.opacity === 'number' ? node.opacity : 1,
   }
 
-  // Resolve effects (shadow)
-  const effects = 'effects' in node ? node.effects : undefined
+  // Resolve effects (shadow) — handle both `effects` (array) and `effect` (single object)
+  let effects = 'effects' in node ? node.effects : undefined
+  if (!effects && 'effect' in node && (node as any).effect) {
+    effects = [(node as any).effect]
+  }
   const shadow = resolveShadow(effects)
 
   // Resolve visibility and lock
@@ -295,14 +335,15 @@ export function createFabricObject(
       const w = sizeToNumber(node.width, 100)
       const h = sizeToNumber(node.height, 100)
       const r = Math.min(cornerRadiusValue(node.cornerRadius), h / 2)
-      const hasFill = node.fill && node.fill.length > 0
+      const fillVal = node.fill as PenFill[] | string | undefined
+      const hasFill = typeof fillVal === 'string' ? fillVal.length > 0 : (fillVal && fillVal.length > 0)
       obj = new fabric.Rect({
         ...baseProps,
         width: w,
         height: h,
         rx: r,
         ry: r,
-        fill: hasFill ? resolveFill(node.fill, w, h) : 'transparent',
+        fill: hasFill ? resolveFill(fillVal, w, h) : 'transparent',
         stroke: resolveStrokeColor(node.stroke),
         strokeWidth: resolveStrokeWidth(node.stroke),
       }) as FabricObjectWithPenId
@@ -312,13 +353,17 @@ export function createFabricObject(
       const w = sizeToNumber(node.width, 100)
       const h = sizeToNumber(node.height, 100)
       const r = Math.min(cornerRadiusValue(node.cornerRadius), h / 2)
+      const rectFillVal = node.fill as PenFill[] | string | undefined
+      const hasFill = typeof rectFillVal === 'string' ? rectFillVal.length > 0 : (rectFillVal && rectFillVal.length > 0)
+      const hasStroke = resolveStrokeWidth(node.stroke) > 0
       obj = new fabric.Rect({
         ...baseProps,
         width: w,
         height: h,
         rx: r,
         ry: r,
-        fill: resolveFill(node.fill, w, h),
+        // Stroke-only rectangles (no fill + has stroke) should be transparent
+        fill: hasFill ? resolveFill(rectFillVal, w, h) : (hasStroke ? 'transparent' : DEFAULT_FILL),
         stroke: resolveStrokeColor(node.stroke),
         strokeWidth: resolveStrokeWidth(node.stroke),
       }) as FabricObjectWithPenId
@@ -414,6 +459,44 @@ export function createFabricObject(
         const uniformScale = Math.min(pw / obj.width, ph / obj.height)
         // Keep native path width/height. Overriding width/height can shift pathOffset
         // and make icons appear visually off-center in logos.
+        obj.set({ scaleX: uniformScale, scaleY: uniformScale })
+      }
+      break
+    }
+    case 'icon_font': {
+      const iconName = node.iconFontName ?? node.name ?? ''
+      const iconMatch = lookupIconByName(iconName)
+      const iconD = iconMatch?.d ?? 'M12 12m-3 0a3 3 0 1 0 6 0a3 3 0 1 0 -6 0'
+      const iconStyle = iconMatch?.style ?? 'stroke'
+      const pw = sizeToNumber(node.width, 20)
+      const ph = sizeToNumber(node.height, 20)
+
+      // Resolve fill color: runtime icon_font.fill may be a string "#hex" or PenFill[]
+      const rawFill = (node as unknown as Record<string, unknown>).fill
+      const iconFillColor = typeof rawFill === 'string'
+        ? rawFill
+        : Array.isArray(node.fill) && node.fill.length > 0
+          ? resolveFillColor(node.fill)
+          : '#64748B'
+
+      const iconPathFill = iconStyle === 'stroke' ? 'transparent' : iconFillColor
+      const iconStrokeColor = iconStyle === 'stroke' ? iconFillColor : undefined
+      const iconStrokeWidth = iconStyle === 'stroke' ? 2 : 0
+
+      obj = new fabric.Path(iconD, {
+        ...baseProps,
+        fill: iconPathFill,
+        stroke: iconStrokeColor,
+        strokeWidth: iconStrokeWidth,
+        strokeUniform: true,
+        strokeLineCap: 'round',
+        strokeLineJoin: 'round',
+        fillRule: 'evenodd',
+      }) as FabricObjectWithPenId
+      ;(obj as any).__nativeWidth = obj.width
+      ;(obj as any).__nativeHeight = obj.height
+      if (pw > 0 && ph > 0 && obj.width && obj.height) {
+        const uniformScale = Math.min(pw / obj.width, ph / obj.height)
         obj.set({ scaleX: uniformScale, scaleY: uniformScale })
       }
       break

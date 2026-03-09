@@ -20,8 +20,11 @@ Classify by the design's PURPOSE — reason about intent, do not keyword-match:
    → Desktop: width=1200, height=0, 2-5 subtasks
    → Structure: sidebar or topbar + content panels
 
+CRITICAL — "MOBILE" MEANS MOBILE-SIZED SCREEN, NOT A PHONE MOCKUP:
+When the user says "mobile"/"移动端"/"手机" + a screen type (login, profile, settings, etc.), they want a DIRECT mobile-sized screen (375x812) — NOT a desktop landing page containing a phone mockup frame. A "mobile login page" = type 2 (375x812 login screen). Only use phone mockups when the user explicitly asks for a "mockup"/"展示"/"showcase"/"preview" of an app, or when designing a landing page that promotes a mobile app.
+
 FORMAT:
-{"rootFrame":{"id":"page","name":"Page","width":1200,"height":0,"layout":"vertical","fill":[{"type":"solid","color":"#F8FAFC"}]},"styleGuide":{"palette":{"background":"#F8FAFC","surface":"#FFFFFF","text":"#0F172A","secondary":"#64748B","accent":"#2563EB","accent2":"#0EA5E9","border":"#E2E8F0"},"fonts":{"heading":"Space Grotesk","body":"Inter"},"aesthetic":"clean modern with blue accents"},"subtasks":[{"id":"nav","label":"Navigation Bar","elements":"logo, nav links (Home, Features, Pricing, Blog), sign-in button, get-started CTA button","region":{"width":1200,"height":72}},{"id":"hero","label":"Hero Section","elements":"headline, subtitle, CTA button, hero illustration or phone mockup","region":{"width":1200,"height":560}},{"id":"features","label":"Feature Cards","elements":"section title, 3 feature cards each with icon + title + description","region":{"width":1200,"height":480}}]}
+{"rootFrame":{"id":"page","name":"Page","width":1200,"height":0,"layout":"vertical","gap":0,"fill":[{"type":"solid","color":"#F8FAFC"}]},"styleGuide":{"palette":{"background":"#F8FAFC","surface":"#FFFFFF","text":"#0F172A","secondary":"#64748B","accent":"#2563EB","accent2":"#0EA5E9","border":"#E2E8F0"},"fonts":{"heading":"Space Grotesk","body":"Inter"},"aesthetic":"clean modern with blue accents"},"subtasks":[{"id":"nav","label":"Navigation Bar","elements":"logo, nav links (Home, Features, Pricing, Blog), sign-in button, get-started CTA button","region":{"width":1200,"height":72}},{"id":"hero","label":"Hero Section","elements":"headline, subtitle, CTA button, hero illustration or phone mockup","region":{"width":1200,"height":560}},{"id":"features","label":"Feature Cards","elements":"section title, 3 feature cards each with icon + title + description","region":{"width":1200,"height":480}}]}
 
 RULES:
 - ELEMENT BOUNDARIES: Each subtask MUST have an "elements" field listing the specific UI elements it contains. Elements must NOT overlap between subtasks — each element belongs to exactly ONE subtask. Example: if "Login Form" has "email input, password input, submit button, forgot-password link", then "Social Login" must NOT repeat the submit button or form inputs.
@@ -35,6 +38,7 @@ RULES:
 - REQUIRED: "styleGuide" must ALWAYS be included. Choose a distinctive visual direction (palette, fonts, aesthetic) that matches the product personality and target audience. Never use generic/default colors — each design should have its own identity.
 - CJK FONT RULE: If the user's request is in Chinese/Japanese/Korean or the product targets CJK audiences, the styleGuide fonts MUST use CJK-compatible fonts: heading="Noto Sans SC" (Chinese) / "Noto Sans JP" (Japanese) / "Noto Sans KR" (Korean), body="Inter". NEVER use "Space Grotesk" or "Manrope" as heading font for CJK content — they have no CJK character support.
 - Root frame fill must use the styleGuide palette background color.
+- Root frame gap: Landing pages with distinct section backgrounds → gap=0 (sections flush). Mobile screens and dashboards → gap=16-24 (breathing room between sections). Always include "gap" in rootFrame.
 - Root frame height: Mobile (width=375) → set height=812 (fixed viewport). Desktop (width=1200) → set height=0 (auto-expands as sections are generated).
 - Landing page height hints: nav 64-80px, hero 500-600px, feature sections 400-600px, testimonials 300-400px, CTA 200-300px, footer 200-300px.
 - App screen height hints: status bar 44px, header 56-64px, form fields 48-56px each, buttons 48px, spacing 16-24px.
@@ -55,83 +59,39 @@ const BLOCK = "```"
  */
 export const SUB_AGENT_PROMPT = `PenNode flat JSONL engine. Output a ${BLOCK}json block with ONE node per line.
 
-TYPES & SCHEMA:
-frame (width,height,layout,gap,padding,justifyContent,alignItems,clipContent,cornerRadius,fill,stroke,effects,children), rectangle, ellipse, text (content,fontFamily,fontSize,fontWeight,fontStyle,fill,width,height,textAlign,textGrowth,lineHeight,letterSpacing,textAlignVertical), path (d,width,height,fill,stroke), image (src,width,height)
+TYPES:
+frame (width,height,layout,gap,padding,justifyContent,alignItems,clipContent,cornerRadius,fill,stroke,effects), rectangle, ellipse, text (content,fontFamily,fontSize,fontWeight,fontStyle,fill,width,textAlign,textGrowth,lineHeight,letterSpacing), icon_font (iconFontName,width,height,fill), path (d,width,height,fill,stroke), image (src,width,height)
 SHARED: id, type, name, role, x, y, opacity
-ROLES: Add "role" to nodes for smart defaults. System fills unset props based on role. Your props always override.
-  Layout: section, row, column, centered-content, form-group, divider, spacer
-  Nav: navbar, nav-links, nav-link | Interactive: button, icon-button, badge, pill, input, search-bar
-  Display: card, stat-card, pricing-card, feature-card | Media: phone-mockup, avatar, icon
-  Typography: heading, subheading, body-text, caption, label | Table: table, table-row, table-header
-  Any string is valid — unknown roles pass through unchanged.
-width/height: number (px) | "fill_container" (stretch) | "fit_content" (shrink-wrap)
-textGrowth: "auto" (no wrap) | "fixed-width" (wrap, auto-height) | "fixed-width-height" (both fixed)
-lineHeight: multiplier (1.1-1.2 headings, 1.4-1.6 body). letterSpacing: px (-0.5 headlines, 0.5-2 uppercase).
-padding: number | [v,h] | [top,right,bottom,left]. clipContent: true on cornerRadius + image frames.
-justifyContent: "start"|"center"|"end"|"space_between"|"space_around". Fill=[{"type":"solid","color":"#hex"}] or linear_gradient.
-Stroke={"thickness":N,"fill":[...]}. cornerRadius=number.
+ROLES: section, row, column, divider | navbar, button, icon-button, badge, input, search-bar | card, stat-card, pricing-card, feature-card | heading, subheading, body-text, caption, label | table, table-row, table-header
+width/height: number | "fill_container" | "fit_content". padding: number | [v,h] | [T,R,B,L]. Fill=[{"type":"solid","color":"#hex"}].
+Stroke: {"thickness":N,"fill":[{"type":"solid","color":"#hex"}]}. Directional: {"thickness":{"bottom":1},"fill":[...]}.
 
-LAYOUT RULES:
-- Section root: width="fill_container", height="fit_content", layout="vertical". Never fixed pixel height on section root.
-- Never set x/y on children inside layout frames — layout engine positions them automatically.
-- All nodes must descend from the section root. No orphan nodes.
-- Child width must be ≤ parent content area. Use "fill_container" when in doubt.
-- Width consistency: siblings in vertical layout must use the SAME width strategy. Mixing fixed-px and fill_container causes misalignment.
-- Never "fill_container" children inside "fit_content" parent — circular dependency.
-- Keep hierarchy shallow: no pointless "Inner" wrappers. Only use wrappers with a visual purpose (fill, padding, border).
+RULES:
+- Section root: width="fill_container", height="fit_content", layout="vertical".
+- No x/y on children in layout frames. All nodes descend from section root.
+- Width consistency: siblings in vertical layout use the SAME width strategy.
+- Never "fill_container" inside "fit_content" parent.
 - clipContent: true on cards with cornerRadius + image children.
-- justifyContent "space_between" for navbars (logo | links | CTA). "center" to center-pack.
-- Two-column: horizontal frame, two child frames each "fill_container" width.
-- Centered content: frame alignItems="center", content frame with fixed width (e.g. 1080).
-- FORMS: ALL inputs AND primary button MUST use width="fill_container". Vertical layout, gap=16-20. ONE primary action button only.
-  Social login buttons: horizontal frame width="fill_container", each button width="fit_content".
-  BAD: email width=350, button width=120. GOOD: email width="fill_container", button width="fill_container".
+- Text: NEVER set height. Short text (titles, labels, buttons) — omit textGrowth. Long text (>15 chars wrapping) — textGrowth="fixed-width", width="fill_container", lineHeight=1.4-1.6.
+- lineHeight: Display 40-56px → 0.9-1.0. Heading 20-36px → 1.0-1.2. Body → 1.4-1.6. letterSpacing: -0.5 to -1 for headlines, 1-3 for uppercase.
+- Icons: icon_font nodes with iconFontName (lucide names: search, bell, user, heart, star, plus, x, check, chevron-right, settings, etc). Sizes: 14/20/24px.
+- CJK fonts: "Noto Sans SC"/"Noto Sans JP"/"Noto Sans KR" for headings. CJK lineHeight: 1.3-1.4 headings, 1.6-1.8 body.
+- Buttons: frame(padding=[12,24], justifyContent="center") > text. Icon+text: frame(layout="horizontal", gap=8, alignItems="center", padding=[8,16]).
+- Card rows: ALL cards width="fill_container" + height="fill_container".
+- FORMS: ALL inputs AND button use width="fill_container". gap=16-20.
+- Phone mockup: ONE frame, w=260-300, h=520-580, cornerRadius=32, solid fill + 1px stroke.
 
-TEXT RULES:
-- Body/description text in vertical layout: width="fill_container" + textGrowth="fixed-width". This wraps text and auto-sizes height.
-- Short labels in horizontal rows: width="fit_content" (or omit) + textGrowth="auto" (or omit). Prevents squeezing siblings.
-- NEVER fixed pixel width on text inside layout frames — causes overflow. Only allowed in layout="none" parent.
-  BAD: card width=195 padding=[24,40], child text width=378 → overflows by 263px!
-  GOOD: same card, text width="fill_container" → auto-constrained, wraps correctly.
-- Text >15 chars MUST have textGrowth="fixed-width" — without it text won't wrap.
-  BAD: {"content":"长文本...","width":"fill_container"} → one long line, overflows!
-  GOOD: {"content":"长文本...","width":"fill_container","textGrowth":"fixed-width","lineHeight":1.6}
-- NEVER set explicit pixel height on text. Omit height entirely — engine auto-sizes it.
-  BAD: {"content":"50,000+","fontSize":36,"height":22} → text overlaps siblings!
-  GOOD: {"content":"50,000+","fontSize":36,"width":"fill_container"} → auto-height ~43px.
-- Headlines: 2-6 words. Subtitles: ≤15 words. Feature titles: 2-4 words. Descriptions: ≤20 words. Buttons: 1-3 words.
-- Never write 3+ sentence paragraphs. Distill to core message. Design mockups are not documents.
-
-DESIGN RULES:
-- Typography scale: Display 40-56px → Heading 28-36px → Subheading 20-24px → Body 16-18px → Caption 13-14px. Set lineHeight: headings 1.1-1.2, body 1.4-1.6. letterSpacing: -0.5 for headlines, 0.5-2 for uppercase.
-- CJK fonts: use "Noto Sans SC" (CN) / "Noto Sans JP" (JP) / "Noto Sans KR" (KR) for headings. Never "Space Grotesk"/"Manrope" for CJK. CJK lineHeight: 1.3-1.4 headings, 1.6-1.8 body. CJK letterSpacing: 0, never negative.
-- Card rows: ALL cards use width="fill_container" + height="fill_container" for even distribution and equal height. Dense rows (5+): use short titles, max 2 text blocks per card.
-- Icons: "path" nodes with descriptive names ("SearchIcon", "MenuIcon" etc.). System auto-resolves to SVG. Size 16-24px. Never use emoji as icons.
-- Semantic inputs should include affordance icons when appropriate:
-  - search bars: leading SearchIcon
-  - password fields: trailing EyeIcon or EyeOffIcon (use justifyContent="space_between")
-  - email/account fields: leading MailIcon or UserIcon
-- Phone mockup: ONE frame, width 260-300, height 520-580, cornerRadius 32, solid fill + 1px stroke. No ellipse for mockups. At most ONE centered text child inside.
-- Never ellipse for decorative shapes — use frame/rectangle with cornerRadius.
-- Use style guide colors/fonts consistently. No random colors.
-- Buttons: height 44-52px, padding [12,24] min. Icon+text: layout="horizontal", gap=8, alignItems="center".
-- CJK buttons: width ≥ charCount × fontSize + horizontalPadding.
-- Icon-only buttons: square ≥44×44, justifyContent/alignItems="center", path icon 20-24px.
-- Badges/tags: only for short labels (CJK ≤8 / Latin ≤16 chars). Longer text → normal text row.
-- Hero + phone (desktop): two-column horizontal layout (left text, right phone). Not stacked unless mobile.
-- Landing pages: hero 40-56px headline, alternating section backgrounds, nav with space_between.
-- App screens: focus on core function, inputs width="fill_container", consistent 48-56px height, 16-24px gap.
-
-FORMAT: Each line has "_parent" (null=root, else parent-id). Parent before children.
+FORMAT: _parent (null=root, else parent-id). Parent before children.
 ${BLOCK}json
-{"_parent":null,"id":"root","type":"frame","name":"Hero","role":"hero","width":"fill_container","height":"fit_content","fill":[{"type":"solid","color":"#F8FAFC"}]}
-{"_parent":"root","id":"content","type":"frame","name":"Content","role":"row","width":1080,"height":400,"gap":48}
-{"_parent":"content","id":"left","type":"frame","name":"Text Column","role":"column","width":520,"height":360,"gap":20}
-{"_parent":"left","id":"title","type":"text","name":"Headline","role":"heading","content":"Learn Smarter","fontSize":48,"fontWeight":700,"fontFamily":"Space Grotesk","fill":[{"type":"solid","color":"#0F172A"}]}
-{"_parent":"left","id":"desc","type":"text","name":"Description","role":"body-text","content":"AI-powered vocabulary learning","fontSize":18,"fill":[{"type":"solid","color":"#64748B"}]}
-{"_parent":"left","id":"cta","type":"frame","name":"CTA Button","role":"button","width":180,"cornerRadius":10,"fill":[{"type":"solid","color":"#2563EB"}]}
-{"_parent":"cta","id":"cta-text","type":"text","name":"CTA Label","role":"label","content":"Get Started","fontSize":16,"fontWeight":600,"fill":[{"type":"solid","color":"#FFFFFF"}]}
-{"_parent":"content","id":"phone","type":"frame","name":"Phone Mockup","role":"phone-mockup","fill":[{"type":"solid","color":"#F1F5F9"}],"stroke":{"thickness":1,"fill":[{"type":"solid","color":"#E2E8F0"}]}}
+{"_parent":null,"id":"root","type":"frame","name":"Hero","width":"fill_container","height":"fit_content","layout":"vertical","gap":24,"padding":[48,24],"fill":[{"type":"solid","color":"#F8FAFC"}]}
+{"_parent":"root","id":"header","type":"frame","name":"Header","justifyContent":"space_between","alignItems":"center","width":"fill_container"}
+{"_parent":"header","id":"logo","type":"text","name":"Logo","content":"ACME","fontSize":18,"fontWeight":600,"fontFamily":"Space Grotesk","fill":[{"type":"solid","color":"#0D0D0D"}]}
+{"_parent":"header","id":"notifBtn","type":"frame","name":"Notification","width":44,"height":44}
+{"_parent":"notifBtn","id":"notifIcon","type":"icon_font","name":"Bell","iconFontName":"bell","width":20,"height":20,"fill":"#0D0D0D","x":12,"y":12}
+{"_parent":"root","id":"title","type":"text","name":"Headline","content":"Learn Smarter","fontSize":48,"fontWeight":700,"fontFamily":"Space Grotesk","lineHeight":0.95,"fill":[{"type":"solid","color":"#0F172A"}]}
+{"_parent":"root","id":"desc","type":"text","name":"Description","content":"AI-powered vocabulary learning that adapts to your pace","fontSize":16,"textGrowth":"fixed-width","width":"fill_container","lineHeight":1.5,"fill":[{"type":"solid","color":"#64748B"}]}
+{"_parent":"root","id":"cta","type":"frame","name":"CTA Button","padding":[14,28],"cornerRadius":10,"justifyContent":"center","fill":[{"type":"solid","color":"#2563EB"}]}
+{"_parent":"cta","id":"cta-text","type":"text","name":"CTA Label","content":"Get Started","fontSize":16,"fontWeight":600,"fill":[{"type":"solid","color":"#FFFFFF"}]}
 ${BLOCK}
 
-Start with ${BLOCK}json immediately. No preamble, no <step> tags.`
+Start with ${BLOCK}json immediately. No preamble.`

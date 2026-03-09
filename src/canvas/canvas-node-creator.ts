@@ -6,6 +6,8 @@ import {
   DEFAULT_FILL,
   DEFAULT_STROKE,
   DEFAULT_STROKE_WIDTH,
+  DEFAULT_FRAME_FILL,
+  DEFAULT_TEXT_FILL,
 } from './canvas-constants'
 
 export function createNodeForTool(
@@ -42,7 +44,7 @@ export function createNodeForTool(
         y,
         width: Math.abs(width),
         height: Math.abs(height),
-        fill: [{ type: 'solid', color: '#ffffff' }],
+        fill: [{ type: 'solid', color: DEFAULT_FRAME_FILL }],
         children: [],
       }
     case 'ellipse':
@@ -84,7 +86,7 @@ export function createNodeForTool(
         content: 'Type here',
         fontSize: 16,
         fontFamily: 'Inter, sans-serif',
-        fill: [{ type: 'solid', color: '#000000' }],
+        fill: [{ type: 'solid', color: DEFAULT_TEXT_FILL }],
       }
     default:
       return null

@@ -252,9 +252,9 @@ const zh: TranslationKeys = {
   'ai.quickAction.loginScreen': '设计一个移动端登录页面',
   'ai.quickAction.loginScreenPrompt':
     '设计一个现代的移动端登录页面，包含邮箱输入框、密码输入框、登录按钮和社交登录选项',
-  'ai.quickAction.productCard': '创建一个产品卡片组件',
-  'ai.quickAction.productCardPrompt':
-    '创建一个包含图片占位符、标题、价格和购买按钮的产品卡片',
+  'ai.quickAction.foodApp': '美食App首页',
+  'ai.quickAction.foodAppPrompt':
+    'Generate a well-designed food mobile app homepage',
   'ai.quickAction.bottomNav': '设计一个底部导航栏',
   'ai.quickAction.bottomNavPrompt':
     '设计一个包含 5 个标签的移动应用底部导航栏：首页、搜索、添加、消息、个人',

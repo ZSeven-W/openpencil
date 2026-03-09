@@ -149,18 +149,33 @@ export function insertStreamingNode(
     // - horizontal layout: short labels should hug content to avoid squeezing siblings
     if (node.type === 'text') {
       const parentLayout = ('layout' in parentNode ? parentNode.layout : undefined)
+      const content = ('content' in node ? (node.content as string) ?? '' : '')
+      const isLongText = content.length > 15
+
       if (parentLayout === 'vertical') {
-        if (typeof node.width === 'number') node.width = 'fill_container'
-        if (!node.textGrowth) node.textGrowth = 'fixed-width'
+        // Only force fill_container + fixed-width on LONG text that needs wrapping.
+        // Short labels/titles/numbers should hug content width (auto).
+        if (isLongText) {
+          if (typeof node.width === 'number') node.width = 'fill_container'
+          if (!node.textGrowth) node.textGrowth = 'fixed-width'
+        } else {
+          // Short text in vertical layout: fix pixel width but don't force wrapping
+          if (typeof node.width === 'number') node.width = 'fill_container'
+        }
       } else if (parentLayout === 'horizontal') {
-        if (typeof node.width === 'string' && node.width.startsWith('fill_container')) {
+        if (typeof node.width === 'string' && node.width.startsWith('fill_container') && !isLongText) {
           node.width = 'fit_content'
         }
-        if (!node.textGrowth || node.textGrowth === 'fixed-width' || node.textGrowth === 'fixed-width-height') {
+        if (!isLongText && (!node.textGrowth || node.textGrowth === 'fixed-width' || node.textGrowth === 'fixed-width-height')) {
           node.textGrowth = 'auto'
         }
-      } else if (!node.textGrowth) {
-        node.textGrowth = 'fixed-width'
+      }
+      // Respect AI's explicit textGrowth setting; don't override if already set.
+
+      // Strip explicit pixel height on text nodes — always let the engine auto-size.
+      // AI models often output height values that cause text clipping/overlap.
+      if (typeof node.height === 'number' && node.textGrowth !== 'fixed-width-height') {
+        delete (node as { height?: unknown }).height
       }
       // Default lineHeight based on text role (heading vs body)
       if (!node.lineHeight) {
@@ -422,6 +437,11 @@ export function extractAndApplyDesignModification(responseText: string): number 
  * Layout/sizing heuristics are now handled by the role resolver.
  */
 export function applyGenerationHeuristics(node: PenNode): void {
+  // Default icon_font nodes to lucide family when unspecified
+  if (node.type === 'icon_font' && !node.iconFontFamily) {
+    node.iconFontFamily = 'lucide'
+  }
+
   applyIconPathResolution(node)
   applyNoEmojiIconHeuristic(node)
   applyImagePlaceholderHeuristic(node)
@@ -489,10 +509,6 @@ export function expandRootFrameHeight(frameId?: string): void {
   const root = getNodeById(rootId)
   if (!root || root.type !== 'frame') return
   if (!Array.isArray(root.children) || root.children.length === 0) return
-
-  // Mobile screens have fixed viewport dimensions -- don't auto-expand height.
-  const rootWidth = toSizeNumber(root.width, 0)
-  if (rootWidth > 0 && rootWidth <= 480) return
 
   const requiredHeight = estimateNodeIntrinsicHeight(root)
   const targetHeight = Math.max(320, Math.round(requiredHeight))

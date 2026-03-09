@@ -23,6 +23,7 @@ import {
   setActivePageChildren,
   getAllChildren,
   migrateToPages,
+  ensureDocumentNodeIds,
   DEFAULT_PAGE_ID,
 } from './document-tree-utils'
 import { createPageActions } from './document-store-pages'
@@ -686,17 +687,19 @@ export const useDocumentStore = create<DocumentStoreState>(
     applyExternalDocument: (doc) => {
       // Push current state to history so MCP changes are undoable
       useHistoryStore.getState().pushState(get().document)
-      const migrated = migrateToPages(doc)
+      const migrated = ensureDocumentNodeIds(migrateToPages(doc))
       // Preserve activePageId if page still exists
       const activePageId = useCanvasStore.getState().activePageId
       const pageExists = migrated.pages?.some((p) => p.id === activePageId)
       const targetPageId = pageExists
         ? activePageId
         : migrated.pages?.[0]?.id
-      // Force new children reference so canvas sync subscriber always detects the change
-      if (targetPageId && migrated.pages) {
-        const page = migrated.pages.find((p) => p.id === targetPageId)
-        if (page) page.children = [...page.children]
+      // Force new children references on ALL pages so canvas sync detects
+      // changes when the user later switches to any page.
+      if (migrated.pages) {
+        for (const page of migrated.pages) {
+          page.children = [...page.children]
+        }
       }
       set({ document: migrated, isDirty: true })
       if (!pageExists && targetPageId) {
@@ -709,7 +712,7 @@ export const useDocumentStore = create<DocumentStoreState>(
 
     loadDocument: (doc, fileName, fileHandle) => {
       useHistoryStore.getState().clear()
-      const migrated = migrateToPages(doc)
+      const migrated = ensureDocumentNodeIds(migrateToPages(doc))
       set({
         document: migrated,
         fileName: fileName ?? null,
@@ -750,3 +753,9 @@ export {
   migrateToPages,
 } from './document-tree-utils'
 export { nanoid as generateId } from 'nanoid'
+
+// Expose stores on window in dev mode for testing/debugging
+if (import.meta.env.DEV && typeof window !== 'undefined') {
+  ;(window as unknown as Record<string, unknown>).__documentStore = useDocumentStore
+  ;(window as unknown as Record<string, unknown>).__canvasStore = useCanvasStore
+}

@@ -33,6 +33,9 @@ import {
   handleReorderPage,
   handleDuplicatePage,
 } from './tools/pages'
+import { handleBatchDesign } from './tools/batch-design'
+import { buildDesignPrompt } from './tools/design-prompt'
+import { MCP_DEFAULT_PORT } from '@/constants/app'
 
 // --- Tool definitions (shared across all Server instances) ---
 
@@ -56,7 +59,9 @@ const TOOL_DEFINITIONS = [
   {
     name: 'batch_get',
     description:
-      'Search and read nodes from an .op file. Search by patterns (type, name regex, reusable flag) or read specific node IDs. Control depth with readDepth and searchDepth.',
+      'Search and read nodes. With no patterns/nodeIds, returns top-level children. Search by type/name regex, or read specific IDs. ' +
+      'readDepth controls how deep children are included in results (default 1, use higher to see nested structure). ' +
+      'Returns nodes with children truncated to "..." beyond readDepth.',
     inputSchema: {
       type: 'object' as const,
       properties: {
@@ -85,7 +90,10 @@ const TOOL_DEFINITIONS = [
   {
     name: 'insert_node',
     description:
-      'Insert a new node into an .op file. The node data is standard JSON (type, name, width, height, fill, children, etc.). When inserting a frame at root level and an empty root frame exists, it will be auto-replaced.',
+      'Insert a new node into the document. Node types: frame, rectangle, ellipse, text, path, image, group, line, polygon, ref. ' +
+      'Fill is always an array: [{ type: "solid", color: "#hex" }]. ' +
+      'When inserting a frame at root level and an empty root frame exists, it is auto-replaced. ' +
+      'Returns the final node state (after post-processing if enabled).',
     inputSchema: {
       type: 'object' as const,
       properties: {
@@ -96,7 +104,14 @@ const TOOL_DEFINITIONS = [
         },
         data: {
           type: 'object',
-          description: 'PenNode data (type, name, width, height, fill, children, ...)',
+          description:
+            'PenNode data. Required: type. Key props by type:\n' +
+            '- frame: width, height, layout (none|vertical|horizontal), gap, padding, justifyContent, alignItems, clipContent, children[]\n' +
+            '- text: content (required), fontSize, fontWeight, fontFamily, textGrowth (auto|fixed-width), lineHeight, fill\n' +
+            '- rectangle/ellipse: width, height, fill, stroke, cornerRadius\n' +
+            '- path: d (SVG path string) or name (icon name like "SearchIcon"), width, height\n' +
+            '- image: src (URL), width, height\n' +
+            'Common: name, role, x, y, opacity, fill (array), stroke, effects, cornerRadius',
         },
         postProcess: {
           type: 'boolean',
@@ -116,7 +131,7 @@ const TOOL_DEFINITIONS = [
   {
     name: 'update_node',
     description:
-      'Update properties of an existing node in an .op file. Only the provided properties are merged; others remain unchanged.',
+      'Update properties of an existing node. Only provided properties are shallow-merged; unmentioned properties remain unchanged. Returns the updated node state.',
     inputSchema: {
       type: 'object' as const,
       properties: {
@@ -435,6 +450,52 @@ const TOOL_DEFINITIONS = [
       required: ['pageId'],
     },
   },
+  {
+    name: 'get_design_prompt',
+    description:
+      'Get the full design knowledge prompt with PenNode schema, layout engine rules, typography guidelines, icon list, and design examples. Call this before generating designs if open_document returned a brief prompt (non-empty document).',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {},
+      required: [],
+    },
+  },
+  {
+    name: 'batch_design',
+    description:
+      'Execute batch design operations in a compact DSL. Each line is one operation:\n' +
+      '  binding=I(parent, { ...nodeData })  — Insert node (binding captures new ID)\n' +
+      '  U(path, { ...updates })             — Update node properties\n' +
+      '  binding=C(sourceId, parent, { overrides })  — Copy node\n' +
+      '  binding=R(path, { ...newNodeData }) — Replace node\n' +
+      '  M(nodeId, parent, index?)           — Move node\n' +
+      '  D(nodeId)                           — Delete node\n' +
+      'Use null for root-level parent. Reference previous bindings by name. ' +
+      'Path expressions support binding+"/ childId" for nested access. ' +
+      'Always set postProcess=true when generating designs for best visual quality.',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        filePath: { type: 'string', description: 'Path to .op file, or omit to use the live canvas (default)' },
+        operations: {
+          type: 'string',
+          description:
+            'DSL operations, one per line. Example:\nroot=I(null, { "type": "frame", "name": "Page", "width": 1200, "height": 0, "layout": "vertical", "children": [...] })',
+        },
+        postProcess: {
+          type: 'boolean',
+          description:
+            'Apply post-processing (role defaults, icon resolution, layout sanitization). Always true for design generation.',
+        },
+        canvasWidth: {
+          type: 'number',
+          description: 'Canvas width for post-processing (default 1200, use 375 for mobile).',
+        },
+        pageId: { type: 'string', description: 'Target page ID (defaults to first page)' },
+      },
+      required: ['operations'],
+    },
+  },
 ]
 
 // --- Tool execution handler ---
@@ -485,6 +546,10 @@ async function handleToolCall(name: string, args: any) {
       return JSON.stringify(await handleReorderPage(args), null, 2)
     case 'duplicate_page':
       return JSON.stringify(await handleDuplicatePage(args), null, 2)
+    case 'get_design_prompt':
+      return JSON.stringify({ designPrompt: buildDesignPrompt() }, null, 2)
+    case 'batch_design':
+      return JSON.stringify(await handleBatchDesign(args), null, 2)
     default:
       throw new Error(`Unknown tool: ${name}`)
   }
@@ -598,11 +663,11 @@ function parseArgs(): { stdio: boolean; http: boolean; port: number } {
   const hasHttp = args.includes('--http')
   const hasStdio = args.includes('--stdio')
   const portIdx = args.indexOf('--port')
-  const port = portIdx !== -1 ? parseInt(args[portIdx + 1], 10) : 3100
+  const port = portIdx !== -1 ? parseInt(args[portIdx + 1], 10) : MCP_DEFAULT_PORT
 
-  if (hasHttp && hasStdio) return { stdio: true, http: true, port: isNaN(port) ? 3100 : port }
-  if (hasHttp) return { stdio: false, http: true, port: isNaN(port) ? 3100 : port }
-  return { stdio: true, http: false, port: 3100 }
+  if (hasHttp && hasStdio) return { stdio: true, http: true, port: isNaN(port) ? MCP_DEFAULT_PORT : port }
+  if (hasHttp) return { stdio: false, http: true, port: isNaN(port) ? MCP_DEFAULT_PORT : port }
+  return { stdio: true, http: false, port: MCP_DEFAULT_PORT }
 }
 
 async function main() {

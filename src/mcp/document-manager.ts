@@ -4,6 +4,7 @@ import { homedir } from 'node:os'
 import { join, resolve } from 'node:path'
 import type { PenDocument } from '../types/pen'
 import { sanitizeObject } from './utils/sanitize'
+import { PORT_FILE_DIR_NAME, PORT_FILE_NAME } from '@/constants/app'
 
 const cache = new Map<string, { doc: PenDocument; mtime: number }>()
 
@@ -16,7 +17,7 @@ export function resolveDocPath(filePath?: string): string {
   return resolve(filePath)
 }
 
-const PORT_FILE_PATH = join(homedir(), '.openpencil', '.port')
+const PORT_FILE_PATH = join(homedir(), PORT_FILE_DIR_NAME, PORT_FILE_NAME)
 
 // ---------------------------------------------------------------------------
 // Sync URL discovery
@@ -95,10 +96,9 @@ function validate(doc: unknown): doc is PenDocument {
 
 /** Read and parse a .op / .pen file, returning a PenDocument. Uses cache. */
 export async function openDocument(filePath: string): Promise<PenDocument> {
-  // Live canvas mode: fetch from running Electron/dev server
+  // Live canvas mode: always re-fetch from running Electron/dev server
+  // to pick up user edits made in the UI since the last MCP call.
   if (filePath === LIVE_CANVAS_PATH) {
-    const cached = cache.get(LIVE_CANVAS_PATH)
-    if (cached) return cached.doc
     const doc = await fetchLiveDocument()
     cache.set(LIVE_CANVAS_PATH, { doc, mtime: Date.now() })
     return doc
@@ -138,8 +138,8 @@ export async function saveDocument(
     return
   }
 
-  // File-based: write to disk
-  const json = JSON.stringify(doc, null, 2)
+  // File-based: write to disk (no indentation to minimize file size)
+  const json = JSON.stringify(doc)
   await writeFile(filePath, json, 'utf-8')
   cache.set(filePath, { doc, mtime: Date.now() })
 

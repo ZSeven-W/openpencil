@@ -1,7 +1,7 @@
 {
     "name": "openpencil",
-    "version": "0.3.0",
-    "description": "Open-source vector design tool with Design-as-Code philosophy",
+    "version": "0.3.1",
+    "description": "The world's first open-source AI-native vector design tool and the first to feature concurrent Agent Teams. Design-as-Code. Turn prompts into UI directly on the live canvas. A modern alternative to Pencil.",
     "author": {
         "name": "ZSeven-W",
         "email": "xkayshen@gmail.com"

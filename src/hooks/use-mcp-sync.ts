@@ -26,8 +26,10 @@ function pushDocumentToServer(clientId: string | null) {
 export function useMcpSync() {
   const clientIdRef = useRef<string | null>(null)
   const pushTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  // Skip the next debounce push when we just applied an external document
-  const skipNextPushRef = useRef(false)
+  // Skip debounce pushes briefly after applying an external document.
+  // Use a timestamp instead of a boolean so cascading setState calls
+  // (e.g. canvas sync page switch handler) are also suppressed.
+  const skipPushUntilRef = useRef(0)
 
   useEffect(() => {
     const baseUrl = getBaseUrl()
@@ -51,8 +53,9 @@ export function useMcpSync() {
             const doc = data.document as PenDocument
             const childCount = doc.pages?.[0]?.children?.length ?? doc.children?.length ?? 0
             console.log('[mcp-sync] Received document:update, top-level children:', childCount)
-            // Mark to skip the push triggered by applyExternalDocument
-            skipNextPushRef.current = true
+            // Suppress push-back for a short window — applyExternalDocument
+            // may trigger multiple cascading setState calls.
+            skipPushUntilRef.current = Date.now() + 200
             useDocumentStore.getState().applyExternalDocument(doc)
           }
         } catch {
@@ -73,10 +76,7 @@ export function useMcpSync() {
 
     // Push local document changes to Nitro (debounced)
     const unsubDoc = useDocumentStore.subscribe(() => {
-      if (skipNextPushRef.current) {
-        skipNextPushRef.current = false
-        return
-      }
+      if (Date.now() < skipPushUntilRef.current) return
       if (pushTimerRef.current) clearTimeout(pushTimerRef.current)
       pushTimerRef.current = setTimeout(() => {
         pushDocumentToServer(clientIdRef.current)

@@ -21,6 +21,10 @@ function indent(depth: number): string {
   return '    '.repeat(depth)
 }
 
+function kebabToPascal(name: string): string {
+  return name.split('-').map(s => s.charAt(0).toUpperCase() + s.slice(1)).join('')
+}
+
 /** Parse a hex color string to Compose Color() call. */
 function hexToComposeColor(hex: string): string {
   if (hex.startsWith('$')) {
@@ -246,6 +250,14 @@ function generateNodeCompose(node: PenNode, depth: number): string {
 
     case 'image':
       return generateImageCompose(node, depth)
+
+    case 'icon_font': {
+      const size = typeof node.width === 'number' ? node.width : 24
+      const color = node.fill?.[0]?.type === 'solid' ? node.fill[0].color : null
+      const iconName = kebabToPascal(node.iconFontName || 'circle')
+      const colorStr = color ? `, tint = Color(0xFF${color.replace('#', '').toUpperCase()})` : ''
+      return `${pad}Icon(LucideIcons.${iconName}, contentDescription = "${node.name ?? 'icon'}", modifier = Modifier.size(${size}.dp)${colorStr})`
+    }
 
     case 'ref':
       return `${pad}// Ref: ${node.ref}`
