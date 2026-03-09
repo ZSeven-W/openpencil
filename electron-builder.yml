@@ -51,7 +51,16 @@ linux:
   category: Graphics
   artifactName: "${productName}-${version}-${arch}-linux.${ext}"
   desktop:
-    StartupWMClass: openpencil
+    entry: |
+      [Desktop Entry]
+      Name=OpenPencil
+      Exec=AppRun --no-sandbox %U
+      Terminal=false
+      Type=Application
+      Icon=openpencil
+      StartupWMClass=openpencil
+      Categories=Graphics;
+      MimeType=application/x-openpencil;
   target:
     - AppImage
     - deb
