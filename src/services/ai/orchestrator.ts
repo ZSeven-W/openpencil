@@ -37,12 +37,12 @@ import { useDocumentStore } from '@/stores/document-store'
 import { useHistoryStore } from '@/stores/history-store'
 import { zoomToFitContent } from '@/canvas/use-fabric-canvas'
 import { resetAnimationState } from './design-animation'
+import { VALIDATION_ENABLED } from './ai-runtime-config'
 import { runPostGenerationValidation } from './design-validation'
 import { executeSubAgents } from './orchestrator-sub-agent'
 import { emitProgress, buildFinalStepTags } from './orchestrator-progress'
 import { assignAgentIdentities } from './agent-identity'
 import { addAgentFrame, clearAgentIndicators } from '@/canvas/agent-indicator'
-import { enrichSubtasksWithHtmlReference } from './visual-ref-orchestrator'
 
 // ---------------------------------------------------------------------------
 // Public API
@@ -87,9 +87,6 @@ export async function executeOrchestration(
       st.idPrefix = st.id
       st.parentFrameId = plan.rootFrame.id
     }
-
-    // Enrich subtasks with HTML references from visual reference pipeline (if active)
-    enrichSubtasksWithHtmlReference(plan.subtasks)
 
     // Set canvas width hint for accurate text height estimation
     setGenerationCanvasWidth(plan.rootFrame.width)
@@ -370,8 +367,8 @@ export async function executeOrchestration(
       }
     }
 
-    // -- Phase 5: Visual validation (skip if user stopped) --
-    if (!aborted) {
+    // -- Phase 5: Visual validation (skip if user stopped or disabled) --
+    if (!aborted && VALIDATION_ENABLED) {
       const validationEntry: OrchestrationProgress['subtasks'][number] = {
         id: '_validation',
         label: 'Validating design',

@@ -7,7 +7,7 @@
  */
 
 import { DEFAULT_FRAME_ID, useDocumentStore } from '@/stores/document-store'
-import { VALIDATION_TIMEOUT_MS, MAX_VALIDATION_ROUNDS, VALIDATION_QUALITY_THRESHOLD } from './ai-runtime-config'
+import { VALIDATION_ENABLED, VALIDATION_TIMEOUT_MS, MAX_VALIDATION_ROUNDS, VALIDATION_QUALITY_THRESHOLD } from './ai-runtime-config'
 import type { PenNode } from '@/types/pen'
 import type { AIProviderType } from '@/types/agent-settings'
 import { getCurrentVisualReference, clearVisualReference } from './visual-ref-orchestrator'
@@ -308,6 +308,15 @@ export async function runPostGenerationValidation(
     log[log.length - 1] = '[done] Pre-checks: OK'
   }
   emit('streaming')
+
+  // If LLM validation is disabled, stop after pre-checks
+  if (!VALIDATION_ENABLED) {
+    clearVisualReference()
+    emit('done', preFixCount > 0
+      ? `[done] Pre-checks: fixed ${preFixCount} issue${preFixCount > 1 ? 's' : ''}`
+      : '[done] Pre-checks complete')
+    return { applied: totalApplied, skipped: false }
+  }
 
   for (let round = 1; round <= MAX_VALIDATION_ROUNDS; round++) {
     const isFirstRound = round === 1

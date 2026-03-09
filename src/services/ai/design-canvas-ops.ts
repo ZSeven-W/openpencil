@@ -437,6 +437,11 @@ export function extractAndApplyDesignModification(responseText: string): number 
  * Layout/sizing heuristics are now handled by the role resolver.
  */
 export function applyGenerationHeuristics(node: PenNode): void {
+  // Default icon_font nodes to lucide family when unspecified
+  if (node.type === 'icon_font' && !node.iconFontFamily) {
+    node.iconFontFamily = 'lucide'
+  }
+
   applyIconPathResolution(node)
   applyNoEmojiIconHeuristic(node)
   applyImagePlaceholderHeuristic(node)
@@ -504,10 +509,6 @@ export function expandRootFrameHeight(frameId?: string): void {
   const root = getNodeById(rootId)
   if (!root || root.type !== 'frame') return
   if (!Array.isArray(root.children) || root.children.length === 0) return
-
-  // Mobile screens have fixed viewport dimensions -- don't auto-expand height.
-  const rootWidth = toSizeNumber(root.width, 0)
-  if (rootWidth > 0 && rootWidth <= 480) return
 
   const requiredHeight = estimateNodeIntrinsicHeight(root)
   const targetHeight = Math.max(320, Math.round(requiredHeight))
