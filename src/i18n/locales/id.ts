@@ -258,9 +258,9 @@ const id: TranslationKeys = {
   'ai.quickAction.loginScreen': 'Desain layar login mobile',
   'ai.quickAction.loginScreenPrompt':
     'Desain layar login mobile modern dengan input email, input kata sandi, tombol login, dan opsi login sosial',
-  'ai.quickAction.productCard': 'Buat komponen kartu produk',
-  'ai.quickAction.productCardPrompt':
-    'Buat kartu produk dengan placeholder gambar, judul, harga, dan tombol beli',
+  'ai.quickAction.foodApp': 'Beranda aplikasi makanan',
+  'ai.quickAction.foodAppPrompt':
+    'Generate a well-designed food mobile app homepage',
   'ai.quickAction.bottomNav': 'Desain bilah navigasi bawah',
   'ai.quickAction.bottomNavPrompt':
     'Desain bilah navigasi bawah aplikasi mobile dengan 5 tab: Beranda, Cari, Tambah, Pesan, Profil',

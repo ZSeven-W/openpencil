@@ -105,6 +105,9 @@ export const DESIGN_STREAM_TIMEOUTS = {
   effort: DEFAULT_THINKING_EFFORT,
 } as const
 
+/** When false, skips the vision LLM validation loop (pre-validation heuristics still run) */
+export const VALIDATION_ENABLED = false
+
 export const VALIDATION_TIMEOUT_MS = 180_000
 export const MAX_VALIDATION_ROUNDS = 3
 export const VALIDATION_QUALITY_THRESHOLD = 8

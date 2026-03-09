@@ -33,8 +33,8 @@ const QUICK_ACTIONS = [
     prompt: 'Design a modern mobile login screen with email input, password input, login button, and social login options',
   },
   {
-    labelKey: 'ai.quickAction.productCard',
-    prompt: 'Create a product card with an image placeholder, title, price, and buy button',
+    labelKey: 'ai.quickAction.foodApp',
+    prompt: 'Generate a well-designed food mobile app homepage',
   },
   {
     labelKey: 'ai.quickAction.bottomNav',

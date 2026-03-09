@@ -258,9 +258,9 @@ const hi: TranslationKeys = {
   'ai.quickAction.loginScreen': 'मोबाइल लॉगिन स्क्रीन डिज़ाइन करें',
   'ai.quickAction.loginScreenPrompt':
     'ईमेल इनपुट, पासवर्ड इनपुट, लॉगिन बटन और सोशल लॉगिन विकल्पों के साथ एक आधुनिक मोबाइल लॉगिन स्क्रीन डिज़ाइन करें',
-  'ai.quickAction.productCard': 'एक प्रोडक्ट कार्ड कंपोनेंट बनाएँ',
-  'ai.quickAction.productCardPrompt':
-    'इमेज प्लेसहोल्डर, शीर्षक, मूल्य और खरीदें बटन के साथ एक प्रोडक्ट कार्ड बनाएँ',
+  'ai.quickAction.foodApp': 'फ़ूड ऐप होमपेज',
+  'ai.quickAction.foodAppPrompt':
+    'Generate a well-designed food mobile app homepage',
   'ai.quickAction.bottomNav': 'बॉटम नेविगेशन बार डिज़ाइन करें',
   'ai.quickAction.bottomNavPrompt':
     '5 टैब के साथ एक मोबाइल ऐप बॉटम नेविगेशन बार डिज़ाइन करें: होम, खोजें, जोड़ें, संदेश, प्रोफ़ाइल',

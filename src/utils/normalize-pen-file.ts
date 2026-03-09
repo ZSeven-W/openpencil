@@ -65,6 +65,11 @@ function normalizeNode(node: PenNode): PenNode {
 
   // opacity — pass through ($variable strings preserved)
 
+  // icon_font: default to lucide family
+  if (out.type === 'icon_font' && !out.iconFontFamily) {
+    out.iconFontFamily = 'lucide'
+  }
+
   // children
   if ('children' in out && Array.isArray(out.children)) {
     out.children = (out.children as PenNode[]).map((c) => normalizeNode(c))

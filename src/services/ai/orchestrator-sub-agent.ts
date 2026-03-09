@@ -110,7 +110,7 @@ export async function executeSubAgents(
 
       results.push(result)
 
-      if (result.nodes.length > 0 && plan.rootFrame.width > 480) {
+      if (result.nodes.length > 0) {
         expandRootFrameHeight()
       }
     }
@@ -169,7 +169,7 @@ export async function executeSubAgents(
         )
         results[idx] = result
 
-        if (result.nodes.length > 0 && plan.rootFrame.width > 480) {
+        if (result.nodes.length > 0) {
           expandRootFrameHeight(plan.subtasks[idx].parentFrameId ?? undefined)
         }
       } catch (err) {
@@ -311,9 +311,7 @@ async function executeSubAgent(
             }
             callbacks?.onApplyPartial?.(progress.totalNodes)
             // Expand the subtask's root frame as content grows
-            if (plan.rootFrame.width > 480) {
-              expandRootFrameHeight(subtask.parentFrameId ?? undefined)
-            }
+            expandRootFrameHeight(subtask.parentFrameId ?? undefined)
             emitProgress(plan, progress, callbacks, rawResponse)
           }
         }
@@ -427,7 +425,6 @@ CRITICAL LAYOUT CONSTRAINTS:
 - Use justifyContent="space_between" to distribute items (e.g. navbar: logo | links | CTA). Use padding=[0,80] for horizontal page margins.
 - For side-by-side layouts, nest a horizontal frame with child frames using "fill_container" width.
 - Phone mockup = ONE frame node, cornerRadius 32. If a placeholder label is needed, allow exactly ONE centered text child inside the phone; otherwise no children. Never place placeholder text below the phone as a sibling. NEVER use ellipse.
-- Text height must fit content: estimate lines × fontSize × 1.4.
 - IDs prefix="${subtask.idPrefix}-". No <step> tags. Output \`\`\`json immediately.`
 
   if (needsNativeDenseCardInstruction(subtask.label, compactPrompt, fullPrompt)) {
@@ -468,11 +465,6 @@ CRITICAL LAYOUT CONSTRAINTS:
   const varContext = buildVariableContext(variables, themes)
   if (varContext) {
     prompt += '\n\n' + varContext
-  }
-
-  // Inject HTML reference from visual reference pipeline (if available)
-  if (subtask.htmlReference) {
-    prompt += `\n\n${subtask.htmlReference}\nUse this HTML structure as guidance for layout and content placement. Match the visual hierarchy and component structure.`
   }
 
   return prompt

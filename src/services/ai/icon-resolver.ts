@@ -1,6 +1,7 @@
 import type { PenNode, PathNode } from '@/types/pen'
 import { useDocumentStore } from '@/stores/document-store'
 import featherData from '@iconify-json/feather/icons.json'
+import lucideData from '@iconify-json/lucide/icons.json'
 import {
   clamp,
   toSizeNumber,
@@ -151,17 +152,16 @@ const ICON_PATH_MAP: Record<string, IconEntry> = {
 const _handPickedKeys = new Set(Object.keys(ICON_PATH_MAP))
 
 // ---------------------------------------------------------------------------
-// Feather icon set — bundled from @iconify-json/feather (286 icons, all stroke)
-// Populated at module init so AI-generated designs never need async network fetches
-// for standard Feather icons.
+// Iconify icon sets — bundled from @iconify-json packages
+// Lucide (1700+ icons) is primary; Feather (286 icons) kept as fallback.
+// Populated at module init so AI-generated designs never need async fetches.
 // ---------------------------------------------------------------------------
 
 /**
- * Parse a Feather SVG body string into a compound SVG path `d` string.
- * Feather uses <path>, <circle>, <rect>, <ellipse> (all inside optional <g>).
- * All elements are converted to equivalent path commands and joined.
+ * Parse an Iconify SVG body string into a compound SVG path `d` string.
+ * Handles <path>, <circle>, <rect>, <ellipse>, <line>, <polyline>, <polygon>.
  */
-function featherBodyToPathD(body: string): string | null {
+function iconifyBodyToPathD(body: string): string | null {
   const parts: string[] = []
 
   // <path d="...">
@@ -251,19 +251,30 @@ function featherBodyToPathD(body: string): string | null {
   return parts.length > 0 ? parts.join(' ') : null
 }
 
-// Populate ICON_PATH_MAP with all 286 Feather icons at module load time.
+// Populate ICON_PATH_MAP with Lucide icons first (1700+), then Feather as fallback.
 // Keys are stored both in original kebab-case and normalized (no separator)
 // form to match the icon resolver's name normalization.
-;(function initFeatherIcons() {
-  const icons = (featherData as { icons: Record<string, { body: string }> }).icons
-  for (const [name, icon] of Object.entries(icons)) {
-    const d = featherBodyToPathD(icon.body)
+;(function initIconSets() {
+  // Lucide — primary icon set (1700+ icons, mostly stroke)
+  const lucideIcons = (lucideData as { icons: Record<string, { body: string }> }).icons
+  for (const [name, icon] of Object.entries(lucideIcons)) {
+    const d = iconifyBodyToPathD(icon.body)
+    if (!d) continue
+    const iconId = `lucide:${name}`
+    const entry = { d, style: 'stroke' as const, iconId }
+    if (!ICON_PATH_MAP[name]) ICON_PATH_MAP[name] = entry
+    const normalized = name.replace(/-/g, '')
+    if (!ICON_PATH_MAP[normalized]) ICON_PATH_MAP[normalized] = entry
+  }
+
+  // Feather — fallback for any names not covered by Lucide
+  const featherIcons = (featherData as { icons: Record<string, { body: string }> }).icons
+  for (const [name, icon] of Object.entries(featherIcons)) {
+    const d = iconifyBodyToPathD(icon.body)
     if (!d) continue
     const iconId = `feather:${name}`
     const entry = { d, style: 'stroke' as const, iconId }
-    // kebab-case key (e.g. "arrow-right") — for direct lookup in icon picker
     if (!ICON_PATH_MAP[name]) ICON_PATH_MAP[name] = entry
-    // normalized key (e.g. "arrowright") — matches applyIconPathResolution normalization
     const normalized = name.replace(/-/g, '')
     if (!ICON_PATH_MAP[normalized]) ICON_PATH_MAP[normalized] = entry
   }
@@ -589,12 +600,15 @@ function replaceNode(target: PenNode, replacement: PenNode): void {
 // ---------------------------------------------------------------------------
 
 /**
- * Sorted list of all available Feather icon names (kebab-case).
+ * Sorted list of all available Lucide icon names (kebab-case).
  * These are guaranteed to resolve instantly without any network request.
  */
-export const AVAILABLE_FEATHER_ICONS: readonly string[] = Object.keys(
-  (featherData as { icons: Record<string, unknown> }).icons,
+export const AVAILABLE_LUCIDE_ICONS: readonly string[] = Object.keys(
+  (lucideData as { icons: Record<string, unknown> }).icons,
 ).sort()
+
+/** @deprecated Use AVAILABLE_LUCIDE_ICONS instead */
+export const AVAILABLE_FEATHER_ICONS: readonly string[] = AVAILABLE_LUCIDE_ICONS
 
 // ---------------------------------------------------------------------------
 // Built-in icon collection export — powers the "OpenPencil" picker collection
@@ -613,7 +627,7 @@ export interface BuiltinIconEntry {
 
 /**
  * All locally bundled icons, deduplicated by iconId and sorted alphabetically.
- * Covers the full Feather set (286 icons) plus hand-picked Lucide aliases.
+ * Covers the full Lucide set (1700+ icons) plus hand-picked aliases.
  * These icons resolve instantly without any network request.
  */
 export const BUILTIN_ICONS: readonly BuiltinIconEntry[] = (() => {

@@ -258,9 +258,9 @@ const tr: TranslationKeys = {
   'ai.quickAction.loginScreen': 'Mobil giriş ekranı tasarla',
   'ai.quickAction.loginScreenPrompt':
     'E-posta girişi, şifre girişi, giriş butonu ve sosyal giriş seçenekleri ile modern bir mobil giriş ekranı tasarla',
-  'ai.quickAction.productCard': 'Bir ürün kartı bileşeni oluştur',
-  'ai.quickAction.productCardPrompt':
-    'Görsel yer tutucusu, başlık, fiyat ve satın al butonu ile bir ürün kartı oluştur',
+  'ai.quickAction.foodApp': 'Yemek uygulaması ana sayfası',
+  'ai.quickAction.foodAppPrompt':
+    'Generate a well-designed food mobile app homepage',
   'ai.quickAction.bottomNav': 'Alt gezinme çubuğu tasarla',
   'ai.quickAction.bottomNavPrompt':
     '5 sekmeli bir mobil uygulama alt gezinme çubuğu tasarla: Ana Sayfa, Ara, Ekle, Mesajlar, Profil',

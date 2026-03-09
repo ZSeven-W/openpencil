@@ -261,9 +261,9 @@ const fr: TranslationKeys = {
   'ai.quickAction.loginScreen': 'Concevoir un écran de connexion mobile',
   'ai.quickAction.loginScreenPrompt':
     'Concevez un écran de connexion mobile moderne avec un champ e-mail, un champ mot de passe, un bouton de connexion et des options de connexion sociale',
-  'ai.quickAction.productCard': 'Créer un composant de fiche produit',
-  'ai.quickAction.productCardPrompt':
-    'Créez une fiche produit avec un espace réservé pour l\u2019image, un titre, un prix et un bouton d\u2019achat',
+  'ai.quickAction.foodApp': 'Page d\'accueil appli cuisine',
+  'ai.quickAction.foodAppPrompt':
+    'Generate a well-designed food mobile app homepage',
   'ai.quickAction.bottomNav': 'Concevoir une barre de navigation inférieure',
   'ai.quickAction.bottomNavPrompt':
     'Concevez une barre de navigation inférieure pour application mobile avec 5 onglets : Accueil, Recherche, Ajouter, Messages, Profil',

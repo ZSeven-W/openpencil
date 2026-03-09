@@ -252,9 +252,9 @@ const zhTW: TranslationKeys = {
   'ai.quickAction.loginScreen': '設計行動裝置登入頁面',
   'ai.quickAction.loginScreenPrompt':
     '設計一個現代的行動裝置登入頁面，包含電子郵件輸入框、密碼輸入框、登入按鈕和社群登入選項',
-  'ai.quickAction.productCard': '建立產品卡片元件',
-  'ai.quickAction.productCardPrompt':
-    '建立一個包含圖片佔位符、標題、價格和購買按鈕的產品卡片',
+  'ai.quickAction.foodApp': '美食App首頁',
+  'ai.quickAction.foodAppPrompt':
+    'Generate a well-designed food mobile app homepage',
   'ai.quickAction.bottomNav': '設計底部導覽列',
   'ai.quickAction.bottomNavPrompt':
     '設計一個包含 5 個標籤的行動應用程式底部導覽列：首頁、搜尋、新增、訊息、個人',

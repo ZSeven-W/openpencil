@@ -258,9 +258,9 @@ const vi: TranslationKeys = {
   'ai.quickAction.loginScreen': 'Thiết kế màn hình đăng nhập di động',
   'ai.quickAction.loginScreenPrompt':
     'Thiết kế màn hình đăng nhập di động hiện đại với ô nhập email, ô nhập mật khẩu, nút đăng nhập và các tuỳ chọn đăng nhập bằng mạng xã hội',
-  'ai.quickAction.productCard': 'Tạo thành phần thẻ sản phẩm',
-  'ai.quickAction.productCardPrompt':
-    'Tạo thẻ sản phẩm với ảnh giữ chỗ, tiêu đề, giá và nút mua',
+  'ai.quickAction.foodApp': 'Trang chủ ứng dụng ẩm thực',
+  'ai.quickAction.foodAppPrompt':
+    'Generate a well-designed food mobile app homepage',
   'ai.quickAction.bottomNav': 'Thiết kế thanh điều hướng dưới cùng',
   'ai.quickAction.bottomNavPrompt':
     'Thiết kế thanh điều hướng dưới cùng cho ứng dụng di động với 5 tab: Trang chủ, Tìm kiếm, Thêm, Tin nhắn, Hồ sơ',
