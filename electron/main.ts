@@ -42,6 +42,7 @@ import {
   getAutoUpdateEnabled,
   setAutoUpdateEnabled,
 } from './auto-updater'
+import { initLogger, log, getLogDir } from './logger'
 
 let mainWindow: BrowserWindow | null = null
 let nitroProcess: ChildProcess | null = null
@@ -84,7 +85,7 @@ function schedulePrefsWrite(): void {
       await mkdir(app.getPath('userData'), { recursive: true })
       await writeFile(PREFS_PATH, JSON.stringify(prefsCache, null, 2), 'utf-8')
     } catch (err) {
-      console.error('[prefs] Failed to write preferences:', err)
+      log.error(`[prefs] Failed to write preferences: ${err}`)
     }
   }, 500)
 }
@@ -187,7 +188,7 @@ async function writePortFile(port: number): Promise<void> {
       'utf-8',
     )
   } catch (err) {
-    console.error('[port-file] Failed to write port file:', err)
+    log.error(`[port-file] Failed to write port file: ${err}`)
   }
 }
 
@@ -253,7 +254,7 @@ async function startNitroServer(): Promise<number> {
 
     child.stdout?.on('data', (data: Buffer) => {
       const msg = data.toString()
-      console.log('[nitro]', msg)
+      log.info(`[nitro] ${msg.trimEnd()}`)
       // Resolve once Nitro reports it's listening
       if (msg.includes('Listening') || msg.includes('ready')) {
         resolve(port)
@@ -261,29 +262,29 @@ async function startNitroServer(): Promise<number> {
     })
 
     child.stderr?.on('data', (data: Buffer) => {
-      console.error('[nitro:err]', data.toString())
+      log.error(`[nitro:err] ${data.toString().trimEnd()}`)
     })
 
     child.on('error', reject)
     child.on('exit', (code) => {
       if (code !== 0 && code !== null) {
-        console.error(`Nitro exited with code ${code}`)
+        log.error(`Nitro exited with code ${code}`)
       }
       nitroProcess = null
       // Auto-restart Nitro server if it crashes while app is running
       if (code !== 0 && code !== null && mainWindow && !mainWindow.isDestroyed()) {
-        console.log('[nitro] Restarting server after crash...')
+        log.info('[nitro] Restarting server after crash...')
         startNitroServer()
           .then((newPort) => {
             serverPort = newPort
             writePortFile(newPort)
-            console.log(`[nitro] Restarted on port ${newPort}`)
+            log.info(`[nitro] Restarted on port ${newPort}`)
             if (mainWindow && !mainWindow.isDestroyed()) {
               mainWindow.loadURL(`http://${NITRO_HOST}:${newPort}/editor`)
             }
           })
           .catch((err) => {
-            console.error('[nitro] Failed to restart:', err)
+            log.error(`[nitro] Failed to restart: ${err}`)
           })
       }
     })
@@ -562,6 +563,8 @@ function setupIPC(): void {
     schedulePrefsWrite()
   })
 
+  ipcMain.handle('log:getDir', () => getLogDir())
+
   ipcMain.handle('updater:getState', () => getUpdaterState())
   ipcMain.handle('updater:checkForUpdates', async () => {
     await checkForAppUpdates(true)
@@ -645,6 +648,7 @@ if (!gotTheLock) {
 // ---------------------------------------------------------------------------
 
 app.on('ready', async () => {
+  await initLogger(app.getPath('userData'))
   fixPath()
   await loadPrefs()
   setupIPC()
@@ -653,10 +657,10 @@ app.on('ready', async () => {
   if (!isDev) {
     try {
       serverPort = await startNitroServer()
-      console.log(`Nitro server started on port ${serverPort}`)
+      log.info(`Nitro server started on port ${serverPort}`)
       await writePortFile(serverPort)
     } catch (err) {
-      console.error('Failed to start Nitro server:', err)
+      log.error(`Failed to start Nitro server: ${err}`)
       dialog.showErrorBox(
         'OpenPencil',
         `Failed to start the application server.\n\n${err instanceof Error ? err.message : String(err)}\n\nThe application will now quit.`,

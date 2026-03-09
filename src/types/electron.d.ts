@@ -29,6 +29,7 @@ interface ElectronAPI {
   onOpenFile: (callback: (filePath: string) => void) => () => void
   readFile: (filePath: string) => Promise<{ filePath: string; content: string } | null>
   getPendingFile: () => Promise<string | null>
+  getLogDir: () => Promise<string>
   setTheme: (theme: 'dark' | 'light', colors?: { bg: string; fg: string }) => void
   getPreferences: () => Promise<Record<string, string>>
   setPreference: (key: string, value: string) => Promise<void>
