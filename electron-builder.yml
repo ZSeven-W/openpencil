@@ -74,9 +74,3 @@ fileAssociations:
     icon: build/icon
 
 asar: true
-
-publish:
-  provider: github
-  owner: ZSeven-W
-  repo: openpencil
-  releaseType: release

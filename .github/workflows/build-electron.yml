@@ -58,7 +58,7 @@ jobs:
         run: bun run mcp:compile
 
       - name: Build Electron app
-        run: npx electron-builder --config electron-builder.yml ${{ matrix.build_args }}
+        run: npx electron-builder --config electron-builder.yml ${{ matrix.build_args }} --publish never
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           CSC_LINK: ${{ secrets.CSC_LINK }}
