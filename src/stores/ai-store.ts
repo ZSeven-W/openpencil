@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import type { ChatMessage, ChatAttachment } from '@/services/ai/ai-types'
 import type { ModelGroup } from '@/types/agent-settings'
+import { appStorage } from '@/utils/app-storage'
 
 export type PanelCorner = 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right'
 
@@ -19,7 +20,7 @@ interface AIUIPrefs {
 function readUIPrefs(): AIUIPrefs {
   if (typeof window === 'undefined') return {}
   try {
-    const raw = window.localStorage.getItem(UI_PREFS_KEY)
+    const raw = appStorage.getItem(UI_PREFS_KEY)
     return raw ? JSON.parse(raw) : {}
   } catch {
     return {}
@@ -30,14 +31,14 @@ function writeUIPrefs(partial: AIUIPrefs): void {
   if (typeof window === 'undefined') return
   try {
     const current = readUIPrefs()
-    window.localStorage.setItem(UI_PREFS_KEY, JSON.stringify({ ...current, ...partial }))
+    appStorage.setItem(UI_PREFS_KEY, JSON.stringify({ ...current, ...partial }))
   } catch { /* ignore */ }
 }
 
 function readStoredModelPreference(): string | null {
   if (typeof window === 'undefined') return null
   try {
-    const value = window.localStorage.getItem(MODEL_PREFERENCE_STORAGE_KEY)
+    const value = appStorage.getItem(MODEL_PREFERENCE_STORAGE_KEY)
     if (!value || value.trim().length === 0) return null
     return value
   } catch {
@@ -48,7 +49,7 @@ function readStoredModelPreference(): string | null {
 function writeStoredModelPreference(model: string): void {
   if (typeof window === 'undefined') return
   try {
-    window.localStorage.setItem(MODEL_PREFERENCE_STORAGE_KEY, model)
+    appStorage.setItem(MODEL_PREFERENCE_STORAGE_KEY, model)
   } catch {
     // Ignore storage failures (private mode, quota, etc.)
   }
@@ -57,7 +58,7 @@ function writeStoredModelPreference(model: string): void {
 function readStoredConcurrency(): number {
   if (typeof window === 'undefined') return 1
   try {
-    const value = window.localStorage.getItem(CONCURRENCY_STORAGE_KEY)
+    const value = appStorage.getItem(CONCURRENCY_STORAGE_KEY)
     if (!value) return 1
     const n = parseInt(value, 10)
     return n >= 1 && n <= 6 ? n : 1
@@ -69,7 +70,7 @@ function readStoredConcurrency(): number {
 function writeStoredConcurrency(n: number): void {
   if (typeof window === 'undefined') return
   try {
-    window.localStorage.setItem(CONCURRENCY_STORAGE_KEY, String(n))
+    appStorage.setItem(CONCURRENCY_STORAGE_KEY, String(n))
   } catch {
     // Ignore storage failures
   }

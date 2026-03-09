@@ -23,6 +23,7 @@ import { useThemePresetStore } from '@/stores/theme-preset-store'
 import { useElectronMenu } from '@/hooks/use-electron-menu'
 import { useFigmaPaste } from '@/hooks/use-figma-paste'
 import { useMcpSync } from '@/hooks/use-mcp-sync'
+import { initAppStorage } from '@/utils/app-storage'
 
 const FabricCanvas = lazy(() => import('@/canvas/fabric-canvas'))
 
@@ -112,12 +113,14 @@ export default function EditorLayout() {
   // MCP ↔ canvas real-time sync
   useMcpSync()
 
-  // Hydrate persisted settings
+  // Hydrate persisted settings (init appStorage first for Electron IPC cache)
   useEffect(() => {
-    useAgentSettingsStore.getState().hydrate()
-    useUIKitStore.getState().hydrate()
-    useCanvasStore.getState().hydrate()
-    useThemePresetStore.getState().hydrate()
+    initAppStorage().then(() => {
+      useAgentSettingsStore.getState().hydrate()
+      useUIKitStore.getState().hydrate()
+      useCanvasStore.getState().hydrate()
+      useThemePresetStore.getState().hydrate()
+    })
   }, [])
 
   return (

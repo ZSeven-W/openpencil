@@ -54,6 +54,40 @@ const isDev = !app.isPackaged
 // Windows: %APPDATA%\OpenPencil\
 // Linux: ~/.config/OpenPencil/
 const SETTINGS_PATH = join(app.getPath('userData'), 'settings.json')
+const PREFS_PATH = join(app.getPath('userData'), 'preferences.json')
+
+// ---------------------------------------------------------------------------
+// Renderer preferences (replaces localStorage which is origin-scoped)
+// ---------------------------------------------------------------------------
+
+let prefsCache: Record<string, string> = {}
+let prefsDirty = false
+let prefsWriteTimer: ReturnType<typeof setTimeout> | null = null
+
+async function loadPrefs(): Promise<void> {
+  try {
+    const raw = await readFile(PREFS_PATH, 'utf-8')
+    prefsCache = JSON.parse(raw)
+  } catch {
+    prefsCache = {}
+  }
+}
+
+function schedulePrefsWrite(): void {
+  if (prefsWriteTimer) return
+  prefsDirty = true
+  prefsWriteTimer = setTimeout(async () => {
+    prefsWriteTimer = null
+    if (!prefsDirty) return
+    prefsDirty = false
+    try {
+      await mkdir(app.getPath('userData'), { recursive: true })
+      await writeFile(PREFS_PATH, JSON.stringify(prefsCache, null, 2), 'utf-8')
+    } catch (err) {
+      console.error('[prefs] Failed to write preferences:', err)
+    }
+  }, 500)
+}
 
 // ---------------------------------------------------------------------------
 // Fix PATH for GUI apps (shell PATH not inherited)
@@ -514,6 +548,20 @@ function setupIPC(): void {
     },
   )
 
+  // Generic renderer preferences (replaces localStorage which is origin-scoped
+  // and lost when Nitro server restarts on a different random port)
+  ipcMain.handle('prefs:getAll', () => ({ ...prefsCache }))
+
+  ipcMain.handle('prefs:set', (_event, key: string, value: string) => {
+    prefsCache[key] = value
+    schedulePrefsWrite()
+  })
+
+  ipcMain.handle('prefs:remove', (_event, key: string) => {
+    delete prefsCache[key]
+    schedulePrefsWrite()
+  })
+
   ipcMain.handle('updater:getState', () => getUpdaterState())
   ipcMain.handle('updater:checkForUpdates', async () => {
     await checkForAppUpdates(true)
@@ -598,6 +646,7 @@ if (!gotTheLock) {
 
 app.on('ready', async () => {
   fixPath()
+  await loadPrefs()
   setupIPC()
   buildAppMenu()
 

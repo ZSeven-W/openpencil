@@ -1,5 +1,6 @@
 import i18n from 'i18next'
 import { initReactI18next } from 'react-i18next'
+import { appStorage } from '@/utils/app-storage'
 
 import en from '@/i18n/locales/en'
 import zh from '@/i18n/locales/zh'
@@ -49,18 +50,14 @@ i18n
     },
   })
 
-// Persist language changes to localStorage
+// Persist language changes
 i18n.on('languageChanged', (lng) => {
-  if (typeof localStorage !== 'undefined') {
-    localStorage.setItem('openpencil-language', lng)
-  }
+  appStorage.setItem('openpencil-language', lng)
 })
 
-/** Detect user language from localStorage or navigator, after hydration. */
+/** Detect user language from persisted storage or navigator, after hydration. */
 export function detectLanguagePostHydration() {
-  const stored = typeof localStorage !== 'undefined'
-    ? localStorage.getItem('openpencil-language')
-    : null
+  const stored = appStorage.getItem('openpencil-language')
   if (stored && SUPPORTED_LANGS.includes(stored)) {
     i18n.changeLanguage(stored)
     return

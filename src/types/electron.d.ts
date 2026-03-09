@@ -30,6 +30,9 @@ interface ElectronAPI {
   readFile: (filePath: string) => Promise<{ filePath: string; content: string } | null>
   getPendingFile: () => Promise<string | null>
   setTheme: (theme: 'dark' | 'light', colors?: { bg: string; fg: string }) => void
+  getPreferences: () => Promise<Record<string, string>>
+  setPreference: (key: string, value: string) => Promise<void>
+  removePreference: (key: string) => Promise<void>
   updater: {
     getState: () => Promise<UpdaterState>
     checkForUpdates: () => Promise<UpdaterState>

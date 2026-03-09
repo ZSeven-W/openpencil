@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import type { ThemePreset } from '@/types/theme-preset'
 import type { VariableDefinition } from '@/types/variables'
+import { appStorage } from '@/utils/app-storage'
 
 const STORAGE_KEY = 'openpencil-theme-presets'
 
@@ -48,7 +49,7 @@ export const useThemePresetStore = create<ThemePresetStoreState>((set, get) => (
   persist: () => {
     try {
       const { presets } = get()
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(presets))
+      appStorage.setItem(STORAGE_KEY, JSON.stringify(presets))
     } catch {
       // ignore — localStorage may be full
     }
@@ -56,7 +57,7 @@ export const useThemePresetStore = create<ThemePresetStoreState>((set, get) => (
 
   hydrate: () => {
     try {
-      const raw = localStorage.getItem(STORAGE_KEY)
+      const raw = appStorage.getItem(STORAGE_KEY)
       if (!raw) return
       const data = JSON.parse(raw)
       if (Array.isArray(data)) {

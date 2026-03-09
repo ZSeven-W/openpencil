@@ -7,6 +7,7 @@ import type {
   GroupedModel,
 } from '@/types/agent-settings'
 import { MCP_DEFAULT_PORT } from '@/constants/app'
+import { appStorage } from '@/utils/app-storage'
 
 const STORAGE_KEY = 'openpencil-agent-settings'
 
@@ -131,7 +132,7 @@ export const useAgentSettingsStore = create<AgentSettingsState>((set, get) => ({
   persist: () => {
     try {
       const { providers, mcpIntegrations, mcpTransportMode, mcpHttpPort } = get()
-      localStorage.setItem(
+      appStorage.setItem(
         STORAGE_KEY,
         JSON.stringify({ providers, mcpIntegrations, mcpTransportMode, mcpHttpPort }),
       )
@@ -142,7 +143,7 @@ export const useAgentSettingsStore = create<AgentSettingsState>((set, get) => ({
 
   hydrate: () => {
     try {
-      const raw = localStorage.getItem(STORAGE_KEY)
+      const raw = appStorage.getItem(STORAGE_KEY)
       if (!raw) return
       const data = JSON.parse(raw) as Partial<PersistedState>
       if (data.providers) {

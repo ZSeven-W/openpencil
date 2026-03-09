@@ -32,6 +32,9 @@ export interface ElectronAPI {
   readFile: (filePath: string) => Promise<{ filePath: string; content: string } | null>
   getPendingFile: () => Promise<string | null>
   setTheme: (theme: 'dark' | 'light', colors?: { bg: string; fg: string }) => void
+  getPreferences: () => Promise<Record<string, string>>
+  setPreference: (key: string, value: string) => Promise<void>
+  removePreference: (key: string) => Promise<void>
   updater: {
     getState: () => Promise<UpdaterState>
     checkForUpdates: () => Promise<UpdaterState>
@@ -55,6 +58,12 @@ const api: ElectronAPI = {
 
   setTheme: (theme: 'dark' | 'light', colors?: { bg: string; fg: string }) =>
     ipcRenderer.invoke('theme:set', theme, colors),
+
+  getPreferences: () => ipcRenderer.invoke('prefs:getAll'),
+
+  setPreference: (key: string, value: string) => ipcRenderer.invoke('prefs:set', key, value),
+
+  removePreference: (key: string) => ipcRenderer.invoke('prefs:remove', key),
 
   onMenuAction: (callback: (action: string) => void) => {
     const listener = (_event: IpcRendererEvent, action: string) => {

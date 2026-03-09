@@ -459,14 +459,14 @@ export function useCanvasSync() {
         prevActivePageId = cs.activePageId
         // Force a full re-sync by resetting prevPageChildren
         prevPageChildren = null as unknown as PenNode[]
-        // Trigger document subscription by creating a new reference
+        // Trigger document subscription by creating a new reference.
+        // Always call setState — even for empty pages — so old canvas
+        // objects are cleared and the sync runs unconditionally.
         const { document: doc } = useDocumentStore.getState()
         const pageChildren = getActivePageChildren(doc, cs.activePageId)
-        if (pageChildren.length > 0) {
-          useDocumentStore.setState({
-            document: setActivePageChildren(doc, cs.activePageId, [...pageChildren]),
-          })
-        }
+        useDocumentStore.setState({
+          document: setActivePageChildren(doc, cs.activePageId, [...pageChildren]),
+        })
       }
       // When fabricCanvas transitions from null → ready, force a full re-sync
       // so that documents loaded before the canvas was ready get rendered.

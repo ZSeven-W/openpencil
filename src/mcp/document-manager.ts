@@ -138,8 +138,8 @@ export async function saveDocument(
     return
   }
 
-  // File-based: write to disk
-  const json = JSON.stringify(doc, null, 2)
+  // File-based: write to disk (no indentation to minimize file size)
+  const json = JSON.stringify(doc)
   await writeFile(filePath, json, 'utf-8')
   cache.set(filePath, { doc, mtime: Date.now() })
 

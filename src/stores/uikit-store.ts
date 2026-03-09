@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import type { UIKit, ComponentCategory } from '@/types/uikit'
 import { getBuiltInKits } from '@/uikit/built-in-registry'
+import { appStorage } from '@/utils/app-storage'
 
 const STORAGE_KEY = 'openpencil-uikits'
 
@@ -71,7 +72,7 @@ export const useUIKitStore = create<UIKitStoreState>((set, get) => ({
     try {
       const { kits, browserOpen } = get()
       const imported = kits.filter((k) => !k.builtIn)
-      localStorage.setItem(STORAGE_KEY, JSON.stringify({ importedKits: imported, browserOpen }))
+      appStorage.setItem(STORAGE_KEY, JSON.stringify({ importedKits: imported, browserOpen }))
     } catch {
       // ignore — localStorage may be full
     }
@@ -79,7 +80,7 @@ export const useUIKitStore = create<UIKitStoreState>((set, get) => ({
 
   hydrate: () => {
     try {
-      const raw = localStorage.getItem(STORAGE_KEY)
+      const raw = appStorage.getItem(STORAGE_KEY)
       if (!raw) return
       const data = JSON.parse(raw) as Partial<PersistedState>
       if (data.importedKits && Array.isArray(data.importedKits)) {

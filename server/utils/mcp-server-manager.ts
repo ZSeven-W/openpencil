@@ -6,6 +6,33 @@ import { join, resolve } from 'node:path'
 let mcpProcess: ChildProcess | null = null
 let mcpPort: number | null = null
 
+// Auto-cleanup MCP child process when the parent (Nitro) process exits.
+// On Linux, child processes become orphaned when the parent is killed;
+// this ensures the MCP server is stopped when the Nitro server exits.
+function killMcpProcessSync(): void {
+  if (!mcpProcess || !mcpProcess.pid) return
+  try {
+    if (process.platform === 'win32') {
+      execSync(`taskkill /pid ${mcpProcess.pid} /T /F`, { stdio: 'ignore' })
+    } else {
+      process.kill(mcpProcess.pid, 'SIGKILL')
+    }
+  } catch { /* process may have already exited */ }
+  mcpProcess = null
+  mcpPort = null
+}
+
+// Synchronous cleanup on process exit (last resort)
+process.on('exit', () => killMcpProcessSync())
+
+// Graceful cleanup on signals (e.g. Electron killing Nitro with SIGTERM)
+for (const signal of ['SIGINT', 'SIGTERM', 'SIGHUP'] as const) {
+  process.on(signal, () => {
+    killMcpProcessSync()
+    process.exit(0)
+  })
+}
+
 /** Resolve the MCP server script path across dev, web build, and Electron production. */
 function resolveMcpServerScript(): string {
   // Electron production: extraResources

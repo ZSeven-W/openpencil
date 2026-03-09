@@ -19,7 +19,7 @@ export async function writeToFileHandle(
   doc: PenDocument,
 ): Promise<void> {
   const writable = await handle.createWritable()
-  await writable.write(JSON.stringify(doc, null, 2))
+  await writable.write(JSON.stringify(doc))
   await writable.close()
 }
 
@@ -74,7 +74,7 @@ export async function openDocumentFS(): Promise<{
     const file = await handle.getFile()
     const text = await file.text()
     const raw = JSON.parse(text) as PenDocument
-    if (!raw.version || !Array.isArray(raw.children)) {
+    if (!raw.version || (!Array.isArray(raw.children) && !Array.isArray(raw.pages))) {
       throw new Error('Invalid PenDocument format')
     }
     const doc = normalizePenDocument(raw)
@@ -90,7 +90,7 @@ export async function openDocumentFS(): Promise<{
 
 /** Download document as a file (browser download). */
 export function downloadDocument(doc: PenDocument, fileName: string): void {
-  const json = JSON.stringify(doc, null, 2)
+  const json = JSON.stringify(doc)
   const blob = new Blob([json], { type: 'application/json' })
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
@@ -118,7 +118,7 @@ export function openDocument(): Promise<{
       try {
         const text = await file.text()
         const raw = JSON.parse(text) as PenDocument
-        if (!raw.version || !Array.isArray(raw.children)) {
+        if (!raw.version || (!Array.isArray(raw.children) && !Array.isArray(raw.pages))) {
           throw new Error('Invalid PenDocument format')
         }
         const doc = normalizePenDocument(raw)

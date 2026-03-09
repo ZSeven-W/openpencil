@@ -694,10 +694,12 @@ export const useDocumentStore = create<DocumentStoreState>(
       const targetPageId = pageExists
         ? activePageId
         : migrated.pages?.[0]?.id
-      // Force new children reference so canvas sync subscriber always detects the change
-      if (targetPageId && migrated.pages) {
-        const page = migrated.pages.find((p) => p.id === targetPageId)
-        if (page) page.children = [...page.children]
+      // Force new children references on ALL pages so canvas sync detects
+      // changes when the user later switches to any page.
+      if (migrated.pages) {
+        for (const page of migrated.pages) {
+          page.children = [...page.children]
+        }
       }
       set({ document: migrated, isDirty: true })
       if (!pageExists && targetPageId) {
