@@ -256,9 +256,9 @@ const en = {
   'ai.quickAction.loginScreen': 'Design a mobile login screen',
   'ai.quickAction.loginScreenPrompt':
     'Design a modern mobile login screen with email input, password input, login button, and social login options',
-  'ai.quickAction.productCard': 'Create a product card component',
-  'ai.quickAction.productCardPrompt':
-    'Create a product card with an image placeholder, title, price, and buy button',
+  'ai.quickAction.foodApp': 'Food app homepage',
+  'ai.quickAction.foodAppPrompt':
+    'Generate a well-designed food mobile app homepage',
   'ai.quickAction.bottomNav': 'Design a bottom navigation bar',
   'ai.quickAction.bottomNavPrompt':
     'Design a mobile app bottom navigation bar with 5 tabs: Home, Search, Add, Messages, Profile',

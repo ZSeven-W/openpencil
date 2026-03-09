@@ -260,9 +260,9 @@ const de: TranslationKeys = {
   'ai.quickAction.loginScreen': 'Einen mobilen Anmeldebildschirm gestalten',
   'ai.quickAction.loginScreenPrompt':
     'Design a modern mobile login screen with email input, password input, login button, and social login options',
-  'ai.quickAction.productCard': 'Eine Produktkarte erstellen',
-  'ai.quickAction.productCardPrompt':
-    'Create a product card with an image placeholder, title, price, and buy button',
+  'ai.quickAction.foodApp': 'Food-App Startseite',
+  'ai.quickAction.foodAppPrompt':
+    'Generate a well-designed food mobile app homepage',
   'ai.quickAction.bottomNav': 'Eine untere Navigationsleiste gestalten',
   'ai.quickAction.bottomNavPrompt':
     'Design a mobile app bottom navigation bar with 5 tabs: Home, Search, Add, Messages, Profile',

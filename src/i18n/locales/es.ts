@@ -262,9 +262,9 @@ const es: TranslationKeys = {
     'Diseñar una pantalla de inicio de sesión móvil',
   'ai.quickAction.loginScreenPrompt':
     'Diseña una pantalla de inicio de sesión móvil moderna con campo de correo electrónico, campo de contraseña, botón de inicio de sesión y opciones de inicio de sesión social',
-  'ai.quickAction.productCard': 'Crear un componente de tarjeta de producto',
-  'ai.quickAction.productCardPrompt':
-    'Crea una tarjeta de producto con un marcador de imagen, título, precio y botón de compra',
+  'ai.quickAction.foodApp': 'Inicio de app de comida',
+  'ai.quickAction.foodAppPrompt':
+    'Generate a well-designed food mobile app homepage',
   'ai.quickAction.bottomNav':
     'Diseñar una barra de navegación inferior',
   'ai.quickAction.bottomNavPrompt':
