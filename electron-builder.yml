@@ -40,6 +40,7 @@ win:
     - portable
 
 nsis:
+  artifactName: "${productName}-${version}-${arch}-win-setup.${ext}"
   oneClick: false
   perMachine: false
   allowToChangeInstallationDirectory: true
