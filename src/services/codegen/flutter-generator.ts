@@ -218,6 +218,13 @@ function generateNodeFlutter(node: PenNode, depth: number): string {
     case 'path': return generatePathFlutter(node as PathNode, depth)
     case 'polygon': return generatePolygonFlutter(node as PolygonNode, depth)
     case 'image': return generateImageFlutter(node as ImageNode, depth)
+    case 'icon_font': {
+      const size = typeof node.width === 'number' ? node.width : 24
+      const color = node.fill?.[0]?.type === 'solid' ? node.fill[0].color : null
+      const iconName = (node.iconFontName || 'circle').replace(/-/g, '_')
+      const colorStr = color ? `, color: Color(0xFF${color.replace('#', '')})` : ''
+      return `${indent(depth)}Icon(LucideIcons.${iconName}, size: ${size}${colorStr})`
+    }
     case 'ref': return `${indent(depth)}// Ref: ${(node as any).ref}`
     default: return `${indent(depth)}// Unsupported node type`
   }

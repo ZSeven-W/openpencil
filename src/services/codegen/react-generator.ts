@@ -21,6 +21,10 @@ function indent(depth: number): string {
   return '  '.repeat(depth)
 }
 
+function kebabToPascal(name: string): string {
+  return name.split('-').map(s => s.charAt(0).toUpperCase() + s.slice(1)).join('')
+}
+
 function fillToTailwind(fills: PenFill[] | undefined): string[] {
   if (!fills || fills.length === 0) return []
   const fill = fills[0]
@@ -315,6 +319,13 @@ function generateNodeJSX(node: PenNode, depth: number): string {
       classes.push(fit)
       const src = node.src
       return `${pad}<img className="${classes.join(' ')}" src="${src}" alt="${node.name ?? 'image'}" />`
+    }
+
+    case 'icon_font': {
+      const size = typeof node.width === 'number' ? node.width : 24
+      const color = node.fill?.[0]?.type === 'solid' ? varOrLiteral(node.fill[0].color) : 'currentColor'
+      const iconComp = kebabToPascal(node.iconFontName || 'circle')
+      return `${pad}<${iconComp} size={${size}} color="${color}" />`
     }
 
     case 'ref':

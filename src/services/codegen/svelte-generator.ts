@@ -218,6 +218,16 @@ function generateNodeMarkup(node: PenNode, depth: number, rules: CSSRule[]): str
       return `${pad}<img class="${className}" src="${escapeHTML(node.src)}" alt="${escapeHTML(node.name ?? '')}" />`
     }
 
+    case 'icon_font': {
+      const size = typeof node.width === 'number' ? node.width : 24
+      css.width = `${size}px`
+      css.height = `${size}px`
+      if (node.fill?.[0]?.type === 'solid') css.color = varOrLiteral(node.fill[0].color)
+      const className = nextClassName(node.name?.replace(/\s+/g, '-').toLowerCase() ?? 'icon')
+      rules.push({ className, properties: css })
+      return `${pad}<i class="${className}" data-lucide="${escapeHTML(node.iconFontName ?? 'circle')}" />`
+    }
+
     case 'ref':
       return `${pad}<!-- Ref: ${node.ref} -->`
 
