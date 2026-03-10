@@ -271,6 +271,48 @@ export function resolveNodeForCanvas(
     }
   }
 
+  // Font family (text nodes — string variable)
+  if (node.type === 'text' && typeof node.fontFamily === 'string' && isVariableRef(node.fontFamily)) {
+    const resolved = resolveVariableRef(node.fontFamily, variables, activeTheme)
+    if (typeof resolved === 'string') {
+      out.fontFamily = resolved
+      changed = true
+    }
+  }
+
+  // Font size (text nodes — numeric variable)
+  if (node.type === 'text' && typeof node.fontSize === 'string') {
+    if (isVariableRef(node.fontSize as unknown as string)) {
+      out.fontSize = resolveNumericRef(node.fontSize, variables, activeTheme) ?? 16
+      changed = true
+    }
+  }
+
+  // Line height (text nodes — numeric variable)
+  if (node.type === 'text' && typeof node.lineHeight === 'string') {
+    if (isVariableRef(node.lineHeight as unknown as string)) {
+      out.lineHeight = resolveNumericRef(node.lineHeight, variables, activeTheme) ?? 1.5
+      changed = true
+    }
+  }
+
+  // Letter spacing (text nodes — numeric variable)
+  if (node.type === 'text' && typeof node.letterSpacing === 'string') {
+    if (isVariableRef(node.letterSpacing as unknown as string)) {
+      out.letterSpacing = resolveNumericRef(node.letterSpacing, variables, activeTheme) ?? 0
+      changed = true
+    }
+  }
+
+  // Corner radius (container nodes — numeric variable)
+  if ('cornerRadius' in node) {
+    const cr = (node as unknown as Record<string, unknown>).cornerRadius
+    if (typeof cr === 'string' && isVariableRef(cr)) {
+      out.cornerRadius = resolveNumericRef(cr, variables, activeTheme) ?? 0
+      changed = true
+    }
+  }
+
   // Text content
   if (node.type === 'text' && typeof node.content === 'string' && isVariableRef(node.content)) {
     const resolved = resolveVariableRef(node.content, variables, activeTheme)

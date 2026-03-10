@@ -129,6 +129,39 @@ export function replaceVariableRefsInTree(
       changed = true
     }
 
+    // Font family (text nodes — string variable)
+    if (node.type === 'text' && typeof node.fontFamily === 'string' && node.fontFamily === oldToken) {
+      out.fontFamily = resolveOrReplace(node.fontFamily)
+      changed = true
+    }
+
+    // Font size (text nodes — numeric variable)
+    if (node.type === 'text' && typeof node.fontSize === 'string' && (node.fontSize as unknown as string) === oldToken) {
+      out.fontSize = resolveOrReplaceNumeric(node.fontSize as unknown as string)
+      changed = true
+    }
+
+    // Line height (text nodes — numeric variable)
+    if (node.type === 'text' && typeof node.lineHeight === 'string' && (node.lineHeight as unknown as string) === oldToken) {
+      out.lineHeight = resolveOrReplaceNumeric(node.lineHeight as unknown as string)
+      changed = true
+    }
+
+    // Letter spacing (text nodes — numeric variable)
+    if (node.type === 'text' && typeof node.letterSpacing === 'string' && (node.letterSpacing as unknown as string) === oldToken) {
+      out.letterSpacing = resolveOrReplaceNumeric(node.letterSpacing as unknown as string)
+      changed = true
+    }
+
+    // Corner radius (container nodes — numeric variable)
+    if ('cornerRadius' in node) {
+      const cr = (node as unknown as Record<string, unknown>).cornerRadius
+      if (typeof cr === 'string' && cr === oldToken) {
+        out.cornerRadius = resolveOrReplaceNumeric(cr)
+        changed = true
+      }
+    }
+
     // Text content
     if (node.type === 'text' && typeof node.content === 'string' && node.content === oldToken) {
       out.content = resolveOrReplace(node.content)
