@@ -136,6 +136,7 @@ export interface OrchestratorPlan {
     height: number
     layout?: 'none' | 'vertical' | 'horizontal'
     gap?: number
+    padding?: number | [number, number] | [number, number, number, number]
     fill?: Array<{ type: string; color: string }>
   }
   styleGuide?: StyleGuide
