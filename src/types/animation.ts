@@ -15,11 +15,14 @@ export type EasingPreset = 'smooth' | 'snappy' | 'bouncy' | 'gentle' | 'linear'
 
 // --- Keyframes ---
 
+export type KeyframePhase = 'in' | 'while' | 'out'
+
 export interface Keyframe {
   id: string
   time: number // ms from composition start
   properties: Partial<AnimatableProperties>
   easing: EasingPreset
+  phase?: KeyframePhase // which animation phase this keyframe belongs to
 }
 
 // --- Animation Phases ---

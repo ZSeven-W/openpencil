@@ -12,7 +12,7 @@ import { appStorage } from '@/utils/app-storage'
 
 const PREFS_KEY = 'openpencil-canvas-preferences'
 
-export type RightPanelTab = 'design' | 'code'
+export type RightPanelTab = 'design' | 'code' | 'animate'
 
 interface CanvasPreferences {
   layerPanelOpen: boolean
@@ -184,7 +184,7 @@ export const useCanvasStore = create<CanvasStoreState>((set, get) => ({
       if (typeof data.layerPanelOpen === 'boolean') set({ layerPanelOpen: data.layerPanelOpen })
       if (typeof data.variablesPanelOpen === 'boolean') set({ variablesPanelOpen: data.variablesPanelOpen })
       if (typeof data.codePanelOpen === 'boolean') set({ codePanelOpen: data.codePanelOpen })
-      if (data.rightPanelTab === 'design' || data.rightPanelTab === 'code') set({ rightPanelTab: data.rightPanelTab })
+      if (data.rightPanelTab === 'design' || data.rightPanelTab === 'code' || data.rightPanelTab === 'animate') set({ rightPanelTab: data.rightPanelTab })
     } catch { /* ignore */ }
   },
 }))

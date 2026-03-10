@@ -60,26 +60,29 @@ function generateFade(
     phases,
     keyframes: [
       // In: opacity 0 → 1
-      { time: 0, properties: { opacity: 0 }, easing },
-      { time: phases.in.duration, properties: { opacity: 1 }, easing },
+      { time: 0, properties: { opacity: 0 }, easing, phase: 'in' as const },
+      { time: phases.in.duration, properties: { opacity: 1 }, easing, phase: 'in' as const },
       // While: subtle scale pulse
       {
         time: phases.in.duration + phases.while.duration * 0.5,
         properties: { scaleX: state.scaleX * 1.02, scaleY: state.scaleY * 1.02 },
         easing: 'smooth',
+        phase: 'while' as const,
       },
       {
         time: phases.in.duration + phases.while.duration,
         properties: { scaleX: state.scaleX, scaleY: state.scaleY },
         easing: 'smooth',
+        phase: 'while' as const,
       },
       // Out: opacity 1 → 0
       {
         time: phases.in.duration + phases.while.duration,
         properties: { opacity: 1 },
         easing,
+        phase: 'out' as const,
       },
-      { time: totalDuration, properties: { opacity: 0 }, easing },
+      { time: totalDuration, properties: { opacity: 0 }, easing, phase: 'out' as const },
     ],
   }
 }
@@ -104,23 +107,26 @@ function generateSlide(
         time: 0,
         properties: { x: state.x + offset.x, y: state.y + offset.y },
         easing,
+        phase: 'in' as const,
       },
       {
         time: phases.in.duration,
         properties: { x: state.x, y: state.y },
         easing,
+        phase: 'in' as const,
       },
-      // While: hold position (no keyframes needed, holds last value)
       // Out: slide to opposite offscreen
       {
         time: phases.in.duration + phases.while.duration,
         properties: { x: state.x, y: state.y },
         easing,
+        phase: 'out' as const,
       },
       {
         time: totalDuration,
         properties: { x: state.x + exitOffset.x, y: state.y + exitOffset.y },
         easing,
+        phase: 'out' as const,
       },
     ],
   }
@@ -137,33 +143,38 @@ function generateScale(
     phases,
     keyframes: [
       // In: scale from 0 to current
-      { time: 0, properties: { scaleX: 0, scaleY: 0, opacity: 0 }, easing },
+      { time: 0, properties: { scaleX: 0, scaleY: 0, opacity: 0 }, easing, phase: 'in' as const },
       {
         time: phases.in.duration,
         properties: { scaleX: state.scaleX, scaleY: state.scaleY, opacity: 1 },
         easing,
+        phase: 'in' as const,
       },
       // While: subtle breathe
       {
         time: phases.in.duration + phases.while.duration * 0.5,
         properties: { scaleX: state.scaleX * 1.03, scaleY: state.scaleY * 1.03 },
         easing: 'smooth',
+        phase: 'while' as const,
       },
       {
         time: phases.in.duration + phases.while.duration,
         properties: { scaleX: state.scaleX, scaleY: state.scaleY },
         easing: 'smooth',
+        phase: 'while' as const,
       },
       // Out: scale to 0
       {
         time: phases.in.duration + phases.while.duration,
         properties: { scaleX: state.scaleX, scaleY: state.scaleY, opacity: 1 },
         easing,
+        phase: 'out' as const,
       },
       {
         time: totalDuration,
         properties: { scaleX: 0, scaleY: 0, opacity: 0 },
         easing,
+        phase: 'out' as const,
       },
     ],
   }
@@ -182,7 +193,7 @@ function generateBounce(
     phases,
     keyframes: [
       // In: overshoot and settle
-      { time: 0, properties: { scaleX: 0, scaleY: 0, opacity: 0 }, easing: 'bouncy' },
+      { time: 0, properties: { scaleX: 0, scaleY: 0, opacity: 0 }, easing: 'bouncy', phase: 'in' as const },
       {
         time: inEnd * 0.6,
         properties: {
@@ -191,22 +202,26 @@ function generateBounce(
           opacity: 1,
         },
         easing: 'bouncy',
+        phase: 'in' as const,
       },
       {
         time: inEnd,
         properties: { scaleX: state.scaleX, scaleY: state.scaleY, opacity: 1 },
         easing: 'smooth',
+        phase: 'in' as const,
       },
       // While: gentle bob (y-axis)
       {
         time: inEnd + phases.while.duration * 0.5,
         properties: { y: state.y - 8 },
         easing: 'smooth',
+        phase: 'while' as const,
       },
       {
         time: whileEnd,
         properties: { y: state.y },
         easing: 'smooth',
+        phase: 'while' as const,
       },
       // Out: compress then exit
       {
@@ -217,6 +232,7 @@ function generateBounce(
           opacity: 1,
         },
         easing,
+        phase: 'out' as const,
       },
       {
         time: whileEnd + phases.out.duration * 0.3,
@@ -226,11 +242,13 @@ function generateBounce(
           opacity: 1,
         },
         easing: 'snappy',
+        phase: 'out' as const,
       },
       {
         time: totalDuration,
         properties: { scaleX: 0, scaleY: 0, opacity: 0 },
         easing: 'snappy',
+        phase: 'out' as const,
       },
     ],
   }

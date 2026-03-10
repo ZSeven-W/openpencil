@@ -2,7 +2,6 @@ import { Separator } from '@/components/ui/separator'
 import PlaybackControls from './playback-controls'
 import ScrubBar from './scrub-bar'
 import TrackList from './track-list'
-import PresetPanel from './preset-panel'
 
 export default function TimelinePanel() {
   return (
@@ -17,17 +16,9 @@ export default function TimelinePanel() {
 
       <Separator />
 
-      {/* Content: tracks left, presets right */}
-      <div className="flex" style={{ maxHeight: '200px' }}>
-        {/* Track list */}
-        <div className="flex-1 min-w-0 overflow-y-auto">
-          <TrackList />
-        </div>
-
-        {/* Preset panel */}
-        <div className="w-64 border-l border-border shrink-0 overflow-y-auto">
-          <PresetPanel />
-        </div>
+      {/* Track list */}
+      <div style={{ maxHeight: '200px' }} className="overflow-y-auto">
+        <TrackList />
       </div>
     </div>
   )

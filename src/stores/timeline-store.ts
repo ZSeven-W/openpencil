@@ -2,6 +2,7 @@ import { create } from 'zustand'
 import { nanoid } from 'nanoid'
 import type {
   AnimationTrack,
+  AnimationPhases,
   AnimationPresetName,
   Keyframe,
   PlaybackMode,
@@ -10,6 +11,41 @@ import type {
 } from '@/types/animation'
 import type { AnimatableProperties } from '@/types/animation'
 import { generatePresetKeyframes } from '@/animation/presets'
+
+/** Recompute phase boundaries from keyframe phase tags */
+function recomputePhases(keyframes: Keyframe[], fallbackPhases: AnimationPhases): AnimationPhases {
+  const phaseRanges = { in: [] as number[], while: [] as number[], out: [] as number[] }
+  for (const kf of keyframes) {
+    if (kf.phase) phaseRanges[kf.phase].push(kf.time)
+  }
+
+  // If no tagged keyframes, keep existing phases
+  if (phaseRanges.in.length === 0 && phaseRanges.while.length === 0 && phaseRanges.out.length === 0) {
+    return fallbackPhases
+  }
+
+  const range = (times: number[]) => {
+    if (times.length === 0) return null
+    const min = Math.min(...times)
+    const max = Math.max(...times)
+    return { start: min, duration: max - min }
+  }
+
+  const inRange = range(phaseRanges.in)
+  const whileRange = range(phaseRanges.while)
+  const outRange = range(phaseRanges.out)
+
+  return {
+    in: inRange ?? { start: fallbackPhases.in.start, duration: 0 },
+    while: whileRange ?? {
+      start: inRange ? inRange.start + inRange.duration : fallbackPhases.while.start,
+      duration: outRange && inRange
+        ? outRange.start - (inRange.start + inRange.duration)
+        : 0,
+    },
+    out: outRange ?? { start: fallbackPhases.out.start, duration: 0 },
+  }
+}
 
 // --- Editor Mode ---
 
@@ -151,10 +187,11 @@ export const useTimelineStore = create<TimelineStoreState>((set, get) => ({
         k.id === keyframeId ? { ...k, ...updates } : k,
       )
       keyframes.sort((a, b) => a.time - b.time)
+      const phases = recomputePhases(keyframes, track.phases)
       return {
         tracks: {
           ...s.tracks,
-          [nodeId]: { ...track, keyframes },
+          [nodeId]: { ...track, keyframes, phases },
         },
       }
     }),

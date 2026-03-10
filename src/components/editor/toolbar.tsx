@@ -8,7 +8,6 @@ import {
   Redo2,
   Braces,
   LayoutGrid,
-  Play,
 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import ToolButton from './tool-button'
@@ -18,7 +17,6 @@ import { useDocumentStore, generateId } from '@/stores/document-store'
 import { parseSvgToNodes } from '@/utils/svg-parser'
 import { useHistoryStore } from '@/stores/history-store'
 import { useUIKitStore } from '@/stores/uikit-store'
-import { useTimelineStore } from '@/stores/timeline-store'
 import { Button } from '@/components/ui/button'
 import { Separator } from '@/components/ui/separator'
 import {
@@ -36,8 +34,6 @@ export default function Toolbar() {
   const toggleVariablesPanel = useCanvasStore((s) => s.toggleVariablesPanel)
   const browserOpen = useUIKitStore((s) => s.browserOpen)
   const toggleBrowser = useUIKitStore((s) => s.toggleBrowser)
-  const editorMode = useTimelineStore((s) => s.editorMode)
-  const setEditorMode = useTimelineStore((s) => s.setEditorMode)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [iconPickerOpen, setIconPickerOpen] = useState(false)
 
@@ -288,35 +284,6 @@ export default function Toolbar() {
           {t('toolbar.uikitBrowser')}
           <kbd className="ml-1.5 inline-flex h-4 items-center rounded border border-border/50 bg-muted px-1 font-mono text-[10px] text-muted-foreground">
             {'\u2318\u21e7'}K
-          </kbd>
-        </TooltipContent>
-      </Tooltip>
-
-      <Separator className="my-1 w-8" />
-
-      {/* Animate Mode */}
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <button
-            type="button"
-            onClick={() =>
-              setEditorMode(editorMode === 'animate' ? 'design' : 'animate')
-            }
-            aria-label="Animate"
-            aria-pressed={editorMode === 'animate'}
-            className={`inline-flex items-center justify-center h-8 min-w-8 px-1.5 rounded-lg transition-colors [&_svg]:size-5 [&_svg]:shrink-0 ${
-              editorMode === 'animate'
-                ? 'bg-primary text-primary-foreground'
-                : 'text-muted-foreground hover:bg-muted hover:text-foreground'
-            }`}
-          >
-            <Play size={20} strokeWidth={1.5} />
-          </button>
-        </TooltipTrigger>
-        <TooltipContent side="right">
-          Animate
-          <kbd className="ml-1.5 inline-flex h-4 items-center rounded border border-border/50 bg-muted px-1 font-mono text-[10px] text-muted-foreground">
-            {'\u2318\u21e7'}A
           </kbd>
         </TooltipContent>
       </Tooltip>

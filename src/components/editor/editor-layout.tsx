@@ -93,7 +93,9 @@ export default function EditorLayout() {
       if (isMod && e.shiftKey && e.key.toLowerCase() === 'a') {
         e.preventDefault()
         const ts = useTimelineStore.getState()
-        ts.setEditorMode(ts.editorMode === 'animate' ? 'design' : 'animate')
+        const nextMode = ts.editorMode === 'animate' ? 'design' : 'animate'
+        ts.setEditorMode(nextMode)
+        useCanvasStore.getState().setRightPanelTab(nextMode === 'animate' ? 'animate' : 'design')
         return
       }
 
@@ -174,7 +176,7 @@ export default function EditorLayout() {
               {/* Expanded AI panel (floating, draggable) */}
               <AIChatPanel />
             </div>
-            {hasSelection && <RightPanel />}
+            {(hasSelection || editorMode === 'animate') && <RightPanel />}
           </div>
           {editorMode === 'animate' && <TimelinePanel />}
         </div>
