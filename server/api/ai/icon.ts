@@ -51,9 +51,79 @@ export default defineEventHandler(async (event) => {
   return { icon: result }
 })
 
+// Common name aliases for icons AI models frequently request.
+// Keep in sync with commonAliases in src/services/ai/icon-resolver.ts
+const NAME_ALIASES: Record<string, string> = {
+  burger: 'hamburger',
+  sushi: 'fish',
+  ramen: 'soup',
+  noodle: 'soup',
+  noodles: 'soup',
+  steak: 'beef',
+  meat: 'beef',
+  icecream: 'ice-cream-cone',
+  donut: 'donut',
+  bread: 'croissant',
+  fruit: 'apple',
+  food: 'utensils',
+  drink: 'cup-soda',
+  coffee: 'coffee',
+  tea: 'cup-soda',
+  restaurant: 'utensils-crossed',
+  delivery: 'truck',
+  order: 'clipboard-list',
+  recipe: 'book-open',
+  grocery: 'shopping-basket',
+  cart: 'shopping-cart',
+  bag: 'shopping-bag',
+  pay: 'credit-card',
+  payment: 'credit-card',
+  wallet: 'wallet',
+  money: 'banknote',
+  coupon: 'ticket',
+  discount: 'percent',
+  rating: 'star',
+  review: 'message-square',
+  favorite: 'heart',
+  favourites: 'heart',
+  favorites: 'heart',
+  notification: 'bell',
+  address: 'map-pin',
+  navigate: 'navigation',
+  directions: 'map',
+  logout: 'log-out',
+  login: 'log-in',
+  signup: 'user-plus',
+  account: 'user',
+  password: 'key',
+  security: 'shield',
+  privacy: 'eye-off',
+  about: 'info',
+  faq: 'help-circle',
+  support: 'headphones',
+  contact: 'phone',
+  feedback: 'message-circle',
+  language: 'globe',
+  theme: 'palette',
+  darkmode: 'moon',
+  lightmode: 'sun',
+  sound: 'volume-2',
+  mute: 'volume-x',
+  wifi: 'wifi',
+  bluetooth: 'bluetooth',
+  battery: 'battery',
+  location: 'map-pin',
+  gps: 'locate',
+  scan: 'scan',
+  qrcode: 'qr-code',
+  barcode: 'barcode',
+}
+
 function resolveIcon(name: string): IconResult | null {
   const kebab = toKebabCase(name)
-  const candidates = kebab !== name ? [name, kebab] : [name]
+  const aliased = NAME_ALIASES[name] ?? NAME_ALIASES[kebab]
+  const candidates = new Set([name, kebab])
+  if (aliased) candidates.add(aliased)
 
   // 1. Try simple-icons first (brand/product icons).
   //    simple-icons only contains brand logos, so a hit here is unambiguously
@@ -124,6 +194,14 @@ function parseIconBody(
     hasFill = true
   }
 
+  // When joining multiple <path> d-values, ensure each sub-path starts with
+  // absolute M. A standalone <path> treats initial lowercase "m" as absolute,
+  // but after concatenation it becomes relative to the previous endpoint.
+  for (let i = 1; i < paths.length; i++) {
+    if (paths[i].startsWith('m')) {
+      paths[i] = 'M' + paths[i].slice(1)
+    }
+  }
   const d = paths.join(' ')
   const style: 'stroke' | 'fill' = hasStroke && !hasFill ? 'stroke' : 'fill'
 
