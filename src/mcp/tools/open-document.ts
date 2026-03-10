@@ -95,7 +95,9 @@ export async function handleOpenDocument(
     context: buildDocumentContext(doc),
     designPrompt: isEmpty
       ? buildDesignPrompt()
-      : 'Document has existing content. Use batch_design or insert_node with postProcess=true to add/modify designs. Call get_design_prompt for full design guidelines if needed.',
+      : 'Document has existing content. Use batch_design or insert_node with postProcess=true to add/modify designs. ' +
+        'For complex multi-section designs, use the layered workflow: design_skeleton → design_content (per section) → design_refine. ' +
+        'Call get_design_prompt(section="planning") for layered workflow guide, or get_design_prompt() for full guidelines.',
   }
 }
 

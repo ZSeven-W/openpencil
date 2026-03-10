@@ -4,36 +4,25 @@ import {
   DESIGN_EXAMPLES,
 } from '../../services/ai/ai-prompts'
 
-/**
- * Build the design knowledge prompt for AI-assisted design generation.
- *
- * This is the MCP equivalent of the CHAT_SYSTEM_PROMPT — it provides the
- * same schema, style policy, roles, typography, icons, and layout rules
- * so that an external AI (e.g. Claude Code) can generate high-quality
- * batch_design operations.
- */
-export function buildDesignPrompt(): string {
-  return `You are generating designs for OpenPencil, a vector design tool.
+// ---------------------------------------------------------------------------
+// Named prompt sections — can be retrieved individually via section parameter
+// ---------------------------------------------------------------------------
+
+const INTRO = `You are generating designs for OpenPencil, a vector design tool.
 Use batch_design (for multi-node designs with DSL) or insert_node (for single node trees with JSON).
 Both support postProcess=true for automatic role defaults, icon resolution, and layout sanitization.
-Each node must follow the PenNode schema below.
+Each node must follow the PenNode schema below.`
 
-${PEN_NODE_SCHEMA}
-
-${ADAPTIVE_STYLE_POLICY}
-
-${DESIGN_EXAMPLES}
-
-DESIGN TYPE DETECTION:
+const DESIGN_TYPE_DETECTION = `DESIGN TYPE DETECTION:
 Classify by the design's PURPOSE to choose the correct root frame size — reason about intent, do not keyword-match:
 - Multi-section page (marketing, promotional, informational content designed to be scrolled) → Desktop: width=1200, height=0 (auto-expands), layout="vertical"
 - Single-task screen (functional UI focused on one user task: authentication, forms, settings, profiles, modals, onboarding, etc.) → Mobile: width=375, height=812 (FIXED)
 - Data-rich workspace (dashboards, admin panels, analytics) → Desktop: width=1200, height=0
 - CRITICAL: Single-task screens MUST be 375×812. NEVER use 1200 width for focused app screens.
 - Multi-section page height hints: nav 64-80px, hero 500-600px, feature sections 400-600px, CTA 200-300px, footer 200-300px.
-- Single-task screen height hints: status bar 44px, header 56-64px, form fields 48-56px each, buttons 48px, spacing 16-24px.
+- Single-task screen height hints: status bar 44px, header 56-64px, form fields 48-56px each, buttons 48px, spacing 16-24px.`
 
-SEMANTIC ROLES (context-aware defaults):
+const ROLE_GUIDE = `SEMANTIC ROLES (context-aware defaults):
 Add "role" to nodes for automatic smart defaults. System fills unset props based on role. Your explicit props always override.
 Available roles:
   Layout:       section, row, column, centered-content, form-group, divider, spacer
@@ -71,9 +60,9 @@ Key role defaults:
   table       → layout:vertical, gap:0, clipContent:true
   table-row   → layout:horizontal, padding:[12,16], alignItems:center
   table-cell  → width:fill_container
-Any string is valid as a role — unknown roles pass through unchanged.
+Any string is valid as a role — unknown roles pass through unchanged.`
 
-LAYOUT ENGINE (flexbox-based):
+const LAYOUT_RULES = `LAYOUT ENGINE (flexbox-based):
 - Frames with layout: "vertical"/"horizontal" auto-position children via gap, padding, justifyContent, alignItems
 - NEVER set x/y on children inside layout containers — the engine positions them automatically
 - CHILD SIZE RULE: child width must be ≤ parent content area. Use "fill_container" when in doubt.
@@ -95,9 +84,9 @@ LAYOUT ENGINE (flexbox-based):
 - Centered content: frame alignItems="center", content frame with fixed width (e.g. 1080).
 - FORMS: ALL inputs AND primary button MUST use width="fill_container". Vertical layout, gap=16-20. ONE primary action button only.
   Social login buttons: horizontal frame width="fill_container", each button width="fit_content".
-- Keep hierarchy shallow: no pointless "Inner" wrappers. Only use wrappers with a visual purpose (fill, padding, border).
+- Keep hierarchy shallow: no pointless "Inner" wrappers. Only use wrappers with a visual purpose (fill, padding, border).`
 
-TEXT RULES:
+const TEXT_RULES = `TEXT RULES:
 - Body/description text in vertical layout: width="fill_container" + textGrowth="fixed-width". This wraps text and auto-sizes height.
 - Short labels in horizontal rows: width="fit_content" (or omit) + textGrowth="auto" (or omit). Prevents squeezing siblings.
 - NEVER fixed pixel width on text inside layout frames — causes overflow. Only allowed in layout="none" parent.
@@ -115,9 +104,9 @@ CJK TYPOGRAPHY:
 
 COPYWRITING:
 - Headlines: 2-6 words. Subtitles: 1 sentence ≤15 words. Buttons: 1-3 words. Card text: ≤2 sentences.
-- NEVER generate placeholder paragraphs with 3+ sentences. Distill to essence.
+- NEVER generate placeholder paragraphs with 3+ sentences. Distill to essence.`
 
-DESIGN GUIDELINES:
+const DESIGN_GUIDELINES = `DESIGN GUIDELINES:
 - Use unique descriptive IDs. All elements INSIDE root frame as children.
 - Max 3-4 levels of nesting. Consistent centered content container (~1040-1160px) for web.
 - Buttons: height 44-52px, cornerRadius 8-12, padding [12, 24]. Icon+text: layout="horizontal", gap=8, alignItems="center".
@@ -132,20 +121,20 @@ DESIGN GUIDELINES:
 - Landing pages: hero 40-56px headline, alternating section backgrounds, nav with space_between.
 - App screens: focus on core function, inputs width="fill_container", consistent 48-56px height, 16-24px gap.
 - Default to light neutral styling unless user asks for dark.
-  Dark theme only when user explicitly mentions: dark/cyber/terminal/neon/夜间/暗黑/gaming/noir.
+  Dark theme only when user explicitly mentions: dark/cyber/terminal/neon/夜间/暗黑/gaming/noir.`
 
-DESIGN VARIABLES:
+const VARIABLE_RULES = `DESIGN VARIABLES:
 - When document has variables, use "$variableName" references instead of hardcoded values.
 - Color variables: [{ "type": "solid", "color": "$primary" }]
 - Number variables: "gap": "$spacing-md"
-- Variables can have per-theme values. Use $name syntax — the engine resolves to concrete values for rendering.
+- Variables can have per-theme values. Use $name syntax — the engine resolves to concrete values for rendering.`
 
-EMPTY FRAME AUTO-REPLACEMENT:
+const AUTO_REPLACE_RULES = `EMPTY FRAME AUTO-REPLACEMENT:
 - When inserting a root-level frame via I(null, {...}), if an empty root frame (no children) already exists on the canvas, it is automatically replaced — no need to delete or move into it manually.
 - The new frame inherits the position (x/y) of the replaced empty frame, so find_empty_space is unnecessary when an empty root frame exists.
-- Always use I(null, {...}) for root-level designs — the tool handles reuse of empty frames automatically.
+- Always use I(null, {...}) for root-level designs — the tool handles reuse of empty frames automatically.`
 
-POST-PROCESSING (automatic with postProcess=true):
+const POST_PROCESSING = `POST-PROCESSING (automatic with postProcess=true):
 - Semantic role defaults: fills unset props based on role (see SEMANTIC ROLES above). Context-aware — e.g. button defaults differ in navbar vs form.
 - Icon name → SVG path auto-resolution: set icon "name" field, system resolves to SVG "d" path.
 - Card row equalization: horizontal layout with 2+ cards auto-equalizes to fill_container width+height.
@@ -157,4 +146,127 @@ POST-PROCESSING (automatic with postProcess=true):
 - Emoji removal and layout child position sanitization.
 - Unique ID enforcement.
 Always set postProcess=true when generating designs for best visual quality.`
+
+const PLANNING_GUIDE = `DESIGN PLANNING (for layered generation workflow):
+
+DESIGN TYPE DETECTION:
+Classify by the design's PURPOSE — reason about intent, do not keyword-match:
+1. Multi-section page — marketing, promotional, or informational content (e.g. landing pages, portfolios):
+   → Desktop: width=1200, height=0 (scrollable), 6-10 sections
+   → Sections: navigation → hero → content sections → CTA → footer
+2. Single-task screen — focused on one user task (e.g. login, settings, profile):
+   → Mobile: width=375, height=812 (fixed viewport), 1-5 sections
+   → No navigation bar/hero/footer — only actual UI elements
+3. Data-rich workspace — dashboards, admin panels, analytics:
+   → Desktop: width=1200, height=0, 2-5 sections
+   → Sidebar or topbar + content panels
+
+SECTION HEIGHT HINTS:
+Landing pages: nav 64-80px, hero 500-600px, features 400-600px, testimonials 300-400px, CTA 200-300px, footer 200-300px.
+App screens: status bar 44px, header 56-64px, form fields 48-56px each, buttons 48px, spacing 16-24px.
+
+STYLE GUIDE TEMPLATE:
+Choose a distinctive visual direction matching the product personality:
+{
+  "palette": { "background": "#F8FAFC", "surface": "#FFFFFF", "text": "#0F172A", "secondary": "#64748B", "accent": "#2563EB", "border": "#E2E8F0" },
+  "fonts": { "heading": "Space Grotesk", "body": "Inter" },
+  "aesthetic": "clean modern with blue accents"
+}
+CJK content: use "Noto Sans SC"/"Noto Sans JP"/"Noto Sans KR" for headings. NEVER "Space Grotesk"/"Manrope".
+Dark style only when explicitly requested. Default to light.
+
+SECTION DECOMPOSITION RULES:
+- Each section = ONE meaningful UI block generating ~10-30 nodes
+- Keep form elements (inputs + submit) together in ONE section — splitting causes duplicate buttons
+- Combine related elements: "Hero with title + image + CTA" = ONE section, not three
+- Only split if a single section would exceed 40 nodes
+- Multi-section pages: include Navigation as FIRST section
+- Single-task screens: do NOT include Navigation, Hero, or Footer
+
+LAYERED WORKFLOW:
+1. Call design_skeleton with rootFrame + sections to create the layout structure
+2. For each section, call design_content to populate content nodes
+3. Call design_refine to run full-tree validation and auto-fixes
+This approach produces higher-fidelity designs than generating everything at once.`
+
+// ---------------------------------------------------------------------------
+// Section registry
+// ---------------------------------------------------------------------------
+
+type PromptSection =
+  | 'all'
+  | 'schema'
+  | 'layout'
+  | 'roles'
+  | 'text'
+  | 'style'
+  | 'icons'
+  | 'examples'
+  | 'guidelines'
+  | 'planning'
+
+const SECTION_MAP: Record<PromptSection, () => string> = {
+  all: () => buildFullPrompt(),
+  schema: () => PEN_NODE_SCHEMA.trim(),
+  layout: () => LAYOUT_RULES,
+  roles: () => ROLE_GUIDE,
+  text: () => TEXT_RULES,
+  style: () => ADAPTIVE_STYLE_POLICY.trim(),
+  icons: () => DESIGN_EXAMPLES.trim(),
+  examples: () => DESIGN_EXAMPLES.trim(),
+  guidelines: () => DESIGN_GUIDELINES,
+  planning: () => PLANNING_GUIDE,
+}
+
+// ---------------------------------------------------------------------------
+// Public API
+// ---------------------------------------------------------------------------
+
+/**
+ * Build the design knowledge prompt for AI-assisted design generation.
+ *
+ * When `section` is provided, returns only that focused subset of design
+ * knowledge. This allows external LLMs to load context incrementally
+ * instead of consuming the full prompt at once.
+ */
+export function buildDesignPrompt(section?: string): string {
+  if (section && section in SECTION_MAP) {
+    return SECTION_MAP[section as PromptSection]()
+  }
+  return buildFullPrompt()
+}
+
+/** List available prompt sections. */
+export function listPromptSections(): string[] {
+  return Object.keys(SECTION_MAP)
+}
+
+// ---------------------------------------------------------------------------
+// Full prompt builder (current behavior)
+// ---------------------------------------------------------------------------
+
+function buildFullPrompt(): string {
+  return `${INTRO}
+
+${PEN_NODE_SCHEMA}
+
+${ADAPTIVE_STYLE_POLICY}
+
+${DESIGN_EXAMPLES}
+
+${DESIGN_TYPE_DETECTION}
+
+${ROLE_GUIDE}
+
+${LAYOUT_RULES}
+
+${TEXT_RULES}
+
+${DESIGN_GUIDELINES}
+
+${VARIABLE_RULES}
+
+${AUTO_REPLACE_RULES}
+
+${POST_PROCESSING}`
 }

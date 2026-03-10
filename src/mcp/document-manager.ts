@@ -172,6 +172,21 @@ export async function fileExists(filePath: string): Promise<boolean> {
   }
 }
 
+/** Fetch the current selection from the live Electron canvas. */
+export async function fetchLiveSelection(): Promise<{ selectedIds: string[]; activePageId: string | null }> {
+  const syncUrl = await getSyncUrl()
+  if (!syncUrl) {
+    return { selectedIds: [], activePageId: null }
+  }
+  try {
+    const res = await fetch(`${syncUrl}/api/mcp/selection`)
+    if (!res.ok) return { selectedIds: [], activePageId: null }
+    return (await res.json()) as { selectedIds: string[]; activePageId: string | null }
+  } catch {
+    return { selectedIds: [], activePageId: null }
+  }
+}
+
 /** Invalidate cache for a file. */
 export function invalidateCache(filePath: string): void {
   cache.delete(filePath)
