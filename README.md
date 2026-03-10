@@ -79,6 +79,8 @@ OpenPencil is built around AI from the ground up — not as a plugin, but as a c
 **MCP Server**
 - Built-in MCP server — one-click install into Claude Code / Codex / Gemini / OpenCode / Kiro / Copilot CLIs
 - Design automation from terminal: read, create, and modify `.op` files via any MCP-compatible agent
+- **Layered design workflow** — `design_skeleton` → `design_content` → `design_refine` for higher-fidelity multi-section designs
+- **Segmented prompt retrieval** — load only the design knowledge you need (schema, layout, roles, icons, planning, etc.)
 - Multi-page support — create, rename, reorder, and duplicate pages via MCP tools
 
 **Code Generation**
@@ -189,7 +191,7 @@ Contributions are welcome! See [CLAUDE.md](./CLAUDE.md) for architecture details
 - [x] Design variables & tokens with CSS sync
 - [x] Component system (instances & overrides)
 - [x] AI design generation with orchestrator
-- [x] MCP server integration
+- [x] MCP server integration with layered design workflow
 - [x] Multi-page support
 - [x] Figma `.fig` import
 - [x] Boolean operations (union, subtract, intersect)

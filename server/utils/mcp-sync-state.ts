@@ -8,6 +8,8 @@ import type { ServerResponse } from 'node:http'
 
 let currentDocument: PenDocument | null = null
 let documentVersion = 0
+let currentSelection: string[] = []
+let currentActivePageId: string | null = null
 
 interface SSEClient {
   id: string
@@ -25,6 +27,15 @@ export function setSyncDocument(doc: PenDocument, sourceClientId?: string): numb
   documentVersion++
   broadcast({ type: 'document:update', version: documentVersion, document: doc }, sourceClientId)
   return documentVersion
+}
+
+export function getSyncSelection(): { selectedIds: string[]; activePageId: string | null } {
+  return { selectedIds: currentSelection, activePageId: currentActivePageId }
+}
+
+export function setSyncSelection(selectedIds: string[], activePageId?: string | null): void {
+  currentSelection = selectedIds
+  if (activePageId !== undefined) currentActivePageId = activePageId
 }
 
 export function registerSSEClient(id: string, res: ServerResponse): void {

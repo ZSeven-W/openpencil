@@ -79,6 +79,43 @@ PenDocument (source of truth)
 - Multiple theme axes supported (e.g. Theme-1 with Light/Dark, Theme-2 with Compact/Comfortable)
 - Each theme axis has variants; variables can have per-variant values (`ThemedValue[]`)
 
+### MCP Layered Design Workflow
+
+External LLMs (Claude Code, Codex, Gemini CLI, etc.) can generate designs via MCP using two approaches:
+
+**Single-shot** (existing): `batch_design` or `insert_node` — generate entire design in one call. Simple but lower fidelity for complex designs.
+
+**Layered** (new): Break generation into phases, each with focused context and per-section post-processing:
+
+```text
+get_design_prompt(section="planning")     → Load planning-specific guidelines
+        │
+        ▼
+design_skeleton(rootFrame, sections)      → Create root + section frames
+        │                                    Returns: section IDs, content width,
+        │                                    per-section guidelines, suggested roles
+        ▼
+design_content(sectionId, children) ×N    → Populate each section independently
+        │                                    Runs: role resolution, icon resolution,
+        │                                    sanitization per section
+        ▼
+design_refine(rootId)                     → Full-tree validation + auto-fixes
+                                             Returns: fix report, layout snapshot
+```
+
+**`get_design_prompt` segmented retrieval**: Instead of loading the full ~8K char prompt at once, external LLMs can request focused subsets:
+- `schema` — PenNode types, fill/stroke format
+- `layout` — Flexbox layout engine rules
+- `roles` — Semantic role listing with defaults
+- `text` — Typography, CJK, copywriting rules
+- `style` — Visual style policy, palette
+- `icons` — Available icon names + usage
+- `examples` — Design examples
+- `guidelines` — General design tips
+- `planning` — Design type detection, section decomposition, style guide template, layered workflow guide
+
+**`design_skeleton` section guidelines**: The tool generates context-specific content guidelines for each section based on its name/role (nav → navbar layout tips, hero → headline sizing, form → input width rules, etc.), reducing per-call cognitive load.
+
 ### Key Modules
 
 - **`src/canvas/`** — Fabric.js integration (30 files):
@@ -203,10 +240,15 @@ PenDocument (source of truth)
   - `kit-utils.ts` — UIKit utilities: extract components from documents, find reusable nodes, deep clone
   - `kits/` — Default kit data: `default-kit.ts`, `default-kit-meta.ts`
 - **`src/mcp/`** — MCP server integration (2 files + `tools/` and `utils/` subdirs):
-  - `server.ts` — MCP server entry point, tool registration
-  - `document-manager.ts` — MCP utility for reading, writing, and caching PenDocuments from disk
-  - `tools/` — Individual MCP tool implementations: `batch-design.ts`, `batch-get.ts`, `find-empty-space.ts`, `open-document.ts`, `snapshot-layout.ts`, `variables.ts`, `pages.ts` (page CRUD: add/remove/rename/reorder/duplicate)
-  - `utils/` — Shared utilities: `id.ts`, `node-operations.ts` (page-aware `getDocChildren`/`setDocChildren`)
+  - `server.ts` — MCP server entry point, tool registration (stdio + HTTP modes)
+  - `document-manager.ts` — MCP utility for reading, writing, and caching PenDocuments from disk; live canvas sync via Nitro API
+  - `tools/` — Individual MCP tool implementations:
+    - Core: `open-document.ts`, `batch-get.ts`, `batch-design.ts` (DSL operations), `node-crud.ts` (insert/update/delete/move/copy/replace)
+    - Layout: `snapshot-layout.ts`, `find-empty-space.ts`, `import-svg.ts`
+    - Variables: `variables.ts`, `theme-presets.ts`
+    - Pages: `pages.ts` (add/remove/rename/reorder/duplicate)
+    - Layered design: `design-prompt.ts` (segmented retrieval), `design-skeleton.ts`, `design-content.ts`, `design-refine.ts`, `layered-design-defs.ts`
+  - `utils/` — Shared utilities: `id.ts`, `node-operations.ts` (page-aware `getDocChildren`/`setDocChildren`), `sanitize.ts`
 - **`src/utils/`** — File operations (save/open .pen), export (PNG/SVG), node clone, pen file normalization (format fixes only, preserves `$variable` refs), SVG parser (import SVG to editable PenNodes), syntax highlight, boolean operations (union/subtract/intersect via Paper.js)
 - **`server/api/ai/`** — Nitro server API (7 files): `chat.ts` (streaming SSE with thinking state, multimodal image attachments per provider), `generate.ts` (non-streaming generation), `connect-agent.ts` (Claude Code/Codex CLI/OpenCode/Copilot connection), `models.ts` (model definitions), `validate.ts` (vision-based post-generation validation), `mcp-install.ts` (MCP server install/uninstall into CLI tool configs), `icon.ts` (icon name → SVG path resolution via local Iconify sets). Supports Anthropic API key or Claude Agent SDK (local OAuth) as dual providers
 - **`server/utils/`** — Server utilities (5 files):

@@ -1,8 +1,10 @@
 import { useEffect, useRef } from 'react'
 import { useDocumentStore } from '@/stores/document-store'
+import { useCanvasStore } from '@/stores/canvas-store'
 import type { PenDocument } from '@/types/pen'
 
 const PUSH_DEBOUNCE_MS = 2000
+const SELECTION_DEBOUNCE_MS = 300
 const RECONNECT_DELAY_MS = 3000
 
 function getBaseUrl(): string {
@@ -83,12 +85,37 @@ export function useMcpSync() {
       }, PUSH_DEBOUNCE_MS)
     })
 
+    // Push selection changes to Nitro (debounced)
+    let selectionTimer: ReturnType<typeof setTimeout> | null = null
+    let prevSelectedIds: string[] = []
+    let prevActivePageId: string | null = null
+
+    const unsubSelection = useCanvasStore.subscribe((state) => {
+      const { selectedIds } = state.selection
+      const { activePageId } = state
+      // Skip if nothing changed
+      if (selectedIds === prevSelectedIds && activePageId === prevActivePageId) return
+      prevSelectedIds = selectedIds
+      prevActivePageId = activePageId
+
+      if (selectionTimer) clearTimeout(selectionTimer)
+      selectionTimer = setTimeout(() => {
+        fetch(`${baseUrl}/api/mcp/selection`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ selectedIds, activePageId }),
+        }).catch(() => {})
+      }, SELECTION_DEBOUNCE_MS)
+    })
+
     return () => {
       disposed = true
       eventSource?.close()
       if (reconnectTimer) clearTimeout(reconnectTimer)
       if (pushTimerRef.current) clearTimeout(pushTimerRef.current)
+      if (selectionTimer) clearTimeout(selectionTimer)
       unsubDoc()
+      unsubSelection()
     }
   }, [])
 }

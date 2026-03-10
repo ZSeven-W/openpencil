@@ -34,7 +34,12 @@ import {
   handleDuplicatePage,
 } from './tools/pages'
 import { handleBatchDesign } from './tools/batch-design'
-import { buildDesignPrompt } from './tools/design-prompt'
+import { buildDesignPrompt, listPromptSections } from './tools/design-prompt'
+import { handleDesignSkeleton } from './tools/design-skeleton'
+import { handleDesignContent } from './tools/design-content'
+import { handleDesignRefine } from './tools/design-refine'
+import { handleGetSelection } from './tools/get-selection'
+import { LAYERED_DESIGN_TOOLS } from './tools/layered-design-defs'
 import { MCP_DEFAULT_PORT } from '@/constants/app'
 
 // --- Tool definitions (shared across all Server instances) ---
@@ -83,6 +88,20 @@ const TOOL_DEFINITIONS = [
         readDepth: { type: 'number', description: 'How deep to include children in results (default 1)' },
         searchDepth: { type: 'number', description: 'How deep to search for matching nodes (default unlimited)' },
         pageId: { type: 'string', description: 'Target page ID (defaults to first page)' },
+      },
+      required: [],
+    },
+  },
+  {
+    name: 'get_selection',
+    description:
+      'Get the currently selected nodes on the live canvas. Returns the full node data for each selected element. ' +
+      'Use this to inspect what the user has selected without needing to search.',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        filePath: { type: 'string', description: 'Path to .op file, or omit to use the live canvas (default)' },
+        readDepth: { type: 'number', description: 'How deep to include children in results (default 2)' },
       },
       required: [],
     },
@@ -453,10 +472,20 @@ const TOOL_DEFINITIONS = [
   {
     name: 'get_design_prompt',
     description:
-      'Get the full design knowledge prompt with PenNode schema, layout engine rules, typography guidelines, icon list, and design examples. Call this before generating designs if open_document returned a brief prompt (non-empty document).',
+      'Get design knowledge prompt. Use "section" to retrieve a focused subset instead of the full prompt. ' +
+      'Sections: schema (PenNode types), layout (flexbox rules), roles (semantic roles), text (typography/CJK/copywriting), ' +
+      'style (visual style policy), icons (icon names), examples (design examples), guidelines (design tips), planning (layered workflow guide). ' +
+      'Omit section for the full prompt.',
     inputSchema: {
       type: 'object' as const,
-      properties: {},
+      properties: {
+        section: {
+          type: 'string',
+          enum: ['all', 'schema', 'layout', 'roles', 'text', 'style', 'icons', 'examples', 'guidelines', 'planning'],
+          description:
+            'Which section of design knowledge to retrieve. Default: all. Use "planning" for layered generation workflow.',
+        },
+      },
       required: [],
     },
   },
@@ -496,6 +525,7 @@ const TOOL_DEFINITIONS = [
       required: ['operations'],
     },
   },
+  ...LAYERED_DESIGN_TOOLS,
 ]
 
 // --- Tool execution handler ---
@@ -506,6 +536,8 @@ async function handleToolCall(name: string, args: any) {
       return JSON.stringify(await handleOpenDocument(args), null, 2)
     case 'batch_get':
       return JSON.stringify(await handleBatchGet(args), null, 2)
+    case 'get_selection':
+      return JSON.stringify(await handleGetSelection(args), null, 2)
     case 'insert_node':
       return JSON.stringify(await handleInsertNode(args), null, 2)
     case 'update_node':
@@ -547,9 +579,23 @@ async function handleToolCall(name: string, args: any) {
     case 'duplicate_page':
       return JSON.stringify(await handleDuplicatePage(args), null, 2)
     case 'get_design_prompt':
-      return JSON.stringify({ designPrompt: buildDesignPrompt() }, null, 2)
+      return JSON.stringify(
+        {
+          section: args?.section ?? 'all',
+          availableSections: listPromptSections(),
+          designPrompt: buildDesignPrompt(args?.section),
+        },
+        null,
+        2,
+      )
     case 'batch_design':
       return JSON.stringify(await handleBatchDesign(args), null, 2)
+    case 'design_skeleton':
+      return JSON.stringify(await handleDesignSkeleton(args), null, 2)
+    case 'design_content':
+      return JSON.stringify(await handleDesignContent(args), null, 2)
+    case 'design_refine':
+      return JSON.stringify(await handleDesignRefine(args), null, 2)
     default:
       throw new Error(`Unknown tool: ${name}`)
   }
