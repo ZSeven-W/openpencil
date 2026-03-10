@@ -547,9 +547,17 @@ export function useCanvasSync() {
         }
       })(pageChildren)
 
-      // Remove objects that no longer exist in the document
+      // Remove objects that no longer exist in the document, and
+      // deduplicate: when multiple Fabric objects share the same penNodeId
+      // (e.g. from ID collisions across separate AI generations), keep only
+      // the one tracked in objMap and remove the rest.
       for (const obj of objects) {
-        if (obj.penNodeId && !nodeMap.has(obj.penNodeId)) {
+        if (!obj.penNodeId) continue
+        if (!nodeMap.has(obj.penNodeId)) {
+          canvas.remove(obj)
+        } else if (objMap.get(obj.penNodeId) !== obj) {
+          // Duplicate — this object has the same penNodeId but isn't the one
+          // tracked in objMap (Map keeps the last occurrence). Remove it.
           canvas.remove(obj)
         }
       }
