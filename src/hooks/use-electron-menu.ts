@@ -4,6 +4,7 @@ import { useDocumentStore } from '@/stores/document-store'
 import { useHistoryStore } from '@/stores/history-store'
 import { zoomToFitContent } from '@/canvas/use-fabric-canvas'
 import { syncCanvasPositionsToStore } from '@/canvas/use-canvas-sync'
+import { injectAnimationData, extractAnimationData } from '@/animation/animation-persistence'
 import { normalizePenDocument } from '@/utils/normalize-pen-file'
 import {
   supportsFileSystemAccess,
@@ -32,6 +33,7 @@ export function useElectronMenu() {
           const doc = normalizePenDocument(raw)
           const name = filePath.split(/[/\\]/).pop() || 'untitled.op'
           useDocumentStore.getState().loadDocument(doc, name)
+          extractAnimationData(doc)
           requestAnimationFrame(() => zoomToFitContent())
         } catch {
           // Invalid file — ignore
@@ -60,6 +62,7 @@ export function useElectronMenu() {
                 useDocumentStore
                   .getState()
                   .loadDocument(result.doc, result.fileName, result.handle)
+                extractAnimationData(result.doc)
                 requestAnimationFrame(() => zoomToFitContent())
               }
             })
@@ -69,6 +72,7 @@ export function useElectronMenu() {
                 useDocumentStore
                   .getState()
                   .loadDocument(result.doc, result.fileName)
+                extractAnimationData(result.doc)
                 requestAnimationFrame(() => zoomToFitContent())
               }
             })
@@ -77,6 +81,7 @@ export function useElectronMenu() {
 
         case 'save': {
           syncCanvasPositionsToStore()
+          injectAnimationData()
           const store = useDocumentStore.getState()
           const { document: doc, fileName, fileHandle } = store
 

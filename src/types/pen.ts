@@ -5,6 +5,7 @@ import type {
   StyledTextSegment,
 } from './styles'
 import type { VariableDefinition } from './variables'
+import type { TimelineState } from './animation'
 
 // --- Page ---
 
@@ -21,6 +22,7 @@ export interface PenDocument {
   name?: string
   themes?: Record<string, string[]>
   variables?: Record<string, VariableDefinition>
+  animation?: TimelineState
   pages?: PenPage[]
   children: PenNode[]
 }

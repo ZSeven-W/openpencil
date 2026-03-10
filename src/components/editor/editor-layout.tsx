@@ -20,6 +20,8 @@ import { useDocumentStore } from '@/stores/document-store'
 import { useAgentSettingsStore } from '@/stores/agent-settings-store'
 import { useUIKitStore } from '@/stores/uikit-store'
 import { useThemePresetStore } from '@/stores/theme-preset-store'
+import TimelinePanel from '@/components/animation/timeline-panel'
+import { useTimelineStore } from '@/stores/timeline-store'
 import { useElectronMenu } from '@/hooks/use-electron-menu'
 import { useFigmaPaste } from '@/hooks/use-figma-paste'
 import { useMcpSync } from '@/hooks/use-mcp-sync'
@@ -36,6 +38,7 @@ export default function EditorLayout() {
   const closeFigmaImport = useCallback(() => {
     useCanvasStore.getState().setFigmaImportDialogOpen(false)
   }, [])
+  const editorMode = useTimelineStore((s) => s.editorMode)
   const browserOpen = useUIKitStore((s) => s.browserOpen)
   const saveDialogOpen = useDocumentStore((s) => s.saveDialogOpen)
   const closeSaveDialog = useCallback(() => {
@@ -83,6 +86,14 @@ export default function EditorLayout() {
       if (isMod && e.shiftKey && e.key.toLowerCase() === 'k') {
         e.preventDefault()
         useUIKitStore.getState().toggleBrowser()
+        return
+      }
+
+      // Cmd+Shift+A: toggle animate mode
+      if (isMod && e.shiftKey && e.key.toLowerCase() === 'a') {
+        e.preventDefault()
+        const ts = useTimelineStore.getState()
+        ts.setEditorMode(ts.editorMode === 'animate' ? 'design' : 'animate')
         return
       }
 
@@ -165,6 +176,7 @@ export default function EditorLayout() {
             </div>
             {hasSelection && <RightPanel />}
           </div>
+          {editorMode === 'animate' && <TimelinePanel />}
         </div>
         <ExportDialog open={exportOpen} onClose={closeExport} />
         <SaveDialog open={saveDialogOpen} onClose={closeSaveDialog} />

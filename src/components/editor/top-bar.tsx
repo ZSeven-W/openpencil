@@ -37,6 +37,7 @@ import {
   openDocument,
 } from '@/utils/file-operations'
 import { syncCanvasPositionsToStore } from '@/canvas/use-canvas-sync'
+import { injectAnimationData, extractAnimationData } from '@/animation/animation-persistence'
 import { zoomToFitContent } from '@/canvas/use-fabric-canvas'
 import { useAgentSettingsStore } from '@/stores/agent-settings-store'
 import type { AIProviderType } from '@/types/agent-settings'
@@ -203,6 +204,7 @@ export default function TopBar() {
 
   const handleSave = useCallback(() => {
     syncCanvasPositionsToStore()
+    injectAnimationData()
     const store = useDocumentStore.getState()
     const { document: doc, fileName: fn, fileHandle } = store
 
@@ -233,6 +235,7 @@ export default function TopBar() {
           useDocumentStore
             .getState()
             .loadDocument(result.doc, result.fileName, result.handle)
+          extractAnimationData(result.doc)
           requestAnimationFrame(() => zoomToFitContent())
         }
       })
@@ -240,6 +243,7 @@ export default function TopBar() {
       openDocument().then((result) => {
         if (result) {
           useDocumentStore.getState().loadDocument(result.doc, result.fileName)
+          extractAnimationData(result.doc)
           requestAnimationFrame(() => zoomToFitContent())
         }
       })
