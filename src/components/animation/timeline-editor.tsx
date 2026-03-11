@@ -50,16 +50,11 @@ const effects: Record<string, TimelineEffect> = {
 
 function getStores(): import('@/animation/timeline-adapter-types').TimelineStores {
   return {
-    getTimelineState: () => ({
-      tracks: {},
-      duration: useTimelineStore.getState().duration,
-      videoClipIds: [],
-    }),
-    updateKeyframe: () => {},
     getDocumentState: () => ({
       getNodeById: useDocumentStore.getState().getNodeById,
     }),
     updateNode: (id, partial) => useDocumentStore.getState().updateNode(id, partial),
+    getDuration: () => useTimelineStore.getState().duration,
   }
 }
 

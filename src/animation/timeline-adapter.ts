@@ -6,17 +6,15 @@
  */
 
 import type { TimelineRow, TimelineAction } from '@cyca/react-timeline-editor'
-import type { AnimationTrack, KeyframePhase, AnimationClipData, VideoClipData } from '@/types/animation'
+import type { AnimationClipData, VideoClipData } from '@/types/animation'
 import type { PenNode } from '@/types/pen'
 import {
   msToSec,
   secToMs,
-  EFFECT_ANIMATION_PHASE,
   EFFECT_VIDEO_CLIP,
   EFFECT_ANIMATION_CLIP,
   type ActionMetadataMap,
   type TimelineStores,
-  type VideoNodeProjection,
 } from './timeline-adapter-types'
 
 // ---------------------------------------------------------------------------
@@ -28,89 +26,8 @@ export interface TimelineProjection {
   metadata: ActionMetadataMap
 }
 
-/**
- * Convert Zustand track/video data into TimelineRow[] + ActionMetadataMap.
- * Pure function — no side effects, no store reads.
- */
-export function toTimelineRows(
-  tracks: Record<string, AnimationTrack>,
-  videoNodes: readonly VideoNodeProjection[],
-  duration_ms: number,
-): TimelineProjection {
-  const rows: TimelineRow[] = []
-  const metadata: ActionMetadataMap = new Map()
-
-  // Animation tracks: each phase becomes one action
-  for (const track of Object.values(tracks)) {
-    const actions: TimelineAction[] = []
-    const phases: KeyframePhase[] = ['in', 'while', 'out']
-
-    for (const phase of phases) {
-      const phaseData = track.phases[phase]
-      if (phaseData.duration <= 0 && phase !== 'while') continue
-
-      const actionId = `${track.nodeId}::${phase}`
-      const start_ms = phaseData.start
-      const end_ms = phaseData.start + phaseData.duration
-
-      actions.push({
-        id: actionId,
-        start: msToSec(start_ms),
-        end: msToSec(end_ms),
-        effectId: EFFECT_ANIMATION_PHASE,
-        flexible: true,
-        movable: true,
-      })
-
-      metadata.set(actionId, {
-        type: 'animation-phase',
-        phase,
-        nodeId: track.nodeId,
-      })
-    }
-
-    if (actions.length > 0) {
-      rows.push({
-        id: track.nodeId,
-        actions,
-      })
-    }
-  }
-
-  // Video clips: each clip becomes one row with one action
-  for (const node of videoNodes) {
-    const inPoint_ms = node.inPoint ?? 0
-    const outPoint_ms = node.outPoint ?? (node.videoDuration ?? duration_ms)
-    const offset_ms = node.timelineOffset ?? 0
-    const clipDuration_ms = outPoint_ms - inPoint_ms
-
-    const actionId = `${node.id}::video`
-
-    rows.push({
-      id: node.id,
-      actions: [
-        {
-          id: actionId,
-          start: msToSec(offset_ms),
-          end: msToSec(offset_ms + clipDuration_ms),
-          effectId: EFFECT_VIDEO_CLIP,
-          flexible: true,
-          movable: true,
-        },
-      ],
-    })
-
-    metadata.set(actionId, {
-      type: 'video-clip',
-      nodeId: node.id,
-    })
-  }
-
-  return { rows, metadata }
-}
-
 // ---------------------------------------------------------------------------
-// Library → Store mutations
+// Library → Store mutations (v2 clip-based)
 // ---------------------------------------------------------------------------
 
 /**
@@ -120,17 +37,19 @@ export function toTimelineRows(
 export function applyActionMove(
   actionId: string,
   newStart_s: number,
-  newEnd_s: number,
+  _newEnd_s: number,
   metadata: ActionMetadataMap,
   stores: TimelineStores,
 ): void {
   const meta = metadata.get(actionId)
   if (!meta) return
 
-  if (meta.type === 'animation-phase') {
-    applyPhaseMove(meta.nodeId, meta.phase, newStart_s, newEnd_s, stores)
-  } else {
-    applyVideoClipMove(meta.nodeId, newStart_s, stores)
+  if (meta.type === 'video-clip') {
+    stores.updateNode(meta.nodeId, {
+      timelineOffset: secToMs(newStart_s),
+    } as Partial<PenNode>)
+  } else if (meta.type === 'animation-clip') {
+    applyClipMove(meta.nodeId, meta.clipId, newStart_s, stores)
   }
 }
 
@@ -149,10 +68,10 @@ export function applyActionResize(
   const meta = metadata.get(actionId)
   if (!meta) return
 
-  if (meta.type === 'animation-phase') {
-    applyPhaseResize(meta.nodeId, meta.phase, newStart_s, newEnd_s, dir, stores)
-  } else {
+  if (meta.type === 'video-clip') {
     applyVideoClipResize(meta.nodeId, newStart_s, newEnd_s, dir, stores)
+  } else if (meta.type === 'animation-clip') {
+    applyClipResize(meta.nodeId, meta.clipId, newStart_s, newEnd_s, stores)
   }
 }
 
@@ -181,9 +100,6 @@ export function validateActionMove(
     return validateVideoClipBounds(meta.nodeId, start_s, end_s, stores)
   }
 
-  // Phase ordering (in < while < out) is enforced at the store level
-  // by recomputePhases() which derives boundaries from keyframe tags.
-
   return true
 }
 
@@ -195,7 +111,6 @@ export function validateActionResize(
   metadata: ActionMetadataMap,
   stores: TimelineStores,
 ): boolean {
-  // Same validation as move
   return validateActionMove(actionId, start_s, end_s, metadata, stores)
 }
 
@@ -203,74 +118,38 @@ export function validateActionResize(
 // Internal helpers
 // ---------------------------------------------------------------------------
 
-function applyPhaseMove(
+function applyClipMove(
   nodeId: string,
-  phase: KeyframePhase,
+  clipId: string,
   newStart_s: number,
-  _newEnd_s: number,
   stores: TimelineStores,
 ): void {
-  const { tracks } = stores.getTimelineState()
-  const track = tracks[nodeId]
-  if (!track) return
+  const node = stores.getDocumentState().getNodeById(nodeId)
+  if (!node?.clips) return
 
-  const oldPhase = track.phases[phase]
-  const oldStart_ms = oldPhase.start
-  const newStart_ms = secToMs(newStart_s)
-  const delta_ms = newStart_ms - oldStart_ms
-
-  // Move all keyframes in this phase by the same delta
-  for (const kf of track.keyframes) {
-    if (kf.phase === phase) {
-      stores.updateKeyframe(nodeId, kf.id, {
-        time: kf.time + delta_ms,
-      })
-    }
-  }
+  const newStartMs = secToMs(newStart_s)
+  const updatedClips = node.clips.map((c) =>
+    c.id === clipId ? { ...c, startTime: newStartMs } : c,
+  )
+  stores.updateNode(nodeId, { clips: updatedClips } as Partial<PenNode>)
 }
 
-function applyPhaseResize(
+function applyClipResize(
   nodeId: string,
-  phase: KeyframePhase,
+  clipId: string,
   newStart_s: number,
   newEnd_s: number,
-  dir: 'left' | 'right',
   stores: TimelineStores,
 ): void {
-  const { tracks } = stores.getTimelineState()
-  const track = tracks[nodeId]
-  if (!track) return
+  const node = stores.getDocumentState().getNodeById(nodeId)
+  if (!node?.clips) return
 
-  const phaseKeyframes = track.keyframes.filter((kf) => kf.phase === phase)
-  if (phaseKeyframes.length === 0) return
-
-  if (dir === 'left') {
-    // Move the first keyframe in the phase to match new start
-    const first = phaseKeyframes[0]
-    if (first) {
-      stores.updateKeyframe(nodeId, first.id, {
-        time: secToMs(newStart_s),
-      })
-    }
-  } else {
-    // Move the last keyframe in the phase to match new end
-    const last = phaseKeyframes[phaseKeyframes.length - 1]
-    if (last) {
-      stores.updateKeyframe(nodeId, last.id, {
-        time: secToMs(newEnd_s),
-      })
-    }
-  }
-}
-
-function applyVideoClipMove(
-  nodeId: string,
-  newStart_s: number,
-  stores: TimelineStores,
-): void {
-  stores.updateNode(nodeId, {
-    timelineOffset: secToMs(newStart_s),
-  } as Partial<import('@/types/pen').PenNode>)
+  const newStartMs = secToMs(newStart_s)
+  const newDurationMs = secToMs(newEnd_s) - newStartMs
+  const updatedClips = node.clips.map((c) =>
+    c.id === clipId ? { ...c, startTime: newStartMs, duration: newDurationMs } : c,
+  )
+  stores.updateNode(nodeId, { clips: updatedClips } as Partial<PenNode>)
 }
 
 function applyVideoClipResize(
@@ -288,20 +167,18 @@ function applyVideoClipResize(
   const inPoint_ms = videoNode.inPoint ?? 0
 
   if (dir === 'left') {
-    // Left resize changes inPoint and timelineOffset
     const newOffset_ms = secToMs(newStart_s)
     const offsetDelta_ms = newOffset_ms - offset_ms
     stores.updateNode(nodeId, {
       timelineOffset: newOffset_ms,
       inPoint: inPoint_ms + offsetDelta_ms,
-    } as Partial<import('@/types/pen').PenNode>)
+    } as Partial<PenNode>)
   } else {
-    // Right resize changes outPoint
     const newEnd_ms = secToMs(newEnd_s)
     const newOutPoint_ms = inPoint_ms + (newEnd_ms - offset_ms)
     stores.updateNode(nodeId, {
       outPoint: newOutPoint_ms,
-    } as Partial<import('@/types/pen').PenNode>)
+    } as Partial<PenNode>)
   }
 }
 
@@ -318,9 +195,7 @@ function validateVideoClipBounds(
   const videoDuration_ms = videoNode.videoDuration ?? Infinity
   const clipDuration_ms = secToMs(end_s - start_s)
 
-  // Clip duration can't exceed video duration
   if (clipDuration_ms > videoDuration_ms) return false
-  // Can't start before 0
   if (start_s < 0) return false
 
   return true
@@ -379,4 +254,3 @@ export function buildTimelineRowsFromNodes(nodes: PenNode[]): TimelineProjection
   walk(nodes)
   return { rows, metadata }
 }
-

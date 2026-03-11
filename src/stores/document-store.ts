@@ -4,7 +4,6 @@ import type { PenDocument, PenNode, GroupNode, RefNode } from '@/types/pen'
 import type { VariableDefinition } from '@/types/variables'
 import { useHistoryStore } from '@/stores/history-store'
 import { useCanvasStore } from '@/stores/canvas-store'
-import { useTimelineStore } from '@/stores/timeline-store'
 import { animationPauseMiddleware } from '@/stores/animation-pause-middleware'
 import { getDefaultTheme } from '@/variables/resolve-variables'
 import { replaceVariableRefsInTree } from '@/variables/replace-refs'
@@ -154,8 +153,6 @@ export const useDocumentStore = create<DocumentStoreState>()(
         ),
         isDirty: true,
       }))
-      // Clean up animation track for deleted node
-      useTimelineStore.getState().removeTrack(id)
     },
 
     moveNode: (id, newParentId, index) => {
@@ -321,19 +318,6 @@ export const useDocumentStore = create<DocumentStoreState>()(
         ),
         isDirty: true,
       }))
-      // Duplicate animation track if source had one
-      const sourceTrack = useTimelineStore.getState().tracks[id]
-      if (sourceTrack) {
-        const clonedTrack = {
-          ...sourceTrack,
-          nodeId: clone.id,
-          keyframes: sourceTrack.keyframes.map((k) => ({
-            ...k,
-            id: nanoid(8),
-          })),
-        }
-        useTimelineStore.getState().addTrack(clonedTrack)
-      }
       return clone.id
     },
 

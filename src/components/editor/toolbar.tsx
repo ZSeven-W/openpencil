@@ -220,9 +220,8 @@ export default function Toolbar() {
         height: h,
       })
 
-      // Auto-open timeline and register clip
+      // Auto-open timeline
       const ts = useTimelineStore.getState()
-      ts.addVideoClip(nodeId)
       if (ts.editorMode !== 'animate') {
         ts.setEditorMode('animate')
         useCanvasStore.getState().setRightPanelTab('animate')

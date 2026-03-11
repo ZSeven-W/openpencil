@@ -15,7 +15,6 @@ import { isFabricSyncLocked, setFabricSyncLock } from './canvas-sync-lock'
 import { isPlaybackActive } from '@/animation/canvas-bridge'
 import { pendingAnimationNodes, getNextStaggerDelay } from '@/services/ai/design-animation'
 import { unregisterVideoElement } from '@/animation/video-registry'
-import { useTimelineStore } from '@/stores/timeline-store'
 import { removePreviewNode, removeAgentIndicator } from './agent-indicator'
 import { resolveNodeForCanvas, getDefaultTheme } from '@/variables/resolve-variables'
 import { COMPONENT_COLOR, INSTANCE_COLOR, SELECTION_BLUE } from './canvas-constants'
@@ -564,7 +563,6 @@ export function useCanvasSync() {
           // Clean up video element if this was a video node
           if ((obj as any).__isVideo) {
             unregisterVideoElement(obj.penNodeId)
-            useTimelineStore.getState().removeVideoClip(obj.penNodeId)
           }
           canvas.remove(obj)
         }
