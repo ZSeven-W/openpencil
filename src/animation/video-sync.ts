@@ -12,11 +12,11 @@
  */
 
 import type { Canvas } from 'fabric'
-import type { FabricObjectWithPenId } from '@/canvas/canvas-object-factory'
 import {
   getAllVideoElements,
   seekVideoToTime,
 } from '@/animation/video-registry'
+import { findFabricObject } from '@/animation/canvas-bridge'
 import { useDocumentStore } from '@/stores/document-store'
 import type { VideoNode } from '@/types/pen'
 
@@ -44,8 +44,7 @@ export function syncVideoFrames(canvas: Canvas, compositionTimeMs: number): void
     const clipEnd = timelineOffset + (outPoint - inPoint)
 
     // Only show video when composition time is within the clip range
-    const objects = canvas.getObjects() as FabricObjectWithPenId[]
-    const fabricObj = objects.find((o) => o.penNodeId === nodeId)
+    const fabricObj = findFabricObject(canvas, nodeId)
 
     if (compositionTimeMs < clipStart || compositionTimeMs > clipEnd) {
       // Outside clip range — hide the video

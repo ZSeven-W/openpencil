@@ -12,12 +12,48 @@ export function setPlaybackActive(active: boolean): void {
   playbackActive = active
 }
 
-// --- Object Lookup ---
+// --- Timestamp-based cursor guard ---
+// Prevents library cursor drag callbacks from firing during playback tick
 
-function findFabricObject(
+let lastExternalCursorSetAt = 0
+
+export function markCursorUpdate(): void {
+  lastExternalCursorSetAt = performance.now()
+}
+
+export function isCursorUpdateRecent(): boolean {
+  return performance.now() - lastExternalCursorSetAt < 20
+}
+
+// --- Object Lookup (shared Map cache) ---
+
+const fabricObjectMap = new Map<string, FabricObjectWithPenId>()
+
+/** Build Map cache from canvas objects. Call at playback start. */
+export function buildFabricObjectMap(canvas: Canvas): void {
+  fabricObjectMap.clear()
+  const objects = canvas.getObjects() as FabricObjectWithPenId[]
+  for (const obj of objects) {
+    if (obj.penNodeId) {
+      fabricObjectMap.set(obj.penNodeId, obj)
+    }
+  }
+}
+
+/** Clear Map cache. Call at playback stop. */
+export function clearFabricObjectMap(): void {
+  fabricObjectMap.clear()
+}
+
+/** Shared lookup — used by canvas-bridge and video-sync. */
+export function findFabricObject(
   canvas: Canvas,
   nodeId: string,
 ): FabricObjectWithPenId | null {
+  // Use cache during playback, linear scan otherwise
+  if (fabricObjectMap.size > 0) {
+    return fabricObjectMap.get(nodeId) ?? null
+  }
   const objects = canvas.getObjects() as FabricObjectWithPenId[]
   return objects.find((obj) => obj.penNodeId === nodeId) ?? null
 }

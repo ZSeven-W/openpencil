@@ -27,6 +27,8 @@ import {
 } from '@/animation/timeline-adapter-types'
 import type { PenNode, VideoNode } from '@/types/pen'
 import { useCanvasStore } from '@/stores/canvas-store'
+import { isCursorUpdateRecent } from '@/animation/canvas-bridge'
+import { setTimelineRef } from '@/animation/playback-loop'
 
 // ---------------------------------------------------------------------------
 // Effects registry (no engine callbacks — we bypass the library's engine)
@@ -112,9 +114,13 @@ export default function TimelineEditor() {
   // Use frozen rows during drag, computed rows otherwise
   const displayRows = isDragging.current ? (frozenRows.current ?? computedRows) : computedRows
 
-  // Cleanup on unmount
+  // Wire timeline ref to playback loop for cursor sync
   useEffect(() => {
+    if (timelineRef.current) {
+      setTimelineRef(timelineRef.current)
+    }
     return () => {
+      setTimelineRef(null)
       isDragging.current = false
       frozenRows.current = null
     }
@@ -167,6 +173,8 @@ export default function TimelineEditor() {
   // --- Cursor callbacks ---
 
   const onCursorDrag = useCallback((time_s: number) => {
+    // Skip if playback engine just set the cursor (prevents feedback loop)
+    if (isCursorUpdateRecent()) return
     useTimelineStore.getState().setCurrentTime(secToMs(time_s))
   }, [])
 

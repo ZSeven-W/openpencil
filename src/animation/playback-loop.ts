@@ -5,6 +5,9 @@ import {
   applyAnimatedProperties,
   setPlaybackActive,
   captureCurrentState,
+  buildFabricObjectMap,
+  clearFabricObjectMap,
+  markCursorUpdate,
 } from '@/animation/canvas-bridge'
 import { syncVideoFrames, pauseAllVideos } from '@/animation/video-sync'
 import type { AnimatableProperties } from '@/types/animation'
@@ -22,6 +25,15 @@ let savedStates: Record<string, AnimatableProperties> = {}
 export let currentPlayheadTime = 0
 let lastUiUpdate = 0
 const UI_UPDATE_INTERVAL = 100 // ~10fps for UI updates
+
+// Timeline library cursor sync (throttled separately at ~30fps)
+let timelineRef: { time: number } | null = null
+let lastCursorUpdate = 0
+const CURSOR_UPDATE_INTERVAL_MS = 33 // ~30fps
+
+export function setTimelineRef(ref: { time: number } | null): void {
+  timelineRef = ref
+}
 
 function tick(canvas: Canvas, timestamp: number) {
   if (startTimestamp === null) startTimestamp = timestamp
@@ -64,6 +76,13 @@ function tick(canvas: Canvas, timestamp: number) {
     lastUiUpdate = timestamp
   }
 
+  // Throttled timeline cursor sync (~30fps, separate from UI updates)
+  if (timelineRef && timestamp - lastCursorUpdate > CURSOR_UPDATE_INTERVAL_MS) {
+    timelineRef.time = currentTime / 1000
+    markCursorUpdate()
+    lastCursorUpdate = timestamp
+  }
+
   animationFrameId = requestAnimationFrame((ts) => tick(canvas, ts))
 }
 
@@ -81,6 +100,9 @@ export function play(canvas: Canvas): void {
     const state = captureCurrentState(canvas, nodeId)
     if (state) savedStates[nodeId] = state
   }
+
+  // Build Fabric object lookup Map for O(1) access during playback
+  buildFabricObjectMap(canvas)
 
   // Enter playback mode
   setPlaybackActive(true)
@@ -118,6 +140,7 @@ export function stop(canvas: Canvas): void {
   }
 
   pauseAllVideos()
+  clearFabricObjectMap()
 
   canvas.requestRenderAll()
   savedStates = {}
@@ -129,6 +152,7 @@ export function stop(canvas: Canvas): void {
   pausedAt = 0
   startTimestamp = null
   currentPlayheadTime = 0
+  lastCursorUpdate = 0
 }
 
 export function seekTo(canvas: Canvas, timeMs: number): void {

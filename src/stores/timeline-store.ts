@@ -279,6 +279,7 @@ export const useTimelineStore = create<TimelineStoreState>((set, get) => ({
           cleaned[nodeId] = track
         }
       }
-      return { tracks: cleaned }
+      const cleanedVideoClipIds = s.videoClipIds.filter((id) => existingNodeIds.has(id))
+      return { tracks: cleaned, videoClipIds: cleanedVideoClipIds }
     }),
 }))
