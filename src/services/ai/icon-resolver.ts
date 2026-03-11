@@ -248,7 +248,17 @@ function iconifyBodyToPathD(body: string): string | null {
     parts.push(cmds.join(' '))
   }
 
-  return parts.length > 0 ? parts.join(' ') : null
+  if (parts.length === 0) return null
+  // When joining multiple <path> d-values, ensure each sub-path starts with
+  // absolute M (uppercase). A standalone <path> treats initial lowercase "m"
+  // as absolute, but after concatenation it becomes relative to the previous
+  // sub-path's endpoint — drawing strokes in wrong positions.
+  for (let i = 1; i < parts.length; i++) {
+    if (parts[i].startsWith('m')) {
+      parts[i] = 'M' + parts[i].slice(1)
+    }
+  }
+  return parts.join(' ')
 }
 
 // Populate ICON_PATH_MAP with Lucide icons first (1700+), then Feather as fallback.
@@ -265,6 +275,92 @@ function iconifyBodyToPathD(body: string): string | null {
     if (!ICON_PATH_MAP[name]) ICON_PATH_MAP[name] = entry
     const normalized = name.replace(/-/g, '')
     if (!ICON_PATH_MAP[normalized]) ICON_PATH_MAP[normalized] = entry
+  }
+
+  // Lucide aliases — map alternate names to their parent icon (e.g. ice-cream → ice-cream-cone)
+  const lucideAliases = (lucideData as { aliases?: Record<string, { parent: string }> }).aliases
+  if (lucideAliases) {
+    for (const [alias, meta] of Object.entries(lucideAliases)) {
+      const parentEntry = ICON_PATH_MAP[meta.parent] ?? ICON_PATH_MAP[meta.parent.replace(/-/g, '')]
+      if (!parentEntry) continue
+      if (!ICON_PATH_MAP[alias]) ICON_PATH_MAP[alias] = parentEntry
+      const normalized = alias.replace(/-/g, '')
+      if (!ICON_PATH_MAP[normalized]) ICON_PATH_MAP[normalized] = parentEntry
+    }
+  }
+
+  // Common aliases that don't exist in Lucide/Feather but are frequently used by AI
+  // Keep in sync with NAME_ALIASES in server/api/ai/icon.ts
+  const commonAliases: Record<string, string> = {
+    burger: 'hamburger',
+    sushi: 'fish',
+    ramen: 'soup',
+    noodle: 'soup',
+    noodles: 'soup',
+    steak: 'beef',
+    meat: 'beef',
+    icecream: 'ice-cream-cone',
+    donut: 'donut',
+    bread: 'croissant',
+    fruit: 'apple',
+    food: 'utensils',
+    drink: 'cup-soda',
+    coffee: 'coffee',
+    tea: 'cup-soda',
+    restaurant: 'utensils-crossed',
+    delivery: 'truck',
+    order: 'clipboard-list',
+    recipe: 'book-open',
+    grocery: 'shopping-basket',
+    cart: 'shopping-cart',
+    bag: 'shopping-bag',
+    pay: 'credit-card',
+    payment: 'credit-card',
+    wallet: 'wallet',
+    money: 'banknote',
+    coupon: 'ticket',
+    discount: 'percent',
+    rating: 'star',
+    review: 'message-square',
+    favorite: 'heart',
+    favourites: 'heart',
+    favorites: 'heart',
+    notification: 'bell',
+    address: 'map-pin',
+    navigate: 'navigation',
+    directions: 'map',
+    logout: 'log-out',
+    login: 'log-in',
+    signup: 'user-plus',
+    account: 'user',
+    password: 'key',
+    security: 'shield',
+    privacy: 'eye-off',
+    about: 'info',
+    faq: 'help-circle',
+    support: 'headphones',
+    contact: 'phone',
+    feedback: 'message-circle',
+    language: 'globe',
+    theme: 'palette',
+    darkmode: 'moon',
+    lightmode: 'sun',
+    sound: 'volume-2',
+    mute: 'volume-x',
+    wifi: 'wifi',
+    bluetooth: 'bluetooth',
+    battery: 'battery',
+    location: 'map-pin',
+    gps: 'locate',
+    scan: 'scan',
+    qrcode: 'qr-code',
+    barcode: 'barcode',
+  }
+  for (const [alias, target] of Object.entries(commonAliases)) {
+    const targetEntry = ICON_PATH_MAP[target] ?? ICON_PATH_MAP[target.replace(/-/g, '')]
+    if (targetEntry && !ICON_PATH_MAP[alias]) {
+      ICON_PATH_MAP[alias] = targetEntry
+    }
   }
 
   // Feather — fallback for any names not covered by Lucide
@@ -338,6 +434,47 @@ function tryImmediateIconResolution(nodeId: string, iconName: string): void {
       updateNode(nodeId, update)
     })
     .catch(() => clearTimeout(timer))
+}
+
+/**
+ * Queue an icon_font node for async resolution when lookupIconByName fails.
+ * Fetches from /api/ai/icon, caches in ICON_PATH_MAP for future lookups,
+ * and triggers node recreation by touching the store node.
+ */
+export function tryAsyncIconFontResolution(nodeId: string, iconName: string): void {
+  const normalized = iconName.replace(/[-_\s/]+/g, '').replace(/icon$/i, '').toLowerCase()
+  if (!normalized || pendingIconResolutions.has(nodeId)) return
+  pendingIconResolutions.set(nodeId, normalized)
+
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), 1500)
+
+  fetch(`/api/ai/icon?name=${encodeURIComponent(normalized)}`, { signal: controller.signal })
+    .then((res) => (res.ok ? res.json() : null))
+    .then((data) => {
+      clearTimeout(timer)
+      if (!pendingIconResolutions.has(nodeId)) return
+      pendingIconResolutions.delete(nodeId)
+
+      const icon = data?.icon as {
+        d: string; style: 'stroke' | 'fill'; iconId?: string
+      } | null
+      if (!icon) return
+
+      // Cache in ICON_PATH_MAP so future lookups resolve instantly
+      const entry: IconEntry = { d: icon.d, style: icon.style, iconId: icon.iconId ?? `resolved:${normalized}` }
+      if (!ICON_PATH_MAP[normalized]) ICON_PATH_MAP[normalized] = entry
+
+      // Touch the node in store to trigger canvas recreation
+      const { getNodeById, updateNode } = useDocumentStore.getState()
+      const node = getNodeById(nodeId)
+      if (!node || node.type !== 'icon_font') return
+      // Update iconFontName to the resolved short name (strip "lucide:" / "feather:" prefix)
+      // to trigger __needsRecreation and ensure lookupIconByName resolves on next render.
+      const resolvedName = (icon.iconId ?? normalized).replace(/^[a-z]+:/, '')
+      updateNode(nodeId, { iconFontName: resolvedName } as Partial<PenNode>)
+    })
+    .catch(() => { clearTimeout(timer); pendingIconResolutions.delete(nodeId) })
 }
 
 /**
@@ -689,6 +826,7 @@ export function lookupIconByName(
   name: string,
 ): { d: string; iconId: string; style: 'stroke' | 'fill' } | null {
   const normalized = name
+    .replace(/^[a-z]+:/i, '')       // strip icon set prefix (lucide:, feather:, resolved:)
     .replace(/[-_\s/]+/g, '')
     .replace(/icon$/i, '')
     .toLowerCase()

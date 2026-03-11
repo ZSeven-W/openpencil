@@ -210,7 +210,8 @@ export async function executeOrchestration(
           width: plan.rootFrame.width,
           height: frameHeight,
           layout: plan.rootFrame.layout ?? 'vertical',
-          gap: plan.rootFrame.gap ?? 0,
+          gap: isMobile ? (plan.rootFrame.gap || 16) : (plan.rootFrame.gap ?? 16),
+          ...(plan.rootFrame.padding != null ? { padding: plan.rootFrame.padding } : {}),
           fill: defaultFill,
           children: [],
         }
@@ -255,7 +256,8 @@ export async function executeOrchestration(
         width: plan.rootFrame.width,
         height: initialHeight,
         layout: plan.rootFrame.layout ?? 'vertical',
-        gap: plan.rootFrame.gap ?? 0,
+        gap: isMobile ? (plan.rootFrame.gap || 16) : (plan.rootFrame.gap ?? 16),
+        ...(plan.rootFrame.padding != null ? { padding: plan.rootFrame.padding } : {}),
         fill: defaultFill,
         children: [],
       }

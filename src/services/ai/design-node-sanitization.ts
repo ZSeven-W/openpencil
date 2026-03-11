@@ -69,11 +69,25 @@ export function hasActiveLayout(node: PenNode): boolean {
   return node.layout === 'vertical' || node.layout === 'horizontal'
 }
 
+/**
+ * Check if a node is a badge/overlay that should use absolute positioning
+ * instead of participating in the parent's layout flow.
+ */
+export function isBadgeOverlayNode(node: PenNode): boolean {
+  if ('role' in node) {
+    const role = (node as { role?: string }).role
+    if (role === 'badge' || role === 'pill' || role === 'tag') return true
+  }
+  const name = (node.name ?? '').toLowerCase()
+  return /badge|indicator|notification[-_\s]?dot|overlay|floating/i.test(name)
+}
+
 export function sanitizeLayoutChildPositions(
   node: PenNode,
   parentHasLayout: boolean,
 ): void {
-  if (parentHasLayout) {
+  // Badge/overlay nodes retain their x/y for absolute positioning
+  if (parentHasLayout && !isBadgeOverlayNode(node)) {
     if ('x' in node) delete (node as { x?: number }).x
     if ('y' in node) delete (node as { y?: number }).y
   }
