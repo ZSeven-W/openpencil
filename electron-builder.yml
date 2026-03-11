@@ -35,7 +35,6 @@ dmg:
 win:
   icon: build/icon.ico
   artifactName: "${productName}-${version}-${arch}-win.${ext}"
-  publisherName: "OpenPencil"
   target:
     - nsis
     - portable
