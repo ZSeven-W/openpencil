@@ -1,10 +1,11 @@
 import { useState, useRef, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
-import { X } from 'lucide-react'
+import { X, Loader2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { useCanvasStore } from '@/stores/canvas-store'
-import { exportToPNG, exportToSVG } from '@/utils/export'
+import { useDocumentStore } from '@/stores/document-store'
+import { exportToPNG, exportToSVG, exportCarouselPDF, exportCarouselImages } from '@/utils/export'
 
 interface ExportDialogProps {
   open: boolean
@@ -13,13 +14,16 @@ interface ExportDialogProps {
 
 export default function ExportDialog({ open, onClose }: ExportDialogProps) {
   const { t } = useTranslation()
-  const [format, setFormat] = useState<'png' | 'svg'>('png')
+  const [format, setFormat] = useState<'png' | 'svg' | 'pdf-carousel' | 'img-carousel'>('png')
   const [scale, setScale] = useState(2)
   const [selectedOnly, setSelectedOnly] = useState(false)
+  const [exporting, setExporting] = useState(false)
   const fabricCanvas = useCanvasStore((s) => s.fabricCanvas)
   const hasSelection = useCanvasStore(
     (s) => s.selection.selectedIds.length > 0,
   )
+  const pages = useDocumentStore((s) => s.document.pages)
+  const hasMultiplePages = (pages?.length ?? 0) > 1
   const dialogRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -33,8 +37,37 @@ export default function ExportDialog({ open, onClose }: ExportDialogProps) {
 
   if (!open) return null
 
-  const handleExport = () => {
+  const handleExport = async () => {
     if (!fabricCanvas) return
+
+    if (format === 'pdf-carousel' || format === 'img-carousel') {
+      if (!pages || pages.length === 0) return
+      setExporting(true)
+      const setActivePageId = useCanvasStore.getState().setActivePageId
+      const activeFormat = useCanvasStore.getState().activeFormat
+      const w = activeFormat?.width ?? 1080
+      const h = activeFormat?.height ?? 1350
+
+      try {
+        if (format === 'pdf-carousel') {
+          await exportCarouselPDF(fabricCanvas, pages, setActivePageId, {
+            multiplier: scale,
+            width: w,
+            height: h,
+          })
+        } else {
+          await exportCarouselImages(fabricCanvas, pages, setActivePageId, {
+            multiplier: scale,
+            format: 'png',
+          })
+        }
+      } finally {
+        setExporting(false)
+      }
+      onClose()
+      return
+    }
+
     if (format === 'png') {
       exportToPNG(fabricCanvas, {
         multiplier: scale,
@@ -80,10 +113,32 @@ export default function ExportDialog({ open, onClose }: ExportDialogProps) {
               </button>
             ))}
           </div>
+          {hasMultiplePages && (
+            <div className="flex gap-2 mt-2">
+              {([
+                ['pdf-carousel', 'PDF Carousel'] as const,
+                ['img-carousel', 'Image Seq'] as const,
+              ]).map(([f, label]) => (
+                <button
+                  key={f}
+                  type="button"
+                  onClick={() => setFormat(f)}
+                  className={cn(
+                    'flex-1 text-xs py-1.5 rounded transition-colors',
+                    format === f
+                      ? 'bg-primary text-primary-foreground'
+                      : 'bg-secondary text-secondary-foreground hover:bg-secondary/80',
+                  )}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
 
-        {/* Scale (PNG only) */}
-        {format === 'png' && (
+        {/* Scale (raster formats) */}
+        {format !== 'svg' && (
           <div className="mb-3">
             <label className="text-xs text-muted-foreground block mb-1">{t('export.scale')}</label>
             <div className="flex gap-2">
@@ -122,11 +177,22 @@ export default function ExportDialog({ open, onClose }: ExportDialogProps) {
         {/* Export button */}
         <Button
           onClick={handleExport}
-          disabled={!fabricCanvas}
+          disabled={!fabricCanvas || exporting}
           className="w-full"
           size="sm"
         >
-          {t('export.exportFormat', { format: format.toUpperCase() })}
+          {exporting ? (
+            <>
+              <Loader2 size={14} className="mr-1 animate-spin" />
+              Exporting...
+            </>
+          ) : (
+            format === 'pdf-carousel'
+              ? 'Export PDF Carousel'
+              : format === 'img-carousel'
+                ? 'Export Image Sequence'
+                : t('export.exportFormat', { format: format.toUpperCase() })
+          )}
         </Button>
       </div>
     </div>

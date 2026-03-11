@@ -1,5 +1,6 @@
 import type { Canvas } from 'fabric'
 import type { FabricObjectWithPenId } from '@/canvas/canvas-object-factory'
+import type { PenPage } from '@/types/pen'
 
 function downloadFile(url: string, filename: string) {
   const link = document.createElement('a')
@@ -145,4 +146,104 @@ export function exportToSVG(canvas: Canvas, options?: SVGExportOptions) {
   const svg = canvas.toSVG()
   const blob = new Blob([svg], { type: 'image/svg+xml' })
   downloadFile(URL.createObjectURL(blob), filename)
+}
+
+// ── Carousel Export ──────────────────────────────────────────────────
+
+export interface CarouselExportOptions {
+  format?: RasterFormat
+  multiplier?: number
+  filename?: string
+  width?: number
+  height?: number
+}
+
+/**
+ * Capture each page of the document as a raster image by switching
+ * the active page, waiting for canvas re-render, and snapshotting.
+ */
+export async function capturePageImages(
+  canvas: Canvas,
+  pages: PenPage[],
+  setActivePageId: (id: string) => void,
+  options?: CarouselExportOptions,
+): Promise<string[]> {
+  const multiplier = options?.multiplier ?? 2
+  const format = options?.format ?? 'png'
+  const quality = format === 'png' ? 1 : 0.92
+  const images: string[] = []
+
+  for (const page of pages) {
+    setActivePageId(page.id)
+    // Allow canvas sync to process the page switch
+    await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)))
+    canvas.renderAll()
+
+    const dataURL = canvas.toDataURL({
+      format,
+      multiplier,
+      quality,
+    } as Parameters<Canvas['toDataURL']>[0])
+    images.push(dataURL)
+  }
+
+  return images
+}
+
+/**
+ * Export a multi-page document as a PDF carousel (LinkedIn native format).
+ * Each page becomes a PDF page.
+ */
+export async function exportCarouselPDF(
+  canvas: Canvas,
+  pages: PenPage[],
+  setActivePageId: (id: string) => void,
+  options?: CarouselExportOptions,
+): Promise<void> {
+  const { jsPDF } = await import('jspdf')
+  const filename = options?.filename ?? 'carousel.pdf'
+  const width = options?.width ?? 1080
+  const height = options?.height ?? 1350
+
+  const images = await capturePageImages(canvas, pages, setActivePageId, {
+    ...options,
+    format: 'png',
+  })
+
+  const pdf = new jsPDF({
+    orientation: height > width ? 'portrait' : 'landscape',
+    unit: 'px',
+    format: [width, height],
+  })
+
+  for (let i = 0; i < images.length; i++) {
+    if (i > 0) pdf.addPage([width, height])
+    pdf.addImage(images[i], 'PNG', 0, 0, width, height)
+  }
+
+  pdf.save(filename)
+}
+
+/**
+ * Export a multi-page document as sequential images bundled in a zip.
+ */
+export async function exportCarouselImages(
+  canvas: Canvas,
+  pages: PenPage[],
+  setActivePageId: (id: string) => void,
+  options?: CarouselExportOptions,
+): Promise<void> {
+  const format = options?.format ?? 'png'
+  const filename = options?.filename ?? `carousel-${format}`
+
+  const images = await capturePageImages(canvas, pages, setActivePageId, options)
+
+  // Convert data URLs to blobs and trigger individual downloads
+  for (let i = 0; i < images.length; i++) {
+    const res = await fetch(images[i])
+    const blob = await res.blob()
+    const url = URL.createObjectURL(blob)
+    downloadFile(url, `${filename}-${String(i + 1).padStart(2, '0')}.${format === 'jpeg' ? 'jpg' : format}`)
+    URL.revokeObjectURL(url)
+  }
 }
