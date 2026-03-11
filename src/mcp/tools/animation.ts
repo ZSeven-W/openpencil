@@ -33,13 +33,16 @@ export interface ListEffectsParams {
 }
 
 export function handleListEffects(params: ListEffectsParams) {
-  if (params.category && !isValidEffectCategory(params.category)) {
-    return { effects: [] }
-  }
+  let effects: ReturnType<typeof getAllEffects>
 
-  const effects = params.category
-    ? getEffectsByCategory(params.category)
-    : getAllEffects()
+  if (params.category) {
+    if (!isValidEffectCategory(params.category)) {
+      return { effects: [] }
+    }
+    effects = getEffectsByCategory(params.category)
+  } else {
+    effects = getAllEffects()
+  }
 
   return {
     effects: effects.map((e) => ({
