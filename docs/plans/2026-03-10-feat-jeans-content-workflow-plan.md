@@ -314,7 +314,7 @@ function instantiateTemplate(templateId: string) {
 
 - [x] `FormatPreset` type + `contentType` on `KitComponent` (`src/types/uikit.ts`)
 - [x] 5 templates as PenNode trees with `$variable` refs (`src/vibekit/content-templates.ts`)
-- [ ] Template picker (wraps `component-browser-panel` pattern) (`src/components/panels/template-picker-panel.tsx`)
+- [x] Template picker (wraps `component-browser-panel` pattern) (`src/components/panels/template-picker-panel.tsx`)
 - [x] Format presets for LinkedIn (`src/vibekit/format-presets.ts`)
 - [x] Template instantiation (`src/vibekit/template-instantiation.ts`)
 - [x] Tests (`src/vibekit/content-templates.test.ts`)
@@ -377,7 +377,7 @@ Toolbar dropdown using existing shadcn/ui `Select` component.
 - [x] `activeFormat` + `setActiveFormat` on canvas store (`src/stores/canvas-store.ts`)
 - [x] `switchFormat()` with proportional scaling (`src/vibekit/format-switch.ts`)
 - [ ] `reflowKeyframes()` on timeline store (`src/stores/timeline-store.ts`)
-- [ ] Format switcher UI (`src/components/editor/format-switcher.tsx`)
+- [x] Format switcher UI (`src/components/editor/format-switcher.tsx`)
 - [x] Tests (`src/vibekit/format-switch.test.ts`)
 
 ---
@@ -434,11 +434,11 @@ Shows: color palette grid, typography samples, spacing scale. Uses existing `Col
 
 #### Phase 4 Deliverables
 
-- [ ] Nitro endpoint (`server/api/vibekit/extract.ts`)
-- [ ] Token extraction heuristics (`server/utils/token-extractor.ts`)
-- [ ] Extraction preview modal (follows `figma-import-dialog` pattern) (`src/components/shared/extraction-preview.tsx`)
-- [ ] Bundled token presets as offline fallback (`server/utils/token-presets.ts`)
-- [ ] Tests (`server/utils/token-extractor.test.ts`)
+- [x] Nitro endpoint (`server/api/vibekit/extract.ts`)
+- [x] Token extraction heuristics (`server/utils/token-extractor.ts`)
+- [x] Extraction preview modal (follows `figma-import-dialog` pattern) (`src/components/shared/extraction-preview.tsx`)
+- [x] Bundled token presets as offline fallback (`server/utils/token-presets.ts`)
+- [x] Tests (`server/utils/token-extractor.test.ts`)
 
 ---
 
@@ -504,9 +504,9 @@ Triggered when `vibekit-store.activeKitId === null` on editor mount.
 
 #### Phase 6 Deliverables
 
-- [ ] Onboarding modal (`src/components/shared/onboarding-modal.tsx`)
-- [ ] 5-10 starter kits as data (`src/vibekit/starter-kits.ts`)
-- [ ] First-run detection in editor layout (`src/components/editor/editor-layout.tsx`)
+- [x] Onboarding modal (`src/components/shared/onboarding-modal.tsx`)
+- [x] 5-10 starter kits as data (`src/vibekit/starter-kits.ts`)
+- [x] First-run detection in editor layout (`src/components/editor/editor-layout.tsx`)
 
 ---
 
@@ -637,8 +637,8 @@ Add Vibe Kit toggle button following existing `variablesPanelOpen` pattern.
 
 #### Phase 8 Deliverables
 
-- [ ] Vibe Kit panel wrapper with category grouping (`src/components/panels/vibekit-panel.tsx`)
-- [ ] Toolbar toggle (`src/components/editor/toolbar.tsx`)
+- [x] Vibe Kit panel wrapper with category grouping (`src/components/panels/vibekit-panel.tsx`)
+- [x] Toolbar toggle (`src/components/editor/toolbar.tsx`)
 
 ---
 
