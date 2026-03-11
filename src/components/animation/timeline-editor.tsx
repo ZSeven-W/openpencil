@@ -1,4 +1,4 @@
-import { useRef, useMemo, useCallback, useEffect } from 'react'
+import { useRef, useMemo, useCallback, useEffect, useState } from 'react'
 import { Timeline } from '@cyca/react-timeline-editor'
 import type {
   TimelineRow,
@@ -30,6 +30,10 @@ import { useCanvasStore } from '@/stores/canvas-store'
 import { isCursorUpdateRecent } from '@/animation/canvas-bridge'
 import { setTimelineRef } from '@/animation/playback-loop'
 import { withTimelineUndoBatch } from '@/animation/timeline-undo'
+import PhaseActionRenderer from './phase-action-renderer'
+import VideoClipRenderer from './video-clip-renderer'
+import TrackHeaders from './track-headers'
+import type { OnScrollParams } from '@cyca/react-timeline-editor'
 
 // ---------------------------------------------------------------------------
 // Effects registry (no engine callbacks — we bypass the library's engine)
@@ -92,6 +96,9 @@ export default function TimelineEditor() {
   const tracks = useTimelineStore((s) => s.tracks)
   const duration_ms = useTimelineStore((s) => s.duration)
   const videoClipIds = useTimelineStore((s) => s.videoClipIds)
+
+  // Scroll sync for track headers
+  const [scrollTop, setScrollTop] = useState(0)
 
   // Mutable ref layer for drag operations
   const isDragging = useRef(false)
@@ -197,30 +204,77 @@ export default function TimelineEditor() {
     [],
   )
 
+  // --- Custom rendering ---
+
+  const getActionRender = useCallback(
+    (action: TimelineAction, _row: TimelineRow) => {
+      const meta = metadataRef.current.get(action.id)
+      if (!meta) return null
+
+      if (meta.type === 'animation-phase') {
+        return (
+          <PhaseActionRenderer
+            nodeId={meta.nodeId}
+            phase={meta.phase}
+            actionStart_s={action.start}
+            actionEnd_s={action.end}
+          />
+        )
+      }
+
+      if (meta.type === 'video-clip') {
+        const node = videoNodes.find((n) => n.id === meta.nodeId)
+        return (
+          <VideoClipRenderer
+            name={node?.name ?? 'Video'}
+            duration_s={action.end - action.start}
+          />
+        )
+      }
+
+      return null
+    },
+    [videoNodes],
+  )
+
+  // --- Scroll sync ---
+
+  const onScroll = useCallback((params: OnScrollParams) => {
+    setScrollTop(params.scrollTop)
+  }, [])
+
+  // Row IDs for track headers
+  const rowIds = useMemo(() => displayRows.map((r) => r.id), [displayRows])
+
   return (
-    <div className="timeline-editor-wrapper">
-      <Timeline
-        ref={timelineRef}
-        editorData={displayRows}
-        effects={effects}
-        autoReRender={false}
-        scale={1}
-        scaleWidth={160}
-        startLeft={20}
-        rowHeight={32}
-        gridSnap={false}
-        dragLine
-        style={{ width: '100%', height: '100%' }}
-        onActionMoveStart={onActionMoveStart}
-        onActionMoving={onActionMoving}
-        onActionMoveEnd={onActionMoveEnd}
-        onActionResizeStart={onActionResizeStart}
-        onActionResizing={onActionResizing}
-        onActionResizeEnd={onActionResizeEnd}
-        onCursorDrag={onCursorDrag}
-        onClickTimeArea={onClickTimeArea}
-        onClickRow={onClickRow}
-      />
+    <div className="timeline-editor-wrapper" style={{ display: 'flex' }}>
+      <TrackHeaders rowIds={rowIds} rowHeight={32} scrollTop={scrollTop} />
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <Timeline
+          ref={timelineRef}
+          editorData={displayRows}
+          effects={effects}
+          autoReRender={false}
+          scale={1}
+          scaleWidth={160}
+          startLeft={20}
+          rowHeight={32}
+          gridSnap={false}
+          dragLine
+          style={{ width: '100%', height: '100%' }}
+          getActionRender={getActionRender}
+          onScroll={onScroll}
+          onActionMoveStart={onActionMoveStart}
+          onActionMoving={onActionMoving}
+          onActionMoveEnd={onActionMoveEnd}
+          onActionResizeStart={onActionResizeStart}
+          onActionResizing={onActionResizing}
+          onActionResizeEnd={onActionResizeEnd}
+          onCursorDrag={onCursorDrag}
+          onClickTimeArea={onClickTimeArea}
+          onClickRow={onClickRow}
+        />
+      </div>
     </div>
   )
 }
