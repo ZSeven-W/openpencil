@@ -39,7 +39,7 @@ import {
 import { createNodeForTool, isDrawingTool, toScene } from './canvas-node-creator'
 import { handleObjectModified } from './canvas-object-modified'
 import { isPlaybackActive } from '@/animation/canvas-bridge'
-import { pause as pausePlayback, isPlaying } from '@/animation/playback-loop'
+import { getPlaybackController } from '@/animation/use-playback-controller'
 
 export function useCanvasEvents() {
   useEffect(() => {
@@ -370,8 +370,8 @@ export function useCanvasEvents() {
         if (useAIStore.getState().isStreaming) return
 
         // Pause animation playback on canvas click
-        if (isPlaying()) {
-          pausePlayback(canvas)
+        if (isPlaybackActive()) {
+          getPlaybackController()?.pause()
           return
         }
 

@@ -119,34 +119,34 @@ if (now - lastNotifyTime > NOTIFY_INTERVAL) {
 Replace all v1 playback-loop imports in UI components.
 
 **`src/components/animation/playback-controls.tsx`**
-- [ ] Replace `import { play, pause, stop, isPlaying } from playback-loop` with `usePlaybackController()` hook
-- [ ] `handlePlay` calls `controller.play()`
-- [ ] `handlePause` calls `controller.pause()`
-- [ ] `handleStop` calls `controller.stop()`
-- [ ] Time display uses `usePlaybackTime()` instead of reading from timeline-store
+- [x] Replace `import { play, pause, stop, isPlaying } from playback-loop` with `usePlaybackController()` hook
+- [x] `handlePlay` calls `controller.play()`
+- [x] `handlePause` calls `controller.pause()`
+- [x] `handleStop` calls `controller.stop()`
+- [x] Time display uses `usePlaybackTime()` instead of reading from timeline-store
 
 **`src/components/animation/timeline-editor.tsx`**
-- [ ] Remove `toTimelineRows(tracks, videoNodes, ...)` call (v1)
-- [ ] Use `buildTimelineRowsFromNodes(pageChildren)` as sole row data source
-- [ ] Remove `tracks` and `videoClipIds` subscriptions from timeline-store
-- [ ] Remove `setTimelineRef(...)` from playback-loop (v1 cursor sync)
-- [ ] Remove `consumeCursorGuard()` — replace cursor sync with v2 controller's `getSnapshot().timeMs`
-- [ ] Remove `EFFECT_ANIMATION_PHASE` usage and phase rendering paths
-- [ ] Remove `PhaseActionRenderer` usage — DELETE `src/components/animation/phase-action-renderer.tsx`
-- [ ] Scrub/seek: `onCursorDrag` calls `controller.seekTo(timeMs)` + `seekVideoClipsV2()`
-- [ ] Remove v1 row merging logic (lines ~156-181)
+- [x] Remove `toTimelineRows(tracks, videoNodes, ...)` call (v1)
+- [x] Use `buildTimelineRowsFromNodes(pageChildren)` as sole row data source
+- [x] Remove `tracks` and `videoClipIds` subscriptions from timeline-store
+- [x] Remove `setTimelineRef(...)` from playback-loop (v1 cursor sync)
+- [x] Remove `consumeCursorGuard()` — replace cursor sync with v2 controller's `getSnapshot().timeMs`
+- [x] Remove `EFFECT_ANIMATION_PHASE` usage and phase rendering paths
+- [x] Remove `PhaseActionRenderer` usage — DELETE `src/components/animation/phase-action-renderer.tsx`
+- [x] Scrub/seek: `onCursorDrag` calls `controller.seekTo(timeMs)` + `seekVideoClipsV2()`
+- [x] Remove v1 row merging logic (lines ~156-181)
 
 **`src/canvas/use-canvas-events.ts`**
-- [ ] Replace `import { pause as pausePlayback, isPlaying } from playback-loop`
-- [ ] Use `isPlaybackActive()` from canvas-bridge (already uses coordinator) for guard
-- [ ] Pause via `playbackControllerRef.pause()` or import from use-playback-controller
+- [x] Replace `import { pause as pausePlayback, isPlaying } from playback-loop`
+- [x] Use `isPlaybackActive()` from canvas-bridge (already uses coordinator) for guard
+- [x] Pause via `playbackControllerRef.pause()` or import from use-playback-controller
 
 **`src/components/animation/preset-panel.tsx`**
-- [ ] Remove `captureCurrentState` import (v1) — keep `captureNodeState` (v2)
-- [ ] Remove `applyPreset` action and v1 preset buttons/easing/direction UI
-- [ ] Remove `tracks` subscription from timeline-store
-- [ ] Keep v2 effects section (effect registry, generateClipFromEffect)
-- [ ] Keep clips summary and video clip controls
+- [x] Remove `captureCurrentState` import (v1) — keep `captureNodeState` (v2)
+- [x] Remove `applyPreset` action and v1 preset buttons/easing/direction UI
+- [x] Remove `tracks` subscription from timeline-store
+- [x] Keep v2 effects section (effect registry, generateClipFromEffect)
+- [x] Keep clips summary and video clip controls
 
 **Success criteria:** Timeline Play/Pause/Seek drives v2 engine. Animation clips animate on canvas. Video clips play and seek.
 

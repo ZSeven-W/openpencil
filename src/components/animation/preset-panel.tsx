@@ -1,78 +1,25 @@
-import { useState } from 'react'
 import { nanoid } from 'nanoid'
 import { Button } from '@/components/ui/button'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
 import { Separator } from '@/components/ui/separator'
 import SectionHeader from '@/components/shared/section-header'
 import { useTimelineStore } from '@/stores/timeline-store'
 import { useCanvasStore } from '@/stores/canvas-store'
 import { useDocumentStore } from '@/stores/document-store'
-import { captureCurrentState, captureNodeState, findFabricObject } from '@/animation/canvas-bridge'
+import { captureNodeState, findFabricObject } from '@/animation/canvas-bridge'
 import { getEffectsByCategory, generateClipFromEffect } from '@/animation/effect-registry'
 import '@/animation/effects' // ensure effects are registered
-import { cn } from '@/lib/utils'
-import type {
-  AnimationPresetName,
-  AnimationClipData,
-  EasingPreset,
-  SlideDirection,
-} from '@/types/animation'
+import type { AnimationClipData } from '@/types/animation'
 import type { PenNode, VideoNode } from '@/types/pen'
 import NumberInput from '@/components/shared/number-input'
 
-const presetOptions: { value: AnimationPresetName; label: string }[] = [
-  { value: 'fade', label: 'Fade' },
-  { value: 'slide', label: 'Slide' },
-  { value: 'scale', label: 'Scale' },
-  { value: 'bounce', label: 'Bounce' },
-]
-
-const easingOptions: { value: EasingPreset; label: string }[] = [
-  { value: 'smooth', label: 'Smooth' },
-  { value: 'snappy', label: 'Snappy' },
-  { value: 'bouncy', label: 'Bouncy' },
-  { value: 'gentle', label: 'Gentle' },
-  { value: 'linear', label: 'Linear' },
-]
-
-const directionOptions: { value: SlideDirection; label: string }[] = [
-  { value: 'left', label: 'Left' },
-  { value: 'right', label: 'Right' },
-  { value: 'top', label: 'Top' },
-  { value: 'bottom', label: 'Bottom' },
-]
-
 export default function PresetPanel() {
-  const [easing, setEasing] = useState<EasingPreset>('smooth')
-  const [direction, setDirection] = useState<SlideDirection>('left')
   const selectedId = useCanvasStore((s) => s.selection.activeId)
   const canvas = useCanvasStore((s) => s.fabricCanvas)
-  const applyPreset = useTimelineStore((s) => s.applyPreset)
-  const tracks = useTimelineStore((s) => s.tracks)
   const duration = useTimelineStore((s) => s.duration)
   const getNodeById = useDocumentStore((s) => s.getNodeById)
-
-  const handleApply = (presetName: AnimationPresetName) => {
-    if (!selectedId || !canvas) return
-
-    const nodeState = captureCurrentState(canvas, selectedId)
-    if (!nodeState) return
-
-    applyPreset(selectedId, presetName, nodeState, {
-      direction,
-      easing,
-    })
-  }
+  const updateNode = useDocumentStore((s) => s.updateNode)
 
   const selectedNode = selectedId ? getNodeById(selectedId) : undefined
-  const selectedTrack = selectedId ? tracks[selectedId] : undefined
-  const updateNode = useDocumentStore((s) => s.updateNode)
   const isVideo = selectedNode?.type === 'video'
   const videoNode = isVideo ? (selectedNode as VideoNode) : null
 
@@ -102,7 +49,7 @@ export default function PresetPanel() {
 
   return (
     <>
-      {/* Layer name header — matches property panel pattern */}
+      {/* Layer name header */}
       <div className="h-8 flex items-center px-2 border-b border-border gap-1 shrink-0">
         <span className="text-[11px] font-medium text-foreground flex-1 truncate px-1">
           {selectedNode ? (selectedNode.name ?? selectedNode.type) : 'No selection'}
@@ -168,78 +115,6 @@ export default function PresetPanel() {
           </>
         )}
 
-        {/* Presets section */}
-        <div className="px-3 py-2 space-y-1.5">
-          <SectionHeader title="Presets" />
-          {selectedId ? (
-            <div className="grid grid-cols-2 gap-1">
-              {presetOptions.map((preset) => (
-                <Button
-                  key={preset.value}
-                  variant="outline"
-                  size="sm"
-                  className={cn(
-                    'h-7 text-[11px]',
-                    selectedTrack && selectedTrack.keyframes.length > 0
-                      ? ''
-                      : '',
-                  )}
-                  onClick={() => handleApply(preset.value)}
-                >
-                  {preset.label}
-                </Button>
-              ))}
-            </div>
-          ) : (
-            <p className="text-[11px] text-muted-foreground">
-              Select a layer to apply a preset
-            </p>
-          )}
-        </div>
-
-        <Separator />
-
-        {/* Easing section */}
-        <div className="px-3 py-2 space-y-1.5">
-          <SectionHeader title="Easing" />
-          <Select value={easing} onValueChange={(v) => setEasing(v as EasingPreset)}>
-            <SelectTrigger className="h-7 text-[11px] w-full">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {easingOptions.map((opt) => (
-                <SelectItem key={opt.value} value={opt.value} className="text-[11px]">
-                  {opt.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-
-        <Separator />
-
-        {/* Direction section */}
-        <div className="px-3 py-2 space-y-1.5">
-          <SectionHeader title="Direction" />
-          <Select
-            value={direction}
-            onValueChange={(v) => setDirection(v as SlideDirection)}
-          >
-            <SelectTrigger className="h-7 text-[11px] w-full">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {directionOptions.map((opt) => (
-                <SelectItem key={opt.value} value={opt.value} className="text-[11px]">
-                  {opt.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-
-        <Separator />
-
         {/* Duration section */}
         <div className="px-3 py-2 space-y-1.5">
           <SectionHeader title="Duration" />
@@ -256,7 +131,7 @@ export default function PresetPanel() {
           <>
             <Separator />
             <div className="px-3 py-2 space-y-1.5">
-              <SectionHeader title="Effects (v2)" />
+              <SectionHeader title="Effects" />
               {effectCategories.map((category) => {
                 const effects = getEffectsByCategory(category)
                 if (effects.length === 0) return null
@@ -285,7 +160,7 @@ export default function PresetPanel() {
           </>
         )}
 
-        {/* v2: Node clips summary */}
+        {/* Node clips summary */}
         {selectedNode?.clips && selectedNode.clips.length > 0 && (
           <>
             <Separator />
@@ -302,52 +177,6 @@ export default function PresetPanel() {
                     </span>
                   </div>
                 ))}
-              </div>
-            </div>
-          </>
-        )}
-
-        {selectedTrack && (
-          <>
-            <Separator />
-
-            {/* Track info section */}
-            <div className="px-3 py-2 space-y-1.5">
-              <SectionHeader title="Phases" />
-              <div className="space-y-1">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-1.5">
-                    <span className="w-2 h-2 rounded-full bg-emerald-500" />
-                    <span className="text-[11px] text-muted-foreground">In</span>
-                  </div>
-                  <span className="text-[11px] text-foreground tabular-nums">
-                    {(selectedTrack.phases.in.duration / 1000).toFixed(2)}s
-                  </span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-1.5">
-                    <span className="w-2 h-2 rounded-full bg-blue-500" />
-                    <span className="text-[11px] text-muted-foreground">While</span>
-                  </div>
-                  <span className="text-[11px] text-foreground tabular-nums">
-                    {(selectedTrack.phases.while.duration / 1000).toFixed(2)}s
-                  </span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-1.5">
-                    <span className="w-2 h-2 rounded-full bg-red-500" />
-                    <span className="text-[11px] text-muted-foreground">Out</span>
-                  </div>
-                  <span className="text-[11px] text-foreground tabular-nums">
-                    {(selectedTrack.phases.out.duration / 1000).toFixed(2)}s
-                  </span>
-                </div>
-              </div>
-              <div className="flex items-center justify-between pt-0.5">
-                <span className="text-[11px] text-muted-foreground">Keyframes</span>
-                <span className="text-[11px] text-foreground tabular-nums">
-                  {selectedTrack.keyframes.length}
-                </span>
               </div>
             </div>
           </>

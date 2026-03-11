@@ -12,7 +12,6 @@ import './timeline-editor.css'
 import { useTimelineStore } from '@/stores/timeline-store'
 import { useDocumentStore } from '@/stores/document-store'
 import {
-  toTimelineRows,
   buildTimelineRowsFromNodes,
   applyActionMove,
   applyActionResize,
@@ -21,20 +20,17 @@ import {
 } from '@/animation/timeline-adapter'
 import {
   secToMs,
-  EFFECT_ANIMATION_PHASE,
   EFFECT_VIDEO_CLIP,
   EFFECT_ANIMATION_CLIP,
   type ActionMetadataMap,
-  type TimelineStores,
-  type VideoNodeProjection,
 } from '@/animation/timeline-adapter-types'
-import type { PenNode, VideoNode } from '@/types/pen'
+import type { PenNode } from '@/types/pen'
 import { useCanvasStore } from '@/stores/canvas-store'
 import { getActivePageChildren } from '@/stores/document-store'
-import { consumeCursorGuard } from '@/animation/canvas-bridge'
-import { setTimelineRef } from '@/animation/playback-loop'
+import { seekToV2 } from '@/animation/use-playback-controller'
+import { seekVideoClipsV2 } from '@/animation/video-sync'
+import { buildAnimationIndex } from '@/animation/animation-index'
 import { withTimelineUndoBatch } from '@/animation/timeline-undo'
-import PhaseActionRenderer from './phase-action-renderer'
 import VideoClipRenderer from './video-clip-renderer'
 import TrackHeaders from './track-headers'
 import type { OnScrollParams } from '@cyca/react-timeline-editor'
@@ -44,50 +40,27 @@ import type { OnScrollParams } from '@cyca/react-timeline-editor'
 // ---------------------------------------------------------------------------
 
 const effects: Record<string, TimelineEffect> = {
-  [EFFECT_ANIMATION_PHASE]: { id: EFFECT_ANIMATION_PHASE, name: 'Animation Phase' },
   [EFFECT_VIDEO_CLIP]: { id: EFFECT_VIDEO_CLIP, name: 'Video Clip' },
   [EFFECT_ANIMATION_CLIP]: { id: EFFECT_ANIMATION_CLIP, name: 'Animation Clip' },
 }
 
 // ---------------------------------------------------------------------------
-// Store bridge (creates TimelineStores interface from real Zustand stores)
+// Store bridge for timeline adapter
 // ---------------------------------------------------------------------------
 
-function getStores(): TimelineStores {
+function getStores(): import('@/animation/timeline-adapter-types').TimelineStores {
   return {
-    getTimelineState: () => {
-      const s = useTimelineStore.getState()
-      return { tracks: s.tracks, duration: s.duration, videoClipIds: s.videoClipIds }
-    },
-    updateKeyframe: (...args) => useTimelineStore.getState().updateKeyframe(...args),
+    getTimelineState: () => ({
+      tracks: {},
+      duration: useTimelineStore.getState().duration,
+      videoClipIds: [],
+    }),
+    updateKeyframe: () => {},
     getDocumentState: () => ({
       getNodeById: useDocumentStore.getState().getNodeById,
     }),
-    updateNode: (...args) => useDocumentStore.getState().updateNode(...args),
+    updateNode: (id, partial) => useDocumentStore.getState().updateNode(id, partial),
   }
-}
-
-// ---------------------------------------------------------------------------
-// Video node projection helper
-// ---------------------------------------------------------------------------
-
-function getVideoNodeProjections(videoClipIds: string[]): VideoNodeProjection[] {
-  const { getNodeById } = useDocumentStore.getState()
-  const projections: VideoNodeProjection[] = []
-  for (const id of videoClipIds) {
-    const node = getNodeById(id) as (PenNode & VideoNode) | undefined
-    if (node?.type === 'video') {
-      projections.push({
-        id: node.id,
-        name: node.name,
-        inPoint: node.inPoint,
-        outPoint: node.outPoint,
-        timelineOffset: node.timelineOffset,
-        videoDuration: node.videoDuration,
-      })
-    }
-  }
-  return projections
 }
 
 // ---------------------------------------------------------------------------
@@ -97,10 +70,7 @@ function getVideoNodeProjections(videoClipIds: string[]): VideoNodeProjection[] 
 export default function TimelineEditor() {
   const timelineRef = useRef<TimelineState>(null)
 
-  // Subscribe to structural data only (not currentTime)
-  const tracks = useTimelineStore((s) => s.tracks)
   const duration_ms = useTimelineStore((s) => s.duration)
-  const videoClipIds = useTimelineStore((s) => s.videoClipIds)
 
   // Scroll sync for track headers
   const [scrollTop, setScrollTop] = useState(0)
@@ -112,32 +82,11 @@ export default function TimelineEditor() {
   const frozenMetadataRef = useRef<ActionMetadataMap | null>(null)
   const computedRowsRef = useRef<TimelineRow[]>([])
 
-  // Subscribe to video node property changes (inPoint, outPoint, timelineOffset)
-  // so the timeline updates when video clips are trimmed or moved via other UI
-  const videoNodeVersion = useDocumentStore((s) => {
-    let hash = 0
-    for (const id of videoClipIds) {
-      const node = s.getNodeById(id)
-      if (node && node.type === 'video') {
-        const v = node as PenNode & VideoNode
-        hash = hash * 31 + (v.inPoint ?? 0) + (v.outPoint ?? 0) * 7 + (v.timelineOffset ?? 0) * 13
-      }
-    }
-    return hash
-  })
-
-  // Compute projection from stores
-  const videoNodes = useMemo(
-    () => getVideoNodeProjections(videoClipIds),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [videoClipIds, videoNodeVersion],
-  )
-
   // v2: Subscribe to nodes with clips for clip-based timeline rows
   const activePageId = useCanvasStore((s) => s.activePageId)
   const pageChildren = useDocumentStore((s) => getActivePageChildren(s.document, activePageId))
 
-  // v2 clip rows version — recompute when node clips change
+  // Recompute when node clips change
   const clipVersion = useMemo(() => {
     let hash = 0
     function walk(nodes: PenNode[]) {
@@ -154,32 +103,9 @@ export default function TimelineEditor() {
   }, [pageChildren])
 
   const { rows: computedRows, metadata } = useMemo(() => {
-    // v1 rows from tracks + video nodes
-    const v1 = toTimelineRows(tracks, videoNodes, duration_ms)
-
-    // v2 rows from node clips
-    const v2 = buildTimelineRowsFromNodes(pageChildren)
-
-    // Merge: v1 rows first, then v2 rows that don't duplicate
-    const existingRowIds = new Set(v1.rows.map((r) => r.id))
-    const mergedRows = [...v1.rows]
-    for (const row of v2.rows) {
-      if (!existingRowIds.has(row.id)) {
-        mergedRows.push(row)
-      }
-    }
-
-    // Merge metadata
-    const mergedMetadata: ActionMetadataMap = new Map(v1.metadata)
-    for (const [key, value] of v2.metadata) {
-      if (!mergedMetadata.has(key)) {
-        mergedMetadata.set(key, value)
-      }
-    }
-
-    return { rows: mergedRows, metadata: mergedMetadata }
+    return buildTimelineRowsFromNodes(pageChildren)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tracks, videoNodes, duration_ms, clipVersion])
+  }, [duration_ms, clipVersion])
 
   // Keep refs in sync (read from callbacks, not during render)
   metadataRef.current = metadata
@@ -188,13 +114,9 @@ export default function TimelineEditor() {
   // Use frozen rows during drag, computed rows otherwise
   const displayRows = isDragging.current ? (frozenRows.current ?? computedRows) : computedRows
 
-  // Wire timeline ref to playback loop for cursor sync
+  // Cleanup on unmount
   useEffect(() => {
-    if (timelineRef.current) {
-      setTimelineRef(timelineRef.current)
-    }
     return () => {
-      setTimelineRef(null)
       isDragging.current = false
       frozenRows.current = null
     }
@@ -251,13 +173,20 @@ export default function TimelineEditor() {
   // --- Cursor callbacks ---
 
   const onCursorDrag = useCallback((time_s: number) => {
-    // Skip if playback engine just set the cursor (prevents feedback loop)
-    if (consumeCursorGuard()) return
-    useTimelineStore.getState().setCurrentTime(secToMs(time_s))
+    const timeMs = secToMs(time_s)
+    seekToV2(timeMs)
+    // Also seek video clips for scrub preview
+    const index = buildAnimationIndex(getActivePageChildren(
+      useDocumentStore.getState().document,
+      useCanvasStore.getState().activePageId,
+    ))
+    const canvas = useCanvasStore.getState().fabricCanvas
+    if (canvas) seekVideoClipsV2(canvas, timeMs, index)
   }, [])
 
   const onClickTimeArea = useCallback((time_s: number) => {
-    useTimelineStore.getState().setCurrentTime(secToMs(time_s))
+    const timeMs = secToMs(time_s)
+    seekToV2(timeMs)
     return undefined
   }, [])
 
@@ -277,28 +206,15 @@ export default function TimelineEditor() {
       const meta = metadataRef.current.get(action.id)
       if (!meta) return null
 
-      if (meta.type === 'animation-phase') {
-        return (
-          <PhaseActionRenderer
-            nodeId={meta.nodeId}
-            phase={meta.phase}
-            actionStart_s={action.start}
-            actionEnd_s={action.end}
-          />
-        )
-      }
-
       if (meta.type === 'video-clip') {
-        const node = videoNodes.find((n) => n.id === meta.nodeId)
         return (
           <VideoClipRenderer
-            name={node?.name ?? 'Video'}
+            name={meta.nodeId}
             duration_s={action.end - action.start}
           />
         )
       }
 
-      // v2: Animation clip — simple colored bar for now
       if (meta.type === 'animation-clip') {
         return (
           <div
@@ -314,7 +230,7 @@ export default function TimelineEditor() {
 
       return null
     },
-    [videoNodes],
+    [],
   )
 
   // --- Scroll sync ---

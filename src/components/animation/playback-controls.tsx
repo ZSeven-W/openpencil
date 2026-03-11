@@ -6,8 +6,13 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip'
 import { useTimelineStore } from '@/stores/timeline-store'
-import { useCanvasStore } from '@/stores/canvas-store'
-import { play, pause, stop, isPlaying } from '@/animation/playback-loop'
+import {
+  playV2,
+  pauseV2,
+  stopV2,
+  usePlaybackTime,
+  usePlaybackPlaying,
+} from '@/animation/use-playback-controller'
 
 function formatTime(ms: number): string {
   const totalSeconds = Math.floor(ms / 1000)
@@ -18,25 +23,22 @@ function formatTime(ms: number): string {
 }
 
 export default function PlaybackControls() {
-  const currentTime = useTimelineStore((s) => s.currentTime)
+  const currentTime = usePlaybackTime()
   const duration = useTimelineStore((s) => s.duration)
-  const playbackMode = useTimelineStore((s) => s.playbackMode)
+  const isPlaying = usePlaybackPlaying()
   const loopEnabled = useTimelineStore((s) => s.loopEnabled)
   const toggleLoop = useTimelineStore((s) => s.toggleLoop)
-  const canvas = useCanvasStore((s) => s.fabricCanvas)
 
   const handlePlayPause = () => {
-    if (!canvas) return
-    if (isPlaying()) {
-      pause(canvas)
+    if (isPlaying) {
+      pauseV2()
     } else {
-      play(canvas)
+      playV2()
     }
   }
 
   const handleStop = () => {
-    if (!canvas) return
-    stop(canvas)
+    stopV2()
   }
 
   return (
@@ -49,7 +51,7 @@ export default function PlaybackControls() {
             className="h-7 w-7"
             onClick={handlePlayPause}
           >
-            {playbackMode === 'playing' ? (
+            {isPlaying ? (
               <Pause className="h-3.5 w-3.5" />
             ) : (
               <Play className="h-3.5 w-3.5" />
@@ -57,7 +59,7 @@ export default function PlaybackControls() {
           </Button>
         </TooltipTrigger>
         <TooltipContent>
-          {playbackMode === 'playing' ? 'Pause' : 'Play'}
+          {isPlaying ? 'Pause' : 'Play'}
         </TooltipContent>
       </Tooltip>
 
