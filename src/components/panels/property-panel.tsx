@@ -121,8 +121,9 @@ export default function PropertyPanel({ embedded }: { embedded?: boolean } = {})
     displayNode.type === 'frame' || displayNode.type === 'group' || displayNode.type === 'rectangle'
   const hasLayout = isContainer
   const isImage = displayNode.type === 'image'
-  const hasFill = displayNode.type !== 'line' && !isImage
-  const hasStroke = !isImage
+  const isVideo = displayNode.type === 'video'
+  const hasFill = displayNode.type !== 'line' && !isImage && !isVideo
+  const hasStroke = !isImage && !isVideo
   const hasCornerRadius =
     displayNode.type === 'rectangle' || displayNode.type === 'frame' || isImage
   const hasEffects = true

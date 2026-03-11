@@ -2,6 +2,7 @@ import { Separator } from '@/components/ui/separator'
 import PlaybackControls from './playback-controls'
 import ScrubBar from './scrub-bar'
 import TrackList from './track-list'
+import VideoClipTrack from './video-clip-track'
 
 export default function TimelinePanel() {
   return (
@@ -16,7 +17,10 @@ export default function TimelinePanel() {
 
       <Separator />
 
-      {/* Track list */}
+      {/* Video clips */}
+      <VideoClipTrack />
+
+      {/* Animation tracks */}
       <div style={{ maxHeight: '200px' }} className="overflow-y-auto">
         <TrackList />
       </div>

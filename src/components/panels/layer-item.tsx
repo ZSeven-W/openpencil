@@ -14,6 +14,7 @@ import {
   Spline,
   Link,
   ImageIcon,
+  Film,
   ChevronDown,
   ChevronRight,
   Diamond,
@@ -31,6 +32,7 @@ const TYPE_ICONS: Record<PenNodeType, typeof Square> = {
   polygon: Hexagon,
   path: Spline,
   image: ImageIcon,
+  video: Film,
   icon_font: Smile,
   ref: Link,
 }

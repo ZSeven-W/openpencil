@@ -25,6 +25,7 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip'
 import IconPickerDialog from '@/components/shared/icon-picker-dialog'
+import { useTimelineStore } from '@/stores/timeline-store'
 
 export default function Toolbar() {
   const { t } = useTranslation()
@@ -35,6 +36,7 @@ export default function Toolbar() {
   const browserOpen = useUIKitStore((s) => s.browserOpen)
   const toggleBrowser = useUIKitStore((s) => s.toggleBrowser)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const videoInputRef = useRef<HTMLInputElement>(null)
   const [iconPickerOpen, setIconPickerOpen] = useState(false)
 
   const handleIconSelect = useCallback((svgText: string, iconName: string) => {
@@ -165,6 +167,73 @@ export default function Toolbar() {
     }
   }, [])
 
+  const handleAddVideo = useCallback(() => {
+    videoInputRef.current?.click()
+  }, [])
+
+  const handleVideoSelected = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    e.target.value = ''
+
+    const blobUrl = URL.createObjectURL(file)
+
+    // Load video metadata to get dimensions and duration
+    const videoEl = document.createElement('video')
+    videoEl.preload = 'metadata'
+    videoEl.src = blobUrl
+
+    videoEl.addEventListener('loadedmetadata', () => {
+      const { viewport, fabricCanvas } = useCanvasStore.getState()
+      const canvasEl = fabricCanvas?.getElement()
+      const canvasW = canvasEl?.clientWidth ?? 800
+      const canvasH = canvasEl?.clientHeight ?? 600
+      const centerX = (-viewport.panX + canvasW / 2) / viewport.zoom
+      const centerY = (-viewport.panY + canvasH / 2) / viewport.zoom
+
+      let w = videoEl.videoWidth || 320
+      let h = videoEl.videoHeight || 180
+      const maxDim = 400
+      if (w > maxDim || h > maxDim) {
+        const scale = maxDim / Math.max(w, h)
+        w = Math.round(w * scale)
+        h = Math.round(h * scale)
+      }
+
+      const nodeId = generateId()
+      const videoDurationMs = Math.round(videoEl.duration * 1000)
+
+      useDocumentStore.getState().addNode(null, {
+        id: nodeId,
+        type: 'video',
+        name: file.name.replace(/\.[^.]+$/, ''),
+        src: blobUrl,
+        mimeType: file.type,
+        videoDuration: videoDurationMs,
+        startTime: 0,
+        inPoint: 0,
+        outPoint: videoDurationMs,
+        timelineOffset: 0,
+        x: centerX - w / 2,
+        y: centerY - h / 2,
+        width: w,
+        height: h,
+      })
+
+      // Auto-open timeline and register clip
+      const ts = useTimelineStore.getState()
+      ts.addVideoClip(nodeId)
+      if (ts.editorMode !== 'animate') {
+        ts.setEditorMode('animate')
+        useCanvasStore.getState().setRightPanelTab('animate')
+      }
+      // Extend composition duration to fit video if needed
+      if (videoDurationMs > ts.duration) {
+        ts.setDuration(videoDurationMs)
+      }
+    })
+  }, [])
+
   return (
     <div className="absolute top-2 left-2 z-10 w-10 bg-card border border-border rounded-xl flex flex-col items-center py-2 gap-1 shadow-lg">
       <ToolButton
@@ -176,6 +245,7 @@ export default function Toolbar() {
       <ShapeToolDropdown
         onIconPickerOpen={() => setIconPickerOpen(true)}
         onImageImport={handleAddImage}
+        onVideoImport={handleAddVideo}
       />
       <ToolButton
         tool="text"
@@ -295,6 +365,13 @@ export default function Toolbar() {
         accept="image/png,image/jpeg,image/svg+xml,image/webp,image/gif"
         className="hidden"
         onChange={handleFileSelected}
+      />
+      <input
+        ref={videoInputRef}
+        type="file"
+        accept="video/mp4,video/webm,video/quicktime"
+        className="hidden"
+        onChange={handleVideoSelected}
       />
       <IconPickerDialog
         open={iconPickerOpen}

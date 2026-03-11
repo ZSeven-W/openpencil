@@ -6,6 +6,7 @@ import {
   PenTool,
   Sparkles,
   ImagePlus,
+  Film,
   ChevronDown,
 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
@@ -39,6 +40,7 @@ type DropdownItem = ToolItem | ActionItem
 interface ShapeToolDropdownProps {
   onIconPickerOpen: () => void
   onImageImport: () => void
+  onVideoImport: () => void
 }
 
 const TOOL_ICON_MAP: Record<string, ReactNode> = {
@@ -51,6 +53,7 @@ const TOOL_ICON_MAP: Record<string, ReactNode> = {
 export default function ShapeToolDropdown({
   onIconPickerOpen,
   onImageImport,
+  onVideoImport,
 }: ShapeToolDropdownProps) {
   const { t } = useTranslation()
   const [open, setOpen] = useState(false)
@@ -93,6 +96,7 @@ export default function ShapeToolDropdown({
     { type: 'tool', tool: 'line', icon: <Minus size={18} strokeWidth={1.5} />, label: t('shapes.line') },
     { type: 'action', key: 'icon', icon: <Sparkles size={18} strokeWidth={1.5} />, label: t('shapes.icon'), onAction: onIconPickerOpen },
     { type: 'action', key: 'image', icon: <ImagePlus size={18} strokeWidth={1.5} />, label: t('shapes.importImageSvg'), onAction: onImageImport },
+    { type: 'action', key: 'video', icon: <Film size={18} strokeWidth={1.5} />, label: 'Import Video\u2026', onAction: onVideoImport },
     { type: 'tool', tool: 'path', icon: <PenTool size={18} strokeWidth={1.5} />, label: t('shapes.pen') },
   ]
 
