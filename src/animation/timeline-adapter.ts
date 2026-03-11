@@ -6,12 +6,14 @@
  */
 
 import type { TimelineRow, TimelineAction } from '@cyca/react-timeline-editor'
-import type { AnimationTrack, KeyframePhase } from '@/types/animation'
+import type { AnimationTrack, KeyframePhase, AnimationClipData, VideoClipData } from '@/types/animation'
+import type { PenNode } from '@/types/pen'
 import {
   msToSec,
   secToMs,
   EFFECT_ANIMATION_PHASE,
   EFFECT_VIDEO_CLIP,
+  EFFECT_ANIMATION_CLIP,
   type ActionMetadataMap,
   type TimelineStores,
   type VideoNodeProjection,
@@ -322,5 +324,59 @@ function validateVideoClipBounds(
   if (start_s < 0) return false
 
   return true
+}
+
+// ---------------------------------------------------------------------------
+// v2: Clip-based timeline rows (reads clips from PenNodes)
+// ---------------------------------------------------------------------------
+
+/**
+ * Convert a v2 AnimationClipData to a TimelineAction (for the timeline library).
+ */
+export function clipToTimelineAction(clip: AnimationClipData | VideoClipData): TimelineAction {
+  return {
+    id: clip.id,
+    start: msToSec(clip.startTime),
+    end: msToSec(clip.startTime + clip.duration),
+    effectId: clip.kind === 'animation' ? EFFECT_ANIMATION_CLIP : EFFECT_VIDEO_CLIP,
+    flexible: true,
+    movable: true,
+  }
+}
+
+/**
+ * Build timeline rows from nodes with clips (v2 model).
+ * Each node with clips becomes a timeline row.
+ * Returns rows + metadata for the v2 clip-based actions.
+ */
+export function buildTimelineRowsFromNodes(nodes: PenNode[]): TimelineProjection {
+  const rows: TimelineRow[] = []
+  const metadata: ActionMetadataMap = new Map()
+
+  function walk(list: PenNode[]) {
+    for (const node of list) {
+      if (node.clips && node.clips.length > 0) {
+        const actions: TimelineAction[] = []
+
+        for (const clip of node.clips) {
+          actions.push(clipToTimelineAction(clip))
+          metadata.set(clip.id, {
+            type: 'animation-clip',
+            nodeId: node.id,
+            clipId: clip.id,
+          })
+        }
+
+        rows.push({ id: `v2-${node.id}`, actions })
+      }
+
+      if ('children' in node && node.children) {
+        walk(node.children as PenNode[])
+      }
+    }
+  }
+
+  walk(nodes)
+  return { rows, metadata }
 }
 

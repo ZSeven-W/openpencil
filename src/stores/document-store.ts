@@ -5,6 +5,7 @@ import type { VariableDefinition } from '@/types/variables'
 import { useHistoryStore } from '@/stores/history-store'
 import { useCanvasStore } from '@/stores/canvas-store'
 import { useTimelineStore } from '@/stores/timeline-store'
+import { animationPauseMiddleware } from '@/stores/animation-pause-middleware'
 import { getDefaultTheme } from '@/variables/resolve-variables'
 import { replaceVariableRefsInTree } from '@/variables/replace-refs'
 import {
@@ -110,8 +111,8 @@ function _setChildren(doc: PenDocument, children: PenNode[]): PenDocument {
   return setActivePageChildren(doc, useCanvasStore.getState().activePageId, children)
 }
 
-export const useDocumentStore = create<DocumentStoreState>(
-  (set, get) => ({
+export const useDocumentStore = create<DocumentStoreState>()(
+  animationPauseMiddleware((set, get) => ({
     document: createEmptyDocument(),
     fileName: null,
     isDirty: false,
@@ -284,6 +285,10 @@ export const useDocumentStore = create<DocumentStoreState>(
       // Regular duplication for non-reusable nodes
       const cloneWithNewIds = (n: PenNode): PenNode => {
         const cloned = { ...n, id: nanoid() } as PenNode
+        // Remap clip IDs so duplicated clips are independent
+        if (cloned.clips) {
+          cloned.clips = cloned.clips.map((c) => ({ ...c, id: nanoid(8) }))
+        }
         if ('children' in cloned && cloned.children) {
           cloned.children = cloned.children.map(cloneWithNewIds)
         }
@@ -755,7 +760,7 @@ export const useDocumentStore = create<DocumentStoreState>(
     markClean: () => set({ isDirty: false }),
     setFileHandle: (fileHandle) => set({ fileHandle }),
     setSaveDialogOpen: (saveDialogOpen) => set({ saveDialogOpen }),
-  }),
+  })),
 )
 
 export {

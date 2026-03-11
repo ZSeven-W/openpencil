@@ -35,7 +35,7 @@ export interface VideoClipMetadata {
   nodeId: string
 }
 
-export type ActionMetadata = AnimationPhaseMetadata | VideoClipMetadata
+export type ActionMetadata = AnimationPhaseMetadata | VideoClipMetadata | AnimationClipMetadata
 
 export type ActionMetadataMap = Map<string, ActionMetadata>
 
@@ -75,3 +75,15 @@ export type VideoNodeProjection = Pick<
   VideoNode,
   'id' | 'inPoint' | 'outPoint' | 'timelineOffset' | 'videoDuration' | 'name'
 >
+
+// ---------------------------------------------------------------------------
+// v2: Clip-based metadata (used by buildTimelineRowsFromNodes)
+// ---------------------------------------------------------------------------
+
+export interface AnimationClipMetadata {
+  type: 'animation-clip'
+  nodeId: string
+  clipId: string
+}
+
+export const EFFECT_ANIMATION_CLIP = 'animation-clip' as const

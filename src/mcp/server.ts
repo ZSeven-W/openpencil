@@ -34,6 +34,14 @@ import {
   handleDuplicatePage,
 } from './tools/pages'
 import { handleBatchDesign } from './tools/batch-design'
+import {
+  handleListEffects,
+  handleListAnimatableProperties,
+  handleAddClip,
+  handleUpdateClip,
+  handleRemoveClip,
+  handleSetComposition,
+} from './tools/animation'
 import { buildDesignPrompt, listPromptSections } from './tools/design-prompt'
 import { handleDesignSkeleton } from './tools/design-skeleton'
 import { handleDesignContent } from './tools/design-content'
@@ -474,14 +482,14 @@ const TOOL_DEFINITIONS = [
     description:
       'Get design knowledge prompt. Use "section" to retrieve a focused subset instead of the full prompt. ' +
       'Sections: schema (PenNode types), layout (flexbox rules), roles (semantic roles), text (typography/CJK/copywriting), ' +
-      'style (visual style policy), icons (icon names), examples (design examples), guidelines (design tips), planning (layered workflow guide). ' +
-      'Omit section for the full prompt.',
+      'style (visual style policy), icons (icon names), examples (design examples), guidelines (design tips), planning (layered workflow guide), ' +
+      'animation (clip schema, effects, animatable properties). Omit section for the full prompt.',
     inputSchema: {
       type: 'object' as const,
       properties: {
         section: {
           type: 'string',
-          enum: ['all', 'schema', 'layout', 'roles', 'text', 'style', 'icons', 'examples', 'guidelines', 'planning'],
+          enum: ['all', 'schema', 'layout', 'roles', 'text', 'style', 'icons', 'examples', 'guidelines', 'planning', 'animation'],
           description:
             'Which section of design knowledge to retrieve. Default: all. Use "planning" for layered generation workflow.',
         },
@@ -523,6 +531,105 @@ const TOOL_DEFINITIONS = [
         pageId: { type: 'string', description: 'Target page ID (defaults to first page)' },
       },
       required: ['operations'],
+    },
+  },
+  {
+    name: 'list_effects',
+    description:
+      'List available animation effects from the effect registry. Optionally filter by category (enter, exit, emphasis, transition, video, custom).',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        category: {
+          type: 'string',
+          enum: ['enter', 'exit', 'emphasis', 'transition', 'video', 'custom'],
+          description: 'Filter effects by category',
+        },
+      },
+      required: [],
+    },
+  },
+  {
+    name: 'list_animatable_properties',
+    description:
+      'List all animatable property descriptors. Optionally filter by node type to see only properties that apply to that type.',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        nodeType: {
+          type: 'string',
+          description: 'Filter to properties applicable to this node type (e.g. "text", "frame")',
+        },
+      },
+      required: [],
+    },
+  },
+  {
+    name: 'add_clip',
+    description:
+      'Add an animation clip to a node. Provide effectId to generate keyframes from a preset effect, or provide raw keyframes directly. Returns the created clip with generated ID.',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        filePath: { type: 'string', description: 'Path to .op file, or omit to use the live canvas (default)' },
+        nodeId: { type: 'string', description: 'ID of the node to animate' },
+        effectId: { type: 'string', description: 'Effect ID from list_effects to generate keyframes automatically' },
+        startTime: { type: 'number', description: 'Start time in milliseconds' },
+        duration: { type: 'number', description: 'Duration in milliseconds' },
+        keyframes: {
+          type: 'array',
+          description: 'Raw keyframes (alternative to effectId). Each: { id, offset: 0-1, properties: { key: value }, easing }',
+          items: { type: 'object' },
+        },
+        params: { type: 'object', description: 'Effect parameters (used with effectId)' },
+        pageId: { type: 'string', description: 'Target page ID (defaults to first page)' },
+      },
+      required: ['nodeId', 'startTime', 'duration'],
+    },
+  },
+  {
+    name: 'update_clip',
+    description:
+      'Update an existing animation clip on a node. If effect params change and the clip has an effectId, keyframes are regenerated.',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        filePath: { type: 'string', description: 'Path to .op file, or omit to use the live canvas (default)' },
+        nodeId: { type: 'string', description: 'ID of the node containing the clip' },
+        clipId: { type: 'string', description: 'ID of the clip to update' },
+        startTime: { type: 'number', description: 'New start time in milliseconds' },
+        duration: { type: 'number', description: 'New duration in milliseconds' },
+        params: { type: 'object', description: 'New effect parameters (triggers keyframe regeneration if effectId exists)' },
+        pageId: { type: 'string', description: 'Target page ID (defaults to first page)' },
+      },
+      required: ['nodeId', 'clipId'],
+    },
+  },
+  {
+    name: 'remove_clip',
+    description: 'Remove an animation clip from a node.',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        filePath: { type: 'string', description: 'Path to .op file, or omit to use the live canvas (default)' },
+        nodeId: { type: 'string', description: 'ID of the node containing the clip' },
+        clipId: { type: 'string', description: 'ID of the clip to remove' },
+        pageId: { type: 'string', description: 'Target page ID (defaults to first page)' },
+      },
+      required: ['nodeId', 'clipId'],
+    },
+  },
+  {
+    name: 'set_composition',
+    description: 'Set or update global composition settings (duration, fps) for the animation timeline.',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        filePath: { type: 'string', description: 'Path to .op file, or omit to use the live canvas (default)' },
+        duration: { type: 'number', description: 'Total composition duration in milliseconds' },
+        fps: { type: 'number', description: 'Frames per second (e.g. 24, 30, 60)' },
+      },
+      required: [],
     },
   },
   ...LAYERED_DESIGN_TOOLS,
@@ -588,6 +695,18 @@ async function handleToolCall(name: string, args: any) {
         null,
         2,
       )
+    case 'list_effects':
+      return JSON.stringify(handleListEffects(args ?? {}), null, 2)
+    case 'list_animatable_properties':
+      return JSON.stringify(handleListAnimatableProperties(args ?? {}), null, 2)
+    case 'add_clip':
+      return JSON.stringify(await handleAddClip(args), null, 2)
+    case 'update_clip':
+      return JSON.stringify(await handleUpdateClip(args), null, 2)
+    case 'remove_clip':
+      return JSON.stringify(await handleRemoveClip(args), null, 2)
+    case 'set_composition':
+      return JSON.stringify(await handleSetComposition(args ?? {}), null, 2)
     case 'batch_design':
       return JSON.stringify(await handleBatchDesign(args), null, 2)
     case 'design_skeleton':

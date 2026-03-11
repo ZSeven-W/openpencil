@@ -89,6 +89,7 @@ function renderLayerTree(
           expanded={isExpanded}
           isReusable={reusable}
           isInstance={isInstance}
+          hasClips={node.clips != null && node.clips.length > 0}
           dropPosition={isDropTarget ? dropPosition : null}
           {...handlers}
         />

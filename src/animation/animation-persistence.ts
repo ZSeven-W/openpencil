@@ -1,58 +1,68 @@
-import type { PenDocument } from '@/types/pen'
-import { useTimelineStore } from '@/stores/timeline-store'
-import { useDocumentStore } from '@/stores/document-store'
+import type { PenDocument, PenNode } from '@/types/pen'
+import { getEffect } from '@/animation/effect-registry'
 
 /**
- * Inject animation data into the document before saving.
- * Call this before any save operation.
+ * Walk the node tree and remove clips whose effectId references
+ * an effect that is not registered. Call after loading a document
+ * to garbage-collect stale animation data.
  */
-export function injectAnimationData(): void {
-  const timelineData = useTimelineStore.getState().getTimelineData()
-  const hasAnimation =
-    Object.keys(timelineData.tracks).length > 0
-
-  useDocumentStore.setState((s) => ({
-    document: {
-      ...s.document,
-      animation: hasAnimation ? timelineData : undefined,
-    },
-  }))
-}
-
-/**
- * Extract animation data from a loaded document and load it into the timeline store.
- */
-export function extractAnimationData(doc: PenDocument): void {
-  if (doc.animation) {
-    useTimelineStore.getState().loadTimelineData(doc.animation)
-  } else {
-    useTimelineStore.getState().clearAllTracks()
-  }
-}
-
-/**
- * Remove animation tracks for nodes that no longer exist in the document.
- */
-export function reconcileAnimationWithDocument(): void {
-  const doc = useDocumentStore.getState().document
-  const nodeIds = new Set<string>()
-
-  function collectIds(nodes: PenDocument['children']) {
-    for (const node of nodes) {
-      nodeIds.add(node.id)
-      if ('children' in node && node.children) {
-        collectIds(node.children)
+export function reconcileAnimationWithDocument(nodes: PenNode[]): void {
+  for (const node of nodes) {
+    if (node.clips && node.clips.length > 0) {
+      node.clips = node.clips.filter((clip) => {
+        if (clip.kind !== 'animation') return true
+        if (!clip.effectId) return true
+        return !!getEffect(clip.effectId)
+      })
+      if (node.clips.length === 0) {
+        node.clips = undefined
       }
     }
-  }
-
-  // Collect IDs from all pages
-  if (doc.pages) {
-    for (const page of doc.pages) {
-      collectIds(page.children)
+    if ('children' in node && node.children) {
+      reconcileAnimationWithDocument(node.children)
     }
   }
-  collectIds(doc.children)
+}
 
-  useTimelineStore.getState().reconcile(nodeIds)
+/**
+ * Return a shallow copy of the node with invalid effectIds cleared
+ * from its clips array.
+ */
+export function cleanOrphanedClips(
+  node: PenNode,
+  existingEffectIds: Set<string>,
+): PenNode {
+  if (!node.clips || node.clips.length === 0) return node
+
+  const cleaned = node.clips.filter((clip) => {
+    if (clip.kind !== 'animation') return true
+    if (!clip.effectId) return true
+    return existingEffectIds.has(clip.effectId)
+  })
+
+  if (cleaned.length === node.clips.length) return node
+
+  return {
+    ...node,
+    clips: cleaned.length > 0 ? cleaned : undefined,
+  } as PenNode
+}
+
+// ---------------------------------------------------------------------------
+// Backward-compatible stubs — these are still imported elsewhere but
+// no longer needed since clips live directly on nodes.
+// ---------------------------------------------------------------------------
+
+/**
+ * @deprecated Clips are persisted on nodes directly. This is a no-op.
+ */
+export function injectAnimationData(): void {
+  // no-op — clips are already on nodes in the document
+}
+
+/**
+ * @deprecated Clips are loaded with nodes directly. This is a no-op.
+ */
+export function extractAnimationData(_doc: PenDocument): void {
+  // no-op — clips are already on nodes in the document
 }

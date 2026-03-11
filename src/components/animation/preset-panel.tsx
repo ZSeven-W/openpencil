@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { nanoid } from 'nanoid'
 import { Button } from '@/components/ui/button'
 import {
   Select,
@@ -12,14 +13,17 @@ import SectionHeader from '@/components/shared/section-header'
 import { useTimelineStore } from '@/stores/timeline-store'
 import { useCanvasStore } from '@/stores/canvas-store'
 import { useDocumentStore } from '@/stores/document-store'
-import { captureCurrentState } from '@/animation/canvas-bridge'
+import { captureCurrentState, captureNodeState, findFabricObject } from '@/animation/canvas-bridge'
+import { getEffectsByCategory, generateClipFromEffect } from '@/animation/effect-registry'
+import '@/animation/effects' // ensure effects are registered
 import { cn } from '@/lib/utils'
 import type {
   AnimationPresetName,
+  AnimationClipData,
   EasingPreset,
   SlideDirection,
 } from '@/types/animation'
-import type { VideoNode } from '@/types/pen'
+import type { PenNode, VideoNode } from '@/types/pen'
 import NumberInput from '@/components/shared/number-input'
 
 const presetOptions: { value: AnimationPresetName; label: string }[] = [
@@ -71,6 +75,30 @@ export default function PresetPanel() {
   const updateNode = useDocumentStore((s) => s.updateNode)
   const isVideo = selectedNode?.type === 'video'
   const videoNode = isVideo ? (selectedNode as VideoNode) : null
+
+  // v2: Effect registry
+  const effectCategories = ['enter', 'exit', 'emphasis'] as const
+  const handleApplyEffect = (effectId: string) => {
+    if (!selectedId || !canvas) return
+
+    const obj = findFabricObject(canvas, selectedId)
+    const currentState = obj ? captureNodeState(obj) : {}
+
+    const result = generateClipFromEffect(effectId, undefined, undefined, currentState)
+    if (!result) return
+
+    const clip: AnimationClipData = {
+      id: nanoid(8),
+      kind: 'animation',
+      startTime: 0,
+      duration: result.duration,
+      effectId,
+      keyframes: result.keyframes,
+    }
+
+    const existing = selectedNode?.clips ?? []
+    updateNode(selectedId, { clips: [...existing, clip] } as Partial<PenNode>)
+  }
 
   return (
     <>
@@ -222,6 +250,62 @@ export default function PresetPanel() {
             <span className="text-[11px] text-muted-foreground">total</span>
           </div>
         </div>
+
+        {/* v2: Effect registry section */}
+        {selectedId && (
+          <>
+            <Separator />
+            <div className="px-3 py-2 space-y-1.5">
+              <SectionHeader title="Effects (v2)" />
+              {effectCategories.map((category) => {
+                const effects = getEffectsByCategory(category)
+                if (effects.length === 0) return null
+                return (
+                  <div key={category} className="space-y-1">
+                    <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                      {category}
+                    </span>
+                    <div className="grid grid-cols-2 gap-1">
+                      {effects.map((effect) => (
+                        <Button
+                          key={effect.id}
+                          variant="outline"
+                          size="sm"
+                          className="h-7 text-[11px]"
+                          onClick={() => handleApplyEffect(effect.id)}
+                        >
+                          {effect.name}
+                        </Button>
+                      ))}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          </>
+        )}
+
+        {/* v2: Node clips summary */}
+        {selectedNode?.clips && selectedNode.clips.length > 0 && (
+          <>
+            <Separator />
+            <div className="px-3 py-2 space-y-1.5">
+              <SectionHeader title="Clips" />
+              <div className="space-y-1">
+                {selectedNode.clips.map((clip) => (
+                  <div key={clip.id} className="flex items-center justify-between">
+                    <span className="text-[11px] text-muted-foreground truncate">
+                      {clip.kind === 'animation' ? (clip.effectId ?? 'Custom') : 'Video'}
+                    </span>
+                    <span className="text-[11px] text-foreground tabular-nums">
+                      {(clip.duration / 1000).toFixed(1)}s
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </>
+        )}
 
         {selectedTrack && (
           <>

@@ -19,6 +19,7 @@ import {
   ChevronRight,
   Diamond,
   Smile,
+  Play,
 } from 'lucide-react'
 import type { PenNodeType } from '@/types/pen'
 
@@ -51,6 +52,7 @@ interface LayerItemProps {
   expanded: boolean
   isReusable: boolean
   isInstance: boolean
+  hasClips?: boolean
   dropPosition: DropPosition
   onSelect: (id: string) => void
   onRename: (id: string, name: string) => void
@@ -75,6 +77,7 @@ export default function LayerItem({
   expanded,
   isReusable,
   isInstance,
+  hasClips,
   dropPosition,
   onSelect,
   onRename,
@@ -177,6 +180,10 @@ export default function LayerItem({
           />
         ) : (
           <span className="flex-1 truncate">{name}</span>
+        )}
+
+        {hasClips && (
+          <Play size={10} className="shrink-0 text-emerald-400 opacity-70" />
         )}
 
         <button

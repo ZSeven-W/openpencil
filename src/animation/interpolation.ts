@@ -1,11 +1,18 @@
 import type {
   AnimatableProperties,
+  AnimatableValue,
+  AnimationClipData,
   AnimationTrack,
   EasingPreset,
 } from '@/types/animation'
+import { resolveEasing } from './cubic-bezier'
+import { getPropertyDescriptor } from './property-descriptors'
+
+// ============================================================
+// v1 Interpolation (deprecated — kept for Phase 1 compatibility)
+// ============================================================
 
 // --- Easing Functions ---
-// Each takes t in [0,1] and returns eased t in [0,1]
 
 function easeOut(t: number): number {
   return 1 - (1 - t) ** 3
@@ -36,16 +43,21 @@ const easingFunctions: Record<EasingPreset, (t: number) => number> = {
   linear: (t: number) => t,
 }
 
-export function getEasingFunction(preset: EasingPreset): (t: number) => number {
+/** @deprecated Use resolveEasing from cubic-bezier.ts */
+export function getEasingFunction(
+  preset: EasingPreset,
+): (t: number) => number {
   return easingFunctions[preset]
 }
 
 // --- Interpolation ---
 
+/** @deprecated Use v2 interpolateClip */
 export function lerp(a: number, b: number, t: number): number {
   return a + (b - a) * t
 }
 
+/** @deprecated Use v2 interpolateClip */
 export function interpolateProperties(
   from: Partial<AnimatableProperties>,
   to: Partial<AnimatableProperties>,
@@ -76,6 +88,7 @@ export function interpolateProperties(
 /**
  * Find the two keyframes surrounding a given time and interpolate between them.
  * Keyframes must be sorted by time (store invariant).
+ * @deprecated Use v2 interpolateClip
  */
 export function getInterpolatedProperties(
   track: AnimationTrack,
@@ -117,4 +130,106 @@ export function getInterpolatedProperties(
   const easedT = getEasingFunction(to.easing)(rawT)
 
   return interpolateProperties(from.properties, to.properties, easedT)
+}
+
+// ============================================================
+// v2 Interpolation Engine
+// ============================================================
+
+export interface TrackBuffer {
+  values: Record<string, AnimatableValue>
+  prevKeyframeIdx: number
+}
+
+export function createTrackBuffer(): TrackBuffer {
+  return { values: {}, prevKeyframeIdx: 0 }
+}
+
+/**
+ * Interpolate a clip's animated values at a given time.
+ * Returns null if time is outside clip bounds (unless extrapolate === 'hold').
+ */
+export function interpolateClip(
+  clip: AnimationClipData,
+  timeMs: number,
+  buffer?: TrackBuffer,
+): Record<string, AnimatableValue> | null {
+  const { startTime, duration, keyframes } = clip
+  if (keyframes.length === 0) return null
+
+  // Calculate local time as ms offset within clip
+  const localTime = timeMs - startTime
+  if (localTime < 0) {
+    if (clip.extrapolate === 'hold') {
+      return { ...keyframes[0].properties }
+    }
+    return null
+  }
+  if (localTime > duration) {
+    if (clip.extrapolate === 'hold') {
+      return { ...keyframes[keyframes.length - 1].properties }
+    }
+    return null
+  }
+
+  const offset = duration > 0 ? localTime / duration : 0
+
+  // Binary search for the upper keyframe
+  let lo = 0
+  let hi = keyframes.length - 1
+  while (lo < hi) {
+    const mid = (lo + hi) >> 1
+    if (keyframes[mid].offset < offset) lo = mid + 1
+    else hi = mid
+  }
+
+  const upperIdx = lo
+  const lowerIdx = Math.max(0, upperIdx - 1)
+
+  if (buffer) buffer.prevKeyframeIdx = lowerIdx
+
+  const lower = keyframes[lowerIdx]
+  const upper = keyframes[upperIdx]
+
+  // Same keyframe or at exact keyframe position
+  if (lowerIdx === upperIdx || lower.offset === upper.offset) {
+    const result = buffer?.values ?? {}
+    for (const [key, val] of Object.entries(lower.properties)) {
+      result[key] = val
+    }
+    return result
+  }
+
+  // Interpolate between keyframes
+  const segmentT = (offset - lower.offset) / (upper.offset - lower.offset)
+  const easingFn = resolveEasing(lower.easing)
+  const easedT = easingFn(Math.max(0, Math.min(1, segmentT)))
+
+  const result = buffer?.values ?? {}
+
+  // Interpolate each property
+  const allKeys = new Set([
+    ...Object.keys(lower.properties),
+    ...Object.keys(upper.properties),
+  ])
+  for (const key of allKeys) {
+    const fromVal = lower.properties[key]
+    const toVal = upper.properties[key]
+
+    if (fromVal === undefined || toVal === undefined) {
+      result[key] = (fromVal ?? toVal)!
+      continue
+    }
+
+    const desc = getPropertyDescriptor(key)
+    if (desc) {
+      result[key] = desc.interpolate(fromVal, toVal, easedT) as AnimatableValue
+    } else if (typeof fromVal === 'number' && typeof toVal === 'number') {
+      result[key] = fromVal + (toVal - fromVal) * easedT
+    } else {
+      result[key] = easedT < 0.5 ? fromVal : toVal
+    }
+  }
+
+  return result
 }

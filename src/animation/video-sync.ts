@@ -14,11 +14,14 @@
 import type { Canvas } from 'fabric'
 import {
   getAllVideoElements,
+  getVideoElement,
   seekVideoToTime,
 } from '@/animation/video-registry'
 import { findFabricObject } from '@/animation/canvas-bridge'
 import { useDocumentStore } from '@/stores/document-store'
 import type { VideoNode } from '@/types/pen'
+import type { AnimationIndex } from '@/animation/animation-index'
+import type { VideoClipData } from '@/types/animation'
 
 /**
  * Sync all video elements to the current composition time.
@@ -76,5 +79,116 @@ export function syncVideoFrames(canvas: Canvas, compositionTimeMs: number): void
 export function pauseAllVideos(): void {
   for (const videoEl of getAllVideoElements().values()) {
     videoEl.pause()
+  }
+}
+
+// ============================================================
+// v2: AnimationIndex-driven video sync
+// ============================================================
+
+const DRIFT_THRESHOLD_MS = 50
+
+function mapClipToSourceTimeSec(clip: VideoClipData, clipLocalTime: number): number {
+  const sourceRange = clip.sourceEnd - clip.sourceStart
+  const clipProgress = clipLocalTime / clip.duration
+  return (clip.sourceStart + clipProgress * sourceRange) / 1000
+}
+
+function syncSingleVideoClip(
+  canvas: Canvas,
+  nodeId: string,
+  clip: VideoClipData,
+  currentTimeMs: number,
+): void {
+  const video = getVideoElement(nodeId)
+  if (!video) return
+
+  const clipLocalTime = currentTimeMs - clip.startTime
+
+  // Outside clip bounds — pause video
+  if (clipLocalTime < 0 || clipLocalTime > clip.duration) {
+    if (!video.paused) video.pause()
+    return
+  }
+
+  const expectedSec = mapClipToSourceTimeSec(clip, clipLocalTime)
+
+  // Set playback rate
+  if (video.playbackRate !== clip.playbackRate) {
+    video.playbackRate = clip.playbackRate
+  }
+
+  // Drift correction: native play + correct only when drift exceeds threshold
+  const driftMs = Math.abs(video.currentTime - expectedSec) * 1000
+  if (driftMs > DRIFT_THRESHOLD_MS) {
+    video.currentTime = expectedSec
+  }
+
+  // Ensure playing
+  if (video.paused) {
+    video.play().catch(() => {}) // ignore autoplay restriction errors
+  }
+
+  // Mark Fabric object dirty to re-read video texture
+  const obj = findFabricObject(canvas, nodeId)
+  if (obj) {
+    obj.dirty = true
+  }
+}
+
+/**
+ * Sync video playback during animation playback.
+ * Uses native video.play() with drift correction (not seek-every-frame).
+ */
+export function syncVideoFramesV2(
+  canvas: Canvas,
+  currentTimeMs: number,
+  index: AnimationIndex,
+): void {
+  for (const [nodeId, clips] of index.clipsByNode) {
+    const videoClips = clips.filter((c): c is VideoClipData => c.kind === 'video')
+    for (const clip of videoClips) {
+      syncSingleVideoClip(canvas, nodeId, clip, currentTimeMs)
+    }
+  }
+}
+
+/**
+ * Seek video to specific time (for scrubbing, not playback).
+ * Pauses video and seeks directly.
+ */
+export function seekVideoClipsV2(
+  canvas: Canvas,
+  currentTimeMs: number,
+  index: AnimationIndex,
+): void {
+  for (const [nodeId, clips] of index.clipsByNode) {
+    const videoClips = clips.filter((c): c is VideoClipData => c.kind === 'video')
+    for (const clip of videoClips) {
+      const video = getVideoElement(nodeId)
+      if (!video) continue
+
+      if (!video.paused) video.pause()
+
+      const clipLocalTime = currentTimeMs - clip.startTime
+      if (clipLocalTime < 0 || clipLocalTime > clip.duration) continue
+
+      video.currentTime = mapClipToSourceTimeSec(clip, clipLocalTime)
+
+      const obj = findFabricObject(canvas, nodeId)
+      if (obj) obj.dirty = true
+    }
+  }
+}
+
+/**
+ * Pause all videos that are in the animation index.
+ */
+export function pauseAllVideosV2(index: AnimationIndex): void {
+  for (const [nodeId, clips] of index.clipsByNode) {
+    if (clips.some((c) => c.kind === 'video')) {
+      const video = getVideoElement(nodeId)
+      if (video && !video.paused) video.pause()
+    }
   }
 }

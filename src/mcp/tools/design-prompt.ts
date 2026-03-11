@@ -3,6 +3,7 @@ import {
   ADAPTIVE_STYLE_POLICY,
   DESIGN_EXAMPLES,
 } from '../../services/ai/ai-prompts'
+import { buildAnimationPromptSection } from './animation'
 
 // ---------------------------------------------------------------------------
 // Named prompt sections — can be retrieved individually via section parameter
@@ -204,6 +205,7 @@ type PromptSection =
   | 'examples'
   | 'guidelines'
   | 'planning'
+  | 'animation'
 
 const SECTION_MAP: Record<PromptSection, () => string> = {
   all: () => buildFullPrompt(),
@@ -216,6 +218,7 @@ const SECTION_MAP: Record<PromptSection, () => string> = {
   examples: () => DESIGN_EXAMPLES.trim(),
   guidelines: () => DESIGN_GUIDELINES,
   planning: () => PLANNING_GUIDE,
+  animation: () => buildAnimationPromptSection(),
 }
 
 // ---------------------------------------------------------------------------

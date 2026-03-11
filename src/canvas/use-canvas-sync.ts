@@ -12,6 +12,7 @@ import {
 } from './canvas-object-factory'
 import { syncFabricObject } from './canvas-object-sync'
 import { isFabricSyncLocked, setFabricSyncLock } from './canvas-sync-lock'
+import { isPlaybackActive } from '@/animation/canvas-bridge'
 import { pendingAnimationNodes, getNextStaggerDelay } from '@/services/ai/design-animation'
 import { unregisterVideoElement } from '@/animation/video-registry'
 import { useTimelineStore } from '@/stores/timeline-store'
@@ -496,6 +497,14 @@ export function useCanvasSync() {
       // When the sync lock is active, track references so that unrelated
       // store updates (e.g. markClean) don't trigger stale re-syncs.
       if (isFabricSyncLocked()) {
+        prevPageChildren = pageChildren
+        prevVariables = state.document.variables
+        prevThemes = state.document.themes
+        return
+      }
+
+      // Skip syncing properties to Fabric during playback — animation engine owns them
+      if (isPlaybackActive()) {
         prevPageChildren = pageChildren
         prevVariables = state.document.variables
         prevThemes = state.document.themes

@@ -13,6 +13,7 @@ import { useTimelineStore } from '@/stores/timeline-store'
 import { useDocumentStore } from '@/stores/document-store'
 import {
   toTimelineRows,
+  buildTimelineRowsFromNodes,
   applyActionMove,
   applyActionResize,
   validateActionMove,
@@ -22,12 +23,14 @@ import {
   secToMs,
   EFFECT_ANIMATION_PHASE,
   EFFECT_VIDEO_CLIP,
+  EFFECT_ANIMATION_CLIP,
   type ActionMetadataMap,
   type TimelineStores,
   type VideoNodeProjection,
 } from '@/animation/timeline-adapter-types'
 import type { PenNode, VideoNode } from '@/types/pen'
 import { useCanvasStore } from '@/stores/canvas-store'
+import { getActivePageChildren } from '@/stores/document-store'
 import { consumeCursorGuard } from '@/animation/canvas-bridge'
 import { setTimelineRef } from '@/animation/playback-loop'
 import { withTimelineUndoBatch } from '@/animation/timeline-undo'
@@ -43,6 +46,7 @@ import type { OnScrollParams } from '@cyca/react-timeline-editor'
 const effects: Record<string, TimelineEffect> = {
   [EFFECT_ANIMATION_PHASE]: { id: EFFECT_ANIMATION_PHASE, name: 'Animation Phase' },
   [EFFECT_VIDEO_CLIP]: { id: EFFECT_VIDEO_CLIP, name: 'Video Clip' },
+  [EFFECT_ANIMATION_CLIP]: { id: EFFECT_ANIMATION_CLIP, name: 'Animation Clip' },
 }
 
 // ---------------------------------------------------------------------------
@@ -129,10 +133,53 @@ export default function TimelineEditor() {
     [videoClipIds, videoNodeVersion],
   )
 
-  const { rows: computedRows, metadata } = useMemo(
-    () => toTimelineRows(tracks, videoNodes, duration_ms),
-    [tracks, videoNodes, duration_ms],
-  )
+  // v2: Subscribe to nodes with clips for clip-based timeline rows
+  const activePageId = useCanvasStore((s) => s.activePageId)
+  const pageChildren = useDocumentStore((s) => getActivePageChildren(s.document, activePageId))
+
+  // v2 clip rows version — recompute when node clips change
+  const clipVersion = useMemo(() => {
+    let hash = 0
+    function walk(nodes: PenNode[]) {
+      for (const n of nodes) {
+        if (n.clips && n.clips.length > 0) {
+          hash += n.clips.length
+          for (const c of n.clips) hash = hash * 31 + c.startTime + c.duration * 7
+        }
+        if ('children' in n && n.children) walk(n.children as PenNode[])
+      }
+    }
+    walk(pageChildren)
+    return hash
+  }, [pageChildren])
+
+  const { rows: computedRows, metadata } = useMemo(() => {
+    // v1 rows from tracks + video nodes
+    const v1 = toTimelineRows(tracks, videoNodes, duration_ms)
+
+    // v2 rows from node clips
+    const v2 = buildTimelineRowsFromNodes(pageChildren)
+
+    // Merge: v1 rows first, then v2 rows that don't duplicate
+    const existingRowIds = new Set(v1.rows.map((r) => r.id))
+    const mergedRows = [...v1.rows]
+    for (const row of v2.rows) {
+      if (!existingRowIds.has(row.id)) {
+        mergedRows.push(row)
+      }
+    }
+
+    // Merge metadata
+    const mergedMetadata: ActionMetadataMap = new Map(v1.metadata)
+    for (const [key, value] of v2.metadata) {
+      if (!mergedMetadata.has(key)) {
+        mergedMetadata.set(key, value)
+      }
+    }
+
+    return { rows: mergedRows, metadata: mergedMetadata }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tracks, videoNodes, duration_ms, clipVersion])
 
   // Keep refs in sync (read from callbacks, not during render)
   metadataRef.current = metadata
@@ -248,6 +295,20 @@ export default function TimelineEditor() {
             name={node?.name ?? 'Video'}
             duration_s={action.end - action.start}
           />
+        )
+      }
+
+      // v2: Animation clip — simple colored bar for now
+      if (meta.type === 'animation-clip') {
+        return (
+          <div
+            className="h-full rounded-sm bg-emerald-500/30 border border-emerald-500/50 flex items-center px-1.5 overflow-hidden"
+            title={`Clip ${meta.clipId}`}
+          >
+            <span className="text-[9px] text-emerald-200 truncate">
+              {meta.clipId.slice(0, 6)}
+            </span>
+          </div>
         )
       }
 

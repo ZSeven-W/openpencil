@@ -9,6 +9,7 @@ import {
 } from '../document-manager'
 import { flattenNodes, getDocChildren } from '../utils/node-operations'
 import { buildDesignPrompt } from './design-prompt'
+import { buildAnimationContext } from './animation'
 import type { PenDocument, PenNode } from '../../types/pen'
 
 export interface OpenDocumentParams {
@@ -155,6 +156,9 @@ function buildDocumentContext(doc: PenDocument): string {
 
   const themeLines = buildThemeContext(doc)
   if (themeLines) parts.push('', themeLines)
+
+  const animationLines = buildAnimationContext(doc)
+  if (animationLines) parts.push('', animationLines)
 
   return parts.join('\n')
 }

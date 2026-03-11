@@ -8,6 +8,7 @@ import type {
   PlaybackMode,
   PresetConfig,
   TimelineState,
+  CompositionSettings,
 } from '@/types/animation'
 import type { AnimatableProperties } from '@/types/animation'
 import { generatePresetKeyframes } from '@/animation/presets'
@@ -108,6 +109,12 @@ interface TimelineStoreState {
   getTimelineData: () => TimelineState
   loadTimelineData: (data: TimelineState) => void
   reconcile: (existingNodeIds: Set<string>) => void
+
+  // v2: Composition getters (read from document store when available)
+  // These fall back to v1 duration/fps when no composition is set.
+  getCompositionDuration: () => number
+  getCompositionFps: () => number
+  setComposition: (settings: Partial<CompositionSettings>) => void
 }
 
 function sortedInsertKeyframe(
@@ -282,4 +289,58 @@ export const useTimelineStore = create<TimelineStoreState>((set, get) => ({
       const cleanedVideoClipIds = s.videoClipIds.filter((id) => existingNodeIds.has(id))
       return { tracks: cleaned, videoClipIds: cleanedVideoClipIds }
     }),
+
+  // --- v2: Composition (reads from document store, falls back to v1) ---
+  // Note: document-store is imported lazily to avoid circular dependencies.
+
+  getCompositionDuration: () => {
+    try {
+      // Lazy import to avoid circular dependency
+      const { useDocumentStore } = require('@/stores/document-store')
+      const doc = useDocumentStore.getState().document
+      if (doc.composition?.duration) return doc.composition.duration
+    } catch {
+      // Fall back to v1
+    }
+    return get().duration
+  },
+
+  getCompositionFps: () => {
+    try {
+      const { useDocumentStore } = require('@/stores/document-store')
+      const doc = useDocumentStore.getState().document
+      if (doc.composition?.fps) return doc.composition.fps
+    } catch {
+      // Fall back to v1
+    }
+    return get().fps
+  },
+
+  setComposition: (settings) => {
+    // v2: Write composition to document store if available.
+    // Also update v1 fields for backward compat.
+    if (settings.duration !== undefined) {
+      get().setDuration(settings.duration)
+    }
+    if (settings.fps !== undefined && (settings.fps === 24 || settings.fps === 30 || settings.fps === 60)) {
+      get().setFps(settings.fps)
+    }
+
+    try {
+      const { useDocumentStore } = require('@/stores/document-store')
+      const doc = useDocumentStore.getState().document
+      const current = doc.composition ?? { duration: get().duration, fps: get().fps }
+      // updateNode won't work for document-level fields.
+      // For now, write to document.composition directly via set.
+      // TODO: Add updateDocument to document-store for v2.
+      useDocumentStore.setState((s: { document: typeof doc }) => ({
+        document: {
+          ...s.document,
+          composition: { ...current, ...settings },
+        },
+      }))
+    } catch {
+      // v1 fields already updated above
+    }
+  },
 }))
