@@ -9,6 +9,7 @@ import type {
 import type { PenNode } from '@/types/pen'
 import { DEFAULT_PAGE_ID } from '@/stores/document-tree-utils'
 import { appStorage } from '@/utils/app-storage'
+import type { FormatPreset } from '@/vibekit/format-presets'
 
 const PREFS_KEY = 'openpencil-canvas-preferences'
 
@@ -34,6 +35,7 @@ interface CanvasStoreState {
   rightPanelTab: RightPanelTab
   figmaImportDialogOpen: boolean
   activePageId: string | null
+  activeFormat: FormatPreset | null
 
   setActiveTool: (tool: ToolType) => void
   setZoom: (zoom: number) => void
@@ -54,6 +56,7 @@ interface CanvasStoreState {
   setRightPanelTab: (tab: RightPanelTab) => void
   setFigmaImportDialogOpen: (open: boolean) => void
   setActivePageId: (pageId: string | null) => void
+  setActiveFormat: (format: FormatPreset | null) => void
   hydrate: () => void
 }
 
@@ -81,6 +84,7 @@ export const useCanvasStore = create<CanvasStoreState>((set, get) => ({
   rightPanelTab: 'design',
   figmaImportDialogOpen: false,
   activePageId: DEFAULT_PAGE_ID,
+  activeFormat: null,
 
   setActiveTool: (tool) => set({ activeTool: tool }),
 
@@ -175,6 +179,7 @@ export const useCanvasStore = create<CanvasStoreState>((set, get) => ({
   },
   setFigmaImportDialogOpen: (open) => set({ figmaImportDialogOpen: open }),
   setActivePageId: (activePageId) => set({ activePageId }),
+  setActiveFormat: (activeFormat) => set({ activeFormat }),
 
   hydrate: () => {
     try {
