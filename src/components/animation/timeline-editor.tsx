@@ -6,7 +6,8 @@ import type {
   TimelineEffect,
   TimelineState,
 } from '@cyca/react-timeline-editor'
-import '@cyca/react-timeline-editor/dist/react-timeline-editor.css'
+// @ts-expect-error — CSS not in package exports; resolved via Vite alias
+import '@cyca/react-timeline-editor/css'
 import './timeline-editor.css'
 import { useTimelineStore } from '@/stores/timeline-store'
 import { useDocumentStore } from '@/stores/document-store'

@@ -16,6 +16,9 @@ const config = defineConfig({
   resolve: {
     alias: {
       '@': fileURLToPath(new URL('./src', import.meta.url)),
+      '@cyca/react-timeline-editor/css': fileURLToPath(
+        new URL('./node_modules/@cyca/react-timeline-editor/dist/react-timeline-editor.css', import.meta.url),
+      ),
     },
   },
   plugins: [
