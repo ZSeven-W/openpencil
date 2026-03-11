@@ -29,6 +29,7 @@ import type { PenNode, VideoNode } from '@/types/pen'
 import { useCanvasStore } from '@/stores/canvas-store'
 import { isCursorUpdateRecent } from '@/animation/canvas-bridge'
 import { setTimelineRef } from '@/animation/playback-loop'
+import { withTimelineUndoBatch } from '@/animation/timeline-undo'
 
 // ---------------------------------------------------------------------------
 // Effects registry (no engine callbacks — we bypass the library's engine)
@@ -142,7 +143,9 @@ export default function TimelineEditor() {
 
   const onActionMoveEnd = useCallback(
     ({ action, start, end }: { action: TimelineAction; row: TimelineRow; start: number; end: number }) => {
-      applyActionMove(action.id, start, end, metadataRef.current, getStores())
+      withTimelineUndoBatch(() => {
+        applyActionMove(action.id, start, end, metadataRef.current, getStores())
+      })
       isDragging.current = false
       frozenRows.current = null
     },
@@ -163,7 +166,9 @@ export default function TimelineEditor() {
 
   const onActionResizeEnd = useCallback(
     ({ action, start, end, dir }: { action: TimelineAction; row: TimelineRow; start: number; end: number; dir: 'right' | 'left' }) => {
-      applyActionResize(action.id, start, end, dir, metadataRef.current, getStores())
+      withTimelineUndoBatch(() => {
+        applyActionResize(action.id, start, end, dir, metadataRef.current, getStores())
+      })
       isDragging.current = false
       frozenRows.current = null
     },
