@@ -48,6 +48,10 @@ export interface NodeRenderInfo {
   parentOffsetX: number
   parentOffsetY: number
   isLayoutChild: boolean
+  /** The ID of the top-level root frame this node belongs to. */
+  rootFrameId?: string
+  /** Nesting depth: 0 = root frame, 1 = immediate child, etc. */
+  depth: number
 }
 
 /** Rebuilt every sync cycle. Maps nodeId → parent offset + layout child status. */
@@ -55,6 +59,51 @@ export const nodeRenderInfo = new Map<string, NodeRenderInfo>()
 
 /** Maps root-frame IDs to their absolute bounds. Rebuilt every sync cycle. */
 export const rootFrameBounds = new Map<string, { x: number; y: number; w: number; h: number }>()
+
+// ---------------------------------------------------------------------------
+// Viewport culling — only create Fabric objects for visible root frames
+// ---------------------------------------------------------------------------
+
+/** Margin in scene-space pixels around the viewport for pre-rendering. */
+const VIEWPORT_MARGIN = 200
+
+interface ViewportRect {
+  left: number
+  top: number
+  right: number
+  bottom: number
+}
+
+/** Compute the viewport bounds in scene coordinates from Fabric's viewport transform. */
+function getViewportBounds(canvas: fabric.Canvas): ViewportRect {
+  const vpt = canvas.viewportTransform
+  const zoom = vpt[0] || 1
+  const panX = vpt[4] || 0
+  const panY = vpt[5] || 0
+  const w = canvas.getWidth()
+  const h = canvas.getHeight()
+  return {
+    left: -panX / zoom,
+    top: -panY / zoom,
+    right: (-panX + w) / zoom,
+    bottom: (-panY + h) / zoom,
+  }
+}
+
+/** Check if a rectangle overlaps the viewport (with margin). */
+function isRectInViewport(
+  rect: { x: number; y: number; w: number; h: number },
+  vp: ViewportRect,
+  margin: number,
+): boolean {
+  return !(
+    rect.x + rect.w < vp.left - margin
+    || rect.x > vp.right + margin
+    || rect.y + rect.h < vp.top - margin
+    || rect.y > vp.bottom + margin
+  )
+}
+
 
 /** Info for layout containers — used by drag-into-layout for hit detection. */
 export interface LayoutContainerInfo {
@@ -211,6 +260,7 @@ function flattenNodes(
   clipMap?: Map<string, ClipInfo>,
   isLayoutChild = false,
   depth = 0,
+  rootFrameId?: string,
 ): PenNode[] {
   const result: PenNode[] = []
   // Iterate children in REVERSE so that children[0] (top of layer panel)
@@ -220,11 +270,16 @@ function flattenNodes(
     const node = nodes[i]
     if (!isNodeVisible(node)) continue
 
+    // Track which root frame this node belongs to
+    const currentRootId = depth === 0 ? node.id : rootFrameId
+
     // Store render info for position conversion in canvas events
     nodeRenderInfo.set(node.id, {
       parentOffsetX: offsetX,
       parentOffsetY: offsetY,
       isLayoutChild,
+      rootFrameId: currentRootId,
+      depth,
     })
 
     // Resolve fill_container / fit_content string sizes into pixel values
@@ -361,7 +416,7 @@ function flattenNodes(
       const childIsLayoutChild = !!(layout && layout !== 'none')
 
       result.push(
-        ...flattenNodes(positioned, parentAbsX, parentAbsY, childAvailW, childAvailH, childClip, clipMap, childIsLayoutChild, depth + 1),
+        ...flattenNodes(positioned, parentAbsX, parentAbsY, childAvailW, childAvailH, childClip, clipMap, childIsLayoutChild, depth + 1, currentRootId),
       )
     }
   }
@@ -390,6 +445,12 @@ export function rebuildNodeRenderInfo() {
  * Call this before saving to guarantee the file captures the latest canvas state,
  * even if a real-time sync was missed for any reason.
  */
+/**
+ * Collect position/size updates from all Fabric objects and apply them to the
+ * document store in a **single** state write — no per-object `updateNode()`
+ * calls and no undo-history pushes.  This makes save-before-export O(n)
+ * instead of O(n²) and avoids flooding the history stack.
+ */
 export function syncCanvasPositionsToStore() {
   const canvas = useCanvasStore.getState().fabricCanvas
   if (!canvas) return
@@ -397,42 +458,239 @@ export function syncCanvasPositionsToStore() {
   // Ensure nodeRenderInfo is fresh
   rebuildNodeRenderInfo()
 
+  // 1. Collect all updates keyed by node id
+  const updateMap = new Map<string, Record<string, unknown>>()
   const objects = canvas.getObjects() as FabricObjectWithPenId[]
+
+  for (const obj of objects) {
+    if (!obj.penNodeId) continue
+
+    const info = nodeRenderInfo.get(obj.penNodeId)
+    const offsetX = info?.parentOffsetX ?? 0
+    const offsetY = info?.parentOffsetY ?? 0
+    const scaleX = obj.scaleX ?? 1
+    const scaleY = obj.scaleY ?? 1
+
+    const updates: Record<string, unknown> = {
+      x: (obj.left ?? 0) - offsetX,
+      y: (obj.top ?? 0) - offsetY,
+      rotation: obj.angle ?? 0,
+    }
+
+    if (obj.width !== undefined) {
+      updates.width = obj.width * scaleX
+    }
+    if (obj.height !== undefined) {
+      updates.height = obj.height * scaleY
+    }
+
+    // Sync text content too
+    if ('text' in obj && typeof (obj as any).text === 'string') {
+      updates.content = (obj as any).text
+    }
+
+    updateMap.set(obj.penNodeId, updates)
+  }
+
+  if (updateMap.size === 0) return
+
+  // 2. Apply all updates in a single tree walk + single store set
+  function applyUpdates(nodes: PenNode[]): PenNode[] {
+    return nodes.map((n) => {
+      const upd = updateMap.get(n.id)
+      const patched = upd ? ({ ...n, ...upd } as PenNode) : n
+      if ('children' in patched && patched.children) {
+        const newChildren = applyUpdates(patched.children)
+        if (newChildren !== patched.children) {
+          return { ...patched, children: newChildren } as PenNode
+        }
+      }
+      return patched
+    })
+  }
+
   setFabricSyncLock(true)
   try {
-    for (const obj of objects) {
-      if (!obj.penNodeId) continue
-
-      const info = nodeRenderInfo.get(obj.penNodeId)
-      const offsetX = info?.parentOffsetX ?? 0
-      const offsetY = info?.parentOffsetY ?? 0
-      const scaleX = obj.scaleX ?? 1
-      const scaleY = obj.scaleY ?? 1
-
-      const updates: Record<string, unknown> = {
-        x: (obj.left ?? 0) - offsetX,
-        y: (obj.top ?? 0) - offsetY,
-        rotation: obj.angle ?? 0,
-      }
-
-      if (obj.width !== undefined) {
-        updates.width = obj.width * scaleX
-      }
-      if (obj.height !== undefined) {
-        updates.height = obj.height * scaleY
-      }
-
-      // Sync text content too
-      if ('text' in obj && typeof (obj as any).text === 'string') {
-        updates.content = (obj as any).text
-      }
-
-      useDocumentStore
-        .getState()
-        .updateNode(obj.penNodeId, updates as Partial<PenNode>)
-    }
+    const state = useDocumentStore.getState()
+    const activePageId = useCanvasStore.getState().activePageId
+    const children = getActivePageChildren(state.document, activePageId)
+    const updated = applyUpdates(children)
+    const newDoc = setActivePageChildren(state.document, activePageId, updated)
+    // Direct set — no history push, no per-node overhead
+    useDocumentStore.setState({ document: newDoc })
   } finally {
     setFabricSyncLock(false)
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Viewport-driven object materialization — instead of creating ALL Fabric
+// objects and toggling `visible`, we only add objects to the canvas when
+// they should be rendered.  Off-screen / deeply-nested objects are removed
+// from the canvas and held in a lightweight pool.  This dramatically
+// reduces Fabric's per-frame iteration count (e.g. from 2949 to ~200).
+// ---------------------------------------------------------------------------
+
+/** Pool of Fabric objects removed from the canvas but kept for quick re-add. */
+const offscreenPool = new Map<string, FabricObjectWithPenId>()
+
+/** Set of penNodeIds currently on the canvas. */
+const onCanvasIds = new Set<string>()
+
+/** Desired z-order for all flat nodes (built during sync). */
+let expectedNodeOrder: string[] = []
+
+/** Whether a progressive materialization is currently in progress. */
+let materializationRafId: number | null = null
+
+/** Determine whether a node should be on canvas given current viewport.
+ *  Only viewport culling is applied: children of off-screen root frames are
+ *  excluded. Depth/size LOD is no longer needed because the zoom cache
+ *  (canvas-zoom-cache.ts) renders a pixel snapshot during zoom/pan, making
+ *  per-object rendering cost irrelevant during navigation. */
+function shouldNodeBeOnCanvas(
+  nodeId: string,
+  visibleRootIds: Set<string>,
+): boolean {
+  const info = nodeRenderInfo.get(nodeId)
+  if (!info) return false
+
+  const isRootFrame = !info.rootFrameId || info.rootFrameId === nodeId
+
+  // Frame-level culling: skip children of off-screen root frames
+  if (!isRootFrame && info.rootFrameId && !visibleRootIds.has(info.rootFrameId)) {
+    return false
+  }
+
+  return true
+}
+
+function updateObjectVisibility(canvas: fabric.Canvas) {
+  const vpBounds = getViewportBounds(canvas)
+
+  // Determine which root frames overlap the viewport
+  const visibleRootIds = new Set<string>()
+  for (const [id, bounds] of rootFrameBounds) {
+    if (isRectInViewport(bounds, vpBounds, VIEWPORT_MARGIN)) {
+      visibleRootIds.add(id)
+    }
+  }
+
+  // 1. Remove objects that should no longer be on canvas.
+  //    Collect all removals first, then batch-process to avoid O(n²)
+  //    from repeated canvas.remove() splice operations.
+  const objects = canvas.getObjects() as FabricObjectWithPenId[]
+  const toRemove: FabricObjectWithPenId[] = []
+  for (const obj of objects) {
+    if (!obj.penNodeId) continue
+    if (!shouldNodeBeOnCanvas(obj.penNodeId, visibleRootIds)) {
+      toRemove.push(obj)
+    }
+  }
+  if (toRemove.length > 0) {
+    // For large batches, manipulate the internal array directly for O(n)
+    // instead of calling canvas.remove() per object which is O(n) each.
+    const removeSet = new Set(toRemove)
+    const internalObjects = (canvas as any)._objects as fabric.FabricObject[]
+    if (internalObjects) {
+      const kept = internalObjects.filter((o) => !removeSet.has(o as FabricObjectWithPenId))
+      internalObjects.length = 0
+      internalObjects.push(...kept)
+    } else {
+      // Fallback: individual remove
+      for (const obj of toRemove) canvas.remove(obj)
+    }
+    for (const obj of toRemove) {
+      offscreenPool.set(obj.penNodeId!, obj)
+      onCanvasIds.delete(obj.penNodeId!)
+      // Detach from canvas group reference
+      ;(obj as any).canvas = undefined
+      ;(obj as any).group = undefined
+    }
+  }
+
+  // 2. Find objects that should be added to canvas
+  const toAdd: FabricObjectWithPenId[] = []
+  for (const nodeId of expectedNodeOrder) {
+    if (onCanvasIds.has(nodeId)) continue
+    const pooled = offscreenPool.get(nodeId)
+    if (!pooled) continue
+    if (shouldNodeBeOnCanvas(nodeId, visibleRootIds)) {
+      toAdd.push(pooled)
+    }
+  }
+
+  // 3. Progressive materialization: add objects in batches to avoid
+  //    a single-frame spike when crossing LOD thresholds.
+  if (toAdd.length > 0) {
+    // Cancel any in-flight progressive add
+    if (materializationRafId !== null) cancelAnimationFrame(materializationRafId)
+
+    const BATCH_SIZE = 150
+    let idx = 0
+
+    function addBatch() {
+      materializationRafId = null
+      if (!canvas || idx >= toAdd.length) return
+      const end = Math.min(idx + BATCH_SIZE, toAdd.length)
+      for (let i = idx; i < end; i++) {
+        const obj = toAdd[i]
+        if (!obj.penNodeId) continue
+        offscreenPool.delete(obj.penNodeId)
+        onCanvasIds.add(obj.penNodeId)
+        canvas.add(obj)
+      }
+      idx = end
+      fixZOrder(canvas)
+      canvas.requestRenderAll()
+
+      if (idx < toAdd.length) {
+        materializationRafId = requestAnimationFrame(addBatch)
+      }
+    }
+
+    // If batch is small, do it synchronously (no jank)
+    if (toAdd.length <= BATCH_SIZE) {
+      addBatch()
+    } else {
+      // First batch immediately, rest progressive
+      addBatch()
+    }
+    return
+  }
+
+  if (toRemove.length > 0) {
+    canvas.requestRenderAll()
+  }
+}
+
+/** Quickly fix z-order after adding objects from pool. */
+function fixZOrder(canvas: fabric.Canvas) {
+  const orderMap = new Map<string, number>()
+  for (let i = 0; i < expectedNodeOrder.length; i++) {
+    orderMap.set(expectedNodeOrder[i], i)
+  }
+
+  const objs = canvas.getObjects() as FabricObjectWithPenId[]
+  // Check if already in correct order (common case — skip sort)
+  let sorted = true
+  let prevIdx = -1
+  for (const o of objs) {
+    if (!o.penNodeId) continue
+    const idx = orderMap.get(o.penNodeId) ?? -1
+    if (idx < prevIdx) { sorted = false; break }
+    prevIdx = idx
+  }
+  if (sorted) return
+
+  // Sort by desired order — uses Fabric's moveObjectTo
+  const desired = objs
+    .filter((o) => o.penNodeId)
+    .sort((a, b) => (orderMap.get(a.penNodeId!) ?? 0) - (orderMap.get(b.penNodeId!) ?? 0))
+
+  for (let i = 0; i < desired.length; i++) {
+    const current = canvas.getObjects().indexOf(desired[i])
+    if (current !== i) canvas.moveObjectTo(desired[i], i)
   }
 }
 
@@ -523,18 +781,30 @@ export function useCanvasSync() {
       nodeRenderInfo.clear()
       rootFrameBounds.clear()
       layoutContainerBounds.clear()
+      // Preserve offscreenPool across syncs: existing Fabric objects are reused
+      // via objMap lookup below, avoiding O(n) recreation on every document edit.
+      // Stale entries (deleted nodes) are purged after the removal pass.
+      onCanvasIds.clear()
       // Resolve RefNodes before flattening so instances render as their component
       const resolvedTree = resolveRefs(pageChildren, allNodes)
       const flatNodes = flattenNodes(
         resolvedTree, 0, 0, undefined, undefined, undefined, clipMap,
       ).map((node) => resolveNodeForCanvas(node, variables, activeTheme))
+
+      // Build expected z-order for materialization
+      expectedNodeOrder = flatNodes.filter((n) => n.type !== 'ref').map((n) => n.id)
+
       const nodeMap = new Map(flatNodes.map((n) => [n.id, n]))
       const objects = canvas.getObjects() as FabricObjectWithPenId[]
+      // Build objMap from BOTH canvas objects AND offscreen pool
       const objMap = new Map(
         objects
           .filter((o) => o.penNodeId)
           .map((o) => [o.penNodeId!, o]),
       )
+      for (const [id, obj] of offscreenPool) {
+        if (!objMap.has(id)) objMap.set(id, obj)
+      }
 
       // Collect component and instance IDs for selection styling
       const reusableIds = new Set<string>()
@@ -547,7 +817,7 @@ export function useCanvasSync() {
         }
       })(pageChildren)
 
-      // Remove objects that no longer exist in the document, and
+      // Remove objects that no longer exist in the active set, and
       // deduplicate: when multiple Fabric objects share the same penNodeId
       // (e.g. from ID collisions across separate AI generations), keep only
       // the one tracked in objMap and remove the rest.
@@ -555,11 +825,21 @@ export function useCanvasSync() {
         if (!obj.penNodeId) continue
         if (!nodeMap.has(obj.penNodeId)) {
           canvas.remove(obj)
+          onCanvasIds.delete(obj.penNodeId)
         } else if (objMap.get(obj.penNodeId) !== obj) {
-          // Duplicate — this object has the same penNodeId but isn't the one
-          // tracked in objMap (Map keeps the last occurrence). Remove it.
           canvas.remove(obj)
         }
+      }
+      // Also purge pool entries for nodes no longer in the document
+      for (const id of offscreenPool.keys()) {
+        if (!nodeMap.has(id)) {
+          offscreenPool.delete(id)
+        }
+      }
+
+      // Rebuild onCanvasIds from surviving canvas objects
+      for (const obj of canvas.getObjects() as FabricObjectWithPenId[]) {
+        if (obj.penNodeId) onCanvasIds.add(obj.penNodeId)
       }
 
       // Add or update objects
@@ -583,6 +863,8 @@ export function useCanvasSync() {
           const isTextbox = existingObj instanceof fabric.Textbox
           if (needsTextbox !== isTextbox) {
             canvas.remove(existingObj)
+            onCanvasIds.delete(node.id)
+            offscreenPool.delete(node.id)
             existingObj = undefined
             objectRecreated = true
           }
@@ -602,6 +884,8 @@ export function useCanvasSync() {
           // Fabric class).
           if ((existingObj as any).__needsRecreation) {
             canvas.remove(existingObj)
+            onCanvasIds.delete(node.id)
+            offscreenPool.delete(node.id)
             existingObj = undefined
             objectRecreated = true
           } else {
@@ -618,6 +902,7 @@ export function useCanvasSync() {
               const totalDelay = getNextStaggerDelay(node.id)
               newObj.set({ opacity: 0 })
               canvas.add(newObj)
+              onCanvasIds.add(node.id)
               setTimeout(() => {
                 removePreviewNode(node.id)
                 newObj.animate({ opacity: targetOpacity }, {
@@ -631,12 +916,17 @@ export function useCanvasSync() {
                 })
               }, totalDelay)
             } else {
-              canvas.add(newObj)
+              // Don't add to canvas yet — pool it for lazy materialization.
+              // updateObjectVisibility() will add visible objects afterwards.
+              offscreenPool.set(node.id, newObj)
             }
             // Restore Fabric selection when an object was recreated
             if (objectRecreated) {
               const { activeId } = useCanvasStore.getState().selection
               if (activeId === node.id) {
+                canvas.add(newObj)
+                onCanvasIds.add(node.id)
+                offscreenPool.delete(node.id)
                 canvas.setActiveObject(newObj)
               }
             }
@@ -678,45 +968,47 @@ export function useCanvasSync() {
               originY: 'top',
               absolutePositioned: true,
             })
-            // Invalidate the object cache so the clipPath takes effect on next render.
-            // Without this, canvas.add() caches the object without the clip and
-            // requestRenderAll() reuses the stale cache.
             obj.dirty = true
           } else if (obj.clipPath && obj.clipPath.absolutePositioned) {
-            // Only clear frame-level clips (absolutePositioned: true).
-            // Preserve object-level clips like image corner radius (absolutePositioned: false).
             obj.clipPath = undefined
             obj.dirty = true
           }
         }
       }
 
-      // Z-order reconciliation: ensure Fabric object order matches the
-      // flatNodes order.  When the user reorders layers in the panel the
-      // document children change, but existing Fabric objects keep their
-      // old canvas indices.  Reconcile once after every sync pass.
-      // Rebuild mapping from CURRENT canvas objects (not the pre-update objMap)
-      // because text objects may have been recreated (IText↔Textbox swap),
-      // leaving stale references in objMap.
-      const freshObjMap = new Map(
-        (canvas.getObjects() as FabricObjectWithPenId[])
-          .filter((o) => o.penNodeId)
-          .map((o) => [o.penNodeId!, o]),
-      )
-      const expectedOrder: FabricObjectWithPenId[] = []
-      for (const node of flatNodes) {
-        if (node.type === 'ref') continue
-        const o = freshObjMap.get(node.id)
-        if (o) expectedOrder.push(o)
-      }
-      for (let i = 0; i < expectedOrder.length; i++) {
-        const current = canvas.getObjects().indexOf(expectedOrder[i])
-        if (current !== i) {
-          canvas.moveObjectTo(expectedOrder[i], i)
-        }
-      }
-
+      // Materialize visible objects from pool and fix z-order.
+      // updateObjectVisibility will add objects from the pool to the
+      // canvas based on current viewport and LOD, then fixZOrder
+      // ensures correct stacking.
+      updateObjectVisibility(canvas)
+      fixZOrder(canvas)
       canvas.requestRenderAll()
+    })
+
+    let visibilityRafId: number | null = null
+    let prevViewportZoom = 0
+    let prevViewportPanX = 0
+    let prevViewportPanY = 0
+
+    const unsubViewport = useCanvasStore.subscribe((cs) => {
+      if (!cs.fabricCanvas) return
+      // Only trigger visibility update when viewport actually changed
+      // (zoom or pan), not on every store tick (tool switch, selection, etc.)
+      const vpt = cs.fabricCanvas.viewportTransform
+      const z = vpt[0] || 1
+      const px = vpt[4] || 0
+      const py = vpt[5] || 0
+      if (z === prevViewportZoom && px === prevViewportPanX && py === prevViewportPanY) return
+      prevViewportZoom = z
+      prevViewportPanX = px
+      prevViewportPanY = py
+
+      // Batch with rAF so visibility updates don't fire on every zoom tick
+      if (visibilityRafId !== null) cancelAnimationFrame(visibilityRafId)
+      visibilityRafId = requestAnimationFrame(() => {
+        visibilityRafId = null
+        if (cs.fabricCanvas) updateObjectVisibility(cs.fabricCanvas)
+      })
     })
 
     // Trigger initial sync for the already-existing document.
@@ -734,6 +1026,12 @@ export function useCanvasSync() {
     return () => {
       unsub()
       unsubCanvas()
+      unsubViewport()
+      if (visibilityRafId !== null) cancelAnimationFrame(visibilityRafId)
+      if (materializationRafId !== null) cancelAnimationFrame(materializationRafId)
+      offscreenPool.clear()
+      onCanvasIds.clear()
+      expectedNodeOrder = []
     }
   }, [])
 }

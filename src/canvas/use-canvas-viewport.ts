@@ -2,6 +2,7 @@ import { useEffect } from 'react'
 import { Point } from 'fabric'
 import { useCanvasStore } from '@/stores/canvas-store'
 import { MIN_ZOOM, MAX_ZOOM } from './canvas-constants'
+import { activateZoomCache, scheduleZoomCacheEnd, refreshZoomCacheIfNeeded } from './canvas-zoom-cache'
 import type { ToolType } from '@/types/canvas'
 
 // Precise crosshair cursor (thin +)
@@ -34,6 +35,10 @@ export function useCanvasViewport() {
         const e = opt.e as WheelEvent
         e.preventDefault()
         e.stopPropagation()
+
+        // Activate zoom/pan cache: draws cached bitmap instead of
+        // re-rendering 200+ objects per frame (~0.1ms vs ~15ms).
+        activateZoomCache(canvas)
 
         if (e.ctrlKey || e.metaKey) {
           // Pinch-to-zoom (trackpad) or Ctrl/Cmd + scroll (mouse) → Zoom
@@ -72,6 +77,11 @@ export function useCanvasViewport() {
           }
         }
 
+        // Periodically re-snapshot so bitmap stays fresh during long gestures
+        refreshZoomCacheIfNeeded()
+        // Deactivate cache after viewport stops changing (150ms debounce).
+        // Full-quality render happens automatically on deactivation.
+        scheduleZoomCacheEnd()
         canvas.requestRenderAll()
       })
     }
@@ -158,6 +168,7 @@ export function useCanvasViewport() {
             lastY = e.clientY
             canvas.defaultCursor = 'grabbing'
             useCanvasStore.getState().setInteraction({ isPanning: true })
+            activateZoomCache(canvas)
           }
         })
 
@@ -176,6 +187,8 @@ export function useCanvasViewport() {
             canvas.setViewportTransform(vpt)
             useCanvasStore.getState().setPan(vpt[4], vpt[5])
           }
+          refreshZoomCacheIfNeeded()
+          scheduleZoomCacheEnd()
         })
 
         canvas.on('mouse:up', () => {
