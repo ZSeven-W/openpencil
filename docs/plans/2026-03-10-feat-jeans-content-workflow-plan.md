@@ -595,12 +595,12 @@ async function exportVideo(canvas, duration, fps, outputPath) {
 
 #### Phase 7 Deliverables
 
-- [ ] Multi-page PDF carousel export using `jspdf` (`src/utils/export.ts` — extend)
-- [ ] Sequential image carousel export with zip (`src/utils/export.ts` — extend)
-- [ ] Video export via FFmpeg piping (`src/utils/video-export.ts`)
-- [ ] Add `ffmpeg-static` and `jspdf` dependencies (`package.json`)
-- [ ] Export dialog with format-aware presets: PDF for LinkedIn carousel (`src/components/shared/export-dialog.tsx` — extend)
-- [ ] Tests for PDF + image carousel export (`src/utils/export.test.ts`)
+- [x] Multi-page PDF carousel export using `jspdf` (`src/utils/export.ts` — extend)
+- [x] Sequential image carousel export (`src/utils/export.ts` — extend)
+- [ ] Video export via FFmpeg piping (`src/utils/video-export.ts`) — blocked on `feat/animation-core` merge
+- [x] Add `jspdf` dependency (`package.json`); `ffmpeg-static` deferred until video export
+- [x] Export dialog with format-aware presets: PDF for LinkedIn carousel (`src/components/shared/export-dialog.tsx` — extend)
+- [ ] Tests for PDF + image carousel export (`src/utils/export.test.ts`) — requires browser DOM
 
 ---
 
