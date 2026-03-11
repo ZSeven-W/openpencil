@@ -136,9 +136,9 @@ describe('toTimelineRows', () => {
 
     // Check action IDs and effectIds
     const actionIds = rows[0].actions.map((a) => a.id)
-    expect(actionIds).toContain('node-1-in')
-    expect(actionIds).toContain('node-1-while')
-    expect(actionIds).toContain('node-1-out')
+    expect(actionIds).toContain('node-1::in')
+    expect(actionIds).toContain('node-1::while')
+    expect(actionIds).toContain('node-1::out')
 
     for (const action of rows[0].actions) {
       expect(action.effectId).toBe(EFFECT_ANIMATION_PHASE)
@@ -148,7 +148,7 @@ describe('toTimelineRows', () => {
 
     // Check metadata
     expect(metadata.size).toBe(3)
-    const inMeta = metadata.get('node-1-in')
+    const inMeta = metadata.get('node-1::in')
     expect(inMeta).toEqual({ type: 'animation-phase', phase: 'in', nodeId: 'node-1' })
   })
 
@@ -158,11 +158,11 @@ describe('toTimelineRows', () => {
 
     const { rows } = toTimelineRows(tracks, [], 5000)
 
-    const inAction = rows[0].actions.find((a) => a.id === 'node-1-in')!
+    const inAction = rows[0].actions.find((a) => a.id === 'node-1::in')!
     expect(inAction.start).toBe(0)
     expect(inAction.end).toBe(0.5)
 
-    const outAction = rows[0].actions.find((a) => a.id === 'node-1-out')!
+    const outAction = rows[0].actions.find((a) => a.id === 'node-1::out')!
     expect(outAction.start).toBe(1.5)
     expect(outAction.end).toBe(2)
   })
@@ -176,12 +176,12 @@ describe('toTimelineRows', () => {
     expect(rows[0].actions).toHaveLength(1)
 
     const action = rows[0].actions[0]
-    expect(action.id).toBe('video-1-video')
+    expect(action.id).toBe('video-1::video')
     expect(action.effectId).toBe(EFFECT_VIDEO_CLIP)
     expect(action.start).toBe(msToSec(1000)) // timelineOffset
     expect(action.end).toBe(msToSec(1000 + 5000)) // offset + (outPoint - inPoint)
 
-    const meta = metadata.get('video-1-video')
+    const meta = metadata.get('video-1::video')
     expect(meta).toEqual({ type: 'video-clip', nodeId: 'video-1' })
   })
 
@@ -204,9 +204,9 @@ describe('toTimelineRows', () => {
 
     // Only 'while' phase should be present (in/out have duration 0)
     const actionIds = rows[0].actions.map((a) => a.id)
-    expect(actionIds).not.toContain('node-1-in')
-    expect(actionIds).toContain('node-1-while')
-    expect(actionIds).not.toContain('node-1-out')
+    expect(actionIds).not.toContain('node-1::in')
+    expect(actionIds).toContain('node-1::while')
+    expect(actionIds).not.toContain('node-1::out')
   })
 
   it('handles empty tracks and no video nodes', () => {
@@ -244,7 +244,7 @@ describe('applyActionMove', () => {
     const { metadata } = toTimelineRows({ 'node-1': track }, [], 5000)
 
     // Move 'in' phase from 0-0.5s to 0.2-0.7s (delta = 200ms)
-    applyActionMove('node-1-in', 0.2, 0.7, metadata, stores)
+    applyActionMove('node-1::in', 0.2, 0.7, metadata, stores)
 
     // Should update both 'in' phase keyframes with +200ms delta
     expect(stores.updateKeyframe).toHaveBeenCalledTimes(2)
@@ -259,7 +259,7 @@ describe('applyActionMove', () => {
     const { metadata } = toTimelineRows({}, [videoNode], 5000)
 
     // Move video from 1s to 2s
-    applyActionMove('video-1-video', 2, 7, metadata, stores)
+    applyActionMove('video-1::video', 2, 7, metadata, stores)
 
     expect(stores.updateNode).toHaveBeenCalledWith('video-1', {
       timelineOffset: 2000,
@@ -289,7 +289,7 @@ describe('applyActionResize', () => {
 
     const { metadata } = toTimelineRows({ 'node-1': track }, [], 5000)
 
-    applyActionResize('node-1-in', 0.1, 0.5, 'left', metadata, stores)
+    applyActionResize('node-1::in', 0.1, 0.5, 'left', metadata, stores)
 
     expect(stores.updateKeyframe).toHaveBeenCalledWith('node-1', 'kf-1', { time: 100 })
   })
@@ -301,7 +301,7 @@ describe('applyActionResize', () => {
 
     const { metadata } = toTimelineRows({ 'node-1': track }, [], 5000)
 
-    applyActionResize('node-1-in', 0, 0.8, 'right', metadata, stores)
+    applyActionResize('node-1::in', 0, 0.8, 'right', metadata, stores)
 
     expect(stores.updateKeyframe).toHaveBeenCalledWith('node-1', 'kf-2', { time: 800 })
   })
@@ -313,7 +313,7 @@ describe('applyActionResize', () => {
     const { metadata } = toTimelineRows({}, [videoNode], 5000)
 
     // Trim left from 1s to 1.5s
-    applyActionResize('video-1-video', 1.5, 6, 'left', metadata, stores)
+    applyActionResize('video-1::video', 1.5, 6, 'left', metadata, stores)
 
     expect(stores.updateNode).toHaveBeenCalledWith('video-1', {
       timelineOffset: 1500,
@@ -328,7 +328,7 @@ describe('applyActionResize', () => {
     const { metadata } = toTimelineRows({}, [videoNode], 5000)
 
     // Trim right from 6s to 5s
-    applyActionResize('video-1-video', 1, 5, 'right', metadata, stores)
+    applyActionResize('video-1::video', 1, 5, 'right', metadata, stores)
 
     expect(stores.updateNode).toHaveBeenCalledWith('video-1', {
       outPoint: 4000, // inPoint(0) + (5000 - 1000)
@@ -374,18 +374,18 @@ describe('validateActionMove', () => {
   it('rejects video clip exceeding video duration', () => {
     const videoNode = makeVideoNode({ videoDuration: 5000 })
     const stores = makeMockStores({}, videoNode)
-    const metadata = new Map([['video-1-video', { type: 'video-clip' as const, nodeId: 'video-1' }]])
+    const metadata = new Map([['video-1::video', { type: 'video-clip' as const, nodeId: 'video-1' }]])
 
     // Clip duration of 6s > video duration of 5s
-    expect(validateActionMove('video-1-video', 0, 6, metadata, stores)).toBe(false)
+    expect(validateActionMove('video-1::video', 0, 6, metadata, stores)).toBe(false)
   })
 
   it('allows valid video clip move', () => {
     const videoNode = makeVideoNode({ videoDuration: 10000 })
     const stores = makeMockStores({}, videoNode)
-    const metadata = new Map([['video-1-video', { type: 'video-clip' as const, nodeId: 'video-1' }]])
+    const metadata = new Map([['video-1::video', { type: 'video-clip' as const, nodeId: 'video-1' }]])
 
-    expect(validateActionMove('video-1-video', 1, 5, metadata, stores)).toBe(true)
+    expect(validateActionMove('video-1::video', 1, 5, metadata, stores)).toBe(true)
   })
 
   it('rejects unknown action', () => {

@@ -4,7 +4,25 @@ import { generateId } from '../utils/id'
 import { getAllEffects, getEffectsByCategory, generateClipFromEffect } from '../../animation/effect-registry'
 import { getAllPropertyDescriptors } from '../../animation/property-descriptors'
 import type { AnimationClip, AnimationClipData, KeyframeV2, CompositionSettings } from '../../types/animation'
-import type { PenNode } from '../../types/pen'
+import type { PenNode, PenNodeType } from '../../types/pen'
+import type { EffectDescriptor } from '../../animation/effect-registry'
+
+const VALID_EFFECT_CATEGORIES: ReadonlySet<EffectDescriptor['category']> = new Set([
+  'enter', 'exit', 'emphasis', 'transition', 'video', 'custom',
+])
+
+const VALID_NODE_TYPES: ReadonlySet<PenNodeType> = new Set([
+  'frame', 'group', 'rectangle', 'ellipse', 'line', 'polygon',
+  'path', 'text', 'image', 'video', 'icon_font', 'ref',
+])
+
+function isValidEffectCategory(value: string): value is EffectDescriptor['category'] {
+  return (VALID_EFFECT_CATEGORIES as ReadonlySet<string>).has(value)
+}
+
+function isValidNodeType(value: string): value is PenNodeType {
+  return (VALID_NODE_TYPES as ReadonlySet<string>).has(value)
+}
 
 // ---------------------------------------------------------------------------
 // list_effects
@@ -15,8 +33,12 @@ export interface ListEffectsParams {
 }
 
 export function handleListEffects(params: ListEffectsParams) {
+  if (params.category && !isValidEffectCategory(params.category)) {
+    return { effects: [] }
+  }
+
   const effects = params.category
-    ? getEffectsByCategory(params.category as any)
+    ? getEffectsByCategory(params.category)
     : getAllEffects()
 
   return {
@@ -49,8 +71,12 @@ export function handleListAnimatableProperties(params: ListAnimatablePropertiesP
   let descriptors = getAllPropertyDescriptors()
 
   if (params.nodeType) {
+    if (!isValidNodeType(params.nodeType)) {
+      return { properties: [] }
+    }
+    const validatedType: PenNodeType = params.nodeType
     descriptors = descriptors.filter(
-      (d) => !d.nodeTypes || d.nodeTypes.includes(params.nodeType as any),
+      (d) => !d.nodeTypes || d.nodeTypes.includes(validatedType),
     )
   }
 
@@ -82,6 +108,29 @@ export interface AddClipParams {
 export async function handleAddClip(
   params: AddClipParams,
 ): Promise<{ clip: AnimationClipData }> {
+  if (!Number.isFinite(params.startTime) || params.startTime < 0) {
+    throw new Error('startTime must be a finite number >= 0')
+  }
+  if (!Number.isFinite(params.duration) || params.duration <= 0) {
+    throw new Error('duration must be a finite number > 0')
+  }
+
+  if (params.keyframes) {
+    const knownKeys = new Set(getAllPropertyDescriptors().map((d) => d.key))
+    for (const kf of params.keyframes) {
+      if (typeof kf.offset !== 'number' || kf.offset < 0 || kf.offset > 1) {
+        throw new Error(`Keyframe offset must be a number in [0, 1], got: ${kf.offset}`)
+      }
+      if (kf.properties) {
+        for (const key of Object.keys(kf.properties)) {
+          if (!knownKeys.has(key)) {
+            throw new Error(`Unknown animatable property: "${key}". Use list_animatable_properties to see valid keys.`)
+          }
+        }
+      }
+    }
+  }
+
   const filePath = resolveDocPath(params.filePath)
   const doc = await openDocument(filePath)
   const cloned = structuredClone(doc)
@@ -144,6 +193,13 @@ export interface UpdateClipParams {
 export async function handleUpdateClip(
   params: UpdateClipParams,
 ): Promise<{ clip: AnimationClip }> {
+  if (params.startTime !== undefined && (!Number.isFinite(params.startTime) || params.startTime < 0)) {
+    throw new Error('startTime must be a finite number >= 0')
+  }
+  if (params.duration !== undefined && (!Number.isFinite(params.duration) || params.duration <= 0)) {
+    throw new Error('duration must be a finite number > 0')
+  }
+
   const filePath = resolveDocPath(params.filePath)
   const doc = await openDocument(filePath)
   const cloned = structuredClone(doc)
@@ -224,6 +280,13 @@ export interface SetCompositionParams {
 export async function handleSetComposition(
   params: SetCompositionParams,
 ): Promise<{ composition: CompositionSettings }> {
+  if (params.duration !== undefined && (!Number.isFinite(params.duration) || params.duration <= 0)) {
+    throw new Error('duration must be a finite number > 0')
+  }
+  if (params.fps !== undefined && (!Number.isFinite(params.fps) || params.fps <= 0 || params.fps > 120)) {
+    throw new Error('fps must be a finite number > 0 and <= 120')
+  }
+
   const filePath = resolveDocPath(params.filePath)
   const doc = await openDocument(filePath)
   const cloned = structuredClone(doc)

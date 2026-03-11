@@ -126,7 +126,10 @@ function syncSingleVideoClip(
 
   // Ensure playing
   if (video.paused) {
-    video.play().catch(() => {}) // ignore autoplay restriction errors
+    video.play().catch((e: unknown) => {
+      if (e instanceof DOMException && e.name === 'AbortError') return
+      throw e
+    })
   }
 
   // Mark Fabric object dirty to re-read video texture

@@ -194,8 +194,8 @@ export function interpolateClip(
   // Same keyframe or at exact keyframe position
   if (lowerIdx === upperIdx || lower.offset === upper.offset) {
     const result = buffer?.values ?? {}
-    for (const [key, val] of Object.entries(lower.properties)) {
-      result[key] = val
+    for (const key in lower.properties) {
+      result[key] = lower.properties[key]
     }
     return result
   }
@@ -207,17 +207,14 @@ export function interpolateClip(
 
   const result = buffer?.values ?? {}
 
-  // Interpolate each property
-  const allKeys = new Set([
-    ...Object.keys(lower.properties),
-    ...Object.keys(upper.properties),
-  ])
-  for (const key of allKeys) {
+  // Interpolate each property — iterate both keyframes directly to avoid Set allocation.
+  // Lower properties first, then upper properties for any keys not already visited.
+  for (const key in lower.properties) {
     const fromVal = lower.properties[key]
     const toVal = upper.properties[key]
 
-    if (fromVal === undefined || toVal === undefined) {
-      result[key] = (fromVal ?? toVal)!
+    if (toVal === undefined) {
+      result[key] = fromVal
       continue
     }
 
@@ -229,6 +226,10 @@ export function interpolateClip(
     } else {
       result[key] = easedT < 0.5 ? fromVal : toVal
     }
+  }
+  for (const key in upper.properties) {
+    if (key in lower.properties) continue
+    result[key] = upper.properties[key]
   }
 
   return result

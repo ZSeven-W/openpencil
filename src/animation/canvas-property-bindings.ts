@@ -291,3 +291,21 @@ registerCanvasBinding<number>({
   capture: () => 1,
   requiresCacheInvalidation: false,
 })
+
+// --- Compile-time parity check ---
+// Ensures every property descriptor has a corresponding canvas binding.
+// Catches drift between the two registries during development.
+
+import { getAllPropertyDescriptors } from './property-descriptors'
+
+if (import.meta.env?.DEV) {
+  const descriptorKeys = new Set(getAllPropertyDescriptors().map((d) => d.key))
+  const bindingKeys = new Set(getAllCanvasBindings().map((b) => b.key))
+  for (const key of descriptorKeys) {
+    if (!bindingKeys.has(key)) {
+      console.warn(
+        `[animation] Property "${key}" has a descriptor but no canvas binding`,
+      )
+    }
+  }
+}

@@ -5,34 +5,51 @@ import {
   getCanvasBinding,
   getAllCanvasBindings,
 } from '@/animation/canvas-property-bindings'
+import { isAnyEnginePlaying } from '@/animation/engine-coordinator'
 
 // --- Playback state ---
 
 let playbackActive = false
 
+/**
+ * Returns true if ANY animation engine is currently playing.
+ * Checks both the local flag (set by v1) and the coordinator (covers v2).
+ */
 export function isPlaybackActive(): boolean {
-  return playbackActive
+  return playbackActive || isAnyEnginePlaying()
 }
 
 export function setPlaybackActive(active: boolean): void {
   playbackActive = active
 }
 
-// --- Cursor guard (boolean flag) ---
+// --- Cursor guard (counter-based) ---
 // Prevents library cursor drag callbacks from echoing back playback tick values.
-// A boolean flag is deterministic; a timing heuristic would fail on slow machines.
+// Uses a monotonic counter so multiple consumers can independently detect
+// engine-driven cursor updates without destructive reads.
 
-let cursorSetByEngine = false
+let cursorUpdateCount = 0
 
 export function markCursorUpdate(): void {
-  cursorSetByEngine = true
+  cursorUpdateCount++
 }
 
-/** Returns true (and resets) if the engine just set the cursor. */
+/** Returns the current cursor update count. Non-destructive read. */
+export function getCursorUpdateCount(): number {
+  return cursorUpdateCount
+}
+
+/**
+ * Returns true (and resets) if the engine just set the cursor.
+ * @deprecated Prefer getCursorUpdateCount() for non-destructive reads.
+ * Kept for backward compatibility with existing consumers.
+ */
 export function consumeCursorGuard(): boolean {
-  const was = cursorSetByEngine
-  cursorSetByEngine = false
-  return was
+  // Legacy behavior: returns true if any updates happened since last consume.
+  // Still resets so existing single-consumer call sites work unchanged.
+  const pending = cursorUpdateCount > 0
+  cursorUpdateCount = 0
+  return pending
 }
 
 // --- Object Lookup (shared Map cache) ---
@@ -145,10 +162,10 @@ export function applyAnimatedFrame(
   values: Record<string, AnimatableValue>,
 ): void {
   let needsCacheInvalidation = false
-  for (const [key, value] of Object.entries(values)) {
+  for (const key in values) {
     const binding = getCanvasBinding(key)
     if (!binding) continue
-    binding.apply(obj, value)
+    binding.apply(obj, values[key])
     if (binding.requiresCacheInvalidation) needsCacheInvalidation = true
   }
   if (needsCacheInvalidation) {
@@ -191,34 +208,4 @@ export function restoreNodeStates(
     applyAnimatedFrame(obj as FabricObject, values)
     obj.setCoords()
   }
-}
-
-// --- v2: Pending asset swap queue ---
-
-interface PendingSwap {
-  nodeId: string
-  element: HTMLElement
-}
-
-const pendingSwaps: PendingSwap[] = []
-
-/** Queue an asset swap during playback, or apply immediately when idle. */
-export function queueAssetSwap(nodeId: string, element: HTMLElement): void {
-  if (playbackActive) {
-    pendingSwaps.push({ nodeId, element })
-    return
-  }
-  // Apply immediately if not playing — no-op for now,
-  // concrete swap logic will be added when asset types are implemented
-}
-
-/** Process and clear all pending asset swaps. Call after playback stops. */
-export function flushPendingSwaps(): void {
-  // Process swaps — concrete logic will be added with asset types
-  pendingSwaps.length = 0
-}
-
-/** Visible for testing only. */
-export function _getPendingSwapsForTest(): PendingSwap[] {
-  return pendingSwaps
 }

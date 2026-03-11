@@ -1,4 +1,6 @@
 import type { PenNodeType } from '@/types/pen'
+import { parseHex, formatHex, srgbLerp } from './color-interpolation'
+export { parseHex, formatHex, srgbLerp }
 
 export interface AnimatablePropertyDescriptor<T = unknown> {
   key: string
@@ -32,36 +34,6 @@ export function lerp(from: number, to: number, t: number): number {
   return from + (to - from) * t
 }
 
-export function srgbLerp(from: string, to: string, t: number): string {
-  const fromRgb = parseHex(from)
-  const toRgb = parseHex(to)
-  if (!fromRgb || !toRgb) return t < 0.5 ? from : to
-  const r = Math.round(lerp(fromRgb[0], toRgb[0], t))
-  const g = Math.round(lerp(fromRgb[1], toRgb[1], t))
-  const b = Math.round(lerp(fromRgb[2], toRgb[2], t))
-  return formatHex(r, g, b)
-}
-
-function parseHex(hex: string): [number, number, number] | null {
-  const m = hex.match(/^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i)
-  if (m) {
-    return [parseInt(m[1], 16), parseInt(m[2], 16), parseInt(m[3], 16)]
-  }
-  const m3 = hex.match(/^#([0-9a-f])([0-9a-f])([0-9a-f])$/i)
-  if (m3) {
-    return [
-      parseInt(m3[1] + m3[1], 16),
-      parseInt(m3[2] + m3[2], 16),
-      parseInt(m3[3] + m3[3], 16),
-    ]
-  }
-  return null
-}
-
-function formatHex(r: number, g: number, b: number): string {
-  const clamp = (v: number) => Math.max(0, Math.min(255, v))
-  return `#${clamp(r).toString(16).padStart(2, '0')}${clamp(g).toString(16).padStart(2, '0')}${clamp(b).toString(16).padStart(2, '0')}`
-}
 
 // --- Register all 22 animatable properties ---
 

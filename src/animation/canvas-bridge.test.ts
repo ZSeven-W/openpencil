@@ -7,9 +7,6 @@ import {
   captureNodeState,
   recalcCoordsForAnimatedObjects,
   restoreNodeStates,
-  queueAssetSwap,
-  flushPendingSwaps,
-  _getPendingSwapsForTest,
   applyAnimatedProperties,
   captureCurrentState,
   buildFabricObjectMap,
@@ -59,7 +56,6 @@ function createMockCanvas(
 beforeEach(() => {
   clearFabricObjectMap()
   setPlaybackActive(false)
-  flushPendingSwaps()
 })
 
 // --- v2: applyAnimatedFrame ---
@@ -209,41 +205,6 @@ describe('restoreNodeStates', () => {
 
     // Should not throw
     restoreNodeStates(canvas, saved)
-  })
-})
-
-// --- v2: Asset swap queue ---
-
-describe('queueAssetSwap', () => {
-  it('queues swaps during playback', () => {
-    setPlaybackActive(true)
-    const el = {} as HTMLElement
-    queueAssetSwap('node-1', el)
-
-    const pending = _getPendingSwapsForTest()
-    expect(pending).toHaveLength(1)
-    expect(pending[0].nodeId).toBe('node-1')
-    expect(pending[0].element).toBe(el)
-  })
-
-  it('does not queue when not playing', () => {
-    setPlaybackActive(false)
-    const el = {} as HTMLElement
-    queueAssetSwap('node-1', el)
-
-    expect(_getPendingSwapsForTest()).toHaveLength(0)
-  })
-})
-
-describe('flushPendingSwaps', () => {
-  it('clears the queue', () => {
-    setPlaybackActive(true)
-    queueAssetSwap('a', {} as HTMLElement)
-    queueAssetSwap('b', {} as HTMLElement)
-
-    expect(_getPendingSwapsForTest()).toHaveLength(2)
-    flushPendingSwaps()
-    expect(_getPendingSwapsForTest()).toHaveLength(0)
   })
 })
 

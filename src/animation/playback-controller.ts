@@ -1,5 +1,11 @@
 import type { CompositionSettings } from '@/types/animation'
 import type { AnimationIndex } from './animation-index'
+import {
+  registerEngine,
+  unregisterEngine,
+  requestPlayback,
+  releasePlayback,
+} from '@/animation/engine-coordinator'
 
 export interface PlaybackController {
   play(): void
@@ -43,6 +49,12 @@ export function createPlaybackController(opts: {
     disposed: false,
   }
 
+  // Register this v2 controller with the coordinator so v1 can stop it.
+  registerEngine('v2', {
+    stop: () => controller.stop(),
+    isPlaying: () => state.playing,
+  })
+
   function getCurrentTime(): number {
     if (!state.playing) return state.pausedAt
     const elapsed = (performance.now() - state.startTimestamp) * state.speed
@@ -85,6 +97,9 @@ export function createPlaybackController(opts: {
     play() {
       if (state.disposed || state.playing) return
 
+      // Ensure only one engine owns the canvas — stops v1 if it's running
+      requestPlayback('v2')
+
       // If at end, wrap to start
       if (state.pausedAt >= composition.duration) {
         state.pausedAt = 0
@@ -104,6 +119,7 @@ export function createPlaybackController(opts: {
         cancelAnimationFrame(state.rafId)
         state.rafId = null
       }
+      releasePlayback('v2')
       notify()
     },
 
@@ -115,6 +131,7 @@ export function createPlaybackController(opts: {
         cancelAnimationFrame(state.rafId)
         state.rafId = null
       }
+      releasePlayback('v2')
       if (wasPlaying) {
         onStop()
       }
@@ -168,6 +185,8 @@ export function createPlaybackController(opts: {
         cancelAnimationFrame(state.rafId)
         state.rafId = null
       }
+      releasePlayback('v2')
+      unregisterEngine('v2')
       state.listeners.clear()
     },
   }

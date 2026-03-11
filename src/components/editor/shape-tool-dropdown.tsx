@@ -150,8 +150,8 @@ export default function ShapeToolDropdown({
             onClick={() => setOpen(false)}
           />
 
-          {/* Dropdown panel — below the chevron, offset to the right */}
-          <div className="absolute top-full left-[calc(100%+8px)] mt-1 z-50 bg-card border border-border rounded-lg shadow-xl py-1.5 min-w-[220px]">
+          {/* Dropdown panel — anchored to top of wrapper, offset to the right */}
+          <div className="absolute top-0 left-[calc(100%+8px)] z-50 bg-card border border-border rounded-lg shadow-xl py-1.5 min-w-[220px] max-h-[calc(100vh-16px)] overflow-y-auto">
             {items.map((item) => {
               const key = item.type === 'tool' ? item.tool : item.key
               const isActive = item.type === 'tool' && activeTool === item.tool

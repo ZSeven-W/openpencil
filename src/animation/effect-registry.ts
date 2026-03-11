@@ -27,6 +27,9 @@ export interface EffectDescriptor {
 const effectRegistry = new Map<string, EffectDescriptor>()
 
 export function registerEffect(desc: EffectDescriptor): void {
+  if (effectRegistry.has(desc.id)) {
+    throw new Error(`Effect "${desc.id}" is already registered. Unregister it first or use a different id.`)
+  }
   effectRegistry.set(desc.id, desc)
 }
 

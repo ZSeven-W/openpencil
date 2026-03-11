@@ -49,7 +49,7 @@ export function toTimelineRows(
       const phaseData = track.phases[phase]
       if (phaseData.duration <= 0 && phase !== 'while') continue
 
-      const actionId = `${track.nodeId}-${phase}`
+      const actionId = `${track.nodeId}::${phase}`
       const start_ms = phaseData.start
       const end_ms = phaseData.start + phaseData.duration
 
@@ -84,7 +84,7 @@ export function toTimelineRows(
     const offset_ms = node.timelineOffset ?? 0
     const clipDuration_ms = outPoint_ms - inPoint_ms
 
-    const actionId = `${node.id}-video`
+    const actionId = `${node.id}::video`
 
     rows.push({
       id: node.id,
@@ -367,7 +367,7 @@ export function buildTimelineRowsFromNodes(nodes: PenNode[]): TimelineProjection
           })
         }
 
-        rows.push({ id: `v2-${node.id}`, actions })
+        rows.push({ id: `v2::${node.id}`, actions })
       }
 
       if ('children' in node && node.children) {

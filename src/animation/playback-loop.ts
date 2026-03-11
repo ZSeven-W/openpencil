@@ -10,6 +10,11 @@ import {
   markCursorUpdate,
 } from '@/animation/canvas-bridge'
 import { syncVideoFrames, pauseAllVideos } from '@/animation/video-sync'
+import {
+  registerEngine,
+  requestPlayback,
+  releasePlayback,
+} from '@/animation/engine-coordinator'
 import type { AnimatableProperties } from '@/types/animation'
 
 // --- Playback Engine ---
@@ -20,6 +25,16 @@ let pausedAt = 0
 
 // Saved states for restoring canvas after playback
 let savedStates: Record<string, AnimatableProperties> = {}
+
+// Register v1 engine with the coordinator so v2 can stop it (and vice versa).
+// Uses a lazy wrapper because `stop` references `canvas` which isn't known yet.
+let activeCanvas: Canvas | null = null
+registerEngine('v1', {
+  stop: () => {
+    if (activeCanvas) stop(activeCanvas)
+  },
+  isPlaying: () => animationFrameId !== null,
+})
 
 // Throttled UI update ref (external consumers read this)
 export let currentPlayheadTime = 0
@@ -94,6 +109,10 @@ export function play(canvas: Canvas): void {
   const store = useTimelineStore.getState()
   if (Object.keys(store.tracks).length === 0) return // nothing to play
 
+  // Ensure only one engine owns the canvas — stops v2 if it's running
+  requestPlayback('v1')
+  activeCanvas = canvas
+
   // Save current canvas states before playback
   savedStates = {}
   for (const nodeId of Object.keys(store.tracks)) {
@@ -126,6 +145,7 @@ export function pause(_canvas: Canvas): void {
   pausedAt = currentPlayheadTime
   store.setPlaybackMode('idle')
   setPlaybackActive(false)
+  releasePlayback('v1')
 }
 
 export function stop(canvas: Canvas): void {
@@ -149,6 +169,8 @@ export function stop(canvas: Canvas): void {
   store.setCurrentTime(0)
   store.setPlaybackMode('idle')
   setPlaybackActive(false)
+  releasePlayback('v1')
+  activeCanvas = null
   pausedAt = 0
   startTimestamp = null
   currentPlayheadTime = 0

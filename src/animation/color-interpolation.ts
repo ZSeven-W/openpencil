@@ -1,6 +1,10 @@
 import type { HexColor } from '@/types/animation'
 
-export function parseHex(hex: string): [number, number, number] | null {
+// Bounded cache for parsed hex values to avoid regex + parseInt on every frame.
+const HEX_CACHE_MAX = 64
+const hexCache = new Map<string, [number, number, number] | null>()
+
+function parseHexUncached(hex: string): [number, number, number] | null {
   const m = hex.match(/^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i)
   if (m) return [parseInt(m[1], 16), parseInt(m[2], 16), parseInt(m[3], 16)]
   const m3 = hex.match(/^#([0-9a-f])([0-9a-f])([0-9a-f])$/i)
@@ -11,6 +15,19 @@ export function parseHex(hex: string): [number, number, number] | null {
       parseInt(m3[3] + m3[3], 16),
     ]
   return null
+}
+
+export function parseHex(hex: string): [number, number, number] | null {
+  const cached = hexCache.get(hex)
+  if (cached !== undefined) return cached
+  const parsed = parseHexUncached(hex)
+  if (hexCache.size >= HEX_CACHE_MAX) {
+    // Evict oldest entry (first inserted)
+    const firstKey = hexCache.keys().next().value
+    if (firstKey !== undefined) hexCache.delete(firstKey)
+  }
+  hexCache.set(hex, parsed)
+  return parsed
 }
 
 export function formatHex(r: number, g: number, b: number): HexColor {

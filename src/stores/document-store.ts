@@ -29,6 +29,7 @@ import {
   DEFAULT_PAGE_ID,
 } from './document-tree-utils'
 import { createPageActions } from './document-store-pages'
+import { registerDocumentStore } from './composition-accessors'
 
 interface DocumentStoreState {
   document: PenDocument
@@ -761,6 +762,13 @@ export const useDocumentStore = create<DocumentStoreState>()(
     setFileHandle: (fileHandle) => set({ fileHandle }),
     setSaveDialogOpen: (saveDialogOpen) => set({ saveDialogOpen }),
   })),
+)
+
+// Wire up composition accessors so timeline-store can read/write
+// document.composition without importing document-store directly.
+registerDocumentStore(
+  useDocumentStore.getState as () => { document: import('@/types/pen').PenDocument },
+  useDocumentStore.setState,
 )
 
 export {
