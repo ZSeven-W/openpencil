@@ -1,5 +1,6 @@
 {
   "include": ["**/*.ts", "**/*.tsx"],
+  "exclude": ["worktrees", "node_modules", "dist", "electron-dist"],
   "compilerOptions": {
     "target": "ES2022",
     "jsx": "react-jsx",

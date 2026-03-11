@@ -96,6 +96,11 @@ interface TimelineStoreState {
   setPlaybackMode: (mode: PlaybackMode) => void
   toggleLoop: () => void
 
+  // Actions — video clips
+  videoClipIds: string[] // nodeIds of video nodes shown on timeline
+  addVideoClip: (nodeId: string) => void
+  removeVideoClip: (nodeId: string) => void
+
   // Actions — mode
   setEditorMode: (mode: EditorMode) => void
 
@@ -125,6 +130,7 @@ export const useTimelineStore = create<TimelineStoreState>((set, get) => ({
   playbackMode: 'idle',
   loopEnabled: false,
   editorMode: 'design',
+  videoClipIds: [],
 
   // --- Timeline ---
 
@@ -232,6 +238,20 @@ export const useTimelineStore = create<TimelineStoreState>((set, get) => ({
   setPlaybackMode: (mode) => set({ playbackMode: mode }),
 
   toggleLoop: () => set((s) => ({ loopEnabled: !s.loopEnabled })),
+
+  // --- Video Clips ---
+
+  addVideoClip: (nodeId) =>
+    set((s) => ({
+      videoClipIds: s.videoClipIds.includes(nodeId)
+        ? s.videoClipIds
+        : [...s.videoClipIds, nodeId],
+    })),
+
+  removeVideoClip: (nodeId) =>
+    set((s) => ({
+      videoClipIds: s.videoClipIds.filter((id) => id !== nodeId),
+    })),
 
   // --- Mode ---
 

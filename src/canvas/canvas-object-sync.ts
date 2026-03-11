@@ -197,6 +197,24 @@ export function syncFabricObject(
       }
       break
     }
+    case 'video': {
+      const w = sizeToNumber(node.width, 320)
+      const h = sizeToNumber(node.height, 180)
+      const nw = (obj as any).__nativeWidth || obj.width || w
+      const nh = (obj as any).__nativeHeight || obj.height || h
+      const transform = computeImageTransform(nw, nh, w, h, 'fill', 0)
+      obj.set({
+        cropX: transform.cropX,
+        cropY: transform.cropY,
+        width: transform.cropWidth,
+        height: transform.cropHeight,
+        scaleX: transform.scaleX,
+        scaleY: transform.scaleY,
+        objectCaching: false,
+        dirty: true,
+      })
+      break
+    }
     case 'polygon':
     case 'path': {
       // Update path data in-place when `d` changes — avoids object recreation

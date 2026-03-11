@@ -6,6 +6,7 @@ import {
   setPlaybackActive,
   captureCurrentState,
 } from '@/animation/canvas-bridge'
+import { syncVideoFrames, pauseAllVideos } from '@/animation/video-sync'
 import type { AnimatableProperties } from '@/types/animation'
 
 // --- Playback Engine ---
@@ -49,6 +50,9 @@ function tick(canvas: Canvas, timestamp: number) {
       applyAnimatedProperties(canvas, track.nodeId, properties)
     }
   }
+
+  // Sync video elements to current composition time
+  syncVideoFrames(canvas, currentTime)
 
   // Single render call per frame
   canvas.requestRenderAll()
@@ -94,6 +98,8 @@ export function pause(_canvas: Canvas): void {
   cancelAnimationFrame(animationFrameId)
   animationFrameId = null
 
+  pauseAllVideos()
+
   const store = useTimelineStore.getState()
   pausedAt = currentPlayheadTime
   store.setPlaybackMode('idle')
@@ -110,6 +116,9 @@ export function stop(canvas: Canvas): void {
   for (const [nodeId, state] of Object.entries(savedStates)) {
     applyAnimatedProperties(canvas, nodeId, state)
   }
+
+  pauseAllVideos()
+
   canvas.requestRenderAll()
   savedStates = {}
 
@@ -133,6 +142,10 @@ export function seekTo(canvas: Canvas, timeMs: number): void {
       applyAnimatedProperties(canvas, track.nodeId, properties)
     }
   }
+
+  // Seek video elements to match
+  syncVideoFrames(canvas, clampedTime)
+
   canvas.requestRenderAll()
 
   pausedAt = clampedTime

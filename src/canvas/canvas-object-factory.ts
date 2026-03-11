@@ -1,5 +1,5 @@
 import * as fabric from 'fabric'
-import type { PenNode, ImageFitMode } from '@/types/pen'
+import type { PenNode, ImageFitMode, VideoNode } from '@/types/pen'
 import type {
   PenFill,
   PenStroke,
@@ -17,6 +17,7 @@ import {
 import { defaultLineHeight } from './canvas-text-measure'
 import { applyRotationControls } from './canvas-controls'
 import { lookupIconByName } from '@/services/ai/icon-resolver'
+import { registerVideoElement } from '@/animation/video-registry'
 
 function angleToCoords(
   angleDeg: number,
@@ -668,6 +669,123 @@ export function createFabricObject(
         }
         obj = placeholder
       }
+      break
+    }
+    case 'video': {
+      const vNode = node as VideoNode
+      const w = sizeToNumber(vNode.width, 320)
+      const h = sizeToNumber(vNode.height, 180)
+      const r = Math.min(cornerRadiusValue(vNode.cornerRadius), h / 2)
+
+      // Create video element (muted, no autoplay — controlled by playback loop)
+      const videoEl = document.createElement('video')
+      videoEl.src = vNode.src
+      videoEl.muted = true
+      videoEl.playsInline = true
+      videoEl.preload = 'auto'
+      videoEl.crossOrigin = 'anonymous'
+
+      // Start placeholder while video loads metadata
+      const videoPlaceholder = new fabric.Rect({
+        ...baseProps,
+        width: w,
+        height: h,
+        rx: r,
+        ry: r,
+        fill: '#1a1a2e',
+        strokeWidth: 0,
+      }) as FabricObjectWithPenId
+      videoPlaceholder.penNodeId = node.id
+      ;(videoPlaceholder as any).__isVideo = true
+
+      // Register in video registry
+      registerVideoElement(node.id, videoEl)
+
+      const swapPlaceholder = () => {
+        const canvas = videoPlaceholder.canvas
+        if (!canvas) {
+          // Placeholder not yet added to Fabric — retry on next frame
+          requestAnimationFrame(swapPlaceholder)
+          return
+        }
+
+        const createFabricImage = () => {
+          const nw = videoEl.videoWidth || w
+          const nh = videoEl.videoHeight || h
+
+          // Fabric.js uses element.width/height for drawImage source dimensions.
+          // For <video>, these default to 0 (unlike <img> which has naturalWidth).
+          // Set them explicitly so Fabric can draw the video frame.
+          videoEl.width = nw
+          videoEl.height = nh
+
+          const transform = computeImageTransform(nw, nh, w, h, 'fill', r)
+
+          const fabricImg = new fabric.FabricImage(videoEl, {
+            ...baseProps,
+            left: videoPlaceholder.left,
+            top: videoPlaceholder.top,
+            cropX: transform.cropX,
+            cropY: transform.cropY,
+            width: transform.cropWidth,
+            height: transform.cropHeight,
+            scaleX: transform.scaleX,
+            scaleY: transform.scaleY,
+            clipPath: transform.clipPath ?? undefined,
+            objectCaching: false, // must re-render every frame during playback
+          }) as unknown as FabricObjectWithPenId
+          fabricImg.penNodeId = node.id
+          ;(fabricImg as any).__isVideo = true
+          ;(fabricImg as any).__nativeWidth = nw
+          ;(fabricImg as any).__nativeHeight = nh
+          fabricImg.set({
+            borderColor: SELECTION_BLUE,
+            borderScaleFactor: 2,
+            cornerColor: SELECTION_BLUE,
+            cornerStrokeColor: '#ffffff',
+            cornerStyle: 'rect',
+            cornerSize: 8,
+            transparentCorners: false,
+            borderOpacityWhenMoving: 1,
+            padding: 0,
+            hoverCursor: 'default',
+          })
+          fabricImg.setControlVisible('mtr', false)
+          applyRotationControls(fabricImg)
+          if (shadow) fabricImg.shadow = shadow
+          fabricImg.visible = visible
+          fabricImg.selectable = !locked
+          fabricImg.evented = !locked
+
+          // Preserve z-order
+          const currentCanvas = videoPlaceholder.canvas
+          if (!currentCanvas) return
+          const idx = currentCanvas.getObjects().indexOf(videoPlaceholder)
+          currentCanvas.remove(videoPlaceholder)
+          if (idx >= 0) {
+            currentCanvas.insertAt(idx, fabricImg)
+          } else {
+            currentCanvas.add(fabricImg)
+          }
+          currentCanvas.requestRenderAll()
+        }
+
+        // Seek to start time, then wait for the browser to decode the frame
+        // before creating the FabricImage. Without this, Fabric paints an
+        // empty/transparent texture because the frame isn't decoded yet.
+        const startTimeSec = (vNode.startTime ?? 0) / 1000
+        if (startTimeSec === 0 && videoEl.readyState >= 2) {
+          // Already at time 0 with enough data — create immediately
+          createFabricImage()
+        } else {
+          videoEl.addEventListener('seeked', createFabricImage, { once: true })
+          videoEl.currentTime = startTimeSec
+        }
+      }
+
+      videoEl.addEventListener('loadeddata', swapPlaceholder)
+
+      obj = videoPlaceholder
       break
     }
     case 'group': {
