@@ -13,6 +13,9 @@ const config = defineConfig({
   test: {
     teardownTimeout: 1000,
   },
+  optimizeDeps: {
+    include: ['@cyca/react-timeline-editor'],
+  },
   resolve: {
     alias: {
       '@': fileURLToPath(new URL('./src', import.meta.url)),
