@@ -76,7 +76,7 @@ function r(n: number): string {
 }
 
 function joinParts(parts: string[]): string | null {
-  return parts.length > 1 ? parts.join(' ') : null
+  return parts.length > 0 ? parts.join(' ') : null
 }
 
 /**

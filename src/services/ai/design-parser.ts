@@ -37,6 +37,11 @@ export function extractJsonFromResponse(text: string): PenNode[] | null {
      return nodes
   }
 
+  // Fallback: try parsing a single root node with nested children
+  // (weaker models may output one root object instead of an array)
+  const singleRoot = tryParseSingleRootNode(text)
+  if (singleRoot) return singleRoot
+
   // Fallback: try parsing raw text after removing <step> tags.
   const stripped = text.replace(/<step[\s\S]*?<\/step>/g, '').trim()
   const directNodes = tryParseNodes(stripped)
@@ -181,6 +186,28 @@ function parseJsonlToTree(text: string): PenNode[] | null {
   }
 
   return roots.length > 0 ? roots : null
+}
+
+/**
+ * Try to parse a single root PenNode with nested children from raw text.
+ * Handles the case where weaker models output a single JSON object
+ * instead of an array or JSONL format.
+ */
+function tryParseSingleRootNode(text: string): PenNode[] | null {
+  const first = text.indexOf('{')
+  const last = text.lastIndexOf('}')
+  if (first < 0 || last <= first) return null
+  try {
+    const obj = JSON.parse(text.slice(first, last + 1)) as Record<string, unknown>
+    if (
+      typeof obj.id === 'string' &&
+      typeof obj.type === 'string' &&
+      Array.isArray(obj.children)
+    ) {
+      return [obj as unknown as PenNode]
+    }
+  } catch { /* ignore parse errors */ }
+  return null
 }
 
 function tryParseNodes(json: string): PenNode[] | null {

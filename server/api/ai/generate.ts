@@ -5,6 +5,7 @@ import {
   buildClaudeAgentEnv,
   getClaudeAgentDebugFilePath,
 } from '../../utils/resolve-claude-agent-env'
+import { formatOpenCodeError } from './chat'
 
 interface GenerateBody {
   system: string
@@ -141,6 +142,26 @@ function buildOpenCodeReasoning(
   return Object.keys(reasoning).length > 0 ? reasoning : undefined
 }
 
+/** Timeout for OpenCode prompt calls (3 minutes) */
+const OPENCODE_PROMPT_TIMEOUT_MS = 180_000
+
+async function promptWithTimeout(
+  ocClient: any,
+  payload: Record<string, unknown>,
+  timeoutMs = OPENCODE_PROMPT_TIMEOUT_MS,
+): Promise<{ data: any; error: any }> {
+  const result = await Promise.race([
+    ocClient.session.prompt(payload),
+    new Promise<{ data: null; error: string }>((resolve) =>
+      setTimeout(
+        () => resolve({ data: null, error: `OpenCode prompt timed out after ${timeoutMs / 1000}s` }),
+        timeoutMs,
+      ),
+    ),
+  ])
+  return result
+}
+
 async function promptOpenCodeWithThinking(
   ocClient: any,
   basePayload: Record<string, unknown>,
@@ -148,17 +169,17 @@ async function promptOpenCodeWithThinking(
 ): Promise<{ data: any; error: any }> {
   const reasoning = buildOpenCodeReasoning(body)
   if (!reasoning) {
-    return await ocClient.session.prompt(basePayload)
+    return await promptWithTimeout(ocClient, basePayload)
   }
 
   const enhanced = { ...basePayload, reasoning }
-  const firstTry = await ocClient.session.prompt(enhanced)
+  const firstTry = await promptWithTimeout(ocClient, enhanced)
   if (!firstTry.error) {
     return firstTry
   }
 
   console.warn('[AI] OpenCode reasoning options rejected, retrying without reasoning.')
-  return await ocClient.session.prompt(basePayload)
+  return await promptWithTimeout(ocClient, basePayload)
 }
 
 /** Generate via OpenCode SDK (connects to a running OpenCode server) */
@@ -174,7 +195,8 @@ async function generateViaOpenCode(body: GenerateBody, model?: string): Promise<
       title: 'OpenPencil Generate',
     })
     if (sessionError || !session) {
-      return { error: 'Failed to create OpenCode session' }
+      const detail = formatOpenCodeError(sessionError)
+      return { error: `Failed to create OpenCode session: ${detail}` }
     }
 
     // Inject system prompt as context (no AI reply)
@@ -189,6 +211,8 @@ async function generateViaOpenCode(body: GenerateBody, model?: string): Promise<
     if (model && model.includes('/')) {
       const idx = model.indexOf('/')
       modelOption = { providerID: model.slice(0, idx), modelID: model.slice(idx + 1) }
+    } else if (model) {
+      console.warn(`[AI] OpenCode generate: could not parse model string "${model}", sending without model override`)
     }
 
     // Send main prompt and await full response
@@ -198,6 +222,8 @@ async function generateViaOpenCode(body: GenerateBody, model?: string): Promise<
       parts: [{ type: 'text', text: body.message }],
     }
 
+    console.log(`[AI] OpenCode generate: model=${model}, parsed=${JSON.stringify(modelOption)}`)
+
     const { data: result, error: promptError } = await promptOpenCodeWithThinking(
       ocClient,
       promptPayload,
@@ -205,7 +231,9 @@ async function generateViaOpenCode(body: GenerateBody, model?: string): Promise<
     )
 
     if (promptError) {
-      return { error: 'OpenCode generation failed' }
+      const errorDetail = formatOpenCodeError(promptError)
+      console.error('[AI] OpenCode generate error:', errorDetail)
+      return { error: errorDetail }
     }
 
     // Extract text from response parts
@@ -216,6 +244,11 @@ async function generateViaOpenCode(body: GenerateBody, model?: string): Promise<
           texts.push(part.text)
         }
       }
+    }
+
+    if (texts.length === 0) {
+      console.warn('[AI] OpenCode generate returned no text parts. Response:', JSON.stringify(result).slice(0, 500))
+      return { error: 'OpenCode returned an empty response. The model may not have generated any output.' }
     }
 
     return { text: texts.join('') }

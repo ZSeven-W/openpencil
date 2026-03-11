@@ -114,6 +114,32 @@ export interface FigmaArcData {
   innerRadius?: number
 }
 
+export interface FigmaGuidPath {
+  guids: FigmaGUID[]
+}
+
+/** Per-child override stored on an INSTANCE's symbolData. */
+export interface FigmaSymbolOverride {
+  guidPath?: FigmaGuidPath
+  fillPaints?: FigmaPaint[]
+  arcData?: FigmaArcData
+  // Text overrides
+  textData?: FigmaTextData
+  fontSize?: number
+  fontName?: FigmaFontName
+  lineHeight?: FigmaNumber
+  letterSpacing?: FigmaNumber
+}
+
+/** Pre-computed size/transform for each node inside an INSTANCE. */
+export interface FigmaDerivedSymbolDataEntry {
+  guidPath?: FigmaGuidPath
+  size?: FigmaVector
+  transform?: FigmaMatrix
+  fontSize?: number
+  derivedTextData?: FigmaTextData
+}
+
 export type FigmaNodeType =
   | 'NONE'
   | 'DOCUMENT'
@@ -229,9 +255,13 @@ export interface FigmaNodeChange {
   arcData?: FigmaArcData
 
   // Component/Instance
-  symbolData?: { symbolID?: FigmaGUID }
+  symbolData?: {
+    symbolID?: FigmaGUID
+    symbolOverrides?: FigmaSymbolOverride[]
+  }
   overriddenSymbolID?: FigmaGUID
   componentKey?: string
+  derivedSymbolData?: FigmaDerivedSymbolDataEntry[]
 }
 
 export interface FigmaDecodedFile {

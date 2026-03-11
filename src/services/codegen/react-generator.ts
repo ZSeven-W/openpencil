@@ -3,6 +3,7 @@ import { getActivePageChildren } from '@/stores/document-tree-utils'
 import type { PenFill, PenStroke, PenEffect, ShadowEffect } from '@/types/styles'
 import { isVariableRef } from '@/variables/resolve-variables'
 import { variableNameToCSS } from '@/services/codegen/css-variables-generator'
+import { buildEllipseArcPath, isArcEllipse } from '@/utils/arc-path'
 
 /**
  * Converts PenDocument nodes to React + Tailwind code.
@@ -253,6 +254,15 @@ function generateNodeJSX(node: PenNode, depth: number): string {
     }
 
     case 'ellipse': {
+      if (isArcEllipse(node.startAngle, node.sweepAngle, node.innerRadius)) {
+        const w = typeof node.width === 'number' ? node.width : 100
+        const h = typeof node.height === 'number' ? node.height : 100
+        const d = buildEllipseArcPath(w, h, node.startAngle ?? 0, node.sweepAngle ?? 360, node.innerRadius ?? 0)
+        const fill = node.fill?.[0]?.type === 'solid' ? node.fill[0].color : '#000'
+        classes.push(...effectsToTailwind(node.effects))
+        const cls = classes.length > 0 ? ` className="${classes.join(' ')}"` : ''
+        return `${pad}<svg${cls} width="${w}" height="${h}" viewBox="0 0 ${w} ${h}"><path d="${d}" fill="${fill}" /></svg>`
+      }
       classes.push(
         'rounded-full',
         ...sizeToTailwind(node.width, node.height),

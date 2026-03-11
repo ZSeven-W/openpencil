@@ -422,35 +422,48 @@ export default function AIChatPanel() {
     }
   }, [])
 
-  const handleFileSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files
-    if (!files) return
+  const processImageFiles = useCallback((files: File[]) => {
     const maxSize = 5 * 1024 * 1024 // 5MB
     const maxCount = 4
     const currentCount = useAIStore.getState().pendingAttachments.length
     const remaining = maxCount - currentCount
+    if (remaining <= 0) return
 
-    Array.from(files).slice(0, remaining).forEach((file) => {
-      if (file.size > maxSize) return
-      if (!file.type.startsWith('image/')) return
-      const reader = new FileReader()
-      reader.onload = () => {
-        const dataUrl = reader.result as string
-        const base64 = dataUrl.split(',')[1]
-        if (!base64) return
-        addPendingAttachment({
-          id: nanoid(),
-          name: file.name,
-          mediaType: file.type,
-          data: base64,
-          size: file.size,
-        })
-      }
-      reader.readAsDataURL(file)
-    })
+    files.filter((f) => f.type.startsWith('image/') && f.size <= maxSize)
+      .slice(0, remaining)
+      .forEach((file) => {
+        const reader = new FileReader()
+        reader.onload = () => {
+          const dataUrl = reader.result as string
+          const base64 = dataUrl.split(',')[1]
+          if (!base64) return
+          addPendingAttachment({
+            id: nanoid(),
+            name: file.name || 'pasted-image.png',
+            mediaType: file.type,
+            data: base64,
+            size: file.size,
+          })
+        }
+        reader.readAsDataURL(file)
+      })
+  }, [addPendingAttachment])
+
+  const handleFileSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files
+    if (!files) return
+    processImageFiles(Array.from(files))
     // Reset so the same file can be re-selected
     e.target.value = ''
-  }, [addPendingAttachment])
+  }, [processImageFiles])
+
+  const handlePaste = useCallback((e: React.ClipboardEvent) => {
+    const files = Array.from(e.clipboardData?.files ?? [])
+    const images = files.filter((f) => f.type.startsWith('image/'))
+    if (images.length === 0) return
+    e.preventDefault()
+    processImageFiles(images)
+  }, [processImageFiles])
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -597,6 +610,7 @@ export default function AIChatPanel() {
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={handleKeyDown}
+          onPaste={handlePaste}
           placeholder={isStreaming ? t('ai.generating') : t('ai.designWithAgent')}
           disabled={isStreaming}
           rows={2}

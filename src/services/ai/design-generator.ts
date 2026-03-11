@@ -7,6 +7,7 @@ import { DESIGN_MODIFIER_PROMPT } from './ai-prompts'
 import { executeOrchestration } from './orchestrator'
 import { DESIGN_STREAM_TIMEOUTS } from './ai-runtime-config'
 import { extractJsonFromResponse } from './design-parser'
+import { resolveModelProfile, applyProfileToTimeouts } from './model-profiles'
 
 // ---------------------------------------------------------------------------
 // Re-exports for backward compatibility — consumers that import from
@@ -115,9 +116,12 @@ export async function generateDesignModification(
   let fullResponse = ''
   let streamError: string | null = null
 
+  const profile = resolveModelProfile(options?.model)
+  const timeouts = applyProfileToTimeouts({ ...DESIGN_STREAM_TIMEOUTS }, profile)
+
   for await (const chunk of streamChat(DESIGN_MODIFIER_PROMPT, [
     { role: 'user', content: userMessage },
-  ], options?.model, DESIGN_STREAM_TIMEOUTS, options?.provider, abortSignal)) {
+  ], options?.model, timeouts, options?.provider, abortSignal)) {
     if (chunk.type === 'thinking') {
       // Ignore thinking chunks for modification -- caller already shows progress
     } else if (chunk.type === 'text') {
@@ -137,5 +141,9 @@ export async function generateDesignModification(
     throw new Error(streamError)
   }
 
-  throw new Error('Failed to parse modified nodes from AI response')
+  const preview = fullResponse.trim().slice(0, 150)
+  const hint = fullResponse.trim().length === 0
+    ? 'The model returned an empty response.'
+    : `Model output: "${preview}${fullResponse.length > 150 ? '…' : ''}"`
+  throw new Error(`Could not parse design nodes from model response. ${hint}`)
 }

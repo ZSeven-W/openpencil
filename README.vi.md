@@ -5,8 +5,8 @@
 <h1 align="center">OpenPencil</h1>
 
 <p align="center">
-  <strong>Công cụ thiết kế mã nguồn mở thuần AI. Design-as-Code.</strong><br />
-  Từ prompt đến giao diện trên canvas. Điều phối đa tác nhân. Máy chủ MCP tích hợp sẵn. Tạo mã nguồn.
+  <strong>Công cụ thiết kế vector mã nguồn mở thuần AI đầu tiên trên thế giới.</strong><br />
+  <sub>Đội Tác nhân Đồng thời &bull; Design-as-Code &bull; Máy chủ MCP Tích hợp &bull; Trí tuệ Đa mô hình</sub>
 </p>
 
 <p align="center">
@@ -14,30 +14,75 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/ZSeven-W/openpencil/stargazers"><img src="https://img.shields.io/github/stars/ZSeven-W/openpencil?style=flat" alt="Stars" /></a>
-  <a href="https://github.com/ZSeven-W/openpencil/blob/main/LICENSE"><img src="https://img.shields.io/github/license/ZSeven-W/openpencil" alt="License" /></a>
+  <a href="https://github.com/ZSeven-W/openpencil/stargazers"><img src="https://img.shields.io/github/stars/ZSeven-W/openpencil?style=flat&color=cfb537" alt="Stars" /></a>
+  <a href="https://github.com/ZSeven-W/openpencil/blob/main/LICENSE"><img src="https://img.shields.io/github/license/ZSeven-W/openpencil?color=64748b" alt="License" /></a>
   <a href="https://github.com/ZSeven-W/openpencil/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/ZSeven-W/openpencil/ci.yml?branch=main&label=CI" alt="CI" /></a>
-  <a href="https://discord.gg/KwXp6BJD"><img src="https://img.shields.io/discord/1476517942949580952?label=Discord&logo=discord&logoColor=white" alt="Discord" /></a>
-</p>
-
-<p align="center">
-  <a href="#quick-start">Bắt đầu nhanh</a> ·
-  <a href="#ai-native-design">AI</a> ·
-  <a href="#features">Tính năng</a> ·
-  <a href="https://discord.gg/KwXp6BJD">Discord</a> ·
-  <a href="#contributing">Đóng góp</a>
+  <a href="https://discord.gg/KwXp6BJD"><img src="https://img.shields.io/discord/1476517942949580952?label=Discord&logo=discord&logoColor=white&color=5865F2" alt="Discord" /></a>
 </p>
 
 <br />
 
 <p align="center">
   <a href="https://oss.ioa.tech/zseven/openpencil/a46e24733239ce24de36702342201033.mp4">
-    <img src="./screenshot/op-cover.png" alt="OpenPencil — click to watch demo" width="100%" />
+    <img src="./screenshot/op-cover.png" alt="OpenPencil — nhấp để xem demo" width="100%" />
   </a>
 </p>
 <p align="center"><sub>Nhấp vào hình ảnh để xem video demo</sub></p>
 
 <br />
+
+## Tại sao chọn OpenPencil
+
+<table>
+<tr>
+<td width="50%">
+
+### 🎨 Prompt → Canvas
+
+Mô tả bất kỳ giao diện nào bằng ngôn ngữ tự nhiên. Xem nó xuất hiện trên canvas vô hạn theo thời gian thực với hiệu ứng streaming. Chỉnh sửa thiết kế hiện có bằng cách chọn các phần tử và trò chuyện.
+
+</td>
+<td width="50%">
+
+### 🤖 Đội Tác nhân Đồng thời
+
+Bộ điều phối phân rã các trang phức tạp thành các tác vụ con theo không gian. Nhiều tác nhân AI làm việc trên các phần khác nhau đồng thời — hero, features, footer — tất cả streaming song song.
+
+</td>
+</tr>
+<tr>
+<td width="50%">
+
+### 🧠 Trí tuệ Đa mô hình
+
+Tự động thích ứng với khả năng của từng mô hình. Claude nhận prompt đầy đủ với thinking; GPT-4o/Gemini tắt thinking; các mô hình nhỏ hơn (MiniMax, Qwen, Llama) nhận prompt đơn giản hóa cho đầu ra đáng tin cậy.
+
+</td>
+<td width="50%">
+
+### 🔌 Máy chủ MCP
+
+Cài đặt một cú nhấp vào Claude Code, Codex, Gemini, OpenCode, Kiro hoặc Copilot CLI. Thiết kế từ terminal — đọc, tạo và chỉnh sửa tệp `.op` thông qua bất kỳ tác nhân tương thích MCP nào.
+
+</td>
+</tr>
+<tr>
+<td width="50%">
+
+### 📦 Design-as-Code
+
+Tệp `.op` là JSON — dễ đọc, thân thiện Git, dễ so sánh khác biệt. Biến thiết kế tạo ra thuộc tính tùy chỉnh CSS. Xuất mã sang React + Tailwind hoặc HTML + CSS.
+
+</td>
+<td width="50%">
+
+### 🖥️ Chạy Mọi nơi
+
+Ứng dụng web + desktop gốc trên macOS, Windows và Linux qua Electron. Tự động cập nhật từ GitHub Releases. Liên kết tệp `.op` — nhấp đúp để mở.
+
+</td>
+</tr>
+</table>
 
 ## Bắt đầu nhanh
 
@@ -59,8 +104,6 @@ bun run electron:dev
 
 ## Thiết kế thuần AI
 
-OpenPencil được xây dựng xung quanh AI từ nền tảng — không phải như một plugin mà là một quy trình làm việc cốt lõi.
-
 **Từ Prompt đến Giao diện**
 - **Văn bản thành thiết kế** — mô tả một trang, nhận kết quả được tạo ra trên canvas theo thời gian thực với hiệu ứng streaming
 - **Orchestrator** — phân rã các trang phức tạp thành các tác vụ con không gian để tạo song song
@@ -74,10 +117,16 @@ OpenPencil được xây dựng xung quanh AI từ nền tảng — không phả
 | **Claude Code** | Không cần cấu hình — sử dụng Claude Agent SDK với OAuth cục bộ |
 | **Codex CLI** | Kết nối trong Cài đặt tác nhân (`Cmd+,`) |
 | **OpenCode** | Kết nối trong Cài đặt tác nhân (`Cmd+,`) |
+| **GitHub Copilot** | `copilot login` rồi kết nối trong Cài đặt tác nhân (`Cmd+,`) |
+
+**Hồ sơ Năng lực Mô hình** — tự động thích ứng prompt, chế độ thinking và thời gian chờ theo từng cấp mô hình. Mô hình cấp đầy đủ (Claude) nhận prompt hoàn chỉnh; cấp tiêu chuẩn (GPT-4o, Gemini, DeepSeek) tắt thinking; cấp cơ bản (MiniMax, Qwen, Llama, Mistral) nhận prompt JSON lồng nhau đơn giản hóa để đảm bảo độ tin cậy tối đa.
 
 **Máy chủ MCP**
-- Máy chủ MCP tích hợp sẵn — cài đặt một cú nhấp vào Claude Code / Codex / Gemini / OpenCode / Kiro CLI
+- Máy chủ MCP tích hợp sẵn — cài đặt một cú nhấp vào Claude Code / Codex / Gemini / OpenCode / Kiro / Copilot CLI
 - Tự động hóa thiết kế từ terminal: đọc, tạo và chỉnh sửa các tệp `.op` qua bất kỳ tác nhân tương thích MCP nào
+- **Quy trình thiết kế phân lớp** — `design_skeleton` → `design_content` → `design_refine` cho thiết kế đa phần có độ trung thực cao hơn
+- **Truy xuất prompt phân đoạn** — chỉ tải kiến thức thiết kế cần thiết (schema, layout, roles, icons, planning, v.v.)
+- Hỗ trợ nhiều trang — tạo, đổi tên, sắp xếp lại và nhân bản trang qua các công cụ MCP
 
 **Tạo mã nguồn**
 - React + Tailwind CSS
@@ -105,6 +154,7 @@ OpenPencil được xây dựng xung quanh AI từ nền tảng — không phả
 
 **Ứng dụng Desktop**
 - macOS, Windows và Linux gốc qua Electron
+- Liên kết tệp `.op` — nhấp đúp để mở, khóa phiên bản đơn
 - Tự động cập nhật từ GitHub Releases
 - Menu ứng dụng gốc và hộp thoại tệp
 
@@ -117,7 +167,7 @@ OpenPencil được xây dựng xung quanh AI từ nền tảng — không phả
 | **Trạng thái** | Zustand v5 |
 | **Máy chủ** | Nitro |
 | **Desktop** | Electron 35 |
-| **AI** | Anthropic SDK · Claude Agent SDK · OpenCode SDK |
+| **AI** | Anthropic SDK · Claude Agent SDK · OpenCode SDK · Copilot SDK |
 | **Runtime** | Bun · Vite 7 |
 | **Định dạng tệp** | `.op` — dựa trên JSON, dễ đọc, thân thiện với Git |
 
@@ -136,7 +186,7 @@ src/
   uikit/           Hệ thống kit component có thể tái sử dụng
 server/
   api/ai/          Nitro API — streaming chat, generation, validation
-  utils/           Claude CLI, OpenCode, Codex client wrappers
+  utils/           Claude CLI, OpenCode, Codex, Copilot client wrappers
 electron/
   main.ts          Cửa sổ, Nitro fork, menu gốc, auto-updater
   preload.ts       IPC bridge
@@ -186,10 +236,11 @@ Chào mừng đóng góp! Xem [CLAUDE.md](./CLAUDE.md) để biết chi tiết v
 - [x] Biến thiết kế & token với đồng bộ CSS
 - [x] Hệ thống component (instances & overrides)
 - [x] Tạo thiết kế AI với orchestrator
-- [x] Tích hợp máy chủ MCP
+- [x] Tích hợp máy chủ MCP với quy trình thiết kế phân lớp
 - [x] Hỗ trợ nhiều trang
 - [x] Nhập Figma `.fig`
 - [x] Phép toán Boolean (hợp nhất, trừ, giao)
+- [x] Hồ sơ năng lực đa mô hình
 - [ ] Chỉnh sửa cộng tác
 - [ ] Hệ thống plugin
 
@@ -206,6 +257,17 @@ Chào mừng đóng góp! Xem [CLAUDE.md](./CLAUDE.md) để biết chi tiết v
   <strong> Tham gia Discord của chúng tôi</strong>
 </a>
 — Đặt câu hỏi, chia sẻ thiết kế, đề xuất tính năng.
+
+
+## Star History
+
+<a href="https://star-history.com/#ZSeven-W/openpencil&Date">
+ <picture>
+   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=ZSeven-W/openpencil&type=Date&theme=dark" />
+   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=ZSeven-W/openpencil&type=Date" />
+   <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=ZSeven-W/openpencil&type=Date" width="100%" />
+ </picture>
+</a>
 
 ## Giấy phép
 
