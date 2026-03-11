@@ -6,6 +6,26 @@ import viteTsConfigPaths from 'vite-tsconfig-paths'
 import { fileURLToPath, URL } from 'node:url'
 import tailwindcss from '@tailwindcss/vite'
 import { nitro } from 'nitro/vite'
+import type { Plugin } from 'vite'
+
+/**
+ * Vite plugin to fix @cyca/react-timeline-editor CJS interop.
+ * The library inlines react-compiler-runtime and react/jsx-runtime as CJS modules
+ * that call __require("react"), which fails in Vite's ESM dev mode.
+ * This plugin rewrites those calls to use the already-imported React.
+ */
+function timelineEditorCjsFix(): Plugin {
+  return {
+    name: 'timeline-editor-cjs-fix',
+    enforce: 'pre',
+    transform(code, id) {
+      if (!id.includes('react-timeline-editor')) return
+      if (!code.includes('__require("react")')) return
+      // The library already does `import * as React$1 from "react"` at top level
+      return code.replace(/__require\("react"\)/g, 'React$1')
+    },
+  }
+}
 
 const isElectronBuild = process.env.BUILD_TARGET === 'electron'
 
@@ -14,7 +34,7 @@ const config = defineConfig({
     teardownTimeout: 1000,
   },
   optimizeDeps: {
-    include: ['@cyca/react-timeline-editor'],
+    exclude: ['@cyca/react-timeline-editor'],
   },
   resolve: {
     alias: {
@@ -25,6 +45,7 @@ const config = defineConfig({
     },
   },
   plugins: [
+    timelineEditorCjsFix(),
     devtools(),
     nitro({
       rollupConfig: { external: [/^@sentry\//, 'canvas', 'jsdom', 'cssstyle'] },
