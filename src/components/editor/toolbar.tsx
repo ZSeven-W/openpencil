@@ -8,6 +8,8 @@ import {
   Redo2,
   Braces,
   LayoutGrid,
+  Palette,
+  FileText,
 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import ToolButton from './tool-button'
@@ -25,6 +27,8 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip'
 import IconPickerDialog from '@/components/shared/icon-picker-dialog'
+import VibeKitPanel from '@/components/panels/vibekit-panel'
+import { TemplatePicker } from '@/components/panels/template-picker-panel'
 
 export default function Toolbar() {
   const { t } = useTranslation()
@@ -36,6 +40,8 @@ export default function Toolbar() {
   const toggleBrowser = useUIKitStore((s) => s.toggleBrowser)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [iconPickerOpen, setIconPickerOpen] = useState(false)
+  const [vibeKitPanelOpen, setVibeKitPanelOpen] = useState(false)
+  const [templatePickerOpen, setTemplatePickerOpen] = useState(false)
 
   const handleIconSelect = useCallback((svgText: string, iconName: string) => {
     const nodes = parseSvgToNodes(svgText)
@@ -288,6 +294,48 @@ export default function Toolbar() {
         </TooltipContent>
       </Tooltip>
 
+      <Separator className="my-1 w-8" />
+
+      {/* Vibe Kit */}
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <button
+            type="button"
+            onClick={() => setVibeKitPanelOpen((v) => !v)}
+            aria-label="Vibe Kit"
+            aria-pressed={vibeKitPanelOpen}
+            className={`inline-flex items-center justify-center h-8 min-w-8 px-1.5 rounded-lg transition-colors [&_svg]:size-5 [&_svg]:shrink-0 ${
+              vibeKitPanelOpen
+                ? 'bg-primary text-primary-foreground'
+                : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+            }`}
+          >
+            <Palette size={20} strokeWidth={1.5} />
+          </button>
+        </TooltipTrigger>
+        <TooltipContent side="right">Vibe Kit</TooltipContent>
+      </Tooltip>
+
+      {/* Templates */}
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <button
+            type="button"
+            onClick={() => setTemplatePickerOpen((v) => !v)}
+            aria-label="Templates"
+            aria-pressed={templatePickerOpen}
+            className={`inline-flex items-center justify-center h-8 min-w-8 px-1.5 rounded-lg transition-colors [&_svg]:size-5 [&_svg]:shrink-0 ${
+              templatePickerOpen
+                ? 'bg-primary text-primary-foreground'
+                : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+            }`}
+          >
+            <FileText size={20} strokeWidth={1.5} />
+          </button>
+        </TooltipTrigger>
+        <TooltipContent side="right">Templates</TooltipContent>
+      </Tooltip>
+
       {/* Hidden file input + icon picker dialog */}
       <input
         ref={fileInputRef}
@@ -301,6 +349,12 @@ export default function Toolbar() {
         onClose={() => setIconPickerOpen(false)}
         onSelect={handleIconSelect}
       />
+      {vibeKitPanelOpen && (
+        <VibeKitPanel open={vibeKitPanelOpen} onClose={() => setVibeKitPanelOpen(false)} />
+      )}
+      {templatePickerOpen && (
+        <TemplatePicker open={templatePickerOpen} onClose={() => setTemplatePickerOpen(false)} />
+      )}
     </div>
   )
 }
