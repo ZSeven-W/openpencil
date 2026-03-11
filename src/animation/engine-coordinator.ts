@@ -1,83 +1,55 @@
 /**
  * Engine Coordinator
  *
- * Ensures only ONE animation engine (v1 playback-loop or v2 playback-controller)
- * controls the Fabric canvas at a time. Each engine registers a stop callback;
- * before either engine starts, it asks the coordinator to stop the other.
+ * Manages the v2 playback-controller's ownership of the Fabric canvas.
+ * Provides a registry pattern so canvas-bridge can check if playback is active.
  */
-
-export type EngineId = 'v1' | 'v2'
 
 interface EngineEntry {
   stop: () => void
   isPlaying: () => boolean
 }
 
-const engines = new Map<EngineId, EngineEntry>()
-let activeEngine: EngineId | null = null
+let engine: EngineEntry | null = null
 
 /**
- * Register an engine's stop/isPlaying callbacks.
- * Called once at module init (v1) or when a controller is created (v2).
+ * Register the v2 engine's stop/isPlaying callbacks.
+ * Called when a controller is created.
  */
 export function registerEngine(
-  id: EngineId,
+  _id: string,
   entry: EngineEntry,
 ): void {
-  engines.set(id, entry)
+  engine = entry
 }
 
 /**
- * Unregister an engine (e.g. when v2 controller is disposed).
+ * Unregister the engine (e.g. when v2 controller is disposed).
  */
-export function unregisterEngine(id: EngineId): void {
-  if (activeEngine === id) activeEngine = null
-  engines.delete(id)
+export function unregisterEngine(_id: string): void {
+  engine = null
 }
 
 /**
- * Called by an engine right before it starts playing.
- * Stops the other engine if it is currently active, then marks
- * the requesting engine as the active owner.
- *
- * Returns false if the requesting engine is not registered.
+ * Called by the engine right before it starts playing.
+ * Returns false if the engine is not registered.
  */
-export function requestPlayback(id: EngineId): boolean {
-  if (!engines.has(id)) return false
-
-  // Stop any other engine that is currently playing
-  for (const [otherId, entry] of engines) {
-    if (otherId !== id && entry.isPlaying()) {
-      entry.stop()
-    }
-  }
-
-  activeEngine = id
+export function requestPlayback(_id: string): boolean {
+  if (!engine) return false
   return true
 }
 
 /**
- * Called when an engine stops or pauses, so the coordinator
+ * Called when the engine stops or pauses, so the coordinator
  * knows the canvas is free.
  */
-export function releasePlayback(id: EngineId): void {
-  if (activeEngine === id) activeEngine = null
+export function releasePlayback(_id: string): void {
+  // No-op — isAnyEnginePlaying() delegates to the engine's isPlaying()
 }
 
 /**
- * Returns which engine currently owns the canvas, or null if idle.
- */
-export function getActiveEngine(): EngineId | null {
-  return activeEngine
-}
-
-/**
- * Returns true if ANY engine is currently playing.
- * Use this instead of checking a single boolean.
+ * Returns true if the engine is currently playing.
  */
 export function isAnyEnginePlaying(): boolean {
-  for (const entry of engines.values()) {
-    if (entry.isPlaying()) return true
-  }
-  return false
+  return engine?.isPlaying() ?? false
 }

@@ -1,6 +1,6 @@
 import type { Canvas, FabricObject } from 'fabric'
 import type { FabricObjectWithPenId } from '@/canvas/canvas-object-factory'
-import type { AnimatableProperties, AnimatableValue } from '@/types/animation'
+import type { AnimatableValue } from '@/types/animation'
 import {
   getCanvasBinding,
   getAllCanvasBindings,
@@ -9,18 +9,11 @@ import { isAnyEnginePlaying } from '@/animation/engine-coordinator'
 
 // --- Playback state ---
 
-let playbackActive = false
-
 /**
- * Returns true if ANY animation engine is currently playing.
- * Checks both the local flag (set by v1) and the coordinator (covers v2).
+ * Returns true if the animation engine is currently playing.
  */
 export function isPlaybackActive(): boolean {
-  return playbackActive || isAnyEnginePlaying()
-}
-
-export function setPlaybackActive(active: boolean): void {
-  playbackActive = active
+  return isAnyEnginePlaying()
 }
 
 // --- Cursor guard (counter-based) ---
@@ -37,19 +30,6 @@ export function markCursorUpdate(): void {
 /** Returns the current cursor update count. Non-destructive read. */
 export function getCursorUpdateCount(): number {
   return cursorUpdateCount
-}
-
-/**
- * Returns true (and resets) if the engine just set the cursor.
- * @deprecated Prefer getCursorUpdateCount() for non-destructive reads.
- * Kept for backward compatibility with existing consumers.
- */
-export function consumeCursorGuard(): boolean {
-  // Legacy behavior: returns true if any updates happened since last consume.
-  // Still resets so existing single-consumer call sites work unchanged.
-  const pending = cursorUpdateCount > 0
-  cursorUpdateCount = 0
-  return pending
 }
 
 // --- Object Lookup (shared Map cache) ---
@@ -83,49 +63,6 @@ export function findFabricObject(
   }
   const objects = canvas.getObjects() as FabricObjectWithPenId[]
   return objects.find((obj) => obj.penNodeId === nodeId) ?? null
-}
-
-// --- v1 backward compat: Apply Animation Properties ---
-
-/**
- * Directly mutate Fabric.js object properties for animation.
- * Uses direct assignment (not obj.set()) to avoid triggering Fabric events.
- * @deprecated Use applyAnimatedFrame for v2 registry-driven application.
- */
-export function applyAnimatedProperties(
-  canvas: Canvas,
-  nodeId: string,
-  properties: Partial<AnimatableProperties>,
-): void {
-  const obj = findFabricObject(canvas, nodeId)
-  if (!obj) return
-
-  if (properties.x !== undefined) obj.left = properties.x
-  if (properties.y !== undefined) obj.top = properties.y
-  if (properties.scaleX !== undefined) obj.scaleX = properties.scaleX
-  if (properties.scaleY !== undefined) obj.scaleY = properties.scaleY
-  if (properties.rotation !== undefined) obj.angle = properties.rotation
-  if (properties.opacity !== undefined) obj.opacity = properties.opacity
-}
-
-// --- v1 backward compat: Capture Current State ---
-
-/** @deprecated Use captureNodeState for v2 registry-driven capture. */
-export function captureCurrentState(
-  canvas: Canvas,
-  nodeId: string,
-): AnimatableProperties | null {
-  const obj = findFabricObject(canvas, nodeId)
-  if (!obj) return null
-
-  return {
-    x: obj.left ?? 0,
-    y: obj.top ?? 0,
-    scaleX: obj.scaleX ?? 1,
-    scaleY: obj.scaleY ?? 1,
-    rotation: obj.angle ?? 0,
-    opacity: obj.opacity ?? 1,
-  }
 }
 
 // --- Object Interaction Lock ---
