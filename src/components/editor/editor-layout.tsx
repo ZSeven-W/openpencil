@@ -13,6 +13,7 @@ import ExportDialog from '@/components/shared/export-dialog'
 import SaveDialog from '@/components/shared/save-dialog'
 import AgentSettingsDialog from '@/components/shared/agent-settings-dialog'
 import FigmaImportDialog from '@/components/shared/figma-import-dialog'
+import OnboardingModal from '@/components/shared/onboarding-modal'
 import UpdateReadyBanner from './update-ready-banner'
 import { useAIStore } from '@/stores/ai-store'
 import { useCanvasStore } from '@/stores/canvas-store'
@@ -20,6 +21,7 @@ import { useDocumentStore } from '@/stores/document-store'
 import { useAgentSettingsStore } from '@/stores/agent-settings-store'
 import { useUIKitStore } from '@/stores/uikit-store'
 import { useThemePresetStore } from '@/stores/theme-preset-store'
+import { useVibeKitStore } from '@/stores/vibekit-store'
 import { useElectronMenu } from '@/hooks/use-electron-menu'
 import { useFigmaPaste } from '@/hooks/use-figma-paste'
 import { useMcpSync } from '@/hooks/use-mcp-sync'
@@ -42,6 +44,7 @@ export default function EditorLayout() {
     useDocumentStore.getState().setSaveDialogOpen(false)
   }, [])
   const [exportOpen, setExportOpen] = useState(false)
+  const [onboardingOpen, setOnboardingOpen] = useState(false)
 
   const closeExport = useCallback(() => {
     setExportOpen(false)
@@ -120,6 +123,12 @@ export default function EditorLayout() {
       useUIKitStore.getState().hydrate()
       useCanvasStore.getState().hydrate()
       useThemePresetStore.getState().hydrate()
+      useVibeKitStore.getState().hydrate()
+
+      // Show onboarding if no Vibe Kit has been selected yet
+      if (!useVibeKitStore.getState().activeKitId) {
+        setOnboardingOpen(true)
+      }
     })
   }, [])
 
@@ -170,6 +179,7 @@ export default function EditorLayout() {
         <SaveDialog open={saveDialogOpen} onClose={closeSaveDialog} />
         <AgentSettingsDialog />
         <FigmaImportDialog open={figmaImportOpen} onClose={closeFigmaImport} />
+        <OnboardingModal open={onboardingOpen} onClose={() => setOnboardingOpen(false)} />
       </div>
     </TooltipProvider>
   )
