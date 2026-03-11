@@ -94,7 +94,21 @@ async function main(): Promise<void> {
   await waitForServer(`http://localhost:${VITE_DEV_PORT}`)
   console.log('[electron-dev] Vite is ready')
 
-  // 3. Compile Electron files
+  // 3. Compile MCP server + Electron files
+  console.log('[electron-dev] Compiling MCP server...')
+  await build({
+    platform: 'node',
+    bundle: true,
+    sourcemap: true,
+    target: 'node20',
+    format: 'cjs',
+    entryPoints: [join(ROOT, 'src', 'mcp', 'server.ts')],
+    outfile: join(ROOT, 'dist', 'mcp-server.cjs'),
+    alias: { '@': join(ROOT, 'src') },
+    define: { 'import.meta.env': '{}' },
+  })
+  console.log('[electron-dev] MCP server compiled')
+
   await compileElectron()
 
   // 4. Launch Electron

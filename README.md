@@ -5,8 +5,8 @@
 <h1 align="center">OpenPencil</h1>
 
 <p align="center">
-  <strong>AI-native open-source design tool. Design-as-Code.</strong><br />
-  Prompt to UI on canvas. Multi-agent orchestration. Built-in MCP server. Code generation.
+  <strong>The world's first open-source AI-native vector design tool.</strong><br />
+  <sub>Concurrent Agent Teams &bull; Design-as-Code &bull; Built-in MCP Server &bull; Multi-model Intelligence</sub>
 </p>
 
 <p align="center">
@@ -14,18 +14,10 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/ZSeven-W/openpencil/stargazers"><img src="https://img.shields.io/github/stars/ZSeven-W/openpencil?style=flat" alt="Stars" /></a>
-  <a href="https://github.com/ZSeven-W/openpencil/blob/main/LICENSE"><img src="https://img.shields.io/github/license/ZSeven-W/openpencil" alt="License" /></a>
+  <a href="https://github.com/ZSeven-W/openpencil/stargazers"><img src="https://img.shields.io/github/stars/ZSeven-W/openpencil?style=flat&color=cfb537" alt="Stars" /></a>
+  <a href="https://github.com/ZSeven-W/openpencil/blob/main/LICENSE"><img src="https://img.shields.io/github/license/ZSeven-W/openpencil?color=64748b" alt="License" /></a>
   <a href="https://github.com/ZSeven-W/openpencil/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/ZSeven-W/openpencil/ci.yml?branch=main&label=CI" alt="CI" /></a>
-  <a href="https://discord.gg/KwXp6BJD"><img src="https://img.shields.io/discord/1476517942949580952?label=Discord&logo=discord&logoColor=white" alt="Discord" /></a>
-</p>
-
-<p align="center">
-  <a href="#quick-start">Quick Start</a> ·
-  <a href="#ai-native-design">AI</a> ·
-  <a href="#features">Features</a> ·
-  <a href="https://discord.gg/KwXp6BJD">Discord</a> ·
-  <a href="#contributing">Contributing</a>
+  <a href="https://discord.gg/KwXp6BJD"><img src="https://img.shields.io/discord/1476517942949580952?label=Discord&logo=discord&logoColor=white&color=5865F2" alt="Discord" /></a>
 </p>
 
 <br />
@@ -38,6 +30,59 @@
 <p align="center"><sub>Click the image to watch the demo video</sub></p>
 
 <br />
+
+## Why OpenPencil
+
+<table>
+<tr>
+<td width="50%">
+
+### 🎨 Prompt → Canvas
+
+Describe any UI in natural language. Watch it appear on the infinite canvas in real-time with streaming animation. Modify existing designs by selecting elements and chatting.
+
+</td>
+<td width="50%">
+
+### 🤖 Concurrent Agent Teams
+
+The orchestrator decomposes complex pages into spatial sub-tasks. Multiple AI agents work on different sections simultaneously — hero, features, footer — all streaming in parallel.
+
+</td>
+</tr>
+<tr>
+<td width="50%">
+
+### 🧠 Multi-Model Intelligence
+
+Automatically adapts to each model's capabilities. Claude gets full prompts with thinking; GPT-4o/Gemini disable thinking; smaller models (MiniMax, Qwen, Llama) get simplified prompts for reliable output.
+
+</td>
+<td width="50%">
+
+### 🔌 MCP Server
+
+One-click install into Claude Code, Codex, Gemini, OpenCode, Kiro, or Copilot CLIs. Design from your terminal — read, create, and modify `.op` files through any MCP-compatible agent.
+
+</td>
+</tr>
+<tr>
+<td width="50%">
+
+### 📦 Design-as-Code
+
+`.op` files are JSON — human-readable, Git-friendly, diffable. Design variables generate CSS custom properties. Code export to React + Tailwind or HTML + CSS.
+
+</td>
+<td width="50%">
+
+### 🖥️ Runs Everywhere
+
+Web app + native desktop on macOS, Windows, and Linux via Electron. Auto-updates from GitHub Releases. `.op` file association — double-click to open.
+
+</td>
+</tr>
+</table>
 
 ## Quick Start
 
@@ -59,8 +104,6 @@ bun run electron:dev
 
 ## AI-Native Design
 
-OpenPencil is built around AI from the ground up — not as a plugin, but as a core workflow.
-
 **Prompt to UI**
 - **Text-to-design** — describe a page, get it generated on canvas in real-time with streaming animation
 - **Orchestrator** — decomposes complex pages into spatial sub-tasks for parallel generation
@@ -75,6 +118,8 @@ OpenPencil is built around AI from the ground up — not as a plugin, but as a c
 | **Codex CLI** | Connect in Agent Settings (`Cmd+,`) |
 | **OpenCode** | Connect in Agent Settings (`Cmd+,`) |
 | **GitHub Copilot** | `copilot login` then connect in Agent Settings (`Cmd+,`) |
+
+**Model Capability Profiles** — automatically adapts prompts, thinking mode, and timeouts per model tier. Full-tier models (Claude) get complete prompts; standard-tier (GPT-4o, Gemini, DeepSeek) disable thinking; basic-tier (MiniMax, Qwen, Llama, Mistral) get simplified nested-JSON prompts for maximum reliability.
 
 **MCP Server**
 - Built-in MCP server — one-click install into Claude Code / Codex / Gemini / OpenCode / Kiro / Copilot CLIs
@@ -195,6 +240,7 @@ Contributions are welcome! See [CLAUDE.md](./CLAUDE.md) for architecture details
 - [x] Multi-page support
 - [x] Figma `.fig` import
 - [x] Boolean operations (union, subtract, intersect)
+- [x] Multi-model capability profiles
 - [ ] Collaborative editing
 - [ ] Plugin system
 
@@ -211,6 +257,16 @@ Contributions are welcome! See [CLAUDE.md](./CLAUDE.md) for architecture details
   <strong> Join our Discord</strong>
 </a>
 — Ask questions, share designs, suggest features.
+
+## Star History
+
+<a href="https://star-history.com/#ZSeven-W/openpencil&Date">
+ <picture>
+   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=ZSeven-W/openpencil&type=Date&theme=dark" />
+   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=ZSeven-W/openpencil&type=Date" />
+   <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=ZSeven-W/openpencil&type=Date" width="100%" />
+ </picture>
+</a>
 
 ## License
 

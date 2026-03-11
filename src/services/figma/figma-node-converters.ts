@@ -1,4 +1,7 @@
-import type { FigmaNodeChange, FigmaMatrix, FigmaImportLayoutMode } from './figma-types'
+import type {
+  FigmaNodeChange, FigmaMatrix, FigmaImportLayoutMode,
+  FigmaSymbolOverride, FigmaDerivedSymbolDataEntry, FigmaGUID,
+} from './figma-types'
 import type { PenNode, SizingBehavior, ImageFitMode } from '@/types/pen'
 import { mapFigmaFills } from './figma-fill-mapper'
 import { mapFigmaStroke } from './figma-stroke-mapper'
@@ -10,6 +13,28 @@ import { lookupIconByName } from '@/services/ai/icon-resolver'
 import type { TreeNode } from './figma-tree-builder'
 import { guidToString } from './figma-tree-builder'
 
+/** Scale tree children's transforms and sizes to fit a different parent size. */
+function scaleTreeChildren(children: TreeNode[], sx: number, sy: number): TreeNode[] {
+  if (Math.abs(sx - 1) < 0.001 && Math.abs(sy - 1) < 0.001) return children
+  return children.map((child) => {
+    const figma = { ...child.figma }
+    if (figma.transform) {
+      figma.transform = {
+        ...figma.transform,
+        m02: figma.transform.m02 * sx,
+        m12: figma.transform.m12 * sy,
+      }
+    }
+    if (figma.size) {
+      figma.size = { x: figma.size.x * sx, y: figma.size.y * sy }
+    }
+    return {
+      figma,
+      children: scaleTreeChildren(child.children, sx, sy),
+    }
+  })
+}
+
 const SKIPPED_TYPES = new Set([
   'SLICE', 'CONNECTOR', 'SHAPE_WITH_TEXT', 'STICKY', 'STAMP',
   'HIGHLIGHT', 'WASHI_TAPE', 'CODE_BLOCK', 'MEDIA', 'WIDGET',
@@ -18,6 +43,8 @@ const SKIPPED_TYPES = new Set([
 
 export interface ConversionContext {
   componentMap: Map<string, string>
+  /** SYMBOL TreeNodes keyed by figma GUID — includes internal canvases for instance inlining */
+  symbolTree: Map<string, TreeNode>
   warnings: string[]
   generateId: () => string
   blobs: (Uint8Array | string)[]
@@ -41,18 +68,39 @@ function resolveHeight(figma: FigmaNodeChange, parentStackMode: string | undefin
 function extractPosition(figma: FigmaNodeChange): { x: number; y: number } {
   if (figma.transform) {
     return {
-      x: Math.round(figma.transform.m02),
-      y: Math.round(figma.transform.m12),
+      x: Math.round(figma.transform.m02 * 100) / 100,
+      y: Math.round(figma.transform.m12 * 100) / 100,
     }
   }
   return { x: 0, y: 0 }
 }
 
+function normalizeAngle(deg: number): number {
+  let a = deg % 360
+  if (a < 0) a += 360
+  return Math.round(a * 100) / 100
+}
+
 function extractRotation(transform?: FigmaMatrix): number | undefined {
   if (!transform) return undefined
-  const angle = Math.atan2(transform.m10, transform.m00) * (180 / Math.PI)
+  // Use abs(m00) to ignore horizontal flip (which is handled separately as flipX)
+  const angle = Math.atan2(transform.m10, Math.abs(transform.m00)) * (180 / Math.PI)
   const rounded = Math.round(angle)
   return rounded !== 0 ? rounded : undefined
+}
+
+function extractFlip(transform?: FigmaMatrix): { flipX?: boolean; flipY?: boolean } {
+  if (!transform) return {}
+  const result: { flipX?: boolean; flipY?: boolean } = {}
+  // Determinant sign of the 2x2 rotation/scale sub-matrix detects reflection
+  // m00*m11 - m01*m10 < 0 means a single-axis flip
+  const det = transform.m00 * transform.m11 - transform.m01 * transform.m10
+  if (det < -0.001) {
+    // Check which axis is flipped by looking at the scale signs
+    if (transform.m00 < 0) result.flipX = true
+    else result.flipY = true
+  }
+  return result
 }
 
 function mapCornerRadius(
@@ -77,8 +125,9 @@ function mapCornerRadius(
 function commonProps(
   figma: FigmaNodeChange,
   id: string,
-): { id: string; name?: string; x: number; y: number; rotation?: number; opacity?: number; locked?: boolean } {
+): { id: string; name?: string; x: number; y: number; rotation?: number; opacity?: number; locked?: boolean; flipX?: boolean; flipY?: boolean } {
   const { x, y } = extractPosition(figma)
+  const flip = extractFlip(figma.transform)
   return {
     id,
     name: figma.name || undefined,
@@ -87,6 +136,7 @@ function commonProps(
     rotation: extractRotation(figma.transform),
     opacity: figma.opacity !== undefined && figma.opacity < 1 ? figma.opacity : undefined,
     locked: figma.locked || undefined,
+    ...flip,
   }
 }
 
@@ -323,6 +373,24 @@ function convertInstance(
     : undefined
 
   if (!componentPenId) {
+    // Instance's own tree node may have 0 children (Figma instances inherit from master).
+    // Try to inline the master SYMBOL's children so the visual content is preserved.
+    if (componentGuid && treeNode.children.length === 0) {
+      const symbolNode = ctx.symbolTree.get(guidToString(componentGuid))
+      if (symbolNode && symbolNode.children.length > 0) {
+        const children = applyInstanceOverrides(
+          symbolNode,
+          figma.symbolData?.symbolOverrides,
+          figma.derivedSymbolData,
+          figma.size,
+        )
+        return convertFrame(
+          { figma: treeNode.figma, children },
+          parentStackMode,
+          ctx,
+        )
+      }
+    }
     return convertFrame(treeNode, parentStackMode, ctx)
   }
 
@@ -332,6 +400,113 @@ function convertInstance(
     ...commonProps(figma, id),
     ref: componentPenId,
   }
+}
+
+/**
+ * Apply INSTANCE overrides (fills, arcData) and derived data (sizes, transforms)
+ * to SYMBOL children when inlining them into an instance.
+ */
+function applyInstanceOverrides(
+  symbolNode: TreeNode,
+  overrides: FigmaSymbolOverride[] | undefined,
+  derived: FigmaDerivedSymbolDataEntry[] | undefined,
+  instanceSize: { x: number; y: number } | undefined,
+): TreeNode[] {
+  // If no derived data, fall back to simple scaling
+  if (!derived || derived.length === 0) {
+    if (instanceSize && symbolNode.figma.size) {
+      const sx = instanceSize.x / symbolNode.figma.size.x
+      const sy = instanceSize.y / symbolNode.figma.size.y
+      return scaleTreeChildren(symbolNode.children, sx, sy)
+    }
+    return symbolNode.children
+  }
+
+  // Build override map keyed by guidPath string
+  const overrideMap = new Map<string, FigmaSymbolOverride>()
+  if (overrides) {
+    for (const ov of overrides) {
+      if (ov.guidPath?.guids?.length) {
+        overrideMap.set(guidPathKey(ov.guidPath.guids), ov)
+      }
+    }
+  }
+
+  // Build derived map keyed by guidPath string
+  const derivedMap = new Map<string, FigmaDerivedSymbolDataEntry>()
+  for (const d of derived) {
+    if (d.guidPath?.guids?.length) {
+      derivedMap.set(guidPathKey(d.guidPath.guids), d)
+    }
+  }
+
+  // Flatten SYMBOL tree in pre-order DFS with children sorted by ascending GUID localID.
+  // derivedSymbolData entries follow creation order (ascending GUID), not the tree's
+  // z-order (descending position), so we must match that order.
+  const flatSymbol: TreeNode[] = []
+  function flattenDFS(node: TreeNode) {
+    flatSymbol.push(node)
+    const sorted = [...node.children].sort((a, b) => {
+      const aId = a.figma.guid?.localID ?? 0
+      const bId = b.figma.guid?.localID ?? 0
+      return aId - bId
+    })
+    for (const c of sorted) flattenDFS(c)
+  }
+  flattenDFS(symbolNode)
+
+  // Map each SYMBOL node's GUID → guidPath key (from derived data, matched by index)
+  const nodeGuidToPathKey = new Map<string, string>()
+  for (let i = 0; i < Math.min(flatSymbol.length, derived.length); i++) {
+    const node = flatSymbol[i]
+    const d = derived[i]
+    if (node.figma.guid && d.guidPath?.guids?.length) {
+      nodeGuidToPathKey.set(
+        guidToString(node.figma.guid),
+        guidPathKey(d.guidPath.guids),
+      )
+    }
+  }
+
+  // Recursively apply overrides and derived data to each node
+  function applyToNode(node: TreeNode): TreeNode {
+    const nodeKey = node.figma.guid ? guidToString(node.figma.guid) : ''
+    const pathKey = nodeGuidToPathKey.get(nodeKey)
+    if (!pathKey) {
+      return { figma: { ...node.figma }, children: node.children.map(applyToNode) }
+    }
+
+    const figma = { ...node.figma }
+
+    // Apply derived data (pre-computed sizes and transforms for this instance)
+    const d = derivedMap.get(pathKey)
+    if (d) {
+      if (d.size) figma.size = d.size
+      if (d.transform) figma.transform = d.transform
+      if (d.fontSize !== undefined) figma.fontSize = d.fontSize
+      if (d.derivedTextData) figma.textData = d.derivedTextData
+    }
+
+    // Apply overrides (fills, arcData, text props customized by this instance)
+    const ov = overrideMap.get(pathKey)
+    if (ov) {
+      if (ov.fillPaints) figma.fillPaints = ov.fillPaints
+      if (ov.arcData) figma.arcData = ov.arcData
+      if (ov.textData) figma.textData = ov.textData
+      if (ov.fontSize !== undefined) figma.fontSize = ov.fontSize
+      if (ov.fontName) figma.fontName = ov.fontName
+      if (ov.lineHeight) figma.lineHeight = ov.lineHeight
+      if (ov.letterSpacing) figma.letterSpacing = ov.letterSpacing
+    }
+
+    return { figma, children: node.children.map(applyToNode) }
+  }
+
+  return symbolNode.children.map(applyToNode)
+}
+
+function guidPathKey(guids: FigmaGUID[]): string {
+  return guids.map((g) => guidToString(g)).join('/')
 }
 
 function convertRectangle(
@@ -388,15 +563,67 @@ function convertEllipse(
     }
   }
 
+  // Convert Figma arcData (radians) to PenNode arc properties (degrees)
+  const arc = figma.arcData
+  const arcProps = arc ? mapFigmaArcData(arc) : {}
+  const props = commonProps(figma, id)
+
+  // For arc ellipses, absorb flipX/flipY into the arc angles instead of
+  // relying on canvas-level flip (SVG path flip doesn't work well in Fabric.js).
+  // Also fix the position: when m00=-1 the x in transform is the right edge.
+  if (arcProps.sweepAngle !== undefined || arcProps.startAngle !== undefined || arcProps.innerRadius !== undefined) {
+    const start = arcProps.startAngle ?? 0
+    const sweep = arcProps.sweepAngle ?? 360
+    if (props.flipX) {
+      arcProps.startAngle = normalizeAngle(180 - start - sweep)
+      arcProps.sweepAngle = sweep
+      const w = figma.size?.x ?? 0
+      props.x = Math.round((props.x - w) * 100) / 100
+      delete props.flipX
+    }
+    if (props.flipY) {
+      arcProps.startAngle = normalizeAngle(360 - start - sweep)
+      arcProps.sweepAngle = sweep
+      const h = figma.size?.y ?? 0
+      props.y = Math.round((props.y - h) * 100) / 100
+      delete props.flipY
+    }
+  }
+
   return {
     type: 'ellipse',
-    ...commonProps(figma, id),
+    ...props,
     width: resolveWidth(figma, parentStackMode, ctx),
     height: resolveHeight(figma, parentStackMode, ctx),
+    ...arcProps,
     fill: mapFigmaFills(figma.fillPaints),
     stroke: mapFigmaStroke(figma),
     effects: mapFigmaEffects(figma.effects),
   }
+}
+
+/** Convert Figma arcData (radians, endAngle) to PenNode arc props (degrees, sweepAngle). */
+function mapFigmaArcData(arc: { startingAngle?: number; endingAngle?: number; innerRadius?: number }): {
+  startAngle?: number
+  sweepAngle?: number
+  innerRadius?: number
+} {
+  const startRad = arc.startingAngle ?? 0
+  const endRad = arc.endingAngle ?? Math.PI * 2
+  const inner = arc.innerRadius ?? 0
+
+  let sweepRad = endRad - startRad
+  while (sweepRad < 0) sweepRad += Math.PI * 2
+
+  const startDeg = (startRad * 180) / Math.PI
+  const sweepDeg = (sweepRad * 180) / Math.PI
+
+  // Only emit props that differ from the full-circle defaults
+  const result: { startAngle?: number; sweepAngle?: number; innerRadius?: number } = {}
+  if (Math.abs(startDeg) > 0.1) result.startAngle = Math.round(startDeg * 100) / 100
+  if (Math.abs(sweepDeg - 360) > 0.1) result.sweepAngle = Math.round(sweepDeg * 100) / 100
+  if (inner > 0.001) result.innerRadius = Math.round(inner * 1000) / 1000
+  return result
 }
 
 function convertLine(

@@ -3,6 +3,7 @@ import { getActivePageChildren } from '@/stores/document-tree-utils'
 import type { PenFill, PenStroke, PenEffect, ShadowEffect } from '@/types/styles'
 import { isVariableRef } from '@/variables/resolve-variables'
 import { variableNameToCSS, generateCSSVariables } from '@/services/codegen/css-variables-generator'
+import { buildEllipseArcPath, isArcEllipse } from '@/utils/arc-path'
 
 /**
  * Converts PenDocument nodes to HTML + CSS.
@@ -220,6 +221,16 @@ function generateNodeHTML(
     }
 
     case 'ellipse': {
+      if (isArcEllipse(node.startAngle, node.sweepAngle, node.innerRadius)) {
+        const w = typeof node.width === 'number' ? node.width : 100
+        const h = typeof node.height === 'number' ? node.height : 100
+        const d = buildEllipseArcPath(w, h, node.startAngle ?? 0, node.sweepAngle ?? 360, node.innerRadius ?? 0)
+        const fill = node.fill?.[0]?.type === 'solid' ? varOrLiteral(node.fill[0].color) : '#000'
+        Object.assign(css, effectsToCSS(node.effects))
+        const className = nextClassName(node.name?.replace(/\s+/g, '-').toLowerCase() ?? 'arc')
+        rules.push({ className, properties: css })
+        return `${pad}<svg class="${className}" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}"><path d="${d}" fill="${fill}" /></svg>`
+      }
       if (typeof node.width === 'number') css.width = `${node.width}px`
       if (typeof node.height === 'number') css.height = `${node.height}px`
       css['border-radius'] = '50%'

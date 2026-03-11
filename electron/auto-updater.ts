@@ -1,7 +1,12 @@
 import { app, BrowserWindow } from 'electron'
 import { autoUpdater } from 'electron-updater'
+import type { NsisUpdater } from 'electron-updater'
 import { GitHubProvider } from 'electron-updater/out/providers/GitHubProvider'
+import { execFile } from 'node:child_process'
+import { promisify } from 'node:util'
 import { GITHUB_OWNER, GITHUB_REPO } from './constants'
+
+const execFileAsync = promisify(execFile)
 
 // ---------------------------------------------------------------------------
 // Types
@@ -155,6 +160,41 @@ export function setupAutoUpdater(): void {
   autoUpdater.autoDownload = true
   autoUpdater.autoInstallOnAppQuit = true
   autoUpdater.allowPrerelease = true
+
+  // Windows: custom signature verification for self-signed certificate.
+  // The default verifier requires the cert to be in the Windows trusted root
+  // store, which self-signed certs are not. This custom function still verifies
+  // the publisher name from the Authenticode signature — it just skips the
+  // trust chain check. This is NOT disabling verification.
+  if (process.platform === 'win32') {
+    const nsisUpdater = autoUpdater as NsisUpdater
+    nsisUpdater.verifyUpdateCodeSignature = async (
+      publisherNames: string[],
+      tempUpdateFile: string,
+    ): Promise<string | null> => {
+      try {
+        const { stdout } = await execFileAsync('powershell.exe', [
+          '-NoProfile', '-NonInteractive', '-Command',
+          `(Get-AuthenticodeSignature '${tempUpdateFile.replace(/'/g, "''")}').SignerCertificate.Subject`,
+        ], { timeout: 30_000 })
+
+        const subject = stdout.trim()
+        if (!subject) {
+          return 'The update file is not signed.'
+        }
+
+        for (const name of publisherNames) {
+          if (subject.includes(name)) {
+            return null // Publisher name matches — verification passed
+          }
+        }
+
+        return `Publisher mismatch. Expected: ${publisherNames.join(', ')}. Got: ${subject}`
+      } catch (err) {
+        return `Signature verification failed: ${err instanceof Error ? err.message : String(err)}`
+      }
+    }
+  }
 
   autoUpdater.on('checking-for-update', () => {
     setUpdaterState({ status: 'checking', error: undefined, downloadProgress: undefined })

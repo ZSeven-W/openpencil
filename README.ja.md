@@ -5,8 +5,8 @@
 <h1 align="center">OpenPencil</h1>
 
 <p align="center">
-  <strong>AI ネイティブのオープンソースデザインツール。デザイン・アズ・コード。</strong><br />
-  プロンプトからキャンバス UI へ。マルチエージェントオーケストレーション。内蔵 MCP サーバー。コード生成。
+  <strong>世界初のオープンソース AI ネイティブベクターデザインツール。</strong><br />
+  <sub>並行エージェントチーム &bull; Design-as-Code &bull; 内蔵 MCP サーバー &bull; マルチモデルインテリジェンス</sub>
 </p>
 
 <p align="center">
@@ -14,18 +14,10 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/ZSeven-W/openpencil/stargazers"><img src="https://img.shields.io/github/stars/ZSeven-W/openpencil?style=flat" alt="Stars" /></a>
-  <a href="https://github.com/ZSeven-W/openpencil/blob/main/LICENSE"><img src="https://img.shields.io/github/license/ZSeven-W/openpencil" alt="License" /></a>
+  <a href="https://github.com/ZSeven-W/openpencil/stargazers"><img src="https://img.shields.io/github/stars/ZSeven-W/openpencil?style=flat&color=cfb537" alt="Stars" /></a>
+  <a href="https://github.com/ZSeven-W/openpencil/blob/main/LICENSE"><img src="https://img.shields.io/github/license/ZSeven-W/openpencil?color=64748b" alt="License" /></a>
   <a href="https://github.com/ZSeven-W/openpencil/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/ZSeven-W/openpencil/ci.yml?branch=main&label=CI" alt="CI" /></a>
-  <a href="https://discord.gg/KwXp6BJD"><img src="https://img.shields.io/discord/1476517942949580952?label=Discord&logo=discord&logoColor=white" alt="Discord" /></a>
-</p>
-
-<p align="center">
-  <a href="#quick-start">クイックスタート</a> ·
-  <a href="#ai-native-design">AI</a> ·
-  <a href="#features">機能</a> ·
-  <a href="https://discord.gg/KwXp6BJD">Discord</a> ·
-  <a href="#contributing">コントリビュート</a>
+  <a href="https://discord.gg/KwXp6BJD"><img src="https://img.shields.io/discord/1476517942949580952?label=Discord&logo=discord&logoColor=white&color=5865F2" alt="Discord" /></a>
 </p>
 
 <br />
@@ -38,6 +30,59 @@
 <p align="center"><sub>画像をクリックしてデモ動画を視聴</sub></p>
 
 <br />
+
+## Why OpenPencil
+
+<table>
+<tr>
+<td width="50%">
+
+### 🎨 プロンプト → キャンバス
+
+自然言語で任意の UI を記述。ストリーミングアニメーションでリアルタイムに無限キャンバス上に表示。要素を選択してチャットすることで既存のデザインを修正。
+
+</td>
+<td width="50%">
+
+### 🤖 並行エージェントチーム
+
+オーケストレーターが複雑なページを空間的なサブタスクに分解。複数の AI エージェントがヒーロー、機能紹介、フッターなど異なるセクションを同時に処理し、すべてが並列でストリーミング。
+
+</td>
+</tr>
+<tr>
+<td width="50%">
+
+### 🧠 マルチモデルインテリジェンス
+
+各モデルの能力に自動適応。Claude にはシンキング付きフルプロンプト、GPT-4o/Gemini ではシンキングを無効化、小規模モデル（MiniMax、Qwen、Llama）には信頼性の高い出力のために簡略化プロンプトを使用。
+
+</td>
+<td width="50%">
+
+### 🔌 MCP サーバー
+
+Claude Code、Codex、Gemini、OpenCode、Kiro、Copilot CLI にワンクリックでインストール。ターミナルからデザイン — MCP 対応エージェントを通じて `.op` ファイルの読み取り、作成、編集が可能。
+
+</td>
+</tr>
+<tr>
+<td width="50%">
+
+### 📦 Design-as-Code
+
+`.op` ファイルは JSON — 人間が読みやすく、Git フレンドリーで差分比較可能。デザイン変数は CSS カスタムプロパティを生成。React + Tailwind または HTML + CSS へのコードエクスポート。
+
+</td>
+<td width="50%">
+
+### 🖥️ どこでも動作
+
+Web アプリ + Electron による macOS・Windows・Linux ネイティブデスクトップ。GitHub Releases からの自動アップデート。`.op` ファイル関連付け — ダブルクリックで開く。
+
+</td>
+</tr>
+</table>
 
 ## クイックスタート
 
@@ -59,8 +104,6 @@ bun run electron:dev
 
 ## AI ネイティブデザイン
 
-OpenPencil はプラグインとしてではなく、コアワークフローとして AI を中心に構築されています。
-
 **プロンプトから UI へ**
 - **テキストからデザインへ** — ページを説明すると、ストリーミングアニメーションでリアルタイムにキャンバス上に生成
 - **オーケストレーター** — 複雑なページを空間サブタスクに分解し、並列生成をサポート
@@ -74,10 +117,16 @@ OpenPencil はプラグインとしてではなく、コアワークフローと
 | **Claude Code** | 設定不要 — ローカル OAuth で Claude Agent SDK を使用 |
 | **Codex CLI** | エージェント設定で接続（`Cmd+,`） |
 | **OpenCode** | エージェント設定で接続（`Cmd+,`） |
+| **GitHub Copilot** | `copilot login` 後、エージェント設定で接続（`Cmd+,`） |
+
+**モデル能力プロファイル** — モデルの階層に応じてプロンプト、シンキングモード、タイムアウトを自動適応。フル階層モデル（Claude）には完全なプロンプト、標準階層（GPT-4o、Gemini、DeepSeek）ではシンキングを無効化、ベーシック階層（MiniMax、Qwen、Llama、Mistral）には最大限の信頼性のために簡略化されたネスト JSON プロンプトを使用。
 
 **MCP サーバー**
-- 内蔵 MCP サーバー — Claude Code / Codex / Gemini / OpenCode / Kiro CLI にワンクリックでインストール
+- 内蔵 MCP サーバー — Claude Code / Codex / Gemini / OpenCode / Kiro / Copilot CLI にワンクリックでインストール
 - ターミナルからのデザイン自動化：MCP 対応エージェントを通じて `.op` ファイルの読み取り、作成、編集が可能
+- **レイヤードデザインワークフロー** — `design_skeleton` → `design_content` → `design_refine` による高忠実度マルチセクションデザイン
+- **セグメント化プロンプト取得** — 必要なデザイン知識のみをロード（schema、layout、roles、icons、planning など）
+- マルチページサポート — MCP ツールを通じてページの作成、名前変更、並べ替え、複製が可能
 
 **コード生成**
 - React + Tailwind CSS
@@ -105,6 +154,7 @@ OpenPencil はプラグインとしてではなく、コアワークフローと
 
 **デスクトップアプリ**
 - Electron によるネイティブ macOS・Windows・Linux 対応
+- `.op` ファイル関連付け — ダブルクリックで開く、シングルインスタンスロック
 - GitHub Releases からの自動アップデート
 - ネイティブアプリケーションメニューとファイルダイアログ
 
@@ -117,7 +167,7 @@ OpenPencil はプラグインとしてではなく、コアワークフローと
 | **状態管理** | Zustand v5 |
 | **サーバー** | Nitro |
 | **デスクトップ** | Electron 35 |
-| **AI** | Anthropic SDK · Claude Agent SDK · OpenCode SDK |
+| **AI** | Anthropic SDK · Claude Agent SDK · OpenCode SDK · Copilot SDK |
 | **ランタイム** | Bun · Vite 7 |
 | **ファイル形式** | `.op` — JSON ベース、人間が読みやすく、Git フレンドリー |
 
@@ -136,7 +186,7 @@ src/
   uikit/           再利用可能なコンポーネントキットシステム
 server/
   api/ai/          Nitro API — ストリーミングチャット、生成、バリデーション
-  utils/           Claude CLI、OpenCode、Codex クライアントラッパー
+  utils/           Claude CLI、OpenCode、Codex、Copilot クライアントラッパー
 electron/
   main.ts          ウィンドウ、Nitro フォーク、ネイティブメニュー、自動アップデーター
   preload.ts       IPC ブリッジ
@@ -186,10 +236,11 @@ bun run electron:build     # Electron パッケージング
 - [x] CSS 同期付きデザイン変数とトークン
 - [x] コンポーネントシステム（インスタンスとオーバーライド）
 - [x] オーケストレーター付き AI デザイン生成
-- [x] MCP サーバー統合
+- [x] レイヤードデザインワークフロー付き MCP サーバー統合
 - [x] マルチページサポート
 - [x] Figma `.fig` インポート
-- [x] ブール演算（結合、減算、交差）
+- [x] ブーリアン演算（合体、型抜き、交差）
+- [x] マルチモデル能力プロファイル
 - [ ] 共同編集
 - [ ] プラグインシステム
 
@@ -206,6 +257,17 @@ bun run electron:build     # Electron パッケージング
   <strong> Discord に参加する</strong>
 </a>
 — 質問、デザインの共有、機能のリクエストはこちら。
+
+
+## Star History
+
+<a href="https://star-history.com/#ZSeven-W/openpencil&Date">
+ <picture>
+   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=ZSeven-W/openpencil&type=Date&theme=dark" />
+   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=ZSeven-W/openpencil&type=Date" />
+   <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=ZSeven-W/openpencil&type=Date" width="100%" />
+ </picture>
+</a>
 
 ## ライセンス
 
