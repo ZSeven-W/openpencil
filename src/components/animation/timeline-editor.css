@@ -1,0 +1,98 @@
+/* Timeline editor CSS overrides — map library classes to shadcn/ui design tokens */
+
+.timeline-editor-wrapper {
+  width: 100%;
+  height: 200px;
+  position: relative;
+}
+
+/* Root container */
+.timeline-editor {
+  background-color: var(--card);
+  font-family: ui-monospace, SFMono-Regular, SF Mono, Menlo, Consolas, monospace;
+  font-size: 11px;
+  width: 100% !important;
+  height: 100% !important;
+}
+
+/* Time ruler area */
+.timeline-editor-time-area {
+  background-color: var(--card);
+  border-bottom: 1px solid var(--border);
+}
+
+.timeline-editor-time-unit {
+  border-right-color: oklch(0.556 0 0 / 0.2);
+}
+
+.timeline-editor-time-unit-big {
+  border-right-color: oklch(0.556 0 0 / 0.4);
+}
+
+.timeline-editor-time-unit-scale {
+  color: var(--muted-foreground);
+  font-size: 9px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Edit area rows */
+.timeline-editor-edit-row {
+  background-image:
+    linear-gradient(var(--card), var(--card)),
+    linear-gradient(90deg, oklch(0.556 0 0 / 0.08) 1px, transparent 0);
+  border-bottom: 1px solid oklch(0.556 0 0 / 0.06);
+}
+
+/* Action blocks (phases + video clips) */
+.timeline-editor-action {
+  background-color: oklch(0.55 0.12 250 / 0.15);
+  border-radius: 3px;
+  transition: opacity 80ms ease;
+}
+
+.timeline-editor-action:hover {
+  opacity: 0.9;
+}
+
+/* Resize handles */
+.timeline-editor-action .timeline-editor-action-left-stretch,
+.timeline-editor-action .timeline-editor-action-right-stretch {
+  opacity: 0;
+  transition: opacity 80ms ease;
+}
+
+.timeline-editor-action:hover .timeline-editor-action-left-stretch,
+.timeline-editor-action:hover .timeline-editor-action-right-stretch {
+  opacity: 1;
+}
+
+.timeline-editor-action .timeline-editor-action-left-stretch::after {
+  border-left-color: oklch(0.985 0 0 / 0.3);
+}
+
+.timeline-editor-action .timeline-editor-action-right-stretch::after {
+  border-right-color: oklch(0.985 0 0 / 0.3);
+}
+
+/* Playhead cursor */
+.timeline-editor-cursor {
+  border-left-color: oklch(0.985 0 0 / 0.9);
+  border-right-color: oklch(0.985 0 0 / 0.9);
+}
+
+/* Drag snap line */
+.timeline-editor-drag-line {
+  border-left-color: oklch(0.623 0.214 259 / 0.5);
+}
+
+/* Edit area scrollbar */
+.timeline-editor-edit-area .ReactVirtualized__Grid::-webkit-scrollbar-thumb,
+.timeline-editor-edit-area [data-radix-scroll-area-viewport]::-webkit-scrollbar-thumb {
+  background: var(--muted-foreground);
+  border-radius: 16px;
+}
+
+/* Click area cursor */
+.timeline-editor-time-area-interact {
+  cursor: pointer;
+}
