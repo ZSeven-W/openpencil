@@ -16,7 +16,7 @@ import {
 } from './canvas-constants'
 import { defaultLineHeight } from './canvas-text-measure'
 import { applyRotationControls } from './canvas-controls'
-import { lookupIconByName } from '@/services/ai/icon-resolver'
+import { lookupIconByName, tryAsyncIconFontResolution } from '@/services/ai/icon-resolver'
 
 function angleToCoords(
   angleDeg: number,
@@ -468,6 +468,10 @@ export function createFabricObject(
       const iconMatch = lookupIconByName(iconName)
       const iconD = iconMatch?.d ?? 'M12 12m-3 0a3 3 0 1 0 6 0a3 3 0 1 0 -6 0'
       const iconStyle = iconMatch?.style ?? 'stroke'
+      // Queue async resolution when local lookup fails — result cached for future lookups
+      if (!iconMatch && iconName) {
+        tryAsyncIconFontResolution(node.id, iconName)
+      }
       const pw = sizeToNumber(node.width, 20)
       const ph = sizeToNumber(node.height, 20)
 
@@ -495,6 +499,8 @@ export function createFabricObject(
       }) as FabricObjectWithPenId
       ;(obj as any).__nativeWidth = obj.width
       ;(obj as any).__nativeHeight = obj.height
+      ;(obj as any).__iconFontName = iconName
+      ;(obj as any).__iconStyle = iconStyle
       if (pw > 0 && ph > 0 && obj.width && obj.height) {
         const uniformScale = Math.min(pw / obj.width, ph / obj.height)
         obj.set({ scaleX: uniformScale, scaleY: uniformScale })

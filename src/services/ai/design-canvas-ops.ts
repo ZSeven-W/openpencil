@@ -31,6 +31,7 @@ import {
   sanitizeLayoutChildPositions,
   sanitizeScreenFrameBounds,
   hasActiveLayout,
+  isBadgeOverlayNode,
 } from './design-node-sanitization'
 
 // ---------------------------------------------------------------------------
@@ -127,6 +128,26 @@ export function insertStreamingNode(
   const { addNode, getNodeById } = useDocumentStore.getState()
   normalizeNodeFills(node)
 
+  // Ensure unique node IDs to avoid collisions with pre-existing canvas content.
+  // The upsert path already does this in sanitizeNodesForUpsert, but the streaming
+  // path was missing it — causing duplicate Fabric objects when two generations
+  // produce nodes with the same IDs (e.g. "header-title" in both FoodHome and Settings).
+  const streamCounters = new Map<string, number>()
+  const streamRemaps = new Map<string, string>()
+  ensureUniqueNodeIds(node, preExistingNodeIds, streamCounters, streamRemaps)
+  // Track the newly inserted IDs so subsequent streaming nodes don't collide either
+  const trackNewIds = (n: PenNode) => {
+    preExistingNodeIds.add(n.id)
+    if ('children' in n && Array.isArray(n.children)) {
+      for (const child of n.children) trackNewIds(child)
+    }
+  }
+  trackNewIds(node)
+  // Merge any remappings into the generation-wide remap table
+  for (const [from, to] of streamRemaps) {
+    generationRemappedIds.set(from, to)
+  }
+
   // Ensure container nodes have children array for later child insertions
   if ((node.type === 'frame' || node.type === 'group') && !('children' in node)) {
     ;(node as PenNode & { children: PenNode[] }).children = []
@@ -141,7 +162,7 @@ export function insertStreamingNode(
     ? getNodeById(resolvedParent)
     : null
 
-  if (parentNode && hasActiveLayout(parentNode)) {
+  if (parentNode && hasActiveLayout(parentNode) && !isBadgeOverlayNode(node)) {
     if ('x' in node) delete (node as { x?: number }).x
     if ('y' in node) delete (node as { y?: number }).y
     // Text defaults inside layout frames:
@@ -248,8 +269,9 @@ export function insertStreamingNode(
       startNewAnimationBatch()
     }
 
-    // Append (not prepend) so auto-layout children stay in generation order
-    addNode(insertParent, node, Infinity)
+    // Badge/overlay nodes prepend (index 0) so they render on top (earlier = higher z-order).
+    // All other nodes append to preserve auto-layout generation order.
+    addNode(insertParent, node, isBadgeOverlayNode(node) ? 0 : Infinity)
 
     // When a frame is inserted into a horizontal layout, equalize sibling card widths
     // to prevent overflow when multiple cards are placed in the same row.
@@ -444,6 +466,12 @@ export function applyGenerationHeuristics(node: PenNode): void {
 
   applyIconPathResolution(node)
   applyNoEmojiIconHeuristic(node)
+  // Re-run icon resolution on nodes converted from emoji text → path by the
+  // heuristic above. applyNoEmojiIconHeuristic sets a circle fallback path;
+  // the icon resolver can often match the name (e.g. "Pizza Emoji Path" → pizza).
+  if (node.type === 'path') {
+    applyIconPathResolution(node)
+  }
   applyImagePlaceholderHeuristic(node)
 
   if (!('children' in node) || !Array.isArray(node.children)) return

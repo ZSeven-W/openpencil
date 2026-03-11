@@ -74,12 +74,13 @@ RULES:
 - clipContent: true on cards with cornerRadius + image children.
 - Text: NEVER set height. Short text (titles, labels, buttons) — omit textGrowth. Long text (>15 chars wrapping) — textGrowth="fixed-width", width="fill_container", lineHeight=1.4-1.6.
 - lineHeight: Display 40-56px → 0.9-1.0. Heading 20-36px → 1.0-1.2. Body → 1.4-1.6. letterSpacing: -0.5 to -1 for headlines, 1-3 for uppercase.
-- Icons: icon_font nodes with iconFontName (lucide names: search, bell, user, heart, star, plus, x, check, chevron-right, settings, etc). Sizes: 14/20/24px.
+- Icons: ALWAYS use icon_font nodes with iconFontName (lucide names: search, bell, user, heart, star, plus, x, check, chevron-right, settings, etc). Sizes: 14/20/24px. NEVER use emoji characters (🍕🍔⭐✅🔔 etc) as icon substitutes — they cannot render on canvas.
 - CJK fonts: "Noto Sans SC"/"Noto Sans JP"/"Noto Sans KR" for headings. CJK lineHeight: 1.3-1.4 headings, 1.6-1.8 body.
 - Buttons: frame(padding=[12,24], justifyContent="center") > text. Icon+text: frame(layout="horizontal", gap=8, alignItems="center", padding=[8,16]).
 - Card rows: ALL cards width="fill_container" + height="fill_container".
 - FORMS: ALL inputs AND button use width="fill_container". gap=16-20.
 - Phone mockup: ONE frame, w=260-300, h=520-580, cornerRadius=32, solid fill + 1px stroke.
+- Z-order: Earlier siblings render on top. Overlay elements (badges, indicators, floating buttons) MUST come BEFORE the content they overlap.
 
 FORMAT: _parent (null=root, else parent-id). Parent before children.
 ${BLOCK}json
