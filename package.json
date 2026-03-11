@@ -30,6 +30,7 @@
     "dependencies": {
         "@anthropic-ai/claude-agent-sdk": "^0.2.47",
         "@anthropic-ai/sdk": "^0.77.0",
+        "@cyca/react-timeline-editor": "0.2.1-alpha.0",
         "@github/copilot-sdk": "^0.1.30",
         "@iconify-json/feather": "^1.2.1",
         "@iconify-json/lucide": "^1.2.93",
