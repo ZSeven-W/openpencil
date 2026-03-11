@@ -179,9 +179,8 @@ export function validateActionMove(
     return validateVideoClipBounds(meta.nodeId, start_s, end_s, stores)
   }
 
-  if (meta.type === 'animation-phase') {
-    return validatePhaseOverlap(meta.nodeId, meta.phase, start_s, end_s, metadata)
-  }
+  // Phase ordering (in < while < out) is enforced at the store level
+  // by recomputePhases() which derives boundaries from keyframe tags.
 
   return true
 }
@@ -325,15 +324,3 @@ function validateVideoClipBounds(
   return true
 }
 
-function validatePhaseOverlap(
-  _nodeId: string,
-  _phase: KeyframePhase,
-  _start_s: number,
-  _end_s: number,
-  _metadata: ActionMetadataMap,
-): boolean {
-  // Phase ordering (in < while < out) is enforced at the store level
-  // by recomputePhases() which derives boundaries from keyframe tags.
-  // The library's drag constraints prevent visual overlap.
-  return true
-}

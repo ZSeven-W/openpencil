@@ -3,6 +3,7 @@
  * Shows a colored bar with keyframe diamond markers inside.
  */
 
+import { useRef } from 'react'
 import type { KeyframePhase, Keyframe } from '@/types/animation'
 import { useTimelineStore } from '@/stores/timeline-store'
 import { msToSec } from '@/animation/timeline-adapter-types'
@@ -42,11 +43,22 @@ export default function PhaseActionRenderer({
   const colors = PHASE_COLORS[phase]
   const actionDuration_s = actionEnd_s - actionStart_s
 
-  // Get keyframes for this phase
+  // Get keyframes for this phase (stable reference via id+time fingerprint)
+  const prevRef = useRef<Keyframe[]>([])
   const keyframes = useTimelineStore((s) => {
     const track = s.tracks[nodeId]
-    if (!track) return []
-    return track.keyframes.filter((kf) => kf.phase === phase)
+    if (!track) return prevRef.current
+    const filtered = track.keyframes.filter((kf) => kf.phase === phase)
+    // Return previous reference if keyframes haven't changed (prevents re-render on currentTime updates)
+    const prev = prevRef.current
+    if (
+      prev.length === filtered.length &&
+      prev.every((p, i) => p.id === filtered[i].id && p.time === filtered[i].time && p.easing === filtered[i].easing)
+    ) {
+      return prev
+    }
+    prevRef.current = filtered
+    return filtered
   })
 
   return (
@@ -115,6 +127,7 @@ function KeyframeDiamond({
 
   return (
     <div
+      className="keyframe-diamond"
       style={{
         position: 'absolute',
         left: `${pct}%`,
@@ -126,14 +139,6 @@ function KeyframeDiamond({
         boxShadow: '0 0 0 1px var(--card)',
         cursor: 'pointer',
         transition: 'transform 80ms ease',
-      }}
-      onMouseEnter={(e) => {
-        ;(e.currentTarget as HTMLDivElement).style.transform =
-          'translate(-50%, -50%) rotate(45deg) scale(1.3)'
-      }}
-      onMouseLeave={(e) => {
-        ;(e.currentTarget as HTMLDivElement).style.transform =
-          'translate(-50%, -50%) rotate(45deg)'
       }}
       title={`${keyframe.easing} @ ${Math.round(keyframe.time)}ms`}
     />

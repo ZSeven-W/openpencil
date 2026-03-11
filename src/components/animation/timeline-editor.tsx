@@ -28,7 +28,7 @@ import {
 } from '@/animation/timeline-adapter-types'
 import type { PenNode, VideoNode } from '@/types/pen'
 import { useCanvasStore } from '@/stores/canvas-store'
-import { isCursorUpdateRecent } from '@/animation/canvas-bridge'
+import { consumeCursorGuard } from '@/animation/canvas-bridge'
 import { setTimelineRef } from '@/animation/playback-loop'
 import { withTimelineUndoBatch } from '@/animation/timeline-undo'
 import PhaseActionRenderer from './phase-action-renderer'
@@ -55,11 +55,11 @@ function getStores(): TimelineStores {
       const s = useTimelineStore.getState()
       return { tracks: s.tracks, duration: s.duration, videoClipIds: s.videoClipIds }
     },
-    updateKeyframe: useTimelineStore.getState().updateKeyframe,
+    updateKeyframe: (...args) => useTimelineStore.getState().updateKeyframe(...args),
     getDocumentState: () => ({
       getNodeById: useDocumentStore.getState().getNodeById,
     }),
-    updateNode: useDocumentStore.getState().updateNode,
+    updateNode: (...args) => useDocumentStore.getState().updateNode(...args),
   }
 }
 
@@ -105,11 +105,28 @@ export default function TimelineEditor() {
   const isDragging = useRef(false)
   const frozenRows = useRef<TimelineRow[] | null>(null)
   const metadataRef = useRef<ActionMetadataMap>(new Map())
+  const frozenMetadataRef = useRef<ActionMetadataMap | null>(null)
+  const computedRowsRef = useRef<TimelineRow[]>([])
+
+  // Subscribe to video node property changes (inPoint, outPoint, timelineOffset)
+  // so the timeline updates when video clips are trimmed or moved via other UI
+  const videoNodeVersion = useDocumentStore((s) => {
+    let hash = 0
+    for (const id of videoClipIds) {
+      const node = s.getNodeById(id)
+      if (node && node.type === 'video') {
+        const v = node as PenNode & VideoNode
+        hash = hash * 31 + (v.inPoint ?? 0) + (v.outPoint ?? 0) * 7 + (v.timelineOffset ?? 0) * 13
+      }
+    }
+    return hash
+  })
 
   // Compute projection from stores
   const videoNodes = useMemo(
     () => getVideoNodeProjections(videoClipIds),
-    [videoClipIds],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [videoClipIds, videoNodeVersion],
   )
 
   const { rows: computedRows, metadata } = useMemo(
@@ -117,8 +134,9 @@ export default function TimelineEditor() {
     [tracks, videoNodes, duration_ms],
   )
 
-  // Keep metadata ref in sync
+  // Keep refs in sync (read from callbacks, not during render)
   metadataRef.current = metadata
+  computedRowsRef.current = computedRows
 
   // Use frozen rows during drag, computed rows otherwise
   const displayRows = isDragging.current ? (frozenRows.current ?? computedRows) : computedRows
@@ -137,14 +155,17 @@ export default function TimelineEditor() {
 
   // --- Drag callbacks ---
 
-  const onActionMoveStart = useCallback(() => {
+  const onDragStart = useCallback(() => {
     isDragging.current = true
-    frozenRows.current = computedRows
-  }, [computedRows])
+    frozenRows.current = computedRowsRef.current
+    frozenMetadataRef.current = metadataRef.current
+  }, [])
+
+  const getDragMetadata = () => frozenMetadataRef.current ?? metadataRef.current
 
   const onActionMoving = useCallback(
     ({ action, start, end }: { action: TimelineAction; row: TimelineRow; start: number; end: number }) => {
-      return validateActionMove(action.id, start, end, metadataRef.current, getStores())
+      return validateActionMove(action.id, start, end, getDragMetadata(), getStores())
     },
     [],
   )
@@ -152,22 +173,18 @@ export default function TimelineEditor() {
   const onActionMoveEnd = useCallback(
     ({ action, start, end }: { action: TimelineAction; row: TimelineRow; start: number; end: number }) => {
       withTimelineUndoBatch(() => {
-        applyActionMove(action.id, start, end, metadataRef.current, getStores())
+        applyActionMove(action.id, start, end, getDragMetadata(), getStores())
       })
       isDragging.current = false
       frozenRows.current = null
+      frozenMetadataRef.current = null
     },
     [],
   )
 
-  const onActionResizeStart = useCallback(() => {
-    isDragging.current = true
-    frozenRows.current = computedRows
-  }, [computedRows])
-
   const onActionResizing = useCallback(
     ({ action, start, end }: { action: TimelineAction; row: TimelineRow; start: number; end: number; dir: 'right' | 'left' }) => {
-      return validateActionResize(action.id, start, end, metadataRef.current, getStores())
+      return validateActionResize(action.id, start, end, getDragMetadata(), getStores())
     },
     [],
   )
@@ -175,10 +192,11 @@ export default function TimelineEditor() {
   const onActionResizeEnd = useCallback(
     ({ action, start, end, dir }: { action: TimelineAction; row: TimelineRow; start: number; end: number; dir: 'right' | 'left' }) => {
       withTimelineUndoBatch(() => {
-        applyActionResize(action.id, start, end, dir, metadataRef.current, getStores())
+        applyActionResize(action.id, start, end, dir, getDragMetadata(), getStores())
       })
       isDragging.current = false
       frozenRows.current = null
+      frozenMetadataRef.current = null
     },
     [],
   )
@@ -187,7 +205,7 @@ export default function TimelineEditor() {
 
   const onCursorDrag = useCallback((time_s: number) => {
     // Skip if playback engine just set the cursor (prevents feedback loop)
-    if (isCursorUpdateRecent()) return
+    if (consumeCursorGuard()) return
     useTimelineStore.getState().setCurrentTime(secToMs(time_s))
   }, [])
 
@@ -265,10 +283,10 @@ export default function TimelineEditor() {
           style={{ width: '100%', height: '100%' }}
           getActionRender={getActionRender}
           onScroll={onScroll}
-          onActionMoveStart={onActionMoveStart}
+          onActionMoveStart={onDragStart}
           onActionMoving={onActionMoving}
           onActionMoveEnd={onActionMoveEnd}
-          onActionResizeStart={onActionResizeStart}
+          onActionResizeStart={onDragStart}
           onActionResizing={onActionResizing}
           onActionResizeEnd={onActionResizeEnd}
           onCursorDrag={onCursorDrag}

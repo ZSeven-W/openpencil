@@ -21,13 +21,20 @@ export function withTimelineUndoBatch(fn: () => void): void {
   const doc = useDocumentStore.getState().document
   useHistoryStore.getState().startBatch(doc)
 
-  // 3. Execute mutations
-  fn()
+  try {
+    // 3. Execute mutations
+    fn()
 
-  // 4. Serialize post-mutation state
-  injectAnimationData()
+    // 4. Serialize post-mutation state
+    injectAnimationData()
 
-  // 5. Push to history with no-op detection
-  const currentDoc = useDocumentStore.getState().document
-  useHistoryStore.getState().endBatch(currentDoc)
+    // 5. Push to history with no-op detection
+    const currentDoc = useDocumentStore.getState().document
+    useHistoryStore.getState().endBatch(currentDoc)
+  } catch (e) {
+    // Ensure batch is closed even on error to prevent dangling startBatch state
+    const currentDoc = useDocumentStore.getState().document
+    useHistoryStore.getState().endBatch(currentDoc)
+    throw e
+  }
 }

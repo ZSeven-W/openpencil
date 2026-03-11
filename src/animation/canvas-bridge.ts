@@ -12,17 +12,21 @@ export function setPlaybackActive(active: boolean): void {
   playbackActive = active
 }
 
-// --- Timestamp-based cursor guard ---
-// Prevents library cursor drag callbacks from firing during playback tick
+// --- Cursor guard (boolean flag) ---
+// Prevents library cursor drag callbacks from echoing back playback tick values.
+// A boolean flag is deterministic; a timing heuristic would fail on slow machines.
 
-let lastExternalCursorSetAt = 0
+let cursorSetByEngine = false
 
 export function markCursorUpdate(): void {
-  lastExternalCursorSetAt = performance.now()
+  cursorSetByEngine = true
 }
 
-export function isCursorUpdateRecent(): boolean {
-  return performance.now() - lastExternalCursorSetAt < 20
+/** Returns true (and resets) if the engine just set the cursor. */
+export function consumeCursorGuard(): boolean {
+  const was = cursorSetByEngine
+  cursorSetByEngine = false
+  return was
 }
 
 // --- Object Lookup (shared Map cache) ---
