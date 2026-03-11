@@ -22,6 +22,10 @@ export interface KitComponent {
   /** Component dimensions for preview sizing */
   width: number
   height: number
+  /** Jeans content type for template components */
+  contentType?: 'slide' | 'post' | 'video-frame'
+  /** Supported format preset IDs */
+  supportedFormats?: string[]
 }
 
 export interface UIKit {
