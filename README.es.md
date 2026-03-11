@@ -5,8 +5,8 @@
 <h1 align="center">OpenPencil</h1>
 
 <p align="center">
-  <strong>Herramienta de diseño de código abierto nativa de IA. Diseño como Código.</strong><br />
-  De prompt a interfaz en el lienzo. Orquestación multiagente. Servidor MCP integrado. Generación de código.
+  <strong>La primera herramienta de diseño vectorial de código abierto nativa de IA del mundo.</strong><br />
+  <sub>Equipos de Agentes Concurrentes &bull; Diseño como Código &bull; Servidor MCP Integrado &bull; Inteligencia Multimodelo</sub>
 </p>
 
 <p align="center">
@@ -14,30 +14,75 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/ZSeven-W/openpencil/stargazers"><img src="https://img.shields.io/github/stars/ZSeven-W/openpencil?style=flat" alt="Stars" /></a>
-  <a href="https://github.com/ZSeven-W/openpencil/blob/main/LICENSE"><img src="https://img.shields.io/github/license/ZSeven-W/openpencil" alt="License" /></a>
+  <a href="https://github.com/ZSeven-W/openpencil/stargazers"><img src="https://img.shields.io/github/stars/ZSeven-W/openpencil?style=flat&color=cfb537" alt="Stars" /></a>
+  <a href="https://github.com/ZSeven-W/openpencil/blob/main/LICENSE"><img src="https://img.shields.io/github/license/ZSeven-W/openpencil?color=64748b" alt="License" /></a>
   <a href="https://github.com/ZSeven-W/openpencil/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/ZSeven-W/openpencil/ci.yml?branch=main&label=CI" alt="CI" /></a>
-  <a href="https://discord.gg/KwXp6BJD"><img src="https://img.shields.io/discord/1476517942949580952?label=Discord&logo=discord&logoColor=white" alt="Discord" /></a>
-</p>
-
-<p align="center">
-  <a href="#inicio-rápido">Inicio Rápido</a> ·
-  <a href="#diseño-nativo-de-ia">IA</a> ·
-  <a href="#características">Características</a> ·
-  <a href="https://discord.gg/KwXp6BJD">Discord</a> ·
-  <a href="#contribuir">Contribuir</a>
+  <a href="https://discord.gg/KwXp6BJD"><img src="https://img.shields.io/discord/1476517942949580952?label=Discord&logo=discord&logoColor=white&color=5865F2" alt="Discord" /></a>
 </p>
 
 <br />
 
 <p align="center">
   <a href="https://oss.ioa.tech/zseven/openpencil/a46e24733239ce24de36702342201033.mp4">
-    <img src="./screenshot/op-cover.png" alt="OpenPencil — click to watch demo" width="100%" />
+    <img src="./screenshot/op-cover.png" alt="OpenPencil — haz clic para ver la demostración" width="100%" />
   </a>
 </p>
 <p align="center"><sub>Haz clic en la imagen para ver el video de demostración</sub></p>
 
 <br />
+
+## Por Qué OpenPencil
+
+<table>
+<tr>
+<td width="50%">
+
+### 🎨 Prompt → Lienzo
+
+Describe cualquier interfaz en lenguaje natural. Obsérvala aparecer en el lienzo infinito en tiempo real con animación de transmisión. Modifica diseños existentes seleccionando elementos y chateando.
+
+</td>
+<td width="50%">
+
+### 🤖 Equipos de Agentes Concurrentes
+
+El orquestador descompone páginas complejas en subtareas espaciales. Múltiples agentes de IA trabajan en diferentes secciones simultáneamente — hero, características, footer — todos transmitiendo en paralelo.
+
+</td>
+</tr>
+<tr>
+<td width="50%">
+
+### 🧠 Inteligencia Multimodelo
+
+Se adapta automáticamente a las capacidades de cada modelo. Claude recibe prompts completos con pensamiento; GPT-4o/Gemini desactivan el pensamiento; modelos más pequeños (MiniMax, Qwen, Llama) reciben prompts simplificados para una salida confiable.
+
+</td>
+<td width="50%">
+
+### 🔌 Servidor MCP
+
+Instalación con un clic en Claude Code, Codex, Gemini, OpenCode, Kiro o Copilot CLIs. Diseña desde tu terminal — lee, crea y modifica archivos `.op` a través de cualquier agente compatible con MCP.
+
+</td>
+</tr>
+<tr>
+<td width="50%">
+
+### 📦 Diseño como Código
+
+Los archivos `.op` son JSON — legibles por humanos, compatibles con Git, comparables. Las variables de diseño generan propiedades personalizadas CSS. Exportación de código a React + Tailwind o HTML + CSS.
+
+</td>
+<td width="50%">
+
+### 🖥️ Funciona en Todas Partes
+
+Aplicación web + escritorio nativo en macOS, Windows y Linux mediante Electron. Actualizaciones automáticas desde GitHub Releases. Asociación de archivos `.op` — doble clic para abrir.
+
+</td>
+</tr>
+</table>
 
 ## Inicio Rápido
 
@@ -59,8 +104,6 @@ bun run electron:dev
 
 ## Diseño Nativo de IA
 
-OpenPencil está construido desde cero con IA en su núcleo — no como un plugin, sino como un flujo de trabajo central.
-
 **De Prompt a Interfaz**
 - **Texto a diseño** — describe una página y se genera en el lienzo en tiempo real con animación de transmisión
 - **Orquestador** — descompone páginas complejas en subtareas espaciales para generación en paralelo
@@ -74,10 +117,16 @@ OpenPencil está construido desde cero con IA en su núcleo — no como un plugi
 | **Claude Code** | Sin configuración — usa Claude Agent SDK con OAuth local |
 | **Codex CLI** | Conectar en Configuración de Agente (`Cmd+,`) |
 | **OpenCode** | Conectar en Configuración de Agente (`Cmd+,`) |
+| **GitHub Copilot** | `copilot login` y luego conectar en Configuración de Agente (`Cmd+,`) |
+
+**Perfiles de Capacidad de Modelos** — adapta automáticamente los prompts, el modo de pensamiento y los tiempos de espera según el nivel del modelo. Los modelos de nivel completo (Claude) reciben prompts completos; los de nivel estándar (GPT-4o, Gemini, DeepSeek) desactivan el pensamiento; los de nivel básico (MiniMax, Qwen, Llama, Mistral) reciben prompts simplificados de JSON anidado para máxima fiabilidad.
 
 **Servidor MCP**
-- Servidor MCP integrado — instalación con un clic en Claude Code / Codex / Gemini / OpenCode / Kiro CLIs
+- Servidor MCP integrado — instalación con un clic en Claude Code / Codex / Gemini / OpenCode / Kiro / Copilot CLIs
 - Automatización de diseño desde la terminal: leer, crear y modificar archivos `.op` a través de cualquier agente compatible con MCP
+- **Flujo de diseño por capas** — `design_skeleton` → `design_content` → `design_refine` para diseños multisección de mayor fidelidad
+- **Recuperación segmentada de prompts** — carga solo el conocimiento de diseño que necesitas (schema, layout, roles, icons, planning, etc.)
+- Soporte multipágina — crear, renombrar, reordenar y duplicar páginas mediante herramientas MCP
 
 **Generación de Código**
 - React + Tailwind CSS
@@ -105,6 +154,7 @@ OpenPencil está construido desde cero con IA en su núcleo — no como un plugi
 
 **Aplicación de Escritorio**
 - Compatible de forma nativa con macOS, Windows y Linux mediante Electron
+- Asociación de archivos `.op` — doble clic para abrir, bloqueo de instancia única
 - Actualización automática desde GitHub Releases
 - Menú de aplicación nativo y diálogos de archivo
 
@@ -117,7 +167,7 @@ OpenPencil está construido desde cero con IA en su núcleo — no como un plugi
 | **Estado** | Zustand v5 |
 | **Servidor** | Nitro |
 | **Escritorio** | Electron 35 |
-| **IA** | Anthropic SDK · Claude Agent SDK · OpenCode SDK |
+| **IA** | Anthropic SDK · Claude Agent SDK · OpenCode SDK · Copilot SDK |
 | **Runtime** | Bun · Vite 7 |
 | **Formato de archivo** | `.op` — basado en JSON, legible por humanos, compatible con Git |
 
@@ -136,7 +186,7 @@ src/
   uikit/           Sistema de kit de componentes reutilizables
 server/
   api/ai/          API Nitro — chat en streaming, generación, validación
-  utils/           Wrappers de cliente Claude CLI, OpenCode, Codex
+  utils/           Wrappers de cliente Claude CLI, OpenCode, Codex, Copilot
 electron/
   main.ts          Ventana, fork Nitro, menú nativo, actualizador automático
   preload.ts       Puente IPC
@@ -186,10 +236,11 @@ bun run electron:build     # Empaquetado de Electron
 - [x] Variables de diseño y tokens con sincronización CSS
 - [x] Sistema de componentes (instancias y sobreescrituras)
 - [x] Generación de diseño con IA y orquestador
-- [x] Integración con servidor MCP
+- [x] Integración con servidor MCP con flujo de diseño por capas
 - [x] Soporte multipágina
 - [x] Importación de Figma `.fig`
 - [x] Operaciones booleanas (unión, sustracción, intersección)
+- [x] Perfiles de capacidad multimodelo
 - [ ] Edición colaborativa
 - [ ] Sistema de plugins
 
@@ -197,6 +248,17 @@ bun run electron:build     # Empaquetado de Electron
 
 <a href="https://github.com/ZSeven-W/openpencil/graphs/contributors">
   <img src="https://contrib.rocks/image?repo=ZSeven-W/openpencil" alt="Contributors" />
+</a>
+
+
+## Star History
+
+<a href="https://star-history.com/#ZSeven-W/openpencil&Date">
+ <picture>
+   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=ZSeven-W/openpencil&type=Date&theme=dark" />
+   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=ZSeven-W/openpencil&type=Date" />
+   <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=ZSeven-W/openpencil&type=Date" width="100%" />
+ </picture>
 </a>
 
 ## Comunidad
@@ -207,6 +269,4 @@ bun run electron:build     # Empaquetado de Electron
 </a>
 — Haz preguntas, comparte diseños y sugiere funciones.
 
-## Licencia
 
-[MIT](./LICENSE) — Copyright (c) 2026 ZSeven-W

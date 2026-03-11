@@ -1,5 +1,6 @@
 import * as fabric from 'fabric'
 import type { PenNode } from '@/types/pen'
+import { buildEllipseArcPath, isArcEllipse } from '@/utils/arc-path'
 import type { FabricObjectWithPenId } from './canvas-object-factory'
 import {
   resolveFill,
@@ -102,13 +103,40 @@ export function syncFabricObject(
     case 'ellipse': {
       const w = sizeToNumber(node.width, 100)
       const h = sizeToNumber(node.height, 100)
-      obj.set({
-        rx: w / 2,
-        ry: h / 2,
-        fill: resolveFill(node.fill, w, h),
-        stroke: resolveStrokeColor(node.stroke),
-        strokeWidth: resolveStrokeWidth(node.stroke),
-      })
+      if (isArcEllipse(node.startAngle, node.sweepAngle, node.innerRadius)) {
+        // Arc ellipse rendered as Fabric.Path — update path data
+        const arcD = buildEllipseArcPath(w, h, node.startAngle ?? 0, node.sweepAngle ?? 360, node.innerRadius ?? 0)
+        if (obj instanceof fabric.Path) {
+          const trackedD = typeof (obj as any).__sourceD === 'string' ? (obj as any).__sourceD.trim() : ''
+          if (arcD !== trackedD) {
+            const tmp = new fabric.Path(arcD)
+            ;(obj as any).path = (tmp as any).path
+            ;(obj as any).__sourceD = arcD
+            ;(obj as any).__nativeWidth = w
+            ;(obj as any).__nativeHeight = h
+          }
+        }
+        // Override Fabric's auto-computed bounding box — the arc path is
+        // drawn within a 0,0 → w,h coordinate space.
+        ;(obj as any).pathOffset = new fabric.Point(w / 2, h / 2)
+        obj.set({
+          width: w,
+          height: h,
+          scaleX: 1,
+          scaleY: 1,
+          fill: resolveFill(node.fill, w, h),
+          stroke: resolveStrokeColor(node.stroke),
+          strokeWidth: resolveStrokeWidth(node.stroke),
+        })
+      } else {
+        obj.set({
+          rx: w / 2,
+          ry: h / 2,
+          fill: resolveFill(node.fill, w, h),
+          stroke: resolveStrokeColor(node.stroke),
+          strokeWidth: resolveStrokeWidth(node.stroke),
+        })
+      }
       break
     }
     case 'line': {

@@ -440,7 +440,7 @@ async function callOrchestrator(
     ORCHESTRATOR_PROMPT,
     [{ role: 'user', content: prompt }],
     model,
-    getOrchestratorTimeouts(timeoutHintLength),
+    getOrchestratorTimeouts(timeoutHintLength, model),
     provider,
     abortSignal,
   )) {
@@ -456,7 +456,11 @@ async function callOrchestrator(
 
   const plan = parseOrchestratorResponse(rawResponse)
   if (!plan) {
-    throw new Error('Failed to parse orchestrator plan')
+    const preview = rawResponse.trim().slice(0, 150)
+    const hint = rawResponse.trim().length === 0
+      ? 'The model returned an empty response.'
+      : `Model output: "${preview}${rawResponse.length > 150 ? '…' : ''}"`
+    throw new Error(`Could not parse design plan from model response. ${hint}`)
   }
 
   return plan

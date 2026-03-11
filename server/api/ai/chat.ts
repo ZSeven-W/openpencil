@@ -343,6 +343,58 @@ function streamViaAgentSDK(body: ChatBody, model?: string) {
   return new Response(stream)
 }
 
+/** Error name → user-friendly label mapping */
+const OPENCODE_ERROR_LABELS: Record<string, string> = {
+  APIError: 'API error',
+  ProviderAuthError: 'Authentication failed',
+  UnknownError: 'Unknown error',
+  MessageOutputLengthError: 'Response too long',
+  MessageAbortedError: 'Request aborted',
+  StructuredOutputError: 'Output format error',
+  ContextOverflowError: 'Context too long',
+}
+
+/**
+ * Extract a human-readable message from an OpenCode error object.
+ * Handles structured errors like { name: "APIError", data: { message: "..." } }
+ * and nested JSON in message strings.
+ */
+export function formatOpenCodeError(error: unknown): string {
+  if (!error) return 'Unknown error'
+  if (typeof error === 'string') return error
+
+  const err = error as Record<string, any>
+
+  // Structured OpenCode error: { name, data: { message, ... } }
+  if (err.name && err.data?.message) {
+    const label = OPENCODE_ERROR_LABELS[err.name] ?? err.name
+    let msg: string = err.data.message
+
+    // Try to extract nested error message from JSON in the message string
+    // e.g. 'Unauthorized: {"error":{"code":"invalid_api_key","message":"invalid access token"}}'
+    const jsonStart = msg.indexOf('{')
+    if (jsonStart > 0) {
+      try {
+        const nested = JSON.parse(msg.slice(jsonStart))
+        const nestedMsg = nested?.error?.message ?? nested?.message
+        if (nestedMsg) {
+          const prefix = msg.slice(0, jsonStart).replace(/:\s*$/, '').trim()
+          msg = prefix ? `${prefix}: ${nestedMsg}` : nestedMsg
+        }
+      } catch { /* not JSON, use as-is */ }
+    }
+
+    return `${label} — ${msg}`
+  }
+
+  // Plain { message } object
+  if (err.message) return err.message
+
+  // Fallback: truncated JSON
+  const json = JSON.stringify(error)
+  return json.length > 200 ? json.slice(0, 200) + '…' : json
+}
+
 /** Parse an OpenCode model string ("providerID/modelID") into its parts */
 function parseOpenCodeModel(model?: string): { providerID: string; modelID: string } | undefined {
   if (!model || !model.includes('/')) return undefined
@@ -377,24 +429,19 @@ function buildOpenCodeReasoning(
   return Object.keys(reasoning).length > 0 ? reasoning : undefined
 }
 
-async function promptOpenCodeWithThinking(
-  ocClient: any,
-  basePayload: Record<string, unknown>,
-  body: ChatBody,
-): Promise<{ data: any; error: any }> {
-  const reasoning = buildOpenCodeReasoning(body)
-  if (!reasoning) {
-    return await ocClient.session.prompt(basePayload)
+/** Wrap an async generator with a timeout — yields values until timeout fires */
+async function* streamWithTimeout<T>(
+  stream: AsyncGenerator<T>,
+  timeoutPromise: Promise<{ done: true; value: undefined }>,
+): AsyncGenerator<T> {
+  while (true) {
+    const result = await Promise.race([
+      stream.next(),
+      timeoutPromise,
+    ]) as IteratorResult<T>
+    if (result.done) break
+    yield result.value
   }
-
-  const enhanced = { ...basePayload, reasoning }
-  const firstTry = await ocClient.session.prompt(enhanced)
-  if (!firstTry.error) {
-    return firstTry
-  }
-
-  console.warn('[AI] OpenCode reasoning options rejected, retrying without reasoning.')
-  return await ocClient.session.prompt(basePayload)
 }
 
 function streamViaCodex(body: ChatBody, model?: string) {
@@ -465,7 +512,7 @@ function streamViaCodex(body: ChatBody, model?: string) {
   return new Response(stream)
 }
 
-/** Stream via OpenCode SDK (connects to a running OpenCode server) */
+/** Stream via OpenCode SDK using event subscription for real-time streaming */
 function streamViaOpenCode(body: ChatBody, model?: string) {
   const stream = new ReadableStream({
     async start(controller) {
@@ -488,7 +535,7 @@ function streamViaOpenCode(body: ChatBody, model?: string) {
           title: 'OpenPencil Chat',
         })
         if (sessionError || !session) {
-          throw new Error('Failed to create OpenCode session')
+          throw new Error(`Failed to create OpenCode session: ${formatOpenCodeError(sessionError)}`)
         }
 
         // Inject system prompt as context (no AI reply)
@@ -503,6 +550,9 @@ function streamViaOpenCode(body: ChatBody, model?: string) {
         const prompt = lastUserMsg?.content ?? ''
 
         const parsed = parseOpenCodeModel(model)
+        if (model && !parsed) {
+          console.warn(`[AI] OpenCode: could not parse model string "${model}", sending without model override`)
+        }
 
         // Build parts array, adding image attachments if present
         const attachments = getLastUserAttachments(body)
@@ -514,32 +564,87 @@ function streamViaOpenCode(body: ChatBody, model?: string) {
           { type: 'text', text: prompt || 'Analyze these images.' },
         ]
 
-        // Send prompt and await full response
+        console.log(`[AI] OpenCode streaming prompt: model=${model}, parsed=${JSON.stringify(parsed)}`)
+
+        // Build prompt payload with optional model and reasoning
         const promptPayload: Record<string, unknown> = {
           sessionID: session.id,
           ...(parsed ? { model: parsed } : {}),
           parts,
         }
-
-        const { data: result, error: promptError } = await promptOpenCodeWithThinking(
-          ocClient,
-          promptPayload,
-          body,
-        )
-
-        if (promptError) {
-          throw new Error('OpenCode prompt failed')
+        const reasoning = buildOpenCodeReasoning(body)
+        if (reasoning) {
+          promptPayload.reasoning = reasoning
         }
 
-        // Extract text from response parts
-        clearInterval(pingTimer)
-        if (result?.parts) {
-          for (const part of result.parts) {
-            if (part.type === 'text' && 'text' in part) {
-              const data = JSON.stringify({ type: 'text', content: part.text })
+        // Subscribe to event stream for real-time deltas
+        const eventResult = await ocClient.event.subscribe()
+        const eventStream = eventResult.stream
+
+        // Send prompt asynchronously — response comes via events
+        const { error: asyncError } = await ocClient.session.promptAsync(promptPayload as any)
+        if (asyncError) {
+          const detail = formatOpenCodeError(asyncError)
+          console.error('[AI] OpenCode promptAsync error:', detail)
+          throw new Error(detail)
+        }
+
+        // Consume event stream, forwarding text deltas to client
+        let emittedText = false
+        const sessionId = session.id
+        const STREAM_TIMEOUT_MS = 180_000
+        const timeoutPromise = new Promise<{ done: true; value: undefined }>((resolve) =>
+          setTimeout(() => resolve({ done: true, value: undefined }), STREAM_TIMEOUT_MS),
+        )
+
+        for await (const event of streamWithTimeout(eventStream, timeoutPromise)) {
+          if (!event || !('type' in event)) continue
+
+          const eventType = event.type as string
+
+          // Stream text deltas for our session
+          if (eventType === 'message.part.delta') {
+            const props = (event as any).properties
+            if (props?.sessionID === sessionId && props.field === 'text') {
+              const data = JSON.stringify({ type: 'text', content: props.delta })
+              controller.enqueue(encoder.encode(`data: ${data}\n\n`))
+              emittedText = true
+            }
+            // Forward reasoning deltas as thinking chunks
+            if (props?.sessionID === sessionId && props.field === 'reasoning') {
+              const data = JSON.stringify({ type: 'thinking', content: props.delta })
               controller.enqueue(encoder.encode(`data: ${data}\n\n`))
             }
+            continue
           }
+
+          // Session went idle — response complete
+          if (eventType === 'session.idle') {
+            const props = (event as any).properties
+            if (props?.sessionID === sessionId) break
+            continue
+          }
+
+          // Session error
+          if (eventType === 'session.error') {
+            const props = (event as any).properties
+            if (props?.sessionID === sessionId || !props?.sessionID) {
+              const errMsg = formatOpenCodeError(props?.error)
+              console.error('[AI] OpenCode session error:', errMsg)
+              const data = JSON.stringify({ type: 'error', content: errMsg })
+              controller.enqueue(encoder.encode(`data: ${data}\n\n`))
+              break
+            }
+            continue
+          }
+        }
+
+        clearInterval(pingTimer)
+
+        if (!emittedText) {
+          console.warn('[AI] OpenCode returned no text via streaming events')
+          const data = JSON.stringify({ type: 'error', content: 'OpenCode returned an empty response. The model may not have generated any output.' })
+          controller.enqueue(encoder.encode(`data: ${data}\n\n`))
         }
 
         controller.enqueue(

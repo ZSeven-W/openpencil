@@ -5,8 +5,8 @@
 <h1 align="center">OpenPencil</h1>
 
 <p align="center">
-  <strong>AI-नेटिव ओपन-सोर्स डिज़ाइन टूल। डिज़ाइन-एज़-कोड।</strong><br />
-  प्रॉम्प्ट से कैनवास UI तक। मल्टी-एजेंट ऑर्केस्ट्रेशन। बिल्ट-इन MCP सर्वर। कोड जनरेशन।
+  <strong>दुनिया का पहला ओपन-सोर्स AI-नेटिव वेक्टर डिज़ाइन टूल।</strong><br />
+  <sub>समवर्ती एजेंट टीमें &bull; डिज़ाइन-एज़-कोड &bull; बिल्ट-इन MCP सर्वर &bull; मल्टी-मॉडल इंटेलिजेंस</sub>
 </p>
 
 <p align="center">
@@ -14,30 +14,75 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/ZSeven-W/openpencil/stargazers"><img src="https://img.shields.io/github/stars/ZSeven-W/openpencil?style=flat" alt="Stars" /></a>
-  <a href="https://github.com/ZSeven-W/openpencil/blob/main/LICENSE"><img src="https://img.shields.io/github/license/ZSeven-W/openpencil" alt="License" /></a>
+  <a href="https://github.com/ZSeven-W/openpencil/stargazers"><img src="https://img.shields.io/github/stars/ZSeven-W/openpencil?style=flat&color=cfb537" alt="Stars" /></a>
+  <a href="https://github.com/ZSeven-W/openpencil/blob/main/LICENSE"><img src="https://img.shields.io/github/license/ZSeven-W/openpencil?color=64748b" alt="License" /></a>
   <a href="https://github.com/ZSeven-W/openpencil/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/ZSeven-W/openpencil/ci.yml?branch=main&label=CI" alt="CI" /></a>
-  <a href="https://discord.gg/KwXp6BJD"><img src="https://img.shields.io/discord/1476517942949580952?label=Discord&logo=discord&logoColor=white" alt="Discord" /></a>
-</p>
-
-<p align="center">
-  <a href="#quick-start">त्वरित शुरुआत</a> ·
-  <a href="#ai-native-design">AI</a> ·
-  <a href="#features">विशेषताएँ</a> ·
-  <a href="https://discord.gg/KwXp6BJD">Discord</a> ·
-  <a href="#contributing">योगदान</a>
+  <a href="https://discord.gg/KwXp6BJD"><img src="https://img.shields.io/discord/1476517942949580952?label=Discord&logo=discord&logoColor=white&color=5865F2" alt="Discord" /></a>
 </p>
 
 <br />
 
 <p align="center">
   <a href="https://oss.ioa.tech/zseven/openpencil/a46e24733239ce24de36702342201033.mp4">
-    <img src="./screenshot/op-cover.png" alt="OpenPencil — click to watch demo" width="100%" />
+    <img src="./screenshot/op-cover.png" alt="OpenPencil — डेमो देखने के लिए क्लिक करें" width="100%" />
   </a>
 </p>
 <p align="center"><sub>डेमो वीडियो देखने के लिए छवि पर क्लिक करें</sub></p>
 
 <br />
+
+## OpenPencil क्यों
+
+<table>
+<tr>
+<td width="50%">
+
+### 🎨 प्रॉम्प्ट → कैनवास
+
+किसी भी UI का प्राकृतिक भाषा में वर्णन करें। स्ट्रीमिंग एनिमेशन के साथ रियल-टाइम में अनंत कैनवास पर प्रकट होते देखें। एलिमेंट चुनकर और चैट करके मौजूदा डिज़ाइन संशोधित करें।
+
+</td>
+<td width="50%">
+
+### 🤖 समवर्ती एजेंट टीमें
+
+ऑर्केस्ट्रेटर जटिल पेजों को स्थानिक सब-टास्क में विभाजित करता है। कई AI एजेंट एक साथ अलग-अलग सेक्शन पर काम करते हैं — हीरो, फ़ीचर, फ़ुटर — सभी समानांतर स्ट्रीमिंग करते हुए।
+
+</td>
+</tr>
+<tr>
+<td width="50%">
+
+### 🧠 मल्टी-मॉडल इंटेलिजेंस
+
+प्रत्येक मॉडल की क्षमताओं के अनुसार स्वचालित रूप से अनुकूलित होता है। Claude को थिंकिंग के साथ पूर्ण प्रॉम्प्ट मिलते हैं; GPT-4o/Gemini में थिंकिंग अक्षम होती है; छोटे मॉडल (MiniMax, Qwen, Llama) को विश्वसनीय आउटपुट के लिए सरलीकृत प्रॉम्प्ट मिलते हैं।
+
+</td>
+<td width="50%">
+
+### 🔌 MCP सर्वर
+
+Claude Code, Codex, Gemini, OpenCode, Kiro, या Copilot CLIs में वन-क्लिक इंस्टॉल। अपने टर्मिनल से डिज़ाइन करें — किसी भी MCP-संगत एजेंट के ज़रिए `.op` फ़ाइलें पढ़ें, बनाएँ और संशोधित करें।
+
+</td>
+</tr>
+<tr>
+<td width="50%">
+
+### 📦 डिज़ाइन-एज़-कोड
+
+`.op` फ़ाइलें JSON हैं — मानव-पठनीय, Git-फ्रेंडली, डिफ़ करने योग्य। डिज़ाइन वेरिएबल CSS कस्टम प्रॉपर्टीज़ जनरेट करते हैं। React + Tailwind या HTML + CSS में कोड एक्सपोर्ट।
+
+</td>
+<td width="50%">
+
+### 🖥️ हर जगह चलता है
+
+वेब ऐप + Electron के ज़रिए macOS, Windows और Linux पर नेटिव डेस्कटॉप। GitHub Releases से ऑटो-अपडेट। `.op` फ़ाइल एसोसिएशन — डबल-क्लिक से खोलें।
+
+</td>
+</tr>
+</table>
 
 ## त्वरित शुरुआत
 
@@ -59,11 +104,9 @@ bun run electron:dev
 
 ## AI-नेटिव डिज़ाइन
 
-OpenPencil को AI के इर्द-गिर्द शुरू से बनाया गया है — एक प्लगइन के रूप में नहीं, बल्कि एक मुख्य वर्कफ़्लो के रूप में।
-
 **प्रॉम्प्ट से UI तक**
 - **टेक्स्ट-टू-डिज़ाइन** — एक पेज का विवरण दें, और स्ट्रीमिंग एनिमेशन के साथ रियल-टाइम में कैनवास पर जनरेट करें
-- **ऑर्केस्ट्रेटर** — जटिल पेजों को स्थानिक सब-टास्क में विभाजित करता है, समानांतर जनरेशन के लिए
+- **ऑर्केस्ट्रेटर** — जटिल पेजों को समानांतर जनरेशन के लिए स्थानिक सब-टास्क में विभाजित करता है
 - **डिज़ाइन संशोधन** — एलिमेंट चुनें, फिर प्राकृतिक भाषा में बदलाव का विवरण दें
 - **विज़न इनपुट** — संदर्भ-आधारित डिज़ाइन के लिए स्क्रीनशॉट या मॉकअप संलग्न करें
 
@@ -74,10 +117,16 @@ OpenPencil को AI के इर्द-गिर्द शुरू से ब
 | **Claude Code** | कोई कॉन्फ़िग नहीं — लोकल OAuth के साथ Claude Agent SDK का उपयोग करता है |
 | **Codex CLI** | एजेंट सेटिंग्स में कनेक्ट करें (`Cmd+,`) |
 | **OpenCode** | एजेंट सेटिंग्स में कनेक्ट करें (`Cmd+,`) |
+| **GitHub Copilot** | `copilot login` फिर एजेंट सेटिंग्स में कनेक्ट करें (`Cmd+,`) |
+
+**मॉडल क्षमता प्रोफ़ाइल** — प्रत्येक मॉडल टियर के अनुसार प्रॉम्प्ट, थिंकिंग मोड और टाइमआउट को स्वचालित रूप से अनुकूलित करता है। फुल-टियर मॉडल (Claude) को पूर्ण प्रॉम्प्ट मिलते हैं; स्टैंडर्ड-टियर (GPT-4o, Gemini, DeepSeek) में थिंकिंग अक्षम होती है; बेसिक-टियर (MiniMax, Qwen, Llama, Mistral) को अधिकतम विश्वसनीयता के लिए सरलीकृत नेस्टेड-JSON प्रॉम्प्ट मिलते हैं।
 
 **MCP सर्वर**
-- बिल्ट-इन MCP सर्वर — Claude Code / Codex / Gemini / OpenCode / Kiro CLIs में वन-क्लिक इंस्टॉल
+- बिल्ट-इन MCP सर्वर — Claude Code / Codex / Gemini / OpenCode / Kiro / Copilot CLIs में वन-क्लिक इंस्टॉल
 - टर्मिनल से डिज़ाइन ऑटोमेशन: किसी भी MCP-संगत एजेंट के ज़रिए `.op` फ़ाइलें पढ़ें, बनाएँ और संपादित करें
+- **लेयर्ड डिज़ाइन वर्कफ़्लो** — उच्च-फ़िडेलिटी मल्टी-सेक्शन डिज़ाइन के लिए `design_skeleton` → `design_content` → `design_refine`
+- **सेगमेंटेड प्रॉम्प्ट रिट्रीवल** — केवल आवश्यक डिज़ाइन ज्ञान लोड करें (schema, layout, roles, icons, planning, आदि)
+- मल्टी-पेज सपोर्ट — MCP टूल के ज़रिए पेज बनाएँ, नाम बदलें, क्रम बदलें और डुप्लिकेट करें
 
 **कोड जनरेशन**
 - React + Tailwind CSS
@@ -105,6 +154,7 @@ OpenPencil को AI के इर्द-गिर्द शुरू से ब
 
 **डेस्कटॉप ऐप**
 - Electron के ज़रिए नेटिव macOS, Windows और Linux सपोर्ट
+- `.op` फ़ाइल एसोसिएशन — डबल-क्लिक से खोलें, सिंगल-इंस्टेंस लॉक
 - GitHub Releases से ऑटो-अपडेट
 - नेटिव एप्लिकेशन मेनू और फ़ाइल डायलॉग
 
@@ -117,7 +167,7 @@ OpenPencil को AI के इर्द-गिर्द शुरू से ब
 | **स्टेट** | Zustand v5 |
 | **सर्वर** | Nitro |
 | **डेस्कटॉप** | Electron 35 |
-| **AI** | Anthropic SDK · Claude Agent SDK · OpenCode SDK |
+| **AI** | Anthropic SDK · Claude Agent SDK · OpenCode SDK · Copilot SDK |
 | **रनटाइम** | Bun · Vite 7 |
 | **फ़ाइल फ़ॉर्मेट** | `.op` — JSON-आधारित, मानव-पठनीय, Git-फ्रेंडली |
 
@@ -136,7 +186,7 @@ src/
   uikit/           पुन: उपयोगी कम्पोनेंट किट सिस्टम
 server/
   api/ai/          Nitro API — स्ट्रीमिंग चैट, जनरेशन, वैलिडेशन
-  utils/           Claude CLI, OpenCode, Codex क्लाइंट रैपर
+  utils/           Claude CLI, OpenCode, Codex, Copilot क्लाइंट रैपर
 electron/
   main.ts          विंडो, Nitro फ़ोर्क, नेटिव मेनू, ऑटो-अपडेटर
   preload.ts       IPC ब्रिज
@@ -186,10 +236,11 @@ bun run electron:build     # Electron पैकेज
 - [x] CSS सिंक के साथ डिज़ाइन वेरिएबल और टोकन
 - [x] कम्पोनेंट सिस्टम (इंस्टेंस और ओवरराइड)
 - [x] ऑर्केस्ट्रेटर के साथ AI डिज़ाइन जनरेशन
-- [x] MCP सर्वर इंटीग्रेशन
+- [x] लेयर्ड डिज़ाइन वर्कफ़्लो के साथ MCP सर्वर इंटीग्रेशन
 - [x] मल्टी-पेज सपोर्ट
 - [x] Figma `.fig` इम्पोर्ट
 - [x] बूलियन ऑपरेशन (यूनियन, सबट्रैक्ट, इंटरसेक्ट)
+- [x] मल्टी-मॉडल क्षमता प्रोफ़ाइल
 - [ ] सहयोगी संपादन
 - [ ] प्लगइन सिस्टम
 
@@ -206,6 +257,17 @@ bun run electron:build     # Electron पैकेज
   <strong> हमारे Discord में शामिल हों</strong>
 </a>
 — प्रश्न पूछें, डिज़ाइन साझा करें, सुविधाएँ सुझाएँ।
+
+
+## Star History
+
+<a href="https://star-history.com/#ZSeven-W/openpencil&Date">
+ <picture>
+   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=ZSeven-W/openpencil&type=Date&theme=dark" />
+   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=ZSeven-W/openpencil&type=Date" />
+   <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=ZSeven-W/openpencil&type=Date" width="100%" />
+ </picture>
+</a>
 
 ## लाइसेंस
 

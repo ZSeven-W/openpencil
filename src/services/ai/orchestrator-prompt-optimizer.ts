@@ -5,7 +5,9 @@ import {
   PROMPT_OPTIMIZER_LIMITS,
   SUB_AGENT_TIMEOUT_PROFILES,
 } from './ai-runtime-config'
+import { detectDesignType } from './design-type-presets'
 import { getAllPrinciples } from './design-principles'
+import { resolveModelProfile, applyProfileToTimeouts } from './model-profiles'
 
 export interface PreparedDesignPrompt {
   original: string
@@ -17,7 +19,7 @@ export interface PreparedDesignPrompt {
   designPrinciples: string
 }
 
-export function getSubAgentTimeouts(promptLength: number): {
+export function getSubAgentTimeouts(promptLength: number, model?: string): {
   hardTimeoutMs: number
   noTextTimeoutMs: number
   thinkingResetsTimeout: boolean
@@ -26,16 +28,18 @@ export function getSubAgentTimeouts(promptLength: number): {
   thinkingMode: 'adaptive' | 'disabled' | 'enabled'
   effort: 'low' | 'medium' | 'high' | 'max'
 } {
+  let base
   if (promptLength < PROMPT_OPTIMIZER_LIMITS.longPromptCharThreshold) {
-    return { ...SUB_AGENT_TIMEOUT_PROFILES.short }
+    base = { ...SUB_AGENT_TIMEOUT_PROFILES.short }
+  } else if (promptLength < PROMPT_TIMEOUT_BUCKETS.mediumPromptMaxChars) {
+    base = { ...SUB_AGENT_TIMEOUT_PROFILES.medium }
+  } else {
+    base = { ...SUB_AGENT_TIMEOUT_PROFILES.long }
   }
-  if (promptLength < PROMPT_TIMEOUT_BUCKETS.mediumPromptMaxChars) {
-    return { ...SUB_AGENT_TIMEOUT_PROFILES.medium }
-  }
-  return { ...SUB_AGENT_TIMEOUT_PROFILES.long }
+  return applyProfileToTimeouts(base, resolveModelProfile(model))
 }
 
-export function getOrchestratorTimeouts(promptLength: number): {
+export function getOrchestratorTimeouts(promptLength: number, model?: string): {
   hardTimeoutMs: number
   noTextTimeoutMs: number
   thinkingResetsTimeout: boolean
@@ -44,13 +48,15 @@ export function getOrchestratorTimeouts(promptLength: number): {
   thinkingMode: 'adaptive' | 'disabled' | 'enabled'
   effort: 'low' | 'medium' | 'high' | 'max'
 } {
+  let base
   if (promptLength < PROMPT_OPTIMIZER_LIMITS.longPromptCharThreshold) {
-    return { ...ORCHESTRATOR_TIMEOUT_PROFILES.short }
+    base = { ...ORCHESTRATOR_TIMEOUT_PROFILES.short }
+  } else if (promptLength < PROMPT_TIMEOUT_BUCKETS.mediumPromptMaxChars) {
+    base = { ...ORCHESTRATOR_TIMEOUT_PROFILES.medium }
+  } else {
+    base = { ...ORCHESTRATOR_TIMEOUT_PROFILES.long }
   }
-  if (promptLength < PROMPT_TIMEOUT_BUCKETS.mediumPromptMaxChars) {
-    return { ...ORCHESTRATOR_TIMEOUT_PROFILES.medium }
-  }
-  return { ...ORCHESTRATOR_TIMEOUT_PROFILES.long }
+  return applyProfileToTimeouts(base, resolveModelProfile(model))
 }
 
 /**
@@ -72,34 +78,26 @@ export function prepareDesignPrompt(prompt: string): PreparedDesignPrompt {
 }
 
 export function buildFallbackPlanFromPrompt(prompt: string): OrchestratorPlan {
-  const labels = extractFallbackSectionLabels(prompt)
+  const preset = detectDesignType(prompt)
+  const labels = extractFallbackSectionLabels(prompt, preset.defaultSections)
   const sectionCount = Math.max(1, labels.length)
 
-  const isMobile = /(?:mobile|手机|phone|app\s*screen|登录|注册|login|signup)/i.test(prompt)
-  const isAppScreen = /(?:login|signup|register|登录|注册|settings|设置|profile|个人|form|表单|dashboard|modal|dialog)/i.test(prompt)
-
-  const width = isMobile ? 375 : 1200
-  // Mobile app screens: fixed 812px viewport. Desktop landing pages: auto-expand. Desktop app screens: fixed height.
-  const totalHeight = isMobile
-    ? 812
-    : isAppScreen
-      ? 800
-      : sectionCount >= 4 ? 4000 : 800
+  const totalHeight = preset.height || (sectionCount >= 4 ? 4000 : 800)
   const heights = allocateSectionHeights(totalHeight, sectionCount)
 
   return {
     rootFrame: {
       id: 'page',
       name: 'Page',
-      width,
-      height: isMobile ? 812 : (isAppScreen ? totalHeight : 0),
+      width: preset.width,
+      height: preset.rootHeight || 0,
       layout: 'vertical',
       fill: [{ type: 'solid', color: '#F8FAFC' }],
     },
     subtasks: labels.map((label, index) => ({
       id: makeSafeSectionId(label, index),
       label,
-      region: { width, height: heights[index] ?? 120 },
+      region: { width: preset.width, height: heights[index] ?? 120 },
       idPrefix: '',
       parentFrameId: null,
     })),
@@ -132,7 +130,7 @@ function truncateByCharCount(text: string, maxChars: number): string {
   return `${truncated.trim()}\n\n[truncated]`
 }
 
-function extractFallbackSectionLabels(prompt: string): string[] {
+function extractFallbackSectionLabels(prompt: string, defaultSections: string[]): string[] {
   const lines = prompt.replace(/\r/g, '').split('\n')
   const labels: string[] = []
   const seen = new Set<string>()
@@ -169,24 +167,7 @@ function extractFallbackSectionLabels(prompt: string): string[] {
 
   if (labels.length > 0) return labels
 
-  // Detect design type to provide appropriate fallback labels
-  const isAppScreen = /(?:login|signup|register|登录|注册|settings|设置|profile|个人|form|表单|dashboard|modal|dialog)/i.test(prompt)
-  if (isAppScreen) {
-    return [
-      'Header',
-      'Main Content',
-      'Actions',
-    ]
-  }
-
-  return [
-    'Navigation',
-    'Hero',
-    'Core Highlights',
-    'Feature Showcase',
-    'CTA',
-    'Footer',
-  ]
+  return defaultSections
 }
 
 function sanitizePlanSectionLabel(label: string): string {

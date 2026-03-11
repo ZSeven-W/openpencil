@@ -18,11 +18,12 @@ import type {
   SubAgentResult,
 } from './ai-types'
 import { streamChat } from './ai-service'
-import { SUB_AGENT_PROMPT } from './orchestrator-prompts'
+import { SUB_AGENT_PROMPT, SUB_AGENT_PROMPT_SIMPLIFIED } from './orchestrator-prompts'
 import {
   type PreparedDesignPrompt,
   getSubAgentTimeouts,
 } from './orchestrator-prompt-optimizer'
+import { resolveModelProfile, needsSimplifiedPrompt } from './model-profiles'
 import {
   expandRootFrameHeight,
   extractStreamingNodes,
@@ -91,7 +92,7 @@ export async function executeSubAgents(
   },
   abortSignal?: AbortSignal,
 ): Promise<SubAgentResult[]> {
-  const timeoutOptions = getSubAgentTimeouts(preparedPrompt.originalLength)
+  const timeoutOptions = getSubAgentTimeouts(preparedPrompt.originalLength, request.model)
 
   // Sequential path — each subtask runs one at a time
   if (concurrency <= 1) {
@@ -193,7 +194,8 @@ export async function executeSubAgents(
   // If ALL failed with zero nodes, throw
   const totalNodes = collected.reduce((sum, r) => sum + r.nodes.length, 0)
   if (totalNodes === 0 && collected.length > 0) {
-    const firstError = collected.find((r) => r.error)?.error ?? 'All sub-agents failed'
+    const errors = collected.filter((r) => r.error).map((r) => r.error!)
+    const firstError = errors[0] ?? 'The model failed to generate any design output.'
     throw new Error(firstError)
   }
 
@@ -241,10 +243,12 @@ async function executeSubAgent(
     request.context?.themes,
   )
 
-  // Inject design principles into the system prompt (selective, not all at once)
-  const systemPrompt = preparedPrompt.designPrinciples
-    ? `${SUB_AGENT_PROMPT}\n\n${preparedPrompt.designPrinciples}`
-    : SUB_AGENT_PROMPT
+  // Select prompt variant based on model profile
+  const profile = resolveModelProfile(request.model)
+  const basePrompt = needsSimplifiedPrompt(profile) ? SUB_AGENT_PROMPT_SIMPLIFIED : SUB_AGENT_PROMPT
+  const systemPrompt = preparedPrompt.designPrinciples && !needsSimplifiedPrompt(profile)
+    ? `${basePrompt}\n\n${preparedPrompt.designPrinciples}`
+    : basePrompt
 
   let rawResponse = ''
   const nodes: PenNode[] = []
@@ -356,11 +360,27 @@ async function executeSubAgent(
     if (nodes.length === 0) {
       progressEntry.status = 'error'
       emitProgress(plan, progress, callbacks)
+
+      // Build a diagnostic error with a preview of what the model returned
+      let errorMsg = 'The model response could not be parsed as design nodes.'
+      if (rawResponse.trim().length === 0) {
+        errorMsg += ' The model returned an empty response.'
+      } else {
+        // Show a short snippet so the user can diagnose the issue
+        const preview = rawResponse.trim().slice(0, 150)
+        const hasJson = rawResponse.includes('{') && rawResponse.includes('"type"')
+        if (!hasJson) {
+          errorMsg += ' The response did not contain valid JSON. Model output: "' + preview + (rawResponse.length > 150 ? '…' : '') + '"'
+        } else {
+          errorMsg += ' JSON was found but contained no valid PenNode objects (need "id" and "type" fields).'
+        }
+      }
+
       return {
         subtaskId: subtask.id,
         nodes,
         rawResponse,
-        error: 'Subtask completed but returned no parseable PenNode output.',
+        error: errorMsg,
       }
     }
 

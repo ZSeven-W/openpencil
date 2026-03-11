@@ -5,8 +5,8 @@
 <h1 align="center">OpenPencil</h1>
 
 <p align="center">
-  <strong>Alat desain open-source berbasis AI. Design-as-Code.</strong><br />
-  Dari prompt ke UI di kanvas. Orkestrasi multi-agen. Server MCP bawaan. Pembuatan kode.
+  <strong>Alat desain vektor open-source berbasis AI pertama di dunia.</strong><br />
+  <sub>Tim Agen Konkuren &bull; Design-as-Code &bull; Server MCP Bawaan &bull; Kecerdasan Multi-model</sub>
 </p>
 
 <p align="center">
@@ -14,30 +14,75 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/ZSeven-W/openpencil/stargazers"><img src="https://img.shields.io/github/stars/ZSeven-W/openpencil?style=flat" alt="Stars" /></a>
-  <a href="https://github.com/ZSeven-W/openpencil/blob/main/LICENSE"><img src="https://img.shields.io/github/license/ZSeven-W/openpencil" alt="License" /></a>
+  <a href="https://github.com/ZSeven-W/openpencil/stargazers"><img src="https://img.shields.io/github/stars/ZSeven-W/openpencil?style=flat&color=cfb537" alt="Stars" /></a>
+  <a href="https://github.com/ZSeven-W/openpencil/blob/main/LICENSE"><img src="https://img.shields.io/github/license/ZSeven-W/openpencil?color=64748b" alt="License" /></a>
   <a href="https://github.com/ZSeven-W/openpencil/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/ZSeven-W/openpencil/ci.yml?branch=main&label=CI" alt="CI" /></a>
-  <a href="https://discord.gg/KwXp6BJD"><img src="https://img.shields.io/discord/1476517942949580952?label=Discord&logo=discord&logoColor=white" alt="Discord" /></a>
-</p>
-
-<p align="center">
-  <a href="#mulai-cepat">Mulai Cepat</a> ·
-  <a href="#desain-berbasis-ai">AI</a> ·
-  <a href="#fitur">Fitur</a> ·
-  <a href="https://discord.gg/KwXp6BJD">Discord</a> ·
-  <a href="#berkontribusi">Berkontribusi</a>
+  <a href="https://discord.gg/KwXp6BJD"><img src="https://img.shields.io/discord/1476517942949580952?label=Discord&logo=discord&logoColor=white&color=5865F2" alt="Discord" /></a>
 </p>
 
 <br />
 
 <p align="center">
   <a href="https://oss.ioa.tech/zseven/openpencil/a46e24733239ce24de36702342201033.mp4">
-    <img src="./screenshot/op-cover.png" alt="OpenPencil — click to watch demo" width="100%" />
+    <img src="./screenshot/op-cover.png" alt="OpenPencil — klik untuk menonton demo" width="100%" />
   </a>
 </p>
 <p align="center"><sub>Klik gambar untuk menonton video demo</sub></p>
 
 <br />
+
+## Mengapa OpenPencil
+
+<table>
+<tr>
+<td width="50%">
+
+### 🎨 Prompt → Kanvas
+
+Deskripsikan UI apa pun dalam bahasa alami. Saksikan hasilnya muncul di kanvas tak terbatas secara real-time dengan animasi streaming. Modifikasi desain yang ada dengan memilih elemen dan berdialog.
+
+</td>
+<td width="50%">
+
+### 🤖 Tim Agen Konkuren
+
+Orkestrator menguraikan halaman kompleks menjadi sub-tugas spasial. Beberapa agen AI bekerja pada bagian yang berbeda secara bersamaan — hero, fitur, footer — semuanya streaming secara paralel.
+
+</td>
+</tr>
+<tr>
+<td width="50%">
+
+### 🧠 Kecerdasan Multi-Model
+
+Secara otomatis menyesuaikan dengan kemampuan setiap model. Claude mendapat prompt lengkap dengan thinking; GPT-4o/Gemini menonaktifkan thinking; model yang lebih kecil (MiniMax, Qwen, Llama) mendapat prompt yang disederhanakan untuk keluaran yang andal.
+
+</td>
+<td width="50%">
+
+### 🔌 Server MCP
+
+Instal satu klik ke Claude Code, Codex, Gemini, OpenCode, Kiro, atau Copilot CLI. Desain dari terminal Anda — baca, buat, dan modifikasi file `.op` melalui agen yang kompatibel dengan MCP.
+
+</td>
+</tr>
+<tr>
+<td width="50%">
+
+### 📦 Design-as-Code
+
+File `.op` adalah JSON — mudah dibaca manusia, ramah Git, mudah dibandingkan. Variabel desain menghasilkan CSS custom properties. Ekspor kode ke React + Tailwind atau HTML + CSS.
+
+</td>
+<td width="50%">
+
+### 🖥️ Berjalan di Mana Saja
+
+Aplikasi web + desktop native di macOS, Windows, dan Linux melalui Electron. Pembaruan otomatis dari GitHub Releases. Asosiasi file `.op` — klik dua kali untuk membuka.
+
+</td>
+</tr>
+</table>
 
 ## Mulai Cepat
 
@@ -59,8 +104,6 @@ bun run electron:dev
 
 ## Desain Berbasis AI
 
-OpenPencil dibangun dengan AI sebagai inti — bukan sebagai plugin, melainkan sebagai alur kerja utama.
-
 **Dari Prompt ke UI**
 - **Teks ke desain** — deskripsikan halaman, dan hasilkan di kanvas secara real-time dengan animasi streaming
 - **Orkestrator** — menguraikan halaman kompleks menjadi sub-tugas spasial untuk pembuatan secara paralel
@@ -74,10 +117,16 @@ OpenPencil dibangun dengan AI sebagai inti — bukan sebagai plugin, melainkan s
 | **Claude Code** | Tanpa konfigurasi — menggunakan Claude Agent SDK dengan OAuth lokal |
 | **Codex CLI** | Hubungkan di Pengaturan Agen (`Cmd+,`) |
 | **OpenCode** | Hubungkan di Pengaturan Agen (`Cmd+,`) |
+| **GitHub Copilot** | `copilot login` lalu hubungkan di Pengaturan Agen (`Cmd+,`) |
+
+**Profil Kemampuan Model** — secara otomatis menyesuaikan prompt, mode thinking, dan timeout per tingkatan model. Model tingkat penuh (Claude) mendapat prompt lengkap; tingkat standar (GPT-4o, Gemini, DeepSeek) menonaktifkan thinking; tingkat dasar (MiniMax, Qwen, Llama, Mistral) mendapat prompt JSON bertingkat yang disederhanakan untuk keandalan maksimum.
 
 **Server MCP**
-- Server MCP bawaan — instal satu klik ke Claude Code / Codex / Gemini / OpenCode / Kiro CLI
+- Server MCP bawaan — instal satu klik ke Claude Code / Codex / Gemini / OpenCode / Kiro / Copilot CLI
 - Otomasi desain dari terminal: baca, buat, dan modifikasi file `.op` melalui agen yang kompatibel dengan MCP
+- **Alur kerja desain berlapis** — `design_skeleton` → `design_content` → `design_refine` untuk desain multi-bagian dengan fidelitas lebih tinggi
+- **Pengambilan prompt tersegmentasi** — muat hanya pengetahuan desain yang Anda butuhkan (schema, layout, roles, icons, planning, dll.)
+- Dukungan multi-halaman — buat, ganti nama, urutkan ulang, dan duplikasi halaman melalui alat MCP
 
 **Pembuatan Kode**
 - React + Tailwind CSS
@@ -105,6 +154,7 @@ OpenPencil dibangun dengan AI sebagai inti — bukan sebagai plugin, melainkan s
 
 **Aplikasi Desktop**
 - macOS, Windows, dan Linux native melalui Electron
+- Asosiasi file `.op` — klik dua kali untuk membuka, kunci instans tunggal
 - Pembaruan otomatis dari GitHub Releases
 - Menu aplikasi native dan dialog file
 
@@ -117,7 +167,7 @@ OpenPencil dibangun dengan AI sebagai inti — bukan sebagai plugin, melainkan s
 | **State** | Zustand v5 |
 | **Server** | Nitro |
 | **Desktop** | Electron 35 |
-| **AI** | Anthropic SDK · Claude Agent SDK · OpenCode SDK |
+| **AI** | Anthropic SDK · Claude Agent SDK · OpenCode SDK · Copilot SDK |
 | **Runtime** | Bun · Vite 7 |
 | **Format file** | `.op` — berbasis JSON, mudah dibaca manusia, ramah Git |
 
@@ -136,7 +186,7 @@ src/
   uikit/           Sistem kit komponen yang dapat digunakan ulang
 server/
   api/ai/          Nitro API — chat streaming, pembuatan, validasi
-  utils/           Pembungkus klien Claude CLI, OpenCode, Codex
+  utils/           Pembungkus klien Claude CLI, OpenCode, Codex, Copilot
 electron/
   main.ts          Jendela, fork Nitro, menu native, pembaruan otomatis
   preload.ts       Jembatan IPC
@@ -186,10 +236,11 @@ Kontribusi sangat disambut! Lihat [CLAUDE.md](./CLAUDE.md) untuk detail arsitekt
 - [x] Variabel & token desain dengan sinkronisasi CSS
 - [x] Sistem komponen (instans & penggantian)
 - [x] Pembuatan desain AI dengan orkestrator
-- [x] Integrasi server MCP
+- [x] Integrasi server MCP dengan alur kerja desain berlapis
 - [x] Dukungan multi-halaman
 - [x] Impor Figma `.fig`
 - [x] Operasi boolean (gabung, kurangi, potong)
+- [x] Profil kemampuan multi-model
 - [ ] Pengeditan kolaboratif
 - [ ] Sistem plugin
 
@@ -206,6 +257,17 @@ Kontribusi sangat disambut! Lihat [CLAUDE.md](./CLAUDE.md) untuk detail arsitekt
   <strong> Bergabung dengan Discord kami</strong>
 </a>
 — Ajukan pertanyaan, bagikan desain, sarankan fitur.
+
+
+## Star History
+
+<a href="https://star-history.com/#ZSeven-W/openpencil&Date">
+ <picture>
+   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=ZSeven-W/openpencil&type=Date&theme=dark" />
+   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=ZSeven-W/openpencil&type=Date" />
+   <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=ZSeven-W/openpencil&type=Date" width="100%" />
+ </picture>
+</a>
 
 ## Lisensi
 

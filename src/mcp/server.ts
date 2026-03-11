@@ -741,6 +741,14 @@ async function main() {
   }
 }
 
+// Prevent uncaught errors from crashing the MCP server process
+process.on('uncaughtException', (err) => {
+  console.error('MCP server uncaught exception:', err)
+})
+process.on('unhandledRejection', (err) => {
+  console.error('MCP server unhandled rejection:', err)
+})
+
 main().catch((err) => {
   console.error('MCP server failed to start:', err)
   process.exit(1)

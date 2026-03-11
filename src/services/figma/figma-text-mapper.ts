@@ -153,6 +153,11 @@ function mapLineHeight(node: FigmaNodeChange): number | undefined {
   if (node.lineHeight.units === 'PIXELS' && node.lineHeight.value) {
     return node.lineHeight.value
   }
+  // Percentage line height: e.g. 150 → 1.5x multiplier → convert to px
+  if (node.lineHeight.units === 'PERCENT' && node.lineHeight.value) {
+    const fontSize = node.fontSize ?? 14
+    return Math.round(fontSize * node.lineHeight.value / 100)
+  }
   return undefined
 }
 
@@ -160,6 +165,11 @@ function mapLetterSpacing(node: FigmaNodeChange): number | undefined {
   if (!node.letterSpacing) return undefined
   if (node.letterSpacing.units === 'PIXELS' && node.letterSpacing.value) {
     return node.letterSpacing.value
+  }
+  // Percentage letter spacing: relative to font size
+  if (node.letterSpacing.units === 'PERCENT' && node.letterSpacing.value) {
+    const fontSize = node.fontSize ?? 14
+    return Math.round(fontSize * node.letterSpacing.value / 100 * 100) / 100
   }
   return undefined
 }

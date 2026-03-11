@@ -7,6 +7,7 @@ import {
   buildTree,
   buildTreeForClipboard,
   collectComponents,
+  collectSymbolTree,
 } from './figma-tree-builder'
 import {
   type ConversionContext,
@@ -48,11 +49,16 @@ export function figmaToPenDocument(
   }
 
   const componentMap = new Map<string, string>()
+  const symbolTree = new Map<string, TreeNode>()
   let idCounter = 1
   collectComponents(page, componentMap, () => `fig_${idCounter++}`)
+  // Collect SYMBOL tree nodes from ALL canvases (including Figma's internal canvas
+  // where master components live) so INSTANCE nodes can inline their content.
+  collectSymbolTree(tree, symbolTree)
 
   const ctx: ConversionContext = {
     componentMap,
+    symbolTree,
     warnings,
     generateId: () => `fig_${idCounter++}`,
     blobs: decoded.blobs,
@@ -112,11 +118,18 @@ export function figmaAllPagesToPenDocument(
   }
 
   const componentMap = new Map<string, string>()
+  const symbolTree = new Map<string, TreeNode>()
   let idCounter = 1
   const genId = () => `fig_${idCounter++}`
-  for (const page of allCanvases) {
+  // Only collect components from user-visible pages so that SYMBOL masters
+  // living on Figma's internal canvas don't get registered.  When an INSTANCE
+  // references a SYMBOL that isn't in componentMap, convertInstance will
+  // inline the master's children via symbolTree instead of emitting a
+  // dangling ref node.
+  for (const page of pages) {
     collectComponents(page, componentMap, genId)
   }
+  collectSymbolTree(tree, symbolTree)
 
   const penPages: PenPage[] = []
 
@@ -124,6 +137,7 @@ export function figmaAllPagesToPenDocument(
     const page = pages[i]
     const ctx: ConversionContext = {
       componentMap,
+      symbolTree,
       warnings,
       generateId: genId,
       blobs: decoded.blobs,
@@ -204,14 +218,19 @@ export function figmaNodeChangesToPenNodes(
   }
 
   const componentMap = new Map<string, string>()
+  const symbolTree = new Map<string, TreeNode>()
   let idCounter = 1
   const genId = () => `fig_${idCounter++}`
   for (const node of topNodes) {
     collectComponents(node, componentMap, genId)
   }
+  // For clipboard, also scan all available nodes for symbols
+  if (tree) collectSymbolTree(tree, symbolTree)
+  for (const node of topNodes) collectSymbolTree(node, symbolTree)
 
   const ctx: ConversionContext = {
     componentMap,
+    symbolTree,
     warnings,
     generateId: genId,
     blobs: decoded.blobs,

@@ -1,5 +1,6 @@
 import * as fabric from 'fabric'
 import type { PenNode, ImageFitMode } from '@/types/pen'
+import { buildEllipseArcPath, isArcEllipse } from '@/utils/arc-path'
 import type {
   PenFill,
   PenStroke,
@@ -372,14 +373,33 @@ export function createFabricObject(
     case 'ellipse': {
       const w = sizeToNumber(node.width, 100)
       const h = sizeToNumber(node.height, 100)
-      obj = new fabric.Ellipse({
-        ...baseProps,
-        rx: w / 2,
-        ry: h / 2,
-        fill: resolveFill(node.fill, w, h),
-        stroke: resolveStrokeColor(node.stroke),
-        strokeWidth: resolveStrokeWidth(node.stroke),
-      }) as FabricObjectWithPenId
+      if (isArcEllipse(node.startAngle, node.sweepAngle, node.innerRadius)) {
+        const arcD = buildEllipseArcPath(w, h, node.startAngle ?? 0, node.sweepAngle ?? 360, node.innerRadius ?? 0)
+        obj = new fabric.Path(arcD, {
+          ...baseProps,
+          fill: resolveFill(node.fill, w, h),
+          stroke: resolveStrokeColor(node.stroke),
+          strokeWidth: resolveStrokeWidth(node.stroke),
+          strokeUniform: true,
+          fillRule: 'evenodd',
+        }) as FabricObjectWithPenId
+        // The arc path is drawn within a 0,0 → w,h coordinate space.
+        // Override Fabric's auto-computed bounding box to avoid distortion.
+        ;(obj as any).__sourceD = arcD
+        ;(obj as any).__nativeWidth = w
+        ;(obj as any).__nativeHeight = h
+        ;(obj as any).pathOffset = new fabric.Point(w / 2, h / 2)
+        obj.set({ width: w, height: h, scaleX: 1, scaleY: 1 })
+      } else {
+        obj = new fabric.Ellipse({
+          ...baseProps,
+          rx: w / 2,
+          ry: h / 2,
+          fill: resolveFill(node.fill, w, h),
+          stroke: resolveStrokeColor(node.stroke),
+          strokeWidth: resolveStrokeWidth(node.stroke),
+        }) as FabricObjectWithPenId
+      }
       break
     }
     case 'line': {

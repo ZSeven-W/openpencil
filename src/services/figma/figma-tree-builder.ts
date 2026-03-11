@@ -122,3 +122,16 @@ export function collectComponents(
     collectComponents(child, map, genId)
   }
 }
+
+/** Collect SYMBOL TreeNodes keyed by figma GUID from all canvases (including internal). */
+export function collectSymbolTree(
+  root: TreeNode,
+  map: Map<string, TreeNode>,
+): void {
+  if (root.figma.type === 'SYMBOL' && root.figma.guid) {
+    map.set(guidToString(root.figma.guid), root)
+  }
+  for (const child of root.children) {
+    collectSymbolTree(child, map)
+  }
+}

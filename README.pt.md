@@ -5,8 +5,8 @@
 <h1 align="center">OpenPencil</h1>
 
 <p align="center">
-  <strong>Ferramenta de design open-source nativa com IA. Design-as-Code.</strong><br />
-  Do prompt à UI no canvas. Orquestração multi-agente. Servidor MCP integrado. Geração de código.
+  <strong>A primeira ferramenta de design vetorial open-source nativa com IA do mundo.</strong><br />
+  <sub>Equipes de Agentes Concorrentes &bull; Design-as-Code &bull; Servidor MCP Integrado &bull; Inteligência Multi-modelo</sub>
 </p>
 
 <p align="center">
@@ -14,30 +14,75 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/ZSeven-W/openpencil/stargazers"><img src="https://img.shields.io/github/stars/ZSeven-W/openpencil?style=flat" alt="Stars" /></a>
-  <a href="https://github.com/ZSeven-W/openpencil/blob/main/LICENSE"><img src="https://img.shields.io/github/license/ZSeven-W/openpencil" alt="License" /></a>
+  <a href="https://github.com/ZSeven-W/openpencil/stargazers"><img src="https://img.shields.io/github/stars/ZSeven-W/openpencil?style=flat&color=cfb537" alt="Stars" /></a>
+  <a href="https://github.com/ZSeven-W/openpencil/blob/main/LICENSE"><img src="https://img.shields.io/github/license/ZSeven-W/openpencil?color=64748b" alt="License" /></a>
   <a href="https://github.com/ZSeven-W/openpencil/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/ZSeven-W/openpencil/ci.yml?branch=main&label=CI" alt="CI" /></a>
-  <a href="https://discord.gg/KwXp6BJD"><img src="https://img.shields.io/discord/1476517942949580952?label=Discord&logo=discord&logoColor=white" alt="Discord" /></a>
-</p>
-
-<p align="center">
-  <a href="#início-rápido">Início Rápido</a> ·
-  <a href="#design-nativo-com-ia">IA</a> ·
-  <a href="#funcionalidades">Funcionalidades</a> ·
-  <a href="https://discord.gg/KwXp6BJD">Discord</a> ·
-  <a href="#contribuindo">Contribuindo</a>
+  <a href="https://discord.gg/KwXp6BJD"><img src="https://img.shields.io/discord/1476517942949580952?label=Discord&logo=discord&logoColor=white&color=5865F2" alt="Discord" /></a>
 </p>
 
 <br />
 
 <p align="center">
   <a href="https://oss.ioa.tech/zseven/openpencil/a46e24733239ce24de36702342201033.mp4">
-    <img src="./screenshot/op-cover.png" alt="OpenPencil — click to watch demo" width="100%" />
+    <img src="./screenshot/op-cover.png" alt="OpenPencil — clique para assistir ao demo" width="100%" />
   </a>
 </p>
 <p align="center"><sub>Clique na imagem para assistir ao vídeo de demonstração</sub></p>
 
 <br />
+
+## Por que OpenPencil
+
+<table>
+<tr>
+<td width="50%">
+
+### 🎨 Prompt → Canvas
+
+Descreva qualquer UI em linguagem natural. Veja-a aparecer no canvas infinito em tempo real com animação de streaming. Modifique designs existentes selecionando elementos e conversando.
+
+</td>
+<td width="50%">
+
+### 🤖 Equipes de Agentes Concorrentes
+
+O orquestrador decompõe páginas complexas em sub-tarefas espaciais. Vários agentes de IA trabalham em diferentes seções simultaneamente — hero, features, footer — tudo em streaming paralelo.
+
+</td>
+</tr>
+<tr>
+<td width="50%">
+
+### 🧠 Inteligência Multi-Modelo
+
+Adapta-se automaticamente às capacidades de cada modelo. Claude recebe prompts completos com thinking; GPT-4o/Gemini desativam thinking; modelos menores (MiniMax, Qwen, Llama) recebem prompts simplificados para saída confiável.
+
+</td>
+<td width="50%">
+
+### 🔌 Servidor MCP
+
+Instalação com um clique no Claude Code, Codex, Gemini, OpenCode, Kiro ou Copilot CLIs. Faça design pelo seu terminal — leia, crie e modifique arquivos `.op` através de qualquer agente compatível com MCP.
+
+</td>
+</tr>
+<tr>
+<td width="50%">
+
+### 📦 Design-as-Code
+
+Arquivos `.op` são JSON — legíveis por humanos, compatíveis com Git, com diff. Variáveis de design geram propriedades CSS personalizadas. Exportação de código para React + Tailwind ou HTML + CSS.
+
+</td>
+<td width="50%">
+
+### 🖥️ Roda em Qualquer Lugar
+
+App web + desktop nativo no macOS, Windows e Linux via Electron. Atualização automática a partir do GitHub Releases. Associação de arquivos `.op` — clique duplo para abrir.
+
+</td>
+</tr>
+</table>
 
 ## Início Rápido
 
@@ -59,8 +104,6 @@ bun run electron:dev
 
 ## Design Nativo com IA
 
-O OpenPencil é construído com IA desde o início — não como um plugin, mas como um fluxo de trabalho central.
-
 **Do Prompt à UI**
 - **Texto para design** — descreva uma página e ela será gerada no canvas em tempo real com animação de streaming
 - **Orquestrador** — decompõe páginas complexas em sub-tarefas espaciais para geração paralela
@@ -74,10 +117,16 @@ O OpenPencil é construído com IA desde o início — não como um plugin, mas 
 | **Claude Code** | Sem configuração — usa o Claude Agent SDK com OAuth local |
 | **Codex CLI** | Conectar nas Configurações do Agente (`Cmd+,`) |
 | **OpenCode** | Conectar nas Configurações do Agente (`Cmd+,`) |
+| **GitHub Copilot** | `copilot login` e depois conectar nas Configurações do Agente (`Cmd+,`) |
+
+**Perfis de Capacidade de Modelo** — adapta automaticamente prompts, modo de thinking e timeouts por nível de modelo. Modelos de nível completo (Claude) recebem prompts completos; nível padrão (GPT-4o, Gemini, DeepSeek) desativam thinking; nível básico (MiniMax, Qwen, Llama, Mistral) recebem prompts simplificados de JSON aninhado para máxima confiabilidade.
 
 **Servidor MCP**
-- Servidor MCP integrado — instalação com um clique no Claude Code / Codex / Gemini / OpenCode / Kiro CLIs
+- Servidor MCP integrado — instalação com um clique no Claude Code / Codex / Gemini / OpenCode / Kiro / Copilot CLIs
 - Automação de design pelo terminal: leia, crie e modifique arquivos `.op` via qualquer agente compatível com MCP
+- **Fluxo de design em camadas** — `design_skeleton` → `design_content` → `design_refine` para designs multi-seção de maior fidelidade
+- **Recuperação segmentada de prompts** — carregue apenas o conhecimento de design necessário (schema, layout, roles, icons, planning, etc.)
+- Suporte a múltiplas páginas — crie, renomeie, reordene e duplique páginas via ferramentas MCP
 
 **Geração de Código**
 - React + Tailwind CSS
@@ -105,6 +154,7 @@ O OpenPencil é construído com IA desde o início — não como um plugin, mas 
 
 **Aplicativo Desktop**
 - macOS, Windows e Linux nativos via Electron
+- Associação de arquivos `.op` — clique duplo para abrir, bloqueio de instância única
 - Atualização automática a partir do GitHub Releases
 - Menu de aplicativo nativo e diálogos de arquivo
 
@@ -117,7 +167,7 @@ O OpenPencil é construído com IA desde o início — não como um plugin, mas 
 | **Estado** | Zustand v5 |
 | **Servidor** | Nitro |
 | **Desktop** | Electron 35 |
-| **IA** | Anthropic SDK · Claude Agent SDK · OpenCode SDK |
+| **IA** | Anthropic SDK · Claude Agent SDK · OpenCode SDK · Copilot SDK |
 | **Runtime** | Bun · Vite 7 |
 | **Formato de arquivo** | `.op` — baseado em JSON, legível por humanos, compatível com Git |
 
@@ -136,7 +186,7 @@ src/
   uikit/           Sistema de kit de componentes reutilizáveis
 server/
   api/ai/          API Nitro — chat em streaming, geração, validação
-  utils/           Wrappers de cliente Claude CLI, OpenCode, Codex
+  utils/           Wrappers de cliente Claude CLI, OpenCode, Codex, Copilot
 electron/
   main.ts          Janela, fork do Nitro, menu nativo, atualizador automático
   preload.ts       Ponte IPC
@@ -186,10 +236,11 @@ Contribuições são bem-vindas! Consulte o [CLAUDE.md](./CLAUDE.md) para detalh
 - [x] Variáveis de design e tokens com sincronização CSS
 - [x] Sistema de componentes (instâncias e substituições)
 - [x] Geração de design com IA e orquestrador
-- [x] Integração com servidor MCP
+- [x] Integração com servidor MCP e fluxo de design em camadas
 - [x] Suporte a múltiplas páginas
 - [x] Importação do Figma `.fig`
 - [x] Operações booleanas (união, subtração, interseção)
+- [x] Perfis de capacidade multi-modelo
 - [ ] Edição colaborativa
 - [ ] Sistema de plugins
 
@@ -206,6 +257,17 @@ Contribuições são bem-vindas! Consulte o [CLAUDE.md](./CLAUDE.md) para detalh
   <strong> Entre no nosso Discord</strong>
 </a>
 — Faça perguntas, compartilhe designs, sugira funcionalidades.
+
+
+## Star History
+
+<a href="https://star-history.com/#ZSeven-W/openpencil&Date">
+ <picture>
+   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=ZSeven-W/openpencil&type=Date&theme=dark" />
+   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=ZSeven-W/openpencil&type=Date" />
+   <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=ZSeven-W/openpencil&type=Date" width="100%" />
+ </picture>
+</a>
 
 ## Licença
 

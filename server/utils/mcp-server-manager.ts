@@ -1,4 +1,4 @@
-import { fork, execSync, type ChildProcess } from 'node:child_process'
+import { spawn, execSync, type ChildProcess } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { networkInterfaces } from 'node:os'
 import { join, resolve } from 'node:path'
@@ -80,12 +80,21 @@ export function startMcpHttpServer(port: number): { running: boolean; port: numb
   const serverScript = resolveMcpServerScript()
 
   try {
-    mcpProcess = fork(serverScript, ['--http', '--port', String(port)], {
-      stdio: ['ignore', 'pipe', 'pipe', 'ipc'],
+    // Use spawn instead of fork to avoid IPC channel issues on Windows.
+    // fork() creates an IPC channel that, if unused and disconnected, can
+    // cause the child process to exit unexpectedly on Windows.
+    mcpProcess = spawn(process.execPath, [serverScript, '--http', '--port', String(port)], {
+      stdio: ['ignore', 'pipe', 'pipe'],
       env: { ...process.env },
+      windowsHide: true,
     })
 
     mcpPort = port
+
+    mcpProcess.stdout?.on('data', (data: Buffer) => {
+      const msg = data.toString().trim()
+      if (msg) console.log(`[mcp-server] ${msg}`)
+    })
 
     mcpProcess.stderr?.on('data', (data: Buffer) => {
       console.error(`[mcp-server] ${data.toString().trim()}`)
