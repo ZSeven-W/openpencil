@@ -7,15 +7,12 @@ import {
   captureNodeState,
   recalcCoordsForAnimatedObjects,
   restoreNodeStates,
-  applyAnimatedProperties,
-  captureCurrentState,
   buildFabricObjectMap,
   clearFabricObjectMap,
   findFabricObject,
-  setPlaybackActive,
   isPlaybackActive,
   markCursorUpdate,
-  consumeCursorGuard,
+  getCursorUpdateCount,
   lockObjectInteraction,
   unlockObjectInteraction,
 } from '@/animation/canvas-bridge'
@@ -55,7 +52,6 @@ function createMockCanvas(
 
 beforeEach(() => {
   clearFabricObjectMap()
-  setPlaybackActive(false)
 })
 
 // --- v2: applyAnimatedFrame ---
@@ -107,7 +103,6 @@ describe('applyAnimatedFrame', () => {
     })
 
     expect(obj.left).toBe(50)
-    // No error thrown
   })
 
   it('does not call setCoords', () => {
@@ -172,7 +167,6 @@ describe('recalcCoordsForAnimatedObjects', () => {
   })
 
   it('does nothing when map is empty', () => {
-    // No build — map is empty. Just confirm no error.
     recalcCoordsForAnimatedObjects()
   })
 })
@@ -203,100 +197,22 @@ describe('restoreNodeStates', () => {
     const saved = new Map<string, Record<string, AnimatableValue>>()
     saved.set('nonexistent', { x: 100 })
 
-    // Should not throw
     restoreNodeStates(canvas, saved)
-  })
-})
-
-// --- v1 backward compat ---
-
-describe('applyAnimatedProperties (v1 compat)', () => {
-  it('applies v1 properties to fabric object', () => {
-    const obj = createMockFabricObject({ penNodeId: 'node-1' })
-    const canvas = createMockCanvas([obj])
-
-    applyAnimatedProperties(canvas, 'node-1', {
-      x: 50,
-      y: 60,
-      scaleX: 2,
-      scaleY: 3,
-      rotation: 45,
-      opacity: 0.5,
-    })
-
-    expect(obj.left).toBe(50)
-    expect(obj.top).toBe(60)
-    expect(obj.scaleX).toBe(2)
-    expect(obj.scaleY).toBe(3)
-    expect(obj.angle).toBe(45)
-    expect(obj.opacity).toBe(0.5)
-  })
-
-  it('handles partial properties', () => {
-    const obj = createMockFabricObject({ penNodeId: 'node-1' })
-    const canvas = createMockCanvas([obj])
-
-    applyAnimatedProperties(canvas, 'node-1', { x: 77 })
-
-    expect(obj.left).toBe(77)
-    expect(obj.top).toBe(200) // unchanged
-  })
-
-  it('returns silently for unknown nodeId', () => {
-    const canvas = createMockCanvas([])
-    // Should not throw
-    applyAnimatedProperties(canvas, 'missing', { x: 0 })
-  })
-})
-
-describe('captureCurrentState (v1 compat)', () => {
-  it('captures v1 state from fabric object', () => {
-    const obj = createMockFabricObject({
-      penNodeId: 'node-1',
-      left: 10,
-      top: 20,
-      scaleX: 1.5,
-      scaleY: 2.5,
-      angle: 30,
-      opacity: 0.8,
-    } as Partial<FabricObjectWithPenId>)
-    const canvas = createMockCanvas([obj])
-
-    const state = captureCurrentState(canvas, 'node-1')
-
-    expect(state).toEqual({
-      x: 10,
-      y: 20,
-      scaleX: 1.5,
-      scaleY: 2.5,
-      rotation: 30,
-      opacity: 0.8,
-    })
-  })
-
-  it('returns null for unknown nodeId', () => {
-    const canvas = createMockCanvas([])
-    expect(captureCurrentState(canvas, 'missing')).toBeNull()
   })
 })
 
 // --- Shared utilities ---
 
 describe('cursor guard', () => {
-  it('marks and consumes', () => {
-    expect(consumeCursorGuard()).toBe(false)
+  it('marks and reads count', () => {
+    const before = getCursorUpdateCount()
     markCursorUpdate()
-    expect(consumeCursorGuard()).toBe(true)
-    expect(consumeCursorGuard()).toBe(false)
+    expect(getCursorUpdateCount()).toBe(before + 1)
   })
 })
 
-describe('playback active flag', () => {
-  it('toggles state', () => {
-    expect(isPlaybackActive()).toBe(false)
-    setPlaybackActive(true)
-    expect(isPlaybackActive()).toBe(true)
-    setPlaybackActive(false)
+describe('isPlaybackActive', () => {
+  it('returns false when no engine is playing', () => {
     expect(isPlaybackActive()).toBe(false)
   })
 })
