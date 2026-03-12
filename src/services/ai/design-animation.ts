@@ -80,6 +80,11 @@ export function isNodeBorderReady(nodeId: string): boolean {
   return Date.now() >= revealAt
 }
 
+/** Get the scheduled reveal timestamp for a node (undefined if not queued). */
+export function getNodeRevealTime(nodeId: string): number | undefined {
+  return nodeRevealTime.get(nodeId)
+}
+
 /** Reset all animation state. Call once at the start of a generation. */
 export function resetAnimationState(): void {
   pendingAnimationNodes.clear()

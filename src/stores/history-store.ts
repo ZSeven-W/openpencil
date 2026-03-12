@@ -2,10 +2,14 @@ import { create } from 'zustand'
 import type { PenDocument, PenNode } from '@/types/pen'
 
 const MAX_HISTORY = 300
+/** Rapid pushState calls within this window are merged into one undo step */
+const DEBOUNCE_MS = 300
 
 function areDocumentsEqual(a: PenDocument, b: PenDocument): boolean {
   return JSON.stringify(a) === JSON.stringify(b)
 }
+
+let lastPushTime = 0
 
 interface HistoryStoreState {
   undoStack: PenDocument[]
@@ -37,6 +41,15 @@ export const useHistoryStore = create<HistoryStoreState>(
     pushState: (doc) => {
       const { batchDepth } = get()
       if (batchDepth > 0) return
+
+      const now = Date.now()
+      if (now - lastPushTime < DEBOUNCE_MS) {
+        // Within debounce window — the "before" state is already saved
+        // from the first push. Skip to merge rapid changes into one undo step.
+        lastPushTime = now
+        return
+      }
+      lastPushTime = now
 
       set((s) => {
         const last = s.undoStack[s.undoStack.length - 1]

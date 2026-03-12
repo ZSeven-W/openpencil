@@ -190,6 +190,10 @@ function shouldSplitByGrapheme(text: string): boolean {
 function isFixedWidthText(node: PenNode): boolean {
   if (node.type !== 'text') return false
   if (node.textGrowth === 'fixed-width' || node.textGrowth === 'fixed-width-height') return true
+  // Auto-width text must always use IText — Textbox would wrap if the stored
+  // width is slightly too narrow (common for CJK text imported from Figma
+  // where font metrics differ between platforms).
+  if (node.textGrowth === 'auto') return false
   // When textAlign is not 'left', the layout engine injected centering.
   // IText ignores width and computes its own, making textAlign ineffective
   // for single-line text. Use Textbox so the width is respected and
@@ -475,11 +479,14 @@ export function createFabricObject(
       ;(obj as any).__nativeWidth = obj.width
       ;(obj as any).__nativeHeight = obj.height
       if (pw > 0 && ph > 0 && obj.width && obj.height) {
-        // Uniform scale — preserve aspect ratio so icons don't get squished
-        const uniformScale = Math.min(pw / obj.width, ph / obj.height)
-        // Keep native path width/height. Overriding width/height can shift pathOffset
-        // and make icons appear visually off-center in logos.
-        obj.set({ scaleX: uniformScale, scaleY: uniformScale })
+        if (node.iconId) {
+          // Icon path: uniform scale to preserve aspect ratio
+          const uniformScale = Math.min(pw / obj.width, ph / obj.height)
+          obj.set({ scaleX: uniformScale, scaleY: uniformScale })
+        } else {
+          // Regular path (pen tool, Figma vectors): non-uniform scale to fill exact bounds
+          obj.set({ scaleX: pw / obj.width, scaleY: ph / obj.height })
+        }
       }
       break
     }

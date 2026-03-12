@@ -150,13 +150,17 @@ function parseFontWeight(style?: string): number | undefined {
 
 function mapLineHeight(node: FigmaNodeChange): number | undefined {
   if (!node.lineHeight) return undefined
+  const fontSize = node.fontSize ?? 14
+  // PenNode lineHeight is a MULTIPLIER (e.g. 1.5), not absolute pixels.
+  // drawText computes final px as: lineHeight * fontSize.
   if (node.lineHeight.units === 'PIXELS' && node.lineHeight.value) {
-    return node.lineHeight.value
+    // Convert absolute pixels to multiplier (e.g. 24px / 16px = 1.5)
+    const mul = node.lineHeight.value / fontSize
+    return Math.round(mul * 1000) / 1000
   }
-  // Percentage line height: e.g. 150 → 1.5x multiplier → convert to px
   if (node.lineHeight.units === 'PERCENT' && node.lineHeight.value) {
-    const fontSize = node.fontSize ?? 14
-    return Math.round(fontSize * node.lineHeight.value / 100)
+    // Convert percentage to multiplier (e.g. 150% = 1.5)
+    return Math.round(node.lineHeight.value / 100 * 1000) / 1000
   }
   return undefined
 }

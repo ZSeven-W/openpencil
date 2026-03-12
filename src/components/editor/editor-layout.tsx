@@ -25,7 +25,7 @@ import { useFigmaPaste } from '@/hooks/use-figma-paste'
 import { useMcpSync } from '@/hooks/use-mcp-sync'
 import { initAppStorage } from '@/utils/app-storage'
 
-const FabricCanvas = lazy(() => import('@/canvas/fabric-canvas'))
+const SkiaCanvas = lazy(() => import('@/canvas/skia/skia-canvas'))
 
 export default function EditorLayout() {
   const toggleMinimize = useAIStore((s) => s.toggleMinimize)
@@ -139,7 +139,7 @@ export default function EditorLayout() {
                   </div>
                 }
               >
-                <FabricCanvas />
+                <SkiaCanvas />
               </Suspense>
               <Toolbar />
               <BooleanToolbar />

@@ -31,14 +31,14 @@ function decodeFigmaPathBlob(blob: Uint8Array): string | null {
         if (offset + 8 > blob.length) return joinParts(parts)
         const x = view.getFloat32(offset, true); offset += 4
         const y = view.getFloat32(offset, true); offset += 4
-        parts.push(`M${r(x)} ${r(y)}`)
+        if (!hasNaN(x, y)) parts.push(`M${r(x)} ${r(y)}`)
         break
       }
       case 0x02: { // lineTo
         if (offset + 8 > blob.length) return joinParts(parts)
         const x = view.getFloat32(offset, true); offset += 4
         const y = view.getFloat32(offset, true); offset += 4
-        parts.push(`L${r(x)} ${r(y)}`)
+        if (!hasNaN(x, y)) parts.push(`L${r(x)} ${r(y)}`)
         break
       }
       case 0x03: { // quadTo
@@ -47,7 +47,7 @@ function decodeFigmaPathBlob(blob: Uint8Array): string | null {
         const cpy = view.getFloat32(offset, true); offset += 4
         const x   = view.getFloat32(offset, true); offset += 4
         const y   = view.getFloat32(offset, true); offset += 4
-        parts.push(`Q${r(cpx)} ${r(cpy)} ${r(x)} ${r(y)}`)
+        if (!hasNaN(cpx, cpy, x, y)) parts.push(`Q${r(cpx)} ${r(cpy)} ${r(x)} ${r(y)}`)
         break
       }
       case 0x04: { // cubicTo
@@ -58,7 +58,7 @@ function decodeFigmaPathBlob(blob: Uint8Array): string | null {
         const cp2y = view.getFloat32(offset, true); offset += 4
         const x    = view.getFloat32(offset, true); offset += 4
         const y    = view.getFloat32(offset, true); offset += 4
-        parts.push(`C${r(cp1x)} ${r(cp1y)} ${r(cp2x)} ${r(cp2y)} ${r(x)} ${r(y)}`)
+        if (!hasNaN(cp1x, cp1y, cp2x, cp2y, x, y)) parts.push(`C${r(cp1x)} ${r(cp1y)} ${r(cp2x)} ${r(cp2y)} ${r(x)} ${r(y)}`)
         break
       }
       default:
@@ -70,13 +70,51 @@ function decodeFigmaPathBlob(blob: Uint8Array): string | null {
   return joinParts(parts)
 }
 
-/** Round to 2 decimal places for compact SVG path data. */
+/** Round to 4 decimal places for accurate SVG path data. */
 function r(n: number): string {
-  return Math.abs(n) < 0.005 ? '0' : parseFloat(n.toFixed(2)).toString()
+  return Math.abs(n) < 0.00005 ? '0' : parseFloat(n.toFixed(4)).toString()
+}
+
+/** Check if any float is NaN/Infinity. */
+function hasNaN(...vals: number[]): boolean {
+  for (const v of vals) { if (!Number.isFinite(v)) return true }
+  return false
 }
 
 function joinParts(parts: string[]): string | null {
   return parts.length > 0 ? parts.join(' ') : null
+}
+
+export interface PathBounds {
+  minX: number; minY: number; maxX: number; maxY: number
+}
+
+/**
+ * Compute approximate bounding box of an SVG path string from its coordinates.
+ * Uses control points (not curve extrema), which is sufficient for layout purposes.
+ */
+export function computeSvgPathBounds(d: string): PathBounds | null {
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
+  const cmds = d.match(/[MLCQZ][^MLCQZ]*/gi)
+  if (!cmds) return null
+  for (const cmd of cmds) {
+    const letter = cmd[0].toUpperCase()
+    if (letter === 'Z') continue
+    const coords = cmd.slice(1).trim().match(/-?\d+\.?\d*/g)
+    if (!coords) continue
+    const vals = coords.map(Number)
+    for (let i = 0; i < vals.length - 1; i += 2) {
+      const x = vals[i], y = vals[i + 1]
+      if (Number.isFinite(x) && Number.isFinite(y)) {
+        minX = Math.min(minX, x)
+        minY = Math.min(minY, y)
+        maxX = Math.max(maxX, x)
+        maxY = Math.max(maxY, y)
+      }
+    }
+  }
+  if (!Number.isFinite(minX)) return null
+  return { minX, minY, maxX, maxY }
 }
 
 /**
@@ -103,48 +141,8 @@ export function decodeFigmaVectorPath(
 
   if (pathParts.length === 0) return null
 
-  const rawPath = pathParts.join(' ')
-
-  // Scale from normalizedSize to actual node size if they differ
-  const normSize = figma.vectorData?.normalizedSize
-  const actualSize = figma.size
-  if (normSize && actualSize) {
-    const sx = actualSize.x / normSize.x
-    const sy = actualSize.y / normSize.y
-    if (Math.abs(sx - 1) > 0.01 || Math.abs(sy - 1) > 0.01) {
-      return scaleSvgPath(rawPath, sx, sy)
-    }
-  }
-
-  return rawPath
-}
-
-/** Scale all coordinates in an SVG path string. */
-function scaleSvgPath(d: string, sx: number, sy: number): string {
-  // Tokenize: commands and numbers
-  const tokens = d.match(/[MLCQZmlcqz]|-?\d+\.?\d*/g)
-  if (!tokens) return d
-
-  const result: string[] = []
-  let i = 0
-
-  while (i < tokens.length) {
-    const token = tokens[i]
-    if (/^[MLCQZmlcqz]$/.test(token)) {
-      result.push(token)
-      i++
-      const cmd = token.toUpperCase()
-      const count = cmd === 'M' || cmd === 'L' ? 2 : cmd === 'Q' ? 4 : cmd === 'C' ? 6 : 0
-      for (let j = 0; j < count && i < tokens.length; j++) {
-        const val = parseFloat(tokens[i])
-        result.push(r(j % 2 === 0 ? val * sx : val * sy))
-        i++
-      }
-    } else {
-      result.push(token)
-      i++
-    }
-  }
-
-  return result.join(' ')
+  // fillGeometry/strokeGeometry coordinates are already in the node's local
+  // coordinate space (0..size.x, 0..size.y). Do NOT scale by normalizedSize —
+  // that applies only to vectorNetworkBlob, which is not used here.
+  return pathParts.join(' ')
 }

@@ -526,10 +526,14 @@ export function useCanvasEvents() {
       })
 
       canvas.on('mouse:up', () => {
-        cancelLayoutDrag()
-        // NOTE: do NOT cancelDragInto() here -- object:modified handles the
-        // commit and cleanup.  In Fabric.js v7 mouse:up can fire before
-        // object:modified, which would clear the session prematurely.
+        // NOTE: do NOT cancelLayoutDrag() or cancelDragInto() here --
+        // object:modified handles the commit and cleanup.  In Fabric.js v7
+        // mouse:up fires before object:modified, which would clear the
+        // session prematurely and prevent layout reorder from executing.
+        // Instead, defer the safety cleanup so object:modified can run first.
+        requestAnimationFrame(() => {
+          if (isLayoutDragActive()) cancelLayoutDrag()
+        })
         endParentDrag()
         selectionDragInfo = null
 

@@ -2,6 +2,7 @@ import * as fabric from 'fabric'
 import type { PenNode } from '@/types/pen'
 import { buildEllipseArcPath, isArcEllipse } from '@/utils/arc-path'
 import type { FabricObjectWithPenId } from './canvas-object-factory'
+import { lookupIconByName } from '@/services/ai/icon-resolver'
 import {
   resolveFill,
   resolveFillColor,
@@ -225,6 +226,51 @@ export function syncFabricObject(
       }
       break
     }
+    case 'icon_font': {
+      const iw = sizeToNumber('width' in node ? node.width : undefined, 20)
+      const ih = sizeToNumber('height' in node ? node.height : undefined, 20)
+
+      // Re-resolve icon if name changed
+      const iconName = (node as any).iconFontName ?? node.name ?? ''
+      const prevIconName = (obj as any).__iconFontName ?? ''
+      if (iconName !== prevIconName && obj instanceof fabric.Path) {
+        const iconMatch = lookupIconByName(iconName)
+        const iconD = iconMatch?.d ?? 'M12 12m-3 0a3 3 0 1 0 6 0a3 3 0 1 0 -6 0'
+        const iconStyle = iconMatch?.style ?? 'stroke'
+        const tmp = new fabric.Path(iconD)
+        ;(obj as any).path = (tmp as any).path
+        obj.width = tmp.width
+        obj.height = tmp.height
+        ;(obj as any).pathOffset = (tmp as any).pathOffset
+        ;(obj as any).__nativeWidth = tmp.width
+        ;(obj as any).__nativeHeight = tmp.height
+        ;(obj as any).__iconFontName = iconName
+        ;(obj as any).__iconStyle = iconStyle
+      }
+
+      // Resolve fill color
+      const rawFill = (node as any).fill
+      const iconFillColor = typeof rawFill === 'string'
+        ? rawFill
+        : Array.isArray(rawFill) && rawFill.length > 0
+          ? resolveFillColor(rawFill)
+          : '#64748B'
+      const iconStyle = (obj as any).__iconStyle ?? 'stroke'
+      obj.set({
+        fill: iconStyle === 'stroke' ? 'transparent' : iconFillColor,
+        stroke: iconStyle === 'stroke' ? iconFillColor : undefined,
+        strokeWidth: iconStyle === 'stroke' ? 2 : 0,
+      })
+
+      // Uniform scale for icons
+      const inw = (obj as any).__nativeWidth || obj.width
+      const inh = (obj as any).__nativeHeight || obj.height
+      if (iw > 0 && ih > 0 && inw && inh) {
+        const uniformScale = Math.min(iw / inw, ih / inh)
+        obj.set({ width: inw, height: inh, scaleX: uniformScale, scaleY: uniformScale })
+      }
+      break
+    }
     case 'polygon':
     case 'path': {
       // Update path data in-place when `d` changes — avoids object recreation
@@ -266,13 +312,12 @@ export function syncFabricObject(
       const nw = (obj as any).__nativeWidth || obj.width
       const nh = (obj as any).__nativeHeight || obj.height
       if (w > 0 && h > 0 && nw && nh) {
-        if (node.type === 'path') {
-          // Uniform scale — preserve aspect ratio so icons don't get squished
+        if (node.type === 'path' && (node as any).iconId) {
+          // Icon path: uniform scale to preserve aspect ratio
           const uniformScale = Math.min(w / nw, h / nh)
-          // Keep native width/height to avoid pathOffset drift that can visually
-          // offset icons inside logo containers.
           obj.set({ width: nw, height: nh, scaleX: uniformScale, scaleY: uniformScale })
         } else {
+          // Regular path / polygon: non-uniform scale to fill exact bounds
           obj.set({ width: nw, height: nh, scaleX: w / nw, scaleY: h / nh })
         }
       }
