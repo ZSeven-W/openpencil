@@ -262,8 +262,8 @@ export default function PresetPanel() {
           </div>
         </div>
 
-        {/* v2: Effect registry section */}
-        {selectedId && (
+        {/* v2: Effect registry section — hidden for video nodes */}
+        {selectedId && !isVideo && (
           <>
             <Separator />
             <div className="px-3 py-2 space-y-1.5">
