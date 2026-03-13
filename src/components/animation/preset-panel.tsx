@@ -166,6 +166,48 @@ export default function PresetPanel() {
     }
   }
 
+  const handleEffectDurationChange = (segment: 'in' | 'out', newDurationSec: number) => {
+    if (!selectedId || !canvas || !animClip) return
+
+    const newDurationMs = Math.round(newDurationSec * 1000)
+    const effectConfig = segment === 'in' ? animClip.inEffect : animClip.outEffect
+    if (!effectConfig) return
+
+    // Clamp: in + out cannot exceed clip duration
+    const otherDuration = segment === 'in'
+      ? (animClip.outEffect?.duration ?? 0)
+      : (animClip.inEffect?.duration ?? 0)
+    const maxDuration = animClip.duration - otherDuration - 50 // leave 50ms min hold
+    const clampedMs = Math.max(50, Math.min(newDurationMs, maxDuration))
+
+    const obj = findFabricObject(canvas, selectedId)
+    const currentState = obj ? captureNodeState(obj) : {}
+
+    const existing = selectedNode?.clips ?? []
+    const updatedEffect: TimedEffectConfig = { ...effectConfig, duration: clampedMs }
+
+    const updated: AnimationClipData = {
+      ...animClip,
+      [segment === 'in' ? 'inEffect' : 'outEffect']: updatedEffect,
+    }
+
+    // Regenerate keyframes for both effects
+    const inConfig = segment === 'in' ? updatedEffect : animClip.inEffect
+    const outConfig = segment === 'out' ? updatedEffect : animClip.outEffect
+
+    const inKf = inConfig
+      ? generateClipFromEffect(inConfig.effectId, inConfig.duration, inConfig.params, currentState)
+      : null
+    const outKf = outConfig
+      ? generateClipFromEffect(outConfig.effectId, outConfig.duration, outConfig.params, currentState)
+      : null
+
+    updated.keyframes = [...(inKf?.keyframes ?? []), ...(outKf?.keyframes ?? [])]
+
+    const updatedClips = existing.map((c) => c.id === animClip.id ? updated : c)
+    updateNode(selectedId, { clips: updatedClips } as Partial<PenNode>)
+  }
+
   return (
     <>
       {/* Layer name header */}
@@ -290,6 +332,38 @@ export default function PresetPanel() {
                   </div>
                 )
               })}
+            </div>
+          </>
+        )}
+
+        {/* In/Out duration controls */}
+        {animClip && (animClip.inEffect || animClip.outEffect) && (
+          <>
+            <Separator />
+            <div className="px-3 py-2 space-y-1.5">
+              <SectionHeader title="Timing" />
+              <div className="grid grid-cols-2 gap-1.5">
+                {animClip.inEffect && (
+                  <NumberInput
+                    label="In"
+                    value={Math.round(animClip.inEffect.duration / 100) / 10}
+                    onChange={(v) => handleEffectDurationChange('in', v)}
+                    min={0.05}
+                    step={0.1}
+                    suffix="s"
+                  />
+                )}
+                {animClip.outEffect && (
+                  <NumberInput
+                    label="Out"
+                    value={Math.round(animClip.outEffect.duration / 100) / 10}
+                    onChange={(v) => handleEffectDurationChange('out', v)}
+                    min={0.05}
+                    step={0.1}
+                    suffix="s"
+                  />
+                )}
+              </div>
             </div>
           </>
         )}
