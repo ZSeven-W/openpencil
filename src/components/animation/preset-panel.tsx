@@ -6,10 +6,10 @@ import { useTimelineStore } from '@/stores/timeline-store'
 import { useCanvasStore } from '@/stores/canvas-store'
 import { useDocumentStore } from '@/stores/document-store'
 import { captureNodeState, findFabricObject } from '@/animation/canvas-bridge'
-import { getEffectsByCategory, generateClipFromEffect } from '@/animation/effect-registry'
+import { getEffect, getEffectsByCategory, generateClipFromEffect } from '@/animation/effect-registry'
 import '@/animation/effects' // ensure effects are registered
-import type { AnimationClipData, VideoClipData } from '@/types/animation'
-import { isVideoClip } from '@/types/animation'
+import type { AnimationClipData, VideoClipData, TimedEffectConfig } from '@/types/animation'
+import { isVideoClip, isAnimationClip } from '@/types/animation'
 import type { PenNode, VideoNode } from '@/types/pen'
 import NumberInput from '@/components/shared/number-input'
 
@@ -28,43 +28,142 @@ export default function PresetPanel() {
   const videoNode = isVideo ? (selectedNode as VideoNode) : null
   const videoClip = videoNode?.clips?.find(isVideoClip) as VideoClipData | undefined
 
-  // v2: Effect registry
-  const effectCategories = ['enter', 'exit', 'emphasis'] as const
-  const appliedEffectIds = new Set(
-    (selectedNode?.clips ?? [])
-      .filter((c): c is AnimationClipData => c.kind === 'animation' && !!c.effectId)
-      .map((c) => c.effectId!),
-  )
+  // v2: Effect registry — only show enter/exit categories (emphasis deferred)
+  const effectCategories = ['enter', 'exit'] as const
+
+  // Find the animation clip on this node (or undefined)
+  const animClip = selectedNode?.clips?.find(isAnimationClip) as AnimationClipData | undefined
+
+  // Determine which effects are currently applied via inEffect/outEffect
+  const appliedEffectIds = new Set<string>()
+  if (animClip?.inEffect) appliedEffectIds.add(animClip.inEffect.effectId)
+  if (animClip?.outEffect) appliedEffectIds.add(animClip.outEffect.effectId)
+  // Legacy: also check effectId for old-style clips
+  if (animClip?.effectId) appliedEffectIds.add(animClip.effectId)
 
   const handleToggleEffect = (effectId: string) => {
     if (!selectedId || !canvas) return
 
-    // If already applied, remove it
-    if (appliedEffectIds.has(effectId)) {
-      const remaining = (selectedNode?.clips ?? []).filter(
-        (c) => !(c.kind === 'animation' && (c as AnimationClipData).effectId === effectId),
-      )
-      updateNode(selectedId, { clips: remaining } as Partial<PenNode>)
-      return
-    }
+    const effect = getEffect(effectId)
+    if (!effect) return
 
     const obj = findFabricObject(canvas, selectedId)
     const currentState = obj ? captureNodeState(obj) : {}
 
-    const result = generateClipFromEffect(effectId, undefined, undefined, currentState)
-    if (!result) return
-
-    const clip: AnimationClipData = {
-      id: nanoid(8),
-      kind: 'animation',
-      startTime: 0,
-      duration: result.duration,
-      effectId,
-      keyframes: result.keyframes,
-    }
-
     const existing = selectedNode?.clips ?? []
-    updateNode(selectedId, { clips: [...existing, clip] } as Partial<PenNode>)
+    const existingAnimClip = existing.find(isAnimationClip) as AnimationClipData | undefined
+
+    if (effect.category === 'enter') {
+      // Toggle in-effect
+      if (existingAnimClip?.inEffect?.effectId === effectId) {
+        // Remove in-effect
+        const updated = { ...existingAnimClip, inEffect: undefined }
+        // Regenerate keyframes without in-effect
+        const outKf = updated.outEffect
+          ? generateClipFromEffect(updated.outEffect.effectId, updated.outEffect.duration, updated.outEffect.params, currentState)
+          : null
+        updated.keyframes = outKf?.keyframes ?? []
+        const updatedClips = existing.map((c) => c.id === existingAnimClip.id ? updated : c)
+        updateNode(selectedId, { clips: updatedClips } as Partial<PenNode>)
+        return
+      }
+
+      const result = generateClipFromEffect(effectId, undefined, undefined, currentState)
+      if (!result) return
+
+      const effectConfig: TimedEffectConfig = {
+        effectId,
+        duration: result.duration,
+      }
+
+      if (existingAnimClip) {
+        // Set inEffect on existing clip, merge keyframes
+        const updated: AnimationClipData = {
+          ...existingAnimClip,
+          inEffect: effectConfig,
+          keyframes: result.keyframes,
+        }
+        // If there's an out-effect, append its keyframes
+        if (existingAnimClip.outEffect) {
+          const outResult = generateClipFromEffect(
+            existingAnimClip.outEffect.effectId,
+            existingAnimClip.outEffect.duration,
+            existingAnimClip.outEffect.params,
+            currentState,
+          )
+          if (outResult) updated.keyframes = [...result.keyframes, ...outResult.keyframes]
+        }
+        const updatedClips = existing.map((c) => c.id === existingAnimClip.id ? updated : c)
+        updateNode(selectedId, { clips: updatedClips } as Partial<PenNode>)
+      } else {
+        // Create new animation clip with inEffect
+        const clip: AnimationClipData = {
+          id: nanoid(8),
+          kind: 'animation',
+          startTime: 0,
+          duration: duration,
+          inEffect: effectConfig,
+          keyframes: result.keyframes,
+        }
+        updateNode(selectedId, { clips: [...existing, clip] } as Partial<PenNode>)
+      }
+    } else if (effect.category === 'exit') {
+      // Toggle out-effect
+      if (existingAnimClip?.outEffect?.effectId === effectId) {
+        // Remove out-effect
+        const updated = { ...existingAnimClip, outEffect: undefined }
+        // Regenerate keyframes without out-effect
+        const inKf = updated.inEffect
+          ? generateClipFromEffect(updated.inEffect.effectId, updated.inEffect.duration, updated.inEffect.params, currentState)
+          : null
+        updated.keyframes = inKf?.keyframes ?? []
+        const updatedClips = existing.map((c) => c.id === existingAnimClip.id ? updated : c)
+        updateNode(selectedId, { clips: updatedClips } as Partial<PenNode>)
+        return
+      }
+
+      const result = generateClipFromEffect(effectId, undefined, undefined, currentState)
+      if (!result) return
+
+      const effectConfig: TimedEffectConfig = {
+        effectId,
+        duration: result.duration,
+      }
+
+      if (existingAnimClip) {
+        // Set outEffect on existing clip, merge keyframes
+        const updated: AnimationClipData = {
+          ...existingAnimClip,
+          outEffect: effectConfig,
+          keyframes: existingAnimClip.keyframes,
+        }
+        // If there's an in-effect, keep its keyframes and append out keyframes
+        if (existingAnimClip.inEffect) {
+          const inResult = generateClipFromEffect(
+            existingAnimClip.inEffect.effectId,
+            existingAnimClip.inEffect.duration,
+            existingAnimClip.inEffect.params,
+            currentState,
+          )
+          updated.keyframes = [...(inResult?.keyframes ?? []), ...result.keyframes]
+        } else {
+          updated.keyframes = result.keyframes
+        }
+        const updatedClips = existing.map((c) => c.id === existingAnimClip.id ? updated : c)
+        updateNode(selectedId, { clips: updatedClips } as Partial<PenNode>)
+      } else {
+        // Create new animation clip with outEffect
+        const clip: AnimationClipData = {
+          id: nanoid(8),
+          kind: 'animation',
+          startTime: 0,
+          duration: duration,
+          outEffect: effectConfig,
+          keyframes: result.keyframes,
+        }
+        updateNode(selectedId, { clips: [...existing, clip] } as Partial<PenNode>)
+      }
+    }
   }
 
   return (
@@ -205,7 +304,11 @@ export default function PresetPanel() {
                 {selectedNode.clips.map((clip) => (
                   <div key={clip.id} className="flex items-center justify-between">
                     <span className="text-[11px] text-muted-foreground truncate">
-                      {clip.kind === 'animation' ? (clip.effectId ?? 'Custom') : 'Video'}
+                      {clip.kind === 'animation'
+                        ? (clip.inEffect || clip.outEffect
+                          ? [clip.inEffect?.effectId, clip.outEffect?.effectId].filter(Boolean).join(' → ')
+                          : (clip.effectId ?? 'Custom'))
+                        : 'Video'}
                     </span>
                     <span className="text-[11px] text-foreground tabular-nums">
                       {(clip.duration / 1000).toFixed(1)}s
