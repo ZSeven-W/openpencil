@@ -29,6 +29,7 @@ import { useDocumentStore } from '@/stores/document-store'
 import { useTimelineStore } from '@/stores/timeline-store'
 import type { Canvas, FabricObject } from 'fabric'
 import type { AnimatableValue } from '@/types/animation'
+import { isVideoClip } from '@/types/animation'
 import type { PenNode } from '@/types/pen'
 
 // ---------------------------------------------------------------------------
@@ -84,7 +85,7 @@ function ensureController(): PlaybackController {
       // Interpolate all animation clips and apply to canvas
       for (const [nodeId, clips] of activeIndex.clipsByNode) {
         for (const clip of clips) {
-          if (clip.kind === 'video') continue
+          if (isVideoClip(clip)) continue
           const values = interpolateClip(clip, timeMs)
           if (!values) continue
           const obj = findFabricObject(activeCanvas, nodeId)
@@ -101,6 +102,9 @@ function ensureController(): PlaybackController {
     onStop() {
       if (!activeCanvas) return
 
+      // Stop time polling before any store updates
+      stopTimePolling()
+
       // Restore original node states
       restoreNodeStates(activeCanvas, activeSavedStates)
       recalcCoordsForAnimatedObjects()
@@ -113,6 +117,17 @@ function ensureController(): PlaybackController {
       useTimelineStore.getState().setCurrentTime(0)
     },
     loopEnabled: useTimelineStore.getState().loopEnabled,
+  })
+
+  // Bridge state transitions (play/pause/stop) to React.
+  // We do NOT forward every frame tick — time is polled by the RAF loop below.
+  let lastPlaying = false
+  ctrl.subscribe(() => {
+    const nowPlaying = ctrl.isPlaying()
+    if (nowPlaying !== lastPlaying) {
+      lastPlaying = nowPlaying
+      notifyGlobalListeners()
+    }
   })
 
   setPauseMiddlewareRef(ctrl)
@@ -147,17 +162,20 @@ export function playV2(): void {
 
   useTimelineStore.getState().setPlaybackMode('playing')
   ctrl.play()
+  startTimePolling()
 }
 
 export function pauseV2(): void {
   if (!controllerRef) return
   controllerRef.pause()
+  stopTimePolling()
   useTimelineStore.getState().setPlaybackMode('idle')
 }
 
 export function stopV2(): void {
   if (!controllerRef) return
   controllerRef.stop()
+  stopTimePolling()
   // onStop callback handles timeline store updates
 }
 
@@ -173,6 +191,7 @@ export function isPlayingV2(): boolean {
 
 export function disposeController(): void {
   if (controllerRef) {
+    stopTimePolling()
     controllerRef.dispose()
     setPauseMiddlewareRef(null)
     controllerRef = null
@@ -185,23 +204,18 @@ export function disposeController(): void {
 // useSyncExternalStore hooks
 // ---------------------------------------------------------------------------
 
-function subscribeTime(cb: () => void): () => void {
-  if (!controllerRef) return () => {}
-  return controllerRef.subscribe(cb)
+// Global listener set — survives controller create/dispose cycles.
+// Only notified on state transitions (play/pause/stop), NOT every frame.
+const globalListeners = new Set<() => void>()
+
+/** Called on play/pause/stop transitions only. */
+export function notifyGlobalListeners(): void {
+  for (const cb of globalListeners) cb()
 }
 
-function getTimeSnapshot(): number {
-  return controllerRef?.currentTime ?? 0
-}
-
-/** Playback time in ms. Re-renders at controller's notify rate. */
-export function usePlaybackTime(): number {
-  return useSyncExternalStore(subscribeTime, getTimeSnapshot, () => 0)
-}
-
-function subscribePlaying(cb: () => void): () => void {
-  if (!controllerRef) return () => {}
-  return controllerRef.subscribe(cb)
+function subscribe(cb: () => void): () => void {
+  globalListeners.add(cb)
+  return () => { globalListeners.delete(cb) }
 }
 
 function getPlayingSnapshot(): boolean {
@@ -210,5 +224,56 @@ function getPlayingSnapshot(): boolean {
 
 /** Whether playback is active. Re-renders only on play/pause/stop transitions. */
 export function usePlaybackPlaying(): boolean {
-  return useSyncExternalStore(subscribePlaying, getPlayingSnapshot, () => false)
+  return useSyncExternalStore(subscribe, getPlayingSnapshot, () => false)
+}
+
+// ---------------------------------------------------------------------------
+// Time polling — separate RAF loop at ~30fps for time display
+// ---------------------------------------------------------------------------
+
+const timeListeners = new Set<() => void>()
+let timePollingRafId: number | null = null
+let lastPolledTime = 0
+
+function pollTime(): void {
+  const t = controllerRef?.currentTime ?? 0
+  if (t !== lastPolledTime) {
+    lastPolledTime = t
+    for (const cb of timeListeners) cb()
+  }
+  if (controllerRef?.isPlaying()) {
+    timePollingRafId = requestAnimationFrame(pollTime)
+  } else {
+    timePollingRafId = null
+  }
+}
+
+/** Start polling when playback begins, stop when it ends. */
+function startTimePolling(): void {
+  if (timePollingRafId !== null) return
+  timePollingRafId = requestAnimationFrame(pollTime)
+}
+
+function stopTimePolling(): void {
+  if (timePollingRafId !== null) {
+    cancelAnimationFrame(timePollingRafId)
+    timePollingRafId = null
+  }
+  // One final notify so subscribers see the stopped time
+  lastPolledTime = controllerRef?.currentTime ?? 0
+  for (const cb of timeListeners) cb()
+}
+
+function subscribeTime(cb: () => void): () => void {
+  timeListeners.add(cb)
+  return () => { timeListeners.delete(cb) }
+}
+
+function getTimeSnapshot(): number {
+  return lastPolledTime
+}
+
+/** Playback time in ms. Re-renders via polling RAF loop while playing. */
+export function usePlaybackTime(): number {
+  return useSyncExternalStore(subscribeTime, getTimeSnapshot, () => 0)
 }
