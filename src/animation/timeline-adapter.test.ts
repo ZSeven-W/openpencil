@@ -6,37 +6,18 @@ import {
   buildTimelineRowsFromNodes,
   clipToTimelineAction,
 } from './timeline-adapter'
-import { msToSec, secToMs, EFFECT_ANIMATION_CLIP } from './timeline-adapter-types'
+import { msToSec, secToMs, EFFECT_ANIMATION_CLIP, EFFECT_VIDEO_CLIP } from './timeline-adapter-types'
 import type { TimelineStores } from './timeline-adapter-types'
-import type { PenNode, VideoNode } from '@/types/pen'
-import type { AnimationClipData } from '@/types/animation'
+import type { PenNode } from '@/types/pen'
+import type { AnimationClipData, VideoClipData } from '@/types/animation'
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
-function makeVideoNode(overrides: Partial<VideoNode> = {}): VideoNode {
-  return {
-    id: 'video-1',
-    type: 'video',
-    name: 'clip.mp4',
-    x: 0,
-    y: 0,
-    width: 100,
-    height: 100,
-    src: '',
-    mimeType: 'video/mp4',
-    videoDuration: 10000,
-    inPoint: 0,
-    outPoint: 5000,
-    timelineOffset: 1000,
-    ...overrides,
-  } as VideoNode
-}
-
 function makeNodeWithClips(
   nodeId: string,
-  clips: AnimationClipData[],
+  clips: (AnimationClipData | VideoClipData)[],
 ): PenNode {
   return {
     id: nodeId,
@@ -50,12 +31,31 @@ function makeNodeWithClips(
   } as unknown as PenNode
 }
 
+function makeVideoNodeWithClip(
+  nodeId: string,
+  clip: VideoClipData,
+): PenNode {
+  return {
+    id: nodeId,
+    type: 'video',
+    name: 'clip.mp4',
+    x: 0,
+    y: 0,
+    width: 100,
+    height: 100,
+    src: '',
+    mimeType: 'video/mp4',
+    videoDuration: 10000,
+    clips: [clip],
+  } as unknown as PenNode
+}
+
 function makeMockStores(
-  videoNode?: VideoNode,
+  node?: PenNode,
 ): TimelineStores & { updateNode: ReturnType<typeof vi.fn> } {
   const updateNode = vi.fn()
   const nodes = new Map<string, PenNode>()
-  if (videoNode) nodes.set(videoNode.id, videoNode as unknown as PenNode)
+  if (node) nodes.set(node.id, node)
 
   return {
     getDocumentState: () => ({
@@ -119,6 +119,25 @@ describe('clipToTimelineAction', () => {
     expect(action.flexible).toBe(true)
     expect(action.movable).toBe(true)
   })
+
+  it('converts video clip to timeline action', () => {
+    const clip: VideoClipData = {
+      id: 'v1',
+      kind: 'video',
+      startTime: 1000,
+      duration: 3000,
+      sourceStart: 0,
+      sourceEnd: 3000,
+      playbackRate: 1,
+    }
+
+    const action = clipToTimelineAction(clip)
+
+    expect(action.id).toBe('v1')
+    expect(action.start).toBe(msToSec(1000))
+    expect(action.end).toBe(msToSec(4000))
+    expect(action.effectId).toBe(EFFECT_VIDEO_CLIP)
+  })
 })
 
 // ---------------------------------------------------------------------------
@@ -141,9 +160,33 @@ describe('buildTimelineRowsFromNodes', () => {
 
     expect(metadata.size).toBe(2)
     expect(metadata.get('c1')).toEqual({
-      type: 'animation-clip',
+      type: 'clip',
       nodeId: 'node-1',
       clipId: 'c1',
+      clipKind: 'animation',
+    })
+  })
+
+  it('creates correct metadata for video clips', () => {
+    const videoClip: VideoClipData = {
+      id: 'v1',
+      kind: 'video',
+      startTime: 0,
+      duration: 5000,
+      sourceStart: 0,
+      sourceEnd: 5000,
+      playbackRate: 1,
+    }
+    const node = makeVideoNodeWithClip('video-1', videoClip)
+
+    const { rows, metadata } = buildTimelineRowsFromNodes([node])
+
+    expect(rows).toHaveLength(1)
+    expect(metadata.get('v1')).toEqual({
+      type: 'clip',
+      nodeId: 'video-1',
+      clipId: 'v1',
+      clipKind: 'video',
     })
   })
 
@@ -180,21 +223,6 @@ describe('buildTimelineRowsFromNodes', () => {
 // ---------------------------------------------------------------------------
 
 describe('applyActionMove', () => {
-  it('moves video clip by updating timelineOffset', () => {
-    const videoNode = makeVideoNode()
-    const stores = makeMockStores(videoNode)
-
-    const metadata = new Map([
-      ['video-1::video', { type: 'video-clip' as const, nodeId: 'video-1' }],
-    ])
-
-    applyActionMove('video-1::video', 2, 7, metadata, stores)
-
-    expect(stores.updateNode).toHaveBeenCalledWith('video-1', {
-      timelineOffset: 2000,
-    })
-  })
-
   it('moves animation clip by updating startTime', () => {
     const clip: AnimationClipData = {
       id: 'c1',
@@ -204,14 +232,53 @@ describe('applyActionMove', () => {
       keyframes: [],
     }
     const node = makeNodeWithClips('node-1', [clip])
-    const updateNode = vi.fn()
-    const stores: TimelineStores = {
-      getDocumentState: () => ({
-        getNodeById: (id: string) => (id === 'node-1' ? node : undefined),
-      }),
-      updateNode,
-      getDuration: () => 5000,
+    const stores = makeMockStores(node)
+
+    const metadata = new Map([
+      ['c1', { type: 'clip' as const, nodeId: 'node-1', clipId: 'c1', clipKind: 'animation' as const }],
+    ])
+
+    applyActionMove('c1', 0.5, 1, metadata, stores)
+
+    expect(stores.updateNode).toHaveBeenCalledWith('node-1', {
+      clips: [{ ...clip, startTime: 500 }],
+    })
+  })
+
+  it('moves video clip by updating startTime on VideoClipData', () => {
+    const videoClip: VideoClipData = {
+      id: 'v1',
+      kind: 'video',
+      startTime: 1000,
+      duration: 3000,
+      sourceStart: 0,
+      sourceEnd: 3000,
+      playbackRate: 1,
     }
+    const node = makeVideoNodeWithClip('video-1', videoClip)
+    const stores = makeMockStores(node)
+
+    const metadata = new Map([
+      ['v1', { type: 'clip' as const, nodeId: 'video-1', clipId: 'v1', clipKind: 'video' as const }],
+    ])
+
+    applyActionMove('v1', 2, 5, metadata, stores)
+
+    expect(stores.updateNode).toHaveBeenCalledWith('video-1', {
+      clips: [{ ...videoClip, startTime: 2000 }],
+    })
+  })
+
+  it('handles legacy animation-clip metadata type', () => {
+    const clip: AnimationClipData = {
+      id: 'c1',
+      kind: 'animation',
+      startTime: 0,
+      duration: 500,
+      keyframes: [],
+    }
+    const node = makeNodeWithClips('node-1', [clip])
+    const stores = makeMockStores(node)
 
     const metadata = new Map([
       ['c1', { type: 'animation-clip' as const, nodeId: 'node-1', clipId: 'c1' }],
@@ -219,7 +286,7 @@ describe('applyActionMove', () => {
 
     applyActionMove('c1', 0.5, 1, metadata, stores)
 
-    expect(updateNode).toHaveBeenCalledWith('node-1', {
+    expect(stores.updateNode).toHaveBeenCalledWith('node-1', {
       clips: [{ ...clip, startTime: 500 }],
     })
   })
@@ -238,34 +305,49 @@ describe('applyActionMove', () => {
 // ---------------------------------------------------------------------------
 
 describe('applyActionResize', () => {
-  it('resizes video clip left edge (adjusts inPoint + timelineOffset)', () => {
-    const videoNode = makeVideoNode({ timelineOffset: 1000, inPoint: 0 })
-    const stores = makeMockStores(videoNode)
+  it('resizes animation clip startTime and duration', () => {
+    const clip: AnimationClipData = {
+      id: 'c1',
+      kind: 'animation',
+      startTime: 500,
+      duration: 1000,
+      keyframes: [],
+    }
+    const node = makeNodeWithClips('node-1', [clip])
+    const stores = makeMockStores(node)
 
     const metadata = new Map([
-      ['video-1::video', { type: 'video-clip' as const, nodeId: 'video-1' }],
+      ['c1', { type: 'clip' as const, nodeId: 'node-1', clipId: 'c1', clipKind: 'animation' as const }],
     ])
 
-    applyActionResize('video-1::video', 1.5, 6, 'left', metadata, stores)
+    applyActionResize('c1', 0.3, 1.8, 'left', metadata, stores)
 
-    expect(stores.updateNode).toHaveBeenCalledWith('video-1', {
-      timelineOffset: 1500,
-      inPoint: 500,
+    expect(stores.updateNode).toHaveBeenCalledWith('node-1', {
+      clips: [{ ...clip, startTime: 300, duration: 1500 }],
     })
   })
 
-  it('resizes video clip right edge (adjusts outPoint)', () => {
-    const videoNode = makeVideoNode({ timelineOffset: 1000, inPoint: 0, outPoint: 5000 })
-    const stores = makeMockStores(videoNode)
+  it('resizes video clip startTime and duration', () => {
+    const videoClip: VideoClipData = {
+      id: 'v1',
+      kind: 'video',
+      startTime: 1000,
+      duration: 3000,
+      sourceStart: 0,
+      sourceEnd: 3000,
+      playbackRate: 1,
+    }
+    const node = makeVideoNodeWithClip('video-1', videoClip)
+    const stores = makeMockStores(node)
 
     const metadata = new Map([
-      ['video-1::video', { type: 'video-clip' as const, nodeId: 'video-1' }],
+      ['v1', { type: 'clip' as const, nodeId: 'video-1', clipId: 'v1', clipKind: 'video' as const }],
     ])
 
-    applyActionResize('video-1::video', 1, 5, 'right', metadata, stores)
+    applyActionResize('v1', 0.5, 4.5, 'right', metadata, stores)
 
     expect(stores.updateNode).toHaveBeenCalledWith('video-1', {
-      outPoint: 4000,
+      clips: [{ ...videoClip, startTime: 500, duration: 4000 }],
     })
   })
 })
@@ -278,7 +360,7 @@ describe('validateActionMove', () => {
   it('rejects start >= end', () => {
     const stores = makeMockStores()
     const metadata = new Map([
-      ['a', { type: 'animation-clip' as const, nodeId: 'n', clipId: 'c' }],
+      ['a', { type: 'clip' as const, nodeId: 'n', clipId: 'c', clipKind: 'animation' as const }],
     ])
 
     expect(validateActionMove('a', 1, 1, metadata, stores)).toBe(false)
@@ -288,7 +370,7 @@ describe('validateActionMove', () => {
   it('rejects duration < 50ms', () => {
     const stores = makeMockStores()
     const metadata = new Map([
-      ['a', { type: 'animation-clip' as const, nodeId: 'n', clipId: 'c' }],
+      ['a', { type: 'clip' as const, nodeId: 'n', clipId: 'c', clipKind: 'animation' as const }],
     ])
 
     expect(validateActionMove('a', 0, 0.04, metadata, stores)).toBe(false)
@@ -297,39 +379,19 @@ describe('validateActionMove', () => {
   it('rejects negative start', () => {
     const stores = makeMockStores()
     const metadata = new Map([
-      ['a', { type: 'animation-clip' as const, nodeId: 'n', clipId: 'c' }],
+      ['a', { type: 'clip' as const, nodeId: 'n', clipId: 'c', clipKind: 'animation' as const }],
     ])
 
     expect(validateActionMove('a', -0.1, 1, metadata, stores)).toBe(false)
   })
 
-  it('allows valid animation clip move', () => {
+  it('allows valid clip move', () => {
     const stores = makeMockStores()
     const metadata = new Map([
-      ['a', { type: 'animation-clip' as const, nodeId: 'n', clipId: 'c' }],
+      ['a', { type: 'clip' as const, nodeId: 'n', clipId: 'c', clipKind: 'animation' as const }],
     ])
 
     expect(validateActionMove('a', 0, 1, metadata, stores)).toBe(true)
-  })
-
-  it('rejects video clip exceeding video duration', () => {
-    const videoNode = makeVideoNode({ videoDuration: 5000 })
-    const stores = makeMockStores(videoNode)
-    const metadata = new Map([
-      ['video-1::video', { type: 'video-clip' as const, nodeId: 'video-1' }],
-    ])
-
-    expect(validateActionMove('video-1::video', 0, 6, metadata, stores)).toBe(false)
-  })
-
-  it('allows valid video clip move', () => {
-    const videoNode = makeVideoNode({ videoDuration: 10000 })
-    const stores = makeMockStores(videoNode)
-    const metadata = new Map([
-      ['video-1::video', { type: 'video-clip' as const, nodeId: 'video-1' }],
-    ])
-
-    expect(validateActionMove('video-1::video', 1, 5, metadata, stores)).toBe(true)
   })
 
   it('rejects unknown action', () => {
