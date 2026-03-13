@@ -1,200 +1,229 @@
 /**
- * Video ↔ timeline synchronization.
+ * Video ↔ timeline synchronization (MediaBunny WebCodecs).
  *
- * During playback, video elements are driven frame-by-frame:
- * - We DON'T call video.play() — that would cause audio/desync issues
- * - Instead, we set video.currentTime each frame so Fabric re-renders
- *   the video element as a texture source
+ * Single-clock architecture: composition RAF loop is sole timing authority.
+ * No video.play(), no drift correction, no competing clocks.
  *
- * For real-time playback (not scrubbing), we let the browser play the
- * video natively and just mark dirty on the Fabric object so it
- * re-reads the video texture each animation frame.
+ * - syncVideoFramesMB: called every RAF tick during playback (synchronous)
+ * - seekVideoFramesMB: called on scrub/seek (async, debounced)
+ * - startVideoPlaybackMB: called at play-start
+ * - stopVideoPlaybackMB: called at stop/pause
  */
 
 import type { Canvas } from 'fabric'
-import {
-  getAllVideoElements,
-  getVideoElement,
-  seekVideoToTime,
-} from '@/animation/video-registry'
+import { getVideoDecoder } from '@/animation/video-registry'
 import { findFabricObject } from '@/animation/canvas-bridge'
-import { useDocumentStore } from '@/stores/document-store'
 import type { AnimationIndex } from '@/animation/animation-index'
 import type { VideoClipData } from '@/types/animation'
-import { isVideoClip } from '@/types/animation'
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+function mapClipToSourceTimeSec(clip: VideoClipData, clipLocalTimeMs: number): number {
+  const sourceRange = clip.sourceEnd - clip.sourceStart
+  const clipProgress = clip.duration > 0 ? clipLocalTimeMs / clip.duration : 0
+  return (clip.sourceStart + clipProgress * sourceRange) / 1000
+}
+
+function getVideoClips(index: AnimationIndex): [string, VideoClipData][] {
+  const result: [string, VideoClipData][] = []
+  for (const [nodeId, clips] of index.clipsByNode) {
+    for (const clip of clips) {
+      if (clip.kind === 'video') {
+        result.push([nodeId, clip as VideoClipData])
+      }
+    }
+  }
+  return result
+}
+
+// ---------------------------------------------------------------------------
+// Playback sync (called every RAF tick — MUST be synchronous)
+// ---------------------------------------------------------------------------
 
 /**
- * Sync all video elements to the current composition time.
- * Called every frame during playback and on seek.
- *
- * Uses video clips on nodes (VideoClipData) for timing — no longer reads
- * from VideoNode.timelineOffset/inPoint/outPoint.
+ * Advance video frames during playback. Called from onFrame callback.
+ * advanceFrame() is synchronous — pre-fetched frames are swapped in.
  */
-export function syncVideoFrames(canvas: Canvas, compositionTimeMs: number): void {
-  const videoElements = getAllVideoElements()
-  if (videoElements.size === 0) return
+export function syncVideoFramesMB(
+  canvas: Canvas,
+  currentTimeMs: number,
+  index: AnimationIndex,
+): void {
+  for (const [nodeId, clip] of getVideoClips(index)) {
+    const handle = getVideoDecoder(nodeId)
+    if (!handle) continue
 
-  const getNodeById = useDocumentStore.getState().getNodeById
+    const clipLocalTime = currentTimeMs - clip.startTime
+    const obj = findFabricObject(canvas, nodeId)
 
-  for (const [nodeId] of videoElements) {
-    const node = getNodeById(nodeId)
-    if (!node || node.type !== 'video') continue
-
-    // Find the first video clip on this node
-    const videoClip = node.clips?.find(isVideoClip)
-    if (!videoClip) continue
-
-    const clipStart = videoClip.startTime
-    const clipEnd = videoClip.startTime + videoClip.duration
-
-    // Only show video when composition time is within the clip range
-    const fabricObj = findFabricObject(canvas, nodeId)
-
-    if (compositionTimeMs < clipStart || compositionTimeMs > clipEnd) {
-      if (fabricObj && fabricObj.visible) {
-        fabricObj.visible = false
-        fabricObj.dirty = true
+    // Outside clip bounds — hide
+    if (clipLocalTime < 0 || clipLocalTime > clip.duration) {
+      if (obj && obj.visible) {
+        obj.visible = false
+        obj.dirty = true
       }
       continue
     }
 
-    // Inside clip range — show and seek
-    if (fabricObj && !fabricObj.visible) {
-      fabricObj.visible = true
+    // Inside clip — show
+    if (obj && !obj.visible) {
+      obj.visible = true
+      obj.dirty = true
     }
 
-    // Map composition time to source video time
-    const clipLocalTime = compositionTimeMs - clipStart
-    const sourceRange = videoClip.sourceEnd - videoClip.sourceStart
-    const clipProgress = videoClip.duration > 0 ? clipLocalTime / videoClip.duration : 0
-    const videoTimeMs = videoClip.sourceStart + clipProgress * sourceRange
-    seekVideoToTime(nodeId, videoTimeMs, 0)
+    const sourceTimeSec = mapClipToSourceTimeSec(clip, clipLocalTime)
+    const advanced = handle.advanceFrame(sourceTimeSec)
 
-    if (fabricObj) {
-      fabricObj.dirty = true
+    if (advanced && obj) {
+      obj.dirty = true
     }
   }
 }
+
+// ---------------------------------------------------------------------------
+// Scrub / seek (async, debounced)
+// ---------------------------------------------------------------------------
+
+let pendingSeek: Promise<void> | null = null
+let latestSeekArgs: { canvas: Canvas; timeMs: number; index: AnimationIndex } | null = null
 
 /**
- * Pause all video elements (called on playback pause/stop).
+ * Seek video frames to a specific time. For scrubbing — async.
+ * Uses "latest wins" debounce: if a seek is in-flight, records the
+ * latest requested time and processes it after the current seek resolves.
  */
-export function pauseAllVideos(): void {
-  for (const videoEl of getAllVideoElements().values()) {
-    videoEl.pause()
-  }
-}
-
-// ============================================================
-// v2: AnimationIndex-driven video sync
-// ============================================================
-
-const DRIFT_THRESHOLD_MS = 50
-
-function mapClipToSourceTimeSec(clip: VideoClipData, clipLocalTime: number): number {
-  const sourceRange = clip.sourceEnd - clip.sourceStart
-  const clipProgress = clipLocalTime / clip.duration
-  return (clip.sourceStart + clipProgress * sourceRange) / 1000
-}
-
-function syncSingleVideoClip(
+export async function seekVideoFramesMB(
   canvas: Canvas,
-  nodeId: string,
-  clip: VideoClipData,
   currentTimeMs: number,
-): void {
-  const video = getVideoElement(nodeId)
-  if (!video) return
-
-  const clipLocalTime = currentTimeMs - clip.startTime
-
-  // Outside clip bounds — pause video
-  if (clipLocalTime < 0 || clipLocalTime > clip.duration) {
-    if (!video.paused) video.pause()
+  index: AnimationIndex,
+): Promise<void> {
+  if (pendingSeek) {
+    // Another seek is in-flight — record latest and return
+    latestSeekArgs = { canvas, timeMs: currentTimeMs, index }
     return
   }
 
-  const expectedSec = mapClipToSourceTimeSec(clip, clipLocalTime)
+  const doSeek = async (timeMs: number) => {
+    for (const [nodeId, clip] of getVideoClips(index)) {
+      const handle = getVideoDecoder(nodeId)
+      if (!handle) continue
 
-  // Set playback rate
-  if (video.playbackRate !== clip.playbackRate) {
-    video.playbackRate = clip.playbackRate
+      const clipLocalTime = timeMs - clip.startTime
+      const obj = findFabricObject(canvas, nodeId)
+
+      if (clipLocalTime < 0 || clipLocalTime > clip.duration) {
+        if (obj && obj.visible) {
+          obj.visible = false
+          obj.dirty = true
+        }
+        continue
+      }
+
+      if (obj && !obj.visible) {
+        obj.visible = true
+      }
+
+      const sourceTimeSec = mapClipToSourceTimeSec(clip, clipLocalTime)
+      await handle.drawFrame(sourceTimeSec)
+
+      if (obj) {
+        obj.dirty = true
+      }
+    }
+    canvas.requestRenderAll()
   }
 
-  // Drift correction: native play + correct only when drift exceeds threshold
-  const driftMs = Math.abs(video.currentTime - expectedSec) * 1000
-  if (driftMs > DRIFT_THRESHOLD_MS) {
-    video.currentTime = expectedSec
+  pendingSeek = doSeek(currentTimeMs)
+  try {
+    await pendingSeek
+  } finally {
+    pendingSeek = null
   }
 
-  // Ensure playing
-  if (video.paused) {
-    video.play().catch((e: unknown) => {
-      if (e instanceof DOMException && e.name === 'AbortError') return
-      throw e
-    })
+  // Process latest if queued
+  if (latestSeekArgs) {
+    const args = latestSeekArgs
+    latestSeekArgs = null
+    await seekVideoFramesMB(args.canvas, args.timeMs, args.index)
   }
+}
 
-  // Mark Fabric object dirty to re-read video texture
-  const obj = findFabricObject(canvas, nodeId)
-  if (obj) {
-    obj.dirty = true
+// ---------------------------------------------------------------------------
+// Start / stop playback
+// ---------------------------------------------------------------------------
+
+/**
+ * Start playback for all video decoders in the index.
+ * Called once when user clicks Play.
+ */
+export function startVideoPlaybackMB(
+  canvas: Canvas,
+  currentTimeMs: number,
+  index: AnimationIndex,
+): void {
+  for (const [nodeId, clip] of getVideoClips(index)) {
+    const handle = getVideoDecoder(nodeId)
+    if (!handle) continue
+
+    const clipLocalTime = currentTimeMs - clip.startTime
+    if (clipLocalTime < 0 || clipLocalTime > clip.duration) continue
+
+    const sourceTimeSec = mapClipToSourceTimeSec(clip, clipLocalTime)
+    handle.startPlayback(sourceTimeSec)
+
+    // Ensure visible
+    const obj = findFabricObject(canvas, nodeId)
+    if (obj && !obj.visible) {
+      obj.visible = true
+      obj.dirty = true
+    }
   }
 }
 
 /**
- * Sync video playback during animation playback.
- * Uses native video.play() with drift correction (not seek-every-frame).
+ * Stop playback for all video decoders in the index.
+ * Called on pause/stop.
  */
+export function stopVideoPlaybackMB(index: AnimationIndex): void {
+  for (const [nodeId, clips] of index.clipsByNode) {
+    if (clips.some((c) => c.kind === 'video')) {
+      const handle = getVideoDecoder(nodeId)
+      handle?.stopPlayback()
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Legacy exports — kept for backward compat during migration
+// ---------------------------------------------------------------------------
+
+/** @deprecated Use syncVideoFramesMB */
+export function syncVideoFrames(): void {}
+
+/** @deprecated Use syncVideoFramesMB */
 export function syncVideoFramesV2(
   canvas: Canvas,
   currentTimeMs: number,
   index: AnimationIndex,
 ): void {
-  for (const [nodeId, clips] of index.clipsByNode) {
-    const videoClips = clips.filter((c): c is VideoClipData => c.kind === 'video')
-    for (const clip of videoClips) {
-      syncSingleVideoClip(canvas, nodeId, clip, currentTimeMs)
-    }
-  }
+  syncVideoFramesMB(canvas, currentTimeMs, index)
 }
 
-/**
- * Seek video to specific time (for scrubbing, not playback).
- * Pauses video and seeks directly.
- */
+/** @deprecated Use seekVideoFramesMB */
 export function seekVideoClipsV2(
   canvas: Canvas,
   currentTimeMs: number,
   index: AnimationIndex,
 ): void {
-  for (const [nodeId, clips] of index.clipsByNode) {
-    const videoClips = clips.filter((c): c is VideoClipData => c.kind === 'video')
-    for (const clip of videoClips) {
-      const video = getVideoElement(nodeId)
-      if (!video) continue
-
-      if (!video.paused) video.pause()
-
-      const clipLocalTime = currentTimeMs - clip.startTime
-      if (clipLocalTime < 0 || clipLocalTime > clip.duration) continue
-
-      video.currentTime = mapClipToSourceTimeSec(clip, clipLocalTime)
-
-      const obj = findFabricObject(canvas, nodeId)
-      if (obj) obj.dirty = true
-    }
-  }
+  seekVideoFramesMB(canvas, currentTimeMs, index)
 }
 
-/**
- * Pause all videos that are in the animation index.
- */
+/** @deprecated Use stopVideoPlaybackMB */
+export function pauseAllVideos(): void {}
+
+/** @deprecated Use stopVideoPlaybackMB */
 export function pauseAllVideosV2(index: AnimationIndex): void {
-  for (const [nodeId, clips] of index.clipsByNode) {
-    if (clips.some((c) => c.kind === 'video')) {
-      const video = getVideoElement(nodeId)
-      if (video && !video.paused) video.pause()
-    }
-  }
+  stopVideoPlaybackMB(index)
 }

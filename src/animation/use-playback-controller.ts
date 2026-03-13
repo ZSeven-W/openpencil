@@ -22,7 +22,12 @@ import {
   recalcCoordsForAnimatedObjects,
   findFabricObject,
 } from '@/animation/canvas-bridge'
-import { syncVideoFramesV2, pauseAllVideosV2 } from '@/animation/video-sync'
+import {
+  syncVideoFramesMB,
+  startVideoPlaybackMB,
+  stopVideoPlaybackMB,
+  seekVideoFramesMB,
+} from '@/animation/video-sync'
 import { setPlaybackControllerRef as setPauseMiddlewareRef } from '@/stores/animation-pause-middleware'
 import { useCanvasStore } from '@/stores/canvas-store'
 import { useDocumentStore } from '@/stores/document-store'
@@ -93,8 +98,8 @@ function ensureController(): PlaybackController {
         }
       }
 
-      // Sync video clips
-      syncVideoFramesV2(activeCanvas, timeMs, activeIndex)
+      // Sync video clips (synchronous — advanceFrame is sync)
+      syncVideoFramesMB(activeCanvas, timeMs, activeIndex)
 
       // Single render call per frame — renderAll (not requestRenderAll) to avoid 1-frame lag
       activeCanvas.renderAll()
@@ -108,7 +113,7 @@ function ensureController(): PlaybackController {
       // Restore original node states
       restoreNodeStates(activeCanvas, activeSavedStates)
       recalcCoordsForAnimatedObjects()
-      pauseAllVideosV2(activeIndex)
+      stopVideoPlaybackMB(activeIndex)
       clearFabricObjectMap()
       activeSavedStates.clear()
 
@@ -129,6 +134,14 @@ function ensureController(): PlaybackController {
       notifyGlobalListeners()
     }
   })
+
+  // Tab backgrounding — pause playback when hidden to prevent audio/video desync
+  const handleVisibilityChange = () => {
+    if (document.hidden && ctrl.isPlaying()) {
+      pauseV2()
+    }
+  }
+  document.addEventListener('visibilitychange', handleVisibilityChange)
 
   setPauseMiddlewareRef(ctrl)
   controllerRef = ctrl
@@ -160,6 +173,10 @@ export function playV2(): void {
     if (obj) activeSavedStates.set(nodeId, captureNodeState(obj as FabricObject))
   }
 
+  // Start video decoders before controller play
+  const startTimeMs = ctrl.currentTime
+  startVideoPlaybackMB(canvas, startTimeMs, activeIndex)
+
   useTimelineStore.getState().setPlaybackMode('playing')
   ctrl.play()
   startTimePolling()
@@ -183,6 +200,11 @@ export function seekToV2(timeMs: number): void {
   if (!controllerRef) return
   controllerRef.seekTo(timeMs)
   useTimelineStore.getState().setCurrentTime(timeMs)
+
+  // Seek video frames (async, debounced)
+  if (activeCanvas && activeIndex.clipsByNode.size > 0) {
+    seekVideoFramesMB(activeCanvas, timeMs, activeIndex)
+  }
 }
 
 export function isPlayingV2(): boolean {
