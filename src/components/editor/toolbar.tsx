@@ -26,6 +26,9 @@ import {
 } from '@/components/ui/tooltip'
 import IconPickerDialog from '@/components/shared/icon-picker-dialog'
 import { useTimelineStore } from '@/stores/timeline-store'
+import { createVideoDecoder } from '@/animation/video-decoder'
+import { registerVideoDecoder } from '@/animation/video-registry'
+import { storeVideoFile } from '@/animation/video-file-store'
 
 export default function Toolbar() {
   const { t } = useTranslation()
@@ -171,71 +174,91 @@ export default function Toolbar() {
     videoInputRef.current?.click()
   }, [])
 
-  const handleVideoSelected = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleVideoSelected = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
     e.target.value = ''
 
-    const blobUrl = URL.createObjectURL(file)
+    // WebCodecs check
+    if (typeof VideoDecoder === 'undefined') {
+      console.warn('[video-import] WebCodecs not available — video requires a modern browser')
+      return
+    }
 
-    // Load video metadata to get dimensions and duration
-    const videoEl = document.createElement('video')
-    videoEl.preload = 'metadata'
-    videoEl.src = blobUrl
+    // Compute display dimensions before creating decoder
+    const { viewport, fabricCanvas } = useCanvasStore.getState()
+    const canvasEl = fabricCanvas?.getElement()
+    const canvasW = canvasEl?.clientWidth ?? 800
+    const canvasH = canvasEl?.clientHeight ?? 600
+    const centerX = (-viewport.panX + canvasW / 2) / viewport.zoom
+    const centerY = (-viewport.panY + canvasH / 2) / viewport.zoom
 
-    videoEl.addEventListener('loadedmetadata', () => {
-      const { viewport, fabricCanvas } = useCanvasStore.getState()
-      const canvasEl = fabricCanvas?.getElement()
-      const canvasW = canvasEl?.clientWidth ?? 800
-      const canvasH = canvasEl?.clientHeight ?? 600
-      const centerX = (-viewport.panX + canvasW / 2) / viewport.zoom
-      const centerY = (-viewport.panY + canvasH / 2) / viewport.zoom
+    // Create decoder BEFORE addNode — fail fast, never create broken nodes
+    const maxDim = 400
+    const handle = await createVideoDecoder(file, maxDim, maxDim)
+    if (!handle) {
+      console.warn('[video-import] Decoder creation failed — codec may be unsupported')
+      return
+    }
 
-      let w = videoEl.videoWidth || 320
-      let h = videoEl.videoHeight || 180
-      const maxDim = 400
-      if (w > maxDim || h > maxDim) {
-        const scale = maxDim / Math.max(w, h)
-        w = Math.round(w * scale)
-        h = Math.round(h * scale)
-      }
+    // Scale to fit maxDim while preserving aspect ratio
+    let w = handle.width
+    let h = handle.height
+    if (w > maxDim || h > maxDim) {
+      const scale = maxDim / Math.max(w, h)
+      w = Math.round(w * scale)
+      h = Math.round(h * scale)
+    }
 
-      const nodeId = generateId()
-      const videoDurationMs = Math.round(videoEl.duration * 1000)
+    // Resize decoder canvas to actual display dimensions
+    handle.resizeCanvas(w, h)
+    // Re-draw first frame at new size
+    await handle.drawFrame(0)
 
-      useDocumentStore.getState().addNode(null, {
-        id: nodeId,
-        type: 'video',
-        name: file.name.replace(/\.[^.]+$/, ''),
-        src: blobUrl,
-        mimeType: file.type,
-        videoDuration: videoDurationMs,
-        x: centerX - w / 2,
-        y: centerY - h / 2,
-        width: w,
-        height: h,
-        clips: [{
-          id: generateId(),
-          kind: 'video' as const,
-          startTime: 0,
-          duration: videoDurationMs,
-          sourceStart: 0,
-          sourceEnd: videoDurationMs,
-          playbackRate: 1,
-        }],
-      })
+    const nodeId = generateId()
+    const videoDurationMs = Math.round(handle.duration * 1000)
 
-      // Auto-open timeline
-      const ts = useTimelineStore.getState()
-      if (ts.editorMode !== 'animate') {
-        ts.setEditorMode('animate')
-        useCanvasStore.getState().setRightPanelTab('animate')
-      }
-      // Extend composition duration to fit video if needed
-      if (videoDurationMs > ts.duration) {
-        ts.setDuration(videoDurationMs)
-      }
+    // Store File reference and register decoder
+    storeVideoFile(nodeId, file)
+    registerVideoDecoder(nodeId, handle)
+
+    // AudioDecoder check (informational — video still works without it)
+    if (typeof AudioDecoder === 'undefined') {
+      console.warn('[video-import] AudioDecoder not available — video will play without audio')
+    }
+
+    useDocumentStore.getState().addNode(null, {
+      id: nodeId,
+      type: 'video',
+      name: file.name.replace(/\.[^.]+$/, ''),
+      src: file.name, // Store filename for re-import hint (not blob URL)
+      mimeType: file.type,
+      videoDuration: videoDurationMs,
+      x: centerX - w / 2,
+      y: centerY - h / 2,
+      width: w,
+      height: h,
+      clips: [{
+        id: generateId(),
+        kind: 'video' as const,
+        startTime: 0,
+        duration: videoDurationMs,
+        sourceStart: 0,
+        sourceEnd: videoDurationMs,
+        playbackRate: 1,
+      }],
     })
+
+    // Auto-open timeline
+    const ts = useTimelineStore.getState()
+    if (ts.editorMode !== 'animate') {
+      ts.setEditorMode('animate')
+      useCanvasStore.getState().setRightPanelTab('animate')
+    }
+    // Extend composition duration to fit video if needed
+    if (videoDurationMs > ts.duration) {
+      ts.setDuration(videoDurationMs)
+    }
   }, [])
 
   return (

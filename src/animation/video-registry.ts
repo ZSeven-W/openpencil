@@ -1,52 +1,79 @@
 /**
- * Registry of HTMLVideoElement instances keyed by PenNode ID.
+ * Registry of VideoDecoderHandle instances keyed by PenNode ID.
  *
- * Video elements are created when a video node is added to the canvas
- * and cleaned up when the node is removed. The playback loop reads
- * from this registry to sync each video's currentTime with the
- * composition timeline.
+ * Decoders are created during video import and registered here.
+ * The playback loop reads from AnimationIndex (not this registry)
+ * to drive sync — this registry is for lifecycle management.
  */
 
-const videoElements = new Map<string, HTMLVideoElement>()
+import type { VideoDecoderHandle } from '@/animation/video-decoder'
+import { removeVideoFile } from '@/animation/video-file-store'
 
-export function registerVideoElement(nodeId: string, el: HTMLVideoElement): void {
-  videoElements.set(nodeId, el)
-}
+const MAX_CONCURRENT_DECODERS = 8
 
-export function unregisterVideoElement(nodeId: string): void {
-  const el = videoElements.get(nodeId)
-  if (el) {
-    el.pause()
-    el.removeAttribute('src')
-    el.load() // release memory
+const decoders = new Map<string, VideoDecoderHandle>()
+
+/**
+ * Register a decoder. Returns false if limit reached (handle is disposed).
+ */
+export function registerVideoDecoder(nodeId: string, handle: VideoDecoderHandle): boolean {
+  if (decoders.size >= MAX_CONCURRENT_DECODERS) {
+    console.warn(`[video-registry] Max decoders (${MAX_CONCURRENT_DECODERS}) reached, disposing new handle`)
+    handle.dispose()
+    return false
   }
-  videoElements.delete(nodeId)
-}
-
-export function getVideoElement(nodeId: string): HTMLVideoElement | undefined {
-  return videoElements.get(nodeId)
-}
-
-export function getAllVideoElements(): Map<string, HTMLVideoElement> {
-  return videoElements
+  decoders.set(nodeId, handle)
+  return true
 }
 
 /**
- * Seek a video to a specific composition time.
- * Accounts for the node's startTime offset.
+ * Unregister and dispose a decoder + its File reference.
  */
-export function seekVideoToTime(
-  nodeId: string,
-  compositionTimeMs: number,
-  startTimeMs: number = 0,
-): void {
-  const el = videoElements.get(nodeId)
-  if (!el) return
-  const videoTime = Math.max(0, (compositionTimeMs - startTimeMs) / 1000)
-  // Clamp to video duration
-  if (el.duration && Number.isFinite(el.duration)) {
-    el.currentTime = Math.min(videoTime, el.duration)
-  } else {
-    el.currentTime = videoTime
+export function unregisterVideoDecoder(nodeId: string): void {
+  const handle = decoders.get(nodeId)
+  if (handle) {
+    handle.dispose()
   }
+  decoders.delete(nodeId)
+  removeVideoFile(nodeId)
+}
+
+export function getVideoDecoder(nodeId: string): VideoDecoderHandle | undefined {
+  return decoders.get(nodeId)
+}
+
+// ---------------------------------------------------------------------------
+// Backward-compat exports — removed in this migration
+// ---------------------------------------------------------------------------
+// These are kept temporarily so existing imports don't break during
+// the multi-file migration. Consumers will be updated to use the new API.
+
+/** @deprecated Use registerVideoDecoder */
+export function registerVideoElement(_nodeId: string, _el: HTMLVideoElement): void {
+  console.warn('[video-registry] registerVideoElement is deprecated — use registerVideoDecoder')
+}
+
+/** @deprecated Use unregisterVideoDecoder */
+export function unregisterVideoElement(nodeId: string): void {
+  unregisterVideoDecoder(nodeId)
+}
+
+/** @deprecated Use getVideoDecoder */
+export function getVideoElement(_nodeId: string): HTMLVideoElement | undefined {
+  // Return undefined — callers need to be migrated
+  return undefined
+}
+
+/** @deprecated Removed — sync functions iterate via AnimationIndex */
+export function getAllVideoElements(): Map<string, HTMLVideoElement> {
+  return new Map()
+}
+
+/** @deprecated Use handle.drawFrame(t) */
+export function seekVideoToTime(
+  _nodeId: string,
+  _compositionTimeMs: number,
+  _startTimeMs?: number,
+): void {
+  console.warn('[video-registry] seekVideoToTime is deprecated')
 }
