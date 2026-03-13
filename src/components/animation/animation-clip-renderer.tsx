@@ -55,6 +55,12 @@ export default function AnimationClipRenderer({
 
       if (!clip || !nodeId || !containerRef.current) return
 
+      // Capture pointer so all subsequent pointer events route to this element,
+      // preventing the timeline library's @use-gesture from interpreting the
+      // drag as a clip move.
+      const target = e.currentTarget as HTMLElement
+      target.setPointerCapture(e.nativeEvent.pointerId)
+
       const containerWidth = containerRef.current.getBoundingClientRect().width
       if (containerWidth <= 0) return
 
@@ -70,6 +76,7 @@ export default function AnimationClipRenderer({
       const maxDuration = clip.duration - otherDuration - MIN_SEGMENT_MS
 
       const onMove = (moveEvent: PointerEvent) => {
+        moveEvent.stopPropagation()
         const dx = moveEvent.clientX - startX
         // For 'in' segment: dragging right increases duration
         // For 'out' segment: dragging left increases duration
@@ -112,13 +119,16 @@ export default function AnimationClipRenderer({
         updateNode(nodeId, { clips: updatedClips } as Partial<PenNode>)
       }
 
-      const onUp = () => {
-        document.removeEventListener('pointermove', onMove)
-        document.removeEventListener('pointerup', onUp)
+      const onUp = (upEvent: PointerEvent) => {
+        upEvent.stopPropagation()
+        target.releasePointerCapture(upEvent.pointerId)
+        target.removeEventListener('pointermove', onMove)
+        target.removeEventListener('pointerup', onUp)
       }
 
-      document.addEventListener('pointermove', onMove)
-      document.addEventListener('pointerup', onUp)
+      // With pointer capture, events route to the target element, not document
+      target.addEventListener('pointermove', onMove)
+      target.addEventListener('pointerup', onUp)
     },
     [clip, clipId, nodeId, updateNode],
   )
