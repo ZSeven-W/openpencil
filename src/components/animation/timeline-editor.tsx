@@ -251,7 +251,6 @@ export default function TimelineEditor() {
         return (
           <AnimationClipRenderer
             clipId={meta.clipId}
-            effectId={meta.effectId}
           />
         )
       }
