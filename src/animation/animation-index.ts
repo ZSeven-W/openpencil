@@ -1,8 +1,8 @@
 import type { PenNode } from '@/types/pen'
-import type { AnimationClip } from '@/types/animation'
+import type { Clip } from '@/types/animation'
 
 export interface AnimationIndex {
-  clipsByNode: Map<string, AnimationClip[]>
+  clipsByNode: Map<string, Clip[]>
   animatedNodes: Set<string>
   version: number
 }
@@ -11,7 +11,7 @@ let indexVersion = 0
 
 function collectClips(
   nodes: PenNode[],
-  clipsByNode: Map<string, AnimationClip[]>,
+  clipsByNode: Map<string, Clip[]>,
   animatedNodes: Set<string>,
 ): void {
   for (const node of nodes) {
@@ -26,7 +26,7 @@ function collectClips(
 }
 
 export function buildAnimationIndex(nodes: PenNode[]): AnimationIndex {
-  const clipsByNode = new Map<string, AnimationClip[]>()
+  const clipsByNode = new Map<string, Clip[]>()
   const animatedNodes = new Set<string>()
   collectClips(nodes, clipsByNode, animatedNodes)
   return { clipsByNode, animatedNodes, version: ++indexVersion }
@@ -35,6 +35,6 @@ export function buildAnimationIndex(nodes: PenNode[]): AnimationIndex {
 export function getClipsForNode(
   index: AnimationIndex,
   nodeId: string,
-): AnimationClip[] {
+): Clip[] {
   return index.clipsByNode.get(nodeId) ?? []
 }
