@@ -23,18 +23,28 @@ export function secToMs(s: number): number {
 // Action metadata (kept separate from library's TimelineAction)
 // ---------------------------------------------------------------------------
 
+export interface ClipMetadata {
+  type: 'clip'
+  nodeId: string
+  clipId: string
+  clipKind: 'animation' | 'video'
+}
+
+/** @deprecated Use ClipMetadata instead */
 export interface VideoClipMetadata {
   type: 'video-clip'
   nodeId: string
 }
 
+/** @deprecated Use ClipMetadata instead */
 export interface AnimationClipMetadata {
   type: 'animation-clip'
   nodeId: string
   clipId: string
+  effectId?: string
 }
 
-export type ActionMetadata = VideoClipMetadata | AnimationClipMetadata
+export type ActionMetadata = ClipMetadata | VideoClipMetadata | AnimationClipMetadata
 
 export type ActionMetadataMap = Map<string, ActionMetadata>
 

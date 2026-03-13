@@ -19,6 +19,7 @@ import {
   validateActionResize,
 } from '@/animation/timeline-adapter'
 import {
+  msToSec,
   secToMs,
   EFFECT_VIDEO_CLIP,
   EFFECT_ANIMATION_CLIP,
@@ -27,11 +28,12 @@ import {
 import type { PenNode } from '@/types/pen'
 import { useCanvasStore } from '@/stores/canvas-store'
 import { getActivePageChildren } from '@/stores/document-store'
-import { seekToV2 } from '@/animation/use-playback-controller'
+import { seekToV2, usePlaybackTime } from '@/animation/use-playback-controller'
 import { seekVideoClipsV2 } from '@/animation/video-sync'
 import { buildAnimationIndex } from '@/animation/animation-index'
 import { withTimelineUndoBatch } from '@/animation/timeline-undo'
 import VideoClipRenderer from './video-clip-renderer'
+import AnimationClipRenderer from './animation-clip-renderer'
 import TrackHeaders from './track-headers'
 import type { OnScrollParams } from '@cyca/react-timeline-editor'
 
@@ -117,6 +119,15 @@ export default function TimelineEditor() {
     }
   }, [])
 
+  // --- Playhead sync ---
+  const playbackTime = usePlaybackTime()
+
+  useEffect(() => {
+    if (timelineRef.current) {
+      timelineRef.current.time = msToSec(playbackTime)
+    }
+  }, [playbackTime])
+
   // --- Drag callbacks ---
 
   const onDragStart = useCallback(() => {
@@ -189,7 +200,16 @@ export default function TimelineEditor() {
 
   const onClickRow = useCallback(
     (_e: React.MouseEvent, { row }: { row: TimelineRow; time: number }) => {
-      useCanvasStore.getState().setSelection([row.id], row.id)
+      const nodeId = row.id.replace(/^v2::/, '')
+      useCanvasStore.getState().setSelection([nodeId], nodeId)
+    },
+    [],
+  )
+
+  const onClickAction = useCallback(
+    (_e: React.MouseEvent, { row }: { row: TimelineRow; action: TimelineAction }) => {
+      const nodeId = row.id.replace(/^v2::/, '')
+      useCanvasStore.getState().setSelection([nodeId], nodeId)
     },
     [],
   )
@@ -201,6 +221,23 @@ export default function TimelineEditor() {
       const meta = metadataRef.current.get(action.id)
       if (!meta) return null
 
+      if (meta.type === 'clip') {
+        if (meta.clipKind === 'video') {
+          return (
+            <VideoClipRenderer
+              name={meta.nodeId}
+              duration_s={action.end - action.start}
+            />
+          )
+        }
+        return (
+          <AnimationClipRenderer
+            clipId={meta.clipId}
+          />
+        )
+      }
+
+      // Legacy metadata support
       if (meta.type === 'video-clip') {
         return (
           <VideoClipRenderer
@@ -212,14 +249,10 @@ export default function TimelineEditor() {
 
       if (meta.type === 'animation-clip') {
         return (
-          <div
-            className="h-full rounded-sm bg-emerald-500/30 border border-emerald-500/50 flex items-center px-1.5 overflow-hidden"
-            title={`Clip ${meta.clipId}`}
-          >
-            <span className="text-[9px] text-emerald-200 truncate">
-              {meta.clipId.slice(0, 6)}
-            </span>
-          </div>
+          <AnimationClipRenderer
+            clipId={meta.clipId}
+            effectId={meta.effectId}
+          />
         )
       }
 
@@ -234,6 +267,18 @@ export default function TimelineEditor() {
     setScrollTop(params.scrollTop)
   }, [])
 
+  // --- Selection sync (canvas ↔ timeline) ---
+  const selectedIds = useCanvasStore((s) => s.selection.selectedIds)
+
+  // Mark rows as selected based on canvas selection
+  const selectedDisplayRows = useMemo(() => {
+    const selectedSet = new Set(selectedIds)
+    return displayRows.map((row) => {
+      const nodeId = row.id.replace(/^v2::/, '')
+      return selectedSet.has(nodeId) ? { ...row, selected: true } : row
+    })
+  }, [displayRows, selectedIds])
+
   // Row IDs for track headers
   const rowIds = useMemo(() => displayRows.map((r) => r.id), [displayRows])
 
@@ -243,7 +288,7 @@ export default function TimelineEditor() {
       <div style={{ flex: 1, minWidth: 0 }}>
         <Timeline
           ref={timelineRef}
-          editorData={displayRows}
+          editorData={selectedDisplayRows}
           effects={effects}
           autoReRender={false}
           scale={1}
@@ -264,6 +309,7 @@ export default function TimelineEditor() {
           onCursorDrag={onCursorDrag}
           onClickTimeArea={onClickTimeArea}
           onClickRow={onClickRow}
+          onClickAction={onClickAction}
         />
       </div>
     </div>

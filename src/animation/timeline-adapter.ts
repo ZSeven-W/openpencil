@@ -44,7 +44,9 @@ export function applyActionMove(
   const meta = metadata.get(actionId)
   if (!meta) return
 
-  if (meta.type === 'animation-clip') {
+  if (meta.type === 'clip') {
+    applyClipMove(meta.nodeId, meta.clipId, newStart_s, stores)
+  } else if (meta.type === 'animation-clip') {
     applyClipMove(meta.nodeId, meta.clipId, newStart_s, stores)
   }
 }
@@ -64,7 +66,9 @@ export function applyActionResize(
   const meta = metadata.get(actionId)
   if (!meta) return
 
-  if (meta.type === 'animation-clip') {
+  if (meta.type === 'clip') {
+    applyClipResize(meta.nodeId, meta.clipId, newStart_s, newEnd_s, stores)
+  } else if (meta.type === 'animation-clip') {
     applyClipResize(meta.nodeId, meta.clipId, newStart_s, newEnd_s, stores)
   }
 }
@@ -177,10 +181,10 @@ export function buildTimelineRowsFromNodes(nodes: PenNode[]): TimelineProjection
         for (const clip of node.clips) {
           actions.push(clipToTimelineAction(clip))
           metadata.set(clip.id, {
-            type: 'animation-clip',
+            type: 'clip',
             nodeId: node.id,
             clipId: clip.id,
-            effectId: clip.kind === 'animation' ? clip.effectId : undefined,
+            clipKind: clip.kind,
           })
         }
 
