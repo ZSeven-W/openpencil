@@ -2,21 +2,33 @@
  * Custom action renderer for animation clip actions.
  * Shows In / Hold / Out segments within a single clip bar.
  * Segment widths are proportional to their duration relative to total clip duration.
+ * In/Out divider edges are draggable to adjust segment durations.
  * Colors sourced from --clip-animation design tokens.
  */
 
+import { useRef, useCallback } from 'react'
 import { useDocumentStore } from '@/stores/document-store'
+import { useCanvasStore } from '@/stores/canvas-store'
 import { isAnimationClip } from '@/types/animation'
+import type { AnimationClipData, TimedEffectConfig } from '@/types/animation'
+import type { PenNode } from '@/types/pen'
 import { getEffect } from '@/animation/effect-registry'
+import { generateClipFromEffect } from '@/animation/effect-registry'
+import { captureNodeState, findFabricObject } from '@/animation/canvas-bridge'
 import '@/animation/effects'
 
 interface AnimationClipRendererProps {
   clipId: string
 }
 
+/** Minimum segment duration in ms */
+const MIN_SEGMENT_MS = 50
+
 export default function AnimationClipRenderer({
   clipId,
 }: AnimationClipRendererProps) {
+  const containerRef = useRef<HTMLDivElement>(null)
+
   // Read clip data from document store for in/out segment sizing
   const clip = useDocumentStore((s) => {
     for (const node of s.getFlatNodes()) {
@@ -25,6 +37,91 @@ export default function AnimationClipRenderer({
     }
     return undefined
   })
+
+  // Find the node that owns this clip (for updating)
+  const nodeId = useDocumentStore((s) => {
+    for (const node of s.getFlatNodes()) {
+      if (node.clips?.some((c) => c.id === clipId)) return node.id
+    }
+    return undefined
+  })
+
+  const updateNode = useDocumentStore((s) => s.updateNode)
+
+  const handleDividerDrag = useCallback(
+    (segment: 'in' | 'out', e: React.PointerEvent) => {
+      e.stopPropagation()
+      e.preventDefault()
+
+      if (!clip || !nodeId || !containerRef.current) return
+
+      const containerWidth = containerRef.current.getBoundingClientRect().width
+      if (containerWidth <= 0) return
+
+      const msPerPx = clip.duration / containerWidth
+      const startX = e.clientX
+      const startDuration = segment === 'in'
+        ? (clip.inEffect?.duration ?? 0)
+        : (clip.outEffect?.duration ?? 0)
+
+      const otherDuration = segment === 'in'
+        ? (clip.outEffect?.duration ?? 0)
+        : (clip.inEffect?.duration ?? 0)
+      const maxDuration = clip.duration - otherDuration - MIN_SEGMENT_MS
+
+      const onMove = (moveEvent: PointerEvent) => {
+        const dx = moveEvent.clientX - startX
+        // For 'in' segment: dragging right increases duration
+        // For 'out' segment: dragging left increases duration
+        const direction = segment === 'in' ? 1 : -1
+        const deltaMs = dx * msPerPx * direction
+        const newDuration = Math.round(
+          Math.max(MIN_SEGMENT_MS, Math.min(startDuration + deltaMs, maxDuration)),
+        )
+
+        // Update the clip in the store
+        const effectConfig = segment === 'in' ? clip.inEffect : clip.outEffect
+        if (!effectConfig) return
+
+        const updatedEffect: TimedEffectConfig = { ...effectConfig, duration: newDuration }
+
+        // Get canvas state for keyframe regeneration
+        const canvas = useCanvasStore.getState().fabricCanvas
+        const obj = canvas ? findFabricObject(canvas, nodeId) : null
+        const currentState = obj ? captureNodeState(obj) : {}
+
+        const inConfig = segment === 'in' ? updatedEffect : clip.inEffect
+        const outConfig = segment === 'out' ? updatedEffect : clip.outEffect
+
+        const inKf = inConfig
+          ? generateClipFromEffect(inConfig.effectId, inConfig.duration, inConfig.params, currentState)
+          : null
+        const outKf = outConfig
+          ? generateClipFromEffect(outConfig.effectId, outConfig.duration, outConfig.params, currentState)
+          : null
+
+        const updated: AnimationClipData = {
+          ...clip,
+          [segment === 'in' ? 'inEffect' : 'outEffect']: updatedEffect,
+          keyframes: [...(inKf?.keyframes ?? []), ...(outKf?.keyframes ?? [])],
+        }
+
+        const node = useDocumentStore.getState().getNodeById(nodeId)
+        if (!node?.clips) return
+        const updatedClips = node.clips.map((c) => c.id === clipId ? updated : c)
+        updateNode(nodeId, { clips: updatedClips } as Partial<PenNode>)
+      }
+
+      const onUp = () => {
+        document.removeEventListener('pointermove', onMove)
+        document.removeEventListener('pointerup', onUp)
+      }
+
+      document.addEventListener('pointermove', onMove)
+      document.addEventListener('pointerup', onUp)
+    },
+    [clip, clipId, nodeId, updateNode],
+  )
 
   if (!clip) {
     return (
@@ -49,18 +146,28 @@ export default function AnimationClipRenderer({
   const hasSegments = inDur > 0 || outDur > 0
 
   return (
-    <div className="h-full w-full flex items-stretch overflow-hidden rounded-[14px] bg-clip-animation-bg border border-clip-animation-border hover:border-clip-animation hover:border-[1.5px] transition-colors">
+    <div
+      ref={containerRef}
+      className="h-full w-full flex items-stretch overflow-hidden rounded-[14px] bg-clip-animation-bg border border-clip-animation-border hover:border-clip-animation hover:border-[1.5px] transition-colors"
+    >
       {hasSegments ? (
         <>
           {/* In segment */}
           {inPct > 0 && (
             <div
-              className="flex items-center justify-center bg-clip-animation/20 border-r border-clip-animation-border/50"
+              className="relative flex items-center justify-center bg-clip-animation/20"
               style={{ width: `${inPct}%` }}
             >
               <span className="text-[8px] text-clip-animation truncate px-0.5">
                 {inLabel ?? 'In'}
               </span>
+              {/* Draggable right edge */}
+              <div
+                className="absolute right-0 top-0 w-[6px] h-full cursor-ew-resize z-10 group/edge"
+                onPointerDown={(e) => handleDividerDrag('in', e)}
+              >
+                <div className="absolute right-[2px] top-0 w-[2px] h-full bg-clip-animation-border/50 group-hover/edge:bg-clip-animation transition-colors" />
+              </div>
             </div>
           )}
 
@@ -79,9 +186,16 @@ export default function AnimationClipRenderer({
           {/* Out segment */}
           {outPct > 0 && (
             <div
-              className="flex items-center justify-center bg-clip-animation/20 border-l border-clip-animation-border/50"
+              className="relative flex items-center justify-center bg-clip-animation/20"
               style={{ width: `${outPct}%` }}
             >
+              {/* Draggable left edge */}
+              <div
+                className="absolute left-0 top-0 w-[6px] h-full cursor-ew-resize z-10 group/edge"
+                onPointerDown={(e) => handleDividerDrag('out', e)}
+              >
+                <div className="absolute left-[2px] top-0 w-[2px] h-full bg-clip-animation-border/50 group-hover/edge:bg-clip-animation transition-colors" />
+              </div>
               <span className="text-[8px] text-clip-animation truncate px-0.5">
                 {outLabel ?? 'Out'}
               </span>
