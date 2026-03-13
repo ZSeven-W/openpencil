@@ -14,7 +14,7 @@ import { syncFabricObject } from './canvas-object-sync'
 import { isFabricSyncLocked, setFabricSyncLock } from './canvas-sync-lock'
 import { isPlaybackActive } from '@/animation/canvas-bridge'
 import { pendingAnimationNodes, getNextStaggerDelay } from '@/services/ai/design-animation'
-import { unregisterVideoElement } from '@/animation/video-registry'
+import { unregisterVideoDecoder } from '@/animation/video-registry'
 import { removePreviewNode, removeAgentIndicator } from './agent-indicator'
 import { resolveNodeForCanvas, getDefaultTheme } from '@/variables/resolve-variables'
 import { COMPONENT_COLOR, INSTANCE_COLOR, SELECTION_BLUE } from './canvas-constants'
@@ -562,7 +562,7 @@ export function useCanvasSync() {
         if (obj.penNodeId && !nodeMap.has(obj.penNodeId)) {
           // Clean up video element if this was a video node
           if ((obj as any).__isVideo) {
-            unregisterVideoElement(obj.penNodeId)
+            unregisterVideoDecoder(obj.penNodeId)
           }
           canvas.remove(obj)
         }

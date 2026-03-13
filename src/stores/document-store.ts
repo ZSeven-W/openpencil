@@ -7,6 +7,7 @@ import { useCanvasStore } from '@/stores/canvas-store'
 import { animationPauseMiddleware } from '@/stores/animation-pause-middleware'
 import { getDefaultTheme } from '@/variables/resolve-variables'
 import { replaceVariableRefsInTree } from '@/variables/replace-refs'
+import { copyVideoFile } from '@/animation/video-file-store'
 import {
   createEmptyDocument,
   findNodeInTree,
@@ -295,6 +296,11 @@ export const useDocumentStore = create<DocumentStoreState>()(
 
       const clone = cloneWithNewIds(node)
       clone.name = (clone.name ?? clone.type) + ' copy'
+
+      // Copy video File reference for duplicated video nodes
+      if (node.type === 'video') {
+        copyVideoFile(node.id, clone.id)
+      }
 
       const parent = findParentInTree(children, id)
       const parentId = parent ? parent.id : null
