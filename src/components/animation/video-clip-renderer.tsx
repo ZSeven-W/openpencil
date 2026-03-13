@@ -1,13 +1,17 @@
 /**
  * Custom action renderer for video clip actions.
- * Shows a muted violet bar with film icon, clip name, and duration timecode.
+ * Shows a violet rounded bar with a film-strip thumbnail row underneath
+ * and segment overlays (VideoIn | hold | VideoOut).
+ * Colors sourced from --clip-video design tokens.
  */
 
 import { Film } from 'lucide-react'
+import { useDocumentStore } from '@/stores/document-store'
 
 interface VideoClipRendererProps {
   name: string
   duration_s: number
+  thumbnailUrl?: string
 }
 
 function formatTimecode(seconds: number): string {
@@ -17,49 +21,69 @@ function formatTimecode(seconds: number): string {
 }
 
 export default function VideoClipRenderer({
-  name,
+  name: nodeId,
   duration_s,
+  thumbnailUrl,
 }: VideoClipRendererProps) {
+  // Resolve display name from document store (name prop is actually nodeId)
+  const displayName = useDocumentStore((s) => {
+    const node = s.getNodeById(nodeId)
+    return node?.name ?? nodeId.slice(0, 8)
+  })
+  const showSegments = duration_s > 0.5
+
   return (
-    <div
-      style={{
-        width: '100%',
-        height: '100%',
-        backgroundColor: 'oklch(0.45 0.12 300 / 0.25)',
-        border: '1px solid oklch(0.55 0.15 300 / 0.40)',
-        borderRadius: 3,
-        display: 'flex',
-        alignItems: 'center',
-        gap: 4,
-        paddingInline: 6,
-        overflow: 'hidden',
-      }}
-    >
-      <Film size={10} style={{ flexShrink: 0, color: 'oklch(0.70 0.12 300)' }} />
-      <span
-        style={{
-          fontSize: 10,
-          color: 'oklch(0.75 0.08 300)',
-          overflow: 'hidden',
-          textOverflow: 'ellipsis',
-          whiteSpace: 'nowrap',
-          flex: 1,
-          minWidth: 0,
-        }}
-      >
-        {name}
-      </span>
-      <span
-        style={{
-          fontSize: 8,
-          fontFamily: 'ui-monospace, SFMono-Regular, SF Mono, Menlo, Consolas, monospace',
-          fontVariantNumeric: 'tabular-nums',
-          color: 'oklch(0.60 0.08 300)',
-          flexShrink: 0,
-        }}
-      >
-        {formatTimecode(duration_s)}
-      </span>
+    <div className="group/vclip h-full w-full relative overflow-hidden rounded-xl bg-clip-video-bg border border-clip-video-border hover:border-clip-video hover:border-[1.5px] transition-colors">
+      {/* Film strip background layer */}
+      {thumbnailUrl && (
+        <div className="absolute inset-0 flex gap-0.5 p-0.5 opacity-30">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <div
+              key={i}
+              className="flex-1 rounded-[10px] bg-cover bg-center"
+              style={{ backgroundImage: `url(${thumbnailUrl})` }}
+            />
+          ))}
+        </div>
+      )}
+
+      {/* Segment overlay layer */}
+      <div className="absolute inset-0 flex items-stretch">
+        {showSegments ? (
+          <>
+            {/* VideoIn segment */}
+            <div className="w-[60px] shrink-0 flex items-center justify-center border-r border-clip-video-border/50 bg-clip-video-bg/40 rounded-l-xl">
+              <Film size={10} className="text-clip-video/60" />
+            </div>
+
+            {/* Hold segment */}
+            <div className="flex-1 min-w-0 flex items-center justify-center gap-1">
+              <Film size={10} className="shrink-0 text-clip-video" />
+              <span className="text-[10px] text-clip-video truncate">
+                {displayName}
+              </span>
+              <span className="text-[8px] font-mono tabular-nums text-clip-video/60 shrink-0">
+                {formatTimecode(duration_s)}
+              </span>
+            </div>
+
+            {/* VideoOut segment */}
+            <div className="w-[60px] shrink-0 flex items-center justify-center border-l border-clip-video-border/50 bg-clip-video-bg/40 rounded-r-xl">
+              <Film size={10} className="text-clip-video/60" />
+            </div>
+          </>
+        ) : (
+          <div className="flex-1 min-w-0 flex items-center justify-center gap-1">
+            <Film size={10} className="shrink-0 text-clip-video" />
+            <span className="text-[10px] text-clip-video truncate">
+              {displayName}
+            </span>
+            <span className="text-[8px] font-mono tabular-nums text-clip-video/60 shrink-0">
+              {formatTimecode(duration_s)}
+            </span>
+          </div>
+        )}
+      </div>
     </div>
   )
 }
