@@ -527,7 +527,7 @@ export function useCanvasSync() {
       const resolvedTree = resolveRefs(pageChildren, allNodes)
       const flatNodes = flattenNodes(
         resolvedTree, 0, 0, undefined, undefined, undefined, clipMap,
-      ).map((node) => resolveNodeForCanvas(node, variables, activeTheme))
+      ).map((node) => resolveNodeForCanvas(node, variables, { ...activeTheme, ...node.theme }))
       const nodeMap = new Map(flatNodes.map((n) => [n.id, n]))
       const objects = canvas.getObjects() as FabricObjectWithPenId[]
       const objMap = new Map(
