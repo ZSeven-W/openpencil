@@ -12,8 +12,7 @@ import { useCanvasStore } from '@/stores/canvas-store'
 import { isAnimationClip } from '@/types/animation'
 import type { AnimationClipData, TimedEffectConfig } from '@/types/animation'
 import type { PenNode } from '@/types/pen'
-import { getEffect } from '@/animation/effect-registry'
-import { generateClipFromEffect } from '@/animation/effect-registry'
+import { getEffect, buildMergedKeyframes } from '@/animation/effect-registry'
 import { captureNodeState, findFabricObject } from '@/animation/canvas-bridge'
 import '@/animation/effects'
 
@@ -100,17 +99,10 @@ export default function AnimationClipRenderer({
         const inConfig = segment === 'in' ? updatedEffect : clip.inEffect
         const outConfig = segment === 'out' ? updatedEffect : clip.outEffect
 
-        const inKf = inConfig
-          ? generateClipFromEffect(inConfig.effectId, inConfig.duration, inConfig.params, currentState)
-          : null
-        const outKf = outConfig
-          ? generateClipFromEffect(outConfig.effectId, outConfig.duration, outConfig.params, currentState)
-          : null
-
         const updated: AnimationClipData = {
           ...clip,
           [segment === 'in' ? 'inEffect' : 'outEffect']: updatedEffect,
-          keyframes: [...(inKf?.keyframes ?? []), ...(outKf?.keyframes ?? [])],
+          keyframes: buildMergedKeyframes(clip.duration, inConfig, outConfig, currentState),
         }
 
         const node = useDocumentStore.getState().getNodeById(nodeId)

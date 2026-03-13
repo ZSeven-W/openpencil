@@ -71,3 +71,54 @@ export function generateClipFromEffect(
 
   return { keyframes, duration: resolvedDuration }
 }
+
+/**
+ * Remap keyframe offsets from effect-local [0,1] to a sub-range of the clip.
+ *
+ * Effect generators produce offsets 0→1 relative to their own duration.
+ * When stored on a clip with In/Hold/Out, we must remap:
+ *   In  keyframes: [0, inDuration/clipDuration]
+ *   Out keyframes: [(clipDuration - outDuration)/clipDuration, 1]
+ */
+function remapKeyframeOffsets(
+  keyframes: KeyframeV2[],
+  rangeStart: number,
+  rangeEnd: number,
+): KeyframeV2[] {
+  const span = rangeEnd - rangeStart
+  return keyframes.map((kf) => ({
+    ...kf,
+    offset: rangeStart + kf.offset * span,
+  }))
+}
+
+/**
+ * Build merged keyframes for a clip with in/out effects.
+ * Remaps each effect's [0,1] offsets to the correct sub-range of the clip.
+ */
+export function buildMergedKeyframes(
+  clipDuration: number,
+  inEffect: { effectId: string; duration: number; params?: Record<string, unknown> } | undefined,
+  outEffect: { effectId: string; duration: number; params?: Record<string, unknown> } | undefined,
+  currentState: Record<string, AnimatableValue>,
+): KeyframeV2[] {
+  const result: KeyframeV2[] = []
+
+  if (inEffect && clipDuration > 0) {
+    const gen = generateClipFromEffect(inEffect.effectId, inEffect.duration, inEffect.params, currentState)
+    if (gen) {
+      const rangeEnd = inEffect.duration / clipDuration
+      result.push(...remapKeyframeOffsets(gen.keyframes, 0, rangeEnd))
+    }
+  }
+
+  if (outEffect && clipDuration > 0) {
+    const gen = generateClipFromEffect(outEffect.effectId, outEffect.duration, outEffect.params, currentState)
+    if (gen) {
+      const rangeStart = (clipDuration - outEffect.duration) / clipDuration
+      result.push(...remapKeyframeOffsets(gen.keyframes, rangeStart, 1))
+    }
+  }
+
+  return result
+}

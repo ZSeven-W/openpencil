@@ -6,7 +6,7 @@ import { useTimelineStore } from '@/stores/timeline-store'
 import { useCanvasStore } from '@/stores/canvas-store'
 import { useDocumentStore } from '@/stores/document-store'
 import { captureNodeState, findFabricObject } from '@/animation/canvas-bridge'
-import { getEffect, getEffectsByCategory, generateClipFromEffect } from '@/animation/effect-registry'
+import { getEffect, getEffectsByCategory, generateClipFromEffect, buildMergedKeyframes } from '@/animation/effect-registry'
 import '@/animation/effects' // ensure effects are registered
 import type { AnimationClipData, VideoClipData, TimedEffectConfig } from '@/types/animation'
 import { isVideoClip, isAnimationClip } from '@/types/animation'
@@ -57,12 +57,11 @@ export default function PresetPanel() {
       // Toggle in-effect
       if (existingAnimClip?.inEffect?.effectId === effectId) {
         // Remove in-effect
-        const updated = { ...existingAnimClip, inEffect: undefined }
-        // Regenerate keyframes without in-effect
-        const outKf = updated.outEffect
-          ? generateClipFromEffect(updated.outEffect.effectId, updated.outEffect.duration, updated.outEffect.params, currentState)
-          : null
-        updated.keyframes = outKf?.keyframes ?? []
+        const updated: AnimationClipData = {
+          ...existingAnimClip,
+          inEffect: undefined,
+          keyframes: buildMergedKeyframes(existingAnimClip.duration, undefined, existingAnimClip.outEffect, currentState),
+        }
         const updatedClips = existing.map((c) => c.id === existingAnimClip.id ? updated : c)
         updateNode(selectedId, { clips: updatedClips } as Partial<PenNode>)
         return
@@ -77,33 +76,21 @@ export default function PresetPanel() {
       }
 
       if (existingAnimClip) {
-        // Set inEffect on existing clip, merge keyframes
         const updated: AnimationClipData = {
           ...existingAnimClip,
           inEffect: effectConfig,
-          keyframes: result.keyframes,
-        }
-        // If there's an out-effect, append its keyframes
-        if (existingAnimClip.outEffect) {
-          const outResult = generateClipFromEffect(
-            existingAnimClip.outEffect.effectId,
-            existingAnimClip.outEffect.duration,
-            existingAnimClip.outEffect.params,
-            currentState,
-          )
-          if (outResult) updated.keyframes = [...result.keyframes, ...outResult.keyframes]
+          keyframes: buildMergedKeyframes(existingAnimClip.duration, effectConfig, existingAnimClip.outEffect, currentState),
         }
         const updatedClips = existing.map((c) => c.id === existingAnimClip.id ? updated : c)
         updateNode(selectedId, { clips: updatedClips } as Partial<PenNode>)
       } else {
-        // Create new animation clip with inEffect
         const clip: AnimationClipData = {
           id: nanoid(8),
           kind: 'animation',
           startTime: 0,
           duration: duration,
           inEffect: effectConfig,
-          keyframes: result.keyframes,
+          keyframes: buildMergedKeyframes(duration, effectConfig, undefined, currentState),
         }
         updateNode(selectedId, { clips: [...existing, clip] } as Partial<PenNode>)
       }
@@ -111,12 +98,11 @@ export default function PresetPanel() {
       // Toggle out-effect
       if (existingAnimClip?.outEffect?.effectId === effectId) {
         // Remove out-effect
-        const updated = { ...existingAnimClip, outEffect: undefined }
-        // Regenerate keyframes without out-effect
-        const inKf = updated.inEffect
-          ? generateClipFromEffect(updated.inEffect.effectId, updated.inEffect.duration, updated.inEffect.params, currentState)
-          : null
-        updated.keyframes = inKf?.keyframes ?? []
+        const updated: AnimationClipData = {
+          ...existingAnimClip,
+          outEffect: undefined,
+          keyframes: buildMergedKeyframes(existingAnimClip.duration, existingAnimClip.inEffect, undefined, currentState),
+        }
         const updatedClips = existing.map((c) => c.id === existingAnimClip.id ? updated : c)
         updateNode(selectedId, { clips: updatedClips } as Partial<PenNode>)
         return
@@ -131,35 +117,21 @@ export default function PresetPanel() {
       }
 
       if (existingAnimClip) {
-        // Set outEffect on existing clip, merge keyframes
         const updated: AnimationClipData = {
           ...existingAnimClip,
           outEffect: effectConfig,
-          keyframes: existingAnimClip.keyframes,
-        }
-        // If there's an in-effect, keep its keyframes and append out keyframes
-        if (existingAnimClip.inEffect) {
-          const inResult = generateClipFromEffect(
-            existingAnimClip.inEffect.effectId,
-            existingAnimClip.inEffect.duration,
-            existingAnimClip.inEffect.params,
-            currentState,
-          )
-          updated.keyframes = [...(inResult?.keyframes ?? []), ...result.keyframes]
-        } else {
-          updated.keyframes = result.keyframes
+          keyframes: buildMergedKeyframes(existingAnimClip.duration, existingAnimClip.inEffect, effectConfig, currentState),
         }
         const updatedClips = existing.map((c) => c.id === existingAnimClip.id ? updated : c)
         updateNode(selectedId, { clips: updatedClips } as Partial<PenNode>)
       } else {
-        // Create new animation clip with outEffect
         const clip: AnimationClipData = {
           id: nanoid(8),
           kind: 'animation',
           startTime: 0,
           duration: duration,
           outEffect: effectConfig,
-          keyframes: result.keyframes,
+          keyframes: buildMergedKeyframes(duration, undefined, effectConfig, currentState),
         }
         updateNode(selectedId, { clips: [...existing, clip] } as Partial<PenNode>)
       }
@@ -186,23 +158,14 @@ export default function PresetPanel() {
     const existing = selectedNode?.clips ?? []
     const updatedEffect: TimedEffectConfig = { ...effectConfig, duration: clampedMs }
 
-    const updated: AnimationClipData = {
-      ...animClip,
-      [segment === 'in' ? 'inEffect' : 'outEffect']: updatedEffect,
-    }
-
-    // Regenerate keyframes for both effects
     const inConfig = segment === 'in' ? updatedEffect : animClip.inEffect
     const outConfig = segment === 'out' ? updatedEffect : animClip.outEffect
 
-    const inKf = inConfig
-      ? generateClipFromEffect(inConfig.effectId, inConfig.duration, inConfig.params, currentState)
-      : null
-    const outKf = outConfig
-      ? generateClipFromEffect(outConfig.effectId, outConfig.duration, outConfig.params, currentState)
-      : null
-
-    updated.keyframes = [...(inKf?.keyframes ?? []), ...(outKf?.keyframes ?? [])]
+    const updated: AnimationClipData = {
+      ...animClip,
+      [segment === 'in' ? 'inEffect' : 'outEffect']: updatedEffect,
+      keyframes: buildMergedKeyframes(animClip.duration, inConfig, outConfig, currentState),
+    }
 
     const updatedClips = existing.map((c) => c.id === animClip.id ? updated : c)
     updateNode(selectedId, { clips: updatedClips } as Partial<PenNode>)
