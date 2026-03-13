@@ -3,7 +3,7 @@ import { findNodeInTree, getDocChildren, flattenNodes } from '../utils/node-oper
 import { generateId } from '../utils/id'
 import { getAllEffects, getEffectsByCategory, generateClipFromEffect } from '../../animation/effect-registry'
 import { getAllPropertyDescriptors } from '../../animation/property-descriptors'
-import type { AnimationClip, AnimationClipData, KeyframeV2, CompositionSettings } from '../../types/animation'
+import type { Clip, AnimationClipData, KeyframeV2, CompositionSettings } from '../../types/animation'
 import type { PenNode, PenNodeType } from '../../types/pen'
 import type { EffectDescriptor } from '../../animation/effect-registry'
 
@@ -195,7 +195,7 @@ export interface UpdateClipParams {
 
 export async function handleUpdateClip(
   params: UpdateClipParams,
-): Promise<{ clip: AnimationClip }> {
+): Promise<{ clip: Clip }> {
   if (params.startTime !== undefined && (!Number.isFinite(params.startTime) || params.startTime < 0)) {
     throw new Error('startTime must be a finite number >= 0')
   }
@@ -387,15 +387,17 @@ export function buildAnimationPromptSection(): string {
 
   return `ANIMATION SYSTEM:
 
-AnimationClip schema:
+Clip schema (animation):
 {
   id: string,
   kind: "animation",
   startTime: number (ms),
   duration: number (ms),
-  effectId?: string,
+  effectId?: string (legacy),
   keyframes: [{ id: string, offset: 0.0-1.0, properties: { key: value }, easing: EasingPreset | [x1,y1,x2,y2] }],
-  params?: Record<string, unknown>
+  params?: Record<string, unknown> (legacy),
+  inEffect?: { effectId: string, duration: number (ms), params?: Record<string, unknown> },
+  outEffect?: { effectId: string, duration: number (ms), params?: Record<string, unknown> }
 }
 
 Easing presets: linear, ease, easeIn, easeOut, easeInOut, snappy, bouncy, gentle, smooth

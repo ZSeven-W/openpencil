@@ -186,10 +186,6 @@ export interface VideoNode extends PenNodeBase {
   src: string // blob URL or data URL of the video file
   mimeType?: string // e.g. 'video/mp4', 'video/webm'
   videoDuration?: number // video duration in ms (intrinsic, from file metadata)
-  startTime?: number // offset into video to start playback (ms), default 0
-  inPoint?: number // trim start within video in ms, default 0
-  outPoint?: number // trim end within video in ms, default videoDuration
-  timelineOffset?: number // position on composition timeline in ms, default 0
   width?: SizingBehavior
   height?: SizingBehavior
   cornerRadius?: number | [number, number, number, number]

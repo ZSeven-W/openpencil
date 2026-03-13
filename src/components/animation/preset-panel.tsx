@@ -8,7 +8,8 @@ import { useDocumentStore } from '@/stores/document-store'
 import { captureNodeState, findFabricObject } from '@/animation/canvas-bridge'
 import { getEffectsByCategory, generateClipFromEffect } from '@/animation/effect-registry'
 import '@/animation/effects' // ensure effects are registered
-import type { AnimationClipData } from '@/types/animation'
+import type { AnimationClipData, VideoClipData } from '@/types/animation'
+import { isVideoClip } from '@/types/animation'
 import type { PenNode, VideoNode } from '@/types/pen'
 import NumberInput from '@/components/shared/number-input'
 
@@ -16,17 +17,36 @@ export default function PresetPanel() {
   const selectedId = useCanvasStore((s) => s.selection.activeId)
   const canvas = useCanvasStore((s) => s.fabricCanvas)
   const duration = useTimelineStore((s) => s.duration)
-  const getNodeById = useDocumentStore((s) => s.getNodeById)
   const updateNode = useDocumentStore((s) => s.updateNode)
 
-  const selectedNode = selectedId ? getNodeById(selectedId) : undefined
+  // Subscribe to document so we re-render when node clips change via updateNode.
+  // getNodeById is a stable function ref that won't trigger re-renders on its own.
+  const selectedNode = useDocumentStore((s) =>
+    selectedId ? s.getNodeById(selectedId) : undefined,
+  )
   const isVideo = selectedNode?.type === 'video'
   const videoNode = isVideo ? (selectedNode as VideoNode) : null
+  const videoClip = videoNode?.clips?.find(isVideoClip) as VideoClipData | undefined
 
   // v2: Effect registry
   const effectCategories = ['enter', 'exit', 'emphasis'] as const
-  const handleApplyEffect = (effectId: string) => {
+  const appliedEffectIds = new Set(
+    (selectedNode?.clips ?? [])
+      .filter((c): c is AnimationClipData => c.kind === 'animation' && !!c.effectId)
+      .map((c) => c.effectId!),
+  )
+
+  const handleToggleEffect = (effectId: string) => {
     if (!selectedId || !canvas) return
+
+    // If already applied, remove it
+    if (appliedEffectIds.has(effectId)) {
+      const remaining = (selectedNode?.clips ?? []).filter(
+        (c) => !(c.kind === 'animation' && (c as AnimationClipData).effectId === effectId),
+      )
+      updateNode(selectedId, { clips: remaining } as Partial<PenNode>)
+      return
+    }
 
     const obj = findFabricObject(canvas, selectedId)
     const currentState = obj ? captureNodeState(obj) : {}
@@ -58,7 +78,7 @@ export default function PresetPanel() {
 
       <div className="flex-1 overflow-y-auto">
         {/* Video clip controls */}
-        {videoNode && (
+        {videoNode && videoClip && (
           <>
             <div className="px-3 py-2 space-y-1.5">
               <SectionHeader title="Video Clip" />
@@ -66,22 +86,30 @@ export default function PresetPanel() {
                 <div className="grid grid-cols-2 gap-1.5">
                   <NumberInput
                     label="In"
-                    value={Math.round((videoNode.inPoint ?? 0) / 100) / 10}
-                    onChange={(v) =>
-                      updateNode(selectedId!, { inPoint: Math.round(v * 1000) } as Partial<VideoNode>)
-                    }
+                    value={Math.round(videoClip.sourceStart / 100) / 10}
+                    onChange={(v) => {
+                      const newSourceStart = Math.round(v * 1000)
+                      const updatedClips = (selectedNode?.clips ?? []).map((c) =>
+                        c.id === videoClip.id ? { ...c, sourceStart: newSourceStart } : c,
+                      )
+                      updateNode(selectedId!, { clips: updatedClips } as Partial<PenNode>)
+                    }}
                     min={0}
-                    max={(videoNode.outPoint ?? videoNode.videoDuration ?? 0) / 1000}
+                    max={videoClip.sourceEnd / 1000}
                     step={0.1}
                     suffix="s"
                   />
                   <NumberInput
                     label="Out"
-                    value={Math.round((videoNode.outPoint ?? videoNode.videoDuration ?? 0) / 100) / 10}
-                    onChange={(v) =>
-                      updateNode(selectedId!, { outPoint: Math.round(v * 1000) } as Partial<VideoNode>)
-                    }
-                    min={(videoNode.inPoint ?? 0) / 1000}
+                    value={Math.round(videoClip.sourceEnd / 100) / 10}
+                    onChange={(v) => {
+                      const newSourceEnd = Math.round(v * 1000)
+                      const updatedClips = (selectedNode?.clips ?? []).map((c) =>
+                        c.id === videoClip.id ? { ...c, sourceEnd: newSourceEnd } : c,
+                      )
+                      updateNode(selectedId!, { clips: updatedClips } as Partial<PenNode>)
+                    }}
+                    min={videoClip.sourceStart / 1000}
                     max={(videoNode.videoDuration ?? 0) / 1000}
                     step={0.1}
                     suffix="s"
@@ -89,10 +117,14 @@ export default function PresetPanel() {
                 </div>
                 <NumberInput
                   label="Offset"
-                  value={Math.round((videoNode.timelineOffset ?? 0) / 100) / 10}
-                  onChange={(v) =>
-                    updateNode(selectedId!, { timelineOffset: Math.round(v * 1000) } as Partial<VideoNode>)
-                  }
+                  value={Math.round(videoClip.startTime / 100) / 10}
+                  onChange={(v) => {
+                    const newStartTime = Math.round(v * 1000)
+                    const updatedClips = (selectedNode?.clips ?? []).map((c) =>
+                      c.id === videoClip.id ? { ...c, startTime: newStartTime } : c,
+                    )
+                    updateNode(selectedId!, { clips: updatedClips } as Partial<PenNode>)
+                  }}
                   min={0}
                   step={0.1}
                   suffix="s"
@@ -106,7 +138,7 @@ export default function PresetPanel() {
                 <div className="flex items-center justify-between">
                   <span className="text-[11px] text-muted-foreground">Clip duration</span>
                   <span className="text-[11px] text-foreground tabular-nums">
-                    {(((videoNode.outPoint ?? videoNode.videoDuration ?? 0) - (videoNode.inPoint ?? 0)) / 1000).toFixed(1)}s
+                    {(videoClip.duration / 1000).toFixed(1)}s
                   </span>
                 </div>
               </div>
@@ -141,17 +173,20 @@ export default function PresetPanel() {
                       {category}
                     </span>
                     <div className="grid grid-cols-2 gap-1">
-                      {effects.map((effect) => (
-                        <Button
-                          key={effect.id}
-                          variant="outline"
-                          size="sm"
-                          className="h-7 text-[11px]"
-                          onClick={() => handleApplyEffect(effect.id)}
-                        >
-                          {effect.name}
-                        </Button>
-                      ))}
+                      {effects.map((effect) => {
+                        const isActive = appliedEffectIds.has(effect.id)
+                        return (
+                          <Button
+                            key={effect.id}
+                            variant={isActive ? 'default' : 'outline'}
+                            size="sm"
+                            className="h-7 text-[11px]"
+                            onClick={() => handleToggleEffect(effect.id)}
+                          >
+                            {effect.name}
+                          </Button>
+                        )
+                      })}
                     </div>
                   </div>
                 )

@@ -40,6 +40,13 @@ export interface KeyframeV2 {
 
 // --- v2: Clips ---
 
+/** Timed effect config — for in/out transitions with a required duration */
+export interface TimedEffectConfig {
+  effectId: string
+  duration: number // ms — how long the transition lasts
+  params?: Record<string, unknown>
+}
+
 /** Base clip fields shared by all clip kinds */
 export interface ClipBase {
   id: string
@@ -51,9 +58,13 @@ export interface ClipBase {
 /** Animation clip — keyframe-driven property animation */
 export interface AnimationClipData extends ClipBase {
   kind: 'animation'
+  /** @deprecated Use inEffect/outEffect instead. Kept for migration. */
   effectId?: string
   keyframes: KeyframeV2[]
+  /** @deprecated Use effect config params instead. */
   params?: Record<string, unknown>
+  inEffect?: TimedEffectConfig
+  outEffect?: TimedEffectConfig
 }
 
 /** Video clip — source media playback */
@@ -65,7 +76,20 @@ export interface VideoClipData extends ClipBase {
 }
 
 /** Discriminated union of clip kinds */
-export type AnimationClip = AnimationClipData | VideoClipData
+export type Clip = AnimationClipData | VideoClipData
+
+/** @deprecated Use Clip instead */
+export type AnimationClip = Clip
+
+/** Type guard for video clips */
+export function isVideoClip(clip: Clip): clip is VideoClipData {
+  return clip.kind === 'video'
+}
+
+/** Type guard for animation clips */
+export function isAnimationClip(clip: Clip): clip is AnimationClipData {
+  return clip.kind === 'animation'
+}
 
 // --- v2: Composition ---
 

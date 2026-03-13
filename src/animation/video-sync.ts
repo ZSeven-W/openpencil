@@ -19,13 +19,16 @@ import {
 } from '@/animation/video-registry'
 import { findFabricObject } from '@/animation/canvas-bridge'
 import { useDocumentStore } from '@/stores/document-store'
-import type { VideoNode } from '@/types/pen'
 import type { AnimationIndex } from '@/animation/animation-index'
 import type { VideoClipData } from '@/types/animation'
+import { isVideoClip } from '@/types/animation'
 
 /**
  * Sync all video elements to the current composition time.
  * Called every frame during playback and on seek.
+ *
+ * Uses video clips on nodes (VideoClipData) for timing — no longer reads
+ * from VideoNode.timelineOffset/inPoint/outPoint.
  */
 export function syncVideoFrames(canvas: Canvas, compositionTimeMs: number): void {
   const videoElements = getAllVideoElements()
@@ -37,20 +40,17 @@ export function syncVideoFrames(canvas: Canvas, compositionTimeMs: number): void
     const node = getNodeById(nodeId)
     if (!node || node.type !== 'video') continue
 
-    const videoNode = node as VideoNode
-    const timelineOffset = videoNode.timelineOffset ?? 0
-    const inPoint = videoNode.inPoint ?? 0
-    const outPoint = videoNode.outPoint ?? (videoNode.videoDuration ?? Infinity)
+    // Find the first video clip on this node
+    const videoClip = node.clips?.find(isVideoClip)
+    if (!videoClip) continue
 
-    // Calculate where we are within the clip
-    const clipStart = timelineOffset
-    const clipEnd = timelineOffset + (outPoint - inPoint)
+    const clipStart = videoClip.startTime
+    const clipEnd = videoClip.startTime + videoClip.duration
 
     // Only show video when composition time is within the clip range
     const fabricObj = findFabricObject(canvas, nodeId)
 
     if (compositionTimeMs < clipStart || compositionTimeMs > clipEnd) {
-      // Outside clip range — hide the video
       if (fabricObj && fabricObj.visible) {
         fabricObj.visible = false
         fabricObj.dirty = true
@@ -63,8 +63,11 @@ export function syncVideoFrames(canvas: Canvas, compositionTimeMs: number): void
       fabricObj.visible = true
     }
 
-    // Map composition time to video time: inPoint + (compositionTime - timelineOffset)
-    const videoTimeMs = inPoint + (compositionTimeMs - timelineOffset)
+    // Map composition time to source video time
+    const clipLocalTime = compositionTimeMs - clipStart
+    const sourceRange = videoClip.sourceEnd - videoClip.sourceStart
+    const clipProgress = videoClip.duration > 0 ? clipLocalTime / videoClip.duration : 0
+    const videoTimeMs = videoClip.sourceStart + clipProgress * sourceRange
     seekVideoToTime(nodeId, videoTimeMs, 0)
 
     if (fabricObj) {

@@ -210,14 +210,19 @@ export default function Toolbar() {
         src: blobUrl,
         mimeType: file.type,
         videoDuration: videoDurationMs,
-        startTime: 0,
-        inPoint: 0,
-        outPoint: videoDurationMs,
-        timelineOffset: 0,
         x: centerX - w / 2,
         y: centerY - h / 2,
         width: w,
         height: h,
+        clips: [{
+          id: generateId(),
+          kind: 'video' as const,
+          startTime: 0,
+          duration: videoDurationMs,
+          sourceStart: 0,
+          sourceEnd: videoDurationMs,
+          playbackRate: 1,
+        }],
       })
 
       // Auto-open timeline

@@ -773,7 +773,8 @@ export function createFabricObject(
         // Seek to start time, then wait for the browser to decode the frame
         // before creating the FabricImage. Without this, Fabric paints an
         // empty/transparent texture because the frame isn't decoded yet.
-        const startTimeSec = (vNode.startTime ?? 0) / 1000
+        const videoClip = vNode.clips?.find((c) => c.kind === 'video')
+        const startTimeSec = videoClip ? (videoClip as import('@/types/animation').VideoClipData).sourceStart / 1000 : 0
         if (startTimeSec === 0 && videoEl.readyState >= 2) {
           // Already at time 0 with enough data — create immediately
           createFabricImage()

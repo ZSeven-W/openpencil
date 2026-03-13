@@ -44,11 +44,7 @@ export function applyActionMove(
   const meta = metadata.get(actionId)
   if (!meta) return
 
-  if (meta.type === 'video-clip') {
-    stores.updateNode(meta.nodeId, {
-      timelineOffset: secToMs(newStart_s),
-    } as Partial<PenNode>)
-  } else if (meta.type === 'animation-clip') {
+  if (meta.type === 'animation-clip') {
     applyClipMove(meta.nodeId, meta.clipId, newStart_s, stores)
   }
 }
@@ -61,16 +57,14 @@ export function applyActionResize(
   actionId: string,
   newStart_s: number,
   newEnd_s: number,
-  dir: 'left' | 'right',
+  _dir: 'left' | 'right',
   metadata: ActionMetadataMap,
   stores: TimelineStores,
 ): void {
   const meta = metadata.get(actionId)
   if (!meta) return
 
-  if (meta.type === 'video-clip') {
-    applyVideoClipResize(meta.nodeId, newStart_s, newEnd_s, dir, stores)
-  } else if (meta.type === 'animation-clip') {
+  if (meta.type === 'animation-clip') {
     applyClipResize(meta.nodeId, meta.clipId, newStart_s, newEnd_s, stores)
   }
 }
@@ -87,7 +81,7 @@ export function validateActionMove(
   start_s: number,
   end_s: number,
   metadata: ActionMetadataMap,
-  stores: TimelineStores,
+  _stores: TimelineStores,
 ): boolean {
   if (start_s >= end_s) return false
   if (secToMs(end_s - start_s) < MIN_DURATION_MS) return false
@@ -95,10 +89,6 @@ export function validateActionMove(
 
   const meta = metadata.get(actionId)
   if (!meta) return false
-
-  if (meta.type === 'video-clip') {
-    return validateVideoClipBounds(meta.nodeId, start_s, end_s, stores)
-  }
 
   return true
 }
@@ -152,55 +142,6 @@ function applyClipResize(
   stores.updateNode(nodeId, { clips: updatedClips } as Partial<PenNode>)
 }
 
-function applyVideoClipResize(
-  nodeId: string,
-  newStart_s: number,
-  newEnd_s: number,
-  dir: 'left' | 'right',
-  stores: TimelineStores,
-): void {
-  const node = stores.getDocumentState().getNodeById(nodeId)
-  if (!node || node.type !== 'video') return
-
-  const videoNode = node as import('@/types/pen').VideoNode
-  const offset_ms = videoNode.timelineOffset ?? 0
-  const inPoint_ms = videoNode.inPoint ?? 0
-
-  if (dir === 'left') {
-    const newOffset_ms = secToMs(newStart_s)
-    const offsetDelta_ms = newOffset_ms - offset_ms
-    stores.updateNode(nodeId, {
-      timelineOffset: newOffset_ms,
-      inPoint: inPoint_ms + offsetDelta_ms,
-    } as Partial<PenNode>)
-  } else {
-    const newEnd_ms = secToMs(newEnd_s)
-    const newOutPoint_ms = inPoint_ms + (newEnd_ms - offset_ms)
-    stores.updateNode(nodeId, {
-      outPoint: newOutPoint_ms,
-    } as Partial<PenNode>)
-  }
-}
-
-function validateVideoClipBounds(
-  nodeId: string,
-  start_s: number,
-  end_s: number,
-  stores: TimelineStores,
-): boolean {
-  const node = stores.getDocumentState().getNodeById(nodeId)
-  if (!node || node.type !== 'video') return false
-
-  const videoNode = node as import('@/types/pen').VideoNode
-  const videoDuration_ms = videoNode.videoDuration ?? Infinity
-  const clipDuration_ms = secToMs(end_s - start_s)
-
-  if (clipDuration_ms > videoDuration_ms) return false
-  if (start_s < 0) return false
-
-  return true
-}
-
 // ---------------------------------------------------------------------------
 // v2: Clip-based timeline rows (reads clips from PenNodes)
 // ---------------------------------------------------------------------------
@@ -239,6 +180,7 @@ export function buildTimelineRowsFromNodes(nodes: PenNode[]): TimelineProjection
             type: 'animation-clip',
             nodeId: node.id,
             clipId: clip.id,
+            effectId: clip.kind === 'animation' ? clip.effectId : undefined,
           })
         }
 

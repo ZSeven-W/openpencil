@@ -372,7 +372,11 @@ export default function PropertyPanel({ embedded }: { embedded?: boolean } = {})
                 {node.clips.map((clip) => (
                   <div key={clip.id} className="flex items-center gap-1.5 group/clip">
                     <span className="text-[11px] text-muted-foreground flex-1 truncate">
-                      {clip.kind === 'animation' ? (clip.effectId ?? 'Custom') : 'Video'}
+                      {clip.kind === 'animation'
+                        ? (clip.inEffect || clip.outEffect
+                          ? [clip.inEffect?.effectId, clip.outEffect?.effectId].filter(Boolean).join(' → ')
+                          : (clip.effectId ?? 'Custom'))
+                        : 'Video'}
                     </span>
                     <span className="text-[11px] text-foreground tabular-nums">
                       {(clip.startTime / 1000).toFixed(1)}s
