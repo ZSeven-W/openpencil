@@ -32,10 +32,10 @@ function resolveStyleReferences(nodeChanges: FigmaNodeChange[]): void {
   }
   if (styleMap.size === 0) return
 
-  for (const nc of nodeChanges) {
-    // Resolve fill style — always use the style's paint when a style reference exists,
-    // as styleIdForFill is the source of truth in Figma's rendering.
-    const fillStyleId = (nc as any).styleIdForFill as { guid?: { sessionID: number; localID: number } } | undefined
+  /** Resolve style references on a single node-like object. */
+  function resolveOnNode(nc: Record<string, any>) {
+    // Resolve fill style — always use the style's paint when a style reference exists
+    const fillStyleId = nc.styleIdForFill as { guid?: { sessionID: number; localID: number } } | undefined
     if (fillStyleId?.guid) {
       const styleKey = `${fillStyleId.guid.sessionID}:${fillStyleId.guid.localID}`
       const style = styleMap.get(styleKey)
@@ -44,12 +44,23 @@ function resolveStyleReferences(nodeChanges: FigmaNodeChange[]): void {
       }
     }
     // Resolve stroke fill style
-    const strokeStyleId = (nc as any).styleIdForStrokeFill as { guid?: { sessionID: number; localID: number } } | undefined
+    const strokeStyleId = nc.styleIdForStrokeFill as { guid?: { sessionID: number; localID: number } } | undefined
     if (strokeStyleId?.guid) {
       const styleKey = `${strokeStyleId.guid.sessionID}:${strokeStyleId.guid.localID}`
       const style = styleMap.get(styleKey)
       if (style?.fillPaints?.length) {
         nc.strokePaints = style.fillPaints
+      }
+    }
+  }
+
+  for (const nc of nodeChanges) {
+    resolveOnNode(nc as Record<string, any>)
+    // Also resolve style references inside instance override entries
+    const overrides = nc.symbolData?.symbolOverrides
+    if (overrides) {
+      for (const ov of overrides) {
+        resolveOnNode(ov as Record<string, any>)
       }
     }
   }
