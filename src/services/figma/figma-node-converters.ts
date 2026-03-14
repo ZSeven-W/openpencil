@@ -544,6 +544,9 @@ function applyInstanceOverrides(
   // nodeOverride/nodeDerived are keyed by node GUID string.
   const nodeOverride = new Map<string, FigmaSymbolOverride>()
   const nodeDerived = new Map<string, FigmaDerivedSymbolDataEntry>()
+  // Virtual pathKey → actual node GUID map, populated by the chosen strategy.
+  // Used to resolve first GUIDs in multi-guid paths for nested instance propagation.
+  const pkToNodeGuid = new Map<string, string>()
 
   /** Resolve a pathKey's override/derived entries to a target node GUID. */
   function resolveToNode(pathKey: string, nodeGuid: string) {
@@ -578,6 +581,7 @@ function applyInstanceOverrides(
       const pkStr = guidToString(pk)
       if (guidToNodeMap.has(pkStr)) {
         resolveToNode(pkStr, pkStr)
+        pkToNodeGuid.set(pkStr, pkStr)
       }
     }
     // Also resolve overrides that use actual GUIDs
@@ -594,7 +598,9 @@ function applyInstanceOverrides(
       const node = flatSymbol[i]
       const d = len1Derived[i]
       if (node.figma.guid && d.guidPath?.guids?.length) {
-        resolveToNode(guidPathKey(d.guidPath.guids), guidToString(node.figma.guid))
+        const actualGuid = guidToString(node.figma.guid)
+        resolveToNode(guidPathKey(d.guidPath.guids), actualGuid)
+        pkToNodeGuid.set(guidToString(d.guidPath.guids[0]), actualGuid)
       }
     }
   } else if (firstLocalID !== undefined && sessionID !== undefined) {
@@ -669,6 +675,11 @@ function applyInstanceOverrides(
       }
     }
 
+    // Populate pkToNodeGuid from the unified mapping for nested resolution
+    for (const [pk, ng] of unifiedPkToNode) {
+      pkToNodeGuid.set(pk, ng)
+    }
+
     // Resolve all single-guid derived and override entries to nodes
     for (const [pk, d] of derivedMap) {
       if (pk.includes('/')) continue // multi-guid → nested instance, skip
@@ -686,21 +697,25 @@ function applyInstanceOverrides(
       const node = flatSymbol[i]
       const d = safeDerived[i]
       if (node.figma.guid && d.guidPath?.guids?.length) {
-        resolveToNode(guidPathKey(d.guidPath.guids), guidToString(node.figma.guid))
+        const actualGuid = guidToString(node.figma.guid)
+        resolveToNode(guidPathKey(d.guidPath.guids), actualGuid)
+        if (d.guidPath.guids.length === 1) {
+          pkToNodeGuid.set(guidToString(d.guidPath.guids[0]), actualGuid)
+        }
       }
     }
   }
 
-  // Build a map of multi-guid overrides grouped by first GUID (nested instance).
-  // These will be propagated to nested instances so their children get the
-  // correct color/paint overrides from the outer instance.
+  // Build nested maps for multi-guid entries (nested instance overrides + derived data).
+  // Use pkToNodeGuid to resolve virtual first GUIDs to actual node GUIDs so that
+  // applyToNode (which uses actual GUIDs) can look them up correctly.
   const nestedOverrideMap = new Map<string, FigmaSymbolOverride[]>()
+  const nestedDerivedMap = new Map<string, FigmaDerivedSymbolDataEntry[]>()
+
   for (const [pk, ov] of overrideMap) {
     if (!pk.includes('/')) continue
     const parts = pk.split('/')
-    const instanceGuid = parts[0]
-    // Rewrite the override's guidPath to only contain the child GUID(s)
-    // so the nested instance can apply it as a normal override.
+    const instanceGuid = pkToNodeGuid.get(parts[0]) ?? parts[0]
     const childGuids = ov.guidPath?.guids?.slice(1)
     if (childGuids?.length) {
       const childOv = { ...ov, guidPath: { guids: childGuids } }
@@ -710,14 +725,28 @@ function applyInstanceOverrides(
     }
   }
 
+  for (const [pk, d] of derivedMap) {
+    if (!pk.includes('/')) continue
+    const parts = pk.split('/')
+    const instanceGuid = pkToNodeGuid.get(parts[0]) ?? parts[0]
+    const childGuids = d.guidPath?.guids?.slice(1)
+    if (childGuids?.length) {
+      const childD = { ...d, guidPath: { guids: childGuids } }
+      const existing = nestedDerivedMap.get(instanceGuid) ?? []
+      existing.push(childD)
+      nestedDerivedMap.set(instanceGuid, existing)
+    }
+  }
+
   // Recursively apply resolved overrides and derived data to each node
   function applyToNode(node: TreeNode): TreeNode {
     const nodeKey = node.figma.guid ? guidToString(node.figma.guid) : ''
     const d = nodeDerived.get(nodeKey)
     const ov = nodeOverride.get(nodeKey)
     const nestedOvs = nestedOverrideMap.get(nodeKey)
+    const nestedDer = nestedDerivedMap.get(nodeKey)
 
-    if (!d && !ov && !nestedOvs) {
+    if (!d && !ov && !nestedOvs && !nestedDer) {
       return { figma: { ...node.figma }, children: node.children.map(applyToNode) }
     }
 
@@ -760,15 +789,21 @@ function applyInstanceOverrides(
       }
     }
 
-    // Propagate multi-guid overrides to nested INSTANCE nodes.
-    // When the outer instance has overrides like "instanceGuid/childGuid",
-    // inject the child-scoped overrides into the nested instance's
-    // symbolOverrides so convertInstance can apply them.
-    if (nestedOvs && (figma.type === 'INSTANCE' || figma.symbolData)) {
-      const existingOverrides = figma.symbolData?.symbolOverrides ?? []
-      figma.symbolData = {
-        ...figma.symbolData,
-        symbolOverrides: [...existingOverrides, ...nestedOvs],
+    // Propagate multi-guid overrides and derived data to nested INSTANCE nodes.
+    // When the outer instance has entries like "instanceGuid/childGuid/...",
+    // inject the child-scoped data into the nested instance's symbolData
+    // and derivedSymbolData so convertInstance can apply them recursively.
+    if ((nestedOvs || nestedDer) && (figma.type === 'INSTANCE' || figma.symbolData)) {
+      if (nestedOvs) {
+        const existingOverrides = figma.symbolData?.symbolOverrides ?? []
+        figma.symbolData = {
+          ...figma.symbolData,
+          symbolOverrides: [...existingOverrides, ...nestedOvs],
+        }
+      }
+      if (nestedDer) {
+        const existingDerived = figma.derivedSymbolData ?? []
+        figma.derivedSymbolData = [...existingDerived, ...nestedDer]
       }
     }
 

@@ -11,9 +11,9 @@ const ZSTD_MAGIC = [0x28, 0xB5, 0x2F, 0xFD]
 const PNG_MAGIC_0 = 137
 const PNG_MAGIC_1 = 80
 
-const MAX_COMPRESSED_SIZE = 50 * 1024 * 1024 // 50MB compressed input — guard against oversized uploads before decompression
-const MAX_UNZIPPED_SIZE = 100 * 1024 * 1024 // 100MB total decompressed
-const MAX_IMAGE_SIZE = 50 * 1024 * 1024 // 50MB per image
+const MAX_COMPRESSED_SIZE = 150 * 1024 * 1024 // 150MB compressed input
+const MAX_UNZIPPED_SIZE = 300 * 1024 * 1024 // 300MB total decompressed
+const MAX_IMAGE_SIZE = 150 * 1024 * 1024 // 150MB per image
 const MAX_ZIP_ENTRIES = 10_000 // guard against zip bombs with many small entries
 
 const int32 = new Int32Array(1)
@@ -98,7 +98,7 @@ function figToBinaryParts(fileBuffer: ArrayBuffer): FigBinaryResult {
     // Pre-decompression size check: reject oversized compressed input before
     // UZIP.parse loads the full archive into memory (mitigates zip bombs).
     if (fileBuffer.byteLength > MAX_COMPRESSED_SIZE) {
-      throw new Error('Compressed .fig file exceeds maximum size limit (50MB)')
+      throw new Error('Compressed .fig file exceeds maximum size limit (150MB)')
     }
 
     let unzipped: Record<string, Uint8Array>
@@ -120,11 +120,11 @@ function figToBinaryParts(fileBuffer: ArrayBuffer): FigBinaryResult {
     for (const [path, bytes] of Object.entries(unzipped)) {
       totalSize += bytes.length
       if (totalSize > MAX_UNZIPPED_SIZE) {
-        throw new Error('Decompressed file exceeds maximum size limit (100MB)')
+        throw new Error('Decompressed file exceeds maximum size limit (300MB)')
       }
       if (path.startsWith('images/') && bytes.length > 0) {
         if (bytes.length > MAX_IMAGE_SIZE) {
-          throw new Error('Image exceeds maximum size limit (50MB)')
+          throw new Error('Image exceeds maximum size limit (150MB)')
         }
         const key = path.slice(7) // Remove "images/" prefix
         imageFiles.set(key, bytes)

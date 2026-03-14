@@ -71,11 +71,18 @@ const BUNDLED_FONTS: Record<string, string[]> = {
     '/fonts/source-sans-3-600.woff2',
     '/fonts/source-sans-3-700.woff2',
   ],
+  'noto sans sc': [
+    '/fonts/noto-sans-sc-400.woff2',
+    '/fonts/noto-sans-sc-700.woff2',
+    '/fonts/noto-sans-sc-latin-400.woff2',
+    '/fonts/noto-sans-sc-latin-700.woff2',
+  ],
 }
 
 /** List of all bundled font family names (for UI font picker) */
 export const BUNDLED_FONT_FAMILIES = [
   'Inter',
+  'Noto Sans SC',
   'Poppins',
   'Roboto',
   'Montserrat',
@@ -138,7 +145,11 @@ export class SkiaFontManager {
     if (this.loadedFamilies.has(lower + ' ext')) {
       chain.push(primaryFamily + ' Ext')
     }
-    // Add Inter + Inter Ext as final fallback
+    // Add Noto Sans SC for CJK glyph fallback (bundled, works offline)
+    if (lower !== 'noto sans sc' && this.loadedFamilies.has('noto sans sc')) {
+      chain.push('Noto Sans SC')
+    }
+    // Add Inter + Inter Ext as final fallback for Latin glyphs
     if (lower !== 'inter') {
       if (this.loadedFamilies.has('inter')) chain.push('Inter')
       if (this.loadedFamilies.has('inter ext')) chain.push('Inter Ext')
@@ -154,7 +165,8 @@ export class SkiaFontManager {
    */
   hasAnyFallback(primaryFamily: string): boolean {
     const key = primaryFamily.toLowerCase()
-    return key !== 'inter' && (this.loadedFamilies.has('inter') || this.loadedFamilies.has('inter ext'))
+    if (key === 'inter' || key === 'noto sans sc') return false
+    return this.loadedFamilies.has('inter') || this.loadedFamilies.has('noto sans sc')
   }
 
   /** Register a font from raw ArrayBuffer data */
@@ -255,39 +267,61 @@ export class SkiaFontManager {
     }
   }
 
+  /**
+   * Fetch a font from Google Fonts CDN with China mirror fallback.
+   * Tries Google Fonts first (3s timeout), then falls back to loli.net mirror
+   * which is accessible in China where Google services are blocked.
+   */
   private async _fetchGoogleFont(family: string, weights: number[]): Promise<boolean> {
-    try {
-      const weightStr = weights.join(';')
-      const cssUrl = `https://fonts.googleapis.com/css2?family=${encodeURIComponent(family)}:wght@${weightStr}&display=swap`
+    const weightStr = weights.join(';')
+    const encodedFamily = encodeURIComponent(family)
+    const query = `family=${encodedFamily}:wght@${weightStr}&display=swap`
 
-      const cssResp = await fetch(cssUrl)
-      if (!cssResp.ok) return false
-      const css = await cssResp.text()
+    // Try Google Fonts first, then China-accessible mirrors
+    const cdnConfigs = [
+      {
+        cssBase: 'https://fonts.googleapis.com/css2',
+        fontUrlPattern: /url\((https:\/\/fonts\.gstatic\.com\/[^)]+\.woff2)\)/g,
+      },
+      {
+        cssBase: 'https://fonts.font.im/css2',
+        fontUrlPattern: /url\((https?:\/\/[^)]+\.woff2)\)/g,
+      },
+    ]
 
-      const urlRegex = /url\((https:\/\/fonts\.gstatic\.com\/[^)]+\.woff2)\)/g
-      const urls: string[] = []
-      let match: RegExpExecArray | null
-      while ((match = urlRegex.exec(css)) !== null) {
-        urls.push(match[1])
+    for (const cdn of cdnConfigs) {
+      try {
+        const cssUrl = `${cdn.cssBase}?${query}`
+        const cssResp = await fetchWithTimeout(cssUrl, 4000)
+        if (!cssResp.ok) continue
+        const css = await cssResp.text()
+
+        const urls: string[] = []
+        let match: RegExpExecArray | null
+        while ((match = cdn.fontUrlPattern.exec(css)) !== null) {
+          urls.push(match[1])
+        }
+        if (urls.length === 0) continue
+
+        const fontBuffers = await Promise.all(
+          urls.map(async (url) => {
+            try {
+              const resp = await fetchWithTimeout(url, 8000)
+              return resp.ok ? resp.arrayBuffer() : null
+            } catch { return null }
+          })
+        )
+
+        let registered = 0
+        for (const buf of fontBuffers) {
+          if (buf && this.registerFont(buf, family)) registered++
+        }
+        if (registered > 0) return true
+      } catch {
+        // CDN failed, try next
       }
-
-      if (urls.length === 0) return false
-
-      const fontBuffers = await Promise.all(
-        urls.map(async (url) => {
-          const resp = await fetch(url)
-          return resp.ok ? resp.arrayBuffer() : null
-        })
-      )
-
-      let registered = 0
-      for (const buf of fontBuffers) {
-        if (buf && this.registerFont(buf, family)) registered++
-      }
-      return registered > 0
-    } catch {
-      return false
     }
+    return false
   }
 
   dispose() {
@@ -318,4 +352,11 @@ const SYSTEM_FONT_PATTERNS = [
 function isSystemFont(family: string): boolean {
   const lower = family.toLowerCase()
   return SYSTEM_FONT_PATTERNS.some(p => lower.includes(p))
+}
+
+/** Fetch with timeout — rejects if response doesn't arrive within `ms`. */
+function fetchWithTimeout(url: string, ms: number): Promise<Response> {
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), ms)
+  return fetch(url, { signal: controller.signal }).finally(() => clearTimeout(timer))
 }

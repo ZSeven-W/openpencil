@@ -729,7 +729,7 @@ export class SkiaRenderer {
           ;(this as any)._onFontLoaded?.()
         }
       })
-      // If no fallback font is available either, fall back to bitmap
+      // If no fallback font is available, fall back to bitmap rendering
       if (!this.fontManager.hasAnyFallback(primaryFamily)) {
         return false
       }
