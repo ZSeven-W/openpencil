@@ -48,7 +48,7 @@ RULES:
 - Mobile: 375x812 (both width AND height are fixed). Desktop: 1200x0 (width fixed, height auto-expands).
 - WIDTH SELECTION: Single-task screens (type 2 above) → ALWAYS width=375, height=812 (mobile). Multi-section pages and data-rich workspaces (types 1 & 3) → width=1200, height=0 (desktop). This is mandatory.
 - MULTI-SCREEN APPS: When the request involves multiple distinct screens/pages (e.g. "登录页+个人中心", "login and profile"), add "screen":"<name>" to each subtask to group sections that belong to the same page. Use a concise page name (e.g. "登录", "Profile"). Subtasks sharing the same "screen" are placed in one root frame. Single-screen requests don't need "screen". Example: [{"id":"brand","label":"Brand Area","screen":"Login","region":{...}},{"id":"form","label":"Login Form","screen":"Login","region":{...}},{"id":"card","label":"User Card","screen":"Profile","region":{...}}]
-- NO explanation. NO markdown. JUST the JSON object.`
+- NO explanation. NO markdown. NO tool calls. JUST the JSON object. Start with {.`
 
 // Safe code block delimiter
 const BLOCK = "```"
@@ -95,7 +95,7 @@ ${BLOCK}json
 {"_parent":"cta","id":"cta-text","type":"text","name":"CTA Label","content":"Get Started","fontSize":16,"fontWeight":600,"fill":[{"type":"solid","color":"#FFFFFF"}]}
 ${BLOCK}
 
-Start with ${BLOCK}json immediately. No preamble.`
+CRITICAL: Output ONLY the ${BLOCK}json block. Do NOT write any text, explanation, plan, or tool calls. Start your response with ${BLOCK}json immediately.`
 
 /**
  * Simplified sub-agent prompt for weaker models (basic tier).
@@ -116,7 +116,7 @@ RULES:
 - Text: never set height. Use width="fill_container" for wrapping text.
 - Icons: use icon_font with iconFontName (lucide names: search, bell, user, heart, star, plus, x, check, chevron-right, settings). Sizes: 16/20/24px.
 - Buttons: frame with padding=[12,24] containing a text child.
-- No emoji characters. No markdown. No explanation.
+- No emoji characters. No markdown. No explanation. No tool calls.
 
 EXAMPLE:
 ${BLOCK}json
@@ -140,4 +140,4 @@ ${BLOCK}json
 }
 ${BLOCK}
 
-Start with ${BLOCK}json immediately. No preamble.`
+CRITICAL: You are a JSON generator. Output ONLY the ${BLOCK}json block. Do NOT write any text, explanation, plan, or tool calls before or after the JSON. Start your response with ${BLOCK}json immediately.`

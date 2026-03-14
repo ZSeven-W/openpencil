@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { X, Upload, AlertCircle, Loader2, FileUp } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useDocumentStore } from '@/stores/document-store'
+import { useCanvasStore } from '@/stores/canvas-store'
 import { zoomToFitContent } from '@/canvas/use-fabric-canvas'
 import { parseFigFile } from '@/services/figma/fig-parser'
 import { figmaToPenDocument, figmaAllPagesToPenDocument, getFigmaPages } from '@/services/figma/figma-node-mapper'
@@ -28,20 +29,6 @@ export default function FigmaImportDialog({ open, onClose }: FigmaImportDialogPr
   const [isDragging, setIsDragging] = useState(false)
   const [layoutMode, setLayoutMode] = useState<FigmaImportLayoutMode>('preserve')
   const fileInputRef = useRef<HTMLInputElement>(null)
-
-  // Reset state when dialog opens
-  useEffect(() => {
-    if (open) {
-      setState('idle')
-      setProgress(0)
-      setError('')
-      setWarnings([])
-      setDecoded(null)
-      setFileName('')
-      setPages([])
-      setLayoutMode('preserve')
-    }
-  }, [open])
 
   // Escape key to close
   useEffect(() => {
@@ -89,6 +76,26 @@ export default function FigmaImportDialog({ open, onClose }: FigmaImportDialogPr
       setState('error')
     }
   }, [t])
+
+  // Reset state when dialog opens; auto-process pending .fig file from drag-and-drop
+  useEffect(() => {
+    if (open) {
+      setState('idle')
+      setProgress(0)
+      setError('')
+      setWarnings([])
+      setDecoded(null)
+      setFileName('')
+      setPages([])
+      setLayoutMode('preserve')
+
+      const pending = useCanvasStore.getState().pendingFigmaFile
+      if (pending) {
+        useCanvasStore.getState().setPendingFigmaFile(null)
+        processFile(pending)
+      }
+    }
+  }, [open, processFile])
 
   const convertAndLoad = useCallback(async (
     decodedFile: FigmaDecodedFile,

@@ -6,6 +6,7 @@ import type { FabricObjectWithPenId } from './canvas-object-factory'
 import { setFabricSyncLock } from './canvas-sync-lock'
 import { nodeRenderInfo } from './use-canvas-sync'
 import { setInsertionIndicator } from './insertion-indicator'
+import { inferLayout } from './canvas-layout-engine'
 
 // ---------------------------------------------------------------------------
 // Session state
@@ -127,7 +128,7 @@ export function beginLayoutDrag(nodeId: string): boolean {
   if (!parent) return false
 
   const container = parent as PenNode & ContainerProps
-  const layout = container.layout
+  const layout = container.layout || inferLayout(parent)
   if (!layout || layout === 'none') return false
 
   const children = 'children' in parent ? parent.children ?? [] : []

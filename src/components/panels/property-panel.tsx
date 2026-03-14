@@ -40,6 +40,13 @@ export default function PropertyPanel({ embedded }: { embedded?: boolean } = {})
   void children
   const node = activeId ? getNodeById(activeId) : undefined
 
+  // These hooks must run unconditionally (React rules of hooks)
+  const [isEditingName, setIsEditingName] = useState(false)
+  const [editName, setEditName] = useState('')
+  useEffect(() => {
+    setIsEditingName(false)
+  }, [activeId])
+
   if (!node) {
     return null
   }
@@ -129,14 +136,6 @@ export default function PropertyPanel({ embedded }: { embedded?: boolean } = {})
   const isText = displayNode.type === 'text'
   const isIcon = (displayNode.type === 'path' && !!(displayNode as PathNode).iconId)
     || displayNode.type === 'icon_font'
-
-  const [isEditingName, setIsEditingName] = useState(false)
-  const [editName, setEditName] = useState('')
-
-  // Reset editing state when selection changes
-  useEffect(() => {
-    setIsEditingName(false)
-  }, [activeId])
 
   const handleNameClick = () => {
     setEditName(node.name ?? node.type)

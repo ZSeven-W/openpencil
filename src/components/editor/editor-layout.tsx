@@ -1,4 +1,4 @@
-import { lazy, Suspense, useState, useCallback, useEffect } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import TopBar from './top-bar'
 import Toolbar from './toolbar'
@@ -23,9 +23,9 @@ import { useThemePresetStore } from '@/stores/theme-preset-store'
 import { useElectronMenu } from '@/hooks/use-electron-menu'
 import { useFigmaPaste } from '@/hooks/use-figma-paste'
 import { useMcpSync } from '@/hooks/use-mcp-sync'
+import { useFileDrop } from '@/hooks/use-file-drop'
 import { initAppStorage } from '@/utils/app-storage'
-
-const FabricCanvas = lazy(() => import('@/canvas/fabric-canvas'))
+import SkiaCanvas from '@/canvas/skia/skia-canvas'
 
 export default function EditorLayout() {
   const toggleMinimize = useAIStore((s) => s.toggleMinimize)
@@ -113,6 +113,9 @@ export default function EditorLayout() {
   // MCP ↔ canvas real-time sync
   useMcpSync()
 
+  // Drag-and-drop file open
+  const isDragging = useFileDrop()
+
   // Hydrate persisted settings (init appStorage first for Electron IPC cache)
   useEffect(() => {
     initAppStorage().then(() => {
@@ -132,15 +135,7 @@ export default function EditorLayout() {
           <div className="flex-1 flex overflow-hidden">
             {layerPanelOpen && <LayerPanel />}
             <div className="flex-1 flex flex-col min-w-0 relative">
-              <Suspense
-                fallback={
-                  <div className="flex-1 flex items-center justify-center bg-muted text-muted-foreground text-sm">
-                    Loading canvas...
-                  </div>
-                }
-              >
-                <FabricCanvas />
-              </Suspense>
+              <SkiaCanvas />
               <Toolbar />
               <BooleanToolbar />
 
@@ -170,6 +165,11 @@ export default function EditorLayout() {
         <SaveDialog open={saveDialogOpen} onClose={closeSaveDialog} />
         <AgentSettingsDialog />
         <FigmaImportDialog open={figmaImportOpen} onClose={closeFigmaImport} />
+
+        {/* Drop zone overlay */}
+        {isDragging && (
+          <div className="fixed inset-0 z-50 border-2 border-dashed border-primary bg-primary/5 pointer-events-none" />
+        )}
       </div>
     </TooltipProvider>
   )

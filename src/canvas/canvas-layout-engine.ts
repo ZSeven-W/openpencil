@@ -123,7 +123,11 @@ export function inferLayout(node: PenNode): 'horizontal' | undefined {
 /** Compute fit-content width from children. */
 export function fitContentWidth(node: PenNode, parentAvail?: number): number {
   if (!('children' in node) || !node.children?.length) return 0
-  const visibleChildren = node.children.filter((child) => isNodeVisible(child))
+  // Exclude badge/overlay nodes — they use absolute positioning and
+  // should not inflate the container's fit-content dimensions.
+  const visibleChildren = node.children.filter(
+    (child) => isNodeVisible(child) && !isBadgeOverlayNode(child),
+  )
   if (visibleChildren.length === 0) return 0
   const c = node as PenNode & ContainerProps
   const layout = c.layout || inferLayout(node)
@@ -147,7 +151,11 @@ export function fitContentWidth(node: PenNode, parentAvail?: number): number {
 /** Compute fit-content height from children. */
 export function fitContentHeight(node: PenNode, parentAvailW?: number): number {
   if (!('children' in node) || !node.children?.length) return 0
-  const visibleChildren = node.children.filter((child) => isNodeVisible(child))
+  // Exclude badge/overlay nodes — they use absolute positioning and
+  // should not inflate the container's fit-content dimensions.
+  const visibleChildren = node.children.filter(
+    (child) => isNodeVisible(child) && !isBadgeOverlayNode(child),
+  )
   if (visibleChildren.length === 0) return 0
   const c = node as PenNode & ContainerProps
   const layout = c.layout || inferLayout(node)
@@ -310,16 +318,25 @@ export function computeLayoutPositions(
     // For single-line text in vertical layouts, use Fabric's actual rendered
     // height (fontSize * 1.13) instead of fontSize * lineHeight.  This ensures
     // justify:center/end position the text correctly on the main axis.
+    // Only apply when text genuinely fits in one line — if it wraps due to
+    // width constraints, keep the multi-line estimated height.
     if (isVertical && ch.type === 'text' && mainSizing[i] !== 'fill') {
       const content = resolveTextContent(ch)
       if (countExplicitTextLines(content) <= 1) {
         const fontSize = (ch as any).fontSize ?? 16
-        mainSize = fontSize * FABRIC_FONT_SIZE_MULT
+        const singleLineH = fontSize * FABRIC_FONT_SIZE_MULT
+        const estH = estimateTextHeight(ch, availW)
+        if (estH <= singleLineH + 1) {
+          mainSize = singleLineH
+        }
       }
     }
     return {
       w: isVertical ? getNodeWidth(ch, availW) : mainSize,
-      h: isVertical ? mainSize : getNodeHeight(ch, availH, availW),
+      // For horizontal layouts, use the child's resolved width (mainSize) for
+      // height estimation. This ensures text wrapping is calculated at the
+      // actual width the child will occupy, not the parent's full available width.
+      h: isVertical ? mainSize : getNodeHeight(ch, availH, isVertical ? availW : mainSize),
     }
   })
 
@@ -370,13 +387,18 @@ export function computeLayoutPositions(
     // Fabric.js strips lineHeight from the last (only) line, so single-line text
     // height is always fontSize * _fontSizeMult regardless of lineHeight.
     // Using fontSize * lineHeight overestimates the height, shifting text upward.
+    // Only apply when text genuinely fits in one line (no word wrapping).
     let effectiveChildCross = childCross
     if (align === 'center' && !isVertical && child.type === 'text') {
       const fontSize = child.fontSize ?? 16
       const content = resolveTextContent(child)
       const isSingleLine = countExplicitTextLines(content) <= 1
       if (isSingleLine) {
-        effectiveChildCross = fontSize * FABRIC_FONT_SIZE_MULT
+        const singleLineH = fontSize * FABRIC_FONT_SIZE_MULT
+        const estH = estimateTextHeight(child, sizes[i].w)
+        if (estH <= singleLineH + 1) {
+          effectiveChildCross = singleLineH
+        }
       }
     }
 

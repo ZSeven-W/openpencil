@@ -61,7 +61,11 @@ function buildClaudeExitHint(rawError: string, debugTail?: string[]): string | u
     hints.push('Upstream API connection failed (check proxy/DNS/network reachability to your ANTHROPIC_BASE_URL).')
   }
   if (/ANTHROPIC_CUSTOM_HEADERS present: false, has Authorization header: false/i.test(text)) {
-    hints.push('No API auth header detected by Claude runtime; verify token/header env mapping.')
+    hints.push(
+      'No API auth header detected. Run "claude login" to authenticate, ' +
+      'or set ANTHROPIC_API_KEY in ~/.claude/settings.json ' +
+      '(env: { "ANTHROPIC_API_KEY": "sk-..." }).',
+    )
   }
 
   if (hints.length === 0) return undefined

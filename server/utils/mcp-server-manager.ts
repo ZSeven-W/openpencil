@@ -3,7 +3,13 @@ import { existsSync, writeFileSync, unlinkSync, readFileSync } from 'node:fs'
 import { networkInterfaces } from 'node:os'
 import { join, resolve, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
+<<<<<<< fix/mcp-server-detached-process
 import { tmpdir } from 'node:os'
+=======
+
+const __filename = fileURLToPath(import.meta.url)
+const __dirname = dirname(__filename)
+>>>>>>> v0.4.0
 
 // ESM-compatible __dirname polyfill
 const __filename = fileURLToPath(import.meta.url)

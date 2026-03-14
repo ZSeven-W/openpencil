@@ -8,7 +8,9 @@ import { canBooleanOp, executeBooleanOp, type BooleanOpType } from '@/utils/bool
 import { tryPasteFigmaFromClipboard } from '@/hooks/use-figma-paste'
 import {
   supportsFileSystemAccess,
+  isElectron,
   writeToFileHandle,
+  writeToFilePath,
   saveDocumentAs,
   downloadDocument,
   openDocumentFS,
@@ -176,32 +178,60 @@ export function useKeyboardShortcuts() {
         return
       }
 
-      // Save: Cmd/Ctrl+S
-      if (isMod && e.key === 's' && !e.shiftKey) {
+      // Save: Cmd/Ctrl+S (also Cmd/Ctrl+Shift+S)
+      // If current file is .op with handle/path → save in-place
+      // Otherwise → save as .op
+      if (isMod && e.key === 's') {
         e.preventDefault()
-        // Force-sync all Fabric object positions to the store before serializing
-        syncCanvasPositionsToStore()
+        try { syncCanvasPositionsToStore() } catch { /* continue */ }
         const store = useDocumentStore.getState()
-        const { document: doc, fileName, fileHandle } = store
+        const { document: doc, fileName, fileHandle, filePath } = store
+        const isOpFile = fileName ? /\.op$/i.test(fileName) : false
+        const suggestedName = fileName
+          ? fileName.replace(/\.(pen|op|json)$/i, '') + '.op'
+          : 'untitled.op'
 
-        if (fileHandle) {
-          writeToFileHandle(fileHandle, doc).then(() => store.markClean())
-        } else if (fileName) {
-          downloadDocument(doc, fileName)
-          store.markClean()
-        } else if (supportsFileSystemAccess()) {
-          saveDocumentAs(doc, 'untitled.op').then((result) => {
-            if (result) {
+        const doSave = async () => {
+          // Electron with known .op path
+          if (isElectron() && filePath && isOpFile) {
+            await writeToFilePath(filePath, doc)
+            store.markClean()
+            return
+          }
+          // Browser with valid .op file handle
+          if (fileHandle && isOpFile) {
+            try {
+              await writeToFileHandle(fileHandle, doc)
+              store.markClean()
+              return
+            } catch {
+              useDocumentStore.setState({ fileHandle: null })
+            }
+          }
+          // Save as .op
+          if (isElectron()) {
+            const savedPath = await window.electronAPI!.saveFile(
+              JSON.stringify(doc), suggestedName,
+            )
+            if (savedPath) {
               useDocumentStore.setState({
-                fileName: result.fileName,
-                fileHandle: result.handle,
-                isDirty: false,
+                fileName: savedPath.split(/[/\\]/).pop() || suggestedName,
+                filePath: savedPath, fileHandle: null, isDirty: false,
               })
             }
-          })
-        } else {
-          store.setSaveDialogOpen(true)
+          } else if (supportsFileSystemAccess()) {
+            const result = await saveDocumentAs(doc, suggestedName)
+            if (result) {
+              useDocumentStore.setState({
+                fileName: result.fileName, fileHandle: result.handle, isDirty: false,
+              })
+            }
+          } else {
+            downloadDocument(doc, suggestedName)
+            store.markClean()
+          }
         }
+        doSave().catch((err) => console.error('[Save] Failed:', err))
         return
       }
 

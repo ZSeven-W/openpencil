@@ -120,6 +120,9 @@ export function useFabricCanvas(
       preserveObjectStacking: true,
       stopContextMenu: true,
       fireRightClick: true,
+      // Prevent automatic re-render on every add/remove — we call
+      // requestRenderAll() once after bulk sync operations instead.
+      renderOnAddRemove: false,
     })
 
     // Selection marquee styling

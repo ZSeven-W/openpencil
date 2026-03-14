@@ -48,6 +48,21 @@ export default defineEventHandler(async (event) => {
   return { connected: false, models: [], error: `Unknown agent: ${body.agent}` } satisfies ConnectResult
 })
 
+/**
+ * Fallback models when supportedModels() fails.
+ * Used with third-party API proxies (e.g. Claude Router) that don't support
+ * the model-listing endpoint. Covers common model IDs routers typically expose.
+ */
+const FALLBACK_CLAUDE_MODELS: GroupedModel[] = [
+  { value: 'claude-sonnet-4-6', displayName: 'Claude Sonnet 4.6', description: '', provider: 'anthropic' },
+  { value: 'claude-opus-4-6', displayName: 'Claude Opus 4.6', description: '', provider: 'anthropic' },
+  { value: 'claude-sonnet-4-5-20250514', displayName: 'Claude Sonnet 4.5', description: '', provider: 'anthropic' },
+  { value: 'claude-haiku-4-5-20251001', displayName: 'Claude Haiku 4.5', description: '', provider: 'anthropic' },
+  { value: 'claude-3-7-sonnet-20250219', displayName: 'Claude 3.7 Sonnet', description: '', provider: 'anthropic' },
+  { value: 'claude-3-5-sonnet-20241022', displayName: 'Claude 3.5 Sonnet', description: '', provider: 'anthropic' },
+  { value: 'claude-3-5-haiku-20241022', displayName: 'Claude 3.5 Haiku', description: '', provider: 'anthropic' },
+]
+
 /** Connect to Claude Code via Agent SDK and fetch real supported models */
 async function connectClaudeCode(): Promise<ConnectResult> {
   const claudePath = resolveClaudeCli()
@@ -86,15 +101,21 @@ async function connectClaudeCode(): Promise<ConnectResult> {
 
     return { connected: true, models }
   } catch (error) {
-    const raw = error instanceof Error ? error.message : 'Failed to connect'
-    return { connected: false, models: [], error: friendlyClaudeError(raw) }
+    const msg = error instanceof Error ? error.message : 'Failed to connect'
+    // Third-party API proxies often don't support the supportedModels() call,
+    // causing "query closed before response". Fall back to a default model list
+    // so users can still connect and choose a model.
+    if (/closed before|closed early|query closed/i.test(msg)) {
+      return { connected: true, models: FALLBACK_CLAUDE_MODELS }
+    }
+    return { connected: false, models: [], error: friendlyClaudeError(msg) }
   }
 }
 
 /** Map raw Agent SDK errors to user-friendly messages */
 function friendlyClaudeError(raw: string): string {
   if (/process exited with code 1|invalid model|unknown model|model.*not/i.test(raw)) {
-    return 'Claude Code exited with code 1. Check your model mapping (e.g. ANTHROPIC_MODEL / default Sonnet model) and run "claude login" if needed.'
+    return 'Claude Code exited with code 1. Run "claude login" to authenticate, or set ANTHROPIC_API_KEY in ~/.claude/settings.json.'
   }
   if (/exited with code/i.test(raw)) {
     return 'Unable to connect. Claude Code process exited unexpectedly.'

@@ -43,12 +43,24 @@ export function parseSvgToNodesServer(
   // Parse viewBox and dimensions
   const vbMatch = svgAttrs.match(/\bviewBox\s*=\s*"([^"]+)"/)
   const vb = vbMatch?.[1].split(/[\s,]+/).map(Number)
-  const svgW = parseAttrNum(svgAttrs, 'width') || vb?.[2] || 100
-  const svgH = parseAttrNum(svgAttrs, 'height') || vb?.[3] || 100
+  const vbW = vb?.[2] || 100
+  const vbH = vb?.[3] || 100
+  // Presentation size — only use if pure numeric (ignore "1em", "100%", etc.)
+  const rawW = extractAttr(svgAttrs, 'width') ?? ''
+  const rawH = extractAttr(svgAttrs, 'height') ?? ''
+  const svgW = /^[\d.]+$/.test(rawW) ? parseFloat(rawW) : vbW
+  const svgH = /^[\d.]+$/.test(rawH) ? parseFloat(rawH) : vbH
 
-  // Compute scale to fit within maxDim
-  const scale =
-    svgW > maxDim || svgH > maxDim ? maxDim / Math.max(svgW, svgH) : 1
+  // Target output size clamped to maxDim
+  let outW = svgW, outH = svgH
+  if (outW > maxDim || outH > maxDim) {
+    const s = maxDim / Math.max(outW, outH)
+    outW *= s
+    outH *= s
+  }
+
+  // Scale from viewBox coordinate space to output space
+  const scale = Math.min(outW / vbW, outH / vbH)
 
   // Build root style context
   const rootCtx: StyleCtx = {
@@ -68,8 +80,8 @@ export function parseSvgToNodesServer(
       id: generateId(),
       type: 'frame',
       name: 'SVG',
-      width: Math.round(svgW * scale),
-      height: Math.round(svgH * scale),
+      width: Math.ceil(outW),
+      height: Math.ceil(outH),
       layout: 'none' as const,
       children: nodes,
     },
@@ -118,10 +130,19 @@ function parseTag(
     const children = parseElements(innerBody, scale, ctx)
     if (children.length === 0) return null
     if (children.length === 1) return children[0]
+    const bounds = computeChildrenBounds(children)
+    // Make children coordinates relative to the group origin
+    for (const child of children) {
+      offsetChild(child, -bounds.x, -bounds.y)
+    }
     return {
       id: generateId(),
       type: 'frame',
       name: extractAttr(attrs, 'id') ?? 'Group',
+      x: bounds.x,
+      y: bounds.y,
+      width: Math.ceil(bounds.w),
+      height: Math.ceil(bounds.h),
       layout: 'none' as const,
       children,
     }
@@ -150,8 +171,8 @@ function parseTag(
         d: scaledD,
         x: bbox.x,
         y: bbox.y,
-        width: Math.round(bbox.w),
-        height: Math.round(bbox.h),
+        width: Math.ceil(bbox.w),
+        height: Math.ceil(bbox.h),
         fill,
         stroke,
       }
@@ -168,8 +189,8 @@ function parseTag(
         type: 'rectangle' as const,
         name: extractAttr(attrs, 'id') ?? 'Rectangle',
         x, y,
-        width: Math.round(w),
-        height: Math.round(h),
+        width: Math.ceil(w),
+        height: Math.ceil(h),
         cornerRadius: rx || undefined,
         fill,
         stroke,
@@ -185,8 +206,8 @@ function parseTag(
         type: 'ellipse' as const,
         name: extractAttr(attrs, 'id') ?? 'Circle',
         x: cx - r, y: cy - r,
-        width: Math.round(r * 2),
-        height: Math.round(r * 2),
+        width: Math.ceil(r * 2),
+        height: Math.ceil(r * 2),
         fill,
         stroke,
       }
@@ -202,8 +223,8 @@ function parseTag(
         type: 'ellipse' as const,
         name: extractAttr(attrs, 'id') ?? 'Ellipse',
         x: cx - rx, y: cy - ry,
-        width: Math.round(rx * 2),
-        height: Math.round(ry * 2),
+        width: Math.ceil(rx * 2),
+        height: Math.ceil(ry * 2),
         fill,
         stroke,
       }
@@ -236,8 +257,8 @@ function parseTag(
         d: scaledD,
         x: bbox.x,
         y: bbox.y,
-        width: Math.round(bbox.w),
-        height: Math.round(bbox.h),
+        width: Math.ceil(bbox.w),
+        height: Math.ceil(bbox.h),
         fill: tag === 'polygon' ? fill : noFill(),
         stroke,
       }
@@ -470,16 +491,57 @@ function estimatePathBBox(d: string): { x: number; y: number; w: number; h: numb
 
   if (!isFinite(minX)) return { x: 0, y: 0, w: 100, h: 100 }
   return {
-    x: Math.round(minX),
-    y: Math.round(minY),
-    w: Math.round(maxX - minX) || 1,
-    h: Math.round(maxY - minY) || 1,
+    x: Math.floor(minX),
+    y: Math.floor(minY),
+    w: Math.ceil(maxX - Math.floor(minX)) || 1,
+    h: Math.ceil(maxY - Math.floor(minY)) || 1,
   }
 }
 
 // ---------------------------------------------------------------------------
 // Utility
 // ---------------------------------------------------------------------------
+
+/** Compute the bounding box that encloses all children (including stroke extent) */
+function computeChildrenBounds(children: PenNode[]): { x: number; y: number; w: number; h: number } {
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
+  for (const child of children) {
+    const cx = (child as any).x ?? 0
+    const cy = (child as any).y ?? 0
+    // Expand by half stroke width so the group fully contains visual bounds
+    const halfStroke = ((child as any).stroke?.thickness ?? 0) / 2
+    if (child.type === 'line') {
+      const x2 = (child as any).x2 ?? cx
+      const y2 = (child as any).y2 ?? cy
+      minX = Math.min(minX, cx - halfStroke, x2 - halfStroke)
+      minY = Math.min(minY, cy - halfStroke, y2 - halfStroke)
+      maxX = Math.max(maxX, cx + halfStroke, x2 + halfStroke)
+      maxY = Math.max(maxY, cy + halfStroke, y2 + halfStroke)
+    } else {
+      const cw = (child as any).width ?? 0
+      const ch = (child as any).height ?? 0
+      minX = Math.min(minX, cx - halfStroke)
+      minY = Math.min(minY, cy - halfStroke)
+      maxX = Math.max(maxX, cx + cw + halfStroke)
+      maxY = Math.max(maxY, cy + ch + halfStroke)
+    }
+  }
+  if (!isFinite(minX)) return { x: 0, y: 0, w: 0, h: 0 }
+  return { x: minX, y: minY, w: maxX - minX, h: maxY - minY }
+}
+
+/** Offset a child node's position (make relative to parent origin) */
+function offsetChild(node: PenNode, dx: number, dy: number) {
+  if (node.type === 'line') {
+    ;(node as any).x = ((node as any).x ?? 0) + dx
+    ;(node as any).y = ((node as any).y ?? 0) + dy
+    ;(node as any).x2 = ((node as any).x2 ?? 0) + dx
+    ;(node as any).y2 = ((node as any).y2 ?? 0) + dy
+  } else {
+    ;(node as any).x = ((node as any).x ?? 0) + dx
+    ;(node as any).y = ((node as any).y ?? 0) + dy
+  }
+}
 
 function pointsToD(points: string, close: boolean): string {
   const nums = points.trim().split(/[\s,]+/).map(Number)

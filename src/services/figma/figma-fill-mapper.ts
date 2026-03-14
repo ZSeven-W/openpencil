@@ -84,7 +84,11 @@ function mapSingleFill(paint: FigmaPaint): PenFill | null {
 }
 
 function gradientAngleFromTransform(m: FigmaMatrix): number {
-  return Math.round(Math.atan2(m.m10, m.m00) * (180 / Math.PI))
+  // Figma gradient direction is (m00, m10) in object space (default = horizontal).
+  // atan2 gives the math-convention angle (0° = right, CCW).
+  // Convert to CSS gradient convention (0° = bottom-to-top, 90° = left-to-right).
+  const mathAngle = Math.atan2(m.m10, m.m00) * (180 / Math.PI)
+  return Math.round(90 - mathAngle)
 }
 
 function mapScaleMode(mode?: string): 'stretch' | 'fill' | 'fit' {

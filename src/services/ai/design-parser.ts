@@ -17,8 +17,23 @@ export interface StreamingNodeResult {
  * Extract PenNode JSON from AI response text.
  * Handles ```json blocks, JSONL format, raw arrays, and fallback parsing.
  */
+/**
+ * Strip non-standard XML-like tags that third-party models may inject
+ * (e.g. `<minimax:tool_call>`, `<tool_call>`, `<|im_start|>`).
+ * Preserves content between tags so any embedded JSON can still be parsed.
+ */
+function stripNonStandardTags(text: string): string {
+  return text
+    .replace(/<\/?[\w:.]+:[\w]+[^>]*>/g, '')  // namespaced tags: <minimax:tool_call>
+    .replace(/<\/?tool_call[^>]*>/g, '')        // <tool_call>, </tool_call>
+    .replace(/<\|[\w_]+\|>/g, '')               // chat template markers: <|im_start|>
+}
+
 export function extractJsonFromResponse(text: string): PenNode[] | null {
-  const parsedBlocks = extractAllJsonBlocks(text)
+  // Clean non-standard model artifacts before parsing
+  const cleaned = stripNonStandardTags(text)
+
+  const parsedBlocks = extractAllJsonBlocks(cleaned)
     .map((block) => tryParseNodes(block))
     .filter(Boolean) as PenNode[][]
 
@@ -27,11 +42,11 @@ export function extractJsonFromResponse(text: string): PenNode[] | null {
   }
 
   // Try JSONL format (flat nodes with _parent field)
-  const jsonlTree = parseJsonlToTree(text)
+  const jsonlTree = parseJsonlToTree(cleaned)
   if (jsonlTree) return jsonlTree
 
   // Fallback: try to find a single JSON array if no blocks found
-  const arrayMatch = text.match(/\[\s*\{[\s\S]*\}\s*\]/)
+  const arrayMatch = cleaned.match(/\[\s*\{[\s\S]*\}\s*\]/)
   if (arrayMatch) {
      const nodes = tryParseNodes(arrayMatch[0])
      return nodes
@@ -39,11 +54,11 @@ export function extractJsonFromResponse(text: string): PenNode[] | null {
 
   // Fallback: try parsing a single root node with nested children
   // (weaker models may output one root object instead of an array)
-  const singleRoot = tryParseSingleRootNode(text)
+  const singleRoot = tryParseSingleRootNode(cleaned)
   if (singleRoot) return singleRoot
 
   // Fallback: try parsing raw text after removing <step> tags.
-  const stripped = text.replace(/<step[\s\S]*?<\/step>/g, '').trim()
+  const stripped = cleaned.replace(/<step[\s\S]*?<\/step>/g, '').trim()
   const directNodes = tryParseNodes(stripped)
   if (directNodes) {
     return directNodes

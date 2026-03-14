@@ -30,7 +30,9 @@ import { useCanvasStore } from '@/stores/canvas-store'
 import { useDocumentStore } from '@/stores/document-store'
 import {
   supportsFileSystemAccess,
+  isElectron,
   writeToFileHandle,
+  writeToFilePath,
   saveDocumentAs,
   downloadDocument,
   openDocumentFS,
@@ -38,6 +40,7 @@ import {
 } from '@/utils/file-operations'
 import { syncCanvasPositionsToStore } from '@/canvas/use-canvas-sync'
 import { zoomToFitContent } from '@/canvas/use-fabric-canvas'
+import { normalizePenDocument } from '@/utils/normalize-pen-file'
 import { useAgentSettingsStore } from '@/stores/agent-settings-store'
 import type { AIProviderType } from '@/types/agent-settings'
 
@@ -201,18 +204,60 @@ export default function TopBar() {
     requestAnimationFrame(() => zoomToFitContent())
   }, [])
 
-  const handleSave = useCallback(() => {
-    syncCanvasPositionsToStore()
+  /**
+   * Unified save: if the current file is .op with a known handle/path, save
+   * in-place; otherwise trigger "save as .op".
+   */
+  const handleSave = useCallback(async () => {
+    try {
+      syncCanvasPositionsToStore()
+    } catch (err) {
+      console.error('[Save] syncCanvasPositionsToStore failed:', err)
+    }
     const store = useDocumentStore.getState()
-    const { document: doc, fileName: fn, fileHandle } = store
+    const { document: doc, fileName: fn, fileHandle, filePath } = store
 
-    if (fileHandle) {
-      writeToFileHandle(fileHandle, doc).then(() => store.markClean())
-    } else if (fn) {
-      downloadDocument(doc, fn)
-      store.markClean()
-    } else if (supportsFileSystemAccess()) {
-      saveDocumentAs(doc, 'untitled.op').then((result) => {
+    const isOpFile = fn ? /\.op$/i.test(fn) : false
+    const suggestedName = fn
+      ? fn.replace(/\.(pen|op|json)$/i, '') + '.op'
+      : 'untitled.op'
+
+    try {
+      // Electron with known .op path → direct write
+      if (isElectron() && filePath && isOpFile) {
+        await writeToFilePath(filePath, doc)
+        store.markClean()
+        return
+      }
+
+      // Browser with valid .op file handle → direct write
+      if (fileHandle && isOpFile) {
+        try {
+          await writeToFileHandle(fileHandle, doc)
+          store.markClean()
+          return
+        } catch (err) {
+          console.warn('[Save] File handle write failed, falling back:', err)
+          useDocumentStore.setState({ fileHandle: null })
+        }
+      }
+
+      // No in-place target (new file, .pen file, or stale handle) → save as .op
+      if (isElectron()) {
+        const savedPath = await window.electronAPI!.saveFile(
+          JSON.stringify(doc),
+          suggestedName,
+        )
+        if (savedPath) {
+          useDocumentStore.setState({
+            fileName: savedPath.split(/[/\\]/).pop() || suggestedName,
+            filePath: savedPath,
+            fileHandle: null,
+            isDirty: false,
+          })
+        }
+      } else if (supportsFileSystemAccess()) {
+        const result = await saveDocumentAs(doc, suggestedName)
         if (result) {
           useDocumentStore.setState({
             fileName: result.fileName,
@@ -220,14 +265,35 @@ export default function TopBar() {
             isDirty: false,
           })
         }
-      })
-    } else {
-      store.setSaveDialogOpen(true)
+      } else {
+        downloadDocument(doc, suggestedName)
+        store.markClean()
+      }
+    } catch (err) {
+      console.error('[Save] Failed to save document:', err)
+      try {
+        downloadDocument(doc, suggestedName)
+        store.markClean()
+      } catch (dlErr) {
+        console.error('[Save] Download fallback also failed:', dlErr)
+      }
     }
   }, [])
 
   const handleOpen = useCallback(() => {
-    if (supportsFileSystemAccess()) {
+    if (isElectron()) {
+      window.electronAPI!.openFile().then((result) => {
+        if (!result) return
+        try {
+          const raw = JSON.parse(result.content)
+          if (!raw.version || (!Array.isArray(raw.children) && !Array.isArray(raw.pages))) return
+          const doc = normalizePenDocument(raw)
+          const name = result.filePath.split(/[/\\]/).pop() || 'untitled.op'
+          useDocumentStore.getState().loadDocument(doc, name, null, result.filePath)
+          requestAnimationFrame(() => zoomToFitContent())
+        } catch { /* invalid file */ }
+      })
+    } else if (supportsFileSystemAccess()) {
       openDocumentFS().then((result) => {
         if (result) {
           useDocumentStore

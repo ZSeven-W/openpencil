@@ -250,6 +250,15 @@ async function executeSubAgent(
     ? `${basePrompt}\n\n${preparedPrompt.designPrinciples}`
     : basePrompt
 
+  // For basic-tier models (MiniMax, GLM, Qwen, etc.) via third-party routers,
+  // system prompts may be ignored or lost. Inline the system prompt into the
+  // user message to ensure the model sees the instructions.
+  const inlineSystem = needsSimplifiedPrompt(profile)
+  const effectiveSystem = inlineSystem ? '' : systemPrompt
+  const effectiveUserContent = inlineSystem
+    ? `${systemPrompt}\n\n---\n\n${userPrompt}`
+    : userPrompt
+
   let rawResponse = ''
   const nodes: PenNode[] = []
   let streamOffset = 0
@@ -257,8 +266,8 @@ async function executeSubAgent(
 
   try {
     for await (const chunk of streamChat(
-      systemPrompt,
-      [{ role: 'user', content: userPrompt }],
+      effectiveSystem,
+      [{ role: 'user', content: effectiveUserContent }],
       request.model,
       timeoutOptions,
       request.provider,

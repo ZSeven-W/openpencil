@@ -33,6 +33,7 @@ interface CanvasStoreState {
   codePanelOpen: boolean
   rightPanelTab: RightPanelTab
   figmaImportDialogOpen: boolean
+  pendingFigmaFile: File | null
   activePageId: string | null
 
   setActiveTool: (tool: ToolType) => void
@@ -53,6 +54,7 @@ interface CanvasStoreState {
   setCodePanelOpen: (open: boolean) => void
   setRightPanelTab: (tab: RightPanelTab) => void
   setFigmaImportDialogOpen: (open: boolean) => void
+  setPendingFigmaFile: (file: File | null) => void
   setActivePageId: (pageId: string | null) => void
   hydrate: () => void
 }
@@ -80,6 +82,7 @@ export const useCanvasStore = create<CanvasStoreState>((set, get) => ({
   codePanelOpen: false,
   rightPanelTab: 'design',
   figmaImportDialogOpen: false,
+  pendingFigmaFile: null,
   activePageId: DEFAULT_PAGE_ID,
 
   setActiveTool: (tool) => set({ activeTool: tool }),
@@ -173,7 +176,8 @@ export const useCanvasStore = create<CanvasStoreState>((set, get) => ({
     const { layerPanelOpen, variablesPanelOpen, codePanelOpen } = get()
     persistPrefs({ layerPanelOpen, variablesPanelOpen, codePanelOpen, rightPanelTab: tab })
   },
-  setFigmaImportDialogOpen: (open) => set({ figmaImportDialogOpen: open }),
+  setFigmaImportDialogOpen: (open) => set({ figmaImportDialogOpen: open, ...(!open && { pendingFigmaFile: null }) }),
+  setPendingFigmaFile: (file) => set({ pendingFigmaFile: file }),
   setActivePageId: (activePageId) => set({ activePageId }),
 
   hydrate: () => {
