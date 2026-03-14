@@ -213,8 +213,13 @@ export function collectImageBlobs(blobs: (Uint8Array | string)[]): Map<number, U
   const map = new Map<number, Uint8Array>()
   for (let i = 0; i < blobs.length; i++) {
     const blob = blobs[i]
-    if (blob instanceof Uint8Array && blob.length > 0) {
-      if (blob[0] === 0x89 && blob[1] === 0x50) {
+    if (blob instanceof Uint8Array && blob.length > 8) {
+      // Detect image magic bytes: PNG, JPEG, GIF, WebP
+      const isPng = blob[0] === 0x89 && blob[1] === 0x50
+      const isJpeg = blob[0] === 0xFF && blob[1] === 0xD8
+      const isGif = blob[0] === 0x47 && blob[1] === 0x49
+      const isWebp = blob[0] === 0x52 && blob[1] === 0x49
+      if (isPng || isJpeg || isGif || isWebp) {
         map.set(i, blob)
       }
     }
@@ -317,9 +322,21 @@ function convertFrame(
     }
   }
 
+  // In preserve mode, only apply auto-layout properties for frames that actually
+  // have stackMode set.  Frames without stackMode use absolute x,y positioning.
+  // For auto-layout frames, children order must be reversed because the tree
+  // builder sorts descending (for z-stacking) but layout needs ascending (flow order).
+  const hasAutoLayout = figma.stackMode && figma.stackMode !== 'NONE'
   const layout = ctx.layoutMode === 'preserve'
-    ? ((figma.frameMaskDisabled !== true || figma.stackMode) ? { clipContent: true } : {})
+    ? (hasAutoLayout ? mapFigmaLayout(figma) : (figma.frameMaskDisabled !== true ? { clipContent: true } : {}))
     : mapFigmaLayout(figma)
+
+  // Reverse children order for auto-layout frames in preserve mode:
+  // tree builder sorts descending by position (z-stacking), but auto-layout
+  // needs ascending order (first child = start of layout flow).
+  const orderedChildren = (hasAutoLayout && ctx.layoutMode === 'preserve' && children.length > 1)
+    ? [...children].reverse()
+    : children
 
   return {
     type: 'frame',
@@ -331,7 +348,7 @@ function convertFrame(
     fill: mapFigmaFills(figma.fillPaints),
     stroke: mapFigmaStroke(figma),
     effects: mapFigmaEffects(figma.effects),
-    children: children.length > 0 ? children : undefined,
+    children: orderedChildren.length > 0 ? orderedChildren : undefined,
   }
 }
 
@@ -363,9 +380,14 @@ function convertComponent(
   const id = ctx.componentMap.get(figmaId) ?? ctx.generateId()
   const children = convertChildren(treeNode, ctx)
 
+  const hasAutoLayout = figma.stackMode && figma.stackMode !== 'NONE'
   const layout = ctx.layoutMode === 'preserve'
-    ? ((figma.frameMaskDisabled !== true || figma.stackMode) ? { clipContent: true } : {})
+    ? (hasAutoLayout ? mapFigmaLayout(figma) : (figma.frameMaskDisabled !== true ? { clipContent: true } : {}))
     : mapFigmaLayout(figma)
+
+  const orderedChildren = (hasAutoLayout && ctx.layoutMode === 'preserve' && children.length > 1)
+    ? [...children].reverse()
+    : children
 
   return {
     type: 'frame',
@@ -378,7 +400,7 @@ function convertComponent(
     fill: mapFigmaFills(figma.fillPaints),
     stroke: mapFigmaStroke(figma),
     effects: mapFigmaEffects(figma.effects),
-    children: children.length > 0 ? children : undefined,
+    children: orderedChildren.length > 0 ? orderedChildren : undefined,
   }
 }
 
@@ -396,11 +418,11 @@ function convertInstance(
   ) ?? false
 
   // Try to inline the master SYMBOL's children with overrides applied.
-  // This is necessary both when the component isn't in componentMap (external symbol)
-  // and when the instance has visual overrides that a simple `ref` node can't represent.
+  // Always inline when the instance has no local children (meaning it needs
+  // the symbol's content to render), or when it has visual overrides.
   if (componentGuid && (treeNode.children.length === 0 || hasVisualOverrides)) {
     const symbolNode = ctx.symbolTree.get(guidToString(componentGuid))
-    if (symbolNode && symbolNode.children.length > 0 && (hasVisualOverrides || figma.derivedSymbolData?.length)) {
+    if (symbolNode && symbolNode.children.length > 0) {
       const children = applyInstanceOverrides(
         symbolNode,
         figma.symbolData?.symbolOverrides,
@@ -458,8 +480,8 @@ function applyInstanceOverrides(
   instanceSize: { x: number; y: number } | undefined,
   symbolTree: Map<string, TreeNode>,
 ): TreeNode[] {
-  // If no derived data, fall back to simple scaling
-  if (!derived || derived.length === 0) {
+  // If no derived data and no overrides, fall back to simple scaling
+  if ((!derived || derived.length === 0) && (!overrides || overrides.length === 0)) {
     if (instanceSize && symbolNode.figma.size) {
       const sx = instanceSize.x / symbolNode.figma.size.x
       const sy = instanceSize.y / symbolNode.figma.size.y
@@ -480,7 +502,8 @@ function applyInstanceOverrides(
 
   // Build derived map keyed by guidPath string
   const derivedMap = new Map<string, FigmaDerivedSymbolDataEntry>()
-  for (const d of derived) {
+  const safeDerived = derived ?? []
+  for (const d of safeDerived) {
     if (d.guidPath?.guids?.length) {
       derivedMap.set(guidPathKey(d.guidPath.guids), d)
     }
@@ -500,7 +523,7 @@ function applyInstanceOverrides(
   flattenDFS(symbolNode)
 
   // Filter derived to length-1 guidPaths only (excludes nested instance entries)
-  const len1Derived = derived.filter(d => d.guidPath?.guids?.length === 1)
+  const len1Derived = safeDerived.filter(d => d.guidPath?.guids?.length === 1)
 
   // Extract base session/localID from the first derived entry
   const firstGuids = len1Derived[0]?.guidPath?.guids
@@ -520,8 +543,40 @@ function applyInstanceOverrides(
     if (ov) nodeOverride.set(nodeGuid, ov)
   }
 
-  if (len1Derived.length === flatSymbol.length) {
-    // Strategy 1: exact count match — direct index mapping (proven correct)
+  // Build GUID→nodeGuid map for direct lookup
+  const guidToNodeMap = new Map<string, string>()
+  for (const node of flatSymbol) {
+    if (node.figma.guid) guidToNodeMap.set(guidToString(node.figma.guid), guidToString(node.figma.guid))
+  }
+
+  // Strategy 0: Direct GUID matching — when derived guidPath GUIDs are actual
+  // symbol node GUIDs (not virtual).  Check if most derived entries match.
+  let directMatches = 0
+  for (const d of len1Derived) {
+    const pk = d.guidPath?.guids?.[0]
+    if (pk && guidToNodeMap.has(guidToString(pk))) directMatches++
+  }
+
+  if (directMatches > len1Derived.length * 0.5) {
+    // Most derived entries have actual GUIDs — use direct matching
+    for (const d of len1Derived) {
+      const pk = d.guidPath?.guids?.[0]
+      if (!pk) continue
+      const pkStr = guidToString(pk)
+      if (guidToNodeMap.has(pkStr)) {
+        resolveToNode(pkStr, pkStr)
+      }
+    }
+    // Also resolve overrides that use actual GUIDs
+    for (const [pk] of overrideMap) {
+      if (pk.includes('/')) continue
+      if (guidToNodeMap.has(pk)) {
+        const ov = overrideMap.get(pk)
+        if (ov) nodeOverride.set(pk, ov)
+      }
+    }
+  } else if (len1Derived.length === flatSymbol.length) {
+    // Strategy 1: exact count match — index mapping (for virtual GUIDs)
     for (let i = 0; i < flatSymbol.length; i++) {
       const node = flatSymbol[i]
       const d = len1Derived[i]
@@ -614,9 +669,9 @@ function applyInstanceOverrides(
     }
   } else {
     // Fallback: direct index mapping with all derived
-    for (let i = 0; i < Math.min(flatSymbol.length, derived.length); i++) {
+    for (let i = 0; i < Math.min(flatSymbol.length, safeDerived.length); i++) {
       const node = flatSymbol[i]
-      const d = derived[i]
+      const d = safeDerived[i]
       if (node.figma.guid && d.guidPath?.guids?.length) {
         resolveToNode(guidPathKey(d.guidPath.guids), guidToString(node.figma.guid))
       }
