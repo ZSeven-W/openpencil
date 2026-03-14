@@ -13,9 +13,12 @@ import { lookupIconByName } from '@/services/ai/icon-resolver'
 import type { TreeNode } from './figma-tree-builder'
 import { guidToString } from './figma-tree-builder'
 
-/** Scale tree children's transforms and sizes to fit a different parent size. */
+/** Scale tree children's transforms and sizes to fit a different parent size.
+ *  Also scales strokeWeight proportionally so strokes don't appear
+ *  disproportionately thick when an instance is smaller than its symbol. */
 function scaleTreeChildren(children: TreeNode[], sx: number, sy: number): TreeNode[] {
   if (Math.abs(sx - 1) < 0.001 && Math.abs(sy - 1) < 0.001) return children
+  const strokeScale = Math.min(sx, sy)
   return children.map((child) => {
     const figma = { ...child.figma }
     if (figma.transform) {
@@ -27,6 +30,10 @@ function scaleTreeChildren(children: TreeNode[], sx: number, sy: number): TreeNo
     }
     if (figma.size) {
       figma.size = { x: figma.size.x * sx, y: figma.size.y * sy }
+    }
+    // Scale stroke weight so lines stay visually proportional
+    if (figma.strokeWeight !== undefined && strokeScale < 0.99) {
+      figma.strokeWeight = Math.round(figma.strokeWeight * strokeScale * 100) / 100
     }
     return {
       figma,
@@ -415,9 +422,9 @@ function convertInstance(
   const figma = treeNode.figma
   const componentGuid = figma.overriddenSymbolID ?? figma.symbolData?.symbolID
 
-  // Check if this instance has visual overrides (fills, arcData, text) that must be inlined
+  // Check if this instance has visual overrides (fills, strokes, arcData, text) that must be inlined
   const hasVisualOverrides = figma.symbolData?.symbolOverrides?.some(
-    (ov: any) => ov.fillPaints?.length > 0 || ov.arcData || ov.textData || ov.fontSize !== undefined,
+    (ov: any) => ov.fillPaints?.length > 0 || ov.strokePaints?.length > 0 || ov.arcData || ov.textData || ov.fontSize !== undefined,
   ) ?? false
 
   // Try to inline the master SYMBOL's children with overrides applied.
@@ -560,8 +567,11 @@ function applyInstanceOverrides(
     if (pk && guidToNodeMap.has(guidToString(pk))) directMatches++
   }
 
-  if (directMatches > len1Derived.length * 0.5) {
-    // Most derived entries have actual GUIDs — use direct matching
+  if (directMatches > len1Derived.length * 0.5 || len1Derived.length === 0) {
+    // Most derived entries have actual GUIDs — use direct matching.
+    // Also handles the override-only case (derived=0, overrides>0) where
+    // override GUIDs are actual node GUIDs (e.g. icon instances that only
+    // override stroke colors without changing sizes).
     for (const d of len1Derived) {
       const pk = d.guidPath?.guids?.[0]
       if (!pk) continue
@@ -681,13 +691,33 @@ function applyInstanceOverrides(
     }
   }
 
+  // Build a map of multi-guid overrides grouped by first GUID (nested instance).
+  // These will be propagated to nested instances so their children get the
+  // correct color/paint overrides from the outer instance.
+  const nestedOverrideMap = new Map<string, FigmaSymbolOverride[]>()
+  for (const [pk, ov] of overrideMap) {
+    if (!pk.includes('/')) continue
+    const parts = pk.split('/')
+    const instanceGuid = parts[0]
+    // Rewrite the override's guidPath to only contain the child GUID(s)
+    // so the nested instance can apply it as a normal override.
+    const childGuids = ov.guidPath?.guids?.slice(1)
+    if (childGuids?.length) {
+      const childOv = { ...ov, guidPath: { guids: childGuids } }
+      const existing = nestedOverrideMap.get(instanceGuid) ?? []
+      existing.push(childOv)
+      nestedOverrideMap.set(instanceGuid, existing)
+    }
+  }
+
   // Recursively apply resolved overrides and derived data to each node
   function applyToNode(node: TreeNode): TreeNode {
     const nodeKey = node.figma.guid ? guidToString(node.figma.guid) : ''
     const d = nodeDerived.get(nodeKey)
     const ov = nodeOverride.get(nodeKey)
+    const nestedOvs = nestedOverrideMap.get(nodeKey)
 
-    if (!d && !ov) {
+    if (!d && !ov && !nestedOvs) {
       return { figma: { ...node.figma }, children: node.children.map(applyToNode) }
     }
 
@@ -695,6 +725,16 @@ function applyInstanceOverrides(
 
     // Apply derived data (pre-computed sizes and transforms for this instance)
     if (d) {
+      // Scale strokeWeight proportionally when derived size is smaller than
+      // the symbol's original size, so strokes don't appear too thick.
+      if (d.size && node.figma.size && figma.strokeWeight !== undefined) {
+        const sx = d.size.x / node.figma.size.x
+        const sy = d.size.y / node.figma.size.y
+        const strokeScale = Math.min(sx, sy)
+        if (strokeScale < 0.99) {
+          figma.strokeWeight = Math.round(figma.strokeWeight * strokeScale * 100) / 100
+        }
+      }
       if (d.size) figma.size = d.size
       if (d.transform) figma.transform = d.transform
       if (d.fontSize !== undefined) figma.fontSize = d.fontSize
@@ -717,6 +757,18 @@ function applyInstanceOverrides(
         if (value !== undefined) {
           ;(figma as Record<string, unknown>)[key] = value
         }
+      }
+    }
+
+    // Propagate multi-guid overrides to nested INSTANCE nodes.
+    // When the outer instance has overrides like "instanceGuid/childGuid",
+    // inject the child-scoped overrides into the nested instance's
+    // symbolOverrides so convertInstance can apply them.
+    if (nestedOvs && (figma.type === 'INSTANCE' || figma.symbolData)) {
+      const existingOverrides = figma.symbolData?.symbolOverrides ?? []
+      figma.symbolData = {
+        ...figma.symbolData,
+        symbolOverrides: [...existingOverrides, ...nestedOvs],
       }
     }
 
@@ -831,7 +883,14 @@ function convertEllipse(
   }
 }
 
-/** Convert Figma arcData (radians, endAngle) to PenNode arc props (degrees, sweepAngle). */
+/** Convert Figma arcData (radians, endAngle) to PenNode arc props (degrees, sweepAngle).
+ *
+ * When endingAngle < startingAngle, Figma draws the arc counter-clockwise from
+ * startingAngle to endingAngle.  The equivalent clockwise arc goes from
+ * endingAngle to startingAngle, so we swap start/end and use their difference
+ * as the sweep.  This is critical for donut chart segments where overlapping
+ * arcs with z-order create the visual pie slices.
+ */
 function mapFigmaArcData(arc: { startingAngle?: number; endingAngle?: number; innerRadius?: number }): {
   startAngle?: number
   sweepAngle?: number
@@ -841,10 +900,22 @@ function mapFigmaArcData(arc: { startingAngle?: number; endingAngle?: number; in
   const endRad = arc.endingAngle ?? Math.PI * 2
   const inner = arc.innerRadius ?? 0
 
-  let sweepRad = endRad - startRad
-  while (sweepRad < 0) sweepRad += Math.PI * 2
+  let actualStartRad: number
+  let sweepRad: number
 
-  const startDeg = (startRad * 180) / Math.PI
+  if (endRad >= startRad) {
+    // Normal case: clockwise from start to end
+    actualStartRad = startRad
+    sweepRad = endRad - startRad
+  } else {
+    // Inverted case: endAngle < startAngle means counter-clockwise from start
+    // to end.  Convert to equivalent clockwise arc: start at endAngle, sweep
+    // forward to startAngle.
+    actualStartRad = endRad
+    sweepRad = startRad - endRad
+  }
+
+  const startDeg = (actualStartRad * 180) / Math.PI
   const sweepDeg = (sweepRad * 180) / Math.PI
 
   // Only emit props that differ from the full-circle defaults
@@ -890,17 +961,36 @@ function convertVector(
 
   const iconMatch = lookupIconByName(name)
   if (iconMatch) {
+    const iconW = resolveWidth(figma, parentStackMode, ctx)
+    const iconH = resolveHeight(figma, parentStackMode, ctx)
+
+    // Lucide/Feather icon paths use a 24×24 viewbox.  When the icon is
+    // rendered smaller, scale strokeWeight proportionally so lines don't
+    // appear disproportionately thick.
+    const iconSize = Math.min(
+      typeof iconW === 'number' ? iconW : 24,
+      typeof iconH === 'number' ? iconH : 24,
+    )
+    const iconScale = iconSize / 24
+
+    let stroke = iconMatch.style === 'stroke'
+      ? mapFigmaStroke(figma) ?? { thickness: 2, fill: [{ type: 'solid', color: figmaFillColor(figma) ?? '#000000' }] }
+      : mapFigmaStroke(figma)
+
+    if (stroke && iconScale < 0.99) {
+      const rawThickness = typeof stroke.thickness === 'number' ? stroke.thickness : 2
+      stroke = { ...stroke, thickness: Math.round(rawThickness * iconScale * 100) / 100 }
+    }
+
     return {
       type: 'path',
       ...commonProps(figma, id),
       d: iconMatch.d,
       iconId: iconMatch.iconId,
-      width: resolveWidth(figma, parentStackMode, ctx),
-      height: resolveHeight(figma, parentStackMode, ctx),
+      width: iconW,
+      height: iconH,
       fill: iconMatch.style === 'fill' ? mapFigmaFills(figma.fillPaints) : undefined,
-      stroke: iconMatch.style === 'stroke'
-        ? mapFigmaStroke(figma) ?? { thickness: 2, fill: [{ type: 'solid', color: figmaFillColor(figma) ?? '#000000' }] }
-        : mapFigmaStroke(figma),
+      stroke,
       effects: mapFigmaEffects(figma.effects),
     }
   }
