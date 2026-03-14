@@ -789,7 +789,7 @@ export function useCanvasSync() {
       const resolvedTree = resolveRefs(pageChildren, allNodes)
       const flatNodes = flattenNodes(
         resolvedTree, 0, 0, undefined, undefined, undefined, clipMap,
-      ).map((node) => resolveNodeForCanvas(node, variables, activeTheme))
+      ).map((node) => resolveNodeForCanvas(node, variables, { ...activeTheme, ...node.theme }))
 
       // Build expected z-order for materialization
       expectedNodeOrder = flatNodes.filter((n) => n.type !== 'ref').map((n) => n.id)
