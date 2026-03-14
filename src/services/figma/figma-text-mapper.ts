@@ -162,6 +162,10 @@ function mapLineHeight(node: FigmaNodeChange): number | undefined {
     // Convert percentage to multiplier (e.g. 150% = 1.5)
     return Math.round(node.lineHeight.value / 100 * 1000) / 1000
   }
+  if (node.lineHeight.units === 'RAW' && node.lineHeight.value) {
+    // RAW is already a multiplier
+    return Math.round(node.lineHeight.value * 1000) / 1000
+  }
   return undefined
 }
 

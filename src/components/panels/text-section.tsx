@@ -26,7 +26,19 @@ interface TextSectionProps {
 }
 
 const FONT_OPTIONS = [
-  { value: 'Inter, sans-serif', label: 'Inter' },
+  // Bundled fonts (always available, vector rendering)
+  { value: 'Inter', label: 'Inter' },
+  { value: 'Poppins', label: 'Poppins' },
+  { value: 'Roboto', label: 'Roboto' },
+  { value: 'Montserrat', label: 'Montserrat' },
+  { value: 'Open Sans', label: 'Open Sans' },
+  { value: 'Lato', label: 'Lato' },
+  { value: 'Raleway', label: 'Raleway' },
+  { value: 'DM Sans', label: 'DM Sans' },
+  { value: 'Playfair Display', label: 'Playfair Display' },
+  { value: 'Nunito', label: 'Nunito' },
+  { value: 'Source Sans 3', label: 'Source Sans 3' },
+  // System fonts
   { value: 'Arial, sans-serif', label: 'Arial' },
   { value: 'Helvetica, sans-serif', label: 'Helvetica' },
   { value: 'Georgia, serif', label: 'Georgia' },

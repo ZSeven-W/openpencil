@@ -4,7 +4,7 @@ import { X, Upload, AlertCircle, Loader2, FileUp } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useDocumentStore } from '@/stores/document-store'
 import { useCanvasStore } from '@/stores/canvas-store'
-import { zoomToFitContent } from '@/canvas/skia-engine-ref'
+import { zoomToFitContent, getSkiaEngineRef } from '@/canvas/skia-engine-ref'
 import { parseFigFile } from '@/services/figma/fig-parser'
 import { figmaToPenDocument, figmaAllPagesToPenDocument, getFigmaPages } from '@/services/figma/figma-node-mapper'
 import { resolveImageBlobs } from '@/services/figma/figma-image-resolver'
@@ -129,6 +129,21 @@ export default function FigmaImportDialog({ open, onClose }: FigmaImportDialogPr
 
       setProgress(95)
       setWarnings(warns)
+
+      // Pre-load fonts used in the document for vector text rendering
+      const fontFamilies = new Set<string>()
+      const collectFonts = (nodes: import('@/types/pen').PenNode[]) => {
+        for (const n of nodes) {
+          if (n.type === 'text' && (n as any).fontFamily) fontFamilies.add((n as any).fontFamily)
+          if ('children' in n && n.children) collectFonts(n.children)
+        }
+      }
+      if (doc.pages) { for (const p of doc.pages) collectFonts(p.children) }
+      else collectFonts(doc.children)
+      const engine = getSkiaEngineRef()
+      if (engine && fontFamilies.size > 0) {
+        engine.renderer.fontManager.ensureFonts([...fontFamilies])
+      }
 
       // Load into the document store
       useDocumentStore.getState().loadDocument(doc, `${name}.op`)

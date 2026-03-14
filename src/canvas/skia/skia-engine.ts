@@ -431,6 +431,10 @@ export class SkiaEngine {
 
     this.renderer.init()
     this.renderer.setRedrawCallback(() => this.markDirty())
+    // Re-render when async font loading completes
+    ;(this.renderer as any)._onFontLoaded = () => this.markDirty()
+    // Pre-load default font for vector text rendering
+    this.renderer.fontManager.ensureFont('Inter').then(() => this.markDirty())
     this.startRenderLoop()
   }
 
@@ -541,6 +545,9 @@ export class SkiaEngine {
     canvas.save()
     canvas.scale(dpr, dpr)
     canvas.concat(viewportMatrix({ zoom: this.zoom, panX: this.panX, panY: this.panY }))
+
+    // Pass current zoom to renderer for zoom-aware text rasterization
+    this.renderer.zoom = this.zoom
 
     // Draw all render nodes
     for (const rn of this.renderNodes) {

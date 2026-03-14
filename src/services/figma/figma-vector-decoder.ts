@@ -125,8 +125,14 @@ export function decodeFigmaVectorPath(
   figma: FigmaNodeChange,
   blobs: (Uint8Array | string)[],
 ): string | null {
-  // Try fillGeometry first, then strokeGeometry
-  const geometries = figma.fillGeometry ?? figma.strokeGeometry
+  // For stroke-only vectors (e.g. Lucide icons), prefer strokeGeometry which
+  // contains the original centerline path.  fillGeometry for stroke-only vectors
+  // is the expanded stroke outline — stroking it again produces double thickness.
+  const hasVisibleFills = figma.fillPaints?.some((p) => p.visible !== false)
+  const hasVisibleStrokes = figma.strokePaints?.some((p) => p.visible !== false)
+  const geometries = (!hasVisibleFills && hasVisibleStrokes)
+    ? (figma.strokeGeometry ?? figma.fillGeometry)
+    : (figma.fillGeometry ?? figma.strokeGeometry)
   if (!geometries || geometries.length === 0) return null
 
   const pathParts: string[] = []

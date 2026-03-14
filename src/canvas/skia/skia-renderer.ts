@@ -1,4 +1,4 @@
-import type { CanvasKit, Canvas, Paint, Font, Typeface, Image as SkImage } from 'canvaskit-wasm'
+import type { CanvasKit, Canvas, Paint, Font, Typeface, Image as SkImage, Paragraph } from 'canvaskit-wasm'
 import type { PenNode, ContainerProps, TextNode, EllipseNode, LineNode, PolygonNode, PathNode, ImageNode, IconFontNode } from '@/types/pen'
 import type { PenFill, PenStroke, PenEffect, ShadowEffect } from '@/types/styles'
 import { DEFAULT_FILL, DEFAULT_STROKE, DEFAULT_STROKE_WIDTH } from '../canvas-constants'
@@ -6,6 +6,7 @@ import { defaultLineHeight } from '../canvas-text-measure'
 import { lookupIconByName } from '@/services/ai/icon-resolver'
 import { buildEllipseArcPath, isArcEllipse } from '@/utils/arc-path'
 import { SkiaImageLoader } from './skia-image-loader'
+import { SkiaFontManager } from './skia-font-manager'
 import {
   parseColor,
   cornerRadiusValue,
@@ -50,12 +51,24 @@ export class SkiaRenderer {
   private textCacheOrder: string[] = []
   private static TEXT_CACHE_MAX = 300
 
+  // Paragraph cache for vector text (keyed by content+style, caches Paragraph objects)
+  private paraCache = new Map<string, Paragraph | null>()
+  private paraCacheOrder: string[] = []
+  private static PARA_CACHE_MAX = 200
+
+  // Current viewport zoom (set by engine before each render frame)
+  zoom = 1
+
+  // Font manager for vector text rendering
+  fontManager: SkiaFontManager
+
   // Image loader
   imageLoader: SkiaImageLoader
 
   constructor(ck: CanvasKit) {
     this.ck = ck
     this.imageLoader = new SkiaImageLoader(ck)
+    this.fontManager = new SkiaFontManager(ck)
   }
 
   init() {
@@ -73,6 +86,8 @@ export class SkiaRenderer {
     this.defaultTypeface?.delete()
     this.defaultTypeface = null
     this.clearTextCache()
+    this.clearParaCache()
+    this.fontManager.dispose()
     this.imageLoader.dispose()
   }
 
@@ -82,6 +97,23 @@ export class SkiaRenderer {
     }
     this.textCache.clear()
     this.textCacheOrder = []
+  }
+
+  clearParaCache() {
+    for (const p of this.paraCache.values()) {
+      p?.delete()
+    }
+    this.paraCache.clear()
+    this.paraCacheOrder = []
+  }
+
+  private evictParaCache() {
+    while (this.paraCacheOrder.length > SkiaRenderer.PARA_CACHE_MAX) {
+      const key = this.paraCacheOrder.shift()!
+      const p = this.paraCache.get(key)
+      p?.delete()
+      this.paraCache.delete(key)
+    }
   }
 
   private evictTextCache() {
@@ -662,6 +694,169 @@ export class SkiaRenderer {
   }
 
   /**
+   * Render text as true vector glyphs using CanvasKit's Paragraph API.
+   * Returns true if rendered, false if font not available (caller should fallback).
+   */
+  private drawTextVector(
+    canvas: Canvas, node: PenNode,
+    x: number, y: number, w: number, _h: number,
+    opacity: number,
+  ): boolean {
+    const ck = this.ck
+    const tNode = node as TextNode
+    const content = typeof tNode.content === 'string'
+      ? tNode.content
+      : Array.isArray(tNode.content)
+        ? tNode.content.map((s) => s.text ?? '').join('')
+        : ''
+    if (!content) return true
+
+    const fontSize = tNode.fontSize ?? 16
+    const fillColor = resolveFillColor(tNode.fill)
+    const fontWeight = tNode.fontWeight ?? '400'
+    const fontFamily = tNode.fontFamily ?? 'Inter'
+    const textAlign: string = tNode.textAlign ?? 'left'
+    const lineHeightMul = tNode.lineHeight ?? defaultLineHeight(fontSize)
+    const textGrowth = tNode.textGrowth
+    const letterSpacing = tNode.letterSpacing ?? 0
+
+    // Check if primary font family is loaded
+    const primaryFamily = fontFamily.split(',')[0].trim().replace(/['"]/g, '')
+    if (!this.fontManager.isFontReady(primaryFamily)) {
+      // Trigger async load, fall back to bitmap for now
+      this.fontManager.ensureFont(primaryFamily).then((ok) => {
+        if (ok) {
+          this.clearParaCache()
+          // Trigger re-render via engine's dirty flag
+          ;(this as any)._onFontLoaded?.()
+        }
+      })
+      return false
+    }
+
+    // Fixed-width text uses node width for wrapping; paragraph handles alignment.
+    // Auto-width text uses unbounded layout (no wrapping); alignment is handled
+    // by manually offsetting the draw position after layout.
+    const isFixedWidth = textGrowth === 'fixed-width' || textGrowth === 'fixed-width-height'
+    // Add tolerance for fixed-width text to prevent unwanted wrapping from
+    // font metric differences between design tools (Figma) and CanvasKit/Skia.
+    // Use 5% of width capped at half fontSize to avoid affecting intentional wrapping.
+    const fwTolerance = isFixedWidth ? Math.min(Math.ceil(w * 0.05), Math.ceil(fontSize * 0.5)) : 0
+    const layoutWidth = isFixedWidth && w > 0 ? w + fwTolerance : 1e6
+    // For auto-width text, force LEFT alignment in the paragraph to prevent
+    // centering within the 1e6 layout width. We manually offset x when drawing.
+    const effectiveAlign = isFixedWidth ? textAlign : 'left'
+
+    // Cache key for paragraph object
+    const cacheKey = `p|${content}|${fontSize}|${fillColor}|${fontWeight}|${fontFamily}|${effectiveAlign}|${Math.round(layoutWidth)}|${letterSpacing}|${lineHeightMul}`
+
+    let para = this.paraCache.get(cacheKey)
+    if (para === undefined) {
+      const color = parseColor(ck, fillColor)
+
+      // Map text alignment
+      let ckAlign = ck.TextAlign.Left
+      if (effectiveAlign === 'center') ckAlign = ck.TextAlign.Center
+      else if (effectiveAlign === 'right') ckAlign = ck.TextAlign.Right
+      else if (effectiveAlign === 'justify') ckAlign = ck.TextAlign.Justify
+
+      // Map font weight
+      const weightNum = typeof fontWeight === 'number' ? fontWeight : parseInt(fontWeight as string, 10) || 400
+      let ckWeight = ck.FontWeight.Normal
+      if (weightNum <= 100) ckWeight = ck.FontWeight.Thin
+      else if (weightNum <= 200) ckWeight = ck.FontWeight.ExtraLight
+      else if (weightNum <= 300) ckWeight = ck.FontWeight.Light
+      else if (weightNum <= 400) ckWeight = ck.FontWeight.Normal
+      else if (weightNum <= 500) ckWeight = ck.FontWeight.Medium
+      else if (weightNum <= 600) ckWeight = ck.FontWeight.SemiBold
+      else if (weightNum <= 700) ckWeight = ck.FontWeight.Bold
+      else if (weightNum <= 800) ckWeight = ck.FontWeight.ExtraBold
+      else ckWeight = ck.FontWeight.Black
+
+      const paraStyle = new ck.ParagraphStyle({
+        textAlign: ckAlign,
+        textStyle: {
+          color,
+          fontSize,
+          fontFamilies: [primaryFamily],
+          fontStyle: { weight: ckWeight },
+          letterSpacing,
+          heightMultiplier: lineHeightMul,
+          halfLeading: true,
+        },
+      })
+
+      try {
+        const builder = ck.ParagraphBuilder.MakeFromFontProvider(
+          paraStyle,
+          this.fontManager.getProvider(),
+        )
+
+        // Handle styled segments
+        if (Array.isArray(tNode.content) && tNode.content.some(s => s.fontFamily || s.fontSize || s.fontWeight || s.fill)) {
+          for (const seg of tNode.content) {
+            if (seg.fontFamily || seg.fontSize || seg.fontWeight || seg.fill) {
+              const segColor = seg.fill ? parseColor(ck, seg.fill) : color
+              const segWeight = seg.fontWeight
+                ? (typeof seg.fontWeight === 'number' ? seg.fontWeight : parseInt(seg.fontWeight as string, 10) || weightNum)
+                : weightNum
+              builder.pushStyle(new ck.TextStyle({
+                color: segColor,
+                fontSize: seg.fontSize ?? fontSize,
+                fontFamilies: [seg.fontFamily?.split(',')[0].trim().replace(/['"]/g, '') ?? primaryFamily],
+                fontStyle: { weight: segWeight as any },
+                letterSpacing,
+                heightMultiplier: lineHeightMul,
+                halfLeading: true,
+              }))
+              builder.addText(seg.text ?? '')
+              builder.pop()
+            } else {
+              builder.addText(seg.text ?? '')
+            }
+          }
+        } else {
+          builder.addText(content)
+        }
+
+        para = builder.build()
+        para.layout(layoutWidth)
+        builder.delete()
+      } catch {
+        para = null
+      }
+
+      this.paraCache.set(cacheKey, para ?? null)
+      this.paraCacheOrder.push(cacheKey)
+      this.evictParaCache()
+    }
+
+    if (!para) return false
+
+    // For auto-width text with non-left alignment, manually offset draw position
+    // (the paragraph uses LEFT alignment to avoid centering in infinite space)
+    let drawX = x
+    if (!isFixedWidth && w > 0 && textAlign !== 'left') {
+      const longestLine = para.getLongestLine()
+      if (textAlign === 'center') drawX = x + Math.max(0, (w - longestLine) / 2)
+      else if (textAlign === 'right') drawX = x + Math.max(0, w - longestLine)
+    }
+
+    if (opacity < 1) {
+      const paint = new ck.Paint()
+      paint.setAlphaf(opacity)
+      canvas.saveLayer(paint)
+      paint.delete()
+      canvas.drawParagraph(para, drawX, y)
+      canvas.restore()
+    } else {
+      canvas.drawParagraph(para, drawX, y)
+    }
+
+    return true
+  }
+
+  /**
    * Render text using browser Canvas 2D API (supports all system fonts including CJK),
    * then draw the rasterized result as a CanvasKit image. Results are cached.
    */
@@ -670,6 +865,10 @@ export class SkiaRenderer {
     x: number, y: number, w: number, h: number,
     opacity: number,
   ) {
+    // Try vector text first (true Skia Paragraph API — no pixelation at any zoom)
+    const vectorOk = this.drawTextVector(canvas, node, x, y, w, h, opacity)
+    if (vectorOk) return
+
     const ck = this.ck
     const tNode = node as TextNode
     const content = typeof tNode.content === 'string'
@@ -735,21 +934,35 @@ export class SkiaRenderer {
         : (wrappedLines.length - 1) * lineHeight + glyphH + 2,
     )
 
-    // Cache key
-    const cacheKey = `${content}|${fontSize}|${fillColor}|${fontWeight}|${textAlign}|${Math.round(renderW)}|${Math.round(textH)}`
+    // Zoom-aware rasterization scale: quantized to 2/4/8 for cache efficiency.
+    // At zoom ≤ 1 with 2× DPR → scale 2 (1:1 pixel mapping on Retina).
+    // Higher zoom → 4 or 8 so text remains sharp when zoomed in.
+    const dpr = window.devicePixelRatio || 1
+    const rawScale = this.zoom * dpr
+    const scale = rawScale <= 2 ? 2 : rawScale <= 4 ? 4 : 8
+
+    // Cache key — includes rasterization scale so zoom changes use fresh textures
+    const cacheKey = `${content}|${fontSize}|${fillColor}|${fontWeight}|${textAlign}|${Math.round(renderW)}|${Math.round(textH)}|${scale}`
 
     let img = this.textCache.get(cacheKey)
     if (img === undefined) {
-      const scale = 2
-      const cw = Math.ceil(renderW * scale)
-      const ch = Math.ceil(textH * scale)
+      let effectiveScale = scale
+      let cw = Math.ceil(renderW * effectiveScale)
+      let ch = Math.ceil(textH * effectiveScale)
       if (cw <= 0 || ch <= 0) { this.textCache.set(cacheKey, null); return }
+      // Cap texture dimensions to avoid exceeding browser canvas limits
+      const MAX_TEX = 4096
+      if (cw > MAX_TEX || ch > MAX_TEX) {
+        effectiveScale = Math.min(MAX_TEX / renderW, MAX_TEX / textH, effectiveScale)
+        cw = Math.ceil(renderW * effectiveScale)
+        ch = Math.ceil(textH * effectiveScale)
+      }
 
       const tmp = document.createElement('canvas')
       tmp.width = cw
       tmp.height = ch
       const ctx = tmp.getContext('2d')!
-      ctx.scale(scale, scale)
+      ctx.scale(effectiveScale, effectiveScale)
       ctx.font = `${fontWeight} ${fontSize}px ${fontFamily}`
       ctx.fillStyle = fillColor
       ctx.textBaseline = 'top'

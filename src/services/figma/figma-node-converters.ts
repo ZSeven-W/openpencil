@@ -974,11 +974,11 @@ function convertVector(
     const iconScale = iconSize / 24
 
     let stroke = iconMatch.style === 'stroke'
-      ? mapFigmaStroke(figma) ?? { thickness: 2, fill: [{ type: 'solid', color: figmaFillColor(figma) ?? '#000000' }] }
+      ? mapFigmaStroke(figma) ?? { thickness: 1.5, fill: [{ type: 'solid', color: figmaFillColor(figma) ?? '#000000' }], cap: 'round' as const, join: 'round' as const }
       : mapFigmaStroke(figma)
 
     if (stroke && iconScale < 0.99) {
-      const rawThickness = typeof stroke.thickness === 'number' ? stroke.thickness : 2
+      const rawThickness = typeof stroke.thickness === 'number' ? stroke.thickness : 1.5
       stroke = { ...stroke, thickness: Math.round(rawThickness * iconScale * 100) / 100 }
     }
 
@@ -1019,6 +1019,29 @@ function convertVector(
           height = Math.round(pathH * 100) / 100
           props.y = Math.round((props.y + bounds.minY) * 100) / 100
         }
+      }
+    }
+
+    // Figma's strokeGeometry is the EXPANDED stroke outline (not a centerline).
+    // For stroke-only vectors, we must FILL this outline with the stroke color
+    // instead of drawing another stroke on top (which would double the thickness).
+    const hasVisibleFills = figma.fillPaints?.some((p: any) => p.visible !== false)
+    const hasVisibleStrokes = figma.strokePaints?.some((p: any) => p.visible !== false)
+    const isStrokeOnlyOutline = !hasVisibleFills && hasVisibleStrokes
+      && !figma.fillGeometry?.length && figma.strokeGeometry?.length
+
+    if (isStrokeOnlyOutline) {
+      // Convert stroke paint to fill — the path IS the visual stroke
+      const strokeAsFill = mapFigmaFills(figma.strokePaints!)
+      return {
+        type: 'path',
+        ...props,
+        d: pathD,
+        width,
+        height,
+        fill: strokeAsFill,
+        // No stroke — the outline shape already represents the stroke visual
+        effects: mapFigmaEffects(figma.effects),
       }
     }
 
