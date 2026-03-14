@@ -1,30 +1,23 @@
 import { Minus, Plus } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { useCanvasStore } from '@/stores/canvas-store'
-import { MIN_ZOOM, MAX_ZOOM } from '@/canvas/canvas-constants'
+import { getSkiaEngineRef } from '@/canvas/skia-engine-ref'
 import { Button } from '@/components/ui/button'
 
 export default function StatusBar() {
   const { t } = useTranslation()
   const zoom = useCanvasStore((s) => s.viewport.zoom)
-  const fabricCanvas = useCanvasStore((s) => s.fabricCanvas)
 
   const zoomPercent = Math.round(zoom * 100)
 
   const applyZoom = (newZoom: number) => {
-    const canvas = fabricCanvas
-    if (!canvas) return
-
-    const clamped = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, newZoom))
-    const center = canvas.getCenterPoint()
-    canvas.zoomToPoint(center, clamped)
-
-    const vpt = canvas.viewportTransform
-    if (vpt) {
-      useCanvasStore.getState().setZoom(clamped)
-      useCanvasStore.getState().setPan(vpt[4], vpt[5])
-    }
-    canvas.requestRenderAll()
+    const engine = getSkiaEngineRef()
+    if (!engine) return
+    const rect = engine.getCanvasRect()
+    if (!rect) return
+    const cx = rect.left + rect.width / 2
+    const cy = rect.top + rect.height / 2
+    engine.zoomToPoint(cx, cy, newZoom)
   }
 
   const handleZoomOut = () => applyZoom(zoom / 1.2)

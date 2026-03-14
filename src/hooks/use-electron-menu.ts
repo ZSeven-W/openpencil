@@ -134,11 +134,6 @@ export function useElectronMenu() {
             useDocumentStore.getState().applyHistoryState(prev)
           }
           useCanvasStore.getState().clearSelection()
-          const canvas = useCanvasStore.getState().fabricCanvas
-          if (canvas) {
-            canvas.discardActiveObject()
-            canvas.requestRenderAll()
-          }
           break
         }
 
@@ -149,11 +144,6 @@ export function useElectronMenu() {
             useDocumentStore.getState().applyHistoryState(next)
           }
           useCanvasStore.getState().clearSelection()
-          const canvas = useCanvasStore.getState().fabricCanvas
-          if (canvas) {
-            canvas.discardActiveObject()
-            canvas.requestRenderAll()
-          }
           break
         }
       }

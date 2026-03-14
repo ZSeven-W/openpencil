@@ -1,5 +1,5 @@
 import type { CanvasKit, Canvas, Paint, Font, Typeface, Image as SkImage } from 'canvaskit-wasm'
-import type { PenNode } from '@/types/pen'
+import type { PenNode, ContainerProps, TextNode, EllipseNode, LineNode, PolygonNode, PathNode, ImageNode, IconFontNode } from '@/types/pen'
 import type { PenFill, PenStroke, PenEffect, ShadowEffect } from '@/types/styles'
 import { DEFAULT_FILL, DEFAULT_STROKE, DEFAULT_STROKE_WIDTH } from '../canvas-constants'
 import { defaultLineHeight } from '../canvas-text-measure'
@@ -254,8 +254,8 @@ export class SkiaRenderer {
     }
 
     // Apply flip (flipX / flipY from Figma import)
-    const flipX = ('flipX' in node && (node as any).flipX) === true
-    const flipY = ('flipY' in node && (node as any).flipY) === true
+    const flipX = node.flipX === true
+    const flipY = node.flipY === true
     if (flipX || flipY) {
       canvas.save()
       canvas.translate(absX + absW / 2, absY + absH / 2)
@@ -271,7 +271,7 @@ export class SkiaRenderer {
     }
 
     // Apply shadow
-    const effects = 'effects' in node ? node.effects : undefined
+    const effects = 'effects' in node ? (node as PenNode & { effects?: PenEffect[] }).effects : undefined
     this.applyShadowDirect(canvas, effects, absX, absY, absW, absH)
 
     switch (node.type) {
@@ -353,12 +353,13 @@ export class SkiaRenderer {
     opacity: number,
   ) {
     const ck = this.ck
-    const cr = cornerRadii('cornerRadius' in node ? (node as any).cornerRadius : undefined)
-    const fills = 'fill' in node ? (node as any).fill : undefined
-    const stroke = 'stroke' in node ? (node as any).stroke : undefined
+    const container = node as PenNode & ContainerProps
+    const cr = cornerRadii(container.cornerRadius)
+    const fills = container.fill
+    const stroke = container.stroke
 
     // For frames/groups without explicit fill, use transparent (no visible background)
-    const hasFill = typeof fills === 'string' ? fills.length > 0 : (fills && fills.length > 0)
+    const hasFill = fills && fills.length > 0
     const isContainer = node.type === 'frame' || node.type === 'group'
 
     // Fill
@@ -403,7 +404,7 @@ export class SkiaRenderer {
     opacity: number,
   ) {
     const ck = this.ck
-    const eNode = node as any
+    const eNode = node as EllipseNode
     const fills = eNode.fill
     const stroke = eNode.stroke
 
@@ -438,7 +439,7 @@ export class SkiaRenderer {
     opacity: number,
   ) {
     const ck = this.ck
-    const lNode = node as any
+    const lNode = node as LineNode
     const x2 = lNode.x2 ?? x + 100
     const y2 = lNode.y2 ?? y
     const strokeColor = resolveStrokeColor(lNode.stroke) ?? DEFAULT_STROKE
@@ -462,7 +463,7 @@ export class SkiaRenderer {
     opacity: number,
   ) {
     const ck = this.ck
-    const pNode = node as any
+    const pNode = node as PolygonNode
     const count = pNode.polygonCount || 6
     const fills = pNode.fill
     const stroke = pNode.stroke
@@ -496,7 +497,7 @@ export class SkiaRenderer {
     _clipRect?: { x: number; y: number; w: number; h: number; rx: number },
   ) {
     const ck = this.ck
-    const pNode = node as any
+    const pNode = node as PathNode
     const rawD = typeof pNode.d === 'string' && pNode.d.trim().length > 0 ? pNode.d : 'M0 0 L0 0'
     const fills = pNode.fill
     const stroke = pNode.stroke
@@ -537,7 +538,7 @@ export class SkiaRenderer {
       // All other paths: non-uniform scaling to fill target bounding box exactly.
       // Figma vector paths may have unscaled normalized coordinates that need
       // different X/Y scaling to match the node's target width/height.
-      const isIcon = !!(pNode.iconId)
+      const isIcon = !!pNode.iconId
       const sx = isIcon ? Math.min(w / nativeW, h / nativeH) : w / nativeW
       const sy = isIcon ? sx : h / nativeH
       const matrix = ck.Matrix.multiply(
@@ -595,7 +596,7 @@ export class SkiaRenderer {
     opacity: number,
   ) {
     const ck = this.ck
-    const iNode = node as any
+    const iNode = node as IconFontNode
     const iconName = iNode.iconFontName ?? iNode.name ?? ''
     const iconMatch = lookupIconByName(iconName)
     const iconD = iconMatch?.d ?? 'M12 12m-3 0a3 3 0 1 0 6 0a3 3 0 1 0 -6 0'
@@ -670,11 +671,11 @@ export class SkiaRenderer {
     opacity: number,
   ) {
     const ck = this.ck
-    const tNode = node as any
+    const tNode = node as TextNode
     const content = typeof tNode.content === 'string'
       ? tNode.content
       : Array.isArray(tNode.content)
-        ? tNode.content.map((s: any) => s.text ?? '').join('')
+        ? tNode.content.map((s) => s.text ?? '').join('')
         : ''
 
     if (!content) return
@@ -686,7 +687,7 @@ export class SkiaRenderer {
     const textAlign: string = tNode.textAlign ?? 'left'
     const lineHeightMul = tNode.lineHeight ?? defaultLineHeight(fontSize)
     const lineHeight = lineHeightMul * fontSize
-    const textGrowth: string | undefined = tNode.textGrowth
+    const textGrowth = tNode.textGrowth
 
     // Match Fabric.js wrapping logic (isFixedWidthText in canvas-object-factory):
     // Only wrap when textGrowth is explicitly 'fixed-width'/'fixed-width-height',
@@ -816,9 +817,9 @@ export class SkiaRenderer {
     opacity: number,
   ) {
     const ck = this.ck
-    const iNode = node as any
+    const iNode = node as ImageNode
     const src: string | undefined = iNode.src
-    const cr = cornerRadiusValue('cornerRadius' in node ? (node as any).cornerRadius : undefined)
+    const cr = cornerRadiusValue(iNode.cornerRadius)
 
     if (!src) {
       this.drawImageFallback(canvas, x, y, w, h, cr, opacity)

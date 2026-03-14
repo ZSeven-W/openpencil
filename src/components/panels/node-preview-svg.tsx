@@ -38,7 +38,7 @@ function resolveFillColor(fills: PenFill[] | undefined, vars: Vars): string | un
 }
 
 function resolveStrokeColor(node: PenNode, vars: Vars): string | undefined {
-  const stroke = 'stroke' in node ? (node as any).stroke : undefined
+  const stroke = 'stroke' in node ? (node as PenNode & { stroke?: import('@/types/styles').PenStroke }).stroke : undefined
   if (!stroke?.fill?.length) return undefined
   const f = stroke.fill[0]
   if (f.type === 'solid') {
@@ -48,7 +48,7 @@ function resolveStrokeColor(node: PenNode, vars: Vars): string | undefined {
 }
 
 function resolveStrokeWidth(node: PenNode, vars: Vars): number {
-  const stroke = 'stroke' in node ? (node as any).stroke : undefined
+  const stroke = 'stroke' in node ? (node as PenNode & { stroke?: import('@/types/styles').PenStroke }).stroke : undefined
   if (!stroke) return 0
   const t = stroke.thickness
   if (typeof t === 'number') return t

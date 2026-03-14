@@ -118,7 +118,7 @@ const TOOL_DEFINITIONS = [
       properties: {
         filePath: { type: 'string', description: 'Path to .op file, or omit to use the live canvas (default)' },
         parent: {
-          type: ['string', 'null'] as any,
+          type: ['string', 'null'] as const,
           description: 'Parent node ID, or null for root level',
         },
         data: {
@@ -196,7 +196,7 @@ const TOOL_DEFINITIONS = [
         filePath: { type: 'string', description: 'Path to .op file, or omit to use the live canvas (default)' },
         nodeId: { type: 'string', description: 'ID of the node to move' },
         parent: {
-          type: ['string', 'null'] as any,
+          type: ['string', 'null'] as const,
           description: 'New parent node ID, or null for root level',
         },
         index: {
@@ -218,7 +218,7 @@ const TOOL_DEFINITIONS = [
         filePath: { type: 'string', description: 'Path to .op file, or omit to use the live canvas (default)' },
         sourceId: { type: 'string', description: 'ID of the node to copy' },
         parent: {
-          type: ['string', 'null'] as any,
+          type: ['string', 'null'] as const,
           description: 'Parent node ID for the clone, or null for root level',
         },
         overrides: {
@@ -266,7 +266,7 @@ const TOOL_DEFINITIONS = [
         filePath: { type: 'string', description: 'Path to .op file, or omit to use the live canvas (default)' },
         svgPath: { type: 'string', description: 'Absolute path to a local .svg file' },
         parent: {
-          type: ['string', 'null'] as any,
+          type: ['string', 'null'] as const,
           description: 'Parent node ID, or null/omit for root level',
         },
         maxDim: {
@@ -530,72 +530,75 @@ const TOOL_DEFINITIONS = [
 
 // --- Tool execution handler ---
 
-async function handleToolCall(name: string, args: any) {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- MCP args are validated at runtime by the protocol
+async function handleToolCall(name: string, args: Record<string, unknown> | undefined) {
+  // MCP protocol guarantees args match the inputSchema; cast via `unknown` to the handler's param type.
+  const a = (args ?? {}) as any  // eslint-disable-line @typescript-eslint/no-explicit-any
   switch (name) {
     case 'open_document':
-      return JSON.stringify(await handleOpenDocument(args), null, 2)
+      return JSON.stringify(await handleOpenDocument(a), null, 2)
     case 'batch_get':
-      return JSON.stringify(await handleBatchGet(args), null, 2)
+      return JSON.stringify(await handleBatchGet(a), null, 2)
     case 'get_selection':
-      return JSON.stringify(await handleGetSelection(args), null, 2)
+      return JSON.stringify(await handleGetSelection(a), null, 2)
     case 'insert_node':
-      return JSON.stringify(await handleInsertNode(args), null, 2)
+      return JSON.stringify(await handleInsertNode(a), null, 2)
     case 'update_node':
-      return JSON.stringify(await handleUpdateNode(args), null, 2)
+      return JSON.stringify(await handleUpdateNode(a), null, 2)
     case 'delete_node':
-      return JSON.stringify(await handleDeleteNode(args), null, 2)
+      return JSON.stringify(await handleDeleteNode(a), null, 2)
     case 'move_node':
-      return JSON.stringify(await handleMoveNode(args), null, 2)
+      return JSON.stringify(await handleMoveNode(a), null, 2)
     case 'copy_node':
-      return JSON.stringify(await handleCopyNode(args), null, 2)
+      return JSON.stringify(await handleCopyNode(a), null, 2)
     case 'replace_node':
-      return JSON.stringify(await handleReplaceNode(args), null, 2)
+      return JSON.stringify(await handleReplaceNode(a), null, 2)
     case 'import_svg':
-      return JSON.stringify(await handleImportSvg(args), null, 2)
+      return JSON.stringify(await handleImportSvg(a), null, 2)
     case 'get_variables':
-      return JSON.stringify(await handleGetVariables(args), null, 2)
+      return JSON.stringify(await handleGetVariables(a), null, 2)
     case 'set_variables':
-      return JSON.stringify(await handleSetVariables(args), null, 2)
+      return JSON.stringify(await handleSetVariables(a), null, 2)
     case 'set_themes':
-      return JSON.stringify(await handleSetThemes(args), null, 2)
+      return JSON.stringify(await handleSetThemes(a), null, 2)
     case 'snapshot_layout':
-      return JSON.stringify(await handleSnapshotLayout(args), null, 2)
+      return JSON.stringify(await handleSnapshotLayout(a), null, 2)
     case 'find_empty_space':
-      return JSON.stringify(await handleFindEmptySpace(args), null, 2)
+      return JSON.stringify(await handleFindEmptySpace(a), null, 2)
     case 'save_theme_preset':
-      return JSON.stringify(await handleSaveThemePreset(args), null, 2)
+      return JSON.stringify(await handleSaveThemePreset(a), null, 2)
     case 'load_theme_preset':
-      return JSON.stringify(await handleLoadThemePreset(args), null, 2)
+      return JSON.stringify(await handleLoadThemePreset(a), null, 2)
     case 'list_theme_presets':
-      return JSON.stringify(await handleListThemePresets(args), null, 2)
+      return JSON.stringify(await handleListThemePresets(a), null, 2)
     case 'add_page':
-      return JSON.stringify(await handleAddPage(args), null, 2)
+      return JSON.stringify(await handleAddPage(a), null, 2)
     case 'remove_page':
-      return JSON.stringify(await handleRemovePage(args), null, 2)
+      return JSON.stringify(await handleRemovePage(a), null, 2)
     case 'rename_page':
-      return JSON.stringify(await handleRenamePage(args), null, 2)
+      return JSON.stringify(await handleRenamePage(a), null, 2)
     case 'reorder_page':
-      return JSON.stringify(await handleReorderPage(args), null, 2)
+      return JSON.stringify(await handleReorderPage(a), null, 2)
     case 'duplicate_page':
-      return JSON.stringify(await handleDuplicatePage(args), null, 2)
+      return JSON.stringify(await handleDuplicatePage(a), null, 2)
     case 'get_design_prompt':
       return JSON.stringify(
         {
-          section: args?.section ?? 'all',
+          section: (a.section as string | undefined) ?? 'all',
           availableSections: listPromptSections(),
-          designPrompt: buildDesignPrompt(args?.section),
+          designPrompt: buildDesignPrompt(a.section as string | undefined),
         },
         null,
         2,
       )
     case 'batch_design':
-      return JSON.stringify(await handleBatchDesign(args), null, 2)
+      return JSON.stringify(await handleBatchDesign(a), null, 2)
     case 'design_skeleton':
-      return JSON.stringify(await handleDesignSkeleton(args), null, 2)
+      return JSON.stringify(await handleDesignSkeleton(a), null, 2)
     case 'design_content':
-      return JSON.stringify(await handleDesignContent(args), null, 2)
+      return JSON.stringify(await handleDesignContent(a), null, 2)
     case 'design_refine':
-      return JSON.stringify(await handleDesignRefine(args), null, 2)
+      return JSON.stringify(await handleDesignRefine(a), null, 2)
     default:
       throw new Error(`Unknown tool: ${name}`)
   }

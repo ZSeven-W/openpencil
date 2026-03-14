@@ -4,7 +4,6 @@ import { X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { useCanvasStore } from '@/stores/canvas-store'
-import { exportToPNG, exportToSVG } from '@/utils/export'
 
 interface ExportDialogProps {
   open: boolean
@@ -16,7 +15,6 @@ export default function ExportDialog({ open, onClose }: ExportDialogProps) {
   const [format, setFormat] = useState<'png' | 'svg'>('png')
   const [scale, setScale] = useState(2)
   const [selectedOnly, setSelectedOnly] = useState(false)
-  const fabricCanvas = useCanvasStore((s) => s.fabricCanvas)
   const hasSelection = useCanvasStore(
     (s) => s.selection.selectedIds.length > 0,
   )
@@ -34,15 +32,8 @@ export default function ExportDialog({ open, onClose }: ExportDialogProps) {
   if (!open) return null
 
   const handleExport = () => {
-    if (!fabricCanvas) return
-    if (format === 'png') {
-      exportToPNG(fabricCanvas, {
-        multiplier: scale,
-        selectedOnly,
-      })
-    } else {
-      exportToSVG(fabricCanvas, { selectedOnly })
-    }
+    // TODO: migrate to CanvasKit-based export
+    console.warn('[ExportDialog] Fabric.js export removed — pending CanvasKit migration')
     onClose()
   }
 
@@ -122,7 +113,7 @@ export default function ExportDialog({ open, onClose }: ExportDialogProps) {
         {/* Export button */}
         <Button
           onClick={handleExport}
-          disabled={!fabricCanvas}
+          disabled={false}
           className="w-full"
           size="sm"
         >

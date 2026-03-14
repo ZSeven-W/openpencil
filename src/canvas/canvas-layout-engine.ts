@@ -1,4 +1,4 @@
-import type { PenNode, ContainerProps } from '@/types/pen'
+import type { PenNode, ContainerProps, SizingBehavior } from '@/types/pen'
 import { isBadgeOverlayNode } from '@/services/ai/design-node-sanitization'
 import { useDocumentStore, DEFAULT_FRAME_ID } from '@/stores/document-store'
 import {
@@ -110,7 +110,7 @@ export function inferLayout(node: PenNode): 'horizontal' | undefined {
   if ('children' in node && node.children?.length) {
     for (const child of node.children) {
       if ('width' in child && child.width === 'fill_container') return 'horizontal'
-      if ('height' in child && (child as any).height === 'fill_container') return 'horizontal'
+      if ('height' in child && child.height === 'fill_container') return 'horizontal'
     }
   }
   return undefined
@@ -131,20 +131,20 @@ export function fitContentWidth(node: PenNode, parentAvail?: number): number {
   if (visibleChildren.length === 0) return 0
   const c = node as PenNode & ContainerProps
   const layout = c.layout || inferLayout(node)
-  const pad = resolvePadding('padding' in node ? (node as any).padding : undefined)
-  const gap = 'gap' in node && typeof (node as any).gap === 'number' ? (node as any).gap : 0
+  const pad = resolvePadding(c.padding)
+  const nodeGap = typeof c.gap === 'number' ? c.gap : 0
   if (layout === 'horizontal') {
-    const gapTotal = gap * Math.max(0, visibleChildren.length - 1)
+    const gapTotal = nodeGap * Math.max(0, visibleChildren.length - 1)
     const childAvail = parentAvail !== undefined
       ? Math.max(0, parentAvail - pad.left - pad.right - gapTotal)
       : undefined
-    const childTotal = visibleChildren.reduce((sum, c) => sum + getNodeWidth(c, childAvail), 0)
+    const childTotal = visibleChildren.reduce((sum, ch) => sum + getNodeWidth(ch, childAvail), 0)
     return childTotal + gapTotal + pad.left + pad.right
   }
   const childAvail = parentAvail !== undefined
     ? Math.max(0, parentAvail - pad.left - pad.right)
     : undefined
-  const maxChildW = visibleChildren.reduce((max, c) => Math.max(max, getNodeWidth(c, childAvail)), 0)
+  const maxChildW = visibleChildren.reduce((max, ch) => Math.max(max, getNodeWidth(ch, childAvail)), 0)
   return maxChildW + pad.left + pad.right
 }
 
@@ -159,17 +159,17 @@ export function fitContentHeight(node: PenNode, parentAvailW?: number): number {
   if (visibleChildren.length === 0) return 0
   const c = node as PenNode & ContainerProps
   const layout = c.layout || inferLayout(node)
-  const pad = resolvePadding('padding' in node ? (node as any).padding : undefined)
-  const gap = 'gap' in node && typeof (node as any).gap === 'number' ? (node as any).gap : 0
+  const pad = resolvePadding(c.padding)
+  const nodeGap = typeof c.gap === 'number' ? c.gap : 0
   // Compute available width for children (used by text height estimation)
   const nodeW = getNodeWidth(node, parentAvailW)
   const childAvailW = nodeW > 0 ? Math.max(0, nodeW - pad.left - pad.right) : parentAvailW
   if (layout === 'vertical') {
-    const childTotal = visibleChildren.reduce((sum, c) => sum + getNodeHeight(c, undefined, childAvailW), 0)
-    const gapTotal = gap * Math.max(0, visibleChildren.length - 1)
+    const childTotal = visibleChildren.reduce((sum, ch) => sum + getNodeHeight(ch, undefined, childAvailW), 0)
+    const gapTotal = nodeGap * Math.max(0, visibleChildren.length - 1)
     return childTotal + gapTotal + pad.top + pad.bottom
   }
-  const maxChildH = visibleChildren.reduce((max, c) => Math.max(max, getNodeHeight(c, undefined, childAvailW)), 0)
+  const maxChildH = visibleChildren.reduce((max, ch) => Math.max(max, getNodeHeight(ch, undefined, childAvailW)), 0)
   return maxChildH + pad.top + pad.bottom
 }
 
@@ -300,7 +300,7 @@ export function computeLayoutPositions(
   const mainSizing = layoutChildren.map((ch) => {
     const prop = isVertical ? 'height' : 'width'
     if (prop in ch) {
-      const s = parseSizing((ch as any)[prop])
+      const s = parseSizing((ch as PenNode & { width?: SizingBehavior; height?: SizingBehavior })[prop])
       if (s === 'fill') return 'fill' as const
     }
     return isVertical ? getNodeHeight(ch, availH, availW) : getNodeWidth(ch, availW)
@@ -323,7 +323,7 @@ export function computeLayoutPositions(
     if (isVertical && ch.type === 'text' && mainSizing[i] !== 'fill') {
       const content = resolveTextContent(ch)
       if (countExplicitTextLines(content) <= 1) {
-        const fontSize = (ch as any).fontSize ?? 16
+        const fontSize = ch.fontSize ?? 16
         const singleLineH = fontSize * FABRIC_FONT_SIZE_MULT
         const estH = estimateTextHeight(ch, availW)
         if (estH <= singleLineH + 1) {

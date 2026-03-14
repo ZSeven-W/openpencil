@@ -1,5 +1,5 @@
 import { nanoid } from 'nanoid'
-import type { PenDocument, PenNode, PenPage, RefNode } from '@/types/pen'
+import type { PenDocument, PenNode, PenNodeBase, PenPage, RefNode } from '@/types/pen'
 
 export const DEFAULT_FRAME_ID = 'root-frame'
 export const DEFAULT_PAGE_ID = 'page-1'
@@ -96,7 +96,7 @@ export function migrateToPages(doc: PenDocument): PenDocument {
 function ensureNodeIdsInTree(nodes: PenNode[]): void {
   for (const node of nodes) {
     if (!node.id) {
-      ;(node as any).id = nanoid()
+      ;(node as PenNodeBase).id = nanoid()
     }
     if ('children' in node && node.children) {
       ensureNodeIdsInTree(node.children)

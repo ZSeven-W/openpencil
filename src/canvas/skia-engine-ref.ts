@@ -26,6 +26,14 @@ export function zoomToFitContent() {
 }
 
 /**
+ * Returns the canvas element dimensions in CSS pixels.
+ * Falls back to 800x600 if no engine is mounted.
+ */
+export function getCanvasSize(): { width: number; height: number } {
+  return _engine?.getCanvasSize() ?? { width: 800, height: 600 }
+}
+
+/**
  * No-op — with the Skia engine, document-store is always in sync.
  * Previously needed for Fabric.js where canvas objects held authoritative positions.
  */

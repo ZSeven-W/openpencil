@@ -8,7 +8,7 @@
  * - svg-parser.ts → scaleSvgPath() (path coordinate scaling)
  */
 
-import type { PenNode } from '../../types/pen'
+import type { PenNode, PenNodeBase, LineNode } from '../../types/pen'
 import type { PenFill, PenStroke } from '../../types/styles'
 import { generateId } from '../utils/id'
 
@@ -506,20 +506,24 @@ function estimatePathBBox(d: string): { x: number; y: number; w: number; h: numb
 function computeChildrenBounds(children: PenNode[]): { x: number; y: number; w: number; h: number } {
   let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
   for (const child of children) {
-    const cx = (child as any).x ?? 0
-    const cy = (child as any).y ?? 0
+    const cx = child.x ?? 0
+    const cy = child.y ?? 0
     // Expand by half stroke width so the group fully contains visual bounds
-    const halfStroke = ((child as any).stroke?.thickness ?? 0) / 2
+    const stroke = 'stroke' in child ? (child as PenNode & { stroke?: PenStroke }).stroke : undefined
+    const thickness = stroke?.thickness
+    const halfStroke = (typeof thickness === 'number' ? thickness : 0) / 2
     if (child.type === 'line') {
-      const x2 = (child as any).x2 ?? cx
-      const y2 = (child as any).y2 ?? cy
+      const lineChild = child as LineNode
+      const x2 = lineChild.x2 ?? cx
+      const y2 = lineChild.y2 ?? cy
       minX = Math.min(minX, cx - halfStroke, x2 - halfStroke)
       minY = Math.min(minY, cy - halfStroke, y2 - halfStroke)
       maxX = Math.max(maxX, cx + halfStroke, x2 + halfStroke)
       maxY = Math.max(maxY, cy + halfStroke, y2 + halfStroke)
     } else {
-      const cw = (child as any).width ?? 0
-      const ch = (child as any).height ?? 0
+      const sized = child as PenNode & { width?: number; height?: number }
+      const cw = sized.width ?? 0
+      const ch = sized.height ?? 0
       minX = Math.min(minX, cx - halfStroke)
       minY = Math.min(minY, cy - halfStroke)
       maxX = Math.max(maxX, cx + cw + halfStroke)
@@ -532,14 +536,16 @@ function computeChildrenBounds(children: PenNode[]): { x: number; y: number; w: 
 
 /** Offset a child node's position (make relative to parent origin) */
 function offsetChild(node: PenNode, dx: number, dy: number) {
+  const mutable = node as PenNodeBase
   if (node.type === 'line') {
-    ;(node as any).x = ((node as any).x ?? 0) + dx
-    ;(node as any).y = ((node as any).y ?? 0) + dy
-    ;(node as any).x2 = ((node as any).x2 ?? 0) + dx
-    ;(node as any).y2 = ((node as any).y2 ?? 0) + dy
+    const lineNode = node as LineNode
+    mutable.x = (mutable.x ?? 0) + dx
+    mutable.y = (mutable.y ?? 0) + dy
+    lineNode.x2 = (lineNode.x2 ?? 0) + dx
+    lineNode.y2 = (lineNode.y2 ?? 0) + dy
   } else {
-    ;(node as any).x = ((node as any).x ?? 0) + dx
-    ;(node as any).y = ((node as any).y ?? 0) + dy
+    mutable.x = (mutable.x ?? 0) + dx
+    mutable.y = (mutable.y ?? 0) + dy
   }
 }
 

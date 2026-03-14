@@ -34,10 +34,6 @@ export default function PageTabs() {
     if (pageId === activePageId) return
     useCanvasStore.getState().clearSelection()
     useCanvasStore.getState().exitAllFrames()
-    const canvas = useCanvasStore.getState().fabricCanvas
-    if (canvas) {
-      canvas.discardActiveObject()
-    }
     setActivePageId(pageId)
     requestAnimationFrame(() => zoomToFitContent())
   }

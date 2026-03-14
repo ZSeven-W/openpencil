@@ -60,21 +60,21 @@ function premeasureTextHeights(nodes: PenNode[]): PenNode[] {
     let result = node
 
     if (node.type === 'text') {
-      const tNode = node as any
+      const tNode = node as import('@/types/pen').TextNode
       const hasFixedWidth = typeof tNode.width === 'number' && tNode.width > 0
       const isContainerHeight = typeof tNode.height === 'string'
         && (tNode.height === 'fill_container' || tNode.height === 'fit_content')
-      const textGrowth: string | undefined = tNode.textGrowth
+      const textGrowth = tNode.textGrowth
       const content = typeof tNode.content === 'string'
         ? tNode.content
         : Array.isArray(tNode.content)
-          ? tNode.content.map((s: any) => s.text ?? '').join('')
+          ? tNode.content.map((s) => s.text ?? '').join('')
           : ''
 
       // Match Fabric.js wrapping: only premeasure when text actually wraps.
       // textGrowth='auto' means auto-width (no wrapping) regardless of textAlign.
       // textGrowth=undefined with non-left textAlign uses fixed-width for alignment.
-      const textAlign: string | undefined = tNode.textAlign
+      const textAlign = tNode.textAlign
       const isFixedWidthText = textGrowth === 'fixed-width' || textGrowth === 'fixed-width-height'
         || (textGrowth !== 'auto' && textAlign != null && textAlign !== 'left')
       if (content && hasFixedWidth && isFixedWidthText && !isContainerHeight) {
@@ -85,7 +85,7 @@ function premeasureTextHeights(nodes: PenNode[]): PenNode[] {
         ctx.font = `${fontWeight} ${fontSize}px ${fontFamily}`
 
         // Fixed-width text with auto height: wrap and measure actual height
-        const wrapWidth = tNode.width + fontSize * 0.2
+        const wrapWidth = (tNode.width as number) + fontSize * 0.2
         const rawLines = content.split('\n')
         const wrappedLines: string[] = []
         for (const raw of rawLines) {
@@ -110,8 +110,8 @@ function premeasureTextHeights(nodes: PenNode[]): PenNode[] {
     }
 
     // Recurse into children
-    if ('children' in result && (result as any).children) {
-      const children = (result as any).children as PenNode[]
+    if ('children' in result && result.children) {
+      const children = result.children
       const measured = premeasureTextHeights(children)
       if (measured !== children) {
         result = { ...result, children: measured } as unknown as PenNode
@@ -175,8 +175,8 @@ function resolveRefs(
     delete resolved.reusable
     const resolvedNode = resolved as unknown as PenNode
     if ('children' in component && component.children) {
-      const refNode = node as any
-      ;(resolvedNode as any).children = remapIds(component.children, node.id, refNode.descendants)
+      const refNode = node as import('@/types/pen').RefNode
+      ;(resolvedNode as PenNode & ContainerProps).children = remapIds(component.children, node.id, refNode.descendants)
     }
     visited.delete(node.ref)
     return [resolvedNode]
@@ -189,7 +189,7 @@ function remapIds(children: PenNode[], refId: string, overrides?: Record<string,
     const ov = overrides?.[child.id] ?? {}
     const mapped = { ...child, ...ov, id: virtualId } as PenNode
     if ('children' in mapped && mapped.children) {
-      (mapped as any).children = remapIds(mapped.children, refId, overrides)
+      (mapped as PenNode & ContainerProps).children = remapIds(mapped.children, refId, overrides)
     }
     return mapped
   })
@@ -241,8 +241,8 @@ export function flattenToRenderNodes(
 
     const absX = (resolved.x ?? 0) + offsetX
     const absY = (resolved.y ?? 0) + offsetY
-    const absW = 'width' in resolved ? sizeToNumber((resolved as any).width, 100) : 100
-    const absH = 'height' in resolved ? sizeToNumber((resolved as any).height, 100) : 100
+    const absW = 'width' in resolved ? sizeToNumber(resolved.width, 100) : 100
+    const absH = 'height' in resolved ? sizeToNumber(resolved.height, 100) : 100
 
     result.push({
       node: { ...resolved, x: absX, y: absY } as PenNode,
@@ -255,7 +255,7 @@ export function flattenToRenderNodes(
     if (children && children.length > 0) {
       const nodeW = getNodeWidth(resolved, parentAvailW)
       const nodeH = getNodeHeight(resolved, parentAvailH, parentAvailW)
-      const pad = resolvePadding('padding' in resolved ? (resolved as any).padding : undefined)
+      const pad = resolvePadding('padding' in resolved ? (resolved as PenNode & ContainerProps).padding : undefined)
       const childAvailW = Math.max(0, nodeW - pad.left - pad.right)
       const childAvailH = Math.max(0, nodeH - pad.top - pad.bottom)
 
@@ -280,8 +280,8 @@ export function flattenToRenderNodes(
 
       // Propagate parent flip to children: mirror positions within parent bounds
       // and toggle child flipX/flipY. Must run BEFORE rotation propagation.
-      const parentFlipX = ('flipX' in node && (node as any).flipX) === true
-      const parentFlipY = ('flipY' in node && (node as any).flipY) === true
+      const parentFlipX = node.flipX === true
+      const parentFlipY = node.flipY === true
       if (parentFlipX || parentFlipY) {
         const pcx = absX + nodeW / 2
         const pcy = absY + nodeH / 2
@@ -290,13 +290,13 @@ export function flattenToRenderNodes(
           if (parentFlipX) {
             const ccx = crn.absX + crn.absW / 2
             crn.absX = 2 * pcx - ccx - crn.absW / 2
-            const childFlip = ('flipX' in crn.node && (crn.node as any).flipX) === true
+            const childFlip = crn.node.flipX === true
             updates.flipX = !childFlip || undefined
           }
           if (parentFlipY) {
             const ccy = crn.absY + crn.absH / 2
             crn.absY = 2 * pcy - ccy - crn.absH / 2
-            const childFlip = ('flipY' in crn.node && (crn.node as any).flipY) === true
+            const childFlip = crn.node.flipY === true
             updates.flipY = !childFlip || undefined
           }
           crn.node = { ...crn.node, x: crn.absX, y: crn.absY, ...updates } as PenNode
@@ -344,7 +344,7 @@ export function flattenToRenderNodes(
 
 function collectReusableIds(nodes: PenNode[], result: Set<string>) {
   for (const node of nodes) {
-    if ('reusable' in node && (node as any).reusable === true) {
+    if (node.type === 'frame' && node.reusable === true) {
       result.add(node.id)
     }
     if ('children' in node && node.children) {
@@ -689,6 +689,13 @@ export class SkiaEngine {
 
   getCanvasRect(): DOMRect | null {
     return this.canvasEl?.getBoundingClientRect() ?? null
+  }
+
+  getCanvasSize(): { width: number; height: number } {
+    return {
+      width: this.canvasEl?.clientWidth ?? 800,
+      height: this.canvasEl?.clientHeight ?? 600,
+    }
   }
 
   zoomToFitContent() {

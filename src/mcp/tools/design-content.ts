@@ -28,7 +28,7 @@ import type { PenNode } from '../../types/pen'
 export interface DesignContentParams {
   filePath?: string
   sectionId: string
-  children: any[]
+  children: Record<string, unknown>[]
   postProcess?: boolean
   canvasWidth?: number
   pageId?: string
@@ -128,49 +128,51 @@ export async function handleDesignContent(
 // ---------------------------------------------------------------------------
 
 /** Recursively assign generated IDs to a node tree, collecting warnings. */
-function assignIds(data: any, warnings: string[]): PenNode {
-  const node = { ...data, id: data.id || generateId() } as PenNode
+function assignIds(data: Record<string, unknown>, warnings: string[]): PenNode {
+  const node = { ...data, id: (data.id as string) || generateId() } as unknown as PenNode
 
   // Validate required fields
-  if (!(node as any).type) {
-    warnings.push(`Node "${(node as any).name ?? (node as any).id}" missing type — defaulting to "frame"`)
-    ;(node as any).type = 'frame'
+  const nodeRec = node as unknown as Record<string, unknown>
+  if (!nodeRec.type) {
+    warnings.push(`Node "${(nodeRec.name as string) ?? (nodeRec.id as string)}" missing type — defaulting to "frame"`)
+    nodeRec.type = 'frame'
   }
 
   // Check for common issues
   if (node.type === 'text') {
-    const content = (node as any).content ?? ''
-    if (content.length > 15 && !(node as any).textGrowth) {
+    const tNode = node as import('../../types/pen').TextNode
+    const content = typeof tNode.content === 'string' ? tNode.content : ''
+    if (content.length > 15 && !tNode.textGrowth) {
       warnings.push(
         `Text "${content.slice(0, 20)}..." is >15 chars without textGrowth="fixed-width" — may overflow`,
       )
     }
-    if (typeof (node as any).height === 'number') {
+    if (typeof tNode.height === 'number') {
       warnings.push(
         `Text "${node.name ?? node.id}" has explicit pixel height — will be removed by post-processing`,
       )
     }
   }
 
-  if (
-    node.type === 'frame' &&
-    typeof (node as any).cornerRadius === 'number' &&
-    (node as any).cornerRadius > 0
-  ) {
-    const hasImageChild =
-      Array.isArray((node as any).children) &&
-      (node as any).children.some((c: any) => c.type === 'image')
-    if (hasImageChild && !(node as any).clipContent) {
-      warnings.push(
-        `Frame "${node.name ?? node.id}" has cornerRadius + image child but no clipContent — will be auto-added`,
-      )
+  if (node.type === 'frame') {
+    const fNode = node as import('../../types/pen').FrameNode
+    if (typeof fNode.cornerRadius === 'number' && fNode.cornerRadius > 0) {
+      const hasImageChild =
+        Array.isArray(fNode.children) &&
+        fNode.children.some((c) => c.type === 'image')
+      if (hasImageChild && !fNode.clipContent) {
+        warnings.push(
+          `Frame "${node.name ?? node.id}" has cornerRadius + image child but no clipContent — will be auto-added`,
+        )
+      }
     }
   }
 
   // Recurse into children
-  if (Array.isArray((node as any).children)) {
-    ;(node as any).children = (node as any).children.map((child: any) =>
-      assignIds(child, warnings),
+  if ('children' in node && Array.isArray(node.children)) {
+    const container = node as PenNode & import('../../types/pen').ContainerProps
+    container.children = container.children!.map((child) =>
+      assignIds(child as unknown as Record<string, unknown>, warnings),
     )
   }
 

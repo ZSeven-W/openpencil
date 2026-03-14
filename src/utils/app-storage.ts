@@ -20,7 +20,7 @@ let initPromise: Promise<void> | null = null
 
 /** Whether we are running inside Electron with the IPC bridge available. */
 function isElectron(): boolean {
-  return typeof window !== 'undefined' && !!(window as any).electronAPI?.getPreferences
+  return typeof window !== 'undefined' && !!window.electronAPI?.getPreferences
 }
 
 /**
@@ -35,7 +35,7 @@ export async function initAppStorage(): Promise<void> {
   initPromise = (async () => {
     try {
       const prefs: Record<string, string> =
-        await (window as any).electronAPI.getPreferences()
+        await window.electronAPI!.getPreferences()
       cache = prefs ?? {}
     } catch {
       cache = {}
@@ -61,7 +61,7 @@ export function getItem(key: string): string | null {
 export function setItem(key: string, value: string): void {
   if (cache !== null) {
     cache[key] = value
-    ;(window as any).electronAPI
+    window.electronAPI
       ?.setPreference(key, value)
       ?.catch(() => {})
     return
@@ -77,7 +77,7 @@ export function setItem(key: string, value: string): void {
 export function removeItem(key: string): void {
   if (cache !== null) {
     delete cache[key]
-    ;(window as any).electronAPI
+    window.electronAPI
       ?.removePreference(key)
       ?.catch(() => {})
     return

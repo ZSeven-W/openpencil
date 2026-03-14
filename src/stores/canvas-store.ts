@@ -1,10 +1,4 @@
 import { create } from 'zustand'
-/**
- * @deprecated Legacy Fabric.js canvas reference — retained for export.ts compatibility.
- * Will be removed once export is migrated to CanvasKit.
- */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type Canvas = Record<string, any>
 import type {
   ToolType,
   ViewportState,
@@ -31,7 +25,6 @@ interface CanvasStoreState {
   viewport: ViewportState
   selection: SelectionState
   interaction: CanvasInteraction
-  fabricCanvas: Canvas | null
   clipboard: PenNode[]
   layerPanelOpen: boolean
   variablesPanelOpen: boolean
@@ -51,7 +44,6 @@ interface CanvasStoreState {
   exitFrame: () => void
   exitAllFrames: () => void
   setInteraction: (partial: Partial<CanvasInteraction>) => void
-  setFabricCanvas: (canvas: Canvas | null) => void
   setClipboard: (nodes: PenNode[]) => void
   toggleLayerPanel: () => void
   toggleVariablesPanel: () => void
@@ -80,7 +72,6 @@ export const useCanvasStore = create<CanvasStoreState>((set, get) => ({
     isDragging: false,
     drawStartPoint: null,
   },
-  fabricCanvas: null,
   clipboard: [],
   layerPanelOpen: true,
   variablesPanelOpen: false,
@@ -148,8 +139,6 @@ export const useCanvasStore = create<CanvasStoreState>((set, get) => ({
 
   setInteraction: (partial) =>
     set((s) => ({ interaction: { ...s.interaction, ...partial } })),
-
-  setFabricCanvas: (fabricCanvas) => set({ fabricCanvas }),
 
   setClipboard: (clipboard) => set({ clipboard }),
 

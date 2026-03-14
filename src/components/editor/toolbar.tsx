@@ -15,6 +15,7 @@ import ShapeToolDropdown from './shape-tool-dropdown'
 import { useCanvasStore } from '@/stores/canvas-store'
 import { useDocumentStore, generateId } from '@/stores/document-store'
 import { parseSvgToNodes } from '@/utils/svg-parser'
+import { getCanvasSize } from '@/canvas/skia-engine-ref'
 import { useHistoryStore } from '@/stores/history-store'
 import { useUIKitStore } from '@/stores/uikit-store'
 import { Button } from '@/components/ui/button'
@@ -41,10 +42,8 @@ export default function Toolbar() {
     const nodes = parseSvgToNodes(svgText)
     if (nodes.length === 0) return
 
-    const { viewport, fabricCanvas } = useCanvasStore.getState()
-    const canvasEl = fabricCanvas?.getElement()
-    const canvasW = canvasEl?.clientWidth ?? 800
-    const canvasH = canvasEl?.clientHeight ?? 600
+    const { viewport } = useCanvasStore.getState()
+    const { width: canvasW, height: canvasH } = getCanvasSize()
     const centerX = (-viewport.panX + canvasW / 2) / viewport.zoom
     const centerY = (-viewport.panY + canvasH / 2) / viewport.zoom
 
@@ -67,11 +66,6 @@ export default function Toolbar() {
       useDocumentStore.getState().applyHistoryState(prev)
     }
     useCanvasStore.getState().clearSelection()
-    const canvas = useCanvasStore.getState().fabricCanvas
-    if (canvas) {
-      canvas.discardActiveObject()
-      canvas.requestRenderAll()
-    }
   }
 
   const handleRedo = () => {
@@ -81,11 +75,6 @@ export default function Toolbar() {
       useDocumentStore.getState().applyHistoryState(next)
     }
     useCanvasStore.getState().clearSelection()
-    const canvas = useCanvasStore.getState().fabricCanvas
-    if (canvas) {
-      canvas.discardActiveObject()
-      canvas.requestRenderAll()
-    }
   }
 
   const handleAddImage = useCallback(() => {
@@ -108,10 +97,8 @@ export default function Toolbar() {
         const nodes = parseSvgToNodes(svgText)
         if (nodes.length === 0) return
 
-        const { viewport, fabricCanvas } = useCanvasStore.getState()
-        const canvasEl = fabricCanvas?.getElement()
-        const canvasW = canvasEl?.clientWidth ?? 800
-        const canvasH = canvasEl?.clientHeight ?? 600
+        const { viewport } = useCanvasStore.getState()
+        const { width: canvasW, height: canvasH } = getCanvasSize()
         const centerX = (-viewport.panX + canvasW / 2) / viewport.zoom
         const centerY = (-viewport.panY + canvasH / 2) / viewport.zoom
 
@@ -132,10 +119,8 @@ export default function Toolbar() {
         const dataUrl = reader.result as string
         const img = new Image()
         img.onload = () => {
-          const { viewport, fabricCanvas } = useCanvasStore.getState()
-          const canvasEl = fabricCanvas?.getElement()
-          const canvasW = canvasEl?.clientWidth ?? 800
-          const canvasH = canvasEl?.clientHeight ?? 600
+          const { viewport } = useCanvasStore.getState()
+          const { width: canvasW, height: canvasH } = getCanvasSize()
           const centerX = (-viewport.panX + canvasW / 2) / viewport.zoom
           const centerY = (-viewport.panY + canvasH / 2) / viewport.zoom
 

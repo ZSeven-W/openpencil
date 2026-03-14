@@ -8,6 +8,7 @@ import { inferLayout } from '../canvas-layout-engine'
 import { SkiaPenTool } from './skia-pen-tool'
 import { setSkiaEngineRef } from '../skia-engine-ref'
 import type { ToolType } from '@/types/canvas'
+import type { PenNode, ContainerProps, TextNode } from '@/types/pen'
 
 interface TextEditState {
   nodeId: string
@@ -355,7 +356,7 @@ export default function SkiaCanvas() {
         drawStartX = scene.x
         drawStartY = scene.y
         engine.previewShape = {
-          type: tool as any,
+          type: tool as 'rectangle' | 'ellipse' | 'frame' | 'line',
           x: scene.x, y: scene.y, w: 0, h: 0,
         }
         engine.markDirty()
@@ -378,8 +379,9 @@ export default function SkiaCanvas() {
           // Use resolved dimensions from spatial index — document store may have
           // string values like 'fill_container' that break arithmetic.
           const resizeRN = engine.spatialIndex.get(handleHit.nodeId)
-          resizeOrigW = resizeRN?.absW ?? (typeof (docNode as any)?.width === 'number' ? (docNode as any).width : 100)
-          resizeOrigH = resizeRN?.absH ?? (typeof (docNode as any)?.height === 'number' ? (docNode as any).height : 100)
+          const docNodeAny = docNode as (PenNode & ContainerProps) | undefined
+          resizeOrigW = resizeRN?.absW ?? (typeof docNodeAny?.width === 'number' ? docNodeAny.width : 100)
+          resizeOrigH = resizeRN?.absH ?? (typeof docNodeAny?.height === 'number' ? docNodeAny.height : 100)
           canvasEl.style.cursor = handleCursors[handleHit.dir]
           return
         }
@@ -508,10 +510,10 @@ export default function SkiaCanvas() {
         // For text nodes, switching to fixed-width enables auto-wrap
         const resizedNode = useDocumentStore.getState().getNodeById(resizeNodeId)
         const updates: Record<string, unknown> = { x: newX, y: newY, width: newW, height: newH }
-        if (resizedNode?.type === 'text' && !(resizedNode as any).textGrowth) {
+        if (resizedNode?.type === 'text' && !(resizedNode as TextNode).textGrowth) {
           updates.textGrowth = 'fixed-width'
         }
-        useDocumentStore.getState().updateNode(resizeNodeId, updates as any)
+        useDocumentStore.getState().updateNode(resizeNodeId, updates as Partial<PenNode>)
 
         // Scale children proportionally when resizing a container with children
         if (
@@ -521,8 +523,9 @@ export default function SkiaCanvas() {
         ) {
           // Use resolved dimensions — document store may have string values
           const resizeRN2 = engine.spatialIndex.get(resizeNodeId)
-          const oldW = resizeRN2?.absW ?? (typeof (resizedNode as any).width === 'number' ? (resizedNode as any).width : 0)
-          const oldH = resizeRN2?.absH ?? (typeof (resizedNode as any).height === 'number' ? (resizedNode as any).height : 0)
+          const resizedContainer = resizedNode as PenNode & ContainerProps
+          const oldW = resizeRN2?.absW ?? (typeof resizedContainer.width === 'number' ? resizedContainer.width : 0)
+          const oldH = resizeRN2?.absH ?? (typeof resizedContainer.height === 'number' ? resizedContainer.height : 0)
           if (oldW > 0 && oldH > 0) {
             const scaleX = newW / oldW
             const scaleY = newH / oldH
@@ -540,7 +543,7 @@ export default function SkiaCanvas() {
         if (e.shiftKey) {
           newAngle = Math.round(newAngle / 15) * 15
         }
-        useDocumentStore.getState().updateNode(rotateNodeId, { rotation: newAngle } as any)
+        useDocumentStore.getState().updateNode(rotateNodeId, { rotation: newAngle } as Partial<PenNode>)
         return
       }
 
@@ -558,7 +561,7 @@ export default function SkiaCanvas() {
         } else {
           // Rectangle / ellipse / frame: handle negative drag direction
           engine.previewShape = {
-            type: drawTool as any,
+            type: drawTool as 'rectangle' | 'ellipse' | 'frame' | 'line',
             x: dx < 0 ? scene.x : drawStartX,
             y: dy < 0 ? scene.y : drawStartY,
             w: Math.abs(dx),
@@ -732,7 +735,7 @@ export default function SkiaCanvas() {
 
               if (outside) {
                 // Reparent to root level with absolute position
-                docStore.updateNode(orig.id, { x: objBounds.x, y: objBounds.y } as any)
+                docStore.updateNode(orig.id, { x: objBounds.x, y: objBounds.y } as Partial<PenNode>)
                 docStore.moveNode(orig.id, null, 0)
                 continue
               }
@@ -741,13 +744,13 @@ export default function SkiaCanvas() {
 
           // Check if node is inside a layout container
           const parentLayout = parent
-            ? ((parent as any).layout || inferLayout(parent))
+            ? ((parent as PenNode & ContainerProps).layout || inferLayout(parent))
             : undefined
 
           if (parentLayout && parentLayout !== 'none' && parent) {
             // Layout child: reorder based on drop position
             const siblings = ('children' in parent ? parent.children ?? [] : [])
-              .filter((c: any) => c.id !== orig.id)
+              .filter((c) => c.id !== orig.id)
             const isVertical = parentLayout === 'vertical'
 
             let newIndex = siblings.length
@@ -770,7 +773,7 @@ export default function SkiaCanvas() {
             docStore.updateNode(orig.id, {
               x: orig.x + dx,
               y: orig.y + dy,
-            } as any)
+            } as Partial<PenNode>)
           }
         }
 
@@ -831,11 +834,10 @@ export default function SkiaCanvas() {
 
       if (topHit.node.type !== 'text') return
 
-      const tNode = topHit.node as any
+      const tNode = topHit.node as TextNode
       const fills = tNode.fill
-      const color = typeof fills === 'string'
-        ? fills
-        : (Array.isArray(fills) && fills[0]?.color ? fills[0].color : '#000000')
+      const firstFill = Array.isArray(fills) ? fills[0] : undefined
+      const color = firstFill?.type === 'solid' ? firstFill.color : '#000000'
 
       setEditingText({
         nodeId: topHit.node.id,
@@ -846,7 +848,7 @@ export default function SkiaCanvas() {
         content: typeof tNode.content === 'string'
           ? tNode.content
           : Array.isArray(tNode.content)
-            ? tNode.content.map((s: any) => s.text ?? '').join('')
+            ? tNode.content.map((s) => s.text ?? '').join('')
             : '',
         fontSize: (tNode.fontSize ?? 16) * engine.zoom,
         fontFamily: tNode.fontFamily ?? 'Inter, -apple-system, "Noto Sans SC", "PingFang SC", system-ui, sans-serif',
@@ -916,7 +918,7 @@ export default function SkiaCanvas() {
           onBlur={(e) => {
             const newContent = e.target.value
             if (newContent !== editingText.content) {
-              useDocumentStore.getState().updateNode(editingText.nodeId, { content: newContent } as any)
+              useDocumentStore.getState().updateNode(editingText.nodeId, { content: newContent } as Partial<PenNode>)
             }
             setEditingText(null)
           }}
