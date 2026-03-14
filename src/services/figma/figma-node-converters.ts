@@ -238,6 +238,9 @@ export function convertChildren(
 
   for (const child of parent.children) {
     if (child.figma.visible === false) continue
+    // Skip fully transparent nodes — their children are also invisible and
+    // the Skia renderer does not propagate parent opacity to descendants.
+    if (child.figma.opacity !== undefined && child.figma.opacity <= 0) continue
     const node = convertNode(child, parentStackMode, ctx)
     if (node) result.push(node)
   }
