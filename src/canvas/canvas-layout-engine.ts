@@ -7,15 +7,11 @@ import {
   estimateTextWidthPrecise,
   estimateTextHeight,
   estimateLineWidth,
-  getTextOpticalCenterYOffset,
   resolveTextContent,
   countExplicitTextLines,
+  defaultLineHeight,
 } from './canvas-text-measure'
 
-// Fabric.js internal constant: single-line text height = fontSize * _fontSizeMult.
-// The lineHeight property only adds spacing BETWEEN lines in multi-line text;
-// for single-line text, Fabric always renders height as fontSize * 1.13.
-const FABRIC_FONT_SIZE_MULT = 1.13
 
 // ---------------------------------------------------------------------------
 // Padding
@@ -315,16 +311,14 @@ export function computeLayoutPositions(
 
   const sizes = layoutChildren.map((ch, i) => {
     let mainSize = mainSizing[i] === 'fill' ? fillSize : (mainSizing[i] as number)
-    // For single-line text in vertical layouts, use Fabric's actual rendered
-    // height (fontSize * 1.13) instead of fontSize * lineHeight.  This ensures
-    // justify:center/end position the text correctly on the main axis.
-    // Only apply when text genuinely fits in one line — if it wraps due to
-    // width constraints, keep the multi-line estimated height.
+    // For single-line text in vertical layouts, use the actual CanvasKit
+    // Paragraph height (fontSize * lineHeight) for correct main-axis positioning.
     if (isVertical && ch.type === 'text' && mainSizing[i] !== 'fill') {
       const content = resolveTextContent(ch)
       if (countExplicitTextLines(content) <= 1) {
         const fontSize = ch.fontSize ?? 16
-        const singleLineH = fontSize * FABRIC_FONT_SIZE_MULT
+        const lineHeight = ch.lineHeight ?? defaultLineHeight(fontSize)
+        const singleLineH = fontSize * lineHeight
         const estH = estimateTextHeight(ch, availW)
         if (estH <= singleLineH + 1) {
           mainSize = singleLineH
@@ -383,33 +377,23 @@ export function computeLayoutPositions(
     let crossPos = 0
 
     // For single-line text centered in horizontal layouts, use the actual
-    // Fabric-rendered height (fontSize * 1.13) instead of fontSize * lineHeight.
-    // Fabric.js strips lineHeight from the last (only) line, so single-line text
-    // height is always fontSize * _fontSizeMult regardless of lineHeight.
-    // Using fontSize * lineHeight overestimates the height, shifting text upward.
-    // Only apply when text genuinely fits in one line (no word wrapping).
+    // CanvasKit Paragraph height (fontSize * lineHeight) for centering.
+    // CanvasKit renders with halfLeading:true, distributing leading evenly
+    // above and below, so no optical correction is needed.
     let effectiveChildCross = childCross
     if (align === 'center' && !isVertical && child.type === 'text') {
       const fontSize = child.fontSize ?? 16
+      const lineHeight = child.lineHeight ?? defaultLineHeight(fontSize)
       const content = resolveTextContent(child)
       const isSingleLine = countExplicitTextLines(content) <= 1
       if (isSingleLine) {
-        const singleLineH = fontSize * FABRIC_FONT_SIZE_MULT
-        const estH = estimateTextHeight(child, sizes[i].w)
-        if (estH <= singleLineH + 1) {
-          effectiveChildCross = singleLineH
-        }
+        effectiveChildCross = fontSize * lineHeight
       }
     }
 
     switch (align) {
       case 'center':
         crossPos = (crossAvail - effectiveChildCross) / 2
-        // Optical correction: centered text in horizontal layouts tends to
-        // look slightly too high; nudge it down a bit for visual centering.
-        if (!isVertical && child.type === 'text') {
-          crossPos += getTextOpticalCenterYOffset(child)
-        }
         break
       case 'end':
         crossPos = crossAvail - childCross
@@ -418,7 +402,7 @@ export function computeLayoutPositions(
         break
     }
 
-    // Keep child within cross-axis bounds after optical correction.
+    // Keep child within cross-axis bounds.
     const clampCrossSize =
       (!isVertical && align === 'center' && child.type === 'text')
         ? effectiveChildCross

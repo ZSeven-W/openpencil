@@ -720,18 +720,19 @@ export class SkiaRenderer {
     const textGrowth = tNode.textGrowth
     const letterSpacing = tNode.letterSpacing ?? 0
 
-    // Check if primary font family is loaded
+    // Check if primary font family is loaded; if not, try async load
     const primaryFamily = fontFamily.split(',')[0].trim().replace(/['"]/g, '')
     if (!this.fontManager.isFontReady(primaryFamily)) {
-      // Trigger async load, fall back to bitmap for now
       this.fontManager.ensureFont(primaryFamily).then((ok) => {
         if (ok) {
           this.clearParaCache()
-          // Trigger re-render via engine's dirty flag
           ;(this as any)._onFontLoaded?.()
         }
       })
-      return false
+      // If no fallback font is available either, fall back to bitmap
+      if (!this.fontManager.hasAnyFallback(primaryFamily)) {
+        return false
+      }
     }
 
     // Fixed-width text uses node width for wrapping; paragraph handles alignment.
@@ -773,12 +774,15 @@ export class SkiaRenderer {
       else if (weightNum <= 800) ckWeight = ck.FontWeight.ExtraBold
       else ckWeight = ck.FontWeight.Black
 
+      // Build font fallback chain: primary font → Inter (has latin-ext for ₦ etc.)
+      const fallbackFamilies = this.fontManager.getFallbackChain(primaryFamily)
+
       const paraStyle = new ck.ParagraphStyle({
         textAlign: ckAlign,
         textStyle: {
           color,
           fontSize,
-          fontFamilies: [primaryFamily],
+          fontFamilies: fallbackFamilies,
           fontStyle: { weight: ckWeight },
           letterSpacing,
           heightMultiplier: lineHeightMul,
@@ -800,10 +804,11 @@ export class SkiaRenderer {
               const segWeight = seg.fontWeight
                 ? (typeof seg.fontWeight === 'number' ? seg.fontWeight : parseInt(seg.fontWeight as string, 10) || weightNum)
                 : weightNum
+              const segPrimary = seg.fontFamily?.split(',')[0].trim().replace(/['"]/g, '') ?? primaryFamily
               builder.pushStyle(new ck.TextStyle({
                 color: segColor,
                 fontSize: seg.fontSize ?? fontSize,
-                fontFamilies: [seg.fontFamily?.split(',')[0].trim().replace(/['"]/g, '') ?? primaryFamily],
+                fontFamilies: this.fontManager.getFallbackChain(segPrimary),
                 fontStyle: { weight: segWeight as any },
                 letterSpacing,
                 heightMultiplier: lineHeightMul,

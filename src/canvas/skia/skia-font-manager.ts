@@ -98,6 +98,8 @@ export class SkiaFontManager {
   private provider: TypefaceFontProvider
   /** Registered family names (lowercase) → true once loaded */
   private loadedFamilies = new Set<string>()
+  /** Font families that failed to load — prevents repeated fetch attempts */
+  private failedFamilies = new Set<string>()
   /** In-flight font fetch promises to avoid duplicate requests */
   private pendingFetches = new Map<string, Promise<boolean>>()
 
@@ -119,6 +121,42 @@ export class SkiaFontManager {
     return family.toLowerCase() in BUNDLED_FONTS
   }
 
+  /**
+   * Build a font fallback chain for the Paragraph API.
+   * Only includes fonts actually registered in the TypefaceFontProvider.
+   * Extended subsets (e.g. "Inter Ext") are added for per-glyph fallback
+   * so characters like ₦ (U+20A6) render correctly.
+   */
+  getFallbackChain(primaryFamily: string): string[] {
+    const chain: string[] = []
+    const lower = primaryFamily.toLowerCase()
+    // Only add primary if it's actually registered
+    if (this.loadedFamilies.has(lower)) {
+      chain.push(primaryFamily)
+    }
+    // Add ext subset of primary family if available
+    if (this.loadedFamilies.has(lower + ' ext')) {
+      chain.push(primaryFamily + ' Ext')
+    }
+    // Add Inter + Inter Ext as final fallback
+    if (lower !== 'inter') {
+      if (this.loadedFamilies.has('inter')) chain.push('Inter')
+      if (this.loadedFamilies.has('inter ext')) chain.push('Inter Ext')
+    }
+    // Must have at least one font
+    if (chain.length === 0) chain.push('Inter')
+    return chain
+  }
+
+  /**
+   * Check if there's at least one loaded fallback font for the given primary family.
+   * Used to decide whether vector rendering can proceed when the primary font is unavailable.
+   */
+  hasAnyFallback(primaryFamily: string): boolean {
+    const key = primaryFamily.toLowerCase()
+    return key !== 'inter' && (this.loadedFamilies.has('inter') || this.loadedFamilies.has('inter ext'))
+  }
+
   /** Register a font from raw ArrayBuffer data */
   registerFont(data: ArrayBuffer, familyName: string): boolean {
     try {
@@ -138,6 +176,7 @@ export class SkiaFontManager {
   async ensureFont(family: string, weights: number[] = [400, 500, 600, 700]): Promise<boolean> {
     const key = family.toLowerCase()
     if (this.loadedFamilies.has(key)) return true
+    if (this.failedFamilies.has(key)) return false
 
     const existing = this.pendingFetches.get(key)
     if (existing) return existing
@@ -146,6 +185,10 @@ export class SkiaFontManager {
     this.pendingFetches.set(key, promise)
     const result = await promise
     this.pendingFetches.delete(key)
+    if (!result) {
+      this.failedFamilies.add(key)
+      console.warn(`[FontManager] Font "${family}" unavailable, will not retry`)
+    }
     return result
   }
 
@@ -172,7 +215,13 @@ export class SkiaFontManager {
       if (ok) return true
     }
 
-    // 2. Fall back to Google Fonts CDN
+    // 2. Skip Google Fonts for system/proprietary fonts that won't exist there
+    if (isSystemFont(family)) {
+      console.log(`[FontManager] "${family}" is a system font, skipping Google Fonts`)
+      return false
+    }
+
+    // 3. Fall back to Google Fonts CDN
     return this._fetchGoogleFont(family, weights)
   }
 
@@ -189,8 +238,14 @@ export class SkiaFontManager {
         })
       )
       let registered = 0
-      for (const buf of buffers) {
-        if (buf && this.registerFont(buf, family)) registered++
+      for (let i = 0; i < buffers.length; i++) {
+        const buf = buffers[i]
+        if (!buf) continue
+        // Register extended subset files (e.g. inter-ext-400.woff2) under a separate
+        // family name so CanvasKit's Paragraph API can do per-glyph fallback.
+        // Base Inter doesn't have ₦ (U+20A6) but latin-ext does.
+        const regName = urls[i].includes('-ext-') ? family + ' Ext' : family
+        if (this.registerFont(buf, regName)) registered++
       }
       console.log(`[FontManager] Local fonts for "${family}": ${registered}/${urls.length} registered`)
       return registered > 0
@@ -238,6 +293,29 @@ export class SkiaFontManager {
   dispose() {
     this.provider.delete()
     this.loadedFamilies.clear()
+    this.failedFamilies.clear()
     this.pendingFetches.clear()
   }
+}
+
+/**
+ * Known system/proprietary fonts that are NOT on Google Fonts.
+ * Avoids pointless 400 requests and CORS errors.
+ */
+const SYSTEM_FONT_PATTERNS = [
+  // Apple
+  'pingfang', 'sf pro', 'sf mono', 'sf compact', 'helvetica neue', 'helvetica',
+  'apple sd gothic', 'hiragino',
+  // Microsoft
+  'microsoft yahei', 'segoe ui', 'consolas', 'arial',
+  // CJK
+  'noto sans cjk', 'youshebiaotihei', 'simhei', 'simsun', 'fangsong', 'kaiti',
+  // Proprietary / non-Google
+  'd-din', 'din pro', 'din-pro', 'avenir', 'futura', 'proxima nova', 'gotham',
+  'brandon grotesque', 'aktiv grotesk', 'circular',
+]
+
+function isSystemFont(family: string): boolean {
+  const lower = family.toLowerCase()
+  return SYSTEM_FONT_PATTERNS.some(p => lower.includes(p))
 }
