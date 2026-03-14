@@ -27,11 +27,23 @@ function stripNonStandardTags(text: string): string {
     .replace(/<\/?[\w:.]+:[\w]+[^>]*>/g, '')  // namespaced tags: <minimax:tool_call>
     .replace(/<\/?tool_call[^>]*>/g, '')        // <tool_call>, </tool_call>
     .replace(/<\|[\w_]+\|>/g, '')               // chat template markers: <|im_start|>
+    .replace(/\[TOOL_CALL\]/gi, '')             // bracket-style tool call markers
+}
+
+/**
+ * Strip fake tool call blocks that basic-tier models (MiniMax, etc.) may emit.
+ * These look like `{tool => "Write", args => { ... }}` and are not valid JSON.
+ * Must run BEFORE JSON extraction so brace-scanning doesn't pick them up.
+ */
+function stripToolCallBlocks(text: string): string {
+  // Remove `{tool => "...", args => { ... }}` blocks (arrow-syntax pseudo-calls)
+  // These use `=>` instead of `:` for key-value pairs
+  return text.replace(/\{tool\s*=>\s*"[^"]*"\s*,\s*args\s*=>[\s\S]*$/gi, '')
 }
 
 export function extractJsonFromResponse(text: string): PenNode[] | null {
   // Clean non-standard model artifacts before parsing
-  const cleaned = stripNonStandardTags(text)
+  const cleaned = stripToolCallBlocks(stripNonStandardTags(text))
 
   const parsedBlocks = extractAllJsonBlocks(cleaned)
     .map((block) => tryParseNodes(block))
