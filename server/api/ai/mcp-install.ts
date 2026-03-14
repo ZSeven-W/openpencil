@@ -1,8 +1,12 @@
 import { defineEventHandler, readBody, setResponseHeaders } from 'h3'
 import { homedir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { join, resolve, dirname } from 'node:path'
 import { readFile, writeFile, mkdir } from 'node:fs/promises'
 import { existsSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
+
+const __filename = fileURLToPath(import.meta.url)
+const __dirname = dirname(__filename)
 
 const MCP_DEFAULT_PORT = 3100
 
