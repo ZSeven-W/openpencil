@@ -5,7 +5,9 @@
 
 import { useCanvasStore } from '@/stores/canvas-store'
 import { DEFAULT_FRAME_ID, useDocumentStore } from '@/stores/document-store'
-import type { FabricObjectWithPenId } from '@/canvas/canvas-object-factory'
+/** @deprecated Legacy Fabric.js stub — will be removed once export is migrated to CanvasKit */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type FabricObjectWithPenId = Record<string, any> & { penNodeId?: string }
 
 /**
  * Capture a screenshot of a specific node and all its descendants.

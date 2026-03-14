@@ -36,7 +36,7 @@ import {
 } from './design-generator'
 import { useDocumentStore } from '@/stores/document-store'
 import { useHistoryStore } from '@/stores/history-store'
-import { zoomToFitContent } from '@/canvas/use-fabric-canvas'
+import { zoomToFitContent } from '@/canvas/skia-engine-ref'
 import { resetAnimationState } from './design-animation'
 import { VALIDATION_ENABLED } from './ai-runtime-config'
 import { runPostGenerationValidation } from './design-validation'

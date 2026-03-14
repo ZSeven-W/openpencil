@@ -123,15 +123,15 @@ bun run electron:dev
 
 **MCP 서버**
 - 내장 MCP 서버 — Claude Code / Codex / Gemini / OpenCode / Kiro / Copilot CLI에 원클릭 설치
+- Node.js 자동 감지 — 설치되지 않은 경우 HTTP 전송 모드로 자동 대체하고 MCP HTTP 서버를 자동 시작
 - 터미널에서 디자인 자동화: MCP 호환 에이전트를 통해 `.op` 파일 읽기, 생성, 편집 가능
 - **계층적 디자인 워크플로** — `design_skeleton` → `design_content` → `design_refine`으로 더 높은 충실도의 멀티 섹션 디자인
 - **세그먼트 프롬프트 검색** — 필요한 디자인 지식만 로드 (스키마, 레이아웃, 역할, 아이콘, 계획 등)
 - 멀티 페이지 지원 — MCP 도구를 통해 페이지 생성, 이름 변경, 순서 변경, 복제
 
 **코드 생성**
-- React + Tailwind CSS
-- HTML + CSS
-- 디자인 토큰에서 CSS Variables 생성
+- React + Tailwind CSS, HTML + CSS, CSS Variables
+- Vue, Svelte, Flutter, SwiftUI, Jetpack Compose, React Native
 
 ## 기능
 
@@ -163,7 +163,7 @@ bun run electron:dev
 | | |
 | --- | --- |
 | **프론트엔드** | React 19 · TanStack Start · Tailwind CSS v4 · shadcn/ui |
-| **캔버스** | Fabric.js v7 |
+| **캔버스** | CanvasKit/Skia (WASM, GPU 가속) |
 | **상태 관리** | Zustand v5 |
 | **서버** | Nitro |
 | **데스크톱** | Electron 35 |
@@ -175,7 +175,7 @@ bun run electron:dev
 
 ```text
 src/
-  canvas/          Fabric.js 엔진 — 드로잉, 동기화, 레이아웃, 가이드, 펜 툴
+  canvas/          CanvasKit/Skia 엔진 — 드로잉, 동기화, 레이아웃, 가이드, 펜 툴
   components/      React UI — 에디터, 패널, 공유 다이얼로그, 아이콘
   services/ai/     AI 채팅, 오케스트레이터, 디자인 생성, 스트리밍
   services/figma/  Figma .fig 바이너리 가져오기 파이프라인

@@ -38,8 +38,8 @@ import {
   openDocumentFS,
   openDocument,
 } from '@/utils/file-operations'
-import { syncCanvasPositionsToStore } from '@/canvas/use-canvas-sync'
-import { zoomToFitContent } from '@/canvas/use-fabric-canvas'
+import { syncCanvasPositionsToStore } from '@/canvas/skia-engine-ref'
+import { zoomToFitContent } from '@/canvas/skia-engine-ref'
 import { normalizePenDocument } from '@/utils/normalize-pen-file'
 import { useAgentSettingsStore } from '@/stores/agent-settings-store'
 import type { AIProviderType } from '@/types/agent-settings'

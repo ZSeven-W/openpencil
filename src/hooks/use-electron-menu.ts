@@ -2,8 +2,8 @@ import { useEffect } from 'react'
 import { useCanvasStore } from '@/stores/canvas-store'
 import { useDocumentStore } from '@/stores/document-store'
 import { useHistoryStore } from '@/stores/history-store'
-import { zoomToFitContent } from '@/canvas/use-fabric-canvas'
-import { syncCanvasPositionsToStore } from '@/canvas/use-canvas-sync'
+import { zoomToFitContent } from '@/canvas/skia-engine-ref'
+import { syncCanvasPositionsToStore } from '@/canvas/skia-engine-ref'
 import { normalizePenDocument } from '@/utils/normalize-pen-file'
 import {
   supportsFileSystemAccess,

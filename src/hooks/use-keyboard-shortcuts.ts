@@ -1,5 +1,4 @@
 import { useEffect } from 'react'
-import { ActiveSelection } from 'fabric'
 import { useCanvasStore } from '@/stores/canvas-store'
 import { useDocumentStore, getActivePageChildren } from '@/stores/document-store'
 import { useHistoryStore } from '@/stores/history-store'
@@ -16,10 +15,7 @@ import {
   openDocumentFS,
   openDocument,
 } from '@/utils/file-operations'
-import { syncCanvasPositionsToStore } from '@/canvas/use-canvas-sync'
-import type { FabricObjectWithPenId } from '@/canvas/canvas-object-factory'
-import { zoomToFitContent } from '@/canvas/use-fabric-canvas'
-import { isPenToolActive, penToolKeyDown } from '@/canvas/pen-tool'
+import { syncCanvasPositionsToStore, zoomToFitContent } from '@/canvas/skia-engine-ref'
 import type { ToolType } from '@/types/canvas'
 
 const TOOL_KEYS: Record<string, ToolType> = {
@@ -46,15 +42,6 @@ export function useKeyboardShortcuts() {
         return
       }
 
-      // During pen tool drawing, handle Enter/Escape/Backspace specially
-      if (isPenToolActive()) {
-        const canvas = useCanvasStore.getState().fabricCanvas
-        if (canvas && penToolKeyDown(canvas, e.key)) {
-          e.preventDefault()
-          return
-        }
-      }
-
       const isMod = e.metaKey || e.ctrlKey
 
       // Undo: Cmd/Ctrl+Z
@@ -65,13 +52,7 @@ export function useKeyboardShortcuts() {
         if (prev) {
           useDocumentStore.getState().applyHistoryState(prev)
         }
-        // Deselect so Fabric re-renders objects at their restored dimensions
         useCanvasStore.getState().clearSelection()
-        const canvas = useCanvasStore.getState().fabricCanvas
-        if (canvas) {
-          canvas.discardActiveObject()
-          canvas.requestRenderAll()
-        }
         return
       }
 
@@ -84,11 +65,6 @@ export function useKeyboardShortcuts() {
           useDocumentStore.getState().applyHistoryState(next)
         }
         useCanvasStore.getState().clearSelection()
-        const canvas = useCanvasStore.getState().fabricCanvas
-        if (canvas) {
-          canvas.discardActiveObject()
-          canvas.requestRenderAll()
-        }
         return
       }
 
@@ -118,11 +94,6 @@ export function useKeyboardShortcuts() {
             useDocumentStore.getState().removeNode(id)
           }
           useCanvasStore.getState().clearSelection()
-          const canvas = useCanvasStore.getState().fabricCanvas
-          if (canvas) {
-            canvas.discardActiveObject()
-            canvas.requestRenderAll()
-          }
         }
         return
       }
@@ -321,11 +292,6 @@ export function useKeyboardShortcuts() {
               }
               useDocumentStore.getState().addNode(null, result)
               useCanvasStore.getState().setSelection([result.id], result.id)
-              const canvas = useCanvasStore.getState().fabricCanvas
-              if (canvas) {
-                canvas.discardActiveObject()
-                canvas.requestRenderAll()
-              }
             }
           }
           return
@@ -346,29 +312,13 @@ export function useKeyboardShortcuts() {
       if (e.key === 'Escape') {
         e.preventDefault()
         const { selectedIds, enteredFrameId } = useCanvasStore.getState().selection
-        const canvas = useCanvasStore.getState().fabricCanvas
 
         if (selectedIds.length > 0) {
-          // Step 1: clear current selection
           useCanvasStore.getState().clearSelection()
-          if (canvas) {
-            canvas.discardActiveObject()
-            canvas.requestRenderAll()
-          }
         } else if (enteredFrameId) {
-          // Step 2: exit entered frame
           useCanvasStore.getState().exitFrame()
-          if (canvas) {
-            canvas.discardActiveObject()
-            canvas.requestRenderAll()
-          }
         } else {
-          // Step 3: switch to select tool
           useCanvasStore.getState().setActiveTool('select')
-          if (canvas) {
-            canvas.discardActiveObject()
-            canvas.requestRenderAll()
-          }
         }
         return
       }
@@ -394,11 +344,6 @@ export function useKeyboardShortcuts() {
               .endBatch(useDocumentStore.getState().document)
           }
           useCanvasStore.getState().clearSelection()
-          const canvas = useCanvasStore.getState().fabricCanvas
-          if (canvas) {
-            canvas.discardActiveObject()
-            canvas.requestRenderAll()
-          }
         }
         return
       }
@@ -409,21 +354,6 @@ export function useKeyboardShortcuts() {
         const topLevelNodes = getActivePageChildren(useDocumentStore.getState().document, useCanvasStore.getState().activePageId)
         const ids = topLevelNodes.map((n) => n.id)
         useCanvasStore.getState().setSelection(ids, ids[0] ?? null)
-        const canvas = useCanvasStore.getState().fabricCanvas
-        if (canvas) {
-          const topLevelSet = new Set(ids)
-          const objects = (
-            canvas.getObjects() as FabricObjectWithPenId[]
-          ).filter((obj) => obj.penNodeId && topLevelSet.has(obj.penNodeId))
-          if (objects.length === 1) {
-            canvas.setActiveObject(objects[0])
-            canvas.requestRenderAll()
-          } else if (objects.length > 1) {
-            const sel = new ActiveSelection(objects, { canvas })
-            canvas.setActiveObject(sel)
-            canvas.requestRenderAll()
-          }
-        }
         return
       }
 

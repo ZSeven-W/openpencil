@@ -1,5 +1,10 @@
 import { create } from 'zustand'
-import type { Canvas } from 'fabric'
+/**
+ * @deprecated Legacy Fabric.js canvas reference — retained for export.ts compatibility.
+ * Will be removed once export is migrated to CanvasKit.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type Canvas = Record<string, any>
 import type {
   ToolType,
   ViewportState,

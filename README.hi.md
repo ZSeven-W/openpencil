@@ -123,15 +123,15 @@ bun run electron:dev
 
 **MCP सर्वर**
 - बिल्ट-इन MCP सर्वर — Claude Code / Codex / Gemini / OpenCode / Kiro / Copilot CLIs में वन-क्लिक इंस्टॉल
+- Node.js स्वचालित पहचान — यदि इंस्टॉल नहीं है तो HTTP ट्रांसपोर्ट पर स्वचालित फ़ॉलबैक और MCP HTTP सर्वर ऑटो-स्टार्ट
 - टर्मिनल से डिज़ाइन ऑटोमेशन: किसी भी MCP-संगत एजेंट के ज़रिए `.op` फ़ाइलें पढ़ें, बनाएँ और संपादित करें
 - **लेयर्ड डिज़ाइन वर्कफ़्लो** — उच्च-फ़िडेलिटी मल्टी-सेक्शन डिज़ाइन के लिए `design_skeleton` → `design_content` → `design_refine`
 - **सेगमेंटेड प्रॉम्प्ट रिट्रीवल** — केवल आवश्यक डिज़ाइन ज्ञान लोड करें (schema, layout, roles, icons, planning, आदि)
 - मल्टी-पेज सपोर्ट — MCP टूल के ज़रिए पेज बनाएँ, नाम बदलें, क्रम बदलें और डुप्लिकेट करें
 
 **कोड जनरेशन**
-- React + Tailwind CSS
-- HTML + CSS
-- डिज़ाइन टोकन से CSS Variables
+- React + Tailwind CSS, HTML + CSS, CSS Variables
+- Vue, Svelte, Flutter, SwiftUI, Jetpack Compose, React Native
 
 ## विशेषताएँ
 
@@ -163,7 +163,7 @@ bun run electron:dev
 | | |
 | --- | --- |
 | **फ्रंटएंड** | React 19 · TanStack Start · Tailwind CSS v4 · shadcn/ui |
-| **कैनवास** | Fabric.js v7 |
+| **कैनवास** | CanvasKit/Skia (WASM, GPU-एक्सेलेरेटेड) |
 | **स्टेट** | Zustand v5 |
 | **सर्वर** | Nitro |
 | **डेस्कटॉप** | Electron 35 |
@@ -175,7 +175,7 @@ bun run electron:dev
 
 ```text
 src/
-  canvas/          Fabric.js इंजन — ड्रॉइंग, सिंक, लेआउट, गाइड, पेन टूल
+  canvas/          CanvasKit/Skia इंजन — ड्रॉइंग, सिंक, लेआउट, गाइड, पेन टूल
   components/      React UI — एडिटर, पैनल, शेयर्ड डायलॉग, आइकन
   services/ai/     AI चैट, ऑर्केस्ट्रेटर, डिज़ाइन जनरेशन, स्ट्रीमिंग
   services/figma/  Figma .fig बाइनरी इम्पोर्ट पाइपलाइन

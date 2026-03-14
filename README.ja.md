@@ -123,15 +123,15 @@ bun run electron:dev
 
 **MCP サーバー**
 - 内蔵 MCP サーバー — Claude Code / Codex / Gemini / OpenCode / Kiro / Copilot CLI にワンクリックでインストール
+- Node.js を自動検出 — 未インストールの場合は HTTP トランスポートに自動フォールバックし、MCP HTTP サーバーを自動起動
 - ターミナルからのデザイン自動化：MCP 対応エージェントを通じて `.op` ファイルの読み取り、作成、編集が可能
 - **レイヤードデザインワークフロー** — `design_skeleton` → `design_content` → `design_refine` による高忠実度マルチセクションデザイン
 - **セグメント化プロンプト取得** — 必要なデザイン知識のみをロード（schema、layout、roles、icons、planning など）
 - マルチページサポート — MCP ツールを通じてページの作成、名前変更、並べ替え、複製が可能
 
 **コード生成**
-- React + Tailwind CSS
-- HTML + CSS
-- デザイントークンから CSS Variables を生成
+- React + Tailwind CSS、HTML + CSS、CSS Variables
+- Vue、Svelte、Flutter、SwiftUI、Jetpack Compose、React Native
 
 ## 機能
 
@@ -163,7 +163,7 @@ bun run electron:dev
 | | |
 | --- | --- |
 | **フロントエンド** | React 19 · TanStack Start · Tailwind CSS v4 · shadcn/ui |
-| **キャンバス** | Fabric.js v7 |
+| **キャンバス** | CanvasKit/Skia（WASM、GPU アクセラレーション） |
 | **状態管理** | Zustand v5 |
 | **サーバー** | Nitro |
 | **デスクトップ** | Electron 35 |
@@ -175,7 +175,7 @@ bun run electron:dev
 
 ```text
 src/
-  canvas/          Fabric.js エンジン — 描画、同期、レイアウト、ガイド、ペンツール
+  canvas/          CanvasKit/Skia エンジン — 描画、同期、レイアウト、ガイド、ペンツール
   components/      React UI — エディター、パネル、共有ダイアログ、アイコン
   services/ai/     AI チャット、オーケストレーター、デザイン生成、ストリーミング
   services/figma/  Figma .fig バイナリインポートパイプライン

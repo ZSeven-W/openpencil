@@ -81,7 +81,7 @@ export function useFileDrop() {
     useDocumentStore.getState().loadDocument(result.doc, result.fileName)
 
     // Let the canvas sync, then zoom to fit
-    const { zoomToFitContent } = await import('@/canvas/use-fabric-canvas')
+    const { zoomToFitContent } = await import('@/canvas/skia-engine-ref')
     requestAnimationFrame(() => zoomToFitContent())
   }, [])
 

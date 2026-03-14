@@ -123,15 +123,15 @@ bun run electron:dev
 
 **MCP Server**
 - Built-in MCP server — one-click install into Claude Code / Codex / Gemini / OpenCode / Kiro / Copilot CLIs
+- Auto-detects Node.js — if not installed, falls back to HTTP transport and auto-starts the MCP HTTP server
 - Design automation from terminal: read, create, and modify `.op` files via any MCP-compatible agent
 - **Layered design workflow** — `design_skeleton` → `design_content` → `design_refine` for higher-fidelity multi-section designs
 - **Segmented prompt retrieval** — load only the design knowledge you need (schema, layout, roles, icons, planning, etc.)
 - Multi-page support — create, rename, reorder, and duplicate pages via MCP tools
 
 **Code Generation**
-- React + Tailwind CSS
-- HTML + CSS
-- CSS Variables from design tokens
+- React + Tailwind CSS, HTML + CSS, CSS Variables
+- Vue, Svelte, Flutter, SwiftUI, Jetpack Compose, React Native
 
 ## Features
 
@@ -163,7 +163,7 @@ bun run electron:dev
 | | |
 | --- | --- |
 | **Frontend** | React 19 · TanStack Start · Tailwind CSS v4 · shadcn/ui |
-| **Canvas** | Fabric.js v7 |
+| **Canvas** | CanvasKit/Skia (WASM, GPU-accelerated) |
 | **State** | Zustand v5 |
 | **Server** | Nitro |
 | **Desktop** | Electron 35 |
@@ -175,11 +175,11 @@ bun run electron:dev
 
 ```text
 src/
-  canvas/          Fabric.js engine — drawing, sync, layout, guides, pen tool
+  canvas/          CanvasKit/Skia engine — drawing, sync, layout, guides, pen tool
   components/      React UI — editor, panels, shared dialogs, icons
   services/ai/     AI chat, orchestrator, design generation, streaming
   services/figma/  Figma .fig binary import pipeline
-  services/codegen React+Tailwind and HTML+CSS code generators
+  services/codegen Multi-platform code generators (React, HTML, Vue, Svelte, Flutter, SwiftUI, Compose, React Native)
   stores/          Zustand — canvas, document, pages, history, AI, settings
   variables/       Design token resolution and reference management
   mcp/             MCP server tools for external CLI integration

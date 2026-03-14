@@ -6,6 +6,7 @@ import { useDocumentStore } from '@/stores/document-store'
 import { createNodeForTool, isDrawingTool } from '../canvas-node-creator'
 import { inferLayout } from '../canvas-layout-engine'
 import { SkiaPenTool } from './skia-pen-tool'
+import { setSkiaEngineRef } from '../skia-engine-ref'
 import type { ToolType } from '@/types/canvas'
 
 interface TextEditState {
@@ -51,6 +52,7 @@ export default function SkiaCanvas() {
         const engine = new SkiaEngine(ck)
         engine.init(canvasEl)
         engineRef.current = engine
+        setSkiaEngineRef(engine)
 
         // Initial sync
         engine.syncFromDocument()
@@ -66,6 +68,7 @@ export default function SkiaCanvas() {
 
     return () => {
       disposed = true
+      setSkiaEngineRef(null)
       engineRef.current?.dispose()
       engineRef.current = null
     }

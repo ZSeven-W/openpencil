@@ -53,7 +53,6 @@
         "class-variance-authority": "^0.7.1",
         "clsx": "^2.1.1",
         "electron-updater": "^6.6.2",
-        "fabric": "^7.1.0",
         "fzstd": "^0.1.1",
         "html2canvas": "^1.4.1",
         "i18next": "^25.8.14",

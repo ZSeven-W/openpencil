@@ -123,15 +123,15 @@ bun run electron:dev
 
 **Máy chủ MCP**
 - Máy chủ MCP tích hợp sẵn — cài đặt một cú nhấp vào Claude Code / Codex / Gemini / OpenCode / Kiro / Copilot CLI
+- Tự động phát hiện Node.js — nếu chưa cài đặt, tự động chuyển sang HTTP transport và khởi động MCP HTTP server
 - Tự động hóa thiết kế từ terminal: đọc, tạo và chỉnh sửa các tệp `.op` qua bất kỳ tác nhân tương thích MCP nào
 - **Quy trình thiết kế phân lớp** — `design_skeleton` → `design_content` → `design_refine` cho thiết kế đa phần có độ trung thực cao hơn
 - **Truy xuất prompt phân đoạn** — chỉ tải kiến thức thiết kế cần thiết (schema, layout, roles, icons, planning, v.v.)
 - Hỗ trợ nhiều trang — tạo, đổi tên, sắp xếp lại và nhân bản trang qua các công cụ MCP
 
 **Tạo mã nguồn**
-- React + Tailwind CSS
-- HTML + CSS
-- CSS Variables từ các token thiết kế
+- React + Tailwind CSS, HTML + CSS, CSS Variables
+- Vue, Svelte, Flutter, SwiftUI, Jetpack Compose, React Native
 
 ## Tính năng
 
@@ -163,7 +163,7 @@ bun run electron:dev
 | | |
 | --- | --- |
 | **Frontend** | React 19 · TanStack Start · Tailwind CSS v4 · shadcn/ui |
-| **Canvas** | Fabric.js v7 |
+| **Canvas** | CanvasKit/Skia (WASM, tăng tốc GPU) |
 | **Trạng thái** | Zustand v5 |
 | **Máy chủ** | Nitro |
 | **Desktop** | Electron 35 |
@@ -175,7 +175,7 @@ bun run electron:dev
 
 ```text
 src/
-  canvas/          Fabric.js engine — vẽ, đồng bộ, layout, hướng dẫn, công cụ bút
+  canvas/          CanvasKit/Skia engine — vẽ, đồng bộ, layout, hướng dẫn, công cụ bút
   components/      React UI — editor, panels, hộp thoại dùng chung, icons
   services/ai/     AI chat, orchestrator, tạo thiết kế, streaming
   services/figma/  Pipeline nhập binary Figma .fig

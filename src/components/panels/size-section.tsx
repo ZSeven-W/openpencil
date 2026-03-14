@@ -1,7 +1,6 @@
 import { useTranslation } from 'react-i18next'
 import NumberInput from '@/components/shared/number-input'
 import type { PenNode } from '@/types/pen'
-import { nodeRenderInfo } from '@/canvas/use-canvas-sync'
 import { RotateCw } from 'lucide-react'
 
 interface SizeSectionProps {
@@ -20,11 +19,8 @@ export default function SizeSection({
   hideWH,
 }: SizeSectionProps) {
   const { t } = useTranslation()
-  const info = nodeRenderInfo.get(node.id)
-  const offsetX = info?.parentOffsetX ?? 0
-  const offsetY = info?.parentOffsetY ?? 0
-  const x = (node.x ?? 0) + offsetX
-  const y = (node.y ?? 0) + offsetY
+  const x = node.x ?? 0
+  const y = node.y ?? 0
   const rotation = node.rotation ?? 0
 
   const width =
@@ -53,12 +49,12 @@ export default function SizeSection({
       <NumberInput
         label="X"
         value={Math.round(x)}
-        onChange={(v) => onUpdate({ x: v - offsetX })}
+        onChange={(v) => onUpdate({ x: v })}
       />
       <NumberInput
         label="Y"
         value={Math.round(y)}
-        onChange={(v) => onUpdate({ y: v - offsetY })}
+        onChange={(v) => onUpdate({ y: v })}
       />
       {!hideWH && width !== undefined && (
         <NumberInput
