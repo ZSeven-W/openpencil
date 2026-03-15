@@ -604,34 +604,40 @@ function applyInstanceOverrides(
       }
     }
   } else if (firstLocalID !== undefined && sessionID !== undefined) {
-    // Strategy 2: hybrid skip-INSTANCE + expanded DFS.
-    // Figma uses two numbering schemes for virtual GUIDs:
-    //   - Skip-INSTANCE DFS for slot indices 0..skipCount-1
-    //     (walks the symbol tree but skips INSTANCE nodes entirely)
-    //   - Expanded DFS for slot indices >= skipCount
-    //     (walks the symbol tree expanding INSTANCE children inline)
+    // Strategy 2: full DFS + expanded DFS.
+    // Figma assigns sequential virtual localIDs to all nodes (including
+    // INSTANCE nodes) in a pre-order DFS starting from the symbol's children
+    // (excluding the symbol root itself).  The expanded DFS handles overflow
+    // entries at higher localIDs caused by inline expansion of nested instances.
 
-    // --- Skip-INSTANCE DFS: pathKey → nodeGuid ---
-    const skipPkToNode = new Map<string, string>()
-    let skipIdx = 0
-    function walkSkipInst(node: TreeNode) {
-      if (node.figma.type === 'INSTANCE') return // skip entirely
+    const childSorted = [...symbolNode.children].sort((a, b) =>
+      (a.figma.guid?.localID ?? 0) - (b.figma.guid?.localID ?? 0),
+    )
+
+    // --- Full DFS from children: pathKey → nodeGuid ---
+    // Includes ALL node types (including INSTANCE).  Starts from the symbol's
+    // children, NOT the root, because derived data doesn't include the root.
+    const fullPkToNode = new Map<string, string>()
+    let fullIdx = 0
+    function walkFull(node: TreeNode) {
       if (node.figma.guid) {
-        skipPkToNode.set(
-          `${sessionID}:${firstLocalID! + skipIdx}`,
+        fullPkToNode.set(
+          `${sessionID}:${firstLocalID! + fullIdx}`,
           guidToString(node.figma.guid),
         )
       }
-      skipIdx++
+      fullIdx++
       const sorted = [...node.children].sort((a, b) =>
         (a.figma.guid?.localID ?? 0) - (b.figma.guid?.localID ?? 0),
       )
-      for (const c of sorted) walkSkipInst(c)
+      for (const c of sorted) walkFull(c)
     }
-    walkSkipInst(symbolNode)
-    const skipCount = skipIdx
+    for (const c of childSorted) walkFull(c)
+    const fullCount = fullIdx
 
-    // --- Expanded DFS: pathKey → nodeGuid (main-symbol nodes only) ---
+    // --- Expanded DFS from children: maps overflow entries ---
+    // When INSTANCE nodes are encountered, their referenced symbol's children
+    // are walked inline, pushing later nodes to higher slot IDs.
     const expPkToNode = new Map<string, string>()
     let expIdx = 0
     function walkExp(node: TreeNode, isMain: boolean) {
@@ -661,16 +667,16 @@ function applyInstanceOverrides(
       )
       for (const c of sorted) walkExp(c, isMain)
     }
-    walkExp(symbolNode, true)
+    for (const c of childSorted) walkExp(c, true)
 
-    // Merge: skip-INSTANCE for indices < skipCount, expanded for >= skipCount
+    // Merge: full DFS for indices < fullCount, expanded for >= fullCount
     const unifiedPkToNode = new Map<string, string>()
-    for (const [pk, ng] of skipPkToNode) {
+    for (const [pk, ng] of fullPkToNode) {
       unifiedPkToNode.set(pk, ng)
     }
     for (const [pk, ng] of expPkToNode) {
       const localId = parseInt(pk.split(':')[1])
-      if (localId >= firstLocalID! + skipCount) {
+      if (localId >= firstLocalID! + fullCount) {
         unifiedPkToNode.set(pk, ng)
       }
     }
