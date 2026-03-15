@@ -77,8 +77,6 @@ interface FigmaClipboardData {
  *     <span data-buffer="BASE64_BINARY"></span>
  */
 export function extractFigmaClipboardData(html: string): FigmaClipboardData | null {
-  console.debug('[figma-clipboard] HTML preview (first 500 chars):', html.slice(0, 500))
-
   let metaB64: string | null = null
   let bufferB64: string | null = null
 
@@ -89,7 +87,6 @@ export function extractFigmaClipboardData(html: string): FigmaClipboardData | nu
   const bufferCommentMatch = html.match(/<!--\(figma\)(?:-->)?([\s\S]*?)<!--\(figma\)-->/)
 
   if (metaCommentMatch && bufferCommentMatch) {
-    console.debug('[figma-clipboard] Matched comment-wrapped format')
     metaB64 = metaCommentMatch[1].trim()
     bufferB64 = bufferCommentMatch[1].trim()
   }
@@ -100,7 +97,6 @@ export function extractFigmaClipboardData(html: string): FigmaClipboardData | nu
     const attrBufferMatch = html.match(/data-buffer="([^"]*)"/)
 
     if (attrMetaMatch && attrBufferMatch) {
-      console.debug('[figma-clipboard] Matched data-attribute format')
       // Strip comment wrappers from attribute values if present.
       // Opening marker may lack --> (e.g. "<!--(figmeta)BASE64<!--(figmeta)-->")
       metaB64 = attrMetaMatch[1]
@@ -118,25 +114,12 @@ export function extractFigmaClipboardData(html: string): FigmaClipboardData | nu
     const encodedBufferMatch = html.match(/&lt;!--\(figma\)--&gt;([\s\S]*?)&lt;!--\(figma\)--&gt;/)
 
     if (encodedMetaMatch && encodedBufferMatch) {
-      console.debug('[figma-clipboard] Matched HTML-encoded comment format')
       metaB64 = encodedMetaMatch[1].trim()
       bufferB64 = encodedBufferMatch[1].trim()
     }
   }
 
-  if (!metaB64 || !bufferB64) {
-    console.warn('[figma-clipboard] No matching extraction strategy.',
-      'Has figmeta comment:', /<!--\(figmeta\)-->/.test(html),
-      'Has figma comment:', /<!--\(figma\)-->/.test(html),
-      'Has data-metadata attr:', /data-metadata=/.test(html),
-      'Has data-buffer attr:', /data-buffer=/.test(html),
-      'Has encoded figmeta:', /&lt;!--\(figmeta\)/.test(html),
-    )
-    return null
-  }
-
-  console.debug('[figma-clipboard] meta base64 length:', metaB64.length,
-    'buffer base64 length:', bufferB64.length)
+  if (!metaB64 || !bufferB64) return null
 
   try {
     const metaRaw = decodeBase64(metaB64)
@@ -144,18 +127,9 @@ export function extractFigmaClipboardData(html: string): FigmaClipboardData | nu
     const jsonEnd = metaRaw.lastIndexOf('}')
     const metaJson = jsonEnd >= 0 ? metaRaw.slice(0, jsonEnd + 1) : metaRaw
     const meta = JSON.parse(metaJson)
-    console.debug('[figma-clipboard] Decoded meta:', meta)
-
     const bytes = decodeBase64ToBytes(bufferB64)
-
-    console.debug('[figma-clipboard] Decoded buffer:', bytes.byteLength, 'bytes,',
-      'first 8 bytes:', Array.from(bytes.slice(0, 8)).map(b => b.toString(16).padStart(2, '0')).join(' '))
-
     return { meta, buffer: bytes.buffer as ArrayBuffer }
-  } catch (err) {
-    console.error('[figma-clipboard] Decode error:', err,
-      'meta b64 preview:', metaB64.slice(0, 80),
-      'buffer b64 preview:', bufferB64.slice(0, 80))
+  } catch {
     return null
   }
 }
@@ -168,12 +142,63 @@ export function figmaClipboardToNodes(
   buffer: ArrayBuffer,
 ): { nodes: PenNode[]; warnings: string[] } {
   const decoded = parseFigFile(buffer)
-  const { nodes, warnings, imageBlobs } = figmaNodeChangesToPenNodes(decoded, 'openpencil')
+  // Use 'preserve' layout mode (same as .fig file import) so that:
+  // 1. Auto-layout children are reversed to correct flow order
+  // 2. Image nodes get numeric pixel dimensions instead of sizing strings
+  const { nodes, warnings, imageBlobs } = figmaNodeChangesToPenNodes(decoded, 'preserve')
 
   // Resolve embedded image blobs to data URLs
   if (imageBlobs.size > 0 || decoded.imageFiles.size > 0) {
     resolveImageBlobs(nodes, imageBlobs, decoded.imageFiles)
   }
 
+  // Handle unresolved image references — clipboard data often lacks image
+  // binary data.  Convert unresolvable image nodes to placeholder rectangles.
+  fixUnresolvedImages(nodes)
+
   return { nodes, warnings }
+}
+
+/**
+ * Walk the node tree and convert image nodes with unresolved __blob:/__hash:
+ * references into placeholder rectangles.  Clipboard data often lacks the
+ * actual image binary, so leaving these as image nodes with broken src would
+ * render as invisible/broken elements.
+ */
+function fixUnresolvedImages(nodes: PenNode[]): void {
+  for (let i = 0; i < nodes.length; i++) {
+    const node = nodes[i]
+    if (node.type === 'image' && node.src && (node.src.startsWith('__blob:') || node.src.startsWith('__hash:'))) {
+      // Convert to a placeholder rectangle preserving position and size
+      const rect: PenNode = {
+        type: 'rectangle',
+        id: node.id,
+        name: node.name,
+        x: node.x,
+        y: node.y,
+        width: node.width,
+        height: node.height,
+        cornerRadius: node.cornerRadius,
+        opacity: node.opacity,
+        fill: [{ type: 'solid', color: '#E5E7EB' }],
+      }
+      nodes[i] = rect
+    }
+    // Also fix image fills on other node types
+    if ('fill' in node && Array.isArray(node.fill)) {
+      for (let j = node.fill.length - 1; j >= 0; j--) {
+        const fill = node.fill[j]
+        if (fill.type === 'image' && 'url' in fill) {
+          const url = (fill as any).url as string
+          if (url?.startsWith('__blob:') || url?.startsWith('__hash:')) {
+            node.fill[j] = { type: 'solid', color: '#E5E7EB' }
+          }
+        }
+      }
+    }
+    // Recurse into children
+    if ('children' in node && Array.isArray(node.children)) {
+      fixUnresolvedImages(node.children)
+    }
+  }
 }

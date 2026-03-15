@@ -440,8 +440,12 @@ function convertInstance(
         figma.size,
         ctx.symbolTree,
       )
+      // Merge symbol's layout and visual properties into the instance.
+      // Instances inherit from their master but clipboard data may not
+      // include inherited properties on the instance node itself.
+      const mergedFigma = mergeSymbolProps(treeNode.figma, symbolNode.figma)
       return convertFrame(
-        { figma: treeNode.figma, children },
+        { figma: mergedFigma, children },
         parentStackMode,
         ctx,
       )
@@ -462,6 +466,43 @@ function convertInstance(
   }
 
   return convertFrame(treeNode, parentStackMode, ctx)
+}
+
+/**
+ * Merge symbol's properties into an instance node.
+ * Instances inherit layout and visual properties from their master component,
+ * but clipboard data may not include these inherited values on the instance.
+ * Instance's own properties take priority (they are explicit overrides).
+ */
+function mergeSymbolProps(instance: FigmaNodeChange, symbol: FigmaNodeChange): FigmaNodeChange {
+  const merged = { ...instance }
+
+  // Layout properties — needed for auto-layout detection and layout generation
+  const layoutKeys: (keyof FigmaNodeChange)[] = [
+    'stackMode', 'stackSpacing', 'stackPadding',
+    'stackHorizontalPadding', 'stackVerticalPadding',
+    'stackPaddingRight', 'stackPaddingBottom',
+    'stackPrimaryAlignItems', 'stackCounterAlignItems',
+    'stackPrimarySizing', 'stackCounterSizing',
+    'stackChildPrimaryGrow', 'stackChildAlignSelf',
+    'frameMaskDisabled',
+  ]
+
+  // Visual properties — fills/strokes for the frame itself
+  const visualKeys: (keyof FigmaNodeChange)[] = [
+    'fillPaints', 'strokePaints', 'strokeWeight', 'strokeAlign',
+    'cornerRadius', 'rectangleCornerRadiiIndependent',
+    'rectangleTopLeftCornerRadius', 'rectangleTopRightCornerRadius',
+    'rectangleBottomLeftCornerRadius', 'rectangleBottomRightCornerRadius',
+  ]
+
+  for (const key of [...layoutKeys, ...visualKeys]) {
+    if ((merged as any)[key] === undefined && (symbol as any)[key] !== undefined) {
+      (merged as any)[key] = (symbol as any)[key]
+    }
+  }
+
+  return merged
 }
 
 /**

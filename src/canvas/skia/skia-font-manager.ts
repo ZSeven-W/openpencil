@@ -381,8 +381,41 @@ function isFontLocallyAvailable(family: string): boolean {
   return available
 }
 
+/**
+ * Known font family prefixes/patterns that are NOT on Google Fonts.
+ * These are system fonts, proprietary fonts, or vendor-specific fonts
+ * that should never be fetched from Google Fonts CDN.
+ */
+const NON_GOOGLE_FONT_PATTERNS = [
+  // Microsoft
+  /^microsoft/i, /^ms /i, /^segoe/i, /^simhei/i, /^simsun/i,
+  /^kaiti/i, /^fangsong/i, /^youyuan/i, /^lishu/i, /^dengxian/i,
+  // Apple / macOS
+  /^sf /i, /^sf-/i, /^apple/i, /^pingfang/i, /^hiragino/i,
+  /^helvetica/i, /^menlo/i, /^monaco/i, /^lucida grande/i,
+  /^avenir/i, /^\.apple/i,
+  // Proprietary / DIN variants
+  /^d-din/i, /^din[ -]/i, /^din$/i, /^proxima/i, /^gotham/i,
+  /^futura/i, /^akzidenz/i, /^univers/i, /^frutiger/i,
+  // Chinese custom fonts
+  /^youshebiaotihei/i, /^youshebiaoti/i,
+  /^fz/i, /^alibaba/i, /^huawen/i, /^stk/i, /^st[hf]/i,
+  /^source han /i, /^noto sans cjk/i, /^noto serif cjk/i,
+  // Japanese
+  /^yu gothic/i, /^yu mincho/i, /^meiryo/i, /^ms gothic/i, /^ms mincho/i,
+  // System generics
+  /^system-ui/i, /^-apple-system/i, /^blinkmacsystemfont/i,
+  /^arial/i, /^times new roman/i, /^courier new/i, /^georgia/i,
+  /^verdana/i, /^tahoma/i, /^trebuchet/i, /^impact/i,
+  /^comic sans/i, /^consolas/i, /^calibri/i, /^cambria/i,
+]
+
+function isKnownNonGoogleFont(family: string): boolean {
+  return NON_GOOGLE_FONT_PATTERNS.some(p => p.test(family.trim()))
+}
+
 function isSystemFont(family: string): boolean {
-  return isFontLocallyAvailable(family)
+  return isFontLocallyAvailable(family) || isKnownNonGoogleFont(family)
 }
 
 /** Fetch with timeout — rejects if response doesn't arrive within `ms`. */
