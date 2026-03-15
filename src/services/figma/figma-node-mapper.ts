@@ -17,10 +17,10 @@ import {
 } from './figma-node-converters'
 
 /**
- * Resolve styleIdForFill / styleIdForStrokeFill references to inline paints.
- * Figma stores paint styles as separate nodes (styleType='FILL') and references
- * them via styleIdForFill on consuming nodes.  Nodes with a style ref but no
- * inline fillPaints need the style's paints copied in.
+ * Resolve style references (fill, stroke, text, effect) to inline properties.
+ * Figma stores styles as separate nodes (styleType='FILL'|'TEXT'|'EFFECT') and
+ * references them via styleIdFor* on consuming nodes.  Nodes with a style ref
+ * but no inline properties need the style's values copied in.
  */
 function resolveStyleReferences(nodeChanges: FigmaNodeChange[]): void {
   // Build style map from nodes with styleType
@@ -32,30 +32,59 @@ function resolveStyleReferences(nodeChanges: FigmaNodeChange[]): void {
   }
   if (styleMap.size === 0) return
 
+  function lookupStyle(ref: { guid?: { sessionID: number; localID: number } } | undefined): FigmaNodeChange | undefined {
+    if (!ref?.guid) return undefined
+    return styleMap.get(`${ref.guid.sessionID}:${ref.guid.localID}`)
+  }
+
   /** Resolve style references on a single node-like object. */
   function resolveOnNode(nc: Record<string, any>) {
-    // Resolve fill style — always use the style's paint when a style reference exists
-    const fillStyleId = nc.styleIdForFill as { guid?: { sessionID: number; localID: number } } | undefined
-    if (fillStyleId?.guid) {
-      const styleKey = `${fillStyleId.guid.sessionID}:${fillStyleId.guid.localID}`
-      const style = styleMap.get(styleKey)
-      if (style?.fillPaints?.length) {
-        nc.fillPaints = style.fillPaints
-      }
+    // Resolve fill style
+    const fillStyle = lookupStyle(nc.styleIdForFill)
+    if (fillStyle?.fillPaints?.length) {
+      nc.fillPaints = fillStyle.fillPaints
     }
+
     // Resolve stroke fill style
-    const strokeStyleId = nc.styleIdForStrokeFill as { guid?: { sessionID: number; localID: number } } | undefined
-    if (strokeStyleId?.guid) {
-      const styleKey = `${strokeStyleId.guid.sessionID}:${strokeStyleId.guid.localID}`
-      const style = styleMap.get(styleKey)
-      if (style?.fillPaints?.length) {
-        nc.strokePaints = style.fillPaints
-      }
+    const strokeStyle = lookupStyle(nc.styleIdForStrokeFill)
+    if (strokeStyle?.fillPaints?.length) {
+      nc.strokePaints = strokeStyle.fillPaints
+    }
+
+    // Resolve text style — copies font properties from the TEXT style node
+    const textStyle = lookupStyle(nc.styleIdForText)
+    if (textStyle) {
+      if (!nc.fontName && textStyle.fontName) nc.fontName = textStyle.fontName
+      if (nc.fontSize === undefined && textStyle.fontSize !== undefined) nc.fontSize = textStyle.fontSize
+      if (!nc.lineHeight && textStyle.lineHeight) nc.lineHeight = textStyle.lineHeight
+      if (!nc.letterSpacing && textStyle.letterSpacing) nc.letterSpacing = textStyle.letterSpacing
+      if (!nc.textAlignHorizontal && textStyle.textAlignHorizontal) nc.textAlignHorizontal = textStyle.textAlignHorizontal
+      if (!nc.textDecoration && textStyle.textDecoration) nc.textDecoration = textStyle.textDecoration
+      if (!nc.textCase && textStyle.textCase) nc.textCase = textStyle.textCase
+      // Text style may also carry fill paints (text color)
+      if (!nc.fillPaints && textStyle.fillPaints?.length) nc.fillPaints = textStyle.fillPaints
+    }
+
+    // Resolve effect style
+    const effectStyle = lookupStyle(nc.styleIdForEffect)
+    if (effectStyle?.effects?.length && !nc.effects?.length) {
+      nc.effects = effectStyle.effects
     }
   }
 
+  let resolvedCount = 0
+  let unresolvedCount = 0
   for (const nc of nodeChanges) {
+    const before = JSON.stringify([nc.fillPaints?.length, nc.strokePaints?.length, nc.fontName, nc.effects?.length])
     resolveOnNode(nc as Record<string, any>)
+    const after = JSON.stringify([nc.fillPaints?.length, nc.strokePaints?.length, nc.fontName, nc.effects?.length])
+    if (before !== after) resolvedCount++
+
+    // Track unresolved refs
+    const ncAny = nc as Record<string, any>
+    if (ncAny.styleIdForFill?.guid && !nc.fillPaints?.length) unresolvedCount++
+    if (ncAny.styleIdForText?.guid && !nc.fontName) unresolvedCount++
+
     // Also resolve style references inside instance override entries
     const overrides = nc.symbolData?.symbolOverrides
     if (overrides) {
@@ -64,6 +93,12 @@ function resolveStyleReferences(nodeChanges: FigmaNodeChange[]): void {
       }
     }
   }
+
+  console.debug(
+    '[figma-mapper] Style resolution: styleMap size:', styleMap.size,
+    '| resolved:', resolvedCount,
+    '| unresolved refs:', unresolvedCount,
+  )
 }
 
 /**
@@ -295,11 +330,32 @@ export function figmaNodeChangesToPenNodes(
   }
 
   const nodes: PenNode[] = []
+  let skippedInvisible = 0
+  let skippedNull = 0
   for (const treeNode of topNodes) {
-    if (treeNode.figma.visible === false) continue
+    if (treeNode.figma.visible === false) { skippedInvisible++; continue }
     const node = convertNode(treeNode, undefined, ctx)
     if (node) nodes.push(node)
+    else skippedNull++
   }
+
+  console.debug(
+    '[figma-mapper] Top-level nodes:', topNodes.length,
+    '| converted:', nodes.length,
+    '| skipped (invisible):', skippedInvisible,
+    '| skipped (null):', skippedNull,
+    '| total nodeChanges:', decoded.nodeChanges.length,
+    '| symbols in tree:', symbolTree.size,
+    '| components:', componentMap.size,
+  )
+
+  // Log node types from nodeChanges for debugging
+  const typeCounts: Record<string, number> = {}
+  for (const nc of decoded.nodeChanges) {
+    const t = nc.type ?? 'UNKNOWN'
+    typeCounts[t] = (typeCounts[t] ?? 0) + 1
+  }
+  console.debug('[figma-mapper] nodeChange types:', JSON.stringify(typeCounts))
 
   const imageBlobs = collectImageBlobs(decoded.blobs)
 

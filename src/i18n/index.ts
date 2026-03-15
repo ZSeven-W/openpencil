@@ -20,35 +20,37 @@ import id from '@/i18n/locales/id'
 
 export const SUPPORTED_LANGS = ['en', 'zh', 'zh-TW', 'ja', 'ko', 'fr', 'es', 'de', 'pt', 'ru', 'hi', 'tr', 'th', 'vi', 'id']
 
-// Initialize with 'en' for SSR hydration safety.
-// Language detection is deferred to post-hydration via detectLanguagePostHydration().
-i18n
-  .use(initReactI18next)
-  .init({
-    lng: 'en',
-    resources: {
-      en: { translation: en },
-      zh: { translation: zh },
-      'zh-TW': { translation: zhTW },
-      ja: { translation: ja },
-      ko: { translation: ko },
-      fr: { translation: fr },
-      es: { translation: es },
-      de: { translation: de },
-      pt: { translation: pt },
-      ru: { translation: ru },
-      hi: { translation: hi },
-      tr: { translation: tr },
-      th: { translation: th },
-      vi: { translation: vi },
-      id: { translation: id },
-    },
-    supportedLngs: SUPPORTED_LANGS,
-    fallbackLng: 'en',
-    interpolation: {
-      escapeValue: false,
-    },
-  })
+const resources = {
+  en: { translation: en },
+  zh: { translation: zh },
+  'zh-TW': { translation: zhTW },
+  ja: { translation: ja },
+  ko: { translation: ko },
+  fr: { translation: fr },
+  es: { translation: es },
+  de: { translation: de },
+  pt: { translation: pt },
+  ru: { translation: ru },
+  hi: { translation: hi },
+  tr: { translation: tr },
+  th: { translation: th },
+  vi: { translation: vi },
+  id: { translation: id },
+}
+
+if (!i18n.isInitialized) {
+  i18n
+    .use(initReactI18next)
+    .init({
+      lng: 'en',
+      resources,
+      supportedLngs: SUPPORTED_LANGS,
+      fallbackLng: 'en',
+      interpolation: {
+        escapeValue: false,
+      },
+    })
+}
 
 // Persist language changes
 i18n.on('languageChanged', (lng) => {

@@ -63,7 +63,7 @@ function processFigmaHtml(html: string): boolean {
   const clipData = extractFigmaClipboardData(html)
   if (!clipData) return false
 
-  const { nodes } = figmaClipboardToNodes(clipData.buffer)
+  const { nodes } = figmaClipboardToNodes(clipData.buffer, html)
   if (nodes.length === 0) return false
 
   // Center pasted nodes at viewport center

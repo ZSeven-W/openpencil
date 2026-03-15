@@ -181,7 +181,6 @@ export class SkiaFontManager {
     try {
       this.provider.registerFont(data, familyName)
       this.loadedFamilies.add(familyName.toLowerCase())
-      console.log(`[FontManager] Registered "${familyName}" (${(data.byteLength / 1024).toFixed(1)}KB)`)
       return true
     } catch (e) {
       console.warn(`[FontManager] Failed to register "${familyName}":`, e)
@@ -212,7 +211,6 @@ export class SkiaFontManager {
         this.systemFontFamilies.add(key)
       } else {
         this.failedFamilies.add(key)
-        console.warn(`[FontManager] Font "${family}" unavailable, will not retry`)
       }
     }
     return result
@@ -243,7 +241,6 @@ export class SkiaFontManager {
 
     // 2. Skip Google Fonts for system/proprietary fonts that won't exist there
     if (isSystemFont(family)) {
-      console.log(`[FontManager] "${family}" is a system font, skipping Google Fonts`)
       return false
     }
 
@@ -257,7 +254,6 @@ export class SkiaFontManager {
         urls.map(async (url) => {
           const resp = await fetch(url)
           if (!resp.ok) {
-            console.warn(`[FontManager] Failed to fetch ${url}: ${resp.status}`)
             return null
           }
           return resp.arrayBuffer()
@@ -273,10 +269,8 @@ export class SkiaFontManager {
         const regName = urls[i].includes('-ext-') ? family + ' Ext' : family
         if (this.registerFont(buf, regName)) registered++
       }
-      console.log(`[FontManager] Local fonts for "${family}": ${registered}/${urls.length} registered`)
       return registered > 0
     } catch (e) {
-      console.warn(`[FontManager] Local font fetch error for "${family}":`, e)
       return false
     }
   }

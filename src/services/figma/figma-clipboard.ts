@@ -137,9 +137,15 @@ export function extractFigmaClipboardData(html: string): FigmaClipboardData | nu
 /**
  * Convert a Figma clipboard buffer into PenNodes.
  * The buffer uses the same fig-kiwi binary format as .fig files.
+ *
+ * @param buffer  The decoded binary buffer from the Figma clipboard.
+ * @param html    Optional full clipboard HTML — when provided, styled content
+ *                outside the binary comments is parsed to supplement missing
+ *                style properties (colors, fonts) on the binary-parsed nodes.
  */
 export function figmaClipboardToNodes(
   buffer: ArrayBuffer,
+  html?: string,
 ): { nodes: PenNode[]; warnings: string[] } {
   const decoded = parseFigFile(buffer)
   // Use 'preserve' layout mode (same as .fig file import) so that:
@@ -152,11 +158,47 @@ export function figmaClipboardToNodes(
     resolveImageBlobs(nodes, imageBlobs, decoded.imageFiles)
   }
 
+  // Log conversion results for debugging
+  const nodeStats = countNodeTypes(nodes)
+  console.debug('[figma-clipboard] Converted nodes:', JSON.stringify(nodeStats))
+  if (warnings.length > 0) {
+    console.warn('[figma-clipboard] Warnings:', warnings)
+  }
+
   // Handle unresolved image references — clipboard data often lacks image
   // binary data.  Convert unresolvable image nodes to placeholder rectangles.
   fixUnresolvedImages(nodes)
 
+  // Enrich nodes with style hints extracted from the clipboard HTML.
+  // Figma clipboard HTML contains styled elements (with inline CSS) that
+  // may carry color/font information lost during binary parsing (e.g. when
+  // shared style nodes are not included in the clipboard data).
+  if (html) {
+    const hints = parseClipboardHtmlStyles(html)
+    console.debug('[figma-clipboard] HTML style hints extracted:', hints.size, 'entries')
+    if (hints.size > 0) {
+      console.debug('[figma-clipboard] HTML hints:', JSON.stringify(Object.fromEntries(hints)))
+      enrichNodesFromHtmlHints(nodes, hints)
+    }
+  }
+
+  // Log the full node tree for debugging
+  console.debug('[figma-clipboard] Full node tree:', JSON.stringify(nodes, null, 2))
+
   return { nodes, warnings }
+}
+
+/** Count node types recursively for debug logging. */
+function countNodeTypes(nodes: PenNode[]): Record<string, number> {
+  const counts: Record<string, number> = {}
+  function walk(ns: PenNode[]) {
+    for (const n of ns) {
+      counts[n.type] = (counts[n.type] ?? 0) + 1
+      if ('children' in n && Array.isArray(n.children)) walk(n.children)
+    }
+  }
+  walk(nodes)
+  return counts
 }
 
 /**
@@ -201,4 +243,196 @@ function fixUnresolvedImages(nodes: PenNode[]): void {
       fixUnresolvedImages(node.children)
     }
   }
+}
+
+// ---------------------------------------------------------------------------
+// HTML style extraction — parse the styled portion of Figma clipboard HTML
+// to recover color/font information that may be missing from the binary data.
+// ---------------------------------------------------------------------------
+
+interface HtmlStyleHint {
+  color?: string
+  fontFamily?: string
+  fontSize?: number
+  fontWeight?: number
+  backgroundColor?: string
+}
+
+/**
+ * Convert a CSS color value (hex, rgb, rgba) to a #RRGGBB(AA) hex string.
+ */
+function cssColorToHex(css: string): string | undefined {
+  const c = css.trim()
+  if (c.startsWith('#')) {
+    // Normalize 3-digit to 6-digit hex
+    if (c.length === 4) {
+      return `#${c[1]}${c[1]}${c[2]}${c[2]}${c[3]}${c[3]}`
+    }
+    return c
+  }
+  const rgbaMatch = c.match(/rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*(?:,\s*([\d.]+)\s*)?\)/)
+  if (rgbaMatch) {
+    const r = parseInt(rgbaMatch[1]).toString(16).padStart(2, '0')
+    const g = parseInt(rgbaMatch[2]).toString(16).padStart(2, '0')
+    const b = parseInt(rgbaMatch[3]).toString(16).padStart(2, '0')
+    if (rgbaMatch[4] !== undefined) {
+      const a = Math.round(parseFloat(rgbaMatch[4]) * 255)
+      if (a < 255) return `#${r}${g}${b}${a.toString(16).padStart(2, '0')}`
+    }
+    return `#${r}${g}${b}`
+  }
+  return undefined
+}
+
+/**
+ * Decode HTML entities (&#NN; and &amp;/&lt;/etc.) in text content.
+ */
+function decodeHtmlEntities(text: string): string {
+  return text
+    .replace(/&#(\d+);/g, (_, code) => String.fromCharCode(parseInt(code)))
+    .replace(/&#x([0-9a-fA-F]+);/g, (_, hex) => String.fromCharCode(parseInt(hex, 16)))
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&nbsp;/g, ' ')
+}
+
+/**
+ * Parse the styled HTML portion of a Figma clipboard to extract text style hints.
+ * Figma clipboard HTML contains styled elements (p, span, div) with inline CSS
+ * in addition to the binary data in comment blocks.  These inline styles carry
+ * resolved color/font values that are sometimes missing from the binary format
+ * (e.g. when a node references a shared style that is not included in the
+ * clipboard data).
+ *
+ * Returns a map keyed by normalized text content → style properties.
+ */
+function parseClipboardHtmlStyles(html: string): Map<string, HtmlStyleHint> {
+  // Remove the binary data comment blocks to isolate the styled HTML content
+  const cleanHtml = html
+    .replace(/<!--\(figmeta\)[\s\S]*?<!--\(figmeta\)-->/g, '')
+    .replace(/<!--\(figma\)[\s\S]*?<!--\(figma\)-->/g, '')
+
+  const hints = new Map<string, HtmlStyleHint>()
+
+  // Match elements with style attributes and text content.
+  // Captures: style attribute value, text content between tags.
+  const elemRegex = /style="([^"]*)"[^>]*>([^<]+)</gi
+  let match
+  while ((match = elemRegex.exec(cleanHtml)) !== null) {
+    const styleAttr = match[1]
+    const rawText = decodeHtmlEntities(match[2]).trim()
+    if (!rawText || rawText.length > 200) continue
+
+    const hint: HtmlStyleHint = {}
+
+    // color (text color) — avoid matching background-color
+    const colorMatch = styleAttr.match(/(?:^|;\s*)color:\s*((?:rgba?\([^)]+\)|#[0-9a-fA-F]{3,8}))/)
+    if (colorMatch) hint.color = cssColorToHex(colorMatch[1])
+
+    // font-family
+    const fontMatch = styleAttr.match(/font-family:\s*([^;]+)/)
+    if (fontMatch) {
+      const family = fontMatch[1].trim().replace(/['"]/g, '').split(',')[0].trim()
+      if (family) hint.fontFamily = family
+    }
+
+    // font-size
+    const sizeMatch = styleAttr.match(/font-size:\s*(\d+(?:\.\d+)?)px/)
+    if (sizeMatch) hint.fontSize = parseFloat(sizeMatch[1])
+
+    // font-weight
+    const weightMatch = styleAttr.match(/font-weight:\s*(\d+)/)
+    if (weightMatch) hint.fontWeight = parseInt(weightMatch[1])
+
+    // background-color (for div/frame enrichment)
+    const bgMatch = styleAttr.match(/background-color:\s*((?:rgba?\([^)]+\)|#[0-9a-fA-F]{3,8}))/)
+    if (bgMatch) hint.backgroundColor = cssColorToHex(bgMatch[1])
+
+    if (Object.keys(hint).length > 0) {
+      // Use first occurrence — later duplicates may be nested/overridden
+      if (!hints.has(rawText)) {
+        hints.set(rawText, hint)
+      }
+    }
+  }
+
+  return hints
+}
+
+/**
+ * Walk the PenNode tree and fill in missing style properties using hints
+ * extracted from the clipboard HTML.  Only fills in properties that are
+ * undefined/missing — explicit values from the binary parser are never
+ * overwritten.
+ */
+function enrichNodesFromHtmlHints(
+  nodes: PenNode[],
+  hints: Map<string, HtmlStyleHint>,
+): void {
+  for (const node of nodes) {
+    if (node.type === 'text') {
+      // Build plain text content for lookup
+      const content = typeof node.content === 'string'
+        ? node.content
+        : Array.isArray(node.content)
+          ? node.content.map(s => s.text).join('')
+          : ''
+      const trimmed = content.trim()
+      if (!trimmed) continue
+
+      // Try exact match first, then try individual lines
+      const hint = hints.get(trimmed) ?? findPartialHint(trimmed, hints)
+      if (hint) {
+        // Fill in missing text color
+        if (!node.fill && hint.color) {
+          node.fill = [{ type: 'solid', color: hint.color }]
+        }
+        // Fill in missing font properties
+        if (!node.fontFamily && hint.fontFamily) {
+          node.fontFamily = hint.fontFamily
+        }
+        if (!node.fontSize && hint.fontSize) {
+          node.fontSize = hint.fontSize
+        }
+        if (!node.fontWeight && hint.fontWeight) {
+          node.fontWeight = hint.fontWeight
+        }
+      }
+    }
+
+    // For frames/rectangles without fill, check if HTML has background-color
+    if ((node.type === 'frame' || node.type === 'rectangle') && !node.fill) {
+      const name = node.name?.trim()
+      if (name) {
+        const hint = hints.get(name)
+        if (hint?.backgroundColor) {
+          node.fill = [{ type: 'solid', color: hint.backgroundColor }]
+        }
+      }
+    }
+
+    // Recurse into children
+    if ('children' in node && Array.isArray(node.children)) {
+      enrichNodesFromHtmlHints(node.children, hints)
+    }
+  }
+}
+
+/**
+ * Try to find a matching hint for text that may span multiple lines or
+ * may be a subset of a longer HTML text.
+ */
+function findPartialHint(
+  text: string,
+  hints: Map<string, HtmlStyleHint>,
+): HtmlStyleHint | undefined {
+  // Check if text starts with any hint key
+  for (const [key, hint] of hints) {
+    if (text.startsWith(key) || key.startsWith(text)) {
+      return hint
+    }
+  }
+  return undefined
 }
