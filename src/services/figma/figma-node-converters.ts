@@ -633,24 +633,46 @@ function applyInstanceOverrides(
       for (const c of sorted) walkFull(c)
     }
     for (const c of childSorted) walkFull(c)
+    // Build root-inclusive DFS to detect overrides targeting the symbol root.
+    // Root-targeted overrides belong to the instance frame (handled by caller)
+    // and must be skipped when applying to children.
+    const rootGuid = symbolNode.figma.guid ? guidToString(symbolNode.figma.guid) : ''
+    const rootPkToNode = new Map<string, string>()
+    let rootIdx = 0
+    function walkRoot(node: TreeNode) {
+      if (node.figma.guid) {
+        rootPkToNode.set(
+          `${sessionID}:${firstLocalID! + rootIdx}`,
+          guidToString(node.figma.guid),
+        )
+      }
+      rootIdx++
+      const sorted = [...node.children].sort((a, b) =>
+        (a.figma.guid?.localID ?? 0) - (b.figma.guid?.localID ?? 0),
+      )
+      for (const c of sorted) walkRoot(c)
+    }
+    walkRoot(symbolNode)
+
     // Populate pkToNodeGuid from the full DFS mapping for nested resolution
     for (const [pk, ng] of fullPkToNode) {
       pkToNodeGuid.set(pk, ng)
     }
 
-    // Resolve all single-guid derived and override entries to nodes.
-    // Only use the full DFS mapping — the expansion zone (localIDs beyond
-    // fullCount) is intentionally not mapped because Figma's expansion
-    // numbering depends on overridden symbol trees whose exact structure
-    // is unavailable.  Nodes that don't get derived data keep their
-    // original symbol sizes, which is visually acceptable.
+    // Resolve derived data via children-only DFS
     for (const [pk, d] of derivedMap) {
       if (pk.includes('/')) continue // multi-guid → nested instance, skip
       const ng = fullPkToNode.get(pk)
       if (ng) nodeDerived.set(ng, d)
     }
+    // Resolve overrides via children-only DFS, but skip overrides that
+    // target the symbol root in root-inclusive DFS.  Nested INSTANCE nodes
+    // inside SYMBOLs carry pre-computed overrides where slot 0 = root;
+    // applying those to the first child (slot 0 in children-only) is wrong.
     for (const [pk, ov] of overrideMap) {
       if (pk.includes('/')) continue
+      // Check if this override targets the root in root-inclusive numbering
+      if (rootPkToNode.get(pk) === rootGuid) continue
       const ng = fullPkToNode.get(pk)
       if (ng) nodeOverride.set(ng, ov)
     }
