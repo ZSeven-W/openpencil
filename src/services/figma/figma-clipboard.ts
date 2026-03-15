@@ -158,13 +158,6 @@ export function figmaClipboardToNodes(
     resolveImageBlobs(nodes, imageBlobs, decoded.imageFiles)
   }
 
-  // Log conversion results for debugging
-  const nodeStats = countNodeTypes(nodes)
-  console.debug('[figma-clipboard] Converted nodes:', JSON.stringify(nodeStats))
-  if (warnings.length > 0) {
-    console.warn('[figma-clipboard] Warnings:', warnings)
-  }
-
   // Handle unresolved image references — clipboard data often lacks image
   // binary data.  Convert unresolvable image nodes to placeholder rectangles.
   fixUnresolvedImages(nodes)
@@ -175,30 +168,12 @@ export function figmaClipboardToNodes(
   // shared style nodes are not included in the clipboard data).
   if (html) {
     const hints = parseClipboardHtmlStyles(html)
-    console.debug('[figma-clipboard] HTML style hints extracted:', hints.size, 'entries')
     if (hints.size > 0) {
-      console.debug('[figma-clipboard] HTML hints:', JSON.stringify(Object.fromEntries(hints)))
       enrichNodesFromHtmlHints(nodes, hints)
     }
   }
 
-  // Log the full node tree for debugging
-  console.debug('[figma-clipboard] Full node tree:', JSON.stringify(nodes, null, 2))
-
   return { nodes, warnings }
-}
-
-/** Count node types recursively for debug logging. */
-function countNodeTypes(nodes: PenNode[]): Record<string, number> {
-  const counts: Record<string, number> = {}
-  function walk(ns: PenNode[]) {
-    for (const n of ns) {
-      counts[n.type] = (counts[n.type] ?? 0) + 1
-      if ('children' in n && Array.isArray(n.children)) walk(n.children)
-    }
-  }
-  walk(nodes)
-  return counts
 }
 
 /**
@@ -210,8 +185,8 @@ function countNodeTypes(nodes: PenNode[]): Record<string, number> {
 function fixUnresolvedImages(nodes: PenNode[]): void {
   for (let i = 0; i < nodes.length; i++) {
     const node = nodes[i]
+    // Convert standalone image nodes with unresolved references to rectangles
     if (node.type === 'image' && node.src && (node.src.startsWith('__blob:') || node.src.startsWith('__hash:'))) {
-      // Convert to a placeholder rectangle preserving position and size
       const rect: PenNode = {
         type: 'rectangle',
         id: node.id,
@@ -226,7 +201,9 @@ function fixUnresolvedImages(nodes: PenNode[]): void {
       }
       nodes[i] = rect
     }
-    // Also fix image fills on other node types
+    // Fix unresolved image fills on rectangles/ellipses/frames —
+    // __blob: and __hash: are internal references that the image loader
+    // cannot fetch; replace with a placeholder solid fill.
     if ('fill' in node && Array.isArray(node.fill)) {
       for (let j = node.fill.length - 1; j >= 0; j--) {
         const fill = node.fill[j]

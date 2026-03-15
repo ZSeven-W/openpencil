@@ -72,19 +72,8 @@ function resolveStyleReferences(nodeChanges: FigmaNodeChange[]): void {
     }
   }
 
-  let resolvedCount = 0
-  let unresolvedCount = 0
   for (const nc of nodeChanges) {
-    const before = JSON.stringify([nc.fillPaints?.length, nc.strokePaints?.length, nc.fontName, nc.effects?.length])
     resolveOnNode(nc as Record<string, any>)
-    const after = JSON.stringify([nc.fillPaints?.length, nc.strokePaints?.length, nc.fontName, nc.effects?.length])
-    if (before !== after) resolvedCount++
-
-    // Track unresolved refs
-    const ncAny = nc as Record<string, any>
-    if (ncAny.styleIdForFill?.guid && !nc.fillPaints?.length) unresolvedCount++
-    if (ncAny.styleIdForText?.guid && !nc.fontName) unresolvedCount++
-
     // Also resolve style references inside instance override entries
     const overrides = nc.symbolData?.symbolOverrides
     if (overrides) {
@@ -93,12 +82,6 @@ function resolveStyleReferences(nodeChanges: FigmaNodeChange[]): void {
       }
     }
   }
-
-  console.debug(
-    '[figma-mapper] Style resolution: styleMap size:', styleMap.size,
-    '| resolved:', resolvedCount,
-    '| unresolved refs:', unresolvedCount,
-  )
 }
 
 /**
@@ -330,32 +313,11 @@ export function figmaNodeChangesToPenNodes(
   }
 
   const nodes: PenNode[] = []
-  let skippedInvisible = 0
-  let skippedNull = 0
   for (const treeNode of topNodes) {
-    if (treeNode.figma.visible === false) { skippedInvisible++; continue }
+    if (treeNode.figma.visible === false) continue
     const node = convertNode(treeNode, undefined, ctx)
     if (node) nodes.push(node)
-    else skippedNull++
   }
-
-  console.debug(
-    '[figma-mapper] Top-level nodes:', topNodes.length,
-    '| converted:', nodes.length,
-    '| skipped (invisible):', skippedInvisible,
-    '| skipped (null):', skippedNull,
-    '| total nodeChanges:', decoded.nodeChanges.length,
-    '| symbols in tree:', symbolTree.size,
-    '| components:', componentMap.size,
-  )
-
-  // Log node types from nodeChanges for debugging
-  const typeCounts: Record<string, number> = {}
-  for (const nc of decoded.nodeChanges) {
-    const t = nc.type ?? 'UNKNOWN'
-    typeCounts[t] = (typeCounts[t] ?? 0) + 1
-  }
-  console.debug('[figma-mapper] nodeChange types:', JSON.stringify(typeCounts))
 
   const imageBlobs = collectImageBlobs(decoded.blobs)
 

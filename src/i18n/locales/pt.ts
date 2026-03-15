@@ -130,8 +130,28 @@ const pt: TranslationKeys = {
   'fill.solid': 'Sólido',
   'fill.linear': 'Linear',
   'fill.radial': 'Radial',
+  'fill.image': 'Imagem',
   'fill.stops': 'Paradas',
   'fill.angle': 'Ângulo',
+
+  // ── Image ──
+  'image.title': 'Imagem',
+  'image.fit': 'Modo de ajuste',
+  'image.fill': 'Preencher',
+  'image.fitMode': 'Ajustar',
+  'image.crop': 'Recortar',
+  'image.tile': 'Ladrilho',
+  'image.clickToUpload': 'Clique para enviar',
+  'image.changeImage': 'Alterar imagem',
+  'image.adjustments': 'Ajustes',
+  'image.exposure': 'Exposição',
+  'image.contrast': 'Contraste',
+  'image.saturation': 'Saturação',
+  'image.temperature': 'Temperatura',
+  'image.tint': 'Matiz',
+  'image.highlights': 'Realces',
+  'image.shadows': 'Sombras',
+  'image.reset': 'Redefinir',
 
   // ── Stroke ──
   'stroke.title': 'Contorno',

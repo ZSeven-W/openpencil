@@ -125,8 +125,28 @@ const zhTW: TranslationKeys = {
   'fill.solid': '純色',
   'fill.linear': '線性漸層',
   'fill.radial': '放射漸層',
+  'fill.image': '圖片',
   'fill.stops': '色標',
   'fill.angle': '角度',
+
+  // ── Image ──
+  'image.title': '圖片',
+  'image.fit': '適應模式',
+  'image.fill': '填滿',
+  'image.fitMode': '適應',
+  'image.crop': '裁切',
+  'image.tile': '平鋪',
+  'image.clickToUpload': '點擊上傳',
+  'image.changeImage': '更換圖片',
+  'image.adjustments': '調整',
+  'image.exposure': '曝光',
+  'image.contrast': '對比度',
+  'image.saturation': '飽和度',
+  'image.temperature': '色溫',
+  'image.tint': '色調',
+  'image.highlights': '高光',
+  'image.shadows': '陰影',
+  'image.reset': '重設',
 
   // ── Stroke ──
   'stroke.title': '描邊',

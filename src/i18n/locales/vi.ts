@@ -128,8 +128,28 @@ const vi: TranslationKeys = {
   'fill.solid': 'Đặc',
   'fill.linear': 'Tuyến tính',
   'fill.radial': 'Toả tròn',
+  'fill.image': 'Hình ảnh',
   'fill.stops': 'Điểm dừng',
   'fill.angle': 'Góc',
+
+  // ── Image ──
+  'image.title': 'Hình ảnh',
+  'image.fit': 'Chế độ vừa',
+  'image.fill': 'Lấp đầy',
+  'image.fitMode': 'Vừa khít',
+  'image.crop': 'Cắt',
+  'image.tile': 'Lát gạch',
+  'image.clickToUpload': 'Nhấp để tải lên',
+  'image.changeImage': 'Đổi hình ảnh',
+  'image.adjustments': 'Điều chỉnh',
+  'image.exposure': 'Phơi sáng',
+  'image.contrast': 'Tương phản',
+  'image.saturation': 'Độ bão hòa',
+  'image.temperature': 'Nhiệt độ màu',
+  'image.tint': 'Sắc thái',
+  'image.highlights': 'Vùng sáng',
+  'image.shadows': 'Vùng tối',
+  'image.reset': 'Đặt lại',
 
   // ── Stroke ──
   'stroke.title': 'Viền',

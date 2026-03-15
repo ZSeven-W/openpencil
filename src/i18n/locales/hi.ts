@@ -128,8 +128,28 @@ const hi: TranslationKeys = {
   'fill.solid': 'ठोस',
   'fill.linear': 'रैखिक',
   'fill.radial': 'वृत्तीय',
+  'fill.image': 'चित्र',
   'fill.stops': 'स्टॉप',
   'fill.angle': 'कोण',
+
+  // ── Image ──
+  'image.title': 'चित्र',
+  'image.fit': 'फिट मोड',
+  'image.fill': 'भरें',
+  'image.fitMode': 'फिट',
+  'image.crop': 'काटें',
+  'image.tile': 'टाइल',
+  'image.clickToUpload': 'अपलोड करने के लिए क्लिक करें',
+  'image.changeImage': 'चित्र बदलें',
+  'image.adjustments': 'समायोजन',
+  'image.exposure': 'एक्सपोज़र',
+  'image.contrast': 'कंट्रास्ट',
+  'image.saturation': 'संतृप्ति',
+  'image.temperature': 'तापमान',
+  'image.tint': 'टिंट',
+  'image.highlights': 'हाइलाइट्स',
+  'image.shadows': 'छायाएँ',
+  'image.reset': 'रीसेट',
 
   // ── Stroke ──
   'stroke.title': 'स्ट्रोक',

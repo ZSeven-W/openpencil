@@ -2,7 +2,7 @@ import type {
   FigmaNodeChange, FigmaMatrix, FigmaImportLayoutMode,
   FigmaSymbolOverride, FigmaDerivedSymbolDataEntry, FigmaGUID,
 } from './figma-types'
-import type { PenNode, SizingBehavior, ImageFitMode } from '@/types/pen'
+import type { PenNode, SizingBehavior } from '@/types/pen'
 import { mapFigmaFills } from './figma-fill-mapper'
 import { mapFigmaStroke } from './figma-stroke-mapper'
 import { mapFigmaEffects } from './figma-effect-mapper'
@@ -170,44 +170,6 @@ function commonProps(
 
 // --- Image helpers ---
 
-function hasOnlyImageFill(figma: FigmaNodeChange): boolean {
-  if (!figma.fillPaints || figma.fillPaints.length === 0) return false
-  const visible = figma.fillPaints.filter((f) => f.visible !== false)
-  return visible.length === 1 && visible[0].type === 'IMAGE'
-}
-
-function hashToHex(hash: Uint8Array): string {
-  return Array.from(hash).map(b => b.toString(16).padStart(2, '0')).join('')
-}
-
-function getImageFillUrl(figma: FigmaNodeChange): string {
-  const paint = figma.fillPaints?.find((f) => f.type === 'IMAGE' && f.visible !== false)
-  if (!paint?.image) return ''
-
-  if (paint.image.hash && paint.image.hash.length > 0) {
-    return `__hash:${hashToHex(paint.image.hash)}`
-  }
-
-  if (paint.image.dataBlob !== undefined && paint.image.dataBlob !== null) {
-    return `__blob:${paint.image.dataBlob}`
-  }
-
-  return ''
-}
-
-function getImageFitMode(figma: FigmaNodeChange): ImageFitMode | undefined {
-  const paint = figma.fillPaints?.find(
-    (f) => f.visible !== false && f.type === 'IMAGE',
-  )
-  if (!paint?.imageScaleMode) return undefined
-  switch (paint.imageScaleMode) {
-    case 'FIT': return 'fit'
-    case 'FILL': return 'fill'
-    case 'TILE': return 'tile'
-    default: return undefined
-  }
-}
-
 function figmaFillColor(figma: FigmaNodeChange): string | undefined {
   const paint = figma.fillPaints?.find((f) => f.visible !== false && f.type === 'SOLID')
   if (!paint?.color) return undefined
@@ -318,19 +280,6 @@ function convertFrame(
   const figma = treeNode.figma
   const id = ctx.generateId()
   const children = convertChildren(treeNode, ctx)
-
-  if (hasOnlyImageFill(figma) && children.length === 0) {
-    return {
-      type: 'image',
-      ...commonProps(figma, id),
-      src: getImageFillUrl(figma),
-      objectFit: getImageFitMode(figma),
-      width: resolveWidth(figma, parentStackMode, ctx),
-      height: resolveHeight(figma, parentStackMode, ctx),
-      cornerRadius: mapCornerRadius(figma),
-      effects: mapFigmaEffects(figma.effects),
-    }
-  }
 
   // In preserve mode, only apply auto-layout properties for frames that actually
   // have stackMode set.  Frames without stackMode use absolute x,y positioning.
@@ -855,19 +804,6 @@ function convertRectangle(
   const figma = treeNode.figma
   const id = ctx.generateId()
 
-  if (hasOnlyImageFill(figma)) {
-    return {
-      type: 'image',
-      ...commonProps(figma, id),
-      src: getImageFillUrl(figma),
-      objectFit: getImageFitMode(figma),
-      width: resolveWidth(figma, parentStackMode, ctx),
-      height: resolveHeight(figma, parentStackMode, ctx),
-      cornerRadius: mapCornerRadius(figma),
-      effects: mapFigmaEffects(figma.effects),
-    }
-  }
-
   return {
     type: 'rectangle',
     ...commonProps(figma, id),
@@ -887,19 +823,6 @@ function convertEllipse(
 ): PenNode {
   const figma = treeNode.figma
   const id = ctx.generateId()
-
-  if (hasOnlyImageFill(figma)) {
-    return {
-      type: 'image',
-      ...commonProps(figma, id),
-      src: getImageFillUrl(figma),
-      objectFit: getImageFitMode(figma),
-      width: resolveWidth(figma, parentStackMode, ctx),
-      height: resolveHeight(figma, parentStackMode, ctx),
-      cornerRadius: Math.round((figma.size?.x ?? 100) / 2),
-      effects: mapFigmaEffects(figma.effects),
-    }
-  }
 
   // Convert Figma arcData (radians) to PenNode arc properties (degrees)
   const arc = figma.arcData

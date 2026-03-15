@@ -1,6 +1,6 @@
 import type { CanvasKit, Canvas, Paint, Font, Typeface, Image as SkImage, Paragraph } from 'canvaskit-wasm'
 import type { PenNode, ContainerProps, TextNode, EllipseNode, LineNode, PolygonNode, PathNode, ImageNode, IconFontNode } from '@/types/pen'
-import type { PenFill, PenStroke, PenEffect, ShadowEffect } from '@/types/styles'
+import type { PenFill, PenStroke, PenEffect, ShadowEffect, ImageFill } from '@/types/styles'
 import { DEFAULT_FILL, DEFAULT_STROKE, DEFAULT_STROKE_WIDTH } from '../canvas-constants'
 import { defaultLineHeight } from '../canvas-text-measure'
 import { lookupIconByName } from '@/services/ai/icon-resolver'
@@ -212,9 +212,170 @@ export class SkiaRenderer {
         c[3] *= fillOpacity
         paint.setColor(c)
       }
+    } else if (first.type === 'image') {
+      this.applyImageFillToPaint(paint, first, w, h, opacity, absX, absY)
     }
 
     return paint
+  }
+
+  /**
+   * Apply an image fill to a Paint object using an image shader.
+   * If the image is not yet loaded, a placeholder color is used.
+   */
+  private applyImageFillToPaint(
+    paint: Paint,
+    fill: ImageFill,
+    w: number, h: number,
+    opacity: number,
+    absX: number, absY: number,
+  ) {
+    const ck = this.ck
+    const fillOpacity = (fill.opacity ?? 1) * opacity
+    const url = fill.url
+    if (!url) {
+      const c = parseColor(ck, '#e5e7eb')
+      c[3] *= fillOpacity
+      paint.setColor(c)
+      return
+    }
+
+    const cached = this.imageLoader.get(url)
+    if (cached === undefined) {
+      this.imageLoader.request(url)
+    }
+    if (!cached) {
+      // Image not loaded or failed — placeholder
+      const c = parseColor(ck, '#e5e7eb')
+      c[3] *= fillOpacity
+      paint.setColor(c)
+      return
+    }
+
+    const imgW = cached.width()
+    const imgH = cached.height()
+    if (imgW <= 0 || imgH <= 0) return
+
+    const mode = fill.mode ?? 'fill'
+    let tileMode = ck.TileMode.Clamp
+
+    // Screen-space scale factor: how large the image appears on screen
+    let sf: number
+    let dSx: number, dSy: number // display scale x/y (can differ for stretch)
+
+    if (mode === 'stretch') {
+      dSx = w / imgW; dSy = h / imgH
+      sf = 0 // not used for stretch
+    } else if (mode === 'fit') {
+      // Contain: fit entire image within shape
+      sf = Math.min(w / imgW, h / imgH)
+      dSx = sf; dSy = sf
+      tileMode = ck.TileMode.Decal
+    } else if (mode === 'tile') {
+      sf = 1
+      dSx = 1; dSy = 1
+      tileMode = ck.TileMode.Repeat
+    } else {
+      // 'fill', 'crop': cover entire shape
+      sf = Math.max(w / imgW, h / imgH)
+      dSx = sf; dSy = sf
+    }
+
+    // Displayed image size in scene coordinates
+    const dispW = imgW * dSx
+    const dispH = imgH * dSy
+    // Displayed image top-left (centered within the shape)
+    const dispX = absX + (w - dispW) / 2
+    const dispY = absY + (h - dispH) / 2
+
+    // Shader localMatrix maps scene coords → texture coords:
+    //   texX = (sceneX - dispX) / dSx
+    //   texY = (sceneY - dispY) / dSy
+    // Matrix: [1/dSx, 0, -dispX/dSx, 0, 1/dSy, -dispY/dSy, 0, 0, 1]
+    const invSx = 1 / dSx
+    const invSy = 1 / dSy
+    const localMatrix = Float32Array.of(
+      invSx, 0, -dispX * invSx,
+      0, invSy, -dispY * invSy,
+      0, 0, 1,
+    )
+
+    const shader = cached.makeShaderOptions(
+      tileMode, tileMode,
+      ck.FilterMode.Linear, ck.MipmapMode.None,
+      localMatrix,
+    )
+    if (shader) {
+      paint.setShader(shader)
+      if (fillOpacity < 1) paint.setAlphaf(fillOpacity)
+
+      // Apply image adjustments as a color filter
+      const cf = this.buildImageAdjustmentFilter(fill)
+      if (cf) {
+        paint.setColorFilter(cf)
+      }
+    }
+  }
+
+  /**
+   * Build a CanvasKit ColorFilter from image adjustment values.
+   * Builds a single 4x5 color matrix combining all adjustments.
+   *
+   * Matrix layout (row-major 4×5):
+   *   R' = m[0]*r + m[1]*g + m[2]*b  + m[3]*a + m[4]
+   *   G' = m[5]*r + m[6]*g + m[7]*b  + m[8]*a + m[9]
+   *   B' = m[10]*r+ m[11]*g+ m[12]*b + m[13]*a+ m[14]
+   *   A' = m[15]*r+ m[16]*g+ m[17]*b + m[18]*a+ m[19]
+   */
+  private buildImageAdjustmentFilter(adj: {
+    exposure?: number; contrast?: number; saturation?: number
+    temperature?: number; tint?: number; highlights?: number; shadows?: number
+  }) {
+    const ck = this.ck
+    const exp = (adj.exposure ?? 0) / 100
+    const con = (adj.contrast ?? 0) / 100
+    const sat = (adj.saturation ?? 0) / 100
+    const temp = (adj.temperature ?? 0) / 100
+    const tintVal = (adj.tint ?? 0) / 100
+    const hi = (adj.highlights ?? 0) / 100
+    const sh = (adj.shadows ?? 0) / 100
+
+    if (exp === 0 && con === 0 && sat === 0 && temp === 0 && tintVal === 0 && hi === 0 && sh === 0) {
+      return null
+    }
+
+    // Exposure: brightness multiplier
+    const e = 1 + exp * 1.5
+
+    // Contrast: scale around 0.5 midpoint
+    const c = 1 + con
+    const cOff = 0.5 * (1 - c)
+
+    // Saturation: luminance-preserving mix
+    const s = 1 + sat
+    const lr = 0.2126, lg = 0.7152, lb = 0.0722
+    const sr = (1 - s) * lr, sg = (1 - s) * lg, sb = (1 - s) * lb
+
+    // Combined scale factor for each matrix cell: contrast * exposure * saturation
+    // Order: saturate → exposure → contrast
+    // saturated_R = (sr+s)*r + sg*g + sb*b
+    // exposed_R   = e * saturated_R
+    // final_R     = c * exposed_R + cOff + offsets
+    const f = c * e
+
+    // Offsets: temperature (warm/cool), tint, highlights, shadows
+    const offR = cOff + temp * 0.15 + (hi + sh * 0.5) * 0.1
+    const offG = cOff + tintVal * 0.15 + (hi + sh * 0.5) * 0.1
+    const offB = cOff - temp * 0.15 + (hi + sh * 0.5) * 0.1
+
+    const m = [
+      f * (sr + s), f * sg,       f * sb,       0, offR,
+      f * sr,       f * (sg + s), f * sb,       0, offG,
+      f * sr,       f * sg,       f * (sb + s), 0, offB,
+      0,            0,            0,            1, 0,
+    ]
+
+    return ck.ColorFilter.MakeMatrix(m)
   }
 
   // Stroke paint
@@ -1064,7 +1225,11 @@ export class SkiaRenderer {
       return
     }
 
-    // Draw loaded image with optional corner radius clipping
+    // Draw loaded image with objectFit and optional corner radius clipping
+    const imgW = cached.width()
+    const imgH = cached.height()
+
+    // Clip for corner radius
     if (cr > 0) {
       canvas.save()
       const maxR = Math.min(cr, w / 2, h / 2)
@@ -1072,18 +1237,72 @@ export class SkiaRenderer {
         ck.RRectXY(ck.LTRBRect(x, y, x + w, y + h), maxR, maxR),
         ck.ClipOp.Intersect, true,
       )
+    } else {
+      canvas.save()
+      canvas.clipRect(ck.LTRBRect(x, y, x + w, y + h), ck.ClipOp.Intersect, true)
     }
+
     const paint = new ck.Paint()
     paint.setAntiAlias(true)
     if (opacity < 1) paint.setAlphaf(opacity)
-    canvas.drawImageRect(
-      cached,
-      ck.LTRBRect(0, 0, cached.width(), cached.height()),
-      ck.LTRBRect(x, y, x + w, y + h),
-      paint,
-    )
+
+    // Apply image adjustments if any
+    const adjFilter = this.buildImageAdjustmentFilter(iNode)
+    if (adjFilter) paint.setColorFilter(adjFilter)
+
+    const fit = iNode.objectFit ?? 'fill'
+
+    if (fit === 'tile') {
+      // Tile: repeat image at its original pixel size
+      const tileMatrix = Float32Array.of(1, 0, -x, 0, 1, -y, 0, 0, 1)
+      const shader = cached.makeShaderOptions(
+        ck.TileMode.Repeat, ck.TileMode.Repeat,
+        ck.FilterMode.Linear, ck.MipmapMode.None,
+        tileMatrix,
+      )
+      if (shader) {
+        paint.setShader(shader)
+        canvas.drawRect(ck.LTRBRect(x, y, x + w, y + h), paint)
+      }
+    } else if (fit === 'fit') {
+      // Fit (contain): scale uniformly so entire image is visible, centered
+      // Draw a subtle background so letterbox areas are visible
+      const bgPaint = new ck.Paint()
+      bgPaint.setStyle(ck.PaintStyle.Fill)
+      bgPaint.setColor(parseColor(ck, '#f3f4f6'))
+      if (opacity < 1) bgPaint.setAlphaf(opacity * 0.3)
+      else bgPaint.setAlphaf(0.3)
+      canvas.drawRect(ck.LTRBRect(x, y, x + w, y + h), bgPaint)
+      bgPaint.delete()
+
+      const scale = Math.min(w / imgW, h / imgH)
+      const dw = imgW * scale
+      const dh = imgH * scale
+      const dx = x + (w - dw) / 2
+      const dy = y + (h - dh) / 2
+      canvas.drawImageRect(
+        cached,
+        ck.LTRBRect(0, 0, imgW, imgH),
+        ck.LTRBRect(dx, dy, dx + dw, dy + dh),
+        paint,
+      )
+    } else {
+      // 'fill' and 'crop' (cover): scale uniformly to fill entire area, centered, excess clipped
+      const scale = Math.max(w / imgW, h / imgH)
+      const dw = imgW * scale
+      const dh = imgH * scale
+      const dx = x + (w - dw) / 2
+      const dy = y + (h - dh) / 2
+      canvas.drawImageRect(
+        cached,
+        ck.LTRBRect(0, 0, imgW, imgH),
+        ck.LTRBRect(dx, dy, dx + dw, dy + dh),
+        paint,
+      )
+    }
+
     paint.delete()
-    if (cr > 0) canvas.restore()
+    canvas.restore()
   }
 
   private drawImageFallback(

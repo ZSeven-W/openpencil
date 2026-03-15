@@ -46,8 +46,15 @@ export interface RadialGradientFill {
 export interface ImageFill {
   type: 'image'
   url: string
-  mode?: 'stretch' | 'fill' | 'fit'
+  mode?: 'fill' | 'fit' | 'crop' | 'tile' | 'stretch'
   opacity?: number
+  exposure?: number    // -100 to 100
+  contrast?: number    // -100 to 100
+  saturation?: number  // -100 to 100
+  temperature?: number // -100 to 100
+  tint?: number        // -100 to 100
+  highlights?: number  // -100 to 100
+  shadows?: number     // -100 to 100
 }
 
 export type PenFill =

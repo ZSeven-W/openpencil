@@ -128,8 +128,28 @@ const tr: TranslationKeys = {
   'fill.solid': 'Düz',
   'fill.linear': 'Doğrusal',
   'fill.radial': 'Dairesel',
+  'fill.image': 'Görüntü',
   'fill.stops': 'Duraklar',
   'fill.angle': 'Açı',
+
+  // ── Image ──
+  'image.title': 'Görüntü',
+  'image.fit': 'Sığdırma Modu',
+  'image.fill': 'Doldur',
+  'image.fitMode': 'Sığdır',
+  'image.crop': 'Kırp',
+  'image.tile': 'Döşe',
+  'image.clickToUpload': 'Yüklemek için tıklayın',
+  'image.changeImage': 'Görüntüyü değiştir',
+  'image.adjustments': 'Ayarlamalar',
+  'image.exposure': 'Pozlama',
+  'image.contrast': 'Kontrast',
+  'image.saturation': 'Doygunluk',
+  'image.temperature': 'Sıcaklık',
+  'image.tint': 'Renk Tonu',
+  'image.highlights': 'Parlak Tonlar',
+  'image.shadows': 'Gölgeler',
+  'image.reset': 'Sıfırla',
 
   // ── Stroke ──
   'stroke.title': 'Kenarlık',
