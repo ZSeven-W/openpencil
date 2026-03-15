@@ -488,7 +488,7 @@ function applyInstanceOverrides(
   overrides: FigmaSymbolOverride[] | undefined,
   derived: FigmaDerivedSymbolDataEntry[] | undefined,
   instanceSize: { x: number; y: number } | undefined,
-  symbolTree: Map<string, TreeNode>,
+  _symbolTree: Map<string, TreeNode>,
 ): TreeNode[] {
   // If no derived data and no overrides, fall back to simple scaling
   if ((!derived || derived.length === 0) && (!overrides || overrides.length === 0)) {
@@ -633,68 +633,25 @@ function applyInstanceOverrides(
       for (const c of sorted) walkFull(c)
     }
     for (const c of childSorted) walkFull(c)
-    const fullCount = fullIdx
-
-    // --- Expanded DFS from children: maps overflow entries ---
-    // When INSTANCE nodes are encountered, their referenced symbol's children
-    // are walked inline, pushing later nodes to higher slot IDs.
-    const expPkToNode = new Map<string, string>()
-    let expIdx = 0
-    function walkExp(node: TreeNode, isMain: boolean) {
-      if (isMain && node.figma.guid) {
-        expPkToNode.set(
-          `${sessionID}:${firstLocalID! + expIdx}`,
-          guidToString(node.figma.guid),
-        )
-      }
-      expIdx++
-      // Expand INSTANCE children inline (excluding symbol root which shares
-      // the INSTANCE's own slot)
-      if (node.figma.type === 'INSTANCE') {
-        const cg = node.figma.overriddenSymbolID ?? node.figma.symbolData?.symbolID
-        if (cg) {
-          const sym = symbolTree.get(guidToString(cg))
-          if (sym) {
-            const sorted = [...sym.children].sort((a, b) =>
-              (a.figma.guid?.localID ?? 0) - (b.figma.guid?.localID ?? 0),
-            )
-            for (const c of sorted) walkExp(c, false)
-          }
-        }
-      }
-      const sorted = [...node.children].sort((a, b) =>
-        (a.figma.guid?.localID ?? 0) - (b.figma.guid?.localID ?? 0),
-      )
-      for (const c of sorted) walkExp(c, isMain)
-    }
-    for (const c of childSorted) walkExp(c, true)
-
-    // Merge: full DFS for indices < fullCount, expanded for >= fullCount
-    const unifiedPkToNode = new Map<string, string>()
+    // Populate pkToNodeGuid from the full DFS mapping for nested resolution
     for (const [pk, ng] of fullPkToNode) {
-      unifiedPkToNode.set(pk, ng)
-    }
-    for (const [pk, ng] of expPkToNode) {
-      const localId = parseInt(pk.split(':')[1])
-      if (localId >= firstLocalID! + fullCount) {
-        unifiedPkToNode.set(pk, ng)
-      }
-    }
-
-    // Populate pkToNodeGuid from the unified mapping for nested resolution
-    for (const [pk, ng] of unifiedPkToNode) {
       pkToNodeGuid.set(pk, ng)
     }
 
-    // Resolve all single-guid derived and override entries to nodes
+    // Resolve all single-guid derived and override entries to nodes.
+    // Only use the full DFS mapping — the expansion zone (localIDs beyond
+    // fullCount) is intentionally not mapped because Figma's expansion
+    // numbering depends on overridden symbol trees whose exact structure
+    // is unavailable.  Nodes that don't get derived data keep their
+    // original symbol sizes, which is visually acceptable.
     for (const [pk, d] of derivedMap) {
       if (pk.includes('/')) continue // multi-guid → nested instance, skip
-      const ng = unifiedPkToNode.get(pk)
+      const ng = fullPkToNode.get(pk)
       if (ng) nodeDerived.set(ng, d)
     }
     for (const [pk, ov] of overrideMap) {
       if (pk.includes('/')) continue
-      const ng = unifiedPkToNode.get(pk)
+      const ng = fullPkToNode.get(pk)
       if (ng) nodeOverride.set(ng, ov)
     }
   } else {
@@ -808,8 +765,12 @@ function applyInstanceOverrides(
         }
       }
       if (nestedDer) {
-        const existingDerived = figma.derivedSymbolData ?? []
-        figma.derivedSymbolData = [...existingDerived, ...nestedDer]
+        // Replace (not merge) existing derived data with nested data from the
+        // outer instance.  INSTANCE nodes inside SYMBOLs carry pre-computed
+        // derivedSymbolData, but the outer instance's nested entries supersede
+        // them.  Merging would inflate the entry count and cause Strategy 1
+        // (index matching) to trigger incorrectly.
+        figma.derivedSymbolData = nestedDer
       }
     }
 

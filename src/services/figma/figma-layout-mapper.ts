@@ -19,17 +19,21 @@ export function mapFigmaLayout(
     result.layout = node.stackMode === 'HORIZONTAL' ? 'horizontal' : 'vertical'
   }
 
-  if (node.stackSpacing !== undefined && node.stackSpacing !== 0) {
+  if (node.stackPrimaryAlignItems) {
+    result.justifyContent = mapJustifyContent(node.stackPrimaryAlignItems)
+  }
+
+  // Set gap from stackSpacing, but skip when justifyContent is space_between.
+  // Figma stores the COMPUTED inter-item spacing in stackSpacing for
+  // SPACE_EVENLY mode — using it as an explicit gap would conflict with
+  // the dynamic spacing that space_between already provides.
+  if (node.stackSpacing !== undefined && node.stackSpacing !== 0 && result.justifyContent !== 'space_between') {
     result.gap = node.stackSpacing
   }
 
   const padding = mapPadding(node)
   if (padding !== undefined) {
     result.padding = padding
-  }
-
-  if (node.stackPrimaryAlignItems) {
-    result.justifyContent = mapJustifyContent(node.stackPrimaryAlignItems)
   }
 
   if (node.stackCounterAlignItems) {
