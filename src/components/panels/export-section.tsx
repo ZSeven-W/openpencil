@@ -1,8 +1,5 @@
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { useCanvasStore } from '@/stores/canvas-store'
-import { useDocumentStore } from '@/stores/document-store'
-import { exportLayerToRaster, type RasterFormat } from '@/utils/export'
 import SectionHeader from '@/components/shared/section-header'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Button } from '@/components/ui/button'
@@ -24,31 +21,14 @@ interface ExportSectionProps {
   nodeName: string
 }
 
-export default function ExportSection({ nodeId, nodeName }: ExportSectionProps) {
+export default function ExportSection({ nodeId: _nodeId, nodeName: _nodeName }: ExportSectionProps) {
   const { t } = useTranslation()
   const [scale, setScale] = useState('1')
   const [format, setFormat] = useState('png')
-  const fabricCanvas = useCanvasStore((s) => s.fabricCanvas)
 
   const handleExport = () => {
-    if (!fabricCanvas) return
-
-    // Collect all descendant IDs for this node
-    const { getFlatNodes, isDescendantOf } = useDocumentStore.getState()
-    const allNodes = getFlatNodes()
-    const descendantIds = new Set<string>()
-    for (const n of allNodes) {
-      if (n.id !== nodeId && isDescendantOf(n.id, nodeId)) {
-        descendantIds.add(n.id)
-      }
-    }
-
-    const ext = format === 'jpeg' ? 'jpg' : format
-    exportLayerToRaster(fabricCanvas, nodeId, descendantIds, {
-      format: format as RasterFormat,
-      multiplier: Number(scale),
-      filename: `${nodeName}.${ext}`,
-    })
+    // TODO: migrate to CanvasKit-based export
+    console.warn('[ExportSection] Fabric.js export removed — pending CanvasKit migration')
   }
 
   return (

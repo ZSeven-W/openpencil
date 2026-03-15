@@ -6,7 +6,8 @@ import {
   removeNodeFromTree,
 } from '../utils/node-operations'
 import { generateId } from '../utils/id'
-import type { PenNode } from '../../types/pen'
+import type { PenNode, ContainerProps } from '../../types/pen'
+import type { PenFill } from '../../types/styles'
 
 // ---------------------------------------------------------------------------
 // Types
@@ -20,16 +21,16 @@ export interface DesignSkeletonParams {
     height: number
     layout?: 'vertical' | 'horizontal'
     gap?: number
-    fill?: any[]
-    padding?: number | number[]
+    fill?: PenFill[]
+    padding?: number | [number, number] | [number, number, number, number]
   }
   sections: Array<{
     name: string
     height?: number
     layout?: 'vertical' | 'horizontal'
-    padding?: number | number[]
+    padding?: number | [number, number] | [number, number, number, number]
     gap?: number
-    fill?: any[]
+    fill?: PenFill[]
     role?: string
     justifyContent?: string
     alignItems?: string
@@ -84,7 +85,7 @@ export async function handleDesignSkeleton(
     children: [],
   } as PenNode
   if (params.rootFrame.padding !== undefined) {
-    ;(rootNode as any).padding = params.rootFrame.padding
+    ;(rootNode as PenNode & ContainerProps).padding = params.rootFrame.padding
   }
 
   // Build section frames as children
@@ -103,12 +104,13 @@ export async function handleDesignSkeleton(
       children: [],
     } as PenNode
 
-    if (section.gap !== undefined) (sectionNode as any).gap = section.gap
-    if (section.padding !== undefined) (sectionNode as any).padding = section.padding
-    if (section.fill) (sectionNode as any).fill = section.fill
-    if (section.role) (sectionNode as any).role = section.role
-    if (section.justifyContent) (sectionNode as any).justifyContent = section.justifyContent
-    if (section.alignItems) (sectionNode as any).alignItems = section.alignItems
+    const sContainer = sectionNode as PenNode & ContainerProps
+    if (section.gap !== undefined) sContainer.gap = section.gap
+    if (section.padding !== undefined) sContainer.padding = section.padding
+    if (section.fill) sContainer.fill = section.fill
+    if (section.role) sectionNode.role = section.role
+    if (section.justifyContent) sContainer.justifyContent = section.justifyContent as ContainerProps['justifyContent']
+    if (section.alignItems) sContainer.alignItems = section.alignItems as ContainerProps['alignItems']
 
     rootChildren.push(sectionNode)
 
@@ -130,15 +132,15 @@ export async function handleDesignSkeleton(
     })
   }
 
-  ;(rootNode as any).children = rootChildren
+  ;(rootNode as PenNode & ContainerProps).children = rootChildren
 
   // Auto-replace empty root frame if exists
   const children = getDocChildren(doc, pageId)
   const emptyIdx = children.findIndex((n) => isEmptyFrame(n))
   if (emptyIdx !== -1) {
     const emptyFrame = children[emptyIdx]
-    if (emptyFrame.x !== undefined) (rootNode as any).x = emptyFrame.x
-    if (emptyFrame.y !== undefined) (rootNode as any).y = emptyFrame.y
+    if (emptyFrame.x !== undefined) rootNode.x = emptyFrame.x
+    if (emptyFrame.y !== undefined) rootNode.y = emptyFrame.y
     let updated = removeNodeFromTree(children, emptyFrame.id)
     updated = insertNodeInTree(updated, null, rootNode, emptyIdx)
     setDocChildren(doc, updated, pageId)
@@ -171,13 +173,13 @@ function isEmptyFrame(node: PenNode): boolean {
 
 function computeContentWidth(section: PenNode, canvasWidth: number): number {
   const pad = parsePadding(
-    'padding' in section ? (section as any).padding : undefined,
+    'padding' in section ? (section as PenNode & ContainerProps).padding as number | [number, number] | [number, number, number, number] | undefined : undefined,
   )
   return canvasWidth - pad.left - pad.right
 }
 
 function parsePadding(
-  padding: number | number[] | undefined,
+  padding: number | [number, number] | [number, number, number, number] | undefined,
 ): { top: number; right: number; bottom: number; left: number } {
   if (padding === undefined) return { top: 0, right: 0, bottom: 0, left: 0 }
   if (typeof padding === 'number')

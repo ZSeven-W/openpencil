@@ -2,6 +2,7 @@ import { useEffect } from 'react'
 import { useCanvasStore } from '@/stores/canvas-store'
 import { useDocumentStore } from '@/stores/document-store'
 import { useHistoryStore } from '@/stores/history-store'
+import { getCanvasSize } from '@/canvas/skia-engine-ref'
 import {
   isFigmaClipboardHtml,
   extractFigmaClipboardData,
@@ -44,20 +45,14 @@ function computeBounds(nodes: PenNode[]): { minX: number; minY: number; maxX: nu
 }
 
 /**
- * Get the viewport center in scene coordinates using the Fabric canvas transform.
+ * Get the viewport center in scene coordinates using the Skia canvas viewport.
  */
 function getViewportCenter(): { cx: number; cy: number } {
-  const canvas = useCanvasStore.getState().fabricCanvas
-  if (canvas) {
-    const vpt = canvas.viewportTransform
-    if (vpt) {
-      const zoom = vpt[0]
-      const cx = (-vpt[4] + canvas.getWidth() / 2) / zoom
-      const cy = (-vpt[5] + canvas.getHeight() / 2) / zoom
-      return { cx, cy }
-    }
-  }
-  return { cx: 0, cy: 0 }
+  const { viewport } = useCanvasStore.getState()
+  const { width, height } = getCanvasSize()
+  const cx = (-viewport.panX + width / 2) / viewport.zoom
+  const cy = (-viewport.panY + height / 2) / viewport.zoom
+  return { cx, cy }
 }
 
 /**

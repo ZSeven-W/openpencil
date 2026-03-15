@@ -1,4 +1,4 @@
-import type { PenNode } from '@/types/pen'
+import type { PenNode, PenNodeBase, LineNode } from '@/types/pen'
 import type { PenFill, PenStroke } from '@/types/styles'
 import { generateId } from '@/stores/document-store'
 
@@ -22,14 +22,26 @@ export function parseSvgToNodes(
   const svg = doc.querySelector('svg')
   if (!svg) return []
 
-  // Resolve source dimensions from viewBox or width/height
+  // Resolve source dimensions from viewBox and width/height
   const vb = svg.getAttribute('viewBox')?.split(/[\s,]+/).map(Number)
-  const svgW = parseFloat(svg.getAttribute('width') ?? '') || vb?.[2] || 100
-  const svgH = parseFloat(svg.getAttribute('height') ?? '') || vb?.[3] || 100
+  const vbW = vb?.[2] || 100
+  const vbH = vb?.[3] || 100
+  // Presentation size — only use if pure numeric (ignore "1em", "100%", etc.)
+  const rawW = svg.getAttribute('width') ?? ''
+  const rawH = svg.getAttribute('height') ?? ''
+  const svgW = /^[\d.]+$/.test(rawW) ? parseFloat(rawW) : vbW
+  const svgH = /^[\d.]+$/.test(rawH) ? parseFloat(rawH) : vbH
 
-  // Compute scale to fit within maxDim
-  const scale =
-    svgW > maxDim || svgH > maxDim ? maxDim / Math.max(svgW, svgH) : 1
+  // Target output size clamped to maxDim
+  let outW = svgW, outH = svgH
+  if (outW > maxDim || outH > maxDim) {
+    const s = maxDim / Math.max(outW, outH)
+    outW *= s
+    outH *= s
+  }
+
+  // Scale from viewBox coordinate space to output space
+  const scale = Math.min(outW / vbW, outH / vbH)
 
   // Build inherited style context from <svg> attributes
   const rootCtx: StyleCtx = {
@@ -49,8 +61,8 @@ export function parseSvgToNodes(
       id: generateId(),
       type: 'frame',
       name: 'SVG',
-      width: Math.round(svgW * scale),
-      height: Math.round(svgH * scale),
+      width: Math.ceil(outW),
+      height: Math.ceil(outH),
       layout: 'none' as const,
       children: nodes,
     },
@@ -97,10 +109,19 @@ function parseElement(
     const children = parseChildren(el, scale, ctx)
     if (children.length === 0) return null
     if (children.length === 1) return children[0]
+    const bounds = computeChildrenBounds(children)
+    // Make children coordinates relative to the group origin
+    for (const child of children) {
+      offsetChild(child, -bounds.x, -bounds.y)
+    }
     return {
       id: generateId(),
       type: 'frame',
       name: el.getAttribute('id') ?? 'Group',
+      x: bounds.x,
+      y: bounds.y,
+      width: Math.ceil(bounds.w),
+      height: Math.ceil(bounds.h),
       layout: 'none' as const,
       children,
     }
@@ -129,8 +150,8 @@ function parseElement(
         d: scaledD,
         x: bbox.x,
         y: bbox.y,
-        width: Math.round(bbox.w),
-        height: Math.round(bbox.h),
+        width: Math.ceil(bbox.w),
+        height: Math.ceil(bbox.h),
         fill,
         stroke,
       }
@@ -147,8 +168,8 @@ function parseElement(
         type: 'rectangle' as const,
         name: el.getAttribute('id') ?? 'Rectangle',
         x, y,
-        width: Math.round(w),
-        height: Math.round(h),
+        width: Math.ceil(w),
+        height: Math.ceil(h),
         cornerRadius: rx || undefined,
         fill,
         stroke,
@@ -164,8 +185,8 @@ function parseElement(
         type: 'ellipse' as const,
         name: el.getAttribute('id') ?? 'Circle',
         x: cx - r, y: cy - r,
-        width: Math.round(r * 2),
-        height: Math.round(r * 2),
+        width: Math.ceil(r * 2),
+        height: Math.ceil(r * 2),
         fill,
         stroke,
       }
@@ -181,8 +202,8 @@ function parseElement(
         type: 'ellipse' as const,
         name: el.getAttribute('id') ?? 'Ellipse',
         x: cx - rx, y: cy - ry,
-        width: Math.round(rx * 2),
-        height: Math.round(ry * 2),
+        width: Math.ceil(rx * 2),
+        height: Math.ceil(ry * 2),
         fill,
         stroke,
       }
@@ -214,8 +235,8 @@ function parseElement(
         d: scaledD,
         x: bbox.x,
         y: bbox.y,
-        width: Math.round(bbox.w),
-        height: Math.round(bbox.h),
+        width: Math.ceil(bbox.w),
+        height: Math.ceil(bbox.h),
         fill: tag === 'polygon' ? fill : noFill(),
         stroke,
       }
@@ -366,6 +387,53 @@ function getPathBBox(d: string): { x: number; y: number; w: number; h: number } 
 
 function num(el: Element, attr: string): number {
   return parseFloat(getAttr(el, attr) ?? '0') || 0
+}
+
+/** Compute the bounding box that encloses all children (including stroke extent) */
+function computeChildrenBounds(children: PenNode[]): { x: number; y: number; w: number; h: number } {
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
+  for (const child of children) {
+    const cx = child.x ?? 0
+    const cy = child.y ?? 0
+    // Expand by half stroke width so the group fully contains visual bounds
+    const stroke = 'stroke' in child ? (child as PenNode & { stroke?: PenStroke }).stroke : undefined
+    const thickness = stroke?.thickness
+    const halfStroke = (typeof thickness === 'number' ? thickness : 0) / 2
+    if (child.type === 'line') {
+      const lineChild = child as LineNode
+      const x2 = lineChild.x2 ?? cx
+      const y2 = lineChild.y2 ?? cy
+      minX = Math.min(minX, cx - halfStroke, x2 - halfStroke)
+      minY = Math.min(minY, cy - halfStroke, y2 - halfStroke)
+      maxX = Math.max(maxX, cx + halfStroke, x2 + halfStroke)
+      maxY = Math.max(maxY, cy + halfStroke, y2 + halfStroke)
+    } else {
+      const sized = child as PenNode & { width?: number; height?: number }
+      const cw = sized.width ?? 0
+      const ch = sized.height ?? 0
+      minX = Math.min(minX, cx - halfStroke)
+      minY = Math.min(minY, cy - halfStroke)
+      maxX = Math.max(maxX, cx + cw + halfStroke)
+      maxY = Math.max(maxY, cy + ch + halfStroke)
+    }
+  }
+  if (!isFinite(minX)) return { x: 0, y: 0, w: 0, h: 0 }
+  return { x: minX, y: minY, w: maxX - minX, h: maxY - minY }
+}
+
+/** Offset a child node's position (make relative to parent origin) */
+function offsetChild(node: PenNode, dx: number, dy: number) {
+  const mutable = node as PenNodeBase
+  if (node.type === 'line') {
+    const lineNode = node as LineNode
+    mutable.x = (mutable.x ?? 0) + dx
+    mutable.y = (mutable.y ?? 0) + dy
+    lineNode.x2 = (lineNode.x2 ?? 0) + dx
+    lineNode.y2 = (lineNode.y2 ?? 0) + dy
+  } else {
+    mutable.x = (mutable.x ?? 0) + dx
+    mutable.y = (mutable.y ?? 0) + dy
+  }
 }
 
 function pointsToD(points: string, close: boolean): string {

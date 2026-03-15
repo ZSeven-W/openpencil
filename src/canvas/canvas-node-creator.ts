@@ -1,4 +1,3 @@
-import * as fabric from 'fabric'
 import { generateId } from '@/stores/document-store'
 import type { PenNode } from '@/types/pen'
 import type { ToolType } from '@/types/canvas'
@@ -97,15 +96,3 @@ export function isDrawingTool(tool: ToolType): boolean {
   return tool !== 'select' && tool !== 'hand'
 }
 
-/**
- * Convert a pointer event to scene coordinates using Fabric's own method
- * which correctly handles DPR / retina scaling and viewport transform.
- */
-export function toScene(
-  canvas: fabric.Canvas,
-  e: PointerEvent,
-): { x: number; y: number } {
-  canvas.calcOffset()
-  const point = canvas.getScenePoint(e)
-  return { x: point.x, y: point.y }
-}

@@ -1,5 +1,4 @@
 import { create } from 'zustand'
-import type { Canvas } from 'fabric'
 import type {
   ToolType,
   ViewportState,
@@ -26,13 +25,13 @@ interface CanvasStoreState {
   viewport: ViewportState
   selection: SelectionState
   interaction: CanvasInteraction
-  fabricCanvas: Canvas | null
   clipboard: PenNode[]
   layerPanelOpen: boolean
   variablesPanelOpen: boolean
   codePanelOpen: boolean
   rightPanelTab: RightPanelTab
   figmaImportDialogOpen: boolean
+  pendingFigmaFile: File | null
   activePageId: string | null
 
   setActiveTool: (tool: ToolType) => void
@@ -45,7 +44,6 @@ interface CanvasStoreState {
   exitFrame: () => void
   exitAllFrames: () => void
   setInteraction: (partial: Partial<CanvasInteraction>) => void
-  setFabricCanvas: (canvas: Canvas | null) => void
   setClipboard: (nodes: PenNode[]) => void
   toggleLayerPanel: () => void
   toggleVariablesPanel: () => void
@@ -53,6 +51,7 @@ interface CanvasStoreState {
   setCodePanelOpen: (open: boolean) => void
   setRightPanelTab: (tab: RightPanelTab) => void
   setFigmaImportDialogOpen: (open: boolean) => void
+  setPendingFigmaFile: (file: File | null) => void
   setActivePageId: (pageId: string | null) => void
   hydrate: () => void
 }
@@ -73,13 +72,13 @@ export const useCanvasStore = create<CanvasStoreState>((set, get) => ({
     isDragging: false,
     drawStartPoint: null,
   },
-  fabricCanvas: null,
   clipboard: [],
   layerPanelOpen: true,
   variablesPanelOpen: false,
   codePanelOpen: false,
   rightPanelTab: 'design',
   figmaImportDialogOpen: false,
+  pendingFigmaFile: null,
   activePageId: DEFAULT_PAGE_ID,
 
   setActiveTool: (tool) => set({ activeTool: tool }),
@@ -141,8 +140,6 @@ export const useCanvasStore = create<CanvasStoreState>((set, get) => ({
   setInteraction: (partial) =>
     set((s) => ({ interaction: { ...s.interaction, ...partial } })),
 
-  setFabricCanvas: (fabricCanvas) => set({ fabricCanvas }),
-
   setClipboard: (clipboard) => set({ clipboard }),
 
   toggleLayerPanel: () => {
@@ -173,7 +170,8 @@ export const useCanvasStore = create<CanvasStoreState>((set, get) => ({
     const { layerPanelOpen, variablesPanelOpen, codePanelOpen } = get()
     persistPrefs({ layerPanelOpen, variablesPanelOpen, codePanelOpen, rightPanelTab: tab })
   },
-  setFigmaImportDialogOpen: (open) => set({ figmaImportDialogOpen: open }),
+  setFigmaImportDialogOpen: (open) => set({ figmaImportDialogOpen: open, ...(!open && { pendingFigmaFile: null }) }),
+  setPendingFigmaFile: (file) => set({ pendingFigmaFile: file }),
   setActivePageId: (activePageId) => set({ activePageId }),
 
   hydrate: () => {

@@ -123,15 +123,15 @@ bun run electron:dev
 
 **MCP Server**
 - MCP Server ในตัว — ติดตั้งได้ด้วยคลิกเดียวใน Claude Code / Codex / Gemini / OpenCode / Kiro / Copilot CLIs
+- ตรวจจับ Node.js อัตโนมัติ — หากไม่ได้ติดตั้ง จะสำรองไปใช้ HTTP transport โดยอัตโนมัติและเริ่ม MCP HTTP เซิร์ฟเวอร์
 - การทำ Design Automation จาก Terminal: อ่าน สร้าง และแก้ไขไฟล์ `.op` ผ่าน agent ที่รองรับ MCP
 - **Layered design workflow** — `design_skeleton` → `design_content` → `design_refine` สำหรับดีไซน์หลายส่วนที่มีความละเอียดสูงขึ้น
 - **Segmented prompt retrieval** — โหลดเฉพาะความรู้ด้านดีไซน์ที่ต้องการ (schema, layout, roles, icons, planning ฯลฯ)
 - รองรับหลายหน้า — สร้าง เปลี่ยนชื่อ เรียงลำดับ และทำซ้ำหน้าผ่าน MCP tools
 
 **การสร้างโค้ด**
-- React + Tailwind CSS
-- HTML + CSS
-- CSS Variables จาก design tokens
+- React + Tailwind CSS, HTML + CSS, CSS Variables
+- Vue, Svelte, Flutter, SwiftUI, Jetpack Compose, React Native
 
 ## ฟีเจอร์
 
@@ -163,7 +163,7 @@ bun run electron:dev
 | | |
 | --- | --- |
 | **Frontend** | React 19 · TanStack Start · Tailwind CSS v4 · shadcn/ui |
-| **Canvas** | Fabric.js v7 |
+| **Canvas** | CanvasKit/Skia (WASM, GPU-accelerated) |
 | **State** | Zustand v5 |
 | **Server** | Nitro |
 | **Desktop** | Electron 35 |
@@ -175,7 +175,7 @@ bun run electron:dev
 
 ```text
 src/
-  canvas/          Fabric.js engine — การวาด, sync, layout, guides, pen tool
+  canvas/          CanvasKit/Skia engine — การวาด, sync, layout, guides, pen tool
   components/      React UI — editor, panels, shared dialogs, icons
   services/ai/     AI chat, orchestrator, การสร้างดีไซน์, streaming
   services/figma/  Figma .fig binary import pipeline

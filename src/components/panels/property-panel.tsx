@@ -6,7 +6,6 @@ import { Separator } from '@/components/ui/separator'
 import type { PenNode, ContainerProps, RefNode, PathNode, ImageNode, IconFontNode } from '@/types/pen'
 import { Component, Diamond, ArrowUpRight, Unlink } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import type { FabricObjectWithPenId } from '@/canvas/canvas-object-factory'
 import SizeSection from './size-section'
 import LayoutSection from './layout-section'
 import FillSection from './fill-section'
@@ -28,7 +27,6 @@ export default function PropertyPanel({ embedded }: { embedded?: boolean } = {})
   const { t } = useTranslation()
   const activeId = useCanvasStore((s) => s.selection.activeId)
   const setSelection = useCanvasStore((s) => s.setSelection)
-  const fabricCanvas = useCanvasStore((s) => s.fabricCanvas)
   const activePageId = useCanvasStore((s) => s.activePageId)
   const children = useDocumentStore((s) => getActivePageChildren(s.document, activePageId))
   const getNodeById = useDocumentStore((s) => s.getNodeById)
@@ -39,6 +37,13 @@ export default function PropertyPanel({ embedded }: { embedded?: boolean } = {})
   // Subscribe to `children` so we re-render when nodes change
   void children
   const node = activeId ? getNodeById(activeId) : undefined
+
+  // These hooks must run unconditionally (React rules of hooks)
+  const [isEditingName, setIsEditingName] = useState(false)
+  const [editName, setEditName] = useState('')
+  useEffect(() => {
+    setIsEditingName(false)
+  }, [activeId])
 
   if (!node) {
     return null
@@ -107,14 +112,6 @@ export default function PropertyPanel({ embedded }: { embedded?: boolean } = {})
     if (!nodeIsInstance || node.type !== 'ref') return
     const refId = (node as RefNode).ref
     setSelection([refId], refId)
-    if (fabricCanvas) {
-      const objects = fabricCanvas.getObjects() as FabricObjectWithPenId[]
-      const target = objects.find((o) => (o as FabricObjectWithPenId).penNodeId === refId)
-      if (target) {
-        fabricCanvas.setActiveObject(target)
-        fabricCanvas.requestRenderAll()
-      }
-    }
   }
 
   const isContainer =
@@ -129,14 +126,6 @@ export default function PropertyPanel({ embedded }: { embedded?: boolean } = {})
   const isText = displayNode.type === 'text'
   const isIcon = (displayNode.type === 'path' && !!(displayNode as PathNode).iconId)
     || displayNode.type === 'icon_font'
-
-  const [isEditingName, setIsEditingName] = useState(false)
-  const [editName, setEditName] = useState('')
-
-  // Reset editing state when selection changes
-  useEffect(() => {
-    setIsEditingName(false)
-  }, [activeId])
 
   const handleNameClick = () => {
     setEditName(node.name ?? node.type)

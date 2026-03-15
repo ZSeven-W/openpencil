@@ -2,8 +2,6 @@ import { useState, useRef, useCallback, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useDocumentStore, findNodeInTree, getActivePageChildren } from '@/stores/document-store'
 import { useCanvasStore } from '@/stores/canvas-store'
-import { setSkipNextDepthResolve } from '@/canvas/use-canvas-selection'
-import type { FabricObjectWithPenId } from '@/canvas/canvas-object-factory'
 import type { PenNode } from '@/types/pen'
 import { useHistoryStore } from '@/stores/history-store'
 import { canBooleanOp, executeBooleanOp, type BooleanOpType } from '@/utils/boolean-ops'
@@ -173,7 +171,6 @@ export default function LayerPanel() {
   const isDescendantOf = useDocumentStore((s) => s.isDescendantOf)
   const selectedIds = useCanvasStore((s) => s.selection.selectedIds)
   const setSelection = useCanvasStore((s) => s.setSelection)
-  const fabricCanvas = useCanvasStore((s) => s.fabricCanvas)
 
   const [contextMenu, setContextMenu] = useState<{
     x: number
@@ -263,19 +260,8 @@ export default function LayerPanel() {
   const handleSelect = useCallback(
     (id: string) => {
       setSelection([id], id)
-      if (fabricCanvas) {
-        const objects = fabricCanvas.getObjects()
-        const target = objects.find(
-          (o) => (o as FabricObjectWithPenId).penNodeId === id,
-        )
-        if (target) {
-          setSkipNextDepthResolve()
-          fabricCanvas.setActiveObject(target)
-          fabricCanvas.requestRenderAll()
-        }
-      }
     },
-    [fabricCanvas, setSelection],
+    [setSelection],
   )
 
   const handleRename = useCallback(

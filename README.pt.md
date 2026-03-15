@@ -123,15 +123,15 @@ bun run electron:dev
 
 **Servidor MCP**
 - Servidor MCP integrado — instalação com um clique no Claude Code / Codex / Gemini / OpenCode / Kiro / Copilot CLIs
+- Detecção automática de Node.js — se não instalado, recurso automático para transporte HTTP e início automático do servidor MCP HTTP
 - Automação de design pelo terminal: leia, crie e modifique arquivos `.op` via qualquer agente compatível com MCP
 - **Fluxo de design em camadas** — `design_skeleton` → `design_content` → `design_refine` para designs multi-seção de maior fidelidade
 - **Recuperação segmentada de prompts** — carregue apenas o conhecimento de design necessário (schema, layout, roles, icons, planning, etc.)
 - Suporte a múltiplas páginas — crie, renomeie, reordene e duplique páginas via ferramentas MCP
 
 **Geração de Código**
-- React + Tailwind CSS
-- HTML + CSS
-- CSS Variables a partir de tokens de design
+- React + Tailwind CSS, HTML + CSS, CSS Variables
+- Vue, Svelte, Flutter, SwiftUI, Jetpack Compose, React Native
 
 ## Funcionalidades
 
@@ -163,7 +163,7 @@ bun run electron:dev
 | | |
 | --- | --- |
 | **Frontend** | React 19 · TanStack Start · Tailwind CSS v4 · shadcn/ui |
-| **Canvas** | Fabric.js v7 |
+| **Canvas** | CanvasKit/Skia (WASM, acelerado por GPU) |
 | **Estado** | Zustand v5 |
 | **Servidor** | Nitro |
 | **Desktop** | Electron 35 |
@@ -175,7 +175,7 @@ bun run electron:dev
 
 ```text
 src/
-  canvas/          Motor Fabric.js — desenho, sincronização, layout, guias, ferramenta caneta
+  canvas/          Motor CanvasKit/Skia — desenho, sincronização, layout, guias, ferramenta caneta
   components/      UI React — editor, painéis, diálogos compartilhados, ícones
   services/ai/     Chat IA, orquestrador, geração de design, streaming
   services/figma/  Pipeline de importação binária do Figma .fig

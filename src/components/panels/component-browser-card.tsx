@@ -4,6 +4,7 @@ import type { KitComponent, UIKit } from '@/types/uikit'
 import type { PenNode } from '@/types/pen'
 import { useDocumentStore } from '@/stores/document-store'
 import { useCanvasStore } from '@/stores/canvas-store'
+import { getCanvasSize } from '@/canvas/skia-engine-ref'
 import { findReusableNode, deepCloneNode, collectVariableRefs } from '@/uikit/kit-utils'
 import NodePreviewSvg from './node-preview-svg'
 
@@ -24,7 +25,7 @@ function reassignIds(node: PenNode): PenNode {
 export default function ComponentBrowserCard({ component, kit }: ComponentBrowserCardProps) {
   const handleInsert = useCallback(() => {
     const { addNode, document } = useDocumentStore.getState()
-    const { viewport, fabricCanvas } = useCanvasStore.getState()
+    const { viewport } = useCanvasStore.getState()
 
     const kitNode = findReusableNode(kit.document, component.id)
     if (!kitNode) return
@@ -49,9 +50,7 @@ export default function ComponentBrowserCard({ component, kit }: ComponentBrowse
     }
 
     // Place at viewport center
-    const canvasEl = fabricCanvas?.getElement()
-    const canvasW = canvasEl?.clientWidth ?? 800
-    const canvasH = canvasEl?.clientHeight ?? 600
+    const { width: canvasW, height: canvasH } = getCanvasSize()
     const centerX = (-viewport.panX + canvasW / 2) / viewport.zoom
     const centerY = (-viewport.panY + canvasH / 2) / viewport.zoom
     cloned.x = centerX - component.width / 2

@@ -149,8 +149,8 @@ function executeLine(
           if (emptyIdx !== -1) {
             const emptyFrame = children[emptyIdx]
             // Inherit position from the empty frame so the design lands in the right spot
-            if (emptyFrame.x !== undefined) (node as any).x = emptyFrame.x
-            if (emptyFrame.y !== undefined) (node as any).y = emptyFrame.y
+            if (emptyFrame.x !== undefined) node.x = emptyFrame.x
+            if (emptyFrame.y !== undefined) node.y = emptyFrame.y
             let updated = removeNodeFromTree(children, emptyFrame.id)
             updated = insertNodeInTree(updated, null, node, emptyIdx)
             setDocChildren(doc, updated, pageId)
@@ -174,11 +174,11 @@ function executeLine(
         if (data) {
           Object.assign(cloned, data)
           // Don't override the cloned id
-          if (data.id) delete (cloned as any).id
+          if (data.id) delete (cloned as unknown as Record<string, unknown>).id
         }
         // Apply descendant overrides
         if (data?.descendants) {
-          applyDescendantOverrides(cloned, data.descendants)
+          applyDescendantOverrides(cloned, data.descendants as Record<string, unknown>)
         }
         setDocChildren(doc, insertNodeInTree(getDocChildren(doc, pageId), parent, cloned), pageId)
         bindings.set(binding, cloned.id)
@@ -256,7 +256,7 @@ function executeLine(
 function parseInsertArgs(
   argsStr: string,
   bindings: Map<string, string>,
-): { parent: string | null; data: Record<string, any> } {
+): { parent: string | null; data: Record<string, unknown> } {
   const firstComma = findTopLevelComma(argsStr)
   if (firstComma === -1) throw new Error('Insert requires parent and node data')
   const parentRaw = argsStr.slice(0, firstComma).trim()
@@ -269,7 +269,7 @@ function parseInsertArgs(
 function parseCopyArgs(
   argsStr: string,
   bindings: Map<string, string>,
-): { sourceId: string; parent: string | null; data: Record<string, any> } {
+): { sourceId: string; parent: string | null; data: Record<string, unknown> } {
   const first = findTopLevelComma(argsStr)
   if (first === -1) throw new Error('Copy requires sourceId, parent, and data')
   const sourceRaw = argsStr.slice(0, first).trim()
@@ -297,7 +297,7 @@ function parseCopyArgs(
 function parseUpdateArgs(
   argsStr: string,
   bindings: Map<string, string>,
-): { path: string; data: Record<string, any> } {
+): { path: string; data: Record<string, unknown> } {
   const firstComma = findTopLevelComma(argsStr)
   if (firstComma === -1)
     throw new Error('Update requires path and update data')
@@ -310,7 +310,7 @@ function parseUpdateArgs(
 function parseReplaceArgs(
   argsStr: string,
   bindings: Map<string, string>,
-): { path: string; data: Record<string, any> } {
+): { path: string; data: Record<string, unknown> } {
   const firstComma = findTopLevelComma(argsStr)
   if (firstComma === -1) throw new Error('Replace requires path and node data')
   const pathRaw = argsStr.slice(0, firstComma).trim()
@@ -426,7 +426,7 @@ function findParentInTree(
 
 function applyDescendantOverrides(
   node: PenNode,
-  descendants: Record<string, any>,
+  descendants: Record<string, unknown>,
 ): void {
   if (!('children' in node) || !node.children) return
   for (const child of node.children) {
@@ -439,7 +439,7 @@ function applyDescendantOverrides(
 }
 
 /** Parse a JSON-like argument, handling unquoted keys. */
-function parseJsonArg(str: string): Record<string, any> {
+function parseJsonArg(str: string): Record<string, unknown> {
   let normalized = str.trim()
   // Convert JavaScript-style object to JSON: unquoted keys → quoted
   normalized = normalized.replace(

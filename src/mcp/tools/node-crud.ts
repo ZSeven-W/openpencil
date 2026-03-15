@@ -34,9 +34,9 @@ const VALID_NODE_TYPES = new Set([
   'frame', 'group', 'rectangle', 'ellipse', 'line', 'polygon', 'path', 'text', 'image', 'ref',
 ])
 
-function validateNodeData(data: Record<string, any>): void {
+function validateNodeData(data: Record<string, unknown>): void {
   if (!data.type) throw new Error('Node data must include a "type" field')
-  if (!VALID_NODE_TYPES.has(data.type)) {
+  if (!VALID_NODE_TYPES.has(data.type as string)) {
     throw new Error(
       `Invalid node type: "${data.type}". Valid types: ${[...VALID_NODE_TYPES].join(', ')}`,
     )
@@ -47,17 +47,18 @@ function validateNodeData(data: Record<string, any>): void {
   if (data.fill && !Array.isArray(data.fill)) {
     throw new Error('Fill must be an array, e.g. [{ type: "solid", color: "#hex" }]')
   }
-  if (data.stroke && data.stroke.fill && !Array.isArray(data.stroke.fill)) {
+  const strokeObj = data.stroke as Record<string, unknown> | undefined
+  if (strokeObj && strokeObj.fill && !Array.isArray(strokeObj.fill)) {
     throw new Error('Stroke fill must be an array, e.g. { thickness: 1, fill: [{ type: "solid", color: "#hex" }] }')
   }
 }
 
 /** Recursively validate node data including children. */
-function validateNodeTree(data: Record<string, any>): void {
+function validateNodeTree(data: Record<string, unknown>): void {
   validateNodeData(data)
   if (Array.isArray(data.children)) {
     for (const child of data.children) {
-      if (child && typeof child === 'object') validateNodeTree(child)
+      if (child && typeof child === 'object') validateNodeTree(child as Record<string, unknown>)
     }
   }
 }
@@ -112,7 +113,7 @@ function isEmptyFrame(node: PenNode): boolean {
 export interface InsertNodeParams {
   filePath?: string
   parent: string | null
-  data: Record<string, any>
+  data: Record<string, unknown>
   postProcess?: boolean
   canvasWidth?: number
   pageId?: string
@@ -138,8 +139,8 @@ export async function handleInsertNode(
     const emptyIdx = children.findIndex((n) => isEmptyFrame(n))
     if (emptyIdx !== -1) {
       const emptyFrame = children[emptyIdx]
-      if (emptyFrame.x !== undefined) (node as any).x = emptyFrame.x
-      if (emptyFrame.y !== undefined) (node as any).y = emptyFrame.y
+      if (emptyFrame.x !== undefined) node.x = emptyFrame.x
+      if (emptyFrame.y !== undefined) node.y = emptyFrame.y
       let updated = removeNodeFromTree(children, emptyFrame.id)
       updated = insertNodeInTree(updated, null, node, emptyIdx)
       setDocChildren(doc, updated, pageId)
@@ -176,7 +177,7 @@ export async function handleInsertNode(
 export interface UpdateNodeParams {
   filePath?: string
   nodeId: string
-  data: Record<string, any>
+  data: Record<string, unknown>
   postProcess?: boolean
   canvasWidth?: number
   pageId?: string
@@ -192,7 +193,7 @@ export async function handleUpdateNode(
 
   const data = sanitizeObject(params.data)
   // Validate type if being changed
-  if (data.type && !VALID_NODE_TYPES.has(data.type)) {
+  if (data.type && !VALID_NODE_TYPES.has(data.type as string)) {
     throw new Error(`Invalid node type: "${data.type}". Valid types: ${[...VALID_NODE_TYPES].join(', ')}`)
   }
   if (data.fill && !Array.isArray(data.fill)) {
@@ -279,7 +280,7 @@ export interface CopyNodeParams {
   filePath?: string
   sourceId: string
   parent: string | null
-  overrides?: Record<string, any>
+  overrides?: Record<string, unknown>
   pageId?: string
 }
 
@@ -299,7 +300,7 @@ export async function handleCopyNode(
     const safe = sanitizeObject(params.overrides)
     Object.assign(cloned, safe)
     // Don't override the cloned id
-    if (safe.id) delete (cloned as any).id
+    if (safe.id) delete (cloned as unknown as Record<string, unknown>).id
   }
 
   setDocChildren(doc, insertNodeInTree(getDocChildren(doc, pageId), params.parent, cloned), pageId)
@@ -317,7 +318,7 @@ export async function handleCopyNode(
 export interface ReplaceNodeParams {
   filePath?: string
   nodeId: string
-  data: Record<string, any>
+  data: Record<string, unknown>
   postProcess?: boolean
   canvasWidth?: number
   pageId?: string
