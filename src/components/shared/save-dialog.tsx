@@ -4,7 +4,7 @@ import { X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useDocumentStore } from '@/stores/document-store'
 import { downloadDocument } from '@/utils/file-operations'
-import { syncCanvasPositionsToStore } from '@/canvas/use-canvas-sync'
+import { syncCanvasPositionsToStore } from '@/canvas/skia-engine-ref'
 
 interface SaveDialogProps {
   open: boolean

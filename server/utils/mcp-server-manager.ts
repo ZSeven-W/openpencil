@@ -1,37 +1,17 @@
-import { spawn, execSync, type ChildProcess } from 'node:child_process'
-import { existsSync } from 'node:fs'
+import { spawn } from 'node:child_process'
+import { existsSync, writeFileSync, unlinkSync, readFileSync } from 'node:fs'
 import { networkInterfaces } from 'node:os'
-import { join, resolve } from 'node:path'
+import { join, resolve, dirname } from 'node:path'
+import { fileURLToPath } from 'node:url'
+import { tmpdir } from 'node:os'
 
-let mcpProcess: ChildProcess | null = null
-let mcpPort: number | null = null
+// ESM-compatible __dirname polyfill
+const __filename = fileURLToPath(import.meta.url)
+const __dirname = dirname(__filename)
 
-// Auto-cleanup MCP child process when the parent (Nitro) process exits.
-// On Linux, child processes become orphaned when the parent is killed;
-// this ensures the MCP server is stopped when the Nitro server exits.
-function killMcpProcessSync(): void {
-  if (!mcpProcess || !mcpProcess.pid) return
-  try {
-    if (process.platform === 'win32') {
-      execSync(`taskkill /pid ${mcpProcess.pid} /T /F`, { stdio: 'ignore' })
-    } else {
-      process.kill(mcpProcess.pid, 'SIGKILL')
-    }
-  } catch { /* process may have already exited */ }
-  mcpProcess = null
-  mcpPort = null
-}
-
-// Synchronous cleanup on process exit (last resort)
-process.on('exit', () => killMcpProcessSync())
-
-// Graceful cleanup on signals (e.g. Electron killing Nitro with SIGTERM)
-for (const signal of ['SIGINT', 'SIGTERM', 'SIGHUP'] as const) {
-  process.on(signal, () => {
-    killMcpProcessSync()
-    process.exit(0)
-  })
-}
+// PID/Port files for tracking the detached MCP server process across restarts
+const MCP_PID_FILE = join(tmpdir(), 'openpencil-mcp-server.pid')
+const MCP_PORT_FILE = join(tmpdir(), 'openpencil-mcp-server.port')
 
 /** Resolve the MCP server script path across dev, web build, and Electron production. */
 function resolveMcpServerScript(): string {
@@ -41,7 +21,7 @@ function resolveMcpServerScript(): string {
     const p = join(electronResources, 'mcp-server.cjs')
     if (existsSync(p)) return p
   }
-  // dev + web build
+  // dev + web build (from cwd)
   const fromCwd = resolve(process.cwd(), 'dist', 'mcp-server.cjs')
   if (existsSync(fromCwd)) return fromCwd
   // Fallback: relative to this file (Nitro bundled output)
@@ -63,48 +43,87 @@ export function getLocalIp(): string | null {
   return null
 }
 
-export function getMcpServerStatus(): { running: boolean; port: number | null; localIp: string | null } {
-  const running = mcpProcess !== null && mcpProcess.exitCode === null
-  return {
-    running,
-    port: running ? mcpPort : null,
-    localIp: running ? getLocalIp() : null,
+/** Check if a process with the given PID is running. */
+function isProcessRunning(pid: number): boolean {
+  try {
+    // Signal 0 checks existence without actually sending a signal
+    process.kill(pid, 0)
+    return true
+  } catch {
+    return false
   }
 }
 
+/** Read PID from file if it exists and process is still running. */
+function getRunningPid(): { pid: number; port: number } | null {
+  try {
+    if (!existsSync(MCP_PID_FILE)) return null
+    const pid = parseInt(readFileSync(MCP_PID_FILE, 'utf-8').trim(), 10)
+    if (isNaN(pid) || !isProcessRunning(pid)) {
+      // Stale PID file - clean up
+      try { unlinkSync(MCP_PID_FILE) } catch { /* ignore */ }
+      try { unlinkSync(MCP_PORT_FILE) } catch { /* ignore */ }
+      return null
+    }
+    const port = existsSync(MCP_PORT_FILE)
+      ? parseInt(readFileSync(MCP_PORT_FILE, 'utf-8').trim(), 10)
+      : 3100
+    return { pid, port: isNaN(port) ? 3100 : port }
+  } catch {
+    return null
+  }
+}
+
+export function getMcpServerStatus(): { running: boolean; port: number | null; localIp: string | null } {
+  const info = getRunningPid()
+  if (!info) {
+    return { running: false, port: null, localIp: null }
+  }
+  return { running: true, port: info.port, localIp: getLocalIp() }
+}
+
 export function startMcpHttpServer(port: number): { running: boolean; port: number; localIp: string | null; error?: string } {
-  if (mcpProcess && mcpProcess.exitCode === null) {
-    return { running: true, port: mcpPort!, localIp: getLocalIp() }
+  // Check if already running
+  const existing = getRunningPid()
+  if (existing) {
+    return { running: true, port: existing.port, localIp: getLocalIp() }
   }
 
   const serverScript = resolveMcpServerScript()
 
   try {
-    // Use spawn instead of fork to avoid IPC channel issues on Windows.
-    // fork() creates an IPC channel that, if unused and disconnected, can
-    // cause the child process to exit unexpectedly on Windows.
-    mcpProcess = spawn(process.execPath, [serverScript, '--http', '--port', String(port)], {
-      stdio: ['ignore', 'pipe', 'pipe'],
+    // CRITICAL: Use detached mode with unref() so the MCP server survives
+    // independently of the parent Nitro process. This prevents the server
+    // from dying when:
+    // 1. The UI settings dialog is closed
+    // 2. The user interacts with the editor canvas
+    // 3. The Nitro server restarts or hot-reloads
+    // 4. The Electron app sends SIGTERM to Nitro on window close
+    //
+    // The process runs in its own session and writes its PID to a file
+    // for later tracking and graceful shutdown.
+    const child = spawn(process.execPath, [serverScript, '--http', '--port', String(port)], {
+      stdio: ['ignore', 'ignore', 'ignore'],
       env: { ...process.env },
+      detached: true,
       windowsHide: true,
     })
 
-    mcpPort = port
+    // Allow parent to exit independently of child
+    child.unref()
 
-    mcpProcess.stdout?.on('data', (data: Buffer) => {
-      const msg = data.toString().trim()
-      if (msg) console.log(`[mcp-server] ${msg}`)
-    })
-
-    mcpProcess.stderr?.on('data', (data: Buffer) => {
-      console.error(`[mcp-server] ${data.toString().trim()}`)
-    })
-
-    mcpProcess.on('exit', (code) => {
-      console.error(`[mcp-server] exited with code ${code}`)
-      mcpProcess = null
-      mcpPort = null
-    })
+    // Write PID to file for later tracking (after brief delay to ensure startup)
+    const childPid = child.pid
+    if (childPid) {
+      setTimeout(() => {
+        try {
+          if (isProcessRunning(childPid)) {
+            writeFileSync(MCP_PID_FILE, String(childPid), 'utf-8')
+            writeFileSync(MCP_PORT_FILE, String(port), 'utf-8')
+          }
+        } catch { /* ignore write errors */ }
+      }, 100)
+    }
 
     return { running: true, port, localIp: getLocalIp() }
   } catch (err) {
@@ -113,20 +132,15 @@ export function startMcpHttpServer(port: number): { running: boolean; port: numb
 }
 
 export function stopMcpHttpServer(): { running: false } {
-  if (mcpProcess) {
-    if (process.platform === 'win32') {
-      // SIGTERM is unreliable on Windows; use taskkill for proper cleanup
-      try {
-        const pid = mcpProcess.pid
-        if (pid) {
-          execSync(`taskkill /pid ${pid} /T /F`, { stdio: 'ignore' })
-        }
-      } catch { /* ignore */ }
-    } else {
-      mcpProcess.kill('SIGTERM')
-    }
-    mcpProcess = null
-    mcpPort = null
+  const info = getRunningPid()
+  if (info) {
+    try {
+      // Use process.kill which is cross-platform and safe
+      process.kill(info.pid, 'SIGTERM')
+    } catch { /* process may have already exited */ }
+    // Clean up PID/Port files
+    try { unlinkSync(MCP_PID_FILE) } catch { /* ignore */ }
+    try { unlinkSync(MCP_PORT_FILE) } catch { /* ignore */ }
   }
   return { running: false }
 }

@@ -4,6 +4,19 @@ import { cn } from '@/lib/utils'
 import NumberInput from '@/components/shared/number-input'
 import type { VariableDefinition, ThemedValue } from '@/types/variables'
 
+/** Convert any CSS color string to #rrggbb for <input type="color">. */
+function toHex7(color: string): string {
+  if (color.startsWith('#') && color.length >= 7) return color.slice(0, 7)
+  const m = color.match(/rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/)
+  if (m) {
+    const r = Number(m[1]).toString(16).padStart(2, '0')
+    const g = Number(m[2]).toString(16).padStart(2, '0')
+    const b = Number(m[3]).toString(16).padStart(2, '0')
+    return `#${r}${g}${b}`
+  }
+  return '#000000'
+}
+
 const TYPE_ICONS: Record<string, React.ComponentType<{ size?: number; className?: string }>> = {
   color: Palette,
   number: Hash,
@@ -201,9 +214,9 @@ function ColorCell({
   opacity: number
   onChange: (color: string) => void
 }) {
-  const [hexInput, setHexInput] = useState(value.slice(0, 7))
+  const [hexInput, setHexInput] = useState(toHex7(value))
 
-  useEffect(() => { setHexInput(value.slice(0, 7)) }, [value])
+  useEffect(() => { setHexInput(toHex7(value)) }, [value])
 
   const handleHexChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const v = e.target.value
@@ -212,14 +225,14 @@ function ColorCell({
   }
 
   const handleBlur = () => {
-    if (!/^#[0-9a-fA-F]{6}$/.test(hexInput)) setHexInput(value.slice(0, 7))
+    if (!/^#[0-9a-fA-F]{6}$/.test(hexInput)) setHexInput(toHex7(value))
   }
 
   return (
     <div className="flex items-center gap-2.5 flex-1">
       <input
         type="color"
-        value={value.slice(0, 7)}
+        value={toHex7(value)}
         onChange={(e) => onChange(e.target.value)}
         className="w-5 h-5 rounded border border-input/40 cursor-pointer bg-transparent p-0 shrink-0"
       />

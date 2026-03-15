@@ -123,15 +123,15 @@ bun run electron:dev
 
 **MCP-сервер**
 - Встроенный MCP-сервер — установка в один клик в Claude Code / Codex / Gemini / OpenCode / Kiro / Copilot CLI
+- Автоопределение Node.js — если не установлен, автоматический переход на HTTP-транспорт и автозапуск MCP HTTP-сервера
 - Автоматизация дизайна из терминала: чтение, создание и изменение файлов `.op` через любой MCP-совместимый агент
 - **Послойный рабочий процесс** — `design_skeleton` → `design_content` → `design_refine` для дизайнов высокого качества с несколькими секциями
 - **Сегментированное получение промптов** — загружайте только нужные знания о дизайне (schema, layout, roles, icons, planning и т.д.)
 - Поддержка нескольких страниц — создание, переименование, переупорядочивание и дублирование страниц через инструменты MCP
 
 **Генерация кода**
-- React + Tailwind CSS
-- HTML + CSS
-- CSS Variables из дизайн-токенов
+- React + Tailwind CSS, HTML + CSS, CSS Variables
+- Vue, Svelte, Flutter, SwiftUI, Jetpack Compose, React Native
 
 ## Возможности
 
@@ -163,7 +163,7 @@ bun run electron:dev
 | | |
 | --- | --- |
 | **Фронтенд** | React 19 · TanStack Start · Tailwind CSS v4 · shadcn/ui |
-| **Холст** | Fabric.js v7 |
+| **Холст** | CanvasKit/Skia (WASM, GPU-ускорение) |
 | **Состояние** | Zustand v5 |
 | **Сервер** | Nitro |
 | **Десктоп** | Electron 35 |
@@ -175,7 +175,7 @@ bun run electron:dev
 
 ```text
 src/
-  canvas/          Движок Fabric.js — рисование, синхронизация, раскладка, направляющие, инструмент пера
+  canvas/          Движок CanvasKit/Skia — рисование, синхронизация, раскладка, направляющие, инструмент пера
   components/      React UI — редактор, панели, общие диалоги, иконки
   services/ai/     AI-чат, оркестратор, генерация дизайна, стриминг
   services/figma/  Пайплайн бинарного импорта Figma .fig

@@ -1,11 +1,12 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { writeFile, unlink, mkdir } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { sanitizeObject } from '../utils/sanitize'
 import { openDocument, invalidateCache } from '../document-manager'
 import { handleBatchDesign } from '../tools/batch-design'
 
-const TMP_DIR = '/tmp/openpencil-security-tests'
+const TMP_DIR = join(tmpdir(), 'openpencil-security-tests')
 
 beforeEach(async () => {
   await mkdir(TMP_DIR, { recursive: true })

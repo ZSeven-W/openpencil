@@ -1,6 +1,20 @@
 import { useState, useRef, useEffect } from 'react'
 import { cn } from '@/lib/utils'
 
+/** Convert any CSS color string to #rrggbb for <input type="color">. */
+function toHex7(color: string): string {
+  if (color.startsWith('#') && color.length >= 7) return color.slice(0, 7)
+  // Handle rgb()/rgba() by parsing channels
+  const m = color.match(/rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/)
+  if (m) {
+    const r = Number(m[1]).toString(16).padStart(2, '0')
+    const g = Number(m[2]).toString(16).padStart(2, '0')
+    const b = Number(m[3]).toString(16).padStart(2, '0')
+    return `#${r}${g}${b}`
+  }
+  return '#000000'
+}
+
 interface ColorPickerProps {
   value: string
   onChange: (color: string) => void
@@ -53,7 +67,7 @@ export default function ColorPicker({
         <div className="pl-1 shrink-0">
           <input
             type="color"
-            value={value.slice(0, 7)}
+            value={toHex7(value)}
             onChange={handleNativeChange}
             className="w-4 h-5 rounded  cursor-pointer bg-transparent p-0"
           />

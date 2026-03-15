@@ -27,8 +27,8 @@ function isPidAlive(pid: number): boolean {
   try {
     process.kill(pid, 0)
     return true
-  } catch (err: any) {
-    return err.code === 'EPERM' // process exists but we lack permission
+  } catch (err: unknown) {
+    return (err as NodeJS.ErrnoException).code === 'EPERM' // process exists but we lack permission
   }
 }
 

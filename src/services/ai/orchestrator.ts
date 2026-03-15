@@ -24,6 +24,7 @@ import {
   getOrchestratorTimeouts,
   prepareDesignPrompt,
 } from './orchestrator-prompt-optimizer'
+import { resolveModelProfile, needsSimplifiedPrompt } from './model-profiles'
 import {
   adjustRootFrameHeightToContent,
   insertStreamingNode,
@@ -35,7 +36,7 @@ import {
 } from './design-generator'
 import { useDocumentStore } from '@/stores/document-store'
 import { useHistoryStore } from '@/stores/history-store'
-import { zoomToFitContent } from '@/canvas/use-fabric-canvas'
+import { zoomToFitContent } from '@/canvas/skia-engine-ref'
 import { resetAnimationState } from './design-animation'
 import { VALIDATION_ENABLED } from './ai-runtime-config'
 import { runPostGenerationValidation } from './design-validation'
@@ -436,9 +437,18 @@ async function callOrchestrator(
   let rawResponse = ''
   let thinkingContent = ''
 
+  // For basic-tier models, inline system prompt into user message
+  // since third-party routers may drop or ignore system prompts.
+  const profile = resolveModelProfile(model)
+  const inlineSystem = needsSimplifiedPrompt(profile)
+  const effectiveSystem = inlineSystem ? '' : ORCHESTRATOR_PROMPT
+  const effectiveUserContent = inlineSystem
+    ? `${ORCHESTRATOR_PROMPT}\n\n---\n\nUSER REQUEST:\n${prompt}`
+    : prompt
+
   for await (const chunk of streamChat(
-    ORCHESTRATOR_PROMPT,
-    [{ role: 'user', content: prompt }],
+    effectiveSystem,
+    [{ role: 'user', content: effectiveUserContent }],
     model,
     getOrchestratorTimeouts(timeoutHintLength, model),
     provider,

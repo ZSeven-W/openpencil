@@ -123,15 +123,15 @@ bun run electron:dev
 
 **MCP Sunucusu**
 - Yerleşik MCP sunucusu — Claude Code / Codex / Gemini / OpenCode / Kiro / Copilot CLI'larına tek tıkla kurulum
+- Otomatik Node.js algılama — kurulu değilse otomatik olarak HTTP aktarımına geçer ve MCP HTTP sunucusunu otomatik başlatır
 - Terminalden tasarım otomasyonu: herhangi bir MCP uyumlu ajan aracılığıyla `.op` dosyalarını okuyun, oluşturun ve düzenleyin
 - **Katmanlı tasarım iş akışı** — daha yüksek kaliteli çok bölümlü tasarımlar için `design_skeleton` → `design_content` → `design_refine`
 - **Bölümlenmiş prompt alımı** — yalnızca ihtiyacınız olan tasarım bilgisini yükleyin (şema, düzen, roller, simgeler, planlama vb.)
 - Çok sayfa desteği — MCP araçları ile sayfaları oluşturun, yeniden adlandırın, sıralayın ve çoğaltın
 
 **Kod Üretimi**
-- React + Tailwind CSS
-- HTML + CSS
-- Tasarım tokenlarından CSS Variables
+- React + Tailwind CSS, HTML + CSS, CSS Variables
+- Vue, Svelte, Flutter, SwiftUI, Jetpack Compose, React Native
 
 ## Özellikler
 
@@ -163,7 +163,7 @@ bun run electron:dev
 | | |
 | --- | --- |
 | **Ön Uç** | React 19 · TanStack Start · Tailwind CSS v4 · shadcn/ui |
-| **Kanvas** | Fabric.js v7 |
+| **Kanvas** | CanvasKit/Skia (WASM, GPU hizlandirmali) |
 | **Durum Yönetimi** | Zustand v5 |
 | **Sunucu** | Nitro |
 | **Masaüstü** | Electron 35 |
@@ -175,7 +175,7 @@ bun run electron:dev
 
 ```text
 src/
-  canvas/          Fabric.js motoru — çizim, senkronizasyon, düzen, kılavuzlar, kalem aracı
+  canvas/          CanvasKit/Skia motoru — çizim, senkronizasyon, düzen, kılavuzlar, kalem aracı
   components/      React UI — editör, paneller, paylaşılan iletişim kutuları, simgeler
   services/ai/     AI sohbet, orkestratör, tasarım üretimi, akış
   services/figma/  Figma .fig ikili içe aktarma ardışık düzeni

@@ -1,5 +1,4 @@
 import { useEffect } from 'react'
-import { ActiveSelection } from 'fabric'
 import { useCanvasStore } from '@/stores/canvas-store'
 import { useDocumentStore, getActivePageChildren } from '@/stores/document-store'
 import { useHistoryStore } from '@/stores/history-store'
@@ -8,16 +7,15 @@ import { canBooleanOp, executeBooleanOp, type BooleanOpType } from '@/utils/bool
 import { tryPasteFigmaFromClipboard } from '@/hooks/use-figma-paste'
 import {
   supportsFileSystemAccess,
+  isElectron,
   writeToFileHandle,
+  writeToFilePath,
   saveDocumentAs,
   downloadDocument,
   openDocumentFS,
   openDocument,
 } from '@/utils/file-operations'
-import { syncCanvasPositionsToStore } from '@/canvas/use-canvas-sync'
-import type { FabricObjectWithPenId } from '@/canvas/canvas-object-factory'
-import { zoomToFitContent } from '@/canvas/use-fabric-canvas'
-import { isPenToolActive, penToolKeyDown } from '@/canvas/pen-tool'
+import { syncCanvasPositionsToStore, zoomToFitContent } from '@/canvas/skia-engine-ref'
 import type { ToolType } from '@/types/canvas'
 
 const TOOL_KEYS: Record<string, ToolType> = {
@@ -44,15 +42,6 @@ export function useKeyboardShortcuts() {
         return
       }
 
-      // During pen tool drawing, handle Enter/Escape/Backspace specially
-      if (isPenToolActive()) {
-        const canvas = useCanvasStore.getState().fabricCanvas
-        if (canvas && penToolKeyDown(canvas, e.key)) {
-          e.preventDefault()
-          return
-        }
-      }
-
       const isMod = e.metaKey || e.ctrlKey
 
       // Undo: Cmd/Ctrl+Z
@@ -63,13 +52,7 @@ export function useKeyboardShortcuts() {
         if (prev) {
           useDocumentStore.getState().applyHistoryState(prev)
         }
-        // Deselect so Fabric re-renders objects at their restored dimensions
         useCanvasStore.getState().clearSelection()
-        const canvas = useCanvasStore.getState().fabricCanvas
-        if (canvas) {
-          canvas.discardActiveObject()
-          canvas.requestRenderAll()
-        }
         return
       }
 
@@ -82,11 +65,6 @@ export function useKeyboardShortcuts() {
           useDocumentStore.getState().applyHistoryState(next)
         }
         useCanvasStore.getState().clearSelection()
-        const canvas = useCanvasStore.getState().fabricCanvas
-        if (canvas) {
-          canvas.discardActiveObject()
-          canvas.requestRenderAll()
-        }
         return
       }
 
@@ -116,11 +94,6 @@ export function useKeyboardShortcuts() {
             useDocumentStore.getState().removeNode(id)
           }
           useCanvasStore.getState().clearSelection()
-          const canvas = useCanvasStore.getState().fabricCanvas
-          if (canvas) {
-            canvas.discardActiveObject()
-            canvas.requestRenderAll()
-          }
         }
         return
       }
@@ -176,32 +149,60 @@ export function useKeyboardShortcuts() {
         return
       }
 
-      // Save: Cmd/Ctrl+S
-      if (isMod && e.key === 's' && !e.shiftKey) {
+      // Save: Cmd/Ctrl+S (also Cmd/Ctrl+Shift+S)
+      // If current file is .op with handle/path → save in-place
+      // Otherwise → save as .op
+      if (isMod && e.key === 's') {
         e.preventDefault()
-        // Force-sync all Fabric object positions to the store before serializing
-        syncCanvasPositionsToStore()
+        try { syncCanvasPositionsToStore() } catch { /* continue */ }
         const store = useDocumentStore.getState()
-        const { document: doc, fileName, fileHandle } = store
+        const { document: doc, fileName, fileHandle, filePath } = store
+        const isOpFile = fileName ? /\.op$/i.test(fileName) : false
+        const suggestedName = fileName
+          ? fileName.replace(/\.(pen|op|json)$/i, '') + '.op'
+          : 'untitled.op'
 
-        if (fileHandle) {
-          writeToFileHandle(fileHandle, doc).then(() => store.markClean())
-        } else if (fileName) {
-          downloadDocument(doc, fileName)
-          store.markClean()
-        } else if (supportsFileSystemAccess()) {
-          saveDocumentAs(doc, 'untitled.op').then((result) => {
-            if (result) {
+        const doSave = async () => {
+          // Electron with known .op path
+          if (isElectron() && filePath && isOpFile) {
+            await writeToFilePath(filePath, doc)
+            store.markClean()
+            return
+          }
+          // Browser with valid .op file handle
+          if (fileHandle && isOpFile) {
+            try {
+              await writeToFileHandle(fileHandle, doc)
+              store.markClean()
+              return
+            } catch {
+              useDocumentStore.setState({ fileHandle: null })
+            }
+          }
+          // Save as .op
+          if (isElectron()) {
+            const savedPath = await window.electronAPI!.saveFile(
+              JSON.stringify(doc), suggestedName,
+            )
+            if (savedPath) {
               useDocumentStore.setState({
-                fileName: result.fileName,
-                fileHandle: result.handle,
-                isDirty: false,
+                fileName: savedPath.split(/[/\\]/).pop() || suggestedName,
+                filePath: savedPath, fileHandle: null, isDirty: false,
               })
             }
-          })
-        } else {
-          store.setSaveDialogOpen(true)
+          } else if (supportsFileSystemAccess()) {
+            const result = await saveDocumentAs(doc, suggestedName)
+            if (result) {
+              useDocumentStore.setState({
+                fileName: result.fileName, fileHandle: result.handle, isDirty: false,
+              })
+            }
+          } else {
+            downloadDocument(doc, suggestedName)
+            store.markClean()
+          }
         }
+        doSave().catch((err) => console.error('[Save] Failed:', err))
         return
       }
 
@@ -291,11 +292,6 @@ export function useKeyboardShortcuts() {
               }
               useDocumentStore.getState().addNode(null, result)
               useCanvasStore.getState().setSelection([result.id], result.id)
-              const canvas = useCanvasStore.getState().fabricCanvas
-              if (canvas) {
-                canvas.discardActiveObject()
-                canvas.requestRenderAll()
-              }
             }
           }
           return
@@ -316,29 +312,13 @@ export function useKeyboardShortcuts() {
       if (e.key === 'Escape') {
         e.preventDefault()
         const { selectedIds, enteredFrameId } = useCanvasStore.getState().selection
-        const canvas = useCanvasStore.getState().fabricCanvas
 
         if (selectedIds.length > 0) {
-          // Step 1: clear current selection
           useCanvasStore.getState().clearSelection()
-          if (canvas) {
-            canvas.discardActiveObject()
-            canvas.requestRenderAll()
-          }
         } else if (enteredFrameId) {
-          // Step 2: exit entered frame
           useCanvasStore.getState().exitFrame()
-          if (canvas) {
-            canvas.discardActiveObject()
-            canvas.requestRenderAll()
-          }
         } else {
-          // Step 3: switch to select tool
           useCanvasStore.getState().setActiveTool('select')
-          if (canvas) {
-            canvas.discardActiveObject()
-            canvas.requestRenderAll()
-          }
         }
         return
       }
@@ -364,11 +344,6 @@ export function useKeyboardShortcuts() {
               .endBatch(useDocumentStore.getState().document)
           }
           useCanvasStore.getState().clearSelection()
-          const canvas = useCanvasStore.getState().fabricCanvas
-          if (canvas) {
-            canvas.discardActiveObject()
-            canvas.requestRenderAll()
-          }
         }
         return
       }
@@ -379,21 +354,6 @@ export function useKeyboardShortcuts() {
         const topLevelNodes = getActivePageChildren(useDocumentStore.getState().document, useCanvasStore.getState().activePageId)
         const ids = topLevelNodes.map((n) => n.id)
         useCanvasStore.getState().setSelection(ids, ids[0] ?? null)
-        const canvas = useCanvasStore.getState().fabricCanvas
-        if (canvas) {
-          const topLevelSet = new Set(ids)
-          const objects = (
-            canvas.getObjects() as FabricObjectWithPenId[]
-          ).filter((obj) => obj.penNodeId && topLevelSet.has(obj.penNodeId))
-          if (objects.length === 1) {
-            canvas.setActiveObject(objects[0])
-            canvas.requestRenderAll()
-          } else if (objects.length > 1) {
-            const sel = new ActiveSelection(objects, { canvas })
-            canvas.setActiveObject(sel)
-            canvas.requestRenderAll()
-          }
-        }
         return
       }
 

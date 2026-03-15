@@ -1,4 +1,4 @@
-import type { FigmaDecodedFile, FigmaImportLayoutMode } from './figma-types'
+import type { FigmaDecodedFile, FigmaImportLayoutMode, FigmaNodeChange } from './figma-types'
 import type { PenNode, PenPage, PenDocument } from '@/types/pen'
 import {
   type TreeNode,
@@ -17,6 +17,56 @@ import {
 } from './figma-node-converters'
 
 /**
+ * Resolve styleIdForFill / styleIdForStrokeFill references to inline paints.
+ * Figma stores paint styles as separate nodes (styleType='FILL') and references
+ * them via styleIdForFill on consuming nodes.  Nodes with a style ref but no
+ * inline fillPaints need the style's paints copied in.
+ */
+function resolveStyleReferences(nodeChanges: FigmaNodeChange[]): void {
+  // Build style map from nodes with styleType
+  const styleMap = new Map<string, FigmaNodeChange>()
+  for (const nc of nodeChanges) {
+    if ((nc as any).styleType && nc.guid) {
+      styleMap.set(guidToString(nc.guid), nc)
+    }
+  }
+  if (styleMap.size === 0) return
+
+  /** Resolve style references on a single node-like object. */
+  function resolveOnNode(nc: Record<string, any>) {
+    // Resolve fill style — always use the style's paint when a style reference exists
+    const fillStyleId = nc.styleIdForFill as { guid?: { sessionID: number; localID: number } } | undefined
+    if (fillStyleId?.guid) {
+      const styleKey = `${fillStyleId.guid.sessionID}:${fillStyleId.guid.localID}`
+      const style = styleMap.get(styleKey)
+      if (style?.fillPaints?.length) {
+        nc.fillPaints = style.fillPaints
+      }
+    }
+    // Resolve stroke fill style
+    const strokeStyleId = nc.styleIdForStrokeFill as { guid?: { sessionID: number; localID: number } } | undefined
+    if (strokeStyleId?.guid) {
+      const styleKey = `${strokeStyleId.guid.sessionID}:${strokeStyleId.guid.localID}`
+      const style = styleMap.get(styleKey)
+      if (style?.fillPaints?.length) {
+        nc.strokePaints = style.fillPaints
+      }
+    }
+  }
+
+  for (const nc of nodeChanges) {
+    resolveOnNode(nc as Record<string, any>)
+    // Also resolve style references inside instance override entries
+    const overrides = nc.symbolData?.symbolOverrides
+    if (overrides) {
+      for (const ov of overrides) {
+        resolveOnNode(ov as Record<string, any>)
+      }
+    }
+  }
+}
+
+/**
  * Convert a decoded .fig file to a PenDocument.
  */
 export function figmaToPenDocument(
@@ -26,6 +76,9 @@ export function figmaToPenDocument(
   layoutMode: FigmaImportLayoutMode = 'openpencil',
 ): { document: PenDocument; warnings: string[]; imageBlobs: Map<number, Uint8Array> } {
   const warnings: string[] = []
+
+  // Resolve style references before tree building
+  resolveStyleReferences(decoded.nodeChanges)
 
   const tree = buildTree(decoded.nodeChanges)
 
@@ -97,6 +150,8 @@ export function figmaAllPagesToPenDocument(
   layoutMode: FigmaImportLayoutMode = 'openpencil',
 ): { document: PenDocument; warnings: string[]; imageBlobs: Map<number, Uint8Array> } {
   const warnings: string[] = []
+
+  resolveStyleReferences(decoded.nodeChanges)
 
   const tree = buildTree(decoded.nodeChanges)
   if (!tree) {
@@ -195,6 +250,8 @@ export function figmaNodeChangesToPenNodes(
   layoutMode: FigmaImportLayoutMode = 'openpencil',
 ): { nodes: PenNode[]; warnings: string[]; imageBlobs: Map<number, Uint8Array> } {
   const warnings: string[] = []
+
+  resolveStyleReferences(decoded.nodeChanges)
 
   const tree = buildTree(decoded.nodeChanges)
   let topNodes: TreeNode[]

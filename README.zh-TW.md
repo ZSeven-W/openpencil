@@ -123,15 +123,15 @@ bun run electron:dev
 
 **MCP 伺服器**
 - 內建 MCP 伺服器 — 一鍵安裝至 Claude Code / Codex / Gemini / OpenCode / Kiro / Copilot CLI
+- 自動偵測 Node.js — 若未安裝則自動回退到 HTTP 傳輸模式並啟動 MCP HTTP 伺服器
 - 從終端機進行設計自動化：透過任意 MCP 相容的智能體讀取、建立和修改 `.op` 檔案
 - **分層設計工作流** — `design_skeleton` → `design_content` → `design_refine`，適用於高保真多區塊設計
 - **分段提示詞擷取** — 僅載入所需的設計知識（schema、layout、roles、icons、planning 等）
 - 多頁面支援 — 透過 MCP 工具建立、重新命名、重新排序和複製頁面
 
 **程式碼生成**
-- React + Tailwind CSS
-- HTML + CSS
-- 從設計令牌生成 CSS Variables
+- React + Tailwind CSS、HTML + CSS、CSS Variables
+- Vue、Svelte、Flutter、SwiftUI、Jetpack Compose、React Native
 
 ## 功能特色
 
@@ -163,7 +163,7 @@ bun run electron:dev
 | | |
 | --- | --- |
 | **前端** | React 19 · TanStack Start · Tailwind CSS v4 · shadcn/ui |
-| **畫布** | Fabric.js v7 |
+| **畫布** | CanvasKit/Skia（WASM、GPU 加速） |
 | **狀態管理** | Zustand v5 |
 | **伺服器** | Nitro |
 | **桌面端** | Electron 35 |
@@ -175,7 +175,7 @@ bun run electron:dev
 
 ```text
 src/
-  canvas/          Fabric.js 引擎 — 繪圖、同步、版面配置、參考線、鋼筆工具
+  canvas/          CanvasKit/Skia 引擎 — 繪圖、同步、版面配置、參考線、鋼筆工具
   components/      React UI — 編輯器、面板、共用對話框、圖示
   services/ai/     AI 聊天、編排器、設計生成、串流處理
   services/figma/  Figma .fig 二進位檔案匯入管線

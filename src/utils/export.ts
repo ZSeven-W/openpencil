@@ -1,5 +1,8 @@
-import type { Canvas } from 'fabric'
-import type { FabricObjectWithPenId } from '@/canvas/canvas-object-factory'
+/** @deprecated Legacy Fabric.js types — will be removed once export is migrated to CanvasKit */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type Canvas = Record<string, any>
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type FabricObjectWithPenId = Record<string, any> & { penNodeId?: string }
 
 function downloadFile(url: string, filename: string) {
   const link = document.createElement('a')

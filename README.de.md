@@ -123,15 +123,15 @@ bun run electron:dev
 
 **MCP-Server**
 - Eingebauter MCP-Server — Ein-Klick-Installation in Claude Code / Codex / Gemini / OpenCode / Kiro / Copilot CLIs
+- Automatische Node.js-Erkennung — falls nicht installiert, automatischer Fallback auf HTTP-Transport und automatischer Start des MCP-HTTP-Servers
 - Design-Automatisierung vom Terminal aus: `.op`-Dateien über jeden MCP-kompatiblen Agenten lesen, erstellen und bearbeiten
 - **Mehrstufiger Design-Workflow** — `design_skeleton` → `design_content` → `design_refine` für hochwertigere mehrteilige Designs
 - **Segmentierter Prompt-Abruf** — laden Sie nur das benötigte Design-Wissen (Schema, Layout, Rollen, Icons, Planung usw.)
 - Mehrseitige Unterstützung — Seiten erstellen, umbenennen, neu ordnen und duplizieren über MCP-Tools
 
 **Codegenerierung**
-- React + Tailwind CSS
-- HTML + CSS
-- CSS Variables aus Design-Tokens
+- React + Tailwind CSS, HTML + CSS, CSS Variables
+- Vue, Svelte, Flutter, SwiftUI, Jetpack Compose, React Native
 
 ## Funktionen
 
@@ -163,7 +163,7 @@ bun run electron:dev
 | | |
 | --- | --- |
 | **Frontend** | React 19 · TanStack Start · Tailwind CSS v4 · shadcn/ui |
-| **Canvas** | Fabric.js v7 |
+| **Canvas** | CanvasKit/Skia (WASM, GPU-beschleunigt) |
 | **Zustand** | Zustand v5 |
 | **Server** | Nitro |
 | **Desktop** | Electron 35 |
@@ -175,7 +175,7 @@ bun run electron:dev
 
 ```text
 src/
-  canvas/          Fabric.js-Engine — Zeichnen, Synchronisierung, Layout, Hilfslinien, Stiftwerkzeug
+  canvas/          CanvasKit/Skia-Engine — Zeichnen, Synchronisierung, Layout, Hilfslinien, Stiftwerkzeug
   components/      React-UI — Editor, Panels, gemeinsame Dialoge, Icons
   services/ai/     KI-Chat, Orchestrierer, Designgenerierung, Streaming
   services/figma/  Figma-.fig-Binär-Importpipeline
