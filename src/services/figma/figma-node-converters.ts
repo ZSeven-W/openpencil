@@ -831,30 +831,19 @@ function convertEllipse(
 
   // For arc ellipses, absorb flipX/flipY into the arc angles instead of
   // relying on canvas-level flip (SVG path flip doesn't work well in Fabric.js).
-  // Also fix the position: when m00=-1 the x in transform is the right edge.
+  // Note: extractPosition already computes the correct visual top-left for
+  // flipped nodes via center-based calculation, so no position adjustment needed.
   if (arcProps.sweepAngle !== undefined || arcProps.startAngle !== undefined || arcProps.innerRadius !== undefined) {
     const start = arcProps.startAngle ?? 0
     const sweep = arcProps.sweepAngle ?? 360
-    // Only adjust position for flip when there's no rotation component.
-    // When rotation is present, extractPosition already computed the correct
-    // center-based position that accounts for both rotation and flip.
-    const hasRot = figma.transform && (Math.abs(figma.transform.m01) > 0.001 || Math.abs(figma.transform.m10) > 0.001)
     if (props.flipX) {
       arcProps.startAngle = normalizeAngle(180 - start - sweep)
       arcProps.sweepAngle = sweep
-      if (!hasRot) {
-        const w = figma.size?.x ?? 0
-        props.x = Math.round((props.x - w) * 100) / 100
-      }
       delete props.flipX
     }
     if (props.flipY) {
       arcProps.startAngle = normalizeAngle(360 - start - sweep)
       arcProps.sweepAngle = sweep
-      if (!hasRot) {
-        const h = figma.size?.y ?? 0
-        props.y = Math.round((props.y - h) * 100) / 100
-      }
       delete props.flipY
     }
   }

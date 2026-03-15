@@ -269,7 +269,7 @@ export default function FillSection({
                   min={0}
                   max={100}
                   suffix="%"
-                  className="w-16"
+                  className="w-[72px]"
                 />
                 {currentStops.length > 2 && (
                   <Button variant="ghost" size="icon-sm" onClick={() => handleRemoveStop(i)}>
