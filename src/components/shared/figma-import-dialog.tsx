@@ -140,6 +140,9 @@ export default function FigmaImportDialog({ open, onClose }: FigmaImportDialogPr
       }
       if (doc.pages) { for (const p of doc.pages) collectFonts(p.children) }
       else collectFonts(doc.children)
+      // Always include Noto Sans SC so CJK text renders when primary fonts are
+      // system fonts (PingFang SC, Microsoft YaHei, etc.) that can't be loaded
+      fontFamilies.add('Noto Sans SC')
       const engine = getSkiaEngineRef()
       if (engine && fontFamilies.size > 0) {
         engine.renderer.fontManager.ensureFonts([...fontFamilies])

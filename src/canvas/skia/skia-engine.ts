@@ -433,8 +433,13 @@ export class SkiaEngine {
     this.renderer.setRedrawCallback(() => this.markDirty())
     // Re-render when async font loading completes
     ;(this.renderer as any)._onFontLoaded = () => this.markDirty()
-    // Pre-load default font for vector text rendering
+    // Pre-load default fonts for vector text rendering.
+    // Noto Sans SC is loaded alongside Inter so CJK glyphs are always available
+    // in the fallback chain — system CJK fonts (PingFang SC, Microsoft YaHei, etc.)
+    // are skipped from Google Fonts, and without Noto Sans SC the fallback chain
+    // would only contain Inter which has no CJK coverage, causing tofu.
     this.renderer.fontManager.ensureFont('Inter').then(() => this.markDirty())
+    this.renderer.fontManager.ensureFont('Noto Sans SC').then(() => this.markDirty())
     this.startRenderLoop()
   }
 
