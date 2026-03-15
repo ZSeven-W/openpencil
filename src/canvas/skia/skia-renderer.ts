@@ -464,9 +464,11 @@ export class SkiaRenderer {
       canvas.rotate(rotation, absX + absW / 2, absY + absH / 2)
     }
 
-    // Apply shadow
+    // Apply shadow (text uses glyph-shaped shadow, not rectangle)
     const effects = 'effects' in node ? (node as PenNode & { effects?: PenEffect[] }).effects : undefined
-    this.applyShadowDirect(canvas, effects, absX, absY, absW, absH)
+    if (node.type !== 'text') {
+      this.applyShadowDirect(canvas, effects, absX, absY, absW, absH)
+    }
 
     switch (node.type) {
       case 'frame':
@@ -490,7 +492,7 @@ export class SkiaRenderer {
         this.drawIconFont(canvas, node, absX, absY, absW, absH, opacity)
         break
       case 'text':
-        this.drawText(canvas, node, absX, absY, absW, absH, opacity)
+        this.drawText(canvas, node, absX, absY, absW, absH, opacity, effects)
         break
       case 'image':
         this.drawImage(canvas, node, absX, absY, absW, absH, opacity)
@@ -1029,6 +1031,55 @@ export class SkiaRenderer {
   }
 
   /**
+   * Draw text shadow as a blurred copy of the actual text glyphs,
+   * matching Figma's drop-shadow behavior (shadow follows glyph outlines).
+   */
+  private drawTextShadow(
+    canvas: Canvas, node: PenNode,
+    x: number, y: number, w: number, h: number,
+    opacity: number,
+    shadow: ShadowEffect,
+  ) {
+    const ck = this.ck
+    const tNode = node as TextNode
+
+    // Create a shadow-colored version of the text node
+    const shadowFillColor = shadow.color ?? '#00000066'
+    const shadowNode = {
+      ...tNode,
+      fill: [{ type: 'solid' as const, color: shadowFillColor }],
+    } as PenNode
+
+    const sx = x + shadow.offsetX
+    const sy = y + shadow.offsetY
+
+    if (shadow.blur > 0) {
+      // Use saveLayer with blur ImageFilter to blur the text glyphs
+      const paint = new ck.Paint()
+      if (opacity < 1) paint.setAlphaf(opacity)
+      const sigma = shadow.blur / 2
+      const filter = ck.ImageFilter.MakeBlur(sigma, sigma, ck.TileMode.Decal, null)
+      paint.setImageFilter(filter)
+      canvas.saveLayer(paint)
+      paint.delete()
+
+      // Draw shadow text (vector path first, then bitmap fallback)
+      const vectorOk = this.drawTextVector(canvas, shadowNode, sx, sy, w, h, 1)
+      if (!vectorOk) {
+        this.drawTextBitmap(canvas, shadowNode, sx, sy, w, h, 1)
+      }
+
+      canvas.restore()
+    } else {
+      // No blur — just draw offset text with shadow color
+      const vectorOk = this.drawTextVector(canvas, shadowNode, sx, sy, w, h, opacity)
+      if (!vectorOk) {
+        this.drawTextBitmap(canvas, shadowNode, sx, sy, w, h, opacity)
+      }
+    }
+  }
+
+  /**
    * Render text using browser Canvas 2D API (supports all system fonts including CJK),
    * then draw the rasterized result as a CanvasKit image. Results are cached.
    */
@@ -1036,11 +1087,28 @@ export class SkiaRenderer {
     canvas: Canvas, node: PenNode,
     x: number, y: number, w: number, h: number,
     opacity: number,
+    effects?: PenEffect[],
   ) {
+    // Draw text shadow as blurred copy of the text glyphs (not a rectangle)
+    const shadow = effects?.find((e): e is ShadowEffect => e.type === 'shadow')
+    if (shadow) {
+      this.drawTextShadow(canvas, node, x, y, w, h, opacity, shadow)
+    }
+
     // Try vector text first (true Skia Paragraph API — no pixelation at any zoom)
     const vectorOk = this.drawTextVector(canvas, node, x, y, w, h, opacity)
     if (vectorOk) return
 
+    // Fallback to bitmap text rendering
+    this.drawTextBitmap(canvas, node, x, y, w, h, opacity)
+  }
+
+  /** Bitmap text rendering fallback — supports all system fonts via Canvas 2D API. */
+  private drawTextBitmap(
+    canvas: Canvas, node: PenNode,
+    x: number, y: number, w: number, h: number,
+    opacity: number,
+  ) {
     const ck = this.ck
     const tNode = node as TextNode
     const content = typeof tNode.content === 'string'
