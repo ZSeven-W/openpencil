@@ -179,6 +179,11 @@ const zhTW: TranslationKeys = {
   'text.weight.semibold': '半粗',
   'text.weight.bold': '粗體',
   'text.weight.black': '極粗',
+  'text.font.search': '搜尋字型\u2026',
+  'text.font.bundled': '內建',
+  'text.font.system': '系統',
+  'text.font.loading': '正在載入字型\u2026',
+  'text.font.noResults': '找不到字型',
 
   // ── Text Layout ──
   'textLayout.title': '佈局',

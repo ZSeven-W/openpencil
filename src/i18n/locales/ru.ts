@@ -184,6 +184,11 @@ const ru: TranslationKeys = {
   'text.weight.semibold': 'Полужирный',
   'text.weight.bold': 'Жирный',
   'text.weight.black': 'Сверхжирный',
+  'text.font.search': 'Поиск шрифтов\u2026',
+  'text.font.bundled': 'Встроенные',
+  'text.font.system': 'Системные',
+  'text.font.loading': 'Загрузка шрифтов\u2026',
+  'text.font.noResults': 'Шрифты не найдены',
 
   // ── Text Layout ──
   'textLayout.title': 'Раскладка',

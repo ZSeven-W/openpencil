@@ -186,6 +186,11 @@ const ja: TranslationKeys = {
   'text.weight.semibold': 'Semibold',
   'text.weight.bold': 'Bold',
   'text.weight.black': 'Black',
+  'text.font.search': 'フォントを検索\u2026',
+  'text.font.bundled': 'バンドル',
+  'text.font.system': 'システム',
+  'text.font.loading': 'フォントを読み込み中\u2026',
+  'text.font.noResults': 'フォントが見つかりません',
 
   // ── Text Layout ──
   'textLayout.title': 'レイアウト',

@@ -184,6 +184,11 @@ const fr: TranslationKeys = {
   'text.weight.semibold': 'Semibold',
   'text.weight.bold': 'Bold',
   'text.weight.black': 'Black',
+  'text.font.search': 'Rechercher des polices\u2026',
+  'text.font.bundled': 'Incluses',
+  'text.font.system': 'Système',
+  'text.font.loading': 'Chargement des polices\u2026',
+  'text.font.noResults': 'Aucune police trouvée',
 
   // ── Text Layout ──
   'textLayout.title': 'Mise en page',

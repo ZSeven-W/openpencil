@@ -182,6 +182,11 @@ const hi: TranslationKeys = {
   'text.weight.semibold': 'सेमीबोल्ड',
   'text.weight.bold': 'बोल्ड',
   'text.weight.black': 'ब्लैक',
+  'text.font.search': 'फ़ॉन्ट खोजें\u2026',
+  'text.font.bundled': 'बंडल',
+  'text.font.system': 'सिस्टम',
+  'text.font.loading': 'फ़ॉन्ट लोड हो रहे हैं\u2026',
+  'text.font.noResults': 'कोई फ़ॉन्ट नहीं मिला',
 
   // ── Text Layout ──
   'textLayout.title': 'लेआउट',

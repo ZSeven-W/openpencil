@@ -184,6 +184,11 @@ const pt: TranslationKeys = {
   'text.weight.semibold': 'Seminegrito',
   'text.weight.bold': 'Negrito',
   'text.weight.black': 'Preto',
+  'text.font.search': 'Pesquisar fontes\u2026',
+  'text.font.bundled': 'Incluídas',
+  'text.font.system': 'Sistema',
+  'text.font.loading': 'Carregando fontes\u2026',
+  'text.font.noResults': 'Nenhuma fonte encontrada',
 
   // ── Text Layout ──
   'textLayout.title': 'Layout',

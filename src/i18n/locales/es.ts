@@ -184,6 +184,11 @@ const es: TranslationKeys = {
   'text.weight.semibold': 'Semibold',
   'text.weight.bold': 'Bold',
   'text.weight.black': 'Black',
+  'text.font.search': 'Buscar fuentes\u2026',
+  'text.font.bundled': 'Incluidas',
+  'text.font.system': 'Sistema',
+  'text.font.loading': 'Cargando fuentes\u2026',
+  'text.font.noResults': 'No se encontraron fuentes',
 
   // ── Text Layout ──
   'textLayout.title': 'Diseño',

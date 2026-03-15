@@ -184,6 +184,11 @@ const de: TranslationKeys = {
   'text.weight.semibold': 'Halbfett',
   'text.weight.bold': 'Fett',
   'text.weight.black': 'Schwarz',
+  'text.font.search': 'Schriften suchen\u2026',
+  'text.font.bundled': 'Mitgeliefert',
+  'text.font.system': 'System',
+  'text.font.loading': 'Schriften werden geladen\u2026',
+  'text.font.noResults': 'Keine Schriften gefunden',
 
   // ── Text Layout ──
   'textLayout.title': 'Layout',

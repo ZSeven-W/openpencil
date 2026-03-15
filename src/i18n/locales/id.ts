@@ -182,6 +182,11 @@ const id: TranslationKeys = {
   'text.weight.semibold': 'Semi Tebal',
   'text.weight.bold': 'Tebal',
   'text.weight.black': 'Sangat Tebal',
+  'text.font.search': 'Cari font\u2026',
+  'text.font.bundled': 'Bawaan',
+  'text.font.system': 'Sistem',
+  'text.font.loading': 'Memuat font\u2026',
+  'text.font.noResults': 'Font tidak ditemukan',
 
   // ── Text Layout ──
   'textLayout.title': 'Tata Letak',

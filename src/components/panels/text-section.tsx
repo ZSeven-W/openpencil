@@ -1,5 +1,6 @@
 import NumberInput from '@/components/shared/number-input'
 import SectionHeader from '@/components/shared/section-header'
+import FontPicker from '@/components/shared/font-picker'
 import {
   Select,
   SelectContent,
@@ -24,27 +25,6 @@ interface TextSectionProps {
   node: TextNode
   onUpdate: (updates: Partial<PenNode>) => void
 }
-
-const FONT_OPTIONS = [
-  // Bundled fonts (always available, vector rendering)
-  { value: 'Inter', label: 'Inter' },
-  { value: 'Poppins', label: 'Poppins' },
-  { value: 'Roboto', label: 'Roboto' },
-  { value: 'Montserrat', label: 'Montserrat' },
-  { value: 'Open Sans', label: 'Open Sans' },
-  { value: 'Lato', label: 'Lato' },
-  { value: 'Raleway', label: 'Raleway' },
-  { value: 'DM Sans', label: 'DM Sans' },
-  { value: 'Playfair Display', label: 'Playfair Display' },
-  { value: 'Nunito', label: 'Nunito' },
-  { value: 'Source Sans 3', label: 'Source Sans 3' },
-  // System fonts
-  { value: 'Arial, sans-serif', label: 'Arial' },
-  { value: 'Helvetica, sans-serif', label: 'Helvetica' },
-  { value: 'Georgia, serif', label: 'Georgia' },
-  { value: 'Times New Roman, serif', label: 'Times' },
-  { value: 'Courier New, monospace', label: 'Courier' },
-]
 
 const WEIGHT_OPTIONS = [
   { value: '100', labelKey: 'text.weight.thin' },
@@ -126,23 +106,10 @@ export default function TextSection({
       <SectionHeader title={t('text.typography')} />
 
       {/* Font family */}
-      <Select
+      <FontPicker
         value={fontFamily}
-        onValueChange={(v) =>
-          onUpdate({ fontFamily: v } as Partial<PenNode>)
-        }
-      >
-        <SelectTrigger className="h-6 text-[11px]">
-          <SelectValue />
-        </SelectTrigger>
-        <SelectContent>
-          {FONT_OPTIONS.map((opt) => (
-            <SelectItem key={opt.value} value={opt.value}>
-              {opt.label}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
+        onChange={(v) => onUpdate({ fontFamily: v } as Partial<PenNode>)}
+      />
 
       {/* Weight + Size */}
       <div className="grid grid-cols-2 gap-1">

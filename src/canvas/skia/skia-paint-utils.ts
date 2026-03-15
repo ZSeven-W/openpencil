@@ -144,3 +144,29 @@ export function wrapLine(ctx: CanvasRenderingContext2D, text: string, maxW: numb
   }
   if (current) out.push(current)
 }
+
+/** CSS generic font families that must NOT be quoted */
+const GENERIC_FAMILIES = new Set([
+  'serif', 'sans-serif', 'monospace', 'cursive', 'fantasy', 'system-ui',
+  'ui-serif', 'ui-sans-serif', 'ui-monospace', 'ui-rounded',
+  '-apple-system', 'blinkmacsystemfont',
+])
+
+/**
+ * Quote font family names for CSS `font` shorthand.
+ * Names with spaces MUST be quoted, otherwise Canvas 2D parses each word
+ * as a separate family (e.g. "Bodoni 72 Smallcaps" → "Bodoni", "72", "Smallcaps").
+ */
+export function cssFontFamily(family: string): string {
+  return family.split(',').map(f => {
+    const trimmed = f.trim()
+    if (!trimmed) return trimmed
+    // Already quoted
+    if ((trimmed.startsWith('"') && trimmed.endsWith('"')) ||
+        (trimmed.startsWith("'") && trimmed.endsWith("'"))) return trimmed
+    // Generic families must not be quoted
+    if (GENERIC_FAMILIES.has(trimmed.toLowerCase())) return trimmed
+    // Quote everything else (safe even for single-word names)
+    return `"${trimmed}"`
+  }).join(', ')
+}

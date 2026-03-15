@@ -182,6 +182,11 @@ const tr: TranslationKeys = {
   'text.weight.semibold': 'Yarı Kalın',
   'text.weight.bold': 'Kalın',
   'text.weight.black': 'Siyah',
+  'text.font.search': 'Yazı tipi ara\u2026',
+  'text.font.bundled': 'Dahili',
+  'text.font.system': 'Sistem',
+  'text.font.loading': 'Yazı tipleri yükleniyor\u2026',
+  'text.font.noResults': 'Yazı tipi bulunamadı',
 
   // ── Text Layout ──
   'textLayout.title': 'Düzen',

@@ -107,6 +107,8 @@ export class SkiaFontManager {
   private loadedFamilies = new Set<string>()
   /** Font families that failed to load — prevents repeated fetch attempts */
   private failedFamilies = new Set<string>()
+  /** System fonts that render via bitmap — not a failure, just not loadable into CanvasKit */
+  private systemFontFamilies = new Set<string>()
   /** In-flight font fetch promises to avoid duplicate requests */
   private pendingFetches = new Map<string, Promise<boolean>>()
 
@@ -126,6 +128,11 @@ export class SkiaFontManager {
   /** Check if a font family is bundled (available offline) */
   isBundled(family: string): boolean {
     return family.toLowerCase() in BUNDLED_FONTS
+  }
+
+  /** Check if a font is a system font that should use bitmap rendering */
+  isSystemFont(family: string): boolean {
+    return this.systemFontFamilies.has(family.toLowerCase()) || isSystemFont(family)
   }
 
   /**
@@ -189,6 +196,7 @@ export class SkiaFontManager {
     const key = family.toLowerCase()
     if (this.loadedFamilies.has(key)) return true
     if (this.failedFamilies.has(key)) return false
+    if (this.systemFontFamilies.has(key)) return false
 
     const existing = this.pendingFetches.get(key)
     if (existing) return existing
@@ -198,8 +206,14 @@ export class SkiaFontManager {
     const result = await promise
     this.pendingFetches.delete(key)
     if (!result) {
-      this.failedFamilies.add(key)
-      console.warn(`[FontManager] Font "${family}" unavailable, will not retry`)
+      if (isSystemFont(family)) {
+        // System font — not a failure, just can't be loaded into CanvasKit.
+        // Renderer will use bitmap (Canvas 2D) which supports all system fonts.
+        this.systemFontFamilies.add(key)
+      } else {
+        this.failedFamilies.add(key)
+        console.warn(`[FontManager] Font "${family}" unavailable, will not retry`)
+      }
     }
     return result
   }
@@ -328,30 +342,47 @@ export class SkiaFontManager {
     this.provider.delete()
     this.loadedFamilies.clear()
     this.failedFamilies.clear()
+    this.systemFontFamilies.clear()
     this.pendingFetches.clear()
   }
 }
 
 /**
- * Known system/proprietary fonts that are NOT on Google Fonts.
- * Avoids pointless 400 requests and CORS errors.
+ * Detect whether a font is available locally on the user's OS using Canvas 2D
+ * text measurement. If the measured width differs from a known fallback font,
+ * the font is installed. Results are cached to avoid repeated measurements.
  */
-const SYSTEM_FONT_PATTERNS = [
-  // Apple
-  'pingfang', 'sf pro', 'sf mono', 'sf compact', 'helvetica neue', 'helvetica',
-  'apple sd gothic', 'hiragino',
-  // Microsoft
-  'microsoft yahei', 'segoe ui', 'consolas', 'arial',
-  // CJK
-  'noto sans cjk', 'youshebiaotihei', 'simhei', 'simsun', 'fangsong', 'kaiti',
-  // Proprietary / non-Google
-  'd-din', 'din pro', 'din-pro', 'avenir', 'futura', 'proxima nova', 'gotham',
-  'brandon grotesque', 'aktiv grotesk', 'circular',
-]
+const localFontCache = new Map<string, boolean>()
+
+function isFontLocallyAvailable(family: string): boolean {
+  const key = family.toLowerCase()
+  const cached = localFontCache.get(key)
+  if (cached !== undefined) return cached
+
+  if (typeof document === 'undefined') return false
+  const canvas = document.createElement('canvas')
+  const ctx = canvas.getContext('2d')
+  if (!ctx) return false
+
+  // Measure with two different generic fallbacks to avoid false positives
+  const testStr = 'mmmmmmmmmmlli1|'
+  ctx.font = '72px monospace'
+  const monoWidth = ctx.measureText(testStr).width
+  ctx.font = '72px serif'
+  const serifWidth = ctx.measureText(testStr).width
+  ctx.font = `72px "${family}", monospace`
+  const testMonoWidth = ctx.measureText(testStr).width
+  ctx.font = `72px "${family}", serif`
+  const testSerifWidth = ctx.measureText(testStr).width
+
+  // If the font changes the measurement against BOTH fallbacks, it's installed
+  const available = testMonoWidth !== monoWidth && testSerifWidth !== serifWidth
+  localFontCache.set(key, available)
+  return available
+}
 
 function isSystemFont(family: string): boolean {
-  const lower = family.toLowerCase()
-  return SYSTEM_FONT_PATTERNS.some(p => lower.includes(p))
+  return isFontLocallyAvailable(family)
 }
 
 /** Fetch with timeout — rejects if response doesn't arrive within `ms`. */

@@ -179,6 +179,11 @@ const zh: TranslationKeys = {
   'text.weight.semibold': '半粗',
   'text.weight.bold': '粗体',
   'text.weight.black': '极粗',
+  'text.font.search': '搜索字体…',
+  'text.font.bundled': '内置字体',
+  'text.font.system': '系统字体',
+  'text.font.loading': '加载字体中…',
+  'text.font.noResults': '未找到字体',
 
   // ── Text Layout ──
   'textLayout.title': '布局',

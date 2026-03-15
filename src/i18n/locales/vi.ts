@@ -182,6 +182,11 @@ const vi: TranslationKeys = {
   'text.weight.semibold': 'Hơi đậm',
   'text.weight.bold': 'Đậm',
   'text.weight.black': 'Rất đậm',
+  'text.font.search': 'Tìm phông chữ\u2026',
+  'text.font.bundled': 'Đi kèm',
+  'text.font.system': 'Hệ thống',
+  'text.font.loading': 'Đang tải phông chữ\u2026',
+  'text.font.noResults': 'Không tìm thấy phông chữ',
 
   // ── Text Layout ──
   'textLayout.title': 'Bố cục',

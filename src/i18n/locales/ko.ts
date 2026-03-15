@@ -182,6 +182,11 @@ const ko: TranslationKeys = {
   'text.weight.semibold': 'Semibold',
   'text.weight.bold': 'Bold',
   'text.weight.black': 'Black',
+  'text.font.search': '글꼴 검색\u2026',
+  'text.font.bundled': '번들',
+  'text.font.system': '시스템',
+  'text.font.loading': '글꼴 로드 중\u2026',
+  'text.font.noResults': '글꼴을 찾을 수 없습니다',
 
   // ── Text Layout ──
   'textLayout.title': '레이아웃',

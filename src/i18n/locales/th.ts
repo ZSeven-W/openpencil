@@ -182,6 +182,11 @@ const th: TranslationKeys = {
   'text.weight.semibold': 'กึ่งหนา',
   'text.weight.bold': 'หนา',
   'text.weight.black': 'หนามาก',
+  'text.font.search': 'ค้นหาฟอนต์\u2026',
+  'text.font.bundled': 'แบบรวม',
+  'text.font.system': 'ระบบ',
+  'text.font.loading': 'กำลังโหลดฟอนต์\u2026',
+  'text.font.noResults': 'ไม่พบฟอนต์',
 
   // ── Text Layout ──
   'textLayout.title': 'เลย์เอาต์',

@@ -180,6 +180,11 @@ const en = {
   'text.weight.semibold': 'Semibold',
   'text.weight.bold': 'Bold',
   'text.weight.black': 'Black',
+  'text.font.search': 'Search fonts…',
+  'text.font.bundled': 'Bundled',
+  'text.font.system': 'System',
+  'text.font.loading': 'Loading fonts…',
+  'text.font.noResults': 'No fonts found',
 
   // ── Text Layout ──
   'textLayout.title': 'Layout',

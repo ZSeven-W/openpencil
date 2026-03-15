@@ -15,6 +15,7 @@ import {
   resolveStrokeColor,
   resolveStrokeWidth,
   wrapLine,
+  cssFontFamily,
 } from './skia-paint-utils'
 import { sanitizeSvgPath, hasInvalidNumbers, tryManualPathParse } from './skia-path-utils'
 import {
@@ -723,6 +724,11 @@ export class SkiaRenderer {
     // Check if primary font family is loaded; if not, try async load
     const primaryFamily = fontFamily.split(',')[0].trim().replace(/['"]/g, '')
     if (!this.fontManager.isFontReady(primaryFamily)) {
+      // System fonts can't be loaded into CanvasKit — use bitmap rendering
+      // which supports all OS-installed fonts via Canvas 2D API
+      if (this.fontManager.isSystemFont(primaryFamily)) {
+        return false
+      }
       this.fontManager.ensureFont(primaryFamily).then((ok) => {
         if (ok) {
           this.clearParaCache()
@@ -905,7 +911,7 @@ export class SkiaRenderer {
     // Set up measurement context
     const measureCanvas = document.createElement('canvas')
     const mCtx = measureCanvas.getContext('2d')!
-    mCtx.font = `${fontWeight} ${fontSize}px ${fontFamily}`
+    mCtx.font = `${fontWeight} ${fontSize}px ${cssFontFamily(fontFamily)}`
 
     const rawLines = content.split('\n')
     let wrappedLines: string[]
@@ -947,7 +953,7 @@ export class SkiaRenderer {
     const scale = rawScale <= 2 ? 2 : rawScale <= 4 ? 4 : 8
 
     // Cache key — includes rasterization scale so zoom changes use fresh textures
-    const cacheKey = `${content}|${fontSize}|${fillColor}|${fontWeight}|${textAlign}|${Math.round(renderW)}|${Math.round(textH)}|${scale}`
+    const cacheKey = `${content}|${fontSize}|${fillColor}|${fontWeight}|${fontFamily}|${textAlign}|${Math.round(renderW)}|${Math.round(textH)}|${scale}`
 
     let img = this.textCache.get(cacheKey)
     if (img === undefined) {
@@ -968,7 +974,7 @@ export class SkiaRenderer {
       tmp.height = ch
       const ctx = tmp.getContext('2d')!
       ctx.scale(effectiveScale, effectiveScale)
-      ctx.font = `${fontWeight} ${fontSize}px ${fontFamily}`
+      ctx.font = `${fontWeight} ${fontSize}px ${cssFontFamily(fontFamily)}`
       ctx.fillStyle = fillColor
       ctx.textBaseline = 'top'
       ctx.textAlign = (textAlign || 'left') as CanvasTextAlign
