@@ -135,7 +135,7 @@ export class SkiaRenderer {
     opacity: number,
     absX: number,
     absY: number,
-  ): Paint {
+  ): { paint: Paint; imageFillDraw?: { fill: ImageFill; w: number; h: number; absX: number; absY: number; opacity: number } } {
     const ck = this.ck
     const paint = new ck.Paint()
     paint.setStyle(ck.PaintStyle.Fill)
@@ -145,13 +145,13 @@ export class SkiaRenderer {
       const c = parseColor(ck, fills)
       c[3] *= opacity
       paint.setColor(c)
-      return paint
+      return { paint }
     }
     if (!fills || fills.length === 0) {
       const c = parseColor(ck, DEFAULT_FILL)
       c[3] *= opacity
       paint.setColor(c)
-      return paint
+      return { paint }
     }
 
     const first = fills[0]
@@ -213,15 +213,25 @@ export class SkiaRenderer {
         paint.setColor(c)
       }
     } else if (first.type === 'image') {
-      this.applyImageFillToPaint(paint, first, w, h, opacity, absX, absY)
+      const result = this.applyImageFillToPaint(paint, first, w, h, opacity, absX, absY)
+      if (result.needsDrawImageRect && result.fill) {
+        return { paint, imageFillDraw: { fill: result.fill, w: result.w!, h: result.h!, absX: result.absX!, absY: result.absY!, opacity: result.opacity! } }
+      }
     }
 
-    return paint
+    return { paint }
   }
 
   /**
    * Apply an image fill to a Paint object using an image shader.
    * If the image is not yet loaded, a placeholder color is used.
+   */
+  /**
+   * Apply an image fill to a Paint object.
+   * For tile mode: uses a shader with TileMode.Repeat.
+   * For fill/fit/crop/stretch: sets a placeholder paint and returns
+   * draw info so the caller can use drawImageRect (shader scaling
+   * is unreliable in CanvasKit for Clamp/Decal tile modes).
    */
   private applyImageFillToPaint(
     paint: Paint,
@@ -229,7 +239,7 @@ export class SkiaRenderer {
     w: number, h: number,
     opacity: number,
     absX: number, absY: number,
-  ) {
+  ): { needsDrawImageRect: boolean; fill?: ImageFill; w?: number; h?: number; absX?: number; absY?: number; opacity?: number } {
     const ck = this.ck
     const fillOpacity = (fill.opacity ?? 1) * opacity
     const url = fill.url
@@ -237,7 +247,7 @@ export class SkiaRenderer {
       const c = parseColor(ck, '#e5e7eb')
       c[3] *= fillOpacity
       paint.setColor(c)
-      return
+      return { needsDrawImageRect: false }
     }
 
     const cached = this.imageLoader.get(url)
@@ -245,76 +255,113 @@ export class SkiaRenderer {
       this.imageLoader.request(url)
     }
     if (!cached) {
-      // Image not loaded or failed — placeholder
       const c = parseColor(ck, '#e5e7eb')
       c[3] *= fillOpacity
       paint.setColor(c)
-      return
+      return { needsDrawImageRect: false }
     }
+
+    const imgW = cached.width()
+    const imgH = cached.height()
+    if (imgW <= 0 || imgH <= 0) return { needsDrawImageRect: false }
+
+    const mode = fill.mode ?? 'fill'
+
+    // Tile mode: use shader (works reliably with Repeat + translation matrix)
+    if (mode === 'tile') {
+      const dispX = absX + (w - imgW) / 2
+      const dispY = absY + (h - imgH) / 2
+      const localMatrix = Float32Array.of(
+        1, 0, -dispX,
+        0, 1, -dispY,
+        0, 0, 1,
+      )
+      const shader = cached.makeShaderOptions(
+        ck.TileMode.Repeat, ck.TileMode.Repeat,
+        ck.FilterMode.Linear, ck.MipmapMode.None,
+        localMatrix,
+      )
+      if (shader) {
+        paint.setShader(shader)
+        if (fillOpacity < 1) paint.setAlphaf(fillOpacity)
+        const cf = this.buildImageAdjustmentFilter(fill)
+        if (cf) paint.setColorFilter(cf)
+      }
+      return { needsDrawImageRect: false }
+    }
+
+    // For fill/fit/crop/stretch: use transparent paint, caller draws image via drawImageRect
+    paint.setColor(Float32Array.of(0, 0, 0, 0))
+    return { needsDrawImageRect: true, fill, w, h, absX, absY, opacity: fillOpacity }
+  }
+
+  /**
+   * Draw an image fill using drawImageRect (for fill/fit/crop/stretch modes).
+   * Must be called after clipping to the shape bounds.
+   */
+  private drawImageFillRect(
+    canvas: Canvas,
+    fill: ImageFill,
+    w: number, h: number,
+    absX: number, absY: number,
+    fillOpacity: number,
+  ) {
+    const ck = this.ck
+    const url = fill.url
+    if (!url) return
+
+    const cached = this.imageLoader.get(url)
+    if (!cached) return
 
     const imgW = cached.width()
     const imgH = cached.height()
     if (imgW <= 0 || imgH <= 0) return
 
     const mode = fill.mode ?? 'fill'
-    let tileMode = ck.TileMode.Clamp
+    const paint = new ck.Paint()
+    paint.setAntiAlias(true)
+    if (fillOpacity < 1) paint.setAlphaf(fillOpacity)
 
-    // Screen-space scale factor: how large the image appears on screen
-    let sf: number
-    let dSx: number, dSy: number // display scale x/y (can differ for stretch)
+    const adjFilter = this.buildImageAdjustmentFilter(fill)
+    if (adjFilter) paint.setColorFilter(adjFilter)
 
-    if (mode === 'stretch') {
-      dSx = w / imgW; dSy = h / imgH
-      sf = 0 // not used for stretch
-    } else if (mode === 'fit') {
-      // Contain: fit entire image within shape
-      sf = Math.min(w / imgW, h / imgH)
-      dSx = sf; dSy = sf
-      tileMode = ck.TileMode.Decal
-    } else if (mode === 'tile') {
-      sf = 1
-      dSx = 1; dSy = 1
-      tileMode = ck.TileMode.Repeat
+    if (mode === 'fit') {
+      // Contain: entire image visible, centered, with letterbox
+      const scale = Math.min(w / imgW, h / imgH)
+      const dw = imgW * scale
+      const dh = imgH * scale
+      const dx = absX + (w - dw) / 2
+      const dy = absY + (h - dh) / 2
+      canvas.drawImageRect(
+        cached,
+        ck.LTRBRect(0, 0, imgW, imgH),
+        ck.LTRBRect(dx, dy, dx + dw, dy + dh),
+        paint,
+      )
+    } else if (mode === 'stretch') {
+      // Stretch: distort to fill entire area
+      canvas.drawImageRect(
+        cached,
+        ck.LTRBRect(0, 0, imgW, imgH),
+        ck.LTRBRect(absX, absY, absX + w, absY + h),
+        paint,
+      )
     } else {
-      // 'fill', 'crop': cover entire shape
-      sf = Math.max(w / imgW, h / imgH)
-      dSx = sf; dSy = sf
+      // 'fill', 'crop': cover, centered, excess clipped by parent clip
+      const scale = Math.max(w / imgW, h / imgH)
+      const dw = imgW * scale
+      const dh = imgH * scale
+      const dx = absX + (w - dw) / 2
+      const dy = absY + (h - dh) / 2
+      canvas.drawImageRect(
+        cached,
+        ck.LTRBRect(0, 0, imgW, imgH),
+        ck.LTRBRect(dx, dy, dx + dw, dy + dh),
+        paint,
+      )
     }
 
-    // Displayed image size in scene coordinates
-    const dispW = imgW * dSx
-    const dispH = imgH * dSy
-    // Displayed image top-left (centered within the shape)
-    const dispX = absX + (w - dispW) / 2
-    const dispY = absY + (h - dispH) / 2
-
-    // Shader localMatrix maps scene coords → texture coords:
-    //   texX = (sceneX - dispX) / dSx
-    //   texY = (sceneY - dispY) / dSy
-    // Matrix: [1/dSx, 0, -dispX/dSx, 0, 1/dSy, -dispY/dSy, 0, 0, 1]
-    const invSx = 1 / dSx
-    const invSy = 1 / dSy
-    const localMatrix = Float32Array.of(
-      invSx, 0, -dispX * invSx,
-      0, invSy, -dispY * invSy,
-      0, 0, 1,
-    )
-
-    const shader = cached.makeShaderOptions(
-      tileMode, tileMode,
-      ck.FilterMode.Linear, ck.MipmapMode.None,
-      localMatrix,
-    )
-    if (shader) {
-      paint.setShader(shader)
-      if (fillOpacity < 1) paint.setAlphaf(fillOpacity)
-
-      // Apply image adjustments as a color filter
-      const cf = this.buildImageAdjustmentFilter(fill)
-      if (cf) {
-        paint.setColorFilter(cf)
-      }
-    }
+    paint.delete()
   }
 
   /**
@@ -557,7 +604,7 @@ export class SkiaRenderer {
     const isContainer = node.type === 'frame' || node.type === 'group'
 
     // Fill
-    const fillPaint = this.makeFillPaint(
+    const { paint: fillPaint, imageFillDraw } = this.makeFillPaint(
       hasFill ? fills : (isContainer ? 'transparent' : undefined),
       w, h, opacity, x, y,
     )
@@ -574,6 +621,22 @@ export class SkiaRenderer {
       canvas.drawRect(ck.LTRBRect(x, y, x + w, y + h), fillPaint)
     }
     fillPaint.delete()
+
+    // Image fill (fill/fit/crop/stretch): draw via drawImageRect with clipping
+    if (imageFillDraw) {
+      canvas.save()
+      if (hasRoundedCorners) {
+        const maxR = Math.min(w / 2, h / 2)
+        canvas.clipRRect(
+          ck.RRectXY(ck.LTRBRect(x, y, x + w, y + h), Math.min(cr[0], maxR), Math.min(cr[0], maxR)),
+          ck.ClipOp.Intersect, true,
+        )
+      } else {
+        canvas.clipRect(ck.LTRBRect(x, y, x + w, y + h), ck.ClipOp.Intersect, true)
+      }
+      this.drawImageFillRect(canvas, imageFillDraw.fill, imageFillDraw.w, imageFillDraw.h, imageFillDraw.absX, imageFillDraw.absY, imageFillDraw.opacity)
+      canvas.restore()
+    }
 
     // Stroke
     const strokePaint = this.makeStrokePaint(stroke, opacity)
@@ -607,7 +670,7 @@ export class SkiaRenderer {
       const path = ck.Path.MakeFromSVGString(arcD)
       if (path) {
         path.offset(x, y)
-        const fillPaint = this.makeFillPaint(fills, w, h, opacity, x, y)
+        const { paint: fillPaint } = this.makeFillPaint(fills, w, h, opacity, x, y)
         fillPaint.setAntiAlias(true)
         canvas.drawPath(path, fillPaint)
         fillPaint.delete()
@@ -616,7 +679,7 @@ export class SkiaRenderer {
       return
     }
 
-    const fillPaint = this.makeFillPaint(fills, w, h, opacity, x, y)
+    const { paint: fillPaint } = this.makeFillPaint(fills, w, h, opacity, x, y)
     canvas.drawOval(ck.LTRBRect(x, y, x + w, y + h), fillPaint)
     fillPaint.delete()
 
@@ -672,7 +735,7 @@ export class SkiaRenderer {
     }
     path.close()
 
-    const fillPaint = this.makeFillPaint(fills, w, h, opacity, x, y)
+    const { paint: fillPaint } = this.makeFillPaint(fills, w, h, opacity, x, y)
     canvas.drawPath(path, fillPaint)
     fillPaint.delete()
 
@@ -715,7 +778,7 @@ export class SkiaRenderer {
     if (!path) {
       // Render fallback with the node's fill color (not debug red)
       if (w > 0 && h > 0) {
-        const fillPaint = this.makeFillPaint(fills, w, h, opacity, x, y)
+        const { paint: fillPaint } = this.makeFillPaint(fills, w, h, opacity, x, y)
         canvas.drawRect(ck.LTRBRect(x, y, x + w, y + h), fillPaint)
         fillPaint.delete()
       }
@@ -760,7 +823,7 @@ export class SkiaRenderer {
 
     // Fill — use EvenOdd for compound paths (multiple sub-paths), Winding for simple paths
     if (hasExplicitFill || !hasVisibleStroke) {
-      const fillPaint = this.makeFillPaint(
+      const { paint: fillPaint } = this.makeFillPaint(
         hasExplicitFill ? fills : undefined,
         w, h, opacity, x, y,
       )
