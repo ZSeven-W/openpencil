@@ -27,6 +27,7 @@ interface ImageFillPopoverProps {
   triggerRect: DOMRect
   onFitModeChange: (mode: FitMode) => void
   onAdjustmentChange: (key: keyof AdjustmentValues, value: number) => void
+  onResetAdjustments?: () => void
   onImageChange?: (dataUrl: string) => void
   onClose: () => void
 }
@@ -53,6 +54,7 @@ export default function ImageFillPopover({
   triggerRect,
   onFitModeChange,
   onAdjustmentChange,
+  onResetAdjustments,
   onImageChange,
   onClose,
 }: ImageFillPopoverProps) {
@@ -97,8 +99,12 @@ export default function ImageFillPopover({
 
   const hasAdjustments = ADJUSTMENT_KEYS.some((a) => (adjustments[a.key] ?? 0) !== 0)
   const handleResetAll = () => {
-    for (const a of ADJUSTMENT_KEYS) {
-      onAdjustmentChange(a.key, 0)
+    if (onResetAdjustments) {
+      onResetAdjustments()
+    } else {
+      for (const a of ADJUSTMENT_KEYS) {
+        onAdjustmentChange(a.key, 0)
+      }
     }
   }
 

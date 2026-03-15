@@ -66,6 +66,7 @@ export default function ImageSection({ node, onUpdate }: ImageSectionProps) {
           }}
           onFitModeChange={(mode) => onUpdate({ objectFit: mode as ImageFitMode })}
           onAdjustmentChange={(key, value) => onUpdate({ [key]: value } as Partial<ImageNode>)}
+          onResetAdjustments={() => onUpdate({ exposure: 0, contrast: 0, saturation: 0, temperature: 0, tint: 0, highlights: 0, shadows: 0 } as Partial<ImageNode>)}
           onImageChange={(dataUrl) => onUpdate({ src: dataUrl })}
           onClose={handleClose}
         />

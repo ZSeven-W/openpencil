@@ -353,6 +353,9 @@ function ImageFillEditor({
           onAdjustmentChange={(key, value) => {
             onUpdate({ fill: [{ ...fill, [key]: value }] } as Partial<PenNode>)
           }}
+          onResetAdjustments={() => {
+            onUpdate({ fill: [{ ...fill, exposure: 0, contrast: 0, saturation: 0, temperature: 0, tint: 0, highlights: 0, shadows: 0 }] } as Partial<PenNode>)
+          }}
           onImageChange={(dataUrl) => {
             onUpdate({ fill: [{ ...fill, url: dataUrl }] } as Partial<PenNode>)
           }}
