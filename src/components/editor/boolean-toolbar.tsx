@@ -52,11 +52,6 @@ export default function BooleanToolbar() {
     }
     useDocumentStore.getState().addNode(null, result)
     useCanvasStore.getState().setSelection([result.id], result.id)
-    const canvas = useCanvasStore.getState().fabricCanvas
-    if (canvas) {
-      canvas.discardActiveObject()
-      canvas.requestRenderAll()
-    }
   }, [])
 
   if (!show) return null

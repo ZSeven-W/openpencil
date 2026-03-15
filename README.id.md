@@ -123,15 +123,15 @@ bun run electron:dev
 
 **Server MCP**
 - Server MCP bawaan — instal satu klik ke Claude Code / Codex / Gemini / OpenCode / Kiro / Copilot CLI
+- Deteksi otomatis Node.js — jika tidak terinstal, otomatis beralih ke transport HTTP dan memulai server MCP HTTP
 - Otomasi desain dari terminal: baca, buat, dan modifikasi file `.op` melalui agen yang kompatibel dengan MCP
 - **Alur kerja desain berlapis** — `design_skeleton` → `design_content` → `design_refine` untuk desain multi-bagian dengan fidelitas lebih tinggi
 - **Pengambilan prompt tersegmentasi** — muat hanya pengetahuan desain yang Anda butuhkan (schema, layout, roles, icons, planning, dll.)
 - Dukungan multi-halaman — buat, ganti nama, urutkan ulang, dan duplikasi halaman melalui alat MCP
 
 **Pembuatan Kode**
-- React + Tailwind CSS
-- HTML + CSS
-- CSS Variables dari token desain
+- React + Tailwind CSS, HTML + CSS, CSS Variables
+- Vue, Svelte, Flutter, SwiftUI, Jetpack Compose, React Native
 
 ## Fitur
 
@@ -163,7 +163,7 @@ bun run electron:dev
 | | |
 | --- | --- |
 | **Frontend** | React 19 · TanStack Start · Tailwind CSS v4 · shadcn/ui |
-| **Kanvas** | Fabric.js v7 |
+| **Kanvas** | CanvasKit/Skia (WASM, akselerasi GPU) |
 | **State** | Zustand v5 |
 | **Server** | Nitro |
 | **Desktop** | Electron 35 |
@@ -175,7 +175,7 @@ bun run electron:dev
 
 ```text
 src/
-  canvas/          Mesin Fabric.js — menggambar, sinkronisasi, tata letak, panduan, alat pen
+  canvas/          Mesin CanvasKit/Skia — menggambar, sinkronisasi, tata letak, panduan, alat pen
   components/      UI React — editor, panel, dialog bersama, ikon
   services/ai/     Chat AI, orkestrator, pembuatan desain, streaming
   services/figma/  Pipeline impor biner Figma .fig

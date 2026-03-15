@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next'
 import { cn } from '@/lib/utils'
 import { useCanvasStore } from '@/stores/canvas-store'
 import { useDocumentStore } from '@/stores/document-store'
-import { zoomToFitContent } from '@/canvas/use-fabric-canvas'
+import { zoomToFitContent } from '@/canvas/skia-engine-ref'
 
 export default function PageTabs() {
   const { t } = useTranslation()
@@ -34,10 +34,6 @@ export default function PageTabs() {
     if (pageId === activePageId) return
     useCanvasStore.getState().clearSelection()
     useCanvasStore.getState().exitAllFrames()
-    const canvas = useCanvasStore.getState().fabricCanvas
-    if (canvas) {
-      canvas.discardActiveObject()
-    }
     setActivePageId(pageId)
     requestAnimationFrame(() => zoomToFitContent())
   }

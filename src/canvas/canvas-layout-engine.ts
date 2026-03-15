@@ -1,4 +1,4 @@
-import type { PenNode, ContainerProps } from '@/types/pen'
+import type { PenNode, ContainerProps, SizingBehavior } from '@/types/pen'
 import { isBadgeOverlayNode } from '@/services/ai/design-node-sanitization'
 import { useDocumentStore, DEFAULT_FRAME_ID } from '@/stores/document-store'
 import {
@@ -7,15 +7,11 @@ import {
   estimateTextWidthPrecise,
   estimateTextHeight,
   estimateLineWidth,
-  getTextOpticalCenterYOffset,
   resolveTextContent,
   countExplicitTextLines,
+  defaultLineHeight,
 } from './canvas-text-measure'
 
-// Fabric.js internal constant: single-line text height = fontSize * _fontSizeMult.
-// The lineHeight property only adds spacing BETWEEN lines in multi-line text;
-// for single-line text, Fabric always renders height as fontSize * 1.13.
-const FABRIC_FONT_SIZE_MULT = 1.13
 
 // ---------------------------------------------------------------------------
 // Padding
@@ -110,7 +106,7 @@ export function inferLayout(node: PenNode): 'horizontal' | undefined {
   if ('children' in node && node.children?.length) {
     for (const child of node.children) {
       if ('width' in child && child.width === 'fill_container') return 'horizontal'
-      if ('height' in child && (child as any).height === 'fill_container') return 'horizontal'
+      if ('height' in child && child.height === 'fill_container') return 'horizontal'
     }
   }
   return undefined
@@ -123,45 +119,53 @@ export function inferLayout(node: PenNode): 'horizontal' | undefined {
 /** Compute fit-content width from children. */
 export function fitContentWidth(node: PenNode, parentAvail?: number): number {
   if (!('children' in node) || !node.children?.length) return 0
-  const visibleChildren = node.children.filter((child) => isNodeVisible(child))
+  // Exclude badge/overlay nodes — they use absolute positioning and
+  // should not inflate the container's fit-content dimensions.
+  const visibleChildren = node.children.filter(
+    (child) => isNodeVisible(child) && !isBadgeOverlayNode(child),
+  )
   if (visibleChildren.length === 0) return 0
   const c = node as PenNode & ContainerProps
   const layout = c.layout || inferLayout(node)
-  const pad = resolvePadding('padding' in node ? (node as any).padding : undefined)
-  const gap = 'gap' in node && typeof (node as any).gap === 'number' ? (node as any).gap : 0
+  const pad = resolvePadding(c.padding)
+  const nodeGap = typeof c.gap === 'number' ? c.gap : 0
   if (layout === 'horizontal') {
-    const gapTotal = gap * Math.max(0, visibleChildren.length - 1)
+    const gapTotal = nodeGap * Math.max(0, visibleChildren.length - 1)
     const childAvail = parentAvail !== undefined
       ? Math.max(0, parentAvail - pad.left - pad.right - gapTotal)
       : undefined
-    const childTotal = visibleChildren.reduce((sum, c) => sum + getNodeWidth(c, childAvail), 0)
+    const childTotal = visibleChildren.reduce((sum, ch) => sum + getNodeWidth(ch, childAvail), 0)
     return childTotal + gapTotal + pad.left + pad.right
   }
   const childAvail = parentAvail !== undefined
     ? Math.max(0, parentAvail - pad.left - pad.right)
     : undefined
-  const maxChildW = visibleChildren.reduce((max, c) => Math.max(max, getNodeWidth(c, childAvail)), 0)
+  const maxChildW = visibleChildren.reduce((max, ch) => Math.max(max, getNodeWidth(ch, childAvail)), 0)
   return maxChildW + pad.left + pad.right
 }
 
 /** Compute fit-content height from children. */
 export function fitContentHeight(node: PenNode, parentAvailW?: number): number {
   if (!('children' in node) || !node.children?.length) return 0
-  const visibleChildren = node.children.filter((child) => isNodeVisible(child))
+  // Exclude badge/overlay nodes — they use absolute positioning and
+  // should not inflate the container's fit-content dimensions.
+  const visibleChildren = node.children.filter(
+    (child) => isNodeVisible(child) && !isBadgeOverlayNode(child),
+  )
   if (visibleChildren.length === 0) return 0
   const c = node as PenNode & ContainerProps
   const layout = c.layout || inferLayout(node)
-  const pad = resolvePadding('padding' in node ? (node as any).padding : undefined)
-  const gap = 'gap' in node && typeof (node as any).gap === 'number' ? (node as any).gap : 0
+  const pad = resolvePadding(c.padding)
+  const nodeGap = typeof c.gap === 'number' ? c.gap : 0
   // Compute available width for children (used by text height estimation)
   const nodeW = getNodeWidth(node, parentAvailW)
   const childAvailW = nodeW > 0 ? Math.max(0, nodeW - pad.left - pad.right) : parentAvailW
   if (layout === 'vertical') {
-    const childTotal = visibleChildren.reduce((sum, c) => sum + getNodeHeight(c, undefined, childAvailW), 0)
-    const gapTotal = gap * Math.max(0, visibleChildren.length - 1)
+    const childTotal = visibleChildren.reduce((sum, ch) => sum + getNodeHeight(ch, undefined, childAvailW), 0)
+    const gapTotal = nodeGap * Math.max(0, visibleChildren.length - 1)
     return childTotal + gapTotal + pad.top + pad.bottom
   }
-  const maxChildH = visibleChildren.reduce((max, c) => Math.max(max, getNodeHeight(c, undefined, childAvailW)), 0)
+  const maxChildH = visibleChildren.reduce((max, ch) => Math.max(max, getNodeHeight(ch, undefined, childAvailW)), 0)
   return maxChildH + pad.top + pad.bottom
 }
 
@@ -292,7 +296,7 @@ export function computeLayoutPositions(
   const mainSizing = layoutChildren.map((ch) => {
     const prop = isVertical ? 'height' : 'width'
     if (prop in ch) {
-      const s = parseSizing((ch as any)[prop])
+      const s = parseSizing((ch as PenNode & { width?: SizingBehavior; height?: SizingBehavior })[prop])
       if (s === 'fill') return 'fill' as const
     }
     return isVertical ? getNodeHeight(ch, availH, availW) : getNodeWidth(ch, availW)
@@ -307,19 +311,26 @@ export function computeLayoutPositions(
 
   const sizes = layoutChildren.map((ch, i) => {
     let mainSize = mainSizing[i] === 'fill' ? fillSize : (mainSizing[i] as number)
-    // For single-line text in vertical layouts, use Fabric's actual rendered
-    // height (fontSize * 1.13) instead of fontSize * lineHeight.  This ensures
-    // justify:center/end position the text correctly on the main axis.
+    // For single-line text in vertical layouts, use the actual CanvasKit
+    // Paragraph height (fontSize * lineHeight) for correct main-axis positioning.
     if (isVertical && ch.type === 'text' && mainSizing[i] !== 'fill') {
       const content = resolveTextContent(ch)
       if (countExplicitTextLines(content) <= 1) {
-        const fontSize = (ch as any).fontSize ?? 16
-        mainSize = fontSize * FABRIC_FONT_SIZE_MULT
+        const fontSize = ch.fontSize ?? 16
+        const lineHeight = ch.lineHeight ?? defaultLineHeight(fontSize)
+        const singleLineH = fontSize * lineHeight
+        const estH = estimateTextHeight(ch, availW)
+        if (estH <= singleLineH + 1) {
+          mainSize = singleLineH
+        }
       }
     }
     return {
       w: isVertical ? getNodeWidth(ch, availW) : mainSize,
-      h: isVertical ? mainSize : getNodeHeight(ch, availH, availW),
+      // For horizontal layouts, use the child's resolved width (mainSize) for
+      // height estimation. This ensures text wrapping is calculated at the
+      // actual width the child will occupy, not the parent's full available width.
+      h: isVertical ? mainSize : getNodeHeight(ch, availH, isVertical ? availW : mainSize),
     }
   })
 
@@ -366,28 +377,23 @@ export function computeLayoutPositions(
     let crossPos = 0
 
     // For single-line text centered in horizontal layouts, use the actual
-    // Fabric-rendered height (fontSize * 1.13) instead of fontSize * lineHeight.
-    // Fabric.js strips lineHeight from the last (only) line, so single-line text
-    // height is always fontSize * _fontSizeMult regardless of lineHeight.
-    // Using fontSize * lineHeight overestimates the height, shifting text upward.
+    // CanvasKit Paragraph height (fontSize * lineHeight) for centering.
+    // CanvasKit renders with halfLeading:true, distributing leading evenly
+    // above and below, so no optical correction is needed.
     let effectiveChildCross = childCross
     if (align === 'center' && !isVertical && child.type === 'text') {
       const fontSize = child.fontSize ?? 16
+      const lineHeight = child.lineHeight ?? defaultLineHeight(fontSize)
       const content = resolveTextContent(child)
       const isSingleLine = countExplicitTextLines(content) <= 1
       if (isSingleLine) {
-        effectiveChildCross = fontSize * FABRIC_FONT_SIZE_MULT
+        effectiveChildCross = fontSize * lineHeight
       }
     }
 
     switch (align) {
       case 'center':
         crossPos = (crossAvail - effectiveChildCross) / 2
-        // Optical correction: centered text in horizontal layouts tends to
-        // look slightly too high; nudge it down a bit for visual centering.
-        if (!isVertical && child.type === 'text') {
-          crossPos += getTextOpticalCenterYOffset(child)
-        }
         break
       case 'end':
         crossPos = crossAvail - childCross
@@ -396,7 +402,7 @@ export function computeLayoutPositions(
         break
     }
 
-    // Keep child within cross-axis bounds after optical correction.
+    // Keep child within cross-axis bounds.
     const clampCrossSize =
       (!isVertical && align === 'center' && child.type === 'text')
         ? effectiveChildCross
@@ -434,6 +440,7 @@ export function computeLayoutPositions(
         out.textAlign = 'center'
       }
     }
+
 
     return out as unknown as PenNode
   })

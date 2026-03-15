@@ -9,18 +9,39 @@ export function supportsFileSystemAccess(): boolean {
   return 'showSaveFilePicker' in window
 }
 
+export function isElectron(): boolean {
+  return !!window.electronAPI?.isElectron
+}
+
 // ---------------------------------------------------------------------------
 // File System Access API (Chrome / Edge)
 // ---------------------------------------------------------------------------
+
+/** Serialize document to JSON string. Throws on failure. */
+function serializeDocument(doc: PenDocument): string {
+  return JSON.stringify(doc)
+}
 
 /** Write document JSON to a FileSystemFileHandle. */
 export async function writeToFileHandle(
   handle: FileSystemFileHandle,
   doc: PenDocument,
 ): Promise<void> {
+  const json = serializeDocument(doc)
   const writable = await handle.createWritable()
-  await writable.write(JSON.stringify(doc))
+  await writable.write(json)
   await writable.close()
+}
+
+/** Write document to a known file path via Electron IPC. */
+export async function writeToFilePath(
+  filePath: string,
+  doc: PenDocument,
+): Promise<void> {
+  const api = window.electronAPI
+  if (!api?.saveToPath) throw new Error('Electron saveToPath not available')
+  const json = serializeDocument(doc)
+  await api.saveToPath(filePath, json)
 }
 
 /** Show native save-file picker, write, and return the handle + name. */

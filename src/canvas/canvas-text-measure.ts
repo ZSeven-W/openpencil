@@ -172,6 +172,95 @@ export function getTextOpticalCenterYOffset(node: PenNode): number {
 }
 
 // ---------------------------------------------------------------------------
+// Canvas 2D measurement context (lazy singleton, browser-only)
+// ---------------------------------------------------------------------------
+
+let _textMeasureCtx: CanvasRenderingContext2D | null = null
+function getTextMeasureCtx(): CanvasRenderingContext2D | null {
+  if (typeof document === 'undefined') return null
+  if (!_textMeasureCtx) {
+    const c = document.createElement('canvas')
+    _textMeasureCtx = c.getContext('2d')
+  }
+  return _textMeasureCtx
+}
+
+/**
+ * Count wrapped lines using Canvas 2D measureText for accurate word-wrap
+ * prediction. Falls back to character-width estimation if Canvas 2D is
+ * unavailable (e.g. SSR).
+ */
+function countWrappedLinesCanvas2D(
+  rawLines: string[],
+  wrapWidth: number,
+  fontSize: number,
+  fontWeight: string | number | undefined,
+  fontFamily: string,
+  letterSpacing: number,
+): number {
+  const ctx = getTextMeasureCtx()
+  if (!ctx) {
+    // Fallback: character-width estimation
+    return rawLines.reduce((sum, line) => {
+      const lineWidth = estimateLineWidth(line, fontSize, letterSpacing, fontWeight) * widthSafetyFactor(line)
+      return sum + Math.max(1, Math.ceil(lineWidth / wrapWidth))
+    }, 0)
+  }
+
+  const fw = typeof fontWeight === 'number' ? String(fontWeight) : (fontWeight ?? '400')
+  ctx.font = `${fw} ${fontSize}px ${fontFamily}`
+
+  let total = 0
+  for (const rawLine of rawLines) {
+    if (!rawLine) { total += 1; continue }
+    // Word-wrap using Canvas 2D measureText — same logic as the renderer's wrapLine
+    if (ctx.measureText(rawLine).width <= wrapWidth) { total += 1; continue }
+    let lineCount = 0
+    let current = ''
+    let i = 0
+    while (i < rawLine.length) {
+      const ch = rawLine[i]
+      if (isCjkCodePoint(ch.codePointAt(0) ?? 0)) {
+        const test = current + ch
+        if (ctx.measureText(test).width > wrapWidth && current) {
+          lineCount++
+          current = ch
+        } else {
+          current = test
+        }
+        i++
+      } else if (ch === ' ') {
+        const test = current + ch
+        if (ctx.measureText(test).width > wrapWidth && current) {
+          lineCount++
+          current = ''
+        } else {
+          current = test
+        }
+        i++
+      } else {
+        // Collect word
+        let word = ''
+        while (i < rawLine.length && rawLine[i] !== ' ' && !isCjkCodePoint(rawLine[i].codePointAt(0) ?? 0)) {
+          word += rawLine[i]
+          i++
+        }
+        const test = current + word
+        if (ctx.measureText(test).width > wrapWidth && current) {
+          lineCount++
+          current = word
+        } else {
+          current = test
+        }
+      }
+    }
+    if (current) lineCount++
+    total += Math.max(1, lineCount)
+  }
+  return total
+}
+
+// ---------------------------------------------------------------------------
 // Text height estimation (multi-line wrapping aware)
 // ---------------------------------------------------------------------------
 
@@ -181,7 +270,11 @@ export function estimateTextHeight(node: PenNode, availableWidth?: number): numb
   const n = node as unknown as Record<string, unknown>
   const fontSize = (typeof n.fontSize === 'number' ? n.fontSize : 16)
   const lineHeight = (typeof n.lineHeight === 'number' ? n.lineHeight : defaultLineHeight(fontSize))
-  const singleLineH = fontSize * lineHeight
+  // Fabric.js uses _fontSizeMult = 1.13 for the glyph height of a single line.
+  // lineHeight spacing applies *between* lines, not below the last line.
+  const FABRIC_FONT_MULT = 1.13
+  const glyphH = fontSize * FABRIC_FONT_MULT
+  const lineStep = fontSize * lineHeight
 
   // Get text content
   const rawContent = n.content
@@ -190,7 +283,7 @@ export function estimateTextHeight(node: PenNode, availableWidth?: number): numb
     : Array.isArray(rawContent)
       ? rawContent.map((s: { text: string }) => s.text).join('')
       : ''
-  if (!content) return singleLineH
+  if (!content) return glyphH
 
   // Determine the effective text width for wrapping estimation
   let textWidth = 0
@@ -203,18 +296,22 @@ export function estimateTextHeight(node: PenNode, availableWidth?: number): numb
   // If no width constraint is known, still count explicit newlines
   if (textWidth <= 0) {
     const explicitLines = content.split(/\r?\n/).length
-    return Math.round(Math.max(1, explicitLines) * singleLineH)
+    const n2 = Math.max(1, explicitLines)
+    return Math.round(n2 <= 1 ? glyphH : (n2 - 1) * lineStep + glyphH)
   }
 
-  // Estimate wrapped lines per paragraph line, then sum.
-  // This preserves explicit newlines and avoids under-estimating CJK widths.
-  const letterSpacing = (typeof n.letterSpacing === 'number' ? n.letterSpacing : 0)
+  // Use Canvas 2D measureText for accurate wrapping prediction (matches renderer).
+  // Falls back to character-width estimation in non-browser environments.
   const fontWeight = n.fontWeight as string | number | undefined
+  const fontFamily = (typeof n.fontFamily === 'string' ? n.fontFamily : '') || 'Inter, -apple-system, "Noto Sans SC", "PingFang SC", system-ui, sans-serif'
+  const letterSpacing = (typeof n.letterSpacing === 'number' ? n.letterSpacing : 0)
   const rawLines = content.split(/\r?\n/)
-  const wrappedLineCount = rawLines.reduce((sum, line) => {
-    const lineWidth = estimateLineWidth(line, fontSize, letterSpacing, fontWeight) * widthSafetyFactor(line)
-    return sum + Math.max(1, Math.ceil(lineWidth / textWidth))
-  }, 0)
+  // Add tolerance matching the renderer's wrapLine (w + fontSize * 0.2)
+  const wrapWidth = textWidth + fontSize * 0.2
+  const wrappedLineCount = countWrappedLinesCanvas2D(
+    rawLines, wrapWidth, fontSize, fontWeight, fontFamily, letterSpacing,
+  )
 
-  return Math.round(Math.max(1, wrappedLineCount) * singleLineH)
+  const totalLines = Math.max(1, wrappedLineCount)
+  return Math.round(totalLines <= 1 ? glyphH : (totalLines - 1) * lineStep + glyphH)
 }

@@ -46,6 +46,7 @@ const MODEL_PROFILES: ModelProfile[] = [
   { match: 'llama', tier: 'basic', thinkingMode: 'disabled', simplifiedPrompt: true, label: 'Llama' },
   { match: 'mistral', tier: 'basic', thinkingMode: 'disabled', simplifiedPrompt: true, label: 'Mistral' },
   { match: 'gemma', tier: 'basic', thinkingMode: 'disabled', simplifiedPrompt: true, label: 'Gemma' },
+  { match: 'glm', tier: 'basic', thinkingMode: 'disabled', simplifiedPrompt: true, label: 'GLM' },
 ]
 
 const DEFAULT_PROFILE: ModelProfile = {

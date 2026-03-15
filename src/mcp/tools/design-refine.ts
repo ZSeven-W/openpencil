@@ -18,6 +18,7 @@ import {
   sanitizeScreenFrameBounds,
 } from '../../services/ai/design-node-sanitization'
 import type { PenNode } from '../../types/pen'
+import type { LayoutEntry } from '../utils/node-operations'
 
 // ---------------------------------------------------------------------------
 // Types
@@ -40,7 +41,7 @@ interface DesignRefineResult {
   rootId: string
   totalNodeCount: number
   fixes: RefineFix[]
-  layoutSnapshot: any
+  layoutSnapshot: LayoutEntry[]
 }
 
 // ---------------------------------------------------------------------------

@@ -3,7 +3,8 @@ import { useTranslation } from 'react-i18next'
 import { X, Upload, AlertCircle, Loader2, FileUp } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useDocumentStore } from '@/stores/document-store'
-import { zoomToFitContent } from '@/canvas/use-fabric-canvas'
+import { useCanvasStore } from '@/stores/canvas-store'
+import { zoomToFitContent, getSkiaEngineRef } from '@/canvas/skia-engine-ref'
 import { parseFigFile } from '@/services/figma/fig-parser'
 import { figmaToPenDocument, figmaAllPagesToPenDocument, getFigmaPages } from '@/services/figma/figma-node-mapper'
 import { resolveImageBlobs } from '@/services/figma/figma-image-resolver'
@@ -28,20 +29,6 @@ export default function FigmaImportDialog({ open, onClose }: FigmaImportDialogPr
   const [isDragging, setIsDragging] = useState(false)
   const [layoutMode, setLayoutMode] = useState<FigmaImportLayoutMode>('preserve')
   const fileInputRef = useRef<HTMLInputElement>(null)
-
-  // Reset state when dialog opens
-  useEffect(() => {
-    if (open) {
-      setState('idle')
-      setProgress(0)
-      setError('')
-      setWarnings([])
-      setDecoded(null)
-      setFileName('')
-      setPages([])
-      setLayoutMode('preserve')
-    }
-  }, [open])
 
   // Escape key to close
   useEffect(() => {
@@ -90,6 +77,26 @@ export default function FigmaImportDialog({ open, onClose }: FigmaImportDialogPr
     }
   }, [t])
 
+  // Reset state when dialog opens; auto-process pending .fig file from drag-and-drop
+  useEffect(() => {
+    if (open) {
+      setState('idle')
+      setProgress(0)
+      setError('')
+      setWarnings([])
+      setDecoded(null)
+      setFileName('')
+      setPages([])
+      setLayoutMode('preserve')
+
+      const pending = useCanvasStore.getState().pendingFigmaFile
+      if (pending) {
+        useCanvasStore.getState().setPendingFigmaFile(null)
+        processFile(pending)
+      }
+    }
+  }, [open, processFile])
+
   const convertAndLoad = useCallback(async (
     decodedFile: FigmaDecodedFile,
     name: string,
@@ -122,6 +129,24 @@ export default function FigmaImportDialog({ open, onClose }: FigmaImportDialogPr
 
       setProgress(95)
       setWarnings(warns)
+
+      // Pre-load fonts used in the document for vector text rendering
+      const fontFamilies = new Set<string>()
+      const collectFonts = (nodes: import('@/types/pen').PenNode[]) => {
+        for (const n of nodes) {
+          if (n.type === 'text' && (n as any).fontFamily) fontFamilies.add((n as any).fontFamily)
+          if ('children' in n && n.children) collectFonts(n.children)
+        }
+      }
+      if (doc.pages) { for (const p of doc.pages) collectFonts(p.children) }
+      else collectFonts(doc.children)
+      // Always include Noto Sans SC so CJK text renders when primary fonts are
+      // system fonts (PingFang SC, Microsoft YaHei, etc.) that can't be loaded
+      fontFamilies.add('Noto Sans SC')
+      const engine = getSkiaEngineRef()
+      if (engine && fontFamilies.size > 0) {
+        engine.renderer.fontManager.ensureFonts([...fontFamilies])
+      }
 
       // Load into the document store
       useDocumentStore.getState().loadDocument(doc, `${name}.op`)

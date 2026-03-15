@@ -118,17 +118,13 @@ export interface FigmaGuidPath {
   guids: FigmaGUID[]
 }
 
-/** Per-child override stored on an INSTANCE's symbolData. */
-export interface FigmaSymbolOverride {
+/** Per-child override stored on an INSTANCE's symbolData.
+ *  Extends FigmaNodeChange to support all overridable node properties
+ *  (size, opacity, visible, strokes, layout, corner radii, etc.). */
+export interface FigmaSymbolOverride extends Omit<FigmaNodeChange,
+  'guid' | 'parentIndex' | 'type' | 'phase' | 'symbolData' | 'derivedSymbolData' | 'componentKey'
+> {
   guidPath?: FigmaGuidPath
-  fillPaints?: FigmaPaint[]
-  arcData?: FigmaArcData
-  // Text overrides
-  textData?: FigmaTextData
-  fontSize?: number
-  fontName?: FigmaFontName
-  lineHeight?: FigmaNumber
-  letterSpacing?: FigmaNumber
 }
 
 /** Pre-computed size/transform for each node inside an INSTANCE. */

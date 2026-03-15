@@ -2,14 +2,12 @@ import { useEffect } from 'react'
 import { useCanvasStore } from '@/stores/canvas-store'
 import { useDocumentStore } from '@/stores/document-store'
 import { useHistoryStore } from '@/stores/history-store'
-import { zoomToFitContent } from '@/canvas/use-fabric-canvas'
-import { syncCanvasPositionsToStore } from '@/canvas/use-canvas-sync'
+import { zoomToFitContent } from '@/canvas/skia-engine-ref'
+import { syncCanvasPositionsToStore } from '@/canvas/skia-engine-ref'
 import { normalizePenDocument } from '@/utils/normalize-pen-file'
 import {
   supportsFileSystemAccess,
-  writeToFileHandle,
-  saveDocumentAs,
-  downloadDocument,
+  writeToFilePath,
   openDocumentFS,
   openDocument,
 } from '@/utils/file-operations'
@@ -31,7 +29,7 @@ export function useElectronMenu() {
           if (!raw.version || (!Array.isArray(raw.children) && !Array.isArray(raw.pages))) return
           const doc = normalizePenDocument(raw)
           const name = filePath.split(/[/\\]/).pop() || 'untitled.op'
-          useDocumentStore.getState().loadDocument(doc, name)
+          useDocumentStore.getState().loadDocument(doc, name, null, filePath)
           requestAnimationFrame(() => zoomToFitContent())
         } catch {
           // Invalid file — ignore
@@ -54,7 +52,24 @@ export function useElectronMenu() {
           break
 
         case 'open':
-          if (supportsFileSystemAccess()) {
+          if (api) {
+            // Electron: use native IPC to get full file path for save-in-place
+            api.openFile().then((result) => {
+              if (!result) return
+              try {
+                const raw = JSON.parse(result.content)
+                if (!raw.version || (!Array.isArray(raw.children) && !Array.isArray(raw.pages))) return
+                const doc = normalizePenDocument(raw)
+                const name = result.filePath.split(/[/\\]/).pop() || 'untitled.op'
+                useDocumentStore
+                  .getState()
+                  .loadDocument(doc, name, null, result.filePath)
+                requestAnimationFrame(() => zoomToFitContent())
+              } catch {
+                // Invalid file
+              }
+            })
+          } else if (supportsFileSystemAccess()) {
             openDocumentFS().then((result) => {
               if (result) {
                 useDocumentStore
@@ -76,28 +91,35 @@ export function useElectronMenu() {
           break
 
         case 'save': {
-          syncCanvasPositionsToStore()
+          try { syncCanvasPositionsToStore() } catch { /* continue */ }
           const store = useDocumentStore.getState()
-          const { document: doc, fileName, fileHandle } = store
+          const { document: doc, fileName, filePath } = store
+          const isOpFile = fileName ? /\.op$/i.test(fileName) : false
+          const suggestedName = fileName
+            ? fileName.replace(/\.(pen|op|json)$/i, '') + '.op'
+            : 'untitled.op'
 
-          if (fileHandle) {
-            writeToFileHandle(fileHandle, doc).then(() => store.markClean())
-          } else if (fileName) {
-            downloadDocument(doc, fileName)
-            store.markClean()
-          } else if (supportsFileSystemAccess()) {
-            saveDocumentAs(doc, 'untitled.op').then((result) => {
-              if (result) {
-                useDocumentStore.setState({
-                  fileName: result.fileName,
-                  fileHandle: result.handle,
-                  isDirty: false,
-                })
-              }
-            })
-          } else {
-            store.setSaveDialogOpen(true)
+          const doSave = async () => {
+            // Known .op path → direct write
+            if (filePath && isOpFile) {
+              await writeToFilePath(filePath, doc)
+              store.markClean()
+              return
+            }
+            // No in-place target → save as .op via native dialog
+            const savedPath = await api.saveFile(
+              JSON.stringify(doc), suggestedName,
+            )
+            if (savedPath) {
+              useDocumentStore.setState({
+                fileName: savedPath.split(/[/\\]/).pop() || suggestedName,
+                filePath: savedPath,
+                fileHandle: null,
+                isDirty: false,
+              })
+            }
           }
+          doSave().catch((err) => console.error('[Save] Failed:', err))
           break
         }
 
@@ -112,11 +134,6 @@ export function useElectronMenu() {
             useDocumentStore.getState().applyHistoryState(prev)
           }
           useCanvasStore.getState().clearSelection()
-          const canvas = useCanvasStore.getState().fabricCanvas
-          if (canvas) {
-            canvas.discardActiveObject()
-            canvas.requestRenderAll()
-          }
           break
         }
 
@@ -127,11 +144,6 @@ export function useElectronMenu() {
             useDocumentStore.getState().applyHistoryState(next)
           }
           useCanvasStore.getState().clearSelection()
-          const canvas = useCanvasStore.getState().fabricCanvas
-          if (canvas) {
-            canvas.discardActiveObject()
-            canvas.requestRenderAll()
-          }
           break
         }
       }

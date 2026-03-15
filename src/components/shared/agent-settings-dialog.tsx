@@ -80,7 +80,7 @@ async function callMcpInstall(
   action: 'install' | 'uninstall',
   transportMode?: MCPTransportMode,
   httpPort?: number,
-): Promise<{ success: boolean; error?: string }> {
+): Promise<{ success: boolean; error?: string; fallbackHttp?: boolean }> {
   const res = await fetch('/api/ai/mcp-install', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -389,6 +389,20 @@ export default function AgentSettingsDialog() {
         if (result.success) {
           toggleMCP(tool)
           persist()
+          // When the server fell back to HTTP mode (no node installed),
+          // the MCP HTTP server was auto-started — sync UI status
+          if (result.fallbackHttp) {
+            setMcpServerStatus(true, null)
+            // Refresh actual status (localIp) after server finishes starting
+            setTimeout(() => {
+              fetch('/api/mcp/server')
+                .then((r) => r.json())
+                .then((data: { running: boolean; localIp: string | null }) => {
+                  setMcpServerStatus(data.running, data.localIp)
+                })
+                .catch(() => {})
+            }, 500)
+          }
         } else {
           setMcpError(result.error ?? t('agents.failedTo', { action }))
         }
@@ -398,7 +412,7 @@ export default function AgentSettingsDialog() {
         setMcpInstalling(null)
       }
     },
-    [mcpIntegrations, toggleMCP, persist],
+    [mcpIntegrations, toggleMCP, persist, setMcpServerStatus],
   )
 
   const handlePortBlur = useCallback(
