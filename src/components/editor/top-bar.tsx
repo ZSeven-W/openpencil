@@ -382,7 +382,7 @@ export default function TopBar() {
 
       {/* Center section — file name */}
       <div className="flex-1 flex items-center justify-center min-w-0">
-        <span className="text-xs text-foreground truncate">
+        <span className="text-xs text-foreground truncate" suppressHydrationWarning>
           {displayName}
         </span>
         {isDirty && (

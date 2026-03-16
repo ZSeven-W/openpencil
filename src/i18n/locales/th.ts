@@ -128,8 +128,28 @@ const th: TranslationKeys = {
   'fill.solid': 'ทึบ',
   'fill.linear': 'เชิงเส้น',
   'fill.radial': 'วงกลม',
+  'fill.image': 'รูปภาพ',
   'fill.stops': 'จุดหยุด',
   'fill.angle': 'มุม',
+
+  // ── Image ──
+  'image.title': 'รูปภาพ',
+  'image.fit': 'โหมดปรับขนาด',
+  'image.fill': 'เติมเต็ม',
+  'image.fitMode': 'พอดี',
+  'image.crop': 'ครอป',
+  'image.tile': 'เรียงต่อ',
+  'image.clickToUpload': 'คลิกเพื่ออัปโหลด',
+  'image.changeImage': 'เปลี่ยนรูปภาพ',
+  'image.adjustments': 'การปรับแต่ง',
+  'image.exposure': 'การเปิดรับแสง',
+  'image.contrast': 'คอนทราสต์',
+  'image.saturation': 'ความอิ่มตัว',
+  'image.temperature': 'อุณหภูมิสี',
+  'image.tint': 'โทนสี',
+  'image.highlights': 'ไฮไลท์',
+  'image.shadows': 'เงา',
+  'image.reset': 'รีเซ็ต',
 
   // ── Stroke ──
   'stroke.title': 'เส้นขอบ',
@@ -182,6 +202,11 @@ const th: TranslationKeys = {
   'text.weight.semibold': 'กึ่งหนา',
   'text.weight.bold': 'หนา',
   'text.weight.black': 'หนามาก',
+  'text.font.search': 'ค้นหาฟอนต์\u2026',
+  'text.font.bundled': 'แบบรวม',
+  'text.font.system': 'ระบบ',
+  'text.font.loading': 'กำลังโหลดฟอนต์\u2026',
+  'text.font.noResults': 'ไม่พบฟอนต์',
 
   // ── Text Layout ──
   'textLayout.title': 'เลย์เอาต์',

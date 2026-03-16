@@ -126,8 +126,28 @@ const en = {
   'fill.solid': 'Solid',
   'fill.linear': 'Linear',
   'fill.radial': 'Radial',
+  'fill.image': 'Image',
   'fill.stops': 'Stops',
   'fill.angle': 'Angle',
+
+  // ── Image ──
+  'image.title': 'Image',
+  'image.fit': 'Fit Mode',
+  'image.fill': 'Fill',
+  'image.fitMode': 'Fit',
+  'image.crop': 'Crop',
+  'image.tile': 'Tile',
+  'image.clickToUpload': 'Click to upload',
+  'image.changeImage': 'Change image',
+  'image.adjustments': 'Adjustments',
+  'image.exposure': 'Exposure',
+  'image.contrast': 'Contrast',
+  'image.saturation': 'Saturation',
+  'image.temperature': 'Temperature',
+  'image.tint': 'Tint',
+  'image.highlights': 'Highlights',
+  'image.shadows': 'Shadows',
+  'image.reset': 'Reset',
 
   // ── Stroke ──
   'stroke.title': 'Stroke',
@@ -180,6 +200,11 @@ const en = {
   'text.weight.semibold': 'Semibold',
   'text.weight.bold': 'Bold',
   'text.weight.black': 'Black',
+  'text.font.search': 'Search fonts…',
+  'text.font.bundled': 'Bundled',
+  'text.font.system': 'System',
+  'text.font.loading': 'Loading fonts…',
+  'text.font.noResults': 'No fonts found',
 
   // ── Text Layout ──
   'textLayout.title': 'Layout',

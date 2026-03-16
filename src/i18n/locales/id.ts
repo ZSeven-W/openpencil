@@ -128,8 +128,28 @@ const id: TranslationKeys = {
   'fill.solid': 'Solid',
   'fill.linear': 'Linear',
   'fill.radial': 'Radial',
+  'fill.image': 'Gambar',
   'fill.stops': 'Titik warna',
   'fill.angle': 'Sudut',
+
+  // ── Image ──
+  'image.title': 'Gambar',
+  'image.fit': 'Mode Penyesuaian',
+  'image.fill': 'Isi',
+  'image.fitMode': 'Sesuaikan',
+  'image.crop': 'Potong',
+  'image.tile': 'Ubin',
+  'image.clickToUpload': 'Klik untuk mengunggah',
+  'image.changeImage': 'Ganti gambar',
+  'image.adjustments': 'Penyesuaian',
+  'image.exposure': 'Eksposur',
+  'image.contrast': 'Kontras',
+  'image.saturation': 'Saturasi',
+  'image.temperature': 'Suhu',
+  'image.tint': 'Rona',
+  'image.highlights': 'Sorotan',
+  'image.shadows': 'Bayangan',
+  'image.reset': 'Atur ulang',
 
   // ── Stroke ──
   'stroke.title': 'Garis Tepi',
@@ -182,6 +202,11 @@ const id: TranslationKeys = {
   'text.weight.semibold': 'Semi Tebal',
   'text.weight.bold': 'Tebal',
   'text.weight.black': 'Sangat Tebal',
+  'text.font.search': 'Cari font\u2026',
+  'text.font.bundled': 'Bawaan',
+  'text.font.system': 'Sistem',
+  'text.font.loading': 'Memuat font\u2026',
+  'text.font.noResults': 'Font tidak ditemukan',
 
   // ── Text Layout ──
   'textLayout.title': 'Tata Letak',

@@ -1,4 +1,5 @@
 import type { PenNode } from '@/types/pen'
+import { cssFontFamily } from './skia/skia-paint-utils'
 
 // ---------------------------------------------------------------------------
 // Sizing parser (shared by layout engine and text height estimation)
@@ -208,7 +209,7 @@ function countWrappedLinesCanvas2D(
   }
 
   const fw = typeof fontWeight === 'number' ? String(fontWeight) : (fontWeight ?? '400')
-  ctx.font = `${fw} ${fontSize}px ${fontFamily}`
+  ctx.font = `${fw} ${fontSize}px ${cssFontFamily(fontFamily)}`
 
   let total = 0
   for (const rawLine of rawLines) {

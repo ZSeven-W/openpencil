@@ -15,7 +15,7 @@ import {
 import { parseSizing, defaultLineHeight } from '../canvas-text-measure'
 import { SkiaRenderer, type RenderNode } from './skia-renderer'
 import { SpatialIndex } from './skia-hit-test'
-import { parseColor, wrapLine } from './skia-paint-utils'
+import { parseColor, wrapLine, cssFontFamily } from './skia-paint-utils'
 import {
   viewportMatrix,
   zoomToPoint as vpZoomToPoint,
@@ -82,7 +82,7 @@ function premeasureTextHeights(nodes: PenNode[]): PenNode[] {
         const fontWeight = tNode.fontWeight ?? '400'
         const fontFamily = tNode.fontFamily ?? 'Inter, -apple-system, "Noto Sans SC", "PingFang SC", system-ui, sans-serif'
         const ctx = getMeasureCtx()
-        ctx.font = `${fontWeight} ${fontSize}px ${fontFamily}`
+        ctx.font = `${fontWeight} ${fontSize}px ${cssFontFamily(fontFamily)}`
 
         // Fixed-width text with auto height: wrap and measure actual height
         const wrapWidth = (tNode.width as number) + fontSize * 0.2
