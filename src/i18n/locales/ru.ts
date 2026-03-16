@@ -30,6 +30,7 @@ const ru: TranslationKeys = {
   // ── Shapes ──
   'shapes.rectangle': 'Прямоугольник',
   'shapes.ellipse': 'Эллипс',
+  'shapes.polygon': 'Полигон',
   'shapes.line': 'Линия',
   'shapes.icon': 'Иконка',
   'shapes.importImageSvg': 'Импорт изображения или SVG\u2026',
@@ -239,6 +240,14 @@ const ru: TranslationKeys = {
   'export.selectedOnly': 'Экспортировать только выделенное',
   'export.exportFormat': 'Экспорт {{format}}',
   'export.exportLayer': 'Экспортировать слой',
+
+  // ── Polygon ──
+  'polygon.sides': 'Стороны',
+
+  // ── Ellipse ──
+  'ellipse.start': 'Начало',
+  'ellipse.sweep': 'Размах',
+  'ellipse.innerRadius': 'Внутр.',
 
   // ── Corner Radius ──
   'cornerRadius.title': 'Радиус углов',

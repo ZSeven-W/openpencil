@@ -30,6 +30,7 @@ const hi: TranslationKeys = {
   // ── Shapes ──
   'shapes.rectangle': 'आयत',
   'shapes.ellipse': 'दीर्घवृत्त',
+  'shapes.polygon': 'बहुभुज',
   'shapes.line': 'रेखा',
   'shapes.icon': 'आइकन',
   'shapes.importImageSvg': 'इमेज या SVG आयात करें\u2026',
@@ -237,6 +238,14 @@ const hi: TranslationKeys = {
   'export.selectedOnly': 'केवल चयनित निर्यात करें',
   'export.exportFormat': '{{format}} निर्यात करें',
   'export.exportLayer': 'लेयर निर्यात करें',
+
+  // ── Polygon ──
+  'polygon.sides': 'भुजाएँ',
+
+  // ── Ellipse ──
+  'ellipse.start': 'शुरू',
+  'ellipse.sweep': 'स्वीप',
+  'ellipse.innerRadius': 'आंतरिक',
 
   // ── Corner Radius ──
   'cornerRadius.title': 'कोने की गोलाई',

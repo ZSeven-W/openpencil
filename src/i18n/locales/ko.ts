@@ -30,6 +30,7 @@ const ko: TranslationKeys = {
   // ── Shapes ──
   'shapes.rectangle': '사각형',
   'shapes.ellipse': '타원',
+  'shapes.polygon': '다각형',
   'shapes.line': '선',
   'shapes.icon': '아이콘',
   'shapes.importImageSvg': '이미지 또는 SVG 가져오기\u2026',
@@ -237,6 +238,14 @@ const ko: TranslationKeys = {
   'export.selectedOnly': '선택 항목만 내보내기',
   'export.exportFormat': '{{format}} 내보내기',
   'export.exportLayer': '레이어 내보내기',
+
+  // ── Polygon ──
+  'polygon.sides': '변 수',
+
+  // ── Ellipse ──
+  'ellipse.start': '시작',
+  'ellipse.sweep': '스윕',
+  'ellipse.innerRadius': '내경',
 
   // ── Corner Radius ──
   'cornerRadius.title': '모서리 반경',

@@ -3,6 +3,7 @@ import {
   Square,
   Circle,
   Minus,
+  Triangle,
   PenTool,
   Sparkles,
   ImagePlus,
@@ -17,7 +18,7 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip'
 
-const SHAPE_TOOLS: ToolType[] = ['rectangle', 'ellipse', 'line', 'path']
+const SHAPE_TOOLS: ToolType[] = ['rectangle', 'ellipse', 'polygon', 'line', 'path']
 
 interface ToolItem {
   type: 'tool'
@@ -44,6 +45,7 @@ interface ShapeToolDropdownProps {
 const TOOL_ICON_MAP: Record<string, ReactNode> = {
   rectangle: <Square size={20} strokeWidth={1.5} />,
   ellipse: <Circle size={20} strokeWidth={1.5} />,
+  polygon: <Triangle size={20} strokeWidth={1.5} />,
   line: <Minus size={20} strokeWidth={1.5} />,
   path: <PenTool size={20} strokeWidth={1.5} />,
 }
@@ -90,6 +92,7 @@ export default function ShapeToolDropdown({
   const items: DropdownItem[] = [
     { type: 'tool', tool: 'rectangle', icon: <Square size={18} strokeWidth={1.5} />, label: t('shapes.rectangle') },
     { type: 'tool', tool: 'ellipse', icon: <Circle size={18} strokeWidth={1.5} />, label: t('shapes.ellipse') },
+    { type: 'tool', tool: 'polygon', icon: <Triangle size={18} strokeWidth={1.5} />, label: t('shapes.polygon') },
     { type: 'tool', tool: 'line', icon: <Minus size={18} strokeWidth={1.5} />, label: t('shapes.line') },
     { type: 'action', key: 'icon', icon: <Sparkles size={18} strokeWidth={1.5} />, label: t('shapes.icon'), onAction: onIconPickerOpen },
     { type: 'action', key: 'image', icon: <ImagePlus size={18} strokeWidth={1.5} />, label: t('shapes.importImageSvg'), onAction: onImageImport },

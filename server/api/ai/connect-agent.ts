@@ -197,13 +197,71 @@ async function connectCodexCli(): Promise<ConnectResult> {
   }
 }
 
+/** Resolve the opencode binary path, checking PATH then common install locations. */
+async function resolveOpencodeBinary(): Promise<string | undefined> {
+  const { execSync } = await import('node:child_process')
+  const { existsSync } = await import('node:fs')
+  const { homedir } = await import('node:os')
+  const { join } = await import('node:path')
+  const isWin = process.platform === 'win32'
+
+  // 1. Try PATH lookup
+  try {
+    const cmd = isWin ? 'where opencode' : 'which opencode 2>/dev/null'
+    const result = execSync(cmd, { encoding: 'utf-8', timeout: 5000 }).trim().split(/\r?\n/)[0]?.trim()
+    if (result && existsSync(result)) return result
+  } catch { /* not in PATH */ }
+
+  // 2. Try `npm prefix -g` to find actual npm global bin directory
+  //    On Windows, must use `npm.cmd` since Electron spawns cmd.exe
+  try {
+    const npmCmd = isWin ? 'npm.cmd prefix -g' : 'npm prefix -g'
+    const prefix = execSync(npmCmd, { encoding: 'utf-8', timeout: 5000 }).trim()
+    if (prefix) {
+      const bin = isWin ? join(prefix, 'opencode.cmd') : join(prefix, 'bin', 'opencode')
+      if (existsSync(bin)) return bin
+    }
+  } catch { /* npm not available */ }
+
+  // 3. Common install locations
+  //    npm -g → %APPDATA%\npm (Windows), /usr/local (macOS/Linux)
+  //    curl installer → ~/.opencode/bin (macOS/Linux)
+  //    Homebrew → /usr/local/bin or /opt/homebrew/bin (macOS)
+  const home = homedir()
+  const candidates = isWin
+    ? [
+        // npm global
+        join(process.env.APPDATA || '', 'npm', 'opencode.cmd'),
+        join(process.env.ProgramFiles || '', 'nodejs', 'opencode.cmd'),
+        // nvm-windows / fnm
+        join(process.env.NVM_SYMLINK || '', 'opencode.cmd'),
+        join(process.env.FNM_MULTISHELL_PATH || '', 'opencode.cmd'),
+        // Scoop
+        join(home, 'scoop', 'shims', 'opencode.exe'),
+        join(process.env.LOCALAPPDATA || '', 'Programs', 'opencode', 'opencode.exe'),
+      ]
+    : [
+        // curl installer (https://opencode.ai/install)
+        join(home, '.opencode', 'bin', 'opencode'),
+        // npm global
+        join(home, '.npm-global', 'bin', 'opencode'),
+        '/usr/local/bin/opencode',
+        // Homebrew
+        '/opt/homebrew/bin/opencode',
+        join(home, '.local', 'bin', 'opencode'),
+      ]
+  for (const c of candidates) {
+    if (c && existsSync(c)) return c
+  }
+
+  return undefined
+}
+
 /** Connect to OpenCode and fetch its configured providers/models. */
 async function connectOpenCode(): Promise<ConnectResult> {
   try {
-    const { execSync } = await import('node:child_process')
-    const whichCmd = process.platform === 'win32' ? 'where opencode 2>nul' : 'which opencode 2>/dev/null || echo ""'
-    const whichResult = execSync(whichCmd, { encoding: 'utf-8', timeout: 5000 }).trim()
-    if (!whichResult) {
+    const binaryPath = await resolveOpencodeBinary()
+    if (!binaryPath) {
       return { connected: false, models: [], notInstalled: true, error: 'OpenCode CLI not found' }
     }
 

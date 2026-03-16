@@ -122,6 +122,7 @@ export default function PropertyPanel({ embedded }: { embedded?: boolean } = {})
   const hasStroke = !isImage
   const hasCornerRadius =
     displayNode.type === 'rectangle' || displayNode.type === 'frame' || isImage
+    || displayNode.type === 'polygon' || displayNode.type === 'ellipse'
   const hasEffects = true
   const isText = displayNode.type === 'text'
   const isIcon = (displayNode.type === 'path' && !!(displayNode as PathNode).iconId)

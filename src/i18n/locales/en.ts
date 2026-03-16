@@ -28,6 +28,7 @@ const en = {
   // ── Shapes ──
   'shapes.rectangle': 'Rectangle',
   'shapes.ellipse': 'Ellipse',
+  'shapes.polygon': 'Polygon',
   'shapes.line': 'Line',
   'shapes.icon': 'Icon',
   'shapes.importImageSvg': 'Import Image or SVG\u2026',
@@ -235,6 +236,14 @@ const en = {
   'export.selectedOnly': 'Export selected only',
   'export.exportFormat': 'Export {{format}}',
   'export.exportLayer': 'Export layer',
+
+  // ── Polygon ──
+  'polygon.sides': 'Sides',
+
+  // ── Ellipse ──
+  'ellipse.start': 'Start',
+  'ellipse.sweep': 'Sweep',
+  'ellipse.innerRadius': 'Inner',
 
   // ── Corner Radius ──
   'cornerRadius.title': 'Corner Radius',

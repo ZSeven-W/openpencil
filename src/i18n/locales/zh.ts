@@ -30,6 +30,7 @@ const zh: TranslationKeys = {
   // ── Shapes ──
   'shapes.rectangle': '矩形',
   'shapes.ellipse': '椭圆',
+  'shapes.polygon': '多边形',
   'shapes.line': '线条',
   'shapes.icon': '图标',
   'shapes.importImageSvg': '导入图片或 SVG\u2026',
@@ -232,6 +233,14 @@ const zh: TranslationKeys = {
   'export.selectedOnly': '仅导出选中项',
   'export.exportFormat': '导出 {{format}}',
   'export.exportLayer': '导出图层',
+
+  // ── Polygon ──
+  'polygon.sides': '边数',
+
+  // ── Ellipse ──
+  'ellipse.start': '起始',
+  'ellipse.sweep': '扫过',
+  'ellipse.innerRadius': '内径',
 
   // ── Corner Radius ──
   'cornerRadius.title': '圆角',

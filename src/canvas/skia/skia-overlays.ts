@@ -181,6 +181,90 @@ export function drawSelectionBorder(
 }
 
 /**
+ * Arc handle positions for an ellipse node (scene coordinates).
+ */
+export interface ArcHandlePositions {
+  start: { x: number; y: number }
+  end: { x: number; y: number }
+  inner: { x: number; y: number }
+}
+
+/**
+ * Compute arc handle positions in scene coordinates.
+ */
+export function computeArcHandles(
+  x: number, y: number, w: number, h: number,
+  startAngle: number, sweepAngle: number, innerRadius: number,
+): ArcHandlePositions {
+  const cx = x + w / 2
+  const cy = y + h / 2
+  const rx = w / 2
+  const ry = h / 2
+  const startRad = (startAngle * Math.PI) / 180
+  const endRad = ((startAngle + sweepAngle) * Math.PI) / 180
+  // Mid-angle for inner radius handle
+  const midRad = (startRad + endRad) / 2
+
+  return {
+    start: {
+      x: cx + rx * Math.cos(startRad),
+      y: cy + ry * Math.sin(startRad),
+    },
+    end: {
+      x: cx + rx * Math.cos(endRad),
+      y: cy + ry * Math.sin(endRad),
+    },
+    inner: {
+      x: cx + rx * innerRadius * Math.cos(midRad),
+      y: cy + ry * innerRadius * Math.sin(midRad),
+    },
+  }
+}
+
+/**
+ * Draw arc control handles on a selected ellipse.
+ */
+export function drawArcHandles(
+  ck: CanvasKit, canvas: Canvas,
+  x: number, y: number, w: number, h: number,
+  startAngle: number, sweepAngle: number, innerRadius: number,
+  zoom: number,
+) {
+  const invZ = 1 / zoom
+  const handles = computeArcHandles(x, y, w, h, startAngle, sweepAngle, innerRadius)
+
+  const fillPaint = new ck.Paint()
+  fillPaint.setStyle(ck.PaintStyle.Fill)
+  fillPaint.setAntiAlias(true)
+  fillPaint.setColor(ck.WHITE)
+
+  const strokePaint = new ck.Paint()
+  strokePaint.setStyle(ck.PaintStyle.Stroke)
+  strokePaint.setAntiAlias(true)
+  strokePaint.setStrokeWidth(1.5 * invZ)
+  strokePaint.setColor(parseColor(ck, SELECTION_BLUE))
+
+  const r = 4 * invZ
+
+  // Start handle
+  canvas.drawCircle(handles.start.x, handles.start.y, r, fillPaint)
+  canvas.drawCircle(handles.start.x, handles.start.y, r, strokePaint)
+
+  // End handle
+  canvas.drawCircle(handles.end.x, handles.end.y, r, fillPaint)
+  canvas.drawCircle(handles.end.x, handles.end.y, r, strokePaint)
+
+  // Inner radius handle (always visible)
+  {
+    canvas.drawCircle(handles.inner.x, handles.inner.y, r, fillPaint)
+    canvas.drawCircle(handles.inner.x, handles.inner.y, r, strokePaint)
+  }
+
+  fillPaint.delete()
+  strokePaint.delete()
+}
+
+/**
  * Draw a frame label above a frame.
  */
 export function drawFrameLabel(

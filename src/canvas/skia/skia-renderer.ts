@@ -30,6 +30,7 @@ import {
   drawAgentBadge as _drawAgentBadge,
   drawAgentNodeBorder as _drawAgentNodeBorder,
   drawAgentPreviewFill as _drawAgentPreviewFill,
+  drawArcHandles as _drawArcHandles,
   type PenPreviewData,
 } from './skia-overlays'
 
@@ -666,6 +667,7 @@ export class SkiaRenderer {
     const eNode = node as EllipseNode
     const fills = eNode.fill
     const stroke = eNode.stroke
+    const cr = cornerRadiusValue(eNode.cornerRadius)
 
     if (isArcEllipse(eNode.startAngle, eNode.sweepAngle, eNode.innerRadius)) {
       const arcD = buildEllipseArcPath(w, h, eNode.startAngle ?? 0, eNode.sweepAngle ?? 360, eNode.innerRadius ?? 0)
@@ -674,8 +676,22 @@ export class SkiaRenderer {
         path.offset(x, y)
         const { paint: fillPaint } = this.makeFillPaint(fills, w, h, opacity, x, y)
         fillPaint.setAntiAlias(true)
+        if (cr > 0) {
+          const effect = ck.PathEffect.MakeCorner(cr)
+          if (effect) fillPaint.setPathEffect(effect)
+        }
         canvas.drawPath(path, fillPaint)
         fillPaint.delete()
+
+        const strokePaint = this.makeStrokePaint(stroke, opacity)
+        if (strokePaint) {
+          if (cr > 0) {
+            const effect = ck.PathEffect.MakeCorner(cr)
+            if (effect) strokePaint.setPathEffect(effect)
+          }
+          canvas.drawPath(path, strokePaint)
+          strokePaint.delete()
+        }
         path.delete()
       }
       return
@@ -726,23 +742,47 @@ export class SkiaRenderer {
     const count = pNode.polygonCount || 6
     const fills = pNode.fill
     const stroke = pNode.stroke
+    const cr = cornerRadiusValue(pNode.cornerRadius)
+
+    // Compute unit polygon vertices, then scale to fill bounding box
+    const raw: [number, number][] = []
+    for (let i = 0; i < count; i++) {
+      const angle = (i * 2 * Math.PI) / count - Math.PI / 2
+      raw.push([Math.cos(angle), Math.sin(angle)])
+    }
+    let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity
+    for (const [rx, ry] of raw) {
+      if (rx < minX) minX = rx
+      if (rx > maxX) maxX = rx
+      if (ry < minY) minY = ry
+      if (ry > maxY) maxY = ry
+    }
+    const rawW = maxX - minX
+    const rawH = maxY - minY
 
     const path = new ck.Path()
     for (let i = 0; i < count; i++) {
-      const angle = (i * 2 * Math.PI) / count - Math.PI / 2
-      const px = x + (w / 2) * Math.cos(angle) + w / 2
-      const py = y + (h / 2) * Math.sin(angle) + h / 2
+      const px = x + ((raw[i][0] - minX) / rawW) * w
+      const py = y + ((raw[i][1] - minY) / rawH) * h
       if (i === 0) path.moveTo(px, py)
       else path.lineTo(px, py)
     }
     path.close()
 
     const { paint: fillPaint } = this.makeFillPaint(fills, w, h, opacity, x, y)
+    if (cr > 0) {
+      const effect = ck.PathEffect.MakeCorner(cr)
+      if (effect) fillPaint.setPathEffect(effect)
+    }
     canvas.drawPath(path, fillPaint)
     fillPaint.delete()
 
     const strokePaint = this.makeStrokePaint(stroke, opacity)
     if (strokePaint) {
+      if (cr > 0) {
+        const effect = ck.PathEffect.MakeCorner(cr)
+        if (effect) strokePaint.setPathEffect(effect)
+      }
       canvas.drawPath(path, strokePaint)
       strokePaint.delete()
     }
@@ -1481,6 +1521,33 @@ export class SkiaRenderer {
     } else if (shape.type === 'ellipse') {
       canvas.drawOval(ck.LTRBRect(x, y, x + w, y + h), fillPaint)
       canvas.drawOval(ck.LTRBRect(x, y, x + w, y + h), strokePaint)
+    } else if (shape.type === 'polygon') {
+      const count = 3
+      const raw: [number, number][] = []
+      for (let i = 0; i < count; i++) {
+        const angle = (i * 2 * Math.PI) / count - Math.PI / 2
+        raw.push([Math.cos(angle), Math.sin(angle)])
+      }
+      let pMinX = Infinity, pMaxX = -Infinity, pMinY = Infinity, pMaxY = -Infinity
+      for (const [rx, ry] of raw) {
+        if (rx < pMinX) pMinX = rx
+        if (rx > pMaxX) pMaxX = rx
+        if (ry < pMinY) pMinY = ry
+        if (ry > pMaxY) pMaxY = ry
+      }
+      const rw = pMaxX - pMinX
+      const rh = pMaxY - pMinY
+      const path = new ck.Path()
+      for (let i = 0; i < count; i++) {
+        const px = x + ((raw[i][0] - pMinX) / rw) * w
+        const py = y + ((raw[i][1] - pMinY) / rh) * h
+        if (i === 0) path.moveTo(px, py)
+        else path.lineTo(px, py)
+      }
+      path.close()
+      canvas.drawPath(path, fillPaint)
+      canvas.drawPath(path, strokePaint)
+      path.delete()
     } else {
       // rectangle / frame
       canvas.drawRect(ck.LTRBRect(x, y, x + w, y + h), fillPaint)
@@ -1551,5 +1618,14 @@ export class SkiaRenderer {
     color: string, time: number,
   ) {
     _drawAgentPreviewFill(this.ck, canvas, x, y, w, h, color, time)
+  }
+
+  drawArcHandles(
+    canvas: Canvas,
+    x: number, y: number, w: number, h: number,
+    startAngle: number, sweepAngle: number, innerRadius: number,
+    zoom: number,
+  ) {
+    _drawArcHandles(this.ck, canvas, x, y, w, h, startAngle, sweepAngle, innerRadius, zoom)
   }
 }

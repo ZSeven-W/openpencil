@@ -61,6 +61,22 @@ export function createNodeForTool(
           fill: [{ type: 'solid', color: DEFAULT_STROKE }],
         },
       }
+    case 'polygon':
+      return {
+        id,
+        type: 'polygon',
+        name: 'Polygon',
+        x,
+        y,
+        width: Math.abs(width),
+        height: Math.abs(height),
+        polygonCount: 3,
+        fill: [{ type: 'solid', color: DEFAULT_FILL }],
+        stroke: {
+          thickness: DEFAULT_STROKE_WIDTH,
+          fill: [{ type: 'solid', color: DEFAULT_STROKE }],
+        },
+      }
     case 'line':
       return {
         id,
