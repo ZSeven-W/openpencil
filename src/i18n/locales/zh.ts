@@ -125,8 +125,28 @@ const zh: TranslationKeys = {
   'fill.solid': '纯色',
   'fill.linear': '线性渐变',
   'fill.radial': '径向渐变',
+  'fill.image': '图片',
   'fill.stops': '色标',
   'fill.angle': '角度',
+
+  // ── Image ──
+  'image.title': '图片',
+  'image.fit': '适应模式',
+  'image.fill': '填充',
+  'image.fitMode': '适应',
+  'image.crop': '裁剪',
+  'image.tile': '平铺',
+  'image.clickToUpload': '点击上传',
+  'image.changeImage': '更换图片',
+  'image.adjustments': '调整',
+  'image.exposure': '曝光',
+  'image.contrast': '对比度',
+  'image.saturation': '饱和度',
+  'image.temperature': '色温',
+  'image.tint': '色调',
+  'image.highlights': '高光',
+  'image.shadows': '阴影',
+  'image.reset': '重置',
 
   // ── Stroke ──
   'stroke.title': '描边',
@@ -179,6 +199,11 @@ const zh: TranslationKeys = {
   'text.weight.semibold': '半粗',
   'text.weight.bold': '粗体',
   'text.weight.black': '极粗',
+  'text.font.search': '搜索字体…',
+  'text.font.bundled': '内置字体',
+  'text.font.system': '系统字体',
+  'text.font.loading': '加载字体中…',
+  'text.font.noResults': '未找到字体',
 
   // ── Text Layout ──
   'textLayout.title': '布局',

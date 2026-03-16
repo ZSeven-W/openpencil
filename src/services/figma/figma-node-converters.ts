@@ -2,7 +2,7 @@ import type {
   FigmaNodeChange, FigmaMatrix, FigmaImportLayoutMode,
   FigmaSymbolOverride, FigmaDerivedSymbolDataEntry, FigmaGUID,
 } from './figma-types'
-import type { PenNode, SizingBehavior, ImageFitMode } from '@/types/pen'
+import type { PenNode, SizingBehavior } from '@/types/pen'
 import { mapFigmaFills } from './figma-fill-mapper'
 import { mapFigmaStroke } from './figma-stroke-mapper'
 import { mapFigmaEffects } from './figma-effect-mapper'
@@ -170,44 +170,6 @@ function commonProps(
 
 // --- Image helpers ---
 
-function hasOnlyImageFill(figma: FigmaNodeChange): boolean {
-  if (!figma.fillPaints || figma.fillPaints.length === 0) return false
-  const visible = figma.fillPaints.filter((f) => f.visible !== false)
-  return visible.length === 1 && visible[0].type === 'IMAGE'
-}
-
-function hashToHex(hash: Uint8Array): string {
-  return Array.from(hash).map(b => b.toString(16).padStart(2, '0')).join('')
-}
-
-function getImageFillUrl(figma: FigmaNodeChange): string {
-  const paint = figma.fillPaints?.find((f) => f.type === 'IMAGE' && f.visible !== false)
-  if (!paint?.image) return ''
-
-  if (paint.image.hash && paint.image.hash.length > 0) {
-    return `__hash:${hashToHex(paint.image.hash)}`
-  }
-
-  if (paint.image.dataBlob !== undefined && paint.image.dataBlob !== null) {
-    return `__blob:${paint.image.dataBlob}`
-  }
-
-  return ''
-}
-
-function getImageFitMode(figma: FigmaNodeChange): ImageFitMode | undefined {
-  const paint = figma.fillPaints?.find(
-    (f) => f.visible !== false && f.type === 'IMAGE',
-  )
-  if (!paint?.imageScaleMode) return undefined
-  switch (paint.imageScaleMode) {
-    case 'FIT': return 'fit'
-    case 'FILL': return 'fill'
-    case 'TILE': return 'tile'
-    default: return undefined
-  }
-}
-
 function figmaFillColor(figma: FigmaNodeChange): string | undefined {
   const paint = figma.fillPaints?.find((f) => f.visible !== false && f.type === 'SOLID')
   if (!paint?.color) return undefined
@@ -319,19 +281,6 @@ function convertFrame(
   const id = ctx.generateId()
   const children = convertChildren(treeNode, ctx)
 
-  if (hasOnlyImageFill(figma) && children.length === 0) {
-    return {
-      type: 'image',
-      ...commonProps(figma, id),
-      src: getImageFillUrl(figma),
-      objectFit: getImageFitMode(figma),
-      width: resolveWidth(figma, parentStackMode, ctx),
-      height: resolveHeight(figma, parentStackMode, ctx),
-      cornerRadius: mapCornerRadius(figma),
-      effects: mapFigmaEffects(figma.effects),
-    }
-  }
-
   // In preserve mode, only apply auto-layout properties for frames that actually
   // have stackMode set.  Frames without stackMode use absolute x,y positioning.
   // For auto-layout frames, children order must be reversed because the tree
@@ -355,7 +304,7 @@ function convertFrame(
     height: resolveHeight(figma, parentStackMode, ctx),
     ...layout,
     cornerRadius: mapCornerRadius(figma),
-    fill: mapFigmaFills(figma.fillPaints),
+    fill: mapFigmaFills(figma.fillPaints) ?? mapFigmaFills(figma.backgroundPaints),
     stroke: mapFigmaStroke(figma),
     effects: mapFigmaEffects(figma.effects),
     children: orderedChildren.length > 0 ? orderedChildren : undefined,
@@ -407,7 +356,7 @@ function convertComponent(
     height: resolveHeight(figma, parentStackMode, ctx),
     ...layout,
     cornerRadius: mapCornerRadius(figma),
-    fill: mapFigmaFills(figma.fillPaints),
+    fill: mapFigmaFills(figma.fillPaints) ?? mapFigmaFills(figma.backgroundPaints),
     stroke: mapFigmaStroke(figma),
     effects: mapFigmaEffects(figma.effects),
     children: orderedChildren.length > 0 ? orderedChildren : undefined,
@@ -440,8 +389,12 @@ function convertInstance(
         figma.size,
         ctx.symbolTree,
       )
+      // Merge symbol's layout and visual properties into the instance.
+      // Instances inherit from their master but clipboard data may not
+      // include inherited properties on the instance node itself.
+      const mergedFigma = mergeSymbolProps(treeNode.figma, symbolNode.figma)
       return convertFrame(
-        { figma: treeNode.figma, children },
+        { figma: mergedFigma, children },
         parentStackMode,
         ctx,
       )
@@ -462,6 +415,43 @@ function convertInstance(
   }
 
   return convertFrame(treeNode, parentStackMode, ctx)
+}
+
+/**
+ * Merge symbol's properties into an instance node.
+ * Instances inherit layout and visual properties from their master component,
+ * but clipboard data may not include these inherited values on the instance.
+ * Instance's own properties take priority (they are explicit overrides).
+ */
+function mergeSymbolProps(instance: FigmaNodeChange, symbol: FigmaNodeChange): FigmaNodeChange {
+  const merged = { ...instance }
+
+  // Layout properties — needed for auto-layout detection and layout generation
+  const layoutKeys: (keyof FigmaNodeChange)[] = [
+    'stackMode', 'stackSpacing', 'stackPadding',
+    'stackHorizontalPadding', 'stackVerticalPadding',
+    'stackPaddingRight', 'stackPaddingBottom',
+    'stackPrimaryAlignItems', 'stackCounterAlignItems',
+    'stackPrimarySizing', 'stackCounterSizing',
+    'stackChildPrimaryGrow', 'stackChildAlignSelf',
+    'frameMaskDisabled',
+  ]
+
+  // Visual properties — fills/strokes for the frame itself
+  const visualKeys: (keyof FigmaNodeChange)[] = [
+    'fillPaints', 'strokePaints', 'strokeWeight', 'strokeAlign',
+    'cornerRadius', 'rectangleCornerRadiiIndependent',
+    'rectangleTopLeftCornerRadius', 'rectangleTopRightCornerRadius',
+    'rectangleBottomLeftCornerRadius', 'rectangleBottomRightCornerRadius',
+  ]
+
+  for (const key of [...layoutKeys, ...visualKeys]) {
+    if ((merged as any)[key] === undefined && (symbol as any)[key] !== undefined) {
+      (merged as any)[key] = (symbol as any)[key]
+    }
+  }
+
+  return merged
 }
 
 /**
@@ -814,19 +804,6 @@ function convertRectangle(
   const figma = treeNode.figma
   const id = ctx.generateId()
 
-  if (hasOnlyImageFill(figma)) {
-    return {
-      type: 'image',
-      ...commonProps(figma, id),
-      src: getImageFillUrl(figma),
-      objectFit: getImageFitMode(figma),
-      width: resolveWidth(figma, parentStackMode, ctx),
-      height: resolveHeight(figma, parentStackMode, ctx),
-      cornerRadius: mapCornerRadius(figma),
-      effects: mapFigmaEffects(figma.effects),
-    }
-  }
-
   return {
     type: 'rectangle',
     ...commonProps(figma, id),
@@ -847,19 +824,6 @@ function convertEllipse(
   const figma = treeNode.figma
   const id = ctx.generateId()
 
-  if (hasOnlyImageFill(figma)) {
-    return {
-      type: 'image',
-      ...commonProps(figma, id),
-      src: getImageFillUrl(figma),
-      objectFit: getImageFitMode(figma),
-      width: resolveWidth(figma, parentStackMode, ctx),
-      height: resolveHeight(figma, parentStackMode, ctx),
-      cornerRadius: Math.round((figma.size?.x ?? 100) / 2),
-      effects: mapFigmaEffects(figma.effects),
-    }
-  }
-
   // Convert Figma arcData (radians) to PenNode arc properties (degrees)
   const arc = figma.arcData
   const arcProps = arc ? mapFigmaArcData(arc) : {}
@@ -867,30 +831,19 @@ function convertEllipse(
 
   // For arc ellipses, absorb flipX/flipY into the arc angles instead of
   // relying on canvas-level flip (SVG path flip doesn't work well in Fabric.js).
-  // Also fix the position: when m00=-1 the x in transform is the right edge.
+  // Note: extractPosition already computes the correct visual top-left for
+  // flipped nodes via center-based calculation, so no position adjustment needed.
   if (arcProps.sweepAngle !== undefined || arcProps.startAngle !== undefined || arcProps.innerRadius !== undefined) {
     const start = arcProps.startAngle ?? 0
     const sweep = arcProps.sweepAngle ?? 360
-    // Only adjust position for flip when there's no rotation component.
-    // When rotation is present, extractPosition already computed the correct
-    // center-based position that accounts for both rotation and flip.
-    const hasRot = figma.transform && (Math.abs(figma.transform.m01) > 0.001 || Math.abs(figma.transform.m10) > 0.001)
     if (props.flipX) {
       arcProps.startAngle = normalizeAngle(180 - start - sweep)
       arcProps.sweepAngle = sweep
-      if (!hasRot) {
-        const w = figma.size?.x ?? 0
-        props.x = Math.round((props.x - w) * 100) / 100
-      }
       delete props.flipX
     }
     if (props.flipY) {
       arcProps.startAngle = normalizeAngle(360 - start - sweep)
       arcProps.sweepAngle = sweep
-      if (!hasRot) {
-        const h = figma.size?.y ?? 0
-        props.y = Math.round((props.y - h) * 100) / 100
-      }
       delete props.flipY
     }
   }

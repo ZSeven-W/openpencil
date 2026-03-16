@@ -130,8 +130,28 @@ const de: TranslationKeys = {
   'fill.solid': 'Vollton',
   'fill.linear': 'Linear',
   'fill.radial': 'Radial',
+  'fill.image': 'Bild',
   'fill.stops': 'Stops',
   'fill.angle': 'Winkel',
+
+  // ── Image ──
+  'image.title': 'Bild',
+  'image.fit': 'Anpassungsmodus',
+  'image.fill': 'Füllen',
+  'image.fitMode': 'Anpassen',
+  'image.crop': 'Zuschneiden',
+  'image.tile': 'Kacheln',
+  'image.clickToUpload': 'Zum Hochladen klicken',
+  'image.changeImage': 'Bild ändern',
+  'image.adjustments': 'Anpassungen',
+  'image.exposure': 'Belichtung',
+  'image.contrast': 'Kontrast',
+  'image.saturation': 'Sättigung',
+  'image.temperature': 'Temperatur',
+  'image.tint': 'Farbton',
+  'image.highlights': 'Lichter',
+  'image.shadows': 'Schatten',
+  'image.reset': 'Zurücksetzen',
 
   // ── Stroke ──
   'stroke.title': 'Kontur',
@@ -184,6 +204,11 @@ const de: TranslationKeys = {
   'text.weight.semibold': 'Halbfett',
   'text.weight.bold': 'Fett',
   'text.weight.black': 'Schwarz',
+  'text.font.search': 'Schriften suchen\u2026',
+  'text.font.bundled': 'Mitgeliefert',
+  'text.font.system': 'System',
+  'text.font.loading': 'Schriften werden geladen\u2026',
+  'text.font.noResults': 'Keine Schriften gefunden',
 
   // ── Text Layout ──
   'textLayout.title': 'Layout',

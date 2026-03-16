@@ -128,8 +128,28 @@ const vi: TranslationKeys = {
   'fill.solid': 'Đặc',
   'fill.linear': 'Tuyến tính',
   'fill.radial': 'Toả tròn',
+  'fill.image': 'Hình ảnh',
   'fill.stops': 'Điểm dừng',
   'fill.angle': 'Góc',
+
+  // ── Image ──
+  'image.title': 'Hình ảnh',
+  'image.fit': 'Chế độ vừa',
+  'image.fill': 'Lấp đầy',
+  'image.fitMode': 'Vừa khít',
+  'image.crop': 'Cắt',
+  'image.tile': 'Lát gạch',
+  'image.clickToUpload': 'Nhấp để tải lên',
+  'image.changeImage': 'Đổi hình ảnh',
+  'image.adjustments': 'Điều chỉnh',
+  'image.exposure': 'Phơi sáng',
+  'image.contrast': 'Tương phản',
+  'image.saturation': 'Độ bão hòa',
+  'image.temperature': 'Nhiệt độ màu',
+  'image.tint': 'Sắc thái',
+  'image.highlights': 'Vùng sáng',
+  'image.shadows': 'Vùng tối',
+  'image.reset': 'Đặt lại',
 
   // ── Stroke ──
   'stroke.title': 'Viền',
@@ -182,6 +202,11 @@ const vi: TranslationKeys = {
   'text.weight.semibold': 'Hơi đậm',
   'text.weight.bold': 'Đậm',
   'text.weight.black': 'Rất đậm',
+  'text.font.search': 'Tìm phông chữ\u2026',
+  'text.font.bundled': 'Đi kèm',
+  'text.font.system': 'Hệ thống',
+  'text.font.loading': 'Đang tải phông chữ\u2026',
+  'text.font.noResults': 'Không tìm thấy phông chữ',
 
   // ── Text Layout ──
   'textLayout.title': 'Bố cục',

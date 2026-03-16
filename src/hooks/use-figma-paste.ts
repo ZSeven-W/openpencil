@@ -60,33 +60,17 @@ function getViewportCenter(): { cx: number; cy: number } {
  * Returns true if Figma nodes were pasted.
  */
 function processFigmaHtml(html: string): boolean {
-  console.debug('[figma-paste] Figma markers detected, extracting clipboard data...')
-
   const clipData = extractFigmaClipboardData(html)
-  if (!clipData) {
-    console.warn('[figma-paste] Failed to extract clipboard data from HTML')
-    return false
-  }
+  if (!clipData) return false
 
-  console.debug('[figma-paste] Extracted clipboard data, meta:', clipData.meta,
-    'buffer size:', clipData.buffer.byteLength, 'bytes')
-
-  const { nodes, warnings } = figmaClipboardToNodes(clipData.buffer)
-  console.debug('[figma-paste] Converted', nodes.length, 'nodes, warnings:', warnings)
-
-  if (nodes.length === 0) {
-    console.warn('[figma-paste] No convertible nodes found:', warnings)
-    return false
-  }
+  const { nodes } = figmaClipboardToNodes(clipData.buffer, html)
+  if (nodes.length === 0) return false
 
   // Center pasted nodes at viewport center
   const bounds = computeBounds(nodes)
   const { cx, cy } = getViewportCenter()
   const offsetX = cx - (bounds.minX + bounds.maxX) / 2
   const offsetY = cy - (bounds.minY + bounds.maxY) / 2
-
-  console.debug('[figma-paste] Bounds:', bounds, 'viewport center:', { cx, cy },
-    'offset:', { offsetX, offsetY })
 
   for (const node of nodes) {
     node.x = (node.x ?? 0) + offsetX
@@ -107,8 +91,6 @@ function processFigmaHtml(html: string): boolean {
 
   // Select the pasted nodes
   useCanvasStore.getState().setSelection(newIds, newIds[0] ?? null)
-
-  console.debug('[figma-paste] Successfully pasted', newIds.length, 'nodes:', newIds)
   return true
 }
 
@@ -119,27 +101,20 @@ function processFigmaHtml(html: string): boolean {
  */
 export async function tryPasteFigmaFromClipboard(): Promise<boolean> {
   try {
-    // Try modern Clipboard API first
     if (navigator.clipboard?.read) {
-      console.debug('[figma-paste] Reading clipboard via Clipboard API...')
       const items = await navigator.clipboard.read()
       for (const item of items) {
         if (item.types.includes('text/html')) {
           const blob = await item.getType('text/html')
           const html = await blob.text()
-          console.debug('[figma-paste] Got HTML from clipboard, length:', html.length,
-            'has figma markers:', isFigmaClipboardHtml(html))
           if (isFigmaClipboardHtml(html)) {
             return processFigmaHtml(html)
           }
         }
       }
-      console.debug('[figma-paste] No Figma data found in clipboard items')
-    } else {
-      console.debug('[figma-paste] Clipboard API not available')
     }
-  } catch (err) {
-    console.warn('[figma-paste] Clipboard API read failed:', err)
+  } catch {
+    // Clipboard API may not be available or permission denied
   }
   return false
 }
@@ -152,8 +127,6 @@ export async function tryPasteFigmaFromClipboard(): Promise<boolean> {
 export function useFigmaPaste() {
   useEffect(() => {
     const handlePaste = (e: ClipboardEvent) => {
-      console.debug('[figma-paste] paste event fired, target:', (e.target as HTMLElement)?.tagName)
-
       // Skip if user is typing in an input/textarea/contentEditable
       const target = e.target as HTMLElement
       if (
@@ -161,14 +134,10 @@ export function useFigmaPaste() {
         target.tagName === 'TEXTAREA' ||
         target.isContentEditable
       ) {
-        console.debug('[figma-paste] Skipping — editable element focused')
         return
       }
 
       const html = e.clipboardData?.getData('text/html')
-      console.debug('[figma-paste] clipboard HTML length:', html?.length ?? 0,
-        'has figma markers:', html ? isFigmaClipboardHtml(html) : false)
-
       if (!html || !isFigmaClipboardHtml(html)) return
 
       e.preventDefault()

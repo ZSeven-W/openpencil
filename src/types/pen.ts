@@ -175,6 +175,13 @@ export interface ImageNode extends PenNodeBase {
   height?: SizingBehavior
   cornerRadius?: number | [number, number, number, number]
   effects?: PenEffect[]
+  exposure?: number    // -100 to 100
+  contrast?: number    // -100 to 100
+  saturation?: number  // -100 to 100
+  temperature?: number // -100 to 100
+  tint?: number        // -100 to 100
+  highlights?: number  // -100 to 100
+  shadows?: number     // -100 to 100
 }
 
 export interface IconFontNode extends PenNodeBase {

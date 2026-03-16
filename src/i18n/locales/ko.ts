@@ -128,8 +128,28 @@ const ko: TranslationKeys = {
   'fill.solid': '단색',
   'fill.linear': '선형',
   'fill.radial': '방사형',
+  'fill.image': '이미지',
   'fill.stops': '정지점',
   'fill.angle': '각도',
+
+  // ── Image ──
+  'image.title': '이미지',
+  'image.fit': '맞춤 모드',
+  'image.fill': '채우기',
+  'image.fitMode': '맞춤',
+  'image.crop': '자르기',
+  'image.tile': '타일',
+  'image.clickToUpload': '클릭하여 업로드',
+  'image.changeImage': '이미지 변경',
+  'image.adjustments': '조정',
+  'image.exposure': '노출',
+  'image.contrast': '대비',
+  'image.saturation': '채도',
+  'image.temperature': '색온도',
+  'image.tint': '틴트',
+  'image.highlights': '하이라이트',
+  'image.shadows': '그림자',
+  'image.reset': '초기화',
 
   // ── Stroke ──
   'stroke.title': '선',
@@ -182,6 +202,11 @@ const ko: TranslationKeys = {
   'text.weight.semibold': 'Semibold',
   'text.weight.bold': 'Bold',
   'text.weight.black': 'Black',
+  'text.font.search': '글꼴 검색\u2026',
+  'text.font.bundled': '번들',
+  'text.font.system': '시스템',
+  'text.font.loading': '글꼴 로드 중\u2026',
+  'text.font.noResults': '글꼴을 찾을 수 없습니다',
 
   // ── Text Layout ──
   'textLayout.title': '레이아웃',
