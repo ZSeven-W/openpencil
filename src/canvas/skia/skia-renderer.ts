@@ -1,6 +1,6 @@
 import type { CanvasKit, Canvas, Paint, Font, Typeface, Image as SkImage, Paragraph } from 'canvaskit-wasm'
 import type { PenNode, ContainerProps, TextNode, EllipseNode, LineNode, PolygonNode, PathNode, ImageNode, IconFontNode } from '@/types/pen'
-import type { PenFill, PenStroke, PenEffect, ShadowEffect } from '@/types/styles'
+import type { PenFill, PenStroke, PenEffect, ShadowEffect, ImageFill } from '@/types/styles'
 import { DEFAULT_FILL, DEFAULT_STROKE, DEFAULT_STROKE_WIDTH } from '../canvas-constants'
 import { defaultLineHeight } from '../canvas-text-measure'
 import { lookupIconByName } from '@/services/ai/icon-resolver'
@@ -15,6 +15,7 @@ import {
   resolveStrokeColor,
   resolveStrokeWidth,
   wrapLine,
+  cssFontFamily,
 } from './skia-paint-utils'
 import { sanitizeSvgPath, hasInvalidNumbers, tryManualPathParse } from './skia-path-utils'
 import {
@@ -134,7 +135,7 @@ export class SkiaRenderer {
     opacity: number,
     absX: number,
     absY: number,
-  ): Paint {
+  ): { paint: Paint; imageFillDraw?: { fill: ImageFill; w: number; h: number; absX: number; absY: number; opacity: number } } {
     const ck = this.ck
     const paint = new ck.Paint()
     paint.setStyle(ck.PaintStyle.Fill)
@@ -144,13 +145,13 @@ export class SkiaRenderer {
       const c = parseColor(ck, fills)
       c[3] *= opacity
       paint.setColor(c)
-      return paint
+      return { paint }
     }
     if (!fills || fills.length === 0) {
       const c = parseColor(ck, DEFAULT_FILL)
       c[3] *= opacity
       paint.setColor(c)
-      return paint
+      return { paint }
     }
 
     const first = fills[0]
@@ -211,9 +212,217 @@ export class SkiaRenderer {
         c[3] *= fillOpacity
         paint.setColor(c)
       }
+    } else if (first.type === 'image') {
+      const result = this.applyImageFillToPaint(paint, first, w, h, opacity, absX, absY)
+      if (result.needsDrawImageRect && result.fill) {
+        return { paint, imageFillDraw: { fill: result.fill, w: result.w!, h: result.h!, absX: result.absX!, absY: result.absY!, opacity: result.opacity! } }
+      }
     }
 
-    return paint
+    return { paint }
+  }
+
+  /**
+   * Apply an image fill to a Paint object using an image shader.
+   * If the image is not yet loaded, a placeholder color is used.
+   */
+  /**
+   * Apply an image fill to a Paint object.
+   * For tile mode: uses a shader with TileMode.Repeat.
+   * For fill/fit/crop/stretch: sets a placeholder paint and returns
+   * draw info so the caller can use drawImageRect (shader scaling
+   * is unreliable in CanvasKit for Clamp/Decal tile modes).
+   */
+  private applyImageFillToPaint(
+    paint: Paint,
+    fill: ImageFill,
+    w: number, h: number,
+    opacity: number,
+    absX: number, absY: number,
+  ): { needsDrawImageRect: boolean; fill?: ImageFill; w?: number; h?: number; absX?: number; absY?: number; opacity?: number } {
+    const ck = this.ck
+    const fillOpacity = (fill.opacity ?? 1) * opacity
+    const url = fill.url
+    if (!url) {
+      const c = parseColor(ck, '#e5e7eb')
+      c[3] *= fillOpacity
+      paint.setColor(c)
+      return { needsDrawImageRect: false }
+    }
+
+    const cached = this.imageLoader.get(url)
+    if (cached === undefined) {
+      this.imageLoader.request(url)
+    }
+    if (!cached) {
+      const c = parseColor(ck, '#e5e7eb')
+      c[3] *= fillOpacity
+      paint.setColor(c)
+      return { needsDrawImageRect: false }
+    }
+
+    const imgW = cached.width()
+    const imgH = cached.height()
+    if (imgW <= 0 || imgH <= 0) return { needsDrawImageRect: false }
+
+    const mode = fill.mode ?? 'fill'
+
+    // Tile mode: use shader (works reliably with Repeat + translation matrix)
+    if (mode === 'tile') {
+      const dispX = absX + (w - imgW) / 2
+      const dispY = absY + (h - imgH) / 2
+      const localMatrix = Float32Array.of(
+        1, 0, -dispX,
+        0, 1, -dispY,
+        0, 0, 1,
+      )
+      const shader = cached.makeShaderOptions(
+        ck.TileMode.Repeat, ck.TileMode.Repeat,
+        ck.FilterMode.Linear, ck.MipmapMode.None,
+        localMatrix,
+      )
+      if (shader) {
+        paint.setShader(shader)
+        if (fillOpacity < 1) paint.setAlphaf(fillOpacity)
+        const cf = this.buildImageAdjustmentFilter(fill)
+        if (cf) paint.setColorFilter(cf)
+      }
+      return { needsDrawImageRect: false }
+    }
+
+    // For fill/fit/crop/stretch: use transparent paint, caller draws image via drawImageRect
+    paint.setColor(Float32Array.of(0, 0, 0, 0))
+    return { needsDrawImageRect: true, fill, w, h, absX, absY, opacity: fillOpacity }
+  }
+
+  /**
+   * Draw an image fill using drawImageRect (for fill/fit/crop/stretch modes).
+   * Must be called after clipping to the shape bounds.
+   */
+  private drawImageFillRect(
+    canvas: Canvas,
+    fill: ImageFill,
+    w: number, h: number,
+    absX: number, absY: number,
+    fillOpacity: number,
+  ) {
+    const ck = this.ck
+    const url = fill.url
+    if (!url) return
+
+    const cached = this.imageLoader.get(url)
+    if (!cached) return
+
+    const imgW = cached.width()
+    const imgH = cached.height()
+    if (imgW <= 0 || imgH <= 0) return
+
+    const mode = fill.mode ?? 'fill'
+    const paint = new ck.Paint()
+    paint.setAntiAlias(true)
+    if (fillOpacity < 1) paint.setAlphaf(fillOpacity)
+
+    const adjFilter = this.buildImageAdjustmentFilter(fill)
+    if (adjFilter) paint.setColorFilter(adjFilter)
+
+    if (mode === 'fit') {
+      // Contain: entire image visible, centered, with letterbox
+      const scale = Math.min(w / imgW, h / imgH)
+      const dw = imgW * scale
+      const dh = imgH * scale
+      const dx = absX + (w - dw) / 2
+      const dy = absY + (h - dh) / 2
+      canvas.drawImageRect(
+        cached,
+        ck.LTRBRect(0, 0, imgW, imgH),
+        ck.LTRBRect(dx, dy, dx + dw, dy + dh),
+        paint,
+      )
+    } else if (mode === 'stretch') {
+      // Stretch: distort to fill entire area
+      canvas.drawImageRect(
+        cached,
+        ck.LTRBRect(0, 0, imgW, imgH),
+        ck.LTRBRect(absX, absY, absX + w, absY + h),
+        paint,
+      )
+    } else {
+      // 'fill', 'crop': cover, centered, excess clipped by parent clip
+      const scale = Math.max(w / imgW, h / imgH)
+      const dw = imgW * scale
+      const dh = imgH * scale
+      const dx = absX + (w - dw) / 2
+      const dy = absY + (h - dh) / 2
+      canvas.drawImageRect(
+        cached,
+        ck.LTRBRect(0, 0, imgW, imgH),
+        ck.LTRBRect(dx, dy, dx + dw, dy + dh),
+        paint,
+      )
+    }
+
+    paint.delete()
+  }
+
+  /**
+   * Build a CanvasKit ColorFilter from image adjustment values.
+   * Builds a single 4x5 color matrix combining all adjustments.
+   *
+   * Matrix layout (row-major 4×5):
+   *   R' = m[0]*r + m[1]*g + m[2]*b  + m[3]*a + m[4]
+   *   G' = m[5]*r + m[6]*g + m[7]*b  + m[8]*a + m[9]
+   *   B' = m[10]*r+ m[11]*g+ m[12]*b + m[13]*a+ m[14]
+   *   A' = m[15]*r+ m[16]*g+ m[17]*b + m[18]*a+ m[19]
+   */
+  private buildImageAdjustmentFilter(adj: {
+    exposure?: number; contrast?: number; saturation?: number
+    temperature?: number; tint?: number; highlights?: number; shadows?: number
+  }) {
+    const ck = this.ck
+    const exp = (adj.exposure ?? 0) / 100
+    const con = (adj.contrast ?? 0) / 100
+    const sat = (adj.saturation ?? 0) / 100
+    const temp = (adj.temperature ?? 0) / 100
+    const tintVal = (adj.tint ?? 0) / 100
+    const hi = (adj.highlights ?? 0) / 100
+    const sh = (adj.shadows ?? 0) / 100
+
+    if (exp === 0 && con === 0 && sat === 0 && temp === 0 && tintVal === 0 && hi === 0 && sh === 0) {
+      return null
+    }
+
+    // Exposure: brightness multiplier
+    const e = 1 + exp * 1.5
+
+    // Contrast: scale around 0.5 midpoint
+    const c = 1 + con
+    const cOff = 0.5 * (1 - c)
+
+    // Saturation: luminance-preserving mix
+    const s = 1 + sat
+    const lr = 0.2126, lg = 0.7152, lb = 0.0722
+    const sr = (1 - s) * lr, sg = (1 - s) * lg, sb = (1 - s) * lb
+
+    // Combined scale factor for each matrix cell: contrast * exposure * saturation
+    // Order: saturate → exposure → contrast
+    // saturated_R = (sr+s)*r + sg*g + sb*b
+    // exposed_R   = e * saturated_R
+    // final_R     = c * exposed_R + cOff + offsets
+    const f = c * e
+
+    // Offsets: temperature (warm/cool), tint, highlights, shadows
+    const offR = cOff + temp * 0.15 + (hi + sh * 0.5) * 0.1
+    const offG = cOff + tintVal * 0.15 + (hi + sh * 0.5) * 0.1
+    const offB = cOff - temp * 0.15 + (hi + sh * 0.5) * 0.1
+
+    const m = [
+      f * (sr + s), f * sg,       f * sb,       0, offR,
+      f * sr,       f * (sg + s), f * sb,       0, offG,
+      f * sr,       f * sg,       f * (sb + s), 0, offB,
+      0,            0,            0,            1, 0,
+    ]
+
+    return ck.ColorFilter.MakeMatrix(m)
   }
 
   // Stroke paint
@@ -302,9 +511,11 @@ export class SkiaRenderer {
       canvas.rotate(rotation, absX + absW / 2, absY + absH / 2)
     }
 
-    // Apply shadow
+    // Apply shadow (text uses glyph-shaped shadow, not rectangle)
     const effects = 'effects' in node ? (node as PenNode & { effects?: PenEffect[] }).effects : undefined
-    this.applyShadowDirect(canvas, effects, absX, absY, absW, absH)
+    if (node.type !== 'text') {
+      this.applyShadowDirect(canvas, effects, absX, absY, absW, absH)
+    }
 
     switch (node.type) {
       case 'frame':
@@ -328,7 +539,7 @@ export class SkiaRenderer {
         this.drawIconFont(canvas, node, absX, absY, absW, absH, opacity)
         break
       case 'text':
-        this.drawText(canvas, node, absX, absY, absW, absH, opacity)
+        this.drawText(canvas, node, absX, absY, absW, absH, opacity, effects)
         break
       case 'image':
         this.drawImage(canvas, node, absX, absY, absW, absH, opacity)
@@ -395,7 +606,7 @@ export class SkiaRenderer {
     const isContainer = node.type === 'frame' || node.type === 'group'
 
     // Fill
-    const fillPaint = this.makeFillPaint(
+    const { paint: fillPaint, imageFillDraw } = this.makeFillPaint(
       hasFill ? fills : (isContainer ? 'transparent' : undefined),
       w, h, opacity, x, y,
     )
@@ -412,6 +623,22 @@ export class SkiaRenderer {
       canvas.drawRect(ck.LTRBRect(x, y, x + w, y + h), fillPaint)
     }
     fillPaint.delete()
+
+    // Image fill (fill/fit/crop/stretch): draw via drawImageRect with clipping
+    if (imageFillDraw) {
+      canvas.save()
+      if (hasRoundedCorners) {
+        const maxR = Math.min(w / 2, h / 2)
+        canvas.clipRRect(
+          ck.RRectXY(ck.LTRBRect(x, y, x + w, y + h), Math.min(cr[0], maxR), Math.min(cr[0], maxR)),
+          ck.ClipOp.Intersect, true,
+        )
+      } else {
+        canvas.clipRect(ck.LTRBRect(x, y, x + w, y + h), ck.ClipOp.Intersect, true)
+      }
+      this.drawImageFillRect(canvas, imageFillDraw.fill, imageFillDraw.w, imageFillDraw.h, imageFillDraw.absX, imageFillDraw.absY, imageFillDraw.opacity)
+      canvas.restore()
+    }
 
     // Stroke
     const strokePaint = this.makeStrokePaint(stroke, opacity)
@@ -445,7 +672,7 @@ export class SkiaRenderer {
       const path = ck.Path.MakeFromSVGString(arcD)
       if (path) {
         path.offset(x, y)
-        const fillPaint = this.makeFillPaint(fills, w, h, opacity, x, y)
+        const { paint: fillPaint } = this.makeFillPaint(fills, w, h, opacity, x, y)
         fillPaint.setAntiAlias(true)
         canvas.drawPath(path, fillPaint)
         fillPaint.delete()
@@ -454,7 +681,7 @@ export class SkiaRenderer {
       return
     }
 
-    const fillPaint = this.makeFillPaint(fills, w, h, opacity, x, y)
+    const { paint: fillPaint } = this.makeFillPaint(fills, w, h, opacity, x, y)
     canvas.drawOval(ck.LTRBRect(x, y, x + w, y + h), fillPaint)
     fillPaint.delete()
 
@@ -510,7 +737,7 @@ export class SkiaRenderer {
     }
     path.close()
 
-    const fillPaint = this.makeFillPaint(fills, w, h, opacity, x, y)
+    const { paint: fillPaint } = this.makeFillPaint(fills, w, h, opacity, x, y)
     canvas.drawPath(path, fillPaint)
     fillPaint.delete()
 
@@ -553,7 +780,7 @@ export class SkiaRenderer {
     if (!path) {
       // Render fallback with the node's fill color (not debug red)
       if (w > 0 && h > 0) {
-        const fillPaint = this.makeFillPaint(fills, w, h, opacity, x, y)
+        const { paint: fillPaint } = this.makeFillPaint(fills, w, h, opacity, x, y)
         canvas.drawRect(ck.LTRBRect(x, y, x + w, y + h), fillPaint)
         fillPaint.delete()
       }
@@ -598,7 +825,7 @@ export class SkiaRenderer {
 
     // Fill — use EvenOdd for compound paths (multiple sub-paths), Winding for simple paths
     if (hasExplicitFill || !hasVisibleStroke) {
-      const fillPaint = this.makeFillPaint(
+      const { paint: fillPaint } = this.makeFillPaint(
         hasExplicitFill ? fills : undefined,
         w, h, opacity, x, y,
       )
@@ -723,6 +950,11 @@ export class SkiaRenderer {
     // Check if primary font family is loaded; if not, try async load
     const primaryFamily = fontFamily.split(',')[0].trim().replace(/['"]/g, '')
     if (!this.fontManager.isFontReady(primaryFamily)) {
+      // System fonts can't be loaded into CanvasKit — use bitmap rendering
+      // which supports all OS-installed fonts via Canvas 2D API
+      if (this.fontManager.isSystemFont(primaryFamily)) {
+        return false
+      }
       this.fontManager.ensureFont(primaryFamily).then((ok) => {
         if (ok) {
           this.clearParaCache()
@@ -862,6 +1094,55 @@ export class SkiaRenderer {
   }
 
   /**
+   * Draw text shadow as a blurred copy of the actual text glyphs,
+   * matching Figma's drop-shadow behavior (shadow follows glyph outlines).
+   */
+  private drawTextShadow(
+    canvas: Canvas, node: PenNode,
+    x: number, y: number, w: number, h: number,
+    opacity: number,
+    shadow: ShadowEffect,
+  ) {
+    const ck = this.ck
+    const tNode = node as TextNode
+
+    // Create a shadow-colored version of the text node
+    const shadowFillColor = shadow.color ?? '#00000066'
+    const shadowNode = {
+      ...tNode,
+      fill: [{ type: 'solid' as const, color: shadowFillColor }],
+    } as PenNode
+
+    const sx = x + shadow.offsetX
+    const sy = y + shadow.offsetY
+
+    if (shadow.blur > 0) {
+      // Use saveLayer with blur ImageFilter to blur the text glyphs
+      const paint = new ck.Paint()
+      if (opacity < 1) paint.setAlphaf(opacity)
+      const sigma = shadow.blur / 2
+      const filter = ck.ImageFilter.MakeBlur(sigma, sigma, ck.TileMode.Decal, null)
+      paint.setImageFilter(filter)
+      canvas.saveLayer(paint)
+      paint.delete()
+
+      // Draw shadow text (vector path first, then bitmap fallback)
+      const vectorOk = this.drawTextVector(canvas, shadowNode, sx, sy, w, h, 1)
+      if (!vectorOk) {
+        this.drawTextBitmap(canvas, shadowNode, sx, sy, w, h, 1)
+      }
+
+      canvas.restore()
+    } else {
+      // No blur — just draw offset text with shadow color
+      const vectorOk = this.drawTextVector(canvas, shadowNode, sx, sy, w, h, opacity)
+      if (!vectorOk) {
+        this.drawTextBitmap(canvas, shadowNode, sx, sy, w, h, opacity)
+      }
+    }
+  }
+
+  /**
    * Render text using browser Canvas 2D API (supports all system fonts including CJK),
    * then draw the rasterized result as a CanvasKit image. Results are cached.
    */
@@ -869,11 +1150,28 @@ export class SkiaRenderer {
     canvas: Canvas, node: PenNode,
     x: number, y: number, w: number, h: number,
     opacity: number,
+    effects?: PenEffect[],
   ) {
+    // Draw text shadow as blurred copy of the text glyphs (not a rectangle)
+    const shadow = effects?.find((e): e is ShadowEffect => e.type === 'shadow')
+    if (shadow) {
+      this.drawTextShadow(canvas, node, x, y, w, h, opacity, shadow)
+    }
+
     // Try vector text first (true Skia Paragraph API — no pixelation at any zoom)
     const vectorOk = this.drawTextVector(canvas, node, x, y, w, h, opacity)
     if (vectorOk) return
 
+    // Fallback to bitmap text rendering
+    this.drawTextBitmap(canvas, node, x, y, w, h, opacity)
+  }
+
+  /** Bitmap text rendering fallback — supports all system fonts via Canvas 2D API. */
+  private drawTextBitmap(
+    canvas: Canvas, node: PenNode,
+    x: number, y: number, w: number, h: number,
+    opacity: number,
+  ) {
     const ck = this.ck
     const tNode = node as TextNode
     const content = typeof tNode.content === 'string'
@@ -905,7 +1203,7 @@ export class SkiaRenderer {
     // Set up measurement context
     const measureCanvas = document.createElement('canvas')
     const mCtx = measureCanvas.getContext('2d')!
-    mCtx.font = `${fontWeight} ${fontSize}px ${fontFamily}`
+    mCtx.font = `${fontWeight} ${fontSize}px ${cssFontFamily(fontFamily)}`
 
     const rawLines = content.split('\n')
     let wrappedLines: string[]
@@ -947,7 +1245,7 @@ export class SkiaRenderer {
     const scale = rawScale <= 2 ? 2 : rawScale <= 4 ? 4 : 8
 
     // Cache key — includes rasterization scale so zoom changes use fresh textures
-    const cacheKey = `${content}|${fontSize}|${fillColor}|${fontWeight}|${textAlign}|${Math.round(renderW)}|${Math.round(textH)}|${scale}`
+    const cacheKey = `${content}|${fontSize}|${fillColor}|${fontWeight}|${fontFamily}|${textAlign}|${Math.round(renderW)}|${Math.round(textH)}|${scale}`
 
     let img = this.textCache.get(cacheKey)
     if (img === undefined) {
@@ -968,7 +1266,7 @@ export class SkiaRenderer {
       tmp.height = ch
       const ctx = tmp.getContext('2d')!
       ctx.scale(effectiveScale, effectiveScale)
-      ctx.font = `${fontWeight} ${fontSize}px ${fontFamily}`
+      ctx.font = `${fontWeight} ${fontSize}px ${cssFontFamily(fontFamily)}`
       ctx.fillStyle = fillColor
       ctx.textBaseline = 'top'
       ctx.textAlign = (textAlign || 'left') as CanvasTextAlign
@@ -1058,7 +1356,11 @@ export class SkiaRenderer {
       return
     }
 
-    // Draw loaded image with optional corner radius clipping
+    // Draw loaded image with objectFit and optional corner radius clipping
+    const imgW = cached.width()
+    const imgH = cached.height()
+
+    // Clip for corner radius
     if (cr > 0) {
       canvas.save()
       const maxR = Math.min(cr, w / 2, h / 2)
@@ -1066,18 +1368,72 @@ export class SkiaRenderer {
         ck.RRectXY(ck.LTRBRect(x, y, x + w, y + h), maxR, maxR),
         ck.ClipOp.Intersect, true,
       )
+    } else {
+      canvas.save()
+      canvas.clipRect(ck.LTRBRect(x, y, x + w, y + h), ck.ClipOp.Intersect, true)
     }
+
     const paint = new ck.Paint()
     paint.setAntiAlias(true)
     if (opacity < 1) paint.setAlphaf(opacity)
-    canvas.drawImageRect(
-      cached,
-      ck.LTRBRect(0, 0, cached.width(), cached.height()),
-      ck.LTRBRect(x, y, x + w, y + h),
-      paint,
-    )
+
+    // Apply image adjustments if any
+    const adjFilter = this.buildImageAdjustmentFilter(iNode)
+    if (adjFilter) paint.setColorFilter(adjFilter)
+
+    const fit = iNode.objectFit ?? 'fill'
+
+    if (fit === 'tile') {
+      // Tile: repeat image at its original pixel size
+      const tileMatrix = Float32Array.of(1, 0, -x, 0, 1, -y, 0, 0, 1)
+      const shader = cached.makeShaderOptions(
+        ck.TileMode.Repeat, ck.TileMode.Repeat,
+        ck.FilterMode.Linear, ck.MipmapMode.None,
+        tileMatrix,
+      )
+      if (shader) {
+        paint.setShader(shader)
+        canvas.drawRect(ck.LTRBRect(x, y, x + w, y + h), paint)
+      }
+    } else if (fit === 'fit') {
+      // Fit (contain): scale uniformly so entire image is visible, centered
+      // Draw a subtle background so letterbox areas are visible
+      const bgPaint = new ck.Paint()
+      bgPaint.setStyle(ck.PaintStyle.Fill)
+      bgPaint.setColor(parseColor(ck, '#f3f4f6'))
+      if (opacity < 1) bgPaint.setAlphaf(opacity * 0.3)
+      else bgPaint.setAlphaf(0.3)
+      canvas.drawRect(ck.LTRBRect(x, y, x + w, y + h), bgPaint)
+      bgPaint.delete()
+
+      const scale = Math.min(w / imgW, h / imgH)
+      const dw = imgW * scale
+      const dh = imgH * scale
+      const dx = x + (w - dw) / 2
+      const dy = y + (h - dh) / 2
+      canvas.drawImageRect(
+        cached,
+        ck.LTRBRect(0, 0, imgW, imgH),
+        ck.LTRBRect(dx, dy, dx + dw, dy + dh),
+        paint,
+      )
+    } else {
+      // 'fill' and 'crop' (cover): scale uniformly to fill entire area, centered, excess clipped
+      const scale = Math.max(w / imgW, h / imgH)
+      const dw = imgW * scale
+      const dh = imgH * scale
+      const dx = x + (w - dw) / 2
+      const dy = y + (h - dh) / 2
+      canvas.drawImageRect(
+        cached,
+        ck.LTRBRect(0, 0, imgW, imgH),
+        ck.LTRBRect(dx, dy, dx + dw, dy + dh),
+        paint,
+      )
+    }
+
     paint.delete()
-    if (cr > 0) canvas.restore()
+    canvas.restore()
   }
 
   private drawImageFallback(

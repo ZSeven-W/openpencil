@@ -4,6 +4,7 @@ import { useKeyboardShortcuts } from '@/hooks/use-keyboard-shortcuts'
 
 export const Route = createFileRoute('/editor')({
   component: EditorPage,
+  ssr: false,
   head: () => ({
     meta: [{ title: 'OpenPencil Editor' }],
   }),

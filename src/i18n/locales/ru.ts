@@ -130,8 +130,28 @@ const ru: TranslationKeys = {
   'fill.solid': 'Сплошная',
   'fill.linear': 'Линейная',
   'fill.radial': 'Радиальная',
+  'fill.image': 'Изображение',
   'fill.stops': 'Точки',
   'fill.angle': 'Угол',
+
+  // ── Image ──
+  'image.title': 'Изображение',
+  'image.fit': 'Режим подгонки',
+  'image.fill': 'Заполнение',
+  'image.fitMode': 'Вписать',
+  'image.crop': 'Обрезка',
+  'image.tile': 'Плитка',
+  'image.clickToUpload': 'Нажмите для загрузки',
+  'image.changeImage': 'Изменить изображение',
+  'image.adjustments': 'Настройки',
+  'image.exposure': 'Экспозиция',
+  'image.contrast': 'Контрастность',
+  'image.saturation': 'Насыщенность',
+  'image.temperature': 'Температура',
+  'image.tint': 'Оттенок',
+  'image.highlights': 'Светлые тона',
+  'image.shadows': 'Тени',
+  'image.reset': 'Сбросить',
 
   // ── Stroke ──
   'stroke.title': 'Обводка',
@@ -184,6 +204,11 @@ const ru: TranslationKeys = {
   'text.weight.semibold': 'Полужирный',
   'text.weight.bold': 'Жирный',
   'text.weight.black': 'Сверхжирный',
+  'text.font.search': 'Поиск шрифтов\u2026',
+  'text.font.bundled': 'Встроенные',
+  'text.font.system': 'Системные',
+  'text.font.loading': 'Загрузка шрифтов\u2026',
+  'text.font.noResults': 'Шрифты не найдены',
 
   // ── Text Layout ──
   'textLayout.title': 'Раскладка',

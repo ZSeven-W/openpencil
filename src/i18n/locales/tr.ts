@@ -128,8 +128,28 @@ const tr: TranslationKeys = {
   'fill.solid': 'Düz',
   'fill.linear': 'Doğrusal',
   'fill.radial': 'Dairesel',
+  'fill.image': 'Görüntü',
   'fill.stops': 'Duraklar',
   'fill.angle': 'Açı',
+
+  // ── Image ──
+  'image.title': 'Görüntü',
+  'image.fit': 'Sığdırma Modu',
+  'image.fill': 'Doldur',
+  'image.fitMode': 'Sığdır',
+  'image.crop': 'Kırp',
+  'image.tile': 'Döşe',
+  'image.clickToUpload': 'Yüklemek için tıklayın',
+  'image.changeImage': 'Görüntüyü değiştir',
+  'image.adjustments': 'Ayarlamalar',
+  'image.exposure': 'Pozlama',
+  'image.contrast': 'Kontrast',
+  'image.saturation': 'Doygunluk',
+  'image.temperature': 'Sıcaklık',
+  'image.tint': 'Renk Tonu',
+  'image.highlights': 'Parlak Tonlar',
+  'image.shadows': 'Gölgeler',
+  'image.reset': 'Sıfırla',
 
   // ── Stroke ──
   'stroke.title': 'Kenarlık',
@@ -182,6 +202,11 @@ const tr: TranslationKeys = {
   'text.weight.semibold': 'Yarı Kalın',
   'text.weight.bold': 'Kalın',
   'text.weight.black': 'Siyah',
+  'text.font.search': 'Yazı tipi ara\u2026',
+  'text.font.bundled': 'Dahili',
+  'text.font.system': 'Sistem',
+  'text.font.loading': 'Yazı tipleri yükleniyor\u2026',
+  'text.font.noResults': 'Yazı tipi bulunamadı',
 
   // ── Text Layout ──
   'textLayout.title': 'Düzen',

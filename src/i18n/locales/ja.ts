@@ -132,8 +132,28 @@ const ja: TranslationKeys = {
   'fill.solid': '単色',
   'fill.linear': '線形グラデーション',
   'fill.radial': '放射グラデーション',
+  'fill.image': '画像',
   'fill.stops': 'カラーストップ',
   'fill.angle': '角度',
+
+  // ── Image ──
+  'image.title': '画像',
+  'image.fit': 'フィットモード',
+  'image.fill': '塗りつぶし',
+  'image.fitMode': 'フィット',
+  'image.crop': 'クロップ',
+  'image.tile': 'タイル',
+  'image.clickToUpload': 'クリックしてアップロード',
+  'image.changeImage': '画像を変更',
+  'image.adjustments': '調整',
+  'image.exposure': '露出',
+  'image.contrast': 'コントラスト',
+  'image.saturation': '彩度',
+  'image.temperature': '色温度',
+  'image.tint': '色合い',
+  'image.highlights': 'ハイライト',
+  'image.shadows': 'シャドウ',
+  'image.reset': 'リセット',
 
   // ── Stroke ──
   'stroke.title': '線',
@@ -186,6 +206,11 @@ const ja: TranslationKeys = {
   'text.weight.semibold': 'Semibold',
   'text.weight.bold': 'Bold',
   'text.weight.black': 'Black',
+  'text.font.search': 'フォントを検索\u2026',
+  'text.font.bundled': 'バンドル',
+  'text.font.system': 'システム',
+  'text.font.loading': 'フォントを読み込み中\u2026',
+  'text.font.noResults': 'フォントが見つかりません',
 
   // ── Text Layout ──
   'textLayout.title': 'レイアウト',

@@ -130,8 +130,28 @@ const pt: TranslationKeys = {
   'fill.solid': 'Sólido',
   'fill.linear': 'Linear',
   'fill.radial': 'Radial',
+  'fill.image': 'Imagem',
   'fill.stops': 'Paradas',
   'fill.angle': 'Ângulo',
+
+  // ── Image ──
+  'image.title': 'Imagem',
+  'image.fit': 'Modo de ajuste',
+  'image.fill': 'Preencher',
+  'image.fitMode': 'Ajustar',
+  'image.crop': 'Recortar',
+  'image.tile': 'Ladrilho',
+  'image.clickToUpload': 'Clique para enviar',
+  'image.changeImage': 'Alterar imagem',
+  'image.adjustments': 'Ajustes',
+  'image.exposure': 'Exposição',
+  'image.contrast': 'Contraste',
+  'image.saturation': 'Saturação',
+  'image.temperature': 'Temperatura',
+  'image.tint': 'Matiz',
+  'image.highlights': 'Realces',
+  'image.shadows': 'Sombras',
+  'image.reset': 'Redefinir',
 
   // ── Stroke ──
   'stroke.title': 'Contorno',
@@ -184,6 +204,11 @@ const pt: TranslationKeys = {
   'text.weight.semibold': 'Seminegrito',
   'text.weight.bold': 'Negrito',
   'text.weight.black': 'Preto',
+  'text.font.search': 'Pesquisar fontes\u2026',
+  'text.font.bundled': 'Incluídas',
+  'text.font.system': 'Sistema',
+  'text.font.loading': 'Carregando fontes\u2026',
+  'text.font.noResults': 'Nenhuma fonte encontrada',
 
   // ── Text Layout ──
   'textLayout.title': 'Layout',
