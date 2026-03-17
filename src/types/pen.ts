@@ -108,6 +108,7 @@ export interface EllipseNode extends PenNodeBase {
   type: 'ellipse'
   width?: SizingBehavior
   height?: SizingBehavior
+  cornerRadius?: number
   innerRadius?: number
   startAngle?: number
   sweepAngle?: number
@@ -129,6 +130,7 @@ export interface PolygonNode extends PenNodeBase {
   polygonCount: number
   width?: SizingBehavior
   height?: SizingBehavior
+  cornerRadius?: number
   fill?: PenFill[]
   stroke?: PenStroke
   effects?: PenEffect[]

@@ -52,7 +52,7 @@ function getInstallInfo(agent: string): { command: string; docsUrl: string } {
     case 'opencode':
       return {
         command: isWin
-          ? 'go install github.com/opencode-ai/opencode@latest'
+          ? 'npm install -g opencode-ai'
           : 'curl -fsSL https://opencode.ai/install | bash',
         docsUrl: 'https://opencode.ai',
       }
@@ -147,12 +147,13 @@ async function tryNpmInstall(pkg: string, binary: string): Promise<InstallResult
 }
 
 async function tryOpenCodeInstall(binary: string): Promise<InstallResult> {
-  if (process.platform === 'win32') {
-    return { success: false, error: 'Auto-install not supported on Windows' }
-  }
+  const isWin = process.platform === 'win32'
+  const cmd = isWin
+    ? 'npm.cmd install -g opencode-ai'
+    : 'curl -fsSL https://opencode.ai/install | bash'
 
   try {
-    execSync('curl -fsSL https://opencode.ai/install | bash', {
+    execSync(cmd, {
       encoding: 'utf-8',
       timeout: 120_000,
       stdio: 'pipe',

@@ -78,11 +78,24 @@ function ellipseToPath(rx: number, ry: number): string {
 }
 
 function polygonToPath(count: number, w: number, h: number): string {
-  const parts: string[] = []
+  const raw: [number, number][] = []
   for (let i = 0; i < count; i++) {
     const angle = (i * 2 * Math.PI) / count - Math.PI / 2
-    const px = (w / 2) * Math.cos(angle) + w / 2
-    const py = (h / 2) * Math.sin(angle) + h / 2
+    raw.push([Math.cos(angle), Math.sin(angle)])
+  }
+  let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity
+  for (const [rx, ry] of raw) {
+    if (rx < minX) minX = rx
+    if (rx > maxX) maxX = rx
+    if (ry < minY) minY = ry
+    if (ry > maxY) maxY = ry
+  }
+  const rw = maxX - minX
+  const rh = maxY - minY
+  const parts: string[] = []
+  for (let i = 0; i < count; i++) {
+    const px = ((raw[i][0] - minX) / rw) * w
+    const py = ((raw[i][1] - minY) / rh) * h
     parts.push(i === 0 ? `M ${px} ${py}` : `L ${px} ${py}`)
   }
   parts.push('Z')

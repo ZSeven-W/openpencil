@@ -102,6 +102,55 @@ bun run electron:dev
 
 > **Ön koşullar:** [Bun](https://bun.sh/) >= 1.0 ve [Node.js](https://nodejs.org/) >= 18
 
+### Docker ile Dağıtım
+
+Birden fazla görüntü varyantı mevcuttur — ihtiyaçlarınıza uygun olanı seçin:
+
+| Görüntü | Boyut | İçerik |
+| --- | --- | --- |
+| `openpencil:latest` | ~226 MB | Yalnızca web uygulaması |
+| `openpencil-claude:latest` | — | + Claude Code CLI |
+| `openpencil-codex:latest` | — | + Codex CLI |
+| `openpencil-opencode:latest` | — | + OpenCode CLI |
+| `openpencil-copilot:latest` | — | + GitHub Copilot CLI |
+| `openpencil-full:latest` | ~1 GB | Tüm CLI araçları |
+
+**Çalıştır (yalnızca web):**
+
+```bash
+docker run -d -p 3000:3000 ghcr.io/zseven-w/openpencil:latest
+```
+
+**AI CLI ile çalıştır (ör. Claude Code):**
+
+AI sohbeti Claude CLI OAuth girişine bağlıdır. Giriş oturumunu kalıcı hale getirmek için bir Docker hacmi kullanın:
+
+```bash
+# Adım 1 — Giriş (tek seferlik)
+docker volume create openpencil-claude-auth
+docker run -it --rm \
+  -v openpencil-claude-auth:/root/.claude \
+  ghcr.io/zseven-w/openpencil-claude:latest claude login
+
+# Adım 2 — Başlat
+docker run -d -p 3000:3000 \
+  -v openpencil-claude-auth:/root/.claude \
+  ghcr.io/zseven-w/openpencil-claude:latest
+```
+
+**Yerel olarak derle:**
+
+```bash
+# Temel (yalnızca web)
+docker build --target base -t openpencil .
+
+# Belirli bir CLI ile
+docker build --target with-claude -t openpencil-claude .
+
+# Tam (tüm CLI'lar)
+docker build --target full -t openpencil-full .
+```
+
 ## AI Destekli Tasarım
 
 **Prompttan UI'ye**

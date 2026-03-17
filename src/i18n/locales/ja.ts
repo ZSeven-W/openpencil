@@ -30,6 +30,7 @@ const ja: TranslationKeys = {
   // ── Shapes ──
   'shapes.rectangle': '長方形',
   'shapes.ellipse': '楕円',
+  'shapes.polygon': 'ポリゴン',
   'shapes.line': '線',
   'shapes.icon': 'アイコン',
   'shapes.importImageSvg': '画像または SVG をインポート\u2026',
@@ -241,6 +242,14 @@ const ja: TranslationKeys = {
   'export.selectedOnly': '選択項目のみエクスポート',
   'export.exportFormat': '{{format}} をエクスポート',
   'export.exportLayer': 'レイヤーをエクスポート',
+
+  // ── Polygon ──
+  'polygon.sides': '辺の数',
+
+  // ── Ellipse ──
+  'ellipse.start': '開始',
+  'ellipse.sweep': 'スイープ',
+  'ellipse.innerRadius': '内径',
 
   // ── Corner Radius ──
   'cornerRadius.title': '角丸',
