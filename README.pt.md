@@ -102,6 +102,55 @@ bun run electron:dev
 
 > **Pré-requisitos:** [Bun](https://bun.sh/) >= 1.0 e [Node.js](https://nodejs.org/) >= 18
 
+### Implantação com Docker
+
+Várias variantes de imagem estão disponíveis — escolha a que se adequa às suas necessidades:
+
+| Imagem | Tamanho | Inclui |
+| --- | --- | --- |
+| `openpencil:latest` | ~226 MB | Apenas aplicação web |
+| `openpencil-claude:latest` | — | + Claude Code CLI |
+| `openpencil-codex:latest` | — | + Codex CLI |
+| `openpencil-opencode:latest` | — | + OpenCode CLI |
+| `openpencil-copilot:latest` | — | + GitHub Copilot CLI |
+| `openpencil-full:latest` | ~1 GB | Todas as ferramentas CLI |
+
+**Executar (apenas web):**
+
+```bash
+docker run -d -p 3000:3000 ghcr.io/zseven-w/openpencil:latest
+```
+
+**Executar com AI CLI (ex. Claude Code):**
+
+O chat de IA depende do login OAuth do Claude CLI. Use um volume Docker para persistir a sessão de login:
+
+```bash
+# Passo 1 — Login (apenas uma vez)
+docker volume create openpencil-claude-auth
+docker run -it --rm \
+  -v openpencil-claude-auth:/root/.claude \
+  ghcr.io/zseven-w/openpencil-claude:latest claude login
+
+# Passo 2 — Iniciar
+docker run -d -p 3000:3000 \
+  -v openpencil-claude-auth:/root/.claude \
+  ghcr.io/zseven-w/openpencil-claude:latest
+```
+
+**Compilar localmente:**
+
+```bash
+# Base (apenas web)
+docker build --target base -t openpencil .
+
+# Com um CLI específico
+docker build --target with-claude -t openpencil-claude .
+
+# Completo (todos os CLIs)
+docker build --target full -t openpencil-full .
+```
+
 ## Design Nativo com IA
 
 **Do Prompt à UI**

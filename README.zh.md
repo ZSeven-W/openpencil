@@ -102,6 +102,55 @@ bun run electron:dev
 
 > **前置条件：** [Bun](https://bun.sh/) >= 1.0 以及 [Node.js](https://nodejs.org/) >= 18
 
+### Docker 部署
+
+提供多个镜像变体，按需选择：
+
+| 镜像 | 大小 | 包含 |
+| --- | --- | --- |
+| `openpencil:latest` | ~226 MB | 仅 Web 应用 |
+| `openpencil-claude:latest` | — | + Claude Code CLI |
+| `openpencil-codex:latest` | — | + Codex CLI |
+| `openpencil-opencode:latest` | — | + OpenCode CLI |
+| `openpencil-copilot:latest` | — | + GitHub Copilot CLI |
+| `openpencil-full:latest` | ~1 GB | 全部 CLI 工具 |
+
+**运行（仅 Web）：**
+
+```bash
+docker run -d -p 3000:3000 ghcr.io/zseven-w/openpencil:latest
+```
+
+**运行 AI CLI（以 Claude Code 为例）：**
+
+AI 聊天依赖 Claude CLI 的 OAuth 登录，使用 Docker volume 持久化登录状态：
+
+```bash
+# 第一步 — 登录（仅需一次）
+docker volume create openpencil-claude-auth
+docker run -it --rm \
+  -v openpencil-claude-auth:/root/.claude \
+  ghcr.io/zseven-w/openpencil-claude:latest claude login
+
+# 第二步 — 启动
+docker run -d -p 3000:3000 \
+  -v openpencil-claude-auth:/root/.claude \
+  ghcr.io/zseven-w/openpencil-claude:latest
+```
+
+**本地构建：**
+
+```bash
+# 基础版（仅 Web）
+docker build --target base -t openpencil .
+
+# 指定 CLI
+docker build --target with-claude -t openpencil-claude .
+
+# 完整版（全部 CLI）
+docker build --target full -t openpencil-full .
+```
+
 ## AI 原生设计
 
 **提示词生成 UI**

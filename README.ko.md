@@ -102,6 +102,55 @@ bun run electron:dev
 
 > **필수 조건:** [Bun](https://bun.sh/) >= 1.0 및 [Node.js](https://nodejs.org/) >= 18
 
+### Docker 배포
+
+여러 이미지 변형을 사용할 수 있습니다 — 필요에 맞는 것을 선택하세요:
+
+| 이미지 | 크기 | 포함 내용 |
+| --- | --- | --- |
+| `openpencil:latest` | ~226 MB | 웹 앱만 |
+| `openpencil-claude:latest` | — | + Claude Code CLI |
+| `openpencil-codex:latest` | — | + Codex CLI |
+| `openpencil-opencode:latest` | — | + OpenCode CLI |
+| `openpencil-copilot:latest` | — | + GitHub Copilot CLI |
+| `openpencil-full:latest` | ~1 GB | 모든 CLI 도구 |
+
+**실행 (웹만):**
+
+```bash
+docker run -d -p 3000:3000 ghcr.io/zseven-w/openpencil:latest
+```
+
+**AI CLI와 함께 실행 (예: Claude Code):**
+
+AI 채팅은 Claude CLI OAuth 로그인에 의존합니다. Docker 볼륨을 사용하여 로그인 세션을 유지하세요:
+
+```bash
+# 1단계 — 로그인 (최초 1회)
+docker volume create openpencil-claude-auth
+docker run -it --rm \
+  -v openpencil-claude-auth:/root/.claude \
+  ghcr.io/zseven-w/openpencil-claude:latest claude login
+
+# 2단계 — 시작
+docker run -d -p 3000:3000 \
+  -v openpencil-claude-auth:/root/.claude \
+  ghcr.io/zseven-w/openpencil-claude:latest
+```
+
+**로컬 빌드:**
+
+```bash
+# 기본 (웹만)
+docker build --target base -t openpencil .
+
+# 특정 CLI 포함
+docker build --target with-claude -t openpencil-claude .
+
+# 전체 (모든 CLI)
+docker build --target full -t openpencil-full .
+```
+
 ## AI 네이티브 디자인
 
 **프롬프트에서 UI로**

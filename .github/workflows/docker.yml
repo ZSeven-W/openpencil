@@ -11,12 +11,34 @@ env:
 
 jobs:
   build-and-push:
-    name: Build & Push Docker Image
+    name: Build & Push (${{ matrix.variant }})
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
     permissions:
       contents: read
       packages: write
+
+    strategy:
+      matrix:
+        include:
+          - variant: base
+            target: base
+            suffix: ''
+          - variant: claude
+            target: with-claude
+            suffix: '-claude'
+          - variant: codex
+            target: with-codex
+            suffix: '-codex'
+          - variant: opencode
+            target: with-opencode
+            suffix: '-opencode'
+          - variant: copilot
+            target: with-copilot
+            suffix: '-copilot'
+          - variant: full
+            target: full
+            suffix: '-full'
 
     steps:
       - uses: actions/checkout@v4
@@ -28,11 +50,13 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Extract metadata (tags, labels)
+      - name: Extract metadata
         id: meta
         uses: docker/metadata-action@v5
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          flavor: |
+            suffix=${{ matrix.suffix }}
           tags: |
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
@@ -45,8 +69,9 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           context: .
+          target: ${{ matrix.target }}
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-from: type=gha,scope=${{ matrix.variant }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.variant }}

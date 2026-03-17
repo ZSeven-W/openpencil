@@ -102,6 +102,55 @@ bun run electron:dev
 
 > **Требования:** [Bun](https://bun.sh/) >= 1.0 и [Node.js](https://nodejs.org/) >= 18
 
+### Развёртывание через Docker
+
+Доступно несколько вариантов образов — выберите подходящий для ваших нужд:
+
+| Образ | Размер | Содержит |
+| --- | --- | --- |
+| `openpencil:latest` | ~226 МБ | Только веб-приложение |
+| `openpencil-claude:latest` | — | + Claude Code CLI |
+| `openpencil-codex:latest` | — | + Codex CLI |
+| `openpencil-opencode:latest` | — | + OpenCode CLI |
+| `openpencil-copilot:latest` | — | + GitHub Copilot CLI |
+| `openpencil-full:latest` | ~1 ГБ | Все CLI-инструменты |
+
+**Запуск (только веб):**
+
+```bash
+docker run -d -p 3000:3000 ghcr.io/zseven-w/openpencil:latest
+```
+
+**Запуск с AI CLI (например, Claude Code):**
+
+AI-чат использует OAuth-авторизацию Claude CLI. Используйте Docker-том для сохранения сессии авторизации:
+
+```bash
+# Шаг 1 — Авторизация (однократно)
+docker volume create openpencil-claude-auth
+docker run -it --rm \
+  -v openpencil-claude-auth:/root/.claude \
+  ghcr.io/zseven-w/openpencil-claude:latest claude login
+
+# Шаг 2 — Запуск
+docker run -d -p 3000:3000 \
+  -v openpencil-claude-auth:/root/.claude \
+  ghcr.io/zseven-w/openpencil-claude:latest
+```
+
+**Локальная сборка:**
+
+```bash
+# Базовый (только веб)
+docker build --target base -t openpencil .
+
+# С конкретным CLI
+docker build --target with-claude -t openpencil-claude .
+
+# Полный (все CLI)
+docker build --target full -t openpencil-full .
+```
+
 ## AI-нативный дизайн
 
 **От запроса к UI**

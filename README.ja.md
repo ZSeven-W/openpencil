@@ -102,6 +102,55 @@ bun run electron:dev
 
 > **前提条件：** [Bun](https://bun.sh/) >= 1.0 および [Node.js](https://nodejs.org/) >= 18
 
+### Docker デプロイ
+
+複数のイメージバリアントが利用可能です — ニーズに合ったものを選択してください：
+
+| イメージ | サイズ | 含まれるもの |
+| --- | --- | --- |
+| `openpencil:latest` | ~226 MB | Web アプリのみ |
+| `openpencil-claude:latest` | — | + Claude Code CLI |
+| `openpencil-codex:latest` | — | + Codex CLI |
+| `openpencil-opencode:latest` | — | + OpenCode CLI |
+| `openpencil-copilot:latest` | — | + GitHub Copilot CLI |
+| `openpencil-full:latest` | ~1 GB | すべての CLI ツール |
+
+**実行（Web のみ）：**
+
+```bash
+docker run -d -p 3000:3000 ghcr.io/zseven-w/openpencil:latest
+```
+
+**AI CLI 付きで実行（例：Claude Code）：**
+
+AI チャットは Claude CLI OAuth ログインに依存しています。Docker ボリュームを使用してログインセッションを永続化してください：
+
+```bash
+# ステップ 1 — ログイン（初回のみ）
+docker volume create openpencil-claude-auth
+docker run -it --rm \
+  -v openpencil-claude-auth:/root/.claude \
+  ghcr.io/zseven-w/openpencil-claude:latest claude login
+
+# ステップ 2 — 起動
+docker run -d -p 3000:3000 \
+  -v openpencil-claude-auth:/root/.claude \
+  ghcr.io/zseven-w/openpencil-claude:latest
+```
+
+**ローカルビルド：**
+
+```bash
+# ベース（Web のみ）
+docker build --target base -t openpencil .
+
+# 特定の CLI 付き
+docker build --target with-claude -t openpencil-claude .
+
+# フル（すべての CLI）
+docker build --target full -t openpencil-full .
+```
+
 ## AI ネイティブデザイン
 
 **プロンプトから UI へ**

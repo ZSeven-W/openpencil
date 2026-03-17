@@ -102,6 +102,55 @@ bun run electron:dev
 
 > **पूर्वापेक्षाएँ:** [Bun](https://bun.sh/) >= 1.0 और [Node.js](https://nodejs.org/) >= 18
 
+### Docker डिप्लॉयमेंट
+
+कई इमेज वेरिएंट उपलब्ध हैं — अपनी ज़रूरत के अनुसार चुनें:
+
+| इमेज | आकार | शामिल |
+| --- | --- | --- |
+| `openpencil:latest` | ~226 MB | केवल वेब ऐप |
+| `openpencil-claude:latest` | — | + Claude Code CLI |
+| `openpencil-codex:latest` | — | + Codex CLI |
+| `openpencil-opencode:latest` | — | + OpenCode CLI |
+| `openpencil-copilot:latest` | — | + GitHub Copilot CLI |
+| `openpencil-full:latest` | ~1 GB | सभी CLI टूल |
+
+**चलाएँ (केवल वेब):**
+
+```bash
+docker run -d -p 3000:3000 ghcr.io/zseven-w/openpencil:latest
+```
+
+**AI CLI के साथ चलाएँ (उदा. Claude Code):**
+
+AI चैट Claude CLI OAuth लॉगिन पर निर्भर करता है। लॉगिन सत्र को बनाए रखने के लिए Docker वॉल्यूम का उपयोग करें:
+
+```bash
+# चरण 1 — लॉगिन (एक बार)
+docker volume create openpencil-claude-auth
+docker run -it --rm \
+  -v openpencil-claude-auth:/root/.claude \
+  ghcr.io/zseven-w/openpencil-claude:latest claude login
+
+# चरण 2 — शुरू करें
+docker run -d -p 3000:3000 \
+  -v openpencil-claude-auth:/root/.claude \
+  ghcr.io/zseven-w/openpencil-claude:latest
+```
+
+**स्थानीय रूप से बिल्ड करें:**
+
+```bash
+# बेस (केवल वेब)
+docker build --target base -t openpencil .
+
+# किसी विशिष्ट CLI के साथ
+docker build --target with-claude -t openpencil-claude .
+
+# पूर्ण (सभी CLI)
+docker build --target full -t openpencil-full .
+```
+
 ## AI-नेटिव डिज़ाइन
 
 **प्रॉम्प्ट से UI तक**
