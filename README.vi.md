@@ -102,6 +102,55 @@ bun run electron:dev
 
 > **Yêu cầu:** [Bun](https://bun.sh/) >= 1.0 và [Node.js](https://nodejs.org/) >= 18
 
+### Triển khai bằng Docker
+
+Có nhiều biến thể image khác nhau — chọn loại phù hợp với nhu cầu của bạn:
+
+| Image | Kích thước | Bao gồm |
+| --- | --- | --- |
+| `openpencil:latest` | ~226 MB | Chỉ ứng dụng web |
+| `openpencil-claude:latest` | — | + Claude Code CLI |
+| `openpencil-codex:latest` | — | + Codex CLI |
+| `openpencil-opencode:latest` | — | + OpenCode CLI |
+| `openpencil-copilot:latest` | — | + GitHub Copilot CLI |
+| `openpencil-full:latest` | ~1 GB | Tất cả công cụ CLI |
+
+**Chạy (chỉ web):**
+
+```bash
+docker run -d -p 3000:3000 ghcr.io/zseven-w/openpencil:latest
+```
+
+**Chạy với AI CLI (ví dụ Claude Code):**
+
+Chat AI dựa vào đăng nhập OAuth của Claude CLI. Sử dụng Docker volume để lưu phiên đăng nhập:
+
+```bash
+# Bước 1 — Đăng nhập (một lần)
+docker volume create openpencil-claude-auth
+docker run -it --rm \
+  -v openpencil-claude-auth:/root/.claude \
+  ghcr.io/zseven-w/openpencil-claude:latest claude login
+
+# Bước 2 — Khởi động
+docker run -d -p 3000:3000 \
+  -v openpencil-claude-auth:/root/.claude \
+  ghcr.io/zseven-w/openpencil-claude:latest
+```
+
+**Build cục bộ:**
+
+```bash
+# Cơ bản (chỉ web)
+docker build --target base -t openpencil .
+
+# Với một CLI cụ thể
+docker build --target with-claude -t openpencil-claude .
+
+# Đầy đủ (tất cả CLI)
+docker build --target full -t openpencil-full .
+```
+
 ## Thiết kế thuần AI
 
 **Từ Prompt đến Giao diện**

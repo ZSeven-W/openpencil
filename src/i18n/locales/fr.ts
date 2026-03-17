@@ -30,6 +30,7 @@ const fr: TranslationKeys = {
   // ── Shapes ──
   'shapes.rectangle': 'Rectangle',
   'shapes.ellipse': 'Ellipse',
+  'shapes.polygon': 'Polygone',
   'shapes.line': 'Ligne',
   'shapes.icon': 'Icône',
   'shapes.importImageSvg': 'Importer une image ou un SVG\u2026',
@@ -240,6 +241,14 @@ const fr: TranslationKeys = {
   'export.selectedOnly': 'Exporter la sélection uniquement',
   'export.exportFormat': 'Exporter en {{format}}',
   'export.exportLayer': 'Exporter le calque',
+
+  // ── Polygon ──
+  'polygon.sides': 'Côtés',
+
+  // ── Ellipse ──
+  'ellipse.start': 'Début',
+  'ellipse.sweep': 'Balayage',
+  'ellipse.innerRadius': 'Intérieur',
 
   // ── Corner Radius ──
   'cornerRadius.title': 'Rayon de coin',

@@ -102,6 +102,55 @@ bun run electron:dev
 
 > **ข้อกำหนดเบื้องต้น:** [Bun](https://bun.sh/) >= 1.0 และ [Node.js](https://nodejs.org/) >= 18
 
+### การติดตั้งด้วย Docker
+
+มี image หลายรูปแบบให้เลือก — เลือกแบบที่เหมาะกับความต้องการของคุณ:
+
+| Image | ขนาด | รวม |
+| --- | --- | --- |
+| `openpencil:latest` | ~226 MB | เว็บแอปเท่านั้น |
+| `openpencil-claude:latest` | — | + Claude Code CLI |
+| `openpencil-codex:latest` | — | + Codex CLI |
+| `openpencil-opencode:latest` | — | + OpenCode CLI |
+| `openpencil-copilot:latest` | — | + GitHub Copilot CLI |
+| `openpencil-full:latest` | ~1 GB | เครื่องมือ CLI ทั้งหมด |
+
+**รัน (เว็บเท่านั้น):**
+
+```bash
+docker run -d -p 3000:3000 ghcr.io/zseven-w/openpencil:latest
+```
+
+**รันพร้อม AI CLI (เช่น Claude Code):**
+
+AI chat ต้องใช้การเข้าสู่ระบบ OAuth ของ Claude CLI ใช้ Docker volume เพื่อเก็บรักษา session การเข้าสู่ระบบ:
+
+```bash
+# ขั้นตอนที่ 1 — เข้าสู่ระบบ (ครั้งเดียว)
+docker volume create openpencil-claude-auth
+docker run -it --rm \
+  -v openpencil-claude-auth:/root/.claude \
+  ghcr.io/zseven-w/openpencil-claude:latest claude login
+
+# ขั้นตอนที่ 2 — เริ่มต้น
+docker run -d -p 3000:3000 \
+  -v openpencil-claude-auth:/root/.claude \
+  ghcr.io/zseven-w/openpencil-claude:latest
+```
+
+**Build ในเครื่อง:**
+
+```bash
+# พื้นฐาน (เว็บเท่านั้น)
+docker build --target base -t openpencil .
+
+# พร้อม CLI เฉพาะตัว
+docker build --target with-claude -t openpencil-claude .
+
+# เต็มรูปแบบ (CLI ทั้งหมด)
+docker build --target full -t openpencil-full .
+```
+
 ## การออกแบบที่ขับเคลื่อนด้วย AI
 
 **จาก Prompt สู่ UI**

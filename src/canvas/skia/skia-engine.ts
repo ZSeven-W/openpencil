@@ -1,5 +1,5 @@
 import type { CanvasKit, Surface } from 'canvaskit-wasm'
-import type { PenNode, ContainerProps } from '@/types/pen'
+import type { PenNode, ContainerProps, EllipseNode } from '@/types/pen'
 import { useCanvasStore } from '@/stores/canvas-store'
 import { useDocumentStore, getActivePageChildren, getAllChildren } from '@/stores/document-store'
 import { resolveNodeForCanvas, getDefaultTheme } from '@/variables/resolve-variables'
@@ -399,7 +399,7 @@ export class SkiaEngine {
   hoveredNodeId: string | null = null
   marquee: { x1: number; y1: number; x2: number; y2: number } | null = null
   previewShape: {
-    type: 'rectangle' | 'ellipse' | 'frame' | 'line'
+    type: 'rectangle' | 'ellipse' | 'frame' | 'line' | 'polygon'
     x: number; y: number; w: number; h: number
   } | null = null
   penPreview: import('./skia-overlays').PenPreviewData | null = null
@@ -641,6 +641,21 @@ export class SkiaEngine {
       const hovered = this.spatialIndex.get(this.hoveredNodeId)
       if (hovered) {
         this.renderer.drawHoverOutline(canvas, hovered.absX, hovered.absY, hovered.absW, hovered.absH)
+      }
+    }
+
+    // Arc handles for selected ellipse
+    if (selectedIds.size === 1) {
+      const selId = selectedIds.values().next().value as string
+      const selRN = this.spatialIndex.get(selId)
+      if (selRN && selRN.node.type === 'ellipse') {
+        const eNode = selRN.node as EllipseNode
+        this.renderer.drawArcHandles(
+          canvas,
+          selRN.absX, selRN.absY, selRN.absW, selRN.absH,
+          eNode.startAngle ?? 0, eNode.sweepAngle ?? 360, eNode.innerRadius ?? 0,
+          this.zoom,
+        )
       }
     }
 
