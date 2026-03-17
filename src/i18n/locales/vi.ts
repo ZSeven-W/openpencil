@@ -30,6 +30,7 @@ const vi: TranslationKeys = {
   // ── Shapes ──
   'shapes.rectangle': 'Hình chữ nhật',
   'shapes.ellipse': 'Hình elip',
+  'shapes.polygon': 'Đa giác',
   'shapes.line': 'Đường thẳng',
   'shapes.icon': 'Biểu tượng',
   'shapes.importImageSvg': 'Nhập ảnh hoặc SVG\u2026',
@@ -237,6 +238,14 @@ const vi: TranslationKeys = {
   'export.selectedOnly': 'Chỉ xuất phần đã chọn',
   'export.exportFormat': 'Xuất {{format}}',
   'export.exportLayer': 'Xuất lớp',
+
+  // ── Polygon ──
+  'polygon.sides': 'Cạnh',
+
+  // ── Ellipse ──
+  'ellipse.start': 'Bắt đầu',
+  'ellipse.sweep': 'Quét',
+  'ellipse.innerRadius': 'Bán kính trong',
 
   // ── Corner Radius ──
   'cornerRadius.title': 'Bán kính góc',

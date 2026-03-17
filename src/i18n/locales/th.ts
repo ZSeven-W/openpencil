@@ -30,6 +30,7 @@ const th: TranslationKeys = {
   // ── Shapes ──
   'shapes.rectangle': 'สี่เหลี่ยมผืนผ้า',
   'shapes.ellipse': 'วงรี',
+  'shapes.polygon': 'รูปหลายเหลี่ยม',
   'shapes.line': 'เส้น',
   'shapes.icon': 'ไอคอน',
   'shapes.importImageSvg': 'นำเข้ารูปภาพหรือ SVG\u2026',
@@ -237,6 +238,14 @@ const th: TranslationKeys = {
   'export.selectedOnly': 'ส่งออกเฉพาะที่เลือก',
   'export.exportFormat': 'ส่งออก {{format}}',
   'export.exportLayer': 'ส่งออกเลเยอร์',
+
+  // ── Polygon ──
+  'polygon.sides': 'ด้าน',
+
+  // ── Ellipse ──
+  'ellipse.start': 'เริ่ม',
+  'ellipse.sweep': 'กวาด',
+  'ellipse.innerRadius': 'ภายใน',
 
   // ── Corner Radius ──
   'cornerRadius.title': 'รัศมีมุม',

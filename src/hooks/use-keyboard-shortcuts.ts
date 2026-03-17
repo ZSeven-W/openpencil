@@ -23,6 +23,7 @@ const TOOL_KEYS: Record<string, ToolType> = {
   f: 'frame',
   r: 'rectangle',
   o: 'ellipse',
+  y: 'polygon',
   l: 'line',
   t: 'text',
   p: 'path',

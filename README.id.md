@@ -102,6 +102,55 @@ bun run electron:dev
 
 > **Prasyarat:** [Bun](https://bun.sh/) >= 1.0 dan [Node.js](https://nodejs.org/) >= 18
 
+### Deployment Docker
+
+Tersedia beberapa varian image — pilih yang sesuai kebutuhan Anda:
+
+| Image | Ukuran | Termasuk |
+| --- | --- | --- |
+| `openpencil:latest` | ~226 MB | Hanya aplikasi web |
+| `openpencil-claude:latest` | — | + Claude Code CLI |
+| `openpencil-codex:latest` | — | + Codex CLI |
+| `openpencil-opencode:latest` | — | + OpenCode CLI |
+| `openpencil-copilot:latest` | — | + GitHub Copilot CLI |
+| `openpencil-full:latest` | ~1 GB | Semua alat CLI |
+
+**Jalankan (hanya web):**
+
+```bash
+docker run -d -p 3000:3000 ghcr.io/zseven-w/openpencil:latest
+```
+
+**Jalankan dengan AI CLI (misal Claude Code):**
+
+Chat AI bergantung pada login OAuth Claude CLI. Gunakan volume Docker untuk menyimpan sesi login:
+
+```bash
+# Langkah 1 — Login (satu kali)
+docker volume create openpencil-claude-auth
+docker run -it --rm \
+  -v openpencil-claude-auth:/root/.claude \
+  ghcr.io/zseven-w/openpencil-claude:latest claude login
+
+# Langkah 2 — Mulai
+docker run -d -p 3000:3000 \
+  -v openpencil-claude-auth:/root/.claude \
+  ghcr.io/zseven-w/openpencil-claude:latest
+```
+
+**Build secara lokal:**
+
+```bash
+# Dasar (hanya web)
+docker build --target base -t openpencil .
+
+# Dengan CLI tertentu
+docker build --target with-claude -t openpencil-claude .
+
+# Lengkap (semua CLI)
+docker build --target full -t openpencil-full .
+```
+
 ## Desain Berbasis AI
 
 **Dari Prompt ke UI**

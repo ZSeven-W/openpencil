@@ -30,6 +30,7 @@ const tr: TranslationKeys = {
   // ── Shapes ──
   'shapes.rectangle': 'Dikdörtgen',
   'shapes.ellipse': 'Elips',
+  'shapes.polygon': 'Çokgen',
   'shapes.line': 'Çizgi',
   'shapes.icon': 'Simge',
   'shapes.importImageSvg': 'Görsel veya SVG İçe Aktar\u2026',
@@ -237,6 +238,14 @@ const tr: TranslationKeys = {
   'export.selectedOnly': 'Yalnızca seçilenleri dışa aktar',
   'export.exportFormat': '{{format}} Dışa Aktar',
   'export.exportLayer': 'Katmanı dışa aktar',
+
+  // ── Polygon ──
+  'polygon.sides': 'Kenar',
+
+  // ── Ellipse ──
+  'ellipse.start': 'Başlangıç',
+  'ellipse.sweep': 'Süpürme',
+  'ellipse.innerRadius': 'İç',
 
   // ── Corner Radius ──
   'cornerRadius.title': 'Köşe Yarıçapı',

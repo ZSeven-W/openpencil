@@ -30,6 +30,7 @@ const id: TranslationKeys = {
   // ── Shapes ──
   'shapes.rectangle': 'Persegi Panjang',
   'shapes.ellipse': 'Elips',
+  'shapes.polygon': 'Poligon',
   'shapes.line': 'Garis',
   'shapes.icon': 'Ikon',
   'shapes.importImageSvg': 'Impor Gambar atau SVG\u2026',
@@ -237,6 +238,14 @@ const id: TranslationKeys = {
   'export.selectedOnly': 'Ekspor pilihan saja',
   'export.exportFormat': 'Ekspor {{format}}',
   'export.exportLayer': 'Ekspor layer',
+
+  // ── Polygon ──
+  'polygon.sides': 'Sisi',
+
+  // ── Ellipse ──
+  'ellipse.start': 'Mulai',
+  'ellipse.sweep': 'Sapuan',
+  'ellipse.innerRadius': 'Dalam',
 
   // ── Corner Radius ──
   'cornerRadius.title': 'Radius Sudut',

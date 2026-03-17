@@ -8,7 +8,8 @@ import { inferLayout } from '../canvas-layout-engine'
 import { SkiaPenTool } from './skia-pen-tool'
 import { setSkiaEngineRef } from '../skia-engine-ref'
 import type { ToolType } from '@/types/canvas'
-import type { PenNode, ContainerProps, TextNode } from '@/types/pen'
+import type { PenNode, ContainerProps, TextNode, EllipseNode } from '@/types/pen'
+import { computeArcHandles } from './skia-overlays'
 
 interface TextEditState {
   nodeId: string
@@ -207,6 +208,37 @@ export default function SkiaCanvas() {
     let rotateCenterY = 0
     let rotateStartAngle = 0
 
+    // --- Arc handle state ---
+    type ArcHandleType = 'start' | 'end' | 'inner'
+    let isDraggingArc = false
+    let arcHandleType: ArcHandleType | null = null
+    let arcNodeId: string | null = null
+
+    const ARC_HANDLE_HIT_RADIUS = 8
+
+    /** Check if a scene point hits an arc handle of the selected ellipse. */
+    const hitTestArcHandle = (sceneX: number, sceneY: number): { type: ArcHandleType; nodeId: string } | null => {
+      const engine = getEngine()
+      if (!engine) return null
+      const { selectedIds } = useCanvasStore.getState().selection
+      if (selectedIds.length !== 1) return null
+      const rn = engine.spatialIndex.get(selectedIds[0])
+      if (!rn || rn.node.type !== 'ellipse') return null
+      const eNode = rn.node as EllipseNode
+      const handles = computeArcHandles(
+        rn.absX, rn.absY, rn.absW, rn.absH,
+        eNode.startAngle ?? 0, eNode.sweepAngle ?? 360, eNode.innerRadius ?? 0,
+      )
+      const hitR = ARC_HANDLE_HIT_RADIUS / engine.zoom
+      for (const key of ['start', 'end', 'inner'] as ArcHandleType[]) {
+        const h = handles[key]
+        if (Math.hypot(sceneX - h.x, sceneY - h.y) <= hitR) {
+          return { type: key, nodeId: rn.node.id }
+        }
+      }
+      return null
+    }
+
     // --- Drawing tool state ---
     let isDrawing = false
     let drawTool: ToolType = 'select'
@@ -356,7 +388,7 @@ export default function SkiaCanvas() {
         drawStartX = scene.x
         drawStartY = scene.y
         engine.previewShape = {
-          type: tool as 'rectangle' | 'ellipse' | 'frame' | 'line',
+          type: tool as 'rectangle' | 'ellipse' | 'frame' | 'line' | 'polygon',
           x: scene.x, y: scene.y, w: 0, h: 0,
         }
         engine.markDirty()
@@ -365,6 +397,16 @@ export default function SkiaCanvas() {
 
       // --- Select tool ---
       if (tool === 'select') {
+        // Check arc handles first (ellipse arc editing)
+        const arcHit = hitTestArcHandle(scene.x, scene.y)
+        if (arcHit) {
+          isDraggingArc = true
+          arcHandleType = arcHit.type
+          arcNodeId = arcHit.nodeId
+          canvasEl.style.cursor = 'pointer'
+          return
+        }
+
         // Check resize handle first (only for single selection)
         const handleHit = hitTestHandle(scene.x, scene.y)
         if (handleHit) {
@@ -547,6 +589,46 @@ export default function SkiaCanvas() {
         return
       }
 
+      // --- Arc handle drag ---
+      if (isDraggingArc && arcNodeId && arcHandleType) {
+        const rn = engine.spatialIndex.get(arcNodeId)
+        if (rn) {
+          const cx = rn.absX + rn.absW / 2
+          const cy = rn.absY + rn.absH / 2
+          // Compute angle from center, accounting for ellipse aspect ratio
+          const angle = Math.atan2(scene.y - cy, scene.x - cx) * 180 / Math.PI
+          const normalizedAngle = ((angle % 360) + 360) % 360
+          const eNode = rn.node as EllipseNode
+
+          if (arcHandleType === 'start') {
+            const oldStart = eNode.startAngle ?? 0
+            const oldEnd = oldStart + (eNode.sweepAngle ?? 360)
+            // Keep end angle fixed, adjust sweep
+            const newSweep = ((oldEnd - normalizedAngle) % 360 + 360) % 360
+            useDocumentStore.getState().updateNode(arcNodeId, {
+              startAngle: normalizedAngle,
+              sweepAngle: newSweep || 360,
+            } as Partial<PenNode>)
+          } else if (arcHandleType === 'end') {
+            const startA = eNode.startAngle ?? 0
+            const newSweep = ((normalizedAngle - startA) % 360 + 360) % 360
+            useDocumentStore.getState().updateNode(arcNodeId, {
+              sweepAngle: newSweep || 360,
+            } as Partial<PenNode>)
+          } else if (arcHandleType === 'inner') {
+            // Inner radius: distance from center as ratio of outer radius
+            const rx = rn.absW / 2
+            const ry = rn.absH / 2
+            const dist = Math.hypot((scene.x - cx) / rx, (scene.y - cy) / ry)
+            const newInner = Math.max(0, Math.min(0.99, dist))
+            useDocumentStore.getState().updateNode(arcNodeId, {
+              innerRadius: newInner,
+            } as Partial<PenNode>)
+          }
+        }
+        return
+      }
+
       // --- Drawing tool preview ---
       if (isDrawing && engine.previewShape) {
         const dx = scene.x - drawStartX
@@ -561,7 +643,7 @@ export default function SkiaCanvas() {
         } else {
           // Rectangle / ellipse / frame: handle negative drag direction
           engine.previewShape = {
-            type: drawTool as 'rectangle' | 'ellipse' | 'frame' | 'line',
+            type: drawTool as 'rectangle' | 'ellipse' | 'frame' | 'line' | 'polygon',
             x: dx < 0 ? scene.x : drawStartX,
             y: dy < 0 ? scene.y : drawStartY,
             w: Math.abs(dx),
@@ -636,6 +718,12 @@ export default function SkiaCanvas() {
 
       // --- Hover + handle cursor (select tool only) ---
       if (getTool() === 'select' && !spacePressed) {
+        // Check arc handle hover
+        const arcHoverHit = hitTestArcHandle(scene.x, scene.y)
+        if (arcHoverHit) {
+          canvasEl.style.cursor = 'pointer'
+          return
+        }
         // Check handle hover for cursor
         const handleHit = hitTestHandle(scene.x, scene.y)
         if (handleHit) {
@@ -676,6 +764,14 @@ export default function SkiaCanvas() {
         isResizing = false
         resizeHandle = null
         resizeNodeId = null
+        canvasEl.style.cursor = toolToCursor(getTool())
+      }
+
+      // --- Arc handle end ---
+      if (isDraggingArc) {
+        isDraggingArc = false
+        arcHandleType = null
+        arcNodeId = null
         canvasEl.style.cursor = toolToCursor(getTool())
       }
 
