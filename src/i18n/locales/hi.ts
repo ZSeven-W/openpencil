@@ -363,6 +363,13 @@ const hi: TranslationKeys = {
   'agents.installing': 'स्थापित हो रहा है...',
   'agents.installFailed': 'स्थापना विफल',
   'agents.viewDocs': 'दस्तावेज़',
+  'settings.title': 'सेटिंग्स',
+  'settings.agents': 'Agents',
+  'settings.mcp': 'MCP',
+  'settings.system': 'सिस्टम',
+  'settings.autoUpdateDesc': 'स्टार्टअप पर स्वचालित रूप से नए संस्करणों की जाँच करें',
+  'settings.systemDesktopOnly': 'सिस्टम सेटिंग्स डेस्कटॉप ऐप में उपलब्ध हैं।',
+  'settings.envHint': 'आप {{path}} में अतिरिक्त पर्यावरण चर सेट कर सकते हैं।',
 
   // ── Figma Import ──
   'figma.title': 'Figma से आयात करें',
