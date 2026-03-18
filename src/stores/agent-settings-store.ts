@@ -28,6 +28,8 @@ interface AgentSettingsState extends PersistedState {
     provider: AIProviderType,
     method: AIProviderConfig['connectionMethod'],
     models: GroupedModel[],
+    connectionInfo?: string,
+    hintPath?: string,
   ) => void
   disconnectProvider: (provider: AIProviderType) => void
   toggleMCPIntegration: (tool: string) => void
@@ -88,7 +90,7 @@ export const useAgentSettingsStore = create<AgentSettingsState>((set, get) => ({
   mcpServerRunning: false,
   mcpServerLocalIp: null,
 
-  connectProvider: (provider, method, models) =>
+  connectProvider: (provider, method, models, connectionInfo, hintPath) =>
     set((s) => ({
       providers: {
         ...s.providers,
@@ -97,6 +99,8 @@ export const useAgentSettingsStore = create<AgentSettingsState>((set, get) => ({
           isConnected: true,
           connectionMethod: method,
           models,
+          connectionInfo,
+          hintPath,
         },
       },
     })),

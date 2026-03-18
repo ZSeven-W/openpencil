@@ -363,6 +363,13 @@ const tr: TranslationKeys = {
   'agents.installing': 'Yükleniyor...',
   'agents.installFailed': 'Yükleme başarısız',
   'agents.viewDocs': 'Belgeler',
+  'settings.title': 'Ayarlar',
+  'settings.agents': 'Agents',
+  'settings.mcp': 'MCP',
+  'settings.system': 'Sistem',
+  'settings.autoUpdateDesc': 'Başlangıçta yeni sürümleri otomatik olarak kontrol et',
+  'settings.systemDesktopOnly': 'Sistem ayarları masaüstü uygulamasında kullanılabilir.',
+  'settings.envHint': '{{path}} dosyasında ek ortam değişkenleri ayarlayabilirsiniz.',
 
   // ── Figma Import ──
   'figma.title': 'Figma\'dan İçe Aktar',

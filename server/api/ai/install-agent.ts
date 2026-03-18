@@ -128,7 +128,8 @@ async function tryNpmInstall(pkg: string, binary: string): Promise<InstallResult
   }
 
   try {
-    execSync(`npm install -g ${pkg}`, {
+    const npmBin = process.platform === 'win32' ? 'npm.cmd' : 'npm'
+    execSync(`${npmBin} install -g ${pkg}`, {
       encoding: 'utf-8',
       timeout: 180_000,
       stdio: 'pipe',

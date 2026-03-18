@@ -1,6 +1,8 @@
 import { defineEventHandler, readBody, setResponseHeaders } from 'h3'
+import { existsSync } from 'node:fs'
 import type { GroupedModel } from '../../../src/types/agent-settings'
 import { resolveClaudeCli } from '../../utils/resolve-claude-cli'
+import { serverLog } from '../../utils/server-logger'
 import {
   buildClaudeAgentEnv,
   getClaudeAgentDebugFilePath,
@@ -15,6 +17,10 @@ interface ConnectResult {
   models: GroupedModel[]
   error?: string
   notInstalled?: boolean
+  /** Human-readable connection status, e.g. "Connected via API key" */
+  connectionInfo?: string
+  /** Config file path for the hint (client renders localized text) */
+  hintPath?: string
 }
 
 /**
@@ -65,7 +71,9 @@ const FALLBACK_CLAUDE_MODELS: GroupedModel[] = [
 
 /** Connect to Claude Code via Agent SDK and fetch real supported models */
 async function connectClaudeCode(): Promise<ConnectResult> {
+  serverLog.info('[connect-agent] connecting to Claude Code...')
   const claudePath = resolveClaudeCli()
+  serverLog.info(`[connect-agent] resolved claude path: ${claudePath ?? 'NOT FOUND'}`)
   if (!claudePath) {
     return { connected: false, models: [], notInstalled: true, error: 'Claude Code CLI not found' }
   }
@@ -75,6 +83,8 @@ async function connectClaudeCode(): Promise<ConnectResult> {
 
     const env = buildClaudeAgentEnv()
     const debugFile = getClaudeAgentDebugFilePath()
+    serverLog.info(`[connect-agent] claude env keys: ${Object.keys(env).join(', ')}`)
+    serverLog.info(`[connect-agent] claude debugFile: ${debugFile ?? 'none'}`)
 
     const q = query({
       prompt: '',
@@ -89,7 +99,17 @@ async function connectClaudeCode(): Promise<ConnectResult> {
       },
     })
 
+    serverLog.info('[connect-agent] querying supportedModels...')
     const raw = await q.supportedModels()
+
+    // Fetch account info (email, org, subscription type)
+    let account: { email?: string; organization?: string; subscriptionType?: string; apiKeySource?: string } | null = null
+    try {
+      account = await q.accountInfo()
+      serverLog.info(`[connect-agent] claude account: email=${account?.email ?? 'n/a'}, type=${account?.subscriptionType ?? 'n/a'}, source=${account?.apiKeySource ?? 'n/a'}`)
+    } catch {
+      serverLog.info('[connect-agent] accountInfo() not available')
+    }
     q.close()
 
     const models: GroupedModel[] = raw.map((m) => ({
@@ -99,17 +119,105 @@ async function connectClaudeCode(): Promise<ConnectResult> {
       provider: 'anthropic' as const,
     }))
 
-    return { connected: true, models }
+    serverLog.info(`[connect-agent] claude connected, ${models.length} models found`)
+    const claudeInfo = buildClaudeConnectionInfo(env, account)
+    return { connected: true, models, ...claudeInfo }
   } catch (error) {
     const msg = error instanceof Error ? error.message : 'Failed to connect'
+    serverLog.error(`[connect-agent] claude connection error: ${msg}`)
     // Third-party API proxies often don't support the supportedModels() call,
     // causing "query closed before response". Fall back to a default model list
     // so users can still connect and choose a model.
     if (/closed before|closed early|query closed/i.test(msg)) {
-      return { connected: true, models: FALLBACK_CLAUDE_MODELS }
+      serverLog.info('[connect-agent] using fallback model list (proxy detected)')
+      const fallbackEnv = buildClaudeAgentEnv()
+      const claudeInfo = buildClaudeConnectionInfo(fallbackEnv, null)
+      return { connected: true, models: FALLBACK_CLAUDE_MODELS, ...claudeInfo }
     }
     return { connected: false, models: [], error: friendlyClaudeError(msg) }
   }
+}
+
+/** Resolve config file path (cross-platform) */
+function configPath(unixPath: string, winPath: string): string {
+  return process.platform === 'win32' ? winPath : unixPath
+}
+
+/** Build Claude connection info from env + SDK account info */
+function buildClaudeConnectionInfo(
+  env: Record<string, string | undefined>,
+  account: { email?: string; organization?: string; subscriptionType?: string; apiKeySource?: string } | null,
+): { connectionInfo: string; hintPath?: string } {
+  const hp = configPath('~/.claude/settings.json', '%USERPROFILE%\\.claude\\settings.json')
+  const apiKey = env.ANTHROPIC_API_KEY
+  const baseUrl = env.ANTHROPIC_BASE_URL
+
+  if (account?.email) {
+    const sub = account.subscriptionType ?? 'subscription'
+    return { connectionInfo: `Connected via ${sub} (${account.email})`, hintPath: hp }
+  }
+  if (apiKey && baseUrl) {
+    return { connectionInfo: 'Connected via API key (custom endpoint)', hintPath: hp }
+  }
+  if (apiKey) {
+    const masked = apiKey.length > 12 ? `${apiKey.slice(0, 8)}...` : '***'
+    return { connectionInfo: `Connected via API key (${masked})`, hintPath: hp }
+  }
+  return { connectionInfo: 'Connected via subscription', hintPath: hp }
+}
+
+/** Decode a JWT payload (no verification — just base64url decode the middle part) */
+function decodeJwtPayload(token: string): Record<string, unknown> | null {
+  try {
+    const parts = token.split('.')
+    if (parts.length !== 3) return null
+    // base64url → base64 → Buffer → JSON
+    const b64 = parts[1].replace(/-/g, '+').replace(/_/g, '/')
+    const padded = b64 + '='.repeat((4 - (b64.length % 4)) % 4)
+    return JSON.parse(Buffer.from(padded, 'base64').toString('utf-8'))
+  } catch {
+    return null
+  }
+}
+
+/** Build Codex CLI connection info by reading ~/.codex/auth.json + JWT tokens */
+async function buildCodexConnectionInfo(): Promise<{ connectionInfo: string; hintPath?: string }> {
+  const { readFile } = await import('node:fs/promises')
+  const { homedir } = await import('node:os')
+  const { join } = await import('node:path')
+  const hp = configPath('~/.codex/config.json', '%USERPROFILE%\\.codex\\config.json')
+
+  if (process.env.OPENAI_API_KEY) {
+    const key = process.env.OPENAI_API_KEY
+    const masked = key.length > 12 ? `${key.slice(0, 8)}...` : '***'
+    return { connectionInfo: `Connected via API key (${masked})`, hintPath: hp }
+  }
+
+  try {
+    const authPath = join(homedir(), '.codex', 'auth.json')
+    const raw = await readFile(authPath, 'utf-8')
+    const auth = JSON.parse(raw) as { auth_mode?: string; tokens?: { id_token?: string } }
+
+    const idToken = auth.tokens?.id_token
+    if (idToken) {
+      const payload = decodeJwtPayload(idToken)
+      if (payload) {
+        const email = payload.email as string | undefined
+        const authClaims = payload['https://api.openai.com/auth'] as Record<string, unknown> | undefined
+        const plan = authClaims?.chatgpt_plan_type as string | undefined
+        serverLog.info(`[connect-agent] codex JWT: email=${email ?? 'n/a'}, plan=${plan ?? 'n/a'}`)
+        if (email) {
+          const label = plan ?? auth.auth_mode ?? 'subscription'
+          return { connectionInfo: `Connected via ${label} (${email})`, hintPath: hp }
+        }
+      }
+    }
+    if (auth.auth_mode) {
+      return { connectionInfo: `Connected via ${auth.auth_mode}`, hintPath: hp }
+    }
+  } catch { /* auth.json not found */ }
+
+  return { connectionInfo: 'Connected via Codex CLI', hintPath: hp }
 }
 
 /** Map raw Agent SDK errors to user-friendly messages */
@@ -131,33 +239,85 @@ function friendlyClaudeError(raw: string): string {
 
 /** Connect to Codex CLI and fetch its supported models from the local cache */
 async function connectCodexCli(): Promise<ConnectResult> {
+  serverLog.info('[connect-agent] connecting to Codex CLI...')
   try {
     const { execSync } = await import('node:child_process')
     const { readFile } = await import('node:fs/promises')
     const { homedir } = await import('node:os')
     const { join } = await import('node:path')
+    const isWin = process.platform === 'win32'
 
-    // Check if codex binary exists
-    const whichCmd = process.platform === 'win32' ? 'where codex 2>nul' : 'which codex 2>/dev/null || echo ""'
-    const which = execSync(whichCmd, {
-      encoding: 'utf-8',
-      timeout: 5000,
-    }).trim().split(/\r?\n/)[0]?.trim() ?? ''
+    // Check if codex binary exists — PATH, npm prefix, then common locations
+    let which = ''
 
-    if (!which) {
-      return { connected: false, models: [], notInstalled: true, error: 'Codex CLI not found' }
+    // 1. PATH lookup
+    try {
+      const whichCmd = isWin ? 'where codex 2>nul' : 'which codex 2>/dev/null || echo ""'
+      serverLog.info(`[connect-agent] codex PATH lookup: ${whichCmd}`)
+      const result = execSync(whichCmd, {
+        encoding: 'utf-8',
+        timeout: 5000,
+      }).trim().split(/\r?\n/)[0]?.trim() ?? ''
+      if (result && existsSync(result)) which = result
+      serverLog.info(`[connect-agent] codex PATH result: "${result}" (exists=${result ? existsSync(result) : false})`)
+    } catch (err) {
+      serverLog.info(`[connect-agent] codex PATH lookup failed: ${err instanceof Error ? err.message : err}`)
     }
 
-    // Verify codex is responsive
+    // 2. npm prefix -g (Windows: npm global creates .cmd wrappers)
+    if (!which && isWin) {
+      try {
+        serverLog.info('[connect-agent] codex: trying npm.cmd prefix -g')
+        const prefix = execSync('npm.cmd prefix -g', {
+          encoding: 'utf-8',
+          timeout: 5000,
+        }).trim()
+        serverLog.info(`[connect-agent] codex npm global prefix: "${prefix}"`)
+        if (prefix) {
+          const bin = join(prefix, 'codex.cmd')
+          serverLog.info(`[connect-agent] codex npm global bin: "${bin}" (exists=${existsSync(bin)})`)
+          if (existsSync(bin)) which = bin
+        }
+      } catch (err) {
+        serverLog.info(`[connect-agent] codex npm prefix -g failed: ${err instanceof Error ? err.message : err}`)
+      }
+    }
+
+    // 3. Common install locations
+    if (!which && isWin) {
+      const candidates = [
+        join(process.env.APPDATA || '', 'npm', 'codex.cmd'),
+        join(process.env.NVM_SYMLINK || '', 'codex.cmd'),
+        join(process.env.FNM_MULTISHELL_PATH || '', 'codex.cmd'),
+      ]
+      for (const c of candidates) {
+        const exists = c ? existsSync(c) : false
+        serverLog.info(`[connect-agent] codex candidate: "${c}" (exists=${exists})`)
+        if (c && exists) { which = c; break }
+      }
+    }
+
+    if (!which) {
+      serverLog.warn('[connect-agent] codex not found')
+      return { connected: false, models: [], notInstalled: true, error: 'Codex CLI not found' }
+    }
+    serverLog.info(`[connect-agent] codex resolved: "${which}"`)
+
+
+    // Verify codex is responsive — on Windows, use the resolved path or .cmd wrapper
+    const versionCmd = isWin ? `"${which}" --version 2>&1` : 'codex --version 2>&1'
     try {
-      execSync('codex --version 2>&1', { encoding: 'utf-8', timeout: 5000 })
-    } catch {
+      const ver = execSync(versionCmd, { encoding: 'utf-8', timeout: 5000 }).trim()
+      serverLog.info(`[connect-agent] codex version: ${ver}`)
+    } catch (err) {
+      serverLog.error(`[connect-agent] codex --version failed: ${err instanceof Error ? err.message : err}`)
       return { connected: false, models: [], error: 'Codex CLI not responding' }
     }
 
     // Read models from Codex CLI's local models cache
     let models: GroupedModel[] = []
     const cachePath = join(homedir(), '.codex', 'models_cache.json')
+    serverLog.info(`[connect-agent] codex models cache: "${cachePath}" (exists=${existsSync(cachePath)})`)
 
     try {
       const raw = await readFile(cachePath, 'utf-8')
@@ -182,17 +342,21 @@ async function connectCodexCli(): Promise<ConnectResult> {
             provider: 'openai' as const,
           }))
       }
-    } catch {
-      // Cache file not found or unreadable
+    } catch (cacheErr) {
+      serverLog.info(`[connect-agent] codex cache read failed: ${cacheErr instanceof Error ? cacheErr.message : cacheErr}`)
     }
 
     if (models.length === 0) {
+      serverLog.info('[connect-agent] codex: no models found')
       return { connected: false, models: [], error: 'No models found. Try running codex once to populate the model cache.' }
     }
 
-    return { connected: true, models }
+    serverLog.info(`[connect-agent] codex connected, ${models.length} models found`)
+    const codexInfo = await buildCodexConnectionInfo()
+    return { connected: true, models, ...codexInfo }
   } catch (error) {
     const msg = error instanceof Error ? error.message : 'Failed to connect'
+    serverLog.error(`[connect-agent] codex connection error: ${msg}`)
     return { connected: false, models: [], error: msg }
   }
 }
@@ -205,23 +369,34 @@ async function resolveOpencodeBinary(): Promise<string | undefined> {
   const { join } = await import('node:path')
   const isWin = process.platform === 'win32'
 
+  serverLog.info(`[resolve-opencode] platform=${process.platform}, isWindows=${isWin}`)
+
   // 1. Try PATH lookup
   try {
-    const cmd = isWin ? 'where opencode' : 'which opencode 2>/dev/null'
+    const cmd = isWin ? 'where opencode 2>nul' : 'which opencode 2>/dev/null'
+    serverLog.info(`[resolve-opencode] PATH lookup: ${cmd}`)
     const result = execSync(cmd, { encoding: 'utf-8', timeout: 5000 }).trim().split(/\r?\n/)[0]?.trim()
+    serverLog.info(`[resolve-opencode] PATH result: "${result}" (exists=${result ? existsSync(result) : false})`)
     if (result && existsSync(result)) return result
-  } catch { /* not in PATH */ }
+  } catch (err) {
+    serverLog.info(`[resolve-opencode] PATH lookup failed: ${err instanceof Error ? err.message : err}`)
+  }
 
   // 2. Try `npm prefix -g` to find actual npm global bin directory
   //    On Windows, must use `npm.cmd` since Electron spawns cmd.exe
   try {
     const npmCmd = isWin ? 'npm.cmd prefix -g' : 'npm prefix -g'
+    serverLog.info(`[resolve-opencode] npm prefix lookup: ${npmCmd}`)
     const prefix = execSync(npmCmd, { encoding: 'utf-8', timeout: 5000 }).trim()
+    serverLog.info(`[resolve-opencode] npm global prefix: "${prefix}"`)
     if (prefix) {
       const bin = isWin ? join(prefix, 'opencode.cmd') : join(prefix, 'bin', 'opencode')
+      serverLog.info(`[resolve-opencode] npm global bin: "${bin}" (exists=${existsSync(bin)})`)
       if (existsSync(bin)) return bin
     }
-  } catch { /* npm not available */ }
+  } catch (err) {
+    serverLog.info(`[resolve-opencode] npm prefix -g failed: ${err instanceof Error ? err.message : err}`)
+  }
 
   // 3. Common install locations
   //    npm -g → %APPDATA%\npm (Windows), /usr/local (macOS/Linux)
@@ -251,27 +426,35 @@ async function resolveOpencodeBinary(): Promise<string | undefined> {
         join(home, '.local', 'bin', 'opencode'),
       ]
   for (const c of candidates) {
-    if (c && existsSync(c)) return c
+    const exists = c ? existsSync(c) : false
+    serverLog.info(`[resolve-opencode] candidate: "${c}" (exists=${exists})`)
+    if (c && exists) return c
   }
 
+  serverLog.info('[resolve-opencode] no opencode binary found')
   return undefined
 }
 
 /** Connect to OpenCode and fetch its configured providers/models. */
 async function connectOpenCode(): Promise<ConnectResult> {
+  serverLog.info('[connect-agent] connecting to OpenCode...')
   try {
     const binaryPath = await resolveOpencodeBinary()
+    serverLog.info(`[connect-agent] resolved opencode path: ${binaryPath ?? 'NOT FOUND'}`)
     if (!binaryPath) {
       return { connected: false, models: [], notInstalled: true, error: 'OpenCode CLI not found' }
     }
 
     const { getOpencodeClient, releaseOpencodeServer } = await import('../../utils/opencode-client')
+    serverLog.info('[connect-agent] creating opencode client...')
     const { client, server } = await getOpencodeClient()
 
+    serverLog.info('[connect-agent] fetching opencode providers...')
     const { data, error } = await client.config.providers()
     releaseOpencodeServer(server)
 
     if (error) {
+      serverLog.error(`[connect-agent] opencode providers error: ${JSON.stringify(error)}`)
       return { connected: false, models: [], error: 'Failed to fetch providers from OpenCode server.' }
     }
 
@@ -289,21 +472,34 @@ async function connectOpenCode(): Promise<ConnectResult> {
     }
 
     if (models.length === 0) {
+      serverLog.info('[connect-agent] opencode: no models found')
       return { connected: false, models: [], error: 'No models configured in OpenCode. Run "opencode" to set up providers.' }
     }
 
-    return { connected: true, models }
+    const providerNames = (data?.providers ?? []).map((p) => p.name || p.id).filter(Boolean)
+    const providerSummary = providerNames.length > 0
+      ? `Connected (${providerNames.slice(0, 3).join(', ')}${providerNames.length > 3 ? ` +${providerNames.length - 3}` : ''})`
+      : 'Connected via OpenCode server'
+    serverLog.info(`[connect-agent] opencode connected, ${models.length} models found`)
+    return {
+      connected: true, models,
+      connectionInfo: providerSummary,
+      hintPath: configPath('~/.opencode/config.json', '%USERPROFILE%\\.opencode\\config.json'),
+    }
   } catch (error) {
     const raw = error instanceof Error ? error.message : 'Failed to connect'
+    serverLog.error(`[connect-agent] opencode connection error: ${raw}`)
     return { connected: false, models: [], error: friendlyOpenCodeError(raw) }
   }
 }
 
 /** Connect to GitHub Copilot CLI via @github/copilot-sdk and fetch available models. */
 async function connectCopilot(): Promise<ConnectResult> {
+  serverLog.info('[connect-agent] connecting to Copilot...')
   // Use standalone copilot binary to avoid Bun's node:sqlite issue
   const { resolveCopilotCli } = await import('../../utils/copilot-client')
   const cliPath = resolveCopilotCli()
+  serverLog.info(`[connect-agent] resolved copilot path: ${cliPath ?? 'NOT FOUND'}`)
   if (!cliPath) {
     return { connected: false, models: [], notInstalled: true, error: 'GitHub Copilot CLI not found' }
   }
@@ -312,10 +508,12 @@ async function connectCopilot(): Promise<ConnectResult> {
     const { CopilotClient } = await import('@github/copilot-sdk')
     const client = new CopilotClient({ autoStart: true, cliPath })
 
+    serverLog.info('[connect-agent] starting copilot client...')
     await client.start()
 
     let models: GroupedModel[] = []
     try {
+      serverLog.info('[connect-agent] listing copilot models...')
       const modelList = await client.listModels()
       models = modelList
         .filter((m) => !m.policy || m.policy.state === 'enabled')
@@ -327,19 +525,39 @@ async function connectCopilot(): Promise<ConnectResult> {
         }))
     } catch (listErr) {
       const msg = listErr instanceof Error ? listErr.message : 'Failed to list models'
+      serverLog.error(`[connect-agent] copilot listModels error: ${msg}`)
       await client.stop().catch(() => {})
       return { connected: false, models: [], error: friendlyCopilotError(msg) }
+    }
+
+    // Try to get auth status for user info
+    const copilotHintPath = configPath('~/.config/github-copilot/config.json', '%USERPROFILE%\\.config\\github-copilot\\config.json')
+    let copilotInfo: { connectionInfo: string; hintPath?: string } = { connectionInfo: 'Connected via GitHub', hintPath: copilotHintPath }
+    try {
+      const authStatus = await client.getAuthStatus()
+      serverLog.info(`[connect-agent] copilot auth: ${JSON.stringify(authStatus)}`)
+      if (authStatus?.login) {
+        const method = authStatus.authType ? ` (${authStatus.authType})` : ''
+        copilotInfo = { connectionInfo: `Connected as @${authStatus.login}${method}`, hintPath: copilotHintPath }
+      } else if (authStatus?.statusMessage) {
+        copilotInfo = { connectionInfo: authStatus.statusMessage, hintPath: copilotHintPath }
+      }
+    } catch (authErr) {
+      serverLog.warn(`[connect-agent] copilot getAuthStatus failed: ${authErr instanceof Error ? authErr.message : authErr}`)
     }
 
     await client.stop()
 
     if (models.length === 0) {
+      serverLog.info('[connect-agent] copilot: no models found')
       return { connected: false, models: [], error: 'No models found. Run "copilot login" to authenticate first.' }
     }
 
-    return { connected: true, models }
+    serverLog.info(`[connect-agent] copilot connected, ${models.length} models found`)
+    return { connected: true, models, ...copilotInfo }
   } catch (error) {
     const raw = error instanceof Error ? error.message : 'Failed to connect'
+    serverLog.error(`[connect-agent] copilot connection error: ${raw}`)
     return { connected: false, models: [], error: friendlyCopilotError(raw) }
   }
 }
