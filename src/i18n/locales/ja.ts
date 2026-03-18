@@ -366,6 +366,13 @@ const ja: TranslationKeys = {
   'agents.installing': 'インストール中...',
   'agents.installFailed': 'インストール失敗',
   'agents.viewDocs': 'ドキュメント',
+  'settings.title': '設定',
+  'settings.agents': 'Agents',
+  'settings.mcp': 'MCP',
+  'settings.system': 'システム',
+  'settings.autoUpdateDesc': '起動時に新しいバージョンを自動的に確認する',
+  'settings.systemDesktopOnly': 'システム設定はデスクトップアプリで利用できます。',
+  'settings.envHint': '{{path}} で追加の環境変数を設定できます。',
 
   // ── Figma Import ──
   'figma.title': 'Figma からインポート',

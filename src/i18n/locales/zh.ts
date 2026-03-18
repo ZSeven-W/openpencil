@@ -355,6 +355,13 @@ const zh: TranslationKeys = {
   'agents.installing': '安装中...',
   'agents.installFailed': '安装失败',
   'agents.viewDocs': '文档',
+  'settings.title': '设置',
+  'settings.agents': 'Agents',
+  'settings.mcp': 'MCP',
+  'settings.system': '系统',
+  'settings.autoUpdateDesc': '启动时自动检查新版本',
+  'settings.systemDesktopOnly': '系统设置仅在桌面应用中可用。',
+  'settings.envHint': '你可以在 {{path}} 中设置额外的环境变量。',
 
   // ── Figma Import ──
   'figma.title': '从 Figma 导入',

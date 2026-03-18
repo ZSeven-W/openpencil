@@ -363,6 +363,13 @@ const th: TranslationKeys = {
   'agents.installing': 'กำลังติดตั้ง...',
   'agents.installFailed': 'การติดตั้งล้มเหลว',
   'agents.viewDocs': 'เอกสาร',
+  'settings.title': 'การตั้งค่า',
+  'settings.agents': 'Agents',
+  'settings.mcp': 'MCP',
+  'settings.system': 'ระบบ',
+  'settings.autoUpdateDesc': 'ตรวจสอบเวอร์ชันใหม่โดยอัตโนมัติเมื่อเริ่มต้น',
+  'settings.systemDesktopOnly': 'การตั้งค่าระบบใช้ได้ในแอปเดสก์ท็อป',
+  'settings.envHint': 'คุณสามารถตั้งค่าตัวแปรสภาพแวดล้อมเพิ่มเติมได้ใน {{path}}',
 
   // ── Figma Import ──
   'figma.title': 'นำเข้าจาก Figma',

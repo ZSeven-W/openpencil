@@ -368,6 +368,13 @@ const fr: TranslationKeys = {
   'agents.installing': 'Installation...',
   'agents.installFailed': "Échec de l'installation",
   'agents.viewDocs': 'Docs',
+  'settings.title': 'Paramètres',
+  'settings.agents': 'Agents',
+  'settings.mcp': 'MCP',
+  'settings.system': 'Système',
+  'settings.autoUpdateDesc': 'Vérifier automatiquement les nouvelles versions au démarrage',
+  'settings.systemDesktopOnly': 'Les paramètres système sont disponibles dans l\'application de bureau.',
+  'settings.envHint': 'Vous pouvez définir des variables d\'environnement supplémentaires dans {{path}}.',
 
   // ── Figma Import ──
   'figma.title': 'Importer depuis Figma',

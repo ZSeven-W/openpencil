@@ -363,6 +363,13 @@ const vi: TranslationKeys = {
   'agents.installing': 'Đang cài đặt...',
   'agents.installFailed': 'Cài đặt thất bại',
   'agents.viewDocs': 'Tài liệu',
+  'settings.title': 'Cài đặt',
+  'settings.agents': 'Agents',
+  'settings.mcp': 'MCP',
+  'settings.system': 'Hệ thống',
+  'settings.autoUpdateDesc': 'Tự động kiểm tra phiên bản mới khi khởi động',
+  'settings.systemDesktopOnly': 'Cài đặt hệ thống khả dụng trong ứng dụng máy tính.',
+  'settings.envHint': 'Bạn có thể đặt thêm biến môi trường trong {{path}}.',
 
   // ── Figma Import ──
   'figma.title': 'Nhập từ Figma',

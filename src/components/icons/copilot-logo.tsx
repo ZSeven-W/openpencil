@@ -3,7 +3,7 @@ import type { SVGProps } from 'react'
 export default function CopilotLogo(props: SVGProps<SVGSVGElement>) {
   return (
     <svg
-      viewBox="0 0 98 96"
+      viewBox="-14 -14 126 124"
       fill="none"
       xmlns="http://www.w3.org/2000/svg"
       {...props}

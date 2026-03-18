@@ -363,6 +363,13 @@ const ko: TranslationKeys = {
   'agents.installing': '설치 중...',
   'agents.installFailed': '설치 실패',
   'agents.viewDocs': '문서',
+  'settings.title': '설정',
+  'settings.agents': 'Agents',
+  'settings.mcp': 'MCP',
+  'settings.system': '시스템',
+  'settings.autoUpdateDesc': '시작 시 자동으로 새 버전 확인',
+  'settings.systemDesktopOnly': '시스템 설정은 데스크톱 앱에서 사용할 수 있습니다.',
+  'settings.envHint': '{{path}}에서 추가 환경 변수를 설정할 수 있습니다.',
 
   // ── Figma Import ──
   'figma.title': 'Figma에서 가져오기',

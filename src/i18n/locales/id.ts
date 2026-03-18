@@ -363,6 +363,13 @@ const id: TranslationKeys = {
   'agents.installing': 'Memasang...',
   'agents.installFailed': 'Pemasangan gagal',
   'agents.viewDocs': 'Dokumen',
+  'settings.title': 'Pengaturan',
+  'settings.agents': 'Agents',
+  'settings.mcp': 'MCP',
+  'settings.system': 'Sistem',
+  'settings.autoUpdateDesc': 'Periksa versi baru secara otomatis saat memulai',
+  'settings.systemDesktopOnly': 'Pengaturan sistem tersedia di aplikasi desktop.',
+  'settings.envHint': 'Anda dapat mengatur variabel lingkungan tambahan di {{path}}.',
 
   // ── Figma Import ──
   'figma.title': 'Impor dari Figma',

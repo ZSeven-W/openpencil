@@ -42,7 +42,7 @@
         "@fontsource/raleway": "^5.2.8",
         "@fontsource/roboto": "^5.2.10",
         "@fontsource/source-sans-3": "^5.2.9",
-        "@github/copilot-sdk": "^0.1.30",
+        "@github/copilot-sdk": "^0.1.32",
         "@iconify-json/feather": "^1.2.1",
         "@iconify-json/lucide": "^1.2.93",
         "@iconify-json/simple-icons": "^1.2.71",

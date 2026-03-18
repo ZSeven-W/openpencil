@@ -365,6 +365,13 @@ const ru: TranslationKeys = {
   'agents.installing': 'Установка...',
   'agents.installFailed': 'Ошибка установки',
   'agents.viewDocs': 'Документация',
+  'settings.title': 'Настройки',
+  'settings.agents': 'Agents',
+  'settings.mcp': 'MCP',
+  'settings.system': 'Система',
+  'settings.autoUpdateDesc': 'Автоматически проверять наличие новых версий при запуске',
+  'settings.systemDesktopOnly': 'Системные настройки доступны в настольном приложении.',
+  'settings.envHint': 'Вы можете задать дополнительные переменные окружения в {{path}}.',
 
   // ── Figma Import ──
   'figma.title': 'Импорт из Figma',

@@ -7,6 +7,10 @@ export interface AIProviderConfig {
   connectionMethod: 'claude-code' | 'codex-cli' | 'opencode' | 'copilot' | null
   /** Models fetched when the user connects this provider */
   models: GroupedModel[]
+  /** Human-readable connection status, e.g. "Connected via API key" */
+  connectionInfo?: string
+  /** Config file path for the hint (client renders localized text) */
+  hintPath?: string
 }
 
 export type MCPCliTool =

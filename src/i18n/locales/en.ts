@@ -361,6 +361,13 @@ const en = {
   'agents.installing': 'Installing...',
   'agents.installFailed': 'Installation failed',
   'agents.viewDocs': 'Docs',
+  'settings.title': 'Settings',
+  'settings.agents': 'Agents',
+  'settings.mcp': 'MCP',
+  'settings.system': 'System',
+  'settings.autoUpdateDesc': 'Automatically check for new versions on startup',
+  'settings.systemDesktopOnly': 'System settings are available in the desktop app.',
+  'settings.envHint': 'You can set additional environment variables in {{path}}.',
 
   // ── Figma Import ──
   'figma.title': 'Import from Figma',

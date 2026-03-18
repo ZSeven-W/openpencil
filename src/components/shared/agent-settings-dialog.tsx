@@ -1,7 +1,10 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import type { ComponentType, SVGProps } from 'react'
 import { useTranslation } from 'react-i18next'
-import { X, Check, Loader2, Unplug, AlertCircle, Zap, Terminal, Play, Square, Globe, Copy, RefreshCw, Download, ExternalLink } from 'lucide-react'
+import {
+  X, Check, Loader2, Unplug, AlertCircle, Terminal, Play, Square,
+  Copy, Download, ExternalLink, Pen, Settings,
+} from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Switch } from '@/components/ui/switch'
@@ -43,9 +46,11 @@ const PROVIDER_META: Record<
   },
 }
 
+type SettingsTab = 'agents' | 'mcp' | 'system'
+
 async function connectAgent(
   agent: 'claude-code' | 'codex-cli' | 'opencode' | 'copilot',
-): Promise<{ connected: boolean; models: GroupedModel[]; error?: string; notInstalled?: boolean }> {
+): Promise<{ connected: boolean; models: GroupedModel[]; error?: string; notInstalled?: boolean; connectionInfo?: string; hintPath?: string }> {
   try {
     const res = await fetch('/api/ai/connect-agent', {
       method: 'POST',
@@ -89,7 +94,8 @@ async function callMcpInstall(
   return res.json()
 }
 
-function ProviderRow({ type }: { type: AIProviderType }) {
+/* ---------- ProviderCard ---------- */
+function ProviderCard({ type }: { type: AIProviderType }) {
   const { t } = useTranslation()
   const provider = useAgentSettingsStore((s) => s.providers[type])
   const connect = useAgentSettingsStore((s) => s.connectProvider)
@@ -111,7 +117,7 @@ function ProviderRow({ type }: { type: AIProviderType }) {
     setInstallInfo(null)
     const result = await connectAgent(meta.agent)
     if (result.connected) {
-      connect(type, meta.agent, result.models)
+      connect(type, meta.agent, result.models, result.connectionInfo, result.hintPath)
       persist()
     } else if (result.notInstalled) {
       setNotInstalled(true)
@@ -134,7 +140,6 @@ function ProviderRow({ type }: { type: AIProviderType }) {
     setInstallInfo(null)
     const result = await installAgent(meta.agent)
     if (result.success) {
-      // Auto-connect after successful install
       setIsInstalling(false)
       setNotInstalled(false)
       handleConnect()
@@ -160,7 +165,6 @@ function ProviderRow({ type }: { type: AIProviderType }) {
 
   const { Icon } = meta
 
-  // Button logic: connected → Disconnect, installing → spinner, notInstalled (no instructions yet) → Install, else → Connect
   const renderAction = () => {
     if (provider.isConnected) {
       return (
@@ -211,41 +215,47 @@ function ProviderRow({ type }: { type: AIProviderType }) {
     <div className="group">
       <div
         className={cn(
-          'flex items-center gap-2.5 px-3 py-1.5 rounded-lg transition-colors',
+          'flex items-center gap-3 px-3.5 py-2.5 rounded-lg border transition-colors',
           provider.isConnected
-            ? 'bg-secondary/40'
-            : 'hover:bg-secondary/30',
+            ? 'bg-secondary/30 border-border'
+            : 'border-transparent hover:bg-secondary/20',
         )}
       >
         {/* Icon */}
         <div
           className={cn(
-            'w-6 h-6 rounded-md flex items-center justify-center shrink-0 transition-colors',
-            provider.isConnected ? 'bg-foreground/10 text-foreground' : 'bg-secondary text-muted-foreground',
+            'w-9 h-9 rounded-lg flex items-center justify-center shrink-0 transition-colors',
+            provider.isConnected ? 'bg-foreground/8 text-foreground' : 'bg-secondary text-muted-foreground',
           )}
         >
-          <Icon className="w-3.5 h-3.5" />
+          <Icon className="w-5 h-5" />
         </div>
 
-        {/* Name + description */}
+        {/* Name + status */}
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2">
-            <span className="text-[13px] font-medium text-foreground leading-tight">{t(meta.labelKey)}</span>
-            <span className="text-[10px] text-muted-foreground leading-tight hidden sm:inline">{t(meta.descriptionKey)}</span>
-          </div>
-          {provider.isConnected && (
+          <span className="text-[13px] font-medium text-foreground leading-tight block">{t(meta.labelKey)}</span>
+          {provider.isConnected && provider.connectionInfo && (
+            <span className="text-[11px] text-green-500 leading-tight flex items-center gap-1 mt-0.5">
+              <Check size={10} strokeWidth={2.5} />
+              {provider.connectionInfo}
+            </span>
+          )}
+          {provider.isConnected && !provider.connectionInfo && (
             <span className="text-[11px] text-green-500 leading-tight flex items-center gap-1 mt-0.5">
               <Check size={10} strokeWidth={2.5} />
               {t('agents.modelCount', { count: provider.models.length })}
             </span>
           )}
+          {!provider.isConnected && !notInstalled && !error && (
+            <span className="text-[11px] text-muted-foreground leading-tight mt-0.5 block">{t(meta.descriptionKey)}</span>
+          )}
           {notInstalled && !isInstalling && !error && (
-            <span className="text-[10px] text-amber-500 leading-tight mt-0.5 block">
+            <span className="text-[11px] text-amber-500 leading-tight mt-0.5 block">
               {t('agents.notInstalled')}
             </span>
           )}
           {error && (
-            <span className="text-[10px] text-destructive leading-tight mt-0.5 block">{error}</span>
+            <span className="text-[11px] text-destructive leading-tight mt-0.5 block">{error}</span>
           )}
         </div>
 
@@ -274,10 +284,179 @@ function ProviderRow({ type }: { type: AIProviderType }) {
           )}
         </div>
       )}
+
+      {/* Provider-specific hint */}
+      {provider.isConnected && provider.hintPath && (
+        <p className="text-[10px] text-muted-foreground/60 px-3.5 mt-1">
+          {t('settings.envHint', { path: provider.hintPath })}
+        </p>
+      )}
     </div>
   )
 }
 
+/* ---------- Sidebar nav item ---------- */
+function NavItem({ icon: IconComp, label, active, onClick }: {
+  icon: ComponentType<{ size?: number; className?: string }>; label: string; active?: boolean; onClick: () => void
+}) {
+  return (
+    <button onClick={onClick} className={cn(
+      'flex items-center gap-2.5 w-full px-3 py-1.5 rounded-lg text-[13px] transition-colors text-left',
+      active ? 'bg-secondary text-foreground font-medium' : 'text-muted-foreground hover:text-foreground hover:bg-secondary/40',
+    )}>
+      <IconComp size={14} className="shrink-0" />
+      {label}
+    </button>
+  )
+}
+
+/* ---------- Agents page ---------- */
+function AgentsPage() {
+  const { t } = useTranslation()
+  return (
+    <div>
+      <h3 className="text-[15px] font-semibold text-foreground mb-4">{t('settings.agents')}</h3>
+      <div className="space-y-1">
+        <ProviderCard type="anthropic" />
+        <ProviderCard type="openai" />
+        <ProviderCard type="opencode" />
+        <ProviderCard type="copilot" />
+      </div>
+    </div>
+  )
+}
+
+/* ---------- MCP page ---------- */
+interface McpPageProps {
+  mcpServerRunning: boolean; mcpServerLocalIp: string | null; mcpServerLoading: boolean
+  mcpServerError: string | null; mcpHttpPort: number; configCopied: boolean
+  mcpIntegrations: { tool: string; displayName: string; enabled: boolean }[]
+  mcpInstalling: string | null; mcpError: string | null; isBusy: boolean
+  onServerToggle: () => void; onCopyConfig: () => void
+  onPortBlur: (value: string) => void; onToggleMCP: (tool: string) => void
+}
+function McpPage(props: McpPageProps) {
+  const {
+    mcpServerRunning, mcpServerLocalIp, mcpServerLoading, mcpServerError,
+    mcpHttpPort, mcpIntegrations, mcpInstalling, mcpError, isBusy, configCopied,
+    onServerToggle, onCopyConfig, onPortBlur, onToggleMCP,
+  } = props
+  const { t } = useTranslation()
+  return (
+    <div>
+      {/* MCP Server */}
+      <div className="mb-6">
+        <h3 className="text-[15px] font-semibold text-foreground mb-3">{t('agents.mcpServer')}</h3>
+        <div className="flex items-center gap-2.5 px-3.5 py-2.5 rounded-lg border border-border bg-secondary/20">
+          <div
+            className={cn(
+              'w-2 h-2 rounded-full shrink-0',
+              mcpServerRunning ? 'bg-green-500' : 'bg-muted-foreground/30',
+            )}
+          />
+          <span className="text-[13px] text-foreground flex-1">
+            {mcpServerRunning ? t('agents.mcpServerRunning') : t('agents.mcpServerStopped')}
+          </span>
+          <span className="text-[11px] text-muted-foreground shrink-0">{t('agents.port')}</span>
+          <input
+            type="text"
+            inputMode="numeric"
+            defaultValue={mcpHttpPort}
+            key={mcpHttpPort}
+            onBlur={(e) => onPortBlur(e.target.value)}
+            disabled={mcpServerRunning || mcpServerLoading}
+            className="h-6 w-[52px] text-[11px] text-center tabular-nums bg-secondary text-foreground rounded border border-input focus:border-ring outline-none transition-colors disabled:opacity-50"
+          />
+          <Button
+            size="sm"
+            variant={mcpServerRunning ? 'outline' : 'default'}
+            onClick={onServerToggle}
+            disabled={mcpServerLoading}
+            className="h-7 px-3 text-[11px] shrink-0"
+          >
+            {mcpServerLoading ? (
+              <Loader2 size={11} className="animate-spin" />
+            ) : mcpServerRunning ? (
+              <>
+                <Square size={10} className="mr-1" />
+                {t('agents.mcpServerStop')}
+              </>
+            ) : (
+              <>
+                <Play size={10} className="mr-1" />
+                {t('agents.mcpServerStart')}
+              </>
+            )}
+          </Button>
+        </div>
+        {mcpServerRunning && mcpServerLocalIp && (
+          <div className="mt-2 px-3.5 py-2 rounded-lg bg-secondary/15 border border-border/50">
+            <div className="flex items-center justify-between mb-1">
+              <span className="text-[11px] text-muted-foreground">{t('agents.mcpClientConfig')}</span>
+              <Button variant="ghost" size="icon-sm" onClick={onCopyConfig} className="shrink-0 h-5 w-5">
+                {configCopied ? <Check size={9} className="text-green-500" /> : <Copy size={9} />}
+              </Button>
+            </div>
+            <code className="text-[10px] text-muted-foreground font-mono select-all leading-none">
+              {`{ "type": "http", "url": "http://${mcpServerLocalIp}:${mcpHttpPort}/mcp" }`}
+            </code>
+          </div>
+        )}
+        {mcpServerError && (
+          <div className="flex items-center gap-1.5 mt-2 px-1">
+            <AlertCircle size={11} className="text-destructive shrink-0" />
+            <p className="text-[11px] text-destructive">{mcpServerError}</p>
+          </div>
+        )}
+      </div>
+
+      {/* MCP Integrations */}
+      <div>
+        <h3 className="text-[15px] font-semibold text-foreground mb-1">{t('agents.mcpIntegrations')}</h3>
+        <p className="text-[11px] text-muted-foreground mb-3">{t('agents.mcpRestart')}</p>
+        <div className="grid grid-cols-2 gap-1.5">
+          {mcpIntegrations.map((m) => (
+            <div
+              key={m.tool}
+              className={cn(
+                'flex items-center justify-between py-2 px-3.5 rounded-lg border transition-colors',
+                m.enabled ? 'bg-secondary/30 border-border' : 'border-transparent hover:bg-secondary/20',
+              )}
+            >
+              <div className="flex items-center gap-1.5 min-w-0">
+                <span
+                  className={cn(
+                    'text-[12px] truncate',
+                    m.enabled ? 'text-foreground' : 'text-muted-foreground',
+                  )}
+                >
+                  {m.displayName}
+                </span>
+                {mcpInstalling === m.tool && (
+                  <Loader2 size={10} className="animate-spin text-muted-foreground shrink-0" />
+                )}
+              </div>
+              <Switch
+                checked={m.enabled}
+                disabled={isBusy}
+                onCheckedChange={() => onToggleMCP(m.tool)}
+                className="shrink-0 ml-2"
+              />
+            </div>
+          ))}
+        </div>
+        {mcpError && (
+          <div className="flex items-center gap-1.5 mt-2 px-1">
+            <AlertCircle size={11} className="text-destructive shrink-0" />
+            <p className="text-[11px] text-destructive">{mcpError}</p>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+/* ---------- Main Dialog ---------- */
 export default function AgentSettingsDialog() {
   const { t } = useTranslation()
   const open = useAgentSettingsStore((s) => s.dialogOpen)
@@ -291,6 +470,8 @@ export default function AgentSettingsDialog() {
   const mcpServerLocalIp = useAgentSettingsStore((s) => s.mcpServerLocalIp)
   const setMcpServerStatus = useAgentSettingsStore((s) => s.setMcpServerStatus)
   const dialogRef = useRef<HTMLDivElement>(null)
+
+  const [activeTab, setActiveTab] = useState<SettingsTab>('agents')
 
   useEffect(() => {
     if (!open) return
@@ -313,7 +494,6 @@ export default function AgentSettingsDialog() {
     setIsElectron(!!window.electronAPI)
   }, [])
 
-  // Fetch MCP server status on dialog open
   useEffect(() => {
     if (!open) return
     fetch('/api/mcp/server')
@@ -324,7 +504,6 @@ export default function AgentSettingsDialog() {
       .catch(() => {})
   }, [open, setMcpServerStatus])
 
-  // Fetch auto-update setting on dialog open (Electron only)
   useEffect(() => {
     if (!open || !window.electronAPI?.updater?.getAutoCheck) return
     window.electronAPI.updater.getAutoCheck()
@@ -389,11 +568,8 @@ export default function AgentSettingsDialog() {
         if (result.success) {
           toggleMCP(tool)
           persist()
-          // When the server fell back to HTTP mode (no node installed),
-          // the MCP HTTP server was auto-started — sync UI status
           if (result.fallbackHttp) {
             setMcpServerStatus(true, null)
-            // Refresh actual status (localIp) after server finishes starting
             setTimeout(() => {
               fetch('/api/mcp/server')
                 .then((r) => r.json())
@@ -437,188 +613,90 @@ export default function AgentSettingsDialog() {
       />
       <div
         ref={dialogRef}
-        className="relative bg-card rounded-xl border border-border w-[480px] max-h-[80vh] overflow-hidden shadow-xl flex flex-col"
+        className="relative bg-card rounded-xl border border-border w-[720px] h-[520px] overflow-hidden shadow-xl flex"
       >
-        {/* Header */}
-        <div className="flex items-center justify-between px-5 pt-3 pb-2">
-          <h3 className="text-sm font-semibold text-foreground">
-            {t('agents.title')}
-          </h3>
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            onClick={() => setDialogOpen(false)}
-          >
-            <X size={14} />
-          </Button>
+        {/* Sidebar */}
+        <div className="w-[200px] shrink-0 border-r border-border flex flex-col bg-card">
+          <div className="px-4 pt-4 pb-3">
+            <h2 className="text-[15px] font-semibold text-foreground">{t('settings.title')}</h2>
+          </div>
+          <nav className="flex-1 px-2 space-y-0.5">
+            <NavItem
+              icon={Pen}
+              label={t('settings.agents')}
+              active={activeTab === 'agents'}
+              onClick={() => setActiveTab('agents')}
+            />
+            <NavItem
+              icon={Terminal}
+              label={t('settings.mcp')}
+              active={activeTab === 'mcp'}
+              onClick={() => setActiveTab('mcp')}
+            />
+            <NavItem
+              icon={Settings}
+              label={t('settings.system')}
+              active={activeTab === 'system'}
+              onClick={() => setActiveTab('system')}
+            />
+          </nav>
         </div>
 
-        {/* Scrollable content */}
-        <div className="flex-1 overflow-y-auto px-5 pb-4">
-          {/* Agents section */}
-          <div className="mb-3">
-            <div className="flex items-center gap-2 mb-1 px-1">
-              <Zap size={12} className="text-muted-foreground" />
-              <h4 className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">
-                {t('agents.agentsOnCanvas')}
-              </h4>
-            </div>
-            <div className="space-y-0.5">
-              <ProviderRow type="anthropic" />
-              <ProviderRow type="openai" />
-              <ProviderRow type="opencode" />
-              <ProviderRow type="copilot" />
-            </div>
+        {/* Content */}
+        <div className="flex-1 flex flex-col min-w-0">
+          {/* Close button */}
+          <div className="flex justify-end px-4 pt-3">
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              onClick={() => setDialogOpen(false)}
+            >
+              <X size={14} />
+            </Button>
           </div>
 
-          {/* Divider */}
-          <div className="h-px bg-border mb-3" />
+          {/* Page content */}
+          <div className="flex-1 overflow-y-auto px-5 pb-5">
+            {activeTab === 'agents' && <AgentsPage />}
 
-          {/* MCP Server section */}
-          <div className="mb-3">
-            <div className="flex items-center gap-2 mb-1.5 px-1">
-              <Globe size={12} className="text-muted-foreground" />
-              <h4 className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">
-                {t('agents.mcpServer')}
-              </h4>
-            </div>
-            <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-secondary/30">
-              {/* Status indicator */}
-              <div
-                className={cn(
-                  'w-2 h-2 rounded-full shrink-0',
-                  mcpServerRunning ? 'bg-green-500' : 'bg-muted-foreground/30',
-                )}
+            {activeTab === 'mcp' && (
+              <McpPage
+                mcpServerRunning={mcpServerRunning}
+                mcpServerLocalIp={mcpServerLocalIp}
+                mcpServerLoading={mcpServerLoading}
+                mcpServerError={mcpServerError}
+                mcpHttpPort={mcpHttpPort}
+                mcpIntegrations={mcpIntegrations}
+                mcpInstalling={mcpInstalling}
+                mcpError={mcpError}
+                isBusy={isBusy}
+                configCopied={configCopied}
+                onServerToggle={handleMcpServerToggle}
+                onCopyConfig={handleCopyConfig}
+                onPortBlur={handlePortBlur}
+                onToggleMCP={handleToggleMCP}
               />
-              <span className="text-[12px] text-foreground flex-1">
-                {mcpServerRunning ? t('agents.mcpServerRunning') : t('agents.mcpServerStopped')}
-              </span>
-              <span className="text-[11px] text-muted-foreground shrink-0">{t('agents.port')}</span>
-              <input
-                type="text"
-                inputMode="numeric"
-                defaultValue={mcpHttpPort}
-                key={mcpHttpPort}
-                onBlur={(e) => handlePortBlur(e.target.value)}
-                disabled={mcpServerRunning || mcpServerLoading}
-                className="h-6 w-[52px] text-[11px] text-center tabular-nums bg-secondary text-foreground rounded border border-input focus:border-ring outline-none transition-colors disabled:opacity-50"
-              />
-              <Button
-                size="sm"
-                variant={mcpServerRunning ? 'outline' : 'default'}
-                onClick={handleMcpServerToggle}
-                disabled={mcpServerLoading}
-                className="h-7 px-3 text-[11px] shrink-0"
-              >
-                {mcpServerLoading ? (
-                  <Loader2 size={11} className="animate-spin" />
-                ) : mcpServerRunning ? (
-                  <>
-                    <Square size={10} className="mr-1" />
-                    {t('agents.mcpServerStop')}
-                  </>
-                ) : (
-                  <>
-                    <Play size={10} className="mr-1" />
-                    {t('agents.mcpServerStart')}
-                  </>
-                )}
-              </Button>
-            </div>
-            {mcpServerRunning && mcpServerLocalIp && (
-              <div className="mt-1.5 px-3 py-1.5 rounded-lg bg-secondary/20">
-                <div className="flex items-center justify-between">
-                  <span className="text-[10px] text-muted-foreground">{t('agents.mcpClientConfig')}</span>
-                  <Button
-                    variant="ghost"
-                    size="icon-sm"
-                    onClick={handleCopyConfig}
-                    className="shrink-0 h-5 w-5"
-                  >
-                    {configCopied ? <Check size={9} className="text-green-500" /> : <Copy size={9} />}
-                  </Button>
-                </div>
-                <code className="text-[10px] text-muted-foreground font-mono select-all leading-none">{`{ "type": "http", "url": "http://${mcpServerLocalIp}:${mcpHttpPort}/mcp" }`}</code>
-              </div>
             )}
-            {mcpServerError && (
-              <div className="flex items-center gap-1.5 mt-2 px-1">
-                <AlertCircle size={11} className="text-destructive shrink-0" />
-                <p className="text-[10px] text-destructive">{mcpServerError}</p>
-              </div>
-            )}
-          </div>
-
-          {/* Divider */}
-          <div className="h-px bg-border mb-3" />
-
-          {/* MCP integrations section */}
-          <div>
-            <div className="flex items-center gap-2 mb-1.5 px-1">
-              <Terminal size={12} className="text-muted-foreground" />
-              <h4 className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">
-                {t('agents.mcpIntegrations')}
-              </h4>
-            </div>
-
-            <div className="grid grid-cols-2 gap-x-2 gap-y-0">
-              {mcpIntegrations.map((m) => (
-                <div
-                  key={m.tool}
-                  className={cn(
-                    'flex items-center justify-between py-1.5 px-3 rounded-lg transition-colors',
-                    m.enabled ? 'bg-secondary/40' : 'hover:bg-secondary/20',
-                  )}
-                >
-                  <div className="flex items-center gap-1.5 min-w-0">
-                    <span
-                      className={cn(
-                        'text-[12px] truncate',
-                        m.enabled ? 'text-foreground' : 'text-muted-foreground',
-                      )}
-                    >
-                      {m.displayName}
-                    </span>
-                    {mcpInstalling === m.tool && (
-                      <Loader2 size={10} className="animate-spin text-muted-foreground shrink-0" />
-                    )}
+            {activeTab === 'system' && (
+              <div>
+                <h3 className="text-[15px] font-semibold text-foreground mb-4">{t('settings.system')}</h3>
+                {isElectron && (
+                  <div className="flex items-center justify-between px-3.5 py-2.5 rounded-lg border border-border bg-secondary/20">
+                    <div>
+                      <span className="text-[13px] text-foreground block leading-tight">{t('agents.autoUpdate')}</span>
+                      <span className="text-[11px] text-muted-foreground mt-0.5 block">{t('settings.autoUpdateDesc')}</span>
+                    </div>
+                    <Switch checked={autoUpdateEnabled} onCheckedChange={handleAutoUpdateToggle} />
                   </div>
-                  <Switch
-                    checked={m.enabled}
-                    disabled={isBusy}
-                    onCheckedChange={() => handleToggleMCP(m.tool)}
-                    className="shrink-0 ml-2"
-                  />
-                </div>
-              ))}
-            </div>
-            {mcpError && (
-              <div className="flex items-center gap-1.5 mt-2 px-1">
-                <AlertCircle size={11} className="text-destructive shrink-0" />
-                <p className="text-[10px] text-destructive">{mcpError}</p>
+                )}
+                {!isElectron && (
+                  <div className="rounded-lg border border-border bg-secondary/20 px-4 py-6 text-center">
+                    <p className="text-[13px] text-muted-foreground">{t('settings.systemDesktopOnly')}</p>
+                  </div>
+                )}
               </div>
             )}
-            <p className="text-[10px] text-muted-foreground/60 mt-2 px-1">
-              {t('agents.mcpRestart')}
-            </p>
           </div>
-
-          {/* Auto-update toggle (Electron only) */}
-          {isElectron && (
-            <>
-              <div className="h-px bg-border my-3" />
-              <div className="flex items-center justify-between px-1">
-                <div className="flex items-center gap-2">
-                  <RefreshCw size={12} className="text-muted-foreground" />
-                  <span className="text-[12px] text-foreground">{t('agents.autoUpdate')}</span>
-                </div>
-                <Switch
-                  checked={autoUpdateEnabled}
-                  onCheckedChange={handleAutoUpdateToggle}
-                />
-              </div>
-            </>
-          )}
         </div>
       </div>
     </div>
