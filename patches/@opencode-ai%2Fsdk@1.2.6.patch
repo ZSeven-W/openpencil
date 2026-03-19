@@ -1,0 +1,20 @@
+diff --git a/dist/server.js b/dist/server.js
+index 293e3940a2135d5317b288465de0af3aa903f069..f35bf7be8dad233e147419392da6ba07b2ff0ee5 100644
+--- a/dist/server.js
++++ b/dist/server.js
+@@ -10,6 +10,7 @@ export async function createOpencodeServer(options) {
+         args.push(`--log-level=${options.config.logLevel}`);
+     const proc = spawn(`opencode`, args, {
+         signal: options.signal,
++        shell: process.platform === 'win32',
+         env: {
+             ...process.env,
+             OPENCODE_CONFIG_CONTENT: JSON.stringify(options.config ?? {}),
+@@ -81,6 +82,7 @@ export function createOpencodeTui(options) {
+     const proc = spawn(`opencode`, args, {
+         signal: options?.signal,
+         stdio: "inherit",
++        shell: process.platform === 'win32',
+         env: {
+             ...process.env,
+             OPENCODE_CONFIG_CONTENT: JSON.stringify(options?.config ?? {}),

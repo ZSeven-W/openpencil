@@ -82,6 +82,9 @@
       },
     },
   },
+  "patchedDependencies": {
+    "@opencode-ai/sdk@1.2.6": "patches/@opencode-ai%2Fsdk@1.2.6.patch",
+  },
   "packages": {
     "7zip-bin": ["7zip-bin@5.2.0", "https://registry.npmmirror.com/7zip-bin/-/7zip-bin-5.2.0.tgz", {}, "sha512-ukTPVhqG4jNzMro2qA9HSCSSVJN3aN7tlb+hfqYCt3ER0yWroeA2VR38MNrOHLQ/cVj+DaIMad0kFCtWWowh/A=="],
 
