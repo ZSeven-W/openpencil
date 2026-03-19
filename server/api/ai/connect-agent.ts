@@ -14,6 +14,21 @@ function winNpmCandidates(dir: string, name: string): string[] {
   return [join(dir, `${name}.cmd`), join(dir, `${name}.ps1`)]
 }
 
+/**
+ * On Windows, `where` may return an extensionless Unix shell script (e.g. `…/npm/opencode`).
+ * This file exists but can't be executed. Prefer `.cmd` or `.ps1` wrapper at the same location.
+ */
+function resolveWinExtension(binPath: string): string {
+  if (process.platform !== 'win32') return binPath
+  // Already has a usable extension
+  if (/\.(cmd|ps1|exe)$/i.test(binPath)) return binPath
+  // Try .cmd then .ps1
+  for (const ext of ['.cmd', '.ps1']) {
+    if (existsSync(binPath + ext)) return binPath + ext
+  }
+  return binPath
+}
+
 /** Build a shell command to invoke a resolved binary (handles .ps1 on Windows) */
 function buildExecCmd(binPath: string, args: string): string {
   if (binPath.endsWith('.ps1')) {
@@ -274,8 +289,8 @@ async function connectCodexCli(): Promise<ConnectResult> {
         encoding: 'utf-8',
         timeout: 5000,
       }).trim().split(/\r?\n/)[0]?.trim() ?? ''
-      if (result && existsSync(result)) which = result
-      serverLog.info(`[connect-agent] codex PATH result: "${result}" (exists=${result ? existsSync(result) : false})`)
+      if (result && existsSync(result)) which = resolveWinExtension(result)
+      serverLog.info(`[connect-agent] codex PATH result: "${result}" resolved="${which}" (exists=${result ? existsSync(result) : false})`)
     } catch (err) {
       serverLog.info(`[connect-agent] codex PATH lookup failed: ${err instanceof Error ? err.message : err}`)
     }
@@ -388,7 +403,7 @@ async function resolveOpencodeBinary(): Promise<string | undefined> {
     serverLog.info(`[resolve-opencode] PATH lookup: ${cmd}`)
     const result = execSync(cmd, { encoding: 'utf-8', timeout: 5000 }).trim().split(/\r?\n/)[0]?.trim()
     serverLog.info(`[resolve-opencode] PATH result: "${result}" (exists=${result ? existsSync(result) : false})`)
-    if (result && existsSync(result)) return result
+    if (result && existsSync(result)) return resolveWinExtension(result)
   } catch (err) {
     serverLog.info(`[resolve-opencode] PATH lookup failed: ${err instanceof Error ? err.message : err}`)
   }
