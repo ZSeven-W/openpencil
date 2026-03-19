@@ -23,6 +23,7 @@ import { ORCHESTRATOR_PROMPT } from './orchestrator-prompts'
 import {
   getOrchestratorTimeouts,
   prepareDesignPrompt,
+  buildFallbackPlanFromPrompt,
 } from './orchestrator-prompt-optimizer'
 import { resolveModelProfile, needsSimplifiedPrompt } from './model-profiles'
 import {
@@ -465,15 +466,15 @@ async function callOrchestrator(
   }
 
   const plan = parseOrchestratorResponse(rawResponse)
-  if (!plan) {
-    const preview = rawResponse.trim().slice(0, 150)
-    const hint = rawResponse.trim().length === 0
-      ? 'The model returned an empty response.'
-      : `Model output: "${preview}${rawResponse.length > 150 ? '…' : ''}"`
-    throw new Error(`Could not parse design plan from model response. ${hint}`)
-  }
+  if (plan) return plan
 
-  return plan
+  // Fallback: model returned non-JSON (e.g. markdown text). Use a heuristic
+  // plan derived from the user's prompt so generation can still proceed.
+  console.warn(
+    '[Orchestrator] Could not parse model response, using fallback plan. Preview:',
+    rawResponse.trim().slice(0, 150),
+  )
+  return buildFallbackPlanFromPrompt(prompt)
 }
 
 function parseOrchestratorResponse(raw: string): OrchestratorPlan | null {
