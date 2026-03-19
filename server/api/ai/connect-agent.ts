@@ -478,6 +478,15 @@ async function connectOpenCode(): Promise<ConnectResult> {
       return { connected: false, models: [], notInstalled: true, error: 'OpenCode CLI not found' }
     }
 
+    // Ensure the resolved binary's directory is in PATH so the SDK's spawn('opencode') works
+    const { dirname } = await import('node:path')
+    const binDir = dirname(binaryPath)
+    const sep = process.platform === 'win32' ? ';' : ':'
+    if (!process.env.PATH?.includes(binDir)) {
+      process.env.PATH = `${binDir}${sep}${process.env.PATH ?? ''}`
+      serverLog.info(`[connect-agent] prepended "${binDir}" to PATH`)
+    }
+
     const { getOpencodeClient, releaseOpencodeServer } = await import('../../utils/opencode-client')
     serverLog.info('[connect-agent] creating opencode client...')
     const { client, server } = await getOpencodeClient()
