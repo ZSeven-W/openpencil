@@ -1,6 +1,6 @@
 {
     "name": "openpencil",
-    "version": "0.4.3",
+    "version": "0.4.4",
     "description": "The world's first open-source AI-native vector design tool and the first to feature concurrent Agent Teams. Design-as-Code. Turn prompts into UI directly on the live canvas. A modern alternative to Pencil.",
     "author": {
         "name": "ZSeven-W",
@@ -102,8 +102,5 @@
         "typescript": "^5.7.2",
         "vite": "^7.1.7",
         "vitest": "^3.0.5"
-    },
-    "patchedDependencies": {
-        "@opencode-ai/sdk@1.2.6": "patches/@opencode-ai%2Fsdk@1.2.6.patch"
     }
 }

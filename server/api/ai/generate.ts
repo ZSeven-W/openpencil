@@ -3,6 +3,7 @@ import { resolveClaudeCli } from '../../utils/resolve-claude-cli'
 import { runCodexExec } from '../../utils/codex-client'
 import {
   buildClaudeAgentEnv,
+  buildSpawnClaudeCodeProcess,
   getClaudeAgentDebugFilePath,
 } from '../../utils/resolve-claude-agent-env'
 import { formatOpenCodeError } from './chat'
@@ -74,6 +75,7 @@ async function generateViaAgentSDK(body: GenerateBody, model?: string): Promise<
         env,
         ...(debugFile ? { debugFile } : {}),
         ...(claudePath ? { pathToClaudeCodeExecutable: claudePath } : {}),
+        ...(buildSpawnClaudeCodeProcess() ? { spawnClaudeCodeProcess: buildSpawnClaudeCodeProcess() } : {}),
       },
     })
 

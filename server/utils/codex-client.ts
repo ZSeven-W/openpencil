@@ -151,8 +151,9 @@ async function executeCodexCommand(
     const child = spawn('codex', args, {
       env: filterCodexEnv(process.env as Record<string, string | undefined>),
       stdio: ['ignore', 'pipe', 'pipe'],
-      // On Windows, npm-installed CLIs are .cmd scripts — need shell to resolve them
-      ...(process.platform === 'win32' && { shell: true }),
+      // On Windows, npm-installed CLIs are .cmd scripts — need shell to resolve them.
+      // Use PowerShell instead of cmd.exe to avoid 8191-char command line limit.
+      ...(process.platform === 'win32' && { shell: 'powershell.exe' }),
     })
 
     let stdoutBuffer = ''
