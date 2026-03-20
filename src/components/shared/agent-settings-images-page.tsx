@@ -139,7 +139,7 @@ function ImageSearchSection() {
       <SectionHeader title="Image Search" />
       <div className="flex items-center gap-2 px-3.5 py-2.5 rounded-lg border border-border bg-secondary/20 mb-3">
         <div className="w-2 h-2 rounded-full bg-green-500 shrink-0" />
-        <span className="text-[13px] text-foreground">Ready (Openverse + Wikimedia)</span>
+        <span className="text-[13px] text-foreground">Ready</span>
       </div>
 
       <Collapsible label="Advanced">
