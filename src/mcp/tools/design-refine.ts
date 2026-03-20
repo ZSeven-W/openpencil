@@ -1,4 +1,4 @@
-import { openDocument, saveDocument, resolveDocPath } from '../document-manager'
+import { openDocument, saveDocument, resolveDocPath, getSyncUrl } from '../document-manager'
 import {
   findNodeInTree,
   flattenNodes,
@@ -95,6 +95,42 @@ export async function handleDesignRefine(
   // Persist
   setDocChildren(doc, allChildren, pageId)
   await saveDocument(filePath, doc)
+
+  // Auto-fill image nodes with placeholder/empty src via image-search API
+  const syncUrl = await getSyncUrl()
+  if (syncUrl) {
+    const walkAndFill = async (node: any) => {
+      if (
+        node.type === 'image' &&
+        (!node.src ||
+          node.src.startsWith('data:image/svg+xml;charset=utf-8,%3Csvg'))
+      ) {
+        const query = node.imagePrompt ?? node.name ?? 'placeholder'
+        try {
+          const res = await fetch(`${syncUrl}/api/ai/image-search`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ query, count: 1 }),
+          })
+          const data = (await res.json()) as { results?: { thumbUrl: string }[] }
+          if (data.results && data.results.length > 0) {
+            node.src = data.results[0].thumbUrl
+          }
+        } catch {
+          // non-fatal: image search unavailable
+        }
+        await new Promise<void>((r) => setTimeout(r, 3000))
+      }
+      if (node.children) {
+        for (const child of node.children) await walkAndFill(child)
+      }
+    }
+    const children = getDocChildren(doc, pageId)
+    for (const child of children) await walkAndFill(child)
+    // Persist again with filled image srcs
+    setDocChildren(doc, children, pageId)
+    await saveDocument(filePath, doc)
+  }
 
   // Build layout snapshot
   const layoutSnapshot = computeLayoutTree([root], allChildren, 3)
