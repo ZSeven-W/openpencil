@@ -267,6 +267,8 @@ function extractCodexCliError(stderr: string): string | null {
   if (!trimmed) return null
 
   const lines = trimmed.split('\n').map((line) => line.trim()).filter(Boolean)
+
+  // 1. Look for "error: ..." lines (simple CLI errors)
   for (let i = lines.length - 1; i >= 0; i--) {
     const line = lines[i]
     if (line.toLowerCase().startsWith('error:')) {
@@ -274,5 +276,25 @@ function extractCodexCliError(stderr: string): string | null {
     }
   }
 
-  return lines[lines.length - 1] ?? null
+  // 2. Look for Codex structured log errors: "<timestamp> ERROR <module>: <message>"
+  //    These contain the real error (auth failures, API errors, etc.)
+  for (let i = lines.length - 1; i >= 0; i--) {
+    const match = lines[i].match(/\bERROR\s+\S+:\s*(.+)/)
+    if (match) {
+      const msg = match[1].trim()
+      // For auth errors, provide actionable guidance
+      if (/refresh token|sign in again|token.*expired|401 Unauthorized/i.test(msg)) {
+        return 'Codex authentication expired. Run "codex logout && codex login" to re-authenticate.'
+      }
+      return msg
+    }
+  }
+
+  // 3. Skip unhelpful "Warning: no last agent message" — surface it only as fallback
+  const lastLine = lines[lines.length - 1] ?? null
+  if (lastLine && /^warning:\s*no last agent message/i.test(lastLine)) {
+    return 'Codex returned no output. Check "codex login" status or try a different model.'
+  }
+
+  return lastLine
 }
