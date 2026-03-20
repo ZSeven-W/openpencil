@@ -55,8 +55,14 @@ export default function ImageGeneratePopover({
         }),
       })
       if (!res.ok) {
-        const text = await res.text()
-        throw new Error(text || `HTTP ${res.status}`)
+        let msg = `HTTP ${res.status}`
+        try {
+          const errData = await res.json()
+          // Extract short message, strip verbose details
+          const raw = errData.message || errData.error || ''
+          msg = raw.split('\n')[0].replace(/^.*?:\s*/, '').slice(0, 100) || msg
+        } catch { /* use default msg */ }
+        throw new Error(msg)
       }
       const data = (await res.json()) as { url?: string; error?: string }
       if (data.error) throw new Error(data.error)
@@ -175,7 +181,7 @@ function IdleView({
         placeholder="Describe the image..."
         className="w-full resize-none rounded-md border border-border bg-background px-3 py-2 text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"
       />
-      {error && <p className="text-xs text-destructive">{error}</p>}
+      {error && <p className="text-xs text-destructive line-clamp-2">{error}</p>}
       <Button size="sm" className="w-full" onClick={onGenerate} disabled={!prompt.trim()}>
         <Sparkles className="w-3.5 h-3.5 mr-1.5" />
         Generate
