@@ -6,6 +6,7 @@ import { resolveClaudeCli } from '../../utils/resolve-claude-cli'
 import { serverLog } from '../../utils/server-logger'
 import {
   buildClaudeAgentEnv,
+  buildSpawnClaudeCodeProcess,
   getClaudeAgentDebugFilePath,
 } from '../../utils/resolve-claude-agent-env'
 
@@ -126,6 +127,7 @@ async function connectClaudeCode(): Promise<ConnectResult> {
         env,
         ...(debugFile ? { debugFile } : {}),
         ...(claudePath ? { pathToClaudeCodeExecutable: claudePath } : {}),
+        ...(buildSpawnClaudeCodeProcess() ? { spawnClaudeCodeProcess: buildSpawnClaudeCodeProcess() } : {}),
       },
     })
 
