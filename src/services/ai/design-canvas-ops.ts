@@ -24,6 +24,7 @@ import type { RoleContext } from './role-resolver'
 // Trigger side-effect registration of all role definitions
 import './role-definitions'
 import { extractJsonFromResponse } from './design-parser'
+import { scanAndFillImages } from './image-search-pipeline'
 import {
   deepCloneNode,
   mergeNodeForProgressiveUpsert,
@@ -300,6 +301,8 @@ export function applyNodesToCanvas(nodes: PenNode[]): void {
   if (isCanvasOnlyEmptyFrame() && preparedNodes.length === 1 && preparedNodes[0].type === 'frame') {
     replaceEmptyFrame(preparedNodes[0])
     resolveAllPendingIcons().catch(console.warn)
+    const rootId = getGenerationRootFrameId()
+    if (rootId) scanAndFillImages(rootId).catch(() => {})
     return
   }
 
@@ -312,6 +315,8 @@ export function applyNodesToCanvas(nodes: PenNode[]): void {
   }
   adjustRootFrameHeightToContent()
   resolveAllPendingIcons().catch(console.warn)
+  const rootId = getGenerationRootFrameId()
+  if (rootId) scanAndFillImages(rootId).catch(() => {})
 }
 
 export function upsertNodesToCanvas(nodes: PenNode[]): number {
@@ -342,6 +347,8 @@ export function upsertNodesToCanvas(nodes: PenNode[]): number {
   }
 
   adjustRootFrameHeightToContent()
+  const rootId = getGenerationRootFrameId()
+  if (rootId) scanAndFillImages(rootId).catch(() => {})
   return count
 }
 
@@ -393,6 +400,8 @@ export function animateNodesToCanvas(nodes: PenNode[]): void {
 
   // Resolve any icons queued for async (brand logos etc.) after nodes are in the store
   resolveAllPendingIcons().catch(console.warn)
+  const rootId = getGenerationRootFrameId()
+  if (rootId) scanAndFillImages(rootId).catch(() => {})
 }
 
 // ---------------------------------------------------------------------------
