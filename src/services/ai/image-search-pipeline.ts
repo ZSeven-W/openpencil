@@ -66,7 +66,8 @@ export async function scanAndFillImages(rootId: string): Promise<void> {
   for (const node of needsFill) {
     if (abort.signal.aborted) return
 
-    const query = node.imagePrompt ?? node.name ?? 'placeholder'
+    // Prefer short search keywords; fall back to name
+    const query = node.imageSearchQuery ?? node.name ?? 'placeholder'
     const aspect = inferAspectRatio(node)
 
     try {

@@ -105,7 +105,7 @@ export async function handleDesignRefine(
         (!node.src ||
           node.src.startsWith('data:image/svg+xml;charset=utf-8,%3Csvg'))
       ) {
-        const query = node.imagePrompt ?? node.name ?? 'placeholder'
+        const query = node.imageSearchQuery ?? node.name ?? 'placeholder'
         try {
           const res = await fetch(`${syncUrl}/api/ai/image-search`, {
             method: 'POST',

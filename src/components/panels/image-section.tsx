@@ -55,7 +55,7 @@ export default function ImageSection({ node, onUpdate }: ImageSectionProps) {
 
       <div className="flex gap-1 mt-1.5">
         <ImageSearchPopover
-          initialQuery={node.imagePrompt ?? node.name ?? ''}
+          initialQuery={node.imageSearchQuery ?? node.name ?? ''}
           onSelect={(url: string) => onUpdate({ src: url })}
         >
           <Button size="sm" variant="outline" className="flex-1 h-7 text-xs">

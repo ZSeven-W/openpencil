@@ -79,6 +79,41 @@ async function getOpenverseToken(clientId: string, clientSecret: string): Promis
 }
 
 // ---------------------------------------------------------------------------
+// Query simplification — convert verbose AI prompts to search keywords
+// ---------------------------------------------------------------------------
+
+const STOP_WORDS = new Set([
+  'a', 'an', 'the', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for',
+  'of', 'with', 'by', 'from', 'is', 'are', 'was', 'were', 'be', 'been',
+  'being', 'have', 'has', 'had', 'do', 'does', 'did', 'will', 'would',
+  'could', 'should', 'may', 'might', 'shall', 'can', 'that', 'this',
+  'these', 'those', 'it', 'its', 'very', 'really', 'just', 'also',
+  'about', 'above', 'after', 'before', 'between', 'into', 'through',
+  'during', 'each', 'some', 'such', 'no', 'not', 'only', 'same', 'so',
+  'than', 'too', 'up', 'out', 'if', 'then', 'once', 'here', 'there',
+  'when', 'where', 'how', 'all', 'both', 'few', 'more', 'most', 'other',
+  'any', 'as', 'while', 'using', 'showing', 'featuring', 'looking',
+  'style', 'styled', 'inspired', 'based',
+])
+
+/**
+ * Simplify a verbose image generation prompt into 2-4 search keywords.
+ * "delicious burger with fries and fresh vegetables" → "burger fries vegetables"
+ * "modern office workspace with natural lighting" → "modern office workspace"
+ */
+export function simplifySearchQuery(prompt: string): string {
+  const words = prompt
+    .toLowerCase()
+    .replace(/[^a-z0-9\s-]/g, ' ')
+    .split(/\s+/)
+    .filter((w) => w.length > 2 && !STOP_WORDS.has(w))
+
+  // Take up to 4 keywords
+  const keywords = words.slice(0, 4)
+  return keywords.join(' ') || prompt.slice(0, 30)
+}
+
+// ---------------------------------------------------------------------------
 // Mapping helpers (exported for testing)
 // ---------------------------------------------------------------------------
 
@@ -203,10 +238,13 @@ export default defineEventHandler(async (event) => {
     openverseClientSecret?: string
   }
 
-  const query = body?.query?.trim() ?? ''
-  if (!query) {
+  const rawQuery = body?.query?.trim() ?? ''
+  if (!rawQuery) {
     return { error: 'Missing required field: query' }
   }
+
+  // Simplify verbose AI prompts into search-friendly keywords
+  const query = simplifySearchQuery(rawQuery)
 
   const count = Math.min(Math.max(Number(body?.count ?? 10), 1), 50)
   const aspectRatio = body?.aspectRatio

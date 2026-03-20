@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { mapOpenverseResult, mapWikimediaPages } from '../../../../server/api/ai/image-search'
+import { mapOpenverseResult, mapWikimediaPages, simplifySearchQuery } from '../../../../server/api/ai/image-search'
 
 // ---------------------------------------------------------------------------
 // mapOpenverseResult
@@ -173,7 +173,43 @@ describe('mapWikimediaPages', () => {
     expect(licenses).toContain('CC BY 4.0')
   })
 
-  it('falls back to empty string license when extmetadata is missing', () => {
+})
+
+// ---------------------------------------------------------------------------
+// simplifySearchQuery
+// ---------------------------------------------------------------------------
+
+describe('simplifySearchQuery', () => {
+  it('extracts keywords from verbose AI prompt', () => {
+    const result = simplifySearchQuery('delicious burger with fries and fresh vegetables')
+    expect(result).toBe('delicious burger fries fresh')
+  })
+
+  it('removes stop words', () => {
+    const result = simplifySearchQuery('a beautiful photo of the sunset on the beach')
+    expect(result).toBe('beautiful photo sunset beach')
+  })
+
+  it('limits to 4 keywords', () => {
+    const result = simplifySearchQuery('modern office workspace natural lighting wooden desk plants')
+    const words = result.split(' ')
+    expect(words.length).toBeLessThanOrEqual(4)
+  })
+
+  it('handles short queries unchanged', () => {
+    const result = simplifySearchQuery('burger')
+    expect(result).toBe('burger')
+  })
+
+  it('falls back to truncated input when all words are stop words', () => {
+    const result = simplifySearchQuery('a the an')
+    expect(result.length).toBeGreaterThan(0)
+  })
+})
+
+// (keep original last test)
+describe('mapWikimediaPages (continued)', () => {
+  it('falls back to empty string license when extmetadata is missing (original)', () => {
     const pages = {
       '55555': {
         pageid: 55555,
