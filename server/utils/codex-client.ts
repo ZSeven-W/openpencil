@@ -1,5 +1,5 @@
 import { spawn } from 'node:child_process'
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { mkdtemp, readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -75,33 +75,17 @@ export async function runCodexExec(
     args.push('--config', `model_reasoning_effort=${codexEffort}`)
   }
 
-  // On Windows, shell escaping causes PowerShell/cmd.exe parsing errors
-  // (MissingExpression, special chars like $, ", etc.). Write prompt to a
-  // temp file and invoke via a wrapper script to avoid all escaping issues.
-  let winScriptPath: string | undefined
-  if (process.platform === 'win32') {
-    const promptFilePath = join(tempDir, 'prompt.txt')
-    await writeFile(promptFilePath, prompt, 'utf-8')
-    winScriptPath = join(tempDir, 'run-codex.ps1')
-    const escapedPromptPath = promptFilePath.replace(/'/g, "''")
-    // Use PowerShell array splatting to pass args safely — each array
-    // element becomes exactly one argument, avoiding all escaping issues
-    // with newlines, $, ", etc. in the prompt text.
-    const argsLiteral = args.map(a => `'${a.replace(/'/g, "''")}'`).join(', ')
-    await writeFile(winScriptPath, [
-      `$prompt = [IO.File]::ReadAllText('${escapedPromptPath}')`,
-      `$allArgs = @(${argsLiteral}, $prompt)`,
-      `& codex @allArgs`,
-    ].join('\r\n'), 'utf-8')
-  } else {
-    args.push(prompt)
-  }
+  // On Windows, passing long prompts as command-line arguments causes
+  // shell escaping issues (PowerShell MissingExpression, special chars).
+  // Use codex's stdin mode (`-` as prompt arg) on all platforms — simpler
+  // and avoids command-line length limits.
+  args.push('-')
 
   try {
     const runResult = await executeCodexCommand(
       args,
       options.timeoutMs ?? DEFAULT_CODEX_TIMEOUT_MS,
-      winScriptPath,
+      prompt,
     )
     const finalText = await readFile(outputPath, 'utf-8').catch(() => '')
     const normalizedText = finalText.trim() || runResult.text.trim()
@@ -169,22 +153,21 @@ function resolveCodexEffort(
 async function executeCodexCommand(
   args: string[],
   timeoutMs: number,
-  winScriptPath?: string,
+  stdinText?: string,
 ): Promise<{ text: string; errors: string[] }> {
   return await new Promise((resolve, reject) => {
-    // On Windows, use PowerShell script to avoid escaping issues with long prompts.
-    // The script reads the prompt from a temp file and invokes codex directly.
-    const cmd = winScriptPath ? 'powershell.exe' : 'codex'
-    const spawnArgs = winScriptPath
-      ? ['-ExecutionPolicy', 'Bypass', '-File', winScriptPath]
-      : args
-
-    const child = spawn(cmd, spawnArgs, {
+    const child = spawn('codex', args, {
       env: filterCodexEnv(process.env as Record<string, string | undefined>),
-      stdio: ['ignore', 'pipe', 'pipe'],
-      // On non-Windows, no shell needed. On Windows, the PS1 script handles everything.
-      ...(process.platform === 'win32' && !winScriptPath && { shell: true }),
+      stdio: [stdinText ? 'pipe' : 'ignore', 'pipe', 'pipe'],
+      // On Windows, npm-installed CLIs are .cmd scripts — need shell to resolve.
+      ...(process.platform === 'win32' && { shell: true }),
     })
+
+    // Pipe prompt via stdin (codex reads from stdin when `-` is the prompt arg)
+    if (stdinText && child.stdin) {
+      child.stdin.write(stdinText)
+      child.stdin.end()
+    }
 
     let stdoutBuffer = ''
     let stderrBuffer = ''
@@ -207,7 +190,7 @@ async function executeCodexCommand(
       reject(new Error(`Codex request timed out after ${Math.round(timeoutMs / 1000)}s.`))
     }, timeoutMs)
 
-    child.stdout.on('data', (chunk: Buffer) => {
+    child.stdout!.on('data', (chunk: Buffer) => {
       stdoutBuffer += chunk.toString('utf-8')
       let idx = stdoutBuffer.indexOf('\n')
       while (idx >= 0) {
@@ -218,7 +201,7 @@ async function executeCodexCommand(
       }
     })
 
-    child.stderr.on('data', (chunk: Buffer) => {
+    child.stderr!.on('data', (chunk: Buffer) => {
       stderrBuffer += chunk.toString('utf-8')
     })
 
