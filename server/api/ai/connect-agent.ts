@@ -270,6 +270,41 @@ function friendlyClaudeError(raw: string): string {
   return raw
 }
 
+/**
+ * Fallback: parse model IDs from Codex's bundled latest-model.md when
+ * models_cache.json is missing (e.g. fresh Windows install).
+ * Only includes text/reasoning models (skips image, audio, video, embedding, moderation).
+ */
+async function parseCodexLatestModelMd(codexHome: string): Promise<GroupedModel[]> {
+  const { readFile } = await import('node:fs/promises')
+  const { join } = await import('node:path')
+  const mdPath = join(codexHome, 'skills', '.system', 'openai-docs', 'references', 'latest-model.md')
+  try {
+    const content = await readFile(mdPath, 'utf-8')
+    const models: GroupedModel[] = []
+    // Match markdown table rows: | `model-id` | description |
+    const rowRe = /^\|\s*`([^`]+)`\s*\|\s*(.+?)\s*\|/gm
+    const skipRe = /image|audio|tts|transcribe|realtime|sora|video|embedding|moderation/i
+    let match: RegExpExecArray | null
+    const seen = new Set<string>()
+    while ((match = rowRe.exec(content)) !== null) {
+      const slug = match[1]
+      const desc = match[2].trim()
+      if (skipRe.test(slug) || skipRe.test(desc) || seen.has(slug)) continue
+      seen.add(slug)
+      models.push({
+        value: slug,
+        displayName: slug,
+        description: desc,
+        provider: 'openai' as const,
+      })
+    }
+    return models
+  } catch {
+    return []
+  }
+}
+
 /** Connect to Codex CLI and fetch its supported models from the local cache */
 async function connectCodexCli(): Promise<ConnectResult> {
   serverLog.info('[connect-agent] connecting to Codex CLI...')
@@ -348,7 +383,7 @@ async function connectCodexCli(): Promise<ConnectResult> {
       return { connected: false, models: [], error: 'Codex CLI not responding' }
     }
 
-    // Read models from Codex CLI's local models cache (best-effort, connect even if empty)
+    // Read models from Codex CLI's local models cache (best-effort)
     let models: GroupedModel[] = []
     const codexHome = process.env.CODEX_HOME || join(homedir(), '.codex')
     const cachePath = join(codexHome, 'models_cache.json')
@@ -375,12 +410,20 @@ async function connectCodexCli(): Promise<ConnectResult> {
           }))
       }
     } catch {
-      serverLog.info(`[connect-agent] codex models cache not available, continuing without models`)
+      serverLog.info(`[connect-agent] codex models cache not available`)
+    }
+
+    // Fallback: parse models from Codex's bundled latest-model.md reference
+    if (models.length === 0) {
+      models = await parseCodexLatestModelMd(codexHome)
+      if (models.length > 0) {
+        serverLog.info(`[connect-agent] codex models loaded from latest-model.md: ${models.length}`)
+      }
     }
 
     serverLog.info(`[connect-agent] codex connected, ${models.length} models found`)
     const codexInfo = await buildCodexConnectionInfo()
-    const warning = models.length === 0 ? 'Models not loaded. Try running codex once to populate the model cache.' : undefined
+    const warning = models.length === 0 ? 'No models found. Try running codex once to populate the model cache.' : undefined
     return { connected: true, models, warning, ...codexInfo }
   } catch (error) {
     const msg = error instanceof Error ? error.message : 'Failed to connect'
