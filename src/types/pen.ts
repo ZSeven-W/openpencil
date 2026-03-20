@@ -184,6 +184,7 @@ export interface ImageNode extends PenNodeBase {
   tint?: number        // -100 to 100
   highlights?: number  // -100 to 100
   shadows?: number     // -100 to 100
+  imagePrompt?: string // Semantic description for image search/generation
 }
 
 export interface IconFontNode extends PenNodeBase {
