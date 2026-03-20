@@ -364,6 +364,7 @@ const en = {
   'settings.title': 'Settings',
   'settings.agents': 'Agents',
   'settings.mcp': 'MCP',
+  'settings.images': 'Images',
   'settings.system': 'System',
   'settings.autoUpdateDesc': 'Automatically check for new versions on startup',
   'settings.systemDesktopOnly': 'System settings are available in the desktop app.',

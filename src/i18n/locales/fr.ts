@@ -371,6 +371,7 @@ const fr: TranslationKeys = {
   'settings.title': 'Paramètres',
   'settings.agents': 'Agents',
   'settings.mcp': 'MCP',
+  'settings.images': 'Images',
   'settings.system': 'Système',
   'settings.autoUpdateDesc': 'Vérifier automatiquement les nouvelles versions au démarrage',
   'settings.systemDesktopOnly': 'Les paramètres système sont disponibles dans l\'application de bureau.',

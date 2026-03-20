@@ -368,6 +368,7 @@ const ru: TranslationKeys = {
   'settings.title': 'Настройки',
   'settings.agents': 'Agents',
   'settings.mcp': 'MCP',
+  'settings.images': 'Images',
   'settings.system': 'Система',
   'settings.autoUpdateDesc': 'Автоматически проверять наличие новых версий при запуске',
   'settings.systemDesktopOnly': 'Системные настройки доступны в настольном приложении.',

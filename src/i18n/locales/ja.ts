@@ -369,6 +369,7 @@ const ja: TranslationKeys = {
   'settings.title': '設定',
   'settings.agents': 'Agents',
   'settings.mcp': 'MCP',
+  'settings.images': 'Images',
   'settings.system': 'システム',
   'settings.autoUpdateDesc': '起動時に新しいバージョンを自動的に確認する',
   'settings.systemDesktopOnly': 'システム設定はデスクトップアプリで利用できます。',

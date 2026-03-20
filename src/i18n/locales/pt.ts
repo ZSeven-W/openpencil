@@ -368,6 +368,7 @@ const pt: TranslationKeys = {
   'settings.title': 'Configurações',
   'settings.agents': 'Agents',
   'settings.mcp': 'MCP',
+  'settings.images': 'Images',
   'settings.system': 'Sistema',
   'settings.autoUpdateDesc': 'Verificar automaticamente novas versões ao iniciar',
   'settings.systemDesktopOnly': 'As configurações do sistema estão disponíveis no aplicativo de desktop.',

@@ -366,6 +366,7 @@ const vi: TranslationKeys = {
   'settings.title': 'Cài đặt',
   'settings.agents': 'Agents',
   'settings.mcp': 'MCP',
+  'settings.images': 'Images',
   'settings.system': 'Hệ thống',
   'settings.autoUpdateDesc': 'Tự động kiểm tra phiên bản mới khi khởi động',
   'settings.systemDesktopOnly': 'Cài đặt hệ thống khả dụng trong ứng dụng máy tính.',

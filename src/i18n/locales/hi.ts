@@ -366,6 +366,7 @@ const hi: TranslationKeys = {
   'settings.title': 'सेटिंग्स',
   'settings.agents': 'Agents',
   'settings.mcp': 'MCP',
+  'settings.images': 'Images',
   'settings.system': 'सिस्टम',
   'settings.autoUpdateDesc': 'स्टार्टअप पर स्वचालित रूप से नए संस्करणों की जाँच करें',
   'settings.systemDesktopOnly': 'सिस्टम सेटिंग्स डेस्कटॉप ऐप में उपलब्ध हैं।',

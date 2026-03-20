@@ -366,6 +366,7 @@ const id: TranslationKeys = {
   'settings.title': 'Pengaturan',
   'settings.agents': 'Agents',
   'settings.mcp': 'MCP',
+  'settings.images': 'Images',
   'settings.system': 'Sistem',
   'settings.autoUpdateDesc': 'Periksa versi baru secara otomatis saat memulai',
   'settings.systemDesktopOnly': 'Pengaturan sistem tersedia di aplikasi desktop.',

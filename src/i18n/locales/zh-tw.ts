@@ -358,6 +358,7 @@ const zhTW: TranslationKeys = {
   'settings.title': '設定',
   'settings.agents': 'Agents',
   'settings.mcp': 'MCP',
+  'settings.images': 'Images',
   'settings.system': '系統',
   'settings.autoUpdateDesc': '啟動時自動檢查新版本',
   'settings.systemDesktopOnly': '系統設定僅在桌面應用程式中可用。',

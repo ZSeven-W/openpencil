@@ -1,9 +1,10 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import type { ComponentType, SVGProps } from 'react'
+import { ImagesPage } from './agent-settings-images-page'
 import { useTranslation } from 'react-i18next'
 import {
   X, Check, Loader2, Unplug, AlertCircle, Terminal, Play, Square,
-  Copy, Download, ExternalLink, Pen, Settings,
+  Copy, Download, ExternalLink, Pen, Settings, Image,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
@@ -46,7 +47,7 @@ const PROVIDER_META: Record<
   },
 }
 
-type SettingsTab = 'agents' | 'mcp' | 'system'
+type SettingsTab = 'agents' | 'mcp' | 'images' | 'system'
 
 async function connectAgent(
   agent: 'claude-code' | 'codex-cli' | 'opencode' | 'copilot',
@@ -640,6 +641,12 @@ export default function AgentSettingsDialog() {
               onClick={() => setActiveTab('mcp')}
             />
             <NavItem
+              icon={Image}
+              label={t('settings.images')}
+              active={activeTab === 'images'}
+              onClick={() => setActiveTab('images')}
+            />
+            <NavItem
               icon={Settings}
               label={t('settings.system')}
               active={activeTab === 'system'}
@@ -683,6 +690,8 @@ export default function AgentSettingsDialog() {
                 onToggleMCP={handleToggleMCP}
               />
             )}
+            {activeTab === 'images' && <ImagesPage />}
+
             {activeTab === 'system' && (
               <div>
                 <h3 className="text-[15px] font-semibold text-foreground mb-4">{t('settings.system')}</h3>

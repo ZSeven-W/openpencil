@@ -366,6 +366,7 @@ const th: TranslationKeys = {
   'settings.title': 'การตั้งค่า',
   'settings.agents': 'Agents',
   'settings.mcp': 'MCP',
+  'settings.images': 'Images',
   'settings.system': 'ระบบ',
   'settings.autoUpdateDesc': 'ตรวจสอบเวอร์ชันใหม่โดยอัตโนมัติเมื่อเริ่มต้น',
   'settings.systemDesktopOnly': 'การตั้งค่าระบบใช้ได้ในแอปเดสก์ท็อป',

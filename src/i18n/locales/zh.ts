@@ -358,6 +358,7 @@ const zh: TranslationKeys = {
   'settings.title': '设置',
   'settings.agents': 'Agents',
   'settings.mcp': 'MCP',
+  'settings.images': 'Images',
   'settings.system': '系统',
   'settings.autoUpdateDesc': '启动时自动检查新版本',
   'settings.systemDesktopOnly': '系统设置仅在桌面应用中可用。',

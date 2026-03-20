@@ -366,6 +366,7 @@ const tr: TranslationKeys = {
   'settings.title': 'Ayarlar',
   'settings.agents': 'Agents',
   'settings.mcp': 'MCP',
+  'settings.images': 'Images',
   'settings.system': 'Sistem',
   'settings.autoUpdateDesc': 'Başlangıçta yeni sürümleri otomatik olarak kontrol et',
   'settings.systemDesktopOnly': 'Sistem ayarları masaüstü uygulamasında kullanılabilir.',

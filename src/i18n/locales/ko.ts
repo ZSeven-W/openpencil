@@ -366,6 +366,7 @@ const ko: TranslationKeys = {
   'settings.title': '설정',
   'settings.agents': 'Agents',
   'settings.mcp': 'MCP',
+  'settings.images': 'Images',
   'settings.system': '시스템',
   'settings.autoUpdateDesc': '시작 시 자동으로 새 버전 확인',
   'settings.systemDesktopOnly': '시스템 설정은 데스크톱 앱에서 사용할 수 있습니다.',
