@@ -75,12 +75,20 @@ export async function runCodexExec(
     args.push('--config', `model_reasoning_effort=${codexEffort}`)
   }
 
-  // On Windows with PowerShell, long prompts and special characters ($, ", etc.)
-  // cause parsing errors. Write prompt to a temp file and pass via stdin.
-  let promptFilePath: string | undefined
+  // On Windows, shell escaping causes PowerShell/cmd.exe parsing errors
+  // (MissingExpression, special chars like $, ", etc.). Write prompt to a
+  // temp file and invoke via a wrapper script to avoid all escaping issues.
+  let winScriptPath: string | undefined
   if (process.platform === 'win32') {
-    promptFilePath = join(tempDir, 'prompt.txt')
+    const promptFilePath = join(tempDir, 'prompt.txt')
     await writeFile(promptFilePath, prompt, 'utf-8')
+    winScriptPath = join(tempDir, 'run-codex.ps1')
+    const escapedPromptPath = promptFilePath.replace(/'/g, "''")
+    const escapedArgs = args.map(a => `'${a.replace(/'/g, "''")}'`).join(' ')
+    await writeFile(winScriptPath, [
+      `$prompt = [IO.File]::ReadAllText('${escapedPromptPath}')`,
+      `& codex ${escapedArgs} $prompt`,
+    ].join('\n'), 'utf-8')
   } else {
     args.push(prompt)
   }
@@ -89,7 +97,7 @@ export async function runCodexExec(
     const runResult = await executeCodexCommand(
       args,
       options.timeoutMs ?? DEFAULT_CODEX_TIMEOUT_MS,
-      promptFilePath,
+      winScriptPath,
     )
     const finalText = await readFile(outputPath, 'utf-8').catch(() => '')
     const normalizedText = finalText.trim() || runResult.text.trim()
@@ -155,24 +163,22 @@ function resolveCodexEffort(
 async function executeCodexCommand(
   args: string[],
   timeoutMs: number,
-  promptFilePath?: string,
+  winScriptPath?: string,
 ): Promise<{ text: string; errors: string[] }> {
   return await new Promise((resolve, reject) => {
-    const child = spawn('codex', args, {
-      env: filterCodexEnv(process.env as Record<string, string | undefined>),
-      stdio: [promptFilePath ? 'pipe' : 'ignore', 'pipe', 'pipe'],
-      // On Windows, npm-installed CLIs are .cmd scripts — need shell to resolve them.
-      shell: process.platform === 'win32',
-    })
+    // On Windows, use PowerShell script to avoid escaping issues with long prompts.
+    // The script reads the prompt from a temp file and invokes codex directly.
+    const cmd = winScriptPath ? 'powershell.exe' : 'codex'
+    const spawnArgs = winScriptPath
+      ? ['-ExecutionPolicy', 'Bypass', '-File', winScriptPath]
+      : args
 
-    // On Windows, pipe prompt via stdin to avoid PowerShell escaping issues
-    if (promptFilePath && child.stdin) {
-      import('node:fs').then(({ createReadStream }) => {
-        createReadStream(promptFilePath).pipe(child.stdin!)
-      }).catch(() => {
-        child.stdin?.end()
-      })
-    }
+    const child = spawn(cmd, spawnArgs, {
+      env: filterCodexEnv(process.env as Record<string, string | undefined>),
+      stdio: ['ignore', 'pipe', 'pipe'],
+      // On non-Windows, no shell needed. On Windows, the PS1 script handles everything.
+      ...(process.platform === 'win32' && !winScriptPath && { shell: true }),
+    })
 
     let stdoutBuffer = ''
     let stderrBuffer = ''
