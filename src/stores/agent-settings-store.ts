@@ -6,6 +6,8 @@ import type {
   MCPTransportMode,
   GroupedModel,
 } from '@/types/agent-settings'
+import type { ImageGenConfig } from '@/types/image-service'
+import { DEFAULT_IMAGE_GEN_CONFIG } from '@/types/image-service'
 import { MCP_DEFAULT_PORT } from '@/constants/app'
 import { appStorage } from '@/utils/app-storage'
 
@@ -16,6 +18,8 @@ interface PersistedState {
   mcpIntegrations: MCPCliIntegration[]
   mcpTransportMode: MCPTransportMode
   mcpHttpPort: number
+  imageGenConfig: ImageGenConfig
+  openverseOAuth: { clientId: string; clientSecret: string } | null
 }
 
 interface AgentSettingsState extends PersistedState {
@@ -36,6 +40,8 @@ interface AgentSettingsState extends PersistedState {
   setMCPTransport: (mode: MCPTransportMode, port?: number) => void
   setMcpServerStatus: (running: boolean, localIp?: string | null) => void
   setDialogOpen: (open: boolean) => void
+  setImageGenConfig: (config: Partial<ImageGenConfig>) => void
+  setOpenverseOAuth: (oauth: { clientId: string; clientSecret: string } | null) => void
   persist: () => void
   hydrate: () => void
 }
@@ -85,6 +91,8 @@ export const useAgentSettingsStore = create<AgentSettingsState>((set, get) => ({
   mcpIntegrations: [...DEFAULT_MCP_INTEGRATIONS],
   mcpTransportMode: 'stdio',
   mcpHttpPort: MCP_DEFAULT_PORT,
+  imageGenConfig: DEFAULT_IMAGE_GEN_CONFIG,
+  openverseOAuth: null,
   dialogOpen: false,
   isHydrated: false,
   mcpServerRunning: false,
@@ -133,12 +141,19 @@ export const useAgentSettingsStore = create<AgentSettingsState>((set, get) => ({
 
   setDialogOpen: (dialogOpen) => set({ dialogOpen }),
 
+  setImageGenConfig: (updates) =>
+    set((s) => ({
+      imageGenConfig: { ...s.imageGenConfig, ...updates },
+    })),
+
+  setOpenverseOAuth: (oauth) => set({ openverseOAuth: oauth }),
+
   persist: () => {
     try {
-      const { providers, mcpIntegrations, mcpTransportMode, mcpHttpPort } = get()
+      const { providers, mcpIntegrations, mcpTransportMode, mcpHttpPort, imageGenConfig, openverseOAuth } = get()
       appStorage.setItem(
         STORAGE_KEY,
-        JSON.stringify({ providers, mcpIntegrations, mcpTransportMode, mcpHttpPort }),
+        JSON.stringify({ providers, mcpIntegrations, mcpTransportMode, mcpHttpPort, imageGenConfig, openverseOAuth }),
       )
     } catch {
       // ignore
@@ -171,6 +186,8 @@ export const useAgentSettingsStore = create<AgentSettingsState>((set, get) => ({
       }
       if (data.mcpTransportMode) set({ mcpTransportMode: data.mcpTransportMode })
       if (data.mcpHttpPort) set({ mcpHttpPort: data.mcpHttpPort })
+      if (data.imageGenConfig) set({ imageGenConfig: data.imageGenConfig })
+      if (data.openverseOAuth !== undefined) set({ openverseOAuth: data.openverseOAuth })
     } catch {
       // ignore
     } finally {
