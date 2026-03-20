@@ -11,7 +11,7 @@ PenNode types (the ONLY format you output for designs):
 - ellipse: Props: width, height, fill, stroke, effects
 - text: Props: content (string), fontFamily, fontSize, fontWeight, fontStyle ('normal'|'italic'), fill, width, height, textAlign, textGrowth ('auto'|'fixed-width'|'fixed-width-height'), lineHeight (number, multiplier e.g. 1.2), letterSpacing (number, px), textAlignVertical ('top'|'middle'|'bottom')
 - path: SVG icon/shape. Props: d (SVG path string), width, height, fill, stroke, effects. IMPORTANT: width and height must match the natural aspect ratio of the SVG path — do NOT force 1:1 for non-square icons/logos
-- image: Raster image. Props: src (URL string), width, height, cornerRadius, effects
+- image: Raster image. Props: width, height, cornerRadius, effects, imagePrompt (recommended: descriptive English phrase for image content, e.g. "modern office workspace", "smiling woman headshot"). Do NOT include src — images are auto-populated after generation. Omit imagePrompt for purely decorative images.
 
 All nodes share: id (string), type, name, role, x, y, rotation, opacity
 
