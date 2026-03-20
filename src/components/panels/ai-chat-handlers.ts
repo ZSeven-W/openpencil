@@ -3,6 +3,7 @@ import { nanoid } from 'nanoid'
 import { useAIStore } from '@/stores/ai-store'
 import { useCanvasStore } from '@/stores/canvas-store'
 import { useDocumentStore } from '@/stores/document-store'
+import { getActivePageChildren } from '@/stores/document-tree-utils'
 import { streamChat } from '@/services/ai/ai-service'
 import { CHAT_SYSTEM_PROMPT } from '@/services/ai/ai-prompts'
 import {
@@ -18,15 +19,18 @@ import { CHAT_STREAM_THINKING_CONFIG } from '@/services/ai/ai-runtime-config'
 /** Intent classification prompt — lightweight LLM call to determine message routing */
 const CLASSIFY_PROMPT = `You are a UI design tool assistant. Classify the user's message intent.
 Reply with EXACTLY one of these tags, nothing else:
-- DESIGN — user wants to create, generate, or modify any UI element, component, screen, or page
+- DESIGN_NEW — user wants to create or generate a NEW design, screen, page, or component from scratch
+- DESIGN_MODIFY — user wants to modify, adjust, refine, or iterate on an EXISTING design (e.g. change colors, resize, restyle, add/remove elements)
 - CHAT — user is asking a question, seeking help, or having a conversation`
+
+type DesignIntent = 'new' | 'modify' | 'chat'
 
 /** Classify user intent via a lightweight LLM call instead of hardcoded keyword matching */
 async function classifyIntent(
   text: string,
   model: string,
   provider?: string,
-): Promise<{ isDesign: boolean }> {
+): Promise<{ intent: DesignIntent }> {
   try {
     const controller = new AbortController()
     const timeout = setTimeout(() => controller.abort(), 8_000)
@@ -48,10 +52,15 @@ async function classifyIntent(
     const data = await response.json()
     const upper = (data.text ?? '').trim().toUpperCase()
 
-    return { isDesign: upper.includes('DESIGN') }
+    if (upper.includes('DESIGN_MODIFY')) return { intent: 'modify' }
+    if (upper.includes('DESIGN_NEW') || upper.includes('DESIGN')) return { intent: 'new' }
+    if (upper.includes('CHAT')) return { intent: 'chat' }
+
+    // Fallback: in a design tool, default to new design mode
+    return { intent: 'new' }
   } catch {
-    // Fallback: in a design tool, default to design mode
-    return { isDesign: true }
+    // Fallback: in a design tool, default to new design mode
+    return { intent: 'new' }
   }
 }
 
@@ -169,24 +178,44 @@ export function useChatHandlers() {
       useAIStore.getState().setAbortController(abortController)
 
       try {
-        // Classify intent via lightweight LLM call
+        // Classify intent via lightweight LLM call (three-way: new / modify / chat)
         const classified = await classifyIntent(
           messageText, model, currentProvider,
         )
-        isDesign = classified.isDesign
-        const isModification = isDesign && hasSelection
+        let intent = classified.intent
+
+        // When LLM says "modify" but canvas is empty, degrade to new design
+        const { document: currentDoc } = useDocumentStore.getState()
+        const activePageId = useCanvasStore.getState().activePageId
+        const pageChildren = getActivePageChildren(currentDoc, activePageId)
+        if (intent === 'modify' && pageChildren.length === 0) {
+          intent = 'new'
+        }
+
+        isDesign = intent === 'new' || intent === 'modify'
+
+        // Determine modification target: explicit selection or auto-selected frame
+        const isModification = intent === 'modify' && (hasSelection || pageChildren.length > 0)
 
         if (isDesign) {
              if (isModification) {
                // --- MODIFICATION MODE ---
                const { getNodeById, document: modDoc } = useDocumentStore.getState()
-               const selectedNodes = selectedIds.map(id => getNodeById(id)).filter(Boolean) as any[]
+               let modTargets: any[]
+               if (hasSelection) {
+                 // User explicitly selected nodes
+                 modTargets = selectedIds.map(id => getNodeById(id)).filter(Boolean)
+               } else {
+                 // Auto-select: last top-level frame on the active page
+                 const frames = pageChildren.filter(n => n.type === 'frame')
+                 modTargets = frames.length > 0 ? [frames[frames.length - 1]] : [pageChildren[pageChildren.length - 1]]
+               }
 
                // We update the UI to show we are working
                accumulated = '<step title="Checking guidelines">Analyzing modification request...</step>'
                updateLastMessage(accumulated)
 
-               const { rawResponse, nodes } = await generateDesignModification(selectedNodes, messageText, {
+               const { rawResponse, nodes } = await generateDesignModification(modTargets, messageText, {
                  variables: modDoc.variables,
                  themes: modDoc.themes,
                  model,

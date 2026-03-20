@@ -2,6 +2,7 @@ import { defineEventHandler, readBody, setResponseHeaders } from 'h3'
 import { resolveClaudeCli } from '../../utils/resolve-claude-cli'
 import {
   buildClaudeAgentEnv,
+  buildSpawnClaudeCodeProcess,
   getClaudeAgentDebugFilePath,
 } from '../../utils/resolve-claude-agent-env'
 import { writeFile, mkdtemp, rm } from 'node:fs/promises'
@@ -125,6 +126,7 @@ CRITICAL: Your ENTIRE response must be a single JSON object. No markdown, no exp
         env,
         ...(debugFile ? { debugFile } : {}),
         ...(claudePath ? { pathToClaudeCodeExecutable: claudePath } : {}),
+        ...(buildSpawnClaudeCodeProcess() ? { spawnClaudeCodeProcess: buildSpawnClaudeCodeProcess() } : {}),
       },
     })
 

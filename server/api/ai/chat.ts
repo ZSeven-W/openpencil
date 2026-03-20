@@ -6,6 +6,7 @@ import { resolveClaudeCli } from '../../utils/resolve-claude-cli'
 import { runCodexExec } from '../../utils/codex-client'
 import {
   buildClaudeAgentEnv,
+  buildSpawnClaudeCodeProcess,
   getClaudeAgentDebugFilePath,
 } from '../../utils/resolve-claude-agent-env'
 
@@ -80,7 +81,7 @@ function buildClaudeExitHint(rawError: string, debugTail?: string[]): string | u
 export default defineEventHandler(async (event) => {
   const body = await readBody<ChatBody>(event)
 
-  if (!body?.messages || !body?.system) {
+  if (!body?.messages || body?.system == null) {
     setResponseHeaders(event, { 'Content-Type': 'application/json' })
     return { error: 'Missing required fields: system, messages' }
   }
@@ -236,6 +237,7 @@ function streamViaAgentSDK(body: ChatBody, model?: string) {
                 env,
                 ...(debugFile ? { debugFile } : {}),
                 ...(claudePath ? { pathToClaudeCodeExecutable: claudePath } : {}),
+                ...(buildSpawnClaudeCodeProcess() ? { spawnClaudeCodeProcess: buildSpawnClaudeCodeProcess() } : {}),
               },
             })
 
@@ -285,6 +287,7 @@ function streamViaAgentSDK(body: ChatBody, model?: string) {
                 env,
                 ...(debugFile ? { debugFile } : {}),
                 ...(claudePath ? { pathToClaudeCodeExecutable: claudePath } : {}),
+                ...(buildSpawnClaudeCodeProcess() ? { spawnClaudeCodeProcess: buildSpawnClaudeCodeProcess() } : {}),
               },
             })
 
@@ -406,32 +409,8 @@ function parseOpenCodeModel(model?: string): { providerID: string; modelID: stri
   return { providerID: model.slice(0, idx), modelID: model.slice(idx + 1) }
 }
 
-function mapOpenCodeEffort(
-  effort?: 'low' | 'medium' | 'high' | 'max',
-): 'low' | 'medium' | 'high' | undefined {
-  if (!effort) return undefined
-  if (effort === 'max') return 'high'
-  return effort
-}
-
-function buildOpenCodeReasoning(
-  body: ChatBody,
-): Record<string, unknown> | undefined {
-  const reasoning: Record<string, unknown> = {}
-  const effort = mapOpenCodeEffort(body.effort)
-  if (effort) {
-    reasoning.effort = effort
-  }
-  if (body.thinkingMode === 'enabled') {
-    reasoning.enabled = true
-  } else if (body.thinkingMode === 'disabled') {
-    reasoning.enabled = false
-  }
-  if (typeof body.thinkingBudgetTokens === 'number' && body.thinkingBudgetTokens > 0) {
-    reasoning.budgetTokens = body.thinkingBudgetTokens
-  }
-  return Object.keys(reasoning).length > 0 ? reasoning : undefined
-}
+// Note: OpenCode SDK does not support `reasoning` in promptAsync/prompt params.
+// The `reasoning` field was silently dropped by buildClientParams. Removed.
 
 /** Wrap an async generator with a timeout — yields values until timeout fires */
 async function* streamWithTimeout<T>(
@@ -543,11 +522,14 @@ function streamViaOpenCode(body: ChatBody, model?: string) {
         }
 
         // Inject system prompt as context (no AI reply)
-        await ocClient.session.prompt({
+        const { error: sysPromptError } = await ocClient.session.prompt({
           sessionID: session.id,
           noReply: true,
           parts: [{ type: 'text', text: body.system }],
-        })
+        }) as any
+        if (sysPromptError) {
+          console.error('[AI] OpenCode system prompt injection failed:', formatOpenCodeError(sysPromptError))
+        }
 
         // Build prompt from the last user message
         const lastUserMsg = [...body.messages].reverse().find((m) => m.role === 'user')
@@ -568,7 +550,6 @@ function streamViaOpenCode(body: ChatBody, model?: string) {
           { type: 'text', text: prompt || 'Analyze these images.' },
         ]
 
-        console.log(`[AI] OpenCode streaming prompt: model=${model}, parsed=${JSON.stringify(parsed)}`)
 
         // Build prompt payload with optional model and reasoning
         const promptPayload: Record<string, unknown> = {
@@ -576,16 +557,46 @@ function streamViaOpenCode(body: ChatBody, model?: string) {
           ...(parsed ? { model: parsed } : {}),
           parts,
         }
-        const reasoning = buildOpenCodeReasoning(body)
-        if (reasoning) {
-          promptPayload.reasoning = reasoning
-        }
 
-        // Subscribe to event stream for real-time deltas
+        // Subscribe to event stream for real-time deltas.
+        // IMPORTANT: The SSE connection is lazy — it only connects when
+        // iteration starts. We must start consuming BEFORE sending the
+        // prompt to avoid a race where events are emitted before the
+        // SSE connection is established.
         const eventResult = await ocClient.event.subscribe()
         const eventStream = eventResult.stream
 
-        // Send prompt asynchronously — response comes via events
+        const sessionId = session.id
+        const STREAM_TIMEOUT_MS = 180_000
+
+        // Start eagerly consuming the event stream into a buffer.
+        // This triggers the SSE HTTP connection immediately.
+        const eventBuffer: unknown[] = []
+        let streamDone = false
+        let notifyFn: (() => void) | null = null
+
+        const notify = () => { if (notifyFn) { const fn = notifyFn; notifyFn = null; fn() } }
+
+        // eslint-disable-next-line @typescript-eslint/no-floating-promises
+        void (async () => {
+          const timeoutPromise = new Promise<{ done: true; value: undefined }>((resolve) =>
+            setTimeout(() => resolve({ done: true, value: undefined }), STREAM_TIMEOUT_MS),
+          )
+          try {
+            for await (const event of streamWithTimeout(eventStream, timeoutPromise)) {
+              eventBuffer.push(event)
+              notify()
+            }
+          } finally {
+            streamDone = true
+            notify()
+          }
+        })()
+
+        // Give the SSE connection a moment to establish before sending prompt
+        await new Promise<void>(resolve => setTimeout(resolve, 100))
+
+        // Now send the prompt — SSE connection should already be active
         const { error: asyncError } = await ocClient.session.promptAsync(promptPayload as any)
         if (asyncError) {
           const detail = formatOpenCodeError(asyncError)
@@ -593,18 +604,24 @@ function streamViaOpenCode(body: ChatBody, model?: string) {
           throw new Error(detail)
         }
 
-        // Consume event stream, forwarding text deltas to client
+        // Consume buffered events + wait for new ones
         let emittedText = false
-        const sessionId = session.id
-        const STREAM_TIMEOUT_MS = 180_000
-        const timeoutPromise = new Promise<{ done: true; value: undefined }>((resolve) =>
-          setTimeout(() => resolve({ done: true, value: undefined }), STREAM_TIMEOUT_MS),
-        )
+        let eventCount = 0
+        let shouldBreak = false
 
-        for await (const event of streamWithTimeout(eventStream, timeoutPromise)) {
-          if (!event || !('type' in event)) continue
+        while (!shouldBreak) {
+          // Wait for events if buffer is empty
+          if (eventBuffer.length === 0) {
+            if (streamDone) break
+            await new Promise<void>(resolve => { notifyFn = resolve })
+            continue
+          }
 
-          const eventType = event.type as string
+          const event = eventBuffer.shift()
+          if (!event || !('type' in (event as any))) continue
+
+          const eventType = (event as any).type as string
+          eventCount++
 
           // Stream text deltas for our session
           if (eventType === 'message.part.delta') {
@@ -625,7 +642,9 @@ function streamViaOpenCode(body: ChatBody, model?: string) {
           // Session went idle — response complete
           if (eventType === 'session.idle') {
             const props = (event as any).properties
-            if (props?.sessionID === sessionId) break
+            if (props?.sessionID === sessionId) {
+              shouldBreak = true
+            }
             continue
           }
 
@@ -637,7 +656,7 @@ function streamViaOpenCode(body: ChatBody, model?: string) {
               console.error('[AI] OpenCode session error:', errMsg)
               const data = JSON.stringify({ type: 'error', content: errMsg })
               controller.enqueue(encoder.encode(`data: ${data}\n\n`))
-              break
+              shouldBreak = true
             }
             continue
           }
@@ -645,8 +664,29 @@ function streamViaOpenCode(body: ChatBody, model?: string) {
 
         clearInterval(pingTimer)
 
+        // Fallback: if no text was streamed, try reading session messages directly
         if (!emittedText) {
-          console.warn('[AI] OpenCode returned no text via streaming events')
+          try {
+            const { data: messages } = await ocClient.session.messages({ sessionID: sessionId }) as any
+            if (messages && Array.isArray(messages)) {
+              // Find the last assistant message (each item has { info, parts })
+              const assistantMsg = [...messages].reverse().find((m: any) => m.info?.role === 'assistant')
+              if (assistantMsg?.parts) {
+                for (const part of assistantMsg.parts) {
+                  if (part.type === 'text' && part.text) {
+                    const data = JSON.stringify({ type: 'text', content: part.text })
+                    controller.enqueue(encoder.encode(`data: ${data}\n\n`))
+                    emittedText = true
+                  }
+                }
+              }
+            }
+          } catch {
+            // fallback failed — will emit error below
+          }
+        }
+
+        if (!emittedText) {
           const data = JSON.stringify({ type: 'error', content: 'OpenCode returned an empty response. The model may not have generated any output.' })
           controller.enqueue(encoder.encode(`data: ${data}\n\n`))
         }

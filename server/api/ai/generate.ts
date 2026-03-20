@@ -3,6 +3,7 @@ import { resolveClaudeCli } from '../../utils/resolve-claude-cli'
 import { runCodexExec } from '../../utils/codex-client'
 import {
   buildClaudeAgentEnv,
+  buildSpawnClaudeCodeProcess,
   getClaudeAgentDebugFilePath,
 } from '../../utils/resolve-claude-agent-env'
 import { formatOpenCodeError } from './chat'
@@ -25,7 +26,7 @@ interface GenerateBody {
 export default defineEventHandler(async (event) => {
   const body = await readBody<GenerateBody>(event)
 
-  if (!body?.message || !body?.system) {
+  if (!body?.message || body?.system == null) {
     setResponseHeaders(event, { 'Content-Type': 'application/json' })
     return { error: 'Missing required fields: system, message' }
   }
@@ -74,6 +75,7 @@ async function generateViaAgentSDK(body: GenerateBody, model?: string): Promise<
         env,
         ...(debugFile ? { debugFile } : {}),
         ...(claudePath ? { pathToClaudeCodeExecutable: claudePath } : {}),
+        ...(buildSpawnClaudeCodeProcess() ? { spawnClaudeCodeProcess: buildSpawnClaudeCodeProcess() } : {}),
       },
     })
 
@@ -247,7 +249,6 @@ async function generateViaOpenCode(body: GenerateBody, model?: string): Promise<
     }
 
     if (texts.length === 0) {
-      console.warn('[AI] OpenCode generate returned no text parts. Response:', JSON.stringify(result).slice(0, 500))
       return { error: 'OpenCode returned an empty response. The model may not have generated any output.' }
     }
 
