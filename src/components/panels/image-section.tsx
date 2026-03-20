@@ -2,8 +2,11 @@ import { useState, useCallback, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { ImageNode, ImageFitMode } from '@/types/pen'
 import SectionHeader from '@/components/shared/section-header'
-import { Image as ImageIcon } from 'lucide-react'
+import { Image as ImageIcon, Search, Sparkles } from 'lucide-react'
 import ImageFillPopover from './image-fill-popover'
+import ImageSearchPopover from './image-search-popover'
+import ImageGeneratePopover from './image-generate-popover'
+import { Button } from '@/components/ui/button'
 
 interface ImageSectionProps {
   node: ImageNode
@@ -49,6 +52,28 @@ export default function ImageSection({ node, onUpdate }: ImageSectionProps) {
           {t(`image.${fitMode === 'fit' ? 'fitMode' : fitMode}`)}
         </span>
       </button>
+
+      <div className="flex gap-1 mt-1.5">
+        <ImageSearchPopover
+          initialQuery={node.imagePrompt ?? node.name ?? ''}
+          onSelect={(url: string) => onUpdate({ src: url })}
+        >
+          <Button size="sm" variant="outline" className="flex-1 h-7 text-xs">
+            <Search className="h-3 w-3 mr-1" />
+            Search
+          </Button>
+        </ImageSearchPopover>
+
+        <ImageGeneratePopover
+          initialPrompt={node.imagePrompt ?? node.name ?? ''}
+          onGenerated={(url: string) => onUpdate({ src: url })}
+        >
+          <Button size="sm" variant="outline" className="flex-1 h-7 text-xs">
+            <Sparkles className="h-3 w-3 mr-1" />
+            Generate
+          </Button>
+        </ImageGeneratePopover>
+      </div>
 
       {triggerRect && (
         <ImageFillPopover
