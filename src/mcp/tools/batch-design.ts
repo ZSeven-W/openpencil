@@ -1,4 +1,4 @@
-import { openDocument, saveDocument, resolveDocPath } from '../document-manager'
+import { openDocument, saveDocument, resolveDocPath, getSyncUrl } from '../document-manager'
 import {
   findNodeInTree,
   insertNodeInTree,
@@ -65,7 +65,7 @@ export async function handleBatchDesign(
 
   for (const line of lines) {
     try {
-      executeLine(line, doc, bindings, results, pageId)
+      await executeLine(line, doc, bindings, results, pageId)
     } catch (err) {
       throw new Error(
         `Error executing "${line}": ${err instanceof Error ? err.message : String(err)}`,
@@ -123,15 +123,15 @@ export async function handleBatchDesign(
   }
 }
 
-function executeLine(
+async function executeLine(
   line: string,
   doc: PenDocument,
   bindings: Map<string, string>,
   results: OpResult[],
   pageId?: string,
-): void {
+): Promise<void> {
   // Parse: binding=OP(args) or OP(args)
-  const assignMatch = line.match(/^(\w+)\s*=\s*([ICRM])\((.+)\)$/)
+  const assignMatch = line.match(/^(\w+)\s*=\s*([ICRMG])\((.+)\)$/)
   const callMatch = line.match(/^([UDM])\((.+)\)$/)
 
   if (assignMatch) {
@@ -215,6 +215,48 @@ function executeLine(
         setDocChildren(doc, children, pageId)
         bindings.set(binding, nodeId)
         results.push({ binding, nodeId })
+        break
+      }
+      case 'G': {
+        const gArgs = argsStr.match(/^"([^"]+)"\s*,\s*"(search|generate)"\s*,\s*"([^"]+)"$/)
+        if (!gArgs) throw new Error(`Invalid G() syntax: ${argsStr}`)
+        const [, gParent, gMode, gPrompt] = gArgs
+        const resolvedParent = resolveRef(gParent, bindings)
+
+        const imageNode = {
+          id: generateId(),
+          type: 'image' as const,
+          name: gPrompt.slice(0, 40),
+          imagePrompt: gPrompt,
+          src: '',
+          width: 400,
+          height: 300,
+        }
+
+        // MCP runs in Node.js — must use absolute URL via getSyncUrl()
+        const syncUrl = await getSyncUrl()
+        if (gMode === 'search' && syncUrl) {
+          try {
+            const searchRes = await fetch(`${syncUrl}/api/ai/image-search`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ query: gPrompt, count: 1 }),
+            })
+            const searchData = (await searchRes.json()) as { results?: Array<{ thumbUrl: string }> }
+            if (searchData.results && searchData.results.length > 0) {
+              imageNode.src = searchData.results[0].thumbUrl
+            }
+          } catch { /* keep empty src */ }
+        }
+        // "generate" mode not supported in MCP (no access to API keys in browser store)
+
+        setDocChildren(
+          doc,
+          insertNodeInTree(getDocChildren(doc, pageId), resolvedParent, imageNode as unknown as PenNode),
+          pageId,
+        )
+        bindings.set(binding, imageNode.id)
+        results.push({ binding, nodeId: imageNode.id })
         break
       }
     }
