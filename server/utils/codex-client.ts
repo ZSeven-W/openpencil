@@ -133,10 +133,12 @@ function buildPrompt(systemPrompt: string | undefined, userPrompt: string, image
   }
 
   return [
-    'SYSTEM INSTRUCTIONS:',
+    'You are a design generation assistant. Follow the guidelines below to produce the requested output.',
+    '',
+    '--- GUIDELINES ---',
     systemPrompt.trim(),
     '',
-    'USER REQUEST:',
+    '--- TASK ---',
     userText + imageSection,
   ].join('\n')
 }
