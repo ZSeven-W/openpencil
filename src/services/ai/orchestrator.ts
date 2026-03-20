@@ -40,6 +40,7 @@ import { zoomToFitContent } from '@/canvas/skia-engine-ref'
 import { resetAnimationState } from './design-animation'
 import { VALIDATION_ENABLED } from './ai-runtime-config'
 import { runPostGenerationValidation } from './design-validation'
+import { scanAndFillImages } from './image-search-pipeline'
 import { executeSubAgents } from './orchestrator-sub-agent'
 import { emitProgress, buildFinalStepTags } from './orchestrator-progress'
 import { assignAgentIdentities } from './agent-identity'
@@ -409,6 +410,10 @@ export async function executeOrchestration(
       }
       emitProgress(plan, progress, callbacks)
     }
+
+    // Auto-fill image nodes with search results (fire-and-forget)
+    const rootId = getGenerationRootFrameId()
+    if (rootId) scanAndFillImages(rootId).catch(() => {})
 
     // Build final rawResponse that includes step tags so the chat message
     // shows the complete pipeline progress after streaming ends

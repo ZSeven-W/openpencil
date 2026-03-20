@@ -50,8 +50,15 @@ export async function scanAndFillImages(rootId: string): Promise<void> {
   currentAbort = abort
 
   const imageNodes = collectImageNodes(rootId)
+
+  console.log('[ImageSearch] rootId:', rootId, 'found', imageNodes.length, 'image nodes')
+  for (const n of imageNodes) {
+    console.log('[ImageSearch]  node:', n.id, 'name:', n.name, 'src:', n.src?.slice(0, 60), 'searchQuery:', n.imageSearchQuery, 'placeholder?', isPlaceholderSrc(n.src))
+  }
+
   const needsFill = imageNodes.filter((n) => isPlaceholderSrc(n.src))
 
+  console.log('[ImageSearch] needsFill:', needsFill.length)
   if (needsFill.length === 0) return
 
   const { setImageSearchStatus } = useCanvasStore.getState()
