@@ -181,7 +181,7 @@ function IdleView({
         placeholder="Describe the image..."
         className="w-full resize-none rounded-md border border-border bg-background px-3 py-2 text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"
       />
-      {error && <p className="text-xs text-destructive line-clamp-2">{error}</p>}
+      {error && <p className="text-xs text-destructive line-clamp-4">{error}</p>}
       <Button size="sm" className="w-full" onClick={onGenerate} disabled={!prompt.trim()}>
         <Sparkles className="w-3.5 h-3.5 mr-1.5" />
         Generate
