@@ -53,6 +53,9 @@ interface CanvasStoreState {
   setFigmaImportDialogOpen: (open: boolean) => void
   setPendingFigmaFile: (file: File | null) => void
   setActivePageId: (pageId: string | null) => void
+  imageSearchStatuses: Map<string, 'pending' | 'found' | 'failed'>
+  setImageSearchStatus: (nodeId: string, status: 'pending' | 'found' | 'failed') => void
+  clearImageSearchStatuses: () => void
   hydrate: () => void
 }
 
@@ -80,6 +83,14 @@ export const useCanvasStore = create<CanvasStoreState>((set, get) => ({
   figmaImportDialogOpen: false,
   pendingFigmaFile: null,
   activePageId: DEFAULT_PAGE_ID,
+  imageSearchStatuses: new Map(),
+  setImageSearchStatus: (nodeId, status) =>
+    set((s) => {
+      const next = new Map(s.imageSearchStatuses)
+      next.set(nodeId, status)
+      return { imageSearchStatuses: next }
+    }),
+  clearImageSearchStatuses: () => set({ imageSearchStatuses: new Map() }),
 
   setActiveTool: (tool) => set({ activeTool: tool }),
 
