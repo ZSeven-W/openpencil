@@ -37,16 +37,16 @@ const MODEL_PROFILES: ModelProfile[] = [
   { match: 'deepseek', tier: 'standard', thinkingMode: 'disabled', label: 'DeepSeek' },
 
   // Basic tier — disable thinking, use simplified prompt
-  { match: 'claude-haiku', tier: 'basic', thinkingMode: 'disabled', simplifiedPrompt: true, label: 'Claude Haiku' },
-  { match: 'gpt-4o-mini', tier: 'basic', thinkingMode: 'disabled', simplifiedPrompt: true, label: 'GPT-4o Mini' },
-  { match: 'gpt-4.1-mini', tier: 'basic', thinkingMode: 'disabled', simplifiedPrompt: true, label: 'GPT-4.1 Mini' },
-  { match: 'gpt-4.1-nano', tier: 'basic', thinkingMode: 'disabled', simplifiedPrompt: true, label: 'GPT-4.1 Nano' },
-  { match: 'minimax', tier: 'basic', thinkingMode: 'disabled', simplifiedPrompt: true, label: 'MiniMax' },
-  { match: 'qwen', tier: 'basic', thinkingMode: 'disabled', simplifiedPrompt: true, label: 'Qwen' },
-  { match: 'llama', tier: 'basic', thinkingMode: 'disabled', simplifiedPrompt: true, label: 'Llama' },
-  { match: 'mistral', tier: 'basic', thinkingMode: 'disabled', simplifiedPrompt: true, label: 'Mistral' },
-  { match: 'gemma', tier: 'basic', thinkingMode: 'disabled', simplifiedPrompt: true, label: 'Gemma' },
-  { match: 'glm', tier: 'basic', thinkingMode: 'disabled', simplifiedPrompt: true, label: 'GLM' },
+  { match: 'claude-haiku', tier: 'basic', thinkingMode: 'disabled', label: 'Claude Haiku' },
+  { match: 'gpt-4o-mini', tier: 'basic', thinkingMode: 'disabled', label: 'GPT-4o Mini' },
+  { match: 'gpt-4.1-mini', tier: 'basic', thinkingMode: 'disabled', label: 'GPT-4.1 Mini' },
+  { match: 'gpt-4.1-nano', tier: 'basic', thinkingMode: 'disabled', label: 'GPT-4.1 Nano' },
+  { match: 'minimax', tier: 'basic', thinkingMode: 'disabled', label: 'MiniMax' },
+  { match: 'qwen', tier: 'basic', thinkingMode: 'disabled', label: 'Qwen' },
+  { match: 'llama', tier: 'basic', thinkingMode: 'disabled', label: 'Llama' },
+  { match: 'mistral', tier: 'basic', thinkingMode: 'disabled', label: 'Mistral' },
+  { match: 'gemma', tier: 'basic', thinkingMode: 'disabled', label: 'Gemma' },
+  { match: 'glm', tier: 'basic', thinkingMode: 'disabled', label: 'GLM' },
 ]
 
 const DEFAULT_PROFILE: ModelProfile = {

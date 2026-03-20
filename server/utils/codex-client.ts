@@ -72,15 +72,20 @@ export async function runCodexExec(
   }
 
   if (codexEffort) {
-    args.push('--config', `model_reasoning_effort="${codexEffort}"`)
+    args.push('--config', `model_reasoning_effort=${codexEffort}`)
   }
 
-  args.push(prompt)
+  // On Windows, passing long prompts as command-line arguments causes
+  // shell escaping issues (PowerShell MissingExpression, special chars).
+  // Use codex's stdin mode (`-` as prompt arg) on all platforms — simpler
+  // and avoids command-line length limits.
+  args.push('-')
 
   try {
     const runResult = await executeCodexCommand(
       args,
       options.timeoutMs ?? DEFAULT_CODEX_TIMEOUT_MS,
+      prompt,
     )
     const finalText = await readFile(outputPath, 'utf-8').catch(() => '')
     const normalizedText = finalText.trim() || runResult.text.trim()
@@ -112,10 +117,12 @@ function buildPrompt(systemPrompt: string | undefined, userPrompt: string, image
   }
 
   return [
-    'SYSTEM INSTRUCTIONS:',
+    'You are a design generation assistant. Follow the guidelines below to produce the requested output.',
+    '',
+    '--- GUIDELINES ---',
     systemPrompt.trim(),
     '',
-    'USER REQUEST:',
+    '--- TASK ---',
     userText + imageSection,
   ].join('\n')
 }
@@ -146,14 +153,21 @@ function resolveCodexEffort(
 async function executeCodexCommand(
   args: string[],
   timeoutMs: number,
+  stdinText?: string,
 ): Promise<{ text: string; errors: string[] }> {
   return await new Promise((resolve, reject) => {
     const child = spawn('codex', args, {
       env: filterCodexEnv(process.env as Record<string, string | undefined>),
-      stdio: ['ignore', 'pipe', 'pipe'],
-      // On Windows, npm-installed CLIs are .cmd scripts — need shell to resolve them
+      stdio: [stdinText ? 'pipe' : 'ignore', 'pipe', 'pipe'],
+      // On Windows, npm-installed CLIs are .cmd scripts — need shell to resolve.
       ...(process.platform === 'win32' && { shell: true }),
     })
+
+    // Pipe prompt via stdin (codex reads from stdin when `-` is the prompt arg)
+    if (stdinText && child.stdin) {
+      child.stdin.write(stdinText)
+      child.stdin.end()
+    }
 
     let stdoutBuffer = ''
     let stderrBuffer = ''
@@ -176,7 +190,7 @@ async function executeCodexCommand(
       reject(new Error(`Codex request timed out after ${Math.round(timeoutMs / 1000)}s.`))
     }, timeoutMs)
 
-    child.stdout.on('data', (chunk: Buffer) => {
+    child.stdout!.on('data', (chunk: Buffer) => {
       stdoutBuffer += chunk.toString('utf-8')
       let idx = stdoutBuffer.indexOf('\n')
       while (idx >= 0) {
@@ -187,7 +201,7 @@ async function executeCodexCommand(
       }
     })
 
-    child.stderr.on('data', (chunk: Buffer) => {
+    child.stderr!.on('data', (chunk: Buffer) => {
       stderrBuffer += chunk.toString('utf-8')
     })
 
@@ -266,6 +280,8 @@ function extractCodexCliError(stderr: string): string | null {
   if (!trimmed) return null
 
   const lines = trimmed.split('\n').map((line) => line.trim()).filter(Boolean)
+
+  // 1. Look for "error: ..." lines (simple CLI errors)
   for (let i = lines.length - 1; i >= 0; i--) {
     const line = lines[i]
     if (line.toLowerCase().startsWith('error:')) {
@@ -273,5 +289,25 @@ function extractCodexCliError(stderr: string): string | null {
     }
   }
 
-  return lines[lines.length - 1] ?? null
+  // 2. Look for Codex structured log errors: "<timestamp> ERROR <module>: <message>"
+  //    These contain the real error (auth failures, API errors, etc.)
+  for (let i = lines.length - 1; i >= 0; i--) {
+    const match = lines[i].match(/\bERROR\s+\S+:\s*(.+)/)
+    if (match) {
+      const msg = match[1].trim()
+      // For auth errors, provide actionable guidance
+      if (/refresh token|sign in again|token.*expired|401 Unauthorized/i.test(msg)) {
+        return 'Codex authentication expired. Run "codex logout && codex login" to re-authenticate.'
+      }
+      return msg
+    }
+  }
+
+  // 3. Skip unhelpful "Warning: no last agent message" — surface it only as fallback
+  const lastLine = lines[lines.length - 1] ?? null
+  if (lastLine && /^warning:\s*no last agent message/i.test(lastLine)) {
+    return 'Codex returned no output. Check "codex login" status or try a different model.'
+  }
+
+  return lastLine
 }
