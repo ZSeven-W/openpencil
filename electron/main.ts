@@ -695,9 +695,7 @@ app.on('ready', async () => {
 })
 
 app.on('window-all-closed', () => {
-  if (process.platform !== 'darwin') {
-    app.quit()
-  }
+  app.quit()
 })
 
 app.on('activate', () => {
@@ -706,25 +704,33 @@ app.on('activate', () => {
   }
 })
 
-app.on('before-quit', async () => {
+app.on('before-quit', () => {
   clearUpdateTimer()
-  await cleanupPortFile()
   killNitroProcess()
+  cleanupPortFile().catch(() => {})
 })
 
 /** Platform-aware Nitro process termination. */
 function killNitroProcess(): void {
   if (!nitroProcess) return
+  const pid = nitroProcess.pid
   if (process.platform === 'win32') {
     // SIGTERM is unreliable on Windows; use taskkill for proper tree-kill
     try {
-      const pid = nitroProcess.pid
       if (pid) {
         execSync(`taskkill /pid ${pid} /T /F`, { stdio: 'ignore' })
       }
     } catch { /* process may have already exited */ }
   } else {
-    nitroProcess.kill('SIGTERM')
+    // SIGTERM may not be processed before the main process exits,
+    // leaving orphan Nitro processes. Kill the entire process group
+    // with SIGKILL for reliable cleanup.
+    try {
+      if (pid) process.kill(-pid, 'SIGKILL')
+    } catch { /* process may have already exited */ }
+    try {
+      nitroProcess.kill('SIGKILL')
+    } catch { /* ignore */ }
   }
   nitroProcess = null
 }

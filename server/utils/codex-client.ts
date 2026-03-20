@@ -84,11 +84,15 @@ export async function runCodexExec(
     await writeFile(promptFilePath, prompt, 'utf-8')
     winScriptPath = join(tempDir, 'run-codex.ps1')
     const escapedPromptPath = promptFilePath.replace(/'/g, "''")
-    const escapedArgs = args.map(a => `'${a.replace(/'/g, "''")}'`).join(' ')
+    // Use PowerShell array splatting to pass args safely — each array
+    // element becomes exactly one argument, avoiding all escaping issues
+    // with newlines, $, ", etc. in the prompt text.
+    const argsLiteral = args.map(a => `'${a.replace(/'/g, "''")}'`).join(', ')
     await writeFile(winScriptPath, [
       `$prompt = [IO.File]::ReadAllText('${escapedPromptPath}')`,
-      `& codex ${escapedArgs} $prompt`,
-    ].join('\n'), 'utf-8')
+      `$allArgs = @(${argsLiteral}, $prompt)`,
+      `& codex @allArgs`,
+    ].join('\r\n'), 'utf-8')
   } else {
     args.push(prompt)
   }
