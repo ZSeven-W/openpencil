@@ -136,6 +136,22 @@ export async function* streamChat(
       return
     }
 
+    // Server returned JSON instead of SSE stream — read body as JSON error
+    const contentType = response.headers.get('content-type') ?? ''
+    if (contentType.includes('application/json')) {
+      const body = await response.text()
+      try {
+        const jsonBody = JSON.parse(body)
+        yield { type: 'error', content: jsonBody.error || jsonBody.message || `Unexpected JSON response: ${body.slice(0, 200)}` }
+      } catch {
+        yield { type: 'error', content: `Unexpected server response: ${body.slice(0, 200)}` }
+      }
+      clearTimeout(hardTimeout)
+      clearNoTextTimeout()
+      clearFirstTextTimeout()
+      return
+    }
+
     const reader = response.body?.getReader()
     if (!reader) {
       yield { type: 'error', content: 'No response stream available' }
@@ -150,7 +166,20 @@ export async function* streamChat(
 
     while (true) {
       const { done, value } = await reader.read()
-      if (done) break
+      if (done) {
+        if (buffer.trim().length > 0) {
+          // Remaining buffer may be a non-SSE response (e.g. JSON error)
+          try {
+            const jsonErr = JSON.parse(buffer.trim())
+            if (jsonErr.error) {
+              yield { type: 'error', content: jsonErr.error } as AIStreamChunk
+            }
+          } catch {
+            // Not JSON, ignore remaining buffer
+          }
+        }
+        break
+      }
 
       buffer += decoder.decode(value, { stream: true })
 
@@ -164,6 +193,7 @@ export async function* streamChat(
           if (!data) continue
           try {
             const chunk = JSON.parse(data) as AIStreamChunk
+
             if (chunk.type === 'done') {
               clearTimeout(hardTimeout)
               clearNoTextTimeout()

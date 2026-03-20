@@ -18,12 +18,11 @@ import type {
   SubAgentResult,
 } from './ai-types'
 import { streamChat } from './ai-service'
-import { SUB_AGENT_PROMPT, SUB_AGENT_PROMPT_SIMPLIFIED } from './orchestrator-prompts'
+import { SUB_AGENT_PROMPT } from './orchestrator-prompts'
 import {
   type PreparedDesignPrompt,
   getSubAgentTimeouts,
 } from './orchestrator-prompt-optimizer'
-import { resolveModelProfile, needsSimplifiedPrompt } from './model-profiles'
 import {
   expandRootFrameHeight,
   extractStreamingNodes,
@@ -243,21 +242,10 @@ async function executeSubAgent(
     request.context?.themes,
   )
 
-  // Select prompt variant based on model profile
-  const profile = resolveModelProfile(request.model)
-  const basePrompt = needsSimplifiedPrompt(profile) ? SUB_AGENT_PROMPT_SIMPLIFIED : SUB_AGENT_PROMPT
-  const systemPrompt = preparedPrompt.designPrinciples && !needsSimplifiedPrompt(profile)
+  const basePrompt = SUB_AGENT_PROMPT
+  const systemPrompt = preparedPrompt.designPrinciples
     ? `${basePrompt}\n\n${preparedPrompt.designPrinciples}`
     : basePrompt
-
-  // For basic-tier models (MiniMax, GLM, Qwen, etc.) via third-party routers,
-  // system prompts may be ignored or lost. Inline the system prompt into the
-  // user message to ensure the model sees the instructions.
-  const inlineSystem = needsSimplifiedPrompt(profile)
-  const effectiveSystem = inlineSystem ? '' : systemPrompt
-  const effectiveUserContent = inlineSystem
-    ? `${systemPrompt}\n\n---\n\n${userPrompt}`
-    : userPrompt
 
   let rawResponse = ''
   const nodes: PenNode[] = []
@@ -266,8 +254,8 @@ async function executeSubAgent(
 
   try {
     for await (const chunk of streamChat(
-      effectiveSystem,
-      [{ role: 'user', content: effectiveUserContent }],
+      systemPrompt,
+      [{ role: 'user', content: userPrompt }],
       request.model,
       timeoutOptions,
       request.provider,

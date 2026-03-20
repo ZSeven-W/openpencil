@@ -1,5 +1,5 @@
 import { spawn } from 'node:child_process'
-import { mkdtemp, readFile, rm } from 'node:fs/promises'
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -72,15 +72,24 @@ export async function runCodexExec(
   }
 
   if (codexEffort) {
-    args.push('--config', `model_reasoning_effort="${codexEffort}"`)
+    args.push('--config', `model_reasoning_effort=${codexEffort}`)
   }
 
-  args.push(prompt)
+  // On Windows with PowerShell, long prompts and special characters ($, ", etc.)
+  // cause parsing errors. Write prompt to a temp file and pass via stdin.
+  let promptFilePath: string | undefined
+  if (process.platform === 'win32') {
+    promptFilePath = join(tempDir, 'prompt.txt')
+    await writeFile(promptFilePath, prompt, 'utf-8')
+  } else {
+    args.push(prompt)
+  }
 
   try {
     const runResult = await executeCodexCommand(
       args,
       options.timeoutMs ?? DEFAULT_CODEX_TIMEOUT_MS,
+      promptFilePath,
     )
     const finalText = await readFile(outputPath, 'utf-8').catch(() => '')
     const normalizedText = finalText.trim() || runResult.text.trim()
@@ -146,15 +155,24 @@ function resolveCodexEffort(
 async function executeCodexCommand(
   args: string[],
   timeoutMs: number,
+  promptFilePath?: string,
 ): Promise<{ text: string; errors: string[] }> {
   return await new Promise((resolve, reject) => {
     const child = spawn('codex', args, {
       env: filterCodexEnv(process.env as Record<string, string | undefined>),
-      stdio: ['ignore', 'pipe', 'pipe'],
+      stdio: [promptFilePath ? 'pipe' : 'ignore', 'pipe', 'pipe'],
       // On Windows, npm-installed CLIs are .cmd scripts — need shell to resolve them.
-      // Use PowerShell instead of cmd.exe to avoid 8191-char command line limit.
-      ...(process.platform === 'win32' && { shell: 'powershell.exe' }),
+      shell: process.platform === 'win32',
     })
+
+    // On Windows, pipe prompt via stdin to avoid PowerShell escaping issues
+    if (promptFilePath && child.stdin) {
+      import('node:fs').then(({ createReadStream }) => {
+        createReadStream(promptFilePath).pipe(child.stdin!)
+      }).catch(() => {
+        child.stdin?.end()
+      })
+    }
 
     let stdoutBuffer = ''
     let stderrBuffer = ''

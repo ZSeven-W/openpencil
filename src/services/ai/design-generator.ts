@@ -7,7 +7,7 @@ import { DESIGN_MODIFIER_PROMPT } from './ai-prompts'
 import { executeOrchestration } from './orchestrator'
 import { DESIGN_STREAM_TIMEOUTS } from './ai-runtime-config'
 import { extractJsonFromResponse } from './design-parser'
-import { resolveModelProfile, applyProfileToTimeouts, needsSimplifiedPrompt } from './model-profiles'
+import { resolveModelProfile, applyProfileToTimeouts } from './model-profiles'
 
 // ---------------------------------------------------------------------------
 // Re-exports for backward compatibility — consumers that import from
@@ -119,16 +119,8 @@ export async function generateDesignModification(
   const profile = resolveModelProfile(options?.model)
   const timeouts = applyProfileToTimeouts({ ...DESIGN_STREAM_TIMEOUTS }, profile)
 
-  // Basic-tier models (MiniMax, GLM, etc.) ignore system prompts via routers —
-  // inline the system prompt into the user message so the model sees it.
-  const inlineSystem = needsSimplifiedPrompt(profile)
-  const effectiveSystem = inlineSystem ? '' : DESIGN_MODIFIER_PROMPT
-  const effectiveUserContent = inlineSystem
-    ? DESIGN_MODIFIER_PROMPT + '\n\n---\n\n' + userMessage
-    : userMessage
-
-  for await (const chunk of streamChat(effectiveSystem, [
-    { role: 'user', content: effectiveUserContent },
+  for await (const chunk of streamChat(DESIGN_MODIFIER_PROMPT, [
+    { role: 'user', content: userMessage },
   ], options?.model, timeouts, options?.provider, abortSignal)) {
     if (chunk.type === 'thinking') {
       // Ignore thinking chunks for modification -- caller already shows progress
