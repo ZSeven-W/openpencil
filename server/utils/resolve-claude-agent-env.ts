@@ -1,3 +1,4 @@
+import { spawn } from 'node:child_process'
 import { mkdirSync, readFileSync } from 'node:fs'
 import { homedir, tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -115,5 +116,23 @@ export function getClaudeAgentDebugFilePath(): string | undefined {
     return join(dir, 'claude-agent.log')
   } catch {
     return undefined
+  }
+}
+
+/**
+ * Custom spawnClaudeCodeProcess for Windows.
+ * On Windows, npm-installed CLIs are .cmd/.ps1 scripts that can't be spawned
+ * directly without a shell. Uses PowerShell to avoid cmd.exe's 8191-char limit.
+ */
+export function buildSpawnClaudeCodeProcess() {
+  if (process.platform !== 'win32') return undefined
+  return (options: { command: string; args: string[]; cwd?: string; env: Record<string, string | undefined>; signal: AbortSignal }) => {
+    return spawn(options.command, options.args, {
+      cwd: options.cwd,
+      env: options.env as NodeJS.ProcessEnv,
+      signal: options.signal,
+      stdio: ['pipe', 'pipe', 'pipe'],
+      shell: 'powershell.exe',
+    })
   }
 }

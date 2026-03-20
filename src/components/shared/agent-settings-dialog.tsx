@@ -50,7 +50,7 @@ type SettingsTab = 'agents' | 'mcp' | 'system'
 
 async function connectAgent(
   agent: 'claude-code' | 'codex-cli' | 'opencode' | 'copilot',
-): Promise<{ connected: boolean; models: GroupedModel[]; error?: string; notInstalled?: boolean; connectionInfo?: string; hintPath?: string }> {
+): Promise<{ connected: boolean; models: GroupedModel[]; error?: string; warning?: string; notInstalled?: boolean; connectionInfo?: string; hintPath?: string }> {
   try {
     const res = await fetch('/api/ai/connect-agent', {
       method: 'POST',
@@ -104,6 +104,7 @@ function ProviderCard({ type }: { type: AIProviderType }) {
 
   const [isConnecting, setIsConnecting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [warning, setWarning] = useState<string | null>(null)
   const [notInstalled, setNotInstalled] = useState(false)
   const [isInstalling, setIsInstalling] = useState(false)
   const [installInfo, setInstallInfo] = useState<{ command: string; docsUrl: string } | null>(null)
@@ -113,12 +114,14 @@ function ProviderCard({ type }: { type: AIProviderType }) {
   const handleConnect = useCallback(async () => {
     setIsConnecting(true)
     setError(null)
+    setWarning(null)
     setNotInstalled(false)
     setInstallInfo(null)
     const result = await connectAgent(meta.agent)
     if (result.connected) {
       connect(type, meta.agent, result.models, result.connectionInfo, result.hintPath)
       persist()
+      if (result.warning) setWarning(result.warning)
     } else if (result.notInstalled) {
       setNotInstalled(true)
     } else {
@@ -256,6 +259,9 @@ function ProviderCard({ type }: { type: AIProviderType }) {
           )}
           {error && (
             <span className="text-[11px] text-destructive leading-tight mt-0.5 block">{error}</span>
+          )}
+          {warning && !error && (
+            <span className="text-[11px] text-amber-500 leading-tight mt-0.5 block">{warning}</span>
           )}
         </div>
 

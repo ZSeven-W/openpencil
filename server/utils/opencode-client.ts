@@ -19,7 +19,7 @@ process.on('SIGTERM', cleanup)
 process.on('SIGINT', cleanup)
 
 export async function getOpencodeClient() {
-  const { createOpencodeClient, createOpencode } = await import('@opencode-ai/sdk/v2')
+  const { createOpencodeClient, createOpencode } = await import('../opencode/index')
 
   // Try connecting to an existing server first
   try {

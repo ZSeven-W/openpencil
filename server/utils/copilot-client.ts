@@ -5,6 +5,21 @@ import { serverLog } from './server-logger'
 
 const isWindows = process.platform === 'win32'
 
+/** Windows npm global installs may create .cmd or .ps1 wrappers — try both */
+function winNpmCandidates(dir: string, name: string): string[] {
+  return [join(dir, `${name}.cmd`), join(dir, `${name}.ps1`)]
+}
+
+/** On Windows, `where` may return an extensionless shell script — prefer .cmd/.ps1 */
+function resolveWinExtension(binPath: string): string {
+  if (!isWindows) return binPath
+  if (/\.(cmd|ps1|exe)$/i.test(binPath)) return binPath
+  for (const ext of ['.cmd', '.ps1']) {
+    if (existsSync(binPath + ext)) return binPath + ext
+  }
+  return binPath
+}
+
 /** Resolve the standalone copilot CLI binary path to avoid Bun's node:sqlite issue */
 export function resolveCopilotCli(): string | undefined {
   serverLog.info(`[resolve-copilot] platform=${process.platform}, isWindows=${isWindows}`)
@@ -17,7 +32,7 @@ export function resolveCopilotCli(): string | undefined {
     // `where` on Windows may return multiple lines
     const path = result.split(/\r?\n/)[0]?.trim()
     serverLog.info(`[resolve-copilot] PATH result: "${path}" (exists=${path ? existsSync(path) : false})`)
-    if (path && existsSync(path)) return path
+    if (path && existsSync(path)) return resolveWinExtension(path)
   } catch (err) {
     serverLog.info(`[resolve-copilot] PATH lookup failed: ${err instanceof Error ? err.message : err}`)
   }
@@ -32,9 +47,10 @@ export function resolveCopilotCli(): string | undefined {
       }).trim()
       serverLog.info(`[resolve-copilot] npm global prefix: "${prefix}"`)
       if (prefix) {
-        const bin = join(prefix, 'copilot.cmd')
-        serverLog.info(`[resolve-copilot] npm global bin: "${bin}" (exists=${existsSync(bin)})`)
-        if (existsSync(bin)) return bin
+        for (const bin of winNpmCandidates(prefix, 'copilot')) {
+          serverLog.info(`[resolve-copilot] npm global bin: "${bin}" (exists=${existsSync(bin)})`)
+          if (existsSync(bin)) return bin
+        }
       }
     } catch (err) {
       serverLog.info(`[resolve-copilot] npm prefix -g failed: ${err instanceof Error ? err.message : err}`)
@@ -44,11 +60,11 @@ export function resolveCopilotCli(): string | undefined {
   // 3. Common install locations
   if (isWindows) {
     const candidates = [
-      // npm global
-      join(process.env.APPDATA || '', 'npm', 'copilot.cmd'),
+      // npm global (.cmd + .ps1)
+      ...winNpmCandidates(join(process.env.APPDATA || '', 'npm'), 'copilot'),
       // nvm-windows / fnm
-      join(process.env.NVM_SYMLINK || '', 'copilot.cmd'),
-      join(process.env.FNM_MULTISHELL_PATH || '', 'copilot.cmd'),
+      ...winNpmCandidates(join(process.env.NVM_SYMLINK || ''), 'copilot'),
+      ...winNpmCandidates(join(process.env.FNM_MULTISHELL_PATH || ''), 'copilot'),
       // winget / native
       join(process.env.LOCALAPPDATA || '', 'Microsoft', 'WinGet', 'Links', 'copilot.exe'),
     ]
