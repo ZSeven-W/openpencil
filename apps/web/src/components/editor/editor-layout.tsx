@@ -8,6 +8,7 @@ import LayerPanel from '@/components/panels/layer-panel'
 import RightPanel from '@/components/panels/right-panel'
 import AIChatPanel, { AIChatMinimizedBar } from '@/components/panels/ai-chat-panel'
 import VariablesPanel from '@/components/panels/variables-panel'
+import DesignMdPanel from '@/components/panels/design-md-panel'
 import ComponentBrowserPanel from '@/components/panels/component-browser-panel'
 import ExportDialog from '@/components/shared/export-dialog'
 import SaveDialog from '@/components/shared/save-dialog'
@@ -20,6 +21,7 @@ import { useDocumentStore } from '@/stores/document-store'
 import { useAgentSettingsStore } from '@/stores/agent-settings-store'
 import { useUIKitStore } from '@/stores/uikit-store'
 import { useThemePresetStore } from '@/stores/theme-preset-store'
+import { useDesignMdStore } from '@/stores/design-md-store'
 import { useElectronMenu } from '@/hooks/use-electron-menu'
 import { useFigmaPaste } from '@/hooks/use-figma-paste'
 import { useMcpSync } from '@/hooks/use-mcp-sync'
@@ -32,6 +34,7 @@ export default function EditorLayout() {
   const hasSelection = useCanvasStore((s) => s.selection.activeId !== null)
   const layerPanelOpen = useCanvasStore((s) => s.layerPanelOpen)
   const variablesPanelOpen = useCanvasStore((s) => s.variablesPanelOpen)
+  const designMdPanelOpen = useCanvasStore((s) => s.designMdPanelOpen)
   const figmaImportOpen = useCanvasStore((s) => s.figmaImportDialogOpen)
   const closeFigmaImport = useCallback(() => {
     useCanvasStore.getState().setFigmaImportDialogOpen(false)
@@ -79,6 +82,13 @@ export default function EditorLayout() {
         return
       }
 
+      // Cmd+Shift+D: toggle design system panel
+      if (isMod && e.shiftKey && e.key.toLowerCase() === 'd') {
+        e.preventDefault()
+        useCanvasStore.getState().toggleDesignMdPanel()
+        return
+      }
+
       // Cmd+Shift+K: toggle UIKit browser
       if (isMod && e.shiftKey && e.key.toLowerCase() === 'k') {
         e.preventDefault()
@@ -123,6 +133,7 @@ export default function EditorLayout() {
       useUIKitStore.getState().hydrate()
       useCanvasStore.getState().hydrate()
       useThemePresetStore.getState().hydrate()
+      useDesignMdStore.getState().hydrate()
     })
   }, [])
 
@@ -141,6 +152,9 @@ export default function EditorLayout() {
 
               {/* Floating variables panel — anchored to the right of the toolbar */}
               {variablesPanelOpen && <VariablesPanel />}
+
+              {/* Floating design system panel */}
+              {designMdPanelOpen && <DesignMdPanel />}
 
               {/* Floating UIKit browser panel */}
               {browserOpen && <ComponentBrowserPanel />}

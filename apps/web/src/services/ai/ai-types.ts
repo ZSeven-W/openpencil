@@ -1,4 +1,5 @@
 import type { AIProviderType } from '@/types/agent-settings'
+import type { DesignMdSpec } from '@/types/design-md'
 
 export interface ChatAttachment {
   id: string
@@ -28,6 +29,7 @@ export interface AIDesignRequest {
     canvasSize?: { width: number; height: number }
     variables?: Record<string, import('@/types/variables').VariableDefinition>
     themes?: Record<string, string[]>
+    designMd?: DesignMdSpec
   }
 }
 

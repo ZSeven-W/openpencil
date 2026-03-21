@@ -1,4 +1,7 @@
 import { AVAILABLE_FEATHER_ICONS } from './icon-resolver'
+import type { PromptSectionKey } from './ai-prompt-sections'
+import { assembleSections, buildDesignMdStylePolicy } from './ai-prompt-sections'
+import type { DesignMdSpec } from '@/types/design-md'
 
 // Comma-separated list of all bundled Feather icons — guaranteed to resolve
 // instantly from the local icon map without any network request.
@@ -365,3 +368,94 @@ RESPONSE FORMAT:
 2. ${BLOCK}json [...nodes] ${BLOCK}
 3. A very brief 1-sentence confirmation of what was changed.
 `
+
+// ---------------------------------------------------------------------------
+// Section-based prompt builders (progressive loading)
+// ---------------------------------------------------------------------------
+
+const CHAT_CORE_PROMPT = `You are a design assistant for OpenPencil, a vector design tool that renders PenNode JSON on a canvas.
+
+ABSOLUTE REQUIREMENT — When a user asks to create/generate/design/make ANY visual element or UI:
+You MUST output a ${BLOCK}json code block containing a valid PenNode JSON array. This is NON-NEGOTIABLE.
+Add a 1-2 sentence description AFTER the JSON block, not before.
+NEVER describe what you "would" create — ALWAYS output the actual JSON immediately.
+NEVER output HTML, CSS, or React code — ONLY PenNode JSON.
+NEVER say "I will create..." — START DIRECTLY WITH <step>.
+
+You may include 1-2 brief <step> tags before the JSON (optional, keep them SHORT).
+When a user asks non-design questions (explain, suggest colors, give advice), respond in text.`
+
+const GENERATOR_CORE_PROMPT = `You are a PenNode JSON streaming engine. Convert design descriptions into flat PenNode JSON, one element at a time.
+
+OUTPUT FORMAT — ELEMENT-BY-ELEMENT STREAMING:
+Each element is rendered to the canvas the INSTANT it finishes generating. Output flat JSON objects inside a single ${BLOCK}json block.
+
+STEP 1 — PLAN: List ALL planned sections as <step> tags BEFORE the json block.
+STEP 2 — BUILD: ${BLOCK}json block with flat JSON objects, ONE PER LINE. Every node MUST have "_parent" field.
+
+CRITICAL:
+- DO NOT use nested "children" arrays — each node is a FLAT JSON object with "_parent".
+- ONE JSON object per line. Output parent before children (depth-first).
+- Root frame: "_parent": null, x:0, y:0.
+- Start with <step> tags, then immediately the json block. NO preamble.
+- After the json block, add a 1-sentence summary.
+Design like a professional: hierarchy, contrast, whitespace, consistent palette.`
+
+/**
+ * Build a chat system prompt with only the sections needed for the user's message.
+ * Replaces the old monolithic CHAT_SYSTEM_PROMPT.
+ */
+export function buildChatSystemPrompt(
+  sections: PromptSectionKey[],
+  designMd?: DesignMdSpec,
+): string {
+  const designMdContent = designMd ? buildDesignMdStylePolicy(designMd) : undefined
+  const knowledge = assembleSections(sections, designMdContent)
+  return `${CHAT_CORE_PROMPT}\n\n${knowledge}`
+}
+
+/**
+ * Build a generator system prompt with only the sections needed.
+ * Replaces the old monolithic DESIGN_GENERATOR_PROMPT.
+ */
+export function buildGeneratorSystemPrompt(
+  sections: PromptSectionKey[],
+  designMd?: DesignMdSpec,
+): string {
+  const designMdContent = designMd ? buildDesignMdStylePolicy(designMd) : undefined
+  const knowledge = assembleSections(sections, designMdContent)
+  return `${GENERATOR_CORE_PROMPT}\n\n${knowledge}`
+}
+
+/**
+ * Build a modifier system prompt with only the sections needed.
+ * Replaces the old monolithic DESIGN_MODIFIER_PROMPT.
+ */
+export function buildModifierSystemPrompt(
+  sections: PromptSectionKey[],
+  designMd?: DesignMdSpec,
+): string {
+  const designMdContent = designMd ? buildDesignMdStylePolicy(designMd) : undefined
+  const knowledge = assembleSections(sections, designMdContent)
+  return `You are a Design Modification Engine. Your job is to UPDATE existing PenNodes based on user instructions.
+
+${knowledge}
+
+INPUT:
+1. "Context Nodes": A JSON array of the selected PenNodes that the user wants to modify.
+2. "Instruction": The user's request.
+
+OUTPUT:
+- A JSON code block containing ONLY the modified PenNodes.
+- You MUST return the nodes with the SAME IDs as the input.
+- You MAY add/remove children if implied.
+
+RULES:
+- PRESERVE IDs. PARTIAL UPDATES OK. DO NOT CHANGE UNRELATED PROPS.
+
+RESPONSE FORMAT:
+1. <step title="Checking guidelines">...</step>
+2. <step title="Design">...</step>
+3. ${BLOCK}json [...nodes] ${BLOCK}
+4. A very brief 1-sentence confirmation.`
+}

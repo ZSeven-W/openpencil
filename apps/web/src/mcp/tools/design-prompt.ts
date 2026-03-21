@@ -3,6 +3,8 @@ import {
   ADAPTIVE_STYLE_POLICY,
   DESIGN_EXAMPLES,
 } from '../../services/ai/ai-prompts'
+import { PROMPT_SECTIONS, buildDesignMdStylePolicy } from '../../services/ai/ai-prompt-sections'
+import type { DesignMdSpec } from '../../types/design-md'
 
 // ---------------------------------------------------------------------------
 // Named prompt sections — can be retrieved individually via section parameter
@@ -204,7 +206,13 @@ type PromptSection =
   | 'examples'
   | 'guidelines'
   | 'planning'
+  | 'design-md'
+  | 'copywriting'
+  | 'overflow'
+  | 'cjk'
+  | 'variables'
 
+// Dynamic section map — some sections use the shared section registry
 const SECTION_MAP: Record<PromptSection, () => string> = {
   all: () => buildFullPrompt(),
   schema: () => PEN_NODE_SCHEMA.trim(),
@@ -216,6 +224,24 @@ const SECTION_MAP: Record<PromptSection, () => string> = {
   examples: () => DESIGN_EXAMPLES.trim(),
   guidelines: () => DESIGN_GUIDELINES,
   planning: () => PLANNING_GUIDE,
+  'design-md': () => _designMdContent ?? 'No design.md loaded in the current document.',
+  copywriting: () => PROMPT_SECTIONS.copywriting,
+  overflow: () => PROMPT_SECTIONS.overflow,
+  cjk: () => PROMPT_SECTIONS.cjk,
+  variables: () => VARIABLE_RULES,
+}
+
+// Design.md content injected via setDesignMdForPrompt()
+let _designMdContent: string | null = null
+
+/** Set the design.md content to be returned by the 'design-md' section. */
+export function setDesignMdForPrompt(spec: DesignMdSpec | undefined): void {
+  _designMdContent = spec ? buildDesignMdStylePolicy(spec) : null
+}
+
+/** Get the design.md style policy, or null if not loaded. */
+export function getDesignMdForPrompt(): string | null {
+  return _designMdContent
 }
 
 // ---------------------------------------------------------------------------
@@ -230,8 +256,14 @@ const SECTION_MAP: Record<PromptSection, () => string> = {
  * instead of consuming the full prompt at once.
  */
 export function buildDesignPrompt(section?: string): string {
-  if (section && section in SECTION_MAP) {
-    return SECTION_MAP[section as PromptSection]()
+  if (section) {
+    // When design-md is loaded, 'style' section returns it instead of default
+    if (section === 'style' && _designMdContent) {
+      return `DESIGN SYSTEM (from design.md):\n${_designMdContent}`
+    }
+    if (section in SECTION_MAP) {
+      return SECTION_MAP[section as PromptSection]()
+    }
   }
   return buildFullPrompt()
 }

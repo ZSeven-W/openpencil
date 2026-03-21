@@ -10,6 +10,7 @@
 
 import type { PenNode } from '@/types/pen'
 import type { VariableDefinition } from '@/types/variables'
+import type { DesignMdSpec } from '@/types/design-md'
 import type {
   AIDesignRequest,
   OrchestratorPlan,
@@ -240,6 +241,7 @@ async function executeSubAgent(
     request.prompt,
     request.context?.variables,
     request.context?.themes,
+    request.context?.designMd,
   )
 
   const basePrompt = SUB_AGENT_PROMPT
@@ -414,6 +416,7 @@ function buildSubAgentUserPrompt(
   fullPrompt: string,
   variables?: Record<string, VariableDefinition>,
   themes?: Record<string, string[]>,
+  designMd?: DesignMdSpec,
 ): string {
   const { region } = subtask
 
@@ -467,8 +470,17 @@ CRITICAL LAYOUT CONSTRAINTS:
 - Only use stacked layout for mobile/narrow viewport sections.`
   }
 
-  // Inject style guide so sub-agent uses consistent colors/fonts
-  if (plan.styleGuide) {
+  // Inject design.md style OR orchestrator style guide
+  if (designMd?.colorPalette?.length) {
+    const colors = designMd.colorPalette
+      .slice(0, 8)
+      .map(c => `${c.name} (${c.hex}) — ${c.role}`)
+      .join('\n- ')
+    prompt += `\n\nDESIGN SYSTEM (from design.md — use these consistently):\n- ${colors}`
+    if (designMd.typography?.fontFamily) {
+      prompt += `\nFont: ${designMd.typography.fontFamily}`
+    }
+  } else if (plan.styleGuide) {
     const sg = plan.styleGuide
     const p = sg.palette
     prompt += `\n\nSTYLE GUIDE (use these consistently):

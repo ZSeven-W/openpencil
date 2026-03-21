@@ -16,6 +16,7 @@ export type RightPanelTab = 'design' | 'code'
 interface CanvasPreferences {
   layerPanelOpen: boolean
   variablesPanelOpen: boolean
+  designMdPanelOpen: boolean
   codePanelOpen: boolean
   rightPanelTab?: RightPanelTab
 }
@@ -28,6 +29,7 @@ interface CanvasStoreState {
   clipboard: PenNode[]
   layerPanelOpen: boolean
   variablesPanelOpen: boolean
+  designMdPanelOpen: boolean
   codePanelOpen: boolean
   rightPanelTab: RightPanelTab
   figmaImportDialogOpen: boolean
@@ -47,6 +49,7 @@ interface CanvasStoreState {
   setClipboard: (nodes: PenNode[]) => void
   toggleLayerPanel: () => void
   toggleVariablesPanel: () => void
+  toggleDesignMdPanel: () => void
   toggleCodePanel: () => void
   setCodePanelOpen: (open: boolean) => void
   setRightPanelTab: (tab: RightPanelTab) => void
@@ -78,6 +81,7 @@ export const useCanvasStore = create<CanvasStoreState>((set, get) => ({
   clipboard: [],
   layerPanelOpen: true,
   variablesPanelOpen: false,
+  designMdPanelOpen: false,
   codePanelOpen: false,
   rightPanelTab: 'design',
   figmaImportDialogOpen: false,
@@ -156,30 +160,36 @@ export const useCanvasStore = create<CanvasStoreState>((set, get) => ({
   toggleLayerPanel: () => {
     const next = !get().layerPanelOpen
     set({ layerPanelOpen: next })
-    const { variablesPanelOpen, codePanelOpen } = get()
-    persistPrefs({ layerPanelOpen: next, variablesPanelOpen, codePanelOpen })
+    const { variablesPanelOpen, designMdPanelOpen, codePanelOpen } = get()
+    persistPrefs({ layerPanelOpen: next, variablesPanelOpen, designMdPanelOpen, codePanelOpen })
   },
   toggleVariablesPanel: () => {
     const next = !get().variablesPanelOpen
     set({ variablesPanelOpen: next })
-    const { layerPanelOpen, codePanelOpen } = get()
-    persistPrefs({ layerPanelOpen, variablesPanelOpen: next, codePanelOpen })
+    const { layerPanelOpen, designMdPanelOpen, codePanelOpen } = get()
+    persistPrefs({ layerPanelOpen, variablesPanelOpen: next, designMdPanelOpen, codePanelOpen })
+  },
+  toggleDesignMdPanel: () => {
+    const next = !get().designMdPanelOpen
+    set({ designMdPanelOpen: next })
+    const { layerPanelOpen, variablesPanelOpen, codePanelOpen } = get()
+    persistPrefs({ layerPanelOpen, variablesPanelOpen, designMdPanelOpen: next, codePanelOpen })
   },
   toggleCodePanel: () => {
     const next = !get().codePanelOpen
     set({ codePanelOpen: next })
-    const { layerPanelOpen, variablesPanelOpen } = get()
-    persistPrefs({ layerPanelOpen, variablesPanelOpen, codePanelOpen: next })
+    const { layerPanelOpen, variablesPanelOpen, designMdPanelOpen } = get()
+    persistPrefs({ layerPanelOpen, variablesPanelOpen, designMdPanelOpen, codePanelOpen: next })
   },
   setCodePanelOpen: (open) => {
     set({ codePanelOpen: open })
-    const { layerPanelOpen, variablesPanelOpen } = get()
-    persistPrefs({ layerPanelOpen, variablesPanelOpen, codePanelOpen: open })
+    const { layerPanelOpen, variablesPanelOpen, designMdPanelOpen } = get()
+    persistPrefs({ layerPanelOpen, variablesPanelOpen, designMdPanelOpen, codePanelOpen: open })
   },
   setRightPanelTab: (tab) => {
     set({ rightPanelTab: tab })
-    const { layerPanelOpen, variablesPanelOpen, codePanelOpen } = get()
-    persistPrefs({ layerPanelOpen, variablesPanelOpen, codePanelOpen, rightPanelTab: tab })
+    const { layerPanelOpen, variablesPanelOpen, designMdPanelOpen, codePanelOpen } = get()
+    persistPrefs({ layerPanelOpen, variablesPanelOpen, designMdPanelOpen, codePanelOpen, rightPanelTab: tab })
   },
   setFigmaImportDialogOpen: (open) => set({ figmaImportDialogOpen: open, ...(!open && { pendingFigmaFile: null }) }),
   setPendingFigmaFile: (file) => set({ pendingFigmaFile: file }),
@@ -192,6 +202,7 @@ export const useCanvasStore = create<CanvasStoreState>((set, get) => ({
       const data = JSON.parse(raw) as Partial<CanvasPreferences>
       if (typeof data.layerPanelOpen === 'boolean') set({ layerPanelOpen: data.layerPanelOpen })
       if (typeof data.variablesPanelOpen === 'boolean') set({ variablesPanelOpen: data.variablesPanelOpen })
+      if (typeof data.designMdPanelOpen === 'boolean') set({ designMdPanelOpen: data.designMdPanelOpen })
       if (typeof data.codePanelOpen === 'boolean') set({ codePanelOpen: data.codePanelOpen })
       if (data.rightPanelTab === 'design' || data.rightPanelTab === 'code') set({ rightPanelTab: data.rightPanelTab })
     } catch { /* ignore */ }

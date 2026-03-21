@@ -22,6 +22,7 @@ import {
   handleReplaceNode,
 } from './tools/node-crud'
 import { handleGetVariables, handleSetVariables, handleSetThemes } from './tools/variables'
+import { handleGetDesignMd, handleSetDesignMd, handleExportDesignMd } from './tools/design-md'
 import { handleImportSvg } from './tools/import-svg'
 import { handleSnapshotLayout } from './tools/snapshot-layout'
 import { handleFindEmptySpace } from './tools/find-empty-space'
@@ -332,6 +333,41 @@ const TOOL_DEFINITIONS = [
     },
   },
   {
+    name: 'get_design_md',
+    description: 'Get the design.md (design system specification) from the document. Returns the parsed spec and raw markdown. If no design.md is loaded, returns hasDesignMd: false.',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        filePath: { type: 'string', description: 'Path to .op file, or omit to use the live canvas (default)' },
+      },
+      required: [],
+    },
+  },
+  {
+    name: 'set_design_md',
+    description: 'Import a design.md (design system specification) into the document. Accepts raw markdown or autoExtract=true to generate from existing document content. The design.md guides AI design generation with consistent colors, typography, and component styles.',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        filePath: { type: 'string', description: 'Path to .op file, or omit to use the live canvas (default)' },
+        markdown: { type: 'string', description: 'Raw markdown content of design.md file' },
+        autoExtract: { type: 'boolean', description: 'Auto-generate design.md from existing document variables and design content (default false)' },
+      },
+      required: [],
+    },
+  },
+  {
+    name: 'export_design_md',
+    description: 'Export the design.md as markdown text. If no design.md exists, auto-extracts from document content.',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        filePath: { type: 'string', description: 'Path to .op file, or omit to use the live canvas (default)' },
+      },
+      required: [],
+    },
+  },
+  {
     name: 'snapshot_layout',
     description: 'Get the hierarchical bounding box layout tree of an .op file. Useful for understanding spatial arrangement.',
     inputSchema: {
@@ -561,6 +597,12 @@ async function handleToolCall(name: string, args: Record<string, unknown> | unde
       return JSON.stringify(await handleSetVariables(a), null, 2)
     case 'set_themes':
       return JSON.stringify(await handleSetThemes(a), null, 2)
+    case 'get_design_md':
+      return JSON.stringify(await handleGetDesignMd(a), null, 2)
+    case 'set_design_md':
+      return JSON.stringify(await handleSetDesignMd(a), null, 2)
+    case 'export_design_md':
+      return JSON.stringify(await handleExportDesignMd(a), null, 2)
     case 'snapshot_layout':
       return JSON.stringify(await handleSnapshotLayout(a), null, 2)
     case 'find_empty_space':

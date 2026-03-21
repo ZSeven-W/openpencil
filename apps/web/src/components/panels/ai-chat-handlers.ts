@@ -3,9 +3,11 @@ import { nanoid } from 'nanoid'
 import { useAIStore } from '@/stores/ai-store'
 import { useCanvasStore } from '@/stores/canvas-store'
 import { useDocumentStore } from '@/stores/document-store'
+import { useDesignMdStore } from '@/stores/design-md-store'
 import { getActivePageChildren } from '@/stores/document-tree-utils'
 import { streamChat } from '@/services/ai/ai-service'
-import { CHAT_SYSTEM_PROMPT } from '@/services/ai/ai-prompts'
+import { buildChatSystemPrompt } from '@/services/ai/ai-prompts'
+import { detectSections } from '@/services/ai/ai-prompt-sections'
 import {
   generateDesign,
   generateDesignModification,
@@ -218,6 +220,7 @@ export function useChatHandlers() {
                const { rawResponse, nodes } = await generateDesignModification(modTargets, messageText, {
                  variables: modDoc.variables,
                  themes: modDoc.themes,
+                 designMd: useDesignMdStore.getState().designMd,
                  model,
                  provider: currentProvider,
                }, abortController.signal)
@@ -241,6 +244,7 @@ export function useChatHandlers() {
                    documentSummary: `Current selection: ${hasSelection ? selectedIds.length + ' items' : 'Empty'}`,
                    variables: doc.variables,
                    themes: doc.themes,
+                   designMd: useDesignMdStore.getState().designMd,
                  },
                }, {
                  animated: true,
@@ -268,9 +272,17 @@ export function useChatHandlers() {
             })
             // Trim history to prevent unbounded context growth
             const trimmedHistory = trimChatHistory(chatHistory)
+            // Progressive section loading: detect needed sections from user message
+            const chatDoc = useDocumentStore.getState().document
+            const chatDesignMd = useDesignMdStore.getState().designMd
+            const chatSections = detectSections(fullUserMessage, {
+              hasDesignMd: !!chatDesignMd,
+              hasVariables: !!chatDoc.variables && Object.keys(chatDoc.variables).length > 0,
+            })
+            const chatSystemPrompt = buildChatSystemPrompt(chatSections, chatDesignMd)
             let chatThinking = ''
             for await (const chunk of streamChat(
-              CHAT_SYSTEM_PROMPT,
+              chatSystemPrompt,
               trimmedHistory,
               model,
               CHAT_STREAM_THINKING_CONFIG,

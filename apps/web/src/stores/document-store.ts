@@ -2,6 +2,7 @@ import { create } from 'zustand'
 import { nanoid } from 'nanoid'
 import type { PenDocument, PenNode, GroupNode, RefNode } from '@/types/pen'
 import type { VariableDefinition } from '@/types/variables'
+
 import { useHistoryStore } from '@/stores/history-store'
 import { useCanvasStore } from '@/stores/canvas-store'
 import { getDefaultTheme } from '@/variables/resolve-variables'
@@ -727,6 +728,10 @@ export const useDocumentStore = create<DocumentStoreState>(
       // Set active page to the first page
       const firstPageId = migrated.pages?.[0]?.id ?? null
       useCanvasStore.getState().setActivePageId(firstPageId)
+      // Sync design.md to this document (lazy import to avoid circular)
+      import('@/stores/design-md-store').then(({ useDesignMdStore }) => {
+        useDesignMdStore.getState().syncToDocument(fileName ?? null, filePath ?? null)
+      })
     },
 
     newDocument: () => {
@@ -740,6 +745,10 @@ export const useDocumentStore = create<DocumentStoreState>(
         isDirty: false,
       })
       useCanvasStore.getState().setActivePageId(doc.pages?.[0]?.id ?? DEFAULT_PAGE_ID)
+      // Clear design.md for new document
+      import('@/stores/design-md-store').then(({ useDesignMdStore }) => {
+        useDesignMdStore.getState().clearForNewDocument()
+      })
     },
 
     markClean: () => set({ isDirty: false }),

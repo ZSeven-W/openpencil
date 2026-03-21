@@ -1,9 +1,11 @@
 import type { PenNode } from '@/types/pen'
 import type { VariableDefinition, ThemedValue } from '@/types/variables'
 import type { AIProviderType } from '@/types/agent-settings'
+import type { DesignMdSpec } from '@/types/design-md'
 import type { AIDesignRequest } from './ai-types'
 import { streamChat } from './ai-service'
-import { DESIGN_MODIFIER_PROMPT } from './ai-prompts'
+import { buildModifierSystemPrompt } from './ai-prompts'
+import { detectSections } from './ai-prompt-sections'
 import { executeOrchestration } from './orchestrator'
 import { DESIGN_STREAM_TIMEOUTS } from './ai-runtime-config'
 import { extractJsonFromResponse } from './design-parser'
@@ -94,6 +96,7 @@ export async function generateDesignModification(
   options?: {
     variables?: Record<string, VariableDefinition>
     themes?: Record<string, string[]>
+    designMd?: DesignMdSpec
     model?: string
     provider?: AIProviderType
   },
@@ -119,7 +122,15 @@ export async function generateDesignModification(
   const profile = resolveModelProfile(options?.model)
   const timeouts = applyProfileToTimeouts({ ...DESIGN_STREAM_TIMEOUTS }, profile)
 
-  for await (const chunk of streamChat(DESIGN_MODIFIER_PROMPT, [
+  // Progressive section loading for modification prompts
+  const modSections = detectSections(instruction, {
+    hasDesignMd: !!options?.designMd,
+    hasVariables: !!options?.variables && Object.keys(options.variables).length > 0,
+    isModification: true,
+  })
+  const modifierPrompt = buildModifierSystemPrompt(modSections, options?.designMd)
+
+  for await (const chunk of streamChat(modifierPrompt, [
     { role: 'user', content: userMessage },
   ], options?.model, timeouts, options?.provider, abortSignal)) {
     if (chunk.type === 'thinking') {
