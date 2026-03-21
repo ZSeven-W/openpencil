@@ -50,7 +50,15 @@ export default function FillSection({
   onUpdate,
 }: FillSectionProps) {
   const { t } = useTranslation()
-  const firstFill = fills?.[0]
+  // Guard: AI-generated nodes may store fill as a plain string (e.g. "#000000")
+  // instead of a PenFill[] array, causing "'opacity' in string" crashes.
+  const safeFills: PenFill[] | undefined =
+    typeof fills === 'string'
+      ? [{ type: 'solid', color: fills }]
+      : Array.isArray(fills)
+        ? fills.map((f) => typeof f === 'string' ? { type: 'solid' as const, color: f } : f)
+        : undefined
+  const firstFill = safeFills?.[0]
   const fillType = firstFill?.type ?? 'solid'
 
   const currentColor =

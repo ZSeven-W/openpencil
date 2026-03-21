@@ -101,7 +101,22 @@ export function getGenerationRemappedIds(): Map<string, string> {
  */
 function normalizeNodeFills(node: PenNode): void {
   const fills = 'fill' in node ? (node as { fill?: unknown }).fill : undefined
+
+  // Convert string shorthand (e.g. "#000000") to PenFill array
+  if (typeof fills === 'string') {
+    ;(node as unknown as Record<string, unknown>).fill = [{ type: 'solid', color: fills }]
+    return
+  }
+
   if (!Array.isArray(fills)) return
+
+  // Convert any string elements in the array to solid fill objects
+  for (let i = 0; i < fills.length; i++) {
+    if (typeof fills[i] === 'string') {
+      fills[i] = { type: 'solid', color: fills[i] }
+    }
+  }
+
   for (const fill of fills) {
     if (!fill || typeof fill !== 'object') continue
     const f = fill as { type?: string; stops?: unknown[] }

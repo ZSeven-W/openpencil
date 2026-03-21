@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="./electron/icon.png" alt="OpenPencil" width="120" />
+  <img src="./apps/desktop/build/icon.png" alt="OpenPencil" width="120" />
 </p>
 
 <h1 align="center">OpenPencil</h1>
@@ -10,7 +10,7 @@
 </p>
 
 <p align="center">
-  <a href="./README.md">English</a> · <a href="./README.zh.md">简体中文</a> · <a href="./README.zh-TW.md">繁體中文</a> · <a href="./README.ja.md">日本語</a> · <a href="./README.ko.md">한국어</a> · <a href="./README.fr.md">Français</a> · <a href="./README.es.md">Español</a> · <a href="./README.de.md">Deutsch</a> · <a href="./README.pt.md"><b>Português</b></a> · <a href="./README.ru.md">Русский</a> · <a href="./README.hi.md">हिन्दी</a> · <a href="./README.tr.md">Türkçe</a> · <a href="./README.th.md">ไทย</a> · <a href="./README.vi.md">Tiếng Việt</a> · <a href="./README.id.md">Bahasa Indonesia</a>
+  <a href="./README.md"><b>English</b></a> · <a href="./README.zh.md">简体中文</a> · <a href="./README.zh-TW.md">繁體中文</a> · <a href="./README.ja.md">日本語</a> · <a href="./README.ko.md">한국어</a> · <a href="./README.fr.md">Français</a> · <a href="./README.es.md">Español</a> · <a href="./README.de.md">Deutsch</a> · <a href="./README.pt.md">Português</a> · <a href="./README.ru.md">Русский</a> · <a href="./README.hi.md">हिन्दी</a> · <a href="./README.tr.md">Türkçe</a> · <a href="./README.th.md">ไทย</a> · <a href="./README.vi.md">Tiếng Việt</a> · <a href="./README.id.md">Bahasa Indonesia</a>
 </p>
 
 <p align="center">
@@ -102,7 +102,7 @@ bun run electron:dev
 
 > **Pré-requisitos:** [Bun](https://bun.sh/) >= 1.0 e [Node.js](https://nodejs.org/) >= 18
 
-### Implantação com Docker
+### Docker
 
 Várias variantes de imagem estão disponíveis — escolha a que se adequa às suas necessidades:
 
@@ -223,22 +223,31 @@ docker build --target full -t openpencil-full .
 ## Estrutura do Projeto
 
 ```text
-src/
-  canvas/          Motor CanvasKit/Skia — desenho, sincronização, layout, guias, ferramenta caneta
-  components/      UI React — editor, painéis, diálogos compartilhados, ícones
-  services/ai/     Chat IA, orquestrador, geração de design, streaming
-  services/figma/  Pipeline de importação binária do Figma .fig
-  services/codegen Geradores de código React+Tailwind e HTML+CSS
-  stores/          Zustand — canvas, documento, páginas, histórico, IA, configurações
-  variables/       Resolução de tokens de design e gerenciamento de referências
-  mcp/             Ferramentas do servidor MCP para integração com CLI externo
-  uikit/           Sistema de kit de componentes reutilizáveis
-server/
-  api/ai/          API Nitro — chat em streaming, geração, validação
-  utils/           Wrappers de cliente Claude CLI, OpenCode, Codex, Copilot
-electron/
-  main.ts          Janela, fork do Nitro, menu nativo, atualizador automático
-  preload.ts       Ponte IPC
+openpencil/
+├── apps/
+│   ├── web/                 Aplicação web TanStack Start
+│   │   ├── src/
+│   │   │   ├── canvas/      Motor CanvasKit/Skia — desenho, sincronização, layout
+│   │   │   ├── components/  UI React — editor, painéis, diálogos compartilhados, ícones
+│   │   │   ├── services/ai/ Chat IA, orquestrador, geração de design, streaming
+│   │   │   ├── stores/      Zustand — canvas, documento, páginas, histórico, IA
+│   │   │   ├── mcp/         Ferramentas do servidor MCP para integração com CLI externo
+│   │   │   ├── hooks/       Atalhos de teclado, soltar arquivos, colar do Figma
+│   │   │   └── uikit/       Sistema de kit de componentes reutilizáveis
+│   │   └── server/
+│   │       ├── api/ai/      API Nitro — chat em streaming, geração, validação
+│   │       └── utils/       Wrappers de cliente Claude CLI, OpenCode, Codex, Copilot
+│   └── desktop/             Aplicativo desktop Electron
+│       ├── main.ts          Janela, fork do Nitro, menu nativo, atualizador automático
+│       └── preload.ts       Ponte IPC
+├── packages/
+│   ├── pen-types/           Definições de tipos para o modelo PenDocument
+│   ├── pen-core/            Operações de árvore de documento, motor de layout, variáveis
+│   ├── pen-codegen/         Geradores de código (React, HTML, Vue, Flutter, ...)
+│   ├── pen-figma/           Parser e conversor de arquivos .fig do Figma
+│   ├── pen-renderer/        Renderizador CanvasKit/Skia independente
+│   └── pen-sdk/             SDK guarda-chuva (re-exporta todos os pacotes)
+└── .githooks/               Sincronização de versão no pre-commit a partir do nome da branch
 ```
 
 ## Atalhos de Teclado
@@ -266,6 +275,7 @@ bun --bun run dev          # Servidor de desenvolvimento (porta 3000)
 bun --bun run build        # Build de produção
 bun --bun run test         # Executar testes (Vitest)
 npx tsc --noEmit           # Verificação de tipos
+bun run bump <version>     # Sincronizar versão em todos os package.json
 bun run electron:dev       # Desenvolvimento com Electron
 bun run electron:build     # Empacotamento do Electron
 ```
@@ -275,10 +285,11 @@ bun run electron:build     # Empacotamento do Electron
 Contribuições são bem-vindas! Consulte o [CLAUDE.md](./CLAUDE.md) para detalhes de arquitetura e estilo de código.
 
 1. Faça fork e clone
-2. Crie uma branch: `git checkout -b feat/my-feature`
-3. Execute as verificações: `npx tsc --noEmit && bun --bun run test`
-4. Faça commit com [Conventional Commits](https://www.conventionalcommits.org/): `feat(canvas): add rotation snapping`
-5. Abra um PR contra `main`
+2. Configure a sincronização de versão: `git config core.hooksPath .githooks`
+3. Crie uma branch: `git checkout -b feat/my-feature`
+4. Execute as verificações: `npx tsc --noEmit && bun --bun run test`
+5. Faça commit com [Conventional Commits](https://www.conventionalcommits.org/): `feat(canvas): add rotation snapping`
+6. Abra um PR contra `main`
 
 ## Roadmap
 
@@ -290,6 +301,7 @@ Contribuições são bem-vindas! Consulte o [CLAUDE.md](./CLAUDE.md) para detalh
 - [x] Importação do Figma `.fig`
 - [x] Operações booleanas (união, subtração, interseção)
 - [x] Perfis de capacidade multi-modelo
+- [x] Reestruturação em monorepo com pacotes reutilizáveis
 - [ ] Edição colaborativa
 - [ ] Sistema de plugins
 
@@ -302,11 +314,10 @@ Contribuições são bem-vindas! Consulte o [CLAUDE.md](./CLAUDE.md) para detalh
 ## Comunidade
 
 <a href="https://discord.gg/h9Fmyy6pVh">
-  <img src="./public/logo-discord.svg" alt="Discord" width="16" />
+  <img src="./apps/web/public/logo-discord.svg" alt="Discord" width="16" />
   <strong> Entre no nosso Discord</strong>
 </a>
 — Faça perguntas, compartilhe designs, sugira funcionalidades.
-
 
 ## Star History
 

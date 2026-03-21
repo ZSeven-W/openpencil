@@ -105,8 +105,12 @@ function normalizeFills(raw: unknown): PenFill[] {
 }
 
 function normalizeSingleFill(
-  raw: Record<string, unknown>,
+  raw: Record<string, unknown> | string,
 ): PenFill | null {
+  // String shorthand inside array: "#hex" or "$variable" → solid fill
+  if (typeof raw === 'string') {
+    return raw ? { type: 'solid', color: raw } : null
+  }
   if (!raw || typeof raw !== 'object') return null
   const t = raw.type as string | undefined
 
