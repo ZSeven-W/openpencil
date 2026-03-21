@@ -7,6 +7,11 @@ export interface ImageGenConfig {
   baseUrl?: string
 }
 
+export interface ImageGenProfile extends ImageGenConfig {
+  id: string
+  name: string
+}
+
 export interface ImageSearchResult {
   id: string
   url: string

@@ -93,10 +93,14 @@ async function generateOpenAI(opts: {
 
   if (!res.ok) {
     const text = await res.text().catch(() => '')
-    throw createError({
-      statusCode: 502,
-      message: `OpenAI returned ${res.status}: ${text.slice(0, 200)}`,
-    })
+    let msg = `OpenAI returned ${res.status}`
+    try {
+      const errJson = JSON.parse(text) as { error?: { message?: string } }
+      if (errJson.error?.message) msg = errJson.error.message
+    } catch {
+      if (text) msg += `: ${text.slice(0, 150)}`
+    }
+    throw createError({ statusCode: 502, message: msg })
   }
 
   const data = (await res.json()) as { data?: { url?: string }[] }
@@ -136,7 +140,9 @@ async function generateGemini(opts: {
 
   const generationConfig: Record<string, unknown> = { responseModalities: ['TEXT', 'IMAGE'] }
   const aspectRatio = mapToGeminiAspectRatio(width, height)
-  if (aspectRatio) generationConfig.aspectRatio = aspectRatio
+  if (aspectRatio) {
+    generationConfig.imageConfig = { aspectRatio }
+  }
 
   let res: Response
   try {
@@ -154,10 +160,14 @@ async function generateGemini(opts: {
 
   if (!res.ok) {
     const text = await res.text().catch(() => '')
-    throw createError({
-      statusCode: 502,
-      message: `Gemini returned ${res.status}: ${text.slice(0, 200)}`,
-    })
+    let msg = `Gemini returned ${res.status}`
+    try {
+      const errJson = JSON.parse(text) as { error?: { message?: string } }
+      if (errJson.error?.message) msg = errJson.error.message
+    } catch {
+      if (text) msg += `: ${text.slice(0, 150)}`
+    }
+    throw createError({ statusCode: 502, message: msg })
   }
 
   const data = (await res.json()) as {
@@ -218,10 +228,14 @@ async function generateReplicate(opts: {
 
   if (!createRes.ok) {
     const text = await createRes.text().catch(() => '')
-    throw createError({
-      statusCode: 502,
-      message: `Replicate returned ${createRes.status}: ${text.slice(0, 200)}`,
-    })
+    let msg = `Replicate returned ${createRes.status}`
+    try {
+      const errJson = JSON.parse(text) as { detail?: string }
+      if (errJson.detail) msg = errJson.detail
+    } catch {
+      if (text) msg += `: ${text.slice(0, 150)}`
+    }
+    throw createError({ statusCode: 502, message: msg })
   }
 
   const prediction = (await createRes.json()) as { id?: string; status?: string }

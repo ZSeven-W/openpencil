@@ -6,7 +6,7 @@ import type {
   MCPTransportMode,
   GroupedModel,
 } from '@/types/agent-settings'
-import type { ImageGenConfig } from '@/types/image-service'
+import type { ImageGenConfig, ImageGenProfile } from '@/types/image-service'
 import { DEFAULT_IMAGE_GEN_CONFIG } from '@/types/image-service'
 import { MCP_DEFAULT_PORT } from '@/constants/app'
 import { appStorage } from '@/utils/app-storage'
@@ -19,6 +19,8 @@ interface PersistedState {
   mcpTransportMode: MCPTransportMode
   mcpHttpPort: number
   imageGenConfig: ImageGenConfig
+  imageGenProfiles: ImageGenProfile[]
+  activeImageGenProfileId: string | null
   openverseOAuth: { clientId: string; clientSecret: string } | null
 }
 
@@ -41,6 +43,11 @@ interface AgentSettingsState extends PersistedState {
   setMcpServerStatus: (running: boolean, localIp?: string | null) => void
   setDialogOpen: (open: boolean) => void
   setImageGenConfig: (config: Partial<ImageGenConfig>) => void
+  addImageGenProfile: (profile: Omit<ImageGenProfile, 'id'>) => string
+  updateImageGenProfile: (id: string, updates: Partial<Omit<ImageGenProfile, 'id'>>) => void
+  removeImageGenProfile: (id: string) => void
+  setActiveImageGenProfile: (id: string | null) => void
+  getActiveImageGenProfile: () => ImageGenProfile | null
   setOpenverseOAuth: (oauth: { clientId: string; clientSecret: string } | null) => void
   persist: () => void
   hydrate: () => void
@@ -92,6 +99,8 @@ export const useAgentSettingsStore = create<AgentSettingsState>((set, get) => ({
   mcpTransportMode: 'stdio',
   mcpHttpPort: MCP_DEFAULT_PORT,
   imageGenConfig: DEFAULT_IMAGE_GEN_CONFIG,
+  imageGenProfiles: [],
+  activeImageGenProfileId: null,
   openverseOAuth: null,
   dialogOpen: false,
   isHydrated: false,
@@ -146,14 +155,51 @@ export const useAgentSettingsStore = create<AgentSettingsState>((set, get) => ({
       imageGenConfig: { ...s.imageGenConfig, ...updates },
     })),
 
+  addImageGenProfile: (profile) => {
+    const id = `igp-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`
+    const newProfile: ImageGenProfile = { ...profile, id }
+    set((s) => {
+      const profiles = [...s.imageGenProfiles, newProfile]
+      // First profile becomes active by default
+      const activeId = s.activeImageGenProfileId ?? id
+      return { imageGenProfiles: profiles, activeImageGenProfileId: activeId }
+    })
+    return id
+  },
+
+  updateImageGenProfile: (id, updates) =>
+    set((s) => ({
+      imageGenProfiles: s.imageGenProfiles.map((p) =>
+        p.id === id ? { ...p, ...updates } : p,
+      ),
+    })),
+
+  removeImageGenProfile: (id) =>
+    set((s) => {
+      const profiles = s.imageGenProfiles.filter((p) => p.id !== id)
+      let activeId = s.activeImageGenProfileId
+      if (activeId === id) {
+        activeId = profiles.length > 0 ? profiles[0].id : null
+      }
+      return { imageGenProfiles: profiles, activeImageGenProfileId: activeId }
+    }),
+
+  setActiveImageGenProfile: (id) => set({ activeImageGenProfileId: id }),
+
+  getActiveImageGenProfile: () => {
+    const { imageGenProfiles, activeImageGenProfileId } = get()
+    if (!activeImageGenProfileId) return imageGenProfiles[0] ?? null
+    return imageGenProfiles.find((p) => p.id === activeImageGenProfileId) ?? imageGenProfiles[0] ?? null
+  },
+
   setOpenverseOAuth: (oauth) => set({ openverseOAuth: oauth }),
 
   persist: () => {
     try {
-      const { providers, mcpIntegrations, mcpTransportMode, mcpHttpPort, imageGenConfig, openverseOAuth } = get()
+      const { providers, mcpIntegrations, mcpTransportMode, mcpHttpPort, imageGenConfig, imageGenProfiles, activeImageGenProfileId, openverseOAuth } = get()
       appStorage.setItem(
         STORAGE_KEY,
-        JSON.stringify({ providers, mcpIntegrations, mcpTransportMode, mcpHttpPort, imageGenConfig, openverseOAuth }),
+        JSON.stringify({ providers, mcpIntegrations, mcpTransportMode, mcpHttpPort, imageGenConfig, imageGenProfiles, activeImageGenProfileId, openverseOAuth }),
       )
     } catch {
       // ignore
@@ -187,6 +233,22 @@ export const useAgentSettingsStore = create<AgentSettingsState>((set, get) => ({
       if (data.mcpTransportMode) set({ mcpTransportMode: data.mcpTransportMode })
       if (data.mcpHttpPort) set({ mcpHttpPort: data.mcpHttpPort })
       if (data.imageGenConfig) set({ imageGenConfig: data.imageGenConfig })
+      // Hydrate multi-profile image gen
+      if ((data as Record<string, unknown>).imageGenProfiles) {
+        const profiles = (data as Record<string, unknown>).imageGenProfiles as ImageGenProfile[]
+        const activeId = (data as Record<string, unknown>).activeImageGenProfileId as string | null
+        set({ imageGenProfiles: profiles, activeImageGenProfileId: activeId })
+      } else if (data.imageGenConfig && data.imageGenConfig.apiKey) {
+        // Migrate old single config to profiles
+        const migrated: ImageGenProfile = {
+          id: 'igp-migrated',
+          name: data.imageGenConfig.provider === 'custom'
+            ? 'Custom'
+            : data.imageGenConfig.provider.charAt(0).toUpperCase() + data.imageGenConfig.provider.slice(1),
+          ...data.imageGenConfig,
+        }
+        set({ imageGenProfiles: [migrated], activeImageGenProfileId: migrated.id })
+      }
       if (data.openverseOAuth !== undefined) set({ openverseOAuth: data.openverseOAuth })
     } catch {
       // ignore

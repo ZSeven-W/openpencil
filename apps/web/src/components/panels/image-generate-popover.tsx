@@ -28,10 +28,10 @@ export default function ImageGeneratePopover({
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
   const [errorMsg, setErrorMsg] = useState<string>('')
 
-  const imageGenConfig = useAgentSettingsStore((s) => s.imageGenConfig)
+  const activeProfile = useAgentSettingsStore((s) => s.getActiveImageGenProfile())
   const setDialogOpen = useAgentSettingsStore((s) => s.setDialogOpen)
 
-  const isConfigured = !!imageGenConfig.apiKey
+  const isConfigured = !!activeProfile?.apiKey
 
   const handleOpenChange = (next: boolean) => {
     setOpen(next)
@@ -45,6 +45,7 @@ export default function ImageGeneratePopover({
   }
 
   const handleGenerate = async () => {
+    if (!activeProfile) return
     setState('loading')
     setErrorMsg('')
     try {
@@ -53,10 +54,10 @@ export default function ImageGeneratePopover({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           prompt,
-          provider: imageGenConfig.provider,
-          model: imageGenConfig.model,
-          apiKey: imageGenConfig.apiKey,
-          baseUrl: imageGenConfig.baseUrl,
+          provider: activeProfile.provider,
+          model: activeProfile.model,
+          apiKey: activeProfile.apiKey,
+          baseUrl: activeProfile.baseUrl,
           ...(width && height ? { width, height } : {}),
         }),
       })
@@ -64,9 +65,8 @@ export default function ImageGeneratePopover({
         let msg = `HTTP ${res.status}`
         try {
           const errData = await res.json()
-          // Extract short message, strip verbose details
-          const raw = errData.message || errData.error || ''
-          msg = raw.split('\n')[0].replace(/^.*?:\s*/, '').slice(0, 100) || msg
+          const raw = errData.message || errData.statusMessage || errData.error || ''
+          if (raw) msg = String(raw).slice(0, 200)
         } catch { /* use default msg */ }
         throw new Error(msg)
       }
@@ -103,8 +103,9 @@ export default function ImageGeneratePopover({
             prompt={prompt}
             onPromptChange={setPrompt}
             onGenerate={handleGenerate}
-            provider={imageGenConfig.provider}
-            model={imageGenConfig.model}
+            provider={activeProfile!.provider}
+            model={activeProfile!.model}
+            profileName={activeProfile!.name}
             error={state === 'error' ? errorMsg : undefined}
           />
         )}
@@ -169,6 +170,7 @@ function IdleView({
   onGenerate,
   provider,
   model,
+  profileName,
   error,
 }: {
   prompt: string
@@ -176,6 +178,7 @@ function IdleView({
   onGenerate: () => void
   provider: string
   model: string
+  profileName: string
   error?: string
 }) {
   return (
@@ -193,7 +196,7 @@ function IdleView({
         Generate
       </Button>
       <p className="text-[10px] text-muted-foreground text-center">
-        {provider} · {model || 'default'}
+        {profileName} · {provider} · {model || 'default'}
       </p>
     </div>
   )

@@ -1,5 +1,13 @@
 import { useState } from 'react'
-import { Check, ChevronDown, ChevronRight, ExternalLink, Loader2 } from 'lucide-react'
+import {
+  Check,
+  ChevronDown,
+  ChevronRight,
+  ExternalLink,
+  Loader2,
+  Plus,
+  Trash2,
+} from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import {
@@ -10,19 +18,13 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { useAgentSettingsStore } from '@/stores/agent-settings-store'
-import type { ImageGenProvider } from '@/types/image-service'
+import type { ImageGenProvider, ImageGenProfile } from '@/types/image-service'
 import { MODEL_PLACEHOLDERS } from '@/types/image-service'
 
 type TestStatus = 'idle' | 'testing' | 'valid' | 'invalid'
 
-/* ---------- Section header ---------- */
-function SectionHeader({ title }: { title: string }) {
-  return (
-    <h3 className="text-[15px] font-semibold text-foreground mb-3">{title}</h3>
-  )
-}
+/* ---------- Shared UI ---------- */
 
-/* ---------- Field row ---------- */
 function FieldRow({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="flex items-center gap-3 mb-2">
@@ -32,7 +34,6 @@ function FieldRow({ label, children }: { label: string; children: React.ReactNod
   )
 }
 
-/* ---------- Text input ---------- */
 function TextInput({
   value,
   onChange,
@@ -60,7 +61,6 @@ function TextInput({
   )
 }
 
-/* ---------- Collapsible section ---------- */
 function Collapsible({
   label,
   children,
@@ -85,7 +85,6 @@ function Collapsible({
   )
 }
 
-/* ---------- Test status indicator ---------- */
 function TestStatusBadge({ status }: { status: TestStatus }) {
   if (status === 'idle') return null
   if (status === 'testing') {
@@ -98,6 +97,7 @@ function TestStatusBadge({ status }: { status: TestStatus }) {
 }
 
 /* ---------- Image Search section ---------- */
+
 function ImageSearchSection() {
   const openverseOAuth = useAgentSettingsStore((s) => s.openverseOAuth)
   const setOpenverseOAuth = useAgentSettingsStore((s) => s.setOpenverseOAuth)
@@ -192,7 +192,8 @@ function ImageSearchSection() {
   )
 }
 
-/* ---------- Image Generation section ---------- */
+/* ---------- Provider labels ---------- */
+
 const PROVIDER_LABELS: Record<ImageGenProvider, string> = {
   openai: 'OpenAI',
   gemini: 'Google Gemini',
@@ -200,17 +201,16 @@ const PROVIDER_LABELS: Record<ImageGenProvider, string> = {
   custom: 'Custom',
 }
 
-function ImageGenerationSection() {
-  const imageGenConfig = useAgentSettingsStore((s) => s.imageGenConfig)
-  const setImageGenConfig = useAgentSettingsStore((s) => s.setImageGenConfig)
-  const persist = useAgentSettingsStore((s) => s.persist)
+/* ---------- Single profile editor ---------- */
 
+function ProfileEditor({
+  profile,
+  onUpdate,
+}: {
+  profile: ImageGenProfile
+  onUpdate: (updates: Partial<Omit<ImageGenProfile, 'id'>>) => void
+}) {
   const [testStatus, setTestStatus] = useState<TestStatus>('idle')
-
-  const update = (updates: Parameters<typeof setImageGenConfig>[0]) => {
-    setImageGenConfig(updates)
-    persist()
-  }
 
   const handleTest = async () => {
     setTestStatus('testing')
@@ -219,10 +219,10 @@ function ImageGenerationSection() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          service: imageGenConfig.provider,
-          apiKey: imageGenConfig.apiKey,
-          model: imageGenConfig.model,
-          baseUrl: imageGenConfig.baseUrl,
+          service: profile.provider,
+          apiKey: profile.apiKey,
+          model: profile.model,
+          baseUrl: profile.baseUrl,
         }),
       })
       setTestStatus(res.ok ? 'valid' : 'invalid')
@@ -232,13 +232,19 @@ function ImageGenerationSection() {
   }
 
   return (
-    <div>
-      <SectionHeader title="Image Generation" />
+    <div className="space-y-2">
+      <FieldRow label="Name">
+        <TextInput
+          value={profile.name}
+          onChange={(v) => onUpdate({ name: v })}
+          placeholder="My Config"
+        />
+      </FieldRow>
 
       <FieldRow label="Provider">
         <Select
-          value={imageGenConfig.provider}
-          onValueChange={(v) => update({ provider: v as ImageGenProvider, model: '' })}
+          value={profile.provider}
+          onValueChange={(v) => onUpdate({ provider: v as ImageGenProvider, model: '' })}
         >
           <SelectTrigger className="h-7 text-xs">
             <SelectValue />
@@ -256,8 +262,8 @@ function ImageGenerationSection() {
       <FieldRow label="API Key">
         <div className="flex items-center gap-2">
           <TextInput
-            value={imageGenConfig.apiKey}
-            onChange={(v) => update({ apiKey: v })}
+            value={profile.apiKey}
+            onChange={(v) => onUpdate({ apiKey: v })}
             placeholder="sk-..."
             type="password"
             className="flex-1"
@@ -268,7 +274,7 @@ function ImageGenerationSection() {
               size="sm"
               variant="outline"
               onClick={handleTest}
-              disabled={testStatus === 'testing' || !imageGenConfig.apiKey}
+              disabled={testStatus === 'testing' || !profile.apiKey}
               className="h-6 px-2.5 text-[11px]"
             >
               Test
@@ -279,17 +285,17 @@ function ImageGenerationSection() {
 
       <FieldRow label="Model">
         <TextInput
-          value={imageGenConfig.model}
-          onChange={(v) => update({ model: v })}
-          placeholder={MODEL_PLACEHOLDERS[imageGenConfig.provider]}
+          value={profile.model}
+          onChange={(v) => onUpdate({ model: v })}
+          placeholder={MODEL_PLACEHOLDERS[profile.provider]}
         />
       </FieldRow>
 
       <Collapsible label="Advanced">
         <FieldRow label="Base URL">
           <TextInput
-            value={imageGenConfig.baseUrl ?? ''}
-            onChange={(v) => update({ baseUrl: v || undefined })}
+            value={profile.baseUrl ?? ''}
+            onChange={(v) => onUpdate({ baseUrl: v || undefined })}
             placeholder="https://api.example.com/v1"
           />
         </FieldRow>
@@ -298,7 +304,146 @@ function ImageGenerationSection() {
   )
 }
 
+/* ---------- Image Generation section ---------- */
+
+function ImageGenerationSection() {
+  const profiles = useAgentSettingsStore((s) => s.imageGenProfiles)
+  const activeId = useAgentSettingsStore((s) => s.activeImageGenProfileId)
+  const addProfile = useAgentSettingsStore((s) => s.addImageGenProfile)
+  const updateProfile = useAgentSettingsStore((s) => s.updateImageGenProfile)
+  const removeProfile = useAgentSettingsStore((s) => s.removeImageGenProfile)
+  const setActive = useAgentSettingsStore((s) => s.setActiveImageGenProfile)
+  const persist = useAgentSettingsStore((s) => s.persist)
+
+  const [editingId, setEditingId] = useState<string | null>(null)
+
+  const handleAdd = () => {
+    const id = addProfile({
+      name: `Config ${profiles.length + 1}`,
+      provider: 'openai',
+      apiKey: '',
+      model: '',
+    })
+    setEditingId(id)
+    persist()
+  }
+
+  const handleUpdate = (id: string, updates: Partial<Omit<ImageGenProfile, 'id'>>) => {
+    updateProfile(id, updates)
+    persist()
+  }
+
+  const handleRemove = (id: string) => {
+    removeProfile(id)
+    if (editingId === id) setEditingId(null)
+    persist()
+  }
+
+  const handleActivate = (id: string) => {
+    setActive(id)
+    persist()
+  }
+
+  const effectiveActiveId = activeId ?? profiles[0]?.id
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-3">
+        <h3 className="text-[15px] font-semibold text-foreground">Image Generation</h3>
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={handleAdd}
+          className="h-6 px-2 text-[11px]"
+        >
+          <Plus size={12} className="mr-1" />
+          Add
+        </Button>
+      </div>
+
+      {profiles.length === 0 ? (
+        <p className="text-[11px] text-muted-foreground py-4 text-center">
+          No configurations yet. Click "Add" to create one.
+        </p>
+      ) : (
+        <div className="space-y-1.5">
+          {profiles.map((profile) => {
+            const isActive = profile.id === effectiveActiveId
+            const isEditing = profile.id === editingId
+
+            return (
+              <div key={profile.id}>
+                {/* Profile row */}
+                <div
+                  className={cn(
+                    'flex items-center gap-2 h-8 px-2 rounded border transition-colors cursor-pointer',
+                    isActive
+                      ? 'border-primary/50 bg-primary/5'
+                      : 'border-border hover:bg-accent/50',
+                  )}
+                  onClick={() => setEditingId(isEditing ? null : profile.id)}
+                >
+                  {/* Active indicator */}
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      handleActivate(profile.id)
+                    }}
+                    className={cn(
+                      'w-3.5 h-3.5 rounded-full border-2 shrink-0 transition-colors',
+                      isActive
+                        ? 'border-primary bg-primary'
+                        : 'border-muted-foreground/40 hover:border-primary/60',
+                    )}
+                    title={isActive ? 'Active' : 'Set as active'}
+                  >
+                    {isActive && <Check size={8} className="text-primary-foreground m-auto block" />}
+                  </button>
+
+                  {/* Name + provider */}
+                  <span className="text-xs text-foreground flex-1 truncate">
+                    {profile.name || PROVIDER_LABELS[profile.provider]}
+                  </span>
+                  <span className="text-[10px] text-muted-foreground shrink-0">
+                    {PROVIDER_LABELS[profile.provider]}
+                  </span>
+
+                  {/* Expand/Collapse */}
+                  {isEditing ? <ChevronDown size={12} className="text-muted-foreground shrink-0" /> : <ChevronRight size={12} className="text-muted-foreground shrink-0" />}
+
+                  {/* Delete */}
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      handleRemove(profile.id)
+                    }}
+                    className="text-muted-foreground hover:text-destructive transition-colors shrink-0"
+                    title="Remove"
+                  >
+                    <Trash2 size={12} />
+                  </button>
+                </div>
+
+                {/* Expanded editor */}
+                {isEditing && (
+                  <div className="mt-2 mb-3 pl-3 border-l-2 border-border">
+                    <ProfileEditor
+                      profile={profile}
+                      onUpdate={(updates) => handleUpdate(profile.id, updates)}
+                    />
+                  </div>
+                )}
+              </div>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
+}
+
 /* ---------- Main export ---------- */
+
 export function ImagesPage() {
   return (
     <div>
