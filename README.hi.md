@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="./electron/icon.png" alt="OpenPencil" width="120" />
+  <img src="./apps/desktop/build/icon.png" alt="OpenPencil" width="120" />
 </p>
 
 <h1 align="center">OpenPencil</h1>
@@ -102,7 +102,7 @@ bun run electron:dev
 
 > **पूर्वापेक्षाएँ:** [Bun](https://bun.sh/) >= 1.0 और [Node.js](https://nodejs.org/) >= 18
 
-### Docker डिप्लॉयमेंट
+### Docker
 
 कई इमेज वेरिएंट उपलब्ध हैं — अपनी ज़रूरत के अनुसार चुनें:
 
@@ -223,22 +223,31 @@ docker build --target full -t openpencil-full .
 ## प्रोजेक्ट संरचना
 
 ```text
-src/
-  canvas/          CanvasKit/Skia इंजन — ड्रॉइंग, सिंक, लेआउट, गाइड, पेन टूल
-  components/      React UI — एडिटर, पैनल, शेयर्ड डायलॉग, आइकन
-  services/ai/     AI चैट, ऑर्केस्ट्रेटर, डिज़ाइन जनरेशन, स्ट्रीमिंग
-  services/figma/  Figma .fig बाइनरी इम्पोर्ट पाइपलाइन
-  services/codegen React+Tailwind और HTML+CSS कोड जनरेटर
-  stores/          Zustand — कैनवास, दस्तावेज़, पेज, हिस्ट्री, AI, सेटिंग्स
-  variables/       डिज़ाइन टोकन रिज़ॉल्यूशन और रेफ़रेंस मैनेजमेंट
-  mcp/             बाहरी CLI इंटीग्रेशन के लिए MCP सर्वर टूल
-  uikit/           पुन: उपयोगी कम्पोनेंट किट सिस्टम
-server/
-  api/ai/          Nitro API — स्ट्रीमिंग चैट, जनरेशन, वैलिडेशन
-  utils/           Claude CLI, OpenCode, Codex, Copilot क्लाइंट रैपर
-electron/
-  main.ts          विंडो, Nitro फ़ोर्क, नेटिव मेनू, ऑटो-अपडेटर
-  preload.ts       IPC ब्रिज
+openpencil/
+├── apps/
+│   ├── web/                 TanStack Start वेब ऐप
+│   │   ├── src/
+│   │   │   ├── canvas/      CanvasKit/Skia इंजन — ड्रॉइंग, सिंक, लेआउट
+│   │   │   ├── components/  React UI — एडिटर, पैनल, शेयर्ड डायलॉग, आइकन
+│   │   │   ├── services/ai/ AI चैट, ऑर्केस्ट्रेटर, डिज़ाइन जनरेशन, स्ट्रीमिंग
+│   │   │   ├── stores/      Zustand — कैनवास, दस्तावेज़, पेज, हिस्ट्री, AI
+│   │   │   ├── mcp/         बाहरी CLI इंटीग्रेशन के लिए MCP सर्वर टूल
+│   │   │   ├── hooks/       कीबोर्ड शॉर्टकट, फ़ाइल ड्रॉप, Figma पेस्ट
+│   │   │   └── uikit/       पुन: उपयोगी कम्पोनेंट किट सिस्टम
+│   │   └── server/
+│   │       ├── api/ai/      Nitro API — स्ट्रीमिंग चैट, जनरेशन, वैलिडेशन
+│   │       └── utils/       Claude CLI, OpenCode, Codex, Copilot रैपर
+│   └── desktop/             Electron डेस्कटॉप ऐप
+│       ├── main.ts          विंडो, Nitro फ़ोर्क, नेटिव मेनू, ऑटो-अपडेटर
+│       └── preload.ts       IPC ब्रिज
+├── packages/
+│   ├── pen-types/           PenDocument मॉडल के लिए टाइप परिभाषाएँ
+│   ├── pen-core/            दस्तावेज़ ट्री ऑपरेशन, लेआउट इंजन, वेरिएबल
+│   ├── pen-codegen/         कोड जनरेटर (React, HTML, Vue, Flutter, ...)
+│   ├── pen-figma/           Figma .fig फ़ाइल पार्सर और कनवर्टर
+│   ├── pen-renderer/        स्टैंडअलोन CanvasKit/Skia रेंडरर
+│   └── pen-sdk/             अम्ब्रेला SDK (सभी पैकेज री-एक्सपोर्ट)
+└── .githooks/               ब्रांच नाम से प्री-कमिट वर्शन सिंक
 ```
 
 ## कीबोर्ड शॉर्टकट
@@ -266,6 +275,7 @@ bun --bun run dev          # डेव सर्वर (पोर्ट 3000)
 bun --bun run build        # प्रोडक्शन बिल्ड
 bun --bun run test         # टेस्ट चलाएँ (Vitest)
 npx tsc --noEmit           # टाइप चेक
+bun run bump <version>     # सभी package.json में वर्शन सिंक करें
 bun run electron:dev       # Electron डेव
 bun run electron:build     # Electron पैकेज
 ```
@@ -275,10 +285,11 @@ bun run electron:build     # Electron पैकेज
 योगदान का स्वागत है! आर्किटेक्चर विवरण और कोड स्टाइल के लिए [CLAUDE.md](./CLAUDE.md) देखें।
 
 1. फ़ोर्क और क्लोन करें
-2. ब्रांच बनाएँ: `git checkout -b feat/my-feature`
-3. चेक चलाएँ: `npx tsc --noEmit && bun --bun run test`
-4. [Conventional Commits](https://www.conventionalcommits.org/) के साथ कमिट करें: `feat(canvas): add rotation snapping`
-5. `main` के विरुद्ध PR खोलें
+2. वर्शन सिंक सेटअप करें: `git config core.hooksPath .githooks`
+3. ब्रांच बनाएँ: `git checkout -b feat/my-feature`
+4. चेक चलाएँ: `npx tsc --noEmit && bun --bun run test`
+5. [Conventional Commits](https://www.conventionalcommits.org/) के साथ कमिट करें: `feat(canvas): add rotation snapping`
+6. `main` के विरुद्ध PR खोलें
 
 ## रोडमैप
 
@@ -290,6 +301,7 @@ bun run electron:build     # Electron पैकेज
 - [x] Figma `.fig` इम्पोर्ट
 - [x] बूलियन ऑपरेशन (यूनियन, सबट्रैक्ट, इंटरसेक्ट)
 - [x] मल्टी-मॉडल क्षमता प्रोफ़ाइल
+- [x] पुन: उपयोगी पैकेज के साथ मोनोरेपो पुनर्गठन
 - [ ] सहयोगी संपादन
 - [ ] प्लगइन सिस्टम
 
@@ -302,11 +314,10 @@ bun run electron:build     # Electron पैकेज
 ## समुदाय
 
 <a href="https://discord.gg/h9Fmyy6pVh">
-  <img src="./public/logo-discord.svg" alt="Discord" width="16" />
+  <img src="./apps/web/public/logo-discord.svg" alt="Discord" width="16" />
   <strong> हमारे Discord में शामिल हों</strong>
 </a>
 — प्रश्न पूछें, डिज़ाइन साझा करें, सुविधाएँ सुझाएँ।
-
 
 ## Star History
 

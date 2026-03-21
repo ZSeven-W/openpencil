@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="./electron/icon.png" alt="OpenPencil" width="120" />
+  <img src="./apps/desktop/build/icon.png" alt="OpenPencil" width="120" />
 </p>
 
 <h1 align="center">OpenPencil</h1>
@@ -223,22 +223,31 @@ docker build --target full -t openpencil-full .
 ## Project Structure
 
 ```text
-src/
-  canvas/          CanvasKit/Skia engine — drawing, sync, layout, guides, pen tool
-  components/      React UI — editor, panels, shared dialogs, icons
-  services/ai/     AI chat, orchestrator, design generation, streaming
-  services/figma/  Figma .fig binary import pipeline
-  services/codegen Multi-platform code generators (React, HTML, Vue, Svelte, Flutter, SwiftUI, Compose, React Native)
-  stores/          Zustand — canvas, document, pages, history, AI, settings
-  variables/       Design token resolution and reference management
-  mcp/             MCP server tools for external CLI integration
-  uikit/           Reusable component kit system
-server/
-  api/ai/          Nitro API — streaming chat, generation, validation
-  utils/           Claude CLI, OpenCode, Codex, Copilot client wrappers
-electron/
-  main.ts          Window, Nitro fork, native menu, auto-updater
-  preload.ts       IPC bridge
+openpencil/
+├── apps/
+│   ├── web/                 TanStack Start web app
+│   │   ├── src/
+│   │   │   ├── canvas/      CanvasKit/Skia engine — drawing, sync, layout
+│   │   │   ├── components/  React UI — editor, panels, shared dialogs, icons
+│   │   │   ├── services/ai/ AI chat, orchestrator, design generation, streaming
+│   │   │   ├── stores/      Zustand — canvas, document, pages, history, AI
+│   │   │   ├── mcp/         MCP server tools for external CLI integration
+│   │   │   ├── hooks/       Keyboard shortcuts, file drop, Figma paste
+│   │   │   └── uikit/       Reusable component kit system
+│   │   └── server/
+│   │       ├── api/ai/      Nitro API — streaming chat, generation, validation
+│   │       └── utils/       Claude CLI, OpenCode, Codex, Copilot wrappers
+│   └── desktop/             Electron desktop app
+│       ├── main.ts          Window, Nitro fork, native menu, auto-updater
+│       └── preload.ts       IPC bridge
+├── packages/
+│   ├── pen-types/           Type definitions for PenDocument model
+│   ├── pen-core/            Document tree ops, layout engine, variables
+│   ├── pen-codegen/         Code generators (React, HTML, Vue, Flutter, ...)
+│   ├── pen-figma/           Figma .fig file parser and converter
+│   ├── pen-renderer/        Standalone CanvasKit/Skia renderer
+│   └── pen-sdk/             Umbrella SDK (re-exports all packages)
+└── .githooks/               Pre-commit version sync from branch name
 ```
 
 ## Keyboard Shortcuts
@@ -266,6 +275,7 @@ bun --bun run dev          # Dev server (port 3000)
 bun --bun run build        # Production build
 bun --bun run test         # Run tests (Vitest)
 npx tsc --noEmit           # Type check
+bun run bump <version>     # Sync version across all package.json
 bun run electron:dev       # Electron dev
 bun run electron:build     # Electron package
 ```
@@ -275,10 +285,11 @@ bun run electron:build     # Electron package
 Contributions are welcome! See [CLAUDE.md](./CLAUDE.md) for architecture details and code style.
 
 1. Fork and clone
-2. Create a branch: `git checkout -b feat/my-feature`
-3. Run checks: `npx tsc --noEmit && bun --bun run test`
-4. Commit with [Conventional Commits](https://www.conventionalcommits.org/): `feat(canvas): add rotation snapping`
-5. Open a PR against `main`
+2. Set up version sync: `git config core.hooksPath .githooks`
+3. Create a branch: `git checkout -b feat/my-feature`
+4. Run checks: `npx tsc --noEmit && bun --bun run test`
+5. Commit with [Conventional Commits](https://www.conventionalcommits.org/): `feat(canvas): add rotation snapping`
+6. Open a PR against `main`
 
 ## Roadmap
 
@@ -290,6 +301,7 @@ Contributions are welcome! See [CLAUDE.md](./CLAUDE.md) for architecture details
 - [x] Figma `.fig` import
 - [x] Boolean operations (union, subtract, intersect)
 - [x] Multi-model capability profiles
+- [x] Monorepo restructure with reusable packages
 - [ ] Collaborative editing
 - [ ] Plugin system
 
@@ -302,7 +314,7 @@ Contributions are welcome! See [CLAUDE.md](./CLAUDE.md) for architecture details
 ## Community
 
 <a href="https://discord.gg/h9Fmyy6pVh">
-  <img src="./public/logo-discord.svg" alt="Discord" width="16" />
+  <img src="./apps/web/public/logo-discord.svg" alt="Discord" width="16" />
   <strong> Join our Discord</strong>
 </a>
 — Ask questions, share designs, suggest features.
