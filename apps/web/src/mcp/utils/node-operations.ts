@@ -1,22 +1,26 @@
 import type { PenDocument, PenNode } from '@/types/pen'
 import {
-  findNodeInTree as _findNodeInTree,
-  findParentInTree as _findParentInTree,
-  removeNodeFromTree as _removeNodeFromTree,
-  updateNodeInTree as _updateNodeInTree,
-  insertNodeInTree as _insertNodeInTree,
-  flattenNodes as _flattenNodes,
-  getNodeBounds as _getNodeBounds,
+  findNodeInTree,
+  findParentInTree,
+  removeNodeFromTree,
+  updateNodeInTree,
+  insertNodeInTree,
+  flattenNodes,
+  getNodeBounds,
+  cloneNodeWithNewIds,
 } from '@/stores/document-tree-utils'
 
-// Re-export from pen-core (via shim) — eliminating 150+ lines of duplication
-export const findNodeInTree = _findNodeInTree
-export const findParentInTree = _findParentInTree
-export const removeNodeFromTree = _removeNodeFromTree
-export const updateNodeInTree = _updateNodeInTree
-export const insertNodeInTree = _insertNodeInTree
-export const flattenNodes = _flattenNodes
-export const getNodeBounds = _getNodeBounds
+// Re-export from pen-core (via shim)
+export {
+  findNodeInTree,
+  findParentInTree,
+  removeNodeFromTree,
+  updateNodeInTree,
+  insertNodeInTree,
+  flattenNodes,
+  getNodeBounds,
+  cloneNodeWithNewIds,
+}
 
 // ---------------------------------------------------------------------------
 // MCP-specific utilities
@@ -48,19 +52,6 @@ export function setDocChildren(doc: PenDocument, children: PenNode[], pageId?: s
   } else {
     doc.children = children
   }
-}
-
-export function cloneNodeWithNewIds(
-  node: PenNode,
-  generateId: () => string,
-): PenNode {
-  const cloned = { ...node, id: generateId() } as PenNode
-  if ('children' in cloned && cloned.children) {
-    cloned.children = cloned.children.map((c) =>
-      cloneNodeWithNewIds(c, generateId),
-    )
-  }
-  return cloned
 }
 
 /** Search nodes matching a pattern. */
@@ -131,7 +122,7 @@ export function computeLayoutTree(
 ): LayoutEntry[] {
   const entries: LayoutEntry[] = []
   for (const node of nodes) {
-    const bounds = _getNodeBounds(node, allNodes)
+    const bounds = getNodeBounds(node, allNodes)
     const absX = parentX + bounds.x
     const absY = parentY + bounds.y
     const entry: LayoutEntry = {

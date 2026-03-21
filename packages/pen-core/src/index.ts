@@ -23,6 +23,9 @@ export {
   findClearX,
   scaleChildrenInPlace,
   rotateChildrenInPlace,
+  deepCloneNode,
+  cloneNodeWithNewIds,
+  cloneNodesWithNewIds,
 } from './tree-utils.js'
 
 // Variables

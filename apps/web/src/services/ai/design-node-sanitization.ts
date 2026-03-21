@@ -2,14 +2,7 @@ import type { PenNode } from '@/types/pen'
 import { clamp } from './generation-utils'
 export { isBadgeOverlayNode } from '@/canvas/node-helpers'
 import { isBadgeOverlayNode } from '@/canvas/node-helpers'
-
-// ---------------------------------------------------------------------------
-// Deep clone
-// ---------------------------------------------------------------------------
-
-export function deepCloneNode(node: PenNode): PenNode {
-  return JSON.parse(JSON.stringify(node)) as PenNode
-}
+export { deepCloneNode } from '@/stores/document-tree-utils'
 
 // ---------------------------------------------------------------------------
 // Children helpers

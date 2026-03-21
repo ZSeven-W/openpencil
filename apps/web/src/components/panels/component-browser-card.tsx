@@ -1,25 +1,15 @@
 import { useCallback } from 'react'
-import { nanoid } from 'nanoid'
 import type { KitComponent, UIKit } from '@/types/uikit'
-import type { PenNode } from '@/types/pen'
 import { useDocumentStore } from '@/stores/document-store'
 import { useCanvasStore } from '@/stores/canvas-store'
 import { getCanvasSize } from '@/canvas/skia-engine-ref'
+import { cloneNodeWithNewIds } from '@/stores/document-tree-utils'
 import { findReusableNode, deepCloneNode, collectVariableRefs } from '@/uikit/kit-utils'
 import NodePreviewSvg from './node-preview-svg'
 
 interface ComponentBrowserCardProps {
   component: KitComponent
   kit: UIKit
-}
-
-/** Recursively assign new IDs to a node tree so each insert is independent. */
-function reassignIds(node: PenNode): PenNode {
-  const clone = { ...node, id: nanoid() }
-  if ('children' in clone && Array.isArray(clone.children)) {
-    clone.children = clone.children.map(reassignIds)
-  }
-  return clone as PenNode
 }
 
 export default function ComponentBrowserCard({ component, kit }: ComponentBrowserCardProps) {
@@ -44,7 +34,7 @@ export default function ComponentBrowserCard({ component, kit }: ComponentBrowse
     }
 
     // Deep clone with new IDs, remove reusable flag so it's standalone
-    const cloned = reassignIds(deepCloneNode(kitNode))
+    const cloned = cloneNodeWithNewIds(deepCloneNode(kitNode))
     if ('reusable' in cloned) {
       delete (cloned as unknown as Record<string, unknown>).reusable
     }

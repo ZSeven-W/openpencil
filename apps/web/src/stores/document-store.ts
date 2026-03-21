@@ -20,6 +20,7 @@ import {
   findClearX,
   scaleChildrenInPlace,
   rotateChildrenInPlace,
+  cloneNodeWithNewIds,
   getActivePageChildren,
   setActivePageChildren,
   getAllChildren,
@@ -284,15 +285,7 @@ export const useDocumentStore = create<DocumentStoreState>(
       }
 
       // Regular duplication for non-reusable nodes
-      const cloneWithNewIds = (n: PenNode): PenNode => {
-        const cloned = { ...n, id: nanoid() } as PenNode
-        if ('children' in cloned && cloned.children) {
-          cloned.children = cloned.children.map(cloneWithNewIds)
-        }
-        return cloned
-      }
-
-      const clone = cloneWithNewIds(node)
+      const clone = cloneNodeWithNewIds(node)
       clone.name = (clone.name ?? clone.type) + ' copy'
 
       const parent = findParentInTree(children, id)
@@ -553,14 +546,7 @@ export const useDocumentStore = create<DocumentStoreState>(
         }
 
         // Clone with new IDs
-        const cloneWithNewIds = (n: PenNode): PenNode => {
-          const cloned = { ...n, id: nanoid() } as PenNode
-          if ('children' in cloned && cloned.children) {
-            cloned.children = cloned.children.map(cloneWithNewIds)
-          }
-          return cloned
-        }
-        const detached = cloneWithNewIds(source)
+        const detached = cloneNodeWithNewIds(source)
         // Apply all direct instance properties (position, size, meta)
         const detachedRecord = detached as unknown as Record<string, unknown>
         for (const [key, val] of Object.entries(node)) {

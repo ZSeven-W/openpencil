@@ -20,4 +20,7 @@ export {
   findClearX,
   scaleChildrenInPlace,
   rotateChildrenInPlace,
+  deepCloneNode,
+  cloneNodeWithNewIds,
+  cloneNodesWithNewIds,
 } from '@zseven-w/pen-core'

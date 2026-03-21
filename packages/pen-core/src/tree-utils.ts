@@ -325,6 +325,48 @@ export function scaleChildrenInPlace(
   })
 }
 
+// ---------------------------------------------------------------------------
+// Clone utilities
+// ---------------------------------------------------------------------------
+
+/** Deep-clone a node tree preserving all IDs. */
+export function deepCloneNode<T extends PenNode>(node: T): T {
+  return structuredClone(node)
+}
+
+/** Clone a single node tree, assigning new IDs to every node. */
+export function cloneNodeWithNewIds(
+  node: PenNode,
+  idGenerator: () => string = nanoid,
+): PenNode {
+  const cloned = { ...node, id: idGenerator() } as PenNode
+  if ('children' in cloned && cloned.children) {
+    cloned.children = cloned.children.map((c) =>
+      cloneNodeWithNewIds(c, idGenerator),
+    )
+  }
+  return cloned
+}
+
+/** Clone multiple nodes with new IDs. Optionally strip `reusable` flag and apply position offset. */
+export function cloneNodesWithNewIds(
+  nodes: PenNode[],
+  options: { offset?: number; stripReusable?: boolean; idGenerator?: () => string } = {},
+): PenNode[] {
+  const { offset = 0, stripReusable = true, idGenerator = nanoid } = options
+  return structuredClone(nodes).map((node) => {
+    const withNewId = cloneNodeWithNewIds(node, idGenerator)
+    if (stripReusable && 'reusable' in withNewId) {
+      delete (withNewId as unknown as Record<string, unknown>).reusable
+    }
+    if (offset !== 0) {
+      withNewId.x = (withNewId.x ?? 0) + offset
+      withNewId.y = (withNewId.y ?? 0) + offset
+    }
+    return withNewId
+  })
+}
+
 /** Recursively rotate all children's relative positions and angles. */
 export function rotateChildrenInPlace(
   children: PenNode[],

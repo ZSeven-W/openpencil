@@ -1,5 +1,6 @@
 import type { PenDocument, PenNode } from '@/types/pen'
 import { getAllChildren } from '@/stores/document-tree-utils'
+export { deepCloneNode } from '@/stores/document-tree-utils'
 import type { ComponentCategory, KitComponent } from '@/types/uikit'
 
 /**
@@ -44,12 +45,7 @@ export function collectVariableRefs(node: PenNode): Set<string> {
   return refs
 }
 
-/**
- * Deep-clone a node tree preserving all IDs.
- */
-export function deepCloneNode<T extends PenNode>(node: T): T {
-  return structuredClone(node)
-}
+// deepCloneNode re-exported from pen-core via document-tree-utils
 
 // ---------------------------------------------------------------------------
 // Internal helpers

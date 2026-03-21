@@ -119,7 +119,7 @@ export function useKeyboardShortcuts() {
               }
             }
             // Regular paste for non-reusable nodes
-            const [cloned] = cloneNodesWithNewIds([original], 10)
+            const [cloned] = cloneNodesWithNewIds([original], { offset: 10 })
             useDocumentStore.getState().addNode(null, cloned)
             newIds.push(cloned.id)
           }
