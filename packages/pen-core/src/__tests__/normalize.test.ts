@@ -79,6 +79,20 @@ describe('normalizePenDocument', () => {
     expect(fill[0].type).toBe('solid')
   })
 
+  it('normalizes string elements inside fill array', () => {
+    const doc: PenDocument = {
+      version: '1.0.0',
+      children: [{
+        id: '1', type: 'path', d: 'M0 0', x: 0, y: 0,
+        fill: ['#ff0000'] as unknown as Array<{ type: 'solid'; color: string }>,
+      }],
+    }
+    const result = normalizePenDocument(doc)
+    const fill = (result.children[0] as { fill: Array<{ type: string; color: string }> }).fill
+    expect(fill).toHaveLength(1)
+    expect(fill[0]).toEqual({ type: 'solid', color: '#ff0000' })
+  })
+
   it('preserves $variable references', () => {
     const doc: PenDocument = {
       version: '1.0.0',
