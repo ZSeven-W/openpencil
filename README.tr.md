@@ -113,6 +113,7 @@ Birden fazla görüntü varyantı mevcuttur — ihtiyaçlarınıza uygun olanı 
 | `openpencil-codex:latest` | — | + Codex CLI |
 | `openpencil-opencode:latest` | — | + OpenCode CLI |
 | `openpencil-copilot:latest` | — | + GitHub Copilot CLI |
+| `openpencil-gemini:latest` | — | + Gemini CLI |
 | `openpencil-full:latest` | ~1 GB | Tüm CLI araçları |
 
 **Çalıştır (yalnızca web):**

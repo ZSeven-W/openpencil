@@ -113,6 +113,7 @@ Mehrere Image-Varianten sind verfügbar — wählen Sie die passende für Ihre A
 | `openpencil-codex:latest` | — | + Codex CLI |
 | `openpencil-opencode:latest` | — | + OpenCode CLI |
 | `openpencil-copilot:latest` | — | + GitHub Copilot CLI |
+| `openpencil-gemini:latest` | — | + Gemini CLI |
 | `openpencil-full:latest` | ~1 GB | Alle CLI-Tools |
 
 **Ausführen (nur Web):**

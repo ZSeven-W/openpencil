@@ -36,6 +36,9 @@ jobs:
           - variant: copilot
             target: with-copilot
             suffix: '-copilot'
+          - variant: gemini
+            target: with-gemini
+            suffix: '-gemini'
           - variant: full
             target: full
             suffix: '-full'

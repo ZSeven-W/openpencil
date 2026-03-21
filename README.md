@@ -113,6 +113,7 @@ Multiple image variants are available — pick the one that fits your needs:
 | `openpencil-codex:latest` | — | + Codex CLI |
 | `openpencil-opencode:latest` | — | + OpenCode CLI |
 | `openpencil-copilot:latest` | — | + GitHub Copilot CLI |
+| `openpencil-gemini:latest` | — | + Gemini CLI |
 | `openpencil-full:latest` | ~1 GB | All CLI tools |
 
 **Run (web only):**
@@ -167,6 +168,7 @@ docker build --target full -t openpencil-full .
 | **Codex CLI** | Connect in Agent Settings (`Cmd+,`) |
 | **OpenCode** | Connect in Agent Settings (`Cmd+,`) |
 | **GitHub Copilot** | `copilot login` then connect in Agent Settings (`Cmd+,`) |
+| **Gemini CLI** | Connect in Agent Settings (`Cmd+,`) |
 
 **Model Capability Profiles** — automatically adapts prompts, thinking mode, and timeouts per model tier. Full-tier models (Claude) get complete prompts; standard-tier (GPT-4o, Gemini, DeepSeek) disable thinking; basic-tier (MiniMax, Qwen, Llama, Mistral) get simplified nested-JSON prompts for maximum reliability.
 
