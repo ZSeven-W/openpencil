@@ -122,17 +122,36 @@ export function getClaudeAgentDebugFilePath(): string | undefined {
 /**
  * Custom spawnClaudeCodeProcess for Windows.
  * On Windows, npm-installed CLIs are .cmd/.ps1 scripts that can't be spawned
- * directly without a shell. Uses PowerShell to avoid cmd.exe's 8191-char limit.
+ * directly without a shell.
+ *
+ * - `.cmd` files: use `cmd.exe /c` (PowerShell can't run .cmd directly)
+ * - `.ps1` files: use `powershell.exe`
+ * - `.exe` files or others: use `cmd.exe /c` as safe default
  */
 export function buildSpawnClaudeCodeProcess() {
   if (process.platform !== 'win32') return undefined
   return (options: { command: string; args: string[]; cwd?: string; env: Record<string, string | undefined>; signal: AbortSignal }) => {
-    return spawn(options.command, options.args, {
+    const cmd = options.command
+    const isPowerShell = cmd.endsWith('.ps1')
+
+    if (isPowerShell) {
+      // For .ps1 scripts, invoke via PowerShell
+      const psArgs = ['-ExecutionPolicy', 'Bypass', '-File', cmd, ...options.args]
+      return spawn('powershell.exe', psArgs, {
+        cwd: options.cwd,
+        env: options.env as NodeJS.ProcessEnv,
+        signal: options.signal,
+        stdio: ['pipe', 'pipe', 'pipe'],
+      })
+    }
+
+    // For .cmd, .exe, or extensionless binaries, use cmd.exe /c
+    return spawn(cmd, options.args, {
       cwd: options.cwd,
       env: options.env as NodeJS.ProcessEnv,
       signal: options.signal,
       stdio: ['pipe', 'pipe', 'pipe'],
-      shell: 'powershell.exe',
+      shell: true,
     })
   }
 }
