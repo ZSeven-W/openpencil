@@ -84,15 +84,15 @@
     },
     "apps/desktop": {
       "name": "@zseven-w/desktop",
-      "version": "0.4.4",
+      "version": "0.5.0",
     },
     "apps/web": {
       "name": "@zseven-w/web",
-      "version": "0.4.4",
+      "version": "0.5.0",
     },
     "packages/pen-codegen": {
       "name": "@zseven-w/pen-codegen",
-      "version": "0.0.1",
+      "version": "0.5.0",
       "dependencies": {
         "@zseven-w/pen-core": "workspace:*",
         "@zseven-w/pen-types": "workspace:*",
@@ -103,7 +103,7 @@
     },
     "packages/pen-core": {
       "name": "@zseven-w/pen-core",
-      "version": "0.0.1",
+      "version": "0.5.0",
       "dependencies": {
         "@zseven-w/pen-types": "workspace:*",
         "nanoid": "^5.1.6",
@@ -115,7 +115,7 @@
     },
     "packages/pen-figma": {
       "name": "@zseven-w/pen-figma",
-      "version": "0.0.1",
+      "version": "0.5.0",
       "dependencies": {
         "@zseven-w/pen-types": "workspace:*",
         "fzstd": "^0.1.1",
@@ -127,13 +127,31 @@
         "typescript": "^5.7.2",
       },
     },
+    "packages/pen-renderer": {
+      "name": "@zseven-w/pen-renderer",
+      "version": "0.5.0",
+      "dependencies": {
+        "@zseven-w/pen-core": "workspace:*",
+        "@zseven-w/pen-types": "workspace:*",
+        "rbush": "^4.0.1",
+      },
+      "devDependencies": {
+        "@types/rbush": "^4.0.0",
+        "canvaskit-wasm": "^0.40.0",
+        "typescript": "^5.7.2",
+      },
+      "peerDependencies": {
+        "canvaskit-wasm": "^0.40.0",
+      },
+    },
     "packages/pen-sdk": {
       "name": "@zseven-w/pen-sdk",
-      "version": "0.0.1",
+      "version": "0.5.0",
       "dependencies": {
         "@zseven-w/pen-codegen": "workspace:*",
         "@zseven-w/pen-core": "workspace:*",
         "@zseven-w/pen-figma": "workspace:*",
+        "@zseven-w/pen-renderer": "workspace:*",
         "@zseven-w/pen-types": "workspace:*",
       },
       "devDependencies": {
@@ -142,7 +160,7 @@
     },
     "packages/pen-types": {
       "name": "@zseven-w/pen-types",
-      "version": "0.0.1",
+      "version": "0.5.0",
       "devDependencies": {
         "typescript": "^5.7.2",
       },
@@ -756,6 +774,8 @@
     "@zseven-w/pen-core": ["@zseven-w/pen-core@workspace:packages/pen-core"],
 
     "@zseven-w/pen-figma": ["@zseven-w/pen-figma@workspace:packages/pen-figma"],
+
+    "@zseven-w/pen-renderer": ["@zseven-w/pen-renderer@workspace:packages/pen-renderer"],
 
     "@zseven-w/pen-sdk": ["@zseven-w/pen-sdk@workspace:packages/pen-sdk"],
 

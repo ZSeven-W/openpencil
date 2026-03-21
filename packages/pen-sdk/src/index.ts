@@ -169,3 +169,27 @@ export {
   type FigmaDecodedFile,
   type FigmaImportLayoutMode,
 } from '@zseven-w/pen-figma'
+
+// ── Renderer: CanvasKit/Skia rendering engine ────────────────────────
+export {
+  // Primary API
+  loadCanvasKit,
+  PenRenderer,
+  // Low-level
+  SkiaNodeRenderer,
+  SkiaFontManager,
+  SkiaImageLoader,
+  SpatialIndex,
+  flattenToRenderNodes,
+  resolveRefs,
+  premeasureTextHeights,
+  // Viewport
+  viewportMatrix,
+  screenToScene,
+  sceneToScreen,
+  zoomToPoint,
+  // Types
+  type RenderNode,
+  type PenRendererOptions,
+  type IconLookupFn,
+} from '@zseven-w/pen-renderer'
