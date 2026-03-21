@@ -239,6 +239,7 @@ openpencil/
 │   │       └── utils/       Pembungkus Claude CLI, OpenCode, Codex, Copilot
 │   └── desktop/             Aplikasi desktop Electron
 │       ├── main.ts          Jendela, fork Nitro, menu native, pembaruan otomatis
+│       ├── ipc-handlers.ts  Dialog file native, sinkronisasi tema, preferensi IPC
 │       └── preload.ts       Jembatan IPC
 ├── packages/
 │   ├── pen-types/           Definisi tipe untuk model PenDocument

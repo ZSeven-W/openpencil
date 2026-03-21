@@ -239,6 +239,7 @@ openpencil/
 │   │       └── utils/       Claude CLI、OpenCode、Codex、Copilot 客戶端封裝
 │   └── desktop/             Electron 桌面應用程式
 │       ├── main.ts          視窗、Nitro 子處理序、原生選單、自動更新
+│       ├── ipc-handlers.ts  原生檔案對話框、主題同步、偏好設定 IPC
 │       └── preload.ts       IPC 橋接
 ├── packages/
 │   ├── pen-types/           PenDocument 模型型別定義

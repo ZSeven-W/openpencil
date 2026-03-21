@@ -239,6 +239,7 @@ openpencil/
 │   │       └── utils/       Claude CLI, OpenCode, Codex, Copilot sarmalayıcıları
 │   └── desktop/             Electron masaüstü uygulaması
 │       ├── main.ts          Pencere, Nitro çatallanması, yerel menü, otomatik güncelleyici
+│       ├── ipc-handlers.ts  Yerel dosya diyalogları, tema senkronizasyonu, tercihler IPC
 │       └── preload.ts       IPC köprüsü
 ├── packages/
 │   ├── pen-types/           PenDocument modeli için tür tanımları

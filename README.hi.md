@@ -239,6 +239,7 @@ openpencil/
 │   │       └── utils/       Claude CLI, OpenCode, Codex, Copilot रैपर
 │   └── desktop/             Electron डेस्कटॉप ऐप
 │       ├── main.ts          विंडो, Nitro फ़ोर्क, नेटिव मेनू, ऑटो-अपडेटर
+│       ├── ipc-handlers.ts  नेटिव फ़ाइल डायलॉग, थीम सिंक, प्राथमिकताएँ IPC
 │       └── preload.ts       IPC ब्रिज
 ├── packages/
 │   ├── pen-types/           PenDocument मॉडल के लिए टाइप परिभाषाएँ

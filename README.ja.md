@@ -239,6 +239,7 @@ openpencil/
 │   │       └── utils/       Claude CLI、OpenCode、Codex、Copilot ラッパー
 │   └── desktop/             Electron デスクトップアプリ
 │       ├── main.ts          ウィンドウ、Nitro フォーク、ネイティブメニュー、自動アップデーター
+│       ├── ipc-handlers.ts  ネイティブファイルダイアログ、テーマ同期、設定 IPC
 │       └── preload.ts       IPC ブリッジ
 ├── packages/
 │   ├── pen-types/           PenDocument モデルの型定義

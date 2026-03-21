@@ -239,6 +239,7 @@ openpencil/
 │   │       └── utils/       Claude CLI, OpenCode, Codex, Copilot-Wrapper
 │   └── desktop/             Electron-Desktop-App
 │       ├── main.ts          Fenster, Nitro-Fork, natives Menü, Auto-Updater
+│       ├── ipc-handlers.ts  Native Dateidialoge, Theme-Sync, Einstellungen-IPC
 │       └── preload.ts       IPC-Brücke
 ├── packages/
 │   ├── pen-types/           Typdefinitionen für das PenDocument-Modell
