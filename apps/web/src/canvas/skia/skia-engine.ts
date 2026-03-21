@@ -16,6 +16,8 @@ import {
   premeasureTextHeights,
   collectReusableIds,
   collectInstanceIds,
+  getViewportBounds,
+  isRectInViewport,
 } from '@zseven-w/pen-renderer'
 import {
   getActiveAgentIndicators,
@@ -211,8 +213,16 @@ export class SkiaEngine {
     // Pass current zoom to renderer for zoom-aware text rasterization
     this.renderer.zoom = this.zoom
 
+    const vpBounds = getViewportBounds(
+      { zoom: this.zoom, panX: this.panX, panY: this.panY },
+      this.canvasEl.clientWidth,
+      this.canvasEl.clientHeight,
+      64 / this.zoom
+    )
     // Draw all render nodes
     for (const rn of this.renderNodes) {
+      // Skip nodes outside the viewport
+      if (!isRectInViewport({ x: rn.absX, y: rn.absY, w: rn.absW, h: rn.absH }, vpBounds)) continue
       this.renderer.drawNodeWithSelection(canvas, rn, selectedIds)
     }
 
