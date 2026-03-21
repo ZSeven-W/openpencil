@@ -465,7 +465,7 @@ export class SkiaEngine {
     if (!this.surface) {
       this.surface = this.ck.MakeSWCanvasSurface(this.canvasEl)
     }
-    this.markDirty()
+    this.render()
   }
 
   // ---------------------------------------------------------------------------
