@@ -8,6 +8,9 @@ interface ImageGeneratePopoverProps {
   initialPrompt: string
   onGenerated: (url: string) => void
   children: React.ReactNode
+  /** Node dimensions — passed to the API for aspect-ratio-aware generation */
+  width?: number
+  height?: number
 }
 
 type State = 'idle' | 'loading' | 'preview' | 'error'
@@ -16,6 +19,8 @@ export default function ImageGeneratePopover({
   initialPrompt,
   onGenerated,
   children,
+  width,
+  height,
 }: ImageGeneratePopoverProps) {
   const [open, setOpen] = useState(false)
   const [prompt, setPrompt] = useState(initialPrompt)
@@ -52,6 +57,7 @@ export default function ImageGeneratePopover({
           model: imageGenConfig.model,
           apiKey: imageGenConfig.apiKey,
           baseUrl: imageGenConfig.baseUrl,
+          ...(width && height ? { width, height } : {}),
         }),
       })
       if (!res.ok) {

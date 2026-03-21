@@ -39,7 +39,7 @@ export default defineEventHandler(async (event) => {
   }
 
   if (provider === 'gemini') {
-    return await generateGemini({ prompt, model, apiKey, baseUrl })
+    return await generateGemini({ prompt, model, apiKey, baseUrl, width, height })
   }
 
   if (provider === 'replicate') {
@@ -112,15 +112,31 @@ async function generateOpenAI(opts: {
 // Gemini image generation
 // ---------------------------------------------------------------------------
 
+function mapToGeminiAspectRatio(w?: number, h?: number): string | undefined {
+  if (!w || !h) return undefined
+  const ratio = w / h
+  if (ratio > 1.6) return '16:9'
+  if (ratio > 1.3) return '4:3'
+  if (ratio < 0.625) return '9:16'
+  if (ratio < 0.77) return '3:4'
+  return '1:1'
+}
+
 async function generateGemini(opts: {
   prompt: string
   model: string
   apiKey: string
   baseUrl?: string
+  width?: number
+  height?: number
 }): Promise<{ url: string }> {
-  const { prompt, model, apiKey, baseUrl } = opts
+  const { prompt, model, apiKey, baseUrl, width, height } = opts
   const base = baseUrl ?? 'https://generativelanguage.googleapis.com'
   const endpoint = `${base}/v1beta/models/${model}:generateContent?key=${apiKey}`
+
+  const generationConfig: Record<string, unknown> = { responseModalities: ['TEXT', 'IMAGE'] }
+  const aspectRatio = mapToGeminiAspectRatio(width, height)
+  if (aspectRatio) generationConfig.aspectRatio = aspectRatio
 
   let res: Response
   try {
@@ -129,7 +145,7 @@ async function generateGemini(opts: {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         contents: [{ parts: [{ text: prompt }] }],
-        generationConfig: { responseModalities: ['TEXT', 'IMAGE'] },
+        generationConfig,
       }),
     })
   } catch (err) {

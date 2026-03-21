@@ -67,6 +67,8 @@ export default function ImageSection({ node, onUpdate }: ImageSectionProps) {
         <ImageGeneratePopover
           initialPrompt={node.imagePrompt ?? node.name ?? ''}
           onGenerated={(url: string) => onUpdate({ src: url })}
+          width={typeof node.width === 'number' ? node.width : undefined}
+          height={typeof node.height === 'number' ? node.height : undefined}
         >
           <Button size="sm" variant="outline" className="flex-1 h-7 text-xs">
             <Sparkles className="h-3 w-3 mr-1" />
