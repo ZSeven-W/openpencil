@@ -202,9 +202,12 @@ export default function TopBar() {
   }, [])
 
   const handleNew = useCallback(() => {
+    if (useDocumentStore.getState().isDirty) {
+      if (!window.confirm(t('topbar.closeConfirmMessage'))) return
+    }
     useDocumentStore.getState().newDocument()
     requestAnimationFrame(() => zoomToFitContent())
-  }, [])
+  }, [t])
 
   /**
    * Unified save: if the current file is .op with a known handle/path, save
@@ -283,6 +286,9 @@ export default function TopBar() {
   }, [])
 
   const handleOpen = useCallback(() => {
+    if (useDocumentStore.getState().isDirty) {
+      if (!window.confirm(t('topbar.closeConfirmMessage'))) return
+    }
     if (isElectron()) {
       window.electronAPI!.openFile().then((result) => {
         if (!result) return
@@ -312,7 +318,7 @@ export default function TopBar() {
         }
       })
     }
-  }, [])
+  }, [t])
 
   const displayName = fileName ?? t('common.untitled')
 

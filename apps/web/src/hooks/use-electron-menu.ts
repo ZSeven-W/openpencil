@@ -1,4 +1,5 @@
 import { useEffect } from 'react'
+import i18n from '@/i18n'
 import { useCanvasStore } from '@/stores/canvas-store'
 import { useDocumentStore } from '@/stores/document-store'
 import { useHistoryStore } from '@/stores/history-store'
@@ -47,11 +48,17 @@ export function useElectronMenu() {
     const cleanup = api.onMenuAction((action: string) => {
       switch (action) {
         case 'new':
+          if (useDocumentStore.getState().isDirty) {
+            if (!window.confirm(i18n.t('topbar.closeConfirmMessage'))) break
+          }
           useDocumentStore.getState().newDocument()
           requestAnimationFrame(() => zoomToFitContent())
           break
 
         case 'open':
+          if (useDocumentStore.getState().isDirty) {
+            if (!window.confirm(i18n.t('topbar.closeConfirmMessage'))) break
+          }
           if (api) {
             // Electron: use native IPC to get full file path for save-in-place
             api.openFile().then((result) => {
@@ -90,7 +97,9 @@ export function useElectronMenu() {
           }
           break
 
-        case 'save': {
+        case 'save':
+        case 'save-and-close': {
+          const closeAfterSave = action === 'save-and-close'
           try { syncCanvasPositionsToStore() } catch { /* continue */ }
           const store = useDocumentStore.getState()
           const { document: doc, fileName, filePath } = store
@@ -104,6 +113,7 @@ export function useElectronMenu() {
             if (filePath && isOpFile) {
               await writeToFilePath(filePath, doc)
               store.markClean()
+              if (closeAfterSave) api.confirmClose()
               return
             }
             // No in-place target → save as .op via native dialog
@@ -117,7 +127,9 @@ export function useElectronMenu() {
                 fileHandle: null,
                 isDirty: false,
               })
+              if (closeAfterSave) api.confirmClose()
             }
+            // If user cancelled the save dialog, don't close
           }
           doSave().catch((err) => console.error('[Save] Failed:', err))
           break

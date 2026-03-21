@@ -75,4 +75,11 @@ export function detectLanguagePostHydration() {
   }
 }
 
+// Expose i18n.t on window so Electron main process can query translated
+// strings via webContents.executeJavaScript (e.g. for close-confirm dialog).
+if (typeof window !== 'undefined') {
+  ;(window as unknown as Record<string, unknown>).__i18nT = (key: string) =>
+    i18n.t(key)
+}
+
 export default i18n

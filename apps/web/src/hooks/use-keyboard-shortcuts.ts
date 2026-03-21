@@ -1,4 +1,5 @@
 import { useEffect } from 'react'
+import i18n from '@/i18n'
 import { useCanvasStore } from '@/stores/canvas-store'
 import { useDocumentStore, getActivePageChildren } from '@/stores/document-store'
 import { useHistoryStore } from '@/stores/history-store'
@@ -210,6 +211,9 @@ export function useKeyboardShortcuts() {
       // Open: Cmd/Ctrl+O
       if (isMod && e.key === 'o' && !e.shiftKey) {
         e.preventDefault()
+        if (useDocumentStore.getState().isDirty) {
+          if (!window.confirm(i18n.t('topbar.closeConfirmMessage'))) return
+        }
         if (supportsFileSystemAccess()) {
           openDocumentFS().then((result) => {
             if (result) {

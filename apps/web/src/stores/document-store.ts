@@ -769,6 +769,14 @@ export {
 } from './document-tree-utils'
 export { generateId } from '@/utils/id'
 
+// Sync isDirty to a global so the Electron main process can query it
+// via webContents.executeJavaScript for close confirmation.
+if (typeof window !== 'undefined') {
+  useDocumentStore.subscribe((state) => {
+    ;(window as unknown as Record<string, unknown>).__documentIsDirty = state.isDirty
+  })
+}
+
 // Expose stores on window in dev mode for testing/debugging
 if (import.meta.env.DEV && typeof window !== 'undefined') {
   ;(window as unknown as Record<string, unknown>).__documentStore = useDocumentStore

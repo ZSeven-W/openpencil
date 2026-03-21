@@ -448,6 +448,74 @@ function createWindow(): void {
     mainWindow.webContents.openDevTools({ mode: 'detach' })
   }
 
+  // ---------------------------------------------------------------------------
+  // Unsaved-changes close confirmation
+  // ---------------------------------------------------------------------------
+  let forceClose = false
+
+  mainWindow.on('close', (event) => {
+    if (forceClose || !mainWindow || mainWindow.isDestroyed()) return
+
+    // preventDefault must be called synchronously — check dirty state after
+    event.preventDefault()
+
+    const win = mainWindow
+    win.webContents
+      .executeJavaScript(
+        '({ dirty: window.__documentIsDirty === true,' +
+        ' message: typeof window.__i18nT === "function" ? window.__i18nT("topbar.closeConfirmMessage") : "",' +
+        ' detail: typeof window.__i18nT === "function" ? window.__i18nT("topbar.closeConfirmDetail") : "",' +
+        ' save: typeof window.__i18nT === "function" ? window.__i18nT("common.save") : "",' +
+        ' dontSave: typeof window.__i18nT === "function" ? window.__i18nT("topbar.dontSave") : "",' +
+        ' cancel: typeof window.__i18nT === "function" ? window.__i18nT("common.cancel") : "" })',
+      )
+      .then((result: { dirty: boolean; message: string; detail: string; save: string; dontSave: string; cancel: string }) => {
+        if (!result.dirty) {
+          // Not dirty — allow close
+          forceClose = true
+          win.close()
+          return
+        }
+
+        // Show native save dialog with i18n strings
+        return dialog
+          .showMessageBox(win, {
+            type: 'question',
+            buttons: [
+              result.save || 'Save',
+              result.dontSave || "Don't Save",
+              result.cancel || 'Cancel',
+            ],
+            defaultId: 0,
+            cancelId: 2,
+            message: result.message || 'Do you want to save changes before closing?',
+            detail: result.detail || 'Your changes will be lost if you don\'t save them.',
+          })
+          .then(({ response }) => {
+            if (response === 0) {
+              // Save — tell renderer to save then confirm close
+              win.webContents.send('menu:action', 'save-and-close')
+            } else if (response === 1) {
+              // Don't Save — force close
+              forceClose = true
+              win.close()
+            }
+            // Cancel (response === 2) — do nothing, window stays open
+          })
+      })
+      .catch(() => {
+        // Page not loaded or crashed — allow close
+        forceClose = true
+        win.close()
+      })
+  })
+
+  // Renderer confirms save completed → force close
+  ipcMain.on('window:confirmClose', () => {
+    forceClose = true
+    mainWindow?.close()
+  })
+
   mainWindow.on('closed', () => {
     mainWindow = null
   })

@@ -36,6 +36,7 @@ export interface ElectronAPI {
   getPreferences: () => Promise<Record<string, string>>
   setPreference: (key: string, value: string) => Promise<void>
   removePreference: (key: string) => Promise<void>
+  confirmClose: () => void
   updater: {
     getState: () => Promise<UpdaterState>
     checkForUpdates: () => Promise<UpdaterState>
@@ -89,6 +90,8 @@ const api: ElectronAPI = {
   readFile: (filePath: string) => ipcRenderer.invoke('file:read', filePath),
 
   getPendingFile: () => ipcRenderer.invoke('file:getPending'),
+
+  confirmClose: () => ipcRenderer.send('window:confirmClose'),
 
   getLogDir: () => ipcRenderer.invoke('log:getDir'),
 
