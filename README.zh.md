@@ -168,6 +168,7 @@ docker build --target full -t openpencil-full .
 | **Codex CLI** | 在 Agent 设置中连接（`Cmd+,`） |
 | **OpenCode** | 在 Agent 设置中连接（`Cmd+,`） |
 | **GitHub Copilot** | 运行 `copilot login` 后在 Agent 设置中连接（`Cmd+,`） |
+| **Gemini CLI** | 在 Agent 设置中连接（`Cmd+,`） |
 
 **模型能力配置** — 自动根据模型层级适配提示词、思考模式和超时时间。完整层级模型（Claude）获得完整提示词；标准层级模型（GPT-4o、Gemini、DeepSeek）关闭思考模式；基础层级模型（MiniMax、Qwen、Llama、Mistral）使用简化的嵌套 JSON 提示词以确保最大可靠性。
 

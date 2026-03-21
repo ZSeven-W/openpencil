@@ -168,6 +168,7 @@ docker build --target full -t openpencil-full .
 | **Codex CLI** | Hubungkan di Pengaturan Agen (`Cmd+,`) |
 | **OpenCode** | Hubungkan di Pengaturan Agen (`Cmd+,`) |
 | **GitHub Copilot** | `copilot login` lalu hubungkan di Pengaturan Agen (`Cmd+,`) |
+| **Gemini CLI** | Hubungkan di Pengaturan Agen (`Cmd+,`) |
 
 **Profil Kemampuan Model** — secara otomatis menyesuaikan prompt, mode thinking, dan timeout per tingkatan model. Model tingkat penuh (Claude) mendapat prompt lengkap; tingkat standar (GPT-4o, Gemini, DeepSeek) menonaktifkan thinking; tingkat dasar (MiniMax, Qwen, Llama, Mistral) mendapat prompt JSON bertingkat yang disederhanakan untuk keandalan maksimum.
 

@@ -168,6 +168,7 @@ docker build --target full -t openpencil-full .
 | **Codex CLI** | Kết nối trong Cài đặt tác nhân (`Cmd+,`) |
 | **OpenCode** | Kết nối trong Cài đặt tác nhân (`Cmd+,`) |
 | **GitHub Copilot** | `copilot login` rồi kết nối trong Cài đặt tác nhân (`Cmd+,`) |
+| **Gemini CLI** | Kết nối trong Cài đặt tác nhân (`Cmd+,`) |
 
 **Hồ sơ Năng lực Mô hình** — tự động thích ứng prompt, chế độ thinking và thời gian chờ theo từng cấp mô hình. Mô hình cấp đầy đủ (Claude) nhận prompt hoàn chỉnh; cấp tiêu chuẩn (GPT-4o, Gemini, DeepSeek) tắt thinking; cấp cơ bản (MiniMax, Qwen, Llama, Mistral) nhận prompt JSON lồng nhau đơn giản hóa để đảm bảo độ tin cậy tối đa.
 

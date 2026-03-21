@@ -168,6 +168,7 @@ docker build --target full -t openpencil-full .
 | **Codex CLI** | 에이전트 설정에서 연결 (`Cmd+,`) |
 | **OpenCode** | 에이전트 설정에서 연결 (`Cmd+,`) |
 | **GitHub Copilot** | `copilot login` 후 에이전트 설정에서 연결 (`Cmd+,`) |
+| **Gemini CLI** | 에이전트 설정에서 연결 (`Cmd+,`) |
 
 **모델 역량 프로파일** — 모델 티어에 따라 프롬프트, 사고 모드, 타임아웃을 자동 조정합니다. 풀 티어 모델(Claude)은 완전한 프롬프트를 받고, 스탠다드 티어(GPT-4o, Gemini, DeepSeek)는 사고 모드를 비활성화하며, 베이직 티어(MiniMax, Qwen, Llama, Mistral)는 최대 안정성을 위해 단순화된 중첩 JSON 프롬프트를 받습니다.
 

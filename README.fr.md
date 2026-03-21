@@ -168,6 +168,7 @@ docker build --target full -t openpencil-full .
 | **Codex CLI** | Connecter dans les Paramètres de l'agent (`Cmd+,`) |
 | **OpenCode** | Connecter dans les Paramètres de l'agent (`Cmd+,`) |
 | **GitHub Copilot** | `copilot login` puis connecter dans les Paramètres de l'agent (`Cmd+,`) |
+| **Gemini CLI** | Connecter dans les Paramètres de l'agent (`Cmd+,`) |
 
 **Profils de capacités des modèles** — adapte automatiquement les prompts, le mode de réflexion et les délais d'attente par niveau de modèle. Les modèles de niveau complet (Claude) reçoivent des prompts complets ; le niveau standard (GPT-4o, Gemini, DeepSeek) désactive la réflexion ; le niveau basique (MiniMax, Qwen, Llama, Mistral) reçoit des prompts JSON imbriqués simplifiés pour une fiabilité maximale.
 

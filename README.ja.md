@@ -168,6 +168,7 @@ docker build --target full -t openpencil-full .
 | **Codex CLI** | エージェント設定で接続（`Cmd+,`） |
 | **OpenCode** | エージェント設定で接続（`Cmd+,`） |
 | **GitHub Copilot** | `copilot login` 後、エージェント設定で接続（`Cmd+,`） |
+| **Gemini CLI** | エージェント設定で接続（`Cmd+,`） |
 
 **モデル能力プロファイル** — モデルの階層に応じてプロンプト、シンキングモード、タイムアウトを自動適応。フル階層モデル（Claude）には完全なプロンプト、標準階層（GPT-4o、Gemini、DeepSeek）ではシンキングを無効化、ベーシック階層（MiniMax、Qwen、Llama、Mistral）には最大限の信頼性のために簡略化されたネスト JSON プロンプトを使用。
 

@@ -168,6 +168,7 @@ docker build --target full -t openpencil-full .
 | **Codex CLI** | เชื่อมต่อใน Agent Settings (`Cmd+,`) |
 | **OpenCode** | เชื่อมต่อใน Agent Settings (`Cmd+,`) |
 | **GitHub Copilot** | `copilot login` จากนั้นเชื่อมต่อใน Agent Settings (`Cmd+,`) |
+| **Gemini CLI** | เชื่อมต่อใน Agent Settings (`Cmd+,`) |
 
 **โปรไฟล์ความสามารถของโมเดล** — ปรับ prompt, โหมด thinking และ timeout ตามระดับโมเดลโดยอัตโนมัติ โมเดลระดับเต็ม (Claude) ได้ prompt ครบถ้วน; โมเดลระดับมาตรฐาน (GPT-4o, Gemini, DeepSeek) ปิด thinking; โมเดลระดับพื้นฐาน (MiniMax, Qwen, Llama, Mistral) ได้ prompt แบบ nested-JSON ที่ย่อลงเพื่อความเสถียรสูงสุด
 

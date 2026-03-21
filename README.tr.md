@@ -168,6 +168,7 @@ docker build --target full -t openpencil-full .
 | **Codex CLI** | Ajan Ayarlarından bağlanın (`Cmd+,`) |
 | **OpenCode** | Ajan Ayarlarından bağlanın (`Cmd+,`) |
 | **GitHub Copilot** | `copilot login` ardından Ajan Ayarlarından bağlanın (`Cmd+,`) |
+| **Gemini CLI** | Ajan Ayarlarından bağlanın (`Cmd+,`) |
 
 **Model Yetenek Profilleri** — promptları, düşünme modunu ve zaman aşımlarını model katmanına göre otomatik olarak uyarlar. Tam katman modeller (Claude) eksiksiz promptlar alır; standart katman (GPT-4o, Gemini, DeepSeek) düşünme modunu devre dışı bırakır; temel katman (MiniMax, Qwen, Llama, Mistral) maksimum güvenilirlik için basitleştirilmiş iç içe JSON promptları alır.
 
