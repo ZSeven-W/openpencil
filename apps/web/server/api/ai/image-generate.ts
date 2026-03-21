@@ -39,7 +39,7 @@ export default defineEventHandler(async (event) => {
   }
 
   if (provider === 'gemini') {
-    return await generateGemini({ prompt, model, apiKey, baseUrl })
+    return await generateGemini({ prompt, model, apiKey, baseUrl, width, height })
   }
 
   if (provider === 'replicate') {
@@ -93,10 +93,14 @@ async function generateOpenAI(opts: {
 
   if (!res.ok) {
     const text = await res.text().catch(() => '')
-    throw createError({
-      statusCode: 502,
-      message: `OpenAI returned ${res.status}: ${text.slice(0, 200)}`,
-    })
+    let msg = `OpenAI returned ${res.status}`
+    try {
+      const errJson = JSON.parse(text) as { error?: { message?: string } }
+      if (errJson.error?.message) msg = errJson.error.message
+    } catch {
+      if (text) msg += `: ${text.slice(0, 150)}`
+    }
+    throw createError({ statusCode: 502, message: msg })
   }
 
   const data = (await res.json()) as { data?: { url?: string }[] }
@@ -112,15 +116,33 @@ async function generateOpenAI(opts: {
 // Gemini image generation
 // ---------------------------------------------------------------------------
 
+function mapToGeminiAspectRatio(w?: number, h?: number): string | undefined {
+  if (!w || !h) return undefined
+  const ratio = w / h
+  if (ratio > 1.6) return '16:9'
+  if (ratio > 1.3) return '4:3'
+  if (ratio < 0.625) return '9:16'
+  if (ratio < 0.77) return '3:4'
+  return '1:1'
+}
+
 async function generateGemini(opts: {
   prompt: string
   model: string
   apiKey: string
   baseUrl?: string
+  width?: number
+  height?: number
 }): Promise<{ url: string }> {
-  const { prompt, model, apiKey, baseUrl } = opts
+  const { prompt, model, apiKey, baseUrl, width, height } = opts
   const base = baseUrl ?? 'https://generativelanguage.googleapis.com'
   const endpoint = `${base}/v1beta/models/${model}:generateContent?key=${apiKey}`
+
+  const generationConfig: Record<string, unknown> = { responseModalities: ['TEXT', 'IMAGE'] }
+  const aspectRatio = mapToGeminiAspectRatio(width, height)
+  if (aspectRatio) {
+    generationConfig.imageConfig = { aspectRatio }
+  }
 
   let res: Response
   try {
@@ -129,7 +151,7 @@ async function generateGemini(opts: {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         contents: [{ parts: [{ text: prompt }] }],
-        generationConfig: { responseModalities: ['TEXT', 'IMAGE'] },
+        generationConfig,
       }),
     })
   } catch (err) {
@@ -138,10 +160,14 @@ async function generateGemini(opts: {
 
   if (!res.ok) {
     const text = await res.text().catch(() => '')
-    throw createError({
-      statusCode: 502,
-      message: `Gemini returned ${res.status}: ${text.slice(0, 200)}`,
-    })
+    let msg = `Gemini returned ${res.status}`
+    try {
+      const errJson = JSON.parse(text) as { error?: { message?: string } }
+      if (errJson.error?.message) msg = errJson.error.message
+    } catch {
+      if (text) msg += `: ${text.slice(0, 150)}`
+    }
+    throw createError({ statusCode: 502, message: msg })
   }
 
   const data = (await res.json()) as {
@@ -202,10 +228,14 @@ async function generateReplicate(opts: {
 
   if (!createRes.ok) {
     const text = await createRes.text().catch(() => '')
-    throw createError({
-      statusCode: 502,
-      message: `Replicate returned ${createRes.status}: ${text.slice(0, 200)}`,
-    })
+    let msg = `Replicate returned ${createRes.status}`
+    try {
+      const errJson = JSON.parse(text) as { detail?: string }
+      if (errJson.detail) msg = errJson.detail
+    } catch {
+      if (text) msg += `: ${text.slice(0, 150)}`
+    }
+    throw createError({ statusCode: 502, message: msg })
   }
 
   const prediction = (await createRes.json()) as { id?: string; status?: string }

@@ -14,7 +14,12 @@ PenNode types (the ONLY format you output for designs):
 - ellipse: Props: width, height, fill, stroke, effects
 - text: Props: content (string), fontFamily, fontSize, fontWeight, fontStyle ('normal'|'italic'), fill, width, height, textAlign, textGrowth ('auto'|'fixed-width'|'fixed-width-height'), lineHeight (number, multiplier e.g. 1.2), letterSpacing (number, px), textAlignVertical ('top'|'middle'|'bottom')
 - path: SVG icon/shape. Props: d (SVG path string), width, height, fill, stroke, effects. IMPORTANT: width and height must match the natural aspect ratio of the SVG path — do NOT force 1:1 for non-square icons/logos
-- image: Raster image. Props: width, height, cornerRadius, effects, imageSearchQuery (2-3 English keywords for photo search, e.g. "burger fries", "office workspace"), imagePrompt (optional: longer descriptive phrase for AI image generation, e.g. "delicious gourmet burger with golden fries on a wooden table"). Do NOT include src — images are auto-populated after generation.
+- image: Raster image. Props: width, height, cornerRadius, effects, imageSearchQuery (2-3 English keywords for photo search, e.g. "burger fries", "office workspace"), imagePrompt (optional: longer descriptive phrase for AI image generation). Do NOT include src — images are auto-populated after generation.
+  imagePrompt RULES:
+  - Describe the subject, scene, style, and composition. Example: "a gourmet burger with golden fries on a rustic wooden table, warm natural lighting, top-down view"
+  - NEVER mention background type (transparent, white, plain, isolated, cutout). Images fill a frame area — background removal is unreliable across models.
+  - Match composition to aspect ratio: wide (w>1.3h) → landscape/panoramic, tall (h>1.3w) → portrait/vertical, square → centered subject.
+  - Keep prompts concise (1-2 sentences). Focus on what to show, not technical rendering instructions.
 
 All nodes share: id (string), type, name, role, x, y, rotation, opacity
 

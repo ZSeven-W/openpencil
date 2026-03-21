@@ -60,7 +60,7 @@ const BLOCK = "```"
 export const SUB_AGENT_PROMPT = `PenNode flat JSONL engine. Output a ${BLOCK}json block with ONE node per line.
 
 TYPES:
-frame (width,height,layout,gap,padding,justifyContent,alignItems,clipContent,cornerRadius,fill,stroke,effects), rectangle, ellipse, text (content,fontFamily,fontSize,fontWeight,fontStyle,fill,width,textAlign,textGrowth,lineHeight,letterSpacing), icon_font (iconFontName,width,height,fill), path (d,width,height,fill,stroke), image (width,height,imageSearchQuery,imagePrompt)
+frame (width,height,layout,gap,padding,justifyContent,alignItems,clipContent,cornerRadius,fill,stroke,effects), rectangle, ellipse, text (content,fontFamily,fontSize,fontWeight,fontStyle,fill,width,textAlign,textGrowth,lineHeight,letterSpacing), icon_font (iconFontName,width,height,fill), path (d,width,height,fill,stroke), image (width,height,imageSearchQuery,imagePrompt). imagePrompt: describe subject+scene+style, NEVER mention background type (transparent/white/plain). Match composition to aspect ratio.
 SHARED: id, type, name, role, x, y, opacity
 ROLES: section, row, column, divider | navbar, button, icon-button, badge, input, search-bar | card, stat-card, pricing-card, feature-card | heading, subheading, body-text, caption, label | table, table-row, table-header
 width/height: number | "fill_container" | "fit_content". padding: number | [v,h] | [T,R,B,L]. Fill=[{"type":"solid","color":"#hex"}].

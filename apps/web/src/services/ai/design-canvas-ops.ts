@@ -24,7 +24,7 @@ import type { RoleContext } from './role-resolver'
 // Trigger side-effect registration of all role definitions
 import './role-definitions'
 import { extractJsonFromResponse } from './design-parser'
-import { scanAndFillImages } from './image-search-pipeline'
+import { scanAndFillImages, enqueueImageForSearch, resetImageSearchQueue } from './image-search-pipeline'
 import {
   deepCloneNode,
   mergeNodeForProgressiveUpsert,
@@ -56,6 +56,8 @@ export function resetGenerationRemapping(): void {
   generationRootFrameId = DEFAULT_FRAME_ID
   // Snapshot all existing node IDs so upsert can avoid collisions
   preExistingNodeIds = new Set(useDocumentStore.getState().getFlatNodes().map((n) => n.id))
+  // Reset incremental image search queue for the new generation
+  resetImageSearchQueue()
 }
 
 export function setGenerationContextHint(hint?: string): void {
@@ -300,6 +302,11 @@ export function insertStreamingNode(
     if (insertParent === generationRootFrameId) {
       expandRootFrameHeight()
     }
+  }
+
+  // Immediately enqueue image nodes for background search as they arrive
+  if (node.type === 'image') {
+    enqueueImageForSearch(node)
   }
 }
 
