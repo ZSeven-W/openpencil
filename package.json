@@ -8,23 +8,27 @@
     },
     "private": true,
     "type": "module",
-    "main": "electron-dist/main.cjs",
+    "workspaces": [
+        "packages/*",
+        "apps/*"
+    ],
+    "main": "out/desktop/main.cjs",
     "bin": {
-        "openpencil-mcp": "dist/mcp-server.cjs"
+        "openpencil-mcp": "out/mcp-server.cjs"
     },
     "scripts": {
-        "dev": "bun --bun vite dev --port 3000",
-        "build": "bun --bun vite build",
-        "preview": "bun --bun vite preview",
-        "test": "bun --bun vitest run --passWithNoTests",
-        "mcp:compile": "esbuild src/mcp/server.ts --bundle --platform=node --target=node20 --outfile=dist/mcp-server.cjs --format=cjs --sourcemap --alias:@=src --define:import.meta.env={}",
-        "mcp:dev": "bun run src/mcp/server.ts",
-        "electron:dev": "bun run scripts/electron-dev.ts",
-        "electron:compile": "esbuild electron/main.ts electron/preload.ts --bundle --platform=node --target=node20 --outdir=electron-dist --external:electron --format=cjs --out-extension:.js=.cjs --sourcemap",
-        "electron:build": "BUILD_TARGET=electron bun --bun run build && bun run electron:compile && bun run mcp:compile && npx electron-builder --config electron-builder.yml",
-        "electron:build:mac-arm64": "BUILD_TARGET=electron bun --bun run build && bun run electron:compile && bun run mcp:compile && npx electron-builder --config electron-builder.yml --mac --arm64 && if [ -f dist-electron/latest-mac.yml ]; then mv dist-electron/latest-mac.yml dist-electron/latest-mac-arm64.yml; fi",
-        "electron:build:mac-x64": "BUILD_TARGET=electron bun --bun run build && bun run electron:compile && bun run mcp:compile && npx electron-builder --config electron-builder.yml --mac --x64",
-        "electron:build:mac-universal": "BUILD_TARGET=electron bun --bun run build && bun run electron:compile && bun run mcp:compile && npx electron-builder --config electron-builder.yml --mac --arm64 --x64",
+        "dev": "cd apps/web && bun --bun vite dev --port 3000",
+        "build": "cd apps/web && bun --bun vite build",
+        "preview": "cd apps/web && bun --bun vite preview",
+        "test": "cd apps/web && bun --bun vitest run --passWithNoTests",
+        "mcp:compile": "cd apps/web && esbuild src/mcp/server.ts --bundle --platform=node --target=node20 --outfile=../../out/mcp-server.cjs --format=cjs --sourcemap --alias:@=src --define:import.meta.env={} --external:canvas --external:paper",
+        "mcp:dev": "bun run apps/web/src/mcp/server.ts",
+        "electron:dev": "bun run apps/desktop/dev.ts",
+        "electron:compile": "esbuild apps/desktop/main.ts apps/desktop/preload.ts --bundle --platform=node --target=node20 --outdir=out/desktop --external:electron --format=cjs --out-extension:.js=.cjs --sourcemap",
+        "electron:build": "BUILD_TARGET=electron bun --bun run build && bun run electron:compile && bun run mcp:compile && npx electron-builder --config apps/desktop/electron-builder.yml",
+        "electron:build:mac-arm64": "BUILD_TARGET=electron bun --bun run build && bun run electron:compile && bun run mcp:compile && npx electron-builder --config apps/desktop/electron-builder.yml --mac --arm64 && if [ -f out/release/latest-mac.yml ]; then mv out/release/latest-mac.yml out/release/latest-mac-arm64.yml; fi",
+        "electron:build:mac-x64": "BUILD_TARGET=electron bun --bun run build && bun run electron:compile && bun run mcp:compile && npx electron-builder --config apps/desktop/electron-builder.yml --mac --x64",
+        "electron:build:mac-universal": "BUILD_TARGET=electron bun --bun run build && bun run electron:compile && bun run mcp:compile && npx electron-builder --config apps/desktop/electron-builder.yml --mac --arm64 --x64",
         "electron:build:mac-both": "bun run electron:build:mac-arm64 && bun run electron:build:mac-x64"
     },
     "dependencies": {

@@ -82,6 +82,71 @@
         "vitest": "^3.0.5",
       },
     },
+    "apps/desktop": {
+      "name": "@zseven-w/desktop",
+      "version": "0.4.4",
+    },
+    "apps/web": {
+      "name": "@zseven-w/web",
+      "version": "0.4.4",
+    },
+    "packages/pen-codegen": {
+      "name": "@zseven-w/pen-codegen",
+      "version": "0.0.1",
+      "dependencies": {
+        "@zseven-w/pen-core": "workspace:*",
+        "@zseven-w/pen-types": "workspace:*",
+      },
+      "devDependencies": {
+        "typescript": "^5.7.2",
+      },
+    },
+    "packages/pen-core": {
+      "name": "@zseven-w/pen-core",
+      "version": "0.0.1",
+      "dependencies": {
+        "@zseven-w/pen-types": "workspace:*",
+        "nanoid": "^5.1.6",
+        "paper": "^0.12.18",
+      },
+      "devDependencies": {
+        "typescript": "^5.7.2",
+      },
+    },
+    "packages/pen-figma": {
+      "name": "@zseven-w/pen-figma",
+      "version": "0.0.1",
+      "dependencies": {
+        "@zseven-w/pen-types": "workspace:*",
+        "fzstd": "^0.1.1",
+        "kiwi-schema": "^0.5.0",
+        "uzip": "^0.20201231.0",
+      },
+      "devDependencies": {
+        "@types/uzip": "^0.20201231.2",
+        "typescript": "^5.7.2",
+      },
+    },
+    "packages/pen-sdk": {
+      "name": "@zseven-w/pen-sdk",
+      "version": "0.0.1",
+      "dependencies": {
+        "@zseven-w/pen-codegen": "workspace:*",
+        "@zseven-w/pen-core": "workspace:*",
+        "@zseven-w/pen-figma": "workspace:*",
+        "@zseven-w/pen-types": "workspace:*",
+      },
+      "devDependencies": {
+        "typescript": "^5.7.2",
+      },
+    },
+    "packages/pen-types": {
+      "name": "@zseven-w/pen-types",
+      "version": "0.0.1",
+      "devDependencies": {
+        "typescript": "^5.7.2",
+      },
+    },
   },
   "packages": {
     "7zip-bin": ["7zip-bin@5.2.0", "https://registry.npmmirror.com/7zip-bin/-/7zip-bin-5.2.0.tgz", {}, "sha512-ukTPVhqG4jNzMro2qA9HSCSSVJN3aN7tlb+hfqYCt3ER0yWroeA2VR38MNrOHLQ/cVj+DaIMad0kFCtWWowh/A=="],
@@ -683,6 +748,20 @@
     "@webgpu/types": ["@webgpu/types@0.1.21", "https://registry.npmmirror.com/@webgpu/types/-/types-0.1.21.tgz", {}, "sha512-pUrWq3V5PiSGFLeLxoGqReTZmiiXwY3jRkIG5sLLKjyqNxrwm/04b4nw7LSmGWJcKk59XOM/YRTUwOzo4MMlow=="],
 
     "@xmldom/xmldom": ["@xmldom/xmldom@0.8.11", "https://registry.npmmirror.com/@xmldom/xmldom/-/xmldom-0.8.11.tgz", {}, "sha512-cQzWCtO6C8TQiYl1ruKNn2U6Ao4o4WBBcbL61yJl84x+j5sOWWFU9X7DpND8XZG3daDppSsigMdfAIl2upQBRw=="],
+
+    "@zseven-w/desktop": ["@zseven-w/desktop@workspace:apps/desktop"],
+
+    "@zseven-w/pen-codegen": ["@zseven-w/pen-codegen@workspace:packages/pen-codegen"],
+
+    "@zseven-w/pen-core": ["@zseven-w/pen-core@workspace:packages/pen-core"],
+
+    "@zseven-w/pen-figma": ["@zseven-w/pen-figma@workspace:packages/pen-figma"],
+
+    "@zseven-w/pen-sdk": ["@zseven-w/pen-sdk@workspace:packages/pen-sdk"],
+
+    "@zseven-w/pen-types": ["@zseven-w/pen-types@workspace:packages/pen-types"],
+
+    "@zseven-w/web": ["@zseven-w/web@workspace:apps/web"],
 
     "abbrev": ["abbrev@3.0.1", "https://registry.npmmirror.com/abbrev/-/abbrev-3.0.1.tgz", {}, "sha512-AO2ac6pjRB3SJmGJo+v5/aK6Omggp6fsLrs6wN9bd35ulu4cCwaAU9+7ZhXjeqHVkaHThLuzH0nZr0YpCDhygg=="],
 
