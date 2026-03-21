@@ -39,7 +39,7 @@ function buildExecCmd(binPath: string, args: string): string {
 }
 
 interface ConnectBody {
-  agent: 'claude-code' | 'codex-cli' | 'opencode' | 'copilot'
+  agent: 'claude-code' | 'codex-cli' | 'opencode' | 'copilot' | 'gemini-cli'
 }
 
 interface ConnectResult {
@@ -80,6 +80,10 @@ export default defineEventHandler(async (event) => {
 
   if (body.agent === 'copilot') {
     return connectCopilot()
+  }
+
+  if (body.agent === 'gemini-cli') {
+    return connectGeminiCli()
   }
 
   return { connected: false, models: [], error: `Unknown agent: ${body.agent}` } satisfies ConnectResult
@@ -661,6 +665,177 @@ function friendlyOpenCodeError(raw: string): string {
   }
   if (/not found|ENOENT/i.test(raw)) {
     return 'OpenCode CLI not found. Please install it first.'
+  }
+  if (/timed?\s*out/i.test(raw)) {
+    return 'Connection timed out. Please try again.'
+  }
+  return raw
+}
+
+/** Fallback model list when dynamic fetch fails */
+const FALLBACK_GEMINI_MODELS: GroupedModel[] = [
+  { value: 'gemini-3-pro-preview', displayName: 'Gemini 3 Pro', description: 'Most capable', provider: 'gemini' },
+  { value: 'gemini-3-flash-preview', displayName: 'Gemini 3 Flash', description: 'Fast + capable', provider: 'gemini' },
+  { value: 'gemini-2.5-pro', displayName: 'Gemini 2.5 Pro', description: 'Thinking model', provider: 'gemini' },
+  { value: 'gemini-2.5-flash', displayName: 'Gemini 2.5 Flash', description: 'Fast + thinking', provider: 'gemini' },
+  { value: 'gemini-2.0-flash', displayName: 'Gemini 2.0 Flash', description: 'Fast model', provider: 'gemini' },
+]
+
+/** Fetch available models from Gemini API using local auth credentials */
+async function fetchGeminiModels(): Promise<GroupedModel[]> {
+  const { readFile } = await import('node:fs/promises')
+  const { homedir } = await import('node:os')
+  const { join } = await import('node:path')
+
+  // Build auth header — try API key first, then OAuth token
+  let authUrl: (base: string) => string
+  let headers: Record<string, string> = {}
+
+  const envKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY
+  if (envKey) {
+    authUrl = (base) => `${base}?key=${envKey}`
+  } else {
+    // Read OAuth token
+    const oauthPath = join(homedir(), '.gemini', 'oauth_creds.json')
+    const raw = await readFile(oauthPath, 'utf-8')
+    const creds = JSON.parse(raw) as { access_token?: string; expiry_date?: number }
+    if (!creds.access_token) throw new Error('No access token')
+    if (creds.expiry_date && Date.now() > creds.expiry_date - 60_000) throw new Error('Token expired')
+    authUrl = (base) => base
+    headers = { Authorization: `Bearer ${creds.access_token}` }
+  }
+
+  const res = await fetch(authUrl('https://generativelanguage.googleapis.com/v1beta/models'), { headers })
+  if (!res.ok) throw new Error(`API ${res.status}`)
+
+  const data = await res.json() as {
+    models?: Array<{
+      name?: string
+      displayName?: string
+      description?: string
+      supportedGenerationMethods?: string[]
+    }>
+  }
+
+  const models: GroupedModel[] = []
+  const seen = new Set<string>()
+  for (const m of data.models ?? []) {
+    // Only include models that support generateContent (text generation)
+    if (!m.supportedGenerationMethods?.includes('generateContent')) continue
+    const id = m.name?.replace('models/', '') ?? ''
+    if (!id || seen.has(id)) continue
+    // Skip embedding, AQA, and legacy models
+    if (/embed|aqa|^chat-bison|^text-bison|^gemini-1\.0/i.test(id)) continue
+    seen.add(id)
+    models.push({
+      value: id,
+      displayName: m.displayName ?? id,
+      description: m.description?.slice(0, 60) ?? '',
+      provider: 'gemini' as const,
+    })
+  }
+
+  // Sort: gemini-3 first, then 2.5, then others
+  models.sort((a, b) => {
+    const order = (v: string) => {
+      if (v.includes('gemini-3')) return 0
+      if (v.includes('gemini-2.5-pro')) return 1
+      if (v.includes('gemini-2.5-flash')) return 2
+      if (v.includes('gemini-2.0')) return 3
+      return 4
+    }
+    return order(a.value) - order(b.value)
+  })
+
+  return models
+}
+
+/** Connect to Gemini CLI and return available models. */
+async function connectGeminiCli(): Promise<ConnectResult> {
+  serverLog.info('[connect-agent] connecting to Gemini CLI...')
+  try {
+    const { resolveGeminiCli } = await import('../../utils/resolve-gemini-cli')
+    const binPath = resolveGeminiCli()
+    serverLog.info(`[connect-agent] resolved gemini path: ${binPath ?? 'NOT FOUND'}`)
+    if (!binPath) {
+      return { connected: false, models: [], notInstalled: true, error: 'Gemini CLI not found' }
+    }
+
+    // Verify binary responds
+    const { execSync } = await import('node:child_process')
+    const versionCmd = buildExecCmd(binPath, '--version')
+    try {
+      const ver = execSync(`${versionCmd} 2>&1`, { encoding: 'utf-8', timeout: 10000 }).trim()
+      serverLog.info(`[connect-agent] gemini version: ${ver}`)
+    } catch (err) {
+      serverLog.error(`[connect-agent] gemini --version failed: ${err instanceof Error ? err.message : err}`)
+      return { connected: false, models: [], error: 'Gemini CLI not responding' }
+    }
+
+    // Dynamically fetch models, fallback to hardcoded list
+    let models: GroupedModel[]
+    try {
+      models = await fetchGeminiModels()
+      serverLog.info(`[connect-agent] gemini: fetched ${models.length} models from API`)
+    } catch (err) {
+      serverLog.info(`[connect-agent] gemini: model fetch failed (${err instanceof Error ? err.message : err}), using fallback`)
+      models = FALLBACK_GEMINI_MODELS
+    }
+
+    const geminiInfo = await buildGeminiConnectionInfo()
+    const warning = models.length === 0 ? 'No models found. Try running "gemini" once to authenticate.' : undefined
+    if (models.length === 0) models = FALLBACK_GEMINI_MODELS
+    serverLog.info(`[connect-agent] gemini connected, ${models.length} models`)
+    return { connected: true, models, warning, ...geminiInfo }
+  } catch (error) {
+    const raw = error instanceof Error ? error.message : 'Failed to connect'
+    serverLog.error(`[connect-agent] gemini connection error: ${raw}`)
+    return { connected: false, models: [], error: friendlyGeminiError(raw) }
+  }
+}
+
+/** Build Gemini CLI connection info from local config files */
+async function buildGeminiConnectionInfo(): Promise<{ connectionInfo: string; hintPath?: string }> {
+  const { readFile } = await import('node:fs/promises')
+  const { homedir } = await import('node:os')
+  const { join } = await import('node:path')
+  const hp = configPath('~/.gemini/settings.json', '%USERPROFILE%\\.gemini\\settings.json')
+
+  // Check env for API key
+  const envKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY
+  if (envKey) {
+    const masked = envKey.length > 12 ? `${envKey.slice(0, 8)}...` : '***'
+    return { connectionInfo: `Connected via API key (${masked})`, hintPath: hp }
+  }
+
+  // Check OAuth creds (Gemini CLI login)
+  try {
+    const oauthPath = join(homedir(), '.gemini', 'oauth_creds.json')
+    await readFile(oauthPath, 'utf-8') // Check existence
+
+    // Try to get account email
+    try {
+      const accountsPath = join(homedir(), '.gemini', 'google_accounts.json')
+      const accountsRaw = await readFile(accountsPath, 'utf-8')
+      const accounts = JSON.parse(accountsRaw) as { active?: string }
+      if (accounts.active) {
+        return { connectionInfo: `Connected via Google (${accounts.active})`, hintPath: hp }
+      }
+    } catch { /* no accounts file */ }
+
+    return { connectionInfo: 'Connected via Google OAuth', hintPath: hp }
+  } catch { /* no OAuth creds */ }
+
+  return { connectionInfo: 'Connected via Gemini CLI', hintPath: hp }
+}
+
+/** Map Gemini CLI errors to user-friendly messages */
+function friendlyGeminiError(raw: string): string {
+  if (/not found|ENOENT/i.test(raw)) {
+    return 'Gemini CLI not found. Install it with: npm install -g @anthropic-ai/gemini-cli'
+  }
+  if (/not authenticated|authenticate|auth|login/i.test(raw)) {
+    return 'Not authenticated. Run "gemini" in your terminal first to set up authentication.'
   }
   if (/timed?\s*out/i.test(raw)) {
     return 'Connection timed out. Please try again.'

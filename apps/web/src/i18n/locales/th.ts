@@ -370,6 +370,8 @@ const th: TranslationKeys = {
   'agents.opencodeDesc': '75+ ผู้ให้บริการ LLM',
   'agents.copilot': 'GitHub Copilot',
   'agents.copilotDesc': 'โมเดล GitHub Copilot',
+  'agents.geminiCli': 'Gemini CLI',
+  'agents.geminiDesc': 'โมเดล Google Gemini',
   'agents.mcpServer': 'เซิร์ฟเวอร์ MCP',
   'agents.mcpServerStart': 'เริ่ม',
   'agents.mcpServerStop': 'หยุด',

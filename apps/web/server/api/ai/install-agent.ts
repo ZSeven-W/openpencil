@@ -2,7 +2,7 @@ import { defineEventHandler, readBody, setResponseHeaders } from 'h3'
 import { execSync } from 'node:child_process'
 
 interface InstallBody {
-  agent: 'claude-code' | 'codex-cli' | 'opencode' | 'copilot'
+  agent: 'claude-code' | 'codex-cli' | 'opencode' | 'copilot' | 'gemini-cli'
 }
 
 interface InstallResult {
@@ -17,6 +17,7 @@ const BINARY_MAP: Record<string, string> = {
   'codex-cli': 'codex',
   'opencode': 'opencode',
   'copilot': 'copilot',
+  'gemini-cli': 'gemini',
 }
 
 function checkBinary(binary: string): boolean {
@@ -64,6 +65,11 @@ function getInstallInfo(agent: string): { command: string; docsUrl: string } {
             ? 'winget install GitHub.CopilotCLI'
             : 'See documentation',
         docsUrl: 'https://docs.github.com/copilot/how-tos/copilot-cli',
+      }
+    case 'gemini-cli':
+      return {
+        command: 'npm install -g @anthropic-ai/gemini-cli',
+        docsUrl: 'https://github.com/anthropics/gemini-cli',
       }
     default:
       return { command: '', docsUrl: '' }
@@ -117,6 +123,8 @@ async function tryAutoInstall(agent: string, binary: string): Promise<InstallRes
       return tryOpenCodeInstall(binary)
     case 'copilot':
       return tryCopilotInstall(binary)
+    case 'gemini-cli':
+      return tryNpmInstall('@anthropic-ai/gemini-cli', binary)
     default:
       return { success: false, error: 'Unknown agent' }
   }

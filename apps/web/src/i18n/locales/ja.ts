@@ -373,6 +373,8 @@ const ja: TranslationKeys = {
   'agents.opencodeDesc': '75 以上の LLM プロバイダー',
   'agents.copilot': 'GitHub Copilot',
   'agents.copilotDesc': 'GitHub Copilot モデル',
+  'agents.geminiCli': 'Gemini CLI',
+  'agents.geminiDesc': 'Google Gemini モデル',
   'agents.mcpServer': 'MCP サーバー',
   'agents.mcpServerStart': '開始',
   'agents.mcpServerStop': '停止',

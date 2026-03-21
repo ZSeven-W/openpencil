@@ -16,6 +16,7 @@ import ClaudeLogo from '@/components/icons/claude-logo'
 import OpenAILogo from '@/components/icons/openai-logo'
 import OpenCodeLogo from '@/components/icons/opencode-logo'
 import CopilotLogo from '@/components/icons/copilot-logo'
+import GeminiLogo from '@/components/icons/gemini-logo'
 import ChatMessage from './chat-message'
 import { useChatHandlers } from './ai-chat-handlers'
 import { FixedChecklist } from './ai-chat-checklist'
@@ -25,6 +26,7 @@ const PROVIDER_ICON: Record<AIProviderType, typeof ClaudeLogo> = {
   openai: OpenAILogo,
   opencode: OpenCodeLogo,
   copilot: CopilotLogo,
+  gemini: GeminiLogo,
 }
 
 const QUICK_ACTIONS = [
@@ -197,6 +199,7 @@ export default function AIChatPanel() {
         openai: 'OpenAI',
         opencode: 'OpenCode',
         copilot: 'GitHub Copilot',
+        gemini: 'Google Gemini',
       }
       const groups = connectedProviders.map((p) => ({
         provider: p,

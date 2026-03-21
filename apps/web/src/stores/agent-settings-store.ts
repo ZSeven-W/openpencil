@@ -82,6 +82,13 @@ const DEFAULT_PROVIDERS: Record<AIProviderType, AIProviderConfig> = {
     connectionMethod: null,
     models: [],
   },
+  gemini: {
+    type: 'gemini',
+    displayName: 'Gemini CLI',
+    isConnected: false,
+    connectionMethod: null,
+    models: [],
+  },
 }
 
 const DEFAULT_MCP_INTEGRATIONS: MCPCliIntegration[] = [

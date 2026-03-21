@@ -17,6 +17,7 @@ import ClaudeLogo from '@/components/icons/claude-logo'
 import OpenAILogo from '@/components/icons/openai-logo'
 import OpenCodeLogo from '@/components/icons/opencode-logo'
 import CopilotLogo from '@/components/icons/copilot-logo'
+import GeminiLogo from '@/components/icons/gemini-logo'
 import FigmaLogo from '@/components/icons/figma-logo'
 import LanguageSelector from '@/components/shared/language-selector'
 import { cn } from '@/lib/utils'
@@ -64,9 +65,10 @@ const PROVIDER_ICONS: Record<AIProviderType, ComponentType<SVGProps<SVGSVGElemen
   openai: OpenAILogo,
   opencode: OpenCodeLogo,
   copilot: CopilotLogo,
+  gemini: GeminiLogo,
 }
 
-const PROVIDER_ORDER: AIProviderType[] = ['anthropic', 'openai', 'opencode', 'copilot']
+const PROVIDER_ORDER: AIProviderType[] = ['anthropic', 'openai', 'opencode', 'copilot', 'gemini']
 
 function AgentStatusButton() {
   const { t } = useTranslation()

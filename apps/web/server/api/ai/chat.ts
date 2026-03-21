@@ -31,7 +31,7 @@ interface ChatBody {
   system: string
   messages: Array<{ role: 'user' | 'assistant'; content: string; attachments?: ChatAttachmentWire[] }>
   model?: string
-  provider?: 'anthropic' | 'openai' | 'opencode' | 'copilot'
+  provider?: 'anthropic' | 'openai' | 'opencode' | 'copilot' | 'gemini'
   thinkingMode?: 'adaptive' | 'disabled' | 'enabled'
   thinkingBudgetTokens?: number
   effort?: 'low' | 'medium' | 'high' | 'max'
@@ -93,7 +93,7 @@ export default defineEventHandler(async (event) => {
     setResponseHeaders(event, { 'Content-Type': 'application/json' })
     return { error: 'Missing model. Model fallback is disabled.' }
   }
-  if (body.provider !== 'anthropic' && body.provider !== 'openai' && body.provider !== 'opencode' && body.provider !== 'copilot') {
+  if (body.provider !== 'anthropic' && body.provider !== 'openai' && body.provider !== 'opencode' && body.provider !== 'copilot' && body.provider !== 'gemini') {
     setResponseHeaders(event, { 'Content-Type': 'application/json' })
     return { error: 'Missing or unsupported provider. Provider fallback is disabled.' }
   }
@@ -107,6 +107,7 @@ export default defineEventHandler(async (event) => {
   if (body.provider === 'anthropic') return streamViaAgentSDK(body, body.model)
   if (body.provider === 'opencode') return streamViaOpenCode(body, body.model)
   if (body.provider === 'copilot') return streamViaCopilot(body, body.model)
+  if (body.provider === 'gemini') return streamViaGemini(body, body.model)
   return streamViaCodex(body, body.model)
 })
 
@@ -718,6 +719,61 @@ function mapCopilotReasoningEffort(
   if (!effort) return undefined
   if (effort === 'max') return 'xhigh'
   return effort
+}
+
+/** Stream via Gemini CLI (`gemini -p -o stream-json`) — CLI handles its own auth */
+function streamViaGemini(body: ChatBody, model?: string) {
+  const stream = new ReadableStream({
+    async start(controller) {
+      const encoder = new TextEncoder()
+      const pingTimer = setInterval(() => {
+        try {
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: 'ping', content: '' })}\n\n`))
+        } catch { /* stream already closed */ }
+      }, KEEPALIVE_INTERVAL_MS)
+
+      try {
+        const { streamGeminiExec } = await import('../../utils/gemini-client')
+
+        // Build prompt from messages
+        const lastUserMsg = [...body.messages].reverse().find((m) => m.role === 'user')
+        const prompt = lastUserMsg?.content ?? ''
+
+        const { stream: geminiStream } = streamGeminiExec(prompt, {
+          model,
+          systemPrompt: body.system,
+        })
+
+        for await (const event of geminiStream) {
+          clearInterval(pingTimer)
+          if (event.type === 'text') {
+            const data = JSON.stringify({ type: 'text', content: event.content })
+            try {
+              controller.enqueue(encoder.encode(`data: ${data}\n\n`))
+            } catch { /* stream closed */ }
+          } else if (event.type === 'error') {
+            const data = JSON.stringify({ type: 'error', content: event.content })
+            controller.enqueue(encoder.encode(`data: ${data}\n\n`))
+          }
+          // 'done' is handled after loop
+        }
+
+        controller.enqueue(
+          encoder.encode(`data: ${JSON.stringify({ type: 'done', content: '' })}\n\n`),
+        )
+      } catch (error) {
+        const content = error instanceof Error ? error.message : 'Unknown error'
+        controller.enqueue(
+          encoder.encode(`data: ${JSON.stringify({ type: 'error', content })}\n\n`),
+        )
+      } finally {
+        clearInterval(pingTimer)
+        controller.close()
+      }
+    },
+  })
+
+  return new Response(stream)
 }
 
 /** Stream via GitHub Copilot SDK (@github/copilot-sdk) */

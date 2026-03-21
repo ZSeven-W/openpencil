@@ -15,11 +15,12 @@ import ClaudeLogo from '@/components/icons/claude-logo'
 import OpenAILogo from '@/components/icons/openai-logo'
 import OpenCodeLogo from '@/components/icons/opencode-logo'
 import CopilotLogo from '@/components/icons/copilot-logo'
+import GeminiLogo from '@/components/icons/gemini-logo'
 
 /** Provider display metadata — labels/descriptions are i18n keys resolved at render time */
 const PROVIDER_META: Record<
   AIProviderType,
-  { labelKey: string; descriptionKey: string; agent: 'claude-code' | 'codex-cli' | 'opencode' | 'copilot'; Icon: ComponentType<SVGProps<SVGSVGElement>> }
+  { labelKey: string; descriptionKey: string; agent: 'claude-code' | 'codex-cli' | 'opencode' | 'copilot' | 'gemini-cli'; Icon: ComponentType<SVGProps<SVGSVGElement>> }
 > = {
   anthropic: {
     labelKey: 'agents.claudeCode',
@@ -45,12 +46,18 @@ const PROVIDER_META: Record<
     agent: 'copilot',
     Icon: CopilotLogo,
   },
+  gemini: {
+    labelKey: 'agents.geminiCli',
+    descriptionKey: 'agents.geminiDesc',
+    agent: 'gemini-cli',
+    Icon: GeminiLogo,
+  },
 }
 
 type SettingsTab = 'agents' | 'mcp' | 'images' | 'system'
 
 async function connectAgent(
-  agent: 'claude-code' | 'codex-cli' | 'opencode' | 'copilot',
+  agent: 'claude-code' | 'codex-cli' | 'opencode' | 'copilot' | 'gemini-cli',
 ): Promise<{ connected: boolean; models: GroupedModel[]; error?: string; warning?: string; notInstalled?: boolean; connectionInfo?: string; hintPath?: string }> {
   try {
     const res = await fetch('/api/ai/connect-agent', {
@@ -66,7 +73,7 @@ async function connectAgent(
 }
 
 async function installAgent(
-  agent: 'claude-code' | 'codex-cli' | 'opencode' | 'copilot',
+  agent: 'claude-code' | 'codex-cli' | 'opencode' | 'copilot' | 'gemini-cli',
 ): Promise<{ success: boolean; error?: string; command?: string; docsUrl?: string }> {
   try {
     const res = await fetch('/api/ai/install-agent', {
@@ -328,6 +335,7 @@ function AgentsPage() {
         <ProviderCard type="openai" />
         <ProviderCard type="opencode" />
         <ProviderCard type="copilot" />
+        <ProviderCard type="gemini" />
       </div>
     </div>
   )

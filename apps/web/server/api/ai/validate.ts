@@ -15,7 +15,7 @@ interface ValidateBody {
   message: string
   imageBase64: string
   model?: string
-  provider?: 'anthropic' | 'openai' | 'opencode'
+  provider?: 'anthropic' | 'openai' | 'opencode' | 'gemini'
 }
 
 /**
@@ -48,6 +48,9 @@ export default defineEventHandler(async (event) => {
     }
     if (body.provider === 'opencode') {
       return await validateViaOpenCode(body, body.model)
+    }
+    if (body.provider === 'gemini') {
+      return await validateViaGemini(body, body.model)
     }
     return { error: 'Missing or unsupported provider. Provider fallback is disabled.' }
   } catch (error) {
@@ -239,4 +242,23 @@ async function validateViaOpenCode(
     const { releaseOpencodeServer } = await import('../../utils/opencode-client')
     releaseOpencodeServer(ocServer)
   }
+}
+
+/** Validate via Gemini CLI — saves screenshot to temp file, asks CLI to read it */
+async function validateViaGemini(
+  body: ValidateBody,
+  model?: string,
+): Promise<{ text: string; skipped?: boolean; error?: string }> {
+  return await withTempImageFile(body.imageBase64, async (tempPath) => {
+    const { runGeminiExec } = await import('../../utils/gemini-client')
+    const prompt = `Read the image file at "${tempPath}". This is a PNG screenshot of a UI design.\n\n${body.message}\n\nOutput ONLY the JSON object, no markdown fences, no explanation.`
+    const result = await runGeminiExec(prompt, {
+      model,
+      systemPrompt: body.system,
+    })
+    if (result.error) {
+      return { text: '', error: result.error }
+    }
+    return { text: result.text ?? '' }
+  })
 }

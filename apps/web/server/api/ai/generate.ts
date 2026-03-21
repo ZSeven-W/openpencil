@@ -12,7 +12,7 @@ interface GenerateBody {
   system: string
   message: string
   model?: string
-  provider?: 'anthropic' | 'openai' | 'opencode'
+  provider?: 'anthropic' | 'openai' | 'opencode' | 'gemini'
   thinkingMode?: 'adaptive' | 'disabled' | 'enabled'
   thinkingBudgetTokens?: number
   effort?: 'low' | 'medium' | 'high' | 'max'
@@ -47,6 +47,9 @@ export default defineEventHandler(async (event) => {
   }
   if (body.provider === 'openai') {
     return generateViaCodex(body, body.model)
+  }
+  if (body.provider === 'gemini') {
+    return generateViaGemini(body, body.model)
   }
   return { error: 'Missing or unsupported provider. Provider fallback is disabled.' }
 })
@@ -260,4 +263,16 @@ async function generateViaOpenCode(body: GenerateBody, model?: string): Promise<
     const { releaseOpencodeServer } = await import('../../utils/opencode-client')
     releaseOpencodeServer(ocServer)
   }
+}
+
+/** Generate via Gemini CLI (`gemini -p -o json`) — CLI handles its own auth */
+async function generateViaGemini(body: GenerateBody, model?: string): Promise<{ text?: string; error?: string }> {
+  const { runGeminiExec } = await import('../../utils/gemini-client')
+  return runGeminiExec(body.message, {
+    model,
+    systemPrompt: body.system,
+    thinkingMode: body.thinkingMode,
+    thinkingBudgetTokens: body.thinkingBudgetTokens,
+    effort: body.effort,
+  })
 }

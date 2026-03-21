@@ -370,6 +370,8 @@ const vi: TranslationKeys = {
   'agents.opencodeDesc': '75+ nhà cung cấp LLM',
   'agents.copilot': 'GitHub Copilot',
   'agents.copilotDesc': 'Các mô hình GitHub Copilot',
+  'agents.geminiCli': 'Gemini CLI',
+  'agents.geminiDesc': 'Các mô hình Google Gemini',
   'agents.mcpServer': 'Máy chủ MCP',
   'agents.mcpServerStart': 'Khởi động',
   'agents.mcpServerStop': 'Dừng',

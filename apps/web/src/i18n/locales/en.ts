@@ -368,6 +368,8 @@ const en = {
   'agents.opencodeDesc': '75+ LLM providers',
   'agents.copilot': 'GitHub Copilot',
   'agents.copilotDesc': 'GitHub Copilot models',
+  'agents.geminiCli': 'Gemini CLI',
+  'agents.geminiDesc': 'Google Gemini models',
   'agents.mcpServer': 'MCP Server',
   'agents.mcpServerStart': 'Start',
   'agents.mcpServerStop': 'Stop',

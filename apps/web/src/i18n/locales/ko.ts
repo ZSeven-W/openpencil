@@ -370,6 +370,8 @@ const ko: TranslationKeys = {
   'agents.opencodeDesc': '75개 이상의 LLM 제공자',
   'agents.copilot': 'GitHub Copilot',
   'agents.copilotDesc': 'GitHub Copilot 모델',
+  'agents.geminiCli': 'Gemini CLI',
+  'agents.geminiDesc': 'Google Gemini 모델',
   'agents.mcpServer': 'MCP 서버',
   'agents.mcpServerStart': '시작',
   'agents.mcpServerStop': '정지',

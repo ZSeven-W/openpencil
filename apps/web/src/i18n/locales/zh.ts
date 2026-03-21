@@ -362,6 +362,8 @@ const zh: TranslationKeys = {
   'agents.opencodeDesc': '75+ LLM 提供商',
   'agents.copilot': 'GitHub Copilot',
   'agents.copilotDesc': 'GitHub Copilot 模型',
+  'agents.geminiCli': 'Gemini CLI',
+  'agents.geminiDesc': 'Google Gemini 模型',
   'agents.mcpServer': 'MCP 服务器',
   'agents.mcpServerStart': '启动',
   'agents.mcpServerStop': '停止',
