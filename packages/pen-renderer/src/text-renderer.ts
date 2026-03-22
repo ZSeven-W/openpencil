@@ -14,14 +14,22 @@ export class SkiaTextRenderer {
   private ck: CanvasKit
 
   // Text rasterization cache (Canvas 2D -> CanvasKit Image)
+  // FIFO eviction via Map insertion order; bytes tracked separately against TEXT_CACHE_BYTE_LIMIT.
   private textCache = new Map<string, SkImage | null>()
-  private textCacheOrder: string[] = []
-  private static TEXT_CACHE_MAX = 300
+  private textCacheBytes = 0
+  // 256 MB — each bitmap entry is ~cw*ch*4 bytes (RGBA pixels)
+  private static TEXT_CACHE_BYTE_LIMIT = 256 * 1024 * 1024
 
   // Paragraph cache for vector text (keyed by content+style)
+  // FIFO eviction via Map insertion order; bytes estimated from content length against PARA_CACHE_BYTE_LIMIT.
   private paraCache = new Map<string, Paragraph | null>()
-  private paraCacheOrder: string[] = []
-  private static PARA_CACHE_MAX = 200
+  private paraCacheBytes = 0
+  // 64 MB — each entry is estimated as content.length*64+4096 bytes (WASM heap approximation)
+  private static PARA_CACHE_BYTE_LIMIT = 64 * 1024 * 1024
+
+  private static estimateParaBytes(content: string): number {
+    return content.length * 64 + 4096
+  }
 
   // Current viewport zoom (set by engine before each render frame)
   zoom = 1
@@ -42,7 +50,7 @@ export class SkiaTextRenderer {
       img?.delete()
     }
     this.textCache.clear()
-    this.textCacheOrder = []
+    this.textCacheBytes = 0
   }
 
   clearParaCache() {
@@ -50,23 +58,26 @@ export class SkiaTextRenderer {
       p?.delete()
     }
     this.paraCache.clear()
-    this.paraCacheOrder = []
+    this.paraCacheBytes = 0
   }
 
-  private evictParaCache() {
-    while (this.paraCacheOrder.length > SkiaTextRenderer.PARA_CACHE_MAX) {
-      const key = this.paraCacheOrder.shift()!
-      const p = this.paraCache.get(key)
-      p?.delete()
+  // Evict oldest entries (Map head = first inserted) until there is room for `incoming` bytes.
+  private evictParaCache(incoming: number) {
+    while (this.paraCacheBytes + incoming > SkiaTextRenderer.PARA_CACHE_BYTE_LIMIT && this.paraCache.size > 0) {
+      const [key, para] = this.paraCache.entries().next().value!
+      para?.delete()
       this.paraCache.delete(key)
+      this.paraCacheBytes -= SkiaTextRenderer.estimateParaBytes(key.split('|')[1] ?? '')
     }
   }
 
-  private evictTextCache() {
-    while (this.textCacheOrder.length > SkiaTextRenderer.TEXT_CACHE_MAX) {
-      const key = this.textCacheOrder.shift()!
-      const img = this.textCache.get(key)
-      img?.delete()
+  private evictTextCache(incoming: number) {
+    while (this.textCacheBytes + incoming > SkiaTextRenderer.TEXT_CACHE_BYTE_LIMIT && this.textCache.size > 0) {
+      const [key, img] = this.textCache.entries().next().value!
+      if (img) {
+        this.textCacheBytes -= img.width() * img.height() * 4
+        img.delete()
+      }
       this.textCache.delete(key)
     }
   }
@@ -223,13 +234,14 @@ export class SkiaTextRenderer {
         para = builder.build()
         para.layout(layoutWidth)
         builder.delete()
+        const entryBytes = SkiaTextRenderer.estimateParaBytes(content)
+        this.evictParaCache(entryBytes)
+        this.paraCacheBytes += entryBytes
       } catch {
         para = null
       }
 
       this.paraCache.set(cacheKey, para ?? null)
-      this.paraCacheOrder.push(cacheKey)
-      this.evictParaCache()
     }
 
     if (!para) return false
@@ -421,9 +433,10 @@ export class SkiaTextRenderer {
         premul, cw * 4,
       ) ?? null
 
+      const imgBytes = img ? cw * ch * 4 : 0
+      this.evictTextCache(imgBytes)
       this.textCache.set(cacheKey, img)
-      this.textCacheOrder.push(cacheKey)
-      this.evictTextCache()
+      this.textCacheBytes += imgBytes
     }
 
     if (!img) return
