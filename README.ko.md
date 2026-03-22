@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="./electron/icon.png" alt="OpenPencil" width="120" />
+  <img src="./apps/desktop/build/icon.png" alt="OpenPencil" width="120" />
 </p>
 
 <h1 align="center">OpenPencil</h1>
@@ -102,7 +102,7 @@ bun run electron:dev
 
 > **필수 조건:** [Bun](https://bun.sh/) >= 1.0 및 [Node.js](https://nodejs.org/) >= 18
 
-### Docker 배포
+### Docker
 
 여러 이미지 변형을 사용할 수 있습니다 — 필요에 맞는 것을 선택하세요:
 
@@ -113,6 +113,7 @@ bun run electron:dev
 | `openpencil-codex:latest` | — | + Codex CLI |
 | `openpencil-opencode:latest` | — | + OpenCode CLI |
 | `openpencil-copilot:latest` | — | + GitHub Copilot CLI |
+| `openpencil-gemini:latest` | — | + Gemini CLI |
 | `openpencil-full:latest` | ~1 GB | 모든 CLI 도구 |
 
 **실행 (웹만):**
@@ -155,8 +156,8 @@ docker build --target full -t openpencil-full .
 
 **프롬프트에서 UI로**
 - **텍스트-투-디자인** — 페이지를 설명하면 스트리밍 애니메이션으로 실시간으로 캔버스에 생성
-- **오케스트레이터** — 복잡한 페이지를 공간적 서브태스크로 분해하여 병렬 생성 지원
-- **디자인 수정** — 요소를 선택하고 자연어로 변경 내용을 설명
+- **오케스트레이터** — 복잡한 페이지를 공간적 서브태스크로 분해하여 병렬 생성
+- **디자인 수정** — 요소를 선택하고 자연어로 변경 사항을 설명
 - **비전 입력** — 스크린샷이나 목업을 참조로 첨부하여 디자인
 
 **멀티 에이전트 지원**
@@ -167,15 +168,16 @@ docker build --target full -t openpencil-full .
 | **Codex CLI** | 에이전트 설정에서 연결 (`Cmd+,`) |
 | **OpenCode** | 에이전트 설정에서 연결 (`Cmd+,`) |
 | **GitHub Copilot** | `copilot login` 후 에이전트 설정에서 연결 (`Cmd+,`) |
+| **Gemini CLI** | 에이전트 설정에서 연결 (`Cmd+,`) |
 
 **모델 역량 프로파일** — 모델 티어에 따라 프롬프트, 사고 모드, 타임아웃을 자동 조정합니다. 풀 티어 모델(Claude)은 완전한 프롬프트를 받고, 스탠다드 티어(GPT-4o, Gemini, DeepSeek)는 사고 모드를 비활성화하며, 베이직 티어(MiniMax, Qwen, Llama, Mistral)는 최대 안정성을 위해 단순화된 중첩 JSON 프롬프트를 받습니다.
 
 **MCP 서버**
 - 내장 MCP 서버 — Claude Code / Codex / Gemini / OpenCode / Kiro / Copilot CLI에 원클릭 설치
 - Node.js 자동 감지 — 설치되지 않은 경우 HTTP 전송 모드로 자동 대체하고 MCP HTTP 서버를 자동 시작
-- 터미널에서 디자인 자동화: MCP 호환 에이전트를 통해 `.op` 파일 읽기, 생성, 편집 가능
+- 터미널에서 디자인 자동화: MCP 호환 에이전트를 통해 `.op` 파일 읽기, 생성, 편집
 - **계층적 디자인 워크플로** — `design_skeleton` → `design_content` → `design_refine`으로 더 높은 충실도의 멀티 섹션 디자인
-- **세그먼트 프롬프트 검색** — 필요한 디자인 지식만 로드 (스키마, 레이아웃, 역할, 아이콘, 계획 등)
+- **세그먼트 프롬프트 검색** — 필요한 디자인 지식만 로드 (schema, layout, roles, icons, planning 등)
 - 멀티 페이지 지원 — MCP 도구를 통해 페이지 생성, 이름 변경, 순서 변경, 복제
 
 **코드 생성**
@@ -186,15 +188,15 @@ docker build --target full -t openpencil-full .
 
 **캔버스 & 드로잉**
 - 팬, 줌, 스마트 정렬 가이드, 스냅 지원의 무한 캔버스
-- 사각형, 타원, 직선, 다각형, 펜(베지어), Frame, 텍스트
-- 불리언 연산 — 합치기, 빼기, 교차 (컨텍스트 도구 모음)
+- Rectangle, Ellipse, Line, Polygon, Pen(Bezier), Frame, Text
+- 불리언 연산 — 합치기, 빼기, 교차 (컨텍스트 툴바)
 - 아이콘 피커(Iconify)와 이미지 가져오기(PNG/JPEG/SVG/WebP/GIF)
-- 오토 레이아웃 — 수직/수평 방향, 갭·패딩·justify·align 지원
+- 오토 레이아웃 — 수직/수평 방향, gap, padding, justify, align 지원
 - 탭 내비게이션이 있는 멀티 페이지 문서
 
 **디자인 시스템**
-- 디자인 변수 — 컬러·숫자·문자열 토큰, `$variable` 참조 지원
-- 멀티 테마 지원 — 여러 테마 축, 각 축에 여러 변형(라이트/다크, 컴팩트/컴포터블)
+- 디자인 변수 — 컬러, 숫자, 문자열 토큰, `$variable` 참조 지원
+- 멀티 테마 지원 — 여러 테마 축, 각 축에 변형(Light/Dark, Compact/Comfortable)
 - 컴포넌트 시스템 — 인스턴스와 오버라이드를 가진 재사용 가능한 컴포넌트
 - CSS 동기화 — 커스텀 프로퍼티 자동 생성, 코드 출력에 `var(--name)` 사용
 
@@ -202,7 +204,7 @@ docker build --target full -t openpencil-full .
 - 레이아웃, 채우기, 선, 효과, 텍스트, 이미지, 벡터를 유지하며 `.fig` 파일 가져오기
 
 **데스크톱 앱**
-- Electron을 통한 네이티브 macOS·Windows·Linux 지원
+- Electron을 통한 네이티브 macOS, Windows, Linux 지원
 - `.op` 파일 연결 — 더블 클릭으로 열기, 단일 인스턴스 잠금
 - GitHub Releases에서 자동 업데이트
 - 네이티브 애플리케이션 메뉴와 파일 다이얼로그
@@ -223,22 +225,32 @@ docker build --target full -t openpencil-full .
 ## 프로젝트 구조
 
 ```text
-src/
-  canvas/          CanvasKit/Skia 엔진 — 드로잉, 동기화, 레이아웃, 가이드, 펜 툴
-  components/      React UI — 에디터, 패널, 공유 다이얼로그, 아이콘
-  services/ai/     AI 채팅, 오케스트레이터, 디자인 생성, 스트리밍
-  services/figma/  Figma .fig 바이너리 가져오기 파이프라인
-  services/codegen React+Tailwind 및 HTML+CSS 코드 생성기
-  stores/          Zustand — 캔버스, 문서, 페이지, 히스토리, AI, 설정
-  variables/       디자인 토큰 해석 및 참조 관리
-  mcp/             외부 CLI 통합용 MCP 서버 툴
-  uikit/           재사용 가능한 컴포넌트 킷 시스템
-server/
-  api/ai/          Nitro API — 스트리밍 채팅, 생성, 유효성 검사
-  utils/           Claude CLI, OpenCode, Codex, Copilot 클라이언트 래퍼
-electron/
-  main.ts          윈도우, Nitro 포크, 네이티브 메뉴, 자동 업데이터
-  preload.ts       IPC 브리지
+openpencil/
+├── apps/
+│   ├── web/                 TanStack Start 웹 앱
+│   │   ├── src/
+│   │   │   ├── canvas/      CanvasKit/Skia 엔진 — 드로잉, 동기화, 레이아웃
+│   │   │   ├── components/  React UI — 에디터, 패널, 공유 다이얼로그, 아이콘
+│   │   │   ├── services/ai/ AI 채팅, 오케스트레이터, 디자인 생성, 스트리밍
+│   │   │   ├── stores/      Zustand — 캔버스, 문서, 페이지, 히스토리, AI
+│   │   │   ├── mcp/         외부 CLI 통합용 MCP 서버 도구
+│   │   │   ├── hooks/       키보드 단축키, 파일 드롭, Figma 붙여넣기
+│   │   │   └── uikit/       재사용 가능한 컴포넌트 킷 시스템
+│   │   └── server/
+│   │       ├── api/ai/      Nitro API — 스트리밍 채팅, 생성, 유효성 검사
+│   │       └── utils/       Claude CLI, OpenCode, Codex, Copilot 래퍼
+│   └── desktop/             Electron 데스크톱 앱
+│       ├── main.ts          윈도우, Nitro 포크, 네이티브 메뉴, 자동 업데이터
+│       ├── ipc-handlers.ts  네이티브 파일 대화상자, 테마 동기화, 환경설정 IPC
+│       └── preload.ts       IPC 브리지
+├── packages/
+│   ├── pen-types/           PenDocument 모델 타입 정의
+│   ├── pen-core/            문서 트리 연산, 레이아웃 엔진, 변수
+│   ├── pen-codegen/         코드 생성기 (React, HTML, Vue, Flutter, ...)
+│   ├── pen-figma/           Figma .fig 파일 파서 및 변환기
+│   ├── pen-renderer/        독립형 CanvasKit/Skia 렌더러
+│   └── pen-sdk/             통합 SDK (모든 패키지 재export)
+└── .githooks/               브랜치 이름에서 버전 동기화를 위한 pre-commit
 ```
 
 ## 키보드 단축키
@@ -266,6 +278,7 @@ bun --bun run dev          # 개발 서버 (포트 3000)
 bun --bun run build        # 프로덕션 빌드
 bun --bun run test         # 테스트 실행 (Vitest)
 npx tsc --noEmit           # 타입 검사
+bun run bump <version>     # 모든 package.json에 버전 동기화
 bun run electron:dev       # Electron 개발 모드
 bun run electron:build     # Electron 패키징
 ```
@@ -275,21 +288,23 @@ bun run electron:build     # Electron 패키징
 기여를 환영합니다! 아키텍처 세부 정보와 코드 스타일은 [CLAUDE.md](./CLAUDE.md)를 참고하세요.
 
 1. 포크 후 클론
-2. 브랜치 생성: `git checkout -b feat/my-feature`
-3. 검사 실행: `npx tsc --noEmit && bun --bun run test`
-4. [Conventional Commits](https://www.conventionalcommits.org/) 형식으로 커밋: `feat(canvas): add rotation snapping`
-5. `main` 브랜치에 PR 생성
+2. 버전 동기화 설정: `git config core.hooksPath .githooks`
+3. 브랜치 생성: `git checkout -b feat/my-feature`
+4. 검사 실행: `npx tsc --noEmit && bun --bun run test`
+5. [Conventional Commits](https://www.conventionalcommits.org/) 형식으로 커밋: `feat(canvas): add rotation snapping`
+6. `main` 브랜치에 PR 생성
 
 ## 로드맵
 
 - [x] CSS 동기화가 있는 디자인 변수 & 토큰
-- [x] 컴포넌트 시스템(인스턴스 & 오버라이드)
+- [x] 컴포넌트 시스템 (인스턴스 & 오버라이드)
 - [x] 오케스트레이터를 통한 AI 디자인 생성
 - [x] 계층적 디자인 워크플로가 포함된 MCP 서버 통합
 - [x] 멀티 페이지 지원
 - [x] Figma `.fig` 가져오기
-- [x] 불리언 연산(결합, 빼기, 교차)
+- [x] 불리언 연산 (합치기, 빼기, 교차)
 - [x] 멀티 모델 역량 프로파일
+- [x] 재사용 가능한 패키지를 포함한 모노레포 구조 변경
 - [ ] 공동 편집
 - [ ] 플러그인 시스템
 
@@ -302,11 +317,10 @@ bun run electron:build     # Electron 패키징
 ## 커뮤니티
 
 <a href="https://discord.gg/h9Fmyy6pVh">
-  <img src="./public/logo-discord.svg" alt="Discord" width="16" />
+  <img src="./apps/web/public/logo-discord.svg" alt="Discord" width="16" />
   <strong> Discord에 참여하기</strong>
 </a>
 — 질문하기, 디자인 공유, 기능 제안.
-
 
 ## Star History
 

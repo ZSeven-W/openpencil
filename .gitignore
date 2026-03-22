@@ -1,7 +1,5 @@
 node_modules
 .DS_Store
-dist
-dist-ssr
 *.local
 count.txt
 .env
@@ -12,7 +10,11 @@ count.txt
 .vinxi
 __unconfig*
 todos.json
+.openpencil-tmp/
+
+# Build outputs
+out/
+dist/
+dist-ssr/
 electron-dist/
 dist-electron/
-.openpencil-tmp/
-scripts/figma-*

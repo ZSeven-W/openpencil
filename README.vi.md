@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="./electron/icon.png" alt="OpenPencil" width="120" />
+  <img src="./apps/desktop/build/icon.png" alt="OpenPencil" width="120" />
 </p>
 
 <h1 align="center">OpenPencil</h1>
@@ -10,7 +10,7 @@
 </p>
 
 <p align="center">
-  <a href="./README.md">English</a> · <a href="./README.zh.md">简体中文</a> · <a href="./README.zh-TW.md">繁體中文</a> · <a href="./README.ja.md">日本語</a> · <a href="./README.ko.md">한국어</a> · <a href="./README.fr.md">Français</a> · <a href="./README.es.md">Español</a> · <a href="./README.de.md">Deutsch</a> · <a href="./README.pt.md">Português</a> · <a href="./README.ru.md">Русский</a> · <a href="./README.hi.md">हिन्दी</a> · <a href="./README.tr.md">Türkçe</a> · <a href="./README.th.md">ไทย</a> · <b>Tiếng Việt</b> · <a href="./README.id.md">Bahasa Indonesia</a>
+  <a href="./README.md"><b>English</b></a> · <a href="./README.zh.md">简体中文</a> · <a href="./README.zh-TW.md">繁體中文</a> · <a href="./README.ja.md">日本語</a> · <a href="./README.ko.md">한국어</a> · <a href="./README.fr.md">Français</a> · <a href="./README.es.md">Español</a> · <a href="./README.de.md">Deutsch</a> · <a href="./README.pt.md">Português</a> · <a href="./README.ru.md">Русский</a> · <a href="./README.hi.md">हिन्दी</a> · <a href="./README.tr.md">Türkçe</a> · <a href="./README.th.md">ไทย</a> · <a href="./README.vi.md">Tiếng Việt</a> · <a href="./README.id.md">Bahasa Indonesia</a>
 </p>
 
 <p align="center">
@@ -102,7 +102,7 @@ bun run electron:dev
 
 > **Yêu cầu:** [Bun](https://bun.sh/) >= 1.0 và [Node.js](https://nodejs.org/) >= 18
 
-### Triển khai bằng Docker
+### Docker
 
 Có nhiều biến thể image khác nhau — chọn loại phù hợp với nhu cầu của bạn:
 
@@ -113,6 +113,7 @@ Có nhiều biến thể image khác nhau — chọn loại phù hợp với nhu
 | `openpencil-codex:latest` | — | + Codex CLI |
 | `openpencil-opencode:latest` | — | + OpenCode CLI |
 | `openpencil-copilot:latest` | — | + GitHub Copilot CLI |
+| `openpencil-gemini:latest` | — | + Gemini CLI |
 | `openpencil-full:latest` | ~1 GB | Tất cả công cụ CLI |
 
 **Chạy (chỉ web):**
@@ -167,6 +168,7 @@ docker build --target full -t openpencil-full .
 | **Codex CLI** | Kết nối trong Cài đặt tác nhân (`Cmd+,`) |
 | **OpenCode** | Kết nối trong Cài đặt tác nhân (`Cmd+,`) |
 | **GitHub Copilot** | `copilot login` rồi kết nối trong Cài đặt tác nhân (`Cmd+,`) |
+| **Gemini CLI** | Kết nối trong Cài đặt tác nhân (`Cmd+,`) |
 
 **Hồ sơ Năng lực Mô hình** — tự động thích ứng prompt, chế độ thinking và thời gian chờ theo từng cấp mô hình. Mô hình cấp đầy đủ (Claude) nhận prompt hoàn chỉnh; cấp tiêu chuẩn (GPT-4o, Gemini, DeepSeek) tắt thinking; cấp cơ bản (MiniMax, Qwen, Llama, Mistral) nhận prompt JSON lồng nhau đơn giản hóa để đảm bảo độ tin cậy tối đa.
 
@@ -223,22 +225,32 @@ docker build --target full -t openpencil-full .
 ## Cấu trúc dự án
 
 ```text
-src/
-  canvas/          CanvasKit/Skia engine — vẽ, đồng bộ, layout, hướng dẫn, công cụ bút
-  components/      React UI — editor, panels, hộp thoại dùng chung, icons
-  services/ai/     AI chat, orchestrator, tạo thiết kế, streaming
-  services/figma/  Pipeline nhập binary Figma .fig
-  services/codegen Bộ tạo mã React+Tailwind và HTML+CSS
-  stores/          Zustand — canvas, document, pages, history, AI, settings
-  variables/       Giải quyết token thiết kế và quản lý tham chiếu
-  mcp/             Công cụ máy chủ MCP để tích hợp CLI bên ngoài
-  uikit/           Hệ thống kit component có thể tái sử dụng
-server/
-  api/ai/          Nitro API — streaming chat, generation, validation
-  utils/           Claude CLI, OpenCode, Codex, Copilot client wrappers
-electron/
-  main.ts          Cửa sổ, Nitro fork, menu gốc, auto-updater
-  preload.ts       IPC bridge
+openpencil/
+├── apps/
+│   ├── web/                 Ứng dụng web TanStack Start
+│   │   ├── src/
+│   │   │   ├── canvas/      Engine CanvasKit/Skia — vẽ, đồng bộ, layout
+│   │   │   ├── components/  React UI — editor, panels, hộp thoại dùng chung, icons
+│   │   │   ├── services/ai/ AI chat, orchestrator, tạo thiết kế, streaming
+│   │   │   ├── stores/      Zustand — canvas, document, pages, history, AI
+│   │   │   ├── mcp/         Công cụ máy chủ MCP để tích hợp CLI bên ngoài
+│   │   │   ├── hooks/       Phím tắt, kéo thả tệp, dán từ Figma
+│   │   │   └── uikit/       Hệ thống kit component có thể tái sử dụng
+│   │   └── server/
+│   │       ├── api/ai/      Nitro API — streaming chat, generation, validation
+│   │       └── utils/       Claude CLI, OpenCode, Codex, Copilot wrappers
+│   └── desktop/             Ứng dụng desktop Electron
+│       ├── main.ts          Cửa sổ, Nitro fork, menu gốc, auto-updater
+│       ├── ipc-handlers.ts  Hộp thoại file gốc, đồng bộ theme, tùy chọn IPC
+│       └── preload.ts       IPC bridge
+├── packages/
+│   ├── pen-types/           Định nghĩa kiểu cho mô hình PenDocument
+│   ├── pen-core/            Thao tác cây tài liệu, layout engine, biến
+│   ├── pen-codegen/         Bộ tạo mã (React, HTML, Vue, Flutter, ...)
+│   ├── pen-figma/           Trình phân tích và chuyển đổi tệp Figma .fig
+│   ├── pen-renderer/        Bộ dựng hình CanvasKit/Skia độc lập
+│   └── pen-sdk/             SDK tổng hợp (tái xuất tất cả các gói)
+└── .githooks/               Pre-commit đồng bộ phiên bản từ tên nhánh
 ```
 
 ## Phím tắt
@@ -266,6 +278,7 @@ bun --bun run dev          # Máy chủ phát triển (cổng 3000)
 bun --bun run build        # Build production
 bun --bun run test         # Chạy kiểm thử (Vitest)
 npx tsc --noEmit           # Kiểm tra kiểu
+bun run bump <version>     # Đồng bộ phiên bản trên tất cả package.json
 bun run electron:dev       # Electron dev
 bun run electron:build     # Đóng gói Electron
 ```
@@ -275,10 +288,11 @@ bun run electron:build     # Đóng gói Electron
 Chào mừng đóng góp! Xem [CLAUDE.md](./CLAUDE.md) để biết chi tiết về kiến trúc và phong cách mã.
 
 1. Fork và clone
-2. Tạo branch: `git checkout -b feat/my-feature`
-3. Chạy kiểm tra: `npx tsc --noEmit && bun --bun run test`
-4. Commit theo [Conventional Commits](https://www.conventionalcommits.org/): `feat(canvas): add rotation snapping`
-5. Mở PR vào nhánh `main`
+2. Thiết lập đồng bộ phiên bản: `git config core.hooksPath .githooks`
+3. Tạo branch: `git checkout -b feat/my-feature`
+4. Chạy kiểm tra: `npx tsc --noEmit && bun --bun run test`
+5. Commit theo [Conventional Commits](https://www.conventionalcommits.org/): `feat(canvas): add rotation snapping`
+6. Mở PR vào nhánh `main`
 
 ## Lộ trình
 
@@ -290,6 +304,7 @@ Chào mừng đóng góp! Xem [CLAUDE.md](./CLAUDE.md) để biết chi tiết v
 - [x] Nhập Figma `.fig`
 - [x] Phép toán Boolean (hợp nhất, trừ, giao)
 - [x] Hồ sơ năng lực đa mô hình
+- [x] Tái cấu trúc monorepo với các gói tái sử dụng
 - [ ] Chỉnh sửa cộng tác
 - [ ] Hệ thống plugin
 
@@ -302,11 +317,10 @@ Chào mừng đóng góp! Xem [CLAUDE.md](./CLAUDE.md) để biết chi tiết v
 ## Cộng đồng
 
 <a href="https://discord.gg/h9Fmyy6pVh">
-  <img src="./public/logo-discord.svg" alt="Discord" width="16" />
+  <img src="./apps/web/public/logo-discord.svg" alt="Discord" width="16" />
   <strong> Tham gia Discord của chúng tôi</strong>
 </a>
 — Đặt câu hỏi, chia sẻ thiết kế, đề xuất tính năng.
-
 
 ## Star History
 

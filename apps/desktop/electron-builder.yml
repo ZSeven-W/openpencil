@@ -1,0 +1,80 @@
+appId: dev.openpencil.app
+productName: OpenPencil
+copyright: Copyright (c) 2024-2026 OpenPencil contributors
+
+directories:
+  output: out/release
+  buildResources: apps/desktop/build
+
+files:
+  - from: out/desktop
+    to: .
+    filter:
+      - "**/*"
+  - "!node_modules"
+
+extraResources:
+  - from: out/web/server
+    to: server
+  - from: out/web/public
+    to: public
+  - from: out/mcp-server.cjs
+    to: mcp-server.cjs
+
+mac:
+  category: public.app-category.graphics-design
+  icon: apps/desktop/build/icon.icns
+  artifactName: "${productName}-${version}-${arch}-mac.${ext}"
+  target:
+    - dmg
+    - zip
+  hardenedRuntime: true
+  gatekeeperAssess: false
+  notarize: true
+
+dmg:
+  title: "${productName} ${version}"
+
+win:
+  icon: apps/desktop/build/icon.ico
+  artifactName: "${productName}-${version}-${arch}-win.${ext}"
+  target:
+    - nsis
+    - portable
+
+nsis:
+  artifactName: "${productName}-${version}-${arch}-win-setup.${ext}"
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+
+linux:
+  icon: apps/desktop/build/icon.png
+  category: Graphics
+  artifactName: "${productName}-${version}-${arch}-linux.${ext}"
+  desktop:
+    entry: |
+      [Desktop Entry]
+      Name=OpenPencil
+      Exec=AppRun --no-sandbox %U
+      Terminal=false
+      Type=Application
+      Icon=openpencil
+      StartupWMClass=openpencil
+      Categories=Graphics;
+      MimeType=application/x-openpencil;
+  target:
+    - AppImage
+    - deb
+
+fileAssociations:
+  - ext: op
+    name: OpenPencil Document
+    description: OpenPencil Design File
+    mimeType: application/x-openpencil
+    role: Editor
+    icon: apps/desktop/build/icon
+
+asar: true

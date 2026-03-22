@@ -1,16 +1,16 @@
 <p align="center">
-  <img src="./electron/icon.png" alt="OpenPencil" width="120" />
+  <img src="./apps/desktop/build/icon.png" alt="OpenPencil" width="120" />
 </p>
 
 <h1 align="center">OpenPencil</h1>
 
 <p align="center">
-  <strong>Dunyanin ilk acik kaynakli AI-yerel vektor tasarim araci.</strong><br />
-  <sub>Eszamanli Ajan Ekipleri &bull; Kod Olarak Tasarim &bull; Yerlesik MCP Sunucusu &bull; Coklu Model Zekasi</sub>
+  <strong>Dünyanın ilk açık kaynaklı AI-yerel vektör tasarım aracı.</strong><br />
+  <sub>Eşzamanlı Ajan Ekipleri &bull; Kod Olarak Tasarım &bull; Yerleşik MCP Sunucusu &bull; Çoklu Model Zekası</sub>
 </p>
 
 <p align="center">
-  <a href="./README.md">English</a> · <a href="./README.zh.md">简体中文</a> · <a href="./README.zh-TW.md">繁體中文</a> · <a href="./README.ja.md">日本語</a> · <a href="./README.ko.md">한국어</a> · <a href="./README.fr.md">Français</a> · <a href="./README.es.md">Español</a> · <a href="./README.de.md">Deutsch</a> · <a href="./README.pt.md">Português</a> · <a href="./README.ru.md">Русский</a> · <a href="./README.hi.md">हिन्दी</a> · <b>Türkçe</b> · <a href="./README.th.md">ไทย</a> · <a href="./README.vi.md">Tiếng Việt</a> · <a href="./README.id.md">Bahasa Indonesia</a>
+  <a href="./README.md"><b>English</b></a> · <a href="./README.zh.md">简体中文</a> · <a href="./README.zh-TW.md">繁體中文</a> · <a href="./README.ja.md">日本語</a> · <a href="./README.ko.md">한국어</a> · <a href="./README.fr.md">Français</a> · <a href="./README.es.md">Español</a> · <a href="./README.de.md">Deutsch</a> · <a href="./README.pt.md">Português</a> · <a href="./README.ru.md">Русский</a> · <a href="./README.hi.md">हिन्दी</a> · <a href="./README.tr.md">Türkçe</a> · <a href="./README.th.md">ไทย</a> · <a href="./README.vi.md">Tiếng Việt</a> · <a href="./README.id.md">Bahasa Indonesia</a>
 </p>
 
 <p align="center">
@@ -102,7 +102,7 @@ bun run electron:dev
 
 > **Ön koşullar:** [Bun](https://bun.sh/) >= 1.0 ve [Node.js](https://nodejs.org/) >= 18
 
-### Docker ile Dağıtım
+### Docker
 
 Birden fazla görüntü varyantı mevcuttur — ihtiyaçlarınıza uygun olanı seçin:
 
@@ -113,6 +113,7 @@ Birden fazla görüntü varyantı mevcuttur — ihtiyaçlarınıza uygun olanı 
 | `openpencil-codex:latest` | — | + Codex CLI |
 | `openpencil-opencode:latest` | — | + OpenCode CLI |
 | `openpencil-copilot:latest` | — | + GitHub Copilot CLI |
+| `openpencil-gemini:latest` | — | + Gemini CLI |
 | `openpencil-full:latest` | ~1 GB | Tüm CLI araçları |
 
 **Çalıştır (yalnızca web):**
@@ -167,6 +168,7 @@ docker build --target full -t openpencil-full .
 | **Codex CLI** | Ajan Ayarlarından bağlanın (`Cmd+,`) |
 | **OpenCode** | Ajan Ayarlarından bağlanın (`Cmd+,`) |
 | **GitHub Copilot** | `copilot login` ardından Ajan Ayarlarından bağlanın (`Cmd+,`) |
+| **Gemini CLI** | Ajan Ayarlarından bağlanın (`Cmd+,`) |
 
 **Model Yetenek Profilleri** — promptları, düşünme modunu ve zaman aşımlarını model katmanına göre otomatik olarak uyarlar. Tam katman modeller (Claude) eksiksiz promptlar alır; standart katman (GPT-4o, Gemini, DeepSeek) düşünme modunu devre dışı bırakır; temel katman (MiniMax, Qwen, Llama, Mistral) maksimum güvenilirlik için basitleştirilmiş iç içe JSON promptları alır.
 
@@ -212,7 +214,7 @@ docker build --target full -t openpencil-full .
 | | |
 | --- | --- |
 | **Ön Uç** | React 19 · TanStack Start · Tailwind CSS v4 · shadcn/ui |
-| **Kanvas** | CanvasKit/Skia (WASM, GPU hizlandirmali) |
+| **Kanvas** | CanvasKit/Skia (WASM, GPU hızlandırmalı) |
 | **Durum Yönetimi** | Zustand v5 |
 | **Sunucu** | Nitro |
 | **Masaüstü** | Electron 35 |
@@ -223,22 +225,32 @@ docker build --target full -t openpencil-full .
 ## Proje Yapısı
 
 ```text
-src/
-  canvas/          CanvasKit/Skia motoru — çizim, senkronizasyon, düzen, kılavuzlar, kalem aracı
-  components/      React UI — editör, paneller, paylaşılan iletişim kutuları, simgeler
-  services/ai/     AI sohbet, orkestratör, tasarım üretimi, akış
-  services/figma/  Figma .fig ikili içe aktarma ardışık düzeni
-  services/codegen React+Tailwind ve HTML+CSS kod üreticileri
-  stores/          Zustand — kanvas, belge, sayfalar, geçmiş, AI, ayarlar
-  variables/       Tasarım token çözümleme ve referans yönetimi
-  mcp/             Harici CLI entegrasyonu için MCP sunucu araçları
-  uikit/           Yeniden kullanılabilir bileşen kiti sistemi
-server/
-  api/ai/          Nitro API — akış sohbet, üretim, doğrulama
-  utils/           Claude CLI, OpenCode, Codex, Copilot istemci sarmalayıcıları
-electron/
-  main.ts          Pencere, Nitro çatallanması, yerel menü, otomatik güncelleyici
-  preload.ts       IPC köprüsü
+openpencil/
+├── apps/
+│   ├── web/                 TanStack Start web uygulaması
+│   │   ├── src/
+│   │   │   ├── canvas/      CanvasKit/Skia motoru — çizim, senkronizasyon, düzen
+│   │   │   ├── components/  React UI — editör, paneller, paylaşılan iletişim kutuları, simgeler
+│   │   │   ├── services/ai/ AI sohbet, orkestratör, tasarım üretimi, akış
+│   │   │   ├── stores/      Zustand — kanvas, belge, sayfalar, geçmiş, AI
+│   │   │   ├── mcp/         Harici CLI entegrasyonu için MCP sunucu araçları
+│   │   │   ├── hooks/       Klavye kısayolları, dosya bırakma, Figma yapıştırma
+│   │   │   └── uikit/       Yeniden kullanılabilir bileşen kiti sistemi
+│   │   └── server/
+│   │       ├── api/ai/      Nitro API — akış sohbet, üretim, doğrulama
+│   │       └── utils/       Claude CLI, OpenCode, Codex, Copilot sarmalayıcıları
+│   └── desktop/             Electron masaüstü uygulaması
+│       ├── main.ts          Pencere, Nitro çatallanması, yerel menü, otomatik güncelleyici
+│       ├── ipc-handlers.ts  Yerel dosya diyalogları, tema senkronizasyonu, tercihler IPC
+│       └── preload.ts       IPC köprüsü
+├── packages/
+│   ├── pen-types/           PenDocument modeli için tür tanımları
+│   ├── pen-core/            Belge ağacı işlemleri, düzen motoru, değişkenler
+│   ├── pen-codegen/         Kod oluşturucular (React, HTML, Vue, Flutter, ...)
+│   ├── pen-figma/           Figma .fig dosya ayrıştırıcı ve dönüştürücü
+│   ├── pen-renderer/        Bağımsız CanvasKit/Skia işleyici
+│   └── pen-sdk/             Şemsiye SDK (tüm paketleri yeniden dışa aktarır)
+└── .githooks/               Dal adından ön-commit sürüm eşitleme
 ```
 
 ## Klavye Kısayolları
@@ -266,6 +278,7 @@ bun --bun run dev          # Geliştirme sunucusu (port 3000)
 bun --bun run build        # Üretim derlemesi
 bun --bun run test         # Testleri çalıştır (Vitest)
 npx tsc --noEmit           # Tür denetimi
+bun run bump <version>     # Tüm package.json dosyalarında sürümü eşitle
 bun run electron:dev       # Electron geliştirme modu
 bun run electron:build     # Electron paketleme
 ```
@@ -275,10 +288,11 @@ bun run electron:build     # Electron paketleme
 Katkılarınızı bekliyoruz! Mimari ayrıntılar ve kod stili için [CLAUDE.md](./CLAUDE.md) dosyasına bakın.
 
 1. Fork'layın ve klonlayın
-2. Dal oluşturun: `git checkout -b feat/my-feature`
-3. Kontrolleri çalıştırın: `npx tsc --noEmit && bun --bun run test`
-4. [Conventional Commits](https://www.conventionalcommits.org/) formatıyla commit yapın: `feat(canvas): add rotation snapping`
-5. `main` dalına PR açın
+2. Sürüm eşitlemeyi ayarlayın: `git config core.hooksPath .githooks`
+3. Dal oluşturun: `git checkout -b feat/my-feature`
+4. Kontrolleri çalıştırın: `npx tsc --noEmit && bun --bun run test`
+5. [Conventional Commits](https://www.conventionalcommits.org/) formatıyla commit yapın: `feat(canvas): add rotation snapping`
+6. `main` dalına PR açın
 
 ## Yol Haritası
 
@@ -290,6 +304,7 @@ Katkılarınızı bekliyoruz! Mimari ayrıntılar ve kod stili için [CLAUDE.md]
 - [x] Figma `.fig` içe aktarma
 - [x] Boolean işlemler (birleştirme, çıkarma, kesişim)
 - [x] Çoklu model yetenek profilleri
+- [x] Yeniden kullanılabilir paketlerle monorepo yapılandırması
 - [ ] Ortak düzenleme
 - [ ] Eklenti sistemi
 
@@ -302,11 +317,10 @@ Katkılarınızı bekliyoruz! Mimari ayrıntılar ve kod stili için [CLAUDE.md]
 ## Topluluk
 
 <a href="https://discord.gg/h9Fmyy6pVh">
-  <img src="./public/logo-discord.svg" alt="Discord" width="16" />
+  <img src="./apps/web/public/logo-discord.svg" alt="Discord" width="16" />
   <strong> Discord'umuza katılın</strong>
 </a>
 — Soru sorun, tasarımlarınızı paylaşın, özellik önerin.
-
 
 ## Star History
 

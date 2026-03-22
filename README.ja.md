@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="./electron/icon.png" alt="OpenPencil" width="120" />
+  <img src="./apps/desktop/build/icon.png" alt="OpenPencil" width="120" />
 </p>
 
 <h1 align="center">OpenPencil</h1>
@@ -102,7 +102,7 @@ bun run electron:dev
 
 > **前提条件：** [Bun](https://bun.sh/) >= 1.0 および [Node.js](https://nodejs.org/) >= 18
 
-### Docker デプロイ
+### Docker
 
 複数のイメージバリアントが利用可能です — ニーズに合ったものを選択してください：
 
@@ -113,6 +113,7 @@ bun run electron:dev
 | `openpencil-codex:latest` | — | + Codex CLI |
 | `openpencil-opencode:latest` | — | + OpenCode CLI |
 | `openpencil-copilot:latest` | — | + GitHub Copilot CLI |
+| `openpencil-gemini:latest` | — | + Gemini CLI |
 | `openpencil-full:latest` | ~1 GB | すべての CLI ツール |
 
 **実行（Web のみ）：**
@@ -167,6 +168,7 @@ docker build --target full -t openpencil-full .
 | **Codex CLI** | エージェント設定で接続（`Cmd+,`） |
 | **OpenCode** | エージェント設定で接続（`Cmd+,`） |
 | **GitHub Copilot** | `copilot login` 後、エージェント設定で接続（`Cmd+,`） |
+| **Gemini CLI** | エージェント設定で接続（`Cmd+,`） |
 
 **モデル能力プロファイル** — モデルの階層に応じてプロンプト、シンキングモード、タイムアウトを自動適応。フル階層モデル（Claude）には完全なプロンプト、標準階層（GPT-4o、Gemini、DeepSeek）ではシンキングを無効化、ベーシック階層（MiniMax、Qwen、Llama、Mistral）には最大限の信頼性のために簡略化されたネスト JSON プロンプトを使用。
 
@@ -194,7 +196,7 @@ docker build --target full -t openpencil-full .
 
 **デザインシステム**
 - デザイン変数 — カラー・数値・文字列トークン、`$variable` 参照付き
-- マルチテーマサポート — 複数のテーマ軸、各軸に複数バリアント（ライト/ダーク、コンパクト/コンフォータブル）
+- マルチテーマサポート — 複数のテーマ軸、各軸に複数バリアント（Light/Dark、Compact/Comfortable）
 - コンポーネントシステム — インスタンスとオーバーライドを持つ再利用可能なコンポーネント
 - CSS 同期 — カスタムプロパティの自動生成、コード出力に `var(--name)` を使用
 
@@ -223,22 +225,32 @@ docker build --target full -t openpencil-full .
 ## プロジェクト構成
 
 ```text
-src/
-  canvas/          CanvasKit/Skia エンジン — 描画、同期、レイアウト、ガイド、ペンツール
-  components/      React UI — エディター、パネル、共有ダイアログ、アイコン
-  services/ai/     AI チャット、オーケストレーター、デザイン生成、ストリーミング
-  services/figma/  Figma .fig バイナリインポートパイプライン
-  services/codegen React+Tailwind および HTML+CSS コードジェネレーター
-  stores/          Zustand — キャンバス、ドキュメント、ページ、履歴、AI、設定
-  variables/       デザイントークンの解決とリファレンス管理
-  mcp/             外部 CLI 統合用 MCP サーバーツール
-  uikit/           再利用可能なコンポーネントキットシステム
-server/
-  api/ai/          Nitro API — ストリーミングチャット、生成、バリデーション
-  utils/           Claude CLI、OpenCode、Codex、Copilot クライアントラッパー
-electron/
-  main.ts          ウィンドウ、Nitro フォーク、ネイティブメニュー、自動アップデーター
-  preload.ts       IPC ブリッジ
+openpencil/
+├── apps/
+│   ├── web/                 TanStack Start Web アプリ
+│   │   ├── src/
+│   │   │   ├── canvas/      CanvasKit/Skia エンジン — 描画、同期、レイアウト
+│   │   │   ├── components/  React UI — エディター、パネル、共有ダイアログ、アイコン
+│   │   │   ├── services/ai/ AI チャット、オーケストレーター、デザイン生成、ストリーミング
+│   │   │   ├── stores/      Zustand — キャンバス、ドキュメント、ページ、履歴、AI
+│   │   │   ├── mcp/         外部 CLI 統合用 MCP サーバーツール
+│   │   │   ├── hooks/       キーボードショートカット、ファイルドロップ、Figma ペースト
+│   │   │   └── uikit/       再利用可能なコンポーネントキットシステム
+│   │   └── server/
+│   │       ├── api/ai/      Nitro API — ストリーミングチャット、生成、バリデーション
+│   │       └── utils/       Claude CLI、OpenCode、Codex、Copilot ラッパー
+│   └── desktop/             Electron デスクトップアプリ
+│       ├── main.ts          ウィンドウ、Nitro フォーク、ネイティブメニュー、自動アップデーター
+│       ├── ipc-handlers.ts  ネイティブファイルダイアログ、テーマ同期、設定 IPC
+│       └── preload.ts       IPC ブリッジ
+├── packages/
+│   ├── pen-types/           PenDocument モデルの型定義
+│   ├── pen-core/            ドキュメントツリー操作、レイアウトエンジン、変数
+│   ├── pen-codegen/         コードジェネレーター（React、HTML、Vue、Flutter、...）
+│   ├── pen-figma/           Figma .fig ファイルパーサーとコンバーター
+│   ├── pen-renderer/        スタンドアロン CanvasKit/Skia レンダラー
+│   └── pen-sdk/             アンブレラ SDK（全パッケージの再エクスポート）
+└── .githooks/               ブランチ名からのプレコミットバージョン同期
 ```
 
 ## キーボードショートカット
@@ -266,6 +278,7 @@ bun --bun run dev          # 開発サーバー（ポート 3000）
 bun --bun run build        # 本番ビルド
 bun --bun run test         # テストの実行（Vitest）
 npx tsc --noEmit           # 型チェック
+bun run bump <version>     # すべての package.json のバージョンを同期
 bun run electron:dev       # Electron 開発モード
 bun run electron:build     # Electron パッケージング
 ```
@@ -275,10 +288,11 @@ bun run electron:build     # Electron パッケージング
 コントリビューションを歓迎します！アーキテクチャの詳細とコードスタイルについては [CLAUDE.md](./CLAUDE.md) をご覧ください。
 
 1. フォークしてクローン
-2. ブランチを作成：`git checkout -b feat/my-feature`
-3. チェックを実行：`npx tsc --noEmit && bun --bun run test`
-4. [Conventional Commits](https://www.conventionalcommits.org/) 形式でコミット：`feat(canvas): add rotation snapping`
-5. `main` ブランチに PR を作成
+2. バージョン同期を設定：`git config core.hooksPath .githooks`
+3. ブランチを作成：`git checkout -b feat/my-feature`
+4. チェックを実行：`npx tsc --noEmit && bun --bun run test`
+5. [Conventional Commits](https://www.conventionalcommits.org/) 形式でコミット：`feat(canvas): add rotation snapping`
+6. `main` ブランチに PR を作成
 
 ## ロードマップ
 
@@ -290,6 +304,7 @@ bun run electron:build     # Electron パッケージング
 - [x] Figma `.fig` インポート
 - [x] ブーリアン演算（合体、型抜き、交差）
 - [x] マルチモデル能力プロファイル
+- [x] 再利用可能なパッケージによるモノレポ構成
 - [ ] 共同編集
 - [ ] プラグインシステム
 
@@ -302,11 +317,10 @@ bun run electron:build     # Electron パッケージング
 ## コミュニティ
 
 <a href="https://discord.gg/h9Fmyy6pVh">
-  <img src="./public/logo-discord.svg" alt="Discord" width="16" />
+  <img src="./apps/web/public/logo-discord.svg" alt="Discord" width="16" />
   <strong> Discord に参加する</strong>
 </a>
 — 質問、デザインの共有、機能のリクエストはこちら。
-
 
 ## Star History
 
