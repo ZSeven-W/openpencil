@@ -1,0 +1,100 @@
+import type { FigmaPaint, FigmaMatrix } from './figma-types'
+import type { PenFill } from '@zseven-w/pen-types'
+import { figmaColorToHex } from './figma-color-utils'
+
+/**
+ * Convert Figma fillPaints (internal format) to PenFill[].
+ */
+export function mapFigmaFills(paints: FigmaPaint[] | undefined): PenFill[] | undefined {
+  if (!paints || paints.length === 0) return undefined
+  const fills: PenFill[] = []
+
+  for (const paint of paints) {
+    if (paint.visible === false) continue
+    const mapped = mapSingleFill(paint)
+    if (mapped) fills.push(mapped)
+  }
+
+  return fills.length > 0 ? fills : undefined
+}
+
+function mapSingleFill(paint: FigmaPaint): PenFill | null {
+  switch (paint.type) {
+    case 'SOLID': {
+      if (!paint.color) return null
+      return {
+        type: 'solid',
+        color: figmaColorToHex(paint.color),
+        opacity: paint.opacity,
+      }
+    }
+
+    case 'GRADIENT_LINEAR': {
+      if (!paint.stops) return null
+      const angle = paint.transform
+        ? gradientAngleFromTransform(paint.transform)
+        : 0
+      return {
+        type: 'linear_gradient',
+        angle,
+        stops: paint.stops.map((s) => ({
+          offset: s.position,
+          color: figmaColorToHex(s.color),
+        })),
+        opacity: paint.opacity,
+      }
+    }
+
+    case 'GRADIENT_RADIAL':
+    case 'GRADIENT_ANGULAR':
+    case 'GRADIENT_DIAMOND': {
+      if (!paint.stops) return null
+      return {
+        type: 'radial_gradient',
+        cx: 0.5,
+        cy: 0.5,
+        radius: 0.5,
+        stops: paint.stops.map((s) => ({
+          offset: s.position,
+          color: figmaColorToHex(s.color),
+        })),
+        opacity: paint.opacity,
+      }
+    }
+
+    case 'IMAGE': {
+      // Image fills reference blobs or ZIP image files; we'll resolve them later
+      let url = ''
+      if (paint.image?.hash && paint.image.hash.length > 0) {
+        url = `__hash:${Array.from(paint.image.hash).map(b => b.toString(16).padStart(2, '0')).join('')}`
+      } else if (paint.image?.dataBlob !== undefined) {
+        url = `__blob:${paint.image.dataBlob}`
+      }
+      return {
+        type: 'image',
+        url,
+        mode: mapScaleMode(paint.imageScaleMode),
+        opacity: paint.opacity,
+      }
+    }
+
+    default:
+      return null
+  }
+}
+
+function gradientAngleFromTransform(m: FigmaMatrix): number {
+  // Figma gradient direction is (m00, m10) in object space (default = horizontal).
+  // atan2 gives the math-convention angle (0° = right, CCW).
+  // Convert to CSS gradient convention (0° = bottom-to-top, 90° = left-to-right).
+  const mathAngle = Math.atan2(m.m10, m.m00) * (180 / Math.PI)
+  return Math.round(90 - mathAngle)
+}
+
+function mapScaleMode(mode?: string): 'stretch' | 'fill' | 'fit' {
+  switch (mode) {
+    case 'FIT': return 'fit'
+    case 'STRETCH': return 'stretch'
+    default: return 'fill'
+  }
+}

@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="./electron/icon.png" alt="OpenPencil" width="120" />
+  <img src="./apps/desktop/build/icon.png" alt="OpenPencil" width="120" />
 </p>
 
 <h1 align="center">OpenPencil</h1>
@@ -10,7 +10,7 @@
 </p>
 
 <p align="center">
-  <a href="./README.md">English</a> · <a href="./README.zh.md">简体中文</a> · <a href="./README.zh-TW.md">繁體中文</a> · <a href="./README.ja.md">日本語</a> · <a href="./README.ko.md">한국어</a> · <a href="./README.fr.md">Français</a> · <a href="./README.es.md">Español</a> · <a href="./README.de.md">Deutsch</a> · <a href="./README.pt.md">Português</a> · <a href="./README.ru.md">Русский</a> · <a href="./README.hi.md">हिन्दी</a> · <a href="./README.tr.md">Türkçe</a> · <a href="./README.th.md">ไทย</a> · <a href="./README.vi.md">Tiếng Việt</a> · <a href="./README.id.md"><b>Bahasa Indonesia</b></a>
+  <a href="./README.md"><b>English</b></a> · <a href="./README.zh.md">简体中文</a> · <a href="./README.zh-TW.md">繁體中文</a> · <a href="./README.ja.md">日本語</a> · <a href="./README.ko.md">한국어</a> · <a href="./README.fr.md">Français</a> · <a href="./README.es.md">Español</a> · <a href="./README.de.md">Deutsch</a> · <a href="./README.pt.md">Português</a> · <a href="./README.ru.md">Русский</a> · <a href="./README.hi.md">हिन्दी</a> · <a href="./README.tr.md">Türkçe</a> · <a href="./README.th.md">ไทย</a> · <a href="./README.vi.md">Tiếng Việt</a> · <a href="./README.id.md">Bahasa Indonesia</a>
 </p>
 
 <p align="center">
@@ -102,7 +102,7 @@ bun run electron:dev
 
 > **Prasyarat:** [Bun](https://bun.sh/) >= 1.0 dan [Node.js](https://nodejs.org/) >= 18
 
-### Deployment Docker
+### Docker
 
 Tersedia beberapa varian image — pilih yang sesuai kebutuhan Anda:
 
@@ -113,6 +113,7 @@ Tersedia beberapa varian image — pilih yang sesuai kebutuhan Anda:
 | `openpencil-codex:latest` | — | + Codex CLI |
 | `openpencil-opencode:latest` | — | + OpenCode CLI |
 | `openpencil-copilot:latest` | — | + GitHub Copilot CLI |
+| `openpencil-gemini:latest` | — | + Gemini CLI |
 | `openpencil-full:latest` | ~1 GB | Semua alat CLI |
 
 **Jalankan (hanya web):**
@@ -167,6 +168,7 @@ docker build --target full -t openpencil-full .
 | **Codex CLI** | Hubungkan di Pengaturan Agen (`Cmd+,`) |
 | **OpenCode** | Hubungkan di Pengaturan Agen (`Cmd+,`) |
 | **GitHub Copilot** | `copilot login` lalu hubungkan di Pengaturan Agen (`Cmd+,`) |
+| **Gemini CLI** | Hubungkan di Pengaturan Agen (`Cmd+,`) |
 
 **Profil Kemampuan Model** — secara otomatis menyesuaikan prompt, mode thinking, dan timeout per tingkatan model. Model tingkat penuh (Claude) mendapat prompt lengkap; tingkat standar (GPT-4o, Gemini, DeepSeek) menonaktifkan thinking; tingkat dasar (MiniMax, Qwen, Llama, Mistral) mendapat prompt JSON bertingkat yang disederhanakan untuk keandalan maksimum.
 
@@ -223,22 +225,32 @@ docker build --target full -t openpencil-full .
 ## Struktur Proyek
 
 ```text
-src/
-  canvas/          Mesin CanvasKit/Skia — menggambar, sinkronisasi, tata letak, panduan, alat pen
-  components/      UI React — editor, panel, dialog bersama, ikon
-  services/ai/     Chat AI, orkestrator, pembuatan desain, streaming
-  services/figma/  Pipeline impor biner Figma .fig
-  services/codegen Generator kode React+Tailwind dan HTML+CSS
-  stores/          Zustand — kanvas, dokumen, halaman, riwayat, AI, pengaturan
-  variables/       Resolusi token desain dan manajemen referensi
-  mcp/             Alat server MCP untuk integrasi CLI eksternal
-  uikit/           Sistem kit komponen yang dapat digunakan ulang
-server/
-  api/ai/          Nitro API — chat streaming, pembuatan, validasi
-  utils/           Pembungkus klien Claude CLI, OpenCode, Codex, Copilot
-electron/
-  main.ts          Jendela, fork Nitro, menu native, pembaruan otomatis
-  preload.ts       Jembatan IPC
+openpencil/
+├── apps/
+│   ├── web/                 Aplikasi web TanStack Start
+│   │   ├── src/
+│   │   │   ├── canvas/      Mesin CanvasKit/Skia — menggambar, sinkronisasi, tata letak
+│   │   │   ├── components/  UI React — editor, panel, dialog bersama, ikon
+│   │   │   ├── services/ai/ Chat AI, orkestrator, pembuatan desain, streaming
+│   │   │   ├── stores/      Zustand — kanvas, dokumen, halaman, riwayat, AI
+│   │   │   ├── mcp/         Alat server MCP untuk integrasi CLI eksternal
+│   │   │   ├── hooks/       Pintasan keyboard, seret file, tempel Figma
+│   │   │   └── uikit/       Sistem kit komponen yang dapat digunakan ulang
+│   │   └── server/
+│   │       ├── api/ai/      Nitro API — chat streaming, pembuatan, validasi
+│   │       └── utils/       Pembungkus Claude CLI, OpenCode, Codex, Copilot
+│   └── desktop/             Aplikasi desktop Electron
+│       ├── main.ts          Jendela, fork Nitro, menu native, pembaruan otomatis
+│       ├── ipc-handlers.ts  Dialog file native, sinkronisasi tema, preferensi IPC
+│       └── preload.ts       Jembatan IPC
+├── packages/
+│   ├── pen-types/           Definisi tipe untuk model PenDocument
+│   ├── pen-core/            Operasi pohon dokumen, mesin tata letak, variabel
+│   ├── pen-codegen/         Generator kode (React, HTML, Vue, Flutter, ...)
+│   ├── pen-figma/           Parser dan konverter file Figma .fig
+│   ├── pen-renderer/        Renderer CanvasKit/Skia mandiri
+│   └── pen-sdk/             SDK payung (re-ekspor semua paket)
+└── .githooks/               Pre-commit sinkronisasi versi dari nama branch
 ```
 
 ## Pintasan Keyboard
@@ -266,6 +278,7 @@ bun --bun run dev          # Server pengembangan (port 3000)
 bun --bun run build        # Build produksi
 bun --bun run test         # Jalankan pengujian (Vitest)
 npx tsc --noEmit           # Pemeriksaan tipe
+bun run bump <version>     # Sinkronisasi versi di semua package.json
 bun run electron:dev       # Pengembangan Electron
 bun run electron:build     # Paket Electron
 ```
@@ -275,10 +288,11 @@ bun run electron:build     # Paket Electron
 Kontribusi sangat disambut! Lihat [CLAUDE.md](./CLAUDE.md) untuk detail arsitektur dan gaya kode.
 
 1. Fork dan clone
-2. Buat cabang: `git checkout -b feat/my-feature`
-3. Jalankan pemeriksaan: `npx tsc --noEmit && bun --bun run test`
-4. Commit dengan [Conventional Commits](https://www.conventionalcommits.org/): `feat(canvas): add rotation snapping`
-5. Buka PR ke `main`
+2. Atur sinkronisasi versi: `git config core.hooksPath .githooks`
+3. Buat cabang: `git checkout -b feat/my-feature`
+4. Jalankan pemeriksaan: `npx tsc --noEmit && bun --bun run test`
+5. Commit dengan [Conventional Commits](https://www.conventionalcommits.org/): `feat(canvas): add rotation snapping`
+6. Buka PR ke `main`
 
 ## Peta Jalan
 
@@ -290,6 +304,7 @@ Kontribusi sangat disambut! Lihat [CLAUDE.md](./CLAUDE.md) untuk detail arsitekt
 - [x] Impor Figma `.fig`
 - [x] Operasi boolean (gabung, kurangi, potong)
 - [x] Profil kemampuan multi-model
+- [x] Restrukturisasi monorepo dengan paket yang dapat digunakan ulang
 - [ ] Pengeditan kolaboratif
 - [ ] Sistem plugin
 
@@ -302,11 +317,10 @@ Kontribusi sangat disambut! Lihat [CLAUDE.md](./CLAUDE.md) untuk detail arsitekt
 ## Komunitas
 
 <a href="https://discord.gg/h9Fmyy6pVh">
-  <img src="./public/logo-discord.svg" alt="Discord" width="16" />
+  <img src="./apps/web/public/logo-discord.svg" alt="Discord" width="16" />
   <strong> Bergabung dengan Discord kami</strong>
 </a>
 — Ajukan pertanyaan, bagikan desain, sarankan fitur.
-
 
 ## Star History
 
