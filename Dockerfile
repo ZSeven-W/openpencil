@@ -13,6 +13,7 @@ COPY apps/web/package.json apps/web/
 COPY apps/desktop/package.json apps/desktop/
 RUN bun install --frozen-lockfile
 COPY . .
+ENV NODE_OPTIONS="--max-old-space-size=4096"
 RUN bun --bun run build
 
 # ── Stage 2: Base (web only, no CLI) ──
