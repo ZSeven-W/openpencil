@@ -218,10 +218,10 @@ function getFreePorts(): Promise<number> {
 
 function getServerEntry(): string {
   if (isDev) {
-    // In dev, the Nitro output lives at .output/server/index.mjs
-    return join(app.getAppPath(), '.output', 'server', 'index.mjs')
+    // In dev, the Nitro output lives at out/web/server/index.mjs
+    return join(app.getAppPath(), 'out', 'web', 'server', 'index.mjs')
   }
-  // In production, extraResources copies .output into the resources folder
+  // In production, extraResources copies out/web into the resources folder
   return join(process.resourcesPath, 'server', 'index.mjs')
 }
 
