@@ -1,6 +1,6 @@
 {
   "name": "@zseven-w/pen-core",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "description": "Core document operations, tree utils, variables, layout engine for OpenPencil",
   "type": "module",
   "exports": {
