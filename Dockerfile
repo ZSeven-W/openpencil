@@ -3,6 +3,14 @@ FROM oven/bun:1 AS builder
 
 WORKDIR /app
 COPY package.json bun.lock ./
+COPY packages/pen-types/package.json packages/pen-types/
+COPY packages/pen-core/package.json packages/pen-core/
+COPY packages/pen-codegen/package.json packages/pen-codegen/
+COPY packages/pen-figma/package.json packages/pen-figma/
+COPY packages/pen-renderer/package.json packages/pen-renderer/
+COPY packages/pen-sdk/package.json packages/pen-sdk/
+COPY apps/web/package.json apps/web/
+COPY apps/desktop/package.json apps/desktop/
 RUN bun install --frozen-lockfile
 COPY . .
 RUN bun --bun run build
