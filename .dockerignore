@@ -1,7 +1,7 @@
 .git
 .github
 .vscode
-.output
+out
 node_modules
 dist
 dist-electron
