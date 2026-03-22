@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="./electron/icon.png" alt="OpenPencil" width="120" />
+  <img src="./apps/desktop/build/icon.png" alt="OpenPencil" width="120" />
 </p>
 
 <h1 align="center">OpenPencil</h1>
@@ -10,7 +10,7 @@
 </p>
 
 <p align="center">
-  <a href="./README.md">English</a> · <a href="./README.zh.md">简体中文</a> · <b>繁體中文</b> · <a href="./README.ja.md">日本語</a> · <a href="./README.ko.md">한국어</a> · <a href="./README.fr.md">Français</a> · <a href="./README.es.md">Español</a> · <a href="./README.de.md">Deutsch</a> · <a href="./README.pt.md">Português</a> · <a href="./README.ru.md">Русский</a> · <a href="./README.hi.md">हिन्दी</a> · <a href="./README.tr.md">Türkçe</a> · <a href="./README.th.md">ไทย</a> · <a href="./README.vi.md">Tiếng Việt</a> · <a href="./README.id.md">Bahasa Indonesia</a>
+  <a href="./README.md"><b>English</b></a> · <a href="./README.zh.md">简体中文</a> · <a href="./README.zh-TW.md">繁體中文</a> · <a href="./README.ja.md">日本語</a> · <a href="./README.ko.md">한국어</a> · <a href="./README.fr.md">Français</a> · <a href="./README.es.md">Español</a> · <a href="./README.de.md">Deutsch</a> · <a href="./README.pt.md">Português</a> · <a href="./README.ru.md">Русский</a> · <a href="./README.hi.md">हिन्दी</a> · <a href="./README.tr.md">Türkçe</a> · <a href="./README.th.md">ไทย</a> · <a href="./README.vi.md">Tiếng Việt</a> · <a href="./README.id.md">Bahasa Indonesia</a>
 </p>
 
 <p align="center">
@@ -102,7 +102,7 @@ bun run electron:dev
 
 > **前置條件：** [Bun](https://bun.sh/) >= 1.0 以及 [Node.js](https://nodejs.org/) >= 18
 
-### Docker 部署
+### Docker
 
 提供多種映像檔變體 — 選擇適合您需求的版本：
 
@@ -113,6 +113,7 @@ bun run electron:dev
 | `openpencil-codex:latest` | — | + Codex CLI |
 | `openpencil-opencode:latest` | — | + OpenCode CLI |
 | `openpencil-copilot:latest` | — | + GitHub Copilot CLI |
+| `openpencil-gemini:latest` | — | + Gemini CLI |
 | `openpencil-full:latest` | ~1 GB | 所有 CLI 工具 |
 
 **執行（僅 Web）：**
@@ -167,6 +168,7 @@ docker build --target full -t openpencil-full .
 | **Codex CLI** | 在 Agent 設定中連接（`Cmd+,`） |
 | **OpenCode** | 在 Agent 設定中連接（`Cmd+,`） |
 | **GitHub Copilot** | 執行 `copilot login` 後在 Agent 設定中連接（`Cmd+,`） |
+| **Gemini CLI** | 在 Agent 設定中連接（`Cmd+,`） |
 
 **模型能力設定檔** — 自動依據模型層級調整提示詞、思考模式和逾時設定。完整層級模型（Claude）獲得完整提示詞；標準層級（GPT-4o、Gemini、DeepSeek）停用思考模式；基礎層級（MiniMax、Qwen、Llama、Mistral）獲得精簡巢狀 JSON 提示詞，確保最大可靠性。
 
@@ -223,22 +225,32 @@ docker build --target full -t openpencil-full .
 ## 專案結構
 
 ```text
-src/
-  canvas/          CanvasKit/Skia 引擎 — 繪圖、同步、版面配置、參考線、鋼筆工具
-  components/      React UI — 編輯器、面板、共用對話框、圖示
-  services/ai/     AI 聊天、編排器、設計生成、串流處理
-  services/figma/  Figma .fig 二進位檔案匯入管線
-  services/codegen React+Tailwind 和 HTML+CSS 程式碼生成器
-  stores/          Zustand — 畫布、文件、頁面、歷程、AI、設定
-  variables/       設計令牌解析與參照管理
-  mcp/             供外部 CLI 整合使用的 MCP 伺服器工具
-  uikit/           可重複使用元件套件系統
-server/
-  api/ai/          Nitro API — 串流聊天、生成、驗證
-  utils/           Claude CLI、OpenCode、Codex、Copilot 客戶端封裝
-electron/
-  main.ts          視窗、Nitro 子處理序、原生選單、自動更新
-  preload.ts       IPC 橋接
+openpencil/
+├── apps/
+│   ├── web/                 TanStack Start Web 應用程式
+│   │   ├── src/
+│   │   │   ├── canvas/      CanvasKit/Skia 引擎 — 繪圖、同步、版面配置
+│   │   │   ├── components/  React UI — 編輯器、面板、共用對話框、圖示
+│   │   │   ├── services/ai/ AI 聊天、編排器、設計生成、串流處理
+│   │   │   ├── stores/      Zustand — 畫布、文件、頁面、歷程、AI
+│   │   │   ├── mcp/         供外部 CLI 整合使用的 MCP 伺服器工具
+│   │   │   ├── hooks/       鍵盤快捷鍵、檔案拖放、Figma 貼上
+│   │   │   └── uikit/       可重複使用元件套件系統
+│   │   └── server/
+│   │       ├── api/ai/      Nitro API — 串流聊天、生成、驗證
+│   │       └── utils/       Claude CLI、OpenCode、Codex、Copilot 客戶端封裝
+│   └── desktop/             Electron 桌面應用程式
+│       ├── main.ts          視窗、Nitro 子處理序、原生選單、自動更新
+│       ├── ipc-handlers.ts  原生檔案對話框、主題同步、偏好設定 IPC
+│       └── preload.ts       IPC 橋接
+├── packages/
+│   ├── pen-types/           PenDocument 模型型別定義
+│   ├── pen-core/            文件樹操作、版面配置引擎、變數
+│   ├── pen-codegen/         程式碼生成器（React、HTML、Vue、Flutter...）
+│   ├── pen-figma/           Figma .fig 檔案解析器與轉換器
+│   ├── pen-renderer/        獨立 CanvasKit/Skia 渲染器
+│   └── pen-sdk/             整合 SDK（重新匯出所有套件）
+└── .githooks/               Pre-commit 版本號同步（從分支名稱）
 ```
 
 ## 鍵盤快捷鍵
@@ -266,6 +278,7 @@ bun --bun run dev          # 開發伺服器（連接埠 3000）
 bun --bun run build        # 正式版建置
 bun --bun run test         # 執行測試（Vitest）
 npx tsc --noEmit           # 型別檢查
+bun run bump <version>     # 在所有 package.json 間同步版本號
 bun run electron:dev       # Electron 開發模式
 bun run electron:build     # Electron 封裝
 ```
@@ -275,10 +288,11 @@ bun run electron:build     # Electron 封裝
 歡迎貢獻！請查閱 [CLAUDE.md](./CLAUDE.md) 了解架構細節和程式碼風格。
 
 1. Fork 並複製存放庫
-2. 建立分支：`git checkout -b feat/my-feature`
-3. 執行檢查：`npx tsc --noEmit && bun --bun run test`
-4. 使用 [Conventional Commits](https://www.conventionalcommits.org/) 提交：`feat(canvas): add rotation snapping`
-5. 向 `main` 分支發起 PR
+2. 設定版本同步：`git config core.hooksPath .githooks`
+3. 建立分支：`git checkout -b feat/my-feature`
+4. 執行檢查：`npx tsc --noEmit && bun --bun run test`
+5. 使用 [Conventional Commits](https://www.conventionalcommits.org/) 提交：`feat(canvas): add rotation snapping`
+6. 向 `main` 分支發起 PR
 
 ## 路線圖
 
@@ -290,6 +304,7 @@ bun run electron:build     # Electron 封裝
 - [x] Figma `.fig` 匯入
 - [x] 布林運算（聯集、減去、交集）
 - [x] 多模型能力設定檔
+- [x] Monorepo 重構，支援可重複使用套件
 - [ ] 協同編輯
 - [ ] 外掛程式系統
 
@@ -302,11 +317,10 @@ bun run electron:build     # Electron 封裝
 ## 社群
 
 <a href="https://discord.gg/h9Fmyy6pVh">
-  <img src="./public/logo-discord.svg" alt="Discord" width="16" />
+  <img src="./apps/web/public/logo-discord.svg" alt="Discord" width="16" />
   <strong> 加入我們的 Discord</strong>
 </a>
 — 提問、分享設計、提出功能建議。
-
 
 ## Star History
 

@@ -1,0 +1,744 @@
+import type { PenNode } from '@/types/pen'
+import { useDocumentStore, DEFAULT_FRAME_ID, getActivePageChildren } from '@/stores/document-store'
+import { useCanvasStore } from '@/stores/canvas-store'
+import { useHistoryStore } from '@/stores/history-store'
+import {
+  pendingAnimationNodes,
+  markNodesForAnimation,
+  startNewAnimationBatch,
+  resetAnimationState,
+} from './design-animation'
+import {
+  toSizeNumber,
+  createPhonePlaceholderDataUri,
+  estimateNodeIntrinsicHeight,
+} from './generation-utils'
+import { defaultLineHeight } from '@/canvas/canvas-text-measure'
+import { applyIconPathResolution, applyNoEmojiIconHeuristic, resolveAsyncIcons, resolveAllPendingIcons } from './icon-resolver'
+import {
+  resolveNodeRole,
+  resolveTreeRoles,
+  resolveTreePostPass,
+} from './role-resolver'
+import type { RoleContext } from './role-resolver'
+// Trigger side-effect registration of all role definitions
+import './role-definitions'
+import { extractJsonFromResponse } from './design-parser'
+import { scanAndFillImages, enqueueImageForSearch, resetImageSearchQueue } from './image-search-pipeline'
+import {
+  deepCloneNode,
+  mergeNodeForProgressiveUpsert,
+  ensureUniqueNodeIds,
+  sanitizeLayoutChildPositions,
+  sanitizeScreenFrameBounds,
+  hasActiveLayout,
+  isBadgeOverlayNode,
+} from './design-node-sanitization'
+
+// ---------------------------------------------------------------------------
+// Cross-phase ID remapping -- tracks replaceEmptyFrame mappings so that
+// later phases recognise the root frame ID has been remapped to DEFAULT_FRAME_ID.
+// ---------------------------------------------------------------------------
+
+const generationRemappedIds = new Map<string, string>()
+let generationContextHint = ''
+/** Root frame width for the current generation (1200 desktop, 375 mobile) */
+let generationCanvasWidth = 1200
+/** Root frame ID for the current generation — may differ from DEFAULT_FRAME_ID
+ *  when canvas already has content and new content is placed beside it. */
+let generationRootFrameId: string = DEFAULT_FRAME_ID
+/** Node IDs that existed on canvas before the current generation started.
+ *  Used by upsert sanitization to avoid ID collisions with pre-existing content. */
+let preExistingNodeIds = new Set<string>()
+
+export function resetGenerationRemapping(): void {
+  generationRemappedIds.clear()
+  generationRootFrameId = DEFAULT_FRAME_ID
+  // Snapshot all existing node IDs so upsert can avoid collisions
+  preExistingNodeIds = new Set(useDocumentStore.getState().getFlatNodes().map((n) => n.id))
+  // Reset incremental image search queue for the new generation
+  resetImageSearchQueue()
+}
+
+export function setGenerationContextHint(hint?: string): void {
+  generationContextHint = hint?.trim() ?? ''
+}
+
+export function setGenerationCanvasWidth(width: number): void {
+  generationCanvasWidth = width > 0 ? width : 1200
+}
+
+/** Expose the current canvas width for use by other modules (read-only). */
+export function getGenerationCanvasWidth(): number {
+  return generationCanvasWidth
+}
+
+/** Expose the root frame ID for the current generation (read-only). */
+export function getGenerationRootFrameId(): string {
+  return generationRootFrameId
+}
+
+/** Expose the current remapped IDs map for use by other modules (read-only). */
+export function getGenerationRemappedIds(): Map<string, string> {
+  return generationRemappedIds
+}
+
+// ---------------------------------------------------------------------------
+// Insert a single streaming node into the canvas
+// ---------------------------------------------------------------------------
+
+/**
+ * Insert a single streaming node into the canvas instantly.
+ * Handles root frame replacement and parent ID remapping.
+ * Note: tree-aware heuristics (button width, frame height, clipContent)
+ * cannot run here because the node has no children yet during streaming.
+ * Use applyPostStreamingTreeHeuristics() after all subtask nodes are inserted.
+ */
+/**
+ * Normalize gradient stop offsets in all fills on a node (in-place).
+ * Handles stops without an offset field by auto-distributing them evenly.
+ * Also normalizes percentage-format offsets (>1) to the 0-1 range.
+ */
+function normalizeNodeFills(node: PenNode): void {
+  const fills = 'fill' in node ? (node as { fill?: unknown }).fill : undefined
+
+  // Convert string shorthand (e.g. "#000000") to PenFill array
+  if (typeof fills === 'string') {
+    ;(node as unknown as Record<string, unknown>).fill = [{ type: 'solid', color: fills }]
+    return
+  }
+
+  if (!Array.isArray(fills)) return
+
+  // Convert any string elements in the array to solid fill objects
+  for (let i = 0; i < fills.length; i++) {
+    if (typeof fills[i] === 'string') {
+      fills[i] = { type: 'solid', color: fills[i] }
+    }
+  }
+
+  for (const fill of fills) {
+    if (!fill || typeof fill !== 'object') continue
+    const f = fill as { type?: string; stops?: unknown[] }
+    if ((f.type === 'linear_gradient' || f.type === 'radial_gradient') && Array.isArray(f.stops)) {
+      const n = f.stops.length
+      f.stops = f.stops.map((s: unknown, i: number) => {
+        const stop = s as Record<string, unknown>
+        let offset = typeof stop.offset === 'number' && Number.isFinite(stop.offset)
+          ? stop.offset
+          : typeof stop.position === 'number' && Number.isFinite(stop.position)
+            ? (stop.position as number)
+            : null
+        if (offset !== null && offset > 1) offset = offset / 100
+        return {
+          color: typeof stop.color === 'string' ? stop.color : '#000000',
+          offset: offset !== null ? Math.max(0, Math.min(1, offset)) : i / Math.max(n - 1, 1),
+        }
+      })
+    }
+  }
+}
+
+export function insertStreamingNode(
+  node: PenNode,
+  parentId: string | null,
+): void {
+  const { addNode, getNodeById } = useDocumentStore.getState()
+  normalizeNodeFills(node)
+
+  // Ensure unique node IDs to avoid collisions with pre-existing canvas content.
+  // The upsert path already does this in sanitizeNodesForUpsert, but the streaming
+  // path was missing it — causing duplicate Fabric objects when two generations
+  // produce nodes with the same IDs (e.g. "header-title" in both FoodHome and Settings).
+  const streamCounters = new Map<string, number>()
+  const streamRemaps = new Map<string, string>()
+  ensureUniqueNodeIds(node, preExistingNodeIds, streamCounters, streamRemaps)
+  // Track the newly inserted IDs so subsequent streaming nodes don't collide either
+  const trackNewIds = (n: PenNode) => {
+    preExistingNodeIds.add(n.id)
+    if ('children' in n && Array.isArray(n.children)) {
+      for (const child of n.children) trackNewIds(child)
+    }
+  }
+  trackNewIds(node)
+  // Merge any remappings into the generation-wide remap table
+  for (const [from, to] of streamRemaps) {
+    generationRemappedIds.set(from, to)
+  }
+
+  // Ensure container nodes have children array for later child insertions
+  if ((node.type === 'frame' || node.type === 'group') && !('children' in node)) {
+    ;(node as PenNode & { children: PenNode[] }).children = []
+  }
+
+  // Resolve remapped parent IDs (e.g., root frame -> DEFAULT_FRAME_ID)
+  const resolvedParent = parentId
+    ? (generationRemappedIds.get(parentId) ?? parentId)
+    : null
+
+  const parentNode = resolvedParent
+    ? getNodeById(resolvedParent)
+    : null
+
+  if (parentNode && hasActiveLayout(parentNode) && !isBadgeOverlayNode(node)) {
+    if ('x' in node) delete (node as { x?: number }).x
+    if ('y' in node) delete (node as { y?: number }).y
+    // Text defaults inside layout frames:
+    // - vertical layout: body text prefers fill width for wrapping
+    // - horizontal layout: short labels should hug content to avoid squeezing siblings
+    if (node.type === 'text') {
+      const parentLayout = ('layout' in parentNode ? parentNode.layout : undefined)
+      const content = ('content' in node ? (node.content as string) ?? '' : '')
+      const isLongText = content.length > 15
+
+      if (parentLayout === 'vertical') {
+        // Only force fill_container + fixed-width on LONG text that needs wrapping.
+        // Short labels/titles/numbers should hug content width (auto).
+        if (isLongText) {
+          if (typeof node.width === 'number') node.width = 'fill_container'
+          if (!node.textGrowth) node.textGrowth = 'fixed-width'
+        } else {
+          // Short text in vertical layout: fix pixel width but don't force wrapping
+          if (typeof node.width === 'number') node.width = 'fill_container'
+        }
+      } else if (parentLayout === 'horizontal') {
+        if (typeof node.width === 'string' && node.width.startsWith('fill_container') && !isLongText) {
+          node.width = 'fit_content'
+        }
+        if (!isLongText && (!node.textGrowth || node.textGrowth === 'fixed-width' || node.textGrowth === 'fixed-width-height')) {
+          node.textGrowth = 'auto'
+        }
+      }
+      // Respect AI's explicit textGrowth setting; don't override if already set.
+
+      // Strip explicit pixel height on text nodes — always let the engine auto-size.
+      // AI models often output height values that cause text clipping/overlap.
+      if (typeof node.height === 'number' && node.textGrowth !== 'fixed-width-height') {
+        delete (node as { height?: unknown }).height
+      }
+      // Default lineHeight based on text role (heading vs body)
+      if (!node.lineHeight) {
+        node.lineHeight = defaultLineHeight(node.fontSize ?? 16)
+      }
+    }
+  }
+
+  // Apply role-based defaults before legacy heuristics
+  const roleCtx: RoleContext = {
+    parentRole: parentNode?.role,
+    parentLayout: parentNode && 'layout' in parentNode ? parentNode.layout : undefined,
+    canvasWidth: generationCanvasWidth,
+  }
+  resolveNodeRole(node, roleCtx)
+
+  applyGenerationHeuristics(node)
+
+  // Recursively remove x/y from children inside layout containers so the
+  // layout engine can position them correctly during canvas sync.
+  const parentHasLayout = parentNode ? hasActiveLayout(parentNode) : false
+  sanitizeLayoutChildPositions(node, parentHasLayout)
+
+  // Skip AI-streamed children under phone placeholders. Placeholder internals are
+  // normalized post-streaming (at most one centered label text is allowed).
+  // Also skip if the parent node doesn't exist on canvas (was itself blocked).
+  if (resolvedParent !== null && !parentNode) {
+    return
+  }
+  if (parentNode && isInsidePhonePlaceholder(resolvedParent!, getNodeById)) {
+    return
+  }
+
+  if (resolvedParent === null && node.type === 'frame') {
+    if (isCanvasOnlyEmptyFrame()) {
+      // Root frame replaces the default empty frame -- no animation needed
+      replaceEmptyFrame(node)
+      generationRootFrameId = DEFAULT_FRAME_ID
+    } else {
+      // Canvas already has content — add as new top-level frame beside existing ones
+      const { document: doc } = useDocumentStore.getState()
+      const activePageId = useCanvasStore.getState().activePageId
+      const pageChildren = getActivePageChildren(doc, activePageId)
+      let maxRight = 0
+      for (const child of pageChildren) {
+        const cx = child.x ?? 0
+        const cw = ('width' in child && typeof child.width === 'number') ? child.width : 0
+        maxRight = Math.max(maxRight, cx + cw)
+      }
+      node.x = maxRight + 100
+      node.y = 0
+      generationRootFrameId = node.id
+      addNode(null, node)
+    }
+  } else {
+    const effectiveParent = resolvedParent ?? generationRootFrameId
+    // Verify parent exists, fall back to generation root frame
+    const parent = getNodeById(effectiveParent)
+    const insertParent = parent ? effectiveParent : generationRootFrameId
+
+    // Frames with fills appear instantly (background context for children).
+    // All other nodes fade in with staggered animation.
+    const nodeFill = 'fill' in node ? node.fill : undefined
+    const hasFill = Array.isArray(nodeFill)
+      ? nodeFill.length > 0
+      : (nodeFill != null && typeof nodeFill === 'object')
+    const isBackgroundFrame = node.type === 'frame' && hasFill
+    if (!isBackgroundFrame) {
+      pendingAnimationNodes.add(node.id)
+      startNewAnimationBatch()
+    }
+
+    // Badge/overlay nodes prepend (index 0) so they render on top (earlier = higher z-order).
+    // All other nodes append to preserve auto-layout generation order.
+    addNode(insertParent, node, isBadgeOverlayNode(node) ? 0 : Infinity)
+
+    // When a frame is inserted into a horizontal layout, equalize sibling card widths
+    // to prevent overflow when multiple cards are placed in the same row.
+    if (node.type === 'frame') {
+      equalizeHorizontalSiblings(insertParent)
+    }
+
+    // When a top-level section is added directly under the generation root frame,
+    // progressively expand root height to fit the new content.
+    if (insertParent === generationRootFrameId) {
+      expandRootFrameHeight()
+    }
+  }
+
+  // Immediately enqueue image nodes for background search as they arrive
+  if (node.type === 'image') {
+    enqueueImageForSearch(node)
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Canvas apply/upsert operations
+// ---------------------------------------------------------------------------
+
+export function applyNodesToCanvas(nodes: PenNode[]): void {
+  const { getFlatNodes } = useDocumentStore.getState()
+  const existingIds = new Set(getFlatNodes().map((n) => n.id))
+  const preparedNodes = sanitizeNodesForInsert(nodes, existingIds)
+
+  // If canvas only has one empty frame, replace it with the generated content
+  if (isCanvasOnlyEmptyFrame() && preparedNodes.length === 1 && preparedNodes[0].type === 'frame') {
+    replaceEmptyFrame(preparedNodes[0])
+    resolveAllPendingIcons().catch(console.warn)
+    const rootId = getGenerationRootFrameId()
+    if (rootId) scanAndFillImages(rootId).catch(() => {})
+    return
+  }
+
+  const { addNode, getNodeById } = useDocumentStore.getState()
+  // Insert into the root frame if it exists, otherwise at document root
+  const rootFrame = getNodeById(DEFAULT_FRAME_ID)
+  const parentId = rootFrame ? DEFAULT_FRAME_ID : null
+  for (const node of preparedNodes) {
+    addNode(parentId, node, Infinity)
+  }
+  adjustRootFrameHeightToContent()
+  resolveAllPendingIcons().catch(console.warn)
+  const rootId = getGenerationRootFrameId()
+  if (rootId) scanAndFillImages(rootId).catch(() => {})
+}
+
+export function upsertNodesToCanvas(nodes: PenNode[]): number {
+  const preparedNodes = sanitizeNodesForUpsert(nodes)
+
+  if (isCanvasOnlyEmptyFrame() && preparedNodes.length === 1 && preparedNodes[0].type === 'frame') {
+    replaceEmptyFrame(preparedNodes[0])
+    return 1
+  }
+
+  const { addNode, updateNode, getNodeById } = useDocumentStore.getState()
+  const rootFrame = getNodeById(DEFAULT_FRAME_ID)
+  const parentId = rootFrame ? DEFAULT_FRAME_ID : null
+  let count = 0
+
+  for (const node of preparedNodes) {
+    // Resolve remapped IDs (e.g., root frame that was mapped to DEFAULT_FRAME_ID in Phase 1)
+    const resolvedId = generationRemappedIds.get(node.id) ?? node.id
+    const existing = getNodeById(resolvedId)
+    if (existing) {
+      const remappedNode = resolvedId !== node.id ? { ...node, id: resolvedId } : node
+      const merged = mergeNodeForProgressiveUpsert(existing, remappedNode)
+      updateNode(resolvedId, merged)
+    } else {
+      addNode(parentId, node, Infinity)
+    }
+    count++
+  }
+
+  adjustRootFrameHeightToContent()
+  const rootId = getGenerationRootFrameId()
+  if (rootId) scanAndFillImages(rootId).catch(() => {})
+  return count
+}
+
+/** Same as upsertNodesToCanvas but skips sanitization (caller already did it). */
+function upsertPreparedNodes(preparedNodes: PenNode[]): number {
+  if (isCanvasOnlyEmptyFrame() && preparedNodes.length === 1 && preparedNodes[0].type === 'frame') {
+    replaceEmptyFrame(preparedNodes[0])
+    return 1
+  }
+
+  const { addNode, updateNode, getNodeById } = useDocumentStore.getState()
+  const rootFrame = getNodeById(DEFAULT_FRAME_ID)
+  const parentId = rootFrame ? DEFAULT_FRAME_ID : null
+  let count = 0
+
+  for (const node of preparedNodes) {
+    // Resolve remapped IDs (e.g., root frame that was mapped to DEFAULT_FRAME_ID in Phase 1)
+    const resolvedId = generationRemappedIds.get(node.id) ?? node.id
+    const existing = getNodeById(resolvedId)
+    if (existing) {
+      const remappedNode = resolvedId !== node.id ? { ...node, id: resolvedId } : node
+      const merged = mergeNodeForProgressiveUpsert(existing, remappedNode)
+      updateNode(resolvedId, merged)
+    } else {
+      addNode(parentId, node, Infinity)
+    }
+    count++
+  }
+
+  adjustRootFrameHeightToContent()
+  return count
+}
+
+/**
+ * Animate nodes onto the canvas with a staggered fade-in effect.
+ * Synchronous -- nodes are inserted immediately, and canvas-sync
+ * schedules fire-and-forget staggered opacity animations.
+ */
+export function animateNodesToCanvas(nodes: PenNode[]): void {
+  resetGenerationRemapping()
+  resetAnimationState()
+  const prepared = sanitizeNodesForUpsert(nodes)
+  startNewAnimationBatch()
+  markNodesForAnimation(prepared)
+
+  useHistoryStore.getState().startBatch(useDocumentStore.getState().document)
+  upsertPreparedNodes(prepared)
+  useHistoryStore.getState().endBatch(useDocumentStore.getState().document)
+
+  // Resolve any icons queued for async (brand logos etc.) after nodes are in the store
+  resolveAllPendingIcons().catch(console.warn)
+  const rootId = getGenerationRootFrameId()
+  if (rootId) scanAndFillImages(rootId).catch(() => {})
+}
+
+// ---------------------------------------------------------------------------
+// Extract + apply convenience wrappers
+// ---------------------------------------------------------------------------
+
+/**
+ * Extract PenNode JSON from AI response text and apply to canvas.
+ * Returns the number of top-level elements added (0 if nothing found/applied).
+ */
+export function extractAndApplyDesign(responseText: string): number {
+  const nodes = extractJsonFromResponse(responseText)
+  if (!nodes || nodes.length === 0) return 0
+
+  useHistoryStore.getState().startBatch(useDocumentStore.getState().document)
+  try {
+    applyNodesToCanvas(nodes)
+  } finally {
+    useHistoryStore.getState().endBatch(useDocumentStore.getState().document)
+  }
+  return nodes.length
+}
+
+/**
+ * Extract PenNode JSON from AI response text and apply updates/insertions to canvas.
+ * Handles both new nodes and modifications (matching by ID).
+ */
+export function extractAndApplyDesignModification(responseText: string): number {
+  const nodes = extractJsonFromResponse(responseText)
+  if (!nodes || nodes.length === 0) return 0
+
+  const { addNode, updateNode, getNodeById } = useDocumentStore.getState()
+  let count = 0
+
+  useHistoryStore.getState().startBatch(useDocumentStore.getState().document)
+  try {
+    for (const node of nodes) {
+      const existing = getNodeById(node.id)
+      if (existing) {
+        // Update existing node
+        updateNode(node.id, node)
+        count++
+      } else {
+        // It's a new node implied by the modification (e.g. "add a button")
+        const rootFrame = getNodeById(DEFAULT_FRAME_ID)
+        const parentId = rootFrame ? DEFAULT_FRAME_ID : null
+        addNode(parentId, node)
+        count++
+      }
+    }
+  } finally {
+    useHistoryStore.getState().endBatch(useDocumentStore.getState().document)
+  }
+  return count
+}
+
+// ---------------------------------------------------------------------------
+// Generation heuristics
+// ---------------------------------------------------------------------------
+
+/**
+ * Lightweight post-parse cleanup applied to each node.
+ * Handles icon path resolution, emoji removal, and image placeholder generation.
+ * Layout/sizing heuristics are now handled by the role resolver.
+ */
+export function applyGenerationHeuristics(node: PenNode): void {
+  // Default icon_font nodes to lucide family when unspecified
+  if (node.type === 'icon_font' && !node.iconFontFamily) {
+    node.iconFontFamily = 'lucide'
+  }
+
+  applyIconPathResolution(node)
+  applyNoEmojiIconHeuristic(node)
+  // Re-run icon resolution on nodes converted from emoji text → path by the
+  // heuristic above. applyNoEmojiIconHeuristic sets a circle fallback path;
+  // the icon resolver can often match the name (e.g. "Pizza Emoji Path" → pizza).
+  if (node.type === 'path') {
+    applyIconPathResolution(node)
+  }
+  applyImagePlaceholderHeuristic(node)
+
+  if (!('children' in node) || !Array.isArray(node.children)) return
+  for (const child of node.children) {
+    applyGenerationHeuristics(child)
+  }
+}
+
+/**
+ * Post-streaming tree heuristics -- applies tree-aware fixes after all nodes
+ * of a subtask have been inserted into the store.
+ *
+ * During streaming, nodes are inserted individually (no children), so tree-aware
+ * heuristics like button width expansion, frame height expansion, and clipContent
+ * detection fail silently. This function re-runs them on the completed subtree.
+ */
+export function applyPostStreamingTreeHeuristics(rootNodeId: string): void {
+  const { getNodeById, updateNode } = useDocumentStore.getState()
+  const rootNode = getNodeById(rootNodeId)
+  if (!rootNode || rootNode.type !== 'frame') return
+  if (!Array.isArray(rootNode.children) || rootNode.children.length === 0) return
+
+  // Role-based tree resolution + cross-node post-pass
+  resolveTreeRoles(rootNode, generationCanvasWidth)
+  resolveTreePostPass(rootNode, generationCanvasWidth, getNodeById, updateNode)
+
+  // Resolve pending icons asynchronously via Iconify API (fire-and-forget)
+  resolveAsyncIcons(rootNodeId).catch(console.warn)
+}
+
+// ---------------------------------------------------------------------------
+// Root frame height management
+// ---------------------------------------------------------------------------
+
+export function adjustRootFrameHeightToContent(frameId?: string): void {
+  const { getNodeById, updateNode } = useDocumentStore.getState()
+  const rootId = frameId ?? generationRootFrameId
+  const root = getNodeById(rootId)
+  if (!root || root.type !== 'frame') return
+  if (!Array.isArray(root.children) || root.children.length === 0) return
+
+  const requiredHeight = estimateNodeIntrinsicHeight(root)
+  const targetHeight = Math.max(320, Math.round(requiredHeight))
+  const currentHeight = toSizeNumber(root.height, 0)
+  if (currentHeight <= 0) return
+  if (Math.abs(currentHeight - targetHeight) < 8) return
+
+  updateNode(rootId, { height: targetHeight })
+}
+
+/**
+ * Expand-only version of adjustRootFrameHeightToContent.
+ * Used during streaming: only grows the root frame, never shrinks it.
+ * This prevents visual jitter while sections are being progressively added.
+ *
+ * When a frame is inserted into a horizontal layout parent, check if sibling
+ * frame children should be equalized to fill_container to prevent overflow.
+ * This runs DURING streaming so cards distribute evenly as they arrive.
+ */
+export function expandRootFrameHeight(frameId?: string): void {
+  const { getNodeById, updateNode } = useDocumentStore.getState()
+  const rootId = frameId ?? generationRootFrameId
+  const root = getNodeById(rootId)
+  if (!root || root.type !== 'frame') return
+  if (!Array.isArray(root.children) || root.children.length === 0) return
+
+  const requiredHeight = estimateNodeIntrinsicHeight(root)
+  const targetHeight = Math.max(320, Math.round(requiredHeight))
+  const currentHeight = toSizeNumber(root.height, 0)
+  // Only grow -- never shrink during progressive generation
+  if (currentHeight > 0 && targetHeight <= currentHeight) return
+
+  updateNode(rootId, { height: targetHeight })
+}
+
+// ---------------------------------------------------------------------------
+// Internal helpers
+// ---------------------------------------------------------------------------
+
+/**
+ * Check if the canvas only has the default empty frame (no children).
+ * Uses active page children (not document.children) to support page migration.
+ */
+function isCanvasOnlyEmptyFrame(): boolean {
+  const { document, getNodeById } = useDocumentStore.getState()
+  const activePageId = useCanvasStore.getState().activePageId
+  const pageChildren = getActivePageChildren(document, activePageId)
+  if (pageChildren.length !== 1) return false
+  const rootFrame = getNodeById(DEFAULT_FRAME_ID)
+  if (!rootFrame) return false
+  return !('children' in rootFrame) || !rootFrame.children || rootFrame.children.length === 0
+}
+
+/**
+ * Replace the default empty frame with the generated frame node,
+ * preserving the root frame ID so canvas sync continues to work.
+ */
+function replaceEmptyFrame(generatedFrame: PenNode): void {
+  const { updateNode } = useDocumentStore.getState()
+  // Record the remapping so subsequent phases can find this node by its original ID
+  generationRemappedIds.set(generatedFrame.id, DEFAULT_FRAME_ID)
+  // Keep root frame ID and position (x=0, y=0), take everything else from generated frame
+  const { id: _id, x: _x, y: _y, ...rest } = generatedFrame
+  updateNode(DEFAULT_FRAME_ID, rest)
+}
+
+function equalizeHorizontalSiblings(parentId: string): void {
+  const { getNodeById, updateNode } = useDocumentStore.getState()
+  const parent = getNodeById(parentId)
+  if (!parent || parent.type !== 'frame') return
+  if (parent.layout !== 'horizontal') return
+  if (!Array.isArray(parent.children) || parent.children.length < 2) return
+
+  // Skip if any card already uses fill_container -- the AI chose it deliberately
+  const cardCandidates = parent.children.filter(
+    (c) => c.type === 'frame'
+      && c.role !== 'phone-mockup'
+      && c.role !== 'divider'
+      && c.role !== 'badge' && c.role !== 'pill' && c.role !== 'tag'
+      && toSizeNumber('height' in c ? c.height : undefined, 0) > 88,
+  )
+  if (cardCandidates.some((c) => ('width' in c) && c.width === 'fill_container')) return
+
+  const fixedFrames = cardCandidates.filter(
+    (c) => 'width' in c && typeof c.width === 'number' && (c.width as number) > 0,
+  )
+  if (fixedFrames.length < 2) return
+
+  // Only equalize when widths vary significantly (ratio < 0.6)
+  const widths = fixedFrames.map((c) => toSizeNumber('width' in c ? c.width : undefined, 0))
+  const maxW = Math.max(...widths)
+  const minW = Math.min(...widths)
+  if (maxW <= 0 || minW / maxW >= 0.6) return
+
+  // Check if they look like a card row (similar heights)
+  const heights = fixedFrames.map((c) => toSizeNumber('height' in c ? c.height : undefined, 0))
+  const maxH = Math.max(...heights)
+  const minH = Math.min(...heights)
+  if (maxH <= 0 || minH / maxH <= 0.5) return
+
+  // Convert to fill_container for even distribution and equal height
+  for (const child of fixedFrames) {
+    updateNode(child.id, { width: 'fill_container', height: 'fill_container' } as Partial<PenNode>)
+  }
+}
+
+function applyImagePlaceholderHeuristic(node: PenNode): void {
+  if (node.type !== 'image') return
+
+  const marker = `${node.name ?? ''} ${node.id}`.toLowerCase()
+  const contextMarker = generationContextHint.toLowerCase()
+  const contextualScreenshotHint = /(截图|screenshot|mockup|手机|app[-_\s]*screen)/.test(contextMarker)
+  const screenshotLike = isScreenshotLikeMarker(marker)
+    || (contextualScreenshotHint && /(preview|hero|showcase|phone|screen)/.test(marker))
+  if (!screenshotLike) return
+
+  const width = toSizeNumber(node.width, 360)
+  const height = toSizeNumber(node.height, 720)
+  // Detect dark/light from context hint (dark if mentions dark/terminal/cyber/night)
+  const dark = !/(light|bright)/.test(generationContextHint.toLowerCase())
+  node.src = createPhonePlaceholderDataUri(width, height, dark)
+  if (node.cornerRadius === undefined) {
+    node.cornerRadius = 24
+  }
+}
+
+function isScreenshotLikeMarker(text: string): boolean {
+  return /app[-_\s]*screen|screenshot|mockup|phone|mobile|device|截图|手机/.test(text)
+}
+
+// ---------------------------------------------------------------------------
+// Node sanitization for insert/upsert
+// ---------------------------------------------------------------------------
+
+function sanitizeNodesForInsert(
+  nodes: PenNode[],
+  existingIds: Set<string>,
+): PenNode[] {
+  const cloned = nodes.map((n) => deepCloneNode(n))
+
+  for (const node of cloned) {
+    resolveTreeRoles(node, generationCanvasWidth)
+    applyGenerationHeuristics(node)
+    sanitizeLayoutChildPositions(node, false)
+    sanitizeScreenFrameBounds(node)
+  }
+
+  const counters = new Map<string, number>()
+  const used = new Set(existingIds)
+  for (const node of cloned) {
+    ensureUniqueNodeIds(node, used, counters)
+  }
+
+  return cloned
+}
+
+function sanitizeNodesForUpsert(nodes: PenNode[]): PenNode[] {
+  const cloned = nodes.map((n) => deepCloneNode(n))
+
+  for (const node of cloned) {
+    resolveTreeRoles(node, generationCanvasWidth)
+    applyGenerationHeuristics(node)
+    sanitizeLayoutChildPositions(node, false)
+    sanitizeScreenFrameBounds(node)
+  }
+
+  // Start with pre-existing node IDs to avoid collisions with content
+  // that was on canvas before this generation started. IDs generated
+  // within the current batch are also tracked so siblings stay unique.
+  // Record remappings so progressive upsert can resolve renamed IDs.
+  const counters = new Map<string, number>()
+  const used = new Set(preExistingNodeIds)
+  const newRemaps = new Map<string, string>()
+  for (const node of cloned) {
+    ensureUniqueNodeIds(node, used, counters, newRemaps)
+  }
+
+  // Merge new remappings into the generation-wide remap table
+  for (const [from, to] of newRemaps) {
+    generationRemappedIds.set(from, to)
+  }
+
+  return cloned
+}
+
+/** Check if a node (by ID) is inside a Phone Placeholder frame (any ancestor). */
+function isInsidePhonePlaceholder(
+  nodeId: string,
+  getNodeById: (id: string) => PenNode | undefined,
+): boolean {
+  let current = getNodeById(nodeId)
+  while (current) {
+    if (current.name === 'Phone Placeholder') return true
+    const parent = useDocumentStore.getState().getParentOf(current.id)
+    if (!parent) break
+    current = parent
+  }
+  return false
+}

@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="./electron/icon.png" alt="OpenPencil" width="120" />
+  <img src="./apps/desktop/build/icon.png" alt="OpenPencil" width="120" />
 </p>
 
 <h1 align="center">OpenPencil</h1>
@@ -10,7 +10,7 @@
 </p>
 
 <p align="center">
-  <a href="./README.md">English</a> · <a href="./README.zh.md">简体中文</a> · <a href="./README.zh-TW.md">繁體中文</a> · <a href="./README.ja.md">日本語</a> · <a href="./README.ko.md">한국어</a> · <a href="./README.fr.md">Français</a> · <a href="./README.es.md">Español</a> · <a href="./README.de.md">Deutsch</a> · <a href="./README.pt.md">Português</a> · <a href="./README.ru.md"><b>Русский</b></a> · <a href="./README.hi.md">हिन्दी</a> · <a href="./README.tr.md">Türkçe</a> · <a href="./README.th.md">ไทย</a> · <a href="./README.vi.md">Tiếng Việt</a> · <a href="./README.id.md">Bahasa Indonesia</a>
+  <a href="./README.md"><b>English</b></a> · <a href="./README.zh.md">简体中文</a> · <a href="./README.zh-TW.md">繁體中文</a> · <a href="./README.ja.md">日本語</a> · <a href="./README.ko.md">한국어</a> · <a href="./README.fr.md">Français</a> · <a href="./README.es.md">Español</a> · <a href="./README.de.md">Deutsch</a> · <a href="./README.pt.md">Português</a> · <a href="./README.ru.md">Русский</a> · <a href="./README.hi.md">हिन्दी</a> · <a href="./README.tr.md">Türkçe</a> · <a href="./README.th.md">ไทย</a> · <a href="./README.vi.md">Tiếng Việt</a> · <a href="./README.id.md">Bahasa Indonesia</a>
 </p>
 
 <p align="center">
@@ -102,7 +102,7 @@ bun run electron:dev
 
 > **Требования:** [Bun](https://bun.sh/) >= 1.0 и [Node.js](https://nodejs.org/) >= 18
 
-### Развёртывание через Docker
+### Docker
 
 Доступно несколько вариантов образов — выберите подходящий для ваших нужд:
 
@@ -113,6 +113,7 @@ bun run electron:dev
 | `openpencil-codex:latest` | — | + Codex CLI |
 | `openpencil-opencode:latest` | — | + OpenCode CLI |
 | `openpencil-copilot:latest` | — | + GitHub Copilot CLI |
+| `openpencil-gemini:latest` | — | + Gemini CLI |
 | `openpencil-full:latest` | ~1 ГБ | Все CLI-инструменты |
 
 **Запуск (только веб):**
@@ -167,6 +168,7 @@ docker build --target full -t openpencil-full .
 | **Codex CLI** | Подключить в настройках агента (`Cmd+,`) |
 | **OpenCode** | Подключить в настройках агента (`Cmd+,`) |
 | **GitHub Copilot** | `copilot login`, затем подключить в настройках агента (`Cmd+,`) |
+| **Gemini CLI** | Подключить в настройках агента (`Cmd+,`) |
 
 **Профили возможностей моделей** — автоматически адаптирует промпты, режим thinking и таймауты для каждого уровня моделей. Модели полного уровня (Claude) получают полные промпты; стандартного уровня (GPT-4o, Gemini, DeepSeek) — с отключённым thinking; базового уровня (MiniMax, Qwen, Llama, Mistral) — упрощённые промпты с вложенным JSON для максимальной надёжности.
 
@@ -223,22 +225,32 @@ docker build --target full -t openpencil-full .
 ## Структура проекта
 
 ```text
-src/
-  canvas/          Движок CanvasKit/Skia — рисование, синхронизация, раскладка, направляющие, инструмент пера
-  components/      React UI — редактор, панели, общие диалоги, иконки
-  services/ai/     AI-чат, оркестратор, генерация дизайна, стриминг
-  services/figma/  Пайплайн бинарного импорта Figma .fig
-  services/codegen Генераторы кода React+Tailwind и HTML+CSS
-  stores/          Zustand — холст, документ, страницы, история, AI, настройки
-  variables/       Разрешение дизайн-токенов и управление ссылками
-  mcp/             Инструменты MCP-сервера для интеграции с внешними CLI
-  uikit/           Система переиспользуемых наборов компонентов
-server/
-  api/ai/          Nitro API — стриминговый чат, генерация, валидация
-  utils/           Обёртки клиентов Claude CLI, OpenCode, Codex, Copilot
-electron/
-  main.ts          Окно, форк Nitro, нативное меню, автообновление
-  preload.ts       IPC-мост
+openpencil/
+├── apps/
+│   ├── web/                 Веб-приложение TanStack Start
+│   │   ├── src/
+│   │   │   ├── canvas/      Движок CanvasKit/Skia — рисование, синхронизация, раскладка
+│   │   │   ├── components/  React UI — редактор, панели, общие диалоги, иконки
+│   │   │   ├── services/ai/ AI-чат, оркестратор, генерация дизайна, стриминг
+│   │   │   ├── stores/      Zustand — холст, документ, страницы, история, AI
+│   │   │   ├── mcp/         Инструменты MCP-сервера для интеграции с внешними CLI
+│   │   │   ├── hooks/       Горячие клавиши, перетаскивание файлов, вставка из Figma
+│   │   │   └── uikit/       Система переиспользуемых наборов компонентов
+│   │   └── server/
+│   │       ├── api/ai/      Nitro API — стриминговый чат, генерация, валидация
+│   │       └── utils/       Обёртки клиентов Claude CLI, OpenCode, Codex, Copilot
+│   └── desktop/             Десктопное приложение Electron
+│       ├── main.ts          Окно, форк Nitro, нативное меню, автообновление
+│       ├── ipc-handlers.ts  Нативные файловые диалоги, синхронизация темы, настройки IPC
+│       └── preload.ts       IPC-мост
+├── packages/
+│   ├── pen-types/           Определения типов для модели PenDocument
+│   ├── pen-core/            Операции с деревом документа, движок раскладки, переменные
+│   ├── pen-codegen/         Генераторы кода (React, HTML, Vue, Flutter, ...)
+│   ├── pen-figma/           Парсер и конвертер файлов Figma .fig
+│   ├── pen-renderer/        Автономный рендерер CanvasKit/Skia
+│   └── pen-sdk/             Зонтичный SDK (реэкспортирует все пакеты)
+└── .githooks/               Pre-commit синхронизация версий из имени ветки
 ```
 
 ## Горячие клавиши
@@ -266,6 +278,7 @@ bun --bun run dev          # Сервер разработки (порт 3000)
 bun --bun run build        # Сборка для продакшена
 bun --bun run test         # Запустить тесты (Vitest)
 npx tsc --noEmit           # Проверка типов
+bun run bump <version>     # Синхронизация версий во всех package.json
 bun run electron:dev       # Разработка Electron
 bun run electron:build     # Упаковка Electron
 ```
@@ -275,10 +288,11 @@ bun run electron:build     # Упаковка Electron
 Мы приветствуем вклад в проект! Подробности об архитектуре и стиле кода смотрите в [CLAUDE.md](./CLAUDE.md).
 
 1. Сделайте форк и клонируйте репозиторий
-2. Создайте ветку: `git checkout -b feat/my-feature`
-3. Запустите проверки: `npx tsc --noEmit && bun --bun run test`
-4. Сделайте коммит в формате [Conventional Commits](https://www.conventionalcommits.org/): `feat(canvas): add rotation snapping`
-5. Откройте PR в ветку `main`
+2. Настройте синхронизацию версий: `git config core.hooksPath .githooks`
+3. Создайте ветку: `git checkout -b feat/my-feature`
+4. Запустите проверки: `npx tsc --noEmit && bun --bun run test`
+5. Сделайте коммит в формате [Conventional Commits](https://www.conventionalcommits.org/): `feat(canvas): add rotation snapping`
+6. Откройте PR в ветку `main`
 
 ## Дорожная карта
 
@@ -290,6 +304,7 @@ bun run electron:build     # Упаковка Electron
 - [x] Импорт Figma `.fig`
 - [x] Булевы операции (объединение, вычитание, пересечение)
 - [x] Мультимодельные профили возможностей
+- [x] Реструктуризация в монорепозиторий с переиспользуемыми пакетами
 - [ ] Совместное редактирование
 - [ ] Система плагинов
 
@@ -302,11 +317,10 @@ bun run electron:build     # Упаковка Electron
 ## Сообщество
 
 <a href="https://discord.gg/h9Fmyy6pVh">
-  <img src="./public/logo-discord.svg" alt="Discord" width="16" />
+  <img src="./apps/web/public/logo-discord.svg" alt="Discord" width="16" />
   <strong> Присоединяйтесь к нашему Discord</strong>
 </a>
 — Задавайте вопросы, делитесь дизайнами, предлагайте функции.
-
 
 ## Star History
 

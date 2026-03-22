@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="./electron/icon.png" alt="OpenPencil" width="120" />
+  <img src="./apps/desktop/build/icon.png" alt="OpenPencil" width="120" />
 </p>
 
 <h1 align="center">OpenPencil</h1>
@@ -10,7 +10,7 @@
 </p>
 
 <p align="center">
-  <a href="./README.md">English</a> · <a href="./README.zh.md">简体中文</a> · <a href="./README.zh-TW.md">繁體中文</a> · <a href="./README.ja.md">日本語</a> · <a href="./README.ko.md">한국어</a> · <a href="./README.fr.md">Français</a> · <a href="./README.es.md">Español</a> · <a href="./README.de.md">Deutsch</a> · <a href="./README.pt.md">Português</a> · <a href="./README.ru.md">Русский</a> · <a href="./README.hi.md">हिन्दी</a> · <a href="./README.tr.md">Türkçe</a> · <b>ไทย</b> · <a href="./README.vi.md">Tiếng Việt</a> · <a href="./README.id.md">Bahasa Indonesia</a>
+  <a href="./README.md"><b>English</b></a> · <a href="./README.zh.md">简体中文</a> · <a href="./README.zh-TW.md">繁體中文</a> · <a href="./README.ja.md">日本語</a> · <a href="./README.ko.md">한국어</a> · <a href="./README.fr.md">Français</a> · <a href="./README.es.md">Español</a> · <a href="./README.de.md">Deutsch</a> · <a href="./README.pt.md">Português</a> · <a href="./README.ru.md">Русский</a> · <a href="./README.hi.md">हिन्दी</a> · <a href="./README.tr.md">Türkçe</a> · <a href="./README.th.md">ไทย</a> · <a href="./README.vi.md">Tiếng Việt</a> · <a href="./README.id.md">Bahasa Indonesia</a>
 </p>
 
 <p align="center">
@@ -102,7 +102,7 @@ bun run electron:dev
 
 > **ข้อกำหนดเบื้องต้น:** [Bun](https://bun.sh/) >= 1.0 และ [Node.js](https://nodejs.org/) >= 18
 
-### การติดตั้งด้วย Docker
+### Docker
 
 มี image หลายรูปแบบให้เลือก — เลือกแบบที่เหมาะกับความต้องการของคุณ:
 
@@ -113,6 +113,7 @@ bun run electron:dev
 | `openpencil-codex:latest` | — | + Codex CLI |
 | `openpencil-opencode:latest` | — | + OpenCode CLI |
 | `openpencil-copilot:latest` | — | + GitHub Copilot CLI |
+| `openpencil-gemini:latest` | — | + Gemini CLI |
 | `openpencil-full:latest` | ~1 GB | เครื่องมือ CLI ทั้งหมด |
 
 **รัน (เว็บเท่านั้น):**
@@ -167,13 +168,14 @@ docker build --target full -t openpencil-full .
 | **Codex CLI** | เชื่อมต่อใน Agent Settings (`Cmd+,`) |
 | **OpenCode** | เชื่อมต่อใน Agent Settings (`Cmd+,`) |
 | **GitHub Copilot** | `copilot login` จากนั้นเชื่อมต่อใน Agent Settings (`Cmd+,`) |
+| **Gemini CLI** | เชื่อมต่อใน Agent Settings (`Cmd+,`) |
 
 **โปรไฟล์ความสามารถของโมเดล** — ปรับ prompt, โหมด thinking และ timeout ตามระดับโมเดลโดยอัตโนมัติ โมเดลระดับเต็ม (Claude) ได้ prompt ครบถ้วน; โมเดลระดับมาตรฐาน (GPT-4o, Gemini, DeepSeek) ปิด thinking; โมเดลระดับพื้นฐาน (MiniMax, Qwen, Llama, Mistral) ได้ prompt แบบ nested-JSON ที่ย่อลงเพื่อความเสถียรสูงสุด
 
 **MCP Server**
 - MCP Server ในตัว — ติดตั้งได้ด้วยคลิกเดียวใน Claude Code / Codex / Gemini / OpenCode / Kiro / Copilot CLIs
-- ตรวจจับ Node.js อัตโนมัติ — หากไม่ได้ติดตั้ง จะสำรองไปใช้ HTTP transport โดยอัตโนมัติและเริ่ม MCP HTTP เซิร์ฟเวอร์
-- การทำ Design Automation จาก Terminal: อ่าน สร้าง และแก้ไขไฟล์ `.op` ผ่าน agent ที่รองรับ MCP
+- ตรวจจับ Node.js อัตโนมัติ — หากไม่ได้ติดตั้ง จะสำรองไปใช้ HTTP transport และเริ่ม MCP HTTP server โดยอัตโนมัติ
+- การทำ Design automation จาก terminal: อ่าน สร้าง และแก้ไขไฟล์ `.op` ผ่าน agent ที่รองรับ MCP
 - **Layered design workflow** — `design_skeleton` → `design_content` → `design_refine` สำหรับดีไซน์หลายส่วนที่มีความละเอียดสูงขึ้น
 - **Segmented prompt retrieval** — โหลดเฉพาะความรู้ด้านดีไซน์ที่ต้องการ (schema, layout, roles, icons, planning ฯลฯ)
 - รองรับหลายหน้า — สร้าง เปลี่ยนชื่อ เรียงลำดับ และทำซ้ำหน้าผ่าน MCP tools
@@ -223,22 +225,32 @@ docker build --target full -t openpencil-full .
 ## โครงสร้างโปรเจกต์
 
 ```text
-src/
-  canvas/          CanvasKit/Skia engine — การวาด, sync, layout, guides, pen tool
-  components/      React UI — editor, panels, shared dialogs, icons
-  services/ai/     AI chat, orchestrator, การสร้างดีไซน์, streaming
-  services/figma/  Figma .fig binary import pipeline
-  services/codegen React+Tailwind และ HTML+CSS code generators
-  stores/          Zustand — canvas, document, pages, history, AI, settings
-  variables/       การแก้ไข design token และการจัดการ reference
-  mcp/             MCP server tools สำหรับการเชื่อมต่อ CLI ภายนอก
-  uikit/           ระบบ component kit ที่นำกลับมาใช้ใหม่ได้
-server/
-  api/ai/          Nitro API — streaming chat, generation, validation
-  utils/           Claude CLI, OpenCode, Codex, Copilot client wrappers
-electron/
-  main.ts          Window, Nitro fork, native menu, auto-updater
-  preload.ts       IPC bridge
+openpencil/
+├── apps/
+│   ├── web/                 TanStack Start web app
+│   │   ├── src/
+│   │   │   ├── canvas/      CanvasKit/Skia engine — การวาด, sync, layout
+│   │   │   ├── components/  React UI — editor, panels, shared dialogs, icons
+│   │   │   ├── services/ai/ AI chat, orchestrator, การสร้างดีไซน์, streaming
+│   │   │   ├── stores/      Zustand — canvas, document, pages, history, AI
+│   │   │   ├── mcp/         MCP server tools สำหรับการเชื่อมต่อ CLI ภายนอก
+│   │   │   ├── hooks/       Keyboard shortcuts, file drop, Figma paste
+│   │   │   └── uikit/       ระบบ component kit ที่นำกลับมาใช้ใหม่ได้
+│   │   └── server/
+│   │       ├── api/ai/      Nitro API — streaming chat, generation, validation
+│   │       └── utils/       Claude CLI, OpenCode, Codex, Copilot wrappers
+│   └── desktop/             Electron desktop app
+│       ├── main.ts          Window, Nitro fork, native menu, auto-updater
+│       ├── ipc-handlers.ts  ไดอะล็อกไฟล์เนทีฟ, ซิงค์ธีม, การตั้งค่า IPC
+│       └── preload.ts       IPC bridge
+├── packages/
+│   ├── pen-types/           Type definitions สำหรับ PenDocument model
+│   ├── pen-core/            Document tree ops, layout engine, variables
+│   ├── pen-codegen/         Code generators (React, HTML, Vue, Flutter, ...)
+│   ├── pen-figma/           Figma .fig file parser และ converter
+│   ├── pen-renderer/        Standalone CanvasKit/Skia renderer
+│   └── pen-sdk/             Umbrella SDK (re-exports ทุก package)
+└── .githooks/               Pre-commit version sync จาก branch name
 ```
 
 ## คีย์ลัด
@@ -266,6 +278,7 @@ bun --bun run dev          # Dev server (port 3000)
 bun --bun run build        # Production build
 bun --bun run test         # รันการทดสอบ (Vitest)
 npx tsc --noEmit           # ตรวจสอบ type
+bun run bump <version>     # Sync version ในทุก package.json
 bun run electron:dev       # Electron dev
 bun run electron:build     # Electron package
 ```
@@ -275,10 +288,11 @@ bun run electron:build     # Electron package
 ยินดีต้อนรับการมีส่วนร่วมทุกรูปแบบ! ดู [CLAUDE.md](./CLAUDE.md) สำหรับรายละเอียดสถาปัตยกรรมและรูปแบบโค้ด
 
 1. Fork และ clone
-2. สร้าง branch: `git checkout -b feat/my-feature`
-3. รันการตรวจสอบ: `npx tsc --noEmit && bun --bun run test`
-4. Commit ด้วย [Conventional Commits](https://www.conventionalcommits.org/): `feat(canvas): add rotation snapping`
-5. เปิด PR เข้า `main`
+2. ตั้งค่า version sync: `git config core.hooksPath .githooks`
+3. สร้าง branch: `git checkout -b feat/my-feature`
+4. รันการตรวจสอบ: `npx tsc --noEmit && bun --bun run test`
+5. Commit ด้วย [Conventional Commits](https://www.conventionalcommits.org/): `feat(canvas): add rotation snapping`
+6. เปิด PR เข้า `main`
 
 ## Roadmap
 
@@ -290,6 +304,7 @@ bun run electron:build     # Electron package
 - [x] นำเข้า Figma `.fig`
 - [x] Boolean operations (union, subtract, intersect)
 - [x] โปรไฟล์ความสามารถหลายโมเดล
+- [x] ปรับโครงสร้างเป็น monorepo พร้อม package ที่นำกลับมาใช้ใหม่ได้
 - [ ] การแก้ไขร่วมกัน
 - [ ] ระบบปลั๊กอิน
 
@@ -302,11 +317,10 @@ bun run electron:build     # Electron package
 ## ชุมชน
 
 <a href="https://discord.gg/h9Fmyy6pVh">
-  <img src="./public/logo-discord.svg" alt="Discord" width="16" />
+  <img src="./apps/web/public/logo-discord.svg" alt="Discord" width="16" />
   <strong> เข้าร่วม Discord ของเรา</strong>
 </a>
 — ถามคำถาม แชร์ดีไซน์ เสนอฟีเจอร์
-
 
 ## Star History
 

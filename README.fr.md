@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="./electron/icon.png" alt="OpenPencil" width="120" />
+  <img src="./apps/desktop/build/icon.png" alt="OpenPencil" width="120" />
 </p>
 
 <h1 align="center">OpenPencil</h1>
@@ -10,7 +10,7 @@
 </p>
 
 <p align="center">
-  <a href="./README.md">English</a> · <a href="./README.zh.md">简体中文</a> · <a href="./README.zh-TW.md">繁體中文</a> · <a href="./README.ja.md">日本語</a> · <a href="./README.ko.md">한국어</a> · <a href="./README.fr.md"><b>Français</b></a> · <a href="./README.es.md">Español</a> · <a href="./README.de.md">Deutsch</a> · <a href="./README.pt.md">Português</a> · <a href="./README.ru.md">Русский</a> · <a href="./README.hi.md">हिन्दी</a> · <a href="./README.tr.md">Türkçe</a> · <a href="./README.th.md">ไทย</a> · <a href="./README.vi.md">Tiếng Việt</a> · <a href="./README.id.md">Bahasa Indonesia</a>
+  <a href="./README.md"><b>English</b></a> · <a href="./README.zh.md">简体中文</a> · <a href="./README.zh-TW.md">繁體中文</a> · <a href="./README.ja.md">日本語</a> · <a href="./README.ko.md">한국어</a> · <a href="./README.fr.md">Français</a> · <a href="./README.es.md">Español</a> · <a href="./README.de.md">Deutsch</a> · <a href="./README.pt.md">Português</a> · <a href="./README.ru.md">Русский</a> · <a href="./README.hi.md">हिन्दी</a> · <a href="./README.tr.md">Türkçe</a> · <a href="./README.th.md">ไทย</a> · <a href="./README.vi.md">Tiếng Việt</a> · <a href="./README.id.md">Bahasa Indonesia</a>
 </p>
 
 <p align="center">
@@ -102,7 +102,7 @@ bun run electron:dev
 
 > **Prérequis :** [Bun](https://bun.sh/) >= 1.0 et [Node.js](https://nodejs.org/) >= 18
 
-### Déploiement Docker
+### Docker
 
 Plusieurs variantes d'images sont disponibles — choisissez celle qui correspond à vos besoins :
 
@@ -113,6 +113,7 @@ Plusieurs variantes d'images sont disponibles — choisissez celle qui correspon
 | `openpencil-codex:latest` | — | + Codex CLI |
 | `openpencil-opencode:latest` | — | + OpenCode CLI |
 | `openpencil-copilot:latest` | — | + GitHub Copilot CLI |
+| `openpencil-gemini:latest` | — | + Gemini CLI |
 | `openpencil-full:latest` | ~1 Go | Tous les outils CLI |
 
 **Exécuter (web uniquement) :**
@@ -167,12 +168,13 @@ docker build --target full -t openpencil-full .
 | **Codex CLI** | Connecter dans les Paramètres de l'agent (`Cmd+,`) |
 | **OpenCode** | Connecter dans les Paramètres de l'agent (`Cmd+,`) |
 | **GitHub Copilot** | `copilot login` puis connecter dans les Paramètres de l'agent (`Cmd+,`) |
+| **Gemini CLI** | Connecter dans les Paramètres de l'agent (`Cmd+,`) |
 
 **Profils de capacités des modèles** — adapte automatiquement les prompts, le mode de réflexion et les délais d'attente par niveau de modèle. Les modèles de niveau complet (Claude) reçoivent des prompts complets ; le niveau standard (GPT-4o, Gemini, DeepSeek) désactive la réflexion ; le niveau basique (MiniMax, Qwen, Llama, Mistral) reçoit des prompts JSON imbriqués simplifiés pour une fiabilité maximale.
 
 **Serveur MCP**
 - Serveur MCP intégré — installation en un clic dans les CLI Claude Code / Codex / Gemini / OpenCode / Kiro / Copilot
-- Détection automatique de Node.js — si non installé, bascule automatiquement vers le transport HTTP et démarre le serveur MCP HTTP
+- Détection automatique de Node.js — si non installé, bascule vers le transport HTTP et démarre automatiquement le serveur MCP HTTP
 - Automatisation du design depuis le terminal : lire, créer et modifier des fichiers `.op` via tout agent compatible MCP
 - **Workflow de design en couches** — `design_skeleton` → `design_content` → `design_refine` pour des designs multi-sections de plus haute fidélité
 - **Récupération segmentée des prompts** — chargez uniquement les connaissances de design nécessaires (schéma, layout, rôles, icônes, planification, etc.)
@@ -223,22 +225,32 @@ docker build --target full -t openpencil-full .
 ## Structure du projet
 
 ```text
-src/
-  canvas/          Moteur CanvasKit/Skia — dessin, sync, mise en page, guides, outil plume
-  components/      Interface React — éditeur, panneaux, boîtes de dialogue partagées, icônes
-  services/ai/     Chat IA, orchestrateur, génération de design, streaming
-  services/figma/  Pipeline d'import binaire Figma .fig
-  services/codegen Générateurs de code React+Tailwind et HTML+CSS
-  stores/          Zustand — canevas, document, pages, historique, IA, paramètres
-  variables/       Résolution des tokens de design et gestion des références
-  mcp/             Outils serveur MCP pour l'intégration CLI externe
-  uikit/           Système de kits de composants réutilisables
-server/
-  api/ai/          API Nitro — chat en streaming, génération, validation
-  utils/           Enveloppes client Claude CLI, OpenCode, Codex, Copilot
-electron/
-  main.ts          Fenêtre, fork Nitro, menu natif, mise à jour automatique
-  preload.ts       Pont IPC
+openpencil/
+├── apps/
+│   ├── web/                 Application web TanStack Start
+│   │   ├── src/
+│   │   │   ├── canvas/      Moteur CanvasKit/Skia — dessin, sync, mise en page
+│   │   │   ├── components/  Interface React — éditeur, panneaux, boîtes de dialogue partagées, icônes
+│   │   │   ├── services/ai/ Chat IA, orchestrateur, génération de design, streaming
+│   │   │   ├── stores/      Zustand — canevas, document, pages, historique, IA
+│   │   │   ├── mcp/         Outils serveur MCP pour l'intégration CLI externe
+│   │   │   ├── hooks/       Raccourcis clavier, dépôt de fichiers, collage Figma
+│   │   │   └── uikit/       Système de kits de composants réutilisables
+│   │   └── server/
+│   │       ├── api/ai/      API Nitro — chat en streaming, génération, validation
+│   │       └── utils/       Enveloppes Claude CLI, OpenCode, Codex, Copilot
+│   └── desktop/             Application de bureau Electron
+│       ├── main.ts          Fenêtre, fork Nitro, menu natif, mise à jour automatique
+│       ├── ipc-handlers.ts  Dialogues fichiers natifs, sync thème, préférences IPC
+│       └── preload.ts       Pont IPC
+├── packages/
+│   ├── pen-types/           Définitions de types pour le modèle PenDocument
+│   ├── pen-core/            Opérations sur l'arbre du document, moteur de mise en page, variables
+│   ├── pen-codegen/         Générateurs de code (React, HTML, Vue, Flutter, ...)
+│   ├── pen-figma/           Parseur et convertisseur de fichiers Figma .fig
+│   ├── pen-renderer/        Moteur de rendu CanvasKit/Skia autonome
+│   └── pen-sdk/             SDK parapluie (réexporte tous les packages)
+└── .githooks/               Synchronisation de version pre-commit depuis le nom de branche
 ```
 
 ## Raccourcis clavier
@@ -266,6 +278,7 @@ bun --bun run dev          # Serveur de développement (port 3000)
 bun --bun run build        # Build de production
 bun --bun run test         # Lancer les tests (Vitest)
 npx tsc --noEmit           # Vérification des types
+bun run bump <version>     # Synchroniser la version dans tous les package.json
 bun run electron:dev       # Développement Electron
 bun run electron:build     # Packaging Electron
 ```
@@ -275,10 +288,11 @@ bun run electron:build     # Packaging Electron
 Les contributions sont les bienvenues ! Consultez [CLAUDE.md](./CLAUDE.md) pour les détails d'architecture et le style de code.
 
 1. Forker et cloner
-2. Créer une branche : `git checkout -b feat/my-feature`
-3. Exécuter les vérifications : `npx tsc --noEmit && bun --bun run test`
-4. Commiter avec [Conventional Commits](https://www.conventionalcommits.org/) : `feat(canvas): add rotation snapping`
-5. Ouvrir une PR contre `main`
+2. Configurer la synchronisation de version : `git config core.hooksPath .githooks`
+3. Créer une branche : `git checkout -b feat/my-feature`
+4. Exécuter les vérifications : `npx tsc --noEmit && bun --bun run test`
+5. Commiter avec [Conventional Commits](https://www.conventionalcommits.org/) : `feat(canvas): add rotation snapping`
+6. Ouvrir une PR contre `main`
 
 ## Feuille de route
 
@@ -290,6 +304,7 @@ Les contributions sont les bienvenues ! Consultez [CLAUDE.md](./CLAUDE.md) pour 
 - [x] Import Figma `.fig`
 - [x] Opérations booléennes (union, soustraction, intersection)
 - [x] Profils de capacités multi-modèles
+- [x] Restructuration en monorepo avec packages réutilisables
 - [ ] Édition collaborative
 - [ ] Système de plugins
 
@@ -299,6 +314,13 @@ Les contributions sont les bienvenues ! Consultez [CLAUDE.md](./CLAUDE.md) pour 
   <img src="https://contrib.rocks/image?repo=ZSeven-W/openpencil" alt="Contributors" />
 </a>
 
+## Communauté
+
+<a href="https://discord.gg/h9Fmyy6pVh">
+  <img src="./apps/web/public/logo-discord.svg" alt="Discord" width="16" />
+  <strong> Rejoindre notre Discord</strong>
+</a>
+— Posez des questions, partagez vos designs, suggérez des fonctionnalités.
 
 ## Star History
 
@@ -310,12 +332,6 @@ Les contributions sont les bienvenues ! Consultez [CLAUDE.md](./CLAUDE.md) pour 
  </picture>
 </a>
 
-## Communauté
+## Licence
 
-<a href="https://discord.gg/h9Fmyy6pVh">
-  <img src="./public/logo-discord.svg" alt="Discord" width="16" />
-  <strong> Rejoindre notre Discord</strong>
-</a>
-— Posez des questions, partagez vos designs, suggérez des fonctionnalités.
-
-
+[MIT](./LICENSE) — Copyright (c) 2026 ZSeven-W

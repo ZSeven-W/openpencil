@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="./electron/icon.png" alt="OpenPencil" width="120" />
+  <img src="./apps/desktop/build/icon.png" alt="OpenPencil" width="120" />
 </p>
 
 <h1 align="center">OpenPencil</h1>
@@ -55,7 +55,7 @@
 
 ### 🧠 多模型智能
 
-自动适配每个模型的能力。Claude 获得完整提示词和思考模式；GPT-4o/Gemini 关闭思考模式；小模型（MiniMax、通义千问、Llama）使用简化提示词以确保输出可靠性。
+自动适配每个模型的能力。Claude 获得完整提示词和思考模式；GPT-4o/Gemini 关闭思考模式；小模型（MiniMax、Qwen、Llama）使用简化提示词以确保输出可靠性。
 
 </td>
 <td width="50%">
@@ -102,9 +102,9 @@ bun run electron:dev
 
 > **前置条件：** [Bun](https://bun.sh/) >= 1.0 以及 [Node.js](https://nodejs.org/) >= 18
 
-### Docker 部署
+### Docker
 
-提供多个镜像变体，按需选择：
+提供多个镜像变体 — 按需选择：
 
 | 镜像 | 大小 | 包含 |
 | --- | --- | --- |
@@ -113,6 +113,7 @@ bun run electron:dev
 | `openpencil-codex:latest` | — | + Codex CLI |
 | `openpencil-opencode:latest` | — | + OpenCode CLI |
 | `openpencil-copilot:latest` | — | + GitHub Copilot CLI |
+| `openpencil-gemini:latest` | — | + Gemini CLI |
 | `openpencil-full:latest` | ~1 GB | 全部 CLI 工具 |
 
 **运行（仅 Web）：**
@@ -123,7 +124,7 @@ docker run -d -p 3000:3000 ghcr.io/zseven-w/openpencil:latest
 
 **运行 AI CLI（以 Claude Code 为例）：**
 
-AI 聊天依赖 Claude CLI 的 OAuth 登录，使用 Docker volume 持久化登录状态：
+AI 聊天依赖 Claude CLI 的 OAuth 登录。使用 Docker volume 持久化登录会话：
 
 ```bash
 # 第一步 — 登录（仅需一次）
@@ -167,8 +168,9 @@ docker build --target full -t openpencil-full .
 | **Codex CLI** | 在 Agent 设置中连接（`Cmd+,`） |
 | **OpenCode** | 在 Agent 设置中连接（`Cmd+,`） |
 | **GitHub Copilot** | 运行 `copilot login` 后在 Agent 设置中连接（`Cmd+,`） |
+| **Gemini CLI** | 在 Agent 设置中连接（`Cmd+,`） |
 
-**模型能力配置** — 自动根据模型层级适配提示词、思考模式和超时时间。完整层级模型（Claude）获得完整提示词；标准层级模型（GPT-4o、Gemini、DeepSeek）关闭思考模式；基础层级模型（MiniMax、通义千问、Llama、Mistral）使用简化的嵌套 JSON 提示词以确保最大可靠性。
+**模型能力配置** — 自动根据模型层级适配提示词、思考模式和超时时间。完整层级模型（Claude）获得完整提示词；标准层级模型（GPT-4o、Gemini、DeepSeek）关闭思考模式；基础层级模型（MiniMax、Qwen、Llama、Mistral）使用简化的嵌套 JSON 提示词以确保最大可靠性。
 
 **MCP 服务器**
 - 内置 MCP 服务器 — 一键安装到 Claude Code / Codex / Gemini / OpenCode / Kiro / Copilot CLI
@@ -181,7 +183,6 @@ docker build --target full -t openpencil-full .
 **代码生成**
 - React + Tailwind CSS、HTML + CSS、CSS Variables
 - Vue、Svelte、Flutter、SwiftUI、Jetpack Compose、React Native
-- 从设计令牌生成 CSS Variables
 
 ## 功能特性
 
@@ -224,22 +225,32 @@ docker build --target full -t openpencil-full .
 ## 项目结构
 
 ```text
-src/
-  canvas/          CanvasKit/Skia 引擎 — 绘图、同步、布局、参考线、钢笔工具
-  components/      React UI — 编辑器、面板、共享对话框、图标
-  services/ai/     AI 聊天、编排器、设计生成、流式处理
-  services/figma/  Figma .fig 二进制文件导入流水线
-  services/codegen 多平台代码生成器（React、HTML、Vue、Svelte、Flutter、SwiftUI、Compose、React Native）
-  stores/          Zustand — 画布、文档、页面、历史、AI、设置
-  variables/       设计令牌解析与引用管理
-  mcp/             供外部 CLI 集成使用的 MCP 服务器工具
-  uikit/           可复用组件套件系统
-server/
-  api/ai/          Nitro API — 流式聊天、生成、验证
-  utils/           Claude CLI、OpenCode、Codex、Copilot 客户端封装
-electron/
-  main.ts          窗口、Nitro 子进程、原生菜单、自动更新
-  preload.ts       IPC 桥接
+openpencil/
+├── apps/
+│   ├── web/                 TanStack Start Web 应用
+│   │   ├── src/
+│   │   │   ├── canvas/      CanvasKit/Skia 引擎 — 绘图、同步、布局
+│   │   │   ├── components/  React UI — 编辑器、面板、共享对话框、图标
+│   │   │   ├── services/ai/ AI 聊天、编排器、设计生成、流式处理
+│   │   │   ├── stores/      Zustand — 画布、文档、页面、历史、AI
+│   │   │   ├── mcp/         供外部 CLI 集成使用的 MCP 服务器工具
+│   │   │   ├── hooks/       键盘快捷键、文件拖放、Figma 粘贴
+│   │   │   └── uikit/       可复用组件套件系统
+│   │   └── server/
+│   │       ├── api/ai/      Nitro API — 流式聊天、生成、验证
+│   │       └── utils/       Claude CLI、OpenCode、Codex、Copilot 客户端封装
+│   └── desktop/             Electron 桌面应用
+│       ├── main.ts          窗口、Nitro 子进程、原生菜单、自动更新
+│       ├── ipc-handlers.ts  原生文件对话框、主题同步、偏好设置 IPC
+│       └── preload.ts       IPC 桥接
+├── packages/
+│   ├── pen-types/           PenDocument 模型类型定义
+│   ├── pen-core/            文档树操作、布局引擎、变量
+│   ├── pen-codegen/         代码生成器（React、HTML、Vue、Flutter 等）
+│   ├── pen-figma/           Figma .fig 文件解析与转换
+│   ├── pen-renderer/        独立 CanvasKit/Skia 渲染器
+│   └── pen-sdk/             聚合 SDK（重新导出所有包）
+└── .githooks/               预提交钩子：从分支名同步版本号
 ```
 
 ## 键盘快捷键
@@ -267,6 +278,7 @@ bun --bun run dev          # 开发服务器（端口 3000）
 bun --bun run build        # 生产构建
 bun --bun run test         # 运行测试（Vitest）
 npx tsc --noEmit           # 类型检查
+bun run bump <version>     # 同步所有 package.json 的版本号
 bun run electron:dev       # Electron 开发模式
 bun run electron:build     # Electron 打包
 ```
@@ -276,10 +288,11 @@ bun run electron:build     # Electron 打包
 欢迎贡献！请查阅 [CLAUDE.md](./CLAUDE.md) 了解架构细节和代码风格。
 
 1. Fork 并克隆仓库
-2. 创建分支：`git checkout -b feat/my-feature`
-3. 运行检查：`npx tsc --noEmit && bun --bun run test`
-4. 使用 [Conventional Commits](https://www.conventionalcommits.org/) 提交：`feat(canvas): add rotation snapping`
-5. 向 `main` 分支发起 PR
+2. 设置版本同步：`git config core.hooksPath .githooks`
+3. 创建分支：`git checkout -b feat/my-feature`
+4. 运行检查：`npx tsc --noEmit && bun --bun run test`
+5. 使用 [Conventional Commits](https://www.conventionalcommits.org/) 提交：`feat(canvas): add rotation snapping`
+6. 向 `main` 分支发起 PR
 
 ## 路线图
 
@@ -291,6 +304,7 @@ bun run electron:build     # Electron 打包
 - [x] Figma `.fig` 导入
 - [x] 布尔运算（合并、减去、相交）
 - [x] 多模型能力配置
+- [x] Monorepo 重构与可复用包
 - [ ] 协同编辑
 - [ ] 插件系统
 
@@ -303,15 +317,10 @@ bun run electron:build     # Electron 打包
 ## 社区
 
 <a href="https://discord.gg/h9Fmyy6pVh">
-  <img src="./public/logo-discord.svg" alt="Discord" width="16" />
+  <img src="./apps/web/public/logo-discord.svg" alt="Discord" width="16" />
   <strong> 加入我们的 Discord</strong>
 </a>
 — 提问、分享设计、提出功能建议。
-
-**飞书交流群**
-
-<img src="./screenshot/557517811-62010928-d91a-4223-bc10-9ee7a4fbf043.jpg" alt="飞书交流群" width="240" />
-
 
 ## Star History
 

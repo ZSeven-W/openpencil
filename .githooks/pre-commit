@@ -1,0 +1,30 @@
+#!/bin/sh
+#
+# Pre-commit hook: read version from branch name (e.g. v0.5.0)
+# and sync to all package.json files
+#
+
+BRANCH=$(git rev-parse --abbrev-ref HEAD)
+
+# Extract version from branch name like v0.5.0, v1.2.3, release/v2.0.0
+VERSION=$(echo "$BRANCH" | grep -oE '[0-9]+\.[0-9]+\.[0-9]+')
+
+if [ -z "$VERSION" ]; then
+  exit 0
+fi
+
+CHANGED=0
+for f in package.json apps/*/package.json packages/*/package.json; do
+  if [ -f "$f" ]; then
+    CURRENT=$(jq -r '.version' "$f")
+    if [ "$CURRENT" != "$VERSION" ]; then
+      jq --arg v "$VERSION" '.version=$v' "$f" > "$f.tmp" && mv "$f.tmp" "$f"
+      git add "$f"
+      CHANGED=1
+    fi
+  fi
+done
+
+if [ "$CHANGED" = "1" ]; then
+  echo "[version-sync] branch $BRANCH → $VERSION"
+fi

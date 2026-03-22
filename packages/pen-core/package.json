@@ -1,0 +1,26 @@
+{
+  "name": "@zseven-w/pen-core",
+  "version": "0.5.0",
+  "description": "Core document operations, tree utils, variables, layout engine for OpenPencil",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "import": "./src/index.ts"
+    }
+  },
+  "files": [
+    "src"
+  ],
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@zseven-w/pen-types": "workspace:*",
+    "nanoid": "^5.1.6",
+    "paper": "^0.12.18"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.2"
+  }
+}

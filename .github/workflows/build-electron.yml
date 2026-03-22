@@ -58,7 +58,7 @@ jobs:
         run: bun run mcp:compile
 
       - name: Build Electron app
-        run: npx electron-builder --config electron-builder.yml ${{ matrix.build_args }} --publish never
+        run: npx electron-builder --config apps/desktop/electron-builder.yml ${{ matrix.build_args }} --publish never
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           CSC_LINK: ${{ secrets.CSC_LINK }}
@@ -72,8 +72,8 @@ jobs:
       - name: Rename arm64 update metadata
         if: matrix.platform == 'mac-arm64'
         run: |
-          if [ -f dist-electron/latest-mac.yml ]; then
-            mv dist-electron/latest-mac.yml dist-electron/latest-mac-arm64.yml
+          if [ -f out/release/latest-mac.yml ]; then
+            mv out/release/latest-mac.yml out/release/latest-mac-arm64.yml
           fi
 
       - name: Upload artifacts
@@ -81,14 +81,14 @@ jobs:
         with:
           name: electron-${{ matrix.platform }}
           path: |
-            dist-electron/*.dmg
-            dist-electron/*.zip
-            dist-electron/*.exe
-            dist-electron/*.AppImage
-            dist-electron/*.deb
-            dist-electron/latest*.yml
-            dist-electron/*.blockmap
-            !dist-electron/builder-debug.yml
+            out/release/*.dmg
+            out/release/*.zip
+            out/release/*.exe
+            out/release/*.AppImage
+            out/release/*.deb
+            out/release/latest*.yml
+            out/release/*.blockmap
+            !out/release/builder-debug.yml
           retention-days: 30
 
   release:
