@@ -71,7 +71,7 @@ FROM oven/bun:1 AS with-gemini
 WORKDIR /app
 COPY --from=builder /app/out/web ./out/web
 COPY --from=builder /app/package.json ./
-RUN bun install -g @anthropic-ai/gemini-cli
+RUN bun install -g @google/gemini-cli
 ENV NODE_ENV=production NITRO_HOST=0.0.0.0 NITRO_PORT=3000
 EXPOSE 3000
 CMD ["bun", "run", "./out/web/server/index.mjs"]
@@ -81,7 +81,7 @@ FROM oven/bun:1 AS full
 WORKDIR /app
 COPY --from=builder /app/out/web ./out/web
 COPY --from=builder /app/package.json ./
-RUN bun install -g @anthropic-ai/claude-code @openai/codex opencode-ai @github/copilot @anthropic-ai/gemini-cli
+RUN bun install -g @anthropic-ai/claude-code @openai/codex opencode-ai @github/copilot @google/gemini-cli
 ENV NODE_ENV=production NITRO_HOST=0.0.0.0 NITRO_PORT=3000
 EXPOSE 3000
 CMD ["bun", "run", "./out/web/server/index.mjs"]
