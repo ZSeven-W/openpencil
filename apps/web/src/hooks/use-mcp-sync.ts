@@ -6,6 +6,7 @@ import type { PenDocument } from '@/types/pen'
 const PUSH_DEBOUNCE_MS = 2000
 const SELECTION_DEBOUNCE_MS = 300
 const RECONNECT_DELAY_MS = 3000
+const MAX_RECONNECT_ATTEMPTS = 3
 
 function getBaseUrl(): string {
   return window.location.origin
@@ -38,12 +39,14 @@ export function useMcpSync() {
     let eventSource: EventSource | null = null
     let reconnectTimer: ReturnType<typeof setTimeout> | null = null
     let disposed = false
+    let reconnectAttempts = 0
 
     function connect() {
       if (disposed) return
       eventSource = new EventSource(`${baseUrl}/api/mcp/events`)
 
       eventSource.onmessage = (event) => {
+        reconnectAttempts = 0 // Reset on successful message
         try {
           const data = JSON.parse(event.data)
 
@@ -68,9 +71,12 @@ export function useMcpSync() {
       eventSource.onerror = () => {
         eventSource?.close()
         eventSource = null
-        if (!disposed) {
+        reconnectAttempts++
+        if (!disposed && reconnectAttempts <= MAX_RECONNECT_ATTEMPTS) {
           reconnectTimer = setTimeout(connect, RECONNECT_DELAY_MS)
         }
+        // Stop retrying after MAX_RECONNECT_ATTEMPTS to avoid console spam.
+        // MCP sync is optional — the editor works fine without it.
       }
     }
 
