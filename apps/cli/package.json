@@ -15,6 +15,6 @@
     "dist"
   ],
   "scripts": {
-    "compile": "cd ../web && esbuild ../cli/src/index.ts --bundle --platform=node --target=node20 --outfile=../cli/dist/openpencil-cli.cjs --format=cjs --sourcemap --alias:@=src --define:import.meta.env={} --external:canvas --external:paper"
+    "compile": "cd ../web && esbuild ../cli/src/index.ts --bundle --platform=node --target=node20 --outfile=../cli/dist/openpencil-cli.cjs --format=cjs --sourcemap --alias:@=src --alias:@zseven-w/pen-types=../../packages/pen-types/src --alias:@zseven-w/pen-core=../../packages/pen-core/src --alias:@zseven-w/pen-codegen=../../packages/pen-codegen/src --alias:@zseven-w/pen-figma=../../packages/pen-figma/src --alias:@zseven-w/pen-renderer=../../packages/pen-renderer/src --alias:@zseven-w/pen-sdk=../../packages/pen-sdk/src --define:import.meta.env={} --external:canvas --external:paper"
   }
 }
