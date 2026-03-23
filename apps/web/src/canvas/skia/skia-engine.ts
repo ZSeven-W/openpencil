@@ -226,19 +226,6 @@ export class SkiaEngine {
       this.renderer.drawNodeWithSelection(canvas, rn, selectedIds)
     }
 
-    // Draw frame labels (root frames + reusable components + instances at any depth)
-    for (const rn of this.renderNodes) {
-      if (!rn.node.name) continue
-      const isRootFrame = rn.node.type === 'frame' && !rn.clipRect
-      const isReusable = this.reusableIds.has(rn.node.id)
-      const isInstance = this.instanceIds.has(rn.node.id)
-      if (!isRootFrame && !isReusable && !isInstance) continue
-      this.renderer.drawFrameLabelColored(
-        canvas, rn.node.name, rn.absX, rn.absY,
-        isReusable, isInstance, this.zoom,
-      )
-    }
-
     // Draw agent indicators (glow, badges, node borders, preview fills)
     const agentIndicators = getActiveAgentIndicators()
     const agentFrames = getActiveAgentFrames()
@@ -346,6 +333,23 @@ export class SkiaEngine {
     }
 
     canvas.restore()
+
+    // Draw frame labels outside viewport transform so fontSize stays constant
+    // (avoids Math.ceil(12/zoom) integer-boundary jumps causing label size flicker)
+    canvas.save()
+    canvas.scale(dpr, dpr)
+    for (const rn of this.renderNodes) {
+      if (!rn.node.name) continue
+      const isRootFrame = rn.node.type === 'frame' && !rn.clipRect
+      const isReusable = this.reusableIds.has(rn.node.id)
+      const isInstance = this.instanceIds.has(rn.node.id)
+      if (!isRootFrame && !isReusable && !isInstance) continue
+      const sx = rn.absX * this.zoom + this.panX
+      const sy = rn.absY * this.zoom + this.panY
+      this.renderer.drawFrameLabelColored(canvas, rn.node.name, sx, sy, isReusable, isInstance, 1)
+    }
+    canvas.restore()
+
     this.surface.flush()
 
     // Keep animating while agent overlays are active (spinning dot + node flashes)
