@@ -11,6 +11,7 @@ COPY packages/pen-renderer/package.json packages/pen-renderer/
 COPY packages/pen-sdk/package.json packages/pen-sdk/
 COPY apps/web/package.json apps/web/
 COPY apps/desktop/package.json apps/desktop/
+COPY apps/cli/package.json apps/cli/
 RUN bun install --frozen-lockfile
 COPY . .
 ENV NODE_OPTIONS="--max-old-space-size=4096"
