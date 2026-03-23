@@ -36,7 +36,8 @@ openpencil/
 │   ├── pen-codegen/   Multi-platform code generators
 │   ├── pen-figma/     Figma .fig file parser and converter
 │   ├── pen-renderer/  Standalone CanvasKit/Skia renderer
-│   └── pen-sdk/       Umbrella SDK (re-exports all packages)
+│   ├── pen-sdk/       Umbrella SDK (re-exports all packages)
+│   └── pen-ai-skills/ AI prompt skill engine (phase-driven prompt loading + design memory)
 ├── scripts/           Build and publish scripts
 └── .githooks/         Pre-commit version sync from branch name
 ```

@@ -110,6 +110,18 @@ TanStack Start full-stack React app (Vite + Nitro). Routes in `src/routes/`, aut
 
 File operations: save/open .pen, export PNG/SVG, node clone (re-exports `cloneNodesWithNewIds` from pen-core), pen file normalization, SVG parser, syntax highlight, boolean operations, `app-storage.ts`, `arc-path.ts`, `theme-preset-io.ts`, `id.ts`
 
+### AI Prompt Skill System
+
+Prompts for AI design generation live in `packages/pen-ai-skills/skills/` as Markdown files with YAML frontmatter. The skill engine loads prompts by phase and intent:
+
+- **Phases:** `planning`, `generation`, `validation`, `maintenance` — each phase loads different base skills
+- **Intent matching:** Domain skills (landing-page, dashboard, etc.) are loaded when keywords match the user message
+- **Budget control:** Token budget per phase prevents context overflow
+
+**Adding a new skill:** Create a `.md` file in the appropriate `skills/` subdirectory with frontmatter (name, phase, trigger, priority, budget, category). The Vite plugin auto-compiles on save.
+
+**Usage:** `import { resolveSkills } from '@zseven-w/pen-ai-skills'` → `resolveSkills('generation', userMessage, { flags, dynamicContent })`
+
 ## Server API (`server/`)
 
 - **`api/ai/`** — Nitro API (11 files): streaming chat, generation, agent connection, validation, MCP install, icon resolution, image generation/search. Supports Anthropic API key or Claude Agent SDK (local OAuth)
