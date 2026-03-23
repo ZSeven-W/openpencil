@@ -1,6 +1,6 @@
 {
   "name": "@zseven-w/pen-renderer",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "description": "Standalone CanvasKit/Skia renderer for OpenPencil (.op) design files",
   "type": "module",
   "exports": {
@@ -16,8 +16,8 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@zseven-w/pen-types": "workspace:*",
-    "@zseven-w/pen-core": "workspace:*",
+    "@zseven-w/pen-types": "0.5.1-beta.1",
+    "@zseven-w/pen-core": "0.5.1-beta.1",
     "rbush": "^4.0.1"
   },
   "peerDependencies": {

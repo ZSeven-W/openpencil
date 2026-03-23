@@ -82,6 +82,22 @@ Web 應用程式 + 透過 Electron 在 macOS、Windows 和 Linux 上原生執行
 
 </td>
 </tr>
+<tr>
+<td width="50%">
+
+### ⌨️ CLI — `op`
+
+從終端機控制設計工具。`op design`、`op insert`、`op export` — 批次設計 DSL、節點操作、程式碼匯出。支援從檔案或 stdin 管道輸入。可搭配桌面應用程式或 Web 伺服器使用。
+
+</td>
+<td width="50%">
+
+### 🎯 多平台程式碼匯出
+
+從單個 `.op` 檔案匯出至 React + Tailwind、HTML + CSS、Vue、Svelte、Flutter、SwiftUI、Jetpack Compose、React Native。設計變數自動轉換為 CSS 自訂屬性。
+
+</td>
+</tr>
 </table>
 
 ## 快速開始
@@ -184,6 +200,25 @@ docker build --target full -t openpencil-full .
 - React + Tailwind CSS、HTML + CSS、CSS Variables
 - Vue、Svelte、Flutter、SwiftUI、Jetpack Compose、React Native
 
+## CLI — `op`
+
+全域安裝後即可從終端機控制設計工具：
+
+```bash
+npm install -g @zseven-w/openpencil
+```
+
+```bash
+op start                     # 啟動桌面應用程式
+op design @landing.txt       # 從檔案批次設計
+op insert '{"type":"RECT"}'  # 插入節點
+op export react --out .      # 匯出為 React + Tailwind
+op import:figma design.fig   # 匯入 Figma 檔案
+cat design.dsl | op design - # 從 stdin 管道輸入
+```
+
+支援三種輸入方式：內嵌字串、`@filepath`（從檔案讀取）、`-`（從 stdin 讀取）。可搭配桌面應用程式或 Web 開發伺服器使用。完整命令參考請查閱 [CLI README](./apps/cli/README.md)。
+
 ## 功能特色
 
 **畫布與繪圖**
@@ -218,6 +253,7 @@ docker build --target full -t openpencil-full .
 | **狀態管理** | Zustand v5 |
 | **伺服器** | Nitro |
 | **桌面端** | Electron 35 |
+| **CLI** | `op` — 終端機控制、批次設計 DSL、程式碼匯出 |
 | **AI** | Anthropic SDK · Claude Agent SDK · OpenCode SDK · Copilot SDK |
 | **執行環境** | Bun · Vite 7 |
 | **檔案格式** | `.op` — 基於 JSON，人類可讀，對 Git 友好 |
@@ -239,10 +275,14 @@ openpencil/
 │   │   └── server/
 │   │       ├── api/ai/      Nitro API — 串流聊天、生成、驗證
 │   │       └── utils/       Claude CLI、OpenCode、Codex、Copilot 客戶端封裝
-│   └── desktop/             Electron 桌面應用程式
-│       ├── main.ts          視窗、Nitro 子處理序、原生選單、自動更新
-│       ├── ipc-handlers.ts  原生檔案對話框、主題同步、偏好設定 IPC
-│       └── preload.ts       IPC 橋接
+│   ├── desktop/             Electron 桌面應用程式
+│   │   ├── main.ts          視窗、Nitro 子處理序、原生選單、自動更新
+│   │   ├── ipc-handlers.ts  原生檔案對話框、主題同步、偏好設定 IPC
+│   │   └── preload.ts       IPC 橋接
+│   └── cli/                 CLI 工具 — `op` 命令
+│       ├── src/commands/    設計、文件、匯出、匯入、節點、頁面、變數命令
+│       ├── connection.ts    與執行中應用程式的 WebSocket 連線
+│       └── launcher.ts      自動偵測並啟動桌面應用程式或 Web 伺服器
 ├── packages/
 │   ├── pen-types/           PenDocument 模型型別定義
 │   ├── pen-core/            文件樹操作、版面配置引擎、變數
@@ -281,6 +321,8 @@ npx tsc --noEmit           # 型別檢查
 bun run bump <version>     # 在所有 package.json 間同步版本號
 bun run electron:dev       # Electron 開發模式
 bun run electron:build     # Electron 封裝
+bun run cli:dev            # 從原始碼執行 CLI
+bun run cli:compile        # 編譯 CLI 到 dist
 ```
 
 ## 參與貢獻
@@ -305,6 +347,7 @@ bun run electron:build     # Electron 封裝
 - [x] 布林運算（聯集、減去、交集）
 - [x] 多模型能力設定檔
 - [x] Monorepo 重構，支援可重複使用套件
+- [x] CLI 工具（`op`）終端控制
 - [ ] 協同編輯
 - [ ] 外掛程式系統
 

@@ -315,6 +315,8 @@ const vi: TranslationKeys = {
   'ai.sendMessage': 'Gửi tin nhắn',
   'ai.loadingModels': 'Đang tải mô hình...',
   'ai.noModelsConnected': 'Chưa kết nối mô hình nào',
+  'ai.searchModels': 'Tìm kiếm mô hình...',
+  'ai.noModelsFound': 'Không tìm thấy mô hình',
   'ai.quickAction.loginScreen': 'Thiết kế màn hình đăng nhập di động',
   'ai.quickAction.loginScreenPrompt':
     'Thiết kế màn hình đăng nhập di động hiện đại với ô nhập email, ô nhập mật khẩu, nút đăng nhập và các tuỳ chọn đăng nhập bằng mạng xã hội',
