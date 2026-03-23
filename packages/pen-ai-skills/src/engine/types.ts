@@ -34,6 +34,10 @@ export interface ResolveOptions {
   dynamicContent?: Record<string, string>
   documentPath?: string
   budgetOverride?: number
+  memory?: {
+    documentContext?: DesignContext
+    generationHistory?: HistoryEntry[]
+  }
 }
 
 export interface DesignContext {

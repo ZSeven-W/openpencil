@@ -3,6 +3,7 @@ import { DEFAULT_BUDGETS } from './types'
 import { getSkillsByPhase } from './loader'
 import { filterByIntent, injectDynamicContent } from './resolver'
 import { trimByBudget, estimateTokens } from './budget'
+import { getRecentEntries } from '../memory/generation-history'
 
 export function resolveSkills(
   phase: Phase,
@@ -29,11 +30,36 @@ export function resolveSkills(
   const trimmed = trimByBudget(injected, totalBudget)
   const usedTokens = trimmed.reduce((sum, s) => sum + s.tokenCount, 0)
 
+  // Memory loading rules per phase
+  const memory: AgentContext['memory'] = {}
+  if (options?.memory) {
+    const { documentContext, generationHistory } = options.memory
+    const historyLimits: Record<Phase, number> = {
+      planning: 5,
+      generation: 0,
+      validation: 0,
+      maintenance: 3,
+    }
+
+    if (documentContext && phase !== 'validation') {
+      memory.documentContext = documentContext
+    }
+
+    const historyLimit = historyLimits[phase]
+    if (generationHistory?.length && historyLimit > 0) {
+      memory.generationHistory = getRecentEntries(
+        generationHistory,
+        historyLimit,
+        options.documentPath
+      )
+    }
+  }
+
   return {
     role: 'general',
     phase,
     skills: trimmed,
-    memory: {},
+    memory,
     budget: { used: usedTokens, max: totalBudget },
   }
 }

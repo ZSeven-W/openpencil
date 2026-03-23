@@ -14,3 +14,17 @@ export { getSkillRegistry, getSkillByName, getSkillsByPhase } from './engine/loa
 // Memory
 export type { DesignContext } from './memory/document-context'
 export type { HistoryEntry } from './memory/generation-history'
+
+export {
+  createDesignContext,
+  extractDesignContext,
+  mergePreference,
+  contextToPromptString,
+} from './memory/document-context'
+
+export {
+  createHistoryEntry,
+  updateFeedback,
+  getRecentEntries,
+  historyToPromptString,
+} from './memory/generation-history'
