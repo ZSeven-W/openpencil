@@ -15,6 +15,15 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 BASE_VERSION=$(jq -r .version "$ROOT/package.json")
 FORCE_NUM="${1:-}"
 
+# --- Guard: block beta publish if release version already exists on npm ---
+RELEASE_CHECK=$(npm view "@zseven-w/pen-types@${BASE_VERSION}" version 2>/dev/null || true)
+if [ -n "$RELEASE_CHECK" ]; then
+  echo "ERROR: Release version ${BASE_VERSION} already exists on npm."
+  echo "Publishing a beta for an already-released version creates conflicting dependencies."
+  echo "Bump the version first (e.g. bun run bump 0.5.2), then publish beta."
+  exit 1
+fi
+
 # Packages in topological order
 PACKAGES=(
   packages/pen-types
