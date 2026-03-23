@@ -1,0 +1,20 @@
+{
+  "name": "@zseven-w/openpencil",
+  "version": "0.5.1",
+  "description": "CLI for OpenPencil — control the design tool from your terminal",
+  "author": {
+    "name": "ZSeven-W",
+    "email": "xkayshen@gmail.com"
+  },
+  "license": "MIT",
+  "type": "module",
+  "bin": {
+    "op": "dist/openpencil-cli.cjs"
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "compile": "cd ../web && esbuild ../cli/src/index.ts --bundle --platform=node --target=node20 --outfile=../cli/dist/openpencil-cli.cjs --format=cjs --sourcemap --alias:@=src --define:import.meta.env={} --external:canvas --external:paper"
+  }
+}

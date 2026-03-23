@@ -318,6 +318,8 @@ const fr: TranslationKeys = {
   'ai.sendMessage': 'Envoyer le message',
   'ai.loadingModels': 'Chargement des modèles...',
   'ai.noModelsConnected': 'Aucun modèle connecté',
+  'ai.searchModels': 'Rechercher des modèles...',
+  'ai.noModelsFound': 'Aucun modèle trouvé',
   'ai.quickAction.loginScreen': 'Concevoir un écran de connexion mobile',
   'ai.quickAction.loginScreenPrompt':
     'Concevez un écran de connexion mobile moderne avec un champ e-mail, un champ mot de passe, un bouton de connexion et des options de connexion sociale',

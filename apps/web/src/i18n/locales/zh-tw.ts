@@ -309,6 +309,8 @@ const zhTW: TranslationKeys = {
   'ai.sendMessage': '傳送訊息',
   'ai.loadingModels': '正在載入模型...',
   'ai.noModelsConnected': '尚未連線模型',
+  'ai.searchModels': '搜尋模型...',
+  'ai.noModelsFound': '未找到匹配的模型',
   'ai.quickAction.loginScreen': '設計行動裝置登入頁面',
   'ai.quickAction.loginScreenPrompt':
     '設計一個現代的行動裝置登入頁面，包含電子郵件輸入框、密碼輸入框、登入按鈕和社群登入選項',

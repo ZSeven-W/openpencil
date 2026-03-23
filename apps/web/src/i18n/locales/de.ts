@@ -317,6 +317,8 @@ const de: TranslationKeys = {
   'ai.sendMessage': 'Nachricht senden',
   'ai.loadingModels': 'Modelle werden geladen...',
   'ai.noModelsConnected': 'Keine Modelle verbunden',
+  'ai.searchModels': 'Modelle suchen...',
+  'ai.noModelsFound': 'Keine Modelle gefunden',
   'ai.quickAction.loginScreen': 'Einen mobilen Anmeldebildschirm gestalten',
   'ai.quickAction.loginScreenPrompt':
     'Design a modern mobile login screen with email input, password input, login button, and social login options',

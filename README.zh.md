@@ -82,6 +82,22 @@ Web 应用 + 通过 Electron 支持 macOS、Windows 和 Linux 原生桌面端。
 
 </td>
 </tr>
+<tr>
+<td width="50%">
+
+### ⌨️ CLI — `op`
+
+从终端控制设计工具。`op design`、`op insert`、`op export` — 批量设计 DSL、节点操作、代码导出。支持从文件或 stdin 管道输入。可搭配桌面应用或 Web 服务器使用。
+
+</td>
+<td width="50%">
+
+### 🎯 多平台代码导出
+
+从单个 `.op` 文件导出到 React + Tailwind、HTML + CSS、Vue、Svelte、Flutter、SwiftUI、Jetpack Compose、React Native。设计变量自动转换为 CSS 自定义属性。
+
+</td>
+</tr>
 </table>
 
 ## 快速开始
@@ -184,6 +200,25 @@ docker build --target full -t openpencil-full .
 - React + Tailwind CSS、HTML + CSS、CSS Variables
 - Vue、Svelte、Flutter、SwiftUI、Jetpack Compose、React Native
 
+## CLI — `op`
+
+全局安装后即可从终端控制设计工具：
+
+```bash
+npm install -g @zseven-w/openpencil
+```
+
+```bash
+op start                     # 启动桌面应用
+op design @landing.txt       # 从文件批量设计
+op insert '{"type":"RECT"}'  # 插入节点
+op export react --out .      # 导出为 React + Tailwind
+op import:figma design.fig   # 导入 Figma 文件
+cat design.dsl | op design - # 从 stdin 管道输入
+```
+
+支持三种输入方式：内联字符串、`@filepath`（从文件读取）、`-`（从 stdin 读取）。可搭配桌面应用或 Web 开发服务器使用。完整命令参考请查阅 [CLI README](./apps/cli/README.md)。
+
 ## 功能特性
 
 **画布与绘图**
@@ -218,6 +253,7 @@ docker build --target full -t openpencil-full .
 | **状态管理** | Zustand v5 |
 | **服务器** | Nitro |
 | **桌面端** | Electron 35 |
+| **CLI** | `op` — 终端控制、批量设计 DSL、代码导出 |
 | **AI** | Anthropic SDK · Claude Agent SDK · OpenCode SDK · Copilot SDK |
 | **运行时** | Bun · Vite 7 |
 | **文件格式** | `.op` — 基于 JSON，人类可读，对 Git 友好 |
@@ -239,10 +275,14 @@ openpencil/
 │   │   └── server/
 │   │       ├── api/ai/      Nitro API — 流式聊天、生成、验证
 │   │       └── utils/       Claude CLI、OpenCode、Codex、Copilot 客户端封装
-│   └── desktop/             Electron 桌面应用
-│       ├── main.ts          窗口、Nitro 子进程、原生菜单、自动更新
-│       ├── ipc-handlers.ts  原生文件对话框、主题同步、偏好设置 IPC
-│       └── preload.ts       IPC 桥接
+│   ├── desktop/             Electron 桌面应用
+│   │   ├── main.ts          窗口、Nitro 子进程、原生菜单、自动更新
+│   │   ├── ipc-handlers.ts  原生文件对话框、主题同步、偏好设置 IPC
+│   │   └── preload.ts       IPC 桥接
+│   └── cli/                 CLI 工具 — `op` 命令
+│       ├── src/commands/    设计、文档、导出、导入、节点、页面、变量命令
+│       ├── connection.ts    与运行中应用的 WebSocket 连接
+│       └── launcher.ts      自动检测并启动桌面应用或 Web 服务器
 ├── packages/
 │   ├── pen-types/           PenDocument 模型类型定义
 │   ├── pen-core/            文档树操作、布局引擎、变量
@@ -281,6 +321,8 @@ npx tsc --noEmit           # 类型检查
 bun run bump <version>     # 同步所有 package.json 的版本号
 bun run electron:dev       # Electron 开发模式
 bun run electron:build     # Electron 打包
+bun run cli:dev            # 从源码运行 CLI
+bun run cli:compile        # 编译 CLI 到 dist
 ```
 
 ## 参与贡献
@@ -305,6 +347,7 @@ bun run electron:build     # Electron 打包
 - [x] 布尔运算（合并、减去、相交）
 - [x] 多模型能力配置
 - [x] Monorepo 重构与可复用包
+- [x] CLI 工具（`op`）终端控制
 - [ ] 协同编辑
 - [ ] 插件系统
 

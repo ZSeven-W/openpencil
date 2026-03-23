@@ -309,6 +309,8 @@ const zh: TranslationKeys = {
   'ai.sendMessage': '发送消息',
   'ai.loadingModels': '正在加载模型...',
   'ai.noModelsConnected': '未连接模型',
+  'ai.searchModels': '搜索模型...',
+  'ai.noModelsFound': '未找到匹配的模型',
   'ai.quickAction.loginScreen': '设计一个移动端登录页面',
   'ai.quickAction.loginScreenPrompt':
     '设计一个现代的移动端登录页面，包含邮箱输入框、密码输入框、登录按钮和社交登录选项',

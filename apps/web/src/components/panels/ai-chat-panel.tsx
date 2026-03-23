@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
-import { Send, Plus, ChevronDown, ChevronUp, Check, MessageSquare, Loader2, Paperclip, X, Square, Zap } from 'lucide-react'
+import { Send, Plus, ChevronDown, ChevronUp, Check, MessageSquare, Loader2, Paperclip, X, Square, Zap, Search } from 'lucide-react'
 import { nanoid } from 'nanoid'
 import { cn } from '@/lib/utils'
 import { useTranslation } from 'react-i18next'
@@ -162,6 +162,8 @@ export default function AIChatPanel() {
   const providers = useAgentSettingsStore((s) => s.providers)
   const providersHydrated = useAgentSettingsStore((s) => s.isHydrated)
   const [modelDropdownOpen, setModelDropdownOpen] = useState(false)
+  const [modelSearch, setModelSearch] = useState('')
+  const modelSearchRef = useRef<HTMLInputElement>(null)
   const pendingAttachments = useAIStore((s) => s.pendingAttachments)
   const addPendingAttachment = useAIStore((s) => s.addPendingAttachment)
   const removePendingAttachment = useAIStore((s) => s.removePendingAttachment)
@@ -233,7 +235,11 @@ export default function AIChatPanel() {
 
   // Close model dropdown when clicking outside
   useEffect(() => {
-    if (!modelDropdownOpen) return
+    if (!modelDropdownOpen) {
+      setModelSearch('')
+      return
+    }
+    requestAnimationFrame(() => modelSearchRef.current?.focus())
     const handler = (e: MouseEvent) => {
       const panel = panelRef.current
       if (panel && !panel.contains(e.target as Node)) {
@@ -621,7 +627,7 @@ export default function AIChatPanel() {
         />
 
         {/* --- Bottom bar: model selector + actions --- */}
-        <div className="flex items-center justify-between px-2 pb-2">
+        <div className="relative flex items-center justify-between px-2 pb-2">
           {/* Model selector */}
           <button
             type="button"
@@ -703,13 +709,63 @@ export default function AIChatPanel() {
               )}
             </div>
           </div>
-        </div>
 
-        {/* Upward model dropdown */}
-        {modelDropdownOpen && availableModels.length > 0 && (
-          <div className="absolute bottom-full left-2 right-2 mb-1 z-[60] rounded-lg border border-border bg-card shadow-xl py-1 max-h-72 overflow-y-auto">
-            {modelGroups.length > 0
-              ? modelGroups.map((group) => {
+          {/* Upward model dropdown */}
+          {modelDropdownOpen && availableModels.length > 0 && (
+            <div className="absolute bottom-full left-0 right-0 mb-1 z-[60] rounded-lg border border-border bg-card shadow-xl py-1 max-h-72 flex flex-col">
+            {/* Search input */}
+            <div className="px-2 pt-1 pb-1.5 border-b border-border shrink-0">
+              <div className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-secondary/50">
+                <Search size={12} className="text-muted-foreground shrink-0" />
+                <input
+                  ref={modelSearchRef}
+                  value={modelSearch}
+                  onChange={(e) => setModelSearch(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Escape') {
+                      setModelDropdownOpen(false)
+                    }
+                  }}
+                  placeholder={t('ai.searchModels')}
+                  className="w-full bg-transparent text-xs text-foreground placeholder-muted-foreground outline-none"
+                />
+                {modelSearch && (
+                  <button
+                    type="button"
+                    onClick={() => setModelSearch('')}
+                    className="text-muted-foreground hover:text-foreground shrink-0"
+                  >
+                    <X size={10} />
+                  </button>
+                )}
+              </div>
+            </div>
+            <div className="overflow-y-auto">
+            {(() => {
+              const q = modelSearch.toLowerCase().trim()
+              if (modelGroups.length > 0) {
+                const filtered = modelGroups
+                  .map((group) => ({
+                    ...group,
+                    models: group.models.filter(
+                      (m) =>
+                        !q ||
+                        m.displayName.toLowerCase().includes(q) ||
+                        m.value.toLowerCase().includes(q) ||
+                        group.providerName.toLowerCase().includes(q),
+                    ),
+                  }))
+                  .filter((group) => group.models.length > 0)
+
+                if (filtered.length === 0) {
+                  return (
+                    <div className="px-3 py-4 text-xs text-muted-foreground text-center">
+                      {t('ai.noModelsFound')}
+                    </div>
+                  )
+                }
+
+                return filtered.map((group) => {
                   const GIcon = PROVIDER_ICON[group.provider]
                   return (
                     <div key={group.provider}>
@@ -740,7 +796,7 @@ export default function AIChatPanel() {
                               {isSelected && <Check size={12} />}
                             </span>
                             <span className="font-medium">{m.displayName}</span>
-                            {idx === 0 && (
+                            {idx === 0 && !q && (
                               <span className="text-[9px] text-muted-foreground bg-secondary px-1 py-0.5 rounded ml-auto">
                                 {t('common.best')}
                               </span>
@@ -751,32 +807,52 @@ export default function AIChatPanel() {
                     </div>
                   )
                 })
-              : availableModels.map((m) => {
-                  const isSelected = m.value === model
-                  return (
-                    <button
-                      key={m.value}
-                      type="button"
-                      onClick={() => {
-                        selectModel(m.value)
-                        setModelDropdownOpen(false)
-                      }}
-                      className={cn(
-                        'w-full flex items-center gap-2 px-3 py-1.5 text-xs transition-colors',
-                        isSelected
-                          ? 'bg-secondary text-foreground'
-                          : 'text-muted-foreground hover:bg-accent hover:text-foreground',
-                      )}
-                    >
-                      <span className="w-3.5 shrink-0">
-                        {isSelected && <Check size={12} />}
-                      </span>
-                      <span className="font-medium">{m.displayName}</span>
-                    </button>
-                  )
-                })}
+              }
+
+              const filtered = availableModels.filter(
+                (m) =>
+                  !q ||
+                  m.displayName.toLowerCase().includes(q) ||
+                  m.value.toLowerCase().includes(q),
+              )
+
+              if (filtered.length === 0) {
+                return (
+                  <div className="px-3 py-4 text-xs text-muted-foreground text-center">
+                    {t('ai.noModelsFound')}
+                  </div>
+                )
+              }
+
+              return filtered.map((m) => {
+                const isSelected = m.value === model
+                return (
+                  <button
+                    key={m.value}
+                    type="button"
+                    onClick={() => {
+                      selectModel(m.value)
+                      setModelDropdownOpen(false)
+                    }}
+                    className={cn(
+                      'w-full flex items-center gap-2 px-3 py-1.5 text-xs transition-colors',
+                      isSelected
+                        ? 'bg-secondary text-foreground'
+                        : 'text-muted-foreground hover:bg-accent hover:text-foreground',
+                    )}
+                  >
+                    <span className="w-3.5 shrink-0">
+                      {isSelected && <Check size={12} />}
+                    </span>
+                    <span className="font-medium">{m.displayName}</span>
+                  </button>
+                )
+              })
+            })()}
+            </div>
           </div>
-        )}
+          )}
+        </div>
       </div>
     </div>
   )

@@ -315,6 +315,8 @@ const th: TranslationKeys = {
   'ai.sendMessage': 'ส่งข้อความ',
   'ai.loadingModels': 'กำลังโหลดโมเดล...',
   'ai.noModelsConnected': 'ไม่มีโมเดลที่เชื่อมต่อ',
+  'ai.searchModels': 'ค้นหาโมเดล...',
+  'ai.noModelsFound': 'ไม่พบโมเดล',
   'ai.quickAction.loginScreen': 'ออกแบบหน้าจอเข้าสู่ระบบมือถือ',
   'ai.quickAction.loginScreenPrompt':
     'ออกแบบหน้าจอเข้าสู่ระบบมือถือที่ทันสมัย พร้อมช่องกรอกอีเมล รหัสผ่าน ปุ่มเข้าสู่ระบบ และตัวเลือกเข้าสู่ระบบผ่านโซเชียล',

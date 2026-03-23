@@ -315,6 +315,8 @@ const ko: TranslationKeys = {
   'ai.sendMessage': '메시지 보내기',
   'ai.loadingModels': '모델 로딩 중...',
   'ai.noModelsConnected': '연결된 모델 없음',
+  'ai.searchModels': '모델 검색...',
+  'ai.noModelsFound': '일치하는 모델이 없습니다',
   'ai.quickAction.loginScreen': '모바일 로그인 화면 디자인',
   'ai.quickAction.loginScreenPrompt':
     '이메일 입력, 비밀번호 입력, 로그인 버튼, 소셜 로그인 옵션이 있는 모던 모바일 로그인 화면을 디자인해 주세요',

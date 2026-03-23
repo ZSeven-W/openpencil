@@ -1,6 +1,6 @@
 {
   "name": "openpencil",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "description": "The world's first open-source AI-native vector design tool and the first to feature concurrent Agent Teams. Design-as-Code. Turn prompts into UI directly on the live canvas. A modern alternative to Pencil.",
   "author": {
     "name": "ZSeven-W",
@@ -25,11 +25,14 @@
     "mcp:dev": "bun run apps/web/src/mcp/server.ts",
     "electron:dev": "bun run apps/desktop/dev.ts",
     "electron:compile": "esbuild apps/desktop/main.ts apps/desktop/preload.ts --bundle --platform=node --target=node20 --outdir=out/desktop --external:electron --format=cjs --out-extension:.js=.cjs --sourcemap",
-    "electron:build": "BUILD_TARGET=electron bun --bun run build && bun run electron:compile && bun run mcp:compile && npx electron-builder --config apps/desktop/electron-builder.yml",
-    "electron:build:mac-arm64": "BUILD_TARGET=electron bun --bun run build && bun run electron:compile && bun run mcp:compile && npx electron-builder --config apps/desktop/electron-builder.yml --mac --arm64 && if [ -f out/release/latest-mac.yml ]; then mv out/release/latest-mac.yml out/release/latest-mac-arm64.yml; fi",
-    "electron:build:mac-x64": "BUILD_TARGET=electron bun --bun run build && bun run electron:compile && bun run mcp:compile && npx electron-builder --config apps/desktop/electron-builder.yml --mac --x64",
-    "electron:build:mac-universal": "BUILD_TARGET=electron bun --bun run build && bun run electron:compile && bun run mcp:compile && npx electron-builder --config apps/desktop/electron-builder.yml --mac --arm64 --x64",
+    "electron:build": "BUILD_TARGET=electron bun --bun run build && bun run electron:compile && bun run mcp:compile && bun run cli:compile && npx electron-builder --config apps/desktop/electron-builder.yml",
+    "electron:build:mac-arm64": "BUILD_TARGET=electron bun --bun run build && bun run electron:compile && bun run mcp:compile && bun run cli:compile && npx electron-builder --config apps/desktop/electron-builder.yml --mac --arm64 && if [ -f out/release/latest-mac.yml ]; then mv out/release/latest-mac.yml out/release/latest-mac-arm64.yml; fi",
+    "electron:build:mac-x64": "BUILD_TARGET=electron bun --bun run build && bun run electron:compile && bun run mcp:compile && bun run cli:compile && npx electron-builder --config apps/desktop/electron-builder.yml --mac --x64",
+    "electron:build:mac-universal": "BUILD_TARGET=electron bun --bun run build && bun run electron:compile && bun run mcp:compile && bun run cli:compile && npx electron-builder --config apps/desktop/electron-builder.yml --mac --arm64 --x64",
     "electron:build:mac-both": "bun run electron:build:mac-arm64 && bun run electron:build:mac-x64",
+    "cli:compile": "cd apps/web && esbuild ../cli/src/index.ts --bundle --platform=node --target=node20 --outfile=../cli/dist/openpencil-cli.cjs --format=cjs --sourcemap --alias:@=src --define:import.meta.env={} --external:canvas --external:paper",
+    "cli:dev": "bun run apps/cli/src/index.ts",
+    "publish:beta": "bash scripts/publish-beta.sh",
     "bump": "sh -c 'V=$0; [ -z \"$V\" ] && echo \"Usage: bun run bump <version>\" && exit 1; for f in package.json apps/*/package.json packages/*/package.json; do [ -f \"$f\" ] && jq --arg v \"$V\" \".version=\\$v\" \"$f\" > \"$f.tmp\" && mv \"$f.tmp\" \"$f\" && echo \"$f → $V\"; done'"
   },
   "dependencies": {

@@ -82,6 +82,22 @@ App web + desktop nativo no macOS, Windows e Linux via Electron. Atualização a
 
 </td>
 </tr>
+<tr>
+<td width="50%">
+
+### ⌨️ CLI — `op`
+
+Controle a ferramenta de design pelo terminal. `op design`, `op insert`, `op export` — DSL de design em lote, manipulação de nós, exportação de código. Entrada por pipe de arquivos ou stdin. Funciona com o app desktop ou servidor web.
+
+</td>
+<td width="50%">
+
+### 🎯 Exportação de Código Multiplataforma
+
+Exporte de um único arquivo `.op` para React + Tailwind, HTML + CSS, Vue, Svelte, Flutter, SwiftUI, Jetpack Compose, React Native. Variáveis de design se tornam propriedades CSS customizadas.
+
+</td>
+</tr>
 </table>
 
 ## Início Rápido
@@ -184,6 +200,25 @@ docker build --target full -t openpencil-full .
 - React + Tailwind CSS, HTML + CSS, CSS Variables
 - Vue, Svelte, Flutter, SwiftUI, Jetpack Compose, React Native
 
+## CLI — `op`
+
+Instale globalmente e controle a ferramenta de design pelo terminal:
+
+```bash
+npm install -g @zseven-w/openpencil
+```
+
+```bash
+op start                     # Iniciar app desktop
+op design @landing.txt       # Design em lote a partir de arquivo
+op insert '{"type":"RECT"}'  # Inserir um nó
+op export react --out .      # Exportar para React + Tailwind
+op import:figma design.fig   # Importar arquivo Figma
+cat design.dsl | op design - # Entrada por pipe via stdin
+```
+
+Suporta três métodos de entrada: string inline, `@filepath` (ler de arquivo) ou `-` (ler de stdin). Funciona com o app desktop ou servidor web de desenvolvimento. Veja o [CLI README](./apps/cli/README.md) para referência completa de comandos.
+
 ## Funcionalidades
 
 **Canvas e Desenho**
@@ -218,6 +253,7 @@ docker build --target full -t openpencil-full .
 | **Estado** | Zustand v5 |
 | **Servidor** | Nitro |
 | **Desktop** | Electron 35 |
+| **CLI** | `op` — controle pelo terminal, DSL de design em lote, exportação de código |
 | **IA** | Anthropic SDK · Claude Agent SDK · OpenCode SDK · Copilot SDK |
 | **Runtime** | Bun · Vite 7 |
 | **Formato de arquivo** | `.op` — baseado em JSON, legível por humanos, compatível com Git |
@@ -239,10 +275,14 @@ openpencil/
 │   │   └── server/
 │   │       ├── api/ai/      API Nitro — chat em streaming, geração, validação
 │   │       └── utils/       Wrappers de cliente Claude CLI, OpenCode, Codex, Copilot
-│   └── desktop/             Aplicativo desktop Electron
-│       ├── main.ts          Janela, fork do Nitro, menu nativo, atualizador automático
-│       ├── ipc-handlers.ts  Diálogos de arquivo nativos, sincronização de tema, preferências IPC
-│       └── preload.ts       Ponte IPC
+│   ├── desktop/             Aplicativo desktop Electron
+│   │   ├── main.ts          Janela, fork do Nitro, menu nativo, atualizador automático
+│   │   ├── ipc-handlers.ts  Diálogos de arquivo nativos, sincronização de tema, preferências IPC
+│   │   └── preload.ts       Ponte IPC
+│   └── cli/                 Ferramenta CLI — comando `op`
+│       ├── src/commands/    Comandos de design, documento, exportação, importação, nó, página, variável
+│       ├── connection.ts    Conexão WebSocket com o app em execução
+│       └── launcher.ts      Detecção automática e inicialização do app desktop ou servidor web
 ├── packages/
 │   ├── pen-types/           Definições de tipos para o modelo PenDocument
 │   ├── pen-core/            Operações de árvore de documento, motor de layout, variáveis
@@ -281,6 +321,8 @@ npx tsc --noEmit           # Verificação de tipos
 bun run bump <version>     # Sincronizar versão em todos os package.json
 bun run electron:dev       # Desenvolvimento com Electron
 bun run electron:build     # Empacotamento do Electron
+bun run cli:dev            # Executar CLI a partir do código-fonte
+bun run cli:compile        # Compilar CLI para dist
 ```
 
 ## Contribuindo
@@ -305,6 +347,7 @@ Contribuições são bem-vindas! Consulte o [CLAUDE.md](./CLAUDE.md) para detalh
 - [x] Operações booleanas (união, subtração, interseção)
 - [x] Perfis de capacidade multi-modelo
 - [x] Reestruturação em monorepo com pacotes reutilizáveis
+- [x] Ferramenta CLI (`op`) para controle pelo terminal
 - [ ] Edição colaborativa
 - [ ] Sistema de plugins
 

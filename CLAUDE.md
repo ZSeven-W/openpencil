@@ -1,7 +1,7 @@
 # CLAUDE.md
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
-Detailed module docs are in `packages/CLAUDE.md`, `apps/web/CLAUDE.md`, and `apps/desktop/CLAUDE.md` — loaded automatically when working in those directories.
+Detailed module docs are in `packages/CLAUDE.md`, `apps/web/CLAUDE.md`, `apps/desktop/CLAUDE.md`, and `apps/cli/CLAUDE.md` — loaded automatically when working in those directories.
 
 ## Commands
 
@@ -16,6 +16,9 @@ Detailed module docs are in `packages/CLAUDE.md`, `apps/web/CLAUDE.md`, and `app
 - **Electron dev:** `bun run electron:dev` (starts Vite + Electron together)
 - **Electron compile:** `bun run electron:compile` (esbuild electron/ to out/desktop/)
 - **Electron build:** `bun run electron:build` (full web build + compile + electron-builder package)
+- **CLI compile:** `bun run cli:compile` (esbuild CLI to apps/cli/dist/)
+- **CLI dev:** `bun run cli:dev` (run CLI from source via Bun)
+- **Publish beta:** `bun run publish:beta [N]` (publish all npm packages with beta tag)
 
 ## Architecture
 
@@ -25,7 +28,8 @@ OpenPencil is an open-source vector design tool (alternative to Pencil.dev) with
 openpencil/
 ├── apps/
 │   ├── web/           TanStack Start full-stack React app (Vite + Nitro)
-│   └── desktop/       Electron desktop app (macOS, Windows, Linux)
+│   ├── desktop/       Electron desktop app (macOS, Windows, Linux)
+│   └── cli/           CLI tool — control the design tool from the terminal
 ├── packages/
 │   ├── pen-types/     Type definitions for PenDocument model
 │   ├── pen-core/      Document tree ops, layout engine, variables, boolean ops, clone utilities
@@ -33,6 +37,7 @@ openpencil/
 │   ├── pen-figma/     Figma .fig file parser and converter
 │   ├── pen-renderer/  Standalone CanvasKit/Skia renderer
 │   └── pen-sdk/       Umbrella SDK (re-exports all packages)
+├── scripts/           Build and publish scripts
 └── .githooks/         Pre-commit version sync from branch name
 ```
 
@@ -93,10 +98,22 @@ External LLMs (Claude Code, Codex, Gemini CLI, etc.) can generate designs via MC
 
 Tailwind CSS v4 imported via `apps/web/src/styles.css`. UI primitives from shadcn/ui. Icons from `lucide-react`.
 
+### CLI (`apps/cli/`)
+
+The `op` command-line tool controls the desktop app or web server from the terminal. Arguments that accept JSON or DSL support three input methods: inline string, `@filepath` (read from file), or `-` (read from stdin).
+
+- **App control:** `op start [--desktop|--web]`, `op stop`, `op status`
+- **Design:** `op design <dsl|@file|->` — batch design DSL operations
+- **Document:** `op open`, `op save`, `op get`, `op selection`
+- **Nodes:** `op insert`, `op update`, `op delete`, `op move`, `op copy`, `op replace`
+- **Export:** `op export <react|html|vue|svelte|flutter|swiftui|compose|rn|css>`
+- **Cross-platform:** macOS, Windows (NSIS/portable), Linux (AppImage/deb/snap/flatpak)
+
 ### CI / CD
 
-- **`.github/workflows/ci.yml`** — Push/PR: type check, tests, web build
+- **`.github/workflows/ci.yml`** — Push/PR on `main` and `v*` branches: type check, tests, web build
 - **`.github/workflows/build-electron.yml`** — Tag push (`v*`) or manual: builds Electron for all platforms, creates draft GitHub Release
+- **`.github/workflows/publish-cli.yml`** — Tag push (`v*`) or manual: publishes all `@zseven-w/*` npm packages in topological order
 - **`.github/workflows/docker.yml`** — Docker image build and push
 
 ### Version Sync
@@ -119,7 +136,7 @@ Use [Conventional Commits](https://www.conventionalcommits.org/) format: `<type>
 
 **Types:** `feat`, `fix`, `refactor`, `perf`, `style`, `docs`, `test`, `chore`
 
-**Scopes:** `editor`, `canvas`, `panels`, `history`, `ai`, `codegen`, `store`, `types`, `variables`, `figma`, `mcp`, `electron`, `renderer`, `sdk`
+**Scopes:** `editor`, `canvas`, `panels`, `history`, `ai`, `codegen`, `store`, `types`, `variables`, `figma`, `mcp`, `electron`, `renderer`, `sdk`, `cli`
 
 **Rules:** Subject in English, lowercase start, no period, imperative mood. Body is optional; explain **why** not what. One commit per change.
 

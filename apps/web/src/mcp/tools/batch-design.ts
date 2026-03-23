@@ -482,19 +482,61 @@ function applyDescendantOverrides(
 
 /** Parse a JSON-like argument, handling unquoted keys. */
 function parseJsonArg(str: string): Record<string, unknown> {
-  let normalized = str.trim()
+  const trimmed = str.trim()
+  // Try strict JSON first (most common case — avoids mangling values like "Don't")
+  try {
+    return sanitizeObject(JSON.parse(trimmed))
+  } catch { /* fall through to lenient parsing */ }
+
+  let normalized = trimmed
   // Convert JavaScript-style object to JSON: unquoted keys → quoted
   normalized = normalized.replace(
     /(?<=\{|,)\s*(\w+)\s*:/g,
     ' "$1":',
   )
-  // Handle single-quoted strings → double-quoted
-  normalized = normalized.replace(/'/g, '"')
+  // Replace single-quoted string delimiters with double quotes (not quotes inside strings)
+  normalized = replaceSingleQuoteDelimiters(normalized)
   try {
     return sanitizeObject(JSON.parse(normalized))
   } catch {
-    throw new Error(`Failed to parse JSON: ${str}`)
+    throw new Error(`Failed to parse JSON: ${str.slice(0, 200)}`)
   }
+}
+
+/** Replace single-quote string delimiters with double quotes, leaving apostrophes inside strings. */
+function replaceSingleQuoteDelimiters(str: string): string {
+  const chars: string[] = []
+  let inDouble = false
+  let inSingle = false
+  for (let i = 0; i < str.length; i++) {
+    const ch = str[i]
+    if (ch === '\\' && (inDouble || inSingle)) {
+      chars.push(ch, str[++i] ?? '')
+      continue
+    }
+    if (inDouble) {
+      if (ch === '"') inDouble = false
+      chars.push(ch)
+    } else if (inSingle) {
+      if (ch === "'") {
+        inSingle = false
+        chars.push('"') // closing single quote → double quote
+      } else {
+        chars.push(ch)
+      }
+    } else {
+      if (ch === '"') {
+        inDouble = true
+        chars.push(ch)
+      } else if (ch === "'") {
+        inSingle = true
+        chars.push('"') // opening single quote → double quote
+      } else {
+        chars.push(ch)
+      }
+    }
+  }
+  return chars.join('')
 }
 
 /** Find the index of the first comma not inside braces/brackets/quotes. */
