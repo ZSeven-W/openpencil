@@ -41,13 +41,21 @@ function resolveMcpServerPath(): string {
     const electronPath = join(electronResources, 'mcp-server.cjs')
     if (existsSync(electronPath)) return electronPath
   }
-  // Try dist/ in the project root (dev + web build)
-  const projectDist = resolve(process.cwd(), 'dist', 'mcp-server.cjs')
-  if (existsSync(projectDist)) return projectDist
-  // Fallback: try relative to this file
-  const serverDist = resolve(__dirname, '..', '..', '..', 'dist', 'mcp-server.cjs')
-  if (existsSync(serverDist)) return serverDist
-  return projectDist // Return expected path even if not yet compiled
+  // Monorepo root: cwd may be apps/web (dev) or project root (Electron)
+  // Walk up from cwd to find monorepo root (has package.json with workspaces)
+  let root = process.cwd()
+  for (let i = 0; i < 5; i++) {
+    const candidate = join(root, 'out', 'mcp-server.cjs')
+    if (existsSync(candidate)) return candidate
+    const parent = dirname(root)
+    if (parent === root) break
+    root = parent
+  }
+  // Fallback: try relative to this file (Nitro bundles server code)
+  const fromFile = resolve(__dirname, '..', '..', '..', 'out', 'mcp-server.cjs')
+  if (existsSync(fromFile)) return fromFile
+  // Return expected monorepo root path
+  return join(root, 'out', 'mcp-server.cjs')
 }
 
 /**

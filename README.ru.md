@@ -82,6 +82,22 @@
 
 </td>
 </tr>
+<tr>
+<td width="50%">
+
+### ⌨️ CLI — `op`
+
+Управляйте инструментом дизайна из терминала. `op design`, `op insert`, `op export` — пакетный DSL дизайна, манипуляция узлами, экспорт кода. Ввод через pipe из файлов или stdin. Работает с десктопным приложением или веб-сервером.
+
+</td>
+<td width="50%">
+
+### 🎯 Мультиплатформенный экспорт кода
+
+Экспорт из одного файла `.op` в React + Tailwind, HTML + CSS, Vue, Svelte, Flutter, SwiftUI, Jetpack Compose, React Native. Переменные дизайна превращаются в пользовательские свойства CSS.
+
+</td>
+</tr>
 </table>
 
 ## Быстрый старт
@@ -184,6 +200,25 @@ docker build --target full -t openpencil-full .
 - React + Tailwind CSS, HTML + CSS, CSS Variables
 - Vue, Svelte, Flutter, SwiftUI, Jetpack Compose, React Native
 
+## CLI — `op`
+
+Установите глобально и управляйте инструментом дизайна из терминала:
+
+```bash
+npm install -g @zseven-w/openpencil
+```
+
+```bash
+op start                     # Запустить десктопное приложение
+op design @landing.txt       # Пакетный дизайн из файла
+op insert '{"type":"RECT"}'  # Вставить узел
+op export react --out .      # Экспорт в React + Tailwind
+op import:figma design.fig   # Импортировать файл Figma
+cat design.dsl | op design - # Передача через stdin
+```
+
+Поддерживает три метода ввода: строка, `@filepath` (чтение из файла) или `-` (чтение из stdin). Работает с десктопным приложением или веб-сервером разработки. Подробнее в [CLI README](./apps/cli/README.md).
+
 ## Возможности
 
 **Холст и рисование**
@@ -218,6 +253,7 @@ docker build --target full -t openpencil-full .
 | **Состояние** | Zustand v5 |
 | **Сервер** | Nitro |
 | **Десктоп** | Electron 35 |
+| **CLI** | `op` — управление из терминала, пакетный DSL дизайна, экспорт кода |
 | **AI** | Anthropic SDK · Claude Agent SDK · OpenCode SDK · Copilot SDK |
 | **Среда выполнения** | Bun · Vite 7 |
 | **Формат файла** | `.op` — на основе JSON, удобочитаемый, дружественный к Git |
@@ -239,10 +275,14 @@ openpencil/
 │   │   └── server/
 │   │       ├── api/ai/      Nitro API — стриминговый чат, генерация, валидация
 │   │       └── utils/       Обёртки клиентов Claude CLI, OpenCode, Codex, Copilot
-│   └── desktop/             Десктопное приложение Electron
-│       ├── main.ts          Окно, форк Nitro, нативное меню, автообновление
-│       ├── ipc-handlers.ts  Нативные файловые диалоги, синхронизация темы, настройки IPC
-│       └── preload.ts       IPC-мост
+│   ├── desktop/             Десктопное приложение Electron
+│   │   ├── main.ts          Окно, форк Nitro, нативное меню, автообновление
+│   │   ├── ipc-handlers.ts  Нативные файловые диалоги, синхронизация темы, настройки IPC
+│   │   └── preload.ts       IPC-мост
+│   └── cli/                 CLI-инструмент — команда `op`
+│       ├── src/commands/    Команды: дизайн, документ, экспорт, импорт, узлы, страницы, переменные
+│       ├── connection.ts    WebSocket-соединение с запущенным приложением
+│       └── launcher.ts      Автоопределение и запуск десктопного приложения или веб-сервера
 ├── packages/
 │   ├── pen-types/           Определения типов для модели PenDocument
 │   ├── pen-core/            Операции с деревом документа, движок раскладки, переменные
@@ -281,6 +321,8 @@ npx tsc --noEmit           # Проверка типов
 bun run bump <version>     # Синхронизация версий во всех package.json
 bun run electron:dev       # Разработка Electron
 bun run electron:build     # Упаковка Electron
+bun run cli:dev            # Запуск CLI из исходников
+bun run cli:compile        # Компиляция CLI в dist
 ```
 
 ## Участие в разработке
@@ -305,6 +347,7 @@ bun run electron:build     # Упаковка Electron
 - [x] Булевы операции (объединение, вычитание, пересечение)
 - [x] Мультимодельные профили возможностей
 - [x] Реструктуризация в монорепозиторий с переиспользуемыми пакетами
+- [x] CLI-инструмент (`op`) для управления из терминала
 - [ ] Совместное редактирование
 - [ ] Система плагинов
 

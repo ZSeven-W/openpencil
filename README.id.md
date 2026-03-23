@@ -82,6 +82,22 @@ Aplikasi web + desktop native di macOS, Windows, dan Linux melalui Electron. Pem
 
 </td>
 </tr>
+<tr>
+<td width="50%">
+
+### ⌨️ CLI — `op`
+
+Kontrol alat desain dari terminal Anda. `op design`, `op insert`, `op export` — batch design DSL, manipulasi node, ekspor kode. Pipe dari file atau stdin. Bekerja dengan aplikasi desktop atau web server.
+
+</td>
+<td width="50%">
+
+### 🎯 Ekspor Kode Multi-Platform
+
+Ekspor dari satu file `.op` ke React + Tailwind, HTML + CSS, Vue, Svelte, Flutter, SwiftUI, Jetpack Compose, React Native. Variabel desain menjadi CSS custom properties.
+
+</td>
+</tr>
 </table>
 
 ## Mulai Cepat
@@ -184,6 +200,25 @@ docker build --target full -t openpencil-full .
 - React + Tailwind CSS, HTML + CSS, CSS Variables
 - Vue, Svelte, Flutter, SwiftUI, Jetpack Compose, React Native
 
+## CLI — `op`
+
+Instal secara global dan kontrol alat desain dari terminal Anda:
+
+```bash
+npm install -g @zseven-w/openpencil
+```
+
+```bash
+op start                     # Jalankan aplikasi desktop
+op design @landing.txt       # Desain batch dari file
+op insert '{"type":"RECT"}'  # Sisipkan sebuah node
+op export react --out .      # Ekspor ke React + Tailwind
+op import:figma design.fig   # Impor file Figma
+cat design.dsl | op design - # Pipe dari stdin
+```
+
+Mendukung tiga metode input: string inline, `@filepath` (baca dari file), atau `-` (baca dari stdin). Bekerja dengan aplikasi desktop atau web dev server. Lihat [CLI README](./apps/cli/README.md) untuk referensi perintah lengkap.
+
 ## Fitur
 
 **Kanvas & Menggambar**
@@ -218,6 +253,7 @@ docker build --target full -t openpencil-full .
 | **State** | Zustand v5 |
 | **Server** | Nitro |
 | **Desktop** | Electron 35 |
+| **CLI** | `op` — kontrol terminal, batch design DSL, ekspor kode |
 | **AI** | Anthropic SDK · Claude Agent SDK · OpenCode SDK · Copilot SDK |
 | **Runtime** | Bun · Vite 7 |
 | **Format file** | `.op` — berbasis JSON, mudah dibaca manusia, ramah Git |
@@ -239,10 +275,14 @@ openpencil/
 │   │   └── server/
 │   │       ├── api/ai/      Nitro API — chat streaming, pembuatan, validasi
 │   │       └── utils/       Pembungkus Claude CLI, OpenCode, Codex, Copilot
-│   └── desktop/             Aplikasi desktop Electron
-│       ├── main.ts          Jendela, fork Nitro, menu native, pembaruan otomatis
-│       ├── ipc-handlers.ts  Dialog file native, sinkronisasi tema, preferensi IPC
-│       └── preload.ts       Jembatan IPC
+│   ├── desktop/             Aplikasi desktop Electron
+│   │   ├── main.ts          Jendela, fork Nitro, menu native, pembaruan otomatis
+│   │   ├── ipc-handlers.ts  Dialog file native, sinkronisasi tema, preferensi IPC
+│   │   └── preload.ts       Jembatan IPC
+│   └── cli/                 Alat CLI — perintah `op`
+│       ├── src/commands/    Perintah design, document, export, import, node, page, variable
+│       ├── connection.ts    Koneksi WebSocket ke aplikasi yang berjalan
+│       └── launcher.ts      Deteksi otomatis dan jalankan aplikasi desktop atau web server
 ├── packages/
 │   ├── pen-types/           Definisi tipe untuk model PenDocument
 │   ├── pen-core/            Operasi pohon dokumen, mesin tata letak, variabel
@@ -281,6 +321,8 @@ npx tsc --noEmit           # Pemeriksaan tipe
 bun run bump <version>     # Sinkronisasi versi di semua package.json
 bun run electron:dev       # Pengembangan Electron
 bun run electron:build     # Paket Electron
+bun run cli:dev            # Jalankan CLI dari sumber
+bun run cli:compile        # Kompilasi CLI ke dist
 ```
 
 ## Berkontribusi
@@ -305,6 +347,7 @@ Kontribusi sangat disambut! Lihat [CLAUDE.md](./CLAUDE.md) untuk detail arsitekt
 - [x] Operasi boolean (gabung, kurangi, potong)
 - [x] Profil kemampuan multi-model
 - [x] Restrukturisasi monorepo dengan paket yang dapat digunakan ulang
+- [x] Alat CLI (`op`) kontrol terminal
 - [ ] Pengeditan kolaboratif
 - [ ] Sistem plugin
 

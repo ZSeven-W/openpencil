@@ -318,6 +318,8 @@ const es: TranslationKeys = {
   'ai.sendMessage': 'Enviar mensaje',
   'ai.loadingModels': 'Cargando modelos...',
   'ai.noModelsConnected': 'Sin modelos conectados',
+  'ai.searchModels': 'Buscar modelos...',
+  'ai.noModelsFound': 'No se encontraron modelos',
   'ai.quickAction.loginScreen':
     'Diseñar una pantalla de inicio de sesión móvil',
   'ai.quickAction.loginScreenPrompt':
