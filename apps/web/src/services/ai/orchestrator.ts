@@ -19,7 +19,7 @@ import type {
   SubAgentResult,
 } from './ai-types'
 import { streamChat } from './ai-service'
-import { ORCHESTRATOR_PROMPT } from './orchestrator-prompts'
+import { resolveSkills } from '@zseven-w/pen-ai-skills'
 import {
   getOrchestratorTimeouts,
   prepareDesignPrompt,
@@ -442,8 +442,11 @@ async function callOrchestrator(
   let rawResponse = ''
   let thinkingContent = ''
 
+  const planningCtx = resolveSkills('planning', prompt)
+  const planningSystemPrompt = planningCtx.skills.map(s => s.content).join('\n\n')
+
   for await (const chunk of streamChat(
-    ORCHESTRATOR_PROMPT,
+    planningSystemPrompt,
     [{ role: 'user', content: prompt }],
     model,
     getOrchestratorTimeouts(timeoutHintLength, model),
