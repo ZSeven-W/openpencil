@@ -365,6 +365,10 @@ bun run cli:compile        # 编译 CLI 到 dist
 </a>
 — 提问、分享设计、提出功能建议。
 
+**飞书交流群**
+
+<img src="./screenshot/557517811-62010928-d91a-4223-bc10-9ee7a4fbf043.jpg" alt="飞书交流群" width="240" />
+
 ## Star History
 
 <a href="https://star-history.com/#ZSeven-W/openpencil&Date">
