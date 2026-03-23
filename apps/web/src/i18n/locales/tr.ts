@@ -315,6 +315,8 @@ const tr: TranslationKeys = {
   'ai.sendMessage': 'Mesaj gönder',
   'ai.loadingModels': 'Modeller yükleniyor...',
   'ai.noModelsConnected': 'Bağlı model yok',
+  'ai.searchModels': 'Model ara...',
+  'ai.noModelsFound': 'Model bulunamadı',
   'ai.quickAction.loginScreen': 'Mobil giriş ekranı tasarla',
   'ai.quickAction.loginScreenPrompt':
     'E-posta girişi, şifre girişi, giriş butonu ve sosyal giriş seçenekleri ile modern bir mobil giriş ekranı tasarla',

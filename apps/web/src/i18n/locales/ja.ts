@@ -319,6 +319,8 @@ const ja: TranslationKeys = {
   'ai.sendMessage': 'メッセージを送信',
   'ai.loadingModels': 'モデルを読み込み中...',
   'ai.noModelsConnected': 'モデルが接続されていません',
+  'ai.searchModels': 'モデルを検索...',
+  'ai.noModelsFound': 'モデルが見つかりません',
   'ai.quickAction.loginScreen': 'モバイルログイン画面をデザイン',
   'ai.quickAction.loginScreenPrompt':
     'メール入力、パスワード入力、ログインボタン、ソーシャルログインオプションを含む、モダンなモバイルログイン画面をデザインしてください',

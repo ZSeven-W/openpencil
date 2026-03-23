@@ -1,0 +1,105 @@
+name: Publish npm
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+jobs:
+  publish:
+    name: Publish to npm
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          registry-url: https://registry.npmjs.org
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Get version
+        id: version
+        run: echo "version=$(jq -r .version package.json)" >> "$GITHUB_OUTPUT"
+
+      - name: Replace workspace:* with version
+        run: |
+          VERSION=${{ steps.version.outputs.version }}
+          for f in packages/*/package.json apps/cli/package.json; do
+            if [ -f "$f" ]; then
+              jq --arg v "$VERSION" '
+                if .dependencies then
+                  .dependencies |= with_entries(
+                    if .value == "workspace:*" then .value = $v else . end
+                  )
+                else . end |
+                if .devDependencies then
+                  .devDependencies |= with_entries(
+                    if .value == "workspace:*" then .value = $v else . end
+                  )
+                else . end
+              ' "$f" > "$f.tmp" && mv "$f.tmp" "$f"
+              echo "Updated $f"
+            fi
+          done
+
+      - name: Compile CLI
+        run: bun run cli:compile
+
+      - name: Verify CLI build
+        run: node apps/cli/dist/openpencil-cli.cjs --version
+
+      # Publish in topological order
+      - name: Publish pen-types
+        run: npm publish --access public || true
+        working-directory: packages/pen-types
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Publish pen-core
+        run: npm publish --access public || true
+        working-directory: packages/pen-core
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Publish pen-codegen
+        run: npm publish --access public || true
+        working-directory: packages/pen-codegen
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Publish pen-figma
+        run: npm publish --access public || true
+        working-directory: packages/pen-figma
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Publish pen-renderer
+        run: npm publish --access public || true
+        working-directory: packages/pen-renderer
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Publish pen-sdk
+        run: npm publish --access public || true
+        working-directory: packages/pen-sdk
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Publish CLI
+        run: npm publish --access public || true
+        working-directory: apps/cli
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

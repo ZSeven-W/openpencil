@@ -1,5 +1,5 @@
 import { defineEventHandler, readBody, setResponseHeaders } from 'h3'
-import { existsSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import type { GroupedModel } from '../../../src/types/agent-settings'
 import { resolveClaudeCli } from '../../utils/resolve-claude-cli'
@@ -121,6 +121,8 @@ async function connectClaudeCode(): Promise<ConnectResult> {
     serverLog.info(`[connect-agent] claude env keys: ${Object.keys(env).join(', ')}`)
     serverLog.info(`[connect-agent] claude debugFile: ${debugFile ?? 'none'}`)
 
+    const spawnProcess = buildSpawnClaudeCodeProcess()
+
     const q = query({
       prompt: '',
       options: {
@@ -131,7 +133,7 @@ async function connectClaudeCode(): Promise<ConnectResult> {
         env,
         ...(debugFile ? { debugFile } : {}),
         ...(claudePath ? { pathToClaudeCodeExecutable: claudePath } : {}),
-        ...(buildSpawnClaudeCodeProcess() ? { spawnClaudeCodeProcess: buildSpawnClaudeCodeProcess() } : {}),
+        ...(spawnProcess ? { spawnClaudeCodeProcess: spawnProcess } : {}),
       },
     })
 
@@ -168,7 +170,34 @@ async function connectClaudeCode(): Promise<ConnectResult> {
       serverLog.info('[connect-agent] using fallback model list (proxy detected)')
       const fallbackEnv = buildClaudeAgentEnv()
       const claudeInfo = buildClaudeConnectionInfo(fallbackEnv, null)
-      return { connected: true, models: FALLBACK_CLAUDE_MODELS, ...claudeInfo }
+
+      // Read debug log for diagnostic warning — the process may have written
+      // useful info (e.g. TLS errors, auth failures) before exiting
+      let warning: string | undefined
+      const debugPath = getClaudeAgentDebugFilePath()
+      if (debugPath) {
+        try {
+          const raw = readFileSync(debugPath, 'utf-8')
+          const lines = raw.split('\n').filter((l) => l.trim().length > 0)
+          const tail = lines.slice(-10).join('\n')
+          if (tail) {
+            // Surface specific issues as warnings
+            if (/certificate|CERT_|ssl|tls/i.test(tail)) {
+              warning = 'TLS/SSL error detected. If using a proxy, add "NODE_TLS_REJECT_UNAUTHORIZED": "0" to ~/.claude/settings.json env.'
+            } else if (/EPERM|operation not permitted/i.test(tail)) {
+              warning = 'Permission error writing config. Try: echo {} > %USERPROFILE%\\.claude.json'
+            } else if (/stderr exit=/i.test(tail)) {
+              // Show captured stderr
+              const stderrMatch = tail.match(/\[stderr exit=\d+\]\s*(.+)/s)
+              if (stderrMatch) {
+                warning = `Claude Code stderr: ${stderrMatch[1].slice(0, 300)}`
+              }
+            }
+          }
+        } catch { /* debug file not available */ }
+      }
+
+      return { connected: true, models: FALLBACK_CLAUDE_MODELS, ...claudeInfo, ...(warning ? { warning } : {}) }
     }
     return { connected: false, models: [], error: friendlyClaudeError(msg) }
   }

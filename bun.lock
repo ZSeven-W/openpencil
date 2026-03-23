@@ -82,17 +82,30 @@
         "vitest": "^3.0.5",
       },
     },
+    "apps/cli": {
+      "name": "@zseven-w/openpencil",
+      "version": "0.5.1",
+      "bin": {
+        "op": "dist/openpencil-cli.cjs",
+      },
+      "dependencies": {
+        "@zseven-w/pen-codegen": "workspace:*",
+        "@zseven-w/pen-core": "workspace:*",
+        "@zseven-w/pen-figma": "workspace:*",
+        "@zseven-w/pen-types": "workspace:*",
+      },
+    },
     "apps/desktop": {
       "name": "@zseven-w/desktop",
-      "version": "0.5.0",
+      "version": "0.5.1",
     },
     "apps/web": {
       "name": "@zseven-w/web",
-      "version": "0.5.0",
+      "version": "0.5.1",
     },
     "packages/pen-codegen": {
       "name": "@zseven-w/pen-codegen",
-      "version": "0.5.0",
+      "version": "0.5.1",
       "dependencies": {
         "@zseven-w/pen-core": "workspace:*",
         "@zseven-w/pen-types": "workspace:*",
@@ -103,7 +116,7 @@
     },
     "packages/pen-core": {
       "name": "@zseven-w/pen-core",
-      "version": "0.5.0",
+      "version": "0.5.1",
       "dependencies": {
         "@zseven-w/pen-types": "workspace:*",
         "nanoid": "^5.1.6",
@@ -115,7 +128,7 @@
     },
     "packages/pen-figma": {
       "name": "@zseven-w/pen-figma",
-      "version": "0.5.0",
+      "version": "0.5.1",
       "dependencies": {
         "@zseven-w/pen-types": "workspace:*",
         "fzstd": "^0.1.1",
@@ -129,7 +142,7 @@
     },
     "packages/pen-renderer": {
       "name": "@zseven-w/pen-renderer",
-      "version": "0.5.0",
+      "version": "0.5.1",
       "dependencies": {
         "@zseven-w/pen-core": "workspace:*",
         "@zseven-w/pen-types": "workspace:*",
@@ -146,7 +159,7 @@
     },
     "packages/pen-sdk": {
       "name": "@zseven-w/pen-sdk",
-      "version": "0.5.0",
+      "version": "0.5.1",
       "dependencies": {
         "@zseven-w/pen-codegen": "workspace:*",
         "@zseven-w/pen-core": "workspace:*",
@@ -160,7 +173,7 @@
     },
     "packages/pen-types": {
       "name": "@zseven-w/pen-types",
-      "version": "0.5.0",
+      "version": "0.5.1",
       "devDependencies": {
         "typescript": "^5.7.2",
       },
@@ -768,6 +781,8 @@
     "@xmldom/xmldom": ["@xmldom/xmldom@0.8.11", "https://registry.npmmirror.com/@xmldom/xmldom/-/xmldom-0.8.11.tgz", {}, "sha512-cQzWCtO6C8TQiYl1ruKNn2U6Ao4o4WBBcbL61yJl84x+j5sOWWFU9X7DpND8XZG3daDppSsigMdfAIl2upQBRw=="],
 
     "@zseven-w/desktop": ["@zseven-w/desktop@workspace:apps/desktop"],
+
+    "@zseven-w/openpencil": ["@zseven-w/openpencil@workspace:apps/cli"],
 
     "@zseven-w/pen-codegen": ["@zseven-w/pen-codegen@workspace:packages/pen-codegen"],
 

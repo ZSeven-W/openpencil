@@ -9,7 +9,6 @@ import {
   buildSpawnClaudeCodeProcess,
   getClaudeAgentDebugFilePath,
 } from '../../utils/resolve-claude-agent-env'
-
 /** Pattern for detecting sensitive data in debug log output */
 export const SENSITIVE_LOG_PATTERN = /ANTHROPIC_API_KEY=|Authorization:\s*Bearer|api[_-]?key\s*[:=]/i
 
@@ -51,26 +50,68 @@ async function readDebugTail(path?: string, maxLines = 40): Promise<string[] | u
 
 function buildClaudeExitHint(rawError: string, debugTail?: string[]): string | undefined {
   if (!/process exited with code 1/i.test(rawError)) return undefined
-  if (!debugTail || debugTail.length === 0) return undefined
-  const text = debugTail.join('\n')
 
   const hints: string[] = []
-  if (/Failed to save config with lock: Error: EPERM|operation not permitted, .*\.claude\.json/i.test(text)) {
-    hints.push('Claude Code cannot write ~/.claude.json in the current runtime (permission denied).')
+
+  if (debugTail && debugTail.length > 0) {
+    const text = debugTail.join('\n')
+    if (/Failed to save config with lock: Error: EPERM|operation not permitted, .*\.claude\.json/i.test(text)) {
+      hints.push(
+        'Claude Code cannot write ~/.claude.json (permission denied). ' +
+        'On Windows, try running as Administrator or manually create the file: echo {} > %USERPROFILE%\\.claude.json',
+      )
+    }
+    if (/Connection error|Could not resolve host|Failed to connect|ECONNREFUSED|ETIMEDOUT/i.test(text)) {
+      hints.push('Upstream API connection failed. Check proxy/DNS/network reachability to your ANTHROPIC_BASE_URL.')
+    }
+    if (/ANTHROPIC_CUSTOM_HEADERS present: false, has Authorization header: false/i.test(text)) {
+      hints.push(
+        'No API auth header detected. Run "claude login" to authenticate, ' +
+        'or set ANTHROPIC_API_KEY in ~/.claude/settings.json ' +
+        '(env: { "ANTHROPIC_API_KEY": "sk-..." }).',
+      )
+    }
+    if (/invalid.*api.?key|unauthorized|401|authentication/i.test(text)) {
+      hints.push('API key authentication failed. Verify your ANTHROPIC_API_KEY is correct and has not expired.')
+    }
+    if (/ENOTFOUND|getaddrinfo/i.test(text)) {
+      hints.push('DNS resolution failed for the API endpoint. Check your ANTHROPIC_BASE_URL is correct.')
+    }
+    if (/certificate|CERT_|ssl|tls/i.test(text)) {
+      hints.push(
+        'TLS/SSL certificate error. If using a corporate proxy, set NODE_TLS_REJECT_UNAUTHORIZED=0 in ~/.claude/settings.json env (not recommended for production).',
+      )
+    }
   }
-  if (/Connection error|Could not resolve host|Failed to connect/i.test(text)) {
-    hints.push('Upstream API connection failed (check proxy/DNS/network reachability to your ANTHROPIC_BASE_URL).')
-  }
-  if (/ANTHROPIC_CUSTOM_HEADERS present: false, has Authorization header: false/i.test(text)) {
+
+  // Detect proxy/custom endpoint — most common cause of exit-code-1 on Windows
+  const env = process.env
+  const hasProxy = !!(env.http_proxy || env.https_proxy || env.HTTP_PROXY || env.HTTPS_PROXY)
+  const hasCustomBaseUrl = !!env.ANTHROPIC_BASE_URL
+  if ((hasProxy || hasCustomBaseUrl) && !env.NODE_TLS_REJECT_UNAUTHORIZED) {
     hints.push(
-      'No API auth header detected. Run "claude login" to authenticate, ' +
-      'or set ANTHROPIC_API_KEY in ~/.claude/settings.json ' +
-      '(env: { "ANTHROPIC_API_KEY": "sk-..." }).',
+      'Proxy or custom ANTHROPIC_BASE_URL detected but NODE_TLS_REJECT_UNAUTHORIZED is not set. ' +
+      'If your proxy uses a self-signed or corporate certificate, add ' +
+      '"NODE_TLS_REJECT_UNAUTHORIZED": "0" to the env section of ~/.claude/settings.json.',
     )
   }
 
-  if (hints.length === 0) return undefined
-  return `${rawError}\n${hints.join(' ')}`
+  // If no debug info available, provide generic Windows guidance
+  if (hints.length === 0) {
+    const isWin = process.platform === 'win32'
+    if (isWin) {
+      hints.push(
+        'Claude Code process crashed on Windows. Common fixes: ' +
+        '(1) Ensure ~/.claude.json exists: echo {} > %USERPROFILE%\\.claude.json ' +
+        '(2) Check ANTHROPIC_API_KEY and ANTHROPIC_BASE_URL in ~/.claude/settings.json ' +
+        '(3) If using a proxy, set NODE_TLS_REJECT_UNAUTHORIZED=0 in env.',
+      )
+    } else {
+      return undefined
+    }
+  }
+
+  return `${rawError}\n${hints.join('\n')}`
 }
 
 /**
@@ -210,6 +251,7 @@ function streamViaAgentSDK(body: ChatBody, model?: string) {
         debugFile = getClaudeAgentDebugFilePath()
 
         const claudePath = resolveClaudeCli()
+        const spawnProcess = buildSpawnClaudeCodeProcess()
         const thinking = getAgentThinkingConfig(body)
 
         // When images are attached, strip the "NEVER use tools" restriction from
@@ -238,7 +280,7 @@ function streamViaAgentSDK(body: ChatBody, model?: string) {
                 env,
                 ...(debugFile ? { debugFile } : {}),
                 ...(claudePath ? { pathToClaudeCodeExecutable: claudePath } : {}),
-                ...(buildSpawnClaudeCodeProcess() ? { spawnClaudeCodeProcess: buildSpawnClaudeCodeProcess() } : {}),
+                ...(spawnProcess ? { spawnClaudeCodeProcess: spawnProcess } : {}),
               },
             })
 
@@ -288,7 +330,7 @@ function streamViaAgentSDK(body: ChatBody, model?: string) {
                 env,
                 ...(debugFile ? { debugFile } : {}),
                 ...(claudePath ? { pathToClaudeCodeExecutable: claudePath } : {}),
-                ...(buildSpawnClaudeCodeProcess() ? { spawnClaudeCodeProcess: buildSpawnClaudeCodeProcess() } : {}),
+                ...(spawnProcess ? { spawnClaudeCodeProcess: spawnProcess } : {}),
               },
             })
 
@@ -332,9 +374,16 @@ function streamViaAgentSDK(body: ChatBody, model?: string) {
         )
       } catch (error) {
         const rawContent = error instanceof Error ? error.message : 'Unknown error'
+
         const tail = await readDebugTail(debugFile)
+
         const hintedContent = buildClaudeExitHint(rawContent, tail)
-        const content = hintedContent ?? rawContent
+        // Append debug log tail so the user can see what Claude Code actually reported
+        let content = hintedContent ?? rawContent
+        if (tail && tail.length > 0 && /process exited with code/i.test(rawContent)) {
+          const debugSnippet = tail.slice(-10).join('\n')
+          content += `\n\n[Debug log]:\n${debugSnippet}`
+        }
         controller.enqueue(
           encoder.encode(`data: ${JSON.stringify({ type: 'error', content })}\n\n`),
         )
