@@ -2,5 +2,12 @@
   "name": "@zseven-w/web",
   "version": "0.5.1",
   "private": true,
-  "type": "module"
+  "type": "module",
+  "dependencies": {
+    "@zseven-w/pen-types": "workspace:*",
+    "@zseven-w/pen-core": "workspace:*",
+    "@zseven-w/pen-codegen": "workspace:*",
+    "@zseven-w/pen-figma": "workspace:*",
+    "@zseven-w/pen-renderer": "workspace:*"
+  }
 }

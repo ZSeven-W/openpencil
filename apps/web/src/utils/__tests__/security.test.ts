@@ -1,5 +1,16 @@
 // @vitest-environment jsdom
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
+
+// paper.js self-initializes a Canvas 2D context on import, which crashes in
+// jsdom. Mock it before any transitive import can trigger the real module.
+vi.mock('paper', () => ({
+  default: {
+    PaperScope: class {},
+    setup: () => {},
+    project: { activeLayer: { removeChildren: () => {} } },
+  },
+}))
+
 import { parseSvgToNodes } from '@/utils/svg-parser'
 
 // ---------------------------------------------------------------------------
