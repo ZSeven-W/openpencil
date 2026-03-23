@@ -21,7 +21,7 @@
     "build": "cd apps/web && bun --bun vite build",
     "preview": "cd apps/web && bun --bun vite preview",
     "test": "cd apps/web && bun --bun vitest run --passWithNoTests",
-    "mcp:compile": "cd apps/web && esbuild src/mcp/server.ts --bundle --platform=node --target=node20 --outfile=../../out/mcp-server.cjs --format=cjs --sourcemap --alias:@=src --alias:@zseven-w/pen-types=../../packages/pen-types/src --alias:@zseven-w/pen-core=../../packages/pen-core/src --alias:@zseven-w/pen-codegen=../../packages/pen-codegen/src --alias:@zseven-w/pen-figma=../../packages/pen-figma/src --alias:@zseven-w/pen-renderer=../../packages/pen-renderer/src --alias:@zseven-w/pen-sdk=../../packages/pen-sdk/src --define:import.meta.env={} --external:canvas --external:paper",
+    "mcp:compile": "cd apps/web && esbuild src/mcp/server.ts --bundle --platform=node --target=node20 --outfile=../../out/mcp-server.cjs --format=cjs --sourcemap --alias:@=src --alias:@zseven-w/pen-types=../../packages/pen-types/src --alias:@zseven-w/pen-core=../../packages/pen-core/src --alias:@zseven-w/pen-codegen=../../packages/pen-codegen/src --alias:@zseven-w/pen-figma=../../packages/pen-figma/src --alias:@zseven-w/pen-renderer=../../packages/pen-renderer/src --alias:@zseven-w/pen-sdk=../../packages/pen-sdk/src --alias:@zseven-w/pen-ai-skills=../../packages/pen-ai-skills/src --define:import.meta.env={} --external:canvas --external:paper",
     "mcp:dev": "bun run apps/web/src/mcp/server.ts",
     "electron:dev": "bun run apps/desktop/dev.ts",
     "electron:compile": "esbuild apps/desktop/main.ts apps/desktop/preload.ts --bundle --platform=node --target=node20 --outdir=out/desktop --external:electron --format=cjs --out-extension:.js=.cjs --sourcemap",

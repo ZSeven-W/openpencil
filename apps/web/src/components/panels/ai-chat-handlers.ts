@@ -7,7 +7,6 @@ import { useDesignMdStore } from '@/stores/design-md-store'
 import { getActivePageChildren } from '@/stores/document-tree-utils'
 import { streamChat } from '@/services/ai/ai-service'
 import { buildChatSystemPrompt } from '@/services/ai/ai-prompts'
-import { detectSections } from '@/services/ai/ai-prompt-sections'
 import {
   generateDesign,
   generateDesignModification,
@@ -272,14 +271,14 @@ export function useChatHandlers() {
             })
             // Trim history to prevent unbounded context growth
             const trimmedHistory = trimChatHistory(chatHistory)
-            // Progressive section loading: detect needed sections from user message
+            // Progressive skill loading: resolve needed skills from user message
             const chatDoc = useDocumentStore.getState().document
             const chatDesignMd = useDesignMdStore.getState().designMd
-            const chatSections = detectSections(fullUserMessage, {
+            const chatSystemPrompt = buildChatSystemPrompt(fullUserMessage, {
               hasDesignMd: !!chatDesignMd,
               hasVariables: !!chatDoc.variables && Object.keys(chatDoc.variables).length > 0,
+              designMd: chatDesignMd,
             })
-            const chatSystemPrompt = buildChatSystemPrompt(chatSections, chatDesignMd)
             let chatThinking = ''
             for await (const chunk of streamChat(
               chatSystemPrompt,

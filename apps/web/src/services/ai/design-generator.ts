@@ -4,8 +4,8 @@ import type { AIProviderType } from '@/types/agent-settings'
 import type { DesignMdSpec } from '@/types/design-md'
 import type { AIDesignRequest } from './ai-types'
 import { streamChat } from './ai-service'
-import { buildModifierSystemPrompt } from './ai-prompts'
-import { detectSections } from './ai-prompt-sections'
+import { resolveSkills } from '@zseven-w/pen-ai-skills'
+import { buildDesignMdStylePolicy } from './ai-prompts'
 import { executeOrchestration } from './orchestrator'
 import { DESIGN_STREAM_TIMEOUTS } from './ai-runtime-config'
 import { extractJsonFromResponse } from './design-parser'
@@ -122,13 +122,18 @@ export async function generateDesignModification(
   const profile = resolveModelProfile(options?.model)
   const timeouts = applyProfileToTimeouts({ ...DESIGN_STREAM_TIMEOUTS }, profile)
 
-  // Progressive section loading for modification prompts
-  const modSections = detectSections(instruction, {
-    hasDesignMd: !!options?.designMd,
-    hasVariables: !!options?.variables && Object.keys(options.variables).length > 0,
-    isModification: true,
+  // Resolve maintenance skills for modification prompts
+  const maintenanceCtx = resolveSkills('maintenance', instruction, {
+    flags: {
+      hasVariables: !!options?.variables && Object.keys(options.variables).length > 0,
+      hasDesignMd: !!options?.designMd,
+    },
   })
-  const modifierPrompt = buildModifierSystemPrompt(modSections, options?.designMd)
+  let modifierPrompt = maintenanceCtx.skills.map(s => s.content).join('\n\n')
+  // Append design-md context if present (design-md skill is generation-phase only)
+  if (options?.designMd) {
+    modifierPrompt += '\n\n' + buildDesignMdStylePolicy(options.designMd)
+  }
 
   for await (const chunk of streamChat(modifierPrompt, [
     { role: 'user', content: userMessage },

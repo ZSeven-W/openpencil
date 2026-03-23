@@ -1,5 +1,5 @@
 import { getSkillByName } from '@zseven-w/pen-ai-skills'
-import { buildDesignMdStylePolicy } from '../../services/ai/ai-prompt-sections'
+import { buildDesignMdStylePolicy } from '../../services/ai/ai-prompts'
 import type { DesignMdSpec } from '../../types/design-md'
 
 // ---------------------------------------------------------------------------
