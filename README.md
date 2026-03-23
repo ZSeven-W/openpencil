@@ -82,6 +82,22 @@ Web app + native desktop on macOS, Windows, and Linux via Electron. Auto-updates
 
 </td>
 </tr>
+<tr>
+<td width="50%">
+
+### ⌨️ CLI — `op`
+
+Control the design tool from your terminal. `op design`, `op insert`, `op export` — batch design DSL, node manipulation, code export. Pipe in from files or stdin. Works with desktop app or web server.
+
+</td>
+<td width="50%">
+
+### 🎯 Multi-Platform Code Export
+
+Export to React + Tailwind, HTML + CSS, Vue, Svelte, Flutter, SwiftUI, Jetpack Compose, React Native — all from one `.op` file. Design variables become CSS custom properties.
+
+</td>
+</tr>
 </table>
 
 ## Quick Start
@@ -184,6 +200,25 @@ docker build --target full -t openpencil-full .
 - React + Tailwind CSS, HTML + CSS, CSS Variables
 - Vue, Svelte, Flutter, SwiftUI, Jetpack Compose, React Native
 
+## CLI — `op`
+
+Install globally and control the design tool from your terminal:
+
+```bash
+npm install -g @zseven-w/openpencil
+```
+
+```bash
+op start                     # Launch desktop app
+op design @landing.txt       # Batch design from file
+op insert '{"type":"RECT"}'  # Insert a node
+op export react --out .      # Export to React + Tailwind
+op import:figma design.fig   # Import Figma file
+cat design.dsl | op design - # Pipe from stdin
+```
+
+Supports three input methods: inline string, `@filepath` (read from file), or `-` (read from stdin). Works with desktop app or web dev server. See [CLI README](./apps/cli/README.md) for full command reference.
+
 ## Features
 
 **Canvas & Drawing**
@@ -218,6 +253,7 @@ docker build --target full -t openpencil-full .
 | **State** | Zustand v5 |
 | **Server** | Nitro |
 | **Desktop** | Electron 35 |
+| **CLI** | `op` — terminal control, batch design DSL, code export |
 | **AI** | Anthropic SDK · Claude Agent SDK · OpenCode SDK · Copilot SDK |
 | **Runtime** | Bun · Vite 7 |
 | **File format** | `.op` — JSON-based, human-readable, Git-friendly |
@@ -239,10 +275,14 @@ openpencil/
 │   │   └── server/
 │   │       ├── api/ai/      Nitro API — streaming chat, generation, validation
 │   │       └── utils/       Claude CLI, OpenCode, Codex, Copilot wrappers
-│   └── desktop/             Electron desktop app
-│       ├── main.ts          Window, Nitro fork, native menu, auto-updater
-│       ├── ipc-handlers.ts  Native file dialogs, theme sync, prefs IPC
-│       └── preload.ts       IPC bridge
+│   ├── desktop/             Electron desktop app
+│   │   ├── main.ts          Window, Nitro fork, native menu, auto-updater
+│   │   ├── ipc-handlers.ts  Native file dialogs, theme sync, prefs IPC
+│   │   └── preload.ts       IPC bridge
+│   └── cli/                 CLI tool — `op` command
+│       ├── src/commands/    Design, document, export, import, node, page, variable commands
+│       ├── connection.ts    WebSocket connection to running app
+│       └── launcher.ts      Auto-detect and launch desktop app or web server
 ├── packages/
 │   ├── pen-types/           Type definitions for PenDocument model
 │   ├── pen-core/            Document tree ops, layout engine, variables
@@ -281,6 +321,8 @@ npx tsc --noEmit           # Type check
 bun run bump <version>     # Sync version across all package.json
 bun run electron:dev       # Electron dev
 bun run electron:build     # Electron package
+bun run cli:dev            # Run CLI from source
+bun run cli:compile        # Compile CLI to dist
 ```
 
 ## Contributing
@@ -305,6 +347,7 @@ Contributions are welcome! See [CLAUDE.md](./CLAUDE.md) for architecture details
 - [x] Boolean operations (union, subtract, intersect)
 - [x] Multi-model capability profiles
 - [x] Monorepo restructure with reusable packages
+- [x] CLI tool (`op`) for terminal control
 - [ ] Collaborative editing
 - [ ] Plugin system
 

@@ -1,7 +1,7 @@
 # CLAUDE.md
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
-Detailed module docs are in `packages/CLAUDE.md`, `apps/web/CLAUDE.md`, and `apps/desktop/CLAUDE.md` — loaded automatically when working in those directories.
+Detailed module docs are in `packages/CLAUDE.md`, `apps/web/CLAUDE.md`, `apps/desktop/CLAUDE.md`, and `apps/cli/CLAUDE.md` — loaded automatically when working in those directories.
 
 ## Commands
 

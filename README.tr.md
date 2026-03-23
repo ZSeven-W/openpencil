@@ -82,6 +82,22 @@ Web uygulaması + Electron ile macOS, Windows ve Linux'ta yerel masaüstü. GitH
 
 </td>
 </tr>
+<tr>
+<td width="50%">
+
+### ⌨️ CLI — `op`
+
+Tasarım aracını terminalinizden kontrol edin. `op design`, `op insert`, `op export` — toplu tasarım DSL, düğüm manipülasyonu, kod dışa aktarımı. Dosyalardan veya stdin'den pipe ile besleyin. Masaüstü uygulama veya web sunucusuyla çalışır.
+
+</td>
+<td width="50%">
+
+### 🎯 Çok Platformlu Kod Dışa Aktarımı
+
+Tek bir `.op` dosyasından React + Tailwind, HTML + CSS, Vue, Svelte, Flutter, SwiftUI, Jetpack Compose, React Native'e dışa aktarın. Tasarım değişkenleri CSS özel özelliklerine dönüşür.
+
+</td>
+</tr>
 </table>
 
 ## Hızlı Başlangıç
@@ -184,6 +200,25 @@ docker build --target full -t openpencil-full .
 - React + Tailwind CSS, HTML + CSS, CSS Variables
 - Vue, Svelte, Flutter, SwiftUI, Jetpack Compose, React Native
 
+## CLI — `op`
+
+Global olarak yükleyin ve tasarım aracını terminalinizden kontrol edin:
+
+```bash
+npm install -g @zseven-w/openpencil
+```
+
+```bash
+op start                     # Masaüstü uygulamayı başlat
+op design @landing.txt       # Dosyadan toplu tasarım
+op insert '{"type":"RECT"}'  # Bir düğüm ekle
+op export react --out .      # React + Tailwind'e dışa aktar
+op import:figma design.fig   # Figma dosyasını içe aktar
+cat design.dsl | op design - # stdin'den pipe ile besle
+```
+
+Üç giriş yöntemini destekler: satır içi metin, `@filepath` (dosyadan oku) veya `-` (stdin'den oku). Masaüstü uygulama veya web geliştirme sunucusuyla çalışır. Tam komut referansı için [CLI README](./apps/cli/README.md) dosyasına bakın.
+
 ## Özellikler
 
 **Kanvas ve Çizim**
@@ -218,6 +253,7 @@ docker build --target full -t openpencil-full .
 | **Durum Yönetimi** | Zustand v5 |
 | **Sunucu** | Nitro |
 | **Masaüstü** | Electron 35 |
+| **CLI** | `op` — terminal kontrolü, toplu tasarım DSL, kod dışa aktarımı |
 | **AI** | Anthropic SDK · Claude Agent SDK · OpenCode SDK · Copilot SDK |
 | **Çalışma Ortamı** | Bun · Vite 7 |
 | **Dosya Formatı** | `.op` — JSON tabanlı, insan tarafından okunabilir, Git dostu |
@@ -239,10 +275,14 @@ openpencil/
 │   │   └── server/
 │   │       ├── api/ai/      Nitro API — akış sohbet, üretim, doğrulama
 │   │       └── utils/       Claude CLI, OpenCode, Codex, Copilot sarmalayıcıları
-│   └── desktop/             Electron masaüstü uygulaması
-│       ├── main.ts          Pencere, Nitro çatallanması, yerel menü, otomatik güncelleyici
-│       ├── ipc-handlers.ts  Yerel dosya diyalogları, tema senkronizasyonu, tercihler IPC
-│       └── preload.ts       IPC köprüsü
+│   ├── desktop/             Electron masaüstü uygulaması
+│   │   ├── main.ts          Pencere, Nitro çatallanması, yerel menü, otomatik güncelleyici
+│   │   ├── ipc-handlers.ts  Yerel dosya diyalogları, tema senkronizasyonu, tercihler IPC
+│   │   └── preload.ts       IPC köprüsü
+│   └── cli/                 CLI aracı — `op` komutu
+│       ├── src/commands/    Tasarım, belge, dışa aktarma, içe aktarma, düğüm, sayfa, değişken komutları
+│       ├── connection.ts    Çalışan uygulamaya WebSocket bağlantısı
+│       └── launcher.ts      Masaüstü uygulamayı veya web sunucusunu otomatik algıla ve başlat
 ├── packages/
 │   ├── pen-types/           PenDocument modeli için tür tanımları
 │   ├── pen-core/            Belge ağacı işlemleri, düzen motoru, değişkenler
@@ -281,6 +321,8 @@ npx tsc --noEmit           # Tür denetimi
 bun run bump <version>     # Tüm package.json dosyalarında sürümü eşitle
 bun run electron:dev       # Electron geliştirme modu
 bun run electron:build     # Electron paketleme
+bun run cli:dev            # CLI'yi kaynaktan çalıştır
+bun run cli:compile        # CLI'yi dist'e derle
 ```
 
 ## Katkıda Bulunma
@@ -305,6 +347,7 @@ Katkılarınızı bekliyoruz! Mimari ayrıntılar ve kod stili için [CLAUDE.md]
 - [x] Boolean işlemler (birleştirme, çıkarma, kesişim)
 - [x] Çoklu model yetenek profilleri
 - [x] Yeniden kullanılabilir paketlerle monorepo yapılandırması
+- [x] CLI aracı (`op`) terminal kontrolü
 - [ ] Ortak düzenleme
 - [ ] Eklenti sistemi
 

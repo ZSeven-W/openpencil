@@ -82,6 +82,22 @@ Web アプリ + Electron による macOS・Windows・Linux ネイティブデス
 
 </td>
 </tr>
+<tr>
+<td width="50%">
+
+### ⌨️ CLI — `op`
+
+ターミナルからデザインツールを操作。`op design`、`op insert`、`op export` — バッチデザインDSL、ノード操作、コードエクスポート。ファイルやstdinからのパイプ入力に対応。デスクトップアプリまたはWebサーバーと連携。
+
+</td>
+<td width="50%">
+
+### 🎯 マルチプラットフォームコードエクスポート
+
+1つの`.op`ファイルからReact + Tailwind、HTML + CSS、Vue、Svelte、Flutter、SwiftUI、Jetpack Compose、React Nativeへエクスポート。デザイン変数はCSSカスタムプロパティに変換。
+
+</td>
+</tr>
 </table>
 
 ## クイックスタート
@@ -184,6 +200,25 @@ docker build --target full -t openpencil-full .
 - React + Tailwind CSS、HTML + CSS、CSS Variables
 - Vue、Svelte、Flutter、SwiftUI、Jetpack Compose、React Native
 
+## CLI — `op`
+
+グローバルインストールしてターミナルからデザインツールを操作：
+
+```bash
+npm install -g @zseven-w/openpencil
+```
+
+```bash
+op start                     # デスクトップアプリを起動
+op design @landing.txt       # ファイルからバッチデザイン
+op insert '{"type":"RECT"}'  # ノードを挿入
+op export react --out .      # React + Tailwind にエクスポート
+op import:figma design.fig   # Figma ファイルをインポート
+cat design.dsl | op design - # stdin からパイプ入力
+```
+
+3つの入力方法に対応：インライン文字列、`@filepath`（ファイルから読み込み）、`-`（stdin から読み込み）。デスクトップアプリまたは Web 開発サーバーと連携。完全なコマンドリファレンスは [CLI README](./apps/cli/README.md) を参照。
+
 ## 機能
 
 **キャンバスと描画**
@@ -218,6 +253,7 @@ docker build --target full -t openpencil-full .
 | **状態管理** | Zustand v5 |
 | **サーバー** | Nitro |
 | **デスクトップ** | Electron 35 |
+| **CLI** | `op` — ターミナル制御、バッチデザインDSL、コードエクスポート |
 | **AI** | Anthropic SDK · Claude Agent SDK · OpenCode SDK · Copilot SDK |
 | **ランタイム** | Bun · Vite 7 |
 | **ファイル形式** | `.op` — JSON ベース、人間が読みやすく、Git フレンドリー |
@@ -239,10 +275,14 @@ openpencil/
 │   │   └── server/
 │   │       ├── api/ai/      Nitro API — ストリーミングチャット、生成、バリデーション
 │   │       └── utils/       Claude CLI、OpenCode、Codex、Copilot ラッパー
-│   └── desktop/             Electron デスクトップアプリ
-│       ├── main.ts          ウィンドウ、Nitro フォーク、ネイティブメニュー、自動アップデーター
-│       ├── ipc-handlers.ts  ネイティブファイルダイアログ、テーマ同期、設定 IPC
-│       └── preload.ts       IPC ブリッジ
+│   ├── desktop/             Electron デスクトップアプリ
+│   │   ├── main.ts          ウィンドウ、Nitro フォーク、ネイティブメニュー、自動アップデーター
+│   │   ├── ipc-handlers.ts  ネイティブファイルダイアログ、テーマ同期、設定 IPC
+│   │   └── preload.ts       IPC ブリッジ
+│   └── cli/                 CLIツール — `op` コマンド
+│       ├── src/commands/    デザイン、ドキュメント、エクスポート、インポート、ノード、ページ、変数コマンド
+│       ├── connection.ts    実行中アプリへのWebSocket接続
+│       └── launcher.ts      デスクトップアプリまたはWebサーバーの自動検出・起動
 ├── packages/
 │   ├── pen-types/           PenDocument モデルの型定義
 │   ├── pen-core/            ドキュメントツリー操作、レイアウトエンジン、変数
@@ -281,6 +321,8 @@ npx tsc --noEmit           # 型チェック
 bun run bump <version>     # すべての package.json のバージョンを同期
 bun run electron:dev       # Electron 開発モード
 bun run electron:build     # Electron パッケージング
+bun run cli:dev            # ソースから CLI を実行
+bun run cli:compile        # CLI を dist にコンパイル
 ```
 
 ## コントリビュート
@@ -305,6 +347,7 @@ bun run electron:build     # Electron パッケージング
 - [x] ブーリアン演算（合体、型抜き、交差）
 - [x] マルチモデル能力プロファイル
 - [x] 再利用可能なパッケージによるモノレポ構成
+- [x] CLIツール（`op`）ターミナル制御
 - [ ] 共同編集
 - [ ] プラグインシステム
 

@@ -82,6 +82,22 @@ Claude Code, Codex, Gemini, OpenCode, Kiro, या Copilot CLIs में वन
 
 </td>
 </tr>
+<tr>
+<td width="50%">
+
+### ⌨️ CLI — `op`
+
+अपने टर्मिनल से डिज़ाइन टूल को नियंत्रित करें। `op design`, `op insert`, `op export` — बैच डिज़ाइन DSL, नोड मैनिपुलेशन, कोड एक्सपोर्ट। फ़ाइलों या stdin से पाइप करें। डेस्कटॉप ऐप या वेब सर्वर के साथ काम करता है।
+
+</td>
+<td width="50%">
+
+### 🎯 मल्टी-प्लेटफ़ॉर्म कोड एक्सपोर्ट
+
+एक `.op` फ़ाइल से React + Tailwind, HTML + CSS, Vue, Svelte, Flutter, SwiftUI, Jetpack Compose, React Native में एक्सपोर्ट करें। डिज़ाइन वेरिएबल CSS कस्टम प्रॉपर्टीज़ बन जाते हैं।
+
+</td>
+</tr>
 </table>
 
 ## त्वरित शुरुआत
@@ -184,6 +200,25 @@ docker build --target full -t openpencil-full .
 - React + Tailwind CSS, HTML + CSS, CSS Variables
 - Vue, Svelte, Flutter, SwiftUI, Jetpack Compose, React Native
 
+## CLI — `op`
+
+वैश्विक रूप से इंस्टॉल करें और अपने टर्मिनल से डिज़ाइन टूल को नियंत्रित करें:
+
+```bash
+npm install -g @zseven-w/openpencil
+```
+
+```bash
+op start                     # डेस्कटॉप ऐप लॉन्च करें
+op design @landing.txt       # फ़ाइल से बैच डिज़ाइन
+op insert '{"type":"RECT"}'  # एक नोड डालें
+op export react --out .      # React + Tailwind में एक्सपोर्ट
+op import:figma design.fig   # Figma फ़ाइल इम्पोर्ट करें
+cat design.dsl | op design - # stdin से पाइप करें
+```
+
+तीन इनपुट विधियाँ समर्थित हैं: इनलाइन स्ट्रिंग, `@filepath` (फ़ाइल से पढ़ें), या `-` (stdin से पढ़ें)। डेस्कटॉप ऐप या वेब डेव सर्वर के साथ काम करता है। पूर्ण कमांड संदर्भ के लिए [CLI README](./apps/cli/README.md) देखें।
+
 ## विशेषताएँ
 
 **कैनवास और ड्रॉइंग**
@@ -218,6 +253,7 @@ docker build --target full -t openpencil-full .
 | **स्टेट** | Zustand v5 |
 | **सर्वर** | Nitro |
 | **डेस्कटॉप** | Electron 35 |
+| **CLI** | `op` — टर्मिनल नियंत्रण, बैच डिज़ाइन DSL, कोड एक्सपोर्ट |
 | **AI** | Anthropic SDK · Claude Agent SDK · OpenCode SDK · Copilot SDK |
 | **रनटाइम** | Bun · Vite 7 |
 | **फ़ाइल फ़ॉर्मेट** | `.op` — JSON-आधारित, मानव-पठनीय, Git-फ्रेंडली |
@@ -239,10 +275,14 @@ openpencil/
 │   │   └── server/
 │   │       ├── api/ai/      Nitro API — स्ट्रीमिंग चैट, जनरेशन, वैलिडेशन
 │   │       └── utils/       Claude CLI, OpenCode, Codex, Copilot रैपर
-│   └── desktop/             Electron डेस्कटॉप ऐप
-│       ├── main.ts          विंडो, Nitro फ़ोर्क, नेटिव मेनू, ऑटो-अपडेटर
-│       ├── ipc-handlers.ts  नेटिव फ़ाइल डायलॉग, थीम सिंक, प्राथमिकताएँ IPC
-│       └── preload.ts       IPC ब्रिज
+│   ├── desktop/             Electron डेस्कटॉप ऐप
+│   │   ├── main.ts          विंडो, Nitro फ़ोर्क, नेटिव मेनू, ऑटो-अपडेटर
+│   │   ├── ipc-handlers.ts  नेटिव फ़ाइल डायलॉग, थीम सिंक, प्राथमिकताएँ IPC
+│   │   └── preload.ts       IPC ब्रिज
+│   └── cli/                 CLI टूल — `op` कमांड
+│       ├── src/commands/    डिज़ाइन, दस्तावेज़, एक्सपोर्ट, इम्पोर्ट, नोड, पेज, वेरिएबल कमांड
+│       ├── connection.ts    चालू ऐप से WebSocket कनेक्शन
+│       └── launcher.ts      डेस्कटॉप ऐप या वेब सर्वर का स्वचालित पता लगाना और लॉन्च
 ├── packages/
 │   ├── pen-types/           PenDocument मॉडल के लिए टाइप परिभाषाएँ
 │   ├── pen-core/            दस्तावेज़ ट्री ऑपरेशन, लेआउट इंजन, वेरिएबल
@@ -281,6 +321,8 @@ npx tsc --noEmit           # टाइप चेक
 bun run bump <version>     # सभी package.json में वर्शन सिंक करें
 bun run electron:dev       # Electron डेव
 bun run electron:build     # Electron पैकेज
+bun run cli:dev            # सोर्स से CLI चलाएँ
+bun run cli:compile        # CLI को dist में कंपाइल करें
 ```
 
 ## योगदान
@@ -305,6 +347,7 @@ bun run electron:build     # Electron पैकेज
 - [x] बूलियन ऑपरेशन (यूनियन, सबट्रैक्ट, इंटरसेक्ट)
 - [x] मल्टी-मॉडल क्षमता प्रोफ़ाइल
 - [x] पुन: उपयोगी पैकेज के साथ मोनोरेपो पुनर्गठन
+- [x] CLI टूल (`op`) टर्मिनल नियंत्रण
 - [ ] सहयोगी संपादन
 - [ ] प्लगइन सिस्टम
 
