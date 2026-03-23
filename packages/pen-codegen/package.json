@@ -1,6 +1,6 @@
 {
   "name": "@zseven-w/pen-codegen",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "description": "Multi-platform code generators for OpenPencil designs",
   "type": "module",
   "exports": {
@@ -16,8 +16,8 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@zseven-w/pen-types": "workspace:*",
-    "@zseven-w/pen-core": "workspace:*"
+    "@zseven-w/pen-types": "0.5.1-beta.1",
+    "@zseven-w/pen-core": "0.5.1-beta.1"
   },
   "devDependencies": {
     "typescript": "^5.7.2"

@@ -317,6 +317,8 @@ const ru: TranslationKeys = {
   'ai.sendMessage': 'Отправить сообщение',
   'ai.loadingModels': 'Загрузка моделей...',
   'ai.noModelsConnected': 'Нет подключённых моделей',
+  'ai.searchModels': 'Поиск моделей...',
+  'ai.noModelsFound': 'Модели не найдены',
   'ai.quickAction.loginScreen': 'Создать экран входа для мобильного',
   'ai.quickAction.loginScreenPrompt':
     'Design a modern mobile login screen with email input, password input, login button, and social login options',

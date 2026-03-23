@@ -1,6 +1,6 @@
 {
   "name": "@zseven-w/pen-figma",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "description": "Figma .fig file parser and converter for OpenPencil",
   "type": "module",
   "exports": {
@@ -16,7 +16,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@zseven-w/pen-types": "workspace:*",
+    "@zseven-w/pen-types": "0.5.1-beta.1",
     "kiwi-schema": "^0.5.0",
     "uzip": "^0.20201231.0",
     "fzstd": "^0.1.1"

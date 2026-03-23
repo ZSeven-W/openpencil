@@ -315,6 +315,8 @@ const id: TranslationKeys = {
   'ai.sendMessage': 'Kirim pesan',
   'ai.loadingModels': 'Memuat model...',
   'ai.noModelsConnected': 'Tidak ada model terhubung',
+  'ai.searchModels': 'Cari model...',
+  'ai.noModelsFound': 'Model tidak ditemukan',
   'ai.quickAction.loginScreen': 'Desain layar login mobile',
   'ai.quickAction.loginScreenPrompt':
     'Desain layar login mobile modern dengan input email, input kata sandi, tombol login, dan opsi login sosial',

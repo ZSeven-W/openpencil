@@ -7,11 +7,10 @@ directories:
   buildResources: apps/desktop/build
 
 files:
-  - from: out/desktop
-    to: .
-    filter:
-      - "**/*"
-  - "!node_modules"
+  - package.json
+  - out/desktop/**/*
+  - "!**/node_modules/**"
+  - "!**/.git/**"
 
 extraResources:
   - from: out/web/server
@@ -20,6 +19,8 @@ extraResources:
     to: public
   - from: out/mcp-server.cjs
     to: mcp-server.cjs
+  - from: apps/cli/dist/openpencil-cli.cjs
+    to: openpencil-cli.cjs
 
 mac:
   category: public.app-category.graphics-design

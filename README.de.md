@@ -82,6 +82,22 @@ Web-App + native Desktop-Anwendung auf macOS, Windows und Linux über Electron. 
 
 </td>
 </tr>
+<tr>
+<td width="50%">
+
+### ⌨️ CLI — `op`
+
+Steuern Sie das Design-Tool vom Terminal aus. `op design`, `op insert`, `op export` — Batch-Design-DSL, Knotenmanipulation, Code-Export. Pipe-Eingabe von Dateien oder stdin. Funktioniert mit der Desktop-App oder dem Webserver.
+
+</td>
+<td width="50%">
+
+### 🎯 Multiplattform-Code-Export
+
+Export aus einer einzigen `.op`-Datei nach React + Tailwind, HTML + CSS, Vue, Svelte, Flutter, SwiftUI, Jetpack Compose, React Native. Design-Variablen werden zu CSS Custom Properties.
+
+</td>
+</tr>
 </table>
 
 ## Schnellstart
@@ -184,6 +200,25 @@ docker build --target full -t openpencil-full .
 - React + Tailwind CSS, HTML + CSS, CSS Variables
 - Vue, Svelte, Flutter, SwiftUI, Jetpack Compose, React Native
 
+## CLI — `op`
+
+Global installieren und das Design-Tool vom Terminal aus steuern:
+
+```bash
+npm install -g @zseven-w/openpencil
+```
+
+```bash
+op start                     # Desktop-App starten
+op design @landing.txt       # Batch-Design aus Datei
+op insert '{"type":"RECT"}'  # Knoten einfügen
+op export react --out .      # Nach React + Tailwind exportieren
+op import:figma design.fig   # Figma-Datei importieren
+cat design.dsl | op design - # Pipe von stdin
+```
+
+Unterstützt drei Eingabemethoden: Inline-String, `@filepath` (aus Datei lesen) oder `-` (von stdin lesen). Funktioniert mit der Desktop-App oder dem Web-Entwicklungsserver. Siehe [CLI README](./apps/cli/README.md) für die vollständige Befehlsreferenz.
+
 ## Funktionen
 
 **Canvas und Zeichnen**
@@ -218,6 +253,7 @@ docker build --target full -t openpencil-full .
 | **State** | Zustand v5 |
 | **Server** | Nitro |
 | **Desktop** | Electron 35 |
+| **CLI** | `op` — Terminal-Steuerung, Batch-Design-DSL, Code-Export |
 | **KI** | Anthropic SDK · Claude Agent SDK · OpenCode SDK · Copilot SDK |
 | **Laufzeit** | Bun · Vite 7 |
 | **Dateiformat** | `.op` — JSON-basiert, menschenlesbar, Git-freundlich |
@@ -239,10 +275,14 @@ openpencil/
 │   │   └── server/
 │   │       ├── api/ai/      Nitro-API — Streaming-Chat, Generierung, Validierung
 │   │       └── utils/       Claude CLI, OpenCode, Codex, Copilot-Wrapper
-│   └── desktop/             Electron-Desktop-App
-│       ├── main.ts          Fenster, Nitro-Fork, natives Menü, Auto-Updater
-│       ├── ipc-handlers.ts  Native Dateidialoge, Theme-Sync, Einstellungen-IPC
-│       └── preload.ts       IPC-Brücke
+│   ├── desktop/             Electron-Desktop-App
+│   │   ├── main.ts          Fenster, Nitro-Fork, natives Menü, Auto-Updater
+│   │   ├── ipc-handlers.ts  Native Dateidialoge, Theme-Sync, Einstellungen-IPC
+│   │   └── preload.ts       IPC-Brücke
+│   └── cli/                 CLI-Tool — `op`-Befehl
+│       ├── src/commands/    Design-, Dokument-, Export-, Import-, Knoten-, Seiten-, Variablen-Befehle
+│       ├── connection.ts    WebSocket-Verbindung zur laufenden App
+│       └── launcher.ts      Automatische Erkennung und Start der Desktop-App oder des Webservers
 ├── packages/
 │   ├── pen-types/           Typdefinitionen für das PenDocument-Modell
 │   ├── pen-core/            Dokumentbaum-Operationen, Layout-Engine, Variablen
@@ -281,6 +321,8 @@ npx tsc --noEmit           # Typprüfung
 bun run bump <version>     # Version über alle package.json synchronisieren
 bun run electron:dev       # Electron-Entwicklung
 bun run electron:build     # Electron-Paketierung
+bun run cli:dev            # CLI aus Quellcode ausführen
+bun run cli:compile        # CLI nach dist kompilieren
 ```
 
 ## Mitwirken
@@ -305,6 +347,7 @@ Beiträge sind willkommen! Siehe [CLAUDE.md](./CLAUDE.md) für Architekturdetail
 - [x] Boolesche Operationen (Vereinigung, Subtraktion, Schnittmenge)
 - [x] Multi-Modell-Fähigkeitsprofile
 - [x] Monorepo-Umstrukturierung mit wiederverwendbaren Paketen
+- [x] CLI-Tool (`op`) für Terminal-Steuerung
 - [ ] Kollaboratives Bearbeiten
 - [ ] Plugin-System
 

@@ -1,7 +1,9 @@
 import { spawn } from 'node:child_process'
-import { mkdirSync, readFileSync } from 'node:fs'
-import { homedir, tmpdir } from 'node:os'
+import { mkdirSync, readFileSync, writeFileSync, existsSync, appendFileSync } from 'node:fs'
+import { homedir, tmpdir, platform } from 'node:os'
 import { join } from 'node:path'
+
+const IS_WIN = platform() === 'win32'
 
 type EnvLike = Record<string, string | undefined>
 
@@ -73,10 +75,40 @@ function isValidJson(str: string): boolean {
 }
 
 /**
+ * On Windows, Claude Code SDK may fail with EPERM when writing to ~/.claude.json
+ * or ~/.claude/ config files. Ensure the directory and config file exist and are writable.
+ */
+function ensureClaudeConfigWritable(): void {
+  if (!IS_WIN) return
+  try {
+    const claudeDir = join(homedir(), '.claude')
+    mkdirSync(claudeDir, { recursive: true })
+    // Ensure .claude.json exists — Claude SDK crashes if it can't write/lock it
+    const configFile = join(homedir(), '.claude.json')
+    if (!existsSync(configFile)) {
+      writeFileSync(configFile, '{}', 'utf-8')
+    }
+    // Ensure credentials.json exists — SDK may crash trying to read/write it
+    const credFile = join(claudeDir, 'credentials.json')
+    if (!existsSync(credFile)) {
+      writeFileSync(credFile, '{}', 'utf-8')
+    }
+    // Ensure statsig/ cache dir exists — SDK crashes writing feature gate cache
+    const statsigDir = join(claudeDir, 'statsig')
+    mkdirSync(statsigDir, { recursive: true })
+  } catch {
+    // Best effort — if we can't fix it, the SDK error hint will guide the user
+  }
+}
+
+/**
  * Build env passed to Claude Agent SDK.
  * Priority: current process env > ~/.claude/settings.json env.
  */
 export function buildClaudeAgentEnv(): EnvLike {
+  // On Windows, pre-create config files to avoid EPERM errors
+  ensureClaudeConfigWritable()
+
   const fromSettings = readClaudeSettingsEnv()
   const fromProcess = process.env as EnvLike
 
@@ -102,6 +134,50 @@ export function buildClaudeAgentEnv(): EnvLike {
   // Running inside Claude terminal can break nested Claude invocations.
   delete merged.CLAUDECODE
 
+  // Remove Electron-specific env vars that may confuse spawned CLI processes
+  delete merged.ELECTRON_RUN_AS_NODE
+  delete merged.ELECTRON_RESOURCES_PATH
+  delete merged.CHROME_CRASHPAD_PIPE_NAME
+
+  // Enable Agent SDK debug stderr so we can capture CLI crash diagnostics.
+  // Without this, the SDK sets stderr to "ignore" and crash output is lost.
+  if (!merged.DEBUG_CLAUDE_AGENT_SDK) {
+    merged.DEBUG_CLAUDE_AGENT_SDK = '1'
+  }
+
+  // Apply NODE_TLS_REJECT_UNAUTHORIZED to the current process as well,
+  // so Node.js HTTP/TLS in this process (used by the SDK internals) respects it.
+  if (merged.NODE_TLS_REJECT_UNAUTHORIZED && !process.env.NODE_TLS_REJECT_UNAUTHORIZED) {
+    process.env.NODE_TLS_REJECT_UNAUTHORIZED = merged.NODE_TLS_REJECT_UNAUTHORIZED
+  }
+
+  if (IS_WIN) {
+    // Redirect Claude debug output to temp to avoid write permission issues
+    if (!merged.CLAUDE_DEBUG_FILE) {
+      const debugPath = getClaudeAgentDebugFilePath()
+      if (debugPath) merged.CLAUDE_DEBUG_FILE = debugPath
+    }
+    // Set CLAUDE_CONFIG_DIR to a writable temp location as fallback
+    // if the default ~/.claude directory is not writable (common in Windows Electron)
+    if (!merged.CLAUDE_CONFIG_DIR) {
+      try {
+        const fallbackDir = join(tmpdir(), 'openpencil-claude-config')
+        mkdirSync(fallbackDir, { recursive: true })
+        // Only use fallback if we can't write to the default location
+        const defaultDir = join(homedir(), '.claude')
+        const testFile = join(defaultDir, '.write-test')
+        try {
+          writeFileSync(testFile, '', 'utf-8')
+          const { unlinkSync } = require('node:fs')
+          unlinkSync(testFile)
+        } catch {
+          // Default dir is not writable — use fallback
+          merged.CLAUDE_CONFIG_DIR = fallbackDir
+        }
+      } catch { /* ignore */ }
+    }
+  }
+
   return merged
 }
 
@@ -126,7 +202,11 @@ export function getClaudeAgentDebugFilePath(): string | undefined {
  *
  * - `.cmd` files: use `cmd.exe /c` (PowerShell can't run .cmd directly)
  * - `.ps1` files: use `powershell.exe`
- * - `.exe` files or others: use `cmd.exe /c` as safe default
+ * - `.exe` files: spawned directly without shell
+ * - Others: use `cmd.exe /c` as safe default
+ *
+ * Also captures stderr to the debug file — when Claude Code crashes early,
+ * the debug file may be empty but stderr often contains the root cause.
  */
 export function buildSpawnClaudeCodeProcess() {
   if (process.platform !== 'win32') return undefined
@@ -134,24 +214,56 @@ export function buildSpawnClaudeCodeProcess() {
     const cmd = options.command
     const isPowerShell = cmd.endsWith('.ps1')
 
+    let child
     if (isPowerShell) {
       // For .ps1 scripts, invoke via PowerShell
       const psArgs = ['-ExecutionPolicy', 'Bypass', '-File', cmd, ...options.args]
-      return spawn('powershell.exe', psArgs, {
+      child = spawn('powershell.exe', psArgs, {
         cwd: options.cwd,
         env: options.env as NodeJS.ProcessEnv,
         signal: options.signal,
         stdio: ['pipe', 'pipe', 'pipe'],
+        windowsHide: true,
+      })
+    } else if (cmd.endsWith('.exe')) {
+      // .exe files can be spawned directly without shell
+      child = spawn(cmd, options.args, {
+        cwd: options.cwd,
+        env: options.env as NodeJS.ProcessEnv,
+        signal: options.signal,
+        stdio: ['pipe', 'pipe', 'pipe'],
+        windowsHide: true,
+      })
+    } else {
+      // For .cmd or extensionless binaries, use shell
+      child = spawn(cmd, options.args, {
+        cwd: options.cwd,
+        env: options.env as NodeJS.ProcessEnv,
+        signal: options.signal,
+        stdio: ['pipe', 'pipe', 'pipe'],
+        shell: true,
+        windowsHide: true,
       })
     }
 
-    // For .cmd, .exe, or extensionless binaries, use cmd.exe /c
-    return spawn(cmd, options.args, {
-      cwd: options.cwd,
-      env: options.env as NodeJS.ProcessEnv,
-      signal: options.signal,
-      stdio: ['pipe', 'pipe', 'pipe'],
-      shell: true,
+    // Capture stderr to debug file — helps diagnose crashes where the process
+    // exits before writing anything to the debug log
+    const stderrChunks: Buffer[] = []
+    child.stderr?.on('data', (chunk: Buffer) => { stderrChunks.push(chunk) })
+    child.on('exit', (code) => {
+      if (code !== 0 && stderrChunks.length > 0) {
+        const stderr = Buffer.concat(stderrChunks).toString('utf-8').trim()
+        if (stderr) {
+          const debugPath = getClaudeAgentDebugFilePath()
+          if (debugPath) {
+            try {
+              appendFileSync(debugPath, `\n[stderr exit=${code}] ${stderr}\n`)
+            } catch { /* best effort */ }
+          }
+        }
+      }
     })
+
+    return child
   }
 }

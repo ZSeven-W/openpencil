@@ -315,6 +315,8 @@ const hi: TranslationKeys = {
   'ai.sendMessage': 'संदेश भेजें',
   'ai.loadingModels': 'मॉडल लोड हो रहे हैं...',
   'ai.noModelsConnected': 'कोई मॉडल कनेक्ट नहीं है',
+  'ai.searchModels': 'मॉडल खोजें...',
+  'ai.noModelsFound': 'कोई मॉडल नहीं मिला',
   'ai.quickAction.loginScreen': 'मोबाइल लॉगिन स्क्रीन डिज़ाइन करें',
   'ai.quickAction.loginScreenPrompt':
     'ईमेल इनपुट, पासवर्ड इनपुट, लॉगिन बटन और सोशल लॉगिन विकल्पों के साथ एक आधुनिक मोबाइल लॉगिन स्क्रीन डिज़ाइन करें',

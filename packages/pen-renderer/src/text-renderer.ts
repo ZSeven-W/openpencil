@@ -27,6 +27,13 @@ export class SkiaTextRenderer {
   // 64 MB — each entry is estimated as content.length*64+4096 bytes (WASM heap approximation)
   private static PARA_CACHE_BYTE_LIMIT = 64 * 1024 * 1024
 
+  // Pre-rasterized paragraph image cache (SkImage, same key as paraCache, zoom-independent)
+  // Allows drawImageRect instead of drawParagraph on every frame — avoids per-frame glyph rasterization.
+  private paraImageCache = new Map<string, SkImage | null>()
+  private paraImageCacheBytes = 0
+  // 128 MB — each entry is sw*sh*4 bytes (RGBA pixels at up to 2x DPR scale)
+  private static PARA_IMAGE_CACHE_BYTE_LIMIT = 128 * 1024 * 1024
+
   private static estimateParaBytes(content: string): number {
     return content.length * 64 + 4096
   }
@@ -36,6 +43,10 @@ export class SkiaTextRenderer {
 
   // Device pixel ratio override
   devicePixelRatio: number | undefined
+
+  private get _dpr(): number {
+    return this.devicePixelRatio ?? (typeof window !== 'undefined' ? window.devicePixelRatio : 1) ?? 1
+  }
 
   // Font manager for vector text rendering
   fontManager: SkiaFontManager
@@ -59,6 +70,11 @@ export class SkiaTextRenderer {
     }
     this.paraCache.clear()
     this.paraCacheBytes = 0
+    for (const img of this.paraImageCache.values()) {
+      img?.delete()
+    }
+    this.paraImageCache.clear()
+    this.paraImageCacheBytes = 0
   }
 
   // Evict oldest entries (Map head = first inserted) until there is room for `incoming` bytes.
@@ -68,6 +84,17 @@ export class SkiaTextRenderer {
       para?.delete()
       this.paraCache.delete(key)
       this.paraCacheBytes -= SkiaTextRenderer.estimateParaBytes(key.split('|')[1] ?? '')
+    }
+  }
+
+  private evictParaImageCache(incoming: number) {
+    while (this.paraImageCacheBytes + incoming > SkiaTextRenderer.PARA_IMAGE_CACHE_BYTE_LIMIT && this.paraImageCache.size > 0) {
+      const [key, img] = this.paraImageCache.entries().next().value!
+      if (img) {
+        this.paraImageCacheBytes -= img.width() * img.height() * 4
+        img.delete()
+      }
+      this.paraImageCache.delete(key)
     }
   }
 
@@ -246,13 +273,63 @@ export class SkiaTextRenderer {
 
     if (!para) return false
 
+    // Compute drawX and surface dimensions
     let drawX = x
-    if (!isFixedWidth && w > 0 && textAlign !== 'left') {
+    let surfaceW: number
+    if (!isFixedWidth) {
       const longestLine = para.getLongestLine()
-      if (textAlign === 'center') drawX = x + Math.max(0, (w - longestLine) / 2)
-      else if (textAlign === 'right') drawX = x + Math.max(0, w - longestLine)
+      surfaceW = longestLine + 2
+      if (w > 0 && textAlign !== 'left') {
+        if (textAlign === 'center') drawX = x + Math.max(0, (w - longestLine) / 2)
+        else if (textAlign === 'right') drawX = x + Math.max(0, w - longestLine)
+      }
+    } else {
+      surfaceW = layoutWidth
+    }
+    const surfaceH = para.getHeight() + 2
+
+    // Try paragraph image cache: drawImageRect is far cheaper than drawParagraph per frame
+    const imgScale = Math.min(this._dpr, 2)
+    let cachedImg = this.paraImageCache.get(cacheKey)
+    if (cachedImg === undefined) {
+      cachedImg = null
+      const sw = Math.min(Math.ceil(surfaceW * imgScale), 4096)
+      const sh = Math.min(Math.ceil(surfaceH * imgScale), 4096)
+      if (sw > 0 && sh > 0) {
+        const surf: any = (ck as any).MakeSurface?.(sw, sh)
+        if (surf) {
+          const offCanvas = surf.getCanvas()
+          offCanvas.scale(imgScale, imgScale)
+          offCanvas.drawParagraph(para, 0, 0)
+          cachedImg = (surf.makeImageSnapshot() as SkImage | null) ?? null
+          surf.delete()
+          if (cachedImg) {
+            const imgBytes = sw * sh * 4
+            this.evictParaImageCache(imgBytes)
+            this.paraImageCacheBytes += imgBytes
+          }
+        }
+      }
+      this.paraImageCache.set(cacheKey, cachedImg)
     }
 
+    if (cachedImg) {
+      const imgW = cachedImg.width() / imgScale
+      const imgH = cachedImg.height() / imgScale
+      const paint = new ck.Paint()
+      paint.setAntiAlias(true)
+      if (opacity < 1) paint.setAlphaf(opacity)
+      canvas.drawImageRect(
+        cachedImg,
+        ck.LTRBRect(0, 0, cachedImg.width(), cachedImg.height()),
+        ck.LTRBRect(drawX, y, drawX + imgW, y + imgH),
+        paint,
+      )
+      paint.delete()
+      return true
+    }
+
+    // Fallback: surface creation failed, draw directly
     if (opacity < 1) {
       const paint = new ck.Paint()
       paint.setAlphaf(opacity)
@@ -371,8 +448,7 @@ export class SkiaTextRenderer {
         : (wrappedLines.length - 1) * lineHeight + glyphH + 2,
     )
 
-    const dpr = this.devicePixelRatio ?? ((typeof window !== 'undefined' ? window.devicePixelRatio : 1) || 1)
-    const rawScale = this.zoom * dpr
+    const rawScale = this.zoom * this._dpr
     const scale = rawScale <= 2 ? 2 : rawScale <= 4 ? 4 : 8
 
     const cacheKey = `${content}|${fontSize}|${fillColor}|${fontWeight}|${fontFamily}|${textAlign}|${Math.round(renderW)}|${Math.round(textH)}|${scale}`

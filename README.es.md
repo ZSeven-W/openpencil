@@ -82,6 +82,22 @@ Aplicación web + escritorio nativo en macOS, Windows y Linux mediante Electron.
 
 </td>
 </tr>
+<tr>
+<td width="50%">
+
+### ⌨️ CLI — `op`
+
+Controla la herramienta de diseño desde la terminal. `op design`, `op insert`, `op export` — DSL de diseño por lotes, manipulación de nodos, exportación de código. Entrada por pipe desde archivos o stdin. Funciona con la app de escritorio o el servidor web.
+
+</td>
+<td width="50%">
+
+### 🎯 Exportación de Código Multiplataforma
+
+Exporta desde un solo archivo `.op` a React + Tailwind, HTML + CSS, Vue, Svelte, Flutter, SwiftUI, Jetpack Compose, React Native. Las variables de diseño se convierten en propiedades CSS personalizadas.
+
+</td>
+</tr>
 </table>
 
 ## Inicio Rápido
@@ -184,6 +200,25 @@ docker build --target full -t openpencil-full .
 - React + Tailwind CSS, HTML + CSS, CSS Variables
 - Vue, Svelte, Flutter, SwiftUI, Jetpack Compose, React Native
 
+## CLI — `op`
+
+Instala globalmente y controla la herramienta de diseño desde tu terminal:
+
+```bash
+npm install -g @zseven-w/openpencil
+```
+
+```bash
+op start                     # Iniciar la app de escritorio
+op design @landing.txt       # Diseño por lotes desde archivo
+op insert '{"type":"RECT"}'  # Insertar un nodo
+op export react --out .      # Exportar a React + Tailwind
+op import:figma design.fig   # Importar archivo de Figma
+cat design.dsl | op design - # Entrada por pipe desde stdin
+```
+
+Soporta tres métodos de entrada: cadena inline, `@filepath` (leer desde archivo), o `-` (leer desde stdin). Funciona con la app de escritorio o el servidor de desarrollo web. Consulta el [README del CLI](./apps/cli/README.md) para la referencia completa de comandos.
+
 ## Características
 
 **Lienzo y Dibujo**
@@ -218,6 +253,7 @@ docker build --target full -t openpencil-full .
 | **Estado** | Zustand v5 |
 | **Servidor** | Nitro |
 | **Escritorio** | Electron 35 |
+| **CLI** | `op` — control desde terminal, DSL de diseño por lotes, exportación de código |
 | **IA** | Anthropic SDK · Claude Agent SDK · OpenCode SDK · Copilot SDK |
 | **Runtime** | Bun · Vite 7 |
 | **Formato de archivo** | `.op` — basado en JSON, legible por humanos, compatible con Git |
@@ -239,10 +275,14 @@ openpencil/
 │   │   └── server/
 │   │       ├── api/ai/      API Nitro — chat en streaming, generación, validación
 │   │       └── utils/       Wrappers de Claude CLI, OpenCode, Codex, Copilot
-│   └── desktop/             Aplicación de escritorio Electron
-│       ├── main.ts          Ventana, fork Nitro, menú nativo, actualizador automático
-│       ├── ipc-handlers.ts  Diálogos de archivos nativos, sincronización de tema, preferencias IPC
-│       └── preload.ts       Puente IPC
+│   ├── desktop/             Aplicación de escritorio Electron
+│   │   ├── main.ts          Ventana, fork Nitro, menú nativo, actualizador automático
+│   │   ├── ipc-handlers.ts  Diálogos de archivos nativos, sincronización de tema, preferencias IPC
+│   │   └── preload.ts       Puente IPC
+│   └── cli/                 Herramienta CLI — comando `op`
+│       ├── src/commands/    Comandos de diseño, documento, exportación, importación, nodo, página, variable
+│       ├── connection.ts    Conexión WebSocket a la app en ejecución
+│       └── launcher.ts      Auto-detección e inicio de la app de escritorio o servidor web
 ├── packages/
 │   ├── pen-types/           Definiciones de tipos para el modelo PenDocument
 │   ├── pen-core/            Operaciones de árbol del documento, motor de diseño, variables
@@ -281,6 +321,8 @@ npx tsc --noEmit           # Verificación de tipos
 bun run bump <version>     # Sincronizar versión en todos los package.json
 bun run electron:dev       # Desarrollo con Electron
 bun run electron:build     # Empaquetado de Electron
+bun run cli:dev            # Ejecutar CLI desde el código fuente
+bun run cli:compile        # Compilar CLI a dist
 ```
 
 ## Contribuir
@@ -305,6 +347,7 @@ bun run electron:build     # Empaquetado de Electron
 - [x] Operaciones booleanas (unión, sustracción, intersección)
 - [x] Perfiles de capacidad multimodelo
 - [x] Reestructuración en monorepo con paquetes reutilizables
+- [x] Herramienta CLI (`op`) para control desde terminal
 - [ ] Edición colaborativa
 - [ ] Sistema de plugins
 

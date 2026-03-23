@@ -313,6 +313,8 @@ const en = {
   'ai.sendMessage': 'Send message',
   'ai.loadingModels': 'Loading models...',
   'ai.noModelsConnected': 'No models connected',
+  'ai.searchModels': 'Search models...',
+  'ai.noModelsFound': 'No models found',
   'ai.quickAction.loginScreen': 'Design a mobile login screen',
   'ai.quickAction.loginScreenPrompt':
     'Design a modern mobile login screen with email input, password input, login button, and social login options',

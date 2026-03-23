@@ -82,20 +82,27 @@
         "vitest": "^3.0.5",
       },
     },
+    "apps/cli": {
+      "name": "@zseven-w/openpencil",
+      "version": "0.5.1",
+      "bin": {
+        "op": "dist/openpencil-cli.cjs",
+      },
+    },
     "apps/desktop": {
       "name": "@zseven-w/desktop",
-      "version": "0.5.0",
+      "version": "0.5.1",
     },
     "apps/web": {
       "name": "@zseven-w/web",
-      "version": "0.5.0",
+      "version": "0.5.1",
     },
     "packages/pen-codegen": {
       "name": "@zseven-w/pen-codegen",
-      "version": "0.5.0",
+      "version": "0.5.1",
       "dependencies": {
-        "@zseven-w/pen-core": "workspace:*",
-        "@zseven-w/pen-types": "workspace:*",
+        "@zseven-w/pen-core": "0.5.1-beta.1",
+        "@zseven-w/pen-types": "0.5.1-beta.1",
       },
       "devDependencies": {
         "typescript": "^5.7.2",
@@ -103,9 +110,9 @@
     },
     "packages/pen-core": {
       "name": "@zseven-w/pen-core",
-      "version": "0.5.0",
+      "version": "0.5.1",
       "dependencies": {
-        "@zseven-w/pen-types": "workspace:*",
+        "@zseven-w/pen-types": "0.5.1-beta.1",
         "nanoid": "^5.1.6",
         "paper": "^0.12.18",
       },
@@ -115,9 +122,9 @@
     },
     "packages/pen-figma": {
       "name": "@zseven-w/pen-figma",
-      "version": "0.5.0",
+      "version": "0.5.1",
       "dependencies": {
-        "@zseven-w/pen-types": "workspace:*",
+        "@zseven-w/pen-types": "0.5.1-beta.1",
         "fzstd": "^0.1.1",
         "kiwi-schema": "^0.5.0",
         "uzip": "^0.20201231.0",
@@ -129,10 +136,10 @@
     },
     "packages/pen-renderer": {
       "name": "@zseven-w/pen-renderer",
-      "version": "0.5.0",
+      "version": "0.5.1",
       "dependencies": {
-        "@zseven-w/pen-core": "workspace:*",
-        "@zseven-w/pen-types": "workspace:*",
+        "@zseven-w/pen-core": "0.5.1-beta.1",
+        "@zseven-w/pen-types": "0.5.1-beta.1",
         "rbush": "^4.0.1",
       },
       "devDependencies": {
@@ -146,13 +153,13 @@
     },
     "packages/pen-sdk": {
       "name": "@zseven-w/pen-sdk",
-      "version": "0.5.0",
+      "version": "0.5.1",
       "dependencies": {
-        "@zseven-w/pen-codegen": "workspace:*",
-        "@zseven-w/pen-core": "workspace:*",
-        "@zseven-w/pen-figma": "workspace:*",
-        "@zseven-w/pen-renderer": "workspace:*",
-        "@zseven-w/pen-types": "workspace:*",
+        "@zseven-w/pen-codegen": "0.5.1-beta.1",
+        "@zseven-w/pen-core": "0.5.1-beta.1",
+        "@zseven-w/pen-figma": "0.5.1-beta.1",
+        "@zseven-w/pen-renderer": "0.5.1-beta.1",
+        "@zseven-w/pen-types": "0.5.1-beta.1",
       },
       "devDependencies": {
         "typescript": "^5.7.2",
@@ -160,7 +167,7 @@
     },
     "packages/pen-types": {
       "name": "@zseven-w/pen-types",
-      "version": "0.5.0",
+      "version": "0.5.1",
       "devDependencies": {
         "typescript": "^5.7.2",
       },
@@ -768,6 +775,8 @@
     "@xmldom/xmldom": ["@xmldom/xmldom@0.8.11", "https://registry.npmmirror.com/@xmldom/xmldom/-/xmldom-0.8.11.tgz", {}, "sha512-cQzWCtO6C8TQiYl1ruKNn2U6Ao4o4WBBcbL61yJl84x+j5sOWWFU9X7DpND8XZG3daDppSsigMdfAIl2upQBRw=="],
 
     "@zseven-w/desktop": ["@zseven-w/desktop@workspace:apps/desktop"],
+
+    "@zseven-w/openpencil": ["@zseven-w/openpencil@workspace:apps/cli"],
 
     "@zseven-w/pen-codegen": ["@zseven-w/pen-codegen@workspace:packages/pen-codegen"],
 
@@ -1918,6 +1927,28 @@
     "@tanstack/start-plugin-core/@babel/code-frame": ["@babel/code-frame@7.27.1", "https://registry.npmmirror.com/@babel/code-frame/-/code-frame-7.27.1.tgz", { "dependencies": { "@babel/helper-validator-identifier": "^7.27.1", "js-tokens": "^4.0.0", "picocolors": "^1.1.1" } }, "sha512-cjQ7ZlQ0Mv3b47hABuTevyTuYN4i+loJKGeV9flcCgIK37cCXRh+L1bd3iBHlynerhQ7BhCkn2BPbQUL+rGqFg=="],
 
     "@tanstack/start-plugin-core/@rolldown/pluginutils": ["@rolldown/pluginutils@1.0.0-beta.40", "https://registry.npmmirror.com/@rolldown/pluginutils/-/pluginutils-1.0.0-beta.40.tgz", {}, "sha512-s3GeJKSQOwBlzdUrj4ISjJj5SfSh+aqn0wjOar4Bx95iV1ETI7F6S/5hLcfAxZ9kXDcyrAkxPlqmd1ZITttf+w=="],
+
+    "@zseven-w/pen-codegen/@zseven-w/pen-core": ["@zseven-w/pen-core@0.5.1-beta.1", "", { "dependencies": { "@zseven-w/pen-types": "0.5.1-beta.1", "nanoid": "^5.1.6", "paper": "^0.12.18" } }, "sha512-TWLK8lhGLOiVD0nrHNEiR/M/Xk9ndt2/WJI9XyBfqpdiTSgl5JatqdwIhAZjvZtce8wpG3Y9GG4k1SUfpvzU5w=="],
+
+    "@zseven-w/pen-codegen/@zseven-w/pen-types": ["@zseven-w/pen-types@0.5.1-beta.1", "", {}, "sha512-ozTon9G2BH0GvHTwhgZQ92keGqJX/ZyXqP0RDuQTc9Av8MVPY8nfLHmw5HaMVD+QAFRRxuvItUINroNNIv+E0Q=="],
+
+    "@zseven-w/pen-core/@zseven-w/pen-types": ["@zseven-w/pen-types@0.5.1-beta.1", "", {}, "sha512-ozTon9G2BH0GvHTwhgZQ92keGqJX/ZyXqP0RDuQTc9Av8MVPY8nfLHmw5HaMVD+QAFRRxuvItUINroNNIv+E0Q=="],
+
+    "@zseven-w/pen-figma/@zseven-w/pen-types": ["@zseven-w/pen-types@0.5.1-beta.1", "", {}, "sha512-ozTon9G2BH0GvHTwhgZQ92keGqJX/ZyXqP0RDuQTc9Av8MVPY8nfLHmw5HaMVD+QAFRRxuvItUINroNNIv+E0Q=="],
+
+    "@zseven-w/pen-renderer/@zseven-w/pen-core": ["@zseven-w/pen-core@0.5.1-beta.1", "", { "dependencies": { "@zseven-w/pen-types": "0.5.1-beta.1", "nanoid": "^5.1.6", "paper": "^0.12.18" } }, "sha512-TWLK8lhGLOiVD0nrHNEiR/M/Xk9ndt2/WJI9XyBfqpdiTSgl5JatqdwIhAZjvZtce8wpG3Y9GG4k1SUfpvzU5w=="],
+
+    "@zseven-w/pen-renderer/@zseven-w/pen-types": ["@zseven-w/pen-types@0.5.1-beta.1", "", {}, "sha512-ozTon9G2BH0GvHTwhgZQ92keGqJX/ZyXqP0RDuQTc9Av8MVPY8nfLHmw5HaMVD+QAFRRxuvItUINroNNIv+E0Q=="],
+
+    "@zseven-w/pen-sdk/@zseven-w/pen-codegen": ["@zseven-w/pen-codegen@0.5.1-beta.1", "", { "dependencies": { "@zseven-w/pen-core": "0.5.1-beta.1", "@zseven-w/pen-types": "0.5.1-beta.1" } }, "sha512-a+qVPoiq1uigVL4iCL8RTjax3GJwiGDIEBT1lrL4VZfckZ20rj6SyJFVjK9raM1Gf/XlFPu+VsWpTPBFTxuZiA=="],
+
+    "@zseven-w/pen-sdk/@zseven-w/pen-core": ["@zseven-w/pen-core@0.5.1-beta.1", "", { "dependencies": { "@zseven-w/pen-types": "0.5.1-beta.1", "nanoid": "^5.1.6", "paper": "^0.12.18" } }, "sha512-TWLK8lhGLOiVD0nrHNEiR/M/Xk9ndt2/WJI9XyBfqpdiTSgl5JatqdwIhAZjvZtce8wpG3Y9GG4k1SUfpvzU5w=="],
+
+    "@zseven-w/pen-sdk/@zseven-w/pen-figma": ["@zseven-w/pen-figma@0.5.1-beta.1", "", { "dependencies": { "@zseven-w/pen-types": "0.5.1-beta.1", "fzstd": "^0.1.1", "kiwi-schema": "^0.5.0", "uzip": "^0.20201231.0" } }, "sha512-bAq2qxJ+XPwYLsf2oFouE4DsClyGNvqLhOuQ2hXCOGK06nMRKExa+iGWAXEwIaZ+CYxQCe3zgWXlg/DgaqvEKg=="],
+
+    "@zseven-w/pen-sdk/@zseven-w/pen-renderer": ["@zseven-w/pen-renderer@0.5.1-beta.1", "", { "dependencies": { "@zseven-w/pen-core": "0.5.1-beta.1", "@zseven-w/pen-types": "0.5.1-beta.1", "rbush": "^4.0.1" }, "peerDependencies": { "canvaskit-wasm": "^0.40.0" } }, "sha512-0iuqNiP2ZFdS8s1/teU62869Mt49Pre+FSWTgfs42E3wJ4zx6DIAzSzidw9drPTNy5Xjo3j9qIV/j6Tv4Qmapw=="],
+
+    "@zseven-w/pen-sdk/@zseven-w/pen-types": ["@zseven-w/pen-types@0.5.1-beta.1", "", {}, "sha512-ozTon9G2BH0GvHTwhgZQ92keGqJX/ZyXqP0RDuQTc9Av8MVPY8nfLHmw5HaMVD+QAFRRxuvItUINroNNIv+E0Q=="],
 
     "ajv-keywords/ajv": ["ajv@6.12.6", "https://registry.npmmirror.com/ajv/-/ajv-6.12.6.tgz", { "dependencies": { "fast-deep-equal": "^3.1.1", "fast-json-stable-stringify": "^2.0.0", "json-schema-traverse": "^0.4.1", "uri-js": "^4.2.2" } }, "sha512-j3fVLgvTo527anyYyJOGTYJbG+vnnQYvE0m5mmkc1TK+nxAppkCLMIL0aZ4dblVCNoGShhm+kzE4ZUykBoMg4g=="],
 
