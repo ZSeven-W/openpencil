@@ -9,11 +9,7 @@
 import type { DesignSystem } from './ai-types'
 import type { AIProviderType } from '@/types/agent-settings'
 import { generateCompletion } from './ai-service'
-import {
-  DESIGN_CODE_SYSTEM_PROMPT,
-  buildCodeGenUserPrompt,
-} from './design-code-prompts'
-import { getAllPrinciples } from './design-principles'
+import { getSkillByName } from '@zseven-w/pen-ai-skills'
 import { designSystemToPromptContext } from './design-system-generator'
 
 interface CodeGenOptions {
@@ -32,12 +28,13 @@ export async function generateDesignCode(
   designSystem: DesignSystem,
   options: CodeGenOptions,
 ): Promise<string> {
-  const principles = getAllPrinciples()
+  const designCodeSkill = getSkillByName('design-code')?.content ?? ''
+  const principles = getSkillByName('design-principles')?.content ?? ''
 
   // Build the system prompt with principles injected
   const systemPrompt = principles
-    ? `${DESIGN_CODE_SYSTEM_PROMPT}\n\n${principles}`
-    : DESIGN_CODE_SYSTEM_PROMPT
+    ? `${designCodeSkill}\n\n${principles}`
+    : designCodeSkill
 
   // Build the user prompt with design system context
   const dsContext = designSystemToPromptContext(designSystem)
@@ -167,4 +164,27 @@ export function extractHtmlSection(html: string, subtaskLabel: string): string |
   }
 
   return null
+}
+
+/**
+ * Build the user prompt for HTML/CSS code generation.
+ * Includes the design system tokens and viewport constraints.
+ */
+function buildCodeGenUserPrompt(
+  userPrompt: string,
+  designSystemContext: string,
+  width: number,
+  height: number,
+): string {
+  const heightInstruction = height > 0
+    ? `Height: ${height}px (fixed viewport).`
+    : `Height: auto (content determines height, estimate based on sections).`
+
+  return `Design request: ${userPrompt}
+
+Viewport: Width ${width}px. ${heightInstruction}
+
+${designSystemContext}
+
+Generate the complete HTML file now.`
 }

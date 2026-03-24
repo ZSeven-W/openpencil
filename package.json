@@ -1,6 +1,6 @@
 {
   "name": "openpencil",
-  "version": "0.5.1",
+  "version": "0.5.2",
   "description": "The world's first open-source AI-native vector design tool and the first to feature concurrent Agent Teams. Design-as-Code. Turn prompts into UI directly on the live canvas. A modern alternative to Pencil.",
   "author": {
     "name": "ZSeven-W",
@@ -21,7 +21,7 @@
     "build": "cd apps/web && bun --bun vite build",
     "preview": "cd apps/web && bun --bun vite preview",
     "test": "cd apps/web && bun --bun vitest run --passWithNoTests",
-    "mcp:compile": "cd apps/web && esbuild src/mcp/server.ts --bundle --platform=node --target=node20 --outfile=../../out/mcp-server.cjs --format=cjs --sourcemap --alias:@=src --alias:@zseven-w/pen-types=../../packages/pen-types/src --alias:@zseven-w/pen-core=../../packages/pen-core/src --alias:@zseven-w/pen-codegen=../../packages/pen-codegen/src --alias:@zseven-w/pen-figma=../../packages/pen-figma/src --alias:@zseven-w/pen-renderer=../../packages/pen-renderer/src --alias:@zseven-w/pen-sdk=../../packages/pen-sdk/src --define:import.meta.env={} --external:canvas --external:paper",
+    "mcp:compile": "cd apps/web && esbuild src/mcp/server.ts --bundle --platform=node --target=node20 --outfile=../../out/mcp-server.cjs --format=cjs --sourcemap --alias:@=src --alias:@zseven-w/pen-types=../../packages/pen-types/src --alias:@zseven-w/pen-core=../../packages/pen-core/src --alias:@zseven-w/pen-codegen=../../packages/pen-codegen/src --alias:@zseven-w/pen-figma=../../packages/pen-figma/src --alias:@zseven-w/pen-renderer=../../packages/pen-renderer/src --alias:@zseven-w/pen-sdk=../../packages/pen-sdk/src --alias:@zseven-w/pen-ai-skills=../../packages/pen-ai-skills/src --define:import.meta.env={} --external:canvas --external:paper",
     "mcp:dev": "bun run apps/web/src/mcp/server.ts",
     "electron:dev": "bun run apps/desktop/dev.ts",
     "electron:compile": "esbuild apps/desktop/main.ts apps/desktop/preload.ts --bundle --platform=node --target=node20 --outdir=out/desktop --external:electron --format=cjs --out-extension:.js=.cjs --sourcemap",
@@ -34,7 +34,9 @@
     "cli:dev": "bun run apps/cli/src/index.ts",
     "publish:beta": "bash scripts/publish-beta.sh",
     "unpublish": "bash scripts/unpublish.sh",
-    "bump": "sh -c 'V=$0; [ -z \"$V\" ] && echo \"Usage: bun run bump <version>\" && exit 1; for f in package.json apps/*/package.json packages/*/package.json; do [ -f \"$f\" ] && jq --arg v \"$V\" \".version=\\$v\" \"$f\" > \"$f.tmp\" && mv \"$f.tmp\" \"$f\" && echo \"$f → $V\"; done'"
+    "bump": "sh -c 'V=$0; [ -z \"$V\" ] && echo \"Usage: bun run bump <version>\" && exit 1; for f in package.json apps/*/package.json packages/*/package.json; do [ -f \"$f\" ] && jq --arg v \"$V\" \".version=\\$v\" \"$f\" > \"$f.tmp\" && mv \"$f.tmp\" \"$f\" && echo \"$f → $V\"; done'",
+    "generate": "bun -e \"import { compileSkills } from './packages/pen-ai-skills/vite-plugin-skills'; compileSkills('./packages/pen-ai-skills')\"",
+    "postinstall": "bun scripts/patch-srvx-bun.ts && bun run generate"
   },
   "dependencies": {
     "@anthropic-ai/claude-agent-sdk": "^0.2.47",

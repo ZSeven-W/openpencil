@@ -8,6 +8,7 @@ import tailwindcss from '@tailwindcss/vite'
 import { nitro } from 'nitro/vite'
 import { copyFileSync, mkdirSync, existsSync } from 'node:fs'
 import { resolve } from 'node:path'
+import { vitePluginSkills } from '../../packages/pen-ai-skills/vite-plugin-skills'
 
 const isElectronBuild = process.env.BUILD_TARGET === 'electron'
 
@@ -43,6 +44,7 @@ const config = defineConfig({
   },
   assetsInclude: ['**/*.wasm'],
   plugins: [
+    vitePluginSkills(fileURLToPath(new URL('../../packages/pen-ai-skills', import.meta.url))),
     devtools(),
     nitro({
       rollupConfig: { external: [/^@sentry\//, 'canvas', 'jsdom', 'cssstyle', 'canvaskit-wasm'] },
