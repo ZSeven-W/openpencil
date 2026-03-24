@@ -11,7 +11,7 @@ import type { DesignSystem } from './ai-types'
 import type { AIProviderType } from '@/types/agent-settings'
 import type { VariableDefinition } from '@/types/variables'
 import { generateCompletion } from './ai-service'
-import { DESIGN_SYSTEM_PROMPT } from './design-system-prompts'
+import { getSkillByName } from '@zseven-w/pen-ai-skills'
 
 /**
  * Generate a design system from a user's prompt.
@@ -22,8 +22,9 @@ export async function generateDesignSystem(
   model?: string,
   provider?: AIProviderType,
 ): Promise<DesignSystem> {
+  const designSystemPrompt = getSkillByName('design-system')?.content ?? ''
   const response = await generateCompletion(
-    DESIGN_SYSTEM_PROMPT,
+    designSystemPrompt,
     prompt,
     model,
     provider,

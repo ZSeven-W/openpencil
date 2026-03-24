@@ -1,10 +1,30 @@
-import {
-  PEN_NODE_SCHEMA,
-  ADAPTIVE_STYLE_POLICY,
-  DESIGN_EXAMPLES,
-} from '../../services/ai/ai-prompts'
-import { PROMPT_SECTIONS, buildDesignMdStylePolicy } from '../../services/ai/ai-prompt-sections'
+import { getSkillByName } from '@zseven-w/pen-ai-skills'
+import { buildDesignMdStylePolicy } from '../../services/ai/ai-prompts'
 import type { DesignMdSpec } from '../../types/design-md'
+
+// ---------------------------------------------------------------------------
+// Skill name mapping — maps legacy section keys to skill registry names
+// ---------------------------------------------------------------------------
+
+const SECTION_NAME_MAP: Record<string, string> = {
+  schema: 'schema',
+  layout: 'layout',
+  text: 'text-rules',
+  overflow: 'overflow',
+  style: 'style-defaults',
+  icons: 'icon-catalog',
+  guidelines: 'form-ui',
+  roles: 'role-definitions',
+  copywriting: 'copywriting',
+  cjk: 'cjk-typography',
+  examples: 'examples',
+}
+
+/** Look up a skill by legacy section key or skill name. */
+function getSkillContent(key: string): string {
+  const skillName = SECTION_NAME_MAP[key] ?? key
+  return getSkillByName(skillName)?.content ?? ''
+}
 
 // ---------------------------------------------------------------------------
 // Named prompt sections — can be retrieved individually via section parameter
@@ -212,22 +232,22 @@ type PromptSection =
   | 'cjk'
   | 'variables'
 
-// Dynamic section map — some sections use the shared section registry
+// Dynamic section map — skills from registry, local sections for planning/variables/design-md
 const SECTION_MAP: Record<PromptSection, () => string> = {
   all: () => buildFullPrompt(),
-  schema: () => PEN_NODE_SCHEMA.trim(),
+  schema: () => getSkillContent('schema'),
   layout: () => LAYOUT_RULES,
   roles: () => ROLE_GUIDE,
   text: () => TEXT_RULES,
-  style: () => ADAPTIVE_STYLE_POLICY.trim(),
-  icons: () => DESIGN_EXAMPLES.trim(),
-  examples: () => DESIGN_EXAMPLES.trim(),
+  style: () => getSkillContent('style'),
+  icons: () => getSkillContent('icons'),
+  examples: () => getSkillContent('examples'),
   guidelines: () => DESIGN_GUIDELINES,
   planning: () => PLANNING_GUIDE,
   'design-md': () => _designMdContent ?? 'No design.md loaded in the current document.',
-  copywriting: () => PROMPT_SECTIONS.copywriting,
-  overflow: () => PROMPT_SECTIONS.overflow,
-  cjk: () => PROMPT_SECTIONS.cjk,
+  copywriting: () => getSkillContent('copywriting'),
+  overflow: () => getSkillContent('overflow'),
+  cjk: () => getSkillContent('cjk'),
   variables: () => VARIABLE_RULES,
 }
 
@@ -280,11 +300,11 @@ export function listPromptSections(): string[] {
 function buildFullPrompt(): string {
   return `${INTRO}
 
-${PEN_NODE_SCHEMA}
+${getSkillContent('schema')}
 
-${ADAPTIVE_STYLE_POLICY}
+${getSkillContent('style')}
 
-${DESIGN_EXAMPLES}
+${getSkillContent('examples')}
 
 ${DESIGN_TYPE_DETECTION}
 

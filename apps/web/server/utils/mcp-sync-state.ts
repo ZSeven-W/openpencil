@@ -1,19 +1,22 @@
 /**
- * In-memory sync state for MCP ↔ Renderer real-time communication.
+ * In-memory sync state for MCP <-> Renderer real-time communication.
  * Shared across Nitro API endpoints: GET/POST /api/mcp/document, GET /api/mcp/events.
  */
 
 import type { PenDocument } from '../../src/types/pen'
-import type { ServerResponse } from 'node:http'
 
 let currentDocument: PenDocument | null = null
 let documentVersion = 0
 let currentSelection: string[] = []
 let currentActivePageId: string | null = null
 
+interface SSEWriter {
+  push(data: string): void
+}
+
 interface SSEClient {
   id: string
-  res: ServerResponse
+  writer: SSEWriter
 }
 
 const clients = new Map<string, SSEClient>()
@@ -38,8 +41,8 @@ export function setSyncSelection(selectedIds: string[], activePageId?: string | 
   if (activePageId !== undefined) currentActivePageId = activePageId
 }
 
-export function registerSSEClient(id: string, res: ServerResponse): void {
-  clients.set(id, { id, res })
+export function registerSSEClient(id: string, writer: SSEWriter): void {
+  clients.set(id, { id, writer })
 }
 
 export function unregisterSSEClient(id: string): void {
@@ -47,11 +50,11 @@ export function unregisterSSEClient(id: string): void {
 }
 
 function broadcast(payload: Record<string, unknown>, excludeClientId?: string): void {
-  const data = `data: ${JSON.stringify(payload)}\n\n`
+  const data = JSON.stringify(payload)
   for (const [id, client] of clients) {
     if (id === excludeClientId) continue
     try {
-      if (!client.res.closed) client.res.write(data)
+      client.writer.push(data)
     } catch {
       clients.delete(id)
     }
