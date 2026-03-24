@@ -19,7 +19,7 @@ import type {
   SubAgentResult,
 } from './ai-types'
 import { streamChat } from './ai-service'
-import { SUB_AGENT_PROMPT } from './orchestrator-prompts'
+import { resolveSkills } from '@zseven-w/pen-ai-skills'
 import {
   type PreparedDesignPrompt,
   getSubAgentTimeouts,
@@ -244,10 +244,16 @@ async function executeSubAgent(
     request.context?.designMd,
   )
 
-  const basePrompt = SUB_AGENT_PROMPT
-  const systemPrompt = preparedPrompt.designPrinciples
-    ? `${basePrompt}\n\n${preparedPrompt.designPrinciples}`
-    : basePrompt
+  const designMd = request.context?.designMd
+  const variables = request.context?.variables
+  const genCtx = resolveSkills('generation', request.prompt, {
+    flags: {
+      hasVariables: !!variables && Object.keys(variables).length > 0,
+      hasDesignMd: !!designMd,
+    },
+    dynamicContent: designMd ? { designMdContent: JSON.stringify(designMd) } : undefined,
+  })
+  const systemPrompt = genCtx.skills.map(s => s.content).join('\n\n')
 
   let rawResponse = ''
   const nodes: PenNode[] = []

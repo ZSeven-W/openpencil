@@ -6,7 +6,7 @@ import {
   SUB_AGENT_TIMEOUT_PROFILES,
 } from './ai-runtime-config'
 import { detectDesignType } from './design-type-presets'
-import { getAllPrinciples } from './design-principles'
+import { getSkillByName } from '@zseven-w/pen-ai-skills'
 import { resolveModelProfile, applyProfileToTimeouts } from './model-profiles'
 
 export interface PreparedDesignPrompt {
@@ -73,7 +73,7 @@ export function prepareDesignPrompt(prompt: string): PreparedDesignPrompt {
     subAgentPrompt: truncateByCharCount(normalized, PROMPT_OPTIMIZER_LIMITS.maxPromptCharsForSubAgent),
     wasCompressed: normalized.length > PROMPT_OPTIMIZER_LIMITS.maxPromptCharsForOrchestrator,
     originalLength: normalized.length,
-    designPrinciples: getAllPrinciples(),
+    designPrinciples: getSkillByName('design-principles')?.content ?? '',
   }
 }
 
