@@ -1,5 +1,5 @@
 import { readFileSync, readdirSync, writeFileSync, mkdirSync, existsSync } from 'fs'
-import { join, relative } from 'path'
+import { join } from 'path'
 import matter from 'gray-matter'
 import type { Plugin } from 'vite'
 import type { SkillMeta } from './src/engine/types'

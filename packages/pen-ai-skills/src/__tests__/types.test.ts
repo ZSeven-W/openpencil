@@ -2,11 +2,7 @@ import { describe, it, expectTypeOf } from 'vitest'
 import type {
   Phase,
   SkillTrigger,
-  SkillMeta,
-  ResolvedSkill,
-  ResolveOptions,
   AgentContext,
-  SkillRegistryEntry,
 } from '../engine/types'
 
 describe('engine types', () => {

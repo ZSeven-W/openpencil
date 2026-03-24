@@ -2,7 +2,7 @@ import type { Phase, ResolveOptions, AgentContext } from './types'
 import { DEFAULT_BUDGETS } from './types'
 import { getSkillsByPhase } from './loader'
 import { filterByIntent, injectDynamicContent } from './resolver'
-import { trimByBudget, estimateTokens } from './budget'
+import { trimByBudget } from './budget'
 import { getRecentEntries } from '../memory/generation-history'
 
 export function resolveSkills(

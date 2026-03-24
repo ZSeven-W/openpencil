@@ -34,7 +34,7 @@ export function injectDynamicContent(
   dynamicContent?: Record<string, string>
 ): string {
   if (!dynamicContent) return content
-  return content.replace(/\{\{(\w+)\}\}/g, (match, key) => {
+  return content.replace(/\{\{(\w+)\}\}/g, (_match, key) => {
     if (key in dynamicContent) return dynamicContent[key]
     console.warn(`[pen-ai-skills] Missing dynamic content for placeholder: {{${key}}}`)
     return ''
