@@ -288,10 +288,13 @@ export class SkiaTextRenderer {
     }
     const surfaceH = para.getHeight() + 2
 
-    // Try paragraph image cache: drawImageRect is far cheaper than drawParagraph per frame
+    // Try paragraph image cache: drawImageRect is far cheaper than drawParagraph per frame.
+    // Skip cache when zoomed in (> 1x) — cached bitmaps are at fixed DPR resolution
+    // and produce visible jagged edges when upscaled by the viewport transform.
+    const useParaImageCache = this.zoom <= 1
     const imgScale = Math.min(this._dpr, 2)
-    let cachedImg = this.paraImageCache.get(cacheKey)
-    if (cachedImg === undefined) {
+    let cachedImg: any = useParaImageCache ? this.paraImageCache.get(cacheKey) : null
+    if (useParaImageCache && cachedImg === undefined) {
       cachedImg = null
       const sw = Math.min(Math.ceil(surfaceW * imgScale), 4096)
       const sh = Math.min(Math.ceil(surfaceH * imgScale), 4096)
@@ -310,7 +313,7 @@ export class SkiaTextRenderer {
           }
         }
       }
-      this.paraImageCache.set(cacheKey, cachedImg)
+      if (useParaImageCache) this.paraImageCache.set(cacheKey, cachedImg)
     }
 
     if (cachedImg) {
