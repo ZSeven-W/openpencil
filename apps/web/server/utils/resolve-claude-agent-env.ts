@@ -182,6 +182,31 @@ export function buildClaudeAgentEnv(): EnvLike {
 }
 
 /**
+ * Resolve the model to pass to Claude Code Agent SDK.
+ *
+ * When a custom ANTHROPIC_BASE_URL is set (proxy mode), the proxy may not
+ * recognize standard Claude model IDs like "claude-sonnet-4-6". Map the
+ * requested model tier to the proxy's real model via ANTHROPIC_DEFAULT_*_MODEL
+ * env vars (read from ~/.claude/settings.json).
+ *
+ * Example: user selects "Claude Sonnet 4.6" → detected as sonnet tier →
+ *   mapped to ANTHROPIC_DEFAULT_SONNET_MODEL (e.g. "gpt-5.3-codex")
+ */
+export function resolveAgentModel(requestedModel: string | undefined, env: Record<string, string | undefined>): string | undefined {
+  if (!requestedModel) return undefined
+  if (!env.ANTHROPIC_BASE_URL) return requestedModel
+
+  // Proxy mode: map model tier to the proxy's model via env vars
+  const lower = requestedModel.toLowerCase()
+  if (lower.includes('opus')) return env.ANTHROPIC_DEFAULT_OPUS_MODEL || env.ANTHROPIC_MODEL || undefined
+  if (lower.includes('haiku')) return env.ANTHROPIC_DEFAULT_HAIKU_MODEL || env.ANTHROPIC_MODEL || undefined
+  if (lower.includes('sonnet')) return env.ANTHROPIC_DEFAULT_SONNET_MODEL || env.ANTHROPIC_MODEL || undefined
+
+  // Unknown tier: use the general default
+  return env.ANTHROPIC_MODEL || undefined
+}
+
+/**
  * Force Claude CLI debug output into a writable temp location.
  * This avoids crashes in restricted environments where ~/.claude/debug is not writable.
  */
@@ -235,8 +260,21 @@ export function buildSpawnClaudeCodeProcess() {
         windowsHide: true,
       })
     } else {
-      // For .cmd or extensionless binaries, use shell
-      child = spawn(cmd, options.args, {
+      // For .cmd or extensionless binaries, use shell.
+      // When shell: true on Windows, empty string args get swallowed.
+      // Filter out --setting-sources with empty value to prevent the next
+      // flag (e.g. --permission-mode) from being consumed as its value.
+      const safeArgs: string[] = []
+      for (let i = 0; i < options.args.length; i++) {
+        const arg = options.args[i]
+        // Skip --setting-sources followed by an empty string
+        if (arg === '--setting-sources' && i + 1 < options.args.length && options.args[i + 1] === '') {
+          i++ // skip the empty value too
+          continue
+        }
+        safeArgs.push(arg)
+      }
+      child = spawn(cmd, safeArgs, {
         cwd: options.cwd,
         env: options.env as NodeJS.ProcessEnv,
         signal: options.signal,

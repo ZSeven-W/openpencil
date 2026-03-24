@@ -1,6 +1,6 @@
 {
   "name": "@zseven-w/pen-ai-skills",
-  "version": "0.5.1",
+  "version": "0.5.2",
   "type": "module",
   "exports": {
     ".": {
@@ -12,7 +12,11 @@
       "import": "./vite-plugin-skills.ts"
     }
   },
-  "files": ["src", "skills", "vite-plugin-skills.ts"],
+  "files": [
+    "src",
+    "skills",
+    "vite-plugin-skills.ts"
+  ],
   "dependencies": {
     "gray-matter": "^4.0.3"
   }

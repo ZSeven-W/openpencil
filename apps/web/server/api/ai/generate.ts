@@ -5,6 +5,7 @@ import {
   buildClaudeAgentEnv,
   buildSpawnClaudeCodeProcess,
   getClaudeAgentDebugFilePath,
+  resolveAgentModel,
 } from '../../utils/resolve-claude-agent-env'
 import { formatOpenCodeError } from './chat'
 
@@ -55,13 +56,14 @@ export default defineEventHandler(async (event) => {
 })
 
 /** Generate via Claude Agent SDK (uses local Claude Code OAuth login, no API key needed) */
-async function generateViaAgentSDK(body: GenerateBody, model?: string): Promise<{ text?: string; error?: string }> {
+async function generateViaAgentSDK(body: GenerateBody, requestedModel?: string): Promise<{ text?: string; error?: string }> {
   const runQuery = async (): Promise<{ text?: string; error?: string }> => {
     const { query } = await import('@anthropic-ai/claude-agent-sdk')
 
     // Remove CLAUDECODE env to allow running from within a CC terminal
     const env = buildClaudeAgentEnv()
     const debugFile = getClaudeAgentDebugFilePath()
+    const model = resolveAgentModel(requestedModel, env)
 
     const claudePath = resolveClaudeCli()
 

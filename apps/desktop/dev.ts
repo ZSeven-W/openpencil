@@ -10,6 +10,7 @@
 import { spawn, execSync, type ChildProcess } from 'node:child_process'
 import { build } from 'esbuild'
 import { join } from 'node:path'
+import { compileSkills } from '../../packages/pen-ai-skills/vite-plugin-skills'
 
 const DESKTOP_DIR = import.meta.dirname
 const ROOT = join(DESKTOP_DIR, '..', '..')
@@ -95,6 +96,7 @@ async function main(): Promise<void> {
   console.log('[electron-dev] Vite is ready')
 
   // 3. Compile MCP server + Electron files
+  compileSkills(join(ROOT, 'packages', 'pen-ai-skills'))
   console.log('[electron-dev] Compiling MCP server...')
   await build({
     platform: 'node',

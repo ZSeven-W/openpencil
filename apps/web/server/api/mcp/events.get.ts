@@ -1,14 +1,15 @@
-import { defineEventHandler } from 'h3'
+import { defineEventHandler, createEventStream } from 'h3'
 import { randomUUID } from 'node:crypto'
 import { registerSSEClient, unregisterSSEClient, getSyncDocument } from '../../utils/mcp-sync-state'
 
-/** GET /api/mcp/events — SSE stream for renderer to subscribe to live document changes. */
-export default defineEventHandler((_event) => {
-  const clientId = randomUUID()
+// Bun.serve has a default idleTimeout of 10s. Heartbeat must be shorter
+// to prevent the SSE connection from being killed.
+const HEARTBEAT_MS = 8_000
 
-  const { readable, writable } = new TransformStream()
-  const writer = writable.getWriter()
-  const encoder = new TextEncoder()
+/** GET /api/mcp/events — SSE stream for renderer to subscribe to live document changes. */
+export default defineEventHandler((event) => {
+  const clientId = randomUUID()
+  const stream = createEventStream(event)
 
   let closed = false
   const cleanup = () => {
@@ -16,12 +17,12 @@ export default defineEventHandler((_event) => {
     closed = true
     clearInterval(heartbeat)
     unregisterSSEClient(clientId)
-    writer.close().catch(() => {})
+    stream.close()
   }
 
   const write = (data: string) => {
     if (closed) return
-    writer.write(encoder.encode(`data: ${data}\n\n`)).catch(cleanup)
+    stream.push(data).catch(cleanup)
   }
 
   // Send client ID so renderer can use it as sourceClientId when pushing back
@@ -35,18 +36,14 @@ export default defineEventHandler((_event) => {
 
   registerSSEClient(clientId, { push: write })
 
-  // Keep-alive heartbeat — also serves as connection health check
+  // Keep-alive heartbeat — must be shorter than Bun's idle timeout (10s)
   const heartbeat = setInterval(() => {
     if (closed) return
-    writer.write(encoder.encode(': heartbeat\n\n')).catch(cleanup)
-  }, 30_000)
+    stream.push(':heartbeat').catch(cleanup)
+  }, HEARTBEAT_MS)
 
-  // Return a proper Response object so Vite/Bun proxy can handle it
-  return new Response(readable, {
-    headers: {
-      'Content-Type': 'text/event-stream',
-      'Cache-Control': 'no-cache',
-      'Connection': 'keep-alive',
-    },
-  })
+  // Clean up when client disconnects
+  stream.onClosed(cleanup)
+
+  return stream.send()
 })

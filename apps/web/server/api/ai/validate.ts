@@ -4,6 +4,7 @@ import {
   buildClaudeAgentEnv,
   buildSpawnClaudeCodeProcess,
   getClaudeAgentDebugFilePath,
+  resolveAgentModel,
 } from '../../utils/resolve-claude-agent-env'
 import { writeFile, mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -98,7 +99,7 @@ async function withTempImageFile<T>(
  */
 async function validateViaAgentSDK(
   body: ValidateBody,
-  model?: string,
+  requestedModel?: string,
 ): Promise<{ text: string; skipped?: boolean; error?: string }> {
   return await withTempImageFile(body.imageBase64, async (tempPath) => {
     const { query } = await import('@anthropic-ai/claude-agent-sdk')
@@ -106,6 +107,7 @@ async function validateViaAgentSDK(
     const env = buildClaudeAgentEnv()
     const debugFile = getClaudeAgentDebugFilePath()
     const claudePath = resolveClaudeCli()
+    const model = resolveAgentModel(requestedModel, env)
 
     const prompt = `IMPORTANT: First, use the Read tool to read the image file at "${tempPath}". This is a PNG screenshot of a UI design.
 

@@ -21,13 +21,19 @@ function resolveMcpServerScript(): string {
     const p = join(electronResources, 'mcp-server.cjs')
     if (existsSync(p)) return p
   }
-  // dev + web build (from cwd)
-  const fromCwd = resolve(process.cwd(), 'dist', 'mcp-server.cjs')
-  if (existsSync(fromCwd)) return fromCwd
+  // dev + web build (from cwd) — monorepo outputs to out/
+  // In dev mode, CWD is apps/web/ (due to "cd apps/web && ..." in dev script),
+  // so also check ../../out/ to reach the monorepo root.
+  for (const base of [
+    resolve(process.cwd(), 'out', 'mcp-server.cjs'),
+    resolve(process.cwd(), '..', '..', 'out', 'mcp-server.cjs'),
+  ]) {
+    if (existsSync(base)) return base
+  }
   // Fallback: relative to this file (Nitro bundled output)
-  const fromFile = resolve(__dirname, '..', '..', '..', 'dist', 'mcp-server.cjs')
+  const fromFile = resolve(__dirname, '..', '..', '..', 'out', 'mcp-server.cjs')
   if (existsSync(fromFile)) return fromFile
-  return fromCwd
+  return resolve(process.cwd(), 'out', 'mcp-server.cjs')
 }
 
 /** Get the first non-internal IPv4 address (LAN IP). */
@@ -104,7 +110,12 @@ export function startMcpHttpServer(port: number): { running: boolean; port: numb
     // for later tracking and graceful shutdown.
     const child = spawn(process.execPath, [serverScript, '--http', '--port', String(port)], {
       stdio: ['ignore', 'ignore', 'ignore'],
-      env: { ...process.env },
+      env: {
+        ...process.env,
+        // In Electron, process.execPath is the Electron binary.
+        // ELECTRON_RUN_AS_NODE makes it behave as plain Node.js.
+        ELECTRON_RUN_AS_NODE: '1',
+      },
       detached: true,
       windowsHide: true,
     })

@@ -1,6 +1,6 @@
 {
   "name": "@zseven-w/pen-sdk",
-  "version": "0.5.1",
+  "version": "0.5.2",
   "description": "OpenPencil SDK — parse, manipulate, and generate code from .op design files",
   "type": "module",
   "exports": {

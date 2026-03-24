@@ -8,6 +8,7 @@ import {
   buildClaudeAgentEnv,
   buildSpawnClaudeCodeProcess,
   getClaudeAgentDebugFilePath,
+  resolveAgentModel,
 } from '../../utils/resolve-claude-agent-env'
 /** Pattern for detecting sensitive data in debug log output */
 export const SENSITIVE_LOG_PATTERN = /ANTHROPIC_API_KEY=|Authorization:\s*Bearer|api[_-]?key\s*[:=]/i
@@ -213,7 +214,7 @@ function stripNoToolsRestriction(systemPrompt: string): string {
 }
 
 /** Stream via Claude Agent SDK (uses local Claude Code OAuth login, no API key needed) */
-function streamViaAgentSDK(body: ChatBody, model?: string) {
+function streamViaAgentSDK(body: ChatBody, requestedModel?: string) {
   const stream = new ReadableStream({
     async start(controller) {
       const encoder = new TextEncoder()
@@ -249,6 +250,11 @@ function streamViaAgentSDK(body: ChatBody, model?: string) {
         // Remove CLAUDECODE env to allow running from within a CC terminal
         const env = buildClaudeAgentEnv()
         debugFile = getClaudeAgentDebugFilePath()
+
+        // When using a custom proxy (ANTHROPIC_BASE_URL), skip explicit model
+        // so Claude Code uses ANTHROPIC_MODEL from env — the proxy may not
+        // recognize standard Claude model IDs.
+        const model = resolveAgentModel(requestedModel, env)
 
         const claudePath = resolveClaudeCli()
         const spawnProcess = buildSpawnClaudeCodeProcess()
