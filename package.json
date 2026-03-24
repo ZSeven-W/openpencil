@@ -35,7 +35,8 @@
     "publish:beta": "bash scripts/publish-beta.sh",
     "unpublish": "bash scripts/unpublish.sh",
     "bump": "sh -c 'V=$0; [ -z \"$V\" ] && echo \"Usage: bun run bump <version>\" && exit 1; for f in package.json apps/*/package.json packages/*/package.json; do [ -f \"$f\" ] && jq --arg v \"$V\" \".version=\\$v\" \"$f\" > \"$f.tmp\" && mv \"$f.tmp\" \"$f\" && echo \"$f → $V\"; done'",
-    "postinstall": "bun scripts/patch-srvx-bun.ts"
+    "generate": "bun -e \"import { compileSkills } from './packages/pen-ai-skills/vite-plugin-skills'; compileSkills('./packages/pen-ai-skills')\"",
+    "postinstall": "bun scripts/patch-srvx-bun.ts && bun run generate"
   },
   "dependencies": {
     "@anthropic-ai/claude-agent-sdk": "^0.2.47",
