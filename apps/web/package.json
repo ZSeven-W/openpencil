@@ -9,6 +9,8 @@
     "@zseven-w/pen-codegen": "workspace:*",
     "@zseven-w/pen-figma": "workspace:*",
     "@zseven-w/pen-renderer": "workspace:*",
-    "@zseven-w/pen-ai-skills": "workspace:*"
+    "@zseven-w/pen-ai-skills": "workspace:*",
+    "@zseven-w/agent": "workspace:*",
+    "zod": "^3.24"
   }
 }

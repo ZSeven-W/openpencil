@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import type { ChatMessage, ChatAttachment } from '@/services/ai/ai-types'
 import type { ModelGroup } from '@/types/agent-settings'
+import type { ToolCallBlockData } from '@/components/panels/tool-call-block'
 import { appStorage } from '@/utils/app-storage'
 
 export type PanelCorner = 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right'
@@ -103,9 +104,13 @@ interface AIState {
   chatTitle: string
   generationProgress: { current: number; total: number } | null
   concurrency: number
+  toolCallBlocks: ToolCallBlockData[]
   pendingAttachments: ChatAttachment[]
   abortController: AbortController | null
 
+  addToolCallBlock: (block: ToolCallBlockData) => void
+  updateToolCallBlock: (id: string, updates: Partial<ToolCallBlockData>) => void
+  clearToolCallBlocks: () => void
   setConcurrency: (n: number) => void
   setChatTitle: (title: string) => void
   setGenerationProgress: (progress: { current: number; total: number } | null) => void
@@ -151,9 +156,19 @@ export const useAIStore = create<AIState>((set, get) => ({
   chatTitle: 'New Chat',
   concurrency: 1,
   generationProgress: null,
+  toolCallBlocks: [],
   pendingAttachments: [],
   abortController: null,
 
+  addToolCallBlock: (block) =>
+    set((s) => ({ toolCallBlocks: [...s.toolCallBlocks, block] })),
+  updateToolCallBlock: (id, updates) =>
+    set((s) => ({
+      toolCallBlocks: s.toolCallBlocks.map((b) =>
+        b.id === id ? { ...b, ...updates } : b,
+      ),
+    })),
+  clearToolCallBlocks: () => set({ toolCallBlocks: [] }),
   setConcurrency: (n) => {
     const clamped = Math.max(1, Math.min(6, n))
     writeStoredConcurrency(clamped)
@@ -217,7 +232,7 @@ export const useAIStore = create<AIState>((set, get) => ({
   setAvailableModels: (availableModels) => set({ availableModels }),
   setModelGroups: (modelGroups) => set({ modelGroups }),
   setLoadingModels: (isLoadingModels) => set({ isLoadingModels }),
-  clearMessages: () => set({ messages: [], chatTitle: 'New Chat' }),
+  clearMessages: () => set({ messages: [], chatTitle: 'New Chat', toolCallBlocks: [] }),
 
   setPanelCorner: (panelCorner) => {
     set({ panelCorner })

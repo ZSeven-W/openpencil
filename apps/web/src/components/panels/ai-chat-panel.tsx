@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
-import { Send, Plus, ChevronDown, ChevronUp, Check, MessageSquare, Loader2, Paperclip, X, Square, Zap, Search } from 'lucide-react'
+import { Send, Plus, ChevronDown, ChevronUp, Check, MessageSquare, Loader2, Paperclip, X, Square, Zap, Search, Key } from 'lucide-react'
 import { nanoid } from 'nanoid'
 import { cn } from '@/lib/utils'
 import { useTranslation } from 'react-i18next'
@@ -20,6 +20,7 @@ import GeminiLogo from '@/components/icons/gemini-logo'
 import ChatMessage from './chat-message'
 import { useChatHandlers } from './ai-chat-handlers'
 import { FixedChecklist } from './ai-chat-checklist'
+import { ToolCallBlock } from './tool-call-block'
 
 const PROVIDER_ICON: Record<AIProviderType, typeof ClaudeLogo> = {
   anthropic: ClaudeLogo,
@@ -160,10 +161,12 @@ export default function AIChatPanel() {
   const isLoadingModels = useAIStore((s) => s.isLoadingModels)
   const setLoadingModels = useAIStore((s) => s.setLoadingModels)
   const providers = useAgentSettingsStore((s) => s.providers)
+  const builtinProviders = useAgentSettingsStore((s) => s.builtinProviders)
   const providersHydrated = useAgentSettingsStore((s) => s.isHydrated)
   const [modelDropdownOpen, setModelDropdownOpen] = useState(false)
   const [modelSearch, setModelSearch] = useState('')
   const modelSearchRef = useRef<HTMLInputElement>(null)
+  const toolCallBlocks = useAIStore((s) => s.toolCallBlocks)
   const pendingAttachments = useAIStore((s) => s.pendingAttachments)
   const addPendingAttachment = useAIStore((s) => s.addPendingAttachment)
   const removePendingAttachment = useAIStore((s) => s.removePendingAttachment)
@@ -182,32 +185,50 @@ export default function AIChatPanel() {
     hydrateModelPreference()
   }, [hydrateModelPreference])
 
-  // Build model list strictly from connected providers in agent-settings-store.
-  // If none are connected, model list is empty.
+  // Build model list from connected CLI providers + enabled built-in providers.
   useEffect(() => {
     if (!providersHydrated) {
       setLoadingModels(true)
       return
     }
 
+    const providerNames: Record<AIProviderType, string> = {
+      anthropic: 'Anthropic',
+      openai: 'OpenAI',
+      opencode: 'OpenCode',
+      copilot: 'GitHub Copilot',
+      gemini: 'Google Gemini',
+    }
+
+    // Collect CLI-connected providers
     const connectedProviders = (Object.keys(providers) as AIProviderType[]).filter(
       (p) => providers[p].isConnected && (providers[p].models?.length ?? 0) > 0,
     )
 
-    if (connectedProviders.length > 0) {
-      // Build groups + flat list from stored models
-      const providerNames: Record<AIProviderType, string> = {
-        anthropic: 'Anthropic',
-        openai: 'OpenAI',
-        opencode: 'OpenCode',
-        copilot: 'GitHub Copilot',
-        gemini: 'Google Gemini',
-      }
-      const groups = connectedProviders.map((p) => ({
-        provider: p,
-        providerName: providerNames[p],
-        models: providers[p].models,
-      }))
+    const groups = connectedProviders.map((p) => ({
+      provider: p,
+      providerName: providerNames[p],
+      models: providers[p].models,
+    }))
+
+    // Also collect enabled built-in providers with API keys
+    for (const bp of builtinProviders) {
+      if (!bp.enabled || !bp.apiKey) continue
+      const providerType: AIProviderType = bp.type === 'anthropic' ? 'anthropic' : 'openai'
+      groups.push({
+        provider: providerType,
+        providerName: bp.displayName || (bp.type === 'anthropic' ? 'Anthropic (API Key)' : bp.displayName),
+        models: [{
+          value: `builtin:${bp.id}:${bp.model}`,
+          displayName: bp.model,
+          description: `via ${bp.displayName} API Key`,
+          provider: providerType,
+          builtinProviderId: bp.id,
+        }],
+      })
+    }
+
+    if (groups.length > 0) {
       const flat = groups.flatMap((g) =>
         g.models.map((m) => ({
           value: m.value,
@@ -231,7 +252,7 @@ export default function AIChatPanel() {
     setModelGroups([])
     setAvailableModels([])
     setLoadingModels(false)
-  }, [providers, providersHydrated]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [providers, builtinProviders, providersHydrated]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Close model dropdown when clicking outside
   useEffect(() => {
@@ -564,16 +585,26 @@ export default function AIChatPanel() {
             </p>
           </div>
         ) : (
-          messages.map((msg) => (
-            <ChatMessage
-              key={msg.id}
-              role={msg.role}
-              content={msg.content}
-              isStreaming={msg.isStreaming && isStreaming}
-              onApplyDesign={handleApplyDesign}
-              attachments={msg.attachments}
-            />
-          ))
+          <>
+            {messages.map((msg) => (
+              <ChatMessage
+                key={msg.id}
+                role={msg.role}
+                content={msg.content}
+                isStreaming={msg.isStreaming && isStreaming}
+                onApplyDesign={handleApplyDesign}
+                attachments={msg.attachments}
+              />
+            ))}
+            {/* Tool call blocks (built-in provider / agent pipeline) */}
+            {toolCallBlocks.length > 0 && (
+              <div className="mt-1">
+                {toolCallBlocks.map((block) => (
+                  <ToolCallBlock key={block.id} block={block} />
+                ))}
+              </div>
+            )}
+          </>
         )}
         <div ref={messagesEndRef} />
       </div>
@@ -636,6 +667,19 @@ export default function AIChatPanel() {
             className="flex items-center gap-1.5 text-[11px] text-muted-foreground hover:text-foreground transition-colors px-1.5 py-1 rounded-md hover:bg-secondary"
           >
             {(() => {
+              // Show Key icon for built-in provider models
+              if (model.startsWith('builtin:')) {
+                const currentGroup = modelGroups.find((g) =>
+                  g.models.some((m) => m.value === model),
+                )
+                if (currentGroup) {
+                  const ProvIcon = PROVIDER_ICON[currentGroup.provider]
+                  return ProvIcon
+                    ? <ProvIcon className="w-3.5 h-3.5 shrink-0" />
+                    : <Key size={12} className="shrink-0 text-muted-foreground" />
+                }
+                return <Key size={12} className="shrink-0 text-muted-foreground" />
+              }
               const currentProvider = modelGroups.find((g) =>
                 g.models.some((m) => m.value === model),
               )?.provider
@@ -765,18 +809,25 @@ export default function AIChatPanel() {
                   )
                 }
 
-                return filtered.map((group) => {
+                return filtered.map((group, groupIdx) => {
                   const GIcon = PROVIDER_ICON[group.provider]
+                  // Use a composite key to avoid collision when CLI + built-in share provider type
+                  const groupKey = `${group.provider}-${group.providerName}-${groupIdx}`
+                  const isBuiltinGroup = group.models.some((m) => m.value.startsWith('builtin:'))
                   return (
-                    <div key={group.provider}>
+                    <div key={groupKey}>
                       <div className="flex items-center gap-1.5 px-3 pt-2.5 pb-1">
-                        <GIcon className="w-3 h-3 text-muted-foreground" />
+                        {isBuiltinGroup
+                          ? <Key size={10} className="text-muted-foreground shrink-0" />
+                          : <GIcon className="w-3 h-3 text-muted-foreground" />
+                        }
                         <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
                           {group.providerName}
                         </span>
                       </div>
                       {group.models.map((m, idx) => {
                         const isSelected = m.value === model
+                        const isBuiltin = m.value.startsWith('builtin:')
                         return (
                           <button
                             key={m.value}
@@ -796,7 +847,12 @@ export default function AIChatPanel() {
                               {isSelected && <Check size={12} />}
                             </span>
                             <span className="font-medium">{m.displayName}</span>
-                            {idx === 0 && !q && (
+                            {isBuiltin && (
+                              <span className="text-[9px] text-muted-foreground bg-secondary px-1 py-0.5 rounded ml-auto">
+                                API Key
+                              </span>
+                            )}
+                            {!isBuiltin && idx === 0 && !q && (
                               <span className="text-[9px] text-muted-foreground bg-secondary px-1 py-0.5 rounded ml-auto">
                                 {t('common.best')}
                               </span>

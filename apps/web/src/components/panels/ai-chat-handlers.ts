@@ -1,9 +1,12 @@
 import { useState, useCallback } from 'react'
 import { nanoid } from 'nanoid'
+import { decodeAgentEvent } from '@zseven-w/agent'
+import type { AgentEvent } from '@zseven-w/agent'
 import { useAIStore } from '@/stores/ai-store'
 import { useCanvasStore } from '@/stores/canvas-store'
 import { useDocumentStore } from '@/stores/document-store'
 import { useDesignMdStore } from '@/stores/design-md-store'
+import { useAgentSettingsStore } from '@/stores/agent-settings-store'
 import { getActivePageChildren } from '@/stores/document-tree-utils'
 import { streamChat } from '@/services/ai/ai-service'
 import { buildChatSystemPrompt } from '@/services/ai/ai-prompts'
@@ -14,7 +17,10 @@ import {
   extractAndApplyDesignModification,
 } from '@/services/ai/design-generator'
 import { trimChatHistory } from '@/services/ai/context-optimizer'
+import { AgentToolExecutor } from '@/services/ai/agent-tool-executor'
+import { createDesignToolRegistry } from '@/services/ai/agent-tools'
 import type { ChatMessage as ChatMessageType } from '@/services/ai/ai-types'
+import type { ToolCallBlockData } from '@/components/panels/tool-call-block'
 import { CHAT_STREAM_THINKING_CONFIG } from '@/services/ai/ai-runtime-config'
 
 /** Intent classification prompt — lightweight LLM call to determine message routing */
@@ -106,6 +112,194 @@ export function buildContextString(): string {
   return parts.length > 0 ? `\n\n[Canvas context: ${parts.join('. ')}]` : ''
 }
 
+// ---------------------------------------------------------------------------
+// Agent mode SSE stream handler
+// ---------------------------------------------------------------------------
+
+const AGENT_SYSTEM_PROMPT = `You are a design assistant for OpenPencil, a vector design tool.
+You have access to tools that let you read and modify the design document.
+Use batch_get and snapshot_layout to understand the current state before making changes.
+Use insert_node, update_node, and delete_node to manipulate the design.
+Always confirm what you did after making changes.`
+
+/**
+ * Parse SSE chunks from a ReadableStream and yield AgentEvents.
+ * Handles partial chunks that may be split across reads.
+ */
+async function* parseAgentSSE(
+  reader: ReadableStreamDefaultReader<Uint8Array>,
+  signal: AbortSignal,
+): AsyncGenerator<AgentEvent> {
+  const decoder = new TextDecoder()
+  let buffer = ''
+
+  while (!signal.aborted) {
+    const { done, value } = await reader.read()
+    if (done) break
+
+    buffer += decoder.decode(value, { stream: true })
+    const chunks = buffer.split('\n\n')
+    // Last item may be incomplete -- keep it in the buffer
+    buffer = chunks.pop() ?? ''
+
+    for (const chunk of chunks) {
+      const trimmed = chunk.trim()
+      if (!trimmed) continue
+      const evt = decodeAgentEvent(trimmed)
+      if (evt) yield evt
+    }
+  }
+
+  // Process any remaining data in buffer
+  if (buffer.trim()) {
+    const evt = decodeAgentEvent(buffer.trim())
+    if (evt) yield evt
+  }
+}
+
+/** Provider config for the agent pipeline */
+interface AgentProviderConfig {
+  providerType: 'anthropic' | 'openai-compat'
+  apiKey: string
+  model: string
+  baseURL?: string
+}
+
+/**
+ * Send a message through the agent pipeline.
+ * Opens an SSE connection to /api/ai/agent, dispatches tool calls
+ * client-side, and updates the AI store in real time.
+ */
+async function runAgentStream(
+  assistantMsgId: string,
+  providerConfig: AgentProviderConfig,
+  abortController: AbortController,
+) {
+  const store = useAIStore.getState()
+  const { updateLastMessage } = store
+
+  const sessionId = nanoid()
+  const executor = new AgentToolExecutor(sessionId)
+
+  // Build tool definitions from the registry (no execute functions -- client-side only)
+  const registry = createDesignToolRegistry()
+  const toolDefs = registry.list().map((t) => ({
+    name: t.name,
+    description: t.description,
+    level: t.level,
+  }))
+
+  // Build conversation messages from chat history
+  const messages = useAIStore.getState().messages
+    .filter((m) => m.id !== assistantMsgId)
+    .map((m) => ({ role: m.role, content: m.content }))
+
+  const context = buildContextString()
+  const systemPrompt = AGENT_SYSTEM_PROMPT + context
+
+  const response = await fetch('/api/ai/agent', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      sessionId,
+      messages,
+      systemPrompt,
+      providerType: providerConfig.providerType,
+      apiKey: providerConfig.apiKey,
+      model: providerConfig.model,
+      ...(providerConfig.baseURL ? { baseURL: providerConfig.baseURL } : {}),
+      toolDefs,
+      maxTurns: 20,
+    }),
+    signal: abortController.signal,
+  })
+
+  if (!response.ok || !response.body) {
+    const errText = await response.text().catch(() => 'Unknown error')
+    throw new Error(`Agent request failed: ${errText}`)
+  }
+
+  const reader = response.body.getReader()
+  let accumulated = ''
+  let thinkingContent = ''
+
+  try {
+    for await (const evt of parseAgentSSE(reader, abortController.signal)) {
+      switch (evt.type) {
+        case 'thinking': {
+          thinkingContent += evt.content
+          const thinkingStep = `<step title="Thinking">${thinkingContent}</step>`
+          updateLastMessage(thinkingStep + (accumulated ? '\n' + accumulated : ''))
+          break
+        }
+
+        case 'text': {
+          accumulated += evt.content
+          const prefix = thinkingContent
+            ? `<step title="Thinking">${thinkingContent}</step>\n`
+            : ''
+          updateLastMessage(prefix + accumulated)
+          break
+        }
+
+        case 'tool_call': {
+          const block: ToolCallBlockData = {
+            id: evt.id,
+            name: evt.name,
+            args: evt.args,
+            level: evt.level,
+            status: 'running',
+          }
+          useAIStore.getState().addToolCallBlock(block)
+
+          // Execute tool client-side and post result back to server
+          executor.execute(evt as Extract<AgentEvent, { type: 'tool_call' }>).then(() => {
+            // Tool result will come back as a separate SSE event
+          }).catch((err) => {
+            useAIStore.getState().updateToolCallBlock(evt.id, {
+              status: 'error',
+              result: { success: false, error: String(err) },
+            })
+          })
+          break
+        }
+
+        case 'tool_result': {
+          useAIStore.getState().updateToolCallBlock(evt.id, {
+            status: evt.result.success ? 'done' : 'error',
+            result: evt.result,
+          })
+          break
+        }
+
+        case 'turn': {
+          // Optionally show turn progress
+          break
+        }
+
+        case 'done': {
+          break
+        }
+
+        case 'error': {
+          accumulated += `\n\n**Error:** ${evt.message}`
+          updateLastMessage(accumulated)
+          if (evt.fatal) return
+          break
+        }
+
+        case 'abort': {
+          return
+        }
+      }
+    }
+  } finally {
+    reader.releaseLock()
+  }
+
+  return accumulated
+}
+
 /** Shared chat logic hook */
 export function useChatHandlers() {
   const [input, setInput] = useState('')
@@ -117,6 +311,7 @@ export function useChatHandlers() {
   const addMessage = useAIStore((s) => s.addMessage)
   const updateLastMessage = useAIStore((s) => s.updateLastMessage)
   const setStreaming = useAIStore((s) => s.setStreaming)
+
   const handleSend = useCallback(
     async (text?: string) => {
       const messageText = text ?? input.trim()
@@ -162,21 +357,88 @@ export function useChatHandlers() {
         useAIStore.getState().setChatTitle(title || 'New Chat')
       }
 
+      const currentProvider = useAIStore.getState().modelGroups.find((g) =>
+        g.models.some((m) => m.value === model),
+      )?.provider
+
+      const abortController = new AbortController()
+      useAIStore.getState().setAbortController(abortController)
+
+      let accumulated = ''
+
+      // -----------------------------------------------------------------------
+      // BUILT-IN PROVIDER (Agent) MODE — route through /api/ai/agent with tool execution
+      // Triggered when the selected model has a `builtin:` prefix
+      // -----------------------------------------------------------------------
+      if (model.startsWith('builtin:')) {
+        const parts = model.split(':')
+        const builtinProviderId = parts[1]
+        const modelName = parts.slice(2).join(':')
+
+        const { builtinProviders } = useAgentSettingsStore.getState()
+        const bp = builtinProviders.find((p) => p.id === builtinProviderId)
+        if (!bp) {
+          accumulated = '**Error:** Built-in provider not found. Please check your settings.'
+          updateLastMessage(accumulated)
+          useAIStore.getState().setAbortController(null)
+          setStreaming(false)
+          useAIStore.setState((s) => {
+            const msgs = [...s.messages]
+            const last = msgs.find((m) => m.id === assistantMsg.id)
+            if (last) { last.content = accumulated; last.isStreaming = false }
+            return { messages: msgs }
+          })
+          return
+        }
+
+        useAIStore.getState().clearToolCallBlocks()
+        try {
+          const result = await runAgentStream(
+            assistantMsg.id,
+            {
+              providerType: bp.type === 'anthropic' ? 'anthropic' : 'openai-compat',
+              apiKey: bp.apiKey,
+              model: modelName,
+              baseURL: bp.baseURL,
+            },
+            abortController,
+          )
+          accumulated = result ?? ''
+        } catch (error) {
+          if (!abortController.signal.aborted) {
+            const errMsg = error instanceof Error ? error.message : 'Unknown error'
+            accumulated += `\n\n**Error:** ${errMsg}`
+            updateLastMessage(accumulated)
+          }
+        } finally {
+          useAIStore.getState().setAbortController(null)
+          setStreaming(false)
+        }
+
+        // Force update final message state
+        useAIStore.setState((s) => {
+          const msgs = [...s.messages]
+          const last = msgs.find((m) => m.id === assistantMsg.id)
+          if (last) {
+            last.content = accumulated
+            last.isStreaming = false
+          }
+          return { messages: msgs }
+        })
+        return
+      }
+
+      // -----------------------------------------------------------------------
+      // STANDARD MODE — existing design/chat pipeline
+      // -----------------------------------------------------------------------
       const chatHistory = messages.map((m) => ({
         role: m.role,
         content: m.content,
         ...(m.attachments?.length ? { attachments: m.attachments } : {}),
       }))
-      const currentProvider = useAIStore.getState().modelGroups.find((g) =>
-        g.models.some((m) => m.value === model),
-      )?.provider
 
-      let accumulated = ''
       let appliedCount = 0
       let isDesign = false
-
-      const abortController = new AbortController()
-      useAIStore.getState().setAbortController(abortController)
 
       try {
         // Classify intent via lightweight LLM call (three-way: new / modify / chat)
