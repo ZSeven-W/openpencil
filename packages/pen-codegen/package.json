@@ -1,6 +1,6 @@
 {
   "name": "@zseven-w/pen-codegen",
-  "version": "0.5.2",
+  "version": "0.5.3",
   "description": "Multi-platform code generators for OpenPencil designs",
   "type": "module",
   "exports": {
