@@ -3,7 +3,7 @@ import { homedir } from 'node:os'
 import { join, resolve, dirname } from 'node:path'
 import { readFile, writeFile, mkdir } from 'node:fs/promises'
 import { existsSync } from 'node:fs'
-import { execSync } from 'node:child_process'
+import { execSync, execFileSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 
 // ESM-compatible __dirname polyfill
@@ -28,6 +28,7 @@ interface InstallResult {
 }
 
 const MCP_SERVER_NAME = 'openpencil'
+const CODEX_CONFIG_PATH = join(homedir(), '.codex', 'config.toml')
 
 /**
  * Resolve the absolute path to the compiled MCP server.
@@ -66,32 +67,46 @@ function resolveMcpServerPath(): string {
  * Caches the result for the lifetime of the process.
  */
 let _nodeAvailable: boolean | null = null
-function isNodeAvailable(): boolean {
-  if (_nodeAvailable !== null) return _nodeAvailable
+let _nodeCommand: string | null = null
 
-  // Try PATH first
-  try {
-    execSync('node --version', { stdio: 'ignore', timeout: 5000 })
-    _nodeAvailable = true
-    return true
-  } catch { /* not on PATH */ }
-
-  // Check common absolute paths (macOS/Linux + Windows)
-  const candidates = process.platform === 'win32'
+function nodeCandidates(): string[] {
+  return process.platform === 'win32'
     ? [
+        'node.exe',
         join(process.env.ProgramFiles ?? 'C:\\Program Files', 'nodejs', 'node.exe'),
         join(process.env.LOCALAPPDATA ?? '', 'fnm_multishells', '**', 'node.exe'),
         join(homedir(), '.nvm', 'current', 'bin', 'node.exe'),
       ]
     : [
+        'node',
         '/usr/local/bin/node',
         '/usr/bin/node',
-        join(homedir(), '.nvm', 'versions', 'node'),  // nvm directory
+        join(homedir(), '.nvm', 'versions', 'node'),
         '/opt/homebrew/bin/node',
       ]
+}
 
-  for (const p of candidates) {
+function isNodeAvailable(): boolean {
+  if (_nodeAvailable !== null) return _nodeAvailable
+
+  // Try PATH first
+  try {
+    const whichCmd = process.platform === 'win32'
+      ? 'where node 2>nul'
+      : 'which node 2>/dev/null'
+    const resolved = execSync(whichCmd, { encoding: 'utf-8', timeout: 5000 })
+      .trim()
+      .split(/\r?\n/)[0]
+      ?.trim()
+    _nodeCommand = resolved || 'node'
+    _nodeAvailable = true
+    return true
+  } catch { /* not on PATH */ }
+
+  // Check common absolute paths (macOS/Linux + Windows)
+  for (const p of nodeCandidates().slice(1)) {
     if (existsSync(p)) {
+      _nodeCommand = p
       _nodeAvailable = true
       return true
     }
@@ -99,6 +114,11 @@ function isNodeAvailable(): boolean {
 
   _nodeAvailable = false
   return false
+}
+
+function resolveNodeCommand(): string {
+  if (isNodeAvailable()) return _nodeCommand ?? 'node'
+  throw new Error('Node.js not found')
 }
 
 function buildMcpServerEntry(
@@ -216,6 +236,57 @@ async function writeJsonConfig(
   await writeFile(filePath, JSON.stringify(config, null, 2) + '\n', 'utf-8')
 }
 
+function codexBinary(): string {
+  return process.platform === 'win32' ? 'codex.cmd' : 'codex'
+}
+
+async function installCodexMcp(
+  transportMode?: 'stdio' | 'http' | 'both',
+  httpPort?: number,
+): Promise<{ configPath: string; fallbackHttp: boolean }> {
+  const serverPath = resolveMcpServerPath()
+  const port = httpPort ?? MCP_DEFAULT_PORT
+  const useHttp = transportMode === 'http' || !isNodeAvailable()
+
+  try {
+    uninstallCodexMcp()
+  } catch {
+    // Ignore missing-entry cleanup failures; install below is the real operation.
+  }
+
+  if (useHttp) {
+    try {
+      const { startMcpHttpServer } = await import('../../utils/mcp-server-manager')
+      startMcpHttpServer(port)
+    } catch {
+      // Non-fatal: server may already be running or will be started manually
+    }
+
+    execFileSync(
+      codexBinary(),
+      ['mcp', 'add', MCP_SERVER_NAME, '--url', `http://127.0.0.1:${port}/mcp`],
+      { encoding: 'utf-8', timeout: 15_000, stdio: 'pipe' },
+    )
+    return { configPath: CODEX_CONFIG_PATH, fallbackHttp: true }
+  }
+
+  execFileSync(
+    codexBinary(),
+    ['mcp', 'add', MCP_SERVER_NAME, '--', resolveNodeCommand(), serverPath],
+    { encoding: 'utf-8', timeout: 15_000, stdio: 'pipe' },
+  )
+  return { configPath: CODEX_CONFIG_PATH, fallbackHttp: false }
+}
+
+function uninstallCodexMcp(): { configPath: string } {
+  execFileSync(
+    codexBinary(),
+    ['mcp', 'remove', MCP_SERVER_NAME],
+    { encoding: 'utf-8', timeout: 15_000, stdio: 'pipe' },
+  )
+  return { configPath: CODEX_CONFIG_PATH }
+}
+
 /**
  * POST /api/ai/mcp-install
  * Install or uninstall the openpencil MCP server into a CLI tool's config.
@@ -234,6 +305,17 @@ export default defineEventHandler(async (event) => {
   }
 
   try {
+    if (body.tool === 'codex-cli') {
+      const result = body.action === 'uninstall'
+        ? uninstallCodexMcp()
+        : await installCodexMcp(body.transportMode, body.httpPort)
+      return {
+        success: true,
+        configPath: result.configPath,
+        ...('fallbackHttp' in result && result.fallbackHttp ? { fallbackHttp: true } : {}),
+      } satisfies InstallResult
+    }
+
     const configPath = cliConfig.configPath()
     const config = await cliConfig.read(configPath)
 

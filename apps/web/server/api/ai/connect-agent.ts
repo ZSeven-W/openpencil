@@ -250,7 +250,7 @@ async function buildCodexConnectionInfo(): Promise<{ connectionInfo: string; hin
   const { readFile } = await import('node:fs/promises')
   const { homedir } = await import('node:os')
   const { join } = await import('node:path')
-  const hp = configPath('~/.codex/config.json', '%USERPROFILE%\\.codex\\config.json')
+  const hp = configPath('~/.codex/config.toml', '%USERPROFILE%\\.codex\\config.toml')
 
   if (process.env.OPENAI_API_KEY) {
     const key = process.env.OPENAI_API_KEY
