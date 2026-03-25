@@ -189,11 +189,6 @@ const CLI_CONFIGS: Record<string, CliConfigDef> = {
     read: readJsonConfig,
     write: writeJsonConfig,
   },
-  'codex-cli': {
-    configPath: () => join(homedir(), '.codex', 'config.json'),
-    read: readJsonConfig,
-    write: writeJsonConfig,
-  },
   'gemini-cli': {
     configPath: () => join(homedir(), '.gemini', 'settings.json'),
     read: readJsonConfig,
@@ -299,13 +294,9 @@ export default defineEventHandler(async (event) => {
     return { success: false, error: 'Missing tool or action field' } satisfies InstallResult
   }
 
-  const cliConfig = CLI_CONFIGS[body.tool]
-  if (!cliConfig) {
-    return { success: false, error: `Unknown CLI tool: ${body.tool}` } satisfies InstallResult
-  }
-
-  try {
-    if (body.tool === 'codex-cli') {
+  // Codex CLI uses its own `codex mcp add/remove` commands (writes ~/.codex/config.toml)
+  if (body.tool === 'codex-cli') {
+    try {
       const result = body.action === 'uninstall'
         ? uninstallCodexMcp()
         : await installCodexMcp(body.transportMode, body.httpPort)
@@ -314,8 +305,20 @@ export default defineEventHandler(async (event) => {
         configPath: result.configPath,
         ...('fallbackHttp' in result && result.fallbackHttp ? { fallbackHttp: true } : {}),
       } satisfies InstallResult
+    } catch (err) {
+      return {
+        success: false,
+        error: err instanceof Error ? err.message : String(err),
+      } satisfies InstallResult
     }
+  }
 
+  const cliConfig = CLI_CONFIGS[body.tool]
+  if (!cliConfig) {
+    return { success: false, error: `Unknown CLI tool: ${body.tool}` } satisfies InstallResult
+  }
+
+  try {
     const configPath = cliConfig.configPath()
     const config = await cliConfig.read(configPath)
 
