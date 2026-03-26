@@ -129,6 +129,7 @@ export default defineEventHandler(async (event) => {
     tools,
     systemPrompt: body.systemPrompt,
     maxTurns: body.maxTurns ?? 20,
+    maxOutputTokens: 4096,
     abortSignal: abortController.signal,
   })
 

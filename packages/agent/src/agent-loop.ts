@@ -12,6 +12,7 @@ export interface AgentConfig {
   tools: ToolRegistry
   systemPrompt: string
   maxTurns?: number
+  maxOutputTokens?: number
   turnTimeout?: number
   contextStrategy?: ContextStrategy
   abortSignal?: AbortSignal
@@ -28,6 +29,7 @@ export function createAgent(config: AgentConfig): Agent {
     tools,
     systemPrompt,
     maxTurns = 20,
+    maxOutputTokens = 4096,
     turnTimeout = 60_000,
     contextStrategy = createSlidingWindowStrategy({ maxTurns: 50 }),
     abortSignal,
@@ -80,12 +82,12 @@ export function createAgent(config: AgentConfig): Agent {
         provider.maxContextTokens,
       )
 
-      // Debug: log what's being sent to streamText
       const response = streamText({
         model: provider.model,
         system: systemPrompt,
         messages: trimmedMessages as ModelMessage[],
         tools: tools.toAISDKFormat(),
+        maxOutputTokens,
         abortSignal,
       })
 
