@@ -29,7 +29,7 @@ export function createAgent(config: AgentConfig): Agent {
     systemPrompt,
     maxTurns = 20,
     turnTimeout = 60_000,
-    contextStrategy = createSlidingWindowStrategy({ maxTurns: 10 }),
+    contextStrategy = createSlidingWindowStrategy({ maxTurns: 50 }),
     abortSignal,
   } = config
 
