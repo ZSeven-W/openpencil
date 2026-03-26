@@ -70,9 +70,18 @@ export default defineEventHandler(async (event) => {
   })
 
   // SSE stream — follows the same ReadableStream pattern as chat.ts
+  // Bun.serve has a default idleTimeout of 10s. Send keep-alive pings
+  // every 8s so long-running LLM calls don't get killed.
+  const KEEPALIVE_MS = 8_000
   const encoder = new TextEncoder()
   const stream = new ReadableStream({
     async start(controller) {
+      const pingTimer = setInterval(() => {
+        try {
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: 'ping', content: '' })}\n\n`))
+        } catch { /* stream already closed */ }
+      }, KEEPALIVE_MS)
+
       try {
         for await (const agentEvent of agent.run(body.messages as any)) {
           controller.enqueue(encoder.encode(encodeAgentEvent(agentEvent)))
@@ -84,6 +93,7 @@ export default defineEventHandler(async (event) => {
           fatal: true,
         })))
       } finally {
+        clearInterval(pingTimer)
         agentSessions.delete(body.sessionId)
         controller.close()
       }

@@ -154,7 +154,8 @@ export default defineEventHandler(async (event) => {
 })
 
 // Keep-alive ping interval (ms) — prevents client timeout while waiting for API TTFT
-const KEEPALIVE_INTERVAL_MS = 15_000
+// Bun.serve has a default idleTimeout of 10s — keep-alive must be shorter.
+const KEEPALIVE_INTERVAL_MS = 8_000
 function getAgentThinkingConfig(body: ChatBody):
   | { type: 'adaptive' | 'disabled' }
   | { type: 'enabled'; budgetTokens?: number }
