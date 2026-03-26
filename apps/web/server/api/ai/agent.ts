@@ -1,4 +1,4 @@
-import { defineEventHandler, readBody, setResponseHeaders } from 'h3'
+import { defineEventHandler, readBody, setResponseHeaders, getQuery, createError } from 'h3'
 import {
   createAgent,
   createAnthropicProvider,
@@ -10,11 +10,38 @@ import type { AuthLevel } from '@zseven-w/agent'
 import { z } from 'zod'
 import { agentSessions } from '../../utils/agent-sessions'
 
+/** MVP tool schemas — duplicated here because Zod schemas can't be serialized over HTTP */
+const TOOL_SCHEMAS: Record<string, z.ZodType> = {
+  batch_get: z.object({
+    ids: z.array(z.string()).optional().describe('Node IDs to retrieve'),
+    patterns: z.array(z.string()).optional().describe('Search patterns'),
+  }),
+  snapshot_layout: z.object({
+    pageId: z.string().optional(),
+  }),
+  insert_node: z.object({
+    parent: z.string().nullable().describe('Parent node ID, or null for root'),
+    data: z.record(z.unknown()).describe('PenNode data'),
+    pageId: z.string().optional(),
+  }),
+  update_node: z.object({
+    id: z.string().describe('Node ID to update'),
+    data: z.record(z.unknown()).describe('Properties to update'),
+  }),
+  delete_node: z.object({
+    id: z.string().describe('Node ID to delete'),
+  }),
+  find_empty_space: z.object({
+    width: z.number().describe('Required width'),
+    height: z.number().describe('Required height'),
+    pageId: z.string().optional(),
+  }),
+}
+
 interface ToolDef {
   name: string
   description: string
   level: AuthLevel
-  jsonSchema?: Record<string, unknown>
 }
 
 interface AgentBody {
@@ -29,26 +56,70 @@ interface AgentBody {
   maxTurns?: number
 }
 
+function toModelMessages(raw: Array<{ role: string; content: unknown }>) {
+  return raw
+    .filter((m) => (m.role === 'user' || m.role === 'assistant') && typeof m.content === 'string')
+    .map((m) => ({
+      role: m.role as 'user' | 'assistant',
+      content: m.content as string,
+    }))
+}
+
+/**
+ * Unified agent endpoint. Routes by `?action=` query param:
+ *   POST /api/ai/agent              — Start agent loop (SSE stream)
+ *   POST /api/ai/agent?action=result — Resolve a pending tool call
+ *   POST /api/ai/agent?action=abort  — Abort an agent session
+ */
 export default defineEventHandler(async (event) => {
+  const { action } = getQuery(event) as { action?: string }
+
+  // ── Tool result callback ────────────────────────────────────
+  if (action === 'result') {
+    const body = await readBody<{ sessionId: string; toolCallId: string; result: any }>(event)
+    if (!body?.sessionId || !body.toolCallId || !body.result) {
+      throw createError({ statusCode: 400, message: 'Missing: sessionId, toolCallId, result' })
+    }
+    const session = agentSessions.get(body.sessionId)
+    if (!session) {
+      throw createError({ statusCode: 404, message: 'Session not found' })
+    }
+    session.agent.resolveToolResult(body.toolCallId, body.result)
+    return { ok: true }
+  }
+
+  // ── Abort ───────────────────────────────────────────────────
+  if (action === 'abort') {
+    const body = await readBody<{ sessionId?: string }>(event)
+    const sid = body?.sessionId
+    if (sid) {
+      const session = agentSessions.get(sid)
+      if (session) {
+        session.abortController.abort()
+        agentSessions.delete(sid)
+      }
+    }
+    return { ok: true }
+  }
+
+  // ── Start agent loop (SSE stream) ──────────────────────────
   const body = await readBody<AgentBody>(event)
   if (!body?.sessionId || !body.messages || !body.systemPrompt || !body.providerType || !body.apiKey || !body.model) {
     setResponseHeaders(event, { 'Content-Type': 'application/json' })
     return { error: 'Missing required fields: sessionId, messages, systemPrompt, providerType, apiKey, model' }
   }
 
-  // Create provider
   const provider = body.providerType === 'anthropic'
     ? createAnthropicProvider({ apiKey: body.apiKey, model: body.model })
     : createOpenAICompatProvider({ apiKey: body.apiKey, model: body.model, baseURL: body.baseURL })
 
-  // Reconstruct tool registry from definitions (no execute — client-side execution)
   const tools = createToolRegistry()
   for (const def of body.toolDefs ?? []) {
     tools.register({
       name: def.name,
       description: def.description,
       level: def.level,
-      schema: z.any(),
+      schema: TOOL_SCHEMAS[def.name] ?? z.object({}).passthrough(),
     })
   }
 
@@ -69,33 +140,33 @@ export default defineEventHandler(async (event) => {
     Connection: 'keep-alive',
   })
 
-  // SSE stream — follows the same ReadableStream pattern as chat.ts
-  // Bun.serve has a default idleTimeout of 10s. Send keep-alive pings
-  // every 8s so long-running LLM calls don't get killed.
-  const KEEPALIVE_MS = 8_000
   const encoder = new TextEncoder()
   const stream = new ReadableStream({
     async start(controller) {
+      // Keep-alive ping every 5s — prevents Bun's 10s idle timeout from killing the SSE stream
+      // while the agent loop is suspended waiting for tool results
       const pingTimer = setInterval(() => {
         try {
-          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: 'ping', content: '' })}\n\n`))
+          controller.enqueue(encoder.encode(': ping\n\n'))
         } catch { /* stream already closed */ }
-      }, KEEPALIVE_MS)
+      }, 5_000)
 
       try {
-        for await (const agentEvent of agent.run(body.messages as any)) {
+        for await (const agentEvent of agent.run(toModelMessages(body.messages))) {
           controller.enqueue(encoder.encode(encodeAgentEvent(agentEvent)))
         }
-      } catch (err) {
-        controller.enqueue(encoder.encode(encodeAgentEvent({
-          type: 'error',
-          message: String(err),
-          fatal: true,
-        })))
+      } catch (err: any) {
+        try {
+          controller.enqueue(encoder.encode(encodeAgentEvent({
+            type: 'error',
+            message: err?.message ?? String(err),
+            fatal: true,
+          })))
+        } catch { /* ignore */ }
       } finally {
         clearInterval(pingTimer)
         agentSessions.delete(body.sessionId)
-        controller.close()
+        try { controller.close() } catch { /* ignore */ }
       }
     },
   })

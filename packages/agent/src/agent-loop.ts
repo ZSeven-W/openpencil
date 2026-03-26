@@ -80,6 +80,7 @@ export function createAgent(config: AgentConfig): Agent {
         provider.maxContextTokens,
       )
 
+      // Debug: log what's being sent to streamText
       const response = streamText({
         model: provider.model,
         system: systemPrompt,
@@ -96,10 +97,12 @@ export function createAgent(config: AgentConfig): Agent {
       }> = []
 
       // Use fullStream for interleaved text + tool_call + reasoning streaming
+      let accumulatedText = ''
       for await (const part of response.fullStream) {
         switch (part.type) {
           case 'text-delta':
             if (part.text) {
+              accumulatedText += part.text
               yield { type: 'text', content: part.text }
             }
             break
@@ -174,27 +177,40 @@ export function createAgent(config: AgentConfig): Agent {
         }
       }
 
-      // Append assistant + tool result messages to conversation history for next turn.
-      // response.response is a PromiseLike that resolves once the stream is consumed.
-      const resolved = await response.response
-      history.push(...(resolved.messages as unknown as ModelMessage[]))
+      // Manually construct ModelMessage[] for conversation history.
+      // Include BOTH text and tool-call parts so the model retains context.
+      const assistantParts: any[] = []
+      if (accumulatedText) {
+        assistantParts.push({ type: 'text' as const, text: accumulatedText })
+      }
+      for (const tc of pendingToolCalls) {
+        assistantParts.push({
+          type: 'tool-call' as const,
+          toolCallId: tc.toolCallId,
+          toolName: tc.toolName,
+          args: tc.input,
+        })
+      }
+      history.push({
+        role: 'assistant' as const,
+        content: assistantParts,
+      } as unknown as ModelMessage)
 
-      // For tools without execute(), their results are not included in response.messages.
-      // We must add tool result messages manually for those.
       for (const tr of toolResults) {
-        if (!tools.hasExecute(tr.name)) {
-          history.push({
-            role: 'tool' as const,
-            content: [
-              {
-                type: 'tool-result' as const,
-                toolCallId: tr.id,
-                toolName: tr.name,
-                result: JSON.stringify(tr.result.data ?? tr.result.error),
+        history.push({
+          role: 'tool' as const,
+          content: [
+            {
+              type: 'tool-result' as const,
+              toolCallId: tr.id,
+              toolName: tr.name,
+              output: {
+                type: 'text' as const,
+                value: JSON.stringify(tr.result.data ?? tr.result.error ?? ''),
               },
-            ],
-          } as unknown as ModelMessage)
-        }
+            },
+          ],
+        } as unknown as ModelMessage)
       }
 
       turn++

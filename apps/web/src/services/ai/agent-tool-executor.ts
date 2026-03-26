@@ -46,7 +46,7 @@ export class AgentToolExecutor {
     }
 
     // POST result back to the server to unblock the agent loop
-    await fetch('/api/ai/agent-tool-result', {
+    await fetch('/api/ai/agent?action=result', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({

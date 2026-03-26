@@ -9,7 +9,7 @@ export function createOpenAICompatProvider(config: ProviderConfig): AgentProvide
     ...(config.baseURL ? { baseURL: config.baseURL } : {}),
   })
   return {
-    model: openai(config.model),
+    model: openai.chat(config.model),
     id: 'openai-compat',
     maxContextTokens: config.maxContextTokens ?? DEFAULT_MAX_CONTEXT,
     supportsThinking: false,

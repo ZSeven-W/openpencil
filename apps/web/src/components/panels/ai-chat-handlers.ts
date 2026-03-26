@@ -278,6 +278,11 @@ async function runAgentStream(
         }
 
         case 'done': {
+          // If no text was accumulated (model returned empty), add a note
+          if (!accumulated.trim()) {
+            accumulated = '*Agent completed with no text output.*'
+            updateLastMessage(accumulated)
+          }
           break
         }
 
