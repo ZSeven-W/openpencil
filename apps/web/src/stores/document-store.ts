@@ -3,6 +3,7 @@ import { nanoid } from 'nanoid'
 import type { PenDocument, PenNode, GroupNode, RefNode } from '@/types/pen'
 import type { VariableDefinition } from '@/types/variables'
 
+import { normalizePenDocument } from '@/utils/normalize-pen-file'
 import { useHistoryStore } from '@/stores/history-store'
 import { useCanvasStore } from '@/stores/canvas-store'
 import { getDefaultTheme } from '@/variables/resolve-variables'
@@ -678,7 +679,9 @@ export const useDocumentStore = create<DocumentStoreState>(
     applyExternalDocument: (doc) => {
       // Push current state to history so MCP changes are undoable
       useHistoryStore.getState().pushState(get().document)
-      const migrated = ensureDocumentNodeIds(migrateToPages(doc))
+      // Normalize external document (fill object→array, text→content, etc.)
+      const normalized = normalizePenDocument(doc)
+      const migrated = ensureDocumentNodeIds(migrateToPages(normalized))
       // Preserve activePageId if page still exists
       const activePageId = useCanvasStore.getState().activePageId
       const pageExists = migrated.pages?.some((p) => p.id === activePageId)

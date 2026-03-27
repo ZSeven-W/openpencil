@@ -52,7 +52,7 @@ export function premeasureTextHeights(nodes: PenNode[]): PenNode[] {
         ? tNode.content
         : Array.isArray(tNode.content)
           ? tNode.content.map((s) => s.text ?? '').join('')
-          : ''
+          : (tNode as unknown as Record<string, unknown>).text as string ?? ''
 
       const textAlign = tNode.textAlign
       const isFixedWidthText = textGrowth === 'fixed-width' || textGrowth === 'fixed-width-height'

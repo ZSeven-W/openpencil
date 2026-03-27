@@ -65,6 +65,12 @@ function normalizeNode(node: PenNode): PenNode {
 
   // opacity — pass through ($variable strings preserved)
 
+  // text nodes: normalize `text` field to `content` (MCP/CLI use `text`, renderer expects `content`)
+  if (out.type === 'text' && !('content' in out) && typeof out.text === 'string') {
+    out.content = out.text as string
+    delete out.text
+  }
+
   // icon_font: default to lucide family
   if (out.type === 'icon_font' && !out.iconFontFamily) {
     out.iconFontFamily = 'lucide'

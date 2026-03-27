@@ -136,9 +136,13 @@ export function estimateTextWidthPrecise(text: string, fontSize: number, letterS
 
 export function resolveTextContent(node: PenNode): string {
   if (node.type !== 'text') return ''
-  return typeof node.content === 'string'
-    ? node.content
-    : node.content.map((s) => s.text).join('')
+  if (typeof node.content === 'string') return node.content
+  if (Array.isArray(node.content)) return node.content.map((s) => s.text).join('')
+  // Fallback: MCP/CLI nodes may use `text` instead of `content`
+  if (typeof (node as unknown as Record<string, unknown>).text === 'string') {
+    return (node as unknown as Record<string, unknown>).text as string
+  }
+  return ''
 }
 
 export function countExplicitTextLines(text: string): number {

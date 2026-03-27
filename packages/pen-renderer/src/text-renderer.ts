@@ -153,7 +153,7 @@ export class SkiaTextRenderer {
       ? tNode.content
       : Array.isArray(tNode.content)
         ? tNode.content.map((s) => s.text ?? '').join('')
-        : ''
+        : (tNode as unknown as Record<string, unknown>).text as string ?? ''
     if (!content) return true
 
     const fontSize = tNode.fontSize ?? 16
@@ -402,7 +402,7 @@ export class SkiaTextRenderer {
       ? tNode.content
       : Array.isArray(tNode.content)
         ? tNode.content.map((s) => s.text ?? '').join('')
-        : ''
+        : (tNode as unknown as Record<string, unknown>).text as string ?? ''
 
     if (!content) return
 

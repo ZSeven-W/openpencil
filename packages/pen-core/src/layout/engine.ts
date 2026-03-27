@@ -183,10 +183,7 @@ export function getNodeWidth(node: PenNode, parentAvail?: number): number {
         const fontSize = node.fontSize ?? 16
         const letterSpacing = node.letterSpacing ?? 0
         const fontWeight = node.fontWeight
-        const content =
-          typeof node.content === 'string'
-            ? node.content
-            : node.content.map((s2) => s2.text).join('')
+        const content = resolveTextContent(node)
         return Math.max(Math.ceil(estimateTextWidth(content, fontSize, letterSpacing, fontWeight)), 1)
       }
     }
@@ -203,10 +200,7 @@ export function getNodeWidth(node: PenNode, parentAvail?: number): number {
     const fontSize = node.fontSize ?? 16
     const letterSpacing = node.letterSpacing ?? 0
     const fontWeight = node.fontWeight
-    const content =
-      typeof node.content === 'string'
-        ? node.content
-        : node.content.map((s) => s.text).join('')
+    const content = resolveTextContent(node)
     return Math.max(Math.ceil(estimateTextWidthPrecise(content, fontSize, letterSpacing, fontWeight)), 1)
   }
   return 0
