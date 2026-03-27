@@ -236,6 +236,15 @@ export class AgentToolExecutor {
     }
 
     const node = assignIds(args.data)
+
+    // Count total nodes created (root + all descendants)
+    const countNodes = (n: any): number => {
+      let c = 1
+      if (Array.isArray(n.children)) for (const ch of n.children) c += countNodes(ch)
+      return c
+    }
+    const totalNodes = countNodes(node)
+
     docStore.addNode(args.parent, node)
 
     // Run post-processing (same pipeline as MCP batch_design with postProcess=true)
@@ -245,7 +254,10 @@ export class AgentToolExecutor {
       // Post-processing is best-effort; don't fail the insert
     }
 
-    return { success: true, data: { id: node.id } }
+    return {
+      success: true,
+      data: { id: node.id, nodesCreated: totalNodes, message: `Created ${totalNodes} nodes successfully. Do NOT retry.` },
+    }
   }
 
   /**
