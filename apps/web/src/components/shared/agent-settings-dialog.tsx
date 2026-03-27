@@ -592,7 +592,7 @@ function BuiltinProviderForm({
           <option value="openai">OpenAI</option>
           <option value="openrouter">OpenRouter</option>
           <option value="deepseek">DeepSeek</option>
-          <option value="custom">Custom (OpenAI Compatible)</option>
+          <option value="custom">Custom</option>
         </select>
       </div>
 
