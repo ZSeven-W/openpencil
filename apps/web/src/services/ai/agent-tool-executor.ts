@@ -237,6 +237,14 @@ export class AgentToolExecutor {
     const { nanoid } = await import('nanoid')
     const docStore = useDocumentStore.getState()
 
+    // Some models send data as a JSON string instead of an object — parse it
+    let nodeData = args.data
+    if (typeof nodeData === 'string') {
+      try { nodeData = JSON.parse(nodeData) } catch {
+        return { success: false, error: 'Invalid node data: could not parse JSON string' }
+      }
+    }
+
     // Recursively assign IDs to the node and all nested children
     const assignIds = (data: Record<string, unknown>): PenNode => {
       const node = { ...data, id: nanoid() } as any
@@ -248,7 +256,7 @@ export class AgentToolExecutor {
       return node as PenNode
     }
 
-    const node = assignIds(args.data)
+    const node = assignIds(nodeData as Record<string, unknown>)
 
     // Count total nodes created (root + all descendants)
     const countNodes = (n: any): number => {
