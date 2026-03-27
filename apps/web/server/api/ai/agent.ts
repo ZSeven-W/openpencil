@@ -7,34 +7,60 @@ import {
   encodeAgentEvent,
 } from '@zseven-w/agent'
 import type { AuthLevel } from '@zseven-w/agent'
-import { z } from 'zod'
+import { jsonSchema } from '@zseven-w/agent'
 import { agentSessions } from '../../utils/agent-sessions'
 
-/** MVP tool schemas — duplicated here because Zod schemas can't be serialized over HTTP */
-const TOOL_SCHEMAS: Record<string, z.ZodType> = {
-  batch_get: z.object({
-    ids: z.array(z.string()).optional().describe('Node IDs to retrieve'),
-    patterns: z.array(z.string()).optional().describe('Search patterns'),
+/**
+ * Tool parameter schemas as clean JSON Schema (no $schema, no additionalProperties).
+ * Using jsonSchema() from AI SDK instead of Zod avoids extra fields that break
+ * strict OpenAI-compatible APIs (MiniMax, StepFun, etc.).
+ */
+const TOOL_SCHEMAS: Record<string, ReturnType<typeof jsonSchema>> = {
+  batch_get: jsonSchema({
+    type: 'object',
+    properties: {
+      ids: { type: 'array', items: { type: 'string' }, description: 'Node IDs to retrieve' },
+      patterns: { type: 'array', items: { type: 'string' }, description: 'Search patterns' },
+    },
   }),
-  snapshot_layout: z.object({
-    pageId: z.string().optional(),
+  snapshot_layout: jsonSchema({
+    type: 'object',
+    properties: {
+      pageId: { type: 'string', description: 'Target page ID (optional)' },
+    },
   }),
-  insert_node: z.object({
-    parent: z.string().nullable().describe('Parent node ID, or null for root'),
-    data: z.record(z.unknown()).describe('PenNode data'),
-    pageId: z.string().optional(),
+  insert_node: jsonSchema({
+    type: 'object',
+    properties: {
+      parent: { type: ['string', 'null'], description: 'Parent node ID, or null for root' },
+      data: { type: 'object', description: 'PenNode data with nested children' },
+      pageId: { type: 'string', description: 'Target page ID (optional)' },
+    },
+    required: ['parent', 'data'],
   }),
-  update_node: z.object({
-    id: z.string().describe('Node ID to update'),
-    data: z.record(z.unknown()).describe('Properties to update'),
+  update_node: jsonSchema({
+    type: 'object',
+    properties: {
+      id: { type: 'string', description: 'Node ID to update' },
+      data: { type: 'object', description: 'Properties to update' },
+    },
+    required: ['id', 'data'],
   }),
-  delete_node: z.object({
-    id: z.string().describe('Node ID to delete'),
+  delete_node: jsonSchema({
+    type: 'object',
+    properties: {
+      id: { type: 'string', description: 'Node ID to delete' },
+    },
+    required: ['id'],
   }),
-  find_empty_space: z.object({
-    width: z.number().describe('Required width'),
-    height: z.number().describe('Required height'),
-    pageId: z.string().optional(),
+  find_empty_space: jsonSchema({
+    type: 'object',
+    properties: {
+      width: { type: 'number', description: 'Required width' },
+      height: { type: 'number', description: 'Required height' },
+      pageId: { type: 'string', description: 'Target page ID (optional)' },
+    },
+    required: ['width', 'height'],
   }),
 }
 
@@ -119,7 +145,7 @@ export default defineEventHandler(async (event) => {
       name: def.name,
       description: def.description,
       level: def.level,
-      schema: TOOL_SCHEMAS[def.name] ?? z.object({}).passthrough(),
+      schema: TOOL_SCHEMAS[def.name] ?? jsonSchema({ type: 'object' }),
     })
   }
 

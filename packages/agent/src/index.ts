@@ -27,6 +27,9 @@ export { createDelegateTool } from './tools/delegate'
 export { createAgent } from './agent-loop'
 export type { AgentConfig, Agent } from './agent-loop'
 
+// Re-export AI SDK utilities needed by consumers
+export { jsonSchema } from 'ai'
+
 // Team
 export { createTeam } from './agent-team'
 export type { TeamConfig, TeamMemberConfig, AgentTeam } from './agent-team'

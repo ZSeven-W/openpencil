@@ -7,6 +7,33 @@ import type { AgentEvent } from './streaming/types'
 import type { ContextStrategy } from './context/types'
 import { createSlidingWindowStrategy } from './context/sliding-window'
 
+/**
+ * Appended to system prompt when tools are disabled (model doesn't support function calling).
+ * Tells the model to output design JSON in a code block — same approach as the CLI pipeline.
+ * The client parses the JSON and inserts nodes.
+ */
+const TEXT_MODE_SUFFIX = `
+
+## IMPORTANT: Text-Only Mode
+Function calling is not available. Instead, output your design as a JSON code block.
+Wrap the root node JSON in a \`\`\`json code fence. Example:
+
+\`\`\`json
+{
+  "type": "frame", "name": "Login Screen", "x": 0, "y": 0, "width": 390, "height": 844,
+  "fills": [{"type": "solid", "color": "#FFFFFF"}], "cornerRadius": 40,
+  "layout": "vertical", "padding": [60, 24, 40, 24], "gap": 16, "alignItems": "stretch",
+  "children": [
+    {"type": "text", "text": "Welcome", "fontSize": 28, "fontWeight": 700, "fills": [{"type": "solid", "color": "#1a1a2e"}]},
+    {"type": "frame", "name": "Button", "height": 48, "fills": [{"type": "solid", "color": "#4F46E5"}], "cornerRadius": 12, "justifyContent": "center", "alignItems": "center", "children": [
+      {"type": "text", "text": "Sign In", "fontSize": 16, "fontWeight": 600, "fills": [{"type": "solid", "color": "#FFFFFF"}]}
+    ]}
+  ]
+}
+\`\`\`
+
+Output ONE JSON code block with the complete design tree. Do NOT use function calls.`
+
 export interface AgentConfig {
   provider: AgentProvider
   tools: ToolRegistry
@@ -134,11 +161,17 @@ export function createAgent(config: AgentConfig): Agent {
         provider.maxContextTokens,
       )
 
+      // When tools are disabled (model doesn't support function calling),
+      // switch to text-based JSON output — same approach as the CLI pipeline.
+      const effectiveSystem = toolsDisabled
+        ? systemPrompt + TEXT_MODE_SUFFIX
+        : systemPrompt
+
       let response: ReturnType<typeof streamText>
       try {
         response = streamText({
           model: provider.model,
-          system: systemPrompt,
+          system: effectiveSystem,
           messages: trimmedMessages as ModelMessage[],
           tools: toolsDisabled ? undefined : tools.toAISDKFormat(),
           maxOutputTokens,
