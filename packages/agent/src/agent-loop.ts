@@ -23,6 +23,57 @@ export interface Agent {
   resolveToolResult(toolCallId: string, result: ToolResult): void
 }
 
+/** Classify API errors into actionable categories for the user. */
+function classifyAPIError(err: any): { userMessage: string; retryWithoutTools: boolean } {
+  const msg = err?.message ?? String(err)
+  const body = err?.responseBody ?? ''
+
+  // Model doesn't support function calling
+  if (
+    /tool_calls.*required|function.*arguments.*required|does not support.*tool/i.test(msg + body)
+  ) {
+    return {
+      userMessage: 'This model does not support function calling properly. The agent will try without tools.',
+      retryWithoutTools: true,
+    }
+  }
+
+  // OpenRouter privacy/guardrail restrictions
+  if (/No endpoints available.*guardrail|data policy/i.test(msg + body)) {
+    return {
+      userMessage: 'This model is blocked by your OpenRouter privacy settings. Visit https://openrouter.ai/settings/privacy to configure, or switch to a different model.',
+      retryWithoutTools: false,
+    }
+  }
+
+  // Credit/billing issues
+  if (/more credits|can only afford|insufficient.*funds|billing/i.test(msg + body)) {
+    return {
+      userMessage: 'Insufficient credits for this model. Try a smaller/free model or add credits at your provider.',
+      retryWithoutTools: false,
+    }
+  }
+
+  // Rate limiting
+  if (/rate.limit|too many requests|429/i.test(msg + body)) {
+    return {
+      userMessage: 'Rate limited by the API provider. Please wait a moment and try again.',
+      retryWithoutTools: false,
+    }
+  }
+
+  // Generic 400 — often means the model can't handle our request format
+  if (err?.statusCode === 400 && /provider returned error/i.test(msg + body)) {
+    return {
+      userMessage: 'The model returned an error. It may not support tool calling. Retrying without tools.',
+      retryWithoutTools: true,
+    }
+  }
+
+  // Fallback
+  return { userMessage: msg, retryWithoutTools: false }
+}
+
 export function createAgent(config: AgentConfig): Agent {
   const {
     provider,
@@ -67,6 +118,7 @@ export function createAgent(config: AgentConfig): Agent {
   async function* run(messages: ModelMessage[]): AsyncGenerator<AgentEvent> {
     let turn = 0
     const history = [...messages]
+    let toolsDisabled = false
 
     while (turn < maxTurns) {
       if (abortSignal?.aborted) {
@@ -82,14 +134,27 @@ export function createAgent(config: AgentConfig): Agent {
         provider.maxContextTokens,
       )
 
-      const response = streamText({
-        model: provider.model,
-        system: systemPrompt,
-        messages: trimmedMessages as ModelMessage[],
-        tools: tools.toAISDKFormat(),
-        maxOutputTokens,
-        abortSignal,
-      })
+      let response: ReturnType<typeof streamText>
+      try {
+        response = streamText({
+          model: provider.model,
+          system: systemPrompt,
+          messages: trimmedMessages as ModelMessage[],
+          tools: toolsDisabled ? undefined : tools.toAISDKFormat(),
+          maxOutputTokens,
+          abortSignal,
+        })
+      } catch (err: any) {
+        // Synchronous errors from streamText (rare — usually validation)
+        const { userMessage, retryWithoutTools } = classifyAPIError(err)
+        if (retryWithoutTools && !toolsDisabled) {
+          toolsDisabled = true
+          yield { type: 'error', message: userMessage, fatal: false }
+          continue // retry this turn without tools
+        }
+        yield { type: 'error', message: userMessage, fatal: true }
+        return
+      }
 
       // Collect tool calls emitted during this turn
       const pendingToolCalls: Array<{
@@ -98,35 +163,54 @@ export function createAgent(config: AgentConfig): Agent {
         input: unknown
       }> = []
 
-      // Use fullStream for interleaved text + tool_call + reasoning streaming
       let accumulatedText = ''
-      for await (const part of response.fullStream) {
-        switch (part.type) {
-          case 'text-delta':
-            if (part.text) {
-              accumulatedText += part.text
-              yield { type: 'text', content: part.text }
-            }
-            break
+      let streamError: any = null
 
-          case 'tool-call':
-            pendingToolCalls.push({
-              toolCallId: part.toolCallId,
-              toolName: part.toolName,
-              input: part.input,
-            })
-            break
+      try {
+        for await (const part of response.fullStream) {
+          switch (part.type) {
+            case 'text-delta':
+              if (part.text) {
+                accumulatedText += part.text
+                yield { type: 'text', content: part.text }
+              }
+              break
 
-          case 'reasoning-delta':
-            if (part.text) {
-              yield { type: 'thinking', content: part.text }
-            }
-            break
+            case 'tool-call':
+              pendingToolCalls.push({
+                toolCallId: part.toolCallId,
+                toolName: part.toolName,
+                input: part.input,
+              })
+              break
 
-          case 'error':
-            yield { type: 'error', message: String((part as any).error ?? 'Stream error'), fatal: false }
-            break
+            case 'reasoning-delta':
+              if (part.text) {
+                yield { type: 'thinking', content: part.text }
+              }
+              break
+
+            case 'error':
+              streamError = (part as any).error
+              break
+          }
         }
+      } catch (err: any) {
+        // API errors during streaming (tool_calls format issues, provider errors, etc.)
+        const { userMessage, retryWithoutTools } = classifyAPIError(err)
+        if (retryWithoutTools && !toolsDisabled && turn === 0) {
+          // Only auto-retry on the first turn — later turns have tool history
+          toolsDisabled = true
+          yield { type: 'error', message: userMessage, fatal: false }
+          continue
+        }
+        yield { type: 'error', message: userMessage, fatal: true }
+        return
+      }
+
+      // Handle stream-level errors
+      if (streamError) {
+        yield { type: 'error', message: String(streamError), fatal: false }
       }
 
       // No tool calls means the model is done
@@ -152,7 +236,6 @@ export function createAgent(config: AgentConfig): Agent {
         let toolResult: ToolResult
 
         if (tools.hasExecute(toolCall.toolName)) {
-          // Tool has an execute function — call it directly
           try {
             const tool = tools.get(toolCall.toolName)!
             const data = await tool.execute!(toolCall.input)
@@ -161,7 +244,6 @@ export function createAgent(config: AgentConfig): Agent {
             toolResult = { success: false, error: String(err) }
           }
         } else {
-          // Tool has no execute — suspend and wait for consumer to call resolveToolResult()
           toolResult = await waitForToolResult(toolCall.toolCallId)
         }
 
