@@ -352,6 +352,7 @@ const zhTW: TranslationKeys = {
   'agents.transport': '傳輸方式',
   'agents.port': '連接埠',
   'agents.mcpRestart': 'MCP 整合將在重新啟動終端機後生效。',
+  'agents.mcpReinstallHint': '升級 OpenPencil 版本後，請重新安裝 MCP 整合以確保相容性。',
   'agents.modelCount': '{{count}} 個模型',
   'agents.connectionFailed': '連線失敗',
   'agents.serverError': '伺服器錯誤 {{status}}',

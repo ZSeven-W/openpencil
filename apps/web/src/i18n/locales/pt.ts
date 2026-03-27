@@ -362,6 +362,8 @@ const pt: TranslationKeys = {
   'agents.port': 'Porta',
   'agents.mcpRestart':
     'As integrações MCP entrarão em vigor após reiniciar o terminal.',
+  'agents.mcpReinstallHint':
+    'Após atualizar o OpenPencil, reinstale as integrações MCP para garantir a compatibilidade.',
   'agents.modelCount': '{{count}} modelo(s)',
   'agents.connectionFailed': 'Falha na conexão',
   'agents.serverError': 'Erro do servidor {{status}}',

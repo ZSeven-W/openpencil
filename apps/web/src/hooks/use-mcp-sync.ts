@@ -54,10 +54,10 @@ export function useMcpSync() {
             clientIdRef.current = data.clientId
             // Push current document so MCP can read it immediately
             pushDocumentToServer(data.clientId)
-          } else if (data.type === 'document:update') {
+          } else if (data.type === 'document:update' || data.type === 'document:init') {
             const doc = data.document as PenDocument
             const childCount = doc.pages?.[0]?.children?.length ?? doc.children?.length ?? 0
-            console.log('[mcp-sync] Received document:update, top-level children:', childCount)
+            console.log(`[mcp-sync] Received ${data.type}, top-level children:`, childCount)
             // Suppress push-back for a short window — applyExternalDocument
             // may trigger multiple cascading setState calls.
             skipPushUntilRef.current = Date.now() + 200

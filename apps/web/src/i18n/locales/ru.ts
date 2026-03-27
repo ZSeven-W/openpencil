@@ -362,6 +362,8 @@ const ru: TranslationKeys = {
   'agents.port': 'Порт',
   'agents.mcpRestart':
     'Интеграции MCP вступят в силу после перезапуска терминала.',
+  'agents.mcpReinstallHint':
+    'После обновления OpenPencil переустановите интеграции MCP для обеспечения совместимости.',
   'agents.modelCount': '{{count}} модель(ей)',
   'agents.connectionFailed': 'Ошибка подключения',
   'agents.serverError': 'Ошибка сервера {{status}}',

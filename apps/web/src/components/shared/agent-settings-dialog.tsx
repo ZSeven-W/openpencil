@@ -952,7 +952,8 @@ function McpPage(props: McpPageProps) {
       {/* MCP Integrations */}
       <div>
         <h3 className="text-[15px] font-semibold text-foreground mb-1">{t('agents.mcpIntegrations')}</h3>
-        <p className="text-[11px] text-muted-foreground mb-3">{t('agents.mcpRestart')}</p>
+        <p className="text-[11px] text-muted-foreground mb-1">{t('agents.mcpRestart')}</p>
+        <p className="text-[11px] text-muted-foreground mb-3">{t('agents.mcpReinstallHint')}</p>
         <div className="grid grid-cols-2 gap-1.5">
           {mcpIntegrations.map((m) => (
             <div

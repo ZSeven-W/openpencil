@@ -360,6 +360,8 @@ const th: TranslationKeys = {
   'agents.port': 'พอร์ต',
   'agents.mcpRestart':
     'การผสานรวม MCP จะมีผลหลังจากรีสตาร์ทเทอร์มินัล',
+  'agents.mcpReinstallHint':
+    'หลังจากอัปเกรด OpenPencil กรุณาติดตั้ง MCP Integration ใหม่เพื่อให้แน่ใจว่าเข้ากันได้',
   'agents.modelCount': '{{count}} โมเดล',
   'agents.connectionFailed': 'การเชื่อมต่อล้มเหลว',
   'agents.serverError': 'ข้อผิดพลาดของเซิร์ฟเวอร์ {{status}}',

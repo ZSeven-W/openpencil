@@ -280,5 +280,18 @@ export function resolveNodeForCanvas(
     }
   }
 
+  // Recurse into children
+  if ('children' in node && node.children) {
+    const children = node.children
+    const resolvedChildren = children.map((child) =>
+      resolveNodeForCanvas(child, variables, activeTheme),
+    )
+    // Only allocate new array if any child actually changed
+    if (resolvedChildren.some((rc, i) => rc !== children[i])) {
+      out.children = resolvedChildren
+      changed = true
+    }
+  }
+
   return changed ? (out as unknown as PenNode) : node
 }

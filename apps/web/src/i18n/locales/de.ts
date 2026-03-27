@@ -362,6 +362,8 @@ const de: TranslationKeys = {
   'agents.port': 'Port',
   'agents.mcpRestart':
     'MCP-Integrationen werden nach einem Neustart des Terminals wirksam.',
+  'agents.mcpReinstallHint':
+    'Bitte installieren Sie die MCP-Integrationen nach einem OpenPencil-Upgrade erneut, um die Kompatibilität sicherzustellen.',
   'agents.modelCount': '{{count}} Modell(e)',
   'agents.connectionFailed': 'Verbindung fehlgeschlagen',
   'agents.serverError': 'Serverfehler {{status}}',

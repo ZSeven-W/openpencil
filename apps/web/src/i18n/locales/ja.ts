@@ -363,6 +363,8 @@ const ja: TranslationKeys = {
   'agents.port': 'ポート',
   'agents.mcpRestart':
     'MCP 連携はターミナルの再起動後に有効になります。',
+  'agents.mcpReinstallHint':
+    'OpenPencil のバージョンアップ後、互換性を確保するため MCP 統合を再インストールしてください。',
   'agents.modelCount': '{{count}} 個のモデル',
   'agents.connectionFailed': '接続に失敗しました',
   'agents.serverError': 'サーバーエラー {{status}}',

@@ -360,6 +360,8 @@ const vi: TranslationKeys = {
   'agents.port': 'Cổng',
   'agents.mcpRestart':
     'Các tích hợp MCP sẽ có hiệu lực sau khi khởi động lại terminal.',
+  'agents.mcpReinstallHint':
+    'Sau khi nâng cấp OpenPencil, vui lòng cài đặt lại tích hợp MCP để đảm bảo tương thích.',
   'agents.modelCount': '{{count}} mô hình',
   'agents.connectionFailed': 'Kết nối thất bại',
   'agents.serverError': 'Lỗi máy chủ {{status}}',

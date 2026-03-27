@@ -558,7 +558,7 @@ async function connectOpenCode(): Promise<ConnectResult> {
 
     const { getOpencodeClient, releaseOpencodeServer } = await import('../../utils/opencode-client')
     serverLog.info('[connect-agent] creating opencode client...')
-    const { client, server } = await getOpencodeClient()
+    const { client, server } = await getOpencodeClient(binaryPath)
 
     serverLog.info('[connect-agent] fetching opencode providers...')
     const { data, error } = await client.config.providers()
@@ -608,12 +608,15 @@ async function connectOpenCode(): Promise<ConnectResult> {
 async function connectCopilot(): Promise<ConnectResult> {
   serverLog.info('[connect-agent] connecting to Copilot...')
   // Use standalone copilot binary to avoid Bun's node:sqlite issue
-  const { resolveCopilotCli } = await import('../../utils/copilot-client')
-  const cliPath = resolveCopilotCli()
-  serverLog.info(`[connect-agent] resolved copilot path: ${cliPath ?? 'NOT FOUND'}`)
-  if (!cliPath) {
+  const { resolveCopilotCli, resolveCliPathForSdk } = await import('../../utils/copilot-client')
+  const rawCliPath = resolveCopilotCli()
+  serverLog.info(`[connect-agent] resolved copilot path: ${rawCliPath ?? 'NOT FOUND'}`)
+  if (!rawCliPath) {
     return { connected: false, models: [], notInstalled: true, error: 'GitHub Copilot CLI not found' }
   }
+
+  // On Windows, .cmd wrappers cause "spawn EINVAL" — resolve to .js entry point
+  const cliPath = resolveCliPathForSdk(rawCliPath)
 
   try {
     const { CopilotClient } = await import('@github/copilot-sdk')

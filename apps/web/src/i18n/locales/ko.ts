@@ -360,6 +360,8 @@ const ko: TranslationKeys = {
   'agents.port': '포트',
   'agents.mcpRestart':
     'MCP 연동은 터미널을 재시작한 후 적용됩니다.',
+  'agents.mcpReinstallHint':
+    'OpenPencil 버전 업그레이드 후 호환성을 위해 MCP 통합을 다시 설치해 주세요.',
   'agents.modelCount': '모델 {{count}}개',
   'agents.connectionFailed': '연결 실패',
   'agents.serverError': '서버 오류 {{status}}',

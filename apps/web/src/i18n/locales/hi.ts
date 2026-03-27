@@ -360,6 +360,8 @@ const hi: TranslationKeys = {
   'agents.port': 'पोर्ट',
   'agents.mcpRestart':
     'MCP इंटीग्रेशन टर्मिनल पुनः आरंभ करने के बाद प्रभावी होंगे।',
+  'agents.mcpReinstallHint':
+    'OpenPencil अपग्रेड करने के बाद, संगतता सुनिश्चित करने के लिए कृपया MCP इंटीग्रेशन पुनः इंस्टॉल करें।',
   'agents.modelCount': '{{count}} मॉडल',
   'agents.connectionFailed': 'कनेक्शन विफल',
   'agents.serverError': 'सर्वर त्रुटि {{status}}',

@@ -847,8 +847,10 @@ function streamViaCopilot(body: ChatBody, model?: string) {
       try {
         const { CopilotClient, approveAll } = await import('@github/copilot-sdk')
         // Use standalone copilot binary to avoid Bun's node:sqlite issue
-        const { resolveCopilotCli } = await import('../../utils/copilot-client')
-        const cliPath = resolveCopilotCli()
+        const { resolveCopilotCli, resolveCliPathForSdk } = await import('../../utils/copilot-client')
+        const rawCliPath = resolveCopilotCli()
+        // On Windows, .cmd wrappers cause "spawn EINVAL" — resolve to .js entry point
+        const cliPath = rawCliPath ? resolveCliPathForSdk(rawCliPath) : undefined
         const client = new CopilotClient({
           autoStart: true,
           ...(cliPath ? { cliPath } : {}),

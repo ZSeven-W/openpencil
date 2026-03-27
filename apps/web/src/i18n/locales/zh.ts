@@ -352,6 +352,7 @@ const zh: TranslationKeys = {
   'agents.transport': '传输方式',
   'agents.port': '端口',
   'agents.mcpRestart': 'MCP 集成将在重启终端后生效。',
+  'agents.mcpReinstallHint': '升级 OpenPencil 版本后，请重新安装 MCP 集成以确保兼容性。',
   'agents.modelCount': '{{count}} 个模型',
   'agents.connectionFailed': '连接失败',
   'agents.serverError': '服务器错误 {{status}}',

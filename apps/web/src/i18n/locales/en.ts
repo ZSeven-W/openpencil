@@ -358,6 +358,8 @@ const en = {
   'agents.port': 'Port',
   'agents.mcpRestart':
     'MCP integrations will take effect after restarting the terminal.',
+  'agents.mcpReinstallHint':
+    'After upgrading OpenPencil, please reinstall MCP integrations to ensure compatibility.',
   'agents.modelCount': '{{count}} model(s)',
   'agents.connectionFailed': 'Connection failed',
   'agents.serverError': 'Server error {{status}}',

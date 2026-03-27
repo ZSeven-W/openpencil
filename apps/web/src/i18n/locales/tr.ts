@@ -360,6 +360,8 @@ const tr: TranslationKeys = {
   'agents.port': 'Port',
   'agents.mcpRestart':
     'MCP entegrasyonları terminal yeniden başlatıldıktan sonra etkin olacaktır.',
+  'agents.mcpReinstallHint':
+    'OpenPencil\'i yükselttikten sonra uyumluluğu sağlamak için MCP entegrasyonlarını yeniden yükleyin.',
   'agents.modelCount': '{{count}} model',
   'agents.connectionFailed': 'Bağlantı başarısız',
   'agents.serverError': 'Sunucu hatası {{status}}',

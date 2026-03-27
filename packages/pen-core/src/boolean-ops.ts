@@ -47,8 +47,13 @@ let scope: PaperScope | null = null
 function getPaperModule(): PaperModule | null {
   if (paperModule !== undefined) return paperModule
   try {
-    const nodeRequire = eval('require') as NodeRequire
-    paperModule = nodeRequire('paper') as PaperModule
+    // Indirect require via globalThis to load paper.js at runtime without
+    // triggering esbuild's direct-eval warning. The assignment to globalThis
+    // happens once; subsequent calls read from the cached paperModule.
+    const _r = (globalThis as any)['require'] as NodeRequire | undefined
+      ?? (typeof require !== 'undefined' ? require : undefined)
+    if (!_r) throw new Error('require not available')
+    paperModule = _r('paper') as PaperModule
   } catch {
     paperModule = null
   }

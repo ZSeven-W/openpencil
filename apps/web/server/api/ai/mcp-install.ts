@@ -2,7 +2,7 @@ import { defineEventHandler, readBody, setResponseHeaders } from 'h3'
 import { homedir } from 'node:os'
 import { join, resolve, dirname } from 'node:path'
 import { readFile, writeFile, mkdir } from 'node:fs/promises'
-import { existsSync } from 'node:fs'
+import { existsSync, readdirSync, statSync } from 'node:fs'
 import { execSync, execFileSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 
@@ -70,20 +70,46 @@ let _nodeAvailable: boolean | null = null
 let _nodeCommand: string | null = null
 
 function nodeCandidates(): string[] {
-  return process.platform === 'win32'
-    ? [
-        'node.exe',
-        join(process.env.ProgramFiles ?? 'C:\\Program Files', 'nodejs', 'node.exe'),
-        join(process.env.LOCALAPPDATA ?? '', 'fnm_multishells', '**', 'node.exe'),
-        join(homedir(), '.nvm', 'current', 'bin', 'node.exe'),
-      ]
-    : [
-        'node',
-        '/usr/local/bin/node',
-        '/usr/bin/node',
-        join(homedir(), '.nvm', 'versions', 'node'),
-        '/opt/homebrew/bin/node',
-      ]
+  if (process.platform === 'win32') {
+    return [
+      'node.exe',
+      join(process.env.ProgramFiles ?? 'C:\\Program Files', 'nodejs', 'node.exe'),
+      join(process.env.LOCALAPPDATA ?? '', 'fnm_multishells', '**', 'node.exe'),
+      join(homedir(), '.nvm', 'current', 'bin', 'node.exe'),
+    ]
+  }
+
+  const candidates = [
+    'node',
+    '/usr/local/bin/node',
+    '/usr/bin/node',
+    '/opt/homebrew/bin/node',
+  ]
+
+  // NVM: resolve the active node version via the symlink or by reading
+  // .nvm/alias/default, then constructing the versioned bin path.
+  // The old path (`.nvm/versions/node`) is a directory, not a binary —
+  // existsSync would return true but executing it gives "Permission denied".
+  const nvmDir = join(homedir(), '.nvm')
+  const nvmCurrent = join(nvmDir, 'current', 'bin', 'node')
+  candidates.push(nvmCurrent)
+
+  // Fallback: if NVM_DIR/current doesn't exist, find the highest installed version
+  if (!existsSync(nvmCurrent)) {
+    const versionsDir = join(nvmDir, 'versions', 'node')
+    if (existsSync(versionsDir)) {
+      try {
+        const versions = readdirSync(versionsDir)
+          .filter((d) => d.startsWith('v'))
+          .sort()
+        if (versions.length > 0) {
+          candidates.push(join(versionsDir, versions[versions.length - 1], 'bin', 'node'))
+        }
+      } catch { /* ignore */ }
+    }
+  }
+
+  return candidates
 }
 
 function isNodeAvailable(): boolean {
@@ -103,13 +129,18 @@ function isNodeAvailable(): boolean {
     return true
   } catch { /* not on PATH */ }
 
-  // Check common absolute paths (macOS/Linux + Windows)
+  // Check common absolute paths (macOS/Linux + Windows).
+  // Must verify the path is a file, not a directory — existsSync returns
+  // true for directories, which caused the NVM versions dir to be treated
+  // as a node binary.
   for (const p of nodeCandidates().slice(1)) {
-    if (existsSync(p)) {
-      _nodeCommand = p
-      _nodeAvailable = true
-      return true
-    }
+    try {
+      if (existsSync(p) && statSync(p).isFile()) {
+        _nodeCommand = p
+        _nodeAvailable = true
+        return true
+      }
+    } catch { /* ignore stat errors */ }
   }
 
   _nodeAvailable = false
