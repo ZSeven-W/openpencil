@@ -146,11 +146,11 @@ export function createAgent(config: AgentConfig): Agent {
         })
       } catch (err: any) {
         // Synchronous errors from streamText (rare — usually validation)
-        const { userMessage, retryWithoutTools } = classifyAPIError(err)
-        if (retryWithoutTools && !toolsDisabled) {
+        const { userMessage } = classifyAPIError(err)
+        if (!toolsDisabled && turn === 0) {
           toolsDisabled = true
-          yield { type: 'error', message: userMessage, fatal: false }
-          continue // retry this turn without tools
+          yield { type: 'error', message: `Tool calling failed: ${userMessage}. Retrying without tools.`, fatal: false }
+          continue
         }
         yield { type: 'error', message: userMessage, fatal: true }
         return
@@ -198,10 +198,10 @@ export function createAgent(config: AgentConfig): Agent {
       } catch (err: any) {
         // API errors during streaming (tool_calls format issues, provider errors, etc.)
         const { userMessage, retryWithoutTools } = classifyAPIError(err)
-        if (retryWithoutTools && !toolsDisabled && turn === 0) {
-          // Only auto-retry on the first turn — later turns have tool history
+        if (!toolsDisabled && turn === 0) {
+          // On first turn, always retry without tools — many models have broken tool support
           toolsDisabled = true
-          yield { type: 'error', message: userMessage, fatal: false }
+          yield { type: 'error', message: retryWithoutTools ? userMessage : `Tool calling failed: ${userMessage}. Retrying without tools.`, fatal: false }
           continue
         }
         yield { type: 'error', message: userMessage, fatal: true }
