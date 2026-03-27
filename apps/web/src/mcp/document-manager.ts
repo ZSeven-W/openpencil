@@ -17,6 +17,26 @@ export function resolveDocPath(filePath?: string): string {
   return resolve(filePath)
 }
 
+// ---------------------------------------------------------------------------
+// Sync URL cache — avoids repeated port file reads + health checks
+// ---------------------------------------------------------------------------
+
+let _cachedSyncUrl: string | null = null
+let _cachedSyncUrlTime = 0
+const SYNC_URL_TTL = 30_000 // 30 seconds
+
+/** Pre-set the sync URL (e.g. from CLI connection discovery). */
+export function setSyncUrl(url: string): void {
+  _cachedSyncUrl = url
+  _cachedSyncUrlTime = Date.now()
+}
+
+/** Clear the cached sync URL (e.g. after connection failure). */
+export function clearSyncUrl(): void {
+  _cachedSyncUrl = null
+  _cachedSyncUrlTime = 0
+}
+
 const PORT_FILE_PATH = join(homedir(), PORT_FILE_DIR_NAME, PORT_FILE_NAME)
 const SYNC_BASE_URLS = ['http://127.0.0.1', 'http://localhost']
 
@@ -111,8 +131,17 @@ function isPidAlive(pid: number): boolean {
 
 /** Read the port file and return the Nitro sync base URL, or null if unavailable. */
 export async function getSyncUrl(): Promise<string | null> {
+  // Use cached URL if still fresh
+  if (_cachedSyncUrl && Date.now() - _cachedSyncUrlTime < SYNC_URL_TTL) {
+    return _cachedSyncUrl
+  }
   const state = await getLiveSyncState()
-  return state.status === 'connected' || state.status === 'no-document' ? state.url : null
+  if ((state.status === 'connected' || state.status === 'no-document') && state.url) {
+    _cachedSyncUrl = state.url
+    _cachedSyncUrlTime = Date.now()
+    return state.url
+  }
+  return null
 }
 
 /** Inspect the current live canvas sync state with a user-facing diagnosis. */
@@ -172,10 +201,29 @@ export async function getLiveSyncState(): Promise<LiveSyncState> {
 
 /** Fetch the current document from the live Electron canvas. */
 async function fetchLiveDocument(): Promise<PenDocument> {
+  // Fast path: use cached sync URL
+  const cachedUrl = _cachedSyncUrl && Date.now() - _cachedSyncUrlTime < SYNC_URL_TTL
+    ? _cachedSyncUrl : null
+
+  if (cachedUrl) {
+    try {
+      const res = await fetch(`${cachedUrl}/api/mcp/document`)
+      if (res.ok) {
+        const data = (await res.json()) as { document: PenDocument }
+        return data.document
+      }
+    } catch {
+      // Cache stale — fall through to full discovery
+      clearSyncUrl()
+    }
+  }
+
   const sync = await getLiveSyncState()
   if (!sync.url || sync.status !== 'connected') {
     throw new Error(sync.message)
   }
+  _cachedSyncUrl = sync.url
+  _cachedSyncUrlTime = Date.now()
   const res = await fetch(`${sync.url}/api/mcp/document`)
   if (!res.ok) {
     const body = await res.json().catch(() => ({} as Record<string, unknown>))
@@ -189,7 +237,10 @@ async function fetchLiveDocument(): Promise<PenDocument> {
 
 /** Push document to the live Electron canvas. Fails silently if unavailable. */
 async function pushLiveDocument(doc: PenDocument): Promise<void> {
-  const syncUrl = await getSyncUrl()
+  // Fast path: use cached sync URL
+  const cachedUrl = _cachedSyncUrl && Date.now() - _cachedSyncUrlTime < SYNC_URL_TTL
+    ? _cachedSyncUrl : null
+  const syncUrl = cachedUrl ?? await getSyncUrl()
   if (!syncUrl) return
   try {
     await fetch(`${syncUrl}/api/mcp/document`, {
@@ -199,6 +250,7 @@ async function pushLiveDocument(doc: PenDocument): Promise<void> {
     })
   } catch {
     // Network error — Electron might have quit between check and request
+    clearSyncUrl()
   }
 }
 
@@ -298,6 +350,19 @@ export async function fileExists(filePath: string): Promise<boolean> {
 
 /** Fetch the current selection from the live Electron canvas. */
 export async function fetchLiveSelection(): Promise<{ selectedIds: string[]; activePageId: string | null }> {
+  // Fast path: use cached sync URL
+  const cachedUrl = _cachedSyncUrl && Date.now() - _cachedSyncUrlTime < SYNC_URL_TTL
+    ? _cachedSyncUrl : null
+
+  if (cachedUrl) {
+    try {
+      const res = await fetch(`${cachedUrl}/api/mcp/selection`)
+      if (res.ok) return (await res.json()) as { selectedIds: string[]; activePageId: string | null }
+    } catch {
+      clearSyncUrl()
+    }
+  }
+
   const sync = await getLiveSyncState()
   if (!sync.url) {
     throw new Error(sync.message)
@@ -305,6 +370,8 @@ export async function fetchLiveSelection(): Promise<{ selectedIds: string[]; act
   if (sync.status === 'no-document') {
     return { selectedIds: [], activePageId: null }
   }
+  _cachedSyncUrl = sync.url
+  _cachedSyncUrlTime = Date.now()
   try {
     const res = await fetch(`${sync.url}/api/mcp/selection`)
     if (!res.ok) return { selectedIds: [], activePageId: null }
