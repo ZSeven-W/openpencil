@@ -245,18 +245,27 @@ export class AgentToolExecutor {
       }
     }
 
-    // Recursively assign IDs to the node and all nested children
-    const assignIds = (data: Record<string, unknown>): PenNode => {
-      const node = { ...data, id: nanoid() } as any
-      if (Array.isArray(node.children)) {
-        node.children = node.children.map((child: Record<string, unknown>) =>
-          assignIds(child),
-        )
+    // Recursively assign IDs and sanitize invalid properties
+    const sanitizeAndAssignIds = (data: Record<string, unknown>): PenNode => {
+      const n = { ...data, id: nanoid() } as any
+      // Convert 'border' → 'strokes' (common model mistake)
+      if (n.border && !n.strokes) {
+        n.strokes = [n.border]
+        delete n.border
       }
-      return node as PenNode
+      // Ensure children is a valid array
+      if (n.children && !Array.isArray(n.children)) {
+        delete n.children
+      }
+      if (Array.isArray(n.children)) {
+        n.children = n.children
+          .filter((child: unknown) => child != null && typeof child === 'object')
+          .map((child: Record<string, unknown>) => sanitizeAndAssignIds(child))
+      }
+      return n as PenNode
     }
 
-    const node = assignIds(nodeData as Record<string, unknown>)
+    const node = sanitizeAndAssignIds(nodeData as Record<string, unknown>)
 
     // Count total nodes created (root + all descendants)
     const countNodes = (n: any): number => {
@@ -266,7 +275,14 @@ export class AgentToolExecutor {
     }
     const totalNodes = countNodes(node)
 
-    docStore.addNode(args.parent, node)
+    // addNode may trigger canvas sync side-effects that throw
+    // (e.g., renderer processing unknown node properties)
+    // Catch and continue — the node IS inserted even if sync fails
+    try {
+      docStore.addNode(args.parent, node)
+    } catch {
+      // Side-effect error — node may still be in the store
+    }
 
     // Track root-level insert to prevent duplicates
     if (args.parent === null) {
@@ -277,7 +293,7 @@ export class AgentToolExecutor {
     try {
       await this.postProcessNode(node.id)
     } catch {
-      // Post-processing is best-effort; don't fail the insert
+      // Post-processing is best-effort
     }
 
     return {
