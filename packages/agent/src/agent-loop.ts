@@ -300,7 +300,9 @@ export function createAgent(config: AgentConfig): Agent {
       turn++
     }
 
-    yield { type: 'error', message: `Max turns (${maxTurns}) reached`, fatal: false }
+    // Reached max turns — treat as a normal completion, not an error.
+    // The model may have done useful work even if it didn't finish cleanly.
+    yield { type: 'done', totalTurns: maxTurns }
   }
 
   return { run, resolveToolResult }
