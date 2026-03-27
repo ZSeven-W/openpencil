@@ -15,6 +15,8 @@ const WRITE_LEVELS: Set<AuthLevel> = new Set(['create', 'modify', 'delete'])
  */
 export class AgentToolExecutor {
   private sessionId: string
+  /** Track root-level insert to prevent duplicate designs */
+  private rootInsertId: string | null = null
 
   constructor(sessionId: string) {
     this.sessionId = sessionId
@@ -220,6 +222,17 @@ export class AgentToolExecutor {
   private async handleInsertNode(
     args: { parent: string | null; data: Record<string, unknown>; pageId?: string },
   ): Promise<ToolResult> {
+    // Prevent duplicate root-level design inserts (common with weaker models)
+    if (args.parent === null && this.rootInsertId) {
+      return {
+        success: true,
+        data: {
+          id: this.rootInsertId,
+          message: `Design already created (id: ${this.rootInsertId}). Use update_node to modify it. Do NOT insert again.`,
+        },
+      }
+    }
+
     const { useDocumentStore } = await import('@/stores/document-store')
     const { nanoid } = await import('nanoid')
     const docStore = useDocumentStore.getState()
@@ -247,6 +260,11 @@ export class AgentToolExecutor {
 
     docStore.addNode(args.parent, node)
 
+    // Track root-level insert to prevent duplicates
+    if (args.parent === null) {
+      this.rootInsertId = node.id
+    }
+
     // Run post-processing (same pipeline as MCP batch_design with postProcess=true)
     try {
       await this.postProcessNode(node.id)
@@ -256,7 +274,7 @@ export class AgentToolExecutor {
 
     return {
       success: true,
-      data: { id: node.id, nodesCreated: totalNodes, message: `Created ${totalNodes} nodes successfully. Do NOT retry.` },
+      data: { id: node.id, nodesCreated: totalNodes, message: `Created ${totalNodes} nodes successfully. Do NOT retry or create again.` },
     }
   }
 
