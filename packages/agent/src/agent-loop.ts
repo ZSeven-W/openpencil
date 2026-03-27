@@ -28,9 +28,9 @@ function classifyAPIError(err: any): { userMessage: string; retryWithoutTools: b
   const msg = err?.message ?? String(err)
   const body = err?.responseBody ?? ''
 
-  // Model doesn't support function calling
+  // Model doesn't support function calling properly
   if (
-    /tool_calls.*required|function.*arguments.*required|does not support.*tool/i.test(msg + body)
+    /tool_calls.*required|function.*arguments.*required|invalid.*function.*arguments|does not support.*tool/i.test(msg + body)
   ) {
     return {
       userMessage: 'This model does not support function calling properly. The agent will try without tools.',
