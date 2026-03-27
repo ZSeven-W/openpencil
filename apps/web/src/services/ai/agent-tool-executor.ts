@@ -1,4 +1,5 @@
 import type { AgentEvent, ToolResult, AuthLevel } from '@zseven-w/agent'
+import type { PenNode } from '@/types/pen'
 
 type ToolCallEvent = Extract<AgentEvent, { type: 'tool_call' }>
 
@@ -23,9 +24,6 @@ export class AgentToolExecutor {
     const { id, name, args, level } = toolCall
     const isWrite = WRITE_LEVELS.has(level)
 
-    // Wrap write operations in an undo batch so the entire tool call is a
-    // single undo step (the store methods call pushState internally, which
-    // becomes a no-op while a batch is active).
     if (isWrite) {
       const { useHistoryStore } = await import('@/stores/history-store')
       const { useDocumentStore } = await import('@/stores/document-store')
@@ -45,7 +43,6 @@ export class AgentToolExecutor {
       useHistoryStore.getState().endBatch(useDocumentStore.getState().document)
     }
 
-    // POST result back to the server to unblock the agent loop
     await fetch('/api/ai/agent?action=result', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -95,7 +92,6 @@ export class AgentToolExecutor {
     const docStore = useDocumentStore.getState()
 
     if (!args.ids?.length && !args.patterns?.length) {
-      // Return top-level children summary when no filters given
       const children = docStore.document.children ?? []
       const nodes = children.map((n) => ({
         id: n.id,
@@ -108,7 +104,6 @@ export class AgentToolExecutor {
     const results: Record<string, unknown>[] = []
     const seen = new Set<string>()
 
-    // Search by IDs
     if (args.ids?.length) {
       for (const id of args.ids) {
         if (seen.has(id)) continue
@@ -120,7 +115,6 @@ export class AgentToolExecutor {
       }
     }
 
-    // Search by name patterns
     if (args.patterns?.length) {
       const flat = docStore.getFlatNodes()
       for (const pattern of args.patterns) {
@@ -203,7 +197,6 @@ export class AgentToolExecutor {
       return { success: true, data: { x: 0, y: 0 } }
     }
 
-    // Compute combined bounding box, then place to the right (matching MCP default "right" direction)
     let minY = Infinity
     let maxX = -Infinity
     for (const node of children) {
@@ -219,15 +212,93 @@ export class AgentToolExecutor {
   // Write tools
   // ---------------------------------------------------------------------------
 
+  /**
+   * Insert a node with full support for nested children.
+   * After insertion, runs the same post-processing as the MCP batch_design:
+   * role resolution, icon resolution, layout sanitization, unique IDs.
+   */
   private async handleInsertNode(
     args: { parent: string | null; data: Record<string, unknown>; pageId?: string },
   ): Promise<ToolResult> {
     const { useDocumentStore } = await import('@/stores/document-store')
     const { nanoid } = await import('nanoid')
     const docStore = useDocumentStore.getState()
-    const node = { ...args.data, id: args.data.id ?? nanoid() } as import('@/types/pen').PenNode
+
+    // Recursively assign IDs to the node and all nested children
+    const assignIds = (data: Record<string, unknown>): PenNode => {
+      const node = { ...data, id: nanoid() } as any
+      if (Array.isArray(node.children)) {
+        node.children = node.children.map((child: Record<string, unknown>) =>
+          assignIds(child),
+        )
+      }
+      return node as PenNode
+    }
+
+    const node = assignIds(args.data)
     docStore.addNode(args.parent, node)
+
+    // Run post-processing (same pipeline as MCP batch_design with postProcess=true)
+    try {
+      await this.postProcessNode(node.id)
+    } catch {
+      // Post-processing is best-effort; don't fail the insert
+    }
+
     return { success: true, data: { id: node.id } }
+  }
+
+  /**
+   * Post-process an inserted node tree — same pipeline as MCP batch_design:
+   * 1. Role resolution (semantic defaults for buttons, cards, etc.)
+   * 2. Icon resolution (icon names → SVG paths)
+   * 3. Layout sanitization (remove x/y from layout children)
+   * 4. Unique ID enforcement
+   */
+  private async postProcessNode(nodeId: string): Promise<void> {
+    const { useDocumentStore, getAllChildren } = await import('@/stores/document-store')
+    const docStore = useDocumentStore.getState()
+    const node = docStore.getNodeById(nodeId)
+    if (!node || !('children' in node) || !node.children?.length) return
+
+    const { flattenNodes } = await import('@/stores/document-tree-utils')
+    const { resolveTreeRoles, resolveTreePostPass } =
+      await import('@/services/ai/role-resolver')
+    await import('@/services/ai/role-definitions/index')
+    const { applyIconPathResolution, applyNoEmojiIconHeuristic } =
+      await import('@/services/ai/icon-resolver')
+    const { ensureUniqueNodeIds, sanitizeLayoutChildPositions } =
+      await import('@/services/ai/design-node-sanitization')
+
+    // Work on the node directly (functions expect PenNode, not array)
+    const target = node as PenNode
+
+    // Determine canvas width (mobile: 375, desktop: 1200)
+    const isMobile = (target as any).width <= 500
+    const canvasWidth = isMobile ? 375 : 1200
+
+    // 1. Role resolution
+    resolveTreeRoles(target, canvasWidth)
+    resolveTreePostPass(target, canvasWidth)
+
+    // 2. Icon + emoji resolution
+    const flat = flattenNodes([target])
+    for (const n of flat) {
+      if (n.type === 'path') applyIconPathResolution(n as any)
+      if (n.type === 'text') applyNoEmojiIconHeuristic(n as any)
+    }
+
+    // 3. Unique IDs
+    const allChildren = getAllChildren(docStore.document)
+    const usedIds = new Set(flattenNodes(allChildren).map((n) => n.id))
+    const idCounters = new Map<string, number>()
+    ensureUniqueNodeIds(target, usedIds, idCounters)
+
+    // 4. Layout sanitization
+    sanitizeLayoutChildPositions(target, false)
+
+    // Apply the processed node back (updateNode merges properties)
+    docStore.updateNode(nodeId, target as any)
   }
 
   private async handleUpdateNode(
@@ -239,7 +310,7 @@ export class AgentToolExecutor {
     if (!existing) {
       return { success: false, error: `Node not found: ${args.id}` }
     }
-    docStore.updateNode(args.id, args.data as Partial<import('@/types/pen').PenNode>)
+    docStore.updateNode(args.id, args.data as Partial<PenNode>)
     return { success: true }
   }
 
