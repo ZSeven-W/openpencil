@@ -213,7 +213,7 @@ export function createAgent(config: AgentConfig): Agent {
               pendingToolCalls.push({
                 toolCallId: part.toolCallId,
                 toolName: part.toolName,
-                input: part.input,
+                input: part.input ?? {},
               })
               break
 
@@ -230,11 +230,15 @@ export function createAgent(config: AgentConfig): Agent {
         }
       } catch (err: any) {
         // API errors during streaming (tool_calls format issues, provider errors, etc.)
-        const { userMessage, retryWithoutTools } = classifyAPIError(err)
-        if (!toolsDisabled && turn === 0) {
-          // On first turn, always retry without tools — many models have broken tool support
+        const { userMessage } = classifyAPIError(err)
+        if (!toolsDisabled) {
+          // Retry without tools — strip tool history and restart from user messages only
           toolsDisabled = true
-          yield { type: 'error', message: retryWithoutTools ? userMessage : `Tool calling failed: ${userMessage}. Retrying without tools.`, fatal: false }
+          // Reset history to original user messages (remove tool call/result entries)
+          history.length = 0
+          history.push(...messages)
+          turn = 0
+          yield { type: 'error', message: `Tool calling failed: ${userMessage}. Retrying without tools.`, fatal: false }
           continue
         }
         yield { type: 'error', message: userMessage, fatal: true }
@@ -305,7 +309,9 @@ export function createAgent(config: AgentConfig): Agent {
           type: 'tool-call' as const,
           toolCallId: tc.toolCallId,
           toolName: tc.toolName,
-          args: tc.input,
+          // Ensure args is always a valid object — undefined/null args causes
+          // strict APIs (MiniMax) to reject with "invalid function arguments json string"
+          args: tc.input ?? {},
         })
       }
       history.push({
