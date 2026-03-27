@@ -298,42 +298,35 @@ export function createAgent(config: AgentConfig): Agent {
         }
       }
 
-      // Manually construct ModelMessage[] for conversation history.
-      // Include BOTH text and tool-call parts so the model retains context.
-      const assistantParts: any[] = []
-      if (accumulatedText) {
-        assistantParts.push({ type: 'text' as const, text: accumulatedText })
-      }
-      for (const tc of pendingToolCalls) {
-        assistantParts.push({
-          type: 'tool-call' as const,
-          toolCallId: tc.toolCallId,
-          toolName: tc.toolName,
-          // Ensure args is always a valid object — undefined/null args causes
-          // strict APIs (MiniMax) to reject with "invalid function arguments json string"
-          args: tc.input ?? {},
-        })
-      }
-      history.push({
-        role: 'assistant' as const,
-        content: assistantParts,
-      } as unknown as ModelMessage)
+      // Use the SDK's own response messages for conversation history.
+      // This ensures correct format conversion (arguments stringification, etc.)
+      // instead of manually constructing ModelMessage[] which loses format details.
+      const resolved = await response.response
+      const responseMessages = resolved.messages as unknown as ModelMessage[]
 
+      // The SDK includes assistant message + tool result messages (for tools with execute()).
+      // For tools WITHOUT execute (client-side execution), we only get the assistant message.
+      // We need to add tool result messages for those.
+      history.push(...responseMessages)
+
+      // Add tool results for client-executed tools (not in responseMessages)
       for (const tr of toolResults) {
-        history.push({
-          role: 'tool' as const,
-          content: [
-            {
-              type: 'tool-result' as const,
-              toolCallId: tr.id,
-              toolName: tr.name,
-              output: {
-                type: 'text' as const,
-                value: JSON.stringify(tr.result.data ?? tr.result.error ?? ''),
+        if (!tools.hasExecute(tr.name)) {
+          history.push({
+            role: 'tool' as const,
+            content: [
+              {
+                type: 'tool-result' as const,
+                toolCallId: tr.id,
+                toolName: tr.name,
+                output: {
+                  type: 'text' as const,
+                  value: JSON.stringify(tr.result.data ?? tr.result.error ?? ''),
+                },
               },
-            },
-          ],
-        } as unknown as ModelMessage)
+            ],
+          } as unknown as ModelMessage)
+        }
       }
 
       turn++
