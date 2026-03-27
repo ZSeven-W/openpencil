@@ -286,24 +286,25 @@ export class AgentToolExecutor {
 
     // --- Auto-replace empty root frame (matches batch_design behavior) ---
     // When inserting a frame at root and an empty root frame exists,
-    // replace it and inherit its position so the design lands at (0,0).
+    // replace it via updateNode (single atomic operation, no duplicate keys).
     let replaced = false
     if (args.parent === null && (nodeData as any).type === 'frame') {
       try {
         const doc = docStore.document
         const pageId = args.pageId ?? useCanvasStore.getState().activePageId
         const children = getActivePageChildren(doc, pageId)
-        const emptyIdx = children.findIndex(
+        const emptyFrame = children.find(
           (n) => n.type === 'frame' && (!('children' in n) || !n.children || n.children.length === 0),
         )
-        if (emptyIdx !== -1) {
-          const emptyFrame = children[emptyIdx]
+        if (emptyFrame) {
           // Inherit position from the empty frame
           if (emptyFrame.x !== undefined) (node as any).x = emptyFrame.x
           if (emptyFrame.y !== undefined) (node as any).y = emptyFrame.y
-          // Remove empty frame, insert new node at same index
-          docStore.removeNode(emptyFrame.id)
-          docStore.addNode(null, node, emptyIdx)
+          // Replace in-place: update the empty frame with all new node properties
+          // This is a single store operation — no remove+add dance, no duplicate keys
+          const { id: _discardId, ...nodeProps } = node as any
+          docStore.updateNode(emptyFrame.id, nodeProps)
+          node.id = emptyFrame.id // track the original ID for result
           replaced = true
         }
       } catch { /* fallback to normal insert */ }
