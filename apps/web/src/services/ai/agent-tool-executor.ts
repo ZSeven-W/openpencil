@@ -296,6 +296,12 @@ export class AgentToolExecutor {
       // Post-processing is best-effort
     }
 
+    // Auto-zoom to show the new design (runs after a short delay to let canvas sync)
+    try {
+      const { zoomToFitContent } = await import('@/canvas/skia-engine-ref')
+      setTimeout(() => zoomToFitContent(), 200)
+    } catch { /* ignore */ }
+
     return {
       success: true,
       data: { id: node.id, nodesCreated: totalNodes, message: `Created ${totalNodes} nodes successfully. Do NOT retry or create again.` },
