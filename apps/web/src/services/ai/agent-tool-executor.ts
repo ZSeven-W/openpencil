@@ -219,6 +219,14 @@ export class AgentToolExecutor {
    * After insertion, runs the same post-processing as the MCP batch_design:
    * role resolution, icon resolution, layout sanitization, unique IDs.
    */
+  /**
+   * Insert a node — aligned with MCP batch_design behavior:
+   * 1. Parse stringified data
+   * 2. Sanitize invalid properties (border→strokes, etc.)
+   * 3. Auto-replace empty root frame (same as batch_design line 146-161)
+   * 4. Post-process: role resolution, icon resolution, layout sanitization
+   * 5. Auto-zoom to show new design
+   */
   private async handleInsertNode(
     args: { parent: string | null; data: Record<string, unknown>; pageId?: string },
   ): Promise<ToolResult> {
@@ -233,7 +241,8 @@ export class AgentToolExecutor {
       }
     }
 
-    const { useDocumentStore } = await import('@/stores/document-store')
+    const { useDocumentStore, getActivePageChildren } = await import('@/stores/document-store')
+    const { useCanvasStore } = await import('@/stores/canvas-store')
     const { nanoid } = await import('nanoid')
     const docStore = useDocumentStore.getState()
 
@@ -267,7 +276,7 @@ export class AgentToolExecutor {
 
     const node = sanitizeAndAssignIds(nodeData as Record<string, unknown>)
 
-    // Count total nodes created (root + all descendants)
+    // Count total nodes
     const countNodes = (n: any): number => {
       let c = 1
       if (Array.isArray(n.children)) for (const ch of n.children) c += countNodes(ch)
@@ -275,13 +284,35 @@ export class AgentToolExecutor {
     }
     const totalNodes = countNodes(node)
 
-    // addNode may trigger canvas sync side-effects that throw
-    // (e.g., renderer processing unknown node properties)
-    // Catch and continue — the node IS inserted even if sync fails
-    try {
-      docStore.addNode(args.parent, node)
-    } catch {
-      // Side-effect error — node may still be in the store
+    // --- Auto-replace empty root frame (matches batch_design behavior) ---
+    // When inserting a frame at root and an empty root frame exists,
+    // replace it and inherit its position so the design lands at (0,0).
+    let replaced = false
+    if (args.parent === null && (nodeData as any).type === 'frame') {
+      try {
+        const doc = docStore.document
+        const pageId = args.pageId ?? useCanvasStore.getState().activePageId
+        const children = getActivePageChildren(doc, pageId)
+        const emptyIdx = children.findIndex(
+          (n) => n.type === 'frame' && (!('children' in n) || !n.children || n.children.length === 0),
+        )
+        if (emptyIdx !== -1) {
+          const emptyFrame = children[emptyIdx]
+          // Inherit position from the empty frame
+          if (emptyFrame.x !== undefined) (node as any).x = emptyFrame.x
+          if (emptyFrame.y !== undefined) (node as any).y = emptyFrame.y
+          // Remove empty frame, insert new node at same index
+          docStore.removeNode(emptyFrame.id)
+          docStore.addNode(null, node, emptyIdx)
+          replaced = true
+        }
+      } catch { /* fallback to normal insert */ }
+    }
+
+    if (!replaced) {
+      try {
+        docStore.addNode(args.parent, node)
+      } catch { /* side-effect error — node may still be in the store */ }
     }
 
     // Track root-level insert to prevent duplicates
@@ -292,11 +323,9 @@ export class AgentToolExecutor {
     // Run post-processing (same pipeline as MCP batch_design with postProcess=true)
     try {
       await this.postProcessNode(node.id)
-    } catch {
-      // Post-processing is best-effort
-    }
+    } catch { /* best-effort */ }
 
-    // Auto-zoom to show the new design (runs after a short delay to let canvas sync)
+    // Auto-zoom to show the new design
     try {
       const { zoomToFitContent } = await import('@/canvas/skia-engine-ref')
       setTimeout(() => zoomToFitContent(), 200)
@@ -304,7 +333,11 @@ export class AgentToolExecutor {
 
     return {
       success: true,
-      data: { id: node.id, nodesCreated: totalNodes, message: `Created ${totalNodes} nodes successfully. Do NOT retry or create again.` },
+      data: {
+        id: node.id,
+        nodesCreated: totalNodes,
+        message: `Created ${totalNodes} nodes successfully. Do NOT retry or create again.`,
+      },
     }
   }
 
