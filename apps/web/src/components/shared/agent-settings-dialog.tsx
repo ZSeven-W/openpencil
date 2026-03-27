@@ -361,7 +361,7 @@ const PROVIDER_PRESETS: Record<BuiltinProviderPreset, {
     modelPlaceholder: 'deepseek-chat',
   },
   custom: {
-    label: 'Custom (OpenAI Compatible)',
+    label: 'Custom',
     type: 'openai-compat',
     placeholder: 'sk-...',
     modelPlaceholder: 'model-name',
@@ -494,6 +494,9 @@ function BuiltinProviderForm({
     initial?.baseURL ?? presetConfig.baseURL ?? '',
   )
   const [showApiKey, setShowApiKey] = useState(false)
+  const [customApiFormat, setCustomApiFormat] = useState<'openai-compat' | 'anthropic'>(
+    initial?.type ?? 'openai-compat',
+  )
 
   // Model search state
   const [modelList, setModelList] = useState<Array<{ id: string; name: string }>>([])
@@ -557,7 +560,8 @@ function BuiltinProviderForm({
   }, [])
 
   const isBaseURLLocked = preset !== 'custom'
-  const showBaseURL = presetConfig.type === 'openai-compat'
+  const effectiveType = preset === 'custom' ? customApiFormat : presetConfig.type
+  const showBaseURL = effectiveType === 'openai-compat' || preset === 'custom'
   const canSave =
     displayName.trim().length > 0 &&
     apiKey.trim().length > 0 &&
@@ -652,7 +656,31 @@ function BuiltinProviderForm({
         )}
       </div>
 
-      {/* Base URL (visible for openai-compat presets) */}
+      {/* API Format selector (custom preset only) */}
+      {preset === 'custom' && (
+        <div>
+          <label className="text-[11px] text-muted-foreground mb-1 block">API Format</label>
+          <div className="flex gap-1">
+            {(['openai-compat', 'anthropic'] as const).map((fmt) => (
+              <button
+                key={fmt}
+                type="button"
+                onClick={() => setCustomApiFormat(fmt)}
+                className={cn(
+                  'flex-1 h-7 text-[11px] rounded-md border transition-colors',
+                  customApiFormat === fmt
+                    ? 'bg-primary text-primary-foreground border-primary'
+                    : 'bg-card text-muted-foreground border-input hover:bg-accent',
+                )}
+              >
+                {fmt === 'openai-compat' ? 'OpenAI Compatible' : 'Anthropic'}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Base URL */}
       {showBaseURL && (
         <div>
           <label className="text-[11px] text-muted-foreground mb-1 block">
@@ -681,11 +709,11 @@ function BuiltinProviderForm({
           onClick={() =>
             onSave({
               displayName: displayName.trim(),
-              type: presetConfig.type,
+              type: effectiveType,
               apiKey: apiKey.trim(),
               model: modelName.trim(),
               preset,
-              ...(presetConfig.type === 'openai-compat' && baseURL.trim()
+              ...(showBaseURL && baseURL.trim()
                 ? { baseURL: baseURL.trim() }
                 : {}),
               enabled: initial?.enabled ?? true,

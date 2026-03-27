@@ -110,7 +110,7 @@ export default defineEventHandler(async (event) => {
   }
 
   const provider = body.providerType === 'anthropic'
-    ? createAnthropicProvider({ apiKey: body.apiKey, model: body.model })
+    ? createAnthropicProvider({ apiKey: body.apiKey, model: body.model, baseURL: body.baseURL })
     : createOpenAICompatProvider({ apiKey: body.apiKey, model: body.model, baseURL: body.baseURL })
 
   const tools = createToolRegistry()
