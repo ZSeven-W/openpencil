@@ -262,43 +262,51 @@ export class AgentToolExecutor {
     if (!node || !('children' in node) || !node.children?.length) return
 
     const { flattenNodes } = await import('@/stores/document-tree-utils')
-    const { resolveTreeRoles, resolveTreePostPass } =
-      await import('@/services/ai/role-resolver')
-    await import('@/services/ai/role-definitions/index')
-    const { applyIconPathResolution, applyNoEmojiIconHeuristic } =
-      await import('@/services/ai/icon-resolver')
-    const { ensureUniqueNodeIds, sanitizeLayoutChildPositions } =
-      await import('@/services/ai/design-node-sanitization')
 
-    // Work on the node directly (functions expect PenNode, not array)
-    const target = node as PenNode
+    // Deep clone — Zustand state is immutable, post-processing mutates in-place
+    const target = JSON.parse(JSON.stringify(node)) as PenNode
 
     // Determine canvas width (mobile: 375, desktop: 1200)
     const isMobile = (target as any).width <= 500
     const canvasWidth = isMobile ? 375 : 1200
 
-    // 1. Role resolution
-    resolveTreeRoles(target, canvasWidth)
-    resolveTreePostPass(target, canvasWidth)
+    // 1. Role resolution (best-effort — some models produce unusual structures)
+    try {
+      const { resolveTreeRoles, resolveTreePostPass } =
+        await import('@/services/ai/role-resolver')
+      await import('@/services/ai/role-definitions/index')
+      resolveTreeRoles(target, canvasWidth)
+      resolveTreePostPass(target, canvasWidth)
+    } catch { /* skip role resolution on error */ }
 
     // 2. Icon + emoji resolution
-    const flat = flattenNodes([target])
-    for (const n of flat) {
-      if (n.type === 'path') applyIconPathResolution(n as any)
-      if (n.type === 'text') applyNoEmojiIconHeuristic(n as any)
-    }
+    try {
+      const { applyIconPathResolution, applyNoEmojiIconHeuristic } =
+        await import('@/services/ai/icon-resolver')
+      const flat = flattenNodes([target])
+      for (const n of flat) {
+        if (n.type === 'path') applyIconPathResolution(n as any)
+        if (n.type === 'text') applyNoEmojiIconHeuristic(n as any)
+      }
+    } catch { /* skip icon resolution on error */ }
 
     // 3. Unique IDs
-    const allChildren = getAllChildren(docStore.document)
-    const usedIds = new Set(flattenNodes(allChildren).map((n) => n.id))
-    const idCounters = new Map<string, number>()
-    ensureUniqueNodeIds(target, usedIds, idCounters)
+    try {
+      const { ensureUniqueNodeIds } = await import('@/services/ai/design-node-sanitization')
+      const allChildren = getAllChildren(docStore.document) ?? []
+      const usedIds = new Set(flattenNodes(allChildren).map((n) => n.id))
+      const idCounters = new Map<string, number>()
+      ensureUniqueNodeIds(target, usedIds, idCounters)
+    } catch { /* skip ID dedup on error */ }
 
     // 4. Layout sanitization
-    sanitizeLayoutChildPositions(target, false)
+    try {
+      const { sanitizeLayoutChildPositions } = await import('@/services/ai/design-node-sanitization')
+      sanitizeLayoutChildPositions(target, false)
+    } catch { /* skip layout sanitization on error */ }
 
-    // Apply the processed node back (updateNode merges properties)
-    docStore.updateNode(nodeId, target as any)
+    // Apply the processed node back
+    docStore.updateNode(nodeId, { children: (target as any).children } as any)
   }
 
   private async handleUpdateNode(
