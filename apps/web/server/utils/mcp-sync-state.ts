@@ -36,6 +36,13 @@ export function getSyncSelection(): { selectedIds: string[]; activePageId: strin
   return { selectedIds: currentSelection, activePageId: currentActivePageId }
 }
 
+export function clearSyncState(): void {
+  currentDocument = null
+  documentVersion = 0
+  currentSelection = []
+  currentActivePageId = null
+}
+
 export function setSyncSelection(selectedIds: string[], activePageId?: string | null): void {
   currentSelection = selectedIds
   if (activePageId !== undefined) currentActivePageId = activePageId
