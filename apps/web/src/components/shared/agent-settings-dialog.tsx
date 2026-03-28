@@ -632,7 +632,7 @@ export default function AgentSettingsDialog() {
       />
       <div
         ref={dialogRef}
-        className="relative bg-card rounded-xl border border-border w-[720px] h-[520px] overflow-hidden shadow-xl flex"
+        className="relative bg-card rounded-xl border border-border w-[720px] h-[720px] overflow-hidden shadow-xl flex"
       >
         {/* Sidebar */}
         <div className="w-[200px] shrink-0 border-r border-border flex flex-col bg-card">
