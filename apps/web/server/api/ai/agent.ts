@@ -143,11 +143,26 @@ export default defineEventHandler(async (event) => {
         provider: memberProvider,
         tools: memberTools,
         systemPrompt: m.systemPrompt || `You are a ${m.id} specialist.`,
+        turnTimeout: 5 * 60_000, // 5 minutes — design generation is slow
       }
     })
 
+    // Remove generate_design from lead tools — force delegation to designer
+    const leadTools = createToolRegistry()
+    for (const def of body.toolDefs ?? []) {
+      if (def.name === 'generate_design') continue // designer-only
+      const params = def.parameters ? { ...def.parameters } : { type: 'object' }
+      delete (params as any).$schema
+      leadTools.register({
+        name: def.name,
+        description: def.description,
+        level: def.level,
+        schema: jsonSchema(params as any),
+      })
+    }
+
     const team = createTeam({
-      lead: { provider, tools, systemPrompt: body.systemPrompt, maxTurns: body.maxTurns ?? 20 },
+      lead: { provider, tools: leadTools, systemPrompt: body.systemPrompt, maxTurns: body.maxTurns ?? 20 },
       members,
     })
     agentOrTeam = { run: (msgs) => team.run(msgs), resolveToolResult: (id, result) => team.resolveToolResult(id, result) }

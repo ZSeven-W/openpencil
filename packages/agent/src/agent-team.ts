@@ -14,6 +14,7 @@ export interface TeamMemberConfig {
   tools: ToolRegistry
   systemPrompt: string
   maxTurns?: number
+  turnTimeout?: number
   contextStrategy?: ContextStrategy
 }
 
@@ -23,6 +24,7 @@ export interface TeamConfig {
     tools: ToolRegistry
     systemPrompt: string
     maxTurns?: number
+    turnTimeout?: number
     contextStrategy?: ContextStrategy
   }
   members: TeamMemberConfig[]
@@ -64,6 +66,7 @@ export function createTeam(config: TeamConfig): AgentTeam {
     tools: leadTools,
     systemPrompt: config.lead.systemPrompt + buildTeamSuffix(config.members),
     maxTurns: config.lead.maxTurns ?? 30,
+    turnTimeout: config.lead.turnTimeout,
     contextStrategy: config.lead.contextStrategy,
     abortSignal: parentAbort.signal,
   })
@@ -78,6 +81,7 @@ export function createTeam(config: TeamConfig): AgentTeam {
           tools: m.tools,
           systemPrompt: m.systemPrompt,
           maxTurns: m.maxTurns ?? 20,
+          turnTimeout: m.turnTimeout,
           contextStrategy: m.contextStrategy,
           abortSignal: parentAbort.signal,
         }),
