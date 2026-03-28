@@ -35,6 +35,8 @@ export interface GroupedModel {
   displayName: string
   description: string
   provider: AIProviderType
+  /** When set, this model came from a built-in provider (API key) rather than a CLI tool */
+  builtinProviderId?: string
 }
 
 export interface ModelGroup {

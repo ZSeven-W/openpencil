@@ -31,6 +31,8 @@
 
 <br />
 
+> **注意：** 另有一个同名的开源项目 — [OpenPencil](https://github.com/open-pencil/open-pencil)，专注于兼容 Figma 的可视化设计与实时协作。本项目专注于 AI 原生的设计转代码工作流。
+
 ## 为什么选择 OpenPencil
 
 <table>
@@ -180,6 +182,7 @@ docker build --target full -t openpencil-full .
 
 | 智能体 | 配置方式 |
 | --- | --- |
+| **内置（9+ 提供商）** | 从提供商预设中选择并切换区域 — Anthropic、OpenAI、Google、DeepSeek 等 |
 | **Claude Code** | 无需配置 — 使用 Claude Agent SDK 本地 OAuth |
 | **Codex CLI** | 在 Agent 设置中连接（`Cmd+,`） |
 | **OpenCode** | 在 Agent 设置中连接（`Cmd+,`） |
@@ -187,6 +190,8 @@ docker build --target full -t openpencil-full .
 | **Gemini CLI** | 在 Agent 设置中连接（`Cmd+,`） |
 
 **模型能力配置** — 自动根据模型层级适配提示词、思考模式和超时时间。完整层级模型（Claude）获得完整提示词；标准层级模型（GPT-4o、Gemini、DeepSeek）关闭思考模式；基础层级模型（MiniMax、Qwen、Llama、Mistral）使用简化的嵌套 JSON 提示词以确保最大可靠性。
+
+**国际化** — 完整界面本地化，支持 15 种语言：English、简体中文、繁體中文、日本語、한국어、Français、Español、Deutsch、Português、Русский、हिन्दी、Türkçe、ไทย、Tiếng Việt、Bahasa Indonesia。
 
 **MCP 服务器**
 - 内置 MCP 服务器 — 一键安装到 Claude Code / Codex / Gemini / OpenCode / Kiro / Copilot CLI
@@ -219,6 +224,8 @@ cat design.dsl | op design - # 从 stdin 管道输入
 
 支持三种输入方式：内联字符串、`@filepath`（从文件读取）、`-`（从 stdin 读取）。可搭配桌面应用或 Web 开发服务器使用。完整命令参考请查阅 [CLI README](./apps/cli/README.md)。
 
+**LLM 技能** — 安装 [OpenPencil Skill](https://github.com/ZSeven-W/openpencil-skill) 插件，教 AI 智能体（Claude Code、Cursor、Codex、Gemini CLI 等）使用 `op` 进行设计。
+
 ## 功能特性
 
 **画布与绘图**
@@ -248,13 +255,13 @@ cat design.dsl | op design - # 从 stdin 管道输入
 
 | | |
 | --- | --- |
-| **前端** | React 19 · TanStack Start · Tailwind CSS v4 · shadcn/ui |
+| **前端** | React 19 · TanStack Start · Tailwind CSS v4 · shadcn/ui · i18next |
 | **画布** | CanvasKit/Skia（WASM, GPU 加速） |
 | **状态管理** | Zustand v5 |
 | **服务器** | Nitro |
 | **桌面端** | Electron 35 |
 | **CLI** | `op` — 终端控制、批量设计 DSL、代码导出 |
-| **AI** | Anthropic SDK · Claude Agent SDK · OpenCode SDK · Copilot SDK |
+| **AI** | Vercel AI SDK v6 · Anthropic SDK · Claude Agent SDK · OpenCode SDK · Copilot SDK |
 | **运行时** | Bun · Vite 7 |
 | **文件格式** | `.op` — 基于 JSON，人类可读，对 Git 友好 |
 
@@ -289,7 +296,9 @@ openpencil/
 │   ├── pen-codegen/         代码生成器（React、HTML、Vue、Flutter 等）
 │   ├── pen-figma/           Figma .fig 文件解析与转换
 │   ├── pen-renderer/        独立 CanvasKit/Skia 渲染器
-│   └── pen-sdk/             聚合 SDK（重新导出所有包）
+│   ├── pen-sdk/             聚合 SDK（重新导出所有包）
+│   ├── pen-ai-skills/       AI 提示词技能引擎（分阶段 prompt 加载）
+│   └── agent/               AI Agent SDK（Vercel AI SDK、多提供商、Agent 团队）
 └── .githooks/               预提交钩子：从分支名同步版本号
 ```
 
@@ -348,6 +357,8 @@ bun run cli:compile        # 编译 CLI 到 dist
 - [x] 多模型能力配置
 - [x] Monorepo 重构与可复用包
 - [x] CLI 工具（`op`）终端控制
+- [x] 内置 AI Agent SDK，支持多提供商
+- [x] 国际化 — 15 种语言
 - [ ] 协同编辑
 - [ ] 插件系统
 

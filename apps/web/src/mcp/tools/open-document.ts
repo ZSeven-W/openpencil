@@ -3,7 +3,6 @@ import {
   createEmptyDocument,
   saveDocument,
   fileExists,
-  getSyncUrl,
   resolveDocPath,
   LIVE_CANVAS_PATH,
 } from '../document-manager'
@@ -37,20 +36,10 @@ export async function handleOpenDocument(
   let doc: PenDocument
 
   if (!params.filePath || params.filePath === LIVE_CANVAS_PATH) {
-    // Live canvas mode: connect to the running Electron/dev server
-    const syncUrl = await getSyncUrl()
-    if (syncUrl) {
-      filePath = LIVE_CANVAS_PATH
-      doc = await openDocument(LIVE_CANVAS_PATH)
-    } else if (params.filePath === LIVE_CANVAS_PATH) {
-      throw new Error(
-        'No running OpenPencil instance found. Start the Electron app or dev server first.',
-      )
-    } else {
-      throw new Error(
-        'filePath is required when no OpenPencil instance is running. Provide a path to an existing .op file or a new file to create.',
-      )
-    }
+    // Live canvas mode: connect to the running Electron/dev server.
+    // openDocument() now returns a more precise diagnostic when sync is unavailable.
+    filePath = LIVE_CANVAS_PATH
+    doc = await openDocument(LIVE_CANVAS_PATH)
   } else {
     filePath = resolveDocPath(params.filePath)
     const exists = await fileExists(filePath)

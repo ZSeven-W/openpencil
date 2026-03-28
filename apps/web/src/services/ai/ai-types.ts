@@ -16,6 +16,7 @@ export interface ChatMessage {
   timestamp: number
   isStreaming?: boolean
   attachments?: ChatAttachment[]
+  source?: string
 }
 
 export interface AIDesignRequest {

@@ -453,6 +453,7 @@ function polygonPoints(sides: number, w: number, h: number): string {
   return points.join(' ')
 }
 
+/** @deprecated Use AI code generation pipeline instead. Will be removed in v1.0.0. */
 export function generateReactNativeCode(
   nodes: PenNode[],
   componentName = 'GeneratedDesign',
@@ -558,6 +559,7 @@ function hasNodeType(nodes: PenNode[], type: string): boolean {
   return false
 }
 
+/** @deprecated Use AI code generation pipeline instead. Will be removed in v1.0.0. */
 export function generateReactNativeFromDocument(
   doc: PenDocument,
   activePageId?: string | null,

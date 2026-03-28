@@ -1,6 +1,6 @@
 import { execSync } from 'node:child_process'
-import { existsSync } from 'node:fs'
-import { join } from 'node:path'
+import { existsSync, readFileSync } from 'node:fs'
+import { dirname, join } from 'node:path'
 import { serverLog } from './server-logger'
 
 const isWindows = process.platform === 'win32'
@@ -77,4 +77,46 @@ export function resolveCopilotCli(): string | undefined {
 
   serverLog.warn('[resolve-copilot] no copilot binary found')
   return undefined
+}
+
+/**
+ * On Windows, `.cmd` wrappers cannot be spawned directly by the copilot-sdk
+ * (it calls `spawn()` without `shell: true`, causing EINVAL).
+ * Resolve the `.cmd` to the actual `.js` entry point so the SDK can run it via node.
+ */
+export function resolveCliPathForSdk(cliPath: string): string {
+  if (!isWindows || !cliPath.endsWith('.cmd')) return cliPath
+
+  // npm .cmd wrappers live alongside node_modules — the JS entry is at:
+  // <dir>/node_modules/@github/copilot/index.js
+  const dir = dirname(cliPath)
+  const jsEntry = join(dir, 'node_modules', '@github', 'copilot', 'index.js')
+  if (existsSync(jsEntry)) {
+    serverLog.info(`[resolve-copilot] resolved .cmd → .js: ${jsEntry}`)
+    return jsEntry
+  }
+
+  // Fallback: parse the .cmd file to extract the JS path
+  // npm .cmd wrappers use %dp0% or %~dp0 to reference their own directory
+  try {
+    const content = readFileSync(cliPath, 'utf-8')
+    const match = content.match(/"([^"]+\.js)"/g)
+    if (match) {
+      for (const m of match) {
+        const jsPath = m
+          .replace(/"/g, '')
+          .replace(/%~?dp0%?\\/g, dir + '\\')
+        if (jsPath.includes('copilot') && existsSync(jsPath)) {
+          serverLog.info(`[resolve-copilot] parsed .cmd → .js: ${jsPath}`)
+          return jsPath
+        }
+      }
+    }
+  } catch (err) {
+    serverLog.warn(`[resolve-copilot] failed to parse .cmd: ${err instanceof Error ? err.message : err}`)
+  }
+
+  // Last resort: return as-is (will likely fail with EINVAL)
+  serverLog.warn(`[resolve-copilot] could not resolve .cmd to .js, using as-is: ${cliPath}`)
+  return cliPath
 }

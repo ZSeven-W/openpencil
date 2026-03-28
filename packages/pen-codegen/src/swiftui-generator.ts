@@ -669,6 +669,7 @@ function generateImageSwiftUI(node: ImageNode, depth: number): string {
   return renderWithModifiers(pad, `Image("${escapedSrc}")`, modifiers)
 }
 
+/** @deprecated Use AI code generation pipeline instead. Will be removed in v1.0.0. */
 export function generateSwiftUICode(
   nodes: PenNode[],
   viewName = 'GeneratedView',
@@ -743,6 +744,7 @@ ${childLines}
 `
 }
 
+/** @deprecated Use AI code generation pipeline instead. Will be removed in v1.0.0. */
 export function generateSwiftUIFromDocument(
   doc: PenDocument,
   activePageId?: string | null,

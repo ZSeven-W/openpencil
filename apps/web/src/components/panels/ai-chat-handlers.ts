@@ -1,9 +1,13 @@
 import { useState, useCallback } from 'react'
 import { nanoid } from 'nanoid'
+import i18n from '@/i18n'
+import { decodeAgentEvent } from '@zseven-w/agent'
+import type { AgentEvent } from '@zseven-w/agent'
 import { useAIStore } from '@/stores/ai-store'
 import { useCanvasStore } from '@/stores/canvas-store'
 import { useDocumentStore } from '@/stores/document-store'
 import { useDesignMdStore } from '@/stores/design-md-store'
+import { useAgentSettingsStore } from '@/stores/agent-settings-store'
 import { getActivePageChildren } from '@/stores/document-tree-utils'
 import { streamChat } from '@/services/ai/ai-service'
 import { buildChatSystemPrompt } from '@/services/ai/ai-prompts'
@@ -14,7 +18,10 @@ import {
   extractAndApplyDesignModification,
 } from '@/services/ai/design-generator'
 import { trimChatHistory } from '@/services/ai/context-optimizer'
+import { AgentToolExecutor } from '@/services/ai/agent-tool-executor'
+import { createDesignToolRegistry } from '@/services/ai/agent-tools'
 import type { ChatMessage as ChatMessageType } from '@/services/ai/ai-types'
+import type { ToolCallBlockData } from '@/components/panels/tool-call-block'
 import { CHAT_STREAM_THINKING_CONFIG } from '@/services/ai/ai-runtime-config'
 
 /** Intent classification prompt — lightweight LLM call to determine message routing */
@@ -106,6 +113,264 @@ export function buildContextString(): string {
   return parts.length > 0 ? `\n\n[Canvas context: ${parts.join('. ')}]` : ''
 }
 
+// ---------------------------------------------------------------------------
+// Agent mode SSE stream handler
+// ---------------------------------------------------------------------------
+
+/** Agent-specific tool usage instructions — prepended to the dynamic skill-based prompt. */
+const AGENT_TOOL_INSTRUCTIONS = `IMPORTANT: When the user asks you to create or design anything, you MUST call the generate_design tool with a descriptive prompt. Do NOT output JSON or code directly.
+
+## Available Tools
+- generate_design: Create complete designs. Pass a natural language description.
+- snapshot_layout: View current canvas state.
+- batch_get: Read specific nodes by ID.
+- update_node: Modify existing node properties.
+- delete_node: Remove nodes.`
+
+/**
+ * Build the agent system prompt dynamically using pen-ai-skills.
+ * Combines agent tool instructions with the same design knowledge the CLI pipeline uses.
+ */
+function buildAgentSystemPrompt(userMessage: string): string {
+  // Loads design skills dynamically based on user message keywords —
+  // same knowledge base the CLI pipeline uses (via pen-ai-skills)
+  const designKnowledge = buildChatSystemPrompt(userMessage)
+  return `${AGENT_TOOL_INSTRUCTIONS}\n\n${designKnowledge}`
+}
+
+/**
+ * Parse SSE chunks from a ReadableStream and yield AgentEvents.
+ * Handles partial chunks that may be split across reads.
+ */
+async function* parseAgentSSE(
+  reader: ReadableStreamDefaultReader<Uint8Array>,
+  signal: AbortSignal,
+): AsyncGenerator<AgentEvent> {
+  const decoder = new TextDecoder()
+  let buffer = ''
+
+  while (!signal.aborted) {
+    const { done, value } = await reader.read()
+    if (done) break
+
+    buffer += decoder.decode(value, { stream: true })
+    const chunks = buffer.split('\n\n')
+    // Last item may be incomplete -- keep it in the buffer
+    buffer = chunks.pop() ?? ''
+
+    for (const chunk of chunks) {
+      const trimmed = chunk.trim()
+      if (!trimmed) continue
+      const evt = decodeAgentEvent(trimmed)
+      if (evt) yield evt
+    }
+  }
+
+  // Process any remaining data in buffer
+  if (buffer.trim()) {
+    const evt = decodeAgentEvent(buffer.trim())
+    if (evt) yield evt
+  }
+}
+
+/** Provider config for the agent pipeline */
+interface AgentProviderConfig {
+  providerType: 'anthropic' | 'openai-compat'
+  apiKey: string
+  model: string
+  baseURL?: string
+  maxOutputTokens?: number
+}
+
+/** Strip <think>...</think> tags (closed and unclosed) from model text output. */
+function stripThinkTags(text: string): string {
+  return text.replace(/<think>[\s\S]*?<\/think>\s*/g, '').replace(/<think>[\s\S]*$/g, '')
+}
+
+/**
+ * Send a message through the agent pipeline.
+ * Opens an SSE connection to /api/ai/agent, dispatches tool calls
+ * client-side, and updates the AI store in real time.
+ */
+async function runAgentStream(
+  assistantMsgId: string,
+  providerConfig: AgentProviderConfig,
+  abortController: AbortController,
+) {
+  const store = useAIStore.getState()
+  const { updateLastMessage } = store
+
+  const sessionId = nanoid()
+  const executor = new AgentToolExecutor(sessionId)
+
+  // Build tool definitions from the registry.
+  // The server uses these to register tools with the AI SDK.
+  const registry = createDesignToolRegistry()
+  const sdkTools = registry.toAISDKFormat()
+  const toolDefs = registry.list().map((t) => {
+    // Extract the JSON Schema from the AI SDK tool object
+    const sdkTool = sdkTools[t.name] as any
+    const parameters = sdkTool?.parameters?.jsonSchema ?? sdkTool?.inputSchema?.jsonSchema
+    return {
+      name: t.name,
+      description: t.description,
+      level: t.level,
+      parameters,
+    }
+  })
+
+  // Build conversation messages from chat history
+  const messages = useAIStore.getState().messages
+    .filter((m) => m.id !== assistantMsgId)
+    .map((m) => ({ role: m.role, content: m.content }))
+
+  const context = buildContextString()
+  // Build the last user message for skill resolution
+  const lastUserMsg = messages[messages.length - 1]?.content ?? ''
+  const systemPrompt = buildAgentSystemPrompt(lastUserMsg) + context
+
+  const agentBody: Record<string, unknown> = {
+    sessionId,
+    messages,
+    systemPrompt,
+    providerType: providerConfig.providerType,
+    apiKey: providerConfig.apiKey,
+    model: providerConfig.model,
+    ...(providerConfig.baseURL ? { baseURL: providerConfig.baseURL } : {}),
+    ...(providerConfig.maxOutputTokens ? { maxOutputTokens: providerConfig.maxOutputTokens } : {}),
+    toolDefs,
+    maxTurns: 20,
+  }
+
+  // Auto team mode: always create a designer member using the same provider as chat.
+  // The designer has a specialized prompt + scoped tools (generate_design only).
+  // Lead handles conversation; designer handles design generation.
+  if (providerConfig.apiKey) {
+    ;(agentBody as any).members = [{
+      id: 'designer',
+      providerType: providerConfig.providerType,
+      apiKey: providerConfig.apiKey,
+      model: providerConfig.model,
+      baseURL: providerConfig.baseURL,
+      systemPrompt: 'You are a design specialist. Use the generate_design tool to create designs based on the task description. Focus on high-quality visual output.',
+    }]
+  }
+
+  const response = await fetch('/api/ai/agent', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(agentBody),
+    signal: abortController.signal,
+  })
+
+  if (!response.ok || !response.body) {
+    const errText = await response.text().catch(() => 'Unknown error')
+    throw new Error(`Agent request failed: ${errText}`)
+  }
+
+  const reader = response.body.getReader()
+  let accumulated = ''
+  let thinkingContent = ''
+
+  try {
+    for await (const evt of parseAgentSSE(reader, abortController.signal)) {
+      switch (evt.type) {
+        case 'thinking': {
+          thinkingContent += evt.content
+          const thinkingStep = `<step title="Thinking">${thinkingContent}</step>`
+          updateLastMessage(thinkingStep + (accumulated ? '\n' + accumulated : ''))
+          break
+        }
+
+        case 'text': {
+          accumulated += evt.content
+          const prefix = thinkingContent
+            ? `<step title="Thinking">${thinkingContent}</step>\n`
+            : ''
+          updateLastMessage(prefix + stripThinkTags(accumulated))
+          break
+        }
+
+        case 'tool_call': {
+          const block: ToolCallBlockData = {
+            id: evt.id,
+            name: evt.name,
+            args: evt.args,
+            level: evt.level,
+            status: 'running',
+            source: evt.source,
+          }
+          useAIStore.getState().addToolCallBlock(block)
+
+          // Execute tool client-side and post result back to server
+          executor.execute(evt as Extract<AgentEvent, { type: 'tool_call' }>).then(() => {
+            // Also update block status locally in case SSE tool_result event is lost
+            const block = useAIStore.getState().toolCallBlocks.find((b) => b.id === evt.id)
+            if (block && block.status === 'running') {
+              useAIStore.getState().updateToolCallBlock(evt.id, { status: 'done', result: { success: true } })
+            }
+          }).catch((err) => {
+            useAIStore.getState().updateToolCallBlock(evt.id, {
+              status: 'error',
+              result: { success: false, error: String(err) },
+            })
+          })
+          break
+        }
+
+        case 'tool_result': {
+          useAIStore.getState().updateToolCallBlock(evt.id, {
+            status: evt.result.success ? 'done' : 'error',
+            result: evt.result,
+          })
+          break
+        }
+
+        case 'turn': {
+          // Optionally show turn progress
+          break
+        }
+
+        case 'done': {
+          // If no text was accumulated (model returned empty), add a note
+          if (!accumulated.trim()) {
+            accumulated = '*Agent completed with no text output.*'
+            updateLastMessage(accumulated)
+          }
+          break
+        }
+
+        case 'error': {
+          accumulated += `\n\n**Error:** ${evt.message}`
+          updateLastMessage(accumulated)
+          if (evt.fatal) return
+          break
+        }
+
+        case 'member_start': {
+          accumulated += `\n\n> **[${evt.memberId}]** ${evt.task}\n`
+          updateLastMessage(accumulated)
+          break
+        }
+
+        case 'member_end': {
+          accumulated += `\n> **[${evt.memberId}]** done\n\n`
+          updateLastMessage(accumulated)
+          break
+        }
+
+        case 'abort': {
+          return
+        }
+      }
+    }
+  } finally {
+    reader.releaseLock()
+  }
+
+  return stripThinkTags(accumulated)
+}
+
 /** Shared chat logic hook */
 export function useChatHandlers() {
   const [input, setInput] = useState('')
@@ -117,6 +382,7 @@ export function useChatHandlers() {
   const addMessage = useAIStore((s) => s.addMessage)
   const updateLastMessage = useAIStore((s) => s.updateLastMessage)
   const setStreaming = useAIStore((s) => s.setStreaming)
+
   const handleSend = useCallback(
     async (text?: string) => {
       const messageText = text ?? input.trim()
@@ -162,21 +428,91 @@ export function useChatHandlers() {
         useAIStore.getState().setChatTitle(title || 'New Chat')
       }
 
+      const currentProvider = useAIStore.getState().modelGroups.find((g) =>
+        g.models.some((m) => m.value === model),
+      )?.provider
+
+      const abortController = new AbortController()
+      useAIStore.getState().setAbortController(abortController)
+
+      let accumulated = ''
+
+      // -----------------------------------------------------------------------
+      // BUILT-IN PROVIDER (Agent) MODE — route through /api/ai/agent with tool execution
+      // Triggered when the selected model has a `builtin:` prefix
+      // -----------------------------------------------------------------------
+      if (model.startsWith('builtin:')) {
+        const parts = model.split(':')
+        const builtinProviderId = parts[1]
+        const modelName = parts.slice(2).join(':')
+
+        const { builtinProviders } = useAgentSettingsStore.getState()
+        const bp = builtinProviders.find((p) => p.id === builtinProviderId)
+        if (!bp || !bp.apiKey) {
+          accumulated = !bp
+            ? `**Error:** ${i18n.t('builtin.errorProviderNotFound')}`
+            : `**Error:** ${i18n.t('builtin.errorApiKeyEmpty')}`
+          updateLastMessage(accumulated)
+          useAIStore.getState().setAbortController(null)
+          setStreaming(false)
+          useAIStore.setState((s) => {
+            const msgs = [...s.messages]
+            const last = msgs.find((m) => m.id === assistantMsg.id)
+            if (last) { last.content = accumulated; last.isStreaming = false }
+            return { messages: msgs }
+          })
+          return
+        }
+
+        useAIStore.getState().clearToolCallBlocks()
+        try {
+          const result = await runAgentStream(
+            assistantMsg.id,
+            {
+              providerType: bp.type === 'anthropic' ? 'anthropic' : 'openai-compat',
+              apiKey: bp.apiKey,
+              model: modelName,
+              baseURL: bp.baseURL,
+              maxOutputTokens: bp.maxContextTokens ? Math.min(bp.maxContextTokens, 8192) : undefined,
+            },
+            abortController,
+          )
+          accumulated = result ?? ''
+        } catch (error) {
+          if (!abortController.signal.aborted) {
+            const errMsg = error instanceof Error ? error.message : 'Unknown error'
+            accumulated += `\n\n**Error:** ${errMsg}`
+            updateLastMessage(accumulated)
+          }
+        } finally {
+          useAIStore.getState().setAbortController(null)
+          setStreaming(false)
+        }
+
+        // Force update final message state
+        useAIStore.setState((s) => {
+          const msgs = [...s.messages]
+          const last = msgs.find((m) => m.id === assistantMsg.id)
+          if (last) {
+            last.content = accumulated
+            last.isStreaming = false
+          }
+          return { messages: msgs }
+        })
+        return
+      }
+
+      // -----------------------------------------------------------------------
+      // STANDARD MODE — existing design/chat pipeline
+      // -----------------------------------------------------------------------
       const chatHistory = messages.map((m) => ({
         role: m.role,
         content: m.content,
         ...(m.attachments?.length ? { attachments: m.attachments } : {}),
       }))
-      const currentProvider = useAIStore.getState().modelGroups.find((g) =>
-        g.models.some((m) => m.value === model),
-      )?.provider
 
-      let accumulated = ''
       let appliedCount = 0
       let isDesign = false
-
-      const abortController = new AbortController()
-      useAIStore.getState().setAbortController(abortController)
 
       try {
         // Classify intent via lightweight LLM call (three-way: new / modify / chat)

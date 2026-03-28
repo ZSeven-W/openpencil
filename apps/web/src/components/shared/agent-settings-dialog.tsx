@@ -10,6 +10,7 @@ import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Switch } from '@/components/ui/switch'
 import { useAgentSettingsStore } from '@/stores/agent-settings-store'
+import { BuiltinProvidersSection } from './builtin-provider-settings'
 import type { AIProviderType, MCPTransportMode, GroupedModel } from '@/types/agent-settings'
 import ClaudeLogo from '@/components/icons/claude-logo'
 import OpenAILogo from '@/components/icons/openai-logo'
@@ -323,12 +324,14 @@ function NavItem({ icon: IconComp, label, active, onClick }: {
     </button>
   )
 }
-
 /* ---------- Agents page ---------- */
 function AgentsPage() {
   const { t } = useTranslation()
   return (
     <div>
+      <div className="mb-6">
+        <BuiltinProvidersSection />
+      </div>
       <h3 className="text-[15px] font-semibold text-foreground mb-4">{t('settings.agents')}</h3>
       <div className="space-y-1">
         <ProviderCard type="anthropic" />
@@ -428,7 +431,8 @@ function McpPage(props: McpPageProps) {
       {/* MCP Integrations */}
       <div>
         <h3 className="text-[15px] font-semibold text-foreground mb-1">{t('agents.mcpIntegrations')}</h3>
-        <p className="text-[11px] text-muted-foreground mb-3">{t('agents.mcpRestart')}</p>
+        <p className="text-[11px] text-muted-foreground mb-1">{t('agents.mcpRestart')}</p>
+        <p className="text-[11px] text-muted-foreground mb-3">{t('agents.mcpReinstallHint')}</p>
         <div className="grid grid-cols-2 gap-1.5">
           {mcpIntegrations.map((m) => (
             <div
@@ -628,7 +632,7 @@ export default function AgentSettingsDialog() {
       />
       <div
         ref={dialogRef}
-        className="relative bg-card rounded-xl border border-border w-[720px] h-[520px] overflow-hidden shadow-xl flex"
+        className="relative bg-card rounded-xl border border-border w-[720px] min-h-[520px] max-h-[720px] overflow-hidden shadow-xl flex"
       >
         {/* Sidebar */}
         <div className="w-[200px] shrink-0 border-r border-border flex flex-col bg-card">

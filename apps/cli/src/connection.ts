@@ -1,12 +1,33 @@
 /** Port file discovery and app health check. */
 
-import { readFile } from 'node:fs/promises'
+import { readFile, unlink } from 'node:fs/promises'
 import { join } from 'node:path'
 import { homedir } from 'node:os'
 
 const PORT_FILE_DIR = '.openpencil'
 const PORT_FILE_NAME = '.port'
 const PORT_FILE_PATH = join(homedir(), PORT_FILE_DIR, PORT_FILE_NAME)
+const APP_BASE_URLS = ['http://127.0.0.1', 'http://localhost']
+
+async function getReachableAppUrl(port: number): Promise<string | null> {
+  for (const baseUrl of APP_BASE_URLS) {
+    const url = `${baseUrl}:${port}/api/mcp/server`
+    for (let attempt = 0; attempt < 5; attempt++) {
+      try {
+        const res = await fetch(url, {
+          signal: AbortSignal.timeout(500),
+        })
+        if (res.ok) return `${baseUrl}:${port}`
+      } catch {
+        // App may still be starting, or the port file may be stale.
+      }
+      if (attempt < 4) {
+        await new Promise((resolve) => setTimeout(resolve, 200))
+      }
+    }
+  }
+  return null
+}
 
 function isPidAlive(pid: number): boolean {
   try {
@@ -33,8 +54,19 @@ export async function getAppInfo(): Promise<AppInfo | null> {
       pid: number
       timestamp: number
     }
-    if (!isPidAlive(pid)) return null
-    return { port, pid, timestamp, url: `http://127.0.0.1:${port}` }
+    const url = await getReachableAppUrl(port)
+    if (url) {
+      return { port, pid, timestamp, url }
+    }
+    if (!isPidAlive(pid)) {
+      try {
+        await unlink(PORT_FILE_PATH)
+      } catch {
+        // Ignore stale port file cleanup failures.
+      }
+      return null
+    }
+    return null
   } catch {
     return null
   }

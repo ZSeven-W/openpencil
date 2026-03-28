@@ -71,6 +71,7 @@ export function resolveFillColor(fills?: PenFill[] | string): string {
   if (typeof fills === 'string') return fills
   if (!fills || fills.length === 0) return DEFAULT_FILL
   const first = fills[0]
+  if (!first) return DEFAULT_FILL
   if (first.type === 'solid') return first.color
   if (first.type === 'linear_gradient' || first.type === 'radial_gradient') {
     return first.stops[0]?.color ?? DEFAULT_FILL
@@ -80,8 +81,10 @@ export function resolveFillColor(fills?: PenFill[] | string): string {
 
 export function resolveStrokeColor(stroke?: PenStroke): string | undefined {
   if (!stroke) return undefined
+  if (typeof stroke === 'string') return stroke
   if (typeof stroke.fill === 'string') return stroke.fill
   if (stroke.fill && stroke.fill.length > 0) return resolveFillColor(stroke.fill)
+  if ('color' in stroke && typeof (stroke as any).color === 'string') return (stroke as any).color
   return undefined
 }
 

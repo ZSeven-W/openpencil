@@ -2,7 +2,7 @@
 
 import { spawn, fork, execSync } from 'node:child_process'
 import { createServer } from 'node:net'
-import { readFile, writeFile, unlink, mkdir } from 'node:fs/promises'
+import { writeFile, unlink, mkdir } from 'node:fs/promises'
 import { join, dirname } from 'node:path'
 import { homedir } from 'node:os'
 import { existsSync } from 'node:fs'
@@ -31,13 +31,8 @@ function getFreePort(): Promise<number> {
 async function waitForPortFile(timeoutMs = 15_000): Promise<{ port: number; pid: number }> {
   const start = Date.now()
   while (Date.now() - start < timeoutMs) {
-    try {
-      const raw = await readFile(PORT_FILE_PATH, 'utf-8')
-      const data = JSON.parse(raw)
-      if (data.port && data.pid) return data
-    } catch {
-      // not ready yet
-    }
+    const info = await getAppInfo()
+    if (info) return { port: info.port, pid: info.pid }
     await new Promise((r) => setTimeout(r, 300))
   }
   throw new Error('Timeout waiting for OpenPencil to start')

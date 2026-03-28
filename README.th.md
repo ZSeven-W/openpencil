@@ -31,6 +31,8 @@
 
 <br />
 
+> **หมายเหตุ:** มีโปรเจกต์โอเพนซอร์สอีกโปรเจกต์หนึ่งที่ใช้ชื่อเดียวกัน — [OpenPencil](https://github.com/open-pencil/open-pencil) ซึ่งเน้นการออกแบบภาพที่เข้ากันได้กับ Figma พร้อมการทำงานร่วมกันแบบเรียลไทม์ โปรเจกต์นี้เน้นเวิร์กโฟลว์ AI-native สำหรับการแปลงดีไซน์เป็นโค้ด
+
 ## ทำไมต้อง OpenPencil
 
 <table>
@@ -180,6 +182,7 @@ docker build --target full -t openpencil-full .
 
 | Agent | วิธีตั้งค่า |
 | --- | --- |
+| **ในตัว (9+ ผู้ให้บริการ)** | เลือกจากพรีเซ็ตผู้ให้บริการพร้อมตัวสลับภูมิภาค — Anthropic, OpenAI, Google, DeepSeek และอื่น ๆ |
 | **Claude Code** | ไม่ต้องตั้งค่า — ใช้ Claude Agent SDK พร้อม local OAuth |
 | **Codex CLI** | เชื่อมต่อใน Agent Settings (`Cmd+,`) |
 | **OpenCode** | เชื่อมต่อใน Agent Settings (`Cmd+,`) |
@@ -187,6 +190,8 @@ docker build --target full -t openpencil-full .
 | **Gemini CLI** | เชื่อมต่อใน Agent Settings (`Cmd+,`) |
 
 **โปรไฟล์ความสามารถของโมเดล** — ปรับ prompt, โหมด thinking และ timeout ตามระดับโมเดลโดยอัตโนมัติ โมเดลระดับเต็ม (Claude) ได้ prompt ครบถ้วน; โมเดลระดับมาตรฐาน (GPT-4o, Gemini, DeepSeek) ปิด thinking; โมเดลระดับพื้นฐาน (MiniMax, Qwen, Llama, Mistral) ได้ prompt แบบ nested-JSON ที่ย่อลงเพื่อความเสถียรสูงสุด
+
+**i18n** — การแปลภาษาเต็มรูปแบบใน 15 ภาษา: English, 简体中文, 繁體中文, 日本語, 한국어, Français, Español, Deutsch, Português, Русский, हिन्दी, Türkçe, ไทย, Tiếng Việt, Bahasa Indonesia
 
 **MCP Server**
 - MCP Server ในตัว — ติดตั้งได้ด้วยคลิกเดียวใน Claude Code / Codex / Gemini / OpenCode / Kiro / Copilot CLIs
@@ -219,6 +224,8 @@ cat design.dsl | op design - # Pipe จาก stdin
 
 รองรับ 3 วิธีการป้อนข้อมูล: สตริงแบบ inline, `@filepath` (อ่านจากไฟล์) หรือ `-` (อ่านจาก stdin) ทำงานร่วมกับแอปเดสก์ท็อปหรือ web dev server ดู [CLI README](./apps/cli/README.md) สำหรับคู่มือคำสั่งฉบับเต็ม
 
+**LLM Skill** — ติดตั้งปลั๊กอิน [OpenPencil Skill](https://github.com/ZSeven-W/openpencil-skill) เพื่อสอน AI agent (Claude Code, Cursor, Codex, Gemini CLI ฯลฯ) ออกแบบด้วย `op`
+
 ## ฟีเจอร์
 
 **Canvas และการวาด**
@@ -248,13 +255,13 @@ cat design.dsl | op design - # Pipe จาก stdin
 
 | | |
 | --- | --- |
-| **Frontend** | React 19 · TanStack Start · Tailwind CSS v4 · shadcn/ui |
+| **Frontend** | React 19 · TanStack Start · Tailwind CSS v4 · shadcn/ui · i18next |
 | **Canvas** | CanvasKit/Skia (WASM, GPU-accelerated) |
 | **State** | Zustand v5 |
 | **Server** | Nitro |
 | **Desktop** | Electron 35 |
 | **CLI** | `op` — ควบคุมจาก terminal, batch design DSL, ส่งออกโค้ด |
-| **AI** | Anthropic SDK · Claude Agent SDK · OpenCode SDK · Copilot SDK |
+| **AI** | Vercel AI SDK v6 · Anthropic SDK · Claude Agent SDK · OpenCode SDK · Copilot SDK |
 | **Runtime** | Bun · Vite 7 |
 | **รูปแบบไฟล์** | `.op` — ใช้ JSON, อ่านได้โดยมนุษย์, Git-friendly |
 
@@ -289,7 +296,9 @@ openpencil/
 │   ├── pen-codegen/         Code generators (React, HTML, Vue, Flutter, ...)
 │   ├── pen-figma/           Figma .fig file parser และ converter
 │   ├── pen-renderer/        Standalone CanvasKit/Skia renderer
-│   └── pen-sdk/             Umbrella SDK (re-exports ทุก package)
+│   ├── pen-sdk/             Umbrella SDK (re-exports ทุก package)
+│   ├── pen-ai-skills/       AI prompt skill engine (โหลด prompt ตามเฟส)
+│   └── agent/               AI Agent SDK (Vercel AI SDK, หลายผู้ให้บริการ, ทีม Agent)
 └── .githooks/               Pre-commit version sync จาก branch name
 ```
 
@@ -348,6 +357,8 @@ bun run cli:compile        # คอมไพล์ CLI ไปยัง dist
 - [x] โปรไฟล์ความสามารถหลายโมเดล
 - [x] ปรับโครงสร้างเป็น monorepo พร้อม package ที่นำกลับมาใช้ใหม่ได้
 - [x] เครื่องมือ CLI (`op`) ควบคุมจาก terminal
+- [x] AI Agent SDK ในตัว รองรับหลายผู้ให้บริการ
+- [x] i18n — 15 ภาษา
 - [ ] การแก้ไขร่วมกัน
 - [ ] ระบบปลั๊กอิน
 

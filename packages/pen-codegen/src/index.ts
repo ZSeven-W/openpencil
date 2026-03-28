@@ -24,3 +24,24 @@ export { generateComposeCode, generateComposeFromDocument } from './compose-gene
 
 // React Native
 export { generateReactNativeCode, generateReactNativeFromDocument } from './react-native-generator.js'
+
+// Utilities
+export { varOrLiteral, sanitizeName, nodeTreeToSummary, isVariableRef } from './utils.js'
+
+// Types
+export type {
+  Framework,
+  PlannedChunk,
+  CodePlanFromAI,
+  ExecutableChunk,
+  CodeExecutionPlan,
+  ChunkContract,
+  PropDef,
+  SlotDef,
+  ImportDef,
+  ChunkResult,
+  ChunkStatus,
+  CodeGenProgress,
+  ContractValidationResult,
+} from './codegen-types.js'
+export { FRAMEWORKS, validateContract } from './codegen-types.js'

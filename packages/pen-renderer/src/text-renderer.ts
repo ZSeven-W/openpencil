@@ -153,7 +153,7 @@ export class SkiaTextRenderer {
       ? tNode.content
       : Array.isArray(tNode.content)
         ? tNode.content.map((s) => s.text ?? '').join('')
-        : ''
+        : (tNode as unknown as Record<string, unknown>).text as string ?? ''
     if (!content) return true
 
     const fontSize = tNode.fontSize ?? 16
@@ -288,10 +288,15 @@ export class SkiaTextRenderer {
     }
     const surfaceH = para.getHeight() + 2
 
-    // Try paragraph image cache: drawImageRect is far cheaper than drawParagraph per frame
-    const imgScale = Math.min(this._dpr, 2)
-    let cachedImg = this.paraImageCache.get(cacheKey)
-    if (cachedImg === undefined) {
+    // Try paragraph image cache: drawImageRect is far cheaper than drawParagraph per frame.
+    // Skip cache when zoomed in (> 1x) or significantly zoomed out (< 0.5x) — cached
+    // bitmaps are at fixed DPR resolution and produce jagged edges when scaled by the
+    // viewport transform. At normal zoom (0.5–1x), bitmap cache is safe and fast.
+    const useParaImageCache = this.zoom >= 0.5 && this.zoom <= 1
+    // Always rasterize at 2x minimum — 1x bitmaps produce jagged text on low-DPR displays
+    const imgScale = Math.max(this._dpr, 2)
+    let cachedImg: any = useParaImageCache ? this.paraImageCache.get(cacheKey) : null
+    if (useParaImageCache && cachedImg === undefined) {
       cachedImg = null
       const sw = Math.min(Math.ceil(surfaceW * imgScale), 4096)
       const sh = Math.min(Math.ceil(surfaceH * imgScale), 4096)
@@ -310,7 +315,7 @@ export class SkiaTextRenderer {
           }
         }
       }
-      this.paraImageCache.set(cacheKey, cachedImg)
+      if (useParaImageCache) this.paraImageCache.set(cacheKey, cachedImg)
     }
 
     if (cachedImg) {
@@ -399,7 +404,7 @@ export class SkiaTextRenderer {
       ? tNode.content
       : Array.isArray(tNode.content)
         ? tNode.content.map((s) => s.text ?? '').join('')
-        : ''
+        : (tNode as unknown as Record<string, unknown>).text as string ?? ''
 
     if (!content) return
 
