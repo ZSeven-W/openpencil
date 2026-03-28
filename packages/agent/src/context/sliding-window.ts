@@ -7,6 +7,8 @@ export interface SlidingWindowOptions {
 
 export function createSlidingWindowStrategy(options: SlidingWindowOptions): ContextStrategy {
   return {
+    // maxTokens is part of the ContextStrategy interface but unused by this turn-based strategy.
+    // A future token-counting strategy would use it for accurate budget trimming.
     trim(messages: ModelMessage[], _maxTokens: number): ModelMessage[] {
       const systemMessages = messages.filter(m => m.role === 'system')
       const nonSystem = messages.filter(m => m.role !== 'system')

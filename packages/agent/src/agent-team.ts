@@ -6,6 +6,7 @@ import type { ContextStrategy } from './context/types'
 import type { ToolResult } from './tools/types'
 import { createAgent } from './agent-loop'
 import { createDelegateTool } from './tools/delegate'
+import { createToolRegistry } from './tools/tool-registry'
 
 export interface TeamMemberConfig {
   id: string
@@ -37,7 +38,11 @@ export function createTeam(config: TeamConfig): AgentTeam {
   const parentAbort = new AbortController()
   const memberIds = config.members.map(m => m.id)
 
-  const leadTools = config.lead.tools
+  // Clone tools to avoid mutating the caller's registry
+  const leadTools = createToolRegistry()
+  for (const tool of config.lead.tools.list()) {
+    leadTools.register(tool)
+  }
   leadTools.register(createDelegateTool(memberIds))
 
   const leadAgent = createAgent({

@@ -54,6 +54,23 @@ export interface Agent {
 function classifyAPIError(err: any): { userMessage: string; retryWithoutTools: boolean } {
   const msg = err?.message ?? String(err)
   const body = err?.responseBody ?? ''
+  const status = err?.statusCode ?? err?.status
+
+  // Match on HTTP status codes first (more reliable than regex)
+  if (status === 429) {
+    return {
+      userMessage: 'Rate limited by the API provider. Please wait a moment and try again.',
+      retryWithoutTools: false,
+    }
+  }
+  if (status === 402 || status === 403) {
+    if (/credit|funds|billing|afford/i.test(msg + body)) {
+      return {
+        userMessage: 'Insufficient credits for this model. Try a smaller/free model or add credits at your provider.',
+        retryWithoutTools: false,
+      }
+    }
+  }
 
   // Model doesn't support function calling properly
   if (
@@ -147,7 +164,8 @@ export function createAgent(config: AgentConfig): Agent {
     const history = [...messages]
     let toolsDisabled = false
 
-    while (turn < maxTurns) {
+    try {
+      while (turn < maxTurns) {
       if (abortSignal?.aborted) {
         yield { type: 'abort' }
         return
@@ -302,6 +320,8 @@ export function createAgent(config: AgentConfig): Agent {
       // This ensures correct format conversion (arguments stringification, etc.)
       // instead of manually constructing ModelMessage[] which loses format details.
       const resolved = await response.response
+      // response.messages contains assistant + auto-executed tool results in a format
+      // compatible with streamText(). Cast needed: ResponseMessage ≠ ModelMessage at type level.
       const responseMessages = resolved.messages as unknown as ModelMessage[]
 
       // The SDK includes assistant message + tool result messages (for tools with execute()).
@@ -309,7 +329,8 @@ export function createAgent(config: AgentConfig): Agent {
       // We need to add tool result messages for those.
       history.push(...responseMessages)
 
-      // Add tool results for client-executed tools (not in responseMessages)
+      // Manually add tool results for client-executed tools (not auto-included by SDK).
+      // Structure matches the AI SDK's expected tool result format.
       for (const tr of toolResults) {
         if (!tools.hasExecute(tr.name)) {
           history.push({
@@ -335,6 +356,13 @@ export function createAgent(config: AgentConfig): Agent {
     // Reached max turns — treat as a normal completion, not an error.
     // The model may have done useful work even if it didn't finish cleanly.
     yield { type: 'done', totalTurns: maxTurns }
+    } finally {
+      // Clean up pending tool calls to prevent timeout leaks
+      for (const [, entry] of pending) {
+        entry.reject(new Error('Agent loop ended'))
+      }
+      pending.clear()
+    }
   }
 
   return { run, resolveToolResult }
