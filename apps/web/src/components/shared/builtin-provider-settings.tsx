@@ -49,6 +49,13 @@ const PROVIDER_PRESETS: Record<BuiltinProviderPreset, PresetConfig> = {
     placeholder: 'sk-...',
     modelPlaceholder: 'deepseek-chat',
   },
+  gemini: {
+    label: 'Google Gemini',
+    type: 'openai-compat',
+    baseURL: 'https://generativelanguage.googleapis.com/v1beta/openai',
+    placeholder: 'AIza...',
+    modelPlaceholder: 'gemini-2.5-flash',
+  },
   minimax: {
     label: 'MiniMax',
     type: 'openai-compat',
@@ -161,6 +168,11 @@ const BUILTIN_MODEL_LISTS: Partial<Record<BuiltinProviderPreset, Array<{ id: str
     { id: 'claude-haiku-4-5-20251001', name: 'Claude Haiku 4.5' },
     { id: 'claude-opus-4-20250514', name: 'Claude Opus 4' },
     { id: 'claude-sonnet-4-20250514', name: 'Claude Sonnet 4' },
+  ],
+  gemini: [
+    { id: 'gemini-2.5-pro', name: 'Gemini 2.5 Pro' },
+    { id: 'gemini-2.5-flash', name: 'Gemini 2.5 Flash' },
+    { id: 'gemini-2.0-flash', name: 'Gemini 2.0 Flash' },
   ],
   minimax: [
     { id: 'MiniMax-M2.7', name: 'MiniMax M2.7' },
@@ -398,6 +410,7 @@ export function BuiltinProviderForm({
           <option value="openai">OpenAI</option>
           <option value="openrouter">OpenRouter</option>
           <option value="deepseek">DeepSeek</option>
+          <option value="gemini">Google Gemini</option>
           <option value="minimax">MiniMax</option>
           <option value="zhipu">智谱 (Zhipu)</option>
           <option value="kimi">Kimi (Moonshot)</option>
