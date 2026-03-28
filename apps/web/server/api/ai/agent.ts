@@ -29,15 +29,6 @@ const TOOL_SCHEMAS: Record<string, ReturnType<typeof jsonSchema>> = {
       pageId: { type: 'string', description: 'Target page ID (optional)' },
     },
   }),
-  insert_node: jsonSchema({
-    type: 'object',
-    properties: {
-      parent: { type: ['string', 'null'], description: 'Parent node ID, or null for root' },
-      data: { type: 'object', description: 'PenNode data with nested children' },
-      pageId: { type: 'string', description: 'Target page ID (optional)' },
-    },
-    required: ['parent', 'data'],
-  }),
   update_node: jsonSchema({
     type: 'object',
     properties: {
@@ -53,14 +44,12 @@ const TOOL_SCHEMAS: Record<string, ReturnType<typeof jsonSchema>> = {
     },
     required: ['id'],
   }),
-  find_empty_space: jsonSchema({
+  generate_design: jsonSchema({
     type: 'object',
     properties: {
-      width: { type: 'number', description: 'Required width' },
-      height: { type: 'number', description: 'Required height' },
-      pageId: { type: 'string', description: 'Target page ID (optional)' },
+      prompt: { type: 'string', description: 'Natural language description of the design to create' },
     },
-    required: ['width', 'height'],
+    required: ['prompt'],
   }),
 }
 

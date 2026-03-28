@@ -67,20 +67,20 @@ export function createDesignToolRegistry() {
     }),
   })
 
+  // Design creation — delegates to the full internal pipeline (orchestrator + sub-agents)
   registry.register({
-    name: 'insert_node',
-    description: 'Insert a new node into the document tree',
-    level: TOOL_AUTH_MAP.insert_node,
+    name: 'generate_design',
+    description: 'Generate a complete design on the canvas. Pass a natural language description. The pipeline handles layout, styling, icons, and rendering. Always use this for creating designs.',
+    level: TOOL_AUTH_MAP.generate_design,
     schema: z.object({
-      parent: z.string().nullable().describe('Parent node ID, or null for root'),
-      data: z.record(z.unknown()).describe('PenNode data'),
-      pageId: z.string().optional(),
+      prompt: z.string().describe('Natural language description of the design, e.g. "a modern mobile login screen with email, password, login button, and social login"'),
     }),
   })
 
+  // Modification tools — for editing existing designs
   registry.register({
     name: 'update_node',
-    description: 'Update properties of an existing node',
+    description: 'Update properties of an existing node by ID',
     level: TOOL_AUTH_MAP.update_node,
     schema: z.object({
       id: z.string().describe('Node ID to update'),
@@ -90,21 +90,10 @@ export function createDesignToolRegistry() {
 
   registry.register({
     name: 'delete_node',
-    description: 'Delete a node from the document',
+    description: 'Delete a node from the document by ID',
     level: TOOL_AUTH_MAP.delete_node,
     schema: z.object({
       id: z.string().describe('Node ID to delete'),
-    }),
-  })
-
-  registry.register({
-    name: 'find_empty_space',
-    description: 'Find an empty area on the canvas for placing new content',
-    level: TOOL_AUTH_MAP.find_empty_space,
-    schema: z.object({
-      width: z.number().describe('Required width'),
-      height: z.number().describe('Required height'),
-      pageId: z.string().optional(),
     }),
   })
 
