@@ -434,6 +434,10 @@ const ko: TranslationKeys = {
   'builtin.errorApiKeyEmpty': 'API 키가 비어 있습니다. 설정에서 API 키를 추가해 주세요.',
   'builtin.parallelAgents': '병렬 하위 에이전트: {{count}}x (클릭하여 전환)',
   'builtin.baseUrlPlaceholder': 'https://api.example.com/v1',
+  'builtin.teamTitle': '팀',
+  'builtin.teamDescription': '대화와 디자인에 다른 모델을 사용합니다. 대화 모델은 채팅을, 디자인 모델은 generate_design을 처리합니다.',
+  'builtin.teamDesignModel': '디자인 모델',
+  'builtin.teamSelectModel': '모델 선택...',
 
   // ── Figma Import ──
   'figma.title': 'Figma에서 가져오기',

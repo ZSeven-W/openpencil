@@ -434,6 +434,10 @@ const th: TranslationKeys = {
   'builtin.errorApiKeyEmpty': 'API Key ว่างเปล่า กรุณาเพิ่ม API Key ในการตั้งค่า',
   'builtin.parallelAgents': 'ตัวแทนย่อยแบบขนาน: {{count}}x (คลิกเพื่อสลับ)',
   'builtin.baseUrlPlaceholder': 'https://api.example.com/v1',
+  'builtin.teamTitle': 'ทีม',
+  'builtin.teamDescription': 'ใช้โมเดลที่แตกต่างกันสำหรับแชทและการออกแบบ โมเดลแชทจัดการการสนทนา โมเดลออกแบบจัดการ generate_design',
+  'builtin.teamDesignModel': 'โมเดลออกแบบ',
+  'builtin.teamSelectModel': 'เลือกโมเดล...',
 
   // ── Figma Import ──
   'figma.title': 'นำเข้าจาก Figma',

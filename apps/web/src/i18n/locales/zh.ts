@@ -425,6 +425,10 @@ const zh: TranslationKeys = {
   'builtin.errorApiKeyEmpty': 'API 密钥为空，请在设置中添加您的 API 密钥。',
   'builtin.parallelAgents': '并行子代理：{{count}}x（点击切换）',
   'builtin.baseUrlPlaceholder': 'https://api.example.com/v1',
+  'builtin.teamTitle': '团队',
+  'builtin.teamDescription': '为对话和设计使用不同模型。对话模型处理聊天，设计模型处理 generate_design。',
+  'builtin.teamDesignModel': '设计模型',
+  'builtin.teamSelectModel': '选择模型...',
 
   // ── Figma Import ──
   'figma.title': '从 Figma 导入',

@@ -434,6 +434,10 @@ const id: TranslationKeys = {
   'builtin.errorApiKeyEmpty': 'API Key kosong. Silakan tambahkan API Key di pengaturan.',
   'builtin.parallelAgents': 'Sub-agen paralel: {{count}}x (klik untuk berganti)',
   'builtin.baseUrlPlaceholder': 'https://api.example.com/v1',
+  'builtin.teamTitle': 'Tim',
+  'builtin.teamDescription': 'Gunakan model berbeda untuk obrolan dan desain. Model obrolan menangani percakapan; model desain menangani generate_design.',
+  'builtin.teamDesignModel': 'Model Desain',
+  'builtin.teamSelectModel': 'Pilih model...',
 
   // ── Figma Import ──
   'figma.title': 'Impor dari Figma',

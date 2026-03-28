@@ -434,6 +434,10 @@ const vi: TranslationKeys = {
   'builtin.errorApiKeyEmpty': 'API Key đang trống. Vui lòng thêm API Key trong cài đặt.',
   'builtin.parallelAgents': 'Tác nhân phụ song song: {{count}}x (nhấn để chuyển đổi)',
   'builtin.baseUrlPlaceholder': 'https://api.example.com/v1',
+  'builtin.teamTitle': 'Nhóm',
+  'builtin.teamDescription': 'Sử dụng các mô hình khác nhau cho trò chuyện và thiết kế. Mô hình trò chuyện xử lý hội thoại; mô hình thiết kế xử lý generate_design.',
+  'builtin.teamDesignModel': 'Mô hình thiết kế',
+  'builtin.teamSelectModel': 'Chọn mô hình...',
 
   // ── Figma Import ──
   'figma.title': 'Nhập từ Figma',

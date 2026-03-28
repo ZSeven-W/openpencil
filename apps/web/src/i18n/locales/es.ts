@@ -441,6 +441,10 @@ const es: TranslationKeys = {
   'builtin.errorApiKeyEmpty': 'La API key está vacía. Por favor, agregue su API key en la configuración.',
   'builtin.parallelAgents': 'Sub-agentes en paralelo: {{count}}x (clic para cambiar)',
   'builtin.baseUrlPlaceholder': 'https://api.example.com/v1',
+  'builtin.teamTitle': 'Equipo',
+  'builtin.teamDescription': 'Usa modelos diferentes para chat y diseño. El modelo de chat maneja la conversación; el modelo de diseño maneja generate_design.',
+  'builtin.teamDesignModel': 'Modelo de diseño',
+  'builtin.teamSelectModel': 'Seleccionar modelo...',
 
   // ── Figma Import ──
   'figma.title': 'Importar desde Figma',

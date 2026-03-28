@@ -432,6 +432,10 @@ const en = {
   'builtin.errorApiKeyEmpty': 'API key is empty. Please add your API key in settings.',
   'builtin.parallelAgents': 'Parallel sub-agents: {{count}}x (click to cycle)',
   'builtin.baseUrlPlaceholder': 'https://api.example.com/v1',
+  'builtin.teamTitle': 'Team',
+  'builtin.teamDescription': 'Use different models for chat and design. The chat model handles conversation; the design model handles generate_design.',
+  'builtin.teamDesignModel': 'Design Model',
+  'builtin.teamSelectModel': 'Select a model...',
 
   // ── Figma Import ──
   'figma.title': 'Import from Figma',
