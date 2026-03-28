@@ -285,29 +285,32 @@ export class AgentToolExecutor {
     const totalNodes = countNodes(node)
 
     // --- Auto-replace empty root frame (matches batch_design behavior) ---
-    // When inserting a frame at root and an empty root frame exists,
-    // replace it via updateNode (single atomic operation, no duplicate keys).
+    // Uses setActivePageChildren for atomic tree swap — same as batch_design.
+    // This avoids updateNode side-effect issues and duplicate key errors.
     let replaced = false
     if (args.parent === null && (nodeData as any).type === 'frame') {
       try {
+        const { setActivePageChildren } = await import('@/stores/document-tree-utils')
+        const { removeNodeFromTree, insertNodeInTree } = await import('@/stores/document-tree-utils')
         const doc = docStore.document
         const pageId = args.pageId ?? useCanvasStore.getState().activePageId
         const children = getActivePageChildren(doc, pageId)
-        const emptyFrame = children.find(
+        const emptyIdx = children.findIndex(
           (n) => n.type === 'frame' && (!('children' in n) || !n.children || n.children.length === 0),
         )
-        if (emptyFrame) {
+        if (emptyIdx !== -1) {
+          const emptyFrame = children[emptyIdx]
           // Inherit position from the empty frame
           if (emptyFrame.x !== undefined) (node as any).x = emptyFrame.x
           if (emptyFrame.y !== undefined) (node as any).y = emptyFrame.y
-          // Mark replaced BEFORE updateNode — updateNode may throw from canvas sync
-          // side-effects, but the update IS applied to the store regardless
+          // Atomic tree swap: remove empty + insert new in one setState
+          let updated = removeNodeFromTree(children, emptyFrame.id)
+          updated = insertNodeInTree(updated, null, node, emptyIdx)
+          useDocumentStore.setState({
+            document: setActivePageChildren(doc, pageId, updated),
+            isDirty: true,
+          })
           replaced = true
-          node.id = emptyFrame.id
-          const { id: _discardId, ...nodeProps } = node as any
-          try {
-            docStore.updateNode(emptyFrame.id, nodeProps)
-          } catch { /* canvas sync side-effect — update still applied */ }
         }
       } catch { /* fallback to normal insert */ }
     }
@@ -315,7 +318,7 @@ export class AgentToolExecutor {
     if (!replaced) {
       try {
         docStore.addNode(args.parent, node)
-      } catch { /* side-effect error — node may still be in the store */ }
+      } catch { /* side-effect error */ }
     }
 
     // Track root-level insert to prevent duplicates
