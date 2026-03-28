@@ -10,7 +10,7 @@ import { useAgentSettingsStore } from '@/stores/agent-settings-store'
 import type { BuiltinProviderConfig, BuiltinProviderPreset } from '@/stores/agent-settings-store'
 
 /* ---------- Provider Preset Config ---------- */
-interface PresetRegion { label: string; baseURL: string }
+interface PresetRegion { baseURL: string }
 
 interface PresetConfig {
   label: string
@@ -56,8 +56,8 @@ const PROVIDER_PRESETS: Record<BuiltinProviderPreset, PresetConfig> = {
     placeholder: 'eyJ...',
     modelPlaceholder: 'MiniMax-M1',
     regions: {
-      cn: { label: 'China', baseURL: 'https://api.minimaxi.com/v1' },
-      global: { label: 'Global', baseURL: 'https://api.minimax.io/v1' },
+      cn: { baseURL: 'https://api.minimaxi.com/v1' },
+      global: { baseURL: 'https://api.minimax.io/v1' },
     },
   },
   zhipu: {
@@ -67,8 +67,8 @@ const PROVIDER_PRESETS: Record<BuiltinProviderPreset, PresetConfig> = {
     placeholder: 'xxx.yyy',
     modelPlaceholder: 'glm-4-flash',
     regions: {
-      cn: { label: 'China', baseURL: 'https://open.bigmodel.cn/api/paas/v4' },
-      global: { label: 'Global', baseURL: 'https://open.z.ai/api/paas/v4' },
+      cn: { baseURL: 'https://open.bigmodel.cn/api/paas/v4' },
+      global: { baseURL: 'https://open.z.ai/api/paas/v4' },
     },
   },
   kimi: {
@@ -78,8 +78,8 @@ const PROVIDER_PRESETS: Record<BuiltinProviderPreset, PresetConfig> = {
     placeholder: 'sk-...',
     modelPlaceholder: 'moonshot-v1-128k',
     regions: {
-      cn: { label: 'China', baseURL: 'https://api.moonshot.cn/v1' },
-      global: { label: 'Global', baseURL: 'https://api.moonshot.ai/v1' },
+      cn: { baseURL: 'https://api.moonshot.cn/v1' },
+      global: { baseURL: 'https://api.moonshot.ai/v1' },
     },
   },
   bailian: {
@@ -89,8 +89,8 @@ const PROVIDER_PRESETS: Record<BuiltinProviderPreset, PresetConfig> = {
     placeholder: 'sk-...',
     modelPlaceholder: 'qwen-plus',
     regions: {
-      cn: { label: 'China', baseURL: 'https://dashscope.aliyuncs.com/compatible-mode/v1' },
-      global: { label: 'Global', baseURL: 'https://dashscope-intl.aliyuncs.com/compatible-mode/v1' },
+      cn: { baseURL: 'https://dashscope.aliyuncs.com/compatible-mode/v1' },
+      global: { baseURL: 'https://dashscope-intl.aliyuncs.com/compatible-mode/v1' },
     },
   },
   doubao: {
@@ -121,8 +121,8 @@ const PROVIDER_PRESETS: Record<BuiltinProviderPreset, PresetConfig> = {
     placeholder: 'API Key',
     modelPlaceholder: 'step-3.5-flash',
     regions: {
-      cn: { label: 'China', baseURL: 'https://api.stepfun.com/v1' },
-      global: { label: 'Global', baseURL: 'https://api.stepfun.ai/v1' },
+      cn: { baseURL: 'https://api.stepfun.com/v1' },
+      global: { baseURL: 'https://api.stepfun.ai/v1' },
     },
   },
   nvidia: {
@@ -339,7 +339,7 @@ export function BuiltinProviderForm({
     }
     const cfg = PROVIDER_PRESETS[preset]
     const url = preset === 'custom' ? baseURL.trim() : (cfg.regions ? cfg.regions[region].baseURL : cfg.baseURL)
-    if (!url) { setModelError('Base URL is required to search models'); return }
+    if (!url) { setModelError(t('builtin.searchError')); return }
     setModelLoading(true)
     setModelError(null)
     const result = await fetchProviderModels(url, apiKey.trim() || undefined)
@@ -387,7 +387,7 @@ export function BuiltinProviderForm({
           <option value="modelscope">ModelScope</option>
           <option value="stepfun">StepFun</option>
           <option value="nvidia">NVIDIA NIM</option>
-          <option value="custom">Custom</option>
+          <option value="custom">{t('builtin.custom')}</option>
         </select>
       </div>
       {presetConfig.regions && (
@@ -446,7 +446,7 @@ export function BuiltinProviderForm({
       {showBaseURL && (
         <div>
           <label className="text-[11px] text-muted-foreground mb-1 block">{isBaseURLLocked ? t('builtin.baseUrl') : t('builtin.baseUrlRequired')}</label>
-          <input value={baseURL} onChange={(e) => setBaseURL(e.target.value)} placeholder="https://api.example.com/v1" readOnly={isBaseURLLocked}
+          <input value={baseURL} onChange={(e) => setBaseURL(e.target.value)} placeholder={t('builtin.baseUrlPlaceholder')} readOnly={isBaseURLLocked}
             className={cn('w-full h-8 px-2.5 text-[13px] bg-card text-foreground rounded-md border border-input focus:border-ring outline-none transition-colors font-mono', isBaseURLLocked && 'opacity-60 cursor-default')} />
         </div>
       )}

@@ -426,6 +426,14 @@ const hi: TranslationKeys = {
   'builtin.openaiCompat': 'OpenAI Compatible',
   'builtin.ready': 'तैयार',
   'builtin.add': 'जोड़ें',
+  'builtin.searchError': 'मॉडल खोजने के लिए Base URL आवश्यक है',
+  'builtin.custom': 'कस्टम',
+  'builtin.apiKeyBadge': 'API Key',
+  'builtin.viaApiKey': '{{name}} API Key के माध्यम से',
+  'builtin.errorProviderNotFound': 'अंतर्निहित प्रदाता नहीं मिला। कृपया अपनी सेटिंग्स जाँचें।',
+  'builtin.errorApiKeyEmpty': 'API key खाली है। कृपया सेटिंग्स में अपनी API key जोड़ें।',
+  'builtin.parallelAgents': 'समानांतर सब-एजेंट: {{count}}x (बदलने के लिए क्लिक करें)',
+  'builtin.baseUrlPlaceholder': 'https://api.example.com/v1',
 
   // ── Figma Import ──
   'figma.title': 'Figma से आयात करें',

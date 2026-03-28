@@ -426,6 +426,14 @@ const ko: TranslationKeys = {
   'builtin.openaiCompat': 'OpenAI Compatible',
   'builtin.ready': '준비 완료',
   'builtin.add': '추가',
+  'builtin.searchError': '모델을 검색하려면 Base URL이 필요합니다',
+  'builtin.custom': '사용자 정의',
+  'builtin.apiKeyBadge': 'API Key',
+  'builtin.viaApiKey': '{{name}} API Key를 통해',
+  'builtin.errorProviderNotFound': '내장 제공자를 찾을 수 없습니다. 설정을 확인해 주세요.',
+  'builtin.errorApiKeyEmpty': 'API 키가 비어 있습니다. 설정에서 API 키를 추가해 주세요.',
+  'builtin.parallelAgents': '병렬 하위 에이전트: {{count}}x (클릭하여 전환)',
+  'builtin.baseUrlPlaceholder': 'https://api.example.com/v1',
 
   // ── Figma Import ──
   'figma.title': 'Figma에서 가져오기',

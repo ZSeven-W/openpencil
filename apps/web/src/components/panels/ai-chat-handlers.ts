@@ -1,5 +1,6 @@
 import { useState, useCallback } from 'react'
 import { nanoid } from 'nanoid'
+import i18n from '@/i18n'
 import { decodeAgentEvent } from '@zseven-w/agent'
 import type { AgentEvent } from '@zseven-w/agent'
 import { useAIStore } from '@/stores/ai-store'
@@ -420,8 +421,8 @@ export function useChatHandlers() {
         const bp = builtinProviders.find((p) => p.id === builtinProviderId)
         if (!bp || !bp.apiKey) {
           accumulated = !bp
-            ? '**Error:** Built-in provider not found. Please check your settings.'
-            : '**Error:** API key is empty. Please add your API key in settings.'
+            ? `**Error:** ${i18n.t('builtin.errorProviderNotFound')}`
+            : `**Error:** ${i18n.t('builtin.errorApiKeyEmpty')}`
           updateLastMessage(accumulated)
           useAIStore.getState().setAbortController(null)
           setStreaming(false)

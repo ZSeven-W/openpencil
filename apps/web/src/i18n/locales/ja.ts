@@ -429,6 +429,14 @@ const ja: TranslationKeys = {
   'builtin.openaiCompat': 'OpenAI Compatible',
   'builtin.ready': '準備完了',
   'builtin.add': '追加',
+  'builtin.searchError': 'モデルを検索するには Base URL が必要です',
+  'builtin.custom': 'カスタム',
+  'builtin.apiKeyBadge': 'API Key',
+  'builtin.viaApiKey': '{{name}} API Key 経由',
+  'builtin.errorProviderNotFound': '組み込みプロバイダーが見つかりません。設定を確認してください。',
+  'builtin.errorApiKeyEmpty': 'API キーが空です。設定で API キーを追加してください。',
+  'builtin.parallelAgents': '並列サブエージェント：{{count}}x（クリックで切替）',
+  'builtin.baseUrlPlaceholder': 'https://api.example.com/v1',
 
   // ── Figma Import ──
   'figma.title': 'Figma からインポート',

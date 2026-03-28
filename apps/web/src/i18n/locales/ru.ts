@@ -428,6 +428,14 @@ const ru: TranslationKeys = {
   'builtin.openaiCompat': 'OpenAI Compatible',
   'builtin.ready': 'Готово',
   'builtin.add': 'Добавить',
+  'builtin.searchError': 'Для поиска моделей требуется Base URL',
+  'builtin.custom': 'Пользовательский',
+  'builtin.apiKeyBadge': 'API Key',
+  'builtin.viaApiKey': 'через API Key {{name}}',
+  'builtin.errorProviderNotFound': 'Встроенный провайдер не найден. Пожалуйста, проверьте настройки.',
+  'builtin.errorApiKeyEmpty': 'API key пуст. Пожалуйста, добавьте API key в настройках.',
+  'builtin.parallelAgents': 'Параллельные суб-агенты: {{count}}x (нажмите для переключения)',
+  'builtin.baseUrlPlaceholder': 'https://api.example.com/v1',
 
   // ── Figma Import ──
   'figma.title': 'Импорт из Figma',

@@ -417,6 +417,14 @@ const zhTW: TranslationKeys = {
   'builtin.openaiCompat': 'OpenAI Compatible',
   'builtin.ready': '就緒',
   'builtin.add': '新增',
+  'builtin.searchError': '搜尋模型需要提供 Base URL',
+  'builtin.custom': '自訂',
+  'builtin.apiKeyBadge': 'API Key',
+  'builtin.viaApiKey': '透過 {{name}} API Key',
+  'builtin.errorProviderNotFound': '找不到內建服務商，請檢查您的設定。',
+  'builtin.errorApiKeyEmpty': 'API 金鑰為空，請在設定中新增您的 API 金鑰。',
+  'builtin.parallelAgents': '並行子代理：{{count}}x（點擊切換）',
+  'builtin.baseUrlPlaceholder': 'https://api.example.com/v1',
 
   // ── Figma Import ──
   'figma.title': '從 Figma 匯入',

@@ -426,6 +426,14 @@ const id: TranslationKeys = {
   'builtin.openaiCompat': 'OpenAI Compatible',
   'builtin.ready': 'Siap',
   'builtin.add': 'Tambah',
+  'builtin.searchError': 'Base URL diperlukan untuk mencari model',
+  'builtin.custom': 'Kustom',
+  'builtin.apiKeyBadge': 'API Key',
+  'builtin.viaApiKey': 'melalui API Key {{name}}',
+  'builtin.errorProviderNotFound': 'Penyedia bawaan tidak ditemukan. Silakan periksa pengaturan Anda.',
+  'builtin.errorApiKeyEmpty': 'API Key kosong. Silakan tambahkan API Key di pengaturan.',
+  'builtin.parallelAgents': 'Sub-agen paralel: {{count}}x (klik untuk berganti)',
+  'builtin.baseUrlPlaceholder': 'https://api.example.com/v1',
 
   // ── Figma Import ──
   'figma.title': 'Impor dari Figma',

@@ -164,7 +164,7 @@ export default function AIChatPanel() {
         models: [{
           value: `builtin:${bp.id}:${bp.model}`,
           displayName: bp.model,
-          description: `via ${bp.displayName} API Key`,
+          description: t('builtin.viaApiKey', { name: bp.displayName }),
           provider: providerType,
           builtinProviderId: bp.id,
         }],

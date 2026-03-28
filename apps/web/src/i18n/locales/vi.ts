@@ -426,6 +426,14 @@ const vi: TranslationKeys = {
   'builtin.openaiCompat': 'OpenAI Compatible',
   'builtin.ready': 'Sẵn sàng',
   'builtin.add': 'Thêm',
+  'builtin.searchError': 'Cần có Base URL để tìm kiếm mô hình',
+  'builtin.custom': 'Tùy chỉnh',
+  'builtin.apiKeyBadge': 'API Key',
+  'builtin.viaApiKey': 'qua API Key của {{name}}',
+  'builtin.errorProviderNotFound': 'Không tìm thấy nhà cung cấp tích hợp. Vui lòng kiểm tra cài đặt của bạn.',
+  'builtin.errorApiKeyEmpty': 'API Key đang trống. Vui lòng thêm API Key trong cài đặt.',
+  'builtin.parallelAgents': 'Tác nhân phụ song song: {{count}}x (nhấn để chuyển đổi)',
+  'builtin.baseUrlPlaceholder': 'https://api.example.com/v1',
 
   // ── Figma Import ──
   'figma.title': 'Nhập từ Figma',

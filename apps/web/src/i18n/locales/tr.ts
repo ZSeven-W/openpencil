@@ -426,6 +426,14 @@ const tr: TranslationKeys = {
   'builtin.openaiCompat': 'OpenAI Compatible',
   'builtin.ready': 'Hazır',
   'builtin.add': 'Ekle',
+  'builtin.searchError': 'Modelleri aramak için Base URL gereklidir',
+  'builtin.custom': 'Özel',
+  'builtin.apiKeyBadge': 'API Key',
+  'builtin.viaApiKey': '{{name}} API Key ile',
+  'builtin.errorProviderNotFound': 'Yerleşik sağlayıcı bulunamadı. Lütfen ayarlarınızı kontrol edin.',
+  'builtin.errorApiKeyEmpty': 'API Key boş. Lütfen ayarlardan API Key ekleyin.',
+  'builtin.parallelAgents': 'Paralel alt ajanlar: {{count}}x (döngü için tıklayın)',
+  'builtin.baseUrlPlaceholder': 'https://api.example.com/v1',
 
   // ── Figma Import ──
   'figma.title': 'Figma\'dan İçe Aktar',

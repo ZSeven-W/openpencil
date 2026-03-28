@@ -428,6 +428,14 @@ const de: TranslationKeys = {
   'builtin.openaiCompat': 'OpenAI Compatible',
   'builtin.ready': 'Bereit',
   'builtin.add': 'Hinzufügen',
+  'builtin.searchError': 'Base URL ist erforderlich, um Modelle zu durchsuchen',
+  'builtin.custom': 'Benutzerdefiniert',
+  'builtin.apiKeyBadge': 'API Key',
+  'builtin.viaApiKey': 'über {{name}} API Key',
+  'builtin.errorProviderNotFound': 'Integrierter Anbieter nicht gefunden. Bitte überprüfen Sie Ihre Einstellungen.',
+  'builtin.errorApiKeyEmpty': 'API Key ist leer. Bitte fügen Sie Ihren API Key in den Einstellungen hinzu.',
+  'builtin.parallelAgents': 'Parallele Sub-Agenten: {{count}}x (klicken zum Wechseln)',
+  'builtin.baseUrlPlaceholder': 'https://api.example.com/v1',
 
   // ── Figma Import ──
   'figma.title': 'Aus Figma importieren',

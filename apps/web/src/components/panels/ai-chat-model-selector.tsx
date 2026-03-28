@@ -36,6 +36,7 @@ export function resolveNextModel(
  * Compact concurrency selector — cycles 1x through 6x on click.
  */
 export function ConcurrencyButton() {
+  const { t } = useTranslation()
   const concurrency = useAIStore((s) => s.concurrency)
   const setConcurrency = useAIStore((s) => s.setConcurrency)
   const isStreaming = useAIStore((s) => s.isStreaming)
@@ -45,7 +46,7 @@ export function ConcurrencyButton() {
       type="button"
       onClick={() => setConcurrency(concurrency >= 6 ? 1 : concurrency + 1)}
       disabled={isStreaming}
-      title={`Parallel sub-agents: ${concurrency}x (click to cycle)`}
+      title={t('builtin.parallelAgents', { count: concurrency })}
       className={cn(
         'flex items-center gap-0.5 text-[10px] px-1.5 py-0.5 rounded-md transition-colors shrink-0',
         concurrency > 1
@@ -134,7 +135,7 @@ export function ModelDropdown({
                   isSelected ? 'bg-secondary text-foreground' : 'text-muted-foreground hover:bg-accent hover:text-foreground')}>
                 <span className="w-3.5 shrink-0">{isSelected && <Check size={12} />}</span>
                 <span className="font-medium">{m.displayName}</span>
-                {isBuiltin && <span className="text-[9px] text-muted-foreground bg-secondary px-1 py-0.5 rounded ml-auto">API Key</span>}
+                {isBuiltin && <span className="text-[9px] text-muted-foreground bg-secondary px-1 py-0.5 rounded ml-auto">{t('builtin.apiKeyBadge')}</span>}
                 {!isBuiltin && idx === 0 && !q && <span className="text-[9px] text-muted-foreground bg-secondary px-1 py-0.5 rounded ml-auto">{t('common.best')}</span>}
               </button>
             )

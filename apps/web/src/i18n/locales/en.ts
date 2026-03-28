@@ -424,6 +424,14 @@ const en = {
   'builtin.openaiCompat': 'OpenAI Compatible',
   'builtin.ready': 'Ready',
   'builtin.add': 'Add',
+  'builtin.searchError': 'Base URL is required to search models',
+  'builtin.custom': 'Custom',
+  'builtin.apiKeyBadge': 'API Key',
+  'builtin.viaApiKey': 'via {{name}} API Key',
+  'builtin.errorProviderNotFound': 'Built-in provider not found. Please check your settings.',
+  'builtin.errorApiKeyEmpty': 'API key is empty. Please add your API key in settings.',
+  'builtin.parallelAgents': 'Parallel sub-agents: {{count}}x (click to cycle)',
+  'builtin.baseUrlPlaceholder': 'https://api.example.com/v1',
 
   // ── Figma Import ──
   'figma.title': 'Import from Figma',

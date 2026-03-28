@@ -426,6 +426,14 @@ const th: TranslationKeys = {
   'builtin.openaiCompat': 'OpenAI Compatible',
   'builtin.ready': 'พร้อม',
   'builtin.add': 'เพิ่ม',
+  'builtin.searchError': 'ต้องระบุ Base URL เพื่อค้นหาโมเดล',
+  'builtin.custom': 'กำหนดเอง',
+  'builtin.apiKeyBadge': 'API Key',
+  'builtin.viaApiKey': 'ผ่าน API Key ของ {{name}}',
+  'builtin.errorProviderNotFound': 'ไม่พบผู้ให้บริการในตัว กรุณาตรวจสอบการตั้งค่าของคุณ',
+  'builtin.errorApiKeyEmpty': 'API Key ว่างเปล่า กรุณาเพิ่ม API Key ในการตั้งค่า',
+  'builtin.parallelAgents': 'ตัวแทนย่อยแบบขนาน: {{count}}x (คลิกเพื่อสลับ)',
+  'builtin.baseUrlPlaceholder': 'https://api.example.com/v1',
 
   // ── Figma Import ──
   'figma.title': 'นำเข้าจาก Figma',
