@@ -580,9 +580,9 @@ export function TeamSection() {
   const setTeamDesignModel = useAgentSettingsStore((s) => s.setTeamDesignModel)
   const persist = useAgentSettingsStore((s) => s.persist)
 
-  // Only show when at least 2 enabled providers exist
+  // Show when at least 1 enabled provider exists
   const enabledProviders = builtinProviders.filter((p) => p.enabled && p.apiKey)
-  if (enabledProviders.length < 2) return null
+  if (enabledProviders.length < 1) return null
 
   // Build model options from enabled providers
   const modelOptions = enabledProviders.map((bp) => ({
