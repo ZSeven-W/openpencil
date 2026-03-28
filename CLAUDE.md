@@ -37,12 +37,13 @@ openpencil/
 │   ├── pen-figma/     Figma .fig file parser and converter
 │   ├── pen-renderer/  Standalone CanvasKit/Skia renderer
 │   ├── pen-sdk/       Umbrella SDK (re-exports all packages)
-│   └── pen-ai-skills/ AI prompt skill engine (phase-driven prompt loading + design memory)
+│   ├── pen-ai-skills/ AI prompt skill engine (phase-driven prompt loading + design memory)
+│   └── agent/         Domain-agnostic AI agent SDK (Vercel AI SDK, multi-provider, agent teams)
 ├── scripts/           Build and publish scripts
 └── .githooks/         Pre-commit version sync from branch name
 ```
 
-**Key technologies:** React 19, CanvasKit/Skia WASM (canvas engine), Paper.js (boolean path operations), Zustand v5 (state management), TanStack Router (file-based routing), Tailwind CSS v4, shadcn/ui (UI primitives), Vite 7, Nitro (server), Electron 35 (desktop), TypeScript (strict mode).
+**Key technologies:** React 19, CanvasKit/Skia WASM (canvas engine), Paper.js (boolean path operations), Zustand v5 (state management), TanStack Router (file-based routing), Tailwind CSS v4, shadcn/ui (UI primitives), Vite 7, Nitro (server), Electron 35 (desktop), Vercel AI SDK v6 (agent framework), i18next (15 locales), TypeScript (strict mode).
 
 ### Data Flow
 
@@ -137,7 +138,7 @@ Use [Conventional Commits](https://www.conventionalcommits.org/) format: `<type>
 
 **Types:** `feat`, `fix`, `refactor`, `perf`, `style`, `docs`, `test`, `chore`
 
-**Scopes:** `editor`, `canvas`, `panels`, `history`, `ai`, `codegen`, `store`, `types`, `variables`, `figma`, `mcp`, `electron`, `renderer`, `sdk`, `cli`
+**Scopes:** `editor`, `canvas`, `panels`, `history`, `ai`, `codegen`, `store`, `types`, `variables`, `figma`, `mcp`, `electron`, `renderer`, `sdk`, `cli`, `agent`, `i18n`
 
 **Rules:** Subject in English, lowercase start, no period, imperative mood. Body is optional; explain **why** not what. One commit per change.
 

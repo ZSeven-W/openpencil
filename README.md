@@ -206,6 +206,7 @@ docker build --target full -t openpencil-full .
 
 | Agent | Setup |
 | --- | --- |
+| **Built-in (9+ providers)** | Select from provider presets with region switcher — Anthropic, OpenAI, Google, DeepSeek, and more |
 | **Claude Code** | No config — uses Claude Agent SDK with local OAuth |
 | **Codex CLI** | Connect in Agent Settings (`Cmd+,`) |
 | **OpenCode** | Connect in Agent Settings (`Cmd+,`) |
@@ -213,6 +214,8 @@ docker build --target full -t openpencil-full .
 | **Gemini CLI** | Connect in Agent Settings (`Cmd+,`) |
 
 **Model Capability Profiles** — automatically adapts prompts, thinking mode, and timeouts per model tier. Full-tier models (Claude) get complete prompts; standard-tier (GPT-4o, Gemini, DeepSeek) disable thinking; basic-tier (MiniMax, Qwen, Llama, Mistral) get simplified nested-JSON prompts for maximum reliability.
+
+**i18n** — Full interface localization in 15 languages: English, 简体中文, 繁體中文, 日本語, 한국어, Français, Español, Deutsch, Português, Русский, हिन्दी, Türkçe, ไทย, Tiếng Việt, Bahasa Indonesia.
 
 **MCP Server**
 - Built-in MCP server — one-click install into Claude Code / Codex / Gemini / OpenCode / Kiro / Copilot CLIs
@@ -276,13 +279,13 @@ Supports three input methods: inline string, `@filepath` (read from file), or `-
 
 | | |
 | --- | --- |
-| **Frontend** | React 19 · TanStack Start · Tailwind CSS v4 · shadcn/ui |
+| **Frontend** | React 19 · TanStack Start · Tailwind CSS v4 · shadcn/ui · i18next |
 | **Canvas** | CanvasKit/Skia (WASM, GPU-accelerated) |
 | **State** | Zustand v5 |
 | **Server** | Nitro |
 | **Desktop** | Electron 35 |
 | **CLI** | `op` — terminal control, batch design DSL, code export |
-| **AI** | Anthropic SDK · Claude Agent SDK · OpenCode SDK · Copilot SDK |
+| **AI** | Vercel AI SDK v6 · Anthropic SDK · Claude Agent SDK · OpenCode SDK · Copilot SDK |
 | **Runtime** | Bun · Vite 7 |
 | **File format** | `.op` — JSON-based, human-readable, Git-friendly |
 
@@ -296,13 +299,16 @@ openpencil/
 │   │   │   ├── canvas/      CanvasKit/Skia engine — drawing, sync, layout
 │   │   │   ├── components/  React UI — editor, panels, shared dialogs, icons
 │   │   │   ├── services/ai/ AI chat, orchestrator, design generation, streaming
+│   │   │   ├── services/codegen/ Code generation service wrappers
 │   │   │   ├── stores/      Zustand — canvas, document, pages, history, AI
 │   │   │   ├── mcp/         MCP server tools for external CLI integration
-│   │   │   ├── hooks/       Keyboard shortcuts, file drop, Figma paste
+│   │   │   ├── hooks/       Keyboard shortcuts, file drop, Figma paste, MCP sync
+│   │   │   ├── i18n/        Internationalization — 15 locales
 │   │   │   └── uikit/       Reusable component kit system
 │   │   └── server/
-│   │       ├── api/ai/      Nitro API — streaming chat, generation, validation
-│   │       └── utils/       Claude CLI, OpenCode, Codex, Copilot wrappers
+│   │       ├── api/ai/      Nitro API — streaming chat, agent, generation, image search
+│   │       ├── api/mcp/     MCP HTTP transport endpoints
+│   │       └── utils/       Claude, OpenCode, Codex, Copilot, Gemini CLI wrappers
 │   ├── desktop/             Electron desktop app
 │   │   ├── main.ts          Window, Nitro fork, native menu, auto-updater
 │   │   ├── ipc-handlers.ts  Native file dialogs, theme sync, prefs IPC
@@ -317,7 +323,9 @@ openpencil/
 │   ├── pen-codegen/         Code generators (React, HTML, Vue, Flutter, ...)
 │   ├── pen-figma/           Figma .fig file parser and converter
 │   ├── pen-renderer/        Standalone CanvasKit/Skia renderer
-│   └── pen-sdk/             Umbrella SDK (re-exports all packages)
+│   ├── pen-sdk/             Umbrella SDK (re-exports all packages)
+│   ├── pen-ai-skills/       AI prompt skill engine (phase-driven prompt loading)
+│   └── agent/               AI agent SDK (Vercel AI SDK, multi-provider, agent teams)
 └── .githooks/               Pre-commit version sync from branch name
 ```
 
@@ -376,6 +384,8 @@ Contributions are welcome! See [CLAUDE.md](./CLAUDE.md) for architecture details
 - [x] Multi-model capability profiles
 - [x] Monorepo restructure with reusable packages
 - [x] CLI tool (`op`) for terminal control
+- [x] Built-in AI agent SDK with multi-provider support
+- [x] i18n — 15 languages
 - [ ] Collaborative editing
 - [ ] Plugin system
 

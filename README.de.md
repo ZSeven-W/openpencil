@@ -182,6 +182,7 @@ docker build --target full -t openpencil-full .
 
 | Agent | Einrichtung |
 | --- | --- |
+| **Integriert (9+ Anbieter)** | Auswahl aus Anbieter-Presets mit Region-Switcher — Anthropic, OpenAI, Google, DeepSeek und mehr |
 | **Claude Code** | Keine Konfiguration — verwendet Claude Agent SDK mit lokalem OAuth |
 | **Codex CLI** | In den Agenteneinstellungen verbinden (`Cmd+,`) |
 | **OpenCode** | In den Agenteneinstellungen verbinden (`Cmd+,`) |
@@ -189,6 +190,8 @@ docker build --target full -t openpencil-full .
 | **Gemini CLI** | In den Agenteneinstellungen verbinden (`Cmd+,`) |
 
 **Modell-Fähigkeitsprofile** — passt Prompts, Thinking-Modus und Timeouts automatisch pro Modellstufe an. Modelle der Vollstufe (Claude) erhalten vollständige Prompts; Standardstufe (GPT-4o, Gemini, DeepSeek) deaktiviert Thinking; Basisstufe (MiniMax, Qwen, Llama, Mistral) erhält vereinfachte verschachtelte JSON-Prompts für maximale Zuverlässigkeit.
+
+**i18n** — Vollständige Interface-Lokalisierung in 15 Sprachen: English, 简体中文, 繁體中文, 日本語, 한국어, Français, Español, Deutsch, Português, Русский, हिन्दी, Türkçe, ไทย, Tiếng Việt, Bahasa Indonesia.
 
 **MCP-Server**
 - Eingebauter MCP-Server — Ein-Klick-Installation in Claude Code / Codex / Gemini / OpenCode / Kiro / Copilot CLIs
@@ -252,13 +255,13 @@ Unterstützt drei Eingabemethoden: Inline-String, `@filepath` (aus Datei lesen) 
 
 | | |
 | --- | --- |
-| **Frontend** | React 19 · TanStack Start · Tailwind CSS v4 · shadcn/ui |
+| **Frontend** | React 19 · TanStack Start · Tailwind CSS v4 · shadcn/ui · i18next |
 | **Canvas** | CanvasKit/Skia (WASM, GPU-beschleunigt) |
 | **State** | Zustand v5 |
 | **Server** | Nitro |
 | **Desktop** | Electron 35 |
 | **CLI** | `op` — Terminal-Steuerung, Batch-Design-DSL, Code-Export |
-| **KI** | Anthropic SDK · Claude Agent SDK · OpenCode SDK · Copilot SDK |
+| **KI** | Vercel AI SDK v6 · Anthropic SDK · Claude Agent SDK · OpenCode SDK · Copilot SDK |
 | **Laufzeit** | Bun · Vite 7 |
 | **Dateiformat** | `.op` — JSON-basiert, menschenlesbar, Git-freundlich |
 
@@ -293,7 +296,9 @@ openpencil/
 │   ├── pen-codegen/         Codegeneratoren (React, HTML, Vue, Flutter, ...)
 │   ├── pen-figma/           Figma-.fig-Datei-Parser und -Konverter
 │   ├── pen-renderer/        Eigenständiger CanvasKit/Skia-Renderer
-│   └── pen-sdk/             Umbrella-SDK (re-exportiert alle Pakete)
+│   ├── pen-sdk/             Umbrella-SDK (re-exportiert alle Pakete)
+│   ├── pen-ai-skills/       KI-Prompt-Skill-Engine (phasengesteuertes Prompt-Laden)
+│   └── agent/               KI-Agenten-SDK (Vercel AI SDK, Multi-Anbieter, Agententeams)
 └── .githooks/               Pre-Commit-Versionssynchronisierung vom Branch-Namen
 ```
 
@@ -352,6 +357,8 @@ Beiträge sind willkommen! Siehe [CLAUDE.md](./CLAUDE.md) für Architekturdetail
 - [x] Multi-Modell-Fähigkeitsprofile
 - [x] Monorepo-Umstrukturierung mit wiederverwendbaren Paketen
 - [x] CLI-Tool (`op`) für Terminal-Steuerung
+- [x] Integriertes KI-Agenten-SDK mit Multi-Anbieter-Unterstützung
+- [x] i18n — 15 Sprachen
 - [ ] Kollaboratives Bearbeiten
 - [ ] Plugin-System
 

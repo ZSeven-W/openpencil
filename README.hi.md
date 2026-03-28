@@ -182,6 +182,7 @@ docker build --target full -t openpencil-full .
 
 | एजेंट | सेटअप |
 | --- | --- |
+| **बिल्ट-इन (9+ प्रदाता)** | प्रदाता प्रीसेट से चुनें और क्षेत्र स्विच करें — Anthropic, OpenAI, Google, DeepSeek और अन्य |
 | **Claude Code** | कोई कॉन्फ़िग नहीं — लोकल OAuth के साथ Claude Agent SDK का उपयोग करता है |
 | **Codex CLI** | एजेंट सेटिंग्स में कनेक्ट करें (`Cmd+,`) |
 | **OpenCode** | एजेंट सेटिंग्स में कनेक्ट करें (`Cmd+,`) |
@@ -189,6 +190,8 @@ docker build --target full -t openpencil-full .
 | **Gemini CLI** | एजेंट सेटिंग्स में कनेक्ट करें (`Cmd+,`) |
 
 **मॉडल क्षमता प्रोफ़ाइल** — प्रत्येक मॉडल टियर के अनुसार प्रॉम्प्ट, थिंकिंग मोड और टाइमआउट को स्वचालित रूप से अनुकूलित करता है। फुल-टियर मॉडल (Claude) को पूर्ण प्रॉम्प्ट मिलते हैं; स्टैंडर्ड-टियर (GPT-4o, Gemini, DeepSeek) में थिंकिंग अक्षम होती है; बेसिक-टियर (MiniMax, Qwen, Llama, Mistral) को अधिकतम विश्वसनीयता के लिए सरलीकृत नेस्टेड-JSON प्रॉम्प्ट मिलते हैं।
+
+**i18n** — 15 भाषाओं में पूर्ण इंटरफ़ेस स्थानीयकरण: English, 简体中文, 繁體中文, 日本語, 한국어, Français, Español, Deutsch, Português, Русский, हिन्दी, Türkçe, ไทย, Tiếng Việt, Bahasa Indonesia।
 
 **MCP सर्वर**
 - बिल्ट-इन MCP सर्वर — Claude Code / Codex / Gemini / OpenCode / Kiro / Copilot CLIs में वन-क्लिक इंस्टॉल
@@ -252,13 +255,13 @@ cat design.dsl | op design - # stdin से पाइप करें
 
 | | |
 | --- | --- |
-| **फ्रंटएंड** | React 19 · TanStack Start · Tailwind CSS v4 · shadcn/ui |
+| **फ्रंटएंड** | React 19 · TanStack Start · Tailwind CSS v4 · shadcn/ui · i18next |
 | **कैनवास** | CanvasKit/Skia (WASM, GPU-एक्सेलेरेटेड) |
 | **स्टेट** | Zustand v5 |
 | **सर्वर** | Nitro |
 | **डेस्कटॉप** | Electron 35 |
 | **CLI** | `op` — टर्मिनल नियंत्रण, बैच डिज़ाइन DSL, कोड एक्सपोर्ट |
-| **AI** | Anthropic SDK · Claude Agent SDK · OpenCode SDK · Copilot SDK |
+| **AI** | Vercel AI SDK v6 · Anthropic SDK · Claude Agent SDK · OpenCode SDK · Copilot SDK |
 | **रनटाइम** | Bun · Vite 7 |
 | **फ़ाइल फ़ॉर्मेट** | `.op` — JSON-आधारित, मानव-पठनीय, Git-फ्रेंडली |
 
@@ -293,7 +296,9 @@ openpencil/
 │   ├── pen-codegen/         कोड जनरेटर (React, HTML, Vue, Flutter, ...)
 │   ├── pen-figma/           Figma .fig फ़ाइल पार्सर और कनवर्टर
 │   ├── pen-renderer/        स्टैंडअलोन CanvasKit/Skia रेंडरर
-│   └── pen-sdk/             अम्ब्रेला SDK (सभी पैकेज री-एक्सपोर्ट)
+│   ├── pen-sdk/             अम्ब्रेला SDK (सभी पैकेज री-एक्सपोर्ट)
+│   ├── pen-ai-skills/       AI प्रॉम्प्ट स्किल इंजन (चरणबद्ध प्रॉम्प्ट लोडिंग)
+│   └── agent/               AI एजेंट SDK (Vercel AI SDK, मल्टी-प्रदाता, एजेंट टीमें)
 └── .githooks/               ब्रांच नाम से प्री-कमिट वर्शन सिंक
 ```
 
@@ -352,6 +357,8 @@ bun run cli:compile        # CLI को dist में कंपाइल कर
 - [x] मल्टी-मॉडल क्षमता प्रोफ़ाइल
 - [x] पुन: उपयोगी पैकेज के साथ मोनोरेपो पुनर्गठन
 - [x] CLI टूल (`op`) टर्मिनल नियंत्रण
+- [x] बिल्ट-इन AI एजेंट SDK, मल्टी-प्रदाता समर्थन
+- [x] i18n — 15 भाषाएँ
 - [ ] सहयोगी संपादन
 - [ ] प्लगइन सिस्टम
 
