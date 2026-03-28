@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
-import { Send, Plus, ChevronDown, ChevronUp, Check, MessageSquare, Loader2, Paperclip, X, Square, Zap, Search, Key } from 'lucide-react'
+import { Send, Plus, ChevronDown, ChevronUp, MessageSquare, Loader2, Paperclip, X, Square, Key } from 'lucide-react'
 import { nanoid } from 'nanoid'
 import { cn } from '@/lib/utils'
 import { useTranslation } from 'react-i18next'
@@ -12,23 +12,12 @@ import {
   extractAndApplyDesign,
 } from '@/services/ai/design-generator'
 import type { AIProviderType } from '@/types/agent-settings'
-import ClaudeLogo from '@/components/icons/claude-logo'
-import OpenAILogo from '@/components/icons/openai-logo'
-import OpenCodeLogo from '@/components/icons/opencode-logo'
-import CopilotLogo from '@/components/icons/copilot-logo'
-import GeminiLogo from '@/components/icons/gemini-logo'
 import ChatMessage from './chat-message'
 import { useChatHandlers } from './ai-chat-handlers'
 import { FixedChecklist } from './ai-chat-checklist'
 import { ToolCallBlock } from './tool-call-block'
+import { PROVIDER_ICON, resolveNextModel, ConcurrencyButton, ModelDropdown } from './ai-chat-model-selector'
 
-const PROVIDER_ICON: Record<AIProviderType, typeof ClaudeLogo> = {
-  anthropic: ClaudeLogo,
-  openai: OpenAILogo,
-  opencode: OpenCodeLogo,
-  copilot: CopilotLogo,
-  gemini: GeminiLogo,
-}
 
 const QUICK_ACTIONS = [
   {
@@ -56,49 +45,6 @@ const CORNER_CLASSES: Record<PanelCorner, string> = {
   'bottom-right': 'bottom-3 right-3',
 }
 
-function resolveNextModel(
-  models: Array<{ value: string }>,
-  currentModel: string,
-  preferredModel: string,
-): string | null {
-  if (models.length === 0) return null
-  if (models.some((m) => m.value === currentModel)) return currentModel
-  if (models.some((m) => m.value === preferredModel)) return preferredModel
-  return models[0].value
-}
-
-/**
- * Compact concurrency selector — cycles 1x through 6x on click.
- * Only visually prominent when concurrency > 1.
- */
-function ConcurrencyButton() {
-  const concurrency = useAIStore((s) => s.concurrency)
-  const setConcurrency = useAIStore((s) => s.setConcurrency)
-  const isStreaming = useAIStore((s) => s.isStreaming)
-
-  const handleClick = () => {
-    // Cycle: 1 → 2 → 3 → 4 → 5 → 6 → 1
-    setConcurrency(concurrency >= 6 ? 1 : concurrency + 1)
-  }
-
-  return (
-    <button
-      type="button"
-      onClick={handleClick}
-      disabled={isStreaming}
-      title={`Parallel sub-agents: ${concurrency}x (click to cycle)`}
-      className={cn(
-        'flex items-center gap-0.5 text-[10px] px-1.5 py-0.5 rounded-md transition-colors shrink-0',
-        concurrency > 1
-          ? 'text-primary bg-primary/10 hover:bg-primary/20'
-          : 'text-muted-foreground/50 hover:text-muted-foreground hover:bg-secondary',
-      )}
-    >
-      <Zap size={10} />
-      <span>{concurrency}x</span>
-    </button>
-  )
-}
 
 /**
  * Minimized AI bar — a compact clickable pill.
@@ -153,7 +99,6 @@ export default function AIChatPanel() {
   const hydrateModelPreference = useAIStore((s) => s.hydrateModelPreference)
   const model = useAIStore((s) => s.model)
   const setModel = useAIStore((s) => s.setModel)
-  const selectModel = useAIStore((s) => s.selectModel)
   const availableModels = useAIStore((s) => s.availableModels)
   const setAvailableModels = useAIStore((s) => s.setAvailableModels)
   const modelGroups = useAIStore((s) => s.modelGroups)
@@ -164,8 +109,6 @@ export default function AIChatPanel() {
   const builtinProviders = useAgentSettingsStore((s) => s.builtinProviders)
   const providersHydrated = useAgentSettingsStore((s) => s.isHydrated)
   const [modelDropdownOpen, setModelDropdownOpen] = useState(false)
-  const [modelSearch, setModelSearch] = useState('')
-  const modelSearchRef = useRef<HTMLInputElement>(null)
   const toolCallBlocks = useAIStore((s) => s.toolCallBlocks)
   const pendingAttachments = useAIStore((s) => s.pendingAttachments)
   const addPendingAttachment = useAIStore((s) => s.addPendingAttachment)
@@ -254,22 +197,6 @@ export default function AIChatPanel() {
     setLoadingModels(false)
   }, [providers, builtinProviders, providersHydrated]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Close model dropdown when clicking outside
-  useEffect(() => {
-    if (!modelDropdownOpen) {
-      setModelSearch('')
-      return
-    }
-    requestAnimationFrame(() => modelSearchRef.current?.focus())
-    const handler = (e: MouseEvent) => {
-      const panel = panelRef.current
-      if (panel && !panel.contains(e.target as Node)) {
-        setModelDropdownOpen(false)
-      }
-    }
-    document.addEventListener('pointerdown', handler)
-    return () => document.removeEventListener('pointerdown', handler)
-  }, [modelDropdownOpen])
 
   // Auto-expand when streaming starts while minimized
   useEffect(() => {
@@ -755,159 +682,7 @@ export default function AIChatPanel() {
           </div>
 
           {/* Upward model dropdown */}
-          {modelDropdownOpen && availableModels.length > 0 && (
-            <div className="absolute bottom-full left-0 right-0 mb-1 z-[60] rounded-lg border border-border bg-card shadow-xl py-1 max-h-72 flex flex-col">
-            {/* Search input */}
-            <div className="px-2 pt-1 pb-1.5 border-b border-border shrink-0">
-              <div className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-secondary/50">
-                <Search size={12} className="text-muted-foreground shrink-0" />
-                <input
-                  ref={modelSearchRef}
-                  value={modelSearch}
-                  onChange={(e) => setModelSearch(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Escape') {
-                      setModelDropdownOpen(false)
-                    }
-                  }}
-                  placeholder={t('ai.searchModels')}
-                  className="w-full bg-transparent text-xs text-foreground placeholder-muted-foreground outline-none"
-                />
-                {modelSearch && (
-                  <button
-                    type="button"
-                    onClick={() => setModelSearch('')}
-                    className="text-muted-foreground hover:text-foreground shrink-0"
-                  >
-                    <X size={10} />
-                  </button>
-                )}
-              </div>
-            </div>
-            <div className="overflow-y-auto">
-            {(() => {
-              const q = modelSearch.toLowerCase().trim()
-              if (modelGroups.length > 0) {
-                const filtered = modelGroups
-                  .map((group) => ({
-                    ...group,
-                    models: group.models.filter(
-                      (m) =>
-                        !q ||
-                        m.displayName.toLowerCase().includes(q) ||
-                        m.value.toLowerCase().includes(q) ||
-                        group.providerName.toLowerCase().includes(q),
-                    ),
-                  }))
-                  .filter((group) => group.models.length > 0)
-
-                if (filtered.length === 0) {
-                  return (
-                    <div className="px-3 py-4 text-xs text-muted-foreground text-center">
-                      {t('ai.noModelsFound')}
-                    </div>
-                  )
-                }
-
-                return filtered.map((group, groupIdx) => {
-                  const GIcon = PROVIDER_ICON[group.provider]
-                  // Use a composite key to avoid collision when CLI + built-in share provider type
-                  const groupKey = `${group.provider}-${group.providerName}-${groupIdx}`
-                  const isBuiltinGroup = group.models.some((m) => m.value.startsWith('builtin:'))
-                  return (
-                    <div key={groupKey}>
-                      <div className="flex items-center gap-1.5 px-3 pt-2.5 pb-1">
-                        {isBuiltinGroup
-                          ? <Key size={10} className="text-muted-foreground shrink-0" />
-                          : <GIcon className="w-3 h-3 text-muted-foreground" />
-                        }
-                        <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
-                          {group.providerName}
-                        </span>
-                      </div>
-                      {group.models.map((m, idx) => {
-                        const isSelected = m.value === model
-                        const isBuiltin = m.value.startsWith('builtin:')
-                        return (
-                          <button
-                            key={m.value}
-                            type="button"
-                            onClick={() => {
-                              selectModel(m.value)
-                              setModelDropdownOpen(false)
-                            }}
-                            className={cn(
-                              'w-full flex items-center gap-2 px-3 py-1.5 text-xs transition-colors',
-                              isSelected
-                                ? 'bg-secondary text-foreground'
-                                : 'text-muted-foreground hover:bg-accent hover:text-foreground',
-                            )}
-                          >
-                            <span className="w-3.5 shrink-0">
-                              {isSelected && <Check size={12} />}
-                            </span>
-                            <span className="font-medium">{m.displayName}</span>
-                            {isBuiltin && (
-                              <span className="text-[9px] text-muted-foreground bg-secondary px-1 py-0.5 rounded ml-auto">
-                                API Key
-                              </span>
-                            )}
-                            {!isBuiltin && idx === 0 && !q && (
-                              <span className="text-[9px] text-muted-foreground bg-secondary px-1 py-0.5 rounded ml-auto">
-                                {t('common.best')}
-                              </span>
-                            )}
-                          </button>
-                        )
-                      })}
-                    </div>
-                  )
-                })
-              }
-
-              const filtered = availableModels.filter(
-                (m) =>
-                  !q ||
-                  m.displayName.toLowerCase().includes(q) ||
-                  m.value.toLowerCase().includes(q),
-              )
-
-              if (filtered.length === 0) {
-                return (
-                  <div className="px-3 py-4 text-xs text-muted-foreground text-center">
-                    {t('ai.noModelsFound')}
-                  </div>
-                )
-              }
-
-              return filtered.map((m) => {
-                const isSelected = m.value === model
-                return (
-                  <button
-                    key={m.value}
-                    type="button"
-                    onClick={() => {
-                      selectModel(m.value)
-                      setModelDropdownOpen(false)
-                    }}
-                    className={cn(
-                      'w-full flex items-center gap-2 px-3 py-1.5 text-xs transition-colors',
-                      isSelected
-                        ? 'bg-secondary text-foreground'
-                        : 'text-muted-foreground hover:bg-accent hover:text-foreground',
-                    )}
-                  >
-                    <span className="w-3.5 shrink-0">
-                      {isSelected && <Check size={12} />}
-                    </span>
-                    <span className="font-medium">{m.displayName}</span>
-                  </button>
-                )
-              })
-            })()}
-            </div>
-          </div>
-          )}
+          <ModelDropdown open={modelDropdownOpen} onClose={() => setModelDropdownOpen(false)} />
         </div>
       </div>
     </div>
