@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
+import { useTranslation } from 'react-i18next'
 import {
   Loader2, Check, Key, Plus, Trash2, Pencil, Eye, EyeOff, Search, ChevronDown,
 } from 'lucide-react'
@@ -207,6 +208,7 @@ function ModelSearchDropdown({
   onSelect: (model: { id: string; name: string }) => void
   onClose: () => void
 }) {
+  const { t } = useTranslation()
   const [filter, setFilter] = useState('')
   const listRef = useRef<HTMLDivElement>(null)
 
@@ -235,14 +237,14 @@ function ModelSearchDropdown({
           autoFocus
           value={filter}
           onChange={(e) => setFilter(e.target.value)}
-          placeholder="Filter models..."
+          placeholder={t('builtin.filterModels')}
           className="w-full h-7 px-2 text-[12px] bg-card text-foreground rounded border border-input focus:border-ring outline-none transition-colors"
         />
       </div>
       <div className="max-h-48 overflow-y-auto">
         {filtered.length === 0 && (
           <div className="px-3 py-4 text-center text-[11px] text-muted-foreground">
-            No models found
+            {t('builtin.noModels')}
           </div>
         )}
         {filtered.map((m) => (
@@ -275,6 +277,7 @@ export function BuiltinProviderForm({
   onSave: (data: Omit<BuiltinProviderConfig, 'id'>) => void
   onCancel: () => void
 }) {
+  const { t } = useTranslation()
   const [preset, setPreset] = useState<BuiltinProviderPreset>(
     initial ? inferPreset(initial) : 'anthropic',
   )
@@ -363,12 +366,12 @@ export function BuiltinProviderForm({
   return (
     <div className="space-y-3 rounded-lg border border-border bg-secondary/20 p-3.5">
       <div>
-        <label className="text-[11px] text-muted-foreground mb-1 block">Display Name</label>
-        <input value={displayName} onChange={(e) => setDisplayName(e.target.value)} placeholder="e.g. My Anthropic Key"
+        <label className="text-[11px] text-muted-foreground mb-1 block">{t('builtin.displayName')}</label>
+        <input value={displayName} onChange={(e) => setDisplayName(e.target.value)} placeholder={t('builtin.displayNamePlaceholder')}
           className="w-full h-8 px-2.5 text-[13px] bg-card text-foreground rounded-md border border-input focus:border-ring outline-none transition-colors" />
       </div>
       <div>
-        <label className="text-[11px] text-muted-foreground mb-1 block">Provider</label>
+        <label className="text-[11px] text-muted-foreground mb-1 block">{t('builtin.provider')}</label>
         <select value={preset} onChange={(e) => handlePresetChange(e.target.value as BuiltinProviderPreset)}
           className="w-full h-8 px-2 text-[13px] bg-card text-foreground rounded-md border border-input focus:border-ring outline-none transition-colors">
           <option value="anthropic">Anthropic</option>
@@ -389,20 +392,20 @@ export function BuiltinProviderForm({
       </div>
       {presetConfig.regions && (
         <div>
-          <label className="text-[11px] text-muted-foreground mb-1 block">Region</label>
+          <label className="text-[11px] text-muted-foreground mb-1 block">{t('builtin.region')}</label>
           <div className="flex gap-1">
             {(['cn', 'global'] as const).map((r) => (
               <button key={r} type="button" onClick={() => handleRegionChange(r)}
                 className={cn('flex-1 h-7 text-[11px] rounded-md border transition-colors',
                   region === r ? 'bg-primary text-primary-foreground border-primary' : 'bg-card text-muted-foreground border-input hover:bg-accent')}>
-                {presetConfig.regions![r].label}
+                {t(`builtin.region${r === 'cn' ? 'China' : 'Global'}`)}
               </button>
             ))}
           </div>
         </div>
       )}
       <div>
-        <label className="text-[11px] text-muted-foreground mb-1 block">API Key</label>
+        <label className="text-[11px] text-muted-foreground mb-1 block">{t('builtin.apiKey')}</label>
         <div className="relative">
           <input type={showApiKey ? 'text' : 'password'} value={apiKey} onChange={(e) => setApiKey(e.target.value)} placeholder={presetConfig.placeholder}
             className="w-full h-8 px-2.5 pr-8 text-[13px] bg-card text-foreground rounded-md border border-input focus:border-ring outline-none transition-colors font-mono" />
@@ -412,11 +415,11 @@ export function BuiltinProviderForm({
         </div>
       </div>
       <div>
-        <label className="text-[11px] text-muted-foreground mb-1 block">Model</label>
+        <label className="text-[11px] text-muted-foreground mb-1 block">{t('builtin.model')}</label>
         <div className="relative">
           <input value={modelName} onChange={(e) => setModelName(e.target.value)} placeholder={presetConfig.modelPlaceholder}
             className="w-full h-8 px-2.5 pr-16 text-[13px] bg-card text-foreground rounded-md border border-input focus:border-ring outline-none transition-colors font-mono" />
-          <button type="button" onClick={handleFetchModels} disabled={modelLoading} title="Search available models"
+          <button type="button" onClick={handleFetchModels} disabled={modelLoading} title={t('builtin.searchModels')}
             className="absolute right-1.5 top-1/2 -translate-y-1/2 h-6 px-1.5 rounded flex items-center gap-1 text-muted-foreground hover:text-foreground hover:bg-secondary/50 transition-colors disabled:opacity-50">
             {modelLoading ? <Loader2 size={12} className="animate-spin" /> : <><Search size={12} /><ChevronDown size={10} /></>}
           </button>
@@ -428,13 +431,13 @@ export function BuiltinProviderForm({
       </div>
       {preset === 'custom' && (
         <div>
-          <label className="text-[11px] text-muted-foreground mb-1 block">API Format</label>
+          <label className="text-[11px] text-muted-foreground mb-1 block">{t('builtin.apiFormat')}</label>
           <div className="flex gap-1">
             {(['openai-compat', 'anthropic'] as const).map((fmt) => (
               <button key={fmt} type="button" onClick={() => setCustomApiFormat(fmt)}
                 className={cn('flex-1 h-7 text-[11px] rounded-md border transition-colors',
                   customApiFormat === fmt ? 'bg-primary text-primary-foreground border-primary' : 'bg-card text-muted-foreground border-input hover:bg-accent')}>
-                {fmt === 'openai-compat' ? 'OpenAI Compatible' : 'Anthropic'}
+                {fmt === 'openai-compat' ? t('builtin.openaiCompat') : 'Anthropic'}
               </button>
             ))}
           </div>
@@ -442,17 +445,17 @@ export function BuiltinProviderForm({
       )}
       {showBaseURL && (
         <div>
-          <label className="text-[11px] text-muted-foreground mb-1 block">Base URL{isBaseURLLocked ? '' : ' (required)'}</label>
+          <label className="text-[11px] text-muted-foreground mb-1 block">{isBaseURLLocked ? t('builtin.baseUrl') : t('builtin.baseUrlRequired')}</label>
           <input value={baseURL} onChange={(e) => setBaseURL(e.target.value)} placeholder="https://api.example.com/v1" readOnly={isBaseURLLocked}
             className={cn('w-full h-8 px-2.5 text-[13px] bg-card text-foreground rounded-md border border-input focus:border-ring outline-none transition-colors font-mono', isBaseURLLocked && 'opacity-60 cursor-default')} />
         </div>
       )}
       <div className="flex items-center justify-end gap-2 pt-1">
-        <Button variant="ghost" size="sm" onClick={onCancel} className="h-7 px-3 text-[11px]">Cancel</Button>
+        <Button variant="ghost" size="sm" onClick={onCancel} className="h-7 px-3 text-[11px]">{t('common.cancel')}</Button>
         <Button size="sm" onClick={() => onSave({
           displayName: displayName.trim(), type: effectiveType, apiKey: apiKey.trim(), model: modelName.trim(), preset,
           ...(showBaseURL && baseURL.trim() ? { baseURL: baseURL.trim() } : {}), enabled: initial?.enabled ?? true,
-        })} disabled={!canSave} className="h-7 px-3 text-[11px]">{initial ? 'Save' : 'Add'}</Button>
+        })} disabled={!canSave} className="h-7 px-3 text-[11px]">{initial ? t('common.save') : t('builtin.add')}</Button>
       </div>
     </div>
   )
@@ -460,6 +463,7 @@ export function BuiltinProviderForm({
 
 /* ---------- Builtin Provider Card ---------- */
 export function BuiltinProviderCard({ provider }: { provider: BuiltinProviderConfig }) {
+  const { t } = useTranslation()
   const update = useAgentSettingsStore((s) => s.updateBuiltinProvider)
   const remove = useAgentSettingsStore((s) => s.removeBuiltinProvider)
   const persist = useAgentSettingsStore((s) => s.persist)
@@ -487,7 +491,7 @@ export function BuiltinProviderCard({ provider }: { provider: BuiltinProviderCon
           <span className="text-[13px] font-medium text-foreground leading-tight block">{provider.displayName}</span>
           <span className="text-[11px] text-muted-foreground leading-tight mt-0.5 block">{provider.model} &middot; {masked}</span>
           {provider.enabled && (
-            <span className="text-[11px] text-green-500 leading-tight flex items-center gap-1 mt-0.5"><Check size={10} strokeWidth={2.5} />Ready</span>
+            <span className="text-[11px] text-green-500 leading-tight flex items-center gap-1 mt-0.5"><Check size={10} strokeWidth={2.5} />{t('builtin.ready')}</span>
           )}
         </div>
         <div className="flex items-center gap-1 shrink-0">
@@ -502,6 +506,7 @@ export function BuiltinProviderCard({ provider }: { provider: BuiltinProviderCon
 
 /* ---------- Builtin Providers Section (used in AgentsPage) ---------- */
 export function BuiltinProvidersSection() {
+  const { t } = useTranslation()
   const builtinProviders = useAgentSettingsStore((s) => s.builtinProviders)
   const addBuiltinProvider = useAgentSettingsStore((s) => s.addBuiltinProvider)
   const persist = useAgentSettingsStore((s) => s.persist)
@@ -519,18 +524,18 @@ export function BuiltinProvidersSection() {
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between">
-        <h3 className="text-sm font-medium">Built-in Providers</h3>
+        <h3 className="text-sm font-medium">{t('builtin.title')}</h3>
         {!showForm && (
           <button
             onClick={() => setShowForm(true)}
             className="text-[11px] text-muted-foreground hover:text-foreground flex items-center gap-1 transition-colors"
           >
-            <Plus size={12} /> Add Provider
+            <Plus size={12} /> {t('builtin.addProvider')}
           </button>
         )}
       </div>
       <p className="text-[11px] text-muted-foreground leading-relaxed">
-        Configure API keys directly — no CLI tools required.
+        {t('builtin.description')}
       </p>
       {showForm && <BuiltinProviderForm onSave={handleAdd} onCancel={() => setShowForm(false)} />}
       {builtinProviders.map((bp) => (
@@ -538,7 +543,7 @@ export function BuiltinProvidersSection() {
       ))}
       {!showForm && builtinProviders.length === 0 && (
         <div className="text-center py-6 text-[11px] text-muted-foreground">
-          No built-in providers configured yet.
+          {t('builtin.empty')}
         </div>
       )}
     </div>
