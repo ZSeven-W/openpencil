@@ -22,6 +22,7 @@ export interface ToolCallBlockData {
   level: AuthLevel
   result?: { success: boolean; data?: unknown; error?: string }
   status: 'pending' | 'running' | 'done' | 'error'
+  source?: string
 }
 
 interface ToolCallBlockProps {
@@ -93,6 +94,9 @@ export function ToolCallBlock({ block, onUndo }: ToolCallBlockProps) {
         <ChevronIcon className="h-3 w-3 shrink-0 opacity-50" />
         <Icon className="h-3.5 w-3.5 shrink-0" />
         <span className="truncate font-medium">{block.name}</span>
+        {block.source && block.source !== 'lead' && (
+          <span className="shrink-0 rounded bg-primary/10 px-1 py-0.5 text-[10px] text-primary">{block.source}</span>
+        )}
         <span className="ml-auto flex items-center gap-1">
           {block.status === 'running' && (
             <Loader2 className="h-3 w-3 animate-spin" />

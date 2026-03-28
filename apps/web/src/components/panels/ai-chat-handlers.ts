@@ -303,6 +303,7 @@ async function runAgentStream(
             args: evt.args,
             level: evt.level,
             status: 'running',
+            source: evt.source,
           }
           useAIStore.getState().addToolCallBlock(block)
 
@@ -352,14 +353,13 @@ async function runAgentStream(
         }
 
         case 'member_start': {
-          const status = `**${evt.memberId}** working: ${evt.task}`
-          accumulated += `\n\n---\n${status}\n`
+          accumulated += `\n\n> **[${evt.memberId}]** ${evt.task}\n`
           updateLastMessage(accumulated)
           break
         }
 
         case 'member_end': {
-          accumulated += `\n---\n`
+          accumulated += `\n> **[${evt.memberId}]** done\n\n`
           updateLastMessage(accumulated)
           break
         }
