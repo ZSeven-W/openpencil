@@ -1,6 +1,7 @@
 import { defineEventHandler, readBody, setResponseHeaders, getQuery, createError } from 'h3'
 import {
   createAgent,
+  createTeam,
   createAnthropicProvider,
   createOpenAICompatProvider,
   createToolRegistry,
@@ -18,6 +19,15 @@ interface ToolDef {
   parameters?: Record<string, unknown>
 }
 
+interface MemberDef {
+  id: string
+  providerType: 'anthropic' | 'openai-compat'
+  apiKey: string
+  model: string
+  baseURL?: string
+  systemPrompt?: string
+}
+
 interface AgentBody {
   sessionId: string
   messages: Array<{ role: string; content: unknown }>
@@ -29,6 +39,7 @@ interface AgentBody {
   toolDefs: ToolDef[]
   maxTurns?: number
   maxOutputTokens?: number
+  members?: MemberDef[]
 }
 
 function toModelMessages(raw: Array<{ role: string; content: unknown }>) {
@@ -104,17 +115,56 @@ export default defineEventHandler(async (event) => {
   }
 
   const abortController = new AbortController()
-  const agent = createAgent({
-    provider,
-    tools,
-    systemPrompt: body.systemPrompt,
-    maxTurns: body.maxTurns ?? 20,
-    maxOutputTokens: body.maxOutputTokens,
-    turnTimeout: 5 * 60_000, // 5 minutes — generate_design runs the full orchestrator pipeline
-    abortSignal: abortController.signal,
-  })
 
-  agentSessions.set(body.sessionId, { agent, abortController, createdAt: Date.now(), lastActivity: Date.now() })
+  // Create agent or team based on whether members are provided
+  let agentOrTeam: { run: (msgs: any) => AsyncGenerator<any>; resolveToolResult: (id: string, result: any) => void }
+
+  if (body.members?.length) {
+    // Team mode — create member agents with their own providers
+    const members = body.members.map(m => {
+      const memberProvider = m.providerType === 'anthropic'
+        ? createAnthropicProvider({ apiKey: m.apiKey, model: m.model, baseURL: m.baseURL })
+        : createOpenAICompatProvider({ apiKey: m.apiKey, model: m.model, baseURL: m.baseURL })
+
+      const memberTools = createToolRegistry()
+      for (const def of body.toolDefs ?? []) {
+        const params = def.parameters ? { ...def.parameters } : { type: 'object' }
+        delete (params as any).$schema
+        memberTools.register({
+          name: def.name,
+          description: def.description,
+          level: def.level,
+          schema: jsonSchema(params as any),
+        })
+      }
+
+      return {
+        id: m.id,
+        provider: memberProvider,
+        tools: memberTools,
+        systemPrompt: m.systemPrompt || `You are a ${m.id} specialist.`,
+      }
+    })
+
+    const team = createTeam({
+      lead: { provider, tools, systemPrompt: body.systemPrompt, maxTurns: body.maxTurns ?? 20 },
+      members,
+    })
+    agentOrTeam = { run: (msgs) => team.run(msgs), resolveToolResult: (id, result) => team.resolveToolResult(id, result) }
+  } else {
+    const agent = createAgent({
+      provider,
+      tools,
+      systemPrompt: body.systemPrompt,
+      maxTurns: body.maxTurns ?? 20,
+      maxOutputTokens: body.maxOutputTokens,
+      turnTimeout: 5 * 60_000,
+      abortSignal: abortController.signal,
+    })
+    agentOrTeam = agent
+  }
+
+  agentSessions.set(body.sessionId, { agent: agentOrTeam as any, abortController, createdAt: Date.now(), lastActivity: Date.now() })
 
   setResponseHeaders(event, {
     'Content-Type': 'text/event-stream',
@@ -134,7 +184,7 @@ export default defineEventHandler(async (event) => {
         }, 5_000)
 
         try {
-          for await (const agentEvent of agent.run(toModelMessages(body.messages))) {
+          for await (const agentEvent of agentOrTeam.run(toModelMessages(body.messages))) {
             const session = agentSessions.get(body.sessionId)
             if (session) session.lastActivity = Date.now()
             controller.enqueue(encoder.encode(encodeAgentEvent(agentEvent)))
