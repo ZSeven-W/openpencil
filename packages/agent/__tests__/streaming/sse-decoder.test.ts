@@ -21,4 +21,22 @@ describe('decodeAgentEvent', () => {
     expect(decodeAgentEvent('garbage')).toBeNull()
     expect(decodeAgentEvent('')).toBeNull()
   })
+
+  it('decodes a text event with source', () => {
+    const raw = 'event: text\ndata: {"content":"hello","source":"designer"}'
+    const event = decodeAgentEvent(raw)
+    expect(event).toEqual({ type: 'text', content: 'hello', source: 'designer' })
+  })
+
+  it('decodes a member_start event', () => {
+    const raw = 'event: member_start\ndata: {"memberId":"designer","task":"Build UI"}'
+    const event = decodeAgentEvent(raw)
+    expect(event).toEqual({ type: 'member_start', memberId: 'designer', task: 'Build UI' })
+  })
+
+  it('decodes a member_end event', () => {
+    const raw = 'event: member_end\ndata: {"memberId":"designer","result":"Done"}'
+    const event = decodeAgentEvent(raw)
+    expect(event).toEqual({ type: 'member_end', memberId: 'designer', result: 'Done' })
+  })
 })

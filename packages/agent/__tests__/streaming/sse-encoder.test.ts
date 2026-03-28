@@ -24,4 +24,22 @@ describe('encodeAgentEvent', () => {
     const encoded = encodeAgentEvent(event)
     expect(encoded).toBe('event: done\ndata: {"totalTurns":3}\n\n')
   })
+
+  it('encodes a text event with source', () => {
+    const event: AgentEvent = { type: 'text', content: 'hello', source: 'lead' }
+    const encoded = encodeAgentEvent(event)
+    expect(encoded).toBe('event: text\ndata: {"content":"hello","source":"lead"}\n\n')
+  })
+
+  it('encodes a member_start event', () => {
+    const event: AgentEvent = { type: 'member_start', memberId: 'designer', task: 'Create landing page' }
+    const encoded = encodeAgentEvent(event)
+    expect(encoded).toBe('event: member_start\ndata: {"memberId":"designer","task":"Create landing page"}\n\n')
+  })
+
+  it('encodes a member_end event', () => {
+    const event: AgentEvent = { type: 'member_end', memberId: 'designer', result: 'Done' }
+    const encoded = encodeAgentEvent(event)
+    expect(encoded).toBe('event: member_end\ndata: {"memberId":"designer","result":"Done"}\n\n')
+  })
 })
