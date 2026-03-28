@@ -241,8 +241,7 @@ export class AgentToolExecutor {
       }
     }
 
-    const { useDocumentStore, getActivePageChildren } = await import('@/stores/document-store')
-    const { useCanvasStore } = await import('@/stores/canvas-store')
+    const { useDocumentStore } = await import('@/stores/document-store')
     const { nanoid } = await import('nanoid')
     const docStore = useDocumentStore.getState()
 
@@ -284,46 +283,26 @@ export class AgentToolExecutor {
     }
     const totalNodes = countNodes(node)
 
-    // --- Auto-replace empty root frame (matches batch_design behavior) ---
-    // When inserting a frame at root and an empty root frame exists,
-    // inherit its position so the design lands at (0,0) in the viewport,
-    // then remove the empty frame and add the new one.
-    if (args.parent === null && (nodeData as any).type === 'frame') {
-      try {
-        const doc = docStore.document
-        const pageId = args.pageId ?? useCanvasStore.getState().activePageId
-        const children = getActivePageChildren(doc, pageId)
-        const emptyFrame = children.find(
-          (n) => n.type === 'frame' && (!('children' in n) || !n.children || n.children.length === 0),
-        )
-        if (emptyFrame) {
-          // Inherit position from the empty frame
-          if (emptyFrame.x !== undefined) (node as any).x = emptyFrame.x
-          if (emptyFrame.y !== undefined) (node as any).y = emptyFrame.y
-          // Remove the empty frame first
-          try { docStore.removeNode(emptyFrame.id) } catch { /* ignore side-effect */ }
-        }
-      } catch { /* ignore — will fall through to normal addNode */ }
-    }
-
+    // Use the SAME applyNodesToCanvas function as the CLI design pipeline.
+    // This handles: sanitization, empty frame replacement, icon resolution,
+    // layout fixes, and proper canvas sync (Skia engine renders correctly).
     try {
-      docStore.addNode(args.parent, node)
-    } catch { /* side-effect error — node may still be in the store */ }
+      const { applyNodesToCanvas } = await import('@/services/ai/design-canvas-ops')
+      applyNodesToCanvas([node])
+    } catch {
+      // Fallback: direct store insert if applyNodesToCanvas fails
+      try { docStore.addNode(args.parent, node) } catch { /* ignore */ }
+    }
 
     // Track root-level insert to prevent duplicates
     if (args.parent === null) {
       this.rootInsertId = node.id
     }
 
-    // Run post-processing (same pipeline as MCP batch_design with postProcess=true)
-    try {
-      await this.postProcessNode(node.id)
-    } catch { /* best-effort */ }
-
     // Auto-zoom to show the new design
     try {
       const { zoomToFitContent } = await import('@/canvas/skia-engine-ref')
-      setTimeout(() => zoomToFitContent(), 200)
+      setTimeout(() => zoomToFitContent(), 300)
     } catch { /* ignore */ }
 
     return {
@@ -334,67 +313,6 @@ export class AgentToolExecutor {
         message: `Created ${totalNodes} nodes successfully. Do NOT retry or create again.`,
       },
     }
-  }
-
-  /**
-   * Post-process an inserted node tree — same pipeline as MCP batch_design:
-   * 1. Role resolution (semantic defaults for buttons, cards, etc.)
-   * 2. Icon resolution (icon names → SVG paths)
-   * 3. Layout sanitization (remove x/y from layout children)
-   * 4. Unique ID enforcement
-   */
-  private async postProcessNode(nodeId: string): Promise<void> {
-    const { useDocumentStore, getAllChildren } = await import('@/stores/document-store')
-    const docStore = useDocumentStore.getState()
-    const node = docStore.getNodeById(nodeId)
-    if (!node || !('children' in node) || !node.children?.length) return
-
-    const { flattenNodes } = await import('@/stores/document-tree-utils')
-
-    // Deep clone — Zustand state is immutable, post-processing mutates in-place
-    const target = JSON.parse(JSON.stringify(node)) as PenNode
-
-    // Determine canvas width (mobile: 375, desktop: 1200)
-    const isMobile = (target as any).width <= 500
-    const canvasWidth = isMobile ? 375 : 1200
-
-    // 1. Role resolution (best-effort — some models produce unusual structures)
-    try {
-      const { resolveTreeRoles, resolveTreePostPass } =
-        await import('@/services/ai/role-resolver')
-      await import('@/services/ai/role-definitions/index')
-      resolveTreeRoles(target, canvasWidth)
-      resolveTreePostPass(target, canvasWidth)
-    } catch { /* skip role resolution on error */ }
-
-    // 2. Icon + emoji resolution
-    try {
-      const { applyIconPathResolution, applyNoEmojiIconHeuristic } =
-        await import('@/services/ai/icon-resolver')
-      const flat = flattenNodes([target])
-      for (const n of flat) {
-        if (n.type === 'path') applyIconPathResolution(n as any)
-        if (n.type === 'text') applyNoEmojiIconHeuristic(n as any)
-      }
-    } catch { /* skip icon resolution on error */ }
-
-    // 3. Unique IDs
-    try {
-      const { ensureUniqueNodeIds } = await import('@/services/ai/design-node-sanitization')
-      const allChildren = getAllChildren(docStore.document) ?? []
-      const usedIds = new Set(flattenNodes(allChildren).map((n) => n.id))
-      const idCounters = new Map<string, number>()
-      ensureUniqueNodeIds(target, usedIds, idCounters)
-    } catch { /* skip ID dedup on error */ }
-
-    // 4. Layout sanitization
-    try {
-      const { sanitizeLayoutChildPositions } = await import('@/services/ai/design-node-sanitization')
-      sanitizeLayoutChildPositions(target, false)
-    } catch { /* skip layout sanitization on error */ }
-
-    // Apply the processed node back
-    docStore.updateNode(nodeId, { children: (target as any).children } as any)
   }
 
   private async handleUpdateNode(
