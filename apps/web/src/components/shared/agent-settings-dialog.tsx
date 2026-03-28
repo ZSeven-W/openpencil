@@ -10,7 +10,7 @@ import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Switch } from '@/components/ui/switch'
 import { useAgentSettingsStore } from '@/stores/agent-settings-store'
-import { BuiltinProvidersSection, TeamSection } from './builtin-provider-settings'
+import { BuiltinProvidersSection } from './builtin-provider-settings'
 import type { AIProviderType, MCPTransportMode, GroupedModel } from '@/types/agent-settings'
 import ClaudeLogo from '@/components/icons/claude-logo'
 import OpenAILogo from '@/components/icons/openai-logo'
@@ -331,9 +331,6 @@ function AgentsPage() {
     <div>
       <div className="mb-6">
         <BuiltinProvidersSection />
-      </div>
-      <div className="mb-6">
-        <TeamSection />
       </div>
       <h3 className="text-[15px] font-semibold text-foreground mb-4">{t('settings.agents')}</h3>
       <div className="space-y-1">

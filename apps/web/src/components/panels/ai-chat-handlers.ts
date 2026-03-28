@@ -242,23 +242,18 @@ async function runAgentStream(
     maxTurns: 20,
   }
 
-  // Smart team mode: if a design model is configured, automatically use team
-  const { teamDesignModel, builtinProviders: allBps } = useAgentSettingsStore.getState()
-  if (teamDesignModel) {
-    const designParts = teamDesignModel.split(':')
-    const designBpId = designParts[1]
-    const designModelName = designParts.slice(2).join(':')
-    const designBp = allBps.find((p) => p.id === designBpId)
-    if (designBp?.apiKey) {
-      ;(agentBody as any).members = [{
-        id: 'designer',
-        providerType: designBp.type === 'anthropic' ? 'anthropic' : 'openai-compat',
-        apiKey: designBp.apiKey,
-        model: designModelName,
-        baseURL: designBp.baseURL,
-        systemPrompt: 'You are a design specialist. Use the generate_design tool to create designs based on the task description. Focus on high-quality visual output.',
-      }]
-    }
+  // Auto team mode: always create a designer member using the same provider as chat.
+  // The designer has a specialized prompt + scoped tools (generate_design only).
+  // Lead handles conversation; designer handles design generation.
+  if (providerConfig.apiKey) {
+    ;(agentBody as any).members = [{
+      id: 'designer',
+      providerType: providerConfig.providerType,
+      apiKey: providerConfig.apiKey,
+      model: providerConfig.model,
+      baseURL: providerConfig.baseURL,
+      systemPrompt: 'You are a design specialist. Use the generate_design tool to create designs based on the task description. Focus on high-quality visual output.',
+    }]
   }
 
   const response = await fetch('/api/ai/agent', {
