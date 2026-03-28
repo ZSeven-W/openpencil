@@ -47,6 +47,11 @@ export function createTeam(config: TeamConfig): AgentTeam {
   const parentAbort = new AbortController()
   const memberIds = config.members.map(m => m.id)
 
+  // Track which agent owns each pending tool call so resolveToolResult routes correctly.
+  // Without this, member tool calls (e.g. generate_design) would be sent to leadAgent
+  // which doesn't have them in its pending map, causing "No pending tool call" errors.
+  const toolCallOwners = new Map<string, { resolveToolResult: (id: string, result: ToolResult) => void }>()
+
   // Clone tools to avoid mutating the caller's registry
   const leadTools = createToolRegistry()
   for (const tool of config.lead.tools.list()) {
@@ -106,6 +111,10 @@ export function createTeam(config: TeamConfig): AgentTeam {
 
         let memberResult = ''
         for await (const memberEvent of memberEntry.agent.run(memberMessages)) {
+          // Register member tool calls for correct resolveToolResult routing
+          if (memberEvent.type === 'tool_call') {
+            toolCallOwners.set(memberEvent.id, memberEntry.agent)
+          }
           // Tag all member events with source
           yield { ...memberEvent, source: member } as AgentEvent
           if (memberEvent.type === 'text') {
@@ -123,6 +132,10 @@ export function createTeam(config: TeamConfig): AgentTeam {
         continue
       }
 
+      // Register lead tool calls for correct resolveToolResult routing
+      if (event.type === 'tool_call') {
+        toolCallOwners.set(event.id, leadAgent)
+      }
       // Tag lead events with source
       yield { ...event, source: 'lead' } as AgentEvent
     }
@@ -131,6 +144,15 @@ export function createTeam(config: TeamConfig): AgentTeam {
   return {
     run,
     abort: () => parentAbort.abort(),
-    resolveToolResult: (id, result) => leadAgent.resolveToolResult(id, result),
+    resolveToolResult: (id, result) => {
+      const owner = toolCallOwners.get(id)
+      if (owner) {
+        toolCallOwners.delete(id)
+        owner.resolveToolResult(id, result)
+      } else {
+        // Fallback to lead for tool calls not tracked (e.g. delegate)
+        leadAgent.resolveToolResult(id, result)
+      }
+    },
   }
 }
