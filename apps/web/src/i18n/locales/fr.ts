@@ -439,11 +439,9 @@ const fr: TranslationKeys = {
   'builtin.errorApiKeyEmpty': 'La clé API est vide. Veuillez ajouter votre clé API dans les paramètres.',
   'builtin.parallelAgents': 'Sous-agents parallèles : {{count}}x (cliquez pour changer)',
   'builtin.baseUrlPlaceholder': 'https://api.example.com/v1',
-  'builtin.teamTitle': 'Équipe',
-  'builtin.teamDescription': 'Utilisez différents modèles pour le chat et le design. Le modèle de chat gère la conversation ; le modèle de design gère generate_design.',
+  'builtin.teamDescription': 'Sélectionnez un modèle pour la génération de design. Une fois défini, les tâches de design sont automatiquement déléguées à un agent spécialisé utilisant ce modèle.',
   'builtin.teamDesignModel': 'Modèle de design',
-  'builtin.teamSelectModel': 'Sélectionner un modèle...',
-  'builtin.teamSameModelWarning': 'Astuce : utilisez un modèle différent et plus performant pour le design afin de tirer le meilleur parti du mode Équipe.',
+  'builtin.teamSelectModel': 'Aucun (agent unique)',
 
   // ── Figma Import ──
   'figma.title': 'Importer depuis Figma',

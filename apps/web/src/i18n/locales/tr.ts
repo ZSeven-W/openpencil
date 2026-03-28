@@ -434,11 +434,9 @@ const tr: TranslationKeys = {
   'builtin.errorApiKeyEmpty': 'API Key boş. Lütfen ayarlardan API Key ekleyin.',
   'builtin.parallelAgents': 'Paralel alt ajanlar: {{count}}x (döngü için tıklayın)',
   'builtin.baseUrlPlaceholder': 'https://api.example.com/v1',
-  'builtin.teamTitle': 'Takım',
-  'builtin.teamDescription': 'Sohbet ve tasarım için farklı modeller kullanın. Sohbet modeli konuşmayı, tasarım modeli generate_design\'ı yönetir.',
+  'builtin.teamDescription': 'Tasarım oluşturma için bir model seçin. Ayarlandığında, tasarım görevleri otomatik olarak bu modeli kullanan uzman bir ajana devredilir.',
   'builtin.teamDesignModel': 'Tasarım Modeli',
-  'builtin.teamSelectModel': 'Model seçin...',
-  'builtin.teamSameModelWarning': 'İpucu: Takım modundan en iyi şekilde yararlanmak için tasarım için farklı, daha güçlü bir model kullanın.',
+  'builtin.teamSelectModel': 'Yok (tek ajan)',
 
   // ── Figma Import ──
   'figma.title': 'Figma\'dan İçe Aktar',

@@ -425,11 +425,9 @@ const zhTW: TranslationKeys = {
   'builtin.errorApiKeyEmpty': 'API 金鑰為空，請在設定中新增您的 API 金鑰。',
   'builtin.parallelAgents': '並行子代理：{{count}}x（點擊切換）',
   'builtin.baseUrlPlaceholder': 'https://api.example.com/v1',
-  'builtin.teamTitle': '團隊',
-  'builtin.teamDescription': '為對話和設計使用不同模型。對話模型處理聊天，設計模型處理 generate_design。',
+  'builtin.teamDescription': '選擇用於設計生成的模型。設定後，設計任務將自動委派給使用此模型的專業 Agent。',
   'builtin.teamDesignModel': '設計模型',
-  'builtin.teamSelectModel': '選擇模型...',
-  'builtin.teamSameModelWarning': '提示：為設計選擇不同的、更強的模型，可以更好地發揮 Team 模式的優勢。',
+  'builtin.teamSelectModel': '無（單 Agent）',
 
   // ── Figma Import ──
   'figma.title': '從 Figma 匯入',

@@ -242,9 +242,9 @@ async function runAgentStream(
     maxTurns: 20,
   }
 
-  // Inject team members if team mode is enabled
-  const { teamEnabled, teamDesignModel, builtinProviders: allBps } = useAgentSettingsStore.getState()
-  if (teamEnabled && teamDesignModel) {
+  // Smart team mode: if a design model is configured, automatically use team
+  const { teamDesignModel, builtinProviders: allBps } = useAgentSettingsStore.getState()
+  if (teamDesignModel) {
     const designParts = teamDesignModel.split(':')
     const designBpId = designParts[1]
     const designModelName = designParts.slice(2).join(':')

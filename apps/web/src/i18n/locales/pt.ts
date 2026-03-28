@@ -436,11 +436,9 @@ const pt: TranslationKeys = {
   'builtin.errorApiKeyEmpty': 'A API key está vazia. Por favor, adicione sua API key nas configurações.',
   'builtin.parallelAgents': 'Sub-agentes paralelos: {{count}}x (clique para alternar)',
   'builtin.baseUrlPlaceholder': 'https://api.example.com/v1',
-  'builtin.teamTitle': 'Equipe',
-  'builtin.teamDescription': 'Use modelos diferentes para chat e design. O modelo de chat gerencia a conversa; o modelo de design gerencia generate_design.',
+  'builtin.teamDescription': 'Selecione um modelo para geração de design. Quando definido, tarefas de design são automaticamente delegadas a um agente especializado usando este modelo.',
   'builtin.teamDesignModel': 'Modelo de design',
-  'builtin.teamSelectModel': 'Selecionar modelo...',
-  'builtin.teamSameModelWarning': 'Dica: use um modelo diferente e mais capaz para o design para aproveitar ao máximo o modo Equipe.',
+  'builtin.teamSelectModel': 'Nenhum (agente único)',
 
   // ── Figma Import ──
   'figma.title': 'Importar do Figma',

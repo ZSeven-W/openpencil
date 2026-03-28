@@ -434,11 +434,9 @@ const id: TranslationKeys = {
   'builtin.errorApiKeyEmpty': 'API Key kosong. Silakan tambahkan API Key di pengaturan.',
   'builtin.parallelAgents': 'Sub-agen paralel: {{count}}x (klik untuk berganti)',
   'builtin.baseUrlPlaceholder': 'https://api.example.com/v1',
-  'builtin.teamTitle': 'Tim',
-  'builtin.teamDescription': 'Gunakan model berbeda untuk obrolan dan desain. Model obrolan menangani percakapan; model desain menangani generate_design.',
+  'builtin.teamDescription': 'Pilih model untuk pembuatan desain. Jika diatur, tugas desain akan otomatis didelegasikan ke agen spesialis yang menggunakan model ini.',
   'builtin.teamDesignModel': 'Model Desain',
-  'builtin.teamSelectModel': 'Pilih model...',
-  'builtin.teamSameModelWarning': 'Tips: Gunakan model yang berbeda dan lebih kuat untuk desain agar mendapat manfaat maksimal dari mode Tim.',
+  'builtin.teamSelectModel': 'Tidak ada (agen tunggal)',
 
   // ── Figma Import ──
   'figma.title': 'Impor dari Figma',

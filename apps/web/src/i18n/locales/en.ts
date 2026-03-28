@@ -432,11 +432,9 @@ const en = {
   'builtin.errorApiKeyEmpty': 'API key is empty. Please add your API key in settings.',
   'builtin.parallelAgents': 'Parallel sub-agents: {{count}}x (click to cycle)',
   'builtin.baseUrlPlaceholder': 'https://api.example.com/v1',
-  'builtin.teamTitle': 'Team',
-  'builtin.teamDescription': 'Use different models for chat and design. The chat model handles conversation; the design model handles generate_design.',
+  'builtin.teamDescription': 'Select a model for design generation. When set, design tasks are automatically delegated to a specialist agent using this model.',
   'builtin.teamDesignModel': 'Design Model',
-  'builtin.teamSelectModel': 'Select a model...',
-  'builtin.teamSameModelWarning': 'Tip: Use a different, more capable model for design to get the most benefit from Team mode.',
+  'builtin.teamSelectModel': 'None (single agent)',
 
   // ── Figma Import ──
   'figma.title': 'Import from Figma',

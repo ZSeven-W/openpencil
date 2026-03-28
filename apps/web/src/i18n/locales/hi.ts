@@ -434,11 +434,9 @@ const hi: TranslationKeys = {
   'builtin.errorApiKeyEmpty': 'API key खाली है। कृपया सेटिंग्स में अपनी API key जोड़ें।',
   'builtin.parallelAgents': 'समानांतर सब-एजेंट: {{count}}x (बदलने के लिए क्लिक करें)',
   'builtin.baseUrlPlaceholder': 'https://api.example.com/v1',
-  'builtin.teamTitle': 'टीम',
-  'builtin.teamDescription': 'चैट और डिज़ाइन के लिए अलग-अलग मॉडल का उपयोग करें। चैट मॉडल बातचीत संभालता है; डिज़ाइन मॉडल generate_design संभालता है।',
+  'builtin.teamDescription': 'डिज़ाइन जनरेशन के लिए एक मॉडल चुनें। सेट करने पर, डिज़ाइन कार्य स्वचालित रूप से इस मॉडल का उपयोग करने वाले विशेषज्ञ एजेंट को सौंपे जाते हैं।',
   'builtin.teamDesignModel': 'डिज़ाइन मॉडल',
-  'builtin.teamSelectModel': 'मॉडल चुनें...',
-  'builtin.teamSameModelWarning': 'सुझाव: टीम मोड का अधिकतम लाभ उठाने के लिए डिज़ाइन के लिए एक अलग, अधिक सक्षम मॉडल का उपयोग करें।',
+  'builtin.teamSelectModel': 'कोई नहीं (एकल एजेंट)',
 
   // ── Figma Import ──
   'figma.title': 'Figma से आयात करें',

@@ -437,11 +437,9 @@ const ja: TranslationKeys = {
   'builtin.errorApiKeyEmpty': 'API キーが空です。設定で API キーを追加してください。',
   'builtin.parallelAgents': '並列サブエージェント：{{count}}x（クリックで切替）',
   'builtin.baseUrlPlaceholder': 'https://api.example.com/v1',
-  'builtin.teamTitle': 'チーム',
-  'builtin.teamDescription': 'チャットとデザインに異なるモデルを使用します。チャットモデルは会話を、デザインモデルは generate_design を処理します。',
+  'builtin.teamDescription': 'デザイン生成用のモデルを選択します。設定すると、デザインタスクはこのモデルを使用する専門エージェントに自動的に委任されます。',
   'builtin.teamDesignModel': 'デザインモデル',
-  'builtin.teamSelectModel': 'モデルを選択...',
-  'builtin.teamSameModelWarning': 'ヒント：デザインには別のより高性能なモデルを使用すると、チームモードの効果が最大になります。',
+  'builtin.teamSelectModel': 'なし（シングルエージェント）',
 
   // ── Figma Import ──
   'figma.title': 'Figma からインポート',

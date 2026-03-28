@@ -436,11 +436,9 @@ const ru: TranslationKeys = {
   'builtin.errorApiKeyEmpty': 'API key пуст. Пожалуйста, добавьте API key в настройках.',
   'builtin.parallelAgents': 'Параллельные суб-агенты: {{count}}x (нажмите для переключения)',
   'builtin.baseUrlPlaceholder': 'https://api.example.com/v1',
-  'builtin.teamTitle': 'Команда',
-  'builtin.teamDescription': 'Используйте разные модели для чата и дизайна. Модель чата обрабатывает беседу, модель дизайна обрабатывает generate_design.',
+  'builtin.teamDescription': 'Выберите модель для генерации дизайна. При установке задачи дизайна автоматически делегируются специализированному агенту, использующему эту модель.',
   'builtin.teamDesignModel': 'Модель дизайна',
-  'builtin.teamSelectModel': 'Выберите модель...',
-  'builtin.teamSameModelWarning': 'Совет: используйте другую, более мощную модель для дизайна, чтобы получить максимальную пользу от режима Команды.',
+  'builtin.teamSelectModel': 'Нет (один агент)',
 
   // ── Figma Import ──
   'figma.title': 'Импорт из Figma',

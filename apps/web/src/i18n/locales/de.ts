@@ -436,11 +436,9 @@ const de: TranslationKeys = {
   'builtin.errorApiKeyEmpty': 'API Key ist leer. Bitte fügen Sie Ihren API Key in den Einstellungen hinzu.',
   'builtin.parallelAgents': 'Parallele Sub-Agenten: {{count}}x (klicken zum Wechseln)',
   'builtin.baseUrlPlaceholder': 'https://api.example.com/v1',
-  'builtin.teamTitle': 'Team',
-  'builtin.teamDescription': 'Verwenden Sie verschiedene Modelle für Chat und Design. Das Chat-Modell übernimmt die Konversation, das Design-Modell übernimmt generate_design.',
+  'builtin.teamDescription': 'Wählen Sie ein Modell für die Designgenerierung. Wenn gesetzt, werden Designaufgaben automatisch an einen spezialisierten Agenten mit diesem Modell delegiert.',
   'builtin.teamDesignModel': 'Design-Modell',
-  'builtin.teamSelectModel': 'Modell auswählen...',
-  'builtin.teamSameModelWarning': 'Tipp: Verwenden Sie ein anderes, leistungsfähigeres Modell für das Design, um den Team-Modus optimal zu nutzen.',
+  'builtin.teamSelectModel': 'Keins (Einzelagent)',
 
   // ── Figma Import ──
   'figma.title': 'Aus Figma importieren',

@@ -434,11 +434,9 @@ const vi: TranslationKeys = {
   'builtin.errorApiKeyEmpty': 'API Key đang trống. Vui lòng thêm API Key trong cài đặt.',
   'builtin.parallelAgents': 'Tác nhân phụ song song: {{count}}x (nhấn để chuyển đổi)',
   'builtin.baseUrlPlaceholder': 'https://api.example.com/v1',
-  'builtin.teamTitle': 'Nhóm',
-  'builtin.teamDescription': 'Sử dụng các mô hình khác nhau cho trò chuyện và thiết kế. Mô hình trò chuyện xử lý hội thoại; mô hình thiết kế xử lý generate_design.',
+  'builtin.teamDescription': 'Chọn mô hình để tạo thiết kế. Khi được đặt, các tác vụ thiết kế sẽ tự động được giao cho agent chuyên dụng sử dụng mô hình này.',
   'builtin.teamDesignModel': 'Mô hình thiết kế',
-  'builtin.teamSelectModel': 'Chọn mô hình...',
-  'builtin.teamSameModelWarning': 'Mẹo: Sử dụng một mô hình khác, mạnh hơn cho thiết kế để tận dụng tối đa chế độ Nhóm.',
+  'builtin.teamSelectModel': 'Không (agent đơn)',
 
   // ── Figma Import ──
   'figma.title': 'Nhập từ Figma',
