@@ -116,20 +116,26 @@ export function buildContextString(): string {
 // Agent mode SSE stream handler
 // ---------------------------------------------------------------------------
 
-const AGENT_SYSTEM_PROMPT = `You are a design assistant for OpenPencil.
+/** Agent-specific tool usage instructions — prepended to the dynamic skill-based prompt. */
+const AGENT_TOOL_INSTRUCTIONS = `IMPORTANT: When the user asks you to create or design anything, you MUST call the generate_design tool with a descriptive prompt. Do NOT output JSON or code directly.
 
-IMPORTANT: When the user asks you to create or design anything, you MUST call the generate_design tool. Do NOT output JSON or code. Just call generate_design with a descriptive prompt.
-
-## Tools
-- generate_design: Create designs. Pass a detailed prompt describing the design.
+## Available Tools
+- generate_design: Create complete designs. Pass a natural language description.
 - snapshot_layout: View current canvas state.
 - batch_get: Read specific nodes by ID.
-- update_node: Modify existing nodes.
-- delete_node: Remove nodes.
-- Use delete_node to remove nodes
-- Use find_empty_space to find available canvas area
+- update_node: Modify existing node properties.
+- delete_node: Remove nodes.`
 
-CRITICAL: Do NOT use CSS properties (backgroundColor, boxShadow, borderRadius, padding:"16px"). Use PenNode properties above.`
+/**
+ * Build the agent system prompt dynamically using pen-ai-skills.
+ * Combines agent tool instructions with the same design knowledge the CLI pipeline uses.
+ */
+function buildAgentSystemPrompt(userMessage: string): string {
+  // Loads design skills dynamically based on user message keywords —
+  // same knowledge base the CLI pipeline uses (via pen-ai-skills)
+  const designKnowledge = buildChatSystemPrompt(userMessage)
+  return `${AGENT_TOOL_INSTRUCTIONS}\n\n${designKnowledge}`
+}
 
 /**
  * Parse SSE chunks from a ReadableStream and yield AgentEvents.
@@ -172,6 +178,7 @@ interface AgentProviderConfig {
   apiKey: string
   model: string
   baseURL?: string
+  maxOutputTokens?: number
 }
 
 /** Strip <think>...</think> tags (closed and unclosed) from model text output. */
@@ -195,13 +202,21 @@ async function runAgentStream(
   const sessionId = nanoid()
   const executor = new AgentToolExecutor(sessionId)
 
-  // Build tool definitions from the registry (no execute functions -- client-side only)
+  // Build tool definitions from the registry.
+  // The server uses these to register tools with the AI SDK.
   const registry = createDesignToolRegistry()
-  const toolDefs = registry.list().map((t) => ({
-    name: t.name,
-    description: t.description,
-    level: t.level,
-  }))
+  const sdkTools = registry.toAISDKFormat()
+  const toolDefs = registry.list().map((t) => {
+    // Extract the JSON Schema from the AI SDK tool object
+    const sdkTool = sdkTools[t.name] as any
+    const parameters = sdkTool?.parameters?.jsonSchema ?? sdkTool?.inputSchema?.jsonSchema
+    return {
+      name: t.name,
+      description: t.description,
+      level: t.level,
+      parameters,
+    }
+  })
 
   // Build conversation messages from chat history
   const messages = useAIStore.getState().messages
@@ -209,7 +224,9 @@ async function runAgentStream(
     .map((m) => ({ role: m.role, content: m.content }))
 
   const context = buildContextString()
-  const systemPrompt = AGENT_SYSTEM_PROMPT + context
+  // Build the last user message for skill resolution
+  const lastUserMsg = messages[messages.length - 1]?.content ?? ''
+  const systemPrompt = buildAgentSystemPrompt(lastUserMsg) + context
 
   const response = await fetch('/api/ai/agent', {
     method: 'POST',
@@ -222,6 +239,7 @@ async function runAgentStream(
       apiKey: providerConfig.apiKey,
       model: providerConfig.model,
       ...(providerConfig.baseURL ? { baseURL: providerConfig.baseURL } : {}),
+      ...(providerConfig.maxOutputTokens ? { maxOutputTokens: providerConfig.maxOutputTokens } : {}),
       toolDefs,
       maxTurns: 20,
     }),
@@ -268,7 +286,11 @@ async function runAgentStream(
 
           // Execute tool client-side and post result back to server
           executor.execute(evt as Extract<AgentEvent, { type: 'tool_call' }>).then(() => {
-            // Tool result will come back as a separate SSE event
+            // Also update block status locally in case SSE tool_result event is lost
+            const block = useAIStore.getState().toolCallBlocks.find((b) => b.id === evt.id)
+            if (block && block.status === 'running') {
+              useAIStore.getState().updateToolCallBlock(evt.id, { status: 'done', result: { success: true } })
+            }
           }).catch((err) => {
             useAIStore.getState().updateToolCallBlock(evt.id, {
               status: 'error',
@@ -396,8 +418,10 @@ export function useChatHandlers() {
 
         const { builtinProviders } = useAgentSettingsStore.getState()
         const bp = builtinProviders.find((p) => p.id === builtinProviderId)
-        if (!bp) {
-          accumulated = '**Error:** Built-in provider not found. Please check your settings.'
+        if (!bp || !bp.apiKey) {
+          accumulated = !bp
+            ? '**Error:** Built-in provider not found. Please check your settings.'
+            : '**Error:** API key is empty. Please add your API key in settings.'
           updateLastMessage(accumulated)
           useAIStore.getState().setAbortController(null)
           setStreaming(false)
@@ -419,6 +443,7 @@ export function useChatHandlers() {
               apiKey: bp.apiKey,
               model: modelName,
               baseURL: bp.baseURL,
+              maxOutputTokens: bp.maxContextTokens ? Math.min(bp.maxContextTokens, 8192) : undefined,
             },
             abortController,
           )
