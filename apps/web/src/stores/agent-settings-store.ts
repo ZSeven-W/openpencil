@@ -37,6 +37,8 @@ interface PersistedState {
   activeImageGenProfileId: string | null
   openverseOAuth: { clientId: string; clientSecret: string } | null
   builtinProviders: BuiltinProviderConfig[]
+  teamEnabled: boolean
+  teamDesignModel: string | null
 }
 
 interface AgentSettingsState extends PersistedState {
@@ -67,6 +69,8 @@ interface AgentSettingsState extends PersistedState {
   addBuiltinProvider: (config: Omit<BuiltinProviderConfig, 'id'>) => string
   updateBuiltinProvider: (id: string, updates: Partial<BuiltinProviderConfig>) => void
   removeBuiltinProvider: (id: string) => void
+  setTeamEnabled: (enabled: boolean) => void
+  setTeamDesignModel: (model: string | null) => void
   persist: () => void
   hydrate: () => void
 }
@@ -128,6 +132,8 @@ export const useAgentSettingsStore = create<AgentSettingsState>((set, get) => ({
   activeImageGenProfileId: null,
   openverseOAuth: null,
   builtinProviders: [],
+  teamEnabled: false,
+  teamDesignModel: null,
   dialogOpen: false,
   isHydrated: false,
   mcpServerRunning: false,
@@ -239,12 +245,15 @@ export const useAgentSettingsStore = create<AgentSettingsState>((set, get) => ({
       builtinProviders: s.builtinProviders.filter((p) => p.id !== id),
     })),
 
+  setTeamEnabled: (teamEnabled) => set({ teamEnabled }),
+  setTeamDesignModel: (teamDesignModel) => set({ teamDesignModel }),
+
   persist: () => {
     try {
-      const { providers, mcpIntegrations, mcpTransportMode, mcpHttpPort, imageGenConfig, imageGenProfiles, activeImageGenProfileId, openverseOAuth, builtinProviders } = get()
+      const { providers, mcpIntegrations, mcpTransportMode, mcpHttpPort, imageGenConfig, imageGenProfiles, activeImageGenProfileId, openverseOAuth, builtinProviders, teamEnabled, teamDesignModel } = get()
       appStorage.setItem(
         STORAGE_KEY,
-        JSON.stringify({ providers, mcpIntegrations, mcpTransportMode, mcpHttpPort, imageGenConfig, imageGenProfiles, activeImageGenProfileId, openverseOAuth, builtinProviders }),
+        JSON.stringify({ providers, mcpIntegrations, mcpTransportMode, mcpHttpPort, imageGenConfig, imageGenProfiles, activeImageGenProfileId, openverseOAuth, builtinProviders, teamEnabled, teamDesignModel }),
       )
     } catch {
       // ignore
@@ -297,6 +306,12 @@ export const useAgentSettingsStore = create<AgentSettingsState>((set, get) => ({
       if (data.openverseOAuth !== undefined) set({ openverseOAuth: data.openverseOAuth })
       if (Array.isArray((data as Record<string, unknown>).builtinProviders)) {
         set({ builtinProviders: (data as Record<string, unknown>).builtinProviders as BuiltinProviderConfig[] })
+      }
+      if ((data as Record<string, unknown>).teamEnabled !== undefined) {
+        set({ teamEnabled: (data as Record<string, unknown>).teamEnabled as boolean })
+      }
+      if ((data as Record<string, unknown>).teamDesignModel !== undefined) {
+        set({ teamDesignModel: (data as Record<string, unknown>).teamDesignModel as string | null })
       }
     } catch {
       // ignore
