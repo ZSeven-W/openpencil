@@ -293,7 +293,8 @@ export class SkiaTextRenderer {
     // bitmaps are at fixed DPR resolution and produce jagged edges when scaled by the
     // viewport transform. At normal zoom (0.5–1x), bitmap cache is safe and fast.
     const useParaImageCache = this.zoom >= 0.5 && this.zoom <= 1
-    const imgScale = Math.min(this._dpr, 2)
+    // Always rasterize at 2x minimum — 1x bitmaps produce jagged text on low-DPR displays
+    const imgScale = Math.max(this._dpr, 2)
     let cachedImg: any = useParaImageCache ? this.paraImageCache.get(cacheKey) : null
     if (useParaImageCache && cachedImg === undefined) {
       cachedImg = null
