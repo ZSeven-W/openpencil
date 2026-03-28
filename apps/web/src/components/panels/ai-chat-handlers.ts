@@ -116,40 +116,18 @@ export function buildContextString(): string {
 // Agent mode SSE stream handler
 // ---------------------------------------------------------------------------
 
-const AGENT_SYSTEM_PROMPT = `You are a design assistant for OpenPencil, a vector design tool.
+const AGENT_SYSTEM_PROMPT = `You are a design assistant for OpenPencil.
 
-## Workflow
-1. Use find_empty_space to find room for new designs.
-2. Create the ENTIRE design in ONE insert_node call with nested children. NEVER call insert_node more than once.
-3. When insert_node returns success, the design is COMPLETE. Do NOT retry or recreate. Just describe what you made.
-4. Use update_node only for modifications to existing nodes.
+IMPORTANT: When the user asks you to create or design anything, you MUST call the generate_design tool. Do NOT output JSON or code. Just call generate_design with a descriptive prompt.
 
-## How to Create Designs
-Use insert_node with parent=null and a full node tree with nested children array. Example:
-insert_node({ parent: null, data: {
-  type: "frame", name: "Login Screen", x: 0, y: 0, width: 390, height: 844,
-  fills: [{ type: "solid", color: "#FFFFFF" }], cornerRadius: 40,
-  layout: "vertical", padding: [60, 24, 40, 24], gap: 16,
-  alignItems: "stretch",
-  children: [
-    { type: "text", text: "Welcome Back", fontSize: 28, fontWeight: 700, fills: [{ type: "solid", color: "#1a1a2e" }] },
-    { type: "text", text: "Sign in to continue", fontSize: 14, fills: [{ type: "solid", color: "#666666" }] },
-    { type: "frame", name: "Email Input", height: 48, fills: [{ type: "solid", color: "#F5F5F5" }], cornerRadius: 12, padding: [12, 16, 12, 16], children: [
-      { type: "text", text: "Email address", fontSize: 14, fills: [{ type: "solid", color: "#999999" }] }
-    ]},
-    { type: "frame", name: "Login Button", height: 48, fills: [{ type: "solid", color: "#4F46E5" }], cornerRadius: 12, justifyContent: "center", alignItems: "center", children: [
-      { type: "text", text: "Sign In", fontSize: 16, fontWeight: 600, fills: [{ type: "solid", color: "#FFFFFF" }] }
-    ]}
-  ]
-}})
-
-Post-processing automatically runs: role defaults, icon resolution, layout sanitization, unique IDs.
-
-## PenNode Properties
-Frame: type:"frame", name, x, y, width, height, fills:[{type:"solid",color:"#hex"}], cornerRadius, opacity, layout:"vertical"|"horizontal", gap, padding:[top,right,bottom,left], justifyContent:"start"|"center"|"end"|"space_between", alignItems:"start"|"center"|"end"|"stretch", children:[]
-Text: type:"text", name, x, y, width, text:"content", fontSize, fontWeight:400-700, fills:[{type:"solid",color:"#hex"}], textAlign:"left"|"center"|"right", lineHeight, letterSpacing
-Rectangle: type:"rectangle", name, x, y, width, height, fills, cornerRadius, strokes:[{type:"solid",color:"#hex",thickness:1}]
-Ellipse: type:"ellipse", name, x, y, width, height, fills
+## Tools
+- generate_design: Create designs. Pass a detailed prompt describing the design.
+- snapshot_layout: View current canvas state.
+- batch_get: Read specific nodes by ID.
+- update_node: Modify existing nodes.
+- delete_node: Remove nodes.
+- Use delete_node to remove nodes
+- Use find_empty_space to find available canvas area
 
 CRITICAL: Do NOT use CSS properties (backgroundColor, boxShadow, borderRadius, padding:"16px"). Use PenNode properties above.`
 
