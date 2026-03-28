@@ -9,13 +9,18 @@ import { useAgentSettingsStore } from '@/stores/agent-settings-store'
 import type { BuiltinProviderConfig, BuiltinProviderPreset } from '@/stores/agent-settings-store'
 
 /* ---------- Provider Preset Config ---------- */
-const PROVIDER_PRESETS: Record<BuiltinProviderPreset, {
+interface PresetRegion { label: string; baseURL: string }
+
+interface PresetConfig {
   label: string
   type: 'anthropic' | 'openai-compat'
   baseURL?: string
   placeholder: string
   modelPlaceholder: string
-}> = {
+  regions?: { cn: PresetRegion; global: PresetRegion }
+}
+
+const PROVIDER_PRESETS: Record<BuiltinProviderPreset, PresetConfig> = {
   anthropic: {
     label: 'Anthropic',
     type: 'anthropic',
@@ -43,6 +48,89 @@ const PROVIDER_PRESETS: Record<BuiltinProviderPreset, {
     placeholder: 'sk-...',
     modelPlaceholder: 'deepseek-chat',
   },
+  minimax: {
+    label: 'MiniMax',
+    type: 'openai-compat',
+    baseURL: 'https://api.minimaxi.com/v1',
+    placeholder: 'eyJ...',
+    modelPlaceholder: 'MiniMax-M1',
+    regions: {
+      cn: { label: 'China', baseURL: 'https://api.minimaxi.com/v1' },
+      global: { label: 'Global', baseURL: 'https://api.minimax.io/v1' },
+    },
+  },
+  zhipu: {
+    label: '智谱 (Zhipu)',
+    type: 'openai-compat',
+    baseURL: 'https://open.bigmodel.cn/api/paas/v4',
+    placeholder: 'xxx.yyy',
+    modelPlaceholder: 'glm-4-flash',
+    regions: {
+      cn: { label: 'China', baseURL: 'https://open.bigmodel.cn/api/paas/v4' },
+      global: { label: 'Global', baseURL: 'https://open.z.ai/api/paas/v4' },
+    },
+  },
+  kimi: {
+    label: 'Kimi (Moonshot)',
+    type: 'openai-compat',
+    baseURL: 'https://api.moonshot.cn/v1',
+    placeholder: 'sk-...',
+    modelPlaceholder: 'moonshot-v1-128k',
+    regions: {
+      cn: { label: 'China', baseURL: 'https://api.moonshot.cn/v1' },
+      global: { label: 'Global', baseURL: 'https://api.moonshot.ai/v1' },
+    },
+  },
+  bailian: {
+    label: 'Bailian (DashScope)',
+    type: 'openai-compat',
+    baseURL: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
+    placeholder: 'sk-...',
+    modelPlaceholder: 'qwen-plus',
+    regions: {
+      cn: { label: 'China', baseURL: 'https://dashscope.aliyuncs.com/compatible-mode/v1' },
+      global: { label: 'Global', baseURL: 'https://dashscope-intl.aliyuncs.com/compatible-mode/v1' },
+    },
+  },
+  doubao: {
+    label: 'DouBao Seed',
+    type: 'openai-compat',
+    baseURL: 'https://ark.cn-beijing.volces.com/api/v3',
+    placeholder: 'ARK API Key',
+    modelPlaceholder: 'doubao-seed-2.0-pro',
+  },
+  xiaomi: {
+    label: 'Xiaomi MiMo',
+    type: 'openai-compat',
+    baseURL: 'https://api.xiaomimimo.com/v1',
+    placeholder: 'API Key',
+    modelPlaceholder: 'mimo-v2-flash',
+  },
+  modelscope: {
+    label: 'ModelScope',
+    type: 'openai-compat',
+    baseURL: 'https://api-inference.modelscope.cn/v1',
+    placeholder: 'API Key',
+    modelPlaceholder: 'qwen-plus',
+  },
+  stepfun: {
+    label: 'StepFun',
+    type: 'openai-compat',
+    baseURL: 'https://api.stepfun.com/v1',
+    placeholder: 'API Key',
+    modelPlaceholder: 'step-3.5-flash',
+    regions: {
+      cn: { label: 'China', baseURL: 'https://api.stepfun.com/v1' },
+      global: { label: 'Global', baseURL: 'https://api.stepfun.ai/v1' },
+    },
+  },
+  nvidia: {
+    label: 'NVIDIA NIM',
+    type: 'openai-compat',
+    baseURL: 'https://integrate.api.nvidia.com/v1',
+    placeholder: 'nvapi-...',
+    modelPlaceholder: 'nvidia/llama-3.1-nemotron-70b-instruct',
+  },
   custom: {
     label: 'Custom',
     type: 'openai-compat',
@@ -50,6 +138,18 @@ const PROVIDER_PRESETS: Record<BuiltinProviderPreset, {
     modelPlaceholder: 'model-name',
   },
 }
+
+/** All known region URLs for reverse-lookup in inferPreset */
+const REGION_URLS: Record<string, BuiltinProviderPreset> = Object.entries(PROVIDER_PRESETS).reduce(
+  (acc, [key, cfg]) => {
+    if (cfg.regions) {
+      acc[cfg.regions.cn.baseURL] = key as BuiltinProviderPreset
+      acc[cfg.regions.global.baseURL] = key as BuiltinProviderPreset
+    }
+    return acc
+  },
+  {} as Record<string, BuiltinProviderPreset>,
+)
 
 const ANTHROPIC_MODELS = [
   { id: 'claude-opus-4-20250514', name: 'Claude Opus 4' },
@@ -66,7 +166,17 @@ function inferPreset(config: BuiltinProviderConfig): BuiltinProviderPreset {
   if (url === 'https://api.openai.com/v1') return 'openai'
   if (url === 'https://openrouter.ai/api/v1') return 'openrouter'
   if (url === 'https://api.deepseek.com/v1') return 'deepseek'
+  if (REGION_URLS[url]) return REGION_URLS[url]
   return 'custom'
+}
+
+/** Infer region from a provider's baseURL */
+function inferRegion(config: BuiltinProviderConfig): 'cn' | 'global' {
+  const preset = inferPreset(config)
+  const regions = PROVIDER_PRESETS[preset].regions
+  if (!regions) return 'cn'
+  const url = config.baseURL?.replace(/\/+$/, '') ?? ''
+  return url === regions.global.baseURL ? 'global' : 'cn'
 }
 
 /** Fetch model list from a provider via our server-side proxy */
@@ -169,6 +279,9 @@ export function BuiltinProviderForm({
     initial ? inferPreset(initial) : 'anthropic',
   )
   const presetConfig = PROVIDER_PRESETS[preset]
+  const [region, setRegion] = useState<'cn' | 'global'>(
+    initial ? inferRegion(initial) : 'cn',
+  )
   const [displayName, setDisplayName] = useState(initial?.displayName ?? '')
   const [apiKey, setApiKey] = useState(initial?.apiKey ?? '')
   const [modelName, setModelName] = useState(initial?.model ?? '')
@@ -192,12 +305,27 @@ export function BuiltinProviderForm({
       if (!displayName.trim() || displayName === PROVIDER_PRESETS[preset].label) {
         setDisplayName(cfg.label)
       }
-      setBaseURL(cfg.baseURL ?? '')
+      setRegion('cn')
+      setBaseURL(cfg.regions?.cn.baseURL ?? cfg.baseURL ?? '')
       setModelList([])
       setShowModelDropdown(false)
       setModelError(null)
     },
     [displayName, preset],
+  )
+
+  const handleRegionChange = useCallback(
+    (newRegion: 'cn' | 'global') => {
+      setRegion(newRegion)
+      const regions = presetConfig.regions
+      if (regions) {
+        setBaseURL(regions[newRegion].baseURL)
+        setModelList([])
+        setShowModelDropdown(false)
+        setModelError(null)
+      }
+    },
+    [presetConfig],
   )
 
   const handleFetchModels = useCallback(async () => {
@@ -206,7 +334,8 @@ export function BuiltinProviderForm({
       setShowModelDropdown(true)
       return
     }
-    const url = preset === 'custom' ? baseURL.trim() : PROVIDER_PRESETS[preset].baseURL
+    const cfg = PROVIDER_PRESETS[preset]
+    const url = preset === 'custom' ? baseURL.trim() : (cfg.regions ? cfg.regions[region].baseURL : cfg.baseURL)
     if (!url) { setModelError('Base URL is required to search models'); return }
     setModelLoading(true)
     setModelError(null)
@@ -246,9 +375,32 @@ export function BuiltinProviderForm({
           <option value="openai">OpenAI</option>
           <option value="openrouter">OpenRouter</option>
           <option value="deepseek">DeepSeek</option>
+          <option value="minimax">MiniMax</option>
+          <option value="zhipu">智谱 (Zhipu)</option>
+          <option value="kimi">Kimi (Moonshot)</option>
+          <option value="bailian">Bailian (DashScope)</option>
+          <option value="doubao">DouBao Seed</option>
+          <option value="xiaomi">Xiaomi MiMo</option>
+          <option value="modelscope">ModelScope</option>
+          <option value="stepfun">StepFun</option>
+          <option value="nvidia">NVIDIA NIM</option>
           <option value="custom">Custom</option>
         </select>
       </div>
+      {presetConfig.regions && (
+        <div>
+          <label className="text-[11px] text-muted-foreground mb-1 block">Region</label>
+          <div className="flex gap-1">
+            {(['cn', 'global'] as const).map((r) => (
+              <button key={r} type="button" onClick={() => handleRegionChange(r)}
+                className={cn('flex-1 h-7 text-[11px] rounded-md border transition-colors',
+                  region === r ? 'bg-primary text-primary-foreground border-primary' : 'bg-card text-muted-foreground border-input hover:bg-accent')}>
+                {presetConfig.regions![r].label}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
       <div>
         <label className="text-[11px] text-muted-foreground mb-1 block">API Key</label>
         <div className="relative">
