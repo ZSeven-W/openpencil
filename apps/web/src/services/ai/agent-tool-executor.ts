@@ -36,7 +36,7 @@ export class AgentToolExecutor {
     try {
       result = await this.dispatch(name, args)
     } catch (err) {
-      result = { success: false, error: String(err) }
+      result = { success: false, error: (err instanceof Error ? err.message : JSON.stringify(err)) }
     }
 
     if (isWrite) {
@@ -200,7 +200,7 @@ export class AgentToolExecutor {
         try { docStore.removeNode(n.id) } catch { /* ignore */ }
       }
       this.rootInsertId = null // Allow retry
-      return { success: false, error: `Design generation failed: ${String(err)}` }
+      return { success: false, error: `Design generation failed: ${(err instanceof Error ? err.message : JSON.stringify(err))}` }
     }
 
     this.rootInsertId = 'generated'

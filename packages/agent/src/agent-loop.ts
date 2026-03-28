@@ -296,7 +296,7 @@ export function createAgent(config: AgentConfig): Agent {
             const data = await tool.execute!(toolCall.input)
             toolResult = { success: true, data }
           } catch (err) {
-            toolResult = { success: false, error: String(err) }
+            toolResult = { success: false, error: err instanceof Error ? err.message : JSON.stringify(err) }
           }
         } else {
           toolResult = await waitForToolResult(toolCall.toolCallId)
