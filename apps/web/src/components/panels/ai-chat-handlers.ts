@@ -229,21 +229,42 @@ async function runAgentStream(
   const lastUserMsg = messages[messages.length - 1]?.content ?? ''
   const systemPrompt = buildAgentSystemPrompt(lastUserMsg) + context
 
+  const agentBody: Record<string, unknown> = {
+    sessionId,
+    messages,
+    systemPrompt,
+    providerType: providerConfig.providerType,
+    apiKey: providerConfig.apiKey,
+    model: providerConfig.model,
+    ...(providerConfig.baseURL ? { baseURL: providerConfig.baseURL } : {}),
+    ...(providerConfig.maxOutputTokens ? { maxOutputTokens: providerConfig.maxOutputTokens } : {}),
+    toolDefs,
+    maxTurns: 20,
+  }
+
+  // Inject team members if team mode is enabled
+  const { teamEnabled, teamDesignModel, builtinProviders: allBps } = useAgentSettingsStore.getState()
+  if (teamEnabled && teamDesignModel) {
+    const designParts = teamDesignModel.split(':')
+    const designBpId = designParts[1]
+    const designModelName = designParts.slice(2).join(':')
+    const designBp = allBps.find((p) => p.id === designBpId)
+    if (designBp?.apiKey) {
+      ;(agentBody as any).members = [{
+        id: 'designer',
+        providerType: designBp.type === 'anthropic' ? 'anthropic' : 'openai-compat',
+        apiKey: designBp.apiKey,
+        model: designModelName,
+        baseURL: designBp.baseURL,
+        systemPrompt: 'You are a design specialist. Use the generate_design tool to create designs based on the task description. Focus on high-quality visual output.',
+      }]
+    }
+  }
+
   const response = await fetch('/api/ai/agent', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      sessionId,
-      messages,
-      systemPrompt,
-      providerType: providerConfig.providerType,
-      apiKey: providerConfig.apiKey,
-      model: providerConfig.model,
-      ...(providerConfig.baseURL ? { baseURL: providerConfig.baseURL } : {}),
-      ...(providerConfig.maxOutputTokens ? { maxOutputTokens: providerConfig.maxOutputTokens } : {}),
-      toolDefs,
-      maxTurns: 20,
-    }),
+    body: JSON.stringify(agentBody),
     signal: abortController.signal,
   })
 
@@ -327,6 +348,19 @@ async function runAgentStream(
           accumulated += `\n\n**Error:** ${evt.message}`
           updateLastMessage(accumulated)
           if (evt.fatal) return
+          break
+        }
+
+        case 'member_start': {
+          const status = `**${evt.memberId}** working: ${evt.task}`
+          accumulated += `\n\n---\n${status}\n`
+          updateLastMessage(accumulated)
+          break
+        }
+
+        case 'member_end': {
+          accumulated += `\n---\n`
+          updateLastMessage(accumulated)
           break
         }
 
