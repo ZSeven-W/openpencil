@@ -100,7 +100,31 @@ Export to React + Tailwind, HTML + CSS, Vue, Svelte, Flutter, SwiftUI, Jetpack C
 </tr>
 </table>
 
-## Quick Start
+## Install
+
+**macOS (Homebrew):**
+
+```bash
+brew tap zseven-w/openpencil
+brew install --cask openpencil
+```
+
+**Windows (Scoop):**
+
+```powershell
+scoop bucket add openpencil https://github.com/zseven-w/scoop-openpencil
+scoop install openpencil
+```
+
+**Linux / Windows direct download:** [GitHub Releases](https://github.com/ZSeven-W/openpencil/releases) — `.exe` (Windows), `.AppImage` / `.deb` (Linux)
+
+**CLI (`op`):**
+
+```bash
+npm install -g @zseven-w/openpencil
+```
+
+## Quick Start (Development)
 
 ```bash
 # Install dependencies
