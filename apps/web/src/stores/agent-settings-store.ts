@@ -13,7 +13,7 @@ import { appStorage } from '@/utils/app-storage'
 
 const STORAGE_KEY = 'openpencil-agent-settings'
 
-export type BuiltinProviderPreset = 'anthropic' | 'openai' | 'openrouter' | 'deepseek' | 'custom'
+export type BuiltinProviderPreset = 'anthropic' | 'openai' | 'openrouter' | 'deepseek' | 'minimax' | 'zhipu' | 'kimi' | 'bailian' | 'doubao' | 'xiaomi' | 'modelscope' | 'stepfun' | 'nvidia' | 'custom'
 
 export interface BuiltinProviderConfig {
   id: string
