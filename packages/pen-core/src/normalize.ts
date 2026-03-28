@@ -13,8 +13,8 @@
  * canvas render time, preserving $variable bindings in the document.
  */
 
-import type { PenDocument, PenNode } from '@zseven-w/pen-types'
-import type { PenFill, PenStroke, GradientStop } from '@zseven-w/pen-types'
+import type { PenDocument, PenNode } from '@zseven-w/pen-types';
+import type { PenFill, PenStroke, GradientStop } from '@zseven-w/pen-types';
 
 // ---------------------------------------------------------------------------
 // Public API
@@ -24,15 +24,15 @@ export function normalizePenDocument(doc: PenDocument): PenDocument {
   const normalized = {
     ...doc,
     children: doc.children.map((n) => normalizeNode(n)),
-  }
+  };
   // Normalize all pages' children too
   if (normalized.pages && normalized.pages.length > 0) {
     normalized.pages = normalized.pages.map((p) => ({
       ...p,
       children: p.children.map((n) => normalizeNode(n)),
-    }))
+    }));
   }
-  return normalized
+  return normalized;
 }
 
 // ---------------------------------------------------------------------------
@@ -40,48 +40,48 @@ export function normalizePenDocument(doc: PenDocument): PenDocument {
 // ---------------------------------------------------------------------------
 
 function normalizeNode(node: PenNode): PenNode {
-  const out: Record<string, unknown> = { ...node }
+  const out: Record<string, unknown> = { ...node };
 
   // fill
   if ('fill' in out && out.fill !== undefined) {
-    out.fill = normalizeFills(out.fill)
+    out.fill = normalizeFills(out.fill);
   }
 
   // stroke
   if ('stroke' in out && out.stroke != null) {
-    out.stroke = normalizeStroke(out.stroke as Record<string, unknown>)
+    out.stroke = normalizeStroke(out.stroke as Record<string, unknown>);
   }
 
   // effects — pass through (no format changes needed)
 
   // sizing
-  if ('width' in out) out.width = normalizeSizing(out.width)
-  if ('height' in out) out.height = normalizeSizing(out.height)
+  if ('width' in out) out.width = normalizeSizing(out.width);
+  if ('height' in out) out.height = normalizeSizing(out.height);
 
   // gap — pass through ($variable strings preserved)
 
   // padding — normalize array format only (not variable resolution)
-  if ('padding' in out) out.padding = normalizePadding(out.padding)
+  if ('padding' in out) out.padding = normalizePadding(out.padding);
 
   // opacity — pass through ($variable strings preserved)
 
   // text nodes: normalize `text` field to `content` (MCP/CLI use `text`, renderer expects `content`)
   if (out.type === 'text' && !('content' in out) && typeof out.text === 'string') {
-    out.content = out.text as string
-    delete out.text
+    out.content = out.text as string;
+    delete out.text;
   }
 
   // icon_font: default to lucide family
   if (out.type === 'icon_font' && !out.iconFontFamily) {
-    out.iconFontFamily = 'lucide'
+    out.iconFontFamily = 'lucide';
   }
 
   // children
   if ('children' in out && Array.isArray(out.children)) {
-    out.children = (out.children as PenNode[]).map((c) => normalizeNode(c))
+    out.children = (out.children as PenNode[]).map((c) => normalizeNode(c));
   }
 
-  return out as unknown as PenNode
+  return out as unknown as PenNode;
 }
 
 // ---------------------------------------------------------------------------
@@ -89,66 +89,64 @@ function normalizeNode(node: PenNode): PenNode {
 // ---------------------------------------------------------------------------
 
 function normalizeFills(raw: unknown): PenFill[] {
-  if (!raw) return []
+  if (!raw) return [];
 
   // String shorthand: "#hex" or "$variable" → solid fill
   if (typeof raw === 'string') {
-    return [{ type: 'solid', color: raw }]
+    return [{ type: 'solid', color: raw }];
   }
 
   // Array of fills
   if (Array.isArray(raw)) {
-    return raw.map((f) => normalizeSingleFill(f)).filter(Boolean) as PenFill[]
+    return raw.map((f) => normalizeSingleFill(f)).filter(Boolean) as PenFill[];
   }
 
   // Single fill object
   if (typeof raw === 'object') {
-    const f = normalizeSingleFill(raw as Record<string, unknown>)
-    return f ? [f] : []
+    const f = normalizeSingleFill(raw as Record<string, unknown>);
+    return f ? [f] : [];
   }
 
-  return []
+  return [];
 }
 
-function normalizeSingleFill(
-  raw: Record<string, unknown> | string,
-): PenFill | null {
+function normalizeSingleFill(raw: Record<string, unknown> | string): PenFill | null {
   // String shorthand inside array: "#hex" or "$variable" → solid fill
   if (typeof raw === 'string') {
-    return raw ? { type: 'solid', color: raw } : null
+    return raw ? { type: 'solid', color: raw } : null;
   }
-  if (!raw || typeof raw !== 'object') return null
-  const t = raw.type as string | undefined
+  if (!raw || typeof raw !== 'object') return null;
+  const t = raw.type as string | undefined;
 
   // Pencil "color" → OpenPencil "solid"
   if (t === 'color' || t === 'solid') {
     return {
       type: 'solid',
       color: typeof raw.color === 'string' ? raw.color : '#000000',
-    }
+    };
   }
 
   // Pencil "gradient" → split by gradientType
   if (t === 'gradient') {
-    const gt = (raw.gradientType as string) ?? 'linear'
-    const stops = normalizeGradientStops(raw.colors as unknown[])
+    const gt = (raw.gradientType as string) ?? 'linear';
+    const stops = normalizeGradientStops(raw.colors as unknown[]);
 
     if (gt === 'radial') {
-      const center = raw.center as Record<string, unknown> | undefined
+      const center = raw.center as Record<string, unknown> | undefined;
       return {
         type: 'radial_gradient',
         cx: typeof center?.x === 'number' ? center.x : 0.5,
         cy: typeof center?.y === 'number' ? center.y : 0.5,
         radius: 0.5,
         stops,
-      }
+      };
     }
     // linear or angular
     return {
       type: 'linear_gradient',
       angle: typeof raw.rotation === 'number' ? raw.rotation : 0,
       stops,
-    }
+    };
   }
 
   // Already our format
@@ -158,85 +156,81 @@ function normalizeSingleFill(
         ? normalizeGradientStops(raw.stops as unknown[])
         : 'colors' in raw
           ? normalizeGradientStops(raw.colors as unknown[])
-          : []
-    return { ...(raw as unknown as PenFill), stops } as PenFill
+          : [];
+    return { ...(raw as unknown as PenFill), stops } as PenFill;
   }
 
   // Image fill — pass through
-  if (t === 'image') return raw as unknown as PenFill
+  if (t === 'image') return raw as unknown as PenFill;
 
   // Fallback: if there's a color field, treat as solid
   if ('color' in raw) {
     return {
       type: 'solid',
       color: typeof raw.color === 'string' ? raw.color : '#000000',
-    }
+    };
   }
 
-  return null
+  return null;
 }
 
-function normalizeGradientStops(
-  raw: unknown[] | undefined,
-): GradientStop[] {
-  if (!Array.isArray(raw) || raw.length === 0) return []
+function normalizeGradientStops(raw: unknown[] | undefined): GradientStop[] {
+  if (!Array.isArray(raw) || raw.length === 0) return [];
 
   // First pass: parse offsets, collecting which ones are explicitly set
   const parsed = raw.map((s: unknown) => {
-    const stop = s as Record<string, unknown>
+    const stop = s as Record<string, unknown>;
     const rawOffset =
       typeof stop.offset === 'number' && Number.isFinite(stop.offset)
         ? stop.offset
         : typeof stop.position === 'number' && Number.isFinite(stop.position)
           ? stop.position
-          : null
+          : null;
     // Normalize percentage-format offsets (AI sometimes outputs 0-100 instead of 0-1)
-    const offset = rawOffset !== null && rawOffset > 1 ? rawOffset / 100 : rawOffset
+    const offset = rawOffset !== null && rawOffset > 1 ? rawOffset / 100 : rawOffset;
     return {
       offset,
       color: typeof stop.color === 'string' ? stop.color : '#000000',
-    }
-  })
+    };
+  });
 
   // Second pass: auto-distribute any stops that are missing an offset
-  const n = parsed.length
+  const n = parsed.length;
   return parsed.map((s, i) => ({
     color: s.color,
     offset: s.offset !== null ? Math.max(0, Math.min(1, s.offset!)) : i / Math.max(n - 1, 1),
-  }))
+  }));
 }
 
 // ---------------------------------------------------------------------------
 // Stroke normalization
 // ---------------------------------------------------------------------------
 
-function normalizeStroke(
-  raw: Record<string, unknown>,
-): PenStroke | undefined {
-  if (!raw) return undefined
-  const out = { ...raw }
+function normalizeStroke(raw: Record<string, unknown>): PenStroke | undefined {
+  if (!raw) return undefined;
+  const out = { ...raw };
 
   // Normalize fill inside stroke
   if ('fill' in out) {
-    out.fill = normalizeFills(out.fill)
+    out.fill = normalizeFills(out.fill);
   }
 
   // Pencil may use "color" directly on stroke
   if ('color' in out && typeof out.color === 'string') {
-    out.fill = [{ type: 'solid', color: out.color as string }]
-    delete out.color
+    out.fill = [{ type: 'solid', color: out.color as string }];
+    delete out.color;
   }
 
   // Thickness: leave $variable strings as-is, normalise plain number strings
   if (typeof out.thickness === 'string') {
-    const str = out.thickness as string
+    const str = out.thickness as string;
     if (!str.startsWith('$')) {
-      const num = parseFloat(str)
-      out.thickness = isNaN(num) ? 1 : num
+      const num = parseFloat(str);
+      out.thickness = isNaN(num) ? 1 : num;
     }
   }
 
-  return out as unknown as PenStroke
+  return out as unknown as PenStroke;
 }
 
 // ---------------------------------------------------------------------------
@@ -244,46 +238,46 @@ function normalizeStroke(
 // ---------------------------------------------------------------------------
 
 function normalizeSizing(value: unknown): number | string {
-  if (typeof value === 'number') return value
-  if (typeof value !== 'string') return 0
+  if (typeof value === 'number') return value;
+  if (typeof value !== 'string') return 0;
 
   // $variable — pass through
-  if (value.startsWith('$')) return value
+  if (value.startsWith('$')) return value;
 
   // fill_container must always resolve dynamically from parent dimensions
-  if (value.startsWith('fill_container')) return 'fill_container'
+  if (value.startsWith('fill_container')) return 'fill_container';
 
   // fit_content with a hint value: use the hint (more accurate than our estimation)
   if (value.startsWith('fit_content')) {
-    const match = value.match(/\((\d+(?:\.\d+)?)\)/)
-    if (match) return parseFloat(match[1])
-    return 'fit_content'
+    const match = value.match(/\((\d+(?:\.\d+)?)\)/);
+    if (match) return parseFloat(match[1]);
+    return 'fit_content';
   }
 
   // Try as a plain number string
-  const num = parseFloat(value)
-  return isNaN(num) ? 0 : num
+  const num = parseFloat(value);
+  return isNaN(num) ? 0 : num;
 }
 
 function normalizePadding(
   value: unknown,
 ): number | [number, number] | [number, number, number, number] | string | undefined {
-  if (typeof value === 'number') return value
+  if (typeof value === 'number') return value;
   if (typeof value === 'string') {
     // $variable — pass through
-    if (value.startsWith('$')) return value
-    const num = parseFloat(value)
-    return isNaN(num) ? 0 : num
+    if (value.startsWith('$')) return value;
+    const num = parseFloat(value);
+    return isNaN(num) ? 0 : num;
   }
   if (Array.isArray(value)) {
     return value.map((v) => {
-      if (typeof v === 'number') return v
+      if (typeof v === 'number') return v;
       if (typeof v === 'string') {
-        const num = parseFloat(v)
-        return isNaN(num) ? 0 : num
+        const num = parseFloat(v);
+        return isNaN(num) ? 0 : num;
       }
-      return 0
-    }) as [number, number] | [number, number, number, number]
+      return 0;
+    }) as [number, number] | [number, number, number, number];
   }
-  return undefined
+  return undefined;
 }

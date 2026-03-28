@@ -1,4 +1,4 @@
-import type { TranslationKeys } from './en'
+import type { TranslationKeys } from './en';
 
 const th: TranslationKeys = {
   // ── Common ──
@@ -87,8 +87,7 @@ const th: TranslationKeys = {
   'updater.restartInstall': 'รีสตาร์ทและติดตั้ง',
   'updater.installing': 'กำลังติดตั้ง...',
   'updater.releaseDate': 'วันที่เผยแพร่: {{date}}',
-  'updater.restartHint':
-    'รีสตาร์ทเพื่อใช้งานอัปเดต การเปิดใหม่โดยปกติใช้เวลา 10-15 วินาที',
+  'updater.restartHint': 'รีสตาร์ทเพื่อใช้งานอัปเดต การเปิดใหม่โดยปกติใช้เวลา 10-15 วินาที',
   'updater.unknownError': 'ข้อผิดพลาดของตัวอัปเดตที่ไม่ทราบสาเหตุ',
   'updater.title.checking': 'กำลังตรวจสอบอัปเดต',
   'updater.title.available': 'พบอัปเดต',
@@ -98,10 +97,8 @@ const th: TranslationKeys = {
   'updater.subtitle.checking': 'กำลังค้นหาเวอร์ชันล่าสุด...',
   'updater.subtitle.available': 'เวอร์ชัน {{version}} พร้อมใช้งาน',
   'updater.subtitle.availableGeneric': 'มีเวอร์ชันใหม่พร้อมใช้งาน',
-  'updater.subtitle.downloading':
-    'เวอร์ชัน {{version}} กำลังดาวน์โหลดในพื้นหลัง',
-  'updater.subtitle.downloadingGeneric':
-    'กำลังดาวน์โหลดแพ็คเกจอัปเดตในพื้นหลัง',
+  'updater.subtitle.downloading': 'เวอร์ชัน {{version}} กำลังดาวน์โหลดในพื้นหลัง',
+  'updater.subtitle.downloadingGeneric': 'กำลังดาวน์โหลดแพ็คเกจอัปเดตในพื้นหลัง',
   'updater.subtitle.downloaded': 'เวอร์ชัน {{version}} ดาวน์โหลดเสร็จแล้ว',
   'updater.subtitle.downloadedGeneric': 'ดาวน์โหลดอัปเดตเสร็จแล้ว',
   'updater.subtitle.error': 'ไม่สามารถตรวจสอบหรือดาวน์โหลดอัปเดตได้',
@@ -219,11 +216,9 @@ const th: TranslationKeys = {
   'textLayout.autoWidth': 'กว้างอัตโนมัติ',
   'textLayout.autoWidthDesc': 'ความกว้างอัตโนมัติ \u2014 ข้อความขยายในแนวนอน',
   'textLayout.autoHeight': 'สูงอัตโนมัติ',
-  'textLayout.autoHeightDesc':
-    'ความสูงอัตโนมัติ \u2014 ความกว้างคงที่ ความสูงปรับอัตโนมัติ',
+  'textLayout.autoHeightDesc': 'ความสูงอัตโนมัติ \u2014 ความกว้างคงที่ ความสูงปรับอัตโนมัติ',
   'textLayout.fixed': 'คงที่',
-  'textLayout.fixedDesc':
-    'ขนาดคงที่ \u2014 ทั้งความกว้างและความสูงคงที่',
+  'textLayout.fixedDesc': 'ขนาดคงที่ \u2014 ทั้งความกว้างและความสูงคงที่',
   'textLayout.fillWidth': 'เต็มความกว้าง',
   'textLayout.fillHeight': 'เต็มความสูง',
 
@@ -306,8 +301,7 @@ const th: TranslationKeys = {
   'ai.newChat': 'แชทใหม่',
   'ai.collapse': 'ย่อ',
   'ai.tryExample': 'ลองตัวอย่างเพื่อออกแบบ...',
-  'ai.tipSelectElements':
-    'เคล็ดลับ: เลือกองค์ประกอบบนแคนวาสก่อนแชทเพื่อให้บริบท',
+  'ai.tipSelectElements': 'เคล็ดลับ: เลือกองค์ประกอบบนแคนวาสก่อนแชทเพื่อให้บริบท',
   'ai.generating': 'กำลังสร้าง...',
   'ai.designWithAgent': 'ออกแบบด้วยเอเจนต์...',
   'ai.attachImage': 'แนบรูปภาพ',
@@ -321,14 +315,12 @@ const th: TranslationKeys = {
   'ai.quickAction.loginScreenPrompt':
     'ออกแบบหน้าจอเข้าสู่ระบบมือถือที่ทันสมัย พร้อมช่องกรอกอีเมล รหัสผ่าน ปุ่มเข้าสู่ระบบ และตัวเลือกเข้าสู่ระบบผ่านโซเชียล',
   'ai.quickAction.foodApp': 'หน้าแรกแอปอาหาร',
-  'ai.quickAction.foodAppPrompt':
-    'Generate a well-designed food mobile app homepage',
+  'ai.quickAction.foodAppPrompt': 'Generate a well-designed food mobile app homepage',
   'ai.quickAction.bottomNav': 'ออกแบบแถบนำทางด้านล่าง',
   'ai.quickAction.bottomNavPrompt':
     'ออกแบบแถบนำทางด้านล่างของแอปมือถือ 5 แท็บ: หน้าแรก, ค้นหา, เพิ่ม, ข้อความ, โปรไฟล์',
   'ai.quickAction.colorPalette': 'แนะนำจานสีสำหรับแอปของฉัน',
-  'ai.quickAction.colorPalettePrompt':
-    'แนะนำจานสีที่ทันสมัยสำหรับแอปดูแลสัตว์เลี้ยง',
+  'ai.quickAction.colorPalettePrompt': 'แนะนำจานสีที่ทันสมัยสำหรับแอปดูแลสัตว์เลี้ยง',
 
   // ── Code Panel ──
   'code.reactTailwind': 'React + Tailwind',
@@ -339,8 +331,7 @@ const th: TranslationKeys = {
   'code.download': 'ดาวน์โหลดไฟล์โค้ด',
   'code.closeCodePanel': 'ปิดแผงโค้ด',
   'code.genCssVars': 'กำลังสร้าง CSS Variables สำหรับเอกสารทั้งหมด',
-  'code.genSelected':
-    'กำลังสร้างโค้ดสำหรับ {{count}} องค์ประกอบที่เลือก',
+  'code.genSelected': 'กำลังสร้างโค้ดสำหรับ {{count}} องค์ประกอบที่เลือก',
   'code.genDocument': 'กำลังสร้างโค้ดสำหรับเอกสารทั้งหมด',
   'code.aiEnhance': 'ปรับปรุงด้วย AI',
   'code.cancelEnhance': 'ยกเลิกการปรับปรุง',
@@ -358,8 +349,7 @@ const th: TranslationKeys = {
   'agents.mcpIntegrations': 'การผสานรวม MCP ในเทอร์มินัล',
   'agents.transport': 'การส่งข้อมูล',
   'agents.port': 'พอร์ต',
-  'agents.mcpRestart':
-    'การผสานรวม MCP จะมีผลหลังจากรีสตาร์ทเทอร์มินัล',
+  'agents.mcpRestart': 'การผสานรวม MCP จะมีผลหลังจากรีสตาร์ทเทอร์มินัล',
   'agents.mcpReinstallHint':
     'หลังจากอัปเกรด OpenPencil กรุณาติดตั้ง MCP Integration ใหม่เพื่อให้แน่ใจว่าเข้ากันได้',
   'agents.modelCount': '{{count}} โมเดล',
@@ -434,7 +424,8 @@ const th: TranslationKeys = {
   'builtin.errorApiKeyEmpty': 'API Key ว่างเปล่า กรุณาเพิ่ม API Key ในการตั้งค่า',
   'builtin.parallelAgents': 'ตัวแทนย่อยแบบขนาน: {{count}}x (คลิกเพื่อสลับ)',
   'builtin.baseUrlPlaceholder': 'https://api.example.com/v1',
-  'builtin.teamDescription': 'เลือกโมเดลสำหรับสร้างงานออกแบบ เมื่อตั้งค่าแล้ว งานออกแบบจะถูกมอบหมายให้เอเจนต์ผู้เชี่ยวชาญที่ใช้โมเดลนี้โดยอัตโนมัติ',
+  'builtin.teamDescription':
+    'เลือกโมเดลสำหรับสร้างงานออกแบบ เมื่อตั้งค่าแล้ว งานออกแบบจะถูกมอบหมายให้เอเจนต์ผู้เชี่ยวชาญที่ใช้โมเดลนี้โดยอัตโนมัติ',
   'builtin.teamDesignModel': 'โมเดลออกแบบ',
   'builtin.teamSelectModel': 'ไม่มี (เอเจนต์เดี่ยว)',
 
@@ -449,8 +440,7 @@ const th: TranslationKeys = {
   'figma.convertFailed': 'ไม่สามารถแปลงไฟล์ Figma ได้',
   'figma.parsing': 'กำลังแยกวิเคราะห์ไฟล์ .fig...',
   'figma.converting': 'กำลังแปลงโหนด...',
-  'figma.selectPage':
-    'ไฟล์นี้มี {{count}} หน้า เลือกหน้าที่จะนำเข้า:',
+  'figma.selectPage': 'ไฟล์นี้มี {{count}} หน้า เลือกหน้าที่จะนำเข้า:',
   'figma.layers': '{{count}} เลเยอร์',
   'figma.importAll': 'นำเข้าทุกหน้า',
   'figma.importComplete': 'นำเข้าเสร็จสมบูรณ์!',
@@ -496,6 +486,6 @@ const th: TranslationKeys = {
   'variablePicker.bindToVariable': 'ผูกกับตัวแปร',
   'variablePicker.unbind': 'ยกเลิกการผูกตัวแปร',
   'variablePicker.noVariables': 'ยังไม่มีตัวแปร {{type}} ที่กำหนดไว้',
-} as const
+} as const;
 
-export default th
+export default th;

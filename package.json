@@ -1,21 +1,21 @@
 {
   "name": "openpencil",
   "version": "0.6.0",
+  "private": true,
   "description": "The world's first open-source AI-native vector design tool and the first to feature concurrent Agent Teams. Design-as-Code. Turn prompts into UI directly on the live canvas. A modern alternative to Pencil.",
   "author": {
     "name": "ZSeven-W",
     "email": "xkayshen@gmail.com"
   },
-  "private": true,
-  "type": "module",
+  "bin": {
+    "openpencil-mcp": "out/mcp-server.cjs"
+  },
   "workspaces": [
     "packages/*",
     "apps/*"
   ],
+  "type": "module",
   "main": "out/desktop/main.cjs",
-  "bin": {
-    "openpencil-mcp": "out/mcp-server.cjs"
-  },
   "scripts": {
     "dev": "cd apps/web && bun --bun vite dev --port 3000",
     "build": "cd apps/web && bun --bun vite build",
@@ -35,13 +35,16 @@
     "publish:beta": "bash scripts/publish-beta.sh",
     "unpublish": "bash scripts/unpublish.sh",
     "bump": "sh -c 'V=$0; [ -z \"$V\" ] && echo \"Usage: bun run bump <version>\" && exit 1; for f in package.json apps/*/package.json packages/*/package.json; do [ -f \"$f\" ] && jq --arg v \"$V\" \".version=\\$v\" \"$f\" > \"$f.tmp\" && mv \"$f.tmp\" \"$f\" && echo \"$f → $V\"; done'",
+    "lint": "oxlint .",
+    "lint:fix": "oxlint --fix .",
+    "format": "oxfmt .",
+    "format:check": "oxfmt --check .",
     "generate": "bun -e \"import { compileSkills } from './packages/pen-ai-skills/vite-plugin-skills'; compileSkills('./packages/pen-ai-skills')\"",
     "postinstall": "(bun scripts/patch-srvx-bun.ts && bun run generate) || true"
   },
   "dependencies": {
     "@anthropic-ai/claude-agent-sdk": "^0.2.47",
     "@anthropic-ai/sdk": "^0.77.0",
-    "h3": "^2.0.1-rc.18",
     "@fontsource-variable/inter": "^5.2.8",
     "@fontsource/dm-sans": "^5.2.8",
     "@fontsource/inter": "^5.2.8",
@@ -79,6 +82,7 @@
     "clsx": "^2.1.1",
     "electron-updater": "^6.6.2",
     "fzstd": "^0.1.1",
+    "h3": "^2.0.1-rc.18",
     "html2canvas": "^1.4.1",
     "i18next": "^25.8.14",
     "i18next-browser-languagedetector": "^8.2.1",
@@ -112,6 +116,8 @@
     "esbuild": "^0.25.0",
     "graceful-fs": "^4.2.11",
     "jsdom": "^27.0.0",
+    "oxfmt": "^0.42.0",
+    "oxlint": "^1.57.0",
     "typescript": "^5.7.2",
     "vite": "^7.1.7",
     "vitest": "^3.0.5"

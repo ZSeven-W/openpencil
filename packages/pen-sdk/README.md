@@ -12,13 +12,13 @@ npm install @zseven-w/pen-sdk
 
 This package re-exports all OpenPencil packages:
 
-| Package | Provides |
-|---|---|
-| `@zseven-w/pen-types` | TypeScript types for the document model |
-| `@zseven-w/pen-core` | Tree operations, layout engine, variables, boolean ops |
-| `@zseven-w/pen-codegen` | Code generators (React, HTML, Vue, Svelte, Flutter, SwiftUI, Compose, RN) |
-| `@zseven-w/pen-figma` | Figma `.fig` parser and converter |
-| `@zseven-w/pen-renderer` | CanvasKit/Skia GPU renderer |
+| Package                  | Provides                                                                  |
+| ------------------------ | ------------------------------------------------------------------------- |
+| `@zseven-w/pen-types`    | TypeScript types for the document model                                   |
+| `@zseven-w/pen-core`     | Tree operations, layout engine, variables, boolean ops                    |
+| `@zseven-w/pen-codegen`  | Code generators (React, HTML, Vue, Svelte, Flutter, SwiftUI, Compose, RN) |
+| `@zseven-w/pen-figma`    | Figma `.fig` parser and converter                                         |
+| `@zseven-w/pen-renderer` | CanvasKit/Skia GPU renderer                                               |
 
 ## Usage
 
@@ -46,7 +46,7 @@ import {
   // Rendering
   loadCanvasKit,
   PenRenderer,
-} from '@zseven-w/pen-sdk'
+} from '@zseven-w/pen-sdk';
 ```
 
 Or install individual packages for smaller bundles — see each package's README for details.

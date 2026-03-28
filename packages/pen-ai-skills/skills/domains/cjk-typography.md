@@ -11,6 +11,7 @@ category: domain
 ---
 
 CJK TYPOGRAPHY (Chinese/Japanese/Korean):
+
 - Headings: "Noto Sans SC" (Chinese) / "Noto Sans JP" / "Noto Sans KR". NEVER "Space Grotesk"/"Manrope" for CJK.
 - Body: "Inter" (system CJK fallback) or "Noto Sans SC".
 - CJK lineHeight: headings 1.3-1.4 (NOT 1.1), body 1.6-1.8. letterSpacing: 0, NEVER negative.

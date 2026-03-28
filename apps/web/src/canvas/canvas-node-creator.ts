@@ -1,13 +1,13 @@
-import { generateId } from '@/stores/document-store'
-import type { PenNode } from '@/types/pen'
-import type { ToolType } from '@/types/canvas'
+import { generateId } from '@/stores/document-store';
+import type { PenNode } from '@/types/pen';
+import type { ToolType } from '@/types/canvas';
 import {
   DEFAULT_FILL,
   DEFAULT_STROKE,
   DEFAULT_STROKE_WIDTH,
   DEFAULT_FRAME_FILL,
   DEFAULT_TEXT_FILL,
-} from './canvas-constants'
+} from './canvas-constants';
 
 export function createNodeForTool(
   tool: ToolType,
@@ -16,7 +16,7 @@ export function createNodeForTool(
   width: number,
   height: number,
 ): PenNode | null {
-  const id = generateId()
+  const id = generateId();
 
   switch (tool) {
     case 'rectangle':
@@ -33,7 +33,7 @@ export function createNodeForTool(
           thickness: DEFAULT_STROKE_WIDTH,
           fill: [{ type: 'solid', color: DEFAULT_STROKE }],
         },
-      }
+      };
     case 'frame':
       return {
         id,
@@ -45,7 +45,7 @@ export function createNodeForTool(
         height: Math.abs(height),
         fill: [{ type: 'solid', color: DEFAULT_FRAME_FILL }],
         children: [],
-      }
+      };
     case 'ellipse':
       return {
         id,
@@ -60,7 +60,7 @@ export function createNodeForTool(
           thickness: DEFAULT_STROKE_WIDTH,
           fill: [{ type: 'solid', color: DEFAULT_STROKE }],
         },
-      }
+      };
     case 'polygon':
       return {
         id,
@@ -76,7 +76,7 @@ export function createNodeForTool(
           thickness: DEFAULT_STROKE_WIDTH,
           fill: [{ type: 'solid', color: DEFAULT_STROKE }],
         },
-      }
+      };
     case 'line':
       return {
         id,
@@ -90,7 +90,7 @@ export function createNodeForTool(
           thickness: DEFAULT_STROKE_WIDTH,
           fill: [{ type: 'solid', color: DEFAULT_STROKE }],
         },
-      }
+      };
     case 'text':
       return {
         id,
@@ -102,13 +102,12 @@ export function createNodeForTool(
         fontSize: 16,
         fontFamily: 'Inter, sans-serif',
         fill: [{ type: 'solid', color: DEFAULT_TEXT_FILL }],
-      }
+      };
     default:
-      return null
+      return null;
   }
 }
 
 export function isDrawingTool(tool: ToolType): boolean {
-  return tool !== 'select' && tool !== 'hand'
+  return tool !== 'select' && tool !== 'hand';
 }
-

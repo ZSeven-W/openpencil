@@ -13,7 +13,7 @@
  */
 export function captureNodeScreenshot(_nodeId: string): string | null {
   // TODO: implement via CanvasKit/Skia offscreen rendering
-  return null
+  return null;
 }
 
 /**
@@ -22,5 +22,5 @@ export function captureNodeScreenshot(_nodeId: string): string | null {
  * Currently returns null — pending CanvasKit migration.
  */
 export function captureRootFrameScreenshot(): string | null {
-  return null
+  return null;
 }

@@ -1,4 +1,4 @@
-import type { TranslationKeys } from './en'
+import type { TranslationKeys } from './en';
 
 const fr: TranslationKeys = {
   // ── Common ──
@@ -100,12 +100,10 @@ const fr: TranslationKeys = {
   'updater.subtitle.availableGeneric': 'Une nouvelle version est disponible.',
   'updater.subtitle.downloading':
     'La version {{version}} est en cours de téléchargement en arrière-plan.',
-  'updater.subtitle.downloadingGeneric':
-    'Téléchargement du paquet de mise à jour en arrière-plan.',
+  'updater.subtitle.downloadingGeneric': 'Téléchargement du paquet de mise à jour en arrière-plan.',
   'updater.subtitle.downloaded': 'La version {{version}} a été téléchargée.',
   'updater.subtitle.downloadedGeneric': 'La mise à jour a été téléchargée.',
-  'updater.subtitle.error':
-    'Impossible de vérifier ou de télécharger la mise à jour.',
+  'updater.subtitle.error': 'Impossible de vérifier ou de télécharger la mise à jour.',
 
   // ── Layers ──
   'layers.title': 'Calques',
@@ -219,14 +217,11 @@ const fr: TranslationKeys = {
   'textLayout.dimensions': 'Dimensions',
   'textLayout.resizing': 'Redimensionnement',
   'textLayout.autoWidth': 'Auto W',
-  'textLayout.autoWidthDesc':
-    'Largeur automatique — le texte s\u2019étend horizontalement',
+  'textLayout.autoWidthDesc': 'Largeur automatique — le texte s\u2019étend horizontalement',
   'textLayout.autoHeight': 'Auto H',
-  'textLayout.autoHeightDesc':
-    'Hauteur automatique — largeur fixe, hauteur auto-ajustée',
+  'textLayout.autoHeightDesc': 'Hauteur automatique — largeur fixe, hauteur auto-ajustée',
   'textLayout.fixed': 'Fixe',
-  'textLayout.fixedDesc':
-    'Taille fixe — la largeur et la hauteur sont fixes',
+  'textLayout.fixedDesc': 'Taille fixe — la largeur et la hauteur sont fixes',
   'textLayout.fillWidth': 'Remplir la largeur',
   'textLayout.fillHeight': 'Remplir la hauteur',
 
@@ -323,14 +318,12 @@ const fr: TranslationKeys = {
   'ai.quickAction.loginScreen': 'Concevoir un écran de connexion mobile',
   'ai.quickAction.loginScreenPrompt':
     'Concevez un écran de connexion mobile moderne avec un champ e-mail, un champ mot de passe, un bouton de connexion et des options de connexion sociale',
-  'ai.quickAction.foodApp': 'Page d\'accueil appli cuisine',
-  'ai.quickAction.foodAppPrompt':
-    'Generate a well-designed food mobile app homepage',
+  'ai.quickAction.foodApp': "Page d'accueil appli cuisine",
+  'ai.quickAction.foodAppPrompt': 'Generate a well-designed food mobile app homepage',
   'ai.quickAction.bottomNav': 'Concevoir une barre de navigation inférieure',
   'ai.quickAction.bottomNavPrompt':
     'Concevez une barre de navigation inférieure pour application mobile avec 5 onglets : Accueil, Recherche, Ajouter, Messages, Profil',
-  'ai.quickAction.colorPalette':
-    'Suggérer une palette de couleurs pour mon application',
+  'ai.quickAction.colorPalette': 'Suggérer une palette de couleurs pour mon application',
   'ai.quickAction.colorPalettePrompt':
     'Suggérez une palette de couleurs moderne pour une application de soins pour animaux',
 
@@ -342,10 +335,8 @@ const fr: TranslationKeys = {
   'code.copied': 'Copié !',
   'code.download': 'Télécharger le fichier de code',
   'code.closeCodePanel': 'Fermer le panneau de code',
-  'code.genCssVars':
-    'Génération des variables CSS pour l\u2019ensemble du document',
-  'code.genSelected':
-    'Génération du code pour {{count}} élément(s) sélectionné(s)',
+  'code.genCssVars': 'Génération des variables CSS pour l\u2019ensemble du document',
+  'code.genSelected': 'Génération du code pour {{count}} élément(s) sélectionné(s)',
   'code.genDocument': 'Génération du code pour l\u2019ensemble du document',
   'code.aiEnhance': 'Améliorer par IA',
   'code.cancelEnhance': 'Annuler l\u2019amélioration',
@@ -363,10 +354,9 @@ const fr: TranslationKeys = {
   'agents.mcpIntegrations': 'Intégrations MCP dans le terminal',
   'agents.transport': 'Transport',
   'agents.port': 'Port',
-  'agents.mcpRestart':
-    'Les intégrations MCP prendront effet après le redémarrage du terminal.',
+  'agents.mcpRestart': 'Les intégrations MCP prendront effet après le redémarrage du terminal.',
   'agents.mcpReinstallHint':
-    'Après la mise à jour d\'OpenPencil, veuillez réinstaller les intégrations MCP pour assurer la compatibilité.',
+    "Après la mise à jour d'OpenPencil, veuillez réinstaller les intégrations MCP pour assurer la compatibilité.",
   'agents.modelCount': '{{count}} modèle(s)',
   'agents.connectionFailed': 'Échec de la connexion',
   'agents.serverError': 'Erreur serveur {{status}}',
@@ -406,15 +396,17 @@ const fr: TranslationKeys = {
   'settings.images': 'Images',
   'settings.system': 'Système',
   'settings.autoUpdateDesc': 'Vérifier automatiquement les nouvelles versions au démarrage',
-  'settings.systemDesktopOnly': 'Les paramètres système sont disponibles dans l\'application de bureau.',
-  'settings.envHint': 'Vous pouvez définir des variables d\'environnement supplémentaires dans {{path}}.',
+  'settings.systemDesktopOnly':
+    "Les paramètres système sont disponibles dans l'application de bureau.",
+  'settings.envHint':
+    "Vous pouvez définir des variables d'environnement supplémentaires dans {{path}}.",
 
   // ── Builtin Providers ──
   'builtin.title': 'Fournisseurs intégrés',
   'builtin.description': 'Configurez les clés API directement — aucun outil CLI requis.',
   'builtin.addProvider': 'Ajouter un fournisseur',
   'builtin.empty': 'Aucun fournisseur intégré configuré.',
-  'builtin.displayName': 'Nom d\'affichage',
+  'builtin.displayName': "Nom d'affichage",
   'builtin.displayNamePlaceholder': 'ex. Ma clé Anthropic',
   'builtin.provider': 'Fournisseur',
   'builtin.region': 'Région',
@@ -435,11 +427,14 @@ const fr: TranslationKeys = {
   'builtin.custom': 'Personnalisé',
   'builtin.apiKeyBadge': 'API Key',
   'builtin.viaApiKey': 'via API Key {{name}}',
-  'builtin.errorProviderNotFound': 'Fournisseur intégré introuvable. Veuillez vérifier vos paramètres.',
-  'builtin.errorApiKeyEmpty': 'La clé API est vide. Veuillez ajouter votre clé API dans les paramètres.',
+  'builtin.errorProviderNotFound':
+    'Fournisseur intégré introuvable. Veuillez vérifier vos paramètres.',
+  'builtin.errorApiKeyEmpty':
+    'La clé API est vide. Veuillez ajouter votre clé API dans les paramètres.',
   'builtin.parallelAgents': 'Sous-agents parallèles : {{count}}x (cliquez pour changer)',
   'builtin.baseUrlPlaceholder': 'https://api.example.com/v1',
-  'builtin.teamDescription': 'Sélectionnez un modèle pour la génération de design. Une fois défini, les tâches de design sont automatiquement déléguées à un agent spécialisé utilisant ce modèle.',
+  'builtin.teamDescription':
+    'Sélectionnez un modèle pour la génération de design. Une fois défini, les tâches de design sont automatiquement déléguées à un agent spécialisé utilisant ce modèle.',
   'builtin.teamDesignModel': 'Modèle de design',
   'builtin.teamSelectModel': 'Aucun (agent unique)',
 
@@ -447,16 +442,14 @@ const fr: TranslationKeys = {
   'figma.title': 'Importer depuis Figma',
   'figma.dropFile': 'Déposez un fichier .fig ici',
   'figma.orBrowse': 'ou cliquez pour parcourir',
-  'figma.exportTip':
-    'Exporter depuis Figma : Fichier \u2192 Enregistrer une copie locale (.fig)',
+  'figma.exportTip': 'Exporter depuis Figma : Fichier \u2192 Enregistrer une copie locale (.fig)',
   'figma.selectFigFile': 'Veuillez sélectionner un fichier .fig',
   'figma.noPages': 'Aucune page trouvée dans le fichier .fig',
   'figma.parseFailed': 'Échec de l\u2019analyse du fichier .fig',
   'figma.convertFailed': 'Échec de la conversion du fichier Figma',
   'figma.parsing': 'Analyse du fichier .fig...',
   'figma.converting': 'Conversion des nœuds...',
-  'figma.selectPage':
-    'Ce fichier contient {{count}} pages. Sélectionnez celles à importer :',
+  'figma.selectPage': 'Ce fichier contient {{count}} pages. Sélectionnez celles à importer :',
   'figma.layers': '{{count}} calques',
   'figma.importAll': 'Importer toutes les pages',
   'figma.importComplete': 'Importation terminée !',
@@ -470,11 +463,9 @@ const fr: TranslationKeys = {
   // ── Landing Page ──
   'landing.open': 'Open',
   'landing.pencil': 'Pencil',
-  'landing.tagline':
-    'Outil de design vectoriel open source. Design as Code.',
+  'landing.tagline': 'Outil de design vectoriel open source. Design as Code.',
   'landing.newDesign': 'Nouveau design',
-  'landing.shortcutHint':
-    'Appuyez sur {{key1}} + {{key2}} pour créer un nouveau design',
+  'landing.shortcutHint': 'Appuyez sur {{key1}} + {{key2}} pour créer un nouveau design',
 
   // ── 404 ──
   'notFound.message': 'Page introuvable',
@@ -504,6 +495,6 @@ const fr: TranslationKeys = {
   'variablePicker.bindToVariable': 'Lier à une variable',
   'variablePicker.unbind': 'Délier la variable',
   'variablePicker.noVariables': 'Aucune variable {{type}} définie',
-} as const
+} as const;
 
-export default fr
+export default fr;

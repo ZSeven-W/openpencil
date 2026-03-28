@@ -29,6 +29,7 @@ BUILD_TARGET=electron bun run build
 ## File Association
 
 `.op` files are registered as OpenPencil documents via `fileAssociations` in `electron-builder.yml`:
+
 - macOS: `open-file` app event handles double-click/drag
 - Windows/Linux: `requestSingleInstanceLock` + `second-instance` event forwards CLI args to existing window
 

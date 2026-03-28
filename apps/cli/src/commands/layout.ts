@@ -1,10 +1,10 @@
-import { handleSnapshotLayout } from '@/mcp/tools/snapshot-layout'
-import { handleFindEmptySpace } from '@/mcp/tools/find-empty-space'
-import { output, outputError } from '../output'
+import { handleSnapshotLayout } from '@/mcp/tools/snapshot-layout';
+import { handleFindEmptySpace } from '@/mcp/tools/find-empty-space';
+import { output, outputError } from '../output';
 
 interface GlobalFlags {
-  file?: string
-  page?: string
+  file?: string;
+  page?: string;
 }
 
 export async function cmdLayout(
@@ -15,8 +15,8 @@ export async function cmdLayout(
     parentId: flags.parent,
     maxDepth: flags.depth ? parseInt(flags.depth, 10) : undefined,
     pageId: flags.page,
-  })
-  output(result)
+  });
+  output(result);
 }
 
 export async function cmdFindSpace(
@@ -28,6 +28,6 @@ export async function cmdFindSpace(
     width: flags.width ? parseInt(flags.width, 10) : undefined,
     height: flags.height ? parseInt(flags.height, 10) : undefined,
     pageId: flags.page,
-  })
-  output(result)
+  });
+  output(result);
 }

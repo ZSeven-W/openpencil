@@ -8,4 +8,4 @@ export {
   resolveStrokeWidth,
   wrapLine,
   cssFontFamily,
-} from '@zseven-w/pen-renderer'
+} from '@zseven-w/pen-renderer';

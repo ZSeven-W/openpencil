@@ -1,160 +1,189 @@
-import { useState, useEffect } from 'react'
-import { useTranslation } from 'react-i18next'
-import { useCanvasStore } from '@/stores/canvas-store'
-import { useDocumentStore, getActivePageChildren } from '@/stores/document-store'
-import { Separator } from '@/components/ui/separator'
-import type { PenNode, ContainerProps, RefNode, PathNode, ImageNode, IconFontNode } from '@/types/pen'
-import { Component, Diamond, ArrowUpRight, Unlink } from 'lucide-react'
-import { Button } from '@/components/ui/button'
-import SizeSection from './size-section'
-import LayoutSection from './layout-section'
-import FillSection from './fill-section'
-import StrokeSection from './stroke-section'
-import AppearanceSection from './appearance-section'
-import TextSection from './text-section'
-import TextLayoutSection from './text-layout-section'
-import EffectsSection from './effects-section'
-import ExportSection from './export-section'
-import IconSection from './icon-section'
-import ImageSection from './image-section'
+import { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
+import { useCanvasStore } from '@/stores/canvas-store';
+import { useDocumentStore, getActivePageChildren } from '@/stores/document-store';
+import { Separator } from '@/components/ui/separator';
+import type {
+  PenNode,
+  ContainerProps,
+  RefNode,
+  PathNode,
+  ImageNode,
+  IconFontNode,
+} from '@/types/pen';
+import { Component, Diamond, ArrowUpRight, Unlink } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import SizeSection from './size-section';
+import LayoutSection from './layout-section';
+import FillSection from './fill-section';
+import StrokeSection from './stroke-section';
+import AppearanceSection from './appearance-section';
+import TextSection from './text-section';
+import TextLayoutSection from './text-layout-section';
+import EffectsSection from './effects-section';
+import ExportSection from './export-section';
+import IconSection from './icon-section';
+import ImageSection from './image-section';
 
 /** Properties stored directly on the RefNode (instance-level), not as overrides. */
 const INSTANCE_DIRECT_PROPS = new Set([
-  'x', 'y', 'width', 'height', 'name', 'visible', 'locked', 'rotation', 'opacity', 'flipX', 'flipY', 'enabled', 'theme',
-])
+  'x',
+  'y',
+  'width',
+  'height',
+  'name',
+  'visible',
+  'locked',
+  'rotation',
+  'opacity',
+  'flipX',
+  'flipY',
+  'enabled',
+  'theme',
+]);
 
 export default function PropertyPanel({ embedded }: { embedded?: boolean } = {}) {
-  const { t } = useTranslation()
-  const activeId = useCanvasStore((s) => s.selection.activeId)
-  const setSelection = useCanvasStore((s) => s.setSelection)
-  const activePageId = useCanvasStore((s) => s.activePageId)
-  const children = useDocumentStore((s) => getActivePageChildren(s.document, activePageId))
-  const getNodeById = useDocumentStore((s) => s.getNodeById)
-  const updateNode = useDocumentStore((s) => s.updateNode)
-  const makeReusable = useDocumentStore((s) => s.makeReusable)
-  const detachComponent = useDocumentStore((s) => s.detachComponent)
+  const { t } = useTranslation();
+  const activeId = useCanvasStore((s) => s.selection.activeId);
+  const setSelection = useCanvasStore((s) => s.setSelection);
+  const activePageId = useCanvasStore((s) => s.activePageId);
+  const children = useDocumentStore((s) => getActivePageChildren(s.document, activePageId));
+  const getNodeById = useDocumentStore((s) => s.getNodeById);
+  const updateNode = useDocumentStore((s) => s.updateNode);
+  const makeReusable = useDocumentStore((s) => s.makeReusable);
+  const detachComponent = useDocumentStore((s) => s.detachComponent);
 
   // Subscribe to `children` so we re-render when nodes change
-  void children
-  const node = activeId ? getNodeById(activeId) : undefined
+  void children;
+  const node = activeId ? getNodeById(activeId) : undefined;
 
   // These hooks must run unconditionally (React rules of hooks)
-  const [isEditingName, setIsEditingName] = useState(false)
-  const [editName, setEditName] = useState('')
+  const [isEditingName, setIsEditingName] = useState(false);
+  const [editName, setEditName] = useState('');
   useEffect(() => {
-    setIsEditingName(false)
-  }, [activeId])
+    setIsEditingName(false);
+  }, [activeId]);
 
   if (!node) {
-    return null
+    return null;
   }
 
-  const nodeIsReusable = 'reusable' in node && node.reusable === true
-  const nodeIsInstance = node.type === 'ref'
+  const nodeIsReusable = 'reusable' in node && node.reusable === true;
+  const nodeIsInstance = node.type === 'ref';
 
   // For RefNodes, resolve the referenced component to get visual properties.
   // The display node merges: component base → instance overrides → RefNode position/meta.
-  let displayNode = node
+  let displayNode = node;
   if (nodeIsInstance) {
-    const refNode = node as RefNode
-    const component = getNodeById(refNode.ref)
+    const refNode = node as RefNode;
+    const component = getNodeById(refNode.ref);
     if (component) {
-      const topOverrides = refNode.descendants?.[refNode.ref] ?? {}
-      const merged: Record<string, unknown> = { ...component, ...topOverrides }
+      const topOverrides = refNode.descendants?.[refNode.ref] ?? {};
+      const merged: Record<string, unknown> = { ...component, ...topOverrides };
       // Apply RefNode's own explicitly defined properties
       for (const [key, val] of Object.entries(node)) {
-        if (key === 'type' || key === 'ref' || key === 'descendants' || key === 'children') continue
+        if (key === 'type' || key === 'ref' || key === 'descendants' || key === 'children')
+          continue;
         if (val !== undefined) {
-          merged[key] = val
+          merged[key] = val;
         }
       }
       // Use component's type (frame/rect/etc.) not 'ref'
-      merged.type = component.type
-      if (!merged.name) merged.name = component.name
-      displayNode = merged as unknown as PenNode
+      merged.type = component.type;
+      if (!merged.name) merged.name = component.name;
+      displayNode = merged as unknown as PenNode;
     }
   }
 
   const handleUpdate = (updates: Partial<PenNode>) => {
-    if (!activeId) return
+    if (!activeId) return;
     if (nodeIsInstance && node.type === 'ref') {
-      const refNode = node as RefNode
-      const refNodeUpdate: Record<string, unknown> = {}
-      const overrideProps: Record<string, unknown> = {}
+      const refNode = node as RefNode;
+      const refNodeUpdate: Record<string, unknown> = {};
+      const overrideProps: Record<string, unknown> = {};
 
       for (const [key, value] of Object.entries(updates)) {
         if (INSTANCE_DIRECT_PROPS.has(key)) {
-          refNodeUpdate[key] = value
+          refNodeUpdate[key] = value;
         } else {
-          overrideProps[key] = value
+          overrideProps[key] = value;
         }
       }
 
       // Store visual properties as overrides in descendants[ref]
       if (Object.keys(overrideProps).length > 0) {
-        const currentDescendants = refNode.descendants ?? {}
-        const existing = currentDescendants[refNode.ref] ?? {}
+        const currentDescendants = refNode.descendants ?? {};
+        const existing = currentDescendants[refNode.ref] ?? {};
         refNodeUpdate.descendants = {
           ...currentDescendants,
           [refNode.ref]: { ...existing, ...overrideProps },
-        }
+        };
       }
 
       if (Object.keys(refNodeUpdate).length > 0) {
-        updateNode(activeId, refNodeUpdate as Partial<PenNode>)
+        updateNode(activeId, refNodeUpdate as Partial<PenNode>);
       }
     } else {
-      updateNode(activeId, updates)
+      updateNode(activeId, updates);
     }
-  }
+  };
 
   const handleGoToComponent = () => {
-    if (!nodeIsInstance || node.type !== 'ref') return
-    const refId = (node as RefNode).ref
-    setSelection([refId], refId)
-  }
+    if (!nodeIsInstance || node.type !== 'ref') return;
+    const refId = (node as RefNode).ref;
+    setSelection([refId], refId);
+  };
 
   const isContainer =
-    displayNode.type === 'frame' || displayNode.type === 'group' || displayNode.type === 'rectangle'
-  const hasLayout = isContainer
-  const isImage = displayNode.type === 'image'
-  const hasFill = displayNode.type !== 'line' && !isImage
-  const hasStroke = !isImage
+    displayNode.type === 'frame' ||
+    displayNode.type === 'group' ||
+    displayNode.type === 'rectangle';
+  const hasLayout = isContainer;
+  const isImage = displayNode.type === 'image';
+  const hasFill = displayNode.type !== 'line' && !isImage;
+  const hasStroke = !isImage;
   const hasCornerRadius =
-    displayNode.type === 'rectangle' || displayNode.type === 'frame' || isImage
-    || displayNode.type === 'polygon' || displayNode.type === 'ellipse'
-  const hasEffects = true
-  const isText = displayNode.type === 'text'
-  const isIcon = (displayNode.type === 'path' && !!(displayNode as PathNode).iconId)
-    || displayNode.type === 'icon_font'
+    displayNode.type === 'rectangle' ||
+    displayNode.type === 'frame' ||
+    isImage ||
+    displayNode.type === 'polygon' ||
+    displayNode.type === 'ellipse';
+  const hasEffects = true;
+  const isText = displayNode.type === 'text';
+  const isIcon =
+    (displayNode.type === 'path' && !!(displayNode as PathNode).iconId) ||
+    displayNode.type === 'icon_font';
 
   const handleNameClick = () => {
-    setEditName(node.name ?? node.type)
-    setIsEditingName(true)
-  }
+    setEditName(node.name ?? node.type);
+    setIsEditingName(true);
+  };
 
   const handleNameBlur = () => {
-    setIsEditingName(false)
-    const trimmed = editName.trim()
+    setIsEditingName(false);
+    const trimmed = editName.trim();
     if (trimmed && trimmed !== (node.name ?? node.type)) {
-      updateNode(activeId!, { name: trimmed } as Partial<PenNode>)
+      updateNode(activeId!, { name: trimmed } as Partial<PenNode>);
     }
-  }
+  };
 
   const handleNameKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter') (e.target as HTMLInputElement).blur()
+    if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
     if (e.key === 'Escape') {
-      setIsEditingName(false)
-      setEditName(node.name ?? node.type)
+      setIsEditingName(false);
+      setEditName(node.name ?? node.type);
     }
-  }
+  };
 
   const content = (
     <>
       {/* Header */}
       <div className="h-8 flex items-center px-2 border-b border-border gap-1 shrink-0">
         {(nodeIsReusable || nodeIsInstance) && (
-          <Diamond size={12} className={`shrink-0 ${nodeIsReusable ? 'text-purple-400' : 'text-[#9281f7]'}`} />
+          <Diamond
+            size={12}
+            className={`shrink-0 ${nodeIsReusable ? 'text-purple-400' : 'text-[#9281f7]'}`}
+          />
         )}
         {isEditingName ? (
           <input
@@ -227,16 +256,16 @@ export default function PropertyPanel({ embedded }: { embedded?: boolean } = {})
                 size="sm"
                 className="w-full h-7 text-xs gap-1.5"
                 onClick={() => {
-                  if (!activeId) return
+                  if (!activeId) return;
                   if (nodeIsInstance) {
-                    const newId = detachComponent(activeId)
+                    const newId = detachComponent(activeId);
                     if (newId) {
-                      makeReusable(newId)
-                      setSelection([newId], newId)
+                      makeReusable(newId);
+                      setSelection([newId], newId);
                     }
-                    return
+                    return;
                   }
-                  makeReusable(activeId)
+                  makeReusable(activeId);
                 }}
               >
                 <Component size={12} />
@@ -251,9 +280,7 @@ export default function PropertyPanel({ embedded }: { embedded?: boolean } = {})
             node={displayNode}
             onUpdate={handleUpdate}
             hasCornerRadius={hasCornerRadius}
-            cornerRadius={
-              'cornerRadius' in displayNode ? displayNode.cornerRadius : undefined
-            }
+            cornerRadius={'cornerRadius' in displayNode ? displayNode.cornerRadius : undefined}
             hideWH={hasLayout || isText}
           />
         </div>
@@ -262,7 +289,10 @@ export default function PropertyPanel({ embedded }: { embedded?: boolean } = {})
           <>
             <Separator />
             <div className="px-3 py-2">
-              <LayoutSection node={displayNode as PenNode & ContainerProps} onUpdate={handleUpdate} />
+              <LayoutSection
+                node={displayNode as PenNode & ContainerProps}
+                onUpdate={handleUpdate}
+              />
             </div>
           </>
         )}
@@ -356,13 +386,11 @@ export default function PropertyPanel({ embedded }: { embedded?: boolean } = {})
         </div>
       </div>
     </>
-  )
+  );
 
-  if (embedded) return content
+  if (embedded) return content;
 
   return (
-    <div className="w-64 bg-card border-l border-border flex flex-col shrink-0">
-      {content}
-    </div>
-  )
+    <div className="w-64 bg-card border-l border-border flex flex-col shrink-0">{content}</div>
+  );
 }

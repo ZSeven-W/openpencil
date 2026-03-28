@@ -1,41 +1,39 @@
-import { useState, useRef, useEffect } from 'react'
-import { useTranslation } from 'react-i18next'
-import { X } from 'lucide-react'
-import { cn } from '@/lib/utils'
-import { Button } from '@/components/ui/button'
-import { useCanvasStore } from '@/stores/canvas-store'
+import { useState, useRef, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
+import { X } from 'lucide-react';
+import { cn } from '@/lib/utils';
+import { Button } from '@/components/ui/button';
+import { useCanvasStore } from '@/stores/canvas-store';
 
 interface ExportDialogProps {
-  open: boolean
-  onClose: () => void
+  open: boolean;
+  onClose: () => void;
 }
 
 export default function ExportDialog({ open, onClose }: ExportDialogProps) {
-  const { t } = useTranslation()
-  const [format, setFormat] = useState<'png' | 'svg'>('png')
-  const [scale, setScale] = useState(2)
-  const [selectedOnly, setSelectedOnly] = useState(false)
-  const hasSelection = useCanvasStore(
-    (s) => s.selection.selectedIds.length > 0,
-  )
-  const dialogRef = useRef<HTMLDivElement>(null)
+  const { t } = useTranslation();
+  const [format, setFormat] = useState<'png' | 'svg'>('png');
+  const [scale, setScale] = useState(2);
+  const [selectedOnly, setSelectedOnly] = useState(false);
+  const hasSelection = useCanvasStore((s) => s.selection.selectedIds.length > 0);
+  const dialogRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (!open) return
+    if (!open) return;
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose()
-    }
-    document.addEventListener('keydown', handleKeyDown)
-    return () => document.removeEventListener('keydown', handleKeyDown)
-  }, [open, onClose])
+      if (e.key === 'Escape') onClose();
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [open, onClose]);
 
-  if (!open) return null
+  if (!open) return null;
 
   const handleExport = () => {
     // TODO: migrate to CanvasKit-based export
-    console.warn('[ExportDialog] Fabric.js export removed — pending CanvasKit migration')
-    onClose()
-  }
+    console.warn('[ExportDialog] Fabric.js export removed — pending CanvasKit migration');
+    onClose();
+  };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
@@ -111,15 +109,10 @@ export default function ExportDialog({ open, onClose }: ExportDialogProps) {
         )}
 
         {/* Export button */}
-        <Button
-          onClick={handleExport}
-          disabled={false}
-          className="w-full"
-          size="sm"
-        >
+        <Button onClick={handleExport} disabled={false} className="w-full" size="sm">
           {t('export.exportFormat', { format: format.toUpperCase() })}
         </Button>
       </div>
     </div>
-  )
+  );
 }

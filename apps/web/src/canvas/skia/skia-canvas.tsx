@@ -1,151 +1,147 @@
-import { useRef, useEffect, useState } from 'react'
-import { loadCanvasKit } from './skia-init'
-import { SkiaEngine } from './skia-engine'
-import { useCanvasStore } from '@/stores/canvas-store'
-import { useDocumentStore } from '@/stores/document-store'
-import { setSkiaEngineRef } from '../skia-engine-ref'
-import type { PenNode } from '@/types/pen'
-import { SkiaInteractionManager, type TextEditState } from './skia-interaction'
+import { useRef, useEffect, useState } from 'react';
+import { loadCanvasKit } from './skia-init';
+import { SkiaEngine } from './skia-engine';
+import { useCanvasStore } from '@/stores/canvas-store';
+import { useDocumentStore } from '@/stores/document-store';
+import { setSkiaEngineRef } from '../skia-engine-ref';
+import type { PenNode } from '@/types/pen';
+import { SkiaInteractionManager, type TextEditState } from './skia-interaction';
 
 export default function SkiaCanvas() {
-  const canvasRef = useRef<HTMLCanvasElement>(null)
-  const containerRef = useRef<HTMLDivElement>(null)
-  const engineRef = useRef<SkiaEngine | null>(null)
-  const [error, setError] = useState<string | null>(null)
-  const [editingText, setEditingText] = useState<TextEditState | null>(null)
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const engineRef = useRef<SkiaEngine | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [editingText, setEditingText] = useState<TextEditState | null>(null);
 
   // Initialize CanvasKit + engine
   useEffect(() => {
-    let disposed = false
+    let disposed = false;
 
     async function init() {
       try {
-        const ck = await loadCanvasKit()
-        if (disposed) return
+        const ck = await loadCanvasKit();
+        if (disposed) return;
 
-        const canvasEl = canvasRef.current
-        if (!canvasEl) return
+        const canvasEl = canvasRef.current;
+        if (!canvasEl) return;
 
-        const engine = new SkiaEngine(ck)
-        engine.init(canvasEl)
-        engineRef.current = engine
-        setSkiaEngineRef(engine)
+        const engine = new SkiaEngine(ck);
+        engine.init(canvasEl);
+        engineRef.current = engine;
+        setSkiaEngineRef(engine);
 
         // Initial sync
-        engine.syncFromDocument()
-        requestAnimationFrame(() => engine.zoomToFitContent())
-
+        engine.syncFromDocument();
+        requestAnimationFrame(() => engine.zoomToFitContent());
       } catch (err) {
-        console.error('SkiaCanvas init failed:', err)
-        setError(String(err))
+        console.error('SkiaCanvas init failed:', err);
+        setError(String(err));
       }
     }
 
-    init()
+    init();
 
     return () => {
-      disposed = true
-      setSkiaEngineRef(null)
-      engineRef.current?.dispose()
-      engineRef.current = null
-    }
-  }, [])
+      disposed = true;
+      setSkiaEngineRef(null);
+      engineRef.current?.dispose();
+      engineRef.current = null;
+    };
+  }, []);
 
   // Resize observer
   useEffect(() => {
-    const container = containerRef.current
-    if (!container) return
+    const container = containerRef.current;
+    if (!container) return;
     const observer = new ResizeObserver((entries) => {
-      const engine = engineRef.current
-      if (!engine) return
+      const engine = engineRef.current;
+      if (!engine) return;
       for (const entry of entries) {
-        const { width, height } = entry.contentRect
-        engine.resize(width, height)
+        const { width, height } = entry.contentRect;
+        engine.resize(width, height);
       }
-    })
-    observer.observe(container)
-    return () => observer.disconnect()
-  }, [])
+    });
+    observer.observe(container);
+    return () => observer.disconnect();
+  }, []);
 
   // Document sync: re-render when document changes
   useEffect(() => {
     const unsub = useDocumentStore.subscribe(() => {
-      engineRef.current?.syncFromDocument()
-    })
-    return unsub
-  }, [])
+      engineRef.current?.syncFromDocument();
+    });
+    return unsub;
+  }, []);
 
   // Page sync: re-render when active page changes
   useEffect(() => {
-    let prevPageId = useCanvasStore.getState().activePageId
+    let prevPageId = useCanvasStore.getState().activePageId;
     const unsub = useCanvasStore.subscribe((state) => {
       if (state.activePageId !== prevPageId) {
-        prevPageId = state.activePageId
-        engineRef.current?.syncFromDocument()
+        prevPageId = state.activePageId;
+        engineRef.current?.syncFromDocument();
       }
-    })
-    return unsub
-  }, [])
+    });
+    return unsub;
+  }, []);
 
   // Selection sync: re-render when selection changes
   useEffect(() => {
-    let prevIds = useCanvasStore.getState().selection.selectedIds
+    let prevIds = useCanvasStore.getState().selection.selectedIds;
     const unsub = useCanvasStore.subscribe((state) => {
       if (state.selection.selectedIds !== prevIds) {
-        prevIds = state.selection.selectedIds
-        engineRef.current?.markDirty()
+        prevIds = state.selection.selectedIds;
+        engineRef.current?.markDirty();
       }
-    })
-    return unsub
-  }, [])
+    });
+    return unsub;
+  }, []);
 
   // Wheel: zoom + pan
   useEffect(() => {
-    const canvasEl = canvasRef.current
-    if (!canvasEl) return
+    const canvasEl = canvasRef.current;
+    if (!canvasEl) return;
 
     const handleWheel = (e: WheelEvent) => {
-      e.preventDefault()
-      e.stopPropagation()
-      const engine = engineRef.current
-      if (!engine) return
+      e.preventDefault();
+      e.stopPropagation();
+      const engine = engineRef.current;
+      if (!engine) return;
 
       if (e.ctrlKey || e.metaKey) {
-        let delta = -e.deltaY
-        if (e.deltaMode === 1) delta *= 40
-        const factor = Math.pow(1.005, delta)
-        const newZoom = engine.zoom * factor
-        engine.zoomToPoint(e.clientX, e.clientY, newZoom)
+        let delta = -e.deltaY;
+        if (e.deltaMode === 1) delta *= 40;
+        const factor = Math.pow(1.005, delta);
+        const newZoom = engine.zoom * factor;
+        engine.zoomToPoint(e.clientX, e.clientY, newZoom);
       } else {
-        let dx = -e.deltaX
-        let dy = -e.deltaY
-        if (e.deltaMode === 1) { dx *= 40; dy *= 40 }
-        engine.pan(dx, dy)
+        let dx = -e.deltaX;
+        let dy = -e.deltaY;
+        if (e.deltaMode === 1) {
+          dx *= 40;
+          dy *= 40;
+        }
+        engine.pan(dx, dy);
       }
-    }
+    };
 
-    canvasEl.addEventListener('wheel', handleWheel, { passive: false })
-    return () => canvasEl.removeEventListener('wheel', handleWheel)
-  }, [])
+    canvasEl.addEventListener('wheel', handleWheel, { passive: false });
+    return () => canvasEl.removeEventListener('wheel', handleWheel);
+  }, []);
 
   // Mouse/keyboard interactions (select, move, resize, draw, hover, etc.)
   useEffect(() => {
-    const canvasEl = canvasRef.current
-    if (!canvasEl) return
+    const canvasEl = canvasRef.current;
+    if (!canvasEl) return;
 
-    const manager = new SkiaInteractionManager(engineRef, canvasEl, setEditingText)
-    return manager.attach()
-  }, [])
+    const manager = new SkiaInteractionManager(engineRef, canvasEl, setEditingText);
+    return manager.attach();
+  }, []);
 
   return (
-    <div
-      ref={containerRef}
-      className="flex-1 relative overflow-hidden bg-muted"
-    >
-      <canvas
-        ref={canvasRef}
-        className="absolute inset-0 w-full h-full"
-      />
+    <div ref={containerRef} className="flex-1 relative overflow-hidden bg-muted">
+      <canvas ref={canvasRef} className="absolute inset-0 w-full h-full" />
       {editingText && (
         <textarea
           autoFocus
@@ -174,17 +170,19 @@ export default function SkiaCanvas() {
             boxSizing: 'border-box',
           }}
           onBlur={(e) => {
-            const newContent = e.target.value
+            const newContent = e.target.value;
             if (newContent !== editingText.content) {
-              useDocumentStore.getState().updateNode(editingText.nodeId, { content: newContent } as Partial<PenNode>)
+              useDocumentStore
+                .getState()
+                .updateNode(editingText.nodeId, { content: newContent } as Partial<PenNode>);
             }
-            setEditingText(null)
+            setEditingText(null);
           }}
           onKeyDown={(e) => {
             if (e.key === 'Escape') {
-              setEditingText(null)
+              setEditingText(null);
             }
-            e.stopPropagation()
+            e.stopPropagation();
           }}
         />
       )}
@@ -195,5 +193,5 @@ export default function SkiaCanvas() {
         </div>
       )}
     </div>
-  )
+  );
 }

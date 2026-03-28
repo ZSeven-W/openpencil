@@ -1,18 +1,15 @@
 #!/usr/bin/env node
 
-import { createServer } from 'node:http'
-import { randomUUID } from 'node:crypto'
-import { Server } from '@modelcontextprotocol/sdk/server/index.js'
-import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
-import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js'
-import {
-  CallToolRequestSchema,
-  ListToolsRequestSchema,
-} from '@modelcontextprotocol/sdk/types.js'
+import { createServer } from 'node:http';
+import { randomUUID } from 'node:crypto';
+import { Server } from '@modelcontextprotocol/sdk/server/index.js';
+import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
+import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
+import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js';
 
-import pkg from '../../package.json'
-import { handleOpenDocument } from './tools/open-document'
-import { handleBatchGet } from './tools/batch-get'
+import pkg from '../../package.json';
+import { handleOpenDocument } from './tools/open-document';
+import { handleBatchGet } from './tools/batch-get';
 import {
   handleInsertNode,
   handleUpdateNode,
@@ -20,29 +17,33 @@ import {
   handleMoveNode,
   handleCopyNode,
   handleReplaceNode,
-} from './tools/node-crud'
-import { handleGetVariables, handleSetVariables, handleSetThemes } from './tools/variables'
-import { handleGetDesignMd, handleSetDesignMd, handleExportDesignMd } from './tools/design-md'
-import { handleImportSvg } from './tools/import-svg'
-import { handleSnapshotLayout } from './tools/snapshot-layout'
-import { handleFindEmptySpace } from './tools/find-empty-space'
-import { handleSaveThemePreset, handleLoadThemePreset, handleListThemePresets } from './tools/theme-presets'
+} from './tools/node-crud';
+import { handleGetVariables, handleSetVariables, handleSetThemes } from './tools/variables';
+import { handleGetDesignMd, handleSetDesignMd, handleExportDesignMd } from './tools/design-md';
+import { handleImportSvg } from './tools/import-svg';
+import { handleSnapshotLayout } from './tools/snapshot-layout';
+import { handleFindEmptySpace } from './tools/find-empty-space';
+import {
+  handleSaveThemePreset,
+  handleLoadThemePreset,
+  handleListThemePresets,
+} from './tools/theme-presets';
 import {
   handleAddPage,
   handleRemovePage,
   handleRenamePage,
   handleReorderPage,
   handleDuplicatePage,
-} from './tools/pages'
-import { handleBatchDesign } from './tools/batch-design'
-import { buildDesignPrompt, listPromptSections } from './tools/design-prompt'
-import { handleDesignSkeleton } from './tools/design-skeleton'
-import { handleDesignContent } from './tools/design-content'
-import { handleDesignRefine } from './tools/design-refine'
-import { handleGetSelection } from './tools/get-selection'
-import { handleExportNodes } from './tools/export-nodes'
-import { LAYERED_DESIGN_TOOLS } from './tools/layered-design-defs'
-import { MCP_DEFAULT_PORT } from '@/constants/app'
+} from './tools/pages';
+import { handleBatchDesign } from './tools/batch-design';
+import { buildDesignPrompt, listPromptSections } from './tools/design-prompt';
+import { handleDesignSkeleton } from './tools/design-skeleton';
+import { handleDesignContent } from './tools/design-content';
+import { handleDesignRefine } from './tools/design-refine';
+import { handleGetSelection } from './tools/get-selection';
+import { handleExportNodes } from './tools/export-nodes';
+import { LAYERED_DESIGN_TOOLS } from './tools/layered-design-defs';
+import { MCP_DEFAULT_PORT } from '@/constants/app';
 
 // --- Tool definitions (shared across all Server instances) ---
 
@@ -72,7 +73,10 @@ const TOOL_DEFINITIONS = [
     inputSchema: {
       type: 'object' as const,
       properties: {
-        filePath: { type: 'string', description: 'Path to .op file, or omit to use the live canvas (default)' },
+        filePath: {
+          type: 'string',
+          description: 'Path to .op file, or omit to use the live canvas (default)',
+        },
         patterns: {
           type: 'array',
           description: 'Search patterns to match nodes',
@@ -85,10 +89,20 @@ const TOOL_DEFINITIONS = [
             },
           },
         },
-        nodeIds: { type: 'array', items: { type: 'string' }, description: 'Specific node IDs to read' },
+        nodeIds: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'Specific node IDs to read',
+        },
         parentId: { type: 'string', description: 'Limit search to children of this parent node' },
-        readDepth: { type: 'number', description: 'How deep to include children in results (default 1)' },
-        searchDepth: { type: 'number', description: 'How deep to search for matching nodes (default unlimited)' },
+        readDepth: {
+          type: 'number',
+          description: 'How deep to include children in results (default 1)',
+        },
+        searchDepth: {
+          type: 'number',
+          description: 'How deep to search for matching nodes (default unlimited)',
+        },
         pageId: { type: 'string', description: 'Target page ID (defaults to first page)' },
       },
       required: [],
@@ -102,8 +116,14 @@ const TOOL_DEFINITIONS = [
     inputSchema: {
       type: 'object' as const,
       properties: {
-        filePath: { type: 'string', description: 'Path to .op file, or omit to use the live canvas (default)' },
-        readDepth: { type: 'number', description: 'How deep to include children in results (default 2)' },
+        filePath: {
+          type: 'string',
+          description: 'Path to .op file, or omit to use the live canvas (default)',
+        },
+        readDepth: {
+          type: 'number',
+          description: 'How deep to include children in results (default 2)',
+        },
       },
       required: [],
     },
@@ -118,7 +138,10 @@ const TOOL_DEFINITIONS = [
     inputSchema: {
       type: 'object' as const,
       properties: {
-        filePath: { type: 'string', description: 'Path to .op file, or omit to use the live canvas (default)' },
+        filePath: {
+          type: 'string',
+          description: 'Path to .op file, or omit to use the live canvas (default)',
+        },
         parent: {
           type: ['string', 'null'] as const,
           description: 'Parent node ID, or null for root level',
@@ -156,7 +179,10 @@ const TOOL_DEFINITIONS = [
     inputSchema: {
       type: 'object' as const,
       properties: {
-        filePath: { type: 'string', description: 'Path to .op file, or omit to use the live canvas (default)' },
+        filePath: {
+          type: 'string',
+          description: 'Path to .op file, or omit to use the live canvas (default)',
+        },
         nodeId: { type: 'string', description: 'ID of the node to update' },
         data: {
           type: 'object',
@@ -181,7 +207,10 @@ const TOOL_DEFINITIONS = [
     inputSchema: {
       type: 'object' as const,
       properties: {
-        filePath: { type: 'string', description: 'Path to .op file, or omit to use the live canvas (default)' },
+        filePath: {
+          type: 'string',
+          description: 'Path to .op file, or omit to use the live canvas (default)',
+        },
         nodeId: { type: 'string', description: 'ID of the node to delete' },
         pageId: { type: 'string', description: 'Target page ID (defaults to first page)' },
       },
@@ -195,7 +224,10 @@ const TOOL_DEFINITIONS = [
     inputSchema: {
       type: 'object' as const,
       properties: {
-        filePath: { type: 'string', description: 'Path to .op file, or omit to use the live canvas (default)' },
+        filePath: {
+          type: 'string',
+          description: 'Path to .op file, or omit to use the live canvas (default)',
+        },
         nodeId: { type: 'string', description: 'ID of the node to move' },
         parent: {
           type: ['string', 'null'] as const,
@@ -217,7 +249,10 @@ const TOOL_DEFINITIONS = [
     inputSchema: {
       type: 'object' as const,
       properties: {
-        filePath: { type: 'string', description: 'Path to .op file, or omit to use the live canvas (default)' },
+        filePath: {
+          type: 'string',
+          description: 'Path to .op file, or omit to use the live canvas (default)',
+        },
         sourceId: { type: 'string', description: 'ID of the node to copy' },
         parent: {
           type: ['string', 'null'] as const,
@@ -239,7 +274,10 @@ const TOOL_DEFINITIONS = [
     inputSchema: {
       type: 'object' as const,
       properties: {
-        filePath: { type: 'string', description: 'Path to .op file, or omit to use the live canvas (default)' },
+        filePath: {
+          type: 'string',
+          description: 'Path to .op file, or omit to use the live canvas (default)',
+        },
         nodeId: { type: 'string', description: 'ID of the node to replace' },
         data: {
           type: 'object',
@@ -265,7 +303,10 @@ const TOOL_DEFINITIONS = [
     inputSchema: {
       type: 'object' as const,
       properties: {
-        filePath: { type: 'string', description: 'Path to .op file, or omit to use the live canvas (default)' },
+        filePath: {
+          type: 'string',
+          description: 'Path to .op file, or omit to use the live canvas (default)',
+        },
         svgPath: { type: 'string', description: 'Absolute path to a local .svg file' },
         parent: {
           type: ['string', 'null'] as const,
@@ -294,20 +335,30 @@ const TOOL_DEFINITIONS = [
     inputSchema: {
       type: 'object' as const,
       properties: {
-        filePath: { type: 'string', description: 'Path to .op file, or omit to use the live canvas (default)' },
+        filePath: {
+          type: 'string',
+          description: 'Path to .op file, or omit to use the live canvas (default)',
+        },
       },
       required: [],
     },
   },
   {
     name: 'set_variables',
-    description: 'Add or update design variables in an .op file. By default merges with existing variables.',
+    description:
+      'Add or update design variables in an .op file. By default merges with existing variables.',
     inputSchema: {
       type: 'object' as const,
       properties: {
-        filePath: { type: 'string', description: 'Path to .op file, or omit to use the live canvas (default)' },
+        filePath: {
+          type: 'string',
+          description: 'Path to .op file, or omit to use the live canvas (default)',
+        },
         variables: { type: 'object', description: 'Variables to set (name → { type, value })' },
-        replace: { type: 'boolean', description: 'Replace all variables instead of merging (default false)' },
+        replace: {
+          type: 'boolean',
+          description: 'Replace all variables instead of merging (default false)',
+        },
       },
       required: ['variables'],
     },
@@ -319,7 +370,10 @@ const TOOL_DEFINITIONS = [
     inputSchema: {
       type: 'object' as const,
       properties: {
-        filePath: { type: 'string', description: 'Path to .op file, or omit to use the live canvas (default)' },
+        filePath: {
+          type: 'string',
+          description: 'Path to .op file, or omit to use the live canvas (default)',
+        },
         themes: {
           type: 'object',
           description:
@@ -335,46 +389,66 @@ const TOOL_DEFINITIONS = [
   },
   {
     name: 'get_design_md',
-    description: 'Get the design.md (design system specification) from the document. Returns the parsed spec and raw markdown. If no design.md is loaded, returns hasDesignMd: false.',
+    description:
+      'Get the design.md (design system specification) from the document. Returns the parsed spec and raw markdown. If no design.md is loaded, returns hasDesignMd: false.',
     inputSchema: {
       type: 'object' as const,
       properties: {
-        filePath: { type: 'string', description: 'Path to .op file, or omit to use the live canvas (default)' },
+        filePath: {
+          type: 'string',
+          description: 'Path to .op file, or omit to use the live canvas (default)',
+        },
       },
       required: [],
     },
   },
   {
     name: 'set_design_md',
-    description: 'Import a design.md (design system specification) into the document. Accepts raw markdown or autoExtract=true to generate from existing document content. The design.md guides AI design generation with consistent colors, typography, and component styles.',
+    description:
+      'Import a design.md (design system specification) into the document. Accepts raw markdown or autoExtract=true to generate from existing document content. The design.md guides AI design generation with consistent colors, typography, and component styles.',
     inputSchema: {
       type: 'object' as const,
       properties: {
-        filePath: { type: 'string', description: 'Path to .op file, or omit to use the live canvas (default)' },
+        filePath: {
+          type: 'string',
+          description: 'Path to .op file, or omit to use the live canvas (default)',
+        },
         markdown: { type: 'string', description: 'Raw markdown content of design.md file' },
-        autoExtract: { type: 'boolean', description: 'Auto-generate design.md from existing document variables and design content (default false)' },
+        autoExtract: {
+          type: 'boolean',
+          description:
+            'Auto-generate design.md from existing document variables and design content (default false)',
+        },
       },
       required: [],
     },
   },
   {
     name: 'export_design_md',
-    description: 'Export the design.md as markdown text. If no design.md exists, auto-extracts from document content.',
+    description:
+      'Export the design.md as markdown text. If no design.md exists, auto-extracts from document content.',
     inputSchema: {
       type: 'object' as const,
       properties: {
-        filePath: { type: 'string', description: 'Path to .op file, or omit to use the live canvas (default)' },
+        filePath: {
+          type: 'string',
+          description: 'Path to .op file, or omit to use the live canvas (default)',
+        },
       },
       required: [],
     },
   },
   {
     name: 'snapshot_layout',
-    description: 'Get the hierarchical bounding box layout tree of an .op file. Useful for understanding spatial arrangement.',
+    description:
+      'Get the hierarchical bounding box layout tree of an .op file. Useful for understanding spatial arrangement.',
     inputSchema: {
       type: 'object' as const,
       properties: {
-        filePath: { type: 'string', description: 'Path to .op file, or omit to use the live canvas (default)' },
+        filePath: {
+          type: 'string',
+          description: 'Path to .op file, or omit to use the live canvas (default)',
+        },
         parentId: { type: 'string', description: 'Only return layout under this parent node' },
         maxDepth: { type: 'number', description: 'Max depth to traverse (default 1)' },
         pageId: { type: 'string', description: 'Target page ID (defaults to first page)' },
@@ -388,12 +462,25 @@ const TOOL_DEFINITIONS = [
     inputSchema: {
       type: 'object' as const,
       properties: {
-        filePath: { type: 'string', description: 'Path to .op file, or omit to use the live canvas (default)' },
+        filePath: {
+          type: 'string',
+          description: 'Path to .op file, or omit to use the live canvas (default)',
+        },
         width: { type: 'number', description: 'Required width of empty space' },
         height: { type: 'number', description: 'Required height of empty space' },
-        padding: { type: 'number', description: 'Minimum padding from other elements (default 50)' },
-        direction: { type: 'string', enum: ['top', 'right', 'bottom', 'left'], description: 'Direction to search for empty space' },
-        nodeId: { type: 'string', description: 'Search relative to this node (default: entire canvas)' },
+        padding: {
+          type: 'number',
+          description: 'Minimum padding from other elements (default 50)',
+        },
+        direction: {
+          type: 'string',
+          enum: ['top', 'right', 'bottom', 'left'],
+          description: 'Direction to search for empty space',
+        },
+        nodeId: {
+          type: 'string',
+          description: 'Search relative to this node (default: entire canvas)',
+        },
         pageId: { type: 'string', description: 'Target page ID (defaults to first page)' },
       },
       required: ['width', 'height', 'direction'],
@@ -401,24 +488,35 @@ const TOOL_DEFINITIONS = [
   },
   {
     name: 'save_theme_preset',
-    description: 'Save the themes and variables from an .op document as a reusable .optheme preset file.',
+    description:
+      'Save the themes and variables from an .op document as a reusable .optheme preset file.',
     inputSchema: {
       type: 'object' as const,
       properties: {
-        filePath: { type: 'string', description: 'Path to .op file, or omit to use the live canvas (default)' },
+        filePath: {
+          type: 'string',
+          description: 'Path to .op file, or omit to use the live canvas (default)',
+        },
         presetPath: { type: 'string', description: 'Absolute path for the output .optheme file' },
-        name: { type: 'string', description: 'Display name for the preset (defaults to file name)' },
+        name: {
+          type: 'string',
+          description: 'Display name for the preset (defaults to file name)',
+        },
       },
       required: ['presetPath'],
     },
   },
   {
     name: 'load_theme_preset',
-    description: 'Load a .optheme preset file and merge its themes and variables into an .op document.',
+    description:
+      'Load a .optheme preset file and merge its themes and variables into an .op document.',
     inputSchema: {
       type: 'object' as const,
       properties: {
-        filePath: { type: 'string', description: 'Path to .op file, or omit to use the live canvas (default)' },
+        filePath: {
+          type: 'string',
+          description: 'Path to .op file, or omit to use the live canvas (default)',
+        },
         presetPath: { type: 'string', description: 'Absolute path to the .optheme file to load' },
       },
       required: ['presetPath'],
@@ -442,7 +540,10 @@ const TOOL_DEFINITIONS = [
     inputSchema: {
       type: 'object' as const,
       properties: {
-        filePath: { type: 'string', description: 'Path to .op file, or omit to use the live canvas (default)' },
+        filePath: {
+          type: 'string',
+          description: 'Path to .op file, or omit to use the live canvas (default)',
+        },
         name: { type: 'string', description: 'Page name (default: "Page N")' },
         children: {
           type: 'array',
@@ -460,7 +561,10 @@ const TOOL_DEFINITIONS = [
     inputSchema: {
       type: 'object' as const,
       properties: {
-        filePath: { type: 'string', description: 'Path to .op file, or omit to use the live canvas (default)' },
+        filePath: {
+          type: 'string',
+          description: 'Path to .op file, or omit to use the live canvas (default)',
+        },
         pageId: { type: 'string', description: 'ID of the page to remove' },
       },
       required: ['pageId'],
@@ -472,7 +576,10 @@ const TOOL_DEFINITIONS = [
     inputSchema: {
       type: 'object' as const,
       properties: {
-        filePath: { type: 'string', description: 'Path to .op file, or omit to use the live canvas (default)' },
+        filePath: {
+          type: 'string',
+          description: 'Path to .op file, or omit to use the live canvas (default)',
+        },
         pageId: { type: 'string', description: 'ID of the page to rename' },
         name: { type: 'string', description: 'New page name' },
       },
@@ -485,7 +592,10 @@ const TOOL_DEFINITIONS = [
     inputSchema: {
       type: 'object' as const,
       properties: {
-        filePath: { type: 'string', description: 'Path to .op file, or omit to use the live canvas (default)' },
+        filePath: {
+          type: 'string',
+          description: 'Path to .op file, or omit to use the live canvas (default)',
+        },
         pageId: { type: 'string', description: 'ID of the page to move' },
         index: { type: 'number', description: 'New zero-based index for the page' },
       },
@@ -499,9 +609,15 @@ const TOOL_DEFINITIONS = [
     inputSchema: {
       type: 'object' as const,
       properties: {
-        filePath: { type: 'string', description: 'Path to .op file, or omit to use the live canvas (default)' },
+        filePath: {
+          type: 'string',
+          description: 'Path to .op file, or omit to use the live canvas (default)',
+        },
         pageId: { type: 'string', description: 'ID of the page to duplicate' },
-        name: { type: 'string', description: 'Name for the duplicated page (default: "original copy")' },
+        name: {
+          type: 'string',
+          description: 'Name for the duplicated page (default: "original copy")',
+        },
       },
       required: ['pageId'],
     },
@@ -518,7 +634,18 @@ const TOOL_DEFINITIONS = [
       properties: {
         section: {
           type: 'string',
-          enum: ['all', 'schema', 'layout', 'roles', 'text', 'style', 'icons', 'examples', 'guidelines', 'planning'],
+          enum: [
+            'all',
+            'schema',
+            'layout',
+            'roles',
+            'text',
+            'style',
+            'icons',
+            'examples',
+            'guidelines',
+            'planning',
+          ],
           description:
             'Which section of design knowledge to retrieve. Default: all. Use "planning" for layered generation workflow.',
         },
@@ -542,7 +669,10 @@ const TOOL_DEFINITIONS = [
     inputSchema: {
       type: 'object' as const,
       properties: {
-        filePath: { type: 'string', description: 'Path to .op file, or omit to use the live canvas (default)' },
+        filePath: {
+          type: 'string',
+          description: 'Path to .op file, or omit to use the live canvas (default)',
+        },
         operations: {
           type: 'string',
           description:
@@ -576,7 +706,8 @@ const TOOL_DEFINITIONS = [
         nodeIds: {
           type: 'array',
           items: { type: 'string' },
-          description: 'Specific node IDs to export. If omitted, exports all nodes on the target page.',
+          description:
+            'Specific node IDs to export. If omitted, exports all nodes on the target page.',
         },
         pageId: {
           type: 'string',
@@ -587,67 +718,67 @@ const TOOL_DEFINITIONS = [
     },
   },
   ...LAYERED_DESIGN_TOOLS,
-]
+];
 
 // --- Tool execution handler ---
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any -- MCP args are validated at runtime by the protocol
 async function handleToolCall(name: string, args: Record<string, unknown> | undefined) {
   // MCP protocol guarantees args match the inputSchema; cast via `unknown` to the handler's param type.
-  const a = (args ?? {}) as any  // eslint-disable-line @typescript-eslint/no-explicit-any
+  const a = (args ?? {}) as any; // eslint-disable-line @typescript-eslint/no-explicit-any
   switch (name) {
     case 'open_document':
-      return JSON.stringify(await handleOpenDocument(a), null, 2)
+      return JSON.stringify(await handleOpenDocument(a), null, 2);
     case 'batch_get':
-      return JSON.stringify(await handleBatchGet(a), null, 2)
+      return JSON.stringify(await handleBatchGet(a), null, 2);
     case 'get_selection':
-      return JSON.stringify(await handleGetSelection(a), null, 2)
+      return JSON.stringify(await handleGetSelection(a), null, 2);
     case 'insert_node':
-      return JSON.stringify(await handleInsertNode(a), null, 2)
+      return JSON.stringify(await handleInsertNode(a), null, 2);
     case 'update_node':
-      return JSON.stringify(await handleUpdateNode(a), null, 2)
+      return JSON.stringify(await handleUpdateNode(a), null, 2);
     case 'delete_node':
-      return JSON.stringify(await handleDeleteNode(a), null, 2)
+      return JSON.stringify(await handleDeleteNode(a), null, 2);
     case 'move_node':
-      return JSON.stringify(await handleMoveNode(a), null, 2)
+      return JSON.stringify(await handleMoveNode(a), null, 2);
     case 'copy_node':
-      return JSON.stringify(await handleCopyNode(a), null, 2)
+      return JSON.stringify(await handleCopyNode(a), null, 2);
     case 'replace_node':
-      return JSON.stringify(await handleReplaceNode(a), null, 2)
+      return JSON.stringify(await handleReplaceNode(a), null, 2);
     case 'import_svg':
-      return JSON.stringify(await handleImportSvg(a), null, 2)
+      return JSON.stringify(await handleImportSvg(a), null, 2);
     case 'get_variables':
-      return JSON.stringify(await handleGetVariables(a), null, 2)
+      return JSON.stringify(await handleGetVariables(a), null, 2);
     case 'set_variables':
-      return JSON.stringify(await handleSetVariables(a), null, 2)
+      return JSON.stringify(await handleSetVariables(a), null, 2);
     case 'set_themes':
-      return JSON.stringify(await handleSetThemes(a), null, 2)
+      return JSON.stringify(await handleSetThemes(a), null, 2);
     case 'get_design_md':
-      return JSON.stringify(await handleGetDesignMd(a), null, 2)
+      return JSON.stringify(await handleGetDesignMd(a), null, 2);
     case 'set_design_md':
-      return JSON.stringify(await handleSetDesignMd(a), null, 2)
+      return JSON.stringify(await handleSetDesignMd(a), null, 2);
     case 'export_design_md':
-      return JSON.stringify(await handleExportDesignMd(a), null, 2)
+      return JSON.stringify(await handleExportDesignMd(a), null, 2);
     case 'snapshot_layout':
-      return JSON.stringify(await handleSnapshotLayout(a), null, 2)
+      return JSON.stringify(await handleSnapshotLayout(a), null, 2);
     case 'find_empty_space':
-      return JSON.stringify(await handleFindEmptySpace(a), null, 2)
+      return JSON.stringify(await handleFindEmptySpace(a), null, 2);
     case 'save_theme_preset':
-      return JSON.stringify(await handleSaveThemePreset(a), null, 2)
+      return JSON.stringify(await handleSaveThemePreset(a), null, 2);
     case 'load_theme_preset':
-      return JSON.stringify(await handleLoadThemePreset(a), null, 2)
+      return JSON.stringify(await handleLoadThemePreset(a), null, 2);
     case 'list_theme_presets':
-      return JSON.stringify(await handleListThemePresets(a), null, 2)
+      return JSON.stringify(await handleListThemePresets(a), null, 2);
     case 'add_page':
-      return JSON.stringify(await handleAddPage(a), null, 2)
+      return JSON.stringify(await handleAddPage(a), null, 2);
     case 'remove_page':
-      return JSON.stringify(await handleRemovePage(a), null, 2)
+      return JSON.stringify(await handleRemovePage(a), null, 2);
     case 'rename_page':
-      return JSON.stringify(await handleRenamePage(a), null, 2)
+      return JSON.stringify(await handleRenamePage(a), null, 2);
     case 'reorder_page':
-      return JSON.stringify(await handleReorderPage(a), null, 2)
+      return JSON.stringify(await handleReorderPage(a), null, 2);
     case 'duplicate_page':
-      return JSON.stringify(await handleDuplicatePage(a), null, 2)
+      return JSON.stringify(await handleDuplicatePage(a), null, 2);
     case 'get_design_prompt':
       return JSON.stringify(
         {
@@ -657,19 +788,19 @@ async function handleToolCall(name: string, args: Record<string, unknown> | unde
         },
         null,
         2,
-      )
+      );
     case 'batch_design':
-      return JSON.stringify(await handleBatchDesign(a), null, 2)
+      return JSON.stringify(await handleBatchDesign(a), null, 2);
     case 'export_nodes':
-      return JSON.stringify(await handleExportNodes(a), null, 2)
+      return JSON.stringify(await handleExportNodes(a), null, 2);
     case 'design_skeleton':
-      return JSON.stringify(await handleDesignSkeleton(a), null, 2)
+      return JSON.stringify(await handleDesignSkeleton(a), null, 2);
     case 'design_content':
-      return JSON.stringify(await handleDesignContent(a), null, 2)
+      return JSON.stringify(await handleDesignContent(a), null, 2);
     case 'design_refine':
-      return JSON.stringify(await handleDesignRefine(a), null, 2)
+      return JSON.stringify(await handleDesignRefine(a), null, 2);
     default:
-      throw new Error(`Unknown tool: ${name}`)
+      throw new Error(`Unknown tool: ${name}`);
   }
 }
 
@@ -677,60 +808,62 @@ async function handleToolCall(name: string, args: Record<string, unknown> | unde
 function registerTools(server: Server): void {
   server.setRequestHandler(ListToolsRequestSchema, async () => ({
     tools: TOOL_DEFINITIONS,
-  }))
+  }));
 
   server.setRequestHandler(CallToolRequestSchema, async (request) => {
-    const { name, arguments: args } = request.params
+    const { name, arguments: args } = request.params;
     try {
-      const text = await handleToolCall(name, args)
-      return { content: [{ type: 'text', text }] }
+      const text = await handleToolCall(name, args);
+      return { content: [{ type: 'text', text }] };
     } catch (err) {
       return {
-        content: [{ type: 'text', text: `Error: ${err instanceof Error ? err.message : String(err)}` }],
+        content: [
+          { type: 'text', text: `Error: ${err instanceof Error ? err.message : String(err)}` },
+        ],
         isError: true,
-      }
+      };
     }
-  })
+  });
 }
 
 // --- HTTP server helper ---
 
 function startHttpServer(port: number): void {
   // Per-session transport map: each client gets its own Server + Transport
-  const sessions = new Map<string, { transport: StreamableHTTPServerTransport; server: Server }>()
+  const sessions = new Map<string, { transport: StreamableHTTPServerTransport; server: Server }>();
 
   const httpServer = createServer(async (req, res) => {
-    res.setHeader('Access-Control-Allow-Origin', '*')
-    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS')
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, mcp-session-id')
-    res.setHeader('Access-Control-Expose-Headers', 'mcp-session-id')
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, mcp-session-id');
+    res.setHeader('Access-Control-Expose-Headers', 'mcp-session-id');
 
     if (req.method === 'OPTIONS') {
-      res.writeHead(204)
-      res.end()
-      return
+      res.writeHead(204);
+      res.end();
+      return;
     }
 
     if (req.url !== '/mcp') {
-      res.writeHead(404, { 'Content-Type': 'application/json' })
-      res.end(JSON.stringify({ error: 'Not found. Use /mcp endpoint.' }))
-      return
+      res.writeHead(404, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'Not found. Use /mcp endpoint.' }));
+      return;
     }
 
-    const sessionId = req.headers['mcp-session-id'] as string | undefined
+    const sessionId = req.headers['mcp-session-id'] as string | undefined;
 
     // Route to existing session
     if (sessionId && sessions.has(sessionId)) {
-      const session = sessions.get(sessionId)!
+      const session = sessions.get(sessionId)!;
       if (req.method === 'POST') {
-        const chunks: Buffer[] = []
-        for await (const chunk of req) chunks.push(chunk as Buffer)
-        const body = JSON.parse(Buffer.concat(chunks).toString())
-        await session.transport.handleRequest(req, res, body)
+        const chunks: Buffer[] = [];
+        for await (const chunk of req) chunks.push(chunk as Buffer);
+        const body = JSON.parse(Buffer.concat(chunks).toString());
+        await session.transport.handleRequest(req, res, body);
       } else {
-        await session.transport.handleRequest(req, res)
+        await session.transport.handleRequest(req, res);
       }
-      return
+      return;
     }
 
     // New session — only POST (initialize) is valid without session ID
@@ -738,90 +871,97 @@ function startHttpServer(port: number): void {
       const mcpServer = new Server(
         { name: pkg.name, version: pkg.version },
         { capabilities: { tools: {} } },
-      )
-      registerTools(mcpServer)
+      );
+      registerTools(mcpServer);
 
       const transport = new StreamableHTTPServerTransport({
         sessionIdGenerator: () => randomUUID(),
         onsessioninitialized: (sid: string) => {
-          sessions.set(sid, { transport, server: mcpServer })
+          sessions.set(sid, { transport, server: mcpServer });
         },
         onsessionclosed: (sid: string) => {
-          sessions.delete(sid)
+          sessions.delete(sid);
         },
-      })
+      });
 
       transport.onclose = () => {
-        if (transport.sessionId) sessions.delete(transport.sessionId)
-      }
+        if (transport.sessionId) sessions.delete(transport.sessionId);
+      };
 
-      await mcpServer.connect(transport)
+      await mcpServer.connect(transport);
 
-      const chunks: Buffer[] = []
-      for await (const chunk of req) chunks.push(chunk as Buffer)
-      const body = JSON.parse(Buffer.concat(chunks).toString())
-      await transport.handleRequest(req, res, body)
-      return
+      const chunks: Buffer[] = [];
+      for await (const chunk of req) chunks.push(chunk as Buffer);
+      const body = JSON.parse(Buffer.concat(chunks).toString());
+      await transport.handleRequest(req, res, body);
+      return;
     }
 
     // Invalid: GET/DELETE without valid session ID
-    res.writeHead(400, { 'Content-Type': 'application/json' })
-    res.end(JSON.stringify({ jsonrpc: '2.0', error: { code: -32000, message: 'Invalid or missing session ID' }, id: null }))
-  })
+    res.writeHead(400, { 'Content-Type': 'application/json' });
+    res.end(
+      JSON.stringify({
+        jsonrpc: '2.0',
+        error: { code: -32000, message: 'Invalid or missing session ID' },
+        id: null,
+      }),
+    );
+  });
 
   httpServer.listen(port, '0.0.0.0', () => {
-    console.error(`OpenPencil MCP server listening on http://0.0.0.0:${port}/mcp`)
-  })
+    console.error(`OpenPencil MCP server listening on http://0.0.0.0:${port}/mcp`);
+  });
 }
 
 // --- Start ---
 
 function parseArgs(): { stdio: boolean; http: boolean; port: number } {
-  const args = process.argv.slice(2)
-  const hasHttp = args.includes('--http')
-  const hasStdio = args.includes('--stdio')
-  const portIdx = args.indexOf('--port')
-  const port = portIdx !== -1 ? parseInt(args[portIdx + 1], 10) : MCP_DEFAULT_PORT
+  const args = process.argv.slice(2);
+  const hasHttp = args.includes('--http');
+  const hasStdio = args.includes('--stdio');
+  const portIdx = args.indexOf('--port');
+  const port = portIdx !== -1 ? parseInt(args[portIdx + 1], 10) : MCP_DEFAULT_PORT;
 
-  if (hasHttp && hasStdio) return { stdio: true, http: true, port: isNaN(port) ? MCP_DEFAULT_PORT : port }
-  if (hasHttp) return { stdio: false, http: true, port: isNaN(port) ? MCP_DEFAULT_PORT : port }
-  return { stdio: true, http: false, port: MCP_DEFAULT_PORT }
+  if (hasHttp && hasStdio)
+    return { stdio: true, http: true, port: isNaN(port) ? MCP_DEFAULT_PORT : port };
+  if (hasHttp) return { stdio: false, http: true, port: isNaN(port) ? MCP_DEFAULT_PORT : port };
+  return { stdio: true, http: false, port: MCP_DEFAULT_PORT };
 }
 
 async function main() {
-  const { stdio, http, port } = parseArgs()
+  const { stdio, http, port } = parseArgs();
 
   if (stdio && http) {
     // Both: stdio server + HTTP server (per-session)
     const stdioServer = new Server(
       { name: pkg.name, version: pkg.version },
       { capabilities: { tools: {} } },
-    )
-    registerTools(stdioServer)
-    await stdioServer.connect(new StdioServerTransport())
+    );
+    registerTools(stdioServer);
+    await stdioServer.connect(new StdioServerTransport());
 
-    startHttpServer(port)
+    startHttpServer(port);
   } else if (http) {
-    startHttpServer(port)
+    startHttpServer(port);
   } else {
     const server = new Server(
       { name: pkg.name, version: pkg.version },
       { capabilities: { tools: {} } },
-    )
-    registerTools(server)
-    await server.connect(new StdioServerTransport())
+    );
+    registerTools(server);
+    await server.connect(new StdioServerTransport());
   }
 }
 
 // Prevent uncaught errors from crashing the MCP server process
 process.on('uncaughtException', (err) => {
-  console.error('MCP server uncaught exception:', err)
-})
+  console.error('MCP server uncaught exception:', err);
+});
 process.on('unhandledRejection', (err) => {
-  console.error('MCP server unhandled rejection:', err)
-})
+  console.error('MCP server unhandled rejection:', err);
+});
 
 main().catch((err) => {
-  console.error('MCP server failed to start:', err)
-  process.exit(1)
-})
+  console.error('MCP server failed to start:', err);
+  process.exit(1);
+});

@@ -1,4 +1,4 @@
-import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron'
+import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron';
 
 export type UpdaterStatus =
   | 'disabled'
@@ -8,43 +8,40 @@ export type UpdaterStatus =
   | 'downloading'
   | 'downloaded'
   | 'not-available'
-  | 'error'
+  | 'error';
 
 export interface UpdaterState {
-  status: UpdaterStatus
-  currentVersion: string
-  latestVersion?: string
-  downloadProgress?: number
-  releaseDate?: string
-  error?: string
+  status: UpdaterStatus;
+  currentVersion: string;
+  latestVersion?: string;
+  downloadProgress?: number;
+  releaseDate?: string;
+  error?: string;
 }
 
 export interface ElectronAPI {
-  isElectron: true
-  openFile: () => Promise<{ filePath: string; content: string } | null>
-  saveFile: (
-    content: string,
-    defaultPath?: string,
-  ) => Promise<string | null>
-  saveToPath: (filePath: string, content: string) => Promise<string>
-  onMenuAction: (callback: (action: string) => void) => () => void
-  onOpenFile: (callback: (filePath: string) => void) => () => void
-  readFile: (filePath: string) => Promise<{ filePath: string; content: string } | null>
-  getPendingFile: () => Promise<string | null>
-  getLogDir: () => Promise<string>
-  setTheme: (theme: 'dark' | 'light', colors?: { bg: string; fg: string }) => void
-  getPreferences: () => Promise<Record<string, string>>
-  setPreference: (key: string, value: string) => Promise<void>
-  removePreference: (key: string) => Promise<void>
-  confirmClose: () => void
+  isElectron: true;
+  openFile: () => Promise<{ filePath: string; content: string } | null>;
+  saveFile: (content: string, defaultPath?: string) => Promise<string | null>;
+  saveToPath: (filePath: string, content: string) => Promise<string>;
+  onMenuAction: (callback: (action: string) => void) => () => void;
+  onOpenFile: (callback: (filePath: string) => void) => () => void;
+  readFile: (filePath: string) => Promise<{ filePath: string; content: string } | null>;
+  getPendingFile: () => Promise<string | null>;
+  getLogDir: () => Promise<string>;
+  setTheme: (theme: 'dark' | 'light', colors?: { bg: string; fg: string }) => void;
+  getPreferences: () => Promise<Record<string, string>>;
+  setPreference: (key: string, value: string) => Promise<void>;
+  removePreference: (key: string) => Promise<void>;
+  confirmClose: () => void;
   updater: {
-    getState: () => Promise<UpdaterState>
-    checkForUpdates: () => Promise<UpdaterState>
-    quitAndInstall: () => Promise<boolean>
-    getAutoCheck: () => Promise<boolean>
-    setAutoCheck: (enabled: boolean) => Promise<boolean>
-    onStateChange: (callback: (state: UpdaterState) => void) => () => void
-  }
+    getState: () => Promise<UpdaterState>;
+    checkForUpdates: () => Promise<UpdaterState>;
+    quitAndInstall: () => Promise<boolean>;
+    getAutoCheck: () => Promise<boolean>;
+    setAutoCheck: (enabled: boolean) => Promise<boolean>;
+    onStateChange: (callback: (state: UpdaterState) => void) => () => void;
+  };
 }
 
 const api: ElectronAPI = {
@@ -69,22 +66,22 @@ const api: ElectronAPI = {
 
   onMenuAction: (callback: (action: string) => void) => {
     const listener = (_event: IpcRendererEvent, action: string) => {
-      callback(action)
-    }
-    ipcRenderer.on('menu:action', listener)
+      callback(action);
+    };
+    ipcRenderer.on('menu:action', listener);
     return () => {
-      ipcRenderer.removeListener('menu:action', listener)
-    }
+      ipcRenderer.removeListener('menu:action', listener);
+    };
   },
 
   onOpenFile: (callback: (filePath: string) => void) => {
     const listener = (_event: IpcRendererEvent, filePath: string) => {
-      callback(filePath)
-    }
-    ipcRenderer.on('file:open', listener)
+      callback(filePath);
+    };
+    ipcRenderer.on('file:open', listener);
     return () => {
-      ipcRenderer.removeListener('file:open', listener)
-    }
+      ipcRenderer.removeListener('file:open', listener);
+    };
   },
 
   readFile: (filePath: string) => ipcRenderer.invoke('file:read', filePath),
@@ -103,14 +100,14 @@ const api: ElectronAPI = {
     setAutoCheck: (enabled: boolean) => ipcRenderer.invoke('updater:setAutoCheck', enabled),
     onStateChange: (callback: (state: UpdaterState) => void) => {
       const listener = (_event: IpcRendererEvent, state: UpdaterState) => {
-        callback(state)
-      }
-      ipcRenderer.on('updater:state', listener)
+        callback(state);
+      };
+      ipcRenderer.on('updater:state', listener);
       return () => {
-        ipcRenderer.removeListener('updater:state', listener)
-      }
+        ipcRenderer.removeListener('updater:state', listener);
+      };
     },
   },
-}
+};
 
-contextBridge.exposeInMainWorld('electronAPI', api)
+contextBridge.exposeInMainWorld('electronAPI', api);

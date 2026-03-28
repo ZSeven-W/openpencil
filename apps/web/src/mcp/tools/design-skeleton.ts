@@ -1,61 +1,61 @@
-import { openDocument, saveDocument, resolveDocPath } from '../document-manager'
+import { openDocument, saveDocument, resolveDocPath } from '../document-manager';
 import {
   getDocChildren,
   setDocChildren,
   insertNodeInTree,
   removeNodeFromTree,
-} from '../utils/node-operations'
-import { generateId } from '../utils/id'
-import type { PenNode, ContainerProps } from '../../types/pen'
-import type { PenFill } from '../../types/styles'
+} from '../utils/node-operations';
+import { generateId } from '../utils/id';
+import type { PenNode, ContainerProps } from '../../types/pen';
+import type { PenFill } from '../../types/styles';
 
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
 
 export interface DesignSkeletonParams {
-  filePath?: string
+  filePath?: string;
   rootFrame: {
-    name?: string
-    width: number
-    height: number
-    layout?: 'vertical' | 'horizontal'
-    gap?: number
-    fill?: PenFill[]
-    padding?: number | [number, number] | [number, number, number, number]
-  }
+    name?: string;
+    width: number;
+    height: number;
+    layout?: 'vertical' | 'horizontal';
+    gap?: number;
+    fill?: PenFill[];
+    padding?: number | [number, number] | [number, number, number, number];
+  };
   sections: Array<{
-    name: string
-    height?: number
-    layout?: 'vertical' | 'horizontal'
-    padding?: number | [number, number] | [number, number, number, number]
-    gap?: number
-    fill?: PenFill[]
-    role?: string
-    justifyContent?: string
-    alignItems?: string
-  }>
+    name: string;
+    height?: number;
+    layout?: 'vertical' | 'horizontal';
+    padding?: number | [number, number] | [number, number, number, number];
+    gap?: number;
+    fill?: PenFill[];
+    role?: string;
+    justifyContent?: string;
+    alignItems?: string;
+  }>;
   styleGuide?: {
-    palette?: Record<string, string>
-    fonts?: { heading?: string; body?: string }
-    aesthetic?: string
-  }
-  canvasWidth?: number
-  pageId?: string
+    palette?: Record<string, string>;
+    fonts?: { heading?: string; body?: string };
+    aesthetic?: string;
+  };
+  canvasWidth?: number;
+  pageId?: string;
 }
 
 interface SectionResult {
-  id: string
-  name: string
-  contentWidth: number
-  guidelines: string
-  suggestedRoles: string[]
+  id: string;
+  name: string;
+  contentWidth: number;
+  guidelines: string;
+  suggestedRoles: string[];
 }
 
 interface DesignSkeletonResult {
-  rootId: string
-  sections: SectionResult[]
-  nextSteps: string
+  rootId: string;
+  sections: SectionResult[];
+  nextSteps: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -65,14 +65,14 @@ interface DesignSkeletonResult {
 export async function handleDesignSkeleton(
   params: DesignSkeletonParams,
 ): Promise<DesignSkeletonResult> {
-  const filePath = resolveDocPath(params.filePath)
-  let doc = await openDocument(filePath)
-  doc = structuredClone(doc)
-  const pageId = params.pageId
-  const canvasWidth = params.canvasWidth ?? params.rootFrame.width ?? 1200
+  const filePath = resolveDocPath(params.filePath);
+  let doc = await openDocument(filePath);
+  doc = structuredClone(doc);
+  const pageId = params.pageId;
+  const canvasWidth = params.canvasWidth ?? params.rootFrame.width ?? 1200;
 
   // Build root frame node
-  const rootId = generateId()
+  const rootId = generateId();
   const rootNode: PenNode = {
     id: rootId,
     type: 'frame',
@@ -83,17 +83,17 @@ export async function handleDesignSkeleton(
     gap: params.rootFrame.gap ?? 0,
     fill: params.rootFrame.fill ?? [{ type: 'solid', color: '#F8FAFC' }],
     children: [],
-  } as PenNode
+  } as PenNode;
   if (params.rootFrame.padding !== undefined) {
-    ;(rootNode as PenNode & ContainerProps).padding = params.rootFrame.padding
+    (rootNode as PenNode & ContainerProps).padding = params.rootFrame.padding;
   }
 
   // Build section frames as children
-  const sectionResults: SectionResult[] = []
-  const rootChildren: PenNode[] = []
+  const sectionResults: SectionResult[] = [];
+  const rootChildren: PenNode[] = [];
 
   for (const section of params.sections) {
-    const sectionId = generateId()
+    const sectionId = generateId();
     const sectionNode: PenNode = {
       id: sectionId,
       type: 'frame',
@@ -102,26 +102,28 @@ export async function handleDesignSkeleton(
       height: section.height ?? 'fit_content',
       layout: section.layout ?? 'vertical',
       children: [],
-    } as PenNode
+    } as PenNode;
 
-    const sContainer = sectionNode as PenNode & ContainerProps
-    if (section.gap !== undefined) sContainer.gap = section.gap
-    if (section.padding !== undefined) sContainer.padding = section.padding
-    if (section.fill) sContainer.fill = section.fill
-    if (section.role) sectionNode.role = section.role
-    if (section.justifyContent) sContainer.justifyContent = section.justifyContent as ContainerProps['justifyContent']
-    if (section.alignItems) sContainer.alignItems = section.alignItems as ContainerProps['alignItems']
+    const sContainer = sectionNode as PenNode & ContainerProps;
+    if (section.gap !== undefined) sContainer.gap = section.gap;
+    if (section.padding !== undefined) sContainer.padding = section.padding;
+    if (section.fill) sContainer.fill = section.fill;
+    if (section.role) sectionNode.role = section.role;
+    if (section.justifyContent)
+      sContainer.justifyContent = section.justifyContent as ContainerProps['justifyContent'];
+    if (section.alignItems)
+      sContainer.alignItems = section.alignItems as ContainerProps['alignItems'];
 
-    rootChildren.push(sectionNode)
+    rootChildren.push(sectionNode);
 
     // Compute content width for this section
-    const contentWidth = computeContentWidth(sectionNode, canvasWidth)
+    const contentWidth = computeContentWidth(sectionNode, canvasWidth);
     const { guidelines, suggestedRoles } = generateSectionGuidelines(
       section,
       contentWidth,
       canvasWidth,
       params.styleGuide,
-    )
+    );
 
     sectionResults.push({
       id: sectionId,
@@ -129,26 +131,26 @@ export async function handleDesignSkeleton(
       contentWidth,
       guidelines,
       suggestedRoles,
-    })
+    });
   }
 
-  ;(rootNode as PenNode & ContainerProps).children = rootChildren
+  (rootNode as PenNode & ContainerProps).children = rootChildren;
 
   // Auto-replace empty root frame if exists
-  const children = getDocChildren(doc, pageId)
-  const emptyIdx = children.findIndex((n) => isEmptyFrame(n))
+  const children = getDocChildren(doc, pageId);
+  const emptyIdx = children.findIndex((n) => isEmptyFrame(n));
   if (emptyIdx !== -1) {
-    const emptyFrame = children[emptyIdx]
-    if (emptyFrame.x !== undefined) rootNode.x = emptyFrame.x
-    if (emptyFrame.y !== undefined) rootNode.y = emptyFrame.y
-    let updated = removeNodeFromTree(children, emptyFrame.id)
-    updated = insertNodeInTree(updated, null, rootNode, emptyIdx)
-    setDocChildren(doc, updated, pageId)
+    const emptyFrame = children[emptyIdx];
+    if (emptyFrame.x !== undefined) rootNode.x = emptyFrame.x;
+    if (emptyFrame.y !== undefined) rootNode.y = emptyFrame.y;
+    let updated = removeNodeFromTree(children, emptyFrame.id);
+    updated = insertNodeInTree(updated, null, rootNode, emptyIdx);
+    setDocChildren(doc, updated, pageId);
   } else {
-    setDocChildren(doc, insertNodeInTree(children, null, rootNode), pageId)
+    setDocChildren(doc, insertNodeInTree(children, null, rootNode), pageId);
   }
 
-  await saveDocument(filePath, doc)
+  await saveDocument(filePath, doc);
 
   return {
     rootId,
@@ -157,7 +159,7 @@ export async function handleDesignSkeleton(
       `Skeleton created with ${sectionResults.length} sections. ` +
       `For each section, call design_content with the sectionId and an array of child nodes. ` +
       `After all sections are populated, call design_refine with rootId="${rootId}" to run full-tree validation.`,
-  }
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -166,29 +168,34 @@ export async function handleDesignSkeleton(
 
 function isEmptyFrame(node: PenNode): boolean {
   return (
-    node.type === 'frame' &&
-    (!('children' in node) || !node.children || node.children.length === 0)
-  )
+    node.type === 'frame' && (!('children' in node) || !node.children || node.children.length === 0)
+  );
 }
 
 function computeContentWidth(section: PenNode, canvasWidth: number): number {
   const pad = parsePadding(
-    'padding' in section ? (section as PenNode & ContainerProps).padding as number | [number, number] | [number, number, number, number] | undefined : undefined,
-  )
-  return canvasWidth - pad.left - pad.right
+    'padding' in section
+      ? ((section as PenNode & ContainerProps).padding as
+          | number
+          | [number, number]
+          | [number, number, number, number]
+          | undefined)
+      : undefined,
+  );
+  return canvasWidth - pad.left - pad.right;
 }
 
 function parsePadding(
   padding: number | [number, number] | [number, number, number, number] | undefined,
 ): { top: number; right: number; bottom: number; left: number } {
-  if (padding === undefined) return { top: 0, right: 0, bottom: 0, left: 0 }
+  if (padding === undefined) return { top: 0, right: 0, bottom: 0, left: 0 };
   if (typeof padding === 'number')
-    return { top: padding, right: padding, bottom: padding, left: padding }
+    return { top: padding, right: padding, bottom: padding, left: padding };
   if (padding.length === 2)
-    return { top: padding[0], right: padding[1], bottom: padding[0], left: padding[1] }
+    return { top: padding[0], right: padding[1], bottom: padding[0], left: padding[1] };
   if (padding.length === 4)
-    return { top: padding[0], right: padding[1], bottom: padding[2], left: padding[3] }
-  return { top: 0, right: 0, bottom: 0, left: 0 }
+    return { top: padding[0], right: padding[1], bottom: padding[2], left: padding[3] };
+  return { top: 0, right: 0, bottom: 0, left: 0 };
 }
 
 // ---------------------------------------------------------------------------
@@ -201,10 +208,10 @@ function generateSectionGuidelines(
   canvasWidth: number,
   styleGuide?: DesignSkeletonParams['styleGuide'],
 ): { guidelines: string; suggestedRoles: string[] } {
-  const name = section.name.toLowerCase()
-  const isMobile = canvasWidth <= 500
-  const palette = styleGuide?.palette
-  const accentColor = palette?.accent ?? '#2563EB'
+  const name = section.name.toLowerCase();
+  const isMobile = canvasWidth <= 500;
+  const palette = styleGuide?.palette;
+  const accentColor = palette?.accent ?? '#2563EB';
 
   // Navigation
   if (name.includes('nav') || section.role === 'navbar') {
@@ -217,7 +224,7 @@ function generateSectionGuidelines(
         `CTA: button with accent fill [{"type":"solid","color":"${accentColor}"}], white text. ` +
         `Content width: ${contentWidth}px.`,
       suggestedRoles: ['navbar', 'nav-links', 'nav-link', 'button', 'label', 'icon'],
-    }
+    };
   }
 
   // Hero
@@ -231,8 +238,16 @@ function generateSectionGuidelines(
             `Without mockup: center-aligned vertical stack.`) +
         ` Use gap=24 between elements. Headline text: textGrowth="fixed-width" if >15 chars. ` +
         `Content width: ${contentWidth}px.`,
-      suggestedRoles: ['hero', 'heading', 'subheading', 'body-text', 'button', 'phone-mockup', 'row'],
-    }
+      suggestedRoles: [
+        'hero',
+        'heading',
+        'subheading',
+        'body-text',
+        'button',
+        'phone-mockup',
+        'row',
+      ],
+    };
   }
 
   // Features / Feature Cards
@@ -244,8 +259,16 @@ function generateSectionGuidelines(
         `Cards in horizontal row: ALL must use width="fill_container" + height="fill_container". ` +
         `Use gap=${isMobile ? 16 : 24} between cards. clipContent=true + cornerRadius=12 on cards. ` +
         `Content width: ${contentWidth}px.`,
-      suggestedRoles: ['section', 'heading', 'subheading', 'feature-card', 'feature-grid', 'icon', 'body-text'],
-    }
+      suggestedRoles: [
+        'section',
+        'heading',
+        'subheading',
+        'feature-card',
+        'feature-grid',
+        'icon',
+        'body-text',
+      ],
+    };
   }
 
   // Footer
@@ -255,8 +278,17 @@ function generateSectionGuidelines(
         `${isMobile ? 'Vertical stack' : 'Horizontal layout with 3-4 column groups'}: logo+tagline, navigation links grouped by category, social icons. ` +
         `Use muted text colors for secondary content. Add a divider (height=1, fill border color) above footer if needed. ` +
         `Bottom row: copyright text, small links. Content width: ${contentWidth}px.`,
-      suggestedRoles: ['footer', 'row', 'column', 'nav-links', 'label', 'caption', 'divider', 'icon'],
-    }
+      suggestedRoles: [
+        'footer',
+        'row',
+        'column',
+        'nav-links',
+        'label',
+        'caption',
+        'divider',
+        'icon',
+      ],
+    };
   }
 
   // CTA / Call to Action
@@ -268,7 +300,7 @@ function generateSectionGuidelines(
         `Button: large (padding [16, 40]), contrasting color, cornerRadius 8-12. ` +
         `Content width: ${contentWidth}px.`,
       suggestedRoles: ['cta-section', 'heading', 'subheading', 'button', 'centered-content'],
-    }
+    };
   }
 
   // Testimonials
@@ -280,7 +312,7 @@ function generateSectionGuidelines(
         `Optional: avatar (circle, 48px), star rating (5 star icons). ` +
         `Cards in horizontal: width="fill_container" + height="fill_container". Content width: ${contentWidth}px.`,
       suggestedRoles: ['section', 'card', 'heading', 'body-text', 'caption', 'avatar', 'row'],
-    }
+    };
   }
 
   // Pricing
@@ -291,8 +323,17 @@ function generateSectionGuidelines(
         `Each card: plan name, price (large text 36-48px), feature list (each item with check icon + text), CTA button. ` +
         `Highlight the recommended plan with accent border or fill. ` +
         `Cards in horizontal: width="fill_container" + height="fill_container". Content width: ${contentWidth}px.`,
-      suggestedRoles: ['section', 'pricing-card', 'heading', 'label', 'body-text', 'button', 'icon', 'divider'],
-    }
+      suggestedRoles: [
+        'section',
+        'pricing-card',
+        'heading',
+        'label',
+        'body-text',
+        'button',
+        'icon',
+        'divider',
+      ],
+    };
   }
 
   // Stats
@@ -304,13 +345,18 @@ function generateSectionGuidelines(
         `Optional: icon or trend indicator. Cards: width="fill_container" + height="fill_container". ` +
         `Content width: ${contentWidth}px.`,
       suggestedRoles: ['stats-section', 'stat-card', 'heading', 'caption', 'icon', 'row'],
-    }
+    };
   }
 
   // Form / Login / Signup
   if (
-    name.includes('form') || name.includes('login') || name.includes('signup') ||
-    name.includes('register') || name.includes('表单') || name.includes('登录') || name.includes('注册')
+    name.includes('form') ||
+    name.includes('login') ||
+    name.includes('signup') ||
+    name.includes('register') ||
+    name.includes('表单') ||
+    name.includes('登录') ||
+    name.includes('注册')
   ) {
     return {
       guidelines:
@@ -321,8 +367,17 @@ function generateSectionGuidelines(
         `Keep form elements (inputs + submit button) together — do NOT split. ` +
         `Optional: social login buttons (horizontal frame, each width="fit_content"). ` +
         `Content width: ${contentWidth}px.`,
-      suggestedRoles: ['form-group', 'form-input', 'input', 'button', 'label', 'caption', 'divider', 'icon'],
-    }
+      suggestedRoles: [
+        'form-group',
+        'form-input',
+        'input',
+        'button',
+        'label',
+        'caption',
+        'divider',
+        'icon',
+      ],
+    };
   }
 
   // Header (app screens)
@@ -333,7 +388,7 @@ function generateSectionGuidelines(
         `Left: back icon or menu icon. Center: title text. Right: action icon(s). ` +
         `Height: ${isMobile ? 56 : 64}px. Content width: ${contentWidth}px.`,
       suggestedRoles: ['row', 'heading', 'icon-button', 'icon', 'label'],
-    }
+    };
   }
 
   // Sidebar
@@ -345,7 +400,7 @@ function generateSectionGuidelines(
         `Active item: accent fill or left border indicator. ` +
         `Group labels: uppercase caption text, letterSpacing=1-2. Content width: ${contentWidth}px.`,
       suggestedRoles: ['column', 'nav-link', 'icon', 'label', 'caption', 'divider', 'heading'],
-    }
+    };
   }
 
   // Default / generic section
@@ -356,5 +411,5 @@ function generateSectionGuidelines(
       `All text >15 chars: textGrowth="fixed-width" + width="fill_container". ` +
       `Content width: ${contentWidth}px.`,
     suggestedRoles: ['section', 'heading', 'subheading', 'body-text', 'button', 'row', 'card'],
-  }
+  };
 }

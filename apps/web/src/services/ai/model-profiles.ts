@@ -5,18 +5,18 @@
  * effort, timeouts, and prompt complexity as needed. First match wins.
  */
 
-import type { ThinkingMode, ThinkingEffort } from './ai-runtime-config'
+import type { ThinkingMode, ThinkingEffort } from './ai-runtime-config';
 
-export type ModelTier = 'full' | 'standard' | 'basic'
+export type ModelTier = 'full' | 'standard' | 'basic';
 
 export interface ModelProfile {
-  match: string | RegExp
-  tier: ModelTier
-  thinkingMode?: ThinkingMode
-  effort?: ThinkingEffort
-  timeoutMultiplier?: number
-  simplifiedPrompt?: boolean
-  label?: string
+  match: string | RegExp;
+  tier: ModelTier;
+  thinkingMode?: ThinkingMode;
+  effort?: ThinkingEffort;
+  timeoutMultiplier?: number;
+  simplifiedPrompt?: boolean;
+  label?: string;
 }
 
 const MODEL_PROFILES: ModelProfile[] = [
@@ -36,7 +36,12 @@ const MODEL_PROFILES: ModelProfile[] = [
   { match: 'gemini-3-flash', tier: 'standard', thinkingMode: 'disabled', label: 'Gemini 3 Flash' },
   { match: /^gemini-3/, tier: 'full', thinkingMode: 'disabled', label: 'Gemini 3' },
   { match: 'gemini-2.5-pro', tier: 'full', thinkingMode: 'disabled', label: 'Gemini 2.5 Pro' },
-  { match: 'gemini-2.5-flash', tier: 'standard', thinkingMode: 'disabled', label: 'Gemini 2.5 Flash' },
+  {
+    match: 'gemini-2.5-flash',
+    tier: 'standard',
+    thinkingMode: 'disabled',
+    label: 'Gemini 2.5 Flash',
+  },
   { match: 'gemini-pro', tier: 'standard', thinkingMode: 'disabled', label: 'Gemini Pro' },
   { match: /^gemini-2/, tier: 'standard', thinkingMode: 'disabled', label: 'Gemini 2' },
   { match: 'deepseek', tier: 'standard', thinkingMode: 'disabled', label: 'DeepSeek' },
@@ -52,75 +57,83 @@ const MODEL_PROFILES: ModelProfile[] = [
   { match: 'mistral', tier: 'basic', thinkingMode: 'disabled', label: 'Mistral' },
   { match: 'gemma', tier: 'basic', thinkingMode: 'disabled', label: 'Gemma' },
   { match: 'glm', tier: 'basic', thinkingMode: 'disabled', label: 'GLM' },
-]
+];
 
 const DEFAULT_PROFILE: ModelProfile = {
   match: '',
   tier: 'standard',
   thinkingMode: 'disabled',
   label: 'Unknown model',
-}
+};
 
 /**
  * Resolve a model profile by ID. Strips `providerID/` prefix, first match wins.
  */
 export function resolveModelProfile(modelId?: string): ModelProfile {
-  if (!modelId) return { ...DEFAULT_PROFILE, tier: 'full', thinkingMode: undefined, label: 'Default (no model)' }
+  if (!modelId)
+    return {
+      ...DEFAULT_PROFILE,
+      tier: 'full',
+      thinkingMode: undefined,
+      label: 'Default (no model)',
+    };
 
   // Strip provider prefix (e.g. "opencode/gpt-4o" → "gpt-4o")
-  const normalized = modelId.includes('/') ? modelId.slice(modelId.indexOf('/') + 1) : modelId
-  const lower = normalized.toLowerCase()
+  const normalized = modelId.includes('/') ? modelId.slice(modelId.indexOf('/') + 1) : modelId;
+  const lower = normalized.toLowerCase();
 
   for (const profile of MODEL_PROFILES) {
     if (typeof profile.match === 'string') {
       if (lower.startsWith(profile.match) || lower.includes(profile.match)) {
-        return profile
+        return profile;
       }
     } else {
       if (profile.match.test(lower)) {
-        return profile
+        return profile;
       }
     }
   }
 
-  return DEFAULT_PROFILE
+  return DEFAULT_PROFILE;
 }
 
 /**
  * Check if a profile requires the simplified sub-agent prompt.
  */
 export function needsSimplifiedPrompt(profile: ModelProfile): boolean {
-  return profile.simplifiedPrompt === true
+  return profile.simplifiedPrompt === true;
 }
 
 /**
  * Apply profile overrides to a timeout config object (mutates a copy).
  */
-export function applyProfileToTimeouts<T extends {
-  hardTimeoutMs: number
-  noTextTimeoutMs: number
-  firstTextTimeoutMs?: number
-  thinkingMode?: ThinkingMode
-  effort?: ThinkingEffort
-}>(base: T, profile: ModelProfile): T {
-  const result = { ...base }
+export function applyProfileToTimeouts<
+  T extends {
+    hardTimeoutMs: number;
+    noTextTimeoutMs: number;
+    firstTextTimeoutMs?: number;
+    thinkingMode?: ThinkingMode;
+    effort?: ThinkingEffort;
+  },
+>(base: T, profile: ModelProfile): T {
+  const result = { ...base };
 
   if (profile.timeoutMultiplier != null && profile.timeoutMultiplier !== 1) {
-    const m = profile.timeoutMultiplier
-    result.hardTimeoutMs = Math.round(result.hardTimeoutMs * m)
-    result.noTextTimeoutMs = Math.round(result.noTextTimeoutMs * m)
+    const m = profile.timeoutMultiplier;
+    result.hardTimeoutMs = Math.round(result.hardTimeoutMs * m);
+    result.noTextTimeoutMs = Math.round(result.noTextTimeoutMs * m);
     if (result.firstTextTimeoutMs != null) {
-      result.firstTextTimeoutMs = Math.round(result.firstTextTimeoutMs * m)
+      result.firstTextTimeoutMs = Math.round(result.firstTextTimeoutMs * m);
     }
   }
 
   if (profile.thinkingMode != null) {
-    result.thinkingMode = profile.thinkingMode
+    result.thinkingMode = profile.thinkingMode;
   }
 
   if (profile.effort != null) {
-    result.effort = profile.effort
+    result.effort = profile.effort;
   }
 
-  return result
+  return result;
 }

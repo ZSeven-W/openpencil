@@ -124,15 +124,15 @@ bun run electron:dev
 
 Có nhiều biến thể image khác nhau — chọn loại phù hợp với nhu cầu của bạn:
 
-| Image | Kích thước | Bao gồm |
-| --- | --- | --- |
-| `openpencil:latest` | ~226 MB | Chỉ ứng dụng web |
-| `openpencil-claude:latest` | — | + Claude Code CLI |
-| `openpencil-codex:latest` | — | + Codex CLI |
-| `openpencil-opencode:latest` | — | + OpenCode CLI |
-| `openpencil-copilot:latest` | — | + GitHub Copilot CLI |
-| `openpencil-gemini:latest` | — | + Gemini CLI |
-| `openpencil-full:latest` | ~1 GB | Tất cả công cụ CLI |
+| Image                        | Kích thước | Bao gồm              |
+| ---------------------------- | ---------- | -------------------- |
+| `openpencil:latest`          | ~226 MB    | Chỉ ứng dụng web     |
+| `openpencil-claude:latest`   | —          | + Claude Code CLI    |
+| `openpencil-codex:latest`    | —          | + Codex CLI          |
+| `openpencil-opencode:latest` | —          | + OpenCode CLI       |
+| `openpencil-copilot:latest`  | —          | + GitHub Copilot CLI |
+| `openpencil-gemini:latest`   | —          | + Gemini CLI         |
+| `openpencil-full:latest`     | ~1 GB      | Tất cả công cụ CLI   |
 
 **Chạy (chỉ web):**
 
@@ -173,6 +173,7 @@ docker build --target full -t openpencil-full .
 ## Thiết kế thuần AI
 
 **Từ Prompt đến Giao diện**
+
 - **Văn bản thành thiết kế** — mô tả một trang, nhận kết quả được tạo ra trên canvas theo thời gian thực với hiệu ứng streaming
 - **Orchestrator** — phân rã các trang phức tạp thành các tác vụ con không gian để tạo song song
 - **Chỉnh sửa thiết kế** — chọn các phần tử, sau đó mô tả thay đổi bằng ngôn ngữ tự nhiên
@@ -180,20 +181,21 @@ docker build --target full -t openpencil-full .
 
 **Hỗ trợ Đa tác nhân**
 
-| Tác nhân | Cài đặt |
-| --- | --- |
+| Tác nhân                           | Cài đặt                                                                                                      |
+| ---------------------------------- | ------------------------------------------------------------------------------------------------------------ |
 | **Tích hợp sẵn (9+ nhà cung cấp)** | Chọn từ các preset nhà cung cấp với bộ chuyển đổi khu vực — Anthropic, OpenAI, Google, DeepSeek và nhiều hơn |
-| **Claude Code** | Không cần cấu hình — sử dụng Claude Agent SDK với OAuth cục bộ |
-| **Codex CLI** | Kết nối trong Cài đặt tác nhân (`Cmd+,`) |
-| **OpenCode** | Kết nối trong Cài đặt tác nhân (`Cmd+,`) |
-| **GitHub Copilot** | `copilot login` rồi kết nối trong Cài đặt tác nhân (`Cmd+,`) |
-| **Gemini CLI** | Kết nối trong Cài đặt tác nhân (`Cmd+,`) |
+| **Claude Code**                    | Không cần cấu hình — sử dụng Claude Agent SDK với OAuth cục bộ                                               |
+| **Codex CLI**                      | Kết nối trong Cài đặt tác nhân (`Cmd+,`)                                                                     |
+| **OpenCode**                       | Kết nối trong Cài đặt tác nhân (`Cmd+,`)                                                                     |
+| **GitHub Copilot**                 | `copilot login` rồi kết nối trong Cài đặt tác nhân (`Cmd+,`)                                                 |
+| **Gemini CLI**                     | Kết nối trong Cài đặt tác nhân (`Cmd+,`)                                                                     |
 
 **Hồ sơ Năng lực Mô hình** — tự động thích ứng prompt, chế độ thinking và thời gian chờ theo từng cấp mô hình. Mô hình cấp đầy đủ (Claude) nhận prompt hoàn chỉnh; cấp tiêu chuẩn (GPT-4o, Gemini, DeepSeek) tắt thinking; cấp cơ bản (MiniMax, Qwen, Llama, Mistral) nhận prompt JSON lồng nhau đơn giản hóa để đảm bảo độ tin cậy tối đa.
 
 **i18n** — Bản địa hóa giao diện đầy đủ bằng 15 ngôn ngữ: English, 简体中文, 繁體中文, 日本語, 한국어, Français, Español, Deutsch, Português, Русский, हिन्दी, Türkçe, ไทย, Tiếng Việt, Bahasa Indonesia.
 
 **Máy chủ MCP**
+
 - Máy chủ MCP tích hợp sẵn — cài đặt một cú nhấp vào Claude Code / Codex / Gemini / OpenCode / Kiro / Copilot CLI
 - Tự động phát hiện Node.js — nếu chưa cài đặt, tự động chuyển sang HTTP transport và khởi động MCP HTTP server
 - Tự động hóa thiết kế từ terminal: đọc, tạo và chỉnh sửa các tệp `.op` qua bất kỳ tác nhân tương thích MCP nào
@@ -202,6 +204,7 @@ docker build --target full -t openpencil-full .
 - Hỗ trợ nhiều trang — tạo, đổi tên, sắp xếp lại và nhân bản trang qua các công cụ MCP
 
 **Tạo mã nguồn**
+
 - React + Tailwind CSS, HTML + CSS, CSS Variables
 - Vue, Svelte, Flutter, SwiftUI, Jetpack Compose, React Native
 
@@ -229,6 +232,7 @@ Hỗ trợ ba phương thức nhập liệu: chuỗi inline, `@filepath` (đọc
 ## Tính năng
 
 **Canvas và Vẽ**
+
 - Canvas vô hạn với pan, zoom, hướng dẫn căn chỉnh thông minh và snapping
 - Hình chữ nhật, Hình ellipse, Đường thẳng, Đa giác, Bút (Bezier), Frame, Văn bản
 - Phép toán Boolean — hợp nhất, trừ, giao nhau với thanh công cụ ngữ cảnh
@@ -237,15 +241,18 @@ Hỗ trợ ba phương thức nhập liệu: chuỗi inline, `@filepath` (đọc
 - Tài liệu nhiều trang với điều hướng bằng tab
 
 **Hệ thống Thiết kế**
+
 - Biến thiết kế — token màu sắc, số, chuỗi với tham chiếu `$variable`
 - Hỗ trợ đa chủ đề — nhiều trục, mỗi trục có các biến thể (Sáng/Tối, Thu gọn/Thoải mái)
 - Hệ thống component — các component có thể tái sử dụng với instances và overrides
 - Đồng bộ CSS — thuộc tính tùy chỉnh tự động tạo, `var(--name)` trong đầu ra mã
 
 **Nhập từ Figma**
+
 - Nhập tệp `.fig` với layout, fills, strokes, effects, văn bản, hình ảnh và vector được bảo toàn
 
 **Ứng dụng Desktop**
+
 - macOS, Windows và Linux gốc qua Electron
 - Liên kết tệp `.op` — nhấp đúp để mở, khóa phiên bản đơn
 - Tự động cập nhật từ GitHub Releases
@@ -253,17 +260,17 @@ Hỗ trợ ba phương thức nhập liệu: chuỗi inline, `@filepath` (đọc
 
 ## Công nghệ
 
-| | |
-| --- | --- |
-| **Frontend** | React 19 · TanStack Start · Tailwind CSS v4 · shadcn/ui · i18next |
-| **Canvas** | CanvasKit/Skia (WASM, tăng tốc GPU) |
-| **Trạng thái** | Zustand v5 |
-| **Máy chủ** | Nitro |
-| **Desktop** | Electron 35 |
-| **CLI** | `op` — điều khiển từ terminal, batch design DSL, xuất mã |
-| **AI** | Vercel AI SDK v6 · Anthropic SDK · Claude Agent SDK · OpenCode SDK · Copilot SDK |
-| **Runtime** | Bun · Vite 7 |
-| **Định dạng tệp** | `.op` — dựa trên JSON, dễ đọc, thân thiện với Git |
+|                   |                                                                                  |
+| ----------------- | -------------------------------------------------------------------------------- |
+| **Frontend**      | React 19 · TanStack Start · Tailwind CSS v4 · shadcn/ui · i18next                |
+| **Canvas**        | CanvasKit/Skia (WASM, tăng tốc GPU)                                              |
+| **Trạng thái**    | Zustand v5                                                                       |
+| **Máy chủ**       | Nitro                                                                            |
+| **Desktop**       | Electron 35                                                                      |
+| **CLI**           | `op` — điều khiển từ terminal, batch design DSL, xuất mã                         |
+| **AI**            | Vercel AI SDK v6 · Anthropic SDK · Claude Agent SDK · OpenCode SDK · Copilot SDK |
+| **Runtime**       | Bun · Vite 7                                                                     |
+| **Định dạng tệp** | `.op` — dựa trên JSON, dễ đọc, thân thiện với Git                                |
 
 ## Cấu trúc dự án
 
@@ -304,21 +311,21 @@ openpencil/
 
 ## Phím tắt
 
-| Phím | Hành động | | Phím | Hành động |
-| --- | --- | --- | --- | --- |
-| `V` | Chọn | | `Cmd+S` | Lưu |
-| `R` | Hình chữ nhật | | `Cmd+Z` | Hoàn tác |
-| `O` | Hình ellipse | | `Cmd+Shift+Z` | Làm lại |
-| `L` | Đường thẳng | | `Cmd+C/X/V/D` | Sao chép/Cắt/Dán/Nhân bản |
-| `T` | Văn bản | | `Cmd+G` | Nhóm |
-| `F` | Frame | | `Cmd+Shift+G` | Bỏ nhóm |
-| `P` | Công cụ bút | | `Cmd+Shift+E` | Xuất |
-| `H` | Tay (pan) | | `Cmd+Shift+C` | Bảng mã |
-| `Del` | Xóa | | `Cmd+Shift+V` | Bảng biến |
-| `[ / ]` | Sắp xếp lại | | `Cmd+J` | AI chat |
-| Mũi tên | Dịch chuyển 1px | | `Cmd+,` | Cài đặt tác nhân |
-| `Cmd+Alt+U` | Hợp nhất Boolean | | `Cmd+Alt+S` | Trừ Boolean |
-| `Cmd+Alt+I` | Giao nhau Boolean | | | |
+| Phím        | Hành động         |     | Phím          | Hành động                 |
+| ----------- | ----------------- | --- | ------------- | ------------------------- |
+| `V`         | Chọn              |     | `Cmd+S`       | Lưu                       |
+| `R`         | Hình chữ nhật     |     | `Cmd+Z`       | Hoàn tác                  |
+| `O`         | Hình ellipse      |     | `Cmd+Shift+Z` | Làm lại                   |
+| `L`         | Đường thẳng       |     | `Cmd+C/X/V/D` | Sao chép/Cắt/Dán/Nhân bản |
+| `T`         | Văn bản           |     | `Cmd+G`       | Nhóm                      |
+| `F`         | Frame             |     | `Cmd+Shift+G` | Bỏ nhóm                   |
+| `P`         | Công cụ bút       |     | `Cmd+Shift+E` | Xuất                      |
+| `H`         | Tay (pan)         |     | `Cmd+Shift+C` | Bảng mã                   |
+| `Del`       | Xóa               |     | `Cmd+Shift+V` | Bảng biến                 |
+| `[ / ]`     | Sắp xếp lại       |     | `Cmd+J`       | AI chat                   |
+| Mũi tên     | Dịch chuyển 1px   |     | `Cmd+,`       | Cài đặt tác nhân          |
+| `Cmd+Alt+U` | Hợp nhất Boolean  |     | `Cmd+Alt+S`   | Trừ Boolean               |
+| `Cmd+Alt+I` | Giao nhau Boolean |     |               |                           |
 
 ## Scripts
 

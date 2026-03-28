@@ -1,4 +1,4 @@
-import type { TranslationKeys } from './en'
+import type { TranslationKeys } from './en';
 
 const hi: TranslationKeys = {
   // ── Common ──
@@ -87,8 +87,7 @@ const hi: TranslationKeys = {
   'updater.restartInstall': 'पुनः आरंभ करें और इंस्टॉल करें',
   'updater.installing': 'इंस्टॉल हो रहा है...',
   'updater.releaseDate': 'रिलीज़ तिथि: {{date}}',
-  'updater.restartHint':
-    'अपडेट लागू करने के लिए पुनः आरंभ करें। पुनः लॉन्च में आमतौर पर 10-15 सेकंड लगते हैं।',
+  'updater.restartHint': 'अपडेट लागू करने के लिए पुनः आरंभ करें। पुनः लॉन्च में आमतौर पर 10-15 सेकंड लगते हैं।',
   'updater.unknownError': 'अज्ञात अपडेटर त्रुटि।',
   'updater.title.checking': 'अपडेट की जाँच हो रही है',
   'updater.title.available': 'अपडेट मिला',
@@ -98,10 +97,8 @@ const hi: TranslationKeys = {
   'updater.subtitle.checking': 'नवीनतम रिलीज़ की खोज हो रही है...',
   'updater.subtitle.available': 'संस्करण {{version}} उपलब्ध है।',
   'updater.subtitle.availableGeneric': 'एक नया संस्करण उपलब्ध है।',
-  'updater.subtitle.downloading':
-    'संस्करण {{version}} बैकग्राउंड में डाउनलोड हो रहा है।',
-  'updater.subtitle.downloadingGeneric':
-    'अपडेट पैकेज बैकग्राउंड में डाउनलोड हो रहा है।',
+  'updater.subtitle.downloading': 'संस्करण {{version}} बैकग्राउंड में डाउनलोड हो रहा है।',
+  'updater.subtitle.downloadingGeneric': 'अपडेट पैकेज बैकग्राउंड में डाउनलोड हो रहा है।',
   'updater.subtitle.downloaded': 'संस्करण {{version}} डाउनलोड हो गया है।',
   'updater.subtitle.downloadedGeneric': 'अपडेट डाउनलोड हो गया है।',
   'updater.subtitle.error': 'अपडेट की जाँच या डाउनलोड नहीं हो सका।',
@@ -219,11 +216,9 @@ const hi: TranslationKeys = {
   'textLayout.autoWidth': 'ऑटो W',
   'textLayout.autoWidthDesc': 'ऑटो चौड़ाई \u2014 टेक्स्ट क्षैतिज रूप से फैलता है',
   'textLayout.autoHeight': 'ऑटो H',
-  'textLayout.autoHeightDesc':
-    'ऑटो ऊँचाई \u2014 निश्चित चौड़ाई, ऊँचाई स्वतः समायोजित',
+  'textLayout.autoHeightDesc': 'ऑटो ऊँचाई \u2014 निश्चित चौड़ाई, ऊँचाई स्वतः समायोजित',
   'textLayout.fixed': 'निश्चित',
-  'textLayout.fixedDesc':
-    'निश्चित आकार \u2014 चौड़ाई और ऊँचाई दोनों निश्चित हैं',
+  'textLayout.fixedDesc': 'निश्चित आकार \u2014 चौड़ाई और ऊँचाई दोनों निश्चित हैं',
   'textLayout.fillWidth': 'चौड़ाई भरें',
   'textLayout.fillHeight': 'ऊँचाई भरें',
 
@@ -306,8 +301,7 @@ const hi: TranslationKeys = {
   'ai.newChat': 'नई चैट',
   'ai.collapse': 'संक्षिप्त करें',
   'ai.tryExample': 'डिज़ाइन करने के लिए एक उदाहरण आज़माएँ...',
-  'ai.tipSelectElements':
-    'सुझाव: संदर्भ के लिए चैट से पहले कैनवस पर तत्वों का चयन करें।',
+  'ai.tipSelectElements': 'सुझाव: संदर्भ के लिए चैट से पहले कैनवस पर तत्वों का चयन करें।',
   'ai.generating': 'जनरेट हो रहा है...',
   'ai.designWithAgent': 'एजेंट के साथ डिज़ाइन करें...',
   'ai.attachImage': 'इमेज संलग्न करें',
@@ -321,14 +315,12 @@ const hi: TranslationKeys = {
   'ai.quickAction.loginScreenPrompt':
     'ईमेल इनपुट, पासवर्ड इनपुट, लॉगिन बटन और सोशल लॉगिन विकल्पों के साथ एक आधुनिक मोबाइल लॉगिन स्क्रीन डिज़ाइन करें',
   'ai.quickAction.foodApp': 'फ़ूड ऐप होमपेज',
-  'ai.quickAction.foodAppPrompt':
-    'Generate a well-designed food mobile app homepage',
+  'ai.quickAction.foodAppPrompt': 'Generate a well-designed food mobile app homepage',
   'ai.quickAction.bottomNav': 'बॉटम नेविगेशन बार डिज़ाइन करें',
   'ai.quickAction.bottomNavPrompt':
     '5 टैब के साथ एक मोबाइल ऐप बॉटम नेविगेशन बार डिज़ाइन करें: होम, खोजें, जोड़ें, संदेश, प्रोफ़ाइल',
   'ai.quickAction.colorPalette': 'मेरे ऐप के लिए कलर पैलेट सुझाएँ',
-  'ai.quickAction.colorPalettePrompt':
-    'एक पेट केयर ऐप के लिए आधुनिक कलर पैलेट सुझाएँ',
+  'ai.quickAction.colorPalettePrompt': 'एक पेट केयर ऐप के लिए आधुनिक कलर पैलेट सुझाएँ',
 
   // ── Code Panel ──
   'code.reactTailwind': 'React + Tailwind',
@@ -339,8 +331,7 @@ const hi: TranslationKeys = {
   'code.download': 'कोड फ़ाइल डाउनलोड करें',
   'code.closeCodePanel': 'कोड पैनल बंद करें',
   'code.genCssVars': 'संपूर्ण डॉक्यूमेंट के लिए CSS वेरिएबल जनरेट हो रहे हैं',
-  'code.genSelected':
-    '{{count}} चयनित तत्व(ओं) के लिए कोड जनरेट हो रहा है',
+  'code.genSelected': '{{count}} चयनित तत्व(ओं) के लिए कोड जनरेट हो रहा है',
   'code.genDocument': 'संपूर्ण डॉक्यूमेंट के लिए कोड जनरेट हो रहा है',
   'code.aiEnhance': 'AI से सुधारें',
   'code.cancelEnhance': 'सुधार रद्द करें',
@@ -358,8 +349,7 @@ const hi: TranslationKeys = {
   'agents.mcpIntegrations': 'टर्मिनल में MCP इंटीग्रेशन',
   'agents.transport': 'ट्रांसपोर्ट',
   'agents.port': 'पोर्ट',
-  'agents.mcpRestart':
-    'MCP इंटीग्रेशन टर्मिनल पुनः आरंभ करने के बाद प्रभावी होंगे।',
+  'agents.mcpRestart': 'MCP इंटीग्रेशन टर्मिनल पुनः आरंभ करने के बाद प्रभावी होंगे।',
   'agents.mcpReinstallHint':
     'OpenPencil अपग्रेड करने के बाद, संगतता सुनिश्चित करने के लिए कृपया MCP इंटीग्रेशन पुनः इंस्टॉल करें।',
   'agents.modelCount': '{{count}} मॉडल',
@@ -434,7 +424,8 @@ const hi: TranslationKeys = {
   'builtin.errorApiKeyEmpty': 'API key खाली है। कृपया सेटिंग्स में अपनी API key जोड़ें।',
   'builtin.parallelAgents': 'समानांतर सब-एजेंट: {{count}}x (बदलने के लिए क्लिक करें)',
   'builtin.baseUrlPlaceholder': 'https://api.example.com/v1',
-  'builtin.teamDescription': 'डिज़ाइन जनरेशन के लिए एक मॉडल चुनें। सेट करने पर, डिज़ाइन कार्य स्वचालित रूप से इस मॉडल का उपयोग करने वाले विशेषज्ञ एजेंट को सौंपे जाते हैं।',
+  'builtin.teamDescription':
+    'डिज़ाइन जनरेशन के लिए एक मॉडल चुनें। सेट करने पर, डिज़ाइन कार्य स्वचालित रूप से इस मॉडल का उपयोग करने वाले विशेषज्ञ एजेंट को सौंपे जाते हैं।',
   'builtin.teamDesignModel': 'डिज़ाइन मॉडल',
   'builtin.teamSelectModel': 'कोई नहीं (एकल एजेंट)',
 
@@ -449,8 +440,7 @@ const hi: TranslationKeys = {
   'figma.convertFailed': 'Figma फ़ाइल कन्वर्ट नहीं हो सकी',
   'figma.parsing': '.fig फ़ाइल पार्स हो रही है...',
   'figma.converting': 'नोड्स कन्वर्ट हो रहे हैं...',
-  'figma.selectPage':
-    'इस फ़ाइल में {{count}} पेज हैं। आयात के लिए चुनें:',
+  'figma.selectPage': 'इस फ़ाइल में {{count}} पेज हैं। आयात के लिए चुनें:',
   'figma.layers': '{{count}} लेयर',
   'figma.importAll': 'सभी पेज आयात करें',
   'figma.importComplete': 'आयात पूरा हुआ!',
@@ -496,6 +486,6 @@ const hi: TranslationKeys = {
   'variablePicker.bindToVariable': 'वेरिएबल से बाइंड करें',
   'variablePicker.unbind': 'वेरिएबल अनबाइंड करें',
   'variablePicker.noVariables': 'कोई {{type}} वेरिएबल परिभाषित नहीं है',
-} as const
+} as const;
 
-export default hi
+export default hi;

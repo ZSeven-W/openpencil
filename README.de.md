@@ -124,15 +124,15 @@ bun run electron:dev
 
 Mehrere Image-Varianten sind verfügbar — wählen Sie die passende für Ihre Anforderungen:
 
-| Image | Größe | Enthält |
-| --- | --- | --- |
-| `openpencil:latest` | ~226 MB | Nur Web-App |
-| `openpencil-claude:latest` | — | + Claude Code CLI |
-| `openpencil-codex:latest` | — | + Codex CLI |
-| `openpencil-opencode:latest` | — | + OpenCode CLI |
-| `openpencil-copilot:latest` | — | + GitHub Copilot CLI |
-| `openpencil-gemini:latest` | — | + Gemini CLI |
-| `openpencil-full:latest` | ~1 GB | Alle CLI-Tools |
+| Image                        | Größe   | Enthält              |
+| ---------------------------- | ------- | -------------------- |
+| `openpencil:latest`          | ~226 MB | Nur Web-App          |
+| `openpencil-claude:latest`   | —       | + Claude Code CLI    |
+| `openpencil-codex:latest`    | —       | + Codex CLI          |
+| `openpencil-opencode:latest` | —       | + OpenCode CLI       |
+| `openpencil-copilot:latest`  | —       | + GitHub Copilot CLI |
+| `openpencil-gemini:latest`   | —       | + Gemini CLI         |
+| `openpencil-full:latest`     | ~1 GB   | Alle CLI-Tools       |
 
 **Ausführen (nur Web):**
 
@@ -173,6 +173,7 @@ docker build --target full -t openpencil-full .
 ## KI-natives Design
 
 **Vom Prompt zur UI**
+
 - **Text-zu-Design** — eine Seite beschreiben und sie wird in Echtzeit mit Streaming-Animation auf der Canvas generiert
 - **Orchestrierer** — zerlegt komplexe Seiten in räumliche Teilaufgaben zur parallelen Generierung
 - **Design-Modifikation** — Elemente auswählen und Änderungen in natürlicher Sprache beschreiben
@@ -180,20 +181,21 @@ docker build --target full -t openpencil-full .
 
 **Multi-Agenten-Unterstützung**
 
-| Agent | Einrichtung |
-| --- | --- |
+| Agent                        | Einrichtung                                                                                     |
+| ---------------------------- | ----------------------------------------------------------------------------------------------- |
 | **Integriert (9+ Anbieter)** | Auswahl aus Anbieter-Presets mit Region-Switcher — Anthropic, OpenAI, Google, DeepSeek und mehr |
-| **Claude Code** | Keine Konfiguration — verwendet Claude Agent SDK mit lokalem OAuth |
-| **Codex CLI** | In den Agenteneinstellungen verbinden (`Cmd+,`) |
-| **OpenCode** | In den Agenteneinstellungen verbinden (`Cmd+,`) |
-| **GitHub Copilot** | `copilot login` dann in den Agenteneinstellungen verbinden (`Cmd+,`) |
-| **Gemini CLI** | In den Agenteneinstellungen verbinden (`Cmd+,`) |
+| **Claude Code**              | Keine Konfiguration — verwendet Claude Agent SDK mit lokalem OAuth                              |
+| **Codex CLI**                | In den Agenteneinstellungen verbinden (`Cmd+,`)                                                 |
+| **OpenCode**                 | In den Agenteneinstellungen verbinden (`Cmd+,`)                                                 |
+| **GitHub Copilot**           | `copilot login` dann in den Agenteneinstellungen verbinden (`Cmd+,`)                            |
+| **Gemini CLI**               | In den Agenteneinstellungen verbinden (`Cmd+,`)                                                 |
 
 **Modell-Fähigkeitsprofile** — passt Prompts, Thinking-Modus und Timeouts automatisch pro Modellstufe an. Modelle der Vollstufe (Claude) erhalten vollständige Prompts; Standardstufe (GPT-4o, Gemini, DeepSeek) deaktiviert Thinking; Basisstufe (MiniMax, Qwen, Llama, Mistral) erhält vereinfachte verschachtelte JSON-Prompts für maximale Zuverlässigkeit.
 
 **i18n** — Vollständige Interface-Lokalisierung in 15 Sprachen: English, 简体中文, 繁體中文, 日本語, 한국어, Français, Español, Deutsch, Português, Русский, हिन्दी, Türkçe, ไทย, Tiếng Việt, Bahasa Indonesia.
 
 **MCP-Server**
+
 - Eingebauter MCP-Server — Ein-Klick-Installation in Claude Code / Codex / Gemini / OpenCode / Kiro / Copilot CLIs
 - Automatische Node.js-Erkennung — falls nicht installiert, automatischer Fallback auf HTTP-Transport und automatischer Start des MCP-HTTP-Servers
 - Design-Automatisierung vom Terminal aus: `.op`-Dateien über jeden MCP-kompatiblen Agenten lesen, erstellen und bearbeiten
@@ -202,6 +204,7 @@ docker build --target full -t openpencil-full .
 - Mehrseitige Unterstützung — Seiten erstellen, umbenennen, neu ordnen und duplizieren über MCP-Tools
 
 **Codegenerierung**
+
 - React + Tailwind CSS, HTML + CSS, CSS Variables
 - Vue, Svelte, Flutter, SwiftUI, Jetpack Compose, React Native
 
@@ -229,6 +232,7 @@ Unterstützt drei Eingabemethoden: Inline-String, `@filepath` (aus Datei lesen) 
 ## Funktionen
 
 **Canvas und Zeichnen**
+
 - Unendliche Canvas mit Pan, Zoom, intelligenten Ausrichtungshilfslinien und Einrasten
 - Rechteck, Ellipse, Linie, Polygon, Stift (Bezier), Frame, Text
 - Boolesche Operationen — Vereinigung, Subtraktion, Schnittmenge mit kontextbezogener Werkzeugleiste
@@ -237,15 +241,18 @@ Unterstützt drei Eingabemethoden: Inline-String, `@filepath` (aus Datei lesen) 
 - Mehrseitige Dokumente mit Tab-Navigation
 
 **Designsystem**
+
 - Designvariablen — Farb-, Zahl- und Text-Tokens mit `$variable`-Referenzen
 - Multi-Theme-Unterstützung — mehrere Achsen, jeweils mit Varianten (Hell/Dunkel, Kompakt/Komfortabel)
 - Komponentensystem — wiederverwendbare Komponenten mit Instanzen und Überschreibungen
 - CSS-Synchronisierung — automatisch generierte benutzerdefinierte Eigenschaften, `var(--name)` in der Code-Ausgabe
 
 **Figma-Import**
+
 - `.fig`-Dateien importieren mit erhaltenem Layout, Füllungen, Konturen, Effekten, Text, Bildern und Vektoren
 
 **Desktop-App**
+
 - Natives macOS, Windows und Linux über Electron
 - `.op`-Dateizuordnung — Doppelklick zum Öffnen, Einzelinstanzsperre
 - Automatische Aktualisierung über GitHub Releases
@@ -253,17 +260,17 @@ Unterstützt drei Eingabemethoden: Inline-String, `@filepath` (aus Datei lesen) 
 
 ## Technologie-Stack
 
-| | |
-| --- | --- |
-| **Frontend** | React 19 · TanStack Start · Tailwind CSS v4 · shadcn/ui · i18next |
-| **Canvas** | CanvasKit/Skia (WASM, GPU-beschleunigt) |
-| **State** | Zustand v5 |
-| **Server** | Nitro |
-| **Desktop** | Electron 35 |
-| **CLI** | `op` — Terminal-Steuerung, Batch-Design-DSL, Code-Export |
-| **KI** | Vercel AI SDK v6 · Anthropic SDK · Claude Agent SDK · OpenCode SDK · Copilot SDK |
-| **Laufzeit** | Bun · Vite 7 |
-| **Dateiformat** | `.op` — JSON-basiert, menschenlesbar, Git-freundlich |
+|                 |                                                                                  |
+| --------------- | -------------------------------------------------------------------------------- |
+| **Frontend**    | React 19 · TanStack Start · Tailwind CSS v4 · shadcn/ui · i18next                |
+| **Canvas**      | CanvasKit/Skia (WASM, GPU-beschleunigt)                                          |
+| **State**       | Zustand v5                                                                       |
+| **Server**      | Nitro                                                                            |
+| **Desktop**     | Electron 35                                                                      |
+| **CLI**         | `op` — Terminal-Steuerung, Batch-Design-DSL, Code-Export                         |
+| **KI**          | Vercel AI SDK v6 · Anthropic SDK · Claude Agent SDK · OpenCode SDK · Copilot SDK |
+| **Laufzeit**    | Bun · Vite 7                                                                     |
+| **Dateiformat** | `.op` — JSON-basiert, menschenlesbar, Git-freundlich                             |
 
 ## Projektstruktur
 
@@ -304,21 +311,21 @@ openpencil/
 
 ## Tastaturkürzel
 
-| Taste | Aktion | | Taste | Aktion |
-| --- | --- | --- | --- | --- |
-| `V` | Auswählen | | `Cmd+S` | Speichern |
-| `R` | Rechteck | | `Cmd+Z` | Rückgängig |
-| `O` | Ellipse | | `Cmd+Shift+Z` | Wiederholen |
-| `L` | Linie | | `Cmd+C/X/V/D` | Kopieren/Ausschneiden/Einfügen/Duplizieren |
-| `T` | Text | | `Cmd+G` | Gruppieren |
-| `F` | Frame | | `Cmd+Shift+G` | Gruppierung aufheben |
-| `P` | Stiftwerkzeug | | `Cmd+Shift+E` | Exportieren |
-| `H` | Hand (Pan) | | `Cmd+Shift+C` | Code-Panel |
-| `Del` | Löschen | | `Cmd+Shift+V` | Variablen-Panel |
-| `[ / ]` | Reihenfolge ändern | | `Cmd+J` | KI-Chat |
-| Pfeiltasten | 1px verschieben | | `Cmd+,` | Agenteneinstellungen |
-| `Cmd+Alt+U` | Boolesche Vereinigung | | `Cmd+Alt+S` | Boolesche Subtraktion |
-| `Cmd+Alt+I` | Boolesche Schnittmenge | | | |
+| Taste       | Aktion                 |     | Taste         | Aktion                                     |
+| ----------- | ---------------------- | --- | ------------- | ------------------------------------------ |
+| `V`         | Auswählen              |     | `Cmd+S`       | Speichern                                  |
+| `R`         | Rechteck               |     | `Cmd+Z`       | Rückgängig                                 |
+| `O`         | Ellipse                |     | `Cmd+Shift+Z` | Wiederholen                                |
+| `L`         | Linie                  |     | `Cmd+C/X/V/D` | Kopieren/Ausschneiden/Einfügen/Duplizieren |
+| `T`         | Text                   |     | `Cmd+G`       | Gruppieren                                 |
+| `F`         | Frame                  |     | `Cmd+Shift+G` | Gruppierung aufheben                       |
+| `P`         | Stiftwerkzeug          |     | `Cmd+Shift+E` | Exportieren                                |
+| `H`         | Hand (Pan)             |     | `Cmd+Shift+C` | Code-Panel                                 |
+| `Del`       | Löschen                |     | `Cmd+Shift+V` | Variablen-Panel                            |
+| `[ / ]`     | Reihenfolge ändern     |     | `Cmd+J`       | KI-Chat                                    |
+| Pfeiltasten | 1px verschieben        |     | `Cmd+,`       | Agenteneinstellungen                       |
+| `Cmd+Alt+U` | Boolesche Vereinigung  |     | `Cmd+Alt+S`   | Boolesche Subtraktion                      |
+| `Cmd+Alt+I` | Boolesche Schnittmenge |     |               |                                            |
 
 ## Skripte
 

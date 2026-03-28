@@ -1,35 +1,35 @@
-import { useState, useCallback, useRef } from 'react'
-import { useTranslation } from 'react-i18next'
-import type { ImageNode, ImageFitMode } from '@/types/pen'
-import SectionHeader from '@/components/shared/section-header'
-import { Image as ImageIcon, Search, Sparkles } from 'lucide-react'
-import ImageFillPopover from './image-fill-popover'
-import ImageSearchPopover from './image-search-popover'
-import ImageGeneratePopover from './image-generate-popover'
-import { Button } from '@/components/ui/button'
+import { useState, useCallback, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
+import type { ImageNode, ImageFitMode } from '@/types/pen';
+import SectionHeader from '@/components/shared/section-header';
+import { Image as ImageIcon, Search, Sparkles } from 'lucide-react';
+import ImageFillPopover from './image-fill-popover';
+import ImageSearchPopover from './image-search-popover';
+import ImageGeneratePopover from './image-generate-popover';
+import { Button } from '@/components/ui/button';
 
 interface ImageSectionProps {
-  node: ImageNode
-  onUpdate: (updates: Partial<ImageNode>) => void
+  node: ImageNode;
+  onUpdate: (updates: Partial<ImageNode>) => void;
 }
 
 export default function ImageSection({ node, onUpdate }: ImageSectionProps) {
-  const { t } = useTranslation()
-  const [triggerRect, setTriggerRect] = useState<DOMRect | null>(null)
-  const triggerRef = useRef<HTMLButtonElement>(null)
+  const { t } = useTranslation();
+  const [triggerRect, setTriggerRect] = useState<DOMRect | null>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
 
-  const fitMode = node.objectFit ?? 'fill'
-  const hasImage = node.src && !node.src.startsWith('__')
+  const fitMode = node.objectFit ?? 'fill';
+  const hasImage = node.src && !node.src.startsWith('__');
 
-  const handleClose = useCallback(() => setTriggerRect(null), [])
+  const handleClose = useCallback(() => setTriggerRect(null), []);
 
   const handleToggle = () => {
     if (triggerRect) {
-      setTriggerRect(null)
+      setTriggerRect(null);
     } else if (triggerRef.current) {
-      setTriggerRect(triggerRef.current.getBoundingClientRect())
+      setTriggerRect(triggerRef.current.getBoundingClientRect());
     }
-  }
+  };
 
   return (
     <div className="space-y-1.5">
@@ -93,11 +93,21 @@ export default function ImageSection({ node, onUpdate }: ImageSectionProps) {
           }}
           onFitModeChange={(mode) => onUpdate({ objectFit: mode as ImageFitMode })}
           onAdjustmentChange={(key, value) => onUpdate({ [key]: value } as Partial<ImageNode>)}
-          onResetAdjustments={() => onUpdate({ exposure: 0, contrast: 0, saturation: 0, temperature: 0, tint: 0, highlights: 0, shadows: 0 } as Partial<ImageNode>)}
+          onResetAdjustments={() =>
+            onUpdate({
+              exposure: 0,
+              contrast: 0,
+              saturation: 0,
+              temperature: 0,
+              tint: 0,
+              highlights: 0,
+              shadows: 0,
+            } as Partial<ImageNode>)
+          }
           onImageChange={(dataUrl) => onUpdate({ src: dataUrl })}
           onClose={handleClose}
         />
       )}
     </div>
-  )
+  );
 }

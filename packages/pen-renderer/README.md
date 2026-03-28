@@ -13,19 +13,19 @@ npm install @zseven-w/pen-renderer canvaskit-wasm
 ## Usage
 
 ```ts
-import { loadCanvasKit, PenRenderer } from '@zseven-w/pen-renderer'
+import { loadCanvasKit, PenRenderer } from '@zseven-w/pen-renderer';
 
 // Initialize CanvasKit
-await loadCanvasKit()
+await loadCanvasKit();
 
 // Create renderer on a canvas element
 const renderer = new PenRenderer(canvas, document, {
   width: 1920,
   height: 1080,
-})
+});
 
 // Render
-renderer.render()
+renderer.render();
 ```
 
 ## API
@@ -40,13 +40,13 @@ renderer.render()
 Pre-process documents for rendering:
 
 ```ts
-import { flattenToRenderNodes, resolveRefs, premeasureTextHeights } from '@zseven-w/pen-renderer'
+import { flattenToRenderNodes, resolveRefs, premeasureTextHeights } from '@zseven-w/pen-renderer';
 ```
 
 ### Viewport Utilities
 
 ```ts
-import { viewportMatrix, screenToScene, sceneToScreen, zoomToPoint } from '@zseven-w/pen-renderer'
+import { viewportMatrix, screenToScene, sceneToScreen, zoomToPoint } from '@zseven-w/pen-renderer';
 ```
 
 ### Low-level Renderers

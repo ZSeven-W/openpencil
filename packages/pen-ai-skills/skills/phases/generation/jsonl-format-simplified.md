@@ -16,6 +16,7 @@ frame (width,height,layout,gap,padding,justifyContent,alignItems,cornerRadius,fi
 SHARED: id, type, name
 
 RULES:
+
 - Root: type="frame", width="fill_container", height="fit_content", layout="vertical".
 - Children go in "children" arrays. No x/y on layout children.
 - width/height: number | "fill_container" | "fit_content".
@@ -26,6 +27,7 @@ RULES:
 - No emoji characters. No markdown. No explanation. No tool calls.
 
 EXAMPLE:
+
 ```json
 {
   "id": "root",
@@ -36,15 +38,48 @@ EXAMPLE:
   "layout": "vertical",
   "gap": 24,
   "padding": [48, 24],
-  "fill": [{"type": "solid", "color": "#F8FAFC"}],
+  "fill": [{ "type": "solid", "color": "#F8FAFC" }],
   "children": [
-    {"id": "title", "type": "text", "name": "Headline", "content": "Learn Smarter", "fontSize": 48, "fontWeight": 700, "fontFamily": "Space Grotesk", "fill": [{"type": "solid", "color": "#0F172A"}]},
-    {"id": "desc", "type": "text", "name": "Description", "content": "AI-powered learning", "fontSize": 16, "width": "fill_container", "fill": [{"type": "solid", "color": "#64748B"}]},
-    {"id": "cta", "type": "frame", "name": "CTA", "padding": [14, 28], "cornerRadius": 10, "justifyContent": "center", "fill": [{"type": "solid", "color": "#2563EB"}], "children": [
-      {"id": "cta-text", "type": "text", "content": "Get Started", "fontSize": 16, "fontWeight": 600, "fill": [{"type": "solid", "color": "#FFFFFF"}]}
-    ]}
+    {
+      "id": "title",
+      "type": "text",
+      "name": "Headline",
+      "content": "Learn Smarter",
+      "fontSize": 48,
+      "fontWeight": 700,
+      "fontFamily": "Space Grotesk",
+      "fill": [{ "type": "solid", "color": "#0F172A" }]
+    },
+    {
+      "id": "desc",
+      "type": "text",
+      "name": "Description",
+      "content": "AI-powered learning",
+      "fontSize": 16,
+      "width": "fill_container",
+      "fill": [{ "type": "solid", "color": "#64748B" }]
+    },
+    {
+      "id": "cta",
+      "type": "frame",
+      "name": "CTA",
+      "padding": [14, 28],
+      "cornerRadius": 10,
+      "justifyContent": "center",
+      "fill": [{ "type": "solid", "color": "#2563EB" }],
+      "children": [
+        {
+          "id": "cta-text",
+          "type": "text",
+          "content": "Get Started",
+          "fontSize": 16,
+          "fontWeight": 600,
+          "fill": [{ "type": "solid", "color": "#FFFFFF" }]
+        }
+      ]
+    }
   ]
 }
 ```
 
-CRITICAL: You are a JSON generator, NOT a code assistant. Output ONLY the ```json block. Do NOT write any text, explanation, plan, tool calls, or function calls before or after the JSON. Do NOT use [TOOL_CALL], {tool => ...}, or any tool/function invocation syntax. Start your response with ```json immediately.
+CRITICAL: You are a JSON generator, NOT a code assistant. Output ONLY the `json block. Do NOT write any text, explanation, plan, tool calls, or function calls before or after the JSON. Do NOT use [TOOL_CALL], {tool => ...}, or any tool/function invocation syntax. Start your response with `json immediately.

@@ -1,15 +1,15 @@
-import RBush from 'rbush'
-import type { RenderNode } from './types.js'
+import RBush from 'rbush';
+import type { RenderNode } from './types.js';
 
 interface RTreeItem {
-  minX: number
-  minY: number
-  maxX: number
-  maxY: number
-  nodeId: string
-  renderNode: RenderNode
+  minX: number;
+  minY: number;
+  maxX: number;
+  maxY: number;
+  nodeId: string;
+  renderNode: RenderNode;
   /** Position in the render array — higher = rendered later = visually on top */
-  zIndex: number
+  zIndex: number;
 }
 
 /**
@@ -18,21 +18,21 @@ interface RTreeItem {
  * are sorted topmost-first (children before parents).
  */
 export class SpatialIndex {
-  private tree = new RBush<RTreeItem>()
-  private items = new Map<string, RTreeItem>()
+  private tree = new RBush<RTreeItem>();
+  private items = new Map<string, RTreeItem>();
 
   /**
    * Rebuild the entire index from a list of render nodes.
    */
   rebuild(nodes: RenderNode[]) {
-    this.tree.clear()
-    this.items.clear()
+    this.tree.clear();
+    this.items.clear();
 
-    const items: RTreeItem[] = []
+    const items: RTreeItem[] = [];
     for (let i = 0; i < nodes.length; i++) {
-      const rn = nodes[i]
-      if (('visible' in rn.node ? rn.node.visible : undefined) === false) continue
-      if (('locked' in rn.node ? rn.node.locked : undefined) === true) continue
+      const rn = nodes[i];
+      if (('visible' in rn.node ? rn.node.visible : undefined) === false) continue;
+      if (('locked' in rn.node ? rn.node.locked : undefined) === true) continue;
 
       const item: RTreeItem = {
         minX: rn.absX,
@@ -42,12 +42,12 @@ export class SpatialIndex {
         nodeId: rn.node.id,
         renderNode: rn,
         zIndex: i,
-      }
-      items.push(item)
-      this.items.set(rn.node.id, item)
+      };
+      items.push(item);
+      this.items.set(rn.node.id, item);
     }
 
-    this.tree.load(items)
+    this.tree.load(items);
   }
 
   /**
@@ -60,11 +60,11 @@ export class SpatialIndex {
       minY: sceneY,
       maxX: sceneX,
       maxY: sceneY,
-    })
+    });
 
     // Sort by zIndex descending — children (rendered later) come first
-    candidates.sort((a, b) => b.zIndex - a.zIndex)
-    return candidates.map((c) => c.renderNode)
+    candidates.sort((a, b) => b.zIndex - a.zIndex);
+    return candidates.map((c) => c.renderNode);
   }
 
   /**
@@ -76,14 +76,14 @@ export class SpatialIndex {
       minY: Math.min(top, bottom),
       maxX: Math.max(left, right),
       maxY: Math.max(top, bottom),
-    })
-    return candidates.map((c) => c.renderNode)
+    });
+    return candidates.map((c) => c.renderNode);
   }
 
   /**
    * Get the render node for a specific node ID.
    */
   get(nodeId: string): RenderNode | undefined {
-    return this.items.get(nodeId)?.renderNode
+    return this.items.get(nodeId)?.renderNode;
   }
 }

@@ -9,6 +9,7 @@ category: base
 ---
 
 TEXT RULES:
+
 - Body/description in vertical layout: width="fill_container" + textGrowth="fixed-width" (wraps text, auto-sizes height).
 - Short labels in horizontal rows: width="fit_content" + textGrowth="auto". Prevents squeezing siblings.
 - NEVER fixed pixel width on text inside layout frames — causes overflow.

@@ -23,4 +23,4 @@ export {
   deepCloneNode,
   cloneNodeWithNewIds,
   cloneNodesWithNewIds,
-} from '@zseven-w/pen-core'
+} from '@zseven-w/pen-core';

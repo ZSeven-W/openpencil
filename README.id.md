@@ -124,15 +124,15 @@ bun run electron:dev
 
 Tersedia beberapa varian image — pilih yang sesuai kebutuhan Anda:
 
-| Image | Ukuran | Termasuk |
-| --- | --- | --- |
-| `openpencil:latest` | ~226 MB | Hanya aplikasi web |
-| `openpencil-claude:latest` | — | + Claude Code CLI |
-| `openpencil-codex:latest` | — | + Codex CLI |
-| `openpencil-opencode:latest` | — | + OpenCode CLI |
-| `openpencil-copilot:latest` | — | + GitHub Copilot CLI |
-| `openpencil-gemini:latest` | — | + Gemini CLI |
-| `openpencil-full:latest` | ~1 GB | Semua alat CLI |
+| Image                        | Ukuran  | Termasuk             |
+| ---------------------------- | ------- | -------------------- |
+| `openpencil:latest`          | ~226 MB | Hanya aplikasi web   |
+| `openpencil-claude:latest`   | —       | + Claude Code CLI    |
+| `openpencil-codex:latest`    | —       | + Codex CLI          |
+| `openpencil-opencode:latest` | —       | + OpenCode CLI       |
+| `openpencil-copilot:latest`  | —       | + GitHub Copilot CLI |
+| `openpencil-gemini:latest`   | —       | + Gemini CLI         |
+| `openpencil-full:latest`     | ~1 GB   | Semua alat CLI       |
 
 **Jalankan (hanya web):**
 
@@ -173,6 +173,7 @@ docker build --target full -t openpencil-full .
 ## Desain Berbasis AI
 
 **Dari Prompt ke UI**
+
 - **Teks ke desain** — deskripsikan halaman, dan hasilkan di kanvas secara real-time dengan animasi streaming
 - **Orkestrator** — menguraikan halaman kompleks menjadi sub-tugas spasial untuk pembuatan secara paralel
 - **Modifikasi desain** — pilih elemen, lalu deskripsikan perubahan dalam bahasa alami
@@ -180,20 +181,21 @@ docker build --target full -t openpencil-full .
 
 **Dukungan Multi-Agen**
 
-| Agen | Pengaturan |
-| --- | --- |
+| Agen                     | Pengaturan                                                                                          |
+| ------------------------ | --------------------------------------------------------------------------------------------------- |
 | **Bawaan (9+ penyedia)** | Pilih dari preset penyedia dengan pemilih wilayah — Anthropic, OpenAI, Google, DeepSeek dan lainnya |
-| **Claude Code** | Tanpa konfigurasi — menggunakan Claude Agent SDK dengan OAuth lokal |
-| **Codex CLI** | Hubungkan di Pengaturan Agen (`Cmd+,`) |
-| **OpenCode** | Hubungkan di Pengaturan Agen (`Cmd+,`) |
-| **GitHub Copilot** | `copilot login` lalu hubungkan di Pengaturan Agen (`Cmd+,`) |
-| **Gemini CLI** | Hubungkan di Pengaturan Agen (`Cmd+,`) |
+| **Claude Code**          | Tanpa konfigurasi — menggunakan Claude Agent SDK dengan OAuth lokal                                 |
+| **Codex CLI**            | Hubungkan di Pengaturan Agen (`Cmd+,`)                                                              |
+| **OpenCode**             | Hubungkan di Pengaturan Agen (`Cmd+,`)                                                              |
+| **GitHub Copilot**       | `copilot login` lalu hubungkan di Pengaturan Agen (`Cmd+,`)                                         |
+| **Gemini CLI**           | Hubungkan di Pengaturan Agen (`Cmd+,`)                                                              |
 
 **Profil Kemampuan Model** — secara otomatis menyesuaikan prompt, mode thinking, dan timeout per tingkatan model. Model tingkat penuh (Claude) mendapat prompt lengkap; tingkat standar (GPT-4o, Gemini, DeepSeek) menonaktifkan thinking; tingkat dasar (MiniMax, Qwen, Llama, Mistral) mendapat prompt JSON bertingkat yang disederhanakan untuk keandalan maksimum.
 
 **i18n** — Lokalisasi antarmuka lengkap dalam 15 bahasa: English, 简体中文, 繁體中文, 日本語, 한국어, Français, Español, Deutsch, Português, Русский, हिन्दी, Türkçe, ไทย, Tiếng Việt, Bahasa Indonesia.
 
 **Server MCP**
+
 - Server MCP bawaan — instal satu klik ke Claude Code / Codex / Gemini / OpenCode / Kiro / Copilot CLI
 - Deteksi otomatis Node.js — jika tidak terinstal, otomatis beralih ke transport HTTP dan memulai server MCP HTTP
 - Otomasi desain dari terminal: baca, buat, dan modifikasi file `.op` melalui agen yang kompatibel dengan MCP
@@ -202,6 +204,7 @@ docker build --target full -t openpencil-full .
 - Dukungan multi-halaman — buat, ganti nama, urutkan ulang, dan duplikasi halaman melalui alat MCP
 
 **Pembuatan Kode**
+
 - React + Tailwind CSS, HTML + CSS, CSS Variables
 - Vue, Svelte, Flutter, SwiftUI, Jetpack Compose, React Native
 
@@ -229,6 +232,7 @@ Mendukung tiga metode input: string inline, `@filepath` (baca dari file), atau `
 ## Fitur
 
 **Kanvas & Menggambar**
+
 - Kanvas tak terbatas dengan pan, zoom, panduan perataan cerdas, dan snapping
 - Persegi panjang, Elips, Garis, Poligon, Pen (Bezier), Frame, Teks
 - Operasi Boolean — gabungan, kurangi, irisan dengan toolbar kontekstual
@@ -237,15 +241,18 @@ Mendukung tiga metode input: string inline, `@filepath` (baca dari file), atau `
 - Dokumen multi-halaman dengan navigasi tab
 
 **Sistem Desain**
+
 - Variabel desain — token warna, angka, string dengan referensi `$variable`
 - Dukungan multi-tema — beberapa sumbu, masing-masing dengan varian (Terang/Gelap, Ringkas/Nyaman)
 - Sistem komponen — komponen yang dapat digunakan ulang dengan instans dan penggantian
 - Sinkronisasi CSS — properti kustom yang dibuat otomatis, `var(--name)` dalam keluaran kode
 
 **Impor Figma**
+
 - Impor file `.fig` dengan tata letak, fill, stroke, efek, teks, gambar, dan vektor tetap terjaga
 
 **Aplikasi Desktop**
+
 - macOS, Windows, dan Linux native melalui Electron
 - Asosiasi file `.op` — klik dua kali untuk membuka, kunci instans tunggal
 - Pembaruan otomatis dari GitHub Releases
@@ -253,17 +260,17 @@ Mendukung tiga metode input: string inline, `@filepath` (baca dari file), atau `
 
 ## Tumpukan Teknologi
 
-| | |
-| --- | --- |
-| **Frontend** | React 19 · TanStack Start · Tailwind CSS v4 · shadcn/ui · i18next |
-| **Kanvas** | CanvasKit/Skia (WASM, akselerasi GPU) |
-| **State** | Zustand v5 |
-| **Server** | Nitro |
-| **Desktop** | Electron 35 |
-| **CLI** | `op` — kontrol terminal, batch design DSL, ekspor kode |
-| **AI** | Vercel AI SDK v6 · Anthropic SDK · Claude Agent SDK · OpenCode SDK · Copilot SDK |
-| **Runtime** | Bun · Vite 7 |
-| **Format file** | `.op` — berbasis JSON, mudah dibaca manusia, ramah Git |
+|                 |                                                                                  |
+| --------------- | -------------------------------------------------------------------------------- |
+| **Frontend**    | React 19 · TanStack Start · Tailwind CSS v4 · shadcn/ui · i18next                |
+| **Kanvas**      | CanvasKit/Skia (WASM, akselerasi GPU)                                            |
+| **State**       | Zustand v5                                                                       |
+| **Server**      | Nitro                                                                            |
+| **Desktop**     | Electron 35                                                                      |
+| **CLI**         | `op` — kontrol terminal, batch design DSL, ekspor kode                           |
+| **AI**          | Vercel AI SDK v6 · Anthropic SDK · Claude Agent SDK · OpenCode SDK · Copilot SDK |
+| **Runtime**     | Bun · Vite 7                                                                     |
+| **Format file** | `.op` — berbasis JSON, mudah dibaca manusia, ramah Git                           |
 
 ## Struktur Proyek
 
@@ -304,21 +311,21 @@ openpencil/
 
 ## Pintasan Keyboard
 
-| Tombol | Aksi | | Tombol | Aksi |
-| --- | --- | --- | --- | --- |
-| `V` | Pilih | | `Cmd+S` | Simpan |
-| `R` | Persegi panjang | | `Cmd+Z` | Batalkan |
-| `O` | Elips | | `Cmd+Shift+Z` | Ulangi |
-| `L` | Garis | | `Cmd+C/X/V/D` | Salin/Potong/Tempel/Duplikat |
-| `T` | Teks | | `Cmd+G` | Grup |
-| `F` | Frame | | `Cmd+Shift+G` | Pisahkan grup |
-| `P` | Alat pen | | `Cmd+Shift+E` | Ekspor |
-| `H` | Hand (pan) | | `Cmd+Shift+C` | Panel kode |
-| `Del` | Hapus | | `Cmd+Shift+V` | Panel variabel |
-| `[ / ]` | Ubah urutan | | `Cmd+J` | Chat AI |
-| Panah | Geser 1px | | `Cmd+,` | Pengaturan agen |
-| `Cmd+Alt+U` | Union Boolean | | `Cmd+Alt+S` | Subtract Boolean |
-| `Cmd+Alt+I` | Intersect Boolean | | | |
+| Tombol      | Aksi              |     | Tombol        | Aksi                         |
+| ----------- | ----------------- | --- | ------------- | ---------------------------- |
+| `V`         | Pilih             |     | `Cmd+S`       | Simpan                       |
+| `R`         | Persegi panjang   |     | `Cmd+Z`       | Batalkan                     |
+| `O`         | Elips             |     | `Cmd+Shift+Z` | Ulangi                       |
+| `L`         | Garis             |     | `Cmd+C/X/V/D` | Salin/Potong/Tempel/Duplikat |
+| `T`         | Teks              |     | `Cmd+G`       | Grup                         |
+| `F`         | Frame             |     | `Cmd+Shift+G` | Pisahkan grup                |
+| `P`         | Alat pen          |     | `Cmd+Shift+E` | Ekspor                       |
+| `H`         | Hand (pan)        |     | `Cmd+Shift+C` | Panel kode                   |
+| `Del`       | Hapus             |     | `Cmd+Shift+V` | Panel variabel               |
+| `[ / ]`     | Ubah urutan       |     | `Cmd+J`       | Chat AI                      |
+| Panah       | Geser 1px         |     | `Cmd+,`       | Pengaturan agen              |
+| `Cmd+Alt+U` | Union Boolean     |     | `Cmd+Alt+S`   | Subtract Boolean             |
+| `Cmd+Alt+I` | Intersect Boolean |     |               |                              |
 
 ## Skrip
 

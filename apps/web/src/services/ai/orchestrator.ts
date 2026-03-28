@@ -11,20 +11,20 @@
  * Falls back to single-call generation on any orchestrator failure.
  */
 
-import type { PenNode, FrameNode } from '@/types/pen'
+import type { PenNode, FrameNode } from '@/types/pen';
 import type {
   AIDesignRequest,
   OrchestratorPlan,
   OrchestrationProgress,
   SubAgentResult,
-} from './ai-types'
-import { streamChat } from './ai-service'
-import { resolveSkills } from '@zseven-w/pen-ai-skills'
+} from './ai-types';
+import { streamChat } from './ai-service';
+import { resolveSkills } from '@zseven-w/pen-ai-skills';
 import {
   getOrchestratorTimeouts,
   prepareDesignPrompt,
   buildFallbackPlanFromPrompt,
-} from './orchestrator-prompt-optimizer'
+} from './orchestrator-prompt-optimizer';
 import {
   adjustRootFrameHeightToContent,
   insertStreamingNode,
@@ -33,18 +33,18 @@ import {
   setGenerationCanvasWidth,
   getGenerationRemappedIds,
   getGenerationRootFrameId,
-} from './design-generator'
-import { useDocumentStore } from '@/stores/document-store'
-import { useHistoryStore } from '@/stores/history-store'
-import { zoomToFitContent } from '@/canvas/skia-engine-ref'
-import { resetAnimationState } from './design-animation'
-import { VALIDATION_ENABLED } from './ai-runtime-config'
-import { runPostGenerationValidation } from './design-validation'
-import { scanAndFillImages } from './image-search-pipeline'
-import { executeSubAgents } from './orchestrator-sub-agent'
-import { emitProgress, buildFinalStepTags } from './orchestrator-progress'
-import { assignAgentIdentities } from './agent-identity'
-import { addAgentFrame, clearAgentIndicators } from '@/canvas/agent-indicator'
+} from './design-generator';
+import { useDocumentStore } from '@/stores/document-store';
+import { useHistoryStore } from '@/stores/history-store';
+import { zoomToFitContent } from '@/canvas/skia-engine-ref';
+import { resetAnimationState } from './design-animation';
+import { VALIDATION_ENABLED } from './ai-runtime-config';
+import { runPostGenerationValidation } from './design-validation';
+import { scanAndFillImages } from './image-search-pipeline';
+import { executeSubAgents } from './orchestrator-sub-agent';
+import { emitProgress, buildFinalStepTags } from './orchestrator-progress';
+import { assignAgentIdentities } from './agent-identity';
+import { addAgentFrame, clearAgentIndicators } from '@/canvas/agent-indicator';
 
 // ---------------------------------------------------------------------------
 // Public API
@@ -53,25 +53,23 @@ import { addAgentFrame, clearAgentIndicators } from '@/canvas/agent-indicator'
 export async function executeOrchestration(
   request: AIDesignRequest,
   callbacks?: {
-    onApplyPartial?: (count: number) => void
-    onTextUpdate?: (text: string) => void
-    animated?: boolean
+    onApplyPartial?: (count: number) => void;
+    onTextUpdate?: (text: string) => void;
+    animated?: boolean;
   },
   abortSignal?: AbortSignal,
 ): Promise<{ nodes: PenNode[]; rawResponse: string }> {
-  setGenerationContextHint(request.prompt)
-  const animated = callbacks?.animated ?? false
-  const preparedPrompt = prepareDesignPrompt(request.prompt)
+  setGenerationContextHint(request.prompt);
+  const animated = callbacks?.animated ?? false;
+  const preparedPrompt = prepareDesignPrompt(request.prompt);
 
   const renderPlanningStatus = (message: string) => {
-    callbacks?.onTextUpdate?.(
-      `<step title="Planning layout" status="streaming">${message}</step>`,
-    )
-  }
+    callbacks?.onTextUpdate?.(`<step title="Planning layout" status="streaming">${message}</step>`);
+  };
 
   try {
     // -- Phase 1: Planning (streaming) --
-    renderPlanningStatus('Analyzing design structure...')
+    renderPlanningStatus('Analyzing design structure...');
 
     const plan = await callOrchestrator(
       preparedPrompt.orchestratorPrompt,
@@ -79,96 +77,101 @@ export async function executeOrchestration(
       request.model,
       request.provider,
       (thinking) => {
-        renderPlanningStatus(thinking)
+        renderPlanningStatus(thinking);
       },
       abortSignal,
-    )
+    );
 
     // Assign ID prefixes
     for (const st of plan.subtasks) {
-      st.idPrefix = st.id
-      st.parentFrameId = plan.rootFrame.id
+      st.idPrefix = st.id;
+      st.parentFrameId = plan.rootFrame.id;
     }
 
     // Set canvas width hint for accurate text height estimation
-    setGenerationCanvasWidth(plan.rootFrame.width)
+    setGenerationCanvasWidth(plan.rootFrame.width);
 
     // Set context hint once with all subtask labels to avoid race conditions
     // during concurrent sub-agent execution
-    setGenerationContextHint(
-      request.prompt + ' ' + plan.subtasks.map((st) => st.label).join(' '),
-    )
+    setGenerationContextHint(request.prompt + ' ' + plan.subtasks.map((st) => st.label).join(' '));
 
     // Show planning done + all subtask steps as pending
-    emitProgress(plan, {
-      phase: 'generating',
-      subtasks: plan.subtasks.map((st) => ({
-        id: st.id, label: st.label, status: 'pending' as const, nodeCount: 0,
-      })),
-      totalNodes: 0,
-    }, callbacks)
+    emitProgress(
+      plan,
+      {
+        phase: 'generating',
+        subtasks: plan.subtasks.map((st) => ({
+          id: st.id,
+          label: st.label,
+          status: 'pending' as const,
+          nodeCount: 0,
+        })),
+        totalNodes: 0,
+      },
+      callbacks,
+    );
 
     // -- Phase 2: Setup canvas --
-    resetGenerationRemapping()
-    const concurrency = request.concurrency ?? 1
+    resetGenerationRemapping();
+    const concurrency = request.concurrency ?? 1;
 
     // Group subtasks by screen for concurrent mode.
     // Only use concurrent path when there are MULTIPLE distinct screens.
     // Single-page designs always use the sequential path (proven, simpler).
-    const screenGroups: { screen: string; indices: number[] }[] = []
+    const screenGroups: { screen: string; indices: number[] }[] = [];
     if (concurrency > 1) {
-      const hasAnyScreen = plan.subtasks.some((st) => st.screen)
+      const hasAnyScreen = plan.subtasks.some((st) => st.screen);
       if (hasAnyScreen) {
-        const screenMap = new Map<string, number>()
-        const firstScreen = plan.subtasks.find((st) => st.screen)?.screen ?? 'page'
+        const screenMap = new Map<string, number>();
+        const firstScreen = plan.subtasks.find((st) => st.screen)?.screen ?? 'page';
         for (let i = 0; i < plan.subtasks.length; i++) {
-          const screen = plan.subtasks[i].screen ?? firstScreen
+          const screen = plan.subtasks[i].screen ?? firstScreen;
           if (screenMap.has(screen)) {
-            screenGroups[screenMap.get(screen)!].indices.push(i)
+            screenGroups[screenMap.get(screen)!].indices.push(i);
           } else {
-            screenMap.set(screen, screenGroups.length)
-            screenGroups.push({ screen, indices: [i] })
+            screenMap.set(screen, screenGroups.length);
+            screenGroups.push({ screen, indices: [i] });
           }
         }
       }
     }
 
     // Effective concurrency: only parallel when there are multiple screen groups
-    const effectiveConcurrency = screenGroups.length > 1 ? concurrency : 1
+    const effectiveConcurrency = screenGroups.length > 1 ? concurrency : 1;
 
     // Assign agent identities — one per screen group (concurrent) or per subtask (sequential)
-    const subtaskIdentity = new Map<number, { color: string; name: string }>()
+    const subtaskIdentity = new Map<number, { color: string; name: string }>();
     if (effectiveConcurrency > 1) {
-      const agentIdentities = assignAgentIdentities(screenGroups.length)
+      const agentIdentities = assignAgentIdentities(screenGroups.length);
       for (let g = 0; g < screenGroups.length; g++) {
         if (agentIdentities[g]) {
           for (const idx of screenGroups[g].indices) {
-            subtaskIdentity.set(idx, agentIdentities[g])
+            subtaskIdentity.set(idx, agentIdentities[g]);
           }
         }
       }
     } else {
       // Sequential mode: single agent handles all subtasks
-      const [identity] = assignAgentIdentities(1)
+      const [identity] = assignAgentIdentities(1);
       if (identity) {
         for (let i = 0; i < plan.subtasks.length; i++) {
-          subtaskIdentity.set(i, identity)
+          subtaskIdentity.set(i, identity);
         }
       }
     }
 
     if (animated) {
-      resetAnimationState()
-      useHistoryStore.getState().startBatch(useDocumentStore.getState().document)
+      resetAnimationState();
+      useHistoryStore.getState().startBatch(useDocumentStore.getState().document);
     }
 
-    const isMobile = plan.rootFrame.width <= 480
+    const isMobile = plan.rootFrame.width <= 480;
     const defaultFill: FrameNode['fill'] = (plan.rootFrame.fill as FrameNode['fill']) ?? [
       { type: 'solid', color: plan.styleGuide?.palette?.background ?? '#FFFFFF' },
-    ]
+    ];
 
     // Track all root frame nodes for result collection
-    const rootNodes: FrameNode[] = []
+    const rootNodes: FrameNode[] = [];
 
     if (effectiveConcurrency > 1) {
       // Concurrent mode: create one root frame per screen group.
@@ -180,28 +183,29 @@ export async function executeOrchestration(
       // for the first frame to handle the empty-canvas case. Subsequent frames
       // are inserted with addNode directly to avoid ID remapping and state
       // corruption.
-      const { addNode } = useDocumentStore.getState()
-      const remappedIds = getGenerationRemappedIds()
-      const gap = 100
-      let nextX = 0
+      const { addNode } = useDocumentStore.getState();
+      const remappedIds = getGenerationRemappedIds();
+      const gap = 100;
+      let nextX = 0;
 
       for (let g = 0; g < screenGroups.length; g++) {
-        const group = screenGroups[g]
-        const firstSt = plan.subtasks[group.indices[0]]
-        const originalId = `${plan.rootFrame.id}-${group.screen}`
+        const group = screenGroups[g];
+        const firstSt = plan.subtasks[group.indices[0]];
+        const originalId = `${plan.rootFrame.id}-${group.screen}`;
 
         // Height: sum of all subtask regions in this group (mobile uses fixed viewport)
         const totalRegionHeight = group.indices.reduce(
-          (sum, i) => sum + plan.subtasks[i].region.height, 0,
-        )
+          (sum, i) => sum + plan.subtasks[i].region.height,
+          0,
+        );
         const frameHeight = isMobile
-          ? (plan.rootFrame.height || 812)
-          : Math.max(320, totalRegionHeight)
+          ? plan.rootFrame.height || 812
+          : Math.max(320, totalRegionHeight);
 
         // Frame name: use screen name if available, else first subtask's short name
         const frameName = firstSt.screen
           ? firstSt.screen
-          : (firstSt.label.replace(/\s*[（(].+$/, '').trim() || firstSt.label)
+          : firstSt.label.replace(/\s*[（(].+$/, '').trim() || firstSt.label;
 
         const rootNode: FrameNode = {
           id: originalId,
@@ -212,43 +216,43 @@ export async function executeOrchestration(
           width: plan.rootFrame.width,
           height: frameHeight,
           layout: plan.rootFrame.layout ?? 'vertical',
-          gap: isMobile ? (plan.rootFrame.gap || 16) : (plan.rootFrame.gap ?? 16),
+          gap: isMobile ? plan.rootFrame.gap || 16 : (plan.rootFrame.gap ?? 16),
           ...(plan.rootFrame.padding != null ? { padding: plan.rootFrame.padding } : {}),
           fill: defaultFill,
           children: [],
-        }
+        };
 
         if (g === 0) {
           // First frame: use insertStreamingNode to handle empty canvas replacement
-          insertStreamingNode(rootNode, null)
-          const actualId = remappedIds.get(originalId) ?? originalId
+          insertStreamingNode(rootNode, null);
+          const actualId = remappedIds.get(originalId) ?? originalId;
           for (const idx of group.indices) {
-            plan.subtasks[idx].parentFrameId = actualId
+            plan.subtasks[idx].parentFrameId = actualId;
           }
-          rootNode.id = actualId
+          rootNode.id = actualId;
         } else {
-          addNode(null, rootNode)
+          addNode(null, rootNode);
           for (const idx of group.indices) {
-            plan.subtasks[idx].parentFrameId = originalId
+            plan.subtasks[idx].parentFrameId = originalId;
           }
         }
 
-        rootNodes.push(rootNode)
+        rootNodes.push(rootNode);
 
         // Register agent badge on the root frame immediately
-        const identity = subtaskIdentity.get(group.indices[0])
+        const identity = subtaskIdentity.get(group.indices[0]);
         if (identity) {
-          addAgentFrame(rootNode.id, identity.color, identity.name)
+          addAgentFrame(rootNode.id, identity.color, identity.name);
         }
 
-        nextX += plan.rootFrame.width + gap
+        nextX += plan.rootFrame.width + gap;
       }
     } else {
       // Sequential mode: single root frame containing all sections
-      const totalPlannedHeight = plan.subtasks.reduce((sum, st) => sum + st.region.height, 0)
+      const totalPlannedHeight = plan.subtasks.reduce((sum, st) => sum + st.region.height, 0);
       const initialHeight = isMobile
-        ? (plan.rootFrame.height || 812)
-        : Math.max(320, totalPlannedHeight)
+        ? plan.rootFrame.height || 812
+        : Math.max(320, totalPlannedHeight);
       const rootNode: FrameNode = {
         id: plan.rootFrame.id,
         type: 'frame',
@@ -258,47 +262,47 @@ export async function executeOrchestration(
         width: plan.rootFrame.width,
         height: initialHeight,
         layout: plan.rootFrame.layout ?? 'vertical',
-        gap: isMobile ? (plan.rootFrame.gap || 16) : (plan.rootFrame.gap ?? 16),
+        gap: isMobile ? plan.rootFrame.gap || 16 : (plan.rootFrame.gap ?? 16),
         ...(plan.rootFrame.padding != null ? { padding: plan.rootFrame.padding } : {}),
         fill: defaultFill,
         children: [],
-      }
-      insertStreamingNode(rootNode, null)
+      };
+      insertStreamingNode(rootNode, null);
       // insertStreamingNode may remap ID (e.g. replacing empty frame)
-      const actualRootId = getGenerationRootFrameId()
-      rootNode.id = actualRootId
-      rootNodes.push(rootNode)
+      const actualRootId = getGenerationRootFrameId();
+      rootNode.id = actualRootId;
+      rootNodes.push(rootNode);
 
       // Register agent badge on the actual root frame
-      const firstIdentity = subtaskIdentity.get(0)
+      const firstIdentity = subtaskIdentity.get(0);
       if (firstIdentity) {
-        addAgentFrame(actualRootId, firstIdentity.color, firstIdentity.name)
+        addAgentFrame(actualRootId, firstIdentity.color, firstIdentity.name);
       }
     }
 
     if (typeof window !== 'undefined') {
       requestAnimationFrame(() => {
-        requestAnimationFrame(() => zoomToFitContent())
-      })
+        requestAnimationFrame(() => zoomToFitContent());
+      });
     }
 
     // -- Phase 3: Parallel sub-agent execution --
     const progress: OrchestrationProgress = {
       phase: 'generating',
       subtasks: plan.subtasks.map((st, i) => {
-        const identity = subtaskIdentity.get(i)
+        const identity = subtaskIdentity.get(i);
         return {
           id: st.id,
           label: st.label,
           status: 'pending' as const,
           nodeCount: 0,
           ...(identity ? { agentColor: identity.color, agentName: identity.name } : {}),
-        }
+        };
       }),
       totalNodes: 0,
-    }
+    };
 
-    let results: SubAgentResult[]
+    let results: SubAgentResult[];
     try {
       results = await executeSubAgents(
         plan,
@@ -308,66 +312,66 @@ export async function executeOrchestration(
         effectiveConcurrency,
         callbacks,
         abortSignal,
-      )
+      );
       if (animated) {
         if (effectiveConcurrency > 1) {
           for (const rn of rootNodes) {
-            adjustRootFrameHeightToContent(rn.id)
+            adjustRootFrameHeightToContent(rn.id);
           }
         } else {
-          adjustRootFrameHeightToContent()
+          adjustRootFrameHeightToContent();
         }
       }
     } finally {
       if (animated) {
-        useHistoryStore.getState().endBatch(useDocumentStore.getState().document)
+        useHistoryStore.getState().endBatch(useDocumentStore.getState().document);
       }
     }
 
     // -- Phase 4: Collect results --
-    const aborted = abortSignal?.aborted ?? false
+    const aborted = abortSignal?.aborted ?? false;
 
     if (!aborted) {
       for (const entry of progress.subtasks) {
         if (entry.status !== 'error') {
-          entry.status = 'done'
+          entry.status = 'done';
         }
       }
-      progress.phase = 'done'
+      progress.phase = 'done';
     } else {
       for (const entry of progress.subtasks) {
         if (entry.status === 'streaming') {
-          entry.status = 'pending'
+          entry.status = 'pending';
         }
       }
-      progress.phase = 'done'
+      progress.phase = 'done';
     }
-    emitProgress(plan, progress, callbacks)
+    emitProgress(plan, progress, callbacks);
 
-    const allNodes: PenNode[] = [...rootNodes]
+    const allNodes: PenNode[] = [...rootNodes];
     for (const r of results) {
-      allNodes.push(...r.nodes)
+      allNodes.push(...r.nodes);
     }
 
-    const generatedNodeCount = allNodes.length - rootNodes.length
+    const generatedNodeCount = allNodes.length - rootNodes.length;
     if (generatedNodeCount === 0 && !aborted) {
-      throw new Error('Orchestration produced no nodes beyond root frame')
+      throw new Error('Orchestration produced no nodes beyond root frame');
     }
 
     if (!animated) {
       if (effectiveConcurrency > 1) {
         for (const rn of rootNodes) {
-          adjustRootFrameHeightToContent(rn.id)
+          adjustRootFrameHeightToContent(rn.id);
         }
       } else {
-        adjustRootFrameHeightToContent()
+        adjustRootFrameHeightToContent();
       }
     }
     // Sync heights back to rootNode objects for result
     for (const rn of rootNodes) {
-      const adjusted = useDocumentStore.getState().getNodeById(rn.id)
+      const adjusted = useDocumentStore.getState().getNodeById(rn.id);
       if (adjusted && adjusted.type === 'frame') {
-        rn.height = adjusted.height
+        rn.height = adjusted.height;
       }
     }
 
@@ -378,8 +382,8 @@ export async function executeOrchestration(
         label: 'Validating design',
         status: 'pending',
         nodeCount: 0,
-      }
-      progress.subtasks.push(validationEntry)
+      };
+      progress.subtasks.push(validationEntry);
       // Also add to plan.subtasks so buildFinalStepTags includes it
       plan.subtasks.push({
         id: '_validation',
@@ -387,43 +391,50 @@ export async function executeOrchestration(
         region: { width: 0, height: 0 },
         idPrefix: '_validation',
         parentFrameId: null,
-      })
-      emitProgress(plan, progress, callbacks)
+      });
+      emitProgress(plan, progress, callbacks);
 
       try {
         const validationResult = await runPostGenerationValidation({
           onStatusUpdate: (status, message) => {
-            validationEntry.status = status === 'streaming' ? 'streaming' : status === 'done' ? 'done' : status === 'error' ? 'error' : 'pending'
-            validationEntry.thinking = message
-            emitProgress(plan, progress, callbacks)
+            validationEntry.status =
+              status === 'streaming'
+                ? 'streaming'
+                : status === 'done'
+                  ? 'done'
+                  : status === 'error'
+                    ? 'error'
+                    : 'pending';
+            validationEntry.thinking = message;
+            emitProgress(plan, progress, callbacks);
           },
           model: request.model,
           provider: request.provider,
-        })
+        });
         if (validationResult.applied > 0) {
-          validationEntry.nodeCount = validationResult.applied
+          validationEntry.nodeCount = validationResult.applied;
         }
-        validationEntry.status = 'done'
+        validationEntry.status = 'done';
       } catch {
-        validationEntry.status = 'done'
-        validationEntry.thinking = 'Skipped'
+        validationEntry.status = 'done';
+        validationEntry.thinking = 'Skipped';
       }
-      emitProgress(plan, progress, callbacks)
+      emitProgress(plan, progress, callbacks);
     }
 
     // Auto-fill image nodes with search results (fire-and-forget)
-    const rootId = getGenerationRootFrameId()
-    if (rootId) scanAndFillImages(rootId).catch(() => {})
+    const rootId = getGenerationRootFrameId();
+    if (rootId) scanAndFillImages(rootId).catch(() => {});
 
     // Build final rawResponse that includes step tags so the chat message
     // shows the complete pipeline progress after streaming ends
-    const finalStepTags = buildFinalStepTags(plan, progress)
+    const finalStepTags = buildFinalStepTags(plan, progress);
 
-    return { nodes: allNodes, rawResponse: finalStepTags }
+    return { nodes: allNodes, rawResponse: finalStepTags };
   } finally {
-    clearAgentIndicators()
-    setGenerationContextHint('')
-    setGenerationCanvasWidth(1200) // Reset to default
+    clearAgentIndicators();
+    setGenerationContextHint('');
+    setGenerationCanvasWidth(1200); // Reset to default
   }
 }
 
@@ -439,11 +450,11 @@ async function callOrchestrator(
   onThinking?: (thinking: string) => void,
   abortSignal?: AbortSignal,
 ): Promise<OrchestratorPlan> {
-  let rawResponse = ''
-  let thinkingContent = ''
+  let rawResponse = '';
+  let thinkingContent = '';
 
-  const planningCtx = resolveSkills('planning', prompt)
-  const planningSystemPrompt = planningCtx.skills.map(s => s.content).join('\n\n')
+  const planningCtx = resolveSkills('planning', prompt);
+  const planningSystemPrompt = planningCtx.skills.map((s) => s.content).join('\n\n');
 
   for await (const chunk of streamChat(
     planningSystemPrompt,
@@ -454,78 +465,84 @@ async function callOrchestrator(
     abortSignal,
   )) {
     if (chunk.type === 'text') {
-      rawResponse += chunk.content
+      rawResponse += chunk.content;
     } else if (chunk.type === 'thinking') {
-      thinkingContent += chunk.content
-      onThinking?.(thinkingContent)
+      thinkingContent += chunk.content;
+      onThinking?.(thinkingContent);
     } else if (chunk.type === 'error') {
-      throw new Error(chunk.content)
+      throw new Error(chunk.content);
     }
   }
 
-  const plan = parseOrchestratorResponse(rawResponse)
-  if (plan) return plan
+  const plan = parseOrchestratorResponse(rawResponse);
+  if (plan) return plan;
 
   // Fallback: model returned non-JSON (e.g. markdown text). Use a heuristic
   // plan derived from the user's prompt so generation can still proceed.
   console.warn(
     '[Orchestrator] Could not parse model response, using fallback plan. Preview:',
     rawResponse.trim().slice(0, 150),
-  )
-  return buildFallbackPlanFromPrompt(prompt)
+  );
+  return buildFallbackPlanFromPrompt(prompt);
 }
 
 function parseOrchestratorResponse(raw: string): OrchestratorPlan | null {
-  const trimmed = raw.trim()
+  const trimmed = raw.trim();
 
   // Try direct parse
-  const plan = tryParsePlan(trimmed)
-  if (plan) return plan
+  const plan = tryParsePlan(trimmed);
+  if (plan) return plan;
 
   // Try extracting from code fences
-  const fenceMatch = trimmed.match(/```(?:json)?\s*\n?([\s\S]*?)\n?```/)
+  const fenceMatch = trimmed.match(/```(?:json)?\s*\n?([\s\S]*?)\n?```/);
   if (fenceMatch) {
-    const fenced = tryParsePlan(fenceMatch[1].trim())
-    if (fenced) return fenced
+    const fenced = tryParsePlan(fenceMatch[1].trim());
+    if (fenced) return fenced;
   }
 
   // Try extracting first { ... } block
-  const firstBrace = trimmed.indexOf('{')
-  const lastBrace = trimmed.lastIndexOf('}')
+  const firstBrace = trimmed.indexOf('{');
+  const lastBrace = trimmed.lastIndexOf('}');
   if (firstBrace >= 0 && lastBrace > firstBrace) {
-    const braced = tryParsePlan(trimmed.slice(firstBrace, lastBrace + 1))
-    if (braced) return braced
+    const braced = tryParsePlan(trimmed.slice(firstBrace, lastBrace + 1));
+    if (braced) return braced;
   }
 
-  return null
+  return null;
 }
 
 function tryParsePlan(text: string): OrchestratorPlan | null {
   try {
-    const obj = JSON.parse(text) as Record<string, unknown>
-    if (!obj.rootFrame || typeof obj.rootFrame !== 'object') return null
-    if (!Array.isArray(obj.subtasks) || obj.subtasks.length === 0) return null
+    const obj = JSON.parse(text) as Record<string, unknown>;
+    if (!obj.rootFrame || typeof obj.rootFrame !== 'object') return null;
+    if (!Array.isArray(obj.subtasks) || obj.subtasks.length === 0) return null;
 
-    const rf = obj.rootFrame as Record<string, unknown>
-    if (!rf.id || !rf.width || (rf.height == null)) return null
+    const rf = obj.rootFrame as Record<string, unknown>;
+    if (!rf.id || !rf.width || rf.height == null) return null;
 
     for (const st of obj.subtasks as Record<string, unknown>[]) {
-      if (!st.id || !st.region) return null
+      if (!st.id || !st.region) return null;
     }
 
-    const plan = obj as unknown as OrchestratorPlan
+    const plan = obj as unknown as OrchestratorPlan;
 
     // Extract styleGuide — required for consistent visual output
     if (obj.styleGuide && typeof obj.styleGuide === 'object') {
-      const sg = obj.styleGuide as Record<string, unknown>
-      if (sg.palette && typeof sg.palette === 'object' && sg.fonts && typeof sg.fonts === 'object') {
-        plan.styleGuide = sg as unknown as import('./ai-types').StyleGuide
+      const sg = obj.styleGuide as Record<string, unknown>;
+      if (
+        sg.palette &&
+        typeof sg.palette === 'object' &&
+        sg.fonts &&
+        typeof sg.fonts === 'object'
+      ) {
+        plan.styleGuide = sg as unknown as import('./ai-types').StyleGuide;
       }
     }
 
     // Fallback: always provide a style guide so sub-agents have consistent styling
     if (!plan.styleGuide) {
-      const bg = (plan.rootFrame.fill as Array<{ color?: string }> | undefined)?.[0]?.color ?? '#F8FAFC'
+      const bg =
+        (plan.rootFrame.fill as Array<{ color?: string }> | undefined)?.[0]?.color ?? '#F8FAFC';
       plan.styleGuide = {
         palette: {
           background: bg,
@@ -538,11 +555,11 @@ function tryParsePlan(text: string): OrchestratorPlan | null {
         },
         fonts: { heading: 'Space Grotesk', body: 'Inter' },
         aesthetic: 'clean modern',
-      }
+      };
     }
 
-    return plan
+    return plan;
   } catch {
-    return null
+    return null;
   }
 }

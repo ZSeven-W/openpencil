@@ -65,7 +65,7 @@ export type {
   // Theme presets
   ThemePreset,
   ThemePresetFile,
-} from '@zseven-w/pen-types'
+} from '@zseven-w/pen-types';
 
 // ── Core: Document operations ──────────────────────────────────────────
 export {
@@ -121,7 +121,7 @@ export {
   type BooleanOpType,
   canBooleanOp,
   executeBooleanOp,
-} from '@zseven-w/pen-core'
+} from '@zseven-w/pen-core';
 
 // ── Codegen: Multi-platform code generation ────────────────────────────
 export {
@@ -152,7 +152,7 @@ export {
   // React Native
   generateReactNativeCode,
   generateReactNativeFromDocument,
-} from '@zseven-w/pen-codegen'
+} from '@zseven-w/pen-codegen';
 
 // ── Figma: .fig file import ────────────────────────────────────────────
 export {
@@ -168,7 +168,7 @@ export {
   setIconLookup,
   type FigmaDecodedFile,
   type FigmaImportLayoutMode,
-} from '@zseven-w/pen-figma'
+} from '@zseven-w/pen-figma';
 
 // ── Renderer: CanvasKit/Skia rendering engine ────────────────────────
 export {
@@ -192,4 +192,4 @@ export {
   type RenderNode,
   type PenRendererOptions,
   type IconLookupFn,
-} from '@zseven-w/pen-renderer'
+} from '@zseven-w/pen-renderer';

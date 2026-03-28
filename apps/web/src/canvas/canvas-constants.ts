@@ -36,14 +36,14 @@ export {
   GUIDE_COLOR,
   GUIDE_LINE_WIDTH,
   GUIDE_DASH,
-} from '@zseven-w/pen-core'
+} from '@zseven-w/pen-core';
 
-import { CANVAS_BACKGROUND_LIGHT, CANVAS_BACKGROUND_DARK } from '@zseven-w/pen-core'
+import { CANVAS_BACKGROUND_LIGHT, CANVAS_BACKGROUND_DARK } from '@zseven-w/pen-core';
 
 // Browser-only function — not in pen-core
 export function getCanvasBackground(): string {
-  if (typeof document === 'undefined') return CANVAS_BACKGROUND_DARK
+  if (typeof document === 'undefined') return CANVAS_BACKGROUND_DARK;
   return document.documentElement.classList.contains('light')
     ? CANVAS_BACKGROUND_LIGHT
-    : CANVAS_BACKGROUND_DARK
+    : CANVAS_BACKGROUND_DARK;
 }

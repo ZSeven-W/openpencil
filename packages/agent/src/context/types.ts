@@ -1,5 +1,5 @@
-import type { ModelMessage } from 'ai'
+import type { ModelMessage } from 'ai';
 
 export interface ContextStrategy {
-  trim(messages: ModelMessage[], maxTokens: number): ModelMessage[]
+  trim(messages: ModelMessage[], maxTokens: number): ModelMessage[];
 }

@@ -124,15 +124,15 @@ bun run electron:dev
 
 Birden fazla görüntü varyantı mevcuttur — ihtiyaçlarınıza uygun olanı seçin:
 
-| Görüntü | Boyut | İçerik |
-| --- | --- | --- |
-| `openpencil:latest` | ~226 MB | Yalnızca web uygulaması |
-| `openpencil-claude:latest` | — | + Claude Code CLI |
-| `openpencil-codex:latest` | — | + Codex CLI |
-| `openpencil-opencode:latest` | — | + OpenCode CLI |
-| `openpencil-copilot:latest` | — | + GitHub Copilot CLI |
-| `openpencil-gemini:latest` | — | + Gemini CLI |
-| `openpencil-full:latest` | ~1 GB | Tüm CLI araçları |
+| Görüntü                      | Boyut   | İçerik                  |
+| ---------------------------- | ------- | ----------------------- |
+| `openpencil:latest`          | ~226 MB | Yalnızca web uygulaması |
+| `openpencil-claude:latest`   | —       | + Claude Code CLI       |
+| `openpencil-codex:latest`    | —       | + Codex CLI             |
+| `openpencil-opencode:latest` | —       | + OpenCode CLI          |
+| `openpencil-copilot:latest`  | —       | + GitHub Copilot CLI    |
+| `openpencil-gemini:latest`   | —       | + Gemini CLI            |
+| `openpencil-full:latest`     | ~1 GB   | Tüm CLI araçları        |
 
 **Çalıştır (yalnızca web):**
 
@@ -173,6 +173,7 @@ docker build --target full -t openpencil-full .
 ## AI Destekli Tasarım
 
 **Prompttan UI'ye**
+
 - **Metinden tasarıma** — bir sayfayı tanımlayın, gerçek zamanlı akış animasyonuyla kanvasta oluşturulsun
 - **Orkestratör** — karmaşık sayfaları paralel üretim için uzamsal alt görevlere ayırır
 - **Tasarım değişikliği** — öğeleri seçin, ardından değişiklikleri doğal dille tanımlayın
@@ -180,20 +181,21 @@ docker build --target full -t openpencil-full .
 
 **Çok Ajanlı Destek**
 
-| Ajan | Kurulum |
-| --- | --- |
+| Ajan                        | Kurulum                                                                                                   |
+| --------------------------- | --------------------------------------------------------------------------------------------------------- |
 | **Yerleşik (9+ sağlayıcı)** | Sağlayıcı ön ayarlarından seçin ve bölge değiştirin — Anthropic, OpenAI, Google, DeepSeek ve daha fazlası |
-| **Claude Code** | Yapılandırma gerekmez — yerel OAuth ile Claude Agent SDK kullanır |
-| **Codex CLI** | Ajan Ayarlarından bağlanın (`Cmd+,`) |
-| **OpenCode** | Ajan Ayarlarından bağlanın (`Cmd+,`) |
-| **GitHub Copilot** | `copilot login` ardından Ajan Ayarlarından bağlanın (`Cmd+,`) |
-| **Gemini CLI** | Ajan Ayarlarından bağlanın (`Cmd+,`) |
+| **Claude Code**             | Yapılandırma gerekmez — yerel OAuth ile Claude Agent SDK kullanır                                         |
+| **Codex CLI**               | Ajan Ayarlarından bağlanın (`Cmd+,`)                                                                      |
+| **OpenCode**                | Ajan Ayarlarından bağlanın (`Cmd+,`)                                                                      |
+| **GitHub Copilot**          | `copilot login` ardından Ajan Ayarlarından bağlanın (`Cmd+,`)                                             |
+| **Gemini CLI**              | Ajan Ayarlarından bağlanın (`Cmd+,`)                                                                      |
 
 **Model Yetenek Profilleri** — promptları, düşünme modunu ve zaman aşımlarını model katmanına göre otomatik olarak uyarlar. Tam katman modeller (Claude) eksiksiz promptlar alır; standart katman (GPT-4o, Gemini, DeepSeek) düşünme modunu devre dışı bırakır; temel katman (MiniMax, Qwen, Llama, Mistral) maksimum güvenilirlik için basitleştirilmiş iç içe JSON promptları alır.
 
 **i18n** — 15 dilde tam arayüz yerelleştirmesi: English, 简体中文, 繁體中文, 日本語, 한국어, Français, Español, Deutsch, Português, Русский, हिन्दी, Türkçe, ไทย, Tiếng Việt, Bahasa Indonesia.
 
 **MCP Sunucusu**
+
 - Yerleşik MCP sunucusu — Claude Code / Codex / Gemini / OpenCode / Kiro / Copilot CLI'larına tek tıkla kurulum
 - Otomatik Node.js algılama — kurulu değilse otomatik olarak HTTP aktarımına geçer ve MCP HTTP sunucusunu otomatik başlatır
 - Terminalden tasarım otomasyonu: herhangi bir MCP uyumlu ajan aracılığıyla `.op` dosyalarını okuyun, oluşturun ve düzenleyin
@@ -202,6 +204,7 @@ docker build --target full -t openpencil-full .
 - Çok sayfa desteği — MCP araçları ile sayfaları oluşturun, yeniden adlandırın, sıralayın ve çoğaltın
 
 **Kod Üretimi**
+
 - React + Tailwind CSS, HTML + CSS, CSS Variables
 - Vue, Svelte, Flutter, SwiftUI, Jetpack Compose, React Native
 
@@ -229,6 +232,7 @@ cat design.dsl | op design - # stdin'den pipe ile besle
 ## Özellikler
 
 **Kanvas ve Çizim**
+
 - Kaydırma, yakınlaştırma, akıllı hizalama kılavuzları ve yakalamayı destekleyen sonsuz kanvas
 - Dikdörtgen, Elips, Çizgi, Çokgen, Kalem (Bezier), Frame, Metin
 - Boolean işlemler — bağlamsal araç çubuğuyla birleştir, çıkar, kesiştir
@@ -237,15 +241,18 @@ cat design.dsl | op design - # stdin'den pipe ile besle
 - Sekme navigasyonlu çok sayfalı belgeler
 
 **Tasarım Sistemi**
+
 - Tasarım değişkenleri — `$variable` referanslı renk, sayı, metin tokenları
 - Çok tema desteği — birden fazla tema ekseni, her biri varyantlarıyla (Açık/Koyu, Kompakt/Rahat)
 - Bileşen sistemi — örnekler ve geçersiz kılmalarla yeniden kullanılabilir bileşenler
 - CSS senkronizasyonu — otomatik oluşturulan özel özellikler, kod çıktısında `var(--name)`
 
 **Figma İçe Aktarma**
+
 - Düzen, dolgu, kontur, efektler, metin, görseller ve vektörler korunarak `.fig` dosyalarını içe aktarın
 
 **Masaüstü Uygulaması**
+
 - Electron aracılığıyla yerel macOS, Windows ve Linux desteği
 - `.op` dosya ilişkilendirmesi — açmak için çift tıklayın, tekli örnek kilidi
 - GitHub Releases'ten otomatik güncelleme
@@ -253,17 +260,17 @@ cat design.dsl | op design - # stdin'den pipe ile besle
 
 ## Teknoloji Yığını
 
-| | |
-| --- | --- |
-| **Ön Uç** | React 19 · TanStack Start · Tailwind CSS v4 · shadcn/ui · i18next |
-| **Kanvas** | CanvasKit/Skia (WASM, GPU hızlandırmalı) |
-| **Durum Yönetimi** | Zustand v5 |
-| **Sunucu** | Nitro |
-| **Masaüstü** | Electron 35 |
-| **CLI** | `op` — terminal kontrolü, toplu tasarım DSL, kod dışa aktarımı |
-| **AI** | Vercel AI SDK v6 · Anthropic SDK · Claude Agent SDK · OpenCode SDK · Copilot SDK |
-| **Çalışma Ortamı** | Bun · Vite 7 |
-| **Dosya Formatı** | `.op` — JSON tabanlı, insan tarafından okunabilir, Git dostu |
+|                    |                                                                                  |
+| ------------------ | -------------------------------------------------------------------------------- |
+| **Ön Uç**          | React 19 · TanStack Start · Tailwind CSS v4 · shadcn/ui · i18next                |
+| **Kanvas**         | CanvasKit/Skia (WASM, GPU hızlandırmalı)                                         |
+| **Durum Yönetimi** | Zustand v5                                                                       |
+| **Sunucu**         | Nitro                                                                            |
+| **Masaüstü**       | Electron 35                                                                      |
+| **CLI**            | `op` — terminal kontrolü, toplu tasarım DSL, kod dışa aktarımı                   |
+| **AI**             | Vercel AI SDK v6 · Anthropic SDK · Claude Agent SDK · OpenCode SDK · Copilot SDK |
+| **Çalışma Ortamı** | Bun · Vite 7                                                                     |
+| **Dosya Formatı**  | `.op` — JSON tabanlı, insan tarafından okunabilir, Git dostu                     |
 
 ## Proje Yapısı
 
@@ -304,21 +311,21 @@ openpencil/
 
 ## Klavye Kısayolları
 
-| Tuş | İşlem | | Tuş | İşlem |
-| --- | --- | --- | --- | --- |
-| `V` | Seç | | `Cmd+S` | Kaydet |
-| `R` | Dikdörtgen | | `Cmd+Z` | Geri Al |
-| `O` | Elips | | `Cmd+Shift+Z` | Yeniden Yap |
-| `L` | Çizgi | | `Cmd+C/X/V/D` | Kopyala/Kes/Yapıştır/Çoğalt |
-| `T` | Metin | | `Cmd+G` | Grupla |
-| `F` | Frame | | `Cmd+Shift+G` | Grubu Çöz |
-| `P` | Kalem aracı | | `Cmd+Shift+E` | Dışa Aktar |
-| `H` | El (kaydır) | | `Cmd+Shift+C` | Kod paneli |
-| `Del` | Sil | | `Cmd+Shift+V` | Değişkenler paneli |
-| `[ / ]` | Yeniden sırala | | `Cmd+J` | AI sohbet |
-| Oklar | 1px kaydır | | `Cmd+,` | Ajan ayarları |
-| `Cmd+Alt+U` | Boolean birleştir | | `Cmd+Alt+S` | Boolean çıkar |
-| `Cmd+Alt+I` | Boolean kesiştir | | | |
+| Tuş         | İşlem             |     | Tuş           | İşlem                       |
+| ----------- | ----------------- | --- | ------------- | --------------------------- |
+| `V`         | Seç               |     | `Cmd+S`       | Kaydet                      |
+| `R`         | Dikdörtgen        |     | `Cmd+Z`       | Geri Al                     |
+| `O`         | Elips             |     | `Cmd+Shift+Z` | Yeniden Yap                 |
+| `L`         | Çizgi             |     | `Cmd+C/X/V/D` | Kopyala/Kes/Yapıştır/Çoğalt |
+| `T`         | Metin             |     | `Cmd+G`       | Grupla                      |
+| `F`         | Frame             |     | `Cmd+Shift+G` | Grubu Çöz                   |
+| `P`         | Kalem aracı       |     | `Cmd+Shift+E` | Dışa Aktar                  |
+| `H`         | El (kaydır)       |     | `Cmd+Shift+C` | Kod paneli                  |
+| `Del`       | Sil               |     | `Cmd+Shift+V` | Değişkenler paneli          |
+| `[ / ]`     | Yeniden sırala    |     | `Cmd+J`       | AI sohbet                   |
+| Oklar       | 1px kaydır        |     | `Cmd+,`       | Ajan ayarları               |
+| `Cmd+Alt+U` | Boolean birleştir |     | `Cmd+Alt+S`   | Boolean çıkar               |
+| `Cmd+Alt+I` | Boolean kesiştir  |     |               |                             |
 
 ## Betikler
 

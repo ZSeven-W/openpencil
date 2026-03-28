@@ -14,10 +14,10 @@ npm install -g @zseven-w/openpencil
 
 El CLI detecta y lanza automaticamente la aplicacion de escritorio OpenPencil en todas las plataformas:
 
-| Plataforma  | Rutas de instalacion detectadas                                                                     |
-| ----------- | --------------------------------------------------------------------------------------------------- |
-| **macOS**   | `/Applications/OpenPencil.app`, `~/Applications/OpenPencil.app`                                     |
-| **Windows** | NSIS por usuario (`%LOCALAPPDATA%`), por maquina (`%PROGRAMFILES%`), portable                       |
+| Plataforma  | Rutas de instalacion detectadas                                                                         |
+| ----------- | ------------------------------------------------------------------------------------------------------- |
+| **macOS**   | `/Applications/OpenPencil.app`, `~/Applications/OpenPencil.app`                                         |
+| **Windows** | NSIS por usuario (`%LOCALAPPDATA%`), por maquina (`%PROGRAMFILES%`), portable                           |
 | **Linux**   | `/usr/bin`, `/usr/local/bin`, `~/.local/bin`, AppImage (`~/Applications`, `~/Downloads`), Snap, Flatpak |
 
 ## Uso

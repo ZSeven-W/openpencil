@@ -14,6 +14,7 @@ category: knowledge
 Generate SwiftUI views with modifier chains.
 
 ## Output Format
+
 - Swift file (`.swift`)
 - `struct ViewName: View` with `var body: some View { ... }`
 - Import `SwiftUI`
@@ -21,6 +22,7 @@ Generate SwiftUI views with modifier chains.
 - Include helper shapes (SVGPath, PolygonShape) when path/polygon nodes exist
 
 ## Layout Mapping
+
 - `layout: "vertical"` → `VStack(alignment:, spacing:) { ... }`
 - `layout: "horizontal"` → `HStack(alignment:, spacing:) { ... }`
 - No layout / stacked children → `ZStack(alignment: .topLeading) { ... }`
@@ -35,17 +37,20 @@ Generate SwiftUI views with modifier chains.
   - `"end"` → `alignment: .bottom`
 
 ## Modifier Chain Pattern
+
 - SwiftUI uses dot-chained modifiers on views
 - Order matters: `.padding()` before `.background()` adds padding inside background
 - Common chain: view → `.padding()` → `.frame()` → `.background()` → `.clipShape()` → `.shadow()` → `.opacity()` → `.offset()`
 
 ## Container Styling
+
 - Empty container with fill + corner radius → `RoundedRectangle(cornerRadius: N).fill(color)`
 - Empty container with fill, no radius → `Rectangle().fill(color)`
 - Container with children → Stack + modifiers (`.padding()`, `.frame()`, `.background()`)
 - `clipContent: true` → `.clipped()`
 
 ## Color & Fill Mapping
+
 - Solid fill `#RRGGBB` → `Color(red: R/255, green: G/255, blue: B/255)` (normalized 0-1 floats)
 - 8-digit hex `#RRGGBBAA` → `.opacity(A/255)` modifier chained on Color
 - Variable ref `$name` → `Color("var(--name)") /* variable */` placeholder
@@ -57,18 +62,22 @@ Generate SwiftUI views with modifier chains.
 - Gradient direction angles map to UnitPoints: 0->bottom/top, 90->leading/trailing, 180->top/bottom, 270->trailing/leading
 
 ## Border & Stroke Mapping
+
 - With corner radius → `.overlay(RoundedRectangle(cornerRadius: N).stroke(color, lineWidth: N))`
 - Without corner radius → `.overlay(Rectangle().stroke(color, lineWidth: N))`
 
 ## Corner Radius
+
 - Uniform → `.clipShape(RoundedRectangle(cornerRadius: N))`
 - On shapes → `RoundedRectangle(cornerRadius: N)` as the shape itself
 
 ## Effects
+
 - Drop shadow → `.shadow(color: Color(...), radius: N, x: X, y: Y)`
 - Blur → `.blur(radius: N)`
 
 ## Typography
+
 - Text nodes → `Text("content")` with modifier chain
 - `fontSize + fontWeight` → `.font(.system(size: N, weight: .weightName))`
 - `fontSize` only → `.font(.system(size: N))`
@@ -83,17 +92,20 @@ Generate SwiftUI views with modifier chains.
 - `strikethrough` → `.strikethrough()`
 
 ## Padding
+
 - Uniform → `.padding(N)`
 - Symmetric → `.padding(.vertical, V)` + `.padding(.horizontal, H)`
 - Per-side → `.padding(.top, T)` + `.padding(.trailing, R)` + `.padding(.bottom, B)` + `.padding(.leading, L)`
 - Variable ref → `.padding(/* var(--name) */ 0)` placeholder
 
 ## Dimensions
+
 - Fixed → `.frame(width: N, height: N)`
 - Width only → `.frame(width: N)`
 - Height only → `.frame(height: N)`
 
 ## Image Handling
+
 - Local asset → `Image("name")` with `.resizable()` + `.aspectRatio(contentMode:)` + `.frame()`
 - Network URL → `AsyncImage(url: URL(string: "url")) { image in image.modifiers } placeholder: { ProgressView() }`
 - Data URI → decode base64 at runtime with `UIImage(data:)` → `Image(uiImage:)`
@@ -102,29 +114,36 @@ Generate SwiftUI views with modifier chains.
 - Corner radius on images → `.clipShape(RoundedRectangle(cornerRadius: N))`
 
 ## Opacity & Transform
+
 - Opacity → `.opacity(N)` modifier
 - Rotation → `.rotationEffect(.degrees(N))` modifier
 - Variable ref opacity → `.opacity(/* var(--name) */ 1.0)` placeholder
 
 ## Positioning
+
 - Absolute children → `.offset(x: X, y: Y)` modifier
 
 ## Ellipse
+
 - Ellipse node → `Ellipse()` with `.fill()`, `.frame()`, `.stroke()` modifiers
 
 ## Icon Handling
+
 - Icon font nodes → `Image("icon.name")` with `.resizable()` + `.frame(width: N, height: N)`
 - Color → `.foregroundColor(Color(hex: "..."))`
 - Icon name: kebab-case converted to dot.notation
 
 ## Path & Polygon
+
 - Path nodes → `SVGPath("path-data").fill(color)` (include SVGPath helper shape)
 - Polygon nodes → `PolygonShape(sides: N).fill(color)` (include PolygonShape helper)
 
 ## Responsive Design
+
 - Use `GeometryReader { geometry in ... }` for parent-relative sizing
 - `geometry.size.width` and `geometry.size.height` for dynamic dimensions
 - Use `.frame(maxWidth: .infinity)` for full-width containers
 
 ## Line Nodes
+
 - Line → `Rectangle()` with `.frame(width: N, height: 1)` + `.background(color)`

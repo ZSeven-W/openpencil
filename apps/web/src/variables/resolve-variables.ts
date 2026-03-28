@@ -6,4 +6,4 @@ export {
   resolveColorRef,
   resolveNumericRef,
   resolveNodeForCanvas,
-} from '@zseven-w/pen-core'
+} from '@zseven-w/pen-core';

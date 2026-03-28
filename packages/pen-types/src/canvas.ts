@@ -7,25 +7,25 @@ export type ToolType =
   | 'polygon'
   | 'path'
   | 'text'
-  | 'hand'
+  | 'hand';
 
 export interface ViewportState {
-  zoom: number
-  panX: number
-  panY: number
+  zoom: number;
+  panX: number;
+  panY: number;
 }
 
 export interface SelectionState {
-  selectedIds: string[]
-  activeId: string | null
-  hoveredId: string | null
-  enteredFrameId: string | null
-  enteredFrameStack: string[]
+  selectedIds: string[];
+  activeId: string | null;
+  hoveredId: string | null;
+  enteredFrameId: string | null;
+  enteredFrameStack: string[];
 }
 
 export interface CanvasInteraction {
-  isDrawing: boolean
-  isPanning: boolean
-  isDragging: boolean
-  drawStartPoint: { x: number; y: number } | null
+  isDrawing: boolean;
+  isPanning: boolean;
+  isDragging: boolean;
+  drawStartPoint: { x: number; y: number } | null;
 }

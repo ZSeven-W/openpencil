@@ -1,4 +1,4 @@
-import { openDocument, saveDocument, resolveDocPath, getSyncUrl } from '../document-manager'
+import { openDocument, saveDocument, resolveDocPath, getSyncUrl } from '../document-manager';
 import {
   findNodeInTree,
   insertNodeInTree,
@@ -8,33 +8,33 @@ import {
   flattenNodes,
   getDocChildren,
   setDocChildren,
-} from '../utils/node-operations'
-import { generateId } from '../utils/id'
-import { sanitizeObject } from '../utils/sanitize'
-import { resolveTreeRoles, resolveTreePostPass } from '../../services/ai/role-resolver'
-import '../../services/ai/role-definitions/index'
+} from '../utils/node-operations';
+import { generateId } from '../utils/id';
+import { sanitizeObject } from '../utils/sanitize';
+import { resolveTreeRoles, resolveTreePostPass } from '../../services/ai/role-resolver';
+import '../../services/ai/role-definitions/index';
 import {
   applyIconPathResolution,
   applyNoEmojiIconHeuristic,
-} from '../../services/ai/icon-resolver'
+} from '../../services/ai/icon-resolver';
 import {
   ensureUniqueNodeIds,
   sanitizeLayoutChildPositions,
   sanitizeScreenFrameBounds,
-} from '../../services/ai/design-node-sanitization'
-import type { PenDocument, PenNode } from '../../types/pen'
+} from '../../services/ai/design-node-sanitization';
+import type { PenDocument, PenNode } from '../../types/pen';
 
 export interface BatchDesignParams {
-  filePath?: string
-  operations: string
-  postProcess?: boolean
-  canvasWidth?: number
-  pageId?: string
+  filePath?: string;
+  operations: string;
+  postProcess?: boolean;
+  canvasWidth?: number;
+  pageId?: string;
 }
 
 interface OpResult {
-  binding: string
-  nodeId: string
+  binding: string;
+  nodeId: string;
 }
 
 /**
@@ -51,76 +51,76 @@ interface OpResult {
 export async function handleBatchDesign(
   params: BatchDesignParams,
 ): Promise<{ results: OpResult[]; nodeCount: number; postProcessed?: boolean }> {
-  const filePath = resolveDocPath(params.filePath)
-  let doc = await openDocument(filePath)
-  doc = structuredClone(doc)
+  const filePath = resolveDocPath(params.filePath);
+  let doc = await openDocument(filePath);
+  doc = structuredClone(doc);
 
-  const pageId = params.pageId
-  const bindings = new Map<string, string>()
-  const results: OpResult[] = []
+  const pageId = params.pageId;
+  const bindings = new Map<string, string>();
+  const results: OpResult[] = [];
   const lines = params.operations
     .split('\n')
     .map((l) => l.trim())
-    .filter((l) => l && !l.startsWith('//'))
+    .filter((l) => l && !l.startsWith('//'));
 
   for (const line of lines) {
     try {
-      await executeLine(line, doc, bindings, results, pageId)
+      await executeLine(line, doc, bindings, results, pageId);
     } catch (err) {
       throw new Error(
         `Error executing "${line}": ${err instanceof Error ? err.message : String(err)}`,
-      )
+      );
     }
   }
 
   // --- Post-processing ---
-  let postProcessed = false
+  let postProcessed = false;
   if (params.postProcess) {
-    const canvasWidth = params.canvasWidth ?? 1200
-    const children = getDocChildren(doc, pageId)
+    const canvasWidth = params.canvasWidth ?? 1200;
+    const children = getDocChildren(doc, pageId);
 
     // Find root nodes that were inserted (first binding is typically the root)
-    const insertedIds = new Set(results.map((r) => r.nodeId))
-    const rootTargets: PenNode[] = []
+    const insertedIds = new Set(results.map((r) => r.nodeId));
+    const rootTargets: PenNode[] = [];
     for (const id of insertedIds) {
-      const node = findNodeInTree(children, id)
-      if (node) rootTargets.push(node)
+      const node = findNodeInTree(children, id);
+      if (node) rootTargets.push(node);
     }
 
     // If no specific roots found, process all top-level children
-    const targets = rootTargets.length > 0 ? rootTargets : children
+    const targets = rootTargets.length > 0 ? rootTargets : children;
 
     for (const target of targets) {
       // 1. Role resolution
-      resolveTreeRoles(target, canvasWidth)
+      resolveTreeRoles(target, canvasWidth);
       // 2. Tree post-pass (cross-node fixes)
-      resolveTreePostPass(target, canvasWidth)
+      resolveTreePostPass(target, canvasWidth);
 
       // 3. Icon resolution + emoji removal
-      const flat = flattenNodes([target])
+      const flat = flattenNodes([target]);
       for (const node of flat) {
-        if (node.type === 'path') applyIconPathResolution(node)
-        if (node.type === 'text') applyNoEmojiIconHeuristic(node)
+        if (node.type === 'path') applyIconPathResolution(node);
+        if (node.type === 'text') applyNoEmojiIconHeuristic(node);
       }
 
       // 4. Sanitization
-      const usedIds = new Set<string>()
-      const idCounters = new Map<string, number>()
-      ensureUniqueNodeIds(target, usedIds, idCounters)
-      sanitizeLayoutChildPositions(target, false)
-      sanitizeScreenFrameBounds(target)
+      const usedIds = new Set<string>();
+      const idCounters = new Map<string, number>();
+      ensureUniqueNodeIds(target, usedIds, idCounters);
+      sanitizeLayoutChildPositions(target, false);
+      sanitizeScreenFrameBounds(target);
     }
 
-    postProcessed = true
+    postProcessed = true;
   }
 
-  await saveDocument(filePath, doc)
+  await saveDocument(filePath, doc);
 
   return {
     results,
     nodeCount: countNodes(getDocChildren(doc, pageId)),
     postProcessed: postProcessed || undefined,
-  }
+  };
 }
 
 async function executeLine(
@@ -131,97 +131,99 @@ async function executeLine(
   pageId?: string,
 ): Promise<void> {
   // Parse: binding=OP(args) or OP(args)
-  const assignMatch = line.match(/^(\w+)\s*=\s*([ICRMG])\((.+)\)$/)
-  const callMatch = line.match(/^([UDM])\((.+)\)$/)
+  const assignMatch = line.match(/^(\w+)\s*=\s*([ICRMG])\((.+)\)$/);
+  const callMatch = line.match(/^([UDM])\((.+)\)$/);
 
   if (assignMatch) {
-    const [, binding, op, argsStr] = assignMatch
+    const [, binding, op, argsStr] = assignMatch;
     switch (op) {
       case 'I': {
-        const { parent, data } = parseInsertArgs(argsStr, bindings)
-        const node = { ...data, id: generateId() } as PenNode
+        const { parent, data } = parseInsertArgs(argsStr, bindings);
+        const node = { ...data, id: generateId() } as PenNode;
 
         // Auto-replace: when inserting a frame at root level and an empty
         // root frame exists, replace it instead of creating a sibling.
         if (parent === null && data.type === 'frame') {
-          const children = getDocChildren(doc, pageId)
-          const emptyIdx = children.findIndex((n) => isEmptyFrame(n))
+          const children = getDocChildren(doc, pageId);
+          const emptyIdx = children.findIndex((n) => isEmptyFrame(n));
           if (emptyIdx !== -1) {
-            const emptyFrame = children[emptyIdx]
+            const emptyFrame = children[emptyIdx];
             // Inherit position from the empty frame so the design lands in the right spot
-            if (emptyFrame.x !== undefined) node.x = emptyFrame.x
-            if (emptyFrame.y !== undefined) node.y = emptyFrame.y
-            let updated = removeNodeFromTree(children, emptyFrame.id)
-            updated = insertNodeInTree(updated, null, node, emptyIdx)
-            setDocChildren(doc, updated, pageId)
-            bindings.set(binding, node.id)
-            results.push({ binding, nodeId: node.id })
-            break
+            if (emptyFrame.x !== undefined) node.x = emptyFrame.x;
+            if (emptyFrame.y !== undefined) node.y = emptyFrame.y;
+            let updated = removeNodeFromTree(children, emptyFrame.id);
+            updated = insertNodeInTree(updated, null, node, emptyIdx);
+            setDocChildren(doc, updated, pageId);
+            bindings.set(binding, node.id);
+            results.push({ binding, nodeId: node.id });
+            break;
           }
         }
 
-        setDocChildren(doc, insertNodeInTree(getDocChildren(doc, pageId), parent, node), pageId)
-        bindings.set(binding, node.id)
-        results.push({ binding, nodeId: node.id })
-        break
+        setDocChildren(doc, insertNodeInTree(getDocChildren(doc, pageId), parent, node), pageId);
+        bindings.set(binding, node.id);
+        results.push({ binding, nodeId: node.id });
+        break;
       }
       case 'C': {
-        const { sourceId, parent, data } = parseCopyArgs(argsStr, bindings)
-        const source = findNodeInTree(getDocChildren(doc, pageId), sourceId)
-        if (!source) throw new Error(`Copy source not found: ${sourceId}`)
-        const cloned = cloneNodeWithNewIds(source, generateId)
+        const { sourceId, parent, data } = parseCopyArgs(argsStr, bindings);
+        const source = findNodeInTree(getDocChildren(doc, pageId), sourceId);
+        if (!source) throw new Error(`Copy source not found: ${sourceId}`);
+        const cloned = cloneNodeWithNewIds(source, generateId);
         // Apply override properties
         if (data) {
-          Object.assign(cloned, data)
+          Object.assign(cloned, data);
           // Don't override the cloned id
-          if (data.id) delete (cloned as unknown as Record<string, unknown>).id
+          if (data.id) delete (cloned as unknown as Record<string, unknown>).id;
         }
         // Apply descendant overrides
         if (data?.descendants) {
-          applyDescendantOverrides(cloned, data.descendants as Record<string, unknown>)
+          applyDescendantOverrides(cloned, data.descendants as Record<string, unknown>);
         }
-        setDocChildren(doc, insertNodeInTree(getDocChildren(doc, pageId), parent, cloned), pageId)
-        bindings.set(binding, cloned.id)
-        results.push({ binding, nodeId: cloned.id })
-        break
+        setDocChildren(doc, insertNodeInTree(getDocChildren(doc, pageId), parent, cloned), pageId);
+        bindings.set(binding, cloned.id);
+        results.push({ binding, nodeId: cloned.id });
+        break;
       }
       case 'R': {
-        const { path, data } = parseReplaceArgs(argsStr, bindings)
-        const resolvedPath = resolveSlashPath(path, doc, bindings)
-        const newNode = { ...data, id: generateId() } as PenNode
+        const { path, data } = parseReplaceArgs(argsStr, bindings);
+        const resolvedPath = resolveSlashPath(path, doc, bindings);
+        const newNode = { ...data, id: generateId() } as PenNode;
         // Find and replace the node
-        const oldNode = findNodeByPath(resolvedPath, doc, pageId)
-        if (!oldNode) throw new Error(`Replace target not found: ${path}`)
+        const oldNode = findNodeByPath(resolvedPath, doc, pageId);
+        if (!oldNode) throw new Error(`Replace target not found: ${path}`);
         // Remove old, insert new at same position
-        const parent = findParentByPath(resolvedPath, doc, pageId)
-        const parentId = parent ? parent.id : null
+        const parent = findParentByPath(resolvedPath, doc, pageId);
+        const parentId = parent ? parent.id : null;
         const siblings = parent
-          ? ('children' in parent ? parent.children ?? [] : [])
-          : getDocChildren(doc, pageId)
-        const idx = siblings.findIndex((n) => n.id === oldNode.id)
-        let children = removeNodeFromTree(getDocChildren(doc, pageId), oldNode.id)
-        children = insertNodeInTree(children, parentId, newNode, idx)
-        setDocChildren(doc, children, pageId)
-        bindings.set(binding, newNode.id)
-        results.push({ binding, nodeId: newNode.id })
-        break
+          ? 'children' in parent
+            ? (parent.children ?? [])
+            : []
+          : getDocChildren(doc, pageId);
+        const idx = siblings.findIndex((n) => n.id === oldNode.id);
+        let children = removeNodeFromTree(getDocChildren(doc, pageId), oldNode.id);
+        children = insertNodeInTree(children, parentId, newNode, idx);
+        setDocChildren(doc, children, pageId);
+        bindings.set(binding, newNode.id);
+        results.push({ binding, nodeId: newNode.id });
+        break;
       }
       case 'M': {
-        const { nodeId, parent, index } = parseMoveArgs(argsStr, bindings)
-        const node = findNodeInTree(getDocChildren(doc, pageId), nodeId)
-        if (!node) throw new Error(`Move target not found: ${nodeId}`)
-        let children = removeNodeFromTree(getDocChildren(doc, pageId), nodeId)
-        children = insertNodeInTree(children, parent, node, index)
-        setDocChildren(doc, children, pageId)
-        bindings.set(binding, nodeId)
-        results.push({ binding, nodeId })
-        break
+        const { nodeId, parent, index } = parseMoveArgs(argsStr, bindings);
+        const node = findNodeInTree(getDocChildren(doc, pageId), nodeId);
+        if (!node) throw new Error(`Move target not found: ${nodeId}`);
+        let children = removeNodeFromTree(getDocChildren(doc, pageId), nodeId);
+        children = insertNodeInTree(children, parent, node, index);
+        setDocChildren(doc, children, pageId);
+        bindings.set(binding, nodeId);
+        results.push({ binding, nodeId });
+        break;
       }
       case 'G': {
-        const gArgs = argsStr.match(/^"([^"]+)"\s*,\s*"(search|generate)"\s*,\s*"([^"]+)"$/)
-        if (!gArgs) throw new Error(`Invalid G() syntax: ${argsStr}`)
-        const [, gParent, gMode, gPrompt] = gArgs
-        const resolvedParent = resolveRef(gParent, bindings)
+        const gArgs = argsStr.match(/^"([^"]+)"\s*,\s*"(search|generate)"\s*,\s*"([^"]+)"$/);
+        if (!gArgs) throw new Error(`Invalid G() syntax: ${argsStr}`);
+        const [, gParent, gMode, gPrompt] = gArgs;
+        const resolvedParent = resolveRef(gParent, bindings);
 
         const imageNode = {
           id: generateId(),
@@ -231,65 +233,76 @@ async function executeLine(
           src: '',
           width: 400,
           height: 300,
-        }
+        };
 
         // MCP runs in Node.js — must use absolute URL via getSyncUrl()
-        const syncUrl = await getSyncUrl()
+        const syncUrl = await getSyncUrl();
         if (gMode === 'search' && syncUrl) {
           try {
             const searchRes = await fetch(`${syncUrl}/api/ai/image-search`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ query: gPrompt, count: 1 }),
-            })
-            const searchData = (await searchRes.json()) as { results?: Array<{ thumbUrl: string }> }
+            });
+            const searchData = (await searchRes.json()) as {
+              results?: Array<{ thumbUrl: string }>;
+            };
             if (searchData.results && searchData.results.length > 0) {
-              imageNode.src = searchData.results[0].thumbUrl
+              imageNode.src = searchData.results[0].thumbUrl;
             }
-          } catch { /* keep empty src */ }
+          } catch {
+            /* keep empty src */
+          }
         }
         // "generate" mode not supported in MCP (no access to API keys in browser store)
 
         setDocChildren(
           doc,
-          insertNodeInTree(getDocChildren(doc, pageId), resolvedParent, imageNode as unknown as PenNode),
+          insertNodeInTree(
+            getDocChildren(doc, pageId),
+            resolvedParent,
+            imageNode as unknown as PenNode,
+          ),
           pageId,
-        )
-        bindings.set(binding, imageNode.id)
-        results.push({ binding, nodeId: imageNode.id })
-        break
+        );
+        bindings.set(binding, imageNode.id);
+        results.push({ binding, nodeId: imageNode.id });
+        break;
       }
     }
   } else if (callMatch) {
-    const [, op, argsStr] = callMatch
+    const [, op, argsStr] = callMatch;
     switch (op) {
       case 'U': {
-        const { path, data } = parseUpdateArgs(argsStr, bindings)
-        const resolvedPath = resolveSlashPath(path, doc, bindings)
-        const targetNode = findNodeByPath(resolvedPath, doc, pageId)
-        if (!targetNode)
-          throw new Error(`Update target not found: ${path}`)
+        const { path, data } = parseUpdateArgs(argsStr, bindings);
+        const resolvedPath = resolveSlashPath(path, doc, bindings);
+        const targetNode = findNodeByPath(resolvedPath, doc, pageId);
+        if (!targetNode) throw new Error(`Update target not found: ${path}`);
         // Update the node in-place
-        setDocChildren(doc, updateNodeInTree(getDocChildren(doc, pageId), targetNode.id, data), pageId)
-        break
+        setDocChildren(
+          doc,
+          updateNodeInTree(getDocChildren(doc, pageId), targetNode.id, data),
+          pageId,
+        );
+        break;
       }
       case 'D': {
-        const nodeId = resolveRef(argsStr.trim().replace(/^"|"$/g, ''), bindings)
-        setDocChildren(doc, removeNodeFromTree(getDocChildren(doc, pageId), nodeId), pageId)
-        break
+        const nodeId = resolveRef(argsStr.trim().replace(/^"|"$/g, ''), bindings);
+        setDocChildren(doc, removeNodeFromTree(getDocChildren(doc, pageId), nodeId), pageId);
+        break;
       }
       case 'M': {
-        const { nodeId, parent, index } = parseMoveArgs(argsStr, bindings)
-        const node = findNodeInTree(getDocChildren(doc, pageId), nodeId)
-        if (!node) throw new Error(`Move target not found: ${nodeId}`)
-        let children = removeNodeFromTree(getDocChildren(doc, pageId), nodeId)
-        children = insertNodeInTree(children, parent, node, index)
-        setDocChildren(doc, children, pageId)
-        break
+        const { nodeId, parent, index } = parseMoveArgs(argsStr, bindings);
+        const node = findNodeInTree(getDocChildren(doc, pageId), nodeId);
+        if (!node) throw new Error(`Move target not found: ${nodeId}`);
+        let children = removeNodeFromTree(getDocChildren(doc, pageId), nodeId);
+        children = insertNodeInTree(children, parent, node, index);
+        setDocChildren(doc, children, pageId);
+        break;
       }
     }
   } else {
-    throw new Error(`Cannot parse operation: ${line}`)
+    throw new Error(`Cannot parse operation: ${line}`);
   }
 }
 
@@ -299,74 +312,73 @@ function parseInsertArgs(
   argsStr: string,
   bindings: Map<string, string>,
 ): { parent: string | null; data: Record<string, unknown> } {
-  const firstComma = findTopLevelComma(argsStr)
-  if (firstComma === -1) throw new Error('Insert requires parent and node data')
-  const parentRaw = argsStr.slice(0, firstComma).trim()
-  const dataStr = argsStr.slice(firstComma + 1).trim()
-  const parent = parentRaw === 'null' ? null : resolveRef(parentRaw, bindings)
-  const data = parseJsonArg(dataStr)
-  return { parent, data }
+  const firstComma = findTopLevelComma(argsStr);
+  if (firstComma === -1) throw new Error('Insert requires parent and node data');
+  const parentRaw = argsStr.slice(0, firstComma).trim();
+  const dataStr = argsStr.slice(firstComma + 1).trim();
+  const parent = parentRaw === 'null' ? null : resolveRef(parentRaw, bindings);
+  const data = parseJsonArg(dataStr);
+  return { parent, data };
 }
 
 function parseCopyArgs(
   argsStr: string,
   bindings: Map<string, string>,
 ): { sourceId: string; parent: string | null; data: Record<string, unknown> } {
-  const first = findTopLevelComma(argsStr)
-  if (first === -1) throw new Error('Copy requires sourceId, parent, and data')
-  const sourceRaw = argsStr.slice(0, first).trim()
-  const rest = argsStr.slice(first + 1).trim()
-  const second = findTopLevelComma(rest)
+  const first = findTopLevelComma(argsStr);
+  if (first === -1) throw new Error('Copy requires sourceId, parent, and data');
+  const sourceRaw = argsStr.slice(0, first).trim();
+  const rest = argsStr.slice(first + 1).trim();
+  const second = findTopLevelComma(rest);
 
-  let parentRaw: string
-  let dataStr: string
+  let parentRaw: string;
+  let dataStr: string;
 
   if (second === -1) {
-    parentRaw = rest
-    dataStr = '{}'
+    parentRaw = rest;
+    dataStr = '{}';
   } else {
-    parentRaw = rest.slice(0, second).trim()
-    dataStr = rest.slice(second + 1).trim()
+    parentRaw = rest.slice(0, second).trim();
+    dataStr = rest.slice(second + 1).trim();
   }
 
   return {
     sourceId: resolveRef(sourceRaw, bindings),
     parent: parentRaw === 'null' ? null : resolveRef(parentRaw, bindings),
     data: parseJsonArg(dataStr),
-  }
+  };
 }
 
 function parseUpdateArgs(
   argsStr: string,
   bindings: Map<string, string>,
 ): { path: string; data: Record<string, unknown> } {
-  const firstComma = findTopLevelComma(argsStr)
-  if (firstComma === -1)
-    throw new Error('Update requires path and update data')
-  const pathRaw = argsStr.slice(0, firstComma).trim()
-  const dataStr = argsStr.slice(firstComma + 1).trim()
-  const path = resolvePathExpr(pathRaw, bindings)
-  return { path, data: parseJsonArg(dataStr) }
+  const firstComma = findTopLevelComma(argsStr);
+  if (firstComma === -1) throw new Error('Update requires path and update data');
+  const pathRaw = argsStr.slice(0, firstComma).trim();
+  const dataStr = argsStr.slice(firstComma + 1).trim();
+  const path = resolvePathExpr(pathRaw, bindings);
+  return { path, data: parseJsonArg(dataStr) };
 }
 
 function parseReplaceArgs(
   argsStr: string,
   bindings: Map<string, string>,
 ): { path: string; data: Record<string, unknown> } {
-  const firstComma = findTopLevelComma(argsStr)
-  if (firstComma === -1) throw new Error('Replace requires path and node data')
-  const pathRaw = argsStr.slice(0, firstComma).trim()
-  const dataStr = argsStr.slice(firstComma + 1).trim()
-  const path = resolvePathExpr(pathRaw, bindings)
-  return { path, data: parseJsonArg(dataStr) }
+  const firstComma = findTopLevelComma(argsStr);
+  if (firstComma === -1) throw new Error('Replace requires path and node data');
+  const pathRaw = argsStr.slice(0, firstComma).trim();
+  const dataStr = argsStr.slice(firstComma + 1).trim();
+  const path = resolvePathExpr(pathRaw, bindings);
+  return { path, data: parseJsonArg(dataStr) };
 }
 
 function parseMoveArgs(
   argsStr: string,
   bindings: Map<string, string>,
 ): { nodeId: string; parent: string | null; index?: number } {
-  const parts = splitTopLevel(argsStr)
-  if (parts.length < 2) throw new Error('Move requires nodeId and parent')
+  const parts = splitTopLevel(argsStr);
+  if (parts.length < 2) throw new Error('Move requires nodeId and parent');
   return {
     nodeId: resolveRef(parts[0].trim(), bindings),
     parent:
@@ -374,246 +386,226 @@ function parseMoveArgs(
         ? null
         : resolveRef(parts[1].trim(), bindings),
     index: parts[2] ? parseInt(parts[2].trim(), 10) : undefined,
-  }
+  };
 }
 
 // --- Helpers ---
 
 function resolveRef(raw: string, bindings: Map<string, string>): string {
-  const cleaned = raw.replace(/^"|"$/g, '')
-  return bindings.get(cleaned) ?? cleaned
+  const cleaned = raw.replace(/^"|"$/g, '');
+  return bindings.get(cleaned) ?? cleaned;
 }
 
 /** Resolve path expressions like `binding+"/child"` or `"id"` */
-function resolvePathExpr(
-  raw: string,
-  bindings: Map<string, string>,
-): string {
+function resolvePathExpr(raw: string, bindings: Map<string, string>): string {
   if (raw.includes('+')) {
     return raw
       .split('+')
       .map((p) => {
-        const t = p.trim()
+        const t = p.trim();
         if (t.startsWith('"') || t.startsWith("'")) {
-          return t.slice(1, -1)
+          return t.slice(1, -1);
         }
-        return bindings.get(t) ?? t
+        return bindings.get(t) ?? t;
       })
-      .join('')
+      .join('');
   }
-  const cleaned = raw.replace(/^"|"$/g, '')
-  return bindings.get(cleaned) ?? cleaned
+  const cleaned = raw.replace(/^"|"$/g, '');
+  return bindings.get(cleaned) ?? cleaned;
 }
 
 /** Resolve slash-separated path (e.g. "instanceId/childId") to find the actual node. */
-function resolveSlashPath(
-  path: string,
-  _doc: PenDocument,
-  _bindings: Map<string, string>,
-): string {
+function resolveSlashPath(path: string, _doc: PenDocument, _bindings: Map<string, string>): string {
   // The path may be "parentId/childId" — we return as-is for findNodeByPath
-  return path
+  return path;
 }
 
 function findNodeByPath(path: string, doc: PenDocument, pageId?: string): PenNode | undefined {
-  const children = getDocChildren(doc, pageId)
-  const parts = path.split('/')
+  const children = getDocChildren(doc, pageId);
+  const parts = path.split('/');
   if (parts.length === 1) {
-    return findNodeInTree(children, parts[0])
+    return findNodeInTree(children, parts[0]);
   }
   // For paths like "instanceId/childId", resolve through the tree
   // First find the instance, then look for child
-  let current = findNodeInTree(children, parts[0])
+  let current = findNodeInTree(children, parts[0]);
   for (let i = 1; i < parts.length && current; i++) {
     if ('children' in current && current.children) {
-      current = current.children.find((c) => c.id === parts[i])
+      current = current.children.find((c) => c.id === parts[i]);
     } else {
       // For ref nodes, the child might be in the referenced component
-      return undefined
+      return undefined;
     }
   }
-  return current
+  return current;
 }
 
-function findParentByPath(
-  path: string,
-  doc: PenDocument,
-  pageId?: string,
-): PenNode | undefined {
-  const parts = path.split('/')
+function findParentByPath(path: string, doc: PenDocument, pageId?: string): PenNode | undefined {
+  const parts = path.split('/');
   if (parts.length <= 1) {
     // Top-level or simple ID — find parent in tree
-    return findParentInTree(getDocChildren(doc, pageId), parts[0])
+    return findParentInTree(getDocChildren(doc, pageId), parts[0]);
   }
   // Parent is the second-to-last part
-  const parentPath = parts.slice(0, -1).join('/')
-  return findNodeByPath(parentPath, doc, pageId)
+  const parentPath = parts.slice(0, -1).join('/');
+  return findNodeByPath(parentPath, doc, pageId);
 }
 
-function findParentInTree(
-  nodes: PenNode[],
-  id: string,
-): PenNode | undefined {
+function findParentInTree(nodes: PenNode[], id: string): PenNode | undefined {
   for (const node of nodes) {
     if ('children' in node && node.children) {
       for (const child of node.children) {
-        if (child.id === id) return node
+        if (child.id === id) return node;
       }
-      const found = findParentInTree(node.children, id)
-      if (found) return found
+      const found = findParentInTree(node.children, id);
+      if (found) return found;
     }
   }
-  return undefined
+  return undefined;
 }
 
-function applyDescendantOverrides(
-  node: PenNode,
-  descendants: Record<string, unknown>,
-): void {
-  if (!('children' in node) || !node.children) return
+function applyDescendantOverrides(node: PenNode, descendants: Record<string, unknown>): void {
+  if (!('children' in node) || !node.children) return;
   for (const child of node.children) {
-    const override = descendants[child.id]
+    const override = descendants[child.id];
     if (override) {
-      Object.assign(child, override)
+      Object.assign(child, override);
     }
-    applyDescendantOverrides(child, descendants)
+    applyDescendantOverrides(child, descendants);
   }
 }
 
 /** Parse a JSON-like argument, handling unquoted keys. */
 function parseJsonArg(str: string): Record<string, unknown> {
-  const trimmed = str.trim()
+  const trimmed = str.trim();
   // Try strict JSON first (most common case — avoids mangling values like "Don't")
   try {
-    return sanitizeObject(JSON.parse(trimmed))
-  } catch { /* fall through to lenient parsing */ }
-
-  let normalized = trimmed
-  // Convert JavaScript-style object to JSON: unquoted keys → quoted
-  normalized = normalized.replace(
-    /(?<=\{|,)\s*(\w+)\s*:/g,
-    ' "$1":',
-  )
-  // Replace single-quoted string delimiters with double quotes (not quotes inside strings)
-  normalized = replaceSingleQuoteDelimiters(normalized)
-  try {
-    return sanitizeObject(JSON.parse(normalized))
+    return sanitizeObject(JSON.parse(trimmed));
   } catch {
-    throw new Error(`Failed to parse JSON: ${str.slice(0, 200)}`)
+    /* fall through to lenient parsing */
+  }
+
+  let normalized = trimmed;
+  // Convert JavaScript-style object to JSON: unquoted keys → quoted
+  normalized = normalized.replace(/(?<=\{|,)\s*(\w+)\s*:/g, ' "$1":');
+  // Replace single-quoted string delimiters with double quotes (not quotes inside strings)
+  normalized = replaceSingleQuoteDelimiters(normalized);
+  try {
+    return sanitizeObject(JSON.parse(normalized));
+  } catch {
+    throw new Error(`Failed to parse JSON: ${str.slice(0, 200)}`);
   }
 }
 
 /** Replace single-quote string delimiters with double quotes, leaving apostrophes inside strings. */
 function replaceSingleQuoteDelimiters(str: string): string {
-  const chars: string[] = []
-  let inDouble = false
-  let inSingle = false
+  const chars: string[] = [];
+  let inDouble = false;
+  let inSingle = false;
   for (let i = 0; i < str.length; i++) {
-    const ch = str[i]
+    const ch = str[i];
     if (ch === '\\' && (inDouble || inSingle)) {
-      chars.push(ch, str[++i] ?? '')
-      continue
+      chars.push(ch, str[++i] ?? '');
+      continue;
     }
     if (inDouble) {
-      if (ch === '"') inDouble = false
-      chars.push(ch)
+      if (ch === '"') inDouble = false;
+      chars.push(ch);
     } else if (inSingle) {
       if (ch === "'") {
-        inSingle = false
-        chars.push('"') // closing single quote → double quote
+        inSingle = false;
+        chars.push('"'); // closing single quote → double quote
       } else {
-        chars.push(ch)
+        chars.push(ch);
       }
     } else {
       if (ch === '"') {
-        inDouble = true
-        chars.push(ch)
+        inDouble = true;
+        chars.push(ch);
       } else if (ch === "'") {
-        inSingle = true
-        chars.push('"') // opening single quote → double quote
+        inSingle = true;
+        chars.push('"'); // opening single quote → double quote
       } else {
-        chars.push(ch)
+        chars.push(ch);
       }
     }
   }
-  return chars.join('')
+  return chars.join('');
 }
 
 /** Find the index of the first comma not inside braces/brackets/quotes. */
 function findTopLevelComma(str: string): number {
-  let depth = 0
-  let inString = false
-  let quote = ''
+  let depth = 0;
+  let inString = false;
+  let quote = '';
   for (let i = 0; i < str.length; i++) {
-    const ch = str[i]
+    const ch = str[i];
     if (inString) {
       if (ch === '\\') {
-        i++
-        continue
+        i++;
+        continue;
       }
-      if (ch === quote) inString = false
-      continue
+      if (ch === quote) inString = false;
+      continue;
     }
     if (ch === '"' || ch === "'") {
-      inString = true
-      quote = ch
-      continue
+      inString = true;
+      quote = ch;
+      continue;
     }
-    if (ch === '{' || ch === '[' || ch === '(') depth++
-    if (ch === '}' || ch === ']' || ch === ')') depth--
-    if (ch === ',' && depth === 0) return i
+    if (ch === '{' || ch === '[' || ch === '(') depth++;
+    if (ch === '}' || ch === ']' || ch === ')') depth--;
+    if (ch === ',' && depth === 0) return i;
   }
-  return -1
+  return -1;
 }
 
 function splitTopLevel(str: string): string[] {
-  const result: string[] = []
-  let start = 0
-  let depth = 0
-  let inString = false
-  let quote = ''
+  const result: string[] = [];
+  let start = 0;
+  let depth = 0;
+  let inString = false;
+  let quote = '';
   for (let i = 0; i < str.length; i++) {
-    const ch = str[i]
+    const ch = str[i];
     if (inString) {
       if (ch === '\\') {
-        i++
-        continue
+        i++;
+        continue;
       }
-      if (ch === quote) inString = false
-      continue
+      if (ch === quote) inString = false;
+      continue;
     }
     if (ch === '"' || ch === "'") {
-      inString = true
-      quote = ch
-      continue
+      inString = true;
+      quote = ch;
+      continue;
     }
-    if (ch === '{' || ch === '[' || ch === '(') depth++
-    if (ch === '}' || ch === ']' || ch === ')') depth--
+    if (ch === '{' || ch === '[' || ch === '(') depth++;
+    if (ch === '}' || ch === ']' || ch === ')') depth--;
     if (ch === ',' && depth === 0) {
-      result.push(str.slice(start, i))
-      start = i + 1
+      result.push(str.slice(start, i));
+      start = i + 1;
     }
   }
-  result.push(str.slice(start))
-  return result
+  result.push(str.slice(start));
+  return result;
 }
 
 function countNodes(nodes: PenNode[]): number {
-  let count = 0
+  let count = 0;
   for (const node of nodes) {
-    count++
+    count++;
     if ('children' in node && node.children) {
-      count += countNodes(node.children)
+      count += countNodes(node.children);
     }
   }
-  return count
+  return count;
 }
 
 /** A root frame is "empty" if it has no children. */
 function isEmptyFrame(node: PenNode): boolean {
   return (
-    node.type === 'frame' &&
-    (!('children' in node) || !node.children || node.children.length === 0)
-  )
+    node.type === 'frame' && (!('children' in node) || !node.children || node.children.length === 0)
+  );
 }
-

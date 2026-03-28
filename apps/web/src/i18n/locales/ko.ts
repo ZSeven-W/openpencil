@@ -1,4 +1,4 @@
-import type { TranslationKeys } from './en'
+import type { TranslationKeys } from './en';
 
 const ko: TranslationKeys = {
   // ── Common ──
@@ -87,8 +87,7 @@ const ko: TranslationKeys = {
   'updater.restartInstall': '재시작 및 설치',
   'updater.installing': '설치 중...',
   'updater.releaseDate': '출시일: {{date}}',
-  'updater.restartHint':
-    '업데이트를 적용하려면 재시작하세요. 재실행은 보통 10~15초 소요됩니다.',
+  'updater.restartHint': '업데이트를 적용하려면 재시작하세요. 재실행은 보통 10~15초 소요됩니다.',
   'updater.unknownError': '알 수 없는 업데이트 오류입니다.',
   'updater.title.checking': '업데이트 확인 중',
   'updater.title.available': '업데이트 발견',
@@ -98,10 +97,8 @@ const ko: TranslationKeys = {
   'updater.subtitle.checking': '최신 릴리스를 확인하고 있습니다...',
   'updater.subtitle.available': '버전 {{version}}을 사용할 수 있습니다.',
   'updater.subtitle.availableGeneric': '새 버전을 사용할 수 있습니다.',
-  'updater.subtitle.downloading':
-    '버전 {{version}}을 백그라운드에서 다운로드 중입니다.',
-  'updater.subtitle.downloadingGeneric':
-    '업데이트 패키지를 백그라운드에서 다운로드 중입니다.',
+  'updater.subtitle.downloading': '버전 {{version}}을 백그라운드에서 다운로드 중입니다.',
+  'updater.subtitle.downloadingGeneric': '업데이트 패키지를 백그라운드에서 다운로드 중입니다.',
   'updater.subtitle.downloaded': '버전 {{version}}이 다운로드되었습니다.',
   'updater.subtitle.downloadedGeneric': '업데이트가 다운로드되었습니다.',
   'updater.subtitle.error': '업데이트를 확인하거나 다운로드할 수 없습니다.',
@@ -219,11 +216,9 @@ const ko: TranslationKeys = {
   'textLayout.autoWidth': '자동 W',
   'textLayout.autoWidthDesc': '자동 너비 — 텍스트가 가로로 확장됩니다',
   'textLayout.autoHeight': '자동 H',
-  'textLayout.autoHeightDesc':
-    '자동 높이 — 고정 너비, 높이가 자동 조절됩니다',
+  'textLayout.autoHeightDesc': '자동 높이 — 고정 너비, 높이가 자동 조절됩니다',
   'textLayout.fixed': '고정',
-  'textLayout.fixedDesc':
-    '고정 크기 — 너비와 높이가 모두 고정됩니다',
+  'textLayout.fixedDesc': '고정 크기 — 너비와 높이가 모두 고정됩니다',
   'textLayout.fillWidth': '너비 채우기',
   'textLayout.fillHeight': '높이 채우기',
 
@@ -306,8 +301,7 @@ const ko: TranslationKeys = {
   'ai.newChat': '새 대화',
   'ai.collapse': '접기',
   'ai.tryExample': '예시로 디자인 해보세요...',
-  'ai.tipSelectElements':
-    '팁: 대화 전에 캔버스에서 요소를 선택하면 컨텍스트를 제공할 수 있습니다.',
+  'ai.tipSelectElements': '팁: 대화 전에 캔버스에서 요소를 선택하면 컨텍스트를 제공할 수 있습니다.',
   'ai.generating': '생성 중...',
   'ai.designWithAgent': '에이전트로 디자인...',
   'ai.attachImage': '이미지 첨부',
@@ -321,8 +315,7 @@ const ko: TranslationKeys = {
   'ai.quickAction.loginScreenPrompt':
     '이메일 입력, 비밀번호 입력, 로그인 버튼, 소셜 로그인 옵션이 있는 모던 모바일 로그인 화면을 디자인해 주세요',
   'ai.quickAction.foodApp': '음식 앱 홈페이지',
-  'ai.quickAction.foodAppPrompt':
-    'Generate a well-designed food mobile app homepage',
+  'ai.quickAction.foodAppPrompt': 'Generate a well-designed food mobile app homepage',
   'ai.quickAction.bottomNav': '하단 네비게이션 바 디자인',
   'ai.quickAction.bottomNavPrompt':
     '홈, 검색, 추가, 메시지, 프로필 5개 탭이 있는 모바일 앱 하단 네비게이션 바를 디자인해 주세요',
@@ -339,8 +332,7 @@ const ko: TranslationKeys = {
   'code.download': '코드 파일 다운로드',
   'code.closeCodePanel': '코드 패널 닫기',
   'code.genCssVars': '전체 문서의 CSS 변수를 생성 중',
-  'code.genSelected':
-    '선택한 요소 {{count}}개의 코드를 생성 중',
+  'code.genSelected': '선택한 요소 {{count}}개의 코드를 생성 중',
   'code.genDocument': '전체 문서의 코드를 생성 중',
   'code.aiEnhance': 'AI 개선',
   'code.cancelEnhance': '개선 취소',
@@ -358,8 +350,7 @@ const ko: TranslationKeys = {
   'agents.mcpIntegrations': '터미널 MCP 연동',
   'agents.transport': '전송 방식',
   'agents.port': '포트',
-  'agents.mcpRestart':
-    'MCP 연동은 터미널을 재시작한 후 적용됩니다.',
+  'agents.mcpRestart': 'MCP 연동은 터미널을 재시작한 후 적용됩니다.',
   'agents.mcpReinstallHint':
     'OpenPencil 버전 업그레이드 후 호환성을 위해 MCP 통합을 다시 설치해 주세요.',
   'agents.modelCount': '모델 {{count}}개',
@@ -434,7 +425,8 @@ const ko: TranslationKeys = {
   'builtin.errorApiKeyEmpty': 'API 키가 비어 있습니다. 설정에서 API 키를 추가해 주세요.',
   'builtin.parallelAgents': '병렬 하위 에이전트: {{count}}x (클릭하여 전환)',
   'builtin.baseUrlPlaceholder': 'https://api.example.com/v1',
-  'builtin.teamDescription': '디자인 생성용 모델을 선택하세요. 설정하면 디자인 작업이 이 모델을 사용하는 전문 에이전트에 자동으로 위임됩니다.',
+  'builtin.teamDescription':
+    '디자인 생성용 모델을 선택하세요. 설정하면 디자인 작업이 이 모델을 사용하는 전문 에이전트에 자동으로 위임됩니다.',
   'builtin.teamDesignModel': '디자인 모델',
   'builtin.teamSelectModel': '없음 (단일 에이전트)',
 
@@ -449,8 +441,7 @@ const ko: TranslationKeys = {
   'figma.convertFailed': 'Figma 파일 변환에 실패했습니다',
   'figma.parsing': '.fig 파일 파싱 중...',
   'figma.converting': '노드 변환 중...',
-  'figma.selectPage':
-    '이 파일에는 {{count}}개의 페이지가 있습니다. 가져올 페이지를 선택하세요:',
+  'figma.selectPage': '이 파일에는 {{count}}개의 페이지가 있습니다. 가져올 페이지를 선택하세요:',
   'figma.layers': '{{count}}개 레이어',
   'figma.importAll': '모든 페이지 가져오기',
   'figma.importComplete': '가져오기 완료!',
@@ -496,6 +487,6 @@ const ko: TranslationKeys = {
   'variablePicker.bindToVariable': '변수에 바인딩',
   'variablePicker.unbind': '변수 바인딩 해제',
   'variablePicker.noVariables': '{{type}} 변수가 정의되지 않았습니다',
-} as const
+} as const;
 
-export default ko
+export default ko;

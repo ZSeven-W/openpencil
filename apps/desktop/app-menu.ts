@@ -1,12 +1,12 @@
-import { app, BrowserWindow, Menu } from 'electron'
+import { app, BrowserWindow, Menu } from 'electron';
 
 function sendMenuAction(action: string): void {
-  const win = BrowserWindow.getFocusedWindow() ?? BrowserWindow.getAllWindows()[0]
-  win?.webContents.send('menu:action', action)
+  const win = BrowserWindow.getFocusedWindow() ?? BrowserWindow.getAllWindows()[0];
+  win?.webContents.send('menu:action', action);
 }
 
 export function buildAppMenu(): void {
-  const isMac = process.platform === 'darwin'
+  const isMac = process.platform === 'darwin';
 
   const template: Electron.MenuItemConstructorOptions[] = [
     // macOS app menu
@@ -55,9 +55,7 @@ export function buildAppMenu(): void {
           accelerator: 'CmdOrCtrl+Shift+F',
           click: () => sendMenuAction('import-figma'),
         },
-        ...(!isMac
-          ? [{ type: 'separator' as const }, { role: 'quit' as const }]
-          : []),
+        ...(!isMac ? [{ type: 'separator' as const }, { role: 'quit' as const }] : []),
       ],
     },
 
@@ -107,14 +105,11 @@ export function buildAppMenu(): void {
         { role: 'minimize' },
         { role: 'zoom' },
         ...(isMac
-          ? [
-              { type: 'separator' as const },
-              { role: 'front' as const },
-            ]
+          ? [{ type: 'separator' as const }, { role: 'front' as const }]
           : [{ role: 'close' as const }]),
       ],
     },
-  ]
+  ];
 
-  Menu.setApplicationMenu(Menu.buildFromTemplate(template))
+  Menu.setApplicationMenu(Menu.buildFromTemplate(template));
 }

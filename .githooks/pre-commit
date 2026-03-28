@@ -28,3 +28,10 @@ done
 if [ "$CHANGED" = "1" ]; then
   echo "[version-sync] branch $BRANCH → $VERSION"
 fi
+
+# --- Lint & format staged files ---
+STAGED=$(git diff --cached --name-only --diff-filter=d | grep -E '\.(ts|tsx|js|jsx)$' || true)
+if [ -n "$STAGED" ]; then
+  echo "$STAGED" | xargs npx oxfmt --check || { echo "[pre-commit] format check failed. Run: bun run format"; exit 1; }
+  echo "$STAGED" | xargs npx oxlint || { echo "[pre-commit] lint failed. Run: bun run lint:fix"; exit 1; }
+fi

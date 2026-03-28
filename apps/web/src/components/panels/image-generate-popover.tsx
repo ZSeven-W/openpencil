@@ -1,19 +1,19 @@
-import { useState } from 'react'
-import { Settings, Sparkles, Loader2 } from 'lucide-react'
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
-import { Button } from '@/components/ui/button'
-import { useAgentSettingsStore } from '@/stores/agent-settings-store'
+import { useState } from 'react';
+import { Settings, Sparkles, Loader2 } from 'lucide-react';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Button } from '@/components/ui/button';
+import { useAgentSettingsStore } from '@/stores/agent-settings-store';
 
 interface ImageGeneratePopoverProps {
-  initialPrompt: string
-  onGenerated: (url: string) => void
-  children: React.ReactNode
+  initialPrompt: string;
+  onGenerated: (url: string) => void;
+  children: React.ReactNode;
   /** Node dimensions — passed to the API for aspect-ratio-aware generation */
-  width?: number
-  height?: number
+  width?: number;
+  height?: number;
 }
 
-type State = 'idle' | 'loading' | 'preview' | 'error'
+type State = 'idle' | 'loading' | 'preview' | 'error';
 
 export default function ImageGeneratePopover({
   initialPrompt,
@@ -22,32 +22,32 @@ export default function ImageGeneratePopover({
   width,
   height,
 }: ImageGeneratePopoverProps) {
-  const [open, setOpen] = useState(false)
-  const [prompt, setPrompt] = useState(initialPrompt)
-  const [state, setState] = useState<State>('idle')
-  const [previewUrl, setPreviewUrl] = useState<string | null>(null)
-  const [errorMsg, setErrorMsg] = useState<string>('')
+  const [open, setOpen] = useState(false);
+  const [prompt, setPrompt] = useState(initialPrompt);
+  const [state, setState] = useState<State>('idle');
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [errorMsg, setErrorMsg] = useState<string>('');
 
-  const activeProfile = useAgentSettingsStore((s) => s.getActiveImageGenProfile())
-  const setDialogOpen = useAgentSettingsStore((s) => s.setDialogOpen)
+  const activeProfile = useAgentSettingsStore((s) => s.getActiveImageGenProfile());
+  const setDialogOpen = useAgentSettingsStore((s) => s.setDialogOpen);
 
-  const isConfigured = !!activeProfile?.apiKey
+  const isConfigured = !!activeProfile?.apiKey;
 
   const handleOpenChange = (next: boolean) => {
-    setOpen(next)
+    setOpen(next);
     if (next) {
       // Reset to idle when reopening
-      setPrompt(initialPrompt)
-      setState('idle')
-      setPreviewUrl(null)
-      setErrorMsg('')
+      setPrompt(initialPrompt);
+      setState('idle');
+      setPreviewUrl(null);
+      setErrorMsg('');
     }
-  }
+  };
 
   const handleGenerate = async () => {
-    if (!activeProfile) return
-    setState('loading')
-    setErrorMsg('')
+    if (!activeProfile) return;
+    setState('loading');
+    setErrorMsg('');
     try {
       const res = await fetch('/api/ai/image-generate', {
         method: 'POST',
@@ -60,33 +60,35 @@ export default function ImageGeneratePopover({
           baseUrl: activeProfile.baseUrl,
           ...(width && height ? { width, height } : {}),
         }),
-      })
+      });
       if (!res.ok) {
-        let msg = `HTTP ${res.status}`
+        let msg = `HTTP ${res.status}`;
         try {
-          const errData = await res.json()
-          const raw = errData.message || errData.statusMessage || errData.error || ''
-          if (raw) msg = String(raw).slice(0, 200)
-        } catch { /* use default msg */ }
-        throw new Error(msg)
+          const errData = await res.json();
+          const raw = errData.message || errData.statusMessage || errData.error || '';
+          if (raw) msg = String(raw).slice(0, 200);
+        } catch {
+          /* use default msg */
+        }
+        throw new Error(msg);
       }
-      const data = (await res.json()) as { url?: string; error?: string }
-      if (data.error) throw new Error(data.error)
-      if (!data.url) throw new Error('No image URL returned')
-      setPreviewUrl(data.url)
-      setState('preview')
+      const data = (await res.json()) as { url?: string; error?: string };
+      if (data.error) throw new Error(data.error);
+      if (!data.url) throw new Error('No image URL returned');
+      setPreviewUrl(data.url);
+      setState('preview');
     } catch (err) {
-      setErrorMsg(err instanceof Error ? err.message : String(err))
-      setState('error')
+      setErrorMsg(err instanceof Error ? err.message : String(err));
+      setState('error');
     }
-  }
+  };
 
   const handleApply = () => {
     if (previewUrl) {
-      onGenerated(previewUrl)
-      setOpen(false)
+      onGenerated(previewUrl);
+      setOpen(false);
     }
-  }
+  };
 
   return (
     <Popover open={open} onOpenChange={handleOpenChange}>
@@ -111,7 +113,7 @@ export default function ImageGeneratePopover({
         )}
       </PopoverContent>
     </Popover>
-  )
+  );
 }
 
 function NotConfiguredView({ onOpenSettings }: { onOpenSettings: () => void }) {
@@ -123,7 +125,7 @@ function NotConfiguredView({ onOpenSettings }: { onOpenSettings: () => void }) {
         Open Settings
       </Button>
     </div>
-  )
+  );
 }
 
 function LoadingView() {
@@ -132,7 +134,7 @@ function LoadingView() {
       <Loader2 className="w-6 h-6 text-muted-foreground animate-spin" />
       <span className="text-xs text-muted-foreground">Generating...</span>
     </div>
-  )
+  );
 }
 
 function PreviewView({
@@ -140,9 +142,9 @@ function PreviewView({
   onApply,
   onRetry,
 }: {
-  url: string
-  onApply: () => void
-  onRetry: () => void
+  url: string;
+  onApply: () => void;
+  onRetry: () => void;
 }) {
   return (
     <div className="flex flex-col gap-3">
@@ -161,7 +163,7 @@ function PreviewView({
         </Button>
       </div>
     </div>
-  )
+  );
 }
 
 function IdleView({
@@ -173,13 +175,13 @@ function IdleView({
   profileName,
   error,
 }: {
-  prompt: string
-  onPromptChange: (v: string) => void
-  onGenerate: () => void
-  provider: string
-  model: string
-  profileName: string
-  error?: string
+  prompt: string;
+  onPromptChange: (v: string) => void;
+  onGenerate: () => void;
+  provider: string;
+  model: string;
+  profileName: string;
+  error?: string;
 }) {
   return (
     <div className="flex flex-col gap-3">
@@ -199,5 +201,5 @@ function IdleView({
         {profileName} · {provider} · {model || 'default'}
       </p>
     </div>
-  )
+  );
 }

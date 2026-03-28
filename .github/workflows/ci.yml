@@ -25,6 +25,12 @@ jobs:
       - name: Generate skill registry
         run: bun run generate
 
+      - name: Lint
+        run: bun run lint
+
+      - name: Format check
+        run: bun run format:check
+
       - name: Type check
         run: npx tsc --noEmit
 

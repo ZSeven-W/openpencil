@@ -1,5 +1,5 @@
-import { z } from 'zod'
-import type { AgentTool } from './types'
+import { z } from 'zod';
+import type { AgentTool } from './types';
 
 export function createDelegateTool(memberIds: string[]): AgentTool {
   return {
@@ -12,5 +12,5 @@ export function createDelegateTool(memberIds: string[]): AgentTool {
       context: z.string().optional().describe('Additional context for the member'),
     }),
     // No execute — handled by agent-team.ts
-  }
+  };
 }

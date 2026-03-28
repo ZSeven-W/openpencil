@@ -23,16 +23,16 @@ import {
   updateNodeInTree,
   deepCloneNode,
   flattenNodes,
-} from '@zseven-w/pen-core'
+} from '@zseven-w/pen-core';
 
-const doc = createEmptyDocument()
-const node = findNodeInTree(doc.children, 'node-id')
+const doc = createEmptyDocument();
+const node = findNodeInTree(doc.children, 'node-id');
 ```
 
 ### Multi-Page Support
 
 ```ts
-import { getActivePage, getActivePageChildren, migrateToPages } from '@zseven-w/pen-core'
+import { getActivePage, getActivePageChildren, migrateToPages } from '@zseven-w/pen-core';
 ```
 
 ### Layout Engine
@@ -40,7 +40,12 @@ import { getActivePage, getActivePageChildren, migrateToPages } from '@zseven-w/
 Automatic layout computation with auto-sizing, padding, and gap support:
 
 ```ts
-import { inferLayout, computeLayoutPositions, fitContentWidth, fitContentHeight } from '@zseven-w/pen-core'
+import {
+  inferLayout,
+  computeLayoutPositions,
+  fitContentWidth,
+  fitContentHeight,
+} from '@zseven-w/pen-core';
 ```
 
 ### Design Variables
@@ -48,7 +53,11 @@ import { inferLayout, computeLayoutPositions, fitContentWidth, fitContentHeight 
 Resolve `$variable` references against theme axes:
 
 ```ts
-import { resolveVariableRef, resolveNodeForCanvas, replaceVariableRefsInTree } from '@zseven-w/pen-core'
+import {
+  resolveVariableRef,
+  resolveNodeForCanvas,
+  replaceVariableRefsInTree,
+} from '@zseven-w/pen-core';
 ```
 
 ### Boolean Path Operations
@@ -56,7 +65,7 @@ import { resolveVariableRef, resolveNodeForCanvas, replaceVariableRefsInTree } f
 Union, subtract, intersect, and exclude paths via Paper.js:
 
 ```ts
-import { executeBooleanOp, BooleanOpType } from '@zseven-w/pen-core'
+import { executeBooleanOp, BooleanOpType } from '@zseven-w/pen-core';
 ```
 
 ### Text Measurement
@@ -64,7 +73,7 @@ import { executeBooleanOp, BooleanOpType } from '@zseven-w/pen-core'
 Estimate text dimensions for layout without a browser:
 
 ```ts
-import { estimateTextWidth, estimateTextHeight } from '@zseven-w/pen-core'
+import { estimateTextWidth, estimateTextHeight } from '@zseven-w/pen-core';
 ```
 
 ### Document Normalization
@@ -72,7 +81,7 @@ import { estimateTextWidth, estimateTextHeight } from '@zseven-w/pen-core'
 Sanitize and fix documents imported from external sources:
 
 ```ts
-import { normalizePenDocument } from '@zseven-w/pen-core'
+import { normalizePenDocument } from '@zseven-w/pen-core';
 ```
 
 ## License

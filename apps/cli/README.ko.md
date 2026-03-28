@@ -14,10 +14,10 @@ npm install -g @zseven-w/openpencil
 
 CLI는 모든 플랫폼에서 OpenPencil 데스크톱 앱을 자동으로 감지하고 실행합니다:
 
-| 플랫폼      | 감지되는 설치 경로                                                                                    |
-| ----------- | --------------------------------------------------------------------------------------------------- |
-| **macOS**   | `/Applications/OpenPencil.app`, `~/Applications/OpenPencil.app`                                     |
-| **Windows** | NSIS 사용자별 (`%LOCALAPPDATA%`), 시스템 전체 (`%PROGRAMFILES%`), 포터블                               |
+| 플랫폼      | 감지되는 설치 경로                                                                                      |
+| ----------- | ------------------------------------------------------------------------------------------------------- |
+| **macOS**   | `/Applications/OpenPencil.app`, `~/Applications/OpenPencil.app`                                         |
+| **Windows** | NSIS 사용자별 (`%LOCALAPPDATA%`), 시스템 전체 (`%PROGRAMFILES%`), 포터블                                |
 | **Linux**   | `/usr/bin`, `/usr/local/bin`, `~/.local/bin`, AppImage (`~/Applications`, `~/Downloads`), Snap, Flatpak |
 
 ## 사용법

@@ -1,141 +1,141 @@
-import { useState, useCallback, useEffect } from 'react'
-import { TooltipProvider } from '@/components/ui/tooltip'
-import TopBar from './top-bar'
-import Toolbar from './toolbar'
-import BooleanToolbar from './boolean-toolbar'
-import StatusBar from './status-bar'
-import LayerPanel from '@/components/panels/layer-panel'
-import RightPanel from '@/components/panels/right-panel'
-import AIChatPanel, { AIChatMinimizedBar } from '@/components/panels/ai-chat-panel'
-import VariablesPanel from '@/components/panels/variables-panel'
-import DesignMdPanel from '@/components/panels/design-md-panel'
-import ComponentBrowserPanel from '@/components/panels/component-browser-panel'
-import ExportDialog from '@/components/shared/export-dialog'
-import SaveDialog from '@/components/shared/save-dialog'
-import AgentSettingsDialog from '@/components/shared/agent-settings-dialog'
-import FigmaImportDialog from '@/components/shared/figma-import-dialog'
-import UpdateReadyBanner from './update-ready-banner'
-import { useAIStore } from '@/stores/ai-store'
-import { useCanvasStore } from '@/stores/canvas-store'
-import { useDocumentStore } from '@/stores/document-store'
-import { useAgentSettingsStore } from '@/stores/agent-settings-store'
-import { useUIKitStore } from '@/stores/uikit-store'
-import { useThemePresetStore } from '@/stores/theme-preset-store'
-import { useDesignMdStore } from '@/stores/design-md-store'
-import { useElectronMenu } from '@/hooks/use-electron-menu'
-import { useFigmaPaste } from '@/hooks/use-figma-paste'
-import { useMcpSync } from '@/hooks/use-mcp-sync'
-import { useFileDrop } from '@/hooks/use-file-drop'
-import { initAppStorage } from '@/utils/app-storage'
-import SkiaCanvas from '@/canvas/skia/skia-canvas'
+import { useState, useCallback, useEffect } from 'react';
+import { TooltipProvider } from '@/components/ui/tooltip';
+import TopBar from './top-bar';
+import Toolbar from './toolbar';
+import BooleanToolbar from './boolean-toolbar';
+import StatusBar from './status-bar';
+import LayerPanel from '@/components/panels/layer-panel';
+import RightPanel from '@/components/panels/right-panel';
+import AIChatPanel, { AIChatMinimizedBar } from '@/components/panels/ai-chat-panel';
+import VariablesPanel from '@/components/panels/variables-panel';
+import DesignMdPanel from '@/components/panels/design-md-panel';
+import ComponentBrowserPanel from '@/components/panels/component-browser-panel';
+import ExportDialog from '@/components/shared/export-dialog';
+import SaveDialog from '@/components/shared/save-dialog';
+import AgentSettingsDialog from '@/components/shared/agent-settings-dialog';
+import FigmaImportDialog from '@/components/shared/figma-import-dialog';
+import UpdateReadyBanner from './update-ready-banner';
+import { useAIStore } from '@/stores/ai-store';
+import { useCanvasStore } from '@/stores/canvas-store';
+import { useDocumentStore } from '@/stores/document-store';
+import { useAgentSettingsStore } from '@/stores/agent-settings-store';
+import { useUIKitStore } from '@/stores/uikit-store';
+import { useThemePresetStore } from '@/stores/theme-preset-store';
+import { useDesignMdStore } from '@/stores/design-md-store';
+import { useElectronMenu } from '@/hooks/use-electron-menu';
+import { useFigmaPaste } from '@/hooks/use-figma-paste';
+import { useMcpSync } from '@/hooks/use-mcp-sync';
+import { useFileDrop } from '@/hooks/use-file-drop';
+import { initAppStorage } from '@/utils/app-storage';
+import SkiaCanvas from '@/canvas/skia/skia-canvas';
 
 export default function EditorLayout() {
-  const toggleMinimize = useAIStore((s) => s.toggleMinimize)
-  const hasSelection = useCanvasStore((s) => s.selection.activeId !== null)
-  const layerPanelOpen = useCanvasStore((s) => s.layerPanelOpen)
-  const variablesPanelOpen = useCanvasStore((s) => s.variablesPanelOpen)
-  const designMdPanelOpen = useCanvasStore((s) => s.designMdPanelOpen)
-  const figmaImportOpen = useCanvasStore((s) => s.figmaImportDialogOpen)
+  const toggleMinimize = useAIStore((s) => s.toggleMinimize);
+  const hasSelection = useCanvasStore((s) => s.selection.activeId !== null);
+  const layerPanelOpen = useCanvasStore((s) => s.layerPanelOpen);
+  const variablesPanelOpen = useCanvasStore((s) => s.variablesPanelOpen);
+  const designMdPanelOpen = useCanvasStore((s) => s.designMdPanelOpen);
+  const figmaImportOpen = useCanvasStore((s) => s.figmaImportDialogOpen);
   const closeFigmaImport = useCallback(() => {
-    useCanvasStore.getState().setFigmaImportDialogOpen(false)
-  }, [])
-  const browserOpen = useUIKitStore((s) => s.browserOpen)
-  const saveDialogOpen = useDocumentStore((s) => s.saveDialogOpen)
+    useCanvasStore.getState().setFigmaImportDialogOpen(false);
+  }, []);
+  const browserOpen = useUIKitStore((s) => s.browserOpen);
+  const saveDialogOpen = useDocumentStore((s) => s.saveDialogOpen);
   const closeSaveDialog = useCallback(() => {
-    useDocumentStore.getState().setSaveDialogOpen(false)
-  }, [])
-  const [exportOpen, setExportOpen] = useState(false)
+    useDocumentStore.getState().setSaveDialogOpen(false);
+  }, []);
+  const [exportOpen, setExportOpen] = useState(false);
 
   const closeExport = useCallback(() => {
-    setExportOpen(false)
-  }, [])
+    setExportOpen(false);
+  }, []);
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      const isMod = e.metaKey || e.ctrlKey
+      const isMod = e.metaKey || e.ctrlKey;
 
       // Cmd+J: toggle AI panel minimize
       if (isMod && e.key === 'j') {
-        e.preventDefault()
-        toggleMinimize()
-        return
+        e.preventDefault();
+        toggleMinimize();
+        return;
       }
 
       // Cmd+Shift+C: switch right panel to code tab
       if (isMod && e.shiftKey && e.key.toLowerCase() === 'c') {
-        e.preventDefault()
-        useCanvasStore.getState().setRightPanelTab('code')
-        return
+        e.preventDefault();
+        useCanvasStore.getState().setRightPanelTab('code');
+        return;
       }
 
       // Cmd+Shift+E: open export
       if (isMod && e.shiftKey && e.key.toLowerCase() === 'e') {
-        e.preventDefault()
-        setExportOpen((prev) => !prev)
-        return
+        e.preventDefault();
+        setExportOpen((prev) => !prev);
+        return;
       }
 
       // Cmd+Shift+V: toggle variables panel
       if (isMod && e.shiftKey && e.key.toLowerCase() === 'v') {
-        e.preventDefault()
-        useCanvasStore.getState().toggleVariablesPanel()
-        return
+        e.preventDefault();
+        useCanvasStore.getState().toggleVariablesPanel();
+        return;
       }
 
       // Cmd+Shift+D: toggle design system panel
       if (isMod && e.shiftKey && e.key.toLowerCase() === 'd') {
-        e.preventDefault()
-        useCanvasStore.getState().toggleDesignMdPanel()
-        return
+        e.preventDefault();
+        useCanvasStore.getState().toggleDesignMdPanel();
+        return;
       }
 
       // Cmd+Shift+K: toggle UIKit browser
       if (isMod && e.shiftKey && e.key.toLowerCase() === 'k') {
-        e.preventDefault()
-        useUIKitStore.getState().toggleBrowser()
-        return
+        e.preventDefault();
+        useUIKitStore.getState().toggleBrowser();
+        return;
       }
 
       // Cmd+Shift+F: open Figma import
       if (isMod && e.shiftKey && e.key.toLowerCase() === 'f') {
-        e.preventDefault()
-        useCanvasStore.getState().setFigmaImportDialogOpen(true)
-        return
+        e.preventDefault();
+        useCanvasStore.getState().setFigmaImportDialogOpen(true);
+        return;
       }
 
       // Cmd+,: open agent settings
       if (isMod && e.key === ',') {
-        e.preventDefault()
-        useAgentSettingsStore.getState().setDialogOpen(true)
-        return
+        e.preventDefault();
+        useAgentSettingsStore.getState().setDialogOpen(true);
+        return;
       }
-    }
-    window.addEventListener('keydown', handler)
-    return () => window.removeEventListener('keydown', handler)
-  }, [toggleMinimize])
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [toggleMinimize]);
 
   // Handle Electron native menu actions
-  useElectronMenu()
+  useElectronMenu();
 
   // Handle Figma clipboard paste
-  useFigmaPaste()
+  useFigmaPaste();
 
   // MCP ↔ canvas real-time sync
-  useMcpSync()
+  useMcpSync();
 
   // Drag-and-drop file open
-  const isDragging = useFileDrop()
+  const isDragging = useFileDrop();
 
   // Hydrate persisted settings (init appStorage first for Electron IPC cache)
   useEffect(() => {
     initAppStorage().then(() => {
-      useAgentSettingsStore.getState().hydrate()
-      useUIKitStore.getState().hydrate()
-      useCanvasStore.getState().hydrate()
-      useThemePresetStore.getState().hydrate()
-      useDesignMdStore.getState().hydrate()
-    })
-  }, [])
+      useAgentSettingsStore.getState().hydrate();
+      useUIKitStore.getState().hydrate();
+      useCanvasStore.getState().hydrate();
+      useThemePresetStore.getState().hydrate();
+      useDesignMdStore.getState().hydrate();
+    });
+  }, []);
 
   return (
     <TooltipProvider delayDuration={300}>
@@ -186,5 +186,5 @@ export default function EditorLayout() {
         )}
       </div>
     </TooltipProvider>
-  )
+  );
 }

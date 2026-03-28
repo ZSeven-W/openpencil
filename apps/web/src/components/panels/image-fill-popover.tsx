@@ -1,39 +1,39 @@
-import { useRef, useEffect, useState } from 'react'
-import { createPortal } from 'react-dom'
-import { useTranslation } from 'react-i18next'
-import { X, Upload, RotateCcw } from 'lucide-react'
-import { Button } from '@/components/ui/button'
-import { Slider } from '@/components/ui/slider'
-import { Separator } from '@/components/ui/separator'
-import type { ImageFitMode } from '@/types/pen'
+import { useRef, useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
+import { useTranslation } from 'react-i18next';
+import { X, Upload, RotateCcw } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Slider } from '@/components/ui/slider';
+import { Separator } from '@/components/ui/separator';
+import type { ImageFitMode } from '@/types/pen';
 
-type FitMode = ImageFitMode | 'stretch'
+type FitMode = ImageFitMode | 'stretch';
 
 interface AdjustmentValues {
-  exposure?: number
-  contrast?: number
-  saturation?: number
-  temperature?: number
-  tint?: number
-  highlights?: number
-  shadows?: number
+  exposure?: number;
+  contrast?: number;
+  saturation?: number;
+  temperature?: number;
+  tint?: number;
+  highlights?: number;
+  shadows?: number;
 }
 
 interface ImageFillPopoverProps {
-  imageSrc?: string
-  fitMode: FitMode
-  adjustments: AdjustmentValues
+  imageSrc?: string;
+  fitMode: FitMode;
+  adjustments: AdjustmentValues;
   /** Bounding rect of the trigger element for positioning */
-  triggerRect: DOMRect
-  onFitModeChange: (mode: FitMode) => void
-  onAdjustmentChange: (key: keyof AdjustmentValues, value: number) => void
-  onResetAdjustments?: () => void
-  onImageChange?: (dataUrl: string) => void
-  onClose: () => void
+  triggerRect: DOMRect;
+  onFitModeChange: (mode: FitMode) => void;
+  onAdjustmentChange: (key: keyof AdjustmentValues, value: number) => void;
+  onResetAdjustments?: () => void;
+  onImageChange?: (dataUrl: string) => void;
+  onClose: () => void;
 }
 
-const PANEL_WIDTH = 220
-const PANEL_GAP = 8
+const PANEL_WIDTH = 220;
+const PANEL_GAP = 8;
 
 const ADJUSTMENT_KEYS: { key: keyof AdjustmentValues; labelKey: string }[] = [
   { key: 'exposure', labelKey: 'image.exposure' },
@@ -43,9 +43,9 @@ const ADJUSTMENT_KEYS: { key: keyof AdjustmentValues; labelKey: string }[] = [
   { key: 'tint', labelKey: 'image.tint' },
   { key: 'highlights', labelKey: 'image.highlights' },
   { key: 'shadows', labelKey: 'image.shadows' },
-]
+];
 
-export type { AdjustmentValues, FitMode }
+export type { AdjustmentValues, FitMode };
 
 export default function ImageFillPopover({
   imageSrc,
@@ -58,64 +58,64 @@ export default function ImageFillPopover({
   onImageChange,
   onClose,
 }: ImageFillPopoverProps) {
-  const { t } = useTranslation()
-  const panelRef = useRef<HTMLDivElement>(null)
-  const fileRef = useRef<HTMLInputElement>(null)
-  const [panelHeight, setPanelHeight] = useState(0)
+  const { t } = useTranslation();
+  const panelRef = useRef<HTMLDivElement>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [panelHeight, setPanelHeight] = useState(0);
 
   // Measure panel height for vertical centering
   useEffect(() => {
     if (panelRef.current) {
-      setPanelHeight(panelRef.current.offsetHeight)
+      setPanelHeight(panelRef.current.offsetHeight);
     }
-  })
+  });
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
       if (panelRef.current && !panelRef.current.contains(e.target as Node)) {
-        onClose()
+        onClose();
       }
-    }
+    };
     // Use setTimeout to avoid the opening click triggering immediate close
     const timer = setTimeout(() => {
-      document.addEventListener('mousedown', handler)
-    }, 0)
+      document.addEventListener('mousedown', handler);
+    }, 0);
     return () => {
-      clearTimeout(timer)
-      document.removeEventListener('mousedown', handler)
-    }
-  }, [onClose])
+      clearTimeout(timer);
+      document.removeEventListener('mousedown', handler);
+    };
+  }, [onClose]);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (!file || !file.type.startsWith('image/')) return
-    const reader = new FileReader()
+    const file = e.target.files?.[0];
+    if (!file || !file.type.startsWith('image/')) return;
+    const reader = new FileReader();
     reader.onload = () => {
-      onImageChange?.(reader.result as string)
-    }
-    reader.readAsDataURL(file)
-    e.target.value = ''
-  }
+      onImageChange?.(reader.result as string);
+    };
+    reader.readAsDataURL(file);
+    e.target.value = '';
+  };
 
-  const hasAdjustments = ADJUSTMENT_KEYS.some((a) => (adjustments[a.key] ?? 0) !== 0)
+  const hasAdjustments = ADJUSTMENT_KEYS.some((a) => (adjustments[a.key] ?? 0) !== 0);
   const handleResetAll = () => {
     if (onResetAdjustments) {
-      onResetAdjustments()
+      onResetAdjustments();
     } else {
       for (const a of ADJUSTMENT_KEYS) {
-        onAdjustmentChange(a.key, 0)
+        onAdjustmentChange(a.key, 0);
       }
     }
-  }
+  };
 
-  const hasImage = imageSrc && !imageSrc.startsWith('__')
+  const hasImage = imageSrc && !imageSrc.startsWith('__');
 
   // Position: to the left of the trigger element
-  const left = triggerRect.left - PANEL_WIDTH - PANEL_GAP
+  const left = triggerRect.left - PANEL_WIDTH - PANEL_GAP;
   // Vertically align with the trigger top, clamped to viewport
-  let top = triggerRect.top
+  let top = triggerRect.top;
   if (panelHeight > 0 && top + panelHeight > window.innerHeight - 8) {
-    top = Math.max(8, window.innerHeight - panelHeight - 8)
+    top = Math.max(8, window.innerHeight - panelHeight - 8);
   }
 
   return createPortal(
@@ -215,7 +215,7 @@ export default function ImageFillPopover({
       </div>
     </div>,
     document.body,
-  )
+  );
 }
 
 function AdjustmentRow({
@@ -223,15 +223,13 @@ function AdjustmentRow({
   value,
   onChange,
 }: {
-  label: string
-  value: number
-  onChange: (v: number) => void
+  label: string;
+  value: number;
+  onChange: (v: number) => void;
 }) {
   return (
     <div className="flex items-center gap-2">
-      <span className="text-[10px] text-muted-foreground w-[68px] shrink-0 truncate">
-        {label}
-      </span>
+      <span className="text-[10px] text-muted-foreground w-[68px] shrink-0 truncate">{label}</span>
       <Slider
         min={-100}
         max={100}
@@ -244,5 +242,5 @@ function AdjustmentRow({
         {value}
       </span>
     </div>
-  )
+  );
 }

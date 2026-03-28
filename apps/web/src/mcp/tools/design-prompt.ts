@@ -1,6 +1,6 @@
-import { getSkillByName } from '@zseven-w/pen-ai-skills'
-import { buildDesignMdStylePolicy } from '../../services/ai/ai-prompts'
-import type { DesignMdSpec } from '../../types/design-md'
+import { getSkillByName } from '@zseven-w/pen-ai-skills';
+import { buildDesignMdStylePolicy } from '../../services/ai/ai-prompts';
+import type { DesignMdSpec } from '../../types/design-md';
 
 // ---------------------------------------------------------------------------
 // Skill name mapping — maps legacy section keys to skill registry names
@@ -18,12 +18,12 @@ const SECTION_NAME_MAP: Record<string, string> = {
   copywriting: 'copywriting',
   cjk: 'cjk-typography',
   examples: 'examples',
-}
+};
 
 /** Look up a skill by legacy section key or skill name. */
 function getSkillContent(key: string): string {
-  const skillName = SECTION_NAME_MAP[key] ?? key
-  return getSkillByName(skillName)?.content ?? ''
+  const skillName = SECTION_NAME_MAP[key] ?? key;
+  return getSkillByName(skillName)?.content ?? '';
 }
 
 // ---------------------------------------------------------------------------
@@ -33,7 +33,7 @@ function getSkillContent(key: string): string {
 const INTRO = `You are generating designs for OpenPencil, a vector design tool.
 Use batch_design (for multi-node designs with DSL) or insert_node (for single node trees with JSON).
 Both support postProcess=true for automatic role defaults, icon resolution, and layout sanitization.
-Each node must follow the PenNode schema below.`
+Each node must follow the PenNode schema below.`;
 
 const DESIGN_TYPE_DETECTION = `DESIGN TYPE DETECTION:
 Classify by the design's PURPOSE to choose the correct root frame size — reason about intent, do not keyword-match:
@@ -42,7 +42,7 @@ Classify by the design's PURPOSE to choose the correct root frame size — reaso
 - Data-rich workspace (dashboards, admin panels, analytics) → Desktop: width=1200, height=0
 - CRITICAL: Single-task screens MUST be 375×812. NEVER use 1200 width for focused app screens.
 - Multi-section page height hints: nav 64-80px, hero 500-600px, feature sections 400-600px, CTA 200-300px, footer 200-300px.
-- Single-task screen height hints: status bar 44px, header 56-64px, form fields 48-56px each, buttons 48px, spacing 16-24px.`
+- Single-task screen height hints: status bar 44px, header 56-64px, form fields 48-56px each, buttons 48px, spacing 16-24px.`;
 
 const ROLE_GUIDE = `SEMANTIC ROLES (context-aware defaults):
 Add "role" to nodes for automatic smart defaults. System fills unset props based on role. Your explicit props always override.
@@ -82,7 +82,7 @@ Key role defaults:
   table       → layout:vertical, gap:0, clipContent:true
   table-row   → layout:horizontal, padding:[12,16], alignItems:center
   table-cell  → width:fill_container
-Any string is valid as a role — unknown roles pass through unchanged.`
+Any string is valid as a role — unknown roles pass through unchanged.`;
 
 const LAYOUT_RULES = `LAYOUT ENGINE (flexbox-based):
 - Frames with layout: "vertical"/"horizontal" auto-position children via gap, padding, justifyContent, alignItems
@@ -106,7 +106,7 @@ const LAYOUT_RULES = `LAYOUT ENGINE (flexbox-based):
 - Centered content: frame alignItems="center", content frame with fixed width (e.g. 1080).
 - FORMS: ALL inputs AND primary button MUST use width="fill_container". Vertical layout, gap=16-20. ONE primary action button only.
   Social login buttons: horizontal frame width="fill_container", each button width="fit_content".
-- Keep hierarchy shallow: no pointless "Inner" wrappers. Only use wrappers with a visual purpose (fill, padding, border).`
+- Keep hierarchy shallow: no pointless "Inner" wrappers. Only use wrappers with a visual purpose (fill, padding, border).`;
 
 const TEXT_RULES = `TEXT RULES:
 - Body/description text in vertical layout: width="fill_container" + textGrowth="fixed-width". This wraps text and auto-sizes height.
@@ -126,7 +126,7 @@ CJK TYPOGRAPHY:
 
 COPYWRITING:
 - Headlines: 2-6 words. Subtitles: 1 sentence ≤15 words. Buttons: 1-3 words. Card text: ≤2 sentences.
-- NEVER generate placeholder paragraphs with 3+ sentences. Distill to essence.`
+- NEVER generate placeholder paragraphs with 3+ sentences. Distill to essence.`;
 
 const DESIGN_GUIDELINES = `DESIGN GUIDELINES:
 - Use unique descriptive IDs. All elements INSIDE root frame as children.
@@ -143,18 +143,18 @@ const DESIGN_GUIDELINES = `DESIGN GUIDELINES:
 - Landing pages: hero 40-56px headline, alternating section backgrounds, nav with space_between.
 - App screens: focus on core function, inputs width="fill_container", consistent 48-56px height, 16-24px gap.
 - Default to light neutral styling unless user asks for dark.
-  Dark theme only when user explicitly mentions: dark/cyber/terminal/neon/夜间/暗黑/gaming/noir.`
+  Dark theme only when user explicitly mentions: dark/cyber/terminal/neon/夜间/暗黑/gaming/noir.`;
 
 const VARIABLE_RULES = `DESIGN VARIABLES:
 - When document has variables, use "$variableName" references instead of hardcoded values.
 - Color variables: [{ "type": "solid", "color": "$primary" }]
 - Number variables: "gap": "$spacing-md"
-- Variables can have per-theme values. Use $name syntax — the engine resolves to concrete values for rendering.`
+- Variables can have per-theme values. Use $name syntax — the engine resolves to concrete values for rendering.`;
 
 const AUTO_REPLACE_RULES = `EMPTY FRAME AUTO-REPLACEMENT:
 - When inserting a root-level frame via I(null, {...}), if an empty root frame (no children) already exists on the canvas, it is automatically replaced — no need to delete or move into it manually.
 - The new frame inherits the position (x/y) of the replaced empty frame, so find_empty_space is unnecessary when an empty root frame exists.
-- Always use I(null, {...}) for root-level designs — the tool handles reuse of empty frames automatically.`
+- Always use I(null, {...}) for root-level designs — the tool handles reuse of empty frames automatically.`;
 
 const POST_PROCESSING = `POST-PROCESSING (automatic with postProcess=true):
 - Semantic role defaults: fills unset props based on role (see SEMANTIC ROLES above). Context-aware — e.g. button defaults differ in navbar vs form.
@@ -167,7 +167,7 @@ const POST_PROCESSING = `POST-PROCESSING (automatic with postProcess=true):
 - clipContent auto-addition: frames with cornerRadius + image children get clipContent:true.
 - Emoji removal and layout child position sanitization.
 - Unique ID enforcement.
-Always set postProcess=true when generating designs for best visual quality.`
+Always set postProcess=true when generating designs for best visual quality.`;
 
 const PLANNING_GUIDE = `DESIGN PLANNING (for layered generation workflow):
 
@@ -209,7 +209,7 @@ LAYERED WORKFLOW:
 1. Call design_skeleton with rootFrame + sections to create the layout structure
 2. For each section, call design_content to populate content nodes
 3. Call design_refine to run full-tree validation and auto-fixes
-This approach produces higher-fidelity designs than generating everything at once.`
+This approach produces higher-fidelity designs than generating everything at once.`;
 
 // ---------------------------------------------------------------------------
 // Section registry
@@ -241,7 +241,7 @@ type PromptSection =
   | 'codegen-flutter'
   | 'codegen-swiftui'
   | 'codegen-compose'
-  | 'codegen-react-native'
+  | 'codegen-react-native';
 
 // Dynamic section map — skills from registry, local sections for planning/variables/design-md
 const SECTION_MAP: Record<PromptSection, () => string> = {
@@ -271,19 +271,19 @@ const SECTION_MAP: Record<PromptSection, () => string> = {
   'codegen-swiftui': () => getSkillContent('codegen-swiftui'),
   'codegen-compose': () => getSkillContent('codegen-compose'),
   'codegen-react-native': () => getSkillContent('codegen-react-native'),
-}
+};
 
 // Design.md content injected via setDesignMdForPrompt()
-let _designMdContent: string | null = null
+let _designMdContent: string | null = null;
 
 /** Set the design.md content to be returned by the 'design-md' section. */
 export function setDesignMdForPrompt(spec: DesignMdSpec | undefined): void {
-  _designMdContent = spec ? buildDesignMdStylePolicy(spec) : null
+  _designMdContent = spec ? buildDesignMdStylePolicy(spec) : null;
 }
 
 /** Get the design.md style policy, or null if not loaded. */
 export function getDesignMdForPrompt(): string | null {
-  return _designMdContent
+  return _designMdContent;
 }
 
 // ---------------------------------------------------------------------------
@@ -301,18 +301,18 @@ export function buildDesignPrompt(section?: string): string {
   if (section) {
     // When design-md is loaded, 'style' section returns it instead of default
     if (section === 'style' && _designMdContent) {
-      return `DESIGN SYSTEM (from design.md):\n${_designMdContent}`
+      return `DESIGN SYSTEM (from design.md):\n${_designMdContent}`;
     }
     if (section in SECTION_MAP) {
-      return SECTION_MAP[section as PromptSection]()
+      return SECTION_MAP[section as PromptSection]();
     }
   }
-  return buildFullPrompt()
+  return buildFullPrompt();
 }
 
 /** List available prompt sections. */
 export function listPromptSections(): string[] {
-  return Object.keys(SECTION_MAP)
+  return Object.keys(SECTION_MAP);
 }
 
 // ---------------------------------------------------------------------------
@@ -342,5 +342,5 @@ ${VARIABLE_RULES}
 
 ${AUTO_REPLACE_RULES}
 
-${POST_PROCESSING}`
+${POST_PROCESSING}`;
 }

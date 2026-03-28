@@ -1,26 +1,26 @@
-import { defineEventHandler, getQuery, setResponseHeaders } from 'h3'
-import simpleIconsData from '@iconify-json/simple-icons/icons.json'
-import lucideData from '@iconify-json/lucide/icons.json'
+import { defineEventHandler, getQuery, setResponseHeaders } from 'h3';
+import simpleIconsData from '@iconify-json/simple-icons/icons.json';
+import lucideData from '@iconify-json/lucide/icons.json';
 
 interface IconResult {
-  d: string
-  style: 'stroke' | 'fill'
-  width: number
-  height: number
-  iconId: string
+  d: string;
+  style: 'stroke' | 'fill';
+  width: number;
+  height: number;
+  iconId: string;
 }
 
 type IconifySet = {
-  width?: number
-  height?: number
-  icons: Record<string, { body: string; width?: number; height?: number }>
-}
+  width?: number;
+  height?: number;
+  icons: Record<string, { body: string; width?: number; height?: number }>;
+};
 
-const simpleIcons = simpleIconsData as unknown as IconifySet
-const lucideIcons = lucideData as unknown as IconifySet
+const simpleIcons = simpleIconsData as unknown as IconifySet;
+const lucideIcons = lucideData as unknown as IconifySet;
 
 // In-memory cache: normalized name → result (null = confirmed miss)
-const iconCache = new Map<string, IconResult | null>()
+const iconCache = new Map<string, IconResult | null>();
 
 /**
  * GET /api/ai/icon?name=google
@@ -30,26 +30,26 @@ const iconCache = new Map<string, IconResult | null>()
  * No external network requests — instant, offline-capable.
  */
 export default defineEventHandler(async (event) => {
-  setResponseHeaders(event, { 'Content-Type': 'application/json' })
+  setResponseHeaders(event, { 'Content-Type': 'application/json' });
 
-  const { name } = getQuery(event) as { name?: string }
+  const { name } = getQuery(event) as { name?: string };
   if (!name || typeof name !== 'string') {
-    return { icon: null, error: 'Missing required query parameter: name' }
+    return { icon: null, error: 'Missing required query parameter: name' };
   }
 
-  const normalizedName = name.trim().toLowerCase()
+  const normalizedName = name.trim().toLowerCase();
   if (!normalizedName) {
-    return { icon: null, error: 'Empty icon name' }
+    return { icon: null, error: 'Empty icon name' };
   }
 
   if (iconCache.has(normalizedName)) {
-    return { icon: iconCache.get(normalizedName) ?? null }
+    return { icon: iconCache.get(normalizedName) ?? null };
   }
 
-  const result = resolveIcon(normalizedName)
-  iconCache.set(normalizedName, result)
-  return { icon: result }
-})
+  const result = resolveIcon(normalizedName);
+  iconCache.set(normalizedName, result);
+  return { icon: result };
+});
 
 // Common name aliases for icons AI models frequently request.
 // Keep in sync with commonAliases in src/services/ai/icon-resolver.ts
@@ -117,41 +117,37 @@ const NAME_ALIASES: Record<string, string> = {
   scan: 'scan',
   qrcode: 'qr-code',
   barcode: 'barcode',
-}
+};
 
 function resolveIcon(name: string): IconResult | null {
-  const kebab = toKebabCase(name)
-  const aliased = NAME_ALIASES[name] ?? NAME_ALIASES[kebab]
-  const candidates = new Set([name, kebab])
-  if (aliased) candidates.add(aliased)
+  const kebab = toKebabCase(name);
+  const aliased = NAME_ALIASES[name] ?? NAME_ALIASES[kebab];
+  const candidates = new Set([name, kebab]);
+  if (aliased) candidates.add(aliased);
 
   // 1. Try simple-icons first (brand/product icons).
   //    simple-icons only contains brand logos, so a hit here is unambiguously
   //    a brand — no risk of shadowing UI icon names like "search" or "home".
   for (const n of candidates) {
-    const result = lookupLocal(simpleIcons, 'simple-icons', n)
-    if (result) return result
+    const result = lookupLocal(simpleIcons, 'simple-icons', n);
+    if (result) return result;
   }
 
   // 2. Try Lucide (UI icons)
   for (const n of candidates) {
-    const result = lookupLocal(lucideIcons, 'lucide', n)
-    if (result) return result
+    const result = lookupLocal(lucideIcons, 'lucide', n);
+    if (result) return result;
   }
 
-  return null
+  return null;
 }
 
-function lookupLocal(
-  set: IconifySet,
-  collection: string,
-  iconName: string,
-): IconResult | null {
-  const icon = set.icons[iconName]
-  if (!icon) return null
-  const w = icon.width ?? set.width ?? 24
-  const h = icon.height ?? set.height ?? 24
-  return parseIconBody(icon.body, w, h, `${collection}:${iconName}`)
+function lookupLocal(set: IconifySet, collection: string, iconName: string): IconResult | null {
+  const icon = set.icons[iconName];
+  if (!icon) return null;
+  const w = icon.width ?? set.width ?? 24;
+  const h = icon.height ?? set.height ?? 24;
+  return parseIconBody(icon.body, w, h, `${collection}:${iconName}`);
 }
 
 /**
@@ -164,34 +160,34 @@ function parseIconBody(
   height: number,
   iconId: string,
 ): IconResult | null {
-  const pathRegex = /<path\s[^>]*?\bd="([^"]+)"[^>]*?\/?>/gi
-  const paths: string[] = []
-  let hasStroke = false
-  let hasFill = false
-  let match: RegExpExecArray | null
+  const pathRegex = /<path\s[^>]*?\bd="([^"]+)"[^>]*?\/?>/gi;
+  const paths: string[] = [];
+  let hasStroke = false;
+  let hasFill = false;
+  let match: RegExpExecArray | null;
 
   while ((match = pathRegex.exec(body)) !== null) {
-    paths.push(match[1])
-    const tag = match[0]
+    paths.push(match[1]);
+    const tag = match[0];
     if (/\bstroke=/.test(tag) || /\bstroke-width=/.test(tag) || /\bstroke-linecap=/.test(tag)) {
-      hasStroke = true
+      hasStroke = true;
     }
     if (/\bfill="(?!none)[^"]*"/.test(tag)) {
-      hasFill = true
+      hasFill = true;
     }
     if (/\bfill="none"/.test(tag)) {
-      hasStroke = true
+      hasStroke = true;
     }
   }
 
-  if (paths.length === 0) return null
+  if (paths.length === 0) return null;
 
   // Check body-level stroke/fill attributes
   if (/\bstroke="currentColor"/.test(body) || /\bstroke-linecap=/.test(body)) {
-    hasStroke = true
+    hasStroke = true;
   }
   if (/\bfill="currentColor"/.test(body) && !/\bfill="none"/.test(body)) {
-    hasFill = true
+    hasFill = true;
   }
 
   // When joining multiple <path> d-values, ensure each sub-path starts with
@@ -199,13 +195,13 @@ function parseIconBody(
   // but after concatenation it becomes relative to the previous endpoint.
   for (let i = 1; i < paths.length; i++) {
     if (paths[i].startsWith('m')) {
-      paths[i] = 'M' + paths[i].slice(1)
+      paths[i] = 'M' + paths[i].slice(1);
     }
   }
-  const d = paths.join(' ')
-  const style: 'stroke' | 'fill' = hasStroke && !hasFill ? 'stroke' : 'fill'
+  const d = paths.join(' ');
+  const style: 'stroke' | 'fill' = hasStroke && !hasFill ? 'stroke' : 'fill';
 
-  return { d, style, width, height, iconId }
+  return { d, style, width, height, iconId };
 }
 
 /**
@@ -214,13 +210,20 @@ function parseIconBody(
  */
 function toKebabCase(name: string): string {
   const prefixes = [
-    'arrow', 'chevron', 'circle', 'alert', 'help',
-    'external', 'bar', 'message', 'log',
-  ]
+    'arrow',
+    'chevron',
+    'circle',
+    'alert',
+    'help',
+    'external',
+    'bar',
+    'message',
+    'log',
+  ];
   for (const prefix of prefixes) {
     if (name.startsWith(prefix) && name.length > prefix.length) {
-      return `${prefix}-${name.slice(prefix.length)}`
+      return `${prefix}-${name.slice(prefix.length)}`;
     }
   }
-  return name
+  return name;
 }

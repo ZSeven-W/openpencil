@@ -1,4 +1,4 @@
-import type { PenNode } from '@/types/pen'
+import type { PenNode } from '@/types/pen';
 
 // ---------------------------------------------------------------------------
 // Inputs (additional)
@@ -38,7 +38,7 @@ export const inputSelect: PenNode = {
       fill: [{ type: 'solid', color: '#71717A' }],
     },
   ],
-}
+};
 
 export const inputSlider: PenNode = {
   id: 'shadcn-input-slider',
@@ -84,7 +84,7 @@ export const inputSlider: PenNode = {
       stroke: { thickness: 2, fill: [{ type: 'solid', color: '#18181B' }] },
     },
   ],
-}
+};
 
 // ---------------------------------------------------------------------------
 // Cards (additional)
@@ -105,7 +105,9 @@ export const dialog: PenNode = {
   cornerRadius: 12,
   fill: [{ type: 'solid', color: '#FFFFFF' }],
   stroke: { thickness: 1, fill: [{ type: 'solid', color: '#E4E4E7' }] },
-  effects: [{ type: 'shadow', offsetX: 0, offsetY: 4, blur: 16, spread: -2, color: 'rgba(0,0,0,0.1)' }],
+  effects: [
+    { type: 'shadow', offsetX: 0, offsetY: 4, blur: 16, spread: -2, color: 'rgba(0,0,0,0.1)' },
+  ],
   children: [
     {
       id: 'shadcn-dialog-title',
@@ -121,7 +123,8 @@ export const dialog: PenNode = {
       id: 'shadcn-dialog-desc',
       type: 'text',
       name: 'Description',
-      content: 'This action cannot be undone. This will permanently delete your account and remove your data from our servers.',
+      content:
+        'This action cannot be undone. This will permanently delete your account and remove your data from our servers.',
       fontSize: 14,
       lineHeight: 1.5,
       fill: [{ type: 'solid', color: '#71717A' }],
@@ -187,7 +190,7 @@ export const dialog: PenNode = {
       ],
     },
   ],
-}
+};
 
 // ---------------------------------------------------------------------------
 // Navigation (additional)
@@ -207,7 +210,9 @@ export const dropdownMenu: PenNode = {
   cornerRadius: 8,
   fill: [{ type: 'solid', color: '#FFFFFF' }],
   stroke: { thickness: 1, fill: [{ type: 'solid', color: '#E4E4E7' }] },
-  effects: [{ type: 'shadow', offsetX: 0, offsetY: 4, blur: 12, spread: -2, color: 'rgba(0,0,0,0.08)' }],
+  effects: [
+    { type: 'shadow', offsetX: 0, offsetY: 4, blur: 12, spread: -2, color: 'rgba(0,0,0,0.08)' },
+  ],
   children: [
     {
       id: 'shadcn-dropdown-item-1',
@@ -220,7 +225,14 @@ export const dropdownMenu: PenNode = {
       padding: [0, 8, 0, 8],
       cornerRadius: 4,
       children: [
-        { id: 'shadcn-dropdown-item-1-label', type: 'text', name: 'Label', content: 'Edit', fontSize: 13, fill: [{ type: 'solid', color: '#18181B' }] },
+        {
+          id: 'shadcn-dropdown-item-1-label',
+          type: 'text',
+          name: 'Label',
+          content: 'Edit',
+          fontSize: 13,
+          fill: [{ type: 'solid', color: '#18181B' }],
+        },
       ],
     },
     {
@@ -234,7 +246,14 @@ export const dropdownMenu: PenNode = {
       padding: [0, 8, 0, 8],
       cornerRadius: 4,
       children: [
-        { id: 'shadcn-dropdown-item-2-label', type: 'text', name: 'Label', content: 'Duplicate', fontSize: 13, fill: [{ type: 'solid', color: '#18181B' }] },
+        {
+          id: 'shadcn-dropdown-item-2-label',
+          type: 'text',
+          name: 'Label',
+          content: 'Duplicate',
+          fontSize: 13,
+          fill: [{ type: 'solid', color: '#18181B' }],
+        },
       ],
     },
     {
@@ -256,7 +275,14 @@ export const dropdownMenu: PenNode = {
       padding: [0, 8, 0, 8],
       cornerRadius: 4,
       children: [
-        { id: 'shadcn-dropdown-item-3-label', type: 'text', name: 'Label', content: 'Archive', fontSize: 13, fill: [{ type: 'solid', color: '#18181B' }] },
+        {
+          id: 'shadcn-dropdown-item-3-label',
+          type: 'text',
+          name: 'Label',
+          content: 'Archive',
+          fontSize: 13,
+          fill: [{ type: 'solid', color: '#18181B' }],
+        },
       ],
     },
     {
@@ -278,11 +304,18 @@ export const dropdownMenu: PenNode = {
       padding: [0, 8, 0, 8],
       cornerRadius: 4,
       children: [
-        { id: 'shadcn-dropdown-item-delete-label', type: 'text', name: 'Label', content: 'Delete', fontSize: 13, fill: [{ type: 'solid', color: '#EF4444' }] },
+        {
+          id: 'shadcn-dropdown-item-delete-label',
+          type: 'text',
+          name: 'Label',
+          content: 'Delete',
+          fontSize: 13,
+          fill: [{ type: 'solid', color: '#EF4444' }],
+        },
       ],
     },
   ],
-}
+};
 
 export const pagination: PenNode = {
   id: 'shadcn-pagination',
@@ -309,7 +342,14 @@ export const pagination: PenNode = {
       cornerRadius: 8,
       stroke: { thickness: 1, fill: [{ type: 'solid', color: '#E4E4E7' }] },
       children: [
-        { id: 'shadcn-pagination-prev-icon', type: 'text', name: 'Icon', content: '\u2039', fontSize: 16, fill: [{ type: 'solid', color: '#18181B' }] },
+        {
+          id: 'shadcn-pagination-prev-icon',
+          type: 'text',
+          name: 'Icon',
+          content: '\u2039',
+          fontSize: 16,
+          fill: [{ type: 'solid', color: '#18181B' }],
+        },
       ],
     },
     {
@@ -324,7 +364,15 @@ export const pagination: PenNode = {
       cornerRadius: 8,
       fill: [{ type: 'solid', color: '#18181B' }],
       children: [
-        { id: 'shadcn-pagination-p1-label', type: 'text', name: 'Label', content: '1', fontSize: 13, fontWeight: 500, fill: [{ type: 'solid', color: '#FAFAFA' }] },
+        {
+          id: 'shadcn-pagination-p1-label',
+          type: 'text',
+          name: 'Label',
+          content: '1',
+          fontSize: 13,
+          fontWeight: 500,
+          fill: [{ type: 'solid', color: '#FAFAFA' }],
+        },
       ],
     },
     {
@@ -339,7 +387,14 @@ export const pagination: PenNode = {
       cornerRadius: 8,
       stroke: { thickness: 1, fill: [{ type: 'solid', color: '#E4E4E7' }] },
       children: [
-        { id: 'shadcn-pagination-p2-label', type: 'text', name: 'Label', content: '2', fontSize: 13, fill: [{ type: 'solid', color: '#18181B' }] },
+        {
+          id: 'shadcn-pagination-p2-label',
+          type: 'text',
+          name: 'Label',
+          content: '2',
+          fontSize: 13,
+          fill: [{ type: 'solid', color: '#18181B' }],
+        },
       ],
     },
     {
@@ -354,7 +409,14 @@ export const pagination: PenNode = {
       cornerRadius: 8,
       stroke: { thickness: 1, fill: [{ type: 'solid', color: '#E4E4E7' }] },
       children: [
-        { id: 'shadcn-pagination-p3-label', type: 'text', name: 'Label', content: '3', fontSize: 13, fill: [{ type: 'solid', color: '#18181B' }] },
+        {
+          id: 'shadcn-pagination-p3-label',
+          type: 'text',
+          name: 'Label',
+          content: '3',
+          fontSize: 13,
+          fill: [{ type: 'solid', color: '#18181B' }],
+        },
       ],
     },
     {
@@ -369,11 +431,18 @@ export const pagination: PenNode = {
       cornerRadius: 8,
       stroke: { thickness: 1, fill: [{ type: 'solid', color: '#E4E4E7' }] },
       children: [
-        { id: 'shadcn-pagination-next-icon', type: 'text', name: 'Icon', content: '\u203A', fontSize: 16, fill: [{ type: 'solid', color: '#18181B' }] },
+        {
+          id: 'shadcn-pagination-next-icon',
+          type: 'text',
+          name: 'Icon',
+          content: '\u203A',
+          fontSize: 16,
+          fill: [{ type: 'solid', color: '#18181B' }],
+        },
       ],
     },
   ],
-}
+};
 
 // ---------------------------------------------------------------------------
 // Feedback (additional)
@@ -395,7 +464,9 @@ export const toast: PenNode = {
   cornerRadius: 12,
   fill: [{ type: 'solid', color: '#FFFFFF' }],
   stroke: { thickness: 1, fill: [{ type: 'solid', color: '#E4E4E7' }] },
-  effects: [{ type: 'shadow', offsetX: 0, offsetY: 4, blur: 12, spread: -2, color: 'rgba(0,0,0,0.08)' }],
+  effects: [
+    { type: 'shadow', offsetX: 0, offsetY: 4, blur: 12, spread: -2, color: 'rgba(0,0,0,0.08)' },
+  ],
   children: [
     {
       id: 'shadcn-toast-content',
@@ -424,7 +495,7 @@ export const toast: PenNode = {
       ],
     },
   ],
-}
+};
 
 export const progress: PenNode = {
   id: 'shadcn-progress',
@@ -450,7 +521,7 @@ export const progress: PenNode = {
       fill: [{ type: 'solid', color: '#18181B' }],
     },
   ],
-}
+};
 
 export const skeleton: PenNode = {
   id: 'shadcn-skeleton',
@@ -492,7 +563,7 @@ export const skeleton: PenNode = {
       fill: [{ type: 'solid', color: '#F4F4F5' }],
     },
   ],
-}
+};
 
 export const tooltip: PenNode = {
   id: 'shadcn-tooltip',
@@ -519,7 +590,7 @@ export const tooltip: PenNode = {
       fill: [{ type: 'solid', color: '#FAFAFA' }],
     },
   ],
-}
+};
 
 // ---------------------------------------------------------------------------
 // Layout (additional)
@@ -551,9 +622,36 @@ export const table: PenNode = {
       fill: [{ type: 'solid', color: '#F4F4F5' }],
       cornerRadius: [8, 8, 0, 0],
       children: [
-        { id: 'shadcn-table-h1', type: 'text', name: 'Name', content: 'Name', fontSize: 13, fontWeight: 600, fill: [{ type: 'solid', color: '#18181B' }], width: 'fill_container' },
-        { id: 'shadcn-table-h2', type: 'text', name: 'Status', content: 'Status', fontSize: 13, fontWeight: 600, fill: [{ type: 'solid', color: '#18181B' }], width: 'fill_container' },
-        { id: 'shadcn-table-h3', type: 'text', name: 'Amount', content: 'Amount', fontSize: 13, fontWeight: 600, fill: [{ type: 'solid', color: '#18181B' }], width: 'fill_container' },
+        {
+          id: 'shadcn-table-h1',
+          type: 'text',
+          name: 'Name',
+          content: 'Name',
+          fontSize: 13,
+          fontWeight: 600,
+          fill: [{ type: 'solid', color: '#18181B' }],
+          width: 'fill_container',
+        },
+        {
+          id: 'shadcn-table-h2',
+          type: 'text',
+          name: 'Status',
+          content: 'Status',
+          fontSize: 13,
+          fontWeight: 600,
+          fill: [{ type: 'solid', color: '#18181B' }],
+          width: 'fill_container',
+        },
+        {
+          id: 'shadcn-table-h3',
+          type: 'text',
+          name: 'Amount',
+          content: 'Amount',
+          fontSize: 13,
+          fontWeight: 600,
+          fill: [{ type: 'solid', color: '#18181B' }],
+          width: 'fill_container',
+        },
       ],
     },
     {
@@ -574,9 +672,33 @@ export const table: PenNode = {
       alignItems: 'center',
       padding: [0, 16, 0, 16],
       children: [
-        { id: 'shadcn-table-r1c1', type: 'text', name: 'Name', content: 'John Doe', fontSize: 13, fill: [{ type: 'solid', color: '#18181B' }], width: 'fill_container' },
-        { id: 'shadcn-table-r1c2', type: 'text', name: 'Status', content: 'Active', fontSize: 13, fill: [{ type: 'solid', color: '#71717A' }], width: 'fill_container' },
-        { id: 'shadcn-table-r1c3', type: 'text', name: 'Amount', content: '$250.00', fontSize: 13, fill: [{ type: 'solid', color: '#18181B' }], width: 'fill_container' },
+        {
+          id: 'shadcn-table-r1c1',
+          type: 'text',
+          name: 'Name',
+          content: 'John Doe',
+          fontSize: 13,
+          fill: [{ type: 'solid', color: '#18181B' }],
+          width: 'fill_container',
+        },
+        {
+          id: 'shadcn-table-r1c2',
+          type: 'text',
+          name: 'Status',
+          content: 'Active',
+          fontSize: 13,
+          fill: [{ type: 'solid', color: '#71717A' }],
+          width: 'fill_container',
+        },
+        {
+          id: 'shadcn-table-r1c3',
+          type: 'text',
+          name: 'Amount',
+          content: '$250.00',
+          fontSize: 13,
+          fill: [{ type: 'solid', color: '#18181B' }],
+          width: 'fill_container',
+        },
       ],
     },
     {
@@ -597,13 +719,37 @@ export const table: PenNode = {
       alignItems: 'center',
       padding: [0, 16, 0, 16],
       children: [
-        { id: 'shadcn-table-r2c1', type: 'text', name: 'Name', content: 'Jane Smith', fontSize: 13, fill: [{ type: 'solid', color: '#18181B' }], width: 'fill_container' },
-        { id: 'shadcn-table-r2c2', type: 'text', name: 'Status', content: 'Pending', fontSize: 13, fill: [{ type: 'solid', color: '#71717A' }], width: 'fill_container' },
-        { id: 'shadcn-table-r2c3', type: 'text', name: 'Amount', content: '$150.00', fontSize: 13, fill: [{ type: 'solid', color: '#18181B' }], width: 'fill_container' },
+        {
+          id: 'shadcn-table-r2c1',
+          type: 'text',
+          name: 'Name',
+          content: 'Jane Smith',
+          fontSize: 13,
+          fill: [{ type: 'solid', color: '#18181B' }],
+          width: 'fill_container',
+        },
+        {
+          id: 'shadcn-table-r2c2',
+          type: 'text',
+          name: 'Status',
+          content: 'Pending',
+          fontSize: 13,
+          fill: [{ type: 'solid', color: '#71717A' }],
+          width: 'fill_container',
+        },
+        {
+          id: 'shadcn-table-r2c3',
+          type: 'text',
+          name: 'Amount',
+          content: '$150.00',
+          fontSize: 13,
+          fill: [{ type: 'solid', color: '#18181B' }],
+          width: 'fill_container',
+        },
       ],
     },
   ],
-}
+};
 
 export const btnOutline: PenNode = {
   id: 'shadcn-btn-outline',
@@ -631,7 +777,7 @@ export const btnOutline: PenNode = {
       fill: [{ type: 'solid', color: '#18181B' }],
     },
   ],
-}
+};
 
 export const btnLink: PenNode = {
   id: 'shadcn-btn-link',
@@ -658,7 +804,7 @@ export const btnLink: PenNode = {
       fill: [{ type: 'solid', color: '#18181B' }],
     },
   ],
-}
+};
 
 export const extraComponents: PenNode[] = [
   btnOutline,
@@ -673,4 +819,4 @@ export const extraComponents: PenNode[] = [
   skeleton,
   tooltip,
   table,
-]
+];

@@ -1,6 +1,6 @@
-import { z } from 'zod'
-import { createToolRegistry } from '@zseven-w/agent'
-import type { AuthLevel } from '@zseven-w/agent'
+import { z } from 'zod';
+import { createToolRegistry } from '@zseven-w/agent';
+import type { AuthLevel } from '@zseven-w/agent';
 
 const TOOL_AUTH_MAP: Record<string, AuthLevel> = {
   // read
@@ -38,14 +38,14 @@ const TOOL_AUTH_MAP: Record<string, AuthLevel> = {
   // delete
   delete_node: 'delete',
   remove_page: 'delete',
-}
+};
 
 /**
  * Create a tool registry pre-loaded with MVP design tools.
  * Tool execute functions are NOT provided — they run on the client via ToolExecutor.
  */
 export function createDesignToolRegistry() {
-  const registry = createToolRegistry()
+  const registry = createToolRegistry();
 
   // MVP tools (Phase 1: 6 tools)
   registry.register({
@@ -56,26 +56,32 @@ export function createDesignToolRegistry() {
       ids: z.array(z.string()).optional().describe('Node IDs to retrieve'),
       patterns: z.array(z.string()).optional().describe('Search patterns to match'),
     }),
-  })
+  });
 
   registry.register({
     name: 'snapshot_layout',
-    description: 'Get a compact layout snapshot of the current page showing node positions and sizes',
+    description:
+      'Get a compact layout snapshot of the current page showing node positions and sizes',
     level: TOOL_AUTH_MAP.snapshot_layout,
     schema: z.object({
       pageId: z.string().optional(),
     }),
-  })
+  });
 
   // Design creation — delegates to the full internal pipeline (orchestrator + sub-agents)
   registry.register({
     name: 'generate_design',
-    description: 'Generate a complete design on the canvas. Pass a natural language description. The pipeline handles layout, styling, icons, and rendering. Always use this for creating designs.',
+    description:
+      'Generate a complete design on the canvas. Pass a natural language description. The pipeline handles layout, styling, icons, and rendering. Always use this for creating designs.',
     level: TOOL_AUTH_MAP.generate_design,
     schema: z.object({
-      prompt: z.string().describe('Natural language description of the design, e.g. "a modern mobile login screen with email, password, login button, and social login"'),
+      prompt: z
+        .string()
+        .describe(
+          'Natural language description of the design, e.g. "a modern mobile login screen with email, password, login button, and social login"',
+        ),
     }),
-  })
+  });
 
   // Modification tools — for editing existing designs
   registry.register({
@@ -86,7 +92,7 @@ export function createDesignToolRegistry() {
       id: z.string().describe('Node ID to update'),
       data: z.record(z.unknown()).describe('Properties to update'),
     }),
-  })
+  });
 
   registry.register({
     name: 'delete_node',
@@ -95,9 +101,9 @@ export function createDesignToolRegistry() {
     schema: z.object({
       id: z.string().describe('Node ID to delete'),
     }),
-  })
+  });
 
-  return registry
+  return registry;
 }
 
-export { TOOL_AUTH_MAP }
+export { TOOL_AUTH_MAP };

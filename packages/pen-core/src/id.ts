@@ -1,1 +1,1 @@
-export { nanoid as generateId } from 'nanoid'
+export { nanoid as generateId } from 'nanoid';

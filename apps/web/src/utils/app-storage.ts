@@ -15,12 +15,12 @@
  */
 
 /** In-memory cache for Electron mode. */
-let cache: Record<string, string> | null = null
-let initPromise: Promise<void> | null = null
+let cache: Record<string, string> | null = null;
+let initPromise: Promise<void> | null = null;
 
 /** Whether we are running inside Electron with the IPC bridge available. */
 function isElectron(): boolean {
-  return typeof window !== 'undefined' && !!window.electronAPI?.getPreferences
+  return typeof window !== 'undefined' && !!window.electronAPI?.getPreferences;
 }
 
 /**
@@ -29,45 +29,42 @@ function isElectron(): boolean {
  * calls return the same promise.
  */
 export async function initAppStorage(): Promise<void> {
-  if (typeof window === 'undefined') return
-  if (!isElectron()) return
-  if (initPromise) return initPromise
+  if (typeof window === 'undefined') return;
+  if (!isElectron()) return;
+  if (initPromise) return initPromise;
   initPromise = (async () => {
     try {
-      const prefs: Record<string, string> =
-        await window.electronAPI!.getPreferences()
-      cache = prefs ?? {}
+      const prefs: Record<string, string> = await window.electronAPI!.getPreferences();
+      cache = prefs ?? {};
     } catch {
-      cache = {}
+      cache = {};
     }
-  })()
-  return initPromise
+  })();
+  return initPromise;
 }
 
 /** Synchronous get — reads from cache (Electron) or localStorage (web). */
 export function getItem(key: string): string | null {
   if (cache !== null) {
-    return cache[key] ?? null
+    return cache[key] ?? null;
   }
-  if (typeof window === 'undefined') return null
+  if (typeof window === 'undefined') return null;
   try {
-    return localStorage.getItem(key)
+    return localStorage.getItem(key);
   } catch {
-    return null
+    return null;
   }
 }
 
 /** Synchronous set — updates cache + fires async IPC write in Electron. */
 export function setItem(key: string, value: string): void {
   if (cache !== null) {
-    cache[key] = value
-    window.electronAPI
-      ?.setPreference(key, value)
-      ?.catch(() => {})
-    return
+    cache[key] = value;
+    window.electronAPI?.setPreference(key, value)?.catch(() => {});
+    return;
   }
   try {
-    localStorage.setItem(key, value)
+    localStorage.setItem(key, value);
   } catch {
     // quota exceeded or private mode
   }
@@ -76,14 +73,12 @@ export function setItem(key: string, value: string): void {
 /** Synchronous remove — updates cache + fires async IPC write in Electron. */
 export function removeItem(key: string): void {
   if (cache !== null) {
-    delete cache[key]
-    window.electronAPI
-      ?.removePreference(key)
-      ?.catch(() => {})
-    return
+    delete cache[key];
+    window.electronAPI?.removePreference(key)?.catch(() => {});
+    return;
   }
   try {
-    localStorage.removeItem(key)
+    localStorage.removeItem(key);
   } catch {
     // ignore
   }
@@ -94,4 +89,4 @@ export function removeItem(key: string): void {
  *   import { appStorage } from '@/utils/app-storage'
  *   appStorage.getItem(...)
  */
-export const appStorage = { getItem, setItem, removeItem }
+export const appStorage = { getItem, setItem, removeItem };

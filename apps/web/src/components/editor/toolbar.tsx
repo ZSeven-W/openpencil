@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from 'react'
+import { useState, useRef, useCallback } from 'react';
 import {
   MousePointer2,
   Type,
@@ -9,131 +9,127 @@ import {
   Braces,
   BookOpen,
   LayoutGrid,
-} from 'lucide-react'
-import { useTranslation } from 'react-i18next'
-import ToolButton from './tool-button'
-import ShapeToolDropdown from './shape-tool-dropdown'
-import { useCanvasStore } from '@/stores/canvas-store'
-import { useDocumentStore, generateId } from '@/stores/document-store'
-import { parseSvgToNodes } from '@/utils/svg-parser'
-import { getCanvasSize } from '@/canvas/skia-engine-ref'
-import { useHistoryStore } from '@/stores/history-store'
-import { useUIKitStore } from '@/stores/uikit-store'
-import { Button } from '@/components/ui/button'
-import { Separator } from '@/components/ui/separator'
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from '@/components/ui/tooltip'
-import IconPickerDialog from '@/components/shared/icon-picker-dialog'
+} from 'lucide-react';
+import { useTranslation } from 'react-i18next';
+import ToolButton from './tool-button';
+import ShapeToolDropdown from './shape-tool-dropdown';
+import { useCanvasStore } from '@/stores/canvas-store';
+import { useDocumentStore, generateId } from '@/stores/document-store';
+import { parseSvgToNodes } from '@/utils/svg-parser';
+import { getCanvasSize } from '@/canvas/skia-engine-ref';
+import { useHistoryStore } from '@/stores/history-store';
+import { useUIKitStore } from '@/stores/uikit-store';
+import { Button } from '@/components/ui/button';
+import { Separator } from '@/components/ui/separator';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import IconPickerDialog from '@/components/shared/icon-picker-dialog';
 
 export default function Toolbar() {
-  const { t } = useTranslation()
-  const canUndo = useHistoryStore((s) => s.undoStack.length > 0)
-  const canRedo = useHistoryStore((s) => s.redoStack.length > 0)
-  const variablesPanelOpen = useCanvasStore((s) => s.variablesPanelOpen)
-  const toggleVariablesPanel = useCanvasStore((s) => s.toggleVariablesPanel)
-  const designMdPanelOpen = useCanvasStore((s) => s.designMdPanelOpen)
-  const toggleDesignMdPanel = useCanvasStore((s) => s.toggleDesignMdPanel)
-  const browserOpen = useUIKitStore((s) => s.browserOpen)
-  const toggleBrowser = useUIKitStore((s) => s.toggleBrowser)
-  const fileInputRef = useRef<HTMLInputElement>(null)
-  const [iconPickerOpen, setIconPickerOpen] = useState(false)
+  const { t } = useTranslation();
+  const canUndo = useHistoryStore((s) => s.undoStack.length > 0);
+  const canRedo = useHistoryStore((s) => s.redoStack.length > 0);
+  const variablesPanelOpen = useCanvasStore((s) => s.variablesPanelOpen);
+  const toggleVariablesPanel = useCanvasStore((s) => s.toggleVariablesPanel);
+  const designMdPanelOpen = useCanvasStore((s) => s.designMdPanelOpen);
+  const toggleDesignMdPanel = useCanvasStore((s) => s.toggleDesignMdPanel);
+  const browserOpen = useUIKitStore((s) => s.browserOpen);
+  const toggleBrowser = useUIKitStore((s) => s.toggleBrowser);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [iconPickerOpen, setIconPickerOpen] = useState(false);
 
   const handleIconSelect = useCallback((svgText: string, iconName: string) => {
-    const nodes = parseSvgToNodes(svgText)
-    if (nodes.length === 0) return
+    const nodes = parseSvgToNodes(svgText);
+    if (nodes.length === 0) return;
 
-    const { viewport } = useCanvasStore.getState()
-    const { width: canvasW, height: canvasH } = getCanvasSize()
-    const centerX = (-viewport.panX + canvasW / 2) / viewport.zoom
-    const centerY = (-viewport.panY + canvasH / 2) / viewport.zoom
+    const { viewport } = useCanvasStore.getState();
+    const { width: canvasW, height: canvasH } = getCanvasSize();
+    const centerX = (-viewport.panX + canvasW / 2) / viewport.zoom;
+    const centerY = (-viewport.panY + canvasH / 2) / viewport.zoom;
 
     for (const node of nodes) {
-      const w = ('width' in node ? (typeof node.width === 'number' ? node.width : 100) : 100)
-      const h = ('height' in node ? (typeof node.height === 'number' ? node.height : 100) : 100)
-      node.x = centerX - w / 2
-      node.y = centerY - h / 2
-      node.name = iconName
-      if (node.type === 'path') node.iconId = iconName
-      useDocumentStore.getState().addNode(null, node)
+      const w = 'width' in node ? (typeof node.width === 'number' ? node.width : 100) : 100;
+      const h = 'height' in node ? (typeof node.height === 'number' ? node.height : 100) : 100;
+      node.x = centerX - w / 2;
+      node.y = centerY - h / 2;
+      node.name = iconName;
+      if (node.type === 'path') node.iconId = iconName;
+      useDocumentStore.getState().addNode(null, node);
     }
-    setIconPickerOpen(false)
-  }, [])
+    setIconPickerOpen(false);
+  }, []);
 
   const handleUndo = () => {
-    const currentDoc = useDocumentStore.getState().document
-    const prev = useHistoryStore.getState().undo(currentDoc)
+    const currentDoc = useDocumentStore.getState().document;
+    const prev = useHistoryStore.getState().undo(currentDoc);
     if (prev) {
-      useDocumentStore.getState().applyHistoryState(prev)
+      useDocumentStore.getState().applyHistoryState(prev);
     }
-    useCanvasStore.getState().clearSelection()
-  }
+    useCanvasStore.getState().clearSelection();
+  };
 
   const handleRedo = () => {
-    const currentDoc = useDocumentStore.getState().document
-    const next = useHistoryStore.getState().redo(currentDoc)
+    const currentDoc = useDocumentStore.getState().document;
+    const next = useHistoryStore.getState().redo(currentDoc);
     if (next) {
-      useDocumentStore.getState().applyHistoryState(next)
+      useDocumentStore.getState().applyHistoryState(next);
     }
-    useCanvasStore.getState().clearSelection()
-  }
+    useCanvasStore.getState().clearSelection();
+  };
 
   const handleAddImage = useCallback(() => {
-    fileInputRef.current?.click()
-  }, [])
+    fileInputRef.current?.click();
+  }, []);
 
   const handleFileSelected = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (!file) return
+    const file = e.target.files?.[0];
+    if (!file) return;
     // Reset input so the same file can be re-selected
-    e.target.value = ''
+    e.target.value = '';
 
-    const isSvg = file.type === 'image/svg+xml'
+    const isSvg = file.type === 'image/svg+xml';
 
     if (isSvg) {
       // SVG → parse into editable path/shape nodes
-      const reader = new FileReader()
+      const reader = new FileReader();
       reader.onload = () => {
-        const svgText = reader.result as string
-        const nodes = parseSvgToNodes(svgText)
-        if (nodes.length === 0) return
+        const svgText = reader.result as string;
+        const nodes = parseSvgToNodes(svgText);
+        if (nodes.length === 0) return;
 
-        const { viewport } = useCanvasStore.getState()
-        const { width: canvasW, height: canvasH } = getCanvasSize()
-        const centerX = (-viewport.panX + canvasW / 2) / viewport.zoom
-        const centerY = (-viewport.panY + canvasH / 2) / viewport.zoom
+        const { viewport } = useCanvasStore.getState();
+        const { width: canvasW, height: canvasH } = getCanvasSize();
+        const centerX = (-viewport.panX + canvasW / 2) / viewport.zoom;
+        const centerY = (-viewport.panY + canvasH / 2) / viewport.zoom;
 
         for (const node of nodes) {
-          const w = ('width' in node ? (typeof node.width === 'number' ? node.width : 100) : 100)
-          const h = ('height' in node ? (typeof node.height === 'number' ? node.height : 100) : 100)
-          node.x = centerX - w / 2
-          node.y = centerY - h / 2
-          node.name = file.name.replace(/\.[^.]+$/, '')
-          useDocumentStore.getState().addNode(null, node)
+          const w = 'width' in node ? (typeof node.width === 'number' ? node.width : 100) : 100;
+          const h = 'height' in node ? (typeof node.height === 'number' ? node.height : 100) : 100;
+          node.x = centerX - w / 2;
+          node.y = centerY - h / 2;
+          node.name = file.name.replace(/\.[^.]+$/, '');
+          useDocumentStore.getState().addNode(null, node);
         }
-      }
-      reader.readAsText(file)
+      };
+      reader.readAsText(file);
     } else {
       // Raster image → ImageNode with data URL
-      const reader = new FileReader()
+      const reader = new FileReader();
       reader.onload = () => {
-        const dataUrl = reader.result as string
-        const img = new Image()
+        const dataUrl = reader.result as string;
+        const img = new Image();
         img.onload = () => {
-          const { viewport } = useCanvasStore.getState()
-          const { width: canvasW, height: canvasH } = getCanvasSize()
-          const centerX = (-viewport.panX + canvasW / 2) / viewport.zoom
-          const centerY = (-viewport.panY + canvasH / 2) / viewport.zoom
+          const { viewport } = useCanvasStore.getState();
+          const { width: canvasW, height: canvasH } = getCanvasSize();
+          const centerX = (-viewport.panX + canvasW / 2) / viewport.zoom;
+          const centerY = (-viewport.panY + canvasH / 2) / viewport.zoom;
 
-          let w = img.naturalWidth
-          let h = img.naturalHeight
-          const maxDim = 400
+          let w = img.naturalWidth;
+          let h = img.naturalHeight;
+          const maxDim = 400;
           if (w > maxDim || h > maxDim) {
-            const scale = maxDim / Math.max(w, h)
-            w = Math.round(w * scale)
-            h = Math.round(h * scale)
+            const scale = maxDim / Math.max(w, h);
+            w = Math.round(w * scale);
+            h = Math.round(h * scale);
           }
 
           useDocumentStore.getState().addNode(null, {
@@ -145,13 +141,13 @@ export default function Toolbar() {
             y: centerY - h / 2,
             width: w,
             height: h,
-          })
-        }
-        img.src = dataUrl
-      }
-      reader.readAsDataURL(file)
+          });
+        };
+        img.src = dataUrl;
+      };
+      reader.readAsDataURL(file);
     }
-  }, [])
+  }, []);
 
   return (
     <div className="absolute top-2 left-2 z-10 w-10 bg-card border border-border rounded-xl flex flex-col items-center py-2 gap-1 shadow-lg">
@@ -189,12 +185,7 @@ export default function Toolbar() {
       {/* Undo / Redo */}
       <Tooltip>
         <TooltipTrigger asChild>
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            onClick={handleUndo}
-            disabled={!canUndo}
-          >
+          <Button variant="ghost" size="icon-sm" onClick={handleUndo} disabled={!canUndo}>
             <Undo2 size={18} strokeWidth={1.5} />
           </Button>
         </TooltipTrigger>
@@ -207,12 +198,7 @@ export default function Toolbar() {
       </Tooltip>
       <Tooltip>
         <TooltipTrigger asChild>
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            onClick={handleRedo}
-            disabled={!canRedo}
-          >
+          <Button variant="ghost" size="icon-sm" onClick={handleRedo} disabled={!canRedo}>
             <Redo2 size={18} strokeWidth={1.5} />
           </Button>
         </TooltipTrigger>
@@ -315,5 +301,5 @@ export default function Toolbar() {
         onSelect={handleIconSelect}
       />
     </div>
-  )
+  );
 }

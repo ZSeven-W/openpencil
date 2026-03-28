@@ -71,6 +71,7 @@ TanStack Start full-stack React app (Vite + Nitro). Routes in `src/routes/`, aut
 ## AI Services (`src/services/ai/`)
 
 35 files + `role-definitions/` + `design-principles/` subdirs:
+
 - `ai-service.ts` — Main AI chat API wrapper, model negotiation, provider selection
 - `ai-prompts.ts` — System prompts for design generation
 - `ai-types.ts` — ChatMessage, ChatAttachment, AIDesignRequest, OrchestratorPlan

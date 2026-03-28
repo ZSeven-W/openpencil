@@ -12,4 +12,4 @@ export {
   getNodeHeight,
   computeLayoutPositions,
   estimateLineWidth,
-} from '@zseven-w/pen-core'
+} from '@zseven-w/pen-core';

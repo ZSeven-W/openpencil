@@ -1,27 +1,34 @@
-import { useState, useRef, useCallback, useEffect, useMemo } from 'react'
+import { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import {
-  Copy, Download, RefreshCw, Sparkles,
-  Check, Loader2, AlertTriangle, MinusCircle, SkipForward,
-} from 'lucide-react'
-import { cn } from '@/lib/utils'
-import { Button } from '@/components/ui/button'
-import { useCanvasStore } from '@/stores/canvas-store'
-import { useDocumentStore, getActivePageChildren } from '@/stores/document-store'
-import { useAIStore } from '@/stores/ai-store'
-import { generateCode } from '@/services/ai/code-generation-pipeline'
-import { highlightCode } from '@/utils/syntax-highlight'
-import type { Framework, CodeGenProgress, ChunkStatus } from '@zseven-w/pen-codegen'
-import { FRAMEWORKS } from '@zseven-w/pen-codegen'
-import type { PenNode } from '@/types/pen'
-import type { SyntaxLanguage } from '@/utils/syntax-highlight'
+  Copy,
+  Download,
+  RefreshCw,
+  Sparkles,
+  Check,
+  Loader2,
+  AlertTriangle,
+  MinusCircle,
+  SkipForward,
+} from 'lucide-react';
+import { cn } from '@/lib/utils';
+import { Button } from '@/components/ui/button';
+import { useCanvasStore } from '@/stores/canvas-store';
+import { useDocumentStore, getActivePageChildren } from '@/stores/document-store';
+import { useAIStore } from '@/stores/ai-store';
+import { generateCode } from '@/services/ai/code-generation-pipeline';
+import { highlightCode } from '@/utils/syntax-highlight';
+import type { Framework, CodeGenProgress, ChunkStatus } from '@zseven-w/pen-codegen';
+import { FRAMEWORKS } from '@zseven-w/pen-codegen';
+import type { PenNode } from '@/types/pen';
+import type { SyntaxLanguage } from '@/utils/syntax-highlight';
 
-type PanelState = 'empty' | 'generating' | 'complete'
+type PanelState = 'empty' | 'generating' | 'complete';
 
 interface ChunkProgress {
-  chunkId: string
-  name: string
-  status: ChunkStatus
-  error?: string
+  chunkId: string;
+  name: string;
+  status: ChunkStatus;
+  error?: string;
 }
 
 const TAB_LABELS: Record<Framework, string> = {
@@ -33,7 +40,7 @@ const TAB_LABELS: Record<Framework, string> = {
   swiftui: 'SwiftUI',
   compose: 'Compose',
   'react-native': 'RN',
-}
+};
 
 const HIGHLIGHT_LANG: Record<Framework, SyntaxLanguage> = {
   react: 'jsx',
@@ -44,145 +51,163 @@ const HIGHLIGHT_LANG: Record<Framework, SyntaxLanguage> = {
   swiftui: 'swift',
   compose: 'kotlin',
   'react-native': 'jsx',
-}
+};
 
 export default function CodePanel() {
-  const [activeTab, setActiveTab] = useState<Framework>('react')
-  const [codeCache, setCodeCache] = useState<Partial<Record<Framework, { code: string; degraded: boolean }>>>({})
-  const [isDegraded, setIsDegraded] = useState(false)
-  const [isGenerating, setIsGenerating] = useState(false)
-  const [copied, setCopied] = useState(false)
-  const [planningStatus, setPlanningStatus] = useState<'idle' | 'running' | 'done' | 'failed'>('idle')
-  const [planningError, setPlanningError] = useState<string>()
-  const [assemblyStatus, setAssemblyStatus] = useState<'idle' | 'running' | 'done' | 'failed'>('idle')
-  const [chunks, setChunks] = useState<ChunkProgress[]>([])
-  const [selectionChanged, setSelectionChanged] = useState(false)
-  const [generateError, setGenerateError] = useState<string>()
+  const [activeTab, setActiveTab] = useState<Framework>('react');
+  const [codeCache, setCodeCache] = useState<
+    Partial<Record<Framework, { code: string; degraded: boolean }>>
+  >({});
+  const [isDegraded, setIsDegraded] = useState(false);
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const [planningStatus, setPlanningStatus] = useState<'idle' | 'running' | 'done' | 'failed'>(
+    'idle',
+  );
+  const [planningError, setPlanningError] = useState<string>();
+  const [assemblyStatus, setAssemblyStatus] = useState<'idle' | 'running' | 'done' | 'failed'>(
+    'idle',
+  );
+  const [chunks, setChunks] = useState<ChunkProgress[]>([]);
+  const [selectionChanged, setSelectionChanged] = useState(false);
+  const [generateError, setGenerateError] = useState<string>();
 
-  const cached = codeCache[activeTab]
-  const generatedCode = cached?.code ?? ''
-  const panelState: PanelState = isGenerating ? 'generating' : cached ? 'complete' : 'empty'
+  const cached = codeCache[activeTab];
+  const generatedCode = cached?.code ?? '';
+  const panelState: PanelState = isGenerating ? 'generating' : cached ? 'complete' : 'empty';
 
-  const abortRef = useRef<AbortController | null>(null)
-  const lastSelectionRef = useRef<string>('')
-  const copyTimeoutRef = useRef<ReturnType<typeof setTimeout>>(null)
+  const abortRef = useRef<AbortController | null>(null);
+  const lastSelectionRef = useRef<string>('');
+  const copyTimeoutRef = useRef<ReturnType<typeof setTimeout>>(null);
 
-  const selectedIds = useCanvasStore(s => s.selection.selectedIds)
-  const activePageId = useCanvasStore(s => s.activePageId)
-  const getNodeById = useDocumentStore(s => s.getNodeById)
-  const children = useDocumentStore(s => getActivePageChildren(s.document, activePageId))
-  const variables = useDocumentStore(s => s.document?.variables)
-  const model = useAIStore(s => s.model)
-  const provider = useAIStore(s =>
-    s.modelGroups.find(g => g.models.some(m => m.value === s.model))?.provider,
-  )
+  const selectedIds = useCanvasStore((s) => s.selection.selectedIds);
+  const activePageId = useCanvasStore((s) => s.activePageId);
+  const getNodeById = useDocumentStore((s) => s.getNodeById);
+  const children = useDocumentStore((s) => getActivePageChildren(s.document, activePageId));
+  const variables = useDocumentStore((s) => s.document?.variables);
+  const model = useAIStore((s) => s.model);
+  const provider = useAIStore(
+    (s) => s.modelGroups.find((g) => g.models.some((m) => m.value === s.model))?.provider,
+  );
 
-  const selectionKey = selectedIds.join(',')
+  const selectionKey = selectedIds.join(',');
 
   // Detect selection changes when code is already generated
   useEffect(() => {
     if (panelState === 'complete' && selectionKey !== lastSelectionRef.current) {
-      setSelectionChanged(true)
+      setSelectionChanged(true);
     }
-  }, [panelState, selectionKey])
+  }, [panelState, selectionKey]);
 
   // Cleanup on unmount
   useEffect(() => {
     return () => {
-      if (copyTimeoutRef.current) clearTimeout(copyTimeoutRef.current)
-      abortRef.current?.abort()
-    }
-  }, [])
+      if (copyTimeoutRef.current) clearTimeout(copyTimeoutRef.current);
+      abortRef.current?.abort();
+    };
+  }, []);
 
   const getTargetNodes = useCallback((): PenNode[] => {
     if (selectedIds.length > 0) {
-      return selectedIds
-        .map(id => getNodeById(id))
-        .filter((n): n is PenNode => n !== undefined)
+      return selectedIds.map((id) => getNodeById(id)).filter((n): n is PenNode => n !== undefined);
     }
-    return children
-  }, [selectedIds, getNodeById, children])
+    return children;
+  }, [selectedIds, getNodeById, children]);
 
   const handleGenerate = useCallback(async () => {
-    const nodes = getTargetNodes()
-    if (nodes.length === 0) return
+    const nodes = getTargetNodes();
+    if (nodes.length === 0) return;
 
-    abortRef.current = new AbortController()
-    setIsGenerating(true)
-    setPlanningStatus('idle')
-    setPlanningError(undefined)
-    setAssemblyStatus('idle')
-    setChunks([])
-    setIsDegraded(false)
-    setSelectionChanged(false)
-    setGenerateError(undefined)
-    lastSelectionRef.current = selectionKey
+    abortRef.current = new AbortController();
+    setIsGenerating(true);
+    setPlanningStatus('idle');
+    setPlanningError(undefined);
+    setAssemblyStatus('idle');
+    setChunks([]);
+    setIsDegraded(false);
+    setSelectionChanged(false);
+    setGenerateError(undefined);
+    lastSelectionRef.current = selectionKey;
 
     const handleProgress = (event: CodeGenProgress) => {
       switch (event.step) {
         case 'planning':
-          setPlanningStatus(event.status)
-          if (event.error) setPlanningError(event.error)
-          break
+          setPlanningStatus(event.status);
+          if (event.error) setPlanningError(event.error);
+          break;
         case 'chunk':
-          setChunks(prev => {
-            const existing = prev.findIndex(c => c.chunkId === event.chunkId)
+          setChunks((prev) => {
+            const existing = prev.findIndex((c) => c.chunkId === event.chunkId);
             const entry: ChunkProgress = {
               chunkId: event.chunkId,
               name: event.name,
               status: event.status,
               error: event.error,
-            }
+            };
             if (existing >= 0) {
-              const next = [...prev]
-              next[existing] = entry
-              return next
+              const next = [...prev];
+              next[existing] = entry;
+              return next;
             }
-            return [...prev, entry]
-          })
-          break
+            return [...prev, entry];
+          });
+          break;
         case 'assembly':
-          setAssemblyStatus(event.status)
-          break
+          setAssemblyStatus(event.status);
+          break;
         case 'complete':
-          setCodeCache(prev => ({ ...prev, [activeTab]: { code: event.finalCode, degraded: event.degraded } }))
-          setIsDegraded(event.degraded)
-          setIsGenerating(false)
-          break
+          setCodeCache((prev) => ({
+            ...prev,
+            [activeTab]: { code: event.finalCode, degraded: event.degraded },
+          }));
+          setIsDegraded(event.degraded);
+          setIsGenerating(false);
+          break;
         case 'error':
-          setGenerateError(event.message)
-          setIsGenerating(false)
-          break
+          setGenerateError(event.message);
+          setIsGenerating(false);
+          break;
       }
-    }
+    };
 
     try {
-      await generateCode(nodes, activeTab, variables, handleProgress, model, provider, abortRef.current.signal)
+      await generateCode(
+        nodes,
+        activeTab,
+        variables,
+        handleProgress,
+        model,
+        provider,
+        abortRef.current.signal,
+      );
     } catch (err) {
       if (!abortRef.current?.signal.aborted) {
-        const msg = err instanceof Error ? err.message : 'Code generation failed'
-        setGenerateError(msg)
+        const msg = err instanceof Error ? err.message : 'Code generation failed';
+        setGenerateError(msg);
       }
-      setIsGenerating(false)
+      setIsGenerating(false);
     }
-  }, [getTargetNodes, activeTab, variables, selectionKey, model, provider])
+  }, [getTargetNodes, activeTab, variables, selectionKey, model, provider]);
 
   const handleCancel = useCallback(() => {
-    abortRef.current?.abort()
-    setIsGenerating(false)
-  }, [])
+    abortRef.current?.abort();
+    setIsGenerating(false);
+  }, []);
 
-  const handleRetryChunk = useCallback((_chunkId: string) => {
-    // Re-run the full pipeline (planning is fast, only failed/skipped chunks re-run)
-    void handleGenerate()
-  }, [handleGenerate])
+  const handleRetryChunk = useCallback(
+    (_chunkId: string) => {
+      // Re-run the full pipeline (planning is fast, only failed/skipped chunks re-run)
+      void handleGenerate();
+    },
+    [handleGenerate],
+  );
 
   const handleCopy = useCallback(async () => {
-    await navigator.clipboard.writeText(generatedCode)
-    setCopied(true)
-    if (copyTimeoutRef.current) clearTimeout(copyTimeoutRef.current)
-    copyTimeoutRef.current = setTimeout(() => setCopied(false), 2000)
-  }, [generatedCode])
+    await navigator.clipboard.writeText(generatedCode);
+    setCopied(true);
+    if (copyTimeoutRef.current) clearTimeout(copyTimeoutRef.current);
+    copyTimeoutRef.current = setTimeout(() => setCopied(false), 2000);
+  }, [generatedCode]);
 
   const handleDownload = useCallback(() => {
     const extensions: Record<Framework, string> = {
@@ -194,65 +219,69 @@ export default function CodePanel() {
       swiftui: '.swift',
       compose: '.kt',
       'react-native': '.tsx',
-    }
-    const blob = new Blob([generatedCode], { type: 'text/plain;charset=utf-8' })
-    const url = URL.createObjectURL(blob)
-    const a = globalThis.document.createElement('a')
-    a.href = url
-    a.download = `design${extensions[activeTab]}`
-    a.click()
-    URL.revokeObjectURL(url)
-  }, [generatedCode, activeTab])
+    };
+    const blob = new Blob([generatedCode], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = globalThis.document.createElement('a');
+    a.href = url;
+    a.download = `design${extensions[activeTab]}`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }, [generatedCode, activeTab]);
 
-  const handleTabChange = useCallback((tab: Framework) => {
-    setActiveTab(tab)
-    setGenerateError(undefined)
-    // isDegraded follows the cached tab's value
-    const tabCache = codeCache[tab]
-    setIsDegraded(tabCache?.degraded ?? false)
-  }, [codeCache])
+  const handleTabChange = useCallback(
+    (tab: Framework) => {
+      setActiveTab(tab);
+      setGenerateError(undefined);
+      // isDegraded follows the cached tab's value
+      const tabCache = codeCache[tab];
+      setIsDegraded(tabCache?.degraded ?? false);
+    },
+    [codeCache],
+  );
 
-  const nodeCount = selectedIds.length > 0 ? selectedIds.length : children.length
+  const nodeCount = selectedIds.length > 0 ? selectedIds.length : children.length;
 
   const highlightedHTML = useMemo(() => {
-    if (!generatedCode) return ''
-    const lang = HIGHLIGHT_LANG[activeTab]
+    if (!generatedCode) return '';
+    const lang = HIGHLIGHT_LANG[activeTab];
 
     // HTML / Vue / Svelte: split at <style to highlight CSS portion separately
     if (activeTab === 'html' || activeTab === 'vue' || activeTab === 'svelte') {
-      const styleIdx = generatedCode.indexOf('<style')
+      const styleIdx = generatedCode.indexOf('<style');
       if (styleIdx !== -1) {
-        const templatePart = generatedCode.slice(0, styleIdx)
-        const stylePart = generatedCode.slice(styleIdx)
-        const styleTagEnd = stylePart.indexOf('>\n')
+        const templatePart = generatedCode.slice(0, styleIdx);
+        const stylePart = generatedCode.slice(styleIdx);
+        const styleTagEnd = stylePart.indexOf('>\n');
         if (styleTagEnd !== -1) {
-          const styleTag = stylePart.slice(0, styleTagEnd + 1)
-          const styleBody = stylePart.slice(styleTagEnd + 1)
-          const closingIdx = styleBody.lastIndexOf('</style>')
+          const styleTag = stylePart.slice(0, styleTagEnd + 1);
+          const styleBody = stylePart.slice(styleTagEnd + 1);
+          const closingIdx = styleBody.lastIndexOf('</style>');
           if (closingIdx !== -1) {
-            const cssContent = styleBody.slice(0, closingIdx)
-            const closingTag = styleBody.slice(closingIdx)
+            const cssContent = styleBody.slice(0, closingIdx);
+            const closingTag = styleBody.slice(closingIdx);
             return (
               highlightCode(templatePart, 'html') +
-              highlightCode(styleTag, 'html') + '\n' +
+              highlightCode(styleTag, 'html') +
+              '\n' +
               highlightCode(cssContent, 'css') +
               highlightCode(closingTag, 'html')
-            )
+            );
           }
         }
-        return highlightCode(templatePart, 'html') + highlightCode(stylePart, 'css')
+        return highlightCode(templatePart, 'html') + highlightCode(stylePart, 'css');
       }
     }
 
-    return highlightCode(generatedCode, lang)
-  }, [activeTab, generatedCode])
+    return highlightCode(generatedCode, lang);
+  }, [activeTab, generatedCode]);
 
   return (
     <div className="flex flex-1 min-h-0 flex-col">
       {/* Tab Bar */}
       <div className="flex items-center border-b border-border px-2 shrink-0">
         <div className="flex gap-1 overflow-x-auto py-1 scrollbar-none">
-          {FRAMEWORKS.map(fw => (
+          {FRAMEWORKS.map((fw) => (
             <button
               key={fw}
               type="button"
@@ -281,11 +310,7 @@ export default function CodePanel() {
                 ? `${nodeCount} node${nodeCount > 1 ? 's' : ''} selected`
                 : 'No nodes on page'}
             </div>
-            <Button
-              onClick={handleGenerate}
-              disabled={nodeCount === 0}
-              size="sm"
-            >
+            <Button onClick={handleGenerate} disabled={nodeCount === 0} size="sm">
               <Sparkles className="mr-2 h-4 w-4" />
               Generate {TAB_LABELS[activeTab]} Code
             </Button>
@@ -296,9 +321,7 @@ export default function CodePanel() {
               </div>
             )}
             {selectionChanged && (
-              <div className="text-xs text-amber-500">
-                Selection changed since last generation
-              </div>
+              <div className="text-xs text-amber-500">Selection changed since last generation</div>
             )}
           </div>
         )}
@@ -309,18 +332,28 @@ export default function CodePanel() {
             {/* Planning */}
             <ProgressItem
               label="Planning"
-              status={planningStatus === 'running' ? 'running' : planningStatus === 'done' ? 'done' : planningStatus === 'failed' ? 'failed' : 'pending'}
+              status={
+                planningStatus === 'running'
+                  ? 'running'
+                  : planningStatus === 'done'
+                    ? 'done'
+                    : planningStatus === 'failed'
+                      ? 'failed'
+                      : 'pending'
+              }
               error={planningError}
             />
 
             {/* Chunks */}
-            {chunks.map(chunk => (
+            {chunks.map((chunk) => (
               <ProgressItem
                 key={chunk.chunkId}
                 label={chunk.name}
                 status={chunk.status}
                 error={chunk.error}
-                onRetry={chunk.status === 'failed' ? () => handleRetryChunk(chunk.chunkId) : undefined}
+                onRetry={
+                  chunk.status === 'failed' ? () => handleRetryChunk(chunk.chunkId) : undefined
+                }
               />
             ))}
 
@@ -328,7 +361,13 @@ export default function CodePanel() {
             {assemblyStatus !== 'idle' && (
               <ProgressItem
                 label="Assembly"
-                status={assemblyStatus === 'running' ? 'running' : assemblyStatus === 'done' ? 'done' : 'failed'}
+                status={
+                  assemblyStatus === 'running'
+                    ? 'running'
+                    : assemblyStatus === 'done'
+                      ? 'done'
+                      : 'failed'
+                }
               />
             )}
 
@@ -361,15 +400,34 @@ export default function CodePanel() {
               </pre>
             </div>
             <div className="flex items-center border-t border-border px-1 py-1 shrink-0 bg-card">
-              <Button variant="ghost" size="sm" className="h-7 flex-1 px-1 text-xs text-muted-foreground hover:text-foreground" onClick={handleCopy}>
-                {copied ? <Check className="mr-1 h-3 w-3 shrink-0" /> : <Copy className="mr-1 h-3 w-3 shrink-0" />}
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-7 flex-1 px-1 text-xs text-muted-foreground hover:text-foreground"
+                onClick={handleCopy}
+              >
+                {copied ? (
+                  <Check className="mr-1 h-3 w-3 shrink-0" />
+                ) : (
+                  <Copy className="mr-1 h-3 w-3 shrink-0" />
+                )}
                 <span className="truncate">{copied ? 'Copied' : 'Copy'}</span>
               </Button>
-              <Button variant="ghost" size="sm" className="h-7 flex-1 px-1 text-xs text-muted-foreground hover:text-foreground" onClick={handleDownload}>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-7 flex-1 px-1 text-xs text-muted-foreground hover:text-foreground"
+                onClick={handleDownload}
+              >
                 <Download className="mr-1 h-3 w-3 shrink-0" />
                 <span className="truncate">Download</span>
               </Button>
-              <Button variant="ghost" size="sm" className="h-7 flex-1 px-1 text-xs text-muted-foreground hover:text-foreground" onClick={handleGenerate}>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-7 flex-1 px-1 text-xs text-muted-foreground hover:text-foreground"
+                onClick={handleGenerate}
+              >
                 <RefreshCw className="mr-1 h-3 w-3 shrink-0" />
                 <span className="truncate">Regenerate</span>
               </Button>
@@ -378,7 +436,7 @@ export default function CodePanel() {
         )}
       </div>
     </div>
-  )
+  );
 }
 
 // ── Progress Item Sub-Component ──
@@ -389,10 +447,10 @@ function ProgressItem({
   error,
   onRetry,
 }: {
-  label: string
-  status: ChunkStatus | 'running' | 'done' | 'failed' | 'pending'
-  error?: string
-  onRetry?: () => void
+  label: string;
+  status: ChunkStatus | 'running' | 'done' | 'failed' | 'pending';
+  error?: string;
+  onRetry?: () => void;
 }) {
   const icons: Record<string, React.ReactNode> = {
     pending: <div className="h-3.5 w-3.5 rounded-full border border-muted-foreground/30" />,
@@ -401,12 +459,12 @@ function ProgressItem({
     degraded: <AlertTriangle className="h-3.5 w-3.5 text-amber-500" />,
     failed: <MinusCircle className="h-3.5 w-3.5 text-destructive" />,
     skipped: <SkipForward className="h-3.5 w-3.5 text-muted-foreground" />,
-  }
+  };
 
   const sublabels: Record<string, string> = {
     degraded: 'generated without contract',
     skipped: 'skipped (dependency failed)',
-  }
+  };
 
   return (
     <div className="flex items-start gap-2 text-sm">
@@ -424,5 +482,5 @@ function ProgressItem({
         </Button>
       )}
     </div>
-  )
+  );
 }

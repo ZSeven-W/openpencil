@@ -124,15 +124,15 @@ bun run electron:dev
 
 複数のイメージバリアントが利用可能です — ニーズに合ったものを選択してください：
 
-| イメージ | サイズ | 含まれるもの |
-| --- | --- | --- |
-| `openpencil:latest` | ~226 MB | Web アプリのみ |
-| `openpencil-claude:latest` | — | + Claude Code CLI |
-| `openpencil-codex:latest` | — | + Codex CLI |
-| `openpencil-opencode:latest` | — | + OpenCode CLI |
-| `openpencil-copilot:latest` | — | + GitHub Copilot CLI |
-| `openpencil-gemini:latest` | — | + Gemini CLI |
-| `openpencil-full:latest` | ~1 GB | すべての CLI ツール |
+| イメージ                     | サイズ  | 含まれるもの         |
+| ---------------------------- | ------- | -------------------- |
+| `openpencil:latest`          | ~226 MB | Web アプリのみ       |
+| `openpencil-claude:latest`   | —       | + Claude Code CLI    |
+| `openpencil-codex:latest`    | —       | + Codex CLI          |
+| `openpencil-opencode:latest` | —       | + OpenCode CLI       |
+| `openpencil-copilot:latest`  | —       | + GitHub Copilot CLI |
+| `openpencil-gemini:latest`   | —       | + Gemini CLI         |
+| `openpencil-full:latest`     | ~1 GB   | すべての CLI ツール  |
 
 **実行（Web のみ）：**
 
@@ -173,6 +173,7 @@ docker build --target full -t openpencil-full .
 ## AI ネイティブデザイン
 
 **プロンプトから UI へ**
+
 - **テキストからデザインへ** — ページを説明すると、ストリーミングアニメーションでリアルタイムにキャンバス上に生成
 - **オーケストレーター** — 複雑なページを空間サブタスクに分解し、並列生成をサポート
 - **デザイン修正** — 要素を選択し、自然言語で変更内容を記述
@@ -180,20 +181,21 @@ docker build --target full -t openpencil-full .
 
 **マルチエージェントサポート**
 
-| エージェント | 設定方法 |
-| --- | --- |
+| エージェント                      | 設定方法                                                                                          |
+| --------------------------------- | ------------------------------------------------------------------------------------------------- |
 | **ビルトイン（9+ プロバイダー）** | プロバイダープリセットから選択し、リージョンを切り替え — Anthropic、OpenAI、Google、DeepSeek など |
-| **Claude Code** | 設定不要 — ローカル OAuth で Claude Agent SDK を使用 |
-| **Codex CLI** | エージェント設定で接続（`Cmd+,`） |
-| **OpenCode** | エージェント設定で接続（`Cmd+,`） |
-| **GitHub Copilot** | `copilot login` 後、エージェント設定で接続（`Cmd+,`） |
-| **Gemini CLI** | エージェント設定で接続（`Cmd+,`） |
+| **Claude Code**                   | 設定不要 — ローカル OAuth で Claude Agent SDK を使用                                              |
+| **Codex CLI**                     | エージェント設定で接続（`Cmd+,`）                                                                 |
+| **OpenCode**                      | エージェント設定で接続（`Cmd+,`）                                                                 |
+| **GitHub Copilot**                | `copilot login` 後、エージェント設定で接続（`Cmd+,`）                                             |
+| **Gemini CLI**                    | エージェント設定で接続（`Cmd+,`）                                                                 |
 
 **モデル能力プロファイル** — モデルの階層に応じてプロンプト、シンキングモード、タイムアウトを自動適応。フル階層モデル（Claude）には完全なプロンプト、標準階層（GPT-4o、Gemini、DeepSeek）ではシンキングを無効化、ベーシック階層（MiniMax、Qwen、Llama、Mistral）には最大限の信頼性のために簡略化されたネスト JSON プロンプトを使用。
 
 **i18n** — 15言語での完全なインターフェースローカライゼーション：English、简体中文、繁體中文、日本語、한국어、Français、Español、Deutsch、Português、Русский、हिन्दी、Türkçe、ไทย、Tiếng Việt、Bahasa Indonesia。
 
 **MCP サーバー**
+
 - 内蔵 MCP サーバー — Claude Code / Codex / Gemini / OpenCode / Kiro / Copilot CLI にワンクリックでインストール
 - Node.js を自動検出 — 未インストールの場合は HTTP トランスポートに自動フォールバックし、MCP HTTP サーバーを自動起動
 - ターミナルからのデザイン自動化：MCP 対応エージェントを通じて `.op` ファイルの読み取り、作成、編集が可能
@@ -202,6 +204,7 @@ docker build --target full -t openpencil-full .
 - マルチページサポート — MCP ツールを通じてページの作成、名前変更、並べ替え、複製が可能
 
 **コード生成**
+
 - React + Tailwind CSS、HTML + CSS、CSS Variables
 - Vue、Svelte、Flutter、SwiftUI、Jetpack Compose、React Native
 
@@ -229,6 +232,7 @@ cat design.dsl | op design - # stdin からパイプ入力
 ## 機能
 
 **キャンバスと描画**
+
 - パン、ズーム、スマートアライメントガイド、スナッピング対応の無限キャンバス
 - 矩形、楕円、直線、多角形、ペン（ベジェ）、Frame、テキスト
 - ブーリアン演算 — 合体、型抜き、交差（コンテキストツールバー付き）
@@ -237,15 +241,18 @@ cat design.dsl | op design - # stdin からパイプ入力
 - タブナビゲーション付きマルチページドキュメント
 
 **デザインシステム**
+
 - デザイン変数 — カラー・数値・文字列トークン、`$variable` 参照付き
 - マルチテーマサポート — 複数のテーマ軸、各軸に複数バリアント（Light/Dark、Compact/Comfortable）
 - コンポーネントシステム — インスタンスとオーバーライドを持つ再利用可能なコンポーネント
 - CSS 同期 — カスタムプロパティの自動生成、コード出力に `var(--name)` を使用
 
 **Figma インポート**
+
 - レイアウト、フィル、ストローク、エフェクト、テキスト、画像、ベクターを保持して `.fig` ファイルをインポート
 
 **デスクトップアプリ**
+
 - Electron によるネイティブ macOS・Windows・Linux 対応
 - `.op` ファイル関連付け — ダブルクリックで開く、シングルインスタンスロック
 - GitHub Releases からの自動アップデート
@@ -253,17 +260,17 @@ cat design.dsl | op design - # stdin からパイプ入力
 
 ## 技術スタック
 
-| | |
-| --- | --- |
-| **フロントエンド** | React 19 · TanStack Start · Tailwind CSS v4 · shadcn/ui · i18next |
-| **キャンバス** | CanvasKit/Skia（WASM、GPU アクセラレーション） |
-| **状態管理** | Zustand v5 |
-| **サーバー** | Nitro |
-| **デスクトップ** | Electron 35 |
-| **CLI** | `op` — ターミナル制御、バッチデザインDSL、コードエクスポート |
-| **AI** | Vercel AI SDK v6 · Anthropic SDK · Claude Agent SDK · OpenCode SDK · Copilot SDK |
-| **ランタイム** | Bun · Vite 7 |
-| **ファイル形式** | `.op` — JSON ベース、人間が読みやすく、Git フレンドリー |
+|                    |                                                                                  |
+| ------------------ | -------------------------------------------------------------------------------- |
+| **フロントエンド** | React 19 · TanStack Start · Tailwind CSS v4 · shadcn/ui · i18next                |
+| **キャンバス**     | CanvasKit/Skia（WASM、GPU アクセラレーション）                                   |
+| **状態管理**       | Zustand v5                                                                       |
+| **サーバー**       | Nitro                                                                            |
+| **デスクトップ**   | Electron 35                                                                      |
+| **CLI**            | `op` — ターミナル制御、バッチデザインDSL、コードエクスポート                     |
+| **AI**             | Vercel AI SDK v6 · Anthropic SDK · Claude Agent SDK · OpenCode SDK · Copilot SDK |
+| **ランタイム**     | Bun · Vite 7                                                                     |
+| **ファイル形式**   | `.op` — JSON ベース、人間が読みやすく、Git フレンドリー                          |
 
 ## プロジェクト構成
 
@@ -304,21 +311,21 @@ openpencil/
 
 ## キーボードショートカット
 
-| キー | 操作 | | キー | 操作 |
-| --- | --- | --- | --- | --- |
-| `V` | 選択 | | `Cmd+S` | 保存 |
-| `R` | 矩形 | | `Cmd+Z` | 元に戻す |
-| `O` | 楕円 | | `Cmd+Shift+Z` | やり直す |
-| `L` | 直線 | | `Cmd+C/X/V/D` | コピー/カット/ペースト/複製 |
-| `T` | テキスト | | `Cmd+G` | グループ化 |
-| `F` | Frame | | `Cmd+Shift+G` | グループ解除 |
-| `P` | ペンツール | | `Cmd+Shift+E` | エクスポート |
-| `H` | ハンド（パン） | | `Cmd+Shift+C` | コードパネル |
-| `Del` | 削除 | | `Cmd+Shift+V` | 変数パネル |
-| `[ / ]` | 重ね順の変更 | | `Cmd+J` | AI チャット |
-| 矢印キー | 1px 微調整 | | `Cmd+,` | エージェント設定 |
-| `Cmd+Alt+U` | ブーリアン合体 | | `Cmd+Alt+S` | ブーリアン型抜き |
-| `Cmd+Alt+I` | ブーリアン交差 | | | |
+| キー        | 操作           |     | キー          | 操作                        |
+| ----------- | -------------- | --- | ------------- | --------------------------- |
+| `V`         | 選択           |     | `Cmd+S`       | 保存                        |
+| `R`         | 矩形           |     | `Cmd+Z`       | 元に戻す                    |
+| `O`         | 楕円           |     | `Cmd+Shift+Z` | やり直す                    |
+| `L`         | 直線           |     | `Cmd+C/X/V/D` | コピー/カット/ペースト/複製 |
+| `T`         | テキスト       |     | `Cmd+G`       | グループ化                  |
+| `F`         | Frame          |     | `Cmd+Shift+G` | グループ解除                |
+| `P`         | ペンツール     |     | `Cmd+Shift+E` | エクスポート                |
+| `H`         | ハンド（パン） |     | `Cmd+Shift+C` | コードパネル                |
+| `Del`       | 削除           |     | `Cmd+Shift+V` | 変数パネル                  |
+| `[ / ]`     | 重ね順の変更   |     | `Cmd+J`       | AI チャット                 |
+| 矢印キー    | 1px 微調整     |     | `Cmd+,`       | エージェント設定            |
+| `Cmd+Alt+U` | ブーリアン合体 |     | `Cmd+Alt+S`   | ブーリアン型抜き            |
+| `Cmd+Alt+I` | ブーリアン交差 |     |               |                             |
 
 ## スクリプト
 

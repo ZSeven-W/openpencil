@@ -1,23 +1,17 @@
-import { useState, useRef, useEffect } from 'react'
-import NumberInput from '@/components/shared/number-input'
-import type { PenNode } from '@/types/pen'
-import { cn } from '@/lib/utils'
-import { Settings } from 'lucide-react'
-import { useTranslation } from 'react-i18next'
+import { useState, useRef, useEffect } from 'react';
+import NumberInput from '@/components/shared/number-input';
+import type { PenNode } from '@/types/pen';
+import { cn } from '@/lib/utils';
+import { Settings } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 
-type PaddingMode = 'single' | 'axis' | 'individual'
+type PaddingMode = 'single' | 'axis' | 'individual';
 
 // ---------------------------------------------------------------------------
 // RadioCircle (shared with GapSection)
 // ---------------------------------------------------------------------------
 
-export function RadioCircle({
-  selected,
-  onClick,
-}: {
-  selected: boolean
-  onClick?: () => void
-}) {
+export function RadioCircle({ selected, onClick }: { selected: boolean; onClick?: () => void }) {
   return (
     <button
       type="button"
@@ -29,7 +23,7 @@ export function RadioCircle({
     >
       {selected && <div className="w-2 h-2 rounded-full bg-primary" />}
     </button>
-  )
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -42,7 +36,7 @@ const PadVIcon = (
     <line x1="4" y1="1" x2="8" y2="1" strokeWidth="1.4" strokeLinecap="round" />
     <line x1="4" y1="11" x2="8" y2="11" strokeWidth="1.4" strokeLinecap="round" />
   </svg>
-)
+);
 
 const PadHIcon = (
   <svg viewBox="0 0 12 12" fill="none" stroke="currentColor">
@@ -50,45 +44,40 @@ const PadHIcon = (
     <line x1="1" y1="4" x2="1" y2="8" strokeWidth="1.4" strokeLinecap="round" />
     <line x1="11" y1="4" x2="11" y2="8" strokeWidth="1.4" strokeLinecap="round" />
   </svg>
-)
+);
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
 export function parsePaddingValues(
-  padding:
-    | number
-    | [number, number]
-    | [number, number, number, number]
-    | string
-    | undefined,
+  padding: number | [number, number] | [number, number, number, number] | string | undefined,
 ): { mode: PaddingMode; values: [number, number, number, number] } {
   if (typeof padding === 'string' || padding === undefined) {
-    return { mode: 'single', values: [0, 0, 0, 0] }
+    return { mode: 'single', values: [0, 0, 0, 0] };
   }
   if (typeof padding === 'number') {
     return {
       mode: 'single',
       values: [padding, padding, padding, padding],
-    }
+    };
   }
   if (padding.length === 2) {
     return {
       mode: 'axis',
       values: [padding[0], padding[1], padding[0], padding[1]],
-    }
+    };
   }
   if (padding[0] === padding[2] && padding[1] === padding[3]) {
     return {
       mode: 'axis',
       values: [padding[0], padding[1], padding[2], padding[3]],
-    }
+    };
   }
   return {
     mode: 'individual',
     values: [padding[0], padding[1], padding[2], padding[3]],
-  }
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -99,73 +88,63 @@ export default function PaddingSection({
   padding,
   onUpdate,
 }: {
-  padding:
-    | number
-    | [number, number]
-    | [number, number, number, number]
-    | string
-    | undefined
-  onUpdate: (updates: Partial<PenNode>) => void
+  padding: number | [number, number] | [number, number, number, number] | string | undefined;
+  onUpdate: (updates: Partial<PenNode>) => void;
 }) {
-  const parsed = parsePaddingValues(padding)
-  const [mode, setMode] = useState<PaddingMode>(parsed.mode)
-  const [popoverOpen, setPopoverOpen] = useState(false)
-  const popoverRef = useRef<HTMLDivElement>(null)
+  const parsed = parsePaddingValues(padding);
+  const [mode, setMode] = useState<PaddingMode>(parsed.mode);
+  const [popoverOpen, setPopoverOpen] = useState(false);
+  const popoverRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    setMode(parsePaddingValues(padding).mode)
-  }, [padding])
+    setMode(parsePaddingValues(padding).mode);
+  }, [padding]);
 
   useEffect(() => {
-    if (!popoverOpen) return
+    if (!popoverOpen) return;
     const handler = (e: MouseEvent) => {
-      if (
-        popoverRef.current &&
-        !popoverRef.current.contains(e.target as Node)
-      ) {
-        setPopoverOpen(false)
+      if (popoverRef.current && !popoverRef.current.contains(e.target as Node)) {
+        setPopoverOpen(false);
       }
-    }
-    document.addEventListener('mousedown', handler)
-    return () => document.removeEventListener('mousedown', handler)
-  }, [popoverOpen])
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [popoverOpen]);
 
   const handleModeChange = (newMode: PaddingMode) => {
-    setMode(newMode)
-    setPopoverOpen(false)
-    const vals = parsed.values
+    setMode(newMode);
+    setPopoverOpen(false);
+    const vals = parsed.values;
     switch (newMode) {
       case 'single':
-        onUpdate({ padding: vals[0] } as Partial<PenNode>)
-        break
+        onUpdate({ padding: vals[0] } as Partial<PenNode>);
+        break;
       case 'axis':
         onUpdate({
           padding: [vals[0], vals[1]],
-        } as Partial<PenNode>)
-        break
+        } as Partial<PenNode>);
+        break;
       case 'individual':
         onUpdate({
           padding: [vals[0], vals[1], vals[2], vals[3]],
-        } as Partial<PenNode>)
-        break
+        } as Partial<PenNode>);
+        break;
     }
-  }
+  };
 
-  const { t } = useTranslation()
+  const { t } = useTranslation();
 
   const MODES = [
     { value: 'single' as const, labelKey: 'padding.oneValue' },
     { value: 'axis' as const, labelKey: 'padding.horizontalVertical' },
     { value: 'individual' as const, labelKey: 'padding.topRightBottomLeft' },
-  ]
+  ];
 
   return (
     <div className="space-y-1.5">
       {/* Label row: "Padding" left, gear right */}
       <div className="flex items-center justify-between">
-        <span className="text-[10px] text-muted-foreground">
-          {t('padding.title')}
-        </span>
+        <span className="text-[10px] text-muted-foreground">{t('padding.title')}</span>
         <div ref={popoverRef} className="relative">
           <button
             type="button"
@@ -177,7 +156,9 @@ export default function PaddingSection({
           </button>
           {popoverOpen && (
             <div className="absolute right-0 top-full mt-1 z-50 bg-popover border border-border rounded-lg shadow-md p-3 min-w-[190px]">
-              <div className="text-[12px] font-medium mb-3 text-foreground">{t('padding.paddingValues')}</div>
+              <div className="text-[12px] font-medium mb-3 text-foreground">
+                {t('padding.paddingValues')}
+              </div>
               <div className="space-y-2.5">
                 {MODES.map((opt) => (
                   <div
@@ -186,7 +167,9 @@ export default function PaddingSection({
                     onClick={() => handleModeChange(opt.value)}
                   >
                     <RadioCircle selected={mode === opt.value} />
-                    <span className="text-[12px] text-foreground leading-none">{t(opt.labelKey)}</span>
+                    <span className="text-[12px] text-foreground leading-none">
+                      {t(opt.labelKey)}
+                    </span>
                   </div>
                 ))}
               </div>
@@ -200,9 +183,7 @@ export default function PaddingSection({
         <NumberInput
           icon={PadVIcon}
           value={parsed.values[0]}
-          onChange={(v) =>
-            onUpdate({ padding: v } as Partial<PenNode>)
-          }
+          onChange={(v) => onUpdate({ padding: v } as Partial<PenNode>)}
           min={0}
         />
       )}
@@ -239,12 +220,7 @@ export default function PaddingSection({
             value={parsed.values[0]}
             onChange={(v) =>
               onUpdate({
-                padding: [
-                  v,
-                  parsed.values[1],
-                  parsed.values[2],
-                  parsed.values[3],
-                ],
+                padding: [v, parsed.values[1], parsed.values[2], parsed.values[3]],
               } as Partial<PenNode>)
             }
             min={0}
@@ -254,12 +230,7 @@ export default function PaddingSection({
             value={parsed.values[1]}
             onChange={(v) =>
               onUpdate({
-                padding: [
-                  parsed.values[0],
-                  v,
-                  parsed.values[2],
-                  parsed.values[3],
-                ],
+                padding: [parsed.values[0], v, parsed.values[2], parsed.values[3]],
               } as Partial<PenNode>)
             }
             min={0}
@@ -269,12 +240,7 @@ export default function PaddingSection({
             value={parsed.values[2]}
             onChange={(v) =>
               onUpdate({
-                padding: [
-                  parsed.values[0],
-                  parsed.values[1],
-                  v,
-                  parsed.values[3],
-                ],
+                padding: [parsed.values[0], parsed.values[1], v, parsed.values[3]],
               } as Partial<PenNode>)
             }
             min={0}
@@ -284,12 +250,7 @@ export default function PaddingSection({
             value={parsed.values[3]}
             onChange={(v) =>
               onUpdate({
-                padding: [
-                  parsed.values[0],
-                  parsed.values[1],
-                  parsed.values[2],
-                  v,
-                ],
+                padding: [parsed.values[0], parsed.values[1], parsed.values[2], v],
               } as Partial<PenNode>)
             }
             min={0}
@@ -297,5 +258,5 @@ export default function PaddingSection({
         </div>
       )}
     </div>
-  )
+  );
 }

@@ -124,15 +124,15 @@ bun run electron:dev
 
 提供多个镜像变体 — 按需选择：
 
-| 镜像 | 大小 | 包含 |
-| --- | --- | --- |
-| `openpencil:latest` | ~226 MB | 仅 Web 应用 |
-| `openpencil-claude:latest` | — | + Claude Code CLI |
-| `openpencil-codex:latest` | — | + Codex CLI |
-| `openpencil-opencode:latest` | — | + OpenCode CLI |
-| `openpencil-copilot:latest` | — | + GitHub Copilot CLI |
-| `openpencil-gemini:latest` | — | + Gemini CLI |
-| `openpencil-full:latest` | ~1 GB | 全部 CLI 工具 |
+| 镜像                         | 大小    | 包含                 |
+| ---------------------------- | ------- | -------------------- |
+| `openpencil:latest`          | ~226 MB | 仅 Web 应用          |
+| `openpencil-claude:latest`   | —       | + Claude Code CLI    |
+| `openpencil-codex:latest`    | —       | + Codex CLI          |
+| `openpencil-opencode:latest` | —       | + OpenCode CLI       |
+| `openpencil-copilot:latest`  | —       | + GitHub Copilot CLI |
+| `openpencil-gemini:latest`   | —       | + Gemini CLI         |
+| `openpencil-full:latest`     | ~1 GB   | 全部 CLI 工具        |
 
 **运行（仅 Web）：**
 
@@ -173,6 +173,7 @@ docker build --target full -t openpencil-full .
 ## AI 原生设计
 
 **提示词生成 UI**
+
 - **文字转设计** — 描述一个页面，实时以流式动画在画布上生成
 - **编排器** — 将复杂页面分解为空间子任务，支持并行生成
 - **设计修改** — 选中元素后，用自然语言描述更改
@@ -180,20 +181,21 @@ docker build --target full -t openpencil-full .
 
 **多智能体支持**
 
-| 智能体 | 配置方式 |
-| --- | --- |
+| 智能体                | 配置方式                                                              |
+| --------------------- | --------------------------------------------------------------------- |
 | **内置（9+ 提供商）** | 从提供商预设中选择并切换区域 — Anthropic、OpenAI、Google、DeepSeek 等 |
-| **Claude Code** | 无需配置 — 使用 Claude Agent SDK 本地 OAuth |
-| **Codex CLI** | 在 Agent 设置中连接（`Cmd+,`） |
-| **OpenCode** | 在 Agent 设置中连接（`Cmd+,`） |
-| **GitHub Copilot** | 运行 `copilot login` 后在 Agent 设置中连接（`Cmd+,`） |
-| **Gemini CLI** | 在 Agent 设置中连接（`Cmd+,`） |
+| **Claude Code**       | 无需配置 — 使用 Claude Agent SDK 本地 OAuth                           |
+| **Codex CLI**         | 在 Agent 设置中连接（`Cmd+,`）                                        |
+| **OpenCode**          | 在 Agent 设置中连接（`Cmd+,`）                                        |
+| **GitHub Copilot**    | 运行 `copilot login` 后在 Agent 设置中连接（`Cmd+,`）                 |
+| **Gemini CLI**        | 在 Agent 设置中连接（`Cmd+,`）                                        |
 
 **模型能力配置** — 自动根据模型层级适配提示词、思考模式和超时时间。完整层级模型（Claude）获得完整提示词；标准层级模型（GPT-4o、Gemini、DeepSeek）关闭思考模式；基础层级模型（MiniMax、Qwen、Llama、Mistral）使用简化的嵌套 JSON 提示词以确保最大可靠性。
 
 **国际化** — 完整界面本地化，支持 15 种语言：English、简体中文、繁體中文、日本語、한국어、Français、Español、Deutsch、Português、Русский、हिन्दी、Türkçe、ไทย、Tiếng Việt、Bahasa Indonesia。
 
 **MCP 服务器**
+
 - 内置 MCP 服务器 — 一键安装到 Claude Code / Codex / Gemini / OpenCode / Kiro / Copilot CLI
 - 自动检测 Node.js — 若未安装则自动回退到 HTTP 传输模式并启动 MCP HTTP 服务器
 - 从终端进行设计自动化：通过任意 MCP 兼容的智能体读取、创建和修改 `.op` 文件
@@ -202,6 +204,7 @@ docker build --target full -t openpencil-full .
 - 多页面支持 — 通过 MCP 工具创建、重命名、重新排序和复制页面
 
 **代码生成**
+
 - React + Tailwind CSS、HTML + CSS、CSS Variables
 - Vue、Svelte、Flutter、SwiftUI、Jetpack Compose、React Native
 
@@ -229,6 +232,7 @@ cat design.dsl | op design - # 从 stdin 管道输入
 ## 功能特性
 
 **画布与绘图**
+
 - 无限画布，支持平移、缩放、智能对齐参考线和吸附
 - 矩形、椭圆、直线、多边形、钢笔（贝塞尔）、Frame、文本
 - 布尔运算 — 联合、减去、交集，配合上下文工具栏
@@ -237,15 +241,18 @@ cat design.dsl | op design - # 从 stdin 管道输入
 - 多页面文档，支持标签页导航
 
 **设计系统**
+
 - 设计变量 — 颜色、数字、字符串令牌，支持 `$variable` 引用
 - 多主题支持 — 多个主题轴，每个轴有多个变体（浅色/深色、紧凑/舒适）
 - 组件系统 — 可复用组件，支持实例和覆盖
 - CSS 同步 — 自动生成自定义属性，代码输出中使用 `var(--name)`
 
 **Figma 导入**
+
 - 导入 `.fig` 文件，保留布局、填充、描边、效果、文本、图片和矢量图形
 
 **桌面应用**
+
 - 通过 Electron 支持原生 macOS、Windows 和 Linux
 - `.op` 文件关联 — 双击即可打开，单实例锁定
 - 从 GitHub Releases 自动更新
@@ -253,17 +260,17 @@ cat design.dsl | op design - # 从 stdin 管道输入
 
 ## 技术栈
 
-| | |
-| --- | --- |
-| **前端** | React 19 · TanStack Start · Tailwind CSS v4 · shadcn/ui · i18next |
-| **画布** | CanvasKit/Skia（WASM, GPU 加速） |
-| **状态管理** | Zustand v5 |
-| **服务器** | Nitro |
-| **桌面端** | Electron 35 |
-| **CLI** | `op` — 终端控制、批量设计 DSL、代码导出 |
-| **AI** | Vercel AI SDK v6 · Anthropic SDK · Claude Agent SDK · OpenCode SDK · Copilot SDK |
-| **运行时** | Bun · Vite 7 |
-| **文件格式** | `.op` — 基于 JSON，人类可读，对 Git 友好 |
+|              |                                                                                  |
+| ------------ | -------------------------------------------------------------------------------- |
+| **前端**     | React 19 · TanStack Start · Tailwind CSS v4 · shadcn/ui · i18next                |
+| **画布**     | CanvasKit/Skia（WASM, GPU 加速）                                                 |
+| **状态管理** | Zustand v5                                                                       |
+| **服务器**   | Nitro                                                                            |
+| **桌面端**   | Electron 35                                                                      |
+| **CLI**      | `op` — 终端控制、批量设计 DSL、代码导出                                          |
+| **AI**       | Vercel AI SDK v6 · Anthropic SDK · Claude Agent SDK · OpenCode SDK · Copilot SDK |
+| **运行时**   | Bun · Vite 7                                                                     |
+| **文件格式** | `.op` — 基于 JSON，人类可读，对 Git 友好                                         |
 
 ## 项目结构
 
@@ -304,21 +311,21 @@ openpencil/
 
 ## 键盘快捷键
 
-| 按键 | 操作 | | 按键 | 操作 |
-| --- | --- | --- | --- | --- |
-| `V` | 选择 | | `Cmd+S` | 保存 |
-| `R` | 矩形 | | `Cmd+Z` | 撤销 |
-| `O` | 椭圆 | | `Cmd+Shift+Z` | 重做 |
-| `L` | 直线 | | `Cmd+C/X/V/D` | 复制/剪切/粘贴/重复 |
-| `T` | 文本 | | `Cmd+G` | 编组 |
-| `F` | Frame | | `Cmd+Shift+G` | 取消编组 |
-| `P` | 钢笔工具 | | `Cmd+Shift+E` | 导出 |
-| `H` | 手形（平移） | | `Cmd+Shift+C` | 代码面板 |
-| `Del` | 删除 | | `Cmd+Shift+V` | 变量面板 |
-| `[ / ]` | 调整层级顺序 | | `Cmd+J` | AI 聊天 |
-| 方向键 | 微移 1px | | `Cmd+,` | 智能体设置 |
-| `Cmd+Alt+U` | 布尔联合 | | `Cmd+Alt+S` | 布尔减去 |
-| `Cmd+Alt+I` | 布尔交集 | | | |
+| 按键        | 操作         |     | 按键          | 操作                |
+| ----------- | ------------ | --- | ------------- | ------------------- |
+| `V`         | 选择         |     | `Cmd+S`       | 保存                |
+| `R`         | 矩形         |     | `Cmd+Z`       | 撤销                |
+| `O`         | 椭圆         |     | `Cmd+Shift+Z` | 重做                |
+| `L`         | 直线         |     | `Cmd+C/X/V/D` | 复制/剪切/粘贴/重复 |
+| `T`         | 文本         |     | `Cmd+G`       | 编组                |
+| `F`         | Frame        |     | `Cmd+Shift+G` | 取消编组            |
+| `P`         | 钢笔工具     |     | `Cmd+Shift+E` | 导出                |
+| `H`         | 手形（平移） |     | `Cmd+Shift+C` | 代码面板            |
+| `Del`       | 删除         |     | `Cmd+Shift+V` | 变量面板            |
+| `[ / ]`     | 调整层级顺序 |     | `Cmd+J`       | AI 聊天             |
+| 方向键      | 微移 1px     |     | `Cmd+,`       | 智能体设置          |
+| `Cmd+Alt+U` | 布尔联合     |     | `Cmd+Alt+S`   | 布尔减去            |
+| `Cmd+Alt+I` | 布尔交集     |     |               |                     |
 
 ## 脚本命令
 

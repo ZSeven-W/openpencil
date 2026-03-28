@@ -14,10 +14,10 @@ npm install -g @zseven-w/openpencil
 
 CLI 會自動偵測並啟動所有平台上的 OpenPencil 桌面應用程式：
 
-| 平台        | 偵測的安裝路徑                                                                                      |
-| ----------- | --------------------------------------------------------------------------------------------------- |
-| **macOS**   | `/Applications/OpenPencil.app`、`~/Applications/OpenPencil.app`                                     |
-| **Windows** | NSIS 使用者安裝（`%LOCALAPPDATA%`）、全域安裝（`%PROGRAMFILES%`）、可攜版                            |
+| 平台        | 偵測的安裝路徑                                                                                           |
+| ----------- | -------------------------------------------------------------------------------------------------------- |
+| **macOS**   | `/Applications/OpenPencil.app`、`~/Applications/OpenPencil.app`                                          |
+| **Windows** | NSIS 使用者安裝（`%LOCALAPPDATA%`）、全域安裝（`%PROGRAMFILES%`）、可攜版                                |
 | **Linux**   | `/usr/bin`、`/usr/local/bin`、`~/.local/bin`、AppImage（`~/Applications`、`~/Downloads`）、Snap、Flatpak |
 
 ## 使用方式

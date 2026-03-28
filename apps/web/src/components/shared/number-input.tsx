@@ -1,19 +1,19 @@
-import { useState, useRef, useCallback, useEffect } from 'react'
-import { cn } from '@/lib/utils'
-import { useHistoryStore } from '@/stores/history-store'
-import { useDocumentStore } from '@/stores/document-store'
+import { useState, useRef, useCallback, useEffect } from 'react';
+import { cn } from '@/lib/utils';
+import { useHistoryStore } from '@/stores/history-store';
+import { useDocumentStore } from '@/stores/document-store';
 
 interface NumberInputProps {
-  value: number
-  onChange: (value: number) => void
-  min?: number
-  max?: number
-  step?: number
-  label?: string
-  icon?: React.ReactNode
-  suffix?: string
-  className?: string
-  readOnly?: boolean
+  value: number;
+  onChange: (value: number) => void;
+  min?: number;
+  max?: number;
+  step?: number;
+  label?: string;
+  icon?: React.ReactNode;
+  suffix?: string;
+  className?: string;
+  readOnly?: boolean;
 }
 
 export default function NumberInput({
@@ -28,74 +28,74 @@ export default function NumberInput({
   className = '',
   readOnly = false,
 }: NumberInputProps) {
-  const [localValue, setLocalValue] = useState(String(value))
-  const [isDragging, setIsDragging] = useState(false)
-  const dragStartY = useRef(0)
-  const dragStartValue = useRef(0)
+  const [localValue, setLocalValue] = useState(String(value));
+  const [isDragging, setIsDragging] = useState(false);
+  const dragStartY = useRef(0);
+  const dragStartValue = useRef(0);
 
   useEffect(() => {
     if (!isDragging) {
-      setLocalValue(String(Math.round(value * 100) / 100))
+      setLocalValue(String(Math.round(value * 100) / 100));
     }
-  }, [value, isDragging])
+  }, [value, isDragging]);
 
   const clamp = useCallback(
     (v: number) => {
-      let result = v
-      if (min !== undefined) result = Math.max(min, result)
-      if (max !== undefined) result = Math.min(max, result)
-      return result
+      let result = v;
+      if (min !== undefined) result = Math.max(min, result);
+      if (max !== undefined) result = Math.min(max, result);
+      return result;
     },
     [min, max],
-  )
+  );
 
   const handleBlur = () => {
-    const parsed = parseFloat(localValue)
+    const parsed = parseFloat(localValue);
     if (!isNaN(parsed)) {
-      onChange(clamp(parsed))
+      onChange(clamp(parsed));
     } else {
-      setLocalValue(String(value))
+      setLocalValue(String(value));
     }
-  }
+  };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter') {
-      handleBlur()
+      handleBlur();
     } else if (e.key === 'ArrowUp') {
-      e.preventDefault()
-      onChange(clamp(value + step))
+      e.preventDefault();
+      onChange(clamp(value + step));
     } else if (e.key === 'ArrowDown') {
-      e.preventDefault()
-      onChange(clamp(value - step))
+      e.preventDefault();
+      onChange(clamp(value - step));
     }
-  }
+  };
 
   const handleMouseDown = (e: React.MouseEvent) => {
-    if (readOnly) return
-    if (e.target instanceof HTMLInputElement) return
-    setIsDragging(true)
-    dragStartY.current = e.clientY
-    dragStartValue.current = value
+    if (readOnly) return;
+    if (e.target instanceof HTMLInputElement) return;
+    setIsDragging(true);
+    dragStartY.current = e.clientY;
+    dragStartValue.current = value;
 
     // Batch all scrub-drag onChange calls into a single undo entry
-    useHistoryStore.getState().startBatch(useDocumentStore.getState().document)
+    useHistoryStore.getState().startBatch(useDocumentStore.getState().document);
 
     const handleMouseMove = (ev: MouseEvent) => {
-      const delta = dragStartY.current - ev.clientY
-      const newValue = clamp(dragStartValue.current + delta * step)
-      onChange(newValue)
-    }
+      const delta = dragStartY.current - ev.clientY;
+      const newValue = clamp(dragStartValue.current + delta * step);
+      onChange(newValue);
+    };
 
     const handleMouseUp = () => {
-      setIsDragging(false)
-      useHistoryStore.getState().endBatch()
-      document.removeEventListener('mousemove', handleMouseMove)
-      document.removeEventListener('mouseup', handleMouseUp)
-    }
+      setIsDragging(false);
+      useHistoryStore.getState().endBatch();
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
 
-    document.addEventListener('mousemove', handleMouseMove)
-    document.addEventListener('mouseup', handleMouseUp)
-  }
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+  };
 
   return (
     <div
@@ -129,10 +129,8 @@ export default function NumberInput({
         )}
       />
       {suffix && (
-        <span className="text-[10px] text-muted-foreground pr-1.5 shrink-0">
-          {suffix}
-        </span>
+        <span className="text-[10px] text-muted-foreground pr-1.5 shrink-0">{suffix}</span>
       )}
     </div>
-  )
+  );
 }

@@ -1,8 +1,8 @@
-import { resolveSkills } from '@zseven-w/pen-ai-skills'
-import type { DesignMdSpec } from '@/types/design-md'
+import { resolveSkills } from '@zseven-w/pen-ai-skills';
+import type { DesignMdSpec } from '@/types/design-md';
 
 // Safe code block delimiter
-const BLOCK = "```"
+const BLOCK = '```';
 
 // ---------------------------------------------------------------------------
 // buildDesignMdStylePolicy — condensed design.md style policy for AI prompts
@@ -10,41 +10,41 @@ const BLOCK = "```"
 
 /** Build a condensed design.md style policy string for AI prompt injection. */
 export function buildDesignMdStylePolicy(spec: DesignMdSpec): string {
-  const parts: string[] = []
+  const parts: string[] = [];
 
   if (spec.visualTheme) {
-    const theme = spec.visualTheme.length > 200
-      ? spec.visualTheme.substring(0, 200) + '...'
-      : spec.visualTheme
-    parts.push(`VISUAL THEME: ${theme}`)
+    const theme =
+      spec.visualTheme.length > 200 ? spec.visualTheme.substring(0, 200) + '...' : spec.visualTheme;
+    parts.push(`VISUAL THEME: ${theme}`);
   }
 
   if (spec.colorPalette?.length) {
     const colors = spec.colorPalette
       .slice(0, 10)
-      .map(c => `${c.name} (${c.hex}) — ${c.role}`)
-      .join('\n- ')
-    parts.push(`COLOR PALETTE:\n- ${colors}`)
+      .map((c) => `${c.name} (${c.hex}) — ${c.role}`)
+      .join('\n- ');
+    parts.push(`COLOR PALETTE:\n- ${colors}`);
   }
 
   if (spec.typography?.fontFamily) {
-    parts.push(`FONT: ${spec.typography.fontFamily}`)
+    parts.push(`FONT: ${spec.typography.fontFamily}`);
   }
   if (spec.typography?.headings) {
-    parts.push(`Headings: ${spec.typography.headings}`)
+    parts.push(`Headings: ${spec.typography.headings}`);
   }
   if (spec.typography?.body) {
-    parts.push(`Body: ${spec.typography.body}`)
+    parts.push(`Body: ${spec.typography.body}`);
   }
 
   if (spec.componentStyles) {
-    const styles = spec.componentStyles.length > 300
-      ? spec.componentStyles.substring(0, 300) + '...'
-      : spec.componentStyles
-    parts.push(`COMPONENT STYLES:\n${styles}`)
+    const styles =
+      spec.componentStyles.length > 300
+        ? spec.componentStyles.substring(0, 300) + '...'
+        : spec.componentStyles;
+    parts.push(`COMPONENT STYLES:\n${styles}`);
   }
 
-  return parts.join('\n\n')
+  return parts.join('\n\n');
 }
 
 // ---------------------------------------------------------------------------
@@ -62,7 +62,7 @@ NEVER say "I will create..." — START DIRECTLY WITH <step>.
 NEVER use "OpenPencil", "Pencil", or the tool name as brand/app name in designs. Use generic placeholders like "AppName", "Acme", or contextually relevant names.
 
 You may include 1-2 brief <step> tags before the JSON (optional, keep them SHORT).
-When a user asks non-design questions (explain, suggest colors, give advice), respond in text.`
+When a user asks non-design questions (explain, suggest colors, give advice), respond in text.`;
 
 const GENERATOR_CORE_PROMPT = `You are a PenNode JSON streaming engine. Convert design descriptions into flat PenNode JSON, one element at a time.
 
@@ -78,7 +78,7 @@ CRITICAL:
 - Root frame: "_parent": null, x:0, y:0.
 - Start with <step> tags, then immediately the json block. NO preamble.
 - After the json block, add a 1-sentence summary.
-Design like a professional: hierarchy, contrast, whitespace, consistent palette.`
+Design like a professional: hierarchy, contrast, whitespace, consistent palette.`;
 
 // ---------------------------------------------------------------------------
 // Prompt builders (progressive skill loading via pen-ai-skills)
@@ -91,9 +91,9 @@ Design like a professional: hierarchy, contrast, whitespace, consistent palette.
 export function buildChatSystemPrompt(
   userMessage: string,
   options?: {
-    hasDesignMd?: boolean
-    hasVariables?: boolean
-    designMd?: DesignMdSpec
+    hasDesignMd?: boolean;
+    hasVariables?: boolean;
+    designMd?: DesignMdSpec;
   },
 ): string {
   const genCtx = resolveSkills('generation', userMessage, {
@@ -104,9 +104,9 @@ export function buildChatSystemPrompt(
     dynamicContent: options?.designMd
       ? { designMdContent: buildDesignMdStylePolicy(options.designMd) }
       : undefined,
-  })
-  const knowledge = genCtx.skills.map(s => s.content).join('\n\n')
-  return `${CHAT_CORE_PROMPT}\n\n${knowledge}`
+  });
+  const knowledge = genCtx.skills.map((s) => s.content).join('\n\n');
+  return `${CHAT_CORE_PROMPT}\n\n${knowledge}`;
 }
 
 /**
@@ -116,9 +116,9 @@ export function buildChatSystemPrompt(
 export function buildGeneratorSystemPrompt(
   userMessage: string,
   options?: {
-    hasDesignMd?: boolean
-    hasVariables?: boolean
-    designMd?: DesignMdSpec
+    hasDesignMd?: boolean;
+    hasVariables?: boolean;
+    designMd?: DesignMdSpec;
   },
 ): string {
   const genCtx = resolveSkills('generation', userMessage, {
@@ -129,9 +129,9 @@ export function buildGeneratorSystemPrompt(
     dynamicContent: options?.designMd
       ? { designMdContent: buildDesignMdStylePolicy(options.designMd) }
       : undefined,
-  })
-  const knowledge = genCtx.skills.map(s => s.content).join('\n\n')
-  return `${GENERATOR_CORE_PROMPT}\n\n${knowledge}`
+  });
+  const knowledge = genCtx.skills.map((s) => s.content).join('\n\n');
+  return `${GENERATOR_CORE_PROMPT}\n\n${knowledge}`;
 }
 
 /**
@@ -141,9 +141,9 @@ export function buildGeneratorSystemPrompt(
 export function buildModifierSystemPrompt(
   userMessage: string,
   options?: {
-    hasDesignMd?: boolean
-    hasVariables?: boolean
-    designMd?: DesignMdSpec
+    hasDesignMd?: boolean;
+    hasVariables?: boolean;
+    designMd?: DesignMdSpec;
   },
 ): string {
   const maintenanceCtx = resolveSkills('maintenance', userMessage, {
@@ -151,11 +151,11 @@ export function buildModifierSystemPrompt(
       hasVariables: !!options?.hasVariables,
       hasDesignMd: !!options?.hasDesignMd,
     },
-  })
-  let prompt = maintenanceCtx.skills.map(s => s.content).join('\n\n')
+  });
+  let prompt = maintenanceCtx.skills.map((s) => s.content).join('\n\n');
   // Append design-md context if present (design-md skill is generation-phase only)
   if (options?.designMd) {
-    prompt += '\n\n' + buildDesignMdStylePolicy(options.designMd)
+    prompt += '\n\n' + buildDesignMdStylePolicy(options.designMd);
   }
-  return prompt
+  return prompt;
 }

@@ -18,4 +18,4 @@ export type {
   IconFontNode,
   RefNode,
   PenNode,
-} from '@zseven-w/pen-types'
+} from '@zseven-w/pen-types';

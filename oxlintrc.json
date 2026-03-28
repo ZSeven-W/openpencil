@@ -1,0 +1,9 @@
+{
+  "categories": {
+    "correctness": "error",
+    "suspicious": "warn",
+    "perf": "warn"
+  },
+  "plugins": ["react", "typescript", "import", "unicorn"],
+  "ignorePatterns": ["node_modules", "out", "dist", "**/routeTree.gen.ts", "**/*.gen.*"]
+}

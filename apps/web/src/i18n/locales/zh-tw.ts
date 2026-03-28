@@ -1,4 +1,4 @@
-import type { TranslationKeys } from './en'
+import type { TranslationKeys } from './en';
 
 const zhTW: TranslationKeys = {
   // ── Common ──
@@ -315,14 +315,12 @@ const zhTW: TranslationKeys = {
   'ai.quickAction.loginScreenPrompt':
     '設計一個現代的行動裝置登入頁面，包含電子郵件輸入框、密碼輸入框、登入按鈕和社群登入選項',
   'ai.quickAction.foodApp': '美食App首頁',
-  'ai.quickAction.foodAppPrompt':
-    'Generate a well-designed food mobile app homepage',
+  'ai.quickAction.foodAppPrompt': 'Generate a well-designed food mobile app homepage',
   'ai.quickAction.bottomNav': '設計底部導覽列',
   'ai.quickAction.bottomNavPrompt':
     '設計一個包含 5 個標籤的行動應用程式底部導覽列：首頁、搜尋、新增、訊息、個人',
   'ai.quickAction.colorPalette': '為我的應用程式推薦配色方案',
-  'ai.quickAction.colorPalettePrompt':
-    '為一個寵物照護應用程式推薦一套現代配色方案',
+  'ai.quickAction.colorPalettePrompt': '為一個寵物照護應用程式推薦一套現代配色方案',
 
   // ── Code Panel ──
   'code.reactTailwind': 'React + Tailwind',
@@ -425,7 +423,8 @@ const zhTW: TranslationKeys = {
   'builtin.errorApiKeyEmpty': 'API 金鑰為空，請在設定中新增您的 API 金鑰。',
   'builtin.parallelAgents': '並行子代理：{{count}}x（點擊切換）',
   'builtin.baseUrlPlaceholder': 'https://api.example.com/v1',
-  'builtin.teamDescription': '選擇用於設計生成的模型。設定後，設計任務將自動委派給使用此模型的專業 Agent。',
+  'builtin.teamDescription':
+    '選擇用於設計生成的模型。設定後，設計任務將自動委派給使用此模型的專業 Agent。',
   'builtin.teamDesignModel': '設計模型',
   'builtin.teamSelectModel': '無（單 Agent）',
 
@@ -486,6 +485,6 @@ const zhTW: TranslationKeys = {
   'variablePicker.bindToVariable': '綁定到變數',
   'variablePicker.unbind': '解除綁定',
   'variablePicker.noVariables': '未定義 {{type}} 類型的變數',
-} as const
+} as const;
 
-export default zhTW
+export default zhTW;

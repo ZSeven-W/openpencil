@@ -9,6 +9,7 @@ category: knowledge
 ---
 
 DESIGN CRAFT:
+
 - Type scale with real contrast: display 48-64, heading 28-36, body 16. Weight: 700 titles, 500 subtitles, 400 body.
 - Line height: tighter at large sizes (1.05-1.15 for 40px+), looser at small (1.5-1.6 for 16px).
 - Palette: 1 primary action color, 1 accent, neutral scale. Max 2 saturated colors. Page bg slightly tinted (#F8FAFC not #FFFFFF).

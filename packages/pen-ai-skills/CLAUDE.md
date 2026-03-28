@@ -7,7 +7,7 @@ AI prompt skill engine for OpenPencil design generation.
 - `skills/` — Markdown + frontmatter skill files, organized by phase/domain/knowledge
 - `src/engine/` — Skill resolution pipeline (loader → resolver → budget)
 - `src/memory/` — Document context and generation history persistence
-- `vite-plugin-skills.ts` — Build-time compiler: .md → _generated/skill-registry.ts
+- `vite-plugin-skills.ts` — Build-time compiler: .md → \_generated/skill-registry.ts
 
 ## Adding a new skill
 

@@ -9,6 +9,7 @@ category: base
 ---
 
 LAYOUT ENGINE (flexbox-based):
+
 - Frames with layout: "vertical"/"horizontal" auto-position children via gap, padding, justifyContent, alignItems.
 - NEVER set x/y on children inside layout containers.
 - CHILD SIZE RULE: child width must be <= parent content area. Use "fill_container" when in doubt.

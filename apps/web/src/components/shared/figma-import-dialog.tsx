@@ -1,199 +1,219 @@
-import { useState, useEffect, useCallback, useRef } from 'react'
-import { useTranslation } from 'react-i18next'
-import { X, Upload, AlertCircle, Loader2, FileUp } from 'lucide-react'
-import { Button } from '@/components/ui/button'
-import { useDocumentStore } from '@/stores/document-store'
-import { useCanvasStore } from '@/stores/canvas-store'
-import { zoomToFitContent, getSkiaEngineRef } from '@/canvas/skia-engine-ref'
-import { parseFigFile } from '@/services/figma/fig-parser'
-import { figmaToPenDocument, figmaAllPagesToPenDocument, getFigmaPages } from '@/services/figma/figma-node-mapper'
-import { resolveImageBlobs } from '@/services/figma/figma-image-resolver'
-import type { FigmaDecodedFile, FigmaImportLayoutMode } from '@/services/figma/figma-types'
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
+import { X, Upload, AlertCircle, Loader2, FileUp } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { useDocumentStore } from '@/stores/document-store';
+import { useCanvasStore } from '@/stores/canvas-store';
+import { zoomToFitContent, getSkiaEngineRef } from '@/canvas/skia-engine-ref';
+import { parseFigFile } from '@/services/figma/fig-parser';
+import {
+  figmaToPenDocument,
+  figmaAllPagesToPenDocument,
+  getFigmaPages,
+} from '@/services/figma/figma-node-mapper';
+import { resolveImageBlobs } from '@/services/figma/figma-image-resolver';
+import type { FigmaDecodedFile, FigmaImportLayoutMode } from '@/services/figma/figma-types';
 
-type ImportState = 'idle' | 'parsing' | 'page-select' | 'converting' | 'done' | 'error'
+type ImportState = 'idle' | 'parsing' | 'page-select' | 'converting' | 'done' | 'error';
 
 interface FigmaImportDialogProps {
-  open: boolean
-  onClose: () => void
+  open: boolean;
+  onClose: () => void;
 }
 
 export default function FigmaImportDialog({ open, onClose }: FigmaImportDialogProps) {
-  const { t } = useTranslation()
-  const [state, setState] = useState<ImportState>('idle')
-  const [progress, setProgress] = useState(0)
-  const [error, setError] = useState('')
-  const [warnings, setWarnings] = useState<string[]>([])
-  const [decoded, setDecoded] = useState<FigmaDecodedFile | null>(null)
-  const [fileName, setFileName] = useState('')
-  const [pages, setPages] = useState<{ id: string; name: string; childCount: number }[]>([])
-  const [isDragging, setIsDragging] = useState(false)
-  const [layoutMode, setLayoutMode] = useState<FigmaImportLayoutMode>('preserve')
-  const fileInputRef = useRef<HTMLInputElement>(null)
+  const { t } = useTranslation();
+  const [state, setState] = useState<ImportState>('idle');
+  const [progress, setProgress] = useState(0);
+  const [error, setError] = useState('');
+  const [warnings, setWarnings] = useState<string[]>([]);
+  const [decoded, setDecoded] = useState<FigmaDecodedFile | null>(null);
+  const [fileName, setFileName] = useState('');
+  const [pages, setPages] = useState<{ id: string; name: string; childCount: number }[]>([]);
+  const [isDragging, setIsDragging] = useState(false);
+  const [layoutMode, setLayoutMode] = useState<FigmaImportLayoutMode>('preserve');
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Escape key to close
   useEffect(() => {
-    if (!open) return
+    if (!open) return;
     const handler = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose()
-    }
-    document.addEventListener('keydown', handler)
-    return () => document.removeEventListener('keydown', handler)
-  }, [open, onClose])
+      if (e.key === 'Escape') onClose();
+    };
+    document.addEventListener('keydown', handler);
+    return () => document.removeEventListener('keydown', handler);
+  }, [open, onClose]);
 
-  const processFile = useCallback(async (file: File) => {
-    if (!file.name.endsWith('.fig')) {
-      setError(t('figma.selectFigFile'))
-      setState('error')
-      return
-    }
-
-    setFileName(file.name.replace(/\.fig$/, ''))
-    setState('parsing')
-    setProgress(10)
-
-    try {
-      const buffer = await file.arrayBuffer()
-      setProgress(30)
-
-      const decodedFile = parseFigFile(buffer)
-      setDecoded(decodedFile)
-      setProgress(50)
-
-      const figmaPages = getFigmaPages(decodedFile)
-
-      if (figmaPages.length === 0) {
-        setError(t('figma.noPages'))
-        setState('error')
-        return
+  const processFile = useCallback(
+    async (file: File) => {
+      if (!file.name.endsWith('.fig')) {
+        setError(t('figma.selectFigFile'));
+        setState('error');
+        return;
       }
 
-      // Always show page-select to let user choose layout mode
-      setPages(figmaPages)
-      setState('page-select')
-    } catch (err) {
-      console.error('[Figma Import] Parse error:', err)
-      setError(err instanceof Error ? err.message : t('figma.parseFailed'))
-      setState('error')
-    }
-  }, [t])
+      setFileName(file.name.replace(/\.fig$/, ''));
+      setState('parsing');
+      setProgress(10);
+
+      try {
+        const buffer = await file.arrayBuffer();
+        setProgress(30);
+
+        const decodedFile = parseFigFile(buffer);
+        setDecoded(decodedFile);
+        setProgress(50);
+
+        const figmaPages = getFigmaPages(decodedFile);
+
+        if (figmaPages.length === 0) {
+          setError(t('figma.noPages'));
+          setState('error');
+          return;
+        }
+
+        // Always show page-select to let user choose layout mode
+        setPages(figmaPages);
+        setState('page-select');
+      } catch (err) {
+        console.error('[Figma Import] Parse error:', err);
+        setError(err instanceof Error ? err.message : t('figma.parseFailed'));
+        setState('error');
+      }
+    },
+    [t],
+  );
 
   // Reset state when dialog opens; auto-process pending .fig file from drag-and-drop
   useEffect(() => {
     if (open) {
-      setState('idle')
-      setProgress(0)
-      setError('')
-      setWarnings([])
-      setDecoded(null)
-      setFileName('')
-      setPages([])
-      setLayoutMode('preserve')
+      setState('idle');
+      setProgress(0);
+      setError('');
+      setWarnings([]);
+      setDecoded(null);
+      setFileName('');
+      setPages([]);
+      setLayoutMode('preserve');
 
-      const pending = useCanvasStore.getState().pendingFigmaFile
+      const pending = useCanvasStore.getState().pendingFigmaFile;
       if (pending) {
-        useCanvasStore.getState().setPendingFigmaFile(null)
-        processFile(pending)
+        useCanvasStore.getState().setPendingFigmaFile(null);
+        processFile(pending);
       }
     }
-  }, [open, processFile])
+  }, [open, processFile]);
 
-  const convertAndLoad = useCallback(async (
-    decodedFile: FigmaDecodedFile,
-    name: string,
-    pageIndex: number | 'all',
-  ) => {
-    setState('converting')
-    setProgress(60)
+  const convertAndLoad = useCallback(
+    async (decodedFile: FigmaDecodedFile, name: string, pageIndex: number | 'all') => {
+      setState('converting');
+      setProgress(60);
 
-    try {
-      // Use requestAnimationFrame to avoid blocking UI
-      await new Promise((r) => requestAnimationFrame(r))
+      try {
+        // Use requestAnimationFrame to avoid blocking UI
+        await new Promise((r) => requestAnimationFrame(r));
 
-      const { document: doc, warnings: warns, imageBlobs } = pageIndex === 'all'
-        ? figmaAllPagesToPenDocument(decodedFile, name, layoutMode)
-        : figmaToPenDocument(decodedFile, name, pageIndex, layoutMode)
-      setProgress(80)
+        const {
+          document: doc,
+          warnings: warns,
+          imageBlobs,
+        } = pageIndex === 'all'
+          ? figmaAllPagesToPenDocument(decodedFile, name, layoutMode)
+          : figmaToPenDocument(decodedFile, name, pageIndex, layoutMode);
+        setProgress(80);
 
-      // Resolve image blobs and hash-based images to data URLs across all pages
-      let unresolved = 0
-      if (doc.pages && doc.pages.length > 0) {
-        for (const page of doc.pages) {
-          unresolved += resolveImageBlobs(page.children, imageBlobs, decodedFile.imageFiles)
+        // Resolve image blobs and hash-based images to data URLs across all pages
+        let unresolved = 0;
+        if (doc.pages && doc.pages.length > 0) {
+          for (const page of doc.pages) {
+            unresolved += resolveImageBlobs(page.children, imageBlobs, decodedFile.imageFiles);
+          }
+        } else {
+          unresolved = resolveImageBlobs(doc.children, imageBlobs, decodedFile.imageFiles);
         }
-      } else {
-        unresolved = resolveImageBlobs(doc.children, imageBlobs, decodedFile.imageFiles)
-      }
-      if (unresolved > 0) {
-        warns.push(`${unresolved} images could not be resolved`)
-      }
-
-      setProgress(95)
-      setWarnings(warns)
-
-      // Pre-load fonts used in the document for vector text rendering
-      const fontFamilies = new Set<string>()
-      const collectFonts = (nodes: import('@/types/pen').PenNode[]) => {
-        for (const n of nodes) {
-          if (n.type === 'text' && (n as any).fontFamily) fontFamilies.add((n as any).fontFamily)
-          if ('children' in n && n.children) collectFonts(n.children)
+        if (unresolved > 0) {
+          warns.push(`${unresolved} images could not be resolved`);
         }
+
+        setProgress(95);
+        setWarnings(warns);
+
+        // Pre-load fonts used in the document for vector text rendering
+        const fontFamilies = new Set<string>();
+        const collectFonts = (nodes: import('@/types/pen').PenNode[]) => {
+          for (const n of nodes) {
+            if (n.type === 'text' && (n as any).fontFamily) fontFamilies.add((n as any).fontFamily);
+            if ('children' in n && n.children) collectFonts(n.children);
+          }
+        };
+        if (doc.pages) {
+          for (const p of doc.pages) collectFonts(p.children);
+        } else collectFonts(doc.children);
+        // Always include Noto Sans SC so CJK text renders when primary fonts are
+        // system fonts (PingFang SC, Microsoft YaHei, etc.) that can't be loaded
+        fontFamilies.add('Noto Sans SC');
+        const engine = getSkiaEngineRef();
+        if (engine && fontFamilies.size > 0) {
+          engine.renderer.fontManager.ensureFonts([...fontFamilies]);
+        }
+
+        // Load into the document store
+        useDocumentStore.getState().loadDocument(doc, `${name}.op`);
+        // Double-RAF ensures React effects (canvas sync) complete before fitting
+        requestAnimationFrame(() => requestAnimationFrame(() => zoomToFitContent()));
+
+        setProgress(100);
+        setState('done');
+
+        // Auto-close after brief delay on success
+        setTimeout(() => {
+          onClose();
+        }, 800);
+      } catch (err) {
+        console.error('[Figma Import] Convert error:', err);
+        setError(err instanceof Error ? err.message : t('figma.convertFailed'));
+        setState('error');
       }
-      if (doc.pages) { for (const p of doc.pages) collectFonts(p.children) }
-      else collectFonts(doc.children)
-      // Always include Noto Sans SC so CJK text renders when primary fonts are
-      // system fonts (PingFang SC, Microsoft YaHei, etc.) that can't be loaded
-      fontFamilies.add('Noto Sans SC')
-      const engine = getSkiaEngineRef()
-      if (engine && fontFamilies.size > 0) {
-        engine.renderer.fontManager.ensureFonts([...fontFamilies])
-      }
+    },
+    [onClose, layoutMode, t],
+  );
 
-      // Load into the document store
-      useDocumentStore.getState().loadDocument(doc, `${name}.op`)
-      // Double-RAF ensures React effects (canvas sync) complete before fitting
-      requestAnimationFrame(() => requestAnimationFrame(() => zoomToFitContent()))
-
-      setProgress(100)
-      setState('done')
-
-      // Auto-close after brief delay on success
-      setTimeout(() => {
-        onClose()
-      }, 800)
-    } catch (err) {
-      console.error('[Figma Import] Convert error:', err)
-      setError(err instanceof Error ? err.message : t('figma.convertFailed'))
-      setState('error')
-    }
-  }, [onClose, layoutMode, t])
-
-  const handlePageSelect = useCallback((pageIndex: number | 'all') => {
-    if (!decoded) return
-    convertAndLoad(decoded, fileName, pageIndex)
-  }, [decoded, fileName, convertAndLoad])
+  const handlePageSelect = useCallback(
+    (pageIndex: number | 'all') => {
+      if (!decoded) return;
+      convertAndLoad(decoded, fileName, pageIndex);
+    },
+    [decoded, fileName, convertAndLoad],
+  );
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
-    e.preventDefault()
-    setIsDragging(true)
-  }, [])
+    e.preventDefault();
+    setIsDragging(true);
+  }, []);
 
   const handleDragLeave = useCallback(() => {
-    setIsDragging(false)
-  }, [])
+    setIsDragging(false);
+  }, []);
 
-  const handleDrop = useCallback((e: React.DragEvent) => {
-    e.preventDefault()
-    setIsDragging(false)
-    const file = e.dataTransfer.files[0]
-    if (file) processFile(file)
-  }, [processFile])
+  const handleDrop = useCallback(
+    (e: React.DragEvent) => {
+      e.preventDefault();
+      setIsDragging(false);
+      const file = e.dataTransfer.files[0];
+      if (file) processFile(file);
+    },
+    [processFile],
+  );
 
-  const handleFileInput = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (file) processFile(file)
-  }, [processFile])
+  const handleFileInput = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      if (file) processFile(file);
+    },
+    [processFile],
+  );
 
-  if (!open) return null
+  if (!open) return null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
@@ -222,12 +242,8 @@ export default function FigmaImportDialog({ open, onClose }: FigmaImportDialogPr
               onClick={() => fileInputRef.current?.click()}
             >
               <FileUp size={32} className="mx-auto mb-3 text-muted-foreground" />
-              <p className="text-sm text-foreground mb-1">
-                {t('figma.dropFile')}
-              </p>
-              <p className="text-xs text-muted-foreground">
-                {t('figma.orBrowse')}
-              </p>
+              <p className="text-sm text-foreground mb-1">{t('figma.dropFile')}</p>
+              <p className="text-xs text-muted-foreground">{t('figma.orBrowse')}</p>
             </div>
             <input
               ref={fileInputRef}
@@ -236,9 +252,7 @@ export default function FigmaImportDialog({ open, onClose }: FigmaImportDialogPr
               className="hidden"
               onChange={handleFileInput}
             />
-            <p className="text-[10px] text-muted-foreground mt-3">
-              {t('figma.exportTip')}
-            </p>
+            <p className="text-[10px] text-muted-foreground mt-3">{t('figma.exportTip')}</p>
           </>
         )}
 
@@ -257,9 +271,7 @@ export default function FigmaImportDialog({ open, onClose }: FigmaImportDialogPr
                 style={{ width: `${progress}%` }}
               />
             </div>
-            <p className="text-xs text-muted-foreground mt-2">
-              {fileName && `${fileName}.fig`}
-            </p>
+            <p className="text-xs text-muted-foreground mt-2">{fileName && `${fileName}.fig`}</p>
           </div>
         )}
 
@@ -309,11 +321,7 @@ export default function FigmaImportDialog({ open, onClose }: FigmaImportDialogPr
                     </button>
                   ))}
                 </div>
-                <Button
-                  size="sm"
-                  className="w-full"
-                  onClick={() => handlePageSelect('all')}
-                >
+                <Button size="sm" className="w-full" onClick={() => handlePageSelect('all')}>
                   {t('figma.importAll')}
                 </Button>
               </>
@@ -322,11 +330,7 @@ export default function FigmaImportDialog({ open, onClose }: FigmaImportDialogPr
                 <p className="text-xs text-muted-foreground mb-3">
                   {pages[0]?.name} &middot; {t('figma.layers', { count: pages[0]?.childCount })}
                 </p>
-                <Button
-                  size="sm"
-                  className="w-full"
-                  onClick={() => handlePageSelect(0)}
-                >
+                <Button size="sm" className="w-full" onClick={() => handlePageSelect(0)}>
                   {t('common.import')}
                 </Button>
               </>
@@ -368,8 +372,8 @@ export default function FigmaImportDialog({ open, onClose }: FigmaImportDialogPr
               size="sm"
               className="mt-4 w-full"
               onClick={() => {
-                setState('idle')
-                setError('')
+                setState('idle');
+                setError('');
               }}
             >
               {t('figma.tryAgain')}
@@ -378,5 +382,5 @@ export default function FigmaImportDialog({ open, onClose }: FigmaImportDialogPr
         )}
       </div>
     </div>
-  )
+  );
 }

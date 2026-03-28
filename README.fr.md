@@ -124,15 +124,15 @@ bun run electron:dev
 
 Plusieurs variantes d'images sont disponibles — choisissez celle qui correspond à vos besoins :
 
-| Image | Taille | Contenu |
-| --- | --- | --- |
-| `openpencil:latest` | ~226 Mo | Application web uniquement |
-| `openpencil-claude:latest` | — | + Claude Code CLI |
-| `openpencil-codex:latest` | — | + Codex CLI |
-| `openpencil-opencode:latest` | — | + OpenCode CLI |
-| `openpencil-copilot:latest` | — | + GitHub Copilot CLI |
-| `openpencil-gemini:latest` | — | + Gemini CLI |
-| `openpencil-full:latest` | ~1 Go | Tous les outils CLI |
+| Image                        | Taille  | Contenu                    |
+| ---------------------------- | ------- | -------------------------- |
+| `openpencil:latest`          | ~226 Mo | Application web uniquement |
+| `openpencil-claude:latest`   | —       | + Claude Code CLI          |
+| `openpencil-codex:latest`    | —       | + Codex CLI                |
+| `openpencil-opencode:latest` | —       | + OpenCode CLI             |
+| `openpencil-copilot:latest`  | —       | + GitHub Copilot CLI       |
+| `openpencil-gemini:latest`   | —       | + Gemini CLI               |
+| `openpencil-full:latest`     | ~1 Go   | Tous les outils CLI        |
 
 **Exécuter (web uniquement) :**
 
@@ -173,6 +173,7 @@ docker build --target full -t openpencil-full .
 ## Design natif IA
 
 **Du prompt à l'interface**
+
 - **Texte vers design** — décrivez une page, elle est générée en temps réel sur le canevas avec une animation en streaming
 - **Orchestrateur** — décompose les pages complexes en sous-tâches spatiales pour une génération parallèle
 - **Modification de design** — sélectionnez des éléments, puis décrivez les modifications en langage naturel
@@ -180,20 +181,21 @@ docker build --target full -t openpencil-full .
 
 **Support multi-agents**
 
-| Agent | Configuration |
-| --- | --- |
+| Agent                         | Configuration                                                                                                           |
+| ----------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
 | **Intégré (9+ fournisseurs)** | Choisissez parmi les préréglages de fournisseurs avec sélecteur de région — Anthropic, OpenAI, Google, DeepSeek et plus |
-| **Claude Code** | Aucune configuration — utilise le Claude Agent SDK avec OAuth local |
-| **Codex CLI** | Connecter dans les Paramètres de l'agent (`Cmd+,`) |
-| **OpenCode** | Connecter dans les Paramètres de l'agent (`Cmd+,`) |
-| **GitHub Copilot** | `copilot login` puis connecter dans les Paramètres de l'agent (`Cmd+,`) |
-| **Gemini CLI** | Connecter dans les Paramètres de l'agent (`Cmd+,`) |
+| **Claude Code**               | Aucune configuration — utilise le Claude Agent SDK avec OAuth local                                                     |
+| **Codex CLI**                 | Connecter dans les Paramètres de l'agent (`Cmd+,`)                                                                      |
+| **OpenCode**                  | Connecter dans les Paramètres de l'agent (`Cmd+,`)                                                                      |
+| **GitHub Copilot**            | `copilot login` puis connecter dans les Paramètres de l'agent (`Cmd+,`)                                                 |
+| **Gemini CLI**                | Connecter dans les Paramètres de l'agent (`Cmd+,`)                                                                      |
 
 **Profils de capacités des modèles** — adapte automatiquement les prompts, le mode de réflexion et les délais d'attente par niveau de modèle. Les modèles de niveau complet (Claude) reçoivent des prompts complets ; le niveau standard (GPT-4o, Gemini, DeepSeek) désactive la réflexion ; le niveau basique (MiniMax, Qwen, Llama, Mistral) reçoit des prompts JSON imbriqués simplifiés pour une fiabilité maximale.
 
 **i18n** — Localisation complète de l'interface en 15 langues : English, 简体中文, 繁體中文, 日本語, 한국어, Français, Español, Deutsch, Português, Русский, हिन्दी, Türkçe, ไทย, Tiếng Việt, Bahasa Indonesia.
 
 **Serveur MCP**
+
 - Serveur MCP intégré — installation en un clic dans les CLI Claude Code / Codex / Gemini / OpenCode / Kiro / Copilot
 - Détection automatique de Node.js — si non installé, bascule vers le transport HTTP et démarre automatiquement le serveur MCP HTTP
 - Automatisation du design depuis le terminal : lire, créer et modifier des fichiers `.op` via tout agent compatible MCP
@@ -202,6 +204,7 @@ docker build --target full -t openpencil-full .
 - Support multi-pages — créer, renommer, réordonner et dupliquer des pages via les outils MCP
 
 **Génération de code**
+
 - React + Tailwind CSS, HTML + CSS, CSS Variables
 - Vue, Svelte, Flutter, SwiftUI, Jetpack Compose, React Native
 
@@ -229,6 +232,7 @@ Supporte trois méthodes d'entrée : chaîne en ligne, `@filepath` (lecture depu
 ## Fonctionnalités
 
 **Canevas et dessin**
+
 - Canevas infini avec panoramique, zoom, guides d'alignement intelligents et magnétisme
 - Rectangle, Ellipse, Ligne, Polygone, Plume (Bézier), Frame, Texte
 - Opérations booléennes — union, soustraction, intersection avec barre d'outils contextuelle
@@ -237,15 +241,18 @@ Supporte trois méthodes d'entrée : chaîne en ligne, `@filepath` (lecture depu
 - Documents multi-pages avec navigation par onglets
 
 **Système de design**
+
 - Variables de design — tokens de couleur, nombre et chaîne avec références `$variable`
 - Support multi-thèmes — plusieurs axes, chacun avec des variantes (Clair/Sombre, Compact/Confortable)
 - Système de composants — composants réutilisables avec instances et substitutions
 - Synchronisation CSS — propriétés personnalisées auto-générées, `var(--name)` dans la sortie de code
 
 **Import Figma**
+
 - Importer des fichiers `.fig` en préservant la mise en page, les remplissages, les contours, les effets, le texte, les images et les vecteurs
 
 **Application de bureau**
+
 - macOS, Windows et Linux natifs via Electron
 - Association de fichiers `.op` — double-cliquez pour ouvrir, verrouillage d'instance unique
 - Mise à jour automatique depuis GitHub Releases
@@ -253,17 +260,17 @@ Supporte trois méthodes d'entrée : chaîne en ligne, `@filepath` (lecture depu
 
 ## Stack technique
 
-| | |
-| --- | --- |
-| **Frontend** | React 19 · TanStack Start · Tailwind CSS v4 · shadcn/ui · i18next |
-| **Canevas** | CanvasKit/Skia (WASM, accélération GPU) |
-| **État** | Zustand v5 |
-| **Serveur** | Nitro |
-| **Bureau** | Electron 35 |
-| **CLI** | `op` — contrôle depuis le terminal, DSL de design par lots, export de code |
-| **IA** | Vercel AI SDK v6 · Anthropic SDK · Claude Agent SDK · OpenCode SDK · Copilot SDK |
-| **Runtime** | Bun · Vite 7 |
-| **Format de fichier** | `.op` — basé sur JSON, lisible par l'humain, compatible Git |
+|                       |                                                                                  |
+| --------------------- | -------------------------------------------------------------------------------- |
+| **Frontend**          | React 19 · TanStack Start · Tailwind CSS v4 · shadcn/ui · i18next                |
+| **Canevas**           | CanvasKit/Skia (WASM, accélération GPU)                                          |
+| **État**              | Zustand v5                                                                       |
+| **Serveur**           | Nitro                                                                            |
+| **Bureau**            | Electron 35                                                                      |
+| **CLI**               | `op` — contrôle depuis le terminal, DSL de design par lots, export de code       |
+| **IA**                | Vercel AI SDK v6 · Anthropic SDK · Claude Agent SDK · OpenCode SDK · Copilot SDK |
+| **Runtime**           | Bun · Vite 7                                                                     |
+| **Format de fichier** | `.op` — basé sur JSON, lisible par l'humain, compatible Git                      |
 
 ## Structure du projet
 
@@ -304,21 +311,21 @@ openpencil/
 
 ## Raccourcis clavier
 
-| Touche | Action | | Touche | Action |
-| --- | --- | --- | --- | --- |
-| `V` | Sélectionner | | `Cmd+S` | Enregistrer |
-| `R` | Rectangle | | `Cmd+Z` | Annuler |
-| `O` | Ellipse | | `Cmd+Shift+Z` | Rétablir |
-| `L` | Ligne | | `Cmd+C/X/V/D` | Copier/Couper/Coller/Dupliquer |
-| `T` | Texte | | `Cmd+G` | Grouper |
-| `F` | Frame | | `Cmd+Shift+G` | Dégrouper |
-| `P` | Outil plume | | `Cmd+Shift+E` | Exporter |
-| `H` | Main (panoramique) | | `Cmd+Shift+C` | Panneau de code |
-| `Del` | Supprimer | | `Cmd+Shift+V` | Panneau des variables |
-| `[ / ]` | Réordonner | | `Cmd+J` | Chat IA |
-| Flèches | Déplacer de 1px | | `Cmd+,` | Paramètres de l'agent |
-| `Cmd+Alt+U` | Union booléenne | | `Cmd+Alt+S` | Soustraction booléenne |
-| `Cmd+Alt+I` | Intersection booléenne | | | |
+| Touche      | Action                 |     | Touche        | Action                         |
+| ----------- | ---------------------- | --- | ------------- | ------------------------------ |
+| `V`         | Sélectionner           |     | `Cmd+S`       | Enregistrer                    |
+| `R`         | Rectangle              |     | `Cmd+Z`       | Annuler                        |
+| `O`         | Ellipse                |     | `Cmd+Shift+Z` | Rétablir                       |
+| `L`         | Ligne                  |     | `Cmd+C/X/V/D` | Copier/Couper/Coller/Dupliquer |
+| `T`         | Texte                  |     | `Cmd+G`       | Grouper                        |
+| `F`         | Frame                  |     | `Cmd+Shift+G` | Dégrouper                      |
+| `P`         | Outil plume            |     | `Cmd+Shift+E` | Exporter                       |
+| `H`         | Main (panoramique)     |     | `Cmd+Shift+C` | Panneau de code                |
+| `Del`       | Supprimer              |     | `Cmd+Shift+V` | Panneau des variables          |
+| `[ / ]`     | Réordonner             |     | `Cmd+J`       | Chat IA                        |
+| Flèches     | Déplacer de 1px        |     | `Cmd+,`       | Paramètres de l'agent          |
+| `Cmd+Alt+U` | Union booléenne        |     | `Cmd+Alt+S`   | Soustraction booléenne         |
+| `Cmd+Alt+I` | Intersection booléenne |     |               |                                |
 
 ## Scripts
 

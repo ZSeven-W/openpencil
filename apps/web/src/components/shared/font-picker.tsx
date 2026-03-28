@@ -1,123 +1,126 @@
-import { useState, useRef, useEffect, useMemo, useCallback } from 'react'
-import { cn } from '@/lib/utils'
-import { useSystemFonts, type FontInfo } from '@/hooks/use-system-fonts'
-import { ChevronDown, Search, Loader2 } from 'lucide-react'
-import { useTranslation } from 'react-i18next'
+import { useState, useRef, useEffect, useMemo, useCallback } from 'react';
+import { cn } from '@/lib/utils';
+import { useSystemFonts, type FontInfo } from '@/hooks/use-system-fonts';
+import { ChevronDown, Search, Loader2 } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 
 interface FontPickerProps {
-  value: string
-  onChange: (fontFamily: string) => void
-  className?: string
+  value: string;
+  onChange: (fontFamily: string) => void;
+  className?: string;
 }
 
 /** Extract display name from a font value like "Arial, sans-serif" → "Arial" */
 function displayName(value: string): string {
-  return value.split(',')[0].trim().replace(/['"]/g, '')
+  return value.split(',')[0].trim().replace(/['"]/g, '');
 }
 
 export default function FontPicker({ value, onChange, className }: FontPickerProps) {
-  const { t } = useTranslation()
-  const { allFonts, loading } = useSystemFonts()
-  const [open, setOpen] = useState(false)
-  const [search, setSearch] = useState('')
-  const [highlightIndex, setHighlightIndex] = useState(-1)
-  const containerRef = useRef<HTMLDivElement>(null)
-  const listRef = useRef<HTMLDivElement>(null)
-  const inputRef = useRef<HTMLInputElement>(null)
+  const { t } = useTranslation();
+  const { allFonts, loading } = useSystemFonts();
+  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState('');
+  const [highlightIndex, setHighlightIndex] = useState(-1);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const listRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
 
   // Filter fonts by search
   const filtered = useMemo(() => {
-    if (!search) return allFonts
-    const q = search.toLowerCase()
-    return allFonts.filter(f => f.family.toLowerCase().includes(q))
-  }, [allFonts, search])
+    if (!search) return allFonts;
+    const q = search.toLowerCase();
+    return allFonts.filter((f) => f.family.toLowerCase().includes(q));
+  }, [allFonts, search]);
 
   // Group into bundled and system
-  const bundled = useMemo(() => filtered.filter(f => f.source === 'bundled'), [filtered])
-  const system = useMemo(() => filtered.filter(f => f.source === 'system'), [filtered])
+  const bundled = useMemo(() => filtered.filter((f) => f.source === 'bundled'), [filtered]);
+  const system = useMemo(() => filtered.filter((f) => f.source === 'system'), [filtered]);
 
   // Flat list for keyboard navigation
   const flatList = useMemo(() => {
-    const items: FontInfo[] = []
-    items.push(...bundled)
-    items.push(...system)
-    return items
-  }, [bundled, system])
+    const items: FontInfo[] = [];
+    items.push(...bundled);
+    items.push(...system);
+    return items;
+  }, [bundled, system]);
 
-  const handleSelect = useCallback((font: FontInfo) => {
-    onChange(font.family)
-    setOpen(false)
-    setSearch('')
-    setHighlightIndex(-1)
-  }, [onChange])
+  const handleSelect = useCallback(
+    (font: FontInfo) => {
+      onChange(font.family);
+      setOpen(false);
+      setSearch('');
+      setHighlightIndex(-1);
+    },
+    [onChange],
+  );
 
   // Close on click outside
   useEffect(() => {
-    if (!open) return
+    if (!open) return;
     const handler = (e: MouseEvent) => {
       if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
-        setOpen(false)
-        setSearch('')
-        setHighlightIndex(-1)
+        setOpen(false);
+        setSearch('');
+        setHighlightIndex(-1);
       }
-    }
-    document.addEventListener('mousedown', handler)
-    return () => document.removeEventListener('mousedown', handler)
-  }, [open])
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [open]);
 
   // Focus search input when opened
   useEffect(() => {
     if (open) {
-      requestAnimationFrame(() => inputRef.current?.focus())
+      requestAnimationFrame(() => inputRef.current?.focus());
     }
-  }, [open])
+  }, [open]);
 
   // Scroll highlighted item into view
   useEffect(() => {
-    if (highlightIndex < 0 || !listRef.current) return
-    const items = listRef.current.querySelectorAll('[data-font-item]')
-    items[highlightIndex]?.scrollIntoView({ block: 'nearest' })
-  }, [highlightIndex])
+    if (highlightIndex < 0 || !listRef.current) return;
+    const items = listRef.current.querySelectorAll('[data-font-item]');
+    items[highlightIndex]?.scrollIntoView({ block: 'nearest' });
+  }, [highlightIndex]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (!open) {
       if (e.key === 'Enter' || e.key === ' ' || e.key === 'ArrowDown') {
-        e.preventDefault()
-        setOpen(true)
+        e.preventDefault();
+        setOpen(true);
       }
-      return
+      return;
     }
 
     switch (e.key) {
       case 'ArrowDown':
-        e.preventDefault()
-        setHighlightIndex(i => Math.min(i + 1, flatList.length - 1))
-        break
+        e.preventDefault();
+        setHighlightIndex((i) => Math.min(i + 1, flatList.length - 1));
+        break;
       case 'ArrowUp':
-        e.preventDefault()
-        setHighlightIndex(i => Math.max(i - 1, 0))
-        break
+        e.preventDefault();
+        setHighlightIndex((i) => Math.max(i - 1, 0));
+        break;
       case 'Enter':
-        e.preventDefault()
+        e.preventDefault();
         if (highlightIndex >= 0 && highlightIndex < flatList.length) {
-          handleSelect(flatList[highlightIndex])
+          handleSelect(flatList[highlightIndex]);
         }
-        break
+        break;
       case 'Escape':
-        e.preventDefault()
-        setOpen(false)
-        setSearch('')
-        setHighlightIndex(-1)
-        break
+        e.preventDefault();
+        setOpen(false);
+        setSearch('');
+        setHighlightIndex(-1);
+        break;
     }
-  }
+  };
 
   // Reset highlight when search changes
   useEffect(() => {
-    setHighlightIndex(search ? 0 : -1)
-  }, [search])
+    setHighlightIndex(search ? 0 : -1);
+  }, [search]);
 
-  const currentDisplay = displayName(value)
+  const currentDisplay = displayName(value);
 
   return (
     <div ref={containerRef} className={cn('relative', className)} onKeyDown={handleKeyDown}>
@@ -217,7 +220,7 @@ export default function FontPicker({ value, onChange, className }: FontPickerPro
         </div>
       )}
     </div>
-  )
+  );
 }
 
 function FontItem({
@@ -226,10 +229,10 @@ function FontItem({
   highlighted,
   onSelect,
 }: {
-  font: FontInfo
-  selected: boolean
-  highlighted: boolean
-  onSelect: (font: FontInfo) => void
+  font: FontInfo;
+  selected: boolean;
+  highlighted: boolean;
+  onSelect: (font: FontInfo) => void;
 }) {
   return (
     <button
@@ -249,5 +252,5 @@ function FontItem({
     >
       {font.family}
     </button>
-  )
+  );
 }

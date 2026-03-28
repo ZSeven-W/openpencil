@@ -116,4 +116,4 @@ export const LAYERED_DESIGN_TOOLS = [
       required: ['rootId'],
     },
   },
-]
+];

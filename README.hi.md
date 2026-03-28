@@ -124,15 +124,15 @@ bun run electron:dev
 
 कई इमेज वेरिएंट उपलब्ध हैं — अपनी ज़रूरत के अनुसार चुनें:
 
-| इमेज | आकार | शामिल |
-| --- | --- | --- |
-| `openpencil:latest` | ~226 MB | केवल वेब ऐप |
-| `openpencil-claude:latest` | — | + Claude Code CLI |
-| `openpencil-codex:latest` | — | + Codex CLI |
-| `openpencil-opencode:latest` | — | + OpenCode CLI |
-| `openpencil-copilot:latest` | — | + GitHub Copilot CLI |
-| `openpencil-gemini:latest` | — | + Gemini CLI |
-| `openpencil-full:latest` | ~1 GB | सभी CLI टूल |
+| इमेज                         | आकार    | शामिल                |
+| ---------------------------- | ------- | -------------------- |
+| `openpencil:latest`          | ~226 MB | केवल वेब ऐप          |
+| `openpencil-claude:latest`   | —       | + Claude Code CLI    |
+| `openpencil-codex:latest`    | —       | + Codex CLI          |
+| `openpencil-opencode:latest` | —       | + OpenCode CLI       |
+| `openpencil-copilot:latest`  | —       | + GitHub Copilot CLI |
+| `openpencil-gemini:latest`   | —       | + Gemini CLI         |
+| `openpencil-full:latest`     | ~1 GB   | सभी CLI टूल          |
 
 **चलाएँ (केवल वेब):**
 
@@ -173,6 +173,7 @@ docker build --target full -t openpencil-full .
 ## AI-नेटिव डिज़ाइन
 
 **प्रॉम्प्ट से UI तक**
+
 - **टेक्स्ट-टू-डिज़ाइन** — एक पेज का विवरण दें, और स्ट्रीमिंग एनिमेशन के साथ रियल-टाइम में कैनवास पर जनरेट करें
 - **ऑर्केस्ट्रेटर** — जटिल पेजों को समानांतर जनरेशन के लिए स्थानिक सब-टास्क में विभाजित करता है
 - **डिज़ाइन संशोधन** — एलिमेंट चुनें, फिर प्राकृतिक भाषा में बदलाव का विवरण दें
@@ -180,20 +181,21 @@ docker build --target full -t openpencil-full .
 
 **मल्टी-एजेंट सपोर्ट**
 
-| एजेंट | सेटअप |
-| --- | --- |
+| एजेंट                     | सेटअप                                                                                        |
+| ------------------------- | -------------------------------------------------------------------------------------------- |
 | **बिल्ट-इन (9+ प्रदाता)** | प्रदाता प्रीसेट से चुनें और क्षेत्र स्विच करें — Anthropic, OpenAI, Google, DeepSeek और अन्य |
-| **Claude Code** | कोई कॉन्फ़िग नहीं — लोकल OAuth के साथ Claude Agent SDK का उपयोग करता है |
-| **Codex CLI** | एजेंट सेटिंग्स में कनेक्ट करें (`Cmd+,`) |
-| **OpenCode** | एजेंट सेटिंग्स में कनेक्ट करें (`Cmd+,`) |
-| **GitHub Copilot** | `copilot login` फिर एजेंट सेटिंग्स में कनेक्ट करें (`Cmd+,`) |
-| **Gemini CLI** | एजेंट सेटिंग्स में कनेक्ट करें (`Cmd+,`) |
+| **Claude Code**           | कोई कॉन्फ़िग नहीं — लोकल OAuth के साथ Claude Agent SDK का उपयोग करता है                      |
+| **Codex CLI**             | एजेंट सेटिंग्स में कनेक्ट करें (`Cmd+,`)                                                     |
+| **OpenCode**              | एजेंट सेटिंग्स में कनेक्ट करें (`Cmd+,`)                                                     |
+| **GitHub Copilot**        | `copilot login` फिर एजेंट सेटिंग्स में कनेक्ट करें (`Cmd+,`)                                 |
+| **Gemini CLI**            | एजेंट सेटिंग्स में कनेक्ट करें (`Cmd+,`)                                                     |
 
 **मॉडल क्षमता प्रोफ़ाइल** — प्रत्येक मॉडल टियर के अनुसार प्रॉम्प्ट, थिंकिंग मोड और टाइमआउट को स्वचालित रूप से अनुकूलित करता है। फुल-टियर मॉडल (Claude) को पूर्ण प्रॉम्प्ट मिलते हैं; स्टैंडर्ड-टियर (GPT-4o, Gemini, DeepSeek) में थिंकिंग अक्षम होती है; बेसिक-टियर (MiniMax, Qwen, Llama, Mistral) को अधिकतम विश्वसनीयता के लिए सरलीकृत नेस्टेड-JSON प्रॉम्प्ट मिलते हैं।
 
 **i18n** — 15 भाषाओं में पूर्ण इंटरफ़ेस स्थानीयकरण: English, 简体中文, 繁體中文, 日本語, 한국어, Français, Español, Deutsch, Português, Русский, हिन्दी, Türkçe, ไทย, Tiếng Việt, Bahasa Indonesia।
 
 **MCP सर्वर**
+
 - बिल्ट-इन MCP सर्वर — Claude Code / Codex / Gemini / OpenCode / Kiro / Copilot CLIs में वन-क्लिक इंस्टॉल
 - Node.js स्वचालित पहचान — यदि इंस्टॉल नहीं है तो HTTP ट्रांसपोर्ट पर स्वचालित फ़ॉलबैक और MCP HTTP सर्वर ऑटो-स्टार्ट
 - टर्मिनल से डिज़ाइन ऑटोमेशन: किसी भी MCP-संगत एजेंट के ज़रिए `.op` फ़ाइलें पढ़ें, बनाएँ और संपादित करें
@@ -202,6 +204,7 @@ docker build --target full -t openpencil-full .
 - मल्टी-पेज सपोर्ट — MCP टूल के ज़रिए पेज बनाएँ, नाम बदलें, क्रम बदलें और डुप्लिकेट करें
 
 **कोड जनरेशन**
+
 - React + Tailwind CSS, HTML + CSS, CSS Variables
 - Vue, Svelte, Flutter, SwiftUI, Jetpack Compose, React Native
 
@@ -229,6 +232,7 @@ cat design.dsl | op design - # stdin से पाइप करें
 ## विशेषताएँ
 
 **कैनवास और ड्रॉइंग**
+
 - पैन, ज़ूम, स्मार्ट अलाइनमेंट गाइड और स्नैपिंग के साथ अनंत कैनवास
 - Rectangle, Ellipse, Line, Polygon, Pen (Bezier), Frame, Text
 - बूलियन ऑपरेशन — संयोजन, घटाना, प्रतिच्छेदन संदर्भ टूलबार के साथ
@@ -237,15 +241,18 @@ cat design.dsl | op design - # stdin से पाइप करें
 - टैब नेवीगेशन के साथ मल्टी-पेज दस्तावेज़
 
 **डिज़ाइन सिस्टम**
+
 - डिज़ाइन वेरिएबल — `$variable` रेफ़रेंस के साथ कलर, नंबर, स्ट्रिंग टोकन
 - मल्टी-थीम सपोर्ट — कई अक्ष, प्रत्येक में वेरिएंट (Light/Dark, Compact/Comfortable)
 - कम्पोनेंट सिस्टम — इंस्टेंस और ओवरराइड के साथ पुन: उपयोगी कम्पोनेंट
 - CSS सिंक — स्वतः-जनरेटेड कस्टम प्रॉपर्टीज़, कोड आउटपुट में `var(--name)`
 
 **Figma इम्पोर्ट**
+
 - लेआउट, फ़िल, स्ट्रोक, इफ़ेक्ट, टेक्स्ट, इमेज और वेक्टर को सुरक्षित रखते हुए `.fig` फ़ाइलें इम्पोर्ट करें
 
 **डेस्कटॉप ऐप**
+
 - Electron के ज़रिए नेटिव macOS, Windows और Linux सपोर्ट
 - `.op` फ़ाइल एसोसिएशन — डबल-क्लिक से खोलें, सिंगल-इंस्टेंस लॉक
 - GitHub Releases से ऑटो-अपडेट
@@ -253,17 +260,17 @@ cat design.dsl | op design - # stdin से पाइप करें
 
 ## टेक स्टैक
 
-| | |
-| --- | --- |
-| **फ्रंटएंड** | React 19 · TanStack Start · Tailwind CSS v4 · shadcn/ui · i18next |
-| **कैनवास** | CanvasKit/Skia (WASM, GPU-एक्सेलेरेटेड) |
-| **स्टेट** | Zustand v5 |
-| **सर्वर** | Nitro |
-| **डेस्कटॉप** | Electron 35 |
-| **CLI** | `op` — टर्मिनल नियंत्रण, बैच डिज़ाइन DSL, कोड एक्सपोर्ट |
-| **AI** | Vercel AI SDK v6 · Anthropic SDK · Claude Agent SDK · OpenCode SDK · Copilot SDK |
-| **रनटाइम** | Bun · Vite 7 |
-| **फ़ाइल फ़ॉर्मेट** | `.op` — JSON-आधारित, मानव-पठनीय, Git-फ्रेंडली |
+|                    |                                                                                  |
+| ------------------ | -------------------------------------------------------------------------------- |
+| **फ्रंटएंड**       | React 19 · TanStack Start · Tailwind CSS v4 · shadcn/ui · i18next                |
+| **कैनवास**         | CanvasKit/Skia (WASM, GPU-एक्सेलेरेटेड)                                          |
+| **स्टेट**          | Zustand v5                                                                       |
+| **सर्वर**          | Nitro                                                                            |
+| **डेस्कटॉप**       | Electron 35                                                                      |
+| **CLI**            | `op` — टर्मिनल नियंत्रण, बैच डिज़ाइन DSL, कोड एक्सपोर्ट                          |
+| **AI**             | Vercel AI SDK v6 · Anthropic SDK · Claude Agent SDK · OpenCode SDK · Copilot SDK |
+| **रनटाइम**         | Bun · Vite 7                                                                     |
+| **फ़ाइल फ़ॉर्मेट** | `.op` — JSON-आधारित, मानव-पठनीय, Git-फ्रेंडली                                    |
 
 ## प्रोजेक्ट संरचना
 
@@ -304,21 +311,21 @@ openpencil/
 
 ## कीबोर्ड शॉर्टकट
 
-| कुंजी | क्रिया | | कुंजी | क्रिया |
-| --- | --- | --- | --- | --- |
-| `V` | चुनें | | `Cmd+S` | सहेजें |
-| `R` | Rectangle | | `Cmd+Z` | पूर्ववत करें |
-| `O` | Ellipse | | `Cmd+Shift+Z` | फिर से करें |
-| `L` | Line | | `Cmd+C/X/V/D` | कॉपी/कट/पेस्ट/डुप्लिकेट |
-| `T` | Text | | `Cmd+G` | ग्रुप करें |
-| `F` | Frame | | `Cmd+Shift+G` | अनग्रुप करें |
-| `P` | Pen tool | | `Cmd+Shift+E` | एक्सपोर्ट |
-| `H` | Hand (pan) | | `Cmd+Shift+C` | कोड पैनल |
-| `Del` | हटाएँ | | `Cmd+Shift+V` | वेरिएबल पैनल |
-| `[ / ]` | क्रम बदलें | | `Cmd+J` | AI चैट |
-| Arrows | 1px नज | | `Cmd+,` | एजेंट सेटिंग्स |
-| `Cmd+Alt+U` | बूलियन संयोजन | | `Cmd+Alt+S` | बूलियन घटाना |
-| `Cmd+Alt+I` | बूलियन प्रतिच्छेदन | | | |
+| कुंजी       | क्रिया             |     | कुंजी         | क्रिया                  |
+| ----------- | ------------------ | --- | ------------- | ----------------------- |
+| `V`         | चुनें              |     | `Cmd+S`       | सहेजें                  |
+| `R`         | Rectangle          |     | `Cmd+Z`       | पूर्ववत करें            |
+| `O`         | Ellipse            |     | `Cmd+Shift+Z` | फिर से करें             |
+| `L`         | Line               |     | `Cmd+C/X/V/D` | कॉपी/कट/पेस्ट/डुप्लिकेट |
+| `T`         | Text               |     | `Cmd+G`       | ग्रुप करें              |
+| `F`         | Frame              |     | `Cmd+Shift+G` | अनग्रुप करें            |
+| `P`         | Pen tool           |     | `Cmd+Shift+E` | एक्सपोर्ट               |
+| `H`         | Hand (pan)         |     | `Cmd+Shift+C` | कोड पैनल                |
+| `Del`       | हटाएँ              |     | `Cmd+Shift+V` | वेरिएबल पैनल            |
+| `[ / ]`     | क्रम बदलें         |     | `Cmd+J`       | AI चैट                  |
+| Arrows      | 1px नज             |     | `Cmd+,`       | एजेंट सेटिंग्स          |
+| `Cmd+Alt+U` | बूलियन संयोजन      |     | `Cmd+Alt+S`   | बूलियन घटाना            |
+| `Cmd+Alt+I` | बूलियन प्रतिच्छेदन |     |               |                         |
 
 ## स्क्रिप्ट
 

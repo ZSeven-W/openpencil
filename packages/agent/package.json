@@ -1,6 +1,9 @@
 {
   "name": "@zseven-w/agent",
   "version": "0.6.0",
+  "files": [
+    "src"
+  ],
   "type": "module",
   "exports": {
     ".": {
@@ -8,16 +11,13 @@
       "import": "./src/index.ts"
     }
   },
-  "files": [
-    "src"
-  ],
   "scripts": {
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "ai": "^6.0",
     "@ai-sdk/anthropic": "^3.0",
     "@ai-sdk/openai": "^3.0",
+    "ai": "^6.0",
     "zod": "^3.24"
   }
 }

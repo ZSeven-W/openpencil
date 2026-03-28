@@ -1,41 +1,41 @@
-import { openDocument, saveDocument, resolveDocPath } from '../document-manager'
-import type { VariableDefinition } from '../../types/variables'
+import { openDocument, saveDocument, resolveDocPath } from '../document-manager';
+import type { VariableDefinition } from '../../types/variables';
 
 export interface GetVariablesParams {
-  filePath?: string
+  filePath?: string;
 }
 
 export interface SetVariablesParams {
-  filePath?: string
-  variables: Record<string, VariableDefinition>
-  replace?: boolean
+  filePath?: string;
+  variables: Record<string, VariableDefinition>;
+  replace?: boolean;
 }
 
 export async function handleGetVariables(
   params: GetVariablesParams,
 ): Promise<{ variables: Record<string, VariableDefinition>; themes: Record<string, string[]> }> {
-  const filePath = resolveDocPath(params.filePath)
-  const doc = await openDocument(filePath)
+  const filePath = resolveDocPath(params.filePath);
+  const doc = await openDocument(filePath);
   return {
     variables: doc.variables ?? {},
     themes: doc.themes ?? {},
-  }
+  };
 }
 
 export async function handleSetVariables(
   params: SetVariablesParams,
 ): Promise<{ variables: Record<string, VariableDefinition> }> {
-  const filePath = resolveDocPath(params.filePath)
-  const doc = await openDocument(filePath)
+  const filePath = resolveDocPath(params.filePath);
+  const doc = await openDocument(filePath);
 
   if (params.replace) {
-    doc.variables = params.variables
+    doc.variables = params.variables;
   } else {
-    doc.variables = { ...(doc.variables ?? {}), ...params.variables }
+    doc.variables = { ...(doc.variables ?? {}), ...params.variables };
   }
 
-  await saveDocument(filePath, doc)
-  return { variables: doc.variables }
+  await saveDocument(filePath, doc);
+  return { variables: doc.variables };
 }
 
 // ---------------------------------------------------------------------------
@@ -43,9 +43,9 @@ export async function handleSetVariables(
 // ---------------------------------------------------------------------------
 
 export interface SetThemesParams {
-  filePath?: string
-  themes: Record<string, string[]>
-  replace?: boolean
+  filePath?: string;
+  themes: Record<string, string[]>;
+  replace?: boolean;
 }
 
 /**
@@ -62,15 +62,15 @@ export interface SetThemesParams {
 export async function handleSetThemes(
   params: SetThemesParams,
 ): Promise<{ themes: Record<string, string[]> }> {
-  const filePath = resolveDocPath(params.filePath)
-  const doc = await openDocument(filePath)
+  const filePath = resolveDocPath(params.filePath);
+  const doc = await openDocument(filePath);
 
   if (params.replace) {
-    doc.themes = params.themes
+    doc.themes = params.themes;
   } else {
-    doc.themes = { ...(doc.themes ?? {}), ...params.themes }
+    doc.themes = { ...(doc.themes ?? {}), ...params.themes };
   }
 
-  await saveDocument(filePath, doc)
-  return { themes: doc.themes }
+  await saveDocument(filePath, doc);
+  return { themes: doc.themes };
 }

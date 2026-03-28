@@ -1,4 +1,4 @@
-import type { TranslationKeys } from './en'
+import type { TranslationKeys } from './en';
 
 const tr: TranslationKeys = {
   // ── Common ──
@@ -98,10 +98,8 @@ const tr: TranslationKeys = {
   'updater.subtitle.checking': 'En son sürüm aranıyor...',
   'updater.subtitle.available': 'Sürüm {{version}} kullanılabilir.',
   'updater.subtitle.availableGeneric': 'Yeni bir sürüm kullanılabilir.',
-  'updater.subtitle.downloading':
-    'Sürüm {{version}} arka planda indiriliyor.',
-  'updater.subtitle.downloadingGeneric':
-    'Güncelleme paketi arka planda indiriliyor.',
+  'updater.subtitle.downloading': 'Sürüm {{version}} arka planda indiriliyor.',
+  'updater.subtitle.downloadingGeneric': 'Güncelleme paketi arka planda indiriliyor.',
   'updater.subtitle.downloaded': 'Sürüm {{version}} indirildi.',
   'updater.subtitle.downloadedGeneric': 'Güncelleme indirildi.',
   'updater.subtitle.error': 'Güncelleme kontrol edilemedi veya indirilemedi.',
@@ -222,8 +220,7 @@ const tr: TranslationKeys = {
   'textLayout.autoHeightDesc':
     'Otomatik Yükseklik \u2014 sabit genişlik, yükseklik otomatik ayarlanır',
   'textLayout.fixed': 'Sabit',
-  'textLayout.fixedDesc':
-    'Sabit Boyut \u2014 hem genişlik hem yükseklik sabit',
+  'textLayout.fixedDesc': 'Sabit Boyut \u2014 hem genişlik hem yükseklik sabit',
   'textLayout.fillWidth': 'Genişliği Doldur',
   'textLayout.fillHeight': 'Yüksekliği Doldur',
 
@@ -306,8 +303,7 @@ const tr: TranslationKeys = {
   'ai.newChat': 'Yeni sohbet',
   'ai.collapse': 'Daralt',
   'ai.tryExample': 'Tasarlamak için bir örnek deneyin...',
-  'ai.tipSelectElements':
-    'İpucu: Bağlam için sohbet etmeden önce tuvaldeki ögeleri seçin.',
+  'ai.tipSelectElements': 'İpucu: Bağlam için sohbet etmeden önce tuvaldeki ögeleri seçin.',
   'ai.generating': 'Oluşturuluyor...',
   'ai.designWithAgent': 'Ajanla Tasarla...',
   'ai.attachImage': 'Görsel ekle',
@@ -321,8 +317,7 @@ const tr: TranslationKeys = {
   'ai.quickAction.loginScreenPrompt':
     'E-posta girişi, şifre girişi, giriş butonu ve sosyal giriş seçenekleri ile modern bir mobil giriş ekranı tasarla',
   'ai.quickAction.foodApp': 'Yemek uygulaması ana sayfası',
-  'ai.quickAction.foodAppPrompt':
-    'Generate a well-designed food mobile app homepage',
+  'ai.quickAction.foodAppPrompt': 'Generate a well-designed food mobile app homepage',
   'ai.quickAction.bottomNav': 'Alt gezinme çubuğu tasarla',
   'ai.quickAction.bottomNavPrompt':
     '5 sekmeli bir mobil uygulama alt gezinme çubuğu tasarla: Ana Sayfa, Ara, Ekle, Mesajlar, Profil',
@@ -339,8 +334,7 @@ const tr: TranslationKeys = {
   'code.download': 'Kod dosyasını indir',
   'code.closeCodePanel': 'Kod panelini kapat',
   'code.genCssVars': 'Tüm belge için CSS değişkenleri oluşturuluyor',
-  'code.genSelected':
-    '{{count}} seçili öge için kod oluşturuluyor',
+  'code.genSelected': '{{count}} seçili öge için kod oluşturuluyor',
   'code.genDocument': 'Tüm belge için kod oluşturuluyor',
   'code.aiEnhance': 'AI ile geliştir',
   'code.cancelEnhance': 'Geliştirmeyi iptal et',
@@ -358,10 +352,9 @@ const tr: TranslationKeys = {
   'agents.mcpIntegrations': 'Terminalde MCP Entegrasyonları',
   'agents.transport': 'Aktarım',
   'agents.port': 'Port',
-  'agents.mcpRestart':
-    'MCP entegrasyonları terminal yeniden başlatıldıktan sonra etkin olacaktır.',
+  'agents.mcpRestart': 'MCP entegrasyonları terminal yeniden başlatıldıktan sonra etkin olacaktır.',
   'agents.mcpReinstallHint':
-    'OpenPencil\'i yükselttikten sonra uyumluluğu sağlamak için MCP entegrasyonlarını yeniden yükleyin.',
+    "OpenPencil'i yükselttikten sonra uyumluluğu sağlamak için MCP entegrasyonlarını yeniden yükleyin.",
   'agents.modelCount': '{{count}} model',
   'agents.connectionFailed': 'Bağlantı başarısız',
   'agents.serverError': 'Sunucu hatası {{status}}',
@@ -430,27 +423,28 @@ const tr: TranslationKeys = {
   'builtin.custom': 'Özel',
   'builtin.apiKeyBadge': 'API Key',
   'builtin.viaApiKey': '{{name}} API Key ile',
-  'builtin.errorProviderNotFound': 'Yerleşik sağlayıcı bulunamadı. Lütfen ayarlarınızı kontrol edin.',
+  'builtin.errorProviderNotFound':
+    'Yerleşik sağlayıcı bulunamadı. Lütfen ayarlarınızı kontrol edin.',
   'builtin.errorApiKeyEmpty': 'API Key boş. Lütfen ayarlardan API Key ekleyin.',
   'builtin.parallelAgents': 'Paralel alt ajanlar: {{count}}x (döngü için tıklayın)',
   'builtin.baseUrlPlaceholder': 'https://api.example.com/v1',
-  'builtin.teamDescription': 'Tasarım oluşturma için bir model seçin. Ayarlandığında, tasarım görevleri otomatik olarak bu modeli kullanan uzman bir ajana devredilir.',
+  'builtin.teamDescription':
+    'Tasarım oluşturma için bir model seçin. Ayarlandığında, tasarım görevleri otomatik olarak bu modeli kullanan uzman bir ajana devredilir.',
   'builtin.teamDesignModel': 'Tasarım Modeli',
   'builtin.teamSelectModel': 'Yok (tek ajan)',
 
   // ── Figma Import ──
-  'figma.title': 'Figma\'dan İçe Aktar',
+  'figma.title': "Figma'dan İçe Aktar",
   'figma.dropFile': 'Bir .fig dosyasını buraya bırakın',
   'figma.orBrowse': 'veya göz atmak için tıklayın',
-  'figma.exportTip': 'Figma\'dan dışa aktar: File \u2192 Save local copy (.fig)',
+  'figma.exportTip': "Figma'dan dışa aktar: File \u2192 Save local copy (.fig)",
   'figma.selectFigFile': 'Lütfen bir .fig dosyası seçin',
   'figma.noPages': '.fig dosyasında sayfa bulunamadı',
   'figma.parseFailed': '.fig dosyası ayrıştırılamadı',
   'figma.convertFailed': 'Figma dosyası dönüştürülemedi',
   'figma.parsing': '.fig dosyası ayrıştırılıyor...',
   'figma.converting': 'Düğümler dönüştürülüyor...',
-  'figma.selectPage':
-    'Bu dosyada {{count}} sayfa var. İçe aktarılacakları seçin:',
+  'figma.selectPage': 'Bu dosyada {{count}} sayfa var. İçe aktarılacakları seçin:',
   'figma.layers': '{{count}} katman',
   'figma.importAll': 'Tüm Sayfaları İçe Aktar',
   'figma.importComplete': 'İçe aktarma tamamlandı!',
@@ -496,6 +490,6 @@ const tr: TranslationKeys = {
   'variablePicker.bindToVariable': 'Değişkene bağla',
   'variablePicker.unbind': 'Değişken bağını kaldır',
   'variablePicker.noVariables': 'Tanımlanmış {{type}} değişkeni yok',
-} as const
+} as const;
 
-export default tr
+export default tr;

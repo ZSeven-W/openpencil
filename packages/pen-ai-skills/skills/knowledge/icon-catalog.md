@@ -9,11 +9,13 @@ category: base
 ---
 
 ICONS:
+
 - Use "path" nodes, size 16-24px. ONLY use Feather icon names — PascalCase + "Icon" suffix (e.g. "SearchIcon").
 - System auto-resolves names to SVG paths. "d" is replaced automatically.
 - NEVER use emoji as icons. Use icon_font nodes for lucide icons.
 
 ICON_FONT NODES:
+
 - Use icon_font type with iconFontName for lucide icons (e.g. iconFontName="search", "bell", "user").
 - Sizes: 14/20/24px. Fill can be a color string.
 - Icon-only buttons: frame(w=44, h=44, layout=none) > icon_font(x=12, y=12)

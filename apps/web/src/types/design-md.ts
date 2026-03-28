@@ -1,5 +1,1 @@
-export type {
-  DesignMdSpec,
-  DesignMdColor,
-  DesignMdTypography,
-} from '@zseven-w/pen-types'
+export type { DesignMdSpec, DesignMdColor, DesignMdTypography } from '@zseven-w/pen-types';

@@ -9,7 +9,5 @@
   "addOnOptions": {},
   "version": 1,
   "framework": "react-cra",
-  "chosenAddOns": [
-    "nitro"
-  ]
+  "chosenAddOns": ["nitro"]
 }

@@ -1,4 +1,4 @@
-@import "tailwindcss";
+@import 'tailwindcss';
 
 @utility scrollbar-none {
   scrollbar-width: none;
@@ -97,24 +97,38 @@
 
 body {
   @apply m-0 bg-background text-foreground antialiased;
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto", "Oxygen",
-    "Ubuntu", "Cantarell", "Fira Sans", "Droid Sans", "Helvetica Neue",
-    sans-serif;
+  font-family:
+    -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell',
+    'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
 }
 
 code {
-  font-family: source-code-pro, Menlo, Monaco, Consolas, "Courier New",
-    monospace;
+  font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New', monospace;
 }
 
 /* Syntax highlighting for code panel */
-.syn-keyword { color: #c792ea; }
-.syn-string { color: #c3e88d; }
-.syn-tag { color: #f07178; }
-.syn-attr { color: #ffcb6b; }
-.syn-comment { color: #546e7a; font-style: italic; }
-.syn-number { color: #f78c6c; }
-.syn-bracket { color: #89ddff; }
+.syn-keyword {
+  color: #c792ea;
+}
+.syn-string {
+  color: #c3e88d;
+}
+.syn-tag {
+  color: #f07178;
+}
+.syn-attr {
+  color: #ffcb6b;
+}
+.syn-comment {
+  color: #546e7a;
+  font-style: italic;
+}
+.syn-number {
+  color: #f78c6c;
+}
+.syn-bracket {
+  color: #89ddff;
+}
 
 /* Thin scrollbars — standard property (Firefox, Edge, Chrome 121+) */
 * {
@@ -139,6 +153,9 @@ code {
 }
 
 /* Electron window drag regions */
-.app-region-drag { -webkit-app-region: drag; }
-.app-region-no-drag { -webkit-app-region: no-drag; }
-
+.app-region-drag {
+  -webkit-app-region: drag;
+}
+.app-region-no-drag {
+  -webkit-app-region: no-drag;
+}

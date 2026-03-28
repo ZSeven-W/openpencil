@@ -14,10 +14,10 @@ npm install -g @zseven-w/openpencil
 
 CLI सभी प्लेटफ़ॉर्म पर OpenPencil डेस्कटॉप ऐप को स्वचालित रूप से पहचानता और लॉन्च करता है:
 
-| प्लेटफ़ॉर्म | पहचाने गए इंस्टॉलेशन पथ                                                                            |
-| ----------- | --------------------------------------------------------------------------------------------------- |
-| **macOS**   | `/Applications/OpenPencil.app`, `~/Applications/OpenPencil.app`                                     |
-| **Windows** | NSIS प्रति-उपयोगकर्ता (`%LOCALAPPDATA%`), प्रति-मशीन (`%PROGRAMFILES%`), पोर्टेबल                    |
+| प्लेटफ़ॉर्म | पहचाने गए इंस्टॉलेशन पथ                                                                                 |
+| ----------- | ------------------------------------------------------------------------------------------------------- |
+| **macOS**   | `/Applications/OpenPencil.app`, `~/Applications/OpenPencil.app`                                         |
+| **Windows** | NSIS प्रति-उपयोगकर्ता (`%LOCALAPPDATA%`), प्रति-मशीन (`%PROGRAMFILES%`), पोर्टेबल                       |
 | **Linux**   | `/usr/bin`, `/usr/local/bin`, `~/.local/bin`, AppImage (`~/Applications`, `~/Downloads`), Snap, Flatpak |
 
 ## उपयोग

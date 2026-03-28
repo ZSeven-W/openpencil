@@ -1,4 +1,4 @@
-import type { TranslationKeys } from './en'
+import type { TranslationKeys } from './en';
 
 const vi: TranslationKeys = {
   // ── Common ──
@@ -98,10 +98,8 @@ const vi: TranslationKeys = {
   'updater.subtitle.checking': 'Đang tìm bản phát hành mới nhất...',
   'updater.subtitle.available': 'Phiên bản {{version}} đã sẵn sàng.',
   'updater.subtitle.availableGeneric': 'Đã có phiên bản mới.',
-  'updater.subtitle.downloading':
-    'Phiên bản {{version}} đang được tải xuống trong nền.',
-  'updater.subtitle.downloadingGeneric':
-    'Đang tải gói cập nhật trong nền.',
+  'updater.subtitle.downloading': 'Phiên bản {{version}} đang được tải xuống trong nền.',
+  'updater.subtitle.downloadingGeneric': 'Đang tải gói cập nhật trong nền.',
   'updater.subtitle.downloaded': 'Phiên bản {{version}} đã được tải xuống.',
   'updater.subtitle.downloadedGeneric': 'Bản cập nhật đã được tải xuống.',
   'updater.subtitle.error': 'Không thể kiểm tra hoặc tải bản cập nhật.',
@@ -222,8 +220,7 @@ const vi: TranslationKeys = {
   'textLayout.autoHeightDesc':
     'Tự động chiều cao \u2014 chiều rộng cố định, chiều cao tự điều chỉnh',
   'textLayout.fixed': 'Cố định',
-  'textLayout.fixedDesc':
-    'Kích thước cố định \u2014 cả chiều rộng và chiều cao đều cố định',
+  'textLayout.fixedDesc': 'Kích thước cố định \u2014 cả chiều rộng và chiều cao đều cố định',
   'textLayout.fillWidth': 'Lấp đầy chiều rộng',
   'textLayout.fillHeight': 'Lấp đầy chiều cao',
 
@@ -321,14 +318,12 @@ const vi: TranslationKeys = {
   'ai.quickAction.loginScreenPrompt':
     'Thiết kế màn hình đăng nhập di động hiện đại với ô nhập email, ô nhập mật khẩu, nút đăng nhập và các tuỳ chọn đăng nhập bằng mạng xã hội',
   'ai.quickAction.foodApp': 'Trang chủ ứng dụng ẩm thực',
-  'ai.quickAction.foodAppPrompt':
-    'Generate a well-designed food mobile app homepage',
+  'ai.quickAction.foodAppPrompt': 'Generate a well-designed food mobile app homepage',
   'ai.quickAction.bottomNav': 'Thiết kế thanh điều hướng dưới cùng',
   'ai.quickAction.bottomNavPrompt':
     'Thiết kế thanh điều hướng dưới cùng cho ứng dụng di động với 5 tab: Trang chủ, Tìm kiếm, Thêm, Tin nhắn, Hồ sơ',
   'ai.quickAction.colorPalette': 'Gợi ý bảng màu cho ứng dụng',
-  'ai.quickAction.colorPalettePrompt':
-    'Gợi ý bảng màu hiện đại cho ứng dụng chăm sóc thú cưng',
+  'ai.quickAction.colorPalettePrompt': 'Gợi ý bảng màu hiện đại cho ứng dụng chăm sóc thú cưng',
 
   // ── Code Panel ──
   'code.reactTailwind': 'React + Tailwind',
@@ -339,8 +334,7 @@ const vi: TranslationKeys = {
   'code.download': 'Tải xuống tệp mã',
   'code.closeCodePanel': 'Đóng bảng mã',
   'code.genCssVars': 'Đang tạo CSS variables cho toàn bộ tài liệu',
-  'code.genSelected':
-    'Đang tạo mã cho {{count}} phần tử đã chọn',
+  'code.genSelected': 'Đang tạo mã cho {{count}} phần tử đã chọn',
   'code.genDocument': 'Đang tạo mã cho toàn bộ tài liệu',
   'code.aiEnhance': 'Cải thiện bằng AI',
   'code.cancelEnhance': 'Hủy cải thiện',
@@ -358,8 +352,7 @@ const vi: TranslationKeys = {
   'agents.mcpIntegrations': 'Tích hợp MCP trong Terminal',
   'agents.transport': 'Giao thức',
   'agents.port': 'Cổng',
-  'agents.mcpRestart':
-    'Các tích hợp MCP sẽ có hiệu lực sau khi khởi động lại terminal.',
+  'agents.mcpRestart': 'Các tích hợp MCP sẽ có hiệu lực sau khi khởi động lại terminal.',
   'agents.mcpReinstallHint':
     'Sau khi nâng cấp OpenPencil, vui lòng cài đặt lại tích hợp MCP để đảm bảo tương thích.',
   'agents.modelCount': '{{count}} mô hình',
@@ -430,11 +423,13 @@ const vi: TranslationKeys = {
   'builtin.custom': 'Tùy chỉnh',
   'builtin.apiKeyBadge': 'API Key',
   'builtin.viaApiKey': 'qua API Key của {{name}}',
-  'builtin.errorProviderNotFound': 'Không tìm thấy nhà cung cấp tích hợp. Vui lòng kiểm tra cài đặt của bạn.',
+  'builtin.errorProviderNotFound':
+    'Không tìm thấy nhà cung cấp tích hợp. Vui lòng kiểm tra cài đặt của bạn.',
   'builtin.errorApiKeyEmpty': 'API Key đang trống. Vui lòng thêm API Key trong cài đặt.',
   'builtin.parallelAgents': 'Tác nhân phụ song song: {{count}}x (nhấn để chuyển đổi)',
   'builtin.baseUrlPlaceholder': 'https://api.example.com/v1',
-  'builtin.teamDescription': 'Chọn mô hình để tạo thiết kế. Khi được đặt, các tác vụ thiết kế sẽ tự động được giao cho agent chuyên dụng sử dụng mô hình này.',
+  'builtin.teamDescription':
+    'Chọn mô hình để tạo thiết kế. Khi được đặt, các tác vụ thiết kế sẽ tự động được giao cho agent chuyên dụng sử dụng mô hình này.',
   'builtin.teamDesignModel': 'Mô hình thiết kế',
   'builtin.teamSelectModel': 'Không (agent đơn)',
 
@@ -449,8 +444,7 @@ const vi: TranslationKeys = {
   'figma.convertFailed': 'Không thể chuyển đổi tệp Figma',
   'figma.parsing': 'Đang phân tích tệp .fig...',
   'figma.converting': 'Đang chuyển đổi các nút...',
-  'figma.selectPage':
-    'Tệp này có {{count}} trang. Chọn trang để nhập:',
+  'figma.selectPage': 'Tệp này có {{count}} trang. Chọn trang để nhập:',
   'figma.layers': '{{count}} lớp',
   'figma.importAll': 'Nhập tất cả các trang',
   'figma.importComplete': 'Nhập hoàn tất!',
@@ -496,6 +490,6 @@ const vi: TranslationKeys = {
   'variablePicker.bindToVariable': 'Gắn với biến',
   'variablePicker.unbind': 'Huỷ gắn biến',
   'variablePicker.noVariables': 'Chưa có biến {{type}} nào được định nghĩa',
-} as const
+} as const;
 
-export default vi
+export default vi;

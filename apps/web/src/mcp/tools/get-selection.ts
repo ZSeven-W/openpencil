@@ -1,15 +1,15 @@
-import { openDocument, resolveDocPath, fetchLiveSelection } from '../document-manager'
-import { findNodeInTree, readNodeWithDepth, getDocChildren } from '../utils/node-operations'
+import { openDocument, resolveDocPath, fetchLiveSelection } from '../document-manager';
+import { findNodeInTree, readNodeWithDepth, getDocChildren } from '../utils/node-operations';
 
 export interface GetSelectionParams {
-  filePath?: string
-  readDepth?: number
+  filePath?: string;
+  readDepth?: number;
 }
 
 export interface GetSelectionResult {
-  selectedIds: string[]
-  activePageId: string | null
-  nodes: Record<string, unknown>[]
+  selectedIds: string[];
+  activePageId: string | null;
+  nodes: Record<string, unknown>[];
 }
 
 /**
@@ -17,27 +17,25 @@ export interface GetSelectionResult {
  * Fetches selection state from the Nitro sync endpoint, then reads the
  * full node data for each selected ID from the document.
  */
-export async function handleGetSelection(
-  params: GetSelectionParams,
-): Promise<GetSelectionResult> {
-  const { selectedIds, activePageId } = await fetchLiveSelection()
+export async function handleGetSelection(params: GetSelectionParams): Promise<GetSelectionResult> {
+  const { selectedIds, activePageId } = await fetchLiveSelection();
 
   if (selectedIds.length === 0) {
-    return { selectedIds: [], activePageId, nodes: [] }
+    return { selectedIds: [], activePageId, nodes: [] };
   }
 
-  const filePath = resolveDocPath(params.filePath)
-  const doc = await openDocument(filePath)
-  const readDepth = params.readDepth ?? 2
-  const children = getDocChildren(doc, activePageId ?? undefined)
+  const filePath = resolveDocPath(params.filePath);
+  const doc = await openDocument(filePath);
+  const readDepth = params.readDepth ?? 2;
+  const children = getDocChildren(doc, activePageId ?? undefined);
 
-  const nodes: Record<string, unknown>[] = []
+  const nodes: Record<string, unknown>[] = [];
   for (const id of selectedIds) {
-    const node = findNodeInTree(children, id)
+    const node = findNodeInTree(children, id);
     if (node) {
-      nodes.push(readNodeWithDepth(node, readDepth))
+      nodes.push(readNodeWithDepth(node, readDepth));
     }
   }
 
-  return { selectedIds, activePageId, nodes }
+  return { selectedIds, activePageId, nodes };
 }
