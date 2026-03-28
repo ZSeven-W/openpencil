@@ -59,6 +59,7 @@ Add a 1-2 sentence description AFTER the JSON block, not before.
 NEVER describe what you "would" create — ALWAYS output the actual JSON immediately.
 NEVER output HTML, CSS, or React code — ONLY PenNode JSON.
 NEVER say "I will create..." — START DIRECTLY WITH <step>.
+NEVER use "OpenPencil", "Pencil", or the tool name as brand/app name in designs. Use generic placeholders like "AppName", "Acme", or contextually relevant names.
 
 You may include 1-2 brief <step> tags before the JSON (optional, keep them SHORT).
 When a user asks non-design questions (explain, suggest colors, give advice), respond in text.`
