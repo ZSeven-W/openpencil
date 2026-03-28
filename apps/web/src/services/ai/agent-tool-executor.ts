@@ -95,8 +95,11 @@ export class AgentToolExecutor {
    * through the standard chat interface. The agent just provides the prompt.
    */
   private async handleGenerateDesign(
-    args: { prompt: string; canvasWidth?: number },
+    args: { prompt?: string; description?: string; canvasWidth?: number },
   ): Promise<ToolResult> {
+    // Some models use 'description' instead of 'prompt'
+    const prompt = args.prompt || args.description
+    if (!prompt) return { success: false, error: 'Missing prompt or description' }
     if (this.rootInsertId) {
       return {
         success: true,
@@ -112,35 +115,66 @@ export class AgentToolExecutor {
     const docStore = useDocumentStore.getState()
     const canvasSize = getCanvasSize()
 
-    // Find the first connected CLI provider to use for the internal pipeline.
-    // The internal pipeline uses /api/ai/chat which routes to CLI providers,
-    // NOT the builtin agent's API key.
+    // Find a provider for the internal pipeline:
+    // 1. First try connected CLI providers (Claude Code, Codex, etc.)
+    // 2. Fall back to the current builtin provider (API key)
     const agentSettings = useAgentSettingsStore.getState()
     const providers = agentSettings.providers ?? {}
-    let cliModel = 'default'
-    let cliProvider: string | undefined
+    let designModel = 'default'
+    let designProvider: string | undefined
+
     for (const [key, cfg] of Object.entries(providers)) {
       if (cfg.isConnected && cfg.models?.length) {
-        cliProvider = key
-        cliModel = cfg.models[0].value
+        designProvider = key
+        designModel = cfg.models[0].value
         break
       }
     }
 
+    // If no CLI provider connected, use builtin provider via the 'builtin' provider path.
+    // The chat endpoint reads builtin credentials from the request body (set by ai-service.ts).
+    if (!designProvider) {
+      const { useAIStore } = await import('@/stores/ai-store')
+      const currentModel = useAIStore.getState().model
+      if (currentModel.startsWith('builtin:')) {
+        const parts = currentModel.split(':')
+        const bpId = parts[1]
+        const bp = agentSettings.builtinProviders.find((p) => p.id === bpId)
+        if (bp?.apiKey) {
+          designProvider = 'builtin' as any
+          designModel = parts.slice(2).join(':')
+        }
+      }
+    }
+
+    // Match the CLI pipeline's generateDesign call exactly
+    const { useAIStore: aiStore } = await import('@/stores/ai-store')
+    const concurrency = aiStore.getState().concurrency
+    const doc = docStore.document
+    let designMd: any
+    try {
+      const { useDesignMdStore } = await import('@/stores/design-md-store')
+      designMd = useDesignMdStore?.getState()?.designMd
+    } catch { /* store may not exist */ }
+
     const result = await generateDesign(
       {
-        prompt: args.prompt,
-        model: cliModel,
-        provider: cliProvider as any,
+        prompt,
+        model: designModel,
+        provider: designProvider as any,
+        concurrency,
         context: {
           canvasSize,
           documentSummary: `Document has ${docStore.getFlatNodes().length} nodes`,
+          variables: doc.variables,
+          themes: doc.themes,
+          designMd,
         },
       },
       {
         onApplyPartial: () => {},
         onTextUpdate: () => {},
-        animated: false,
+        animated: true,
       },
     )
 
