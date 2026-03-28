@@ -116,9 +116,13 @@ Routing logic:
 - No `members` or empty → `createAgent()` (existing path, fully backward compatible)
 - `members` present → `createTeam()` with lead from main body fields, each member gets its own provider
 
-`resolveToolResult` unchanged — `AgentTeam.resolveToolResult` forwards to lead internally.
+`resolveToolResult` routing: `AgentTeam` maintains a `toolCallOwners` map that tracks which agent (lead or member) issued each tool call. When the server receives a tool result, `team.resolveToolResult()` looks up the owner and routes to the correct agent. This is critical — member tool calls (e.g. `generate_design`) must be routed to the member agent, not the lead.
+
+Member tools: Members receive the **same tool registry** as the lead (server creates a copy from `body.toolDefs` for each member). This ensures the designer member can call `generate_design` and other design tools.
 
 SSE stream code unchanged — `encodeAgentEvent` handles new event types automatically.
+
+Source and ChatMessage: The `source` field on `ChatMessage` represents the overall message origin. Within a single assistant message, lead and member text are visually separated via markdown dividers (`---`) inserted by `member_start`/`member_end` event handlers. Per-segment source tracking is not needed for the MVP.
 
 ### Client Layer (`apps/web/`)
 
