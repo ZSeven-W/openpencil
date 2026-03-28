@@ -300,12 +300,14 @@ export class AgentToolExecutor {
           // Inherit position from the empty frame
           if (emptyFrame.x !== undefined) (node as any).x = emptyFrame.x
           if (emptyFrame.y !== undefined) (node as any).y = emptyFrame.y
-          // Replace in-place: update the empty frame with all new node properties
-          // This is a single store operation — no remove+add dance, no duplicate keys
-          const { id: _discardId, ...nodeProps } = node as any
-          docStore.updateNode(emptyFrame.id, nodeProps)
-          node.id = emptyFrame.id // track the original ID for result
+          // Mark replaced BEFORE updateNode — updateNode may throw from canvas sync
+          // side-effects, but the update IS applied to the store regardless
           replaced = true
+          node.id = emptyFrame.id
+          const { id: _discardId, ...nodeProps } = node as any
+          try {
+            docStore.updateNode(emptyFrame.id, nodeProps)
+          } catch { /* canvas sync side-effect — update still applied */ }
         }
       } catch { /* fallback to normal insert */ }
     }
