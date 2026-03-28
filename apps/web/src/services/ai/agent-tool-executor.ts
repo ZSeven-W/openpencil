@@ -45,15 +45,21 @@ export class AgentToolExecutor {
       useHistoryStore.getState().endBatch(useDocumentStore.getState().document)
     }
 
-    await fetch('/api/ai/agent?action=result', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        sessionId: this.sessionId,
-        toolCallId: id,
-        result,
-      }),
-    })
+    // Post result back to server to unblock the agent loop.
+    // Retry once on failure — if the POST is lost, the agent hangs.
+    const payload = JSON.stringify({ sessionId: this.sessionId, toolCallId: id, result })
+    const postHeaders = { 'Content-Type': 'application/json' }
+    try {
+      const res = await fetch('/api/ai/agent?action=result', { method: 'POST', headers: postHeaders, body: payload })
+      if (!res.ok) throw new Error(`Status ${res.status}`)
+    } catch {
+      // Retry once
+      try {
+        await fetch('/api/ai/agent?action=result', { method: 'POST', headers: postHeaders, body: payload })
+      } catch (retryErr) {
+        console.error(`[AgentToolExecutor] Failed to post tool result ${id}:`, retryErr)
+      }
+    }
   }
 
   // ---------------------------------------------------------------------------
