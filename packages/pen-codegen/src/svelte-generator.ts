@@ -258,6 +258,7 @@ function cssRulesToString(rules: CSSRule[]): string {
 // Public API
 // ---------------------------------------------------------------------------
 
+/** @deprecated Use AI code generation pipeline instead. Will be removed in v1.0.0. */
 export function generateSvelteCode(nodes: PenNode[]): string {
   resetClassCounter()
   const rules: CSSRule[] = []
@@ -290,6 +291,7 @@ ${css}
 `
 }
 
+/** @deprecated Use AI code generation pipeline instead. Will be removed in v1.0.0. */
 export function generateSvelteFromDocument(doc: PenDocument, activePageId?: string | null): string {
   const children = activePageId !== undefined ? getActivePageChildren(doc, activePageId) : doc.children
   return generateSvelteCode(children)

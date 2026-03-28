@@ -31,6 +31,8 @@
 
 <br />
 
+> **참고:** 같은 이름의 다른 오픈소스 프로젝트가 있습니다 — [OpenPencil](https://github.com/open-pencil/open-pencil). 해당 프로젝트는 Figma 호환 비주얼 디자인과 실시간 협업에 중점을 둡니다. 본 프로젝트는 AI 네이티브 디자인-투-코드 워크플로에 중점을 둡니다.
+
 ## OpenPencil을 선택하는 이유
 
 <table>
@@ -180,6 +182,7 @@ docker build --target full -t openpencil-full .
 
 | 에이전트 | 설정 방법 |
 | --- | --- |
+| **내장 (9+ 제공자)** | 제공자 프리셋에서 선택하고 지역을 전환 — Anthropic, OpenAI, Google, DeepSeek 등 |
 | **Claude Code** | 설정 불필요 — 로컬 OAuth로 Claude Agent SDK 사용 |
 | **Codex CLI** | 에이전트 설정에서 연결 (`Cmd+,`) |
 | **OpenCode** | 에이전트 설정에서 연결 (`Cmd+,`) |
@@ -187,6 +190,8 @@ docker build --target full -t openpencil-full .
 | **Gemini CLI** | 에이전트 설정에서 연결 (`Cmd+,`) |
 
 **모델 역량 프로파일** — 모델 티어에 따라 프롬프트, 사고 모드, 타임아웃을 자동 조정합니다. 풀 티어 모델(Claude)은 완전한 프롬프트를 받고, 스탠다드 티어(GPT-4o, Gemini, DeepSeek)는 사고 모드를 비활성화하며, 베이직 티어(MiniMax, Qwen, Llama, Mistral)는 최대 안정성을 위해 단순화된 중첩 JSON 프롬프트를 받습니다.
+
+**i18n** — 15개 언어로 완전한 인터페이스 지역화: English, 简体中文, 繁體中文, 日本語, 한국어, Français, Español, Deutsch, Português, Русский, हिन्दी, Türkçe, ไทย, Tiếng Việt, Bahasa Indonesia.
 
 **MCP 서버**
 - 내장 MCP 서버 — Claude Code / Codex / Gemini / OpenCode / Kiro / Copilot CLI에 원클릭 설치
@@ -219,6 +224,8 @@ cat design.dsl | op design - # stdin에서 파이프 입력
 
 세 가지 입력 방식을 지원합니다: 인라인 문자열, `@filepath` (파일에서 읽기), `-` (stdin에서 읽기). 데스크톱 앱 또는 웹 개발 서버와 연동됩니다. 전체 명령어 레퍼런스는 [CLI README](./apps/cli/README.md)를 참고하세요.
 
+**LLM 스킬** — [OpenPencil Skill](https://github.com/ZSeven-W/openpencil-skill) 플러그인을 설치하면 AI 에이전트(Claude Code, Cursor, Codex, Gemini CLI 등)에게 `op`를 사용한 디자인을 교육할 수 있습니다.
+
 ## 기능
 
 **캔버스 & 드로잉**
@@ -248,13 +255,13 @@ cat design.dsl | op design - # stdin에서 파이프 입력
 
 | | |
 | --- | --- |
-| **프론트엔드** | React 19 · TanStack Start · Tailwind CSS v4 · shadcn/ui |
+| **프론트엔드** | React 19 · TanStack Start · Tailwind CSS v4 · shadcn/ui · i18next |
 | **캔버스** | CanvasKit/Skia (WASM, GPU 가속) |
 | **상태 관리** | Zustand v5 |
 | **서버** | Nitro |
 | **데스크톱** | Electron 35 |
 | **CLI** | `op` — 터미널 제어, 배치 디자인 DSL, 코드 내보내기 |
-| **AI** | Anthropic SDK · Claude Agent SDK · OpenCode SDK · Copilot SDK |
+| **AI** | Vercel AI SDK v6 · Anthropic SDK · Claude Agent SDK · OpenCode SDK · Copilot SDK |
 | **런타임** | Bun · Vite 7 |
 | **파일 형식** | `.op` — JSON 기반, 사람이 읽을 수 있는, Git 친화적 |
 
@@ -289,7 +296,9 @@ openpencil/
 │   ├── pen-codegen/         코드 생성기 (React, HTML, Vue, Flutter, ...)
 │   ├── pen-figma/           Figma .fig 파일 파서 및 변환기
 │   ├── pen-renderer/        독립형 CanvasKit/Skia 렌더러
-│   └── pen-sdk/             통합 SDK (모든 패키지 재export)
+│   ├── pen-sdk/             통합 SDK (모든 패키지 재export)
+│   ├── pen-ai-skills/       AI 프롬프트 스킬 엔진 (단계별 프롬프트 로딩)
+│   └── agent/               AI 에이전트 SDK (Vercel AI SDK, 멀티 제공자, 에이전트 팀)
 └── .githooks/               브랜치 이름에서 버전 동기화를 위한 pre-commit
 ```
 
@@ -348,6 +357,8 @@ bun run cli:compile        # CLI를 dist로 컴파일
 - [x] 멀티 모델 역량 프로파일
 - [x] 재사용 가능한 패키지를 포함한 모노레포 구조 변경
 - [x] CLI 도구 (`op`) 터미널 제어
+- [x] 내장 AI 에이전트 SDK (멀티 제공자 지원)
+- [x] i18n — 15개 언어
 - [ ] 공동 편집
 - [ ] 플러그인 시스템
 

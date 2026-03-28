@@ -231,6 +231,17 @@ type PromptSection =
   | 'overflow'
   | 'cjk'
   | 'variables'
+  | 'codegen-planning'
+  | 'codegen-chunk'
+  | 'codegen-assembly'
+  | 'codegen-react'
+  | 'codegen-vue'
+  | 'codegen-svelte'
+  | 'codegen-html'
+  | 'codegen-flutter'
+  | 'codegen-swiftui'
+  | 'codegen-compose'
+  | 'codegen-react-native'
 
 // Dynamic section map — skills from registry, local sections for planning/variables/design-md
 const SECTION_MAP: Record<PromptSection, () => string> = {
@@ -249,6 +260,17 @@ const SECTION_MAP: Record<PromptSection, () => string> = {
   overflow: () => getSkillContent('overflow'),
   cjk: () => getSkillContent('cjk'),
   variables: () => VARIABLE_RULES,
+  'codegen-planning': () => getSkillContent('codegen-planning'),
+  'codegen-chunk': () => getSkillContent('codegen-chunk'),
+  'codegen-assembly': () => getSkillContent('codegen-assembly'),
+  'codegen-react': () => getSkillContent('codegen-react'),
+  'codegen-vue': () => getSkillContent('codegen-vue'),
+  'codegen-svelte': () => getSkillContent('codegen-svelte'),
+  'codegen-html': () => getSkillContent('codegen-html'),
+  'codegen-flutter': () => getSkillContent('codegen-flutter'),
+  'codegen-swiftui': () => getSkillContent('codegen-swiftui'),
+  'codegen-compose': () => getSkillContent('codegen-compose'),
+  'codegen-react-native': () => getSkillContent('codegen-react-native'),
 }
 
 // Design.md content injected via setDesignMdForPrompt()

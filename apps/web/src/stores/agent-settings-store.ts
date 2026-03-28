@@ -13,6 +13,20 @@ import { appStorage } from '@/utils/app-storage'
 
 const STORAGE_KEY = 'openpencil-agent-settings'
 
+export type BuiltinProviderPreset = 'anthropic' | 'openai' | 'openrouter' | 'deepseek' | 'gemini' | 'minimax' | 'zhipu' | 'kimi' | 'bailian' | 'doubao' | 'xiaomi' | 'modelscope' | 'stepfun' | 'nvidia' | 'custom'
+
+export interface BuiltinProviderConfig {
+  id: string
+  displayName: string
+  type: 'anthropic' | 'openai-compat'
+  apiKey: string
+  model: string
+  baseURL?: string
+  preset?: BuiltinProviderPreset
+  maxContextTokens?: number
+  enabled: boolean
+}
+
 interface PersistedState {
   providers: Record<AIProviderType, AIProviderConfig>
   mcpIntegrations: MCPCliIntegration[]
@@ -22,6 +36,9 @@ interface PersistedState {
   imageGenProfiles: ImageGenProfile[]
   activeImageGenProfileId: string | null
   openverseOAuth: { clientId: string; clientSecret: string } | null
+  builtinProviders: BuiltinProviderConfig[]
+  teamEnabled: boolean
+  teamDesignModel: string | null
 }
 
 interface AgentSettingsState extends PersistedState {
@@ -49,6 +66,11 @@ interface AgentSettingsState extends PersistedState {
   setActiveImageGenProfile: (id: string | null) => void
   getActiveImageGenProfile: () => ImageGenProfile | null
   setOpenverseOAuth: (oauth: { clientId: string; clientSecret: string } | null) => void
+  addBuiltinProvider: (config: Omit<BuiltinProviderConfig, 'id'>) => string
+  updateBuiltinProvider: (id: string, updates: Partial<BuiltinProviderConfig>) => void
+  removeBuiltinProvider: (id: string) => void
+  setTeamEnabled: (enabled: boolean) => void
+  setTeamDesignModel: (model: string | null) => void
   persist: () => void
   hydrate: () => void
 }
@@ -109,6 +131,9 @@ export const useAgentSettingsStore = create<AgentSettingsState>((set, get) => ({
   imageGenProfiles: [],
   activeImageGenProfileId: null,
   openverseOAuth: null,
+  builtinProviders: [],
+  teamEnabled: false,
+  teamDesignModel: null,
   dialogOpen: false,
   isHydrated: false,
   mcpServerRunning: false,
@@ -201,12 +226,34 @@ export const useAgentSettingsStore = create<AgentSettingsState>((set, get) => ({
 
   setOpenverseOAuth: (oauth) => set({ openverseOAuth: oauth }),
 
+  addBuiltinProvider: (config) => {
+    const id = `bp-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`
+    const newProvider: BuiltinProviderConfig = { ...config, id }
+    set((s) => ({ builtinProviders: [...s.builtinProviders, newProvider] }))
+    return id
+  },
+
+  updateBuiltinProvider: (id, updates) =>
+    set((s) => ({
+      builtinProviders: s.builtinProviders.map((p) =>
+        p.id === id ? { ...p, ...updates } : p,
+      ),
+    })),
+
+  removeBuiltinProvider: (id) =>
+    set((s) => ({
+      builtinProviders: s.builtinProviders.filter((p) => p.id !== id),
+    })),
+
+  setTeamEnabled: (teamEnabled) => set({ teamEnabled }),
+  setTeamDesignModel: (teamDesignModel) => set({ teamDesignModel }),
+
   persist: () => {
     try {
-      const { providers, mcpIntegrations, mcpTransportMode, mcpHttpPort, imageGenConfig, imageGenProfiles, activeImageGenProfileId, openverseOAuth } = get()
+      const { providers, mcpIntegrations, mcpTransportMode, mcpHttpPort, imageGenConfig, imageGenProfiles, activeImageGenProfileId, openverseOAuth, builtinProviders, teamEnabled, teamDesignModel } = get()
       appStorage.setItem(
         STORAGE_KEY,
-        JSON.stringify({ providers, mcpIntegrations, mcpTransportMode, mcpHttpPort, imageGenConfig, imageGenProfiles, activeImageGenProfileId, openverseOAuth }),
+        JSON.stringify({ providers, mcpIntegrations, mcpTransportMode, mcpHttpPort, imageGenConfig, imageGenProfiles, activeImageGenProfileId, openverseOAuth, builtinProviders, teamEnabled, teamDesignModel }),
       )
     } catch {
       // ignore
@@ -257,6 +304,15 @@ export const useAgentSettingsStore = create<AgentSettingsState>((set, get) => ({
         set({ imageGenProfiles: [migrated], activeImageGenProfileId: migrated.id })
       }
       if (data.openverseOAuth !== undefined) set({ openverseOAuth: data.openverseOAuth })
+      if (Array.isArray((data as Record<string, unknown>).builtinProviders)) {
+        set({ builtinProviders: (data as Record<string, unknown>).builtinProviders as BuiltinProviderConfig[] })
+      }
+      if ((data as Record<string, unknown>).teamEnabled !== undefined) {
+        set({ teamEnabled: (data as Record<string, unknown>).teamEnabled as boolean })
+      }
+      if ((data as Record<string, unknown>).teamDesignModel !== undefined) {
+        set({ teamDesignModel: (data as Record<string, unknown>).teamDesignModel as string | null })
+      }
     } catch {
       // ignore
     } finally {

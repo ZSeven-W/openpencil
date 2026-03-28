@@ -142,36 +142,40 @@ export class SkiaEngine {
 
   syncFromDocument() {
     if (this.dragSyncSuppressed) return
-    const docState = useDocumentStore.getState()
-    const activePageId = useCanvasStore.getState().activePageId
-    const pageChildren = getActivePageChildren(docState.document, activePageId)
-    const allNodes = getAllChildren(docState.document)
+    try {
+      const docState = useDocumentStore.getState()
+      const activePageId = useCanvasStore.getState().activePageId
+      const pageChildren = getActivePageChildren(docState.document, activePageId)
+      const allNodes = getAllChildren(docState.document)
 
-    // Collect reusable/instance IDs from raw tree (before ref resolution strips them)
-    this.reusableIds.clear()
-    this.instanceIds.clear()
-    collectReusableIds(pageChildren, this.reusableIds)
-    collectInstanceIds(pageChildren, this.instanceIds)
+      // Collect reusable/instance IDs from raw tree (before ref resolution strips them)
+      this.reusableIds.clear()
+      this.instanceIds.clear()
+      collectReusableIds(pageChildren, this.reusableIds)
+      collectInstanceIds(pageChildren, this.instanceIds)
 
-    // Resolve refs, variables, then flatten
-    const resolved = resolveRefs(pageChildren, allNodes)
+      // Resolve refs, variables, then flatten
+      const resolved = resolveRefs(pageChildren, allNodes)
 
-    // Resolve design variables
-    const variables = docState.document.variables ?? {}
-    const themes = docState.document.themes
-    const defaultTheme = getDefaultTheme(themes)
-    const variableResolved = resolved.map((n) =>
-      resolveNodeForCanvas(n, variables, defaultTheme),
-    )
+      // Resolve design variables
+      const variables = docState.document.variables ?? {}
+      const themes = docState.document.themes
+      const defaultTheme = getDefaultTheme(themes)
+      const variableResolved = resolved.map((n) =>
+        resolveNodeForCanvas(n, variables, defaultTheme),
+      )
 
-    // Only premeasure text HEIGHTS for fixed-width text (where wrapping
-    // estimation may differ from Canvas 2D). Never touch widths or
-    // container-relative sizing to maintain layout consistency with Fabric.js.
-    const measured = premeasureTextHeights(variableResolved)
+      // Only premeasure text HEIGHTS for fixed-width text (where wrapping
+      // estimation may differ from Canvas 2D). Never touch widths or
+      // container-relative sizing to maintain layout consistency with Fabric.js.
+      const measured = premeasureTextHeights(variableResolved)
 
-    this.renderNodes = flattenToRenderNodes(measured)
+      this.renderNodes = flattenToRenderNodes(measured)
 
-    this.spatialIndex.rebuild(this.renderNodes)
+      this.spatialIndex.rebuild(this.renderNodes)
+    } catch (err) {
+      console.error('[SkiaEngine] syncFromDocument failed:', err)
+    }
     this.markDirty()
   }
 

@@ -31,6 +31,8 @@
 
 <br />
 
+> **Nota:** Existe otro proyecto de código abierto con el mismo nombre — [OpenPencil](https://github.com/open-pencil/open-pencil), enfocado en diseño visual compatible con Figma con colaboración en tiempo real. Este proyecto se enfoca en flujos de trabajo AI-nativos de diseño a código.
+
 ## Por Qué OpenPencil
 
 <table>
@@ -180,6 +182,7 @@ docker build --target full -t openpencil-full .
 
 | Agente | Configuración |
 | --- | --- |
+| **Integrado (9+ proveedores)** | Selecciona de preajustes de proveedores con selector de región — Anthropic, OpenAI, Google, DeepSeek y más |
 | **Claude Code** | Sin configuración — usa Claude Agent SDK con OAuth local |
 | **Codex CLI** | Conectar en Configuración de Agente (`Cmd+,`) |
 | **OpenCode** | Conectar en Configuración de Agente (`Cmd+,`) |
@@ -187,6 +190,8 @@ docker build --target full -t openpencil-full .
 | **Gemini CLI** | Conectar en Configuración de Agente (`Cmd+,`) |
 
 **Perfiles de Capacidad de Modelos** — adapta automáticamente los prompts, el modo de pensamiento y los tiempos de espera según el nivel del modelo. Los modelos de nivel completo (Claude) reciben prompts completos; los de nivel estándar (GPT-4o, Gemini, DeepSeek) desactivan el pensamiento; los de nivel básico (MiniMax, Qwen, Llama, Mistral) reciben prompts simplificados de JSON anidado para máxima fiabilidad.
+
+**i18n** — Localización completa de la interfaz en 15 idiomas: English, 简体中文, 繁體中文, 日本語, 한국어, Français, Español, Deutsch, Português, Русский, हिन्दी, Türkçe, ไทย, Tiếng Việt, Bahasa Indonesia.
 
 **Servidor MCP**
 - Servidor MCP integrado — instalación con un clic en Claude Code / Codex / Gemini / OpenCode / Kiro / Copilot CLIs
@@ -219,6 +224,8 @@ cat design.dsl | op design - # Entrada por pipe desde stdin
 
 Soporta tres métodos de entrada: cadena inline, `@filepath` (leer desde archivo), o `-` (leer desde stdin). Funciona con la app de escritorio o el servidor de desarrollo web. Consulta el [README del CLI](./apps/cli/README.md) para la referencia completa de comandos.
 
+**Habilidad LLM** — instala el plugin [OpenPencil Skill](https://github.com/ZSeven-W/openpencil-skill) para enseñar a agentes IA (Claude Code, Cursor, Codex, Gemini CLI, etc.) a diseñar con `op`.
+
 ## Características
 
 **Lienzo y Dibujo**
@@ -248,13 +255,13 @@ Soporta tres métodos de entrada: cadena inline, `@filepath` (leer desde archivo
 
 | | |
 | --- | --- |
-| **Frontend** | React 19 · TanStack Start · Tailwind CSS v4 · shadcn/ui |
+| **Frontend** | React 19 · TanStack Start · Tailwind CSS v4 · shadcn/ui · i18next |
 | **Lienzo** | CanvasKit/Skia (WASM, acelerado por GPU) |
 | **Estado** | Zustand v5 |
 | **Servidor** | Nitro |
 | **Escritorio** | Electron 35 |
 | **CLI** | `op` — control desde terminal, DSL de diseño por lotes, exportación de código |
-| **IA** | Anthropic SDK · Claude Agent SDK · OpenCode SDK · Copilot SDK |
+| **IA** | Vercel AI SDK v6 · Anthropic SDK · Claude Agent SDK · OpenCode SDK · Copilot SDK |
 | **Runtime** | Bun · Vite 7 |
 | **Formato de archivo** | `.op` — basado en JSON, legible por humanos, compatible con Git |
 
@@ -289,7 +296,9 @@ openpencil/
 │   ├── pen-codegen/         Generadores de código (React, HTML, Vue, Flutter, ...)
 │   ├── pen-figma/           Parser y conversor de archivos .fig de Figma
 │   ├── pen-renderer/        Renderizador independiente CanvasKit/Skia
-│   └── pen-sdk/             SDK global (reexporta todos los paquetes)
+│   ├── pen-sdk/             SDK global (reexporta todos los paquetes)
+│   ├── pen-ai-skills/       Motor de habilidades AI (carga de prompts por fases)
+│   └── agent/               SDK de agente AI (Vercel AI SDK, multi-proveedor, equipos de agentes)
 └── .githooks/               Sincronización de versión pre-commit desde nombre de rama
 ```
 
@@ -348,6 +357,8 @@ bun run cli:compile        # Compilar CLI a dist
 - [x] Perfiles de capacidad multimodelo
 - [x] Reestructuración en monorepo con paquetes reutilizables
 - [x] Herramienta CLI (`op`) para control desde terminal
+- [x] SDK de agente AI integrado con soporte multi-proveedor
+- [x] i18n — 15 idiomas
 - [ ] Edición colaborativa
 - [ ] Sistema de plugins
 

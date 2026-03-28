@@ -1,4 +1,3 @@
-import paper from 'paper'
 import { nanoid } from 'nanoid'
 import type { PenNode, PathNode } from '@zseven-w/pen-types'
 
@@ -8,9 +7,64 @@ export type BooleanOpType = 'union' | 'subtract' | 'intersect'
 // Paper.js scope — headless (no canvas needed)
 // ---------------------------------------------------------------------------
 
-let scope: paper.PaperScope | null = null
+interface PaperBoundsLike {
+  center: unknown
+  x: number
+  y: number
+  width: number
+  height: number
+}
 
-function getScope(): paper.PaperScope {
+interface PaperPathItem {
+  bounds: PaperBoundsLike
+  pathData: string
+  translate: (point: unknown) => void
+  rotate: (angle: number, center: unknown) => void
+  unite: (path: PaperPathItem) => PaperPathItem
+  subtract: (path: PaperPathItem) => PaperPathItem
+  intersect: (path: PaperPathItem) => PaperPathItem
+  remove: () => void
+}
+
+interface PaperScope {
+  setup: (size: unknown) => void
+  activate: () => void
+  Size: new (width: number, height: number) => unknown
+  Point: new (x: number, y: number) => unknown
+  CompoundPath: {
+    create: (pathData: string) => PaperPathItem
+  }
+}
+
+interface PaperModule {
+  PaperScope: new () => PaperScope
+  Point: new (x: number, y: number) => unknown
+}
+
+let paperModule: PaperModule | null | undefined
+let scope: PaperScope | null = null
+
+function getPaperModule(): PaperModule | null {
+  if (paperModule !== undefined) return paperModule
+  try {
+    // Indirect require via globalThis to load paper.js at runtime without
+    // triggering esbuild's direct-eval warning. The assignment to globalThis
+    // happens once; subsequent calls read from the cached paperModule.
+    const _r = (globalThis as any)['require'] as NodeRequire | undefined
+      ?? (typeof require !== 'undefined' ? require : undefined)
+    if (!_r) throw new Error('require not available')
+    paperModule = _r('paper') as PaperModule
+  } catch {
+    paperModule = null
+  }
+  return paperModule
+}
+
+function getScope(): PaperScope {
+  const paper = getPaperModule()
+  if (!paper) {
+    throw new Error('paper runtime is unavailable')
+  }
   if (!scope) {
     scope = new paper.PaperScope()
     scope.setup(new scope.Size(1, 1))
@@ -153,12 +207,12 @@ export function canBooleanOp(nodes: PenNode[]): boolean {
  * Create a Paper.js PathItem from a PenNode, positioned in absolute scene
  * coordinates (applying x, y, rotation).
  */
-function nodeToPaperPath(node: PenNode): paper.PathItem | null {
+function nodeToPaperPath(node: PenNode): PaperPathItem | null {
   const d = nodeToLocalPath(node)
   if (!d) return null
 
   const s = getScope()
-  let item: paper.PathItem
+  let item: PaperPathItem
   try {
     item = s.CompoundPath.create(d)
   } catch {
@@ -189,10 +243,12 @@ export function executeBooleanOp(
 ): PathNode | null {
   if (nodes.length < 2) return null
 
+  if (!getPaperModule()) return null
+
   const paperPaths = nodes.map(nodeToPaperPath)
   if (paperPaths.some((p) => p === null)) return null
 
-  const paths = paperPaths as paper.PathItem[]
+  const paths = paperPaths as PaperPathItem[]
 
   // Accumulate: fold left with the boolean operation
   let result = paths[0]
@@ -218,6 +274,8 @@ export function executeBooleanOp(
   const bounds = result.bounds
 
   // Translate path so it starts at origin (0,0)
+  const paper = getPaperModule()
+  if (!paper) return null
   result.translate(new paper.Point(-bounds.x, -bounds.y))
   const originPathData = result.pathData
 

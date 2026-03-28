@@ -31,6 +31,8 @@
 
 <br />
 
+> **Примечание:** Существует другой проект с открытым исходным кодом с таким же названием — [OpenPencil](https://github.com/open-pencil/open-pencil), ориентированный на визуальный дизайн, совместимый с Figma, с совместной работой в реальном времени. Этот проект ориентирован на AI-нативные рабочие процессы «дизайн в код».
+
 ## Почему OpenPencil
 
 <table>
@@ -180,6 +182,7 @@ docker build --target full -t openpencil-full .
 
 | Агент | Настройка |
 | --- | --- |
+| **Встроенный (9+ провайдеров)** | Выбор из предустановленных провайдеров с переключателем региона — Anthropic, OpenAI, Google, DeepSeek и другие |
 | **Claude Code** | Без настройки — использует Claude Agent SDK с локальным OAuth |
 | **Codex CLI** | Подключить в настройках агента (`Cmd+,`) |
 | **OpenCode** | Подключить в настройках агента (`Cmd+,`) |
@@ -187,6 +190,8 @@ docker build --target full -t openpencil-full .
 | **Gemini CLI** | Подключить в настройках агента (`Cmd+,`) |
 
 **Профили возможностей моделей** — автоматически адаптирует промпты, режим thinking и таймауты для каждого уровня моделей. Модели полного уровня (Claude) получают полные промпты; стандартного уровня (GPT-4o, Gemini, DeepSeek) — с отключённым thinking; базового уровня (MiniMax, Qwen, Llama, Mistral) — упрощённые промпты с вложенным JSON для максимальной надёжности.
+
+**i18n** — Полная локализация интерфейса на 15 языках: English, 简体中文, 繁體中文, 日本語, 한국어, Français, Español, Deutsch, Português, Русский, हिन्दी, Türkçe, ไทย, Tiếng Việt, Bahasa Indonesia.
 
 **MCP-сервер**
 - Встроенный MCP-сервер — установка в один клик в Claude Code / Codex / Gemini / OpenCode / Kiro / Copilot CLI
@@ -219,6 +224,8 @@ cat design.dsl | op design - # Передача через stdin
 
 Поддерживает три метода ввода: строка, `@filepath` (чтение из файла) или `-` (чтение из stdin). Работает с десктопным приложением или веб-сервером разработки. Подробнее в [CLI README](./apps/cli/README.md).
 
+**LLM-навык** — установите плагин [OpenPencil Skill](https://github.com/ZSeven-W/openpencil-skill), чтобы научить ИИ-агентов (Claude Code, Cursor, Codex, Gemini CLI и др.) проектировать с помощью `op`.
+
 ## Возможности
 
 **Холст и рисование**
@@ -248,13 +255,13 @@ cat design.dsl | op design - # Передача через stdin
 
 | | |
 | --- | --- |
-| **Фронтенд** | React 19 · TanStack Start · Tailwind CSS v4 · shadcn/ui |
+| **Фронтенд** | React 19 · TanStack Start · Tailwind CSS v4 · shadcn/ui · i18next |
 | **Холст** | CanvasKit/Skia (WASM, GPU-ускорение) |
 | **Состояние** | Zustand v5 |
 | **Сервер** | Nitro |
 | **Десктоп** | Electron 35 |
 | **CLI** | `op` — управление из терминала, пакетный DSL дизайна, экспорт кода |
-| **AI** | Anthropic SDK · Claude Agent SDK · OpenCode SDK · Copilot SDK |
+| **AI** | Vercel AI SDK v6 · Anthropic SDK · Claude Agent SDK · OpenCode SDK · Copilot SDK |
 | **Среда выполнения** | Bun · Vite 7 |
 | **Формат файла** | `.op` — на основе JSON, удобочитаемый, дружественный к Git |
 
@@ -289,7 +296,9 @@ openpencil/
 │   ├── pen-codegen/         Генераторы кода (React, HTML, Vue, Flutter, ...)
 │   ├── pen-figma/           Парсер и конвертер файлов Figma .fig
 │   ├── pen-renderer/        Автономный рендерер CanvasKit/Skia
-│   └── pen-sdk/             Зонтичный SDK (реэкспортирует все пакеты)
+│   ├── pen-sdk/             Зонтичный SDK (реэкспортирует все пакеты)
+│   ├── pen-ai-skills/       Движок AI-навыков (фазовая загрузка промптов)
+│   └── agent/               SDK AI-агента (Vercel AI SDK, мультипровайдер, команды агентов)
 └── .githooks/               Pre-commit синхронизация версий из имени ветки
 ```
 
@@ -348,6 +357,8 @@ bun run cli:compile        # Компиляция CLI в dist
 - [x] Мультимодельные профили возможностей
 - [x] Реструктуризация в монорепозиторий с переиспользуемыми пакетами
 - [x] CLI-инструмент (`op`) для управления из терминала
+- [x] Встроенный SDK AI-агента с поддержкой нескольких провайдеров
+- [x] i18n — 15 языков
 - [ ] Совместное редактирование
 - [ ] Система плагинов
 

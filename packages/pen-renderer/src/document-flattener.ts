@@ -52,7 +52,7 @@ export function premeasureTextHeights(nodes: PenNode[]): PenNode[] {
         ? tNode.content
         : Array.isArray(tNode.content)
           ? tNode.content.map((s) => s.text ?? '').join('')
-          : ''
+          : (tNode as unknown as Record<string, unknown>).text as string ?? ''
 
       const textAlign = tNode.textAlign
       const isFixedWidthText = textGrowth === 'fixed-width' || textGrowth === 'fixed-width-height'
@@ -172,8 +172,16 @@ export function flattenToRenderNodes(
 
     const absX = (resolved.x ?? 0) + offsetX
     const absY = (resolved.y ?? 0) + offsetY
-    const absW = 'width' in resolved ? sizeToNumber(resolved.width, 100) : 100
-    const absH = 'height' in resolved ? sizeToNumber(resolved.height, 100) : 100
+
+    // Compute authoritative dimensions once via getNodeWidth/getNodeHeight.
+    // Used for: RenderNode absW/absH, child available space, and clip rect.
+    // This replaces the prior split where absW/absH used sizeToNumber (raw
+    // parse + 100 fallback) while child layout used getNodeWidth/getNodeHeight,
+    // causing divergence when nodes lacked numeric dimensions.
+    const nodeW = getNodeWidth(resolved, parentAvailW)
+    const nodeH = getNodeHeight(resolved, parentAvailH, parentAvailW)
+    const absW = nodeW > 0 ? nodeW : ('width' in resolved ? sizeToNumber(resolved.width, 100) : 100)
+    const absH = nodeH > 0 ? nodeH : ('height' in resolved ? sizeToNumber(resolved.height, 100) : 100)
 
     result.push({
       node: { ...resolved, x: absX, y: absY } as PenNode,
@@ -184,8 +192,6 @@ export function flattenToRenderNodes(
     // Recurse into children
     const children = 'children' in node ? node.children : undefined
     if (children && children.length > 0) {
-      const nodeW = getNodeWidth(resolved, parentAvailW)
-      const nodeH = getNodeHeight(resolved, parentAvailH, parentAvailW)
       const pad = resolvePadding('padding' in resolved ? (resolved as PenNode & ContainerProps).padding : undefined)
       const childAvailW = Math.max(0, nodeW - pad.left - pad.right)
       const childAvailH = Math.max(0, nodeH - pad.top - pad.bottom)

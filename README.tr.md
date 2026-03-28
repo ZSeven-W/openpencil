@@ -31,6 +31,8 @@
 
 <br />
 
+> **Not:** Aynı ada sahip başka bir açık kaynak proje bulunmaktadır — [OpenPencil](https://github.com/open-pencil/open-pencil), Figma uyumlu görsel tasarım ve gerçek zamanlı iş birliğine odaklanmaktadır. Bu proje, AI-native tasarımdan koda iş akışlarına odaklanmaktadır.
+
 ## Neden OpenPencil
 
 <table>
@@ -180,6 +182,7 @@ docker build --target full -t openpencil-full .
 
 | Ajan | Kurulum |
 | --- | --- |
+| **Yerleşik (9+ sağlayıcı)** | Sağlayıcı ön ayarlarından seçin ve bölge değiştirin — Anthropic, OpenAI, Google, DeepSeek ve daha fazlası |
 | **Claude Code** | Yapılandırma gerekmez — yerel OAuth ile Claude Agent SDK kullanır |
 | **Codex CLI** | Ajan Ayarlarından bağlanın (`Cmd+,`) |
 | **OpenCode** | Ajan Ayarlarından bağlanın (`Cmd+,`) |
@@ -187,6 +190,8 @@ docker build --target full -t openpencil-full .
 | **Gemini CLI** | Ajan Ayarlarından bağlanın (`Cmd+,`) |
 
 **Model Yetenek Profilleri** — promptları, düşünme modunu ve zaman aşımlarını model katmanına göre otomatik olarak uyarlar. Tam katman modeller (Claude) eksiksiz promptlar alır; standart katman (GPT-4o, Gemini, DeepSeek) düşünme modunu devre dışı bırakır; temel katman (MiniMax, Qwen, Llama, Mistral) maksimum güvenilirlik için basitleştirilmiş iç içe JSON promptları alır.
+
+**i18n** — 15 dilde tam arayüz yerelleştirmesi: English, 简体中文, 繁體中文, 日本語, 한국어, Français, Español, Deutsch, Português, Русский, हिन्दी, Türkçe, ไทย, Tiếng Việt, Bahasa Indonesia.
 
 **MCP Sunucusu**
 - Yerleşik MCP sunucusu — Claude Code / Codex / Gemini / OpenCode / Kiro / Copilot CLI'larına tek tıkla kurulum
@@ -219,6 +224,8 @@ cat design.dsl | op design - # stdin'den pipe ile besle
 
 Üç giriş yöntemini destekler: satır içi metin, `@filepath` (dosyadan oku) veya `-` (stdin'den oku). Masaüstü uygulama veya web geliştirme sunucusuyla çalışır. Tam komut referansı için [CLI README](./apps/cli/README.md) dosyasına bakın.
 
+**LLM Becerisi** — [OpenPencil Skill](https://github.com/ZSeven-W/openpencil-skill) eklentisini kurarak AI ajanlarına (Claude Code, Cursor, Codex, Gemini CLI vb.) `op` ile tasarım yapmayı öğretin.
+
 ## Özellikler
 
 **Kanvas ve Çizim**
@@ -248,13 +255,13 @@ cat design.dsl | op design - # stdin'den pipe ile besle
 
 | | |
 | --- | --- |
-| **Ön Uç** | React 19 · TanStack Start · Tailwind CSS v4 · shadcn/ui |
+| **Ön Uç** | React 19 · TanStack Start · Tailwind CSS v4 · shadcn/ui · i18next |
 | **Kanvas** | CanvasKit/Skia (WASM, GPU hızlandırmalı) |
 | **Durum Yönetimi** | Zustand v5 |
 | **Sunucu** | Nitro |
 | **Masaüstü** | Electron 35 |
 | **CLI** | `op` — terminal kontrolü, toplu tasarım DSL, kod dışa aktarımı |
-| **AI** | Anthropic SDK · Claude Agent SDK · OpenCode SDK · Copilot SDK |
+| **AI** | Vercel AI SDK v6 · Anthropic SDK · Claude Agent SDK · OpenCode SDK · Copilot SDK |
 | **Çalışma Ortamı** | Bun · Vite 7 |
 | **Dosya Formatı** | `.op` — JSON tabanlı, insan tarafından okunabilir, Git dostu |
 
@@ -289,7 +296,9 @@ openpencil/
 │   ├── pen-codegen/         Kod oluşturucular (React, HTML, Vue, Flutter, ...)
 │   ├── pen-figma/           Figma .fig dosya ayrıştırıcı ve dönüştürücü
 │   ├── pen-renderer/        Bağımsız CanvasKit/Skia işleyici
-│   └── pen-sdk/             Şemsiye SDK (tüm paketleri yeniden dışa aktarır)
+│   ├── pen-sdk/             Şemsiye SDK (tüm paketleri yeniden dışa aktarır)
+│   ├── pen-ai-skills/       AI prompt beceri motoru (aşamalı prompt yükleme)
+│   └── agent/               AI ajan SDK'sı (Vercel AI SDK, çoklu sağlayıcı, ajan ekipleri)
 └── .githooks/               Dal adından ön-commit sürüm eşitleme
 ```
 
@@ -348,6 +357,8 @@ Katkılarınızı bekliyoruz! Mimari ayrıntılar ve kod stili için [CLAUDE.md]
 - [x] Çoklu model yetenek profilleri
 - [x] Yeniden kullanılabilir paketlerle monorepo yapılandırması
 - [x] CLI aracı (`op`) terminal kontrolü
+- [x] Çoklu sağlayıcı destekli yerleşik AI ajan SDK'sı
+- [x] i18n — 15 dil
 - [ ] Ortak düzenleme
 - [ ] Eklenti sistemi
 
