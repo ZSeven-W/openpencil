@@ -569,3 +569,61 @@ export function BuiltinProvidersSection() {
     </div>
   )
 }
+
+/** Team configuration — assign a separate model for design work */
+export function TeamSection() {
+  const { t } = useTranslation()
+  const builtinProviders = useAgentSettingsStore((s) => s.builtinProviders)
+  const teamEnabled = useAgentSettingsStore((s) => s.teamEnabled)
+  const teamDesignModel = useAgentSettingsStore((s) => s.teamDesignModel)
+  const setTeamEnabled = useAgentSettingsStore((s) => s.setTeamEnabled)
+  const setTeamDesignModel = useAgentSettingsStore((s) => s.setTeamDesignModel)
+  const persist = useAgentSettingsStore((s) => s.persist)
+
+  // Only show when at least 2 enabled providers exist
+  const enabledProviders = builtinProviders.filter((p) => p.enabled && p.apiKey)
+  if (enabledProviders.length < 2) return null
+
+  // Build model options from enabled providers
+  const modelOptions = enabledProviders.map((bp) => ({
+    value: `builtin:${bp.id}:${bp.model}`,
+    label: `${bp.model} (${bp.displayName})`,
+  }))
+
+  const handleToggle = (enabled: boolean) => {
+    setTeamEnabled(enabled)
+    persist()
+  }
+
+  const handleModelChange = (value: string) => {
+    setTeamDesignModel(value || null)
+    persist()
+  }
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center justify-between">
+        <h3 className="text-sm font-medium">{t('builtin.teamTitle')}</h3>
+        <Switch checked={teamEnabled} onCheckedChange={handleToggle} />
+      </div>
+      <p className="text-[11px] text-muted-foreground leading-relaxed">
+        {t('builtin.teamDescription')}
+      </p>
+      {teamEnabled && (
+        <div>
+          <label className="text-[11px] text-muted-foreground mb-1 block">{t('builtin.teamDesignModel')}</label>
+          <select
+            value={teamDesignModel ?? ''}
+            onChange={(e) => handleModelChange(e.target.value)}
+            className="w-full h-8 px-2 text-[13px] bg-card text-foreground rounded-md border border-input focus:border-ring outline-none transition-colors"
+          >
+            <option value="">{t('builtin.teamSelectModel')}</option>
+            {modelOptions.map((opt) => (
+              <option key={opt.value} value={opt.value}>{opt.label}</option>
+            ))}
+          </select>
+        </div>
+      )}
+    </div>
+  )
+}
