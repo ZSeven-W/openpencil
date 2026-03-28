@@ -108,6 +108,25 @@ export async function* streamChat(
       ? AbortSignal.any([controller.signal, abortSignal])
       : controller.signal
 
+    // For builtin provider, attach API key and config from agent settings store
+    let builtinFields: Record<string, unknown> = {}
+    if (provider === 'builtin') {
+      const { useAgentSettingsStore } = await import('@/stores/agent-settings-store')
+      const { useAIStore } = await import('@/stores/ai-store')
+      const currentModel = useAIStore.getState().model
+      if (currentModel.startsWith('builtin:')) {
+        const bpId = currentModel.split(':')[1]
+        const bp = useAgentSettingsStore.getState().builtinProviders.find((p) => p.id === bpId)
+        if (bp) {
+          builtinFields = {
+            builtinApiKey: bp.apiKey,
+            builtinBaseURL: bp.baseURL,
+            builtinType: bp.type,
+          }
+        }
+      }
+    }
+
     const response = await fetch('/api/ai/chat', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -123,6 +142,7 @@ export async function* streamChat(
         thinkingMode: options?.thinkingMode,
         thinkingBudgetTokens: options?.thinkingBudgetTokens,
         effort: options?.effort,
+        ...builtinFields,
       }),
       signal: fetchSignal,
     })
