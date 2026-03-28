@@ -26,21 +26,21 @@ const PROVIDER_PRESETS: Record<BuiltinProviderPreset, PresetConfig> = {
     label: 'Anthropic',
     type: 'anthropic',
     placeholder: 'sk-ant-...',
-    modelPlaceholder: 'claude-sonnet-4-20250514',
+    modelPlaceholder: 'claude-sonnet-4-6-20250916',
   },
   openai: {
     label: 'OpenAI',
     type: 'openai-compat',
     baseURL: 'https://api.openai.com/v1',
     placeholder: 'sk-...',
-    modelPlaceholder: 'gpt-4o',
+    modelPlaceholder: 'gpt-5.4',
   },
   openrouter: {
     label: 'OpenRouter',
     type: 'openai-compat',
     baseURL: 'https://openrouter.ai/api/v1',
     placeholder: 'sk-or-...',
-    modelPlaceholder: 'anthropic/claude-sonnet-4',
+    modelPlaceholder: 'anthropic/claude-sonnet-4.6',
   },
   deepseek: {
     label: 'DeepSeek',
@@ -54,7 +54,7 @@ const PROVIDER_PRESETS: Record<BuiltinProviderPreset, PresetConfig> = {
     type: 'openai-compat',
     baseURL: 'https://api.minimaxi.com/v1',
     placeholder: 'eyJ...',
-    modelPlaceholder: 'MiniMax-M1',
+    modelPlaceholder: 'MiniMax-M2.7',
     regions: {
       cn: { baseURL: 'https://api.minimaxi.com/v1' },
       global: { baseURL: 'https://api.minimax.io/v1' },
@@ -65,7 +65,7 @@ const PROVIDER_PRESETS: Record<BuiltinProviderPreset, PresetConfig> = {
     type: 'openai-compat',
     baseURL: 'https://open.bigmodel.cn/api/paas/v4',
     placeholder: 'xxx.yyy',
-    modelPlaceholder: 'glm-4-flash',
+    modelPlaceholder: 'glm-5',
     regions: {
       cn: { baseURL: 'https://open.bigmodel.cn/api/paas/v4' },
       global: { baseURL: 'https://open.z.ai/api/paas/v4' },
@@ -76,7 +76,7 @@ const PROVIDER_PRESETS: Record<BuiltinProviderPreset, PresetConfig> = {
     type: 'openai-compat',
     baseURL: 'https://api.moonshot.cn/v1',
     placeholder: 'sk-...',
-    modelPlaceholder: 'moonshot-v1-128k',
+    modelPlaceholder: 'kimi-k2.5',
     regions: {
       cn: { baseURL: 'https://api.moonshot.cn/v1' },
       global: { baseURL: 'https://api.moonshot.ai/v1' },
@@ -105,7 +105,7 @@ const PROVIDER_PRESETS: Record<BuiltinProviderPreset, PresetConfig> = {
     type: 'openai-compat',
     baseURL: 'https://api.xiaomimimo.com/v1',
     placeholder: 'API Key',
-    modelPlaceholder: 'mimo-v2-flash',
+    modelPlaceholder: 'mimo-v2-pro',
   },
   modelscope: {
     label: 'ModelScope',
@@ -152,12 +152,31 @@ const REGION_URLS: Record<string, BuiltinProviderPreset> = Object.entries(PROVID
   {} as Record<string, BuiltinProviderPreset>,
 )
 
-const ANTHROPIC_MODELS = [
-  { id: 'claude-opus-4-20250514', name: 'Claude Opus 4' },
-  { id: 'claude-sonnet-4-20250514', name: 'Claude Sonnet 4' },
-  { id: 'claude-sonnet-4-5-20250929', name: 'Claude Sonnet 4.5' },
-  { id: 'claude-haiku-4-5-20251001', name: 'Claude Haiku 4.5' },
-]
+/** Hardcoded model lists for providers that don't expose /models endpoint */
+const BUILTIN_MODEL_LISTS: Partial<Record<BuiltinProviderPreset, Array<{ id: string; name: string }>>> = {
+  anthropic: [
+    { id: 'claude-opus-4-6-20250916', name: 'Claude Opus 4.6' },
+    { id: 'claude-sonnet-4-6-20250916', name: 'Claude Sonnet 4.6' },
+    { id: 'claude-sonnet-4-5-20250929', name: 'Claude Sonnet 4.5' },
+    { id: 'claude-haiku-4-5-20251001', name: 'Claude Haiku 4.5' },
+    { id: 'claude-opus-4-20250514', name: 'Claude Opus 4' },
+    { id: 'claude-sonnet-4-20250514', name: 'Claude Sonnet 4' },
+  ],
+  minimax: [
+    { id: 'MiniMax-M2.7', name: 'MiniMax M2.7' },
+    { id: 'MiniMax-M2.7-highspeed', name: 'MiniMax M2.7 Highspeed' },
+    { id: 'MiniMax-M2.5', name: 'MiniMax M2.5' },
+    { id: 'MiniMax-M2.5-highspeed', name: 'MiniMax M2.5 Highspeed' },
+    { id: 'MiniMax-M2.1', name: 'MiniMax M2.1' },
+    { id: 'MiniMax-M1', name: 'MiniMax M1' },
+  ],
+  doubao: [
+    { id: 'doubao-seed-2.0-pro', name: 'Doubao Seed 2.0 Pro' },
+    { id: 'doubao-seed-2.0-lite', name: 'Doubao Seed 2.0 Lite' },
+    { id: 'doubao-seed-2.0-code', name: 'Doubao Seed 2.0 Code' },
+    { id: 'doubao-seed-code', name: 'Doubao Seed Code' },
+  ],
+}
 
 /** Infer preset from an existing provider config (for editing) */
 function inferPreset(config: BuiltinProviderConfig): BuiltinProviderPreset {
@@ -332,8 +351,9 @@ export function BuiltinProviderForm({
   )
 
   const handleFetchModels = useCallback(async () => {
-    if (preset === 'anthropic') {
-      setModelList(ANTHROPIC_MODELS)
+    const builtinList = BUILTIN_MODEL_LISTS[preset]
+    if (builtinList) {
+      setModelList(builtinList)
       setShowModelDropdown(true)
       return
     }
