@@ -66,6 +66,8 @@ export class AgentToolExecutor {
         return this.handleBatchGet(args as { ids?: string[]; patterns?: string[] })
       case 'snapshot_layout':
         return this.handleSnapshotLayout(args as { pageId?: string })
+      case 'generate_design':
+        return this.handleGenerateDesign(args as { prompt: string; canvasWidth?: number })
       case 'insert_node':
         return this.handleInsertNode(
           args as { parent: string | null; data: Record<string, unknown>; pageId?: string },
@@ -80,6 +82,82 @@ export class AgentToolExecutor {
         )
       default:
         return { success: false, error: `Unknown tool: ${name}` }
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // generate_design — calls the SAME internal pipeline as the chat design flow
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Generate a design using the EXISTING internal pipeline (orchestrator → sub-agents
+   * → insertStreamingNode). This is the same path that works with M2.5 and all models
+   * through the standard chat interface. The agent just provides the prompt.
+   */
+  private async handleGenerateDesign(
+    args: { prompt: string; canvasWidth?: number },
+  ): Promise<ToolResult> {
+    if (this.rootInsertId) {
+      return {
+        success: true,
+        data: { message: `Design already created. Use update_node to modify.` },
+      }
+    }
+
+    const { generateDesign } = await import('@/services/ai/design-generator')
+    const { useDocumentStore } = await import('@/stores/document-store')
+    const { useAgentSettingsStore } = await import('@/stores/agent-settings-store')
+    const { getCanvasSize } = await import('@/canvas/skia-engine-ref')
+
+    const docStore = useDocumentStore.getState()
+    const canvasSize = getCanvasSize()
+
+    // Find the first connected CLI provider to use for the internal pipeline.
+    // The internal pipeline uses /api/ai/chat which routes to CLI providers,
+    // NOT the builtin agent's API key.
+    const agentSettings = useAgentSettingsStore.getState()
+    const providers = agentSettings.providers ?? {}
+    let cliModel = 'default'
+    let cliProvider: string | undefined
+    for (const [key, cfg] of Object.entries(providers)) {
+      if (cfg.isConnected && cfg.models?.length) {
+        cliProvider = key
+        cliModel = cfg.models[0].value
+        break
+      }
+    }
+
+    const result = await generateDesign(
+      {
+        prompt: args.prompt,
+        model: cliModel,
+        provider: cliProvider as any,
+        context: {
+          canvasSize,
+          documentSummary: `Document has ${docStore.getFlatNodes().length} nodes`,
+        },
+      },
+      {
+        onApplyPartial: () => {},
+        onTextUpdate: () => {},
+        animated: false,
+      },
+    )
+
+    this.rootInsertId = 'generated'
+
+    // Auto-zoom
+    try {
+      const { zoomToFitContent } = await import('@/canvas/skia-engine-ref')
+      setTimeout(() => zoomToFitContent(), 300)
+    } catch { /* ignore */ }
+
+    return {
+      success: true,
+      data: {
+        nodeCount: result.nodes.length,
+        message: `Design generated with ${result.nodes.length} nodes via internal pipeline. Do NOT retry.`,
+      },
     }
   }
 
@@ -241,9 +319,7 @@ export class AgentToolExecutor {
       }
     }
 
-    const { useDocumentStore } = await import('@/stores/document-store')
     const { nanoid } = await import('nanoid')
-    const docStore = useDocumentStore.getState()
 
     // Some models send data as a JSON string instead of an object — parse it
     let nodeData = args.data
@@ -283,16 +359,32 @@ export class AgentToolExecutor {
     }
     const totalNodes = countNodes(node)
 
-    // Use the SAME applyNodesToCanvas function as the CLI design pipeline.
-    // This handles: sanitization, empty frame replacement, icon resolution,
-    // layout fixes, and proper canvas sync (Skia engine renders correctly).
-    try {
-      const { applyNodesToCanvas } = await import('@/services/ai/design-canvas-ops')
-      applyNodesToCanvas([node])
-    } catch {
-      // Fallback: direct store insert if applyNodesToCanvas fails
-      try { docStore.addNode(args.parent, node) } catch { /* ignore */ }
+    // Use insertStreamingNode — the SAME function the CLI streaming pipeline uses.
+    // MUST call resetGenerationRemapping() first to initialize generation state
+    // (preExistingNodeIds, generationRootFrameId, generationRemappedIds).
+    // Without this, insertStreamingNode's ID dedup and parent resolution break.
+    const { insertStreamingNode, resetGenerationRemapping, setGenerationCanvasWidth } =
+      await import('@/services/ai/design-canvas-ops')
+    resetGenerationRemapping()
+    // Set canvas width for role resolution (mobile: 375, desktop: 1200)
+    const isMobile = (node as any).width && (node as any).width <= 500
+    setGenerationCanvasWidth(isMobile ? 375 : 1200)
+    const insertRecursive = (n: PenNode, parentId: string | null) => {
+      const children = ('children' in n && Array.isArray(n.children)) ? [...n.children] : []
+      const nodeForInsert = { ...n } as PenNode
+      if (children.length > 0) {
+        ;(nodeForInsert as any).children = []
+      }
+      insertStreamingNode(nodeForInsert, parentId)
+      // Use nodeForInsert.id (not n.id) — ensureUniqueNodeIds inside
+      // insertStreamingNode may have renamed it, and replaceEmptyFrame
+      // maps from the renamed ID to root-frame via generationRemappedIds.
+      const actualId = nodeForInsert.id
+      for (const child of children) {
+        insertRecursive(child, actualId)
+      }
     }
+    insertRecursive(node, args.parent)
 
     // Track root-level insert to prevent duplicates
     if (args.parent === null) {
