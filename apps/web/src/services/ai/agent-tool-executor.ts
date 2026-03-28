@@ -285,41 +285,30 @@ export class AgentToolExecutor {
     const totalNodes = countNodes(node)
 
     // --- Auto-replace empty root frame (matches batch_design behavior) ---
-    // Uses setActivePageChildren for atomic tree swap — same as batch_design.
-    // This avoids updateNode side-effect issues and duplicate key errors.
-    let replaced = false
+    // When inserting a frame at root and an empty root frame exists,
+    // inherit its position so the design lands at (0,0) in the viewport,
+    // then remove the empty frame and add the new one.
     if (args.parent === null && (nodeData as any).type === 'frame') {
       try {
-        const { setActivePageChildren } = await import('@/stores/document-tree-utils')
-        const { removeNodeFromTree, insertNodeInTree } = await import('@/stores/document-tree-utils')
         const doc = docStore.document
         const pageId = args.pageId ?? useCanvasStore.getState().activePageId
         const children = getActivePageChildren(doc, pageId)
-        const emptyIdx = children.findIndex(
+        const emptyFrame = children.find(
           (n) => n.type === 'frame' && (!('children' in n) || !n.children || n.children.length === 0),
         )
-        if (emptyIdx !== -1) {
-          const emptyFrame = children[emptyIdx]
+        if (emptyFrame) {
           // Inherit position from the empty frame
           if (emptyFrame.x !== undefined) (node as any).x = emptyFrame.x
           if (emptyFrame.y !== undefined) (node as any).y = emptyFrame.y
-          // Atomic tree swap: remove empty + insert new in one setState
-          let updated = removeNodeFromTree(children, emptyFrame.id)
-          updated = insertNodeInTree(updated, null, node, emptyIdx)
-          useDocumentStore.setState({
-            document: setActivePageChildren(doc, pageId, updated),
-            isDirty: true,
-          })
-          replaced = true
+          // Remove the empty frame first
+          try { docStore.removeNode(emptyFrame.id) } catch { /* ignore side-effect */ }
         }
-      } catch { /* fallback to normal insert */ }
+      } catch { /* ignore — will fall through to normal addNode */ }
     }
 
-    if (!replaced) {
-      try {
-        docStore.addNode(args.parent, node)
-      } catch { /* side-effect error */ }
-    }
+    try {
+      docStore.addNode(args.parent, node)
+    } catch { /* side-effect error — node may still be in the store */ }
 
     // Track root-level insert to prevent duplicates
     if (args.parent === null) {
