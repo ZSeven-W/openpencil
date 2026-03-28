@@ -182,6 +182,7 @@ docker build --target full -t openpencil-full .
 
 | エージェント | 設定方法 |
 | --- | --- |
+| **ビルトイン（9+ プロバイダー）** | プロバイダープリセットから選択し、リージョンを切り替え — Anthropic、OpenAI、Google、DeepSeek など |
 | **Claude Code** | 設定不要 — ローカル OAuth で Claude Agent SDK を使用 |
 | **Codex CLI** | エージェント設定で接続（`Cmd+,`） |
 | **OpenCode** | エージェント設定で接続（`Cmd+,`） |
@@ -189,6 +190,8 @@ docker build --target full -t openpencil-full .
 | **Gemini CLI** | エージェント設定で接続（`Cmd+,`） |
 
 **モデル能力プロファイル** — モデルの階層に応じてプロンプト、シンキングモード、タイムアウトを自動適応。フル階層モデル（Claude）には完全なプロンプト、標準階層（GPT-4o、Gemini、DeepSeek）ではシンキングを無効化、ベーシック階層（MiniMax、Qwen、Llama、Mistral）には最大限の信頼性のために簡略化されたネスト JSON プロンプトを使用。
+
+**i18n** — 15言語での完全なインターフェースローカライゼーション：English、简体中文、繁體中文、日本語、한국어、Français、Español、Deutsch、Português、Русский、हिन्दी、Türkçe、ไทย、Tiếng Việt、Bahasa Indonesia。
 
 **MCP サーバー**
 - 内蔵 MCP サーバー — Claude Code / Codex / Gemini / OpenCode / Kiro / Copilot CLI にワンクリックでインストール
@@ -252,13 +255,13 @@ cat design.dsl | op design - # stdin からパイプ入力
 
 | | |
 | --- | --- |
-| **フロントエンド** | React 19 · TanStack Start · Tailwind CSS v4 · shadcn/ui |
+| **フロントエンド** | React 19 · TanStack Start · Tailwind CSS v4 · shadcn/ui · i18next |
 | **キャンバス** | CanvasKit/Skia（WASM、GPU アクセラレーション） |
 | **状態管理** | Zustand v5 |
 | **サーバー** | Nitro |
 | **デスクトップ** | Electron 35 |
 | **CLI** | `op` — ターミナル制御、バッチデザインDSL、コードエクスポート |
-| **AI** | Anthropic SDK · Claude Agent SDK · OpenCode SDK · Copilot SDK |
+| **AI** | Vercel AI SDK v6 · Anthropic SDK · Claude Agent SDK · OpenCode SDK · Copilot SDK |
 | **ランタイム** | Bun · Vite 7 |
 | **ファイル形式** | `.op` — JSON ベース、人間が読みやすく、Git フレンドリー |
 
@@ -293,7 +296,9 @@ openpencil/
 │   ├── pen-codegen/         コードジェネレーター（React、HTML、Vue、Flutter、...）
 │   ├── pen-figma/           Figma .fig ファイルパーサーとコンバーター
 │   ├── pen-renderer/        スタンドアロン CanvasKit/Skia レンダラー
-│   └── pen-sdk/             アンブレラ SDK（全パッケージの再エクスポート）
+│   ├── pen-sdk/             アンブレラ SDK（全パッケージの再エクスポート）
+│   ├── pen-ai-skills/       AI プロンプトスキルエンジン（フェーズ駆動プロンプト読込）
+│   └── agent/               AI エージェント SDK（Vercel AI SDK、マルチプロバイダー、エージェントチーム）
 └── .githooks/               ブランチ名からのプレコミットバージョン同期
 ```
 
@@ -352,6 +357,8 @@ bun run cli:compile        # CLI を dist にコンパイル
 - [x] マルチモデル能力プロファイル
 - [x] 再利用可能なパッケージによるモノレポ構成
 - [x] CLIツール（`op`）ターミナル制御
+- [x] ビルトイン AI エージェント SDK（マルチプロバイダー対応）
+- [x] i18n — 15言語対応
 - [ ] 共同編集
 - [ ] プラグインシステム
 

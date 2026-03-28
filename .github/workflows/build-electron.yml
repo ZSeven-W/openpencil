@@ -134,8 +134,8 @@ jobs:
       - name: Download macOS zips and compute sha256
         run: |
           VERSION=${{ steps.version.outputs.version }}
-          curl -sL "https://github.com/zseven-w/openpencil/releases/download/v${VERSION}/OpenPencil-${VERSION}-arm64-mac.zip" -o arm64.zip
-          curl -sL "https://github.com/zseven-w/openpencil/releases/download/v${VERSION}/OpenPencil-${VERSION}-x64-mac.zip" -o x64.zip
+          curl -fSL "https://github.com/zseven-w/openpencil/releases/download/v${VERSION}/OpenPencil-${VERSION}-arm64-mac.zip" -o arm64.zip
+          curl -fSL "https://github.com/zseven-w/openpencil/releases/download/v${VERSION}/OpenPencil-${VERSION}-x64-mac.zip" -o x64.zip
           echo "SHA_ARM64=$(sha256sum arm64.zip | cut -d' ' -f1)" >> "$GITHUB_ENV"
           echo "SHA_X64=$(sha256sum x64.zip | cut -d' ' -f1)" >> "$GITHUB_ENV"
 
@@ -148,6 +148,7 @@ jobs:
       - name: Update cask formula
         run: |
           VERSION=${{ steps.version.outputs.version }}
+          mkdir -p Casks
           cat > Casks/openpencil.rb << EOF
           cask "openpencil" do
             version "${VERSION}"
@@ -198,7 +199,7 @@ jobs:
       - name: Download Windows portable and compute sha256
         run: |
           VERSION=${{ steps.version.outputs.version }}
-          curl -sL "https://github.com/zseven-w/openpencil/releases/download/v${VERSION}/OpenPencil-${VERSION}-x64-win.exe" -o win64.exe
+          curl -fSL "https://github.com/zseven-w/openpencil/releases/download/v${VERSION}/OpenPencil-${VERSION}-x64-win.exe" -o win64.exe
           echo "SHA_WIN64=$(sha256sum win64.exe | cut -d' ' -f1)" >> "$GITHUB_ENV"
 
       - name: Checkout scoop bucket
@@ -210,6 +211,7 @@ jobs:
       - name: Update manifest
         run: |
           VERSION=${{ steps.version.outputs.version }}
+          mkdir -p bucket
           cat > bucket/openpencil.json << EOF
           {
             "version": "${VERSION}",
@@ -222,6 +224,7 @@ jobs:
                 "hash": "${SHA_WIN64}"
               }
             },
+            "pre_install": "Rename-Item \"\$dir\\OpenPencil-\$version-x64-win.exe\" 'OpenPencil.exe'",
             "bin": "OpenPencil.exe",
             "shortcuts": [["OpenPencil.exe", "OpenPencil"]],
             "checkver": {
@@ -232,7 +235,8 @@ jobs:
                 "64bit": {
                   "url": "https://github.com/zseven-w/openpencil/releases/download/v\$version/OpenPencil-\$version-x64-win.exe"
                 }
-              }
+              },
+              "pre_install": "Rename-Item \"\$dir\\OpenPencil-\$version-x64-win.exe\" 'OpenPencil.exe'"
             }
           }
           EOF
