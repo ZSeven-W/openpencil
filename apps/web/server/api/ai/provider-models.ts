@@ -37,16 +37,21 @@ export default defineEventHandler(async (event) => {
       return { models: [], error: `Provider returned ${res.status}: ${text.slice(0, 200)}` }
     }
 
-    const json = (await res.json()) as { data?: Array<{ id: string; name?: string }> }
-    if (!json.data || !Array.isArray(json.data)) {
-      return { models: [], error: 'Unexpected response format (missing data array)' }
+    const json = await res.json() as Record<string, unknown>
+    // Handle different response formats: { data: [...] } (OpenAI), { models: [...] }, or [...]
+    const rawModels = Array.isArray(json.data) ? json.data
+      : Array.isArray(json.models) ? json.models
+      : Array.isArray(json) ? json
+      : null
+    if (!rawModels) {
+      return { models: [], error: 'Unexpected response format (no model array found)' }
     }
 
-    const models: ModelEntry[] = json.data
+    const models: ModelEntry[] = (rawModels as Array<Record<string, unknown>>)
       .filter((m) => m.id)
       .map((m) => ({
-        id: m.id,
-        name: (m as Record<string, unknown>).name as string || m.id,
+        id: String(m.id),
+        name: (typeof m.name === 'string' ? m.name : '') || String(m.id),
       }))
       .sort((a, b) => a.name.localeCompare(b.name))
 

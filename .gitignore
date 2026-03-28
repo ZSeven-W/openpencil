@@ -11,6 +11,8 @@ __unconfig*
 todos.json
 .openpencil-tmp/
 
+docs/
+
 # Build outputs
 out/
 dist/
