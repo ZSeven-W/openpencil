@@ -264,6 +264,7 @@ function cssRulesToString(rules: CSSRule[]): string {
 // Public API
 // ---------------------------------------------------------------------------
 
+/** @deprecated Use AI code generation pipeline instead. Will be removed in v1.0.0. */
 export function generateVueCode(nodes: PenNode[], componentName = 'GeneratedDesign'): string {
   resetClassCounter()
   const rules: CSSRule[] = []
@@ -302,6 +303,7 @@ ${css}
 `
 }
 
+/** @deprecated Use AI code generation pipeline instead. Will be removed in v1.0.0. */
 export function generateVueFromDocument(doc: PenDocument, activePageId?: string | null): string {
   const children = activePageId !== undefined ? getActivePageChildren(doc, activePageId) : doc.children
   return generateVueCode(children)

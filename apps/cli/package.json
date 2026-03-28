@@ -1,6 +1,6 @@
 {
   "name": "@zseven-w/openpencil",
-  "version": "0.5.3",
+  "version": "0.6.0",
   "description": "CLI for OpenPencil — control the design tool from your terminal",
   "author": {
     "name": "ZSeven-W",

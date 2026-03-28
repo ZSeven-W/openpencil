@@ -514,6 +514,7 @@ function getHelperClasses(nodes: PenNode[]): string {
   return helpers.join('\n\n')
 }
 
+/** @deprecated Use AI code generation pipeline instead. Will be removed in v1.0.0. */
 export function generateFlutterCode(
   nodes: PenNode[],
   widgetName = 'GeneratedDesign',
@@ -570,6 +571,7 @@ ${childWidgets.map((c) => c + ',').join('\n')}
 `
 }
 
+/** @deprecated Use AI code generation pipeline instead. Will be removed in v1.0.0. */
 export function generateFlutterFromDocument(
   doc: PenDocument,
   activePageId?: string | null,

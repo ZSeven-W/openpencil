@@ -355,6 +355,7 @@ function escapeJSX(text: string): string {
     .replace(/}/g, '&#125;')
 }
 
+/** @deprecated Use AI code generation pipeline instead. Will be removed in v1.0.0. */
 export function generateReactCode(
   nodes: PenNode[],
   componentName = 'GeneratedDesign',
@@ -393,6 +394,7 @@ ${childrenJSX}
 `
 }
 
+/** @deprecated Use AI code generation pipeline instead. Will be removed in v1.0.0. */
 export function generateReactFromDocument(doc: PenDocument, activePageId?: string | null): string {
   const children = activePageId !== undefined
     ? getActivePageChildren(doc, activePageId)

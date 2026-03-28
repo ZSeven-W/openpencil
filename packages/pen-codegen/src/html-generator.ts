@@ -350,6 +350,7 @@ function cssRulesToString(rules: CSSRule[]): string {
     .join('\n\n')
 }
 
+/** @deprecated Use AI code generation pipeline instead. Will be removed in v1.0.0. */
 export function generateHTMLCode(nodes: PenNode[]): { html: string; css: string } {
   resetClassCounter()
   const rules: CSSRule[] = []
@@ -388,6 +389,7 @@ export function generateHTMLCode(nodes: PenNode[]): { html: string; css: string 
   return { html, css }
 }
 
+/** @deprecated Use AI code generation pipeline instead. Will be removed in v1.0.0. */
 export function generateHTMLFromDocument(doc: PenDocument, activePageId?: string | null): { html: string; css: string } {
   const children = activePageId !== undefined
     ? getActivePageChildren(doc, activePageId)

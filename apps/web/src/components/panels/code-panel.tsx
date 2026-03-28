@@ -1,154 +1,229 @@
-import { useState, useMemo, useCallback, useRef, useEffect } from 'react'
-import { Copy, Check, Sparkles, Loader2, RotateCcw, Download, ChevronLeft, ChevronRight } from 'lucide-react'
+import { useState, useRef, useCallback, useEffect, useMemo } from 'react'
+import {
+  Copy, Download, RefreshCw, Sparkles,
+  Check, Loader2, AlertTriangle, MinusCircle, SkipForward,
+} from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { useTranslation } from 'react-i18next'
 import { Button } from '@/components/ui/button'
-import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 import { useCanvasStore } from '@/stores/canvas-store'
 import { useDocumentStore, getActivePageChildren } from '@/stores/document-store'
 import { useAIStore } from '@/stores/ai-store'
-import { streamChat } from '@/services/ai/ai-service'
-import { generateReactCode } from '@/services/codegen/react-generator'
-import { generateHTMLCode } from '@/services/codegen/html-generator'
-import { generateVueCode } from '@/services/codegen/vue-generator'
-import { generateSvelteCode } from '@/services/codegen/svelte-generator'
-import { generateSwiftUICode } from '@/services/codegen/swiftui-generator'
-import { generateComposeCode } from '@/services/codegen/compose-generator'
-import { generateFlutterCode } from '@/services/codegen/flutter-generator'
-import { generateReactNativeCode } from '@/services/codegen/react-native-generator'
-import { generateCSSVariables } from '@/services/codegen/css-variables-generator'
+import { generateCode } from '@/services/ai/code-generation-pipeline'
 import { highlightCode } from '@/utils/syntax-highlight'
+import type { Framework, CodeGenProgress, ChunkStatus } from '@zseven-w/pen-codegen'
+import { FRAMEWORKS } from '@zseven-w/pen-codegen'
 import type { PenNode } from '@/types/pen'
+import type { SyntaxLanguage } from '@/utils/syntax-highlight'
 
-type CodeTab = 'react' | 'vue' | 'svelte' | 'html' | 'swiftui' | 'compose' | 'flutter' | 'react-native' | 'css-vars'
+type PanelState = 'empty' | 'generating' | 'complete'
 
-const ENHANCE_SYSTEM_PROMPT = `You are a code rewriter. You receive auto-generated UI code and rewrite it to be idiomatic, production-ready, and RESPONSIVE.
+interface ChunkProgress {
+  chunkId: string
+  name: string
+  status: ChunkStatus
+  error?: string
+}
 
-CRITICAL: Your ENTIRE response must be ONLY the improved source code. Nothing else.
-- Do NOT include explanations, commentary, reasoning, or thinking.
-- Do NOT include markdown fences (\`\`\`), XML tags, or tool calls.
-- Do NOT prefix with "Here is" or any preamble.
-- Start your response with the first line of code and end with the last line.
+const TAB_LABELS: Record<Framework, string> = {
+  react: 'React',
+  vue: 'Vue',
+  svelte: 'Svelte',
+  html: 'HTML',
+  flutter: 'Flutter',
+  swiftui: 'SwiftUI',
+  compose: 'Compose',
+  'react-native': 'RN',
+}
 
-Rewriting rules:
-- Preserve visual fidelity — the output must look identical to the input design on desktop.
-- Use semantic HTML where appropriate (nav, header, main, section, article, etc.).
-- Replace absolute pixel positioning with proper layout (flexbox/grid) where possible.
-- Use meaningful class/variable names derived from the node names.
-- Keep the same framework and language as the input.
-- For CSS-in-JS or scoped styles, keep styles co-located.
-- For SwiftUI/Compose/Flutter, use idiomatic patterns (SwiftUI: adaptive stacks, Compose: adaptive layouts, Flutter: LayoutBuilder/MediaQuery).
-- Do not add functionality, interactivity, or state beyond what exists.
-- If design variables are present as var(--name), preserve them.
-
-RESPONSIVE DESIGN (CRITICAL — make the output adapt gracefully across screen sizes):
-- Convert fixed pixel widths to relative units (%, max-w-*, flex-1, w-full) where appropriate. Keep max-width constraints for readability.
-- Use responsive Tailwind breakpoints (sm:, md:, lg:) for layout changes:
-  - Multi-column rows (horizontal layouts) should stack vertically on small screens (flex-col → sm:flex-row or md:flex-row).
-  - Grid layouts: use responsive column counts (grid-cols-1 sm:grid-cols-2 lg:grid-cols-3).
-  - Adjust padding/gap with responsive variants (p-4 md:p-8 lg:p-12).
-  - Font sizes: scale down on mobile (text-2xl md:text-4xl lg:text-5xl).
-- Images: use w-full max-w-* with aspect ratio preservation, never fixed px width.
-- Container: use max-w-7xl mx-auto px-4 (or similar) for centered content with side padding.
-- Navigation: consider collapsible patterns on small screens.
-- For HTML+CSS: use @media queries with mobile-first breakpoints (min-width: 640px, 768px, 1024px).
-- For Vue/Svelte: apply the same responsive CSS/class strategies.
-- Do NOT break the design on desktop while making it responsive — desktop must remain visually faithful.`
-
-/** Strip markdown fences, reasoning preamble, and tool-call XML from AI output. */
-function cleanEnhancedResult(raw: string): string {
-  let result = raw
-
-  // Strip everything before the first code-like line if the AI prepended reasoning
-  // Detect patterns like "I'll start...", "<tool_call>", "Let me..."
-  const reasoningPatterns = /^(I['']ll |Let me |Here['']s |Sure|Okay|<tool_call>|<tool_name>)/im
-  if (reasoningPatterns.test(result)) {
-    // Try to find the start of actual code after the reasoning
-    // Look for common code markers: import, export, <, struct, @, class, fun, <!DOCTYPE
-    const codeStart = result.search(/^(import |export |<[!a-zA-Z]|struct |@Composable|@override|class |fun |<!DOCTYPE|package )/m)
-    if (codeStart > 0) {
-      result = result.slice(codeStart)
-    }
-  }
-
-  // Strip markdown fences
-  if (result.startsWith('```')) {
-    const firstNewline = result.indexOf('\n')
-    const lastFence = result.lastIndexOf('```')
-    if (lastFence > firstNewline) {
-      result = result.slice(firstNewline + 1, lastFence).trimEnd()
-    }
-  }
-
-  return result
+const HIGHLIGHT_LANG: Record<Framework, SyntaxLanguage> = {
+  react: 'jsx',
+  vue: 'html',
+  svelte: 'html',
+  html: 'html',
+  flutter: 'dart',
+  swiftui: 'swift',
+  compose: 'kotlin',
+  'react-native': 'jsx',
 }
 
 export default function CodePanel() {
-  const { t } = useTranslation()
-  const [activeTab, setActiveTab] = useState<CodeTab>('react')
+  const [activeTab, setActiveTab] = useState<Framework>('react')
+  const [codeCache, setCodeCache] = useState<Partial<Record<Framework, { code: string; degraded: boolean }>>>({})
+  const [isDegraded, setIsDegraded] = useState(false)
+  const [isGenerating, setIsGenerating] = useState(false)
   const [copied, setCopied] = useState(false)
-  const [enhancedCode, setEnhancedCode] = useState<Record<string, string>>({})
-  const [isEnhancing, setIsEnhancing] = useState(false)
-  const enhanceAbortRef = useRef<AbortController | null>(null)
+  const [planningStatus, setPlanningStatus] = useState<'idle' | 'running' | 'done' | 'failed'>('idle')
+  const [planningError, setPlanningError] = useState<string>()
+  const [assemblyStatus, setAssemblyStatus] = useState<'idle' | 'running' | 'done' | 'failed'>('idle')
+  const [chunks, setChunks] = useState<ChunkProgress[]>([])
+  const [selectionChanged, setSelectionChanged] = useState(false)
+  const [generateError, setGenerateError] = useState<string>()
+
+  const cached = codeCache[activeTab]
+  const generatedCode = cached?.code ?? ''
+  const panelState: PanelState = isGenerating ? 'generating' : cached ? 'complete' : 'empty'
+
+  const abortRef = useRef<AbortController | null>(null)
+  const lastSelectionRef = useRef<string>('')
   const copyTimeoutRef = useRef<ReturnType<typeof setTimeout>>(null)
-  const selectedIds = useCanvasStore((s) => s.selection.selectedIds)
-  const activePageId = useCanvasStore((s) => s.activePageId)
-  const children = useDocumentStore((s) => getActivePageChildren(s.document, activePageId))
-  const getNodeById = useDocumentStore((s) => s.getNodeById)
 
-  // Force re-render when document changes
-  void children
+  const selectedIds = useCanvasStore(s => s.selection.selectedIds)
+  const activePageId = useCanvasStore(s => s.activePageId)
+  const getNodeById = useDocumentStore(s => s.getNodeById)
+  const children = useDocumentStore(s => getActivePageChildren(s.document, activePageId))
+  const variables = useDocumentStore(s => s.document?.variables)
+  const model = useAIStore(s => s.model)
+  const provider = useAIStore(s =>
+    s.modelGroups.find(g => g.models.some(m => m.value === s.model))?.provider,
+  )
 
-  const targetNodes: PenNode[] = useMemo(() => {
+  const selectionKey = selectedIds.join(',')
+
+  // Detect selection changes when code is already generated
+  useEffect(() => {
+    if (panelState === 'complete' && selectionKey !== lastSelectionRef.current) {
+      setSelectionChanged(true)
+    }
+  }, [panelState, selectionKey])
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (copyTimeoutRef.current) clearTimeout(copyTimeoutRef.current)
+      abortRef.current?.abort()
+    }
+  }, [])
+
+  const getTargetNodes = useCallback((): PenNode[] => {
     if (selectedIds.length > 0) {
       return selectedIds
-        .map((id) => getNodeById(id))
+        .map(id => getNodeById(id))
         .filter((n): n is PenNode => n !== undefined)
     }
     return children
-  }, [selectedIds, children, getNodeById])
+  }, [selectedIds, getNodeById, children])
 
-  const document = useDocumentStore((s) => s.document)
+  const handleGenerate = useCallback(async () => {
+    const nodes = getTargetNodes()
+    if (nodes.length === 0) return
 
-  const generatedCode = useMemo(() => {
-    switch (activeTab) {
-      case 'css-vars': return generateCSSVariables(document)
-      case 'react': return generateReactCode(targetNodes)
-      case 'vue': return generateVueCode(targetNodes)
-      case 'svelte': return generateSvelteCode(targetNodes)
-      case 'swiftui': return generateSwiftUICode(targetNodes)
-      case 'compose': return generateComposeCode(targetNodes)
-      case 'flutter': return generateFlutterCode(targetNodes)
-      case 'react-native': return generateReactNativeCode(targetNodes)
-      case 'html': {
-        const { html, css } = generateHTMLCode(targetNodes)
-        return `<!DOCTYPE html>\n<html lang="en">\n<head>\n  <meta charset="UTF-8" />\n  <meta name="viewport" content="width=device-width, initial-scale=1.0" />\n  <title>Design</title>\n  <style>\n${css.split('\n').map((l) => `    ${l}`).join('\n')}\n  </style>\n</head>\n<body>\n${html.split('\n').map((l) => `  ${l}`).join('\n')}\n</body>\n</html>`
+    abortRef.current = new AbortController()
+    setIsGenerating(true)
+    setPlanningStatus('idle')
+    setPlanningError(undefined)
+    setAssemblyStatus('idle')
+    setChunks([])
+    setIsDegraded(false)
+    setSelectionChanged(false)
+    setGenerateError(undefined)
+    lastSelectionRef.current = selectionKey
+
+    const handleProgress = (event: CodeGenProgress) => {
+      switch (event.step) {
+        case 'planning':
+          setPlanningStatus(event.status)
+          if (event.error) setPlanningError(event.error)
+          break
+        case 'chunk':
+          setChunks(prev => {
+            const existing = prev.findIndex(c => c.chunkId === event.chunkId)
+            const entry: ChunkProgress = {
+              chunkId: event.chunkId,
+              name: event.name,
+              status: event.status,
+              error: event.error,
+            }
+            if (existing >= 0) {
+              const next = [...prev]
+              next[existing] = entry
+              return next
+            }
+            return [...prev, entry]
+          })
+          break
+        case 'assembly':
+          setAssemblyStatus(event.status)
+          break
+        case 'complete':
+          setCodeCache(prev => ({ ...prev, [activeTab]: { code: event.finalCode, degraded: event.degraded } }))
+          setIsDegraded(event.degraded)
+          setIsGenerating(false)
+          break
+        case 'error':
+          setGenerateError(event.message)
+          setIsGenerating(false)
+          break
       }
     }
-  }, [activeTab, targetNodes, document])
 
-  // Use enhanced code if available for this tab, otherwise the generated code
-  const displayCode = enhancedCode[activeTab] ?? generatedCode
+    try {
+      await generateCode(nodes, activeTab, variables, handleProgress, model, provider, abortRef.current.signal)
+    } catch (err) {
+      if (!abortRef.current?.signal.aborted) {
+        const msg = err instanceof Error ? err.message : 'Code generation failed'
+        setGenerateError(msg)
+      }
+      setIsGenerating(false)
+    }
+  }, [getTargetNodes, activeTab, variables, selectionKey, model, provider])
+
+  const handleCancel = useCallback(() => {
+    abortRef.current?.abort()
+    setIsGenerating(false)
+  }, [])
+
+  const handleRetryChunk = useCallback((_chunkId: string) => {
+    // Re-run the full pipeline (planning is fast, only failed/skipped chunks re-run)
+    void handleGenerate()
+  }, [handleGenerate])
+
+  const handleCopy = useCallback(async () => {
+    await navigator.clipboard.writeText(generatedCode)
+    setCopied(true)
+    if (copyTimeoutRef.current) clearTimeout(copyTimeoutRef.current)
+    copyTimeoutRef.current = setTimeout(() => setCopied(false), 2000)
+  }, [generatedCode])
+
+  const handleDownload = useCallback(() => {
+    const extensions: Record<Framework, string> = {
+      react: '.tsx',
+      vue: '.vue',
+      svelte: '.svelte',
+      html: '.html',
+      flutter: '.dart',
+      swiftui: '.swift',
+      compose: '.kt',
+      'react-native': '.tsx',
+    }
+    const blob = new Blob([generatedCode], { type: 'text/plain;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const a = globalThis.document.createElement('a')
+    a.href = url
+    a.download = `design${extensions[activeTab]}`
+    a.click()
+    URL.revokeObjectURL(url)
+  }, [generatedCode, activeTab])
+
+  const handleTabChange = useCallback((tab: Framework) => {
+    setActiveTab(tab)
+    setGenerateError(undefined)
+    // isDegraded follows the cached tab's value
+    const tabCache = codeCache[tab]
+    setIsDegraded(tabCache?.degraded ?? false)
+  }, [codeCache])
+
+  const nodeCount = selectedIds.length > 0 ? selectedIds.length : children.length
 
   const highlightedHTML = useMemo(() => {
-    const langMap: Record<CodeTab, Parameters<typeof highlightCode>[1]> = {
-      react: 'jsx',
-      vue: 'html',
-      svelte: 'html',
-      swiftui: 'swift',
-      compose: 'kotlin',
-      flutter: 'dart',
-      'react-native': 'jsx',
-      'css-vars': 'css',
-      html: 'html',
-    }
+    if (!generatedCode) return ''
+    const lang = HIGHLIGHT_LANG[activeTab]
+
     // HTML / Vue / Svelte: split at <style to highlight CSS portion separately
     if (activeTab === 'html' || activeTab === 'vue' || activeTab === 'svelte') {
-      const styleIdx = displayCode.indexOf('<style')
+      const styleIdx = generatedCode.indexOf('<style')
       if (styleIdx !== -1) {
-        const templatePart = displayCode.slice(0, styleIdx)
-        const stylePart = displayCode.slice(styleIdx)
-        // Highlight the style tag line as HTML, then contents as CSS
+        const templatePart = generatedCode.slice(0, styleIdx)
+        const stylePart = generatedCode.slice(styleIdx)
         const styleTagEnd = stylePart.indexOf('>\n')
         if (styleTagEnd !== -1) {
           const styleTag = stylePart.slice(0, styleTagEnd + 1)
@@ -168,296 +243,186 @@ export default function CodePanel() {
         return highlightCode(templatePart, 'html') + highlightCode(stylePart, 'css')
       }
     }
-    return highlightCode(displayCode, langMap[activeTab])
-  }, [activeTab, displayCode])
 
-  const handleCopy = useCallback(() => {
-    navigator.clipboard.writeText(displayCode).then(() => {
-      setCopied(true)
-      if (copyTimeoutRef.current) clearTimeout(copyTimeoutRef.current)
-      copyTimeoutRef.current = setTimeout(() => setCopied(false), 2000)
-    })
-  }, [displayCode])
-
-  const handleDownload = useCallback(() => {
-    const extMap: Record<CodeTab, string> = {
-      react: 'tsx',
-      vue: 'vue',
-      svelte: 'svelte',
-      html: 'html',
-      swiftui: 'swift',
-      compose: 'kt',
-      flutter: 'dart',
-      'react-native': 'tsx',
-      'css-vars': 'css',
-    }
-    const ext = extMap[activeTab]
-    const blob = new Blob([displayCode], { type: 'text/plain;charset=utf-8' })
-    const url = URL.createObjectURL(blob)
-    const a = globalThis.document.createElement('a')
-    a.href = url
-    a.download = `design.${ext}`
-    a.click()
-    URL.revokeObjectURL(url)
-  }, [activeTab, displayCode])
-
-  const hasAI = useAIStore((s) => s.availableModels.length > 0)
-
-  const handleEnhance = useCallback(async () => {
-    if (isEnhancing || activeTab === 'css-vars') return
-
-    const model = useAIStore.getState().model
-    const modelGroups = useAIStore.getState().modelGroups
-    const provider = modelGroups.find((g) =>
-      g.models.some((m) => m.value === model),
-    )?.provider
-
-    if (!model || !provider) return
-
-    setIsEnhancing(true)
-    const abortController = new AbortController()
-    enhanceAbortRef.current = abortController
-
-    // Build a compact node summary for context
-    const nodesSummary = JSON.stringify(
-      targetNodes.map((n) => {
-        const base: Record<string, unknown> = { type: n.type, name: n.name }
-        if ('width' in n) base.width = n.width
-        if ('height' in n) base.height = n.height
-        if ('children' in n && Array.isArray(n.children)) base.childCount = n.children.length
-        if ('layout' in n) base.layout = n.layout
-        return base
-      }),
-    )
-
-    const frameworkNames: Record<CodeTab, string> = {
-      react: 'React with Tailwind CSS',
-      vue: 'Vue 3 SFC',
-      svelte: 'Svelte',
-      html: 'HTML + CSS',
-      swiftui: 'SwiftUI',
-      compose: 'Jetpack Compose (Kotlin)',
-      flutter: 'Flutter (Dart)',
-      'react-native': 'React Native',
-      'css-vars': '',
-    }
-
-    const userMessage = `Framework: ${frameworkNames[activeTab]}
-
-Design nodes (JSON summary):
-${nodesSummary}
-
-Auto-generated code to improve:
-${generatedCode}`
-
-    try {
-      let result = ''
-      for await (const chunk of streamChat(
-        ENHANCE_SYSTEM_PROMPT,
-        [{ role: 'user', content: userMessage }],
-        model,
-        { thinkingMode: 'disabled', effort: 'high' },
-        provider,
-        abortController.signal,
-      )) {
-        if (chunk.type === 'text') {
-          result += chunk.content
-          setEnhancedCode((prev) => ({ ...prev, [activeTab]: result }))
-        }
-        if (chunk.type === 'error') break
-      }
-      // Clean up artifacts the AI may have included despite instructions
-      result = cleanEnhancedResult(result)
-      setEnhancedCode((prev) => ({ ...prev, [activeTab]: result }))
-    } finally {
-      setIsEnhancing(false)
-      enhanceAbortRef.current = null
-    }
-  }, [isEnhancing, activeTab, generatedCode, targetNodes])
-
-  const handleCancelEnhance = useCallback(() => {
-    enhanceAbortRef.current?.abort()
-    setIsEnhancing(false)
-  }, [])
-
-  const handleResetEnhance = useCallback(() => {
-    setEnhancedCode((prev) => {
-      const next = { ...prev }
-      delete next[activeTab]
-      return next
-    })
-  }, [activeTab])
-
-  // Clear enhanced code when nodes change
-  useEffect(() => {
-    setEnhancedCode({})
-  }, [targetNodes])
-
-  useEffect(() => {
-    return () => {
-      if (copyTimeoutRef.current) clearTimeout(copyTimeoutRef.current)
-      enhanceAbortRef.current?.abort()
-    }
-  }, [])
-
-  const tabs: { key: CodeTab; label: string }[] = [
-    { key: 'react', label: 'React' },
-    { key: 'vue', label: 'Vue' },
-    { key: 'svelte', label: 'Svelte' },
-    { key: 'html', label: 'HTML' },
-    { key: 'swiftui', label: 'SwiftUI' },
-    { key: 'compose', label: 'Compose' },
-    { key: 'flutter', label: 'Flutter' },
-    { key: 'react-native', label: 'RN' },
-    { key: 'css-vars', label: t('code.cssVariables') },
-  ]
-
-  const tabsScrollRef = useRef<HTMLDivElement>(null)
-  const [canScrollLeft, setCanScrollLeft] = useState(false)
-  const [canScrollRight, setCanScrollRight] = useState(false)
-
-  const updateScrollState = useCallback(() => {
-    const el = tabsScrollRef.current
-    if (!el) return
-    setCanScrollLeft(el.scrollLeft > 1)
-    setCanScrollRight(el.scrollLeft + el.clientWidth < el.scrollWidth - 1)
-  }, [])
-
-  useEffect(() => {
-    const el = tabsScrollRef.current
-    if (!el) return
-    updateScrollState()
-    el.addEventListener('scroll', updateScrollState, { passive: true })
-    const ro = new ResizeObserver(updateScrollState)
-    ro.observe(el)
-    return () => {
-      el.removeEventListener('scroll', updateScrollState)
-      ro.disconnect()
-    }
-  }, [updateScrollState])
-
-  const scrollTabs = useCallback((dir: 'left' | 'right') => {
-    tabsScrollRef.current?.scrollBy({ left: dir === 'left' ? -80 : 80, behavior: 'smooth' })
-  }, [])
+    return highlightCode(generatedCode, lang)
+  }, [activeTab, generatedCode])
 
   return (
-    <div className="flex flex-col flex-1 min-h-0">
-      {/* Framework tabs + action buttons */}
-      <div className="flex items-center pl-1 pr-2 py-1 border-b border-border shrink-0 gap-0.5">
-        {canScrollLeft && (
-          <button type="button" onClick={() => scrollTabs('left')} className="shrink-0 p-0.5 text-muted-foreground hover:text-foreground">
-            <ChevronLeft size={10} />
-          </button>
-        )}
-        <div ref={tabsScrollRef} className="flex items-center gap-1 flex-1 min-w-0 overflow-x-auto scrollbar-none px-1">
-          {tabs.map((tab) => (
+    <div className="flex flex-1 min-h-0 flex-col">
+      {/* Tab Bar */}
+      <div className="flex items-center border-b border-border px-2 shrink-0">
+        <div className="flex gap-1 overflow-x-auto py-1 scrollbar-none">
+          {FRAMEWORKS.map(fw => (
             <button
-              key={tab.key}
+              key={fw}
               type="button"
-              onClick={() => setActiveTab(tab.key)}
               className={cn(
-                'text-[10px] px-1.5 py-0.5 rounded transition-colors shrink-0 whitespace-nowrap',
-                activeTab === tab.key
-                  ? 'bg-secondary text-foreground'
-                  : 'text-muted-foreground hover:text-foreground',
+                'whitespace-nowrap rounded-md px-2.5 py-1 text-xs font-medium transition-colors shrink-0',
+                activeTab === fw
+                  ? 'bg-primary text-primary-foreground'
+                  : 'text-muted-foreground hover:bg-muted',
               )}
+              onClick={() => handleTabChange(fw)}
             >
-              {tab.label}
+              {TAB_LABELS[fw]}
             </button>
           ))}
         </div>
-        {canScrollRight && (
-          <button type="button" onClick={() => scrollTabs('right')} className="shrink-0 p-0.5 text-muted-foreground hover:text-foreground">
-            <ChevronRight size={10} />
-          </button>
+      </div>
+
+      {/* Content */}
+      <div className="flex-1 min-h-0 flex flex-col">
+        {/* Empty State */}
+        {panelState === 'empty' && (
+          <div className="flex h-full flex-col items-center justify-center gap-3 p-6 text-center">
+            <Sparkles className="h-8 w-8 text-muted-foreground" />
+            <div className="text-sm text-muted-foreground">
+              {nodeCount > 0
+                ? `${nodeCount} node${nodeCount > 1 ? 's' : ''} selected`
+                : 'No nodes on page'}
+            </div>
+            <Button
+              onClick={handleGenerate}
+              disabled={nodeCount === 0}
+              size="sm"
+            >
+              <Sparkles className="mr-2 h-4 w-4" />
+              Generate {TAB_LABELS[activeTab]} Code
+            </Button>
+            {generateError && (
+              <div className="max-w-[260px] rounded-md bg-destructive/10 px-3 py-2 text-xs text-destructive">
+                <div className="font-medium">Generation failed</div>
+                <div className="mt-1 break-words">{generateError}</div>
+              </div>
+            )}
+            {selectionChanged && (
+              <div className="text-xs text-amber-500">
+                Selection changed since last generation
+              </div>
+            )}
+          </div>
         )}
-        <div className="flex items-center gap-0.5 shrink-0">
-          {hasAI && activeTab !== 'css-vars' && (
-            <>
-              {enhancedCode[activeTab] && !isEnhancing && (
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      variant="ghost"
-                      size="icon-sm"
-                      onClick={handleResetEnhance}
-                      className="text-muted-foreground h-5 w-5"
-                    >
-                      <RotateCcw size={11} />
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent>{t('code.resetEnhance')}</TooltipContent>
-                </Tooltip>
-              )}
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    size="icon-sm"
-                    onClick={isEnhancing ? handleCancelEnhance : handleEnhance}
-                    className={cn(
-                      'h-5 w-5',
-                      isEnhancing && 'text-primary',
-                      enhancedCode[activeTab] && !isEnhancing && 'text-primary',
-                    )}
-                  >
-                    {isEnhancing ? <Loader2 size={12} className="animate-spin" /> : <Sparkles size={12} />}
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>{isEnhancing ? t('code.cancelEnhance') : t('code.aiEnhance')}</TooltipContent>
-              </Tooltip>
-            </>
-          )}
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                onClick={handleDownload}
-                className="h-5 w-5"
-              >
-                <Download size={12} />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>{t('code.download')}</TooltipContent>
-          </Tooltip>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                onClick={handleCopy}
-                className="h-5 w-5"
-              >
-                {copied ? <Check size={12} className="text-green-400" /> : <Copy size={12} />}
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>{copied ? t('code.copied') : t('code.copyClipboard')}</TooltipContent>
-          </Tooltip>
-        </div>
-      </div>
 
-      {/* Code content */}
-      <div className="flex-1 overflow-auto p-2">
-        <pre className="text-[10px] leading-relaxed font-mono text-foreground/80 whitespace-pre-wrap break-all">
-          <code dangerouslySetInnerHTML={{ __html: highlightedHTML }} />
-        </pre>
-      </div>
+        {/* Generating State */}
+        {panelState === 'generating' && (
+          <div className="flex flex-col gap-2 p-4">
+            {/* Planning */}
+            <ProgressItem
+              label="Planning"
+              status={planningStatus === 'running' ? 'running' : planningStatus === 'done' ? 'done' : planningStatus === 'failed' ? 'failed' : 'pending'}
+              error={planningError}
+            />
 
-      {/* Footer info */}
-      <div className="h-5 flex items-center px-2 border-t border-border shrink-0">
-        <span className="text-[9px] text-muted-foreground">
-          {isEnhancing
-            ? t('code.enhancing')
-            : enhancedCode[activeTab]
-              ? t('code.enhanced')
-              : activeTab === 'css-vars'
-                ? t('code.genCssVars')
-                : selectedIds.length > 0
-                  ? t('code.genSelected', { count: selectedIds.length })
-                  : t('code.genDocument')}
-        </span>
+            {/* Chunks */}
+            {chunks.map(chunk => (
+              <ProgressItem
+                key={chunk.chunkId}
+                label={chunk.name}
+                status={chunk.status}
+                error={chunk.error}
+                onRetry={chunk.status === 'failed' ? () => handleRetryChunk(chunk.chunkId) : undefined}
+              />
+            ))}
+
+            {/* Assembly */}
+            {assemblyStatus !== 'idle' && (
+              <ProgressItem
+                label="Assembly"
+                status={assemblyStatus === 'running' ? 'running' : assemblyStatus === 'done' ? 'done' : 'failed'}
+              />
+            )}
+
+            <Button variant="ghost" size="sm" onClick={handleCancel} className="mt-2 self-center">
+              Cancel
+            </Button>
+          </div>
+        )}
+
+        {/* Complete State */}
+        {panelState === 'complete' && (
+          <>
+            {isDegraded && (
+              <div className="flex items-center gap-2 bg-amber-500/10 px-3 py-2 text-xs text-amber-600 shrink-0">
+                <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+                Some chunks failed or degraded. Output may not compile.
+              </div>
+            )}
+            {selectionChanged && (
+              <div className="flex items-center justify-between bg-muted px-3 py-1.5 text-xs text-muted-foreground shrink-0">
+                <span>Selection changed</span>
+                <Button variant="ghost" size="sm" className="h-6 text-xs" onClick={handleGenerate}>
+                  Regenerate
+                </Button>
+              </div>
+            )}
+            <div className="flex-1 min-h-0 overflow-auto p-2">
+              <pre className="text-[10px] leading-relaxed font-mono text-foreground/80 whitespace-pre-wrap break-all">
+                <code dangerouslySetInnerHTML={{ __html: highlightedHTML }} />
+              </pre>
+            </div>
+            <div className="flex items-center border-t border-border px-1 py-1 shrink-0 bg-card">
+              <Button variant="ghost" size="sm" className="h-7 flex-1 px-1 text-xs text-muted-foreground hover:text-foreground" onClick={handleCopy}>
+                {copied ? <Check className="mr-1 h-3 w-3 shrink-0" /> : <Copy className="mr-1 h-3 w-3 shrink-0" />}
+                <span className="truncate">{copied ? 'Copied' : 'Copy'}</span>
+              </Button>
+              <Button variant="ghost" size="sm" className="h-7 flex-1 px-1 text-xs text-muted-foreground hover:text-foreground" onClick={handleDownload}>
+                <Download className="mr-1 h-3 w-3 shrink-0" />
+                <span className="truncate">Download</span>
+              </Button>
+              <Button variant="ghost" size="sm" className="h-7 flex-1 px-1 text-xs text-muted-foreground hover:text-foreground" onClick={handleGenerate}>
+                <RefreshCw className="mr-1 h-3 w-3 shrink-0" />
+                <span className="truncate">Regenerate</span>
+              </Button>
+            </div>
+          </>
+        )}
       </div>
+    </div>
+  )
+}
+
+// ── Progress Item Sub-Component ──
+
+function ProgressItem({
+  label,
+  status,
+  error,
+  onRetry,
+}: {
+  label: string
+  status: ChunkStatus | 'running' | 'done' | 'failed' | 'pending'
+  error?: string
+  onRetry?: () => void
+}) {
+  const icons: Record<string, React.ReactNode> = {
+    pending: <div className="h-3.5 w-3.5 rounded-full border border-muted-foreground/30" />,
+    running: <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" />,
+    done: <Check className="h-3.5 w-3.5 text-green-500" />,
+    degraded: <AlertTriangle className="h-3.5 w-3.5 text-amber-500" />,
+    failed: <MinusCircle className="h-3.5 w-3.5 text-destructive" />,
+    skipped: <SkipForward className="h-3.5 w-3.5 text-muted-foreground" />,
+  }
+
+  const sublabels: Record<string, string> = {
+    degraded: 'generated without contract',
+    skipped: 'skipped (dependency failed)',
+  }
+
+  return (
+    <div className="flex items-start gap-2 text-sm">
+      <div className="mt-0.5">{icons[status]}</div>
+      <div className="flex-1">
+        <div className="font-medium">{label}</div>
+        {sublabels[status] && (
+          <div className="text-xs text-muted-foreground">{sublabels[status]}</div>
+        )}
+        {error && <div className="text-xs text-destructive">{error}</div>}
+      </div>
+      {onRetry && (
+        <Button variant="ghost" size="sm" className="h-6 text-xs" onClick={onRetry}>
+          Retry
+        </Button>
+      )}
     </div>
   )
 }

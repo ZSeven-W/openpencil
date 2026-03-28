@@ -40,6 +40,7 @@ import { handleDesignSkeleton } from './tools/design-skeleton'
 import { handleDesignContent } from './tools/design-content'
 import { handleDesignRefine } from './tools/design-refine'
 import { handleGetSelection } from './tools/get-selection'
+import { handleExportNodes } from './tools/export-nodes'
 import { LAYERED_DESIGN_TOOLS } from './tools/layered-design-defs'
 import { MCP_DEFAULT_PORT } from '@/constants/app'
 
@@ -561,6 +562,30 @@ const TOOL_DEFINITIONS = [
       required: ['operations'],
     },
   },
+  {
+    name: 'export_nodes',
+    description:
+      'Export raw PenNode data with design variables and themes. Pure data export — no AI, no analysis. Use with get_design_prompt(section="codegen-*") to let your LLM generate code.',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        filePath: {
+          type: 'string',
+          description: 'Path to .op file. If omitted, uses the currently opened document.',
+        },
+        nodeIds: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'Specific node IDs to export. If omitted, exports all nodes on the target page.',
+        },
+        pageId: {
+          type: 'string',
+          description: 'Target page ID. If omitted, uses the first/active page.',
+        },
+      },
+      required: [],
+    },
+  },
   ...LAYERED_DESIGN_TOOLS,
 ]
 
@@ -635,6 +660,8 @@ async function handleToolCall(name: string, args: Record<string, unknown> | unde
       )
     case 'batch_design':
       return JSON.stringify(await handleBatchDesign(a), null, 2)
+    case 'export_nodes':
+      return JSON.stringify(await handleExportNodes(a), null, 2)
     case 'design_skeleton':
       return JSON.stringify(await handleDesignSkeleton(a), null, 2)
     case 'design_content':

@@ -721,6 +721,7 @@ function generateImageCompose(node: ImageNode, depth: number): string {
   return lines.join('\n')
 }
 
+/** @deprecated Use AI code generation pipeline instead. Will be removed in v1.0.0. */
 export function generateComposeCode(
   nodes: PenNode[],
   composableName = 'GeneratedDesign',
@@ -796,6 +797,7 @@ ${childLines}
 `
 }
 
+/** @deprecated Use AI code generation pipeline instead. Will be removed in v1.0.0. */
 export function generateComposeFromDocument(
   doc: PenDocument,
   activePageId?: string | null,
