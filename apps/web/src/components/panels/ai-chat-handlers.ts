@@ -174,6 +174,11 @@ interface AgentProviderConfig {
   baseURL?: string
 }
 
+/** Strip <think>...</think> tags (closed and unclosed) from model text output. */
+function stripThinkTags(text: string): string {
+  return text.replace(/<think>[\s\S]*?<\/think>\s*/g, '').replace(/<think>[\s\S]*$/g, '')
+}
+
 /**
  * Send a message through the agent pipeline.
  * Opens an SSE connection to /api/ai/agent, dispatches tool calls
@@ -244,15 +249,10 @@ async function runAgentStream(
 
         case 'text': {
           accumulated += evt.content
-          // Strip <think>...</think> tags from model output (M2.5, DeepSeek, etc.)
-          // Also strip unclosed <think> tags during streaming
-          const cleaned = accumulated
-            .replace(/<think>[\s\S]*?<\/think>\s*/g, '')
-            .replace(/<think>[\s\S]*$/g, '')
           const prefix = thinkingContent
             ? `<step title="Thinking">${thinkingContent}</step>\n`
             : ''
-          updateLastMessage(prefix + cleaned)
+          updateLastMessage(prefix + stripThinkTags(accumulated))
           break
         }
 
@@ -316,7 +316,7 @@ async function runAgentStream(
     reader.releaseLock()
   }
 
-  return accumulated
+  return stripThinkTags(accumulated)
 }
 
 /** Shared chat logic hook */
