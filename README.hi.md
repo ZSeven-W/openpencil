@@ -219,6 +219,8 @@ cat design.dsl | op design - # stdin से पाइप करें
 
 तीन इनपुट विधियाँ समर्थित हैं: इनलाइन स्ट्रिंग, `@filepath` (फ़ाइल से पढ़ें), या `-` (stdin से पढ़ें)। डेस्कटॉप ऐप या वेब डेव सर्वर के साथ काम करता है। पूर्ण कमांड संदर्भ के लिए [CLI README](./apps/cli/README.md) देखें।
 
+**LLM स्किल** — [OpenPencil Skill](https://github.com/ZSeven-W/openpencil-skill) प्लगइन इंस्टॉल करें ताकि AI एजेंट (Claude Code, Cursor, Codex, Gemini CLI आदि) `op` से डिज़ाइन करना सीख सकें।
+
 ## विशेषताएँ
 
 **कैनवास और ड्रॉइंग**

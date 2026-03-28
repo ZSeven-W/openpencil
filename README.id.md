@@ -219,6 +219,8 @@ cat design.dsl | op design - # Pipe dari stdin
 
 Mendukung tiga metode input: string inline, `@filepath` (baca dari file), atau `-` (baca dari stdin). Bekerja dengan aplikasi desktop atau web dev server. Lihat [CLI README](./apps/cli/README.md) untuk referensi perintah lengkap.
 
+**LLM Skill** — instal plugin [OpenPencil Skill](https://github.com/ZSeven-W/openpencil-skill) untuk mengajarkan agen AI (Claude Code, Cursor, Codex, Gemini CLI, dll.) mendesain dengan `op`.
+
 ## Fitur
 
 **Kanvas & Menggambar**

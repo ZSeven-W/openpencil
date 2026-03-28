@@ -219,6 +219,8 @@ cat design.dsl | op design - # Pipe จาก stdin
 
 รองรับ 3 วิธีการป้อนข้อมูล: สตริงแบบ inline, `@filepath` (อ่านจากไฟล์) หรือ `-` (อ่านจาก stdin) ทำงานร่วมกับแอปเดสก์ท็อปหรือ web dev server ดู [CLI README](./apps/cli/README.md) สำหรับคู่มือคำสั่งฉบับเต็ม
 
+**LLM Skill** — ติดตั้งปลั๊กอิน [OpenPencil Skill](https://github.com/ZSeven-W/openpencil-skill) เพื่อสอน AI agent (Claude Code, Cursor, Codex, Gemini CLI ฯลฯ) ออกแบบด้วย `op`
+
 ## ฟีเจอร์
 
 **Canvas และการวาด**

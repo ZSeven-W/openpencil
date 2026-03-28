@@ -219,6 +219,8 @@ cat design.dsl | op design - # Pipe từ stdin
 
 Hỗ trợ ba phương thức nhập liệu: chuỗi inline, `@filepath` (đọc từ tệp), hoặc `-` (đọc từ stdin). Hoạt động với ứng dụng desktop hoặc web dev server. Xem [CLI README](./apps/cli/README.md) để biết đầy đủ các lệnh.
 
+**LLM Skill** — cài đặt plugin [OpenPencil Skill](https://github.com/ZSeven-W/openpencil-skill) để dạy AI agent (Claude Code, Cursor, Codex, Gemini CLI, v.v.) thiết kế bằng `op`.
+
 ## Tính năng
 
 **Canvas và Vẽ**

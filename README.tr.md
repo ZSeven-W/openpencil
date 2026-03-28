@@ -219,6 +219,8 @@ cat design.dsl | op design - # stdin'den pipe ile besle
 
 Üç giriş yöntemini destekler: satır içi metin, `@filepath` (dosyadan oku) veya `-` (stdin'den oku). Masaüstü uygulama veya web geliştirme sunucusuyla çalışır. Tam komut referansı için [CLI README](./apps/cli/README.md) dosyasına bakın.
 
+**LLM Becerisi** — [OpenPencil Skill](https://github.com/ZSeven-W/openpencil-skill) eklentisini kurarak AI ajanlarına (Claude Code, Cursor, Codex, Gemini CLI vb.) `op` ile tasarım yapmayı öğretin.
+
 ## Özellikler
 
 **Kanvas ve Çizim**

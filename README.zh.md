@@ -219,6 +219,8 @@ cat design.dsl | op design - # 从 stdin 管道输入
 
 支持三种输入方式：内联字符串、`@filepath`（从文件读取）、`-`（从 stdin 读取）。可搭配桌面应用或 Web 开发服务器使用。完整命令参考请查阅 [CLI README](./apps/cli/README.md)。
 
+**LLM 技能** — 安装 [OpenPencil Skill](https://github.com/ZSeven-W/openpencil-skill) 插件，教 AI 智能体（Claude Code、Cursor、Codex、Gemini CLI 等）使用 `op` 进行设计。
+
 ## 功能特性
 
 **画布与绘图**

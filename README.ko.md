@@ -219,6 +219,8 @@ cat design.dsl | op design - # stdin에서 파이프 입력
 
 세 가지 입력 방식을 지원합니다: 인라인 문자열, `@filepath` (파일에서 읽기), `-` (stdin에서 읽기). 데스크톱 앱 또는 웹 개발 서버와 연동됩니다. 전체 명령어 레퍼런스는 [CLI README](./apps/cli/README.md)를 참고하세요.
 
+**LLM 스킬** — [OpenPencil Skill](https://github.com/ZSeven-W/openpencil-skill) 플러그인을 설치하면 AI 에이전트(Claude Code, Cursor, Codex, Gemini CLI 등)에게 `op`를 사용한 디자인을 교육할 수 있습니다.
+
 ## 기능
 
 **캔버스 & 드로잉**

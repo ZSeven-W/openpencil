@@ -243,6 +243,8 @@ cat design.dsl | op design - # Pipe from stdin
 
 Supports three input methods: inline string, `@filepath` (read from file), or `-` (read from stdin). Works with desktop app or web dev server. See [CLI README](./apps/cli/README.md) for full command reference.
 
+**LLM Skill** — install the [OpenPencil Skill](https://github.com/ZSeven-W/openpencil-skill) plugin to teach AI agents (Claude Code, Cursor, Codex, Gemini CLI, etc.) how to design with `op`.
+
 ## Features
 
 **Canvas & Drawing**

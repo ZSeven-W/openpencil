@@ -219,6 +219,8 @@ cat design.dsl | op design - # Передача через stdin
 
 Поддерживает три метода ввода: строка, `@filepath` (чтение из файла) или `-` (чтение из stdin). Работает с десктопным приложением или веб-сервером разработки. Подробнее в [CLI README](./apps/cli/README.md).
 
+**LLM-навык** — установите плагин [OpenPencil Skill](https://github.com/ZSeven-W/openpencil-skill), чтобы научить ИИ-агентов (Claude Code, Cursor, Codex, Gemini CLI и др.) проектировать с помощью `op`.
+
 ## Возможности
 
 **Холст и рисование**
