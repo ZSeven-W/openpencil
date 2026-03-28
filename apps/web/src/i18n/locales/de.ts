@@ -440,6 +440,7 @@ const de: TranslationKeys = {
   'builtin.teamDescription': 'Verwenden Sie verschiedene Modelle für Chat und Design. Das Chat-Modell übernimmt die Konversation, das Design-Modell übernimmt generate_design.',
   'builtin.teamDesignModel': 'Design-Modell',
   'builtin.teamSelectModel': 'Modell auswählen...',
+  'builtin.teamSameModelWarning': 'Tipp: Verwenden Sie ein anderes, leistungsfähigeres Modell für das Design, um den Team-Modus optimal zu nutzen.',
 
   // ── Figma Import ──
   'figma.title': 'Aus Figma importieren',

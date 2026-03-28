@@ -429,6 +429,7 @@ const zh: TranslationKeys = {
   'builtin.teamDescription': '为对话和设计使用不同模型。对话模型处理聊天，设计模型处理 generate_design。',
   'builtin.teamDesignModel': '设计模型',
   'builtin.teamSelectModel': '选择模型...',
+  'builtin.teamSameModelWarning': '提示：为设计选择不同的、更强的模型，可以更好地发挥 Team 模式的优势。',
 
   // ── Figma Import ──
   'figma.title': '从 Figma 导入',

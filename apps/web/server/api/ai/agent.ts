@@ -120,14 +120,20 @@ export default defineEventHandler(async (event) => {
   let agentOrTeam: { run: (msgs: any) => AsyncGenerator<any>; resolveToolResult: (id: string, result: any) => void }
 
   if (body.members?.length) {
-    // Team mode — create member agents with their own providers
+    // Team mode — create member agents with scoped tools
+    // Designer only gets generate_design + snapshot_layout (read-only check).
+    // Giving all tools causes wasteful batch_get calls after generation.
+    const DESIGNER_TOOLS = new Set(['generate_design', 'snapshot_layout'])
+
     const members = body.members.map(m => {
       const memberProvider = m.providerType === 'anthropic'
         ? createAnthropicProvider({ apiKey: m.apiKey, model: m.model, baseURL: m.baseURL })
         : createOpenAICompatProvider({ apiKey: m.apiKey, model: m.model, baseURL: m.baseURL })
 
       const memberTools = createToolRegistry()
+      const allowedTools = m.id === 'designer' ? DESIGNER_TOOLS : null
       for (const def of body.toolDefs ?? []) {
+        if (allowedTools && !allowedTools.has(def.name)) continue
         const params = def.parameters ? { ...def.parameters } : { type: 'object' }
         delete (params as any).$schema
         memberTools.register({

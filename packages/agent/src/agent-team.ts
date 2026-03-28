@@ -42,7 +42,7 @@ function buildTeamSuffix(members: TeamMemberConfig[]): string {
     const desc = m.systemPrompt.split('\n')[0] || 'Available for sub-tasks'
     return `- **${m.id}**: ${desc}`
   })
-  return `\n\n## Team Members\nYou have team members available via the \`delegate\` tool:\n${lines.join('\n')}\n\nWhen the user's request involves specialized work, delegate to the appropriate member.\nHandle conversation, planning, and simple queries yourself.`
+  return `\n\n## Team Members\nYou have team members available via the \`delegate\` tool:\n${lines.join('\n')}\n\nWhen the user's request involves design or specialized work, delegate immediately — do not plan or describe the design yourself. Write a clear task for the member and let them handle it.\nHandle only conversation and simple queries yourself.`
 }
 
 export function createTeam(config: TeamConfig): AgentTeam {

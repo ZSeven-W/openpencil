@@ -443,6 +443,7 @@ const fr: TranslationKeys = {
   'builtin.teamDescription': 'Utilisez différents modèles pour le chat et le design. Le modèle de chat gère la conversation ; le modèle de design gère generate_design.',
   'builtin.teamDesignModel': 'Modèle de design',
   'builtin.teamSelectModel': 'Sélectionner un modèle...',
+  'builtin.teamSameModelWarning': 'Astuce : utilisez un modèle différent et plus performant pour le design afin de tirer le meilleur parti du mode Équipe.',
 
   // ── Figma Import ──
   'figma.title': 'Importer depuis Figma',

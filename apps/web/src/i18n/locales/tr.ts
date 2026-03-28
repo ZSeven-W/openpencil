@@ -438,6 +438,7 @@ const tr: TranslationKeys = {
   'builtin.teamDescription': 'Sohbet ve tasarım için farklı modeller kullanın. Sohbet modeli konuşmayı, tasarım modeli generate_design\'ı yönetir.',
   'builtin.teamDesignModel': 'Tasarım Modeli',
   'builtin.teamSelectModel': 'Model seçin...',
+  'builtin.teamSameModelWarning': 'İpucu: Takım modundan en iyi şekilde yararlanmak için tasarım için farklı, daha güçlü bir model kullanın.',
 
   // ── Figma Import ──
   'figma.title': 'Figma\'dan İçe Aktar',

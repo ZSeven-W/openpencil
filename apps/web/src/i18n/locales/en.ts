@@ -436,6 +436,7 @@ const en = {
   'builtin.teamDescription': 'Use different models for chat and design. The chat model handles conversation; the design model handles generate_design.',
   'builtin.teamDesignModel': 'Design Model',
   'builtin.teamSelectModel': 'Select a model...',
+  'builtin.teamSameModelWarning': 'Tip: Use a different, more capable model for design to get the most benefit from Team mode.',
 
   // ── Figma Import ──
   'figma.title': 'Import from Figma',

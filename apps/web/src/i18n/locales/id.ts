@@ -438,6 +438,7 @@ const id: TranslationKeys = {
   'builtin.teamDescription': 'Gunakan model berbeda untuk obrolan dan desain. Model obrolan menangani percakapan; model desain menangani generate_design.',
   'builtin.teamDesignModel': 'Model Desain',
   'builtin.teamSelectModel': 'Pilih model...',
+  'builtin.teamSameModelWarning': 'Tips: Gunakan model yang berbeda dan lebih kuat untuk desain agar mendapat manfaat maksimal dari mode Tim.',
 
   // ── Figma Import ──
   'figma.title': 'Impor dari Figma',

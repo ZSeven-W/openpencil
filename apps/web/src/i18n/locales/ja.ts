@@ -441,6 +441,7 @@ const ja: TranslationKeys = {
   'builtin.teamDescription': 'チャットとデザインに異なるモデルを使用します。チャットモデルは会話を、デザインモデルは generate_design を処理します。',
   'builtin.teamDesignModel': 'デザインモデル',
   'builtin.teamSelectModel': 'モデルを選択...',
+  'builtin.teamSameModelWarning': 'ヒント：デザインには別のより高性能なモデルを使用すると、チームモードの効果が最大になります。',
 
   // ── Figma Import ──
   'figma.title': 'Figma からインポート',

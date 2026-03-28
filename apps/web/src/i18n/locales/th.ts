@@ -438,6 +438,7 @@ const th: TranslationKeys = {
   'builtin.teamDescription': 'ใช้โมเดลที่แตกต่างกันสำหรับแชทและการออกแบบ โมเดลแชทจัดการการสนทนา โมเดลออกแบบจัดการ generate_design',
   'builtin.teamDesignModel': 'โมเดลออกแบบ',
   'builtin.teamSelectModel': 'เลือกโมเดล...',
+  'builtin.teamSameModelWarning': 'เคล็ดลับ: ใช้โมเดลที่แตกต่างและมีความสามารถมากกว่าสำหรับการออกแบบเพื่อใช้ประโยชน์จากโหมดทีมอย่างเต็มที่',
 
   // ── Figma Import ──
   'figma.title': 'นำเข้าจาก Figma',

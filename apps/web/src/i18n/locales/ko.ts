@@ -438,6 +438,7 @@ const ko: TranslationKeys = {
   'builtin.teamDescription': '대화와 디자인에 다른 모델을 사용합니다. 대화 모델은 채팅을, 디자인 모델은 generate_design을 처리합니다.',
   'builtin.teamDesignModel': '디자인 모델',
   'builtin.teamSelectModel': '모델 선택...',
+  'builtin.teamSameModelWarning': '팁: 디자인에 다른 고성능 모델을 사용하면 팀 모드의 효과를 극대화할 수 있습니다.',
 
   // ── Figma Import ──
   'figma.title': 'Figma에서 가져오기',

@@ -610,18 +610,25 @@ export function TeamSection() {
         {t('builtin.teamDescription')}
       </p>
       {teamEnabled && (
-        <div>
-          <label className="text-[11px] text-muted-foreground mb-1 block">{t('builtin.teamDesignModel')}</label>
-          <select
-            value={teamDesignModel ?? ''}
-            onChange={(e) => handleModelChange(e.target.value)}
-            className="w-full h-8 px-2 text-[13px] bg-card text-foreground rounded-md border border-input focus:border-ring outline-none transition-colors"
-          >
-            <option value="">{t('builtin.teamSelectModel')}</option>
-            {modelOptions.map((opt) => (
-              <option key={opt.value} value={opt.value}>{opt.label}</option>
-            ))}
-          </select>
+        <div className="space-y-2">
+          <div>
+            <label className="text-[11px] text-muted-foreground mb-1 block">{t('builtin.teamDesignModel')}</label>
+            <select
+              value={teamDesignModel ?? ''}
+              onChange={(e) => handleModelChange(e.target.value)}
+              className="w-full h-8 px-2 text-[13px] bg-card text-foreground rounded-md border border-input focus:border-ring outline-none transition-colors"
+            >
+              <option value="">{t('builtin.teamSelectModel')}</option>
+              {modelOptions.map((opt) => (
+                <option key={opt.value} value={opt.value}>{opt.label}</option>
+              ))}
+            </select>
+          </div>
+          {teamDesignModel && modelOptions.length <= 2 && (
+            <p className="text-[10px] text-amber-500 leading-relaxed">
+              {t('builtin.teamSameModelWarning')}
+            </p>
+          )}
         </div>
       )}
     </div>

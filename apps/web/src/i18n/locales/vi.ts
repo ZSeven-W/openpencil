@@ -438,6 +438,7 @@ const vi: TranslationKeys = {
   'builtin.teamDescription': 'Sử dụng các mô hình khác nhau cho trò chuyện và thiết kế. Mô hình trò chuyện xử lý hội thoại; mô hình thiết kế xử lý generate_design.',
   'builtin.teamDesignModel': 'Mô hình thiết kế',
   'builtin.teamSelectModel': 'Chọn mô hình...',
+  'builtin.teamSameModelWarning': 'Mẹo: Sử dụng một mô hình khác, mạnh hơn cho thiết kế để tận dụng tối đa chế độ Nhóm.',
 
   // ── Figma Import ──
   'figma.title': 'Nhập từ Figma',

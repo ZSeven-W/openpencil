@@ -440,6 +440,7 @@ const ru: TranslationKeys = {
   'builtin.teamDescription': 'Используйте разные модели для чата и дизайна. Модель чата обрабатывает беседу, модель дизайна обрабатывает generate_design.',
   'builtin.teamDesignModel': 'Модель дизайна',
   'builtin.teamSelectModel': 'Выберите модель...',
+  'builtin.teamSameModelWarning': 'Совет: используйте другую, более мощную модель для дизайна, чтобы получить максимальную пользу от режима Команды.',
 
   // ── Figma Import ──
   'figma.title': 'Импорт из Figma',

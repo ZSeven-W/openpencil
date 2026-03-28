@@ -438,6 +438,7 @@ const hi: TranslationKeys = {
   'builtin.teamDescription': 'चैट और डिज़ाइन के लिए अलग-अलग मॉडल का उपयोग करें। चैट मॉडल बातचीत संभालता है; डिज़ाइन मॉडल generate_design संभालता है।',
   'builtin.teamDesignModel': 'डिज़ाइन मॉडल',
   'builtin.teamSelectModel': 'मॉडल चुनें...',
+  'builtin.teamSameModelWarning': 'सुझाव: टीम मोड का अधिकतम लाभ उठाने के लिए डिज़ाइन के लिए एक अलग, अधिक सक्षम मॉडल का उपयोग करें।',
 
   // ── Figma Import ──
   'figma.title': 'Figma से आयात करें',
