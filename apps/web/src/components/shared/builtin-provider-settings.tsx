@@ -624,11 +624,6 @@ export function TeamSection() {
               ))}
             </select>
           </div>
-          {teamDesignModel && modelOptions.length <= 2 && (
-            <p className="text-[10px] text-amber-500 leading-relaxed">
-              {t('builtin.teamSameModelWarning')}
-            </p>
-          )}
         </div>
       )}
     </div>

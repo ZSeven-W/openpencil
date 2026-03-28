@@ -153,6 +153,13 @@ export class AgentToolExecutor {
       }
     }
 
+    // Mark as in-progress BEFORE calling generateDesign to prevent duplicate calls.
+    // If the first call fails midway, partial nodes are cleaned up below.
+    this.rootInsertId = 'generating'
+
+    // Snapshot current node IDs so we can clean up partial nodes on failure
+    const nodeIdsBefore = new Set(docStore.getFlatNodes().map(n => n.id))
+
     // Match the CLI pipeline's generateDesign call exactly
     const { useAIStore: aiStore } = await import('@/stores/ai-store')
     const concurrency = aiStore.getState().concurrency
@@ -163,26 +170,38 @@ export class AgentToolExecutor {
       designMd = useDesignMdStore?.getState()?.designMd
     } catch { /* store may not exist */ }
 
-    const result = await generateDesign(
-      {
-        prompt,
-        model: designModel,
-        provider: designProvider as any,
-        concurrency,
-        context: {
-          canvasSize,
-          documentSummary: `Document has ${docStore.getFlatNodes().length} nodes`,
-          variables: doc.variables,
-          themes: doc.themes,
-          designMd,
+    let result: { nodes: unknown[] }
+    try {
+      result = await generateDesign(
+        {
+          prompt,
+          model: designModel,
+          provider: designProvider as any,
+          concurrency,
+          context: {
+            canvasSize,
+            documentSummary: `Document has ${docStore.getFlatNodes().length} nodes`,
+            variables: doc.variables,
+            themes: doc.themes,
+            designMd,
+          },
         },
-      },
-      {
-        onApplyPartial: () => {},
-        onTextUpdate: () => {},
-        animated: true,
-      },
-    )
+        {
+          onApplyPartial: () => {},
+          onTextUpdate: () => {},
+          animated: true,
+        },
+      )
+    } catch (err) {
+      // Clean up partial nodes inserted before the failure
+      const currentNodes = docStore.getFlatNodes()
+      const newNodes = currentNodes.filter(n => !nodeIdsBefore.has(n.id))
+      for (const n of newNodes) {
+        try { docStore.removeNode(n.id) } catch { /* ignore */ }
+      }
+      this.rootInsertId = null // Allow retry
+      return { success: false, error: `Design generation failed: ${String(err)}` }
+    }
 
     this.rootInsertId = 'generated'
 
