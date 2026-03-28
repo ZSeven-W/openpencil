@@ -31,10 +31,16 @@ interface ChatBody {
   system: string
   messages: Array<{ role: 'user' | 'assistant'; content: string; attachments?: ChatAttachmentWire[] }>
   model?: string
-  provider?: 'anthropic' | 'openai' | 'opencode' | 'copilot' | 'gemini'
+  provider?: 'anthropic' | 'openai' | 'opencode' | 'copilot' | 'gemini' | 'builtin'
   thinkingMode?: 'adaptive' | 'disabled' | 'enabled'
   thinkingBudgetTokens?: number
   effort?: 'low' | 'medium' | 'high' | 'max'
+  /** For builtin provider: direct API key (not CLI-based) */
+  builtinApiKey?: string
+  /** For builtin provider: base URL for OpenAI-compatible endpoints */
+  builtinBaseURL?: string
+  /** For builtin provider: 'anthropic' or 'openai-compat' */
+  builtinType?: 'anthropic' | 'openai-compat'
 }
 
 async function readDebugTail(path?: string, maxLines = 40): Promise<string[] | undefined> {
@@ -135,7 +141,7 @@ export default defineEventHandler(async (event) => {
     setResponseHeaders(event, { 'Content-Type': 'application/json' })
     return { error: 'Missing model. Model fallback is disabled.' }
   }
-  if (body.provider !== 'anthropic' && body.provider !== 'openai' && body.provider !== 'opencode' && body.provider !== 'copilot' && body.provider !== 'gemini') {
+  if (body.provider !== 'anthropic' && body.provider !== 'openai' && body.provider !== 'opencode' && body.provider !== 'copilot' && body.provider !== 'gemini' && body.provider !== 'builtin') {
     setResponseHeaders(event, { 'Content-Type': 'application/json' })
     return { error: 'Missing or unsupported provider. Provider fallback is disabled.' }
   }
@@ -146,6 +152,7 @@ export default defineEventHandler(async (event) => {
     Connection: 'keep-alive',
   })
 
+  if (body.provider === 'builtin') return streamViaBuiltin(body)
   if (body.provider === 'anthropic') return streamViaAgentSDK(body, body.model)
   if (body.provider === 'opencode') return streamViaOpenCode(body, body.model)
   if (body.provider === 'copilot') return streamViaCopilot(body, body.model)
@@ -153,8 +160,9 @@ export default defineEventHandler(async (event) => {
   return streamViaCodex(body, body.model)
 })
 
-// Keep-alive ping interval (ms) — prevents client timeout while waiting for API TTFT
-const KEEPALIVE_INTERVAL_MS = 15_000
+// Keep-alive ping interval (ms) — must be shorter than Bun's 10s idle timeout
+// to prevent "socket connection was closed unexpectedly" errors
+const KEEPALIVE_INTERVAL_MS = 5_000
 function getAgentThinkingConfig(body: ChatBody):
   | { type: 'adaptive' | 'disabled' }
   | { type: 'enabled'; budgetTokens?: number }
@@ -846,8 +854,10 @@ function streamViaCopilot(body: ChatBody, model?: string) {
       try {
         const { CopilotClient, approveAll } = await import('@github/copilot-sdk')
         // Use standalone copilot binary to avoid Bun's node:sqlite issue
-        const { resolveCopilotCli } = await import('../../utils/copilot-client')
-        const cliPath = resolveCopilotCli()
+        const { resolveCopilotCli, resolveCliPathForSdk } = await import('../../utils/copilot-client')
+        const rawCliPath = resolveCopilotCli()
+        // On Windows, .cmd wrappers cause "spawn EINVAL" — resolve to .js entry point
+        const cliPath = rawCliPath ? resolveCliPathForSdk(rawCliPath) : undefined
         const client = new CopilotClient({
           autoStart: true,
           ...(cliPath ? { cliPath } : {}),
@@ -895,6 +905,70 @@ function streamViaCopilot(body: ChatBody, model?: string) {
         if (copilotClient) {
           copilotClient.stop().catch(() => {})
         }
+        controller.close()
+      }
+    },
+  })
+
+  return new Response(stream)
+}
+
+/**
+ * Stream via builtin provider — direct API key, no CLI tool needed.
+ * Uses Vercel AI SDK's streamText with Anthropic or OpenAI-compatible providers.
+ */
+function streamViaBuiltin(body: ChatBody) {
+  const stream = new ReadableStream({
+    async start(controller) {
+      const encoder = new TextEncoder()
+      const pingTimer = setInterval(() => {
+        try {
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: 'ping', content: '' })}\n\n`))
+        } catch { /* stream already closed */ }
+      }, KEEPALIVE_INTERVAL_MS)
+
+      try {
+        const { streamText } = await import('@zseven-w/agent')
+        const apiKey = body.builtinApiKey
+        const model = body.model?.trim()
+        if (!apiKey || !model) throw new Error('Builtin provider requires apiKey and model')
+
+        const { createAnthropicProvider, createOpenAICompatProvider } = await import('@zseven-w/agent')
+        const provider = body.builtinType === 'anthropic'
+          ? createAnthropicProvider({ apiKey, model, baseURL: body.builtinBaseURL })
+          : createOpenAICompatProvider({ apiKey, model, baseURL: body.builtinBaseURL })
+        const llmModel = provider.model
+
+        const messages = body.messages.map((m) => ({
+          role: m.role as 'user' | 'assistant',
+          content: m.content,
+        }))
+
+        const response = streamText({
+          model: llmModel,
+          system: body.system,
+          messages,
+        })
+
+        for await (const part of response.fullStream) {
+          if (part.type === 'text-delta' && part.text) {
+            clearInterval(pingTimer)
+            controller.enqueue(
+              encoder.encode(`data: ${JSON.stringify({ type: 'text', content: part.text })}\n\n`),
+            )
+          } else if (part.type === 'reasoning-delta' && (part as any).text) {
+            controller.enqueue(
+              encoder.encode(`data: ${JSON.stringify({ type: 'thinking', content: (part as any).text })}\n\n`),
+            )
+          }
+        }
+      } catch (error) {
+        const content = error instanceof Error ? error.message : 'Unknown error'
+        controller.enqueue(
+          encoder.encode(`data: ${JSON.stringify({ type: 'error', content })}\n\n`),
+        )
+      } finally {
+        clearInterval(pingTimer)
         controller.close()
       }
     },

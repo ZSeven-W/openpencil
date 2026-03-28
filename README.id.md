@@ -31,6 +31,8 @@
 
 <br />
 
+> **Catatan:** Ada proyek open-source lain dengan nama yang sama — [OpenPencil](https://github.com/open-pencil/open-pencil), yang berfokus pada desain visual kompatibel Figma dengan kolaborasi real-time. Proyek ini berfokus pada alur kerja AI-native dari desain ke kode.
+
 ## Mengapa OpenPencil
 
 <table>
@@ -180,6 +182,7 @@ docker build --target full -t openpencil-full .
 
 | Agen | Pengaturan |
 | --- | --- |
+| **Bawaan (9+ penyedia)** | Pilih dari preset penyedia dengan pemilih wilayah — Anthropic, OpenAI, Google, DeepSeek dan lainnya |
 | **Claude Code** | Tanpa konfigurasi — menggunakan Claude Agent SDK dengan OAuth lokal |
 | **Codex CLI** | Hubungkan di Pengaturan Agen (`Cmd+,`) |
 | **OpenCode** | Hubungkan di Pengaturan Agen (`Cmd+,`) |
@@ -187,6 +190,8 @@ docker build --target full -t openpencil-full .
 | **Gemini CLI** | Hubungkan di Pengaturan Agen (`Cmd+,`) |
 
 **Profil Kemampuan Model** — secara otomatis menyesuaikan prompt, mode thinking, dan timeout per tingkatan model. Model tingkat penuh (Claude) mendapat prompt lengkap; tingkat standar (GPT-4o, Gemini, DeepSeek) menonaktifkan thinking; tingkat dasar (MiniMax, Qwen, Llama, Mistral) mendapat prompt JSON bertingkat yang disederhanakan untuk keandalan maksimum.
+
+**i18n** — Lokalisasi antarmuka lengkap dalam 15 bahasa: English, 简体中文, 繁體中文, 日本語, 한국어, Français, Español, Deutsch, Português, Русский, हिन्दी, Türkçe, ไทย, Tiếng Việt, Bahasa Indonesia.
 
 **Server MCP**
 - Server MCP bawaan — instal satu klik ke Claude Code / Codex / Gemini / OpenCode / Kiro / Copilot CLI
@@ -219,6 +224,8 @@ cat design.dsl | op design - # Pipe dari stdin
 
 Mendukung tiga metode input: string inline, `@filepath` (baca dari file), atau `-` (baca dari stdin). Bekerja dengan aplikasi desktop atau web dev server. Lihat [CLI README](./apps/cli/README.md) untuk referensi perintah lengkap.
 
+**LLM Skill** — instal plugin [OpenPencil Skill](https://github.com/ZSeven-W/openpencil-skill) untuk mengajarkan agen AI (Claude Code, Cursor, Codex, Gemini CLI, dll.) mendesain dengan `op`.
+
 ## Fitur
 
 **Kanvas & Menggambar**
@@ -248,13 +255,13 @@ Mendukung tiga metode input: string inline, `@filepath` (baca dari file), atau `
 
 | | |
 | --- | --- |
-| **Frontend** | React 19 · TanStack Start · Tailwind CSS v4 · shadcn/ui |
+| **Frontend** | React 19 · TanStack Start · Tailwind CSS v4 · shadcn/ui · i18next |
 | **Kanvas** | CanvasKit/Skia (WASM, akselerasi GPU) |
 | **State** | Zustand v5 |
 | **Server** | Nitro |
 | **Desktop** | Electron 35 |
 | **CLI** | `op` — kontrol terminal, batch design DSL, ekspor kode |
-| **AI** | Anthropic SDK · Claude Agent SDK · OpenCode SDK · Copilot SDK |
+| **AI** | Vercel AI SDK v6 · Anthropic SDK · Claude Agent SDK · OpenCode SDK · Copilot SDK |
 | **Runtime** | Bun · Vite 7 |
 | **Format file** | `.op` — berbasis JSON, mudah dibaca manusia, ramah Git |
 
@@ -289,7 +296,9 @@ openpencil/
 │   ├── pen-codegen/         Generator kode (React, HTML, Vue, Flutter, ...)
 │   ├── pen-figma/           Parser dan konverter file Figma .fig
 │   ├── pen-renderer/        Renderer CanvasKit/Skia mandiri
-│   └── pen-sdk/             SDK payung (re-ekspor semua paket)
+│   ├── pen-sdk/             SDK payung (re-ekspor semua paket)
+│   ├── pen-ai-skills/       Engine skill AI prompt (pemuatan prompt bertahap)
+│   └── agent/               SDK agen AI (Vercel AI SDK, multi-penyedia, tim agen)
 └── .githooks/               Pre-commit sinkronisasi versi dari nama branch
 ```
 
@@ -348,6 +357,8 @@ Kontribusi sangat disambut! Lihat [CLAUDE.md](./CLAUDE.md) untuk detail arsitekt
 - [x] Profil kemampuan multi-model
 - [x] Restrukturisasi monorepo dengan paket yang dapat digunakan ulang
 - [x] Alat CLI (`op`) kontrol terminal
+- [x] SDK agen AI bawaan dengan dukungan multi-penyedia
+- [x] i18n — 15 bahasa
 - [ ] Pengeditan kolaboratif
 - [ ] Sistem plugin
 

@@ -31,6 +31,8 @@
 
 <br />
 
+> **Lưu ý:** Có một dự án mã nguồn mở khác cùng tên — [OpenPencil](https://github.com/open-pencil/open-pencil), tập trung vào thiết kế trực quan tương thích Figma với cộng tác thời gian thực. Dự án này tập trung vào quy trình AI-native từ thiết kế sang mã.
+
 ## Tại sao chọn OpenPencil
 
 <table>
@@ -180,6 +182,7 @@ docker build --target full -t openpencil-full .
 
 | Tác nhân | Cài đặt |
 | --- | --- |
+| **Tích hợp sẵn (9+ nhà cung cấp)** | Chọn từ các preset nhà cung cấp với bộ chuyển đổi khu vực — Anthropic, OpenAI, Google, DeepSeek và nhiều hơn |
 | **Claude Code** | Không cần cấu hình — sử dụng Claude Agent SDK với OAuth cục bộ |
 | **Codex CLI** | Kết nối trong Cài đặt tác nhân (`Cmd+,`) |
 | **OpenCode** | Kết nối trong Cài đặt tác nhân (`Cmd+,`) |
@@ -187,6 +190,8 @@ docker build --target full -t openpencil-full .
 | **Gemini CLI** | Kết nối trong Cài đặt tác nhân (`Cmd+,`) |
 
 **Hồ sơ Năng lực Mô hình** — tự động thích ứng prompt, chế độ thinking và thời gian chờ theo từng cấp mô hình. Mô hình cấp đầy đủ (Claude) nhận prompt hoàn chỉnh; cấp tiêu chuẩn (GPT-4o, Gemini, DeepSeek) tắt thinking; cấp cơ bản (MiniMax, Qwen, Llama, Mistral) nhận prompt JSON lồng nhau đơn giản hóa để đảm bảo độ tin cậy tối đa.
+
+**i18n** — Bản địa hóa giao diện đầy đủ bằng 15 ngôn ngữ: English, 简体中文, 繁體中文, 日本語, 한국어, Français, Español, Deutsch, Português, Русский, हिन्दी, Türkçe, ไทย, Tiếng Việt, Bahasa Indonesia.
 
 **Máy chủ MCP**
 - Máy chủ MCP tích hợp sẵn — cài đặt một cú nhấp vào Claude Code / Codex / Gemini / OpenCode / Kiro / Copilot CLI
@@ -219,6 +224,8 @@ cat design.dsl | op design - # Pipe từ stdin
 
 Hỗ trợ ba phương thức nhập liệu: chuỗi inline, `@filepath` (đọc từ tệp), hoặc `-` (đọc từ stdin). Hoạt động với ứng dụng desktop hoặc web dev server. Xem [CLI README](./apps/cli/README.md) để biết đầy đủ các lệnh.
 
+**LLM Skill** — cài đặt plugin [OpenPencil Skill](https://github.com/ZSeven-W/openpencil-skill) để dạy AI agent (Claude Code, Cursor, Codex, Gemini CLI, v.v.) thiết kế bằng `op`.
+
 ## Tính năng
 
 **Canvas và Vẽ**
@@ -248,13 +255,13 @@ Hỗ trợ ba phương thức nhập liệu: chuỗi inline, `@filepath` (đọc
 
 | | |
 | --- | --- |
-| **Frontend** | React 19 · TanStack Start · Tailwind CSS v4 · shadcn/ui |
+| **Frontend** | React 19 · TanStack Start · Tailwind CSS v4 · shadcn/ui · i18next |
 | **Canvas** | CanvasKit/Skia (WASM, tăng tốc GPU) |
 | **Trạng thái** | Zustand v5 |
 | **Máy chủ** | Nitro |
 | **Desktop** | Electron 35 |
 | **CLI** | `op` — điều khiển từ terminal, batch design DSL, xuất mã |
-| **AI** | Anthropic SDK · Claude Agent SDK · OpenCode SDK · Copilot SDK |
+| **AI** | Vercel AI SDK v6 · Anthropic SDK · Claude Agent SDK · OpenCode SDK · Copilot SDK |
 | **Runtime** | Bun · Vite 7 |
 | **Định dạng tệp** | `.op` — dựa trên JSON, dễ đọc, thân thiện với Git |
 
@@ -289,7 +296,9 @@ openpencil/
 │   ├── pen-codegen/         Bộ tạo mã (React, HTML, Vue, Flutter, ...)
 │   ├── pen-figma/           Trình phân tích và chuyển đổi tệp Figma .fig
 │   ├── pen-renderer/        Bộ dựng hình CanvasKit/Skia độc lập
-│   └── pen-sdk/             SDK tổng hợp (tái xuất tất cả các gói)
+│   ├── pen-sdk/             SDK tổng hợp (tái xuất tất cả các gói)
+│   ├── pen-ai-skills/       Engine kỹ năng AI prompt (tải prompt theo giai đoạn)
+│   └── agent/               SDK tác nhân AI (Vercel AI SDK, đa nhà cung cấp, đội tác nhân)
 └── .githooks/               Pre-commit đồng bộ phiên bản từ tên nhánh
 ```
 
@@ -348,6 +357,8 @@ Chào mừng đóng góp! Xem [CLAUDE.md](./CLAUDE.md) để biết chi tiết v
 - [x] Hồ sơ năng lực đa mô hình
 - [x] Tái cấu trúc monorepo với các gói tái sử dụng
 - [x] Công cụ CLI (`op`) điều khiển từ terminal
+- [x] SDK tác nhân AI tích hợp sẵn với hỗ trợ đa nhà cung cấp
+- [x] i18n — 15 ngôn ngữ
 - [ ] Chỉnh sửa cộng tác
 - [ ] Hệ thống plugin
 

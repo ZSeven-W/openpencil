@@ -34,15 +34,6 @@ jobs:
         id: version
         run: echo "version=$(jq -r .version package.json)" >> "$GITHUB_OUTPUT"
 
-      - name: Check if version already published
-        run: |
-          VERSION=${{ steps.version.outputs.version }}
-          if npm view "@zseven-w/pen-types@${VERSION}" version 2>/dev/null; then
-            echo "::error::Version ${VERSION} already exists on npm. Aborting."
-            exit 1
-          fi
-          echo "Version ${VERSION} is not yet published. Proceeding."
-
       - name: Replace workspace:* with version
         run: |
           VERSION=${{ steps.version.outputs.version }}
@@ -70,45 +61,51 @@ jobs:
       - name: Verify CLI build
         run: node apps/cli/dist/openpencil-cli.cjs --version
 
-      # Publish in topological order — fail fast on error
+      # Publish in topological order — skip packages already published at this version
       - name: Publish pen-types
-        run: npm publish --access public
+        run: npm publish --access public 2>&1 || [[ $? -eq 0 ]] || npm view "@zseven-w/pen-types@${{ steps.version.outputs.version }}" version
         working-directory: packages/pen-types
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Publish pen-core
-        run: npm publish --access public
+        run: npm publish --access public 2>&1 || npm view "@zseven-w/pen-core@${{ steps.version.outputs.version }}" version
         working-directory: packages/pen-core
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Publish pen-codegen
-        run: npm publish --access public
+        run: npm publish --access public 2>&1 || npm view "@zseven-w/pen-codegen@${{ steps.version.outputs.version }}" version
         working-directory: packages/pen-codegen
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Publish pen-figma
-        run: npm publish --access public
+        run: npm publish --access public 2>&1 || npm view "@zseven-w/pen-figma@${{ steps.version.outputs.version }}" version
         working-directory: packages/pen-figma
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Publish pen-renderer
-        run: npm publish --access public
+        run: npm publish --access public 2>&1 || npm view "@zseven-w/pen-renderer@${{ steps.version.outputs.version }}" version
         working-directory: packages/pen-renderer
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Publish pen-sdk
-        run: npm publish --access public
+        run: npm publish --access public 2>&1 || npm view "@zseven-w/pen-sdk@${{ steps.version.outputs.version }}" version
         working-directory: packages/pen-sdk
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
+      - name: Publish pen-ai-skills
+        run: npm publish --access public 2>&1 || npm view "@zseven-w/pen-ai-skills@${{ steps.version.outputs.version }}" version
+        working-directory: packages/pen-ai-skills
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
       - name: Publish CLI
-        run: npm publish --access public
+        run: npm publish --access public 2>&1 || npm view "@zseven-w/openpencil-cli@${{ steps.version.outputs.version }}" version
         working-directory: apps/cli
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

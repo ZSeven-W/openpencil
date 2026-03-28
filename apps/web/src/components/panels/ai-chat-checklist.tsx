@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react'
-import { Pencil, ChevronDown, Check, AlertTriangle } from 'lucide-react'
+import { Pencil, ChevronDown, Check, AlertTriangle, Loader2, Circle } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import type { ChatMessage as ChatMessageType } from '@/services/ai/ai-types'
 import {
@@ -42,12 +42,22 @@ export function FixedChecklist({ messages, isStreaming }: { messages: ChatMessag
   if (items.length === 0) return null
 
   const completed = items.filter((item) => item.done).length
+  const progress = items.length > 0 ? (completed / items.length) * 100 : 0
 
   // Hide checklist when streaming stopped with nothing completed
   if (!isStreaming && completed === 0) return null
 
   return (
-    <div className="shrink-0 border-t border-border bg-card/95">
+    <div className="shrink-0 border-t border-border bg-card/95 backdrop-blur-sm">
+      {/* Progress bar */}
+      <div className="h-[2px] bg-secondary/50">
+        <div
+          className="h-full bg-primary transition-all duration-500 ease-out"
+          style={{ width: `${progress}%` }}
+        />
+      </div>
+
+      {/* Header */}
       <button
         type="button"
         onClick={() => setCollapsed(!collapsed)}
@@ -57,8 +67,10 @@ export function FixedChecklist({ messages, isStreaming }: { messages: ChatMessag
           <Pencil size={13} className="text-muted-foreground shrink-0" />
           <span className="text-xs font-medium text-foreground">Pencil it out</span>
         </div>
-        <div className="flex items-center gap-1.5">
-          <span className="text-xs text-muted-foreground">{completed}/{items.length}</span>
+        <div className="flex items-center gap-2">
+          <span className="text-[10px] font-medium tabular-nums text-muted-foreground bg-secondary/60 rounded-full px-1.5 py-0.5">
+            {completed}/{items.length}
+          </span>
           <ChevronDown
             size={12}
             className={cn(
@@ -68,50 +80,61 @@ export function FixedChecklist({ messages, isStreaming }: { messages: ChatMessag
           />
         </div>
       </button>
+
+      {/* Item list */}
       {!collapsed && (
-        <div className="px-3 pb-2.5 flex max-h-44 flex-col gap-1 overflow-y-auto">
+        <div className="px-3 pb-2.5 flex max-h-48 flex-col gap-0.5 overflow-y-auto">
           {items.map((item, index) => (
-            <div key={`${item.label}-${index}`} className="flex flex-col gap-0.5">
-              <div className="flex items-center gap-2 text-[11px] text-muted-foreground/90">
+            <div key={`${item.label}-${index}`} className="flex flex-col">
+              <div
+                className={cn(
+                  'flex items-center gap-2.5 py-1 px-1.5 rounded-md text-xs transition-colors',
+                  item.active ? 'bg-primary/[0.06]' : '',
+                )}
+              >
+                {/* Status indicator */}
+                {item.done ? (
+                  <span className="w-4 h-4 rounded-full bg-emerald-500/15 flex items-center justify-center shrink-0">
+                    <Check size={10} strokeWidth={2.5} className="text-emerald-500" />
+                  </span>
+                ) : item.active ? (
+                  <Loader2 size={14} className="text-primary animate-spin shrink-0" />
+                ) : (
+                  <Circle size={14} className="text-muted-foreground/30 shrink-0" />
+                )}
+
+                {/* Label */}
                 <span
                   className={cn(
-                    'w-3.5 h-3.5 rounded-full border flex items-center justify-center shrink-0',
+                    'truncate',
                     item.done
-                      ? 'border-emerald-500/70 text-emerald-500/80'
+                      ? 'text-muted-foreground'
                       : item.active
-                        ? 'border-primary/70 text-primary'
-                        : 'border-border/70 text-muted-foreground/50',
+                        ? 'text-foreground font-medium'
+                        : 'text-muted-foreground/60',
                   )}
                 >
-                  {item.done ? (
-                    <Check size={9} strokeWidth={2.5} />
-                  ) : (
-                    <span className={cn(
-                      'w-1.5 h-1.5 rounded-full',
-                      item.active ? 'bg-primary animate-pulse' : 'bg-muted-foreground/60',
-                    )} />
-                  )}
+                  {item.label}
                 </span>
-                <span className={cn(item.active ? 'text-foreground' : '')}>{item.label}</span>
               </div>
+
+              {/* Detail lines */}
               {item.details && item.details.length > 0 && (
-                <div className="ml-[22px] flex flex-col gap-px">
+                <div className="ml-[30px] flex flex-col gap-px pb-0.5">
                   {item.details.map((line, di) => {
                     const { status, text } = parseDetailStatus(line)
                     return (
-                      <span key={di} className="flex items-center gap-1.5 text-[10px] text-muted-foreground/70">
+                      <span key={di} className="flex items-center gap-1.5 text-[10px] text-muted-foreground/60">
                         {status === 'done' && (
-                          <span className="w-2.5 h-2.5 rounded-full border border-emerald-500/70 text-emerald-500/80 flex items-center justify-center shrink-0">
-                            <Check size={7} strokeWidth={2.5} />
+                          <span className="w-2.5 h-2.5 rounded-full bg-emerald-500/15 flex items-center justify-center shrink-0">
+                            <Check size={7} strokeWidth={2.5} className="text-emerald-500" />
                           </span>
                         )}
                         {status === 'pending' && (
-                          <span className="w-2.5 h-2.5 rounded-full border border-primary/70 flex items-center justify-center shrink-0">
-                            <span className="w-1 h-1 rounded-full bg-primary animate-pulse" />
-                          </span>
+                          <Loader2 size={9} className="text-primary/70 animate-spin shrink-0" />
                         )}
                         {status === 'error' && (
-                          <AlertTriangle size={10} className="text-amber-500/80 shrink-0" />
+                          <AlertTriangle size={9} className="text-amber-500/80 shrink-0" />
                         )}
                         <span>{text}</span>
                       </span>

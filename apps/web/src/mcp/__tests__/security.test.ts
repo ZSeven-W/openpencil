@@ -1,12 +1,18 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest'
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { writeFile, unlink, mkdir } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { sanitizeObject } from '../utils/sanitize'
-import { openDocument, invalidateCache } from '../document-manager'
+import {
+  openDocument,
+  invalidateCache,
+  probeLiveSyncUrl,
+  buildLiveSyncMessage,
+} from '../document-manager'
 import { handleBatchDesign } from '../tools/batch-design'
 
 const TMP_DIR = join(tmpdir(), 'openpencil-security-tests')
+const originalFetch = globalThis.fetch
 
 beforeEach(async () => {
   await mkdir(TMP_DIR, { recursive: true })
@@ -22,6 +28,8 @@ afterEach(async () => {
       await unlink(fp)
     } catch {}
   }
+  vi.restoreAllMocks()
+  globalThis.fetch = originalFetch
 })
 
 // ---------- sanitizeObject ----------
@@ -120,6 +128,33 @@ describe('openDocument', () => {
       x: 10,
       y: 20,
     })
+  })
+})
+
+describe('live sync diagnostics', () => {
+  it('treats 404 document endpoint as reachable but missing live document', async () => {
+    globalThis.fetch = vi.fn(async (input: string | URL | Request) => {
+      const url = String(input)
+      if (url.endsWith('/api/mcp/document')) {
+        return new Response('{}', { status: 404 })
+      }
+      return new Response('{}', { status: 200 })
+    }) as typeof fetch
+
+    await expect(probeLiveSyncUrl('http://127.0.0.1:3000')).resolves.toBe('no-document')
+  })
+
+  it('reports unreachable when all live sync probes fail', async () => {
+    globalThis.fetch = vi.fn(async () => {
+      throw new Error('connect failed')
+    }) as typeof fetch
+
+    await expect(probeLiveSyncUrl('http://127.0.0.1:3000')).resolves.toBe('unreachable')
+  })
+
+  it('builds a clear unreachable message', () => {
+    expect(buildLiveSyncMessage('unreachable', 3000)).toContain('port 3000')
+    expect(buildLiveSyncMessage('unreachable', 3000)).toContain('unreachable')
   })
 })
 

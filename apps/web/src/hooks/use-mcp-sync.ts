@@ -54,10 +54,10 @@ export function useMcpSync() {
             clientIdRef.current = data.clientId
             // Push current document so MCP can read it immediately
             pushDocumentToServer(data.clientId)
-          } else if (data.type === 'document:update') {
+          } else if (data.type === 'document:update' || data.type === 'document:init') {
             const doc = data.document as PenDocument
             const childCount = doc.pages?.[0]?.children?.length ?? doc.children?.length ?? 0
-            console.log('[mcp-sync] Received document:update, top-level children:', childCount)
+            console.log(`[mcp-sync] Received ${data.type}, top-level children:`, childCount)
             // Suppress push-back for a short window — applyExternalDocument
             // may trigger multiple cascading setState calls.
             skipPushUntilRef.current = Date.now() + 200
@@ -80,12 +80,28 @@ export function useMcpSync() {
       }
     }
 
-    connect()
+    // Clear stale server cache from previous session before connecting.
+    // This prevents document:init from echoing back an old document and
+    // falsely marking the editor as dirty after a page refresh or file open.
+    fetch(`${baseUrl}/api/mcp/sync-reset`, { method: 'POST' })
+      .catch(() => {})
+      .finally(() => {
+        if (!disposed) connect()
+      })
 
-    // Push local document changes to Nitro (debounced)
-    const unsubDoc = useDocumentStore.subscribe(() => {
+    // Push local document changes to Nitro (debounced).
+    // On loadDocument/newDocument (isDirty transitions to false), push
+    // immediately so the server cache is replaced without waiting 2s.
+    const unsubDoc = useDocumentStore.subscribe((state, prevState) => {
       if (Date.now() < skipPushUntilRef.current) return
       if (pushTimerRef.current) clearTimeout(pushTimerRef.current)
+
+      const isLoadEvent = !state.isDirty && prevState.isDirty !== state.isDirty
+      if (isLoadEvent) {
+        pushDocumentToServer(clientIdRef.current)
+        return
+      }
+
       pushTimerRef.current = setTimeout(() => {
         pushDocumentToServer(clientIdRef.current)
       }, PUSH_DEBOUNCE_MS)
