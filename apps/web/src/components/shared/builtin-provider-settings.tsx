@@ -54,7 +54,7 @@ const PROVIDER_PRESETS: Record<BuiltinProviderPreset, PresetConfig> = {
     type: 'openai-compat',
     baseURL: 'https://generativelanguage.googleapis.com/v1beta/openai',
     placeholder: 'AIza...',
-    modelPlaceholder: 'gemini-2.5-flash',
+    modelPlaceholder: 'gemini-3-flash-preview',
   },
   minimax: {
     label: 'MiniMax',
@@ -170,9 +170,11 @@ const BUILTIN_MODEL_LISTS: Partial<Record<BuiltinProviderPreset, Array<{ id: str
     { id: 'claude-sonnet-4-20250514', name: 'Claude Sonnet 4' },
   ],
   gemini: [
+    { id: 'gemini-3.1-pro-preview', name: 'Gemini 3.1 Pro' },
+    { id: 'gemini-3-flash-preview', name: 'Gemini 3 Flash' },
+    { id: 'gemini-3.1-flash-lite-preview', name: 'Gemini 3.1 Flash-Lite' },
     { id: 'gemini-2.5-pro', name: 'Gemini 2.5 Pro' },
     { id: 'gemini-2.5-flash', name: 'Gemini 2.5 Flash' },
-    { id: 'gemini-2.0-flash', name: 'Gemini 2.0 Flash' },
   ],
   minimax: [
     { id: 'MiniMax-M2.7', name: 'MiniMax M2.7' },
