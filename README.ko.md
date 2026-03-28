@@ -31,6 +31,8 @@
 
 <br />
 
+> **참고:** 같은 이름의 다른 오픈소스 프로젝트가 있습니다 — [OpenPencil](https://github.com/open-pencil/open-pencil). 해당 프로젝트는 Figma 호환 비주얼 디자인과 실시간 협업에 중점을 둡니다. 본 프로젝트는 AI 네이티브 디자인-투-코드 워크플로에 중점을 둡니다.
+
 ## OpenPencil을 선택하는 이유
 
 <table>

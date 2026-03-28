@@ -31,6 +31,8 @@
 
 <br />
 
+> **注意：** 另有一个同名的开源项目 — [OpenPencil](https://github.com/open-pencil/open-pencil)，专注于兼容 Figma 的可视化设计与实时协作。本项目专注于 AI 原生的设计转代码工作流。
+
 ## 为什么选择 OpenPencil
 
 <table>

@@ -31,6 +31,8 @@
 
 <br />
 
+> **Nota:** Existe outro projeto de código aberto com o mesmo nome — [OpenPencil](https://github.com/open-pencil/open-pencil), focado em design visual compatível com Figma com colaboração em tempo real. Este projeto foca em fluxos de trabalho AI-nativos de design para código.
+
 ## Por que OpenPencil
 
 <table>

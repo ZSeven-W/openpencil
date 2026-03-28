@@ -31,6 +31,8 @@
 
 <br />
 
+> **Note:** There is another open-source project with the same name — [OpenPencil](https://github.com/open-pencil/open-pencil), focused on Figma-compatible visual design with real-time collaboration. This project focuses on AI-native design-to-code workflows.
+
 ## Why OpenPencil
 
 <table>

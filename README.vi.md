@@ -31,6 +31,8 @@
 
 <br />
 
+> **Lưu ý:** Có một dự án mã nguồn mở khác cùng tên — [OpenPencil](https://github.com/open-pencil/open-pencil), tập trung vào thiết kế trực quan tương thích Figma với cộng tác thời gian thực. Dự án này tập trung vào quy trình AI-native từ thiết kế sang mã.
+
 ## Tại sao chọn OpenPencil
 
 <table>

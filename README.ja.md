@@ -31,6 +31,8 @@
 
 <br />
 
+> **注：** 同名の別のオープンソースプロジェクト — [OpenPencil](https://github.com/open-pencil/open-pencil) があります。そちらは Figma 互換のビジュアルデザインとリアルタイムコラボレーションに特化しています。本プロジェクトは AI ネイティブのデザインからコードへのワークフローに特化しています。
+
 ## Why OpenPencil
 
 <table>

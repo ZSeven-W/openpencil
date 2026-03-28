@@ -31,6 +31,8 @@
 
 <br />
 
+> **Not:** Aynı ada sahip başka bir açık kaynak proje bulunmaktadır — [OpenPencil](https://github.com/open-pencil/open-pencil), Figma uyumlu görsel tasarım ve gerçek zamanlı iş birliğine odaklanmaktadır. Bu proje, AI-native tasarımdan koda iş akışlarına odaklanmaktadır.
+
 ## Neden OpenPencil
 
 <table>

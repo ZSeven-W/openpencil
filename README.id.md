@@ -31,6 +31,8 @@
 
 <br />
 
+> **Catatan:** Ada proyek open-source lain dengan nama yang sama — [OpenPencil](https://github.com/open-pencil/open-pencil), yang berfokus pada desain visual kompatibel Figma dengan kolaborasi real-time. Proyek ini berfokus pada alur kerja AI-native dari desain ke kode.
+
 ## Mengapa OpenPencil
 
 <table>
