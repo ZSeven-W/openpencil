@@ -10,53 +10,12 @@ import type { AuthLevel } from '@zseven-w/agent'
 import { jsonSchema } from '@zseven-w/agent'
 import { agentSessions } from '../../utils/agent-sessions'
 
-/**
- * Tool parameter schemas as clean JSON Schema (no $schema, no additionalProperties).
- * Using jsonSchema() from AI SDK instead of Zod avoids extra fields that break
- * strict OpenAI-compatible APIs (MiniMax, StepFun, etc.).
- */
-const TOOL_SCHEMAS: Record<string, ReturnType<typeof jsonSchema>> = {
-  batch_get: jsonSchema({
-    type: 'object',
-    properties: {
-      ids: { type: 'array', items: { type: 'string' }, description: 'Node IDs to retrieve' },
-      patterns: { type: 'array', items: { type: 'string' }, description: 'Search patterns' },
-    },
-  }),
-  snapshot_layout: jsonSchema({
-    type: 'object',
-    properties: {
-      pageId: { type: 'string', description: 'Target page ID (optional)' },
-    },
-  }),
-  update_node: jsonSchema({
-    type: 'object',
-    properties: {
-      id: { type: 'string', description: 'Node ID to update' },
-      data: { type: 'object', description: 'Properties to update' },
-    },
-    required: ['id', 'data'],
-  }),
-  delete_node: jsonSchema({
-    type: 'object',
-    properties: {
-      id: { type: 'string', description: 'Node ID to delete' },
-    },
-    required: ['id'],
-  }),
-  generate_design: jsonSchema({
-    type: 'object',
-    properties: {
-      prompt: { type: 'string', description: 'Natural language description of the design to create' },
-    },
-    required: ['prompt'],
-  }),
-}
-
 interface ToolDef {
   name: string
   description: string
   level: AuthLevel
+  /** JSON Schema from client — single source of truth, no server-side duplication */
+  parameters?: Record<string, unknown>
 }
 
 interface AgentBody {
@@ -69,6 +28,7 @@ interface AgentBody {
   baseURL?: string
   toolDefs: ToolDef[]
   maxTurns?: number
+  maxOutputTokens?: number
 }
 
 function toModelMessages(raw: Array<{ role: string; content: unknown }>) {
@@ -130,11 +90,15 @@ export default defineEventHandler(async (event) => {
 
   const tools = createToolRegistry()
   for (const def of body.toolDefs ?? []) {
+    // Use client-provided JSON Schema (single source of truth)
+    // Strip $schema field that strict APIs (MiniMax, StepFun) reject
+    const params = def.parameters ? { ...def.parameters } : { type: 'object' }
+    delete (params as any).$schema
     tools.register({
       name: def.name,
       description: def.description,
       level: def.level,
-      schema: TOOL_SCHEMAS[def.name] ?? jsonSchema({ type: 'object' }),
+      schema: jsonSchema(params as any),
     })
   }
 
@@ -144,7 +108,8 @@ export default defineEventHandler(async (event) => {
     tools,
     systemPrompt: body.systemPrompt,
     maxTurns: body.maxTurns ?? 20,
-    maxOutputTokens: 4096,
+    maxOutputTokens: body.maxOutputTokens,
+    turnTimeout: 5 * 60_000, // 5 minutes — generate_design runs the full orchestrator pipeline
     abortSignal: abortController.signal,
   })
 

@@ -28,7 +28,7 @@ export { createAgent } from './agent-loop'
 export type { AgentConfig, Agent } from './agent-loop'
 
 // Re-export AI SDK utilities needed by consumers
-export { jsonSchema } from 'ai'
+export { jsonSchema, streamText } from 'ai'
 
 // Team
 export { createTeam } from './agent-team'
