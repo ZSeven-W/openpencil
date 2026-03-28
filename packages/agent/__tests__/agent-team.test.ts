@@ -36,4 +36,14 @@ describe('createTeam', () => {
     })
     expect(team).toBeDefined()
   })
+
+  it('does not mutate the caller tools registry', () => {
+    const tools = createToolRegistry()
+    const initialCount = tools.list().length
+    createTeam({
+      lead: { provider: mockProvider, tools, systemPrompt: 'Lead' },
+      members: [{ id: 'worker', provider: mockProvider, tools: createToolRegistry(), systemPrompt: 'Worker' }],
+    })
+    expect(tools.list().length).toBe(initialCount)
+  })
 })
