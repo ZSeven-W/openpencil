@@ -4,5 +4,6 @@ export { HistoryManager, type HistoryManagerOptions } from './core/history-manag
 export { SelectionManager, type SelectionManagerOptions } from './core/selection-manager.js';
 export { DocumentManager, type DocumentManagerOptions } from './core/document-manager.js';
 export { PageManager, type PageManagerOptions } from './core/page-manager.js';
+export { VariableManager, type VariableManagerOptions } from './core/variable-manager.js';
 export { ViewportController, type ViewportControllerOptions } from './core/viewport-controller.js';
 export { EngineSpatialIndex } from './core/spatial-index.js';
