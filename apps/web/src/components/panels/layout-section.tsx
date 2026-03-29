@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import NumberInput from '@/components/shared/number-input';
 import type { PenNode, ContainerProps, SizingBehavior } from '@/types/pen';
 import { cn } from '@/lib/utils';
@@ -352,7 +353,7 @@ function SizingCheckboxes({
 // Main LayoutSection
 // ---------------------------------------------------------------------------
 
-export default function LayoutSection({ node, onUpdate }: LayoutSectionProps) {
+function LayoutSectionInner({ node, onUpdate }: LayoutSectionProps) {
   const { t } = useTranslation();
   const layout = node.layout ?? 'none';
   const hasLayout = layout !== 'none';
@@ -496,3 +497,5 @@ export default function LayoutSection({ node, onUpdate }: LayoutSectionProps) {
     </div>
   );
 }
+
+export default memo(LayoutSectionInner);

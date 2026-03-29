@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback, useEffect } from 'react';
+import { useState, useRef, useCallback, useEffect, memo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useDocumentStore, findNodeInTree, getActivePageChildren } from '@/stores/document-store';
 import { useCanvasStore } from '@/stores/canvas-store';
@@ -118,7 +118,7 @@ function collectCollapsibleNodeIds(
   return result;
 }
 
-export default function LayerPanel() {
+function LayerPanelInner() {
   const { t } = useTranslation();
   const [panelWidth, setPanelWidth] = useState(LAYER_DEFAULT_WIDTH);
   const isDraggingResize = useRef(false);
@@ -493,3 +493,5 @@ export default function LayerPanel() {
     </div>
   );
 }
+
+export default memo(LayerPanelInner);

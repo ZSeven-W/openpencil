@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, memo } from 'react';
 import { Plus, ChevronDown, Pencil, Trash2, BookMarked, Upload, Download } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useTranslation } from 'react-i18next';
@@ -22,7 +22,7 @@ export interface ThemeManagerProps {
 }
 
 /** Theme tabs header row — manages axes, presets, and import/export. */
-export function ThemeTabsHeader({
+function ThemeTabsHeaderInner({
   themes,
   variables,
   setThemes,
@@ -380,6 +380,8 @@ export function ThemeTabsHeader({
   );
 }
 
+export const ThemeTabsHeader = memo(ThemeTabsHeaderInner);
+
 export interface VariantColumnsHeaderProps {
   themeValues: string[];
   themeAxis: string;
@@ -390,7 +392,7 @@ export interface VariantColumnsHeaderProps {
 }
 
 /** Column headers row — variant names with rename/delete dropdown + add variant button. */
-export function VariantColumnsHeader({
+function VariantColumnsHeaderInner({
   themeValues,
   themeAxis,
   themes,
@@ -556,3 +558,5 @@ export function VariantColumnsHeader({
     </div>
   );
 }
+
+export const VariantColumnsHeader = memo(VariantColumnsHeaderInner);

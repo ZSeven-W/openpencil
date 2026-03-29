@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback, useEffect, useMemo } from 'react';
+import { useState, useRef, useCallback, useEffect, useMemo, memo } from 'react';
 import {
   Copy,
   Download,
@@ -53,7 +53,7 @@ const HIGHLIGHT_LANG: Record<Framework, SyntaxLanguage> = {
   'react-native': 'jsx',
 };
 
-export default function CodePanel() {
+function CodePanelInner() {
   const [activeTab, setActiveTab] = useState<Framework>('react');
   const [codeCache, setCodeCache] = useState<
     Partial<Record<Framework, { code: string; degraded: boolean }>>
@@ -493,6 +493,8 @@ export default function CodePanel() {
     </div>
   );
 }
+
+export default memo(CodePanelInner);
 
 // ── Progress Item Sub-Component ──
 

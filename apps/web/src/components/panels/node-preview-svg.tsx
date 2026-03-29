@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, memo } from 'react';
 import type { PenNode, ContainerProps } from '@/types/pen';
 import type { PenFill } from '@/types/styles';
 import type { VariableDefinition } from '@/types/variables';
@@ -486,7 +486,7 @@ function renderNode(
 // Public component
 // ---------------------------------------------------------------------------
 
-export default function NodePreviewSvg({
+function NodePreviewSvgInner({
   node,
   maxWidth,
   maxHeight,
@@ -524,3 +524,5 @@ export default function NodePreviewSvg({
 
   return svg ?? <div className="w-16 h-8 rounded bg-muted" />;
 }
+
+export default memo(NodePreviewSvgInner);
