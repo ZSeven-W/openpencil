@@ -143,6 +143,28 @@
         "typescript": "^5.7.2",
       },
     },
+    "packages/pen-engine": {
+      "name": "@zseven-w/pen-engine",
+      "version": "0.6.0",
+      "dependencies": {
+        "@zseven-w/pen-codegen": "workspace:*",
+        "@zseven-w/pen-core": "workspace:*",
+        "@zseven-w/pen-figma": "workspace:*",
+        "@zseven-w/pen-renderer": "workspace:*",
+        "@zseven-w/pen-types": "workspace:*",
+        "nanoid": "^5.1.6",
+      },
+      "devDependencies": {
+        "canvaskit-wasm": "^0.40.0",
+        "typescript": "^5.7.2",
+      },
+      "peerDependencies": {
+        "canvaskit-wasm": "^0.40.0",
+      },
+      "optionalPeers": [
+        "canvaskit-wasm",
+      ],
+    },
     "packages/pen-figma": {
       "name": "@zseven-w/pen-figma",
       "version": "0.6.0",
@@ -896,6 +918,8 @@
     "@zseven-w/pen-codegen": ["@zseven-w/pen-codegen@workspace:packages/pen-codegen"],
 
     "@zseven-w/pen-core": ["@zseven-w/pen-core@workspace:packages/pen-core"],
+
+    "@zseven-w/pen-engine": ["@zseven-w/pen-engine@workspace:packages/pen-engine"],
 
     "@zseven-w/pen-figma": ["@zseven-w/pen-figma@workspace:packages/pen-figma"],
 
