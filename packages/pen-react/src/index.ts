@@ -1,4 +1,5 @@
-// pen-react — React UI SDK for OpenPencil
-// Exports are added incrementally as modules are built.
+// Context
+export { DesignEngineContext } from './context.js';
 
-export {};
+// Hooks
+export { useDesignEngine } from './hooks/use-design-engine.js';
