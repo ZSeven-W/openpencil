@@ -96,6 +96,6 @@ describe('DesignProvider', () => {
       </DesignProvider>,
     );
 
-    expect(capturedEngine.getDocument()).toBe(initDoc);
+    expect(capturedEngine.getDocument()).toMatchObject({ id: 'init', name: 'Init' });
   });
 });

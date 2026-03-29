@@ -7,15 +7,17 @@ import { useDocument } from './use-document.js';
 /**
  * Returns the first selected node's full data, or null.
  * Derived from useSelection + useDocument — re-renders on either change.
+ *
+ * `doc` is included in the deps so the memo recomputes when node properties
+ * change even if the selection array stays the same.
  */
 export function useActiveNode(): PenNode | null {
   const engine = useDesignEngine();
   const selection = useSelection();
-  // Subscribe to document so we get updated node data when props change
-  useDocument();
+  const doc = useDocument();
 
   return useMemo(() => {
     if (selection.length === 0) return null;
     return engine.getNodeById(selection[0]) ?? null;
-  }, [engine, selection]);
+  }, [engine, selection, doc]);
 }

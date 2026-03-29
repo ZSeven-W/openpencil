@@ -101,8 +101,13 @@ export function DesignCanvas({ className, onReady, loadingFallback }: DesignCanv
         let delta = -e.deltaY;
         if (e.deltaMode === 1) delta *= 40;
         const factor = Math.pow(1.005, delta);
-        const scene = engine.screenToScene(e.clientX, e.clientY);
-        engine.setViewport(engine.zoom * factor, scene.x, scene.y);
+        const rect = canvasRef.current?.getBoundingClientRect();
+        const mx = e.clientX - (rect?.left ?? 0);
+        const my = e.clientY - (rect?.top ?? 0);
+        const newZoom = engine.zoom * factor;
+        const newPanX = mx - (mx - engine.panX) * (newZoom / engine.zoom);
+        const newPanY = my - (my - engine.panY) * (newZoom / engine.zoom);
+        engine.setViewport(newZoom, newPanX, newPanY);
       } else {
         let dx = -e.deltaX;
         let dy = -e.deltaY;

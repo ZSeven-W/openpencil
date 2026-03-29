@@ -45,9 +45,11 @@ export class EngineSelectHandler {
     if (!this.dragMoved && Math.hypot(dx, dy) < DRAG_THRESHOLD) return;
     this.dragMoved = true;
 
-    for (const orig of this.dragOrigPositions) {
-      engine.updateNode(orig.id, { x: orig.x + dx, y: orig.y + dy });
-    }
+    engine.batch(() => {
+      for (const orig of this.dragOrigPositions) {
+        engine.updateNode(orig.id, { x: orig.x + dx, y: orig.y + dy });
+      }
+    });
   }
 
   handleMarqueeMove(

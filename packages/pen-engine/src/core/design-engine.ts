@@ -207,6 +207,16 @@ export class DesignEngine {
     return this.selectionManager.getSelection();
   }
 
+  // ── Hover ──
+
+  getHoveredId(): string | null {
+    return this.selectionManager.getHoveredId();
+  }
+
+  setHoveredId(id: string | null): void {
+    this.selectionManager.setHoveredId(id);
+  }
+
   // ── Viewport ──
 
   get zoom(): number {

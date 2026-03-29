@@ -29,8 +29,6 @@ export interface DesignEngineOptions {
 export interface DesignEngineEvents {
   /** Fired after document mutation (batch-aware: only once per batch). Payload is immutable ref. */
   'document:change': (doc: PenDocument) => void;
-  /** Fired before document mutation. Return false to cancel (opt-in guard). */
-  'document:before-change': () => boolean | void;
   'selection:change': (ids: string[]) => void;
   'viewport:change': (state: ViewportState) => void;
   'tool:change': (tool: ToolType) => void;
