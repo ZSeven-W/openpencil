@@ -54,3 +54,17 @@ export type { DesignMdSpec, DesignMdColor, DesignMdTypography } from './design-m
 
 // Layout
 export type { Padding } from './layout.js';
+
+// Engine
+export type {
+  DesignEngineOptions,
+  DesignEngineEvents,
+  CodePlatform,
+  CodeResult,
+  TextEditState,
+  AgentIndicatorEntry,
+  AgentFrameEntry,
+  InsertionIndicator,
+  ContainerHighlight,
+  IconLookupFn,
+} from './engine.js';
