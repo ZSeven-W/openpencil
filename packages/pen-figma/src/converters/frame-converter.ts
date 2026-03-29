@@ -1,4 +1,9 @@
-import type { FigmaNodeChange, FigmaSymbolOverride, FigmaDerivedSymbolDataEntry, FigmaGUID } from '../figma-types.js';
+import type {
+  FigmaNodeChange,
+  FigmaSymbolOverride,
+  FigmaDerivedSymbolDataEntry,
+  FigmaGUID,
+} from '../figma-types.js';
 import type { PenNode } from '@zseven-w/pen-types';
 import { mapFigmaFills } from '../figma-fill-mapper.js';
 import { mapFigmaStroke } from '../figma-stroke-mapper.js';

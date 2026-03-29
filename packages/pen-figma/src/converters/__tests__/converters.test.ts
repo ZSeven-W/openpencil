@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { convertNode, convertChildren, collectImageBlobs } from '../index';
+import { convertNode, collectImageBlobs } from '../index';
 import type { ConversionContext } from '../index';
 
 function makeCtx(): ConversionContext {
@@ -10,7 +10,7 @@ function makeCtx(): ConversionContext {
     warnings: [],
     generateId: () => `test-${++id}`,
     blobs: [],
-    layoutMode: 'responsive',
+    layoutMode: 'openpencil',
   };
 }
 

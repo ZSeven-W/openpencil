@@ -10,7 +10,14 @@ import type { PenNode, SizingBehavior } from '@zseven-w/pen-types';
 import { mapWidthSizing, mapHeightSizing } from '../figma-layout-mapper.js';
 import type { TreeNode } from '../figma-tree-builder.js';
 
-export type { FigmaNodeChange, FigmaMatrix, FigmaImportLayoutMode, FigmaSymbolOverride, FigmaDerivedSymbolDataEntry, FigmaGUID };
+export type {
+  FigmaNodeChange,
+  FigmaMatrix,
+  FigmaImportLayoutMode,
+  FigmaSymbolOverride,
+  FigmaDerivedSymbolDataEntry,
+  FigmaGUID,
+};
 export type { PenNode, SizingBehavior };
 export type { TreeNode };
 

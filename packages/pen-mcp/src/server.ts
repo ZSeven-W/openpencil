@@ -14,11 +14,7 @@ import {
   DOCUMENT_TOOL_NAMES,
   handleDocumentToolCall,
 } from './routes/document-routes';
-import {
-  NODE_TOOL_DEFINITIONS,
-  NODE_TOOL_NAMES,
-  handleNodeToolCall,
-} from './routes/node-routes';
+import { NODE_TOOL_DEFINITIONS, NODE_TOOL_NAMES, handleNodeToolCall } from './routes/node-routes';
 import {
   DESIGN_TOOL_DEFINITIONS,
   DESIGN_TOOL_NAMES,

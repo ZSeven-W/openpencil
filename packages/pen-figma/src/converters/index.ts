@@ -15,7 +15,12 @@ export {
   setIconLookup,
   lookupIconByName,
 } from './common.js';
-export { convertFrame, convertGroup, convertComponent, convertInstance } from './frame-converter.js';
+export {
+  convertFrame,
+  convertGroup,
+  convertComponent,
+  convertInstance,
+} from './frame-converter.js';
 export { convertRectangle, convertEllipse, convertLine } from './shape-converter.js';
 export { convertText } from './text-converter.js';
 export { convertVector } from './path-converter.js';
