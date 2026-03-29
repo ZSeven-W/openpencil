@@ -8,3 +8,4 @@ export { VariableManager, type VariableManagerOptions } from './core/variable-ma
 export { ViewportController, type ViewportControllerOptions } from './core/viewport-controller.js';
 export { EngineSpatialIndex } from './core/spatial-index.js';
 export { createNodeForTool, isDrawingTool } from './core/node-creator.js';
+export { parseSvgToNodes } from './core/svg-parser.js';
