@@ -1,22 +1,12 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import {
-  Loader2,
-  Check,
-  Key,
-  Plus,
-  Trash2,
-  Pencil,
-  Eye,
-  EyeOff,
-  Search,
-  ChevronDown,
-} from 'lucide-react';
+import { Loader2, Eye, EyeOff, Search, ChevronDown, Plus } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
-import { Switch } from '@/components/ui/switch';
 import { useAgentSettingsStore } from '@/stores/agent-settings-store';
 import type { BuiltinProviderConfig, BuiltinProviderPreset } from '@/stores/agent-settings-store';
+import ModelSearchDropdown, { BUILTIN_MODEL_LISTS, fetchProviderModels } from './model-selector';
+import { BuiltinProviderCard } from './provider-card';
 
 /* ---------- Provider Preset Config ---------- */
 interface PresetRegion {
@@ -170,41 +160,6 @@ const REGION_URLS: Record<string, BuiltinProviderPreset> = Object.entries(PROVID
   {} as Record<string, BuiltinProviderPreset>,
 );
 
-/** Hardcoded model lists for providers that don't expose /models endpoint */
-const BUILTIN_MODEL_LISTS: Partial<
-  Record<BuiltinProviderPreset, Array<{ id: string; name: string }>>
-> = {
-  anthropic: [
-    { id: 'claude-opus-4-6-20250916', name: 'Claude Opus 4.6' },
-    { id: 'claude-sonnet-4-6-20250916', name: 'Claude Sonnet 4.6' },
-    { id: 'claude-sonnet-4-5-20250929', name: 'Claude Sonnet 4.5' },
-    { id: 'claude-haiku-4-5-20251001', name: 'Claude Haiku 4.5' },
-    { id: 'claude-opus-4-20250514', name: 'Claude Opus 4' },
-    { id: 'claude-sonnet-4-20250514', name: 'Claude Sonnet 4' },
-  ],
-  gemini: [
-    { id: 'gemini-3.1-pro-preview', name: 'Gemini 3.1 Pro' },
-    { id: 'gemini-3-flash-preview', name: 'Gemini 3 Flash' },
-    { id: 'gemini-3.1-flash-lite-preview', name: 'Gemini 3.1 Flash-Lite' },
-    { id: 'gemini-2.5-pro', name: 'Gemini 2.5 Pro' },
-    { id: 'gemini-2.5-flash', name: 'Gemini 2.5 Flash' },
-  ],
-  minimax: [
-    { id: 'MiniMax-M2.7', name: 'MiniMax M2.7' },
-    { id: 'MiniMax-M2.7-highspeed', name: 'MiniMax M2.7 Highspeed' },
-    { id: 'MiniMax-M2.5', name: 'MiniMax M2.5' },
-    { id: 'MiniMax-M2.5-highspeed', name: 'MiniMax M2.5 Highspeed' },
-    { id: 'MiniMax-M2.1', name: 'MiniMax M2.1' },
-    { id: 'MiniMax-M1', name: 'MiniMax M1' },
-  ],
-  doubao: [
-    { id: 'doubao-seed-2.0-pro', name: 'Doubao Seed 2.0 Pro' },
-    { id: 'doubao-seed-2.0-lite', name: 'Doubao Seed 2.0 Lite' },
-    { id: 'doubao-seed-2.0-code', name: 'Doubao Seed 2.0 Code' },
-    { id: 'doubao-seed-code', name: 'Doubao Seed Code' },
-  ],
-};
-
 /** Infer preset from an existing provider config (for editing) */
 function inferPreset(config: BuiltinProviderConfig): BuiltinProviderPreset {
   if (config.preset) return config.preset;
@@ -224,93 +179,6 @@ function inferRegion(config: BuiltinProviderConfig): 'cn' | 'global' {
   if (!regions) return 'cn';
   const url = config.baseURL?.replace(/\/+$/, '') ?? '';
   return url === regions.global.baseURL ? 'global' : 'cn';
-}
-
-/** Fetch model list from a provider via our server-side proxy */
-async function fetchProviderModels(
-  baseURL: string,
-  apiKey?: string,
-): Promise<{ models: Array<{ id: string; name: string }>; error?: string }> {
-  try {
-    const res = await fetch('/api/ai/provider-models', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ baseURL, apiKey }),
-    });
-    if (!res.ok) return { models: [], error: `Server error ${res.status}` };
-    return await res.json();
-  } catch {
-    return { models: [], error: 'Request failed' };
-  }
-}
-
-/* ---------- Model Search Dropdown ---------- */
-function ModelSearchDropdown({
-  models,
-  onSelect,
-  onClose,
-}: {
-  models: Array<{ id: string; name: string }>;
-  onSelect: (model: { id: string; name: string }) => void;
-  onClose: () => void;
-}) {
-  const { t } = useTranslation();
-  const [filter, setFilter] = useState('');
-  const listRef = useRef<HTMLDivElement>(null);
-
-  const filtered = models.filter((m) => {
-    const q = filter.toLowerCase();
-    return m.id.toLowerCase().includes(q) || m.name.toLowerCase().includes(q);
-  });
-
-  useEffect(() => {
-    const handler = (e: MouseEvent) => {
-      if (listRef.current && !listRef.current.contains(e.target as Node)) {
-        onClose();
-      }
-    };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
-  }, [onClose]);
-
-  return (
-    <div
-      ref={listRef}
-      className="absolute bottom-full left-0 right-0 mb-1 rounded-md border border-border bg-popover shadow-md z-10 overflow-hidden"
-    >
-      <div className="p-1.5 border-b border-border">
-        <input
-          autoFocus
-          value={filter}
-          onChange={(e) => setFilter(e.target.value)}
-          placeholder={t('builtin.filterModels')}
-          className="w-full h-7 px-2 text-[12px] bg-card text-foreground rounded border border-input focus:border-ring outline-none transition-colors"
-        />
-      </div>
-      <div className="max-h-48 overflow-y-auto">
-        {filtered.length === 0 && (
-          <div className="px-3 py-4 text-center text-[11px] text-muted-foreground">
-            {t('builtin.noModels')}
-          </div>
-        )}
-        {filtered.map((m) => (
-          <button
-            key={m.id}
-            onClick={() => {
-              onSelect(m);
-              onClose();
-            }}
-            className="w-full text-left px-3 py-1.5 text-[12px] text-foreground hover:bg-secondary/50 transition-colors flex flex-col"
-          >
-            <span className="font-medium truncate">{m.name !== m.id ? m.name : m.id}</span>
-            {m.name !== m.id && (
-              <span className="text-[10px] text-muted-foreground font-mono truncate">{m.id}</span>
-            )}
-          </button>
-        ))}
-      </div>
-    </div>
-  );
 }
 
 /* ---------- Builtin Provider Form ---------- */
@@ -600,107 +468,6 @@ export function BuiltinProviderForm({
         >
           {initial ? t('common.save') : t('builtin.add')}
         </Button>
-      </div>
-    </div>
-  );
-}
-
-/* ---------- Builtin Provider Card ---------- */
-export function BuiltinProviderCard({ provider }: { provider: BuiltinProviderConfig }) {
-  const { t } = useTranslation();
-  const update = useAgentSettingsStore((s) => s.updateBuiltinProvider);
-  const remove = useAgentSettingsStore((s) => s.removeBuiltinProvider);
-  const persist = useAgentSettingsStore((s) => s.persist);
-  const [editing, setEditing] = useState(false);
-
-  const handleToggle = useCallback(
-    (enabled: boolean) => {
-      update(provider.id, { enabled });
-      persist();
-    },
-    [provider.id, update, persist],
-  );
-  const handleRemove = useCallback(() => {
-    remove(provider.id);
-    persist();
-  }, [provider.id, remove, persist]);
-  const handleSave = useCallback(
-    (data: Omit<BuiltinProviderConfig, 'id'>) => {
-      update(provider.id, data);
-      persist();
-      setEditing(false);
-    },
-    [provider.id, update, persist],
-  );
-
-  if (editing) {
-    return (
-      <BuiltinProviderForm
-        initial={provider}
-        onSave={handleSave}
-        onCancel={() => setEditing(false)}
-      />
-    );
-  }
-
-  const masked =
-    provider.apiKey.length > 12
-      ? provider.apiKey.slice(0, 7) + '***' + provider.apiKey.slice(-3)
-      : '***';
-
-  return (
-    <div className="group">
-      <div
-        className={cn(
-          'flex items-center gap-3 px-3.5 py-2.5 rounded-lg border transition-colors',
-          provider.enabled
-            ? 'bg-secondary/30 border-border'
-            : 'border-transparent hover:bg-secondary/20',
-        )}
-      >
-        <div
-          className={cn(
-            'w-9 h-9 rounded-lg flex items-center justify-center shrink-0 transition-colors',
-            provider.enabled
-              ? 'bg-foreground/8 text-foreground'
-              : 'bg-secondary text-muted-foreground',
-          )}
-        >
-          <Key size={18} />
-        </div>
-        <div className="flex-1 min-w-0">
-          <span className="text-[13px] font-medium text-foreground leading-tight block">
-            {provider.displayName}
-          </span>
-          <span className="text-[11px] text-muted-foreground leading-tight mt-0.5 block">
-            {provider.model} &middot; {masked}
-          </span>
-          {provider.enabled && (
-            <span className="text-[11px] text-green-500 leading-tight flex items-center gap-1 mt-0.5">
-              <Check size={10} strokeWidth={2.5} />
-              {t('builtin.ready')}
-            </span>
-          )}
-        </div>
-        <div className="flex items-center gap-1 shrink-0">
-          <Switch checked={provider.enabled} onCheckedChange={handleToggle} className="mr-1" />
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            onClick={() => setEditing(true)}
-            className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
-          >
-            <Pencil size={11} />
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            onClick={handleRemove}
-            className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-destructive"
-          >
-            <Trash2 size={11} />
-          </Button>
-        </div>
       </div>
     </div>
   );
