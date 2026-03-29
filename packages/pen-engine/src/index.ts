@@ -7,3 +7,4 @@ export { PageManager, type PageManagerOptions } from './core/page-manager.js';
 export { VariableManager, type VariableManagerOptions } from './core/variable-manager.js';
 export { ViewportController, type ViewportControllerOptions } from './core/viewport-controller.js';
 export { EngineSpatialIndex } from './core/spatial-index.js';
+export { createNodeForTool, isDrawingTool } from './core/node-creator.js';
