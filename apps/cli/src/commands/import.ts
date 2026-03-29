@@ -1,7 +1,8 @@
-import { handleImportSvg } from '@/mcp/tools/import-svg';
-import { openDocument, saveDocument, resolveDocPath } from '@/mcp/document-manager';
+import { handleImportSvg } from '@zseven-w/pen-mcp';
+import { saveDocument } from '@zseven-w/pen-mcp';
 import { parseFigFile, figmaAllPagesToPenDocument } from '@zseven-w/pen-figma';
 import { readFile } from 'node:fs/promises';
+import { basename } from 'node:path';
 import { output, outputError } from '../output';
 
 interface GlobalFlags {
@@ -32,8 +33,8 @@ export async function cmdImportFigma(
   if (!figPath) outputError('Usage: op import:figma <file.fig> [--out output.op]');
 
   const buf = await readFile(figPath);
-  const figFile = parseFigFile(new Uint8Array(buf));
-  const doc = figmaAllPagesToPenDocument(figFile);
+  const figFile = parseFigFile(buf.buffer as ArrayBuffer);
+  const { document: doc, warnings } = figmaAllPagesToPenDocument(figFile, basename(figPath));
 
   const outPath = flags.out ?? figPath.replace(/\.fig$/, '.op');
   await saveDocument(outPath, doc);
@@ -42,7 +43,8 @@ export async function cmdImportFigma(
     filePath: outPath,
     pageCount: doc.pages?.length ?? 1,
     nodeCount: doc.pages
-      ? doc.pages.reduce((s, p) => s + p.children.length, 0)
+      ? doc.pages.reduce((s: number, p: { children: unknown[] }) => s + p.children.length, 0)
       : doc.children.length,
+    warnings,
   });
 }

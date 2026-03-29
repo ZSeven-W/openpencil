@@ -5,7 +5,7 @@ import {
   handleMoveNode,
   handleCopyNode,
   handleReplaceNode,
-} from '@/mcp/tools/node-crud';
+} from '@zseven-w/pen-mcp';
 import { output, outputError, parseJsonArg } from '../output';
 
 interface GlobalFlags {

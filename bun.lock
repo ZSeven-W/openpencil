@@ -91,6 +91,11 @@
       "bin": {
         "op": "dist/openpencil-cli.cjs",
       },
+      "dependencies": {
+        "@zseven-w/pen-codegen": "workspace:*",
+        "@zseven-w/pen-figma": "workspace:*",
+        "@zseven-w/pen-mcp": "workspace:*",
+      },
     },
     "apps/desktop": {
       "name": "@zseven-w/desktop",
@@ -161,6 +166,22 @@
       },
       "devDependencies": {
         "@types/uzip": "^0.20201231.2",
+        "typescript": "^5.7.2",
+      },
+    },
+    "packages/pen-mcp": {
+      "name": "@zseven-w/pen-mcp",
+      "version": "0.6.0",
+      "dependencies": {
+        "@iconify-json/feather": "^1.2.1",
+        "@iconify-json/lucide": "^1.2.93",
+        "@modelcontextprotocol/sdk": "^1.12.1",
+        "@zseven-w/pen-ai-skills": "workspace:*",
+        "@zseven-w/pen-core": "workspace:*",
+        "@zseven-w/pen-types": "workspace:*",
+        "nanoid": "^5.1.6",
+      },
+      "devDependencies": {
         "typescript": "^5.7.2",
       },
     },
@@ -913,6 +934,8 @@
     "@zseven-w/pen-core": ["@zseven-w/pen-core@workspace:packages/pen-core"],
 
     "@zseven-w/pen-figma": ["@zseven-w/pen-figma@workspace:packages/pen-figma"],
+
+    "@zseven-w/pen-mcp": ["@zseven-w/pen-mcp@workspace:packages/pen-mcp"],
 
     "@zseven-w/pen-renderer": ["@zseven-w/pen-renderer@workspace:packages/pen-renderer"],
 

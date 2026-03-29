@@ -1,4 +1,4 @@
-import { openDocument, resolveDocPath } from '@/mcp/document-manager';
+import { openDocument, resolveDocPath } from '@zseven-w/pen-mcp';
 import {
   generateReactFromDocument,
   generateHTMLFromDocument,

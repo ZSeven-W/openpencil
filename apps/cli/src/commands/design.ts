@@ -1,7 +1,7 @@
-import { handleBatchDesign } from '@/mcp/tools/batch-design';
-import { handleDesignSkeleton } from '@/mcp/tools/design-skeleton';
-import { handleDesignContent } from '@/mcp/tools/design-content';
-import { handleDesignRefine } from '@/mcp/tools/design-refine';
+import { handleBatchDesign } from '@zseven-w/pen-mcp';
+import { handleDesignSkeleton } from '@zseven-w/pen-mcp';
+import { handleDesignContent } from '@zseven-w/pen-mcp';
+import { handleDesignRefine } from '@zseven-w/pen-mcp';
 import { output, outputError, parseJsonArg, resolveArg } from '../output';
 
 interface GlobalFlags {
@@ -53,7 +53,7 @@ export async function cmdDesignContent(
 }
 
 export async function cmdDesignRefine(
-  args: string[],
+  _args: string[],
   flags: GlobalFlags & { rootId?: string; canvasWidth?: string },
 ): Promise<void> {
   if (!flags.rootId) outputError('Usage: openpencil design:refine --root-id <id>');

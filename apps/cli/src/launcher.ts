@@ -3,7 +3,7 @@
 import { spawn, fork, execSync } from 'node:child_process';
 import { createServer } from 'node:net';
 import { writeFile, unlink, mkdir } from 'node:fs/promises';
-import { join, dirname } from 'node:path';
+import { join } from 'node:path';
 import { homedir } from 'node:os';
 import { existsSync } from 'node:fs';
 import { getAppInfo } from './connection';

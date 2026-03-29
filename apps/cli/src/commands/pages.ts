@@ -4,8 +4,8 @@ import {
   handleRenamePage,
   handleReorderPage,
   handleDuplicatePage,
-} from '@/mcp/tools/pages';
-import { handleOpenDocument } from '@/mcp/tools/open-document';
+} from '@zseven-w/pen-mcp';
+import { handleOpenDocument } from '@zseven-w/pen-mcp';
 import { output, outputError } from '../output';
 
 interface GlobalFlags {

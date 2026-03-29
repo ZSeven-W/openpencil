@@ -1,7 +1,7 @@
-import { handleOpenDocument } from '@/mcp/tools/open-document';
-import { handleBatchGet } from '@/mcp/tools/batch-get';
-import { handleGetSelection } from '@/mcp/tools/get-selection';
-import { openDocument, saveDocument, resolveDocPath } from '@/mcp/document-manager';
+import { handleOpenDocument } from '@zseven-w/pen-mcp';
+import { handleBatchGet } from '@zseven-w/pen-mcp';
+import { handleGetSelection } from '@zseven-w/pen-mcp';
+import { openDocument, saveDocument, resolveDocPath } from '@zseven-w/pen-mcp';
 import { output, outputError } from '../output';
 
 interface GlobalFlags {
@@ -23,7 +23,7 @@ export async function cmdSave(args: string[], flags: GlobalFlags): Promise<void>
 }
 
 export async function cmdGet(
-  args: string[],
+  _args: string[],
   flags: GlobalFlags & {
     type?: string;
     name?: string;

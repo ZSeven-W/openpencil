@@ -31,6 +31,7 @@ PACKAGES=(
   packages/pen-codegen
   packages/pen-figma
   packages/pen-renderer
+  packages/pen-mcp
   packages/pen-sdk
   apps/cli
 )

@@ -1,6 +1,6 @@
-import { handleSnapshotLayout } from '@/mcp/tools/snapshot-layout';
-import { handleFindEmptySpace } from '@/mcp/tools/find-empty-space';
-import { output, outputError } from '../output';
+import { handleSnapshotLayout } from '@zseven-w/pen-mcp';
+import { handleFindEmptySpace } from '@zseven-w/pen-mcp';
+import { output } from '../output';
 
 interface GlobalFlags {
   file?: string;
@@ -25,8 +25,8 @@ export async function cmdFindSpace(
   const result = await handleFindEmptySpace({
     filePath: flags.file,
     direction: (flags.direction as 'right' | 'bottom' | 'left' | 'top') ?? 'right',
-    width: flags.width ? parseInt(flags.width, 10) : undefined,
-    height: flags.height ? parseInt(flags.height, 10) : undefined,
+    width: flags.width ? parseInt(flags.width, 10) : 400,
+    height: flags.height ? parseInt(flags.height, 10) : 300,
     pageId: flags.page,
   });
   output(result);
