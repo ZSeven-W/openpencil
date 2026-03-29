@@ -5,3 +5,4 @@ export { SelectionManager, type SelectionManagerOptions } from './core/selection
 export { DocumentManager, type DocumentManagerOptions } from './core/document-manager.js';
 export { PageManager, type PageManagerOptions } from './core/page-manager.js';
 export { ViewportController, type ViewportControllerOptions } from './core/viewport-controller.js';
+export { EngineSpatialIndex } from './core/spatial-index.js';
