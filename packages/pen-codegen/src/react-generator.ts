@@ -1,33 +1,16 @@
 import type { PenDocument, PenNode, ContainerProps, TextNode } from '@zseven-w/pen-types';
 import { getActivePageChildren } from '@zseven-w/pen-core';
 import type { PenFill, PenStroke, PenEffect, ShadowEffect } from '@zseven-w/pen-types';
-import { isVariableRef } from '@zseven-w/pen-core';
-import { variableNameToCSS } from './css-variables-generator.js';
-import { buildEllipseArcPath, isArcEllipse } from '@zseven-w/pen-core';
+import { buildEllipseArcPath, isArcEllipse, isVariableRef } from '@zseven-w/pen-core';
+import { varOrLiteral } from './utils.js';
+import { indent } from './shared/indentation.js';
+import { kebabToPascal } from './shared/naming.js';
+import { getTextContent } from './shared/text.js';
 
 /**
  * Converts PenDocument nodes to React + Tailwind code.
  * $variable references are output as var(--name) CSS custom properties.
  */
-
-/** Convert a `$variable` ref to `var(--name)`, or return the raw value. */
-function varOrLiteral(value: string): string {
-  if (isVariableRef(value)) {
-    return `var(${variableNameToCSS(value.slice(1))})`;
-  }
-  return value;
-}
-
-function indent(depth: number): string {
-  return '  '.repeat(depth);
-}
-
-function kebabToPascal(name: string): string {
-  return name
-    .split('-')
-    .map((s) => s.charAt(0).toUpperCase() + s.slice(1))
-    .join('');
-}
 
 function fillToTailwind(fills: PenFill[] | undefined): string[] {
   if (!fills || fills.length === 0) return [];
@@ -176,11 +159,6 @@ function textTag(node: TextNode): string {
   if (size >= 24) return 'h2';
   if (size >= 20) return 'h3';
   return 'p';
-}
-
-function getTextContent(node: TextNode): string {
-  if (typeof node.content === 'string') return node.content;
-  return node.content.map((s) => s.text).join('');
 }
 
 function textToTailwind(node: TextNode): string[] {

@@ -11,31 +11,15 @@ import type {
 import { getActivePageChildren } from '@zseven-w/pen-core';
 import type { PenFill, PenStroke, PenEffect, ShadowEffect } from '@zseven-w/pen-types';
 import { isVariableRef } from '@zseven-w/pen-core';
-import { variableNameToCSS } from './css-variables-generator.js';
+import { varOrLiteral } from './utils.js';
+import { indent } from './shared/indentation.js';
+import { kebabToPascal } from './shared/naming.js';
+import { getTextContent } from './shared/text.js';
 
 /**
  * Converts PenDocument nodes to React Native code with inline styles.
  * $variable references are output as /* var(--name) *​/ comments.
  */
-
-/** Convert a `$variable` ref to a comment placeholder, or return the raw value. */
-function varOrLiteral(value: string): string {
-  if (isVariableRef(value)) {
-    return `var(${variableNameToCSS(value.slice(1))})`;
-  }
-  return value;
-}
-
-function indent(depth: number): string {
-  return '  '.repeat(depth);
-}
-
-function kebabToPascal(name: string): string {
-  return name
-    .split('-')
-    .map((s) => s.charAt(0).toUpperCase() + s.slice(1))
-    .join('');
-}
 
 /** Return a hex color string, or a comment for variable refs. */
 function hexColor(value: string): string {
@@ -227,11 +211,6 @@ function formatStyle(styles: Record<string, string>): string {
     return `${k}: ${v}`;
   });
   return `{ ${parts.join(', ')} }`;
-}
-
-function getTextContent(node: TextNode): string {
-  if (typeof node.content === 'string') return node.content;
-  return node.content.map((s) => s.text).join('');
 }
 
 function escapeJSX(text: string): string {

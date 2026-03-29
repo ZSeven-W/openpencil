@@ -1,23 +1,15 @@
-import type { PenDocument, PenNode, ContainerProps, TextNode } from '@zseven-w/pen-types';
+import type { PenDocument, PenNode, ContainerProps } from '@zseven-w/pen-types';
 import { getActivePageChildren } from '@zseven-w/pen-core';
 import type { PenFill, PenStroke, PenEffect, ShadowEffect } from '@zseven-w/pen-types';
-import { isVariableRef } from '@zseven-w/pen-core';
-import { variableNameToCSS } from './css-variables-generator.js';
-import { buildEllipseArcPath, isArcEllipse } from '@zseven-w/pen-core';
+import { buildEllipseArcPath, isArcEllipse, isVariableRef } from '@zseven-w/pen-core';
+import { varOrLiteral } from './utils.js';
+import { indent } from './shared/indentation.js';
+import { getTextContent } from './shared/text.js';
 
 /**
  * Converts PenDocument nodes to Svelte component code.
  * Generates a single .svelte file with markup + scoped <style>.
  */
-
-function varOrLiteral(value: string): string {
-  if (isVariableRef(value)) return `var(${variableNameToCSS(value.slice(1))})`;
-  return value;
-}
-
-function indent(depth: number): string {
-  return '  '.repeat(depth);
-}
 
 // ---------------------------------------------------------------------------
 // CSS helpers
@@ -145,11 +137,6 @@ function escapeHTML(text: string): string {
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;');
-}
-
-function getTextContent(node: TextNode): string {
-  if (typeof node.content === 'string') return node.content;
-  return node.content.map((s) => s.text).join('');
 }
 
 function generateNodeMarkup(node: PenNode, depth: number, rules: CSSRule[]): string {

@@ -8,27 +8,18 @@ import type {
   PathNode,
   PolygonNode,
 } from '@zseven-w/pen-types';
-import { getActivePageChildren } from '@zseven-w/pen-core';
+import { getActivePageChildren, isVariableRef } from '@zseven-w/pen-core';
 import type { PenFill, PenStroke, PenEffect, ShadowEffect } from '@zseven-w/pen-types';
-import { isVariableRef } from '@zseven-w/pen-core';
-import { variableNameToCSS } from './css-variables-generator.js';
+import { varOrLiteral } from './utils.js';
+import { indent as indent2 } from './shared/indentation.js';
+import { getTextContent } from './shared/text.js';
 
 /**
  * Converts PenDocument nodes to SwiftUI code.
  * $variable references are output as var(--name) comments for manual mapping.
  */
 
-/** Convert a `$variable` ref to a placeholder comment, or return the raw value. */
-function varOrLiteral(value: string): string {
-  if (isVariableRef(value)) {
-    return `var(${variableNameToCSS(value.slice(1))})`;
-  }
-  return value;
-}
-
-function indent(depth: number): string {
-  return '    '.repeat(depth);
-}
+const indent = (d: number) => indent2(d, '    ');
 
 /** Parse a hex color string to SwiftUI Color initializer. */
 function hexToSwiftUIColor(hex: string): string {
@@ -176,11 +167,6 @@ function paddingToSwiftUI(
     }
   }
   return [];
-}
-
-function getTextContent(node: TextNode): string {
-  if (typeof node.content === 'string') return node.content;
-  return node.content.map((s) => s.text).join('');
 }
 
 function escapeSwiftString(text: string): string {

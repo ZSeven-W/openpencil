@@ -1,21 +1,16 @@
-import type { PenDocument, PenNode, ContainerProps, TextNode } from '@zseven-w/pen-types';
+import type { PenDocument, PenNode, ContainerProps } from '@zseven-w/pen-types';
 import { getActivePageChildren } from '@zseven-w/pen-core';
 import type { PenFill, PenStroke, PenEffect, ShadowEffect } from '@zseven-w/pen-types';
-import { isVariableRef } from '@zseven-w/pen-core';
-import { variableNameToCSS, generateCSSVariables } from './css-variables-generator.js';
-import { buildEllipseArcPath, isArcEllipse } from '@zseven-w/pen-core';
+import { generateCSSVariables } from './css-variables-generator.js';
+import { buildEllipseArcPath, isArcEllipse, isVariableRef } from '@zseven-w/pen-core';
+import { varOrLiteral } from './utils.js';
+import { indent } from './shared/indentation.js';
+import { getTextContent } from './shared/text.js';
 
 /**
  * Converts PenDocument nodes to HTML + CSS.
  * $variable references are output as var(--name) CSS custom properties.
  */
-
-function varOrLiteral(value: string): string {
-  if (isVariableRef(value)) {
-    return `var(${variableNameToCSS(value.slice(1))})`;
-  }
-  return value;
-}
 
 let classCounter = 0;
 
@@ -26,10 +21,6 @@ function resetClassCounter() {
 function nextClassName(prefix: string): string {
   classCounter++;
   return `${prefix}-${classCounter}`;
-}
-
-function indent(depth: number): string {
-  return '  '.repeat(depth);
 }
 
 function fillToCSS(fills: PenFill[] | undefined): Record<string, string> {
@@ -153,11 +144,6 @@ function layoutToCSS(node: ContainerProps): Record<string, string> {
 interface CSSRule {
   className: string;
   properties: Record<string, string>;
-}
-
-function getTextContent(node: TextNode): string {
-  if (typeof node.content === 'string') return node.content;
-  return node.content.map((s) => s.text).join('');
 }
 
 function escapeHTML(text: string): string {

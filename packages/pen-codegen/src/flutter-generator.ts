@@ -9,24 +9,16 @@ import type {
   PathNode,
   PolygonNode,
 } from '@zseven-w/pen-types';
-import { getActivePageChildren } from '@zseven-w/pen-core';
+import { getActivePageChildren, isVariableRef } from '@zseven-w/pen-core';
 import type { PenFill, PenStroke, PenEffect, ShadowEffect, BlurEffect } from '@zseven-w/pen-types';
-import { isVariableRef } from '@zseven-w/pen-core';
-import { variableNameToCSS } from './css-variables-generator.js';
+import { varOrLiteral } from './utils.js';
+import { indent } from './shared/indentation.js';
+import { getTextContent } from './shared/text.js';
 
 /**
  * Converts PenDocument nodes to Flutter (Dart) code.
  * $variable references are output as var(--name) comments for manual mapping.
  */
-
-function varOrLiteral(value: string): string {
-  if (isVariableRef(value)) return `var(${variableNameToCSS(value.slice(1))})`;
-  return value;
-}
-
-function indent(depth: number): string {
-  return '  '.repeat(depth);
-}
 
 function hexToFlutterColor(hex: string): string {
   if (hex.startsWith('$')) return `Color(0x00000000) /* ${varOrLiteral(hex)} */`;
@@ -50,11 +42,6 @@ function escapeDartString(text: string): string {
     .replace(/'/g, "\\'")
     .replace(/\$/g, '\\$')
     .replace(/\n/g, '\\n');
-}
-
-function getTextContent(node: TextNode): string {
-  if (typeof node.content === 'string') return node.content;
-  return node.content.map((s) => s.text).join('');
 }
 
 function fillToDecoration(
