@@ -29,23 +29,6 @@ function copyCanvasKitWasm() {
 copyCanvasKitWasm();
 
 const config = defineConfig({
-  build: {
-    rollupOptions: {
-      output: {
-        manualChunks(id) {
-          if (id.includes('node_modules/react-dom') || id.includes('node_modules/react/')) {
-            return 'vendor-react';
-          }
-          if (id.includes('@tanstack/react-router') || id.includes('@tanstack/react-start')) {
-            return 'vendor-tanstack';
-          }
-          if (id.includes('@radix-ui/')) {
-            return 'vendor-radix';
-          }
-        },
-      },
-    },
-  },
   test: {
     teardownTimeout: 1000,
     include: ['src/**/*.test.ts', 'server/**/*.test.ts', '../../packages/*/src/**/*.test.ts'],

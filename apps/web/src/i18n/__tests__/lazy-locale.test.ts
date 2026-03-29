@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect } from 'vitest';
 
 describe('i18n lazy locale loading', () => {
   it('should export loadLocale function', async () => {

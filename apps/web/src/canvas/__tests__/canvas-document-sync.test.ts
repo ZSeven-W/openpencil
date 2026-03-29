@@ -1,6 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { useDocumentStore } from '@/stores/document-store';
-import { useCanvasStore } from '@/stores/canvas-store';
 import { subscribeToActivePageChildren } from '../canvas-document-sync';
 
 describe('subscribeToActivePageChildren', () => {
