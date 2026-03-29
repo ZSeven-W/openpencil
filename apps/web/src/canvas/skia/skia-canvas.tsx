@@ -4,6 +4,7 @@ import { SkiaEngine } from './skia-engine';
 import { useCanvasStore } from '@/stores/canvas-store';
 import { useDocumentStore } from '@/stores/document-store';
 import { setSkiaEngineRef } from '../skia-engine-ref';
+import { subscribeToActivePageChildren } from '../canvas-document-sync';
 import type { PenNode } from '@/types/pen';
 import { SkiaInteractionManager, type TextEditState } from './skia-interaction';
 
@@ -66,12 +67,11 @@ export default function SkiaCanvas() {
     return () => observer.disconnect();
   }, []);
 
-  // Document sync: re-render when document changes
+  // Document sync: re-render only when active page children reference changes
   useEffect(() => {
-    const unsub = useDocumentStore.subscribe(() => {
+    return subscribeToActivePageChildren(() => {
       engineRef.current?.syncFromDocument();
     });
-    return unsub;
   }, []);
 
   // Page sync: re-render when active page changes
