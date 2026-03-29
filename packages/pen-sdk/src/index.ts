@@ -170,6 +170,26 @@ export {
   type FigmaImportLayoutMode,
 } from '@zseven-w/pen-figma';
 
+// ── Engine: Headless design engine ────────────────────────────────────
+export {
+  DesignEngine,
+  TypedEventEmitter,
+  HistoryManager,
+  DocumentManager,
+  SelectionManager,
+  PageManager,
+  VariableManager,
+  ViewportController,
+  EngineSpatialIndex,
+  createNodeForTool,
+  isDrawingTool,
+  parseSvgToNodes,
+  type DesignEngineOptions,
+  type DesignEngineEvents,
+  type CodePlatform,
+  type CodeResult,
+} from '@zseven-w/pen-engine';
+
 // ── Renderer: CanvasKit/Skia rendering engine ────────────────────────
 export {
   // Primary API
