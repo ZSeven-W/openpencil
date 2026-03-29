@@ -1,4 +1,4 @@
-export class TypedEventEmitter<Events extends Record<string, (...args: any[]) => void>> {
+export class TypedEventEmitter<Events extends { [K in keyof Events]: (...args: any[]) => void }> {
   private listeners = new Map<keyof Events, Set<(...args: any[]) => void>>();
 
   on<K extends keyof Events>(event: K, cb: Events[K]): () => void {

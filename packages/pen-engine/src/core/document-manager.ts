@@ -185,6 +185,11 @@ export class DocumentManager {
     this.onChangeCb?.(this.document);
   }
 
+  /** Returns the children of the active page (public accessor for DesignEngine). */
+  getActivePageChildren(): PenNode[] {
+    return this.getPageChildren();
+  }
+
   getNodeById(id: string): PenNode | undefined {
     const allChildren = getAllChildren(this.document);
     return findNodeInTree(allChildren, id) ?? undefined;
