@@ -49,7 +49,7 @@ function RootDocument({ children }: { children: React.ReactNode }) {
   const { i18n } = useTranslation();
 
   useEffect(() => {
-    detectLanguagePostHydration();
+    void detectLanguagePostHydration();
   }, []);
 
   return (
