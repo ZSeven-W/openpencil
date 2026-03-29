@@ -1,10 +1,6 @@
 import type { PenNode, PathNode } from '@/types/pen';
 import { toStrokeThicknessNumber, extractPrimaryColor } from './generation-utils';
-import {
-  ICON_PATH_MAP,
-  findPrefixFallback,
-  findSubstringFallback,
-} from './icon-dictionary';
+import { ICON_PATH_MAP, findPrefixFallback, findSubstringFallback } from './icon-dictionary';
 import { pendingIconResolutions, tryImmediateIconResolution } from './icon-font-fetcher';
 
 // ---------------------------------------------------------------------------

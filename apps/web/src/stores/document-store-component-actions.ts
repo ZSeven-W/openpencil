@@ -31,7 +31,9 @@ interface ComponentActions {
 
 type SetState = {
   (partial: Partial<{ document: PenDocument; isDirty: boolean }>): void;
-  (fn: (state: { document: PenDocument }) => Partial<{ document: PenDocument; isDirty: boolean }>): void;
+  (
+    fn: (state: { document: PenDocument }) => Partial<{ document: PenDocument; isDirty: boolean }>,
+  ): void;
 };
 
 export function createComponentActions(

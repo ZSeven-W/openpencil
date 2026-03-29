@@ -153,9 +153,7 @@ export function DesignMdContent({
               )}
               {designMd.typography.headings && (
                 <p>
-                  <span className="text-foreground font-medium">
-                    {t('designMd.headings')}:
-                  </span>{' '}
+                  <span className="text-foreground font-medium">{t('designMd.headings')}:</span>{' '}
                   {renderInline(designMd.typography.headings)}
                 </p>
               )}

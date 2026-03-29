@@ -21,8 +21,14 @@ const DEFAULT_HEIGHT = 520;
 export default function DesignMdPanel() {
   const { t } = useTranslation();
   const { isGenerating, hasAI, handleAutoGenerate } = useDesignMdAIGenerator();
-  const { designMd, handleImport, handleExport, handleSyncColor, handleSyncAllColors, handleClear } =
-    useDesignMdActions();
+  const {
+    designMd,
+    handleImport,
+    handleExport,
+    handleSyncColor,
+    handleSyncAllColors,
+    handleClear,
+  } = useDesignMdActions();
 
   const [panelWidth, setPanelWidth] = useState(DEFAULT_WIDTH);
   const [panelHeight, setPanelHeight] = useState(DEFAULT_HEIGHT);

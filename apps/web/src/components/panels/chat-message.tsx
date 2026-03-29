@@ -7,7 +7,11 @@ import { ChatMessageAttachments } from './chat-message-attachment';
 
 // Re-export types and utilities used by other modules (ai-chat-checklist.tsx)
 export type { ParsedStep, PipelineItem } from './chat-message-tool-call';
-export { parseStepBlocks, countDesignJsonBlocks, buildPipelineProgress } from './chat-message-tool-call';
+export {
+  parseStepBlocks,
+  countDesignJsonBlocks,
+  buildPipelineProgress,
+} from './chat-message-tool-call';
 
 interface ChatMessageProps {
   role: 'user' | 'assistant';

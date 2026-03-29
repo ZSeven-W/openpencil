@@ -1,13 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import {
-  Plus,
-  ChevronDown,
-  Pencil,
-  Trash2,
-  BookMarked,
-  Upload,
-  Download,
-} from 'lucide-react';
+import { Plus, ChevronDown, Pencil, Trash2, BookMarked, Upload, Download } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useTranslation } from 'react-i18next';
 import { useThemePresetStore } from '@/stores/theme-preset-store';

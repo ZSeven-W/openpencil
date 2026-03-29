@@ -6,11 +6,7 @@ import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import { useAIStore } from '@/stores/ai-store';
 import { useCanvasStore } from '@/stores/canvas-store';
-import {
-  PROVIDER_ICON,
-  ConcurrencyButton,
-  ModelDropdown,
-} from './ai-chat-model-selector';
+import { PROVIDER_ICON, ConcurrencyButton, ModelDropdown } from './ai-chat-model-selector';
 
 interface AIChatInputProps {
   input: string;
@@ -161,9 +157,7 @@ export function AIChatInput({ input, setInput, onSend }: AIChatInputProps) {
           {(() => {
             // Show Key icon for built-in provider models
             if (model.startsWith('builtin:')) {
-              const currentGroup = modelGroups.find((g) =>
-                g.models.some((m) => m.value === model),
-              );
+              const currentGroup = modelGroups.find((g) => g.models.some((m) => m.value === model));
               if (currentGroup) {
                 const ProvIcon = PROVIDER_ICON[currentGroup.provider];
                 return ProvIcon ? (

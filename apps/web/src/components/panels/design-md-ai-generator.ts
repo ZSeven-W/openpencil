@@ -110,8 +110,7 @@ function summarizeNode(n: PenNode, depth = 0): string {
   }
   if ('stroke' in n && n.stroke) {
     const sf = n.stroke.fill?.[0];
-    if (sf?.type === 'solid' && sf.color)
-      props.push(`stroke:${sf.color}/${n.stroke.thickness}`);
+    if (sf?.type === 'solid' && sf.color) props.push(`stroke:${sf.color}/${n.stroke.thickness}`);
   }
   if ('content' in n && n.content) props.push(`"${String(n.content).slice(0, 40)}"`);
   if ('fontSize' in n) props.push(`${n.fontSize}px`);

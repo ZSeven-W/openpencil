@@ -5,10 +5,7 @@ import { useDocumentStore } from '@/stores/document-store';
 import { useDesignMdStore } from '@/stores/design-md-store';
 import { useCanvasStore } from '@/stores/canvas-store';
 import { importDesignMd, exportDesignMd } from '@/utils/design-md-io';
-import {
-  designMdColorsToVariables,
-  extractDesignMdFromDocument,
-} from '@/utils/design-md-parser';
+import { designMdColorsToVariables, extractDesignMdFromDocument } from '@/utils/design-md-parser';
 import type { DesignMdSpec, DesignMdColor } from '@/types/design-md';
 
 // ---------------------------------------------------------------------------
@@ -43,7 +40,14 @@ export function useDesignMdActions() {
 
   const handleClear = () => setDesignMd(undefined);
 
-  return { designMd, handleImport, handleExport, handleSyncColor, handleSyncAllColors, handleClear };
+  return {
+    designMd,
+    handleImport,
+    handleExport,
+    handleSyncColor,
+    handleSyncAllColors,
+    handleClear,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -95,11 +99,7 @@ export function DesignMdHeaderActions({
           )}
           title={t('designMd.autoGenerate')}
         >
-          {isGenerating ? (
-            <Loader2 size={14} className="animate-spin" />
-          ) : (
-            <Sparkles size={14} />
-          )}
+          {isGenerating ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
         </button>
       )}
       <button
@@ -186,11 +186,7 @@ export function DesignMdEmptyState({
             onClick={onAutoGenerate}
             className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg border border-border text-foreground hover:bg-muted transition-colors"
           >
-            {isGenerating ? (
-              <Loader2 size={12} className="animate-spin" />
-            ) : (
-              <Sparkles size={12} />
-            )}
+            {isGenerating ? <Loader2 size={12} className="animate-spin" /> : <Sparkles size={12} />}
             {t('designMd.autoGenerateCta')}
           </button>
         )}
