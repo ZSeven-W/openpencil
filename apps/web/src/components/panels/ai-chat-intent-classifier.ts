@@ -1,0 +1,47 @@
+/** Intent classification prompt — lightweight LLM call to determine message routing */
+const CLASSIFY_PROMPT = `You are a UI design tool assistant. Classify the user's message intent.
+Reply with EXACTLY one of these tags, nothing else:
+- DESIGN_NEW — user wants to create or generate a NEW design, screen, page, or component from scratch
+- DESIGN_MODIFY — user wants to modify, adjust, refine, or iterate on an EXISTING design (e.g. change colors, resize, restyle, add/remove elements)
+- CHAT — user is asking a question, seeking help, or having a conversation`;
+
+export type DesignIntent = 'new' | 'modify' | 'chat';
+
+/** Classify user intent via a lightweight LLM call instead of hardcoded keyword matching */
+export async function classifyIntent(
+  text: string,
+  model: string,
+  provider?: string,
+): Promise<{ intent: DesignIntent }> {
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 8_000);
+
+    const response = await fetch('/api/ai/generate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        system: CLASSIFY_PROMPT,
+        message: text,
+        model,
+        provider,
+      }),
+      signal: controller.signal,
+    });
+    clearTimeout(timeout);
+
+    if (!response.ok) throw new Error('classify failed');
+    const data = await response.json();
+    const upper = (data.text ?? '').trim().toUpperCase();
+
+    if (upper.includes('DESIGN_MODIFY')) return { intent: 'modify' };
+    if (upper.includes('DESIGN_NEW') || upper.includes('DESIGN')) return { intent: 'new' };
+    if (upper.includes('CHAT')) return { intent: 'chat' };
+
+    // Fallback: in a design tool, default to new design mode
+    return { intent: 'new' };
+  } catch {
+    // Fallback: in a design tool, default to new design mode
+    return { intent: 'new' };
+  }
+}

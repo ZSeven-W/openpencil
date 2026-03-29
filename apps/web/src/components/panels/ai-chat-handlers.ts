@@ -23,93 +23,11 @@ import { createDesignToolRegistry } from '@/services/ai/agent-tools';
 import type { ChatMessage as ChatMessageType } from '@/services/ai/ai-types';
 import type { ToolCallBlockData } from '@/components/panels/tool-call-block';
 import { CHAT_STREAM_THINKING_CONFIG } from '@/services/ai/ai-runtime-config';
+import { classifyIntent } from './ai-chat-intent-classifier';
+import { buildContextString } from './ai-chat-context-builder';
 
-/** Intent classification prompt — lightweight LLM call to determine message routing */
-const CLASSIFY_PROMPT = `You are a UI design tool assistant. Classify the user's message intent.
-Reply with EXACTLY one of these tags, nothing else:
-- DESIGN_NEW — user wants to create or generate a NEW design, screen, page, or component from scratch
-- DESIGN_MODIFY — user wants to modify, adjust, refine, or iterate on an EXISTING design (e.g. change colors, resize, restyle, add/remove elements)
-- CHAT — user is asking a question, seeking help, or having a conversation`;
-
-type DesignIntent = 'new' | 'modify' | 'chat';
-
-/** Classify user intent via a lightweight LLM call instead of hardcoded keyword matching */
-async function classifyIntent(
-  text: string,
-  model: string,
-  provider?: string,
-): Promise<{ intent: DesignIntent }> {
-  try {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 8_000);
-
-    const response = await fetch('/api/ai/generate', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        system: CLASSIFY_PROMPT,
-        message: text,
-        model,
-        provider,
-      }),
-      signal: controller.signal,
-    });
-    clearTimeout(timeout);
-
-    if (!response.ok) throw new Error('classify failed');
-    const data = await response.json();
-    const upper = (data.text ?? '').trim().toUpperCase();
-
-    if (upper.includes('DESIGN_MODIFY')) return { intent: 'modify' };
-    if (upper.includes('DESIGN_NEW') || upper.includes('DESIGN')) return { intent: 'new' };
-    if (upper.includes('CHAT')) return { intent: 'chat' };
-
-    // Fallback: in a design tool, default to new design mode
-    return { intent: 'new' };
-  } catch {
-    // Fallback: in a design tool, default to new design mode
-    return { intent: 'new' };
-  }
-}
-
-export function buildContextString(): string {
-  const selectedIds = useCanvasStore.getState().selection.selectedIds;
-  const { getFlatNodes, document: doc } = useDocumentStore.getState();
-  const flatNodes = getFlatNodes();
-
-  const parts: string[] = [];
-
-  if (flatNodes.length > 0) {
-    const summary = flatNodes
-      .slice(0, 20)
-      .map((n) => `${n.type}:${n.name ?? n.id}`)
-      .join(', ');
-    parts.push(`Document has ${flatNodes.length} nodes: ${summary}`);
-  }
-
-  if (selectedIds.length > 0) {
-    const selectedNodes = selectedIds
-      .map((id) => useDocumentStore.getState().getNodeById(id))
-      .filter(Boolean);
-    const selectedSummary = selectedNodes
-      .map((n) => {
-        const dims = 'width' in n! && 'height' in n! ? ` (${n!.width}x${n!.height})` : '';
-        return `${n!.type}:${n!.name ?? n!.id}${dims}`;
-      })
-      .join(', ');
-    parts.push(`Selected: ${selectedSummary}`);
-  }
-
-  // Include variable summary so chat mode also knows about design tokens
-  if (doc.variables && Object.keys(doc.variables).length > 0) {
-    const varNames = Object.entries(doc.variables)
-      .map(([n, d]) => `$${n}(${d.type})`)
-      .join(', ');
-    parts.push(`Variables: ${varNames}`);
-  }
-
-  return parts.length > 0 ? `\n\n[Canvas context: ${parts.join('. ')}]` : '';
-}
+// Re-export for any external consumers
+export { buildContextString } from './ai-chat-context-builder';
 
 // ---------------------------------------------------------------------------
 // Agent mode SSE stream handler
@@ -130,8 +48,6 @@ const AGENT_TOOL_INSTRUCTIONS = `IMPORTANT: When the user asks you to create or 
  * Combines agent tool instructions with the same design knowledge the CLI pipeline uses.
  */
 function buildAgentSystemPrompt(userMessage: string): string {
-  // Loads design skills dynamically based on user message keywords —
-  // same knowledge base the CLI pipeline uses (via pen-ai-skills)
   const designKnowledge = buildChatSystemPrompt(userMessage);
   return `${AGENT_TOOL_INSTRUCTIONS}\n\n${designKnowledge}`;
 }
@@ -153,7 +69,6 @@ async function* parseAgentSSE(
 
     buffer += decoder.decode(value, { stream: true });
     const chunks = buffer.split('\n\n');
-    // Last item may be incomplete -- keep it in the buffer
     buffer = chunks.pop() ?? '';
 
     for (const chunk of chunks) {
@@ -164,7 +79,6 @@ async function* parseAgentSSE(
     }
   }
 
-  // Process any remaining data in buffer
   if (buffer.trim()) {
     const evt = decodeAgentEvent(buffer.trim());
     if (evt) yield evt;
@@ -201,12 +115,9 @@ async function runAgentStream(
   const sessionId = nanoid();
   const executor = new AgentToolExecutor(sessionId);
 
-  // Build tool definitions from the registry.
-  // The server uses these to register tools with the AI SDK.
   const registry = createDesignToolRegistry();
   const sdkTools = registry.toAISDKFormat();
   const toolDefs = registry.list().map((t) => {
-    // Extract the JSON Schema from the AI SDK tool object
     const sdkTool = sdkTools[t.name] as any;
     const parameters = sdkTool?.parameters?.jsonSchema ?? sdkTool?.inputSchema?.jsonSchema;
     return {
@@ -217,14 +128,12 @@ async function runAgentStream(
     };
   });
 
-  // Build conversation messages from chat history
   const messages = useAIStore
     .getState()
     .messages.filter((m) => m.id !== assistantMsgId)
     .map((m) => ({ role: m.role, content: m.content }));
 
   const context = buildContextString();
-  // Build the last user message for skill resolution
   const lastUserMsg = messages[messages.length - 1]?.content ?? '';
   const systemPrompt = buildAgentSystemPrompt(lastUserMsg) + context;
 
@@ -241,9 +150,6 @@ async function runAgentStream(
     maxTurns: 20,
   };
 
-  // Auto team mode: always create a designer member using the same provider as chat.
-  // The designer has a specialized prompt + scoped tools (generate_design only).
-  // Lead handles conversation; designer handles design generation.
   if (providerConfig.apiKey) {
     (agentBody as any).members = [
       {
@@ -304,11 +210,9 @@ async function runAgentStream(
           };
           useAIStore.getState().addToolCallBlock(block);
 
-          // Execute tool client-side and post result back to server
           executor
             .execute(evt as Extract<AgentEvent, { type: 'tool_call' }>)
             .then(() => {
-              // Also update block status locally in case SSE tool_result event is lost
               const block = useAIStore.getState().toolCallBlocks.find((b) => b.id === evt.id);
               if (block && block.status === 'running') {
                 useAIStore
@@ -333,13 +237,10 @@ async function runAgentStream(
           break;
         }
 
-        case 'turn': {
-          // Optionally show turn progress
+        case 'turn':
           break;
-        }
 
         case 'done': {
-          // If no text was accumulated (model returned empty), add a note
           if (!accumulated.trim()) {
             accumulated = '*Agent completed with no text output.*';
             updateLastMessage(accumulated);
@@ -366,9 +267,8 @@ async function runAgentStream(
           break;
         }
 
-        case 'abort': {
+        case 'abort':
           return;
-        }
       }
     }
   } finally {
@@ -378,7 +278,7 @@ async function runAgentStream(
   return stripThinkTags(accumulated);
 }
 
-/** Shared chat logic hook */
+/** Shared chat logic hook — orchestrates intent classification, context building, and dispatching. */
 export function useChatHandlers() {
   const [input, setInput] = useState('');
   const messages = useAIStore((s) => s.messages);
@@ -406,7 +306,6 @@ export function useChatHandlers() {
       setInput('');
       useAIStore.getState().clearPendingAttachments();
 
-      // Determine context and mode
       const selectedIds = useCanvasStore.getState().selection.selectedIds;
       const hasSelection = selectedIds.length > 0;
 
@@ -434,7 +333,6 @@ export function useChatHandlers() {
 
       // Set chat title if it's the first message
       if (messages.length === 0) {
-        // Simple heuristic: Take first ~4 words or up to 25 chars
         const cleanText = messageText.replace(/^(Design|Create|Generate|Make)\s+/i, '');
         const words = cleanText.split(' ').slice(0, 4).join(' ');
         const title = words.length > 30 ? words.slice(0, 30) + '...' : words;
@@ -451,8 +349,7 @@ export function useChatHandlers() {
       let accumulated = '';
 
       // -----------------------------------------------------------------------
-      // BUILT-IN PROVIDER (Agent) MODE — route through /api/ai/agent with tool execution
-      // Triggered when the selected model has a `builtin:` prefix
+      // BUILT-IN PROVIDER (Agent) MODE
       // -----------------------------------------------------------------------
       if (model.startsWith('builtin:')) {
         const parts = model.split(':');
@@ -507,7 +404,6 @@ export function useChatHandlers() {
           setStreaming(false);
         }
 
-        // Force update final message state
         useAIStore.setState((s) => {
           const msgs = [...s.messages];
           const last = msgs.find((m) => m.id === assistantMsg.id);
@@ -521,7 +417,7 @@ export function useChatHandlers() {
       }
 
       // -----------------------------------------------------------------------
-      // STANDARD MODE — existing design/chat pipeline
+      // STANDARD MODE — design/chat pipeline
       // -----------------------------------------------------------------------
       const chatHistory = messages.map((m) => ({
         role: m.role,
@@ -533,11 +429,9 @@ export function useChatHandlers() {
       let isDesign = false;
 
       try {
-        // Classify intent via lightweight LLM call (three-way: new / modify / chat)
         const classified = await classifyIntent(messageText, model, currentProvider);
         let intent = classified.intent;
 
-        // When LLM says "modify" but canvas is empty, degrade to new design
         const { document: currentDoc } = useDocumentStore.getState();
         const activePageId = useCanvasStore.getState().activePageId;
         const pageChildren = getActivePageChildren(currentDoc, activePageId);
@@ -546,20 +440,15 @@ export function useChatHandlers() {
         }
 
         isDesign = intent === 'new' || intent === 'modify';
-
-        // Determine modification target: explicit selection or auto-selected frame
         const isModification = intent === 'modify' && (hasSelection || pageChildren.length > 0);
 
         if (isDesign) {
           if (isModification) {
-            // --- MODIFICATION MODE ---
             const { getNodeById, document: modDoc } = useDocumentStore.getState();
             let modTargets: any[];
             if (hasSelection) {
-              // User explicitly selected nodes
               modTargets = selectedIds.map((id) => getNodeById(id)).filter(Boolean);
             } else {
-              // Auto-select: last top-level frame on the active page
               const frames = pageChildren.filter((n) => n.type === 'frame');
               modTargets =
                 frames.length > 0
@@ -567,7 +456,6 @@ export function useChatHandlers() {
                   : [pageChildren[pageChildren.length - 1]];
             }
 
-            // We update the UI to show we are working
             accumulated =
               '<step title="Checking guidelines">Analyzing modification request...</step>';
             updateLastMessage(accumulated);
@@ -587,11 +475,9 @@ export function useChatHandlers() {
             accumulated = rawResponse;
             updateLastMessage(accumulated);
 
-            // Apply all changes
             const count = extractAndApplyDesignModification(JSON.stringify(nodes));
             appliedCount += count;
           } else {
-            // --- GENERATION MODE (animated) ---
             const doc = useDocumentStore.getState().document;
             const concurrency = useAIStore.getState().concurrency;
             const { rawResponse, nodes } = await generateDesign(
@@ -620,7 +506,6 @@ export function useChatHandlers() {
               },
               abortController.signal,
             );
-            // Ensure final text is captured
             accumulated = rawResponse;
             if (appliedCount === 0 && nodes.length > 0) {
               animateNodesToCanvas(nodes);
@@ -634,9 +519,7 @@ export function useChatHandlers() {
             content: fullUserMessage,
             ...(hasAttachments ? { attachments: pendingAttachments } : {}),
           });
-          // Trim history to prevent unbounded context growth
           const trimmedHistory = trimChatHistory(chatHistory);
-          // Progressive skill loading: resolve needed skills from user message
           const chatDoc = useDocumentStore.getState().document;
           const chatDesignMd = useDesignMdStore.getState().designMd;
           const chatSystemPrompt = buildChatSystemPrompt(fullUserMessage, {
@@ -655,12 +538,10 @@ export function useChatHandlers() {
           )) {
             if (chunk.type === 'thinking') {
               chatThinking += chunk.content;
-              // Show thinking content as a collapsible step in the panel
               const thinkingStep = `<step title="Thinking">${chatThinking}</step>`;
               updateLastMessage(thinkingStep + (accumulated ? '\n' + accumulated : ''));
             } else if (chunk.type === 'text') {
               accumulated += chunk.content;
-              // Keep thinking step visible above text content
               const thinkingPrefix = chatThinking
                 ? `<step title="Thinking">${chatThinking}</step>\n`
                 : '';
@@ -672,7 +553,6 @@ export function useChatHandlers() {
           }
         }
       } catch (error) {
-        // Silently handle user-initiated stop
         if (abortController.signal.aborted) {
           // Keep partial content, don't show error
         } else {
@@ -685,12 +565,10 @@ export function useChatHandlers() {
         setStreaming(false);
       }
 
-      // Final update - mark as applied (hidden) so the "Apply" button doesn't show up
       if (isDesign && appliedCount > 0) {
         accumulated += `\n\n<!-- APPLIED -->`;
       }
 
-      // Force update the last message state to ensure sync
       useAIStore.setState((s) => {
         const msgs = [...s.messages];
         const last = msgs.find((m) => m.id === assistantMsg.id);
