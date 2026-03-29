@@ -1,5 +1,7 @@
 import type { PenNode } from '@zseven-w/pen-types';
 
+export type { ViewportState } from '@zseven-w/pen-types';
+
 export interface RenderNode {
   node: PenNode;
   absX: number;
@@ -7,12 +9,6 @@ export interface RenderNode {
   absW: number;
   absH: number;
   clipRect?: { x: number; y: number; w: number; h: number; rx: number };
-}
-
-export interface ViewportState {
-  zoom: number;
-  panX: number;
-  panY: number;
 }
 
 /** Injectable icon lookup function for resolving icon names to SVG path data. */
