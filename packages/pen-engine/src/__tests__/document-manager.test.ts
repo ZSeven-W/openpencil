@@ -2,7 +2,6 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { DocumentManager } from '../core/document-manager';
 import { HistoryManager } from '../core/history-manager';
 import type { PenDocument, PenNode } from '@zseven-w/pen-types';
-import { createEmptyDocument } from '@zseven-w/pen-core';
 
 function makeRect(id: string, x = 0): PenNode {
   return {

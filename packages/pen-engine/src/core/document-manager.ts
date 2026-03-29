@@ -81,18 +81,10 @@ export class DocumentManager {
     this.onChangeCb?.(this.document);
   }
 
-  private mutateDoc(fn: (doc: PenDocument) => PenDocument): void {
-    this.history.push(this.document);
-    this.document = fn(this.document);
-    this.onChangeCb?.(this.document);
-  }
-
   // ── Node CRUD ──
 
   addNode(parentId: string | null, node: PenNode, index?: number): void {
-    this.mutate((children) =>
-      insertNodeInTree(children, parentId, node, index ?? 0),
-    );
+    this.mutate((children) => insertNodeInTree(children, parentId, node, index ?? 0));
   }
 
   updateNode(id: string, updates: Partial<PenNode>): void {
@@ -123,9 +115,7 @@ export class DocumentManager {
     const parentId = parent ? parent.id : null;
     const siblings = parent && 'children' in parent ? (parent.children ?? []) : children;
     const idx = siblings.findIndex((n) => n.id === id);
-    this.mutate((c) =>
-      insertNodeInTree(c, parentId, cloned, idx >= 0 ? idx + 1 : 0),
-    );
+    this.mutate((c) => insertNodeInTree(c, parentId, cloned, idx >= 0 ? idx + 1 : 0));
     return cloned.id;
   }
 
@@ -135,12 +125,17 @@ export class DocumentManager {
     const nodes = ids.map((id) => findNodeInTree(children, id)).filter(Boolean) as PenNode[];
     if (nodes.length < 2) return null;
 
-    const bounds = getNodeBounds(nodes);
     const groupId = generateId();
+    const allChildren = this.getPageChildren();
+    const nodeBounds = nodes.map((n) => getNodeBounds(n, allChildren));
+    const minX = Math.min(...nodeBounds.map((b) => b.x));
+    const minY = Math.min(...nodeBounds.map((b) => b.y));
+    const maxX = Math.max(...nodeBounds.map((b) => b.x + b.w));
+    const maxY = Math.max(...nodeBounds.map((b) => b.y + b.h));
     const groupChildren = nodes.map((n) => ({
       ...n,
-      x: (n.x ?? 0) - bounds.x,
-      y: (n.y ?? 0) - bounds.y,
+      x: (n.x ?? 0) - minX,
+      y: (n.y ?? 0) - minY,
     }));
 
     this.history.push(this.document);
@@ -152,10 +147,10 @@ export class DocumentManager {
       id: groupId,
       type: 'group',
       name: 'Group',
-      x: bounds.x,
-      y: bounds.y,
-      width: bounds.w,
-      height: bounds.h,
+      x: minX,
+      y: minY,
+      width: maxX - minX,
+      height: maxY - minY,
       children: groupChildren,
     } as PenNode;
     newChildren = insertNodeInTree(newChildren, null, group, 0);

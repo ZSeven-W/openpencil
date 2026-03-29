@@ -1,10 +1,6 @@
 import type { PenDocument } from '@zseven-w/pen-types';
 import type { VariableDefinition } from '@zseven-w/pen-types';
-import {
-  getDefaultTheme,
-  resolveVariableRef,
-  replaceVariableRefsInTree,
-} from '@zseven-w/pen-core';
+import { getDefaultTheme, resolveVariableRef, replaceVariableRefsInTree } from '@zseven-w/pen-core';
 
 export interface VariableManagerOptions {
   getDocument: () => PenDocument;
@@ -28,7 +24,7 @@ export class VariableManager {
     const doc = this.getDocument();
     this.setDocument({
       ...doc,
-      variables: { ...(doc.variables ?? {}), [name]: definition },
+      variables: { ...doc.variables, [name]: definition },
     });
   }
 
@@ -76,7 +72,13 @@ export class VariableManager {
       }));
       this.setDocument({ ...doc, variables: newVars, pages: newPages });
     } else {
-      const newChildren = replaceVariableRefsInTree(doc.children, oldName, newName, vars, activeTheme);
+      const newChildren = replaceVariableRefsInTree(
+        doc.children,
+        oldName,
+        newName,
+        vars,
+        activeTheme,
+      );
       this.setDocument({ ...doc, variables: newVars, children: newChildren });
     }
   }

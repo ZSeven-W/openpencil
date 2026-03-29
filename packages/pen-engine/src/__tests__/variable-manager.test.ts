@@ -1,6 +1,6 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach } from 'vitest';
 import { VariableManager } from '../core/variable-manager';
-import type { PenDocument, PenNode } from '@zseven-w/pen-types';
+import type { PenDocument } from '@zseven-w/pen-types';
 import type { VariableDefinition } from '@zseven-w/pen-types';
 import { createEmptyDocument, migrateToPages, ensureDocumentNodeIds } from '@zseven-w/pen-core';
 
@@ -12,7 +12,9 @@ describe('VariableManager', () => {
     doc = ensureDocumentNodeIds(migrateToPages(createEmptyDocument()));
     vm = new VariableManager({
       getDocument: () => doc,
-      setDocument: (d) => { doc = d; },
+      setDocument: (d) => {
+        doc = d;
+      },
     });
   });
 
