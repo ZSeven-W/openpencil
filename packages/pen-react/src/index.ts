@@ -19,3 +19,11 @@ export { useVariables } from './hooks/use-variables.js';
 
 // Utilities
 export { useEngineSubscribe } from './utils/use-engine-subscribe.js';
+
+// Components
+export { DesignCanvas } from './components/design-canvas.js';
+export type { DesignCanvasProps } from './components/design-canvas.js';
+
+// Stores
+export { useUIStore } from './stores/ui-store.js';
+export type { UIStoreState } from './stores/ui-store.js';
