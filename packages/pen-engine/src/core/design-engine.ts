@@ -209,15 +209,28 @@ export class DesignEngine {
 
   // ── Viewport ──
 
-  get zoom(): number { return this.viewportController.zoom; }
-  get panX(): number { return this.viewportController.panX; }
-  get panY(): number { return this.viewportController.panY; }
+  get zoom(): number {
+    return this.viewportController.zoom;
+  }
+  get panX(): number {
+    return this.viewportController.panX;
+  }
+  get panY(): number {
+    return this.viewportController.panY;
+  }
 
   setViewport(zoom: number, panX: number, panY: number): void {
     this.viewportController.setViewport(zoom, panX, panY);
   }
 
-  zoomToRect(x: number, y: number, w: number, h: number, containerW: number, containerH: number): void {
+  zoomToRect(
+    x: number,
+    y: number,
+    w: number,
+    h: number,
+    containerW: number,
+    containerH: number,
+  ): void {
     this.viewportController.zoomToRect(x, y, w, h, containerW, containerH);
   }
 
@@ -229,7 +242,10 @@ export class DesignEngine {
   getContentBounds(): { x: number; y: number; w: number; h: number } | null {
     const children = this.documentManager.getActivePageChildren();
     if (!children.length) return null;
-    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    let minX = Infinity,
+      minY = Infinity,
+      maxX = -Infinity,
+      maxY = -Infinity;
     for (const node of children) {
       const nx = node.x ?? 0;
       const ny = node.y ?? 0;
@@ -352,7 +368,9 @@ export class DesignEngine {
   importFigma(_buffer: ArrayBuffer): PenDocument {
     // Dynamic import to avoid bundling pen-figma in headless scenarios
     // that don't use Figma import.
-    throw new Error('importFigma requires the pen-figma package. Use: import { parseFigFile, figmaToPenDocument } from "@zseven-w/pen-figma"');
+    throw new Error(
+      'importFigma requires the pen-figma package. Use: import { parseFigFile, figmaToPenDocument } from "@zseven-w/pen-figma"',
+    );
   }
 
   generateCode(platform: CodePlatform, _nodeId?: string): CodeResult {

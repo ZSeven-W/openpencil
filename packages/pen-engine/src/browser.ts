@@ -1,3 +1,9 @@
 // pen-engine browser adapter — public API
-// Populated after headless core is complete.
-export {};
+
+export {
+  attachCanvas,
+  type CanvasBinding,
+  type AttachCanvasOptions,
+} from './browser/canvas-bindings.js';
+
+export { attachInteraction } from './browser/interaction/interaction-controller.js';

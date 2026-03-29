@@ -15,7 +15,10 @@ describe('PageManager', () => {
     doc = ensureDocumentNodeIds(migrateToPages(createEmptyDocument()));
     pm = new PageManager({
       getDocument: () => doc,
-      setDocument: (d) => { doc = d; onChange(d); },
+      setDocument: (d) => {
+        doc = d;
+        onChange(d);
+      },
       onPageChange,
     });
   });

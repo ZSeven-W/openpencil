@@ -4,8 +4,13 @@ import type { PenDocument, PenNode } from '@zseven-w/pen-types';
 
 function makeRect(id: string, x = 0): PenNode {
   return {
-    id, type: 'rectangle', name: `Rect ${id}`,
-    x, y: 0, width: 100, height: 100,
+    id,
+    type: 'rectangle',
+    name: `Rect ${id}`,
+    x,
+    y: 0,
+    width: 100,
+    height: 100,
   } as PenNode;
 }
 
@@ -212,7 +217,8 @@ describe('DesignEngine', () => {
   // ── SVG Import ──
 
   it('importSVG should add nodes', () => {
-    const svg = '<svg viewBox="0 0 100 100"><rect x="0" y="0" width="100" height="100" fill="#F00" /></svg>';
+    const svg =
+      '<svg viewBox="0 0 100 100"><rect x="0" y="0" width="100" height="100" fill="#F00" /></svg>';
     const nodes = engine.importSVG(svg);
     expect(nodes.length).toBeGreaterThan(0);
   });

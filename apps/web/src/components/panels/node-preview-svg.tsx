@@ -486,12 +486,7 @@ function renderNode(
 // Public component
 // ---------------------------------------------------------------------------
 
-function NodePreviewSvgInner({
-  node,
-  maxWidth,
-  maxHeight,
-  variables,
-}: NodePreviewSvgProps) {
+function NodePreviewSvgInner({ node, maxWidth, maxHeight, variables }: NodePreviewSvgProps) {
   const svg = useMemo(() => {
     const vars = variables ?? {};
     const w = nodeWidth(node);

@@ -82,11 +82,7 @@ export class ViewportController {
     zoom = Math.max(MIN_ZOOM, Math.min(VIEWPORT_MAX_ZOOM, zoom));
     const centerX = x + w / 2;
     const centerY = y + h / 2;
-    this.setViewport(
-      zoom,
-      containerW / 2 - centerX * zoom,
-      containerH / 2 - centerY * zoom,
-    );
+    this.setViewport(zoom, containerW / 2 - centerX * zoom, containerH / 2 - centerY * zoom);
   }
 
   /** Get the viewport state as a plain object. */

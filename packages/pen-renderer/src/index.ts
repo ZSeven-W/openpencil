@@ -15,6 +15,7 @@
 
 // ---- Primary API ----
 export { loadCanvasKit, getCanvasKit } from './init.js';
+export type { LoadCanvasKitOptions } from './init.js';
 export { PenRenderer } from './renderer.js';
 
 // ---- Types ----

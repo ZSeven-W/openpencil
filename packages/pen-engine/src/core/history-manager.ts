@@ -59,10 +59,7 @@ export class HistoryManager {
       return;
     }
 
-    this.undoStack = [
-      ...this.undoStack.slice(-(this.maxStates - 1)),
-      structuredClone(doc),
-    ];
+    this.undoStack = [...this.undoStack.slice(-(this.maxStates - 1)), structuredClone(doc)];
     this.redoStack = [];
     this.notify();
   }
@@ -113,15 +110,10 @@ export class HistoryManager {
     this.batchDepth--;
 
     if (this.batchDepth === 0 && this.batchBaseState) {
-      const unchanged = currentDoc
-        ? this.areEqual(this.batchBaseState, currentDoc)
-        : false;
+      const unchanged = currentDoc ? this.areEqual(this.batchBaseState, currentDoc) : false;
 
       if (!unchanged) {
-        this.undoStack = [
-          ...this.undoStack.slice(-(this.maxStates - 1)),
-          this.batchBaseState,
-        ];
+        this.undoStack = [...this.undoStack.slice(-(this.maxStates - 1)), this.batchBaseState];
         this.redoStack = [];
         this.notify();
       }

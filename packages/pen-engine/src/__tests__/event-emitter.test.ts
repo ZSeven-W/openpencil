@@ -2,9 +2,9 @@ import { describe, it, expect, vi } from 'vitest';
 import { TypedEventEmitter } from '../core/event-emitter';
 
 interface TestEvents {
-  'foo': (value: number) => void;
-  'bar': (a: string, b: boolean) => void;
-  'baz': () => void;
+  foo: (value: number) => void;
+  bar: (a: string, b: boolean) => void;
+  baz: () => void;
 }
 
 describe('TypedEventEmitter', () => {

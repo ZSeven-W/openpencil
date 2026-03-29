@@ -15,7 +15,10 @@ describe('subscribeToActivePageChildren', () => {
       id: 'test-sync-1',
       type: 'rectangle' as const,
       name: 'Test Rect',
-      x: 0, y: 0, width: 100, height: 100,
+      x: 0,
+      y: 0,
+      width: 100,
+      height: 100,
     };
     useDocumentStore.getState().addNode(null, testNode as any);
     expect(onSync).toHaveBeenCalledTimes(1);
@@ -40,8 +43,24 @@ describe('subscribeToActivePageChildren', () => {
     const onSync = vi.fn();
     const unsub = subscribeToActivePageChildren(onSync);
 
-    const node1 = { id: 'n1', type: 'rectangle' as const, name: 'N1', x: 0, y: 0, width: 50, height: 50 };
-    const node2 = { id: 'n2', type: 'rectangle' as const, name: 'N2', x: 0, y: 0, width: 50, height: 50 };
+    const node1 = {
+      id: 'n1',
+      type: 'rectangle' as const,
+      name: 'N1',
+      x: 0,
+      y: 0,
+      width: 50,
+      height: 50,
+    };
+    const node2 = {
+      id: 'n2',
+      type: 'rectangle' as const,
+      name: 'N2',
+      x: 0,
+      y: 0,
+      width: 50,
+      height: 50,
+    };
     useDocumentStore.getState().addNode(null, node1 as any);
     useDocumentStore.getState().addNode(null, node2 as any);
     expect(onSync).toHaveBeenCalledTimes(2);
@@ -54,7 +73,15 @@ describe('subscribeToActivePageChildren', () => {
     const unsub = subscribeToActivePageChildren(onSync);
     unsub();
 
-    const node = { id: 'n3', type: 'rectangle' as const, name: 'N3', x: 0, y: 0, width: 50, height: 50 };
+    const node = {
+      id: 'n3',
+      type: 'rectangle' as const,
+      name: 'N3',
+      x: 0,
+      y: 0,
+      width: 50,
+      height: 50,
+    };
     useDocumentStore.getState().addNode(null, node as any);
     expect(onSync).not.toHaveBeenCalled();
   });

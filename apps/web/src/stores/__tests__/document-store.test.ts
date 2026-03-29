@@ -12,8 +12,13 @@ describe('document-store mutations', () => {
   it('addNode should push history before mutating document', () => {
     const docBefore = useDocumentStore.getState().document;
     const testNode: PenNode = {
-      id: 'test-1', type: 'rectangle', name: 'Test Rect',
-      x: 0, y: 0, width: 100, height: 100,
+      id: 'test-1',
+      type: 'rectangle',
+      name: 'Test Rect',
+      x: 0,
+      y: 0,
+      width: 100,
+      height: 100,
     } as PenNode;
     useDocumentStore.getState().addNode(null, testNode);
     const docAfter = useDocumentStore.getState().document;
@@ -23,7 +28,15 @@ describe('document-store mutations', () => {
   });
 
   it('updateNode should push history and mark dirty', () => {
-    const testNode = { id: 'test-2', type: 'rectangle', name: 'Test', x: 0, y: 0, width: 50, height: 50 } as PenNode;
+    const testNode = {
+      id: 'test-2',
+      type: 'rectangle',
+      name: 'Test',
+      x: 0,
+      y: 0,
+      width: 50,
+      height: 50,
+    } as PenNode;
     useDocumentStore.getState().addNode(null, testNode);
     useHistoryStore.getState().clear();
     useDocumentStore.getState().updateNode('test-2', { x: 100 });
@@ -34,7 +47,15 @@ describe('document-store mutations', () => {
   });
 
   it('removeNode should push history', () => {
-    const testNode = { id: 'test-3', type: 'rectangle', name: 'Test', x: 0, y: 0, width: 50, height: 50 } as PenNode;
+    const testNode = {
+      id: 'test-3',
+      type: 'rectangle',
+      name: 'Test',
+      x: 0,
+      y: 0,
+      width: 50,
+      height: 50,
+    } as PenNode;
     useDocumentStore.getState().addNode(null, testNode);
     useHistoryStore.getState().clear();
     useDocumentStore.getState().removeNode('test-3');

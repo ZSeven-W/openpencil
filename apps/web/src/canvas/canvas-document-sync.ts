@@ -15,10 +15,7 @@ export function subscribeToActivePageChildren(onSync: () => void): () => void {
     useCanvasStore.getState().activePageId,
   );
   return useDocumentStore.subscribe((state) => {
-    const children = getActivePageChildren(
-      state.document,
-      useCanvasStore.getState().activePageId,
-    );
+    const children = getActivePageChildren(state.document, useCanvasStore.getState().activePageId);
     if (children !== prevChildren) {
       prevChildren = children;
       onSync();

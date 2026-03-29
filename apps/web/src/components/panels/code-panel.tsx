@@ -453,9 +453,7 @@ function CodePanelInner() {
                 size="sm"
                 className={cn(
                   'h-7 flex-1 px-1 text-[11px] transition-colors',
-                  copied
-                    ? 'text-green-500'
-                    : 'text-muted-foreground hover:text-foreground',
+                  copied ? 'text-green-500' : 'text-muted-foreground hover:text-foreground',
                 )}
                 onClick={handleCopy}
               >
@@ -549,9 +547,7 @@ function ProgressItem({
         {sublabels[status] && (
           <div className="text-[10px] text-muted-foreground/60 mt-0.5">{sublabels[status]}</div>
         )}
-        {error && (
-          <div className="text-[10px] text-destructive/80 mt-0.5 break-words">{error}</div>
-        )}
+        {error && <div className="text-[10px] text-destructive/80 mt-0.5 break-words">{error}</div>}
       </div>
       {onRetry && (
         <button
