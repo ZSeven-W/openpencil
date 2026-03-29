@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import type { ToolType, ViewportState, SelectionState, CanvasInteraction } from '@/types/canvas';
 import type { PenNode } from '@/types/pen';
+import type { DesignEngine } from '@zseven-w/pen-engine';
 import { DEFAULT_PAGE_ID } from '@/stores/document-tree-utils';
 import { appStorage } from '@/utils/app-storage';
 
@@ -219,3 +220,38 @@ export const useCanvasStore = create<CanvasStoreState>((set, get) => ({
     }
   },
 }));
+
+/**
+ * Bridge: mirror pen-engine state into canvas-store so that legacy readers
+ * (components not yet migrated to pen-react hooks) continue to work.
+ *
+ * Call this once after DesignEngine is created.
+ * Remove this bridge once ALL readers have migrated to pen-react hooks.
+ */
+export function initCanvasStoreBridge(engine: DesignEngine): () => void {
+  const unsubs: Array<() => void> = [];
+
+  unsubs.push(
+    engine.on('tool:change', (tool) => {
+      useCanvasStore.setState({ activeTool: tool });
+    }),
+  );
+
+  unsubs.push(
+    engine.on('selection:change', (ids) => {
+      useCanvasStore.setState((s) => ({
+        selection: { ...s.selection, selectedIds: ids },
+      }));
+    }),
+  );
+
+  unsubs.push(
+    engine.on('node:hover', (id) => {
+      useCanvasStore.setState((s) => ({
+        selection: { ...s.selection, hoveredId: id },
+      }));
+    }),
+  );
+
+  return () => unsubs.forEach((u) => u());
+}

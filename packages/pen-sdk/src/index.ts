@@ -190,6 +190,9 @@ export {
   type CodeResult,
 } from '@zseven-w/pen-engine';
 
+// ── React: React hooks and components ─────────────────────────────────
+export * from '@zseven-w/pen-react';
+
 // ── Renderer: CanvasKit/Skia rendering engine ────────────────────────
 export {
   // Primary API
