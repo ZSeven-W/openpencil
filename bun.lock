@@ -197,6 +197,35 @@
         "typescript": "^5.7.2",
       },
     },
+    "packages/pen-react": {
+      "name": "@zseven-w/pen-react",
+      "version": "0.6.0",
+      "dependencies": {
+        "@zseven-w/pen-core": "workspace:*",
+        "@zseven-w/pen-engine": "workspace:*",
+        "@zseven-w/pen-types": "workspace:*",
+        "class-variance-authority": "^0.7.0",
+        "clsx": "^2.1.0",
+        "lucide-react": "^0.511.0",
+        "tailwind-merge": "^3.4.0",
+        "zustand": "^5.0.0",
+      },
+      "devDependencies": {
+        "@testing-library/react": "^16.0.0",
+        "typescript": "^5.7.2",
+      },
+      "peerDependencies": {
+        "@radix-ui/react-popover": "^1.1.0",
+        "@radix-ui/react-select": "^2.2.0",
+        "@radix-ui/react-separator": "^1.1.0",
+        "@radix-ui/react-slider": "^1.3.0",
+        "@radix-ui/react-switch": "^1.2.0",
+        "@radix-ui/react-toggle": "^1.1.0",
+        "@radix-ui/react-tooltip": "^1.2.0",
+        "react": "^19.0.0",
+        "react-dom": "^19.0.0",
+      },
+    },
     "packages/pen-renderer": {
       "name": "@zseven-w/pen-renderer",
       "version": "0.6.0",
@@ -927,6 +956,8 @@
     "@zseven-w/pen-figma": ["@zseven-w/pen-figma@workspace:packages/pen-figma"],
 
     "@zseven-w/pen-mcp": ["@zseven-w/pen-mcp@workspace:packages/pen-mcp"],
+
+    "@zseven-w/pen-react": ["@zseven-w/pen-react@workspace:packages/pen-react"],
 
     "@zseven-w/pen-renderer": ["@zseven-w/pen-renderer@workspace:packages/pen-renderer"],
 
@@ -2089,6 +2120,8 @@
     "@tanstack/start-server-core/@tanstack/router-core": ["@tanstack/router-core@1.168.1", "", { "dependencies": { "@tanstack/history": "1.161.6", "cookie-es": "^2.0.0", "seroval": "^1.4.2", "seroval-plugins": "^1.4.2", "tiny-invariant": "^1.3.3", "tiny-warning": "^1.0.3" }, "bin": { "intent": "bin/intent.js" } }, "sha512-RtpshTLZsMOkwW7rI52WFWGZSSfMAyDR1zWP9kVm91UX28gedc+LXih1CTP6TchS+TvxK4q8oW7ApMTvnpiY1w=="],
 
     "@tanstack/start-storage-context/@tanstack/router-core": ["@tanstack/router-core@1.168.1", "", { "dependencies": { "@tanstack/history": "1.161.6", "cookie-es": "^2.0.0", "seroval": "^1.4.2", "seroval-plugins": "^1.4.2", "tiny-invariant": "^1.3.3", "tiny-warning": "^1.0.3" }, "bin": { "intent": "bin/intent.js" } }, "sha512-RtpshTLZsMOkwW7rI52WFWGZSSfMAyDR1zWP9kVm91UX28gedc+LXih1CTP6TchS+TvxK4q8oW7ApMTvnpiY1w=="],
+
+    "@zseven-w/pen-react/lucide-react": ["lucide-react@0.511.0", "", { "peerDependencies": { "react": "^16.5.1 || ^17.0.0 || ^18.0.0 || ^19.0.0" } }, "sha512-VK5a2ydJ7xm8GvBeKLS9mu1pVK6ucef9780JVUjw6bAjJL/QXnd4Y0p7SPeOUMC27YhzNCZvm5d/QX0Tp3rc0w=="],
 
     "ajv-keywords/ajv": ["ajv@6.14.0", "", { "dependencies": { "fast-deep-equal": "^3.1.1", "fast-json-stable-stringify": "^2.0.0", "json-schema-traverse": "^0.4.1", "uri-js": "^4.2.2" } }, "sha512-IWrosm/yrn43eiKqkfkHis7QioDleaXQHdDVPKg0FSwwd/DuvyX79TZnFOnYpB7dcsFAMmtFztZuXPDvSePkFw=="],
 
