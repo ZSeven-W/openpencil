@@ -9,6 +9,7 @@ COPY packages/pen-codegen/package.json packages/pen-codegen/
 COPY packages/pen-figma/package.json packages/pen-figma/
 COPY packages/pen-renderer/package.json packages/pen-renderer/
 COPY packages/pen-sdk/package.json packages/pen-sdk/
+COPY packages/pen-mcp/package.json packages/pen-mcp/
 COPY packages/pen-ai-skills/package.json packages/pen-ai-skills/
 COPY packages/agent/package.json packages/agent/
 COPY apps/web/package.json apps/web/
