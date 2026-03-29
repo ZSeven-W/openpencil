@@ -71,9 +71,7 @@
     "@radix-ui/react-toggle": "^1.1.10",
     "@radix-ui/react-tooltip": "^1.2.8",
     "@tailwindcss/vite": "^4.1.18",
-    "@tanstack/react-devtools": "0.10.0",
     "@tanstack/react-router": "1.168.1",
-    "@tanstack/react-router-devtools": "1.166.11",
     "@tanstack/react-router-ssr-query": "1.166.10",
     "@tanstack/react-start": "1.167.2",
     "@tanstack/router-plugin": "1.167.1",
@@ -103,6 +101,8 @@
   },
   "devDependencies": {
     "@tanstack/devtools-vite": "0.6.0",
+    "@tanstack/react-devtools": "0.10.0",
+    "@tanstack/react-router-devtools": "1.166.11",
     "@testing-library/dom": "^10.4.0",
     "@testing-library/react": "^16.2.0",
     "@types/node": "^22.10.2",

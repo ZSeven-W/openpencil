@@ -41,7 +41,7 @@ const config = defineConfig({
   assetsInclude: ['**/*.wasm'],
   plugins: [
     vitePluginSkills(fileURLToPath(new URL('../../packages/pen-ai-skills', import.meta.url))),
-    devtools(),
+    ...(process.env.NODE_ENV === 'production' ? [] : [devtools()]),
     nitro({
       rollupConfig: { external: [/^@sentry\//, 'canvas', 'jsdom', 'cssstyle', 'canvaskit-wasm'] },
       serverDir: './server',
