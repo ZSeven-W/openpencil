@@ -1,4 +1,5 @@
-import type { PenNode, ContainerProps, SizingBehavior } from '@zseven-w/pen-types';
+import type { PenNode, ContainerProps, SizingBehavior, Padding } from '@zseven-w/pen-types';
+export type { Padding } from '@zseven-w/pen-types';
 import { isBadgeOverlayNode } from '../node-helpers.js';
 import {
   parseSizing,
@@ -14,13 +15,6 @@ import {
 // ---------------------------------------------------------------------------
 // Padding
 // ---------------------------------------------------------------------------
-
-export interface Padding {
-  top: number;
-  right: number;
-  bottom: number;
-  left: number;
-}
 
 export function resolvePadding(
   padding: number | [number, number] | [number, number, number, number] | string | undefined,

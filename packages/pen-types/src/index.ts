@@ -51,3 +51,6 @@ export type { ThemePreset, ThemePresetFile } from './theme-preset.js';
 
 // Design.md
 export type { DesignMdSpec, DesignMdColor, DesignMdTypography } from './design-md.js';
+
+// Layout
+export type { Padding } from './layout.js';
