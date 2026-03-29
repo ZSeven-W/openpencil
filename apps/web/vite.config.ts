@@ -28,10 +28,12 @@ function copyCanvasKitWasm() {
 }
 copyCanvasKitWasm();
 
+
 const config = defineConfig({
   test: {
     teardownTimeout: 1000,
-    include: ['src/**/*.test.ts', 'server/**/*.test.ts', '../../packages/*/src/**/*.test.ts'],
+    include: ['src/**/*.test.{ts,tsx}', 'server/**/*.test.ts', '../../packages/*/src/**/*.test.{ts,tsx}'],
+    setupFiles: ['./src/__tests__/setup-react.ts'],
   },
   resolve: {
     alias: {
