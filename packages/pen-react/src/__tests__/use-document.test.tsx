@@ -14,7 +14,9 @@ function createMockEngine() {
     on: vi.fn((event: string, cb: (...args: any[]) => void) => {
       if (!listeners.has(event)) listeners.set(event, new Set());
       listeners.get(event)!.add(cb);
-      return () => { listeners.get(event)?.delete(cb); };
+      return () => {
+        listeners.get(event)?.delete(cb);
+      };
     }),
     off: vi.fn(),
     // Test helper: simulate document change
@@ -29,9 +31,7 @@ describe('useDocument', () => {
   it('should return current document from engine', () => {
     const engine = createMockEngine();
     const wrapper = ({ children }: { children: ReactNode }) => (
-      <DesignEngineContext.Provider value={engine as any}>
-        {children}
-      </DesignEngineContext.Provider>
+      <DesignEngineContext.Provider value={engine as any}>{children}</DesignEngineContext.Provider>
     );
 
     const { result } = renderHook(() => useDocument(), { wrapper });
@@ -41,9 +41,7 @@ describe('useDocument', () => {
   it('should re-render when document changes', () => {
     const engine = createMockEngine();
     const wrapper = ({ children }: { children: ReactNode }) => (
-      <DesignEngineContext.Provider value={engine as any}>
-        {children}
-      </DesignEngineContext.Provider>
+      <DesignEngineContext.Provider value={engine as any}>{children}</DesignEngineContext.Provider>
     );
 
     const { result } = renderHook(() => useDocument(), { wrapper });
@@ -61,9 +59,7 @@ describe('useDocument', () => {
   it('should subscribe to document:change event', () => {
     const engine = createMockEngine();
     const wrapper = ({ children }: { children: ReactNode }) => (
-      <DesignEngineContext.Provider value={engine as any}>
-        {children}
-      </DesignEngineContext.Provider>
+      <DesignEngineContext.Provider value={engine as any}>{children}</DesignEngineContext.Provider>
     );
 
     renderHook(() => useDocument(), { wrapper });

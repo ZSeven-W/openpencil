@@ -14,7 +14,9 @@ function createMockEngine() {
     on: vi.fn((event: string, cb: (...args: any[]) => void) => {
       if (!listeners.has(event)) listeners.set(event, new Set());
       listeners.get(event)!.add(cb);
-      return () => { listeners.get(event)?.delete(cb); };
+      return () => {
+        listeners.get(event)?.delete(cb);
+      };
     }),
     off: vi.fn(),
     _setSelection(ids: string[]) {
@@ -28,9 +30,7 @@ describe('useSelection', () => {
   it('should return current selection from engine', () => {
     const engine = createMockEngine();
     const wrapper = ({ children }: { children: ReactNode }) => (
-      <DesignEngineContext.Provider value={engine as any}>
-        {children}
-      </DesignEngineContext.Provider>
+      <DesignEngineContext.Provider value={engine as any}>{children}</DesignEngineContext.Provider>
     );
 
     const { result } = renderHook(() => useSelection(), { wrapper });
@@ -40,9 +40,7 @@ describe('useSelection', () => {
   it('should re-render when selection changes', () => {
     const engine = createMockEngine();
     const wrapper = ({ children }: { children: ReactNode }) => (
-      <DesignEngineContext.Provider value={engine as any}>
-        {children}
-      </DesignEngineContext.Provider>
+      <DesignEngineContext.Provider value={engine as any}>{children}</DesignEngineContext.Provider>
     );
 
     const { result } = renderHook(() => useSelection(), { wrapper });

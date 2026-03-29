@@ -23,7 +23,11 @@ export function useHistory(): HistoryState {
     (e: typeof engine) => {
       const canUndo = !!e.canUndo;
       const canRedo = !!e.canRedo;
-      if (cacheRef.current && cacheRef.current.canUndo === canUndo && cacheRef.current.canRedo === canRedo) {
+      if (
+        cacheRef.current &&
+        cacheRef.current.canUndo === canUndo &&
+        cacheRef.current.canRedo === canRedo
+      ) {
         return cacheRef.current;
       }
       cacheRef.current = { canUndo, canRedo };

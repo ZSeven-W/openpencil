@@ -11,7 +11,7 @@ export function useDesignEngine(): DesignEngine {
   if (!engine) {
     throw new Error(
       'useDesignEngine must be used within a <DesignProvider>. ' +
-      'Wrap your component tree with <DesignProvider>.',
+        'Wrap your component tree with <DesignProvider>.',
     );
   }
   return engine;

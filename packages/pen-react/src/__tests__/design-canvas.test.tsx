@@ -6,20 +6,17 @@ import { DesignCanvas } from '../components/design-canvas';
 
 // Mock via the resolved file path so vitest can intercept it regardless of
 // how the package sub-path export is resolved through symlinks.
-vi.mock(
-  '/Users/kayshen/Workspace/ZSeven-W/openpencil/packages/pen-engine/src/browser.ts',
-  () => ({
-    attachCanvas: vi.fn(() =>
-      Promise.resolve({
-        render: vi.fn(),
-        resize: vi.fn(),
-        dispose: vi.fn(),
-        renderToImageData: vi.fn(),
-      }),
-    ),
-    attachInteraction: vi.fn(() => vi.fn()),
-  }),
-);
+vi.mock('/Users/kayshen/Workspace/ZSeven-W/openpencil/packages/pen-engine/src/browser.ts', () => ({
+  attachCanvas: vi.fn(() =>
+    Promise.resolve({
+      render: vi.fn(),
+      resize: vi.fn(),
+      dispose: vi.fn(),
+      renderToImageData: vi.fn(),
+    }),
+  ),
+  attachInteraction: vi.fn(() => vi.fn()),
+}));
 
 // jsdom doesn't implement ResizeObserver — provide a stub
 beforeAll(() => {

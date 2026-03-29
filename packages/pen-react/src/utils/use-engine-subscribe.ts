@@ -22,10 +22,7 @@ export function useEngineSubscribe<K extends keyof DesignEngineEvents, T>(
   const snapshotRef = useRef(getSnapshot);
   snapshotRef.current = getSnapshot;
 
-  const subscribe = useCallback(
-    (cb: () => void) => engine.on(event, cb as any),
-    [engine, event],
-  );
+  const subscribe = useCallback((cb: () => void) => engine.on(event, cb as any), [engine, event]);
   const snap = useCallback(() => snapshotRef.current(engine), [engine]);
   return useSyncExternalStore(subscribe, snap);
 }

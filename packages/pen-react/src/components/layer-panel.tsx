@@ -32,7 +32,11 @@ function getEffectiveChildren(node: PenNode, allChildren: PenNode[]): PenNode[] 
   if (node.type === 'ref') {
     const refNode = node as PenNode & { ref: string };
     const component = findNodeInTree(allChildren, refNode.ref);
-    if (component && 'children' in component && (component as PenNode & { children?: PenNode[] }).children?.length) {
+    if (
+      component &&
+      'children' in component &&
+      (component as PenNode & { children?: PenNode[] }).children?.length
+    ) {
       return (component as PenNode & { children: PenNode[] }).children;
     }
     return null;
@@ -473,7 +477,8 @@ function LayerPanelInner() {
               contextNode.type === 'rectangle'
             : false;
           const nodeIsReusable = contextNode
-            ? 'reusable' in contextNode && (contextNode as unknown as Record<string, unknown>).reusable === true
+            ? 'reusable' in contextNode &&
+              (contextNode as unknown as Record<string, unknown>).reusable === true
             : false;
           const nodeIsInstance = contextNode?.type === 'ref';
           const booleanNodes = selectedIds

@@ -24,18 +24,12 @@ export function useVariables(): VariablesState {
     (name: string, def: VariableDefinition) => engine.setVariable(name, def),
     [engine],
   );
-  const removeVariable = useCallback(
-    (name: string) => engine.removeVariable(name),
-    [engine],
-  );
+  const removeVariable = useCallback((name: string) => engine.removeVariable(name), [engine]);
   const renameVariable = useCallback(
     (oldName: string, newName: string) => engine.renameVariable(oldName, newName),
     [engine],
   );
-  const resolveVariable = useCallback(
-    (ref: string) => engine.resolveVariable(ref),
-    [engine],
-  );
+  const resolveVariable = useCallback((ref: string) => engine.resolveVariable(ref), [engine]);
 
   return { variables, setVariable, removeVariable, renameVariable, resolveVariable };
 }

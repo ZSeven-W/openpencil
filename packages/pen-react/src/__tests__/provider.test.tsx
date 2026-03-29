@@ -14,7 +14,9 @@ vi.mock('@zseven-w/pen-engine', () => {
     on(event: string, cb: (...args: any[]) => void) {
       if (!listeners.has(event)) listeners.set(event, new Set());
       listeners.get(event)!.add(cb);
-      return () => { listeners.get(event)?.delete(cb); };
+      return () => {
+        listeners.get(event)?.delete(cb);
+      };
     }
     off(event: string, cb: (...args: any[]) => void) {
       listeners.get(event)?.delete(cb);
@@ -23,8 +25,12 @@ vi.mock('@zseven-w/pen-engine', () => {
       doc = d;
       listeners.get('document:change')?.forEach((fn) => fn(d));
     }
-    getDocument() { return doc; }
-    createDocument() { return { id: 'new', name: 'New', children: [], pages: [] }; }
+    getDocument() {
+      return doc;
+    }
+    createDocument() {
+      return { id: 'new', name: 'New', children: [], pages: [] };
+    }
     dispose() {}
   }
 
@@ -54,13 +60,21 @@ describe('DesignProvider', () => {
 
     const { rerender } = render(
       <DesignProvider>
-        <Capture onCapture={(e) => { engineRef1 = e; }} />
+        <Capture
+          onCapture={(e) => {
+            engineRef1 = e;
+          }}
+        />
       </DesignProvider>,
     );
 
     rerender(
       <DesignProvider>
-        <Capture onCapture={(e) => { engineRef2 = e; }} />
+        <Capture
+          onCapture={(e) => {
+            engineRef2 = e;
+          }}
+        />
       </DesignProvider>,
     );
 

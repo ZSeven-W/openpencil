@@ -2,7 +2,13 @@
 export { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@radix-ui/react-tooltip';
 export { Popover, PopoverTrigger, PopoverContent } from '@radix-ui/react-popover';
 export { Separator } from '@radix-ui/react-separator';
-export { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from '@radix-ui/react-select';
+export {
+  Select,
+  SelectTrigger,
+  SelectContent,
+  SelectItem,
+  SelectValue,
+} from '@radix-ui/react-select';
 export { Slider } from '@radix-ui/react-slider';
 export { Switch } from '@radix-ui/react-switch';
 export { Toggle } from '@radix-ui/react-toggle';

@@ -75,9 +75,5 @@ export function DesignProvider({
     };
   }, []);
 
-  return (
-    <DesignEngineContext.Provider value={engine}>
-      {children}
-    </DesignEngineContext.Provider>
-  );
+  return <DesignEngineContext.Provider value={engine}>{children}</DesignEngineContext.Provider>;
 }

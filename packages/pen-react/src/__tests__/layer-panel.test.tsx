@@ -15,7 +15,15 @@ function createMockEngine() {
         id: 'page-1',
         name: 'Page 1',
         children: [
-          { id: 'rect-1', type: 'rectangle', name: 'Header BG', x: 0, y: 0, width: 400, height: 60 },
+          {
+            id: 'rect-1',
+            type: 'rectangle',
+            name: 'Header BG',
+            x: 0,
+            y: 0,
+            width: 400,
+            height: 60,
+          },
           { id: 'text-1', type: 'text', name: 'Title', x: 20, y: 10, content: 'Hello' },
         ],
       },
@@ -35,7 +43,15 @@ function createMockEngine() {
     redo: vi.fn(),
     getNodeById: vi.fn((id: string) => {
       if (id === 'rect-1')
-        return { id: 'rect-1', type: 'rectangle', name: 'Header BG', x: 0, y: 0, width: 400, height: 60 };
+        return {
+          id: 'rect-1',
+          type: 'rectangle',
+          name: 'Header BG',
+          x: 0,
+          y: 0,
+          width: 400,
+          height: 60,
+        };
       if (id === 'text-1')
         return { id: 'text-1', type: 'text', name: 'Title', x: 20, y: 10, content: 'Hello' };
       return undefined;

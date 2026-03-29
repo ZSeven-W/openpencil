@@ -15,7 +15,9 @@ export function PageTabs({ onPageSwitch }: PageTabsProps) {
 
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editValue, setEditValue] = useState('');
-  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; pageId: string } | null>(null);
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; pageId: string } | null>(
+    null,
+  );
   const inputRef = useRef<HTMLInputElement>(null);
 
   if (!pages || pages.length === 0) return null;

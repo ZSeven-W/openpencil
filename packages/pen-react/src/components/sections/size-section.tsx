@@ -10,7 +10,13 @@ interface SizeSectionProps {
   hideWH?: boolean;
 }
 
-export function SizeSection({ node, onUpdate, hasCornerRadius, cornerRadius, hideWH }: SizeSectionProps) {
+export function SizeSection({
+  node,
+  onUpdate,
+  hasCornerRadius,
+  cornerRadius,
+  hideWH,
+}: SizeSectionProps) {
   const x = node.x ?? 0;
   const y = node.y ?? 0;
   const rotation = node.rotation ?? 0;

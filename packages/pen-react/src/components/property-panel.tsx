@@ -18,8 +18,19 @@ import type { PenNode } from '@zseven-w/pen-types';
 
 /** Properties stored directly on the RefNode (instance-level), not as overrides. */
 const INSTANCE_DIRECT_PROPS = new Set([
-  'x', 'y', 'width', 'height', 'name', 'visible', 'locked',
-  'rotation', 'opacity', 'flipX', 'flipY', 'enabled', 'theme',
+  'x',
+  'y',
+  'width',
+  'height',
+  'name',
+  'visible',
+  'locked',
+  'rotation',
+  'opacity',
+  'flipX',
+  'flipY',
+  'enabled',
+  'theme',
 ]);
 
 type RefNode = PenNode & { ref: string; descendants?: Record<string, Record<string, unknown>> };
@@ -93,7 +104,8 @@ export function PropertyPanel({ embedded }: PropertyPanelProps = {}) {
 
   if (!node) return null;
 
-  const nodeIsReusable = 'reusable' in node && (node as unknown as Record<string, unknown>).reusable === true;
+  const nodeIsReusable =
+    'reusable' in node && (node as unknown as Record<string, unknown>).reusable === true;
   const nodeIsInstance = node.type === 'ref';
 
   // For RefNodes, resolve the referenced component to get visual properties.
@@ -105,7 +117,8 @@ export function PropertyPanel({ embedded }: PropertyPanelProps = {}) {
       const topOverrides = refNode.descendants?.[refNode.ref] ?? {};
       const merged: Record<string, unknown> = { ...component, ...topOverrides };
       for (const [key, val] of Object.entries(node)) {
-        if (key === 'type' || key === 'ref' || key === 'descendants' || key === 'children') continue;
+        if (key === 'type' || key === 'ref' || key === 'descendants' || key === 'children')
+          continue;
         if (val !== undefined) merged[key] = val;
       }
       merged.type = component.type;
@@ -121,7 +134,9 @@ export function PropertyPanel({ embedded }: PropertyPanelProps = {}) {
   };
 
   const isContainer =
-    displayNode.type === 'frame' || displayNode.type === 'group' || displayNode.type === 'rectangle';
+    displayNode.type === 'frame' ||
+    displayNode.type === 'group' ||
+    displayNode.type === 'rectangle';
   const hasLayout = isContainer;
   const isImage = displayNode.type === 'image';
   const hasFill = displayNode.type !== 'line' && !isImage;
@@ -262,7 +277,15 @@ export function PropertyPanel({ embedded }: PropertyPanelProps = {}) {
             node={displayNode}
             onUpdate={handleUpdate}
             hasCornerRadius={hasCornerRadius}
-            cornerRadius={'cornerRadius' in displayNode ? (displayNode as PenNode & { cornerRadius?: number | [number, number, number, number] }).cornerRadius : undefined}
+            cornerRadius={
+              'cornerRadius' in displayNode
+                ? (
+                    displayNode as PenNode & {
+                      cornerRadius?: number | [number, number, number, number];
+                    }
+                  ).cornerRadius
+                : undefined
+            }
             hideWH={hasLayout || isText}
           />
         </div>
@@ -283,7 +306,14 @@ export function PropertyPanel({ embedded }: PropertyPanelProps = {}) {
           <>
             <div className="h-px bg-border" />
             <div className="px-3 py-2">
-              <TextLayoutSection node={displayNode as PenNode & { textGrowth?: 'auto' | 'fixed-width' | 'fixed-width-height' }} onUpdate={handleUpdate} />
+              <TextLayoutSection
+                node={
+                  displayNode as PenNode & {
+                    textGrowth?: 'auto' | 'fixed-width' | 'fixed-width-height';
+                  }
+                }
+                onUpdate={handleUpdate}
+              />
             </div>
           </>
         )}
@@ -324,7 +354,11 @@ export function PropertyPanel({ embedded }: PropertyPanelProps = {}) {
           <>
             <div className="px-3 py-2">
               <FillSection
-                fills={'fill' in displayNode ? (displayNode as PenNode & { fill?: unknown[] }).fill as never : undefined}
+                fills={
+                  'fill' in displayNode
+                    ? ((displayNode as PenNode & { fill?: unknown[] }).fill as never)
+                    : undefined
+                }
                 onUpdate={handleUpdate}
               />
             </div>
@@ -336,7 +370,11 @@ export function PropertyPanel({ embedded }: PropertyPanelProps = {}) {
           <>
             <div className="px-3 py-2">
               <StrokeSection
-                stroke={'stroke' in displayNode ? (displayNode as PenNode & { stroke?: unknown }).stroke as never : undefined}
+                stroke={
+                  'stroke' in displayNode
+                    ? ((displayNode as PenNode & { stroke?: unknown }).stroke as never)
+                    : undefined
+                }
                 onUpdate={handleUpdate}
               />
             </div>
@@ -346,7 +384,10 @@ export function PropertyPanel({ embedded }: PropertyPanelProps = {}) {
 
         {isText && displayNode.type === 'text' && (
           <div className="px-3 py-2">
-            <TextSection node={displayNode as PenNode & { fontFamily?: string }} onUpdate={handleUpdate} />
+            <TextSection
+              node={displayNode as PenNode & { fontFamily?: string }}
+              onUpdate={handleUpdate}
+            />
           </div>
         )}
 
@@ -354,7 +395,11 @@ export function PropertyPanel({ embedded }: PropertyPanelProps = {}) {
           <div className="h-px bg-border" />
           <div className="px-3 py-2">
             <EffectsSection
-              effects={'effects' in displayNode ? (displayNode as PenNode & { effects?: unknown[] }).effects as never : undefined}
+              effects={
+                'effects' in displayNode
+                  ? ((displayNode as PenNode & { effects?: unknown[] }).effects as never)
+                  : undefined
+              }
               onUpdate={handleUpdate}
             />
           </div>

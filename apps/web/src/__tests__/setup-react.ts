@@ -24,10 +24,16 @@ import * as viteTranformedReact from 'react';
 
 // Load react via native CJS require — same instance that react-dom uses internally
 const require = createRequire(import.meta.url);
-const cjsReact = require('/Users/kayshen/Workspace/ZSeven-W/openpencil/node_modules/.bun/react@19.2.4/node_modules/react') as Record<string, any>;
+const cjsReact =
+  require('/Users/kayshen/Workspace/ZSeven-W/openpencil/node_modules/.bun/react@19.2.4/node_modules/react') as Record<
+    string,
+    any
+  >;
 
-const viteInternals = (viteTranformedReact as any).__CLIENT_INTERNALS_DO_NOT_USE_OR_WARN_USERS_THEY_CANNOT_UPGRADE as Record<string, any>;
-const cjsInternals = cjsReact.__CLIENT_INTERNALS_DO_NOT_USE_OR_WARN_USERS_THEY_CANNOT_UPGRADE as Record<string, any>;
+const viteInternals = (viteTranformedReact as any)
+  .__CLIENT_INTERNALS_DO_NOT_USE_OR_WARN_USERS_THEY_CANNOT_UPGRADE as Record<string, any>;
+const cjsInternals =
+  cjsReact.__CLIENT_INTERNALS_DO_NOT_USE_OR_WARN_USERS_THEY_CANNOT_UPGRADE as Record<string, any>;
 
 if (viteInternals && cjsInternals && viteInternals !== cjsInternals) {
   // Make vite-transformed React's internals delegate all reads/writes to CJS internals.
@@ -35,7 +41,9 @@ if (viteInternals && cjsInternals && viteInternals !== cjsInternals) {
   for (const key of Object.keys(cjsInternals)) {
     Object.defineProperty(viteInternals, key, {
       get: () => (cjsInternals as any)[key],
-      set: (v) => { (cjsInternals as any)[key] = v; },
+      set: (v) => {
+        (cjsInternals as any)[key] = v;
+      },
       configurable: true,
       enumerable: true,
     });

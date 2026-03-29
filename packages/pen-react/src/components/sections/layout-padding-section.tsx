@@ -160,17 +160,13 @@ export function LayoutPaddingSection({ padding, onUpdate }: LayoutPaddingSection
           <NumberInput
             icon={PadHIcon}
             value={parsed.values[1]}
-            onChange={(v) =>
-              onUpdate({ padding: [parsed.values[0], v] } as Partial<PenNode>)
-            }
+            onChange={(v) => onUpdate({ padding: [parsed.values[0], v] } as Partial<PenNode>)}
             min={0}
           />
           <NumberInput
             icon={PadVIcon}
             value={parsed.values[0]}
-            onChange={(v) =>
-              onUpdate({ padding: [v, parsed.values[1]] } as Partial<PenNode>)
-            }
+            onChange={(v) => onUpdate({ padding: [v, parsed.values[1]] } as Partial<PenNode>)}
             min={0}
           />
         </div>

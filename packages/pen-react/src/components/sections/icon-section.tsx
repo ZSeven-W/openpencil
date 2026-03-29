@@ -38,7 +38,7 @@ export function IconSection({ node, onUpdate }: IconSectionProps) {
 
   const iconId = isIconFont
     ? `${(node as IconFontNode).iconFontFamily || 'lucide'}:${(node as IconFontNode).iconFontName}`
-    : (node as PathNode).iconId ?? '';
+    : ((node as PathNode).iconId ?? '');
   const colonIdx = iconId.indexOf(':');
   const collection = colonIdx >= 0 ? iconId.slice(0, colonIdx) : '';
   const iconName = colonIdx >= 0 ? iconId.slice(colonIdx + 1) : iconId;
