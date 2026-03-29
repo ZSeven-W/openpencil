@@ -21,6 +21,13 @@ import {
   getAllChildren,
 } from './document-tree-utils';
 
+type SetState = {
+  (partial: Partial<{ document: PenDocument; isDirty: boolean }>): void;
+  (
+    fn: (state: { document: PenDocument }) => Partial<{ document: PenDocument; isDirty: boolean }>,
+  ): void;
+};
+
 /** Shortcut: get the active page's children from the current state. */
 function _children(s: { document: PenDocument }): PenNode[] {
   return getActivePageChildren(s.document, useCanvasStore.getState().activePageId);
@@ -29,6 +36,16 @@ function _children(s: { document: PenDocument }): PenNode[] {
 /** Shortcut: return a new document with active page's children replaced. */
 function _setChildren(doc: PenDocument, children: PenNode[]): PenDocument {
   return setActivePageChildren(doc, useCanvasStore.getState().activePageId, children);
+}
+
+/** Push current document to history, then apply mutation and mark dirty. */
+function mutateWithHistory(
+  get: () => { document: PenDocument },
+  set: SetState,
+  fn: (doc: PenDocument) => PenDocument,
+) {
+  useHistoryStore.getState().pushState(get().document);
+  set({ document: fn(get().document), isDirty: true });
 }
 
 interface NodeActions {
@@ -50,46 +67,33 @@ interface NodeActions {
   isDescendantOf: (nodeId: string, ancestorId: string) => boolean;
 }
 
-type SetState = {
-  (partial: Partial<{ document: PenDocument; isDirty: boolean }>): void;
-  (
-    fn: (state: { document: PenDocument }) => Partial<{ document: PenDocument; isDirty: boolean }>,
-  ): void;
-};
-
 export function createNodeActions(
   set: SetState,
   get: () => { document: PenDocument },
 ): NodeActions {
   return {
     addNode: (parentId, node, index) => {
-      useHistoryStore.getState().pushState(get().document);
-      set((s) => ({
-        document: _setChildren(
-          s.document,
+      mutateWithHistory(get, set, (doc) =>
+        _setChildren(
+          doc,
           // Default to index 0 (prepend) so new items appear at the top of
           // the layer panel = frontmost on canvas. Callers can pass an
           // explicit index to override.
-          insertNodeInTree(_children(s), parentId, node, index ?? 0),
+          insertNodeInTree(_children({ document: doc }), parentId, node, index ?? 0),
         ),
-        isDirty: true,
-      }));
+      );
     },
 
     updateNode: (id, updates) => {
-      useHistoryStore.getState().pushState(get().document);
-      set((s) => ({
-        document: _setChildren(s.document, updateNodeInTree(_children(s), id, updates)),
-        isDirty: true,
-      }));
+      mutateWithHistory(get, set, (doc) =>
+        _setChildren(doc, updateNodeInTree(_children({ document: doc }), id, updates)),
+      );
     },
 
     removeNode: (id) => {
-      useHistoryStore.getState().pushState(get().document);
-      set((s) => ({
-        document: _setChildren(s.document, removeNodeFromTree(_children(s), id)),
-        isDirty: true,
-      }));
+      mutateWithHistory(get, set, (doc) =>
+        _setChildren(doc, removeNodeFromTree(_children({ document: doc }), id)),
+      );
     },
 
     moveNode: (id, newParentId, index) => {
@@ -97,13 +101,9 @@ export function createNodeActions(
       const children = _children(state);
       const node = findNodeInTree(children, id);
       if (!node) return;
-      useHistoryStore.getState().pushState(state.document);
       const withoutNode = removeNodeFromTree(children, id);
       const withNode = insertNodeInTree(withoutNode, newParentId, node, index);
-      set({
-        document: _setChildren(state.document, withNode),
-        isDirty: true,
-      });
+      mutateWithHistory(get, set, () => _setChildren(state.document, withNode));
     },
 
     reorderNode: (id, direction) => {
@@ -116,59 +116,50 @@ export function createNodeActions(
       const newIdx =
         direction === 'up' ? Math.max(0, idx - 1) : Math.min(siblings.length - 1, idx + 1);
       if (newIdx === idx) return;
-      useHistoryStore.getState().pushState(state.document);
       const newSiblings = [...siblings];
       const [removed] = newSiblings.splice(idx, 1);
       newSiblings.splice(newIdx, 0, removed);
 
       if (parent && 'children' in parent) {
-        set((s) => ({
-          document: _setChildren(
-            s.document,
-            updateNodeInTree(_children(s), parent.id, {
+        mutateWithHistory(get, set, (doc) =>
+          _setChildren(
+            doc,
+            updateNodeInTree(_children({ document: doc }), parent.id, {
               children: newSiblings,
             } as Partial<PenNode>),
           ),
-          isDirty: true,
-        }));
+        );
       } else {
-        set((s) => ({
-          document: _setChildren(s.document, newSiblings),
-          isDirty: true,
-        }));
+        mutateWithHistory(get, set, (doc) => _setChildren(doc, newSiblings));
       }
     },
 
     toggleVisibility: (id) => {
       const node = findNodeInTree(_children(get()), id);
       if (!node) return;
-      useHistoryStore.getState().pushState(get().document);
       const currentVisible = node.visible !== false;
-      set((s) => ({
-        document: _setChildren(
-          s.document,
-          updateNodeInTree(_children(s), id, {
+      mutateWithHistory(get, set, (doc) =>
+        _setChildren(
+          doc,
+          updateNodeInTree(_children({ document: doc }), id, {
             visible: !currentVisible,
           } as Partial<PenNode>),
         ),
-        isDirty: true,
-      }));
+      );
     },
 
     toggleLock: (id) => {
       const node = findNodeInTree(_children(get()), id);
       if (!node) return;
-      useHistoryStore.getState().pushState(get().document);
       const currentLocked = node.locked === true;
-      set((s) => ({
-        document: _setChildren(
-          s.document,
-          updateNodeInTree(_children(s), id, {
+      mutateWithHistory(get, set, (doc) =>
+        _setChildren(
+          doc,
+          updateNodeInTree(_children({ document: doc }), id, {
             locked: !currentLocked,
           } as Partial<PenNode>),
         ),
-        isDirty: true,
-      }));
+      );
     },
 
     duplicateNode: (id) => {
@@ -197,14 +188,12 @@ export function createNodeActions(
           y: bounds.y,
         };
 
-        useHistoryStore.getState().pushState(state.document);
-        set((s) => ({
-          document: _setChildren(
-            s.document,
-            insertNodeInTree(_children(s), parentId, refNode as PenNode, idx),
+        mutateWithHistory(get, set, (doc) =>
+          _setChildren(
+            doc,
+            insertNodeInTree(_children({ document: doc }), parentId, refNode as PenNode, idx),
           ),
-          isDirty: true,
-        }));
+        );
         return refNode.id;
       }
 
@@ -221,11 +210,9 @@ export function createNodeActions(
       clone.x = findClearX(bounds.x, bounds.w, bounds.y, bounds.h, siblings, id, allNodes);
       clone.y = bounds.y;
 
-      useHistoryStore.getState().pushState(state.document);
-      set((s) => ({
-        document: _setChildren(s.document, insertNodeInTree(_children(s), parentId, clone, idx)),
-        isDirty: true,
-      }));
+      mutateWithHistory(get, set, (doc) =>
+        _setChildren(doc, insertNodeInTree(_children({ document: doc }), parentId, clone, idx)),
+      );
       return clone.id;
     },
 
@@ -281,21 +268,14 @@ export function createNodeActions(
         : children;
       const firstIdx = siblings.findIndex((n) => nodeIds.includes(n.id));
 
-      useHistoryStore.getState().pushState(state.document);
-
-      // Remove all selected nodes
+      // Remove all selected nodes, then insert group at first node's position
       let newChildren = children;
       for (const id of nodeIds) {
         newChildren = removeNodeFromTree(newChildren, id);
       }
-
-      // Insert group at first node's position
       newChildren = insertNodeInTree(newChildren, parentId, group, firstIdx);
 
-      set({
-        document: _setChildren(state.document, newChildren),
-        isDirty: true,
-      });
+      mutateWithHistory(get, set, () => _setChildren(state.document, newChildren));
       return groupId;
     },
 
@@ -320,20 +300,13 @@ export function createNodeActions(
         y: (child.y ?? 0) + groupY,
       })) as PenNode[];
 
-      useHistoryStore.getState().pushState(state.document);
-
-      // Remove group
+      // Remove group, then insert children at group's position (in reverse to maintain order)
       let newChildren = removeNodeFromTree(children, groupId);
-
-      // Insert children at group's position (in reverse to maintain order)
       for (let i = adjustedChildren.length - 1; i >= 0; i--) {
         newChildren = insertNodeInTree(newChildren, parentId, adjustedChildren[i], groupIdx);
       }
 
-      set({
-        document: _setChildren(state.document, newChildren),
-        isDirty: true,
-      });
+      mutateWithHistory(get, set, () => _setChildren(state.document, newChildren));
     },
 
     scaleDescendantsInStore: (parentId, scaleX, scaleY) => {
@@ -344,15 +317,14 @@ export function createNodeActions(
       if (!parent || !('children' in parent) || !parent.children) return;
 
       const scaledChildren = scaleChildrenInPlace(parent.children, scaleX, scaleY);
-      set((s) => ({
-        document: _setChildren(
-          s.document,
-          updateNodeInTree(_children(s), parentId, {
+      mutateWithHistory(get, set, (doc) =>
+        _setChildren(
+          doc,
+          updateNodeInTree(_children({ document: doc }), parentId, {
             children: scaledChildren,
           } as Partial<PenNode>),
         ),
-        isDirty: true,
-      }));
+      );
     },
 
     rotateDescendantsInStore: (parentId, angleDeltaDeg) => {
@@ -363,15 +335,14 @@ export function createNodeActions(
       if (!parent || !('children' in parent) || !parent.children) return;
 
       const rotatedChildren = rotateChildrenInPlace(parent.children, angleDeltaDeg);
-      set((s) => ({
-        document: _setChildren(
-          s.document,
-          updateNodeInTree(_children(s), parentId, {
+      mutateWithHistory(get, set, (doc) =>
+        _setChildren(
+          doc,
+          updateNodeInTree(_children({ document: doc }), parentId, {
             children: rotatedChildren,
           } as Partial<PenNode>),
         ),
-        isDirty: true,
-      }));
+      );
     },
 
     getNodeById: (id) => findNodeInTree(_children(get()), id),

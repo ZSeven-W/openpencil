@@ -92,7 +92,10 @@ export const useHistoryStore = create<HistoryStoreState>((set, get) => ({
   canUndo: () => get().undoStack.length > 0,
   canRedo: () => get().redoStack.length > 0,
 
-  clear: () => set({ undoStack: [], redoStack: [], batchDepth: 0, batchBaseState: null }),
+  clear: () => {
+    lastPushTime = 0;
+    set({ undoStack: [], redoStack: [], batchDepth: 0, batchBaseState: null });
+  },
 
   startBatch: (doc) => {
     const { batchDepth } = get();
