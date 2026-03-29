@@ -276,20 +276,27 @@ export default function CodePanel() {
     return highlightCode(generatedCode, lang);
   }, [activeTab, generatedCode]);
 
+  const totalSteps = 1 + chunks.length + (assemblyStatus !== 'idle' ? 1 : 0);
+  const completedSteps =
+    (planningStatus === 'done' ? 1 : 0) +
+    chunks.filter((c) => c.status === 'done' || c.status === 'degraded').length +
+    (assemblyStatus === 'done' ? 1 : 0);
+  const progressPct = totalSteps > 0 ? (completedSteps / totalSteps) * 100 : 0;
+
   return (
     <div className="flex flex-1 min-h-0 flex-col">
       {/* Tab Bar */}
-      <div className="flex items-center border-b border-border px-2 shrink-0">
-        <div className="flex gap-1 overflow-x-auto py-1 scrollbar-none">
+      <div className="flex items-center border-b border-border px-1.5 shrink-0">
+        <div className="flex gap-0.5 overflow-x-auto py-1 scrollbar-none">
           {FRAMEWORKS.map((fw) => (
             <button
               key={fw}
               type="button"
               className={cn(
-                'whitespace-nowrap rounded-md px-2.5 py-1 text-xs font-medium transition-colors shrink-0',
+                'whitespace-nowrap rounded px-2 py-1 text-[11px] font-medium transition-all duration-150 shrink-0',
                 activeTab === fw
-                  ? 'bg-primary text-primary-foreground'
-                  : 'text-muted-foreground hover:bg-muted',
+                  ? 'bg-primary text-primary-foreground shadow-sm'
+                  : 'text-muted-foreground hover:text-foreground hover:bg-muted/60',
               )}
               onClick={() => handleTabChange(fw)}
             >
@@ -303,77 +310,111 @@ export default function CodePanel() {
       <div className="flex-1 min-h-0 flex flex-col">
         {/* Empty State */}
         {panelState === 'empty' && (
-          <div className="flex h-full flex-col items-center justify-center gap-3 p-6 text-center">
-            <Sparkles className="h-8 w-8 text-muted-foreground" />
-            <div className="text-sm text-muted-foreground">
-              {nodeCount > 0
-                ? `${nodeCount} node${nodeCount > 1 ? 's' : ''} selected`
-                : 'No nodes on page'}
+          <div className="flex h-full flex-col items-center justify-center gap-4 p-6 text-center">
+            <div className="relative">
+              <div className="absolute inset-0 rounded-xl bg-primary/10 blur-xl" />
+              <div className="relative rounded-xl border border-border/50 bg-muted/40 p-4">
+                <Sparkles className="h-6 w-6 text-primary/70" />
+              </div>
             </div>
-            <Button onClick={handleGenerate} disabled={nodeCount === 0} size="sm">
-              <Sparkles className="mr-2 h-4 w-4" />
-              Generate {TAB_LABELS[activeTab]} Code
+            <div className="space-y-1">
+              <div className="text-xs font-medium text-foreground/80">
+                {nodeCount > 0
+                  ? `${nodeCount} node${nodeCount > 1 ? 's' : ''} selected`
+                  : 'No nodes on page'}
+              </div>
+              <div className="text-[11px] text-muted-foreground">
+                Generate production-ready code
+              </div>
+            </div>
+            <Button
+              onClick={handleGenerate}
+              disabled={nodeCount === 0}
+              size="sm"
+              className="h-8 gap-1.5 text-xs shadow-sm"
+            >
+              <Sparkles className="h-3.5 w-3.5" />
+              Generate {TAB_LABELS[activeTab]}
             </Button>
             {generateError && (
-              <div className="max-w-[260px] rounded-md bg-destructive/10 px-3 py-2 text-xs text-destructive">
+              <div className="max-w-[260px] rounded-lg border border-destructive/20 bg-destructive/8 px-3 py-2 text-xs text-destructive">
                 <div className="font-medium">Generation failed</div>
-                <div className="mt-1 break-words">{generateError}</div>
+                <div className="mt-1 break-words opacity-80">{generateError}</div>
               </div>
             )}
             {selectionChanged && (
-              <div className="text-xs text-amber-500">Selection changed since last generation</div>
+              <div className="flex items-center gap-1.5 text-[11px] text-amber-500">
+                <AlertTriangle className="h-3 w-3" />
+                Selection changed since last generation
+              </div>
             )}
           </div>
         )}
 
         {/* Generating State */}
         {panelState === 'generating' && (
-          <div className="flex flex-col gap-2 p-4">
-            {/* Planning */}
-            <ProgressItem
-              label="Planning"
-              status={
-                planningStatus === 'running'
-                  ? 'running'
-                  : planningStatus === 'done'
-                    ? 'done'
-                    : planningStatus === 'failed'
-                      ? 'failed'
-                      : 'pending'
-              }
-              error={planningError}
-            />
-
-            {/* Chunks */}
-            {chunks.map((chunk) => (
-              <ProgressItem
-                key={chunk.chunkId}
-                label={chunk.name}
-                status={chunk.status}
-                error={chunk.error}
-                onRetry={
-                  chunk.status === 'failed' ? () => handleRetryChunk(chunk.chunkId) : undefined
-                }
+          <div className="flex flex-1 flex-col">
+            {/* Progress bar */}
+            <div className="h-[2px] shrink-0 bg-muted">
+              <div
+                className="h-full bg-primary transition-all duration-500 ease-out"
+                style={{ width: `${progressPct}%` }}
               />
-            ))}
+            </div>
 
-            {/* Assembly */}
-            {assemblyStatus !== 'idle' && (
+            <div className="flex flex-col gap-1 p-3">
+              {/* Planning */}
               <ProgressItem
-                label="Assembly"
+                label="Planning"
                 status={
-                  assemblyStatus === 'running'
+                  planningStatus === 'running'
                     ? 'running'
-                    : assemblyStatus === 'done'
+                    : planningStatus === 'done'
                       ? 'done'
-                      : 'failed'
+                      : planningStatus === 'failed'
+                        ? 'failed'
+                        : 'pending'
                 }
+                error={planningError}
               />
-            )}
 
-            <Button variant="ghost" size="sm" onClick={handleCancel} className="mt-2 self-center">
-              Cancel
-            </Button>
+              {/* Chunks */}
+              {chunks.map((chunk) => (
+                <ProgressItem
+                  key={chunk.chunkId}
+                  label={chunk.name}
+                  status={chunk.status}
+                  error={chunk.error}
+                  onRetry={
+                    chunk.status === 'failed' ? () => handleRetryChunk(chunk.chunkId) : undefined
+                  }
+                />
+              ))}
+
+              {/* Assembly */}
+              {assemblyStatus !== 'idle' && (
+                <ProgressItem
+                  label="Assembly"
+                  status={
+                    assemblyStatus === 'running'
+                      ? 'running'
+                      : assemblyStatus === 'done'
+                        ? 'done'
+                        : 'failed'
+                  }
+                />
+              )}
+            </div>
+
+            <div className="mt-auto border-t border-border/50 p-2 shrink-0">
+              <button
+                type="button"
+                onClick={handleCancel}
+                className="w-full rounded-md py-1.5 text-[11px] font-medium text-muted-foreground transition-colors hover:text-foreground hover:bg-muted/60"
+              >
+                Cancel
+              </button>
+            </div>
           </div>
         )}
 
@@ -381,17 +422,24 @@ export default function CodePanel() {
         {panelState === 'complete' && (
           <>
             {isDegraded && (
-              <div className="flex items-center gap-2 bg-amber-500/10 px-3 py-2 text-xs text-amber-600 shrink-0">
-                <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
-                Some chunks failed or degraded. Output may not compile.
+              <div className="flex items-center gap-2 border-b border-amber-500/20 bg-amber-500/8 px-3 py-1.5 text-[11px] text-amber-600 shrink-0">
+                <AlertTriangle className="h-3 w-3 shrink-0" />
+                Some chunks failed. Output may not compile.
               </div>
             )}
             {selectionChanged && (
-              <div className="flex items-center justify-between bg-muted px-3 py-1.5 text-xs text-muted-foreground shrink-0">
-                <span>Selection changed</span>
-                <Button variant="ghost" size="sm" className="h-6 text-xs" onClick={handleGenerate}>
+              <div className="flex items-center justify-between border-b border-border/50 bg-muted/40 px-3 py-1 text-[11px] text-muted-foreground shrink-0">
+                <span className="flex items-center gap-1.5">
+                  <AlertTriangle className="h-3 w-3 text-amber-500" />
+                  Selection changed
+                </span>
+                <button
+                  type="button"
+                  className="text-[11px] font-medium text-primary hover:text-primary/80 transition-colors"
+                  onClick={handleGenerate}
+                >
                   Regenerate
-                </Button>
+                </button>
               </div>
             )}
             <div className="flex-1 min-h-0 overflow-auto p-2">
@@ -399,11 +447,16 @@ export default function CodePanel() {
                 <code dangerouslySetInnerHTML={{ __html: highlightedHTML }} />
               </pre>
             </div>
-            <div className="flex items-center border-t border-border px-1 py-1 shrink-0 bg-card">
+            <div className="flex items-center gap-px border-t border-border px-1 py-1 shrink-0 bg-card">
               <Button
                 variant="ghost"
                 size="sm"
-                className="h-7 flex-1 px-1 text-xs text-muted-foreground hover:text-foreground"
+                className={cn(
+                  'h-7 flex-1 px-1 text-[11px] transition-colors',
+                  copied
+                    ? 'text-green-500'
+                    : 'text-muted-foreground hover:text-foreground',
+                )}
                 onClick={handleCopy}
               >
                 {copied ? (
@@ -413,19 +466,21 @@ export default function CodePanel() {
                 )}
                 <span className="truncate">{copied ? 'Copied' : 'Copy'}</span>
               </Button>
+              <div className="w-px h-4 bg-border/50" />
               <Button
                 variant="ghost"
                 size="sm"
-                className="h-7 flex-1 px-1 text-xs text-muted-foreground hover:text-foreground"
+                className="h-7 flex-1 px-1 text-[11px] text-muted-foreground hover:text-foreground"
                 onClick={handleDownload}
               >
                 <Download className="mr-1 h-3 w-3 shrink-0" />
                 <span className="truncate">Download</span>
               </Button>
+              <div className="w-px h-4 bg-border/50" />
               <Button
                 variant="ghost"
                 size="sm"
-                className="h-7 flex-1 px-1 text-xs text-muted-foreground hover:text-foreground"
+                className="h-7 flex-1 px-1 text-[11px] text-muted-foreground hover:text-foreground"
                 onClick={handleGenerate}
               >
                 <RefreshCw className="mr-1 h-3 w-3 shrink-0" />
@@ -453,12 +508,12 @@ function ProgressItem({
   onRetry?: () => void;
 }) {
   const icons: Record<string, React.ReactNode> = {
-    pending: <div className="h-3.5 w-3.5 rounded-full border border-muted-foreground/30" />,
-    running: <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" />,
-    done: <Check className="h-3.5 w-3.5 text-green-500" />,
-    degraded: <AlertTriangle className="h-3.5 w-3.5 text-amber-500" />,
-    failed: <MinusCircle className="h-3.5 w-3.5 text-destructive" />,
-    skipped: <SkipForward className="h-3.5 w-3.5 text-muted-foreground" />,
+    pending: <div className="h-3 w-3 rounded-full border border-muted-foreground/20" />,
+    running: <Loader2 className="h-3 w-3 animate-spin text-primary" />,
+    done: <Check className="h-3 w-3 text-green-500" />,
+    degraded: <AlertTriangle className="h-3 w-3 text-amber-500" />,
+    failed: <MinusCircle className="h-3 w-3 text-destructive" />,
+    skipped: <SkipForward className="h-3 w-3 text-muted-foreground/50" />,
   };
 
   const sublabels: Record<string, string> = {
@@ -467,19 +522,43 @@ function ProgressItem({
   };
 
   return (
-    <div className="flex items-start gap-2 text-sm">
-      <div className="mt-0.5">{icons[status]}</div>
-      <div className="flex-1">
-        <div className="font-medium">{label}</div>
+    <div
+      className={cn(
+        'flex items-start gap-2 rounded-md px-2 py-1.5 text-[12px] transition-colors',
+        status === 'running' && 'bg-primary/5',
+        status === 'failed' && 'bg-destructive/5',
+      )}
+    >
+      <div className="mt-[3px] shrink-0">{icons[status]}</div>
+      <div className="flex-1 min-w-0">
+        <div
+          className={cn(
+            'font-medium truncate',
+            status === 'pending' && 'text-muted-foreground/60',
+            status === 'running' && 'text-foreground',
+            status === 'done' && 'text-foreground/70',
+            status === 'failed' && 'text-destructive',
+            status === 'degraded' && 'text-amber-600',
+            status === 'skipped' && 'text-muted-foreground/50',
+          )}
+        >
+          {label}
+        </div>
         {sublabels[status] && (
-          <div className="text-xs text-muted-foreground">{sublabels[status]}</div>
+          <div className="text-[10px] text-muted-foreground/60 mt-0.5">{sublabels[status]}</div>
         )}
-        {error && <div className="text-xs text-destructive">{error}</div>}
+        {error && (
+          <div className="text-[10px] text-destructive/80 mt-0.5 break-words">{error}</div>
+        )}
       </div>
       {onRetry && (
-        <Button variant="ghost" size="sm" className="h-6 text-xs" onClick={onRetry}>
+        <button
+          type="button"
+          className="shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium text-primary hover:bg-primary/10 transition-colors"
+          onClick={onRetry}
+        >
           Retry
-        </Button>
+        </button>
       )}
     </div>
   );
