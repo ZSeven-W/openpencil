@@ -8,15 +8,17 @@ describe('createDelegateTool', () => {
     expect(tool.level).toBe('orchestrate');
   });
 
-  it('schema validates member names', () => {
+  it('schema validates member names', async () => {
     const tool = createDelegateTool(['designer', 'reviewer']);
-    const result = tool.schema.safeParse({ member: 'designer', task: 'do thing' });
-    expect(result.success).toBe(true);
+    const schema = tool.schema as { validate?: (v: unknown) => unknown };
+    const result = await schema.validate?.({ member: 'designer', task: 'do thing' });
+    expect((result as { success: boolean }).success).toBe(true);
   });
 
-  it('schema rejects unknown members', () => {
+  it('schema rejects unknown members', async () => {
     const tool = createDelegateTool(['designer', 'reviewer']);
-    const result = tool.schema.safeParse({ member: 'unknown', task: 'do thing' });
-    expect(result.success).toBe(false);
+    const schema = tool.schema as { validate?: (v: unknown) => unknown };
+    const result = await schema.validate?.({ member: 'unknown', task: 'do thing' });
+    expect((result as { success: boolean }).success).toBe(false);
   });
 });

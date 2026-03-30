@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { createTeam } from '../src/agent-team';
 import { createToolRegistry } from '../src/tools/tool-registry';
 import type { AgentProvider } from '../src/providers/types';
+import type { FallbackStrategy } from '../src/tools/types';
 
 const mockProvider: AgentProvider = {
   id: 'mock',
@@ -9,6 +10,13 @@ const mockProvider: AgentProvider = {
   supportsThinking: false,
   model: {} as any,
 };
+
+const defaultFallback: FallbackStrategy = {
+  systemSuffix: '\n\nFallback: output JSON in a code fence.',
+  parseResponse: (text: string) => JSON.parse(text),
+};
+
+const allowAll = async () => 'allow' as const;
 
 describe('createTeam', () => {
   it('creates a team with lead and members', () => {
@@ -26,6 +34,8 @@ describe('createTeam', () => {
           systemPrompt: 'You are a worker.',
         },
       ],
+      fallbackStrategy: defaultFallback,
+      beforeToolExecute: allowAll,
     });
     expect(team).toHaveProperty('run');
     expect(team).toHaveProperty('abort');
@@ -43,6 +53,8 @@ describe('createTeam', () => {
           systemPrompt: 'Member',
         },
       ],
+      fallbackStrategy: defaultFallback,
+      beforeToolExecute: allowAll,
     });
     expect(team).toBeDefined();
   });
@@ -60,6 +72,8 @@ describe('createTeam', () => {
           systemPrompt: 'Worker',
         },
       ],
+      fallbackStrategy: defaultFallback,
+      beforeToolExecute: allowAll,
     });
     expect(tools.list().length).toBe(initialCount);
   });

@@ -3,7 +3,7 @@ import type { AgentProvider } from './providers/types';
 import type { ToolRegistry } from './tools/tool-registry';
 import type { AgentEvent } from './streaming/types';
 import type { ContextStrategy } from './context/types';
-import type { ToolResult } from './tools/types';
+import type { ToolResult, ToolCallInfo, FallbackStrategy } from './tools/types';
 import { createAgent } from './agent-loop';
 import { createDelegateTool } from './tools/delegate';
 import { createToolRegistry } from './tools/tool-registry';
@@ -28,6 +28,8 @@ export interface TeamConfig {
     contextStrategy?: ContextStrategy;
   };
   members: TeamMemberConfig[];
+  fallbackStrategy: FallbackStrategy;
+  beforeToolExecute: (call: ToolCallInfo) => Promise<'allow' | 'deny'>;
 }
 
 export interface AgentTeam {
@@ -68,6 +70,8 @@ export function createTeam(config: TeamConfig): AgentTeam {
     provider: config.lead.provider,
     tools: leadTools,
     systemPrompt: config.lead.systemPrompt + buildTeamSuffix(config.members),
+    fallbackStrategy: config.fallbackStrategy,
+    beforeToolExecute: config.beforeToolExecute,
     maxTurns: config.lead.maxTurns ?? 30,
     turnTimeout: config.lead.turnTimeout,
     contextStrategy: config.lead.contextStrategy,
@@ -83,6 +87,8 @@ export function createTeam(config: TeamConfig): AgentTeam {
           provider: m.provider,
           tools: m.tools,
           systemPrompt: m.systemPrompt,
+          fallbackStrategy: config.fallbackStrategy,
+          beforeToolExecute: config.beforeToolExecute,
           maxTurns: m.maxTurns ?? 20,
           turnTimeout: m.turnTimeout,
           contextStrategy: m.contextStrategy,

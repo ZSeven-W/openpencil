@@ -2,7 +2,7 @@
 // Public API will be exported here as modules are implemented
 
 // Tools
-export type { AgentTool, AuthLevel, ToolResult, ToolCallInfo } from './tools/types';
+export type { AgentTool, AuthLevel, ToolResult, ToolCallInfo, FallbackStrategy } from './tools/types';
 export { createToolRegistry } from './tools/tool-registry';
 export type { ToolRegistry } from './tools/tool-registry';
 
@@ -15,6 +15,8 @@ export { decodeAgentEvent } from './streaming/sse-decoder';
 export type { ProviderConfig, AgentProvider } from './providers/types';
 export { createAnthropicProvider } from './providers/anthropic';
 export { createOpenAICompatProvider } from './providers/openai-compat';
+export { createOllamaProvider } from './providers/ollama';
+export type { OllamaProviderConfig } from './providers/ollama';
 
 // Context
 export type { ContextStrategy } from './context/types';
