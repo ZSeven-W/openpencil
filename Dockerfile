@@ -1,20 +1,10 @@
+# syntax=docker/dockerfile:1
 # ── Stage 1: Build web app ──
 FROM oven/bun:1 AS builder
 
 WORKDIR /app
 COPY package.json bun.lock ./
-COPY packages/pen-types/package.json packages/pen-types/
-COPY packages/pen-core/package.json packages/pen-core/
-COPY packages/pen-codegen/package.json packages/pen-codegen/
-COPY packages/pen-figma/package.json packages/pen-figma/
-COPY packages/pen-renderer/package.json packages/pen-renderer/
-COPY packages/pen-sdk/package.json packages/pen-sdk/
-COPY packages/pen-mcp/package.json packages/pen-mcp/
-COPY packages/pen-ai-skills/package.json packages/pen-ai-skills/
-COPY packages/agent/package.json packages/agent/
-COPY apps/web/package.json apps/web/
-COPY apps/desktop/package.json apps/desktop/
-COPY apps/cli/package.json apps/cli/
+COPY --parents packages/*/package.json apps/*/package.json ./
 RUN bun install --frozen-lockfile
 COPY . .
 ENV NODE_OPTIONS="--max-old-space-size=4096"

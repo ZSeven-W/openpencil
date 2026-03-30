@@ -7,9 +7,20 @@ import {
   createToolRegistry,
   encodeAgentEvent,
 } from '@zseven-w/agent';
-import type { AuthLevel } from '@zseven-w/agent';
+import type { AuthLevel, FallbackStrategy } from '@zseven-w/agent';
 import { jsonSchema } from '@zseven-w/agent';
 import { agentSessions } from '../../utils/agent-sessions';
+
+const DESIGN_FALLBACK: FallbackStrategy = {
+  systemSuffix: `\n\n## IMPORTANT: Text-Only Mode\nFunction calling is not available. Instead, output your design as a JSON code block.\nWrap the root node JSON in a \`\`\`json code fence. Example:\n\n\`\`\`json\n{\n  "type": "frame", "name": "Login Screen", "x": 0, "y": 0, "width": 390, "height": 844,\n  "fills": [{"type": "solid", "color": "#FFFFFF"}], "cornerRadius": 40,\n  "layout": "vertical", "padding": [60, 24, 40, 24], "gap": 16, "alignItems": "stretch",\n  "children": [\n    {"type": "text", "text": "Welcome", "fontSize": 28, "fontWeight": 700, "fills": [{"type": "solid", "color": "#1a1a2e"}]},\n    {"type": "frame", "name": "Button", "height": 48, "fills": [{"type": "solid", "color": "#4F46E5"}], "cornerRadius": 12, "justifyContent": "center", "alignItems": "center", "children": [\n      {"type": "text", "text": "Sign In", "fontSize": 16, "fontWeight": 600, "fills": [{"type": "solid", "color": "#FFFFFF"}]}\n    ]}\n  ]\n}\n\`\`\`\n\nOutput ONE JSON code block with the complete design tree. Do NOT use function calls.`,
+  parseResponse(text) {
+    const match = text.match(/```json\s*([\s\S]*?)```/);
+    if (!match) return text;
+    try { return JSON.parse(match[1].trim()); } catch { return text; }
+  },
+};
+
+const alwaysAllow = async () => 'allow' as const;
 
 interface ToolDef {
   name: string;
@@ -203,6 +214,8 @@ export default defineEventHandler(async (event) => {
         maxTurns: body.maxTurns ?? 20,
       },
       members,
+      fallbackStrategy: DESIGN_FALLBACK,
+      beforeToolExecute: alwaysAllow,
     });
     agentOrTeam = {
       run: (msgs) => team.run(msgs),
@@ -213,6 +226,8 @@ export default defineEventHandler(async (event) => {
       provider,
       tools,
       systemPrompt: body.systemPrompt,
+      fallbackStrategy: DESIGN_FALLBACK,
+      beforeToolExecute: alwaysAllow,
       maxTurns: body.maxTurns ?? 20,
       maxOutputTokens: body.maxOutputTokens,
       turnTimeout: 5 * 60_000,
