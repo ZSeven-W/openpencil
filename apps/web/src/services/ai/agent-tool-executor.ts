@@ -15,8 +15,6 @@ const WRITE_LEVELS: Set<AuthLevel> = new Set(['create', 'modify', 'delete']);
  */
 export class AgentToolExecutor {
   private sessionId: string;
-  /** Track root-level insert to prevent duplicate designs */
-  private rootInsertId: string | null = null;
 
   constructor(sessionId: string) {
     this.sessionId = sessionId;
@@ -115,11 +113,12 @@ export class AgentToolExecutor {
   }): Promise<ToolResult> {
     // Some models use 'description' instead of 'prompt'
     const prompt = args.prompt || args.description;
-    if (!prompt) return { success: false, error: 'Missing prompt or description' };
-    if (this.rootInsertId) {
+    if (!prompt) {
       return {
-        success: true,
-        data: { message: `Design already created. Use update_node to modify.` },
+        success: false,
+        error:
+          'Missing prompt parameter. You MUST call generate_design with: {"prompt": "your design description"}. ' +
+          'Copy the full design task into the prompt field. Example: generate_design({"prompt": "a mobile login screen with email, password fields and login button"})',
       };
     }
 
@@ -162,10 +161,6 @@ export class AgentToolExecutor {
         }
       }
     }
-
-    // Mark as in-progress BEFORE calling generateDesign to prevent duplicate calls.
-    // If the first call fails midway, partial nodes are cleaned up below.
-    this.rootInsertId = 'generating';
 
     // Snapshot current node IDs so we can clean up partial nodes on failure
     const nodeIdsBefore = new Set(docStore.getFlatNodes().map((n) => n.id));
@@ -215,14 +210,11 @@ export class AgentToolExecutor {
           /* ignore */
         }
       }
-      this.rootInsertId = null; // Allow retry
       return {
         success: false,
         error: `Design generation failed: ${err instanceof Error ? err.message : JSON.stringify(err)}`,
       };
     }
-
-    this.rootInsertId = 'generated';
 
     // Auto-zoom
     try {
@@ -236,7 +228,7 @@ export class AgentToolExecutor {
       success: true,
       data: {
         nodeCount: result.nodes.length,
-        message: `Design generated with ${result.nodes.length} nodes via internal pipeline. Do NOT retry.`,
+        message: `Design generated with ${result.nodes.length} nodes. Use snapshot_layout to review the result.`,
       },
     };
   }
@@ -299,6 +291,18 @@ export class AgentToolExecutor {
     const children = getActivePageChildren(doc, pageId);
     const allChildren = getAllChildren(doc);
 
+    // Prefer SkiaEngine's layout-computed bounds (absX/absY/absW/absH) over raw
+    // stored values. getNodeBounds returns stored width/height which may be defaults
+    // (100) for auto-layout frames — misleading for the model.
+    const { getSkiaEngineRef } = await import('@/canvas/skia-engine-ref');
+    const engine = getSkiaEngineRef();
+    const renderNodeMap = new Map<string, { x: number; y: number; w: number; h: number }>();
+    if (engine?.renderNodes) {
+      for (const rn of engine.renderNodes) {
+        renderNodeMap.set(rn.node.id, { x: rn.absX, y: rn.absY, w: rn.absW, h: rn.absH });
+      }
+    }
+
     const { getNodeBounds } = await import('@/stores/document-tree-utils');
 
     const buildLayout = (
@@ -316,7 +320,9 @@ export class AgentToolExecutor {
       children?: unknown[];
     }[] =>
       nodes.map((node) => {
-        const b = getNodeBounds(node, allChildren);
+        // Use layout-computed bounds from SkiaEngine, fall back to stored values
+        const computed = renderNodeMap.get(node.id);
+        const b = computed ?? getNodeBounds(node, allChildren);
         const entry: {
           id: string;
           name?: string;
@@ -330,10 +336,10 @@ export class AgentToolExecutor {
           id: node.id,
           name: node.name,
           type: node.type,
-          x: b.x,
-          y: b.y,
-          width: b.w,
-          height: b.h,
+          x: Math.round(b.x),
+          y: Math.round(b.y),
+          width: Math.round(b.w),
+          height: Math.round(b.h),
         };
         if ('children' in node && node.children?.length && depth < maxDepth) {
           entry.children = buildLayout(node.children, maxDepth, depth + 1);
@@ -341,7 +347,7 @@ export class AgentToolExecutor {
         return entry;
       });
 
-    return { success: true, data: buildLayout(children, 1) };
+    return { success: true, data: buildLayout(children, 3) };
   }
 
   private async handleFindEmptySpace(args: {
@@ -397,17 +403,6 @@ export class AgentToolExecutor {
     data: Record<string, unknown>;
     pageId?: string;
   }): Promise<ToolResult> {
-    // Prevent duplicate root-level design inserts (common with weaker models)
-    if (args.parent === null && this.rootInsertId) {
-      return {
-        success: true,
-        data: {
-          id: this.rootInsertId,
-          message: `Design already created (id: ${this.rootInsertId}). Use update_node to modify it. Do NOT insert again.`,
-        },
-      };
-    }
-
     const { nanoid } = await import('nanoid');
 
     // Some models send data as a JSON string instead of an object — parse it
@@ -477,11 +472,6 @@ export class AgentToolExecutor {
     };
     insertRecursive(node, args.parent);
 
-    // Track root-level insert to prevent duplicates
-    if (args.parent === null) {
-      this.rootInsertId = node.id;
-    }
-
     // Auto-zoom to show the new design
     try {
       const { zoomToFitContent } = await import('@/canvas/skia-engine-ref');
@@ -495,7 +485,7 @@ export class AgentToolExecutor {
       data: {
         id: node.id,
         nodesCreated: totalNodes,
-        message: `Created ${totalNodes} nodes successfully. Do NOT retry or create again.`,
+        message: `Created ${totalNodes} nodes successfully.`,
       },
     };
   }

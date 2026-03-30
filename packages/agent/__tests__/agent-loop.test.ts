@@ -37,16 +37,16 @@ describe('createAgent', () => {
     expect(stream[Symbol.asyncIterator]).toBeDefined();
   });
 
-  it('resolveToolResult throws for unknown tool call id', () => {
+  it('resolveToolResult buffers result for unknown tool call id (pre-resolution)', () => {
     const tools = createToolRegistry();
     const agent = createAgent({
       provider: mockProvider,
       tools,
       systemPrompt: 'You are helpful.',
     });
-    expect(() => agent.resolveToolResult('nonexistent', { success: true })).toThrow(
-      'No pending tool call: nonexistent',
-    );
+    // Pre-resolution: calling resolveToolResult before waitForToolResult
+    // should NOT throw — the result is buffered for later consumption.
+    expect(() => agent.resolveToolResult('nonexistent', { success: true })).not.toThrow();
   });
 
   it('yields abort event when signal is already aborted', async () => {

@@ -16,6 +16,13 @@ export interface TeamMemberConfig {
   maxTurns?: number;
   turnTimeout?: number;
   contextStrategy?: ContextStrategy;
+  /**
+   * When a member calls a tool with empty args, inject the delegation task
+   * into the specified arg field. Map of tool name → arg field name.
+   * Example: `{ 'generate_design': 'prompt' }` — if generate_design is called
+   * with no `prompt`, the delegation task text is injected as the prompt.
+   */
+  taskFallbackArgs?: Record<string, string>;
 }
 
 export interface TeamConfig {
@@ -129,8 +136,23 @@ export function createTeam(config: TeamConfig): AgentTeam {
           if (memberEvent.type === 'tool_call') {
             toolCallOwners.set(memberEvent.id, memberEntry.agent);
           }
+
+          // Patch empty tool args: some models (e.g. GLM-5.1) call tools with empty {}
+          // despite receiving the task in the conversation. Inject the delegation task
+          // into the configured arg field so the tool executor can proceed.
+          let patchedEvent = memberEvent;
+          if (memberEvent.type === 'tool_call' && memberEntry.config.taskFallbackArgs) {
+            const fallbackField = memberEntry.config.taskFallbackArgs[memberEvent.name];
+            if (fallbackField) {
+              const args = memberEvent.args as Record<string, unknown> | undefined;
+              if (!args?.[fallbackField]) {
+                patchedEvent = { ...memberEvent, args: { ...args, [fallbackField]: task } };
+              }
+            }
+          }
+
           // Tag all member events with source
-          yield { ...memberEvent, source: member } as AgentEvent;
+          yield { ...patchedEvent, source: member } as AgentEvent;
           if (memberEvent.type === 'text') {
             memberResult += memberEvent.content;
           }

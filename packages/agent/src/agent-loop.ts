@@ -146,14 +146,30 @@ export function createAgent(config: AgentConfig): Agent {
     }
   >();
 
+  // Pre-resolved results — handles the case where resolveToolResult is called
+  // BEFORE waitForToolResult (e.g. agent-team resolves delegate before the
+  // lead generator advances past its yield to register the pending entry).
+  const preResolved = new Map<string, ToolResult>();
+
   function resolveToolResult(toolCallId: string, result: ToolResult): void {
     const entry = pending.get(toolCallId);
-    if (!entry) throw new Error(`No pending tool call: ${toolCallId}`);
-    pending.delete(toolCallId);
-    entry.resolve(result);
+    if (entry) {
+      pending.delete(toolCallId);
+      entry.resolve(result);
+    } else {
+      // Buffer the result — waitForToolResult will pick it up when called later
+      preResolved.set(toolCallId, result);
+    }
   }
 
   function waitForToolResult(toolCallId: string): Promise<ToolResult> {
+    // Check for a pre-resolved result (resolveToolResult was called first)
+    const buffered = preResolved.get(toolCallId);
+    if (buffered) {
+      preResolved.delete(toolCallId);
+      return Promise.resolve(buffered);
+    }
+
     return new Promise<ToolResult>((resolve, reject) => {
       const timeout = setTimeout(() => {
         pending.delete(toolCallId);
@@ -176,6 +192,11 @@ export function createAgent(config: AgentConfig): Agent {
     let turn = 0;
     const history = [...messages];
     let toolsDisabled = false;
+    let consecutiveToolFailures = 0;
+    let lastToolSignature = '';
+    let consecutiveIdenticalCalls = 0;
+    const MAX_CONSECUTIVE_TOOL_FAILURES = 3;
+    const MAX_CONSECUTIVE_IDENTICAL_CALLS = 3;
 
     try {
       while (turn < maxTurns) {
@@ -335,6 +356,44 @@ export function createAgent(config: AgentConfig): Agent {
           };
         }
 
+        // Detect stuck loops: consecutive failures or repeated identical calls.
+        // Models like GLM-5.1 may call tools with empty args or repeat read calls indefinitely.
+        const allFailed = toolResults.length > 0 && toolResults.every((tr) => !tr.result.success);
+        if (allFailed) {
+          consecutiveToolFailures++;
+          if (consecutiveToolFailures >= MAX_CONSECUTIVE_TOOL_FAILURES) {
+            yield {
+              type: 'error',
+              message: `Tool calls failed ${consecutiveToolFailures} times in a row. Stopping to avoid infinite loop.`,
+              fatal: false,
+            };
+            yield { type: 'done', totalTurns: turn + 1 };
+            return;
+          }
+        } else {
+          consecutiveToolFailures = 0;
+        }
+
+        // Detect repeated identical tool calls (e.g. calling snapshot_layout with same args)
+        const turnSignature = pendingToolCalls
+          .map((tc) => `${tc.toolName}:${JSON.stringify(tc.input)}`)
+          .join('|');
+        if (turnSignature === lastToolSignature) {
+          consecutiveIdenticalCalls++;
+          if (consecutiveIdenticalCalls >= MAX_CONSECUTIVE_IDENTICAL_CALLS) {
+            yield {
+              type: 'error',
+              message: `Same tool call repeated ${consecutiveIdenticalCalls + 1} times with identical results. Stopping.`,
+              fatal: false,
+            };
+            yield { type: 'done', totalTurns: turn + 1 };
+            return;
+          }
+        } else {
+          consecutiveIdenticalCalls = 0;
+        }
+        lastToolSignature = turnSignature;
+
         // Use the SDK's own response messages for conversation history.
         // This ensures correct format conversion (arguments stringification, etc.)
         // instead of manually constructing ModelMessage[] which loses format details.
@@ -381,6 +440,7 @@ export function createAgent(config: AgentConfig): Agent {
         entry.reject(new Error('Agent loop ended'));
       }
       pending.clear();
+      preResolved.clear();
     }
   }
 

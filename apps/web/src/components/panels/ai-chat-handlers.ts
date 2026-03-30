@@ -159,7 +159,11 @@ async function runAgentStream(
         model: providerConfig.model,
         baseURL: providerConfig.baseURL,
         systemPrompt:
-          'You are a design specialist. Use the generate_design tool to create designs based on the task description. Focus on high-quality visual output.',
+          'You are a design specialist. When given a task, you MUST call the generate_design tool with the prompt parameter containing the full design description.\n\n' +
+          'CRITICAL: Always pass the design description in the "prompt" parameter. Example:\n' +
+          'generate_design({"prompt": "a modern mobile login screen with email, password, and social login buttons"})\n\n' +
+          'Never call generate_design with empty arguments. Copy the task description into the prompt field.',
+        taskFallbackArgs: { generate_design: 'prompt' },
       },
     ];
   }
@@ -205,10 +209,13 @@ async function runAgentStream(
             name: evt.name,
             args: evt.args,
             level: evt.level,
-            status: 'running',
+            status: evt.level === 'orchestrate' ? 'done' : 'running',
             source: evt.source,
           };
           useAIStore.getState().addToolCallBlock(block);
+
+          // Skip internal team coordination tools — they are resolved by agent-team, not the client
+          if (evt.level === 'orchestrate') break;
 
           executor
             .execute(evt as Extract<AgentEvent, { type: 'tool_call' }>)

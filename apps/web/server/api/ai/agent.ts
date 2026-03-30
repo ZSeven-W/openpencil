@@ -26,6 +26,7 @@ interface MemberDef {
   model: string;
   baseURL?: string;
   systemPrompt?: string;
+  taskFallbackArgs?: Record<string, string>;
 }
 
 interface AgentBody {
@@ -70,7 +71,14 @@ export default defineEventHandler(async (event) => {
     if (!session) {
       throw createError({ statusCode: 404, message: 'Session not found' });
     }
-    session.agent.resolveToolResult(body.toolCallId, body.result);
+    try {
+      session.agent.resolveToolResult(body.toolCallId, body.result);
+    } catch {
+      // Ignore — tool call may have been resolved internally (e.g. delegate)
+      // or the agent loop already ended. The pre-resolution buffer in agent-loop
+      // handles the normal case; this catch is a safety net.
+      return { ok: true, ignored: true };
+    }
     session.lastActivity = Date.now();
     return { ok: true };
   }
@@ -169,6 +177,7 @@ export default defineEventHandler(async (event) => {
         tools: memberTools,
         systemPrompt: m.systemPrompt || `You are a ${m.id} specialist.`,
         turnTimeout: 5 * 60_000, // 5 minutes — design generation is slow
+        ...(m.taskFallbackArgs ? { taskFallbackArgs: m.taskFallbackArgs } : {}),
       };
     });
 
