@@ -502,7 +502,7 @@ async function callOrchestrator(
     const rootWidth = typeof plan.rootFrame.width === 'number' ? plan.rootFrame.width : 1440;
     const platform = rootWidth <= 500 ? 'mobile' : 'webapp';
 
-    let selected = selectStyleGuide(styleGuideRegistry, { name: plan.styleGuideName });
+    let selected = selectStyleGuide(styleGuideRegistry, { name: plan.styleGuideName, platform });
     if (!selected) {
       // Planner may return a primary tag (e.g. "brutalist") instead of full slug
       // ("brutalist-luxury-dark"). Fall back to tag-based matching with platform filter.

@@ -44,6 +44,11 @@ export function selectStyleGuide(
   options: { tags?: string[]; name?: string; platform?: string },
 ): ParsedStyleGuide | null {
   if (options.name) {
+    // Prefer exact name + platform match; fall back to name-only if no platform match
+    if (options.platform) {
+      const exact = guides.find((g) => g.name === options.name && g.platform === options.platform);
+      if (exact) return exact;
+    }
     return guides.find((g) => g.name === options.name) ?? null;
   }
 
