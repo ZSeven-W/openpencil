@@ -15,6 +15,14 @@
     "./vite-plugin": {
       "types": "./vite-plugin-skills.ts",
       "import": "./vite-plugin-skills.ts"
+    },
+    "./style-guide": {
+      "types": "./src/style-guide/index.ts",
+      "import": "./src/style-guide/index.ts"
+    },
+    "./_generated/style-guide-registry": {
+      "types": "./src/_generated/style-guide-registry.ts",
+      "import": "./src/_generated/style-guide-registry.ts"
     }
   },
   "dependencies": {
