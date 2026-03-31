@@ -30,6 +30,11 @@ import {
   EXPORT_TOOL_NAMES,
   handleExportToolCall,
 } from './routes/export-routes';
+import {
+  STYLE_GUIDE_TOOL_DEFINITIONS,
+  STYLE_GUIDE_TOOL_NAMES,
+  handleStyleGuideToolCall,
+} from './routes/style-guide-routes';
 
 const pkg = { name: '@zseven-w/pen-mcp', version: '0.6.0' };
 
@@ -41,6 +46,7 @@ const TOOL_DEFINITIONS = [
   ...DESIGN_TOOL_DEFINITIONS,
   ...VARIABLE_TOOL_DEFINITIONS,
   ...EXPORT_TOOL_DEFINITIONS,
+  ...STYLE_GUIDE_TOOL_DEFINITIONS,
 ];
 
 // --- Tool execution handler ---
@@ -53,6 +59,7 @@ async function handleToolCall(name: string, args: Record<string, unknown> | unde
   if (DESIGN_TOOL_NAMES.has(name)) return handleDesignToolCall(name, a);
   if (VARIABLE_TOOL_NAMES.has(name)) return handleVariableToolCall(name, a);
   if (EXPORT_TOOL_NAMES.has(name)) return handleExportToolCall(name, a);
+  if (STYLE_GUIDE_TOOL_NAMES.has(name)) return handleStyleGuideToolCall(name, a);
   throw new Error(`Unknown tool: ${name}`);
 }
 
