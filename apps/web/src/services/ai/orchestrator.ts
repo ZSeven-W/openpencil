@@ -498,12 +498,17 @@ async function callOrchestrator(
 
   // Look up the selected style guide — try exact name first, then fuzzy tag match
   if (plan.styleGuideName) {
+    // Infer platform from rootFrame width to prevent mobile/desktop mismatch
+    const rootWidth = typeof plan.rootFrame.width === 'number' ? plan.rootFrame.width : 1440;
+    const platform = rootWidth <= 500 ? 'mobile' : 'webapp';
+
     let selected = selectStyleGuide(styleGuideRegistry, { name: plan.styleGuideName });
     if (!selected) {
       // Planner may return a primary tag (e.g. "brutalist") instead of full slug
-      // ("brutalist-luxury-dark"). Fall back to tag-based matching.
+      // ("brutalist-luxury-dark"). Fall back to tag-based matching with platform filter.
       selected = selectStyleGuide(styleGuideRegistry, {
         tags: [plan.styleGuideName.toLowerCase()],
+        platform,
       });
     }
     if (selected) {
