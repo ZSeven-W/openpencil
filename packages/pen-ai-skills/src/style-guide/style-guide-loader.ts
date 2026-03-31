@@ -44,11 +44,11 @@ export function selectStyleGuide(
   options: { tags?: string[]; name?: string; platform?: string },
 ): ParsedStyleGuide | null {
   if (options.name) {
-    // Prefer exact name + platform match; fall back to name-only if no platform match
     if (options.platform) {
-      const exact = guides.find((g) => g.name === options.name && g.platform === options.platform);
-      if (exact) return exact;
+      // When platform is specified, only return a guide that matches both name AND platform
+      return guides.find((g) => g.name === options.name && g.platform === options.platform) ?? null;
     }
+    // No platform constraint — match by name only (MCP tool without platform param)
     return guides.find((g) => g.name === options.name) ?? null;
   }
 
