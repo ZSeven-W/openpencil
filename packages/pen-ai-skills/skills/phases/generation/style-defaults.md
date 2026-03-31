@@ -2,7 +2,8 @@
 name: style-defaults
 description: Visual style policy — palettes, typography scale, shapes
 phase: [generation]
-trigger: null
+trigger:
+  flags: [noStyleGuideMatch]
 priority: 5
 budget: 1500
 category: base

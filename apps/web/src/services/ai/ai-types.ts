@@ -143,6 +143,8 @@ export interface OrchestratorPlan {
     fill?: Array<{ type: string; color: string }>;
   };
   styleGuide?: StyleGuide;
+  styleGuideName?: string;
+  selectedStyleGuideContent?: string;
   subtasks: SubTask[];
 }
 

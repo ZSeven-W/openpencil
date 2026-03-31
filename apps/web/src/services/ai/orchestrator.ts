@@ -20,6 +20,8 @@ import type {
 } from './ai-types';
 import { streamChat } from './ai-service';
 import { resolveSkills } from '@zseven-w/pen-ai-skills';
+import { styleGuideRegistry } from '@zseven-w/pen-ai-skills/_generated/style-guide-registry';
+import { selectStyleGuide } from '@zseven-w/pen-ai-skills/style-guide';
 import {
   getOrchestratorTimeouts,
   prepareDesignPrompt,
@@ -453,7 +455,16 @@ async function callOrchestrator(
   let rawResponse = '';
   let thinkingContent = '';
 
-  const planningCtx = resolveSkills('planning', prompt);
+  const guideList = styleGuideRegistry
+    .map((g) => {
+      const bgMatch = g.content.match(/Page Background\s*\|\s*(#[0-9A-Fa-f]{6})/);
+      const bgHint = bgMatch ? ` bg:${bgMatch[1]}` : '';
+      return `- **${g.name}** [${g.platform}]${bgHint}: ${g.tags.join(', ')}`;
+    })
+    .join('\n');
+  const planningCtx = resolveSkills('planning', prompt, {
+    dynamicContent: { availableStyleGuides: guideList },
+  });
   const planningSystemPrompt = planningCtx.skills.map((s) => s.content).join('\n\n');
 
   for await (const chunk of streamChat(
@@ -474,16 +485,33 @@ async function callOrchestrator(
     }
   }
 
-  const plan = parseOrchestratorResponse(rawResponse);
-  if (plan) return plan;
+  let plan = parseOrchestratorResponse(rawResponse);
+  if (!plan) {
+    // Fallback: model returned non-JSON (e.g. markdown text). Use a heuristic
+    // plan derived from the user's prompt so generation can still proceed.
+    console.warn(
+      '[Orchestrator] Could not parse model response, using fallback plan. Preview:',
+      rawResponse.trim().slice(0, 150),
+    );
+    plan = buildFallbackPlanFromPrompt(prompt);
+  }
 
-  // Fallback: model returned non-JSON (e.g. markdown text). Use a heuristic
-  // plan derived from the user's prompt so generation can still proceed.
-  console.warn(
-    '[Orchestrator] Could not parse model response, using fallback plan. Preview:',
-    rawResponse.trim().slice(0, 150),
-  );
-  return buildFallbackPlanFromPrompt(prompt);
+  // Look up the selected style guide — try exact name first, then fuzzy tag match
+  if (plan.styleGuideName) {
+    let selected = selectStyleGuide(styleGuideRegistry, { name: plan.styleGuideName });
+    if (!selected) {
+      // Planner may return a primary tag (e.g. "brutalist") instead of full slug
+      // ("brutalist-luxury-dark"). Fall back to tag-based matching.
+      selected = selectStyleGuide(styleGuideRegistry, {
+        tags: [plan.styleGuideName.toLowerCase()],
+      });
+    }
+    if (selected) {
+      plan.selectedStyleGuideContent = selected.content;
+    }
+  }
+
+  return plan;
 }
 
 function parseOrchestratorResponse(raw: string): OrchestratorPlan | null {
@@ -526,7 +554,12 @@ function tryParsePlan(text: string): OrchestratorPlan | null {
 
     const plan = obj as unknown as OrchestratorPlan;
 
-    // Extract styleGuide — required for consistent visual output
+    // Extract styleGuideName — new string reference to pre-built style guide
+    if (typeof obj.styleGuideName === 'string' && obj.styleGuideName) {
+      plan.styleGuideName = obj.styleGuideName;
+    }
+
+    // Extract styleGuide — legacy inline object for backward compatibility
     if (obj.styleGuide && typeof obj.styleGuide === 'object') {
       const sg = obj.styleGuide as Record<string, unknown>;
       if (

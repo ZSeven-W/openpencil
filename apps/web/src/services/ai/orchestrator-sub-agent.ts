@@ -264,6 +264,10 @@ async function executeSubAgent(
     flags: {
       hasVariables: !!variables && Object.keys(variables).length > 0,
       hasDesignMd: !!designMd,
+      // style-defaults.md only loads when no style direction exists at all:
+      // - no pre-built style guide selected
+      // - no design.md present (even without colorPalette, design.md provides visual direction)
+      noStyleGuideMatch: !plan.selectedStyleGuideContent && !designMd,
     },
     dynamicContent: designMd ? { designMdContent: JSON.stringify(designMd) } : undefined,
   });
@@ -489,7 +493,10 @@ CRITICAL LAYOUT CONSTRAINTS:
 - Only use stacked layout for mobile/narrow viewport sections.`;
   }
 
-  // Inject design.md style OR orchestrator style guide
+  // Style guide injection precedence:
+  // 1. designMd color palette (user's own design system) — highest
+  // 2. Selected pre-built style guide content — middle
+  // 3. AI-generated styleGuide from planning (existing fallback) — lowest
   if (designMd?.colorPalette?.length) {
     const colors = designMd.colorPalette
       .slice(0, 8)
@@ -498,6 +505,12 @@ CRITICAL LAYOUT CONSTRAINTS:
     prompt += `\n\nDESIGN SYSTEM (from design.md — use these consistently):\n- ${colors}`;
     if (designMd.typography?.fontFamily) {
       prompt += `\nFont: ${designMd.typography.fontFamily}`;
+    }
+  } else if (plan.selectedStyleGuideContent) {
+    prompt += `\n\nVISUAL STYLE GUIDE (follow these specifications exactly):\n${plan.selectedStyleGuideContent}`;
+    if (/[\u4e00-\u9fff\u3040-\u309f\u30a0-\u30ff\uac00-\ud7af]/.test(fullPrompt)) {
+      prompt +=
+        '\n\nCJK OVERRIDE: The user prompt contains Chinese/Japanese/Korean text. Replace ALL heading/display fonts with "Noto Sans SC" (or "Noto Sans JP"/"Noto Sans KR" as appropriate). Keep body font as "Inter". Never use Latin-only display fonts like JetBrains Mono, Space Grotesk, Cormorant Garamond, etc. for CJK headings. Line heights for CJK: headings 1.3-1.4, body 1.6-1.8. Letter spacing: always 0 for CJK.';
     }
   } else if (plan.styleGuide) {
     const sg = plan.styleGuide;
