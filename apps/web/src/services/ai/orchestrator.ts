@@ -465,7 +465,9 @@ async function callOrchestrator(
   const planningCtx = resolveSkills('planning', prompt, {
     dynamicContent: { availableStyleGuides: guideList },
   });
-  const planningSystemPrompt = planningCtx.skills.map((s) => s.content).join('\n\n');
+  const planningSystemPrompt =
+    planningCtx.skills.map((s) => s.content).join('\n\n') +
+    '\n\n---\nCRITICAL OUTPUT FORMAT ENFORCEMENT:\nYou MUST output ONLY a single JSON object. Start your response with { and end with }.\nDo NOT output any text, explanation, analysis, markdown, or tool calls before or after the JSON.\nDo NOT "explore" or "think out loud". Do NOT use <tool_call> or function calls.\nAny pre-design analysis (concept extraction, superfan simulation, etc.) must happen internally — include results as JSON fields, never as prose.\nViolating this format will cause a system error.';
 
   for await (const chunk of streamChat(
     planningSystemPrompt,
