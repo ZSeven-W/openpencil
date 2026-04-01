@@ -1,68 +1,89 @@
 ---
 name: mobile-app
-description: Mobile app screen design patterns (375x812)
+description: Mobile app three-section architecture with enforced Blueprint
 phase: [generation]
 trigger:
-  keywords: [mobile, app, phone, ios, android]
-priority: 35
+  keywords: [mobile, phone, ios, android, 移动, 手机]
+priority: 25
 budget: 1500
 category: domain
 ---
 
-MOBILE APP DESIGN PATTERNS:
+MOBILE APP — MANDATORY THREE-SECTION ARCHITECTURE:
 
-VIEWPORT:
+Every mobile screen is composed as a vertical stack of exactly three sections.
+You MUST define all three before generating any content.
 
-- Root frame: width=375, height=812 (fixed viewport)
-- This is an ACTUAL mobile screen, NOT a desktop page with phone mockup
-- "mobile"/"移动端"/"手机" + screen type = direct 375x812 screen
+## 1) STATUS BAR (OS-controlled)
 
-STATUS BAR:
+- Height: 62px
+- Time font: SF Pro (fallback: Inter), fontSize 17, fontWeight 600
+- Content vertically centered within the bar
+- NEVER place critical UI behind the status bar
+- NEVER create custom fake status bars
 
-- height=44, padding=[0,16], layout="horizontal", alignItems="center"
-- Time, signal, battery indicators (text nodes, 12-13px)
+## 2) APP CONTENT (your layout)
 
-HEADER:
+ALL content elements must sit inside ONE wrapper container (vertical stack).
 
-- height=56-64, padding=[0,16], layout="horizontal"
-- justifyContent="space_between", alignItems="center"
-- Back arrow icon + title text + optional action icon
+Wrapper provides:
+- Consistent left/right padding: 16-20px (applied ONCE at wrapper level)
+- Gap-based vertical spacing between sections (use gap, NOT margins)
+- padding-bottom equal to the gap value for bottom space (NOT spacer elements)
 
-CONTENT AREA:
+Content stacking order inside the wrapper:
+1. Top context: title / navigation header / search / filters
+2. Primary content: the main "job to be done" for this screen
+3. Supporting content: secondary modules, help text, empty states
+4. Floating actions (optional): FAB or sticky CTA
 
-- padding=[0,16] or [16,16], gap=16-20
-- layout="vertical", width="fill_container"
-- Scroll-friendly: content flows vertically
-
-TAB BAR (bottom navigation):
-
-- height=80-84 (includes safe area), padding=[8,0,28,0]
-- layout="horizontal", justifyContent="space_around", alignItems="center"
-- Each tab: frame(layout="vertical", gap=4, alignItems="center") > icon_font + text(10-11px)
-- Active tab: accent color, inactive: muted gray
-
-FORM SCREENS (login, signup, settings):
-
-- All inputs width="fill_container", height=48, gap=16
-- Primary button width="fill_container", height=48
-- Section gap=20-24
-
-CARDS ON MOBILE:
-
-- Full width: width="fill_container", cornerRadius=12-16
-- padding=[16,16], gap=12
-- Swipeable card rows: horizontal layout with fixed-width cards
-
-LIST ITEMS:
-
-- layout="horizontal", padding=[12,16], gap=12, alignItems="center"
-- Leading: avatar/icon (40-48px)
-- Content: vertical stack (title 16px + subtitle 14px muted)
-- Trailing: chevron-right icon or status indicator
-
-SPACING:
-
+Rules:
+- One primary intent per screen. Everything else is subordinate.
+- First 1-2 elements must answer "where am I" + "what can I do here"
+- Title font size must be uniform across ALL screens in the app
+- Design for one-handed use: primary actions in lower half
+- Single vertical scroll (avoid nested scrolls)
 - Touch targets: minimum 44x44px
-- Padding: 16px horizontal, 12-16px vertical
-- Section gaps: 20-24px
-- Safe area bottom: 28px padding
+
+DO NOT:
+- Add per-section horizontal padding (wrapper handles it)
+- Use spacer elements for bottom space (use padding-bottom)
+- Cram multiple competing sections above the fold
+
+## 3) BOTTOM TAB BAR — PILL STYLE
+
+Tab Bar Container:
+- Full screen width
+- Padding: [12, 21, 21, 21] (includes home-indicator safe area)
+- Fill: gradient overlay (transparent at top → solid background at 30%)
+
+Pill (menu items wrapper):
+- Height: 62px, width: fill_container
+- Corner radius: 36px
+- Border: 1px solid (theme border color)
+- Inner padding: 4px
+
+Tab Items (3-5 tabs, top-level destinations only):
+- Width: fill_container, height: fill_container
+- Corner radius: 26px
+- Layout: vertical, gap: 4, centered on both axes
+- Icon: 18px
+- Label: 10px, weight 500-600, UPPERCASE, letterSpacing: 0.5
+
+Active state: solid fill (accent color) + contrasting icon/label color
+Inactive state: transparent background + muted icon/label color
+
+Rules:
+- Labels MUST be uppercase
+- Tab switching preserves each tab's navigation state
+- App content must never be obscured by the Tab Bar
+
+## BLUEPRINT (internal planning)
+
+Before generating nodes, mentally verify these three layers are accounted for:
+1. Status Bar: standard or edge-to-edge?
+2. App Content: what is the header, primary content, action placement, scroll behavior?
+3. Bottom Bar: None or Pill Tab Bar (which tabs)?
+
+Do NOT output this blueprint as text. Apply it silently through your node structure.
+Your output must remain valid JSON/JSONL only.

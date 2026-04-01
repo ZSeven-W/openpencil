@@ -3,8 +3,8 @@ name: design-principles
 description: Core design craft principles for high-quality output
 phase: [generation]
 trigger: null
-priority: 25
-budget: 1000
+priority: 35
+budget: 800
 category: knowledge
 ---
 
