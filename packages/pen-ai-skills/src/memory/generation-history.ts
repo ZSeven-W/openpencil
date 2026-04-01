@@ -13,6 +13,9 @@ export function createHistoryEntry(params: {
   sectionTypes: string[];
   validationScore?: number;
   validationRounds?: number;
+  headingFont?: string;
+  palette?: string;
+  creativeVariant?: string;
 }): HistoryEntry {
   return {
     id: `gen-${Date.now()}-${++idCounter}`,
@@ -28,6 +31,9 @@ export function createHistoryEntry(params: {
       sectionTypes: params.sectionTypes,
       validationScore: params.validationScore,
       validationRounds: params.validationRounds,
+      headingFont: params.headingFont,
+      palette: params.palette,
+      creativeVariant: params.creativeVariant,
     },
   };
 }

@@ -20,23 +20,13 @@ export function resolveSkills(
   // Step 2: Intent + flag match
   const matched = filterByIntent(phaseSkills, userMessage, flags);
 
-  // Step 3: Dynamic content injection
-  const injected = matched.map((skill) => ({
-    ...skill,
-    content: injectDynamicContent(skill.content, dynamicContent),
-  }));
-
-  // Step 4: Budget trim
-  const trimmed = trimByBudget(injected, totalBudget);
-  const usedTokens = trimmed.reduce((sum, s) => sum + s.tokenCount, 0);
-
-  // Memory loading rules per phase
+  // Memory loading rules per phase (moved before Step 3 so history is available for injection)
   const memory: AgentContext['memory'] = {};
   if (options?.memory) {
     const { documentContext, generationHistory } = options.memory;
     const historyLimits: Record<Phase, number> = {
       planning: 5,
-      generation: 0,
+      generation: 3,
       validation: 0,
       maintenance: 3,
     };
@@ -54,6 +44,34 @@ export function resolveSkills(
       );
     }
   }
+
+  // Build merged dynamic content: caller-provided + recentHistory for anti-slop
+  let mergedDynamic = dynamicContent;
+  if (phase === 'generation') {
+    let historyStr = 'No recent history.';
+    if (memory.generationHistory?.length) {
+      historyStr = memory.generationHistory
+        .map((h, i) => {
+          const parts = [`Generation ${i + 1} (${h.timestamp}):`];
+          if (h.output.headingFont) parts.push(`  Heading font: ${h.output.headingFont}`);
+          if (h.output.palette) parts.push(`  Palette: ${h.output.palette}`);
+          if (h.output.creativeVariant) parts.push(`  Variation: ${h.output.creativeVariant}`);
+          return parts.join('\n');
+        })
+        .join('\n');
+    }
+    mergedDynamic = { ...dynamicContent, recentHistory: historyStr };
+  }
+
+  // Step 3: Dynamic content injection (all placeholders resolved in one pass)
+  const injected = matched.map((skill) => ({
+    ...skill,
+    content: injectDynamicContent(skill.content, mergedDynamic),
+  }));
+
+  // Step 4: Budget trim (after injection, so token counts reflect actual content)
+  const trimmed = trimByBudget(injected, totalBudget);
+  const usedTokens = trimmed.reduce((sum, s) => sum + s.tokenCount, 0);
 
   return {
     role: 'general',

@@ -71,6 +71,9 @@ export interface HistoryEntry {
     sectionTypes: string[];
     validationScore?: number;
     validationRounds?: number;
+    headingFont?: string;
+    palette?: string;
+    creativeVariant?: string;
   };
   feedback?: 'accepted' | 'modified' | 'regenerated' | 'deleted';
 }
