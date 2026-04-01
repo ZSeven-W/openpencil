@@ -2,6 +2,7 @@ import { useState, useMemo } from 'react';
 import { Pencil, ChevronDown, Check, AlertTriangle, Loader2, Circle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { ChatMessage as ChatMessageType } from '@/services/ai/ai-types';
+import { useAIStore } from '@/stores/ai-store';
 import { parseStepBlocks, countDesignJsonBlocks, buildPipelineProgress } from './chat-message';
 
 /** Parse [done]/[pending]/[error] prefix from a detail line */
@@ -32,9 +33,12 @@ export function FixedChecklist({
     return null;
   }, [messages]);
 
+  const agentSteps = useAIStore((s) => s.agentOrchestrationSteps);
+
   const items = useMemo(() => {
-    if (!lastAssistant) return [];
-    const content = lastAssistant.content;
+    // Prefer agent orchestration steps (from tool execution) over message content
+    const content = agentSteps || (lastAssistant ? lastAssistant.content : '');
+    if (!content) return [];
     const steps = parseStepBlocks(content, isStreaming);
     const planSteps = steps.filter((s) => s.title !== 'Thinking');
     if (planSteps.length === 0) return [];
@@ -45,7 +49,7 @@ export function FixedChecklist({
       content.includes('[done] Applied');
     const hasError = /\*\*Error:\*\*/i.test(content);
     return buildPipelineProgress(planSteps, jsonCount, isStreaming, isApplied, hasError);
-  }, [lastAssistant, isStreaming]);
+  }, [lastAssistant, isStreaming, agentSteps]);
 
   if (items.length === 0) return null;
 

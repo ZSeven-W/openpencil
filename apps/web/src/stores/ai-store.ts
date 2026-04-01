@@ -105,6 +105,9 @@ interface AIState {
   isMinimized: boolean;
   chatTitle: string;
   generationProgress: { current: number; total: number } | null;
+  /** Step tags from orchestrator during Agent tool execution (bypasses message content) */
+  agentOrchestrationSteps: string | null;
+  setAgentOrchestrationSteps: (steps: string | null) => void;
   concurrency: number;
   toolCallBlocks: ToolCallBlockData[];
   pendingAttachments: ChatAttachment[];
@@ -158,6 +161,8 @@ export const useAIStore = create<AIState>((set, get) => ({
   chatTitle: 'New Chat',
   concurrency: 1,
   generationProgress: null,
+  agentOrchestrationSteps: null,
+  setAgentOrchestrationSteps: (steps) => set({ agentOrchestrationSteps: steps }),
   toolCallBlocks: [],
   pendingAttachments: [],
   abortController: null,
@@ -188,7 +193,11 @@ export const useAIStore = create<AIState>((set, get) => ({
     if (prefs.codeFormat) set({ codeFormat: prefs.codeFormat });
   },
 
-  addMessage: (msg) => set((s) => ({ messages: [...s.messages, msg] })),
+  addMessage: (msg) => set((s) => ({
+    messages: [...s.messages, msg],
+    // Clear stale orchestration steps when a new user message starts a new turn
+    agentOrchestrationSteps: msg.role === 'user' ? null : s.agentOrchestrationSteps,
+  })),
 
   updateLastMessage: (content) =>
     set((s) => {
@@ -230,7 +239,7 @@ export const useAIStore = create<AIState>((set, get) => ({
   setAvailableModels: (availableModels) => set({ availableModels }),
   setModelGroups: (modelGroups) => set({ modelGroups }),
   setLoadingModels: (isLoadingModels) => set({ isLoadingModels }),
-  clearMessages: () => set({ messages: [], chatTitle: 'New Chat', toolCallBlocks: [] }),
+  clearMessages: () => set({ messages: [], chatTitle: 'New Chat', toolCallBlocks: [], agentOrchestrationSteps: null }),
 
   setPanelCorner: (panelCorner) => {
     set({ panelCorner });

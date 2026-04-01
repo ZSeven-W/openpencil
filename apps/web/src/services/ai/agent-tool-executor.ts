@@ -177,6 +177,15 @@ export class AgentToolExecutor {
       /* store may not exist */
     }
 
+    // Store orchestrator progress in a dedicated store field (not in message content)
+    // so it survives agent text streaming after tool completion.
+    const { useAIStore: progressStore } = await import('@/stores/ai-store');
+    progressStore.getState().setAgentOrchestrationSteps(null); // reset
+
+    const updateProgress = (text: string) => {
+      progressStore.getState().setAgentOrchestrationSteps(text);
+    };
+
     let result: { nodes: unknown[] };
     try {
       result = await generateDesign(
@@ -195,7 +204,7 @@ export class AgentToolExecutor {
         },
         {
           onApplyPartial: () => {},
-          onTextUpdate: () => {},
+          onTextUpdate: updateProgress,
           animated: true,
         },
       );
@@ -210,6 +219,8 @@ export class AgentToolExecutor {
           /* ignore */
         }
       }
+      // Clear stale progress so checklist doesn't show partial steps from a failed run
+      progressStore.getState().setAgentOrchestrationSteps(null);
       return {
         success: false,
         error: `Design generation failed: ${err instanceof Error ? err.message : JSON.stringify(err)}`,
@@ -222,6 +233,14 @@ export class AgentToolExecutor {
       setTimeout(() => zoomToFitContent(), 300);
     } catch {
       /* ignore */
+    }
+
+    // Mark all steps as done in the stored progress
+    const currentSteps = progressStore.getState().agentOrchestrationSteps;
+    if (currentSteps) {
+      const allDone = currentSteps
+        .replace(/status="(streaming|pending)"/g, 'status="done"');
+      progressStore.getState().setAgentOrchestrationSteps(allDone);
     }
 
     return {
