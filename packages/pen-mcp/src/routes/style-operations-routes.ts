@@ -127,14 +127,10 @@ function replaceFillColor(
 ): boolean {
   const fillHolder = fieldName === 'fill' ? node : node.stroke;
   if (!fillHolder) return false;
-  const fill = fieldName === 'fill' ? fillHolder.fill : fillHolder.fill;
+  const fill = fillHolder.fill;
   if (typeof fill === 'string') {
     if (fill === from) {
-      if (fieldName === 'fill') {
-        fillHolder.fill = to;
-      } else {
-        fillHolder.fill = to;
-      }
+      fillHolder.fill = to;
       return true;
     }
     return false;
