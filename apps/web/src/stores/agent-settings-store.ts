@@ -346,10 +346,10 @@ export const useAgentSettingsStore = create<AgentSettingsState>((set, get) => ({
         set({ imageGenProfiles: [migrated], activeImageGenProfileId: migrated.id });
       }
       if (data.openverseOAuth !== undefined) set({ openverseOAuth: data.openverseOAuth });
-      if (Array.isArray((data as Record<string, unknown>).builtinProviders)) {
+      const builtinProviders = (data as Record<string, unknown>).builtinProviders;
+      if (Array.isArray(builtinProviders)) {
         set({
-          builtinProviders: (data as Record<string, unknown>)
-            .builtinProviders.map((p) =>
+          builtinProviders: builtinProviders.map((p: unknown) =>
               canonicalizeBuiltinProviderConfig(p as BuiltinProviderConfig),
             ) as BuiltinProviderConfig[],
         });

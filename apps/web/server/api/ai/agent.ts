@@ -16,10 +16,19 @@ import {
   teamRegisterDelegate,
   runTeamMember,
   destroyIterator,
+  resolveMemberToolResult,
+  seedTeamMessages,
 } from '@zseven-w/agent-native';
+import { resolveSkills } from '@zseven-w/pen-ai-skills';
+import type { Phase } from '@zseven-w/pen-ai-skills';
 import type { AuthLevel } from '../../../src/types/agent';
-import { agentSessions, cleanup, abortSession, type AgentSession } from '../../utils/agent-sessions';
-import { normalizeOptionalBaseURL, normalizeMemberBaseURL, requireOpenAICompatBaseURL } from './provider-url';
+import { agentSessions, cleanup, abortSession, createSession, type AgentSession } from '../../utils/agent-sessions';
+import { getAllToolDefs } from '../../../src/services/ai/agent-tools';
+import {
+  normalizeOptionalBaseURL,
+  normalizeMemberBaseURL,
+  requireOpenAICompatBaseURL,
+} from './provider-url';
 
 const TOOL_LEVEL_MAP: Record<string, AuthLevel> = {
   batch_get: 'read',
@@ -30,6 +39,76 @@ const TOOL_LEVEL_MAP: Record<string, AuthLevel> = {
   update_node: 'modify',
   delete_node: 'delete',
 };
+
+const ROLE_TOOL_PRESETS: Record<string, string[]> = {
+  designer: ['batch_get', 'snapshot_layout', 'find_empty_space', 'generate_design', 'insert_node'],
+  reviewer: ['batch_get', 'snapshot_layout', 'get_selection'],
+  editor: ['batch_get', 'snapshot_layout', 'find_empty_space', 'update_node', 'delete_node', 'insert_node'],
+  researcher: ['batch_get', 'snapshot_layout', 'find_empty_space', 'get_selection'],
+};
+
+const ROLE_SKILL_PHASE: Record<string, Phase> = {
+  designer: 'generation',
+  reviewer: 'validation',
+  editor: 'maintenance',
+  researcher: 'planning',
+};
+
+const ROLE_TOOL_INSTRUCTIONS: Record<string, string> = {
+  designer: `You are a design team member. When asked to create designs, you MUST call the generate_design tool with a descriptive prompt. You can also use insert_node for manual node creation, batch_get and snapshot_layout to inspect the canvas, and find_empty_space to find placement locations.`,
+  reviewer: `You are a design reviewer. Use batch_get and snapshot_layout to inspect the current canvas state. Use get_selection to see what the user has selected. Provide detailed feedback on layout, spacing, typography, and visual hierarchy.`,
+  editor: `You are a design editor. Use batch_get and snapshot_layout to understand the current canvas. Use update_node to modify node properties, delete_node to remove elements, and insert_node to add new elements. Use find_empty_space to find placement locations.`,
+  researcher: `You are a design researcher. Use batch_get and snapshot_layout to analyze the current canvas state. Use find_empty_space to identify available space. Use get_selection to see what the user has selected. Provide analysis and recommendations.`,
+};
+
+function buildTeamCapabilitiesPrompt(concurrency: number): string {
+  return `\n\n## Team Capabilities
+You can spawn up to ${concurrency} team members and delegate tasks to them.
+
+Available roles:
+- designer: Creates designs (tools: generate_design, insert_node, batch_get, snapshot_layout, find_empty_space)
+- reviewer: Validates designs (tools: batch_get, snapshot_layout, get_selection)
+- editor: Modifies existing designs (tools: update_node, delete_node, insert_node, batch_get, snapshot_layout, find_empty_space)
+- researcher: Reads canvas and plans (tools: batch_get, snapshot_layout, find_empty_space, get_selection)
+
+Use spawn_member({id, role}) to create a member, then delegate({member_id, task}) to assign work.
+For simple tasks, handle them yourself without spawning members.
+For complex multi-section designs, spawn designers and delegate sections to them.
+Each member has its own design knowledge and tools — describe the task clearly.`;
+}
+
+function buildMemberSystemPrompt(role: string, designMdContent?: string, hasVariables?: boolean): string {
+  const phase = ROLE_SKILL_PHASE[role] ?? 'generation';
+  const toolInstructions = ROLE_TOOL_INSTRUCTIONS[role] ?? '';
+
+  const skillCtx = resolveSkills(phase, '', {
+    flags: {
+      hasDesignMd: !!designMdContent,
+      hasVariables: !!hasVariables,
+    },
+    dynamicContent: designMdContent ? { designMdContent } : undefined,
+  });
+  const knowledge = skillCtx.skills.map((s) => s.content).join('\n\n');
+
+  return `${toolInstructions}\n\n${knowledge}`;
+}
+
+const SPAWN_MEMBER_SCHEMA = JSON.stringify({
+  type: 'object',
+  properties: {
+    id: { type: 'string', description: 'Unique member ID, e.g. "designer-1"' },
+    role: {
+      type: 'string',
+      enum: ['designer', 'reviewer', 'editor', 'researcher'],
+      description: 'Member role — determines available tools and knowledge',
+    },
+    model: {
+      type: 'string',
+      description: 'Optional model override for this member. Defaults to lead model.',
+    },
+  },
+  required: ['id', 'role'],
+});
 
 interface ToolDef {
   name: string;
@@ -59,6 +138,10 @@ interface AgentBody {
   maxTurns?: number;
   maxOutputTokens?: number;
   members?: MemberDef[];
+  teamMode?: boolean;
+  concurrency?: number;
+  designMdContent?: string;
+  hasVariables?: boolean;
 }
 
 /** Map Zig event JSON to client SSE format.
@@ -171,7 +254,12 @@ export default defineEventHandler(async (event) => {
     }
     try {
       const resultJson = JSON.stringify(body.result);
-      if (session.team) {
+      // Per-toolCallId routing: check if this tool belongs to a member
+      const memberId = session.toolOwners?.get(body.toolCallId);
+      if (memberId && session.team) {
+        resolveMemberToolResult(session.team, memberId, body.toolCallId, resultJson);
+        session.toolOwners.delete(body.toolCallId);
+      } else if (session.team) {
         resolveTeamToolResult(session.team, body.toolCallId, resultJson);
       } else if (session.engine) {
         resolveToolResult(session.engine, body.toolCallId, resultJson);
@@ -248,29 +336,52 @@ export default defineEventHandler(async (event) => {
 
   let session: AgentSession;
 
-  if (normalizedMembers.length) {
-    // Team mode: create team with lead + members
-    console.info(`[agent] creating team with ${normalizedMembers.length} member(s)`);
-    const team = createTeam(provider, tools, body.systemPrompt, body.maxTurns ?? 20);
+  if (body.teamMode || normalizedMembers.length) {
+    const concurrency = body.concurrency ?? 1;
+    console.info(`[agent] creating team (teamMode=${!!body.teamMode}, concurrency=${concurrency})`);
+
+    // Append team capabilities to system prompt when teamMode
+    const teamSystemPrompt = body.teamMode && concurrency >= 2
+      ? body.systemPrompt + buildTeamCapabilitiesPrompt(concurrency)
+      : body.systemPrompt;
+
+    const team = createTeam(provider, tools, teamSystemPrompt, body.maxTurns ?? 20);
 
     const memberHandles: Array<{ provider: ReturnType<typeof createProviderHandle>; tools: ReturnType<typeof createToolRegistry> }> = [];
 
-    for (const m of normalizedMembers) {
-      const memberProvider = createProviderHandle(m.providerType, m.apiKey, m.model, m.normalizedBaseURL);
-      // Members get an EMPTY tool registry — they output JSONL text directly,
-      // not via tool calls. If we registered external tools (generate_design etc.),
-      // the member would call them, but tool results can only be resolved on the
-      // leader engine, not the member — causing the member to block forever.
-      const memberTools = createToolRegistry();
-      addTeamMember(team, m.id, memberProvider, memberTools, m.systemPrompt ?? '', 20);
-      memberHandles.push({ provider: memberProvider, tools: memberTools });
+    // Legacy path: pre-configured members from client
+    if (normalizedMembers.length) {
+      for (const m of normalizedMembers) {
+        const memberProvider = createProviderHandle(
+          m.providerType,
+          m.apiKey,
+          m.model,
+          m.normalizedBaseURL,
+        );
+        const memberTools = createToolRegistry();
+        addTeamMember(team, m.id, memberProvider, memberTools, m.systemPrompt ?? '', 20);
+        memberHandles.push({ provider: memberProvider, tools: memberTools });
+      }
     }
 
-    // Register delegate tool in leader's registry so the LLM can call
-    // delegate({member_id, task}) to dispatch work to members
+    // Register spawn_member + delegate tools when teamMode
+    if (body.teamMode) {
+      registerToolSchema(tools, 'spawn_member', SPAWN_MEMBER_SCHEMA);
+    }
     teamRegisterDelegate(team);
 
-    session = { team, provider, tools, memberHandles, createdAt: Date.now(), lastActivity: Date.now() };
+    // Seed prior conversation history onto the lead engine
+    const priorMessages = body.messages.slice(0, -1).filter(
+      (m) => (m.role === 'user' || m.role === 'assistant') && typeof m.content === 'string',
+    );
+    if (priorMessages.length > 0) {
+      seedTeamMessages(team, JSON.stringify(priorMessages));
+    }
+
+    session = createSession({
+      team, provider, tools, memberHandles,
+      createdAt: Date.now(), lastActivity: Date.now(),
+    });
   } else {
     // Single engine mode
     const engine = createQueryEngine({
@@ -289,7 +400,10 @@ export default defineEventHandler(async (event) => {
       seedMessages(engine, JSON.stringify(priorMessages));
     }
 
-    session = { engine, provider, tools, createdAt: Date.now(), lastActivity: Date.now() };
+    session = createSession({
+      engine, provider, tools,
+      createdAt: Date.now(), lastActivity: Date.now(),
+    });
   }
 
   // Register session for tool result callbacks and abort
@@ -323,17 +437,77 @@ export default defineEventHandler(async (event) => {
         while ((raw = await nextEvent(iter)) !== null) {
           session.lastActivity = Date.now();
 
-          // Intercept delegate tool_use in team mode — run member engine
-          // instead of forwarding to client
           if (session.team) {
             try {
               const evt = JSON.parse(raw);
+
+              // ── spawn_member intercept ──
+              if (evt.tool_use && evt.tool_use.name === 'spawn_member') {
+                const toolUseId = evt.tool_use.id;
+                const inputData = typeof evt.tool_use.input === 'string'
+                  ? JSON.parse(evt.tool_use.input) : evt.tool_use.input;
+                const memberId: string = inputData?.id;
+                const role: string = inputData?.role;
+                const memberModel: string | undefined = inputData?.model;
+
+                if (!memberId || !role || !ROLE_TOOL_PRESETS[role]) {
+                  resolveTeamToolResult(session.team, toolUseId, JSON.stringify({
+                    success: false, error: `Invalid spawn_member args: id=${memberId}, role=${role}`,
+                  }));
+                  continue;
+                }
+
+                // Check duplicate
+                if (session.memberRoles.has(memberId)) {
+                  resolveTeamToolResult(session.team, toolUseId, JSON.stringify({
+                    success: false, error: `Member "${memberId}" already exists`,
+                  }));
+                  continue;
+                }
+
+                // Create provider (use member model or lead's)
+                const mProvider = createProviderHandle(
+                  body.providerType,
+                  body.apiKey,
+                  memberModel ?? body.model,
+                  normalizedBaseURL,
+                );
+
+                // Create tool registry with role preset
+                const mTools = createToolRegistry();
+                const allDefs = getAllToolDefs();
+                const presetNames = ROLE_TOOL_PRESETS[role];
+                for (const name of presetNames) {
+                  const def = allDefs.find((d) => d.name === name);
+                  if (def) {
+                    const params = def.parameters ? { ...def.parameters } : { type: 'object' };
+                    delete (params as any).$schema;
+                    registerToolSchema(mTools, name, JSON.stringify(params));
+                  }
+                }
+
+                // Build member system prompt with role skills
+                const memberPrompt = buildMemberSystemPrompt(
+                  role, body.designMdContent, body.hasVariables,
+                );
+
+                addTeamMember(session.team, memberId, mProvider, mTools, memberPrompt, 20);
+                if (!session.memberHandles) session.memberHandles = [];
+                session.memberHandles.push({ provider: mProvider, tools: mTools });
+                session.memberRoles.set(memberId, role);
+
+                resolveTeamToolResult(session.team, toolUseId, JSON.stringify({
+                  success: true, member_id: memberId, role, tools: presetNames,
+                }));
+                continue;
+              }
+
+              // ── delegate intercept (enhanced with member tool routing) ──
               if (evt.tool_use && evt.tool_use.name === 'delegate') {
                 const toolUseId = evt.tool_use.id;
                 let memberIdRaw: string | undefined;
                 let taskRaw: string | undefined;
 
-                // Parse delegate args from input (may be JSON string or object)
                 const inputData = evt.tool_use.input;
                 if (typeof inputData === 'string') {
                   try {
@@ -347,47 +521,84 @@ export default defineEventHandler(async (event) => {
                 }
 
                 if (memberIdRaw && taskRaw) {
-                  // Emit member_start to client
+                  // Resolve task-specific skills based on member role
+                  const memberRole = session.memberRoles.get(memberIdRaw);
+                  let enrichedTask = taskRaw;
+                  if (memberRole) {
+                    const phase = ROLE_SKILL_PHASE[memberRole] ?? 'generation';
+                    const taskSkills = resolveSkills(phase, taskRaw, {
+                      flags: {
+                        hasDesignMd: !!body.designMdContent,
+                        hasVariables: !!body.hasVariables,
+                      },
+                    });
+                    const skillPrefix = taskSkills.skills.map((s) => s.content).join('\n\n');
+                    if (skillPrefix) enrichedTask = skillPrefix + '\n\n' + taskRaw;
+                  }
+
                   controller.enqueue(encoder.encode(
                     `event: member_start\ndata: ${JSON.stringify({ type: 'member_start', memberId: memberIdRaw, task: taskRaw })}\n\n`,
                   ));
 
-                  // Run member engine
                   let memberResult = '';
-                  const memberIter = await runTeamMember(session.team, memberIdRaw, taskRaw);
+                  const memberIter = await runTeamMember(session.team, memberIdRaw, enrichedTask);
                   try {
                     let memberRaw: string | null;
                     while ((memberRaw = await nextEvent(memberIter)) !== null) {
                       session.lastActivity = Date.now();
-                      // Forward member events to client (text, thinking, tool_call, etc.)
-                      controller.enqueue(encoder.encode(zigEventToSSE(memberRaw)));
-                      // Collect text for delegate tool result
                       try {
                         const mEvt = JSON.parse(memberRaw);
+
+                        // Member tool_use → record owner, forward with source
+                        if (mEvt.tool_use) {
+                          const mToolId = mEvt.tool_use.id;
+                          session.toolOwners.set(mToolId, memberIdRaw!);
+                          // Forward as tool_call with source field
+                          const level = TOOL_LEVEL_MAP[mEvt.tool_use.name as string] ?? 'read';
+                          const toolCallEvt = {
+                            type: 'tool_call',
+                            id: mToolId,
+                            name: mEvt.tool_use.name,
+                            args: typeof mEvt.tool_use.input === 'string'
+                              ? JSON.parse(mEvt.tool_use.input as string)
+                              : (mEvt.tool_use.input ?? {}),
+                            level,
+                            source: memberIdRaw,
+                          };
+                          controller.enqueue(encoder.encode(
+                            `event: tool_call\ndata: ${JSON.stringify(toolCallEvt)}\n\n`,
+                          ));
+                          continue;
+                        }
+
+                        // Collect text
                         if (mEvt.stream_event?.text && mEvt.stream_event.type === 'text_delta') {
                           memberResult += mEvt.stream_event.text;
                         }
                       } catch { /* ignore parse errors */ }
+                      controller.enqueue(encoder.encode(zigEventToSSE(memberRaw)));
                     }
                   } finally {
                     destroyIterator(memberIter);
+                    // Clean up any remaining toolOwner entries for this member
+                    for (const [tid, mid] of session.toolOwners) {
+                      if (mid === memberIdRaw) session.toolOwners.delete(tid);
+                    }
                   }
 
-                  // Emit member_end to client
                   controller.enqueue(encoder.encode(
                     `event: member_end\ndata: ${JSON.stringify({ type: 'member_end', memberId: memberIdRaw, result: '' })}\n\n`,
                   ));
 
-                  // Resolve delegate tool result back to leader engine
                   resolveTeamToolResult(
                     session.team,
                     toolUseId,
                     JSON.stringify({ result: memberResult || 'Member completed task.' }),
                   );
-                  continue; // skip normal forwarding for this event
+                  continue;
                 }
               }
-            } catch { /* not JSON or not delegate — fall through to normal forwarding */ }
+            } catch { /* not JSON or not intercepted — fall through to normal forwarding */ }
           }
 
           controller.enqueue(encoder.encode(zigEventToSSE(raw)));

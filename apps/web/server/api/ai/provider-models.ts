@@ -20,6 +20,7 @@ interface ModelEntry {
 export default defineEventHandler(async (event) => {
   const body = await readBody<ProviderModelsBody>(event);
   const normalizedBaseURL = normalizeOptionalBaseURL(body?.baseURL);
+  const apiKey = body?.apiKey;
   if (!normalizedBaseURL) {
     return { models: [], error: 'baseURL is required' };
   }
@@ -28,8 +29,8 @@ export default defineEventHandler(async (event) => {
   const headers: Record<string, string> = {
     Accept: 'application/json',
   };
-  if (body.apiKey) {
-    headers.Authorization = `Bearer ${body.apiKey}`;
+  if (apiKey) {
+    headers.Authorization = `Bearer ${apiKey}`;
   }
 
   try {
