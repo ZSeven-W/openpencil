@@ -120,4 +120,51 @@ export function getDesignToolDefs(): ToolDef[] {
   ];
 }
 
+/** All tool definitions — canonical schema source for both lead and member registries. */
+export function getAllToolDefs(): ToolDef[] {
+  return [
+    ...getDesignToolDefs(),
+    {
+      name: 'insert_node',
+      description: 'Insert a new node into the document tree with full support for nested children',
+      level: TOOL_AUTH_MAP.insert_node,
+      parameters: {
+        type: 'object',
+        properties: {
+          parent: {
+            type: ['string', 'null'],
+            description: 'Parent node ID, or null for root-level insertion',
+          },
+          data: { type: 'object', description: 'PenNode data (type, name, width, height, fills, children, etc.)' },
+          pageId: { type: 'string', description: 'Target page ID (optional, defaults to active page)' },
+        },
+        required: ['parent', 'data'],
+      },
+    },
+    {
+      name: 'find_empty_space',
+      description: 'Find empty space on the canvas for placing new content',
+      level: TOOL_AUTH_MAP.find_empty_space,
+      parameters: {
+        type: 'object',
+        properties: {
+          width: { type: 'number', description: 'Required width' },
+          height: { type: 'number', description: 'Required height' },
+          pageId: { type: 'string', description: 'Target page ID (optional)' },
+        },
+        required: ['width', 'height'],
+      },
+    },
+    {
+      name: 'get_selection',
+      description: 'Get the currently selected nodes on the canvas with their full data',
+      level: TOOL_AUTH_MAP.get_selection,
+      parameters: {
+        type: 'object',
+        properties: {},
+      },
+    },
+  ];
+}
+
 export { TOOL_AUTH_MAP };

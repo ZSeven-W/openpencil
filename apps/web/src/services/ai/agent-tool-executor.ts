@@ -92,6 +92,8 @@ export class AgentToolExecutor {
         return this.handleFindEmptySpace(
           args as { width: number; height: number; pageId?: string },
         );
+      case 'get_selection':
+        return this.handleGetSelection();
       default:
         return { success: false, error: `Unknown tool: ${name}` };
     }
@@ -398,6 +400,21 @@ export class AgentToolExecutor {
     }
 
     return { success: true, data: { x: maxX + padding, y: minY } };
+  }
+
+  private async handleGetSelection(): Promise<ToolResult> {
+    const { useCanvasStore } = await import('@/stores/canvas-store');
+    const { useDocumentStore } = await import('@/stores/document-store');
+    const selectedIds = useCanvasStore.getState().selection.selectedIds;
+    if (selectedIds.length === 0) {
+      return { success: true, data: [] };
+    }
+    const docStore = useDocumentStore.getState();
+    const nodes = selectedIds
+      .map((id) => docStore.getNodeById(id))
+      .filter(Boolean)
+      .map((n) => ({ ...n }));
+    return { success: true, data: nodes };
   }
 
   // ---------------------------------------------------------------------------
