@@ -1,4 +1,5 @@
 import { defineEventHandler, readBody } from 'h3';
+import { buildProviderModelsURL, normalizeOptionalBaseURL } from './provider-url';
 
 interface ProviderModelsBody {
   baseURL: string;
@@ -18,11 +19,12 @@ interface ModelEntry {
  */
 export default defineEventHandler(async (event) => {
   const body = await readBody<ProviderModelsBody>(event);
-  if (!body?.baseURL) {
+  const normalizedBaseURL = normalizeOptionalBaseURL(body?.baseURL);
+  if (!normalizedBaseURL) {
     return { models: [], error: 'baseURL is required' };
   }
 
-  const url = body.baseURL.replace(/\/+$/, '') + '/models';
+  const url = buildProviderModelsURL(normalizedBaseURL);
   const headers: Record<string, string> = {
     Accept: 'application/json',
   };

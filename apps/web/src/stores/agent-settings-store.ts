@@ -9,6 +9,7 @@ import type {
 import type { ImageGenConfig, ImageGenProfile } from '@/types/image-service';
 import { DEFAULT_IMAGE_GEN_CONFIG } from '@/types/image-service';
 import { MCP_DEFAULT_PORT } from '@/constants/app';
+import { canonicalizeBuiltinProviderConfig } from '@/lib/builtin-provider-presets';
 import { appStorage } from '@/utils/app-storage';
 
 const STORAGE_KEY = 'openpencil-agent-settings';
@@ -243,14 +244,16 @@ export const useAgentSettingsStore = create<AgentSettingsState>((set, get) => ({
 
   addBuiltinProvider: (config) => {
     const id = `bp-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
-    const newProvider: BuiltinProviderConfig = { ...config, id };
+    const newProvider = canonicalizeBuiltinProviderConfig({ ...config, id });
     set((s) => ({ builtinProviders: [...s.builtinProviders, newProvider] }));
     return id;
   },
 
   updateBuiltinProvider: (id, updates) =>
     set((s) => ({
-      builtinProviders: s.builtinProviders.map((p) => (p.id === id ? { ...p, ...updates } : p)),
+      builtinProviders: s.builtinProviders.map((p) =>
+        p.id === id ? canonicalizeBuiltinProviderConfig({ ...p, ...updates }) : p,
+      ),
     })),
 
   removeBuiltinProvider: (id) =>
@@ -346,7 +349,9 @@ export const useAgentSettingsStore = create<AgentSettingsState>((set, get) => ({
       if (Array.isArray((data as Record<string, unknown>).builtinProviders)) {
         set({
           builtinProviders: (data as Record<string, unknown>)
-            .builtinProviders as BuiltinProviderConfig[],
+            .builtinProviders.map((p) =>
+              canonicalizeBuiltinProviderConfig(p as BuiltinProviderConfig),
+            ) as BuiltinProviderConfig[],
         });
       }
       if ((data as Record<string, unknown>).teamEnabled !== undefined) {

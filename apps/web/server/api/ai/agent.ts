@@ -19,6 +19,7 @@ import {
 } from '@zseven-w/agent-native';
 import type { AuthLevel } from '../../../src/types/agent';
 import { agentSessions, cleanup, abortSession, type AgentSession } from '../../utils/agent-sessions';
+import { normalizeOptionalBaseURL, normalizeMemberBaseURL, requireOpenAICompatBaseURL } from './provider-url';
 
 const TOOL_LEVEL_MAP: Record<string, AuthLevel> = {
   batch_get: 'read',
@@ -146,7 +147,7 @@ function createProviderHandle(
 ) {
   return providerType === 'anthropic'
     ? createAnthropicProvider(apiKey, model, baseURL)
-    : createOpenAICompatProvider(apiKey, baseURL!, model);
+    : createOpenAICompatProvider(apiKey, requireOpenAICompatBaseURL(baseURL), model);
 }
 
 /**
@@ -207,14 +208,35 @@ export default defineEventHandler(async (event) => {
     !body.apiKey ||
     !body.model
   ) {
-    setResponseHeaders(event, { 'Content-Type': 'application/json' });
-    return {
-      error:
-        'Missing required fields: sessionId, messages, systemPrompt, providerType, apiKey, model',
-    };
+    throw createError({
+      statusCode: 400,
+      message: 'Missing required fields: sessionId, messages, systemPrompt, providerType, apiKey, model',
+    });
   }
 
-  const provider = createProviderHandle(body.providerType, body.apiKey, body.model, body.baseURL);
+  const normalizedBaseURL = normalizeOptionalBaseURL(body.baseURL);
+  if (body.providerType === 'openai-compat' && !normalizedBaseURL) {
+    throw createError({
+      statusCode: 400,
+      message: 'OpenAI-compatible provider requires baseURL',
+    });
+  }
+
+  // Validate all member baseURLs upfront before allocating any native handles
+  const normalizedMembers = (body.members ?? []).map((m) => {
+    try {
+      return { ...m, normalizedBaseURL: normalizeMemberBaseURL(m.id, m.providerType, m.baseURL) };
+    } catch (err: any) {
+      throw createError({ statusCode: 400, message: err.message });
+    }
+  });
+
+  const provider = createProviderHandle(
+    body.providerType,
+    body.apiKey,
+    body.model,
+    normalizedBaseURL,
+  );
   const tools = createToolRegistry();
   for (const def of body.toolDefs ?? []) {
     const params = def.parameters ? { ...def.parameters } : { type: 'object' };
@@ -226,15 +248,15 @@ export default defineEventHandler(async (event) => {
 
   let session: AgentSession;
 
-  if (body.members?.length) {
+  if (normalizedMembers.length) {
     // Team mode: create team with lead + members
-    console.info(`[agent] creating team with ${body.members.length} member(s)`);
+    console.info(`[agent] creating team with ${normalizedMembers.length} member(s)`);
     const team = createTeam(provider, tools, body.systemPrompt, body.maxTurns ?? 20);
 
     const memberHandles: Array<{ provider: ReturnType<typeof createProviderHandle>; tools: ReturnType<typeof createToolRegistry> }> = [];
 
-    for (const m of body.members) {
-      const memberProvider = createProviderHandle(m.providerType, m.apiKey, m.model, m.baseURL);
+    for (const m of normalizedMembers) {
+      const memberProvider = createProviderHandle(m.providerType, m.apiKey, m.model, m.normalizedBaseURL);
       // Members get an EMPTY tool registry — they output JSONL text directly,
       // not via tool calls. If we registered external tools (generate_design etc.),
       // the member would call them, but tool results can only be resolved on the

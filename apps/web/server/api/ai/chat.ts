@@ -10,6 +10,7 @@ import {
   getClaudeAgentDebugFilePath,
   resolveAgentModel,
 } from '../../utils/resolve-claude-agent-env';
+import { normalizeOptionalBaseURL, requireOpenAICompatBaseURL } from './provider-url';
 /** Pattern for detecting sensitive data in debug log output */
 export const SENSITIVE_LOG_PATTERN =
   /ANTHROPIC_API_KEY=|Authorization:\s*Bearer|api[_-]?key\s*[:=]/i;
@@ -42,7 +43,7 @@ interface ChatBody {
   effort?: 'low' | 'medium' | 'high' | 'max';
   /** For builtin provider: direct API key (not CLI-based) */
   builtinApiKey?: string;
-  /** For builtin provider: base URL for OpenAI-compatible endpoints */
+  /** For builtin provider: API root base URL (e.g. https://api.openai.com/v1) */
   builtinBaseURL?: string;
   /** For builtin provider: 'anthropic' or 'openai-compat' */
   builtinType?: 'anthropic' | 'openai-compat';
@@ -1029,10 +1030,15 @@ function streamViaBuiltin(body: ChatBody) {
           : rawModel;
         if (!apiKey || !model) throw new Error('Builtin provider requires apiKey and model');
 
+        const normalizedBuiltinBaseURL = normalizeOptionalBaseURL(body.builtinBaseURL);
         const builtinProvider =
           body.builtinType === 'anthropic'
-            ? createAnthropicProvider(apiKey, model, body.builtinBaseURL)
-            : createOpenAICompatProvider(apiKey, body.builtinBaseURL!, model);
+            ? createAnthropicProvider(apiKey, model, normalizedBuiltinBaseURL)
+            : createOpenAICompatProvider(
+                apiKey,
+                requireOpenAICompatBaseURL(normalizedBuiltinBaseURL),
+                model,
+              );
 
         // Pure streaming — no tools, maxTurns=1 prevents agentic looping
         const builtinEngine = createQueryEngine({
