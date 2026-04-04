@@ -43,12 +43,15 @@ const config = defineConfig({
       '@': fileURLToPath(new URL('./src', import.meta.url)),
     },
   },
+  ssr: {
+    external: ['@zseven-w/agent-native'],
+  },
   assetsInclude: ['**/*.wasm'],
   plugins: [
     vitePluginSkills(fileURLToPath(new URL('../../packages/pen-ai-skills', import.meta.url))),
     ...(process.env.NODE_ENV === 'production' ? [] : [devtools()]),
     nitro({
-      rollupConfig: { external: [/^@sentry\//, 'canvas', 'jsdom', 'cssstyle', 'canvaskit-wasm'] },
+      rollupConfig: { external: [/^@sentry\//, 'canvas', 'jsdom', 'cssstyle', 'canvaskit-wasm', '@zseven-w/agent-native'] },
       serverDir: './server',
       output: { dir: '../../out/web' },
       ...(isElectronBuild ? { preset: 'node-server' } : {}),

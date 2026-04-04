@@ -26,6 +26,7 @@ const PROVIDER_PRESETS: Record<BuiltinProviderPreset, PresetConfig> = {
   anthropic: {
     label: 'Anthropic',
     type: 'anthropic',
+    baseURL: 'https://api.anthropic.com',
     placeholder: 'sk-ant-...',
     modelPlaceholder: 'claude-sonnet-4-6-20250916',
   },
@@ -59,13 +60,13 @@ const PROVIDER_PRESETS: Record<BuiltinProviderPreset, PresetConfig> = {
   },
   minimax: {
     label: 'MiniMax',
-    type: 'openai-compat',
-    baseURL: 'https://api.minimaxi.com/v1',
+    type: 'anthropic',
+    baseURL: 'https://api.minimaxi.com/anthropic',
     placeholder: 'eyJ...',
     modelPlaceholder: 'MiniMax-M2.7',
     regions: {
-      cn: { baseURL: 'https://api.minimaxi.com/v1' },
-      global: { baseURL: 'https://api.minimax.io/v1' },
+      cn: { baseURL: 'https://api.minimaxi.com/anthropic' },
+      global: { baseURL: 'https://api.minimax.io/anthropic' },
     },
   },
   zhipu: {
@@ -282,7 +283,7 @@ export function BuiltinProviderForm({
 
   const isBaseURLLocked = preset !== 'custom';
   const effectiveType = preset === 'custom' ? customApiFormat : presetConfig.type;
-  const showBaseURL = effectiveType === 'openai-compat' || preset === 'custom';
+
   const canSave =
     displayName.trim().length > 0 && apiKey.trim().length > 0 && modelName.trim().length > 0;
 
@@ -429,7 +430,7 @@ export function BuiltinProviderForm({
           </div>
         </div>
       )}
-      {showBaseURL && (
+      {(
         <div>
           <label className="text-[11px] text-muted-foreground mb-1 block">
             {isBaseURLLocked ? t('builtin.baseUrl') : t('builtin.baseUrlRequired')}
@@ -459,7 +460,7 @@ export function BuiltinProviderForm({
               apiKey: apiKey.trim(),
               model: modelName.trim(),
               preset,
-              ...(showBaseURL && baseURL.trim() ? { baseURL: baseURL.trim() } : {}),
+              ...(baseURL.trim() ? { baseURL: baseURL.trim() } : {}),
               enabled: initial?.enabled ?? true,
             })
           }

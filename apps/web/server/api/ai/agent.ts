@@ -1,32 +1,32 @@
 import { defineEventHandler, readBody, setResponseHeaders, getQuery, createError } from 'h3';
 import {
-  createAgent,
-  createTeam,
   createAnthropicProvider,
   createOpenAICompatProvider,
   createToolRegistry,
-  encodeAgentEvent,
-} from '@zseven-w/agent';
-import type { AuthLevel, FallbackStrategy } from '@zseven-w/agent';
-import { jsonSchema } from '@zseven-w/agent';
-import { agentSessions } from '../../utils/agent-sessions';
+  registerToolSchema,
+  createQueryEngine,
+  seedMessages,
+  submitMessage,
+  nextEvent,
+  resolveToolResult,
+} from '@zseven-w/agent-native';
+import type { AuthLevel } from '../../../src/types/agent';
+import { agentSessions, cleanup, abortSession, type AgentSession } from '../../utils/agent-sessions';
 
-const DESIGN_FALLBACK: FallbackStrategy = {
-  systemSuffix: `\n\n## IMPORTANT: Text-Only Mode\nFunction calling is not available. Instead, output your design as a JSON code block.\nWrap the root node JSON in a \`\`\`json code fence. Example:\n\n\`\`\`json\n{\n  "type": "frame", "name": "Login Screen", "x": 0, "y": 0, "width": 390, "height": 844,\n  "fills": [{"type": "solid", "color": "#FFFFFF"}], "cornerRadius": 40,\n  "layout": "vertical", "padding": [60, 24, 40, 24], "gap": 16, "alignItems": "stretch",\n  "children": [\n    {"type": "text", "text": "Welcome", "fontSize": 28, "fontWeight": 700, "fills": [{"type": "solid", "color": "#1a1a2e"}]},\n    {"type": "frame", "name": "Button", "height": 48, "fills": [{"type": "solid", "color": "#4F46E5"}], "cornerRadius": 12, "justifyContent": "center", "alignItems": "center", "children": [\n      {"type": "text", "text": "Sign In", "fontSize": 16, "fontWeight": 600, "fills": [{"type": "solid", "color": "#FFFFFF"}]}\n    ]}\n  ]\n}\n\`\`\`\n\nOutput ONE JSON code block with the complete design tree. Do NOT use function calls.`,
-  parseResponse(text) {
-    const match = text.match(/```json\s*([\s\S]*?)```/);
-    if (!match) return text;
-    try { return JSON.parse(match[1].trim()); } catch { return text; }
-  },
+const TOOL_LEVEL_MAP: Record<string, AuthLevel> = {
+  batch_get: 'read',
+  snapshot_layout: 'read',
+  find_empty_space: 'read',
+  generate_design: 'create',
+  insert_node: 'create',
+  update_node: 'modify',
+  delete_node: 'delete',
 };
-
-const alwaysAllow = async () => 'allow' as const;
 
 interface ToolDef {
   name: string;
   description: string;
   level: AuthLevel;
-  /** JSON Schema from client — single source of truth, no server-side duplication */
   parameters?: Record<string, unknown>;
 }
 
@@ -37,12 +37,11 @@ interface MemberDef {
   model: string;
   baseURL?: string;
   systemPrompt?: string;
-  taskFallbackArgs?: Record<string, string>;
 }
 
 interface AgentBody {
   sessionId: string;
-  messages: Array<{ role: string; content: unknown }>;
+  messages: Array<{ role: string; content: string }>;
   systemPrompt: string;
   providerType: 'anthropic' | 'openai-compat';
   apiKey: string;
@@ -54,13 +53,79 @@ interface AgentBody {
   members?: MemberDef[];
 }
 
-function toModelMessages(raw: Array<{ role: string; content: unknown }>) {
-  return raw
-    .filter((m) => (m.role === 'user' || m.role === 'assistant') && typeof m.content === 'string')
-    .map((m) => ({
-      role: m.role as 'user' | 'assistant',
-      content: m.content as string,
-    }));
+/** Map Zig event JSON to client SSE format.
+ *  Zig events are tagged unions: {"result":{...}} or {"stream_event":{...}}.
+ *  Extract the tag and inner data, then map to the flat client format.
+ */
+function zigEventToSSE(raw: string): string {
+  const evt = JSON.parse(raw);
+
+  // Zig tagged union: the single key is the event type, value is the data.
+  // For stream_event, the inner object has its own "type" field (text_delta, etc.)
+  let tag: string;
+  let data: Record<string, unknown>;
+  if (evt.stream_event) {
+    tag = evt.stream_event.type ?? 'unknown';
+    data = evt.stream_event;
+  } else if (evt.result) {
+    tag = 'result';
+    data = evt.result;
+  } else if (evt.tool_progress) {
+    tag = 'tool_progress';
+    data = evt.tool_progress;
+  } else {
+    // Flat format fallback (shouldn't happen with current Zig serialization)
+    tag = evt.type ?? 'unknown';
+    data = evt;
+  }
+
+  let mapped: Record<string, unknown>;
+  switch (tag) {
+    case 'text_delta':
+      mapped = { type: 'text', content: data.text };
+      break;
+    case 'thinking_delta':
+      mapped = { type: 'thinking', content: data.text };
+      break;
+    case 'content_block_start':
+      if (data.tool_name) {
+        mapped = {
+          type: 'tool_call',
+          id: data.tool_use_id ?? data.id,
+          name: data.tool_name,
+          args: typeof data.tool_input === 'string' ? JSON.parse(data.tool_input as string) : (data.tool_input ?? {}),
+          level: TOOL_LEVEL_MAP[data.tool_name as string] ?? 'read',
+        };
+      } else {
+        mapped = { type: tag, ...data };
+      }
+      break;
+    case 'result':
+      if (data.is_error) {
+        mapped = {
+          type: 'error',
+          message: `Agent error: ${data.subtype ?? 'unknown'}${data.result ? ' — ' + data.result : ''}`,
+          fatal: true,
+        };
+      } else {
+        mapped = { type: 'done', totalTurns: data.num_turns ?? 0 };
+      }
+      break;
+    default:
+      mapped = { type: tag, ...data };
+  }
+  return `event: ${mapped.type}\ndata: ${JSON.stringify(mapped)}\n\n`;
+}
+
+function createProviderHandle(
+  providerType: 'anthropic' | 'openai-compat',
+  apiKey: string,
+  model: string,
+  baseURL?: string,
+) {
+  return providerType === 'anthropic'
+    ? createAnthropicProvider(apiKey, model, baseURL)
+    : createOpenAICompatProvider(apiKey, baseURL!, model);
 }
 
 /**
@@ -83,11 +148,11 @@ export default defineEventHandler(async (event) => {
       throw createError({ statusCode: 404, message: 'Session not found' });
     }
     try {
-      session.agent.resolveToolResult(body.toolCallId, body.result);
+      const resultJson = JSON.stringify(body.result);
+      if (session.engine) {
+        resolveToolResult(session.engine, body.toolCallId, resultJson);
+      }
     } catch {
-      // Ignore — tool call may have been resolved internally (e.g. delegate)
-      // or the agent loop already ended. The pre-resolution buffer in agent-loop
-      // handles the normal case; this catch is a safety net.
       return { ok: true, ignored: true };
     }
     session.lastActivity = Date.now();
@@ -101,7 +166,8 @@ export default defineEventHandler(async (event) => {
     if (sid) {
       const session = agentSessions.get(sid);
       if (session) {
-        session.abortController.abort();
+        abortSession(session);
+        cleanup(session);
         agentSessions.delete(sid);
       }
     }
@@ -125,123 +191,41 @@ export default defineEventHandler(async (event) => {
     };
   }
 
-  const provider =
-    body.providerType === 'anthropic'
-      ? createAnthropicProvider({ apiKey: body.apiKey, model: body.model, baseURL: body.baseURL })
-      : createOpenAICompatProvider({
-          apiKey: body.apiKey,
-          model: body.model,
-          baseURL: body.baseURL,
-        });
+  // TODO: Team mode (body.members) is not yet implemented in the Zig NAPI addon.
+  // When createTeam / resolveTeamToolResult / runTeam are added, re-enable multi-member support.
+  if (body.members?.length) {
+    console.warn('[agent] Team mode requested but not yet supported by native addon — using single engine');
+  }
 
+  const provider = createProviderHandle(body.providerType, body.apiKey, body.model, body.baseURL);
   const tools = createToolRegistry();
   for (const def of body.toolDefs ?? []) {
-    // Use client-provided JSON Schema (single source of truth)
-    // Strip $schema field that strict APIs (MiniMax, StepFun) reject
     const params = def.parameters ? { ...def.parameters } : { type: 'object' };
     delete (params as any).$schema;
-    tools.register({
-      name: def.name,
-      description: def.description,
-      level: def.level,
-      schema: jsonSchema(params as any),
-    });
+    registerToolSchema(tools, def.name, JSON.stringify(params));
   }
 
-  const abortController = new AbortController();
-
-  // Create agent or team based on whether members are provided
-  let agentOrTeam: {
-    run: (msgs: any) => AsyncGenerator<any>;
-    resolveToolResult: (id: string, result: any) => void;
-  };
-
-  if (body.members?.length) {
-    // Team mode — create member agents with scoped tools
-    // Designer only gets generate_design + snapshot_layout (read-only check).
-    // Giving all tools causes wasteful batch_get calls after generation.
-    const DESIGNER_TOOLS = new Set(['generate_design', 'snapshot_layout']);
-
-    const members = body.members.map((m) => {
-      const memberProvider =
-        m.providerType === 'anthropic'
-          ? createAnthropicProvider({ apiKey: m.apiKey, model: m.model, baseURL: m.baseURL })
-          : createOpenAICompatProvider({ apiKey: m.apiKey, model: m.model, baseURL: m.baseURL });
-
-      const memberTools = createToolRegistry();
-      const allowedTools = m.id === 'designer' ? DESIGNER_TOOLS : null;
-      for (const def of body.toolDefs ?? []) {
-        if (allowedTools && !allowedTools.has(def.name)) continue;
-        const params = def.parameters ? { ...def.parameters } : { type: 'object' };
-        delete (params as any).$schema;
-        memberTools.register({
-          name: def.name,
-          description: def.description,
-          level: def.level,
-          schema: jsonSchema(params as any),
-        });
-      }
-
-      return {
-        id: m.id,
-        provider: memberProvider,
-        tools: memberTools,
-        systemPrompt: m.systemPrompt || `You are a ${m.id} specialist.`,
-        turnTimeout: 5 * 60_000, // 5 minutes — design generation is slow
-        ...(m.taskFallbackArgs ? { taskFallbackArgs: m.taskFallbackArgs } : {}),
-      };
-    });
-
-    // Remove generate_design from lead tools — force delegation to designer
-    const leadTools = createToolRegistry();
-    for (const def of body.toolDefs ?? []) {
-      if (def.name === 'generate_design') continue; // designer-only
-      const params = def.parameters ? { ...def.parameters } : { type: 'object' };
-      delete (params as any).$schema;
-      leadTools.register({
-        name: def.name,
-        description: def.description,
-        level: def.level,
-        schema: jsonSchema(params as any),
-      });
-    }
-
-    const team = createTeam({
-      lead: {
-        provider,
-        tools: leadTools,
-        systemPrompt: body.systemPrompt,
-        maxTurns: body.maxTurns ?? 20,
-      },
-      members,
-      fallbackStrategy: DESIGN_FALLBACK,
-      beforeToolExecute: alwaysAllow,
-    });
-    agentOrTeam = {
-      run: (msgs) => team.run(msgs),
-      resolveToolResult: (id, result) => team.resolveToolResult(id, result),
-    };
-  } else {
-    const agent = createAgent({
-      provider,
-      tools,
-      systemPrompt: body.systemPrompt,
-      fallbackStrategy: DESIGN_FALLBACK,
-      beforeToolExecute: alwaysAllow,
-      maxTurns: body.maxTurns ?? 20,
-      maxOutputTokens: body.maxOutputTokens,
-      turnTimeout: 5 * 60_000,
-      abortSignal: abortController.signal,
-    });
-    agentOrTeam = agent;
-  }
-
-  agentSessions.set(body.sessionId, {
-    agent: agentOrTeam as any,
-    abortController,
-    createdAt: Date.now(),
-    lastActivity: Date.now(),
+  const engine = createQueryEngine({
+    provider,
+    tools,
+    systemPrompt: body.systemPrompt,
+    maxTurns: body.maxTurns ?? 20,
+    cwd: process.cwd(),
   });
+
+  // Seed conversation history
+  const priorMessages = body.messages.slice(0, -1).filter(
+    (m) => (m.role === 'user' || m.role === 'assistant') && typeof m.content === 'string',
+  );
+  if (priorMessages.length > 0) {
+    seedMessages(engine, JSON.stringify(priorMessages));
+  }
+  const prompt =
+    body.messages[body.messages.length - 1]?.content ?? '';
+
+  // Register session for tool result callbacks and abort
+  const session: AgentSession = { engine, provider, tools, createdAt: Date.now(), lastActivity: Date.now() };
+  agentSessions.set(body.sessionId, session);
 
   setResponseHeaders(event, {
     'Content-Type': 'text/event-stream',
@@ -250,54 +234,48 @@ export default defineEventHandler(async (event) => {
   });
 
   const encoder = new TextEncoder();
-  let stream: ReadableStream;
-  try {
-    stream = new ReadableStream({
-      async start(controller) {
-        const pingTimer = setInterval(() => {
-          try {
-            controller.enqueue(encoder.encode(': ping\n\n'));
-          } catch {
-            /* stream already closed */
-          }
-        }, 5_000);
-
+  const stream = new ReadableStream({
+    async start(controller) {
+      const pingTimer = setInterval(() => {
         try {
-          for await (const agentEvent of agentOrTeam.run(toModelMessages(body.messages))) {
-            const session = agentSessions.get(body.sessionId);
-            if (session) session.lastActivity = Date.now();
-            controller.enqueue(encoder.encode(encodeAgentEvent(agentEvent)));
-          }
-        } catch (err: any) {
-          try {
-            controller.enqueue(
-              encoder.encode(
-                encodeAgentEvent({
-                  type: 'error',
-                  message: err?.message ?? String(err),
-                  fatal: true,
-                }),
-              ),
-            );
-          } catch {
-            /* ignore */
-          }
-        } finally {
-          clearInterval(pingTimer);
-          agentSessions.delete(body.sessionId);
-          try {
-            controller.close();
-          } catch {
-            /* ignore */
-          }
+          controller.enqueue(encoder.encode(': ping\n\n'));
+        } catch {
+          /* stream already closed */
         }
-      },
-    });
-  } catch (err) {
-    // Stream construction failed — clean up session
-    agentSessions.delete(body.sessionId);
-    throw err;
-  }
+      }, 5_000);
+
+      let iter;
+      try {
+        iter = await submitMessage(engine, prompt);
+        session.iter = iter;
+
+        let raw: string | null;
+        while ((raw = await nextEvent(iter)) !== null) {
+          session.lastActivity = Date.now();
+          controller.enqueue(encoder.encode(zigEventToSSE(raw)));
+        }
+      } catch (err: any) {
+        try {
+          controller.enqueue(
+            encoder.encode(
+              `event: error\ndata: ${JSON.stringify({ type: 'error', message: err?.message ?? String(err), fatal: true })}\n\n`,
+            ),
+          );
+        } catch {
+          /* ignore */
+        }
+      } finally {
+        clearInterval(pingTimer);
+        agentSessions.delete(body.sessionId);
+        cleanup(session);
+        try {
+          controller.close();
+        } catch {
+          /* ignore */
+        }
+      }
+    },
+  });
 
   return new Response(stream);
 });

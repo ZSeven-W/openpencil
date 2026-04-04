@@ -1,8 +1,20 @@
 import { useState, useCallback } from 'react';
 import { nanoid } from 'nanoid';
 import i18n from '@/i18n';
-import { decodeAgentEvent } from '@zseven-w/agent';
-import type { AgentEvent } from '@zseven-w/agent';
+import type { AgentEvent } from '@/types/agent';
+
+function decodeAgentEvent(raw: string): AgentEvent | null {
+  const eventMatch = raw.match(/^event:\s*(\S+)/);
+  const dataMatch = raw.match(/^data:\s*(.+)$/m);
+  if (!eventMatch || !dataMatch) return null;
+  try {
+    const type = eventMatch[1] as AgentEvent['type'];
+    const payload = JSON.parse(dataMatch[1]);
+    return { type, ...payload } as AgentEvent;
+  } catch {
+    return null;
+  }
+}
 import { useAIStore } from '@/stores/ai-store';
 import { useCanvasStore } from '@/stores/canvas-store';
 import { useDocumentStore } from '@/stores/document-store';
@@ -17,9 +29,11 @@ import {
   animateNodesToCanvas,
   extractAndApplyDesignModification,
 } from '@/services/ai/design-generator';
+import { insertStreamingNode } from '@/services/ai/design-canvas-ops';
+import { addAgentFrame, getActiveAgentFrames } from '@/canvas/agent-indicator';
 import { trimChatHistory } from '@/services/ai/context-optimizer';
 import { AgentToolExecutor } from '@/services/ai/agent-tool-executor';
-import { createDesignToolRegistry } from '@/services/ai/agent-tools';
+import { getDesignToolDefs } from '@/services/ai/agent-tools';
 import type { ChatMessage as ChatMessageType } from '@/services/ai/ai-types';
 import type { ToolCallBlockData } from '@/components/panels/tool-call-block';
 import { CHAT_STREAM_THINKING_CONFIG } from '@/services/ai/ai-runtime-config';
@@ -115,18 +129,7 @@ async function runAgentStream(
   const sessionId = nanoid();
   const executor = new AgentToolExecutor(sessionId);
 
-  const registry = createDesignToolRegistry();
-  const sdkTools = registry.toAISDKFormat();
-  const toolDefs = registry.list().map((t) => {
-    const sdkTool = sdkTools[t.name] as any;
-    const parameters = sdkTool?.parameters?.jsonSchema ?? sdkTool?.inputSchema?.jsonSchema;
-    return {
-      name: t.name,
-      description: t.description,
-      level: t.level,
-      parameters,
-    };
-  });
+  const toolDefs = getDesignToolDefs();
 
   const messages = useAIStore
     .getState()
@@ -183,6 +186,9 @@ async function runAgentStream(
   const reader = response.body.getReader();
   let accumulated = '';
   let thinkingContent = '';
+  let parsedLineCount = 0;
+  const appliedIds = new Set<string>();
+  const pendingNodes: Record<string, unknown>[] = [];
 
   try {
     for await (const evt of parseAgentSSE(reader, abortController.signal)) {
@@ -195,11 +201,44 @@ async function runAgentStream(
         }
 
         case 'text': {
-          accumulated += evt.content;
+          accumulated += evt.content ?? '';
           const prefix = thinkingContent
             ? `<step title="Thinking">${thinkingContent}</step>\n`
             : '';
           updateLastMessage(prefix + stripThinkTags(accumulated));
+
+          // Stream-apply: parse new JSONL lines, insert via insertStreamingNode (handles layout)
+          if (evt.content?.includes('\n')) {
+            const allLines = accumulated.split('\n');
+            for (let i = parsedLineCount; i < allLines.length - 1; i++) {
+              const line = allLines[i].trim();
+              if (line.startsWith('{') && /"_parent"\s*:/.test(line)) {
+                try { pendingNodes.push(JSON.parse(line)); } catch { /* skip */ }
+              }
+            }
+            parsedLineCount = allLines.length - 1;
+            // Flush: insert nodes whose parent is already applied (or root)
+            let progress = true;
+            while (progress) {
+              progress = false;
+              for (let i = pendingNodes.length - 1; i >= 0; i--) {
+                const n = pendingNodes[i];
+                const parentId = n._parent as string | null;
+                if (parentId === null || parentId === undefined || appliedIds.has(parentId)) {
+                  try {
+                    insertStreamingNode(n as any, parentId);
+                    // Register root frame for breathing glow effect
+                    if (parentId === null || parentId === undefined) {
+                      addAgentFrame(n.id as string, '#2563EB', 'Agent');
+                    }
+                  } catch { /* skip */ }
+                  appliedIds.add(n.id as string);
+                  pendingNodes.splice(i, 1);
+                  progress = true;
+                }
+              }
+            }
+          }
           break;
         }
 
@@ -252,13 +291,48 @@ async function runAgentStream(
             accumulated = '*Agent completed with no text output.*';
             updateLastMessage(accumulated);
           }
+          // Remove breathing glow from agent frames
+          const agentFrameMap = getActiveAgentFrames();
+          for (const id of appliedIds) {
+            agentFrameMap.delete(id);
+          }
+          // Flush any remaining pending nodes
+          try {
+            const allLines = accumulated.split('\n');
+            for (let i = parsedLineCount; i < allLines.length; i++) {
+              const line = allLines[i].trim();
+              if (line.startsWith('{') && /"_parent"\s*:/.test(line)) {
+                try { pendingNodes.push(JSON.parse(line)); } catch { /* skip */ }
+              }
+            }
+            let progress = true;
+            while (progress) {
+              progress = false;
+              for (let i = pendingNodes.length - 1; i >= 0; i--) {
+                const n = pendingNodes[i];
+                const parentId = n._parent as string | null;
+                if (parentId === null || parentId === undefined || appliedIds.has(parentId)) {
+                  try { insertStreamingNode(n as any, parentId); } catch { /* skip */ }
+                  appliedIds.add(n.id as string);
+                  pendingNodes.splice(i, 1);
+                  progress = true;
+                }
+              }
+            }
+            // Force-apply any orphans
+            if (pendingNodes.length > 0) {
+              for (const n of pendingNodes) {
+                try { insertStreamingNode(n as any, (n._parent as string) ?? null); } catch { /* skip */ }
+              }
+            }
+          } catch { /* ignore */ }
           break;
         }
 
         case 'error': {
           accumulated += `\n\n**Error:** ${evt.message}`;
           updateLastMessage(accumulated);
-          if (evt.fatal) return;
+          if (evt.fatal) return stripThinkTags(accumulated);
           break;
         }
 
@@ -399,7 +473,7 @@ export function useChatHandlers() {
             },
             abortController,
           );
-          accumulated = result ?? '';
+          if (result) accumulated = result;
         } catch (error) {
           if (!abortController.signal.aborted) {
             const errMsg = error instanceof Error ? error.message : 'Unknown error';
