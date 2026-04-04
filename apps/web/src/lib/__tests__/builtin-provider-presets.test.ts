@@ -113,6 +113,50 @@ describe('builtin provider presets', () => {
     expect(coding.baseURL).toBe('https://api.z.ai/api/coding/paas/v4');
   });
 
+  it('migrates malformed Ark URLs with an extra /v1 suffix back to canonical roots', () => {
+    const doubao = canonicalizeBuiltinProviderConfig({
+      id: 'bp-doubao-bad',
+      displayName: 'DouBao',
+      type: 'openai-compat',
+      apiKey: 'key',
+      model: 'doubao-seed-2.0-code',
+      baseURL: 'https://ark.cn-beijing.volces.com/api/v3/v1',
+      enabled: true,
+    });
+
+    expect(doubao.preset).toBe('doubao');
+    expect(doubao.baseURL).toBe('https://ark.cn-beijing.volces.com/api/v3');
+
+    const arkCoding = canonicalizeBuiltinProviderConfig({
+      id: 'bp-ark-coding-bad',
+      displayName: 'Ark Coding Plan',
+      type: 'openai-compat',
+      apiKey: 'key',
+      model: 'ark-code-latest',
+      baseURL: 'https://ark.cn-beijing.volces.com/api/coding/v3/v1',
+      enabled: true,
+    });
+
+    expect(arkCoding.preset).toBe('ark-coding');
+    expect(arkCoding.baseURL).toBe('https://ark.cn-beijing.volces.com/api/coding/v3');
+  });
+
+  it('keeps custom preset but fixes known malformed openai-compatible roots', () => {
+    const custom = canonicalizeBuiltinProviderConfig({
+      id: 'bp-custom-ark-bad',
+      displayName: 'Custom Ark',
+      preset: 'custom',
+      type: 'openai-compat',
+      apiKey: 'key',
+      model: 'ark-code-latest',
+      baseURL: 'https://ark.cn-beijing.volces.com/api/coding/v3/v1',
+      enabled: true,
+    });
+
+    expect(custom.preset).toBe('custom');
+    expect(custom.baseURL).toBe('https://ark.cn-beijing.volces.com/api/coding/v3');
+  });
+
   it('canonicalizes legacy built-in provider URLs on hydrate', () => {
     expect(
       canonicalizeBuiltinProviderConfig({
