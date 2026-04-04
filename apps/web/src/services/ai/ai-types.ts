@@ -110,6 +110,8 @@ export interface SubTask {
   screen?: string;
   /** HTML reference snippet for this section (from visual reference pipeline) */
   htmlReference?: string;
+  /** Actual generated root node ID for this subtask (captured at runtime) */
+  generatedRootId?: string;
 }
 
 /** Style guide produced by the orchestrator for visual consistency */

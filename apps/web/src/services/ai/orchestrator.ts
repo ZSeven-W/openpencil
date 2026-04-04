@@ -47,10 +47,436 @@ import { executeSubAgents } from './orchestrator-sub-agent';
 import { emitProgress, buildFinalStepTags } from './orchestrator-progress';
 import { assignAgentIdentities } from './agent-identity';
 import { addAgentFrame, clearAgentIndicators } from '@/canvas/agent-indicator';
+import { createMobileStatusBar, inferStatusBarVariant } from './mobile-status-bar';
 
 // ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
+
+const STATUS_BAR_NAME_RE = /status\s*[-_]?\s*bar|状态栏|system\s*[-_]?\s*(bar|chrome)|phone\s*(status|chrome)|ios\s*(bar|status)/i;
+
+/**
+ * Removes AI-generated status-bar frames from root frames.
+ * Re-reads from the store after each removal to avoid stale references.
+ * Nodes with `role === 'status-bar'` (our pre-injected bar) are kept.
+ */
+function removeDuplicateStatusBars(rootNodes: FrameNode[]): void {
+  const store = useDocumentStore.getState();
+  for (const rn of rootNodes) {
+    // Re-read after each removal pass to get fresh children
+    let removed = true;
+    while (removed) {
+      removed = false;
+      const root = store.getNodeById(rn.id);
+      if (!root || root.type !== 'frame' || !root.children) break;
+      for (const child of root.children) {
+        if (isAIDuplicateStatusBar(child)) {
+          store.removeNode(child.id);
+          removed = true;
+          break; // restart scan with fresh children
+        }
+        // One level deeper (e.g. inside a "Header" wrapper)
+        if ('children' in child && Array.isArray(child.children)) {
+          for (const gc of child.children) {
+            if (isAIDuplicateStatusBar(gc)) {
+              store.removeNode(gc.id);
+              removed = true;
+              break;
+            }
+          }
+          if (removed) break;
+        }
+      }
+    }
+  }
+}
+
+function isAIDuplicateStatusBar(node: PenNode): boolean {
+  if (node.type !== 'frame') return false;
+  if ('role' in node && (node as { role?: string }).role === 'status-bar') return false;
+  const name = ('name' in node ? (node as { name?: string }).name : '') ?? '';
+  return STATUS_BAR_NAME_RE.test(name);
+}
+
+function isSidebarSubtask(
+  subtask: Pick<OrchestratorPlan['subtasks'][number], 'id' | 'label' | 'elements'>,
+): boolean {
+  const text = `${subtask.id} ${subtask.label} ${subtask.elements ?? ''}`.toLowerCase();
+  return /(sidebar|side\s*bar|navigation|nav|menu)/.test(text) && !/(top\s*bar|header)/.test(text);
+}
+
+function isMainContentContainerSubtask(
+  subtask: Pick<OrchestratorPlan['subtasks'][number], 'id' | 'label' | 'elements'>,
+): boolean {
+  const text = `${subtask.id} ${subtask.label} ${subtask.elements ?? ''}`.toLowerCase();
+  return (
+    /(main\s*content|content\s*area|main\s*area|content\s*column)/.test(text)
+    && !/(metric|chart|table|transaction|customer|analytics|revenue|growth|sidebar)/.test(text)
+  );
+}
+
+function isDashboardLikePrompt(prompt: string, plan: OrchestratorPlan): boolean {
+  const text = `${prompt}\n${plan.subtasks
+    .map((st) => `${st.id} ${st.label} ${st.elements ?? ''}`)
+    .join('\n')}`.toLowerCase();
+  return /(dashboard|admin|analytics|fintech|workspace|data)/.test(text);
+}
+
+function shouldUseDashboardColumns(prompt: string, plan: OrchestratorPlan): boolean {
+  if (plan.rootFrame.width <= 480) return false;
+
+  const dashboardLike = isDashboardLikePrompt(prompt, plan);
+  const hasSidebar = plan.subtasks.some((st) => isSidebarSubtask(st));
+  const hasMainPanels = plan.subtasks.some((st) =>
+    /(metric|chart|table|transaction|customer|revenue|growth|analytics|list)/.test(
+      `${st.label} ${st.elements ?? ''}`.toLowerCase(),
+    ),
+  );
+
+  return dashboardLike && hasSidebar && hasMainPanels;
+}
+
+function inferDashboardSectionHeight(
+  subtask: Pick<OrchestratorPlan['subtasks'][number], 'id' | 'label' | 'elements'>,
+): number {
+  const text = `${subtask.id} ${subtask.label} ${subtask.elements ?? ''}`.toLowerCase();
+  if (isSidebarSubtask(subtask)) return 760;
+  if (/(top\s*header|top\s*bar|header)/.test(text)) return 96;
+  if (/(metric|kpi)/.test(text)) return 160;
+  if (/(chart|revenue)/.test(text)) return 320;
+  if (/(transaction|activity|feed)/.test(text)) return 320;
+  if (/(table|analytics|customer)/.test(text)) return 340;
+  return 160;
+}
+
+function inferDashboardSectionWidth(
+  subtask: Pick<OrchestratorPlan['subtasks'][number], 'id' | 'label' | 'elements'>,
+  rootWidth: number,
+): number {
+  const sidebarWidth = 260;
+  const mainWidth = Math.max(320, rootWidth - sidebarWidth);
+  const text = `${subtask.id} ${subtask.label} ${subtask.elements ?? ''}`.toLowerCase();
+  if (isSidebarSubtask(subtask)) return sidebarWidth;
+  if (/(chart|revenue)/.test(text)) return Math.round(mainWidth * 0.62);
+  if (/(transaction|activity|feed)/.test(text)) return Math.round(mainWidth * 0.38);
+  return mainWidth;
+}
+
+function normalizeOrchestratorPlan(plan: OrchestratorPlan, prompt: string): void {
+  if (!Array.isArray(plan.subtasks) || plan.subtasks.length === 0) return;
+
+  const rootWidth =
+    typeof plan.rootFrame.width === 'number' && plan.rootFrame.width > 0 ? plan.rootFrame.width : 1200;
+  const dashboardLike = isDashboardLikePrompt(prompt, plan);
+
+  plan.rootFrame.width = rootWidth;
+  if (plan.rootFrame.height == null || Number(plan.rootFrame.height) < 0) {
+    plan.rootFrame.height = 0;
+  }
+
+  for (const st of plan.subtasks) {
+    if (!st.region) {
+      st.region = { width: rootWidth, height: 160 };
+      continue;
+    }
+
+    if (dashboardLike) {
+      const inferredWidth = inferDashboardSectionWidth(st, rootWidth);
+      const inferredHeight = inferDashboardSectionHeight(st);
+      st.region.width = inferredWidth;
+
+      if (!(typeof st.region.height === 'number') || st.region.height <= 0) {
+        st.region.height = inferredHeight;
+      } else {
+        const minHeight = Math.round(inferredHeight * 0.6);
+        const maxHeight = Math.round(inferredHeight * 1.6);
+        st.region.height = Math.max(minHeight, Math.min(st.region.height, maxHeight));
+      }
+      continue;
+    }
+
+    if (!(typeof st.region.width === 'number') || st.region.width <= 0) {
+      st.region.width = rootWidth;
+    }
+    if (!(typeof st.region.height === 'number') || st.region.height <= 0) {
+      st.region.height = 160;
+    }
+  }
+}
+
+function extractSidebarSurfaceColor(plan: OrchestratorPlan): string | undefined {
+  const content = plan.selectedStyleGuideContent;
+  if (!content) return undefined;
+
+  const tableMatch = content.match(/Sidebar Surface\s*\|\s*(#[0-9A-Fa-f]{6})/i);
+  if (tableMatch) return tableMatch[1].toUpperCase();
+
+  const inlineMatch = content.match(/Sidebar Surface[^#]*(#[0-9A-Fa-f]{6})/i);
+  if (inlineMatch) return inlineMatch[1].toUpperCase();
+
+  return undefined;
+}
+
+function createDashboardColumnFrames(plan: OrchestratorPlan, rootId: string): {
+  sidebar: FrameNode;
+  main: FrameNode;
+} {
+  const sidebarFillColor =
+    extractSidebarSurfaceColor(plan)
+    ?? (plan.rootFrame.fill as Array<{ color?: string }> | undefined)?.[0]?.color
+    ?? '#0F172A';
+  const contentGap =
+    typeof plan.rootFrame.gap === 'number' && plan.rootFrame.gap > 0 ? plan.rootFrame.gap : 20;
+
+  return {
+    sidebar: {
+      id: `${rootId}-sidebar`,
+      type: 'frame',
+      name: 'Sidebar',
+      width: 260,
+      height: 'fit_content',
+      layout: 'vertical',
+      fill: [{ type: 'solid', color: sidebarFillColor }],
+      children: [],
+    },
+    main: {
+      id: `${rootId}-main`,
+      type: 'frame',
+      name: 'Main Content',
+      width: 'fill_container',
+      height: 'fit_content',
+      layout: 'vertical',
+      gap: contentGap,
+      children: [],
+    },
+  };
+}
+
+function normalizeDashboardMainSubtasks(plan: OrchestratorPlan): void {
+  const mainSubtasks = plan.subtasks.filter((st) => !isSidebarSubtask(st));
+  if (mainSubtasks.length < 2) return;
+
+  const container = mainSubtasks.find((st) => isMainContentContainerSubtask(st));
+  if (!container) return;
+
+  const rawElements = container.elements ?? '';
+  const cleanedElements = rawElements
+    .replace(/[,;]?\s*metrics?\s*(cards?\s*)?(row|container)[^,.;\]]*/gi, '')
+    .replace(/\s{2,}/g, ' ')
+    .trim()
+    .replace(/[;,]\s*$/, '');
+  const topBarElements =
+    cleanedElements.match(/top\s*bar[^.;\]]*/i)?.[0]?.trim()
+    ?? cleanedElements
+    ?? 'Top bar with page title, date range selector, and export button';
+
+  container.label = 'Top Bar';
+  container.elements = topBarElements;
+  container.region.height = Math.max(88, Math.min(container.region.height || 88, 120));
+}
+
+function groupDashboardMainRows(
+  plan: OrchestratorPlan,
+): {
+  rows: Array<OrchestratorPlan['subtasks']>;
+  fullWidth: number;
+  rowGap: number;
+} {
+  const mainSubtasks = plan.subtasks.filter((st) => !isSidebarSubtask(st));
+  const fullWidth = Math.max(
+    plan.rootFrame.width - 260,
+    ...mainSubtasks.map((st) => (st.region.width > 0 ? st.region.width : 0)),
+  );
+  const rowGap =
+    typeof plan.rootFrame.gap === 'number' && plan.rootFrame.gap > 0 ? plan.rootFrame.gap : 24;
+
+  if (mainSubtasks.length === 0) {
+    return { rows: [], fullWidth, rowGap };
+  }
+
+  const rows: Array<OrchestratorPlan['subtasks']> = [];
+  let currentRow: OrchestratorPlan['subtasks'] = [];
+  let currentWidth = 0;
+
+  const flushRow = () => {
+    if (currentRow.length > 0) {
+      rows.push(currentRow);
+      currentRow = [];
+      currentWidth = 0;
+    }
+  };
+
+  for (const subtask of mainSubtasks) {
+    const width = subtask.region.width > 0 ? subtask.region.width : fullWidth;
+    const isStandalone = width >= fullWidth * 0.82 || isMainContentContainerSubtask(subtask);
+
+    if (isStandalone) {
+      flushRow();
+      rows.push([subtask]);
+      continue;
+    }
+
+    const nextWidth = currentRow.length === 0 ? width : currentWidth + rowGap + width;
+    if (currentRow.length > 0 && nextWidth > fullWidth * 1.05) {
+      flushRow();
+    }
+
+    currentRow.push(subtask);
+    currentWidth = currentRow.length === 1 ? width : currentWidth + rowGap + width;
+
+    if (currentWidth >= fullWidth * 0.92) {
+      flushRow();
+    }
+  }
+
+  flushRow();
+  return { rows, fullWidth, rowGap };
+}
+
+function assignDashboardMainParents(
+  plan: OrchestratorPlan,
+  mainParentId: string,
+): Array<{ node: FrameNode; parentId: string }> {
+  const rowFrames: Array<{ node: FrameNode; parentId: string }> = [];
+  const { rows, fullWidth, rowGap } = groupDashboardMainRows(plan);
+  if (rows.length === 0) return rowFrames;
+
+  let rowIndex = 1;
+  for (const row of rows) {
+    if (row.length === 1) {
+      const subtask = row[0];
+      const slotId = `${mainParentId}-row-${rowIndex}-${subtask.id}-slot`;
+      rowFrames.push({
+        parentId: mainParentId,
+        node: {
+          id: slotId,
+          type: 'frame',
+          name: `${subtask.label} Slot`,
+          width: 'fill_container',
+          height: 'fit_content',
+          layout: 'vertical',
+          children: [],
+        },
+      });
+      subtask.parentFrameId = slotId;
+      rowIndex++;
+      continue;
+    }
+
+    const rowId = `${mainParentId}-row-${rowIndex}`;
+    const slotGap = rowGap * (row.length - 1);
+    const availableWidth = Math.max(320, fullWidth - slotGap);
+    const widthSum = row.reduce((sum, st) => sum + Math.max(1, st.region.width || fullWidth), 0);
+
+    rowFrames.push({
+      parentId: mainParentId,
+      node: {
+        id: rowId,
+        type: 'frame',
+        name: `Dashboard Row ${rowIndex}`,
+        width: 'fill_container',
+        height: 'fit_content',
+        layout: 'horizontal',
+        gap: rowGap,
+        children: [],
+      },
+    });
+
+    let assignedWidth = 0;
+    row.forEach((subtask, idx) => {
+      const isLast = idx === row.length - 1;
+      const proportionalWidth = Math.max(
+        220,
+        Math.round((availableWidth * Math.max(1, subtask.region.width || fullWidth)) / widthSum),
+      );
+      const slotWidth = isLast
+        ? 'fill_container'
+        : Math.min(availableWidth - assignedWidth - 220 * (row.length - idx - 1), proportionalWidth);
+      const slotId = `${rowId}-${subtask.id}-slot`;
+      rowFrames.push({
+        parentId: rowId,
+        node: {
+          id: slotId,
+          type: 'frame',
+          name: `${subtask.label} Slot`,
+          width: slotWidth,
+          height: 'fit_content',
+          layout: 'vertical',
+          children: [],
+        },
+      });
+      if (typeof slotWidth === 'number') assignedWidth += slotWidth;
+      subtask.parentFrameId = slotId;
+    });
+
+    rowIndex++;
+  }
+
+  return rowFrames;
+}
+
+function getDashboardPlaceholderHeight(plan: OrchestratorPlan): number {
+  const { rows, rowGap } = groupDashboardMainRows(plan);
+  const sidebarHeight = plan.subtasks
+    .filter((st) => isSidebarSubtask(st))
+    .reduce((sum, st) => sum + Math.max(0, st.region.height || 0), 0);
+
+  const visibleRows = rows.slice(0, rows.length >= 3 ? 3 : 2);
+  const foldHeight =
+    visibleRows.reduce(
+      (sum, row) =>
+        sum
+        + Math.max(
+          0,
+          ...row.map((st) => (typeof st.region.height === 'number' ? st.region.height : 0)),
+        ),
+      0,
+    )
+    + Math.max(0, visibleRows.length - 1) * rowGap;
+
+  const mainFoldHint = visibleRows.length > 0 ? foldHeight : 560;
+  const sidebarHint = sidebarHeight > 0 ? Math.min(sidebarHeight, 600) : 0;
+  return Math.max(560, Math.min(Math.max(mainFoldHint, sidebarHint), 680));
+}
+
+function reorderDashboardMainChildren(plan: OrchestratorPlan, mainParentId: string): void {
+  const store = useDocumentStore.getState();
+  const mainNode = store.getNodeById(mainParentId);
+  if (!mainNode || !('children' in mainNode) || !Array.isArray(mainNode.children)) return;
+
+  const desiredOrder: string[] = [];
+  const seen = new Set<string>();
+
+  const pushOnce = (id: string | null | undefined) => {
+    if (!id || seen.has(id)) return;
+    seen.add(id);
+    desiredOrder.push(id);
+  };
+
+  for (const subtask of plan.subtasks) {
+    if (isSidebarSubtask(subtask)) continue;
+
+    if (subtask.parentFrameId && subtask.parentFrameId !== mainParentId) {
+      const parentOfSlot = store.getParentOf(subtask.parentFrameId);
+      if (parentOfSlot?.id === mainParentId) {
+        pushOnce(subtask.parentFrameId);
+        continue;
+      }
+
+      const rowId = parentOfSlot?.id;
+      if (rowId && store.getParentOf(rowId)?.id === mainParentId) {
+        pushOnce(rowId);
+        continue;
+      }
+    }
+
+    pushOnce(subtask.generatedRootId);
+  }
+
+  desiredOrder.forEach((id, index) => {
+    store.moveNode(id, mainParentId, index);
+  });
+}
 
 export async function executeOrchestration(
   request: AIDesignRequest,
@@ -83,6 +509,18 @@ export async function executeOrchestration(
       },
       abortSignal,
     );
+
+    if (shouldUseDashboardColumns(request.prompt, plan)) {
+      normalizeDashboardMainSubtasks(plan);
+    }
+
+    // Remove status-bar subtasks on mobile — the bar is pre-injected
+    const isMobileScreen = plan.rootFrame.width <= 480;
+    if (isMobileScreen) {
+      plan.subtasks = plan.subtasks.filter(
+        (st) => !STATUS_BAR_NAME_RE.test(`${st.id} ${st.label}`),
+      );
+    }
 
     // Assign ID prefixes
     for (const st of plan.subtasks) {
@@ -168,12 +606,14 @@ export async function executeOrchestration(
     }
 
     const isMobile = plan.rootFrame.width <= 480;
+    const useDashboardColumns = shouldUseDashboardColumns(request.prompt, plan);
     const defaultFill: FrameNode['fill'] = (plan.rootFrame.fill as FrameNode['fill']) ?? [
       { type: 'solid', color: plan.styleGuide?.palette?.background ?? '#FFFFFF' },
     ];
 
     // Track all root frame nodes for result collection
     const rootNodes: FrameNode[] = [];
+    let dashboardColumnIds: { sidebarId: string; mainId: string } | null = null;
 
     if (effectiveConcurrency > 1) {
       // Concurrent mode: create one root frame per screen group.
@@ -241,6 +681,14 @@ export async function executeOrchestration(
 
         rootNodes.push(rootNode);
 
+        // Inject fixed status bar for all mobile screens (iOS-style chrome
+        // used as universal mockup — intentional, matches industry convention)
+        if (isMobile) {
+          const bgColor = (defaultFill as Array<{ color?: string }>)?.[0]?.color;
+          const statusBar = createMobileStatusBar(inferStatusBarVariant(bgColor));
+          insertStreamingNode(statusBar, rootNode.id);
+        }
+
         // Register agent badge on the root frame immediately
         const identity = subtaskIdentity.get(group.indices[0]);
         if (identity) {
@@ -254,7 +702,9 @@ export async function executeOrchestration(
       const totalPlannedHeight = plan.subtasks.reduce((sum, st) => sum + st.region.height, 0);
       const initialHeight = isMobile
         ? plan.rootFrame.height || 812
-        : Math.max(320, totalPlannedHeight);
+        : useDashboardColumns
+          ? getDashboardPlaceholderHeight(plan)
+          : Math.max(320, totalPlannedHeight);
       const rootNode: FrameNode = {
         id: plan.rootFrame.id,
         type: 'frame',
@@ -262,9 +712,9 @@ export async function executeOrchestration(
         x: 0,
         y: 0,
         width: plan.rootFrame.width,
-        height: initialHeight,
-        layout: plan.rootFrame.layout ?? 'vertical',
-        gap: isMobile ? plan.rootFrame.gap || 16 : (plan.rootFrame.gap ?? 16),
+        height: useDashboardColumns ? `fit_content(${initialHeight})` : initialHeight,
+        layout: useDashboardColumns ? 'horizontal' : (plan.rootFrame.layout ?? 'vertical'),
+        gap: useDashboardColumns ? 0 : isMobile ? plan.rootFrame.gap || 16 : (plan.rootFrame.gap ?? 16),
         ...(plan.rootFrame.padding != null ? { padding: plan.rootFrame.padding } : {}),
         fill: defaultFill,
         children: [],
@@ -275,10 +725,46 @@ export async function executeOrchestration(
       rootNode.id = actualRootId;
       rootNodes.push(rootNode);
 
+      // Inject fixed iPhone status bar for iOS mobile screens
+      if (isMobile) {
+        const bgColor = (defaultFill as Array<{ color?: string }>)?.[0]?.color;
+        const statusBar = createMobileStatusBar(inferStatusBarVariant(bgColor));
+        insertStreamingNode(statusBar, actualRootId);
+      }
+
       // Register agent badge on the actual root frame
       const firstIdentity = subtaskIdentity.get(0);
       if (firstIdentity) {
         addAgentFrame(actualRootId, firstIdentity.color, firstIdentity.name);
+      }
+
+      if (useDashboardColumns) {
+        const dashboardColumns = createDashboardColumnFrames(plan, actualRootId);
+        insertStreamingNode(dashboardColumns.sidebar, actualRootId);
+        insertStreamingNode(dashboardColumns.main, actualRootId);
+        dashboardColumnIds = {
+          sidebarId: dashboardColumns.sidebar.id,
+          mainId: dashboardColumns.main.id,
+        };
+        for (const st of plan.subtasks) {
+          st.parentFrameId = isSidebarSubtask(st) ? dashboardColumns.sidebar.id : null;
+        }
+        const mainRowFrames = assignDashboardMainParents(plan, dashboardColumns.main.id);
+        for (const frame of mainRowFrames) {
+          insertStreamingNode(frame.node, frame.parentId);
+        }
+        for (const st of plan.subtasks) {
+          if (isSidebarSubtask(st) && st.parentFrameId == null) {
+            st.parentFrameId = dashboardColumns.sidebar.id;
+          }
+          if (!isSidebarSubtask(st) && st.parentFrameId == null) {
+            st.parentFrameId = dashboardColumns.main.id;
+          }
+        }
+      } else {
+        for (const st of plan.subtasks) {
+          st.parentFrameId = actualRootId;
+        }
       }
     }
 
@@ -315,23 +801,28 @@ export async function executeOrchestration(
         callbacks,
         abortSignal,
       );
-      if (animated) {
-        if (effectiveConcurrency > 1) {
-          for (const rn of rootNodes) {
-            adjustRootFrameHeightToContent(rn.id);
-          }
-        } else {
-          adjustRootFrameHeightToContent();
-        }
+      if (dashboardColumnIds) {
+        reorderDashboardMainChildren(plan, dashboardColumnIds.mainId);
       }
-    } finally {
+      // Height adjustment for animated mode is deferred to after Phase 4b
+      // (duplicate status-bar removal) so it sees the cleaned node tree.
+    } catch (e) {
+      // On streaming failure, still close the batch before re-throwing
       if (animated) {
         useHistoryStore.getState().endBatch(useDocumentStore.getState().document);
       }
+      throw e;
     }
 
-    // -- Phase 4: Collect results --
+    // Everything below until endBatch must also be guarded so the undo
+    // batch is closed even if Phase 4/4b/height-adjustment throws.
+    // Declared outside try so they're accessible after the finally block
     const aborted = abortSignal?.aborted ?? false;
+    let allNodes: PenNode[] = [];
+
+    try {
+
+    // -- Phase 4: Collect results --
 
     if (!aborted) {
       for (const entry of progress.subtasks) {
@@ -350,7 +841,7 @@ export async function executeOrchestration(
     }
     emitProgress(plan, progress, callbacks);
 
-    const allNodes: PenNode[] = [...rootNodes];
+    allNodes = [...rootNodes];
     for (const r of results) {
       allNodes.push(...r.nodes);
     }
@@ -360,20 +851,38 @@ export async function executeOrchestration(
       throw new Error('Orchestration produced no nodes beyond root frame');
     }
 
-    if (!animated) {
-      if (effectiveConcurrency > 1) {
-        for (const rn of rootNodes) {
-          adjustRootFrameHeightToContent(rn.id);
-        }
-      } else {
-        adjustRootFrameHeightToContent();
+    // -- Phase 4b: Remove duplicate status bars on mobile --
+    // Must run BEFORE height adjustment so removed nodes don't inflate the frame.
+    if (isMobile) {
+      removeDuplicateStatusBars(rootNodes);
+    }
+
+    // Height adjustment runs after duplicate removal for both animated and
+    // non-animated paths so the frame size reflects the cleaned node tree.
+    if (dashboardColumnIds) {
+      adjustRootFrameHeightToContent(dashboardColumnIds.sidebarId);
+      adjustRootFrameHeightToContent(dashboardColumnIds.mainId);
+    }
+    if (effectiveConcurrency > 1) {
+      for (const rn of rootNodes) {
+        adjustRootFrameHeightToContent(rn.id);
       }
+    } else {
+      adjustRootFrameHeightToContent();
     }
     // Sync heights back to rootNode objects for result
     for (const rn of rootNodes) {
       const adjusted = useDocumentStore.getState().getNodeById(rn.id);
       if (adjusted && adjusted.type === 'frame') {
         rn.height = adjusted.height;
+      }
+    }
+
+    } finally {
+      // Close the undo batch AFTER cleanup + height adjustment so the entire
+      // generation (including status-bar dedup) is a single undo operation.
+      if (animated) {
+        useHistoryStore.getState().endBatch(useDocumentStore.getState().document);
       }
     }
 
@@ -497,6 +1006,8 @@ async function callOrchestrator(
     );
     plan = buildFallbackPlanFromPrompt(prompt);
   }
+
+  normalizeOrchestratorPlan(plan, prompt);
 
   // Look up the selected style guide — try exact name first, then fuzzy tag match
   if (plan.styleGuideName) {

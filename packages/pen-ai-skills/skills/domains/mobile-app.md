@@ -14,13 +14,13 @@ MOBILE APP — MANDATORY THREE-SECTION ARCHITECTURE:
 Every mobile screen is composed as a vertical stack of exactly three sections.
 You MUST define all three before generating any content.
 
-## 1) STATUS BAR (OS-controlled)
+## 1) STATUS BAR (OS-controlled) — PRE-INSERTED
 
-- Height: 62px
-- Time font: SF Pro (fallback: Inter), fontSize 17, fontWeight 600
-- Content vertically centered within the bar
-- NEVER place critical UI behind the status bar
-- NEVER create custom fake status bars
+The status bar (time, signal, wifi, battery) is **automatically pre-inserted** by the orchestrator as the first child of the root frame. It is a fixed 62px-tall frame with hardcoded path icons.
+
+- **DO NOT generate a status bar** — it already exists
+- **DO NOT delete or modify** the pre-inserted status bar
+- Your first section should start BELOW the status bar (it occupies ~62px)
 
 ## 2) APP CONTENT (your layout)
 

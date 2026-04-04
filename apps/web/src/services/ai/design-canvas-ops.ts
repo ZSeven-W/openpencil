@@ -503,6 +503,10 @@ export function extractAndApplyDesignModification(responseText: string): number 
  * Layout/sizing heuristics are now handled by the role resolver.
  */
 export function applyGenerationHeuristics(node: PenNode): void {
+  // Skip pre-injected chrome (e.g. iPhone status bar) — its path data is
+  // hardcoded from the Pencil demo and must not be overwritten by icon resolver.
+  if ('role' in node && (node as { role?: string }).role === 'status-bar') return;
+
   // Default icon_font nodes to lucide family when unspecified
   if (node.type === 'icon_font' && !node.iconFontFamily) {
     node.iconFontFamily = 'lucide';
@@ -551,16 +555,17 @@ export function applyPostStreamingTreeHeuristics(rootNodeId: string): void {
 // ---------------------------------------------------------------------------
 
 export function adjustRootFrameHeightToContent(frameId?: string): void {
-  const { getNodeById, updateNode } = useDocumentStore.getState();
+  const { getNodeById, updateNode, getParentOf } = useDocumentStore.getState();
   const rootId = frameId ?? generationRootFrameId;
   const root = getNodeById(rootId);
   if (!root || root.type !== 'frame') return;
   if (!Array.isArray(root.children) || root.children.length === 0) return;
 
-  const requiredHeight = estimateNodeIntrinsicHeight(root);
-  const targetHeight = Math.max(320, Math.round(requiredHeight));
+  const measurableRoot = { ...root, height: 0 } as typeof root;
+  const requiredHeight = estimateNodeIntrinsicHeight(measurableRoot);
+  const minimumHeight = getParentOf(rootId) ? 0 : 320;
+  const targetHeight = Math.max(minimumHeight, Math.round(requiredHeight));
   const currentHeight = toSizeNumber(root.height, 0);
-  if (currentHeight <= 0) return;
   if (Math.abs(currentHeight - targetHeight) < 8) return;
 
   updateNode(rootId, { height: targetHeight });
@@ -576,14 +581,16 @@ export function adjustRootFrameHeightToContent(frameId?: string): void {
  * This runs DURING streaming so cards distribute evenly as they arrive.
  */
 export function expandRootFrameHeight(frameId?: string): void {
-  const { getNodeById, updateNode } = useDocumentStore.getState();
+  const { getNodeById, updateNode, getParentOf } = useDocumentStore.getState();
   const rootId = frameId ?? generationRootFrameId;
   const root = getNodeById(rootId);
   if (!root || root.type !== 'frame') return;
   if (!Array.isArray(root.children) || root.children.length === 0) return;
 
-  const requiredHeight = estimateNodeIntrinsicHeight(root);
-  const targetHeight = Math.max(320, Math.round(requiredHeight));
+  const measurableRoot = { ...root, height: 0 } as typeof root;
+  const requiredHeight = estimateNodeIntrinsicHeight(measurableRoot);
+  const minimumHeight = getParentOf(rootId) ? 0 : 320;
+  const targetHeight = Math.max(minimumHeight, Math.round(requiredHeight));
   const currentHeight = toSizeNumber(root.height, 0);
   // Only grow -- never shrink during progressive generation
   if (currentHeight > 0 && targetHeight <= currentHeight) return;
