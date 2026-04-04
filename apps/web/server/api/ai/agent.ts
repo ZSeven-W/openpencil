@@ -19,11 +19,16 @@ import {
   resolveMemberToolResult,
   seedTeamMessages,
 } from '@zseven-w/agent-native';
-import type { AuthLevel } from '../../../src/types/agent';
-import { agentSessions, cleanup, abortSession, createSession, type AgentSession } from '../../utils/agent-sessions';
 import { resolveSkills } from '@zseven-w/pen-ai-skills';
 import type { Phase } from '@zseven-w/pen-ai-skills';
+import type { AuthLevel } from '../../../src/types/agent';
+import { agentSessions, cleanup, abortSession, createSession, type AgentSession } from '../../utils/agent-sessions';
 import { getAllToolDefs } from '../../../src/services/ai/agent-tools';
+import {
+  normalizeOptionalBaseURL,
+  normalizeMemberBaseURL,
+  requireOpenAICompatBaseURL,
+} from './provider-url';
 
 const TOOL_LEVEL_MAP: Record<string, AuthLevel> = {
   batch_get: 'read',
@@ -230,6 +235,91 @@ function zigEventToSSE(raw: string): string {
   return `event: ${mapped.type}\ndata: ${JSON.stringify(mapped)}\n\n`;
 }
 
+/** Run a delegated member asynchronously — does NOT block the caller. */
+async function runDelegateMember(
+  session: AgentSession,
+  body: AgentBody,
+  controller: ReadableStreamDefaultController,
+  encoder: TextEncoder,
+  toolUseId: string,
+  memberId: string,
+  task: string,
+) {
+  // Resolve task-specific skills based on member role
+  const memberRole = session.memberRoles.get(memberId);
+  let enrichedTask = task;
+  if (memberRole) {
+    const phase = ROLE_SKILL_PHASE[memberRole] ?? 'generation';
+    const taskSkills = resolveSkills(phase, task, {
+      flags: {
+        hasDesignMd: !!body.designMdContent,
+        hasVariables: !!body.hasVariables,
+      },
+    });
+    const skillPrefix = taskSkills.skills.map((s) => s.content).join('\n\n');
+    if (skillPrefix) enrichedTask = skillPrefix + '\n\n' + task;
+  }
+
+  controller.enqueue(encoder.encode(
+    `event: member_start\ndata: ${JSON.stringify({ type: 'member_start', memberId, task })}\n\n`,
+  ));
+
+  let memberResult = '';
+  const memberIter = await runTeamMember(session.team!, memberId, enrichedTask);
+  try {
+    let memberRaw: string | null;
+    while ((memberRaw = await nextEvent(memberIter)) !== null) {
+      session.lastActivity = Date.now();
+      try {
+        const mEvt = JSON.parse(memberRaw);
+
+        // Member tool_use → record owner, forward with source
+        if (mEvt.tool_use) {
+          const mToolId = mEvt.tool_use.id;
+          session.toolOwners.set(mToolId, memberId);
+          const level = TOOL_LEVEL_MAP[mEvt.tool_use.name as string] ?? 'read';
+          const toolCallEvt = {
+            type: 'tool_call',
+            id: mToolId,
+            name: mEvt.tool_use.name,
+            args: typeof mEvt.tool_use.input === 'string'
+              ? JSON.parse(mEvt.tool_use.input as string)
+              : (mEvt.tool_use.input ?? {}),
+            level,
+            source: memberId,
+          };
+          controller.enqueue(encoder.encode(
+            `event: tool_call\ndata: ${JSON.stringify(toolCallEvt)}\n\n`,
+          ));
+          continue;
+        }
+
+        // Collect text
+        if (mEvt.stream_event?.text && mEvt.stream_event.type === 'text_delta') {
+          memberResult += mEvt.stream_event.text;
+        }
+      } catch { /* ignore parse errors */ }
+      const memberSse = zigEventToSSE(memberRaw);
+      if (memberSse) controller.enqueue(encoder.encode(memberSse));
+    }
+  } finally {
+    destroyIterator(memberIter);
+    for (const [tid, mid] of session.toolOwners) {
+      if (mid === memberId) session.toolOwners.delete(tid);
+    }
+  }
+
+  controller.enqueue(encoder.encode(
+    `event: member_end\ndata: ${JSON.stringify({ type: 'member_end', memberId, result: '' })}\n\n`,
+  ));
+
+  resolveTeamToolResult(
+    session.team!,
+    toolUseId,
+    JSON.stringify({ result: memberResult || 'Member completed task.' }),
+  );
+}
+
 function createProviderHandle(
   providerType: 'anthropic' | 'openai-compat',
   apiKey: string,
@@ -238,7 +328,7 @@ function createProviderHandle(
 ) {
   return providerType === 'anthropic'
     ? createAnthropicProvider(apiKey, model, baseURL)
-    : createOpenAICompatProvider(apiKey, baseURL!, model);
+    : createOpenAICompatProvider(apiKey, requireOpenAICompatBaseURL(baseURL), model);
 }
 
 /**
@@ -304,14 +394,35 @@ export default defineEventHandler(async (event) => {
     !body.apiKey ||
     !body.model
   ) {
-    setResponseHeaders(event, { 'Content-Type': 'application/json' });
-    return {
-      error:
-        'Missing required fields: sessionId, messages, systemPrompt, providerType, apiKey, model',
-    };
+    throw createError({
+      statusCode: 400,
+      message: 'Missing required fields: sessionId, messages, systemPrompt, providerType, apiKey, model',
+    });
   }
 
-  const provider = createProviderHandle(body.providerType, body.apiKey, body.model, body.baseURL);
+  const normalizedBaseURL = normalizeOptionalBaseURL(body.baseURL);
+  if (body.providerType === 'openai-compat' && !normalizedBaseURL) {
+    throw createError({
+      statusCode: 400,
+      message: 'OpenAI-compatible provider requires baseURL',
+    });
+  }
+
+  // Validate all member baseURLs upfront before allocating any native handles
+  const normalizedMembers = (body.members ?? []).map((m) => {
+    try {
+      return { ...m, normalizedBaseURL: normalizeMemberBaseURL(m.id, m.providerType, m.baseURL) };
+    } catch (err: any) {
+      throw createError({ statusCode: 400, message: err.message });
+    }
+  });
+
+  const provider = createProviderHandle(
+    body.providerType,
+    body.apiKey,
+    body.model,
+    normalizedBaseURL,
+  );
   const tools = createToolRegistry();
   for (const def of body.toolDefs ?? []) {
     const params = def.parameters ? { ...def.parameters } : { type: 'object' };
@@ -323,7 +434,7 @@ export default defineEventHandler(async (event) => {
 
   let session: AgentSession;
 
-  if (body.teamMode || body.members?.length) {
+  if (body.teamMode || normalizedMembers.length) {
     const concurrency = body.concurrency ?? 1;
     console.info(`[agent] creating team (teamMode=${!!body.teamMode}, concurrency=${concurrency})`);
 
@@ -337,9 +448,14 @@ export default defineEventHandler(async (event) => {
     const memberHandles: Array<{ provider: ReturnType<typeof createProviderHandle>; tools: ReturnType<typeof createToolRegistry> }> = [];
 
     // Legacy path: pre-configured members from client
-    if (body.members?.length) {
-      for (const m of body.members) {
-        const memberProvider = createProviderHandle(m.providerType, m.apiKey, m.model, m.baseURL);
+    if (normalizedMembers.length) {
+      for (const m of normalizedMembers) {
+        const memberProvider = createProviderHandle(
+          m.providerType,
+          m.apiKey,
+          m.model,
+          m.normalizedBaseURL,
+        );
         const memberTools = createToolRegistry();
         addTeamMember(team, m.id, memberProvider, memberTools, m.systemPrompt ?? '', 20);
         memberHandles.push({ provider: memberProvider, tools: memberTools });
@@ -456,7 +572,10 @@ export default defineEventHandler(async (event) => {
 
                 // Create provider (use member model or lead's)
                 const mProvider = createProviderHandle(
-                  body.providerType, body.apiKey, memberModel ?? body.model, body.baseURL,
+                  body.providerType,
+                  body.apiKey,
+                  memberModel ?? body.model,
+                  normalizedBaseURL,
                 );
 
                 // Create tool registry with role preset
@@ -507,81 +626,22 @@ export default defineEventHandler(async (event) => {
                 }
 
                 if (memberIdRaw && taskRaw) {
-                  // Resolve task-specific skills based on member role
-                  const memberRole = session.memberRoles.get(memberIdRaw);
-                  let enrichedTask = taskRaw;
-                  if (memberRole) {
-                    const phase = ROLE_SKILL_PHASE[memberRole] ?? 'generation';
-                    const taskSkills = resolveSkills(phase, taskRaw, {
-                      flags: {
-                        hasDesignMd: !!body.designMdContent,
-                        hasVariables: !!body.hasVariables,
-                      },
-                    });
-                    const skillPrefix = taskSkills.skills.map((s) => s.content).join('\n\n');
-                    if (skillPrefix) enrichedTask = skillPrefix + '\n\n' + taskRaw;
-                  }
-
-                  controller.enqueue(encoder.encode(
-                    `event: member_start\ndata: ${JSON.stringify({ type: 'member_start', memberId: memberIdRaw, task: taskRaw })}\n\n`,
-                  ));
-
-                  let memberResult = '';
-                  const memberIter = await runTeamMember(session.team, memberIdRaw, enrichedTask);
-                  try {
-                    let memberRaw: string | null;
-                    while ((memberRaw = await nextEvent(memberIter)) !== null) {
-                      session.lastActivity = Date.now();
-                      try {
-                        const mEvt = JSON.parse(memberRaw);
-
-                        // Member tool_use → record owner, forward with source
-                        if (mEvt.tool_use) {
-                          const mToolId = mEvt.tool_use.id;
-                          session.toolOwners.set(mToolId, memberIdRaw!);
-                          // Forward as tool_call with source field
-                          const level = TOOL_LEVEL_MAP[mEvt.tool_use.name as string] ?? 'read';
-                          const toolCallEvt = {
-                            type: 'tool_call',
-                            id: mToolId,
-                            name: mEvt.tool_use.name,
-                            args: typeof mEvt.tool_use.input === 'string'
-                              ? JSON.parse(mEvt.tool_use.input as string)
-                              : (mEvt.tool_use.input ?? {}),
-                            level,
-                            source: memberIdRaw,
-                          };
-                          controller.enqueue(encoder.encode(
-                            `event: tool_call\ndata: ${JSON.stringify(toolCallEvt)}\n\n`,
-                          ));
-                          continue;
-                        }
-
-                        // Collect text
-                        if (mEvt.stream_event?.text && mEvt.stream_event.type === 'text_delta') {
-                          memberResult += mEvt.stream_event.text;
-                        }
-                      } catch { /* ignore parse errors */ }
-                      const memberSse = zigEventToSSE(memberRaw);
-                      if (memberSse) controller.enqueue(encoder.encode(memberSse));
-                    }
-                  } finally {
-                    destroyIterator(memberIter);
-                    // Clean up any remaining toolOwner entries for this member
-                    for (const [tid, mid] of session.toolOwners) {
-                      if (mid === memberIdRaw) session.toolOwners.delete(tid);
-                    }
-                  }
-
-                  controller.enqueue(encoder.encode(
-                    `event: member_end\ndata: ${JSON.stringify({ type: 'member_end', memberId: memberIdRaw, result: '' })}\n\n`,
-                  ));
-
-                  resolveTeamToolResult(
-                    session.team,
-                    toolUseId,
-                    JSON.stringify({ result: memberResult || 'Member completed task.' }),
-                  );
+                  // Fire-and-forget: run member in parallel. The Zig engine blocks in
+                  // waiting_for_external_tools until ALL delegate results are resolved.
+                  // By not awaiting, multiple delegates run concurrently.
+                  runDelegateMember(
+                    session, body, controller, encoder,
+                    toolUseId, memberIdRaw, taskRaw,
+                  ).catch((err) => {
+                    console.error(`[agent] delegate ${memberIdRaw} failed:`, err);
+                    try {
+                      resolveTeamToolResult(
+                        session.team!,
+                        toolUseId,
+                        JSON.stringify({ result: `Error: ${err?.message ?? String(err)}` }),
+                      );
+                    } catch { /* ignore */ }
+                  });
                   continue;
                 }
               }

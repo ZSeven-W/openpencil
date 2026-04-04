@@ -52,6 +52,12 @@ export { buildContextString } from './ai-chat-context-builder';
 /** Agent-specific tool usage instructions — prepended to the dynamic skill-based prompt. */
 const AGENT_TOOL_INSTRUCTIONS = `IMPORTANT: When the user asks you to create or design anything, you MUST call the generate_design tool with a descriptive prompt. Do NOT output JSON or code directly.
 
+IMPORTANT: Always end your turn with a short natural-language reply for the user.
+- After any tool call or delegated task, summarize the result in 1-3 short sentences.
+- If work completed successfully, say what changed or what was created.
+- If nothing changed, explain why in one sentence.
+- Never end with tool calls only.
+
 ## Available Tools
 - generate_design: Create complete designs. Pass a natural language description.
 - snapshot_layout: View current canvas state.
@@ -113,6 +119,30 @@ interface AgentProviderConfig {
 /** Strip <think>...</think> tags (closed and unclosed) from model text output. */
 function stripThinkTags(text: string): string {
   return text.replace(/<think>[\s\S]*?<\/think>\s*/g, '').replace(/<think>[\s\S]*$/g, '');
+}
+
+function buildAgentEmptyOutputFallback({
+  sawThinking,
+  sawToolActivity,
+  sawMemberActivity,
+}: {
+  sawThinking: boolean;
+  sawToolActivity: boolean;
+  sawMemberActivity: boolean;
+}): string {
+  if (sawToolActivity) {
+    return '*Completed, but the agent returned no final summary. The requested action may still have been applied.*';
+  }
+
+  if (sawMemberActivity) {
+    return '*Completed team execution, but no final summary was returned.*';
+  }
+
+  if (sawThinking) {
+    return '*The agent finished without a final answer. Please retry if you need a written response.*';
+  }
+
+  return '*The agent finished without producing a visible response. Please retry.*';
 }
 
 /**
@@ -186,6 +216,9 @@ async function runAgentStream(
   const reader = response.body.getReader();
   let accumulated = '';
   let thinkingContent = '';
+  let sawThinking = false;
+  let sawToolActivity = false;
+  let sawMemberActivity = false;
   const [defaultIdentity] = assignAgentIdentities(1);
   const renderer = new StreamingDesignRenderer({
     agentColor: defaultIdentity.color,
@@ -201,6 +234,7 @@ async function runAgentStream(
     for await (const evt of parseAgentSSE(reader, abortController.signal)) {
       switch (evt.type) {
         case 'thinking': {
+          sawThinking = true;
           thinkingContent += evt.content;
           const thinkingStep = `<step title="Thinking">${thinkingContent}</step>`;
           updateLastMessage(thinkingStep + (accumulated ? '\n' + accumulated : ''));
@@ -219,6 +253,7 @@ async function runAgentStream(
         }
 
         case 'tool_call': {
+          sawToolActivity = true;
           const block: ToolCallBlockData = {
             id: evt.id,
             name: evt.name,
@@ -252,6 +287,7 @@ async function runAgentStream(
         }
 
         case 'tool_result': {
+          sawToolActivity = true;
           useAIStore.getState().updateToolCallBlock(evt.id, {
             status: evt.result.success ? 'done' : 'error',
             result: evt.result,
@@ -264,12 +300,11 @@ async function runAgentStream(
 
         case 'done': {
           if (!accumulated.trim()) {
-            const hasToolCalls = useAIStore.getState().toolCallBlocks.length > 0;
-            if (hasToolCalls) {
-              accumulated = '*Design generated successfully.*';
-            } else if (!thinkingContent) {
-              accumulated = '*Agent completed with no text output.*';
-            }
+            accumulated = buildAgentEmptyOutputFallback({
+              sawThinking,
+              sawToolActivity,
+              sawMemberActivity,
+            });
             // Preserve thinking steps in the final message
             const prefix = thinkingContent
               ? `<step title="Thinking">${thinkingContent}</step>\n`
@@ -302,6 +337,7 @@ async function runAgentStream(
         }
 
         case 'member_start': {
+          sawMemberActivity = true;
           if (identityPool.length === 0) {
             identityPool = assignAgentIdentities(6);
           }
@@ -315,6 +351,7 @@ async function runAgentStream(
         }
 
         case 'member_end': {
+          sawMemberActivity = true;
           const id = memberIdentities.get(evt.memberId);
           accumulated += `\n> **[${id?.name ?? evt.memberId}]** done\n\n`;
           updateLastMessage(accumulated);
