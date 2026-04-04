@@ -1,3 +1,5 @@
+import { consumeSSEAsText } from '@/services/ai/ai-service';
+
 /** Intent classification prompt — lightweight LLM call to determine message routing */
 const CLASSIFY_PROMPT = `You are a UI design tool assistant. Classify the user's message intent.
 Reply with EXACTLY one of these tags, nothing else:
@@ -19,7 +21,10 @@ export async function classifyIntent(
 
     const response = await fetch('/api/ai/generate', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'text/event-stream',
+      },
       body: JSON.stringify({
         system: CLASSIFY_PROMPT,
         message: text,
@@ -31,14 +36,12 @@ export async function classifyIntent(
     clearTimeout(timeout);
 
     if (!response.ok) throw new Error('classify failed');
-    const data = await response.json();
-    const upper = (data.text ?? '').trim().toUpperCase();
+    const resultText = await consumeSSEAsText(response);
+    const upper = resultText.trim().toUpperCase();
 
     if (upper.includes('DESIGN_MODIFY')) return { intent: 'modify' };
     if (upper.includes('DESIGN_NEW') || upper.includes('DESIGN')) return { intent: 'new' };
     if (upper.includes('CHAT')) return { intent: 'chat' };
-
-    // Fallback: in a design tool, default to new design mode
     return { intent: 'new' };
   } catch {
     // Fallback: in a design tool, default to new design mode

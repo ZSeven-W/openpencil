@@ -367,6 +367,38 @@ export async function* streamChat(
 }
 
 /**
+ * Consume an SSE endpoint and accumulate the full text response.
+ * Used by callers that don't need per-chunk streaming.
+ */
+export async function consumeSSEAsText(response: Response): Promise<string> {
+  if (!response.body) throw new Error('No response body');
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+  let accumulated = '';
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    const chunks = buffer.split('\n\n');
+    buffer = chunks.pop() ?? '';
+    for (const chunk of chunks) {
+      const dataMatch = chunk.match(/^data:\s*(.+)$/m);
+      if (!dataMatch) continue;
+      try {
+        const evt = JSON.parse(dataMatch[1]);
+        if (evt.type === 'text') accumulated += evt.content;
+        if (evt.type === 'error') throw new Error(evt.content);
+      } catch (e) {
+        if (e instanceof Error && e.message !== dataMatch[1]) throw e;
+      }
+    }
+  }
+  return accumulated;
+}
+
+/**
  * Non-streaming completion for design/code generation.
  * Calls the server-side endpoint which routes to the appropriate provider SDK.
  */
@@ -379,16 +411,19 @@ export async function generateCompletion(
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), DEFAULT_GENERATE_TIMEOUT_MS);
 
-  let response: Response;
   try {
-    response = await fetch('/api/ai/generate', {
+    const response = await fetch('/api/ai/generate', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'text/event-stream',
+      },
       body: JSON.stringify({ system: systemPrompt, message: userMessage, model, provider }),
       signal: controller.signal,
     });
+    if (!response.ok) throw new Error(`Server error: ${response.status}`);
+    return await consumeSSEAsText(response);
   } catch (error) {
-    clearTimeout(timeout);
     if (controller.signal.aborted) {
       throw new Error('AI generation request timed out. Please retry.');
     }
@@ -396,16 +431,6 @@ export async function generateCompletion(
   } finally {
     clearTimeout(timeout);
   }
-
-  if (!response.ok) {
-    throw new Error(`Server error: ${response.status}`);
-  }
-
-  const data = await response.json();
-  if (data.error) {
-    throw new Error(data.error);
-  }
-  return data.text ?? '';
 }
 
 /**
