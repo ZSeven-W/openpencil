@@ -50,10 +50,10 @@ const ROLE_SKILL_PHASE: Record<string, Phase> = {
 };
 
 const ROLE_TOOL_INSTRUCTIONS: Record<string, string> = {
-  designer: `You are a design team member. When asked to create designs, you MUST call the generate_design tool with a descriptive prompt. You can also use insert_node for manual node creation, batch_get and snapshot_layout to inspect the canvas, and find_empty_space to find placement locations.`,
-  reviewer: `You are a design reviewer. Use batch_get and snapshot_layout to inspect the current canvas state. Use get_selection to see what the user has selected. Provide detailed feedback on layout, spacing, typography, and visual hierarchy.`,
-  editor: `You are a design editor. Use batch_get and snapshot_layout to understand the current canvas. Use update_node to modify node properties, delete_node to remove elements, and insert_node to add new elements. Use find_empty_space to find placement locations.`,
-  researcher: `You are a design researcher. Use batch_get and snapshot_layout to analyze the current canvas state. Use find_empty_space to identify available space. Use get_selection to see what the user has selected. Provide analysis and recommendations.`,
+  designer: `You are a design team member. When asked to create designs, you MUST call the generate_design tool with a descriptive prompt. You can also use insert_node for manual node creation, batch_get and snapshot_layout to inspect the canvas, and find_empty_space to find placement locations. Always end with a short natural-language summary of what you created or changed. Never stop at tool calls only.`,
+  reviewer: `You are a design reviewer. Use batch_get and snapshot_layout to inspect the current canvas state. Use get_selection to see what the user has selected. Provide detailed feedback on layout, spacing, typography, and visual hierarchy. Always end with a short natural-language summary for the lead agent.`,
+  editor: `You are a design editor. Use batch_get and snapshot_layout to understand the current canvas. Use update_node to modify node properties, delete_node to remove elements, and insert_node to add new elements. Use find_empty_space to find placement locations. Always end with a short natural-language summary of what changed. Never stop at tool calls only.`,
+  researcher: `You are a design researcher. Use batch_get and snapshot_layout to analyze the current canvas state. Use find_empty_space to identify available space. Use get_selection to see what the user has selected. Provide analysis and recommendations. Always end with a short natural-language summary for the lead agent.`,
 };
 
 function buildTeamCapabilitiesPrompt(concurrency: number): string {
@@ -69,7 +69,8 @@ Available roles:
 Use spawn_member({id, role}) to create a member, then delegate({member_id, task}) to assign work.
 For simple tasks, handle them yourself without spawning members.
 For complex multi-section designs, spawn designers and delegate sections to them.
-Each member has its own design knowledge and tools — describe the task clearly.`;
+Each member has its own design knowledge and tools — describe the task clearly.
+After delegation or tool use, you must still send a short final natural-language reply to the user. Never end with tool calls only.`;
 }
 
 function buildMemberSystemPrompt(role: string, designMdContent?: string, hasVariables?: boolean): string {
@@ -150,7 +151,12 @@ function zigEventToSSE(raw: string): string {
   // For stream_event, the inner object has its own "type" field (text_delta, etc.)
   let tag: string;
   let data: Record<string, unknown>;
-  if (evt.stream_event) {
+  if (evt.tool_use) {
+    // Complete tool call from Zig engine (after input_json_delta accumulation).
+    // This is the authoritative tool_call event — content_block_start only has metadata.
+    tag = 'tool_use';
+    data = evt.tool_use;
+  } else if (evt.stream_event) {
     tag = evt.stream_event.type ?? 'unknown';
     data = evt.stream_event;
   } else if (evt.result) {
@@ -160,7 +166,6 @@ function zigEventToSSE(raw: string): string {
     tag = 'tool_progress';
     data = evt.tool_progress;
   } else {
-    // Flat format fallback (shouldn't happen with current Zig serialization)
     tag = evt.type ?? 'unknown';
     data = evt;
   }
@@ -173,18 +178,23 @@ function zigEventToSSE(raw: string): string {
     case 'thinking_delta':
       mapped = { type: 'thinking', content: data.text };
       break;
+    case 'tool_use':
+      // Complete tool call with full args — emitted by Zig engine after input_json_delta accumulation
+      mapped = {
+        type: 'tool_call',
+        id: data.id,
+        name: data.name,
+        args: typeof data.input === 'string' ? JSON.parse(data.input as string) : (data.input ?? {}),
+        level: TOOL_LEVEL_MAP[data.name as string] ?? 'read',
+      };
+      break;
     case 'content_block_start':
+      // Skip tool_use content_block_start — args aren't available yet.
+      // The complete tool_call is emitted later as a tool_use event.
       if (data.tool_name) {
-        mapped = {
-          type: 'tool_call',
-          id: data.tool_use_id ?? data.id,
-          name: data.tool_name,
-          args: typeof data.tool_input === 'string' ? JSON.parse(data.tool_input as string) : (data.tool_input ?? {}),
-          level: TOOL_LEVEL_MAP[data.tool_name as string] ?? 'read',
-        };
-      } else {
-        mapped = { type: tag, ...data };
+        return '';  // suppress — will come as tool_use event with full args
       }
+      mapped = { type: tag, ...data };
       break;
     case 'result':
       if (data.is_error) {
@@ -549,7 +559,8 @@ export default defineEventHandler(async (event) => {
                           memberResult += mEvt.stream_event.text;
                         }
                       } catch { /* ignore parse errors */ }
-                      controller.enqueue(encoder.encode(zigEventToSSE(memberRaw)));
+                      const memberSse = zigEventToSSE(memberRaw);
+                      if (memberSse) controller.enqueue(encoder.encode(memberSse));
                     }
                   } finally {
                     destroyIterator(memberIter);
@@ -574,7 +585,8 @@ export default defineEventHandler(async (event) => {
             } catch { /* not JSON or not intercepted — fall through to normal forwarding */ }
           }
 
-          controller.enqueue(encoder.encode(zigEventToSSE(raw)));
+          const sse = zigEventToSSE(raw);
+          if (sse) controller.enqueue(encoder.encode(sse));
         }
         console.info(`[agent] stream ended after ${eventCount} events`);
       } catch (err: any) {
