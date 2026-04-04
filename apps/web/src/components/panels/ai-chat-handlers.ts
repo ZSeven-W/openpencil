@@ -264,14 +264,17 @@ async function runAgentStream(
 
         case 'done': {
           if (!accumulated.trim()) {
-            // Check if any tool calls were made (not their status — there's a
-            // race between the SSE done event and the executor's .then() callback
-            // that updates status from 'running' to 'done').
             const hasToolCalls = useAIStore.getState().toolCallBlocks.length > 0;
-            accumulated = hasToolCalls
-              ? '*Design generated successfully.*'
-              : '*Agent completed with no text output.*';
-            updateLastMessage(accumulated);
+            if (hasToolCalls) {
+              accumulated = '*Design generated successfully.*';
+            } else if (!thinkingContent) {
+              accumulated = '*Agent completed with no text output.*';
+            }
+            // Preserve thinking steps in the final message
+            const prefix = thinkingContent
+              ? `<step title="Thinking">${thinkingContent}</step>\n`
+              : '';
+            updateLastMessage(prefix + accumulated);
           }
 
           if (renderer.getAppliedIds().size === 0) {
