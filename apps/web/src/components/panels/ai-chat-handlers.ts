@@ -29,8 +29,8 @@ import {
   animateNodesToCanvas,
   extractAndApplyDesignModification,
 } from '@/services/ai/design-generator';
-import { insertStreamingNode } from '@/services/ai/design-canvas-ops';
-import { addAgentFrame, getActiveAgentFrames } from '@/canvas/agent-indicator';
+import { StreamingDesignRenderer } from '@/services/ai/streaming-design-renderer';
+import { applyPostStreamingTreeHeuristics } from '@/services/ai/design-canvas-ops';
 import { trimChatHistory } from '@/services/ai/context-optimizer';
 import { AgentToolExecutor } from '@/services/ai/agent-tool-executor';
 import { getDesignToolDefs } from '@/services/ai/agent-tools';
@@ -186,9 +186,11 @@ async function runAgentStream(
   const reader = response.body.getReader();
   let accumulated = '';
   let thinkingContent = '';
-  let parsedLineCount = 0;
-  const appliedIds = new Set<string>();
-  const pendingNodes: Record<string, unknown>[] = [];
+  const renderer = new StreamingDesignRenderer({
+    agentColor: '#2563EB',
+    agentName: 'Agent',
+    animated: true,
+  });
 
   try {
     for await (const evt of parseAgentSSE(reader, abortController.signal)) {
@@ -207,38 +209,7 @@ async function runAgentStream(
             : '';
           updateLastMessage(prefix + stripThinkTags(accumulated));
 
-          // Stream-apply: parse new JSONL lines, insert via insertStreamingNode (handles layout)
-          if (evt.content?.includes('\n')) {
-            const allLines = accumulated.split('\n');
-            for (let i = parsedLineCount; i < allLines.length - 1; i++) {
-              const line = allLines[i].trim();
-              if (line.startsWith('{') && /"_parent"\s*:/.test(line)) {
-                try { pendingNodes.push(JSON.parse(line)); } catch { /* skip */ }
-              }
-            }
-            parsedLineCount = allLines.length - 1;
-            // Flush: insert nodes whose parent is already applied (or root)
-            let progress = true;
-            while (progress) {
-              progress = false;
-              for (let i = pendingNodes.length - 1; i >= 0; i--) {
-                const n = pendingNodes[i];
-                const parentId = n._parent as string | null;
-                if (parentId === null || parentId === undefined || appliedIds.has(parentId)) {
-                  try {
-                    insertStreamingNode(n as any, parentId);
-                    // Register root frame for breathing glow effect
-                    if (parentId === null || parentId === undefined) {
-                      addAgentFrame(n.id as string, '#2563EB', 'Agent');
-                    }
-                  } catch { /* skip */ }
-                  appliedIds.add(n.id as string);
-                  pendingNodes.splice(i, 1);
-                  progress = true;
-                }
-              }
-            }
-          }
+          renderer.feedText(accumulated);
           break;
         }
 
@@ -291,47 +262,24 @@ async function runAgentStream(
             accumulated = '*Agent completed with no text output.*';
             updateLastMessage(accumulated);
           }
-          // Remove breathing glow from agent frames
-          const agentFrameMap = getActiveAgentFrames();
-          for (const id of appliedIds) {
-            agentFrameMap.delete(id);
+
+          if (renderer.getAppliedIds().size === 0) {
+            renderer.flushRemaining(accumulated);
           }
-          // Flush any remaining pending nodes
-          try {
-            const allLines = accumulated.split('\n');
-            for (let i = parsedLineCount; i < allLines.length; i++) {
-              const line = allLines[i].trim();
-              if (line.startsWith('{') && /"_parent"\s*:/.test(line)) {
-                try { pendingNodes.push(JSON.parse(line)); } catch { /* skip */ }
-              }
-            }
-            let progress = true;
-            while (progress) {
-              progress = false;
-              for (let i = pendingNodes.length - 1; i >= 0; i--) {
-                const n = pendingNodes[i];
-                const parentId = n._parent as string | null;
-                if (parentId === null || parentId === undefined || appliedIds.has(parentId)) {
-                  try { insertStreamingNode(n as any, parentId); } catch { /* skip */ }
-                  appliedIds.add(n.id as string);
-                  pendingNodes.splice(i, 1);
-                  progress = true;
-                }
-              }
-            }
-            // Force-apply any orphans
-            if (pendingNodes.length > 0) {
-              for (const n of pendingNodes) {
-                try { insertStreamingNode(n as any, (n._parent as string) ?? null); } catch { /* skip */ }
-              }
-            }
-          } catch { /* ignore */ }
+
+          const rootId = renderer.getRootId();
+          if (rootId) {
+            applyPostStreamingTreeHeuristics(rootId);
+          }
+
+          renderer.finish();
           break;
         }
 
         case 'error': {
           accumulated += `\n\n**Error:** ${evt.message}`;
           updateLastMessage(accumulated);
+          renderer.finish();
           if (evt.fatal) return stripThinkTags(accumulated);
           break;
         }
@@ -353,6 +301,7 @@ async function runAgentStream(
       }
     }
   } finally {
+    renderer.finish();
     reader.releaseLock();
   }
 
