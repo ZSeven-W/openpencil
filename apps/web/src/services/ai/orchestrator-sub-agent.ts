@@ -390,6 +390,11 @@ CRITICAL LAYOUT CONSTRAINTS:
 - Phone mockup = ONE frame node, cornerRadius 32. If a placeholder label is needed, allow exactly ONE centered text child inside the phone; otherwise no children. Never place placeholder text below the phone as a sibling. NEVER use ellipse.
 - IDs prefix="${subtask.idPrefix}-". No <step> tags. Output \`\`\`json immediately.`;
 
+  // Prevent sub-agents from generating a duplicate status bar on mobile
+  if (plan.rootFrame.width <= 480) {
+    prompt += `\n\nMOBILE STATUS BAR: A status bar (time, signal, wifi, battery) has ALREADY been pre-inserted as the first child of the root page frame. Do NOT generate any status bar, system chrome, or OS-level indicators. Start your content directly.`;
+  }
+
   if (needsNativeDenseCardInstruction(subtask.label, compactPrompt, fullPrompt)) {
     prompt += `\n\nNATIVE DENSE-CARD MODE (must be solved during generation):
 - If you create a horizontal row with 5+ cards (or cards become narrow), compact each card natively BEFORE output.

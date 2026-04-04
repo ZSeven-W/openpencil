@@ -53,6 +53,12 @@ export function runPreValidationFixes(): number {
   // Apply
   for (const fix of uniqueFixes) {
     if (fix.property === '__remove') {
+      // Never remove pre-injected chrome (e.g. iPhone status bar)
+      const target = store.getNodeById(fix.nodeId);
+      if (target && 'role' in target && (target as { role?: string }).role === 'status-bar') {
+        console.log(`[Pre-validation] ${fix.nodeId}: skipped removal (protected status-bar)`);
+        continue;
+      }
       store.removeNode(fix.nodeId);
       console.log(`[Pre-validation] ${fix.nodeId}: removed (${fix.reason})`);
     } else {

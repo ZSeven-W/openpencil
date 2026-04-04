@@ -5,7 +5,7 @@ export interface PropertyReplacement {
   textColor?: { from: string; to: string }[];
   strokeColor?: { from: string; to: string }[];
   fontFamily?: { from: string; to: string }[];
-  cornerRadius?: { from: number; to: number }[];
+  cornerRadius?: { from: number | number[]; to: number | number[] }[];
 }
 
 /**

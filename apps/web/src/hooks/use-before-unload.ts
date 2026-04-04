@@ -12,6 +12,8 @@ export function useBeforeUnload() {
   useEffect(() => {
     // Electron handles close confirmation in the main process
     if (window.electronAPI) return;
+    // Skip in dev mode so Vite HMR doesn't trigger the "Leave page?" dialog
+    if (import.meta.env.DEV) return;
     if (!isDirty) return;
 
     const handler = (e: BeforeUnloadEvent) => {

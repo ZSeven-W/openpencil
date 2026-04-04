@@ -277,6 +277,11 @@ export async function applyValidationFixes(result: ValidationResult): Promise<nu
         skipped.push(`removeNode: ${sf.nodeId} not found`);
         continue;
       }
+      // Never remove pre-injected chrome (e.g. iPhone status bar)
+      if ('role' in node && (node as { role?: string }).role === 'status-bar') {
+        skipped.push(`removeNode: ${sf.nodeId} is a protected status-bar node`);
+        continue;
+      }
       store.removeNode(sf.nodeId);
       console.log(`[Validation Fix] removeNode: ${sf.nodeId}`);
       applied++;

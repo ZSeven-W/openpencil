@@ -47,7 +47,7 @@ RULES:
 - Root frame gap: Landing pages with distinct section backgrounds - gap=0 (sections flush). Mobile screens and dashboards - gap=16-24 (breathing room between sections). Always include "gap" in rootFrame.
 - Root frame height: Mobile (width=375) - set height=812 (fixed viewport). Desktop (width=1200) - set height=0 (auto-expands as sections are generated).
 - Landing page height hints: nav 64-80px, hero 500-600px, feature sections 400-600px, testimonials 300-400px, CTA 200-300px, footer 200-300px.
-- App screen height hints: status bar 44px, header 56-64px, form fields 48-56px each, buttons 48px, spacing 16-24px.
+- App screen height hints: status bar is pre-inserted (62px, do NOT plan a "Status Bar" section). Header 56-64px, form fields 48-56px each, buttons 48px, spacing 16-24px.
 - If a section is about "App截图"/"XX截图"/"screenshot"/"mockup", plan it as a phone mockup placeholder block, not a detailed mini-app reconstruction.
 - For landing pages: navigation sections should preserve good horizontal balance, links evenly distributed in the center group.
 - Regions tile to fill rootFrame. vertical = top-to-bottom.

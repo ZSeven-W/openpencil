@@ -27,6 +27,10 @@ describe('text-measure', () => {
       expect(parseSizing('fit_content')).toBe('fit');
     });
 
+    it('uses numeric hints from fit_content(N)', () => {
+      expect(parseSizing('fit_content(600)')).toBe(600);
+    });
+
     it('parses numeric strings', () => {
       expect(parseSizing('200')).toBe(200);
     });
