@@ -264,10 +264,11 @@ async function runAgentStream(
 
         case 'done': {
           if (!accumulated.trim()) {
-            const hasSuccessfulToolCalls = useAIStore
-              .getState()
-              .toolCallBlocks.some((b) => b.status === 'done');
-            accumulated = hasSuccessfulToolCalls
+            // Check if any tool calls were made (not their status — there's a
+            // race between the SSE done event and the executor's .then() callback
+            // that updates status from 'running' to 'done').
+            const hasToolCalls = useAIStore.getState().toolCallBlocks.length > 0;
+            accumulated = hasToolCalls
               ? '*Design generated successfully.*'
               : '*Agent completed with no text output.*';
             updateLastMessage(accumulated);
