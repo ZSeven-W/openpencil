@@ -24,6 +24,21 @@ export interface AgentSession {
   memberHandles?: Array<{ provider: ProviderHandle; tools: ToolRegistryHandle }>;
   createdAt: number;
   lastActivity: number;
+  /** toolCallId → memberId — routes async tool results to the correct member engine. */
+  toolOwners: Map<string, string>;
+  /** memberId → role — used for delegation-time skill resolution. */
+  memberRoles: Map<string, string>;
+}
+
+/** Create a session with required defaults. */
+export function createSession(
+  fields: Omit<AgentSession, 'toolOwners' | 'memberRoles'> & Partial<Pick<AgentSession, 'toolOwners' | 'memberRoles'>>,
+): AgentSession {
+  return {
+    ...fields,
+    toolOwners: fields.toolOwners ?? new Map(),
+    memberRoles: fields.memberRoles ?? new Map(),
+  };
 }
 
 export const agentSessions = new Map<string, AgentSession>();

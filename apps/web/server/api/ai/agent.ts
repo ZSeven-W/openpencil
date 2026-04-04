@@ -18,7 +18,7 @@ import {
   destroyIterator,
 } from '@zseven-w/agent-native';
 import type { AuthLevel } from '../../../src/types/agent';
-import { agentSessions, cleanup, abortSession, type AgentSession } from '../../utils/agent-sessions';
+import { agentSessions, cleanup, abortSession, createSession, type AgentSession } from '../../utils/agent-sessions';
 
 const TOOL_LEVEL_MAP: Record<string, AuthLevel> = {
   batch_get: 'read',
@@ -248,7 +248,10 @@ export default defineEventHandler(async (event) => {
     // delegate({member_id, task}) to dispatch work to members
     teamRegisterDelegate(team);
 
-    session = { team, provider, tools, memberHandles, createdAt: Date.now(), lastActivity: Date.now() };
+    session = createSession({
+      team, provider, tools, memberHandles,
+      createdAt: Date.now(), lastActivity: Date.now(),
+    });
   } else {
     // Single engine mode
     const engine = createQueryEngine({
@@ -267,7 +270,10 @@ export default defineEventHandler(async (event) => {
       seedMessages(engine, JSON.stringify(priorMessages));
     }
 
-    session = { engine, provider, tools, createdAt: Date.now(), lastActivity: Date.now() };
+    session = createSession({
+      engine, provider, tools,
+      createdAt: Date.now(), lastActivity: Date.now(),
+    });
   }
 
   // Register session for tool result callbacks and abort
