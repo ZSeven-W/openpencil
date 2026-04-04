@@ -9,7 +9,11 @@ export function parseSizing(value: unknown): number | 'fit' | 'fill' {
   if (typeof value === 'number') return value;
   if (typeof value !== 'string') return 0;
   if (value.startsWith('fill_container')) return 'fill';
-  if (value.startsWith('fit_content')) return 'fit';
+  if (value.startsWith('fit_content')) {
+    const match = value.match(/\((\d+(?:\.\d+)?)\)/);
+    if (match) return parseFloat(match[1]);
+    return 'fit';
+  }
   const n = parseFloat(value);
   return isNaN(n) ? 0 : n;
 }
