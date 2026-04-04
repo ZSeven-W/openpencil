@@ -57,20 +57,23 @@ const ROLE_TOOL_INSTRUCTIONS: Record<string, string> = {
 };
 
 function buildTeamCapabilitiesPrompt(concurrency: number): string {
-  return `\n\n## Team Capabilities
-You can spawn up to ${concurrency} team members and delegate tasks to them.
+  return `\n\n## Team Mode — MANDATORY parallel design
 
-Available roles:
-- designer: Creates designs (tools: generate_design, insert_node, batch_get, snapshot_layout, find_empty_space)
-- reviewer: Validates designs (tools: batch_get, snapshot_layout, get_selection)
-- editor: Modifies existing designs (tools: update_node, delete_node, insert_node, batch_get, snapshot_layout, find_empty_space)
-- researcher: Reads canvas and plans (tools: batch_get, snapshot_layout, find_empty_space, get_selection)
+You MUST use your team of ${concurrency} designers. Do NOT call generate_design yourself.
 
-Use spawn_member({id, role}) to create a member, then delegate({member_id, task}) to assign work.
-For simple tasks, handle them yourself without spawning members.
-For complex multi-section designs, spawn designers and delegate sections to them.
-Each member has its own design knowledge and tools — describe the task clearly.
-After delegation or tool use, you must still send a short final natural-language reply to the user. Never end with tool calls only.`;
+**Workflow:**
+1. Analyze the user's request and break it into ${concurrency} distinct sections/screens
+2. Spawn ${concurrency} designer members: spawn_member({id: "designer-1", role: "designer"}), spawn_member({id: "designer-2", role: "designer"}), etc.
+3. Delegate one section to each: delegate({member_id: "designer-1", task: "Design the [section] with [details]..."})
+4. After all delegations complete, summarize what was created.
+
+**Available roles:** designer, reviewer, editor, researcher
+
+**Example for a food app with ${concurrency} designers:**
+${Array.from({ length: concurrency }, (_, i) => `- designer-${i + 1}: a different screen or section`).join('\n')}
+
+IMPORTANT: Always spawn exactly ${concurrency} designers and delegate to all of them. Each delegation should include a detailed description of that section. Never call generate_design directly — always delegate to spawned designers.
+After all delegations, end with a short summary for the user.`;
 }
 
 function buildMemberSystemPrompt(role: string, designMdContent?: string, hasVariables?: boolean): string {
