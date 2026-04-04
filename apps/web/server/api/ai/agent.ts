@@ -403,8 +403,15 @@ export default defineEventHandler(async (event) => {
         session.iter = iter;
 
         let raw: string | null;
+        let eventCount = 0;
         while ((raw = await nextEvent(iter)) !== null) {
+          eventCount++;
           session.lastActivity = Date.now();
+          // Log first 5 events and any tool_use/result events for diagnostics
+          if (eventCount <= 5 || raw.includes('tool_use') || raw.includes('"result"')) {
+            const preview = raw.length > 200 ? raw.substring(0, 200) + '...' : raw;
+            console.info(`[agent] event #${eventCount}: ${preview}`);
+          }
 
           if (session.team) {
             try {
@@ -569,7 +576,9 @@ export default defineEventHandler(async (event) => {
 
           controller.enqueue(encoder.encode(zigEventToSSE(raw)));
         }
+        console.info(`[agent] stream ended after ${eventCount} events`);
       } catch (err: any) {
+        console.error(`[agent] stream error:`, err?.message ?? String(err));
         try {
           controller.enqueue(
             encoder.encode(
