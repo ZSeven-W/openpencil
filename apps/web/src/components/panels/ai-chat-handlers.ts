@@ -142,6 +142,18 @@ async function runAgentStream(
   const lastUserMsg = messages[messages.length - 1]?.content ?? '';
   const systemPrompt = buildAgentSystemPrompt(lastUserMsg) + context;
 
+  // Read document context for team member skill loading
+  const { useDesignMdStore } = await import('@/stores/design-md-store');
+  const { useDocumentStore } = await import('@/stores/document-store');
+  const { buildDesignMdStylePolicy } = await import('@/services/ai/ai-prompts');
+  const designMd = useDesignMdStore.getState().designMd;
+  const docVariables = useDocumentStore.getState().document.variables;
+  const hasVariables = !!docVariables && Object.keys(docVariables).length > 0;
+  const designMdContent = designMd ? buildDesignMdStylePolicy(designMd) : undefined;
+
+  const { useAIStore: concurrencyStore } = await import('@/stores/ai-store');
+  const concurrency = concurrencyStore.getState().concurrency;
+
   const agentBody: Record<string, unknown> = {
     sessionId,
     messages,
@@ -153,10 +165,11 @@ async function runAgentStream(
     ...(providerConfig.maxOutputTokens ? { maxOutputTokens: providerConfig.maxOutputTokens } : {}),
     toolDefs,
     maxTurns: 20,
+    teamMode: concurrency >= 2,
+    concurrency,
+    ...(designMdContent ? { designMdContent } : {}),
+    ...(hasVariables ? { hasVariables } : {}),
   };
-
-  // Concurrency (⚡2x, 3x, etc.) is handled by the orchestrator in standard
-  // mode via useAIStore.getState().concurrency — no Zig team members needed.
 
   const response = await fetch('/api/ai/agent', {
     method: 'POST',
