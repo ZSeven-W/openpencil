@@ -30,6 +30,8 @@ import {
   extractAndApplyDesignModification,
 } from '@/services/ai/design-generator';
 import { StreamingDesignRenderer } from '@/services/ai/streaming-design-renderer';
+import { assignAgentIdentities } from '@/services/ai/agent-identity';
+import type { AgentIdentity } from '@/services/ai/agent-identity';
 import { applyPostStreamingTreeHeuristics } from '@/services/ai/design-canvas-ops';
 import { trimChatHistory } from '@/services/ai/context-optimizer';
 import { AgentToolExecutor } from '@/services/ai/agent-tool-executor';
@@ -192,6 +194,10 @@ async function runAgentStream(
     animated: true,
   });
 
+  let identityPool: AgentIdentity[] = [];
+  let nextIdentityIdx = 0;
+  const memberIdentities = new Map<string, AgentIdentity>();
+
   try {
     for await (const evt of parseAgentSSE(reader, abortController.signal)) {
       switch (evt.type) {
@@ -285,14 +291,23 @@ async function runAgentStream(
         }
 
         case 'member_start': {
-          accumulated += `\n\n> **[${evt.memberId}]** ${evt.task}\n`;
+          if (identityPool.length === 0) {
+            identityPool = assignAgentIdentities(6);
+          }
+          const identity = identityPool[nextIdentityIdx % identityPool.length];
+          nextIdentityIdx++;
+          memberIdentities.set(evt.memberId, identity);
+          renderer.setIdentity(identity.color, identity.name);
+          accumulated += `\n\n> **[${identity.name}]** ${evt.task}\n`;
           updateLastMessage(accumulated);
           break;
         }
 
         case 'member_end': {
-          accumulated += `\n> **[${evt.memberId}]** done\n\n`;
+          const id = memberIdentities.get(evt.memberId);
+          accumulated += `\n> **[${id?.name ?? evt.memberId}]** done\n\n`;
           updateLastMessage(accumulated);
+          renderer.setIdentity('#2563EB', 'Agent');
           break;
         }
 

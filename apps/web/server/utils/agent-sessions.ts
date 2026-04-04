@@ -3,6 +3,7 @@ import type {
   IteratorHandle,
   ProviderHandle,
   ToolRegistryHandle,
+  TeamHandle,
 } from '@zseven-w/agent-native';
 import {
   abortEngine,
@@ -10,13 +11,17 @@ import {
   destroyQueryEngine,
   destroyToolRegistry,
   destroyProvider,
+  abortTeam,
+  destroyTeam,
 } from '@zseven-w/agent-native';
 
 export interface AgentSession {
   engine?: QueryEngineHandle;
+  team?: TeamHandle;
   iter?: IteratorHandle;
   provider: ProviderHandle;
   tools?: ToolRegistryHandle;
+  memberHandles?: Array<{ provider: ProviderHandle; tools: ToolRegistryHandle }>;
   createdAt: number;
   lastActivity: number;
 }
@@ -29,9 +34,21 @@ export function cleanup(session: AgentSession): void {
     destroyIterator(session.iter);
     session.iter = undefined;
   }
+  if (session.team) {
+    abortTeam(session.team);
+    destroyTeam(session.team);
+    session.team = undefined;
+  }
   if (session.engine) {
     destroyQueryEngine(session.engine);
     session.engine = undefined;
+  }
+  if (session.memberHandles) {
+    for (const mh of session.memberHandles) {
+      destroyToolRegistry(mh.tools);
+      destroyProvider(mh.provider);
+    }
+    session.memberHandles = undefined;
   }
   if (session.tools) {
     destroyToolRegistry(session.tools);
@@ -45,7 +62,8 @@ export function cleanup(session: AgentSession): void {
 
 /** Abort a session — makes pending nextEvent resolve null. */
 export function abortSession(session: AgentSession): void {
-  if (session.engine) abortEngine(session.engine);
+  if (session.team) abortTeam(session.team);
+  else if (session.engine) abortEngine(session.engine);
 }
 
 // Cleanup stale sessions every 60s (5-minute TTL from last activity)

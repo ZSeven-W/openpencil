@@ -9,6 +9,10 @@ import {
   submitMessage,
   nextEvent,
   resolveToolResult,
+  createTeam,
+  runTeam,
+  addTeamMember,
+  resolveTeamToolResult,
 } from '@zseven-w/agent-native';
 import type { AuthLevel } from '../../../src/types/agent';
 import { agentSessions, cleanup, abortSession, type AgentSession } from '../../utils/agent-sessions';
@@ -111,6 +115,20 @@ function zigEventToSSE(raw: string): string {
         mapped = { type: 'done', totalTurns: data.num_turns ?? 0 };
       }
       break;
+    case 'member_start':
+      mapped = {
+        type: 'member_start',
+        memberId: data.member_id,
+        task: data.task ?? '',
+      };
+      break;
+    case 'member_end':
+      mapped = {
+        type: 'member_end',
+        memberId: data.member_id,
+        result: data.result ?? '',
+      };
+      break;
     default:
       mapped = { type: tag, ...data };
   }
@@ -151,6 +169,8 @@ export default defineEventHandler(async (event) => {
       const resultJson = JSON.stringify(body.result);
       if (session.engine) {
         resolveToolResult(session.engine, body.toolCallId, resultJson);
+      } else if (session.team) {
+        resolveTeamToolResult(session.team, body.toolCallId, resultJson);
       }
     } catch {
       return { ok: true, ignored: true };
@@ -191,12 +211,6 @@ export default defineEventHandler(async (event) => {
     };
   }
 
-  // TODO: Team mode (body.members) is not yet implemented in the Zig NAPI addon.
-  // When createTeam / resolveTeamToolResult / runTeam are added, re-enable multi-member support.
-  if (body.members?.length) {
-    console.warn('[agent] Team mode requested but not yet supported by native addon — using single engine');
-  }
-
   const provider = createProviderHandle(body.providerType, body.apiKey, body.model, body.baseURL);
   const tools = createToolRegistry();
   for (const def of body.toolDefs ?? []) {
@@ -205,26 +219,52 @@ export default defineEventHandler(async (event) => {
     registerToolSchema(tools, def.name, JSON.stringify(params));
   }
 
-  const engine = createQueryEngine({
-    provider,
-    tools,
-    systemPrompt: body.systemPrompt,
-    maxTurns: body.maxTurns ?? 20,
-    cwd: process.cwd(),
-  });
+  const prompt = body.messages[body.messages.length - 1]?.content ?? '';
 
-  // Seed conversation history
-  const priorMessages = body.messages.slice(0, -1).filter(
-    (m) => (m.role === 'user' || m.role === 'assistant') && typeof m.content === 'string',
-  );
-  if (priorMessages.length > 0) {
-    seedMessages(engine, JSON.stringify(priorMessages));
+  let session: AgentSession;
+
+  if (body.members?.length) {
+    // Team mode: create team with lead + members
+    console.info(`[agent] creating team with ${body.members.length} member(s)`);
+    const team = createTeam(provider, tools, body.systemPrompt, body.maxTurns ?? 20);
+
+    const memberHandles: Array<{ provider: ReturnType<typeof createProviderHandle>; tools: ReturnType<typeof createToolRegistry> }> = [];
+
+    for (const m of body.members) {
+      const memberProvider = createProviderHandle(m.providerType, m.apiKey, m.model, m.baseURL);
+      const memberTools = createToolRegistry();
+      for (const def of body.toolDefs ?? []) {
+        const params = def.parameters ? { ...def.parameters } : { type: 'object' };
+        delete (params as any).$schema;
+        registerToolSchema(memberTools, def.name, JSON.stringify(params));
+      }
+      addTeamMember(team, m.id, memberProvider, memberTools, m.systemPrompt ?? '', 20);
+      memberHandles.push({ provider: memberProvider, tools: memberTools });
+    }
+
+    session = { team, provider, tools, memberHandles, createdAt: Date.now(), lastActivity: Date.now() };
+  } else {
+    // Single engine mode
+    const engine = createQueryEngine({
+      provider,
+      tools,
+      systemPrompt: body.systemPrompt,
+      maxTurns: body.maxTurns ?? 20,
+      cwd: process.cwd(),
+    });
+
+    // Seed conversation history
+    const priorMessages = body.messages.slice(0, -1).filter(
+      (m) => (m.role === 'user' || m.role === 'assistant') && typeof m.content === 'string',
+    );
+    if (priorMessages.length > 0) {
+      seedMessages(engine, JSON.stringify(priorMessages));
+    }
+
+    session = { engine, provider, tools, createdAt: Date.now(), lastActivity: Date.now() };
   }
-  const prompt =
-    body.messages[body.messages.length - 1]?.content ?? '';
 
   // Register session for tool result callbacks and abort
-  const session: AgentSession = { engine, provider, tools, createdAt: Date.now(), lastActivity: Date.now() };
   agentSessions.set(body.sessionId, session);
 
   setResponseHeaders(event, {
@@ -246,7 +286,9 @@ export default defineEventHandler(async (event) => {
 
       let iter;
       try {
-        iter = await submitMessage(engine, prompt);
+        iter = session.team
+          ? await runTeam(session.team, prompt)
+          : await submitMessage(session.engine!, prompt);
         session.iter = iter;
 
         let raw: string | null;
