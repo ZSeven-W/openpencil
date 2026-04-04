@@ -120,6 +120,54 @@ export async function runCodexExec(
   }
 }
 
+export async function* streamCodexExec(
+  userPrompt: string,
+  options: CodexExecOptions = {},
+): AsyncGenerator<{ type: 'text'; content: string } | { type: 'error'; content: string }> {
+  const tempDir = await mkdtemp(join(tmpdir(), 'openpencil-codex-'));
+  const prompt = buildPrompt(options.systemPrompt, userPrompt, options.imageFiles);
+  const codexEffort = resolveCodexEffort(options.thinkingMode, options.effort);
+
+  const args = [
+    'exec', '--json', '--skip-git-repo-check', '--sandbox', 'read-only', '-',
+    ...(options.model ? ['--model', options.model] : []),
+    ...(codexEffort ? ['--config', `model_reasoning_effort=${codexEffort}`] : []),
+  ];
+
+  const child = spawn('codex', args, {
+    env: filterCodexEnv(process.env as Record<string, string | undefined>),
+    stdio: ['pipe', 'pipe', 'pipe'],
+    ...(process.platform === 'win32' && { shell: true }),
+  });
+
+  if (child.stdin) { child.stdin.write(prompt); child.stdin.end(); }
+
+  try {
+    let stdoutBuffer = '';
+    for await (const chunk of child.stdout!) {
+      stdoutBuffer += chunk.toString('utf-8');
+      let idx = stdoutBuffer.indexOf('\n');
+      while (idx >= 0) {
+        const line = stdoutBuffer.slice(0, idx).trim();
+        stdoutBuffer = stdoutBuffer.slice(idx + 1);
+        if (line) {
+          const event = parseCodexJsonLine(line);
+          if (event?.text) yield { type: 'text' as const, content: event.text };
+          if (event?.error) yield { type: 'error' as const, content: event.error };
+        }
+        idx = stdoutBuffer.indexOf('\n');
+      }
+    }
+    if (stdoutBuffer.trim()) {
+      const event = parseCodexJsonLine(stdoutBuffer.trim());
+      if (event?.text) yield { type: 'text' as const, content: event.text };
+      if (event?.error) yield { type: 'error' as const, content: event.error };
+    }
+  } finally {
+    await rm(tempDir, { recursive: true, force: true }).catch(() => {});
+  }
+}
+
 function buildPrompt(
   systemPrompt: string | undefined,
   userPrompt: string,
