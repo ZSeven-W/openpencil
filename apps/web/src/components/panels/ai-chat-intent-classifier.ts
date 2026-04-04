@@ -15,6 +15,12 @@ export async function classifyIntent(
   model: string,
   provider?: string,
 ): Promise<{ intent: DesignIntent }> {
+  // Builtin providers can't use /api/ai/generate (it doesn't resolve builtin
+  // API keys). Use keyword-based classification instead.
+  if (model.startsWith('builtin:') || provider === 'builtin') {
+    return classifyByKeywords(text);
+  }
+
   try {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 8_000);
@@ -47,4 +53,15 @@ export async function classifyIntent(
     // Fallback: in a design tool, default to new design mode
     return { intent: 'new' };
   }
+}
+
+const MODIFY_KEYWORDS =
+  /\b(change|modify|update|adjust|resize|move|restyle|refine|fix|tweak|edit|replace|remove|delete|add to|smaller|larger|bigger|wider|taller)\b/i;
+const CHAT_KEYWORDS =
+  /\b(what is|how do|explain|tell me|help|why|can you|question|describe)\b/i;
+
+function classifyByKeywords(text: string): { intent: DesignIntent } {
+  if (CHAT_KEYWORDS.test(text) && !MODIFY_KEYWORDS.test(text)) return { intent: 'chat' };
+  if (MODIFY_KEYWORDS.test(text)) return { intent: 'modify' };
+  return { intent: 'new' };
 }

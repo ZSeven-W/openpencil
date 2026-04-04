@@ -48,7 +48,7 @@ Describe any UI in natural language. Watch it appear on the infinite canvas in r
 
 ### 🤖 Concurrent Agent Teams
 
-The orchestrator decomposes complex pages into spatial sub-tasks. Multiple AI agents work on different sections simultaneously — hero, features, footer — all streaming in parallel.
+The orchestrator decomposes complex pages into spatial sub-tasks. Multiple AI agents work on different sections simultaneously — hero, features, footer — all streaming in parallel with per-member canvas indicators.
 
 </td>
 </tr>
@@ -71,11 +71,20 @@ One-click install into Claude Code, Codex, Gemini, OpenCode, Kiro, or Copilot CL
 <tr>
 <td width="50%">
 
+### 🎨 Style Guides
+
+Built-in style guide library with tag-based fuzzy matching. Apply visual styles (glassmorphism, brutalist, retro, etc.) to AI-generated designs. MCP tools for external agent access.
+
+</td>
+<td width="50%">
+
 ### 📦 Design-as-Code
 
 `.op` files are JSON — human-readable, Git-friendly, diffable. Design variables generate CSS custom properties. Code export to React + Tailwind or HTML + CSS.
 
 </td>
+</tr>
+<tr>
 <td width="50%">
 
 ### 🖥️ Runs Everywhere
@@ -83,8 +92,6 @@ One-click install into Claude Code, Codex, Gemini, OpenCode, Kiro, or Copilot CL
 Web app + native desktop on macOS, Windows, and Linux via Electron. Auto-updates from GitHub Releases. `.op` file association — double-click to open.
 
 </td>
-</tr>
-<tr>
 <td width="50%">
 
 ### ⌨️ CLI — `op`
@@ -92,12 +99,32 @@ Web app + native desktop on macOS, Windows, and Linux via Electron. Auto-updates
 Control the design tool from your terminal. `op design`, `op insert`, `op export` — batch design DSL, node manipulation, code export. Pipe in from files or stdin. Works with desktop app or web server.
 
 </td>
+</tr>
+<tr>
 <td width="50%">
 
 ### 🎯 Multi-Platform Code Export
 
 Export to React + Tailwind, HTML + CSS, Vue, Svelte, Flutter, SwiftUI, Jetpack Compose, React Native — all from one `.op` file. Design variables become CSS custom properties.
 
+</td>
+<td width="50%">
+
+### 🧩 Embeddable SDK
+
+`pen-engine` (headless) + `pen-react` (React UI SDK) — embed the design engine in your own app. DesignProvider, DesignCanvas, hooks, panels, and toolbar components out of the box.
+
+</td>
+</tr>
+<tr>
+<td width="50%">
+
+### 🛡️ Design System Kit
+
+Manage reusable UIKits with style switching and component composition. Import/export kits from `.pen` files. Built-in registry with MCP tools for external access.
+
+</td>
+<td width="50%">
 </td>
 </tr>
 </table>
@@ -142,7 +169,7 @@ Or run as a desktop app:
 bun run electron:dev
 ```
 
-> **Prerequisites:** [Bun](https://bun.sh/) >= 1.0 and [Node.js](https://nodejs.org/) >= 18
+> **Prerequisites:** [Bun](https://bun.sh/) >= 1.0 and [Node.js](https://nodejs.org/) >= 18. Optional: [Zig](https://ziglang.org/) >= 0.14 for building `agent-native` from source (a prebuilt binary will be downloaded automatically if Zig is not installed).
 
 ### Docker
 
@@ -198,10 +225,13 @@ docker build --target full -t openpencil-full .
 
 **Prompt to UI**
 
-- **Text-to-design** — describe a page, get it generated on canvas in real-time with streaming animation
+- **Text-to-design** — describe a page, get it generated on canvas in real-time with SSE streaming animation
 - **Orchestrator** — decomposes complex pages into spatial sub-tasks for parallel generation
+- **Agent Teams** — concurrent team members with delegate tool, per-member canvas indicators, and fallback strategies
 - **Design modification** — select elements, then describe changes in natural language
 - **Vision input** — attach screenshots or mockups for reference-based design
+- **Style Guides** — apply visual styles (glassmorphism, brutalist, retro, etc.) via tag-based fuzzy matching
+- **Anti-slop** — cross-generation diversity tracking to avoid repetitive AI output
 
 **Multi-Agent Support**
 
@@ -220,11 +250,12 @@ docker build --target full -t openpencil-full .
 
 **MCP Server**
 
-- Built-in MCP server — one-click install into Claude Code / Codex / Gemini / OpenCode / Kiro / Copilot CLIs
+- Built-in MCP server (`pen-mcp` package) — one-click install into Claude Code / Codex / Gemini / OpenCode / Kiro / Copilot CLIs
 - Auto-detects Node.js — if not installed, falls back to HTTP transport and auto-starts the MCP HTTP server
 - Design automation from terminal: read, create, and modify `.op` files via any MCP-compatible agent
 - **Layered design workflow** — `design_skeleton` → `design_content` → `design_refine` for higher-fidelity multi-section designs
 - **Segmented prompt retrieval** — load only the design knowledge you need (schema, layout, roles, icons, planning, etc.)
+- **Style guide tools** — `get_style_guide_tags` and `get_style_guide` for applying visual styles via MCP
 - Multi-page support — create, rename, reorder, and duplicate pages via MCP tools
 
 **Code Generation**
@@ -288,12 +319,14 @@ Supports three input methods: inline string, `@filepath` (read from file), or `-
 | --------------- | -------------------------------------------------------------------------------- |
 | **Frontend**    | React 19 · TanStack Start · Tailwind CSS v4 · shadcn/ui · i18next                |
 | **Canvas**      | CanvasKit/Skia (WASM, GPU-accelerated)                                           |
+| **Engine**      | pen-engine (headless) · pen-react (React UI SDK)                                 |
 | **State**       | Zustand v5                                                                       |
 | **Server**      | Nitro                                                                            |
 | **Desktop**     | Electron 35                                                                      |
 | **CLI**         | `op` — terminal control, batch design DSL, code export                           |
-| **AI**          | Vercel AI SDK v6 · Anthropic SDK · Claude Agent SDK · OpenCode SDK · Copilot SDK |
+| **AI**          | agent-native (Zig NAPI) · Anthropic SDK · Claude Agent SDK · OpenCode SDK · Copilot SDK |
 | **Runtime**     | Bun · Vite 7                                                                     |
+| **Lint**        | oxlint · oxfmt                                                                   |
 | **File format** | `.op` — JSON-based, human-readable, Git-friendly                                 |
 
 ## Project Structure
@@ -308,7 +341,6 @@ openpencil/
 │   │   │   ├── services/ai/ AI chat, orchestrator, design generation, streaming
 │   │   │   ├── services/codegen/ Code generation service wrappers
 │   │   │   ├── stores/      Zustand — canvas, document, pages, history, AI
-│   │   │   ├── mcp/         MCP server tools for external CLI integration
 │   │   │   ├── hooks/       Keyboard shortcuts, file drop, Figma paste, MCP sync
 │   │   │   ├── i18n/        Internationalization — 15 locales
 │   │   │   └── uikit/       Reusable component kit system
@@ -327,12 +359,15 @@ openpencil/
 ├── packages/
 │   ├── pen-types/           Type definitions for PenDocument model
 │   ├── pen-core/            Document tree ops, layout engine, variables
+│   ├── pen-engine/          Headless design engine — document, selection, history, viewport
+│   ├── pen-react/           React UI SDK — provider, canvas, hooks, panels, toolbar
 │   ├── pen-codegen/         Code generators (React, HTML, Vue, Flutter, ...)
 │   ├── pen-figma/           Figma .fig file parser and converter
 │   ├── pen-renderer/        Standalone CanvasKit/Skia renderer
+│   ├── pen-mcp/             MCP server — tools, routes, document manager
 │   ├── pen-sdk/             Umbrella SDK (re-exports all packages)
 │   ├── pen-ai-skills/       AI prompt skill engine (phase-driven prompt loading)
-│   └── agent/               AI agent SDK (Vercel AI SDK, multi-provider, agent teams)
+│   └── agent-native/        Native AI agent runtime (Zig NAPI, multi-provider, teams)
 └── .githooks/               Pre-commit version sync from branch name
 ```
 
@@ -361,11 +396,14 @@ bun --bun run dev          # Dev server (port 3000)
 bun --bun run build        # Production build
 bun --bun run test         # Run tests (Vitest)
 npx tsc --noEmit           # Type check
+bun run lint               # Lint (oxlint)
+bun run format             # Format (oxfmt)
 bun run bump <version>     # Sync version across all package.json
 bun run electron:dev       # Electron dev
 bun run electron:build     # Electron package
 bun run cli:dev            # Run CLI from source
 bun run cli:compile        # Compile CLI to dist
+bun run mcp:dev            # Run MCP server from source
 ```
 
 ## Contributing
@@ -393,6 +431,10 @@ Contributions are welcome! See [CLAUDE.md](./CLAUDE.md) for architecture details
 - [x] CLI tool (`op`) for terminal control
 - [x] Built-in AI agent SDK with multi-provider support
 - [x] i18n — 15 languages
+- [x] Headless design engine (`pen-engine`) + React UI SDK (`pen-react`)
+- [x] Style Guides with tag-based matching and MCP tools
+- [x] Concurrent Agent Teams with delegate tool and canvas indicators
+- [x] Native agent runtime (`agent-native` — Zig NAPI)
 - [ ] Collaborative editing
 - [ ] Plugin system
 

@@ -13,6 +13,9 @@ import {
   runTeam,
   addTeamMember,
   resolveTeamToolResult,
+  teamRegisterDelegate,
+  runTeamMember,
+  destroyIterator,
 } from '@zseven-w/agent-native';
 import type { AuthLevel } from '../../../src/types/agent';
 import { agentSessions, cleanup, abortSession, type AgentSession } from '../../utils/agent-sessions';
@@ -167,10 +170,10 @@ export default defineEventHandler(async (event) => {
     }
     try {
       const resultJson = JSON.stringify(body.result);
-      if (session.engine) {
-        resolveToolResult(session.engine, body.toolCallId, resultJson);
-      } else if (session.team) {
+      if (session.team) {
         resolveTeamToolResult(session.team, body.toolCallId, resultJson);
+      } else if (session.engine) {
+        resolveToolResult(session.engine, body.toolCallId, resultJson);
       }
     } catch {
       return { ok: true, ignored: true };
@@ -232,15 +235,18 @@ export default defineEventHandler(async (event) => {
 
     for (const m of body.members) {
       const memberProvider = createProviderHandle(m.providerType, m.apiKey, m.model, m.baseURL);
+      // Members get an EMPTY tool registry — they output JSONL text directly,
+      // not via tool calls. If we registered external tools (generate_design etc.),
+      // the member would call them, but tool results can only be resolved on the
+      // leader engine, not the member — causing the member to block forever.
       const memberTools = createToolRegistry();
-      for (const def of body.toolDefs ?? []) {
-        const params = def.parameters ? { ...def.parameters } : { type: 'object' };
-        delete (params as any).$schema;
-        registerToolSchema(memberTools, def.name, JSON.stringify(params));
-      }
       addTeamMember(team, m.id, memberProvider, memberTools, m.systemPrompt ?? '', 20);
       memberHandles.push({ provider: memberProvider, tools: memberTools });
     }
+
+    // Register delegate tool in leader's registry so the LLM can call
+    // delegate({member_id, task}) to dispatch work to members
+    teamRegisterDelegate(team);
 
     session = { team, provider, tools, memberHandles, createdAt: Date.now(), lastActivity: Date.now() };
   } else {
@@ -294,6 +300,74 @@ export default defineEventHandler(async (event) => {
         let raw: string | null;
         while ((raw = await nextEvent(iter)) !== null) {
           session.lastActivity = Date.now();
+
+          // Intercept delegate tool_use in team mode — run member engine
+          // instead of forwarding to client
+          if (session.team) {
+            try {
+              const evt = JSON.parse(raw);
+              if (evt.tool_use && evt.tool_use.name === 'delegate') {
+                const toolUseId = evt.tool_use.id;
+                let memberIdRaw: string | undefined;
+                let taskRaw: string | undefined;
+
+                // Parse delegate args from input (may be JSON string or object)
+                const inputData = evt.tool_use.input;
+                if (typeof inputData === 'string') {
+                  try {
+                    const parsed = JSON.parse(inputData);
+                    memberIdRaw = parsed.member_id;
+                    taskRaw = parsed.task;
+                  } catch { /* fallback below */ }
+                } else if (inputData && typeof inputData === 'object') {
+                  memberIdRaw = inputData.member_id;
+                  taskRaw = inputData.task;
+                }
+
+                if (memberIdRaw && taskRaw) {
+                  // Emit member_start to client
+                  controller.enqueue(encoder.encode(
+                    `event: member_start\ndata: ${JSON.stringify({ type: 'member_start', memberId: memberIdRaw, task: taskRaw })}\n\n`,
+                  ));
+
+                  // Run member engine
+                  let memberResult = '';
+                  const memberIter = await runTeamMember(session.team, memberIdRaw, taskRaw);
+                  try {
+                    let memberRaw: string | null;
+                    while ((memberRaw = await nextEvent(memberIter)) !== null) {
+                      session.lastActivity = Date.now();
+                      // Forward member events to client (text, thinking, tool_call, etc.)
+                      controller.enqueue(encoder.encode(zigEventToSSE(memberRaw)));
+                      // Collect text for delegate tool result
+                      try {
+                        const mEvt = JSON.parse(memberRaw);
+                        if (mEvt.stream_event?.text && mEvt.stream_event.type === 'text_delta') {
+                          memberResult += mEvt.stream_event.text;
+                        }
+                      } catch { /* ignore parse errors */ }
+                    }
+                  } finally {
+                    destroyIterator(memberIter);
+                  }
+
+                  // Emit member_end to client
+                  controller.enqueue(encoder.encode(
+                    `event: member_end\ndata: ${JSON.stringify({ type: 'member_end', memberId: memberIdRaw, result: '' })}\n\n`,
+                  ));
+
+                  // Resolve delegate tool result back to leader engine
+                  resolveTeamToolResult(
+                    session.team,
+                    toolUseId,
+                    JSON.stringify({ result: memberResult || 'Member completed task.' }),
+                  );
+                  continue; // skip normal forwarding for this event
+                }
+              }
+            } catch { /* not JSON or not delegate — fall through to normal forwarding */ }
+          }
+
           controller.enqueue(encoder.encode(zigEventToSSE(raw)));
         }
       } catch (err: any) {

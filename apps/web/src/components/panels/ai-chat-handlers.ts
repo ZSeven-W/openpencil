@@ -155,23 +155,8 @@ async function runAgentStream(
     maxTurns: 20,
   };
 
-  if (providerConfig.apiKey) {
-    (agentBody as any).members = [
-      {
-        id: 'designer',
-        providerType: providerConfig.providerType,
-        apiKey: providerConfig.apiKey,
-        model: providerConfig.model,
-        baseURL: providerConfig.baseURL,
-        systemPrompt:
-          'You are a design specialist. When given a task, you MUST call the generate_design tool with the prompt parameter containing the full design description.\n\n' +
-          'CRITICAL: Always pass the design description in the "prompt" parameter. Example:\n' +
-          'generate_design({"prompt": "a modern mobile login screen with email, password, and social login buttons"})\n\n' +
-          'Never call generate_design with empty arguments. Copy the task description into the prompt field.',
-        taskFallbackArgs: { generate_design: 'prompt' },
-      },
-    ];
-  }
+  // Concurrency (⚡2x, 3x, etc.) is handled by the orchestrator in standard
+  // mode via useAIStore.getState().concurrency — no Zig team members needed.
 
   const response = await fetch('/api/ai/agent', {
     method: 'POST',
@@ -188,9 +173,10 @@ async function runAgentStream(
   const reader = response.body.getReader();
   let accumulated = '';
   let thinkingContent = '';
+  const [defaultIdentity] = assignAgentIdentities(1);
   const renderer = new StreamingDesignRenderer({
-    agentColor: '#2563EB',
-    agentName: 'Agent',
+    agentColor: defaultIdentity.color,
+    agentName: defaultIdentity.name,
     animated: true,
   });
 
@@ -265,13 +251,21 @@ async function runAgentStream(
 
         case 'done': {
           if (!accumulated.trim()) {
-            accumulated = '*Agent completed with no text output.*';
+            const hasSuccessfulToolCalls = useAIStore
+              .getState()
+              .toolCallBlocks.some((b) => b.status === 'done');
+            accumulated = hasSuccessfulToolCalls
+              ? '*Design generated successfully.*'
+              : '*Agent completed with no text output.*';
             updateLastMessage(accumulated);
           }
 
           if (renderer.getAppliedIds().size === 0) {
             renderer.flushRemaining(accumulated);
           }
+
+          // Force-insert any orphan nodes whose parents never arrived
+          renderer.forceFlushPending();
 
           const rootId = renderer.getRootId();
           if (rootId) {
@@ -384,6 +378,9 @@ export function useChatHandlers() {
         useAIStore.getState().setChatTitle(title || 'New Chat');
       }
 
+      // For builtin models, force provider to 'builtin' — modelGroups may
+      // report 'anthropic' based on the upstream API type, but streamChat/
+      // orchestrator need 'builtin' to route through the correct server path.
       const currentProvider = useAIStore
         .getState()
         .modelGroups.find((g) => g.models.some((m) => m.value === model))?.provider;
@@ -394,7 +391,9 @@ export function useChatHandlers() {
       let accumulated = '';
 
       // -----------------------------------------------------------------------
-      // BUILT-IN PROVIDER (Agent) MODE
+      // BUILT-IN PROVIDER (Agent) MODE — uses Zig engine via runAgentStream()
+      // Rendering is consistent with orchestrator path via shared
+      // StreamingDesignRenderer (breathing glow, animation, cleanup).
       // -----------------------------------------------------------------------
       if (model.startsWith('builtin:')) {
         const parts = model.split(':');
@@ -462,7 +461,7 @@ export function useChatHandlers() {
       }
 
       // -----------------------------------------------------------------------
-      // STANDARD MODE — design/chat pipeline
+      // STANDARD MODE — design/chat pipeline (external CLI providers)
       // -----------------------------------------------------------------------
       const chatHistory = messages.map((m) => ({
         role: m.role,

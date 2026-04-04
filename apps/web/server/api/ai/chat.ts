@@ -1022,7 +1022,11 @@ function streamViaBuiltin(body: ChatBody) {
         } = await import('@zseven-w/agent-native');
 
         const apiKey = body.builtinApiKey;
-        const model = body.model?.trim();
+        const rawModel = body.model?.trim() ?? '';
+        // Model string may be "builtin:<providerId>:<actualModel>" — extract the actual model name
+        const model = rawModel.startsWith('builtin:')
+          ? rawModel.split(':').slice(2).join(':')
+          : rawModel;
         if (!apiKey || !model) throw new Error('Builtin provider requires apiKey and model');
 
         const builtinProvider =
