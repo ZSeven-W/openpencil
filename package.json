@@ -12,6 +12,7 @@
   },
   "workspaces": [
     "packages/*",
+    "packages/agent-native/napi",
     "apps/*"
   ],
   "type": "module",
@@ -40,7 +41,8 @@
     "format": "oxfmt .",
     "format:check": "oxfmt --check .",
     "generate": "bun -e \"import { compileSkills } from './packages/pen-ai-skills/vite-plugin-skills'; compileSkills('./packages/pen-ai-skills')\"",
-    "postinstall": "(bun scripts/patch-srvx-bun.ts && bun run generate) || true"
+    "agent:build": "cd packages/agent-native && zig build napi -Doptimize=ReleaseFast",
+    "postinstall": "(bun scripts/patch-srvx-bun.ts && bun run generate && node scripts/ensure-agent-native.cjs) || true"
   },
   "dependencies": {
     "@anthropic-ai/claude-agent-sdk": "^0.2.47",

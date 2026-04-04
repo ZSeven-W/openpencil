@@ -1,4 +1,13 @@
-import type { AuthLevel } from '../tools/types';
+// Agent event types — extracted from @zseven-w/agent for zero-runtime-dependency usage.
+// These types define the SSE protocol between server and client.
+
+export type AuthLevel = 'read' | 'create' | 'modify' | 'delete' | 'orchestrate';
+
+export interface ToolResult {
+  success: boolean;
+  data?: unknown;
+  error?: string;
+}
 
 export type AgentEvent =
   | { type: 'thinking'; content: string; source?: string }
@@ -15,7 +24,7 @@ export type AgentEvent =
       type: 'tool_result';
       id: string;
       name: string;
-      result: { success: boolean; data?: unknown; error?: string };
+      result: ToolResult;
       source?: string;
     }
   | { type: 'turn'; turn: number; maxTurns: number; source?: string }

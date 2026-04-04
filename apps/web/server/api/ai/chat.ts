@@ -992,7 +992,7 @@ function streamViaCopilot(body: ChatBody, model?: string) {
 
 /**
  * Stream via builtin provider — direct API key, no CLI tool needed.
- * Uses Vercel AI SDK's streamText with Anthropic or OpenAI-compatible providers.
+ * Uses Zig NAPI addon (agent-native) with Anthropic or OpenAI-compatible providers.
  */
 function streamViaBuiltin(body: ChatBody) {
   const stream = new ReadableStream({
@@ -1009,43 +1009,70 @@ function streamViaBuiltin(body: ChatBody) {
       }, KEEPALIVE_INTERVAL_MS);
 
       try {
-        const { streamText } = await import('@zseven-w/agent');
+        const {
+          createAnthropicProvider,
+          createOpenAICompatProvider,
+          createQueryEngine,
+          seedMessages,
+          submitMessage,
+          nextEvent,
+          destroyIterator,
+          destroyQueryEngine,
+          destroyProvider,
+        } = await import('@zseven-w/agent-native');
+
         const apiKey = body.builtinApiKey;
         const model = body.model?.trim();
         if (!apiKey || !model) throw new Error('Builtin provider requires apiKey and model');
 
-        const { createAnthropicProvider, createOpenAICompatProvider } =
-          await import('@zseven-w/agent');
-        const provider =
+        const builtinProvider =
           body.builtinType === 'anthropic'
-            ? createAnthropicProvider({ apiKey, model, baseURL: body.builtinBaseURL })
-            : createOpenAICompatProvider({ apiKey, model, baseURL: body.builtinBaseURL });
-        const llmModel = provider.model;
+            ? createAnthropicProvider(apiKey, model, body.builtinBaseURL)
+            : createOpenAICompatProvider(apiKey, body.builtinBaseURL!, model);
 
-        const messages = body.messages.map((m) => ({
-          role: m.role as 'user' | 'assistant',
-          content: m.content,
-        }));
-
-        const response = streamText({
-          model: llmModel,
-          system: body.system,
-          messages,
+        // Pure streaming — no tools, maxTurns=1 prevents agentic looping
+        const builtinEngine = createQueryEngine({
+          provider: builtinProvider,
+          systemPrompt: body.system,
+          maxTurns: 1,
+          cwd: process.cwd(),
         });
 
-        for await (const part of response.fullStream) {
-          if (part.type === 'text-delta' && part.text) {
+        // Seed prior conversation history for multi-turn context
+        const priorMsgs = body.messages.slice(0, -1).filter(
+          (m: any) =>
+            (m.role === 'user' || m.role === 'assistant') && typeof m.content === 'string',
+        );
+        if (priorMsgs.length > 0) {
+          seedMessages(builtinEngine, JSON.stringify(priorMsgs));
+        }
+
+        const lastMsg = body.messages[body.messages.length - 1]?.content ?? '';
+        const builtinIter = await submitMessage(builtinEngine, lastMsg);
+
+        try {
+          let raw: string | null;
+          while ((raw = await nextEvent(builtinIter)) !== null) {
+            const evt = JSON.parse(raw);
             clearInterval(pingTimer);
-            controller.enqueue(
-              encoder.encode(`data: ${JSON.stringify({ type: 'text', content: part.text })}\n\n`),
-            );
-          } else if (part.type === 'reasoning-delta' && (part as any).text) {
-            controller.enqueue(
-              encoder.encode(
-                `data: ${JSON.stringify({ type: 'thinking', content: (part as any).text })}\n\n`,
-              ),
-            );
+            if (evt.type === 'text_delta' && evt.text) {
+              controller.enqueue(
+                encoder.encode(
+                  `data: ${JSON.stringify({ type: 'text', content: evt.text })}\n\n`,
+                ),
+              );
+            } else if (evt.type === 'thinking' && evt.text) {
+              controller.enqueue(
+                encoder.encode(
+                  `data: ${JSON.stringify({ type: 'thinking', content: evt.text })}\n\n`,
+                ),
+              );
+            }
           }
+        } finally {
+          destroyIterator(builtinIter);
+          destroyQueryEngine(builtinEngine);
+          destroyProvider(builtinProvider);
         }
       } catch (error) {
         const content = error instanceof Error ? error.message : 'Unknown error';

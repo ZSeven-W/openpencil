@@ -1,0 +1,3 @@
+[submodule "packages/agent-native"]
+	path = packages/agent-native
+	url = https://github.com/ZSeven-W/agent.git

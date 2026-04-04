@@ -1,4 +1,4 @@
-import type { AgentEvent, ToolResult, AuthLevel } from '@zseven-w/agent';
+import type { AgentEvent, ToolResult, AuthLevel } from '@/types/agent';
 import type { PenNode } from '@/types/pen';
 
 type ToolCallEvent = Extract<AgentEvent, { type: 'tool_call' }>;

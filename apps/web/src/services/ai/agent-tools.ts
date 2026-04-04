@@ -1,6 +1,11 @@
-import { z } from 'zod';
-import { createToolRegistry } from '@zseven-w/agent';
-import type { AuthLevel } from '@zseven-w/agent';
+import type { AuthLevel } from '@/types/agent';
+
+export interface ToolDef {
+  name: string;
+  description: string;
+  level: AuthLevel;
+  parameters: Record<string, unknown>;
+}
 
 const TOOL_AUTH_MAP: Record<string, AuthLevel> = {
   // read
@@ -40,70 +45,79 @@ const TOOL_AUTH_MAP: Record<string, AuthLevel> = {
   remove_page: 'delete',
 };
 
-/**
- * Create a tool registry pre-loaded with MVP design tools.
- * Tool execute functions are NOT provided — they run on the client via ToolExecutor.
- */
-export function createDesignToolRegistry() {
-  const registry = createToolRegistry();
-
-  // MVP tools (Phase 1: 6 tools)
-  registry.register({
-    name: 'batch_get',
-    description: 'Get nodes by IDs or search patterns from the document tree',
-    level: TOOL_AUTH_MAP.batch_get,
-    schema: z.object({
-      ids: z.array(z.string()).optional().describe('Node IDs to retrieve'),
-      patterns: z.array(z.string()).optional().describe('Search patterns to match'),
-    }),
-  });
-
-  registry.register({
-    name: 'snapshot_layout',
-    description:
-      'Get a compact layout snapshot of the current page showing node positions and sizes',
-    level: TOOL_AUTH_MAP.snapshot_layout,
-    schema: z.object({
-      pageId: z.string().optional(),
-    }),
-  });
-
-  // Design creation — delegates to the full internal pipeline (orchestrator + sub-agents)
-  registry.register({
-    name: 'generate_design',
-    description:
-      'Generate a complete design on the canvas. Pass a natural language description. The pipeline handles layout, styling, icons, and rendering. Always use this for creating designs.',
-    level: TOOL_AUTH_MAP.generate_design,
-    schema: z.object({
-      prompt: z
-        .string()
-        .describe(
-          'Natural language description of the design, e.g. "a modern mobile login screen with email, password, login button, and social login"',
-        ),
-    }),
-  });
-
-  // Modification tools — for editing existing designs
-  registry.register({
-    name: 'update_node',
-    description: 'Update properties of an existing node by ID',
-    level: TOOL_AUTH_MAP.update_node,
-    schema: z.object({
-      id: z.string().describe('Node ID to update'),
-      data: z.record(z.unknown()).describe('Properties to update'),
-    }),
-  });
-
-  registry.register({
-    name: 'delete_node',
-    description: 'Delete a node from the document by ID',
-    level: TOOL_AUTH_MAP.delete_node,
-    schema: z.object({
-      id: z.string().describe('Node ID to delete'),
-    }),
-  });
-
-  return registry;
+export function getDesignToolDefs(): ToolDef[] {
+  return [
+    {
+      name: 'batch_get',
+      description: 'Get nodes by IDs or search patterns from the document tree',
+      level: TOOL_AUTH_MAP.batch_get,
+      parameters: {
+        type: 'object',
+        properties: {
+          ids: { type: 'array', items: { type: 'string' }, description: 'Node IDs to retrieve' },
+          patterns: {
+            type: 'array',
+            items: { type: 'string' },
+            description: 'Search patterns to match',
+          },
+        },
+      },
+    },
+    {
+      name: 'snapshot_layout',
+      description:
+        'Get a compact layout snapshot of the current page showing node positions and sizes',
+      level: TOOL_AUTH_MAP.snapshot_layout,
+      parameters: {
+        type: 'object',
+        properties: {
+          pageId: { type: 'string' },
+        },
+      },
+    },
+    {
+      name: 'generate_design',
+      description:
+        'Generate a complete design on the canvas. Pass a natural language description. The pipeline handles layout, styling, icons, and rendering. Always use this for creating designs.',
+      level: TOOL_AUTH_MAP.generate_design,
+      parameters: {
+        type: 'object',
+        properties: {
+          prompt: {
+            type: 'string',
+            description:
+              'Natural language description of the design, e.g. "a modern mobile login screen with email, password, login button, and social login"',
+          },
+        },
+        required: ['prompt'],
+      },
+    },
+    {
+      name: 'update_node',
+      description: 'Update properties of an existing node by ID',
+      level: TOOL_AUTH_MAP.update_node,
+      parameters: {
+        type: 'object',
+        properties: {
+          id: { type: 'string', description: 'Node ID to update' },
+          data: { type: 'object', description: 'Properties to update' },
+        },
+        required: ['id', 'data'],
+      },
+    },
+    {
+      name: 'delete_node',
+      description: 'Delete a node from the document by ID',
+      level: TOOL_AUTH_MAP.delete_node,
+      parameters: {
+        type: 'object',
+        properties: {
+          id: { type: 'string', description: 'Node ID to delete' },
+        },
+        required: ['id'],
+      },
+    },
+  ];
 }
 
 export { TOOL_AUTH_MAP };

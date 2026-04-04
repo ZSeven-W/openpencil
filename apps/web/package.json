@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "dependencies": {
-    "@zseven-w/agent": "workspace:*",
+    "@zseven-w/agent-native": "workspace:*",
     "@zseven-w/pen-ai-skills": "workspace:*",
     "@zseven-w/pen-codegen": "workspace:*",
     "@zseven-w/pen-core": "workspace:*",

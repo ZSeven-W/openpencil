@@ -13,7 +13,7 @@ import {
   Trash2,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import type { AuthLevel } from '@zseven-w/agent';
+import type { AuthLevel } from '@/types/agent';
 
 export interface ToolCallBlockData {
   id: string;
