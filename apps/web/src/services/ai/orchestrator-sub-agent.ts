@@ -8,7 +8,6 @@
  * - ID namespace isolation via prefixes
  */
 
-import type { PenNode } from '@/types/pen';
 import type { VariableDefinition } from '@/types/variables';
 import type { DesignMdSpec } from '@/types/design-md';
 import type {
@@ -23,19 +22,13 @@ import { resolveSkills } from '@zseven-w/pen-ai-skills';
 import { type PreparedDesignPrompt, getSubAgentTimeouts } from './orchestrator-prompt-optimizer';
 import {
   expandRootFrameHeight,
-  extractStreamingNodes,
-  extractJsonFromResponse,
-  insertStreamingNode,
   buildVariableContext,
   applyPostStreamingTreeHeuristics,
 } from './design-generator';
-import { startNewAnimationBatch } from './design-animation';
 import { emitProgress } from './orchestrator-progress';
-import {
-  addAgentIndicatorRecursive,
-  removeAgentIndicatorsByPrefix,
-} from '@/canvas/agent-indicator';
-import { markNodesForAnimation } from './design-animation';
+import { StreamingDesignRenderer } from './streaming-design-renderer';
+
+export { ensureIdPrefix, ensurePrefixStr } from './streaming-design-renderer';
 
 // ---------------------------------------------------------------------------
 // Stream timeout configuration (shared with orchestrator.ts)
@@ -50,27 +43,6 @@ export interface StreamTimeoutConfig {
   thinkingMode?: 'adaptive' | 'disabled' | 'enabled';
   thinkingBudgetTokens?: number;
   effort?: 'low' | 'medium' | 'high' | 'max';
-}
-
-// ---------------------------------------------------------------------------
-// ID namespace isolation
-// ---------------------------------------------------------------------------
-
-export function ensureIdPrefix(node: PenNode, prefix: string): void {
-  if (!node.id.startsWith(`${prefix}-`)) {
-    node.id = `${prefix}-${node.id}`;
-  }
-  // Recursively prefix children (for fallback tree extraction)
-  if ('children' in node && Array.isArray(node.children)) {
-    for (const child of node.children) {
-      ensureIdPrefix(child, prefix);
-    }
-  }
-}
-
-export function ensurePrefixStr(id: string, prefix: string): string {
-  if (id.startsWith(`${prefix}-`)) return id;
-  return `${prefix}-${id}`;
 }
 
 // ---------------------------------------------------------------------------
@@ -241,10 +213,6 @@ async function executeSubAgent(
   progressEntry.status = 'streaming';
   emitProgress(plan, progress, callbacks);
 
-  // Agent identity for canvas indicators (concurrent mode only)
-  const agentColor = progressEntry.agentColor;
-  const agentName = progressEntry.agentName;
-
   // Context hint is set once at orchestrator level (combining all subtask labels)
   // to avoid race conditions during concurrent execution
 
@@ -274,9 +242,14 @@ async function executeSubAgent(
   const systemPrompt = genCtx.skills.map((s) => s.content).join('\n\n');
 
   let rawResponse = '';
-  const nodes: PenNode[] = [];
-  let streamOffset = 0;
-  let subtaskRootId: string | null = null;
+
+  const renderer = new StreamingDesignRenderer({
+    agentColor: progressEntry.agentColor,
+    agentName: progressEntry.agentName,
+    idPrefix: subtask.idPrefix,
+    parentFrameId: subtask.parentFrameId ?? plan.rootFrame.id,
+    animated,
+  });
 
   try {
     for await (const chunk of streamChat(
@@ -289,52 +262,14 @@ async function executeSubAgent(
     )) {
       if (chunk.type === 'text') {
         rawResponse += chunk.content;
-
-        // Forward streaming text to panel
         emitProgress(plan, progress, callbacks, rawResponse);
 
-        if (animated) {
-          const { results, newOffset } = extractStreamingNodes(rawResponse, streamOffset);
-          if (results.length > 0) {
-            streamOffset = newOffset;
-            startNewAnimationBatch();
-
-            for (const { node, parentId } of results) {
-              // Enforce ID prefix
-              ensureIdPrefix(node, subtask.idPrefix);
-
-              // Tag node AND all descendants for canvas indicator + preview
-              // delay BEFORE insert. insertStreamingNode triggers synchronous
-              // canvas sync which checks isPreviewNode — must be set first.
-              if (agentColor && agentName) {
-                addAgentIndicatorRecursive(node, agentColor, agentName);
-              }
-              // Pre-populate pendingAnimationNodes for all descendants so
-              // canvas-sync animates them (insertStreamingNode only marks the
-              // root and skips background frames).
-              markNodesForAnimation([node]);
-
-              if (parentId !== null) {
-                // Prefix the parent reference too
-                const prefixedParent = ensurePrefixStr(parentId, subtask.idPrefix);
-                insertStreamingNode(node, prefixedParent);
-              } else {
-                // Sub-agent root → insert under subtask's parent frame
-                // In concurrent mode, each subtask has its own root frame;
-                // in sequential mode, all share plan.rootFrame.id
-                const targetParent = subtask.parentFrameId ?? plan.rootFrame.id;
-                insertStreamingNode(node, targetParent);
-                if (!subtaskRootId) subtaskRootId = node.id;
-              }
-              nodes.push(node);
-              progressEntry.nodeCount++;
-              progress.totalNodes++;
-            }
-            callbacks?.onApplyPartial?.(progress.totalNodes);
-            // Expand the subtask's root frame as content grows
-            expandRootFrameHeight(subtask.parentFrameId ?? undefined);
-            emitProgress(plan, progress, callbacks, rawResponse);
-          }
+        const count = renderer.feedText(rawResponse);
+        if (count > 0) {
+          progressEntry.nodeCount += count;
+          progress.totalNodes += count;
+          callbacks?.onApplyPartial?.(progress.totalNodes);
+          emitProgress(plan, progress, callbacks, rawResponse);
         }
       } else if (chunk.type === 'thinking') {
         // Accumulate and forward thinking content to UI
@@ -343,38 +278,22 @@ async function executeSubAgent(
       } else if (chunk.type === 'error') {
         progressEntry.status = 'error';
         emitProgress(plan, progress, callbacks);
-        return { subtaskId: subtask.id, nodes, rawResponse, error: chunk.content };
+        return { subtaskId: subtask.id, nodes: renderer.getInsertedNodes(), rawResponse, error: chunk.content };
       }
     }
 
-    // Fallback: if streaming extraction found nothing, try batch extraction
-    if (nodes.length === 0 && rawResponse.trim().length > 0) {
-      const fallbackNodes = extractJsonFromResponse(rawResponse);
-      if (fallbackNodes && fallbackNodes.length > 0) {
-        startNewAnimationBatch();
-        for (const node of fallbackNodes) {
-          ensureIdPrefix(node, subtask.idPrefix);
-
-          // Tag ALL descendants BEFORE insert — same reason as streaming path
-          if (agentColor && agentName) {
-            addAgentIndicatorRecursive(node, agentColor, agentName);
-          }
-          markNodesForAnimation([node]);
-
-          const targetParent = subtaskRootId
-            ? subtaskRootId
-            : (subtask.parentFrameId ?? plan.rootFrame.id);
-          insertStreamingNode(node, targetParent);
-          if (!subtaskRootId) subtaskRootId = node.id;
-          nodes.push(node);
-          progressEntry.nodeCount++;
-          progress.totalNodes++;
-        }
+    // Fallback batch extraction
+    if (renderer.getAppliedIds().size === 0 && rawResponse.trim()) {
+      const count = renderer.flushRemaining(rawResponse);
+      if (count > 0) {
+        progressEntry.nodeCount += count;
+        progress.totalNodes += count;
         callbacks?.onApplyPartial?.(progress.totalNodes);
       }
     }
 
-    if (nodes.length === 0) {
+    if (renderer.getAppliedIds().size === 0) {
+      renderer.finish();
       progressEntry.status = 'error';
       emitProgress(plan, progress, callbacks);
 
@@ -400,7 +319,7 @@ async function executeSubAgent(
 
       return {
         subtaskId: subtask.id,
-        nodes,
+        nodes: renderer.getInsertedNodes(),
         rawResponse,
         error: errorMsg,
       };
@@ -409,22 +328,23 @@ async function executeSubAgent(
     // Apply tree-aware heuristics now that the full subtree is in the store.
     // During streaming, nodes were inserted individually without children, so
     // tree-aware heuristics (button width, frame height, clipContent) couldn't run.
-    if (subtaskRootId) {
-      applyPostStreamingTreeHeuristics(subtaskRootId);
+    const rootId = renderer.getRootId();
+    if (rootId) {
+      applyPostStreamingTreeHeuristics(rootId);
     }
 
     progressEntry.status = 'done';
     // Delay indicator removal so the glow effect is visible even when the
     // subtask finishes quickly (e.g. model outputs everything in one chunk).
-    setTimeout(() => removeAgentIndicatorsByPrefix(subtask.idPrefix), 1500);
+    renderer.finish(1500);
     emitProgress(plan, progress, callbacks);
-    return { subtaskId: subtask.id, nodes, rawResponse };
+    return { subtaskId: subtask.id, nodes: renderer.getInsertedNodes(), rawResponse };
   } catch (err) {
     const msg = err instanceof Error ? err.message : 'Unknown error';
     progressEntry.status = 'error';
-    setTimeout(() => removeAgentIndicatorsByPrefix(subtask.idPrefix), 1500);
+    renderer.finish(1500);
     emitProgress(plan, progress, callbacks);
-    return { subtaskId: subtask.id, nodes, rawResponse, error: msg };
+    return { subtaskId: subtask.id, nodes: renderer.getInsertedNodes(), rawResponse, error: msg };
   }
 }
 
