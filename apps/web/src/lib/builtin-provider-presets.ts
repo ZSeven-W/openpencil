@@ -71,7 +71,17 @@ export const BUILTIN_PROVIDER_PRESETS: Record<BuiltinProviderPreset, BuiltinPres
     modelPlaceholder: 'glm-5',
     regions: {
       cn: { baseURL: 'https://open.bigmodel.cn/api/paas/v4' },
-      global: { baseURL: 'https://open.z.ai/api/paas/v4' },
+      global: { baseURL: 'https://api.z.ai/api/paas/v4' },
+    },
+  },
+  'glm-coding': {
+    label: 'GLM Coding Plan',
+    type: 'openai-compat',
+    placeholder: 'xxx.yyy',
+    modelPlaceholder: 'glm-4.7',
+    regions: {
+      cn: { baseURL: 'https://open.bigmodel.cn/api/coding/paas/v4' },
+      global: { baseURL: 'https://api.z.ai/api/coding/paas/v4' },
     },
   },
   kimi: {
@@ -102,6 +112,13 @@ export const BUILTIN_PROVIDER_PRESETS: Record<BuiltinProviderPreset, BuiltinPres
     baseURL: 'https://ark.cn-beijing.volces.com/api/v3',
     placeholder: 'ARK API Key',
     modelPlaceholder: 'doubao-seed-2.0-pro',
+  },
+  'ark-coding': {
+    label: 'Ark Coding Plan',
+    type: 'openai-compat',
+    baseURL: 'https://ark.cn-beijing.volces.com/api/coding/v3',
+    placeholder: 'ARK API Key',
+    modelPlaceholder: 'ark-code-latest',
   },
   xiaomi: {
     label: 'Xiaomi MiMo',
@@ -160,6 +177,13 @@ const LEGACY_URL_LOOKUP: Record<string, BuiltinProviderPreset> = {
   'https://api.openai.com': 'openai',
   'https://api.minimaxi.com/anthropic/v1': 'minimax',
   'https://api.minimax.io/anthropic/v1': 'minimax',
+  'https://open.z.ai/api/paas/v4': 'zhipu',
+  'https://open.z.ai/api/coding/paas/v4': 'glm-coding',
+};
+
+const LEGACY_GLOBAL_URL_LOOKUP: Partial<Record<BuiltinProviderPreset, Set<string>>> = {
+  zhipu: new Set(['https://open.z.ai/api/paas/v4']),
+  'glm-coding': new Set(['https://open.z.ai/api/coding/paas/v4']),
 };
 
 function normalizeURL(url?: string): string {
@@ -178,8 +202,10 @@ function inferRegionFromURL(
 ): 'cn' | 'global' {
   const regions = BUILTIN_PROVIDER_PRESETS[preset].regions;
   if (!regions) return 'cn';
+  const legacyGlobalURLs = LEGACY_GLOBAL_URL_LOOKUP[preset];
   return normalizedURL === regions.global.baseURL ||
-    normalizedURL === `${regions.global.baseURL}/v1`
+    normalizedURL === `${regions.global.baseURL}/v1` ||
+    legacyGlobalURLs?.has(normalizedURL)
     ? 'global'
     : 'cn';
 }

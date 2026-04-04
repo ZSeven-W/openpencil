@@ -152,9 +152,11 @@ export function BuiltinProviderForm({
           <option value="gemini">Google Gemini</option>
           <option value="minimax">MiniMax</option>
           <option value="zhipu">智谱 (Zhipu)</option>
+          <option value="glm-coding">GLM Coding Plan</option>
           <option value="kimi">Kimi (Moonshot)</option>
           <option value="bailian">Bailian (DashScope)</option>
           <option value="doubao">DouBao Seed</option>
+          <option value="ark-coding">Ark Coding Plan</option>
           <option value="xiaomi">Xiaomi MiMo</option>
           <option value="modelscope">ModelScope</option>
           <option value="stepfun">StepFun</option>

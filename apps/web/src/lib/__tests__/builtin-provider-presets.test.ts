@@ -52,6 +52,67 @@ describe('builtin provider presets', () => {
     ).toBe('global');
   });
 
+  it('keeps coding-plan endpoints distinct from standard zhipu and doubao endpoints', () => {
+    expect(
+      inferBuiltinProviderPreset({
+        type: 'openai-compat',
+        baseURL: 'https://open.bigmodel.cn/api/coding/paas/v4',
+      } as any),
+    ).toBe('glm-coding');
+    expect(
+      inferBuiltinProviderRegion({
+        type: 'openai-compat',
+        baseURL: 'https://api.z.ai/api/coding/paas/v4',
+      } as any),
+    ).toBe('global');
+    expect(
+      inferBuiltinProviderPreset({
+        type: 'openai-compat',
+        baseURL: 'https://open.bigmodel.cn/api/paas/v4',
+      } as any),
+    ).toBe('zhipu');
+    expect(
+      inferBuiltinProviderPreset({
+        type: 'openai-compat',
+        baseURL: 'https://ark.cn-beijing.volces.com/api/coding/v3',
+      } as any),
+    ).toBe('ark-coding');
+    expect(
+      inferBuiltinProviderPreset({
+        type: 'openai-compat',
+        baseURL: 'https://ark.cn-beijing.volces.com/api/v3',
+      } as any),
+    ).toBe('doubao');
+  });
+
+  it('migrates legacy Z.AI global endpoints to the canonical hostnames', () => {
+    const general = canonicalizeBuiltinProviderConfig({
+      id: 'bp-zhipu-global',
+      displayName: 'Zhipu',
+      type: 'openai-compat',
+      apiKey: 'key',
+      model: 'glm-5',
+      baseURL: 'https://open.z.ai/api/paas/v4',
+      enabled: true,
+    });
+
+    expect(general.preset).toBe('zhipu');
+    expect(general.baseURL).toBe('https://api.z.ai/api/paas/v4');
+
+    const coding = canonicalizeBuiltinProviderConfig({
+      id: 'bp-glm-coding-global',
+      displayName: 'GLM Coding Plan',
+      type: 'openai-compat',
+      apiKey: 'key',
+      model: 'glm-4.7',
+      baseURL: 'https://open.z.ai/api/coding/paas/v4',
+      enabled: true,
+    });
+
+    expect(coding.preset).toBe('glm-coding');
+    expect(coding.baseURL).toBe('https://api.z.ai/api/coding/paas/v4');
+  });
+
   it('canonicalizes legacy built-in provider URLs on hydrate', () => {
     expect(
       canonicalizeBuiltinProviderConfig({

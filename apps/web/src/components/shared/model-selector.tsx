@@ -29,11 +29,28 @@ export const BUILTIN_MODEL_LISTS: Partial<
     { id: 'MiniMax-M2.1', name: 'MiniMax M2.1' },
     { id: 'MiniMax-M1', name: 'MiniMax M1' },
   ],
+  'glm-coding': [
+    { id: 'glm-5', name: 'GLM-5' },
+    { id: 'glm-4.7', name: 'GLM-4.7' },
+    { id: 'glm-4.6', name: 'GLM-4.6' },
+    { id: 'glm-4.5-air', name: 'GLM-4.5 Air' },
+  ],
   doubao: [
     { id: 'doubao-seed-2.0-pro', name: 'Doubao Seed 2.0 Pro' },
     { id: 'doubao-seed-2.0-lite', name: 'Doubao Seed 2.0 Lite' },
     { id: 'doubao-seed-2.0-code', name: 'Doubao Seed 2.0 Code' },
     { id: 'doubao-seed-code', name: 'Doubao Seed Code' },
+  ],
+  'ark-coding': [
+    { id: 'ark-code-latest', name: 'Ark Code Latest' },
+    { id: 'doubao-seed-2.0-code', name: 'Doubao Seed 2.0 Code' },
+    { id: 'doubao-seed-code', name: 'Doubao Seed Code' },
+    { id: 'doubao-seed-2.0-pro', name: 'Doubao Seed 2.0 Pro' },
+    { id: 'doubao-seed-2.0-lite', name: 'Doubao Seed 2.0 Lite' },
+    { id: 'glm-4.7', name: 'GLM-4.7' },
+    { id: 'deepseek-v3.2', name: 'DeepSeek V3.2' },
+    { id: 'kimi-k2.5', name: 'Kimi K2.5' },
+    { id: 'minimax-m2.5', name: 'MiniMax M2.5' },
   ],
 };
 
