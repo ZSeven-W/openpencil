@@ -788,6 +788,26 @@ export async function executeOrchestration(
       });
     }
 
+    // Snapshot descendant count per root frame AFTER Phase 2 scaffold setup
+    // (status bar, dashboard columns, row frames) so we can distinguish
+    // scaffold-only frames from frames that received real sub-agent content.
+    const scaffoldCounts = new Map<string, number>();
+    {
+      const store = useDocumentStore.getState();
+      const countDescendants = (node: PenNode): number => {
+        let n = 0;
+        if ('children' in node && Array.isArray(node.children)) {
+          n = node.children.length;
+          for (const c of node.children) n += countDescendants(c as PenNode);
+        }
+        return n;
+      };
+      for (const rn of rootNodes) {
+        const live = store.getNodeById(rn.id);
+        scaffoldCounts.set(rn.id, live ? countDescendants(live) : 0);
+      }
+    }
+
     // -- Phase 3: Parallel sub-agent execution --
     const progress: OrchestrationProgress = {
       phase: 'generating',
@@ -821,16 +841,23 @@ export async function executeOrchestration(
       // Height adjustment for animated mode is deferred to after Phase 4b
       // (duplicate status-bar removal) so it sees the cleaned node tree.
     } catch (e) {
-      // Only remove root frames if they are completely empty — earlier
-      // subtasks may have already streamed valid content into them.
+      // Remove root frames that have no sub-agent content — only scaffold
+      // nodes (status bar, dashboard columns) from Phase 2 setup.
       const store = useDocumentStore.getState();
+      const countDesc = (node: PenNode): number => {
+        let n = 0;
+        if ('children' in node && Array.isArray(node.children)) {
+          n = node.children.length;
+          for (const c of node.children) n += countDesc(c as PenNode);
+        }
+        return n;
+      };
       for (const rn of rootNodes) {
         const live = store.getNodeById(rn.id);
-        const isEmpty = !live
-          || !('children' in live)
-          || !Array.isArray(live.children)
-          || live.children.length === 0;
-        if (isEmpty) {
+        if (!live) continue;
+        const nowCount = countDesc(live);
+        const beforeCount = scaffoldCounts.get(rn.id) ?? 0;
+        if (nowCount <= beforeCount) {
           try { store.removeNode(rn.id); } catch { /* already gone */ }
         }
       }
