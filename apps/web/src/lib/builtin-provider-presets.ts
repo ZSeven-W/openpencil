@@ -153,6 +153,8 @@ export const BUILTIN_PROVIDER_PRESETS: Record<BuiltinProviderPreset, BuiltinPres
     label: 'ModelScope',
     type: 'openai-compat',
     baseURL: 'https://api-inference.modelscope.cn/v1',
+    altBaseURL: 'https://api-inference.modelscope.cn',
+    altType: 'anthropic',
     placeholder: 'API Key',
     modelPlaceholder: 'qwen-plus',
   },
