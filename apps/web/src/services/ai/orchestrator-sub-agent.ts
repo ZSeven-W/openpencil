@@ -70,7 +70,7 @@ export async function executeSubAgents(
     for (let i = 0; i < plan.subtasks.length; i++) {
       if (abortSignal?.aborted) break;
 
-      const result = await executeSubAgent(
+      let result = await executeSubAgent(
         plan.subtasks[i],
         plan,
         request,
@@ -82,6 +82,23 @@ export async function executeSubAgents(
         undefined,
         abortSignal,
       );
+
+      // Retry once on failure (e.g. socket closed by provider)
+      if (result.error && result.nodes.length === 0 && !abortSignal?.aborted) {
+        console.warn(`[orchestrator] subtask ${i} failed, retrying: ${result.error}`);
+        result = await executeSubAgent(
+          plan.subtasks[i],
+          plan,
+          request,
+          preparedPrompt,
+          timeoutOptions,
+          progress,
+          i,
+          callbacks,
+          undefined,
+          abortSignal,
+        );
+      }
 
       if (result.error && result.nodes.length === 0) {
         throw new Error(result.error);
