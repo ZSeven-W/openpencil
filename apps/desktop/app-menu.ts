@@ -5,6 +5,26 @@ function sendMenuAction(action: string): void {
   win?.webContents.send('menu:action', action);
 }
 
+/** Recent files submenu — rebuilt each time the menu opens. */
+function buildRecentFilesSubmenu(): Electron.MenuItemConstructorOptions[] {
+  const recent = app.isReady() ? (global as any).__recentFiles ?? [] : [];
+  if (recent.length === 0) {
+    return [{ label: 'No Recent Files', enabled: false }];
+  }
+  const items: Electron.MenuItemConstructorOptions[] = recent.map(
+    (entry: { fileName: string; filePath: string }) => ({
+      label: entry.fileName,
+      click: () => sendMenuAction(`open-recent:${entry.filePath}`),
+    }),
+  );
+  items.push({ type: 'separator' });
+  items.push({
+    label: 'Clear Recent Files',
+    click: () => sendMenuAction('clear-recent-files'),
+  });
+  return items;
+}
+
 export function buildAppMenu(): void {
   const isMac = process.platform === 'darwin';
 
@@ -43,11 +63,20 @@ export function buildAppMenu(): void {
           accelerator: 'CmdOrCtrl+O',
           click: () => sendMenuAction('open'),
         },
+        {
+          label: 'Open Recent',
+          submenu: buildRecentFilesSubmenu(),
+        },
         { type: 'separator' },
         {
           label: 'Save',
           accelerator: 'CmdOrCtrl+S',
           click: () => sendMenuAction('save'),
+        },
+        {
+          label: 'Save As\u2026',
+          accelerator: 'CmdOrCtrl+Shift+S',
+          click: () => sendMenuAction('save-as'),
         },
         { type: 'separator' },
         {

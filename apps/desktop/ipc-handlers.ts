@@ -139,6 +139,16 @@ export function setupIPC(deps: IpcDeps): void {
     schedulePrefsWrite();
   });
 
+  // Recent files sync from renderer → main (for native menu)
+  ipcMain.on(
+    'recent-files:sync',
+    (_event, files: Array<{ fileName: string; filePath: string }>) => {
+      (global as any).__recentFiles = files;
+      // Rebuild menu so "Open Recent" reflects current state
+      import('./app-menu').then(({ buildAppMenu }) => buildAppMenu());
+    },
+  );
+
   ipcMain.handle('log:getDir', () => getLogDir());
 
   // Updater IPC

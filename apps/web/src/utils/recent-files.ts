@@ -20,6 +20,15 @@ export function getRecentFiles(): RecentFile[] {
   }
 }
 
+function syncToElectron(files: RecentFile[]): void {
+  if (typeof window !== 'undefined' && window.electronAPI?.syncRecentFiles) {
+    const forMenu = files
+      .filter((f) => f.filePath)
+      .map((f) => ({ fileName: f.fileName, filePath: f.filePath! }));
+    window.electronAPI.syncRecentFiles(forMenu);
+  }
+}
+
 export function addRecentFile(entry: Omit<RecentFile, 'lastOpened'>): void {
   const files = getRecentFiles();
   const filtered = files.filter(
@@ -28,10 +37,12 @@ export function addRecentFile(entry: Omit<RecentFile, 'lastOpened'>): void {
   const newEntry: RecentFile = { ...entry, lastOpened: Date.now() };
   const updated = [newEntry, ...filtered].slice(0, MAX_ENTRIES);
   appStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+  syncToElectron(updated);
 }
 
 export function clearRecentFiles(): void {
   appStorage.removeItem(STORAGE_KEY);
+  syncToElectron([]);
 }
 
 /**

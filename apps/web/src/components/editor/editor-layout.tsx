@@ -29,6 +29,7 @@ import { useFigmaPaste } from '@/hooks/use-figma-paste';
 import { useMcpSync } from '@/hooks/use-mcp-sync';
 import { useFileDrop } from '@/hooks/use-file-drop';
 import { initAppStorage } from '@/utils/app-storage';
+import { getRecentFiles } from '@/utils/recent-files';
 import SkiaCanvas from '@/canvas/skia/skia-canvas';
 
 export default function EditorLayout() {
@@ -157,6 +158,14 @@ export default function EditorLayout() {
       useAgentSettingsStore.getState().hydrate();
       useUIKitStore.getState().hydrate();
       useCanvasStore.getState().hydrate();
+      // Sync recent files to Electron native menu on startup
+      const recent = getRecentFiles();
+      if (recent.length > 0 && window.electronAPI?.syncRecentFiles) {
+        const forMenu = recent
+          .filter((f) => f.filePath)
+          .map((f) => ({ fileName: f.fileName, filePath: f.filePath! }));
+        window.electronAPI.syncRecentFiles(forMenu);
+      }
       useThemePresetStore.getState().hydrate();
       useDesignMdStore.getState().hydrate();
     });

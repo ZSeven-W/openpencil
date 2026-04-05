@@ -6,12 +6,51 @@ import { useHistoryStore } from '@/stores/history-store';
 import { zoomToFitContent } from '@/canvas/skia-engine-ref';
 import { syncCanvasPositionsToStore } from '@/canvas/skia-engine-ref';
 import { normalizePenDocument } from '@/utils/normalize-pen-file';
+import { addRecentFile, clearRecentFiles } from '@/utils/recent-files';
 import {
   supportsFileSystemAccess,
   writeToFilePath,
   openDocumentFS,
   openDocument,
 } from '@/utils/file-operations';
+
+async function confirmUnsaved(): Promise<boolean> {
+  const showDialog = (window as any).__showUnsavedDialog;
+  if (!showDialog) return window.confirm(i18n.t('topbar.closeConfirmMessage'));
+  const fileName = useDocumentStore.getState().fileName || i18n.t('common.untitled');
+  const result = await showDialog(fileName);
+  if (result === 'cancel') return false;
+  if (result === 'save') {
+    // Trigger save before proceeding
+    try {
+      syncCanvasPositionsToStore();
+    } catch { /* continue */ }
+    const api = window.electronAPI;
+    if (api) {
+      const store = useDocumentStore.getState();
+      const { document: doc, fileName: fn, filePath } = store;
+      const isOpFile = fn ? /\.op$/i.test(fn) : false;
+      const suggestedName = fn ? fn.replace(/\.(pen|op|json)$/i, '') + '.op' : 'untitled.op';
+      if (filePath && isOpFile) {
+        await writeToFilePath(filePath, doc);
+        store.markClean();
+      } else {
+        const savedPath = await api.saveFile(JSON.stringify(doc), suggestedName);
+        if (savedPath) {
+          useDocumentStore.setState({
+            fileName: savedPath.split(/[/\\]/).pop() || suggestedName,
+            filePath: savedPath,
+            fileHandle: null,
+            isDirty: false,
+          });
+        } else {
+          return false; // User cancelled save dialog
+        }
+      }
+    }
+  }
+  return true;
+}
 
 /**
  * Listens for Electron native menu actions and dispatches them to stores.
@@ -46,52 +85,67 @@ export function useElectronMenu() {
     });
 
     const cleanup = api.onMenuAction((action: string) => {
+      // Handle open-recent:<filePath> actions
+      if (action.startsWith('open-recent:')) {
+        const recentPath = action.slice('open-recent:'.length);
+        (async () => {
+          if (useDocumentStore.getState().isDirty) {
+            if (!(await confirmUnsaved())) return;
+          }
+          loadFileFromPath(recentPath);
+        })();
+        return;
+      }
+
       switch (action) {
         case 'new':
-          if (useDocumentStore.getState().isDirty) {
-            if (!window.confirm(i18n.t('topbar.closeConfirmMessage'))) break;
-          }
-          useDocumentStore.getState().newDocument();
-          requestAnimationFrame(() => zoomToFitContent());
+          (async () => {
+            if (useDocumentStore.getState().isDirty) {
+              if (!(await confirmUnsaved())) return;
+            }
+            useDocumentStore.getState().newDocument();
+            requestAnimationFrame(() => zoomToFitContent());
+          })();
           break;
 
         case 'open':
-          if (useDocumentStore.getState().isDirty) {
-            if (!window.confirm(i18n.t('topbar.closeConfirmMessage'))) break;
-          }
-          if (api) {
-            // Electron: use native IPC to get full file path for save-in-place
-            api.openFile().then((result) => {
-              if (!result) return;
-              try {
-                const raw = JSON.parse(result.content);
-                if (!raw.version || (!Array.isArray(raw.children) && !Array.isArray(raw.pages)))
-                  return;
-                const doc = normalizePenDocument(raw);
-                const name = result.filePath.split(/[/\\]/).pop() || 'untitled.op';
-                useDocumentStore.getState().loadDocument(doc, name, null, result.filePath);
-                requestAnimationFrame(() => zoomToFitContent());
-              } catch {
-                // Invalid file
-              }
-            });
-          } else if (supportsFileSystemAccess()) {
-            openDocumentFS().then((result) => {
-              if (result) {
-                useDocumentStore
-                  .getState()
-                  .loadDocument(result.doc, result.fileName, result.handle);
-                requestAnimationFrame(() => zoomToFitContent());
-              }
-            });
-          } else {
-            openDocument().then((result) => {
-              if (result) {
-                useDocumentStore.getState().loadDocument(result.doc, result.fileName);
-                requestAnimationFrame(() => zoomToFitContent());
-              }
-            });
-          }
+          (async () => {
+            if (useDocumentStore.getState().isDirty) {
+              if (!(await confirmUnsaved())) return;
+            }
+            if (api) {
+              api.openFile().then((result) => {
+                if (!result) return;
+                try {
+                  const raw = JSON.parse(result.content);
+                  if (!raw.version || (!Array.isArray(raw.children) && !Array.isArray(raw.pages)))
+                    return;
+                  const doc = normalizePenDocument(raw);
+                  const name = result.filePath.split(/[/\\]/).pop() || 'untitled.op';
+                  useDocumentStore.getState().loadDocument(doc, name, null, result.filePath);
+                  requestAnimationFrame(() => zoomToFitContent());
+                } catch {
+                  // Invalid file
+                }
+              });
+            } else if (supportsFileSystemAccess()) {
+              openDocumentFS().then((result) => {
+                if (result) {
+                  useDocumentStore
+                    .getState()
+                    .loadDocument(result.doc, result.fileName, result.handle);
+                  requestAnimationFrame(() => zoomToFitContent());
+                }
+              });
+            } else {
+              openDocument().then((result) => {
+                if (result) {
+                  useDocumentStore.getState().loadDocument(result.doc, result.fileName);
+                  requestAnimationFrame(() => zoomToFitContent());
+                }
+              });
+            }
+          })();
           break;
 
         case 'save':
@@ -110,29 +164,61 @@ export function useElectronMenu() {
             : 'untitled.op';
 
           const doSave = async () => {
-            // Known .op path → direct write
             if (filePath && isOpFile) {
               await writeToFilePath(filePath, doc);
               store.markClean();
+              if (store.fileName) addRecentFile({ fileName: store.fileName, filePath });
               if (closeAfterSave) api.confirmClose();
               return;
             }
-            // No in-place target → save as .op via native dialog
             const savedPath = await api.saveFile(JSON.stringify(doc), suggestedName);
             if (savedPath) {
+              const savedName = savedPath.split(/[/\\]/).pop() || suggestedName;
               useDocumentStore.setState({
-                fileName: savedPath.split(/[/\\]/).pop() || suggestedName,
+                fileName: savedName,
                 filePath: savedPath,
                 fileHandle: null,
                 isDirty: false,
               });
+              addRecentFile({ fileName: savedName, filePath: savedPath });
               if (closeAfterSave) api.confirmClose();
             }
-            // If user cancelled the save dialog, don't close
           };
           doSave().catch((err) => console.error('[Save] Failed:', err));
           break;
         }
+
+        case 'save-as': {
+          try {
+            syncCanvasPositionsToStore();
+          } catch {
+            /* continue */
+          }
+          const store = useDocumentStore.getState();
+          const suggestedName = store.fileName
+            ? store.fileName.replace(/\.(pen|op|json)$/i, '') + '.op'
+            : 'untitled.op';
+          api
+            .saveFile(JSON.stringify(store.document), suggestedName)
+            .then((savedPath) => {
+              if (savedPath) {
+                const savedName = savedPath.split(/[/\\]/).pop() || suggestedName;
+                useDocumentStore.setState({
+                  fileName: savedName,
+                  filePath: savedPath,
+                  fileHandle: null,
+                  isDirty: false,
+                });
+                addRecentFile({ fileName: savedName, filePath: savedPath });
+              }
+            })
+            .catch((err) => console.error('[SaveAs] Failed:', err));
+          break;
+        }
+
+        case 'clear-recent-files':
+          clearRecentFiles();
+          break;
 
         case 'import-figma':
           useCanvasStore.getState().setFigmaImportDialogOpen(true);
