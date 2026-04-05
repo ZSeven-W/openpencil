@@ -115,6 +115,8 @@ export const BUILTIN_PROVIDER_PRESETS: Record<BuiltinProviderPreset, BuiltinPres
     label: 'Bailian (DashScope)',
     type: 'openai-compat',
     baseURL: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
+    altBaseURL: 'https://dashscope.aliyuncs.com/apps/anthropic',
+    altType: 'anthropic',
     placeholder: 'sk-...',
     modelPlaceholder: 'qwen-plus',
     regions: {
