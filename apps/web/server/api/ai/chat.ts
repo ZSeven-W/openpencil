@@ -1064,7 +1064,6 @@ function streamViaBuiltin(body: ChatBody) {
           let raw: string | null;
           while ((raw = await nextEvent(builtinIter)) !== null) {
             const evt = JSON.parse(raw);
-            clearInterval(pingTimer);
             if (evt.type === 'text_delta' && evt.text) {
               controller.enqueue(
                 encoder.encode(
