@@ -1,5 +1,5 @@
 import type { PenNode, FrameNode, SizingBehavior } from '@/types/pen';
-import type { PenFill, PenStroke, PenEffect } from '@/types/styles';
+import type { PenFill, PenStroke, PenEffect, SolidFill } from '@/types/styles';
 import {
   toSizeNumber,
   toGapNumber,
@@ -176,6 +176,7 @@ export function resolveTreePostPass(
   canvasWidth: number,
   getNodeById?: (id: string) => PenNode | undefined,
   updateNode?: (id: string, updates: Partial<PenNode>) => void,
+  _parentNode?: PenNode,
 ): void {
   if (root.type !== 'frame') return;
   if (!('children' in root) || !Array.isArray(root.children)) return;
@@ -239,8 +240,43 @@ export function resolveTreePostPass(
 
   // Recurse
   for (const child of children) {
-    resolveTreePostPass(child, canvasWidth, getNodeById, updateNode);
+    resolveTreePostPass(child, canvasWidth, getNodeById, updateNode, root);
   }
+}
+
+// ---------------------------------------------------------------------------
+// Visual helpers (exported for testing)
+// ---------------------------------------------------------------------------
+
+/**
+ * Compute perceived luminance from a hex color string.
+ * Returns 0 (black) to 1 (white). Handles #RRGGBB and #RRGGBBAA.
+ */
+export function hexLuminance(hex: string): number {
+  const h = hex.replace('#', '');
+  const r = parseInt(h.slice(0, 2), 16) / 255;
+  const g = parseInt(h.slice(2, 4), 16) / 255;
+  const b = parseInt(h.slice(4, 6), 16) / 255;
+  return 0.299 * r + 0.587 * g + 0.114 * b;
+}
+
+/**
+ * Check if a node has a non-empty fill array.
+ * Does NOT distinguish AI-explicit from role-default fills.
+ */
+export function hasFill(node: PenNode): boolean {
+  return 'fill' in node && Array.isArray(node.fill) && node.fill.length > 0;
+}
+
+/**
+ * Extract the first solid fill color from a node, or undefined.
+ * Used by post-pass visual fixes (Tasks 5, 7, 8).
+ */
+export function getFirstSolidColor(node: PenNode): string | undefined {
+  if (!hasFill(node)) return undefined;
+  const fills = (node as unknown as { fill: PenFill[] }).fill;
+  const solid = fills.find((f): f is SolidFill => f.type === 'solid');
+  return solid?.color;
 }
 
 // ---------------------------------------------------------------------------
