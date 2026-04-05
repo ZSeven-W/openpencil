@@ -13,6 +13,8 @@ export interface BuiltinPresetConfig {
   baseURL?: string;
   /** Alternative baseURL for the other API format (if provider supports both) */
   altBaseURL?: string;
+  /** Region-specific alternative baseURLs (overrides altBaseURL when region is selected) */
+  altRegions?: { cn: string; global: string };
   /** The API format that altBaseURL corresponds to */
   altType?: 'anthropic' | 'openai-compat';
   placeholder: string;
@@ -65,6 +67,7 @@ export const BUILTIN_PROVIDER_PRESETS: Record<BuiltinProviderPreset, BuiltinPres
     type: 'anthropic',
     baseURL: 'https://api.minimaxi.com/anthropic',
     altBaseURL: 'https://api.minimaxi.com/v1',
+    altRegions: { cn: 'https://api.minimaxi.com/v1', global: 'https://api.minimax.io/v1' },
     altType: 'openai-compat',
     placeholder: 'eyJ...',
     modelPlaceholder: 'MiniMax-M2.7',
@@ -78,6 +81,7 @@ export const BUILTIN_PROVIDER_PRESETS: Record<BuiltinProviderPreset, BuiltinPres
     type: 'openai-compat',
     baseURL: 'https://open.bigmodel.cn/api/paas/v4',
     altBaseURL: 'https://open.bigmodel.cn/api/anthropic',
+    altRegions: { cn: 'https://open.bigmodel.cn/api/anthropic', global: 'https://api.z.ai/api/anthropic' },
     altType: 'anthropic',
     placeholder: 'xxx.yyy',
     modelPlaceholder: 'glm-5',
@@ -90,6 +94,7 @@ export const BUILTIN_PROVIDER_PRESETS: Record<BuiltinProviderPreset, BuiltinPres
     label: 'GLM Coding Plan',
     type: 'openai-compat',
     altBaseURL: 'https://open.bigmodel.cn/api/anthropic',
+    altRegions: { cn: 'https://open.bigmodel.cn/api/anthropic', global: 'https://api.z.ai/api/anthropic' },
     altType: 'anthropic',
     placeholder: 'xxx.yyy',
     modelPlaceholder: 'glm-4.7',
@@ -103,6 +108,7 @@ export const BUILTIN_PROVIDER_PRESETS: Record<BuiltinProviderPreset, BuiltinPres
     type: 'openai-compat',
     baseURL: 'https://api.moonshot.cn/v1',
     altBaseURL: 'https://api.moonshot.cn/anthropic',
+    altRegions: { cn: 'https://api.moonshot.cn/anthropic', global: 'https://api.moonshot.ai/anthropic' },
     altType: 'anthropic',
     placeholder: 'sk-...',
     modelPlaceholder: 'kimi-k2.5',
@@ -116,6 +122,7 @@ export const BUILTIN_PROVIDER_PRESETS: Record<BuiltinProviderPreset, BuiltinPres
     type: 'openai-compat',
     baseURL: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
     altBaseURL: 'https://dashscope.aliyuncs.com/apps/anthropic',
+    altRegions: { cn: 'https://dashscope.aliyuncs.com/apps/anthropic', global: 'https://dashscope-intl.aliyuncs.com/apps/anthropic' },
     altType: 'anthropic',
     placeholder: 'sk-...',
     modelPlaceholder: 'qwen-plus',
@@ -129,6 +136,7 @@ export const BUILTIN_PROVIDER_PRESETS: Record<BuiltinProviderPreset, BuiltinPres
     type: 'openai-compat',
     baseURL: 'https://coding.dashscope.aliyuncs.com/v1',
     altBaseURL: 'https://coding.dashscope.aliyuncs.com/apps/anthropic',
+    altRegions: { cn: 'https://coding.dashscope.aliyuncs.com/apps/anthropic', global: 'https://coding-intl.dashscope.aliyuncs.com/apps/anthropic' },
     altType: 'anthropic',
     placeholder: 'sk-sp-...',
     modelPlaceholder: 'qwen3-coder-plus',
@@ -275,7 +283,10 @@ export function getBaseURLForFormat(
   region: 'cn' | 'global' = 'cn',
 ): string | undefined {
   const cfg = BUILTIN_PROVIDER_PRESETS[preset];
-  if (format === cfg.altType && cfg.altBaseURL) return cfg.altBaseURL;
+  if (format === cfg.altType) {
+    if (cfg.altRegions) return cfg.altRegions[region];
+    if (cfg.altBaseURL) return cfg.altBaseURL;
+  }
   if (cfg.regions) return cfg.regions[region].baseURL;
   return cfg.baseURL;
 }
