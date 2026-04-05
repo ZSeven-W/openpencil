@@ -19,6 +19,8 @@ const TOOL_AUTH_MAP: Record<string, AuthLevel> = {
   get_design_md: 'read',
 
   // create
+  plan_layout: 'create',
+  batch_insert: 'create',
   insert_node: 'create',
   add_page: 'create',
   duplicate_page: 'create',
@@ -124,6 +126,35 @@ export function getDesignToolDefs(): ToolDef[] {
 export function getAllToolDefs(): ToolDef[] {
   return [
     ...getDesignToolDefs(),
+    {
+      name: 'plan_layout',
+      description: 'Create a root design frame and return a section plan. Use this FIRST before generating content. Returns section names and the root frame ID.',
+      level: TOOL_AUTH_MAP.plan_layout,
+      parameters: {
+        type: 'object',
+        properties: {
+          prompt: { type: 'string', description: 'Design description to plan layout for' },
+        },
+        required: ['prompt'],
+      },
+    },
+    {
+      name: 'batch_insert',
+      description: 'Insert multiple PenNode objects into the canvas at once. Each node should have id, type, name, and other PenNode properties. Use _parent field to specify parent node ID.',
+      level: TOOL_AUTH_MAP.batch_insert,
+      parameters: {
+        type: 'object',
+        properties: {
+          parentId: { type: ['string', 'null'], description: 'Parent frame ID to insert into (from plan_layout result)' },
+          nodes: {
+            type: 'array',
+            items: { type: 'object' },
+            description: 'Array of PenNode objects to insert',
+          },
+        },
+        required: ['parentId', 'nodes'],
+      },
+    },
     {
       name: 'insert_node',
       description: 'Insert a new node into the document tree with full support for nested children',

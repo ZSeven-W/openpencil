@@ -41,7 +41,7 @@ const TOOL_LEVEL_MAP: Record<string, AuthLevel> = {
 };
 
 const ROLE_TOOL_PRESETS: Record<string, string[]> = {
-  designer: ['batch_get', 'snapshot_layout', 'find_empty_space', 'generate_design', 'insert_node'],
+  designer: ['batch_get', 'snapshot_layout', 'find_empty_space', 'generate_design', 'insert_node', 'plan_layout', 'batch_insert'],
   reviewer: ['batch_get', 'snapshot_layout', 'get_selection'],
   editor: ['batch_get', 'snapshot_layout', 'find_empty_space', 'update_node', 'delete_node', 'insert_node'],
   researcher: ['batch_get', 'snapshot_layout', 'find_empty_space', 'get_selection'],

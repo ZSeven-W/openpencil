@@ -15,6 +15,7 @@ const WRITE_LEVELS: Set<AuthLevel> = new Set(['create', 'modify', 'delete']);
  */
 export class AgentToolExecutor {
   private sessionId: string;
+  private designGenerated = false;
 
   constructor(sessionId: string) {
     this.sessionId = sessionId;
@@ -80,6 +81,10 @@ export class AgentToolExecutor {
         return this.handleSnapshotLayout(args as { pageId?: string });
       case 'generate_design':
         return this.handleGenerateDesign(args as { prompt: string; canvasWidth?: number });
+      case 'plan_layout':
+        return this.handlePlanLayout(args as { prompt: string });
+      case 'batch_insert':
+        return this.handleBatchInsert(args as { parentId: string | null; nodes: unknown[] });
       case 'insert_node':
         return this.handleInsertNode(
           args as { parent: string | null; data: Record<string, unknown>; pageId?: string },
@@ -113,6 +118,14 @@ export class AgentToolExecutor {
     description?: string;
     canvasWidth?: number;
   }): Promise<ToolResult> {
+    // Prevent duplicate calls — some models call generate_design multiple times
+    if (this.designGenerated) {
+      return {
+        success: true,
+        data: { message: 'Design already created. Do not call generate_design again.' },
+      };
+    }
+
     // Some models use 'description' instead of 'prompt'
     const prompt = args.prompt || args.description;
     if (!prompt) {
@@ -549,5 +562,109 @@ export class AgentToolExecutor {
     }
     docStore.removeNode(args.id);
     return { success: true };
+  }
+
+  // ---------------------------------------------------------------------------
+  // plan_layout — heuristic layout planning (no API call)
+  // ---------------------------------------------------------------------------
+
+  private async handlePlanLayout(args: { prompt: string }): Promise<ToolResult> {
+    const { detectDesignType } = await import('@/services/ai/design-type-presets');
+    const { useDocumentStore } = await import('@/stores/document-store');
+    const { nanoid } = await import('nanoid');
+
+    const preset = detectDesignType(args.prompt);
+    const rootId = nanoid(10);
+
+    // Create root frame on canvas
+    const rootNode = {
+      id: rootId,
+      type: 'frame' as const,
+      name: 'Page',
+      x: 50,
+      y: 50,
+      width: preset.width,
+      height: preset.rootHeight || preset.height,
+      layout: 'vertical' as const,
+      gap: 0,
+      fill: [{ type: 'solid' as const, color: '#F8FAFC' }],
+      children: [],
+    };
+
+    const docStore = useDocumentStore.getState();
+    docStore.addNode(null, rootNode as any);
+
+    return {
+      success: true,
+      data: {
+        rootFrameId: rootId,
+        width: preset.width,
+        height: preset.rootHeight || preset.height,
+        sections: preset.defaultSections,
+        message: `Root frame created (${preset.width}x${preset.rootHeight || preset.height}). Now generate PenNode JSON for each section and use batch_insert to add them. Sections: ${preset.defaultSections.join(', ')}`,
+      },
+    };
+  }
+
+  // ---------------------------------------------------------------------------
+  // batch_insert — insert multiple nodes at once (no API call)
+  // ---------------------------------------------------------------------------
+
+  private async handleBatchInsert(args: {
+    parentId: string | null;
+    nodes: unknown[];
+  }): Promise<ToolResult> {
+    if (!args.nodes?.length) {
+      return { success: false, error: 'No nodes provided' };
+    }
+
+    const {
+      insertStreamingNode,
+      applyPostStreamingTreeHeuristics,
+    } = await import('@/services/ai/design-generator');
+    const { startNewAnimationBatch, markNodesForAnimation } = await import(
+      '@/services/ai/design-animation'
+    );
+
+    startNewAnimationBatch();
+
+    let inserted = 0;
+    let rootId: string | null = null;
+
+    for (const raw of args.nodes) {
+      const node = raw as Record<string, unknown>;
+      if (!node.id || !node.type) continue;
+
+      // Resolve _parent: use explicit _parent, or fall back to parentId arg
+      const parentTarget =
+        (node._parent as string | null) ?? args.parentId ?? null;
+      delete node._parent;
+
+      markNodesForAnimation([node as any]);
+      insertStreamingNode(node as any, parentTarget);
+
+      if (!rootId) rootId = node.id as string;
+      inserted++;
+    }
+
+    // Apply role defaults + post-pass fixes
+    const effectiveRoot = args.parentId ?? rootId;
+    if (effectiveRoot) {
+      applyPostStreamingTreeHeuristics(effectiveRoot);
+    }
+
+    // Auto-zoom
+    try {
+      const { zoomToFitContent } = await import('@/canvas/skia-engine-ref');
+      setTimeout(() => zoomToFitContent(), 300);
+    } catch { /* ignore */ }
+
+    return {
+      success: true,
+      data: {
+        inserted,
+        message: `Inserted ${inserted} nodes. Design elements are now on the canvas.`,
+      },
+    };
   }
 }

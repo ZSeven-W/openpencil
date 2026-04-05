@@ -49,23 +49,40 @@ export { buildContextString } from './ai-chat-context-builder';
 // Agent mode SSE stream handler
 // ---------------------------------------------------------------------------
 
-/** Agent-specific tool usage instructions — prepended to the dynamic skill-based prompt. */
-const AGENT_TOOL_INSTRUCTIONS = `You are a design assistant. You MUST use tools to do your work.
+/** Agent tool instructions for CLI providers — delegates to orchestrator via generate_design. */
+const AGENT_TOOL_INSTRUCTIONS_CLI = `You are a design assistant. You MUST use tools to do your work.
 
 RULE 1: To create or design ANYTHING, call generate_design. NEVER output JSON yourself.
 RULE 2: After every tool call, write 1-2 sentences summarizing what happened.
-RULE 3: When calling generate_design, write a detailed prompt with style direction (colors, shadows, spacing, visual hierarchy). Do not just repeat the user's words.
+RULE 3: When calling generate_design, write a detailed prompt with style direction (colors, shadows, spacing, visual hierarchy).
 
 FORBIDDEN: Do not output JSON, code blocks, or node definitions directly. Always use generate_design instead.`;
 
+/** Agent tool instructions for builtin providers — direct tool-based design. */
+const AGENT_TOOL_INSTRUCTIONS_BUILTIN = `You are a design assistant. You create designs using tools.
+
+WORKFLOW:
+1. Call plan_layout with the user's design request to create the canvas frame
+2. Generate PenNode JSON for the design content
+3. Call batch_insert with the nodes array to place them on canvas
+4. Summarize what you created
+
+IMPORTANT: Each node needs: id (unique string), type (frame/text/path/icon_font), name, x, y, width, height.
+Use _parent field to nest nodes inside parent frames.
+Frames can have: layout (vertical/horizontal), gap, padding, cornerRadius, fill, stroke, effects, children.
+Text nodes need: content, fontSize, fontFamily, fontWeight.`;
+
 /**
- * Build the agent system prompt.
- * Agent mode does NOT include design generation knowledge (PenNode schema, JSONL format,
- * etc.) because the agent should call generate_design tool, not output JSON itself.
- * Design knowledge is loaded by the orchestrator sub-agents instead.
+ * Build the agent system prompt based on provider type.
+ * Builtin providers get direct design instructions (plan_layout + batch_insert).
+ * CLI providers get generate_design tool instructions (orchestrator pipeline).
  */
-function buildAgentSystemPrompt(_userMessage: string): string {
-  return AGENT_TOOL_INSTRUCTIONS;
+function buildAgentSystemPrompt(userMessage: string, isBuiltin: boolean): string {
+  if (isBuiltin) {
+    const designKnowledge = buildChatSystemPrompt(userMessage);
+    return AGENT_TOOL_INSTRUCTIONS_BUILTIN + '\n\n' + designKnowledge;
+  }
+  return AGENT_TOOL_INSTRUCTIONS_CLI;
 }
 
 /**
@@ -164,7 +181,8 @@ async function runAgentStream(
 
   const context = buildContextString();
   const lastUserMsg = messages[messages.length - 1]?.content ?? '';
-  const systemPrompt = buildAgentSystemPrompt(lastUserMsg) + context;
+  const isBuiltin = providerConfig.providerType === 'anthropic' || providerConfig.providerType === 'openai-compat';
+  const systemPrompt = buildAgentSystemPrompt(lastUserMsg, isBuiltin) + context;
 
   // Read document context for team member skill loading
   const { useDesignMdStore } = await import('@/stores/design-md-store');
