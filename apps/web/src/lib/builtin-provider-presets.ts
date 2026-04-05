@@ -77,6 +77,8 @@ export const BUILTIN_PROVIDER_PRESETS: Record<BuiltinProviderPreset, BuiltinPres
     label: '智谱 (Zhipu)',
     type: 'openai-compat',
     baseURL: 'https://open.bigmodel.cn/api/paas/v4',
+    altBaseURL: 'https://open.bigmodel.cn/api/anthropic',
+    altType: 'anthropic',
     placeholder: 'xxx.yyy',
     modelPlaceholder: 'glm-5',
     regions: {
