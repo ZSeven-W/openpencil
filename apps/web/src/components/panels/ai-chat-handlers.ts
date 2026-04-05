@@ -324,6 +324,91 @@ async function runAgentStream(
             updateLastMessage(prefix + accumulated);
           }
 
+          // ── Intercept: agent output raw design JSON instead of calling generate_design ──
+          // Some models (e.g. minimax) ignore tool-calling instructions and output
+          // design JSON directly as text. Detect this and re-route through the full
+          // orchestrator pipeline for proper quality (spatial decomposition, sub-agents,
+          // role resolution, validation).
+          if (!sawToolActivity && !sawMemberActivity && accumulated.trim()) {
+            const hasDesignJson = /```json[\s\S]*?"type"\s*:\s*"frame"/.test(accumulated) ||
+              /\{\s*"id"\s*:[\s\S]*?"type"\s*:\s*"frame"/.test(accumulated);
+            if (hasDesignJson) {
+              // Extract user's original prompt and re-generate through the pipeline
+              const userPrompt = useAIStore.getState()
+                .messages.filter((m) => m.role === 'user')
+                .pop()?.content ?? '';
+              if (userPrompt) {
+                updateLastMessage(i18n.t('ai.designGenerating'));
+                try {
+                  const { generateDesign } = await import('@/services/ai/design-generator');
+                  const { useAgentSettingsStore } = await import('@/stores/agent-settings-store');
+                  const agentSettings = useAgentSettingsStore.getState();
+                  const currentModel = useAIStore.getState().model;
+
+                  let designModel = 'default';
+                  let designProvider: string | undefined;
+
+                  // Try connected CLI providers first
+                  const providers = agentSettings.providers ?? {};
+                  for (const [key, cfg] of Object.entries(providers)) {
+                    if (cfg.isConnected && cfg.models?.length) {
+                      designProvider = key;
+                      designModel = cfg.models[0].value;
+                      break;
+                    }
+                  }
+
+                  // Fall back to builtin provider
+                  if (!designProvider && currentModel.startsWith('builtin:')) {
+                    const parts = currentModel.split(':');
+                    const bpId = parts[1];
+                    const bp = agentSettings.builtinProviders.find((p: any) => p.id === bpId);
+                    if (bp?.apiKey) {
+                      designProvider = 'builtin';
+                      designModel = parts.slice(2).join(':');
+                    }
+                  }
+
+                  const doc = useDocumentStore.getState().document;
+                  const { getCanvasSize } = await import('@/canvas/skia-engine-ref');
+                  const canvasSize = getCanvasSize();
+
+                  const result = await generateDesign(
+                    {
+                      prompt: userPrompt,
+                      model: designModel,
+                      provider: designProvider as any,
+                      concurrency: useAIStore.getState().concurrency,
+                      context: {
+                        canvasSize: canvasSize ?? undefined,
+                        variables: doc.variables,
+                        themes: doc.themes,
+                      },
+                    },
+                    {
+                      onApplyPartial: (count) => {
+                        updateLastMessage(`${i18n.t('ai.designGenerating')} (${count} elements)`);
+                      },
+                      onTextUpdate: (text) => {
+                        updateLastMessage(text);
+                      },
+                      animated: true,
+                    },
+                  );
+
+                  const nodeCount = result.nodes?.length ?? 0;
+                  accumulated = `Design created with ${nodeCount} elements via orchestrator pipeline.`;
+                  updateLastMessage(accumulated);
+                } catch (err: any) {
+                  console.warn('[agent] orchestrator re-route failed, falling back to inline nodes:', err?.message);
+                  // Fall through to normal inline node processing below
+                }
+                renderer.finish();
+                break;
+              }
+            }
+          }
+
           if (renderer.getAppliedIds().size === 0) {
             renderer.flushRemaining(accumulated);
           }
