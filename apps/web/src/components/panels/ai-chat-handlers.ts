@@ -259,8 +259,9 @@ async function runAgentStream(
             ? `<step title="Thinking">${thinkingContent}</step>\n`
             : '';
           updateLastMessage(prefix + stripThinkTags(accumulated));
-
-          renderer.feedText(accumulated);
+          // Don't call renderer.feedText() here — agent text output should go
+          // through generateDesign() if it contains design JSON (handled in 'done').
+          // Calling feedText() would insert nodes that we'd have to delete later.
           break;
         }
 
@@ -338,15 +339,6 @@ async function runAgentStream(
                 .messages.filter((m) => m.role === 'user')
                 .pop()?.content ?? '';
               if (userPrompt) {
-                // Clean up inline nodes that feedText() already inserted
-                const inlineIds = renderer.getAppliedIds();
-                if (inlineIds.size > 0) {
-                  for (const id of inlineIds) {
-                    try { useDocumentStore.getState().removeNode(id); } catch { /* ignore */ }
-                  }
-                }
-                renderer.finish();
-
                 updateLastMessage(i18n.t('ai.designGenerating'));
                 try {
                   const { generateDesign } = await import('@/services/ai/design-generator');
