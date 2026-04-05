@@ -1,24 +1,30 @@
 import { useTranslation } from 'react-i18next';
 import { cn } from '@/lib/utils';
 
-export const QUICK_ACTIONS = [
+const QUICK_ACTIONS = [
   {
+    emoji: '📱',
     labelKey: 'ai.quickAction.loginScreen',
-    prompt:
-      'Design a modern mobile login screen with email input, password input, login button, and social login options',
+    descKey: 'ai.quickAction.loginScreenDesc',
+    promptKey: 'ai.quickAction.loginScreenPrompt',
   },
   {
+    emoji: '🍕',
     labelKey: 'ai.quickAction.foodApp',
-    prompt: 'Generate a well-designed food mobile app homepage',
+    descKey: 'ai.quickAction.foodAppDesc',
+    promptKey: 'ai.quickAction.foodAppPrompt',
   },
   {
+    emoji: '⬇️',
     labelKey: 'ai.quickAction.bottomNav',
-    prompt:
-      'Design a mobile app bottom navigation bar with 5 tabs: Home, Search, Add, Messages, Profile',
+    descKey: 'ai.quickAction.bottomNavDesc',
+    promptKey: 'ai.quickAction.bottomNavPrompt',
   },
   {
+    emoji: '🎨',
     labelKey: 'ai.quickAction.colorPalette',
-    prompt: 'Suggest a modern color palette for a pet care app',
+    descKey: 'ai.quickAction.colorPaletteDesc',
+    promptKey: 'ai.quickAction.colorPalettePrompt',
   },
 ];
 
@@ -27,27 +33,33 @@ interface AIChatQuickActionsProps {
   disabled: boolean;
 }
 
-/**
- * Quick action buttons shown when the chat has no messages yet.
- */
 export function AIChatQuickActions({ onSend, disabled }: AIChatQuickActionsProps) {
   const { t } = useTranslation();
 
   return (
-    <div className="flex flex-col items-center justify-center py-4">
-      <p className="text-xs text-muted-foreground mb-4">{t('ai.tryExample')}</p>
-      <div className="flex flex-col gap-2 w-full px-2">
+    <div className="flex flex-col items-center justify-center py-6 px-1">
+      <p className="text-xs text-muted-foreground mb-4">{t('ai.startDesigning')}</p>
+      <div className="grid grid-cols-2 gap-2 w-full">
         {QUICK_ACTIONS.map((action) => (
           <button
             key={action.labelKey}
             type="button"
-            onClick={() => onSend(action.prompt)}
+            onClick={() => onSend(t(action.promptKey))}
+            disabled={disabled}
             className={cn(
-              'text-xs text-left px-3.5 py-1 rounded-full bg-secondary/50 border border-border text-muted-foreground transition-colors',
-              disabled ? 'cursor-default' : 'hover:bg-secondary hover:text-foreground',
+              'flex flex-col items-start gap-0.5 p-3 rounded-lg border border-border bg-secondary/30 text-left transition-colors',
+              disabled
+                ? 'cursor-default opacity-60'
+                : 'hover:bg-secondary hover:border-border/80',
             )}
           >
-            {t(action.labelKey)}
+            <div className="flex items-center gap-1.5">
+              <span className="text-sm">{action.emoji}</span>
+              <span className="text-xs font-medium text-foreground">{t(action.labelKey)}</span>
+            </div>
+            <span className="text-[10px] text-muted-foreground leading-tight">
+              {t(action.descKey)}
+            </span>
           </button>
         ))}
       </div>
