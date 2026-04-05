@@ -27,9 +27,12 @@ export function detectDesignType(prompt: string): DesignTypePreset {
       width: 375,
       height: 812,
       rootHeight: 812,
-      // Two sections with distinct roles — sub-agent prompt adds element hints
-      // to prevent both sections from generating identical content.
-      defaultSections: ['Header', 'Main Content'],
+      // Single section — the mobile status bar is pre-injected by the
+      // orchestrator, so no separate Header subtask is needed.  Using one
+      // subtask avoids content duplication that occurs when two sub-agents
+      // both try to generate the same UI elements from the user's prompt
+      // (e.g. categories, restaurant cards appearing twice).
+      defaultSections: ['Page Content'],
     };
   }
 

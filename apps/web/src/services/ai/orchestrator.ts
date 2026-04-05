@@ -499,20 +499,30 @@ export async function executeOrchestration(
     // -- Phase 1: Planning (streaming) --
     renderPlanningStatus('Analyzing design structure...');
 
-    // For builtin providers (API key direct), skip the planning API call and use
-    // a heuristic plan. Many providers (minimax, etc.) return empty responses for
-    // the long planning system prompt, making the API call wasteful.
-    const skipPlanningApi = (request.provider as string) === 'builtin';
-
-    const plan = skipPlanningApi
-      ? buildFallbackPlanFromPrompt(preparedPrompt.orchestratorPrompt)
-      : await callOrchestrator(
-          preparedPrompt.orchestratorPrompt,
-          preparedPrompt.originalLength,
-          request.model,
-          request.provider,
-          abortSignal,
-        );
+    // Always attempt AI planning first — even for builtin providers.
+    // callOrchestrator already falls back to buildFallbackPlanFromPrompt
+    // when the model returns unparseable responses, so we don't need to
+    // skip the call preemptively.  Builtin providers get a tighter timeout
+    // (30s no-text / 60s hard) so planning fails fast when the provider
+    // can't handle the long system prompt, while still giving slow-but-capable
+    // models enough time once they start streaming.
+    const isBuiltin = (request.provider as string) === 'builtin';
+    let plan: OrchestratorPlan;
+    try {
+      plan = await callOrchestrator(
+        preparedPrompt.orchestratorPrompt,
+        preparedPrompt.originalLength,
+        request.model,
+        request.provider,
+        abortSignal,
+        isBuiltin,
+      );
+    } catch (err) {
+      // User abort — propagate so the outer catch cleans up without mutating canvas
+      if (abortSignal?.aborted) throw err;
+      // Network error, timeout, or provider failure — use heuristic plan
+      plan = buildFallbackPlanFromPrompt(preparedPrompt.orchestratorPrompt);
+    }
 
     if (shouldUseDashboardColumns(request.prompt, plan)) {
       normalizeDashboardMainSubtasks(plan);
@@ -963,6 +973,7 @@ async function callOrchestrator(
   model?: string,
   provider?: AIDesignRequest['provider'],
   abortSignal?: AbortSignal,
+  fastTimeout?: boolean,
 ): Promise<OrchestratorPlan> {
   let rawResponse = '';
 
@@ -980,11 +991,26 @@ async function callOrchestrator(
     planningCtx.skills.map((s) => s.content).join('\n\n') +
     '\n\n---\nCRITICAL OUTPUT FORMAT ENFORCEMENT:\nYou MUST output ONLY a single JSON object. Start your response with { and end with }.\nDo NOT output any text, explanation, analysis, markdown, or tool calls before or after the JSON.\nDo NOT "explore" or "think out loud". Do NOT use <tool_call> or function calls.\nAny pre-design analysis (concept extraction, superfan simulation, etc.) must happen internally — include results as JSON fields, never as prose.\nViolating this format will cause a system error.';
 
+  // Builtin providers get a tighter timeout so planning fails fast when
+  // the provider can't handle the long system prompt, while giving
+  // slow-but-capable models enough runway once they start streaming.
+  const timeouts = fastTimeout
+    ? {
+        hardTimeoutMs: 60_000,
+        noTextTimeoutMs: 30_000,
+        thinkingResetsTimeout: true,
+        pingResetsTimeout: false,
+        firstTextTimeoutMs: 30_000,
+        thinkingMode: 'adaptive' as const,
+        effort: 'low' as const,
+      }
+    : getOrchestratorTimeouts(timeoutHintLength, model);
+
   for await (const chunk of streamChat(
     planningSystemPrompt,
     [{ role: 'user', content: prompt }],
     model,
-    getOrchestratorTimeouts(timeoutHintLength, model),
+    timeouts,
     provider,
     abortSignal,
   )) {
@@ -997,6 +1023,12 @@ async function callOrchestrator(
     } else if (chunk.type === 'error') {
       throw new Error(chunk.content);
     }
+  }
+
+  // If the user cancelled during streaming, stop immediately — do not
+  // fall through to the fallback plan which would continue generation.
+  if (abortSignal?.aborted) {
+    throw new Error('Aborted');
   }
 
   let plan = parseOrchestratorResponse(rawResponse);

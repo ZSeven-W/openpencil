@@ -161,10 +161,8 @@ export function buildFallbackPlanFromPrompt(prompt: string): OrchestratorPlan {
 function getMobileSectionElements(type: string, label: string): string | undefined {
   if (type !== 'mobile-screen') return undefined;
   switch (label) {
-    case 'Header':
-      return 'Logo/brand icon, welcome title, subtitle text. Do NOT include form inputs, buttons, or social login here.';
-    case 'Main Content':
-      return 'Form inputs, action buttons, dividers, social login options, footer links. Do NOT include logo or welcome title here.';
+    case 'Page Content':
+      return 'All main UI content for this screen. A status bar is already pre-inserted — do NOT generate one.';
     default:
       return undefined;
   }
