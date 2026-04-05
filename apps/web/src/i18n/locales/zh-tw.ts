@@ -321,6 +321,33 @@ const zhTW: TranslationKeys = {
     '設計一個包含 5 個標籤的行動應用程式底部導覽列：首頁、搜尋、新增、訊息、個人',
   'ai.quickAction.colorPalette': '為我的應用程式推薦配色方案',
   'ai.quickAction.colorPalettePrompt': '為一個寵物照護應用程式推薦一套現代配色方案',
+  'ai.startDesigning': '用 AI 開始設計',
+  'ai.maximize': '最大化',
+  'ai.restore': '還原',
+  'ai.quickAction.loginScreenDesc': '帶社交登入的行動端頁面',
+  'ai.quickAction.foodAppDesc': 'App 首頁設計',
+  'ai.quickAction.bottomNavDesc': '5 個 Tab 導航列',
+  'ai.quickAction.colorPaletteDesc': '應用配色推薦',
+
+  // ── File Menu ──
+  'fileMenu.newFile': '新建檔案',
+  'fileMenu.openFile': '開啟檔案...',
+  'fileMenu.save': '儲存',
+  'fileMenu.saveAs': '另存為...',
+  'fileMenu.recentFiles': '最近檔案',
+  'fileMenu.clearHistory': '清除歷史',
+  'fileMenu.noRecentFiles': '暫無最近檔案',
+  'fileMenu.saved': '已儲存',
+  'fileMenu.justNow': '剛剛',
+  'fileMenu.minutesAgo': '{{count}}分鐘前',
+  'fileMenu.hoursAgo': '{{count}}小時前',
+  'fileMenu.yesterday': '昨天',
+  'fileMenu.daysAgo': '{{count}}天前',
+
+  // ── Unsaved Changes ──
+  'unsaved.title': '未儲存的變更',
+  'unsaved.message': '是否儲存對 "{{name}}" 的變更？',
+  'unsaved.dontSave': '不儲存',
 
   // ── Code Panel ──
   'code.reactTailwind': 'React + Tailwind',

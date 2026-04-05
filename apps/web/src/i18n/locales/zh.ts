@@ -321,6 +321,33 @@ const zh: TranslationKeys = {
     '设计一个包含 5 个标签的移动应用底部导航栏：首页、搜索、添加、消息、个人',
   'ai.quickAction.colorPalette': '为我的应用推荐配色方案',
   'ai.quickAction.colorPalettePrompt': '为一个宠物护理应用推荐一套现代配色方案',
+  'ai.startDesigning': '用 AI 开始设计',
+  'ai.maximize': '最大化',
+  'ai.restore': '还原',
+  'ai.quickAction.loginScreenDesc': '带社交登录的移动端页面',
+  'ai.quickAction.foodAppDesc': 'App 首页设计',
+  'ai.quickAction.bottomNavDesc': '5 个 Tab 导航栏',
+  'ai.quickAction.colorPaletteDesc': '应用配色推荐',
+
+  // ── File Menu ──
+  'fileMenu.newFile': '新建文件',
+  'fileMenu.openFile': '打开文件...',
+  'fileMenu.save': '保存',
+  'fileMenu.saveAs': '另存为...',
+  'fileMenu.recentFiles': '最近文件',
+  'fileMenu.clearHistory': '清除历史',
+  'fileMenu.noRecentFiles': '暂无最近文件',
+  'fileMenu.saved': '已保存',
+  'fileMenu.justNow': '刚刚',
+  'fileMenu.minutesAgo': '{{count}}分钟前',
+  'fileMenu.hoursAgo': '{{count}}小时前',
+  'fileMenu.yesterday': '昨天',
+  'fileMenu.daysAgo': '{{count}}天前',
+
+  // ── Unsaved Changes ──
+  'unsaved.title': '未保存的更改',
+  'unsaved.message': '是否保存对 "{{name}}" 的更改？',
+  'unsaved.dontSave': '不保存',
 
   // ── Code Panel ──
   'code.reactTailwind': 'React + Tailwind',
