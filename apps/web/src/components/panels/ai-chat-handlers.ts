@@ -168,6 +168,8 @@ async function runAgentStream(
   const sessionId = nanoid();
   const executor = new AgentToolExecutor(sessionId);
 
+  const isBuiltin = providerConfig.providerType === 'anthropic' || providerConfig.providerType === 'openai-compat';
+
   const toolDefs = getDesignToolDefs();
 
   const messages = useAIStore
@@ -177,7 +179,6 @@ async function runAgentStream(
 
   const context = buildContextString();
   const lastUserMsg = messages[messages.length - 1]?.content ?? '';
-  const isBuiltin = providerConfig.providerType === 'anthropic' || providerConfig.providerType === 'openai-compat';
   const systemPrompt = buildAgentSystemPrompt(lastUserMsg, isBuiltin) + context;
 
   // Read document context for team member skill loading
@@ -278,14 +279,6 @@ async function runAgentStream(
 
           executor
             .execute(evt as Extract<AgentEvent, { type: 'tool_call' }>)
-            .then(() => {
-              const block = useAIStore.getState().toolCallBlocks.find((b) => b.id === evt.id);
-              if (block && block.status === 'running') {
-                useAIStore
-                  .getState()
-                  .updateToolCallBlock(evt.id, { status: 'done', result: { success: true } });
-              }
-            })
             .catch((err) => {
               useAIStore.getState().updateToolCallBlock(evt.id, {
                 status: 'error',

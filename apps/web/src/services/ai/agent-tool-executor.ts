@@ -1,5 +1,6 @@
 import type { AgentEvent, ToolResult, AuthLevel } from '@/types/agent';
 import type { PenNode } from '@/types/pen';
+import { createEmptyDocument, DEFAULT_FRAME_ID, useDocumentStore } from '@/stores/document-store';
 
 type ToolCallEvent = Extract<AgentEvent, { type: 'tool_call' }>;
 
@@ -23,7 +24,7 @@ export class AgentToolExecutor {
     this.sessionId = sessionId;
   }
 
-  async execute(toolCall: ToolCallEvent): Promise<void> {
+  async execute(toolCall: ToolCallEvent): Promise<ToolResult> {
     const { id, name, args, level } = toolCall;
     const isWrite = WRITE_LEVELS.has(level);
 
@@ -60,15 +61,21 @@ export class AgentToolExecutor {
     } catch {
       // Retry once
       try {
-        await fetch('/api/ai/agent?action=result', {
+        const retryRes = await fetch('/api/ai/agent?action=result', {
           method: 'POST',
           headers: postHeaders,
           body: payload,
         });
+        if (!retryRes.ok) throw new Error(`Status ${retryRes.status}`);
       } catch (retryErr) {
         console.error(`[AgentToolExecutor] Failed to post tool result ${id}:`, retryErr);
+        throw retryErr instanceof Error
+          ? retryErr
+          : new Error(`Failed to post tool result ${id}`);
       }
     }
+
+    return result;
   }
 
   // ---------------------------------------------------------------------------
@@ -139,48 +146,57 @@ export class AgentToolExecutor {
       };
     }
 
-    const { generateDesign } = await import('@/services/ai/design-generator');
-    const { useDocumentStore } = await import('@/stores/document-store');
-    const { useAgentSettingsStore } = await import('@/stores/agent-settings-store');
-    const { getCanvasSize } = await import('@/canvas/skia-engine-ref');
+    const { useAIStore } = await import('@/stores/ai-store');
+    const currentModel = useAIStore.getState().model;
 
-    const docStore = useDocumentStore.getState();
-    const canvasSize = getCanvasSize();
-
-    // Find a provider for the internal pipeline:
-    // 1. First try connected CLI providers (Claude Code, Codex, etc.)
-    // 2. Fall back to the current builtin provider (API key)
-    const agentSettings = useAgentSettingsStore.getState();
-    const providers = agentSettings.providers ?? {};
-    let designModel = 'default';
-    let designProvider: string | undefined;
-
-    for (const [key, cfg] of Object.entries(providers)) {
-      if (cfg.isConnected && cfg.models?.length) {
-        designProvider = key;
-        designModel = cfg.models[0].value;
-        break;
-      }
+    // Builtin provider: skip orchestrator, just create layout frame.
+    // The agent itself generates the content and calls batch_insert.
+    if (currentModel.startsWith('builtin:')) {
+      const layoutResult = await this.handlePlanLayout({ prompt });
+      this.designGenerated = true;
+      return {
+        success: true,
+        data: {
+          ...(layoutResult.data ?? {}),
+          message: `Layout frame created. Now generate the design content as PenNode JSON and call batch_insert to place it on the canvas. ${(layoutResult.data as any)?.message ?? ''}`,
+        },
+      };
     }
 
-    // If no CLI provider connected, use builtin provider via the 'builtin' provider path.
-    // The chat endpoint reads builtin credentials from the request body (set by ai-service.ts).
-    if (!designProvider) {
-      const { useAIStore } = await import('@/stores/ai-store');
-      const currentModel = useAIStore.getState().model;
-      if (currentModel.startsWith('builtin:')) {
-        const parts = currentModel.split(':');
-        const bpId = parts[1];
-        const bp = agentSettings.builtinProviders.find((p) => p.id === bpId);
-        if (bp?.apiKey) {
-          designProvider = 'builtin' as any;
-          designModel = parts.slice(2).join(':');
+    // CLI provider: full orchestrator pipeline
+    const { generateDesign } = await import('@/services/ai/design-generator');
+    const { useDocumentStore: docStoreModule } = await import('@/stores/document-store');
+    const { useAgentSettingsStore } = await import('@/stores/agent-settings-store');
+    const { getCanvasSize } = await import('@/canvas/skia-engine-ref');
+    const { getGenerationRemappedIds } = await import('@/services/ai/design-canvas-ops');
+
+    const docStore = docStoreModule.getState();
+    const canvasSize = getCanvasSize();
+
+    const agentSettings = useAgentSettingsStore.getState();
+    let designModel = 'default';
+    let designProvider: string | undefined;
+    const currentProvider = useAIStore
+      .getState()
+      .modelGroups.find((g) => g.models.some((m) => m.value === currentModel))?.provider;
+
+    if (currentProvider) {
+      designProvider = currentProvider;
+      designModel = currentModel;
+    } else {
+      const providers = agentSettings.providers ?? {};
+      for (const [key, cfg] of Object.entries(providers)) {
+        if (cfg.isConnected && cfg.models?.length) {
+          designProvider = key;
+          designModel = cfg.models[0].value;
+          break;
         }
       }
     }
 
     // Snapshot current node IDs so we can clean up partial nodes on failure
     const nodeIdsBefore = new Set(docStore.getFlatNodes().map((n) => n.id));
+    const remappedIdsBefore = new Map(getGenerationRemappedIds());
 
     // Match the CLI pipeline's generateDesign call exactly
     const { useAIStore: aiStore } = await import('@/stores/ai-store');
@@ -236,6 +252,14 @@ export class AgentToolExecutor {
           /* ignore */
         }
       }
+
+      const remappedIdsAfter = getGenerationRemappedIds();
+      const hadDefaultReplacementBefore = [...remappedIdsBefore.values()].includes(DEFAULT_FRAME_ID);
+      const hasDefaultReplacementAfter = [...remappedIdsAfter.values()].includes(DEFAULT_FRAME_ID);
+      if (hasDefaultReplacementAfter && !hadDefaultReplacementBefore) {
+        this.restoreDefaultFrame();
+      }
+
       // Clear stale progress so checklist doesn't show partial steps from a failed run
       progressStore.getState().setAgentOrchestrationSteps(null);
       return {
@@ -260,6 +284,8 @@ export class AgentToolExecutor {
       progressStore.getState().setAgentOrchestrationSteps(allDone);
     }
 
+    this.designGenerated = true;
+
     return {
       success: true,
       data: {
@@ -267,6 +293,18 @@ export class AgentToolExecutor {
         message: `Design completed successfully with ${result.nodes.length} elements. The design is now on the canvas. Do NOT call generate_design again — the task is done. Reply to the user with a short summary of what was created.`,
       },
     };
+  }
+
+  private restoreDefaultFrame(): void {
+    const docStore = useDocumentStore.getState();
+    const emptyDoc = createEmptyDocument();
+    const defaultFrame = emptyDoc.pages?.[0]?.children.find((n) => n.id === DEFAULT_FRAME_ID);
+    if (!defaultFrame) return;
+
+    docStore.updateNode(DEFAULT_FRAME_ID, {
+      ...defaultFrame,
+      id: DEFAULT_FRAME_ID,
+    } as Partial<PenNode>);
   }
 
   // ---------------------------------------------------------------------------
