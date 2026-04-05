@@ -338,6 +338,15 @@ async function runAgentStream(
                 .messages.filter((m) => m.role === 'user')
                 .pop()?.content ?? '';
               if (userPrompt) {
+                // Clean up inline nodes that feedText() already inserted
+                const inlineIds = renderer.getAppliedIds();
+                if (inlineIds.size > 0) {
+                  for (const id of inlineIds) {
+                    try { useDocumentStore.getState().removeNode(id); } catch { /* ignore */ }
+                  }
+                }
+                renderer.finish();
+
                 updateLastMessage(i18n.t('ai.designGenerating'));
                 try {
                   const { generateDesign } = await import('@/services/ai/design-generator');
