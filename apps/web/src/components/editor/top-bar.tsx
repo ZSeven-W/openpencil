@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { appStorage, initAppStorage } from '@/utils/app-storage';
 import type { ComponentType, SVGProps } from 'react';
-import { PanelLeft, Folder, Sun, Moon, Maximize, Minimize, Blocks } from 'lucide-react';
+import { PanelLeft, Folder, ChevronDown, Sun, Moon, Maximize, Minimize, Blocks } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import ClaudeLogo from '@/components/icons/claude-logo';
 import OpenAILogo from '@/components/icons/openai-logo';
@@ -394,11 +394,12 @@ export default function TopBar() {
             <TooltipTrigger asChild>
               <Button
                 variant="ghost"
-                size="icon-sm"
-                className="text-muted-foreground"
+                size="sm"
+                className="text-muted-foreground h-7 px-1.5 gap-0.5"
                 onClick={() => setFileMenuOpen((v) => !v)}
               >
                 <Folder size={15} strokeWidth={1.5} />
+                <ChevronDown size={10} className="text-muted-foreground/60" />
               </Button>
             </TooltipTrigger>
             <TooltipContent side="bottom">{t('topbar.open')}</TooltipContent>
