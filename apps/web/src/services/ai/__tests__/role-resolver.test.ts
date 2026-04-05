@@ -297,3 +297,47 @@ describe('resolveTreePostPass — orphan container contrast', () => {
     expect((empty as any).fill).toBeUndefined();
   });
 });
+
+describe('resolveTreePostPass — input sibling consistency', () => {
+  it('propagates first input fill/stroke to mismatched siblings', () => {
+    const input1: PenNode = {
+      id: 'i1', type: 'frame', name: 'Email', x: 0, y: 0, width: 300, height: 48,
+      role: 'form-input',
+      fill: [{ type: 'solid', color: '#E0F2FE' }],
+      stroke: { thickness: 1, fill: [{ type: 'solid', color: '#0EA5E9' }] },
+    } as unknown as PenNode;
+    const input2: PenNode = {
+      id: 'i2', type: 'frame', name: 'Password', x: 0, y: 0, width: 300, height: 48,
+      role: 'form-input',
+      fill: [{ type: 'solid', color: '#F8FAFC' }],
+      stroke: { thickness: 1, fill: [{ type: 'solid', color: '#E2E8F0' }] },
+    } as unknown as PenNode;
+    const root: PenNode = {
+      id: 'root', type: 'frame', name: 'Form', x: 0, y: 0, width: 400, height: 200,
+      layout: 'vertical', children: [input1, input2],
+    } as PenNode;
+    resolveTreePostPass(root, 375);
+    expect((input2 as any).fill).toEqual([{ type: 'solid', color: '#E0F2FE' }]);
+    expect((input2 as any).stroke.fill).toEqual([{ type: 'solid', color: '#0EA5E9' }]);
+  });
+
+  it('skips when all inputs already match', () => {
+    const fill = [{ type: 'solid' as const, color: '#F8FAFC' }];
+    const stroke = { thickness: 1, fill: [{ type: 'solid' as const, color: '#E2E8F0' }] };
+    const input1: PenNode = {
+      id: 'i1', type: 'frame', name: 'Email', x: 0, y: 0, width: 300, height: 48,
+      role: 'input', fill: [...fill], stroke: { ...stroke },
+    } as unknown as PenNode;
+    const input2: PenNode = {
+      id: 'i2', type: 'frame', name: 'Password', x: 0, y: 0, width: 300, height: 48,
+      role: 'input', fill: [...fill], stroke: { ...stroke },
+    } as unknown as PenNode;
+    const root: PenNode = {
+      id: 'root', type: 'frame', name: 'Form', x: 0, y: 0, width: 400, height: 200,
+      layout: 'vertical', children: [input1, input2],
+    } as PenNode;
+    resolveTreePostPass(root, 375);
+    expect((input1 as any).fill[0].color).toBe('#F8FAFC');
+    expect((input2 as any).fill[0].color).toBe('#F8FAFC');
+  });
+});

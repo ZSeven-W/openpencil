@@ -249,6 +249,11 @@ export function resolveTreePostPass(
   // --- Orphan container contrast ---
   fixOrphanContainerContrast(root, parentNode);
 
+  // --- Input sibling fill/stroke consistency ---
+  if (root.layout === 'vertical' && children.length >= 2) {
+    fixInputSiblingConsistency(root, children);
+  }
+
   // Recurse
   for (const child of children) {
     resolveTreePostPass(child, canvasWidth, getNodeById, updateNode, root);
@@ -404,6 +409,29 @@ function fixOrphanContainerContrast(node: FrameNode, parentNode?: PenNode): void
     { type: 'shadow', offsetX: 0, offsetY: 1, blur: 3, spread: 0, color: '#0000001A' },
     { type: 'shadow', offsetX: 0, offsetY: 1, blur: 2, spread: -1, color: '#0000000F' },
   ];
+}
+
+function fixInputSiblingConsistency(_parent: FrameNode, children: PenNode[]): void {
+  const inputs = children.filter(
+    (c) => c.type === 'frame' && (c.role === 'input' || c.role === 'form-input') && hasFill(c),
+  );
+  if (inputs.length < 2) return;
+
+  const firstColor = getFirstSolidColor(inputs[0]);
+  if (!firstColor) return;
+  const allMatch = inputs.every((inp) => getFirstSolidColor(inp) === firstColor);
+  if (allMatch) return;
+
+  const sourceFill = (inputs[0] as unknown as Record<string, unknown>).fill;
+  const sourceStroke = (inputs[0] as unknown as Record<string, unknown>).stroke;
+
+  for (let i = 1; i < inputs.length; i++) {
+    const rec = inputs[i] as unknown as Record<string, unknown>;
+    rec.fill = sourceFill;
+    if (sourceStroke) {
+      rec.stroke = sourceStroke;
+    }
+  }
 }
 
 function equalizeCardRow(parent: FrameNode, children: PenNode[]): void {
