@@ -16,11 +16,19 @@ export default function UnsavedChangesDialog({
 }: UnsavedChangesDialogProps) {
   const { t } = useTranslation();
   const [visible, setVisible] = useState(false);
-  const isLight = typeof document !== 'undefined' && document.documentElement.classList.contains('light');
+  const [stagger, setStagger] = useState(false);
+  const isLight =
+    typeof document !== 'undefined' &&
+    document.documentElement.classList.contains('light');
 
   useEffect(() => {
-    if (open) requestAnimationFrame(() => setVisible(true));
-    else setVisible(false);
+    if (open) {
+      requestAnimationFrame(() => setVisible(true));
+      const timer = setTimeout(() => setStagger(true), 200);
+      return () => clearTimeout(timer);
+    }
+    setVisible(false);
+    setStagger(false);
   }, [open]);
 
   useEffect(() => {
@@ -34,164 +42,195 @@ export default function UnsavedChangesDialog({
 
   if (!open) return null;
 
-  // Theme-aware color tokens
-  const theme = isLight
-    ? {
-        backdrop: 'radial-gradient(ellipse at center, rgba(255,255,255,0.5) 0%, rgba(100,100,120,0.4) 100%)',
-        cardBg: 'linear-gradient(145deg, rgba(255,255,255,0.97) 0%, rgba(248,248,252,0.99) 100%)',
-        cardBorder: 'rgba(0,0,0,0.08)',
-        cardShadow: '0 25px 60px rgba(0,0,0,0.12), 0 8px 20px rgba(0,0,0,0.06)',
-        shimmer: 'linear-gradient(90deg, transparent 0%, rgba(0,0,0,0.04) 30%, rgba(0,0,0,0.06) 50%, rgba(0,0,0,0.04) 70%, transparent 100%)',
-        iconBg: 'linear-gradient(135deg, rgba(245,158,11,0.12) 0%, rgba(239,68,68,0.08) 100%)',
-        iconBorder: 'rgba(245,158,11,0.2)',
-        iconShadow: '0 0 15px rgba(245,158,11,0.1)',
-        iconPulse: 'radial-gradient(circle, rgba(245,158,11,0.15) 0%, transparent 70%)',
-        iconColor: 'text-amber-500',
-        titleColor: 'rgba(15,15,20,0.9)',
-        messageColor: 'rgba(15,15,20,0.45)',
-        saveBg: 'linear-gradient(135deg, #3b82f6 0%, #6366f1 100%)',
-        saveShadow: '0 4px 15px rgba(59,130,246,0.25), inset 0 1px 0 rgba(255,255,255,0.2)',
-        discardBg: 'rgba(239,68,68,0.06)',
-        discardColor: 'rgba(220,38,38,0.85)',
-        discardBorder: '1px solid rgba(239,68,68,0.12)',
-        cancelBg: 'rgba(0,0,0,0.04)',
-        cancelColor: 'rgba(0,0,0,0.45)',
-        cancelBorder: '1px solid rgba(0,0,0,0.08)',
-        glowOpacity: 0.3,
-        glowSpreadOpacity: 0.08,
-      }
-    : {
-        backdrop: 'radial-gradient(ellipse at center, rgba(0,0,0,0.4) 0%, rgba(0,0,0,0.7) 100%)',
-        cardBg: 'linear-gradient(145deg, rgba(30,30,35,0.95) 0%, rgba(18,18,22,0.98) 100%)',
-        cardBorder: 'rgba(255,255,255,0.08)',
-        cardShadow: '0 25px 60px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.05)',
-        shimmer: 'linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.15) 30%, rgba(255,255,255,0.25) 50%, rgba(255,255,255,0.15) 70%, transparent 100%)',
-        iconBg: 'linear-gradient(135deg, rgba(245,158,11,0.2) 0%, rgba(239,68,68,0.15) 100%)',
-        iconBorder: 'rgba(245,158,11,0.25)',
-        iconShadow: '0 0 20px rgba(245,158,11,0.2), inset 0 1px 0 rgba(255,255,255,0.1)',
-        iconPulse: 'radial-gradient(circle, rgba(245,158,11,0.3) 0%, transparent 70%)',
-        iconColor: 'text-amber-400',
-        titleColor: 'rgba(255,255,255,0.92)',
-        messageColor: 'rgba(255,255,255,0.45)',
-        saveBg: 'linear-gradient(135deg, #3b82f6 0%, #6366f1 100%)',
-        saveShadow: '0 4px 15px rgba(59,130,246,0.3), inset 0 1px 0 rgba(255,255,255,0.15)',
-        discardBg: 'rgba(239,68,68,0.1)',
-        discardColor: 'rgba(248,113,113,0.9)',
-        discardBorder: '1px solid rgba(239,68,68,0.15)',
-        cancelBg: 'rgba(255,255,255,0.06)',
-        cancelColor: 'rgba(255,255,255,0.5)',
-        cancelBorder: '1px solid rgba(255,255,255,0.08)',
-        glowOpacity: 0.6,
-        glowSpreadOpacity: 0.2,
-      };
+  const L = isLight;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center perspective-[1200px]">
+    <div className="fixed inset-0 z-50 flex items-center justify-center">
       {/* Backdrop */}
       <div
-        className="absolute inset-0 backdrop-blur-md transition-all duration-500"
-        style={{ background: theme.backdrop, opacity: visible ? 1 : 0 }}
+        className="absolute inset-0 transition-all duration-700 ease-out"
+        style={{
+          backdropFilter: visible ? 'blur(12px) saturate(1.2)' : 'blur(0px)',
+          WebkitBackdropFilter: visible ? 'blur(12px) saturate(1.2)' : 'blur(0px)',
+          background: L
+            ? `radial-gradient(ellipse at 50% 40%, rgba(255,255,255,0.55) 0%, rgba(120,120,140,0.45) 100%)`
+            : `radial-gradient(ellipse at 50% 40%, rgba(10,10,15,0.5) 0%, rgba(0,0,0,0.75) 100%)`,
+          opacity: visible ? 1 : 0,
+        }}
         onClick={() => onResult('cancel')}
       />
 
-      {/* Dialog card */}
+      {/* Card wrapper */}
       <div
-        className="relative w-[360px] transition-all duration-500 ease-out"
+        className="relative w-[340px] transition-all duration-600 ease-[cubic-bezier(0.16,1,0.3,1)]"
         style={{
           opacity: visible ? 1 : 0,
           transform: visible
-            ? 'translateY(0) scale(1) rotateX(0deg)'
-            : 'translateY(40px) scale(0.9) rotateX(8deg)',
+            ? 'translateY(0) scale(1)'
+            : 'translateY(32px) scale(0.92)',
         }}
       >
-        {/* Animated glow border */}
+        {/* Glow — slow rotating, breathing opacity */}
         <div
-          className="absolute -inset-[1px] rounded-2xl"
+          className="absolute -inset-[1px] rounded-[18px]"
           style={{
-            background: 'conic-gradient(from var(--glow-angle, 0deg), #f59e0b, #ef4444, #8b5cf6, #3b82f6, #10b981, #f59e0b)',
-            animation: 'glowSpin 4s linear infinite',
-            filter: 'blur(2px)',
-            opacity: theme.glowOpacity,
+            background:
+              'conic-gradient(from var(--glow-angle, 0deg), #f59e0b88, #ef444488, #8b5cf688, #3b82f688, #10b98188, #f59e0b88)',
+            animation: 'glowSpin 6s linear infinite, glowBreath 3s ease-in-out infinite',
+            filter: 'blur(1.5px)',
+            opacity: L ? 0.35 : 0.55,
           }}
         />
-        {/* Outer glow spread */}
         <div
-          className="absolute -inset-3 rounded-3xl"
+          className="absolute -inset-2.5 rounded-[22px]"
           style={{
-            background: 'conic-gradient(from var(--glow-angle, 0deg), #f59e0b, #ef4444, #8b5cf6, #3b82f6, #10b981, #f59e0b)',
-            animation: 'glowSpin 4s linear infinite',
-            filter: 'blur(20px)',
-            opacity: theme.glowSpreadOpacity,
+            background:
+              'conic-gradient(from var(--glow-angle, 0deg), #f59e0b, #ef4444, #8b5cf6, #3b82f6, #10b981, #f59e0b)',
+            animation: 'glowSpin 6s linear infinite, glowBreath 3s ease-in-out infinite',
+            filter: 'blur(18px)',
+            opacity: L ? 0.06 : 0.15,
           }}
         />
 
-        {/* Card */}
+        {/* Glass card */}
         <div
-          className="relative rounded-2xl overflow-hidden"
+          className="relative rounded-[18px] overflow-hidden"
           style={{
-            background: theme.cardBg,
-            border: `1px solid ${theme.cardBorder}`,
-            boxShadow: theme.cardShadow,
+            background: L
+              ? 'linear-gradient(160deg, rgba(255,255,255,0.98) 0%, rgba(250,250,254,0.96) 100%)'
+              : 'linear-gradient(160deg, rgba(28,28,34,0.97) 0%, rgba(16,16,20,0.99) 100%)',
+            border: `1px solid ${L ? 'rgba(0,0,0,0.06)' : 'rgba(255,255,255,0.07)'}`,
+            boxShadow: L
+              ? '0 20px 50px rgba(0,0,0,0.1), 0 1px 3px rgba(0,0,0,0.04)'
+              : '0 20px 50px rgba(0,0,0,0.5), 0 1px 0 rgba(255,255,255,0.03) inset',
           }}
         >
-          {/* Top shimmer line */}
-          <div className="absolute top-0 left-0 right-0 h-px" style={{ background: theme.shimmer }} />
+          {/* Top highlight */}
+          <div
+            className="absolute top-0 inset-x-0 h-px"
+            style={{
+              background: L
+                ? 'linear-gradient(90deg, transparent, rgba(0,0,0,0.04) 30%, rgba(0,0,0,0.06) 50%, rgba(0,0,0,0.04) 70%, transparent)'
+                : 'linear-gradient(90deg, transparent, rgba(255,255,255,0.08) 30%, rgba(255,255,255,0.14) 50%, rgba(255,255,255,0.08) 70%, transparent)',
+            }}
+          />
 
-          <div className="relative px-7 pt-7 pb-6">
-            {/* Warning icon */}
-            <div className="flex justify-center mb-5">
+          {/* Noise grain overlay */}
+          <div
+            className="absolute inset-0 opacity-[0.025] pointer-events-none mix-blend-overlay"
+            style={{
+              backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")`,
+            }}
+          />
+
+          <div className="relative px-8 pt-8 pb-7">
+            {/* Icon — staggered entry */}
+            <div
+              className="flex justify-center mb-5 transition-all duration-500 ease-out"
+              style={{
+                opacity: stagger ? 1 : 0,
+                transform: stagger ? 'translateY(0) scale(1)' : 'translateY(8px) scale(0.8)',
+              }}
+            >
               <div className="relative">
+                {/* Soft pulse ring */}
                 <div
-                  className="absolute inset-0 rounded-full"
+                  className="absolute -inset-3 rounded-full"
                   style={{
-                    background: theme.iconPulse,
-                    animation: 'pulse 2s ease-in-out infinite',
-                    transform: 'scale(2.5)',
+                    background: `radial-gradient(circle, ${L ? 'rgba(245,158,11,0.08)' : 'rgba(245,158,11,0.18)'} 0%, transparent 70%)`,
+                    animation: 'iconPulse 2.5s ease-in-out infinite',
                   }}
                 />
+                {/* Outer ring */}
                 <div
-                  className="relative h-12 w-12 rounded-full flex items-center justify-center"
+                  className="h-[52px] w-[52px] rounded-full p-[1px]"
                   style={{
-                    background: theme.iconBg,
-                    boxShadow: theme.iconShadow,
-                    border: `1px solid ${theme.iconBorder}`,
+                    background: `linear-gradient(135deg, ${L ? 'rgba(245,158,11,0.2)' : 'rgba(245,158,11,0.3)'}, ${L ? 'rgba(239,68,68,0.1)' : 'rgba(239,68,68,0.2)'})`,
                   }}
                 >
-                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={theme.iconColor}>
-                    <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3" />
-                    <path d="M12 9v4" />
-                    <path d="M12 17h.01" />
-                  </svg>
+                  {/* Inner circle */}
+                  <div
+                    className="h-full w-full rounded-full flex items-center justify-center"
+                    style={{
+                      background: L
+                        ? 'linear-gradient(135deg, rgba(245,158,11,0.08), rgba(255,250,240,0.9))'
+                        : 'linear-gradient(135deg, rgba(245,158,11,0.12), rgba(30,25,20,0.9))',
+                      boxShadow: L
+                        ? '0 2px 8px rgba(245,158,11,0.08) inset'
+                        : '0 2px 12px rgba(245,158,11,0.1) inset, 0 0 1px rgba(255,255,255,0.06) inset',
+                    }}
+                  >
+                    <svg
+                      width="21"
+                      height="21"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="1.8"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      className={L ? 'text-amber-500' : 'text-amber-400'}
+                    >
+                      <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3" />
+                      <path d="M12 9v4" />
+                      <path d="M12 17h.01" />
+                    </svg>
+                  </div>
                 </div>
               </div>
             </div>
 
-            {/* Title */}
+            {/* Title — staggered */}
             <h3
-              className="text-center text-[15px] font-semibold tracking-tight mb-1.5"
-              style={{ color: theme.titleColor }}
+              className="text-center text-[15px] font-semibold tracking-[-0.01em] mb-1 transition-all duration-500 delay-75 ease-out"
+              style={{
+                color: L ? 'rgba(15,15,20,0.88)' : 'rgba(255,255,255,0.9)',
+                opacity: stagger ? 1 : 0,
+                transform: stagger ? 'translateY(0)' : 'translateY(6px)',
+              }}
             >
               {t('unsaved.title')}
             </h3>
 
-            {/* Message */}
+            {/* Subtitle — staggered */}
             <p
-              className="text-center text-[13px] leading-relaxed mb-7"
-              style={{ color: theme.messageColor }}
+              className="text-center text-[12.5px] leading-relaxed mb-7 transition-all duration-500 delay-100 ease-out"
+              style={{
+                color: L ? 'rgba(15,15,20,0.4)' : 'rgba(255,255,255,0.4)',
+                opacity: stagger ? 1 : 0,
+                transform: stagger ? 'translateY(0)' : 'translateY(6px)',
+              }}
             >
               {t('unsaved.message', { name: fileName || t('common.untitled') })}
             </p>
 
-            {/* Actions */}
-            <div className="flex flex-col gap-2.5">
-              {/* Save — hero button */}
+            {/* Buttons — staggered */}
+            <div
+              className="flex flex-col gap-2 transition-all duration-500 delay-150 ease-out"
+              style={{
+                opacity: stagger ? 1 : 0,
+                transform: stagger ? 'translateY(0)' : 'translateY(8px)',
+              }}
+            >
+              {/* Save — primary */}
               <button
                 type="button"
                 onClick={() => onResult('save')}
-                className="h-10 w-full rounded-xl text-[13px] font-semibold text-white transition-all duration-200 hover:brightness-110 hover:shadow-lg hover:shadow-blue-500/20 active:scale-[0.98]"
-                style={{ background: theme.saveBg, boxShadow: theme.saveShadow }}
+                className="group relative h-[38px] w-full rounded-[10px] text-[13px] font-semibold text-white overflow-hidden transition-all duration-200 active:scale-[0.98]"
+                style={{
+                  background: 'linear-gradient(135deg, #3b82f6 0%, #6366f1 100%)',
+                  boxShadow: L
+                    ? '0 2px 10px rgba(59,130,246,0.25), 0 1px 2px rgba(59,130,246,0.1)'
+                    : '0 2px 14px rgba(59,130,246,0.3), 0 1px 0 rgba(255,255,255,0.1) inset',
+                }}
               >
-                {t('common.save')}
+                {/* Hover shimmer */}
+                <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300"
+                  style={{
+                    background: 'linear-gradient(135deg, rgba(255,255,255,0.12) 0%, transparent 50%, rgba(255,255,255,0.06) 100%)',
+                  }}
+                />
+                <span className="relative">{t('common.save')}</span>
               </button>
 
               {/* Secondary row */}
@@ -199,16 +238,24 @@ export default function UnsavedChangesDialog({
                 <button
                   type="button"
                   onClick={() => onResult('discard')}
-                  className="h-9 flex-1 rounded-xl text-[12px] font-medium transition-all duration-200 hover:brightness-125 active:scale-[0.98]"
-                  style={{ background: theme.discardBg, color: theme.discardColor, border: theme.discardBorder }}
+                  className="group h-[34px] flex-1 rounded-[10px] text-[11.5px] font-medium transition-all duration-200 active:scale-[0.98]"
+                  style={{
+                    background: L ? 'rgba(239,68,68,0.05)' : 'rgba(239,68,68,0.08)',
+                    color: L ? 'rgba(220,38,38,0.8)' : 'rgba(248,113,113,0.85)',
+                    border: `1px solid ${L ? 'rgba(239,68,68,0.1)' : 'rgba(239,68,68,0.12)'}`,
+                  }}
                 >
                   {t('unsaved.dontSave')}
                 </button>
                 <button
                   type="button"
                   onClick={() => onResult('cancel')}
-                  className="h-9 flex-1 rounded-xl text-[12px] font-medium transition-all duration-200 hover:brightness-125 active:scale-[0.98]"
-                  style={{ background: theme.cancelBg, color: theme.cancelColor, border: theme.cancelBorder }}
+                  className="group h-[34px] flex-1 rounded-[10px] text-[11.5px] font-medium transition-all duration-200 active:scale-[0.98]"
+                  style={{
+                    background: L ? 'rgba(0,0,0,0.03)' : 'rgba(255,255,255,0.05)',
+                    color: L ? 'rgba(0,0,0,0.4)' : 'rgba(255,255,255,0.45)',
+                    border: `1px solid ${L ? 'rgba(0,0,0,0.06)' : 'rgba(255,255,255,0.07)'}`,
+                  }}
                 >
                   {t('common.cancel')}
                 </button>
@@ -226,6 +273,14 @@ export default function UnsavedChangesDialog({
         }
         @keyframes glowSpin {
           to { --glow-angle: 360deg; }
+        }
+        @keyframes glowBreath {
+          0%, 100% { opacity: 1; }
+          50% { opacity: 0.6; }
+        }
+        @keyframes iconPulse {
+          0%, 100% { transform: scale(1); opacity: 1; }
+          50% { transform: scale(1.3); opacity: 0.5; }
         }
       `}</style>
     </div>
