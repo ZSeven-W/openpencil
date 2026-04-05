@@ -29,6 +29,7 @@ import {
   normalizeMemberBaseURL,
   requireOpenAICompatBaseURL,
 } from './provider-url';
+import { startSSEKeepAlive } from '../../utils/sse-keepalive';
 
 const TOOL_LEVEL_MAP: Record<string, AuthLevel> = {
   batch_get: 'read',
@@ -516,12 +517,10 @@ export default defineEventHandler(async (event) => {
   const encoder = new TextEncoder();
   const stream = new ReadableStream({
     async start(controller) {
-      const pingTimer = setInterval(() => {
-        try {
-          controller.enqueue(encoder.encode(': ping\n\n'));
-        } catch {
-          /* stream already closed */
-        }
+      // Keep pings active for the full orchestration. Delegated tool calls can
+      // legitimately stall visible output for >10s while the model waits.
+      const pingTimer = startSSEKeepAlive(() => {
+        controller.enqueue(encoder.encode(': ping\n\n'));
       }, 5_000);
 
       let iter;

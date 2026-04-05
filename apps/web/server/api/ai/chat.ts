@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { resolveClaudeCli } from '../../utils/resolve-claude-cli';
 import { runCodexExec } from '../../utils/codex-client';
+import { startSSEKeepAlive } from '../../utils/sse-keepalive';
 import {
   buildClaudeAgentEnv,
   buildSpawnClaudeCodeProcess,
@@ -185,8 +186,9 @@ export default defineEventHandler(async (event) => {
   return streamViaCodex(body, body.model);
 });
 
-// Keep-alive ping interval (ms) — must be shorter than Bun's 10s idle timeout
-// to prevent "socket connection was closed unexpectedly" errors
+// Keep-alive ping interval (ms) — must stay below Bun's 10s idle timeout,
+// but shouldn't be so aggressive that long-lived nested SSE streams create
+// unnecessary write pressure on Bun dev.
 const KEEPALIVE_INTERVAL_MS = 5_000;
 function getAgentThinkingConfig(
   body: ChatBody,
@@ -248,15 +250,12 @@ function streamViaAgentSDK(body: ChatBody, requestedModel?: string) {
   const stream = new ReadableStream({
     async start(controller) {
       const encoder = new TextEncoder();
-      // Send keep-alive pings until the first real chunk arrives
-      const pingTimer = setInterval(() => {
-        try {
-          controller.enqueue(
-            encoder.encode(`data: ${JSON.stringify({ type: 'ping', content: '' })}\n\n`),
-          );
-        } catch {
-          /* stream already closed */
-        }
+      // Keep emitting pings for the full stream lifetime. Some providers pause
+      // for >10s between text deltas, and Bun will otherwise kill the SSE socket.
+      const pingTimer = startSSEKeepAlive(() => {
+        controller.enqueue(
+          encoder.encode(`data: ${JSON.stringify({ type: 'ping', content: '' })}\n\n`),
+        );
       }, KEEPALIVE_INTERVAL_MS);
       let debugFile: string | undefined;
       let attachTempDir: string | undefined;
@@ -350,7 +349,6 @@ function streamViaAgentSDK(body: ChatBody, requestedModel?: string) {
 
           const resultText = await runImageQuery();
 
-          clearInterval(pingTimer);
           if (resultText) {
             controller.enqueue(
               encoder.encode(`data: ${JSON.stringify({ type: 'text', content: resultText })}\n\n`),
@@ -385,11 +383,9 @@ function streamViaAgentSDK(body: ChatBody, requestedModel?: string) {
                   const ev = message.event;
                   if (ev.type === 'content_block_delta') {
                     if (ev.delta.type === 'text_delta') {
-                      clearInterval(pingTimer);
                       const data = JSON.stringify({ type: 'text', content: ev.delta.text });
                       controller.enqueue(encoder.encode(`data: ${data}\n\n`));
                     } else if (ev.delta.type === 'thinking_delta') {
-                      // Keep pings alive during thinking — only stop on text output
                       const data = JSON.stringify({
                         type: 'thinking',
                         content: (ev.delta as any).thinking,
@@ -530,14 +526,10 @@ function streamViaCodex(body: ChatBody, model?: string) {
   const stream = new ReadableStream({
     async start(controller) {
       const encoder = new TextEncoder();
-      const pingTimer = setInterval(() => {
-        try {
-          controller.enqueue(
-            encoder.encode(`data: ${JSON.stringify({ type: 'ping', content: '' })}\n\n`),
-          );
-        } catch {
-          /* stream already closed */
-        }
+      const pingTimer = startSSEKeepAlive(() => {
+        controller.enqueue(
+          encoder.encode(`data: ${JSON.stringify({ type: 'ping', content: '' })}\n\n`),
+        );
       }, KEEPALIVE_INTERVAL_MS);
 
       let attachTempDir: string | undefined;
@@ -563,7 +555,6 @@ function streamViaCodex(body: ChatBody, model?: string) {
           imageFiles,
         });
 
-        clearInterval(pingTimer);
         if (result.error) {
           controller.enqueue(
             encoder.encode(`data: ${JSON.stringify({ type: 'error', content: result.error })}\n\n`),
@@ -603,14 +594,10 @@ function streamViaOpenCode(body: ChatBody, model?: string) {
   const stream = new ReadableStream({
     async start(controller) {
       const encoder = new TextEncoder();
-      const pingTimer = setInterval(() => {
-        try {
-          controller.enqueue(
-            encoder.encode(`data: ${JSON.stringify({ type: 'ping', content: '' })}\n\n`),
-          );
-        } catch {
-          /* stream already closed */
-        }
+      const pingTimer = startSSEKeepAlive(() => {
+        controller.enqueue(
+          encoder.encode(`data: ${JSON.stringify({ type: 'ping', content: '' })}\n\n`),
+        );
       }, KEEPALIVE_INTERVAL_MS);
 
       let ocServer: { close(): void } | undefined;
@@ -783,8 +770,6 @@ function streamViaOpenCode(body: ChatBody, model?: string) {
           }
         }
 
-        clearInterval(pingTimer);
-
         // Fallback: if no text was streamed, try reading session messages directly
         if (!emittedText) {
           try {
@@ -854,14 +839,10 @@ function streamViaGemini(body: ChatBody, model?: string) {
   const stream = new ReadableStream({
     async start(controller) {
       const encoder = new TextEncoder();
-      const pingTimer = setInterval(() => {
-        try {
-          controller.enqueue(
-            encoder.encode(`data: ${JSON.stringify({ type: 'ping', content: '' })}\n\n`),
-          );
-        } catch {
-          /* stream already closed */
-        }
+      const pingTimer = startSSEKeepAlive(() => {
+        controller.enqueue(
+          encoder.encode(`data: ${JSON.stringify({ type: 'ping', content: '' })}\n\n`),
+        );
       }, KEEPALIVE_INTERVAL_MS);
 
       try {
@@ -877,7 +858,6 @@ function streamViaGemini(body: ChatBody, model?: string) {
         });
 
         for await (const event of geminiStream) {
-          clearInterval(pingTimer);
           if (event.type === 'text') {
             const data = JSON.stringify({ type: 'text', content: event.content });
             try {
@@ -915,14 +895,10 @@ function streamViaCopilot(body: ChatBody, model?: string) {
   const stream = new ReadableStream({
     async start(controller) {
       const encoder = new TextEncoder();
-      const pingTimer = setInterval(() => {
-        try {
-          controller.enqueue(
-            encoder.encode(`data: ${JSON.stringify({ type: 'ping', content: '' })}\n\n`),
-          );
-        } catch {
-          /* stream already closed */
-        }
+      const pingTimer = startSSEKeepAlive(() => {
+        controller.enqueue(
+          encoder.encode(`data: ${JSON.stringify({ type: 'ping', content: '' })}\n\n`),
+        );
       }, KEEPALIVE_INTERVAL_MS);
 
       let copilotClient: { stop(): Promise<unknown> } | undefined;
@@ -954,7 +930,6 @@ function streamViaCopilot(body: ChatBody, model?: string) {
 
         // Subscribe to streaming deltas
         session.on('assistant.message_delta', (event) => {
-          clearInterval(pingTimer);
           const deltaContent = (event as any).data?.deltaContent ?? '';
           if (deltaContent) {
             const data = JSON.stringify({ type: 'text', content: deltaContent });
@@ -1000,14 +975,10 @@ function streamViaBuiltin(body: ChatBody) {
     async start(controller) {
       const encoder = new TextEncoder();
       const BUILTIN_EVENT_IDLE_TIMEOUT_MS = 45_000;
-      const pingTimer = setInterval(() => {
-        try {
-          controller.enqueue(
-            encoder.encode(`data: ${JSON.stringify({ type: 'ping', content: '' })}\n\n`),
-          );
-        } catch {
-          /* stream already closed */
-        }
+      const pingTimer = startSSEKeepAlive(() => {
+        controller.enqueue(
+          encoder.encode(`data: ${JSON.stringify({ type: 'ping', content: '' })}\n\n`),
+        );
       }, KEEPALIVE_INTERVAL_MS);
 
       try {
@@ -1086,20 +1057,26 @@ function streamViaBuiltin(body: ChatBody) {
               clearTimeout(firstEventTimer);
             }
             const evt = JSON.parse(raw);
-            if (evt.type === 'text_delta' && evt.text) {
+            // NAPI addon returns tagged-union events: {stream_event:{type,text,...}} or {result:{...}}
+            const se = evt.stream_event;
+            if (se?.type === 'text_delta' && se.text) {
               controller.enqueue(
                 encoder.encode(
-                  `data: ${JSON.stringify({ type: 'text', content: evt.text })}\n\n`,
+                  `data: ${JSON.stringify({ type: 'text', content: se.text })}\n\n`,
                 ),
               );
-            } else if (evt.type === 'thinking' && evt.text) {
+            } else if (se?.type === 'thinking_delta' && se.text) {
               controller.enqueue(
                 encoder.encode(
-                  `data: ${JSON.stringify({ type: 'thinking', content: evt.text })}\n\n`,
+                  `data: ${JSON.stringify({ type: 'thinking', content: se.text })}\n\n`,
                 ),
               );
             }
           }
+
+          controller.enqueue(
+            encoder.encode(`data: ${JSON.stringify({ type: 'done', content: '' })}\n\n`),
+          );
         } finally {
           clearTimeout(firstEventTimer);
           destroyIterator(builtinIter);
