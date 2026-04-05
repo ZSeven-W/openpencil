@@ -371,7 +371,14 @@ async function runAgentStream(
 
                   const doc = useDocumentStore.getState().document;
                   const { getCanvasSize } = await import('@/canvas/skia-engine-ref');
-                  const canvasSize = getCanvasSize();
+                  const viewportSize = getCanvasSize();
+
+                  // Detect mobile intent from prompt — force mobile canvas size
+                  const mobilePattern = /\b(mobile|手机|移动端|app\b|ios|android|iphone|手机端|小程序)/i;
+                  const isMobile = mobilePattern.test(userPrompt);
+                  const canvasSize = isMobile
+                    ? { width: 375, height: 812 }
+                    : viewportSize ?? undefined;
 
                   const result = await generateDesign(
                     {
@@ -380,7 +387,7 @@ async function runAgentStream(
                       provider: designProvider as any,
                       concurrency: useAIStore.getState().concurrency,
                       context: {
-                        canvasSize: canvasSize ?? undefined,
+                        canvasSize,
                         variables: doc.variables,
                         themes: doc.themes,
                       },
