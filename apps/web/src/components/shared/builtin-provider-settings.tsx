@@ -274,29 +274,31 @@ export function BuiltinProviderForm({
         {modelError && <p className="text-[10px] text-destructive mt-1">{modelError}</p>}
       </div>
 
-      {/* API Format — always visible */}
-      <div className="space-y-1.5">
-        <label className="text-[11px] font-medium text-muted-foreground">
-          {t('builtin.apiFormat')}
-        </label>
-        <div className="flex gap-1">
-          {(['openai-compat', 'anthropic'] as const).map((fmt) => (
-            <button
-              key={fmt}
-              type="button"
-              onClick={() => setApiFormat(fmt)}
-              className={cn(
-                'flex-1 h-7 text-[11px] rounded-lg border transition-all',
-                apiFormat === fmt
-                  ? 'bg-primary text-primary-foreground border-primary shadow-sm'
-                  : 'bg-card text-muted-foreground border-input hover:bg-accent',
-              )}
-            >
-              {fmt === 'openai-compat' ? t('builtin.openaiCompat') : 'Anthropic'}
-            </button>
-          ))}
+      {/* API Format — hidden for anthropic/openai (format is fixed) */}
+      {preset !== 'anthropic' && preset !== 'openai' && (
+        <div className="space-y-1.5">
+          <label className="text-[11px] font-medium text-muted-foreground">
+            {t('builtin.apiFormat')}
+          </label>
+          <div className="flex gap-1">
+            {(['openai-compat', 'anthropic'] as const).map((fmt) => (
+              <button
+                key={fmt}
+                type="button"
+                onClick={() => setApiFormat(fmt)}
+                className={cn(
+                  'flex-1 h-7 text-[11px] rounded-lg border transition-all',
+                  apiFormat === fmt
+                    ? 'bg-primary text-primary-foreground border-primary shadow-sm'
+                    : 'bg-card text-muted-foreground border-input hover:bg-accent',
+                )}
+              >
+                {fmt === 'openai-compat' ? t('builtin.openaiCompat') : 'Anthropic'}
+              </button>
+            ))}
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Base URL */}
       <div className="space-y-1.5">
