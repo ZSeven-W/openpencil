@@ -35,7 +35,7 @@ import type { AgentIdentity } from '@/services/ai/agent-identity';
 import { applyPostStreamingTreeHeuristics } from '@/services/ai/design-canvas-ops';
 import { trimChatHistory } from '@/services/ai/context-optimizer';
 import { AgentToolExecutor } from '@/services/ai/agent-tool-executor';
-import { getDesignToolDefs } from '@/services/ai/agent-tools';
+import { getBuiltinLeadToolDefs, getDesignToolDefs } from '@/services/ai/agent-tools';
 import type { ChatMessage as ChatMessageType } from '@/services/ai/ai-types';
 import type { ToolCallBlockData } from '@/components/panels/tool-call-block';
 import { CHAT_STREAM_THINKING_CONFIG } from '@/services/ai/ai-runtime-config';
@@ -56,6 +56,13 @@ RULE 1: To create or design ANYTHING, call generate_design. NEVER output JSON yo
 RULE 2: After every tool call, write 1-2 sentences summarizing what happened.
 RULE 3: When calling generate_design, write a detailed prompt with style direction (colors, shadows, spacing, visual hierarchy).
 
+IMPORTANT: Always end your turn with a short natural-language reply for the user.
+- After any tool call completes, reply with ONLY a 1-3 sentence summary of what was created.
+- NEVER output JSON, code blocks, or PenNode data in your text reply. The tool already handled it.
+- If work completed successfully, say what changed or what was created.
+- If nothing changed, explain why in one sentence.
+- Never end with tool calls only.
+
 FORBIDDEN: Do not output JSON, code blocks, or node definitions directly. Always use generate_design instead.`;
 
 /** Agent tool instructions for builtin providers — same generate_design pipeline as CLI. */
@@ -67,12 +74,22 @@ RULE 3: Do NOT call generate_design more than once unless the user asks for a ne
 
 FORBIDDEN: Do not output JSON, code blocks, or node definitions directly. Always use generate_design instead.`;
 
+/** Agent instructions for lead agents coordinating a team. */
+const AGENT_TOOL_INSTRUCTIONS_TEAM = `You are a design lead coordinating a team.
+
+Do not create the design directly in this mode. Analyze the request, delegate the work to team members, then summarize the outcome for the user.`;
+
 /**
  * Build the agent system prompt based on provider type.
  * Builtin providers get direct design instructions (plan_layout + batch_insert).
  * CLI providers get generate_design tool instructions (orchestrator pipeline).
  */
-function buildAgentSystemPrompt(_userMessage: string, isBuiltin: boolean): string {
+function buildAgentSystemPrompt(
+  _userMessage: string,
+  isBuiltin: boolean,
+  teamMode: boolean,
+): string {
+  if (teamMode) return AGENT_TOOL_INSTRUCTIONS_TEAM;
   return isBuiltin ? AGENT_TOOL_INSTRUCTIONS_BUILTIN : AGENT_TOOL_INSTRUCTIONS_CLI;
 }
 
@@ -164,9 +181,9 @@ async function runAgentStream(
   const sessionId = nanoid();
   const executor = new AgentToolExecutor(sessionId);
 
-  const isBuiltin = providerConfig.providerType === 'anthropic' || providerConfig.providerType === 'openai-compat';
-
-  const toolDefs = getDesignToolDefs();
+  const isBuiltin =
+    providerConfig.providerType === 'anthropic' ||
+    providerConfig.providerType === 'openai-compat';
 
   const messages = useAIStore
     .getState()
@@ -175,7 +192,6 @@ async function runAgentStream(
 
   const context = buildContextString();
   const lastUserMsg = messages[messages.length - 1]?.content ?? '';
-  const systemPrompt = buildAgentSystemPrompt(lastUserMsg, isBuiltin) + context;
 
   // Read document context for team member skill loading
   const { useDesignMdStore } = await import('@/stores/design-md-store');
@@ -188,6 +204,9 @@ async function runAgentStream(
 
   const { useAIStore: concurrencyStore } = await import('@/stores/ai-store');
   const concurrency = concurrencyStore.getState().concurrency;
+  const teamMode = concurrency > 1;
+  const toolDefs = isBuiltin && !teamMode ? getBuiltinLeadToolDefs() : getDesignToolDefs();
+  const systemPrompt = buildAgentSystemPrompt(lastUserMsg, isBuiltin, teamMode) + context;
 
   const agentBody: Record<string, unknown> = {
     sessionId,
@@ -201,8 +220,7 @@ async function runAgentStream(
     ...(providerConfig.maxContextTokens ? { maxContextTokens: providerConfig.maxContextTokens } : {}),
     toolDefs,
     maxTurns: 20,
-    teamMode: true,
-    concurrency,
+    ...(teamMode ? { teamMode: true, concurrency } : {}),
     ...(designMdContent ? { designMdContent } : {}),
     ...(hasVariables ? { hasVariables } : {}),
   };
@@ -277,10 +295,13 @@ async function runAgentStream(
           executor
             .execute(evt as Extract<AgentEvent, { type: 'tool_call' }>)
             .then((result) => {
-              useAIStore.getState().updateToolCallBlock(evt.id, {
-                status: result?.success !== false ? 'done' : 'error',
-                result: result ?? undefined,
-              });
+              const block = useAIStore.getState().toolCallBlocks.find((b) => b.id === evt.id);
+              if (block && block.status === 'running') {
+                useAIStore.getState().updateToolCallBlock(evt.id, {
+                  status: result?.success !== false ? 'done' : 'error',
+                  result: result ?? undefined,
+                });
+              }
             })
             .catch((err) => {
               useAIStore.getState().updateToolCallBlock(evt.id, {
@@ -368,6 +389,11 @@ async function runAgentStream(
           return;
       }
     }
+  } catch (error) {
+    if (abortController.signal.aborted) {
+      return stripThinkTags(accumulated);
+    }
+    throw error;
   } finally {
     renderer.finish();
     reader.releaseLock();

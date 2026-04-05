@@ -17,7 +17,7 @@ const WRITE_LEVELS: Set<AuthLevel> = new Set(['create', 'modify', 'delete']);
 export class AgentToolExecutor {
   private sessionId: string;
   private designGenerated = false;
-  private layoutCreated = false;
+  private layoutPhase: 'idle' | 'layout_done' | 'content_started' = 'idle';
   private layoutRootId: string | null = null;
 
   constructor(sessionId: string) {
@@ -91,7 +91,7 @@ export class AgentToolExecutor {
       case 'generate_design':
         return this.handleGenerateDesign(args as { prompt: string; canvasWidth?: number });
       case 'plan_layout':
-        return this.handlePlanLayout(args as { prompt: string });
+        return this.handlePlanLayout(args as { prompt: string; newRoot?: boolean });
       case 'batch_insert':
         return this.handleBatchInsert(args as { parentId: string | null; nodes: unknown[] });
       case 'insert_node':
@@ -111,6 +111,10 @@ export class AgentToolExecutor {
       default:
         return { success: false, error: `Unknown tool: ${name}` };
     }
+  }
+
+  private markContentStarted(): void {
+    this.layoutPhase = 'content_started';
   }
 
   // ---------------------------------------------------------------------------
@@ -290,7 +294,6 @@ export class AgentToolExecutor {
       success: true,
       data: {
         nodeCount: result.nodes.length,
-        message: `Design completed successfully with ${result.nodes.length} elements. The design is now on the canvas. Do NOT call generate_design again — the task is done. Reply to the user with a short summary of what was created.`,
       },
     };
   }
@@ -560,6 +563,7 @@ export class AgentToolExecutor {
       }
     };
     insertRecursive(node, args.parent);
+    this.markContentStarted();
 
     // Auto-zoom to show the new design
     try {
@@ -608,11 +612,15 @@ export class AgentToolExecutor {
   // plan_layout — heuristic layout planning (no API call)
   // ---------------------------------------------------------------------------
 
-  private async handlePlanLayout(args: { prompt: string }): Promise<ToolResult> {
-    if (this.layoutCreated && this.layoutRootId) {
+  private async handlePlanLayout(args: { prompt: string; newRoot?: boolean }): Promise<ToolResult> {
+    if (this.layoutPhase !== 'idle' && this.layoutRootId && !args.newRoot) {
       return {
-        success: true,
-        data: { rootFrameId: this.layoutRootId, message: 'Layout already created. Use batch_insert to add content.' },
+        success: false,
+        data: { rootFrameId: this.layoutRootId },
+        error:
+          `Layout already exists for this session (rootFrameId: ${this.layoutRootId}). ` +
+          'Use batch_insert or insert_node to add content to the existing frame. ' +
+          'Only call plan_layout again with {"prompt": "...", "newRoot": true} if you intentionally want another root frame or artboard.',
       };
     }
 
@@ -659,7 +667,7 @@ export class AgentToolExecutor {
       docStore.addNode(null, rootNode as any);
     }
 
-    this.layoutCreated = true;
+    this.layoutPhase = 'layout_done';
     this.layoutRootId = rootId;
 
     return {
@@ -669,7 +677,7 @@ export class AgentToolExecutor {
         width: preset.width,
         height: preset.rootHeight || preset.height,
         sections: preset.defaultSections,
-        message: `Root frame created (${preset.width}x${preset.rootHeight || preset.height}). Now generate PenNode JSON for each section and use batch_insert to add them. Sections: ${preset.defaultSections.join(', ')}`,
+        message: `Root frame created (${preset.width}x${preset.rootHeight || preset.height}). Now generate PenNode JSON for each section and use batch_insert or insert_node to add them. Sections: ${preset.defaultSections.join(', ')}`,
       },
     };
   }
@@ -739,6 +747,10 @@ export class AgentToolExecutor {
     const effectiveRoot = args.parentId ?? rootId;
     if (effectiveRoot) {
       applyPostStreamingTreeHeuristics(effectiveRoot);
+    }
+
+    if (inserted > 0) {
+      this.markContentStarted();
     }
 
     // Auto-zoom

@@ -511,9 +511,6 @@ export async function executeOrchestration(
           preparedPrompt.originalLength,
           request.model,
           request.provider,
-          (thinking) => {
-            renderPlanningStatus(thinking);
-          },
           abortSignal,
         );
 
@@ -965,11 +962,9 @@ async function callOrchestrator(
   timeoutHintLength: number,
   model?: string,
   provider?: AIDesignRequest['provider'],
-  onThinking?: (thinking: string) => void,
   abortSignal?: AbortSignal,
 ): Promise<OrchestratorPlan> {
   let rawResponse = '';
-  let thinkingContent = '';
 
   const guideList = styleGuideRegistry
     .map((g) => {
@@ -996,8 +991,9 @@ async function callOrchestrator(
     if (chunk.type === 'text') {
       rawResponse += chunk.content;
     } else if (chunk.type === 'thinking') {
-      thinkingContent += chunk.content;
-      onThinking?.(thinkingContent);
+      // Suppress raw model reasoning in the planning UI. The static planning
+      // step label already communicates progress without leaking verbose traces.
+      continue;
     } else if (chunk.type === 'error') {
       throw new Error(chunk.content);
     }

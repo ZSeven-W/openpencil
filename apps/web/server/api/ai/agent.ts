@@ -23,12 +23,14 @@ import { resolveSkills } from '@zseven-w/pen-ai-skills';
 import type { Phase } from '@zseven-w/pen-ai-skills';
 import type { AuthLevel } from '../../../src/types/agent';
 import { agentSessions, cleanup, abortSession, createSession, type AgentSession } from '../../utils/agent-sessions';
+import { shouldShortCircuitPlanLayout, updateLayoutSessionState } from '../../utils/agent-tool-guard';
 import { getAllToolDefs } from '../../../src/services/ai/agent-tools';
 import {
   normalizeOptionalBaseURL,
   normalizeMemberBaseURL,
   requireOpenAICompatBaseURL,
 } from './provider-url';
+import { startSSEKeepAlive } from '../../utils/sse-keepalive';
 
 const TOOL_LEVEL_MAP: Record<string, AuthLevel> = {
   batch_get: 'read',
@@ -353,6 +355,9 @@ export default defineEventHandler(async (event) => {
       throw createError({ statusCode: 404, message: 'Session not found' });
     }
     try {
+      const toolName = session.toolNames.get(body.toolCallId);
+      updateLayoutSessionState(session, toolName, body.result);
+
       const resultJson = JSON.stringify(body.result);
       // Per-toolCallId routing: check if this tool belongs to a member
       const memberId = session.toolOwners?.get(body.toolCallId);
@@ -364,6 +369,7 @@ export default defineEventHandler(async (event) => {
       } else if (session.engine) {
         resolveToolResult(session.engine, body.toolCallId, resultJson);
       }
+      session.toolNames.delete(body.toolCallId);
     } catch {
       return { ok: true, ignored: true };
     }
@@ -520,12 +526,10 @@ export default defineEventHandler(async (event) => {
   const encoder = new TextEncoder();
   const stream = new ReadableStream({
     async start(controller) {
-      const pingTimer = setInterval(() => {
-        try {
-          controller.enqueue(encoder.encode(': ping\n\n'));
-        } catch {
-          /* stream already closed */
-        }
+      // Keep pings active for the full orchestration. Delegated tool calls can
+      // legitimately stall visible output for >10s while the model waits.
+      const pingTimer = startSSEKeepAlive(() => {
+        controller.enqueue(encoder.encode(': ping\n\n'));
       }, 5_000);
 
       let iter;
@@ -546,7 +550,7 @@ export default defineEventHandler(async (event) => {
             console.info(`[agent] event #${eventCount}: ${preview}`);
           }
 
-          if (session.team) {
+	          if (session.team) {
             try {
               const evt = JSON.parse(raw);
 
@@ -650,11 +654,45 @@ export default defineEventHandler(async (event) => {
                   continue;
                 }
               }
-            } catch { /* not JSON or not intercepted — fall through to normal forwarding */ }
+	            } catch { /* not JSON or not intercepted — fall through to normal forwarding */ }
+	          }
+
+          if (!session.team) {
+            try {
+              const evt = JSON.parse(raw);
+              if (evt.tool_use?.id && evt.tool_use?.name) {
+                const toolUseId = evt.tool_use.id as string;
+                const toolName = evt.tool_use.name as string;
+                session.toolNames.set(toolUseId, toolName);
+
+                const syntheticResult = shouldShortCircuitPlanLayout(
+                  session,
+                  toolName,
+                  evt.tool_use.input,
+                );
+                if (syntheticResult && session.engine) {
+                  resolveToolResult(session.engine, toolUseId, JSON.stringify(syntheticResult));
+                  session.toolNames.delete(toolUseId);
+                  controller.enqueue(
+                    encoder.encode(
+                      `event: tool_result\ndata: ${JSON.stringify({
+                        type: 'tool_result',
+                        id: toolUseId,
+                        name: toolName,
+                        result: syntheticResult,
+                      })}\n\n`,
+                    ),
+                  );
+                  continue;
+                }
+              }
+            } catch {
+              /* ignore parse errors and forward raw event */
+            }
           }
 
-          const sse = zigEventToSSE(raw);
-          if (sse) controller.enqueue(encoder.encode(sse));
+	          const sse = zigEventToSSE(raw);
+	          if (sse) controller.enqueue(encoder.encode(sse));
         }
         console.info(`[agent] stream ended after ${eventCount} events`);
       } catch (err: any) {

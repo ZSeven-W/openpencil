@@ -21,10 +21,7 @@ export interface PreparedDesignPrompt {
   designPrinciples: string;
 }
 
-export function getSubAgentTimeouts(
-  promptLength: number,
-  model?: string,
-): {
+type StreamTimeoutProfile = {
   hardTimeoutMs: number;
   noTextTimeoutMs: number;
   thinkingResetsTimeout: boolean;
@@ -32,9 +29,14 @@ export function getSubAgentTimeouts(
   firstTextTimeoutMs: number;
   thinkingMode: 'adaptive' | 'disabled' | 'enabled';
   effort: 'low' | 'medium' | 'high' | 'max';
-} {
+};
+
+export function getSubAgentTimeouts(
+  promptLength: number,
+  model?: string,
+): StreamTimeoutProfile {
   const profile = resolveModelProfile(model);
-  let base;
+  let base: StreamTimeoutProfile;
   if (promptLength < PROMPT_OPTIMIZER_LIMITS.longPromptCharThreshold) {
     base = { ...SUB_AGENT_TIMEOUT_PROFILES.short };
   } else if (promptLength < PROMPT_TIMEOUT_BUCKETS.mediumPromptMaxChars) {
@@ -58,16 +60,8 @@ export function getSubAgentTimeouts(
 export function getOrchestratorTimeouts(
   promptLength: number,
   model?: string,
-): {
-  hardTimeoutMs: number;
-  noTextTimeoutMs: number;
-  thinkingResetsTimeout: boolean;
-  pingResetsTimeout: boolean;
-  firstTextTimeoutMs: number;
-  thinkingMode: 'adaptive' | 'disabled' | 'enabled';
-  effort: 'low' | 'medium' | 'high' | 'max';
-} {
-  let base;
+): StreamTimeoutProfile {
+  let base: StreamTimeoutProfile;
   if (promptLength < PROMPT_OPTIMIZER_LIMITS.longPromptCharThreshold) {
     base = { ...ORCHESTRATOR_TIMEOUT_PROFILES.short };
   } else if (promptLength < PROMPT_TIMEOUT_BUCKETS.mediumPromptMaxChars) {

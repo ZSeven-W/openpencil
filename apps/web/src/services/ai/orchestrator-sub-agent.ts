@@ -289,9 +289,9 @@ async function executeSubAgent(
           emitProgress(plan, progress, callbacks, rawResponse);
         }
       } else if (chunk.type === 'thinking') {
-        // Accumulate and forward thinking content to UI
-        progressEntry.thinking = (progressEntry.thinking ?? '') + chunk.content;
-        emitProgress(plan, progress, callbacks);
+        // Do not expose provider reasoning text in the checklist UI. It is
+        // verbose, repetitive, and often duplicates the visible step labels.
+        continue;
       } else if (chunk.type === 'error') {
         progressEntry.status = 'error';
         emitProgress(plan, progress, callbacks);
