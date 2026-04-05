@@ -9,10 +9,19 @@ describe('agent tool definitions', () => {
   });
 
   it('exposes direct layout tools for builtin single-agent mode', () => {
-    const names = getBuiltinLeadToolDefs().map((def) => def.name);
+    const toolDefs = getBuiltinLeadToolDefs();
+    const names = toolDefs.map((def) => def.name);
+    const planLayout = toolDefs.find((def) => def.name === 'plan_layout');
 
     expect(names).toContain('plan_layout');
     expect(names).toContain('batch_insert');
     expect(names).not.toContain('generate_design');
+    expect(planLayout?.parameters).toMatchObject({
+      properties: {
+        newRoot: {
+          type: 'boolean',
+        },
+      },
+    });
   });
 });

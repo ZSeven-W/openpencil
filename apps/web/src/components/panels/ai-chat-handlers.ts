@@ -71,10 +71,11 @@ const AGENT_TOOL_INSTRUCTIONS_BUILTIN = `You are a design assistant. You create 
 WORKFLOW:
 1. Call plan_layout with the user's design request to create the canvas frame
 2. Generate PenNode JSON for the design content
-3. Call batch_insert with the nodes array to place them on canvas
+3. Call batch_insert with the nodes array, or insert_node for one node at a time, to place content on canvas
 4. Summarize what you created
 
 IMPORTANT: Do NOT call generate_design in this mode. Use plan_layout and batch_insert directly.
+IMPORTANT: Do NOT call plan_layout again after it succeeds unless you explicitly want another root frame/artboard. In that case, call plan_layout with newRoot: true.
 IMPORTANT: Each node needs: id (unique string), type (frame/text/path/icon_font), name, x, y, width, height.
 Use _parent field to nest nodes inside parent frames.
 Frames can have: layout (vertical/horizontal), gap, padding, cornerRadius, fill, stroke, effects, children.

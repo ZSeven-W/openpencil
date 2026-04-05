@@ -5,6 +5,7 @@ import type {
   ToolRegistryHandle,
   TeamHandle,
 } from '@zseven-w/agent-native';
+import type { LayoutPhase } from './agent-tool-guard';
 import {
   abortEngine,
   destroyIterator,
@@ -26,18 +27,27 @@ export interface AgentSession {
   lastActivity: number;
   /** toolCallId → memberId — routes async tool results to the correct member engine. */
   toolOwners: Map<string, string>;
+  /** toolCallId → tool name — used for session-level tool guards and state updates. */
+  toolNames: Map<string, string>;
   /** memberId → role — used for delegation-time skill resolution. */
   memberRoles: Map<string, string>;
+  /** Session-local layout progress for builtin single-agent guardrails. */
+  layoutPhase: LayoutPhase;
+  layoutRootId: string | null;
 }
 
 /** Create a session with required defaults. */
 export function createSession(
-  fields: Omit<AgentSession, 'toolOwners' | 'memberRoles'> & Partial<Pick<AgentSession, 'toolOwners' | 'memberRoles'>>,
+  fields: Omit<AgentSession, 'toolOwners' | 'toolNames' | 'memberRoles' | 'layoutPhase' | 'layoutRootId'> &
+    Partial<Pick<AgentSession, 'toolOwners' | 'toolNames' | 'memberRoles' | 'layoutPhase' | 'layoutRootId'>>,
 ): AgentSession {
   return {
     ...fields,
     toolOwners: fields.toolOwners ?? new Map(),
+    toolNames: fields.toolNames ?? new Map(),
     memberRoles: fields.memberRoles ?? new Map(),
+    layoutPhase: fields.layoutPhase ?? 'idle',
+    layoutRootId: fields.layoutRootId ?? null,
   };
 }
 

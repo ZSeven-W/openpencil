@@ -138,12 +138,18 @@ export function getAllToolDefs(): ToolDef[] {
     ...getDesignToolDefs(),
     {
       name: 'plan_layout',
-      description: 'Create a root design frame and return a section plan. Use this FIRST before generating content. Returns section names and the root frame ID.',
+      description:
+        'Create a root design frame and return a section plan. Use this FIRST before generating content. Returns section names and the root frame ID. Call it again only when you intentionally want a new root frame/artboard.',
       level: TOOL_AUTH_MAP.plan_layout,
       parameters: {
         type: 'object',
         properties: {
           prompt: { type: 'string', description: 'Design description to plan layout for' },
+          newRoot: {
+            type: 'boolean',
+            description:
+              'Set true only when you intentionally want to create another root frame/artboard in the same session',
+          },
         },
         required: ['prompt'],
       },
