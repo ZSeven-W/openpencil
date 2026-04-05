@@ -16,6 +16,8 @@ const WRITE_LEVELS: Set<AuthLevel> = new Set(['create', 'modify', 'delete']);
 export class AgentToolExecutor {
   private sessionId: string;
   private designGenerated = false;
+  private layoutCreated = false;
+  private layoutRootId: string | null = null;
 
   constructor(sessionId: string) {
     this.sessionId = sessionId;
@@ -569,6 +571,13 @@ export class AgentToolExecutor {
   // ---------------------------------------------------------------------------
 
   private async handlePlanLayout(args: { prompt: string }): Promise<ToolResult> {
+    if (this.layoutCreated && this.layoutRootId) {
+      return {
+        success: true,
+        data: { rootFrameId: this.layoutRootId, message: 'Layout already created. Use batch_insert to add content.' },
+      };
+    }
+
     const { detectDesignType } = await import('@/services/ai/design-type-presets');
     const { useDocumentStore } = await import('@/stores/document-store');
     const { nanoid } = await import('nanoid');
@@ -593,6 +602,9 @@ export class AgentToolExecutor {
 
     const docStore = useDocumentStore.getState();
     docStore.addNode(null, rootNode as any);
+
+    this.layoutCreated = true;
+    this.layoutRootId = rootId;
 
     return {
       success: true,
