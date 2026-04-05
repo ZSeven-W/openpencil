@@ -11,6 +11,12 @@ export interface BuiltinPresetConfig {
   label: string;
   type: 'anthropic' | 'openai-compat';
   baseURL?: string;
+  /** Alternative baseURL for the other API format (if provider supports both) */
+  altBaseURL?: string;
+  /** Region-specific alternative baseURLs (overrides altBaseURL when region is selected) */
+  altRegions?: { cn: string; global: string };
+  /** The API format that altBaseURL corresponds to */
+  altType?: 'anthropic' | 'openai-compat';
   placeholder: string;
   modelPlaceholder: string;
   regions?: { cn: PresetRegion; global: PresetRegion };
@@ -35,6 +41,8 @@ export const BUILTIN_PROVIDER_PRESETS: Record<BuiltinProviderPreset, BuiltinPres
     label: 'OpenRouter',
     type: 'openai-compat',
     baseURL: 'https://openrouter.ai/api/v1',
+    altBaseURL: 'https://openrouter.ai/api',
+    altType: 'anthropic',
     placeholder: 'sk-or-...',
     modelPlaceholder: 'anthropic/claude-sonnet-4.6',
   },
@@ -42,6 +50,8 @@ export const BUILTIN_PROVIDER_PRESETS: Record<BuiltinProviderPreset, BuiltinPres
     label: 'DeepSeek',
     type: 'openai-compat',
     baseURL: 'https://api.deepseek.com/v1',
+    altBaseURL: 'https://api.deepseek.com/anthropic',
+    altType: 'anthropic',
     placeholder: 'sk-...',
     modelPlaceholder: 'deepseek-chat',
   },
@@ -56,6 +66,9 @@ export const BUILTIN_PROVIDER_PRESETS: Record<BuiltinProviderPreset, BuiltinPres
     label: 'MiniMax',
     type: 'anthropic',
     baseURL: 'https://api.minimaxi.com/anthropic',
+    altBaseURL: 'https://api.minimaxi.com/v1',
+    altRegions: { cn: 'https://api.minimaxi.com/v1', global: 'https://api.minimax.io/v1' },
+    altType: 'openai-compat',
     placeholder: 'eyJ...',
     modelPlaceholder: 'MiniMax-M2.7',
     regions: {
@@ -67,6 +80,9 @@ export const BUILTIN_PROVIDER_PRESETS: Record<BuiltinProviderPreset, BuiltinPres
     label: '智谱 (Zhipu)',
     type: 'openai-compat',
     baseURL: 'https://open.bigmodel.cn/api/paas/v4',
+    altBaseURL: 'https://open.bigmodel.cn/api/anthropic',
+    altRegions: { cn: 'https://open.bigmodel.cn/api/anthropic', global: 'https://api.z.ai/api/anthropic' },
+    altType: 'anthropic',
     placeholder: 'xxx.yyy',
     modelPlaceholder: 'glm-5',
     regions: {
@@ -77,6 +93,9 @@ export const BUILTIN_PROVIDER_PRESETS: Record<BuiltinProviderPreset, BuiltinPres
   'glm-coding': {
     label: 'GLM Coding Plan',
     type: 'openai-compat',
+    altBaseURL: 'https://open.bigmodel.cn/api/anthropic',
+    altRegions: { cn: 'https://open.bigmodel.cn/api/anthropic', global: 'https://api.z.ai/api/anthropic' },
+    altType: 'anthropic',
     placeholder: 'xxx.yyy',
     modelPlaceholder: 'glm-4.7',
     regions: {
@@ -88,6 +107,9 @@ export const BUILTIN_PROVIDER_PRESETS: Record<BuiltinProviderPreset, BuiltinPres
     label: 'Kimi (Moonshot)',
     type: 'openai-compat',
     baseURL: 'https://api.moonshot.cn/v1',
+    altBaseURL: 'https://api.moonshot.cn/anthropic',
+    altRegions: { cn: 'https://api.moonshot.cn/anthropic', global: 'https://api.moonshot.ai/anthropic' },
+    altType: 'anthropic',
     placeholder: 'sk-...',
     modelPlaceholder: 'kimi-k2.5',
     regions: {
@@ -99,6 +121,9 @@ export const BUILTIN_PROVIDER_PRESETS: Record<BuiltinProviderPreset, BuiltinPres
     label: 'Bailian (DashScope)',
     type: 'openai-compat',
     baseURL: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
+    altBaseURL: 'https://dashscope.aliyuncs.com/apps/anthropic',
+    altRegions: { cn: 'https://dashscope.aliyuncs.com/apps/anthropic', global: 'https://dashscope-intl.aliyuncs.com/apps/anthropic' },
+    altType: 'anthropic',
     placeholder: 'sk-...',
     modelPlaceholder: 'qwen-plus',
     regions: {
@@ -106,10 +131,26 @@ export const BUILTIN_PROVIDER_PRESETS: Record<BuiltinProviderPreset, BuiltinPres
       global: { baseURL: 'https://dashscope-intl.aliyuncs.com/compatible-mode/v1' },
     },
   },
+  'bailian-coding': {
+    label: 'Bailian Coding Plan',
+    type: 'openai-compat',
+    baseURL: 'https://coding.dashscope.aliyuncs.com/v1',
+    altBaseURL: 'https://coding.dashscope.aliyuncs.com/apps/anthropic',
+    altRegions: { cn: 'https://coding.dashscope.aliyuncs.com/apps/anthropic', global: 'https://coding-intl.dashscope.aliyuncs.com/apps/anthropic' },
+    altType: 'anthropic',
+    placeholder: 'sk-sp-...',
+    modelPlaceholder: 'qwen3-coder-plus',
+    regions: {
+      cn: { baseURL: 'https://coding.dashscope.aliyuncs.com/v1' },
+      global: { baseURL: 'https://coding-intl.dashscope.aliyuncs.com/v1' },
+    },
+  },
   doubao: {
     label: 'DouBao Seed',
     type: 'openai-compat',
     baseURL: 'https://ark.cn-beijing.volces.com/api/v3',
+    altBaseURL: 'https://ark.cn-beijing.volces.com/api/coding',
+    altType: 'anthropic',
     placeholder: 'ARK API Key',
     modelPlaceholder: 'doubao-seed-2.0-pro',
   },
@@ -117,6 +158,8 @@ export const BUILTIN_PROVIDER_PRESETS: Record<BuiltinProviderPreset, BuiltinPres
     label: 'Ark Coding Plan',
     type: 'openai-compat',
     baseURL: 'https://ark.cn-beijing.volces.com/api/coding/v3',
+    altBaseURL: 'https://ark.cn-beijing.volces.com/api/coding',
+    altType: 'anthropic',
     placeholder: 'ARK API Key',
     modelPlaceholder: 'ark-code-latest',
   },
@@ -131,6 +174,8 @@ export const BUILTIN_PROVIDER_PRESETS: Record<BuiltinProviderPreset, BuiltinPres
     label: 'ModelScope',
     type: 'openai-compat',
     baseURL: 'https://api-inference.modelscope.cn/v1',
+    altBaseURL: 'https://api-inference.modelscope.cn',
+    altType: 'anthropic',
     placeholder: 'API Key',
     modelPlaceholder: 'qwen-plus',
   },
@@ -229,6 +274,30 @@ export function inferBuiltinProviderRegion(
   config: Pick<BuiltinProviderConfig, 'preset' | 'type' | 'baseURL'>,
 ): 'cn' | 'global' {
   return inferRegionFromURL(inferBuiltinProviderPreset(config), normalizeURL(config.baseURL));
+}
+
+/** Get baseURL for a specific API format. Returns altBaseURL if format matches altType. */
+export function getBaseURLForFormat(
+  preset: BuiltinProviderPreset,
+  format: 'anthropic' | 'openai-compat',
+  region: 'cn' | 'global' = 'cn',
+): string | undefined {
+  const cfg = BUILTIN_PROVIDER_PRESETS[preset];
+  if (format === cfg.altType) {
+    if (cfg.altRegions) return cfg.altRegions[region];
+    if (cfg.altBaseURL) return cfg.altBaseURL;
+  }
+  if (cfg.regions) return cfg.regions[region].baseURL;
+  return cfg.baseURL;
+}
+
+/** Check if a preset supports a given API format (has altBaseURL for it). */
+export function presetSupportsFormat(
+  preset: BuiltinProviderPreset,
+  format: 'anthropic' | 'openai-compat',
+): boolean {
+  const cfg = BUILTIN_PROVIDER_PRESETS[preset];
+  return cfg.type === format || cfg.altType === format;
 }
 
 export function getCanonicalBuiltinBaseURL(

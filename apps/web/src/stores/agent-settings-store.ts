@@ -25,6 +25,7 @@ export type BuiltinProviderPreset =
   | 'glm-coding'
   | 'kimi'
   | 'bailian'
+  | 'bailian-coding'
   | 'doubao'
   | 'ark-coding'
   | 'xiaomi'
