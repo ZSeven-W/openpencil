@@ -289,7 +289,7 @@ export function BuiltinProviderForm({
         </Field>
 
         {/* API Format + Base URL — compact row */}
-        {(preset === 'openrouter' || preset === 'deepseek' || preset === 'minimax' || preset === 'custom') && (
+        {(presetConfig.altType || preset === 'custom') && (
           <Field label={t('builtin.apiFormat')}>
             <div className="flex rounded-md border border-input overflow-hidden h-7">
               {(['openai-compat', 'anthropic'] as const).map((fmt) => (
