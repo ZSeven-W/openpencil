@@ -499,16 +499,23 @@ export async function executeOrchestration(
     // -- Phase 1: Planning (streaming) --
     renderPlanningStatus('Analyzing design structure...');
 
-    const plan = await callOrchestrator(
-      preparedPrompt.orchestratorPrompt,
-      preparedPrompt.originalLength,
-      request.model,
-      request.provider,
-      (thinking) => {
-        renderPlanningStatus(thinking);
-      },
-      abortSignal,
-    );
+    // For builtin providers (API key direct), skip the planning API call and use
+    // a heuristic plan. Many providers (minimax, etc.) return empty responses for
+    // the long planning system prompt, making the API call wasteful.
+    const skipPlanningApi = (request.provider as string) === 'builtin';
+
+    const plan = skipPlanningApi
+      ? buildFallbackPlanFromPrompt(preparedPrompt.orchestratorPrompt)
+      : await callOrchestrator(
+          preparedPrompt.orchestratorPrompt,
+          preparedPrompt.originalLength,
+          request.model,
+          request.provider,
+          (thinking) => {
+            renderPlanningStatus(thinking);
+          },
+          abortSignal,
+        );
 
     if (shouldUseDashboardColumns(request.prompt, plan)) {
       normalizeDashboardMainSubtasks(plan);
