@@ -821,6 +821,12 @@ export async function executeOrchestration(
       // Height adjustment for animated mode is deferred to after Phase 4b
       // (duplicate status-bar removal) so it sees the cleaned node tree.
     } catch (e) {
+      // Clean up root frames created in Phase 2 so the canvas doesn't
+      // strand empty frames when sub-agent execution fails.
+      const store = useDocumentStore.getState();
+      for (const rn of rootNodes) {
+        try { store.removeNode(rn.id); } catch { /* already gone */ }
+      }
       // On streaming failure, still close the batch before re-throwing
       if (animated) {
         useHistoryStore.getState().endBatch(useDocumentStore.getState().document);
