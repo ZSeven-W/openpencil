@@ -36,7 +36,7 @@ import {
   getGenerationRemappedIds,
   getGenerationRootFrameId,
 } from './design-generator';
-import { useDocumentStore } from '@/stores/document-store';
+import { useDocumentStore, DEFAULT_FRAME_ID, createEmptyDocument } from '@/stores/document-store';
 import { useHistoryStore } from '@/stores/history-store';
 import { zoomToFitContent } from '@/canvas/skia-engine-ref';
 import { resetAnimationState } from './design-animation';
@@ -858,7 +858,18 @@ export async function executeOrchestration(
         const nowCount = countDesc(live);
         const beforeCount = scaffoldCounts.get(rn.id) ?? 0;
         if (nowCount <= beforeCount) {
-          try { store.removeNode(rn.id); } catch { /* already gone */ }
+          if (rn.id === DEFAULT_FRAME_ID) {
+            // Restore the default empty frame instead of deleting it
+            const emptyDoc = createEmptyDocument();
+            const defaultFrame = emptyDoc.pages?.[0]?.children.find(
+              (n) => n.id === DEFAULT_FRAME_ID,
+            );
+            if (defaultFrame) {
+              store.updateNode(DEFAULT_FRAME_ID, defaultFrame as Partial<PenNode>);
+            }
+          } else {
+            try { store.removeNode(rn.id); } catch { /* already gone */ }
+          }
         }
       }
       // On streaming failure, still close the batch before re-throwing
