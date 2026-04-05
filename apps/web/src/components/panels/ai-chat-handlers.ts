@@ -205,7 +205,7 @@ async function runAgentStream(
   const { useAIStore: concurrencyStore } = await import('@/stores/ai-store');
   const concurrency = concurrencyStore.getState().concurrency;
   const teamMode = concurrency > 1;
-  const toolDefs = isBuiltin && !teamMode ? getBuiltinLeadToolDefs() : getDesignToolDefs();
+  const toolDefs = getDesignToolDefs();
   const systemPrompt = buildAgentSystemPrompt(lastUserMsg, isBuiltin, teamMode) + context;
 
   const agentBody: Record<string, unknown> = {
