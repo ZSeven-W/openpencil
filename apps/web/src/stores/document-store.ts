@@ -3,6 +3,7 @@ import type { PenDocument, PenNode } from '@/types/pen';
 import type { VariableDefinition } from '@/types/variables';
 
 import { normalizePenDocument } from '@/utils/normalize-pen-file';
+import { addRecentFile } from '@/utils/recent-files';
 import { useHistoryStore } from '@/stores/history-store';
 import { useCanvasStore } from '@/stores/canvas-store';
 import {
@@ -132,6 +133,10 @@ export const useDocumentStore = create<DocumentStoreState>((set, get) => ({
       filePath: filePath ?? null,
       isDirty: false,
     });
+    // Track in recent files
+    if (fileName) {
+      addRecentFile({ fileName, filePath: filePath ?? null });
+    }
     // Set active page to the first page
     const firstPageId = migrated.pages?.[0]?.id ?? null;
     useCanvasStore.getState().setActivePageId(firstPageId);

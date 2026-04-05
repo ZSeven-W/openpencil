@@ -1,7 +1,18 @@
 import { useCallback, useEffect, useState } from 'react';
 import { appStorage, initAppStorage } from '@/utils/app-storage';
 import type { ComponentType, SVGProps } from 'react';
-import { PanelLeft, Plus, Folder, Save, Sun, Moon, Maximize, Minimize, Blocks } from 'lucide-react';
+import {
+  PanelLeft,
+  Plus,
+  Folder,
+  Save,
+  Sun,
+  Moon,
+  Maximize,
+  Minimize,
+  Blocks,
+  ChevronDown,
+} from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import ClaudeLogo from '@/components/icons/claude-logo';
 import OpenAILogo from '@/components/icons/openai-logo';
@@ -9,6 +20,7 @@ import OpenCodeLogo from '@/components/icons/opencode-logo';
 import CopilotLogo from '@/components/icons/copilot-logo';
 import GeminiLogo from '@/components/icons/gemini-logo';
 import FigmaLogo from '@/components/icons/figma-logo';
+import FileMenu from '@/components/shared/file-menu';
 import LanguageSelector from '@/components/shared/language-selector';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -28,6 +40,7 @@ import {
 import { syncCanvasPositionsToStore } from '@/canvas/skia-engine-ref';
 import { zoomToFitContent } from '@/canvas/skia-engine-ref';
 import { normalizePenDocument } from '@/utils/normalize-pen-file';
+import { addRecentFile } from '@/utils/recent-files';
 import { useAgentSettingsStore } from '@/stores/agent-settings-store';
 import type { AIProviderType } from '@/types/agent-settings';
 
@@ -129,6 +142,8 @@ export default function TopBar() {
 
   const [theme, setTheme] = useState<'dark' | 'light'>('dark');
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [fileMenuOpen, setFileMenuOpen] = useState(false);
+  const [saveIndicator, setSaveIndicator] = useState(false);
 
   // Read computed CSS --card and --card-foreground as hex for Electron overlay
   const syncOverlayColors = useCallback((t: 'dark' | 'light') => {
@@ -266,6 +281,44 @@ export default function TopBar() {
     }
   }, []);
 
+  const handleSaveWithFeedback = useCallback(async () => {
+    await handleSave();
+    const store = useDocumentStore.getState();
+    if (store.fileName) {
+      addRecentFile({ fileName: store.fileName, filePath: store.filePath ?? null });
+    }
+    setSaveIndicator(true);
+    setTimeout(() => setSaveIndicator(false), 2000);
+  }, [handleSave]);
+
+  const handleSaveAs = useCallback(() => {
+    useDocumentStore.setState({ fileHandle: null, filePath: null });
+    handleSaveWithFeedback();
+  }, [handleSaveWithFeedback]);
+
+  const handleOpenRecent = useCallback(
+    (filePath: string) => {
+      if (!isElectron()) return;
+      if (useDocumentStore.getState().isDirty) {
+        if (!window.confirm(t('topbar.closeConfirmMessage'))) return;
+      }
+      window.electronAPI!.readFile(filePath).then((result) => {
+        if (!result) return;
+        try {
+          const raw = JSON.parse(result.content);
+          if (!raw.version || (!Array.isArray(raw.children) && !Array.isArray(raw.pages))) return;
+          const doc = normalizePenDocument(raw);
+          const name = result.filePath.split(/[/\\]/).pop() || 'untitled.op';
+          useDocumentStore.getState().loadDocument(doc, name, null, result.filePath);
+          requestAnimationFrame(() => zoomToFitContent());
+        } catch {
+          /* invalid file */
+        }
+      });
+    },
+    [t],
+  );
+
   const handleOpen = useCallback(() => {
     if (useDocumentStore.getState().isDirty) {
       if (!window.confirm(t('topbar.closeConfirmMessage'))) return;
@@ -359,7 +412,7 @@ export default function TopBar() {
               variant="ghost"
               size="icon-sm"
               className="text-muted-foreground"
-              onClick={handleSave}
+              onClick={handleSaveWithFeedback}
             >
               <Save size={15} strokeWidth={1.5} />
             </Button>
@@ -384,14 +437,35 @@ export default function TopBar() {
         </Tooltip>
       </div>
 
-      {/* Center section — file name */}
-      <div className="flex-1 flex items-center justify-center min-w-0">
-        <span className="text-xs text-foreground truncate" suppressHydrationWarning>
-          {displayName}
-        </span>
-        {isDirty && (
-          <span className="text-xs text-muted-foreground ml-1.5">{t('topbar.edited')}</span>
+      {/* Center section — file name + menu */}
+      <div className="relative flex-1 flex items-center justify-center min-w-0">
+        <button
+          type="button"
+          onClick={() => setFileMenuOpen((v) => !v)}
+          className="flex items-center gap-1 px-2 py-0.5 rounded-md hover:bg-accent transition-colors app-region-no-drag"
+        >
+          <span className="text-xs text-foreground truncate max-w-[200px]" suppressHydrationWarning>
+            {displayName}
+          </span>
+          {isDirty && (
+            <span className="text-xs text-muted-foreground">{t('topbar.edited')}</span>
+          )}
+          <ChevronDown size={10} className="text-muted-foreground shrink-0" />
+        </button>
+        {saveIndicator && (
+          <span className="absolute right-0 top-1/2 -translate-y-1/2 text-[10px] text-emerald-500 animate-pulse">
+            {t('fileMenu.saved')}
+          </span>
         )}
+        <FileMenu
+          open={fileMenuOpen}
+          onClose={() => setFileMenuOpen(false)}
+          onNew={handleNew}
+          onOpen={handleOpen}
+          onSave={handleSaveWithFeedback}
+          onSaveAs={handleSaveAs}
+          onOpenRecent={handleOpenRecent}
+        />
       </div>
 
       {/* Right section */}
