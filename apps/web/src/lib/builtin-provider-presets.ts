@@ -102,6 +102,8 @@ export const BUILTIN_PROVIDER_PRESETS: Record<BuiltinProviderPreset, BuiltinPres
     label: 'Kimi (Moonshot)',
     type: 'openai-compat',
     baseURL: 'https://api.moonshot.cn/v1',
+    altBaseURL: 'https://api.moonshot.cn/anthropic',
+    altType: 'anthropic',
     placeholder: 'sk-...',
     modelPlaceholder: 'kimi-k2.5',
     regions: {
