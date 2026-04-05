@@ -58,19 +58,14 @@ RULE 3: When calling generate_design, write a detailed prompt with style directi
 
 FORBIDDEN: Do not output JSON, code blocks, or node definitions directly. Always use generate_design instead.`;
 
-/** Agent tool instructions for builtin providers — direct tool-based design. */
-const AGENT_TOOL_INSTRUCTIONS_BUILTIN = `You are a design assistant. You create designs using tools.
+/** Agent tool instructions for builtin providers — same generate_design pipeline as CLI. */
+const AGENT_TOOL_INSTRUCTIONS_BUILTIN = `You are a design assistant. You MUST use tools to do your work.
 
-WORKFLOW:
-1. Call plan_layout with the user's design request to create the canvas frame
-2. Generate PenNode JSON for the design content
-3. Call batch_insert with the nodes array to place them on canvas
-4. Summarize what you created
+RULE 1: To create or design ANYTHING, call generate_design. NEVER output JSON yourself.
+RULE 2: After the tool call completes, write 1-2 sentences summarizing what happened.
+RULE 3: Do NOT call generate_design more than once unless the user asks for a new design.
 
-IMPORTANT: Each node needs: id (unique string), type (frame/text/path/icon_font), name, x, y, width, height.
-Use _parent field to nest nodes inside parent frames.
-Frames can have: layout (vertical/horizontal), gap, padding, cornerRadius, fill, stroke, effects, children.
-Text nodes need: content, fontSize, fontFamily, fontWeight.`;
+FORBIDDEN: Do not output JSON, code blocks, or node definitions directly. Always use generate_design instead.`;
 
 /**
  * Build the agent system prompt based on provider type.
@@ -121,6 +116,7 @@ interface AgentProviderConfig {
   model: string;
   baseURL?: string;
   maxOutputTokens?: number;
+  maxContextTokens?: number;
 }
 
 /** Strip <think>...</think> tags (closed and unclosed) from model text output. */
@@ -202,8 +198,9 @@ async function runAgentStream(
     model: providerConfig.model,
     ...(providerConfig.baseURL ? { baseURL: providerConfig.baseURL } : {}),
     ...(providerConfig.maxOutputTokens ? { maxOutputTokens: providerConfig.maxOutputTokens } : {}),
+    ...(providerConfig.maxContextTokens ? { maxContextTokens: providerConfig.maxContextTokens } : {}),
     toolDefs,
-    maxTurns: isBuiltin ? 5 : 20,
+    maxTurns: 20,
     teamMode: true,
     concurrency,
     ...(designMdContent ? { designMdContent } : {}),
@@ -279,6 +276,12 @@ async function runAgentStream(
 
           executor
             .execute(evt as Extract<AgentEvent, { type: 'tool_call' }>)
+            .then((result) => {
+              useAIStore.getState().updateToolCallBlock(evt.id, {
+                status: result?.success !== false ? 'done' : 'error',
+                result: result ?? undefined,
+              });
+            })
             .catch((err) => {
               useAIStore.getState().updateToolCallBlock(evt.id, {
                 status: 'error',
@@ -486,9 +489,7 @@ export function useChatHandlers() {
               apiKey: bp.apiKey,
               model: modelName,
               baseURL: bp.baseURL,
-              maxOutputTokens: bp.maxContextTokens
-                ? Math.min(bp.maxContextTokens, 8192)
-                : undefined,
+              maxContextTokens: bp.maxContextTokens,
             },
             abortController,
           );

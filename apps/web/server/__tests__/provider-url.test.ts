@@ -3,7 +3,6 @@ import {
   buildProviderModelsURL,
   normalizeBaseURL,
   normalizeMemberBaseURL,
-  normalizeOpenAICompatBaseURL,
   normalizeOptionalBaseURL,
   requireOpenAICompatBaseURL,
 } from '../api/ai/provider-url';
@@ -28,17 +27,8 @@ describe('provider-url helpers', () => {
     expect(buildProviderModelsURL('https://generativelanguage.googleapis.com/v1beta/openai')).toBe(
       'https://generativelanguage.googleapis.com/v1beta/openai/models',
     );
-    expect(buildProviderModelsURL('https://ark.cn-beijing.volces.com/api/coding/v3/v1')).toBe(
-      'https://ark.cn-beijing.volces.com/api/coding/v3/models',
-    );
-  });
-
-  it('canonicalizes known malformed openai-compatible legacy roots', () => {
-    expect(normalizeOpenAICompatBaseURL('https://ark.cn-beijing.volces.com/api/coding/v3/v1')).toBe(
-      'https://ark.cn-beijing.volces.com/api/coding/v3',
-    );
-    expect(normalizeOpenAICompatBaseURL('https://open.bigmodel.cn/api/coding/paas/v4/v1')).toBe(
-      'https://open.bigmodel.cn/api/coding/paas/v4',
+    expect(buildProviderModelsURL('https://ark.cn-beijing.volces.com/api/v3')).toBe(
+      'https://ark.cn-beijing.volces.com/api/v3/models',
     );
   });
 
@@ -52,9 +42,6 @@ describe('provider-url helpers', () => {
     expect(requireOpenAICompatBaseURL('https://api.openai.com/v1/')).toBe(
       'https://api.openai.com/v1',
     );
-    expect(requireOpenAICompatBaseURL('https://ark.cn-beijing.volces.com/api/coding/v3/v1')).toBe(
-      'https://ark.cn-beijing.volces.com/api/coding/v3',
-    );
   });
 
   it('validates team-member baseURL for openai-compat', () => {
@@ -67,13 +54,6 @@ describe('provider-url helpers', () => {
     expect(normalizeMemberBaseURL('designer', 'openai-compat', 'https://api.openai.com/v1/')).toBe(
       'https://api.openai.com/v1',
     );
-    expect(
-      normalizeMemberBaseURL(
-        'designer',
-        'openai-compat',
-        'https://ark.cn-beijing.volces.com/api/coding/v3/v1',
-      ),
-    ).toBe('https://ark.cn-beijing.volces.com/api/coding/v3');
   });
 
   it('allows missing baseURL for anthropic team members', () => {

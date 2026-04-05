@@ -141,6 +141,7 @@ interface AgentBody {
   toolDefs: ToolDef[];
   maxTurns?: number;
   maxOutputTokens?: number;
+  maxContextTokens?: number;
   members?: MemberDef[];
   teamMode?: boolean;
   concurrency?: number;
@@ -325,10 +326,11 @@ function createProviderHandle(
   apiKey: string,
   model: string,
   baseURL?: string,
+  maxContextTokens?: number,
 ) {
   return providerType === 'anthropic'
-    ? createAnthropicProvider(apiKey, model, baseURL)
-    : createOpenAICompatProvider(apiKey, requireOpenAICompatBaseURL(baseURL), model);
+    ? createAnthropicProvider(apiKey, model, baseURL, maxContextTokens)
+    : createOpenAICompatProvider(apiKey, requireOpenAICompatBaseURL(baseURL), model, maxContextTokens);
 }
 
 /**
@@ -422,6 +424,7 @@ export default defineEventHandler(async (event) => {
     body.apiKey,
     body.model,
     normalizedBaseURL,
+    body.maxContextTokens,
   );
   const tools = createToolRegistry();
   for (const def of body.toolDefs ?? []) {
@@ -443,7 +446,7 @@ export default defineEventHandler(async (event) => {
       ? body.systemPrompt + buildTeamCapabilitiesPrompt(concurrency)
       : body.systemPrompt;
 
-    const team = createTeam(provider, tools, teamSystemPrompt, body.maxTurns ?? 20);
+    const team = createTeam(provider, tools, teamSystemPrompt, body.maxTurns ?? 20, body.maxOutputTokens);
 
     const memberHandles: Array<{ provider: ReturnType<typeof createProviderHandle>; tools: ReturnType<typeof createToolRegistry> }> = [];
 
@@ -487,6 +490,7 @@ export default defineEventHandler(async (event) => {
       tools,
       systemPrompt: body.systemPrompt,
       maxTurns: body.maxTurns ?? 20,
+      maxOutputTokens: body.maxOutputTokens,
       cwd: process.cwd(),
     });
 
@@ -576,6 +580,7 @@ export default defineEventHandler(async (event) => {
                   body.apiKey,
                   memberModel ?? body.model,
                   normalizedBaseURL,
+                  body.maxContextTokens,
                 );
 
                 // Create tool registry with role preset

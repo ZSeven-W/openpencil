@@ -141,15 +141,15 @@ describe('builtin provider presets', () => {
     expect(arkCoding.baseURL).toBe('https://ark.cn-beijing.volces.com/api/coding/v3');
   });
 
-  it('keeps custom preset but fixes known malformed openai-compatible roots', () => {
+  it('keeps custom preset URLs unchanged (version detection is in agent-native)', () => {
     const custom = canonicalizeBuiltinProviderConfig({
-      id: 'bp-custom-ark-bad',
+      id: 'bp-custom-ark',
       displayName: 'Custom Ark',
       preset: 'custom',
       type: 'openai-compat',
       apiKey: 'key',
       model: 'ark-code-latest',
-      baseURL: 'https://ark.cn-beijing.volces.com/api/coding/v3/v1',
+      baseURL: 'https://ark.cn-beijing.volces.com/api/coding/v3',
       enabled: true,
     });
 

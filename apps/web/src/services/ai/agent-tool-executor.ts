@@ -149,19 +149,7 @@ export class AgentToolExecutor {
     const { useAIStore } = await import('@/stores/ai-store');
     const currentModel = useAIStore.getState().model;
 
-    // Builtin provider: skip orchestrator, just create layout frame.
-    // The agent itself generates the content and calls batch_insert.
-    if (currentModel.startsWith('builtin:')) {
-      const layoutResult = await this.handlePlanLayout({ prompt });
-      this.designGenerated = true;
-      const rootId = (layoutResult.data as any)?.rootFrameId ?? '';
-      return {
-        success: true,
-        data: { rootFrameId: rootId, message: 'Frame created. Call batch_insert with nodes.' },
-      };
-    }
-
-    // CLI provider: full orchestrator pipeline
+    // Full orchestrator pipeline — same path for CLI and builtin providers
     const { generateDesign } = await import('@/services/ai/design-generator');
     const { useDocumentStore: docStoreModule } = await import('@/stores/document-store');
     const { useAgentSettingsStore } = await import('@/stores/agent-settings-store');
@@ -174,20 +162,34 @@ export class AgentToolExecutor {
     const agentSettings = useAgentSettingsStore.getState();
     let designModel = 'default';
     let designProvider: string | undefined;
-    const currentProvider = useAIStore
-      .getState()
-      .modelGroups.find((g) => g.models.some((m) => m.value === currentModel))?.provider;
 
-    if (currentProvider) {
-      designProvider = currentProvider;
-      designModel = currentModel;
-    } else {
-      const providers = agentSettings.providers ?? {};
-      for (const [key, cfg] of Object.entries(providers)) {
-        if (cfg.isConnected && cfg.models?.length) {
-          designProvider = key;
-          designModel = cfg.models[0].value;
-          break;
+    // For builtin providers, resolve to the actual model name and provider type
+    if (currentModel.startsWith('builtin:')) {
+      const bpId = currentModel.split(':')[1];
+      const actualModel = currentModel.split(':').slice(2).join(':');
+      const bp = agentSettings.builtinProviders.find((p: any) => p.id === bpId);
+      if (bp) {
+        designProvider = 'builtin';
+        designModel = actualModel || currentModel;
+      }
+    }
+
+    if (!designProvider) {
+      const currentProvider = useAIStore
+        .getState()
+        .modelGroups.find((g) => g.models.some((m) => m.value === currentModel))?.provider;
+
+      if (currentProvider) {
+        designProvider = currentProvider;
+        designModel = currentModel;
+      } else {
+        const providers = agentSettings.providers ?? {};
+        for (const [key, cfg] of Object.entries(providers)) {
+          if (cfg.isConnected && cfg.models?.length) {
+            designProvider = key;
+            designModel = cfg.models[0].value;
+            break;
+          }
         }
       }
     }
@@ -615,29 +617,47 @@ export class AgentToolExecutor {
     }
 
     const { detectDesignType } = await import('@/services/ai/design-type-presets');
-    const { useDocumentStore } = await import('@/stores/document-store');
+    const { useDocumentStore, getActivePageChildren } = await import('@/stores/document-store');
+    const { useCanvasStore } = await import('@/stores/canvas-store');
     const { nanoid } = await import('nanoid');
 
     const preset = detectDesignType(args.prompt);
-    const rootId = nanoid(10);
-
-    // Create root frame on canvas
-    const rootNode = {
-      id: rootId,
-      type: 'frame' as const,
-      name: 'Page',
-      x: 50,
-      y: 50,
-      width: preset.width,
-      height: preset.rootHeight || preset.height,
-      layout: 'vertical' as const,
-      gap: 0,
-      fill: [{ type: 'solid' as const, color: '#F8FAFC' }],
-      children: [],
-    };
-
     const docStore = useDocumentStore.getState();
-    docStore.addNode(null, rootNode as any);
+
+    // Reuse existing root frame if one exists (avoid duplicate root frames)
+    const activePageId = useCanvasStore.getState().activePageId;
+    const pageChildren = getActivePageChildren(docStore.document, activePageId);
+    const existingFrame = pageChildren.find(
+      (n: any) => n.type === 'frame',
+    );
+    let rootId: string;
+    if (existingFrame) {
+      rootId = existingFrame.id;
+      // Resize existing frame to match preset
+      docStore.updateNode(rootId, {
+        width: preset.width,
+        height: preset.rootHeight || preset.height,
+        layout: 'vertical',
+        gap: 0,
+        fill: [{ type: 'solid' as const, color: '#F8FAFC' }],
+      } as any);
+    } else {
+      rootId = nanoid(10);
+      const rootNode = {
+        id: rootId,
+        type: 'frame' as const,
+        name: 'Page',
+        x: 50,
+        y: 50,
+        width: preset.width,
+        height: preset.rootHeight || preset.height,
+        layout: 'vertical' as const,
+        gap: 0,
+        fill: [{ type: 'solid' as const, color: '#F8FAFC' }],
+        children: [],
+      };
+      docStore.addNode(null, rootNode as any);
+    }
 
     this.layoutCreated = true;
     this.layoutRootId = rootId;
@@ -673,26 +693,46 @@ export class AgentToolExecutor {
     const { startNewAnimationBatch, markNodesForAnimation } = await import(
       '@/services/ai/design-animation'
     );
+    const { addAgentIndicatorRecursive } = await import('@/canvas/agent-indicator');
+    const { assignAgentIdentities } = await import('@/services/ai/agent-identity');
+
+    // Limit batch size — model should call batch_insert multiple times with ≤9 nodes each
+    const MAX_NODES = 9;
+    const nodes = args.nodes.slice(0, MAX_NODES);
+
+    // Random agent identity for breathing glow
+    const [identity] = assignAgentIdentities(1);
 
     startNewAnimationBatch();
 
     let inserted = 0;
     let rootId: string | null = null;
 
-    for (const raw of args.nodes) {
+    console.info('[batch_insert] received', args.nodes.length, 'nodes (limit', MAX_NODES, '), parentId:', args.parentId);
+    for (const raw of nodes) {
       const node = raw as Record<string, unknown>;
-      if (!node.id || !node.type) continue;
+      if (!node.id || !node.type) {
+        console.warn('[batch_insert] skipping node without id/type:', JSON.stringify(node).slice(0, 200));
+        continue;
+      }
 
       // Resolve _parent: use explicit _parent, or fall back to parentId arg
       const parentTarget =
         (node._parent as string | null) ?? args.parentId ?? null;
       delete node._parent;
 
+      // Breathing glow indicator with random color + name
+      addAgentIndicatorRecursive(node as any, identity.color, identity.name);
       markNodesForAnimation([node as any]);
       insertStreamingNode(node as any, parentTarget);
 
       if (!rootId) rootId = node.id as string;
       inserted++;
+
+      // Streaming effect: pause every 3 nodes for visual feedback
+      if (inserted % 3 === 0) {
+        await new Promise((r) => setTimeout(r, 80));
+      }
     }
 
     // Apply role defaults + post-pass fixes

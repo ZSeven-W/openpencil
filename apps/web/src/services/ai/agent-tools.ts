@@ -140,7 +140,7 @@ export function getAllToolDefs(): ToolDef[] {
     },
     {
       name: 'batch_insert',
-      description: 'Insert multiple PenNode objects into the canvas at once. Each node should have id, type, name, and other PenNode properties. Use _parent field to specify parent node ID.',
+      description: 'Insert PenNode objects into the canvas. MAX 9 nodes per call — call multiple times for more nodes. Each node needs id, type, name. Use _parent field to specify parent node ID.',
       level: TOOL_AUTH_MAP.batch_insert,
       parameters: {
         type: 'object',

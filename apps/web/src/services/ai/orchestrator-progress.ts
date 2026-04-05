@@ -37,8 +37,7 @@ export function emitProgress(
               ? 'error'
               : 'pending';
       const nodeInfo = entry.nodeCount > 0 ? ` (${entry.nodeCount} elements)` : '';
-      const thinkingContent = entry.thinking ?? '';
-      return `<step title="${st.label}${nodeInfo}" status="${status}">${thinkingContent}</step>`;
+      return `<step title="${st.label}${nodeInfo}" status="${status}"></step>`;
     })
     .join('\n');
 

@@ -111,7 +111,7 @@ export function buildFallbackPlanFromPrompt(prompt: string): OrchestratorPlan {
   const guide = selectStyleGuide(styleGuideRegistry, { tags, platform });
 
   // Extract background color from selected guide, or use default
-  let bgColor = '#F8FAFC';
+  let bgColor = '#FFFFFF';
   if (guide) {
     const bgMatch = guide.content.match(/(#[0-9A-Fa-f]{6})\s*[—–-]\s*(?:Page )?Background/i)
       ?? guide.content.match(/Background[^#]*(#[0-9A-Fa-f]{6})/i);
@@ -147,6 +147,7 @@ export function buildFallbackPlanFromPrompt(prompt: string): OrchestratorPlan {
     subtasks: labels.map((label, index) => ({
       id: makeSafeSectionId(label, index),
       label,
+      elements: getMobileSectionElements(preset.type, label),
       region: { width: preset.width, height: heights[index] ?? 120 },
       idPrefix: '',
       parentFrameId: null,
@@ -160,6 +161,19 @@ export function buildFallbackPlanFromPrompt(prompt: string): OrchestratorPlan {
   }
 
   return plan;
+}
+
+/** Assign distinct element hints to each mobile section to prevent duplicate content. */
+function getMobileSectionElements(type: string, label: string): string | undefined {
+  if (type !== 'mobile-screen') return undefined;
+  switch (label) {
+    case 'Header':
+      return 'Logo/brand icon, welcome title, subtitle text. Do NOT include form inputs, buttons, or social login here.';
+    case 'Main Content':
+      return 'Form inputs, action buttons, dividers, social login options, footer links. Do NOT include logo or welcome title here.';
+    default:
+      return undefined;
+  }
 }
 
 /** Infer style guide tags from user prompt keywords */

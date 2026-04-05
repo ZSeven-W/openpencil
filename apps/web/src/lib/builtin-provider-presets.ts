@@ -192,40 +192,8 @@ function normalizeURL(url?: string): string {
   return url?.trim().replace(/\/+$/, '') ?? '';
 }
 
-function normalizeKnownMalformedOpenAICompatURL(url?: string): string {
-  const normalizedURL = normalizeURL(url);
-  if (normalizedURL === 'https://ark.cn-beijing.volces.com/api/v3/v1') {
-    return 'https://ark.cn-beijing.volces.com/api/v3';
-  }
-  if (normalizedURL === 'https://ark.cn-beijing.volces.com/api/coding/v3/v1') {
-    return 'https://ark.cn-beijing.volces.com/api/coding/v3';
-  }
-  if (normalizedURL === 'https://open.bigmodel.cn/api/paas/v4/v1') {
-    return 'https://open.bigmodel.cn/api/paas/v4';
-  }
-  if (
-    normalizedURL === 'https://api.z.ai/api/paas/v4/v1' ||
-    normalizedURL === 'https://open.z.ai/api/paas/v4/v1'
-  ) {
-    return 'https://api.z.ai/api/paas/v4';
-  }
-  if (normalizedURL === 'https://open.bigmodel.cn/api/coding/paas/v4/v1') {
-    return 'https://open.bigmodel.cn/api/coding/paas/v4';
-  }
-  if (
-    normalizedURL === 'https://api.z.ai/api/coding/paas/v4/v1' ||
-    normalizedURL === 'https://open.z.ai/api/coding/paas/v4/v1'
-  ) {
-    return 'https://api.z.ai/api/coding/paas/v4';
-  }
-  if (normalizedURL === 'https://generativelanguage.googleapis.com/v1beta/openai/v1') {
-    return 'https://generativelanguage.googleapis.com/v1beta/openai';
-  }
-  return normalizedURL;
-}
-
 function lookupPresetByURL(url?: string): BuiltinProviderPreset | undefined {
-  const normalizedURL = normalizeKnownMalformedOpenAICompatURL(url);
+  const normalizedURL = normalizeURL(url);
   if (!normalizedURL) return undefined;
   return PRESET_URL_LOOKUP[normalizedURL] ?? LEGACY_URL_LOOKUP[normalizedURL];
 }
@@ -275,17 +243,12 @@ export function getCanonicalBuiltinBaseURL(
 export function canonicalizeBuiltinProviderConfig(
   config: BuiltinProviderConfig,
 ): BuiltinProviderConfig {
-  if (config.preset === 'custom') {
-    const normalizedBaseURL = normalizeKnownMalformedOpenAICompatURL(config.baseURL);
-    return normalizedBaseURL && normalizedBaseURL !== config.baseURL
-      ? { ...config, baseURL: normalizedBaseURL }
-      : config;
-  }
+  if (config.preset === 'custom') return config;
 
   const preset = lookupPresetByURL(config.baseURL) ?? inferBuiltinProviderPreset(config);
   if (preset === 'custom') return config;
 
-  const region = inferRegionFromURL(preset, normalizeKnownMalformedOpenAICompatURL(config.baseURL));
+  const region = inferRegionFromURL(preset, normalizeURL(config.baseURL));
   const canonicalBaseURL = getCanonicalBuiltinBaseURL(preset, region);
 
   return {

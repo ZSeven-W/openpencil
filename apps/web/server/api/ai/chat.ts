@@ -1047,6 +1047,7 @@ function streamViaBuiltin(body: ChatBody) {
           provider: builtinProvider,
           systemPrompt: body.system,
           maxTurns: 1,
+          maxOutputTokens: 16384,
           cwd: process.cwd(),
         });
 
@@ -1086,16 +1087,26 @@ function streamViaBuiltin(body: ChatBody) {
               clearTimeout(firstEventTimer);
             }
             const evt = JSON.parse(raw);
-            if (evt.type === 'text_delta' && evt.text) {
+            // Zig events are tagged unions: {"stream_event":{...}} or {"result":{...}}
+            const delta = evt.stream_event;
+            if (delta?.type === 'text_delta' && delta.text) {
               controller.enqueue(
                 encoder.encode(
-                  `data: ${JSON.stringify({ type: 'text', content: evt.text })}\n\n`,
+                  `data: ${JSON.stringify({ type: 'text', content: delta.text })}\n\n`,
                 ),
               );
-            } else if (evt.type === 'thinking' && evt.text) {
+            } else if (delta?.type === 'thinking_delta' && delta.text) {
               controller.enqueue(
                 encoder.encode(
-                  `data: ${JSON.stringify({ type: 'thinking', content: evt.text })}\n\n`,
+                  `data: ${JSON.stringify({ type: 'thinking', content: delta.text })}\n\n`,
+                ),
+              );
+            } else if (evt.result?.is_error) {
+              const errMsg = `Provider error: ${evt.result.subtype ?? 'unknown'}`;
+              console.error('[builtin]', errMsg);
+              controller.enqueue(
+                encoder.encode(
+                  `data: ${JSON.stringify({ type: 'error', content: errMsg })}\n\n`,
                 ),
               );
             }

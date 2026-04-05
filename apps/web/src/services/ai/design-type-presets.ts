@@ -27,8 +27,8 @@ export function detectDesignType(prompt: string): DesignTypePreset {
       width: 375,
       height: 812,
       rootHeight: 812,
-      // Generic 2-section split — the sub-agent decides actual structure.
-      // NOT 3 fixed sections with "Bottom Navigation" (wrong for login/onboarding).
+      // Two sections with distinct roles — sub-agent prompt adds element hints
+      // to prevent both sections from generating identical content.
       defaultSections: ['Header', 'Main Content'],
     };
   }
