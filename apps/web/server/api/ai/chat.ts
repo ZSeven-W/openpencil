@@ -1098,9 +1098,9 @@ function streamViaBuiltin(body: ChatBody) {
   return new Response(stream);
 }
 
-async function waitForBuiltinEvent(
-  nextEventFn: (iter: unknown) => Promise<string | null>,
-  iter: unknown,
+async function waitForBuiltinEvent<TIterator>(
+  nextEventFn: (iter: TIterator) => Promise<string | null>,
+  iter: TIterator,
   onTimeout: () => void,
   timeoutMs: number,
 ): Promise<string | null> {

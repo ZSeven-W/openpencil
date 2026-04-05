@@ -8,8 +8,34 @@ export function normalizeOptionalBaseURL(baseURL?: string): string | undefined {
   return normalized.length > 0 ? normalized : undefined;
 }
 
-export function requireOpenAICompatBaseURL(baseURL?: string): string {
+export function normalizeOpenAICompatBaseURL(baseURL?: string): string | undefined {
   const normalized = normalizeOptionalBaseURL(baseURL);
+  if (!normalized) return undefined;
+
+  switch (normalized) {
+    case 'https://ark.cn-beijing.volces.com/api/v3/v1':
+      return 'https://ark.cn-beijing.volces.com/api/v3';
+    case 'https://ark.cn-beijing.volces.com/api/coding/v3/v1':
+      return 'https://ark.cn-beijing.volces.com/api/coding/v3';
+    case 'https://open.bigmodel.cn/api/paas/v4/v1':
+      return 'https://open.bigmodel.cn/api/paas/v4';
+    case 'https://api.z.ai/api/paas/v4/v1':
+    case 'https://open.z.ai/api/paas/v4/v1':
+      return 'https://api.z.ai/api/paas/v4';
+    case 'https://open.bigmodel.cn/api/coding/paas/v4/v1':
+      return 'https://open.bigmodel.cn/api/coding/paas/v4';
+    case 'https://api.z.ai/api/coding/paas/v4/v1':
+    case 'https://open.z.ai/api/coding/paas/v4/v1':
+      return 'https://api.z.ai/api/coding/paas/v4';
+    case 'https://generativelanguage.googleapis.com/v1beta/openai/v1':
+      return 'https://generativelanguage.googleapis.com/v1beta/openai';
+    default:
+      return normalized;
+  }
+}
+
+export function requireOpenAICompatBaseURL(baseURL?: string): string {
+  const normalized = normalizeOpenAICompatBaseURL(baseURL);
   if (!normalized) {
     throw new Error('OpenAI-compatible provider requires baseURL');
   }
@@ -24,7 +50,10 @@ export function normalizeMemberBaseURL(
   providerType: string,
   baseURL?: string,
 ): string | undefined {
-  const normalized = normalizeOptionalBaseURL(baseURL);
+  const normalized =
+    providerType === 'openai-compat'
+      ? normalizeOpenAICompatBaseURL(baseURL)
+      : normalizeOptionalBaseURL(baseURL);
   if (providerType === 'openai-compat' && !normalized) {
     throw new Error(`Member "${memberId}" (openai-compat) requires baseURL`);
   }
@@ -32,5 +61,5 @@ export function normalizeMemberBaseURL(
 }
 
 export function buildProviderModelsURL(baseURL: string): string {
-  return `${normalizeBaseURL(baseURL)}/models`;
+  return `${normalizeOpenAICompatBaseURL(baseURL) ?? normalizeBaseURL(baseURL)}/models`;
 }

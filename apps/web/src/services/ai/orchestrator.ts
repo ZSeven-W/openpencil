@@ -511,9 +511,6 @@ export async function executeOrchestration(
           preparedPrompt.originalLength,
           request.model,
           request.provider,
-          (thinking) => {
-            renderPlanningStatus(thinking);
-          },
           abortSignal,
         );
 
@@ -965,7 +962,6 @@ async function callOrchestrator(
   timeoutHintLength: number,
   model?: string,
   provider?: AIDesignRequest['provider'],
-  onThinking?: (thinking: string) => void,
   abortSignal?: AbortSignal,
 ): Promise<OrchestratorPlan> {
   let rawResponse = '';
