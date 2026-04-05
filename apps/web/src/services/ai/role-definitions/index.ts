@@ -5,6 +5,15 @@
 
 import { registerRole } from '../role-resolver';
 import { hasCjkText, getTextContentForNode } from '../generation-utils';
+import type { PenFill, PenStroke, PenEffect } from '@/types/styles';
+
+const CARD_FILL: PenFill[] = [{ type: 'solid', color: '#FFFFFF' }];
+const CARD_SHADOW: PenEffect[] = [
+  { type: 'shadow', offsetX: 0, offsetY: 1, blur: 3, spread: 0, color: '#0000001A' },
+  { type: 'shadow', offsetX: 0, offsetY: 1, blur: 2, spread: -1, color: '#0000000F' },
+];
+const INPUT_FILL: PenFill[] = [{ type: 'solid', color: '#F8FAFC' }];
+const INPUT_STROKE: PenStroke = { thickness: 1, fill: [{ type: 'solid', color: '#E2E8F0' }] };
 
 // ---------------------------------------------------------------------------
 // Layout roles
@@ -53,12 +62,18 @@ registerRole('spacer', (_node, _ctx) => ({
 registerRole('divider', (node, _ctx) => {
   const isVertical = node.name?.toLowerCase().includes('vertical');
   if (isVertical) {
-    return { width: 1, height: 'fill_container' as const, layout: 'none' as const };
+    return {
+      width: 1,
+      height: 'fill_container' as const,
+      layout: 'none' as const,
+      fill: [{ type: 'solid', color: '#E2E8F0' }] as PenFill[],
+    };
   }
   return {
     width: 'fill_container' as const,
     height: 1,
     layout: 'none' as const,
+    fill: [{ type: 'solid', color: '#E2E8F0' }] as PenFill[],
   };
 });
 
@@ -73,6 +88,8 @@ registerRole('navbar', (_node, ctx) => ({
   padding: ctx.canvasWidth <= 480 ? ([0, 16] as [number, number]) : ([0, 80] as [number, number]),
   alignItems: 'center',
   justifyContent: 'space_between' as const,
+  fill: [{ type: 'solid', color: '#FFFFFF' }] as PenFill[],
+  stroke: { thickness: [0, 0, 1, 0] as [number, number, number, number], fill: [{ type: 'solid', color: '#E2E8F0' }] } as PenStroke,
 }));
 
 registerRole('nav-links', (_node, _ctx) => ({
@@ -100,6 +117,7 @@ registerRole('button', (_node, ctx) => {
       alignItems: 'center' as const,
       justifyContent: 'center' as const,
       cornerRadius: 8,
+      fill: [{ type: 'solid', color: '#2563EB' }] as PenFill[],
     };
   }
   if (ctx.parentRole === 'form-group') {
@@ -112,6 +130,7 @@ registerRole('button', (_node, ctx) => {
       alignItems: 'center' as const,
       justifyContent: 'center' as const,
       cornerRadius: 10,
+      fill: [{ type: 'solid', color: '#2563EB' }] as PenFill[],
     };
   }
   return {
@@ -122,6 +141,7 @@ registerRole('button', (_node, ctx) => {
     alignItems: 'center' as const,
     justifyContent: 'center' as const,
     cornerRadius: 8,
+    fill: [{ type: 'solid', color: '#2563EB' }] as PenFill[],
   };
 });
 
@@ -141,6 +161,7 @@ registerRole('badge', (_node, _ctx) => ({
   alignItems: 'center' as const,
   justifyContent: 'center' as const,
   cornerRadius: 999,
+  fill: [{ type: 'solid', color: '#DBEAFE' }] as PenFill[],
 }));
 
 registerRole('tag', (_node, _ctx) => ({
@@ -170,6 +191,8 @@ registerRole('input', (_node, ctx) => {
       padding: [12, 16] as [number, number],
       alignItems: 'center' as const,
       cornerRadius: 8,
+      fill: INPUT_FILL,
+      stroke: INPUT_STROKE,
     };
   }
   return {
@@ -178,6 +201,8 @@ registerRole('input', (_node, ctx) => {
     padding: [12, 16] as [number, number],
     alignItems: 'center' as const,
     cornerRadius: 8,
+    fill: INPUT_FILL,
+    stroke: INPUT_STROKE,
   };
 });
 
@@ -188,6 +213,8 @@ registerRole('form-input', (_node, _ctx) => ({
   padding: [12, 16] as [number, number],
   alignItems: 'center' as const,
   cornerRadius: 8,
+  fill: INPUT_FILL,
+  stroke: INPUT_STROKE,
 }));
 
 registerRole('search-bar', (_node, _ctx) => ({
@@ -197,6 +224,8 @@ registerRole('search-bar', (_node, _ctx) => ({
   gap: 8,
   alignItems: 'center' as const,
   cornerRadius: 22,
+  fill: INPUT_FILL,
+  stroke: INPUT_STROKE,
 }));
 
 // ---------------------------------------------------------------------------
@@ -212,6 +241,8 @@ registerRole('card', (_node, ctx) => {
       gap: 12,
       cornerRadius: 12,
       clipContent: true,
+      fill: CARD_FILL,
+      effects: CARD_SHADOW,
     };
   }
   return {
@@ -219,6 +250,8 @@ registerRole('card', (_node, ctx) => {
     gap: 12,
     cornerRadius: 12,
     clipContent: true,
+    fill: CARD_FILL,
+    effects: CARD_SHADOW,
   };
 });
 
@@ -231,6 +264,8 @@ registerRole('stat-card', (_node, ctx) => {
       gap: 8,
       padding: [24, 24] as [number, number],
       cornerRadius: 12,
+      fill: CARD_FILL,
+      effects: CARD_SHADOW,
     };
   }
   return {
@@ -238,6 +273,8 @@ registerRole('stat-card', (_node, ctx) => {
     gap: 8,
     padding: [24, 24] as [number, number],
     cornerRadius: 12,
+    fill: CARD_FILL,
+    effects: CARD_SHADOW,
   };
 });
 
@@ -251,6 +288,8 @@ registerRole('pricing-card', (_node, ctx) => {
       padding: [32, 24] as [number, number],
       cornerRadius: 16,
       clipContent: true,
+      fill: CARD_FILL,
+      effects: CARD_SHADOW,
     };
   }
   return {
@@ -259,6 +298,8 @@ registerRole('pricing-card', (_node, ctx) => {
     padding: [32, 24] as [number, number],
     cornerRadius: 16,
     clipContent: true,
+    fill: CARD_FILL,
+    effects: CARD_SHADOW,
   };
 });
 
@@ -267,6 +308,7 @@ registerRole('image-card', (_node, _ctx) => ({
   gap: 0,
   cornerRadius: 12,
   clipContent: true,
+  effects: CARD_SHADOW,
 }));
 
 // ---------------------------------------------------------------------------
@@ -298,6 +340,8 @@ registerRole('feature-card', (_node, ctx) => {
       gap: 12,
       padding: [24, 24] as [number, number],
       cornerRadius: 12,
+      fill: CARD_FILL,
+      effects: CARD_SHADOW,
     };
   }
   return {
@@ -305,6 +349,8 @@ registerRole('feature-card', (_node, ctx) => {
     gap: 12,
     padding: [24, 24] as [number, number],
     cornerRadius: 12,
+    fill: CARD_FILL,
+    effects: CARD_SHADOW,
   };
 });
 
@@ -313,6 +359,8 @@ registerRole('testimonial', (_node, _ctx) => ({
   gap: 16,
   padding: [24, 24] as [number, number],
   cornerRadius: 12,
+  fill: CARD_FILL,
+  effects: CARD_SHADOW,
 }));
 
 registerRole('cta-section', (_node, ctx) => ({
@@ -447,6 +495,7 @@ registerRole('table-header', (_node, _ctx) => ({
   width: 'fill_container' as const,
   alignItems: 'center' as const,
   padding: [12, 16] as [number, number],
+  fill: [{ type: 'solid', color: '#F8FAFC' }] as PenFill[],
 }));
 
 registerRole('table-cell', (_node, _ctx) => ({
