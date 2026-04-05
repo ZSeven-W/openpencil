@@ -32,6 +32,7 @@ const PRESET_ORDER: BuiltinProviderPreset[] = [
   'glm-coding',
   'kimi',
   'bailian',
+  'bailian-coding',
   'doubao',
   'ark-coding',
   'xiaomi',

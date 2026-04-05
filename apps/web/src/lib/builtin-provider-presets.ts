@@ -124,6 +124,19 @@ export const BUILTIN_PROVIDER_PRESETS: Record<BuiltinProviderPreset, BuiltinPres
       global: { baseURL: 'https://dashscope-intl.aliyuncs.com/compatible-mode/v1' },
     },
   },
+  'bailian-coding': {
+    label: 'Bailian Coding Plan',
+    type: 'openai-compat',
+    baseURL: 'https://coding.dashscope.aliyuncs.com/v1',
+    altBaseURL: 'https://coding.dashscope.aliyuncs.com/apps/anthropic',
+    altType: 'anthropic',
+    placeholder: 'sk-sp-...',
+    modelPlaceholder: 'qwen3-coder-plus',
+    regions: {
+      cn: { baseURL: 'https://coding.dashscope.aliyuncs.com/v1' },
+      global: { baseURL: 'https://coding-intl.dashscope.aliyuncs.com/v1' },
+    },
+  },
   doubao: {
     label: 'DouBao Seed',
     type: 'openai-compat',
