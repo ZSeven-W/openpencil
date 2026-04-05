@@ -1,5 +1,13 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { ChevronDown, ChevronUp, MessageSquare, Loader2, Plus } from 'lucide-react';
+import {
+  ChevronDown,
+  ChevronUp,
+  MessageSquare,
+  Loader2,
+  Plus,
+  Maximize2,
+  Minimize2,
+} from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
@@ -11,6 +19,23 @@ import { useChatHandlers } from './ai-chat-handlers';
 import { resolveNextModel } from './ai-chat-model-selector';
 import { AIChatMessageList } from './ai-chat-message-list';
 import { AIChatInput } from './ai-chat-input';
+
+const MIN_WIDTH = 280;
+const MIN_HEIGHT = 250;
+const MAX_RATIO = 0.8;
+
+type ResizeEdge = 'n' | 's' | 'e' | 'w' | 'ne' | 'nw' | 'se' | 'sw';
+
+const EDGE_CURSORS: Record<ResizeEdge, string> = {
+  n: 'cursor-ns-resize',
+  s: 'cursor-ns-resize',
+  e: 'cursor-ew-resize',
+  w: 'cursor-ew-resize',
+  ne: 'cursor-nesw-resize',
+  sw: 'cursor-nesw-resize',
+  nw: 'cursor-nwse-resize',
+  se: 'cursor-nwse-resize',
+};
 
 const CORNER_CLASSES: Record<PanelCorner, string> = {
   'top-left': 'top-3 left-3',
@@ -52,9 +77,13 @@ export default function AIChatPanel() {
   const { t } = useTranslation();
   const panelRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef<{ offsetX: number; offsetY: number } | null>(null);
-  const resizeRef = useRef<{ startY: number; startHeight: number; startTop: number } | null>(null);
+  const resizeRef = useRef<{
+    edge: ResizeEdge;
+    startX: number;
+    startY: number;
+    startRect: { left: number; top: number; width: number; height: number };
+  } | null>(null);
   const [dragStyle, setDragStyle] = useState<React.CSSProperties | null>(null);
-  const [panelHeight, setPanelHeight] = useState(400);
 
   const messages = useAIStore((s) => s.messages);
   const isStreaming = useAIStore((s) => s.isStreaming);
@@ -64,6 +93,11 @@ export default function AIChatPanel() {
   const setPanelCorner = useAIStore((s) => s.setPanelCorner);
   const chatTitle = useAIStore((s) => s.chatTitle);
   const toggleMinimize = useAIStore((s) => s.toggleMinimize);
+  const isMaximized = useAIStore((s) => s.isMaximized);
+  const toggleMaximize = useAIStore((s) => s.toggleMaximize);
+  const panelWidth = useAIStore((s) => s.panelWidth);
+  const panelHeight = useAIStore((s) => s.panelHeight);
+  const setPanelSize = useAIStore((s) => s.setPanelSize);
   const hydrateModelPreference = useAIStore((s) => s.hydrateModelPreference);
   const setModel = useAIStore((s) => s.setModel);
   const availableModels = useAIStore((s) => s.availableModels);
@@ -218,66 +252,116 @@ export default function AIChatPanel() {
     setDragStyle(null);
   }, [setPanelCorner]);
 
-  /* --- Resize handlers --- */
+  /* --- Resize handlers (all 8 edges/corners) --- */
 
-  const handleResizeStart = useCallback(
-    (e: React.PointerEvent) => {
+  const handleResizePointerDown = useCallback(
+    (edge: ResizeEdge) => (e: React.PointerEvent) => {
       e.preventDefault();
       e.stopPropagation();
       const panel = panelRef.current;
       if (!panel) return;
       const rect = panel.getBoundingClientRect();
       const container = panel.parentElement!.getBoundingClientRect();
+      resizeRef.current = {
+        edge,
+        startX: e.clientX,
+        startY: e.clientY,
+        startRect: {
+          left: rect.left - container.left,
+          top: rect.top - container.top,
+          width: rect.width,
+          height: rect.height,
+        },
+      };
       if (!dragStyle) {
         setDragStyle({
           left: rect.left - container.left,
           top: rect.top - container.top,
-          width: 320,
-          height: rect.height,
         });
       }
-      resizeRef.current = {
-        startY: e.clientY,
-        startHeight: rect.height,
-        startTop: rect.top - container.top,
-      };
       e.currentTarget.setPointerCapture(e.pointerId);
     },
     [dragStyle],
   );
 
-  const handleResizeMove = useCallback((e: React.PointerEvent) => {
-    if (!resizeRef.current) return;
-    e.preventDefault();
-    e.stopPropagation();
-    const deltaY = e.clientY - resizeRef.current.startY;
-    let newHeight = resizeRef.current.startHeight - deltaY;
-    let newTop = resizeRef.current.startTop + deltaY;
-    if (newHeight < 200) {
-      const diff = 200 - newHeight;
-      newHeight = 200;
-      newTop -= diff;
-    }
-    if (newHeight > 1200) {
-      const diff = newHeight - 1200;
-      newHeight = 1200;
-      newTop += diff;
-    }
-    setPanelHeight(newHeight);
-    setDragStyle((prev) => ({
-      ...prev,
-      top: newTop,
-      height: newHeight,
-    }));
-  }, []);
+  const handleResizePointerMove = useCallback(
+    (e: React.PointerEvent) => {
+      if (!resizeRef.current) return;
+      e.preventDefault();
+      e.stopPropagation();
+      const { edge, startX, startY, startRect } = resizeRef.current;
+      const container = panelRef.current?.parentElement;
+      if (!container) return;
+      const containerRect = container.getBoundingClientRect();
+      const maxW = containerRect.width * MAX_RATIO;
+      const maxH = containerRect.height * MAX_RATIO;
+      const dx = e.clientX - startX;
+      const dy = e.clientY - startY;
 
-  const handleResizeEnd = useCallback((e: React.PointerEvent) => {
+      let newW = startRect.width;
+      let newH = startRect.height;
+      let newLeft = startRect.left;
+      let newTop = startRect.top;
+
+      if (edge.includes('e')) newW = startRect.width + dx;
+      if (edge.includes('w')) {
+        newW = startRect.width - dx;
+        newLeft = startRect.left + dx;
+      }
+      if (edge.includes('s')) newH = startRect.height + dy;
+      if (edge.includes('n')) {
+        newH = startRect.height - dy;
+        newTop = startRect.top + dy;
+      }
+
+      if (newW < MIN_WIDTH) {
+        const diff = MIN_WIDTH - newW;
+        newW = MIN_WIDTH;
+        if (edge.includes('w')) newLeft -= diff;
+      }
+      if (newW > maxW) {
+        const diff = newW - maxW;
+        newW = maxW;
+        if (edge.includes('w')) newLeft += diff;
+      }
+      if (newH < MIN_HEIGHT) {
+        const diff = MIN_HEIGHT - newH;
+        newH = MIN_HEIGHT;
+        if (edge.includes('n')) newTop -= diff;
+      }
+      if (newH > maxH) {
+        const diff = newH - maxH;
+        newH = maxH;
+        if (edge.includes('n')) newTop += diff;
+      }
+
+      setPanelSize(Math.round(newW), Math.round(newH));
+      setDragStyle({ left: newLeft, top: newTop });
+    },
+    [setPanelSize],
+  );
+
+  const handleResizePointerUp = useCallback((e: React.PointerEvent) => {
     if (!resizeRef.current) return;
     e.preventDefault();
     e.stopPropagation();
     resizeRef.current = null;
     e.currentTarget.releasePointerCapture(e.pointerId);
   }, []);
+
+  const resizeHandleProps = (edge: ResizeEdge) => ({
+    onPointerDown: handleResizePointerDown(edge),
+    onPointerMove: handleResizePointerMove,
+    onPointerUp: handleResizePointerUp,
+  });
+
+  const handleHeaderDoubleClick = useCallback(
+    (e: React.MouseEvent) => {
+      if ((e.target as HTMLElement).closest('button')) return;
+      toggleMaximize();
+    },
+    [toggleMaximize],
+  );
 
   // Don't render when minimized — the minimized bar is rendered by parent
   if (isMinimized) return null;
@@ -286,43 +370,62 @@ export default function AIChatPanel() {
     <div
       ref={panelRef}
       className={cn(
-        'absolute z-50 flex w-[320px] flex-col overflow-hidden rounded-xl border border-border bg-card/95 shadow-2xl backdrop-blur-sm',
-        !dragStyle && CORNER_CLASSES[panelCorner],
+        'absolute z-50 flex flex-col overflow-hidden rounded-xl border border-border bg-card/95 shadow-2xl backdrop-blur-sm',
+        isMaximized ? 'inset-3' : !dragStyle && CORNER_CLASSES[panelCorner],
       )}
-      style={{ ...dragStyle, height: panelHeight }}
+      style={isMaximized ? undefined : { ...dragStyle, width: panelWidth, height: panelHeight }}
     >
-      {/* --- Resize Handle (Top Edge) --- */}
-      <div
-        className="absolute -top-1.5 left-0 right-0 h-3 cursor-ns-resize z-50 hover:bg-primary/20 transition-colors group flex items-center justify-center"
-        onPointerDown={handleResizeStart}
-        onPointerMove={handleResizeMove}
-        onPointerUp={handleResizeEnd}
-      >
-        <div className="w-8 h-1 rounded-full bg-border group-hover:bg-primary/50 transition-colors" />
-      </div>
+      {/* --- Resize Handles (8 directions, hidden when maximized) --- */}
+      {!isMaximized && (
+        <>
+          <div className={cn('absolute -top-1 left-2 right-2 h-2 z-50', EDGE_CURSORS.n)} {...resizeHandleProps('n')} />
+          <div className={cn('absolute -bottom-1 left-2 right-2 h-2 z-50', EDGE_CURSORS.s)} {...resizeHandleProps('s')} />
+          <div className={cn('absolute -left-1 top-2 bottom-2 w-2 z-50', EDGE_CURSORS.w)} {...resizeHandleProps('w')} />
+          <div className={cn('absolute -right-1 top-2 bottom-2 w-2 z-50', EDGE_CURSORS.e)} {...resizeHandleProps('e')} />
+          <div className={cn('absolute -top-1 -left-1 w-3 h-3 z-[51]', EDGE_CURSORS.nw)} {...resizeHandleProps('nw')} />
+          <div className={cn('absolute -top-1 -right-1 w-3 h-3 z-[51]', EDGE_CURSORS.ne)} {...resizeHandleProps('ne')} />
+          <div className={cn('absolute -bottom-1 -left-1 w-3 h-3 z-[51]', EDGE_CURSORS.sw)} {...resizeHandleProps('sw')} />
+          <div className={cn('absolute -bottom-1 -right-1 w-3 h-3 z-[51]', EDGE_CURSORS.se)} {...resizeHandleProps('se')} />
+        </>
+      )}
 
-      {/* --- Header (draggable) --- */}
+      {/* --- Header (draggable, double-click to maximize) --- */}
       <div
-        className="flex items-center justify-between px-1 py-1 border-b border-border cursor-grab active:cursor-grabbing select-none"
-        onPointerDown={handleDragStart}
-        onPointerMove={handleDragMove}
-        onPointerUp={handleDragEnd}
+        className={cn(
+          'flex items-center justify-between px-1 py-1 border-b border-border select-none',
+          isMaximized ? '' : 'cursor-grab active:cursor-grabbing',
+        )}
+        onPointerDown={isMaximized ? undefined : handleDragStart}
+        onPointerMove={isMaximized ? undefined : handleDragMove}
+        onPointerUp={isMaximized ? undefined : handleDragEnd}
+        onDoubleClick={handleHeaderDoubleClick}
       >
         <div className="flex items-center gap-1">
           <Button variant="ghost" size="icon-sm" onClick={toggleMinimize} title={t('ai.collapse')}>
             <ChevronDown size={14} />
           </Button>
           <span
-            className="text-sm font-medium text-foreground max-w-[100px] truncate overflow-hidden text-ellipsis"
+            className="text-sm font-medium text-foreground truncate overflow-hidden text-ellipsis"
+            style={{ maxWidth: isMaximized ? 300 : Math.max(80, panelWidth - 140) }}
             title={chatTitle}
           >
             {chatTitle}
           </span>
           {isStreaming && <Loader2 size={13} className="animate-spin text-muted-foreground ml-2" />}
         </div>
-        <Button variant="ghost" size="icon-sm" onClick={clearMessages} title={t('ai.newChat')}>
-          <Plus size={14} />
-        </Button>
+        <div className="flex items-center gap-0.5">
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            onClick={toggleMaximize}
+            title={isMaximized ? t('ai.restore') : t('ai.maximize')}
+          >
+            {isMaximized ? <Minimize2 size={12} /> : <Maximize2 size={12} />}
+          </Button>
+          <Button variant="ghost" size="icon-sm" onClick={clearMessages} title={t('ai.newChat')}>
+            <Plus size={14} />
+          </Button>
+        </div>
       </div>
 
       {/* --- Messages --- */}
