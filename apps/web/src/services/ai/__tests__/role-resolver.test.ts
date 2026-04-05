@@ -8,8 +8,12 @@ vi.mock('@/canvas/canvas-text-measure', () => ({
   hasCjkText: () => false,
 }));
 
-import { hexLuminance, hasFill, resolveTreePostPass } from '../role-resolver';
+import { hexLuminance, hasFill, resolveNodeRole, resolveTreePostPass } from '../role-resolver';
+import type { RoleContext } from '../role-resolver';
 import type { PenNode } from '@zseven-w/pen-types';
+
+// Ensure role definitions are registered
+import '../role-definitions/index';
 
 describe('hexLuminance', () => {
   it('returns 0 for black', () => {
@@ -348,5 +352,80 @@ describe('resolveTreePostPass — input sibling consistency', () => {
     resolveTreePostPass(root, 375);
     expect((input1 as any).fill[0].color).toBe('#F8FAFC');
     expect((input2 as any).fill[0].color).toBe('#F8FAFC');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Name-based role inference
+// ---------------------------------------------------------------------------
+
+describe('resolveNodeRole — name-based role inference', () => {
+  const ctx: RoleContext = { canvasWidth: 375 };
+
+  it('infers button role from name "Sign In Button"', () => {
+    const node = { id: 'b', type: 'frame', name: 'Sign In Button', x: 0, y: 0, width: 120, height: 44 } as PenNode;
+    resolveNodeRole(node, ctx);
+    expect(node.role).toBe('button');
+    expect((node as any).fill).toBeDefined();
+    expect((node as any).fill[0].color).toBe('#2563EB');
+  });
+
+  it('infers card role from name "Restaurant Card"', () => {
+    const node = { id: 'c', type: 'frame', name: 'Restaurant Card', x: 0, y: 0, width: 300, height: 200 } as PenNode;
+    resolveNodeRole(node, ctx);
+    expect(node.role).toBe('card');
+    expect((node as any).fill).toBeDefined();
+    expect((node as any).effects).toHaveLength(2);
+  });
+
+  it('infers input role from name "Email Input"', () => {
+    const node = { id: 'i', type: 'frame', name: 'Email Input', x: 0, y: 0, width: 300, height: 48 } as PenNode;
+    resolveNodeRole(node, { ...ctx, parentLayout: 'vertical' });
+    expect(node.role).toBe('input');
+    expect((node as any).fill[0].color).toBe('#F8FAFC');
+    expect((node as any).stroke).toBeDefined();
+  });
+
+  it('infers navbar from exact name "Navigation"', () => {
+    const node = { id: 'n', type: 'frame', name: 'Navigation', x: 0, y: 0, width: 375, height: 56 } as PenNode;
+    resolveNodeRole(node, ctx);
+    expect(node.role).toBe('navbar');
+    expect((node as any).fill[0].color).toBe('#FFFFFF');
+  });
+
+  it('infers search-bar from name "Search"', () => {
+    const node = { id: 's', type: 'frame', name: 'Search', x: 0, y: 0, width: 300, height: 44 } as PenNode;
+    resolveNodeRole(node, ctx);
+    expect(node.role).toBe('search-bar');
+  });
+
+  it('infers hero from exact name "Hero"', () => {
+    const node = { id: 'h', type: 'frame', name: 'Hero', x: 0, y: 0, width: 375, height: 400 } as PenNode;
+    resolveNodeRole(node, ctx);
+    expect(node.role).toBe('hero');
+  });
+
+  it('infers footer from exact name "Footer"', () => {
+    const node = { id: 'f', type: 'frame', name: 'Footer', x: 0, y: 0, width: 375, height: 200 } as PenNode;
+    resolveNodeRole(node, ctx);
+    expect(node.role).toBe('footer');
+  });
+
+  it('does not infer role for non-frame nodes', () => {
+    const node = { id: 't', type: 'text', name: 'Button Label', x: 0, y: 0, width: 80, height: 20, content: 'Click' } as PenNode;
+    resolveNodeRole(node, ctx);
+    expect(node.role).toBeUndefined();
+  });
+
+  it('does not override explicit role', () => {
+    const node = { id: 'b', type: 'frame', name: 'Search', x: 0, y: 0, width: 300, height: 44, role: 'input' } as PenNode;
+    resolveNodeRole(node, ctx);
+    expect(node.role).toBe('input'); // keeps explicit role, not inferred search-bar
+  });
+
+  it('does not infer role for generic names', () => {
+    const node = { id: 'g', type: 'frame', name: 'Container', x: 0, y: 0, width: 300, height: 200 } as PenNode;
+    resolveNodeRole(node, ctx);
+    expect(node.role).toBeUndefined();
   });
 });

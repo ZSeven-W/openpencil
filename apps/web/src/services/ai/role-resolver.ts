@@ -70,6 +70,76 @@ export function registerRole(role: string, ruleFn: RoleRuleFn): void {
 }
 
 // ---------------------------------------------------------------------------
+// Name-based role inference for models that don't output `role`
+// ---------------------------------------------------------------------------
+
+/** Exact name → role mappings (case-insensitive). */
+const NAME_EXACT_MAP: Record<string, string> = {
+  'navbar': 'navbar',
+  'navigation': 'navbar',
+  'navigation bar': 'navbar',
+  'nav bar': 'navbar',
+  'nav': 'navbar',
+  'header': 'navbar',
+  'top bar': 'navbar',
+  'topbar': 'navbar',
+  'hero': 'hero',
+  'hero section': 'hero',
+  'footer': 'footer',
+  'search bar': 'search-bar',
+  'searchbar': 'search-bar',
+  'search input': 'search-bar',
+  'search': 'search-bar',
+  'avatar': 'avatar',
+  'divider': 'divider',
+  'separator': 'divider',
+  'spacer': 'spacer',
+  'badge': 'badge',
+  'tag': 'tag',
+  'pill': 'pill',
+  'table': 'table',
+};
+
+/** Substring patterns → role (checked in order, first match wins). */
+const NAME_PATTERN_MAP: [RegExp, string][] = [
+  [/\bbtn\b|button/i, 'button'],
+  [/\bcard\b/i, 'card'],
+  [/\binput\b|text\s*field|text\s*box/i, 'input'],
+  [/\bform\b/i, 'form-group'],
+  [/\bsearch/i, 'search-bar'],
+  [/\bnav\s*link/i, 'nav-link'],
+  [/\bstat/i, 'stat-card'],
+  [/\bpricing/i, 'pricing-card'],
+  [/\btestimonial\b|\breview\b|\bquote\b/i, 'testimonial'],
+  [/\bcta\b|call\s*to\s*action/i, 'cta-section'],
+  [/\bfeature/i, 'feature-card'],
+  [/\bicon\b/i, 'icon'],
+];
+
+/**
+ * Infer a semantic role from a node's name when no explicit role is set.
+ * Only applies to frame nodes — text, path, image, etc. don't need role inference.
+ */
+function inferRoleFromName(node: PenNode): string | undefined {
+  if (node.type !== 'frame') return undefined;
+  const name = node.name;
+  if (!name) return undefined;
+
+  const lower = name.toLowerCase().trim();
+
+  // Exact match first
+  const exact = NAME_EXACT_MAP[lower];
+  if (exact) return exact;
+
+  // Pattern match
+  for (const [pattern, role] of NAME_PATTERN_MAP) {
+    if (pattern.test(lower)) return role;
+  }
+
+  return undefined;
+}
+
+// ---------------------------------------------------------------------------
 // Per-node resolution
 // ---------------------------------------------------------------------------
 
@@ -77,9 +147,19 @@ export function registerRole(role: string, ruleFn: RoleRuleFn): void {
  * Apply role-based defaults to a single node.
  * Only fills in properties that are NOT already set by the AI.
  * The AI's explicit properties always win.
+ * If no explicit role is set, attempts to infer one from the node name.
  */
 export function resolveNodeRole(node: PenNode, ctx: RoleContext): void {
-  const role = node.role;
+  let role = node.role;
+
+  // Infer role from name if not explicitly set
+  if (!role) {
+    role = inferRoleFromName(node);
+    if (role) {
+      (node as unknown as Record<string, unknown>).role = role;
+    }
+  }
+
   if (!role) return;
 
   const ruleFn = roleRegistry.get(role);
