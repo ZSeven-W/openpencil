@@ -202,14 +202,6 @@ export default function TopBar() {
     }
   }, []);
 
-  const handleNew = useCallback(() => {
-    if (useDocumentStore.getState().isDirty) {
-      if (!window.confirm(t('topbar.closeConfirmMessage'))) return;
-    }
-    useDocumentStore.getState().newDocument();
-    requestAnimationFrame(() => zoomToFitContent());
-  }, [t]);
-
   /**
    * Unified save: if the current file is .op with a known handle/path, save
    * in-place; otherwise trigger "save as .op".
@@ -296,11 +288,33 @@ export default function TopBar() {
     handleSaveWithFeedback();
   }, [handleSaveWithFeedback]);
 
+  const handleNew = useCallback(async () => {
+    if (useDocumentStore.getState().isDirty) {
+      const showDialog = (window as any).__showUnsavedDialog;
+      if (showDialog) {
+        const result = await showDialog(
+          useDocumentStore.getState().fileName || t('common.untitled'),
+        );
+        if (result === 'cancel') return;
+        if (result === 'save') await handleSaveWithFeedback();
+      }
+    }
+    useDocumentStore.getState().newDocument();
+    requestAnimationFrame(() => zoomToFitContent());
+  }, [t, handleSaveWithFeedback]);
+
   const handleOpenRecent = useCallback(
-    (filePath: string) => {
+    async (filePath: string) => {
       if (!isElectron()) return;
       if (useDocumentStore.getState().isDirty) {
-        if (!window.confirm(t('topbar.closeConfirmMessage'))) return;
+        const showDialog = (window as any).__showUnsavedDialog;
+        if (showDialog) {
+          const result = await showDialog(
+            useDocumentStore.getState().fileName || t('common.untitled'),
+          );
+          if (result === 'cancel') return;
+          if (result === 'save') await handleSaveWithFeedback();
+        }
       }
       window.electronAPI!.readFile(filePath).then((result) => {
         if (!result) return;
@@ -316,12 +330,19 @@ export default function TopBar() {
         }
       });
     },
-    [t],
+    [t, handleSaveWithFeedback],
   );
 
-  const handleOpen = useCallback(() => {
+  const handleOpen = useCallback(async () => {
     if (useDocumentStore.getState().isDirty) {
-      if (!window.confirm(t('topbar.closeConfirmMessage'))) return;
+      const showDialog = (window as any).__showUnsavedDialog;
+      if (showDialog) {
+        const result = await showDialog(
+          useDocumentStore.getState().fileName || t('common.untitled'),
+        );
+        if (result === 'cancel') return;
+        if (result === 'save') await handleSaveWithFeedback();
+      }
     }
     if (isElectron()) {
       window.electronAPI!.openFile().then((result) => {
@@ -352,7 +373,7 @@ export default function TopBar() {
         }
       });
     }
-  }, [t]);
+  }, [t, handleSaveWithFeedback]);
 
   const displayName = fileName ?? t('common.untitled');
 

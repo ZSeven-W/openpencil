@@ -14,6 +14,8 @@ import ExportDialog from '@/components/shared/export-dialog';
 import SaveDialog from '@/components/shared/save-dialog';
 import AgentSettingsDialog from '@/components/shared/agent-settings-dialog';
 import FigmaImportDialog from '@/components/shared/figma-import-dialog';
+import UnsavedChangesDialog from '@/components/shared/unsaved-changes-dialog';
+import type { UnsavedResult } from '@/components/shared/unsaved-changes-dialog';
 import UpdateReadyBanner from './update-ready-banner';
 import { useAIStore } from '@/stores/ai-store';
 import { useCanvasStore } from '@/stores/canvas-store';
@@ -45,10 +47,33 @@ export default function EditorLayout() {
     useDocumentStore.getState().setSaveDialogOpen(false);
   }, []);
   const [exportOpen, setExportOpen] = useState(false);
+  const [unsavedDialog, setUnsavedDialog] = useState<{
+    open: boolean;
+    fileName: string;
+    onResult: (result: UnsavedResult) => void;
+  }>({ open: false, fileName: '', onResult: () => {} });
 
   const closeExport = useCallback(() => {
     setExportOpen(false);
   }, []);
+
+  const showUnsavedDialog = useCallback((fileName: string): Promise<UnsavedResult> => {
+    return new Promise((resolve) => {
+      setUnsavedDialog({
+        open: true,
+        fileName,
+        onResult: (result) => {
+          setUnsavedDialog((prev) => ({ ...prev, open: false }));
+          resolve(result);
+        },
+      });
+    });
+  }, []);
+
+  useEffect(() => {
+    (window as any).__showUnsavedDialog = showUnsavedDialog;
+    return () => { delete (window as any).__showUnsavedDialog; };
+  }, [showUnsavedDialog]);
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -179,6 +204,11 @@ export default function EditorLayout() {
         <SaveDialog open={saveDialogOpen} onClose={closeSaveDialog} />
         <AgentSettingsDialog />
         <FigmaImportDialog open={figmaImportOpen} onClose={closeFigmaImport} />
+        <UnsavedChangesDialog
+          open={unsavedDialog.open}
+          fileName={unsavedDialog.fileName}
+          onResult={unsavedDialog.onResult}
+        />
 
         {/* Drop zone overlay */}
         {isDragging && (
