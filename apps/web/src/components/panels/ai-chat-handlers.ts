@@ -50,32 +50,13 @@ export { buildContextString } from './ai-chat-context-builder';
 // ---------------------------------------------------------------------------
 
 /** Agent-specific tool usage instructions — prepended to the dynamic skill-based prompt. */
-const AGENT_TOOL_INSTRUCTIONS = `IMPORTANT: When the user asks you to create or design anything, you MUST call the generate_design tool with a descriptive prompt. Do NOT output JSON or code directly.
+const AGENT_TOOL_INSTRUCTIONS = `You are a design assistant. You MUST use tools to do your work.
 
-IMPORTANT: Always end your turn with a short natural-language reply for the user.
-- After any tool call or delegated task, summarize the result in 1-3 short sentences.
-- If work completed successfully, say what changed or what was created.
-- If nothing changed, explain why in one sentence.
-- Never end with tool calls only.
+RULE 1: To create or design ANYTHING, call generate_design. NEVER output JSON yourself.
+RULE 2: After every tool call, write 1-2 sentences summarizing what happened.
+RULE 3: When calling generate_design, write a detailed prompt with style direction (colors, shadows, spacing, visual hierarchy). Do not just repeat the user's words.
 
-## Available Tools
-- generate_design: Create complete designs. Pass a natural language description.
-- snapshot_layout: View current canvas state.
-- batch_get: Read specific nodes by ID.
-- update_node: Modify existing node properties.
-- delete_node: Remove nodes.
-
-## Design Quality
-
-When calling generate_design, ALWAYS enrich your prompt with style direction:
-- Visual style: modern/minimal/bold/elegant — pick one that fits the request
-- Color mood: suggest a primary color and whether warm/cool/neutral
-- Polish level: mention "rounded corners, subtle shadows, clear visual hierarchy"
-- Component expectations: "cards with white background and shadow", "inputs with light fill and border"
-Never pass the user's raw text as-is — always add at least 2-3 sentences of design direction.
-
-Example: User says "login page" → you call generate_design with:
-"A modern login page with email and password fields. Clean white card on a light gray background (#F8FAFC). Inputs have light fill (#F8FAFC) with subtle border (#E2E8F0). Primary action button in blue (#2563EB) with white text. Rounded corners (12px card, 8px inputs/button), subtle card shadow. Clear visual hierarchy with the form centered."`;
+FORBIDDEN: Do not output JSON, code blocks, or node definitions directly. Always use generate_design instead.`;
 
 /**
  * Build the agent system prompt dynamically using pen-ai-skills.
@@ -323,98 +304,6 @@ async function runAgentStream(
               ? `<step title="Thinking">${thinkingContent}</step>\n`
               : '';
             updateLastMessage(prefix + accumulated);
-          }
-
-          // ── Intercept: agent output raw design JSON instead of calling generate_design ──
-          // Some models (e.g. minimax) ignore tool-calling instructions and output
-          // design JSON directly as text. Detect this and re-route through the full
-          // orchestrator pipeline for proper quality (spatial decomposition, sub-agents,
-          // role resolution, validation).
-          if (!sawToolActivity && !sawMemberActivity && accumulated.trim()) {
-            const hasDesignJson = /```json[\s\S]*?"type"\s*:\s*"frame"/.test(accumulated) ||
-              /\{\s*"id"\s*:[\s\S]*?"type"\s*:\s*"frame"/.test(accumulated);
-            if (hasDesignJson) {
-              // Extract user's original prompt and re-generate through the pipeline
-              const userPrompt = useAIStore.getState()
-                .messages.filter((m) => m.role === 'user')
-                .pop()?.content ?? '';
-              if (userPrompt) {
-                updateLastMessage(i18n.t('ai.designGenerating'));
-                try {
-                  const { generateDesign } = await import('@/services/ai/design-generator');
-                  const { useAgentSettingsStore } = await import('@/stores/agent-settings-store');
-                  const agentSettings = useAgentSettingsStore.getState();
-                  const currentModel = useAIStore.getState().model;
-
-                  let designModel = 'default';
-                  let designProvider: string | undefined;
-
-                  // Try connected CLI providers first
-                  const providers = agentSettings.providers ?? {};
-                  for (const [key, cfg] of Object.entries(providers)) {
-                    if (cfg.isConnected && cfg.models?.length) {
-                      designProvider = key;
-                      designModel = cfg.models[0].value;
-                      break;
-                    }
-                  }
-
-                  // Fall back to builtin provider
-                  if (!designProvider && currentModel.startsWith('builtin:')) {
-                    const parts = currentModel.split(':');
-                    const bpId = parts[1];
-                    const bp = agentSettings.builtinProviders.find((p: any) => p.id === bpId);
-                    if (bp?.apiKey) {
-                      designProvider = 'builtin';
-                      designModel = parts.slice(2).join(':');
-                    }
-                  }
-
-                  const doc = useDocumentStore.getState().document;
-                  const { getCanvasSize } = await import('@/canvas/skia-engine-ref');
-                  const viewportSize = getCanvasSize();
-
-                  // Detect mobile intent from prompt — force mobile canvas size
-                  const mobilePattern = /\b(mobile|手机|移动端|app\b|ios|android|iphone|手机端|小程序)/i;
-                  const isMobile = mobilePattern.test(userPrompt);
-                  const canvasSize = isMobile
-                    ? { width: 375, height: 812 }
-                    : viewportSize ?? undefined;
-
-                  const result = await generateDesign(
-                    {
-                      prompt: userPrompt,
-                      model: designModel,
-                      provider: designProvider as any,
-                      concurrency: useAIStore.getState().concurrency,
-                      context: {
-                        canvasSize,
-                        variables: doc.variables,
-                        themes: doc.themes,
-                      },
-                    },
-                    {
-                      onApplyPartial: (count) => {
-                        updateLastMessage(`${i18n.t('ai.designGenerating')} (${count} elements)`);
-                      },
-                      onTextUpdate: (text) => {
-                        updateLastMessage(text);
-                      },
-                      animated: true,
-                    },
-                  );
-
-                  const nodeCount = result.nodes?.length ?? 0;
-                  accumulated = `Design created with ${nodeCount} elements via orchestrator pipeline.`;
-                  updateLastMessage(accumulated);
-                } catch (err: any) {
-                  console.warn('[agent] orchestrator re-route failed, falling back to inline nodes:', err?.message);
-                  // Fall through to normal inline node processing below
-                }
-                renderer.finish();
-                break;
-              }
-            }
           }
 
           if (renderer.getAppliedIds().size === 0) {
