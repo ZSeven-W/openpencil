@@ -63,7 +63,19 @@ IMPORTANT: Always end your turn with a short natural-language reply for the user
 - snapshot_layout: View current canvas state.
 - batch_get: Read specific nodes by ID.
 - update_node: Modify existing node properties.
-- delete_node: Remove nodes.`;
+- delete_node: Remove nodes.
+
+## Design Quality
+
+When calling generate_design, ALWAYS enrich your prompt with style direction:
+- Visual style: modern/minimal/bold/elegant — pick one that fits the request
+- Color mood: suggest a primary color and whether warm/cool/neutral
+- Polish level: mention "rounded corners, subtle shadows, clear visual hierarchy"
+- Component expectations: "cards with white background and shadow", "inputs with light fill and border"
+Never pass the user's raw text as-is — always add at least 2-3 sentences of design direction.
+
+Example: User says "login page" → you call generate_design with:
+"A modern login page with email and password fields. Clean white card on a light gray background (#F8FAFC). Inputs have light fill (#F8FAFC) with subtle border (#E2E8F0). Primary action button in blue (#2563EB) with white text. Rounded corners (12px card, 8px inputs/button), subtle card shadow. Clear visual hierarchy with the form centered."`;
 
 /**
  * Build the agent system prompt dynamically using pen-ai-skills.
@@ -195,7 +207,7 @@ async function runAgentStream(
     ...(providerConfig.maxOutputTokens ? { maxOutputTokens: providerConfig.maxOutputTokens } : {}),
     toolDefs,
     maxTurns: 20,
-    teamMode: concurrency >= 2,
+    teamMode: true,
     concurrency,
     ...(designMdContent ? { designMdContent } : {}),
     ...(hasVariables ? { hasVariables } : {}),

@@ -1,4 +1,13 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
+
+// Mock canvas-text-measure to avoid CanvasKit WASM dependency in tests
+vi.mock('@/canvas/canvas-text-measure', () => ({
+  estimateLineWidth: () => 0,
+  estimateTextHeight: () => 0,
+  defaultLineHeight: () => 1.2,
+  hasCjkText: () => false,
+}));
+
 import { hexLuminance, hasFill, resolveTreePostPass } from '../role-resolver';
 import type { PenNode } from '@zseven-w/pen-types';
 

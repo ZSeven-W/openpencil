@@ -329,7 +329,7 @@ function fixButtonForegroundContrast(parent: FrameNode): void {
       if (hasFill(child)) {
         // fill-style icon — already styled, skip
       } else if (hasStroke && !hasStrokeFill) {
-        (child.stroke as Record<string, unknown>).fill = fgFill;
+        (child.stroke as unknown as Record<string, unknown>).fill = fgFill;
       } else if (!hasStroke && !hasFill(child)) {
         rec.fill = fgFill;
       }
