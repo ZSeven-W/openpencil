@@ -366,8 +366,20 @@ describe('resolveNodeRole — name-based role inference', () => {
     const node = { id: 'b', type: 'frame', name: 'Sign In Button', x: 0, y: 0, width: 120, height: 44 } as PenNode;
     resolveNodeRole(node, ctx);
     expect(node.role).toBe('button');
-    expect((node as any).fill).toBeDefined();
-    expect((node as any).fill[0].color).toBe('#2563EB');
+    // Button role should NOT inject a hardcoded fill color — fill comes from AI/design system
+    expect((node as any).fill).toBeUndefined();
+  });
+
+  it('does not infer button role for container names like "Button Group"', () => {
+    const node = { id: 'bg', type: 'frame', name: 'Button Group', x: 0, y: 0, width: 300, height: 60 } as PenNode;
+    resolveNodeRole(node, ctx);
+    expect(node.role).toBeUndefined();
+  });
+
+  it('does not infer button role for container names like "Buttons Row"', () => {
+    const node = { id: 'br', type: 'frame', name: 'Buttons Row', x: 0, y: 0, width: 300, height: 60 } as PenNode;
+    resolveNodeRole(node, ctx);
+    expect(node.role).toBeUndefined();
   });
 
   it('infers card role from name "Restaurant Card"', () => {

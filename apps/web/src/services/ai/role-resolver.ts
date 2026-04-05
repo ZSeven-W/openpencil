@@ -100,9 +100,12 @@ const NAME_EXACT_MAP: Record<string, string> = {
   'table': 'table',
 };
 
+/** Names that indicate a container rather than an individual component. */
+const CONTAINER_SUFFIXES = /\b(group|row|container|wrapper|section|list|area|stack|grid|bar)s?\b/i;
+
 /** Substring patterns → role (checked in order, first match wins). */
-const NAME_PATTERN_MAP: [RegExp, string][] = [
-  [/\bbtn\b|button/i, 'button'],
+const NAME_PATTERN_MAP: [RegExp, string, boolean?][] = [
+  [/\bbtn\b|\bbutton\b/i, 'button', true],
   [/\bcard\b/i, 'card'],
   [/\binput\b|text\s*field|text\s*box/i, 'input'],
   [/\bform\b/i, 'form-group'],
@@ -132,8 +135,12 @@ function inferRoleFromName(node: PenNode): string | undefined {
   if (exact) return exact;
 
   // Pattern match
-  for (const [pattern, role] of NAME_PATTERN_MAP) {
-    if (pattern.test(lower)) return role;
+  for (const [pattern, role, skipContainers] of NAME_PATTERN_MAP) {
+    if (pattern.test(lower)) {
+      // Skip container-like names (e.g. "Button Group", "Buttons Row")
+      if (skipContainers && CONTAINER_SUFFIXES.test(lower)) continue;
+      return role;
+    }
   }
 
   return undefined;

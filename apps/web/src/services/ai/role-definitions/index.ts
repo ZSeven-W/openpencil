@@ -117,7 +117,6 @@ registerRole('button', (_node, ctx) => {
       alignItems: 'center' as const,
       justifyContent: 'center' as const,
       cornerRadius: 8,
-      fill: [{ type: 'solid', color: '#2563EB' }] as PenFill[],
     };
   }
   if (ctx.parentRole === 'form-group') {
@@ -130,7 +129,6 @@ registerRole('button', (_node, ctx) => {
       alignItems: 'center' as const,
       justifyContent: 'center' as const,
       cornerRadius: 10,
-      fill: [{ type: 'solid', color: '#2563EB' }] as PenFill[],
     };
   }
   return {
@@ -141,7 +139,6 @@ registerRole('button', (_node, ctx) => {
     alignItems: 'center' as const,
     justifyContent: 'center' as const,
     cornerRadius: 8,
-    fill: [{ type: 'solid', color: '#2563EB' }] as PenFill[],
   };
 });
 
