@@ -999,6 +999,7 @@ function streamViaBuiltin(body: ChatBody) {
   const stream = new ReadableStream({
     async start(controller) {
       const encoder = new TextEncoder();
+      const BUILTIN_EVENT_IDLE_TIMEOUT_MS = 45_000;
       const pingTimer = setInterval(() => {
         try {
           controller.enqueue(
@@ -1072,7 +1073,14 @@ function streamViaBuiltin(body: ChatBody) {
 
         try {
           let raw: string | null;
-          while ((raw = await nextEvent(builtinIter)) !== null) {
+          while (
+            (raw = await waitForBuiltinEvent(
+              nextEvent,
+              builtinIter,
+              () => abortEngine(builtinEngine),
+              BUILTIN_EVENT_IDLE_TIMEOUT_MS,
+            )) !== null
+          ) {
             if (!gotFirstEvent) {
               gotFirstEvent = true;
               clearTimeout(firstEventTimer);
@@ -1111,4 +1119,32 @@ function streamViaBuiltin(body: ChatBody) {
   });
 
   return new Response(stream);
+}
+
+async function waitForBuiltinEvent(
+  nextEventFn: (iter: unknown) => Promise<string | null>,
+  iter: unknown,
+  onTimeout: () => void,
+  timeoutMs: number,
+): Promise<string | null> {
+  return await new Promise<string | null>((resolve, reject) => {
+    const timer = setTimeout(() => {
+      try {
+        onTimeout();
+      } catch {
+        /* ignore */
+      }
+      reject(new Error('Builtin provider stalled without output. Please retry.'));
+    }, timeoutMs);
+
+    nextEventFn(iter)
+      .then((value) => {
+        clearTimeout(timer);
+        resolve(value);
+      })
+      .catch((err) => {
+        clearTimeout(timer);
+        reject(err);
+      });
+  });
 }

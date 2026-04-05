@@ -33,6 +33,7 @@ export function getSubAgentTimeouts(
   thinkingMode: 'adaptive' | 'disabled' | 'enabled';
   effort: 'low' | 'medium' | 'high' | 'max';
 } {
+  const profile = resolveModelProfile(model);
   let base;
   if (promptLength < PROMPT_OPTIMIZER_LIMITS.longPromptCharThreshold) {
     base = { ...SUB_AGENT_TIMEOUT_PROFILES.short };
@@ -41,7 +42,17 @@ export function getSubAgentTimeouts(
   } else {
     base = { ...SUB_AGENT_TIMEOUT_PROFILES.long };
   }
-  return applyProfileToTimeouts(base, resolveModelProfile(model));
+  const timeouts = applyProfileToTimeouts(base, profile);
+
+  // Basic models are much more likely to stall after emitting a small amount
+  // of reasoning or while the server only sends keepalive pings. Fail faster.
+  if (profile.tier === 'basic') {
+    timeouts.pingResetsTimeout = false;
+    timeouts.noTextTimeoutMs = Math.min(timeouts.noTextTimeoutMs, 45_000);
+    timeouts.firstTextTimeoutMs = Math.min(timeouts.firstTextTimeoutMs, 75_000);
+  }
+
+  return timeouts;
 }
 
 export function getOrchestratorTimeouts(

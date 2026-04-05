@@ -203,7 +203,7 @@ async function runAgentStream(
     ...(providerConfig.baseURL ? { baseURL: providerConfig.baseURL } : {}),
     ...(providerConfig.maxOutputTokens ? { maxOutputTokens: providerConfig.maxOutputTokens } : {}),
     toolDefs,
-    maxTurns: 20,
+    maxTurns: isBuiltin ? 5 : 20,
     teamMode: true,
     concurrency,
     ...(designMdContent ? { designMdContent } : {}),
