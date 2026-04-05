@@ -241,6 +241,11 @@ export function resolveTreePostPass(
   // --- Button foreground contrast ---
   fixButtonForegroundContrast(root);
 
+  // --- Section background alternation ---
+  if (root.layout === 'vertical' && children.length >= 3) {
+    fixSectionAlternation(root, children);
+  }
+
   // Recurse
   for (const child of children) {
     resolveTreePostPass(child, canvasWidth, getNodeById, updateNode, root);
@@ -319,6 +324,43 @@ function fixButtonForegroundContrast(parent: FrameNode): void {
         (child.stroke as Record<string, unknown>).fill = fgFill;
       } else if (!hasStroke && !hasFill(child)) {
         rec.fill = fgFill;
+      }
+    }
+  }
+}
+
+const SECTION_ROLES = new Set(['section', 'hero', 'cta-section', 'stats-section', 'footer']);
+const ALTERNATING_BG = ['#FFFFFF', '#F8FAFC'];
+
+function fixSectionAlternation(parent: FrameNode, children: PenNode[]): void {
+  if (parent.layout !== 'vertical') return;
+
+  const runs: PenNode[][] = [];
+  let current: PenNode[] = [];
+
+  for (const child of children) {
+    if (child.type === 'frame' && child.role && SECTION_ROLES.has(child.role)) {
+      current.push(child);
+    } else {
+      if (current.length > 0) {
+        runs.push(current);
+        current = [];
+      }
+    }
+  }
+  if (current.length > 0) runs.push(current);
+
+  for (const run of runs) {
+    const unfilled = run.filter((c) => !hasFill(c));
+    if (unfilled.length < 3) continue;
+
+    let idx = 0;
+    for (const section of run) {
+      if (!hasFill(section)) {
+        (section as unknown as Record<string, unknown>).fill = [
+          { type: 'solid', color: ALTERNATING_BG[idx % 2] },
+        ];
+        idx++;
       }
     }
   }

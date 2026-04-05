@@ -165,3 +165,69 @@ describe('resolveTreePostPass — button foreground contrast', () => {
     expect(p.fill).toEqual([{ type: 'solid', color: '#FFFFFF' }]);
   });
 });
+
+describe('resolveTreePostPass — section background alternation', () => {
+  it('alternates fills on 3+ consecutive unfilled sections', () => {
+    const children = [
+      { id: 's0', type: 'frame' as const, name: 'Hero', x: 0, y: 0, width: 1200, height: 400, role: 'hero', layout: 'vertical' as const, children: [] },
+      { id: 's1', type: 'frame' as const, name: 'Features', x: 0, y: 0, width: 1200, height: 400, role: 'section', layout: 'vertical' as const, children: [] },
+      { id: 's2', type: 'frame' as const, name: 'CTA', x: 0, y: 0, width: 1200, height: 400, role: 'cta-section', layout: 'vertical' as const, children: [] },
+    ] as PenNode[];
+    const root: PenNode = {
+      id: 'root', type: 'frame', name: 'Root', x: 0, y: 0, width: 1200, height: 2400,
+      layout: 'vertical', children,
+    } as PenNode;
+    resolveTreePostPass(root, 1200);
+    expect((children[0] as any).fill).toEqual([{ type: 'solid', color: '#FFFFFF' }]);
+    expect((children[1] as any).fill).toEqual([{ type: 'solid', color: '#F8FAFC' }]);
+    expect((children[2] as any).fill).toEqual([{ type: 'solid', color: '#FFFFFF' }]);
+  });
+
+  it('only alternates within contiguous runs — non-section children break the run', () => {
+    const children = [
+      { id: 's0', type: 'frame' as const, name: 'Hero', x: 0, y: 0, width: 1200, height: 400, role: 'hero', layout: 'vertical' as const, children: [] },
+      { id: 's1', type: 'frame' as const, name: 'Features', x: 0, y: 0, width: 1200, height: 400, role: 'section', layout: 'vertical' as const, children: [] },
+      { id: 'card', type: 'frame' as const, name: 'Card', x: 0, y: 0, width: 300, height: 200, role: 'card', children: [] },
+      { id: 's2', type: 'frame' as const, name: 'Footer', x: 0, y: 0, width: 1200, height: 400, role: 'footer', layout: 'vertical' as const, children: [] },
+      { id: 's3', type: 'frame' as const, name: 'Section2', x: 0, y: 0, width: 1200, height: 400, role: 'section', layout: 'vertical' as const, children: [] },
+    ] as PenNode[];
+    const root: PenNode = {
+      id: 'root', type: 'frame', name: 'Root', x: 0, y: 0, width: 1200, height: 3000,
+      layout: 'vertical', children,
+    } as PenNode;
+    resolveTreePostPass(root, 1200);
+    expect((children[0] as any).fill).toBeUndefined();
+    expect((children[1] as any).fill).toBeUndefined();
+    expect((children[3] as any).fill).toBeUndefined();
+    expect((children[4] as any).fill).toBeUndefined();
+  });
+
+  it('skips sections with existing fills', () => {
+    const children = [
+      { id: 's0', type: 'frame' as const, name: 'Hero', x: 0, y: 0, width: 1200, height: 400, role: 'hero', layout: 'vertical' as const, fill: [{ type: 'solid', color: '#1E293B' }], children: [] },
+      { id: 's1', type: 'frame' as const, name: 'Features', x: 0, y: 0, width: 1200, height: 400, role: 'section', layout: 'vertical' as const, children: [] },
+      { id: 's2', type: 'frame' as const, name: 'Footer', x: 0, y: 0, width: 1200, height: 400, role: 'footer', layout: 'vertical' as const, children: [] },
+    ] as PenNode[];
+    const root: PenNode = {
+      id: 'root', type: 'frame', name: 'Root', x: 0, y: 0, width: 1200, height: 2400,
+      layout: 'vertical', children,
+    } as PenNode;
+    resolveTreePostPass(root, 1200);
+    expect((children[0] as any).fill).toEqual([{ type: 'solid', color: '#1E293B' }]);
+    expect((children[1] as any).fill).toBeUndefined();
+  });
+
+  it('does nothing with fewer than 3 consecutive sections', () => {
+    const children = [
+      { id: 's0', type: 'frame' as const, name: 'Hero', x: 0, y: 0, width: 1200, height: 400, role: 'hero', layout: 'vertical' as const, children: [] },
+      { id: 's1', type: 'frame' as const, name: 'Footer', x: 0, y: 0, width: 1200, height: 400, role: 'footer', layout: 'vertical' as const, children: [] },
+    ] as PenNode[];
+    const root: PenNode = {
+      id: 'root', type: 'frame', name: 'Root', x: 0, y: 0, width: 1200, height: 1200,
+      layout: 'vertical', children,
+    } as PenNode;
+    resolveTreePostPass(root, 1200);
+    expect((children[0] as any).fill).toBeUndefined();
+    expect((children[1] as any).fill).toBeUndefined();
+  });
+});
