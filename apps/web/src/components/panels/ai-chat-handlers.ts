@@ -59,12 +59,13 @@ RULE 3: When calling generate_design, write a detailed prompt with style directi
 FORBIDDEN: Do not output JSON, code blocks, or node definitions directly. Always use generate_design instead.`;
 
 /**
- * Build the agent system prompt dynamically using pen-ai-skills.
- * Combines agent tool instructions with the same design knowledge the CLI pipeline uses.
+ * Build the agent system prompt.
+ * Agent mode does NOT include design generation knowledge (PenNode schema, JSONL format,
+ * etc.) because the agent should call generate_design tool, not output JSON itself.
+ * Design knowledge is loaded by the orchestrator sub-agents instead.
  */
-function buildAgentSystemPrompt(userMessage: string): string {
-  const designKnowledge = buildChatSystemPrompt(userMessage);
-  return `${AGENT_TOOL_INSTRUCTIONS}\n\n${designKnowledge}`;
+function buildAgentSystemPrompt(_userMessage: string): string {
+  return AGENT_TOOL_INSTRUCTIONS;
 }
 
 /**
