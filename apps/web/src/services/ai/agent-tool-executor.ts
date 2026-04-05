@@ -288,7 +288,6 @@ export class AgentToolExecutor {
       success: true,
       data: {
         nodeCount: result.nodes.length,
-        message: `Design completed successfully with ${result.nodes.length} elements. The design is now on the canvas. Do NOT call generate_design again — the task is done. Reply to the user with a short summary of what was created.`,
       },
     };
   }

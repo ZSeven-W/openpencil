@@ -56,6 +56,13 @@ RULE 1: To create or design ANYTHING, call generate_design. NEVER output JSON yo
 RULE 2: After every tool call, write 1-2 sentences summarizing what happened.
 RULE 3: When calling generate_design, write a detailed prompt with style direction (colors, shadows, spacing, visual hierarchy).
 
+IMPORTANT: Always end your turn with a short natural-language reply for the user.
+- After any tool call completes, reply with ONLY a 1-3 sentence summary of what was created.
+- NEVER output JSON, code blocks, or PenNode data in your text reply. The tool already handled it.
+- If work completed successfully, say what changed or what was created.
+- If nothing changed, explain why in one sentence.
+- Never end with tool calls only.
+
 FORBIDDEN: Do not output JSON, code blocks, or node definitions directly. Always use generate_design instead.`;
 
 /** Agent tool instructions for builtin providers — direct tool-based design. */
@@ -168,7 +175,9 @@ async function runAgentStream(
   const sessionId = nanoid();
   const executor = new AgentToolExecutor(sessionId);
 
-  const isBuiltin = providerConfig.providerType === 'anthropic' || providerConfig.providerType === 'openai-compat';
+  const isBuiltin =
+    providerConfig.providerType === 'anthropic' ||
+    providerConfig.providerType === 'openai-compat';
 
   const toolDefs = getDesignToolDefs();
 
@@ -192,6 +201,7 @@ async function runAgentStream(
 
   const { useAIStore: concurrencyStore } = await import('@/stores/ai-store');
   const concurrency = concurrencyStore.getState().concurrency;
+  const teamMode = concurrency > 1;
 
   const agentBody: Record<string, unknown> = {
     sessionId,
@@ -204,8 +214,7 @@ async function runAgentStream(
     ...(providerConfig.maxOutputTokens ? { maxOutputTokens: providerConfig.maxOutputTokens } : {}),
     toolDefs,
     maxTurns: isBuiltin ? 5 : 20,
-    teamMode: true,
-    concurrency,
+    ...(teamMode ? { teamMode: true, concurrency } : {}),
     ...(designMdContent ? { designMdContent } : {}),
     ...(hasVariables ? { hasVariables } : {}),
   };
@@ -238,6 +247,24 @@ async function runAgentStream(
   let identityPool: AgentIdentity[] = [];
   let nextIdentityIdx = 0;
   const memberIdentities = new Map<string, AgentIdentity>();
+  let designToolCompleted = false;
+  let stopRequested = false;
+
+  const abortAgentSession = async () => {
+    if (stopRequested) return;
+    stopRequested = true;
+    try {
+      await fetch('/api/ai/agent?action=abort', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sessionId }),
+      });
+    } catch {
+      /* best-effort */
+    } finally {
+      abortController.abort();
+    }
+  };
 
   try {
     for await (const evt of parseAgentSSE(reader, abortController.signal)) {
@@ -264,6 +291,10 @@ async function runAgentStream(
 
         case 'tool_call': {
           sawToolActivity = true;
+          if (designToolCompleted && evt.name === 'generate_design') {
+            void abortAgentSession();
+            break;
+          }
           const block: ToolCallBlockData = {
             id: evt.id,
             name: evt.name,
@@ -279,6 +310,42 @@ async function runAgentStream(
 
           executor
             .execute(evt as Extract<AgentEvent, { type: 'tool_call' }>)
+            .then((result) => {
+              const block = useAIStore.getState().toolCallBlocks.find((b) => b.id === evt.id);
+              if (block && block.status === 'running') {
+                useAIStore.getState().updateToolCallBlock(evt.id, {
+                  status: result.success ? 'done' : 'error',
+                  result,
+                });
+              }
+
+              // In single-agent mode, one successful generate_design is enough.
+              // Waiting for the model to narrate after the tool often triggers
+              // a second identical generate_design call, which multiplies the
+              // nested /api/ai/chat load and makes Bun dev far less stable.
+              if (
+                !teamMode &&
+                evt.name === 'generate_design' &&
+                result.success &&
+                !designToolCompleted
+              ) {
+                designToolCompleted = true;
+                const nodeCount =
+                  typeof result.data === 'object' &&
+                  result.data &&
+                  'nodeCount' in result.data &&
+                  typeof (result.data as { nodeCount?: unknown }).nodeCount === 'number'
+                    ? (result.data as { nodeCount: number }).nodeCount
+                    : null;
+                const toolMessage =
+                  nodeCount != null
+                    ? `Design completed — ${nodeCount} nodes now on canvas.`
+                    : 'Created the requested design on the canvas.';
+                accumulated = toolMessage;
+                updateLastMessage(toolMessage);
+                void abortAgentSession();
+              }
+            })
             .catch((err) => {
               useAIStore.getState().updateToolCallBlock(evt.id, {
                 status: 'error',
@@ -365,6 +432,11 @@ async function runAgentStream(
           return;
       }
     }
+  } catch (error) {
+    if (abortController.signal.aborted) {
+      return stripThinkTags(accumulated);
+    }
+    throw error;
   } finally {
     renderer.finish();
     reader.releaseLock();
