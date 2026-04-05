@@ -133,29 +133,84 @@ export function AIChatInput({ input, setInput, onSend }: AIChatInputProps) {
         </div>
       )}
 
-      {/* Textarea with inline send/attach buttons */}
-      <div className="relative flex">
-        <textarea
-          ref={inputRef}
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          onKeyDown={handleKeyDown}
-          onPaste={handlePaste}
-          placeholder={isStreaming ? t('ai.generating') : t('ai.designWithAgent')}
-          disabled={isStreaming}
-          rows={2}
-          className="w-full bg-transparent text-sm text-foreground placeholder-muted-foreground px-3.5 pt-3 pb-2 pr-12 resize-none outline-none max-h-28 min-h-[52px]"
-        />
-        <div className="absolute right-2 bottom-2 flex flex-col items-center gap-0.5">
+      <textarea
+        ref={inputRef}
+        value={input}
+        onChange={(e) => setInput(e.target.value)}
+        onKeyDown={handleKeyDown}
+        onPaste={handlePaste}
+        placeholder={isStreaming ? t('ai.generating') : t('ai.designWithAgent')}
+        disabled={isStreaming}
+        rows={2}
+        className="w-full bg-transparent text-sm text-foreground placeholder-muted-foreground px-3.5 pt-3 pb-2 resize-none outline-none max-h-28 min-h-[52px]"
+      />
+
+      {/* --- Bottom bar: model selector + concurrency + selected + attach + send --- */}
+      <div className="relative flex items-center justify-between px-2 pb-2">
+        <div className="flex items-center">
+          {/* Model selector */}
+          <button
+            type="button"
+            onClick={() => setModelDropdownOpen((v) => !v)}
+            disabled={isLoadingModels || availableModels.length === 0}
+            className="flex items-center gap-1.5 text-[11px] text-muted-foreground hover:text-foreground transition-colors px-1.5 py-1 rounded-md hover:bg-secondary"
+          >
+            {(() => {
+              if (model.startsWith('builtin:')) {
+                const currentGroup = modelGroups.find((g) => g.models.some((m) => m.value === model));
+                if (currentGroup) {
+                  const ProvIcon = PROVIDER_ICON[currentGroup.provider];
+                  return ProvIcon ? (
+                    <ProvIcon className="w-3.5 h-3.5 shrink-0" />
+                  ) : (
+                    <Key size={12} className="shrink-0 text-muted-foreground" />
+                  );
+                }
+                return <Key size={12} className="shrink-0 text-muted-foreground" />;
+              }
+              const currentProvider = modelGroups.find((g) =>
+                g.models.some((m) => m.value === model),
+              )?.provider;
+              if (currentProvider) {
+                const ProvIcon = PROVIDER_ICON[currentProvider];
+                return <ProvIcon className="w-3.5 h-3.5 shrink-0" />;
+              }
+              return null;
+            })()}
+            <span className="truncate max-w-[100px]">
+              {isLoadingModels
+                ? t('ai.loadingModels')
+                : noAvailableModels
+                  ? t('ai.noModelsConnected')
+                  : (availableModels.find((m) => m.value === model)?.displayName ?? model)}
+            </span>
+            <ChevronUp size={10} className="shrink-0" />
+          </button>
+
+          {/* Concurrency selector */}
+          <ConcurrencyButton />
+
+          <span
+            className={cn(
+              'ml-1 shrink-0 whitespace-nowrap text-[10px] select-none',
+              selectedIds.length > 0 ? 'text-muted-foreground/80' : 'text-muted-foreground/40',
+            )}
+          >
+            {t('common.selected', { count: selectedIds.length })}
+          </span>
+        </div>
+
+        {/* Action icons */}
+        <div className="flex items-center gap-0.5">
           <Button
             variant="ghost"
             size="icon-sm"
             onClick={() => fileInputRef.current?.click()}
             disabled={isStreaming || pendingAttachments.length >= 4}
             title={t('ai.attachImage')}
-            className="shrink-0 rounded-lg h-6 w-6"
+            className="shrink-0 rounded-lg h-7 w-7"
           >
-            <Paperclip size={12} />
+            <Paperclip size={13} />
           </Button>
           {isStreaming ? (
             <Button
@@ -163,9 +218,9 @@ export function AIChatInput({ input, setInput, onSend }: AIChatInputProps) {
               size="icon-sm"
               onClick={stopStreaming}
               title={t('ai.stopGenerating')}
-              className="shrink-0 rounded-lg h-6 w-6 text-destructive hover:text-destructive hover:scale-110 active:scale-95 transition-all duration-150"
+              className="shrink-0 rounded-lg h-7 w-7 text-destructive hover:text-destructive hover:scale-110 active:scale-95 transition-all duration-150"
             >
-              <Square size={9} fill="currentColor" />
+              <Square size={10} fill="currentColor" />
             </Button>
           ) : (
             <Button
@@ -175,70 +230,16 @@ export function AIChatInput({ input, setInput, onSend }: AIChatInputProps) {
               disabled={!canSendMessage}
               title={t('ai.sendMessage')}
               className={cn(
-                'shrink-0 rounded-lg h-6 w-6 transition-all duration-150',
+                'shrink-0 rounded-lg h-7 w-7 transition-all duration-150',
                 canSendMessage
                   ? 'text-primary hover:text-primary hover:scale-110 active:scale-95'
                   : 'text-muted-foreground/30',
               )}
             >
-              <Send size={12} />
+              <Send size={13} />
             </Button>
           )}
         </div>
-      </div>
-
-      {/* --- Bottom bar: model selector + concurrency + selected count --- */}
-      <div className="relative flex items-center px-2 pb-2">
-        {/* Model selector */}
-        <button
-          type="button"
-          onClick={() => setModelDropdownOpen((v) => !v)}
-          disabled={isLoadingModels || availableModels.length === 0}
-          className="flex items-center gap-1.5 text-[11px] text-muted-foreground hover:text-foreground transition-colors px-1.5 py-1 rounded-md hover:bg-secondary"
-        >
-          {(() => {
-            if (model.startsWith('builtin:')) {
-              const currentGroup = modelGroups.find((g) => g.models.some((m) => m.value === model));
-              if (currentGroup) {
-                const ProvIcon = PROVIDER_ICON[currentGroup.provider];
-                return ProvIcon ? (
-                  <ProvIcon className="w-3.5 h-3.5 shrink-0" />
-                ) : (
-                  <Key size={12} className="shrink-0 text-muted-foreground" />
-                );
-              }
-              return <Key size={12} className="shrink-0 text-muted-foreground" />;
-            }
-            const currentProvider = modelGroups.find((g) =>
-              g.models.some((m) => m.value === model),
-            )?.provider;
-            if (currentProvider) {
-              const ProvIcon = PROVIDER_ICON[currentProvider];
-              return <ProvIcon className="w-3.5 h-3.5 shrink-0" />;
-            }
-            return null;
-          })()}
-          <span className="truncate max-w-[100px]">
-            {isLoadingModels
-              ? t('ai.loadingModels')
-              : noAvailableModels
-                ? t('ai.noModelsConnected')
-                : (availableModels.find((m) => m.value === model)?.displayName ?? model)}
-          </span>
-          <ChevronUp size={10} className="shrink-0" />
-        </button>
-
-        {/* Concurrency selector */}
-        <ConcurrencyButton />
-
-        <span
-          className={cn(
-            'ml-1 shrink-0 whitespace-nowrap text-[10px] select-none',
-            selectedIds.length > 0 ? 'text-muted-foreground/80' : 'text-muted-foreground/40',
-          )}
-        >
-          {t('common.selected', { count: selectedIds.length })}
-        </span>
 
         {/* Upward model dropdown */}
         <ModelDropdown open={modelDropdownOpen} onClose={() => setModelDropdownOpen(false)} />
