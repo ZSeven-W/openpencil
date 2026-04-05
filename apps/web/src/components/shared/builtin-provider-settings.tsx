@@ -317,17 +317,31 @@ export function BuiltinProviderForm({
           </Field>
         )}
 
-        <Field label={t('builtin.baseUrl')}>
-          <div className="relative">
-            <Globe size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground/40" />
-            <input
-              value={baseURL}
-              onChange={(e) => setBaseURL(e.target.value)}
-              placeholder={t('builtin.baseUrlPlaceholder')}
-              className={cn(inputClass, 'pl-7 font-mono text-[11px]')}
-            />
-          </div>
-        </Field>
+        {/* Base URL — read-only for Anthropic/OpenAI, editable for others */}
+        {(preset === 'anthropic' || preset === 'openai') ? (
+          <Field label={t('builtin.baseUrl')}>
+            <div className="relative">
+              <Globe size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground/30" />
+              <input
+                value={baseURL}
+                readOnly
+                className={cn(inputClass, 'pl-7 font-mono text-[11px] opacity-50 cursor-default')}
+              />
+            </div>
+          </Field>
+        ) : (
+          <Field label={t('builtin.baseUrl')}>
+            <div className="relative">
+              <Globe size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground/40" />
+              <input
+                value={baseURL}
+                onChange={(e) => setBaseURL(e.target.value)}
+                placeholder={t('builtin.baseUrlPlaceholder')}
+                className={cn(inputClass, 'pl-7 font-mono text-[11px]')}
+              />
+            </div>
+          </Field>
+        )}
 
         {/* Actions */}
         <div className="flex items-center justify-end gap-2 pt-1.5 border-t border-border/50">
