@@ -154,12 +154,10 @@ export class AgentToolExecutor {
     if (currentModel.startsWith('builtin:')) {
       const layoutResult = await this.handlePlanLayout({ prompt });
       this.designGenerated = true;
+      const rootId = (layoutResult.data as any)?.rootFrameId ?? '';
       return {
         success: true,
-        data: {
-          ...(layoutResult.data ?? {}),
-          message: `Layout frame created. Now generate the design content as PenNode JSON and call batch_insert to place it on the canvas. ${(layoutResult.data as any)?.message ?? ''}`,
-        },
+        data: { rootFrameId: rootId, message: 'Frame created. Call batch_insert with nodes.' },
       };
     }
 
