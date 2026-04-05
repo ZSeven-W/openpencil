@@ -16,6 +16,8 @@ interface AIUIPrefs {
   panelCorner?: PanelCorner;
   isMinimized?: boolean;
   codeFormat?: 'react-tailwind' | 'html-css' | 'react-inline';
+  panelWidth?: number;
+  panelHeight?: number;
 }
 
 function readUIPrefs(): AIUIPrefs {
@@ -103,6 +105,11 @@ interface AIState {
   isLoadingModels: boolean;
   panelCorner: PanelCorner;
   isMinimized: boolean;
+  panelWidth: number;
+  panelHeight: number;
+  isMaximized: boolean;
+  toggleMaximize: () => void;
+  setPanelSize: (width: number, height: number) => void;
   chatTitle: string;
   generationProgress: { current: number; total: number } | null;
   /** Step tags from orchestrator during Agent tool execution (bypasses message content) */
@@ -158,6 +165,9 @@ export const useAIStore = create<AIState>((set, get) => ({
   isLoadingModels: false,
   panelCorner: 'bottom-left',
   isMinimized: false,
+  panelWidth: 360,
+  panelHeight: 400,
+  isMaximized: false,
   chatTitle: 'New Chat',
   concurrency: 1,
   generationProgress: null,
@@ -190,6 +200,8 @@ export const useAIStore = create<AIState>((set, get) => ({
     if (typeof prefs.isPanelOpen === 'boolean') set({ isPanelOpen: prefs.isPanelOpen });
     if (prefs.panelCorner) set({ panelCorner: prefs.panelCorner });
     if (typeof prefs.isMinimized === 'boolean') set({ isMinimized: prefs.isMinimized });
+    if (prefs.panelWidth) set({ panelWidth: prefs.panelWidth });
+    if (prefs.panelHeight) set({ panelHeight: prefs.panelHeight });
     if (prefs.codeFormat) set({ codeFormat: prefs.codeFormat });
   },
 
@@ -263,4 +275,13 @@ export const useAIStore = create<AIState>((set, get) => ({
       s.abortController?.abort();
       return { isStreaming: false, abortController: null };
     }),
+
+  toggleMaximize: () => {
+    const next = !get().isMaximized;
+    set({ isMaximized: next });
+  },
+  setPanelSize: (panelWidth, panelHeight) => {
+    set({ panelWidth, panelHeight });
+    writeUIPrefs({ panelWidth, panelHeight });
+  },
 }));
