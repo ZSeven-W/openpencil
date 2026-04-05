@@ -246,6 +246,9 @@ export function resolveTreePostPass(
     fixSectionAlternation(root, children);
   }
 
+  // --- Orphan container contrast ---
+  fixOrphanContainerContrast(root, parentNode);
+
   // Recurse
   for (const child of children) {
     resolveTreePostPass(child, canvasWidth, getNodeById, updateNode, root);
@@ -364,6 +367,43 @@ function fixSectionAlternation(parent: FrameNode, children: PenNode[]): void {
       }
     }
   }
+}
+
+const STRUCTURAL_DENYLIST = new Set([
+  'section', 'row', 'column', 'centered-content', 'form-group', 'feature-grid',
+  'screenshot-frame', 'phone-mockup', 'navbar', 'nav-links', 'hero', 'footer',
+  'cta-section', 'stats-section', 'table', 'table-row', 'table-header', 'spacer', 'divider',
+]);
+
+const CARD_LIKE_ALLOWLIST = new Set([
+  'card', 'stat-card', 'pricing-card', 'feature-card', 'image-card', 'testimonial',
+]);
+
+function fixOrphanContainerContrast(node: FrameNode, parentNode?: PenNode): void {
+  if (!parentNode) return;
+  if (hasFill(node)) return;
+  if (hasFill(parentNode)) return;
+
+  const cr =
+    typeof node.cornerRadius === 'number'
+      ? node.cornerRadius
+      : Array.isArray(node.cornerRadius) && node.cornerRadius.length > 0
+        ? node.cornerRadius[0]
+        : 0;
+  if (cr <= 0) return;
+
+  if (!('children' in node) || !Array.isArray(node.children) || node.children.length === 0) return;
+
+  const role = node.role;
+  if (role && STRUCTURAL_DENYLIST.has(role)) return;
+  if (role && !CARD_LIKE_ALLOWLIST.has(role)) return;
+
+  const rec = node as unknown as Record<string, unknown>;
+  rec.fill = [{ type: 'solid', color: '#FFFFFF' }];
+  rec.effects = [
+    { type: 'shadow', offsetX: 0, offsetY: 1, blur: 3, spread: 0, color: '#0000001A' },
+    { type: 'shadow', offsetX: 0, offsetY: 1, blur: 2, spread: -1, color: '#0000000F' },
+  ];
 }
 
 function equalizeCardRow(parent: FrameNode, children: PenNode[]): void {

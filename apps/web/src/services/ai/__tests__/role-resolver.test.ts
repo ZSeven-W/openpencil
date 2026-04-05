@@ -231,3 +231,69 @@ describe('resolveTreePostPass — section background alternation', () => {
     expect((children[1] as any).fill).toBeUndefined();
   });
 });
+
+describe('resolveTreePostPass — orphan container contrast', () => {
+  it('adds fill + shadow to untagged rounded frame when parent has no fill', () => {
+    const card: PenNode = {
+      id: 'card', type: 'frame', name: 'Card', x: 0, y: 0, width: 300, height: 200,
+      cornerRadius: 12,
+      children: [
+        { id: 'txt', type: 'text', name: 'Title', x: 0, y: 0, width: 200, height: 20, content: 'Hello' } as PenNode,
+      ],
+    } as PenNode;
+    const root: PenNode = {
+      id: 'root', type: 'frame', name: 'Root', x: 0, y: 0, width: 1200, height: 800,
+      children: [card],
+    } as PenNode;
+    resolveTreePostPass(root, 1200);
+    expect((card as any).fill).toEqual([{ type: 'solid', color: '#FFFFFF' }]);
+    expect((card as any).effects).toHaveLength(2);
+    expect((card as any).effects[0].type).toBe('shadow');
+  });
+
+  it('does not apply to structural roles like section', () => {
+    const section: PenNode = {
+      id: 'sec', type: 'frame', name: 'Section', x: 0, y: 0, width: 1200, height: 400,
+      role: 'section', cornerRadius: 12,
+      children: [
+        { id: 'txt', type: 'text', name: 'Title', x: 0, y: 0, width: 200, height: 20, content: 'Hello' } as PenNode,
+      ],
+    } as PenNode;
+    const root: PenNode = {
+      id: 'root', type: 'frame', name: 'Root', x: 0, y: 0, width: 1200, height: 800,
+      children: [section],
+    } as PenNode;
+    resolveTreePostPass(root, 1200);
+    expect((section as any).fill).toBeUndefined();
+  });
+
+  it('does not apply when parent has fill', () => {
+    const card: PenNode = {
+      id: 'card', type: 'frame', name: 'Card', x: 0, y: 0, width: 300, height: 200,
+      cornerRadius: 12,
+      children: [
+        { id: 'txt', type: 'text', name: 'Title', x: 0, y: 0, width: 200, height: 20, content: 'Hello' } as PenNode,
+      ],
+    } as PenNode;
+    const root: PenNode = {
+      id: 'root', type: 'frame', name: 'Root', x: 0, y: 0, width: 1200, height: 800,
+      fill: [{ type: 'solid', color: '#F8FAFC' }],
+      children: [card],
+    } as PenNode;
+    resolveTreePostPass(root, 1200);
+    expect((card as any).fill).toBeUndefined();
+  });
+
+  it('does not apply to empty frames', () => {
+    const empty: PenNode = {
+      id: 'e', type: 'frame', name: 'Empty', x: 0, y: 0, width: 300, height: 200,
+      cornerRadius: 12, children: [],
+    } as PenNode;
+    const root: PenNode = {
+      id: 'root', type: 'frame', name: 'Root', x: 0, y: 0, width: 1200, height: 800,
+      children: [empty],
+    } as PenNode;
+    resolveTreePostPass(root, 1200);
+    expect((empty as any).fill).toBeUndefined();
+  });
+});
