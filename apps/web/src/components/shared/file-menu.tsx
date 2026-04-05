@@ -1,5 +1,5 @@
 import { useRef, useEffect } from 'react';
-import { Plus, Folder, Save, FileText } from 'lucide-react';
+import { Plus, Folder, Save, SaveAll, FileText } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { getRecentFiles, clearRecentFiles, relativeTime } from '@/utils/recent-files';
 
@@ -54,36 +54,33 @@ export default function FileMenu({
     label,
     shortcut,
     onClick,
-    className,
   }: {
-    icon?: typeof Plus;
+    icon: typeof Plus;
     label: string;
     shortcut?: string;
     onClick: () => void;
-    className?: string;
   }) => (
     <button
       type="button"
       onClick={() => { onClick(); onClose(); }}
-      className={`w-full flex items-center gap-2 px-3 py-1.5 text-xs text-muted-foreground hover:bg-accent hover:text-foreground transition-colors ${className ?? ''}`}
+      className="w-full flex items-center gap-2 px-3 py-1 text-[11px] text-foreground/80 hover:bg-accent hover:text-foreground transition-colors rounded-sm mx-0.5"
     >
-      {Icon && <Icon size={13} className="shrink-0" />}
-      {!Icon && <span className="w-[13px] shrink-0" />}
+      <Icon size={14} className="shrink-0 text-muted-foreground" />
       <span className="flex-1 text-left">{label}</span>
-      {shortcut && <span className="text-[10px] text-muted-foreground/60">{shortcut}</span>}
+      {shortcut && <span className="text-[10px] text-muted-foreground/40 font-mono">{shortcut}</span>}
     </button>
   );
 
   return (
     <div
       ref={menuRef}
-      className="absolute top-full left-1/2 -translate-x-1/2 mt-1 z-50 w-56 rounded-lg border border-border bg-card shadow-xl py-1"
+      className="absolute top-full left-0 mt-1 z-50 w-52 rounded-lg border border-border bg-card shadow-xl py-1.5 px-0.5"
     >
       <MenuItem icon={Plus} label={t('fileMenu.newFile')} shortcut={`${mod}N`} onClick={onNew} />
       <MenuItem icon={Folder} label={t('fileMenu.openFile')} shortcut={`${mod}O`} onClick={onOpen} />
-      <div className="h-px bg-border mx-2 my-1" />
+      <div className="h-px bg-border/50 mx-2.5 my-1" />
       <MenuItem icon={Save} label={t('fileMenu.save')} shortcut={`${mod}S`} onClick={onSave} />
-      <MenuItem label={t('fileMenu.saveAs')} shortcut={`${mod}\u21E7S`} onClick={onSaveAs} />
+      <MenuItem icon={SaveAll} label={t('fileMenu.saveAs')} shortcut={`${mod}\u21E7S`} onClick={onSaveAs} />
 
       {recentFiles.length > 0 && (
         <>

@@ -1,18 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { appStorage, initAppStorage } from '@/utils/app-storage';
 import type { ComponentType, SVGProps } from 'react';
-import {
-  PanelLeft,
-  Plus,
-  Folder,
-  Save,
-  Sun,
-  Moon,
-  Maximize,
-  Minimize,
-  Blocks,
-  ChevronDown,
-} from 'lucide-react';
+import { PanelLeft, Folder, Sun, Moon, Maximize, Minimize, Blocks } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import ClaudeLogo from '@/components/icons/claude-logo';
 import OpenAILogo from '@/components/icons/openai-logo';
@@ -399,47 +388,31 @@ export default function TopBar() {
 
         <div className="w-px h-3.5 bg-border/60 mx-1" />
 
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              className="text-muted-foreground"
-              onClick={handleNew}
-            >
-              <Plus size={16} strokeWidth={1.5} />
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent side="bottom">{t('topbar.new')}</TooltipContent>
-        </Tooltip>
-
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              className="text-muted-foreground"
-              onClick={handleOpen}
-            >
-              <Folder size={15} strokeWidth={1.5} />
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent side="bottom">{t('topbar.open')}</TooltipContent>
-        </Tooltip>
-
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              className="text-muted-foreground"
-              onClick={handleSaveWithFeedback}
-            >
-              <Save size={15} strokeWidth={1.5} />
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent side="bottom">{t('topbar.save')}</TooltipContent>
-        </Tooltip>
+        {/* File menu dropdown trigger */}
+        <div className="relative">
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                className="text-muted-foreground"
+                onClick={() => setFileMenuOpen((v) => !v)}
+              >
+                <Folder size={15} strokeWidth={1.5} />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom">{t('topbar.open')}</TooltipContent>
+          </Tooltip>
+          <FileMenu
+            open={fileMenuOpen}
+            onClose={() => setFileMenuOpen(false)}
+            onNew={handleNew}
+            onOpen={handleOpen}
+            onSave={handleSaveWithFeedback}
+            onSaveAs={handleSaveAs}
+            onOpenRecent={handleOpenRecent}
+          />
+        </div>
 
         <div className="w-px h-3.5 bg-border/60 mx-1" />
 
@@ -458,35 +431,19 @@ export default function TopBar() {
         </Tooltip>
       </div>
 
-      {/* Center section — file name + menu */}
-      <div className="relative flex-1 flex items-center justify-center min-w-0">
-        <button
-          type="button"
-          onClick={() => setFileMenuOpen((v) => !v)}
-          className="flex items-center gap-1 px-2 py-0.5 rounded-md hover:bg-accent transition-colors app-region-no-drag"
-        >
-          <span className="text-xs text-foreground truncate max-w-[200px]" suppressHydrationWarning>
-            {displayName}
-          </span>
-          {isDirty && (
-            <span className="text-xs text-muted-foreground">{t('topbar.edited')}</span>
-          )}
-          <ChevronDown size={10} className="text-muted-foreground shrink-0" />
-        </button>
+      {/* Center section — file name */}
+      <div className="flex-1 flex items-center justify-center min-w-0">
+        <span className="text-xs text-foreground truncate" suppressHydrationWarning>
+          {displayName}
+        </span>
+        {isDirty && (
+          <span className="text-xs text-muted-foreground ml-1.5">{t('topbar.edited')}</span>
+        )}
         {saveIndicator && (
-          <span className="absolute right-0 top-1/2 -translate-y-1/2 text-[10px] text-emerald-500 animate-pulse">
+          <span className="ml-2 text-[10px] text-emerald-500 animate-pulse">
             {t('fileMenu.saved')}
           </span>
         )}
-        <FileMenu
-          open={fileMenuOpen}
-          onClose={() => setFileMenuOpen(false)}
-          onNew={handleNew}
-          onOpen={handleOpen}
-          onSave={handleSaveWithFeedback}
-          onSaveAs={handleSaveAs}
-          onOpenRecent={handleOpenRecent}
-        />
       </div>
 
       {/* Right section */}
