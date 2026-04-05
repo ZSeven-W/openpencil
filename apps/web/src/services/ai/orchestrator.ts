@@ -859,13 +859,15 @@ export async function executeOrchestration(
         const beforeCount = scaffoldCounts.get(rn.id) ?? 0;
         if (nowCount <= beforeCount) {
           if (rn.id === DEFAULT_FRAME_ID) {
-            // Restore the default empty frame instead of deleting it
+            // Full replace: remove then re-add so no stale properties
+            // (layout, gap, fill, children) survive from the failed run.
             const emptyDoc = createEmptyDocument();
             const defaultFrame = emptyDoc.pages?.[0]?.children.find(
               (n) => n.id === DEFAULT_FRAME_ID,
             );
             if (defaultFrame) {
-              store.updateNode(DEFAULT_FRAME_ID, defaultFrame as Partial<PenNode>);
+              try { store.removeNode(DEFAULT_FRAME_ID); } catch { /* ok */ }
+              store.addNode(null, defaultFrame as PenNode);
             }
           } else {
             try { store.removeNode(rn.id); } catch { /* already gone */ }
