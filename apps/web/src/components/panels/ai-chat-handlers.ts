@@ -77,12 +77,8 @@ Text nodes need: content, fontSize, fontFamily, fontWeight.`;
  * Builtin providers get direct design instructions (plan_layout + batch_insert).
  * CLI providers get generate_design tool instructions (orchestrator pipeline).
  */
-function buildAgentSystemPrompt(userMessage: string, isBuiltin: boolean): string {
-  if (isBuiltin) {
-    const designKnowledge = buildChatSystemPrompt(userMessage);
-    return AGENT_TOOL_INSTRUCTIONS_BUILTIN + '\n\n' + designKnowledge;
-  }
-  return AGENT_TOOL_INSTRUCTIONS_CLI;
+function buildAgentSystemPrompt(_userMessage: string, isBuiltin: boolean): string {
+  return isBuiltin ? AGENT_TOOL_INSTRUCTIONS_BUILTIN : AGENT_TOOL_INSTRUCTIONS_CLI;
 }
 
 /**
