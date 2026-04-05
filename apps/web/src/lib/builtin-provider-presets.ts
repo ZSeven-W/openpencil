@@ -89,6 +89,8 @@ export const BUILTIN_PROVIDER_PRESETS: Record<BuiltinProviderPreset, BuiltinPres
   'glm-coding': {
     label: 'GLM Coding Plan',
     type: 'openai-compat',
+    altBaseURL: 'https://open.bigmodel.cn/api/anthropic',
+    altType: 'anthropic',
     placeholder: 'xxx.yyy',
     modelPlaceholder: 'glm-4.7',
     regions: {
