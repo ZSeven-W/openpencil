@@ -1,4 +1,5 @@
 import type { PenNode, FrameNode, SizingBehavior } from '@/types/pen';
+import type { PenFill, PenStroke, PenEffect } from '@/types/styles';
 import {
   toSizeNumber,
   toGapNumber,
@@ -46,6 +47,9 @@ export type RoleDefaults = Partial<{
   textAlignVertical: 'top' | 'middle' | 'bottom';
   lineHeight: number;
   letterSpacing: number;
+  fill: PenFill[];
+  stroke: PenStroke;
+  effects: PenEffect[];
 }>;
 
 /** A role rule function computes defaults based on context. */
