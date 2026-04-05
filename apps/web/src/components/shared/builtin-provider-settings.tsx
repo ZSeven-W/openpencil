@@ -16,6 +16,7 @@ import {
   BUILTIN_PROVIDER_PRESETS,
   inferBuiltinProviderPreset,
   inferBuiltinProviderRegion,
+  getBaseURLForFormat,
 } from '@/lib/builtin-provider-presets';
 import ModelSearchDropdown, { BUILTIN_MODEL_LISTS, fetchProviderModels } from './model-selector';
 import { BuiltinProviderCard } from './provider-card';
@@ -142,7 +143,6 @@ export function BuiltinProviderForm({
     setShowModelDropdown(false);
   }, []);
 
-  const isBaseURLLocked = preset !== 'custom';
   const effectiveType = apiFormat;
 
   const canSave =
@@ -285,7 +285,14 @@ export function BuiltinProviderForm({
               <button
                 key={fmt}
                 type="button"
-                onClick={() => setApiFormat(fmt)}
+                onClick={() => {
+                  setApiFormat(fmt);
+                  // Auto-switch baseURL when format changes
+                  if (preset !== 'custom') {
+                    const url = getBaseURLForFormat(preset, fmt, region);
+                    if (url) setBaseURL(url);
+                  }
+                }}
                 className={cn(
                   'flex-1 h-7 text-[11px] rounded-lg border transition-all',
                   apiFormat === fmt
@@ -300,19 +307,17 @@ export function BuiltinProviderForm({
         </div>
       )}
 
-      {/* Base URL */}
+      {/* Base URL — always editable */}
       <div className="space-y-1.5">
         <label className="text-[11px] font-medium text-muted-foreground">
-          {isBaseURLLocked ? t('builtin.baseUrl') : t('builtin.baseUrlRequired')}
+          {t('builtin.baseUrl')}
         </label>
         <input
           value={baseURL}
           onChange={(e) => setBaseURL(e.target.value)}
           placeholder={t('builtin.baseUrlPlaceholder')}
-          readOnly={isBaseURLLocked}
           className={cn(
             'w-full h-8 px-2.5 text-[13px] bg-card text-foreground rounded-lg border border-input focus:border-ring focus:ring-1 focus:ring-ring/30 outline-none transition-all font-mono',
-            isBaseURLLocked && 'opacity-50 cursor-default',
           )}
         />
       </div>

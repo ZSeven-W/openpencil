@@ -11,6 +11,10 @@ export interface BuiltinPresetConfig {
   label: string;
   type: 'anthropic' | 'openai-compat';
   baseURL?: string;
+  /** Alternative baseURL for the other API format (if provider supports both) */
+  altBaseURL?: string;
+  /** The API format that altBaseURL corresponds to */
+  altType?: 'anthropic' | 'openai-compat';
   placeholder: string;
   modelPlaceholder: string;
   regions?: { cn: PresetRegion; global: PresetRegion };
@@ -35,6 +39,8 @@ export const BUILTIN_PROVIDER_PRESETS: Record<BuiltinProviderPreset, BuiltinPres
     label: 'OpenRouter',
     type: 'openai-compat',
     baseURL: 'https://openrouter.ai/api/v1',
+    altBaseURL: 'https://openrouter.ai/api',
+    altType: 'anthropic',
     placeholder: 'sk-or-...',
     modelPlaceholder: 'anthropic/claude-sonnet-4.6',
   },
@@ -42,6 +48,8 @@ export const BUILTIN_PROVIDER_PRESETS: Record<BuiltinProviderPreset, BuiltinPres
     label: 'DeepSeek',
     type: 'openai-compat',
     baseURL: 'https://api.deepseek.com/v1',
+    altBaseURL: 'https://api.deepseek.com/anthropic',
+    altType: 'anthropic',
     placeholder: 'sk-...',
     modelPlaceholder: 'deepseek-chat',
   },
@@ -56,6 +64,8 @@ export const BUILTIN_PROVIDER_PRESETS: Record<BuiltinProviderPreset, BuiltinPres
     label: 'MiniMax',
     type: 'anthropic',
     baseURL: 'https://api.minimaxi.com/anthropic',
+    altBaseURL: 'https://api.minimaxi.com/v1',
+    altType: 'openai-compat',
     placeholder: 'eyJ...',
     modelPlaceholder: 'MiniMax-M2.7',
     regions: {
@@ -229,6 +239,27 @@ export function inferBuiltinProviderRegion(
   config: Pick<BuiltinProviderConfig, 'preset' | 'type' | 'baseURL'>,
 ): 'cn' | 'global' {
   return inferRegionFromURL(inferBuiltinProviderPreset(config), normalizeURL(config.baseURL));
+}
+
+/** Get baseURL for a specific API format. Returns altBaseURL if format matches altType. */
+export function getBaseURLForFormat(
+  preset: BuiltinProviderPreset,
+  format: 'anthropic' | 'openai-compat',
+  region: 'cn' | 'global' = 'cn',
+): string | undefined {
+  const cfg = BUILTIN_PROVIDER_PRESETS[preset];
+  if (format === cfg.altType && cfg.altBaseURL) return cfg.altBaseURL;
+  if (cfg.regions) return cfg.regions[region].baseURL;
+  return cfg.baseURL;
+}
+
+/** Check if a preset supports a given API format (has altBaseURL for it). */
+export function presetSupportsFormat(
+  preset: BuiltinProviderPreset,
+  format: 'anthropic' | 'openai-compat',
+): boolean {
+  const cfg = BUILTIN_PROVIDER_PRESETS[preset];
+  return cfg.type === format || cfg.altType === format;
 }
 
 export function getCanonicalBuiltinBaseURL(
