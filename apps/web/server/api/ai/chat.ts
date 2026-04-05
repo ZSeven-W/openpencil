@@ -1017,6 +1017,7 @@ function streamViaBuiltin(body: ChatBody) {
           seedMessages,
           submitMessage,
           nextEvent,
+          abortEngine,
           destroyIterator,
           destroyQueryEngine,
           destroyProvider,
@@ -1060,9 +1061,22 @@ function streamViaBuiltin(body: ChatBody) {
         const lastMsg = body.messages[body.messages.length - 1]?.content ?? '';
         const builtinIter = await submitMessage(builtinEngine, lastMsg);
 
+        // Abort engine if no events arrive within 60s (provider sent 200 but no SSE data)
+        let gotFirstEvent = false;
+        const firstEventTimer = setTimeout(() => {
+          if (!gotFirstEvent) {
+            console.warn('[builtin] No SSE events received within 60s — aborting engine');
+            abortEngine(builtinEngine);
+          }
+        }, 60_000);
+
         try {
           let raw: string | null;
           while ((raw = await nextEvent(builtinIter)) !== null) {
+            if (!gotFirstEvent) {
+              gotFirstEvent = true;
+              clearTimeout(firstEventTimer);
+            }
             const evt = JSON.parse(raw);
             if (evt.type === 'text_delta' && evt.text) {
               controller.enqueue(
@@ -1079,6 +1093,7 @@ function streamViaBuiltin(body: ChatBody) {
             }
           }
         } finally {
+          clearTimeout(firstEventTimer);
           destroyIterator(builtinIter);
           destroyQueryEngine(builtinEngine);
           destroyProvider(builtinProvider);
