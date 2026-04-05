@@ -35,7 +35,7 @@ import type { AgentIdentity } from '@/services/ai/agent-identity';
 import { applyPostStreamingTreeHeuristics } from '@/services/ai/design-canvas-ops';
 import { trimChatHistory } from '@/services/ai/context-optimizer';
 import { AgentToolExecutor } from '@/services/ai/agent-tool-executor';
-import { getDesignToolDefs } from '@/services/ai/agent-tools';
+import { getBuiltinLeadToolDefs, getDesignToolDefs } from '@/services/ai/agent-tools';
 import type { ChatMessage as ChatMessageType } from '@/services/ai/ai-types';
 import type { ToolCallBlockData } from '@/components/panels/tool-call-block';
 import { CHAT_STREAM_THINKING_CONFIG } from '@/services/ai/ai-runtime-config';
@@ -74,17 +74,28 @@ WORKFLOW:
 3. Call batch_insert with the nodes array to place them on canvas
 4. Summarize what you created
 
+IMPORTANT: Do NOT call generate_design in this mode. Use plan_layout and batch_insert directly.
 IMPORTANT: Each node needs: id (unique string), type (frame/text/path/icon_font), name, x, y, width, height.
 Use _parent field to nest nodes inside parent frames.
 Frames can have: layout (vertical/horizontal), gap, padding, cornerRadius, fill, stroke, effects, children.
 Text nodes need: content, fontSize, fontFamily, fontWeight.`;
+
+/** Agent instructions for lead agents coordinating a team. */
+const AGENT_TOOL_INSTRUCTIONS_TEAM = `You are a design lead coordinating a team.
+
+Do not create the design directly in this mode. Analyze the request, delegate the work to team members, then summarize the outcome for the user.`;
 
 /**
  * Build the agent system prompt based on provider type.
  * Builtin providers get direct design instructions (plan_layout + batch_insert).
  * CLI providers get generate_design tool instructions (orchestrator pipeline).
  */
-function buildAgentSystemPrompt(_userMessage: string, isBuiltin: boolean): string {
+function buildAgentSystemPrompt(
+  _userMessage: string,
+  isBuiltin: boolean,
+  teamMode: boolean,
+): string {
+  if (teamMode) return AGENT_TOOL_INSTRUCTIONS_TEAM;
   return isBuiltin ? AGENT_TOOL_INSTRUCTIONS_BUILTIN : AGENT_TOOL_INSTRUCTIONS_CLI;
 }
 
@@ -179,8 +190,6 @@ async function runAgentStream(
     providerConfig.providerType === 'anthropic' ||
     providerConfig.providerType === 'openai-compat';
 
-  const toolDefs = getDesignToolDefs();
-
   const messages = useAIStore
     .getState()
     .messages.filter((m) => m.id !== assistantMsgId)
@@ -188,7 +197,6 @@ async function runAgentStream(
 
   const context = buildContextString();
   const lastUserMsg = messages[messages.length - 1]?.content ?? '';
-  const systemPrompt = buildAgentSystemPrompt(lastUserMsg, isBuiltin) + context;
 
   // Read document context for team member skill loading
   const { useDesignMdStore } = await import('@/stores/design-md-store');
@@ -202,6 +210,8 @@ async function runAgentStream(
   const { useAIStore: concurrencyStore } = await import('@/stores/ai-store');
   const concurrency = concurrencyStore.getState().concurrency;
   const teamMode = concurrency > 1;
+  const toolDefs = isBuiltin && !teamMode ? getBuiltinLeadToolDefs() : getDesignToolDefs();
+  const systemPrompt = buildAgentSystemPrompt(lastUserMsg, isBuiltin, teamMode) + context;
 
   const agentBody: Record<string, unknown> = {
     sessionId,
@@ -247,24 +257,6 @@ async function runAgentStream(
   let identityPool: AgentIdentity[] = [];
   let nextIdentityIdx = 0;
   const memberIdentities = new Map<string, AgentIdentity>();
-  let designToolCompleted = false;
-  let stopRequested = false;
-
-  const abortAgentSession = async () => {
-    if (stopRequested) return;
-    stopRequested = true;
-    try {
-      await fetch('/api/ai/agent?action=abort', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sessionId }),
-      });
-    } catch {
-      /* best-effort */
-    } finally {
-      abortController.abort();
-    }
-  };
 
   try {
     for await (const evt of parseAgentSSE(reader, abortController.signal)) {
@@ -291,10 +283,6 @@ async function runAgentStream(
 
         case 'tool_call': {
           sawToolActivity = true;
-          if (designToolCompleted && evt.name === 'generate_design') {
-            void abortAgentSession();
-            break;
-          }
           const block: ToolCallBlockData = {
             id: evt.id,
             name: evt.name,
@@ -317,33 +305,6 @@ async function runAgentStream(
                   status: result.success ? 'done' : 'error',
                   result,
                 });
-              }
-
-              // In single-agent mode, one successful generate_design is enough.
-              // Waiting for the model to narrate after the tool often triggers
-              // a second identical generate_design call, which multiplies the
-              // nested /api/ai/chat load and makes Bun dev far less stable.
-              if (
-                !teamMode &&
-                evt.name === 'generate_design' &&
-                result.success &&
-                !designToolCompleted
-              ) {
-                designToolCompleted = true;
-                const nodeCount =
-                  typeof result.data === 'object' &&
-                  result.data &&
-                  'nodeCount' in result.data &&
-                  typeof (result.data as { nodeCount?: unknown }).nodeCount === 'number'
-                    ? (result.data as { nodeCount: number }).nodeCount
-                    : null;
-                const toolMessage =
-                  nodeCount != null
-                    ? `Design completed — ${nodeCount} nodes now on canvas.`
-                    : 'Created the requested design on the canvas.';
-                accumulated = toolMessage;
-                updateLastMessage(toolMessage);
-                void abortAgentSession();
               }
             })
             .catch((err) => {

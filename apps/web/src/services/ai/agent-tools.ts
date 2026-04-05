@@ -122,6 +122,16 @@ export function getDesignToolDefs(): ToolDef[] {
   ];
 }
 
+/**
+ * Builtin single-agent flows create the frame via `plan_layout` and then
+ * insert content with `batch_insert`. Do not expose `generate_design` here,
+ * because in builtin mode it only creates the frame and is not a complete
+ * design operation.
+ */
+export function getBuiltinLeadToolDefs(): ToolDef[] {
+  return getAllToolDefs().filter((def) => def.name !== 'generate_design');
+}
+
 /** All tool definitions — canonical schema source for both lead and member registries. */
 export function getAllToolDefs(): ToolDef[] {
   return [
