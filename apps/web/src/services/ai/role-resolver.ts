@@ -176,7 +176,7 @@ export function resolveTreePostPass(
   canvasWidth: number,
   getNodeById?: (id: string) => PenNode | undefined,
   updateNode?: (id: string, updates: Partial<PenNode>) => void,
-  _parentNode?: PenNode,
+  parentNode?: PenNode,
 ): void {
   if (root.type !== 'frame') return;
   if (!('children' in root) || !Array.isArray(root.children)) return;
@@ -238,6 +238,9 @@ export function resolveTreePostPass(
     }
   }
 
+  // --- Button foreground contrast ---
+  fixButtonForegroundContrast(root);
+
   // Recurse
   for (const child of children) {
     resolveTreePostPass(child, canvasWidth, getNodeById, updateNode, root);
@@ -282,6 +285,44 @@ export function getFirstSolidColor(node: PenNode): string | undefined {
 // ---------------------------------------------------------------------------
 // Post-pass helpers
 // ---------------------------------------------------------------------------
+
+function fixButtonForegroundContrast(parent: FrameNode): void {
+  if (parent.role !== 'button' && parent.role !== 'icon-button') return;
+  if (!hasFill(parent)) return;
+
+  const bgColor = getFirstSolidColor(parent);
+  if (!bgColor) return;
+
+  const lum = hexLuminance(bgColor);
+  const fgColor = lum < 0.5 ? '#FFFFFF' : '#0F172A';
+  const fgFill: PenFill[] = [{ type: 'solid', color: fgColor }];
+
+  if (!('children' in parent) || !Array.isArray(parent.children)) return;
+
+  for (const child of parent.children) {
+    const rec = child as unknown as Record<string, unknown>;
+
+    if (child.type === 'text' || child.type === 'icon_font') {
+      if (!hasFill(child)) {
+        rec.fill = fgFill;
+      }
+    } else if (child.type === 'path') {
+      const hasStroke = 'stroke' in child && child.stroke != null;
+      const hasStrokeFill =
+        hasStroke &&
+        Array.isArray((child.stroke as PenStroke)?.fill) &&
+        (child.stroke as PenStroke).fill!.length > 0;
+
+      if (hasFill(child)) {
+        // fill-style icon — already styled, skip
+      } else if (hasStroke && !hasStrokeFill) {
+        (child.stroke as Record<string, unknown>).fill = fgFill;
+      } else if (!hasStroke && !hasFill(child)) {
+        rec.fill = fgFill;
+      }
+    }
+  }
+}
 
 function equalizeCardRow(parent: FrameNode, children: PenNode[]): void {
   if (parent.width === 'fit_content') return;
