@@ -62,9 +62,31 @@ let generationRootFrameId: string = DEFAULT_FRAME_ID;
  *  Used by upsert sanitization to avoid ID collisions with pre-existing content. */
 let preExistingNodeIds = new Set<string>();
 
+/**
+ * Return the id of the first top-level frame on the ACTIVE page, or null
+ * if the page has no frame children yet. This is the correct "page root
+ * frame id" for multi-page documents — DEFAULT_FRAME_ID ("root-frame")
+ * only applies to Page 1 because addPage() assigns a fresh nanoid to
+ * every subsequent page's initial frame. Use this helper anywhere you
+ * previously wrote `getNodeById(DEFAULT_FRAME_ID)` with the intent of
+ * locating "the current page's root frame".
+ */
+function getActivePagePrimaryFrameId(): string | null {
+  const doc = useDocumentStore.getState().document;
+  const activePageId = useCanvasStore.getState().activePageId;
+  const children = getActivePageChildren(doc, activePageId);
+  for (const child of children) {
+    if (child.type === 'frame') return child.id;
+  }
+  return null;
+}
+
 export function resetGenerationRemapping(): void {
   generationRemappedIds.clear();
-  generationRootFrameId = DEFAULT_FRAME_ID;
+  // Fall back to DEFAULT_FRAME_ID only when the active page has no frame yet
+  // (e.g. first load, legacy docs). In the multi-page case this is the
+  // nanoid from addPage().
+  generationRootFrameId = getActivePagePrimaryFrameId() ?? DEFAULT_FRAME_ID;
   // Snapshot all existing node IDs so upsert can avoid collisions
   preExistingNodeIds = new Set(
     useDocumentStore
@@ -269,9 +291,12 @@ export function insertStreamingNode(node: PenNode, parentId: string | null): voi
 
   if (resolvedParent === null && node.type === 'frame') {
     if (isCanvasOnlyEmptyFrame()) {
-      // Root frame replaces the default empty frame -- no animation needed
-      replaceEmptyFrame(node);
-      generationRootFrameId = DEFAULT_FRAME_ID;
+      // Root frame replaces the active page's empty frame -- no animation
+      // needed. replaceEmptyFrame returns the real target id (nanoid for
+      // pages 2+, DEFAULT_FRAME_ID for page 1) so we can track it as the
+      // generation root.
+      const targetId = replaceEmptyFrame(node);
+      if (targetId) generationRootFrameId = targetId;
     } else {
       // Canvas already has content — add as new top-level frame beside existing ones
       const { document: doc } = useDocumentStore.getState();
@@ -381,10 +406,11 @@ export function applyNodesToCanvas(nodes: PenNode[]): void {
     return;
   }
 
-  const { addNode, getNodeById } = useDocumentStore.getState();
-  // Insert into the root frame if it exists, otherwise at document root
-  const rootFrame = getNodeById(DEFAULT_FRAME_ID);
-  const parentId = rootFrame ? DEFAULT_FRAME_ID : null;
+  const { addNode } = useDocumentStore.getState();
+  // Insert into the active page's root frame if it exists, otherwise at
+  // document root. `getActivePagePrimaryFrameId` replaces the old
+  // DEFAULT_FRAME_ID lookup which only worked on Page 1.
+  const parentId = getActivePagePrimaryFrameId();
   for (const node of preparedNodes) {
     addNode(parentId, node, Infinity);
   }
@@ -405,8 +431,7 @@ export function upsertNodesToCanvas(nodes: PenNode[]): number {
   }
 
   const { addNode, updateNode, getNodeById } = useDocumentStore.getState();
-  const rootFrame = getNodeById(DEFAULT_FRAME_ID);
-  const parentId = rootFrame ? DEFAULT_FRAME_ID : null;
+  const parentId = getActivePagePrimaryFrameId();
   let count = 0;
 
   for (const node of preparedNodes) {
@@ -439,8 +464,7 @@ function upsertPreparedNodes(preparedNodes: PenNode[]): number {
   }
 
   const { addNode, updateNode, getNodeById } = useDocumentStore.getState();
-  const rootFrame = getNodeById(DEFAULT_FRAME_ID);
-  const parentId = rootFrame ? DEFAULT_FRAME_ID : null;
+  const parentId = getActivePagePrimaryFrameId();
   let count = 0;
 
   for (const node of preparedNodes) {
@@ -525,9 +549,10 @@ export function extractAndApplyDesignModification(responseText: string): number 
         updateNode(node.id, node);
         count++;
       } else {
-        // It's a new node implied by the modification (e.g. "add a button")
-        const rootFrame = getNodeById(DEFAULT_FRAME_ID);
-        const parentId = rootFrame ? DEFAULT_FRAME_ID : null;
+        // It's a new node implied by the modification (e.g. "add a button").
+        // Parent it to the active page's root frame, whichever page we're
+        // on — not just the Page 1 constant.
+        const parentId = getActivePagePrimaryFrameId();
         addNode(parentId, node);
         count++;
       }
@@ -717,30 +742,48 @@ export function expandRootFrameHeight(frameId?: string): void {
 // ---------------------------------------------------------------------------
 
 /**
- * Check if the canvas only has the default empty frame (no children).
- * Uses active page children (not document.children) to support page migration.
+ * Check if the active page has exactly one top-level frame and that frame
+ * has no children yet. Used to decide whether an incoming batch/streaming
+ * insert should REPLACE the empty boilerplate frame created by addPage()
+ * vs. append new content beside it.
+ *
+ * Previously this hardcoded DEFAULT_FRAME_ID, which broke on every page
+ * after the first: addPage() gives new pages a nanoid-based root frame id,
+ * so the check was `false` on Page 2+ and the replace branch never fired.
+ * The check now looks at the actual top-level frame of the active page,
+ * whatever its id happens to be.
  */
 function isCanvasOnlyEmptyFrame(): boolean {
-  const { document, getNodeById } = useDocumentStore.getState();
+  const { document } = useDocumentStore.getState();
   const activePageId = useCanvasStore.getState().activePageId;
   const pageChildren = getActivePageChildren(document, activePageId);
   if (pageChildren.length !== 1) return false;
-  const rootFrame = getNodeById(DEFAULT_FRAME_ID);
-  if (!rootFrame) return false;
-  return !('children' in rootFrame) || !rootFrame.children || rootFrame.children.length === 0;
+  const only = pageChildren[0];
+  if (only.type !== 'frame') return false;
+  return !('children' in only) || !only.children || only.children.length === 0;
 }
 
 /**
- * Replace the default empty frame with the generated frame node,
- * preserving the root frame ID so canvas sync continues to work.
+ * Replace the active page's empty root frame with the generated frame
+ * node, preserving the existing frame id so canvas sync continues to
+ * work. Returns the id of the frame that was updated, or null if the
+ * active page has no frame to replace (caller should have gated this
+ * call on isCanvasOnlyEmptyFrame).
+ *
+ * Previously this hardcoded DEFAULT_FRAME_ID as the update target, which
+ * meant calling replaceEmptyFrame on Page 2+ would silently modify
+ * Page 1's root frame instead of the page the user was actually editing.
  */
-function replaceEmptyFrame(generatedFrame: PenNode): void {
+function replaceEmptyFrame(generatedFrame: PenNode): string | null {
+  const targetId = getActivePagePrimaryFrameId();
+  if (!targetId) return null;
   const { updateNode } = useDocumentStore.getState();
   // Record the remapping so subsequent phases can find this node by its original ID
-  generationRemappedIds.set(generatedFrame.id, DEFAULT_FRAME_ID);
+  generationRemappedIds.set(generatedFrame.id, targetId);
   // Keep root frame ID and position (x=0, y=0), take everything else from generated frame
   const { id: _id, x: _x, y: _y, ...rest } = generatedFrame;
-  updateNode(DEFAULT_FRAME_ID, rest);
+  updateNode(targetId, rest);
+  return targetId;
 }
 
 function equalizeHorizontalSiblings(parentId: string): void {
