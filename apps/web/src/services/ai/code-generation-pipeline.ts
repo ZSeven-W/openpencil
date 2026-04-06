@@ -11,8 +11,9 @@ import type {
   ChunkContract,
   ChunkStatus,
   CodeGenProgress,
-} from '@zseven-w/pen-codegen';
-import { validateContract, sanitizeName } from '@zseven-w/pen-codegen';
+} from '@zseven-w/pen-types';
+import { sanitizeName } from '@zseven-w/pen-core';
+import { validateContract } from '@zseven-w/pen-mcp';
 import { buildPlanningPrompt, buildChunkPrompt, buildAssemblyPrompt } from './codegen-prompts';
 import { streamChat } from './ai-service';
 

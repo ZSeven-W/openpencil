@@ -203,17 +203,6 @@ describe('DesignEngine', () => {
     expect(engine.resolveVariable('$primary')).toBe('#FF0000');
   });
 
-  // ── Code generation ──
-
-  it('generateCode should return CodeResult', () => {
-    engine.addNode(null, makeRect('n1'));
-    const result = engine.generateCode('react');
-    expect(result.files).toBeDefined();
-    expect(result.files.length).toBeGreaterThan(0);
-    expect(result.files[0].content).toBeTruthy();
-    expect(result.files[0].language).toBeTruthy();
-  });
-
   // ── SVG Import ──
 
   it('importSVG should add nodes', () => {

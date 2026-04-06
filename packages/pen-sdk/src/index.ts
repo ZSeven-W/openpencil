@@ -123,33 +123,45 @@ export {
   executeBooleanOp,
 } from '@zseven-w/pen-core';
 
-// ── Codegen: Multi-platform code generation ────────────────────────────
+// ── Codegen types (from pen-types) ──────────────────────────────────────
+export type {
+  Framework,
+  PlannedChunk,
+  CodePlanFromAI,
+  ExecutableChunk,
+  CodeExecutionPlan,
+  ChunkContract,
+  PropDef,
+  SlotDef,
+  ImportDef,
+  ChunkResult,
+  ChunkStatus,
+  CodeGenProgress,
+  ContractValidationResult,
+  NodeSnapshot,
+  ExecutableChunkPayload,
+  ResolvedDepContract,
+} from '@zseven-w/pen-types';
+export { FRAMEWORKS } from '@zseven-w/pen-types';
+
+// ── Codegen: generator functions (pen-codegen — to be inlined in Task 13) ──
 export {
-  // CSS Variables
   variableNameToCSS,
   generateCSSVariables,
-  // React + Tailwind
   generateReactCode,
   generateReactFromDocument,
-  // HTML + CSS
   generateHTMLCode,
   generateHTMLFromDocument,
-  // Vue 3
   generateVueCode,
   generateVueFromDocument,
-  // Svelte
   generateSvelteCode,
   generateSvelteFromDocument,
-  // Flutter
   generateFlutterCode,
   generateFlutterFromDocument,
-  // SwiftUI
   generateSwiftUICode,
   generateSwiftUIFromDocument,
-  // Android Compose
   generateComposeCode,
   generateComposeFromDocument,
-  // React Native
   generateReactNativeCode,
   generateReactNativeFromDocument,
 } from '@zseven-w/pen-codegen';

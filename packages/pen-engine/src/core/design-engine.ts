@@ -4,8 +4,6 @@ import type {
   ToolType,
   DesignEngineOptions,
   DesignEngineEvents,
-  CodePlatform,
-  CodeResult,
   VariableDefinition,
 } from '@zseven-w/pen-types';
 import { TypedEventEmitter } from './event-emitter.js';
@@ -17,17 +15,6 @@ import { VariableManager } from './variable-manager.js';
 import { ViewportController } from './viewport-controller.js';
 import { EngineSpatialIndex } from './spatial-index.js';
 import { parseSvgToNodes } from './svg-parser.js';
-import {
-  generateReactFromDocument,
-  generateHTMLFromDocument,
-  generateVueFromDocument,
-  generateSvelteFromDocument,
-  generateFlutterFromDocument,
-  generateSwiftUIFromDocument,
-  generateComposeFromDocument,
-  generateReactNativeFromDocument,
-  generateCSSVariables,
-} from '@zseven-w/pen-codegen';
 
 /**
  * DesignEngine -- headless design engine with zero DOM/React/Zustand dependencies.
@@ -381,76 +368,6 @@ export class DesignEngine {
     throw new Error(
       'importFigma requires the pen-figma package. Use: import { parseFigFile, figmaToPenDocument } from "@zseven-w/pen-figma"',
     );
-  }
-
-  generateCode(platform: CodePlatform, _nodeId?: string): CodeResult {
-    const doc = this.getDocument();
-    const activePageId = this.getActivePage();
-    let content: string;
-    let language: string;
-    let filename: string;
-
-    switch (platform) {
-      case 'react':
-        content = generateReactFromDocument(doc, activePageId);
-        language = 'tsx';
-        filename = 'Component.tsx';
-        break;
-      case 'html': {
-        const result = generateHTMLFromDocument(doc, activePageId);
-        const files: CodeResult['files'] = [
-          { filename: 'index.html', content: result.html, language: 'html' },
-          { filename: 'styles.css', content: result.css, language: 'css' },
-        ];
-        const variables = generateCSSVariables(doc);
-        return { files, variables: variables || undefined };
-      }
-      case 'css':
-        content = generateCSSVariables(doc);
-        language = 'css';
-        filename = 'variables.css';
-        break;
-      case 'vue':
-        content = generateVueFromDocument(doc, activePageId);
-        language = 'vue';
-        filename = 'Component.vue';
-        break;
-      case 'svelte':
-        content = generateSvelteFromDocument(doc, activePageId);
-        language = 'svelte';
-        filename = 'Component.svelte';
-        break;
-      case 'flutter':
-        content = generateFlutterFromDocument(doc, activePageId);
-        language = 'dart';
-        filename = 'generated_design.dart';
-        break;
-      case 'swiftui':
-        content = generateSwiftUIFromDocument(doc, activePageId);
-        language = 'swift';
-        filename = 'GeneratedView.swift';
-        break;
-      case 'compose':
-        content = generateComposeFromDocument(doc, activePageId);
-        language = 'kotlin';
-        filename = 'GeneratedDesign.kt';
-        break;
-      case 'react-native':
-        content = generateReactNativeFromDocument(doc, activePageId);
-        language = 'tsx';
-        filename = 'Component.tsx';
-        break;
-      default:
-        content = '';
-        language = 'text';
-        filename = 'output.txt';
-    }
-
-    const variables = generateCSSVariables(doc);
-    return {
-      files: [{ filename, content, language }],
-      variables: variables || undefined,
-    };
   }
 
   // ── Events ──

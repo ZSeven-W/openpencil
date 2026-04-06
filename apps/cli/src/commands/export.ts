@@ -9,7 +9,7 @@ import {
   generateComposeFromDocument,
   generateReactNativeFromDocument,
   generateCSSVariables,
-} from '@zseven-w/pen-codegen';
+} from '@zseven-w/pen-sdk';
 import { writeFile } from 'node:fs/promises';
 import { output, outputError } from '../output';
 

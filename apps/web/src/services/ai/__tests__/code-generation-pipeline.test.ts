@@ -6,7 +6,7 @@ import {
   computeExecutionOrder,
   parseChunkResponse,
 } from '../code-generation-pipeline';
-import type { CodePlanFromAI, PlannedChunk } from '@zseven-w/pen-codegen';
+import type { CodePlanFromAI, PlannedChunk } from '@zseven-w/pen-types';
 import type { PenNode } from '@zseven-w/pen-types';
 
 describe('hydratePlan', () => {

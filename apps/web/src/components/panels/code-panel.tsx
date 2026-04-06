@@ -17,8 +17,8 @@ import { useDocumentStore, getActivePageChildren } from '@/stores/document-store
 import { useAIStore } from '@/stores/ai-store';
 import { generateCode } from '@/services/ai/code-generation-pipeline';
 import { highlightCode } from '@/utils/syntax-highlight';
-import type { Framework, CodeGenProgress, ChunkStatus } from '@zseven-w/pen-codegen';
-import { FRAMEWORKS } from '@zseven-w/pen-codegen';
+import type { Framework, CodeGenProgress, ChunkStatus } from '@zseven-w/pen-types';
+import { FRAMEWORKS } from '@zseven-w/pen-types';
 import type { PenNode } from '@/types/pen';
 import type { SyntaxLanguage } from '@/utils/syntax-highlight';
 

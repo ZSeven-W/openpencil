@@ -80,9 +80,9 @@
         "op": "dist/openpencil-cli.cjs",
       },
       "dependencies": {
-        "@zseven-w/pen-codegen": "workspace:*",
         "@zseven-w/pen-figma": "workspace:*",
         "@zseven-w/pen-mcp": "workspace:*",
+        "@zseven-w/pen-sdk": "workspace:*",
       },
     },
     "apps/desktop": {
