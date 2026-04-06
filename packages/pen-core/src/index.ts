@@ -144,3 +144,16 @@ export {
   designMdColorsToVariables,
   extractDesignMdFromDocument,
 } from './design-md-parser.js';
+
+// --- Merge module ---
+export type { NodePatch } from './merge/node-diff.js';
+export { diffDocuments } from './merge/node-diff.js';
+export type {
+  MergeInput,
+  MergeResult,
+  NodeConflict,
+  NodeConflictReason,
+  DocFieldConflict,
+  DocFieldName,
+} from './merge/node-merge.js';
+export { mergeDocuments } from './merge/node-merge.js';
