@@ -14,4 +14,5 @@ export {
   estimateLineWidth,
   normalizeTreeLayout,
   unwrapFakePhoneMockups,
+  stripRedundantSectionFills,
 } from '@zseven-w/pen-core';

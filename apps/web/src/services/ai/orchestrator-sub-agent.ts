@@ -394,6 +394,11 @@ function buildSubAgentUserPrompt(
     ? `\nYOUR ELEMENTS: ${subtask.elements}\nDo NOT generate elements listed in other sections — they handle their own content.`
     : '';
 
+  const rootBgColor = extractRootFrameFillColor(plan);
+  const rootBgHint = rootBgColor
+    ? `The page root frame already has background color ${rootBgColor} — your section inherits it.`
+    : `The page root frame already carries the background color — your section inherits it.`;
+
   let prompt = `Page sections:\n${sectionList}\n\nGenerate ONLY "${subtask.label}" (~${region.height}px of content).${myElements}\n${compactPrompt}
 
 CRITICAL LAYOUT CONSTRAINTS:
@@ -404,6 +409,7 @@ CRITICAL LAYOUT CONSTRAINTS:
 - Use "fill_container" for children that stretch, "fit_content" for shrink-wrap sizing.
 - Use justifyContent="space_between" to distribute items (e.g. navbar: logo | links | CTA). Use padding=[0,80] for horizontal page margins.
 - For side-by-side layouts, nest a horizontal frame with child frames using "fill_container" width.
+- SECTION BACKGROUND: do NOT set \`fill\` on your section root frame. ${rootBgHint} Hardcoding a "safe dark" fill (e.g. #000 / #0A0A0A / #111) will cover the intended background and break theme switching. Only set \`fill\` on cards, buttons, chips, badges, and other visually distinct components — never on the section container itself.
 - IDs prefix="${subtask.idPrefix}-". No <step> tags. Output \`\`\`json immediately.`;
 
   // Phone mockup guidance is only relevant when this subtask is actually
@@ -540,6 +546,20 @@ function needsHeroPhoneTwoColumnInstruction(
   const heroLike = /(hero|首页首屏|首屏|横幅|banner)/.test(text);
   const phoneLike = /(phone|mockup|screenshot|截图|手机|app\s*screen|应用截图)/.test(text);
   return heroLike && phoneLike;
+}
+
+/**
+ * Pull the first solid fill color off the plan's root frame, if any.
+ * Used in the sub-agent prompt so the model sees the actual background
+ * color it is inheriting and has no excuse to hedge with a hardcoded
+ * "safe dark" fill on its own section root.
+ */
+function extractRootFrameFillColor(plan: OrchestratorPlan): string | null {
+  const fill = plan.rootFrame?.fill;
+  if (!fill || !Array.isArray(fill) || fill.length === 0) return null;
+  const first = fill[0] as { type?: string; color?: string };
+  if (first?.type === 'solid' && typeof first.color === 'string') return first.color;
+  return null;
 }
 
 /**

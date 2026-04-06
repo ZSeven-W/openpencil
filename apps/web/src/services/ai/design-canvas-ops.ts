@@ -14,7 +14,11 @@ import {
   estimateNodeIntrinsicHeight,
 } from './generation-utils';
 import { defaultLineHeight } from '@/canvas/canvas-text-measure';
-import { normalizeTreeLayout, unwrapFakePhoneMockups } from '@/canvas/canvas-layout-engine';
+import {
+  normalizeTreeLayout,
+  unwrapFakePhoneMockups,
+  stripRedundantSectionFills,
+} from '@/canvas/canvas-layout-engine';
 import { forcePageResync } from '@/canvas/canvas-sync-utils';
 import {
   applyIconPathResolution,
@@ -576,6 +580,26 @@ export function applyPostStreamingTreeHeuristics(rootNodeId: string): void {
   // before role defaults can override them.
   normalizeTreeLayout(freshRoot);
 
+  // Strip redundant section-level fills. Weaker sub-agents hedge by
+  // hardcoding a "safe dark" hex (e.g. #0A0A0A) on every section root they
+  // emit, which then completely covers the page root's intended background
+  // and breaks theme switching. This pass drops those redundant fills while
+  // preserving cards/buttons/badges. Must run AFTER role resolution so we
+  // can tell section containers apart from card/button/chip components by
+  // their resolved role.
+  //
+  // The sub-agent's root frame is itself a direct child of the OUTER page
+  // root frame (DEFAULT_FRAME_ID or the generation root), so we run the
+  // strip pass on that parent — that's the level where section fills live.
+  // We also run it on freshRoot itself to catch sub-agents that build an
+  // entire page inside a single sub-task (where the "sections" are freshRoot's
+  // own children).
+  const parentOfRoot = useDocumentStore.getState().getParentOf(rootNodeId);
+  if (parentOfRoot && parentOfRoot.type === 'frame') {
+    stripRedundantSectionFills(parentOfRoot);
+  }
+  stripRedundantSectionFills(freshRoot);
+
   // Publish point. unwrap, resolveTreeRoles, and normalizeTreeLayout all
   // mutate store-owned nodes in place; resolveTreePostPass mostly goes
   // through updateNode but also has direct-mutation branches. Without an
@@ -762,6 +786,9 @@ function sanitizeNodesForInsert(nodes: PenNode[], existingIds: Set<string>): Pen
     resolveTreeRoles(node, generationCanvasWidth);
     applyGenerationHeuristics(node);
     normalizeTreeLayout(node);
+    // Drop redundant section-level fills after role resolution so cards
+    // and buttons (which must keep their fill) are correctly identified.
+    stripRedundantSectionFills(node);
     sanitizeLayoutChildPositions(node, false);
     sanitizeScreenFrameBounds(node);
   }
@@ -788,6 +815,9 @@ function sanitizeNodesForUpsert(nodes: PenNode[]): PenNode[] {
     resolveTreeRoles(node, generationCanvasWidth);
     applyGenerationHeuristics(node);
     normalizeTreeLayout(node);
+    // Drop redundant section-level fills after role resolution so cards
+    // and buttons (which must keep their fill) are correctly identified.
+    stripRedundantSectionFills(node);
     sanitizeLayoutChildPositions(node, false);
     sanitizeScreenFrameBounds(node);
   }
