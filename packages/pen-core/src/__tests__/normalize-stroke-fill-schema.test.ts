@@ -2,7 +2,13 @@ import { describe, it, expect } from 'vitest';
 import type { PenNode } from '@zseven-w/pen-types';
 import { normalizeStrokeFillSchema } from '../normalize/normalize-stroke-fill-schema';
 
-const path = (props: Partial<PenNode> = {}): PenNode =>
+// Test helpers accept untyped property bags because most assertions here
+// intentionally put malformed (schema-violating) data on the node — that
+// is exactly the input shape the normalizer is designed to repair. A
+// strongly-typed signature would reject the very cases we need to cover.
+type NodeProps = Record<string, unknown>;
+
+const path = (props: NodeProps = {}): PenNode =>
   ({
     id: 'p',
     type: 'path',
@@ -10,25 +16,25 @@ const path = (props: Partial<PenNode> = {}): PenNode =>
     width: 100,
     height: 50,
     ...props,
-  }) as PenNode;
+  }) as unknown as PenNode;
 
-const ellipse = (props: Partial<PenNode> = {}): PenNode =>
+const ellipse = (props: NodeProps = {}): PenNode =>
   ({
     id: 'e',
     type: 'ellipse',
     width: 100,
     height: 100,
     ...props,
-  }) as PenNode;
+  }) as unknown as PenNode;
 
-const frame = (props: Partial<PenNode> & { children?: PenNode[] } = {}): PenNode =>
+const frame = (props: NodeProps & { children?: PenNode[] } = {}): PenNode =>
   ({
     id: 'f',
     type: 'frame',
     width: 200,
     height: 200,
     ...props,
-  }) as PenNode;
+  }) as unknown as PenNode;
 
 const validFill = [{ type: 'solid' as const, color: '#C4F82A' }];
 
@@ -37,7 +43,7 @@ describe('normalizeStrokeFillSchema — stroke array unwrap', () => {
     const node = ellipse({
       stroke: [
         { thickness: 12, fill: validFill },
-      ] as unknown as PenNode['stroke'],
+      ],
     });
     normalizeStrokeFillSchema(node);
     const rec = node as unknown as { stroke?: { thickness?: number; fill?: unknown } };
@@ -48,7 +54,7 @@ describe('normalizeStrokeFillSchema — stroke array unwrap', () => {
 
   it('leaves a stroke that is already a proper object alone', () => {
     const node = ellipse({
-      stroke: { thickness: 4, fill: validFill } as PenNode['stroke'],
+      stroke: { thickness: 4, fill: validFill },
     });
     normalizeStrokeFillSchema(node);
     const rec = node as unknown as { stroke?: { thickness?: number; fill?: unknown } };
@@ -60,9 +66,9 @@ describe('normalizeStrokeFillSchema — stroke array unwrap', () => {
     // {type, color} (fill shape) instead of {thickness, fill}. strokeWidth
     // lives as a top-level node field.
     const node = path({
-      stroke: [{ type: 'solid', color: '#C4F82A' }] as unknown as PenNode['stroke'],
+      stroke: [{ type: 'solid', color: '#C4F82A' }],
       strokeWidth: 2.5,
-    } as Partial<PenNode> & { strokeWidth?: number });
+    });
     normalizeStrokeFillSchema(node);
     const rec = node as unknown as {
       stroke?: { thickness?: number; fill?: Array<{ color?: string }> };
@@ -76,7 +82,7 @@ describe('normalizeStrokeFillSchema — stroke array unwrap', () => {
 
   it('uses a default thickness when neither strokeWidth nor thickness is present', () => {
     const node = path({
-      stroke: [{ type: 'solid', color: '#111' }] as unknown as PenNode['stroke'],
+      stroke: [{ type: 'solid', color: '#111' }],
     });
     normalizeStrokeFillSchema(node);
     const rec = node as unknown as { stroke?: { thickness?: number; fill?: unknown } };
@@ -88,9 +94,9 @@ describe('normalizeStrokeFillSchema — stroke array unwrap', () => {
     // Some sub-agents emit { stroke: { type: "solid", color: "#fff" } }
     // (object, not array) — still a fill shape. Same recovery rules apply.
     const node = path({
-      stroke: { type: 'solid', color: '#FFFFFF' } as unknown as PenNode['stroke'],
+      stroke: { type: 'solid', color: '#FFFFFF' },
       strokeWidth: 3,
-    } as Partial<PenNode> & { strokeWidth?: number });
+    });
     normalizeStrokeFillSchema(node);
     const rec = node as unknown as {
       stroke?: { thickness?: number; fill?: Array<{ color?: string }> };
@@ -100,32 +106,54 @@ describe('normalizeStrokeFillSchema — stroke array unwrap', () => {
   });
 });
 
-describe('normalizeStrokeFillSchema — illegal fill color drops', () => {
-  it('drops fills whose color is "none"', () => {
+describe('normalizeStrokeFillSchema — illegal fill color replacement', () => {
+  it('replaces a sole "none" fill with explicit transparent hex', () => {
+    // "none" and "transparent" are CSS keywords, not valid PenFill colors.
+    // But they express an explicit "no fill" intent (e.g. an activity ring
+    // that should be hollow). Deleting the fill field entirely would make
+    // the canvas renderer fall back to a default gray fill — the opposite
+    // of what the AI meant. Replace with the 8-digit transparent hex so
+    // the renderer sees an explicit transparent color and respects it.
     const node = path({
-      fill: [{ type: 'solid', color: 'none' }] as unknown as PenNode['fill'],
+      fill: [{ type: 'solid', color: 'none' }],
     });
     normalizeStrokeFillSchema(node);
-    const rec = node as unknown as { fill?: unknown };
-    // Either absent or empty array is acceptable — the important thing
-    // is that no { color: "none" } entry remains to confuse the renderer.
-    const f = rec.fill as unknown[] | undefined;
-    expect(f === undefined || (Array.isArray(f) && f.length === 0)).toBe(true);
+    const rec = node as unknown as { fill?: Array<{ type?: string; color?: string }> };
+    expect(rec.fill).toBeDefined();
+    expect(rec.fill).toHaveLength(1);
+    expect(rec.fill?.[0]?.type).toBe('solid');
+    expect(rec.fill?.[0]?.color?.toLowerCase()).toBe('#00000000');
   });
 
-  it('drops fills whose color is "transparent"', () => {
+  it('replaces a sole "transparent" fill with explicit transparent hex', () => {
     const node = path({
-      fill: [{ type: 'solid', color: 'transparent' }] as unknown as PenNode['fill'],
+      fill: [{ type: 'solid', color: 'transparent' }],
     });
     normalizeStrokeFillSchema(node);
-    const rec = node as unknown as { fill?: unknown };
-    const f = rec.fill as unknown[] | undefined;
-    expect(f === undefined || (Array.isArray(f) && f.length === 0)).toBe(true);
+    const rec = node as unknown as { fill?: Array<{ type?: string; color?: string }> };
+    expect(rec.fill).toBeDefined();
+    expect(rec.fill).toHaveLength(1);
+    expect(rec.fill?.[0]?.color?.toLowerCase()).toBe('#00000000');
+  });
+
+  it('drops a "none" entry but keeps other legitimate entries in the same array', () => {
+    // Mixed array: one illegal, one legal. Just drop the illegal one and
+    // keep the real color — no transparent fallback needed.
+    const node = path({
+      fill: [
+        { type: 'solid', color: 'none' },
+        { type: 'solid', color: '#FF0000' },
+      ],
+    });
+    normalizeStrokeFillSchema(node);
+    const rec = node as unknown as { fill?: Array<{ color?: string }> };
+    expect(rec.fill).toHaveLength(1);
+    expect(rec.fill?.[0]?.color).toBe('#FF0000');
   });
 
   it('keeps legitimate hex fills alone', () => {
     const node = path({
-      fill: [{ type: 'solid', color: '#C4F82A' }] as unknown as PenNode['fill'],
+      fill: [{ type: 'solid', color: '#C4F82A' }],
     });
     normalizeStrokeFillSchema(node);
     const rec = node as unknown as { fill?: Array<{ color?: string }> };
@@ -136,7 +164,7 @@ describe('normalizeStrokeFillSchema — illegal fill color drops', () => {
     // The 8-digit hex IS a valid color string (alpha channel). Only the
     // CSS keywords "none" and "transparent" are the unsupported forms.
     const node = ellipse({
-      fill: [{ type: 'solid', color: '#00000000' }] as unknown as PenNode['fill'],
+      fill: [{ type: 'solid', color: '#00000000' }],
     });
     normalizeStrokeFillSchema(node);
     const rec = node as unknown as { fill?: Array<{ color?: string }> };
@@ -145,7 +173,7 @@ describe('normalizeStrokeFillSchema — illegal fill color drops', () => {
 
   it('also strips illegal colors from stroke.fill arrays', () => {
     const node = path({
-      stroke: { thickness: 2, fill: [{ type: 'solid', color: 'none' }] } as unknown as PenNode['stroke'],
+      stroke: { thickness: 2, fill: [{ type: 'solid', color: 'none' }] },
     });
     normalizeStrokeFillSchema(node);
     const rec = node as unknown as { stroke?: { thickness?: number; fill?: unknown[] } };
@@ -161,7 +189,7 @@ describe('normalizeStrokeFillSchema — recursion', () => {
   it('recurses into children', () => {
     const inner = ellipse({
       id: 'inner',
-      stroke: [{ thickness: 8, fill: validFill }] as unknown as PenNode['stroke'],
+      stroke: [{ thickness: 8, fill: validFill }],
     });
     const root = frame({ id: 'root', children: [inner] });
     normalizeStrokeFillSchema(root);
@@ -176,10 +204,10 @@ describe('normalizeStrokeFillSchema — recursion', () => {
       name: 'Steps Circle',
       width: 100,
       height: 100,
-      fill: [{ type: 'solid', color: '#00000000' }] as unknown as PenNode['fill'],
+      fill: [{ type: 'solid', color: '#00000000' }],
       stroke: [
         { thickness: 12, fill: [{ type: 'solid', color: '#C4F82A' }] },
-      ] as unknown as PenNode['stroke'],
+      ],
     });
     normalizeStrokeFillSchema(ring);
     const rec = ring as unknown as {
@@ -198,21 +226,24 @@ describe('normalizeStrokeFillSchema — recursion', () => {
       id: 'line',
       name: 'Chart Line',
       d: 'M0 50 L100 20',
-      fill: [{ type: 'solid', color: 'none' }] as unknown as PenNode['fill'],
-      stroke: [{ type: 'solid', color: '#C4F82A' }] as unknown as PenNode['stroke'],
+      fill: [{ type: 'solid', color: 'none' }],
+      stroke: [{ type: 'solid', color: '#C4F82A' }],
       strokeWidth: 2.5,
-    } as Partial<PenNode> & { strokeWidth?: number });
+    });
     normalizeStrokeFillSchema(line);
     const rec = line as unknown as {
-      fill?: unknown[];
+      fill?: Array<{ color?: string }>;
       stroke?: { thickness?: number; fill?: Array<{ color?: string }> };
       strokeWidth?: number;
     };
     expect(rec.stroke?.thickness).toBe(2.5);
     expect(rec.stroke?.fill?.[0]?.color).toBe('#C4F82A');
-    // "none" fill is gone
-    const f = rec.fill;
-    expect(f === undefined || (Array.isArray(f) && f.length === 0)).toBe(true);
+    // "none" fill was replaced with explicit transparent — NOT deleted.
+    // Deleting would let the canvas factory fall back to the default gray
+    // fill and the chart line's background would bleed through as a
+    // solid grey rectangle.
+    expect(rec.fill).toBeDefined();
+    expect(rec.fill?.[0]?.color?.toLowerCase()).toBe('#00000000');
     expect(rec.strokeWidth).toBeUndefined();
   });
 });

@@ -137,16 +137,37 @@ function stripIllegalColorsFromStrokeFill(node: PenNode): void {
 // Fill normalization
 // ---------------------------------------------------------------------------
 
+/**
+ * Explicit transparent hex. Used when we need to preserve a node's
+ * "no fill" intent but cannot leave the fill field absent (which would
+ * make canvas-object-factory fall back to an opaque default gray fill).
+ */
+const EXPLICIT_TRANSPARENT_FILL: SolidFill = {
+  type: 'solid',
+  color: '#00000000',
+};
+
 function normalizeNodeFill(node: PenNode): void {
   const rec = node as unknown as { fill?: unknown };
   const raw = rec.fill;
   if (!raw) return;
   if (!Array.isArray(raw)) return;
+  // Separate legal entries from CSS-keyword illegal entries.
   const cleaned = raw.filter((f) => isLegalFillEntry(f));
-  if (cleaned.length === 0) {
-    delete rec.fill;
-  } else {
+  if (cleaned.length > 0) {
     rec.fill = cleaned as PenFill[];
+    return;
+  }
+  // Every original entry was a CSS keyword ("none" / "transparent").
+  // The AI's intent was "no fill" — but DELETING the field would let
+  // canvas-object-factory fall back to its default opaque gray fill,
+  // which is the opposite of no-fill. Replace with an explicit
+  // transparent hex so the renderer honours the intent.
+  if (raw.length > 0) {
+    rec.fill = [EXPLICIT_TRANSPARENT_FILL] as PenFill[];
+  } else {
+    // Empty array in, empty array out — leave unchanged.
+    rec.fill = [] as PenFill[];
   }
 }
 
