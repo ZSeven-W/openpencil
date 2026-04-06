@@ -86,9 +86,15 @@ function CodePanelInner() {
   const children = useDocumentStore((s) => getActivePageChildren(s.document, activePageId));
   const variables = useDocumentStore((s) => s.document?.variables);
   const model = useAIStore((s) => s.model);
-  const provider = useAIStore(
-    (s) => s.modelGroups.find((g) => g.models.some((m) => m.value === s.model))?.provider,
-  );
+  // For builtin models, force provider to 'builtin' — modelGroups may report
+  // 'anthropic'/'openai' based on the upstream API type, but streamChat needs
+  // 'builtin' to route through streamViaBuiltin on the server. Mirrors
+  // ai-chat-handlers.ts behavior so the code panel uses the same model/provider
+  // as the chat panel.
+  const provider = useAIStore((s) => {
+    if (s.model.startsWith('builtin:')) return 'builtin';
+    return s.modelGroups.find((g) => g.models.some((m) => m.value === s.model))?.provider;
+  });
 
   const selectionKey = selectedIds.join(',');
 
