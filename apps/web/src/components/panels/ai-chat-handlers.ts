@@ -35,7 +35,7 @@ import type { AgentIdentity } from '@/services/ai/agent-identity';
 import { applyPostStreamingTreeHeuristics } from '@/services/ai/design-canvas-ops';
 import { trimChatHistory } from '@/services/ai/context-optimizer';
 import { AgentToolExecutor } from '@/services/ai/agent-tool-executor';
-import { getBuiltinLeadToolDefs, getDesignToolDefs } from '@/services/ai/agent-tools';
+import { getDesignToolDefs } from '@/services/ai/agent-tools';
 import type { ChatMessage as ChatMessageType } from '@/services/ai/ai-types';
 import type { ToolCallBlockData } from '@/components/panels/tool-call-block';
 import { CHAT_STREAM_THINKING_CONFIG } from '@/services/ai/ai-runtime-config';
