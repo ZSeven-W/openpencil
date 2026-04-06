@@ -18,6 +18,7 @@ import {
   normalizeTreeLayout,
   unwrapFakePhoneMockups,
   stripRedundantSectionFills,
+  normalizeStrokeFillSchema,
 } from '@/canvas/canvas-layout-engine';
 import { forcePageResync } from '@/canvas/canvas-sync-utils';
 import {
@@ -626,6 +627,12 @@ export function applyPostStreamingTreeHeuristics(rootNodeId: string): void {
   if (!rootNode || rootNode.type !== 'frame') return;
   if (!Array.isArray(rootNode.children) || rootNode.children.length === 0) return;
 
+  // Schema-level normalization runs first: unwrap array-wrapped strokes,
+  // migrate fill-shaped stroke objects to proper PenStroke, drop illegal
+  // "none"/"transparent" CSS keyword fills. Sub-agents break these
+  // constraints constantly and downstream passes assume valid shapes.
+  normalizeStrokeFillSchema(rootNode);
+
   // Earliest pass: strip fake phone mockup wrappers that weaker sub-agents
   // generate when they misread the prompt's phone mockup guidance. Must run
   // BEFORE resolveTreeRoles, otherwise the role resolver may write defaults
@@ -882,6 +889,10 @@ function sanitizeNodesForInsert(nodes: PenNode[], existingIds: Set<string>): Pen
   const cloned = nodes.map((n) => deepCloneNode(n));
 
   for (const node of cloned) {
+    // Schema normalization first so later passes see valid stroke/fill
+    // shapes (unwrap stroke arrays, migrate fill-shaped strokes, drop
+    // CSS-keyword fill colors).
+    normalizeStrokeFillSchema(node);
     // Strip fake phone mockup wrappers BEFORE role resolution so role
     // defaults aren't wasted on a wrapper we're about to discard.
     unwrapFakePhoneMockups(node);
@@ -912,6 +923,10 @@ function sanitizeNodesForUpsert(nodes: PenNode[]): PenNode[] {
   const cloned = nodes.map((n) => deepCloneNode(n));
 
   for (const node of cloned) {
+    // Schema normalization first so later passes see valid stroke/fill
+    // shapes (unwrap stroke arrays, migrate fill-shaped strokes, drop
+    // CSS-keyword fill colors).
+    normalizeStrokeFillSchema(node);
     // Strip fake phone mockup wrappers BEFORE role resolution so role
     // defaults aren't wasted on a wrapper we're about to discard.
     unwrapFakePhoneMockups(node);

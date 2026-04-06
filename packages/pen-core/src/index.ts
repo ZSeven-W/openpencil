@@ -59,6 +59,7 @@ export {
 export { normalizeTreeLayout } from './layout/normalize-tree.js';
 export { unwrapFakePhoneMockups } from './layout/unwrap-fake-phone-mockup.js';
 export { stripRedundantSectionFills } from './layout/strip-redundant-section-fills.js';
+export { normalizeStrokeFillSchema } from './normalize/normalize-stroke-fill-schema.js';
 
 // Text measurement
 export {

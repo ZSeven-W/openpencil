@@ -15,4 +15,5 @@ export {
   normalizeTreeLayout,
   unwrapFakePhoneMockups,
   stripRedundantSectionFills,
+  normalizeStrokeFillSchema,
 } from '@zseven-w/pen-core';
