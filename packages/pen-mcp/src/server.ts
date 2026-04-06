@@ -26,10 +26,10 @@ import {
   handleVariableToolCall,
 } from './routes/variable-routes';
 import {
-  EXPORT_TOOL_DEFINITIONS,
-  EXPORT_TOOL_NAMES,
-  handleExportToolCall,
-} from './routes/export-routes';
+  CODEGEN_TOOL_DEFINITIONS,
+  CODEGEN_TOOL_NAMES,
+  handleCodegenToolCall,
+} from './routes/codegen-routes';
 import {
   STYLE_GUIDE_TOOL_DEFINITIONS,
   STYLE_GUIDE_TOOL_NAMES,
@@ -50,7 +50,7 @@ const TOOL_DEFINITIONS = [
   ...NODE_TOOL_DEFINITIONS,
   ...DESIGN_TOOL_DEFINITIONS,
   ...VARIABLE_TOOL_DEFINITIONS,
-  ...EXPORT_TOOL_DEFINITIONS,
+  ...CODEGEN_TOOL_DEFINITIONS,
   ...STYLE_GUIDE_TOOL_DEFINITIONS,
   ...STYLE_OPS_TOOL_DEFINITIONS,
 ];
@@ -64,7 +64,7 @@ async function handleToolCall(name: string, args: Record<string, unknown> | unde
   if (NODE_TOOL_NAMES.has(name)) return handleNodeToolCall(name, a);
   if (DESIGN_TOOL_NAMES.has(name)) return handleDesignToolCall(name, a);
   if (VARIABLE_TOOL_NAMES.has(name)) return handleVariableToolCall(name, a);
-  if (EXPORT_TOOL_NAMES.has(name)) return handleExportToolCall(name, a);
+  if (CODEGEN_TOOL_NAMES.has(name)) return handleCodegenToolCall(name, a);
   if (STYLE_GUIDE_TOOL_NAMES.has(name)) return handleStyleGuideToolCall(name, a);
   if (STYLE_OPS_TOOL_NAMES.has(name)) return handleStyleOpsToolCall(name, a);
   throw new Error(`Unknown tool: ${name}`);
