@@ -4,9 +4,11 @@ import { render, screen, cleanup, waitFor } from '@testing-library/react';
 import { DesignEngineContext } from '../context';
 import { DesignCanvas } from '../components/design-canvas';
 
-// Mock via the resolved file path so vitest can intercept it regardless of
-// how the package sub-path export is resolved through symlinks.
-vi.mock('/Users/kayshen/Workspace/ZSeven-W/openpencil/packages/pen-engine/src/browser.ts', () => ({
+// Mock the browser entry that DesignCanvas imports from. Use the package
+// sub-path export (matches the source `import` statement), so the mock
+// resolves the same way under any checkout location — earlier the test
+// pinned an absolute /Users/... path which silently no-op'd in CI.
+vi.mock('@zseven-w/pen-engine/browser', () => ({
   attachCanvas: vi.fn(() =>
     Promise.resolve({
       render: vi.fn(),
