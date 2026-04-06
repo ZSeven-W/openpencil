@@ -3,7 +3,6 @@ import { useTranslation } from 'react-i18next';
 import { X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useDocumentStore } from '@/stores/document-store';
-import { downloadDocument } from '@/utils/file-operations';
 import { syncCanvasPositionsToStore } from '@/canvas/skia-engine-ref';
 
 interface SaveDialogProps {
@@ -40,16 +39,20 @@ export default function SaveDialog({ open, onClose }: SaveDialogProps) {
 
   if (!open) return null;
 
-  const handleSave = () => {
+  const handleSave = async () => {
     const trimmed = name.trim();
     if (!trimmed) return;
     // Force-sync all Fabric object positions to the store before serializing
     syncCanvasPositionsToStore();
-    const fileName = trimmed.endsWith('.op') ? trimmed : `${trimmed}.op`;
-    const doc = useDocumentStore.getState().document;
-    downloadDocument(doc, fileName);
-    useDocumentStore.setState({ fileName, isDirty: false });
-    onClose();
+    // Pass the typed name as an explicit suggestion. The store action handles
+    // dialog/picker, write, fileName/filePath mutation, isDirty=false, and the
+    // 'saved' emission — but ONLY on confirmed success. We do not pre-mutate
+    // store state; if save fails or the user cancels, store stays untouched
+    // and the dialog stays open so the user can retry or change the name.
+    const savedName = await useDocumentStore.getState().saveAs(trimmed);
+    if (savedName) {
+      onClose();
+    }
   };
 
   return (
