@@ -87,7 +87,7 @@ export default function FileMenu({
       <MenuItem
         icon={Download}
         label={t('fileMenu.exportImage')}
-        shortcut={`${mod}\u21E7E`}
+        shortcut={`${mod}\u21E7P`}
         onClick={onExport}
       />
 

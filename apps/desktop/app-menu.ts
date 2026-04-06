@@ -81,11 +81,16 @@ export function buildAppMenu(): void {
         { type: 'separator' },
         {
           label: 'Export Image\u2026',
-          // Display the shortcut hint in the menu, but let the renderer's
-          // window keydown listener handle the keystroke. Registering it as
-          // an OS-level accelerator routes through IPC, which has been seen
-          // to lose the message under HMR / hot-reload.
-          accelerator: 'CmdOrCtrl+Shift+E',
+          // Use Cmd+Shift+P (P = Print/PDF/Picture). Cmd+Shift+E was being
+          // swallowed at the OS level by Chinese IMEs / system tools on
+          // macOS before reaching the renderer.
+          //
+          // `registerAccelerator: false` keeps the hint visible in the menu
+          // but tells Electron NOT to register it with the OS — the
+          // keystroke is handled by the renderer's capture-phase document
+          // keydown listener in editor-layout.tsx, which avoids HMR/IPC
+          // fragility.
+          accelerator: 'CmdOrCtrl+Shift+P',
           registerAccelerator: false,
           click: () => sendMenuAction('export-image'),
         },

@@ -133,21 +133,26 @@ export default function EditorLayout() {
     return () => window.removeEventListener('keydown', handler);
   }, [toggleMinimize]);
 
-  // Cmd/Ctrl+Shift+E: open the global export dialog.
+  // Cmd/Ctrl+Shift+P: open the global export dialog.
   //
-  // Registered as a *capture-phase document listener* — separate from the
-  // other shortcuts above — so it fires earliest in the event chain, before
-  // any bubble-phase listener (use-edit-shortcuts, use-tool-shortcuts, etc.)
-  // can interfere. Uses `e.code === 'KeyE'` for keyboard-layout independence
-  // (a Pinyin/IME state can change `e.key` but not `e.code`). The action is
+  // We previously used Cmd+Shift+E, but that combo is silently swallowed
+  // by some macOS Chinese IMEs / system tools before the keystroke ever
+  // reaches the renderer (no JS handler fires, no logs appear). P (for
+  // "Print/PDF/Picture") is unused everywhere else in the app and is not
+  // intercepted by common IMEs.
+  //
+  // Registered as a *capture-phase document listener* so it fires earliest
+  // in the event chain, before any bubble-phase listener can interfere.
+  // Uses `e.code === 'KeyP'` for keyboard-layout independence (an IME state
+  // can change `e.key` but not `e.code`). The action is
   // `setExportDialogOpen(true)` (idempotent) rather than a toggle, so even
-  // if multiple paths fire (web listener + Electron menu IPC) the dialog
-  // still ends up open instead of cancelling itself out.
+  // if multiple paths fire the dialog still ends up open instead of
+  // cancelling itself out.
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       const isMod = e.metaKey || e.ctrlKey;
       if (!isMod || !e.shiftKey) return;
-      if (e.code !== 'KeyE' && e.key.toLowerCase() !== 'e') return;
+      if (e.code !== 'KeyP' && e.key.toLowerCase() !== 'p') return;
       e.preventDefault();
       e.stopImmediatePropagation();
       useCanvasStore.getState().setExportDialogOpen(true);
