@@ -88,11 +88,7 @@ export function mergeDocuments(input: MergeInput): MergeResult {
   const oursIdx = indexNodesById(ours);
   const theirsIdx = indexNodesById(theirs);
 
-  const allIds = new Set<string>([
-    ...baseIdx.keys(),
-    ...oursIdx.keys(),
-    ...theirsIdx.keys(),
-  ]);
+  const allIds = new Set<string>([...baseIdx.keys(), ...oursIdx.keys(), ...theirsIdx.keys()]);
 
   const decisions = new Map<string, NodeDecision>();
   const nodeConflicts: NodeConflict[] = [];
@@ -107,14 +103,220 @@ export function mergeDocuments(input: MergeInput): MergeResult {
   }
 
   const merged = rebuildDocument(ours, decisions);
+  const docFieldConflicts: DocFieldConflict[] = [];
 
-  // TODO Task 10: merge doc-level fields
+  // Merge doc-level scalar fields (name, version)
+  mergeDocScalarField(base, ours, theirs, 'name', merged, docFieldConflicts);
+  mergeDocScalarField(base, ours, theirs, 'version', merged, docFieldConflicts);
+
+  // Merge variables (object map)
+  merged.variables = mergeRecord(
+    base.variables,
+    ours.variables,
+    theirs.variables,
+    'variables',
+    docFieldConflicts,
+  );
+  if (merged.variables && Object.keys(merged.variables).length === 0) {
+    delete merged.variables;
+  }
+
+  // Merge themes (object map of string[])
+  merged.themes = mergeRecord(base.themes, ours.themes, theirs.themes, 'themes', docFieldConflicts);
+  if (merged.themes && Object.keys(merged.themes).length === 0) {
+    delete merged.themes;
+  }
+
+  // Merge pages order (only if both sides have pages)
+  if (base.pages && ours.pages && theirs.pages) {
+    const reorderConflict = detectPagesOrderConflict(base.pages, ours.pages, theirs.pages);
+    if (reorderConflict) {
+      docFieldConflicts.push(reorderConflict);
+    }
+  }
 
   return {
     merged,
     nodeConflicts,
-    docFieldConflicts: [],
+    docFieldConflicts,
   };
+}
+
+/**
+ * 3-way merge for a top-level scalar string field on PenDocument (name/version).
+ */
+function mergeDocScalarField(
+  base: PenDocument,
+  ours: PenDocument,
+  theirs: PenDocument,
+  field: 'name' | 'version',
+  merged: PenDocument,
+  conflicts: DocFieldConflict[],
+): void {
+  const bv = base[field];
+  const ov = ours[field];
+  const tv = theirs[field];
+  if (jsonEqual(ov, bv) && jsonEqual(tv, bv)) {
+    if (bv !== undefined) merged[field] = bv as string;
+    return;
+  }
+  if (jsonEqual(ov, bv)) {
+    if (tv !== undefined) merged[field] = tv as string;
+    return;
+  }
+  if (jsonEqual(tv, bv)) {
+    if (ov !== undefined) merged[field] = ov as string;
+    return;
+  }
+  if (jsonEqual(ov, tv)) {
+    if (ov !== undefined) merged[field] = ov as string;
+    return;
+  }
+  // Both changed differently — conflict; take ours as placeholder.
+  if (ov !== undefined) merged[field] = ov as string;
+  conflicts.push({
+    field,
+    path: field,
+    base: bv,
+    ours: ov,
+    theirs: tv,
+  });
+}
+
+/**
+ * 3-way merge for an object record (variables, themes). Walks every key from
+ * the union and applies the per-key merge rules. Returns the merged record.
+ */
+function mergeRecord<V>(
+  base: Record<string, V> | undefined,
+  ours: Record<string, V> | undefined,
+  theirs: Record<string, V> | undefined,
+  fieldName: 'variables' | 'themes',
+  conflicts: DocFieldConflict[],
+): Record<string, V> | undefined {
+  if (!base && !ours && !theirs) return undefined;
+  const b = base ?? {};
+  const o = ours ?? {};
+  const t = theirs ?? {};
+  const allKeys = new Set<string>([...Object.keys(b), ...Object.keys(o), ...Object.keys(t)]);
+  const merged: Record<string, V> = {};
+  for (const key of allKeys) {
+    const bv = b[key];
+    const ov = o[key];
+    const tv = t[key];
+    const inBase = key in b;
+    const inOurs = key in o;
+    const inTheirs = key in t;
+
+    // Use the same 7-grid logic as nodes.
+    if (inBase && inOurs && inTheirs) {
+      // ✓✓✓
+      if (jsonEqual(ov, bv) && jsonEqual(tv, bv)) {
+        merged[key] = bv;
+      } else if (jsonEqual(ov, bv)) {
+        merged[key] = tv;
+      } else if (jsonEqual(tv, bv)) {
+        merged[key] = ov;
+      } else if (jsonEqual(ov, tv)) {
+        merged[key] = ov;
+      } else {
+        merged[key] = ov;
+        conflicts.push({
+          field: fieldName,
+          path: `${fieldName}.${key}`,
+          base: bv,
+          ours: ov,
+          theirs: tv,
+        });
+      }
+    } else if (inBase && inOurs && !inTheirs) {
+      // ✓✓✗ — theirs deleted
+      if (jsonEqual(ov, bv)) {
+        // ours unchanged → delete
+      } else {
+        // ours modified → conflict; take ours
+        merged[key] = ov;
+        conflicts.push({
+          field: fieldName,
+          path: `${fieldName}.${key}`,
+          base: bv,
+          ours: ov,
+          theirs: undefined,
+        });
+      }
+    } else if (inBase && !inOurs && inTheirs) {
+      // ✓✗✓ — ours deleted
+      if (jsonEqual(tv, bv)) {
+        // theirs unchanged → delete
+      } else {
+        // theirs modified → conflict; take theirs
+        merged[key] = tv;
+        conflicts.push({
+          field: fieldName,
+          path: `${fieldName}.${key}`,
+          base: bv,
+          ours: undefined,
+          theirs: tv,
+        });
+      }
+    } else if (inBase && !inOurs && !inTheirs) {
+      // ✓✗✗ — both deleted
+    } else if (!inBase && inOurs && inTheirs) {
+      // ✗✓✓ — both added
+      if (jsonEqual(ov, tv)) {
+        merged[key] = ov;
+      } else {
+        merged[key] = ov;
+        conflicts.push({
+          field: fieldName,
+          path: `${fieldName}.${key}`,
+          base: undefined,
+          ours: ov,
+          theirs: tv,
+        });
+      }
+    } else if (!inBase && inOurs && !inTheirs) {
+      merged[key] = ov;
+    } else if (!inBase && !inOurs && inTheirs) {
+      merged[key] = tv;
+    }
+  }
+  return merged;
+}
+
+/**
+ * Detect a `pages-order` conflict. Returns a DocFieldConflict if both sides
+ * reordered pages differently from base; otherwise returns null. The merge
+ * leaves the pages in ours' order (the rebuildDocument step already did this).
+ */
+function detectPagesOrderConflict(
+  basePages: PenDocument['pages'],
+  oursPages: PenDocument['pages'],
+  theirsPages: PenDocument['pages'],
+): DocFieldConflict | null {
+  if (!basePages || !oursPages || !theirsPages) return null;
+  const baseOrder = basePages.map((p) => p.id);
+  const oursOrder = oursPages.map((p) => p.id);
+  const theirsOrder = theirsPages.map((p) => p.id);
+  const oursReordered = !sequenceEqual(baseOrder, oursOrder);
+  const theirsReordered = !sequenceEqual(baseOrder, theirsOrder);
+  if (!oursReordered || !theirsReordered) return null;
+  if (sequenceEqual(oursOrder, theirsOrder)) return null;
+  return {
+    field: 'pages-order',
+    path: 'pages-order',
+    base: baseOrder,
+    ours: oursOrder,
+    theirs: theirsOrder,
+  };
+}
+
+function sequenceEqual(a: string[], b: string[]): boolean {
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) {
+    if (a[i] !== b[i]) return false;
+  }
+  return true;
 }
 
 /**
@@ -132,10 +334,7 @@ export function mergeDocuments(input: MergeInput): MergeResult {
  *   3. Within a parent, sort by `index` ascending; ties broken by id for
  *      determinism.
  */
-function rebuildDocument(
-  scaffold: PenDocument,
-  decisions: Map<string, NodeDecision>,
-): PenDocument {
+function rebuildDocument(scaffold: PenDocument, decisions: Map<string, NodeDecision>): PenDocument {
   // Group by parent for fast child lookup.
   const byParent = new Map<string, NodeDecision[]>();
   for (const decision of decisions.values()) {
