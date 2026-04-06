@@ -9,7 +9,6 @@ import { normalizePenDocument } from '@/utils/normalize-pen-file';
 import { addRecentFile, clearRecentFiles } from '@/utils/recent-files';
 import {
   supportsFileSystemAccess,
-  writeToFilePath,
   openDocumentFS,
   openDocument,
 } from '@/utils/file-operations';
@@ -21,32 +20,15 @@ async function confirmUnsaved(): Promise<boolean> {
   const result = await showDialog(fileName);
   if (result === 'cancel') return false;
   if (result === 'save') {
-    // Trigger save before proceeding
     try {
       syncCanvasPositionsToStore();
-    } catch { /* continue */ }
-    const api = window.electronAPI;
-    if (api) {
-      const store = useDocumentStore.getState();
-      const { document: doc, fileName: fn, filePath } = store;
-      const isOpFile = fn ? /\.op$/i.test(fn) : false;
-      const suggestedName = fn ? fn.replace(/\.(pen|op|json)$/i, '') + '.op' : 'untitled.op';
-      if (filePath && isOpFile) {
-        await writeToFilePath(filePath, doc);
-        store.markClean();
-      } else {
-        const savedPath = await api.saveFile(JSON.stringify(doc), suggestedName);
-        if (savedPath) {
-          useDocumentStore.setState({
-            fileName: savedPath.split(/[/\\]/).pop() || suggestedName,
-            filePath: savedPath,
-            fileHandle: null,
-            isDirty: false,
-          });
-        } else {
-          return false; // User cancelled save dialog
-        }
-      }
+    } catch {
+      /* continue */
+    }
+    const savedName = await useDocumentStore.getState().save();
+    if (!savedName) {
+      // user cancelled the save dialog or save failed — abort the close
+      return false;
     }
   }
   return true;
@@ -156,35 +138,14 @@ export function useElectronMenu() {
           } catch {
             /* continue */
           }
-          const store = useDocumentStore.getState();
-          const { document: doc, fileName, filePath } = store;
-          const isOpFile = fileName ? /\.op$/i.test(fileName) : false;
-          const suggestedName = fileName
-            ? fileName.replace(/\.(pen|op|json)$/i, '') + '.op'
-            : 'untitled.op';
-
-          const doSave = async () => {
-            if (filePath && isOpFile) {
-              await writeToFilePath(filePath, doc);
-              store.markClean();
-              if (store.fileName) addRecentFile({ fileName: store.fileName, filePath });
-              if (closeAfterSave) api.confirmClose();
-              return;
-            }
-            const savedPath = await api.saveFile(JSON.stringify(doc), suggestedName);
-            if (savedPath) {
-              const savedName = savedPath.split(/[/\\]/).pop() || suggestedName;
-              useDocumentStore.setState({
-                fileName: savedName,
-                filePath: savedPath,
-                fileHandle: null,
-                isDirty: false,
-              });
-              addRecentFile({ fileName: savedName, filePath: savedPath });
+          (async () => {
+            const savedName = await useDocumentStore.getState().save();
+            if (savedName) {
+              const filePath = useDocumentStore.getState().filePath;
+              addRecentFile({ fileName: savedName, filePath });
               if (closeAfterSave) api.confirmClose();
             }
-          };
-          doSave().catch((err) => console.error('[Save] Failed:', err));
+          })().catch((err) => console.error('[Save] Failed:', err));
           break;
         }
 
@@ -194,25 +155,13 @@ export function useElectronMenu() {
           } catch {
             /* continue */
           }
-          const store = useDocumentStore.getState();
-          const suggestedName = store.fileName
-            ? store.fileName.replace(/\.(pen|op|json)$/i, '') + '.op'
-            : 'untitled.op';
-          api
-            .saveFile(JSON.stringify(store.document), suggestedName)
-            .then((savedPath) => {
-              if (savedPath) {
-                const savedName = savedPath.split(/[/\\]/).pop() || suggestedName;
-                useDocumentStore.setState({
-                  fileName: savedName,
-                  filePath: savedPath,
-                  fileHandle: null,
-                  isDirty: false,
-                });
-                addRecentFile({ fileName: savedName, filePath: savedPath });
-              }
-            })
-            .catch((err) => console.error('[SaveAs] Failed:', err));
+          (async () => {
+            const savedName = await useDocumentStore.getState().saveAs();
+            if (savedName) {
+              const filePath = useDocumentStore.getState().filePath;
+              addRecentFile({ fileName: savedName, filePath });
+            }
+          })().catch((err) => console.error('[SaveAs] Failed:', err));
           break;
         }
 
