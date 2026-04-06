@@ -482,8 +482,36 @@ export function hexLuminance(hex: string): number {
  * Check if a node has a non-empty fill array.
  * Does NOT distinguish AI-explicit from role-default fills.
  */
+/**
+ * Returns true when a node has a VISIBLE fill.
+ *
+ * The subtle bit is the "visible" qualifier: an explicit-transparent hex
+ * (`#00000000`), a fully-transparent 8-digit hex (any `#RRGGBB00`), or a
+ * CSS keyword (`"transparent"` / `"none"`) all satisfy the naive
+ * `fill.length > 0` test but draw nothing. Downstream heuristics like
+ * `fixButtonForegroundContrast` ask this function "does this path icon
+ * already have a color?" expecting a truthful answer. A normalized
+ * transparent fill (the placeholder the stroke/fill schema normalizer
+ * leaves on hollow shapes to stop the renderer from falling back to
+ * the default gray) must be reported as "no visible fill" so the
+ * contrast pass can paint in a foreground color.
+ */
 export function hasFill(node: PenNode): boolean {
-  return 'fill' in node && Array.isArray(node.fill) && node.fill.length > 0;
+  if (!('fill' in node) || !Array.isArray(node.fill) || node.fill.length === 0) return false;
+  const first = node.fill[0];
+  if (!first) return false;
+  if (first.type === 'solid' && isInvisibleColor(first.color)) return false;
+  return true;
+}
+
+function isInvisibleColor(color: unknown): boolean {
+  if (typeof color !== 'string') return false;
+  const c = color.trim().toLowerCase();
+  if (c === 'transparent' || c === 'none') return true;
+  // 8-digit hex with 00 alpha (#RRGGBB00). Valid hex color literal, but
+  // it draws nothing.
+  if (/^#[0-9a-f]{6}00$/i.test(c)) return true;
+  return false;
 }
 
 /**

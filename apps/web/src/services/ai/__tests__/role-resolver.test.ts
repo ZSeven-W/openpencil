@@ -65,6 +65,107 @@ describe('hasFill', () => {
     } as PenNode;
     expect(hasFill(node)).toBe(true);
   });
+
+  // Regression: button foreground contrast relies on hasFill to detect
+  // "no visible fill here, please supply one". A path icon whose fill
+  // was normalized to the explicit-transparent hex #00000000 (to
+  // preserve hollow-shape intent on activity rings / chart lines) must
+  // still be reported as "no fill" so the contrast pass can paint it.
+  it('returns false for 8-digit transparent hex (#00000000)', () => {
+    const node = {
+      id: 'p', type: 'path', x: 0, y: 0, width: 24, height: 24,
+      fill: [{ type: 'solid', color: '#00000000' }],
+    } as PenNode;
+    expect(hasFill(node)).toBe(false);
+  });
+
+  it('returns false for any 8-digit hex with 00 alpha', () => {
+    const node = {
+      id: 'p', type: 'path', x: 0, y: 0, width: 24, height: 24,
+      fill: [{ type: 'solid', color: '#FF00FF00' }],
+    } as PenNode;
+    expect(hasFill(node)).toBe(false);
+  });
+
+  it('returns false for CSS keyword "transparent"', () => {
+    const node = {
+      id: 'p', type: 'path', x: 0, y: 0, width: 24, height: 24,
+      fill: [{ type: 'solid', color: 'transparent' }],
+    } as PenNode;
+    expect(hasFill(node)).toBe(false);
+  });
+
+  it('returns false for CSS keyword "none"', () => {
+    const node = {
+      id: 'p', type: 'path', x: 0, y: 0, width: 24, height: 24,
+      fill: [{ type: 'solid', color: 'none' }],
+    } as PenNode;
+    expect(hasFill(node)).toBe(false);
+  });
+
+  it('returns true for a partially-transparent 8-digit hex (non-zero alpha)', () => {
+    const node = {
+      id: 'n', type: 'frame', x: 0, y: 0, width: 100, height: 100,
+      fill: [{ type: 'solid', color: '#FF000080' }],
+    } as PenNode;
+    expect(hasFill(node)).toBe(true);
+  });
+});
+
+describe('resolveTreePostPass — button foreground contrast with transparent-hex path icon', () => {
+  // The real failure the normalizeStrokeFillSchema fix had to address:
+  // an AI-generated stroke-style line icon inside a button, where the
+  // AI wrote `fill: [{color: "none"}]` and the normalizer substituted
+  // `#00000000` to preserve hollow intent. The button contrast pass
+  // must still see "no visible fill" and supply a visible stroke color.
+  it('paints stroke on a path icon whose fill is 8-digit transparent hex', () => {
+    const button: PenNode = {
+      id: 'btn',
+      type: 'frame',
+      name: 'Icon Button',
+      x: 0, y: 0, width: 44, height: 44,
+      role: 'icon-button',
+      fill: [{ type: 'solid', color: '#1E293B' }],
+      children: [
+        {
+          id: 'p', type: 'path', name: 'Arrow', x: 0, y: 0, width: 24, height: 24,
+          fill: [{ type: 'solid', color: '#00000000' }],
+          stroke: { thickness: 2 },
+        } as PenNode,
+      ],
+    } as PenNode;
+    const root: PenNode = {
+      id: 'root', type: 'frame', name: 'Root', x: 0, y: 0, width: 375, height: 812,
+      children: [button],
+    } as PenNode;
+    resolveTreePostPass(root, 375);
+    const p = (root as any).children[0].children[0];
+    expect(p.stroke.fill).toEqual([{ type: 'solid', color: '#FFFFFF' }]);
+  });
+
+  it('paints fill on a path icon whose only fill is transparent and has no stroke', () => {
+    const button: PenNode = {
+      id: 'btn',
+      type: 'frame',
+      name: 'Icon Button',
+      x: 0, y: 0, width: 44, height: 44,
+      role: 'icon-button',
+      fill: [{ type: 'solid', color: '#2563EB' }],
+      children: [
+        {
+          id: 'p', type: 'path', name: 'Star', x: 0, y: 0, width: 24, height: 24,
+          fill: [{ type: 'solid', color: '#00000000' }],
+        } as PenNode,
+      ],
+    } as PenNode;
+    const root: PenNode = {
+      id: 'root', type: 'frame', name: 'Root', x: 0, y: 0, width: 375, height: 812,
+      children: [button],
+    } as PenNode;
+    resolveTreePostPass(root, 375);
+    const p = (root as any).children[0].children[0];
+    expect(p.fill).toEqual([{ type: 'solid', color: '#FFFFFF' }]);
+  });
 });
 
 describe('resolveTreePostPass — button foreground contrast', () => {
