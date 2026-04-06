@@ -106,12 +106,53 @@ const CONTAINER_SUFFIXES = /\b(group|row|container|wrapper|section|list|area|sta
 /**
  * Words that, when combined with a role-like word, turn the node into a
  * PART of that role rather than an instance of it. "Card Header",
- * "Card Body", "Card Footer", "Button Group", "Nav Link Wrapper" are all
- * structural pieces inside a parent component — they must NOT inherit the
- * parent component's role defaults (white fill, shadow, rounded corners…).
+ * "Card Body", "Card Footer" are all structural pieces inside a parent
+ * card — they must NOT inherit the card's role defaults (white fill,
+ * shadow, rounded corners…).
+ *
+ * Stored as a Set (not a regex) because the check is "is the first word
+ * after the role keyword exactly one of these" — position-sensitive and
+ * word-scoped, not a substring scan. A substring scan would wrongly
+ * reject prepositional variants like "Card with Icon" or "Button with
+ * Image", where the part word is separated from the role word by a
+ * modifier ("with") and the whole name describes a variant of the role
+ * rather than an internal piece of it.
  */
-const ROLE_PART_WORDS =
-  /\b(header|body|footer|title|subtitle|content|wrapper|container|area|label|value|caption|description|image|media|icon|action|actions|meta|row|column|stack|grid)\b/i;
+const ROLE_PART_WORDS = new Set([
+  'header',
+  'body',
+  'footer',
+  'title',
+  'subtitle',
+  'content',
+  'wrapper',
+  'container',
+  'area',
+  'label',
+  'value',
+  'caption',
+  'description',
+  'image',
+  'media',
+  'icon',
+  'action',
+  'actions',
+  'meta',
+  'row',
+  'column',
+  'stack',
+  'grid',
+]);
+
+/**
+ * Extract the first word-like token from a string, skipping any leading
+ * whitespace, punctuation, or separators. Returns null when the string
+ * has no word characters. Used by the suffix-scan guard below.
+ */
+function firstWordToken(s: string): string | null {
+  const m = /\w+/.exec(s);
+  return m ? m[0] : null;
+}
 
 /** Substring patterns → role (checked in order, first match wins). */
 const NAME_PATTERN_MAP: [RegExp, string, boolean?][] = [
@@ -155,14 +196,17 @@ function inferRoleFromName(node: PenNode): string | undefined {
       // Skip container-like names (e.g. "Button Group", "Buttons Row")
       if (CONTAINER_SUFFIXES.test(lower)) continue;
       // Skip "Card Header", "Card Body", "Button Label", etc. — when the
-      // part word appears AFTER the role word, the node is a PIECE of
-      // the role, not the role itself. Crucially, we only look at the
-      // text AFTER the match: "Icon Button" must still become 'button',
-      // because there the part word ("icon") appears BEFORE the role
-      // word and is just a modifier ("a button of the icon variety"),
-      // not an internal piece of the button.
+      // FIRST word after the role keyword is a part word, the node is a
+      // PIECE of the role. Two positional guards matter here:
+      //   1. We look at the text AFTER the match, so "Icon Button"
+      //      (part word before role) is correctly kept as button.
+      //   2. We only check the FIRST word in that suffix, so
+      //      "Card with Icon" / "Button with Image" (prepositional
+      //      variants: "a card that HAS an icon") keep their role —
+      //      the first word is "with", not a part word.
       const afterMatch = lower.slice(match.index + match[0].length);
-      if (ROLE_PART_WORDS.test(afterMatch)) continue;
+      const nextWord = firstWordToken(afterMatch);
+      if (nextWord && ROLE_PART_WORDS.has(nextWord)) continue;
     }
     return role;
   }
