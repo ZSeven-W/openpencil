@@ -36,6 +36,25 @@ const frame = (props: NodeProps & { children?: PenNode[] } = {}): PenNode =>
     ...props,
   }) as unknown as PenNode;
 
+const text = (props: NodeProps = {}): PenNode =>
+  ({
+    id: 't',
+    type: 'text',
+    content: 'Hello',
+    fontSize: 16,
+    ...props,
+  }) as unknown as PenNode;
+
+const iconFont = (props: NodeProps = {}): PenNode =>
+  ({
+    id: 'i',
+    type: 'icon_font',
+    iconFontName: 'heart',
+    width: 16,
+    height: 16,
+    ...props,
+  }) as unknown as PenNode;
+
 const validFill = [{ type: 'solid' as const, color: '#C4F82A' }];
 
 describe('normalizeStrokeFillSchema — stroke array unwrap', () => {
@@ -169,6 +188,77 @@ describe('normalizeStrokeFillSchema — illegal fill color replacement', () => {
     normalizeStrokeFillSchema(node);
     const rec = node as unknown as { fill?: Array<{ color?: string }> };
     expect(rec.fill?.[0]?.color).toBe('#00000000');
+  });
+
+  it('DELETES text node fill when all entries are CSS keywords', () => {
+    // text.fill is the foreground color, not a shape background.
+    // "none"/"transparent" on a text node would hide the text entirely —
+    // almost certainly a mistake. Delete the field so downstream layers
+    // (role defaults, button contrast heuristic) can fill in a visible
+    // color. Replacing with #00000000 would freeze the text invisible.
+    const node = text({
+      fill: [{ type: 'solid', color: 'none' }],
+    });
+    normalizeStrokeFillSchema(node);
+    const rec = node as unknown as { fill?: unknown };
+    expect(rec.fill).toBeUndefined();
+  });
+
+  it('DELETES text node fill for "transparent" too', () => {
+    const node = text({
+      fill: [{ type: 'solid', color: 'transparent' }],
+    });
+    normalizeStrokeFillSchema(node);
+    const rec = node as unknown as { fill?: unknown };
+    expect(rec.fill).toBeUndefined();
+  });
+
+  it('DELETES icon_font fill when all entries are CSS keywords', () => {
+    // Same reasoning: icon_font.fill is the foreground color.
+    const node = iconFont({
+      fill: [{ type: 'solid', color: 'none' }],
+    });
+    normalizeStrokeFillSchema(node);
+    const rec = node as unknown as { fill?: unknown };
+    expect(rec.fill).toBeUndefined();
+  });
+
+  it('still keeps a legitimate text fill unchanged', () => {
+    const node = text({
+      fill: [{ type: 'solid', color: '#FFFFFF' }],
+    });
+    normalizeStrokeFillSchema(node);
+    const rec = node as unknown as { fill?: Array<{ color?: string }> };
+    expect(rec.fill?.[0]?.color).toBe('#FFFFFF');
+  });
+
+  it('still drops illegal entries from text but preserves legal siblings', () => {
+    const node = text({
+      fill: [
+        { type: 'solid', color: 'none' },
+        { type: 'solid', color: '#00FF00' },
+      ],
+    });
+    normalizeStrokeFillSchema(node);
+    const rec = node as unknown as { fill?: Array<{ color?: string }> };
+    expect(rec.fill).toHaveLength(1);
+    expect(rec.fill?.[0]?.color).toBe('#00FF00');
+  });
+
+  it('keeps the transparent-hex replacement for shape fills (frame / ellipse / path)', () => {
+    // Sanity guard: the shape-vs-foreground split must not regress the
+    // shape branch. Frames, ellipses, and paths still get the explicit
+    // #00000000 when an AI writes "none".
+    for (const node of [
+      frame({ fill: [{ type: 'solid', color: 'none' }] }),
+      ellipse({ fill: [{ type: 'solid', color: 'none' }] }),
+      path({ fill: [{ type: 'solid', color: 'transparent' }] }),
+    ]) {
+      normalizeStrokeFillSchema(node);
+      const rec = node as unknown as { fill?: Array<{ color?: string }> };
+      expect(rec.fill).toHaveLength(1);
+      expect(rec.fill?.[0]?.color?.toLowerCase()).toBe('#00000000');
+    }
   });
 
   it('also strips illegal colors from stroke.fill arrays', () => {

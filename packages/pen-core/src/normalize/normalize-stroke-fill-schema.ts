@@ -138,14 +138,27 @@ function stripIllegalColorsFromStrokeFill(node: PenNode): void {
 // ---------------------------------------------------------------------------
 
 /**
- * Explicit transparent hex. Used when we need to preserve a node's
- * "no fill" intent but cannot leave the fill field absent (which would
- * make canvas-object-factory fall back to an opaque default gray fill).
+ * Explicit transparent hex. Used for SHAPE fills (frame, rectangle,
+ * ellipse, path, group…) where "no fill" really means a hollow shape
+ * that should let the background show through. We write the 8-digit
+ * transparent hex so canvas-object-factory doesn't fall back to an
+ * opaque default gray fill.
  */
 const EXPLICIT_TRANSPARENT_FILL: SolidFill = {
   type: 'solid',
   color: '#00000000',
 };
+
+/**
+ * Node types whose `fill` represents a FOREGROUND color (text color,
+ * icon color) rather than a shape's background. On these types an
+ * illegal "none" / "transparent" fill is almost certainly a mistake:
+ * the user meant "default text color", not "invisible text". Freezing
+ * them to #00000000 would hide the content entirely, so we delete the
+ * field and let downstream layers (role defaults, button contrast,
+ * style inheritance) supply a visible color.
+ */
+const FOREGROUND_NODE_TYPES = new Set<string>(['text', 'icon_font']);
 
 function normalizeNodeFill(node: PenNode): void {
   const rec = node as unknown as { fill?: unknown };
@@ -158,16 +171,28 @@ function normalizeNodeFill(node: PenNode): void {
     rec.fill = cleaned as PenFill[];
     return;
   }
-  // Every original entry was a CSS keyword ("none" / "transparent").
-  // The AI's intent was "no fill" — but DELETING the field would let
-  // canvas-object-factory fall back to its default opaque gray fill,
-  // which is the opposite of no-fill. Replace with an explicit
-  // transparent hex so the renderer honours the intent.
-  if (raw.length > 0) {
-    rec.fill = [EXPLICIT_TRANSPARENT_FILL] as PenFill[];
-  } else {
-    // Empty array in, empty array out — leave unchanged.
+  // Empty in, empty out — leave unchanged.
+  if (raw.length === 0) {
     rec.fill = [] as PenFill[];
+    return;
+  }
+  // Every original entry was a CSS keyword ("none" / "transparent").
+  // The correct repair depends on whether `fill` is a background or a
+  // foreground color on this node type:
+  //
+  //   SHAPE types (frame, rectangle, ellipse, path, group, …)
+  //     fill = shape background. "no fill" means hollow. Keep the
+  //     explicit transparent hex so canvas doesn't fall back to the
+  //     default gray fill.
+  //
+  //   FOREGROUND types (text, icon_font)
+  //     fill = text/icon color. "no fill" would hide the content —
+  //     almost certainly not what the AI meant. Delete the field so
+  //     downstream layers can populate a visible color.
+  if (FOREGROUND_NODE_TYPES.has(node.type)) {
+    delete rec.fill;
+  } else {
+    rec.fill = [EXPLICIT_TRANSPARENT_FILL] as PenFill[];
   }
 }
 
