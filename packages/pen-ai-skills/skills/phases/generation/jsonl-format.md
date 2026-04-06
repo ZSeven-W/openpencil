@@ -31,7 +31,6 @@ RULES:
 - Buttons: frame(padding=[12,24], justifyContent="center") > text. Icon+text: frame(layout="horizontal", gap=8, alignItems="center", padding=[8,16]).
 - Card rows: ALL cards width="fill_container" + height="fill_container".
 - FORMS: ALL inputs AND button use width="fill_container". gap=16-20.
-- Phone mockup: ONE frame, w=260-300, h=520-580, cornerRadius=32, solid fill + 1px stroke.
 - Z-order: Earlier siblings render on top. Overlay elements (badges, indicators, floating buttons) MUST come BEFORE the content they overlap.
 
 FORMAT: \_parent (null=root, else parent-id). Parent before children.

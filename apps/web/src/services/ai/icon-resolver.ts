@@ -32,19 +32,67 @@ export { applyNoEmojiIconHeuristic } from './icon-emoji-heuristics';
 // ---------------------------------------------------------------------------
 
 /**
+ * Reserved words that mark a path node as explicitly an icon/logo/symbol.
+ * The `path` type is also used for legitimate custom geometry (chart
+ * lines, progress arcs, waveforms, sparklines, illustrations), so we
+ * MUST NOT blindly run icon resolution on every path node — that would
+ * clobber the real geometry with a circle/bar-chart/arrow icon path.
+ *
+ * Only names that clearly signal "this is an icon" are candidates —
+ * tested by splitting the name into words on camelCase, spaces, dashes
+ * and underscores, then checking for an exact word hit.
+ */
+const ICON_MARKER_WORDS = new Set(['icon', 'logo', 'symbol', 'glyph']);
+
+/**
+ * Check whether a path node's name carries an explicit icon marker.
+ * Handles "SearchIcon" (camelCase), "Search Icon" (spaced), "search_icon"
+ * (snake), "search-icon" (kebab), and "BrandLogo" / "AppGlyph".
+ * Rejects descriptive geometry names like "Heart Rate Chart",
+ * "Steps Progress", "Chart Fill", "Heart Rate Waveform".
+ */
+function hasExplicitIconMarker(name: string): boolean {
+  // Split on camelCase boundaries, then on whitespace/underscore/hyphen.
+  const words = name
+    .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+    .toLowerCase()
+    .split(/[\s_-]+/);
+  for (const word of words) {
+    if (ICON_MARKER_WORDS.has(word)) return true;
+  }
+  return false;
+}
+
+/**
  * Resolve icon path nodes by their name. When the AI generates a path node
  * with a name like "SearchIcon" or "MenuIcon", look up the verified SVG path
  * from ICON_PATH_MAP and replace the d attribute.
  *
  * On local map miss for icon-like names, sets a generic placeholder and
  * records the node for async resolution via the Iconify API.
+ *
+ * IMPORTANT: Only path nodes whose name explicitly says "icon"/"logo"/
+ * "symbol"/"glyph" are considered. Everything else is treated as real
+ * custom geometry and left alone — AI-generated data-viz paths like
+ * "Heart Rate Chart", "Steps Progress", "Chart Fill" must never be
+ * hijacked into a circle or bar-chart icon. The `icon_font` node type
+ * is the canonical way for AI to emit icons; icon_resolver only exists
+ * to salvage the rare case where AI picks `path` but still means an icon.
  */
 export function applyIconPathResolution(node: PenNode): void {
   if (node.type !== 'path') return;
-  const rawName = (node.name ?? node.id ?? '')
+
+  const originalName = node.name ?? node.id ?? '';
+  // Hard gate: require an explicit icon/logo marker in the name.
+  // Without this guard, descriptive path names share substrings with icon
+  // dictionary keys (e.g. "Chart Fill" → prefix "chart") and get
+  // overwritten with the matched icon path.
+  if (!hasExplicitIconMarker(originalName)) return;
+
+  const rawName = originalName
     .toLowerCase()
     .replace(/[-_\s]+/g, '') // normalize separators
-    .replace(/(icon|logo)$/, ''); // strip trailing "icon" or "logo"
+    .replace(/(icon|logo|symbol|glyph)$/, ''); // strip trailing marker
 
   let match = ICON_PATH_MAP[rawName];
 
@@ -88,13 +136,17 @@ export function applyIconPathResolution(node: PenNode): void {
 // Internal helpers
 // ---------------------------------------------------------------------------
 
-/** Check if a name looks like an icon reference (not just any path node). */
-function isIconLikeName(originalName: string, normalized: string): boolean {
-  // Explicit icon/logo suffix in original name
-  if (/icon|logo/i.test(originalName)) return true;
-  // Short normalized name (likely an icon name, not a complex path description)
-  if (normalized.length > 0 && normalized.length <= 30) return true;
-  return false;
+/**
+ * Check if a name looks like an icon reference (not just any path node).
+ *
+ * The top-level guard in applyIconPathResolution already requires an
+ * explicit icon/logo/symbol/glyph marker, so by the time we get here we
+ * know the caller believes this is an icon. We still want a short
+ * non-empty normalized form so we can queue it for async Iconify
+ * resolution (empty after normalization means there is nothing to look up).
+ */
+function isIconLikeName(_originalName: string, normalized: string): boolean {
+  return normalized.length > 0 && normalized.length <= 30;
 }
 
 /** Apply stroke/fill styling to a resolved icon node (caller must ensure path type). */

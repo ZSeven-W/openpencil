@@ -8,6 +8,7 @@ import {
   invalidateCache,
   probeLiveSyncUrl,
   buildLiveSyncMessage,
+  getReachableSyncUrl,
 } from '../document-manager';
 import { handleBatchDesign } from '../tools/batch-design';
 
@@ -151,6 +152,46 @@ describe('live sync diagnostics', () => {
   it('builds a clear unreachable message', () => {
     expect(buildLiveSyncMessage('unreachable', 3000)).toContain('port 3000');
     expect(buildLiveSyncMessage('unreachable', 3000)).toContain('unreachable');
+  });
+});
+
+describe('getReachableSyncUrl', () => {
+  it('returns the IPv6 URL when only [::1] responds (Vite 6+ default)', async () => {
+    // Reproduces the OpenPencil dev server scenario: Vite binds to [::1] only,
+    // 127.0.0.1 / localhost both fail with connection refused.
+    globalThis.fetch = vi.fn(async (input: string | URL | Request) => {
+      const url = String(input);
+      if (url.startsWith('http://[::1]:')) {
+        return new Response('{}', { status: 200 });
+      }
+      throw new Error('ECONNREFUSED');
+    }) as typeof fetch;
+
+    await expect(getReachableSyncUrl(3000)).resolves.toBe('http://[::1]:3000');
+  });
+
+  it('returns the IPv4 URL when only 127.0.0.1 responds', async () => {
+    globalThis.fetch = vi.fn(async (input: string | URL | Request) => {
+      const url = String(input);
+      if (url.startsWith('http://127.0.0.1:')) {
+        return new Response('{}', { status: 200 });
+      }
+      throw new Error('ECONNREFUSED');
+    }) as typeof fetch;
+
+    await expect(getReachableSyncUrl(3000)).resolves.toBe('http://127.0.0.1:3000');
+  });
+
+  it('returns the localhost URL when only localhost responds', async () => {
+    globalThis.fetch = vi.fn(async (input: string | URL | Request) => {
+      const url = String(input);
+      if (url.startsWith('http://localhost:')) {
+        return new Response('{}', { status: 200 });
+      }
+      throw new Error('ECONNREFUSED');
+    }) as typeof fetch;
+
+    await expect(getReachableSyncUrl(3000)).resolves.toBe('http://localhost:3000');
   });
 });
 

@@ -103,19 +103,79 @@ const NAME_EXACT_MAP: Record<string, string> = {
 /** Names that indicate a container rather than an individual component. */
 const CONTAINER_SUFFIXES = /\b(group|row|container|wrapper|section|list|area|stack|grid|bar)s?\b/i;
 
+/**
+ * Words that, when combined with a role-like word, turn the node into a
+ * PART of that role rather than an instance of it. "Card Header",
+ * "Card Body", "Card Footer" are all structural pieces inside a parent
+ * card — they must NOT inherit the card's role defaults (white fill,
+ * shadow, rounded corners…).
+ *
+ * Stored as a Set (not a regex) because the check is "is the first word
+ * after the role keyword exactly one of these" — position-sensitive and
+ * word-scoped, not a substring scan. A substring scan would wrongly
+ * reject prepositional variants like "Card with Icon" or "Button with
+ * Image", where the part word is separated from the role word by a
+ * modifier ("with") and the whole name describes a variant of the role
+ * rather than an internal piece of it.
+ */
+const ROLE_PART_WORDS = new Set([
+  'header',
+  'body',
+  'footer',
+  'title',
+  'subtitle',
+  'content',
+  'wrapper',
+  'container',
+  'area',
+  'label',
+  'value',
+  'caption',
+  'description',
+  'image',
+  'media',
+  'icon',
+  'action',
+  'actions',
+  'meta',
+  'row',
+  'column',
+  'stack',
+  'grid',
+]);
+
+/**
+ * Extract the first meaningful alphabetic token from a string, skipping
+ * leading whitespace, punctuation, digits, and single-letter fragments.
+ * Returns null when no qualifying token exists.
+ *
+ * Why alpha-only and min-length 2: sub-agents frequently name nodes
+ * "Card 1 Content", "Card 2 Header", "Button 3 Label" with a numeric
+ * index between the role word and the part word. A naive `\w+` would
+ * match the index ("1") and lose the trailing "content"/"header"/
+ * "label" that actually determines whether the node is a structural
+ * piece. We skip anything non-alpha (or alpha shorter than 2 chars) and
+ * scan forward until we land on a real word, so "Card 1 Content"
+ * correctly surfaces "content" and gets treated as a card piece.
+ */
+function firstWordToken(s: string): string | null {
+  const m = /[a-z]{2,}/i.exec(s);
+  return m ? m[0].toLowerCase() : null;
+}
+
 /** Substring patterns → role (checked in order, first match wins). */
 const NAME_PATTERN_MAP: [RegExp, string, boolean?][] = [
   [/\bbtn\b|\bbutton\b/i, 'button', true],
-  [/\bcard\b/i, 'card'],
+  [/\bcard\b/i, 'card', true],
   [/\binput\b|text\s*field|text\s*box/i, 'input'],
   [/\bform\b/i, 'form-group'],
   [/\bsearch/i, 'search-bar'],
   [/\bnav\s*link/i, 'nav-link'],
-  [/\bstat/i, 'stat-card'],
-  [/\bpricing/i, 'pricing-card'],
+  [/\bstat/i, 'stat-card', true],
+  [/\bpricing/i, 'pricing-card', true],
   [/\btestimonial\b|\breview\b|\bquote\b/i, 'testimonial'],
   [/\bcta\b|call\s*to\s*action/i, 'cta-section'],
-  [/\bfeature/i, 'feature-card'],
+  [/\bfeature/i, 'feature-card', true],
   [/\bicon\b/i, 'icon'],
 ];
 
@@ -136,11 +196,28 @@ function inferRoleFromName(node: PenNode): string | undefined {
 
   // Pattern match
   for (const [pattern, role, skipContainers] of NAME_PATTERN_MAP) {
-    if (pattern.test(lower)) {
+    // Use exec (not test) so we know WHERE in the name the role word sits.
+    // Position matters for the ROLE_PART_WORDS guard below.
+    const match = pattern.exec(lower);
+    if (!match) continue;
+
+    if (skipContainers) {
       // Skip container-like names (e.g. "Button Group", "Buttons Row")
-      if (skipContainers && CONTAINER_SUFFIXES.test(lower)) continue;
-      return role;
+      if (CONTAINER_SUFFIXES.test(lower)) continue;
+      // Skip "Card Header", "Card Body", "Button Label", etc. — when the
+      // FIRST word after the role keyword is a part word, the node is a
+      // PIECE of the role. Two positional guards matter here:
+      //   1. We look at the text AFTER the match, so "Icon Button"
+      //      (part word before role) is correctly kept as button.
+      //   2. We only check the FIRST word in that suffix, so
+      //      "Card with Icon" / "Button with Image" (prepositional
+      //      variants: "a card that HAS an icon") keep their role —
+      //      the first word is "with", not a part word.
+      const afterMatch = lower.slice(match.index + match[0].length);
+      const nextWord = firstWordToken(afterMatch);
+      if (nextWord && ROLE_PART_WORDS.has(nextWord)) continue;
     }
+    return role;
   }
 
   return undefined;
@@ -268,82 +345,120 @@ export function resolveTreePostPass(
   if (root.type !== 'frame') return;
   if (!('children' in root) || !Array.isArray(root.children)) return;
 
-  const children = root.children;
+  // `updateNode` goes through Zustand's immutable `updateNodeInTree`, which
+  // shallow-clones every ancestor along the update path. Once we call it, our
+  // `root` parameter reference becomes detached from the store: later direct
+  // mutations to `root` (fill/effects) would be silently dropped, and stale
+  // reads (e.g. the fill we pass down to children as `parentNode`) could lie
+  // about the live tree state. After every updateNode call, re-fetch a fresh
+  // reference via `getNodeById` and rebind `currentRoot` + `children` before
+  // continuing. Children array identity is preserved across
+  // `updateNode(currentRoot.id, patch)` because the patch never touches
+  // `children`, but we rebind it via the fresh root for clarity and safety.
+  let currentRoot: FrameNode = root as FrameNode;
+  const refreshRoot = () => {
+    if (!getNodeById) return;
+    const fresh = getNodeById(currentRoot.id);
+    if (fresh && fresh.type === 'frame') {
+      currentRoot = fresh as FrameNode;
+    }
+  };
+  const currentChildren = (): PenNode[] =>
+    Array.isArray(currentRoot.children) ? currentRoot.children : [];
 
   // --- Card row equalization ---
-  if (root.layout === 'horizontal' && children.length >= 2) {
-    equalizeCardRow(root, children);
+  if (currentRoot.layout === 'horizontal' && currentChildren().length >= 2) {
+    equalizeCardRow(currentRoot, currentChildren());
   }
 
   // --- Horizontal overflow fix ---
-  if (root.layout === 'horizontal' && typeof root.width === 'number' && children.length >= 2) {
-    fixHorizontalOverflow(root, children, canvasWidth);
+  if (
+    currentRoot.layout === 'horizontal' &&
+    typeof currentRoot.width === 'number' &&
+    currentChildren().length >= 2
+  ) {
+    fixHorizontalOverflow(currentRoot, currentChildren(), canvasWidth);
   }
 
   // --- Form input consistency ---
-  if (root.layout === 'vertical' && root.width !== 'fit_content' && children.length >= 2) {
-    normalizeFormInputWidths(root, children);
+  if (
+    currentRoot.layout === 'vertical' &&
+    currentRoot.width !== 'fit_content' &&
+    currentChildren().length >= 2
+  ) {
+    normalizeFormInputWidths(currentRoot, currentChildren());
   }
 
   // --- Input trailing icon alignment ---
-  if (root.layout === 'horizontal' && children.length >= 2) {
-    normalizeInputTrailingIconAlignment(root, children);
+  if (currentRoot.layout === 'horizontal' && currentChildren().length >= 2) {
+    normalizeInputTrailingIconAlignment(currentRoot, currentChildren());
   }
 
   // --- Text height estimation ---
-  if (root.layout && root.layout !== 'none') {
-    fixTextHeights(root, children, canvasWidth);
+  if (currentRoot.layout && currentRoot.layout !== 'none') {
+    fixTextHeights(currentRoot, currentChildren(), canvasWidth);
   }
 
   // --- Frame height expansion ---
-  if (typeof root.height === 'number' && root.layout && root.layout !== 'none') {
-    const intrinsic = estimateNodeIntrinsicHeight(root, undefined, canvasWidth);
-    const maxExpansion = root.height * 1.3;
-    if (intrinsic > root.height && intrinsic <= maxExpansion) {
+  if (
+    typeof currentRoot.height === 'number' &&
+    currentRoot.layout &&
+    currentRoot.layout !== 'none'
+  ) {
+    const intrinsic = estimateNodeIntrinsicHeight(currentRoot, undefined, canvasWidth);
+    const maxExpansion = currentRoot.height * 1.3;
+    if (intrinsic > currentRoot.height && intrinsic <= maxExpansion) {
       if (updateNode) {
-        updateNode(root.id, { height: Math.round(intrinsic) });
+        updateNode(currentRoot.id, { height: Math.round(intrinsic) });
+        refreshRoot();
       } else {
-        (root as unknown as Record<string, unknown>).height = Math.round(intrinsic);
+        (currentRoot as unknown as Record<string, unknown>).height = Math.round(intrinsic);
       }
     }
   }
 
   // --- clipContent for frames with cornerRadius + image children ---
-  if (!root.clipContent) {
+  if (!currentRoot.clipContent) {
     const cr =
-      typeof root.cornerRadius === 'number'
-        ? root.cornerRadius
-        : Array.isArray(root.cornerRadius) && root.cornerRadius.length > 0
-          ? root.cornerRadius[0]
+      typeof currentRoot.cornerRadius === 'number'
+        ? currentRoot.cornerRadius
+        : Array.isArray(currentRoot.cornerRadius) && currentRoot.cornerRadius.length > 0
+          ? currentRoot.cornerRadius[0]
           : 0;
-    if (cr > 0 && children.some((c) => c.type === 'image')) {
+    if (cr > 0 && currentChildren().some((c) => c.type === 'image')) {
       if (updateNode) {
-        updateNode(root.id, { clipContent: true } as Partial<PenNode>);
+        updateNode(currentRoot.id, { clipContent: true } as Partial<PenNode>);
+        refreshRoot();
       } else {
-        root.clipContent = true;
+        currentRoot.clipContent = true;
       }
     }
   }
 
   // --- Button foreground contrast ---
-  fixButtonForegroundContrast(root);
+  fixButtonForegroundContrast(currentRoot);
 
   // --- Section background alternation ---
-  if (root.layout === 'vertical' && children.length >= 3) {
-    fixSectionAlternation(root, children);
+  if (currentRoot.layout === 'vertical' && currentChildren().length >= 3) {
+    fixSectionAlternation(currentRoot, currentChildren());
   }
 
   // --- Orphan container contrast ---
-  fixOrphanContainerContrast(root, parentNode);
+  // This one is the primary motivation for the refreshRoot dance above:
+  // it mutates `currentRoot.fill` and `currentRoot.effects` directly, and
+  // would silently lose its writes if we still held the stale `root`.
+  fixOrphanContainerContrast(currentRoot, parentNode);
 
   // --- Input sibling fill/stroke consistency ---
-  if (root.layout === 'vertical' && children.length >= 2) {
-    fixInputSiblingConsistency(root, children);
+  if (currentRoot.layout === 'vertical' && currentChildren().length >= 2) {
+    fixInputSiblingConsistency(currentRoot, currentChildren());
   }
 
-  // Recurse
-  for (const child of children) {
-    resolveTreePostPass(child, canvasWidth, getNodeById, updateNode, root);
+  // Recurse. Pass `currentRoot` as the parentNode so descendants see
+  // whatever state this pass just wrote (e.g. a newly assigned fill from
+  // fixOrphanContainerContrast), not the pre-mutation snapshot.
+  for (const child of currentChildren()) {
+    resolveTreePostPass(child, canvasWidth, getNodeById, updateNode, currentRoot);
   }
 }
 
@@ -367,8 +482,67 @@ export function hexLuminance(hex: string): number {
  * Check if a node has a non-empty fill array.
  * Does NOT distinguish AI-explicit from role-default fills.
  */
+/**
+ * Returns true when a node has ANY declared fill entry, visible or not.
+ *
+ * This is the "overwrite protection" predicate: heuristics like
+ * `fixOrphanContainerContrast` and `fixSectionAlternation` ask this to
+ * decide whether the author has already made a deliberate fill choice
+ * that they should respect. An explicit transparent fill
+ * (`#00000000`, `"transparent"`, `"none"`) IS a deliberate choice —
+ * "I want this container to be see-through" — and must be preserved,
+ * not swapped for a default white background.
+ *
+ * When you instead need to know "will this draw a visible color on
+ * screen?" (e.g. to decide whether the button foreground contrast
+ * pass needs to paint in a readable color), use `hasVisibleFill`
+ * instead.
+ */
 export function hasFill(node: PenNode): boolean {
   return 'fill' in node && Array.isArray(node.fill) && node.fill.length > 0;
+}
+
+/**
+ * Returns true when a node has a fill that will actually render a
+ * visible color. Differs from `hasFill` by rejecting fills that draw
+ * nothing:
+ *   - Solid fills whose color is `#00000000`, any 8-digit hex with
+ *     `00` alpha, or the CSS keywords `"transparent"` / `"none"`
+ *   - Any fill (solid, gradient, image) whose `opacity` field is
+ *     `0` (or any non-positive number — negative values are treated
+ *     defensively as zero)
+ *
+ * Use this when deciding whether a node needs a color PAINTED ONTO it
+ * (button foreground contrast, focus ring supply, etc.). Do NOT use
+ * this to decide whether to overwrite an author's fill choice —
+ * transparent is a legitimate choice. See `hasFill` for that case.
+ */
+export function hasVisibleFill(node: PenNode): boolean {
+  if (!('fill' in node) || !Array.isArray(node.fill) || node.fill.length === 0) return false;
+  const first = node.fill[0];
+  if (!first) return false;
+  return !isFillInvisible(first);
+}
+
+/** A fill is invisible when its opacity is <= 0 or (for solids) its
+ *  color is an explicit-transparent hex / CSS keyword. */
+function isFillInvisible(fill: PenFill): boolean {
+  const opacity = (fill as { opacity?: unknown }).opacity;
+  if (typeof opacity === 'number' && opacity <= 0) return true;
+  if (fill.type === 'solid') {
+    return isInvisibleColor((fill as SolidFill).color);
+  }
+  return false;
+}
+
+function isInvisibleColor(color: unknown): boolean {
+  if (typeof color !== 'string') return false;
+  const c = color.trim().toLowerCase();
+  if (c === 'transparent' || c === 'none') return true;
+  // 8-digit hex with 00 alpha (#RRGGBB00). Valid hex color literal, but
+  // it draws nothing.
+  if (/^#[0-9a-f]{6}00$/i.test(c)) return true;
+  return false;
 }
 
 /**
@@ -388,7 +562,10 @@ export function getFirstSolidColor(node: PenNode): string | undefined {
 
 function fixButtonForegroundContrast(parent: FrameNode): void {
   if (parent.role !== 'button' && parent.role !== 'icon-button') return;
-  if (!hasFill(parent)) return;
+  // A transparent button has no background color to compute contrast
+  // against — nothing to do, and we definitely should not paint text
+  // white on an invisible button.
+  if (!hasVisibleFill(parent)) return;
 
   const bgColor = getFirstSolidColor(parent);
   if (!bgColor) return;
@@ -403,7 +580,10 @@ function fixButtonForegroundContrast(parent: FrameNode): void {
     const rec = child as unknown as Record<string, unknown>;
 
     if (child.type === 'text' || child.type === 'icon_font') {
-      if (!hasFill(child)) {
+      // `hasVisibleFill` treats transparent-hex placeholder fills as
+      // unfilled, so the normalizer's #00000000 leftover does not
+      // block contrast from supplying a visible color.
+      if (!hasVisibleFill(child)) {
         rec.fill = fgFill;
       }
     } else if (child.type === 'path') {
@@ -413,11 +593,11 @@ function fixButtonForegroundContrast(parent: FrameNode): void {
         Array.isArray((child.stroke as PenStroke)?.fill) &&
         (child.stroke as PenStroke).fill!.length > 0;
 
-      if (hasFill(child)) {
+      if (hasVisibleFill(child)) {
         // fill-style icon — already styled, skip
       } else if (hasStroke && !hasStrokeFill) {
         (child.stroke as unknown as Record<string, unknown>).fill = fgFill;
-      } else if (!hasStroke && !hasFill(child)) {
+      } else if (!hasStroke && !hasVisibleFill(child)) {
         rec.fill = fgFill;
       }
     }

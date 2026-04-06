@@ -38,23 +38,40 @@ export function clearSyncUrl(): void {
 }
 
 const PORT_FILE_PATH = join(homedir(), PORT_FILE_DIR_NAME, PORT_FILE_NAME);
-const SYNC_BASE_URLS = ['http://127.0.0.1', 'http://localhost'];
+// IPv6 [::1] comes first because Vite 6+ resolves `localhost` to ::1 only on
+// macOS — it's the most likely successful host. IPv4 + named localhost are
+// kept as fallbacks for systems where the dev server binds to IPv4 only.
+const SYNC_BASE_URLS = ['http://[::1]', 'http://127.0.0.1', 'http://localhost'];
 
-async function getReachableSyncUrl(port: number): Promise<string | null> {
-  for (const baseUrl of SYNC_BASE_URLS) {
-    const url = `${baseUrl}:${port}/api/mcp/server`;
-    for (let attempt = 0; attempt < 5; attempt++) {
-      try {
-        const res = await fetch(url, {
-          signal: AbortSignal.timeout(500),
-        });
-        if (res.ok) return `${baseUrl}:${port}`;
-      } catch {
-        // Server may still be starting, or the port file may be stale.
+/**
+ * Try every base URL in parallel and return the first one whose
+ * `/api/mcp/server` probe succeeds. Retries up to 5 times with a small delay
+ * between attempts so we tolerate the dev server still booting.
+ *
+ * Exported for unit tests; internal callers should go through getSyncUrl /
+ * getLiveSyncState which add caching and richer state reporting.
+ */
+export async function getReachableSyncUrl(port: number): Promise<string | null> {
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const probes = SYNC_BASE_URLS.map(async (baseUrl) => {
+      const url = `${baseUrl}:${port}/api/mcp/server`;
+      const res = await fetch(url, {
+        signal: AbortSignal.timeout(500),
+      });
+      if (!res.ok) {
+        throw new Error(`probe ${baseUrl} returned ${res.status}`);
       }
-      if (attempt < 4) {
-        await new Promise((resolve) => setTimeout(resolve, 200));
-      }
+      return `${baseUrl}:${port}`;
+    });
+    try {
+      // Promise.any settles as soon as one probe resolves; if all reject we
+      // fall through to the retry delay below.
+      return await Promise.any(probes);
+    } catch {
+      // All probes failed this attempt — retry after a small delay.
+    }
+    if (attempt < 4) {
+      await new Promise((resolve) => setTimeout(resolve, 200));
     }
   }
   return null;

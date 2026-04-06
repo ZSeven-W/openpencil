@@ -15,6 +15,13 @@ import {
 } from './generation-utils';
 import { defaultLineHeight } from '@/canvas/canvas-text-measure';
 import {
+  normalizeTreeLayout,
+  unwrapFakePhoneMockups,
+  stripRedundantSectionFills,
+  normalizeStrokeFillSchema,
+} from '@/canvas/canvas-layout-engine';
+import { forcePageResync } from '@/canvas/canvas-sync-utils';
+import {
   applyIconPathResolution,
   applyNoEmojiIconHeuristic,
   resolveAsyncIcons,
@@ -56,9 +63,31 @@ let generationRootFrameId: string = DEFAULT_FRAME_ID;
  *  Used by upsert sanitization to avoid ID collisions with pre-existing content. */
 let preExistingNodeIds = new Set<string>();
 
+/**
+ * Return the id of the first top-level frame on the ACTIVE page, or null
+ * if the page has no frame children yet. This is the correct "page root
+ * frame id" for multi-page documents — DEFAULT_FRAME_ID ("root-frame")
+ * only applies to Page 1 because addPage() assigns a fresh nanoid to
+ * every subsequent page's initial frame. Use this helper anywhere you
+ * previously wrote `getNodeById(DEFAULT_FRAME_ID)` with the intent of
+ * locating "the current page's root frame".
+ */
+function getActivePagePrimaryFrameId(): string | null {
+  const doc = useDocumentStore.getState().document;
+  const activePageId = useCanvasStore.getState().activePageId;
+  const children = getActivePageChildren(doc, activePageId);
+  for (const child of children) {
+    if (child.type === 'frame') return child.id;
+  }
+  return null;
+}
+
 export function resetGenerationRemapping(): void {
   generationRemappedIds.clear();
-  generationRootFrameId = DEFAULT_FRAME_ID;
+  // Fall back to DEFAULT_FRAME_ID only when the active page has no frame yet
+  // (e.g. first load, legacy docs). In the multi-page case this is the
+  // nanoid from addPage().
+  generationRootFrameId = getActivePagePrimaryFrameId() ?? DEFAULT_FRAME_ID;
   // Snapshot all existing node IDs so upsert can avoid collisions
   preExistingNodeIds = new Set(
     useDocumentStore
@@ -263,9 +292,12 @@ export function insertStreamingNode(node: PenNode, parentId: string | null): voi
 
   if (resolvedParent === null && node.type === 'frame') {
     if (isCanvasOnlyEmptyFrame()) {
-      // Root frame replaces the default empty frame -- no animation needed
-      replaceEmptyFrame(node);
-      generationRootFrameId = DEFAULT_FRAME_ID;
+      // Root frame replaces the active page's empty frame -- no animation
+      // needed. replaceEmptyFrame returns the real target id (nanoid for
+      // pages 2+, DEFAULT_FRAME_ID for page 1) so we can track it as the
+      // generation root.
+      const targetId = replaceEmptyFrame(node);
+      if (targetId) generationRootFrameId = targetId;
     } else {
       // Canvas already has content — add as new top-level frame beside existing ones
       const { document: doc } = useDocumentStore.getState();
@@ -327,6 +359,39 @@ export function insertStreamingNode(node: PenNode, parentId: string | null): voi
 // Canvas apply/upsert operations
 // ---------------------------------------------------------------------------
 
+/**
+ * Run the page-root post-pass cleanups after a non-streaming apply path
+ * inserts its nodes into the store. This mirrors part of what
+ * applyPostStreamingTreeHeuristics does for the streaming path:
+ * specifically, strip redundant "safe-dark" section fills that sub-agents
+ * or external MCP callers hedge with on section roots (they hide the real
+ * page background and break theming).
+ *
+ * OpenPencil documents are multi-page — only the FIRST page uses the
+ * constant DEFAULT_FRAME_ID for its root frame. Pages added later via
+ * addPage() receive a fresh nanoid, so we cannot look the page root up by
+ * a well-known id. Instead we pull the active page's top-level children
+ * and run stripRedundantSectionFills on every top-level frame we find.
+ * In the common case that's a single page-root frame; edge cases with
+ * multiple top-level frames on one page (comparison mockups, etc.) are
+ * handled by iterating. Publishes once if any frame was modified.
+ */
+function finalizePageRootAfterApply(): void {
+  const doc = useDocumentStore.getState().document;
+  const activePageId = useCanvasStore.getState().activePageId;
+  const topLevel = getActivePageChildren(doc, activePageId);
+  if (!topLevel || topLevel.length === 0) return;
+
+  let anyChanged = false;
+  for (const node of topLevel) {
+    if (node.type !== 'frame') continue;
+    if (stripRedundantSectionFills(node)) {
+      anyChanged = true;
+    }
+  }
+  if (anyChanged) forcePageResync();
+}
+
 export function applyNodesToCanvas(nodes: PenNode[]): void {
   const { getFlatNodes } = useDocumentStore.getState();
   const existingIds = new Set(getFlatNodes().map((n) => n.id));
@@ -335,22 +400,30 @@ export function applyNodesToCanvas(nodes: PenNode[]): void {
   // If canvas only has one empty frame, replace it with the generated content
   if (isCanvasOnlyEmptyFrame() && preparedNodes.length === 1 && preparedNodes[0].type === 'frame') {
     replaceEmptyFrame(preparedNodes[0]);
+    finalizePageRootAfterApply();
     resolveAllPendingIcons().catch(console.warn);
-    const rootId = getGenerationRootFrameId();
+    // Use the active page's primary frame id, NOT generationRootFrameId.
+    // The latter is module-level state owned by the streaming path and
+    // is stale here (module init value or leftover from a previous
+    // streaming generation — on Page 2+ it would point at nothing on the
+    // current page).
+    const rootId = getActivePagePrimaryFrameId();
     if (rootId) scanAndFillImages(rootId).catch(() => {});
     return;
   }
 
-  const { addNode, getNodeById } = useDocumentStore.getState();
-  // Insert into the root frame if it exists, otherwise at document root
-  const rootFrame = getNodeById(DEFAULT_FRAME_ID);
-  const parentId = rootFrame ? DEFAULT_FRAME_ID : null;
+  const { addNode } = useDocumentStore.getState();
+  // Insert into the active page's root frame if it exists, otherwise at
+  // document root. `getActivePagePrimaryFrameId` replaces the old
+  // DEFAULT_FRAME_ID lookup which only worked on Page 1.
+  const parentId = getActivePagePrimaryFrameId();
   for (const node of preparedNodes) {
     addNode(parentId, node, Infinity);
   }
   adjustRootFrameHeightToContent();
+  finalizePageRootAfterApply();
   resolveAllPendingIcons().catch(console.warn);
-  const rootId = getGenerationRootFrameId();
+  const rootId = getActivePagePrimaryFrameId();
   if (rootId) scanAndFillImages(rootId).catch(() => {});
 }
 
@@ -359,12 +432,12 @@ export function upsertNodesToCanvas(nodes: PenNode[]): number {
 
   if (isCanvasOnlyEmptyFrame() && preparedNodes.length === 1 && preparedNodes[0].type === 'frame') {
     replaceEmptyFrame(preparedNodes[0]);
+    finalizePageRootAfterApply();
     return 1;
   }
 
   const { addNode, updateNode, getNodeById } = useDocumentStore.getState();
-  const rootFrame = getNodeById(DEFAULT_FRAME_ID);
-  const parentId = rootFrame ? DEFAULT_FRAME_ID : null;
+  const parentId = getActivePagePrimaryFrameId();
   let count = 0;
 
   for (const node of preparedNodes) {
@@ -382,7 +455,11 @@ export function upsertNodesToCanvas(nodes: PenNode[]): number {
   }
 
   adjustRootFrameHeightToContent();
-  const rootId = getGenerationRootFrameId();
+  finalizePageRootAfterApply();
+  // Use the active page's primary frame id, not the streaming path's
+  // generationRootFrameId (which is stale for non-streaming applies —
+  // see applyNodesToCanvas for the full explanation).
+  const rootId = getActivePagePrimaryFrameId();
   if (rootId) scanAndFillImages(rootId).catch(() => {});
   return count;
 }
@@ -391,12 +468,12 @@ export function upsertNodesToCanvas(nodes: PenNode[]): number {
 function upsertPreparedNodes(preparedNodes: PenNode[]): number {
   if (isCanvasOnlyEmptyFrame() && preparedNodes.length === 1 && preparedNodes[0].type === 'frame') {
     replaceEmptyFrame(preparedNodes[0]);
+    finalizePageRootAfterApply();
     return 1;
   }
 
   const { addNode, updateNode, getNodeById } = useDocumentStore.getState();
-  const rootFrame = getNodeById(DEFAULT_FRAME_ID);
-  const parentId = rootFrame ? DEFAULT_FRAME_ID : null;
+  const parentId = getActivePagePrimaryFrameId();
   let count = 0;
 
   for (const node of preparedNodes) {
@@ -414,6 +491,7 @@ function upsertPreparedNodes(preparedNodes: PenNode[]): number {
   }
 
   adjustRootFrameHeightToContent();
+  finalizePageRootAfterApply();
   return count;
 }
 
@@ -435,7 +513,12 @@ export function animateNodesToCanvas(nodes: PenNode[]): void {
 
   // Resolve any icons queued for async (brand logos etc.) after nodes are in the store
   resolveAllPendingIcons().catch(console.warn);
-  const rootId = getGenerationRootFrameId();
+  // Scan images on the active page root. generationRootFrameId is refreshed
+  // by resetGenerationRemapping above, but going straight through
+  // getActivePagePrimaryFrameId keeps the source of truth consistent with
+  // the other non-streaming apply paths and doesn't rely on a specific
+  // ordering between reset and this call.
+  const rootId = getActivePagePrimaryFrameId();
   if (rootId) scanAndFillImages(rootId).catch(() => {});
 }
 
@@ -480,13 +563,15 @@ export function extractAndApplyDesignModification(responseText: string): number 
         updateNode(node.id, node);
         count++;
       } else {
-        // It's a new node implied by the modification (e.g. "add a button")
-        const rootFrame = getNodeById(DEFAULT_FRAME_ID);
-        const parentId = rootFrame ? DEFAULT_FRAME_ID : null;
+        // It's a new node implied by the modification (e.g. "add a button").
+        // Parent it to the active page's root frame, whichever page we're
+        // on — not just the Page 1 constant.
+        const parentId = getActivePagePrimaryFrameId();
         addNode(parentId, node);
         count++;
       }
     }
+    finalizePageRootAfterApply();
   } finally {
     useHistoryStore.getState().endBatch(useDocumentStore.getState().document);
   }
@@ -542,9 +627,83 @@ export function applyPostStreamingTreeHeuristics(rootNodeId: string): void {
   if (!rootNode || rootNode.type !== 'frame') return;
   if (!Array.isArray(rootNode.children) || rootNode.children.length === 0) return;
 
-  // Role-based tree resolution + cross-node post-pass
+  // Schema-level normalization runs first: unwrap array-wrapped strokes,
+  // migrate fill-shaped stroke objects to proper PenStroke, drop illegal
+  // "none"/"transparent" CSS keyword fills. Sub-agents break these
+  // constraints constantly and downstream passes assume valid shapes.
+  normalizeStrokeFillSchema(rootNode);
+
+  // Earliest pass: strip fake phone mockup wrappers that weaker sub-agents
+  // generate when they misread the prompt's phone mockup guidance. Must run
+  // BEFORE resolveTreeRoles, otherwise the role resolver may write defaults
+  // (layout, fill) onto the wrapper and the children inside it that we then
+  // throw away.
+  // Return value is intentionally ignored — see the publish step at the end:
+  // we always publish, so the boolean would only be informational.
+  unwrapFakePhoneMockups(rootNode);
+
+  // Role-based tree resolution + cross-node post-pass.
+  // Runs FIRST so role defaults (e.g. navbar → horizontal, button → horizontal)
+  // can populate missing `layout` fields with semantically correct values.
   resolveTreeRoles(rootNode, generationCanvasWidth);
   resolveTreePostPass(rootNode, generationCanvasWidth, getNodeById, updateNode);
+
+  // Re-fetch the root from the store before running any subsequent pass.
+  // resolveTreePostPass calls `updateNode` in several places (height
+  // expansion, clipContent). Each call routes through `updateNodeInTree`,
+  // which shallow-clones every ancestor along the update path. Our original
+  // `rootNode` reference now points to a detached tree: further mutations on
+  // it would silently disappear for nodes that lived on those update paths.
+  // Always read a fresh reference for mutation passes that follow updateNode.
+  const freshRoot = useDocumentStore.getState().getNodeById(rootNodeId);
+  if (!freshRoot || freshRoot.type !== 'frame') return;
+
+  // Normalize layout as a final safety net: fills in `layout` for frames the
+  // role resolver did not touch (unknown roles, plain containers) and strips
+  // stale x/y from children of any auto-layout frame. MUST run AFTER role
+  // resolution — otherwise the 'vertical' fallback here freezes wrong layouts
+  // before role defaults can override them.
+  normalizeTreeLayout(freshRoot);
+
+  // Strip redundant section-level fills. Weaker sub-agents hedge by
+  // hardcoding a "safe dark" hex (e.g. #0A0A0A) on every section root they
+  // emit, which then completely covers the page root's intended background
+  // and breaks theme switching. This pass drops those redundant fills while
+  // preserving cards/buttons/badges. Must run AFTER role resolution so we
+  // can tell section containers apart from card/button/chip components by
+  // their resolved role.
+  //
+  // IMPORTANT: stripRedundantSectionFills must ONLY be called on the true
+  // page root frame. Calling it on an arbitrary sub-agent root (or any
+  // non-root nested frame) is wrong — the nested frame's direct children
+  // are components, not "sections", and stripping their fills would
+  // clobber intended visual styling (e.g. a card's own dark header).
+  //
+  // The page root is:
+  //   - `parentOfRoot` when the sub-agent's root was inserted as a child of
+  //     an existing page frame (the common case for a multi-section plan)
+  //   - `freshRoot` itself when the sub-agent's root IS the page frame
+  //     (replaceEmptyFrame remap, or a single-sub-agent page)
+  // Pick exactly one — never both.
+  const parentOfRoot = useDocumentStore.getState().getParentOf(rootNodeId);
+  const pageRoot = parentOfRoot && parentOfRoot.type === 'frame' ? parentOfRoot : freshRoot;
+  stripRedundantSectionFills(pageRoot);
+
+  // Publish point. unwrap, resolveTreeRoles, and normalizeTreeLayout all
+  // mutate store-owned nodes in place; resolveTreePostPass mostly goes
+  // through updateNode but also has direct-mutation branches. Without an
+  // explicit publish, Zustand subscribers (canvas sync, MCP push) only fire
+  // if some later code path happens to call updateNode — and that path is
+  // skipped on sub-agent retry / no-op cases.
+  //
+  // We use forcePageResync (not a hand-rolled shallow doc spread) because
+  // canvas-document-sync subscribes to the active page's children array
+  // identity, not to the document object itself. A naive `{ ...document }`
+  // spread would NOT change `pages[0].children` and the canvas would never
+  // re-sync — see canvas-sync-utils.ts header comment for the trap.
+  // forcePageResync also bypasses mutateWithHistory so we don't push an
+  // undo entry for what is a deterministic post-streaming cleanup.
+  forcePageResync();
 
   // Resolve pending icons asynchronously via Iconify API (fire-and-forget)
   resolveAsyncIcons(rootNodeId).catch(console.warn);
@@ -556,7 +715,12 @@ export function applyPostStreamingTreeHeuristics(rootNodeId: string): void {
 
 export function adjustRootFrameHeightToContent(frameId?: string): void {
   const { getNodeById, updateNode, getParentOf } = useDocumentStore.getState();
-  const rootId = frameId ?? generationRootFrameId;
+  // Prefer the explicitly-passed frame, then the active page's primary
+  // frame (the correct default for non-streaming apply paths, which is
+  // where this function is called from), and finally the streaming
+  // path's generationRootFrameId as a last resort.
+  const rootId = frameId ?? getActivePagePrimaryFrameId() ?? generationRootFrameId;
+  if (!rootId) return;
   const root = getNodeById(rootId);
   if (!root || root.type !== 'frame') return;
   if (!Array.isArray(root.children) || root.children.length === 0) return;
@@ -603,30 +767,48 @@ export function expandRootFrameHeight(frameId?: string): void {
 // ---------------------------------------------------------------------------
 
 /**
- * Check if the canvas only has the default empty frame (no children).
- * Uses active page children (not document.children) to support page migration.
+ * Check if the active page has exactly one top-level frame and that frame
+ * has no children yet. Used to decide whether an incoming batch/streaming
+ * insert should REPLACE the empty boilerplate frame created by addPage()
+ * vs. append new content beside it.
+ *
+ * Previously this hardcoded DEFAULT_FRAME_ID, which broke on every page
+ * after the first: addPage() gives new pages a nanoid-based root frame id,
+ * so the check was `false` on Page 2+ and the replace branch never fired.
+ * The check now looks at the actual top-level frame of the active page,
+ * whatever its id happens to be.
  */
 function isCanvasOnlyEmptyFrame(): boolean {
-  const { document, getNodeById } = useDocumentStore.getState();
+  const { document } = useDocumentStore.getState();
   const activePageId = useCanvasStore.getState().activePageId;
   const pageChildren = getActivePageChildren(document, activePageId);
   if (pageChildren.length !== 1) return false;
-  const rootFrame = getNodeById(DEFAULT_FRAME_ID);
-  if (!rootFrame) return false;
-  return !('children' in rootFrame) || !rootFrame.children || rootFrame.children.length === 0;
+  const only = pageChildren[0];
+  if (only.type !== 'frame') return false;
+  return !('children' in only) || !only.children || only.children.length === 0;
 }
 
 /**
- * Replace the default empty frame with the generated frame node,
- * preserving the root frame ID so canvas sync continues to work.
+ * Replace the active page's empty root frame with the generated frame
+ * node, preserving the existing frame id so canvas sync continues to
+ * work. Returns the id of the frame that was updated, or null if the
+ * active page has no frame to replace (caller should have gated this
+ * call on isCanvasOnlyEmptyFrame).
+ *
+ * Previously this hardcoded DEFAULT_FRAME_ID as the update target, which
+ * meant calling replaceEmptyFrame on Page 2+ would silently modify
+ * Page 1's root frame instead of the page the user was actually editing.
  */
-function replaceEmptyFrame(generatedFrame: PenNode): void {
+function replaceEmptyFrame(generatedFrame: PenNode): string | null {
+  const targetId = getActivePagePrimaryFrameId();
+  if (!targetId) return null;
   const { updateNode } = useDocumentStore.getState();
   // Record the remapping so subsequent phases can find this node by its original ID
-  generationRemappedIds.set(generatedFrame.id, DEFAULT_FRAME_ID);
+  generationRemappedIds.set(generatedFrame.id, targetId);
   // Keep root frame ID and position (x=0, y=0), take everything else from generated frame
   const { id: _id, x: _x, y: _y, ...rest } = generatedFrame;
-  updateNode(DEFAULT_FRAME_ID, rest);
+  updateNode(targetId, rest);
+  return targetId;
 }
 
 function equalizeHorizontalSiblings(parentId: string): void {
@@ -707,8 +889,23 @@ function sanitizeNodesForInsert(nodes: PenNode[], existingIds: Set<string>): Pen
   const cloned = nodes.map((n) => deepCloneNode(n));
 
   for (const node of cloned) {
+    // Schema normalization first so later passes see valid stroke/fill
+    // shapes (unwrap stroke arrays, migrate fill-shaped strokes, drop
+    // CSS-keyword fill colors).
+    normalizeStrokeFillSchema(node);
+    // Strip fake phone mockup wrappers BEFORE role resolution so role
+    // defaults aren't wasted on a wrapper we're about to discard.
+    unwrapFakePhoneMockups(node);
+    // Role resolution runs first so role defaults can populate `layout`
+    // before normalizeTreeLayout's generic fallback would otherwise freeze
+    // the wrong value (e.g. navbar → horizontal, not vertical fallback).
     resolveTreeRoles(node, generationCanvasWidth);
     applyGenerationHeuristics(node);
+    normalizeTreeLayout(node);
+    // Intentionally NOT calling stripRedundantSectionFills here: `cloned`
+    // is an arbitrary PenNode from MCP/batch APIs (could be a card, a
+    // component, or a page). strip must only run on the true page root
+    // frame, which this path cannot guarantee.
     sanitizeLayoutChildPositions(node, false);
     sanitizeScreenFrameBounds(node);
   }
@@ -726,8 +923,23 @@ function sanitizeNodesForUpsert(nodes: PenNode[]): PenNode[] {
   const cloned = nodes.map((n) => deepCloneNode(n));
 
   for (const node of cloned) {
+    // Schema normalization first so later passes see valid stroke/fill
+    // shapes (unwrap stroke arrays, migrate fill-shaped strokes, drop
+    // CSS-keyword fill colors).
+    normalizeStrokeFillSchema(node);
+    // Strip fake phone mockup wrappers BEFORE role resolution so role
+    // defaults aren't wasted on a wrapper we're about to discard.
+    unwrapFakePhoneMockups(node);
+    // Role resolution runs first so role defaults can populate `layout`
+    // before normalizeTreeLayout's generic fallback would otherwise freeze
+    // the wrong value (e.g. navbar → horizontal, not vertical fallback).
     resolveTreeRoles(node, generationCanvasWidth);
     applyGenerationHeuristics(node);
+    normalizeTreeLayout(node);
+    // Intentionally NOT calling stripRedundantSectionFills here: `cloned`
+    // is an arbitrary PenNode from MCP/batch APIs (could be a card, a
+    // component, or a page). strip must only run on the true page root
+    // frame, which this path cannot guarantee.
     sanitizeLayoutChildPositions(node, false);
     sanitizeScreenFrameBounds(node);
   }
