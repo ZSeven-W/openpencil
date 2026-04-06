@@ -440,4 +440,91 @@ describe('resolveNodeRole — name-based role inference', () => {
     resolveNodeRole(node, ctx);
     expect(node.role).toBeUndefined();
   });
+
+  // ---------------------------------------------------------------------
+  // Regression coverage for the 2026-04-06 part-word / modifier fixes
+  // (commits 5e2e6f9, d45f1a5, f842853). These cases locked down the
+  // final behavior of ROLE_PART_WORDS / first-word-after-match scan.
+  // ---------------------------------------------------------------------
+
+  // --- "Card X" where X is a structural piece: must NOT become role=card ---
+  it.each([
+    ['Card Header'],
+    ['Card Body'],
+    ['Card Footer'],
+    ['Card Title'],
+    ['Card Content'],
+    ['Card Image'],
+    ['Card Media'],
+    ['Card Label'],
+    ['Card Action'],
+    ['Card Actions'],
+    ['Card Meta'],
+    ['Card Caption'],
+    ['Card Description'],
+    ['Card Wrapper'],
+  ])('does not infer card role from structural part name "%s"', (name) => {
+    const node = { id: 'n', type: 'frame', name, x: 0, y: 0, width: 300, height: 60 } as PenNode;
+    resolveNodeRole(node, ctx);
+    expect(node.role).not.toBe('card');
+    // Must not inherit card default fill/shadow
+    expect((node as { fill?: unknown }).fill).toBeUndefined();
+    expect((node as { effects?: unknown }).effects).toBeUndefined();
+  });
+
+  // --- Punctuation between role word and part word still counts as part ---
+  it.each([['Card - Header'], ['Card: Body'], ['Card / Footer']])(
+    'does not infer card role when punctuation separates it from part word: "%s"',
+    (name) => {
+      const node = { id: 'n', type: 'frame', name, x: 0, y: 0, width: 300, height: 60 } as PenNode;
+      resolveNodeRole(node, ctx);
+      expect(node.role).not.toBe('card');
+    },
+  );
+
+  // --- Modifier BEFORE the role word: must STILL infer the role ---
+  it.each([
+    ['Icon Button', 'button'],
+    ['Primary Button', 'button'],
+    ['Submit Button', 'button'],
+    ['Text Button', 'button'],
+    ['Image Card', 'card'],
+    ['Icon Card', 'card'],
+    ['Media Card', 'card'],
+    ['User Card', 'card'],
+    ['Product Card', 'card'],
+  ])('infers %s role from modifier-before name "%s"', (name, expected) => {
+    const node = { id: 'n', type: 'frame', name, x: 0, y: 0, width: 300, height: 60 } as PenNode;
+    resolveNodeRole(node, ctx);
+    expect(node.role).toBe(expected);
+  });
+
+  // --- Prepositional variants: "X with Y" means a variant of X, keep role ---
+  it.each([
+    ['Card with Icon', 'card'],
+    ['Card with Image', 'card'],
+    ['Card with Header', 'card'],
+    ['Card with Label', 'card'],
+    ['Button with Icon', 'button'],
+    ['Button with Image', 'button'],
+    ['Button with Label', 'button'],
+  ])('keeps role on prepositional variant "%s" → %s', (name, expected) => {
+    const node = { id: 'n', type: 'frame', name, x: 0, y: 0, width: 300, height: 60 } as PenNode;
+    resolveNodeRole(node, ctx);
+    expect(node.role).toBe(expected);
+  });
+
+  // --- "X Icon" / "X Label": role pattern skipped by part word, the icon
+  //     pattern (later in NAME_PATTERN_MAP) then takes over ---
+  it('falls through to icon role for "Card Icon" (icon is a part word after card)', () => {
+    const node = { id: 'n', type: 'frame', name: 'Card Icon', x: 0, y: 0, width: 40, height: 40 } as PenNode;
+    resolveNodeRole(node, ctx);
+    expect(node.role).toBe('icon');
+  });
+
+  it('falls through to icon role for "Button Icon"', () => {
+    const node = { id: 'n', type: 'frame', name: 'Button Icon', x: 0, y: 0, width: 40, height: 40 } as PenNode;
+    resolveNodeRole(node, ctx);
+    expect(node.role).toBe('icon');
+  });
 });
