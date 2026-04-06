@@ -6,11 +6,6 @@ import { useHistoryStore } from '@/stores/history-store';
 import { canBooleanOp, executeBooleanOp, type BooleanOpType } from '@/utils/boolean-ops';
 import {
   supportsFileSystemAccess,
-  isElectron,
-  writeToFileHandle,
-  writeToFilePath,
-  saveDocumentAs,
-  downloadDocument,
   openDocumentFS,
   openDocument,
 } from '@/utils/file-operations';
@@ -35,62 +30,10 @@ export function useEditShortcuts() {
         } catch {
           /* continue */
         }
-        const store = useDocumentStore.getState();
-        const { document: doc, fileName, fileHandle, filePath } = store;
-        const isOpFile = fileName ? /\.op$/i.test(fileName) : false;
-        const suggestedName = fileName
-          ? fileName.replace(/\.(pen|op|json)$/i, '') + '.op'
-          : 'untitled.op';
-        const forceSaveAs = e.shiftKey;
-
-        const doSave = async () => {
-          // Save (no shift): if a known .op target exists, write in place.
-          if (!forceSaveAs) {
-            if (isElectron() && filePath && isOpFile) {
-              await writeToFilePath(filePath, doc);
-              store.markClean();
-              return;
-            }
-            if (fileHandle && isOpFile) {
-              try {
-                await writeToFileHandle(fileHandle, doc);
-                store.markClean();
-                return;
-              } catch {
-                useDocumentStore.setState({ fileHandle: null });
-              }
-            }
-          }
-
-          // Save As (shift) OR no known target — show the file picker.
-          if (isElectron()) {
-            const savedPath = await window.electronAPI!.saveFile(
-              JSON.stringify(doc),
-              suggestedName,
-            );
-            if (savedPath) {
-              useDocumentStore.setState({
-                fileName: savedPath.split(/[/\\]/).pop() || suggestedName,
-                filePath: savedPath,
-                fileHandle: null,
-                isDirty: false,
-              });
-            }
-          } else if (supportsFileSystemAccess()) {
-            const result = await saveDocumentAs(doc, suggestedName);
-            if (result) {
-              useDocumentStore.setState({
-                fileName: result.fileName,
-                fileHandle: result.handle,
-                isDirty: false,
-              });
-            }
-          } else {
-            downloadDocument(doc, suggestedName);
-            store.markClean();
-          }
-        };
-        doSave().catch((err) => console.error('[Save] Failed:', err));
+        useDocumentStore
+          .getState()
+          .save()
+          .catch((err) => console.error('[Save] Failed:', err));
         return;
       }
 
