@@ -49,8 +49,19 @@ export interface MergeResult {
 }
 
 /**
- * Per-id decision the classification step produces. The tree-rebuild step in
- * Task 9 consumes these to assemble the merged document.
+ * Per-id decision the classification step produces. Invariants:
+ *   - Every id in the merged-id union is either present in the decisions map
+ *     OR omitted entirely. A null `mergedNode` means "explicitly deleted by
+ *     the merge"; an absent map entry means "the rebuild step shouldn't see
+ *     this id at all" (which currently never happens — every id produces a
+ *     decision). The two states are kept distinct so the rebuild step in
+ *     Task 9 can assert on its inputs.
+ *   - When `mergedNode` is non-null, `mergedFields` excludes the `children`
+ *     field. The rebuild step in Task 9 produces children by walking the
+ *     decision map, not by reading the merged-node value.
+ *   - `index` is a HINT for ordering inside the new parent. The rebuild step
+ *     prefers ours' indices when both sides modified the same parent (this
+ *     matches the spec's "fall back to ours" tiebreaker).
  */
 interface NodeDecision {
   /** The merged node, with `children` left empty (the rebuild step fills them). null = deleted */
@@ -95,19 +106,91 @@ export function mergeDocuments(input: MergeInput): MergeResult {
     if (result.decision) decisions.set(id, result.decision);
   }
 
-  // TODO Task 9: rebuild merged tree from decisions
-  // TODO Task 10: merge doc-level fields
+  const merged = rebuildDocument(ours, decisions);
 
-  // Placeholder until Task 9 lands.
-  const merged: PenDocument = {
-    version: ours.version,
-    children: [],
-  };
+  // TODO Task 10: merge doc-level fields
 
   return {
     merged,
     nodeConflicts,
     docFieldConflicts: [],
+  };
+}
+
+/**
+ * Rebuild a PenDocument from a decision map. Uses ours' page structure as the
+ * scaffold (so users see their own page list). For each merged node, attach it
+ * to its merged parent at its merged index.
+ *
+ * Algorithm:
+ *   1. Group decisions by (pageId, parentId).
+ *   2. For each page in ours (or the legacy single page):
+ *      a. Build the page's top-level children list from decisions where
+ *         parentId === null and pageId === thisPageId.
+ *      b. Recursively populate each container's children from decisions where
+ *         parentId === containerId.
+ *   3. Within a parent, sort by `index` ascending; ties broken by id for
+ *      determinism.
+ */
+function rebuildDocument(
+  scaffold: PenDocument,
+  decisions: Map<string, NodeDecision>,
+): PenDocument {
+  // Group by parent for fast child lookup.
+  const byParent = new Map<string, NodeDecision[]>();
+  for (const decision of decisions.values()) {
+    if (!decision.mergedNode) continue;
+    const key = `${decision.pageId ?? '_'}::${decision.parentId ?? '_'}`;
+    let bucket = byParent.get(key);
+    if (!bucket) {
+      bucket = [];
+      byParent.set(key, bucket);
+    }
+    bucket.push(decision);
+  }
+
+  function buildChildren(pageId: string | null, parentId: string | null): PenNode[] {
+    const key = `${pageId ?? '_'}::${parentId ?? '_'}`;
+    const bucket = byParent.get(key);
+    if (!bucket) return [];
+    // Stable sort by (index, id).
+    const sorted = [...bucket].sort((a, b) => {
+      if (a.index !== b.index) return a.index - b.index;
+      const ai = a.mergedNode ? a.mergedNode.id : '';
+      const bi = b.mergedNode ? b.mergedNode.id : '';
+      return ai.localeCompare(bi);
+    });
+    return sorted.map((decision) => {
+      const node = decision.mergedNode!;
+      const children = buildChildren(pageId, node.id);
+      // Only attach a children array if the original node type supports it
+      // (containers). Following the existing PenDocument convention, attach
+      // the children only if the node already had `children` or if there are
+      // any children to attach.
+      if (children.length > 0 || (node as { children?: PenNode[] }).children !== undefined) {
+        return { ...node, children } as PenNode;
+      }
+      return node;
+    });
+  }
+
+  // Use ours' page structure as the scaffold.
+  if (scaffold.pages && scaffold.pages.length > 0) {
+    const newPages = scaffold.pages.map((page) => ({
+      id: page.id,
+      name: page.name,
+      children: buildChildren(page.id, null),
+    }));
+    return {
+      ...scaffold,
+      pages: newPages,
+      children: [],
+    };
+  }
+  // Legacy single-page mode.
+  return {
+    ...scaffold,
+    children: buildChildren(null, null),
   };
 }
 
