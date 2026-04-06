@@ -146,17 +146,25 @@ function inferRoleFromName(node: PenNode): string | undefined {
 
   // Pattern match
   for (const [pattern, role, skipContainers] of NAME_PATTERN_MAP) {
-    if (pattern.test(lower)) {
+    // Use exec (not test) so we know WHERE in the name the role word sits.
+    // Position matters for the ROLE_PART_WORDS guard below.
+    const match = pattern.exec(lower);
+    if (!match) continue;
+
+    if (skipContainers) {
       // Skip container-like names (e.g. "Button Group", "Buttons Row")
-      if (skipContainers) {
-        if (CONTAINER_SUFFIXES.test(lower)) continue;
-        // Also skip "Card Header", "Card Body", "Button Label", etc. — the
-        // role word is modified by a structural part word, meaning the
-        // node is a PIECE of the role, not the role itself.
-        if (ROLE_PART_WORDS.test(lower)) continue;
-      }
-      return role;
+      if (CONTAINER_SUFFIXES.test(lower)) continue;
+      // Skip "Card Header", "Card Body", "Button Label", etc. — when the
+      // part word appears AFTER the role word, the node is a PIECE of
+      // the role, not the role itself. Crucially, we only look at the
+      // text AFTER the match: "Icon Button" must still become 'button',
+      // because there the part word ("icon") appears BEFORE the role
+      // word and is just a modifier ("a button of the icon variety"),
+      // not an internal piece of the button.
+      const afterMatch = lower.slice(match.index + match[0].length);
+      if (ROLE_PART_WORDS.test(afterMatch)) continue;
     }
+    return role;
   }
 
   return undefined;
