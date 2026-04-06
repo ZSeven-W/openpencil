@@ -70,9 +70,15 @@ Design:
   op design:content <section-id> <json|@file|->
   op design:refine --root-id <id>
 
-Export:
-  op export <format> [--out file]
-  Formats: react, html, vue, svelte, flutter, swiftui, compose, rn, css
+Read Nodes:
+  op read-nodes [ids] [--depth N] [--vars] [--page P] [--file F]
+  ids: comma-separated node IDs (omit to read all)
+
+Codegen Pipeline:
+  op codegen:plan <plan-json|@file|->
+  op codegen:submit <planId> <chunk-result|@file|->
+  op codegen:assemble <planId> [--framework react]
+  op codegen:clean <planId>
 
 Variables & Themes:
   op vars                       Get variables
@@ -266,13 +272,40 @@ async function main(): Promise<void> {
       break;
     }
 
-    // --- Export ---
-    case 'export': {
-      const { cmdExport } = await import('./commands/export');
-      await cmdExport(positionals, {
+    // --- Read Nodes ---
+    case 'read-nodes': {
+      const { cmdReadNodes } = await import('./commands/read-nodes');
+      await cmdReadNodes(positionals, {
         file: globalFlags.file,
-        out: flags.out as string | undefined,
+        page: globalFlags.page,
+        depth: flags.depth as string | undefined,
+        vars: !!flags.vars,
       });
+      break;
+    }
+
+    // --- Codegen Pipeline ---
+    case 'codegen:plan': {
+      const { cmdCodegenPlan } = await import('./commands/codegen');
+      await cmdCodegenPlan(positionals, globalFlags);
+      break;
+    }
+    case 'codegen:submit': {
+      const { cmdCodegenSubmit } = await import('./commands/codegen');
+      await cmdCodegenSubmit(positionals, globalFlags);
+      break;
+    }
+    case 'codegen:assemble': {
+      const { cmdCodegenAssemble } = await import('./commands/codegen');
+      await cmdCodegenAssemble(positionals, {
+        ...globalFlags,
+        framework: flags.framework as string | undefined,
+      });
+      break;
+    }
+    case 'codegen:clean': {
+      const { cmdCodegenClean } = await import('./commands/codegen');
+      await cmdCodegenClean(positionals, globalFlags);
       break;
     }
 

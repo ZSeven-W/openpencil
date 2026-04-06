@@ -68,3 +68,24 @@ export type {
   ContainerHighlight,
   IconLookupFn,
 } from './engine.js';
+
+// Codegen
+export type {
+  Framework,
+  PlannedChunk,
+  CodePlanFromAI,
+  ExecutableChunk,
+  CodeExecutionPlan,
+  ChunkContract,
+  PropDef,
+  SlotDef,
+  ImportDef,
+  ChunkResult,
+  ChunkStatus,
+  CodeGenProgress,
+  ContractValidationResult,
+  NodeSnapshot,
+  ExecutableChunkPayload,
+  ResolvedDepContract,
+} from './codegen.js';
+export { FRAMEWORKS } from './codegen.js';

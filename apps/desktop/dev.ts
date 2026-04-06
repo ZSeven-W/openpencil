@@ -108,7 +108,6 @@ async function main(): Promise<void> {
     alias: {
       '@zseven-w/pen-types': join(ROOT, 'packages', 'pen-types', 'src'),
       '@zseven-w/pen-core': join(ROOT, 'packages', 'pen-core', 'src'),
-      '@zseven-w/pen-codegen': join(ROOT, 'packages', 'pen-codegen', 'src'),
       '@zseven-w/pen-figma': join(ROOT, 'packages', 'pen-figma', 'src'),
       '@zseven-w/pen-renderer': join(ROOT, 'packages', 'pen-renderer', 'src'),
       '@zseven-w/pen-sdk': join(ROOT, 'packages', 'pen-sdk', 'src'),

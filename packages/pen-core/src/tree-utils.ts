@@ -362,3 +362,27 @@ export function rotateChildrenInPlace(children: PenNode[], angleDeltaDeg: number
     return updated as unknown as PenNode;
   });
 }
+
+/**
+ * Recursively render a node tree summary for AI prompts.
+ * Shows node IDs, types, names, dimensions, roles, and child counts with indentation.
+ */
+export function nodeTreeToSummary(nodes: PenNode[], depth: number = 0): string {
+  if (nodes.length === 0) return '';
+
+  const indent = '  '.repeat(depth);
+  return nodes
+    .map((node) => {
+      const n = node as unknown as Record<string, unknown>;
+      const dims = `${n.width ?? '?'}x${n.height ?? '?'}`;
+      const childCount = (n.children as PenNode[] | undefined)?.length ?? 0;
+      const role = n.role ? ` [${n.role}]` : '';
+      const line = `${indent}- [${node.id}] ${node.type} "${node.name ?? ''}" (${dims})${role}${childCount > 0 ? ` [${childCount} children]` : ''}`;
+      const children = n.children as PenNode[] | undefined;
+      if (children && children.length > 0) {
+        return line + '\n' + nodeTreeToSummary(children, depth + 1);
+      }
+      return line;
+    })
+    .join('\n');
+}

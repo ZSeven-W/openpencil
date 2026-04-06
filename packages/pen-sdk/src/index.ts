@@ -10,7 +10,6 @@
  *   type PenDocument,
  *   createEmptyDocument,
  *   normalizePenDocument,
- *   generateReactFromDocument,
  *   parseFigFile,
  * } from '@zseven-w/pen-sdk'
  * ```
@@ -123,36 +122,26 @@ export {
   executeBooleanOp,
 } from '@zseven-w/pen-core';
 
-// ── Codegen: Multi-platform code generation ────────────────────────────
-export {
-  // CSS Variables
-  variableNameToCSS,
-  generateCSSVariables,
-  // React + Tailwind
-  generateReactCode,
-  generateReactFromDocument,
-  // HTML + CSS
-  generateHTMLCode,
-  generateHTMLFromDocument,
-  // Vue 3
-  generateVueCode,
-  generateVueFromDocument,
-  // Svelte
-  generateSvelteCode,
-  generateSvelteFromDocument,
-  // Flutter
-  generateFlutterCode,
-  generateFlutterFromDocument,
-  // SwiftUI
-  generateSwiftUICode,
-  generateSwiftUIFromDocument,
-  // Android Compose
-  generateComposeCode,
-  generateComposeFromDocument,
-  // React Native
-  generateReactNativeCode,
-  generateReactNativeFromDocument,
-} from '@zseven-w/pen-codegen';
+// ── Codegen types (from pen-types) ──────────────────────────────────────
+export type {
+  Framework,
+  PlannedChunk,
+  CodePlanFromAI,
+  ExecutableChunk,
+  CodeExecutionPlan,
+  ChunkContract,
+  PropDef,
+  SlotDef,
+  ImportDef,
+  ChunkResult,
+  ChunkStatus,
+  CodeGenProgress,
+  ContractValidationResult,
+  NodeSnapshot,
+  ExecutableChunkPayload,
+  ResolvedDepContract,
+} from '@zseven-w/pen-types';
+export { FRAMEWORKS } from '@zseven-w/pen-types';
 
 // ── Figma: .fig file import ────────────────────────────────────────────
 export {

@@ -80,7 +80,6 @@
         "op": "dist/openpencil-cli.cjs",
       },
       "dependencies": {
-        "@zseven-w/pen-codegen": "workspace:*",
         "@zseven-w/pen-figma": "workspace:*",
         "@zseven-w/pen-mcp": "workspace:*",
       },
@@ -95,10 +94,10 @@
       "dependencies": {
         "@zseven-w/agent-native": "workspace:*",
         "@zseven-w/pen-ai-skills": "workspace:*",
-        "@zseven-w/pen-codegen": "workspace:*",
         "@zseven-w/pen-core": "workspace:*",
         "@zseven-w/pen-engine": "workspace:*",
         "@zseven-w/pen-figma": "workspace:*",
+        "@zseven-w/pen-mcp": "workspace:*",
         "@zseven-w/pen-react": "workspace:*",
         "@zseven-w/pen-renderer": "workspace:*",
         "@zseven-w/pen-types": "workspace:*",
@@ -114,17 +113,6 @@
       "version": "0.6.0",
       "dependencies": {
         "gray-matter": "^4.0.3",
-      },
-    },
-    "packages/pen-codegen": {
-      "name": "@zseven-w/pen-codegen",
-      "version": "0.6.0",
-      "dependencies": {
-        "@zseven-w/pen-core": "workspace:*",
-        "@zseven-w/pen-types": "workspace:*",
-      },
-      "devDependencies": {
-        "typescript": "^5.7.2",
       },
     },
     "packages/pen-core": {
@@ -143,7 +131,6 @@
       "name": "@zseven-w/pen-engine",
       "version": "0.6.0",
       "dependencies": {
-        "@zseven-w/pen-codegen": "workspace:*",
         "@zseven-w/pen-core": "workspace:*",
         "@zseven-w/pen-figma": "workspace:*",
         "@zseven-w/pen-renderer": "workspace:*",
@@ -242,7 +229,6 @@
       "name": "@zseven-w/pen-sdk",
       "version": "0.6.0",
       "dependencies": {
-        "@zseven-w/pen-codegen": "workspace:*",
         "@zseven-w/pen-core": "workspace:*",
         "@zseven-w/pen-engine": "workspace:*",
         "@zseven-w/pen-figma": "workspace:*",
@@ -926,8 +912,6 @@
     "@zseven-w/openpencil": ["@zseven-w/openpencil@workspace:apps/cli"],
 
     "@zseven-w/pen-ai-skills": ["@zseven-w/pen-ai-skills@workspace:packages/pen-ai-skills"],
-
-    "@zseven-w/pen-codegen": ["@zseven-w/pen-codegen@workspace:packages/pen-codegen"],
 
     "@zseven-w/pen-core": ["@zseven-w/pen-core@workspace:packages/pen-core"],
 

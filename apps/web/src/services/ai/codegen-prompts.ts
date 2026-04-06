@@ -1,9 +1,9 @@
 // apps/web/src/services/ai/codegen-prompts.ts
 
 import { getSkillByName } from '@zseven-w/pen-ai-skills';
-import type { Framework, ChunkContract, CodePlanFromAI } from '@zseven-w/pen-codegen';
+import type { Framework, ChunkContract, CodePlanFromAI } from '@zseven-w/pen-types';
 import type { PenNode } from '@zseven-w/pen-types';
-import { nodeTreeToSummary } from '@zseven-w/pen-codegen';
+import { nodeTreeToSummary } from '@zseven-w/pen-core';
 
 function loadSkill(name: string): string {
   return getSkillByName(name)?.content ?? '';

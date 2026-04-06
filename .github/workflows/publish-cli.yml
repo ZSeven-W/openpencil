@@ -74,12 +74,6 @@ jobs:
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
-      - name: Publish pen-codegen
-        run: npm publish --access public 2>&1 || npm view "@zseven-w/pen-codegen@${{ steps.version.outputs.version }}" version
-        working-directory: packages/pen-codegen
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-
       - name: Publish pen-figma
         run: npm publish --access public 2>&1 || npm view "@zseven-w/pen-figma@${{ steps.version.outputs.version }}" version
         working-directory: packages/pen-figma

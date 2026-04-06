@@ -20,7 +20,6 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@zseven-w/pen-codegen": "workspace:*",
     "@zseven-w/pen-core": "workspace:*",
     "@zseven-w/pen-figma": "workspace:*",
     "@zseven-w/pen-renderer": "workspace:*",

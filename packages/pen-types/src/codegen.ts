@@ -1,4 +1,4 @@
-import type { PenNode } from '@zseven-w/pen-types';
+import type { PenNode } from './pen.js';
 
 // === Canonical framework type ===
 
@@ -121,21 +121,27 @@ export interface ContractValidationResult {
   issues: string[];
 }
 
-export function validateContract(result: ChunkResult): ContractValidationResult {
-  const issues: string[] = [];
-  const { contract, code } = result;
+// === Wire DTO types (MCP/CLI responses) ===
 
-  // 1. componentName must be a valid PascalCase identifier (if provided)
-  if (contract.componentName && !/^[A-Z][a-zA-Z0-9]*$/.test(contract.componentName)) {
-    issues.push(`componentName "${contract.componentName}" is not a valid PascalCase identifier`);
-  }
+/**
+ * Depth-limited node snapshot for wire transfer.
+ * When depth is exhausted, `children` is the string `"..."` instead of NodeSnapshot[].
+ */
+export type NodeSnapshot = Omit<PenNode, 'children'> & {
+  children?: NodeSnapshot[] | '...';
+};
 
-  // 2. componentName should appear in code (skip for SFC frameworks where name is implicit)
-  // Svelte/Vue SFC may have <script>, <template>, or just <style> with HTML
-  const isSFC = code.includes('<script') || code.includes('<template') || code.includes('<style');
-  if (contract.componentName && !isSFC && !code.includes(contract.componentName)) {
-    issues.push(`componentName "${contract.componentName}" not found in generated code`);
-  }
-
-  return { valid: issues.length === 0, issues };
+/**
+ * Hydrated chunk payload returned by codegen_plan and codegen_submit_chunk.
+ * Uses NodeSnapshot (depth-limited) instead of PenNode[].
+ * depContracts entries may be null when a dependency chunk failed/was skipped.
+ */
+export interface ExecutableChunkPayload extends Omit<ExecutableChunk, 'nodes' | 'depContracts'> {
+  nodes: NodeSnapshot[];
+  depContracts: ResolvedDepContract[];
 }
+
+/**
+ * A dependency contract that may be absent if the upstream chunk failed or was skipped.
+ */
+export type ResolvedDepContract = ChunkContract | null;
