@@ -221,7 +221,7 @@ export const useDocumentStore = create<DocumentStoreState>((set, get) => ({
       } catch (err) {
         console.warn('[document-store.save] writeToFileHandle failed, falling back:', err);
         set({ fileHandle: null });
-        // fall through to saveAs()
+        return get().saveAs();
       }
     }
 
