@@ -26,6 +26,7 @@ export {
   deepCloneNode,
   cloneNodeWithNewIds,
   cloneNodesWithNewIds,
+  nodeTreeToSummary,
 } from './tree-utils.js';
 
 // Variables
@@ -130,7 +131,7 @@ export { type BooleanOpType, canBooleanOp, executeBooleanOp } from './boolean-op
 export { cssFontFamily } from './font-utils.js';
 
 // Node helpers
-export { isBadgeOverlayNode } from './node-helpers.js';
+export { isBadgeOverlayNode, sanitizeName } from './node-helpers.js';
 
 // Design-MD parser
 export {
