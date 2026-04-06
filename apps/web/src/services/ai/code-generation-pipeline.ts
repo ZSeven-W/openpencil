@@ -11,11 +11,26 @@ import type {
   ChunkContract,
   ChunkStatus,
   CodeGenProgress,
+  ContractValidationResult,
 } from '@zseven-w/pen-types';
 import { sanitizeName } from '@zseven-w/pen-core';
-import { validateContract } from '@zseven-w/pen-mcp';
 import { buildPlanningPrompt, buildChunkPrompt, buildAssemblyPrompt } from './codegen-prompts';
 import { streamChat } from './ai-service';
+
+// Inlined to avoid importing from @zseven-w/pen-mcp, which transitively pulls
+// node:fs/promises via document-manager and breaks Vite browser builds.
+function validateContract(result: ChunkResult): ContractValidationResult {
+  const issues: string[] = [];
+  const { contract, code } = result;
+  if (contract.componentName && !/^[A-Z][a-zA-Z0-9]*$/.test(contract.componentName)) {
+    issues.push(`componentName "${contract.componentName}" is not a valid PascalCase identifier`);
+  }
+  const isSFC = code.includes('<script') || code.includes('<template') || code.includes('<style');
+  if (contract.componentName && !isSFC && !code.includes(contract.componentName)) {
+    issues.push(`componentName "${contract.componentName}" not found in generated code`);
+  }
+  return { valid: issues.length === 0, issues };
+}
 
 // ── Exported helpers (tested independently) ──
 
