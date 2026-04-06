@@ -94,13 +94,6 @@ export default function EditorLayout() {
         return;
       }
 
-      // Cmd+Shift+E: open export
-      if (isMod && e.shiftKey && e.key.toLowerCase() === 'e') {
-        e.preventDefault();
-        useCanvasStore.getState().toggleExportDialog();
-        return;
-      }
-
       // Cmd+Shift+V: toggle variables panel
       if (isMod && e.shiftKey && e.key.toLowerCase() === 'v') {
         e.preventDefault();
@@ -139,6 +132,29 @@ export default function EditorLayout() {
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
   }, [toggleMinimize]);
+
+  // Cmd/Ctrl+Shift+E: open the global export dialog.
+  //
+  // Registered as a *capture-phase document listener* — separate from the
+  // other shortcuts above — so it fires earliest in the event chain, before
+  // any bubble-phase listener (use-edit-shortcuts, use-tool-shortcuts, etc.)
+  // can interfere. Uses `e.code === 'KeyE'` for keyboard-layout independence
+  // (a Pinyin/IME state can change `e.key` but not `e.code`). The action is
+  // `setExportDialogOpen(true)` (idempotent) rather than a toggle, so even
+  // if multiple paths fire (web listener + Electron menu IPC) the dialog
+  // still ends up open instead of cancelling itself out.
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      const isMod = e.metaKey || e.ctrlKey;
+      if (!isMod || !e.shiftKey) return;
+      if (e.code !== 'KeyE' && e.key.toLowerCase() !== 'e') return;
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      useCanvasStore.getState().setExportDialogOpen(true);
+    };
+    document.addEventListener('keydown', handler, { capture: true });
+    return () => document.removeEventListener('keydown', handler, { capture: true });
+  }, []);
 
   // Handle Electron native menu actions
   useElectronMenu();
