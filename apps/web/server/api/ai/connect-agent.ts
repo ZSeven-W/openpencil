@@ -740,7 +740,14 @@ async function connectCopilot(): Promise<ConnectResult> {
 
   try {
     const { CopilotClient } = await import('@github/copilot-sdk');
-    const client = new CopilotClient({ autoStart: true, cliPath });
+    // In Electron, the SDK spawns `process.execPath` (= OpenPencil.exe) to run
+    // the .js entry. ELECTRON_RUN_AS_NODE makes that binary behave as plain Node
+    // so it doesn't reject `index.js` as a stray positional argument.
+    const client = new CopilotClient({
+      autoStart: true,
+      cliPath,
+      env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' },
+    });
 
     serverLog.info('[connect-agent] starting copilot client...');
     await client.start();
