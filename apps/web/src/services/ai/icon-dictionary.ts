@@ -481,35 +481,58 @@ function iconifyBodyToPathD(body: string): string | null {
 // ---------------------------------------------------------------------------
 
 /**
+ * A fallback match is only trusted when the matched key covers a
+ * sufficiently large fraction of the node's normalized name. Without this
+ * guard, short icon keys (e.g. "heart") would hijack unrelated multi-word
+ * names like "heartratewaveform" — the matched key would be 5 chars out of
+ * 17, and the rest of the name would be silently ignored. 0.5 means the
+ * matched key must cover at least half of the name.
+ */
+const FALLBACK_MIN_RATIO = 0.5;
+
+/**
  * Try to resolve an unknown normalized icon name by finding the longest
- * known icon key that the name starts with (prefix match, min 4 chars).
- * e.g. "arrowdowncircle" -> "arrowdown", "shieldcheck" -> "shield"
+ * known icon key that the name starts with (prefix match, min 4 chars, and
+ * covering ≥50% of the name).
+ * e.g. "arrowdowncircle" -> "arrowdown" (9/15 = 60%)
+ * but  "heartratewaveform" -> null ("heart" is 5/17 = 29%, too weak)
  */
 export function findPrefixFallback(normalizedName: string): string | null {
+  if (normalizedName.length === 0) return null;
   let best: string | null = null;
   let bestLen = 3; // require at least 4-char match
   for (const key of Object.keys(ICON_PATH_MAP)) {
-    if (key.length > bestLen && normalizedName.startsWith(key)) {
-      best = key;
-      bestLen = key.length;
-    }
+    if (key.length <= bestLen) continue;
+    if (!normalizedName.startsWith(key)) continue;
+    if (key.length / normalizedName.length < FALLBACK_MIN_RATIO) continue;
+    best = key;
+    bestLen = key.length;
   }
   return best;
 }
 
 /**
- * Find the longest ICON_PATH_MAP key that appears anywhere as a substring
- * of the normalized name. E.g. "badgecheck" -> "check", "uploadcloud" -> "upload".
- * Only keys of at least 4 characters are considered.
+ * Find an ICON_PATH_MAP key that the normalized name ENDS with (suffix
+ * match). Suffix match is safer than "anywhere" substring: it captures
+ * patterns where the trailing word is the actual icon ("badgecheck" →
+ * "check", "arrowdowncircle" → "circle") while rejecting cases where the
+ * icon word sits in the middle or at the front of a longer compound name
+ * ("heartratewaveform" should NOT resolve to the heart icon just because
+ * "heart" happens to appear at the start).
+ *
+ * Also requires the matched key to cover at least 50% of the name so that
+ * short suffixes like "bar" don't hijack long names like "snackbar".
  */
 export function findSubstringFallback(normalizedName: string): string | null {
+  if (normalizedName.length === 0) return null;
   let best: string | null = null;
   let bestLen = 3;
   for (const key of Object.keys(ICON_PATH_MAP)) {
-    if (key.length > bestLen && normalizedName.includes(key)) {
-      best = key;
-      bestLen = key.length;
-    }
+    if (key.length <= bestLen) continue;
+    if (!normalizedName.endsWith(key)) continue;
+    if (key.length / normalizedName.length < FALLBACK_MIN_RATIO) continue;
+    best = key;
+    bestLen = key.length;
   }
   return best;
 }
