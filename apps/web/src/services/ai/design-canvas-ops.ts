@@ -333,6 +333,29 @@ export function insertStreamingNode(node: PenNode, parentId: string | null): voi
 // Canvas apply/upsert operations
 // ---------------------------------------------------------------------------
 
+/**
+ * Run the page-root post-pass cleanups after a non-streaming apply path
+ * inserts its nodes into the store. This mirrors part of what
+ * applyPostStreamingTreeHeuristics does for the streaming path:
+ * specifically, strip redundant "safe-dark" section fills that sub-agents
+ * or external MCP callers hedge with on section roots (they hide the real
+ * page background and break theming).
+ *
+ * This helper targets DEFAULT_FRAME_ID — the canonical page root frame —
+ * so it always honours the stripRedundantSectionFills scope contract
+ * regardless of what the caller actually inserted (a full page, a set of
+ * sections, or a single card). If the page root does not exist yet (first
+ * insert before any root frame was created), there is nothing to strip
+ * and the helper is a no-op.
+ */
+function finalizePageRootAfterApply(): void {
+  const pageRoot = useDocumentStore.getState().getNodeById(DEFAULT_FRAME_ID);
+  if (!pageRoot || pageRoot.type !== 'frame') return;
+  if (stripRedundantSectionFills(pageRoot)) {
+    forcePageResync();
+  }
+}
+
 export function applyNodesToCanvas(nodes: PenNode[]): void {
   const { getFlatNodes } = useDocumentStore.getState();
   const existingIds = new Set(getFlatNodes().map((n) => n.id));
@@ -341,6 +364,7 @@ export function applyNodesToCanvas(nodes: PenNode[]): void {
   // If canvas only has one empty frame, replace it with the generated content
   if (isCanvasOnlyEmptyFrame() && preparedNodes.length === 1 && preparedNodes[0].type === 'frame') {
     replaceEmptyFrame(preparedNodes[0]);
+    finalizePageRootAfterApply();
     resolveAllPendingIcons().catch(console.warn);
     const rootId = getGenerationRootFrameId();
     if (rootId) scanAndFillImages(rootId).catch(() => {});
@@ -355,6 +379,7 @@ export function applyNodesToCanvas(nodes: PenNode[]): void {
     addNode(parentId, node, Infinity);
   }
   adjustRootFrameHeightToContent();
+  finalizePageRootAfterApply();
   resolveAllPendingIcons().catch(console.warn);
   const rootId = getGenerationRootFrameId();
   if (rootId) scanAndFillImages(rootId).catch(() => {});
@@ -365,6 +390,7 @@ export function upsertNodesToCanvas(nodes: PenNode[]): number {
 
   if (isCanvasOnlyEmptyFrame() && preparedNodes.length === 1 && preparedNodes[0].type === 'frame') {
     replaceEmptyFrame(preparedNodes[0]);
+    finalizePageRootAfterApply();
     return 1;
   }
 
@@ -388,6 +414,7 @@ export function upsertNodesToCanvas(nodes: PenNode[]): number {
   }
 
   adjustRootFrameHeightToContent();
+  finalizePageRootAfterApply();
   const rootId = getGenerationRootFrameId();
   if (rootId) scanAndFillImages(rootId).catch(() => {});
   return count;
@@ -397,6 +424,7 @@ export function upsertNodesToCanvas(nodes: PenNode[]): number {
 function upsertPreparedNodes(preparedNodes: PenNode[]): number {
   if (isCanvasOnlyEmptyFrame() && preparedNodes.length === 1 && preparedNodes[0].type === 'frame') {
     replaceEmptyFrame(preparedNodes[0]);
+    finalizePageRootAfterApply();
     return 1;
   }
 
@@ -420,6 +448,7 @@ function upsertPreparedNodes(preparedNodes: PenNode[]): number {
   }
 
   adjustRootFrameHeightToContent();
+  finalizePageRootAfterApply();
   return count;
 }
 
@@ -493,6 +522,7 @@ export function extractAndApplyDesignModification(responseText: string): number 
         count++;
       }
     }
+    finalizePageRootAfterApply();
   } finally {
     useHistoryStore.getState().endBatch(useDocumentStore.getState().document);
   }
