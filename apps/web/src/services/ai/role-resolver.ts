@@ -504,12 +504,13 @@ export function hasFill(node: PenNode): boolean {
 
 /**
  * Returns true when a node has a fill that will actually render a
- * visible color. Differs from `hasFill` by rejecting fully-transparent
- * solid fills:
- *   - `#00000000` and any 8-digit hex with `00` alpha
- *   - CSS keyword `"transparent"`
- *   - CSS keyword `"none"` (not a legal PenFill color but the
- *     stroke/fill normalizer may leave it in mixed arrays)
+ * visible color. Differs from `hasFill` by rejecting fills that draw
+ * nothing:
+ *   - Solid fills whose color is `#00000000`, any 8-digit hex with
+ *     `00` alpha, or the CSS keywords `"transparent"` / `"none"`
+ *   - Any fill (solid, gradient, image) whose `opacity` field is
+ *     `0` (or any non-positive number — negative values are treated
+ *     defensively as zero)
  *
  * Use this when deciding whether a node needs a color PAINTED ONTO it
  * (button foreground contrast, focus ring supply, etc.). Do NOT use
@@ -520,8 +521,18 @@ export function hasVisibleFill(node: PenNode): boolean {
   if (!('fill' in node) || !Array.isArray(node.fill) || node.fill.length === 0) return false;
   const first = node.fill[0];
   if (!first) return false;
-  if (first.type === 'solid' && isInvisibleColor(first.color)) return false;
-  return true;
+  return !isFillInvisible(first);
+}
+
+/** A fill is invisible when its opacity is <= 0 or (for solids) its
+ *  color is an explicit-transparent hex / CSS keyword. */
+function isFillInvisible(fill: PenFill): boolean {
+  const opacity = (fill as { opacity?: unknown }).opacity;
+  if (typeof opacity === 'number' && opacity <= 0) return true;
+  if (fill.type === 'solid') {
+    return isInvisibleColor((fill as SolidFill).color);
+  }
+  return false;
 }
 
 function isInvisibleColor(color: unknown): boolean {

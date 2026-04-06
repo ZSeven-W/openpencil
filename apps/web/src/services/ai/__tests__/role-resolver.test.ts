@@ -90,6 +90,17 @@ describe('hasFill', () => {
     } as PenNode;
     expect(hasFill(node)).toBe(true);
   });
+
+  it('returns true for opacity-0 fill — still a deliberate author choice', () => {
+    // opacity: 0 is a legitimate "I want a transparent background"
+    // declaration. hasFill exists to stop post-pass heuristics from
+    // overwriting such choices, so it must keep reporting true.
+    const node = {
+      id: 'n', type: 'frame', x: 0, y: 0, width: 100, height: 100,
+      fill: [{ type: 'solid', color: '#FFFFFF', opacity: 0 }],
+    } as PenNode;
+    expect(hasFill(node)).toBe(true);
+  });
 });
 
 describe('hasVisibleFill', () => {
@@ -155,6 +166,61 @@ describe('hasVisibleFill', () => {
     } as PenNode;
     expect(hasVisibleFill(node)).toBe(true);
   });
+
+  // --- opacity field handling ---------------------------------------
+  // PenFill variants all carry an optional `opacity` field. A solid fill
+  // with opacity=0 renders as fully transparent regardless of its color
+  // hex, and downstream contrast logic must treat it as "no visible
+  // fill" so the foreground color can still be supplied.
+  it('returns false for a solid fill with opacity: 0', () => {
+    const node = {
+      id: 'n', type: 'frame', x: 0, y: 0, width: 100, height: 100,
+      fill: [{ type: 'solid', color: '#FFFFFF', opacity: 0 }],
+    } as PenNode;
+    expect(hasVisibleFill(node)).toBe(false);
+  });
+
+  it('returns false for a linear gradient fill with opacity: 0', () => {
+    const node = {
+      id: 'n', type: 'frame', x: 0, y: 0, width: 100, height: 100,
+      fill: [
+        {
+          type: 'linear_gradient',
+          angle: 90,
+          stops: [
+            { offset: 0, color: '#FF0000' },
+            { offset: 1, color: '#0000FF' },
+          ],
+          opacity: 0,
+        },
+      ],
+    } as unknown as PenNode;
+    expect(hasVisibleFill(node)).toBe(false);
+  });
+
+  it('returns false for negative opacity (treated as zero)', () => {
+    const node = {
+      id: 'n', type: 'frame', x: 0, y: 0, width: 100, height: 100,
+      fill: [{ type: 'solid', color: '#FFFFFF', opacity: -0.5 }],
+    } as PenNode;
+    expect(hasVisibleFill(node)).toBe(false);
+  });
+
+  it('returns true for a solid fill with opacity: 0.5', () => {
+    const node = {
+      id: 'n', type: 'frame', x: 0, y: 0, width: 100, height: 100,
+      fill: [{ type: 'solid', color: '#FFFFFF', opacity: 0.5 }],
+    } as PenNode;
+    expect(hasVisibleFill(node)).toBe(true);
+  });
+
+  it('returns true for a solid fill without an opacity field (default opaque)', () => {
+    const node = {
+      id: 'n', type: 'frame', x: 0, y: 0, width: 100, height: 100,
+      fill: [{ type: 'solid', color: '#FFFFFF' }],
+    } as PenNode;
+    expect(hasVisibleFill(node)).toBe(true);
+  });
 });
 
 describe('resolveTreePostPass — transparent fill overwrite protection', () => {
@@ -162,6 +228,24 @@ describe('resolveTreePostPass — transparent fill overwrite protection', () => 
   // explicit fill choice must respect a transparent fill the same way
   // they respect any other color. Only the button contrast pass needs
   // to treat transparent as "no visible fill".
+
+  it('fixOrphanContainerContrast does NOT overwrite a card with opacity: 0 fill', () => {
+    const card: PenNode = {
+      id: 'card', type: 'frame', name: 'Opacity Zero Card', x: 0, y: 0, width: 300, height: 200,
+      cornerRadius: 12,
+      fill: [{ type: 'solid', color: '#FFFFFF', opacity: 0 }],
+      children: [
+        { id: 'txt', type: 'text', name: 'Title', x: 0, y: 0, width: 200, height: 20, content: 'Hello' } as PenNode,
+      ],
+    } as PenNode;
+    const root: PenNode = {
+      id: 'root', type: 'frame', name: 'Root', x: 0, y: 0, width: 1200, height: 800,
+      children: [card],
+    } as PenNode;
+    resolveTreePostPass(root, 1200);
+    expect((card as any).fill).toEqual([{ type: 'solid', color: '#FFFFFF', opacity: 0 }]);
+    expect((card as any).effects).toBeUndefined();
+  });
 
   it('fixOrphanContainerContrast does NOT overwrite a card with explicit transparent fill', () => {
     // An author wrote a card with cornerRadius + children but chose a
