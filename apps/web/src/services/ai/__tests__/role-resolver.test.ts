@@ -8,7 +8,7 @@ vi.mock('@/canvas/canvas-text-measure', () => ({
   hasCjkText: () => false,
 }));
 
-import { hexLuminance, hasFill, resolveNodeRole, resolveTreePostPass } from '../role-resolver';
+import { hexLuminance, hasFill, hasVisibleFill, resolveNodeRole, resolveTreePostPass } from '../role-resolver';
 import type { RoleContext } from '../role-resolver';
 import type { PenNode } from '@zseven-w/pen-types';
 
@@ -48,6 +48,11 @@ describe('hexLuminance', () => {
 });
 
 describe('hasFill', () => {
+  // hasFill answers "has the AI declared any fill entry?" — it's used by
+  // post-pass heuristics that must NOT overwrite an explicitly-chosen
+  // fill, even if that fill is transparent. Use `hasVisibleFill` when
+  // you need "will this draw a visible color?".
+
   it('returns false for node without fill', () => {
     const node = { id: 'n1', type: 'frame', x: 0, y: 0, width: 100, height: 100 } as PenNode;
     expect(hasFill(node)).toBe(false);
@@ -66,17 +71,57 @@ describe('hasFill', () => {
     expect(hasFill(node)).toBe(true);
   });
 
-  // Regression: button foreground contrast relies on hasFill to detect
-  // "no visible fill here, please supply one". A path icon whose fill
-  // was normalized to the explicit-transparent hex #00000000 (to
-  // preserve hollow-shape intent on activity rings / chart lines) must
-  // still be reported as "no fill" so the contrast pass can paint it.
+  // hasFill must report transparent fills as "has fill" so the overwrite-
+  // protection callers (fixOrphanContainerContrast, fixSectionAlternation)
+  // leave them alone. A frame whose AI author explicitly set
+  // fill=#00000000 is making a deliberate no-background choice.
+  it('returns true for explicit-transparent hex (#00000000) — overwrite protection', () => {
+    const node = {
+      id: 'n', type: 'frame', x: 0, y: 0, width: 100, height: 100,
+      fill: [{ type: 'solid', color: '#00000000' }],
+    } as PenNode;
+    expect(hasFill(node)).toBe(true);
+  });
+
+  it('returns true for CSS keyword "transparent"', () => {
+    const node = {
+      id: 'n', type: 'frame', x: 0, y: 0, width: 100, height: 100,
+      fill: [{ type: 'solid', color: 'transparent' }],
+    } as PenNode;
+    expect(hasFill(node)).toBe(true);
+  });
+});
+
+describe('hasVisibleFill', () => {
+  // hasVisibleFill answers "will this draw a visible color on screen?".
+  // Used by the button foreground contrast pass to decide whether a
+  // child node needs a color supplied. Transparent fills must report
+  // as false so contrast can paint in a visible foreground color.
+
+  it('returns false for node without fill', () => {
+    const node = { id: 'n', type: 'frame', x: 0, y: 0, width: 100, height: 100 } as PenNode;
+    expect(hasVisibleFill(node)).toBe(false);
+  });
+
+  it('returns false for empty fill array', () => {
+    const node = { id: 'n', type: 'frame', x: 0, y: 0, width: 100, height: 100, fill: [] } as PenNode;
+    expect(hasVisibleFill(node)).toBe(false);
+  });
+
+  it('returns true for node with opaque solid fill', () => {
+    const node = {
+      id: 'n', type: 'frame', x: 0, y: 0, width: 100, height: 100,
+      fill: [{ type: 'solid', color: '#FFFFFF' }],
+    } as PenNode;
+    expect(hasVisibleFill(node)).toBe(true);
+  });
+
   it('returns false for 8-digit transparent hex (#00000000)', () => {
     const node = {
       id: 'p', type: 'path', x: 0, y: 0, width: 24, height: 24,
       fill: [{ type: 'solid', color: '#00000000' }],
     } as PenNode;
-    expect(hasFill(node)).toBe(false);
+    expect(hasVisibleFill(node)).toBe(false);
   });
 
   it('returns false for any 8-digit hex with 00 alpha', () => {
@@ -84,7 +129,7 @@ describe('hasFill', () => {
       id: 'p', type: 'path', x: 0, y: 0, width: 24, height: 24,
       fill: [{ type: 'solid', color: '#FF00FF00' }],
     } as PenNode;
-    expect(hasFill(node)).toBe(false);
+    expect(hasVisibleFill(node)).toBe(false);
   });
 
   it('returns false for CSS keyword "transparent"', () => {
@@ -92,7 +137,7 @@ describe('hasFill', () => {
       id: 'p', type: 'path', x: 0, y: 0, width: 24, height: 24,
       fill: [{ type: 'solid', color: 'transparent' }],
     } as PenNode;
-    expect(hasFill(node)).toBe(false);
+    expect(hasVisibleFill(node)).toBe(false);
   });
 
   it('returns false for CSS keyword "none"', () => {
@@ -100,7 +145,7 @@ describe('hasFill', () => {
       id: 'p', type: 'path', x: 0, y: 0, width: 24, height: 24,
       fill: [{ type: 'solid', color: 'none' }],
     } as PenNode;
-    expect(hasFill(node)).toBe(false);
+    expect(hasVisibleFill(node)).toBe(false);
   });
 
   it('returns true for a partially-transparent 8-digit hex (non-zero alpha)', () => {
@@ -108,7 +153,71 @@ describe('hasFill', () => {
       id: 'n', type: 'frame', x: 0, y: 0, width: 100, height: 100,
       fill: [{ type: 'solid', color: '#FF000080' }],
     } as PenNode;
-    expect(hasFill(node)).toBe(true);
+    expect(hasVisibleFill(node)).toBe(true);
+  });
+});
+
+describe('resolveTreePostPass — transparent fill overwrite protection', () => {
+  // Regression: the post-pass heuristics that DON'T want to overwrite an
+  // explicit fill choice must respect a transparent fill the same way
+  // they respect any other color. Only the button contrast pass needs
+  // to treat transparent as "no visible fill".
+
+  it('fixOrphanContainerContrast does NOT overwrite a card with explicit transparent fill', () => {
+    // An author wrote a card with cornerRadius + children but chose a
+    // transparent background intentionally. The orphan-contrast pass
+    // must not suddenly paint it white and add shadows.
+    const card: PenNode = {
+      id: 'card', type: 'frame', name: 'Hollow Card', x: 0, y: 0, width: 300, height: 200,
+      cornerRadius: 12,
+      fill: [{ type: 'solid', color: '#00000000' }],
+      children: [
+        { id: 'txt', type: 'text', name: 'Title', x: 0, y: 0, width: 200, height: 20, content: 'Hello' } as PenNode,
+      ],
+    } as PenNode;
+    const root: PenNode = {
+      id: 'root', type: 'frame', name: 'Root', x: 0, y: 0, width: 1200, height: 800,
+      children: [card],
+    } as PenNode;
+    resolveTreePostPass(root, 1200);
+    // Fill is exactly what the author set — not #FFFFFF.
+    expect((card as any).fill).toEqual([{ type: 'solid', color: '#00000000' }]);
+    // No shadow added.
+    expect((card as any).effects).toBeUndefined();
+  });
+
+  it('fixSectionAlternation does NOT repaint a section with explicit transparent fill', () => {
+    const children = [
+      {
+        id: 's0', type: 'frame' as const, name: 'Hero',
+        x: 0, y: 0, width: 1200, height: 400,
+        role: 'hero', layout: 'vertical' as const, children: [],
+        fill: [{ type: 'solid', color: '#00000000' }],
+      },
+      {
+        id: 's1', type: 'frame' as const, name: 'Features',
+        x: 0, y: 0, width: 1200, height: 400,
+        role: 'section', layout: 'vertical' as const, children: [],
+      },
+      {
+        id: 's2', type: 'frame' as const, name: 'CTA',
+        x: 0, y: 0, width: 1200, height: 400,
+        role: 'cta-section', layout: 'vertical' as const, children: [],
+      },
+      {
+        id: 's3', type: 'frame' as const, name: 'Footer',
+        x: 0, y: 0, width: 1200, height: 400,
+        role: 'footer', layout: 'vertical' as const, children: [],
+      },
+    ] as PenNode[];
+    const root: PenNode = {
+      id: 'root', type: 'frame', name: 'Root', x: 0, y: 0, width: 1200, height: 1600,
+      layout: 'vertical', children,
+    } as PenNode;
+    resolveTreePostPass(root, 1200);
+    // The transparent hero stays transparent — alternation does not
+    // overwrite an explicit fill of any color.
+    expect((children[0] as any).fill).toEqual([{ type: 'solid', color: '#00000000' }]);
   });
 });
 

@@ -483,20 +483,40 @@ export function hexLuminance(hex: string): number {
  * Does NOT distinguish AI-explicit from role-default fills.
  */
 /**
- * Returns true when a node has a VISIBLE fill.
+ * Returns true when a node has ANY declared fill entry, visible or not.
  *
- * The subtle bit is the "visible" qualifier: an explicit-transparent hex
- * (`#00000000`), a fully-transparent 8-digit hex (any `#RRGGBB00`), or a
- * CSS keyword (`"transparent"` / `"none"`) all satisfy the naive
- * `fill.length > 0` test but draw nothing. Downstream heuristics like
- * `fixButtonForegroundContrast` ask this function "does this path icon
- * already have a color?" expecting a truthful answer. A normalized
- * transparent fill (the placeholder the stroke/fill schema normalizer
- * leaves on hollow shapes to stop the renderer from falling back to
- * the default gray) must be reported as "no visible fill" so the
- * contrast pass can paint in a foreground color.
+ * This is the "overwrite protection" predicate: heuristics like
+ * `fixOrphanContainerContrast` and `fixSectionAlternation` ask this to
+ * decide whether the author has already made a deliberate fill choice
+ * that they should respect. An explicit transparent fill
+ * (`#00000000`, `"transparent"`, `"none"`) IS a deliberate choice —
+ * "I want this container to be see-through" — and must be preserved,
+ * not swapped for a default white background.
+ *
+ * When you instead need to know "will this draw a visible color on
+ * screen?" (e.g. to decide whether the button foreground contrast
+ * pass needs to paint in a readable color), use `hasVisibleFill`
+ * instead.
  */
 export function hasFill(node: PenNode): boolean {
+  return 'fill' in node && Array.isArray(node.fill) && node.fill.length > 0;
+}
+
+/**
+ * Returns true when a node has a fill that will actually render a
+ * visible color. Differs from `hasFill` by rejecting fully-transparent
+ * solid fills:
+ *   - `#00000000` and any 8-digit hex with `00` alpha
+ *   - CSS keyword `"transparent"`
+ *   - CSS keyword `"none"` (not a legal PenFill color but the
+ *     stroke/fill normalizer may leave it in mixed arrays)
+ *
+ * Use this when deciding whether a node needs a color PAINTED ONTO it
+ * (button foreground contrast, focus ring supply, etc.). Do NOT use
+ * this to decide whether to overwrite an author's fill choice —
+ * transparent is a legitimate choice. See `hasFill` for that case.
+ */
+export function hasVisibleFill(node: PenNode): boolean {
   if (!('fill' in node) || !Array.isArray(node.fill) || node.fill.length === 0) return false;
   const first = node.fill[0];
   if (!first) return false;
@@ -531,7 +551,10 @@ export function getFirstSolidColor(node: PenNode): string | undefined {
 
 function fixButtonForegroundContrast(parent: FrameNode): void {
   if (parent.role !== 'button' && parent.role !== 'icon-button') return;
-  if (!hasFill(parent)) return;
+  // A transparent button has no background color to compute contrast
+  // against — nothing to do, and we definitely should not paint text
+  // white on an invisible button.
+  if (!hasVisibleFill(parent)) return;
 
   const bgColor = getFirstSolidColor(parent);
   if (!bgColor) return;
@@ -546,7 +569,10 @@ function fixButtonForegroundContrast(parent: FrameNode): void {
     const rec = child as unknown as Record<string, unknown>;
 
     if (child.type === 'text' || child.type === 'icon_font') {
-      if (!hasFill(child)) {
+      // `hasVisibleFill` treats transparent-hex placeholder fills as
+      // unfilled, so the normalizer's #00000000 leftover does not
+      // block contrast from supplying a visible color.
+      if (!hasVisibleFill(child)) {
         rec.fill = fgFill;
       }
     } else if (child.type === 'path') {
@@ -556,11 +582,11 @@ function fixButtonForegroundContrast(parent: FrameNode): void {
         Array.isArray((child.stroke as PenStroke)?.fill) &&
         (child.stroke as PenStroke).fill!.length > 0;
 
-      if (hasFill(child)) {
+      if (hasVisibleFill(child)) {
         // fill-style icon — already styled, skip
       } else if (hasStroke && !hasStrokeFill) {
         (child.stroke as unknown as Record<string, unknown>).fill = fgFill;
-      } else if (!hasStroke && !hasFill(child)) {
+      } else if (!hasStroke && !hasVisibleFill(child)) {
         rec.fill = fgFill;
       }
     }
