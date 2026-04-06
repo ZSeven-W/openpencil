@@ -373,6 +373,9 @@ function createWindow(): void {
       // Persist localStorage/cookies in a fixed partition so data survives
       // across random Nitro server port changes (origin-independent storage).
       partition: 'persist:openpencil',
+      // Disable DevTools entirely in packaged builds. This blocks the API,
+      // any role-based menu item, and keyboard shortcuts at the lowest level.
+      devTools: isDev,
     },
   };
 
@@ -389,6 +392,26 @@ function createWindow(): void {
   if (isWinOrLinux) {
     mainWindow.setAutoHideMenuBar(true);
     mainWindow.setMenuBarVisibility(false);
+  }
+
+  // Block reload / DevTools keyboard shortcuts in packaged builds. The View
+  // menu hides the items in prod (see app-menu.ts), but Chromium still ships
+  // built-in handlers for Cmd/Ctrl+R, Cmd/Ctrl+Shift+R, F5 and the DevTools
+  // chord — swallow them at the input layer.
+  if (!isDev) {
+    mainWindow.webContents.on('before-input-event', (event, input) => {
+      if (input.type !== 'keyDown') return;
+      const cmdOrCtrl = process.platform === 'darwin' ? input.meta : input.control;
+      const key = input.key.toLowerCase();
+      const isReload = (cmdOrCtrl && key === 'r') || key === 'f5';
+      const isDevTools =
+        key === 'f12' ||
+        (cmdOrCtrl && input.shift && (key === 'i' || key === 'j' || key === 'c')) ||
+        (process.platform === 'darwin' && input.meta && input.alt && key === 'i');
+      if (isReload || isDevTools) {
+        event.preventDefault();
+      }
+    });
   }
 
   const url = isDev

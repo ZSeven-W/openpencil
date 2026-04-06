@@ -131,10 +131,15 @@ export function buildAppMenu(): void {
     {
       label: 'View',
       submenu: [
-        { role: 'reload' },
-        { role: 'forceReload' },
-        { role: 'toggleDevTools' },
-        { type: 'separator' },
+        // Reload / Force Reload / DevTools are dev-only — hide in packaged builds.
+        ...(app.isPackaged
+          ? []
+          : [
+              { role: 'reload' as const },
+              { role: 'forceReload' as const },
+              { role: 'toggleDevTools' as const },
+              { type: 'separator' as const },
+            ]),
         { role: 'resetZoom' },
         { role: 'zoomIn' },
         { role: 'zoomOut' },
