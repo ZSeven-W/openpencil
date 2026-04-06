@@ -401,7 +401,12 @@ export function applyNodesToCanvas(nodes: PenNode[]): void {
     replaceEmptyFrame(preparedNodes[0]);
     finalizePageRootAfterApply();
     resolveAllPendingIcons().catch(console.warn);
-    const rootId = getGenerationRootFrameId();
+    // Use the active page's primary frame id, NOT generationRootFrameId.
+    // The latter is module-level state owned by the streaming path and
+    // is stale here (module init value or leftover from a previous
+    // streaming generation — on Page 2+ it would point at nothing on the
+    // current page).
+    const rootId = getActivePagePrimaryFrameId();
     if (rootId) scanAndFillImages(rootId).catch(() => {});
     return;
   }
@@ -417,7 +422,7 @@ export function applyNodesToCanvas(nodes: PenNode[]): void {
   adjustRootFrameHeightToContent();
   finalizePageRootAfterApply();
   resolveAllPendingIcons().catch(console.warn);
-  const rootId = getGenerationRootFrameId();
+  const rootId = getActivePagePrimaryFrameId();
   if (rootId) scanAndFillImages(rootId).catch(() => {});
 }
 
@@ -450,7 +455,10 @@ export function upsertNodesToCanvas(nodes: PenNode[]): number {
 
   adjustRootFrameHeightToContent();
   finalizePageRootAfterApply();
-  const rootId = getGenerationRootFrameId();
+  // Use the active page's primary frame id, not the streaming path's
+  // generationRootFrameId (which is stale for non-streaming applies —
+  // see applyNodesToCanvas for the full explanation).
+  const rootId = getActivePagePrimaryFrameId();
   if (rootId) scanAndFillImages(rootId).catch(() => {});
   return count;
 }
@@ -504,7 +512,12 @@ export function animateNodesToCanvas(nodes: PenNode[]): void {
 
   // Resolve any icons queued for async (brand logos etc.) after nodes are in the store
   resolveAllPendingIcons().catch(console.warn);
-  const rootId = getGenerationRootFrameId();
+  // Scan images on the active page root. generationRootFrameId is refreshed
+  // by resetGenerationRemapping above, but going straight through
+  // getActivePagePrimaryFrameId keeps the source of truth consistent with
+  // the other non-streaming apply paths and doesn't rely on a specific
+  // ordering between reset and this call.
+  const rootId = getActivePagePrimaryFrameId();
   if (rootId) scanAndFillImages(rootId).catch(() => {});
 }
 
@@ -695,7 +708,12 @@ export function applyPostStreamingTreeHeuristics(rootNodeId: string): void {
 
 export function adjustRootFrameHeightToContent(frameId?: string): void {
   const { getNodeById, updateNode, getParentOf } = useDocumentStore.getState();
-  const rootId = frameId ?? generationRootFrameId;
+  // Prefer the explicitly-passed frame, then the active page's primary
+  // frame (the correct default for non-streaming apply paths, which is
+  // where this function is called from), and finally the streaming
+  // path's generationRootFrameId as a last resort.
+  const rootId = frameId ?? getActivePagePrimaryFrameId() ?? generationRootFrameId;
+  if (!rootId) return;
   const root = getNodeById(rootId);
   if (!root || root.type !== 'frame') return;
   if (!Array.isArray(root.children) || root.children.length === 0) return;
