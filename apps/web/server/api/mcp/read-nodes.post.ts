@@ -2,19 +2,7 @@ import { defineEventHandler, readBody, createError } from 'h3';
 import { getSyncDocument } from '../../utils/mcp-sync-state';
 import type { PenDocument, PenNode, NodeSnapshot } from '@zseven-w/pen-types';
 import { findNodeInTree, getActivePageChildren } from '@zseven-w/pen-core';
-import { openDocument, LIVE_CANVAS_PATH } from '@zseven-w/pen-mcp';
-
-function readNodeWithDepth(node: PenNode, depth: number): NodeSnapshot {
-  const result: Record<string, unknown> = { ...node };
-  if (depth <= 0 && 'children' in node && (node as { children?: PenNode[] }).children?.length) {
-    result.children = '...';
-  } else if ('children' in node && (node as { children?: PenNode[] }).children) {
-    result.children = (node as { children: PenNode[] }).children.map((c) =>
-      readNodeWithDepth(c, depth - 1),
-    );
-  }
-  return result as unknown as NodeSnapshot;
-}
+import { openDocument, LIVE_CANVAS_PATH, readNodeWithDepth } from '@zseven-w/pen-mcp';
 
 async function resolveDocument(filePath?: string): Promise<PenDocument> {
   if (filePath && filePath !== LIVE_CANVAS_PATH) {
@@ -48,10 +36,16 @@ export default defineEventHandler(async (event) => {
     nodes = body.nodeIds
       .map((id) => findNodeInTree(pageChildren, id))
       .filter((n): n is PenNode => n !== undefined)
-      .map((n) => (depth === -1 ? (n as unknown as NodeSnapshot) : readNodeWithDepth(n, depth)));
+      .map((n) =>
+        depth === -1
+          ? (n as unknown as NodeSnapshot)
+          : (readNodeWithDepth(n, depth) as unknown as NodeSnapshot),
+      );
   } else {
     nodes = pageChildren.map((n) =>
-      depth === -1 ? (n as unknown as NodeSnapshot) : readNodeWithDepth(n, depth),
+      depth === -1
+        ? (n as unknown as NodeSnapshot)
+        : (readNodeWithDepth(n, depth) as unknown as NodeSnapshot),
     );
   }
 

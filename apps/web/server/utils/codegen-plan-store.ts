@@ -13,21 +13,7 @@ import type {
   PenNode,
 } from '@zseven-w/pen-types';
 import { randomUUID } from 'node:crypto';
-
-// --- Contract validation (inlined to avoid cross-package dependency from apps/web to pen-mcp) ---
-
-function validateContractFn(result: ChunkResult): ContractValidationResult {
-  const issues: string[] = [];
-  const { contract, code } = result;
-  if (contract.componentName && !/^[A-Z][a-zA-Z0-9]*$/.test(contract.componentName)) {
-    issues.push(`componentName "${contract.componentName}" is not a valid PascalCase identifier`);
-  }
-  const isSFC = code.includes('<script') || code.includes('<template') || code.includes('<style');
-  if (contract.componentName && !isSFC && !code.includes(contract.componentName)) {
-    issues.push(`componentName "${contract.componentName}" not found in generated code`);
-  }
-  return { valid: issues.length === 0, issues };
-}
+import { validateContract } from '@zseven-w/pen-mcp';
 
 // --- Internal state ---
 
@@ -270,7 +256,7 @@ export function submitChunkResult(
   if (!state) throw new Error(`Plan ${planId} not found`);
   touch(planId);
 
-  const validation = validateContractFn(result);
+  const validation = validateContract(result);
 
   let status: ChunkStatus;
   if (statusOverride === 'failed' || statusOverride === 'skipped') {

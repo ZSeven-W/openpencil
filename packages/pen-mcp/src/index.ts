@@ -72,3 +72,4 @@ export {
   extractDesignMdFromDocument,
 } from './utils/design-md-parser';
 export { validateContract } from './utils/validate-contract';
+export { readNodeWithDepth } from './utils/node-operations';
