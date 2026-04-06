@@ -31,7 +31,7 @@ function validateContractFn(result: ChunkResult): ContractValidationResult {
 
 // --- Internal state ---
 
-interface PlanState {
+export interface PlanState {
   plan: CodePlanFromAI;
   nodes: Map<string, PenNode>;
   order: Map<string, number>;
@@ -264,7 +264,7 @@ export interface SubmitChunkResult {
 export function submitChunkResult(
   planId: string,
   result: ChunkResult,
-  statusOverride?: ChunkStatus,
+  statusOverride?: 'failed' | 'skipped',
 ): SubmitChunkResult {
   const state = plans.get(planId);
   if (!state) throw new Error(`Plan ${planId} not found`);
