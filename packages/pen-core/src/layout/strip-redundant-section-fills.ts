@@ -1,8 +1,8 @@
 import type { PenNode, PenFill, SolidFill } from '@zseven-w/pen-types';
 
 /**
- * Strip redundant "section-level" fills from direct children of the page
- * root frame.
+ * Strip redundant "section-level" fills from the direct children of a
+ * page root frame.
  *
  * Weaker sub-agents (MiniMax M2, GLM, Kimi) often hedge by writing a
  * hardcoded dark hex (`#0A0A0A`, `#111`, etc.) on every section root they
@@ -12,6 +12,14 @@ import type { PenNode, PenFill, SolidFill } from '@zseven-w/pen-types';
  * components are NOT affected — only "section container" frames (direct
  * children of the root that either have no role or have a structural
  * role).
+ *
+ * ⚠️ SCOPE CONTRACT — callers MUST only pass the true page root frame.
+ * Calling this on an arbitrary nested frame (a card, a component, a
+ * sub-agent's own root that is NOT the page root) will incorrectly treat
+ * that frame's inner children as "sections" and may erase intended
+ * nested fills (e.g. a card's own dark header). The function itself is
+ * strictly non-recursive — it only touches direct children of the passed
+ * node — so mis-targeted calls are bounded, but still wrong.
  *
  * Returns `true` when any fill was stripped, so the caller can publish a
  * store update.

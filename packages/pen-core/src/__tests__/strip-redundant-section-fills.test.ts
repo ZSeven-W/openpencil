@@ -201,6 +201,40 @@ describe('stripRedundantSectionFills', () => {
     expect((section as PenNode & { fill?: unknown }).fill).toBeUndefined();
   });
 
+  it('is strictly non-recursive: never touches grandchildren even when caller mis-targets a card', () => {
+    // Defensive: if a caller accidentally hands us a card frame instead of
+    // the page root, we must NOT recurse into it. Only the direct children
+    // of the passed node are ever considered — and a card header (no role,
+    // safe-dark fill) that is a DIRECT child of a card is still fair game,
+    // but anything deeper is untouched.
+    const deepInner = frame({
+      id: 'deep',
+      // no role, safe-dark — would normally be stripped, but is two levels
+      // down so must survive
+      fill: solidFill('#0A0A0A'),
+    });
+    const cardBody = frame({ id: 'body', children: [deepInner] });
+    const cardHeader = frame({
+      id: 'header',
+      // no role, safe-dark — direct child of the mis-targeted parent, so
+      // will still be stripped (the caller is at fault)
+      fill: solidFill('#0A0A0A'),
+    });
+    const card = frame({
+      id: 'card',
+      role: 'card',
+      fill: solidFill('#141414'),
+      children: [cardHeader, cardBody],
+    });
+    // Deliberately mis-target the card (not the page root). This must NOT
+    // crash and must NOT recurse into cardBody's grandchildren.
+    stripRedundantSectionFills(card);
+    // Card itself is untouched (we never touch the passed node)
+    expect((card as PenNode & { fill?: unknown }).fill).toEqual(solidFill('#141414'));
+    // deepInner survives because strip is strictly non-recursive
+    expect((deepInner as PenNode & { fill?: unknown }).fill).toEqual(solidFill('#0A0A0A'));
+  });
+
   it('reproduces the M2.7 health-tracker case', () => {
     // Direct repro of the actual failure: root #1a1a2e, six section roots
     // all hardcoded #0A0A0A, including one real card. The six section

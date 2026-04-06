@@ -588,17 +588,21 @@ export function applyPostStreamingTreeHeuristics(rootNodeId: string): void {
   // can tell section containers apart from card/button/chip components by
   // their resolved role.
   //
-  // The sub-agent's root frame is itself a direct child of the OUTER page
-  // root frame (DEFAULT_FRAME_ID or the generation root), so we run the
-  // strip pass on that parent — that's the level where section fills live.
-  // We also run it on freshRoot itself to catch sub-agents that build an
-  // entire page inside a single sub-task (where the "sections" are freshRoot's
-  // own children).
+  // IMPORTANT: stripRedundantSectionFills must ONLY be called on the true
+  // page root frame. Calling it on an arbitrary sub-agent root (or any
+  // non-root nested frame) is wrong — the nested frame's direct children
+  // are components, not "sections", and stripping their fills would
+  // clobber intended visual styling (e.g. a card's own dark header).
+  //
+  // The page root is:
+  //   - `parentOfRoot` when the sub-agent's root was inserted as a child of
+  //     an existing page frame (the common case for a multi-section plan)
+  //   - `freshRoot` itself when the sub-agent's root IS the page frame
+  //     (replaceEmptyFrame remap, or a single-sub-agent page)
+  // Pick exactly one — never both.
   const parentOfRoot = useDocumentStore.getState().getParentOf(rootNodeId);
-  if (parentOfRoot && parentOfRoot.type === 'frame') {
-    stripRedundantSectionFills(parentOfRoot);
-  }
-  stripRedundantSectionFills(freshRoot);
+  const pageRoot = parentOfRoot && parentOfRoot.type === 'frame' ? parentOfRoot : freshRoot;
+  stripRedundantSectionFills(pageRoot);
 
   // Publish point. unwrap, resolveTreeRoles, and normalizeTreeLayout all
   // mutate store-owned nodes in place; resolveTreePostPass mostly goes
@@ -786,9 +790,10 @@ function sanitizeNodesForInsert(nodes: PenNode[], existingIds: Set<string>): Pen
     resolveTreeRoles(node, generationCanvasWidth);
     applyGenerationHeuristics(node);
     normalizeTreeLayout(node);
-    // Drop redundant section-level fills after role resolution so cards
-    // and buttons (which must keep their fill) are correctly identified.
-    stripRedundantSectionFills(node);
+    // Intentionally NOT calling stripRedundantSectionFills here: `cloned`
+    // is an arbitrary PenNode from MCP/batch APIs (could be a card, a
+    // component, or a page). strip must only run on the true page root
+    // frame, which this path cannot guarantee.
     sanitizeLayoutChildPositions(node, false);
     sanitizeScreenFrameBounds(node);
   }
@@ -815,9 +820,10 @@ function sanitizeNodesForUpsert(nodes: PenNode[]): PenNode[] {
     resolveTreeRoles(node, generationCanvasWidth);
     applyGenerationHeuristics(node);
     normalizeTreeLayout(node);
-    // Drop redundant section-level fills after role resolution so cards
-    // and buttons (which must keep their fill) are correctly identified.
-    stripRedundantSectionFills(node);
+    // Intentionally NOT calling stripRedundantSectionFills here: `cloned`
+    // is an arbitrary PenNode from MCP/batch APIs (could be a card, a
+    // component, or a page). strip must only run on the true page root
+    // frame, which this path cannot guarantee.
     sanitizeLayoutChildPositions(node, false);
     sanitizeScreenFrameBounds(node);
   }
