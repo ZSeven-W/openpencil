@@ -29,8 +29,13 @@ vi.mock('@/canvas/skia-engine-ref', () => canvasMocks);
 
 describe('AgentToolExecutor layout flow', () => {
   beforeEach(() => {
+    // Start from a document whose active page has NO frames so that
+    // plan_layout exercises its "create new root frame" branch instead
+    // of reusing the default frame that createEmptyDocument() ships.
+    const doc = createEmptyDocument();
+    if (doc.pages?.[0]) doc.pages[0].children = [];
     useDocumentStore.setState({
-      document: createEmptyDocument(),
+      document: doc,
       fileName: null,
       isDirty: false,
       fileHandle: null,

@@ -631,10 +631,13 @@ export class AgentToolExecutor {
     const preset = detectDesignType(args.prompt);
     const docStore = useDocumentStore.getState();
 
-    // Reuse existing root frame if one exists (avoid duplicate root frames)
+    // Reuse existing root frame if one exists (avoid duplicate root frames),
+    // unless the caller explicitly asked for a brand-new root via newRoot.
     const activePageId = useCanvasStore.getState().activePageId;
     const pageChildren = getActivePageChildren(docStore.document, activePageId);
-    const existingFrame = pageChildren.find((n: any) => n.type === 'frame');
+    const existingFrame = args.newRoot
+      ? undefined
+      : pageChildren.find((n: any) => n.type === 'frame');
     let rootId: string;
     if (existingFrame) {
       rootId = existingFrame.id;
