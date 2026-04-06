@@ -2,9 +2,25 @@
 # ── Stage 1: Build web app ──
 FROM oven/bun:1 AS builder
 
+# Install Zig (required to build agent-native NAPI addon during postinstall)
+RUN apt-get update && apt-get install -y --no-install-recommends curl xz-utils ca-certificates \
+    && ARCH="$(uname -m)" \
+    && case "$ARCH" in \
+        x86_64) ZIG_ARCH=x86_64 ;; \
+        aarch64) ZIG_ARCH=aarch64 ;; \
+        *) echo "Unsupported arch: $ARCH" && exit 1 ;; \
+       esac \
+    && curl -fsSL "https://ziglang.org/download/0.14.0/zig-linux-${ZIG_ARCH}-0.14.0.tar.xz" \
+       | tar -xJ -C /usr/local \
+    && ln -sf "/usr/local/zig-linux-${ZIG_ARCH}-0.14.0/zig" /usr/local/bin/zig \
+    && rm -rf /var/lib/apt/lists/*
+
 WORKDIR /app
 COPY package.json bun.lock ./
 COPY --parents packages/*/package.json apps/*/package.json ./
+# agent-native is a git submodule with a nested workspace package (napi/)
+# and Zig sources needed by the postinstall hook — copy it whole.
+COPY packages/agent-native ./packages/agent-native
 RUN bun install --frozen-lockfile
 COPY . .
 ENV NODE_OPTIONS="--max-old-space-size=4096"
