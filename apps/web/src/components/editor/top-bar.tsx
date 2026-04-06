@@ -19,10 +19,6 @@ import { useDocumentStore } from '@/stores/document-store';
 import {
   supportsFileSystemAccess,
   isElectron,
-  writeToFileHandle,
-  writeToFilePath,
-  saveDocumentAs,
-  downloadDocument,
   openDocumentFS,
   openDocument,
 } from '@/utils/file-operations';
@@ -191,91 +187,46 @@ export default function TopBar() {
     }
   }, []);
 
-  /**
-   * Unified save: if the current file is .op with a known handle/path, save
-   * in-place; otherwise trigger "save as .op".
-   */
-  const handleSave = useCallback(async () => {
+  // Bare save: delegates to the store. Used by handleNew/handleOpenRecent
+  // when they need to save before discarding the current doc; the indicator
+  // flash is owned by handleSaveWithFeedback below.
+  const handleSave = useCallback(async (): Promise<string | null> => {
     try {
       syncCanvasPositionsToStore();
     } catch (err) {
       console.error('[Save] syncCanvasPositionsToStore failed:', err);
     }
-    const store = useDocumentStore.getState();
-    const { document: doc, fileName: fn, fileHandle, filePath } = store;
-
-    const isOpFile = fn ? /\.op$/i.test(fn) : false;
-    const suggestedName = fn ? fn.replace(/\.(pen|op|json)$/i, '') + '.op' : 'untitled.op';
-
-    try {
-      // Electron with known .op path → direct write
-      if (isElectron() && filePath && isOpFile) {
-        await writeToFilePath(filePath, doc);
-        store.markClean();
-        return;
-      }
-
-      // Browser with valid .op file handle → direct write
-      if (fileHandle && isOpFile) {
-        try {
-          await writeToFileHandle(fileHandle, doc);
-          store.markClean();
-          return;
-        } catch (err) {
-          console.warn('[Save] File handle write failed, falling back:', err);
-          useDocumentStore.setState({ fileHandle: null });
-        }
-      }
-
-      // No in-place target (new file, .pen file, or stale handle) → save as .op
-      if (isElectron()) {
-        const savedPath = await window.electronAPI!.saveFile(JSON.stringify(doc), suggestedName);
-        if (savedPath) {
-          useDocumentStore.setState({
-            fileName: savedPath.split(/[/\\]/).pop() || suggestedName,
-            filePath: savedPath,
-            fileHandle: null,
-            isDirty: false,
-          });
-        }
-      } else if (supportsFileSystemAccess()) {
-        const result = await saveDocumentAs(doc, suggestedName);
-        if (result) {
-          useDocumentStore.setState({
-            fileName: result.fileName,
-            fileHandle: result.handle,
-            isDirty: false,
-          });
-        }
-      } else {
-        downloadDocument(doc, suggestedName);
-        store.markClean();
-      }
-    } catch (err) {
-      console.error('[Save] Failed to save document:', err);
-      try {
-        downloadDocument(doc, suggestedName);
-        store.markClean();
-      } catch (dlErr) {
-        console.error('[Save] Download fallback also failed:', dlErr);
-      }
-    }
+    return useDocumentStore.getState().save();
   }, []);
 
   const handleSaveWithFeedback = useCallback(async () => {
-    await handleSave();
-    const store = useDocumentStore.getState();
-    if (store.fileName) {
-      addRecentFile({ fileName: store.fileName, filePath: store.filePath ?? null });
+    const savedName = await handleSave();
+    if (!savedName) {
+      // User cancelled the save dialog or save failed.
+      // Critically: do NOT add to recent files and do NOT flash the indicator.
+      return;
     }
+    const filePath = useDocumentStore.getState().filePath;
+    addRecentFile({ fileName: savedName, filePath: filePath ?? null });
     setSaveIndicator(true);
     setTimeout(() => setSaveIndicator(false), 2000);
   }, [handleSave]);
 
-  const handleSaveAs = useCallback(() => {
-    useDocumentStore.setState({ fileHandle: null, filePath: null });
-    handleSaveWithFeedback();
-  }, [handleSaveWithFeedback]);
+  const handleSaveAs = useCallback(async () => {
+    try {
+      syncCanvasPositionsToStore();
+    } catch (err) {
+      console.error('[SaveAs] syncCanvasPositionsToStore failed:', err);
+    }
+    // Direct saveAs() — does NOT pre-mutate filePath/fileHandle. The store
+    // action handles the dialog and only updates state on confirmed success.
+    const savedName = await useDocumentStore.getState().saveAs();
+    if (!savedName) return;
+    const filePath = useDocumentStore.getState().filePath;
+    addRecentFile({ fileName: savedName, filePath: filePath ?? null });
+    setSaveIndicator(true);
+    setTimeout(() => setSaveIndicator(false), 2000);
+  }, []);
 
   const handleNew = useCallback(async () => {
     if (useDocumentStore.getState().isDirty) {
