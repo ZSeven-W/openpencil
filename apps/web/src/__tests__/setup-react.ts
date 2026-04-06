@@ -22,13 +22,12 @@ import { createRequire } from 'node:module';
 // Import 'react' via vite's transform pipeline — same instance that pen-react hooks use
 import * as viteTranformedReact from 'react';
 
-// Load react via native CJS require — same instance that react-dom uses internally
+// Load react via native CJS require — same instance that react-dom uses internally.
+// Resolve dynamically via node's own module lookup so this file is not tied to
+// any single developer's machine (the previous hardcoded absolute path broke
+// the entire apps/web test suite on every checkout outside that user's home).
 const require = createRequire(import.meta.url);
-const cjsReact =
-  require('/Users/kayshen/Workspace/ZSeven-W/openpencil/node_modules/.bun/react@19.2.4/node_modules/react') as Record<
-    string,
-    any
-  >;
+const cjsReact = require('react') as Record<string, any>;
 
 const viteInternals = (viteTranformedReact as any)
   .__CLIENT_INTERNALS_DO_NOT_USE_OR_WARN_USERS_THEY_CANNOT_UPGRADE as Record<string, any>;
