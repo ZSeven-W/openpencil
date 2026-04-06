@@ -236,6 +236,7 @@ const zh: TranslationKeys = {
   'export.selectedOnly': '仅导出选中项',
   'export.exportFormat': '导出 {{format}}',
   'export.exportLayer': '导出图层',
+  'export.pdfMultiPage': 'PDF 将包含全部 {{count}} 个页面。',
 
   // ── Polygon ──
   'polygon.sides': '边数',
@@ -334,6 +335,7 @@ const zh: TranslationKeys = {
   'fileMenu.openFile': '打开文件...',
   'fileMenu.save': '保存',
   'fileMenu.saveAs': '另存为...',
+  'fileMenu.exportImage': '导出图片...',
   'fileMenu.recentFiles': '最近文件',
   'fileMenu.clearHistory': '清除历史',
   'fileMenu.noRecentFiles': '暂无最近文件',

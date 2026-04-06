@@ -238,6 +238,7 @@ const tr: TranslationKeys = {
   'export.selectedOnly': 'Yalnızca seçilenleri dışa aktar',
   'export.exportFormat': '{{format}} Dışa Aktar',
   'export.exportLayer': 'Katmanı dışa aktar',
+  'export.pdfMultiPage': 'PDF tüm {{count}} sayfayı içerecek.',
 
   // ── Polygon ──
   'polygon.sides': 'Kenar',
@@ -337,6 +338,7 @@ const tr: TranslationKeys = {
   'fileMenu.openFile': 'Open file...',
   'fileMenu.save': 'Save',
   'fileMenu.saveAs': 'Save as...',
+  'fileMenu.exportImage': 'Görseli dışa aktar...',
   'fileMenu.recentFiles': 'Recent files',
   'fileMenu.clearHistory': 'Clear history',
   'fileMenu.noRecentFiles': 'No recent files',

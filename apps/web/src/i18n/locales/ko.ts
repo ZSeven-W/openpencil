@@ -236,6 +236,7 @@ const ko: TranslationKeys = {
   'export.selectedOnly': '선택 항목만 내보내기',
   'export.exportFormat': '{{format}} 내보내기',
   'export.exportLayer': '레이어 내보내기',
+  'export.pdfMultiPage': 'PDF에 {{count}}개의 모든 페이지가 포함됩니다.',
 
   // ── Polygon ──
   'polygon.sides': '변 수',
@@ -335,6 +336,7 @@ const ko: TranslationKeys = {
   'fileMenu.openFile': 'Open file...',
   'fileMenu.save': 'Save',
   'fileMenu.saveAs': 'Save as...',
+  'fileMenu.exportImage': '이미지 내보내기...',
   'fileMenu.recentFiles': 'Recent files',
   'fileMenu.clearHistory': 'Clear history',
   'fileMenu.noRecentFiles': 'No recent files',

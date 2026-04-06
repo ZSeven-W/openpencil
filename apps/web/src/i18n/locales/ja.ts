@@ -237,6 +237,7 @@ const ja: TranslationKeys = {
   'export.selectedOnly': '選択項目のみエクスポート',
   'export.exportFormat': '{{format}} をエクスポート',
   'export.exportLayer': 'レイヤーをエクスポート',
+  'export.pdfMultiPage': 'PDF にはすべての {{count}} ページが含まれます。',
 
   // ── Polygon ──
   'polygon.sides': '辺の数',
@@ -337,6 +338,7 @@ const ja: TranslationKeys = {
   'fileMenu.openFile': 'Open file...',
   'fileMenu.save': 'Save',
   'fileMenu.saveAs': 'Save as...',
+  'fileMenu.exportImage': '画像をエクスポート...',
   'fileMenu.recentFiles': 'Recent files',
   'fileMenu.clearHistory': 'Clear history',
   'fileMenu.noRecentFiles': 'No recent files',

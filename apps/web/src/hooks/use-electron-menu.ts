@@ -224,6 +224,10 @@ export function useElectronMenu() {
           useCanvasStore.getState().setFigmaImportDialogOpen(true);
           break;
 
+        case 'export-image':
+          useCanvasStore.getState().setExportDialogOpen(true);
+          break;
+
         case 'undo': {
           const currentDoc = useDocumentStore.getState().document;
           const prev = useHistoryStore.getState().undo(currentDoc);

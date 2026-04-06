@@ -47,7 +47,7 @@ export default function EditorLayout() {
   const closeSaveDialog = useCallback(() => {
     useDocumentStore.getState().setSaveDialogOpen(false);
   }, []);
-  const [exportOpen, setExportOpen] = useState(false);
+  const exportOpen = useCanvasStore((s) => s.exportDialogOpen);
   const [unsavedDialog, setUnsavedDialog] = useState<{
     open: boolean;
     fileName: string;
@@ -55,7 +55,7 @@ export default function EditorLayout() {
   }>({ open: false, fileName: '', onResult: () => {} });
 
   const closeExport = useCallback(() => {
-    setExportOpen(false);
+    useCanvasStore.getState().setExportDialogOpen(false);
   }, []);
 
   const showUnsavedDialog = useCallback((fileName: string): Promise<UnsavedResult> => {
@@ -97,7 +97,7 @@ export default function EditorLayout() {
       // Cmd+Shift+E: open export
       if (isMod && e.shiftKey && e.key.toLowerCase() === 'e') {
         e.preventDefault();
-        setExportOpen((prev) => !prev);
+        useCanvasStore.getState().toggleExportDialog();
         return;
       }
 

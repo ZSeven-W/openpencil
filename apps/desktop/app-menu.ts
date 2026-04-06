@@ -80,6 +80,17 @@ export function buildAppMenu(): void {
         },
         { type: 'separator' },
         {
+          label: 'Export Image\u2026',
+          // Display the shortcut hint in the menu, but let the renderer's
+          // window keydown listener handle the keystroke. Registering it as
+          // an OS-level accelerator routes through IPC, which has been seen
+          // to lose the message under HMR / hot-reload.
+          accelerator: 'CmdOrCtrl+Shift+E',
+          registerAccelerator: false,
+          click: () => sendMenuAction('export-image'),
+        },
+        { type: 'separator' },
+        {
           label: 'Import Figma\u2026',
           accelerator: 'CmdOrCtrl+Shift+F',
           click: () => sendMenuAction('import-figma'),

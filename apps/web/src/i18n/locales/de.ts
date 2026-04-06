@@ -237,6 +237,7 @@ const de: TranslationKeys = {
   'export.selectedOnly': 'Nur Auswahl exportieren',
   'export.exportFormat': '{{format}} exportieren',
   'export.exportLayer': 'Ebene exportieren',
+  'export.pdfMultiPage': 'Die PDF enthält alle {{count}} Seiten.',
 
   // ── Polygon ──
   'polygon.sides': 'Seiten',
@@ -336,6 +337,7 @@ const de: TranslationKeys = {
   'fileMenu.openFile': 'Open file...',
   'fileMenu.save': 'Save',
   'fileMenu.saveAs': 'Save as...',
+  'fileMenu.exportImage': 'Bild exportieren...',
   'fileMenu.recentFiles': 'Recent files',
   'fileMenu.clearHistory': 'Clear history',
   'fileMenu.noRecentFiles': 'No recent files',

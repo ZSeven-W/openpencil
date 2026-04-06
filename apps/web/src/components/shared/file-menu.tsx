@@ -1,5 +1,5 @@
 import { useRef, useEffect } from 'react';
-import { Plus, Folder, Save, SaveAll, FileText } from 'lucide-react';
+import { Plus, Folder, Save, SaveAll, FileText, Download } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { getRecentFiles, clearRecentFiles, relativeTime } from '@/utils/recent-files';
 
@@ -10,6 +10,7 @@ interface FileMenuProps {
   onOpen: () => void;
   onSave: () => void;
   onSaveAs: () => void;
+  onExport: () => void;
   onOpenRecent: (filePath: string) => void;
 }
 
@@ -20,6 +21,7 @@ export default function FileMenu({
   onOpen,
   onSave,
   onSaveAs,
+  onExport,
   onOpenRecent,
 }: FileMenuProps) {
   const { t } = useTranslation();
@@ -81,6 +83,13 @@ export default function FileMenu({
       <div className="h-px bg-border/50 mx-2.5 my-1" />
       <MenuItem icon={Save} label={t('fileMenu.save')} shortcut={`${mod}S`} onClick={onSave} />
       <MenuItem icon={SaveAll} label={t('fileMenu.saveAs')} shortcut={`${mod}\u21E7S`} onClick={onSaveAs} />
+      <div className="h-px bg-border/50 mx-2.5 my-1" />
+      <MenuItem
+        icon={Download}
+        label={t('fileMenu.exportImage')}
+        shortcut={`${mod}\u21E7E`}
+        onClick={onExport}
+      />
 
       {recentFiles.length > 0 && (
         <>

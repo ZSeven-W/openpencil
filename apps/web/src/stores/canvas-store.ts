@@ -30,6 +30,7 @@ interface CanvasStoreState {
   rightPanelTab: RightPanelTab;
   figmaImportDialogOpen: boolean;
   pendingFigmaFile: File | null;
+  exportDialogOpen: boolean;
   activePageId: string | null;
 
   setActiveTool: (tool: ToolType) => void;
@@ -51,6 +52,8 @@ interface CanvasStoreState {
   setRightPanelTab: (tab: RightPanelTab) => void;
   setFigmaImportDialogOpen: (open: boolean) => void;
   setPendingFigmaFile: (file: File | null) => void;
+  setExportDialogOpen: (open: boolean) => void;
+  toggleExportDialog: () => void;
   setActivePageId: (pageId: string | null) => void;
   imageSearchStatuses: Map<string, 'pending' | 'found' | 'failed'>;
   setImageSearchStatus: (nodeId: string, status: 'pending' | 'found' | 'failed') => void;
@@ -90,6 +93,7 @@ export const useCanvasStore = create<CanvasStoreState>((set, get) => ({
   rightPanelTab: 'design',
   figmaImportDialogOpen: false,
   pendingFigmaFile: null,
+  exportDialogOpen: false,
   activePageId: DEFAULT_PAGE_ID,
   imageSearchStatuses: new Map(),
   setImageSearchStatus: (nodeId, status) =>
@@ -200,6 +204,8 @@ export const useCanvasStore = create<CanvasStoreState>((set, get) => ({
   setFigmaImportDialogOpen: (open) =>
     set({ figmaImportDialogOpen: open, ...(!open && { pendingFigmaFile: null }) }),
   setPendingFigmaFile: (file) => set({ pendingFigmaFile: file }),
+  setExportDialogOpen: (open) => set({ exportDialogOpen: open }),
+  toggleExportDialog: () => set((s) => ({ exportDialogOpen: !s.exportDialogOpen })),
   setActivePageId: (activePageId) => set({ activePageId }),
 
   hydrate: () => {

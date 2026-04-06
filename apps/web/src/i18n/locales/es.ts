@@ -238,6 +238,7 @@ const es: TranslationKeys = {
   'export.selectedOnly': 'Exportar solo la selección',
   'export.exportFormat': 'Exportar {{format}}',
   'export.exportLayer': 'Exportar capa',
+  'export.pdfMultiPage': 'El PDF incluirá las {{count}} páginas.',
 
   // ── Polygon ──
   'polygon.sides': 'Lados',
@@ -338,6 +339,7 @@ const es: TranslationKeys = {
   'fileMenu.openFile': 'Open file...',
   'fileMenu.save': 'Save',
   'fileMenu.saveAs': 'Save as...',
+  'fileMenu.exportImage': 'Exportar imagen...',
   'fileMenu.recentFiles': 'Recent files',
   'fileMenu.clearHistory': 'Clear history',
   'fileMenu.noRecentFiles': 'No recent files',

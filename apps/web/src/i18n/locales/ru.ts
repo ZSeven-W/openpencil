@@ -237,6 +237,7 @@ const ru: TranslationKeys = {
   'export.selectedOnly': 'Экспортировать только выделенное',
   'export.exportFormat': 'Экспорт {{format}}',
   'export.exportLayer': 'Экспортировать слой',
+  'export.pdfMultiPage': 'PDF будет включать все {{count}} страниц.',
 
   // ── Polygon ──
   'polygon.sides': 'Стороны',
@@ -335,6 +336,7 @@ const ru: TranslationKeys = {
   'fileMenu.openFile': 'Open file...',
   'fileMenu.save': 'Save',
   'fileMenu.saveAs': 'Save as...',
+  'fileMenu.exportImage': 'Экспорт изображения...',
   'fileMenu.recentFiles': 'Recent files',
   'fileMenu.clearHistory': 'Clear history',
   'fileMenu.noRecentFiles': 'No recent files',

@@ -236,6 +236,7 @@ const zhTW: TranslationKeys = {
   'export.selectedOnly': '僅匯出選取項目',
   'export.exportFormat': '匯出 {{format}}',
   'export.exportLayer': '匯出圖層',
+  'export.pdfMultiPage': 'PDF 將包含全部 {{count}} 個頁面。',
 
   // ── Polygon ──
   'polygon.sides': '邊數',
@@ -334,6 +335,7 @@ const zhTW: TranslationKeys = {
   'fileMenu.openFile': '開啟檔案...',
   'fileMenu.save': '儲存',
   'fileMenu.saveAs': '另存為...',
+  'fileMenu.exportImage': '匯出圖片...',
   'fileMenu.recentFiles': '最近檔案',
   'fileMenu.clearHistory': '清除歷史',
   'fileMenu.noRecentFiles': '暫無最近檔案',

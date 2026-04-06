@@ -237,6 +237,7 @@ const id: TranslationKeys = {
   'export.selectedOnly': 'Ekspor pilihan saja',
   'export.exportFormat': 'Ekspor {{format}}',
   'export.exportLayer': 'Ekspor layer',
+  'export.pdfMultiPage': 'PDF akan menyertakan semua {{count}} halaman.',
 
   // ── Polygon ──
   'polygon.sides': 'Sisi',
@@ -336,6 +337,7 @@ const id: TranslationKeys = {
   'fileMenu.openFile': 'Open file...',
   'fileMenu.save': 'Save',
   'fileMenu.saveAs': 'Save as...',
+  'fileMenu.exportImage': 'Ekspor gambar...',
   'fileMenu.recentFiles': 'Recent files',
   'fileMenu.clearHistory': 'Clear history',
   'fileMenu.noRecentFiles': 'No recent files',

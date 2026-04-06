@@ -236,6 +236,7 @@ const hi: TranslationKeys = {
   'export.selectedOnly': 'केवल चयनित निर्यात करें',
   'export.exportFormat': '{{format}} निर्यात करें',
   'export.exportLayer': 'लेयर निर्यात करें',
+  'export.pdfMultiPage': 'PDF में सभी {{count}} पृष्ठ शामिल होंगे।',
 
   // ── Polygon ──
   'polygon.sides': 'भुजाएँ',
@@ -334,6 +335,7 @@ const hi: TranslationKeys = {
   'fileMenu.openFile': 'Open file...',
   'fileMenu.save': 'Save',
   'fileMenu.saveAs': 'Save as...',
+  'fileMenu.exportImage': 'छवि निर्यात करें...',
   'fileMenu.recentFiles': 'Recent files',
   'fileMenu.clearHistory': 'Clear history',
   'fileMenu.noRecentFiles': 'No recent files',

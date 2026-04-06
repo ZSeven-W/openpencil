@@ -26,9 +26,8 @@ export function useEditShortcuts() {
 
       const isMod = e.metaKey || e.ctrlKey;
 
-      // Save: Cmd/Ctrl+S (also Cmd/Ctrl+Shift+S)
-      // If current file is .op with handle/path -> save in-place
-      // Otherwise -> save as .op
+      // Save: Cmd/Ctrl+S         → save in-place if .op file is known, else save-as
+      // Save As: Cmd/Ctrl+Shift+S → always show file picker (never overwrite silently)
       if (isMod && e.key === 's') {
         e.preventDefault();
         try {
@@ -42,25 +41,28 @@ export function useEditShortcuts() {
         const suggestedName = fileName
           ? fileName.replace(/\.(pen|op|json)$/i, '') + '.op'
           : 'untitled.op';
+        const forceSaveAs = e.shiftKey;
 
         const doSave = async () => {
-          // Electron with known .op path
-          if (isElectron() && filePath && isOpFile) {
-            await writeToFilePath(filePath, doc);
-            store.markClean();
-            return;
-          }
-          // Browser with valid .op file handle
-          if (fileHandle && isOpFile) {
-            try {
-              await writeToFileHandle(fileHandle, doc);
+          // Save (no shift): if a known .op target exists, write in place.
+          if (!forceSaveAs) {
+            if (isElectron() && filePath && isOpFile) {
+              await writeToFilePath(filePath, doc);
               store.markClean();
               return;
-            } catch {
-              useDocumentStore.setState({ fileHandle: null });
+            }
+            if (fileHandle && isOpFile) {
+              try {
+                await writeToFileHandle(fileHandle, doc);
+                store.markClean();
+                return;
+              } catch {
+                useDocumentStore.setState({ fileHandle: null });
+              }
             }
           }
-          // Save as .op
+
+          // Save As (shift) OR no known target — show the file picker.
           if (isElectron()) {
             const savedPath = await window.electronAPI!.saveFile(
               JSON.stringify(doc),

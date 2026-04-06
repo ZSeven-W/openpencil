@@ -411,6 +411,7 @@ export default function TopBar() {
             onOpen={handleOpen}
             onSave={handleSaveWithFeedback}
             onSaveAs={handleSaveAs}
+            onExport={() => useCanvasStore.getState().setExportDialogOpen(true)}
             onOpenRecent={handleOpenRecent}
           />
         </div>

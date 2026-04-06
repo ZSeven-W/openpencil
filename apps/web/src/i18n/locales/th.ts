@@ -236,6 +236,7 @@ const th: TranslationKeys = {
   'export.selectedOnly': 'ส่งออกเฉพาะที่เลือก',
   'export.exportFormat': 'ส่งออก {{format}}',
   'export.exportLayer': 'ส่งออกเลเยอร์',
+  'export.pdfMultiPage': 'PDF จะรวมทั้งหมด {{count}} หน้า',
 
   // ── Polygon ──
   'polygon.sides': 'ด้าน',
@@ -334,6 +335,7 @@ const th: TranslationKeys = {
   'fileMenu.openFile': 'Open file...',
   'fileMenu.save': 'Save',
   'fileMenu.saveAs': 'Save as...',
+  'fileMenu.exportImage': 'ส่งออกภาพ...',
   'fileMenu.recentFiles': 'Recent files',
   'fileMenu.clearHistory': 'Clear history',
   'fileMenu.noRecentFiles': 'No recent files',

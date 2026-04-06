@@ -234,6 +234,7 @@ const en = {
   'export.selectedOnly': 'Export selected only',
   'export.exportFormat': 'Export {{format}}',
   'export.exportLayer': 'Export layer',
+  'export.pdfMultiPage': 'PDF will include all {{count}} pages.',
 
   // ── Polygon ──
   'polygon.sides': 'Sides',
@@ -332,6 +333,7 @@ const en = {
   'fileMenu.openFile': 'Open file...',
   'fileMenu.save': 'Save',
   'fileMenu.saveAs': 'Save as...',
+  'fileMenu.exportImage': 'Export image...',
   'fileMenu.recentFiles': 'Recent files',
   'fileMenu.clearHistory': 'Clear history',
   'fileMenu.noRecentFiles': 'No recent files',
