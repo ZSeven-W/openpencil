@@ -21,3 +21,4 @@ dist-ssr/
 electron-dist/
 dist-electron/
 .claude
+.omx
