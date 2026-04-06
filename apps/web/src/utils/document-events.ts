@@ -23,13 +23,13 @@ type EventName = keyof DocumentEventMap;
 type Handler<E extends EventName> = (payload: DocumentEventMap[E]) => void;
 
 class DocumentEventEmitter {
-  private handlers: { [E in EventName]?: Set<Handler<E>> } = {};
+  private handlers: Partial<{ [E in EventName]: Set<Handler<E>> }> = {};
 
   on<E extends EventName>(event: E, handler: Handler<E>): () => void {
     let set = this.handlers[event] as Set<Handler<E>> | undefined;
     if (!set) {
-      set = new Set<Handler<E>>();
-      (this.handlers as Record<E, Set<Handler<E>>>)[event] = set;
+      set = new Set();
+      this.handlers[event] = set as never;
     }
     set.add(handler);
     return () => {
