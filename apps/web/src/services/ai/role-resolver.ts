@@ -145,13 +145,22 @@ const ROLE_PART_WORDS = new Set([
 ]);
 
 /**
- * Extract the first word-like token from a string, skipping any leading
- * whitespace, punctuation, or separators. Returns null when the string
- * has no word characters. Used by the suffix-scan guard below.
+ * Extract the first meaningful alphabetic token from a string, skipping
+ * leading whitespace, punctuation, digits, and single-letter fragments.
+ * Returns null when no qualifying token exists.
+ *
+ * Why alpha-only and min-length 2: sub-agents frequently name nodes
+ * "Card 1 Content", "Card 2 Header", "Button 3 Label" with a numeric
+ * index between the role word and the part word. A naive `\w+` would
+ * match the index ("1") and lose the trailing "content"/"header"/
+ * "label" that actually determines whether the node is a structural
+ * piece. We skip anything non-alpha (or alpha shorter than 2 chars) and
+ * scan forward until we land on a real word, so "Card 1 Content"
+ * correctly surfaces "content" and gets treated as a card piece.
  */
 function firstWordToken(s: string): string | null {
-  const m = /\w+/.exec(s);
-  return m ? m[0] : null;
+  const m = /[a-z]{2,}/i.exec(s);
+  return m ? m[0].toLowerCase() : null;
 }
 
 /** Substring patterns → role (checked in order, first match wins). */

@@ -482,6 +482,32 @@ describe('resolveNodeRole — name-based role inference', () => {
     },
   );
 
+  // --- Numeric index between role word and part word must NOT leak role ---
+  // Regression: sub-agents name nodes "Card 1 Content", "Card 2 Header",
+  // "Button 3 Label". The naive \w+ word scan grabbed the numeric "1" as
+  // the first token, missed the trailing part word, and wrongly inferred
+  // role=card on the content wrapper — which then got the white card
+  // default fill and hid all the text inside (the "Upcoming card title
+  // invisible" bug from the 2026-04-06 health-tracker dump).
+  it.each([
+    ['Card 1 Content'],
+    ['Card 2 Header'],
+    ['Card 3 Footer'],
+    ['Card 1 Body'],
+    ['Card 10 Title'],
+    ['Button 1 Label'],
+    ['Button 2 Icon'],
+  ])('does not infer card/button role when a numeric index precedes the part word: "%s"', (name) => {
+    const node = { id: 'n', type: 'frame', name, x: 0, y: 0, width: 300, height: 60 } as PenNode;
+    resolveNodeRole(node, ctx);
+    // The node should not inherit the card white fill + shadow. Role is
+    // either undefined or something other than card/button.
+    expect(node.role).not.toBe('card');
+    expect(node.role).not.toBe('button');
+    expect((node as { fill?: unknown }).fill).toBeUndefined();
+    expect((node as { effects?: unknown }).effects).toBeUndefined();
+  });
+
   // --- Modifier BEFORE the role word: must STILL infer the role ---
   it.each([
     ['Icon Button', 'button'],
