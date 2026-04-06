@@ -56,6 +56,8 @@ export {
   getNodeHeight,
   computeLayoutPositions,
 } from './layout/engine.js';
+export { normalizeTreeLayout } from './layout/normalize-tree.js';
+export { unwrapFakePhoneMockups } from './layout/unwrap-fake-phone-mockup.js';
 
 // Text measurement
 export {

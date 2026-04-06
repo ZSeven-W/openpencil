@@ -404,12 +404,24 @@ CRITICAL LAYOUT CONSTRAINTS:
 - Use "fill_container" for children that stretch, "fit_content" for shrink-wrap sizing.
 - Use justifyContent="space_between" to distribute items (e.g. navbar: logo | links | CTA). Use padding=[0,80] for horizontal page margins.
 - For side-by-side layouts, nest a horizontal frame with child frames using "fill_container" width.
-- Phone mockup = ONE frame node, cornerRadius 32. If a placeholder label is needed, allow exactly ONE centered text child inside the phone; otherwise no children. Never place placeholder text below the phone as a sibling. NEVER use ellipse.
 - IDs prefix="${subtask.idPrefix}-". No <step> tags. Output \`\`\`json immediately.`;
 
-  // Prevent sub-agents from generating a duplicate status bar on mobile
+  // Phone mockup guidance is only relevant when this subtask is actually
+  // rendering a phone mockup. Injecting it everywhere causes weaker models
+  // (e.g. MiniMax M2) to wrap unrelated sections — bottom-nav, footers — in
+  // a fake "Phone Mockup" frame and stuff the rest of the design inside.
+  if (needsPhoneMockupInstruction(subtask.label, compactPrompt, fullPrompt, plan.rootFrame.width)) {
+    prompt += `\n\nPHONE MOCKUP RULE:
+- Phone mockup = ONE frame node, cornerRadius 32. If a placeholder label is needed, allow exactly ONE centered text child inside the phone; otherwise no children.
+- Never place placeholder text below the phone as a sibling. NEVER use ellipse for the phone bezel.`;
+  }
+
+  // Prevent sub-agents from generating a duplicate status bar on mobile,
+  // and explicitly tell them NOT to wrap their section in a phone mockup —
+  // the design is already a mobile screen.
   if (plan.rootFrame.width <= 480) {
     prompt += `\n\nMOBILE STATUS BAR: A status bar (time, signal, wifi, battery) has ALREADY been pre-inserted as the first child of the root page frame. Do NOT generate any status bar, system chrome, or OS-level indicators. Start your content directly.`;
+    prompt += `\n\nNO PHONE MOCKUP WRAPPER: The whole design IS a mobile screen. Do NOT wrap your section in a phone-shaped frame (cornerRadius 32 dark bezel, fixed 260-300px width, name "Phone Mockup"). Your section's root frame must use width="fill_container" and contain only the content that belongs to this section — never the entire app's children.`;
   }
 
   if (needsNativeDenseCardInstruction(subtask.label, compactPrompt, fullPrompt)) {
@@ -528,4 +540,27 @@ function needsHeroPhoneTwoColumnInstruction(
   const heroLike = /(hero|首页首屏|首屏|横幅|banner)/.test(text);
   const phoneLike = /(phone|mockup|screenshot|截图|手机|app\s*screen|应用截图)/.test(text);
   return heroLike && phoneLike;
+}
+
+/**
+ * Decide whether this sub-agent should see the phone mockup style guide.
+ *
+ * Mobile generation (root width <= 480) NEVER needs it: the design itself
+ * is already a phone screen, so the prompt would only confuse the model
+ * into wrapping its section in a fake bezel.
+ *
+ * Desktop generation needs it only when this specific sub-task is the one
+ * rendering a phone mockup (hero showcase, app preview, etc.).
+ */
+function needsPhoneMockupInstruction(
+  subtaskLabel: string,
+  compactPrompt: string,
+  fullPrompt: string,
+  rootFrameWidth: number,
+): boolean {
+  if (rootFrameWidth <= 480) return false;
+  const text = `${subtaskLabel}\n${compactPrompt}\n${fullPrompt}`.toLowerCase();
+  return /(phone\s*mockup|app\s*mockup|app\s*screen|app\s*screenshot|device\s*frame|手机\s*样机|手机\s*模型|应用\s*截图|应用\s*预览)/.test(
+    text,
+  );
 }

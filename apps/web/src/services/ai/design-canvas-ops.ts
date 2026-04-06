@@ -14,6 +14,8 @@ import {
   estimateNodeIntrinsicHeight,
 } from './generation-utils';
 import { defaultLineHeight } from '@/canvas/canvas-text-measure';
+import { normalizeTreeLayout, unwrapFakePhoneMockups } from '@/canvas/canvas-layout-engine';
+import { forcePageResync } from '@/canvas/canvas-sync-utils';
 import {
   applyIconPathResolution,
   applyNoEmojiIconHeuristic,
@@ -542,9 +544,53 @@ export function applyPostStreamingTreeHeuristics(rootNodeId: string): void {
   if (!rootNode || rootNode.type !== 'frame') return;
   if (!Array.isArray(rootNode.children) || rootNode.children.length === 0) return;
 
-  // Role-based tree resolution + cross-node post-pass
+  // Earliest pass: strip fake phone mockup wrappers that weaker sub-agents
+  // generate when they misread the prompt's phone mockup guidance. Must run
+  // BEFORE resolveTreeRoles, otherwise the role resolver may write defaults
+  // (layout, fill) onto the wrapper and the children inside it that we then
+  // throw away.
+  // Return value is intentionally ignored — see the publish step at the end:
+  // we always publish, so the boolean would only be informational.
+  unwrapFakePhoneMockups(rootNode);
+
+  // Role-based tree resolution + cross-node post-pass.
+  // Runs FIRST so role defaults (e.g. navbar → horizontal, button → horizontal)
+  // can populate missing `layout` fields with semantically correct values.
   resolveTreeRoles(rootNode, generationCanvasWidth);
   resolveTreePostPass(rootNode, generationCanvasWidth, getNodeById, updateNode);
+
+  // Re-fetch the root from the store before running any subsequent pass.
+  // resolveTreePostPass calls `updateNode` in several places (height
+  // expansion, clipContent). Each call routes through `updateNodeInTree`,
+  // which shallow-clones every ancestor along the update path. Our original
+  // `rootNode` reference now points to a detached tree: further mutations on
+  // it would silently disappear for nodes that lived on those update paths.
+  // Always read a fresh reference for mutation passes that follow updateNode.
+  const freshRoot = useDocumentStore.getState().getNodeById(rootNodeId);
+  if (!freshRoot || freshRoot.type !== 'frame') return;
+
+  // Normalize layout as a final safety net: fills in `layout` for frames the
+  // role resolver did not touch (unknown roles, plain containers) and strips
+  // stale x/y from children of any auto-layout frame. MUST run AFTER role
+  // resolution — otherwise the 'vertical' fallback here freezes wrong layouts
+  // before role defaults can override them.
+  normalizeTreeLayout(freshRoot);
+
+  // Publish point. unwrap, resolveTreeRoles, and normalizeTreeLayout all
+  // mutate store-owned nodes in place; resolveTreePostPass mostly goes
+  // through updateNode but also has direct-mutation branches. Without an
+  // explicit publish, Zustand subscribers (canvas sync, MCP push) only fire
+  // if some later code path happens to call updateNode — and that path is
+  // skipped on sub-agent retry / no-op cases.
+  //
+  // We use forcePageResync (not a hand-rolled shallow doc spread) because
+  // canvas-document-sync subscribes to the active page's children array
+  // identity, not to the document object itself. A naive `{ ...document }`
+  // spread would NOT change `pages[0].children` and the canvas would never
+  // re-sync — see canvas-sync-utils.ts header comment for the trap.
+  // forcePageResync also bypasses mutateWithHistory so we don't push an
+  // undo entry for what is a deterministic post-streaming cleanup.
+  forcePageResync();
 
   // Resolve pending icons asynchronously via Iconify API (fire-and-forget)
   resolveAsyncIcons(rootNodeId).catch(console.warn);
@@ -707,8 +753,15 @@ function sanitizeNodesForInsert(nodes: PenNode[], existingIds: Set<string>): Pen
   const cloned = nodes.map((n) => deepCloneNode(n));
 
   for (const node of cloned) {
+    // Strip fake phone mockup wrappers BEFORE role resolution so role
+    // defaults aren't wasted on a wrapper we're about to discard.
+    unwrapFakePhoneMockups(node);
+    // Role resolution runs first so role defaults can populate `layout`
+    // before normalizeTreeLayout's generic fallback would otherwise freeze
+    // the wrong value (e.g. navbar → horizontal, not vertical fallback).
     resolveTreeRoles(node, generationCanvasWidth);
     applyGenerationHeuristics(node);
+    normalizeTreeLayout(node);
     sanitizeLayoutChildPositions(node, false);
     sanitizeScreenFrameBounds(node);
   }
@@ -726,8 +779,15 @@ function sanitizeNodesForUpsert(nodes: PenNode[]): PenNode[] {
   const cloned = nodes.map((n) => deepCloneNode(n));
 
   for (const node of cloned) {
+    // Strip fake phone mockup wrappers BEFORE role resolution so role
+    // defaults aren't wasted on a wrapper we're about to discard.
+    unwrapFakePhoneMockups(node);
+    // Role resolution runs first so role defaults can populate `layout`
+    // before normalizeTreeLayout's generic fallback would otherwise freeze
+    // the wrong value (e.g. navbar → horizontal, not vertical fallback).
     resolveTreeRoles(node, generationCanvasWidth);
     applyGenerationHeuristics(node);
+    normalizeTreeLayout(node);
     sanitizeLayoutChildPositions(node, false);
     sanitizeScreenFrameBounds(node);
   }

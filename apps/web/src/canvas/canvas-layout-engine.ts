@@ -12,4 +12,6 @@ export {
   getNodeHeight,
   computeLayoutPositions,
   estimateLineWidth,
+  normalizeTreeLayout,
+  unwrapFakePhoneMockups,
 } from '@zseven-w/pen-core';

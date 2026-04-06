@@ -268,82 +268,120 @@ export function resolveTreePostPass(
   if (root.type !== 'frame') return;
   if (!('children' in root) || !Array.isArray(root.children)) return;
 
-  const children = root.children;
+  // `updateNode` goes through Zustand's immutable `updateNodeInTree`, which
+  // shallow-clones every ancestor along the update path. Once we call it, our
+  // `root` parameter reference becomes detached from the store: later direct
+  // mutations to `root` (fill/effects) would be silently dropped, and stale
+  // reads (e.g. the fill we pass down to children as `parentNode`) could lie
+  // about the live tree state. After every updateNode call, re-fetch a fresh
+  // reference via `getNodeById` and rebind `currentRoot` + `children` before
+  // continuing. Children array identity is preserved across
+  // `updateNode(currentRoot.id, patch)` because the patch never touches
+  // `children`, but we rebind it via the fresh root for clarity and safety.
+  let currentRoot: FrameNode = root as FrameNode;
+  const refreshRoot = () => {
+    if (!getNodeById) return;
+    const fresh = getNodeById(currentRoot.id);
+    if (fresh && fresh.type === 'frame') {
+      currentRoot = fresh as FrameNode;
+    }
+  };
+  const currentChildren = (): PenNode[] =>
+    Array.isArray(currentRoot.children) ? currentRoot.children : [];
 
   // --- Card row equalization ---
-  if (root.layout === 'horizontal' && children.length >= 2) {
-    equalizeCardRow(root, children);
+  if (currentRoot.layout === 'horizontal' && currentChildren().length >= 2) {
+    equalizeCardRow(currentRoot, currentChildren());
   }
 
   // --- Horizontal overflow fix ---
-  if (root.layout === 'horizontal' && typeof root.width === 'number' && children.length >= 2) {
-    fixHorizontalOverflow(root, children, canvasWidth);
+  if (
+    currentRoot.layout === 'horizontal' &&
+    typeof currentRoot.width === 'number' &&
+    currentChildren().length >= 2
+  ) {
+    fixHorizontalOverflow(currentRoot, currentChildren(), canvasWidth);
   }
 
   // --- Form input consistency ---
-  if (root.layout === 'vertical' && root.width !== 'fit_content' && children.length >= 2) {
-    normalizeFormInputWidths(root, children);
+  if (
+    currentRoot.layout === 'vertical' &&
+    currentRoot.width !== 'fit_content' &&
+    currentChildren().length >= 2
+  ) {
+    normalizeFormInputWidths(currentRoot, currentChildren());
   }
 
   // --- Input trailing icon alignment ---
-  if (root.layout === 'horizontal' && children.length >= 2) {
-    normalizeInputTrailingIconAlignment(root, children);
+  if (currentRoot.layout === 'horizontal' && currentChildren().length >= 2) {
+    normalizeInputTrailingIconAlignment(currentRoot, currentChildren());
   }
 
   // --- Text height estimation ---
-  if (root.layout && root.layout !== 'none') {
-    fixTextHeights(root, children, canvasWidth);
+  if (currentRoot.layout && currentRoot.layout !== 'none') {
+    fixTextHeights(currentRoot, currentChildren(), canvasWidth);
   }
 
   // --- Frame height expansion ---
-  if (typeof root.height === 'number' && root.layout && root.layout !== 'none') {
-    const intrinsic = estimateNodeIntrinsicHeight(root, undefined, canvasWidth);
-    const maxExpansion = root.height * 1.3;
-    if (intrinsic > root.height && intrinsic <= maxExpansion) {
+  if (
+    typeof currentRoot.height === 'number' &&
+    currentRoot.layout &&
+    currentRoot.layout !== 'none'
+  ) {
+    const intrinsic = estimateNodeIntrinsicHeight(currentRoot, undefined, canvasWidth);
+    const maxExpansion = currentRoot.height * 1.3;
+    if (intrinsic > currentRoot.height && intrinsic <= maxExpansion) {
       if (updateNode) {
-        updateNode(root.id, { height: Math.round(intrinsic) });
+        updateNode(currentRoot.id, { height: Math.round(intrinsic) });
+        refreshRoot();
       } else {
-        (root as unknown as Record<string, unknown>).height = Math.round(intrinsic);
+        (currentRoot as unknown as Record<string, unknown>).height = Math.round(intrinsic);
       }
     }
   }
 
   // --- clipContent for frames with cornerRadius + image children ---
-  if (!root.clipContent) {
+  if (!currentRoot.clipContent) {
     const cr =
-      typeof root.cornerRadius === 'number'
-        ? root.cornerRadius
-        : Array.isArray(root.cornerRadius) && root.cornerRadius.length > 0
-          ? root.cornerRadius[0]
+      typeof currentRoot.cornerRadius === 'number'
+        ? currentRoot.cornerRadius
+        : Array.isArray(currentRoot.cornerRadius) && currentRoot.cornerRadius.length > 0
+          ? currentRoot.cornerRadius[0]
           : 0;
-    if (cr > 0 && children.some((c) => c.type === 'image')) {
+    if (cr > 0 && currentChildren().some((c) => c.type === 'image')) {
       if (updateNode) {
-        updateNode(root.id, { clipContent: true } as Partial<PenNode>);
+        updateNode(currentRoot.id, { clipContent: true } as Partial<PenNode>);
+        refreshRoot();
       } else {
-        root.clipContent = true;
+        currentRoot.clipContent = true;
       }
     }
   }
 
   // --- Button foreground contrast ---
-  fixButtonForegroundContrast(root);
+  fixButtonForegroundContrast(currentRoot);
 
   // --- Section background alternation ---
-  if (root.layout === 'vertical' && children.length >= 3) {
-    fixSectionAlternation(root, children);
+  if (currentRoot.layout === 'vertical' && currentChildren().length >= 3) {
+    fixSectionAlternation(currentRoot, currentChildren());
   }
 
   // --- Orphan container contrast ---
-  fixOrphanContainerContrast(root, parentNode);
+  // This one is the primary motivation for the refreshRoot dance above:
+  // it mutates `currentRoot.fill` and `currentRoot.effects` directly, and
+  // would silently lose its writes if we still held the stale `root`.
+  fixOrphanContainerContrast(currentRoot, parentNode);
 
   // --- Input sibling fill/stroke consistency ---
-  if (root.layout === 'vertical' && children.length >= 2) {
-    fixInputSiblingConsistency(root, children);
+  if (currentRoot.layout === 'vertical' && currentChildren().length >= 2) {
+    fixInputSiblingConsistency(currentRoot, currentChildren());
   }
 
-  // Recurse
-  for (const child of children) {
-    resolveTreePostPass(child, canvasWidth, getNodeById, updateNode, root);
+  // Recurse. Pass `currentRoot` as the parentNode so descendants see
+  // whatever state this pass just wrote (e.g. a newly assigned fill from
+  // fixOrphanContainerContrast), not the pre-mutation snapshot.
+  for (const child of currentChildren()) {
+    resolveTreePostPass(child, canvasWidth, getNodeById, updateNode, currentRoot);
   }
 }
 
