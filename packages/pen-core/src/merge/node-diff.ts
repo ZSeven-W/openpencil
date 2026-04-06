@@ -3,12 +3,7 @@
 // One-direction diff: compute the patches needed to transform `base` into `next`.
 
 import type { PenNode, PenDocument } from '@zseven-w/pen-types';
-import {
-  indexNodesById,
-  nodeFieldsEqual,
-  stripChildren,
-  jsonEqual,
-} from './merge-helpers.js';
+import { indexNodesById, nodeFieldsEqual, stripChildren, jsonEqual } from './merge-helpers.js';
 
 export interface NodePatch {
   op: 'add' | 'remove' | 'modify' | 'move';
@@ -75,10 +70,7 @@ export function diffDocuments(base: PenDocument, next: PenDocument): NodePatch[]
       // Present in both. Check for `move` (parent or page changed) and `modify`
       // (atomic fields changed). They are independent — one node may produce
       // both kinds of patches.
-      const moved =
-        b.parentId !== n.parentId ||
-        b.pageId !== n.pageId ||
-        b.index !== n.index;
+      const moved = b.parentId !== n.parentId || b.pageId !== n.pageId || b.index !== n.index;
       if (moved) {
         patches.push({
           op: 'move',

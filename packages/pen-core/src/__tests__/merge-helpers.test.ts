@@ -68,9 +68,7 @@ describe('merge-helpers', () => {
     });
 
     it('records correct index within parent.children', () => {
-      const doc = docWithPages([
-        { id: 'page-1', children: [rect('a'), rect('b'), rect('c')] },
-      ]);
+      const doc = docWithPages([{ id: 'page-1', children: [rect('a'), rect('b'), rect('c')] }]);
       const idx = indexNodesById(doc);
       expect(idx.get('a')!.index).toBe(0);
       expect(idx.get('b')!.index).toBe(1);

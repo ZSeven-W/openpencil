@@ -51,9 +51,7 @@ function walk(
  * the explicit `pages` array or the legacy `children` array. Legacy mode
  * produces a single synthetic page with `id = null`.
  */
-export function getAllPages(
-  doc: PenDocument,
-): Array<{ id: string | null; children: PenNode[] }> {
+export function getAllPages(doc: PenDocument): Array<{ id: string | null; children: PenNode[] }> {
   if (doc.pages && doc.pages.length > 0) {
     return doc.pages.map((p) => ({ id: p.id, children: p.children }));
   }
