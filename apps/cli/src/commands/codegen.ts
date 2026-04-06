@@ -107,10 +107,9 @@ export async function cmdCodegenClean(args: string[], _flags: GlobalFlags): Prom
   if (!syncUrl) return;
 
   try {
-    const res = await fetch(
-      `${syncUrl}/api/mcp/codegen/plan/${encodeURIComponent(planId)}`,
-      { method: 'DELETE' },
-    );
+    const res = await fetch(`${syncUrl}/api/mcp/codegen/plan/${encodeURIComponent(planId)}`, {
+      method: 'DELETE',
+    });
     if (!res.ok) {
       outputError(await res.text());
     }

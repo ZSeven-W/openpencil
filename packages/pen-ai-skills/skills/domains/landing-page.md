@@ -64,6 +64,7 @@ GENERAL:
 ## Headline Hierarchy
 
 Write headlines from the strongest level down:
+
 1. Transformation: "Finally feel in control of your inbox" (strongest)
 2. Outcome: "Ship more content, grow your audience"
 3. Benefit: "Write 10x faster"
@@ -74,6 +75,7 @@ Lead with transformation or outcome. Use benefit/feature in supporting copy only
 ## Image Intent Hierarchy
 
 When choosing imagery (prioritize top → bottom):
+
 1. Transformation imagery: people in the "after state" — emotion, outcome, identity achieved
 2. Contextual use: people using the product in real environments
 3. Product-in-environment: product in a setting implying use/outcome

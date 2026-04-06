@@ -22,8 +22,17 @@ import {
 import { resolveSkills } from '@zseven-w/pen-ai-skills';
 import type { Phase } from '@zseven-w/pen-ai-skills';
 import type { AuthLevel } from '../../../src/types/agent';
-import { agentSessions, cleanup, abortSession, createSession, type AgentSession } from '../../utils/agent-sessions';
-import { shouldShortCircuitPlanLayout, updateLayoutSessionState } from '../../utils/agent-tool-guard';
+import {
+  agentSessions,
+  cleanup,
+  abortSession,
+  createSession,
+  type AgentSession,
+} from '../../utils/agent-sessions';
+import {
+  shouldShortCircuitPlanLayout,
+  updateLayoutSessionState,
+} from '../../utils/agent-tool-guard';
 import { getAllToolDefs } from '../../../src/services/ai/agent-tools';
 import {
   normalizeOptionalBaseURL,
@@ -43,9 +52,24 @@ const TOOL_LEVEL_MAP: Record<string, AuthLevel> = {
 };
 
 const ROLE_TOOL_PRESETS: Record<string, string[]> = {
-  designer: ['batch_get', 'snapshot_layout', 'find_empty_space', 'generate_design', 'insert_node', 'plan_layout', 'batch_insert'],
+  designer: [
+    'batch_get',
+    'snapshot_layout',
+    'find_empty_space',
+    'generate_design',
+    'insert_node',
+    'plan_layout',
+    'batch_insert',
+  ],
   reviewer: ['batch_get', 'snapshot_layout', 'get_selection'],
-  editor: ['batch_get', 'snapshot_layout', 'find_empty_space', 'update_node', 'delete_node', 'insert_node'],
+  editor: [
+    'batch_get',
+    'snapshot_layout',
+    'find_empty_space',
+    'update_node',
+    'delete_node',
+    'insert_node',
+  ],
   researcher: ['batch_get', 'snapshot_layout', 'find_empty_space', 'get_selection'],
 };
 
@@ -83,7 +107,11 @@ IMPORTANT: Always spawn exactly ${concurrency} designers and delegate to all of 
 After all delegations, end with a short summary for the user.`;
 }
 
-function buildMemberSystemPrompt(role: string, designMdContent?: string, hasVariables?: boolean): string {
+function buildMemberSystemPrompt(
+  role: string,
+  designMdContent?: string,
+  hasVariables?: boolean,
+): string {
   const phase = ROLE_SKILL_PHASE[role] ?? 'generation';
   const toolInstructions = ROLE_TOOL_INSTRUCTIONS[role] ?? '';
 
@@ -195,7 +223,8 @@ function zigEventToSSE(raw: string): string {
         type: 'tool_call',
         id: data.id,
         name: data.name,
-        args: typeof data.input === 'string' ? JSON.parse(data.input as string) : (data.input ?? {}),
+        args:
+          typeof data.input === 'string' ? JSON.parse(data.input as string) : (data.input ?? {}),
         level: TOOL_LEVEL_MAP[data.name as string] ?? 'read',
       };
       break;
@@ -203,7 +232,7 @@ function zigEventToSSE(raw: string): string {
       // Skip tool_use content_block_start — args aren't available yet.
       // The complete tool_call is emitted later as a tool_use event.
       if (data.tool_name) {
-        return '';  // suppress — will come as tool_use event with full args
+        return ''; // suppress — will come as tool_use event with full args
       }
       mapped = { type: tag, ...data };
       break;
@@ -263,9 +292,11 @@ async function runDelegateMember(
     if (skillPrefix) enrichedTask = skillPrefix + '\n\n' + task;
   }
 
-  controller.enqueue(encoder.encode(
-    `event: member_start\ndata: ${JSON.stringify({ type: 'member_start', memberId, task })}\n\n`,
-  ));
+  controller.enqueue(
+    encoder.encode(
+      `event: member_start\ndata: ${JSON.stringify({ type: 'member_start', memberId, task })}\n\n`,
+    ),
+  );
 
   let memberResult = '';
   const memberIter = await runTeamMember(session.team!, memberId, enrichedTask);
@@ -285,15 +316,16 @@ async function runDelegateMember(
             type: 'tool_call',
             id: mToolId,
             name: mEvt.tool_use.name,
-            args: typeof mEvt.tool_use.input === 'string'
-              ? JSON.parse(mEvt.tool_use.input as string)
-              : (mEvt.tool_use.input ?? {}),
+            args:
+              typeof mEvt.tool_use.input === 'string'
+                ? JSON.parse(mEvt.tool_use.input as string)
+                : (mEvt.tool_use.input ?? {}),
             level,
             source: memberId,
           };
-          controller.enqueue(encoder.encode(
-            `event: tool_call\ndata: ${JSON.stringify(toolCallEvt)}\n\n`,
-          ));
+          controller.enqueue(
+            encoder.encode(`event: tool_call\ndata: ${JSON.stringify(toolCallEvt)}\n\n`),
+          );
           continue;
         }
 
@@ -301,7 +333,9 @@ async function runDelegateMember(
         if (mEvt.stream_event?.text && mEvt.stream_event.type === 'text_delta') {
           memberResult += mEvt.stream_event.text;
         }
-      } catch { /* ignore parse errors */ }
+      } catch {
+        /* ignore parse errors */
+      }
       const memberSse = zigEventToSSE(memberRaw);
       if (memberSse) controller.enqueue(encoder.encode(memberSse));
     }
@@ -312,9 +346,11 @@ async function runDelegateMember(
     }
   }
 
-  controller.enqueue(encoder.encode(
-    `event: member_end\ndata: ${JSON.stringify({ type: 'member_end', memberId, result: '' })}\n\n`,
-  ));
+  controller.enqueue(
+    encoder.encode(
+      `event: member_end\ndata: ${JSON.stringify({ type: 'member_end', memberId, result: '' })}\n\n`,
+    ),
+  );
 
   resolveTeamToolResult(
     session.team!,
@@ -332,7 +368,12 @@ function createProviderHandle(
 ) {
   return providerType === 'anthropic'
     ? createAnthropicProvider(apiKey, model, baseURL, maxContextTokens)
-    : createOpenAICompatProvider(apiKey, requireOpenAICompatBaseURL(baseURL), model, maxContextTokens);
+    : createOpenAICompatProvider(
+        apiKey,
+        requireOpenAICompatBaseURL(baseURL),
+        model,
+        maxContextTokens,
+      );
 }
 
 /**
@@ -404,7 +445,8 @@ export default defineEventHandler(async (event) => {
   ) {
     throw createError({
       statusCode: 400,
-      message: 'Missing required fields: sessionId, messages, systemPrompt, providerType, apiKey, model',
+      message:
+        'Missing required fields: sessionId, messages, systemPrompt, providerType, apiKey, model',
     });
   }
 
@@ -448,13 +490,23 @@ export default defineEventHandler(async (event) => {
     console.info(`[agent] creating team (teamMode=${!!body.teamMode}, concurrency=${concurrency})`);
 
     // Append team capabilities to system prompt when teamMode
-    const teamSystemPrompt = body.teamMode && concurrency >= 2
-      ? body.systemPrompt + buildTeamCapabilitiesPrompt(concurrency)
-      : body.systemPrompt;
+    const teamSystemPrompt =
+      body.teamMode && concurrency >= 2
+        ? body.systemPrompt + buildTeamCapabilitiesPrompt(concurrency)
+        : body.systemPrompt;
 
-    const team = createTeam(provider, tools, teamSystemPrompt, body.maxTurns ?? 20, body.maxOutputTokens);
+    const team = createTeam(
+      provider,
+      tools,
+      teamSystemPrompt,
+      body.maxTurns ?? 20,
+      body.maxOutputTokens,
+    );
 
-    const memberHandles: Array<{ provider: ReturnType<typeof createProviderHandle>; tools: ReturnType<typeof createToolRegistry> }> = [];
+    const memberHandles: Array<{
+      provider: ReturnType<typeof createProviderHandle>;
+      tools: ReturnType<typeof createToolRegistry>;
+    }> = [];
 
     // Legacy path: pre-configured members from client
     if (normalizedMembers.length) {
@@ -478,16 +530,22 @@ export default defineEventHandler(async (event) => {
     teamRegisterDelegate(team);
 
     // Seed prior conversation history onto the lead engine
-    const priorMessages = body.messages.slice(0, -1).filter(
-      (m) => (m.role === 'user' || m.role === 'assistant') && typeof m.content === 'string',
-    );
+    const priorMessages = body.messages
+      .slice(0, -1)
+      .filter(
+        (m) => (m.role === 'user' || m.role === 'assistant') && typeof m.content === 'string',
+      );
     if (priorMessages.length > 0) {
       seedTeamMessages(team, JSON.stringify(priorMessages));
     }
 
     session = createSession({
-      team, provider, tools, memberHandles,
-      createdAt: Date.now(), lastActivity: Date.now(),
+      team,
+      provider,
+      tools,
+      memberHandles,
+      createdAt: Date.now(),
+      lastActivity: Date.now(),
     });
   } else {
     // Single engine mode
@@ -501,16 +559,21 @@ export default defineEventHandler(async (event) => {
     });
 
     // Seed conversation history
-    const priorMessages = body.messages.slice(0, -1).filter(
-      (m) => (m.role === 'user' || m.role === 'assistant') && typeof m.content === 'string',
-    );
+    const priorMessages = body.messages
+      .slice(0, -1)
+      .filter(
+        (m) => (m.role === 'user' || m.role === 'assistant') && typeof m.content === 'string',
+      );
     if (priorMessages.length > 0) {
       seedMessages(engine, JSON.stringify(priorMessages));
     }
 
     session = createSession({
-      engine, provider, tools,
-      createdAt: Date.now(), lastActivity: Date.now(),
+      engine,
+      provider,
+      tools,
+      createdAt: Date.now(),
+      lastActivity: Date.now(),
     });
   }
 
@@ -550,31 +613,43 @@ export default defineEventHandler(async (event) => {
             console.info(`[agent] event #${eventCount}: ${preview}`);
           }
 
-	          if (session.team) {
+          if (session.team) {
             try {
               const evt = JSON.parse(raw);
 
               // ── spawn_member intercept ──
               if (evt.tool_use && evt.tool_use.name === 'spawn_member') {
                 const toolUseId = evt.tool_use.id;
-                const inputData = typeof evt.tool_use.input === 'string'
-                  ? JSON.parse(evt.tool_use.input) : evt.tool_use.input;
+                const inputData =
+                  typeof evt.tool_use.input === 'string'
+                    ? JSON.parse(evt.tool_use.input)
+                    : evt.tool_use.input;
                 const memberId: string = inputData?.id;
                 const role: string = inputData?.role;
                 const memberModel: string | undefined = inputData?.model;
 
                 if (!memberId || !role || !ROLE_TOOL_PRESETS[role]) {
-                  resolveTeamToolResult(session.team, toolUseId, JSON.stringify({
-                    success: false, error: `Invalid spawn_member args: id=${memberId}, role=${role}`,
-                  }));
+                  resolveTeamToolResult(
+                    session.team,
+                    toolUseId,
+                    JSON.stringify({
+                      success: false,
+                      error: `Invalid spawn_member args: id=${memberId}, role=${role}`,
+                    }),
+                  );
                   continue;
                 }
 
                 // Check duplicate
                 if (session.memberRoles.has(memberId)) {
-                  resolveTeamToolResult(session.team, toolUseId, JSON.stringify({
-                    success: false, error: `Member "${memberId}" already exists`,
-                  }));
+                  resolveTeamToolResult(
+                    session.team,
+                    toolUseId,
+                    JSON.stringify({
+                      success: false,
+                      error: `Member "${memberId}" already exists`,
+                    }),
+                  );
                   continue;
                 }
 
@@ -602,7 +677,9 @@ export default defineEventHandler(async (event) => {
 
                 // Build member system prompt with role skills
                 const memberPrompt = buildMemberSystemPrompt(
-                  role, body.designMdContent, body.hasVariables,
+                  role,
+                  body.designMdContent,
+                  body.hasVariables,
                 );
 
                 addTeamMember(session.team, memberId, mProvider, mTools, memberPrompt, 20);
@@ -610,9 +687,16 @@ export default defineEventHandler(async (event) => {
                 session.memberHandles.push({ provider: mProvider, tools: mTools });
                 session.memberRoles.set(memberId, role);
 
-                resolveTeamToolResult(session.team, toolUseId, JSON.stringify({
-                  success: true, member_id: memberId, role, tools: presetNames,
-                }));
+                resolveTeamToolResult(
+                  session.team,
+                  toolUseId,
+                  JSON.stringify({
+                    success: true,
+                    member_id: memberId,
+                    role,
+                    tools: presetNames,
+                  }),
+                );
                 continue;
               }
 
@@ -628,7 +712,9 @@ export default defineEventHandler(async (event) => {
                     const parsed = JSON.parse(inputData);
                     memberIdRaw = parsed.member_id;
                     taskRaw = parsed.task;
-                  } catch { /* fallback below */ }
+                  } catch {
+                    /* fallback below */
+                  }
                 } else if (inputData && typeof inputData === 'object') {
                   memberIdRaw = inputData.member_id;
                   taskRaw = inputData.task;
@@ -639,8 +725,13 @@ export default defineEventHandler(async (event) => {
                   // waiting_for_external_tools until ALL delegate results are resolved.
                   // By not awaiting, multiple delegates run concurrently.
                   runDelegateMember(
-                    session, body, controller, encoder,
-                    toolUseId, memberIdRaw, taskRaw,
+                    session,
+                    body,
+                    controller,
+                    encoder,
+                    toolUseId,
+                    memberIdRaw,
+                    taskRaw,
                   ).catch((err) => {
                     console.error(`[agent] delegate ${memberIdRaw} failed:`, err);
                     try {
@@ -649,13 +740,17 @@ export default defineEventHandler(async (event) => {
                         toolUseId,
                         JSON.stringify({ result: `Error: ${err?.message ?? String(err)}` }),
                       );
-                    } catch { /* ignore */ }
+                    } catch {
+                      /* ignore */
+                    }
                   });
                   continue;
                 }
               }
-	            } catch { /* not JSON or not intercepted — fall through to normal forwarding */ }
-	          }
+            } catch {
+              /* not JSON or not intercepted — fall through to normal forwarding */
+            }
+          }
 
           if (!session.team) {
             try {
@@ -691,8 +786,8 @@ export default defineEventHandler(async (event) => {
             }
           }
 
-	          const sse = zigEventToSSE(raw);
-	          if (sse) controller.enqueue(encoder.encode(sse));
+          const sse = zigEventToSSE(raw);
+          if (sse) controller.enqueue(encoder.encode(sse));
         }
         console.info(`[agent] stream ended after ${eventCount} events`);
       } catch (err: any) {

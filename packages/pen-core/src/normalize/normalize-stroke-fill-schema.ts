@@ -128,9 +128,7 @@ function stripIllegalColorsFromStrokeFill(node: PenNode): void {
   if (!stroke || typeof stroke !== 'object') return;
   const fillArr = stroke.fill;
   if (!Array.isArray(fillArr)) return;
-  (stroke as { fill?: PenFill[] }).fill = fillArr.filter(
-    (f) => isLegalFillEntry(f),
-  ) as PenFill[];
+  (stroke as { fill?: PenFill[] }).fill = fillArr.filter((f) => isLegalFillEntry(f)) as PenFill[];
 }
 
 // ---------------------------------------------------------------------------

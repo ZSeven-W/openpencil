@@ -157,7 +157,9 @@ export function AIChatInput({ input, setInput, onSend }: AIChatInputProps) {
           >
             {(() => {
               if (model.startsWith('builtin:')) {
-                const currentGroup = modelGroups.find((g) => g.models.some((m) => m.value === model));
+                const currentGroup = modelGroups.find((g) =>
+                  g.models.some((m) => m.value === model),
+                );
                 if (currentGroup) {
                   const ProvIcon = PROVIDER_ICON[currentGroup.provider];
                   return ProvIcon ? (

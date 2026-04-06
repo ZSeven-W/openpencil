@@ -7,7 +7,7 @@ function sendMenuAction(action: string): void {
 
 /** Recent files submenu — rebuilt each time the menu opens. */
 function buildRecentFilesSubmenu(): Electron.MenuItemConstructorOptions[] {
-  const recent = app.isReady() ? (global as any).__recentFiles ?? [] : [];
+  const recent = app.isReady() ? ((global as any).__recentFiles ?? []) : [];
   if (recent.length === 0) {
     return [{ label: 'No Recent Files', enabled: false }];
   }

@@ -295,7 +295,12 @@ async function executeSubAgent(
       } else if (chunk.type === 'error') {
         progressEntry.status = 'error';
         emitProgress(plan, progress, callbacks);
-        return { subtaskId: subtask.id, nodes: renderer.getInsertedNodes(), rawResponse, error: chunk.content };
+        return {
+          subtaskId: subtask.id,
+          nodes: renderer.getInsertedNodes(),
+          rawResponse,
+          error: chunk.content,
+        };
       }
     }
 

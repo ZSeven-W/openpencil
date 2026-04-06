@@ -12,10 +12,9 @@ export async function handleCodegenClean(params: CodegenCleanParams): Promise<st
     return JSON.stringify({ ok: true, deleted: false });
   }
 
-  const res = await fetch(
-    `${syncUrl}/api/mcp/codegen/plan/${encodeURIComponent(params.planId)}`,
-    { method: 'DELETE' },
-  );
+  const res = await fetch(`${syncUrl}/api/mcp/codegen/plan/${encodeURIComponent(params.planId)}`, {
+    method: 'DELETE',
+  });
 
   if (!res.ok) {
     const text = await res.text();

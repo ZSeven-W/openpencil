@@ -75,29 +75,29 @@ export function registerRole(role: string, ruleFn: RoleRuleFn): void {
 
 /** Exact name → role mappings (case-insensitive). */
 const NAME_EXACT_MAP: Record<string, string> = {
-  'navbar': 'navbar',
-  'navigation': 'navbar',
+  navbar: 'navbar',
+  navigation: 'navbar',
   'navigation bar': 'navbar',
   'nav bar': 'navbar',
-  'nav': 'navbar',
-  'header': 'navbar',
+  nav: 'navbar',
+  header: 'navbar',
   'top bar': 'navbar',
-  'topbar': 'navbar',
-  'hero': 'hero',
+  topbar: 'navbar',
+  hero: 'hero',
   'hero section': 'hero',
-  'footer': 'footer',
+  footer: 'footer',
   'search bar': 'search-bar',
-  'searchbar': 'search-bar',
+  searchbar: 'search-bar',
   'search input': 'search-bar',
-  'search': 'search-bar',
-  'avatar': 'avatar',
-  'divider': 'divider',
-  'separator': 'divider',
-  'spacer': 'spacer',
-  'badge': 'badge',
-  'tag': 'tag',
-  'pill': 'pill',
-  'table': 'table',
+  search: 'search-bar',
+  avatar: 'avatar',
+  divider: 'divider',
+  separator: 'divider',
+  spacer: 'spacer',
+  badge: 'badge',
+  tag: 'tag',
+  pill: 'pill',
+  table: 'table',
 };
 
 /** Names that indicate a container rather than an individual component. */
@@ -642,13 +642,34 @@ function fixSectionAlternation(parent: FrameNode, children: PenNode[]): void {
 }
 
 const STRUCTURAL_DENYLIST = new Set([
-  'section', 'row', 'column', 'centered-content', 'form-group', 'feature-grid',
-  'screenshot-frame', 'phone-mockup', 'navbar', 'nav-links', 'hero', 'footer',
-  'cta-section', 'stats-section', 'table', 'table-row', 'table-header', 'spacer', 'divider',
+  'section',
+  'row',
+  'column',
+  'centered-content',
+  'form-group',
+  'feature-grid',
+  'screenshot-frame',
+  'phone-mockup',
+  'navbar',
+  'nav-links',
+  'hero',
+  'footer',
+  'cta-section',
+  'stats-section',
+  'table',
+  'table-row',
+  'table-header',
+  'spacer',
+  'divider',
 ]);
 
 const CARD_LIKE_ALLOWLIST = new Set([
-  'card', 'stat-card', 'pricing-card', 'feature-card', 'image-card', 'testimonial',
+  'card',
+  'stat-card',
+  'pricing-card',
+  'feature-card',
+  'image-card',
+  'testimonial',
 ]);
 
 function fixOrphanContainerContrast(node: FrameNode, parentNode?: PenNode): void {

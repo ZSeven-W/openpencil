@@ -98,9 +98,7 @@ export default function ExportDialog({ open, onClose }: ExportDialogProps) {
 
         {/* Format */}
         <div className="mb-3">
-          <label className="text-xs text-muted-foreground block mb-1.5">
-            {t('export.format')}
-          </label>
+          <label className="text-xs text-muted-foreground block mb-1.5">{t('export.format')}</label>
           <div className="grid grid-cols-4 gap-1.5">
             {FORMATS.map((f) => (
               <button
@@ -123,9 +121,7 @@ export default function ExportDialog({ open, onClose }: ExportDialogProps) {
 
         {/* Scale */}
         <div className="mb-3">
-          <label className="text-xs text-muted-foreground block mb-1.5">
-            {t('export.scale')}
-          </label>
+          <label className="text-xs text-muted-foreground block mb-1.5">{t('export.scale')}</label>
           <div className="flex gap-1.5">
             {[1, 2, 3].map((s) => (
               <button

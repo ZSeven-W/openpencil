@@ -9,10 +9,7 @@ const frame = (props: Partial<PenNode> & { children?: PenNode[] }): PenNode =>
     ...props,
   }) as PenNode;
 
-const rect = (
-  id: string,
-  props: Partial<PenNode> = {},
-): PenNode =>
+const rect = (id: string, props: Partial<PenNode> = {}): PenNode =>
   ({
     id,
     type: 'rectangle',
@@ -81,10 +78,7 @@ describe('normalizeTreeLayout', () => {
     // treat the container as absolute-positioned. This is conservative but
     // avoids destroying hand-placed overlays.
     const node = frame({
-      children: [
-        rect('base'),
-        rect('overlay', { x: 120, y: 80 }),
-      ],
+      children: [rect('base'), rect('overlay', { x: 120, y: 80 })],
     });
     normalizeTreeLayout(node);
     expect((node as PenNode & { layout?: string }).layout).toBeUndefined();

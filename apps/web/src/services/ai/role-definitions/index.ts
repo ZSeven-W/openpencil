@@ -89,7 +89,10 @@ registerRole('navbar', (_node, ctx) => ({
   alignItems: 'center',
   justifyContent: 'space_between' as const,
   fill: [{ type: 'solid', color: '#FFFFFF' }] as PenFill[],
-  stroke: { thickness: [0, 0, 1, 0] as [number, number, number, number], fill: [{ type: 'solid', color: '#E2E8F0' }] } as PenStroke,
+  stroke: {
+    thickness: [0, 0, 1, 0] as [number, number, number, number],
+    fill: [{ type: 'solid', color: '#E2E8F0' }],
+  } as PenStroke,
 }));
 
 registerRole('nav-links', (_node, _ctx) => ({

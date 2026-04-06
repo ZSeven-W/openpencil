@@ -378,14 +378,38 @@ export default function AIChatPanel() {
       {/* --- Resize Handles (8 directions, hidden when maximized) --- */}
       {!isMaximized && (
         <>
-          <div className={cn('absolute -top-1 left-2 right-2 h-2 z-50', EDGE_CURSORS.n)} {...resizeHandleProps('n')} />
-          <div className={cn('absolute -bottom-1 left-2 right-2 h-2 z-50', EDGE_CURSORS.s)} {...resizeHandleProps('s')} />
-          <div className={cn('absolute -left-1 top-2 bottom-2 w-2 z-50', EDGE_CURSORS.w)} {...resizeHandleProps('w')} />
-          <div className={cn('absolute -right-1 top-2 bottom-2 w-2 z-50', EDGE_CURSORS.e)} {...resizeHandleProps('e')} />
-          <div className={cn('absolute -top-1 -left-1 w-3 h-3 z-[51]', EDGE_CURSORS.nw)} {...resizeHandleProps('nw')} />
-          <div className={cn('absolute -top-1 -right-1 w-3 h-3 z-[51]', EDGE_CURSORS.ne)} {...resizeHandleProps('ne')} />
-          <div className={cn('absolute -bottom-1 -left-1 w-3 h-3 z-[51]', EDGE_CURSORS.sw)} {...resizeHandleProps('sw')} />
-          <div className={cn('absolute -bottom-1 -right-1 w-3 h-3 z-[51]', EDGE_CURSORS.se)} {...resizeHandleProps('se')} />
+          <div
+            className={cn('absolute -top-1 left-2 right-2 h-2 z-50', EDGE_CURSORS.n)}
+            {...resizeHandleProps('n')}
+          />
+          <div
+            className={cn('absolute -bottom-1 left-2 right-2 h-2 z-50', EDGE_CURSORS.s)}
+            {...resizeHandleProps('s')}
+          />
+          <div
+            className={cn('absolute -left-1 top-2 bottom-2 w-2 z-50', EDGE_CURSORS.w)}
+            {...resizeHandleProps('w')}
+          />
+          <div
+            className={cn('absolute -right-1 top-2 bottom-2 w-2 z-50', EDGE_CURSORS.e)}
+            {...resizeHandleProps('e')}
+          />
+          <div
+            className={cn('absolute -top-1 -left-1 w-3 h-3 z-[51]', EDGE_CURSORS.nw)}
+            {...resizeHandleProps('nw')}
+          />
+          <div
+            className={cn('absolute -top-1 -right-1 w-3 h-3 z-[51]', EDGE_CURSORS.ne)}
+            {...resizeHandleProps('ne')}
+          />
+          <div
+            className={cn('absolute -bottom-1 -left-1 w-3 h-3 z-[51]', EDGE_CURSORS.sw)}
+            {...resizeHandleProps('sw')}
+          />
+          <div
+            className={cn('absolute -bottom-1 -right-1 w-3 h-3 z-[51]', EDGE_CURSORS.se)}
+            {...resizeHandleProps('se')}
+          />
         </>
       )}
 

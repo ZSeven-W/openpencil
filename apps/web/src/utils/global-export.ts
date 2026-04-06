@@ -9,11 +9,7 @@
  */
 
 import type { PenNode, PenDocument } from '@zseven-w/pen-types';
-import {
-  resolveRefs,
-  premeasureTextHeights,
-  flattenToRenderNodes,
-} from '@zseven-w/pen-renderer';
+import { resolveRefs, premeasureTextHeights, flattenToRenderNodes } from '@zseven-w/pen-renderer';
 import { resolveNodeForCanvas, getDefaultTheme } from '@zseven-w/pen-core';
 import { getSkiaEngineRef } from '@/canvas/skia-engine-ref';
 
@@ -152,11 +148,7 @@ function renderPageToImage(
 
   // Encode via the browser's native canvas encoder.
   const mimeType =
-    opts.format === 'jpeg'
-      ? 'image/jpeg'
-      : opts.format === 'webp'
-        ? 'image/webp'
-        : 'image/png';
+    opts.format === 'jpeg' ? 'image/jpeg' : opts.format === 'webp' ? 'image/webp' : 'image/png';
   const quality = opts.format === 'png' ? undefined : 0.92;
   let dataUrl: string;
   try {
@@ -216,8 +208,7 @@ export function exportActivePageImage(
   const result = renderPageToImage(page.children, doc, { multiplier, format });
   if (!result) return null;
 
-  const mime =
-    format === 'jpeg' ? 'image/jpeg' : format === 'webp' ? 'image/webp' : 'image/png';
+  const mime = format === 'jpeg' ? 'image/jpeg' : format === 'webp' ? 'image/webp' : 'image/png';
   const ext = format === 'jpeg' ? 'jpg' : format;
   return {
     blob: new Blob([result.bytes], { type: mime }),
@@ -349,9 +340,7 @@ function buildRasterPdf(pages: PageRender[]): Blob {
   }
 
   // Trailer
-  push(
-    `trailer << /Size ${totalObjects + 1} /Root 1 0 R >>\nstartxref\n${xrefOffset}\n%%EOF\n`,
-  );
+  push(`trailer << /Size ${totalObjects + 1} /Root 1 0 R >>\nstartxref\n${xrefOffset}\n%%EOF\n`);
 
   // Concatenate
   const out = new Uint8Array(length);

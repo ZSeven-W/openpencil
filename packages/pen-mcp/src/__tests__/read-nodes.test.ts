@@ -6,14 +6,24 @@ const mockDoc: PenDocument = {
   version: '0.6.0',
   children: [
     {
-      id: 'f1', type: 'frame', name: 'Hero', x: 0, y: 0, width: 800, height: 600,
+      id: 'f1',
+      type: 'frame',
+      name: 'Hero',
+      x: 0,
+      y: 0,
+      width: 800,
+      height: 600,
       children: [
         { id: 'r1', type: 'rectangle', name: 'BG', x: 0, y: 0, width: 800, height: 600 },
         {
-          id: 'f2', type: 'frame', name: 'Content', x: 100, y: 100, width: 600, height: 400,
-          children: [
-            { id: 't1', type: 'text', name: 'Title', x: 0, y: 0, width: 200, height: 40 },
-          ],
+          id: 'f2',
+          type: 'frame',
+          name: 'Content',
+          x: 100,
+          y: 100,
+          width: 600,
+          height: 400,
+          children: [{ id: 't1', type: 'text', name: 'Title', x: 0, y: 0, width: 200, height: 40 }],
         },
       ],
     },

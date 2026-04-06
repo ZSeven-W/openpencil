@@ -234,10 +234,12 @@ export const useDocumentStore = create<DocumentStoreState>((set, get) => ({
     const state = get();
     const { document: doc, fileName } = state;
     const suggestedName = explicitSuggestedName
-      ? (explicitSuggestedName.endsWith('.op') ? explicitSuggestedName : `${explicitSuggestedName}.op`)
-      : (fileName
-          ? fileName.replace(/\.(pen|op|json)$/i, '') + '.op'
-          : 'untitled.op');
+      ? explicitSuggestedName.endsWith('.op')
+        ? explicitSuggestedName
+        : `${explicitSuggestedName}.op`
+      : fileName
+        ? fileName.replace(/\.(pen|op|json)$/i, '') + '.op'
+        : 'untitled.op';
 
     // Path A: Electron native save dialog.
     if (isElectron()) {

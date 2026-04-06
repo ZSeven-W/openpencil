@@ -18,12 +18,14 @@ Always use ref instantiation over creating from scratch. Existing components ens
 ## Slot System
 
 Frames with a `slot` property contain recommended child component IDs:
+
 - Insert recommended components: I(parentSlotPath, {type: "ref", ref: "recommendedId"})
 - Disable unused slots: U(instance+"/slotId", {enabled: false})
 
 ## Descendant Overrides
 
 Modify instance content WITHOUT recreating the component:
+
 - Change properties: U(instance+"/childId", {content: "New Text"})
 - Replace a node: R(instance+"/slotId", {type: "frame", layout: "vertical", ...})
 - Nested instances use / path: instance+"/nestedRef/childId"
@@ -31,28 +33,28 @@ Modify instance content WITHOUT recreating the component:
 ## Common Composition Patterns
 
 Sidebar + Content = Dashboard:
-  layout: horizontal, sidebar width 240-280px, content fill_container
+layout: horizontal, sidebar width 240-280px, content fill_container
 
 Header + Content = Standard Page:
-  layout: vertical, header height 64px, content fill_container
+layout: vertical, header height 64px, content fill_container
 
 Card (3-slot architecture):
-  Card Header (slot) — title, description
-  Card Content (slot) — main content, form fields
-  Card Actions (slot) — buttons, links
+Card Header (slot) — title, description
+Card Content (slot) — main content, form fields
+Card Actions (slot) — buttons, links
 
 Dialog = Card ref + custom header/actions:
-  descendants: {"headerSlot": {children: [Title, Description]}, "contentSlot": {enabled: false}}
+descendants: {"headerSlot": {children: [Title, Description]}, "contentSlot": {enabled: false}}
 
 Modal = Card ref + shadow effect:
-  effect: [{type: "shadow", blur: 20, ...}]
+effect: [{type: "shadow", blur: 20, ...}]
 
 Table hierarchy:
-  Table → Row (slot) → Cell (frame) → Content
-  NEVER skip the Cell frame layer
+Table → Row (slot) → Cell (frame) → Content
+NEVER skip the Cell frame layer
 
 Tabs:
-  Tabs container (slot) → Tab Item Active / Tab Item Inactive
+Tabs container (slot) → Tab Item Active / Tab Item Inactive
 
 ## Copy Warnings
 

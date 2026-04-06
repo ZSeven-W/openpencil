@@ -7,11 +7,7 @@ import { zoomToFitContent } from '@/canvas/skia-engine-ref';
 import { syncCanvasPositionsToStore } from '@/canvas/skia-engine-ref';
 import { normalizePenDocument } from '@/utils/normalize-pen-file';
 import { addRecentFile, clearRecentFiles } from '@/utils/recent-files';
-import {
-  supportsFileSystemAccess,
-  openDocumentFS,
-  openDocument,
-} from '@/utils/file-operations';
+import { supportsFileSystemAccess, openDocumentFS, openDocument } from '@/utils/file-operations';
 
 async function confirmUnsaved(): Promise<boolean> {
   const showDialog = (window as any).__showUnsavedDialog;

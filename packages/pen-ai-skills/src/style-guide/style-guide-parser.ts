@@ -100,7 +100,10 @@ function extractTypography(sections: Map<string, string>): StyleGuideValues['typ
   // We expect up to 3 rows: display, body, data/mono
   const rows: { role: string; family: string }[] = [];
   for (const line of familyText.split('\n')) {
-    const cells = line.split('|').map((c) => c.trim()).filter(Boolean);
+    const cells = line
+      .split('|')
+      .map((c) => c.trim())
+      .filter(Boolean);
     if (cells.length < 2) continue;
     // Skip header and divider rows
     if (cells[0].toLowerCase() === 'role' || cells[0].startsWith('-')) continue;
@@ -156,9 +159,9 @@ function extractRadius(sections: Map<string, string>): StyleGuideValues['radius'
 
   // If "Everything" is 0px (brutalist style), both are 0
   if (card === undefined && button === undefined) {
-    const everythingLine = radiusSection.split('\n').find(
-      (l) => /everything/i.test(l) && /\d+px/.test(l),
-    );
+    const everythingLine = radiusSection
+      .split('\n')
+      .find((l) => /everything/i.test(l) && /\d+px/.test(l));
     if (everythingLine) {
       const m = everythingLine.match(/(\d+)px/);
       if (m) {

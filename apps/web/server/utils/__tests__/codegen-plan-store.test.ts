@@ -15,8 +15,23 @@ const mockNodes: PenNode[] = [
 
 const validPlan: CodePlanFromAI = {
   chunks: [
-    { id: 'c1', name: 'Hero', nodeIds: ['n1'], role: 'section', suggestedComponentName: 'Hero', dependencies: [], exposedSlots: [] },
-    { id: 'c2', name: 'Card', nodeIds: ['n2'], role: 'component', suggestedComponentName: 'Card', dependencies: ['c1'] },
+    {
+      id: 'c1',
+      name: 'Hero',
+      nodeIds: ['n1'],
+      role: 'section',
+      suggestedComponentName: 'Hero',
+      dependencies: [],
+      exposedSlots: [],
+    },
+    {
+      id: 'c2',
+      name: 'Card',
+      nodeIds: ['n2'],
+      role: 'component',
+      suggestedComponentName: 'Card',
+      dependencies: ['c1'],
+    },
   ],
   sharedStyles: [],
   rootLayout: { direction: 'vertical', gap: 16, responsive: true },
@@ -36,10 +51,7 @@ describe('codegen-plan-store', () => {
   it('createPlan rejects duplicate chunkIds', () => {
     const badPlan = {
       ...validPlan,
-      chunks: [
-        { ...validPlan.chunks[0] },
-        { ...validPlan.chunks[1], id: 'c1' },
-      ],
+      chunks: [{ ...validPlan.chunks[0] }, { ...validPlan.chunks[1], id: 'c1' }],
     };
     expect(() => createPlan(badPlan, mockNodes)).toThrow('Duplicate chunkId: c1');
   });
@@ -99,8 +111,13 @@ describe('codegen-plan-store', () => {
       chunkId: 'c1',
       code: 'function Hero() {}',
       contract: {
-        chunkId: 'c1', componentName: 'Hero',
-        exportedProps: [], slots: [], cssClasses: [], cssVariables: [], imports: [],
+        chunkId: 'c1',
+        componentName: 'Hero',
+        exportedProps: [],
+        slots: [],
+        cssClasses: [],
+        cssVariables: [],
+        imports: [],
       },
     };
     const submitResult = submitChunkResult(planId, chunkResult);
@@ -113,12 +130,30 @@ describe('codegen-plan-store', () => {
   it('assemblePlan returns all results and clears cache', () => {
     const { planId } = createPlan(validPlan, mockNodes);
     const cr1: ChunkResult = {
-      chunkId: 'c1', code: 'function Hero() {}',
-      contract: { chunkId: 'c1', componentName: 'Hero', exportedProps: [], slots: [], cssClasses: [], cssVariables: [], imports: [] },
+      chunkId: 'c1',
+      code: 'function Hero() {}',
+      contract: {
+        chunkId: 'c1',
+        componentName: 'Hero',
+        exportedProps: [],
+        slots: [],
+        cssClasses: [],
+        cssVariables: [],
+        imports: [],
+      },
     };
     const cr2: ChunkResult = {
-      chunkId: 'c2', code: 'function Card() {}',
-      contract: { chunkId: 'c2', componentName: 'Card', exportedProps: [], slots: [], cssClasses: [], cssVariables: [], imports: [] },
+      chunkId: 'c2',
+      code: 'function Card() {}',
+      contract: {
+        chunkId: 'c2',
+        componentName: 'Card',
+        exportedProps: [],
+        slots: [],
+        cssClasses: [],
+        cssVariables: [],
+        imports: [],
+      },
     };
     submitChunkResult(planId, cr1);
     submitChunkResult(planId, cr2);

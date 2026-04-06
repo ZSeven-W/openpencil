@@ -44,24 +44,16 @@ export default defineEventHandler(async (event) => {
   const acceptSSE = getHeader(event, 'accept')?.includes('text/event-stream');
 
   if (body.provider === 'anthropic') {
-    return acceptSSE
-      ? streamViaAgentSDK(body, body.model)
-      : generateViaAgentSDK(body, body.model);
+    return acceptSSE ? streamViaAgentSDK(body, body.model) : generateViaAgentSDK(body, body.model);
   }
   if (body.provider === 'opencode') {
-    return acceptSSE
-      ? streamViaOpenCode(body, body.model)
-      : generateViaOpenCode(body, body.model);
+    return acceptSSE ? streamViaOpenCode(body, body.model) : generateViaOpenCode(body, body.model);
   }
   if (body.provider === 'openai') {
-    return acceptSSE
-      ? streamViaCodex(body, body.model)
-      : generateViaCodex(body, body.model);
+    return acceptSSE ? streamViaCodex(body, body.model) : generateViaCodex(body, body.model);
   }
   if (body.provider === 'gemini') {
-    return acceptSSE
-      ? streamViaGemini(body, body.model)
-      : generateViaGemini(body, body.model);
+    return acceptSSE ? streamViaGemini(body, body.model) : generateViaGemini(body, body.model);
   }
   return { error: 'Missing or unsupported provider. Provider fallback is disabled.' };
 });
@@ -346,8 +338,7 @@ function streamViaAgentSDK(body: GenerateBody, requestedModel?: string) {
         if (message.type === 'stream_event') {
           const ev = (message as any).event;
           if (ev.type === 'content_block_delta') {
-            if (ev.delta.type === 'text_delta')
-              emit({ type: 'text', content: ev.delta.text });
+            if (ev.delta.type === 'text_delta') emit({ type: 'text', content: ev.delta.text });
             else if (ev.delta.type === 'thinking_delta')
               emit({ type: 'thinking', content: (ev.delta as any).thinking });
           }
@@ -394,7 +385,8 @@ function parseOpenCodeModel(model?: string): { providerID: string; modelID: stri
 /** Stream via OpenCode SDK — emits text/thinking deltas as SSE */
 function streamViaOpenCode(body: GenerateBody, model?: string) {
   return createSSEResponse(async (emit) => {
-    const { getOpencodeClient, releaseOpencodeServer } = await import('../../utils/opencode-client');
+    const { getOpencodeClient, releaseOpencodeServer } =
+      await import('../../utils/opencode-client');
     const oc = await getOpencodeClient();
     try {
       const ocClient = oc.client;
@@ -405,7 +397,8 @@ function streamViaOpenCode(body: GenerateBody, model?: string) {
         throw new Error(`Session create failed: ${formatOpenCodeError(sessionError)}`);
 
       await ocClient.session.prompt({
-        sessionID: session.id, noReply: true,
+        sessionID: session.id,
+        noReply: true,
         parts: [{ type: 'text', text: body.system }],
       });
 
@@ -417,20 +410,15 @@ function streamViaOpenCode(body: GenerateBody, model?: string) {
       };
 
       const reasoning = buildOpenCodeReasoning(body);
-      const payloadWithReasoning = reasoning
-        ? { ...basePayload, reasoning } : basePayload;
+      const payloadWithReasoning = reasoning ? { ...basePayload, reasoning } : basePayload;
 
       const eventResult = await ocClient.event.subscribe();
       await new Promise<void>((r) => setTimeout(r, 100));
 
-      let { error: asyncError } = await ocClient.session.promptAsync(
-        payloadWithReasoning as any,
-      );
+      let { error: asyncError } = await ocClient.session.promptAsync(payloadWithReasoning as any);
       if (asyncError && reasoning) {
         console.warn('[AI] OpenCode reasoning rejected, retrying without');
-        ({ error: asyncError } = await ocClient.session.promptAsync(
-          basePayload as any,
-        ));
+        ({ error: asyncError } = await ocClient.session.promptAsync(basePayload as any));
       }
       if (asyncError) throw new Error(formatOpenCodeError(asyncError));
 
@@ -439,14 +427,14 @@ function streamViaOpenCode(body: GenerateBody, model?: string) {
         const eventType = (event as any).type as string;
         const props = (event as any).properties;
         if (eventType === 'message.part.delta' && props?.sessionID === sessionId) {
-          if (props.field === 'text')
-            emit({ type: 'text', content: props.delta });
-          if (props.field === 'reasoning')
-            emit({ type: 'thinking', content: props.delta });
+          if (props.field === 'text') emit({ type: 'text', content: props.delta });
+          if (props.field === 'reasoning') emit({ type: 'thinking', content: props.delta });
         }
         if (eventType === 'session.idle' && props?.sessionID === sessionId) break;
-        if (eventType === 'session.error' &&
-            (props?.sessionID === sessionId || !props?.sessionID)) {
+        if (
+          eventType === 'session.error' &&
+          (props?.sessionID === sessionId || !props?.sessionID)
+        ) {
           throw new Error(formatOpenCodeError(props?.error));
         }
       }

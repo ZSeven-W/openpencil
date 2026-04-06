@@ -129,7 +129,12 @@ export async function* streamCodexExec(
   const codexEffort = resolveCodexEffort(options.thinkingMode, options.effort);
 
   const args = [
-    'exec', '--json', '--skip-git-repo-check', '--sandbox', 'read-only', '-',
+    'exec',
+    '--json',
+    '--skip-git-repo-check',
+    '--sandbox',
+    'read-only',
+    '-',
     ...(options.model ? ['--model', options.model] : []),
     ...(codexEffort ? ['--config', `model_reasoning_effort=${codexEffort}`] : []),
   ];
@@ -140,7 +145,10 @@ export async function* streamCodexExec(
     ...(process.platform === 'win32' && { shell: true }),
   });
 
-  if (child.stdin) { child.stdin.write(prompt); child.stdin.end(); }
+  if (child.stdin) {
+    child.stdin.write(prompt);
+    child.stdin.end();
+  }
 
   try {
     let stdoutBuffer = '';

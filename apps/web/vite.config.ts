@@ -51,7 +51,16 @@ const config = defineConfig({
     vitePluginSkills(fileURLToPath(new URL('../../packages/pen-ai-skills', import.meta.url))),
     ...(process.env.NODE_ENV === 'production' ? [] : [devtools()]),
     nitro({
-      rollupConfig: { external: [/^@sentry\//, 'canvas', 'jsdom', 'cssstyle', 'canvaskit-wasm', '@zseven-w/agent-native'] },
+      rollupConfig: {
+        external: [
+          /^@sentry\//,
+          'canvas',
+          'jsdom',
+          'cssstyle',
+          'canvaskit-wasm',
+          '@zseven-w/agent-native',
+        ],
+      },
       serverDir: './server',
       output: { dir: '../../out/web' },
       ...(isElectronBuild ? { preset: 'node-server' } : {}),

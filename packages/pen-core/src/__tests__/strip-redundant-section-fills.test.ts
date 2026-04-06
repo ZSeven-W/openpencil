@@ -245,10 +245,26 @@ describe('stripRedundantSectionFills', () => {
       fill: solidFill('#1a1a2e'),
       children: [
         frame({ id: 'header-root', name: 'Greeting Header', fill: solidFill('#0A0A0A') }),
-        frame({ id: 'activityRings-root', name: 'Activity Rings Section', fill: solidFill('#0A0A0A') }),
-        frame({ id: 'heartRate-root', name: 'Heart Rate Card Section', fill: solidFill('#0A0A0A') }),
-        frame({ id: 'workoutChart-root', name: 'Weekly Workout Chart', fill: solidFill('#0A0A0A') }),
-        frame({ id: 'upcomingWorkouts-root', name: 'Upcoming Workouts', fill: solidFill('#0A0A0A') }),
+        frame({
+          id: 'activityRings-root',
+          name: 'Activity Rings Section',
+          fill: solidFill('#0A0A0A'),
+        }),
+        frame({
+          id: 'heartRate-root',
+          name: 'Heart Rate Card Section',
+          fill: solidFill('#0A0A0A'),
+        }),
+        frame({
+          id: 'workoutChart-root',
+          name: 'Weekly Workout Chart',
+          fill: solidFill('#0A0A0A'),
+        }),
+        frame({
+          id: 'upcomingWorkouts-root',
+          name: 'Upcoming Workouts',
+          fill: solidFill('#0A0A0A'),
+        }),
         frame({ id: 'bottomNav-root', name: 'Bottom Tab Bar', fill: solidFill('#0A0A0A') }),
       ],
     });

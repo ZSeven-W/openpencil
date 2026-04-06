@@ -31,10 +31,7 @@ type StreamTimeoutProfile = {
   effort: 'low' | 'medium' | 'high' | 'max';
 };
 
-export function getSubAgentTimeouts(
-  promptLength: number,
-  model?: string,
-): StreamTimeoutProfile {
+export function getSubAgentTimeouts(promptLength: number, model?: string): StreamTimeoutProfile {
   const profile = resolveModelProfile(model);
   let base: StreamTimeoutProfile;
   if (promptLength < PROMPT_OPTIMIZER_LIMITS.longPromptCharThreshold) {
@@ -107,8 +104,9 @@ export function buildFallbackPlanFromPrompt(prompt: string): OrchestratorPlan {
   // Extract background color from selected guide, or use default
   let bgColor = '#FFFFFF';
   if (guide) {
-    const bgMatch = guide.content.match(/(#[0-9A-Fa-f]{6})\s*[—–-]\s*(?:Page )?Background/i)
-      ?? guide.content.match(/Background[^#]*(#[0-9A-Fa-f]{6})/i);
+    const bgMatch =
+      guide.content.match(/(#[0-9A-Fa-f]{6})\s*[—–-]\s*(?:Page )?Background/i) ??
+      guide.content.match(/Background[^#]*(#[0-9A-Fa-f]{6})/i);
     if (bgMatch) bgColor = bgMatch[1];
   }
 

@@ -49,9 +49,7 @@ describe('useDocumentStore.save()', () => {
   });
 
   it('writes via writeToFilePath and emits saved when Electron path is set', async () => {
-    const writeSpy = vi
-      .spyOn(fileOps, 'writeToFilePath')
-      .mockImplementation(async () => {});
+    const writeSpy = vi.spyOn(fileOps, 'writeToFilePath').mockImplementation(async () => {});
     (window as unknown as Record<string, unknown>).electronAPI = {
       isElectron: true,
       saveFile: vi.fn(),
@@ -75,11 +73,9 @@ describe('useDocumentStore.save()', () => {
   });
 
   it('does NOT emit saved when writeToFilePath throws', async () => {
-    const writeSpy = vi
-      .spyOn(fileOps, 'writeToFilePath')
-      .mockImplementation(async () => {
-        throw new Error('disk full');
-      });
+    const writeSpy = vi.spyOn(fileOps, 'writeToFilePath').mockImplementation(async () => {
+      throw new Error('disk full');
+    });
     const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
     (window as unknown as Record<string, unknown>).electronAPI = {
       isElectron: true,
@@ -99,11 +95,9 @@ describe('useDocumentStore.save()', () => {
   });
 
   it('falls back to saveAs() when writeToFileHandle throws and clears the stale handle', async () => {
-    const handleWriteSpy = vi
-      .spyOn(fileOps, 'writeToFileHandle')
-      .mockImplementation(async () => {
-        throw new Error('handle revoked');
-      });
+    const handleWriteSpy = vi.spyOn(fileOps, 'writeToFileHandle').mockImplementation(async () => {
+      throw new Error('handle revoked');
+    });
     const dl = vi.spyOn(fileOps, 'downloadDocument').mockImplementation(() => {});
     const consoleWarn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     const fakeHandle = {} as FileSystemFileHandle;
@@ -185,9 +179,7 @@ describe('useDocumentStore.save()', () => {
   });
 
   it('saveToNewPath writes to the given path and emits saved (Electron)', async () => {
-    const writeSpy = vi
-      .spyOn(fileOps, 'writeToFilePath')
-      .mockImplementation(async () => {});
+    const writeSpy = vi.spyOn(fileOps, 'writeToFilePath').mockImplementation(async () => {});
     (window as unknown as Record<string, unknown>).electronAPI = {
       isElectron: true,
       saveFile: vi.fn(),

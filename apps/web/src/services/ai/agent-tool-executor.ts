@@ -69,9 +69,7 @@ export class AgentToolExecutor {
         if (!retryRes.ok) throw new Error(`Status ${retryRes.status}`);
       } catch (retryErr) {
         console.error(`[AgentToolExecutor] Failed to post tool result ${id}:`, retryErr);
-        throw retryErr instanceof Error
-          ? retryErr
-          : new Error(`Failed to post tool result ${id}`);
+        throw retryErr instanceof Error ? retryErr : new Error(`Failed to post tool result ${id}`);
       }
     }
 
@@ -258,7 +256,9 @@ export class AgentToolExecutor {
       }
 
       const remappedIdsAfter = getGenerationRemappedIds();
-      const hadDefaultReplacementBefore = [...remappedIdsBefore.values()].includes(DEFAULT_FRAME_ID);
+      const hadDefaultReplacementBefore = [...remappedIdsBefore.values()].includes(
+        DEFAULT_FRAME_ID,
+      );
       const hasDefaultReplacementAfter = [...remappedIdsAfter.values()].includes(DEFAULT_FRAME_ID);
       if (hasDefaultReplacementAfter && !hadDefaultReplacementBefore) {
         this.restoreDefaultFrame();
@@ -283,8 +283,7 @@ export class AgentToolExecutor {
     // Mark all steps as done in the stored progress
     const currentSteps = progressStore.getState().agentOrchestrationSteps;
     if (currentSteps) {
-      const allDone = currentSteps
-        .replace(/status="(streaming|pending)"/g, 'status="done"');
+      const allDone = currentSteps.replace(/status="(streaming|pending)"/g, 'status="done"');
       progressStore.getState().setAgentOrchestrationSteps(allDone);
     }
 
@@ -635,9 +634,7 @@ export class AgentToolExecutor {
     // Reuse existing root frame if one exists (avoid duplicate root frames)
     const activePageId = useCanvasStore.getState().activePageId;
     const pageChildren = getActivePageChildren(docStore.document, activePageId);
-    const existingFrame = pageChildren.find(
-      (n: any) => n.type === 'frame',
-    );
+    const existingFrame = pageChildren.find((n: any) => n.type === 'frame');
     let rootId: string;
     if (existingFrame) {
       rootId = existingFrame.id;
@@ -694,13 +691,10 @@ export class AgentToolExecutor {
       return { success: false, error: 'No nodes provided' };
     }
 
-    const {
-      insertStreamingNode,
-      applyPostStreamingTreeHeuristics,
-    } = await import('@/services/ai/design-generator');
-    const { startNewAnimationBatch, markNodesForAnimation } = await import(
-      '@/services/ai/design-animation'
-    );
+    const { insertStreamingNode, applyPostStreamingTreeHeuristics } =
+      await import('@/services/ai/design-generator');
+    const { startNewAnimationBatch, markNodesForAnimation } =
+      await import('@/services/ai/design-animation');
     const { addAgentIndicatorRecursive } = await import('@/canvas/agent-indicator');
     const { assignAgentIdentities } = await import('@/services/ai/agent-identity');
 
@@ -716,17 +710,26 @@ export class AgentToolExecutor {
     let inserted = 0;
     let rootId: string | null = null;
 
-    console.info('[batch_insert] received', args.nodes.length, 'nodes (limit', MAX_NODES, '), parentId:', args.parentId);
+    console.info(
+      '[batch_insert] received',
+      args.nodes.length,
+      'nodes (limit',
+      MAX_NODES,
+      '), parentId:',
+      args.parentId,
+    );
     for (const raw of nodes) {
       const node = raw as Record<string, unknown>;
       if (!node.id || !node.type) {
-        console.warn('[batch_insert] skipping node without id/type:', JSON.stringify(node).slice(0, 200));
+        console.warn(
+          '[batch_insert] skipping node without id/type:',
+          JSON.stringify(node).slice(0, 200),
+        );
         continue;
       }
 
       // Resolve _parent: use explicit _parent, or fall back to parentId arg
-      const parentTarget =
-        (node._parent as string | null) ?? args.parentId ?? null;
+      const parentTarget = (node._parent as string | null) ?? args.parentId ?? null;
       delete node._parent;
 
       // Breathing glow indicator with random color + name
@@ -757,7 +760,9 @@ export class AgentToolExecutor {
     try {
       const { zoomToFitContent } = await import('@/canvas/skia-engine-ref');
       setTimeout(() => zoomToFitContent(), 300);
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
 
     return {
       success: true,

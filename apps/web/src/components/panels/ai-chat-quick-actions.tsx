@@ -48,9 +48,7 @@ export function AIChatQuickActions({ onSend, disabled }: AIChatQuickActionsProps
             disabled={disabled}
             className={cn(
               'flex flex-col items-start gap-0.5 p-3 rounded-lg border border-border bg-secondary/30 text-left transition-colors',
-              disabled
-                ? 'cursor-default opacity-60'
-                : 'hover:bg-secondary hover:border-border/80',
+              disabled ? 'cursor-default opacity-60' : 'hover:bg-secondary hover:border-border/80',
             )}
           >
             <div className="flex items-center gap-1.5">

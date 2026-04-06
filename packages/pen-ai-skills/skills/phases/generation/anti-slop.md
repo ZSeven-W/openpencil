@@ -31,12 +31,14 @@ Recent generation history (use to avoid repetition):
 {{recentHistory}}
 
 Rules:
+
 - Heading font MUST differ from recent generations listed above
 - Color palette MUST NOT duplicate the most recent generation
 
 ## Creative Variation (mandatory)
 
 After establishing your baseline direction, introduce 1-3 small creative variations (~10% each):
+
 - Asymmetric layout for one section
 - Unusual image cropping or placement
 - Typography personality shift (weight, case, spacing)

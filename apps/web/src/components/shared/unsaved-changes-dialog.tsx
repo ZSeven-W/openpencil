@@ -18,8 +18,7 @@ export default function UnsavedChangesDialog({
   const [visible, setVisible] = useState(false);
   const [stagger, setStagger] = useState(false);
   const isLight =
-    typeof document !== 'undefined' &&
-    document.documentElement.classList.contains('light');
+    typeof document !== 'undefined' && document.documentElement.classList.contains('light');
 
   useEffect(() => {
     if (open) {
@@ -65,9 +64,7 @@ export default function UnsavedChangesDialog({
         className="relative w-[340px] transition-all duration-600 ease-[cubic-bezier(0.16,1,0.3,1)]"
         style={{
           opacity: visible ? 1 : 0,
-          transform: visible
-            ? 'translateY(0) scale(1)'
-            : 'translateY(32px) scale(0.92)',
+          transform: visible ? 'translateY(0) scale(1)' : 'translateY(32px) scale(0.92)',
         }}
       >
         {/* Glow — slow rotating, breathing opacity */}
@@ -225,9 +222,11 @@ export default function UnsavedChangesDialog({
                 }}
               >
                 {/* Hover shimmer */}
-                <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300"
+                <div
+                  className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300"
                   style={{
-                    background: 'linear-gradient(135deg, rgba(255,255,255,0.12) 0%, transparent 50%, rgba(255,255,255,0.06) 100%)',
+                    background:
+                      'linear-gradient(135deg, rgba(255,255,255,0.12) 0%, transparent 50%, rgba(255,255,255,0.06) 100%)',
                   }}
                 />
                 <span className="relative">{t('common.save')}</span>

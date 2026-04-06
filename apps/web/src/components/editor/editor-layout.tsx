@@ -73,7 +73,9 @@ export default function EditorLayout() {
 
   useEffect(() => {
     (window as any).__showUnsavedDialog = showUnsavedDialog;
-    return () => { delete (window as any).__showUnsavedDialog; };
+    return () => {
+      delete (window as any).__showUnsavedDialog;
+    };
   }, [showUnsavedDialog]);
 
   useEffect(() => {

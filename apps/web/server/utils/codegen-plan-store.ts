@@ -95,9 +95,7 @@ function validatePlan(plan: CodePlanFromAI, nodeIndex: Map<string, PenNode>): st
       }
     }
     if (processed < plan.chunks.length) {
-      const cycleIds = plan.chunks
-        .filter((c) => (inDegree.get(c.id) ?? 0) > 0)
-        .map((c) => c.id);
+      const cycleIds = plan.chunks.filter((c) => (inDegree.get(c.id) ?? 0) > 0).map((c) => c.id);
       errors.push(`Circular dependency: ${cycleIds.join(' → ')}`);
     }
   }

@@ -1,9 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { FRAMEWORKS } from '../codegen';
-import type {
-  NodeSnapshot,
-  ResolvedDepContract,
-} from '../codegen';
+import type { NodeSnapshot, ResolvedDepContract } from '../codegen';
 
 describe('codegen types', () => {
   it('FRAMEWORKS contains all 8 frameworks', () => {
@@ -27,9 +24,7 @@ describe('codegen types', () => {
       id: 'n1',
       type: 'frame',
       name: 'Parent',
-      children: [
-        { id: 'n2', type: 'rectangle', name: 'Child' } as NodeSnapshot,
-      ],
+      children: [{ id: 'n2', type: 'rectangle', name: 'Child' } as NodeSnapshot],
     } as NodeSnapshot;
     expect(Array.isArray(snapshot.children)).toBe(true);
   });

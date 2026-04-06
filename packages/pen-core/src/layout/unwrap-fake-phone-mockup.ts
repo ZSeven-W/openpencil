@@ -111,8 +111,9 @@ function isFakePhoneMockup(node: PenNode): boolean {
   // Detection signal #1: literal name match. Models often copy the prompt's
   // wording verbatim into the node name.
   const name = (node.name ?? '').toLowerCase();
-  const hasPhoneName =
-    /phone\s*mockup|app\s*mockup|手机\s*样机|手机\s*模型|device\s*frame/.test(name);
+  const hasPhoneName = /phone\s*mockup|app\s*mockup|手机\s*样机|手机\s*模型|device\s*frame/.test(
+    name,
+  );
 
   // Detection signal #2: visual signature. The combination of large radius
   // (>= 28) and narrow width (240-320) is the classic phone bezel.

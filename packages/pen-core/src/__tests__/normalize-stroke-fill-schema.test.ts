@@ -60,9 +60,7 @@ const validFill = [{ type: 'solid' as const, color: '#C4F82A' }];
 describe('normalizeStrokeFillSchema — stroke array unwrap', () => {
   it('unwraps a stroke that is an array of one proper PenStroke object', () => {
     const node = ellipse({
-      stroke: [
-        { thickness: 12, fill: validFill },
-      ],
+      stroke: [{ thickness: 12, fill: validFill }],
     });
     normalizeStrokeFillSchema(node);
     const rec = node as unknown as { stroke?: { thickness?: number; fill?: unknown } };
@@ -295,9 +293,7 @@ describe('normalizeStrokeFillSchema — recursion', () => {
       width: 100,
       height: 100,
       fill: [{ type: 'solid', color: '#00000000' }],
-      stroke: [
-        { thickness: 12, fill: [{ type: 'solid', color: '#C4F82A' }] },
-      ],
+      stroke: [{ thickness: 12, fill: [{ type: 'solid', color: '#C4F82A' }] }],
     });
     normalizeStrokeFillSchema(ring);
     const rec = ring as unknown as {

@@ -38,8 +38,16 @@ export interface AgentSession {
 
 /** Create a session with required defaults. */
 export function createSession(
-  fields: Omit<AgentSession, 'toolOwners' | 'toolNames' | 'memberRoles' | 'layoutPhase' | 'layoutRootId'> &
-    Partial<Pick<AgentSession, 'toolOwners' | 'toolNames' | 'memberRoles' | 'layoutPhase' | 'layoutRootId'>>,
+  fields: Omit<
+    AgentSession,
+    'toolOwners' | 'toolNames' | 'memberRoles' | 'layoutPhase' | 'layoutRootId'
+  > &
+    Partial<
+      Pick<
+        AgentSession,
+        'toolOwners' | 'toolNames' | 'memberRoles' | 'layoutPhase' | 'layoutRootId'
+      >
+    >,
 ): AgentSession {
   return {
     ...fields,

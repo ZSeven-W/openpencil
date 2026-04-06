@@ -20,10 +20,11 @@ Identify the core concepts this page must communicate:
 
 Mark each concept as primary or secondary.
 Map each to a concrete design decision:
-  - Content: what does this concept say?
-  - Layout: how is it structured?
-  - Color: what palette supports it?
-  - Typography: what type treatment fits?
+
+- Content: what does this concept say?
+- Layout: how is it structured?
+- Color: what palette supports it?
+- Typography: what type treatment fits?
 
 ## Step 2: Superfan Simulation
 
@@ -35,10 +36,11 @@ Simulate a brief research interview with a product superfan. Extract 2-5 insight
 - What visuals feel authentic to them?
 
 Apply these insights to:
-  - Hero messaging (what headline resonates?)
-  - Content hierarchy (what comes first?)
-  - Section priorities (what matters most?)
-  - Visual direction (what feels right?)
+
+- Hero messaging (what headline resonates?)
+- Content hierarchy (what comes first?)
+- Section priorities (what matters most?)
+- Visual direction (what feels right?)
 
 ## Step 3: Transformation Mapping
 

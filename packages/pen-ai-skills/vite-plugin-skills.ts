@@ -16,7 +16,12 @@ function scanMarkdownFiles(dir: string, excludeDirs: string[] = []): string[] {
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
     const fullPath = join(dir, entry.name);
     if (entry.isDirectory()) {
-      if (excludeDirs.some((ex) => fullPath === ex || fullPath.endsWith(`/${ex}`) || fullPath.endsWith(`\\${ex}`))) continue;
+      if (
+        excludeDirs.some(
+          (ex) => fullPath === ex || fullPath.endsWith(`/${ex}`) || fullPath.endsWith(`\\${ex}`),
+        )
+      )
+        continue;
       results.push(...scanMarkdownFiles(fullPath, excludeDirs));
     } else if (entry.name.endsWith('.md')) {
       results.push(fullPath);
@@ -121,7 +126,12 @@ function generateStyleGuideRegistry(packageRoot: string): string {
     "import type { ParsedStyleGuide } from '../style-guide/style-guide-types'",
     '',
     `export const styleGuideRegistry: ParsedStyleGuide[] = ${JSON.stringify(
-      entries.map((e) => ({ name: e.name, tags: e.tags, platform: e.platform, content: e.content })),
+      entries.map((e) => ({
+        name: e.name,
+        tags: e.tags,
+        platform: e.platform,
+        content: e.content,
+      })),
       null,
       2,
     )}`,

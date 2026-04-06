@@ -4,11 +4,7 @@ import { useCanvasStore } from '@/stores/canvas-store';
 import { useDocumentStore, getActivePageChildren } from '@/stores/document-store';
 import { useHistoryStore } from '@/stores/history-store';
 import { canBooleanOp, executeBooleanOp, type BooleanOpType } from '@/utils/boolean-ops';
-import {
-  supportsFileSystemAccess,
-  openDocumentFS,
-  openDocument,
-} from '@/utils/file-operations';
+import { supportsFileSystemAccess, openDocumentFS, openDocument } from '@/utils/file-operations';
 import { syncCanvasPositionsToStore, zoomToFitContent } from '@/canvas/skia-engine-ref';
 
 export function useEditShortcuts() {

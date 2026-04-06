@@ -353,8 +353,8 @@ export const useAgentSettingsStore = create<AgentSettingsState>((set, get) => ({
       if (Array.isArray(builtinProviders)) {
         set({
           builtinProviders: builtinProviders.map((p: unknown) =>
-              canonicalizeBuiltinProviderConfig(p as BuiltinProviderConfig),
-            ) as BuiltinProviderConfig[],
+            canonicalizeBuiltinProviderConfig(p as BuiltinProviderConfig),
+          ) as BuiltinProviderConfig[],
         });
       }
       if ((data as Record<string, unknown>).teamEnabled !== undefined) {

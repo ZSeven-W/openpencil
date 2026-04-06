@@ -327,7 +327,9 @@ export const STYLE_OPS_TOOL_DEFINITIONS = [
               items: {
                 type: 'object',
                 properties: {
-                  from: { oneOf: [{ type: 'number' }, { type: 'array', items: { type: 'number' } }] },
+                  from: {
+                    oneOf: [{ type: 'number' }, { type: 'array', items: { type: 'number' } }],
+                  },
                   to: { oneOf: [{ type: 'number' }, { type: 'array', items: { type: 'number' } }] },
                 },
                 required: ['from', 'to'],
@@ -346,7 +348,9 @@ export const STYLE_OPS_TOOL_DEFINITIONS = [
               items: {
                 type: 'object',
                 properties: {
-                  from: { oneOf: [{ type: 'number' }, { type: 'array', items: { type: 'number' } }] },
+                  from: {
+                    oneOf: [{ type: 'number' }, { type: 'array', items: { type: 'number' } }],
+                  },
                   to: { oneOf: [{ type: 'number' }, { type: 'array', items: { type: 'number' } }] },
                 },
                 required: ['from', 'to'],
@@ -357,7 +361,9 @@ export const STYLE_OPS_TOOL_DEFINITIONS = [
               items: {
                 type: 'object',
                 properties: {
-                  from: { oneOf: [{ type: 'number' }, { type: 'array', items: { type: 'number' } }] },
+                  from: {
+                    oneOf: [{ type: 'number' }, { type: 'array', items: { type: 'number' } }],
+                  },
                   to: { oneOf: [{ type: 'number' }, { type: 'array', items: { type: 'number' } }] },
                 },
                 required: ['from', 'to'],

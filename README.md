@@ -315,19 +315,19 @@ Supports three input methods: inline string, `@filepath` (read from file), or `-
 
 ## Tech Stack
 
-|                 |                                                                                  |
-| --------------- | -------------------------------------------------------------------------------- |
-| **Frontend**    | React 19 · TanStack Start · Tailwind CSS v4 · shadcn/ui · i18next                |
-| **Canvas**      | CanvasKit/Skia (WASM, GPU-accelerated)                                           |
-| **Engine**      | pen-engine (headless) · pen-react (React UI SDK)                                 |
-| **State**       | Zustand v5                                                                       |
-| **Server**      | Nitro                                                                            |
-| **Desktop**     | Electron 35                                                                      |
-| **CLI**         | `op` — terminal control, batch design DSL, code export                           |
+|                 |                                                                                         |
+| --------------- | --------------------------------------------------------------------------------------- |
+| **Frontend**    | React 19 · TanStack Start · Tailwind CSS v4 · shadcn/ui · i18next                       |
+| **Canvas**      | CanvasKit/Skia (WASM, GPU-accelerated)                                                  |
+| **Engine**      | pen-engine (headless) · pen-react (React UI SDK)                                        |
+| **State**       | Zustand v5                                                                              |
+| **Server**      | Nitro                                                                                   |
+| **Desktop**     | Electron 35                                                                             |
+| **CLI**         | `op` — terminal control, batch design DSL, code export                                  |
 | **AI**          | agent-native (Zig NAPI) · Anthropic SDK · Claude Agent SDK · OpenCode SDK · Copilot SDK |
-| **Runtime**     | Bun · Vite 7                                                                     |
-| **Lint**        | oxlint · oxfmt                                                                   |
-| **File format** | `.op` — JSON-based, human-readable, Git-friendly                                 |
+| **Runtime**     | Bun · Vite 7                                                                            |
+| **Lint**        | oxlint · oxfmt                                                                          |
+| **File format** | `.op` — JSON-based, human-readable, Git-friendly                                        |
 
 ## Project Structure
 

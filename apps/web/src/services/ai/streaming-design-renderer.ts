@@ -1,6 +1,10 @@
 import type { PenNode } from '@/types/pen';
 import { extractStreamingNodes, extractJsonFromResponse } from './design-parser';
-import { insertStreamingNode, expandRootFrameHeight, getGenerationRootFrameId } from './design-canvas-ops';
+import {
+  insertStreamingNode,
+  expandRootFrameHeight,
+  getGenerationRootFrameId,
+} from './design-canvas-ops';
 import { startNewAnimationBatch, markNodesForAnimation } from './design-animation';
 import {
   addAgentIndicatorRecursive,
@@ -46,9 +50,10 @@ export class StreamingDesignRenderer {
       if (this.options.idPrefix) {
         ensureIdPrefix(node, this.options.idPrefix);
       }
-      const resolvedParent = parentId !== null && this.options.idPrefix
-        ? ensurePrefixStr(parentId, this.options.idPrefix)
-        : parentId;
+      const resolvedParent =
+        parentId !== null && this.options.idPrefix
+          ? ensurePrefixStr(parentId, this.options.idPrefix)
+          : parentId;
       this.pendingNodes.push({ node, parentId: resolvedParent });
     }
 
@@ -106,9 +111,8 @@ export class StreamingDesignRenderer {
       // insertStreamingNode may remap root frame ID (e.g. replaces the
       // default empty frame with DEFAULT_FRAME_ID). Register the badge
       // under the actual ID the canvas uses, not the original node.id.
-      const effectiveId = getGenerationRootFrameId() !== node.id
-        ? getGenerationRootFrameId()
-        : node.id;
+      const effectiveId =
+        getGenerationRootFrameId() !== node.id ? getGenerationRootFrameId() : node.id;
 
       if (this.options.agentColor && this.options.agentName) {
         addAgentFrame(effectiveId, this.options.agentColor, this.options.agentName);
@@ -226,10 +230,7 @@ export class StreamingDesignRenderer {
   }
 }
 
-export function ensureIdPrefix(
-  node: { id: string; children?: unknown[] },
-  prefix: string,
-): void {
+export function ensureIdPrefix(node: { id: string; children?: unknown[] }, prefix: string): void {
   if (!node.id.startsWith(`${prefix}-`)) {
     node.id = `${prefix}-${node.id}`;
   }

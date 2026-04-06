@@ -64,12 +64,17 @@ export default function FileMenu({
   }) => (
     <button
       type="button"
-      onClick={() => { onClick(); onClose(); }}
+      onClick={() => {
+        onClick();
+        onClose();
+      }}
       className="w-full flex items-center gap-2 px-3 py-1 text-[11px] text-foreground/80 hover:bg-accent hover:text-foreground transition-colors rounded-sm mx-0.5"
     >
       <Icon size={14} className="shrink-0 text-muted-foreground" />
       <span className="flex-1 text-left">{label}</span>
-      {shortcut && <span className="text-[10px] text-muted-foreground/40 font-mono">{shortcut}</span>}
+      {shortcut && (
+        <span className="text-[10px] text-muted-foreground/40 font-mono">{shortcut}</span>
+      )}
     </button>
   );
 
@@ -79,10 +84,20 @@ export default function FileMenu({
       className="absolute top-full left-0 mt-1 z-50 w-52 rounded-lg border border-border bg-card shadow-xl py-1.5 px-0.5"
     >
       <MenuItem icon={Plus} label={t('fileMenu.newFile')} shortcut={`${mod}N`} onClick={onNew} />
-      <MenuItem icon={Folder} label={t('fileMenu.openFile')} shortcut={`${mod}O`} onClick={onOpen} />
+      <MenuItem
+        icon={Folder}
+        label={t('fileMenu.openFile')}
+        shortcut={`${mod}O`}
+        onClick={onOpen}
+      />
       <div className="h-px bg-border/50 mx-2.5 my-1" />
       <MenuItem icon={Save} label={t('fileMenu.save')} shortcut={`${mod}S`} onClick={onSave} />
-      <MenuItem icon={SaveAll} label={t('fileMenu.saveAs')} shortcut={`${mod}\u21E7S`} onClick={onSaveAs} />
+      <MenuItem
+        icon={SaveAll}
+        label={t('fileMenu.saveAs')}
+        shortcut={`${mod}\u21E7S`}
+        onClick={onSaveAs}
+      />
       <div className="h-px bg-border/50 mx-2.5 my-1" />
       <MenuItem
         icon={Download}
@@ -123,7 +138,10 @@ export default function FileMenu({
           <div className="h-px bg-border mx-2 my-1" />
           <button
             type="button"
-            onClick={() => { clearRecentFiles(); onClose(); }}
+            onClick={() => {
+              clearRecentFiles();
+              onClose();
+            }}
             className="w-full px-3 py-1.5 text-[11px] text-muted-foreground/60 hover:text-foreground hover:bg-accent transition-colors text-left"
           >
             {t('fileMenu.clearHistory')}

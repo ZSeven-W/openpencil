@@ -7,7 +7,15 @@ const path = require('path');
 const { execSync } = require('child_process');
 
 const NAPI_DIR = path.join(__dirname, '..', 'packages', 'agent-native', 'napi');
-const ZIG_OUT = path.join(__dirname, '..', 'packages', 'agent-native', 'zig-out', 'napi', 'agent_napi.node');
+const ZIG_OUT = path.join(
+  __dirname,
+  '..',
+  'packages',
+  'agent-native',
+  'zig-out',
+  'napi',
+  'agent_napi.node',
+);
 const BUNDLED = path.join(NAPI_DIR, 'agent_napi.node');
 
 // 1. Already exists?
@@ -18,7 +26,9 @@ if (fs.existsSync(ZIG_OUT) || fs.existsSync(BUNDLED)) {
 
 // Check if submodule is initialized
 if (!fs.existsSync(path.join(NAPI_DIR, 'package.json'))) {
-  console.log('[agent-native] Submodule not initialized, skipping. Run: git submodule update --init');
+  console.log(
+    '[agent-native] Submodule not initialized, skipping. Run: git submodule update --init',
+  );
   process.exit(0);
 }
 
@@ -45,14 +55,15 @@ const arch = process.arch;
 const assetName = `agent_napi-${platform}-${arch}.node`;
 
 try {
-  const releaseJson = execSync(
-    `curl -sL https://api.github.com/repos/${REPO}/releases/latest`,
-    { encoding: 'utf8' },
-  );
+  const releaseJson = execSync(`curl -sL https://api.github.com/repos/${REPO}/releases/latest`, {
+    encoding: 'utf8',
+  });
   const release = JSON.parse(releaseJson);
   const asset = release.assets?.find((a) => a.name === assetName);
   if (!asset) {
-    console.warn(`[agent-native] No prebuilt binary for ${platform}-${arch}. Build manually with: bun run agent:build`);
+    console.warn(
+      `[agent-native] No prebuilt binary for ${platform}-${arch}. Build manually with: bun run agent:build`,
+    );
     process.exit(0);
   }
   console.log(`[agent-native] Downloading ${asset.browser_download_url}...`);

@@ -13,7 +13,7 @@ import type { PenDocument } from '@/types/pen';
 
 export interface DocumentEventMap {
   saved: {
-    filePath: string | null;     // null only in browser-download fallback
+    filePath: string | null; // null only in browser-download fallback
     fileName: string;
     document: PenDocument;
   };

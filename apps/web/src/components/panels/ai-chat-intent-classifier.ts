@@ -29,7 +29,7 @@ export async function classifyIntent(
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Accept': 'text/event-stream',
+        Accept: 'text/event-stream',
       },
       body: JSON.stringify({
         system: CLASSIFY_PROMPT,
@@ -57,8 +57,7 @@ export async function classifyIntent(
 
 const MODIFY_KEYWORDS =
   /\b(change|modify|update|adjust|resize|move|restyle|refine|fix|tweak|edit|replace|remove|delete|add to|smaller|larger|bigger|wider|taller)\b/i;
-const CHAT_KEYWORDS =
-  /\b(what is|how do|explain|tell me|help|why|can you|question|describe)\b/i;
+const CHAT_KEYWORDS = /\b(what is|how do|explain|tell me|help|why|can you|question|describe)\b/i;
 
 function classifyByKeywords(text: string): { intent: DesignIntent } {
   if (CHAT_KEYWORDS.test(text) && !MODIFY_KEYWORDS.test(text)) return { intent: 'chat' };

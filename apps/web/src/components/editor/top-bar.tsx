@@ -1,7 +1,16 @@
 import { useCallback, useEffect, useState } from 'react';
 import { appStorage, initAppStorage } from '@/utils/app-storage';
 import type { ComponentType, SVGProps } from 'react';
-import { PanelLeft, Folder, ChevronDown, Sun, Moon, Maximize, Minimize, Blocks } from 'lucide-react';
+import {
+  PanelLeft,
+  Folder,
+  ChevronDown,
+  Sun,
+  Moon,
+  Maximize,
+  Minimize,
+  Blocks,
+} from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import ClaudeLogo from '@/components/icons/claude-logo';
 import OpenAILogo from '@/components/icons/openai-logo';

@@ -1,6 +1,16 @@
 import { useState, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Loader2, Eye, EyeOff, Search, ChevronDown, Plus, Key, Globe, Sparkles } from 'lucide-react';
+import {
+  Loader2,
+  Eye,
+  EyeOff,
+  Search,
+  ChevronDown,
+  Plus,
+  Key,
+  Globe,
+  Sparkles,
+} from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import {
@@ -235,7 +245,10 @@ export function BuiltinProviderForm({
         {/* API Key */}
         <Field label={t('builtin.apiKey')}>
           <div className="relative">
-            <Key size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground/40" />
+            <Key
+              size={12}
+              className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground/40"
+            />
             <input
               type={showApiKey ? 'text' : 'password'}
               value={apiKey}
@@ -319,10 +332,13 @@ export function BuiltinProviderForm({
         )}
 
         {/* Base URL — read-only for Anthropic/OpenAI, editable for others */}
-        {(preset === 'anthropic' || preset === 'openai') ? (
+        {preset === 'anthropic' || preset === 'openai' ? (
           <Field label={t('builtin.baseUrl')}>
             <div className="relative">
-              <Globe size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground/30" />
+              <Globe
+                size={12}
+                className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground/30"
+              />
               <input
                 value={baseURL}
                 readOnly
@@ -333,7 +349,10 @@ export function BuiltinProviderForm({
         ) : (
           <Field label={t('builtin.baseUrl')}>
             <div className="relative">
-              <Globe size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground/40" />
+              <Globe
+                size={12}
+                className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground/40"
+              />
               <input
                 value={baseURL}
                 onChange={(e) => setBaseURL(e.target.value)}

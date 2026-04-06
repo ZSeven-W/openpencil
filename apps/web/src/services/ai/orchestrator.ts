@@ -53,7 +53,8 @@ import { createMobileStatusBar, inferStatusBarVariant } from './mobile-status-ba
 // Public API
 // ---------------------------------------------------------------------------
 
-const STATUS_BAR_NAME_RE = /status\s*[-_]?\s*bar|状态栏|system\s*[-_]?\s*(bar|chrome)|phone\s*(status|chrome)|ios\s*(bar|status)/i;
+const STATUS_BAR_NAME_RE =
+  /status\s*[-_]?\s*bar|状态栏|system\s*[-_]?\s*(bar|chrome)|phone\s*(status|chrome)|ios\s*(bar|status)/i;
 
 /**
  * Removes AI-generated status-bar frames from root frames.
@@ -110,8 +111,8 @@ function isMainContentContainerSubtask(
 ): boolean {
   const text = `${subtask.id} ${subtask.label} ${subtask.elements ?? ''}`.toLowerCase();
   return (
-    /(main\s*content|content\s*area|main\s*area|content\s*column)/.test(text)
-    && !/(metric|chart|table|transaction|customer|analytics|revenue|growth|sidebar)/.test(text)
+    /(main\s*content|content\s*area|main\s*area|content\s*column)/.test(text) &&
+    !/(metric|chart|table|transaction|customer|analytics|revenue|growth|sidebar)/.test(text)
   );
 }
 
@@ -166,7 +167,9 @@ function normalizeOrchestratorPlan(plan: OrchestratorPlan, prompt: string): void
   if (!Array.isArray(plan.subtasks) || plan.subtasks.length === 0) return;
 
   const rootWidth =
-    typeof plan.rootFrame.width === 'number' && plan.rootFrame.width > 0 ? plan.rootFrame.width : 1200;
+    typeof plan.rootFrame.width === 'number' && plan.rootFrame.width > 0
+      ? plan.rootFrame.width
+      : 1200;
   const dashboardLike = isDashboardLikePrompt(prompt, plan);
 
   plan.rootFrame.width = rootWidth;
@@ -217,14 +220,17 @@ function extractSidebarSurfaceColor(plan: OrchestratorPlan): string | undefined 
   return undefined;
 }
 
-function createDashboardColumnFrames(plan: OrchestratorPlan, rootId: string): {
+function createDashboardColumnFrames(
+  plan: OrchestratorPlan,
+  rootId: string,
+): {
   sidebar: FrameNode;
   main: FrameNode;
 } {
   const sidebarFillColor =
-    extractSidebarSurfaceColor(plan)
-    ?? (plan.rootFrame.fill as Array<{ color?: string }> | undefined)?.[0]?.color
-    ?? '#0F172A';
+    extractSidebarSurfaceColor(plan) ??
+    (plan.rootFrame.fill as Array<{ color?: string }> | undefined)?.[0]?.color ??
+    '#0F172A';
   const contentGap =
     typeof plan.rootFrame.gap === 'number' && plan.rootFrame.gap > 0 ? plan.rootFrame.gap : 20;
 
@@ -266,18 +272,16 @@ function normalizeDashboardMainSubtasks(plan: OrchestratorPlan): void {
     .trim()
     .replace(/[;,]\s*$/, '');
   const topBarElements =
-    cleanedElements.match(/top\s*bar[^.;\]]*/i)?.[0]?.trim()
-    ?? cleanedElements
-    ?? 'Top bar with page title, date range selector, and export button';
+    cleanedElements.match(/top\s*bar[^.;\]]*/i)?.[0]?.trim() ??
+    cleanedElements ??
+    'Top bar with page title, date range selector, and export button';
 
   container.label = 'Top Bar';
   container.elements = topBarElements;
   container.region.height = Math.max(88, Math.min(container.region.height || 88, 120));
 }
 
-function groupDashboardMainRows(
-  plan: OrchestratorPlan,
-): {
+function groupDashboardMainRows(plan: OrchestratorPlan): {
   rows: Array<OrchestratorPlan['subtasks']>;
   fullWidth: number;
   rowGap: number;
@@ -391,7 +395,10 @@ function assignDashboardMainParents(
       );
       const slotWidth = isLast
         ? 'fill_container'
-        : Math.min(availableWidth - assignedWidth - 220 * (row.length - idx - 1), proportionalWidth);
+        : Math.min(
+            availableWidth - assignedWidth - 220 * (row.length - idx - 1),
+            proportionalWidth,
+          );
       const slotId = `${rowId}-${subtask.id}-slot`;
       rowFrames.push({
         parentId: rowId,
@@ -425,14 +432,14 @@ function getDashboardPlaceholderHeight(plan: OrchestratorPlan): number {
   const foldHeight =
     visibleRows.reduce(
       (sum, row) =>
-        sum
-        + Math.max(
+        sum +
+        Math.max(
           0,
           ...row.map((st) => (typeof st.region.height === 'number' ? st.region.height : 0)),
         ),
       0,
-    )
-    + Math.max(0, visibleRows.length - 1) * rowGap;
+    ) +
+    Math.max(0, visibleRows.length - 1) * rowGap;
 
   const mainFoldHint = visibleRows.length > 0 ? foldHeight : 560;
   const sidebarHint = sidebarHeight > 0 ? Math.min(sidebarHeight, 600) : 0;
@@ -728,7 +735,11 @@ export async function executeOrchestration(
         width: plan.rootFrame.width,
         height: useDashboardColumns ? `fit_content(${initialHeight})` : initialHeight,
         layout: useDashboardColumns ? 'horizontal' : (plan.rootFrame.layout ?? 'vertical'),
-        gap: useDashboardColumns ? 0 : isMobile ? plan.rootFrame.gap || 16 : (plan.rootFrame.gap ?? 16),
+        gap: useDashboardColumns
+          ? 0
+          : isMobile
+            ? plan.rootFrame.gap || 16
+            : (plan.rootFrame.gap ?? 16),
         ...(plan.rootFrame.padding != null ? { padding: plan.rootFrame.padding } : {}),
         fill: defaultFill,
         children: [],
@@ -866,11 +877,19 @@ export async function executeOrchestration(
               (n) => n.id === DEFAULT_FRAME_ID,
             );
             if (defaultFrame) {
-              try { store.removeNode(DEFAULT_FRAME_ID); } catch { /* ok */ }
+              try {
+                store.removeNode(DEFAULT_FRAME_ID);
+              } catch {
+                /* ok */
+              }
               store.addNode(null, defaultFrame as PenNode);
             }
           } else {
-            try { store.removeNode(rn.id); } catch { /* already gone */ }
+            try {
+              store.removeNode(rn.id);
+            } catch {
+              /* already gone */
+            }
           }
         }
       }
@@ -888,63 +907,61 @@ export async function executeOrchestration(
     let allNodes: PenNode[] = [];
 
     try {
+      // -- Phase 4: Collect results --
 
-    // -- Phase 4: Collect results --
-
-    if (!aborted) {
-      for (const entry of progress.subtasks) {
-        if (entry.status !== 'error') {
-          entry.status = 'done';
+      if (!aborted) {
+        for (const entry of progress.subtasks) {
+          if (entry.status !== 'error') {
+            entry.status = 'done';
+          }
         }
-      }
-      progress.phase = 'done';
-    } else {
-      for (const entry of progress.subtasks) {
-        if (entry.status === 'streaming') {
-          entry.status = 'pending';
+        progress.phase = 'done';
+      } else {
+        for (const entry of progress.subtasks) {
+          if (entry.status === 'streaming') {
+            entry.status = 'pending';
+          }
         }
+        progress.phase = 'done';
       }
-      progress.phase = 'done';
-    }
-    emitProgress(plan, progress, callbacks);
+      emitProgress(plan, progress, callbacks);
 
-    allNodes = [...rootNodes];
-    for (const r of results) {
-      allNodes.push(...r.nodes);
-    }
+      allNodes = [...rootNodes];
+      for (const r of results) {
+        allNodes.push(...r.nodes);
+      }
 
-    const generatedNodeCount = allNodes.length - rootNodes.length;
-    if (generatedNodeCount === 0 && !aborted) {
-      throw new Error('Orchestration produced no nodes beyond root frame');
-    }
+      const generatedNodeCount = allNodes.length - rootNodes.length;
+      if (generatedNodeCount === 0 && !aborted) {
+        throw new Error('Orchestration produced no nodes beyond root frame');
+      }
 
-    // -- Phase 4b: Remove duplicate status bars on mobile --
-    // Must run BEFORE height adjustment so removed nodes don't inflate the frame.
-    if (isMobile) {
-      removeDuplicateStatusBars(rootNodes);
-    }
+      // -- Phase 4b: Remove duplicate status bars on mobile --
+      // Must run BEFORE height adjustment so removed nodes don't inflate the frame.
+      if (isMobile) {
+        removeDuplicateStatusBars(rootNodes);
+      }
 
-    // Height adjustment runs after duplicate removal for both animated and
-    // non-animated paths so the frame size reflects the cleaned node tree.
-    if (dashboardColumnIds) {
-      adjustRootFrameHeightToContent(dashboardColumnIds.sidebarId);
-      adjustRootFrameHeightToContent(dashboardColumnIds.mainId);
-    }
-    if (effectiveConcurrency > 1) {
+      // Height adjustment runs after duplicate removal for both animated and
+      // non-animated paths so the frame size reflects the cleaned node tree.
+      if (dashboardColumnIds) {
+        adjustRootFrameHeightToContent(dashboardColumnIds.sidebarId);
+        adjustRootFrameHeightToContent(dashboardColumnIds.mainId);
+      }
+      if (effectiveConcurrency > 1) {
+        for (const rn of rootNodes) {
+          adjustRootFrameHeightToContent(rn.id);
+        }
+      } else {
+        adjustRootFrameHeightToContent();
+      }
+      // Sync heights back to rootNode objects for result
       for (const rn of rootNodes) {
-        adjustRootFrameHeightToContent(rn.id);
+        const adjusted = useDocumentStore.getState().getNodeById(rn.id);
+        if (adjusted && adjusted.type === 'frame') {
+          rn.height = adjusted.height;
+        }
       }
-    } else {
-      adjustRootFrameHeightToContent();
-    }
-    // Sync heights back to rootNode objects for result
-    for (const rn of rootNodes) {
-      const adjusted = useDocumentStore.getState().getNodeById(rn.id);
-      if (adjusted && adjusted.type === 'frame') {
-        rn.height = adjusted.height;
-      }
-    }
-
     } finally {
       // Close the undo batch AFTER cleanup + height adjustment so the entire
       // generation (including status-bar dedup) is a single undo operation.

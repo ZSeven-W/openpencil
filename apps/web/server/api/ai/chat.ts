@@ -1023,10 +1023,12 @@ function streamViaBuiltin(body: ChatBody) {
         });
 
         // Seed prior conversation history for multi-turn context
-        const priorMsgs = body.messages.slice(0, -1).filter(
-          (m: any) =>
-            (m.role === 'user' || m.role === 'assistant') && typeof m.content === 'string',
-        );
+        const priorMsgs = body.messages
+          .slice(0, -1)
+          .filter(
+            (m: any) =>
+              (m.role === 'user' || m.role === 'assistant') && typeof m.content === 'string',
+          );
         if (priorMsgs.length > 0) {
           seedMessages(builtinEngine, JSON.stringify(priorMsgs));
         }
@@ -1062,9 +1064,7 @@ function streamViaBuiltin(body: ChatBody) {
             const se = evt.stream_event;
             if (se?.type === 'text_delta' && se.text) {
               controller.enqueue(
-                encoder.encode(
-                  `data: ${JSON.stringify({ type: 'text', content: se.text })}\n\n`,
-                ),
+                encoder.encode(`data: ${JSON.stringify({ type: 'text', content: se.text })}\n\n`),
               );
             } else if (se?.type === 'thinking_delta' && se.text) {
               controller.enqueue(
@@ -1076,9 +1076,7 @@ function streamViaBuiltin(body: ChatBody) {
               const errMsg = `Provider error: ${evt.result.subtype ?? 'unknown'}`;
               console.error('[builtin]', errMsg);
               controller.enqueue(
-                encoder.encode(
-                  `data: ${JSON.stringify({ type: 'error', content: errMsg })}\n\n`,
-                ),
+                encoder.encode(`data: ${JSON.stringify({ type: 'error', content: errMsg })}\n\n`),
               );
             }
           }

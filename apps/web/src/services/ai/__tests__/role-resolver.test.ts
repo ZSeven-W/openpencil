@@ -8,7 +8,13 @@ vi.mock('@/canvas/canvas-text-measure', () => ({
   hasCjkText: () => false,
 }));
 
-import { hexLuminance, hasFill, hasVisibleFill, resolveNodeRole, resolveTreePostPass } from '../role-resolver';
+import {
+  hexLuminance,
+  hasFill,
+  hasVisibleFill,
+  resolveNodeRole,
+  resolveTreePostPass,
+} from '../role-resolver';
 import type { RoleContext } from '../role-resolver';
 import type { PenNode } from '@zseven-w/pen-types';
 
@@ -59,13 +65,26 @@ describe('hasFill', () => {
   });
 
   it('returns false for empty fill array', () => {
-    const node = { id: 'n1', type: 'frame', x: 0, y: 0, width: 100, height: 100, fill: [] } as PenNode;
+    const node = {
+      id: 'n1',
+      type: 'frame',
+      x: 0,
+      y: 0,
+      width: 100,
+      height: 100,
+      fill: [],
+    } as PenNode;
     expect(hasFill(node)).toBe(false);
   });
 
   it('returns true for node with solid fill', () => {
     const node = {
-      id: 'n1', type: 'frame', x: 0, y: 0, width: 100, height: 100,
+      id: 'n1',
+      type: 'frame',
+      x: 0,
+      y: 0,
+      width: 100,
+      height: 100,
       fill: [{ type: 'solid', color: '#FFFFFF' }],
     } as PenNode;
     expect(hasFill(node)).toBe(true);
@@ -77,7 +96,12 @@ describe('hasFill', () => {
   // fill=#00000000 is making a deliberate no-background choice.
   it('returns true for explicit-transparent hex (#00000000) — overwrite protection', () => {
     const node = {
-      id: 'n', type: 'frame', x: 0, y: 0, width: 100, height: 100,
+      id: 'n',
+      type: 'frame',
+      x: 0,
+      y: 0,
+      width: 100,
+      height: 100,
       fill: [{ type: 'solid', color: '#00000000' }],
     } as PenNode;
     expect(hasFill(node)).toBe(true);
@@ -85,7 +109,12 @@ describe('hasFill', () => {
 
   it('returns true for CSS keyword "transparent"', () => {
     const node = {
-      id: 'n', type: 'frame', x: 0, y: 0, width: 100, height: 100,
+      id: 'n',
+      type: 'frame',
+      x: 0,
+      y: 0,
+      width: 100,
+      height: 100,
       fill: [{ type: 'solid', color: 'transparent' }],
     } as PenNode;
     expect(hasFill(node)).toBe(true);
@@ -96,7 +125,12 @@ describe('hasFill', () => {
     // declaration. hasFill exists to stop post-pass heuristics from
     // overwriting such choices, so it must keep reporting true.
     const node = {
-      id: 'n', type: 'frame', x: 0, y: 0, width: 100, height: 100,
+      id: 'n',
+      type: 'frame',
+      x: 0,
+      y: 0,
+      width: 100,
+      height: 100,
       fill: [{ type: 'solid', color: '#FFFFFF', opacity: 0 }],
     } as PenNode;
     expect(hasFill(node)).toBe(true);
@@ -115,13 +149,26 @@ describe('hasVisibleFill', () => {
   });
 
   it('returns false for empty fill array', () => {
-    const node = { id: 'n', type: 'frame', x: 0, y: 0, width: 100, height: 100, fill: [] } as PenNode;
+    const node = {
+      id: 'n',
+      type: 'frame',
+      x: 0,
+      y: 0,
+      width: 100,
+      height: 100,
+      fill: [],
+    } as PenNode;
     expect(hasVisibleFill(node)).toBe(false);
   });
 
   it('returns true for node with opaque solid fill', () => {
     const node = {
-      id: 'n', type: 'frame', x: 0, y: 0, width: 100, height: 100,
+      id: 'n',
+      type: 'frame',
+      x: 0,
+      y: 0,
+      width: 100,
+      height: 100,
       fill: [{ type: 'solid', color: '#FFFFFF' }],
     } as PenNode;
     expect(hasVisibleFill(node)).toBe(true);
@@ -129,7 +176,12 @@ describe('hasVisibleFill', () => {
 
   it('returns false for 8-digit transparent hex (#00000000)', () => {
     const node = {
-      id: 'p', type: 'path', x: 0, y: 0, width: 24, height: 24,
+      id: 'p',
+      type: 'path',
+      x: 0,
+      y: 0,
+      width: 24,
+      height: 24,
       fill: [{ type: 'solid', color: '#00000000' }],
     } as PenNode;
     expect(hasVisibleFill(node)).toBe(false);
@@ -137,7 +189,12 @@ describe('hasVisibleFill', () => {
 
   it('returns false for any 8-digit hex with 00 alpha', () => {
     const node = {
-      id: 'p', type: 'path', x: 0, y: 0, width: 24, height: 24,
+      id: 'p',
+      type: 'path',
+      x: 0,
+      y: 0,
+      width: 24,
+      height: 24,
       fill: [{ type: 'solid', color: '#FF00FF00' }],
     } as PenNode;
     expect(hasVisibleFill(node)).toBe(false);
@@ -145,7 +202,12 @@ describe('hasVisibleFill', () => {
 
   it('returns false for CSS keyword "transparent"', () => {
     const node = {
-      id: 'p', type: 'path', x: 0, y: 0, width: 24, height: 24,
+      id: 'p',
+      type: 'path',
+      x: 0,
+      y: 0,
+      width: 24,
+      height: 24,
       fill: [{ type: 'solid', color: 'transparent' }],
     } as PenNode;
     expect(hasVisibleFill(node)).toBe(false);
@@ -153,7 +215,12 @@ describe('hasVisibleFill', () => {
 
   it('returns false for CSS keyword "none"', () => {
     const node = {
-      id: 'p', type: 'path', x: 0, y: 0, width: 24, height: 24,
+      id: 'p',
+      type: 'path',
+      x: 0,
+      y: 0,
+      width: 24,
+      height: 24,
       fill: [{ type: 'solid', color: 'none' }],
     } as PenNode;
     expect(hasVisibleFill(node)).toBe(false);
@@ -161,7 +228,12 @@ describe('hasVisibleFill', () => {
 
   it('returns true for a partially-transparent 8-digit hex (non-zero alpha)', () => {
     const node = {
-      id: 'n', type: 'frame', x: 0, y: 0, width: 100, height: 100,
+      id: 'n',
+      type: 'frame',
+      x: 0,
+      y: 0,
+      width: 100,
+      height: 100,
       fill: [{ type: 'solid', color: '#FF000080' }],
     } as PenNode;
     expect(hasVisibleFill(node)).toBe(true);
@@ -174,7 +246,12 @@ describe('hasVisibleFill', () => {
   // fill" so the foreground color can still be supplied.
   it('returns false for a solid fill with opacity: 0', () => {
     const node = {
-      id: 'n', type: 'frame', x: 0, y: 0, width: 100, height: 100,
+      id: 'n',
+      type: 'frame',
+      x: 0,
+      y: 0,
+      width: 100,
+      height: 100,
       fill: [{ type: 'solid', color: '#FFFFFF', opacity: 0 }],
     } as PenNode;
     expect(hasVisibleFill(node)).toBe(false);
@@ -182,7 +259,12 @@ describe('hasVisibleFill', () => {
 
   it('returns false for a linear gradient fill with opacity: 0', () => {
     const node = {
-      id: 'n', type: 'frame', x: 0, y: 0, width: 100, height: 100,
+      id: 'n',
+      type: 'frame',
+      x: 0,
+      y: 0,
+      width: 100,
+      height: 100,
       fill: [
         {
           type: 'linear_gradient',
@@ -200,7 +282,12 @@ describe('hasVisibleFill', () => {
 
   it('returns false for negative opacity (treated as zero)', () => {
     const node = {
-      id: 'n', type: 'frame', x: 0, y: 0, width: 100, height: 100,
+      id: 'n',
+      type: 'frame',
+      x: 0,
+      y: 0,
+      width: 100,
+      height: 100,
       fill: [{ type: 'solid', color: '#FFFFFF', opacity: -0.5 }],
     } as PenNode;
     expect(hasVisibleFill(node)).toBe(false);
@@ -208,7 +295,12 @@ describe('hasVisibleFill', () => {
 
   it('returns true for a solid fill with opacity: 0.5', () => {
     const node = {
-      id: 'n', type: 'frame', x: 0, y: 0, width: 100, height: 100,
+      id: 'n',
+      type: 'frame',
+      x: 0,
+      y: 0,
+      width: 100,
+      height: 100,
       fill: [{ type: 'solid', color: '#FFFFFF', opacity: 0.5 }],
     } as PenNode;
     expect(hasVisibleFill(node)).toBe(true);
@@ -216,7 +308,12 @@ describe('hasVisibleFill', () => {
 
   it('returns true for a solid fill without an opacity field (default opaque)', () => {
     const node = {
-      id: 'n', type: 'frame', x: 0, y: 0, width: 100, height: 100,
+      id: 'n',
+      type: 'frame',
+      x: 0,
+      y: 0,
+      width: 100,
+      height: 100,
       fill: [{ type: 'solid', color: '#FFFFFF' }],
     } as PenNode;
     expect(hasVisibleFill(node)).toBe(true);
@@ -231,15 +328,36 @@ describe('resolveTreePostPass — transparent fill overwrite protection', () => 
 
   it('fixOrphanContainerContrast does NOT overwrite a card with opacity: 0 fill', () => {
     const card: PenNode = {
-      id: 'card', type: 'frame', name: 'Opacity Zero Card', x: 0, y: 0, width: 300, height: 200,
+      id: 'card',
+      type: 'frame',
+      name: 'Opacity Zero Card',
+      x: 0,
+      y: 0,
+      width: 300,
+      height: 200,
       cornerRadius: 12,
       fill: [{ type: 'solid', color: '#FFFFFF', opacity: 0 }],
       children: [
-        { id: 'txt', type: 'text', name: 'Title', x: 0, y: 0, width: 200, height: 20, content: 'Hello' } as PenNode,
+        {
+          id: 'txt',
+          type: 'text',
+          name: 'Title',
+          x: 0,
+          y: 0,
+          width: 200,
+          height: 20,
+          content: 'Hello',
+        } as PenNode,
       ],
     } as PenNode;
     const root: PenNode = {
-      id: 'root', type: 'frame', name: 'Root', x: 0, y: 0, width: 1200, height: 800,
+      id: 'root',
+      type: 'frame',
+      name: 'Root',
+      x: 0,
+      y: 0,
+      width: 1200,
+      height: 800,
       children: [card],
     } as PenNode;
     resolveTreePostPass(root, 1200);
@@ -252,15 +370,36 @@ describe('resolveTreePostPass — transparent fill overwrite protection', () => 
     // transparent background intentionally. The orphan-contrast pass
     // must not suddenly paint it white and add shadows.
     const card: PenNode = {
-      id: 'card', type: 'frame', name: 'Hollow Card', x: 0, y: 0, width: 300, height: 200,
+      id: 'card',
+      type: 'frame',
+      name: 'Hollow Card',
+      x: 0,
+      y: 0,
+      width: 300,
+      height: 200,
       cornerRadius: 12,
       fill: [{ type: 'solid', color: '#00000000' }],
       children: [
-        { id: 'txt', type: 'text', name: 'Title', x: 0, y: 0, width: 200, height: 20, content: 'Hello' } as PenNode,
+        {
+          id: 'txt',
+          type: 'text',
+          name: 'Title',
+          x: 0,
+          y: 0,
+          width: 200,
+          height: 20,
+          content: 'Hello',
+        } as PenNode,
       ],
     } as PenNode;
     const root: PenNode = {
-      id: 'root', type: 'frame', name: 'Root', x: 0, y: 0, width: 1200, height: 800,
+      id: 'root',
+      type: 'frame',
+      name: 'Root',
+      x: 0,
+      y: 0,
+      width: 1200,
+      height: 800,
       children: [card],
     } as PenNode;
     resolveTreePostPass(root, 1200);
@@ -273,30 +412,65 @@ describe('resolveTreePostPass — transparent fill overwrite protection', () => 
   it('fixSectionAlternation does NOT repaint a section with explicit transparent fill', () => {
     const children = [
       {
-        id: 's0', type: 'frame' as const, name: 'Hero',
-        x: 0, y: 0, width: 1200, height: 400,
-        role: 'hero', layout: 'vertical' as const, children: [],
+        id: 's0',
+        type: 'frame' as const,
+        name: 'Hero',
+        x: 0,
+        y: 0,
+        width: 1200,
+        height: 400,
+        role: 'hero',
+        layout: 'vertical' as const,
+        children: [],
         fill: [{ type: 'solid', color: '#00000000' }],
       },
       {
-        id: 's1', type: 'frame' as const, name: 'Features',
-        x: 0, y: 0, width: 1200, height: 400,
-        role: 'section', layout: 'vertical' as const, children: [],
+        id: 's1',
+        type: 'frame' as const,
+        name: 'Features',
+        x: 0,
+        y: 0,
+        width: 1200,
+        height: 400,
+        role: 'section',
+        layout: 'vertical' as const,
+        children: [],
       },
       {
-        id: 's2', type: 'frame' as const, name: 'CTA',
-        x: 0, y: 0, width: 1200, height: 400,
-        role: 'cta-section', layout: 'vertical' as const, children: [],
+        id: 's2',
+        type: 'frame' as const,
+        name: 'CTA',
+        x: 0,
+        y: 0,
+        width: 1200,
+        height: 400,
+        role: 'cta-section',
+        layout: 'vertical' as const,
+        children: [],
       },
       {
-        id: 's3', type: 'frame' as const, name: 'Footer',
-        x: 0, y: 0, width: 1200, height: 400,
-        role: 'footer', layout: 'vertical' as const, children: [],
+        id: 's3',
+        type: 'frame' as const,
+        name: 'Footer',
+        x: 0,
+        y: 0,
+        width: 1200,
+        height: 400,
+        role: 'footer',
+        layout: 'vertical' as const,
+        children: [],
       },
     ] as PenNode[];
     const root: PenNode = {
-      id: 'root', type: 'frame', name: 'Root', x: 0, y: 0, width: 1200, height: 1600,
-      layout: 'vertical', children,
+      id: 'root',
+      type: 'frame',
+      name: 'Root',
+      x: 0,
+      y: 0,
+      width: 1200,
+      height: 1600,
+      layout: 'vertical',
+      children,
     } as PenNode;
     resolveTreePostPass(root, 1200);
     // The transparent hero stays transparent — alternation does not
@@ -316,19 +490,34 @@ describe('resolveTreePostPass — button foreground contrast with transparent-he
       id: 'btn',
       type: 'frame',
       name: 'Icon Button',
-      x: 0, y: 0, width: 44, height: 44,
+      x: 0,
+      y: 0,
+      width: 44,
+      height: 44,
       role: 'icon-button',
       fill: [{ type: 'solid', color: '#1E293B' }],
       children: [
         {
-          id: 'p', type: 'path', name: 'Arrow', x: 0, y: 0, width: 24, height: 24,
+          id: 'p',
+          type: 'path',
+          name: 'Arrow',
+          x: 0,
+          y: 0,
+          width: 24,
+          height: 24,
           fill: [{ type: 'solid', color: '#00000000' }],
           stroke: { thickness: 2 },
         } as PenNode,
       ],
     } as PenNode;
     const root: PenNode = {
-      id: 'root', type: 'frame', name: 'Root', x: 0, y: 0, width: 375, height: 812,
+      id: 'root',
+      type: 'frame',
+      name: 'Root',
+      x: 0,
+      y: 0,
+      width: 375,
+      height: 812,
       children: [button],
     } as PenNode;
     resolveTreePostPass(root, 375);
@@ -341,18 +530,33 @@ describe('resolveTreePostPass — button foreground contrast with transparent-he
       id: 'btn',
       type: 'frame',
       name: 'Icon Button',
-      x: 0, y: 0, width: 44, height: 44,
+      x: 0,
+      y: 0,
+      width: 44,
+      height: 44,
       role: 'icon-button',
       fill: [{ type: 'solid', color: '#2563EB' }],
       children: [
         {
-          id: 'p', type: 'path', name: 'Star', x: 0, y: 0, width: 24, height: 24,
+          id: 'p',
+          type: 'path',
+          name: 'Star',
+          x: 0,
+          y: 0,
+          width: 24,
+          height: 24,
           fill: [{ type: 'solid', color: '#00000000' }],
         } as PenNode,
       ],
     } as PenNode;
     const root: PenNode = {
-      id: 'root', type: 'frame', name: 'Root', x: 0, y: 0, width: 375, height: 812,
+      id: 'root',
+      type: 'frame',
+      name: 'Root',
+      x: 0,
+      y: 0,
+      width: 375,
+      height: 812,
       children: [button],
     } as PenNode;
     resolveTreePostPass(root, 375);
@@ -364,15 +568,36 @@ describe('resolveTreePostPass — button foreground contrast with transparent-he
 describe('resolveTreePostPass — button foreground contrast', () => {
   it('sets white text on dark button', () => {
     const button: PenNode = {
-      id: 'btn', type: 'frame', name: 'Button', x: 0, y: 0, width: 120, height: 44,
+      id: 'btn',
+      type: 'frame',
+      name: 'Button',
+      x: 0,
+      y: 0,
+      width: 120,
+      height: 44,
       role: 'button',
       fill: [{ type: 'solid', color: '#2563EB' }],
       children: [
-        { id: 'txt', type: 'text', name: 'Label', x: 0, y: 0, width: 80, height: 20, content: 'Sign In' } as PenNode,
+        {
+          id: 'txt',
+          type: 'text',
+          name: 'Label',
+          x: 0,
+          y: 0,
+          width: 80,
+          height: 20,
+          content: 'Sign In',
+        } as PenNode,
       ],
     } as PenNode;
     const root: PenNode = {
-      id: 'root', type: 'frame', name: 'Root', x: 0, y: 0, width: 375, height: 812,
+      id: 'root',
+      type: 'frame',
+      name: 'Root',
+      x: 0,
+      y: 0,
+      width: 375,
+      height: 812,
       children: [button],
     } as PenNode;
     resolveTreePostPass(root, 375);
@@ -382,15 +607,36 @@ describe('resolveTreePostPass — button foreground contrast', () => {
 
   it('sets dark text on light button', () => {
     const button: PenNode = {
-      id: 'btn', type: 'frame', name: 'Button', x: 0, y: 0, width: 120, height: 44,
+      id: 'btn',
+      type: 'frame',
+      name: 'Button',
+      x: 0,
+      y: 0,
+      width: 120,
+      height: 44,
       role: 'button',
       fill: [{ type: 'solid', color: '#DBEAFE' }],
       children: [
-        { id: 'txt', type: 'text', name: 'Label', x: 0, y: 0, width: 80, height: 20, content: 'Sign In' } as PenNode,
+        {
+          id: 'txt',
+          type: 'text',
+          name: 'Label',
+          x: 0,
+          y: 0,
+          width: 80,
+          height: 20,
+          content: 'Sign In',
+        } as PenNode,
       ],
     } as PenNode;
     const root: PenNode = {
-      id: 'root', type: 'frame', name: 'Root', x: 0, y: 0, width: 375, height: 812,
+      id: 'root',
+      type: 'frame',
+      name: 'Root',
+      x: 0,
+      y: 0,
+      width: 375,
+      height: 812,
       children: [button],
     } as PenNode;
     resolveTreePostPass(root, 375);
@@ -400,16 +646,37 @@ describe('resolveTreePostPass — button foreground contrast', () => {
 
   it('does not overwrite explicit text fill', () => {
     const button: PenNode = {
-      id: 'btn', type: 'frame', name: 'Button', x: 0, y: 0, width: 120, height: 44,
+      id: 'btn',
+      type: 'frame',
+      name: 'Button',
+      x: 0,
+      y: 0,
+      width: 120,
+      height: 44,
       role: 'button',
       fill: [{ type: 'solid', color: '#2563EB' }],
       children: [
-        { id: 'txt', type: 'text', name: 'Label', x: 0, y: 0, width: 80, height: 20, content: 'Sign In',
-          fill: [{ type: 'solid', color: '#FDE047' }] } as PenNode,
+        {
+          id: 'txt',
+          type: 'text',
+          name: 'Label',
+          x: 0,
+          y: 0,
+          width: 80,
+          height: 20,
+          content: 'Sign In',
+          fill: [{ type: 'solid', color: '#FDE047' }],
+        } as PenNode,
       ],
     } as PenNode;
     const root: PenNode = {
-      id: 'root', type: 'frame', name: 'Root', x: 0, y: 0, width: 375, height: 812,
+      id: 'root',
+      type: 'frame',
+      name: 'Root',
+      x: 0,
+      y: 0,
+      width: 375,
+      height: 812,
       children: [button],
     } as PenNode;
     resolveTreePostPass(root, 375);
@@ -419,15 +686,35 @@ describe('resolveTreePostPass — button foreground contrast', () => {
 
   it('sets fill on icon_font child in dark button', () => {
     const button: PenNode = {
-      id: 'btn', type: 'frame', name: 'Button', x: 0, y: 0, width: 44, height: 44,
+      id: 'btn',
+      type: 'frame',
+      name: 'Button',
+      x: 0,
+      y: 0,
+      width: 44,
+      height: 44,
       role: 'icon-button',
       fill: [{ type: 'solid', color: '#1E293B' }],
       children: [
-        { id: 'ico', type: 'icon_font', name: 'Icon', x: 0, y: 0, width: 24, height: 24 } as PenNode,
+        {
+          id: 'ico',
+          type: 'icon_font',
+          name: 'Icon',
+          x: 0,
+          y: 0,
+          width: 24,
+          height: 24,
+        } as PenNode,
       ],
     } as PenNode;
     const root: PenNode = {
-      id: 'root', type: 'frame', name: 'Root', x: 0, y: 0, width: 375, height: 812,
+      id: 'root',
+      type: 'frame',
+      name: 'Root',
+      x: 0,
+      y: 0,
+      width: 375,
+      height: 812,
       children: [button],
     } as PenNode;
     resolveTreePostPass(root, 375);
@@ -437,16 +724,36 @@ describe('resolveTreePostPass — button foreground contrast', () => {
 
   it('sets stroke.fill on stroke-style path in dark button', () => {
     const button: PenNode = {
-      id: 'btn', type: 'frame', name: 'Button', x: 0, y: 0, width: 44, height: 44,
+      id: 'btn',
+      type: 'frame',
+      name: 'Button',
+      x: 0,
+      y: 0,
+      width: 44,
+      height: 44,
       role: 'button',
       fill: [{ type: 'solid', color: '#2563EB' }],
       children: [
-        { id: 'p', type: 'path', name: 'Arrow', x: 0, y: 0, width: 24, height: 24,
-          stroke: { thickness: 2 } } as PenNode,
+        {
+          id: 'p',
+          type: 'path',
+          name: 'Arrow',
+          x: 0,
+          y: 0,
+          width: 24,
+          height: 24,
+          stroke: { thickness: 2 },
+        } as PenNode,
       ],
     } as PenNode;
     const root: PenNode = {
-      id: 'root', type: 'frame', name: 'Root', x: 0, y: 0, width: 375, height: 812,
+      id: 'root',
+      type: 'frame',
+      name: 'Root',
+      x: 0,
+      y: 0,
+      width: 375,
+      height: 812,
       children: [button],
     } as PenNode;
     resolveTreePostPass(root, 375);
@@ -456,7 +763,13 @@ describe('resolveTreePostPass — button foreground contrast', () => {
 
   it('sets fill on unstyled path (no stroke, no fill) in dark button', () => {
     const button: PenNode = {
-      id: 'btn', type: 'frame', name: 'Button', x: 0, y: 0, width: 44, height: 44,
+      id: 'btn',
+      type: 'frame',
+      name: 'Button',
+      x: 0,
+      y: 0,
+      width: 44,
+      height: 44,
       role: 'button',
       fill: [{ type: 'solid', color: '#2563EB' }],
       children: [
@@ -464,7 +777,13 @@ describe('resolveTreePostPass — button foreground contrast', () => {
       ],
     } as PenNode;
     const root: PenNode = {
-      id: 'root', type: 'frame', name: 'Root', x: 0, y: 0, width: 375, height: 812,
+      id: 'root',
+      type: 'frame',
+      name: 'Root',
+      x: 0,
+      y: 0,
+      width: 375,
+      height: 812,
       children: [button],
     } as PenNode;
     resolveTreePostPass(root, 375);
@@ -476,13 +795,53 @@ describe('resolveTreePostPass — button foreground contrast', () => {
 describe('resolveTreePostPass — section background alternation', () => {
   it('alternates fills on 3+ consecutive unfilled sections', () => {
     const children = [
-      { id: 's0', type: 'frame' as const, name: 'Hero', x: 0, y: 0, width: 1200, height: 400, role: 'hero', layout: 'vertical' as const, children: [] },
-      { id: 's1', type: 'frame' as const, name: 'Features', x: 0, y: 0, width: 1200, height: 400, role: 'section', layout: 'vertical' as const, children: [] },
-      { id: 's2', type: 'frame' as const, name: 'CTA', x: 0, y: 0, width: 1200, height: 400, role: 'cta-section', layout: 'vertical' as const, children: [] },
+      {
+        id: 's0',
+        type: 'frame' as const,
+        name: 'Hero',
+        x: 0,
+        y: 0,
+        width: 1200,
+        height: 400,
+        role: 'hero',
+        layout: 'vertical' as const,
+        children: [],
+      },
+      {
+        id: 's1',
+        type: 'frame' as const,
+        name: 'Features',
+        x: 0,
+        y: 0,
+        width: 1200,
+        height: 400,
+        role: 'section',
+        layout: 'vertical' as const,
+        children: [],
+      },
+      {
+        id: 's2',
+        type: 'frame' as const,
+        name: 'CTA',
+        x: 0,
+        y: 0,
+        width: 1200,
+        height: 400,
+        role: 'cta-section',
+        layout: 'vertical' as const,
+        children: [],
+      },
     ] as PenNode[];
     const root: PenNode = {
-      id: 'root', type: 'frame', name: 'Root', x: 0, y: 0, width: 1200, height: 2400,
-      layout: 'vertical', children,
+      id: 'root',
+      type: 'frame',
+      name: 'Root',
+      x: 0,
+      y: 0,
+      width: 1200,
+      height: 2400,
+      layout: 'vertical',
+      children,
     } as PenNode;
     resolveTreePostPass(root, 1200);
     expect((children[0] as any).fill).toEqual([{ type: 'solid', color: '#FFFFFF' }]);
@@ -492,15 +851,76 @@ describe('resolveTreePostPass — section background alternation', () => {
 
   it('only alternates within contiguous runs — non-section children break the run', () => {
     const children = [
-      { id: 's0', type: 'frame' as const, name: 'Hero', x: 0, y: 0, width: 1200, height: 400, role: 'hero', layout: 'vertical' as const, children: [] },
-      { id: 's1', type: 'frame' as const, name: 'Features', x: 0, y: 0, width: 1200, height: 400, role: 'section', layout: 'vertical' as const, children: [] },
-      { id: 'card', type: 'frame' as const, name: 'Card', x: 0, y: 0, width: 300, height: 200, role: 'card', children: [] },
-      { id: 's2', type: 'frame' as const, name: 'Footer', x: 0, y: 0, width: 1200, height: 400, role: 'footer', layout: 'vertical' as const, children: [] },
-      { id: 's3', type: 'frame' as const, name: 'Section2', x: 0, y: 0, width: 1200, height: 400, role: 'section', layout: 'vertical' as const, children: [] },
+      {
+        id: 's0',
+        type: 'frame' as const,
+        name: 'Hero',
+        x: 0,
+        y: 0,
+        width: 1200,
+        height: 400,
+        role: 'hero',
+        layout: 'vertical' as const,
+        children: [],
+      },
+      {
+        id: 's1',
+        type: 'frame' as const,
+        name: 'Features',
+        x: 0,
+        y: 0,
+        width: 1200,
+        height: 400,
+        role: 'section',
+        layout: 'vertical' as const,
+        children: [],
+      },
+      {
+        id: 'card',
+        type: 'frame' as const,
+        name: 'Card',
+        x: 0,
+        y: 0,
+        width: 300,
+        height: 200,
+        role: 'card',
+        children: [],
+      },
+      {
+        id: 's2',
+        type: 'frame' as const,
+        name: 'Footer',
+        x: 0,
+        y: 0,
+        width: 1200,
+        height: 400,
+        role: 'footer',
+        layout: 'vertical' as const,
+        children: [],
+      },
+      {
+        id: 's3',
+        type: 'frame' as const,
+        name: 'Section2',
+        x: 0,
+        y: 0,
+        width: 1200,
+        height: 400,
+        role: 'section',
+        layout: 'vertical' as const,
+        children: [],
+      },
     ] as PenNode[];
     const root: PenNode = {
-      id: 'root', type: 'frame', name: 'Root', x: 0, y: 0, width: 1200, height: 3000,
-      layout: 'vertical', children,
+      id: 'root',
+      type: 'frame',
+      name: 'Root',
+      x: 0,
+      y: 0,
+      width: 1200,
+      height: 3000,
+      layout: 'vertical',
+      children,
     } as PenNode;
     resolveTreePostPass(root, 1200);
     expect((children[0] as any).fill).toBeUndefined();
@@ -511,13 +931,54 @@ describe('resolveTreePostPass — section background alternation', () => {
 
   it('skips sections with existing fills', () => {
     const children = [
-      { id: 's0', type: 'frame' as const, name: 'Hero', x: 0, y: 0, width: 1200, height: 400, role: 'hero', layout: 'vertical' as const, fill: [{ type: 'solid', color: '#1E293B' }], children: [] },
-      { id: 's1', type: 'frame' as const, name: 'Features', x: 0, y: 0, width: 1200, height: 400, role: 'section', layout: 'vertical' as const, children: [] },
-      { id: 's2', type: 'frame' as const, name: 'Footer', x: 0, y: 0, width: 1200, height: 400, role: 'footer', layout: 'vertical' as const, children: [] },
+      {
+        id: 's0',
+        type: 'frame' as const,
+        name: 'Hero',
+        x: 0,
+        y: 0,
+        width: 1200,
+        height: 400,
+        role: 'hero',
+        layout: 'vertical' as const,
+        fill: [{ type: 'solid', color: '#1E293B' }],
+        children: [],
+      },
+      {
+        id: 's1',
+        type: 'frame' as const,
+        name: 'Features',
+        x: 0,
+        y: 0,
+        width: 1200,
+        height: 400,
+        role: 'section',
+        layout: 'vertical' as const,
+        children: [],
+      },
+      {
+        id: 's2',
+        type: 'frame' as const,
+        name: 'Footer',
+        x: 0,
+        y: 0,
+        width: 1200,
+        height: 400,
+        role: 'footer',
+        layout: 'vertical' as const,
+        children: [],
+      },
     ] as PenNode[];
     const root: PenNode = {
-      id: 'root', type: 'frame', name: 'Root', x: 0, y: 0, width: 1200, height: 2400,
-      layout: 'vertical', children,
+      id: 'root',
+      type: 'frame',
+      name: 'Root',
+      x: 0,
+      y: 0,
+      width: 1200,
+      height: 2400,
+      layout: 'vertical',
+      children,
     } as PenNode;
     resolveTreePostPass(root, 1200);
     expect((children[0] as any).fill).toEqual([{ type: 'solid', color: '#1E293B' }]);
@@ -526,12 +987,41 @@ describe('resolveTreePostPass — section background alternation', () => {
 
   it('does nothing with fewer than 3 consecutive sections', () => {
     const children = [
-      { id: 's0', type: 'frame' as const, name: 'Hero', x: 0, y: 0, width: 1200, height: 400, role: 'hero', layout: 'vertical' as const, children: [] },
-      { id: 's1', type: 'frame' as const, name: 'Footer', x: 0, y: 0, width: 1200, height: 400, role: 'footer', layout: 'vertical' as const, children: [] },
+      {
+        id: 's0',
+        type: 'frame' as const,
+        name: 'Hero',
+        x: 0,
+        y: 0,
+        width: 1200,
+        height: 400,
+        role: 'hero',
+        layout: 'vertical' as const,
+        children: [],
+      },
+      {
+        id: 's1',
+        type: 'frame' as const,
+        name: 'Footer',
+        x: 0,
+        y: 0,
+        width: 1200,
+        height: 400,
+        role: 'footer',
+        layout: 'vertical' as const,
+        children: [],
+      },
     ] as PenNode[];
     const root: PenNode = {
-      id: 'root', type: 'frame', name: 'Root', x: 0, y: 0, width: 1200, height: 1200,
-      layout: 'vertical', children,
+      id: 'root',
+      type: 'frame',
+      name: 'Root',
+      x: 0,
+      y: 0,
+      width: 1200,
+      height: 1200,
+      layout: 'vertical',
+      children,
     } as PenNode;
     resolveTreePostPass(root, 1200);
     expect((children[0] as any).fill).toBeUndefined();
@@ -542,14 +1032,35 @@ describe('resolveTreePostPass — section background alternation', () => {
 describe('resolveTreePostPass — orphan container contrast', () => {
   it('adds fill + shadow to untagged rounded frame when parent has no fill', () => {
     const card: PenNode = {
-      id: 'card', type: 'frame', name: 'Card', x: 0, y: 0, width: 300, height: 200,
+      id: 'card',
+      type: 'frame',
+      name: 'Card',
+      x: 0,
+      y: 0,
+      width: 300,
+      height: 200,
       cornerRadius: 12,
       children: [
-        { id: 'txt', type: 'text', name: 'Title', x: 0, y: 0, width: 200, height: 20, content: 'Hello' } as PenNode,
+        {
+          id: 'txt',
+          type: 'text',
+          name: 'Title',
+          x: 0,
+          y: 0,
+          width: 200,
+          height: 20,
+          content: 'Hello',
+        } as PenNode,
       ],
     } as PenNode;
     const root: PenNode = {
-      id: 'root', type: 'frame', name: 'Root', x: 0, y: 0, width: 1200, height: 800,
+      id: 'root',
+      type: 'frame',
+      name: 'Root',
+      x: 0,
+      y: 0,
+      width: 1200,
+      height: 800,
       children: [card],
     } as PenNode;
     resolveTreePostPass(root, 1200);
@@ -560,14 +1071,36 @@ describe('resolveTreePostPass — orphan container contrast', () => {
 
   it('does not apply to structural roles like section', () => {
     const section: PenNode = {
-      id: 'sec', type: 'frame', name: 'Section', x: 0, y: 0, width: 1200, height: 400,
-      role: 'section', cornerRadius: 12,
+      id: 'sec',
+      type: 'frame',
+      name: 'Section',
+      x: 0,
+      y: 0,
+      width: 1200,
+      height: 400,
+      role: 'section',
+      cornerRadius: 12,
       children: [
-        { id: 'txt', type: 'text', name: 'Title', x: 0, y: 0, width: 200, height: 20, content: 'Hello' } as PenNode,
+        {
+          id: 'txt',
+          type: 'text',
+          name: 'Title',
+          x: 0,
+          y: 0,
+          width: 200,
+          height: 20,
+          content: 'Hello',
+        } as PenNode,
       ],
     } as PenNode;
     const root: PenNode = {
-      id: 'root', type: 'frame', name: 'Root', x: 0, y: 0, width: 1200, height: 800,
+      id: 'root',
+      type: 'frame',
+      name: 'Root',
+      x: 0,
+      y: 0,
+      width: 1200,
+      height: 800,
       children: [section],
     } as PenNode;
     resolveTreePostPass(root, 1200);
@@ -576,14 +1109,35 @@ describe('resolveTreePostPass — orphan container contrast', () => {
 
   it('does not apply when parent has fill', () => {
     const card: PenNode = {
-      id: 'card', type: 'frame', name: 'Card', x: 0, y: 0, width: 300, height: 200,
+      id: 'card',
+      type: 'frame',
+      name: 'Card',
+      x: 0,
+      y: 0,
+      width: 300,
+      height: 200,
       cornerRadius: 12,
       children: [
-        { id: 'txt', type: 'text', name: 'Title', x: 0, y: 0, width: 200, height: 20, content: 'Hello' } as PenNode,
+        {
+          id: 'txt',
+          type: 'text',
+          name: 'Title',
+          x: 0,
+          y: 0,
+          width: 200,
+          height: 20,
+          content: 'Hello',
+        } as PenNode,
       ],
     } as PenNode;
     const root: PenNode = {
-      id: 'root', type: 'frame', name: 'Root', x: 0, y: 0, width: 1200, height: 800,
+      id: 'root',
+      type: 'frame',
+      name: 'Root',
+      x: 0,
+      y: 0,
+      width: 1200,
+      height: 800,
       fill: [{ type: 'solid', color: '#F8FAFC' }],
       children: [card],
     } as PenNode;
@@ -593,11 +1147,24 @@ describe('resolveTreePostPass — orphan container contrast', () => {
 
   it('does not apply to empty frames', () => {
     const empty: PenNode = {
-      id: 'e', type: 'frame', name: 'Empty', x: 0, y: 0, width: 300, height: 200,
-      cornerRadius: 12, children: [],
+      id: 'e',
+      type: 'frame',
+      name: 'Empty',
+      x: 0,
+      y: 0,
+      width: 300,
+      height: 200,
+      cornerRadius: 12,
+      children: [],
     } as PenNode;
     const root: PenNode = {
-      id: 'root', type: 'frame', name: 'Root', x: 0, y: 0, width: 1200, height: 800,
+      id: 'root',
+      type: 'frame',
+      name: 'Root',
+      x: 0,
+      y: 0,
+      width: 1200,
+      height: 800,
       children: [empty],
     } as PenNode;
     resolveTreePostPass(root, 1200);
@@ -608,20 +1175,39 @@ describe('resolveTreePostPass — orphan container contrast', () => {
 describe('resolveTreePostPass — input sibling consistency', () => {
   it('propagates first input fill/stroke to mismatched siblings', () => {
     const input1: PenNode = {
-      id: 'i1', type: 'frame', name: 'Email', x: 0, y: 0, width: 300, height: 48,
+      id: 'i1',
+      type: 'frame',
+      name: 'Email',
+      x: 0,
+      y: 0,
+      width: 300,
+      height: 48,
       role: 'form-input',
       fill: [{ type: 'solid', color: '#E0F2FE' }],
       stroke: { thickness: 1, fill: [{ type: 'solid', color: '#0EA5E9' }] },
     } as unknown as PenNode;
     const input2: PenNode = {
-      id: 'i2', type: 'frame', name: 'Password', x: 0, y: 0, width: 300, height: 48,
+      id: 'i2',
+      type: 'frame',
+      name: 'Password',
+      x: 0,
+      y: 0,
+      width: 300,
+      height: 48,
       role: 'form-input',
       fill: [{ type: 'solid', color: '#F8FAFC' }],
       stroke: { thickness: 1, fill: [{ type: 'solid', color: '#E2E8F0' }] },
     } as unknown as PenNode;
     const root: PenNode = {
-      id: 'root', type: 'frame', name: 'Form', x: 0, y: 0, width: 400, height: 200,
-      layout: 'vertical', children: [input1, input2],
+      id: 'root',
+      type: 'frame',
+      name: 'Form',
+      x: 0,
+      y: 0,
+      width: 400,
+      height: 200,
+      layout: 'vertical',
+      children: [input1, input2],
     } as PenNode;
     resolveTreePostPass(root, 375);
     expect((input2 as any).fill).toEqual([{ type: 'solid', color: '#E0F2FE' }]);
@@ -632,16 +1218,39 @@ describe('resolveTreePostPass — input sibling consistency', () => {
     const fill = [{ type: 'solid' as const, color: '#F8FAFC' }];
     const stroke = { thickness: 1, fill: [{ type: 'solid' as const, color: '#E2E8F0' }] };
     const input1: PenNode = {
-      id: 'i1', type: 'frame', name: 'Email', x: 0, y: 0, width: 300, height: 48,
-      role: 'input', fill: [...fill], stroke: { ...stroke },
+      id: 'i1',
+      type: 'frame',
+      name: 'Email',
+      x: 0,
+      y: 0,
+      width: 300,
+      height: 48,
+      role: 'input',
+      fill: [...fill],
+      stroke: { ...stroke },
     } as unknown as PenNode;
     const input2: PenNode = {
-      id: 'i2', type: 'frame', name: 'Password', x: 0, y: 0, width: 300, height: 48,
-      role: 'input', fill: [...fill], stroke: { ...stroke },
+      id: 'i2',
+      type: 'frame',
+      name: 'Password',
+      x: 0,
+      y: 0,
+      width: 300,
+      height: 48,
+      role: 'input',
+      fill: [...fill],
+      stroke: { ...stroke },
     } as unknown as PenNode;
     const root: PenNode = {
-      id: 'root', type: 'frame', name: 'Form', x: 0, y: 0, width: 400, height: 200,
-      layout: 'vertical', children: [input1, input2],
+      id: 'root',
+      type: 'frame',
+      name: 'Form',
+      x: 0,
+      y: 0,
+      width: 400,
+      height: 200,
+      layout: 'vertical',
+      children: [input1, input2],
     } as PenNode;
     resolveTreePostPass(root, 375);
     expect((input1 as any).fill[0].color).toBe('#F8FAFC');
@@ -657,7 +1266,15 @@ describe('resolveNodeRole — name-based role inference', () => {
   const ctx: RoleContext = { canvasWidth: 375 };
 
   it('infers button role from name "Sign In Button"', () => {
-    const node = { id: 'b', type: 'frame', name: 'Sign In Button', x: 0, y: 0, width: 120, height: 44 } as PenNode;
+    const node = {
+      id: 'b',
+      type: 'frame',
+      name: 'Sign In Button',
+      x: 0,
+      y: 0,
+      width: 120,
+      height: 44,
+    } as PenNode;
     resolveNodeRole(node, ctx);
     expect(node.role).toBe('button');
     // Button role should NOT inject a hardcoded fill color — fill comes from AI/design system
@@ -665,19 +1282,43 @@ describe('resolveNodeRole — name-based role inference', () => {
   });
 
   it('does not infer button role for container names like "Button Group"', () => {
-    const node = { id: 'bg', type: 'frame', name: 'Button Group', x: 0, y: 0, width: 300, height: 60 } as PenNode;
+    const node = {
+      id: 'bg',
+      type: 'frame',
+      name: 'Button Group',
+      x: 0,
+      y: 0,
+      width: 300,
+      height: 60,
+    } as PenNode;
     resolveNodeRole(node, ctx);
     expect(node.role).toBeUndefined();
   });
 
   it('does not infer button role for container names like "Buttons Row"', () => {
-    const node = { id: 'br', type: 'frame', name: 'Buttons Row', x: 0, y: 0, width: 300, height: 60 } as PenNode;
+    const node = {
+      id: 'br',
+      type: 'frame',
+      name: 'Buttons Row',
+      x: 0,
+      y: 0,
+      width: 300,
+      height: 60,
+    } as PenNode;
     resolveNodeRole(node, ctx);
     expect(node.role).toBeUndefined();
   });
 
   it('infers card role from name "Restaurant Card"', () => {
-    const node = { id: 'c', type: 'frame', name: 'Restaurant Card', x: 0, y: 0, width: 300, height: 200 } as PenNode;
+    const node = {
+      id: 'c',
+      type: 'frame',
+      name: 'Restaurant Card',
+      x: 0,
+      y: 0,
+      width: 300,
+      height: 200,
+    } as PenNode;
     resolveNodeRole(node, ctx);
     expect(node.role).toBe('card');
     expect((node as any).fill).toBeDefined();
@@ -685,7 +1326,15 @@ describe('resolveNodeRole — name-based role inference', () => {
   });
 
   it('infers input role from name "Email Input"', () => {
-    const node = { id: 'i', type: 'frame', name: 'Email Input', x: 0, y: 0, width: 300, height: 48 } as PenNode;
+    const node = {
+      id: 'i',
+      type: 'frame',
+      name: 'Email Input',
+      x: 0,
+      y: 0,
+      width: 300,
+      height: 48,
+    } as PenNode;
     resolveNodeRole(node, { ...ctx, parentLayout: 'vertical' });
     expect(node.role).toBe('input');
     expect((node as any).fill[0].color).toBe('#F8FAFC');
@@ -693,44 +1342,102 @@ describe('resolveNodeRole — name-based role inference', () => {
   });
 
   it('infers navbar from exact name "Navigation"', () => {
-    const node = { id: 'n', type: 'frame', name: 'Navigation', x: 0, y: 0, width: 375, height: 56 } as PenNode;
+    const node = {
+      id: 'n',
+      type: 'frame',
+      name: 'Navigation',
+      x: 0,
+      y: 0,
+      width: 375,
+      height: 56,
+    } as PenNode;
     resolveNodeRole(node, ctx);
     expect(node.role).toBe('navbar');
     expect((node as any).fill[0].color).toBe('#FFFFFF');
   });
 
   it('infers search-bar from name "Search"', () => {
-    const node = { id: 's', type: 'frame', name: 'Search', x: 0, y: 0, width: 300, height: 44 } as PenNode;
+    const node = {
+      id: 's',
+      type: 'frame',
+      name: 'Search',
+      x: 0,
+      y: 0,
+      width: 300,
+      height: 44,
+    } as PenNode;
     resolveNodeRole(node, ctx);
     expect(node.role).toBe('search-bar');
   });
 
   it('infers hero from exact name "Hero"', () => {
-    const node = { id: 'h', type: 'frame', name: 'Hero', x: 0, y: 0, width: 375, height: 400 } as PenNode;
+    const node = {
+      id: 'h',
+      type: 'frame',
+      name: 'Hero',
+      x: 0,
+      y: 0,
+      width: 375,
+      height: 400,
+    } as PenNode;
     resolveNodeRole(node, ctx);
     expect(node.role).toBe('hero');
   });
 
   it('infers footer from exact name "Footer"', () => {
-    const node = { id: 'f', type: 'frame', name: 'Footer', x: 0, y: 0, width: 375, height: 200 } as PenNode;
+    const node = {
+      id: 'f',
+      type: 'frame',
+      name: 'Footer',
+      x: 0,
+      y: 0,
+      width: 375,
+      height: 200,
+    } as PenNode;
     resolveNodeRole(node, ctx);
     expect(node.role).toBe('footer');
   });
 
   it('does not infer role for non-frame nodes', () => {
-    const node = { id: 't', type: 'text', name: 'Button Label', x: 0, y: 0, width: 80, height: 20, content: 'Click' } as PenNode;
+    const node = {
+      id: 't',
+      type: 'text',
+      name: 'Button Label',
+      x: 0,
+      y: 0,
+      width: 80,
+      height: 20,
+      content: 'Click',
+    } as PenNode;
     resolveNodeRole(node, ctx);
     expect(node.role).toBeUndefined();
   });
 
   it('does not override explicit role', () => {
-    const node = { id: 'b', type: 'frame', name: 'Search', x: 0, y: 0, width: 300, height: 44, role: 'input' } as PenNode;
+    const node = {
+      id: 'b',
+      type: 'frame',
+      name: 'Search',
+      x: 0,
+      y: 0,
+      width: 300,
+      height: 44,
+      role: 'input',
+    } as PenNode;
     resolveNodeRole(node, ctx);
     expect(node.role).toBe('input'); // keeps explicit role, not inferred search-bar
   });
 
   it('does not infer role for generic names', () => {
-    const node = { id: 'g', type: 'frame', name: 'Container', x: 0, y: 0, width: 300, height: 200 } as PenNode;
+    const node = {
+      id: 'g',
+      type: 'frame',
+      name: 'Container',
+      x: 0,
+      y: 0,
+      width: 300,
+      height: 200,
+    } as PenNode;
     resolveNodeRole(node, ctx);
     expect(node.role).toBeUndefined();
   });
@@ -791,16 +1498,19 @@ describe('resolveNodeRole — name-based role inference', () => {
     ['Card 10 Title'],
     ['Button 1 Label'],
     ['Button 2 Icon'],
-  ])('does not infer card/button role when a numeric index precedes the part word: "%s"', (name) => {
-    const node = { id: 'n', type: 'frame', name, x: 0, y: 0, width: 300, height: 60 } as PenNode;
-    resolveNodeRole(node, ctx);
-    // The node should not inherit the card white fill + shadow. Role is
-    // either undefined or something other than card/button.
-    expect(node.role).not.toBe('card');
-    expect(node.role).not.toBe('button');
-    expect((node as { fill?: unknown }).fill).toBeUndefined();
-    expect((node as { effects?: unknown }).effects).toBeUndefined();
-  });
+  ])(
+    'does not infer card/button role when a numeric index precedes the part word: "%s"',
+    (name) => {
+      const node = { id: 'n', type: 'frame', name, x: 0, y: 0, width: 300, height: 60 } as PenNode;
+      resolveNodeRole(node, ctx);
+      // The node should not inherit the card white fill + shadow. Role is
+      // either undefined or something other than card/button.
+      expect(node.role).not.toBe('card');
+      expect(node.role).not.toBe('button');
+      expect((node as { fill?: unknown }).fill).toBeUndefined();
+      expect((node as { effects?: unknown }).effects).toBeUndefined();
+    },
+  );
 
   // --- Modifier BEFORE the role word: must STILL infer the role ---
   it.each([
@@ -837,13 +1547,29 @@ describe('resolveNodeRole — name-based role inference', () => {
   // --- "X Icon" / "X Label": role pattern skipped by part word, the icon
   //     pattern (later in NAME_PATTERN_MAP) then takes over ---
   it('falls through to icon role for "Card Icon" (icon is a part word after card)', () => {
-    const node = { id: 'n', type: 'frame', name: 'Card Icon', x: 0, y: 0, width: 40, height: 40 } as PenNode;
+    const node = {
+      id: 'n',
+      type: 'frame',
+      name: 'Card Icon',
+      x: 0,
+      y: 0,
+      width: 40,
+      height: 40,
+    } as PenNode;
     resolveNodeRole(node, ctx);
     expect(node.role).toBe('icon');
   });
 
   it('falls through to icon role for "Button Icon"', () => {
-    const node = { id: 'n', type: 'frame', name: 'Button Icon', x: 0, y: 0, width: 40, height: 40 } as PenNode;
+    const node = {
+      id: 'n',
+      type: 'frame',
+      name: 'Button Icon',
+      x: 0,
+      y: 0,
+      width: 40,
+      height: 40,
+    } as PenNode;
     resolveNodeRole(node, ctx);
     expect(node.role).toBe('icon');
   });

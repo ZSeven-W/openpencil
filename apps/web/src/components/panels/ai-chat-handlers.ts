@@ -182,8 +182,7 @@ async function runAgentStream(
   const executor = new AgentToolExecutor(sessionId);
 
   const isBuiltin =
-    providerConfig.providerType === 'anthropic' ||
-    providerConfig.providerType === 'openai-compat';
+    providerConfig.providerType === 'anthropic' || providerConfig.providerType === 'openai-compat';
 
   const messages = useAIStore
     .getState()
@@ -217,7 +216,9 @@ async function runAgentStream(
     model: providerConfig.model,
     ...(providerConfig.baseURL ? { baseURL: providerConfig.baseURL } : {}),
     ...(providerConfig.maxOutputTokens ? { maxOutputTokens: providerConfig.maxOutputTokens } : {}),
-    ...(providerConfig.maxContextTokens ? { maxContextTokens: providerConfig.maxContextTokens } : {}),
+    ...(providerConfig.maxContextTokens
+      ? { maxContextTokens: providerConfig.maxContextTokens }
+      : {}),
     toolDefs,
     maxTurns: 20,
     ...(teamMode ? { teamMode: true, concurrency } : {}),

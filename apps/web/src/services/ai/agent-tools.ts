@@ -156,12 +156,16 @@ export function getAllToolDefs(): ToolDef[] {
     },
     {
       name: 'batch_insert',
-      description: 'Insert PenNode objects into the canvas. MAX 9 nodes per call — call multiple times for more nodes. Each node needs id, type, name. Use _parent field to specify parent node ID.',
+      description:
+        'Insert PenNode objects into the canvas. MAX 9 nodes per call — call multiple times for more nodes. Each node needs id, type, name. Use _parent field to specify parent node ID.',
       level: TOOL_AUTH_MAP.batch_insert,
       parameters: {
         type: 'object',
         properties: {
-          parentId: { type: ['string', 'null'], description: 'Parent frame ID to insert into (from plan_layout result)' },
+          parentId: {
+            type: ['string', 'null'],
+            description: 'Parent frame ID to insert into (from plan_layout result)',
+          },
           nodes: {
             type: 'array',
             items: { type: 'object' },
@@ -182,8 +186,14 @@ export function getAllToolDefs(): ToolDef[] {
             type: ['string', 'null'],
             description: 'Parent node ID, or null for root-level insertion',
           },
-          data: { type: 'object', description: 'PenNode data (type, name, width, height, fills, children, etc.)' },
-          pageId: { type: 'string', description: 'Target page ID (optional, defaults to active page)' },
+          data: {
+            type: 'object',
+            description: 'PenNode data (type, name, width, height, fills, children, etc.)',
+          },
+          pageId: {
+            type: 'string',
+            description: 'Target page ID (optional, defaults to active page)',
+          },
         },
         required: ['parent', 'data'],
       },

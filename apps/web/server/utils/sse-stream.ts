@@ -13,7 +13,11 @@ export function createSSEResponse(
   const stream = new ReadableStream({
     async start(controller) {
       const enqueue = (raw: string) => {
-        try { controller.enqueue(encoder.encode(raw)); } catch { /* closed */ }
+        try {
+          controller.enqueue(encoder.encode(raw));
+        } catch {
+          /* closed */
+        }
       };
 
       const emit = (event: SSEEvent) => {
@@ -33,7 +37,11 @@ export function createSSEResponse(
         emit({ type: 'error', content: msg });
       } finally {
         clearInterval(pingTimer);
-        try { controller.close(); } catch { /* already closed */ }
+        try {
+          controller.close();
+        } catch {
+          /* already closed */
+        }
       }
     },
     cancel() {
@@ -45,7 +53,7 @@ export function createSSEResponse(
     headers: {
       'Content-Type': 'text/event-stream',
       'Cache-Control': 'no-cache',
-      'Connection': 'keep-alive',
+      Connection: 'keep-alive',
     },
   });
 }

@@ -14,11 +14,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { getSkiaEngineRef } from '@/canvas/skia-engine-ref';
 import { useCanvasStore } from '@/stores/canvas-store';
-import {
-  useDocumentStore,
-  getActivePageChildren,
-  getAllChildren,
-} from '@/stores/document-store';
+import { useDocumentStore, getActivePageChildren, getAllChildren } from '@/stores/document-store';
 
 const SCALE_OPTIONS = [
   { value: '1', label: '1x' },
