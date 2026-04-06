@@ -16,6 +16,15 @@ import { createNodeActions } from './document-store-node-actions';
 import { createComponentActions } from './document-store-component-actions';
 import { createVariableActions } from './document-store-variable-actions';
 import { createPageActions } from './document-store-pages';
+import {
+  isElectron,
+  supportsFileSystemAccess,
+  writeToFileHandle,
+  writeToFilePath,
+  saveDocumentAs as fsaSaveDocumentAs,
+  downloadDocument,
+} from '@/utils/file-operations';
+import { documentEvents } from '@/utils/document-events';
 
 interface DocumentStoreState {
   document: PenDocument;
@@ -74,6 +83,23 @@ interface DocumentStoreState {
   markClean: () => void;
   setFileHandle: (handle: FileSystemFileHandle | null) => void;
   setSaveDialogOpen: (open: boolean) => void;
+
+  // --- Save pipeline (consolidated single entry point) ---
+  // save() saves to the existing target if any, falls back to saveAs() otherwise.
+  // saveAs(suggestedName?) always shows a save dialog. The suggestedName, when
+  // provided, overrides the auto-derived suggested name (used by the legacy
+  // SaveDialog component which collects a manual filename input — it MUST NOT
+  // mutate store state itself, so it passes the typed name here and only the
+  // store updates fileName/filePath after a confirmed write).
+  // saveToNewPath(path) writes to a specific given path (Electron-only;
+  // returns null in browser builds after logging an error). Used by future
+  // programmatic flows that already know the destination — currently has no
+  // in-tree callers but is required by the design for forward-compat. Like
+  // save() and saveAs(), it returns null on any failure (including the
+  // browser-build case) and emits 'saved' only on success.
+  save: () => Promise<string | null>;
+  saveAs: (suggestedName?: string) => Promise<string | null>;
+  saveToNewPath: (filePath: string) => Promise<string | null>;
 }
 
 export const useDocumentStore = create<DocumentStoreState>((set, get) => ({
@@ -166,6 +192,123 @@ export const useDocumentStore = create<DocumentStoreState>((set, get) => ({
   markClean: () => set({ isDirty: false }),
   setFileHandle: (fileHandle) => set({ fileHandle }),
   setSaveDialogOpen: (saveDialogOpen) => set({ saveDialogOpen }),
+
+  save: async () => {
+    const state = get();
+    const { document: doc, fileName, fileHandle, filePath } = state;
+    const isOpFile = fileName ? /\.op$/i.test(fileName) : false;
+
+    // Path 1: Electron with a known .op path → in-place write.
+    if (isElectron() && filePath && isOpFile) {
+      try {
+        await writeToFilePath(filePath, doc);
+      } catch (err) {
+        console.error('[document-store.save] writeToFilePath failed:', err);
+        return null;
+      }
+      set({ isDirty: false });
+      documentEvents.emit('saved', { filePath, fileName: fileName!, document: doc });
+      return fileName!;
+    }
+
+    // Path 2: Browser with a valid .op file handle → in-place write.
+    if (fileHandle && isOpFile) {
+      try {
+        await writeToFileHandle(fileHandle, doc);
+        set({ isDirty: false });
+        documentEvents.emit('saved', { filePath: null, fileName: fileName!, document: doc });
+        return fileName!;
+      } catch (err) {
+        console.warn('[document-store.save] writeToFileHandle failed, falling back:', err);
+        set({ fileHandle: null });
+        // fall through to saveAs()
+      }
+    }
+
+    // Path 3: No in-place target → delegate to saveAs() which handles the
+    // dialog flow per backend.
+    return get().saveAs();
+  },
+
+  saveAs: async (explicitSuggestedName) => {
+    const state = get();
+    const { document: doc, fileName } = state;
+    const suggestedName = explicitSuggestedName
+      ? (explicitSuggestedName.endsWith('.op') ? explicitSuggestedName : `${explicitSuggestedName}.op`)
+      : (fileName
+          ? fileName.replace(/\.(pen|op|json)$/i, '') + '.op'
+          : 'untitled.op');
+
+    // Path A: Electron native save dialog.
+    if (isElectron()) {
+      let savedPath: string | null = null;
+      try {
+        savedPath = await window.electronAPI!.saveFile(JSON.stringify(doc), suggestedName);
+      } catch (err) {
+        console.error('[document-store.saveAs] electronAPI.saveFile failed:', err);
+        return null;
+      }
+      if (!savedPath) return null; // user cancelled
+      const savedName = savedPath.split(/[/\\]/).pop() || suggestedName;
+      set({
+        fileName: savedName,
+        filePath: savedPath,
+        fileHandle: null,
+        isDirty: false,
+      });
+      documentEvents.emit('saved', { filePath: savedPath, fileName: savedName, document: doc });
+      return savedName;
+    }
+
+    // Path B: Browser File System Access API.
+    if (supportsFileSystemAccess()) {
+      const result = await fsaSaveDocumentAs(doc, suggestedName);
+      if (!result) return null; // user cancelled or API error
+      set({
+        fileName: result.fileName,
+        fileHandle: result.handle,
+        filePath: null,
+        isDirty: false,
+      });
+      documentEvents.emit('saved', { filePath: null, fileName: result.fileName, document: doc });
+      return result.fileName;
+    }
+
+    // Path C: Last-resort browser download. We treat the download as a save
+    // because the user got the file out — but filePath stays null.
+    try {
+      downloadDocument(doc, suggestedName);
+    } catch (err) {
+      console.error('[document-store.saveAs] downloadDocument failed:', err);
+      return null;
+    }
+    set({ fileName: suggestedName, isDirty: false });
+    documentEvents.emit('saved', { filePath: null, fileName: suggestedName, document: doc });
+    return suggestedName;
+  },
+
+  saveToNewPath: async (filePath) => {
+    const { document: doc } = get();
+    if (!isElectron()) {
+      console.error('[document-store.saveToNewPath] not supported in browser builds');
+      return null;
+    }
+    try {
+      await writeToFilePath(filePath, doc);
+    } catch (err) {
+      console.error('[document-store.saveToNewPath] writeToFilePath failed:', err);
+      return null;
+    }
+    const savedName = filePath.split(/[/\\]/).pop() || 'untitled.op';
+    set({
+      fileName: savedName,
+      filePath,
+      fileHandle: null,
+      isDirty: false,
+    });
+    documentEvents.emit('saved', { filePath, fileName: savedName, document: doc });
+    return savedName;
+  },
 }));
 
 export {
