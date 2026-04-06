@@ -341,19 +341,29 @@ export function insertStreamingNode(node: PenNode, parentId: string | null): voi
  * or external MCP callers hedge with on section roots (they hide the real
  * page background and break theming).
  *
- * This helper targets DEFAULT_FRAME_ID — the canonical page root frame —
- * so it always honours the stripRedundantSectionFills scope contract
- * regardless of what the caller actually inserted (a full page, a set of
- * sections, or a single card). If the page root does not exist yet (first
- * insert before any root frame was created), there is nothing to strip
- * and the helper is a no-op.
+ * OpenPencil documents are multi-page — only the FIRST page uses the
+ * constant DEFAULT_FRAME_ID for its root frame. Pages added later via
+ * addPage() receive a fresh nanoid, so we cannot look the page root up by
+ * a well-known id. Instead we pull the active page's top-level children
+ * and run stripRedundantSectionFills on every top-level frame we find.
+ * In the common case that's a single page-root frame; edge cases with
+ * multiple top-level frames on one page (comparison mockups, etc.) are
+ * handled by iterating. Publishes once if any frame was modified.
  */
 function finalizePageRootAfterApply(): void {
-  const pageRoot = useDocumentStore.getState().getNodeById(DEFAULT_FRAME_ID);
-  if (!pageRoot || pageRoot.type !== 'frame') return;
-  if (stripRedundantSectionFills(pageRoot)) {
-    forcePageResync();
+  const doc = useDocumentStore.getState().document;
+  const activePageId = useCanvasStore.getState().activePageId;
+  const topLevel = getActivePageChildren(doc, activePageId);
+  if (!topLevel || topLevel.length === 0) return;
+
+  let anyChanged = false;
+  for (const node of topLevel) {
+    if (node.type !== 'frame') continue;
+    if (stripRedundantSectionFills(node)) {
+      anyChanged = true;
+    }
   }
+  if (anyChanged) forcePageResync();
 }
 
 export function applyNodesToCanvas(nodes: PenNode[]): void {
