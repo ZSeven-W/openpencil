@@ -103,19 +103,29 @@ const NAME_EXACT_MAP: Record<string, string> = {
 /** Names that indicate a container rather than an individual component. */
 const CONTAINER_SUFFIXES = /\b(group|row|container|wrapper|section|list|area|stack|grid|bar)s?\b/i;
 
+/**
+ * Words that, when combined with a role-like word, turn the node into a
+ * PART of that role rather than an instance of it. "Card Header",
+ * "Card Body", "Card Footer", "Button Group", "Nav Link Wrapper" are all
+ * structural pieces inside a parent component — they must NOT inherit the
+ * parent component's role defaults (white fill, shadow, rounded corners…).
+ */
+const ROLE_PART_WORDS =
+  /\b(header|body|footer|title|subtitle|content|wrapper|container|area|label|value|caption|description|image|media|icon|action|actions|meta|row|column|stack|grid)\b/i;
+
 /** Substring patterns → role (checked in order, first match wins). */
 const NAME_PATTERN_MAP: [RegExp, string, boolean?][] = [
   [/\bbtn\b|\bbutton\b/i, 'button', true],
-  [/\bcard\b/i, 'card'],
+  [/\bcard\b/i, 'card', true],
   [/\binput\b|text\s*field|text\s*box/i, 'input'],
   [/\bform\b/i, 'form-group'],
   [/\bsearch/i, 'search-bar'],
   [/\bnav\s*link/i, 'nav-link'],
-  [/\bstat/i, 'stat-card'],
-  [/\bpricing/i, 'pricing-card'],
+  [/\bstat/i, 'stat-card', true],
+  [/\bpricing/i, 'pricing-card', true],
   [/\btestimonial\b|\breview\b|\bquote\b/i, 'testimonial'],
   [/\bcta\b|call\s*to\s*action/i, 'cta-section'],
-  [/\bfeature/i, 'feature-card'],
+  [/\bfeature/i, 'feature-card', true],
   [/\bicon\b/i, 'icon'],
 ];
 
@@ -138,7 +148,13 @@ function inferRoleFromName(node: PenNode): string | undefined {
   for (const [pattern, role, skipContainers] of NAME_PATTERN_MAP) {
     if (pattern.test(lower)) {
       // Skip container-like names (e.g. "Button Group", "Buttons Row")
-      if (skipContainers && CONTAINER_SUFFIXES.test(lower)) continue;
+      if (skipContainers) {
+        if (CONTAINER_SUFFIXES.test(lower)) continue;
+        // Also skip "Card Header", "Card Body", "Button Label", etc. — the
+        // role word is modified by a structural part word, meaning the
+        // node is a PIECE of the role, not the role itself.
+        if (ROLE_PART_WORDS.test(lower)) continue;
+      }
       return role;
     }
   }
