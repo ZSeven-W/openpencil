@@ -71,3 +71,4 @@ export {
   generateDesignMd,
   extractDesignMdFromDocument,
 } from './utils/design-md-parser';
+export { validateContract } from './utils/validate-contract';
