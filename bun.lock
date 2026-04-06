@@ -82,7 +82,6 @@
       "dependencies": {
         "@zseven-w/pen-figma": "workspace:*",
         "@zseven-w/pen-mcp": "workspace:*",
-        "@zseven-w/pen-sdk": "workspace:*",
       },
     },
     "apps/desktop": {
@@ -243,7 +242,6 @@
       "name": "@zseven-w/pen-sdk",
       "version": "0.6.0",
       "dependencies": {
-        "@zseven-w/pen-codegen": "workspace:*",
         "@zseven-w/pen-core": "workspace:*",
         "@zseven-w/pen-engine": "workspace:*",
         "@zseven-w/pen-figma": "workspace:*",

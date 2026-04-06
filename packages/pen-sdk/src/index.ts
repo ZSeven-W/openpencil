@@ -10,7 +10,6 @@
  *   type PenDocument,
  *   createEmptyDocument,
  *   normalizePenDocument,
- *   generateReactFromDocument,
  *   parseFigFile,
  * } from '@zseven-w/pen-sdk'
  * ```
@@ -143,28 +142,6 @@ export type {
   ResolvedDepContract,
 } from '@zseven-w/pen-types';
 export { FRAMEWORKS } from '@zseven-w/pen-types';
-
-// ── Codegen: generator functions (pen-codegen — to be inlined in Task 13) ──
-export {
-  variableNameToCSS,
-  generateCSSVariables,
-  generateReactCode,
-  generateReactFromDocument,
-  generateHTMLCode,
-  generateHTMLFromDocument,
-  generateVueCode,
-  generateVueFromDocument,
-  generateSvelteCode,
-  generateSvelteFromDocument,
-  generateFlutterCode,
-  generateFlutterFromDocument,
-  generateSwiftUICode,
-  generateSwiftUIFromDocument,
-  generateComposeCode,
-  generateComposeFromDocument,
-  generateReactNativeCode,
-  generateReactNativeFromDocument,
-} from '@zseven-w/pen-codegen';
 
 // ── Figma: .fig file import ────────────────────────────────────────────
 export {

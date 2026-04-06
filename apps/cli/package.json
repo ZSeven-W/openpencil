@@ -19,7 +19,6 @@
   },
   "dependencies": {
     "@zseven-w/pen-figma": "workspace:*",
-    "@zseven-w/pen-mcp": "workspace:*",
-    "@zseven-w/pen-sdk": "workspace:*"
+    "@zseven-w/pen-mcp": "workspace:*"
   }
 }

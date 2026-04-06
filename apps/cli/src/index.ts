@@ -70,10 +70,6 @@ Design:
   op design:content <section-id> <json|@file|->
   op design:refine --root-id <id>
 
-Export:
-  op export <format> [--out file]
-  Formats: react, html, vue, svelte, flutter, swiftui, compose, rn, css
-
 Read Nodes:
   op read-nodes [ids] [--depth N] [--vars] [--page P] [--file F]
   ids: comma-separated node IDs (omit to read all)
@@ -272,16 +268,6 @@ async function main(): Promise<void> {
         ...globalFlags,
         rootId: flags['root-id'] as string | undefined,
         canvasWidth: flags['canvas-width'] as string | undefined,
-      });
-      break;
-    }
-
-    // --- Export ---
-    case 'export': {
-      const { cmdExport } = await import('./commands/export');
-      await cmdExport(positionals, {
-        file: globalFlags.file,
-        out: flags.out as string | undefined,
       });
       break;
     }
