@@ -39,6 +39,7 @@ import {
 } from './auto-updater';
 import { initLogger, log } from './logger';
 import { setupIPC } from './ipc-handlers';
+import { setupGitIPC } from './git/ipc-handlers';
 
 let mainWindow: BrowserWindow | null = null;
 let nitroProcess: ChildProcess | null = null;
@@ -565,6 +566,7 @@ function initIPC(): void {
     schedulePrefsWrite,
     writeAppSettings,
   });
+  setupGitIPC();
 }
 
 // ---------------------------------------------------------------------------
