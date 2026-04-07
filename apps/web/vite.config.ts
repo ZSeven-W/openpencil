@@ -35,6 +35,7 @@ const config = defineConfig({
       'src/**/*.test.{ts,tsx}',
       'server/**/*.test.ts',
       '../../packages/*/src/**/*.test.{ts,tsx}',
+      '../desktop/git/__tests__/**/*.test.ts',
     ],
     setupFiles: ['./src/__tests__/setup-react.ts'],
   },
