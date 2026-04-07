@@ -200,4 +200,43 @@ describe('normalizeTreeLayout', () => {
     expect(kids[2].x).toBe(40);
     expect(kids[2].y).toBe(0);
   });
+
+  it('does NOT verticalize when ALL non-overlay children are frames (overlay composition)', () => {
+    // This is the bug subagent diagnosed: AI emits a layout-less parent
+    // containing structured nested-frame children (e.g. ring + value-wrap,
+    // hero + floating-card overlay, badge stack). Children have no x/y
+    // because the AI assumed (0,0) would just work. The previous behavior
+    // would silently rewrite the parent to layout='vertical', stacking
+    // the frames into a list and breaking the intended overlay.
+    //
+    // New behavior: when every non-overlay child is a frame, treat it as
+    // an overlay container and leave layout undefined so the renderer
+    // respects the children's positions.
+    const inner1 = frame({ id: 'inner1', width: 80, height: 80 });
+    const inner2 = frame({ id: 'inner2', width: 80, height: 80 });
+    const outer = frame({
+      id: 'outer',
+      width: 80,
+      height: 80,
+      children: [inner1, inner2],
+    });
+    normalizeTreeLayout(outer);
+    expect((outer as PenNode & { layout?: string }).layout).toBeUndefined();
+  });
+
+  it('still verticalizes mixed-type stacks (frame + rect) where vertical is the right call', () => {
+    // Counter-test for the previous one. The "all-frame heuristic" must
+    // not over-trigger: a frame containing one nested frame plus other
+    // primitive shapes (rectangles, text, etc.) is still a content stack
+    // and SHOULD be verticalized. Only homogeneously-frame children
+    // signal an overlay container.
+    const inner = frame({ id: 'inner', children: [rect('c'), rect('d')] });
+    const outer = frame({
+      id: 'outer',
+      children: [inner, rect('b')],
+    });
+    normalizeTreeLayout(outer);
+    expect((outer as PenNode & { layout?: string }).layout).toBe('vertical');
+    expect((inner as PenNode & { layout?: string }).layout).toBe('vertical');
+  });
 });

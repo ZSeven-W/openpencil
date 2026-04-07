@@ -75,15 +75,57 @@ export function normalizeTreeLayout(node: PenNode): void {
 }
 
 /**
- * Treat the frame as absolute-positioned when any non-overlay child has an
- * explicit x or y coordinate. Overlays (badges/pills/tags) don't count —
- * they legitimately carry x/y even inside auto-layout frames.
+ * Decide whether a layout-less parent should be treated as an absolute-
+ * positioning container (skip the `vertical` fallback) instead of being
+ * verticalized.
+ *
+ * Two signals count as "this is an absolute-positioning container":
+ *
+ *   1. A non-overlay child has a numeric `x` or `y` (including 0). Models
+ *      that explicitly position children clearly intend absolute layout.
+ *
+ *   2. EVERY non-overlay child is a `frame`. AI models routinely emit
+ *      nested-frame compositions at (0,0) without writing x/y at all
+ *      (rings + center text, badge stacks, hero overlays, multi-layer
+ *      cards). The previous check returned false on these because their
+ *      x/y fields were absent, and `normalizeTreeLayout` would silently
+ *      rewrite the parent to `layout: 'vertical'`, stacking the overlays
+ *      into a vertical list and clipping anything past the parent's
+ *      bounds. When ALL children are frames, the most likely intent is
+ *      structured composition (each child has its own internal layout),
+ *      not a generic content stack — and the conservative thing to do
+ *      is leave `layout` undefined so the renderer treats it as overlay.
+ *      Mixed types (frame + rect, frame + text, etc.) still get the
+ *      vertical fallback, since those are typically content stacks where
+ *      verticalization is the right call.
+ *
+ * Overlay nodes (badges/pills/tags via `isBadgeOverlayNode`) are excluded
+ * from the count — they legitimately carry x/y inside auto-layout frames
+ * and shouldn't tip the all-frame heuristic.
+ *
+ * This is intentionally conservative: it accepts a few false negatives
+ * (some genuinely vertical all-frame stacks will be left un-normalized,
+ * forcing the AI to declare layout explicitly) to eliminate the
+ * catastrophic false-positive of silently verticalizing an overlay
+ * composition.
  */
 function hasAbsolutePositionedChild(children: PenNode[]): boolean {
+  // Signal 1: explicit numeric x/y on any non-overlay child.
   for (const child of children) {
     if (isBadgeOverlayNode(child)) continue;
     const c = child as PenNode & { x?: number; y?: number };
     if (typeof c.x === 'number' || typeof c.y === 'number') return true;
   }
+
+  // Signal 2: every non-overlay child is a frame (>= 2 such children).
+  let nonOverlayCount = 0;
+  let frameCount = 0;
+  for (const child of children) {
+    if (isBadgeOverlayNode(child)) continue;
+    nonOverlayCount++;
+    if (child.type === 'frame') frameCount++;
+  }
+  if (nonOverlayCount >= 2 && frameCount === nonOverlayCount) return true;
+
   return false;
 }
