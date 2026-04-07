@@ -40,8 +40,26 @@ import {
   STYLE_OPS_TOOL_NAMES,
   handleStyleOpsToolCall,
 } from './routes/style-operations-routes';
+import {
+  DEBUG_TOOL_DEFINITIONS,
+  DEBUG_TOOL_NAMES,
+  handleDebugToolCall,
+} from './routes/debug-routes';
 
 const pkg = { name: '@zseven-w/pen-mcp', version: '0.6.0' };
+
+const DEBUG_ENABLED =
+  process.env.OPENPENCIL_DEBUG_TOOLS === '1' || process.argv.includes('--debug');
+
+/**
+ * MCP content block types supported by this server's tool handlers.
+ * Phase 1 tools all return string (wrapped to a single text block); Phase 2
+ * will add `debug_screenshot` which returns ToolContent[] directly.
+ * See Decision 6 in docs/superpowers/specs/2026-04-06-mcp-debug-tools-design.md
+ */
+export type ToolContent =
+  | { type: 'text'; text: string }
+  | { type: 'image'; data: string; mimeType: string };
 
 // --- Tool definitions (shared across all Server instances) ---
 
@@ -53,12 +71,16 @@ const TOOL_DEFINITIONS = [
   ...CODEGEN_TOOL_DEFINITIONS,
   ...STYLE_GUIDE_TOOL_DEFINITIONS,
   ...STYLE_OPS_TOOL_DEFINITIONS,
+  ...(DEBUG_ENABLED ? DEBUG_TOOL_DEFINITIONS : []),
 ];
 
 // --- Tool execution handler ---
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any -- MCP args are validated at runtime by the protocol
-async function handleToolCall(name: string, args: Record<string, unknown> | undefined) {
+async function handleToolCall(
+  name: string,
+  args: Record<string, unknown> | undefined,
+): Promise<string | ToolContent[]> {
   const a = args ?? {};
   if (DOCUMENT_TOOL_NAMES.has(name)) return handleDocumentToolCall(name, a);
   if (NODE_TOOL_NAMES.has(name)) return handleNodeToolCall(name, a);
@@ -67,6 +89,7 @@ async function handleToolCall(name: string, args: Record<string, unknown> | unde
   if (CODEGEN_TOOL_NAMES.has(name)) return handleCodegenToolCall(name, a);
   if (STYLE_GUIDE_TOOL_NAMES.has(name)) return handleStyleGuideToolCall(name, a);
   if (STYLE_OPS_TOOL_NAMES.has(name)) return handleStyleOpsToolCall(name, a);
+  if (DEBUG_ENABLED && DEBUG_TOOL_NAMES.has(name)) return handleDebugToolCall(name, a);
   throw new Error(`Unknown tool: ${name}`);
 }
 
@@ -79,8 +102,11 @@ function registerTools(server: Server): void {
   server.setRequestHandler(CallToolRequestSchema, async (request) => {
     const { name, arguments: args } = request.params;
     try {
-      const text = await handleToolCall(name, args);
-      return { content: [{ type: 'text', text }] };
+      const result = await handleToolCall(name, args);
+      if (typeof result === 'string') {
+        return { content: [{ type: 'text', text: result }] };
+      }
+      return { content: result };
     } catch (err) {
       return {
         content: [
@@ -196,6 +222,12 @@ function parseArgs(): { stdio: boolean; http: boolean; port: number } {
 
 async function main() {
   const { stdio, http, port } = parseArgs();
+
+  if (DEBUG_ENABLED) {
+    console.error(
+      `[pen-mcp] DEBUG tools enabled — ${DEBUG_TOOL_DEFINITIONS.length} debug tools loaded`,
+    );
+  }
 
   if (stdio && http) {
     // Both: stdio server + HTTP server (per-session)

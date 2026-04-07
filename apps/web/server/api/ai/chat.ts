@@ -1,5 +1,5 @@
 import { defineEventHandler, readBody, setResponseHeaders } from 'h3';
-import { readFile, writeFile, mkdtemp, rm } from 'node:fs/promises';
+import { writeFile, mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { resolveClaudeCli } from '../../utils/resolve-claude-cli';
@@ -12,9 +12,10 @@ import {
   resolveAgentModel,
 } from '../../utils/resolve-claude-agent-env';
 import { normalizeOptionalBaseURL, requireOpenAICompatBaseURL } from './provider-url';
-/** Pattern for detecting sensitive data in debug log output */
-export const SENSITIVE_LOG_PATTERN =
-  /ANTHROPIC_API_KEY=|Authorization:\s*Bearer|api[_-]?key\s*[:=]/i;
+// SENSITIVE_LOG_PATTERN + readDebugTail are now canonical in @zseven-w/pen-mcp.
+// Re-export here to keep existing consumers (tests, other modules) working.
+import { SENSITIVE_LOG_PATTERN, readDebugTail } from '@zseven-w/pen-mcp';
+export { SENSITIVE_LOG_PATTERN };
 
 /** Allowed media types for image attachments */
 export const ALLOWED_MEDIA_TYPES = new Set(['image/png', 'image/jpeg', 'image/gif', 'image/webp']);
@@ -48,18 +49,6 @@ interface ChatBody {
   builtinBaseURL?: string;
   /** For builtin provider: 'anthropic' or 'openai-compat' */
   builtinType?: 'anthropic' | 'openai-compat';
-}
-
-async function readDebugTail(path?: string, maxLines = 40): Promise<string[] | undefined> {
-  if (!path) return undefined;
-  try {
-    const raw = await readFile(path, 'utf-8');
-    const lines = raw.split('\n').filter((l) => l.trim().length > 0);
-    const sanitized = lines.filter((l) => !SENSITIVE_LOG_PATTERN.test(l));
-    return sanitized.slice(-maxLines);
-  } catch {
-    return undefined;
-  }
 }
 
 function buildClaudeExitHint(rawError: string, debugTail?: string[]): string | undefined {

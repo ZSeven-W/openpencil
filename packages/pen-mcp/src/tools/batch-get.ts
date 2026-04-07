@@ -5,6 +5,7 @@ import {
   readNodeWithDepth,
   getDocChildren,
 } from '../utils/node-operations';
+import type { ReadNodeOptions } from '../utils/node-operations';
 import type { PenNode } from '@zseven-w/pen-types';
 
 export interface SearchPattern {
@@ -21,6 +22,8 @@ export interface BatchGetParams {
   readDepth?: number;
   searchDepth?: number;
   pageId?: string;
+  /** When true, resolve $variable refs to concrete values. Default false. */
+  resolveRefs?: boolean;
 }
 
 export async function handleBatchGet(
@@ -32,6 +35,9 @@ export async function handleBatchGet(
 
   const readDepth = params.readDepth ?? 1;
   const searchDepth = params.searchDepth ?? Infinity;
+  const readOpts: ReadNodeOptions | undefined = params.resolveRefs
+    ? { resolveRefs: true, doc }
+    : undefined;
 
   // If no patterns or nodeIds, return top-level children
   if (!params.patterns?.length && !params.nodeIds?.length) {
@@ -42,7 +48,7 @@ export async function handleBatchGet(
         })()
       : getDocChildren(doc, pageId);
     return {
-      nodes: rootNodes.map((n) => readNodeWithDepth(n, readDepth)),
+      nodes: rootNodes.map((n) => readNodeWithDepth(n, readDepth, readOpts)),
     };
   }
 
@@ -82,6 +88,6 @@ export async function handleBatchGet(
   }
 
   return {
-    nodes: results.map((n) => readNodeWithDepth(n, readDepth)),
+    nodes: results.map((n) => readNodeWithDepth(n, readDepth, readOpts)),
   };
 }

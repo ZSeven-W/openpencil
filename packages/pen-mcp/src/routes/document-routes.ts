@@ -68,6 +68,11 @@ export const DOCUMENT_TOOL_DEFINITIONS = [
           description: 'How deep to search for matching nodes (default unlimited)',
         },
         pageId: { type: 'string', description: 'Target page ID (defaults to first page)' },
+        resolve_refs: {
+          type: 'boolean',
+          description:
+            'When true, recursively resolve $variable references (via resolveNodeForCanvas) so fill/stroke/effects/children/text return concrete values. Default false keeps current raw output. Useful for debugging visualization of what Skia actually receives.',
+        },
       },
       required: [],
     },
@@ -254,7 +259,14 @@ export async function handleDocumentToolCall(
     case 'open_document':
       return JSON.stringify(await handleOpenDocument(a), null, 2);
     case 'batch_get':
-      return JSON.stringify(await handleBatchGet(a), null, 2);
+      return JSON.stringify(
+        await handleBatchGet({
+          ...a,
+          resolveRefs: a.resolve_refs as boolean | undefined,
+        }),
+        null,
+        2,
+      );
     case 'get_selection':
       return JSON.stringify(await handleGetSelection(a), null, 2);
     case 'snapshot_layout':

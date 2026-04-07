@@ -77,3 +77,7 @@ export {
 } from './utils/design-md-parser';
 export { validateContract } from './utils/validate-contract';
 export { readNodeWithDepth } from './utils/node-operations';
+
+// Log utilities (sensitive redaction + log tail reading)
+export { SENSITIVE_LOG_PATTERN, readDebugTail, readLogTail } from './utils/log-utils';
+export type { ReadLogTailOptions } from './utils/log-utils';

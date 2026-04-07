@@ -9,7 +9,7 @@ export {
   getNodeBounds,
   cloneNodeWithNewIds,
 } from '@zseven-w/pen-core';
-import { getNodeBounds } from '@zseven-w/pen-core';
+import { getNodeBounds, resolveNodeForCanvas, getDefaultTheme } from '@zseven-w/pen-core';
 
 // ---------------------------------------------------------------------------
 // MCP-specific utilities
@@ -72,13 +72,36 @@ export function searchNodes(
   return results;
 }
 
-/** Read a node with depth-limited children. */
-export function readNodeWithDepth(node: PenNode, depth: number): Record<string, unknown> {
-  const result: Record<string, unknown> = { ...node };
-  if (depth <= 0 && 'children' in node && node.children?.length) {
+export interface ReadNodeOptions {
+  /**
+   * If true, recursively resolve all `$variable` references via
+   * `resolveNodeForCanvas(node, variables, activeTheme?)` before serializing.
+   * Requires `doc` to be provided.
+   * Default: false (raw output, backward compatible).
+   */
+  resolveRefs?: boolean;
+  /** Required when resolveRefs=true — provides variables and themes. */
+  doc?: PenDocument;
+}
+
+/** Read a node with depth-limited children. Optionally resolve variable refs. */
+export function readNodeWithDepth(
+  node: PenNode,
+  depth: number,
+  opts?: ReadNodeOptions,
+): Record<string, unknown> {
+  let working: PenNode = node;
+  if (opts?.resolveRefs && opts.doc) {
+    const variables = (opts.doc.variables ?? {}) as Parameters<typeof resolveNodeForCanvas>[1];
+    const activeTheme = getDefaultTheme(opts.doc.themes);
+    working = resolveNodeForCanvas(node, variables, activeTheme);
+  }
+
+  const result: Record<string, unknown> = { ...working };
+  if (depth <= 0 && 'children' in working && working.children?.length) {
     result.children = '...';
-  } else if ('children' in node && node.children) {
-    result.children = node.children.map((c) => readNodeWithDepth(c, depth - 1));
+  } else if ('children' in working && working.children) {
+    result.children = working.children.map((c) => readNodeWithDepth(c, depth - 1, opts));
   }
   return result;
 }
