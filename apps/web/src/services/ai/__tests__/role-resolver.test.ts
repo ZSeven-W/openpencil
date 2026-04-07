@@ -14,6 +14,7 @@ import {
   hasVisibleFill,
   resolveNodeRole,
   resolveTreePostPass,
+  resolveTreeRoles,
 } from '../role-resolver';
 import type { RoleContext } from '../role-resolver';
 import type { PenNode } from '@zseven-w/pen-types';
@@ -1572,5 +1573,201 @@ describe('resolveNodeRole — name-based role inference', () => {
     } as PenNode;
     resolveNodeRole(node, ctx);
     expect(node.role).toBe('icon');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Theme detection (resolveTreeRoles)
+// ---------------------------------------------------------------------------
+
+describe('resolveTreeRoles — theme-aware role defaults', () => {
+  it('paints navbar default with WHITE on a light page (theme inferred light)', () => {
+    // Baseline: page bg is white, the navbar role default should pick the
+    // light-theme fill (#FFFFFF). Locks in the original behavior so the
+    // theme switch is purely additive.
+    const navbar = {
+      id: 'nav',
+      type: 'frame',
+      role: 'navbar',
+      width: 375,
+      height: 56,
+    } as unknown as PenNode;
+    const page = {
+      id: 'page',
+      type: 'frame',
+      width: 375,
+      height: 800,
+      fill: [{ type: 'solid', color: '#FFFFFF' }],
+      children: [navbar],
+    } as unknown as PenNode;
+
+    resolveTreeRoles(page, 375);
+
+    const fill = (navbar as unknown as { fill?: Array<{ color?: string }> }).fill;
+    expect(fill?.[0]?.color).toBe('#FFFFFF');
+  });
+
+  it('paints navbar default with DARK fill on a dark page (theme inferred dark)', () => {
+    // The bug: a navbar with no LLM-set fill on a #111111 dark page used
+    // to inherit the hardcoded #FFFFFF default, leaving a glaring white
+    // bar across the top of the dark design. The theme detector reads
+    // the root fill, classifies the page as dark, and the navbar role
+    // function picks navbarFill('dark') = #111111.
+    const navbar = {
+      id: 'nav',
+      type: 'frame',
+      role: 'navbar',
+      width: 375,
+      height: 56,
+    } as unknown as PenNode;
+    const page = {
+      id: 'page',
+      type: 'frame',
+      width: 375,
+      height: 800,
+      fill: [{ type: 'solid', color: '#111111' }],
+      children: [navbar],
+    } as unknown as PenNode;
+
+    resolveTreeRoles(page, 375);
+
+    const fill = (navbar as unknown as { fill?: Array<{ color?: string }> }).fill;
+    expect(fill?.[0]?.color).toBe('#111111');
+  });
+
+  it('paints card default with DARK fill on a dark page', () => {
+    const card = {
+      id: 'card',
+      type: 'frame',
+      role: 'card',
+      width: 300,
+      height: 200,
+    } as unknown as PenNode;
+    const page = {
+      id: 'page',
+      type: 'frame',
+      width: 375,
+      height: 800,
+      fill: [{ type: 'solid', color: '#0A0A0A' }],
+      children: [card],
+    } as unknown as PenNode;
+
+    resolveTreeRoles(page, 375);
+
+    const fill = (card as unknown as { fill?: Array<{ color?: string }> }).fill;
+    expect(fill?.[0]?.color).toBe('#1A1A1A');
+  });
+
+  it('does NOT overwrite an LLM-supplied fill (only fills missing defaults)', () => {
+    // The applyDefaults rule must still hold: if the LLM emits any fill,
+    // the resolver leaves it alone — even if theme-aware defaults would
+    // pick something else. This guards against the resolver becoming a
+    // destructive layer.
+    const navbar = {
+      id: 'nav',
+      type: 'frame',
+      role: 'navbar',
+      width: 375,
+      height: 56,
+      fill: [{ type: 'solid', color: '#FF00AA' }],
+    } as unknown as PenNode;
+    const page = {
+      id: 'page',
+      type: 'frame',
+      width: 375,
+      height: 800,
+      fill: [{ type: 'solid', color: '#111111' }],
+      children: [navbar],
+    } as unknown as PenNode;
+
+    resolveTreeRoles(page, 375);
+
+    const fill = (navbar as unknown as { fill?: Array<{ color?: string }> }).fill;
+    expect(fill?.[0]?.color).toBe('#FF00AA');
+  });
+
+  it('falls back to LIGHT theme when the root fill is missing or unparseable', () => {
+    const navbar = {
+      id: 'nav',
+      type: 'frame',
+      role: 'navbar',
+      width: 375,
+      height: 56,
+    } as unknown as PenNode;
+    const page = {
+      id: 'page',
+      type: 'frame',
+      width: 375,
+      height: 800,
+      // No fill on root → defaults to light theme
+      children: [navbar],
+    } as unknown as PenNode;
+
+    resolveTreeRoles(page, 375);
+
+    const fill = (navbar as unknown as { fill?: Array<{ color?: string }> }).fill;
+    expect(fill?.[0]?.color).toBe('#FFFFFF');
+  });
+
+  it('honors EXPLICIT theme override even when called on a sub-tree without its own fill', () => {
+    // Locks in the fix Codex caught: `sanitizeNodesForInsert` and
+    // `sanitizeNodesForUpsert` call `resolveTreeRoles` on an arbitrary
+    // sub-tree (a card or navbar that has no fill of its own — the LLM
+    // omitted it expecting the dark page bg to show through). Without
+    // an explicit theme parameter, theme detection would read the
+    // sub-tree root's missing fill, fall back to 'light', and stamp
+    // #FFFFFF on top of the dark page.
+    //
+    // The fix is to look up the actual page root from the document
+    // store at the call site and pass its detected theme through this
+    // last positional argument. This test simulates that path.
+    const navbar = {
+      id: 'nav-subtree',
+      type: 'frame',
+      role: 'navbar',
+      width: 375,
+      height: 56,
+      // No fill on this navbar — the LLM expected the page bg to show.
+    } as unknown as PenNode;
+
+    // Call resolveTreeRoles on the navbar DIRECTLY (no parent passed),
+    // but supply an explicit dark theme — this is what the sanitize
+    // path does after looking up the live page root.
+    resolveTreeRoles(navbar, 375, undefined, undefined, undefined, false, 'dark');
+
+    const fill = (navbar as unknown as { fill?: Array<{ color?: string }> }).fill;
+    expect(fill?.[0]?.color).toBe('#111111');
+  });
+
+  it('explicit theme override beats auto-detection from a non-page sub-tree root', () => {
+    // Stronger version of the previous test: the sub-tree root HAS a
+    // fill (e.g. a card with #1A1A1A) which auto-detection would
+    // classify as 'dark' anyway. This test makes sure the explicit
+    // 'light' override still wins, proving the explicit parameter is
+    // not silently ignored.
+    const card = {
+      id: 'card-subtree',
+      type: 'frame',
+      role: 'card',
+      width: 300,
+      height: 200,
+      fill: [{ type: 'solid', color: '#FAFAFA' }],
+      children: [
+        {
+          id: 'inner-navbar',
+          type: 'frame',
+          role: 'navbar',
+          width: 300,
+          height: 56,
+        },
+      ],
+    } as unknown as PenNode;
+
+    // Force theme = 'dark' even though the card itself looks light
+    resolveTreeRoles(card, 375, undefined, undefined, undefined, false, 'dark');
+
+    const innerNavbar = (card as unknown as { children: PenNode[] }).children[0];
+    const fill = (innerNavbar as unknown as { fill?: Array<{ color?: string }> }).fill;
+    expect(fill?.[0]?.color).toBe('#111111');
   });
 });

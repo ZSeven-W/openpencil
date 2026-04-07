@@ -26,6 +26,13 @@ export interface RoleContext {
   hasCjk?: boolean;
   /** Whether this node is inside a table-like structure */
   isTableContext?: boolean;
+  /**
+   * Document theme detected from the page root fill at the start of
+   * `resolveTreeRoles`. Roles that have visual defaults (navbar, card,
+   * input, divider) read this so the LLM doesn't get a #FFFFFF default
+   * painted on top of an explicitly dark page background.
+   */
+  theme?: 'dark' | 'light';
 }
 
 // ---------------------------------------------------------------------------
@@ -286,13 +293,20 @@ export function resolveTreeRoles(
   parentLayout?: 'none' | 'vertical' | 'horizontal',
   parentContentWidth?: number,
   isTableContext = false,
+  theme?: 'dark' | 'light',
 ): void {
+  // Detect theme from the root node's fill on the first (entry) call.
+  // Subsequent recursive calls inherit the parent's resolved theme so
+  // every node sees the same value.
+  const resolvedTheme = theme ?? detectThemeFromNode(root);
+
   const ctx: RoleContext = {
     parentRole,
     parentLayout,
     parentContentWidth,
     canvasWidth,
     isTableContext,
+    theme: resolvedTheme,
   };
 
   // Detect CJK in text nodes
@@ -323,8 +337,56 @@ export function resolveTreeRoles(
       'layout' in root ? root.layout : undefined,
       contentW || parentContentWidth,
       childTableContext,
+      resolvedTheme,
     );
   }
+}
+
+/**
+ * Detect light vs dark theme from a node's fill color.
+ *
+ * Used by `resolveTreeRoles` (and exported for sanitize-time call sites
+ * in `design-canvas-ops.ts`) so role default functions can pick a fill
+ * that matches the page background instead of always defaulting to
+ * light-theme `#FFFFFF`.
+ *
+ * IMPORTANT: pass the actual PAGE ROOT here, not whatever sub-tree the
+ * resolver is currently walking. A card inside a dark page has no fill
+ * of its own (the LLM omitted it because it expected the dark page bg
+ * to show through) — calling this on the card returns 'light' (default
+ * fallback), which is the wrong answer. Always look up the document
+ * page root and pass it explicitly when resolving an MCP-emitted
+ * subtree before insertion.
+ *
+ * Heuristic: if the first solid fill color has WCAG relative luminance
+ * below 0.3, the design is dark theme. Otherwise (or when the fill is
+ * missing / a variable ref / not a solid color) we default to 'light'
+ * for backward compatibility with all existing light-theme designs.
+ */
+export function detectThemeFromNode(node: PenNode): 'dark' | 'light' {
+  if (!('fill' in node) || !Array.isArray((node as { fill?: unknown[] }).fill)) return 'light';
+  const fills = (node as { fill: Array<{ type?: string; color?: string }> }).fill;
+  const first = fills[0];
+  if (!first || first.type !== 'solid' || typeof first.color !== 'string') return 'light';
+  const color = first.color.trim();
+  // Skip variable refs ($color-1, etc.) — we can't resolve them here.
+  if (color.startsWith('$')) return 'light';
+  const m = color.match(/^#([0-9a-fA-F]{3,8})$/);
+  if (!m) return 'light';
+  let hex = m[1];
+  if (hex.length === 3) hex = hex.split('').map((c) => c + c).join('');
+  if (hex.length !== 6 && hex.length !== 8) return 'light';
+  const r = parseInt(hex.slice(0, 2), 16);
+  const g = parseInt(hex.slice(2, 4), 16);
+  const b = parseInt(hex.slice(4, 6), 16);
+  if (Number.isNaN(r) || Number.isNaN(g) || Number.isNaN(b)) return 'light';
+  // sRGB → relative luminance
+  const lin = (v: number): number => {
+    const s = v / 255;
+    return s <= 0.03928 ? s / 12.92 : Math.pow((s + 0.055) / 1.055, 2.4);
+  };
+  const Y = 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b);
+  return Y < 0.3 ? 'dark' : 'light';
 }
 
 // ---------------------------------------------------------------------------

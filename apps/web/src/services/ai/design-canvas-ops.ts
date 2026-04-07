@@ -27,7 +27,12 @@ import {
   resolveAsyncIcons,
   resolveAllPendingIcons,
 } from './icon-resolver';
-import { resolveNodeRole, resolveTreeRoles, resolveTreePostPass } from './role-resolver';
+import {
+  resolveNodeRole,
+  resolveTreeRoles,
+  resolveTreePostPass,
+  detectThemeFromNode,
+} from './role-resolver';
 import type { RoleContext } from './role-resolver';
 // Trigger side-effect registration of all role definitions
 import './role-definitions';
@@ -885,8 +890,43 @@ function isScreenshotLikeMarker(text: string): boolean {
 // Node sanitization for insert/upsert
 // ---------------------------------------------------------------------------
 
+/**
+ * Resolve the theme of the LIVE document so role defaults applied to an
+ * MCP-emitted subtree pick the right colors.
+ *
+ * Why this exists: `sanitizeNodesForInsert/Upsert` receives an arbitrary
+ * `PenNode` (a card, a navbar, a sub-section, a component) — NOT the page
+ * root. Calling `resolveTreeRoles(node, ...)` on a card has no fill of
+ * its own and falls back to 'light', so a navbar inserted into a dark
+ * page would silently get the white default. The fix is to look up the
+ * current page root from the document store and detect theme from THAT.
+ *
+ * Always reads the LIVE active-page primary frame via
+ * `getActivePagePrimaryFrameId()` rather than the cached
+ * `generationRootFrameId` module variable. The cache is set by
+ * `resetGenerationRemapping()` at the start of an orchestrator
+ * generation flow but is stale or default for direct MCP call paths
+ * (`insert_node`, `batch_design`, `upsertNodesToCanvas` from non-
+ * streaming code) that bypass that initialization. The same precedent
+ * exists at line ~464 of this file: `upsertNodesToCanvas` already
+ * deliberately reads `getActivePagePrimaryFrameId()` instead of the
+ * cached generation root for the same reason.
+ *
+ * Returns `undefined` when the active page has no primary frame yet
+ * (brand-new document, first load) — callers should treat that the
+ * same as the default light theme.
+ */
+function detectActiveDocumentTheme(): 'dark' | 'light' | undefined {
+  const primaryFrameId = getActivePagePrimaryFrameId();
+  if (!primaryFrameId) return undefined;
+  const pageRoot = useDocumentStore.getState().getNodeById(primaryFrameId);
+  if (!pageRoot) return undefined;
+  return detectThemeFromNode(pageRoot);
+}
+
 function sanitizeNodesForInsert(nodes: PenNode[], existingIds: Set<string>): PenNode[] {
   const cloned = nodes.map((n) => deepCloneNode(n));
+  const activeTheme = detectActiveDocumentTheme();
 
   for (const node of cloned) {
     // Schema normalization first so later passes see valid stroke/fill
@@ -899,7 +939,13 @@ function sanitizeNodesForInsert(nodes: PenNode[], existingIds: Set<string>): Pen
     // Role resolution runs first so role defaults can populate `layout`
     // before normalizeTreeLayout's generic fallback would otherwise freeze
     // the wrong value (e.g. navbar → horizontal, not vertical fallback).
-    resolveTreeRoles(node, generationCanvasWidth);
+    //
+    // `activeTheme` is detected from the LIVE page root (not from `node`)
+    // because `node` here is an arbitrary subtree without its own fill —
+    // a card or navbar that omitted fill expecting the dark page bg to
+    // show through. Without this, theme detection would fall back to
+    // 'light' and paint a white default on top of a dark page.
+    resolveTreeRoles(node, generationCanvasWidth, undefined, undefined, undefined, false, activeTheme);
     applyGenerationHeuristics(node);
     normalizeTreeLayout(node);
     // Intentionally NOT calling stripRedundantSectionFills here: `cloned`
@@ -921,6 +967,7 @@ function sanitizeNodesForInsert(nodes: PenNode[], existingIds: Set<string>): Pen
 
 function sanitizeNodesForUpsert(nodes: PenNode[]): PenNode[] {
   const cloned = nodes.map((n) => deepCloneNode(n));
+  const activeTheme = detectActiveDocumentTheme();
 
   for (const node of cloned) {
     // Schema normalization first so later passes see valid stroke/fill
@@ -933,7 +980,8 @@ function sanitizeNodesForUpsert(nodes: PenNode[]): PenNode[] {
     // Role resolution runs first so role defaults can populate `layout`
     // before normalizeTreeLayout's generic fallback would otherwise freeze
     // the wrong value (e.g. navbar → horizontal, not vertical fallback).
-    resolveTreeRoles(node, generationCanvasWidth);
+    // See sanitizeNodesForInsert for the activeTheme rationale.
+    resolveTreeRoles(node, generationCanvasWidth, undefined, undefined, undefined, false, activeTheme);
     applyGenerationHeuristics(node);
     normalizeTreeLayout(node);
     // Intentionally NOT calling stripRedundantSectionFills here: `cloned`

@@ -1,19 +1,63 @@
 /**
  * Role definitions for the AI design generation system.
  * All registerRole() calls are consolidated here for runtime registration.
+ *
+ * Theme awareness: roles with visual defaults (cards, inputs, navbar,
+ * dividers) read `ctx.theme` and pick a theme-appropriate fill/stroke.
+ * Without this, an LLM generating a dark-theme design that omits the
+ * fill on a card or navbar would have the role resolver paint a
+ * `#FFFFFF` default on top of the dark page background — the visual
+ * regression that motivated the change.
+ *
+ * The theme is detected once at the entry of `resolveTreeRoles` from
+ * the page root fill (luminance < 0.3 = dark). All defaults below use
+ * the helper accessors `cardFill / inputFill / navbarFill / etc.` to
+ * stay consistent.
  */
 
 import { registerRole } from '../role-resolver';
 import { hasCjkText, getTextContentForNode } from '../generation-utils';
 import type { PenFill, PenStroke, PenEffect } from '@/types/styles';
 
-const CARD_FILL: PenFill[] = [{ type: 'solid', color: '#FFFFFF' }];
+const CARD_FILL_LIGHT: PenFill[] = [{ type: 'solid', color: '#FFFFFF' }];
+const CARD_FILL_DARK: PenFill[] = [{ type: 'solid', color: '#1A1A1A' }];
+const cardFill = (theme?: 'dark' | 'light'): PenFill[] =>
+  theme === 'dark' ? CARD_FILL_DARK : CARD_FILL_LIGHT;
+
 const CARD_SHADOW: PenEffect[] = [
   { type: 'shadow', offsetX: 0, offsetY: 1, blur: 3, spread: 0, color: '#0000001A' },
   { type: 'shadow', offsetX: 0, offsetY: 1, blur: 2, spread: -1, color: '#0000000F' },
 ];
-const INPUT_FILL: PenFill[] = [{ type: 'solid', color: '#F8FAFC' }];
-const INPUT_STROKE: PenStroke = { thickness: 1, fill: [{ type: 'solid', color: '#E2E8F0' }] };
+
+const INPUT_FILL_LIGHT: PenFill[] = [{ type: 'solid', color: '#F8FAFC' }];
+const INPUT_FILL_DARK: PenFill[] = [{ type: 'solid', color: '#1A1A1A' }];
+const inputFill = (theme?: 'dark' | 'light'): PenFill[] =>
+  theme === 'dark' ? INPUT_FILL_DARK : INPUT_FILL_LIGHT;
+
+const INPUT_STROKE_LIGHT: PenStroke = {
+  thickness: 1,
+  fill: [{ type: 'solid', color: '#E2E8F0' }],
+};
+const INPUT_STROKE_DARK: PenStroke = {
+  thickness: 1,
+  fill: [{ type: 'solid', color: '#2A2A2A' }],
+};
+const inputStroke = (theme?: 'dark' | 'light'): PenStroke =>
+  theme === 'dark' ? INPUT_STROKE_DARK : INPUT_STROKE_LIGHT;
+
+const navbarFill = (theme?: 'dark' | 'light'): PenFill[] =>
+  theme === 'dark'
+    ? [{ type: 'solid', color: '#111111' }]
+    : [{ type: 'solid', color: '#FFFFFF' }];
+
+const navbarBottomBorder = (theme?: 'dark' | 'light'): PenStroke => ({
+  thickness: [0, 0, 1, 0] as [number, number, number, number],
+  fill: [{ type: 'solid', color: theme === 'dark' ? '#1F1F1F' : '#E2E8F0' }],
+});
+
+const dividerFill = (theme?: 'dark' | 'light'): PenFill[] => [
+  { type: 'solid', color: theme === 'dark' ? '#2A2A2A' : '#E2E8F0' },
+];
 
 // ---------------------------------------------------------------------------
 // Layout roles
@@ -59,21 +103,21 @@ registerRole('spacer', (_node, _ctx) => ({
   height: 40,
 }));
 
-registerRole('divider', (node, _ctx) => {
+registerRole('divider', (node, ctx) => {
   const isVertical = node.name?.toLowerCase().includes('vertical');
   if (isVertical) {
     return {
       width: 1,
       height: 'fill_container' as const,
       layout: 'none' as const,
-      fill: [{ type: 'solid', color: '#E2E8F0' }] as PenFill[],
+      fill: dividerFill(ctx.theme),
     };
   }
   return {
     width: 'fill_container' as const,
     height: 1,
     layout: 'none' as const,
-    fill: [{ type: 'solid', color: '#E2E8F0' }] as PenFill[],
+    fill: dividerFill(ctx.theme),
   };
 });
 
@@ -88,11 +132,8 @@ registerRole('navbar', (_node, ctx) => ({
   padding: ctx.canvasWidth <= 480 ? ([0, 16] as [number, number]) : ([0, 80] as [number, number]),
   alignItems: 'center',
   justifyContent: 'space_between' as const,
-  fill: [{ type: 'solid', color: '#FFFFFF' }] as PenFill[],
-  stroke: {
-    thickness: [0, 0, 1, 0] as [number, number, number, number],
-    fill: [{ type: 'solid', color: '#E2E8F0' }],
-  } as PenStroke,
+  fill: navbarFill(ctx.theme),
+  stroke: navbarBottomBorder(ctx.theme),
 }));
 
 registerRole('nav-links', (_node, _ctx) => ({
@@ -191,8 +232,8 @@ registerRole('input', (_node, ctx) => {
       padding: [12, 16] as [number, number],
       alignItems: 'center' as const,
       cornerRadius: 8,
-      fill: INPUT_FILL,
-      stroke: INPUT_STROKE,
+      fill: inputFill(ctx.theme),
+      stroke: inputStroke(ctx.theme),
     };
   }
   return {
@@ -201,31 +242,31 @@ registerRole('input', (_node, ctx) => {
     padding: [12, 16] as [number, number],
     alignItems: 'center' as const,
     cornerRadius: 8,
-    fill: INPUT_FILL,
-    stroke: INPUT_STROKE,
+    fill: inputFill(ctx.theme),
+    stroke: inputStroke(ctx.theme),
   };
 });
 
-registerRole('form-input', (_node, _ctx) => ({
+registerRole('form-input', (_node, ctx) => ({
   width: 'fill_container' as const,
   height: 48,
   layout: 'horizontal' as const,
   padding: [12, 16] as [number, number],
   alignItems: 'center' as const,
   cornerRadius: 8,
-  fill: INPUT_FILL,
-  stroke: INPUT_STROKE,
+  fill: inputFill(ctx.theme),
+  stroke: inputStroke(ctx.theme),
 }));
 
-registerRole('search-bar', (_node, _ctx) => ({
+registerRole('search-bar', (_node, ctx) => ({
   layout: 'horizontal' as const,
   height: 44,
   padding: [10, 16] as [number, number],
   gap: 8,
   alignItems: 'center' as const,
   cornerRadius: 22,
-  fill: INPUT_FILL,
-  stroke: INPUT_STROKE,
+  fill: inputFill(ctx.theme),
+  stroke: inputStroke(ctx.theme),
 }));
 
 // ---------------------------------------------------------------------------
@@ -241,7 +282,7 @@ registerRole('card', (_node, ctx) => {
       gap: 12,
       cornerRadius: 12,
       clipContent: true,
-      fill: CARD_FILL,
+      fill: cardFill(ctx.theme),
       effects: CARD_SHADOW,
     };
   }
@@ -250,7 +291,7 @@ registerRole('card', (_node, ctx) => {
     gap: 12,
     cornerRadius: 12,
     clipContent: true,
-    fill: CARD_FILL,
+    fill: cardFill(ctx.theme),
     effects: CARD_SHADOW,
   };
 });
@@ -264,7 +305,7 @@ registerRole('stat-card', (_node, ctx) => {
       gap: 8,
       padding: [24, 24] as [number, number],
       cornerRadius: 12,
-      fill: CARD_FILL,
+      fill: cardFill(ctx.theme),
       effects: CARD_SHADOW,
     };
   }
@@ -273,7 +314,7 @@ registerRole('stat-card', (_node, ctx) => {
     gap: 8,
     padding: [24, 24] as [number, number],
     cornerRadius: 12,
-    fill: CARD_FILL,
+    fill: cardFill(ctx.theme),
     effects: CARD_SHADOW,
   };
 });
@@ -288,7 +329,7 @@ registerRole('pricing-card', (_node, ctx) => {
       padding: [32, 24] as [number, number],
       cornerRadius: 16,
       clipContent: true,
-      fill: CARD_FILL,
+      fill: cardFill(ctx.theme),
       effects: CARD_SHADOW,
     };
   }
@@ -298,7 +339,7 @@ registerRole('pricing-card', (_node, ctx) => {
     padding: [32, 24] as [number, number],
     cornerRadius: 16,
     clipContent: true,
-    fill: CARD_FILL,
+    fill: cardFill(ctx.theme),
     effects: CARD_SHADOW,
   };
 });
@@ -340,7 +381,7 @@ registerRole('feature-card', (_node, ctx) => {
       gap: 12,
       padding: [24, 24] as [number, number],
       cornerRadius: 12,
-      fill: CARD_FILL,
+      fill: cardFill(ctx.theme),
       effects: CARD_SHADOW,
     };
   }
@@ -349,17 +390,17 @@ registerRole('feature-card', (_node, ctx) => {
     gap: 12,
     padding: [24, 24] as [number, number],
     cornerRadius: 12,
-    fill: CARD_FILL,
+    fill: cardFill(ctx.theme),
     effects: CARD_SHADOW,
   };
 });
 
-registerRole('testimonial', (_node, _ctx) => ({
+registerRole('testimonial', (_node, ctx) => ({
   layout: 'vertical' as const,
   gap: 16,
   padding: [24, 24] as [number, number],
   cornerRadius: 12,
-  fill: CARD_FILL,
+  fill: cardFill(ctx.theme),
   effects: CARD_SHADOW,
 }));
 
@@ -490,12 +531,12 @@ registerRole('table-row', (_node, _ctx) => ({
   padding: [12, 16] as [number, number],
 }));
 
-registerRole('table-header', (_node, _ctx) => ({
+registerRole('table-header', (_node, ctx) => ({
   layout: 'horizontal' as const,
   width: 'fill_container' as const,
   alignItems: 'center' as const,
   padding: [12, 16] as [number, number],
-  fill: [{ type: 'solid', color: '#F8FAFC' }] as PenFill[],
+  fill: inputFill(ctx.theme),
 }));
 
 registerRole('table-cell', (_node, _ctx) => ({
