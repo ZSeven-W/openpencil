@@ -9,6 +9,8 @@ export class SkiaImageLoader {
   private ck: CanvasKit;
   private cache = new Map<string, SkImage | null>();
   private loading = new Set<string>();
+  /** In-flight load promises (separate from `loading` URL set, used for flushPending) */
+  private pendingPromises = new Set<Promise<unknown>>();
   private onLoaded: (() => void) | null = null;
 
   constructor(ck: CanvasKit) {
@@ -29,7 +31,23 @@ export class SkiaImageLoader {
   request(src: string) {
     if (this.cache.has(src) || this.loading.has(src)) return;
     this.loading.add(src);
-    this.loadAsync(src);
+    const p = this.loadAsync(src);
+    this.pendingPromises.add(p);
+    p.finally(() => this.pendingPromises.delete(p));
+  }
+
+  /** Number of in-flight image load promises. */
+  pendingCount(): number {
+    return this.pendingPromises.size;
+  }
+
+  /**
+   * Wait for every currently pending image load to settle.
+   * Used by SkiaEngine.waitForSettled to coordinate readback timing.
+   */
+  async flushPending(): Promise<void> {
+    const snapshot = Array.from(this.pendingPromises);
+    await Promise.all(snapshot.map((p) => p.catch(() => undefined)));
   }
 
   dispose() {

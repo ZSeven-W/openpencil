@@ -9,6 +9,7 @@ let currentDocument: PenDocument | null = null;
 let documentVersion = 0;
 let currentSelection: string[] = [];
 let currentActivePageId: string | null = null;
+let lastActiveClientId: string | null = null;
 
 interface SSEWriter {
   push(data: string): void;
@@ -28,6 +29,7 @@ export function getSyncDocument(): { doc: PenDocument | null; version: number } 
 export function setSyncDocument(doc: PenDocument, sourceClientId?: string): number {
   currentDocument = doc;
   documentVersion++;
+  if (sourceClientId) lastActiveClientId = sourceClientId;
   broadcast({ type: 'document:update', version: documentVersion, document: doc }, sourceClientId);
   return documentVersion;
 }
@@ -41,11 +43,17 @@ export function clearSyncState(): void {
   documentVersion = 0;
   currentSelection = [];
   currentActivePageId = null;
+  lastActiveClientId = null;
 }
 
-export function setSyncSelection(selectedIds: string[], activePageId?: string | null): void {
+export function setSyncSelection(
+  selectedIds: string[],
+  activePageId?: string | null,
+  sourceClientId?: string,
+): void {
   currentSelection = selectedIds;
   if (activePageId !== undefined) currentActivePageId = activePageId;
+  if (sourceClientId) lastActiveClientId = sourceClientId;
 }
 
 export function registerSSEClient(id: string, writer: SSEWriter): void {
@@ -65,5 +73,34 @@ function broadcast(payload: Record<string, unknown>, excludeClientId?: string): 
     } catch {
       clients.delete(id);
     }
+  }
+}
+
+export function markClientActive(clientId: string): void {
+  if (clients.has(clientId)) {
+    lastActiveClientId = clientId;
+  }
+}
+
+export function getLastActiveClientId(): string | null {
+  return lastActiveClientId;
+}
+
+export function isClientConnected(clientId: string): boolean {
+  return clients.has(clientId);
+}
+
+export function sendToClient(
+  clientId: string,
+  payload: Record<string, unknown>,
+): boolean {
+  const client = clients.get(clientId);
+  if (!client) return false;
+  try {
+    client.writer.push(JSON.stringify(payload));
+    return true;
+  } catch {
+    clients.delete(clientId);
+    return false;
   }
 }

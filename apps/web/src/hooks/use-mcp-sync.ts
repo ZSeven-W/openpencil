@@ -8,6 +8,86 @@ const SELECTION_DEBOUNCE_MS = 300;
 const RECONNECT_DELAY_MS = 3000;
 const MAX_RECONNECT_ATTEMPTS = 3;
 
+async function handleScreenshotRequest(
+  req: {
+    requestId: string;
+    bounds?: { x: number; y: number; w: number; h: number } | 'root';
+    nodeId?: string;
+    opts?: { dpr?: number; padding?: number };
+    timeoutMs: number;
+  },
+  baseUrl: string,
+): Promise<void> {
+  const { getSkiaEngineRef } = await import('@/canvas/skia-engine-ref');
+  const engine = getSkiaEngineRef();
+
+  const postResponse = (payload: Record<string, unknown>) => {
+    fetch(`${baseUrl}/api/mcp/screenshot-response`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    }).catch(() => {});
+  };
+
+  if (!engine) {
+    postResponse({
+      requestId: req.requestId,
+      success: false,
+      error: 'canvas not ready',
+    });
+    return;
+  }
+
+  try {
+    // Resolve effective bounds: explicit rect wins; nodeId lookup otherwise; else 'root'.
+    let bounds: { x: number; y: number; w: number; h: number } | 'root' = req.bounds ?? 'root';
+    if (!req.bounds && req.nodeId) {
+      const renderNode = engine.spatialIndex.get(req.nodeId);
+      if (!renderNode) {
+        postResponse({
+          requestId: req.requestId,
+          success: false,
+          error: `node not found in spatial index: ${req.nodeId} (layout may not have run yet — try focusing the editor and retrying)`,
+        });
+        return;
+      }
+      bounds = {
+        x: renderNode.absX,
+        y: renderNode.absY,
+        w: renderNode.absW,
+        h: renderNode.absH,
+      };
+    }
+
+    const png = await engine.captureRegion(bounds, req.opts);
+    if (!png) {
+      postResponse({
+        requestId: req.requestId,
+        success: false,
+        error: 'readback failed (captureRegion returned null)',
+      });
+      return;
+    }
+
+    let binary = '';
+    for (let i = 0; i < png.length; i++) binary += String.fromCharCode(png[i]);
+    const pngBase64 = btoa(binary);
+
+    postResponse({
+      requestId: req.requestId,
+      success: true,
+      pngBase64,
+      actualBounds: bounds === 'root' ? undefined : bounds,
+    });
+  } catch (err) {
+    postResponse({
+      requestId: req.requestId,
+      success: false,
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
+}
+
 function getBaseUrl(): string {
   return window.location.origin;
 }
@@ -41,6 +121,23 @@ export function useMcpSync() {
     let disposed = false;
     let reconnectAttempts = 0;
 
+    // ---- Focus / visibility ping: keep lastActiveClientId accurate ----
+    const sendActivePing = () => {
+      if (typeof document !== 'undefined' && document.hidden) return;
+      const id = clientIdRef.current;
+      if (!id) return;
+      fetch(`${baseUrl}/api/mcp/active-ping`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ clientId: id }),
+      }).catch(() => {});
+    };
+
+    if (typeof window !== 'undefined') {
+      window.addEventListener('focus', sendActivePing);
+      document.addEventListener('visibilitychange', sendActivePing);
+    }
+
     function connect() {
       if (disposed) return;
       eventSource = new EventSource(`${baseUrl}/api/mcp/events`);
@@ -54,6 +151,8 @@ export function useMcpSync() {
             clientIdRef.current = data.clientId;
             // Push current document so MCP can read it immediately
             pushDocumentToServer(data.clientId);
+            // Announce this tab as the active one
+            sendActivePing();
           } else if (data.type === 'document:update' || data.type === 'document:init') {
             const doc = data.document as PenDocument;
             const childCount = doc.pages?.[0]?.children?.length ?? doc.children?.length ?? 0;
@@ -62,6 +161,14 @@ export function useMcpSync() {
             // may trigger multiple cascading setState calls.
             skipPushUntilRef.current = Date.now() + 200;
             useDocumentStore.getState().applyExternalDocument(doc);
+          } else if (data.type === 'screenshot:request') {
+            void handleScreenshotRequest(data as {
+              requestId: string;
+              bounds?: { x: number; y: number; w: number; h: number } | 'root';
+              nodeId?: string;
+              opts?: { dpr?: number; padding?: number };
+              timeoutMs: number;
+            }, baseUrl);
           }
         } catch {
           // Ignore malformed events
@@ -125,7 +232,11 @@ export function useMcpSync() {
         fetch(`${baseUrl}/api/mcp/selection`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ selectedIds, activePageId }),
+          body: JSON.stringify({
+            selectedIds,
+            activePageId,
+            sourceClientId: clientIdRef.current,
+          }),
         }).catch(() => {});
       }, SELECTION_DEBOUNCE_MS);
     });
@@ -138,6 +249,10 @@ export function useMcpSync() {
       if (selectionTimer) clearTimeout(selectionTimer);
       unsubDoc();
       unsubSelection();
+      if (typeof window !== 'undefined') {
+        window.removeEventListener('focus', sendActivePing);
+        document.removeEventListener('visibilitychange', sendActivePing);
+      }
     };
   }, []);
 }

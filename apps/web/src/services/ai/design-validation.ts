@@ -299,7 +299,7 @@ export async function runPostGenerationValidation(options?: {
       });
     });
 
-    const imageBase64 = captureRootFrameScreenshot();
+    const imageBase64 = await captureRootFrameScreenshot();
     if (!imageBase64) {
       console.warn(`[Validation] Round ${round}: could not capture screenshot — stopping`);
       if (isFirstRound) {

@@ -49,6 +49,16 @@ export class SkiaEngine {
   private animFrameId = 0;
   private dirty = true;
 
+  // Ref counter — when > 0, render() skips the agent-overlay self-loop
+  // (further down). captureRegion increments this for the duration of
+  // waitForSettled + makeImageSnapshot so the loop terminates even when
+  // AI agents are actively painting indicators on the canvas. A counter
+  // (rather than a boolean) is used so that overlapping/nested captures
+  // don't re-enable the self-loop while an outer capture is still settling.
+  // Agent overlays are still drawn into each captured frame — we just
+  // don't schedule the next animation tick during capture.
+  private _captureRefcount = 0;
+
   // Viewport
   zoom = 1;
   panX = 0;
@@ -390,9 +400,209 @@ export class SkiaEngine {
 
     this.surface.flush();
 
-    // Keep animating while agent overlays are active (spinning dot + node flashes)
-    if (hasAgentOverlays) {
+    // Keep animating while agent overlays are active (spinning dot + node flashes).
+    // Suppressed during captureRegion so waitForSettled can reach a stable state.
+    // Uses a ref counter so concurrent captures don't unblock each other.
+    if (hasAgentOverlays && this._captureRefcount === 0) {
       this.markDirty();
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Capture utilities
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Drive the engine to a stable rendered state suitable for readback.
+   *
+   * This must work regardless of whether the editor tab is focused. The
+   * render loop is RAF-driven and `requestAnimationFrame` is heavily
+   * throttled (or fully suspended) on background tabs, so a strategy that
+   * waits for RAF will stall for the full timeout when the editor isn't
+   * focused.
+   *
+   * Algorithm: each pass force-renders synchronously, then waits for any
+   * async font/image loads triggered by that render to complete, then
+   * checks whether anything is still pending. We need TWO consecutive
+   * stable passes because resolving a pending font/image fires
+   * `markDirty()` again, so the very next render must also produce no
+   * new work before we can trust the surface contents.
+   *
+   *   loop:
+   *     1. dirty := false; render()         (sync, no RAF)
+   *     2. await flushPending(font + image) (resolves what render() just queued)
+   *     3. if dirty + pendingCount all 0    → stablePasses++
+   *        else                              → stablePasses = 0
+   *
+   * @param timeoutMs - max wait (default 5000ms). On timeout, logs a warning
+   *                    and returns; the caller can still attempt readback.
+   */
+  async waitForSettled(timeoutMs = 5000): Promise<void> {
+    const deadline = Date.now() + timeoutMs;
+    const REQUIRED_STABLE_PASSES = 2;
+    let stablePasses = 0;
+    let passes = 0;
+
+    while (Date.now() < deadline && stablePasses < REQUIRED_STABLE_PASSES) {
+      passes++;
+
+      // 1. Force a synchronous render. This:
+      //    - clears the dirty flag (we set it to false ourselves since
+      //      render() itself does not touch the flag — only the RAF loop
+      //      does, and the RAF loop is suspended on background tabs)
+      //    - draws the current scene into the surface
+      //    - causes node-renderer / text-renderer to issue any image/font
+      //      requests they need (which become entries in pendingPromises /
+      //      pendingFetches)
+      this.dirty = false;
+      this.render();
+
+      // 2. Wait for any currently pending async loads to settle. These may
+      //    include loads triggered by the render in step 1.
+      await this.renderer.fontManager.flushPending();
+      await this.renderer.imageLoader.flushPending();
+
+      // 3. Resolving a font/image load fires markDirty() via the loader
+      //    callbacks, so dirty may be true again here. Also new pending
+      //    items may have been added if the manager wraps loads in chains.
+      const isStable =
+        !this.dirty &&
+        this.renderer.fontManager.pendingCount() === 0 &&
+        this.renderer.imageLoader.pendingCount() === 0;
+
+      if (isStable) {
+        stablePasses++;
+      } else {
+        // The previous render either left dirty true (font/image just
+        // resolved) or queued new pending work. Restart the stable counter
+        // and run another pass.
+        stablePasses = 0;
+      }
+
+      // Yield to the microtask queue so any chained .then() callbacks
+      // (e.g. font load → markDirty) get a chance to run before the next
+      // pass observes the dirty flag.
+      await Promise.resolve();
+    }
+
+    if (stablePasses < REQUIRED_STABLE_PASSES) {
+      console.warn(
+        `[SkiaEngine.waitForSettled] Timed out after ${timeoutMs}ms (${passes} passes) — capture may have pending loads`,
+      );
+    }
+  }
+
+  /**
+   * Capture a region of the live canvas as PNG bytes.
+   *
+   * @param bounds - scene-space bbox, or 'root' for the whole canvas surface
+   * @param opts.dpr - device pixel ratio override (default: window.devicePixelRatio)
+   * @param opts.padding - extra pixels around bounds (default 0)
+   * @param opts.waitForSettled - wait for async loads (default true)
+   * @returns PNG bytes, or null if canvas not ready
+   */
+  async captureRegion(
+    bounds: { x: number; y: number; w: number; h: number } | 'root',
+    opts?: { dpr?: number; padding?: number; waitForSettled?: boolean },
+  ): Promise<Uint8Array | null> {
+    // Validate bounds upfront — this is a parameter contract check, not
+    // dependent on any runtime state. Fail loud if the caller passed
+    // declared sizing strings (`"fill_container"` / `"fit_content"`)
+    // instead of computed pixel coordinates. Done before refcount/try so
+    // we don't even bump the refcount on a clearly-invalid call.
+    if (bounds !== 'root') {
+      const ok =
+        Number.isFinite(bounds.x) &&
+        Number.isFinite(bounds.y) &&
+        Number.isFinite(bounds.w) &&
+        Number.isFinite(bounds.h);
+      if (!ok) {
+        throw new Error(
+          `captureRegion: bounds must have numeric x/y/w/h, got ${JSON.stringify(bounds)}`,
+        );
+      }
+    }
+
+    // Block render()'s agent-overlay self-loop for the duration of capture.
+    // Without this, an active AI agent painting node indicators would keep
+    // dirtying the surface forever and waitForSettled would time out.
+    // Ref-counted so overlapping/nested captures don't unblock each other.
+    this._captureRefcount++;
+    try {
+      if (opts?.waitForSettled !== false) {
+        // waitForSettled() drives force-renders + flushes pending font/image
+        // loads in a loop until two consecutive stable passes. After it
+        // returns, the surface is guaranteed to reflect the current scene
+        // with all assets resolved (or the timeout warning has been logged).
+        await this.waitForSettled();
+      } else if (this.surface && this.canvasEl) {
+        // Caller opted out of settling — still do one sync render so the
+        // surface is at least up-to-date with the current scene state.
+        this.dirty = false;
+        this.render();
+      }
+
+      if (!this.surface || !this.canvasEl) return null;
+
+      // Take a full-surface snapshot via makeImageSnapshot (works across all
+      // CanvasKit versions; cropping happens via OffscreenCanvas if needed).
+      const snapshot = this.surface.makeImageSnapshot();
+      if (!snapshot) return null;
+
+      // Encode to PNG bytes (full surface)
+      const fullBytes = snapshot.encodeToBytes();
+      snapshot.delete();
+      if (!fullBytes) return null;
+
+      // For 'root' or whole-surface capture, return as-is
+      if (bounds === 'root') {
+        return fullBytes;
+      }
+
+      // For specific bounds, crop using OffscreenCanvas
+      const dpr = opts?.dpr ?? (typeof window !== 'undefined' ? window.devicePixelRatio : 1);
+      const padding = opts?.padding ?? 0;
+      const rect = {
+        x: Math.max(0, Math.floor((bounds.x - padding) * dpr)),
+        y: Math.max(0, Math.floor((bounds.y - padding) * dpr)),
+        w: Math.max(1, Math.ceil((bounds.w + padding * 2) * dpr)),
+        h: Math.max(1, Math.ceil((bounds.h + padding * 2) * dpr)),
+      };
+
+      try {
+        const blob = new Blob([new Uint8Array(fullBytes) as unknown as ArrayBuffer], { type: 'image/png' });
+        const bitmap = await createImageBitmap(blob);
+        const off = new OffscreenCanvas(rect.w, rect.h);
+        const ctx = off.getContext('2d');
+        if (!ctx) {
+          bitmap.close();
+          return fullBytes; // degraded: return full frame rather than fail
+        }
+        ctx.drawImage(bitmap, rect.x, rect.y, rect.w, rect.h, 0, 0, rect.w, rect.h);
+        bitmap.close();
+        const croppedBlob = await off.convertToBlob({ type: 'image/png' });
+        const croppedBuf = await croppedBlob.arrayBuffer();
+        return new Uint8Array(croppedBuf);
+      } catch (err) {
+        console.warn('[SkiaEngine.captureRegion] crop failed, returning full frame', err);
+        return fullBytes;
+      }
+    } finally {
+      // Decrement the ref counter, even if waitForSettled threw or this
+      // capture returned early. Concurrent/nested captures rely on the
+      // counter never going below zero or skipping a decrement.
+      this._captureRefcount = Math.max(0, this._captureRefcount - 1);
+      // If this was the LAST in-flight capture and agent overlays are
+      // still active, re-arm the dirty flag so the normal render-loop
+      // animation resumes on the next RAF tick. Skipped while other
+      // captures are still in progress — they'll re-arm when they finish.
+      if (this._captureRefcount === 0) {
+        const a = getActiveAgentIndicators();
+        const f = getActiveAgentFrames();
+        if (a.size > 0 || f.size > 0) {
+          this.markDirty();
+        }
+      }
     }
   }
 
