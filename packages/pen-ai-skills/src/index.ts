@@ -28,3 +28,6 @@ export {
   getRecentEntries,
   historyToPromptString,
 } from './memory/generation-history';
+
+// Diagnostics (pure detectors for design quality issues)
+export * from './diagnostics';
