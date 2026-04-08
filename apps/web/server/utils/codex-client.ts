@@ -1,6 +1,7 @@
 import { spawn } from 'node:child_process';
+import { readFileSync } from 'node:fs';
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
+import { homedir, tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 type ThinkingMode = 'adaptive' | 'disabled' | 'enabled';
@@ -50,12 +51,46 @@ const CODEX_ENV_ALLOWLIST = new Set([
   'HOMEPATH',
 ]);
 
+/**
+ * 从 ~/.codex/config.toml 里提取 provider 明确声明的 env_key。
+ *
+ * 这样做可以继续保持“默认不透传敏感环境变量”的安全边界,
+ * 同时允许用户自己的 Codex provider 按 config.toml 的单一真相源取 key。
+ */
+export function extractCodexConfigEnvKeys(configToml: string): string[] {
+  return Array.from(
+    new Set(
+      Array.from(
+        configToml.matchAll(/^\s*env_key\s*=\s*"([^"]+)"\s*$/gm),
+        (match) => match[1],
+      ),
+    ),
+  );
+}
+
+function loadCodexConfigEnvKeys(): string[] {
+  const codexHome = process.env.CODEX_HOME || join(homedir(), '.codex');
+  const configPath = join(codexHome, 'config.toml');
+  try {
+    return extractCodexConfigEnvKeys(readFileSync(configPath, 'utf-8'));
+  } catch {
+    return [];
+  }
+}
+
 export function filterCodexEnv(
   env: Record<string, string | undefined>,
+  extraAllowedKeys: Iterable<string> = [],
 ): Record<string, string | undefined> {
   const result: Record<string, string | undefined> = {};
+  const extraAllowed = new Set(extraAllowedKeys);
   for (const [k, v] of Object.entries(env)) {
-    if (CODEX_ENV_ALLOWLIST.has(k) || k.startsWith('OPENAI_') || k.startsWith('CODEX_')) {
+    if (
+      CODEX_ENV_ALLOWLIST.has(k)
+      || extraAllowed.has(k)
+      || k.startsWith('OPENAI_')
+      || k.startsWith('CODEX_')
+    ) {
       result[k] = v;
     }
   }
@@ -140,7 +175,10 @@ export async function* streamCodexExec(
   ];
 
   const child = spawn('codex', args, {
-    env: filterCodexEnv(process.env as Record<string, string | undefined>),
+    env: filterCodexEnv(
+      process.env as Record<string, string | undefined>,
+      loadCodexConfigEnvKeys(),
+    ),
     stdio: ['pipe', 'pipe', 'pipe'],
     ...(process.platform === 'win32' && { shell: true }),
   });
@@ -232,8 +270,12 @@ async function executeCodexCommand(
   stdinText?: string,
 ): Promise<{ text: string; errors: string[] }> {
   return await new Promise((resolve, reject) => {
+    const codexConfigEnvKeys = loadCodexConfigEnvKeys();
     const child = spawn('codex', args, {
-      env: filterCodexEnv(process.env as Record<string, string | undefined>),
+      env: filterCodexEnv(
+        process.env as Record<string, string | undefined>,
+        codexConfigEnvKeys,
+      ),
       stdio: [stdinText ? 'pipe' : 'ignore', 'pipe', 'pipe'],
       // On Windows, npm-installed CLIs are .cmd scripts — need shell to resolve.
       ...(process.platform === 'win32' && { shell: true }),
