@@ -47,18 +47,33 @@ vi.mock('@/services/git-client', () => {
 
 // Mock document-store so withCleanWorkingTree can read isDirty without
 // pulling in the full document implementation.
+//
+// `save` is hoisted to a stable spy so tests can (a) assert it was called
+// and (b) override its return value via __setSaveResult. Without this
+// hoist, every getState() call would build a fresh vi.fn() and the spy
+// would disappear before any assertion could see it.
 vi.mock('@/stores/document-store', () => {
   let dirty = false;
+  let saveResult: string | null = 'saved-path.op';
+  const saveSpy = vi.fn(async () => saveResult);
   return {
     useDocumentStore: {
       getState: () => ({
         isDirty: dirty,
-        save: vi.fn(async () => 'saved-path.op'),
+        save: saveSpy,
       }),
       // Test helper:
       __setDirty: (next: boolean) => {
         dirty = next;
       },
+      // Test helper: override save()'s return value. The store's
+      // retrySaveRequired action treats null as "save failed" and bails
+      // without clearing saveRequiredFor.
+      __setSaveResult: (result: string | null) => {
+        saveResult = result;
+      },
+      // Test helper: stable spy so tests can assert call counts.
+      __saveSpy: saveSpy,
     },
   };
 });
@@ -109,6 +124,11 @@ describe('git-store state machine', () => {
     vi.clearAllMocks();
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (mockedDocStore as any).__setDirty(false);
+    // Reset the hoisted save result so a previous test's __setSaveResult(null)
+    // doesn't bleed into this one. vi.clearAllMocks() doesn't touch closure
+    // state, so we have to reset the variable explicitly.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (mockedDocStore as any).__setSaveResult('saved-path.op');
     // Set safe default resolved values for the refresh path. Without these,
     // initRepo/openRepo/cloneRepo/bindTrackedFile would crash because they
     // now invoke status() and branchList() automatically.
@@ -287,5 +307,136 @@ describe('git-store state machine', () => {
     });
     await useGitStore.getState().refreshStatus();
     expect(useGitStore.getState().state.kind).toBe('ready');
+  });
+
+  it('retrySaveRequired clears saveRequiredFor and re-runs the queued action after save succeeds', async () => {
+    // Set up a ready state with a queued commit waiting on a dirty doc.
+    vi.mocked(gitClient.init).mockResolvedValue(SAMPLE_REPO);
+    vi.mocked(gitClient.commit).mockResolvedValue({ hash: 'abc123' });
+    await useGitStore.getState().initRepo('/tmp/login.op');
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (mockedDocStore as any).__setDirty(true);
+
+    // First call traps in saveRequiredFor.
+    await expect(
+      useGitStore.getState().commitMilestone('first', { name: 't', email: 't@e.com' }),
+    ).rejects.toMatchObject({ name: 'GitError', code: 'save-required' });
+
+    // The user clicks save in the panel. Simulate the dirty flag flipping
+    // back to false (as the real document-store would after a save).
+    // saveResult is already 'saved-path.op' from the beforeEach reset.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (mockedDocStore as any).__setDirty(false);
+
+    await useGitStore.getState().retrySaveRequired();
+
+    // The save spy was called exactly once, the original commit IPC was
+    // invoked exactly once with the queued args, and saveRequiredFor is
+    // now cleared.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    expect((mockedDocStore as any).__saveSpy).toHaveBeenCalledTimes(1);
+    expect(gitClient.commit).toHaveBeenCalledTimes(1);
+    expect(gitClient.commit).toHaveBeenCalledWith('repo-1', {
+      kind: 'milestone',
+      message: 'first',
+      author: { name: 't', email: 't@e.com' },
+    });
+    const s = useGitStore.getState().state;
+    expect(s.kind).toBe('ready');
+    if (s.kind === 'ready') {
+      expect(s.saveRequiredFor).toBeUndefined();
+    }
+  });
+
+  it('retrySaveRequired bails without clearing saveRequiredFor when save returns null', async () => {
+    // Set up a ready state with a queued commit waiting on a dirty doc.
+    vi.mocked(gitClient.init).mockResolvedValue(SAMPLE_REPO);
+    await useGitStore.getState().initRepo('/tmp/login.op');
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (mockedDocStore as any).__setDirty(true);
+
+    await expect(
+      useGitStore.getState().commitMilestone('first', { name: 't', email: 't@e.com' }),
+    ).rejects.toMatchObject({ name: 'GitError', code: 'save-required' });
+
+    // Simulate save() failing (returning null). Do NOT clear isDirty —
+    // the doc is still dirty after a failed save in real life.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (mockedDocStore as any).__setSaveResult(null);
+
+    await useGitStore.getState().retrySaveRequired();
+
+    // The save spy was called once, but the commit IPC was NOT called and
+    // saveRequiredFor is still set so the user can retry.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    expect((mockedDocStore as any).__saveSpy).toHaveBeenCalledTimes(1);
+    expect(gitClient.commit).not.toHaveBeenCalled();
+    const s = useGitStore.getState().state;
+    expect(s.kind).toBe('ready');
+    if (s.kind === 'ready') {
+      expect(s.saveRequiredFor).toBeDefined();
+      expect(s.saveRequiredFor?.label).toBe('commit milestone');
+    }
+  });
+
+  it('closeRepo swallows gitClient.close failures and still resets state to no-file', async () => {
+    vi.mocked(gitClient.init).mockResolvedValue(SAMPLE_REPO);
+    await useGitStore.getState().initRepo('/tmp/login.op');
+    expect(useGitStore.getState().state.kind).toBe('ready');
+
+    // Backend close throws — e.g., the session was already cleaned up.
+    vi.mocked(gitClient.close).mockRejectedValue(new Error('session not found'));
+
+    // closeRepo must not throw — it swallows and resets state regardless.
+    await expect(useGitStore.getState().closeRepo()).resolves.toBeUndefined();
+
+    const s = useGitStore.getState();
+    expect(s.state).toEqual({ kind: 'no-file' });
+    expect(s.log).toEqual([]);
+    // The close IPC was attempted exactly once.
+    expect(gitClient.close).toHaveBeenCalledTimes(1);
+    expect(gitClient.close).toHaveBeenCalledWith('repo-1');
+  });
+
+  it('refreshStatus Step 1 copies basic status fields onto the active repo', async () => {
+    vi.mocked(gitClient.init).mockResolvedValue(SAMPLE_REPO);
+    await useGitStore.getState().initRepo('/tmp/login.op');
+    expect(useGitStore.getState().state.kind).toBe('ready');
+
+    // Override status to return new values for every Step 1 field.
+    vi.mocked(gitClient.status).mockResolvedValue({
+      ...DEFAULT_STATUS,
+      branch: 'feature/login-redesign',
+      workingDirty: true,
+      otherFilesDirty: 2,
+      otherFilesPaths: ['README.md', 'src/index.ts'],
+      ahead: 3,
+      behind: 1,
+    });
+
+    await useGitStore.getState().refreshStatus();
+
+    const s = useGitStore.getState().state;
+    expect(s.kind).toBe('ready');
+    if (s.kind === 'ready') {
+      expect(s.repo.currentBranch).toBe('feature/login-redesign');
+      expect(s.repo.workingDirty).toBe(true);
+      expect(s.repo.otherFilesDirty).toBe(2);
+      expect(s.repo.otherFilesPaths).toEqual(['README.md', 'src/index.ts']);
+      expect(s.repo.ahead).toBe(3);
+      expect(s.repo.behind).toBe(1);
+    }
+  });
+
+  it('requireRepoId throws GitError(no-file) when called from a non-repo state', async () => {
+    // Initial state is no-file (set by __resetGitStore in beforeEach). Any
+    // action that calls requireRepoId without first transitioning to a
+    // repo-bearing state must reject with GitError('no-file').
+    expect(useGitStore.getState().state.kind).toBe('no-file');
+
+    await expect(useGitStore.getState().refreshStatus()).rejects.toMatchObject({
+      name: 'GitError',
+      code: 'no-file',
+    });
   });
 });
