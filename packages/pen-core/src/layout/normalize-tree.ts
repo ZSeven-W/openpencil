@@ -84,31 +84,39 @@ export function normalizeTreeLayout(node: PenNode): void {
  *   1. A non-overlay child has a numeric `x` or `y` (including 0). Models
  *      that explicitly position children clearly intend absolute layout.
  *
- *   2. EVERY non-overlay child is a `frame`. AI models routinely emit
- *      nested-frame compositions at (0,0) without writing x/y at all
- *      (rings + center text, badge stacks, hero overlays, multi-layer
- *      cards). The previous check returned false on these because their
- *      x/y fields were absent, and `normalizeTreeLayout` would silently
- *      rewrite the parent to `layout: 'vertical'`, stacking the overlays
- *      into a vertical list and clipping anything past the parent's
- *      bounds. When ALL children are frames, the most likely intent is
- *      structured composition (each child has its own internal layout),
- *      not a generic content stack — and the conservative thing to do
- *      is leave `layout` undefined so the renderer treats it as overlay.
- *      Mixed types (frame + rect, frame + text, etc.) still get the
- *      vertical fallback, since those are typically content stacks where
- *      verticalization is the right call.
+ *   2. EVERY non-overlay child is a "composition primitive" — currently
+ *      `frame`, `ellipse`, or `path`. AI models routinely emit structured
+ *      compositions at (0,0) without writing x/y at all: nested-frame
+ *      badge stacks, hero overlays, rings built from concentric
+ *      ellipses, icon compositions built from paths. The previous check
+ *      only counted frame children, so an ellipse-only or path-only
+ *      composition (e.g. 3 concentric ellipses forming a progress ring)
+ *      fell through to the vertical fallback and rendered as a broken
+ *      list.
+ *
+ *      The rule intentionally does NOT treat `rectangle` as a
+ *      composition primitive: plain rectangles are by far the most
+ *      common children in content stacks (nav buttons, list items,
+ *      card backgrounds) and defaulting those to overlay would silently
+ *      break many more designs than it fixes. When you really want a
+ *      rectangle overlay composition, declare x/y explicitly.
+ *
+ *      Mixed content stacks (frame + text, shape + icon_font, etc.)
+ *      still get the vertical fallback, because those are typically
+ *      content stacks where verticalization is the right call.
  *
  * Overlay nodes (badges/pills/tags via `isBadgeOverlayNode`) are excluded
  * from the count — they legitimately carry x/y inside auto-layout frames
- * and shouldn't tip the all-frame heuristic.
+ * and shouldn't tip the heuristic.
  *
  * This is intentionally conservative: it accepts a few false negatives
- * (some genuinely vertical all-frame stacks will be left un-normalized,
+ * (some genuinely vertical all-shape stacks will be left un-normalized,
  * forcing the AI to declare layout explicitly) to eliminate the
  * catastrophic false-positive of silently verticalizing an overlay
  * composition.
  */
+const COMPOSITION_PRIMITIVE_TYPES = new Set(['frame', 'ellipse', 'path']);
+
 function hasAbsolutePositionedChild(children: PenNode[]): boolean {
   // Signal 1: explicit numeric x/y on any non-overlay child.
   for (const child of children) {
@@ -117,15 +125,16 @@ function hasAbsolutePositionedChild(children: PenNode[]): boolean {
     if (typeof c.x === 'number' || typeof c.y === 'number') return true;
   }
 
-  // Signal 2: every non-overlay child is a frame (>= 2 such children).
+  // Signal 2: every non-overlay child is a composition primitive
+  // (>= 2 such children).
   let nonOverlayCount = 0;
-  let frameCount = 0;
+  let primitiveCount = 0;
   for (const child of children) {
     if (isBadgeOverlayNode(child)) continue;
     nonOverlayCount++;
-    if (child.type === 'frame') frameCount++;
+    if (COMPOSITION_PRIMITIVE_TYPES.has(child.type)) primitiveCount++;
   }
-  if (nonOverlayCount >= 2 && frameCount === nonOverlayCount) return true;
+  if (nonOverlayCount >= 2 && primitiveCount === nonOverlayCount) return true;
 
   return false;
 }

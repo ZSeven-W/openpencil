@@ -46,25 +46,45 @@ export function normalizeStrokeFillSchema(node: PenNode): void {
 interface MaybeStrokeHolder {
   stroke?: unknown;
   strokeWidth?: unknown;
+  'stroke-width'?: unknown;
+  'stroke-dasharray'?: unknown;
+  'stroke-dashoffset'?: unknown;
+  'stroke-linecap'?: unknown;
+  'stroke-linejoin'?: unknown;
 }
 
 function normalizeNodeStroke(node: PenNode): void {
   const rec = node as unknown as MaybeStrokeHolder;
   const rawStroke = rec.stroke;
-  if (rawStroke === undefined || rawStroke === null) return;
+  const hasSvgStrokeAttrs =
+    rec['stroke-width'] !== undefined ||
+    rec['stroke-dasharray'] !== undefined ||
+    rec['stroke-dashoffset'] !== undefined ||
+    rec['stroke-linecap'] !== undefined ||
+    rec['stroke-linejoin'] !== undefined;
+  if ((rawStroke === undefined || rawStroke === null) && !hasSvgStrokeAttrs) return;
 
   // (1) Unwrap `stroke: [ ... ]` by taking the first element.
   let stroke: unknown = rawStroke;
+  if (typeof stroke === 'string') {
+    stroke = { type: 'solid', color: stroke };
+  }
   if (Array.isArray(stroke)) {
     stroke = stroke.length > 0 ? stroke[0] : undefined;
   }
-  if (!stroke || typeof stroke !== 'object') {
+  if ((!stroke || typeof stroke !== 'object') && !hasSvgStrokeAttrs) {
     delete rec.stroke;
+    delete rec.strokeWidth;
+    delete rec['stroke-width'];
+    delete rec['stroke-dasharray'];
+    delete rec['stroke-dashoffset'];
+    delete rec['stroke-linecap'];
+    delete rec['stroke-linejoin'];
     return;
   }
 
   // (2) Detect the fill-shape-as-stroke pattern and migrate it.
-  const maybeFillShape = stroke as {
+  const maybeFillShape = (stroke ?? {}) as {
     type?: unknown;
     color?: unknown;
     thickness?: unknown;
@@ -96,13 +116,43 @@ function normalizeNodeStroke(node: PenNode): void {
   // Otherwise we have something that looks like a real PenStroke — fix
   // missing thickness, clean up illegal colors, and persist any
   // strokeWidth field that survived as a top-level property.
-  const strokeObj = stroke as Partial<PenStroke> & { [k: string]: unknown };
+  const strokeObj = (stroke ?? {}) as Partial<PenStroke> & { [k: string]: unknown };
   if (strokeObj.thickness === undefined || strokeObj.thickness === null) {
     const width = readThickness(rec);
     (strokeObj as { thickness?: number }).thickness = width;
   }
+  const dashPattern = readDashPattern(rec['stroke-dasharray']);
+  if (dashPattern && dashPattern.length > 0 && strokeObj.dashPattern === undefined) {
+    strokeObj.dashPattern = dashPattern;
+  }
+  const dashOffset = readDashOffset(rec['stroke-dashoffset']);
+  if (dashOffset !== null && strokeObj.dashOffset === undefined) {
+    strokeObj.dashOffset = dashOffset;
+  }
+  const cap = readCap(rec['stroke-linecap']);
+  if (cap && strokeObj.cap === undefined) {
+    strokeObj.cap = cap;
+  }
+  const join = readJoin(rec['stroke-linejoin']);
+  if (join && strokeObj.join === undefined) {
+    strokeObj.join = join;
+  }
+  if (
+    (!Array.isArray(strokeObj.fill) || strokeObj.fill.length === 0) &&
+    typeof maybeFillShape.color !== 'string'
+  ) {
+    const inferredColor = inferStrokeColor(node);
+    if (inferredColor) {
+      strokeObj.fill = [{ type: 'solid', color: inferredColor }] as PenFill[];
+    }
+  }
   rec.stroke = strokeObj as PenStroke;
   delete rec.strokeWidth;
+  delete rec['stroke-width'];
+  delete rec['stroke-dasharray'];
+  delete rec['stroke-dashoffset'];
+  delete rec['stroke-linecap'];
+  delete rec['stroke-linejoin'];
   stripIllegalColorsFromStrokeFill(node);
 
   // If after cleanup the stroke has no fill at all, drop the whole stroke.
@@ -113,13 +163,54 @@ function normalizeNodeStroke(node: PenNode): void {
 }
 
 function readThickness(rec: MaybeStrokeHolder): number {
-  const raw = rec.strokeWidth;
+  const raw = rec.strokeWidth ?? rec['stroke-width'];
   if (typeof raw === 'number' && raw > 0) return raw;
   if (typeof raw === 'string') {
     const n = parseFloat(raw);
     if (Number.isFinite(n) && n > 0) return n;
   }
   return 2;
+}
+
+function readDashPattern(raw: unknown): number[] | null {
+  if (Array.isArray(raw)) {
+    const nums = raw.filter((value): value is number => typeof value === 'number' && value > 0);
+    if (nums.length === 1) return [nums[0], nums[0]];
+    return nums.length > 0 ? nums : null;
+  }
+  if (typeof raw === 'string') {
+    const nums = raw
+      .split(/[,\s]+/)
+      .map((part) => parseFloat(part))
+      .filter((value) => Number.isFinite(value) && value > 0);
+    if (nums.length === 1) return [nums[0], nums[0]];
+    return nums.length > 0 ? nums : null;
+  }
+  return null;
+}
+
+function readDashOffset(raw: unknown): number | null {
+  if (typeof raw === 'number' && Number.isFinite(raw)) return raw;
+  if (typeof raw === 'string') {
+    const parsed = parseFloat(raw);
+    if (Number.isFinite(parsed)) return parsed;
+  }
+  return null;
+}
+
+function readCap(raw: unknown): PenStroke['cap'] | null {
+  return raw === 'round' || raw === 'square' || raw === 'none' ? raw : null;
+}
+
+function readJoin(raw: unknown): PenStroke['join'] | null {
+  return raw === 'round' || raw === 'bevel' || raw === 'miter' ? raw : null;
+}
+
+function inferStrokeColor(node: PenNode): string | null {
+  const name = typeof node.name === 'string' ? node.name.toLowerCase() : '';
+  if (/track/.test(name)) return '#2A2A2A';
+  if (/(progress|chart line|line|curve|wave)/.test(name)) return '#22C55E';
+  return null;
 }
 
 function stripIllegalColorsFromStrokeFill(node: PenNode): void {

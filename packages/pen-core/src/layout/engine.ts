@@ -433,6 +433,27 @@ function normalizeJustifyContent(
   }
 }
 
+/**
+ * Normalize a raw `alignItems` string into the three values the layout
+ * engine actually implements: `start`, `center`, `end`.
+ *
+ * Accepts a generous set of aliases from CSS/flexbox terminology so
+ * AI-generated designs (and copy-pasted web snippets) don't silently
+ * fall through to the `start` default when they meant something else.
+ *
+ * `baseline` specifically is treated as `end`:
+ *   OpenPencil's layout engine doesn't implement text-baseline
+ *   alignment (there's no font-metrics pipeline in the position step).
+ *   LLMs routinely emit `alignItems: 'baseline'` from web CSS reflex
+ *   for patterns like "big number + small unit" (e.g. "72 BPM"), where
+ *   the intent is that the small text bottom-aligns with the big
+ *   text's visual baseline. The best approximation we can render is
+ *   `end` — it bottom-aligns both children to the cross-axis end,
+ *   which for a horizontal row of a large heading and a small unit
+ *   looks essentially identical to true baseline alignment. Falling
+ *   through to `start` (the old behavior) would top-align the unit,
+ *   which is visually wrong.
+ */
 function normalizeAlignItems(value: unknown): 'start' | 'center' | 'end' {
   if (typeof value !== 'string') return 'start';
   const v = value.trim().toLowerCase();
@@ -449,6 +470,9 @@ function normalizeAlignItems(value: unknown): 'start' | 'center' | 'end' {
     case 'flex-end':
     case 'right':
     case 'bottom':
+    case 'baseline':
+    case 'last baseline':
+    case 'first baseline':
       return 'end';
     default:
       return 'start';

@@ -10,7 +10,7 @@ import {
   isArcEllipse,
   pathDataToAnchors,
 } from '@zseven-w/pen-core'
-import { parseColor, cornerRadiusValue, cornerRadii, resolveFillColor, resolveStrokeColor, resolveStrokeWidth } from './paint-utils.js'
+import { parseColor, cornerRadiusValue, cornerRadii, resolveFillColor, shouldUseTransparentFallbackFill, resolveStrokeColor, resolveStrokeWidth } from './paint-utils.js'
 import { sanitizeSvgPath, hasInvalidNumbers, tryManualPathParse } from './path-utils.js'
 import { SkiaImageLoader } from './image-loader.js'
 import { SkiaTextRenderer } from './text-renderer.js'
@@ -258,7 +258,7 @@ export class SkiaNodeRenderer {
     if (stroke.cap === 'round') paint.setStrokeCap(ck.StrokeCap.Round)
     else if (stroke.cap === 'square') paint.setStrokeCap(ck.StrokeCap.Square)
     if (stroke.dashPattern && stroke.dashPattern.length >= 2) {
-      const effect = ck.PathEffect.MakeDash(stroke.dashPattern, 0)
+      const effect = ck.PathEffect.MakeDash(stroke.dashPattern, stroke.dashOffset ?? 0)
       if (effect) paint.setPathEffect(effect)
     }
 
@@ -373,7 +373,16 @@ export class SkiaNodeRenderer {
     const hasFill = fills && fills.length > 0
     const isContainer = node.type === 'frame' || node.type === 'group'
 
-    const { paint: fillPaint, imageFillDraw } = this.makeFillPaint(hasFill ? fills : (isContainer ? 'transparent' : undefined), w, h, opacity, x, y)
+    const { paint: fillPaint, imageFillDraw } = this.makeFillPaint(
+      hasFill || !shouldUseTransparentFallbackFill(fills, stroke, isContainer)
+        ? fills
+        : 'transparent',
+      w,
+      h,
+      opacity,
+      x,
+      y,
+    )
     const hasRoundedCorners = cr.some((r) => r > 0)
     if (hasRoundedCorners) {
       const maxR = Math.min(w / 2, h / 2)
@@ -412,13 +421,14 @@ export class SkiaNodeRenderer {
     const eNode = node as EllipseNode
     const fills = eNode.fill, stroke = eNode.stroke
     const cr = cornerRadiusValue(eNode.cornerRadius)
+    const fillSource = shouldUseTransparentFallbackFill(fills, stroke) ? 'transparent' : fills
 
     if (isArcEllipse(eNode.startAngle, eNode.sweepAngle, eNode.innerRadius)) {
       const arcD = buildEllipseArcPath(w, h, eNode.startAngle ?? 0, eNode.sweepAngle ?? 360, eNode.innerRadius ?? 0)
       const path = ck.Path.MakeFromSVGString(arcD)
       if (path) {
         path.offset(x, y)
-        const { paint: fillPaint } = this.makeFillPaint(fills, w, h, opacity, x, y)
+        const { paint: fillPaint } = this.makeFillPaint(fillSource, w, h, opacity, x, y)
         if (cr > 0) { const effect = ck.PathEffect.MakeCorner(cr); if (effect) fillPaint.setPathEffect(effect) }
         canvas.drawPath(path, fillPaint); fillPaint.delete()
         const strokePaint = this.makeStrokePaint(stroke, opacity)
@@ -428,7 +438,7 @@ export class SkiaNodeRenderer {
       return
     }
 
-    const { paint: fillPaint } = this.makeFillPaint(fills, w, h, opacity, x, y)
+    const { paint: fillPaint } = this.makeFillPaint(fillSource, w, h, opacity, x, y)
     canvas.drawOval(ck.LTRBRect(x, y, x + w, y + h), fillPaint); fillPaint.delete()
     const strokePaint = this.makeStrokePaint(stroke, opacity)
     if (strokePaint) { canvas.drawOval(ck.LTRBRect(x, y, x + w, y + h), strokePaint); strokePaint.delete() }
@@ -452,6 +462,7 @@ export class SkiaNodeRenderer {
     const count = pNode.polygonCount || 6
     const fills = pNode.fill, stroke = pNode.stroke
     const cr = cornerRadiusValue(pNode.cornerRadius)
+    const fillSource = shouldUseTransparentFallbackFill(fills, stroke) ? 'transparent' : fills
 
     const raw: [number, number][] = []
     for (let i = 0; i < count; i++) {
@@ -469,7 +480,7 @@ export class SkiaNodeRenderer {
     }
     path.close()
 
-    const { paint: fillPaint } = this.makeFillPaint(fills, w, h, opacity, x, y)
+    const { paint: fillPaint } = this.makeFillPaint(fillSource, w, h, opacity, x, y)
     if (cr > 0) { const effect = ck.PathEffect.MakeCorner(cr); if (effect) fillPaint.setPathEffect(effect) }
     canvas.drawPath(path, fillPaint); fillPaint.delete()
     const strokePaint = this.makeStrokePaint(stroke, opacity)

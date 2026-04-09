@@ -163,6 +163,50 @@ describe('layout-engine', () => {
       expect(result[0].y).toBe(35); // (100 - 30) / 2
     });
 
+    it('maps alignItems="baseline" to end-alignment (engine has no baseline metric)', () => {
+      // LLMs routinely emit alignItems: 'baseline' from web CSS reflex
+      // for "big number + small unit" patterns like "72 BPM". The
+      // layout engine doesn't compute text baselines; the closest
+      // visually correct fallback is end-alignment (both children
+      // bottom-pinned). Locks in that `baseline` no longer falls
+      // through to the `start` default.
+      //
+      // `baseline` is not part of the TS `alignItems` union, so we
+      // cast through unknown — the normalizer accepts any string and
+      // that's exactly the behavior we want to exercise here.
+      const parent = frame({
+        width: 300,
+        height: 100,
+        layout: 'horizontal',
+        alignItems: 'baseline' as unknown as 'start' | 'center' | 'end',
+        children: [rect('big', 120, 80), rect('unit', 60, 20)],
+      });
+      const result = computeLayoutPositions(
+        parent,
+        (parent as PenNode & { children: PenNode[] }).children,
+      );
+      expect(result[0].y).toBe(20); // 100 - 80 (big pinned to bottom)
+      expect(result[1].y).toBe(80); // 100 - 20 (unit pinned to bottom)
+    });
+
+    it('maps alignItems="flex-end" and "bottom" to end (CSS/alias passthrough)', () => {
+      // `flex-end` is a CSS alias that the normalizer accepts but the
+      // TS union doesn't — cast through unknown same as the baseline
+      // test above.
+      const parent = frame({
+        width: 300,
+        height: 100,
+        layout: 'horizontal',
+        alignItems: 'flex-end' as unknown as 'start' | 'center' | 'end',
+        children: [rect('a', 50, 30)],
+      });
+      const result = computeLayoutPositions(
+        parent,
+        (parent as PenNode & { children: PenNode[] }).children,
+      );
+      expect(result[0].y).toBe(70); // 100 - 30
+    });
+
     it('filters invisible children', () => {
       const parent = frame({
         width: 300,

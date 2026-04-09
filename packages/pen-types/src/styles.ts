@@ -67,6 +67,7 @@ export interface PenStroke {
   join?: 'miter' | 'bevel' | 'round';
   cap?: 'none' | 'round' | 'square';
   dashPattern?: number[];
+  dashOffset?: number;
   fill?: PenFill[];
 }
 

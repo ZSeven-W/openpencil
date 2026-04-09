@@ -99,6 +99,19 @@ export function resolveStrokeWidth(stroke?: PenStroke): number {
   return stroke.thickness?.[0] ?? DEFAULT_STROKE_WIDTH;
 }
 
+export function hasVisibleStroke(stroke?: PenStroke): boolean {
+  return resolveStrokeWidth(stroke) > 0 && !!resolveStrokeColor(stroke);
+}
+
+export function shouldUseTransparentFallbackFill(
+  fills: PenFill[] | string | undefined,
+  stroke?: PenStroke,
+  isContainer = false,
+): boolean {
+  const hasExplicitFill = typeof fills === 'string' ? fills.length > 0 : !!fills?.length;
+  return !hasExplicitFill && (isContainer || hasVisibleStroke(stroke));
+}
+
 // ---------------------------------------------------------------------------
 // Text wrapping utilities
 // ---------------------------------------------------------------------------

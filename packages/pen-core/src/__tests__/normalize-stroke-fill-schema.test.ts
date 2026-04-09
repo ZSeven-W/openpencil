@@ -121,6 +121,87 @@ describe('normalizeStrokeFillSchema — stroke array unwrap', () => {
     expect(rec.stroke?.thickness).toBe(3);
     expect(rec.stroke?.fill?.[0]?.color).toBe('#FFFFFF');
   });
+
+  it('migrates SVG-style stroke attrs into a canonical PenStroke', () => {
+    const node = path({
+      name: 'HR Chart Line',
+      'stroke-width': '2',
+      'stroke-dasharray': '4 2',
+      'stroke-linecap': 'round',
+      'stroke-linejoin': 'round',
+    });
+
+    normalizeStrokeFillSchema(node);
+
+    const rec = node as unknown as {
+      stroke?: {
+        thickness?: number;
+        dashPattern?: number[];
+        dashOffset?: number;
+        cap?: string;
+        join?: string;
+        fill?: Array<{ color?: string }>;
+      };
+      'stroke-width'?: unknown;
+      'stroke-dasharray'?: unknown;
+      'stroke-dashoffset'?: unknown;
+    };
+
+    expect(rec.stroke?.thickness).toBe(2);
+    expect(rec.stroke?.dashPattern).toEqual([4, 2]);
+    expect(rec.stroke?.dashOffset).toBeUndefined();
+    expect(rec.stroke?.cap).toBe('round');
+    expect(rec.stroke?.join).toBe('round');
+    expect(rec.stroke?.fill?.[0]?.color).toBe('#22C55E');
+    expect(rec['stroke-width']).toBeUndefined();
+    expect(rec['stroke-dasharray']).toBeUndefined();
+  });
+
+  it('migrates SVG dash offset into PenStroke.dashOffset', () => {
+    const node = path({
+      name: 'Steps Progress',
+      'stroke-width': '8',
+      'stroke-dasharray': '158.4',
+      'stroke-dashoffset': '44.4',
+      'stroke-linecap': 'round',
+    });
+
+    normalizeStrokeFillSchema(node);
+
+    const rec = node as unknown as {
+      stroke?: {
+        thickness?: number;
+        dashPattern?: number[];
+        dashOffset?: number;
+        cap?: string;
+        fill?: Array<{ color?: string }>;
+      };
+      'stroke-dashoffset'?: unknown;
+    };
+
+    expect(rec.stroke?.thickness).toBe(8);
+    expect(rec.stroke?.dashPattern).toEqual([158.4, 158.4]);
+    expect(rec.stroke?.dashOffset).toBe(44.4);
+    expect(rec.stroke?.cap).toBe('round');
+    expect(rec.stroke?.fill?.[0]?.color).toBe('#22C55E');
+    expect(rec['stroke-dashoffset']).toBeUndefined();
+  });
+
+  it('infers a muted track color for SVG-style track paths with no explicit stroke fill', () => {
+    const node = path({
+      name: 'Steps Track',
+      'stroke-width': '8',
+      fill: [{ type: 'solid', color: '#00000000' }],
+    });
+
+    normalizeStrokeFillSchema(node);
+
+    const rec = node as unknown as {
+      stroke?: { fill?: Array<{ color?: string }> };
+    };
+
+    expect(rec.stroke?.fill?.[0]?.color).toBe('#2A2A2A');
+  });
 });
 
 describe('normalizeStrokeFillSchema — illegal fill color replacement', () => {

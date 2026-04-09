@@ -224,19 +224,74 @@ describe('normalizeTreeLayout', () => {
     expect((outer as PenNode & { layout?: string }).layout).toBeUndefined();
   });
 
-  it('still verticalizes mixed-type stacks (frame + rect) where vertical is the right call', () => {
-    // Counter-test for the previous one. The "all-frame heuristic" must
-    // not over-trigger: a frame containing one nested frame plus other
-    // primitive shapes (rectangles, text, etc.) is still a content stack
-    // and SHOULD be verticalized. Only homogeneously-frame children
-    // signal an overlay container.
+  it('still verticalizes mixed text+shape stacks (frame + text) where vertical is the right call', () => {
+    // Counter-test for the widened composition-primitive rule. The rule
+    // must not over-trigger: a frame containing a nested frame plus a
+    // text node is a content stack and SHOULD be verticalized.
+    // Homogeneous shape-only children (frame+frame, frame+rect,
+    // ellipse+ellipse) signal composition; text or icon_font mixed in
+    // breaks the heuristic.
     const inner = frame({ id: 'inner', children: [rect('c'), rect('d')] });
     const outer = frame({
       id: 'outer',
-      children: [inner, rect('b')],
+      children: [
+        inner,
+        { id: 'label', type: 'text', content: 'Hello' } as unknown as PenNode,
+      ],
     });
     normalizeTreeLayout(outer);
     expect((outer as PenNode & { layout?: string }).layout).toBe('vertical');
-    expect((inner as PenNode & { layout?: string }).layout).toBe('vertical');
+  });
+
+  it('does NOT verticalize all-ellipse concentric stacks (progress-ring pattern)', () => {
+    // The activity-rings regression: an LLM emits a layout-less parent
+    // with N concentric ellipses at (0,0), expecting them to render
+    // centered. The old all-FRAME-children heuristic missed this because
+    // the children were ellipses (not frames) and fell through to the
+    // vertical fallback, stacking the rings as a list. The widened
+    // composition-primitive rule now recognises ellipse-only children
+    // as a composition and leaves layout undefined.
+    const ellipse = (id: string, w: number, h: number): PenNode =>
+      ({ id, type: 'ellipse', width: w, height: h }) as PenNode;
+    const parent = frame({
+      id: 'rings',
+      width: 120,
+      height: 120,
+      children: [ellipse('outer', 120, 120), ellipse('middle', 84, 84), ellipse('inner', 52, 52)],
+    });
+    normalizeTreeLayout(parent);
+    expect((parent as PenNode & { layout?: string }).layout).toBeUndefined();
+  });
+
+  it('does NOT verticalize frame + ellipse (ring wrapped in a frame)', () => {
+    // A common composition: an outer frame background with a nested
+    // ellipse ring on top. Both are composition primitives, so the
+    // heuristic keeps layout undefined and lets the renderer use the
+    // children's own positioning.
+    const parent = frame({
+      id: 'avatar',
+      width: 80,
+      height: 80,
+      children: [
+        { id: 'bg', type: 'frame', width: 80, height: 80 } as unknown as PenNode,
+        { id: 'ring', type: 'ellipse', width: 80, height: 80 } as unknown as PenNode,
+      ],
+    });
+    normalizeTreeLayout(parent);
+    expect((parent as PenNode & { layout?: string }).layout).toBeUndefined();
+  });
+
+  it('STILL verticalizes rectangle-only stacks (list of cards, not an overlay)', () => {
+    // Rectangles are intentionally NOT in the composition-primitive set.
+    // 3 rectangles with no layout hints is almost always a content
+    // stack (card list, nav buttons, divider rows), so we keep the
+    // vertical fallback for it. Authors who really want a rectangle
+    // overlay composition must declare x/y on at least one child.
+    const parent = frame({
+      id: 'list',
+      children: [rect('a'), rect('b'), rect('c')],
+    });
+    normalizeTreeLayout(parent);
+    expect((parent as PenNode & { layout?: string }).layout).toBe('vertical');
   });
 });
