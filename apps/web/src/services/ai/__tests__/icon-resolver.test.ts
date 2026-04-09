@@ -1,6 +1,24 @@
 import { describe, it, expect } from 'vitest';
 import type { PenNode } from '@zseven-w/pen-types';
 
+// Mock canvas-text-measure to avoid alias resolution pulling browser-only deps.
+import { vi } from 'vitest';
+vi.mock('@/canvas/canvas-text-measure', () => ({
+  estimateLineWidth: () => 0,
+  estimateTextHeight: () => 0,
+  defaultLineHeight: () => 1.2,
+  hasCjkText: () => false,
+}));
+
+vi.mock('@/stores/document-store', () => ({
+  useDocumentStore: {
+    getState: () => ({
+      getNodeById: () => undefined,
+      updateNode: () => {},
+    }),
+  },
+}));
+
 import { applyIconPathResolution } from '../icon-resolver';
 
 // A minimal valid SVG path data used as a placeholder for tests where we
@@ -98,6 +116,13 @@ describe('applyIconPathResolution — opt-in marker gate', () => {
     // custom geometry IS overwritten (which is correct: the caller asked
     // for a logo, not custom geometry).
     expect((node as { d?: string }).d).not.toBe(CUSTOM_GEOMETRY_D);
+  });
+
+  it('does not replace generic scaffold names like "WC1 Icon" with a fallback circle', () => {
+    const node = makePath({ name: 'WC1 Icon' });
+    applyIconPathResolution(node);
+    expect((node as { d?: string }).d).toBe(CUSTOM_GEOMETRY_D);
+    expect((node as { iconId?: string }).iconId).toBeUndefined();
   });
 
   // --- "chart" alone (word with explicit icon marker) still resolves ---

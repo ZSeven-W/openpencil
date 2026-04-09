@@ -1577,6 +1577,195 @@ describe('resolveNodeRole — name-based role inference', () => {
 });
 
 // ---------------------------------------------------------------------------
+// Size-sanity guard for card-family roles
+// ---------------------------------------------------------------------------
+
+describe('resolveNodeRole — absurd-size guard for card-family roles', () => {
+  const ctx: RoleContext = { canvasWidth: 375 };
+
+  it('refuses stat-card inference on a 6×6 status dot (name "Status Dot")', () => {
+    // Regression: name-based inference saw `/\bstat/` in "Status Dot"
+    // and tagged it stat-card. That role injects padding:[24,24] +
+    // cornerRadius + shadow, inflating a 6-pixel dot into an
+    // oversized card. Guard strips the role entirely when the node
+    // is too small to plausibly be a card container.
+    const node = {
+      id: 'dot',
+      type: 'frame',
+      name: 'Status Dot',
+      x: 0,
+      y: 0,
+      width: 6,
+      height: 6,
+      cornerRadius: 3,
+      fill: [{ type: 'solid', color: '#22C55E' }],
+    } as unknown as PenNode;
+    resolveNodeRole(node, ctx);
+    expect((node as { role?: string }).role).toBeUndefined();
+    expect((node as { padding?: unknown }).padding).toBeUndefined();
+    expect((node as { effects?: unknown[] }).effects).toBeUndefined();
+  });
+
+  it('refuses card inference on a tiny swatch (width=20)', () => {
+    // A 20×20 color swatch named "Card Swatch" also shouldn't become
+    // a card — 20px is below the CARD_LIKE_MIN_DIMENSION threshold.
+    const node = {
+      id: 'swatch',
+      type: 'frame',
+      name: 'Card Swatch',
+      x: 0,
+      y: 0,
+      width: 20,
+      height: 20,
+    } as unknown as PenNode;
+    resolveNodeRole(node, ctx);
+    expect((node as { role?: string }).role).toBeUndefined();
+  });
+
+  it('refuses LLM-emitted card role on a 16×16 node (not just name-inferred)', () => {
+    // The LLM can also emit `role: "card"` directly on a tiny node.
+    // Guard applies either way.
+    const node = {
+      id: 'pill',
+      type: 'frame',
+      role: 'card',
+      x: 0,
+      y: 0,
+      width: 16,
+      height: 16,
+    } as unknown as PenNode;
+    resolveNodeRole(node, ctx);
+    expect((node as { role?: string }).role).toBeUndefined();
+  });
+
+  it('applies card defaults normally on a normal-sized card (200×120)', () => {
+    // Counter-test: a real card-sized frame must still get the
+    // card defaults applied. The guard should only strip the role
+    // on tiny elements.
+    const node = {
+      id: 'real-card',
+      type: 'frame',
+      name: 'Restaurant Card',
+      x: 0,
+      y: 0,
+      width: 200,
+      height: 120,
+    } as unknown as PenNode;
+    resolveNodeRole(node, ctx);
+    expect((node as { role?: string }).role).toBe('card');
+    expect((node as { cornerRadius?: number }).cornerRadius).toBeDefined();
+    expect((node as { effects?: unknown[] }).effects).toBeDefined();
+  });
+
+  it('leaves the role alone when width/height are fill_container (unknown pixel size)', () => {
+    // When dimensions are sizing keywords we can't tell if the final
+    // render will be small, so the guard refuses to decide and the
+    // role is applied normally. This prevents the guard from
+    // accidentally stripping card roles on responsive layouts.
+    const node = {
+      id: 'responsive-card',
+      type: 'frame',
+      role: 'card',
+      width: 'fill_container',
+      height: 'fit_content',
+    } as unknown as PenNode;
+    resolveNodeRole(node, ctx);
+    expect((node as { role?: string }).role).toBe('card');
+    expect((node as { effects?: unknown[] }).effects).toBeDefined();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Page-chrome-in-card guard
+// ---------------------------------------------------------------------------
+
+describe('resolveNodeRole — page-chrome roles must not infer inside a card-family parent', () => {
+  it('does NOT infer navbar from "Header" when parent is a card', () => {
+    // Regression: heart-rate card had a child named "Header" (its
+    // title row with the heart icon and "Heart Rate" label). The
+    // name `header` lexically matches NAME_EXACT_MAP → 'navbar',
+    // which then injected navbarFill (#FFFFFF on light) + bottom
+    // border, turning the inner section into a glaring white bar
+    // that didn't belong inside the dark heart-rate card.
+    const node = {
+      id: 'card-header',
+      type: 'frame',
+      name: 'Header',
+      width: 343,
+      height: 48,
+    } as unknown as PenNode;
+    const ctxInCard: RoleContext = { canvasWidth: 375, parentRole: 'card' };
+    resolveNodeRole(node, ctxInCard);
+    expect((node as { role?: string }).role).toBeUndefined();
+    expect((node as { fill?: unknown }).fill).toBeUndefined();
+    expect((node as { stroke?: unknown }).stroke).toBeUndefined();
+  });
+
+  it('does NOT infer footer from "Footer" when parent is a stat-card', () => {
+    const node = {
+      id: 'card-footer',
+      type: 'frame',
+      name: 'Footer',
+      width: 343,
+      height: 36,
+    } as unknown as PenNode;
+    const ctxInCard: RoleContext = { canvasWidth: 375, parentRole: 'stat-card' };
+    resolveNodeRole(node, ctxInCard);
+    expect((node as { role?: string }).role).toBeUndefined();
+    expect((node as { padding?: unknown }).padding).toBeUndefined();
+  });
+
+  it('STILL infers navbar from "Header" at the page top level (no card parent)', () => {
+    // Counter-test: at the page top level (no parent role, or
+    // parent is a layout container like section), "Header" still
+    // legitimately means a page navbar. Don't over-strip.
+    const node = {
+      id: 'page-header',
+      type: 'frame',
+      name: 'Header',
+      width: 375,
+      height: 56,
+    } as unknown as PenNode;
+    const ctxAtTop: RoleContext = { canvasWidth: 375 };
+    resolveNodeRole(node, ctxAtTop);
+    expect((node as { role?: string }).role).toBe('navbar');
+    expect((node as { fill?: Array<{ color?: string }> }).fill).toBeDefined();
+  });
+
+  it('STILL infers footer from "Footer" at the page top level (no card parent)', () => {
+    const node = {
+      id: 'page-footer',
+      type: 'frame',
+      name: 'Footer',
+      width: 375,
+      height: 200,
+    } as unknown as PenNode;
+    const ctxAtTop: RoleContext = { canvasWidth: 375 };
+    resolveNodeRole(node, ctxAtTop);
+    expect((node as { role?: string }).role).toBe('footer');
+  });
+
+  it('does NOT strip an EXPLICIT navbar role even when parent is a card (LLM was deliberate)', () => {
+    // Guard only applies to NAME-INFERRED page-chrome roles. If the
+    // LLM explicitly emitted `role: navbar` on a node inside a card,
+    // we trust the author intent and apply navbar defaults. (Edge
+    // case: a card containing a mini search/nav header. Probably
+    // wrong but not our place to override.)
+    const node = {
+      id: 'explicit-nav',
+      type: 'frame',
+      name: 'Some Inner Nav',
+      role: 'navbar',
+      width: 343,
+      height: 48,
+    } as unknown as PenNode;
+    const ctxInCard: RoleContext = { canvasWidth: 375, parentRole: 'card' };
+    resolveNodeRole(node, ctxInCard);
+    expect((node as { role?: string }).role).toBe('navbar');
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Theme detection (resolveTreeRoles)
 // ---------------------------------------------------------------------------
 
@@ -1656,6 +1845,50 @@ describe('resolveTreeRoles — theme-aware role defaults', () => {
 
     const fill = (card as unknown as { fill?: Array<{ color?: string }> }).fill;
     expect(fill?.[0]?.color).toBe('#1A1A1A');
+  });
+
+  it('does not paint white orphan-container fill over stroked activity rings', () => {
+    const ringCircle = {
+      id: 'activity_rings-steps-circle',
+      type: 'frame',
+      name: 'Steps Circle',
+      width: 100,
+      height: 100,
+      cornerRadius: 50,
+      stroke: { thickness: 10, fill: [{ type: 'solid', color: '#00D09C' }] },
+      layout: 'vertical',
+      children: [
+        {
+          id: 'steps-value',
+          type: 'text',
+          content: '8,432',
+        },
+      ],
+    } as unknown as PenNode;
+    const ring = {
+      id: 'steps-ring',
+      type: 'frame',
+      name: 'Steps Ring',
+      width: 100,
+      height: 100,
+      children: [ringCircle],
+    } as unknown as PenNode;
+    const page = {
+      id: 'page',
+      type: 'frame',
+      width: 375,
+      height: 812,
+      fill: [{ type: 'solid', color: '#1A1A2E' }],
+      children: [ring],
+    } as unknown as PenNode;
+
+    resolveTreeRoles(page, 375);
+    resolveTreePostPass(page, 375);
+
+    const fill = (ringCircle as unknown as { fill?: Array<{ color?: string }> }).fill;
+    const effects = (ringCircle as unknown as { effects?: unknown[] }).effects;
+    expect(fill).toBeUndefined();
+    expect(effects).toBeUndefined();
   });
 
   it('does NOT overwrite an LLM-supplied fill (only fills missing defaults)', () => {

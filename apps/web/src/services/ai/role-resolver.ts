@@ -1,4 +1,5 @@
 import type { PenNode, FrameNode, SizingBehavior } from '@/types/pen';
+import type { PathNode } from '@/types/pen';
 import type { PenFill, PenStroke, PenEffect, SolidFill } from '@/types/styles';
 import {
   toSizeNumber,
@@ -8,6 +9,7 @@ import {
   getTextContentForNode,
   hasCjkText,
 } from './generation-utils';
+import { resolveIconPathBySemanticName } from './icon-resolver';
 
 // ---------------------------------------------------------------------------
 // Context passed to each role rule function
@@ -246,12 +248,45 @@ export function resolveNodeRole(node: PenNode, ctx: RoleContext): void {
   // Infer role from name if not explicitly set
   if (!role) {
     role = inferRoleFromName(node);
+
+    // Page-chrome inference is wrong inside a card-family parent. The
+    // LLM frequently names a card's internal sections "Header" and
+    // "Footer" (the card's title row and action row, respectively),
+    // but `NAME_EXACT_MAP` blindly maps those to the page-level
+    // 'navbar' and 'footer' roles — which then inject navbar fill +
+    // border or footer padding into the inner card section, turning
+    // it into a glaring white bar (the heart-rate "Mini Chart"
+    // regression). Strip the inference when the immediate parent is
+    // already a card-family role: those are container roles whose
+    // children are card pieces, not page chrome.
+    if (
+      role &&
+      PAGE_CHROME_ROLES.has(role) &&
+      ctx.parentRole &&
+      CARD_LIKE_ROLES.has(ctx.parentRole)
+    ) {
+      role = undefined;
+    }
+
     if (role) {
       (node as unknown as Record<string, unknown>).role = role;
     }
   }
 
   if (!role) return;
+
+  // Size sanity check for card-family roles. The `inferRoleFromName`
+  // pattern matcher is lexical — a 6×6 node named "Status Dot" trips
+  // the `/\bstat/` regex and gets `role: 'stat-card'`, which then
+  // injects 24px padding, a card shadow, and cornerRadius. Refuse to
+  // apply card-like roles on nodes too small to plausibly be a card;
+  // delete the role entirely so downstream passes also treat the
+  // node as unroled. This catches both name-inferred and LLM-
+  // emitted-directly versions of the same mistake.
+  if (CARD_LIKE_ROLES.has(role) && isAbsurdlyTinyForCardRole(node)) {
+    delete (node as { role?: string }).role;
+    return;
+  }
 
   const ruleFn = roleRegistry.get(role);
   if (!ruleFn) return; // unknown role — pass through unchanged
@@ -260,6 +295,73 @@ export function resolveNodeRole(node: PenNode, ctx: RoleContext): void {
   if (!defaults) return;
 
   applyDefaults(node, defaults);
+}
+
+/**
+ * Roles that inject heavy visual defaults (padding ≥ 16, card shadow,
+ * cornerRadius ≥ 12, fill) which only make sense on a container large
+ * enough to hold content. Applying them to a tiny element (e.g. a 6×6
+ * status dot whose name happens to match `/\bstat/` and trips the
+ * stat-card pattern) silently inflates it into an oversized card with
+ * 24px padding and a drop shadow.
+ *
+ * When `resolveNodeRole` sees a role in this list AND the node's
+ * declared width or height is below `CARD_LIKE_MIN_DIMENSION`, the
+ * role is stripped (set back to undefined) before any defaults are
+ * applied. The node keeps whatever it already had.
+ */
+const CARD_LIKE_ROLES = new Set([
+  'card',
+  'stat-card',
+  'pricing-card',
+  'feature-card',
+  'image-card',
+  'testimonial',
+]);
+const CARD_LIKE_MIN_DIMENSION = 40;
+
+/**
+ * Roles that only make sense at the top of a page tree — they paint
+ * page-level chrome (navbar bar across the top, footer band across
+ * the bottom, full-bleed hero block, full-width call-to-action band).
+ *
+ * When the LLM names a card's INTERNAL sections "Header" or "Footer"
+ * (the card's title row / action row), the lexical name match in
+ * `NAME_EXACT_MAP` blindly returns 'navbar' / 'footer' — which then
+ * injects navbar fill + border or footer padding into a section
+ * inside the card, turning it into a glaring white bar that doesn't
+ * belong there. `resolveNodeRole` strips any of these inferred roles
+ * whose immediate parent is in `CARD_LIKE_ROLES`, on the principle
+ * that page-chrome roles cannot live inside a card.
+ *
+ * search-bar is intentionally NOT included: a search input legitimately
+ * appears inside settings cards, profile cards, etc. The visual
+ * defaults for search-bar are also harmless (rounded input fill), so
+ * even if it's mis-inferred the visual cost is small.
+ */
+const PAGE_CHROME_ROLES = new Set(['navbar', 'footer', 'hero', 'cta-section']);
+
+/**
+ * Read a declared dimension as a pixel number when possible. Returns
+ * `null` for `'fill_container'`, `'fit_content'`, `undefined`, or any
+ * non-numeric value — those sizing modes don't tell us whether the
+ * final render will be small, so we refuse to make a decision from
+ * them and fall back to the permissive default (apply the role).
+ */
+function readDeclaredPixelSize(value: unknown): number | null {
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+  return null;
+}
+
+function isAbsurdlyTinyForCardRole(node: PenNode): boolean {
+  if (node.type !== 'frame') return false;
+  const w = readDeclaredPixelSize((node as { width?: unknown }).width);
+  const h = readDeclaredPixelSize((node as { height?: unknown }).height);
+  // Only reject when BOTH dimensions are declared numbers AND at least
+  // one is below the threshold. Unknown/sizing-keyword dimensions are
+  // left alone (we can't tell what they'll resolve to).
+  if (w == null || h == null) return false;
+  return w < CARD_LIKE_MIN_DIMENSION || h < CARD_LIKE_MIN_DIMENSION;
 }
 
 /**
@@ -455,6 +557,9 @@ export function resolveTreePostPass(
   if (currentRoot.layout === 'horizontal' && currentChildren().length >= 2) {
     normalizeInputTrailingIconAlignment(currentRoot, currentChildren());
   }
+
+  // --- Placeholder icon repair ---
+  repairPlaceholderIcons(currentRoot, parentNode);
 
   // --- Text height estimation ---
   if (currentRoot.layout && currentRoot.layout !== 'none') {
@@ -738,6 +843,7 @@ function fixOrphanContainerContrast(node: FrameNode, parentNode?: PenNode): void
   if (!parentNode) return;
   if (hasFill(node)) return;
   if (hasFill(parentNode)) return;
+  if (isRingLikeDecorativeContainer(node)) return;
 
   const cr =
     typeof node.cornerRadius === 'number'
@@ -759,6 +865,28 @@ function fixOrphanContainerContrast(node: FrameNode, parentNode?: PenNode): void
     { type: 'shadow', offsetX: 0, offsetY: 1, blur: 3, spread: 0, color: '#0000001A' },
     { type: 'shadow', offsetX: 0, offsetY: 1, blur: 2, spread: -1, color: '#0000000F' },
   ];
+}
+
+function isRingLikeDecorativeContainer(node: FrameNode): boolean {
+  const label = `${node.id ?? ''} ${node.name ?? ''}`.toLowerCase();
+  if (!/(ring|circle|progress|activity)/.test(label)) return false;
+  if (!node.stroke) return false;
+
+  const width = toSizeNumber(node.width, 0);
+  const height = toSizeNumber(node.height, 0);
+  if (width <= 0 || height <= 0) return false;
+
+  const roughlySquare = Math.abs(width - height) <= Math.max(2, Math.max(width, height) * 0.08);
+  if (!roughlySquare) return false;
+
+  const cr =
+    typeof node.cornerRadius === 'number'
+      ? node.cornerRadius
+      : Array.isArray(node.cornerRadius) && node.cornerRadius.length > 0
+        ? node.cornerRadius[0]
+        : 0;
+
+  return cr >= Math.min(width, height) * 0.35;
 }
 
 function fixInputSiblingConsistency(_parent: FrameNode, children: PenNode[]): void {
@@ -917,6 +1045,72 @@ function isIconLikeNode(node: PenNode): boolean {
   }
 
   return false;
+}
+
+function repairPlaceholderIcons(node: FrameNode, parentNode?: PenNode): void {
+  if (!Array.isArray(node.children) || node.children.length === 0) return;
+
+  for (const child of node.children) {
+    if (!isPlaceholderCircleIcon(child)) continue;
+    const semanticName = inferSemanticIconName(child, node, parentNode);
+    if (!semanticName) continue;
+    resolveIconPathBySemanticName(child as PathNode, semanticName);
+  }
+}
+
+function isPlaceholderCircleIcon(node: PenNode): boolean {
+  return node.type === 'path' && (node.iconId === 'lucide:circle' || node.iconId === 'feather:circle');
+}
+
+function inferSemanticIconName(
+  node: PenNode,
+  localParent: FrameNode,
+  parentNode?: PenNode,
+): string | null {
+  const candidates = [
+    node.name,
+    localParent.name,
+    ...collectNearbyText(localParent, 2, node),
+    ...(parentNode ? collectNearbyText(parentNode, 2, localParent) : []),
+    parentNode?.name,
+  ]
+    .filter((value): value is string => typeof value === 'string' && value.trim().length > 0)
+    .map((value) => value.toLowerCase());
+
+  for (const text of candidates) {
+    if (/(run|jog|walk|hike|cardio|activity|exercise|training)/.test(text)) return 'activity';
+    if (/(workout|workouts|gym|strength|dumbbell|barbell)/.test(text)) return 'dumbbell';
+    if (/(yoga|meditation|stretch|profile|account|person|user)/.test(text)) return 'user';
+    if (/(nutrition|meal|food|diet|apple|fruit)/.test(text)) return 'apple';
+    if (/(today|sun|morning)/.test(text)) return 'sun';
+  }
+
+  return null;
+}
+
+function collectNearbyText(
+  node: PenNode,
+  depth: number,
+  exclude?: PenNode,
+): string[] {
+  if (depth < 0 || node === exclude) return [];
+
+  const out: string[] = [];
+  if (node.type === 'text') {
+    const content = getTextContentForNode(node).trim();
+    if (content) out.push(content);
+  } else if (typeof node.name === 'string' && node.name.trim()) {
+    out.push(node.name.trim());
+  }
+
+  if ('children' in node && Array.isArray(node.children) && depth > 0) {
+    for (const child of node.children) {
+      if (child === exclude) continue;
+      out.push(...collectNearbyText(child, depth - 1, exclude));
+    }
+  }
+
+  return out;
 }
 
 function fixTextHeights(_parent: FrameNode, children: PenNode[], _canvasWidth: number): void {

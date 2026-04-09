@@ -34,6 +34,7 @@ import {
   detectThemeFromNode,
 } from './role-resolver';
 import type { RoleContext } from './role-resolver';
+import { rewriteLlmAntiPatterns } from './sanitize-llm-anti-patterns';
 // Trigger side-effect registration of all role definitions
 import './role-definitions';
 import { extractJsonFromResponse } from './design-parser';
@@ -270,11 +271,28 @@ export function insertStreamingNode(node: PenNode, parentId: string | null): voi
     }
   }
 
-  // Apply role-based defaults before legacy heuristics
+  // Apply role-based defaults before legacy heuristics.
+  //
+  // Theme detection for the streaming path: `detectActiveDocumentTheme`
+  // walks the live page root via `getActivePagePrimaryFrameId()`. For
+  // streaming, the page root frame is always committed to the store
+  // BEFORE any of its children (it's the first node emitted by the
+  // LLM and hits `replaceEmptyFrame` / `addNode` earlier in this same
+  // function for the root case). By the time a child streaming node
+  // reaches role resolution, the root is already in place and its fill
+  // is readable — so the theme lookup is always accurate for children.
+  //
+  // For the root node itself, `detectActiveDocumentTheme` sees the
+  // still-stale empty default root in the store (bad) UNLESS we also
+  // check the incoming `node` — which we do by passing `[node]` as
+  // the input-forest hint. If `node` has a solid fill (the LLM-supplied
+  // dark page bg), input-first detection wins. Falls back to the store
+  // cleanly for everything else.
   const roleCtx: RoleContext = {
     parentRole: parentNode?.role,
     parentLayout: parentNode && 'layout' in parentNode ? parentNode.layout : undefined,
     canvasWidth: generationCanvasWidth,
+    theme: detectActiveDocumentTheme([node]),
   };
   resolveNodeRole(node, roleCtx);
 
@@ -891,32 +909,50 @@ function isScreenshotLikeMarker(text: string): boolean {
 // ---------------------------------------------------------------------------
 
 /**
- * Resolve the theme of the LIVE document so role defaults applied to an
- * MCP-emitted subtree pick the right colors.
+ * Resolve the theme that should drive role defaults for an incoming
+ * batch of nodes.
  *
- * Why this exists: `sanitizeNodesForInsert/Upsert` receives an arbitrary
- * `PenNode` (a card, a navbar, a sub-section, a component) — NOT the page
- * root. Calling `resolveTreeRoles(node, ...)` on a card has no fill of
- * its own and falls back to 'light', so a navbar inserted into a dark
- * page would silently get the white default. The fix is to look up the
- * current page root from the document store and detect theme from THAT.
+ * Detection order — INPUT NODES FIRST, then live store:
  *
- * Always reads the LIVE active-page primary frame via
- * `getActivePagePrimaryFrameId()` rather than the cached
- * `generationRootFrameId` module variable. The cache is set by
- * `resetGenerationRemapping()` at the start of an orchestrator
- * generation flow but is stale or default for direct MCP call paths
- * (`insert_node`, `batch_design`, `upsertNodesToCanvas` from non-
- * streaming code) that bypass that initialization. The same precedent
- * exists at line ~464 of this file: `upsertNodesToCanvas` already
- * deliberately reads `getActivePagePrimaryFrameId()` instead of the
- * cached generation root for the same reason.
+ *   1. Walk the incoming `nodes` array top-down. The first frame at
+ *      depth 0 (outermost) with a solid-color fill wins. If none of
+ *      the outermost nodes has a fill, walk one level deeper, and so
+ *      on. The first hit is the theme source.
  *
- * Returns `undefined` when the active page has no primary frame yet
- * (brand-new document, first load) — callers should treat that the
- * same as the default light theme.
+ *      Why input first: in a fresh generation the LLM emits the new
+ *      page root (e.g. fill #0A0A0A) inside `nodes`, but the LIVE
+ *      store still holds the previous empty default root. Reading
+ *      the store would return 'light' from that empty default, and
+ *      the LLM-supplied dark page would get white card defaults
+ *      injected into every child before the new root reaches the
+ *      store. Reading the input first guarantees the cards see the
+ *      same theme as the page they belong to.
+ *
+ *   2. Fall back to the LIVE active-page primary frame in the store
+ *      via `getActivePagePrimaryFrameId()`. This handles partial
+ *      inserts (e.g. dropping a single navbar into an existing dark
+ *      page where `nodes` doesn't carry the page root).
+ *
+ *      Always reads via `getActivePagePrimaryFrameId()` rather than
+ *      the cached `generationRootFrameId` module variable. The cache
+ *      is set by `resetGenerationRemapping()` at the start of an
+ *      orchestrator generation flow but is stale or default for
+ *      direct MCP call paths (`insert_node`, `batch_design`,
+ *      `upsertNodesToCanvas` from non-streaming code) that bypass
+ *      that initialization. The same precedent exists at line ~464
+ *      of this file: `upsertNodesToCanvas` already reads
+ *      `getActivePagePrimaryFrameId()` for the same reason.
+ *
+ *   3. Returns `undefined` when neither source has a usable fill
+ *      (brand-new document, partial insert into empty page) —
+ *      callers should treat that the same as the default light theme.
  */
-function detectActiveDocumentTheme(): 'dark' | 'light' | undefined {
+function detectActiveDocumentTheme(nodes?: PenNode[]): 'dark' | 'light' | undefined {
+  if (nodes && nodes.length > 0) {
+    const fromInput = detectThemeFromNodeForest(nodes);
+    if (fromInput) return fromInput;
+  }
+
   const primaryFrameId = getActivePagePrimaryFrameId();
   if (!primaryFrameId) return undefined;
   const pageRoot = useDocumentStore.getState().getNodeById(primaryFrameId);
@@ -924,9 +960,52 @@ function detectActiveDocumentTheme(): 'dark' | 'light' | undefined {
   return detectThemeFromNode(pageRoot);
 }
 
+/**
+ * BFS over a forest of nodes, returning the theme detected from the
+ * first frame with a usable solid fill. Returns `undefined` if no
+ * frame in the entire forest carries a fill we can read.
+ *
+ * BFS (not DFS) so the OUTERMOST frames are visited first — the page
+ * root and top-level sections are the most authoritative theme
+ * source. A small white card nested deep inside a dark page must not
+ * out-vote the page root.
+ */
+function detectThemeFromNodeForest(nodes: PenNode[]): 'dark' | 'light' | undefined {
+  const queue: PenNode[] = [...nodes];
+  while (queue.length > 0) {
+    const node = queue.shift()!;
+    if (node.type === 'frame') {
+      const theme = readThemeFromNodeFill(node);
+      if (theme) return theme;
+    }
+    if ('children' in node && Array.isArray(node.children)) {
+      for (const child of node.children) queue.push(child);
+    }
+  }
+  return undefined;
+}
+
+/**
+ * Read theme from a single node's fill if it has a parseable solid
+ * color. Returns `undefined` for missing fill, empty fill, gradient,
+ * variable ref, or any other unreadable shape — caller must keep
+ * walking the tree.
+ *
+ * Mirrors `detectThemeFromNode` from role-resolver but returns
+ * undefined (not 'light') when the fill is unreadable, so the caller
+ * can distinguish "no fill found, keep looking" from "explicit light".
+ */
+function readThemeFromNodeFill(node: PenNode): 'dark' | 'light' | undefined {
+  const fill = (node as { fill?: unknown }).fill;
+  if (!Array.isArray(fill) || fill.length === 0) return undefined;
+  const first = fill[0] as { type?: string; color?: string };
+  if (first?.type !== 'solid' || typeof first.color !== 'string') return undefined;
+  return detectThemeFromNode(node);
+}
+
 function sanitizeNodesForInsert(nodes: PenNode[], existingIds: Set<string>): PenNode[] {
   const cloned = nodes.map((n) => deepCloneNode(n));
-  const activeTheme = detectActiveDocumentTheme();
+  const activeTheme = detectActiveDocumentTheme(cloned);
 
   for (const node of cloned) {
     // Schema normalization first so later passes see valid stroke/fill
@@ -936,6 +1015,12 @@ function sanitizeNodesForInsert(nodes: PenNode[], existingIds: Set<string>): Pen
     // Strip fake phone mockup wrappers BEFORE role resolution so role
     // defaults aren't wasted on a wrapper we're about to discard.
     unwrapFakePhoneMockups(node);
+    // Rewrite known LLM composition anti-patterns BEFORE role resolution
+    // so the rewritten subtree still benefits from theme-aware defaults,
+    // layout normalization, and post-pass fixes. Covers stacked-ellipse
+    // progress rings rendering as overlapping top-left blobs, and
+    // alternating bar/label siblings that break chart column layouts.
+    rewriteLlmAntiPatterns(node);
     // Role resolution runs first so role defaults can populate `layout`
     // before normalizeTreeLayout's generic fallback would otherwise freeze
     // the wrong value (e.g. navbar → horizontal, not vertical fallback).
@@ -967,7 +1052,7 @@ function sanitizeNodesForInsert(nodes: PenNode[], existingIds: Set<string>): Pen
 
 function sanitizeNodesForUpsert(nodes: PenNode[]): PenNode[] {
   const cloned = nodes.map((n) => deepCloneNode(n));
-  const activeTheme = detectActiveDocumentTheme();
+  const activeTheme = detectActiveDocumentTheme(cloned);
 
   for (const node of cloned) {
     // Schema normalization first so later passes see valid stroke/fill
@@ -977,6 +1062,9 @@ function sanitizeNodesForUpsert(nodes: PenNode[]): PenNode[] {
     // Strip fake phone mockup wrappers BEFORE role resolution so role
     // defaults aren't wasted on a wrapper we're about to discard.
     unwrapFakePhoneMockups(node);
+    // Rewrite known LLM composition anti-patterns BEFORE role resolution.
+    // See sanitizeNodesForInsert for the full rationale.
+    rewriteLlmAntiPatterns(node);
     // Role resolution runs first so role defaults can populate `layout`
     // before normalizeTreeLayout's generic fallback would otherwise freeze
     // the wrong value (e.g. navbar → horizontal, not vertical fallback).

@@ -1,6 +1,11 @@
 import type { PenNode, PathNode } from '@/types/pen';
 import { toStrokeThicknessNumber, extractPrimaryColor } from './generation-utils';
-import { ICON_PATH_MAP, findPrefixFallback, findSubstringFallback } from './icon-dictionary';
+import {
+  ICON_PATH_MAP,
+  findPrefixFallback,
+  findSubstringFallback,
+  lookupIconByName,
+} from './icon-dictionary';
 import { pendingIconResolutions, tryImmediateIconResolution } from './icon-font-fetcher';
 
 // ---------------------------------------------------------------------------
@@ -113,7 +118,7 @@ export function applyIconPathResolution(node: PenNode): void {
 
   if (!match) {
     // 3. Last resort: circle from Feather, queued for async.
-    if (isIconLikeName(node.name ?? '', queueName)) {
+    if (isIconLikeName(node.name ?? '', queueName) && !isOverlyGenericFallbackName(queueName)) {
       const fallback = ICON_PATH_MAP['circle'] ?? ICON_PATH_MAP['feather:circle'];
       if (fallback) {
         node.d = fallback.d;
@@ -132,6 +137,18 @@ export function applyIconPathResolution(node: PenNode): void {
   applyIconStyle(node, match.style);
 }
 
+export function resolveIconPathBySemanticName(
+  node: PathNode,
+  semanticName: string,
+): boolean {
+  const match = lookupIconByName(semanticName);
+  if (!match) return false;
+  node.d = match.d;
+  node.iconId = match.iconId;
+  applyIconStyle(node, match.style);
+  return true;
+}
+
 // ---------------------------------------------------------------------------
 // Internal helpers
 // ---------------------------------------------------------------------------
@@ -147,6 +164,17 @@ export function applyIconPathResolution(node: PenNode): void {
  */
 function isIconLikeName(_originalName: string, normalized: string): boolean {
   return normalized.length > 0 && normalized.length <= 30;
+}
+
+function isOverlyGenericFallbackName(normalized: string): boolean {
+  return (
+    normalized === 'icon' ||
+    /^wc\d+$/.test(normalized) ||
+    /^tab[a-z0-9]+$/.test(normalized) ||
+    /^nav[a-z0-9]+$/.test(normalized) ||
+    /^item\d+$/.test(normalized) ||
+    /^section\d+$/.test(normalized)
+  );
 }
 
 /** Apply stroke/fill styling to a resolved icon node (caller must ensure path type). */

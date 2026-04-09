@@ -458,10 +458,20 @@ registerRole('avatar', (node, _ctx) => {
   };
 });
 
-registerRole('icon', (_node, _ctx) => ({
-  width: 24,
-  height: 24,
-}));
+registerRole('icon', (node, _ctx) =>
+  node.type === 'frame'
+    ? {
+        width: 24,
+        height: 24,
+        layout: 'horizontal',
+        alignItems: 'center',
+        justifyContent: 'center',
+      }
+    : {
+        width: 24,
+        height: 24,
+      },
+);
 
 // ---------------------------------------------------------------------------
 // Typography roles
