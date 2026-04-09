@@ -1,17 +1,16 @@
 import { useEffect } from 'react'
-import i18n from '@/i18n'
 import { useCanvasStore } from '@/stores/canvas-store'
 import { useDocumentStore } from '@/stores/document-store'
 import { useHistoryStore } from '@/stores/history-store'
 import { zoomToFitContent } from '@/canvas/skia-engine-ref'
-import { syncCanvasPositionsToStore } from '@/canvas/skia-engine-ref'
-import { normalizePenDocument } from '@/utils/normalize-pen-file'
+import { parseAndPrepareImportedDocument } from '@/utils/import-pen-document'
 import {
   supportsFileSystemAccess,
-  writeToFilePath,
   openDocumentFS,
   openDocument,
 } from '@/utils/file-operations'
+import { saveCurrentDocument } from '@/utils/save-current-document'
+import { confirmContinueWithUnsavedChanges } from '@/utils/unsaved-changes'
 
 /**
  * Listens for Electron native menu actions and dispatches them to stores.
@@ -22,19 +21,24 @@ export function useElectronMenu() {
     const api = window.electronAPI
     if (!api?.onMenuAction) return
 
+    const loadElectronDocument = async (content: string, filePath: string) => {
+      const name = filePath.split(/[/\\]/).pop() || 'untitled.op'
+      const prepared = parseAndPrepareImportedDocument(content, {
+        fileName: name,
+        filePath,
+      })
+      if (!prepared) return
+      const { doc } = prepared
+      useDocumentStore.getState().loadDocument(doc, name, null, filePath)
+      requestAnimationFrame(() => zoomToFitContent())
+    }
+
     const loadFileFromPath = (filePath: string) => {
       api.readFile?.(filePath).then((result) => {
         if (!result) return
-        try {
-          const raw = JSON.parse(result.content)
-          if (!raw.version || (!Array.isArray(raw.children) && !Array.isArray(raw.pages))) return
-          const doc = normalizePenDocument(raw)
-          const name = filePath.split(/[/\\]/).pop() || 'untitled.op'
-          useDocumentStore.getState().loadDocument(doc, name, null, filePath)
-          requestAnimationFrame(() => zoomToFitContent())
-        } catch {
+        void loadElectronDocument(result.content, filePath).catch(() => {
           // Invalid file — ignore
-        }
+        })
       })
     }
 
@@ -48,90 +52,51 @@ export function useElectronMenu() {
     const cleanup = api.onMenuAction((action: string) => {
       switch (action) {
         case 'new':
-          if (useDocumentStore.getState().isDirty) {
-            if (!window.confirm(i18n.t('topbar.closeConfirmMessage'))) break
-          }
-          useDocumentStore.getState().newDocument()
-          requestAnimationFrame(() => zoomToFitContent())
+          void (async () => {
+            if (!(await confirmContinueWithUnsavedChanges())) return
+            useDocumentStore.getState().newDocument()
+            requestAnimationFrame(() => zoomToFitContent())
+          })()
           break
 
         case 'open':
-          if (useDocumentStore.getState().isDirty) {
-            if (!window.confirm(i18n.t('topbar.closeConfirmMessage'))) break
-          }
-          if (api) {
-            // Electron: use native IPC to get full file path for save-in-place
-            api.openFile().then((result) => {
-              if (!result) return
-              try {
-                const raw = JSON.parse(result.content)
-                if (!raw.version || (!Array.isArray(raw.children) && !Array.isArray(raw.pages))) return
-                const doc = normalizePenDocument(raw)
-                const name = result.filePath.split(/[/\\]/).pop() || 'untitled.op'
-                useDocumentStore
-                  .getState()
-                  .loadDocument(doc, name, null, result.filePath)
-                requestAnimationFrame(() => zoomToFitContent())
-              } catch {
-                // Invalid file
-              }
-            })
-          } else if (supportsFileSystemAccess()) {
-            openDocumentFS().then((result) => {
-              if (result) {
-                useDocumentStore
-                  .getState()
-                  .loadDocument(result.doc, result.fileName, result.handle)
-                requestAnimationFrame(() => zoomToFitContent())
-              }
-            })
-          } else {
-            openDocument().then((result) => {
-              if (result) {
-                useDocumentStore
-                  .getState()
-                  .loadDocument(result.doc, result.fileName)
-                requestAnimationFrame(() => zoomToFitContent())
-              }
-            })
-          }
+          void (async () => {
+            if (!(await confirmContinueWithUnsavedChanges())) return
+            if (api) {
+              api.openFile().then((result) => {
+                if (!result) return
+                void loadElectronDocument(result.content, result.filePath).catch(() => {
+                  // Invalid file
+                })
+              })
+            } else if (supportsFileSystemAccess()) {
+              openDocumentFS().then((result) => {
+                if (result) {
+                  useDocumentStore
+                    .getState()
+                    .loadDocument(result.doc, result.fileName, result.handle)
+                  requestAnimationFrame(() => zoomToFitContent())
+                }
+              })
+            } else {
+              openDocument().then((result) => {
+                if (result) {
+                  useDocumentStore
+                    .getState()
+                    .loadDocument(result.doc, result.fileName)
+                  requestAnimationFrame(() => zoomToFitContent())
+                }
+              })
+            }
+          })()
           break
 
         case 'save':
         case 'save-and-close': {
           const closeAfterSave = action === 'save-and-close'
-          try { syncCanvasPositionsToStore() } catch { /* continue */ }
-          const store = useDocumentStore.getState()
-          const { document: doc, fileName, filePath } = store
-          const isOpFile = fileName ? /\.op$/i.test(fileName) : false
-          const suggestedName = fileName
-            ? fileName.replace(/\.(pen|op|json)$/i, '') + '.op'
-            : 'untitled.op'
-
-          const doSave = async () => {
-            // Known .op path → direct write
-            if (filePath && isOpFile) {
-              await writeToFilePath(filePath, doc)
-              store.markClean()
-              if (closeAfterSave) api.confirmClose()
-              return
-            }
-            // No in-place target → save as .op via native dialog
-            const savedPath = await api.saveFile(
-              JSON.stringify(doc), suggestedName,
-            )
-            if (savedPath) {
-              useDocumentStore.setState({
-                fileName: savedPath.split(/[/\\]/).pop() || suggestedName,
-                filePath: savedPath,
-                fileHandle: null,
-                isDirty: false,
-              })
-              if (closeAfterSave) api.confirmClose()
-            }
-            // If user cancelled the save dialog, don't close
-          }
-          doSave().catch((err) => console.error('[Save] Failed:', err))
+          void saveCurrentDocument().then((saved) => {
+            if (saved && closeAfterSave) api.confirmClose()
+          }).catch((err) => console.error('[Save] Failed:', err))
           break
         }
 

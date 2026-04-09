@@ -48,6 +48,10 @@ describe('layout-engine', () => {
     it('returns false when visible is false', () => {
       expect(isNodeVisible({ ...rect('a'), visible: false })).toBe(false)
     })
+
+    it('returns false when enabled is false', () => {
+      expect(isNodeVisible({ ...rect('a'), enabled: false } as PenNode)).toBe(false)
+    })
   })
 
   describe('inferLayout', () => {

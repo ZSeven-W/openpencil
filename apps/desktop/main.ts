@@ -39,6 +39,10 @@ import {
 } from './auto-updater'
 import { initLogger, log } from './logger'
 import { setupIPC } from './ipc-handlers'
+import {
+  buildUnsavedChangesDialogOptions,
+  mapUnsavedChangesResponse,
+} from './unsaved-changes-dialog'
 
 let mainWindow: BrowserWindow | null = null
 let nitroProcess: ChildProcess | null = null
@@ -461,11 +465,11 @@ function createWindow(): void {
         '({ dirty: window.__documentIsDirty === true,' +
         ' message: typeof window.__i18nT === "function" ? window.__i18nT("topbar.closeConfirmMessage") : "",' +
         ' detail: typeof window.__i18nT === "function" ? window.__i18nT("topbar.closeConfirmDetail") : "",' +
-        ' save: typeof window.__i18nT === "function" ? window.__i18nT("common.save") : "",' +
-        ' dontSave: typeof window.__i18nT === "function" ? window.__i18nT("topbar.dontSave") : "",' +
+        ' yes: typeof window.__i18nT === "function" ? window.__i18nT("common.yes") : "",' +
+        ' no: typeof window.__i18nT === "function" ? window.__i18nT("common.no") : "",' +
         ' cancel: typeof window.__i18nT === "function" ? window.__i18nT("common.cancel") : "" })',
       )
-      .then((result: { dirty: boolean; message: string; detail: string; save: string; dontSave: string; cancel: string }) => {
+      .then((result: { dirty: boolean; message: string; detail: string; yes: string; no: string; cancel: string }) => {
         if (!result.dirty) {
           // Not dirty — allow close
           forceClose = true
@@ -475,28 +479,24 @@ function createWindow(): void {
 
         // Show native save dialog with i18n strings
         return dialog
-          .showMessageBox(win, {
-            type: 'question',
-            buttons: [
-              result.save || 'Save',
-              result.dontSave || "Don't Save",
-              result.cancel || 'Cancel',
-            ],
-            defaultId: 0,
-            cancelId: 2,
+          .showMessageBox(win, buildUnsavedChangesDialogOptions({
+            yesLabel: result.yes || 'Yes',
+            noLabel: result.no || 'No',
+            cancelLabel: result.cancel || 'Cancel',
             message: result.message || 'Do you want to save changes before closing?',
             detail: result.detail || 'Your changes will be lost if you don\'t save them.',
-          })
+          }))
           .then(({ response }) => {
-            if (response === 0) {
+            const decision = mapUnsavedChangesResponse(response)
+            if (decision === 'save') {
               // Save — tell renderer to save then confirm close
               win.webContents.send('menu:action', 'save-and-close')
-            } else if (response === 1) {
-              // Don't Save — force close
+            } else if (decision === 'discard') {
+              // No — force close without saving
               forceClose = true
               win.close()
             }
-            // Cancel (response === 2) — do nothing, window stays open
+            // Cancel — do nothing, window stays open
           })
       })
       .catch(() => {

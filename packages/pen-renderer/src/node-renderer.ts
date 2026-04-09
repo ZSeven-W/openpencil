@@ -1,7 +1,15 @@
 import type { CanvasKit, Canvas, Paint, Font, Typeface } from 'canvaskit-wasm'
 import type { PenNode, ContainerProps, EllipseNode, LineNode, PolygonNode, PathNode, ImageNode, IconFontNode } from '@zseven-w/pen-types'
 import type { PenFill, PenStroke, PenEffect, ShadowEffect, ImageFill } from '@zseven-w/pen-types'
-import { DEFAULT_FILL, DEFAULT_STROKE, DEFAULT_STROKE_WIDTH, buildEllipseArcPath, isArcEllipse } from '@zseven-w/pen-core'
+import {
+  DEFAULT_FILL,
+  DEFAULT_STROKE,
+  DEFAULT_STROKE_WIDTH,
+  buildEllipseArcPath,
+  getPathBoundsFromAnchors,
+  isArcEllipse,
+  pathDataToAnchors,
+} from '@zseven-w/pen-core'
 import { parseColor, cornerRadiusValue, cornerRadii, resolveFillColor, resolveStrokeColor, resolveStrokeWidth } from './paint-utils.js'
 import { sanitizeSvgPath, hasInvalidNumbers, tryManualPathParse } from './path-utils.js'
 import { SkiaImageLoader } from './image-loader.js'
@@ -56,6 +64,10 @@ export class SkiaNodeRenderer {
   /** Set injectable icon lookup function. */
   setIconLookup(fn: IconLookupFn) {
     this.iconLookup = fn
+  }
+
+  setImageSourceResolver(resolver: (src: string) => { cacheKey: string; loadUrl: string | null }) {
+    this.imageLoader.setSourceResolver(resolver)
   }
 
   dispose() {
@@ -144,7 +156,13 @@ export class SkiaNodeRenderer {
 
     const cached = this.imageLoader.get(url)
     if (cached === undefined) this.imageLoader.request(url)
-    if (!cached) { const c = parseColor(ck, '#e5e7eb'); c[3] *= fillOpacity; paint.setColor(c); return { needsDrawImageRect: false } }
+    if (!cached) {
+      const isMissing = this.imageLoader.getStatus(url)?.state === 'missing'
+      const c = parseColor(ck, isMissing ? '#f1d7d7' : '#e5e7eb')
+      c[3] *= fillOpacity
+      paint.setColor(c)
+      return { needsDrawImageRect: false }
+    }
 
     const imgW = cached.width(), imgH = cached.height()
     if (imgW <= 0 || imgH <= 0) return { needsDrawImageRect: false }
@@ -478,7 +496,23 @@ export class SkiaNodeRenderer {
       return
     }
 
-    const bounds = path.getBounds()
+    const parsedAnchors = pNode.anchors
+      ? {
+          anchors: pNode.anchors,
+          closed: pNode.closed ?? /[Zz]\s*$/.test(rawD),
+        }
+      : pathDataToAnchors(rawD)
+    const geometryBounds = parsedAnchors
+      ? getPathBoundsFromAnchors(parsedAnchors.anchors, parsedAnchors.closed)
+      : null
+    const bounds = geometryBounds
+      ? Float32Array.of(
+          geometryBounds.x,
+          geometryBounds.y,
+          geometryBounds.x + geometryBounds.width,
+          geometryBounds.y + geometryBounds.height,
+        )
+      : path.getBounds()
     const nativeW = bounds[2] - bounds[0], nativeH = bounds[3] - bounds[1]
     if (w > 0 && h > 0 && nativeW > 0.01 && nativeH > 0.01) {
       const isIcon = !!pNode.iconId
@@ -551,11 +585,19 @@ export class SkiaNodeRenderer {
     const src: string | undefined = iNode.src
     const cr = cornerRadiusValue(iNode.cornerRadius)
 
-    if (!src) { this.drawImageFallback(canvas, x, y, w, h, cr, opacity); return }
+    if (!src) { this.drawImageFallback(canvas, x, y, w, h, cr, opacity, false); return }
 
     const cached = this.imageLoader.get(src)
-    if (cached === undefined) { this.imageLoader.request(src); this.drawImageFallback(canvas, x, y, w, h, cr, opacity); return }
-    if (!cached) { this.drawImageFallback(canvas, x, y, w, h, cr, opacity); return }
+    if (cached === undefined) {
+      this.imageLoader.request(src)
+      this.drawImageFallback(canvas, x, y, w, h, cr, opacity, false)
+      return
+    }
+    if (!cached) {
+      const status = this.imageLoader.getStatus(src)
+      this.drawImageFallback(canvas, x, y, w, h, cr, opacity, status?.state === 'missing' || status?.state === 'error')
+      return
+    }
 
     const imgW = cached.width(), imgH = cached.height()
 
@@ -588,12 +630,94 @@ export class SkiaNodeRenderer {
     paint.delete(); canvas.restore()
   }
 
-  private drawImageFallback(canvas: Canvas, x: number, y: number, w: number, h: number, cr: number, opacity: number) {
+  private drawImageFallback(
+    canvas: Canvas,
+    x: number,
+    y: number,
+    w: number,
+    h: number,
+    cr: number,
+    opacity: number,
+    emphasizeMissing: boolean,
+  ) {
     const ck = this.ck
-    const paint = new ck.Paint(); paint.setStyle(ck.PaintStyle.Fill); paint.setAntiAlias(true)
-    const c = parseColor(ck, '#e5e7eb'); c[3] *= opacity; paint.setColor(c)
-    if (cr > 0) { const maxR = Math.min(cr, w / 2, h / 2); canvas.drawRRect(ck.RRectXY(ck.LTRBRect(x, y, x + w, y + h), maxR, maxR), paint) }
-    else { canvas.drawRect(ck.LTRBRect(x, y, x + w, y + h), paint) }
-    paint.delete()
+    const rect = ck.LTRBRect(x, y, x + w, y + h)
+    const maxR = Math.min(cr, w / 2, h / 2)
+
+    const fillPaint = new ck.Paint()
+    fillPaint.setStyle(ck.PaintStyle.Fill)
+    fillPaint.setAntiAlias(true)
+    const fillColor = parseColor(ck, emphasizeMissing ? '#f8d7da' : '#e5e7eb')
+    fillColor[3] *= opacity
+    fillPaint.setColor(fillColor)
+
+    if (cr > 0) {
+      canvas.drawRRect(ck.RRectXY(rect, maxR, maxR), fillPaint)
+    } else {
+      canvas.drawRect(rect, fillPaint)
+    }
+    fillPaint.delete()
+
+    const strokePaint = new ck.Paint()
+    strokePaint.setStyle(ck.PaintStyle.Stroke)
+    strokePaint.setAntiAlias(true)
+    strokePaint.setStrokeWidth(Math.max(1, Math.min(w, h) * 0.02))
+    const strokeColor = parseColor(ck, emphasizeMissing ? '#c2410c' : '#94a3b8')
+    strokeColor[3] *= opacity
+    strokePaint.setColor(strokeColor)
+    const dash = ck.PathEffect.MakeDash([8, 6], 0)
+    if (dash) strokePaint.setPathEffect(dash)
+
+    if (cr > 0) {
+      canvas.drawRRect(ck.RRectXY(rect, maxR, maxR), strokePaint)
+    } else {
+      canvas.drawRect(rect, strokePaint)
+    }
+
+    const iconPaint = new ck.Paint()
+    iconPaint.setStyle(ck.PaintStyle.Stroke)
+    iconPaint.setAntiAlias(true)
+    iconPaint.setStrokeWidth(Math.max(1.25, Math.min(w, h) * 0.03))
+    iconPaint.setStrokeCap(ck.StrokeCap.Round)
+    iconPaint.setStrokeJoin(ck.StrokeJoin.Round)
+    iconPaint.setColor(strokeColor)
+
+    const inset = Math.max(10, Math.min(w, h) * 0.18)
+    const iconLeft = x + inset
+    const iconTop = y + inset
+    const iconRight = x + w - inset
+    const iconBottom = y + h - inset
+    const iconPath = new ck.Path()
+    iconPath.moveTo(iconLeft, iconBottom)
+    iconPath.lineTo(x + w * 0.42, y + h * 0.58)
+    iconPath.lineTo(x + w * 0.58, y + h * 0.72)
+    iconPath.lineTo(iconRight, y + h * 0.42)
+    iconPath.moveTo(iconLeft, iconTop)
+    iconPath.lineTo(iconRight, iconTop)
+    iconPath.lineTo(iconRight, iconBottom)
+    iconPath.lineTo(iconLeft, iconBottom)
+    iconPath.close()
+    canvas.drawPath(iconPath, iconPaint)
+    iconPath.delete()
+
+    const dotPaint = new ck.Paint()
+    dotPaint.setStyle(ck.PaintStyle.Fill)
+    dotPaint.setAntiAlias(true)
+    dotPaint.setColor(strokeColor)
+    canvas.drawCircle(x + w * 0.35, y + h * 0.38, Math.max(3, Math.min(w, h) * 0.05), dotPaint)
+
+    if (emphasizeMissing) {
+      canvas.drawLine(
+        x + inset * 0.9,
+        y + h - inset * 0.9,
+        x + w - inset * 0.9,
+        y + inset * 0.9,
+        iconPaint,
+      )
+    }
+
+    strokePaint.delete()
+    iconPaint.delete()
+    dotPaint.delete()
   }
 }

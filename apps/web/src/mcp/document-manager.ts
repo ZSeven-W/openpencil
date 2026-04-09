@@ -5,6 +5,7 @@ import { join, resolve } from 'node:path'
 import type { PenDocument } from '../types/pen'
 import { sanitizeObject } from './utils/sanitize'
 import { PORT_FILE_DIR_NAME, PORT_FILE_NAME } from '@/constants/app'
+import { prepareImportedDocument } from '@/utils/import-pen-document'
 
 const cache = new Map<string, { doc: PenDocument; mtime: number }>()
 
@@ -290,8 +291,12 @@ export async function openDocument(filePath: string): Promise<PenDocument> {
   if (!validate(sanitized)) {
     throw new Error(`Invalid document format: ${filePath}`)
   }
-  cache.set(filePath, { doc: sanitized, mtime: Date.now() })
-  return sanitized
+  const prepared = prepareImportedDocument(sanitized, { filePath })
+  if (!prepared) {
+    throw new Error(`Invalid document format: ${filePath}`)
+  }
+  cache.set(filePath, { doc: prepared.doc, mtime: Date.now() })
+  return prepared.doc
 }
 
 /** Create a new empty document (not saved to disk yet). */

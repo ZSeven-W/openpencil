@@ -1,12 +1,27 @@
 import { readFileSync, readdirSync, writeFileSync, mkdirSync, existsSync } from 'fs'
 import { join } from 'path'
 import matter from 'gray-matter'
+// @ts-expect-error js-yaml is installed without ambient types in this workspace.
+import yaml from 'js-yaml'
 import type { Plugin } from 'vite'
 import type { SkillMeta } from './src/engine/types'
 
 const SKILLS_DIR = 'skills'
 const OUTPUT_DIR = 'src/_generated'
 const OUTPUT_FILE = 'skill-registry.ts'
+const MATTER_OPTIONS = {
+  engines: {
+    yaml: {
+      parse(source: string) {
+        const parsed = yaml.load(source)
+        return parsed && typeof parsed === 'object' ? parsed : {}
+      },
+      stringify(value: unknown) {
+        return yaml.dump(value)
+      },
+    },
+  },
+}
 
 function scanMarkdownFiles(dir: string): string[] {
   const results: string[] = []
@@ -24,7 +39,7 @@ function scanMarkdownFiles(dir: string): string[] {
 
 function parseFrontmatter(filePath: string): { meta: SkillMeta; content: string } | null {
   const raw = readFileSync(filePath, 'utf-8')
-  const { data, content } = matter(raw)
+  const { data, content } = matter(raw, MATTER_OPTIONS)
 
   if (!data.name || !data.phase) {
     console.warn(`[vite-plugin-skills] Skipping ${filePath}: missing required frontmatter (name, phase)`)

@@ -22,6 +22,7 @@ import {
   scaleChildrenInPlace,
   rotateChildrenInPlace,
   cloneNodeWithNewIds,
+  deepCloneNode,
   getActivePageChildren,
   setActivePageChildren,
   getAllChildren,
@@ -139,14 +140,16 @@ export const useDocumentStore = create<DocumentStoreState>(
     },
 
     updateNode: (id, updates) => {
-      useHistoryStore.getState().pushState(get().document)
-      set((s) => ({
-        document: _setChildren(
-          s.document,
-          updateNodeInTree(_children(s), id, updates),
-        ),
+      const state = get()
+      const currentChildren = _children(state)
+      const nextChildren = updateNodeInTree(currentChildren, id, updates)
+      if (nextChildren === currentChildren) return
+
+      useHistoryStore.getState().pushState(state.document)
+      set({
+        document: _setChildren(state.document, nextChildren),
         isDirty: true,
-      }))
+      })
     },
 
     removeNode: (id) => {
@@ -167,7 +170,12 @@ export const useDocumentStore = create<DocumentStoreState>(
       if (!node) return
       useHistoryStore.getState().pushState(state.document)
       const withoutNode = removeNodeFromTree(children, id)
-      const withNode = insertNodeInTree(withoutNode, newParentId, node, index)
+      const withNode = insertNodeInTree(
+        withoutNode,
+        newParentId,
+        deepCloneNode(node),
+        index,
+      )
       set({
         document: _setChildren(state.document, withNode),
         isDirty: true,

@@ -10,6 +10,8 @@ const ja: TranslationKeys = {
   'common.close': '閉じる',
   'common.connect': '接続',
   'common.disconnect': '切断',
+  'common.yes': 'はい',
+  'common.no': 'いいえ',
   'common.import': 'インポート',
   'common.export': 'エクスポート',
   'common.name': '名前',
@@ -74,6 +76,8 @@ const ja: TranslationKeys = {
   'statusbar.zoomOut': '縮小',
   'statusbar.zoomIn': '拡大',
   'statusbar.resetZoom': 'ズームをリセット',
+  'statusbar.focusContent': 'すべての内容を表示',
+  'statusbar.focusSelection': '選択範囲にフォーカス',
 
   // ── Updater ──
   'updater.softwareUpdate': 'ソフトウェアアップデート',

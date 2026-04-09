@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Slider } from '@/components/ui/slider'
 import { Separator } from '@/components/ui/separator'
 import type { ImageFitMode } from '@/types/pen'
+import { toStoredAssetPath } from '@/utils/document-assets'
 
 type FitMode = ImageFitMode | 'stretch'
 
@@ -23,6 +24,7 @@ interface ImageFillPopoverProps {
   imageSrc?: string
   fitMode: FitMode
   adjustments: AdjustmentValues
+  documentPath?: string | null
   /** Bounding rect of the trigger element for positioning */
   triggerRect: DOMRect
   onFitModeChange: (mode: FitMode) => void
@@ -51,6 +53,7 @@ export default function ImageFillPopover({
   imageSrc,
   fitMode,
   adjustments,
+  documentPath,
   triggerRect,
   onFitModeChange,
   onAdjustmentChange,
@@ -95,6 +98,17 @@ export default function ImageFillPopover({
     }
     reader.readAsDataURL(file)
     e.target.value = ''
+  }
+
+  const handlePickImage = async () => {
+    if (window.electronAPI?.openImageFile) {
+      const result = await window.electronAPI.openImageFile()
+      if (!result) return
+      onImageChange?.(toStoredAssetPath(result.filePath, documentPath))
+      return
+    }
+
+    fileRef.current?.click()
   }
 
   const hasAdjustments = ADJUSTMENT_KEYS.some((a) => (adjustments[a.key] ?? 0) !== 0)
@@ -164,7 +178,7 @@ export default function ImageFillPopover({
         />
         <button
           type="button"
-          onClick={() => fileRef.current?.click()}
+          onClick={() => void handlePickImage()}
           className="w-full h-28 rounded-md border border-dashed border-border bg-muted/50 hover:bg-muted transition-colors flex items-center justify-center overflow-hidden cursor-pointer relative group"
         >
           {hasImage ? (
@@ -227,6 +241,51 @@ function AdjustmentRow({
   value: number
   onChange: (v: number) => void
 }) {
+  const [draftValue, setDraftValue] = useState(value)
+  const [isSliding, setIsSliding] = useState(false)
+  const frameRef = useRef<number | null>(null)
+  const pendingValueRef = useRef<number | null>(null)
+
+  useEffect(() => {
+    if (!isSliding) {
+      setDraftValue(value)
+    }
+  }, [value, isSliding])
+
+  useEffect(() => {
+    return () => {
+      if (frameRef.current !== null) {
+        cancelAnimationFrame(frameRef.current)
+      }
+    }
+  }, [])
+
+  const flushPendingChange = (nextValue?: number) => {
+    if (frameRef.current !== null) {
+      cancelAnimationFrame(frameRef.current)
+      frameRef.current = null
+    }
+    const valueToApply = nextValue ?? pendingValueRef.current
+    pendingValueRef.current = null
+    if (typeof valueToApply === 'number') {
+      onChange(valueToApply)
+    }
+  }
+
+  const scheduleChange = (nextValue: number) => {
+    pendingValueRef.current = nextValue
+    if (frameRef.current !== null) return
+
+    frameRef.current = requestAnimationFrame(() => {
+      frameRef.current = null
+      const valueToApply = pendingValueRef.current
+      pendingValueRef.current = null
+      if (typeof valueToApply === 'number') {
+        onChange(valueToApply)
+      }
+    })
+  }
+
   return (
     <div className="flex items-center gap-2">
       <span className="text-[10px] text-muted-foreground w-[68px] shrink-0 truncate">
@@ -236,12 +295,21 @@ function AdjustmentRow({
         min={-100}
         max={100}
         step={1}
-        value={[value]}
-        onValueChange={([v]) => onChange(v)}
+        value={[draftValue]}
+        onValueChange={([nextValue]) => {
+          setIsSliding(true)
+          setDraftValue(nextValue)
+          scheduleChange(nextValue)
+        }}
+        onValueCommit={([nextValue]) => {
+          setIsSliding(false)
+          setDraftValue(nextValue)
+          flushPendingChange(nextValue)
+        }}
         className="flex-1"
       />
       <span className="text-[10px] text-muted-foreground w-7 text-right tabular-nums shrink-0">
-        {value}
+        {draftValue}
       </span>
     </div>
   )

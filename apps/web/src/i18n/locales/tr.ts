@@ -10,6 +10,8 @@ const tr: TranslationKeys = {
   'common.close': 'Kapat',
   'common.connect': 'Bağlan',
   'common.disconnect': 'Bağlantıyı Kes',
+  'common.yes': 'Evet',
+  'common.no': 'Hayır',
   'common.import': 'İçe Aktar',
   'common.export': 'Dışa Aktar',
   'common.name': 'Ad',
@@ -74,6 +76,8 @@ const tr: TranslationKeys = {
   'statusbar.zoomOut': 'Uzaklaştır',
   'statusbar.zoomIn': 'Yakınlaştır',
   'statusbar.resetZoom': 'Yakınlaştırmayı sıfırla',
+  'statusbar.focusContent': 'Tüm içeriği sığdır',
+  'statusbar.focusSelection': 'Seçime odaklan',
 
   // ── Updater ──
   'updater.softwareUpdate': 'Yazılım Güncellemesi',

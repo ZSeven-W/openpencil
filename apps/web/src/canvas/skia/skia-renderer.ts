@@ -14,7 +14,9 @@ import {
   drawAgentNodeBorder as _drawAgentNodeBorder,
   drawAgentPreviewFill as _drawAgentPreviewFill,
   drawArcHandles as _drawArcHandles,
+  drawPathEditor as _drawPathEditor,
   type PenPreviewData,
+  type PenAnchor,
 } from './skia-overlays'
 
 export type { RenderNode } from '@zseven-w/pen-renderer'
@@ -168,5 +170,14 @@ export class SkiaRenderer extends SkiaNodeRenderer {
     zoom: number,
   ) {
     _drawArcHandles(this.ck, canvas, x, y, w, h, startAngle, sweepAngle, innerRadius, zoom)
+  }
+
+  drawPathEditor(
+    canvas: Canvas,
+    anchors: PenAnchor[],
+    zoom: number,
+    closed: boolean,
+  ) {
+    _drawPathEditor(this.ck, canvas, anchors, zoom, closed)
   }
 }

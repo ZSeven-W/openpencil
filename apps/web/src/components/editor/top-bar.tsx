@@ -32,18 +32,15 @@ import { useDocumentStore } from '@/stores/document-store'
 import {
   supportsFileSystemAccess,
   isElectron,
-  writeToFileHandle,
-  writeToFilePath,
-  saveDocumentAs,
-  downloadDocument,
   openDocumentFS,
   openDocument,
 } from '@/utils/file-operations'
-import { syncCanvasPositionsToStore } from '@/canvas/skia-engine-ref'
 import { zoomToFitContent } from '@/canvas/skia-engine-ref'
-import { normalizePenDocument } from '@/utils/normalize-pen-file'
+import { parseAndPrepareImportedDocument } from '@/utils/import-pen-document'
 import { useAgentSettingsStore } from '@/stores/agent-settings-store'
 import type { AIProviderType } from '@/types/agent-settings'
+import { saveCurrentDocument } from '@/utils/save-current-document'
+import { confirmContinueWithUnsavedChanges } from '@/utils/unsaved-changes'
 
 /** Convert a computed CSS color value (oklch/rgb/etc.) to #rrggbb via an offscreen canvas. */
 function cssToHex(raw: string): string | null {
@@ -201,105 +198,37 @@ export default function TopBar() {
     }
   }, [])
 
-  const handleNew = useCallback(() => {
-    if (useDocumentStore.getState().isDirty) {
-      if (!window.confirm(t('topbar.closeConfirmMessage'))) return
-    }
+  const handleNew = useCallback(async () => {
+    if (!(await confirmContinueWithUnsavedChanges())) return
     useDocumentStore.getState().newDocument()
     requestAnimationFrame(() => zoomToFitContent())
-  }, [t])
+  }, [])
 
   /**
    * Unified save: if the current file is .op with a known handle/path, save
    * in-place; otherwise trigger "save as .op".
    */
   const handleSave = useCallback(async () => {
-    try {
-      syncCanvasPositionsToStore()
-    } catch (err) {
-      console.error('[Save] syncCanvasPositionsToStore failed:', err)
-    }
-    const store = useDocumentStore.getState()
-    const { document: doc, fileName: fn, fileHandle, filePath } = store
-
-    const isOpFile = fn ? /\.op$/i.test(fn) : false
-    const suggestedName = fn
-      ? fn.replace(/\.(pen|op|json)$/i, '') + '.op'
-      : 'untitled.op'
-
-    try {
-      // Electron with known .op path → direct write
-      if (isElectron() && filePath && isOpFile) {
-        await writeToFilePath(filePath, doc)
-        store.markClean()
-        return
-      }
-
-      // Browser with valid .op file handle → direct write
-      if (fileHandle && isOpFile) {
-        try {
-          await writeToFileHandle(fileHandle, doc)
-          store.markClean()
-          return
-        } catch (err) {
-          console.warn('[Save] File handle write failed, falling back:', err)
-          useDocumentStore.setState({ fileHandle: null })
-        }
-      }
-
-      // No in-place target (new file, .pen file, or stale handle) → save as .op
-      if (isElectron()) {
-        const savedPath = await window.electronAPI!.saveFile(
-          JSON.stringify(doc),
-          suggestedName,
-        )
-        if (savedPath) {
-          useDocumentStore.setState({
-            fileName: savedPath.split(/[/\\]/).pop() || suggestedName,
-            filePath: savedPath,
-            fileHandle: null,
-            isDirty: false,
-          })
-        }
-      } else if (supportsFileSystemAccess()) {
-        const result = await saveDocumentAs(doc, suggestedName)
-        if (result) {
-          useDocumentStore.setState({
-            fileName: result.fileName,
-            fileHandle: result.handle,
-            isDirty: false,
-          })
-        }
-      } else {
-        downloadDocument(doc, suggestedName)
-        store.markClean()
-      }
-    } catch (err) {
-      console.error('[Save] Failed to save document:', err)
-      try {
-        downloadDocument(doc, suggestedName)
-        store.markClean()
-      } catch (dlErr) {
-        console.error('[Save] Download fallback also failed:', dlErr)
-      }
-    }
+    await saveCurrentDocument()
   }, [])
 
-  const handleOpen = useCallback(() => {
-    if (useDocumentStore.getState().isDirty) {
-      if (!window.confirm(t('topbar.closeConfirmMessage'))) return
-    }
+  const handleOpen = useCallback(async () => {
+    if (!(await confirmContinueWithUnsavedChanges())) return
     if (isElectron()) {
       window.electronAPI!.openFile().then((result) => {
         if (!result) return
-        try {
-          const raw = JSON.parse(result.content)
-          if (!raw.version || (!Array.isArray(raw.children) && !Array.isArray(raw.pages))) return
-          const doc = normalizePenDocument(raw)
+        const load = async () => {
           const name = result.filePath.split(/[/\\]/).pop() || 'untitled.op'
+          const prepared = parseAndPrepareImportedDocument(result.content, {
+            fileName: name,
+            filePath: result.filePath,
+          })
+          if (!prepared) return
+          const { doc } = prepared
           useDocumentStore.getState().loadDocument(doc, name, null, result.filePath)
           requestAnimationFrame(() => zoomToFitContent())
-        } catch { /* invalid file */ }
+        }
+        void load().catch(() => { /* invalid file */ })
       })
     } else if (supportsFileSystemAccess()) {
       openDocumentFS().then((result) => {
@@ -318,7 +247,7 @@ export default function TopBar() {
         }
       })
     }
-  }, [t])
+  }, [])
 
   const displayName = fileName ?? t('common.untitled')
 

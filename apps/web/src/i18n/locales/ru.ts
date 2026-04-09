@@ -10,6 +10,8 @@ const ru: TranslationKeys = {
   'common.close': 'Закрыть',
   'common.connect': 'Подключить',
   'common.disconnect': 'Отключить',
+  'common.yes': 'Да',
+  'common.no': 'Нет',
   'common.import': 'Импорт',
   'common.export': 'Экспорт',
   'common.name': 'Имя',
@@ -74,6 +76,8 @@ const ru: TranslationKeys = {
   'statusbar.zoomOut': 'Уменьшить масштаб',
   'statusbar.zoomIn': 'Увеличить масштаб',
   'statusbar.resetZoom': 'Сбросить масштаб',
+  'statusbar.focusContent': 'Показать всё содержимое',
+  'statusbar.focusSelection': 'Сфокусировать выделение',
 
   // ── Updater ──
   'updater.softwareUpdate': 'Обновление ПО',

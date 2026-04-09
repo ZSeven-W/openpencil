@@ -20,6 +20,7 @@ interface UpdaterState {
 interface ElectronAPI {
   isElectron: true
   openFile: () => Promise<{ filePath: string; content: string } | null>
+  openImageFile: () => Promise<{ filePath: string; name: string; content: string | null } | null>
   saveFile: (
     content: string,
     defaultPath?: string,
@@ -30,6 +31,13 @@ interface ElectronAPI {
   readFile: (filePath: string) => Promise<{ filePath: string; content: string } | null>
   getPendingFile: () => Promise<string | null>
   confirmClose: () => void
+  confirmUnsavedChanges: (payload: {
+    message: string
+    detail?: string
+    yesLabel: string
+    noLabel: string
+    cancelLabel: string
+  }) => Promise<'save' | 'discard' | 'cancel'>
   getLogDir: () => Promise<string>
   setTheme: (theme: 'dark' | 'light', colors?: { bg: string; fg: string }) => void
   getPreferences: () => Promise<Record<string, string>>

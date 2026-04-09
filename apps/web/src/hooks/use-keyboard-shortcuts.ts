@@ -1,5 +1,4 @@
 import { useEffect } from 'react'
-import i18n from '@/i18n'
 import { useCanvasStore } from '@/stores/canvas-store'
 import { useDocumentStore, getActivePageChildren } from '@/stores/document-store'
 import { useHistoryStore } from '@/stores/history-store'
@@ -8,16 +7,13 @@ import { canBooleanOp, executeBooleanOp, type BooleanOpType } from '@/utils/bool
 import { tryPasteFigmaFromClipboard } from '@/hooks/use-figma-paste'
 import {
   supportsFileSystemAccess,
-  isElectron,
-  writeToFileHandle,
-  writeToFilePath,
-  saveDocumentAs,
-  downloadDocument,
   openDocumentFS,
   openDocument,
 } from '@/utils/file-operations'
-import { syncCanvasPositionsToStore, zoomToFitContent } from '@/canvas/skia-engine-ref'
+import { zoomToFitContent } from '@/canvas/skia-engine-ref'
 import type { ToolType } from '@/types/canvas'
+import { saveCurrentDocument } from '@/utils/save-current-document'
+import { confirmContinueWithUnsavedChanges } from '@/utils/unsaved-changes'
 
 const TOOL_KEYS: Record<string, ToolType> = {
   v: 'select',
@@ -156,83 +152,35 @@ export function useKeyboardShortcuts() {
       // Otherwise → save as .op
       if (isMod && e.key === 's') {
         e.preventDefault()
-        try { syncCanvasPositionsToStore() } catch { /* continue */ }
-        const store = useDocumentStore.getState()
-        const { document: doc, fileName, fileHandle, filePath } = store
-        const isOpFile = fileName ? /\.op$/i.test(fileName) : false
-        const suggestedName = fileName
-          ? fileName.replace(/\.(pen|op|json)$/i, '') + '.op'
-          : 'untitled.op'
-
-        const doSave = async () => {
-          // Electron with known .op path
-          if (isElectron() && filePath && isOpFile) {
-            await writeToFilePath(filePath, doc)
-            store.markClean()
-            return
-          }
-          // Browser with valid .op file handle
-          if (fileHandle && isOpFile) {
-            try {
-              await writeToFileHandle(fileHandle, doc)
-              store.markClean()
-              return
-            } catch {
-              useDocumentStore.setState({ fileHandle: null })
-            }
-          }
-          // Save as .op
-          if (isElectron()) {
-            const savedPath = await window.electronAPI!.saveFile(
-              JSON.stringify(doc), suggestedName,
-            )
-            if (savedPath) {
-              useDocumentStore.setState({
-                fileName: savedPath.split(/[/\\]/).pop() || suggestedName,
-                filePath: savedPath, fileHandle: null, isDirty: false,
-              })
-            }
-          } else if (supportsFileSystemAccess()) {
-            const result = await saveDocumentAs(doc, suggestedName)
-            if (result) {
-              useDocumentStore.setState({
-                fileName: result.fileName, fileHandle: result.handle, isDirty: false,
-              })
-            }
-          } else {
-            downloadDocument(doc, suggestedName)
-            store.markClean()
-          }
-        }
-        doSave().catch((err) => console.error('[Save] Failed:', err))
+        void saveCurrentDocument().catch((err) => console.error('[Save] Failed:', err))
         return
       }
 
       // Open: Cmd/Ctrl+O
       if (isMod && e.key === 'o' && !e.shiftKey) {
         e.preventDefault()
-        if (useDocumentStore.getState().isDirty) {
-          if (!window.confirm(i18n.t('topbar.closeConfirmMessage'))) return
-        }
-        if (supportsFileSystemAccess()) {
-          openDocumentFS().then((result) => {
-            if (result) {
-              useDocumentStore
-                .getState()
-                .loadDocument(result.doc, result.fileName, result.handle)
-              requestAnimationFrame(() => zoomToFitContent())
-            }
-          })
-        } else {
-          openDocument().then((result) => {
-            if (result) {
-              useDocumentStore
-                .getState()
-                .loadDocument(result.doc, result.fileName)
-              requestAnimationFrame(() => zoomToFitContent())
-            }
-          })
-        }
+        void (async () => {
+          if (!(await confirmContinueWithUnsavedChanges())) return
+          if (supportsFileSystemAccess()) {
+            openDocumentFS().then((result) => {
+              if (result) {
+                useDocumentStore
+                  .getState()
+                  .loadDocument(result.doc, result.fileName, result.handle)
+                requestAnimationFrame(() => zoomToFitContent())
+              }
+            })
+          } else {
+            openDocument().then((result) => {
+              if (result) {
+                useDocumentStore
+                  .getState()
+                  .loadDocument(result.doc, result.fileName)
+                requestAnimationFrame(() => zoomToFitContent())
+              }
+            })
+          }
+        })()
         return
       }
 

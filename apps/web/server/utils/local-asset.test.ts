@@ -1,0 +1,53 @@
+import { describe, expect, it } from 'bun:test'
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { join } from 'node:path'
+import { tmpdir } from 'node:os'
+
+import { resolveServableLocalImagePath } from './local-asset'
+
+describe('resolveServableLocalImagePath', () => {
+  it('resolves an extensionless png file by sniffing its bytes', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'openpencil-local-asset-'))
+    try {
+      const filePath = join(dir, 'hero')
+      writeFileSync(filePath, Buffer.from([
+        0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A,
+        0x00, 0x00, 0x00, 0x0D,
+      ]))
+
+      await expect(resolveServableLocalImagePath(filePath)).resolves.toEqual({
+        resolvedPath: filePath,
+        mimeType: 'image/png',
+      })
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  it('resolves a sibling image file when the requested path is missing an extension', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'openpencil-local-asset-'))
+    try {
+      const filePath = join(dir, 'hero.jpg')
+      writeFileSync(filePath, Buffer.from([0xFF, 0xD8, 0xFF, 0xE0]))
+
+      await expect(resolveServableLocalImagePath(join(dir, 'hero'))).resolves.toEqual({
+        resolvedPath: filePath,
+        mimeType: 'image/jpeg',
+      })
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  it('returns null for explicit unsupported extensions', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'openpencil-local-asset-'))
+    try {
+      const filePath = join(dir, 'hero.pdf')
+      writeFileSync(filePath, Buffer.from('%PDF-1.7'))
+
+      await expect(resolveServableLocalImagePath(filePath)).resolves.toBeNull()
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+})

@@ -22,6 +22,7 @@ export interface UpdaterState {
 export interface ElectronAPI {
   isElectron: true
   openFile: () => Promise<{ filePath: string; content: string } | null>
+  openImageFile: () => Promise<{ filePath: string; name: string; content: string | null } | null>
   saveFile: (
     content: string,
     defaultPath?: string,
@@ -37,6 +38,13 @@ export interface ElectronAPI {
   setPreference: (key: string, value: string) => Promise<void>
   removePreference: (key: string) => Promise<void>
   confirmClose: () => void
+  confirmUnsavedChanges: (payload: {
+    message: string
+    detail?: string
+    yesLabel: string
+    noLabel: string
+    cancelLabel: string
+  }) => Promise<'save' | 'discard' | 'cancel'>
   updater: {
     getState: () => Promise<UpdaterState>
     checkForUpdates: () => Promise<UpdaterState>
@@ -51,6 +59,8 @@ const api: ElectronAPI = {
   isElectron: true,
 
   openFile: () => ipcRenderer.invoke('dialog:openFile'),
+
+  openImageFile: () => ipcRenderer.invoke('dialog:openImageFile'),
 
   saveFile: (content: string, defaultPath?: string) =>
     ipcRenderer.invoke('dialog:saveFile', { content, defaultPath }),
@@ -92,6 +102,9 @@ const api: ElectronAPI = {
   getPendingFile: () => ipcRenderer.invoke('file:getPending'),
 
   confirmClose: () => ipcRenderer.send('window:confirmClose'),
+
+  confirmUnsavedChanges: (payload) =>
+    ipcRenderer.invoke('dialog:confirmUnsavedChanges', payload),
 
   getLogDir: () => ipcRenderer.invoke('log:getDir'),
 

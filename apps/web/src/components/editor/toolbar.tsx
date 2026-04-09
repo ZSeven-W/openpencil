@@ -21,6 +21,11 @@ import { useHistoryStore } from '@/stores/history-store'
 import { useUIKitStore } from '@/stores/uikit-store'
 import { Button } from '@/components/ui/button'
 import { Separator } from '@/components/ui/separator'
+import { isElectron } from '@/utils/file-operations'
+import {
+  resolveRuntimeAssetSource,
+  toStoredAssetPath,
+} from '@/utils/document-assets'
 import {
   Tooltip,
   TooltipContent,
@@ -40,6 +45,78 @@ export default function Toolbar() {
   const toggleBrowser = useUIKitStore((s) => s.toggleBrowser)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [iconPickerOpen, setIconPickerOpen] = useState(false)
+
+  const insertRasterImage = useCallback((src: string, name: string) => {
+    const runtimeSource = resolveRuntimeAssetSource(
+      src,
+      useDocumentStore.getState().filePath,
+    )
+    if (!runtimeSource.runtimeUrl) return
+
+    const img = new Image()
+    img.onload = () => {
+      const { viewport } = useCanvasStore.getState()
+      const { width: canvasW, height: canvasH } = getCanvasSize()
+      const centerX = (-viewport.panX + canvasW / 2) / viewport.zoom
+      const centerY = (-viewport.panY + canvasH / 2) / viewport.zoom
+
+      let w = img.naturalWidth
+      let h = img.naturalHeight
+      const maxDim = 400
+      if (w > maxDim || h > maxDim) {
+        const scale = maxDim / Math.max(w, h)
+        w = Math.round(w * scale)
+        h = Math.round(h * scale)
+      }
+
+      useDocumentStore.getState().addNode(null, {
+        id: generateId(),
+        type: 'image',
+        name,
+        src,
+        x: centerX - w / 2,
+        y: centerY - h / 2,
+        width: w,
+        height: h,
+      })
+    }
+    img.src = runtimeSource.runtimeUrl
+  }, [])
+
+  const handleElectronImageSelection = useCallback((result: {
+    filePath: string
+    name: string
+    content: string | null
+  }) => {
+    const fileName = result.name.replace(/\.[^.]+$/, '')
+    const isSvg = /\.svg$/i.test(result.filePath)
+
+    if (isSvg && result.content) {
+      const nodes = parseSvgToNodes(result.content)
+      if (nodes.length === 0) return
+
+      const { viewport } = useCanvasStore.getState()
+      const { width: canvasW, height: canvasH } = getCanvasSize()
+      const centerX = (-viewport.panX + canvasW / 2) / viewport.zoom
+      const centerY = (-viewport.panY + canvasH / 2) / viewport.zoom
+
+      for (const node of nodes) {
+        const w = ('width' in node ? (typeof node.width === 'number' ? node.width : 100) : 100)
+        const h = ('height' in node ? (typeof node.height === 'number' ? node.height : 100) : 100)
+        node.x = centerX - w / 2
+        node.y = centerY - h / 2
+        node.name = fileName
+        useDocumentStore.getState().addNode(null, node)
+      }
+      return
+    }
+
+    const storedPath = toStoredAssetPath(
+      result.filePath,
+      useDocumentStore.getState().filePath,
+    )
+    insertRasterImage(storedPath, fileName)
+  }, [insertRasterImage])
 
   const handleIconSelect = useCallback((svgText: string, iconName: string) => {
     const nodes = parseSvgToNodes(svgText)
@@ -81,8 +158,15 @@ export default function Toolbar() {
   }
 
   const handleAddImage = useCallback(() => {
+    if (isElectron() && window.electronAPI?.openImageFile) {
+      void window.electronAPI.openImageFile().then((result) => {
+        if (!result) return
+        handleElectronImageSelection(result)
+      })
+      return
+    }
     fileInputRef.current?.click()
-  }, [])
+  }, [handleElectronImageSelection])
 
   const handleFileSelected = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -116,42 +200,15 @@ export default function Toolbar() {
       }
       reader.readAsText(file)
     } else {
-      // Raster image → ImageNode with data URL
+      // Raster image → ImageNode
       const reader = new FileReader()
       reader.onload = () => {
         const dataUrl = reader.result as string
-        const img = new Image()
-        img.onload = () => {
-          const { viewport } = useCanvasStore.getState()
-          const { width: canvasW, height: canvasH } = getCanvasSize()
-          const centerX = (-viewport.panX + canvasW / 2) / viewport.zoom
-          const centerY = (-viewport.panY + canvasH / 2) / viewport.zoom
-
-          let w = img.naturalWidth
-          let h = img.naturalHeight
-          const maxDim = 400
-          if (w > maxDim || h > maxDim) {
-            const scale = maxDim / Math.max(w, h)
-            w = Math.round(w * scale)
-            h = Math.round(h * scale)
-          }
-
-          useDocumentStore.getState().addNode(null, {
-            id: generateId(),
-            type: 'image',
-            name: file.name.replace(/\.[^.]+$/, ''),
-            src: dataUrl,
-            x: centerX - w / 2,
-            y: centerY - h / 2,
-            width: w,
-            height: h,
-          })
-        }
-        img.src = dataUrl
+        insertRasterImage(dataUrl, file.name.replace(/\.[^.]+$/, ''))
       }
       reader.readAsDataURL(file)
     }
-  }, [])
+  }, [insertRasterImage])
 
   return (
     <div className="absolute top-2 left-2 z-10 w-10 bg-card border border-border rounded-xl flex flex-col items-center py-2 gap-1 shadow-lg">

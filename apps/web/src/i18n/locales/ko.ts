@@ -10,6 +10,8 @@ const ko: TranslationKeys = {
   'common.close': '닫기',
   'common.connect': '연결',
   'common.disconnect': '연결 해제',
+  'common.yes': '예',
+  'common.no': '아니요',
   'common.import': '가져오기',
   'common.export': '내보내기',
   'common.name': '이름',
@@ -74,6 +76,8 @@ const ko: TranslationKeys = {
   'statusbar.zoomOut': '축소',
   'statusbar.zoomIn': '확대',
   'statusbar.resetZoom': '확대/축소 초기화',
+  'statusbar.focusContent': '전체 콘텐츠 맞추기',
+  'statusbar.focusSelection': '선택 항목에 초점 맞추기',
 
   // ── Updater ──
   'updater.softwareUpdate': '소프트웨어 업데이트',

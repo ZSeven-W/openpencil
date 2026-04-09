@@ -10,6 +10,8 @@ const id: TranslationKeys = {
   'common.close': 'Tutup',
   'common.connect': 'Hubungkan',
   'common.disconnect': 'Putuskan',
+  'common.yes': 'Ya',
+  'common.no': 'Tidak',
   'common.import': 'Impor',
   'common.export': 'Ekspor',
   'common.name': 'Nama',
@@ -74,6 +76,8 @@ const id: TranslationKeys = {
   'statusbar.zoomOut': 'Perkecil',
   'statusbar.zoomIn': 'Perbesar',
   'statusbar.resetZoom': 'Atur ulang zoom',
+  'statusbar.focusContent': 'Sesuaikan seluruh konten',
+  'statusbar.focusSelection': 'Fokus ke pilihan',
 
   // ── Updater ──
   'updater.softwareUpdate': 'Pembaruan Perangkat Lunak',

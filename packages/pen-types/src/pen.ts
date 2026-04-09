@@ -136,10 +136,27 @@ export interface PolygonNode extends PenNodeBase {
   effects?: PenEffect[]
 }
 
+export interface PenPathHandle {
+  x: number
+  y: number
+}
+
+export type PenPathPointType = 'corner' | 'mirrored' | 'independent'
+
+export interface PenPathAnchor {
+  x: number
+  y: number
+  handleIn: PenPathHandle | null
+  handleOut: PenPathHandle | null
+  pointType?: PenPathPointType
+}
+
 export interface PathNode extends PenNodeBase {
   type: 'path'
   iconId?: string // Iconify icon ID, e.g. "lucide:home"
   d: string
+  anchors?: PenPathAnchor[]
+  closed?: boolean
   width?: SizingBehavior
   height?: SizingBehavior
   fill?: PenFill[]

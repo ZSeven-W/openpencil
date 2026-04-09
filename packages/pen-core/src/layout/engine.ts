@@ -56,6 +56,7 @@ export function resolvePadding(
 
 export function isNodeVisible(node: PenNode): boolean {
   return ('visible' in node ? node.visible : undefined) !== false
+    && ('enabled' in node ? node.enabled : undefined) !== false
 }
 
 // ---------------------------------------------------------------------------

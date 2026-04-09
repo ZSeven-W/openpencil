@@ -1,11 +1,23 @@
-import { useRef, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { loadCanvasKit } from './skia-init'
 import { SkiaEngine } from './skia-engine'
 import { useCanvasStore } from '@/stores/canvas-store'
 import { useDocumentStore } from '@/stores/document-store'
 import { setSkiaEngineRef } from '../skia-engine-ref'
-import type { PenNode } from '@/types/pen'
-import { SkiaInteractionManager, type TextEditState } from './skia-interaction'
+import type { PathNode, PenNode, PenPathPointType } from '@/types/pen'
+import {
+  bakeSceneAnchorsToPathNode,
+  getEditablePathState,
+  resetPathPointHandles,
+  setPathPointType,
+} from './path-editing'
+import {
+  SkiaInteractionManager,
+  type PathAnchorContextMenuState,
+  type TextEditState,
+} from './skia-interaction'
+import { createDocumentSyncScheduler } from './document-sync-scheduler'
+import { projectTextEditStateToViewport } from './text-edit-overlay'
 
 export default function SkiaCanvas() {
   const canvasRef = useRef<HTMLCanvasElement>(null)
@@ -13,6 +25,53 @@ export default function SkiaCanvas() {
   const engineRef = useRef<SkiaEngine | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [editingText, setEditingText] = useState<TextEditState | null>(null)
+  const [pathContextMenu, setPathContextMenu] = useState<PathAnchorContextMenuState | null>(null)
+  const viewport = useCanvasStore((state) => state.viewport)
+  const editingTextOverlay = editingText
+    ? projectTextEditStateToViewport(editingText, viewport)
+    : null
+
+  const closePathContextMenu = useCallback(() => {
+    setPathContextMenu(null)
+  }, [])
+
+  const updatePathAnchor = useCallback((
+    menuState: PathAnchorContextMenuState,
+    action: PenPathPointType | 'reset',
+  ) => {
+    const engine = engineRef.current
+    if (!engine) return
+
+    const rn = engine.spatialIndex.get(menuState.nodeId)
+    if (!rn || rn.node.type !== 'path') return
+
+    const node = rn.node as PathNode
+    const state = getEditablePathState(node, {
+      x: rn.absX,
+      y: rn.absY,
+      width: rn.absW,
+      height: rn.absH,
+    })
+    if (!state) return
+
+    const nextSceneAnchors = action === 'reset'
+      ? resetPathPointHandles(state.sceneAnchors, menuState.anchorIndex, state.closed)
+      : setPathPointType(state.sceneAnchors, menuState.anchorIndex, action, state.closed)
+
+    const parentSceneOrigin = {
+      x: rn.absX - (node.x ?? 0),
+      y: rn.absY - (node.y ?? 0),
+    }
+    const patch = bakeSceneAnchorsToPathNode(
+      nextSceneAnchors,
+      state.closed,
+      parentSceneOrigin,
+    )
+    if (!patch) return
+
+    useDocumentStore.getState().updateNode(menuState.nodeId, patch as Partial<PenNode>)
+    useCanvasStore.getState().setSelection([menuState.nodeId], menuState.nodeId)
+  }, [])
 
   // Initialize CanvasKit + engine
   useEffect(() => {
@@ -69,10 +128,14 @@ export default function SkiaCanvas() {
 
   // Document sync: re-render when document changes
   useEffect(() => {
+    const scheduler = createDocumentSyncScheduler(() => engineRef.current)
     const unsub = useDocumentStore.subscribe(() => {
-      engineRef.current?.syncFromDocument()
+      scheduler.schedule()
     })
-    return unsub
+    return () => {
+      unsub()
+      scheduler.dispose()
+    }
   }, [])
 
   // Page sync: re-render when active page changes
@@ -133,7 +196,12 @@ export default function SkiaCanvas() {
     const canvasEl = canvasRef.current
     if (!canvasEl) return
 
-    const manager = new SkiaInteractionManager(engineRef, canvasEl, setEditingText)
+    const manager = new SkiaInteractionManager(
+      engineRef,
+      canvasEl,
+      setEditingText,
+      setPathContextMenu,
+    )
     return manager.attach()
   }, [])
 
@@ -152,11 +220,11 @@ export default function SkiaCanvas() {
           defaultValue={editingText.content}
           style={{
             position: 'absolute',
-            left: editingText.x,
-            top: editingText.y,
-            width: Math.max(editingText.w, 40),
-            minHeight: Math.max(editingText.h, 24),
-            fontSize: editingText.fontSize,
+            left: editingTextOverlay?.left,
+            top: editingTextOverlay?.top,
+            width: editingTextOverlay?.width,
+            minHeight: editingTextOverlay?.minHeight,
+            fontSize: editingTextOverlay?.fontSize,
             fontFamily: editingText.fontFamily,
             fontWeight: editingText.fontWeight,
             textAlign: editingText.textAlign as CanvasTextAlign,
@@ -189,11 +257,81 @@ export default function SkiaCanvas() {
         />
       )}
 
+      {pathContextMenu && (
+        <PathAnchorContextMenu
+          x={pathContextMenu.x}
+          y={pathContextMenu.y}
+          onAction={(action) => {
+            updatePathAnchor(pathContextMenu, action)
+            closePathContextMenu()
+          }}
+          onClose={closePathContextMenu}
+        />
+      )}
+
       {error && (
         <div className="absolute inset-0 flex items-center justify-center text-destructive">
           Failed to load CanvasKit: {error}
         </div>
       )}
+    </div>
+  )
+}
+
+function PathAnchorContextMenu({
+  x,
+  y,
+  onAction,
+  onClose,
+}: {
+  x: number
+  y: number
+  onAction: (action: PenPathPointType | 'reset') => void
+  onClose: () => void
+}) {
+  const menuRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    const handleMouseDown = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        onClose()
+      }
+    }
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose()
+    }
+
+    document.addEventListener('mousedown', handleMouseDown)
+    document.addEventListener('keydown', handleKeyDown)
+    return () => {
+      document.removeEventListener('mousedown', handleMouseDown)
+      document.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [onClose])
+
+  const items: Array<{ action: PenPathPointType | 'reset'; label: string }> = [
+    { action: 'corner', label: 'Corner Point' },
+    { action: 'mirrored', label: 'Symmetric Curve' },
+    { action: 'independent', label: 'Free Curve' },
+    { action: 'reset', label: 'Reset Handles' },
+  ]
+
+  return (
+    <div
+      ref={menuRef}
+      className="fixed z-50 min-w-[160px] rounded-md border border-border bg-popover py-1 shadow-md"
+      style={{ left: x, top: y }}
+    >
+      {items.map((item) => (
+        <button
+          key={item.action}
+          type="button"
+          className="w-full px-3 py-1.5 text-left text-xs text-popover-foreground transition-colors hover:bg-accent"
+          onClick={() => onAction(item.action)}
+        >
+          {item.label}
+        </button>
+      ))}
     </div>
   )
 }

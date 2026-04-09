@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import { useDocumentStore } from '@/stores/document-store'
 import { useCanvasStore } from '@/stores/canvas-store'
-import { normalizePenDocument } from '@/utils/normalize-pen-file'
+import { parseAndPrepareImportedDocument } from '@/utils/import-pen-document'
 import type { PenDocument } from '@/types/pen'
 
 /**
@@ -16,14 +16,11 @@ async function parseDroppedFile(
 
   try {
     const text = await file.text()
-    const raw = JSON.parse(text) as PenDocument
-    if (
-      !raw.version ||
-      (!Array.isArray(raw.children) && !Array.isArray(raw.pages))
-    ) {
-      return null
-    }
-    const doc = normalizePenDocument(raw)
+    const prepared = parseAndPrepareImportedDocument(text, {
+      fileName: file.name,
+    })
+    if (!prepared) return null
+    const { doc } = prepared
     return { doc, fileName: file.name }
   } catch {
     return null

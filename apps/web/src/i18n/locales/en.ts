@@ -8,6 +8,8 @@ const en = {
   'common.close': 'Close',
   'common.connect': 'Connect',
   'common.disconnect': 'Disconnect',
+  'common.yes': 'Yes',
+  'common.no': 'No',
   'common.import': 'Import',
   'common.export': 'Export',
   'common.name': 'Name',
@@ -72,6 +74,8 @@ const en = {
   'statusbar.zoomOut': 'Zoom out',
   'statusbar.zoomIn': 'Zoom in',
   'statusbar.resetZoom': 'Reset zoom',
+  'statusbar.focusContent': 'Fit all content',
+  'statusbar.focusSelection': 'Focus selection',
 
   // ── Updater ──
   'updater.softwareUpdate': 'Software Update',

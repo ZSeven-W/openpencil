@@ -2,16 +2,18 @@ import { screenToScene } from './skia-engine'
 import type { SkiaEngine } from './skia-engine'
 import { useCanvasStore } from '@/stores/canvas-store'
 import { useDocumentStore } from '@/stores/document-store'
+import { useHistoryStore } from '@/stores/history-store'
 import { createNodeForTool, isDrawingTool } from '../canvas-node-creator'
 import { inferLayout } from '../canvas-layout-engine'
 import { SkiaPenTool } from './skia-pen-tool'
 import type { ToolType } from '@/types/canvas'
-import type { PenNode, ContainerProps, TextNode, EllipseNode } from '@/types/pen'
+import type { PenNode, ContainerProps, TextNode, EllipseNode, PathNode, PenPathAnchor } from '@/types/pen'
 import {
-  type HandleDir, type ArcHandleType,
+  type HandleDir, type ArcHandleType, type PathControlType,
   DRAG_THRESHOLD, handleCursors,
-  hitTestHandle, hitTestRotation, hitTestArcHandle,
+  hitTestHandle, hitTestRotation, hitTestArcHandle, hitTestPathControl,
 } from './skia-hit-handlers'
+import { bakeSceneAnchorsToPathNode, getEditablePathState, movePathControl } from './path-editing'
 
 export interface TextEditState {
   nodeId: string
@@ -23,6 +25,29 @@ export interface TextEditState {
   textAlign: string
   color: string
   lineHeight: number
+}
+
+export interface PathAnchorContextMenuState {
+  x: number
+  y: number
+  nodeId: string
+  anchorIndex: number
+}
+
+interface RenderNodeSnapshot {
+  node: PenNode
+  absX: number
+  absY: number
+  absW: number
+  absH: number
+  clipRect?: { x: number; y: number; w: number; h: number; rx: number }
+}
+
+interface PreviewRect {
+  x: number
+  y: number
+  w: number
+  h: number
 }
 
 
@@ -43,6 +68,7 @@ export class SkiaInteractionManager {
   private engineRef: { current: SkiaEngine | null }
   private canvasEl: HTMLCanvasElement
   private onEditText: (state: TextEditState | null) => void
+  private onPathAnchorContextMenu: (state: PathAnchorContextMenuState | null) => void
 
   // Shared state
   private isPanning = false
@@ -72,6 +98,10 @@ export class SkiaInteractionManager {
   private resizeOrigH = 0
   private resizeStartSceneX = 0
   private resizeStartSceneY = 0
+  private resizePreviewNodes: Map<string, RenderNodeSnapshot> | null = null
+  private resizeLatestPatch: Partial<PenNode> | null = null
+  private resizeLatestScale: { scaleX: number; scaleY: number } | null = null
+  private resizeMoved = false
 
   // Rotation state
   private isRotating = false
@@ -80,11 +110,30 @@ export class SkiaInteractionManager {
   private rotateCenterX = 0
   private rotateCenterY = 0
   private rotateStartAngle = 0
+  private rotatePreviewNodes: Map<string, RenderNodeSnapshot> | null = null
+  private rotateLatestAngle: number | null = null
+  private rotateMoved = false
 
   // Arc handle state
   private isDraggingArc = false
   private arcHandleType: ArcHandleType | null = null
   private arcNodeId: string | null = null
+  private arcPreviewNode: PenNode | null = null
+  private arcLatestPatch: Partial<EllipseNode> | null = null
+  private arcMoved = false
+
+  // Path control state
+  private isDraggingPathControl = false
+  private pathControlType: PathControlType | null = null
+  private pathControlAnchorIndex: number | null = null
+  private pathNodeId: string | null = null
+  private pathPrevSceneX = 0
+  private pathPrevSceneY = 0
+  private pathSceneAnchors: PenPathAnchor[] | null = null
+  private pathClosed = false
+  private pathParentSceneOrigin: { x: number; y: number } | null = null
+  private pathLatestPatch: Pick<PathNode, 'x' | 'y' | 'width' | 'height' | 'd' | 'anchors' | 'closed'> | null = null
+  private pathControlMoved = false
 
   // Drawing tool state
   private isDrawing = false
@@ -99,10 +148,12 @@ export class SkiaInteractionManager {
     engineRef: { current: SkiaEngine | null },
     canvasEl: HTMLCanvasElement,
     onEditText: (state: TextEditState | null) => void,
+    onPathAnchorContextMenu: (state: PathAnchorContextMenuState | null) => void = () => {},
   ) {
     this.engineRef = engineRef
     this.canvasEl = canvasEl
     this.onEditText = onEditText
+    this.onPathAnchorContextMenu = onPathAnchorContextMenu
     this.penTool = new SkiaPenTool(() => this.engineRef.current)
   }
 
@@ -184,12 +235,45 @@ export class SkiaInteractionManager {
     scene: { x: number; y: number },
     engine: SkiaEngine,
   ) {
+    const pathHit = hitTestPathControl(engine, scene.x, scene.y)
+    if (pathHit) {
+      const rn = engine.spatialIndex.get(pathHit.nodeId)
+      if (!rn || rn.node.type !== 'path') return
+      const pathState = getEditablePathState(
+        rn.node as PathNode,
+        { x: rn.absX, y: rn.absY, width: rn.absW, height: rn.absH },
+      )
+      if (!pathState) return
+
+      this.isDraggingPathControl = true
+      this.pathControlType = pathHit.type
+      this.pathControlAnchorIndex = pathHit.anchorIndex
+      this.pathNodeId = pathHit.nodeId
+      this.pathPrevSceneX = scene.x
+      this.pathPrevSceneY = scene.y
+      this.pathSceneAnchors = pathState.sceneAnchors
+      this.pathClosed = pathState.closed
+      this.pathParentSceneOrigin = {
+        x: rn.absX - ((rn.node as PathNode).x ?? 0),
+        y: rn.absY - ((rn.node as PathNode).y ?? 0),
+      }
+      this.pathLatestPatch = null
+      this.pathControlMoved = false
+      engine.dragSyncSuppressed = true
+      this.canvasEl.style.cursor = 'pointer'
+      return
+    }
+
     // Check arc handles first
     const arcHit = hitTestArcHandle(engine,scene.x, scene.y)
     if (arcHit) {
       this.isDraggingArc = true
       this.arcHandleType = arcHit.type
       this.arcNodeId = arcHit.nodeId
+      this.arcPreviewNode = null
+      this.arcLatestPatch = null
+      this.arcMoved = false
+      engine.dragSyncSuppressed = true
       this.canvasEl.style.cursor = 'pointer'
       return
     }
@@ -209,6 +293,11 @@ export class SkiaInteractionManager {
       const docNodeAny = docNode as (PenNode & ContainerProps) | undefined
       this.resizeOrigW = resizeRN?.absW ?? (typeof docNodeAny?.width === 'number' ? docNodeAny.width : 100)
       this.resizeOrigH = resizeRN?.absH ?? (typeof docNodeAny?.height === 'number' ? docNodeAny.height : 100)
+      this.resizePreviewNodes = null
+      this.resizeLatestPatch = null
+      this.resizeLatestScale = null
+      this.resizeMoved = false
+      engine.dragSyncSuppressed = true
       this.canvasEl.style.cursor = handleCursors[handleHit.dir]
       return
     }
@@ -224,6 +313,10 @@ export class SkiaInteractionManager {
       this.rotateCenterX = rn.absX + rn.absW / 2
       this.rotateCenterY = rn.absY + rn.absH / 2
       this.rotateStartAngle = Math.atan2(scene.y - this.rotateCenterY, scene.x - this.rotateCenterX) * 180 / Math.PI
+      this.rotatePreviewNodes = null
+      this.rotateLatestAngle = null
+      this.rotateMoved = false
+      engine.dragSyncSuppressed = true
       this.canvasEl.style.cursor = 'grabbing'
       return
     }
@@ -307,6 +400,11 @@ export class SkiaInteractionManager {
 
     if (this.penTool.onMouseMove(scene)) return
 
+    if (this.isDraggingPathControl && this.pathNodeId && this.pathControlType != null && this.pathControlAnchorIndex != null) {
+      this.handlePathControlMove(scene, engine)
+      return
+    }
+
     if (this.isResizing && this.resizeHandle && this.resizeNodeId) {
       this.handleResizeMove(scene, engine)
       return
@@ -343,6 +441,90 @@ export class SkiaInteractionManager {
     }
   }
 
+  private collectSubtreeIds(rootId: string): Set<string> {
+    const ids = new Set<string>()
+    const visit = (nodeId: string) => {
+      if (ids.has(nodeId)) return
+      ids.add(nodeId)
+      const node = useDocumentStore.getState().getNodeById(nodeId)
+      if (node && 'children' in node && node.children) {
+        for (const child of node.children) visit(child.id)
+      }
+    }
+    visit(rootId)
+    return ids
+  }
+
+  private captureRenderNodeSnapshots(
+    rootId: string,
+    engine: SkiaEngine,
+  ): Map<string, RenderNodeSnapshot> {
+    const ids = this.collectSubtreeIds(rootId)
+    const snapshots = new Map<string, RenderNodeSnapshot>()
+    for (const rn of engine.renderNodes) {
+      if (!ids.has(rn.node.id)) continue
+      snapshots.set(rn.node.id, {
+        node: structuredClone(rn.node),
+        absX: rn.absX,
+        absY: rn.absY,
+        absW: rn.absW,
+        absH: rn.absH,
+        ...(rn.clipRect ? { clipRect: { ...rn.clipRect } } : {}),
+      })
+    }
+    return snapshots
+  }
+
+  private scalePreviewRect(rect: PreviewRect, from: PreviewRect, to: PreviewRect): PreviewRect {
+    const scaleX = from.w !== 0 ? to.w / from.w : 1
+    const scaleY = from.h !== 0 ? to.h / from.h : 1
+    return {
+      x: to.x + (rect.x - from.x) * scaleX,
+      y: to.y + (rect.y - from.y) * scaleY,
+      w: rect.w * scaleX,
+      h: rect.h * scaleY,
+    }
+  }
+
+  private rotatePreviewRect(
+    rect: PreviewRect,
+    centerX: number,
+    centerY: number,
+    angleDeg: number,
+  ): PreviewRect {
+    const rad = angleDeg * Math.PI / 180
+    const cosA = Math.cos(rad)
+    const sinA = Math.sin(rad)
+    const rectCx = rect.x + rect.w / 2
+    const rectCy = rect.y + rect.h / 2
+    const dx = rectCx - centerX
+    const dy = rectCy - centerY
+    const nextCx = centerX + dx * cosA - dy * sinA
+    const nextCy = centerY + dx * sinA + dy * cosA
+    return {
+      x: nextCx - rect.w / 2,
+      y: nextCy - rect.h / 2,
+      w: rect.w,
+      h: rect.h,
+    }
+  }
+
+  private ensureResizePreviewNodes(engine: SkiaEngine): Map<string, RenderNodeSnapshot> | null {
+    if (!this.resizeNodeId) return null
+    if (!this.resizePreviewNodes) {
+      this.resizePreviewNodes = this.captureRenderNodeSnapshots(this.resizeNodeId, engine)
+    }
+    return this.resizePreviewNodes
+  }
+
+  private ensureRotatePreviewNodes(engine: SkiaEngine): Map<string, RenderNodeSnapshot> | null {
+    if (!this.rotateNodeId) return null
+    if (!this.rotatePreviewNodes) {
+      this.rotatePreviewNodes = this.captureRenderNodeSnapshots(this.rotateNodeId, engine)
+    }
+    return this.rotatePreviewNodes
+  }
+
   private handleResizeMove(scene: { x: number; y: number }, engine: SkiaEngine) {
     const dx = scene.x - this.resizeStartSceneX
     const dy = scene.y - this.resizeStartSceneY
@@ -366,67 +548,245 @@ export class SkiaInteractionManager {
     if (resizedNode?.type === 'text' && !(resizedNode as TextNode).textGrowth) {
       updates.textGrowth = 'fixed-width'
     }
-    useDocumentStore.getState().updateNode(this.resizeNodeId!, updates as Partial<PenNode>)
 
-    if (
-      resizedNode
-      && 'children' in resizedNode
-      && resizedNode.children?.length
-    ) {
-      const resizeRN2 = engine.spatialIndex.get(this.resizeNodeId!)
-      const resizedContainer = resizedNode as PenNode & ContainerProps
-      const oldW = resizeRN2?.absW ?? (typeof resizedContainer.width === 'number' ? resizedContainer.width : 0)
-      const oldH = resizeRN2?.absH ?? (typeof resizedContainer.height === 'number' ? resizedContainer.height : 0)
-      if (oldW > 0 && oldH > 0) {
-        const scaleX = newW / oldW
-        const scaleY = newH / oldH
-        useDocumentStore.getState().scaleDescendantsInStore(this.resizeNodeId!, scaleX, scaleY)
-      }
+    const previewNodes = this.ensureResizePreviewNodes(engine)
+    const rootSnapshot = previewNodes?.get(this.resizeNodeId!)
+    const rootRn = engine.spatialIndex.get(this.resizeNodeId!)
+    if (!previewNodes || !rootSnapshot || !rootRn) return
+
+    const sourceRect = {
+      x: rootSnapshot.absX,
+      y: rootSnapshot.absY,
+      w: rootSnapshot.absW,
+      h: rootSnapshot.absH,
     }
+    const nextRootRect = {
+      x: dir.includes('w') ? rootSnapshot.absX + dx : rootSnapshot.absX,
+      y: dir.includes('n') ? rootSnapshot.absY + dy : rootSnapshot.absY,
+      w: newW,
+      h: newH,
+    }
+    const scaleX = sourceRect.w !== 0 ? nextRootRect.w / sourceRect.w : 1
+    const scaleY = sourceRect.h !== 0 ? nextRootRect.h / sourceRect.h : 1
+
+    rootRn.node = {
+      ...rootSnapshot.node,
+      ...updates,
+    } as PenNode
+    rootRn.absX = nextRootRect.x
+    rootRn.absY = nextRootRect.y
+    rootRn.absW = nextRootRect.w
+    rootRn.absH = nextRootRect.h
+    rootRn.clipRect = rootSnapshot.clipRect
+      ? {
+          ...this.scalePreviewRect(
+            {
+              x: rootSnapshot.clipRect.x,
+              y: rootSnapshot.clipRect.y,
+              w: rootSnapshot.clipRect.w,
+              h: rootSnapshot.clipRect.h,
+            },
+            sourceRect,
+            nextRootRect,
+          ),
+          rx: rootSnapshot.clipRect.rx * Math.min(scaleX, scaleY),
+        }
+      : undefined
+
+    for (const [id, snapshot] of previewNodes) {
+      if (id === this.resizeNodeId) continue
+      const rn = engine.spatialIndex.get(id)
+      if (!rn) continue
+      const scaled = this.scalePreviewRect(
+        { x: snapshot.absX, y: snapshot.absY, w: snapshot.absW, h: snapshot.absH },
+        sourceRect,
+        nextRootRect,
+      )
+      rn.node = snapshot.node
+      rn.absX = scaled.x
+      rn.absY = scaled.y
+      rn.absW = scaled.w
+      rn.absH = scaled.h
+      rn.clipRect = snapshot.clipRect
+        ? {
+            ...this.scalePreviewRect(
+              {
+                x: snapshot.clipRect.x,
+                y: snapshot.clipRect.y,
+                w: snapshot.clipRect.w,
+                h: snapshot.clipRect.h,
+              },
+              sourceRect,
+              nextRootRect,
+            ),
+            rx: snapshot.clipRect.rx * Math.min(scaleX, scaleY),
+          }
+        : undefined
+    }
+
+    this.resizeLatestPatch = updates as Partial<PenNode>
+    this.resizeLatestScale = { scaleX, scaleY }
+    this.resizeMoved = true
+    engine.spatialIndex.rebuild(engine.renderNodes)
+    engine.markDirty()
   }
 
   private handleRotateMove(scene: { x: number; y: number }, shiftKey: boolean) {
+    const engine = this.getEngine()
+    if (!engine) return
+
     const currentAngle = Math.atan2(scene.y - this.rotateCenterY, scene.x - this.rotateCenterX) * 180 / Math.PI
     let newAngle = this.rotateOrigAngle + (currentAngle - this.rotateStartAngle)
     if (shiftKey) {
       newAngle = Math.round(newAngle / 15) * 15
     }
-    useDocumentStore.getState().updateNode(this.rotateNodeId!, { rotation: newAngle } as Partial<PenNode>)
+
+    const previewNodes = this.ensureRotatePreviewNodes(engine)
+    const rootSnapshot = previewNodes?.get(this.rotateNodeId!)
+    const rootRn = this.rotateNodeId ? engine.spatialIndex.get(this.rotateNodeId) : null
+    if (!previewNodes || !rootSnapshot || !rootRn) return
+
+    const angleDelta = newAngle - this.rotateOrigAngle
+    rootRn.node = {
+      ...rootSnapshot.node,
+      rotation: newAngle,
+    } as PenNode
+    rootRn.absX = rootSnapshot.absX
+    rootRn.absY = rootSnapshot.absY
+    rootRn.absW = rootSnapshot.absW
+    rootRn.absH = rootSnapshot.absH
+    rootRn.clipRect = rootSnapshot.clipRect ? { ...rootSnapshot.clipRect } : undefined
+
+    const centerX = rootSnapshot.absX + rootSnapshot.absW / 2
+    const centerY = rootSnapshot.absY + rootSnapshot.absH / 2
+    for (const [id, snapshot] of previewNodes) {
+      if (id === this.rotateNodeId) continue
+      const rn = engine.spatialIndex.get(id)
+      if (!rn) continue
+      const rotated = this.rotatePreviewRect(
+        { x: snapshot.absX, y: snapshot.absY, w: snapshot.absW, h: snapshot.absH },
+        centerX,
+        centerY,
+        angleDelta,
+      )
+      rn.node = {
+        ...snapshot.node,
+        x: rotated.x,
+        y: rotated.y,
+        rotation: (snapshot.node.rotation ?? 0) + angleDelta,
+      } as PenNode
+      rn.absX = rotated.x
+      rn.absY = rotated.y
+      rn.absW = rotated.w
+      rn.absH = rotated.h
+      rn.clipRect = snapshot.clipRect
+        ? {
+            ...this.rotatePreviewRect(
+              {
+                x: snapshot.clipRect.x,
+                y: snapshot.clipRect.y,
+                w: snapshot.clipRect.w,
+                h: snapshot.clipRect.h,
+              },
+              centerX,
+              centerY,
+              angleDelta,
+            ),
+            rx: snapshot.clipRect.rx,
+          }
+        : undefined
+    }
+
+    this.rotateLatestAngle = newAngle
+    this.rotateMoved = true
+    engine.spatialIndex.rebuild(engine.renderNodes)
+    engine.markDirty()
   }
 
   private handleArcMove(scene: { x: number; y: number }, engine: SkiaEngine) {
     const rn = engine.spatialIndex.get(this.arcNodeId!)
     if (!rn) return
 
+    if (!this.arcPreviewNode) {
+      this.arcPreviewNode = structuredClone(rn.node)
+    }
+
     const cx = rn.absX + rn.absW / 2
     const cy = rn.absY + rn.absH / 2
     const angle = Math.atan2(scene.y - cy, scene.x - cx) * 180 / Math.PI
     const normalizedAngle = ((angle % 360) + 360) % 360
-    const eNode = rn.node as EllipseNode
+    const eNode = this.arcPreviewNode as EllipseNode
+    const updates: Partial<EllipseNode> = {}
 
     if (this.arcHandleType === 'start') {
       const oldStart = eNode.startAngle ?? 0
       const oldEnd = oldStart + (eNode.sweepAngle ?? 360)
       const newSweep = ((oldEnd - normalizedAngle) % 360 + 360) % 360
-      useDocumentStore.getState().updateNode(this.arcNodeId!, {
-        startAngle: normalizedAngle,
-        sweepAngle: newSweep || 360,
-      } as Partial<PenNode>)
+      updates.startAngle = normalizedAngle
+      updates.sweepAngle = newSweep || 360
     } else if (this.arcHandleType === 'end') {
       const startA = eNode.startAngle ?? 0
       const newSweep = ((normalizedAngle - startA) % 360 + 360) % 360
-      useDocumentStore.getState().updateNode(this.arcNodeId!, {
-        sweepAngle: newSweep || 360,
-      } as Partial<PenNode>)
+      updates.sweepAngle = newSweep || 360
     } else if (this.arcHandleType === 'inner') {
       const rx = rn.absW / 2
       const ry = rn.absH / 2
       const dist = Math.hypot((scene.x - cx) / rx, (scene.y - cy) / ry)
-      const newInner = Math.max(0, Math.min(0.99, dist))
-      useDocumentStore.getState().updateNode(this.arcNodeId!, {
-        innerRadius: newInner,
-      } as Partial<PenNode>)
+      updates.innerRadius = Math.max(0, Math.min(0.99, dist))
     }
+
+    rn.node = {
+      ...this.arcPreviewNode,
+      ...updates,
+    } as PenNode
+    this.arcLatestPatch = updates
+    this.arcMoved = true
+    engine.markDirty()
+  }
+
+  private handlePathControlMove(scene: { x: number; y: number }, engine: SkiaEngine) {
+    const rn = engine.spatialIndex.get(this.pathNodeId!)
+    if (!rn || rn.node.type !== 'path') return
+
+    const dx = scene.x - this.pathPrevSceneX
+    const dy = scene.y - this.pathPrevSceneY
+    if (dx === 0 && dy === 0) return
+
+    this.pathPrevSceneX = scene.x
+    this.pathPrevSceneY = scene.y
+
+    if (!this.pathSceneAnchors || !this.pathParentSceneOrigin) return
+
+    this.pathSceneAnchors = movePathControl(
+      this.pathSceneAnchors,
+      this.pathControlAnchorIndex!,
+      this.pathControlType!,
+      dx,
+      dy,
+    )
+    const patch = bakeSceneAnchorsToPathNode(
+      this.pathSceneAnchors,
+      this.pathClosed,
+      this.pathParentSceneOrigin,
+    )
+    if (!patch) return
+
+    this.pathLatestPatch = patch
+    this.pathControlMoved = true
+    const patchX = typeof patch.x === 'number' ? patch.x : 0
+    const patchY = typeof patch.y === 'number' ? patch.y : 0
+    const patchW = typeof patch.width === 'number' ? patch.width : rn.absW
+    const patchH = typeof patch.height === 'number' ? patch.height : rn.absH
+
+    rn.node = {
+      ...rn.node,
+      ...patch,
+    } as PenNode
+    rn.absX = this.pathParentSceneOrigin.x + patchX
+    rn.absY = this.pathParentSceneOrigin.y + patchY
+    rn.absW = patchW
+    rn.absH = patchH
+    engine.markDirty()
   }
 
   private handleDrawingMove(scene: { x: number; y: number }, engine: SkiaEngine) {
@@ -507,6 +867,11 @@ export class SkiaInteractionManager {
   }
 
   private handleHoverCursor(scene: { x: number; y: number }, engine: SkiaEngine) {
+    const pathHoverHit = hitTestPathControl(engine, scene.x, scene.y)
+    if (pathHoverHit) {
+      this.canvasEl.style.cursor = 'pointer'
+      return
+    }
     const arcHoverHit = hitTestArcHandle(engine,scene.x, scene.y)
     if (arcHoverHit) {
       this.canvasEl.style.cursor = 'pointer'
@@ -544,22 +909,111 @@ export class SkiaInteractionManager {
     }
 
     if (this.isResizing) {
+      const resizeNodeId = this.resizeNodeId
+      const resizePatch = this.resizeLatestPatch
+      const resizeScale = this.resizeLatestScale
+      const resizePreviewNodes = this.resizePreviewNodes
+      const shouldCommitResize = this.resizeMoved && !!resizeNodeId && !!resizePatch
       this.isResizing = false
       this.resizeHandle = null
       this.resizeNodeId = null
+      this.resizePreviewNodes = null
+      this.resizeLatestPatch = null
+      this.resizeLatestScale = null
+      this.resizeMoved = false
+      if (shouldCommitResize) {
+        const history = useHistoryStore.getState()
+        const docStore = useDocumentStore.getState()
+        history.startBatch(docStore.document)
+        docStore.updateNode(resizeNodeId!, resizePatch as Partial<PenNode>)
+        const resizedNode = docStore.getNodeById(resizeNodeId!)
+        if (
+          resizeScale
+          && resizedNode
+          && 'children' in resizedNode
+          && resizedNode.children?.length
+          && (resizeScale.scaleX !== 1 || resizeScale.scaleY !== 1)
+        ) {
+          docStore.scaleDescendantsInStore(
+            resizeNodeId!,
+            resizeScale.scaleX,
+            resizeScale.scaleY,
+          )
+        }
+        history.endBatch(useDocumentStore.getState().document)
+      } else if (resizePreviewNodes && engine) {
+        engine.dragSyncSuppressed = false
+        engine.syncFromDocument()
+      }
       this.canvasEl.style.cursor = toolToCursor(this.getTool())
     }
 
     if (this.isDraggingArc) {
+      const arcNodeId = this.arcNodeId
+      const arcPatch = this.arcLatestPatch
+      const arcPreviewNode = this.arcPreviewNode
+      const shouldCommitArc = this.arcMoved && !!arcNodeId && !!arcPatch
       this.isDraggingArc = false
       this.arcHandleType = null
       this.arcNodeId = null
+      this.arcPreviewNode = null
+      this.arcLatestPatch = null
+      this.arcMoved = false
+      if (shouldCommitArc) {
+        useDocumentStore.getState().updateNode(
+          arcNodeId!,
+          arcPatch as Partial<PenNode>,
+        )
+      } else if (arcPreviewNode && engine) {
+        engine.dragSyncSuppressed = false
+        engine.syncFromDocument()
+      }
+      this.canvasEl.style.cursor = toolToCursor(this.getTool())
+    }
+
+    if (this.isDraggingPathControl) {
+      const patch = this.pathLatestPatch
+      const pathNodeId = this.pathNodeId
+      this.isDraggingPathControl = false
+      this.pathControlType = null
+      this.pathControlAnchorIndex = null
+      this.pathNodeId = null
+      this.pathSceneAnchors = null
+      this.pathParentSceneOrigin = null
+      this.pathLatestPatch = null
+      const shouldCommitPathControl = this.pathControlMoved && !!patch && !!pathNodeId
+      this.pathControlMoved = false
+      if (engine) {
+        engine.dragSyncSuppressed = false
+      }
+      if (shouldCommitPathControl) {
+        useDocumentStore.getState().updateNode(
+          pathNodeId!,
+          patch as Partial<PenNode>,
+        )
+      }
       this.canvasEl.style.cursor = toolToCursor(this.getTool())
     }
 
     if (this.isRotating) {
+      const rotateNodeId = this.rotateNodeId
+      const rotateAngle = this.rotateLatestAngle
+      const rotatePreviewNodes = this.rotatePreviewNodes
+      const shouldCommitRotate = this.rotateMoved && !!rotateNodeId && typeof rotateAngle === 'number'
       this.isRotating = false
       this.rotateNodeId = null
+      this.rotatePreviewNodes = null
+      this.rotateLatestAngle = null
+      this.rotateMoved = false
+      if (shouldCommitRotate) {
+        useDocumentStore.getState().updateNode(
+          rotateNodeId!,
+          { rotation: rotateAngle } as Partial<PenNode>,
+        )
+      } else if (rotatePreviewNodes && engine) {
+        engine.dragSyncSuppressed = false
+        engine.syncFromDocument()
+      }
       this.canvasEl.style.cursor = toolToCursor(this.getTool())
     }
 
@@ -714,16 +1168,16 @@ export class SkiaInteractionManager {
 
     this.onEditText({
       nodeId: topHit.node.id,
-      x: topHit.absX * engine.zoom + engine.panX,
-      y: topHit.absY * engine.zoom + engine.panY,
-      w: topHit.absW * engine.zoom,
-      h: topHit.absH * engine.zoom,
+      x: topHit.absX,
+      y: topHit.absY,
+      w: topHit.absW,
+      h: topHit.absH,
       content: typeof tNode.content === 'string'
         ? tNode.content
         : Array.isArray(tNode.content)
           ? tNode.content.map((s) => s.text ?? '').join('')
           : '',
-      fontSize: (tNode.fontSize ?? 16) * engine.zoom,
+      fontSize: tNode.fontSize ?? 16,
       fontFamily: tNode.fontFamily ?? 'Inter, -apple-system, "Noto Sans SC", "PingFang SC", system-ui, sans-serif',
       fontWeight: String(tNode.fontWeight ?? '400'),
       textAlign: tNode.textAlign ?? 'left',
@@ -762,7 +1216,29 @@ export class SkiaInteractionManager {
   attach(): () => void {
     const canvasEl = this.canvasEl
 
-    const onContextMenu = (e: MouseEvent) => e.preventDefault()
+    const onContextMenu = (e: MouseEvent) => {
+      e.preventDefault()
+
+      const engine = this.getEngine()
+      if (!engine || this.getTool() !== 'select') return
+
+      const scene = this.getScene(e)
+      if (!scene) return
+
+      const pathHit = hitTestPathControl(engine, scene.x, scene.y)
+      if (!pathHit) {
+        this.onPathAnchorContextMenu(null)
+        return
+      }
+
+      useCanvasStore.getState().setSelection([pathHit.nodeId], pathHit.nodeId)
+      this.onPathAnchorContextMenu({
+        x: e.clientX,
+        y: e.clientY,
+        nodeId: pathHit.nodeId,
+        anchorIndex: pathHit.anchorIndex,
+      })
+    }
 
     // Tool change → cursor + cancel pen if switching away
     const unsubTool = useCanvasStore.subscribe((state) => {

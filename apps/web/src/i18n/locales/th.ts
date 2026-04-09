@@ -10,6 +10,8 @@ const th: TranslationKeys = {
   'common.close': 'ปิด',
   'common.connect': 'เชื่อมต่อ',
   'common.disconnect': 'ตัดการเชื่อมต่อ',
+  'common.yes': 'ใช่',
+  'common.no': 'ไม่',
   'common.import': 'นำเข้า',
   'common.export': 'ส่งออก',
   'common.name': 'ชื่อ',
@@ -74,6 +76,8 @@ const th: TranslationKeys = {
   'statusbar.zoomOut': 'ซูมออก',
   'statusbar.zoomIn': 'ซูมเข้า',
   'statusbar.resetZoom': 'รีเซ็ตการซูม',
+  'statusbar.focusContent': 'พอดีกับเนื้อหาทั้งหมด',
+  'statusbar.focusSelection': 'โฟกัสที่สิ่งที่เลือก',
 
   // ── Updater ──
   'updater.softwareUpdate': 'อัปเดตซอฟต์แวร์',
