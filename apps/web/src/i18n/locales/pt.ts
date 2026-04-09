@@ -1,4 +1,4 @@
-import type { TranslationKeys } from './en'
+import type { TranslationKeys } from './en';
 
 const pt: TranslationKeys = {
   // ── Common ──
@@ -102,19 +102,15 @@ const pt: TranslationKeys = {
   'updater.subtitle.checking': 'Procurando a versão mais recente...',
   'updater.subtitle.available': 'A versão {{version}} está disponível.',
   'updater.subtitle.availableGeneric': 'Uma nova versão está disponível.',
-  'updater.subtitle.downloading':
-    'A versão {{version}} está sendo baixada em segundo plano.',
-  'updater.subtitle.downloadingGeneric':
-    'Baixando pacote de atualização em segundo plano.',
+  'updater.subtitle.downloading': 'A versão {{version}} está sendo baixada em segundo plano.',
+  'updater.subtitle.downloadingGeneric': 'Baixando pacote de atualização em segundo plano.',
   'updater.subtitle.downloaded': 'A versão {{version}} foi baixada.',
   'updater.subtitle.downloadedGeneric': 'A atualização foi baixada.',
-  'updater.subtitle.error':
-    'Não foi possível verificar ou baixar a atualização.',
+  'updater.subtitle.error': 'Não foi possível verificar ou baixar a atualização.',
 
   // ── Layers ──
   'layers.title': 'Camadas',
-  'layers.empty':
-    'Nenhuma camada ainda. Use a barra de ferramentas para desenhar formas.',
+  'layers.empty': 'Nenhuma camada ainda. Use a barra de ferramentas para desenhar formas.',
 
   // ── Layer Context Menu ──
   'layerMenu.groupSelection': 'Agrupar seleção',
@@ -225,11 +221,9 @@ const pt: TranslationKeys = {
   'textLayout.autoWidth': 'Auto L',
   'textLayout.autoWidthDesc': 'Largura automática — texto expande horizontalmente',
   'textLayout.autoHeight': 'Auto A',
-  'textLayout.autoHeightDesc':
-    'Altura automática — largura fixa, altura se ajusta',
+  'textLayout.autoHeightDesc': 'Altura automática — largura fixa, altura se ajusta',
   'textLayout.fixed': 'Fixo',
-  'textLayout.fixedDesc':
-    'Tamanho fixo — largura e altura são fixas',
+  'textLayout.fixedDesc': 'Tamanho fixo — largura e altura são fixas',
   'textLayout.fillWidth': 'Preencher largura',
   'textLayout.fillHeight': 'Preencher altura',
 
@@ -247,6 +241,7 @@ const pt: TranslationKeys = {
   'export.selectedOnly': 'Exportar somente selecionados',
   'export.exportFormat': 'Exportar {{format}}',
   'export.exportLayer': 'Exportar camada',
+  'export.pdfMultiPage': 'O PDF incluirá todas as {{count}} páginas.',
 
   // ── Polygon ──
   'polygon.sides': 'Lados',
@@ -327,14 +322,40 @@ const pt: TranslationKeys = {
   'ai.quickAction.loginScreenPrompt':
     'Design a modern mobile login screen with email input, password input, login button, and social login options',
   'ai.quickAction.foodApp': 'Página inicial de app de comida',
-  'ai.quickAction.foodAppPrompt':
-    'Generate a well-designed food mobile app homepage',
+  'ai.quickAction.foodAppPrompt': 'Generate a well-designed food mobile app homepage',
   'ai.quickAction.bottomNav': 'Criar uma barra de navegação inferior',
   'ai.quickAction.bottomNavPrompt':
     'Design a mobile app bottom navigation bar with 5 tabs: Home, Search, Add, Messages, Profile',
   'ai.quickAction.colorPalette': 'Sugerir uma paleta de cores para meu app',
-  'ai.quickAction.colorPalettePrompt':
-    'Suggest a modern color palette for a pet care app',
+  'ai.quickAction.colorPalettePrompt': 'Suggest a modern color palette for a pet care app',
+  'ai.startDesigning': 'Start designing with AI',
+  'ai.maximize': 'Maximize',
+  'ai.restore': 'Restore',
+  'ai.quickAction.loginScreenDesc': 'Mobile login with social auth',
+  'ai.quickAction.foodAppDesc': 'App homepage design',
+  'ai.quickAction.bottomNavDesc': '5-tab navigation bar',
+  'ai.quickAction.colorPaletteDesc': 'Color palette recommendation',
+
+  // ── File Menu ──
+  'fileMenu.newFile': 'New file',
+  'fileMenu.openFile': 'Open file...',
+  'fileMenu.save': 'Save',
+  'fileMenu.saveAs': 'Save as...',
+  'fileMenu.exportImage': 'Exportar imagem...',
+  'fileMenu.recentFiles': 'Recent files',
+  'fileMenu.clearHistory': 'Clear history',
+  'fileMenu.noRecentFiles': 'No recent files',
+  'fileMenu.saved': 'Saved',
+  'fileMenu.justNow': 'just now',
+  'fileMenu.minutesAgo': '{{count}}m ago',
+  'fileMenu.hoursAgo': '{{count}}h ago',
+  'fileMenu.yesterday': 'yesterday',
+  'fileMenu.daysAgo': '{{count}}d ago',
+
+  // ── Unsaved Changes ──
+  'unsaved.title': 'Unsaved changes',
+  'unsaved.message': 'Save changes to "{{name}}"?',
+  'unsaved.dontSave': "Don't Save",
 
   // ── Code Panel ──
   'code.reactTailwind': 'React + Tailwind',
@@ -345,8 +366,7 @@ const pt: TranslationKeys = {
   'code.download': 'Baixar arquivo de código',
   'code.closeCodePanel': 'Fechar painel de código',
   'code.genCssVars': 'Gerando variáveis CSS para o documento inteiro',
-  'code.genSelected':
-    'Gerando código para {{count}} elemento(s) selecionado(s)',
+  'code.genSelected': 'Gerando código para {{count}} elemento(s) selecionado(s)',
   'code.genDocument': 'Gerando código para o documento inteiro',
   'code.aiEnhance': 'Melhorar com IA',
   'code.cancelEnhance': 'Cancelar melhoria',
@@ -364,8 +384,7 @@ const pt: TranslationKeys = {
   'agents.mcpIntegrations': 'Integrações MCP no Terminal',
   'agents.transport': 'Transporte',
   'agents.port': 'Porta',
-  'agents.mcpRestart':
-    'As integrações MCP entrarão em vigor após reiniciar o terminal.',
+  'agents.mcpRestart': 'As integrações MCP entrarão em vigor após reiniciar o terminal.',
   'agents.mcpReinstallHint':
     'Após atualizar o OpenPencil, reinstale as integrações MCP para garantir a compatibilidade.',
   'agents.modelCount': '{{count}} modelo(s)',
@@ -407,12 +426,14 @@ const pt: TranslationKeys = {
   'settings.images': 'Images',
   'settings.system': 'Sistema',
   'settings.autoUpdateDesc': 'Verificar automaticamente novas versões ao iniciar',
-  'settings.systemDesktopOnly': 'As configurações do sistema estão disponíveis no aplicativo de desktop.',
+  'settings.systemDesktopOnly':
+    'As configurações do sistema estão disponíveis no aplicativo de desktop.',
   'settings.envHint': 'Você pode definir variáveis de ambiente adicionais em {{path}}.',
 
   // ── Builtin Providers ──
   'builtin.title': 'Provedores integrados',
-  'builtin.description': 'Configure as chaves de API diretamente — sem ferramentas CLI necessárias.',
+  'builtin.description':
+    'Configure as chaves de API diretamente — sem ferramentas CLI necessárias.',
   'builtin.addProvider': 'Adicionar provedor',
   'builtin.empty': 'Nenhum provedor integrado configurado ainda.',
   'builtin.displayName': 'Nome de exibição',
@@ -436,11 +457,14 @@ const pt: TranslationKeys = {
   'builtin.custom': 'Personalizado',
   'builtin.apiKeyBadge': 'API Key',
   'builtin.viaApiKey': 'via API Key de {{name}}',
-  'builtin.errorProviderNotFound': 'Provedor integrado não encontrado. Por favor, verifique suas configurações.',
-  'builtin.errorApiKeyEmpty': 'A API key está vazia. Por favor, adicione sua API key nas configurações.',
+  'builtin.errorProviderNotFound':
+    'Provedor integrado não encontrado. Por favor, verifique suas configurações.',
+  'builtin.errorApiKeyEmpty':
+    'A API key está vazia. Por favor, adicione sua API key nas configurações.',
   'builtin.parallelAgents': 'Sub-agentes paralelos: {{count}}x (clique para alternar)',
   'builtin.baseUrlPlaceholder': 'https://api.example.com/v1',
-  'builtin.teamDescription': 'Selecione um modelo para geração de design. Quando definido, tarefas de design são automaticamente delegadas a um agente especializado usando este modelo.',
+  'builtin.teamDescription':
+    'Selecione um modelo para geração de design. Quando definido, tarefas de design são automaticamente delegadas a um agente especializado usando este modelo.',
   'builtin.teamDesignModel': 'Modelo de design',
   'builtin.teamSelectModel': 'Nenhum (agente único)',
 
@@ -455,8 +479,7 @@ const pt: TranslationKeys = {
   'figma.convertFailed': 'Falha ao converter o arquivo Figma',
   'figma.parsing': 'Analisando arquivo .fig...',
   'figma.converting': 'Convertendo nós...',
-  'figma.selectPage':
-    'Este arquivo tem {{count}} páginas. Selecione quais importar:',
+  'figma.selectPage': 'Este arquivo tem {{count}} páginas. Selecione quais importar:',
   'figma.layers': '{{count}} camadas',
   'figma.importAll': 'Importar todas as páginas',
   'figma.importComplete': 'Importação concluída!',
@@ -470,8 +493,7 @@ const pt: TranslationKeys = {
   // ── Landing Page ──
   'landing.open': 'Open',
   'landing.pencil': 'Pencil',
-  'landing.tagline':
-    'Ferramenta de design vetorial de código aberto. Design as Code.',
+  'landing.tagline': 'Ferramenta de design vetorial de código aberto. Design as Code.',
   'landing.newDesign': 'Novo Design',
   'landing.shortcutHint': 'Pressione {{key1}} + {{key2}} para criar um novo design',
 
@@ -503,6 +525,6 @@ const pt: TranslationKeys = {
   'variablePicker.bindToVariable': 'Vincular a variável',
   'variablePicker.unbind': 'Desvincular variável',
   'variablePicker.noVariables': 'Nenhuma variável de {{type}} definida',
-} as const
+} as const;
 
-export default pt
+export default pt;

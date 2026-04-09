@@ -1,16 +1,16 @@
-import { defineEventHandler } from 'h3'
+import { defineEventHandler } from 'h3';
 import {
   buildClaudeAgentEnv,
   getClaudeAgentDebugFilePath,
-} from '../../utils/resolve-claude-agent-env'
+} from '../../utils/resolve-claude-agent-env';
 
 interface ModelInfo {
-  value: string
-  displayName: string
-  description: string
+  value: string;
+  displayName: string;
+  description: string;
 }
 
-let cachedModels: ModelInfo[] | null = null
+let cachedModels: ModelInfo[] | null = null;
 
 /**
  * Returns the list of available AI models via Claude Agent SDK.
@@ -18,14 +18,14 @@ let cachedModels: ModelInfo[] | null = null
  */
 export default defineEventHandler(async () => {
   if (cachedModels) {
-    return { models: cachedModels }
+    return { models: cachedModels };
   }
 
   try {
-    const { query } = await import('@anthropic-ai/claude-agent-sdk')
+    const { query } = await import('@anthropic-ai/claude-agent-sdk');
 
-    const env = buildClaudeAgentEnv()
-    const debugFile = getClaudeAgentDebugFilePath()
+    const env = buildClaudeAgentEnv();
+    const debugFile = getClaudeAgentDebugFilePath();
 
     const q = query({
       prompt: '',
@@ -37,15 +37,15 @@ export default defineEventHandler(async () => {
         env,
         ...(debugFile ? { debugFile } : {}),
       },
-    })
+    });
 
-    const models = await q.supportedModels()
-    cachedModels = models
-    q.close()
+    const models = await q.supportedModels();
+    cachedModels = models;
+    q.close();
 
-    return { models }
+    return { models };
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'Unknown error'
-    return { models: [], error: message }
+    const message = error instanceof Error ? error.message : 'Unknown error';
+    return { models: [], error: message };
   }
-})
+});

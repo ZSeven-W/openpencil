@@ -1,4 +1,4 @@
-import type { TranslationKeys } from './en'
+import type { TranslationKeys } from './en';
 
 const ja: TranslationKeys = {
   // ── Common ──
@@ -91,8 +91,7 @@ const ja: TranslationKeys = {
   'updater.restartInstall': '再起動してインストール',
   'updater.installing': 'インストール中...',
   'updater.releaseDate': 'リリース日：{{date}}',
-  'updater.restartHint':
-    '再起動してアップデートを適用します。再起動には通常 10〜15 秒かかります。',
+  'updater.restartHint': '再起動してアップデートを適用します。再起動には通常 10〜15 秒かかります。',
   'updater.unknownError': '不明なアップデートエラーです。',
   'updater.title.checking': 'アップデートを確認中',
   'updater.title.available': 'アップデートが見つかりました',
@@ -102,21 +101,16 @@ const ja: TranslationKeys = {
   'updater.subtitle.checking': '最新リリースを確認中...',
   'updater.subtitle.available': 'バージョン {{version}} が利用可能です。',
   'updater.subtitle.availableGeneric': '新しいバージョンが利用可能です。',
-  'updater.subtitle.downloading':
-    'バージョン {{version}} をバックグラウンドでダウンロード中。',
+  'updater.subtitle.downloading': 'バージョン {{version}} をバックグラウンドでダウンロード中。',
   'updater.subtitle.downloadingGeneric':
     'アップデートパッケージをバックグラウンドでダウンロード中。',
-  'updater.subtitle.downloaded':
-    'バージョン {{version}} のダウンロードが完了しました。',
-  'updater.subtitle.downloadedGeneric':
-    'アップデートのダウンロードが完了しました。',
-  'updater.subtitle.error':
-    'アップデートの確認またはダウンロードができませんでした。',
+  'updater.subtitle.downloaded': 'バージョン {{version}} のダウンロードが完了しました。',
+  'updater.subtitle.downloadedGeneric': 'アップデートのダウンロードが完了しました。',
+  'updater.subtitle.error': 'アップデートの確認またはダウンロードができませんでした。',
 
   // ── Layers ──
   'layers.title': 'レイヤー',
-  'layers.empty':
-    'レイヤーがありません。ツールバーからシェイプを描画してください。',
+  'layers.empty': 'レイヤーがありません。ツールバーからシェイプを描画してください。',
 
   // ── Layer Context Menu ──
   'layerMenu.groupSelection': '選択をグループ化',
@@ -227,11 +221,9 @@ const ja: TranslationKeys = {
   'textLayout.autoWidth': '自動 W',
   'textLayout.autoWidthDesc': '自動幅 \u2014 テキストが水平に拡張',
   'textLayout.autoHeight': '自動 H',
-  'textLayout.autoHeightDesc':
-    '自動高さ \u2014 幅固定、高さが自動調整',
+  'textLayout.autoHeightDesc': '自動高さ \u2014 幅固定、高さが自動調整',
   'textLayout.fixed': '固定',
-  'textLayout.fixedDesc':
-    '固定サイズ \u2014 幅と高さの両方が固定',
+  'textLayout.fixedDesc': '固定サイズ \u2014 幅と高さの両方が固定',
   'textLayout.fillWidth': '幅を埋める',
   'textLayout.fillHeight': '高さを埋める',
 
@@ -249,6 +241,7 @@ const ja: TranslationKeys = {
   'export.selectedOnly': '選択項目のみエクスポート',
   'export.exportFormat': '{{format}} をエクスポート',
   'export.exportLayer': 'レイヤーをエクスポート',
+  'export.pdfMultiPage': 'PDF にはすべての {{count}} ページが含まれます。',
 
   // ── Polygon ──
   'polygon.sides': '辺の数',
@@ -329,14 +322,41 @@ const ja: TranslationKeys = {
   'ai.quickAction.loginScreenPrompt':
     'メール入力、パスワード入力、ログインボタン、ソーシャルログインオプションを含む、モダンなモバイルログイン画面をデザインしてください',
   'ai.quickAction.foodApp': 'フードアプリのホームページ',
-  'ai.quickAction.foodAppPrompt':
-    'Generate a well-designed food mobile app homepage',
+  'ai.quickAction.foodAppPrompt': 'Generate a well-designed food mobile app homepage',
   'ai.quickAction.bottomNav': 'ボトムナビゲーションバーをデザイン',
   'ai.quickAction.bottomNavPrompt':
     'ホーム、検索、追加、メッセージ、プロフィールの 5 つのタブを含むモバイルアプリのボトムナビゲーションバーをデザインしてください',
   'ai.quickAction.colorPalette': 'アプリのカラーパレットを提案',
   'ai.quickAction.colorPalettePrompt':
     'ペットケアアプリ向けのモダンなカラーパレットを提案してください',
+  'ai.startDesigning': 'Start designing with AI',
+  'ai.maximize': 'Maximize',
+  'ai.restore': 'Restore',
+  'ai.quickAction.loginScreenDesc': 'Mobile login with social auth',
+  'ai.quickAction.foodAppDesc': 'App homepage design',
+  'ai.quickAction.bottomNavDesc': '5-tab navigation bar',
+  'ai.quickAction.colorPaletteDesc': 'Color palette recommendation',
+
+  // ── File Menu ──
+  'fileMenu.newFile': 'New file',
+  'fileMenu.openFile': 'Open file...',
+  'fileMenu.save': 'Save',
+  'fileMenu.saveAs': 'Save as...',
+  'fileMenu.exportImage': '画像をエクスポート...',
+  'fileMenu.recentFiles': 'Recent files',
+  'fileMenu.clearHistory': 'Clear history',
+  'fileMenu.noRecentFiles': 'No recent files',
+  'fileMenu.saved': 'Saved',
+  'fileMenu.justNow': 'just now',
+  'fileMenu.minutesAgo': '{{count}}m ago',
+  'fileMenu.hoursAgo': '{{count}}h ago',
+  'fileMenu.yesterday': 'yesterday',
+  'fileMenu.daysAgo': '{{count}}d ago',
+
+  // ── Unsaved Changes ──
+  'unsaved.title': 'Unsaved changes',
+  'unsaved.message': 'Save changes to "{{name}}"?',
+  'unsaved.dontSave': "Don't Save",
 
   // ── Code Panel ──
   'code.reactTailwind': 'React + Tailwind',
@@ -365,8 +385,7 @@ const ja: TranslationKeys = {
   'agents.mcpIntegrations': 'ターミナルでの MCP 連携',
   'agents.transport': 'トランスポート',
   'agents.port': 'ポート',
-  'agents.mcpRestart':
-    'MCP 連携はターミナルの再起動後に有効になります。',
+  'agents.mcpRestart': 'MCP 連携はターミナルの再起動後に有効になります。',
   'agents.mcpReinstallHint':
     'OpenPencil のバージョンアップ後、互換性を確保するため MCP 統合を再インストールしてください。',
   'agents.modelCount': '{{count}} 個のモデル',
@@ -441,7 +460,8 @@ const ja: TranslationKeys = {
   'builtin.errorApiKeyEmpty': 'API キーが空です。設定で API キーを追加してください。',
   'builtin.parallelAgents': '並列サブエージェント：{{count}}x（クリックで切替）',
   'builtin.baseUrlPlaceholder': 'https://api.example.com/v1',
-  'builtin.teamDescription': 'デザイン生成用のモデルを選択します。設定すると、デザインタスクはこのモデルを使用する専門エージェントに自動的に委任されます。',
+  'builtin.teamDescription':
+    'デザイン生成用のモデルを選択します。設定すると、デザインタスクはこのモデルを使用する専門エージェントに自動的に委任されます。',
   'builtin.teamDesignModel': 'デザインモデル',
   'builtin.teamSelectModel': 'なし（シングルエージェント）',
 
@@ -449,8 +469,7 @@ const ja: TranslationKeys = {
   'figma.title': 'Figma からインポート',
   'figma.dropFile': '.fig ファイルをここにドロップ',
   'figma.orBrowse': 'またはクリックして参照',
-  'figma.exportTip':
-    'Figma からエクスポート：ファイル \u2192 ローカルコピーを保存 (.fig)',
+  'figma.exportTip': 'Figma からエクスポート：ファイル \u2192 ローカルコピーを保存 (.fig)',
   'figma.selectFigFile': '.fig ファイルを選択してください',
   'figma.noPages': '.fig ファイルにページが見つかりません',
   'figma.parseFailed': '.fig ファイルの解析に失敗しました',
@@ -472,11 +491,9 @@ const ja: TranslationKeys = {
   // ── Landing Page ──
   'landing.open': 'Open',
   'landing.pencil': 'Pencil',
-  'landing.tagline':
-    'オープンソースのベクターデザインツール。Design as Code。',
+  'landing.tagline': 'オープンソースのベクターデザインツール。Design as Code。',
   'landing.newDesign': '新規デザイン',
-  'landing.shortcutHint':
-    '{{key1}} + {{key2}} を押して新規デザインを作成',
+  'landing.shortcutHint': '{{key1}} + {{key2}} を押して新規デザインを作成',
 
   // ── 404 ──
   'notFound.message': 'ページが見つかりません',
@@ -506,6 +523,6 @@ const ja: TranslationKeys = {
   'variablePicker.bindToVariable': '変数にバインド',
   'variablePicker.unbind': 'バインドを解除',
   'variablePicker.noVariables': '{{type}} 型の変数が定義されていません',
-} as const
+} as const;
 
-export default ja
+export default ja;

@@ -13,8 +13,8 @@ import LocalImageWarning from './local-image-warning'
 import { useImageAssetState } from './use-image-asset-state'
 
 interface ImageSectionProps {
-  node: ImageNode
-  onUpdate: (updates: Partial<ImageNode>) => void
+  node: ImageNode;
+  onUpdate: (updates: Partial<ImageNode>) => void;
 }
 
 export default function ImageSection({ node, onUpdate }: ImageSectionProps) {
@@ -28,15 +28,15 @@ export default function ImageSection({ node, onUpdate }: ImageSectionProps) {
     documentPath,
   )
 
-  const handleClose = useCallback(() => setTriggerRect(null), [])
+  const handleClose = useCallback(() => setTriggerRect(null), []);
 
   const handleToggle = () => {
     if (triggerRect) {
-      setTriggerRect(null)
+      setTriggerRect(null);
     } else if (triggerRef.current) {
-      setTriggerRect(triggerRef.current.getBoundingClientRect())
+      setTriggerRect(triggerRef.current.getBoundingClientRect());
     }
-  }
+  };
 
   const handleRelink = useCallback(async () => {
     if (!window.electronAPI?.openImageFile) return
@@ -118,11 +118,21 @@ export default function ImageSection({ node, onUpdate }: ImageSectionProps) {
           }}
           onFitModeChange={(mode) => onUpdate({ objectFit: mode as ImageFitMode })}
           onAdjustmentChange={(key, value) => onUpdate({ [key]: value } as Partial<ImageNode>)}
-          onResetAdjustments={() => onUpdate({ exposure: 0, contrast: 0, saturation: 0, temperature: 0, tint: 0, highlights: 0, shadows: 0 } as Partial<ImageNode>)}
+          onResetAdjustments={() =>
+            onUpdate({
+              exposure: 0,
+              contrast: 0,
+              saturation: 0,
+              temperature: 0,
+              tint: 0,
+              highlights: 0,
+              shadows: 0,
+            } as Partial<ImageNode>)
+          }
           onImageChange={(dataUrl) => onUpdate({ src: dataUrl })}
           onClose={handleClose}
         />
       )}
     </div>
-  )
+  );
 }

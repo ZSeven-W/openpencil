@@ -6,17 +6,17 @@
  * Design principles are included to ensure consistent visual quality.
  */
 
-import type { DesignSystem } from './ai-types'
-import type { AIProviderType } from '@/types/agent-settings'
-import { generateCompletion } from './ai-service'
-import { getSkillByName } from '@zseven-w/pen-ai-skills'
-import { designSystemToPromptContext } from './design-system-generator'
+import type { DesignSystem } from './ai-types';
+import type { AIProviderType } from '@/types/agent-settings';
+import { generateCompletion } from './ai-service';
+import { getSkillByName } from '@zseven-w/pen-ai-skills';
+import { designSystemToPromptContext } from './design-system-generator';
 
 interface CodeGenOptions {
-  width: number
-  height: number
-  model?: string
-  provider?: AIProviderType
+  width: number;
+  height: number;
+  model?: string;
+  provider?: AIProviderType;
 }
 
 /**
@@ -28,31 +28,24 @@ export async function generateDesignCode(
   designSystem: DesignSystem,
   options: CodeGenOptions,
 ): Promise<string> {
-  const designCodeSkill = getSkillByName('design-code')?.content ?? ''
-  const principles = getSkillByName('design-principles')?.content ?? ''
+  const designCodeSkill = getSkillByName('design-code')?.content ?? '';
+  const principles = getSkillByName('design-principles')?.content ?? '';
 
   // Build the system prompt with principles injected
-  const systemPrompt = principles
-    ? `${designCodeSkill}\n\n${principles}`
-    : designCodeSkill
+  const systemPrompt = principles ? `${designCodeSkill}\n\n${principles}` : designCodeSkill;
 
   // Build the user prompt with design system context
-  const dsContext = designSystemToPromptContext(designSystem)
-  const userPrompt = buildCodeGenUserPrompt(
-    prompt,
-    dsContext,
-    options.width,
-    options.height,
-  )
+  const dsContext = designSystemToPromptContext(designSystem);
+  const userPrompt = buildCodeGenUserPrompt(prompt, dsContext, options.width, options.height);
 
   const response = await generateCompletion(
     systemPrompt,
     userPrompt,
     options.model,
     options.provider,
-  )
+  );
 
-  return extractHtmlFromResponse(response)
+  return extractHtmlFromResponse(response);
 }
 
 /**
@@ -60,26 +53,26 @@ export async function generateDesignCode(
  * Handles responses with code fences, markdown, or bare HTML.
  */
 function extractHtmlFromResponse(response: string): string {
-  const trimmed = response.trim()
+  const trimmed = response.trim();
 
   // Check for code fence wrapped HTML
-  const fenceMatch = trimmed.match(/```(?:html)?\s*\n?([\s\S]*?)\n?```/)
+  const fenceMatch = trimmed.match(/```(?:html)?\s*\n?([\s\S]*?)\n?```/);
   if (fenceMatch) {
-    const content = fenceMatch[1].trim()
+    const content = fenceMatch[1].trim();
     if (content.includes('<!DOCTYPE') || content.includes('<html')) {
-      return content
+      return content;
     }
   }
 
   // Check if the response itself starts with HTML
   if (trimmed.startsWith('<!DOCTYPE') || trimmed.startsWith('<html')) {
-    return trimmed
+    return trimmed;
   }
 
   // Try to find HTML document in the response
-  const htmlMatch = trimmed.match(/(<!DOCTYPE[\s\S]*<\/html>)/i)
+  const htmlMatch = trimmed.match(/(<!DOCTYPE[\s\S]*<\/html>)/i);
   if (htmlMatch) {
-    return htmlMatch[1]
+    return htmlMatch[1];
   }
 
   // Last resort: wrap bare content
@@ -87,7 +80,7 @@ function extractHtmlFromResponse(response: string): string {
 <html lang="en">
 <head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Design</title></head>
 <body>${trimmed}</body>
-</html>`
+</html>`;
 }
 
 /**
@@ -95,43 +88,51 @@ function extractHtmlFromResponse(response: string): string {
  * Produces a concise text description of the HTML structure.
  */
 export function extractStructureSummary(html: string): string {
-  const lines: string[] = ['DESIGN REFERENCE STRUCTURE:']
+  const lines: string[] = ['DESIGN REFERENCE STRUCTURE:'];
 
   // Extract section-level elements
-  const sectionPattern = /<(?:section|header|footer|nav|main|div)\s+[^>]*(?:class|id)="([^"]*)"[^>]*>/gi
-  let match: RegExpExecArray | null
+  const sectionPattern =
+    /<(?:section|header|footer|nav|main|div)\s+[^>]*(?:class|id)="([^"]*)"[^>]*>/gi;
+  let match: RegExpExecArray | null;
   while ((match = sectionPattern.exec(html)) !== null) {
-    const classOrId = match[1]
+    const classOrId = match[1];
     if (classOrId && !classOrId.includes('__')) {
-      lines.push(`- Section: ${classOrId}`)
+      lines.push(`- Section: ${classOrId}`);
     }
   }
 
   // Extract heading content for structure hints
-  const headingPattern = /<h([1-6])[^>]*>([\s\S]*?)<\/h\1>/gi
+  const headingPattern = /<h([1-6])[^>]*>([\s\S]*?)<\/h\1>/gi;
   while ((match = headingPattern.exec(html)) !== null) {
-    const level = match[1]
-    const content = match[2].replace(/<[^>]+>/g, '').trim().slice(0, 60)
+    const level = match[1];
+    const content = match[2]
+      .replace(/<[^>]+>/g, '')
+      .trim()
+      .slice(0, 60);
     if (content) {
-      lines.push(`- H${level}: "${content}"`)
+      lines.push(`- H${level}: "${content}"`);
     }
   }
 
   // Extract button/CTA text
-  const buttonPattern = /<(?:button|a)\s+[^>]*class="[^"]*(?:btn|button|cta)[^"]*"[^>]*>([\s\S]*?)<\/(?:button|a)>/gi
+  const buttonPattern =
+    /<(?:button|a)\s+[^>]*class="[^"]*(?:btn|button|cta)[^"]*"[^>]*>([\s\S]*?)<\/(?:button|a)>/gi;
   while ((match = buttonPattern.exec(html)) !== null) {
-    const text = match[1].replace(/<[^>]+>/g, '').trim().slice(0, 30)
+    const text = match[1]
+      .replace(/<[^>]+>/g, '')
+      .trim()
+      .slice(0, 30);
     if (text) {
-      lines.push(`- CTA: "${text}"`)
+      lines.push(`- CTA: "${text}"`);
     }
   }
 
   // If we couldn't extract structure, provide a generic summary
   if (lines.length <= 1) {
-    lines.push('(HTML structure extracted — use as visual layout reference)')
+    lines.push('(HTML structure extracted — use as visual layout reference)');
   }
 
-  return lines.join('\n')
+  return lines.join('\n');
 }
 
 /**
@@ -139,31 +140,31 @@ export function extractStructureSummary(html: string): string {
  * Uses heuristic matching on section/div IDs, classes, and heading content.
  */
 export function extractHtmlSection(html: string, subtaskLabel: string): string | null {
-  const labelLower = subtaskLabel.toLowerCase()
+  const labelLower = subtaskLabel.toLowerCase();
 
   // Try to find a matching section by common keywords
   const keywords = labelLower
     .replace(/[（(].+[)）]/g, '')
     .split(/[\s,/]+/)
-    .filter((w) => w.length > 2)
+    .filter((w) => w.length > 2);
 
-  if (keywords.length === 0) return null
+  if (keywords.length === 0) return null;
 
   // Build a regex to match section containers
-  const keywordPattern = keywords.map((k) => k.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|')
+  const keywordPattern = keywords.map((k) => k.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|');
   const sectionRegex = new RegExp(
     `<(?:section|div|header|footer|nav)[^>]*(?:class|id)="[^"]*(?:${keywordPattern})[^"]*"[^>]*>[\\s\\S]*?(?=<(?:section|div|header|footer|nav)[^>]*(?:class|id)="|$)`,
     'i',
-  )
+  );
 
-  const match = sectionRegex.exec(html)
+  const match = sectionRegex.exec(html);
   if (match) {
     // Truncate to reasonable length for context
-    const section = match[0].slice(0, 1500)
-    return `HTML reference for "${subtaskLabel}":\n${section}`
+    const section = match[0].slice(0, 1500);
+    return `HTML reference for "${subtaskLabel}":\n${section}`;
   }
 
-  return null
+  return null;
 }
 
 /**
@@ -176,9 +177,10 @@ function buildCodeGenUserPrompt(
   width: number,
   height: number,
 ): string {
-  const heightInstruction = height > 0
-    ? `Height: ${height}px (fixed viewport).`
-    : `Height: auto (content determines height, estimate based on sections).`
+  const heightInstruction =
+    height > 0
+      ? `Height: ${height}px (fixed viewport).`
+      : `Height: auto (content determines height, estimate based on sections).`;
 
   return `Design request: ${userPrompt}
 
@@ -186,5 +188,5 @@ Viewport: Width ${width}px. ${heightInstruction}
 
 ${designSystemContext}
 
-Generate the complete HTML file now.`
+Generate the complete HTML file now.`;
 }

@@ -14,6 +14,7 @@ category: knowledge
 Generate Svelte components with markup and scoped `<style>` blocks.
 
 ## Output Format
+
 - Svelte component (`.svelte`)
 - `<script lang="ts">` for component logic (optional, only when props/logic needed)
 - HTML template markup
@@ -21,6 +22,7 @@ Generate Svelte components with markup and scoped `<style>` blocks.
 - Each node gets a unique, descriptive CSS class name derived from `node.name`
 
 ## Layout Mapping
+
 - `layout: "vertical"` → `display: flex; flex-direction: column`
 - `layout: "horizontal"` → `display: flex; flex-direction: row`
 - `gap: N` → `gap: Npx`
@@ -37,6 +39,7 @@ Generate Svelte components with markup and scoped `<style>` blocks.
 - `clipContent: true` → `overflow: hidden`
 
 ## Color & Fill Mapping
+
 - Solid fill `#hex` → `background: #hex`
 - Variable ref `$name` → `background: var(--name)`
 - Text fill → `color: #hex` or `color: var(--name)`
@@ -44,21 +47,25 @@ Generate Svelte components with markup and scoped `<style>` blocks.
 - Radial gradient → `background: radial-gradient(circle, color1 0%, color2 100%)`
 
 ## Border & Stroke Mapping
+
 - `stroke.thickness` → `border-width: Npx; border-style: solid`
 - `stroke.color` → `border-color: #hex`
 - Variable ref → `border-width: var(--name)`, `border-color: var(--name)`
 
 ## Corner Radius
+
 - Uniform → `border-radius: Npx`
 - Per-corner `[tl, tr, br, bl]` → `border-radius: TLpx TRpx BRpx BLpx`
 - Ellipse → `border-radius: 50%`
 
 ## Effects
+
 - Drop shadow → `box-shadow: offsetXpx offsetYpx blurpx spreadpx color`
 - Inner shadow → `box-shadow: inset offsetXpx offsetYpx blurpx spreadpx color`
 - Multiple shadows comma-separated
 
 ## Typography
+
 - `fontSize` → `font-size: Npx`
 - `fontWeight` → `font-weight: N`
 - `fontStyle: "italic"` → `font-style: italic`
@@ -70,22 +77,27 @@ Generate Svelte components with markup and scoped `<style>` blocks.
 - `strikethrough` → `text-decoration: line-through`
 
 ## Dimensions
+
 - Fixed → `width: Npx; height: Npx`
 - `fill_container` → `width: 100%` or `height: 100%`
 
 ## Image Handling
+
 - `<img class="className" src={src} alt={name} />`
 - `object-fit: contain|cover|fill` based on `objectFit` property
 - Corner radius applied via CSS class
 
 ## Opacity & Transform
+
 - `opacity: N` → `opacity: N`
 - `rotation: N` → `transform: rotate(Ndeg)`
 
 ## Positioning
+
 - Absolute children → `position: absolute; left: Xpx; top: Ypx`
 
 ## Semantic HTML Tags
+
 - Font size >= 32 → `<h1>`
 - Font size >= 24 → `<h2>`
 - Font size >= 20 → `<h3>`
@@ -94,10 +106,12 @@ Generate Svelte components with markup and scoped `<style>` blocks.
 - Use semantic elements (`<nav>`, `<header>`, `<main>`, `<section>`, `<footer>`)
 
 ## Icon Handling
+
 - Icon font nodes → `<i class="className" data-lucide="icon-name" />`
 - Set `width`, `height`, and `color` via CSS class
 
 ## Svelte-Specific Patterns
+
 - Use `{#each items as item}` for lists
 - Use `{#if condition}` / `{:else}` for conditional rendering
 - Use `class:active={isActive}` directive for conditional classes
@@ -108,6 +122,7 @@ Generate Svelte components with markup and scoped `<style>` blocks.
 - Styles are automatically scoped to the component
 
 ## Variable References
+
 - `$variable` refs → `var(--variable-name)` in CSS
 - Background: `background: var(--name)`
 - Text color: `color: var(--name)`

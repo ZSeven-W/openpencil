@@ -1,43 +1,43 @@
-import type { AIStreamChunk } from './ai-types'
-import type { AIModelInfo } from '@/stores/ai-store'
+import type { AIStreamChunk } from './ai-types';
+import type { AIModelInfo } from '@/stores/ai-store';
 import {
   DEFAULT_GENERATE_TIMEOUT_MS,
   DEFAULT_STREAM_HARD_TIMEOUT_MS,
   DEFAULT_STREAM_NO_TEXT_TIMEOUT_MS,
   STREAM_TIMEOUT_MIN_MS,
-} from './ai-runtime-config'
+} from './ai-runtime-config';
 
 interface StreamChatOptions {
-  hardTimeoutMs?: number
-  noTextTimeoutMs?: number
+  hardTimeoutMs?: number;
+  noTextTimeoutMs?: number;
   /**
    * Whether thinking events should reset the no-text timeout.
    * Default: true (backward compatible). Set to false for fast calls
    * where thinking should NOT prevent the no-text timeout from firing.
    */
-  thinkingResetsTimeout?: boolean
+  thinkingResetsTimeout?: boolean;
   /**
    * Whether keep-alive ping events reset the no-text timeout.
    * Default: true (backward compatible). Set to false to avoid endless
    * waiting when the server only emits pings.
    */
-  pingResetsTimeout?: boolean
+  pingResetsTimeout?: boolean;
   /**
    * Max time to wait for the first non-empty text token.
    * This timeout is independent from keep-alive pings/thinking chunks.
    */
-  firstTextTimeoutMs?: number
+  firstTextTimeoutMs?: number;
   /**
    * Controls provider thinking mode.
    * - adaptive: model decides thinking depth
    * - disabled: disable extended thinking for faster first text
    * - enabled: explicitly enable extended thinking
    */
-  thinkingMode?: 'adaptive' | 'disabled' | 'enabled'
+  thinkingMode?: 'adaptive' | 'disabled' | 'enabled';
   /** Thinking budget (used when thinkingMode === 'enabled'). */
-  thinkingBudgetTokens?: number
+  thinkingBudgetTokens?: number;
   /** Model effort level (low is usually faster). */
-  effort?: 'low' | 'medium' | 'high' | 'max'
+  effort?: 'low' | 'medium' | 'high' | 'max';
 }
 
 /**
@@ -46,83 +46,93 @@ interface StreamChatOptions {
  */
 export async function* streamChat(
   systemPrompt: string,
-  messages: Array<{ role: 'user' | 'assistant'; content: string; attachments?: Array<{ name: string; mediaType: string; data: string }> }>,
+  messages: Array<{
+    role: 'user' | 'assistant';
+    content: string;
+    attachments?: Array<{ name: string; mediaType: string; data: string }>;
+  }>,
   model?: string,
   options?: StreamChatOptions,
   provider?: string,
   abortSignal?: AbortSignal,
 ): AsyncGenerator<AIStreamChunk> {
-  const hardTimeoutMs = Math.max(STREAM_TIMEOUT_MIN_MS, options?.hardTimeoutMs ?? DEFAULT_STREAM_HARD_TIMEOUT_MS)
-  const noTextTimeoutMs = Math.max(STREAM_TIMEOUT_MIN_MS, options?.noTextTimeoutMs ?? DEFAULT_STREAM_NO_TEXT_TIMEOUT_MS)
-  const thinkingResetsTimeout = options?.thinkingResetsTimeout ?? true
-  const pingResetsTimeout = options?.pingResetsTimeout ?? true
+  const hardTimeoutMs = Math.max(
+    STREAM_TIMEOUT_MIN_MS,
+    options?.hardTimeoutMs ?? DEFAULT_STREAM_HARD_TIMEOUT_MS,
+  );
+  const noTextTimeoutMs = Math.max(
+    STREAM_TIMEOUT_MIN_MS,
+    options?.noTextTimeoutMs ?? DEFAULT_STREAM_NO_TEXT_TIMEOUT_MS,
+  );
+  const thinkingResetsTimeout = options?.thinkingResetsTimeout ?? true;
+  const pingResetsTimeout = options?.pingResetsTimeout ?? true;
   const firstTextTimeoutMs = options?.firstTextTimeoutMs
     ? Math.max(STREAM_TIMEOUT_MIN_MS, options.firstTextTimeoutMs)
-    : null
+    : null;
 
-  const controller = new AbortController()
-  let abortReason: 'hard_timeout' | 'no_text_timeout' | 'first_text_timeout' | null = null
-  let noTextTimeout: ReturnType<typeof setTimeout> | null = null
-  let firstTextTimeout: ReturnType<typeof setTimeout> | null = null
-  let sawText = false
+  const controller = new AbortController();
+  let abortReason: 'hard_timeout' | 'no_text_timeout' | 'first_text_timeout' | null = null;
+  let noTextTimeout: ReturnType<typeof setTimeout> | null = null;
+  let firstTextTimeout: ReturnType<typeof setTimeout> | null = null;
+  let sawText = false;
 
   const clearNoTextTimeout = () => {
     if (noTextTimeout) {
-      clearTimeout(noTextTimeout)
-      noTextTimeout = null
+      clearTimeout(noTextTimeout);
+      noTextTimeout = null;
     }
-  }
+  };
 
   const clearFirstTextTimeout = () => {
     if (firstTextTimeout) {
-      clearTimeout(firstTextTimeout)
-      firstTextTimeout = null
+      clearTimeout(firstTextTimeout);
+      firstTextTimeout = null;
     }
-  }
+  };
 
   const resetActivityTimeout = () => {
-    clearNoTextTimeout()
+    clearNoTextTimeout();
     noTextTimeout = setTimeout(() => {
-      abortReason = 'no_text_timeout'
-      controller.abort()
-    }, noTextTimeoutMs)
-  }
+      abortReason = 'no_text_timeout';
+      controller.abort();
+    }, noTextTimeoutMs);
+  };
 
   const hardTimeout = setTimeout(() => {
-    abortReason = 'hard_timeout'
-    controller.abort()
-  }, hardTimeoutMs)
+    abortReason = 'hard_timeout';
+    controller.abort();
+  }, hardTimeoutMs);
 
   if (firstTextTimeoutMs) {
     firstTextTimeout = setTimeout(() => {
-      if (sawText) return
-      abortReason = 'first_text_timeout'
-      controller.abort()
-    }, firstTextTimeoutMs)
+      if (sawText) return;
+      abortReason = 'first_text_timeout';
+      controller.abort();
+    }, firstTextTimeoutMs);
   }
 
-  resetActivityTimeout()
+  resetActivityTimeout();
 
   try {
     const fetchSignal = abortSignal
       ? AbortSignal.any([controller.signal, abortSignal])
-      : controller.signal
+      : controller.signal;
 
     // For builtin provider, attach API key and config from agent settings store
-    let builtinFields: Record<string, unknown> = {}
+    let builtinFields: Record<string, unknown> = {};
     if (provider === 'builtin') {
-      const { useAgentSettingsStore } = await import('@/stores/agent-settings-store')
-      const { useAIStore } = await import('@/stores/ai-store')
-      const currentModel = useAIStore.getState().model
+      const { useAgentSettingsStore } = await import('@/stores/agent-settings-store');
+      const { useAIStore } = await import('@/stores/ai-store');
+      const currentModel = useAIStore.getState().model;
       if (currentModel.startsWith('builtin:')) {
-        const bpId = currentModel.split(':')[1]
-        const bp = useAgentSettingsStore.getState().builtinProviders.find((p) => p.id === bpId)
+        const bpId = currentModel.split(':')[1];
+        const bp = useAgentSettingsStore.getState().builtinProviders.find((p) => p.id === bpId);
         if (bp) {
           builtinFields = {
             builtinApiKey: bp.apiKey,
             builtinBaseURL: bp.baseURL,
             builtinType: bp.type,
-          }
+          };
         }
       }
     }
@@ -145,120 +155,128 @@ export async function* streamChat(
         ...builtinFields,
       }),
       signal: fetchSignal,
-    })
+    });
 
     if (!response.ok) {
-      const errBody = await response.text()
-      yield { type: 'error', content: `Server error: ${response.status} ${errBody}` }
-      clearTimeout(hardTimeout)
-      clearNoTextTimeout()
-      clearFirstTextTimeout()
-      return
+      const errBody = await response.text();
+      yield { type: 'error', content: `Server error: ${response.status} ${errBody}` };
+      clearTimeout(hardTimeout);
+      clearNoTextTimeout();
+      clearFirstTextTimeout();
+      return;
     }
 
     // Server returned JSON instead of SSE stream — read body as JSON error
-    const contentType = response.headers.get('content-type') ?? ''
+    const contentType = response.headers.get('content-type') ?? '';
     if (contentType.includes('application/json')) {
-      const body = await response.text()
+      const body = await response.text();
       try {
-        const jsonBody = JSON.parse(body)
-        yield { type: 'error', content: jsonBody.error || jsonBody.message || `Unexpected JSON response: ${body.slice(0, 200)}` }
+        const jsonBody = JSON.parse(body);
+        yield {
+          type: 'error',
+          content:
+            jsonBody.error || jsonBody.message || `Unexpected JSON response: ${body.slice(0, 200)}`,
+        };
       } catch {
-        yield { type: 'error', content: `Unexpected server response: ${body.slice(0, 200)}` }
+        yield { type: 'error', content: `Unexpected server response: ${body.slice(0, 200)}` };
       }
-      clearTimeout(hardTimeout)
-      clearNoTextTimeout()
-      clearFirstTextTimeout()
-      return
+      clearTimeout(hardTimeout);
+      clearNoTextTimeout();
+      clearFirstTextTimeout();
+      return;
     }
 
-    const reader = response.body?.getReader()
+    const reader = response.body?.getReader();
     if (!reader) {
-      yield { type: 'error', content: 'No response stream available' }
-      clearTimeout(hardTimeout)
-      clearNoTextTimeout()
-      clearFirstTextTimeout()
-      return
+      yield { type: 'error', content: 'No response stream available' };
+      clearTimeout(hardTimeout);
+      clearNoTextTimeout();
+      clearFirstTextTimeout();
+      return;
     }
 
-    const decoder = new TextDecoder()
-    let buffer = ''
+    const decoder = new TextDecoder();
+    let buffer = '';
 
     while (true) {
-      const { done, value } = await reader.read()
+      const { done, value } = await reader.read();
       if (done) {
         if (buffer.trim().length > 0) {
           // Remaining buffer may be a non-SSE response (e.g. JSON error)
           try {
-            const jsonErr = JSON.parse(buffer.trim())
+            const jsonErr = JSON.parse(buffer.trim());
             if (jsonErr.error) {
-              yield { type: 'error', content: jsonErr.error } as AIStreamChunk
+              yield { type: 'error', content: jsonErr.error } as AIStreamChunk;
             }
           } catch {
             // Not JSON, ignore remaining buffer
           }
         }
-        break
+        break;
       }
 
-      buffer += decoder.decode(value, { stream: true })
+      buffer += decoder.decode(value, { stream: true });
 
       // Parse SSE events from the buffer
-      const lines = buffer.split('\n')
-      buffer = lines.pop() ?? ''
+      const lines = buffer.split('\n');
+      buffer = lines.pop() ?? '';
 
       for (const line of lines) {
         if (line.startsWith('data: ')) {
-          const data = line.slice(6).trim()
-          if (!data) continue
+          const data = line.slice(6).trim();
+          if (!data) continue;
           try {
-            const chunk = JSON.parse(data) as AIStreamChunk
+            const chunk = JSON.parse(data) as AIStreamChunk;
 
             if (chunk.type === 'done') {
-              clearTimeout(hardTimeout)
-              clearNoTextTimeout()
-              clearFirstTextTimeout()
+              clearTimeout(hardTimeout);
+              clearNoTextTimeout();
+              clearFirstTextTimeout();
               try {
-                await reader.cancel()
+                await reader.cancel();
               } catch {
                 // ignore cancellation errors
               }
-              return
+              return;
             }
 
             // Keep-alive pings from server — reset activity timeout but don't yield
             if (chunk.type === 'ping') {
               if (pingResetsTimeout) {
-                resetActivityTimeout()
+                resetActivityTimeout();
               }
-              continue
+              continue;
             }
 
             if (chunk.type === 'thinking' && !chunk.content) {
-              continue
+              continue;
             }
 
             // Any non-empty text counts as activity; thinking only resets
             // the timeout when thinkingResetsTimeout is true (default).
             if (chunk.type === 'text' && chunk.content.trim().length > 0) {
-              sawText = true
-              clearFirstTextTimeout()
-              resetActivityTimeout()
-            } else if (chunk.type === 'thinking' && chunk.content.trim().length > 0 && thinkingResetsTimeout) {
-              resetActivityTimeout()
+              sawText = true;
+              clearFirstTextTimeout();
+              resetActivityTimeout();
+            } else if (
+              chunk.type === 'thinking' &&
+              chunk.content.trim().length > 0 &&
+              thinkingResetsTimeout
+            ) {
+              resetActivityTimeout();
             }
 
-            yield chunk
+            yield chunk;
             if (chunk.type === 'error') {
-              clearTimeout(hardTimeout)
-              clearNoTextTimeout()
-              clearFirstTextTimeout()
+              clearTimeout(hardTimeout);
+              clearNoTextTimeout();
+              clearFirstTextTimeout();
               try {
-                await reader.cancel()
+                await reader.cancel();
               } catch {
                 // ignore cancellation errors
               }
-              return
+              return;
             }
           } catch {
             // Skip malformed lines
@@ -269,32 +287,32 @@ export async function* streamChat(
 
     // Process remaining buffer
     if (buffer.startsWith('data: ')) {
-      const data = buffer.slice(6).trim()
+      const data = buffer.slice(6).trim();
       if (data) {
         try {
-          const chunk = JSON.parse(data) as AIStreamChunk
+          const chunk = JSON.parse(data) as AIStreamChunk;
           if (chunk.type === 'done') {
-            clearTimeout(hardTimeout)
-            clearNoTextTimeout()
-            clearFirstTextTimeout()
-            return
+            clearTimeout(hardTimeout);
+            clearNoTextTimeout();
+            clearFirstTextTimeout();
+            return;
           }
           if (chunk.type === 'thinking' && !chunk.content) {
-            clearTimeout(hardTimeout)
-            clearNoTextTimeout()
-            clearFirstTextTimeout()
-            return
+            clearTimeout(hardTimeout);
+            clearNoTextTimeout();
+            clearFirstTextTimeout();
+            return;
           }
           if (chunk.type === 'text' && chunk.content.trim().length > 0) {
-            sawText = true
-            clearFirstTextTimeout()
+            sawText = true;
+            clearFirstTextTimeout();
           }
-          clearTimeout(hardTimeout)
-          clearNoTextTimeout()
-          clearFirstTextTimeout()
-          yield chunk
+          clearTimeout(hardTimeout);
+          clearNoTextTimeout();
+          clearFirstTextTimeout();
+          yield chunk;
           if (chunk.type === 'error') {
-            return
+            return;
           }
         } catch {
           // Skip
@@ -304,10 +322,10 @@ export async function* streamChat(
   } catch (error) {
     // User-initiated stop via external abort signal
     if (abortSignal?.aborted && !abortReason) {
-      clearTimeout(hardTimeout)
-      clearNoTextTimeout()
-      clearFirstTextTimeout()
-      return
+      clearTimeout(hardTimeout);
+      clearNoTextTimeout();
+      clearFirstTextTimeout();
+      return;
     }
 
     if (controller.signal.aborted) {
@@ -315,37 +333,69 @@ export async function* streamChat(
         yield {
           type: 'error',
           content: 'AI has been thinking too long without output. Request stopped, please retry.',
-        }
+        };
       } else if (abortReason === 'hard_timeout') {
         yield {
           type: 'error',
           content: 'AI request timed out. Please retry.',
-        }
+        };
       } else if (abortReason === 'first_text_timeout') {
         yield {
           type: 'error',
-          content: 'AI spent too long thinking without producing output. Request stopped, please retry.',
-        }
+          content:
+            'AI spent too long thinking without producing output. Request stopped, please retry.',
+        };
       } else {
         yield {
           type: 'error',
           content: 'AI request was aborted.',
-        }
+        };
       }
-      clearTimeout(hardTimeout)
-      clearNoTextTimeout()
-      clearFirstTextTimeout()
-      return
+      clearTimeout(hardTimeout);
+      clearNoTextTimeout();
+      clearFirstTextTimeout();
+      return;
     }
 
-    const message =
-      error instanceof Error ? error.message : 'Unknown error occurred'
-    yield { type: 'error', content: message }
+    const message = error instanceof Error ? error.message : 'Unknown error occurred';
+    yield { type: 'error', content: message };
   } finally {
-    clearTimeout(hardTimeout)
-    clearNoTextTimeout()
-    clearFirstTextTimeout()
+    clearTimeout(hardTimeout);
+    clearNoTextTimeout();
+    clearFirstTextTimeout();
   }
+}
+
+/**
+ * Consume an SSE endpoint and accumulate the full text response.
+ * Used by callers that don't need per-chunk streaming.
+ */
+export async function consumeSSEAsText(response: Response): Promise<string> {
+  if (!response.body) throw new Error('No response body');
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+  let accumulated = '';
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    const chunks = buffer.split('\n\n');
+    buffer = chunks.pop() ?? '';
+    for (const chunk of chunks) {
+      const dataMatch = chunk.match(/^data:\s*(.+)$/m);
+      if (!dataMatch) continue;
+      try {
+        const evt = JSON.parse(dataMatch[1]);
+        if (evt.type === 'text') accumulated += evt.content;
+        if (evt.type === 'error') throw new Error(evt.content);
+      } catch (e) {
+        if (e instanceof Error && e.message !== dataMatch[1]) throw e;
+      }
+    }
+  }
+  return accumulated;
 }
 
 /**
@@ -358,36 +408,29 @@ export async function generateCompletion(
   model?: string,
   provider?: string,
 ): Promise<string> {
-  const controller = new AbortController()
-  const timeout = setTimeout(() => controller.abort(), DEFAULT_GENERATE_TIMEOUT_MS)
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), DEFAULT_GENERATE_TIMEOUT_MS);
 
-  let response: Response
   try {
-    response = await fetch('/api/ai/generate', {
+    const response = await fetch('/api/ai/generate', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'text/event-stream',
+      },
       body: JSON.stringify({ system: systemPrompt, message: userMessage, model, provider }),
       signal: controller.signal,
-    })
+    });
+    if (!response.ok) throw new Error(`Server error: ${response.status}`);
+    return await consumeSSEAsText(response);
   } catch (error) {
-    clearTimeout(timeout)
     if (controller.signal.aborted) {
-      throw new Error('AI generation request timed out. Please retry.')
+      throw new Error('AI generation request timed out. Please retry.');
     }
-    throw error
+    throw error;
   } finally {
-    clearTimeout(timeout)
+    clearTimeout(timeout);
   }
-
-  if (!response.ok) {
-    throw new Error(`Server error: ${response.status}`)
-  }
-
-  const data = await response.json()
-  if (data.error) {
-    throw new Error(data.error)
-  }
-  return data.text ?? ''
 }
 
 /**
@@ -396,11 +439,11 @@ export async function generateCompletion(
  */
 export async function fetchAvailableModels(): Promise<AIModelInfo[]> {
   try {
-    const response = await fetch('/api/ai/models')
-    if (!response.ok) return []
-    const data = await response.json()
-    return data.models ?? []
+    const response = await fetch('/api/ai/models');
+    if (!response.ok) return [];
+    const data = await response.json();
+    return data.models ?? [];
   } catch {
-    return []
+    return [];
   }
 }

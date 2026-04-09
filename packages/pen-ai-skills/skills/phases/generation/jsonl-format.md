@@ -18,6 +18,7 @@ width/height: number | "fill_container" | "fit_content". padding: number | [v,h]
 Stroke: {"thickness":N,"fill":[{"type":"solid","color":"#hex"}]}. Directional: {"thickness":{"bottom":1},"fill":[...]}.
 
 RULES:
+
 - Section root: width="fill_container", height="fit_content", layout="vertical".
 - No x/y on children in layout frames. All nodes descend from section root.
 - Width consistency: siblings in vertical layout use the SAME width strategy.
@@ -30,10 +31,10 @@ RULES:
 - Buttons: frame(padding=[12,24], justifyContent="center") > text. Icon+text: frame(layout="horizontal", gap=8, alignItems="center", padding=[8,16]).
 - Card rows: ALL cards width="fill_container" + height="fill_container".
 - FORMS: ALL inputs AND button use width="fill_container". gap=16-20.
-- Phone mockup: ONE frame, w=260-300, h=520-580, cornerRadius=32, solid fill + 1px stroke.
 - Z-order: Earlier siblings render on top. Overlay elements (badges, indicators, floating buttons) MUST come BEFORE the content they overlap.
 
-FORMAT: _parent (null=root, else parent-id). Parent before children.
+FORMAT: \_parent (null=root, else parent-id). Parent before children.
+
 ```json
 {"_parent":null,"id":"root","type":"frame","name":"Hero","width":"fill_container","height":"fit_content","layout":"vertical","gap":24,"padding":[48,24],"fill":[{"type":"solid","color":"#F8FAFC"}]}
 {"_parent":"root","id":"header","type":"frame","name":"Header","justifyContent":"space_between","alignItems":"center","width":"fill_container"}
@@ -46,4 +47,4 @@ FORMAT: _parent (null=root, else parent-id). Parent before children.
 {"_parent":"cta","id":"cta-text","type":"text","name":"CTA Label","content":"Get Started","fontSize":16,"fontWeight":600,"fill":[{"type":"solid","color":"#FFFFFF"}]}
 ```
 
-CRITICAL: Output ONLY the ```json block. Do NOT write any text, explanation, plan, tool calls, or function calls. Do NOT use [TOOL_CALL] or {tool => ...} syntax. Start your response with ```json immediately.
+CRITICAL: Output ONLY the `json block. Do NOT write any text, explanation, plan, tool calls, or function calls. Do NOT use [TOOL_CALL] or {tool => ...} syntax. Start your response with `json immediately.

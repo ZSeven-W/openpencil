@@ -14,10 +14,10 @@ npm install -g @zseven-w/openpencil
 
 CLI 会自动检测并启动各平台上的 OpenPencil 桌面应用：
 
-| 平台        | 检测的安装路径                                                                                      |
-| ----------- | --------------------------------------------------------------------------------------------------- |
-| **macOS**   | `/Applications/OpenPencil.app`, `~/Applications/OpenPencil.app`                                     |
-| **Windows** | NSIS 用户级 (`%LOCALAPPDATA%`)、系统级 (`%PROGRAMFILES%`)、便携版                                    |
+| 平台        | 检测的安装路径                                                                                          |
+| ----------- | ------------------------------------------------------------------------------------------------------- |
+| **macOS**   | `/Applications/OpenPencil.app`, `~/Applications/OpenPencil.app`                                         |
+| **Windows** | NSIS 用户级 (`%LOCALAPPDATA%`)、系统级 (`%PROGRAMFILES%`)、便携版                                       |
 | **Linux**   | `/usr/bin`, `/usr/local/bin`, `~/.local/bin`, AppImage (`~/Applications`, `~/Downloads`), Snap, Flatpak |
 
 ## 用法

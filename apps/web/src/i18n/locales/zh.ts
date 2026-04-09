@@ -1,4 +1,4 @@
-import type { TranslationKeys } from './en'
+import type { TranslationKeys } from './en';
 
 const zh: TranslationKeys = {
   // ── Common ──
@@ -240,6 +240,7 @@ const zh: TranslationKeys = {
   'export.selectedOnly': '仅导出选中项',
   'export.exportFormat': '导出 {{format}}',
   'export.exportLayer': '导出图层',
+  'export.pdfMultiPage': 'PDF 将包含全部 {{count}} 个页面。',
 
   // ── Polygon ──
   'polygon.sides': '边数',
@@ -319,14 +320,40 @@ const zh: TranslationKeys = {
   'ai.quickAction.loginScreenPrompt':
     '设计一个现代的移动端登录页面，包含邮箱输入框、密码输入框、登录按钮和社交登录选项',
   'ai.quickAction.foodApp': '美食App首页',
-  'ai.quickAction.foodAppPrompt':
-    'Generate a well-designed food mobile app homepage',
+  'ai.quickAction.foodAppPrompt': 'Generate a well-designed food mobile app homepage',
   'ai.quickAction.bottomNav': '设计一个底部导航栏',
   'ai.quickAction.bottomNavPrompt':
     '设计一个包含 5 个标签的移动应用底部导航栏：首页、搜索、添加、消息、个人',
   'ai.quickAction.colorPalette': '为我的应用推荐配色方案',
-  'ai.quickAction.colorPalettePrompt':
-    '为一个宠物护理应用推荐一套现代配色方案',
+  'ai.quickAction.colorPalettePrompt': '为一个宠物护理应用推荐一套现代配色方案',
+  'ai.startDesigning': '用 AI 开始设计',
+  'ai.maximize': '最大化',
+  'ai.restore': '还原',
+  'ai.quickAction.loginScreenDesc': '带社交登录的移动端页面',
+  'ai.quickAction.foodAppDesc': 'App 首页设计',
+  'ai.quickAction.bottomNavDesc': '5 个 Tab 导航栏',
+  'ai.quickAction.colorPaletteDesc': '应用配色推荐',
+
+  // ── File Menu ──
+  'fileMenu.newFile': '新建文件',
+  'fileMenu.openFile': '打开文件...',
+  'fileMenu.save': '保存',
+  'fileMenu.saveAs': '另存为...',
+  'fileMenu.exportImage': '导出图片...',
+  'fileMenu.recentFiles': '最近文件',
+  'fileMenu.clearHistory': '清除历史',
+  'fileMenu.noRecentFiles': '暂无最近文件',
+  'fileMenu.saved': '已保存',
+  'fileMenu.justNow': '刚刚',
+  'fileMenu.minutesAgo': '{{count}}分钟前',
+  'fileMenu.hoursAgo': '{{count}}小时前',
+  'fileMenu.yesterday': '昨天',
+  'fileMenu.daysAgo': '{{count}}天前',
+
+  // ── Unsaved Changes ──
+  'unsaved.title': '未保存的更改',
+  'unsaved.message': '是否保存对 "{{name}}" 的更改？',
+  'unsaved.dontSave': '不保存',
 
   // ── Code Panel ──
   'code.reactTailwind': 'React + Tailwind',
@@ -429,7 +456,8 @@ const zh: TranslationKeys = {
   'builtin.errorApiKeyEmpty': 'API 密钥为空，请在设置中添加您的 API 密钥。',
   'builtin.parallelAgents': '并行子代理：{{count}}x（点击切换）',
   'builtin.baseUrlPlaceholder': 'https://api.example.com/v1',
-  'builtin.teamDescription': '选择用于设计生成的模型。设置后，设计任务将自动委派给使用此模型的专业 Agent。',
+  'builtin.teamDescription':
+    '选择用于设计生成的模型。设置后，设计任务将自动委派给使用此模型的专业 Agent。',
   'builtin.teamDesignModel': '设计模型',
   'builtin.teamSelectModel': '无（单 Agent）',
 
@@ -490,6 +518,6 @@ const zh: TranslationKeys = {
   'variablePicker.bindToVariable': '绑定到变量',
   'variablePicker.unbind': '解除绑定',
   'variablePicker.noVariables': '未定义 {{type}} 类型的变量',
-} as const
+} as const;
 
-export default zh
+export default zh;

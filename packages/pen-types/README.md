@@ -23,7 +23,7 @@ This package provides all TypeScript types and interfaces for the OpenPencil des
 ## Usage
 
 ```ts
-import type { PenDocument, PenNode, FrameNode } from '@zseven-w/pen-types'
+import type { PenDocument, PenNode, FrameNode } from '@zseven-w/pen-types';
 ```
 
 ## License

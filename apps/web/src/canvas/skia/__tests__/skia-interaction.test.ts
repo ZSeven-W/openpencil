@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'bun:test'
+import { describe, expect, it } from 'vitest'
 
 import { createEmptyDocument } from '@/stores/document-tree-utils'
 import { useCanvasStore } from '@/stores/canvas-store'

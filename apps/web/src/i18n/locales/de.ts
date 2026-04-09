@@ -1,4 +1,4 @@
-import type { TranslationKeys } from './en'
+import type { TranslationKeys } from './en';
 
 const de: TranslationKeys = {
   // ── Common ──
@@ -102,19 +102,15 @@ const de: TranslationKeys = {
   'updater.subtitle.checking': 'Suche nach der neuesten Version...',
   'updater.subtitle.available': 'Version {{version}} ist verfügbar.',
   'updater.subtitle.availableGeneric': 'Eine neue Version ist verfügbar.',
-  'updater.subtitle.downloading':
-    'Version {{version}} wird im Hintergrund heruntergeladen.',
-  'updater.subtitle.downloadingGeneric':
-    'Update-Paket wird im Hintergrund heruntergeladen.',
+  'updater.subtitle.downloading': 'Version {{version}} wird im Hintergrund heruntergeladen.',
+  'updater.subtitle.downloadingGeneric': 'Update-Paket wird im Hintergrund heruntergeladen.',
   'updater.subtitle.downloaded': 'Version {{version}} wurde heruntergeladen.',
   'updater.subtitle.downloadedGeneric': 'Das Update wurde heruntergeladen.',
-  'updater.subtitle.error':
-    'Das Update konnte nicht geprüft oder heruntergeladen werden.',
+  'updater.subtitle.error': 'Das Update konnte nicht geprüft oder heruntergeladen werden.',
 
   // ── Layers ──
   'layers.title': 'Ebenen',
-  'layers.empty':
-    'Noch keine Ebenen. Verwende die Werkzeugleiste, um Formen zu zeichnen.',
+  'layers.empty': 'Noch keine Ebenen. Verwende die Werkzeugleiste, um Formen zu zeichnen.',
 
   // ── Layer Context Menu ──
   'layerMenu.groupSelection': 'Auswahl gruppieren',
@@ -225,11 +221,9 @@ const de: TranslationKeys = {
   'textLayout.autoWidth': 'Auto B',
   'textLayout.autoWidthDesc': 'Auto Breite — Text dehnt sich horizontal aus',
   'textLayout.autoHeight': 'Auto H',
-  'textLayout.autoHeightDesc':
-    'Auto Höhe — feste Breite, Höhe passt sich an',
+  'textLayout.autoHeightDesc': 'Auto Höhe — feste Breite, Höhe passt sich an',
   'textLayout.fixed': 'Fest',
-  'textLayout.fixedDesc':
-    'Feste Größe — Breite und Höhe sind festgelegt',
+  'textLayout.fixedDesc': 'Feste Größe — Breite und Höhe sind festgelegt',
   'textLayout.fillWidth': 'Breite füllen',
   'textLayout.fillHeight': 'Höhe füllen',
 
@@ -247,6 +241,7 @@ const de: TranslationKeys = {
   'export.selectedOnly': 'Nur Auswahl exportieren',
   'export.exportFormat': '{{format}} exportieren',
   'export.exportLayer': 'Ebene exportieren',
+  'export.pdfMultiPage': 'Die PDF enthält alle {{count}} Seiten.',
 
   // ── Polygon ──
   'polygon.sides': 'Seiten',
@@ -327,14 +322,40 @@ const de: TranslationKeys = {
   'ai.quickAction.loginScreenPrompt':
     'Design a modern mobile login screen with email input, password input, login button, and social login options',
   'ai.quickAction.foodApp': 'Food-App Startseite',
-  'ai.quickAction.foodAppPrompt':
-    'Generate a well-designed food mobile app homepage',
+  'ai.quickAction.foodAppPrompt': 'Generate a well-designed food mobile app homepage',
   'ai.quickAction.bottomNav': 'Eine untere Navigationsleiste gestalten',
   'ai.quickAction.bottomNavPrompt':
     'Design a mobile app bottom navigation bar with 5 tabs: Home, Search, Add, Messages, Profile',
   'ai.quickAction.colorPalette': 'Eine Farbpalette für meine App vorschlagen',
-  'ai.quickAction.colorPalettePrompt':
-    'Suggest a modern color palette for a pet care app',
+  'ai.quickAction.colorPalettePrompt': 'Suggest a modern color palette for a pet care app',
+  'ai.startDesigning': 'Start designing with AI',
+  'ai.maximize': 'Maximize',
+  'ai.restore': 'Restore',
+  'ai.quickAction.loginScreenDesc': 'Mobile login with social auth',
+  'ai.quickAction.foodAppDesc': 'App homepage design',
+  'ai.quickAction.bottomNavDesc': '5-tab navigation bar',
+  'ai.quickAction.colorPaletteDesc': 'Color palette recommendation',
+
+  // ── File Menu ──
+  'fileMenu.newFile': 'New file',
+  'fileMenu.openFile': 'Open file...',
+  'fileMenu.save': 'Save',
+  'fileMenu.saveAs': 'Save as...',
+  'fileMenu.exportImage': 'Bild exportieren...',
+  'fileMenu.recentFiles': 'Recent files',
+  'fileMenu.clearHistory': 'Clear history',
+  'fileMenu.noRecentFiles': 'No recent files',
+  'fileMenu.saved': 'Saved',
+  'fileMenu.justNow': 'just now',
+  'fileMenu.minutesAgo': '{{count}}m ago',
+  'fileMenu.hoursAgo': '{{count}}h ago',
+  'fileMenu.yesterday': 'yesterday',
+  'fileMenu.daysAgo': '{{count}}d ago',
+
+  // ── Unsaved Changes ──
+  'unsaved.title': 'Unsaved changes',
+  'unsaved.message': 'Save changes to "{{name}}"?',
+  'unsaved.dontSave': "Don't Save",
 
   // ── Code Panel ──
   'code.reactTailwind': 'React + Tailwind',
@@ -345,8 +366,7 @@ const de: TranslationKeys = {
   'code.download': 'Code-Datei herunterladen',
   'code.closeCodePanel': 'Code-Panel schließen',
   'code.genCssVars': 'CSS-Variablen für das gesamte Dokument generieren',
-  'code.genSelected':
-    'Code für {{count}} ausgewählte(s) Element(e) generieren',
+  'code.genSelected': 'Code für {{count}} ausgewählte(s) Element(e) generieren',
   'code.genDocument': 'Code für das gesamte Dokument generieren',
   'code.aiEnhance': 'KI-Verbesserung',
   'code.cancelEnhance': 'Verbesserung abbrechen',
@@ -364,8 +384,7 @@ const de: TranslationKeys = {
   'agents.mcpIntegrations': 'MCP-Integrationen im Terminal',
   'agents.transport': 'Transport',
   'agents.port': 'Port',
-  'agents.mcpRestart':
-    'MCP-Integrationen werden nach einem Neustart des Terminals wirksam.',
+  'agents.mcpRestart': 'MCP-Integrationen werden nach einem Neustart des Terminals wirksam.',
   'agents.mcpReinstallHint':
     'Bitte installieren Sie die MCP-Integrationen nach einem OpenPencil-Upgrade erneut, um die Kompatibilität sicherzustellen.',
   'agents.modelCount': '{{count}} Modell(e)',
@@ -436,11 +455,14 @@ const de: TranslationKeys = {
   'builtin.custom': 'Benutzerdefiniert',
   'builtin.apiKeyBadge': 'API Key',
   'builtin.viaApiKey': 'über {{name}} API Key',
-  'builtin.errorProviderNotFound': 'Integrierter Anbieter nicht gefunden. Bitte überprüfen Sie Ihre Einstellungen.',
-  'builtin.errorApiKeyEmpty': 'API Key ist leer. Bitte fügen Sie Ihren API Key in den Einstellungen hinzu.',
+  'builtin.errorProviderNotFound':
+    'Integrierter Anbieter nicht gefunden. Bitte überprüfen Sie Ihre Einstellungen.',
+  'builtin.errorApiKeyEmpty':
+    'API Key ist leer. Bitte fügen Sie Ihren API Key in den Einstellungen hinzu.',
   'builtin.parallelAgents': 'Parallele Sub-Agenten: {{count}}x (klicken zum Wechseln)',
   'builtin.baseUrlPlaceholder': 'https://api.example.com/v1',
-  'builtin.teamDescription': 'Wählen Sie ein Modell für die Designgenerierung. Wenn gesetzt, werden Designaufgaben automatisch an einen spezialisierten Agenten mit diesem Modell delegiert.',
+  'builtin.teamDescription':
+    'Wählen Sie ein Modell für die Designgenerierung. Wenn gesetzt, werden Designaufgaben automatisch an einen spezialisierten Agenten mit diesem Modell delegiert.',
   'builtin.teamDesignModel': 'Design-Modell',
   'builtin.teamSelectModel': 'Keins (Einzelagent)',
 
@@ -455,8 +477,7 @@ const de: TranslationKeys = {
   'figma.convertFailed': 'Figma-Datei konnte nicht konvertiert werden',
   'figma.parsing': '.fig-Datei wird gelesen...',
   'figma.converting': 'Knoten werden konvertiert...',
-  'figma.selectPage':
-    'Diese Datei hat {{count}} Seiten. Wähle, welche importiert werden sollen:',
+  'figma.selectPage': 'Diese Datei hat {{count}} Seiten. Wähle, welche importiert werden sollen:',
   'figma.layers': '{{count}} Ebenen',
   'figma.importAll': 'Alle Seiten importieren',
   'figma.importComplete': 'Import abgeschlossen!',
@@ -470,8 +491,7 @@ const de: TranslationKeys = {
   // ── Landing Page ──
   'landing.open': 'Open',
   'landing.pencil': 'Pencil',
-  'landing.tagline':
-    'Open-Source-Vektordesign-Werkzeug. Design as Code.',
+  'landing.tagline': 'Open-Source-Vektordesign-Werkzeug. Design as Code.',
   'landing.newDesign': 'Neues Design',
   'landing.shortcutHint': 'Drücke {{key1}} + {{key2}} für ein neues Design',
 
@@ -503,6 +523,6 @@ const de: TranslationKeys = {
   'variablePicker.bindToVariable': 'An Variable binden',
   'variablePicker.unbind': 'Variable lösen',
   'variablePicker.noVariables': 'Keine {{type}}-Variablen definiert',
-} as const
+} as const;
 
-export default de
+export default de;

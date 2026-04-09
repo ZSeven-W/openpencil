@@ -6,25 +6,28 @@ export type {
   ResolvedSkill,
   ResolveOptions,
   AgentContext,
-} from './engine/types'
+} from './engine/types';
 
-export { resolveSkills } from './engine/resolve-skills'
-export { getSkillRegistry, getSkillByName, getSkillsByPhase } from './engine/loader'
+export { resolveSkills } from './engine/resolve-skills';
+export { getSkillRegistry, getSkillByName, getSkillsByPhase } from './engine/loader';
 
 // Memory
-export type { DesignContext } from './memory/document-context'
-export type { HistoryEntry } from './memory/generation-history'
+export type { DesignContext } from './memory/document-context';
+export type { HistoryEntry } from './memory/generation-history';
 
 export {
   createDesignContext,
   extractDesignContext,
   mergePreference,
   contextToPromptString,
-} from './memory/document-context'
+} from './memory/document-context';
 
 export {
   createHistoryEntry,
   updateFeedback,
   getRecentEntries,
   historyToPromptString,
-} from './memory/generation-history'
+} from './memory/generation-history';
+
+// Diagnostics (pure detectors for design quality issues)
+export * from './diagnostics';

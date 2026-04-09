@@ -12,26 +12,30 @@
  * "how to encode it" (Stage 3) lets each LLM call focus on what it's best at.
  */
 
-import type { PenNode } from '@/types/pen'
-import type {
-  AIDesignRequest,
-  DesignSystem,
-  VisualReference,
-} from './ai-types'
-import { generateDesignSystem, designSystemToVariables, designSystemToPromptContext } from './design-system-generator'
-import { generateDesignCode, extractStructureSummary, extractHtmlSection } from './design-code-generator'
-import { renderHtmlToScreenshot } from './html-renderer'
-import { executeOrchestration } from './orchestrator'
-import { useDocumentStore } from '@/stores/document-store'
+import type { PenNode } from '@/types/pen';
+import type { AIDesignRequest, DesignSystem, VisualReference } from './ai-types';
+import {
+  generateDesignSystem,
+  designSystemToVariables,
+  designSystemToPromptContext,
+} from './design-system-generator';
+import {
+  generateDesignCode,
+  extractStructureSummary,
+  extractHtmlSection,
+} from './design-code-generator';
+import { renderHtmlToScreenshot } from './html-renderer';
+import { executeOrchestration } from './orchestrator';
+import { useDocumentStore } from '@/stores/document-store';
 
 // ---------------------------------------------------------------------------
 // Module state — reference data for the current generation
 // ---------------------------------------------------------------------------
 
-let currentReference: VisualReference | null = null
+let currentReference: VisualReference | null = null;
 
 export function getCurrentVisualReference(): VisualReference | null {
-  return currentReference
+  return currentReference;
 }
 
 // ---------------------------------------------------------------------------
@@ -41,91 +45,88 @@ export function getCurrentVisualReference(): VisualReference | null {
 export async function executeVisualRefOrchestration(
   request: AIDesignRequest,
   callbacks?: {
-    onApplyPartial?: (count: number) => void
-    onTextUpdate?: (text: string) => void
-    animated?: boolean
+    onApplyPartial?: (count: number) => void;
+    onTextUpdate?: (text: string) => void;
+    animated?: boolean;
   },
   abortSignal?: AbortSignal,
 ): Promise<{ nodes: PenNode[]; rawResponse: string }> {
-  currentReference = null
+  currentReference = null;
 
   const emitStatus = (title: string, detail: string) => {
-    callbacks?.onTextUpdate?.(
-      `<step title="${title}" status="streaming">${detail}</step>`,
-    )
-  }
+    callbacks?.onTextUpdate?.(`<step title="${title}" status="streaming">${detail}</step>`);
+  };
 
   try {
     // -- Stage 0: Generate Design System --
-    emitStatus('Crafting design system', 'Selecting colors, typography, and spacing...')
+    emitStatus('Crafting design system', 'Selecting colors, typography, and spacing...');
 
-    if (abortSignal?.aborted) throw new Error('Aborted')
+    if (abortSignal?.aborted) throw new Error('Aborted');
 
-    let designSystem: DesignSystem
+    let designSystem: DesignSystem;
     try {
-      designSystem = await generateDesignSystem(
-        request.prompt,
-        request.model,
-        request.provider,
-      )
+      designSystem = await generateDesignSystem(request.prompt, request.model, request.provider);
     } catch (err) {
-      console.warn('[VisualRef] Design system generation failed, using defaults:', err)
-      designSystem = getDefaultDesignSystem()
+      console.warn('[VisualRef] Design system generation failed, using defaults:', err);
+      designSystem = getDefaultDesignSystem();
     }
 
     // Write design tokens to document variables
-    const variables = designSystemToVariables(designSystem)
-    const store = useDocumentStore.getState()
+    const variables = designSystemToVariables(designSystem);
+    const store = useDocumentStore.getState();
     for (const [name, def] of Object.entries(variables)) {
-      store.setVariable(name, def)
+      store.setVariable(name, def);
     }
 
-    emitStatus('Crafting design system', `Style: ${designSystem.aesthetic}`)
+    emitStatus('Crafting design system', `Style: ${designSystem.aesthetic}`);
 
-    if (abortSignal?.aborted) throw new Error('Aborted')
+    if (abortSignal?.aborted) throw new Error('Aborted');
 
     // -- Stage 1: Generate HTML/CSS Code --
-    emitStatus('Generating design reference', 'Creating high-fidelity HTML blueprint...')
+    emitStatus('Generating design reference', 'Creating high-fidelity HTML blueprint...');
 
     // Determine viewport from request context or defaults
-    const width = request.context?.canvasSize?.width ?? 1200
-    const height = request.context?.canvasSize?.height ?? 0
+    const width = request.context?.canvasSize?.width ?? 1200;
+    const height = request.context?.canvasSize?.height ?? 0;
 
-    let html: string
+    let html: string;
     try {
       html = await generateDesignCode(request.prompt, designSystem, {
         width,
         height,
         model: request.model,
         provider: request.provider,
-      })
+      });
     } catch (err) {
-      console.warn('[VisualRef] Code generation failed, falling back to direct pipeline:', err)
-      return executeOrchestration(request, callbacks, abortSignal)
+      console.warn('[VisualRef] Code generation failed, falling back to direct pipeline:', err);
+      return executeOrchestration(request, callbacks, abortSignal);
     }
 
-    emitStatus('Generating design reference', 'HTML blueprint ready')
+    emitStatus('Generating design reference', 'HTML blueprint ready');
 
-    if (abortSignal?.aborted) throw new Error('Aborted')
+    if (abortSignal?.aborted) throw new Error('Aborted');
 
     // -- Stage 2: Render to Screenshot --
-    emitStatus('Rendering reference', 'Capturing visual reference...')
+    emitStatus('Rendering reference', 'Capturing visual reference...');
 
-    let screenshot: string
+    let screenshot: string;
     try {
-      screenshot = await renderHtmlToScreenshot(html, width, height)
+      screenshot = await renderHtmlToScreenshot(html, width, height);
     } catch (err) {
-      console.warn('[VisualRef] Screenshot rendering failed, continuing without visual reference:', err)
+      console.warn(
+        '[VisualRef] Screenshot rendering failed, continuing without visual reference:',
+        err,
+      );
       // Continue without screenshot — sub-agents still get the HTML structure
-      screenshot = ''
+      screenshot = '';
     }
 
     if (screenshot) {
-      emitStatus('Rendering reference', 'Visual reference captured')
+      emitStatus('Rendering reference', 'Visual reference captured');
     }
 
     // Build structure summary for orchestrator context
-    const structureSummary = extractStructureSummary(html)
+    const structureSummary = extractStructureSummary(html);
 
     // Store the reference for validation phase
     currentReference = {
@@ -133,14 +134,14 @@ export async function executeVisualRefOrchestration(
       screenshot,
       designSystem,
       structureSummary,
-    }
+    };
 
-    if (abortSignal?.aborted) throw new Error('Aborted')
+    if (abortSignal?.aborted) throw new Error('Aborted');
 
     // -- Stage 3: PenNode Generation with Reference --
     // Enhance the request prompt with design reference context
-    const dsContext = designSystemToPromptContext(designSystem)
-    const enhancedPrompt = buildEnhancedPrompt(request.prompt, structureSummary, dsContext)
+    const dsContext = designSystemToPromptContext(designSystem);
+    const enhancedPrompt = buildEnhancedPrompt(request.prompt, structureSummary, dsContext);
 
     const enhancedRequest: AIDesignRequest = {
       ...request,
@@ -153,12 +154,12 @@ export async function executeVisualRefOrchestration(
           ...variables,
         },
       },
-    }
+    };
 
     // Run the existing orchestration pipeline with enhanced context
-    const result = await executeOrchestration(enhancedRequest, callbacks, abortSignal)
+    const result = await executeOrchestration(enhancedRequest, callbacks, abortSignal);
 
-    return result
+    return result;
   } finally {
     // Don't clear currentReference here — validation needs it
   }
@@ -179,7 +180,7 @@ ${structureSummary}
 
 ${designSystemContext}
 
-IMPORTANT: Follow the design reference structure closely. The design system colors, fonts, and spacing have already been determined — use them consistently. The reference structure shows the intended layout — match its section order and composition.`
+IMPORTANT: Follow the design reference structure closely. The design system colors, fonts, and spacing have already been determined — use them consistently. The reference structure shows the intended layout — match its section order and composition.`;
 }
 
 // ---------------------------------------------------------------------------
@@ -193,12 +194,12 @@ IMPORTANT: Follow the design reference structure closely. The design system colo
 export function enrichSubtasksWithHtmlReference(
   subtasks: Array<{ id: string; label: string; htmlReference?: string }>,
 ): void {
-  if (!currentReference) return
+  if (!currentReference) return;
 
   for (const subtask of subtasks) {
-    const section = extractHtmlSection(currentReference.html, subtask.label)
+    const section = extractHtmlSection(currentReference.html, subtask.label);
     if (section) {
-      subtask.htmlReference = section
+      subtask.htmlReference = section;
     }
   }
 }
@@ -208,7 +209,7 @@ export function enrichSubtasksWithHtmlReference(
 // ---------------------------------------------------------------------------
 
 export function clearVisualReference(): void {
-  currentReference = null
+  currentReference = null;
 }
 
 // ---------------------------------------------------------------------------
@@ -238,5 +239,5 @@ function getDefaultDesignSystem(): DesignSystem {
     },
     radius: [8, 12, 16],
     aesthetic: 'clean modern',
-  }
+  };
 }

@@ -48,7 +48,6 @@ async function waitForViteServer(
   }
 
   vite.once('exit', handleExit)
-
   while (Date.now() - start < timeoutMs) {
     let baseReachable = false
     let viteClientReachable = false
@@ -123,7 +122,7 @@ async function compileElectron(): Promise<void> {
       ...common,
       entryPoints: [join(DESKTOP_DIR, 'preload.ts')],
     }),
-  ])
+  ]);
 
   console.log('[electron-dev] Electron files compiled')
 }
@@ -148,7 +147,9 @@ async function main(): Promise<void> {
     if (process.platform === 'win32' && vite.pid) {
       try {
         execSync(`taskkill /pid ${vite.pid} /T /F`, { stdio: 'ignore' })
-      } catch { /* ignore */ }
+      } catch {
+        /* ignore */
+      }
       return
     }
 
@@ -190,9 +191,19 @@ async function main(): Promise<void> {
     sourcemap: true,
     target: 'node20',
     format: 'cjs',
-    entryPoints: [join(ROOT, 'apps', 'web', 'src', 'mcp', 'server.ts')],
+    entryPoints: [join(ROOT, 'packages', 'pen-mcp', 'src', 'server.ts')],
     outfile: join(ROOT, 'out', 'mcp-server.cjs'),
-    alias: { '@': join(ROOT, 'apps', 'web', 'src') },
+    alias: {
+      '@zseven-w/pen-types': join(ROOT, 'packages', 'pen-types', 'src'),
+      '@zseven-w/pen-core': join(ROOT, 'packages', 'pen-core', 'src'),
+      '@zseven-w/pen-figma': join(ROOT, 'packages', 'pen-figma', 'src'),
+      '@zseven-w/pen-renderer': join(ROOT, 'packages', 'pen-renderer', 'src'),
+      '@zseven-w/pen-sdk': join(ROOT, 'packages', 'pen-sdk', 'src'),
+      '@zseven-w/pen-ai-skills': join(ROOT, 'packages', 'pen-ai-skills', 'src'),
+      '@zseven-w/pen-mcp': join(ROOT, 'packages', 'pen-mcp', 'src'),
+      '@zseven-w/pen-engine': join(ROOT, 'packages', 'pen-engine', 'src'),
+      '@zseven-w/pen-react': join(ROOT, 'packages', 'pen-react', 'src'),
+    },
     define: { 'import.meta.env': '{}' },
     external: ['canvas', 'paper'],
   })

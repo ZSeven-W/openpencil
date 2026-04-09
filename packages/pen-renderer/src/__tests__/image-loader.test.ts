@@ -1,11 +1,51 @@
-import { describe, expect, it } from 'bun:test'
+import { describe, expect, it } from 'vitest'
 
 import { SkiaImageLoader } from '../image-loader'
+
+function makeMockCk(): unknown {
+  return {}
+}
 
 const originalDocument = globalThis.document
 const OriginalImage = globalThis.Image
 
 describe('SkiaImageLoader', () => {
+  it('starts with pendingCount = 0', () => {
+    const loader = new SkiaImageLoader(makeMockCk() as never)
+    expect(loader.pendingCount()).toBe(0)
+  })
+
+  it('flushPending resolves immediately when nothing is pending', async () => {
+    const loader = new SkiaImageLoader(makeMockCk() as never)
+    let resolved = false
+    await loader.flushPending().then(() => {
+      resolved = true
+    })
+    expect(resolved).toBe(true)
+  })
+
+  it('tracks in-flight promises injected via the pendingPromises set', async () => {
+    const loader = new SkiaImageLoader(makeMockCk() as never)
+    let release: () => void = () => {}
+    const pending = new Promise<void>((resolve) => {
+      release = () => resolve()
+    })
+    ;(loader as unknown as { pendingPromises: Set<Promise<unknown>> }).pendingPromises.add(pending)
+    expect(loader.pendingCount()).toBe(1)
+
+    let flushResolved = false
+    const flushed = loader.flushPending().then(() => {
+      flushResolved = true
+    })
+    await new Promise((r) => setTimeout(r, 10))
+    expect(flushResolved).toBe(false)
+
+    release()
+    await pending
+    await flushed
+    expect(flushResolved).toBe(true)
+  })
+
   it('downscales oversized decoded images before creating a CanvasKit image', async () => {
     let drawSize: { width: number; height: number } | null = null
     let imageDataSize: { width: number; height: number } | null = null

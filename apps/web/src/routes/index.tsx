@@ -1,17 +1,16 @@
-import { createFileRoute, Link } from '@tanstack/react-router'
-import { useTranslation } from 'react-i18next'
-import { PenTool, Plus } from 'lucide-react'
-
+import { createFileRoute, Link } from '@tanstack/react-router';
+import { useTranslation } from 'react-i18next';
+import { PenTool, Plus } from 'lucide-react';
 
 export const Route = createFileRoute('/')({
   component: LandingPage,
   head: () => ({
     meta: [{ title: 'OpenPencil - Design as Code' }],
   }),
-})
+});
 
 function LandingPage() {
-  const { t } = useTranslation()
+  const { t } = useTranslation();
   return (
     <div className="min-h-screen bg-background flex flex-col items-center justify-center text-foreground">
       <div className="text-center mb-12">
@@ -22,9 +21,7 @@ function LandingPage() {
             <span className="text-primary">{t('landing.pencil')}</span>
           </h1>
         </div>
-        <p className="text-xl text-muted-foreground">
-          {t('landing.tagline')}
-        </p>
+        <p className="text-xl text-muted-foreground">{t('landing.tagline')}</p>
       </div>
 
       <div className="flex gap-4">
@@ -41,5 +38,5 @@ function LandingPage() {
         {t('landing.shortcutHint', { key1: 'Ctrl', key2: 'N' })}
       </p>
     </div>
-  )
+  );
 }

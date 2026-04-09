@@ -3,4 +3,4 @@ export {
   isFigmaClipboardHtml,
   extractFigmaClipboardData,
   figmaClipboardToNodes,
-} from '@zseven-w/pen-figma'
+} from '@zseven-w/pen-figma';

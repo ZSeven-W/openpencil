@@ -9,17 +9,17 @@ export default function StatusBar() {
   const zoom = useCanvasStore((s) => s.viewport.zoom)
   const selectedIds = useCanvasStore((s) => s.selection.selectedIds)
 
-  const zoomPercent = Math.round(zoom * 100)
+  const zoomPercent = Math.round(zoom * 100);
 
   const applyZoom = (newZoom: number) => {
-    const engine = getSkiaEngineRef()
-    if (!engine) return
-    const rect = engine.getCanvasRect()
-    if (!rect) return
-    const cx = rect.left + rect.width / 2
-    const cy = rect.top + rect.height / 2
-    engine.zoomToPoint(cx, cy, newZoom)
-  }
+    const engine = getSkiaEngineRef();
+    if (!engine) return;
+    const rect = engine.getCanvasRect();
+    if (!rect) return;
+    const cx = rect.left + rect.width / 2;
+    const cy = rect.top + rect.height / 2;
+    engine.zoomToPoint(cx, cy, newZoom);
+  };
 
   const handleZoomOut = () => applyZoom(zoom / 1.2)
   const handleZoomIn = () => applyZoom(zoom * 1.2)
@@ -68,5 +68,5 @@ export default function StatusBar() {
         <Plus size={14} />
       </Button>
     </div>
-  )
+  );
 }

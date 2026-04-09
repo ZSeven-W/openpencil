@@ -52,8 +52,8 @@ const en = {
   'topbar.exitFullscreen': 'Exit fullscreen',
   'topbar.edited': '— Edited',
   'topbar.closeConfirmMessage': 'Do you want to save changes before closing?',
-  'topbar.closeConfirmDetail': 'Your changes will be lost if you don\'t save them.',
-  'topbar.dontSave': 'Don\'t Save',
+  'topbar.closeConfirmDetail': "Your changes will be lost if you don't save them.",
+  'topbar.dontSave': "Don't Save",
   'topbar.agentsAndMcp': 'Agents & MCP',
   'topbar.setupAgentsMcp': 'Setup Agents & MCP',
   'topbar.connected': 'connected',
@@ -89,8 +89,7 @@ const en = {
   'updater.restartInstall': 'Restart & Install',
   'updater.installing': 'Installing...',
   'updater.releaseDate': 'Release date: {{date}}',
-  'updater.restartHint':
-    'Restart to apply update. Relaunch usually takes 10-15 seconds.',
+  'updater.restartHint': 'Restart to apply update. Relaunch usually takes 10-15 seconds.',
   'updater.unknownError': 'Unknown updater error.',
   'updater.title.checking': 'Checking for updates',
   'updater.title.available': 'Update found',
@@ -100,10 +99,8 @@ const en = {
   'updater.subtitle.checking': 'Looking for the latest release...',
   'updater.subtitle.available': 'Version {{version}} is available.',
   'updater.subtitle.availableGeneric': 'A new version is available.',
-  'updater.subtitle.downloading':
-    'Version {{version}} is downloading in the background.',
-  'updater.subtitle.downloadingGeneric':
-    'Downloading update package in the background.',
+  'updater.subtitle.downloading': 'Version {{version}} is downloading in the background.',
+  'updater.subtitle.downloadingGeneric': 'Downloading update package in the background.',
   'updater.subtitle.downloaded': 'Version {{version}} has been downloaded.',
   'updater.subtitle.downloadedGeneric': 'The update has been downloaded.',
   'updater.subtitle.error': 'Unable to check or download the update.',
@@ -221,11 +218,9 @@ const en = {
   'textLayout.autoWidth': 'Auto W',
   'textLayout.autoWidthDesc': 'Auto Width \u2014 text expands horizontally',
   'textLayout.autoHeight': 'Auto H',
-  'textLayout.autoHeightDesc':
-    'Auto Height \u2014 fixed width, height auto-sizes',
+  'textLayout.autoHeightDesc': 'Auto Height \u2014 fixed width, height auto-sizes',
   'textLayout.fixed': 'Fixed',
-  'textLayout.fixedDesc':
-    'Fixed Size \u2014 both width and height are fixed',
+  'textLayout.fixedDesc': 'Fixed Size \u2014 both width and height are fixed',
   'textLayout.fillWidth': 'Fill Width',
   'textLayout.fillHeight': 'Fill Height',
 
@@ -243,6 +238,7 @@ const en = {
   'export.selectedOnly': 'Export selected only',
   'export.exportFormat': 'Export {{format}}',
   'export.exportLayer': 'Export layer',
+  'export.pdfMultiPage': 'PDF will include all {{count}} pages.',
 
   // ── Polygon ──
   'polygon.sides': 'Sides',
@@ -308,8 +304,7 @@ const en = {
   'ai.newChat': 'New chat',
   'ai.collapse': 'Collapse',
   'ai.tryExample': 'Try an example to design...',
-  'ai.tipSelectElements':
-    'Tip: Select elements on canvas before chatting for context.',
+  'ai.tipSelectElements': 'Tip: Select elements on canvas before chatting for context.',
   'ai.generating': 'Generating...',
   'ai.designWithAgent': 'Design with Agent...',
   'ai.attachImage': 'Attach image',
@@ -323,14 +318,40 @@ const en = {
   'ai.quickAction.loginScreenPrompt':
     'Design a modern mobile login screen with email input, password input, login button, and social login options',
   'ai.quickAction.foodApp': 'Food app homepage',
-  'ai.quickAction.foodAppPrompt':
-    'Generate a well-designed food mobile app homepage',
+  'ai.quickAction.foodAppPrompt': 'Generate a well-designed food mobile app homepage',
   'ai.quickAction.bottomNav': 'Design a bottom navigation bar',
   'ai.quickAction.bottomNavPrompt':
     'Design a mobile app bottom navigation bar with 5 tabs: Home, Search, Add, Messages, Profile',
   'ai.quickAction.colorPalette': 'Suggest a color palette for my app',
-  'ai.quickAction.colorPalettePrompt':
-    'Suggest a modern color palette for a pet care app',
+  'ai.quickAction.colorPalettePrompt': 'Suggest a modern color palette for a pet care app',
+  'ai.startDesigning': 'Start designing with AI',
+  'ai.maximize': 'Maximize',
+  'ai.restore': 'Restore',
+  'ai.quickAction.loginScreenDesc': 'Mobile login with social auth',
+  'ai.quickAction.foodAppDesc': 'App homepage design',
+  'ai.quickAction.bottomNavDesc': '5-tab navigation bar',
+  'ai.quickAction.colorPaletteDesc': 'Color palette recommendation',
+
+  // ── File Menu ──
+  'fileMenu.newFile': 'New file',
+  'fileMenu.openFile': 'Open file...',
+  'fileMenu.save': 'Save',
+  'fileMenu.saveAs': 'Save as...',
+  'fileMenu.exportImage': 'Export image...',
+  'fileMenu.recentFiles': 'Recent files',
+  'fileMenu.clearHistory': 'Clear history',
+  'fileMenu.noRecentFiles': 'No recent files',
+  'fileMenu.saved': 'Saved',
+  'fileMenu.justNow': 'just now',
+  'fileMenu.minutesAgo': '{{count}}m ago',
+  'fileMenu.hoursAgo': '{{count}}h ago',
+  'fileMenu.yesterday': 'yesterday',
+  'fileMenu.daysAgo': '{{count}}d ago',
+
+  // ── Unsaved Changes ──
+  'unsaved.title': 'Unsaved changes',
+  'unsaved.message': 'Save changes to "{{name}}"?',
+  'unsaved.dontSave': "Don't Save",
 
   // ── Code Panel ──
   'code.reactTailwind': 'React + Tailwind',
@@ -341,8 +362,7 @@ const en = {
   'code.download': 'Download code file',
   'code.closeCodePanel': 'Close code panel',
   'code.genCssVars': 'Generating CSS variables for entire document',
-  'code.genSelected':
-    'Generating code for {{count}} selected element(s)',
+  'code.genSelected': 'Generating code for {{count}} selected element(s)',
   'code.genDocument': 'Generating code for entire document',
   'code.aiEnhance': 'AI Enhance',
   'code.cancelEnhance': 'Cancel enhancement',
@@ -360,8 +380,7 @@ const en = {
   'agents.mcpIntegrations': 'MCP Integrations in Terminal',
   'agents.transport': 'Transport',
   'agents.port': 'Port',
-  'agents.mcpRestart':
-    'MCP integrations will take effect after restarting the terminal.',
+  'agents.mcpRestart': 'MCP integrations will take effect after restarting the terminal.',
   'agents.mcpReinstallHint':
     'After upgrading OpenPencil, please reinstall MCP integrations to ensure compatibility.',
   'agents.modelCount': '{{count}} model(s)',
@@ -436,7 +455,8 @@ const en = {
   'builtin.errorApiKeyEmpty': 'API key is empty. Please add your API key in settings.',
   'builtin.parallelAgents': 'Parallel sub-agents: {{count}}x (click to cycle)',
   'builtin.baseUrlPlaceholder': 'https://api.example.com/v1',
-  'builtin.teamDescription': 'Select a model for design generation. When set, design tasks are automatically delegated to a specialist agent using this model.',
+  'builtin.teamDescription':
+    'Select a model for design generation. When set, design tasks are automatically delegated to a specialist agent using this model.',
   'builtin.teamDesignModel': 'Design Model',
   'builtin.teamSelectModel': 'None (single agent)',
 
@@ -451,8 +471,7 @@ const en = {
   'figma.convertFailed': 'Failed to convert Figma file',
   'figma.parsing': 'Parsing .fig file...',
   'figma.converting': 'Converting nodes...',
-  'figma.selectPage':
-    'This file has {{count}} pages. Select which to import:',
+  'figma.selectPage': 'This file has {{count}} pages. Select which to import:',
   'figma.layers': '{{count}} layers',
   'figma.importAll': 'Import All Pages',
   'figma.importComplete': 'Import complete!',
@@ -498,7 +517,7 @@ const en = {
   'variablePicker.bindToVariable': 'Bind to variable',
   'variablePicker.unbind': 'Unbind variable',
   'variablePicker.noVariables': 'No {{type}} variables defined',
-} as const
+} as const;
 
-export default en
-export type TranslationKeys = { [K in keyof typeof en]: string }
+export default en;
+export type TranslationKeys = { [K in keyof typeof en]: string };

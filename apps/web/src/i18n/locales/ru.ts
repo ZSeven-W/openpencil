@@ -1,4 +1,4 @@
-import type { TranslationKeys } from './en'
+import type { TranslationKeys } from './en';
 
 const ru: TranslationKeys = {
   // ── Common ──
@@ -102,19 +102,15 @@ const ru: TranslationKeys = {
   'updater.subtitle.checking': 'Поиск последней версии...',
   'updater.subtitle.available': 'Доступна версия {{version}}.',
   'updater.subtitle.availableGeneric': 'Доступна новая версия.',
-  'updater.subtitle.downloading':
-    'Версия {{version}} загружается в фоновом режиме.',
-  'updater.subtitle.downloadingGeneric':
-    'Пакет обновления загружается в фоновом режиме.',
+  'updater.subtitle.downloading': 'Версия {{version}} загружается в фоновом режиме.',
+  'updater.subtitle.downloadingGeneric': 'Пакет обновления загружается в фоновом режиме.',
   'updater.subtitle.downloaded': 'Версия {{version}} загружена.',
   'updater.subtitle.downloadedGeneric': 'Обновление загружено.',
-  'updater.subtitle.error':
-    'Не удалось проверить или загрузить обновление.',
+  'updater.subtitle.error': 'Не удалось проверить или загрузить обновление.',
 
   // ── Layers ──
   'layers.title': 'Слои',
-  'layers.empty':
-    'Слоёв пока нет. Используйте панель инструментов для рисования фигур.',
+  'layers.empty': 'Слоёв пока нет. Используйте панель инструментов для рисования фигур.',
 
   // ── Layer Context Menu ──
   'layerMenu.groupSelection': 'Сгруппировать выделение',
@@ -225,11 +221,9 @@ const ru: TranslationKeys = {
   'textLayout.autoWidth': 'Авто Ш',
   'textLayout.autoWidthDesc': 'Авто ширина — текст расширяется горизонтально',
   'textLayout.autoHeight': 'Авто В',
-  'textLayout.autoHeightDesc':
-    'Авто высота — фиксированная ширина, высота подстраивается',
+  'textLayout.autoHeightDesc': 'Авто высота — фиксированная ширина, высота подстраивается',
   'textLayout.fixed': 'Фикс.',
-  'textLayout.fixedDesc':
-    'Фиксированный размер — ширина и высота зафиксированы',
+  'textLayout.fixedDesc': 'Фиксированный размер — ширина и высота зафиксированы',
   'textLayout.fillWidth': 'Заполнить ширину',
   'textLayout.fillHeight': 'Заполнить высоту',
 
@@ -247,6 +241,7 @@ const ru: TranslationKeys = {
   'export.selectedOnly': 'Экспортировать только выделенное',
   'export.exportFormat': 'Экспорт {{format}}',
   'export.exportLayer': 'Экспортировать слой',
+  'export.pdfMultiPage': 'PDF будет включать все {{count}} страниц.',
 
   // ── Polygon ──
   'polygon.sides': 'Стороны',
@@ -312,8 +307,7 @@ const ru: TranslationKeys = {
   'ai.newChat': 'Новый чат',
   'ai.collapse': 'Свернуть',
   'ai.tryExample': 'Попробуйте пример для дизайна...',
-  'ai.tipSelectElements':
-    'Совет: Выделите элементы на холсте перед чатом для контекста.',
+  'ai.tipSelectElements': 'Совет: Выделите элементы на холсте перед чатом для контекста.',
   'ai.generating': 'Генерация...',
   'ai.designWithAgent': 'Дизайн с агентом...',
   'ai.attachImage': 'Прикрепить изображение',
@@ -327,14 +321,40 @@ const ru: TranslationKeys = {
   'ai.quickAction.loginScreenPrompt':
     'Design a modern mobile login screen with email input, password input, login button, and social login options',
   'ai.quickAction.foodApp': 'Главная страница приложения еды',
-  'ai.quickAction.foodAppPrompt':
-    'Generate a well-designed food mobile app homepage',
+  'ai.quickAction.foodAppPrompt': 'Generate a well-designed food mobile app homepage',
   'ai.quickAction.bottomNav': 'Создать нижнюю панель навигации',
   'ai.quickAction.bottomNavPrompt':
     'Design a mobile app bottom navigation bar with 5 tabs: Home, Search, Add, Messages, Profile',
   'ai.quickAction.colorPalette': 'Предложить цветовую палитру для приложения',
-  'ai.quickAction.colorPalettePrompt':
-    'Suggest a modern color palette for a pet care app',
+  'ai.quickAction.colorPalettePrompt': 'Suggest a modern color palette for a pet care app',
+  'ai.startDesigning': 'Start designing with AI',
+  'ai.maximize': 'Maximize',
+  'ai.restore': 'Restore',
+  'ai.quickAction.loginScreenDesc': 'Mobile login with social auth',
+  'ai.quickAction.foodAppDesc': 'App homepage design',
+  'ai.quickAction.bottomNavDesc': '5-tab navigation bar',
+  'ai.quickAction.colorPaletteDesc': 'Color palette recommendation',
+
+  // ── File Menu ──
+  'fileMenu.newFile': 'New file',
+  'fileMenu.openFile': 'Open file...',
+  'fileMenu.save': 'Save',
+  'fileMenu.saveAs': 'Save as...',
+  'fileMenu.exportImage': 'Экспорт изображения...',
+  'fileMenu.recentFiles': 'Recent files',
+  'fileMenu.clearHistory': 'Clear history',
+  'fileMenu.noRecentFiles': 'No recent files',
+  'fileMenu.saved': 'Saved',
+  'fileMenu.justNow': 'just now',
+  'fileMenu.minutesAgo': '{{count}}m ago',
+  'fileMenu.hoursAgo': '{{count}}h ago',
+  'fileMenu.yesterday': 'yesterday',
+  'fileMenu.daysAgo': '{{count}}d ago',
+
+  // ── Unsaved Changes ──
+  'unsaved.title': 'Unsaved changes',
+  'unsaved.message': 'Save changes to "{{name}}"?',
+  'unsaved.dontSave': "Don't Save",
 
   // ── Code Panel ──
   'code.reactTailwind': 'React + Tailwind',
@@ -345,8 +365,7 @@ const ru: TranslationKeys = {
   'code.download': 'Скачать файл с кодом',
   'code.closeCodePanel': 'Закрыть панель кода',
   'code.genCssVars': 'Генерация CSS-переменных для всего документа',
-  'code.genSelected':
-    'Генерация кода для {{count}} выделенных элементов',
+  'code.genSelected': 'Генерация кода для {{count}} выделенных элементов',
   'code.genDocument': 'Генерация кода для всего документа',
   'code.aiEnhance': 'Улучшить с ИИ',
   'code.cancelEnhance': 'Отменить улучшение',
@@ -364,8 +383,7 @@ const ru: TranslationKeys = {
   'agents.mcpIntegrations': 'Интеграции MCP в терминале',
   'agents.transport': 'Транспорт',
   'agents.port': 'Порт',
-  'agents.mcpRestart':
-    'Интеграции MCP вступят в силу после перезапуска терминала.',
+  'agents.mcpRestart': 'Интеграции MCP вступят в силу после перезапуска терминала.',
   'agents.mcpReinstallHint':
     'После обновления OpenPencil переустановите интеграции MCP для обеспечения совместимости.',
   'agents.modelCount': '{{count}} модель(ей)',
@@ -436,11 +454,13 @@ const ru: TranslationKeys = {
   'builtin.custom': 'Пользовательский',
   'builtin.apiKeyBadge': 'API Key',
   'builtin.viaApiKey': 'через API Key {{name}}',
-  'builtin.errorProviderNotFound': 'Встроенный провайдер не найден. Пожалуйста, проверьте настройки.',
+  'builtin.errorProviderNotFound':
+    'Встроенный провайдер не найден. Пожалуйста, проверьте настройки.',
   'builtin.errorApiKeyEmpty': 'API key пуст. Пожалуйста, добавьте API key в настройках.',
   'builtin.parallelAgents': 'Параллельные суб-агенты: {{count}}x (нажмите для переключения)',
   'builtin.baseUrlPlaceholder': 'https://api.example.com/v1',
-  'builtin.teamDescription': 'Выберите модель для генерации дизайна. При установке задачи дизайна автоматически делегируются специализированному агенту, использующему эту модель.',
+  'builtin.teamDescription':
+    'Выберите модель для генерации дизайна. При установке задачи дизайна автоматически делегируются специализированному агенту, использующему эту модель.',
   'builtin.teamDesignModel': 'Модель дизайна',
   'builtin.teamSelectModel': 'Нет (один агент)',
 
@@ -455,8 +475,7 @@ const ru: TranslationKeys = {
   'figma.convertFailed': 'Не удалось конвертировать файл Figma',
   'figma.parsing': 'Разбор файла .fig...',
   'figma.converting': 'Конвертация узлов...',
-  'figma.selectPage':
-    'В этом файле {{count}} страниц. Выберите, какие импортировать:',
+  'figma.selectPage': 'В этом файле {{count}} страниц. Выберите, какие импортировать:',
   'figma.layers': '{{count}} слоёв',
   'figma.importAll': 'Импортировать все страницы',
   'figma.importComplete': 'Импорт завершён!',
@@ -470,8 +489,7 @@ const ru: TranslationKeys = {
   // ── Landing Page ──
   'landing.open': 'Open',
   'landing.pencil': 'Pencil',
-  'landing.tagline':
-    'Векторный дизайн-инструмент с открытым исходным кодом. Design as Code.',
+  'landing.tagline': 'Векторный дизайн-инструмент с открытым исходным кодом. Design as Code.',
   'landing.newDesign': 'Новый дизайн',
   'landing.shortcutHint': 'Нажмите {{key1}} + {{key2}} для создания нового дизайна',
 
@@ -503,6 +521,6 @@ const ru: TranslationKeys = {
   'variablePicker.bindToVariable': 'Привязать к переменной',
   'variablePicker.unbind': 'Отвязать переменную',
   'variablePicker.noVariables': 'Нет переменных типа {{type}}',
-} as const
+} as const;
 
-export default ru
+export default ru;

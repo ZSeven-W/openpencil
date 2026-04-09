@@ -1,4 +1,4 @@
-import type { TranslationKeys } from './en'
+import type { TranslationKeys } from './en';
 
 const id: TranslationKeys = {
   // ── Common ──
@@ -102,10 +102,8 @@ const id: TranslationKeys = {
   'updater.subtitle.checking': 'Mencari rilis terbaru...',
   'updater.subtitle.available': 'Versi {{version}} tersedia.',
   'updater.subtitle.availableGeneric': 'Versi baru tersedia.',
-  'updater.subtitle.downloading':
-    'Versi {{version}} sedang diunduh di latar belakang.',
-  'updater.subtitle.downloadingGeneric':
-    'Paket pembaruan sedang diunduh di latar belakang.',
+  'updater.subtitle.downloading': 'Versi {{version}} sedang diunduh di latar belakang.',
+  'updater.subtitle.downloadingGeneric': 'Paket pembaruan sedang diunduh di latar belakang.',
   'updater.subtitle.downloaded': 'Versi {{version}} telah diunduh.',
   'updater.subtitle.downloadedGeneric': 'Pembaruan telah diunduh.',
   'updater.subtitle.error': 'Tidak dapat memeriksa atau mengunduh pembaruan.',
@@ -223,11 +221,9 @@ const id: TranslationKeys = {
   'textLayout.autoWidth': 'Auto L',
   'textLayout.autoWidthDesc': 'Lebar Otomatis \u2014 teks meluas secara horizontal',
   'textLayout.autoHeight': 'Auto T',
-  'textLayout.autoHeightDesc':
-    'Tinggi Otomatis \u2014 lebar tetap, tinggi menyesuaikan otomatis',
+  'textLayout.autoHeightDesc': 'Tinggi Otomatis \u2014 lebar tetap, tinggi menyesuaikan otomatis',
   'textLayout.fixed': 'Tetap',
-  'textLayout.fixedDesc':
-    'Ukuran Tetap \u2014 lebar dan tinggi tetap',
+  'textLayout.fixedDesc': 'Ukuran Tetap \u2014 lebar dan tinggi tetap',
   'textLayout.fillWidth': 'Isi Lebar',
   'textLayout.fillHeight': 'Isi Tinggi',
 
@@ -245,6 +241,7 @@ const id: TranslationKeys = {
   'export.selectedOnly': 'Ekspor pilihan saja',
   'export.exportFormat': 'Ekspor {{format}}',
   'export.exportLayer': 'Ekspor layer',
+  'export.pdfMultiPage': 'PDF akan menyertakan semua {{count}} halaman.',
 
   // ── Polygon ──
   'polygon.sides': 'Sisi',
@@ -310,8 +307,7 @@ const id: TranslationKeys = {
   'ai.newChat': 'Chat baru',
   'ai.collapse': 'Ciutkan',
   'ai.tryExample': 'Coba contoh untuk mendesain...',
-  'ai.tipSelectElements':
-    'Tips: Pilih elemen di canvas sebelum chat untuk memberikan konteks.',
+  'ai.tipSelectElements': 'Tips: Pilih elemen di canvas sebelum chat untuk memberikan konteks.',
   'ai.generating': 'Membuat...',
   'ai.designWithAgent': 'Desain dengan Agent...',
   'ai.attachImage': 'Lampirkan gambar',
@@ -325,14 +321,41 @@ const id: TranslationKeys = {
   'ai.quickAction.loginScreenPrompt':
     'Desain layar login mobile modern dengan input email, input kata sandi, tombol login, dan opsi login sosial',
   'ai.quickAction.foodApp': 'Beranda aplikasi makanan',
-  'ai.quickAction.foodAppPrompt':
-    'Generate a well-designed food mobile app homepage',
+  'ai.quickAction.foodAppPrompt': 'Generate a well-designed food mobile app homepage',
   'ai.quickAction.bottomNav': 'Desain bilah navigasi bawah',
   'ai.quickAction.bottomNavPrompt':
     'Desain bilah navigasi bawah aplikasi mobile dengan 5 tab: Beranda, Cari, Tambah, Pesan, Profil',
   'ai.quickAction.colorPalette': 'Sarankan palet warna untuk aplikasi saya',
   'ai.quickAction.colorPalettePrompt':
     'Sarankan palet warna modern untuk aplikasi perawatan hewan peliharaan',
+  'ai.startDesigning': 'Start designing with AI',
+  'ai.maximize': 'Maximize',
+  'ai.restore': 'Restore',
+  'ai.quickAction.loginScreenDesc': 'Mobile login with social auth',
+  'ai.quickAction.foodAppDesc': 'App homepage design',
+  'ai.quickAction.bottomNavDesc': '5-tab navigation bar',
+  'ai.quickAction.colorPaletteDesc': 'Color palette recommendation',
+
+  // ── File Menu ──
+  'fileMenu.newFile': 'New file',
+  'fileMenu.openFile': 'Open file...',
+  'fileMenu.save': 'Save',
+  'fileMenu.saveAs': 'Save as...',
+  'fileMenu.exportImage': 'Ekspor gambar...',
+  'fileMenu.recentFiles': 'Recent files',
+  'fileMenu.clearHistory': 'Clear history',
+  'fileMenu.noRecentFiles': 'No recent files',
+  'fileMenu.saved': 'Saved',
+  'fileMenu.justNow': 'just now',
+  'fileMenu.minutesAgo': '{{count}}m ago',
+  'fileMenu.hoursAgo': '{{count}}h ago',
+  'fileMenu.yesterday': 'yesterday',
+  'fileMenu.daysAgo': '{{count}}d ago',
+
+  // ── Unsaved Changes ──
+  'unsaved.title': 'Unsaved changes',
+  'unsaved.message': 'Save changes to "{{name}}"?',
+  'unsaved.dontSave': "Don't Save",
 
   // ── Code Panel ──
   'code.reactTailwind': 'React + Tailwind',
@@ -343,8 +366,7 @@ const id: TranslationKeys = {
   'code.download': 'Unduh file kode',
   'code.closeCodePanel': 'Tutup panel kode',
   'code.genCssVars': 'Membuat CSS variables untuk seluruh dokumen',
-  'code.genSelected':
-    'Membuat kode untuk {{count}} elemen yang dipilih',
+  'code.genSelected': 'Membuat kode untuk {{count}} elemen yang dipilih',
   'code.genDocument': 'Membuat kode untuk seluruh dokumen',
   'code.aiEnhance': 'Tingkatkan dengan AI',
   'code.cancelEnhance': 'Batalkan peningkatan',
@@ -362,8 +384,7 @@ const id: TranslationKeys = {
   'agents.mcpIntegrations': 'Integrasi MCP di Terminal',
   'agents.transport': 'Transport',
   'agents.port': 'Port',
-  'agents.mcpRestart':
-    'Integrasi MCP akan berlaku setelah terminal dimulai ulang.',
+  'agents.mcpRestart': 'Integrasi MCP akan berlaku setelah terminal dimulai ulang.',
   'agents.mcpReinstallHint':
     'Setelah memperbarui OpenPencil, silakan instal ulang integrasi MCP untuk memastikan kompatibilitas.',
   'agents.modelCount': '{{count}} model',
@@ -434,11 +455,13 @@ const id: TranslationKeys = {
   'builtin.custom': 'Kustom',
   'builtin.apiKeyBadge': 'API Key',
   'builtin.viaApiKey': 'melalui API Key {{name}}',
-  'builtin.errorProviderNotFound': 'Penyedia bawaan tidak ditemukan. Silakan periksa pengaturan Anda.',
+  'builtin.errorProviderNotFound':
+    'Penyedia bawaan tidak ditemukan. Silakan periksa pengaturan Anda.',
   'builtin.errorApiKeyEmpty': 'API Key kosong. Silakan tambahkan API Key di pengaturan.',
   'builtin.parallelAgents': 'Sub-agen paralel: {{count}}x (klik untuk berganti)',
   'builtin.baseUrlPlaceholder': 'https://api.example.com/v1',
-  'builtin.teamDescription': 'Pilih model untuk pembuatan desain. Jika diatur, tugas desain akan otomatis didelegasikan ke agen spesialis yang menggunakan model ini.',
+  'builtin.teamDescription':
+    'Pilih model untuk pembuatan desain. Jika diatur, tugas desain akan otomatis didelegasikan ke agen spesialis yang menggunakan model ini.',
   'builtin.teamDesignModel': 'Model Desain',
   'builtin.teamSelectModel': 'Tidak ada (agen tunggal)',
 
@@ -453,8 +476,7 @@ const id: TranslationKeys = {
   'figma.convertFailed': 'Gagal mengonversi file Figma',
   'figma.parsing': 'Mengurai file .fig...',
   'figma.converting': 'Mengonversi node...',
-  'figma.selectPage':
-    'File ini memiliki {{count}} halaman. Pilih yang akan diimpor:',
+  'figma.selectPage': 'File ini memiliki {{count}} halaman. Pilih yang akan diimpor:',
   'figma.layers': '{{count}} layer',
   'figma.importAll': 'Impor Semua Halaman',
   'figma.importComplete': 'Impor selesai!',
@@ -500,6 +522,6 @@ const id: TranslationKeys = {
   'variablePicker.bindToVariable': 'Ikat ke variabel',
   'variablePicker.unbind': 'Lepaskan variabel',
   'variablePicker.noVariables': 'Belum ada variabel {{type}} yang didefinisikan',
-} as const
+} as const;
 
-export default id
+export default id;

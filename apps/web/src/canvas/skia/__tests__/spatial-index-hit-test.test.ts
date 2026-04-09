@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'bun:test'
+import { describe, expect, it } from 'vitest'
 import { SpatialIndex } from '@zseven-w/pen-renderer'
 import type { PenNode } from '@/types/pen'
 import type { RenderNode } from '@zseven-w/pen-renderer'

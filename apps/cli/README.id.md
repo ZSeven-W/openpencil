@@ -14,10 +14,10 @@ npm install -g @zseven-w/openpencil
 
 CLI secara otomatis mendeteksi dan meluncurkan aplikasi desktop OpenPencil di semua platform:
 
-| Platform    | Jalur instalasi yang terdeteksi                                                                     |
-| ----------- | --------------------------------------------------------------------------------------------------- |
-| **macOS**   | `/Applications/OpenPencil.app`, `~/Applications/OpenPencil.app`                                     |
-| **Windows** | NSIS per-pengguna (`%LOCALAPPDATA%`), per-mesin (`%PROGRAMFILES%`), portabel                        |
+| Platform    | Jalur instalasi yang terdeteksi                                                                         |
+| ----------- | ------------------------------------------------------------------------------------------------------- |
+| **macOS**   | `/Applications/OpenPencil.app`, `~/Applications/OpenPencil.app`                                         |
+| **Windows** | NSIS per-pengguna (`%LOCALAPPDATA%`), per-mesin (`%PROGRAMFILES%`), portabel                            |
 | **Linux**   | `/usr/bin`, `/usr/local/bin`, `~/.local/bin`, AppImage (`~/Applications`, `~/Downloads`), Snap, Flatpak |
 
 ## Penggunaan

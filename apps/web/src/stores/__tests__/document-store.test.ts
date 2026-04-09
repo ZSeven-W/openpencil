@@ -1,7 +1,9 @@
-import { describe, expect, it } from 'bun:test'
+import { describe, expect, it } from 'vitest'
 
 import { useCanvasStore } from '@/stores/canvas-store'
 import { useDocumentStore } from '@/stores/document-store'
+import { useHistoryStore } from '@/stores/history-store'
+import type { PenNode } from '@/types/pen'
 import type { PenDocument } from '@/types/pen'
 
 function resetStores(document: PenDocument) {
@@ -25,6 +27,64 @@ function resetStores(document: PenDocument) {
 }
 
 describe('document-store moveNode', () => {
+  it('addNode should push history before mutating document', () => {
+    useDocumentStore.getState().newDocument()
+    useHistoryStore.getState().clear()
+    const docBefore = useDocumentStore.getState().document
+    const testNode: PenNode = {
+      id: 'test-1',
+      type: 'rectangle',
+      name: 'Test Rect',
+      x: 0,
+      y: 0,
+      width: 100,
+      height: 100,
+    } as PenNode
+    useDocumentStore.getState().addNode(null, testNode)
+    const docAfter = useDocumentStore.getState().document
+    expect(docAfter).not.toBe(docBefore)
+    expect(useHistoryStore.getState().canUndo()).toBe(true)
+    expect(useDocumentStore.getState().isDirty).toBe(true)
+  })
+
+  it('updateNode should push history and mark dirty', () => {
+    useDocumentStore.getState().newDocument()
+    const testNode = {
+      id: 'test-2',
+      type: 'rectangle',
+      name: 'Test',
+      x: 0,
+      y: 0,
+      width: 50,
+      height: 50,
+    } as PenNode
+    useDocumentStore.getState().addNode(null, testNode)
+    useHistoryStore.getState().clear()
+    useDocumentStore.getState().updateNode('test-2', { x: 100 })
+    expect(useHistoryStore.getState().canUndo()).toBe(true)
+    expect(useDocumentStore.getState().isDirty).toBe(true)
+    const node = useDocumentStore.getState().getNodeById('test-2')
+    expect(node?.x).toBe(100)
+  })
+
+  it('removeNode should push history', () => {
+    useDocumentStore.getState().newDocument()
+    const testNode = {
+      id: 'test-3',
+      type: 'rectangle',
+      name: 'Test',
+      x: 0,
+      y: 0,
+      width: 50,
+      height: 50,
+    } as PenNode
+    useDocumentStore.getState().addNode(null, testNode)
+    useHistoryStore.getState().clear()
+    useDocumentStore.getState().removeNode('test-3')
+    expect(useHistoryStore.getState().canUndo()).toBe(true)
+    expect(useDocumentStore.getState().getNodeById('test-3')).toBeUndefined()
+  })
+
   it('detaches moved nodes from stale references so reparenting cannot corrupt local coordinates', () => {
     const document: PenDocument = {
       version: '1.0.0',
