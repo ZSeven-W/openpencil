@@ -26,6 +26,9 @@ import {
   getOrchestratorTimeouts,
   prepareDesignPrompt,
   buildFallbackPlanFromPrompt,
+  buildPlanningStyleGuideContext,
+  buildCompactPlanningPrompt,
+  getBuiltinPlanningTimeouts,
 } from './orchestrator-prompt-optimizer';
 import {
   adjustRootFrameHeightToContent,
@@ -48,6 +51,8 @@ import { emitProgress, buildFinalStepTags } from './orchestrator-progress';
 import { assignAgentIdentities } from './agent-identity';
 import { addAgentFrame, clearAgentIndicators } from '@/canvas/agent-indicator';
 import { createMobileStatusBar, inferStatusBarVariant } from './mobile-status-bar';
+import { resolveModelProfile } from './model-profiles';
+import { filterPlanningSkillsForPrompt, parseOrchestratorResponse } from './orchestrator-planning';
 
 // ---------------------------------------------------------------------------
 // Public API
@@ -1045,177 +1050,176 @@ async function callOrchestrator(
   abortSignal?: AbortSignal,
   fastTimeout?: boolean,
 ): Promise<OrchestratorPlan> {
-  let rawResponse = '';
-
-  const guideList = styleGuideRegistry
-    .map((g) => {
-      const bgMatch = g.content.match(/Page Background\s*\|\s*(#[0-9A-Fa-f]{6})/);
-      const bgHint = bgMatch ? ` bg:${bgMatch[1]}` : '';
-      return `- **${g.name}** [${g.platform}]${bgHint}: ${g.tags.join(', ')}`;
-    })
-    .join('\n');
-  const planningCtx = resolveSkills('planning', prompt, {
-    dynamicContent: { availableStyleGuides: guideList },
-  });
-  const planningSystemPrompt =
-    planningCtx.skills.map((s) => s.content).join('\n\n') +
-    '\n\n---\nCRITICAL OUTPUT FORMAT ENFORCEMENT:\nYou MUST output ONLY a single JSON object. Start your response with { and end with }.\nDo NOT output any text, explanation, analysis, markdown, or tool calls before or after the JSON.\nDo NOT "explore" or "think out loud". Do NOT use <tool_call> or function calls.\nAny pre-design analysis (concept extraction, superfan simulation, etc.) must happen internally — include results as JSON fields, never as prose.\nViolating this format will cause a system error.';
+  const modelProfile = resolveModelProfile(model);
+  const attemptModes =
+    modelProfile.tier === 'full'
+      ? (['rich'] as const)
+      : modelProfile.tier === 'basic'
+        ? (['rich', 'minimal', 'compact'] as const)
+        : (['rich', 'minimal'] as const);
 
   // Builtin providers get a tighter timeout so planning fails fast when
   // the provider can't handle the long system prompt, while giving
   // slow-but-capable models enough runway once they start streaming.
   const timeouts = fastTimeout
-    ? {
-        hardTimeoutMs: 60_000,
-        noTextTimeoutMs: 30_000,
-        thinkingResetsTimeout: true,
-        pingResetsTimeout: false,
-        firstTextTimeoutMs: 30_000,
-        thinkingMode: 'adaptive' as const,
-        effort: 'low' as const,
-      }
+    ? getBuiltinPlanningTimeouts(model)
     : getOrchestratorTimeouts(timeoutHintLength, model);
+  let lastPlanningFailure:
+    | {
+        reason: 'stream_error' | 'parse_error';
+        mode: string;
+        detail?: string;
+        preview?: string;
+      }
+    | null = null;
 
-  for await (const chunk of streamChat(
-    planningSystemPrompt,
-    [{ role: 'user', content: prompt }],
-    model,
-    timeouts,
-    provider,
-    abortSignal,
-  )) {
-    if (chunk.type === 'text') {
-      rawResponse += chunk.content;
-    } else if (chunk.type === 'thinking') {
-      // Suppress raw model reasoning in the planning UI. The static planning
-      // step label already communicates progress without leaking verbose traces.
-      continue;
-    } else if (chunk.type === 'error') {
-      throw new Error(chunk.content);
+  for (const [attemptIdx, mode] of attemptModes.entries()) {
+    let rawResponse = '';
+    let planningSystemPrompt: string;
+    let planningUserPrompt = prompt;
+    let planningGuideContext: ReturnType<typeof buildPlanningStyleGuideContext> | null = null;
+    let forcedStyleGuideName: string | undefined;
+
+    if (mode === 'compact') {
+      const compact = buildCompactPlanningPrompt(prompt, model);
+      planningSystemPrompt = compact.systemPrompt;
+      planningUserPrompt = compact.userPrompt;
+      forcedStyleGuideName = compact.selectedStyleGuideName;
+      console.info('[Orchestrator] planning compact retry', {
+        model: model ?? 'default',
+        tier: modelProfile.tier,
+        mode,
+        selectedStyleGuideName: forcedStyleGuideName,
+        systemChars: planningSystemPrompt.length,
+      });
+    } else {
+      planningGuideContext = buildPlanningStyleGuideContext(prompt, model, mode);
+      console.info('[Orchestrator] planning shortlist', {
+        model: model ?? 'default',
+        tier: modelProfile.tier,
+        mode,
+        metadataCount: planningGuideContext.metadataCount,
+        snippetCount: planningGuideContext.snippetCount,
+        topGuides: planningGuideContext.topGuideNames,
+        snippetGuides: planningGuideContext.snippetGuideNames,
+      });
+      const planningCtx = resolveSkills('planning', prompt, {
+        dynamicContent: { availableStyleGuides: planningGuideContext.availableStyleGuides },
+      });
+      const filteredSkills = filterPlanningSkillsForPrompt(planningCtx.skills, prompt);
+      planningSystemPrompt =
+        filteredSkills.map((s) => s.content).join('\n\n') +
+        (mode === 'rich'
+          ? '\n\n---\nCRITICAL OUTPUT FORMAT ENFORCEMENT:\nYou MUST output ONLY a single JSON object. Start your response with { and end with }.\nDo NOT output any text, explanation, analysis, markdown, or tool calls before or after the JSON.\nDo NOT "explore" or "think out loud". Do NOT use <tool_call> or function calls.\nAny pre-design analysis (concept extraction, superfan simulation, etc.) must happen internally — include results as JSON fields, never as prose.\nViolating this format will cause a system error.'
+          : '\n\nOUTPUT ONLY ONE JSON OBJECT. No prose. No markdown. No tool calls.');
     }
-  }
 
-  // If the user cancelled during streaming, stop immediately — do not
-  // fall through to the fallback plan which would continue generation.
-  if (abortSignal?.aborted) {
-    throw new Error('Aborted');
-  }
+    try {
+      for await (const chunk of streamChat(
+        planningSystemPrompt,
+        [{ role: 'user', content: planningUserPrompt }],
+        model,
+        timeouts,
+        provider,
+        abortSignal,
+      )) {
+        if (chunk.type === 'text') {
+          rawResponse += chunk.content;
+        } else if (chunk.type === 'thinking') {
+          continue;
+        } else if (chunk.type === 'error') {
+          throw new Error(chunk.content);
+        }
+      }
+    } catch (err) {
+      if (abortSignal?.aborted) throw err;
+      const detail = err instanceof Error ? err.message : String(err);
+      lastPlanningFailure = { reason: 'stream_error', mode, detail };
+      if (attemptIdx < attemptModes.length - 1) {
+        console.warn('[Orchestrator] Planning attempt failed. Retrying with lighter context.', {
+          mode,
+          detail,
+        });
+        continue;
+      }
+      console.warn('[Orchestrator] Planning failed on final attempt.', {
+        mode,
+        detail,
+      });
+      break;
+    }
 
-  let plan = parseOrchestratorResponse(rawResponse);
-  if (!plan) {
-    // Fallback: model returned non-JSON (e.g. markdown text). Use a heuristic
-    // plan derived from the user's prompt so generation can still proceed.
+    if (abortSignal?.aborted) {
+      throw new Error('Aborted');
+    }
+
+    const parsed = parseOrchestratorResponse(rawResponse, prompt);
+    if (parsed) {
+      if (parsed.repaired) {
+        console.info('[Orchestrator] repaired near-miss planning JSON', {
+          mode,
+          preview: rawResponse.trim().slice(0, 150),
+        });
+      }
+
+      const plan = parsed.plan;
+      if (!plan.styleGuideName && forcedStyleGuideName) {
+        plan.styleGuideName = forcedStyleGuideName;
+      }
+      normalizeOrchestratorPlan(plan, prompt);
+
+      if (plan.styleGuideName) {
+        const rootWidth = typeof plan.rootFrame.width === 'number' ? plan.rootFrame.width : 1440;
+        const platform = rootWidth <= 500 ? 'mobile' : 'webapp';
+
+        let selected = selectStyleGuide(styleGuideRegistry, { name: plan.styleGuideName, platform });
+        if (!selected) {
+          selected = selectStyleGuide(styleGuideRegistry, {
+            tags: [plan.styleGuideName.toLowerCase()],
+            platform,
+          });
+        }
+        if (selected) {
+          plan.selectedStyleGuideContent = selected.content;
+        }
+      }
+
+      return plan;
+    }
+
+    lastPlanningFailure = {
+      reason: 'parse_error',
+      mode,
+      preview: rawResponse.trim().slice(0, 150),
+    };
+    if (attemptIdx < attemptModes.length - 1) {
+      console.warn(
+        `[Orchestrator] Planning attempt ${attemptIdx + 1} returned no parseable JSON. Retrying with lighter context.`,
+        {
+          mode,
+          preview: rawResponse.trim().slice(0, 150),
+          metadataCount: planningGuideContext?.metadataCount ?? 0,
+          snippetCount: planningGuideContext?.snippetCount ?? 0,
+        },
+      );
+      continue;
+    }
+
     console.warn(
       '[Orchestrator] Could not parse model response, using fallback plan. Preview:',
       rawResponse.trim().slice(0, 150),
     );
-    plan = buildFallbackPlanFromPrompt(prompt);
   }
 
-  normalizeOrchestratorPlan(plan, prompt);
-
-  // Look up the selected style guide — try exact name first, then fuzzy tag match
-  if (plan.styleGuideName) {
-    // Infer platform from rootFrame width to prevent mobile/desktop mismatch
-    const rootWidth = typeof plan.rootFrame.width === 'number' ? plan.rootFrame.width : 1440;
-    const platform = rootWidth <= 500 ? 'mobile' : 'webapp';
-
-    let selected = selectStyleGuide(styleGuideRegistry, { name: plan.styleGuideName, platform });
-    if (!selected) {
-      // Planner may return a primary tag (e.g. "brutalist") instead of full slug
-      // ("brutalist-luxury-dark"). Fall back to tag-based matching with platform filter.
-      selected = selectStyleGuide(styleGuideRegistry, {
-        tags: [plan.styleGuideName.toLowerCase()],
-        platform,
-      });
-    }
-    if (selected) {
-      plan.selectedStyleGuideContent = selected.content;
-    }
-  }
-
-  return plan;
-}
-
-function parseOrchestratorResponse(raw: string): OrchestratorPlan | null {
-  const trimmed = raw.trim();
-
-  // Try direct parse
-  const plan = tryParsePlan(trimmed);
-  if (plan) return plan;
-
-  // Try extracting from code fences
-  const fenceMatch = trimmed.match(/```(?:json)?\s*\n?([\s\S]*?)\n?```/);
-  if (fenceMatch) {
-    const fenced = tryParsePlan(fenceMatch[1].trim());
-    if (fenced) return fenced;
-  }
-
-  // Try extracting first { ... } block
-  const firstBrace = trimmed.indexOf('{');
-  const lastBrace = trimmed.lastIndexOf('}');
-  if (firstBrace >= 0 && lastBrace > firstBrace) {
-    const braced = tryParsePlan(trimmed.slice(firstBrace, lastBrace + 1));
-    if (braced) return braced;
-  }
-
-  return null;
-}
-
-function tryParsePlan(text: string): OrchestratorPlan | null {
-  try {
-    const obj = JSON.parse(text) as Record<string, unknown>;
-    if (!obj.rootFrame || typeof obj.rootFrame !== 'object') return null;
-    if (!Array.isArray(obj.subtasks) || obj.subtasks.length === 0) return null;
-
-    const rf = obj.rootFrame as Record<string, unknown>;
-    if (!rf.id || !rf.width || rf.height == null) return null;
-
-    for (const st of obj.subtasks as Record<string, unknown>[]) {
-      if (!st.id || !st.region) return null;
-    }
-
-    const plan = obj as unknown as OrchestratorPlan;
-
-    // Extract styleGuideName — new string reference to pre-built style guide
-    if (typeof obj.styleGuideName === 'string' && obj.styleGuideName) {
-      plan.styleGuideName = obj.styleGuideName;
-    }
-
-    // Extract styleGuide — legacy inline object for backward compatibility
-    if (obj.styleGuide && typeof obj.styleGuide === 'object') {
-      const sg = obj.styleGuide as Record<string, unknown>;
-      if (
-        sg.palette &&
-        typeof sg.palette === 'object' &&
-        sg.fonts &&
-        typeof sg.fonts === 'object'
-      ) {
-        plan.styleGuide = sg as unknown as import('./ai-types').StyleGuide;
-      }
-    }
-
-    // Fallback: always provide a style guide so sub-agents have consistent styling
-    if (!plan.styleGuide) {
-      const bg =
-        (plan.rootFrame.fill as Array<{ color?: string }> | undefined)?.[0]?.color ?? '#F8FAFC';
-      plan.styleGuide = {
-        palette: {
-          background: bg,
-          surface: '#FFFFFF',
-          text: '#0F172A',
-          secondary: '#64748B',
-          accent: '#6366F1',
-          accent2: '#8B5CF6',
-          border: '#E2E8F0',
-        },
-        fonts: { heading: 'Space Grotesk', body: 'Inter' },
-        aesthetic: 'clean modern',
-      };
-    }
-
-    return plan;
-  } catch {
-    return null;
-  }
+  console.warn('[Orchestrator] Using fallback plan after planner failed.', {
+    model: model ?? 'default',
+    tier: modelProfile.tier,
+    reason: lastPlanningFailure?.reason ?? 'unknown',
+    mode: lastPlanningFailure?.mode ?? 'unknown',
+    detail: lastPlanningFailure?.detail,
+    preview: lastPlanningFailure?.preview,
+  });
+  const fallback = buildFallbackPlanFromPrompt(prompt);
+  normalizeOrchestratorPlan(fallback, prompt);
+  return fallback;
 }

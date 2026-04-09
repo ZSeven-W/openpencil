@@ -7,9 +7,9 @@ import {
 } from './ai-runtime-config';
 import { detectDesignType } from './design-type-presets';
 import { getSkillByName } from '@zseven-w/pen-ai-skills';
-import { selectStyleGuide } from '@zseven-w/pen-ai-skills/style-guide';
+import { extractStyleGuideValues, selectStyleGuide } from '@zseven-w/pen-ai-skills/style-guide';
 import { styleGuideRegistry } from '@zseven-w/pen-ai-skills/_generated/style-guide-registry';
-import { resolveModelProfile, applyProfileToTimeouts } from './model-profiles';
+import { resolveModelProfile, applyProfileToTimeouts, type ModelTier } from './model-profiles';
 
 export interface PreparedDesignPrompt {
   original: string;
@@ -30,6 +30,12 @@ type StreamTimeoutProfile = {
   thinkingMode: 'adaptive' | 'disabled' | 'enabled';
   effort: 'low' | 'medium' | 'high' | 'max';
 };
+
+export interface CompactPlanningPrompt {
+  systemPrompt: string;
+  userPrompt: string;
+  selectedStyleGuideName?: string;
+}
 
 export function getSubAgentTimeouts(promptLength: number, model?: string): StreamTimeoutProfile {
   const profile = resolveModelProfile(model);
@@ -67,6 +73,29 @@ export function getOrchestratorTimeouts(
     base = { ...ORCHESTRATOR_TIMEOUT_PROFILES.long };
   }
   return applyProfileToTimeouts(base, resolveModelProfile(model));
+}
+
+export function getBuiltinPlanningTimeouts(model?: string): StreamTimeoutProfile {
+  const profile = resolveModelProfile(model);
+  const base: StreamTimeoutProfile = {
+    hardTimeoutMs: 60_000,
+    noTextTimeoutMs: 30_000,
+    thinkingResetsTimeout: true,
+    pingResetsTimeout: false,
+    firstTextTimeoutMs: 30_000,
+    thinkingMode: 'adaptive',
+    effort: 'low',
+  };
+  const timeouts = applyProfileToTimeouts(base, profile);
+
+  if (profile.tier === 'basic') {
+    timeouts.hardTimeoutMs = Math.max(timeouts.hardTimeoutMs, 150_000);
+    timeouts.noTextTimeoutMs = Math.max(timeouts.noTextTimeoutMs, 75_000);
+    timeouts.firstTextTimeoutMs = Math.max(timeouts.firstTextTimeoutMs ?? 0, 75_000);
+    timeouts.thinkingMode = 'disabled';
+  }
+
+  return timeouts;
 }
 
 /**
@@ -159,11 +188,113 @@ export function buildFallbackPlanFromPrompt(prompt: string): OrchestratorPlan {
 function getMobileSectionElements(type: string, label: string): string | undefined {
   if (type !== 'mobile-screen') return undefined;
   switch (label) {
-    case 'Page Content':
-      return 'All main UI content for this screen. A status bar is already pre-inserted — do NOT generate one.';
+    case 'Top Summary':
+      return 'Top-of-screen summary only: greeting/title/avatar/hero metric strip. A status bar is already pre-inserted — do NOT generate one. Do NOT include charts, long lists, workout cards, or bottom navigation here.';
+    case 'Main Content':
+      return 'All remaining main UI content for this screen: cards, charts, lists, forms, actions, and bottom navigation if requested. Do NOT repeat the top greeting/title/avatar summary block here.';
     default:
       return undefined;
   }
+}
+
+type PlanningContextMode = 'rich' | 'minimal';
+
+const STYLE_GUIDE_METADATA_TAG_LIMIT = 4;
+const STYLE_GUIDE_SNIPPET_LIMITS: Record<ModelTier, number> = {
+  basic: 4,
+  standard: 6,
+  full: 8,
+};
+
+export interface PlanningStyleGuideContext {
+  availableStyleGuides: string;
+  metadataCount: number;
+  snippetCount: number;
+  topGuideNames: string[];
+  snippetGuideNames: string[];
+}
+
+export function buildPlanningStyleGuideContext(
+  prompt: string,
+  model?: string,
+  mode: PlanningContextMode = 'rich',
+): PlanningStyleGuideContext {
+  const preset = detectDesignType(prompt);
+  const platform = preset.width <= 500 ? 'mobile' : 'webapp';
+  const tags = inferTagsFromPrompt(prompt);
+  const tier = resolveModelProfile(model).tier;
+  const ranked = rankStyleGuidesForPrompt(tags, platform);
+
+  const metadataLines = ranked.map((guide) => formatGuideMetadataLine(guide, mode));
+  const snippetLimit = mode === 'rich' ? STYLE_GUIDE_SNIPPET_LIMITS[tier] : 0;
+  const snippetGuides = ranked.slice(0, snippetLimit);
+
+  const parts = [
+    'Available style guides (compact catalog; all candidates are listed below):',
+    ...metadataLines,
+  ];
+
+  if (snippetGuides.length > 0) {
+    parts.push(
+      '',
+      'Detailed references for the best-matching candidates (prefer these before inventing a styleGuideName):',
+      ...snippetGuides.map((guide) => formatGuideSnippet(guide)),
+    );
+  }
+
+  return {
+    availableStyleGuides: parts.join('\n'),
+    metadataCount: metadataLines.length,
+    snippetCount: snippetGuides.length,
+    topGuideNames: ranked.slice(0, 12).map((guide) => guide.name),
+    snippetGuideNames: snippetGuides.map((guide) => guide.name),
+  };
+}
+
+export function buildCompactPlanningPrompt(prompt: string, _model?: string): CompactPlanningPrompt {
+  const preset = detectDesignType(prompt);
+  const platform = preset.width <= 500 ? 'mobile' : 'webapp';
+  const tags = inferTagsFromPrompt(prompt);
+  const selectedGuide = selectStyleGuide(styleGuideRegistry, { tags, platform });
+  const guideValues = selectedGuide ? extractStyleGuideValues(selectedGuide.content) : null;
+  const backgroundColor =
+    guideValues?.colors.background ??
+    (preset.type === 'mobile-screen' ? '#111827' : '#F8FAFC');
+  const defaultGap = preset.type === 'mobile-screen' || preset.type === 'desktop-screen' ? 20 : 0;
+  const subtaskHint =
+    preset.type === 'mobile-screen'
+      ? 'Create 2-4 cohesive subtasks for one mobile app screen. Group related UI together.'
+      : preset.type === 'desktop-screen'
+        ? 'Create 2-5 cohesive workspace sections. Keep related dashboard panels together.'
+        : 'Create 4-8 scrollable page sections in top-to-bottom order.';
+  const mobileRules =
+    preset.type === 'mobile-screen'
+      ? [
+          'This is a direct mobile screen, not a phone mockup.',
+          'Do NOT create a status bar section. The status bar is inserted separately.',
+          'Use width=375 and height=812 on the root frame.',
+        ]
+      : ['Use width=1200 and height=0 on the root frame.'];
+  const styleRule = selectedGuide
+    ? `Use styleGuideName="${selectedGuide.name}" and rootFrame background ${backgroundColor}.`
+    : `Pick a suitable styleGuideName for platform=${platform} and set rootFrame background to ${backgroundColor}.`;
+
+  return {
+    systemPrompt: [
+      'You are a UI planning assistant. Output ONLY one JSON object.',
+      'Schema: {"rootFrame":{"id":"page","name":"Page","width":375,"height":812,"layout":"vertical","gap":20,"fill":[{"type":"solid","color":"#111827"}]},"styleGuideName":"guide-name","subtasks":[{"id":"section-id","label":"Section Label","elements":"comma-separated owned UI elements","region":{"width":375,"height":240}}]}',
+      'Every subtask MUST include: id, label, elements, region.width, region.height.',
+      'Elements must not overlap between subtasks.',
+      'Keep form controls and their submit action in the same subtask.',
+      'Start the response with { and end with }. No prose. No markdown. No tool calls.',
+      subtaskHint,
+      styleRule,
+      ...mobileRules,
+      `Always set rootFrame layout="vertical" and gap=${defaultGap}.`,
+    ].join('\n'),
+    userPrompt: prompt,
+    selectedStyleGuideName: selectedGuide?.name,
+  };
 }
 
 /** Infer style guide tags from user prompt keywords */
@@ -200,6 +331,70 @@ function inferTagsFromPrompt(prompt: string): string[] {
   if (/gradient|渐变/.test(lower)) tags.push('gradient');
 
   return tags.length > 0 ? tags : ['minimal', 'light-mode'];
+}
+
+function rankStyleGuidesForPrompt(tags: string[], platform: string) {
+  return [...styleGuideRegistry].sort((a, b) => {
+    const scoreA = styleGuidePromptScore(a.tags, tags, a.platform === platform);
+    const scoreB = styleGuidePromptScore(b.tags, tags, b.platform === platform);
+    if (scoreB !== scoreA) return scoreB - scoreA;
+    if (a.platform === platform && b.platform !== platform) return -1;
+    if (b.platform === platform && a.platform !== platform) return 1;
+    return a.name.localeCompare(b.name);
+  });
+}
+
+function styleGuidePromptScore(
+  guideTags: string[],
+  requestTags: string[],
+  platformMatch: boolean,
+): number {
+  const overlap = requestTags.filter((tag) => guideTags.includes(tag)).length;
+  return overlap * 10 + (platformMatch ? 3 : 0);
+}
+
+function formatGuideMetadataLine(
+  guide: (typeof styleGuideRegistry)[number],
+  mode: PlanningContextMode,
+): string {
+  const values = extractStyleGuideValues(guide.content);
+  const bg = values.colors.background ? ` bg:${values.colors.background}` : '';
+  const tags = guide.tags.slice(0, mode === 'rich' ? STYLE_GUIDE_METADATA_TAG_LIMIT : 3).join(', ');
+  return `- ${guide.name} [${guide.platform}]${bg} :: ${tags}`;
+}
+
+function formatGuideSnippet(guide: (typeof styleGuideRegistry)[number]): string {
+  const values = extractStyleGuideValues(guide.content);
+  const tags = guide.tags.slice(0, 6).join(', ');
+  const colors = [
+    values.colors.background ? `bg=${values.colors.background}` : null,
+    values.colors.surface ? `surface=${values.colors.surface}` : null,
+    values.colors.accent ? `accent=${values.colors.accent}` : null,
+  ]
+    .filter(Boolean)
+    .join(', ');
+  const fonts = [
+    values.typography.displayFont ? `display=${values.typography.displayFont}` : null,
+    values.typography.bodyFont ? `body=${values.typography.bodyFont}` : null,
+  ]
+    .filter(Boolean)
+    .join(', ');
+  const radius = [
+    values.radius.card != null ? `card=${values.radius.card}` : null,
+    values.radius.button != null ? `button=${values.radius.button}` : null,
+  ]
+    .filter(Boolean)
+    .join(', ');
+
+  return [
+    `### ${guide.name} [${guide.platform}]`,
+    `tags: ${tags}`,
+    colors ? `colors: ${colors}` : null,
+    fonts ? `fonts: ${fonts}` : null,
+    radius ? `radius: ${radius}` : null,
+  ]
+    .filter(Boolean)
+    .join('\n');
 }
 
 // ---------------------------------------------------------------------------

@@ -19,7 +19,13 @@ import type {
 } from './ai-types';
 import { streamChat } from './ai-service';
 import { resolveSkills } from '@zseven-w/pen-ai-skills';
+import { SUB_AGENT_DEBUG_FLAGS } from './sub-agent-debug-flags';
 import { type PreparedDesignPrompt, getSubAgentTimeouts } from './orchestrator-prompt-optimizer';
+import {
+  buildSubAgentStyleGuideInstruction,
+  compactSubAgentSkills,
+} from './orchestrator-sub-agent-compact';
+import { resolveModelProfile } from './model-profiles';
 import {
   expandRootFrameHeight,
   buildVariableContext,
@@ -97,6 +103,7 @@ export async function executeSubAgents(
           callbacks,
           undefined,
           abortSignal,
+          resolveModelProfile(request.model).tier === 'basic',
         );
       }
 
@@ -117,7 +124,7 @@ export async function executeSubAgents(
   // Subtasks sharing the same screen run sequentially (preserves section order).
   // Different screen groups run in parallel, limited by `concurrency`.
   const total = plan.subtasks.length;
-  const results: (SubAgentResult | null)[] = new Array(total).fill(null);
+  const results: (SubAgentResult | null)[] = Array.from({ length: total }, () => null);
 
   // Group subtasks by screen (same logic as orchestrator.ts)
   const screenGroups: number[][] = [];
@@ -224,6 +231,7 @@ async function executeSubAgent(
   },
   promptOverride?: string,
   abortSignal?: AbortSignal,
+  reducedComplexity = false,
 ): Promise<SubAgentResult> {
   const animated = callbacks?.animated ?? false;
   const progressEntry = progress.subtasks[index];
@@ -238,6 +246,7 @@ async function executeSubAgent(
     plan,
     promptOverride ?? preparedPrompt.subAgentPrompt,
     request.prompt,
+    request.model,
     request.context?.variables,
     request.context?.themes,
     request.context?.designMd,
@@ -245,18 +254,58 @@ async function executeSubAgent(
 
   const designMd = request.context?.designMd;
   const variables = request.context?.variables;
+  const modelProfile = resolveModelProfile(request.model);
+  const isMobileScreen = plan.rootFrame.width <= 480;
   const genCtx = resolveSkills('generation', request.prompt, {
     flags: {
       hasVariables: !!variables && Object.keys(variables).length > 0,
       hasDesignMd: !!designMd,
+      isBasicTier: modelProfile.tier === 'basic',
       // style-defaults.md only loads when no style direction exists at all:
       // - no pre-built style guide selected
       // - no design.md present (even without colorPalette, design.md provides visual direction)
       noStyleGuideMatch: !plan.selectedStyleGuideContent && !designMd,
     },
     dynamicContent: designMd ? { designMdContent: JSON.stringify(designMd) } : undefined,
+    budgetOverride:
+      modelProfile.tier === 'basic' ? 5200 : modelProfile.tier === 'standard' ? 6500 : undefined,
   });
-  const systemPrompt = genCtx.skills.map((s) => s.content).join('\n\n');
+
+  // Debug-flag bisection for the cross-provider empty-response bug.
+  // See `sub-agent-debug-flags.ts` for the toggles. All branches here
+  // are no-ops when the corresponding flag is false (the default).
+  let resolvedSkills = genCtx.skills;
+  if (SUB_AGENT_DEBUG_FLAGS.SKILLS_MINIMAL_ONLY) {
+    resolvedSkills = resolvedSkills.filter(
+      (s) => s.meta.name === 'schema' || s.meta.name === 'jsonl-format',
+    );
+  } else {
+    if (SUB_AGENT_DEBUG_FLAGS.SKILLS_DISABLE_ANTI_SLOP) {
+      resolvedSkills = resolvedSkills.filter((s) => s.meta.name !== 'anti-slop');
+    }
+    if (SUB_AGENT_DEBUG_FLAGS.SKILLS_DISABLE_LAYOUT) {
+      resolvedSkills = resolvedSkills.filter((s) => s.meta.name !== 'layout');
+    }
+    if (SUB_AGENT_DEBUG_FLAGS.SKILLS_DISABLE_OVERFLOW) {
+      resolvedSkills = resolvedSkills.filter((s) => s.meta.name !== 'overflow');
+    }
+  }
+  resolvedSkills = compactSubAgentSkills(
+    resolvedSkills,
+    modelProfile.tier,
+    isMobileScreen,
+    !!plan.selectedStyleGuideContent || !!designMd,
+    reducedComplexity,
+  );
+
+  const systemPrompt = resolvedSkills.map((s) => s.content).join('\n\n');
+
+  if (SUB_AGENT_DEBUG_FLAGS.LOG_PROMPT_SIZE) {
+    const skillNames = resolvedSkills.map((s) => s.meta.name).join(',');
+    console.log(
+      `[sub-agent] systemPrompt: chars=${systemPrompt.length} userPrompt=${userPrompt.length} skills=${skillNames}`,
+    );
+  }
 
   let rawResponse = '';
 
@@ -379,11 +428,13 @@ function buildSubAgentUserPrompt(
   plan: OrchestratorPlan,
   compactPrompt: string,
   fullPrompt: string,
+  modelId?: string,
   variables?: Record<string, VariableDefinition>,
   themes?: Record<string, string[]>,
   designMd?: DesignMdSpec,
 ): string {
   const { region } = subtask;
+  const modelTier = resolveModelProfile(modelId).tier;
 
   // Show all sections with their element boundaries so the model knows exact scope
   const sectionList = plan.subtasks
@@ -472,7 +523,11 @@ CRITICAL LAYOUT CONSTRAINTS:
       prompt += `\nFont: ${designMd.typography.fontFamily}`;
     }
   } else if (plan.selectedStyleGuideContent) {
-    prompt += `\n\nVISUAL STYLE GUIDE (follow these specifications exactly):\n${plan.selectedStyleGuideContent}`;
+    prompt += `\n\n${buildSubAgentStyleGuideInstruction(
+      plan.selectedStyleGuideContent,
+      plan.styleGuideName,
+      modelTier,
+    )}`;
     if (/[\u4e00-\u9fff\u3040-\u309f\u30a0-\u30ff\uac00-\ud7af]/.test(fullPrompt)) {
       prompt +=
         '\n\nCJK OVERRIDE: The user prompt contains Chinese/Japanese/Korean text. Replace ALL heading/display fonts with "Noto Sans SC" (or "Noto Sans JP"/"Noto Sans KR" as appropriate). Keep body font as "Inter". Never use Latin-only display fonts like JetBrains Mono, Space Grotesk, Cormorant Garamond, etc. for CJK headings. Line heights for CJK: headings 1.3-1.4, body 1.6-1.8. Letter spacing: always 0 for CJK.';
@@ -495,6 +550,7 @@ CRITICAL LAYOUT CONSTRAINTS:
 
   return prompt;
 }
+
 
 // ---------------------------------------------------------------------------
 // Instruction detection helpers

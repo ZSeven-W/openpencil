@@ -27,12 +27,10 @@ export function detectDesignType(prompt: string): DesignTypePreset {
       width: 375,
       height: 812,
       rootHeight: 812,
-      // Single section — the mobile status bar is pre-injected by the
-      // orchestrator, so no separate Header subtask is needed.  Using one
-      // subtask avoids content duplication that occurs when two sub-agents
-      // both try to generate the same UI elements from the user's prompt
-      // (e.g. categories, restaurant cards appearing twice).
-      defaultSections: ['Page Content'],
+      // Two safe buckets preserve a readable checklist while still keeping
+      // weak-model fallback decomposition broad enough to avoid heavy
+      // cross-section duplication.
+      defaultSections: ['Top Summary', 'Main Content'],
     };
   }
 
