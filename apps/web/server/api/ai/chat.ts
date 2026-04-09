@@ -236,15 +236,34 @@ function stripNoToolsRestriction(systemPrompt: string): string {
 
 /** Stream via Claude Agent SDK (uses local Claude Code OAuth login, no API key needed) */
 function streamViaAgentSDK(body: ChatBody, requestedModel?: string) {
+  let activeQuery: { close(): void } | undefined;
+  let cancelled = false;
   const stream = new ReadableStream({
     async start(controller) {
       const encoder = new TextEncoder();
+      const safeEnqueue = (payload: Record<string, unknown>) => {
+        if (cancelled) return false;
+        try {
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify(payload)}\n\n`));
+          return true;
+        } catch {
+          cancelled = true;
+          return false;
+        }
+      };
+      const safeClose = () => {
+        if (cancelled) return;
+        cancelled = true;
+        try {
+          controller.close();
+        } catch {
+          /* already closed */
+        }
+      };
       // Keep emitting pings for the full stream lifetime. Some providers pause
       // for >10s between text deltas, and Bun will otherwise kill the SSE socket.
       const pingTimer = startSSEKeepAlive(() => {
-        controller.enqueue(
-          encoder.encode(`data: ${JSON.stringify({ type: 'ping', content: '' })}\n\n`),
-        );
+        safeEnqueue({ type: 'ping', content: '' });
       }, KEEPALIVE_INTERVAL_MS);
       let debugFile: string | undefined;
       let attachTempDir: string | undefined;
@@ -314,9 +333,11 @@ function streamViaAgentSDK(body: ChatBody, requestedModel?: string) {
                 ...(spawnProcess ? { spawnClaudeCodeProcess: spawnProcess } : {}),
               },
             });
+            activeQuery = q;
 
             try {
               for await (const message of q) {
+                if (cancelled) return '';
                 if (message.type === 'result') {
                   const isErrorResult =
                     'is_error' in message && Boolean((message as { is_error?: boolean }).is_error);
@@ -332,6 +353,7 @@ function streamViaAgentSDK(body: ChatBody, requestedModel?: string) {
               }
               return '';
             } finally {
+              activeQuery = undefined;
               q.close();
             }
           };
@@ -339,9 +361,7 @@ function streamViaAgentSDK(body: ChatBody, requestedModel?: string) {
           const resultText = await runImageQuery();
 
           if (resultText) {
-            controller.enqueue(
-              encoder.encode(`data: ${JSON.stringify({ type: 'text', content: resultText })}\n\n`),
-            );
+            safeEnqueue({ type: 'text', content: resultText });
           }
         } else {
           // Normal text-only chat: stream partial messages as before
@@ -365,21 +385,21 @@ function streamViaAgentSDK(body: ChatBody, requestedModel?: string) {
                 ...(spawnProcess ? { spawnClaudeCodeProcess: spawnProcess } : {}),
               },
             });
+            activeQuery = q;
 
             try {
               for await (const message of q) {
+                if (cancelled) return;
                 if (message.type === 'stream_event') {
                   const ev = message.event;
                   if (ev.type === 'content_block_delta') {
                     if (ev.delta.type === 'text_delta') {
-                      const data = JSON.stringify({ type: 'text', content: ev.delta.text });
-                      controller.enqueue(encoder.encode(`data: ${data}\n\n`));
+                      safeEnqueue({ type: 'text', content: ev.delta.text });
                     } else if (ev.delta.type === 'thinking_delta') {
-                      const data = JSON.stringify({
+                      safeEnqueue({
                         type: 'thinking',
                         content: (ev.delta as any).thinking,
                       });
-                      controller.enqueue(encoder.encode(`data: ${data}\n\n`));
                     }
                   }
                 } else if (message.type === 'result') {
@@ -390,13 +410,12 @@ function streamViaAgentSDK(body: ChatBody, requestedModel?: string) {
                     const resultText = 'result' in message ? String(message.result ?? '') : '';
                     const content =
                       errors.join('; ') || resultText || `Query ended with: ${message.subtype}`;
-                    controller.enqueue(
-                      encoder.encode(`data: ${JSON.stringify({ type: 'error', content })}\n\n`),
-                    );
+                    safeEnqueue({ type: 'error', content });
                   }
                 }
               }
             } finally {
+              activeQuery = undefined;
               q.close();
             }
           };
@@ -404,9 +423,7 @@ function streamViaAgentSDK(body: ChatBody, requestedModel?: string) {
           await runQuery();
         }
 
-        controller.enqueue(
-          encoder.encode(`data: ${JSON.stringify({ type: 'done', content: '' })}\n\n`),
-        );
+        safeEnqueue({ type: 'done', content: '' });
       } catch (error) {
         const rawContent = error instanceof Error ? error.message : 'Unknown error';
 
@@ -419,16 +436,29 @@ function streamViaAgentSDK(body: ChatBody, requestedModel?: string) {
           const debugSnippet = tail.slice(-10).join('\n');
           content += `\n\n[Debug log]:\n${debugSnippet}`;
         }
-        controller.enqueue(
-          encoder.encode(`data: ${JSON.stringify({ type: 'error', content })}\n\n`),
-        );
+        safeEnqueue({ type: 'error', content });
       } finally {
         clearInterval(pingTimer);
+        try {
+          activeQuery?.close();
+        } catch {
+          /* ignore */
+        }
+        activeQuery = undefined;
         if (attachTempDir) {
           rm(attachTempDir, { recursive: true, force: true }).catch(() => {});
         }
-        controller.close();
+        safeClose();
       }
+    },
+    cancel() {
+      cancelled = true;
+      try {
+        activeQuery?.close();
+      } catch {
+        /* ignore */
+      }
+      activeQuery = undefined;
     },
   });
 

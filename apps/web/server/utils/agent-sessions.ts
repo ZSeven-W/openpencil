@@ -61,6 +61,11 @@ export function createSession(
 
 export const agentSessions = new Map<string, AgentSession>();
 
+/** Mark a session as active so long-running external tool callbacks are not expired. */
+export function touchSession(session: Pick<AgentSession, 'lastActivity'>, now = Date.now()): void {
+  session.lastActivity = now;
+}
+
 /** Idempotent cleanup — nullifies handles after destroying to prevent double-free. */
 export function cleanup(session: AgentSession): void {
   if (session.iter) {

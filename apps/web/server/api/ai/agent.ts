@@ -27,6 +27,7 @@ import {
   cleanup,
   abortSession,
   createSession,
+  touchSession,
   type AgentSession,
 } from '../../utils/agent-sessions';
 import {
@@ -458,6 +459,125 @@ export default defineEventHandler(async (event) => {
     });
   }
 
+  // Diagnostic logging for the cross-provider empty-response bug.
+  // When a provider returns a 200 OK + message_start + immediate
+  // stream close (0 content blocks), the failure is silent at the
+  // provider edge. This log captures the ACTUAL upstream shape —
+  // NOT the raw body fields — because the server applies several
+  // transformations between reading the body and issuing the
+  // upstream request:
+  //
+  //   1. teamMode && concurrency >= 2 appends
+  //      `buildTeamCapabilitiesPrompt(concurrency)` to systemPrompt
+  //   2. teamMode auto-registers the `spawn_member` tool on top of
+  //      whatever the client sent in `toolDefs`
+  //   3. Prior messages are filtered to `role in {user, assistant}
+  //      && typeof content === 'string'` before being seeded; the
+  //      LAST message becomes the new-turn prompt
+  //   4. `registerToolSchema` only sends `parameters` (with $schema
+  //      stripped), not the full `ToolDef`, so tool-schema size is
+  //      computed from `parameters` alone
+  //
+  // This block mirrors all four transformations so the logged
+  // numbers match what the native agent runtime actually sends to
+  // the provider edge.
+  //
+  // Gated by a hard-coded constant so flipping it off is one line.
+  const OUTER_AGENT_LOG_ENABLED = true;
+  if (OUTER_AGENT_LOG_ENABLED) {
+    const concurrency = body.concurrency ?? 1;
+
+    // (1) Effective system prompt — mirrors teamSystemPrompt logic below.
+    const effectiveSystemPrompt =
+      body.teamMode && concurrency >= 2
+        ? (body.systemPrompt ?? '') + buildTeamCapabilitiesPrompt(concurrency)
+        : (body.systemPrompt ?? '');
+
+    // (3) Seeded prior messages — same filter as seedMessages /
+    // seedTeamMessages below.
+    const allMessages = body.messages ?? [];
+    const newPromptRaw = allMessages[allMessages.length - 1]?.content;
+    const newPromptChars = typeof newPromptRaw === 'string' ? newPromptRaw.length : 0;
+    const priorMessages = allMessages
+      .slice(0, -1)
+      .filter(
+        (m) => (m.role === 'user' || m.role === 'assistant') && typeof m.content === 'string',
+      );
+    const priorMessageChars = priorMessages.reduce(
+      (sum, m) => sum + (m.content as string).length,
+      0,
+    );
+
+    // (2, 4) Effective tool count + on-wire schema bytes.
+    //
+    // On-wire tool list in team mode includes up to THREE classes
+    // of additions on top of the client-supplied body.toolDefs:
+    //
+    //   a) `spawn_member` — registered ONLY when body.teamMode===true
+    //      via `registerToolSchema(tools, 'spawn_member', SPAWN_MEMBER_SCHEMA)`.
+    //
+    //   b) `delegate` — registered by `teamRegisterDelegate(team)`,
+    //      which runs whenever `body.teamMode || normalizedMembers.length`
+    //      (i.e. any team-mode branch). This is a NATIVE runtime-side
+    //      registration inside `team.registerDelegateTool()` in
+    //      packages/agent-native/src/team.zig. The schema it registers
+    //      has a fixed shape: `{type:"object", properties:{member_id,
+    //      task}, required:[member_id,task]}` — 159 bytes as the
+    //      `input_schema` parameters blob. I was missing this
+    //      entirely in the previous log.
+    //
+    //   c) Member-specific tools registered via addTeamMember() when
+    //      normalizedMembers.length > 0. Each member has its OWN
+    //      tool registry and those tools are NOT on the leader's
+    //      on-wire payload, so they don't count toward the leader
+    //      request shape we log here.
+    //
+    // Tool schemas are serialized as JSON.stringify(parameters) with
+    // `$schema` stripped — see registerToolSchema call below. We
+    // mirror that transform here so the log matches the bytes the
+    // native runtime actually pushes over the wire.
+    const toolDefsChars = (body.toolDefs ?? []).reduce((sum, t) => {
+      const params = t.parameters ? { ...(t.parameters as Record<string, unknown>) } : {};
+      delete (params as Record<string, unknown>).$schema;
+      return sum + JSON.stringify(params).length;
+    }, 0);
+
+    // Delegate schema text, verbatim from team.zig::registerDelegateTool.
+    // Hard-coded here rather than imported because it lives inside a
+    // Zig function body and isn't exported. Keep in sync if the Zig
+    // side is ever edited (the unit test coverage in team.zig catches
+    // drift on that side; this side is a diagnostic log only).
+    const DELEGATE_INPUT_SCHEMA =
+      '{"type":"object","properties":{"member_id":{"type":"string","description":"ID of the team member to delegate to"},"task":{"type":"string","description":"Task description for the member"}},"required":["member_id","task"]}';
+    // The team-mode branch below is gated on `body.teamMode ||
+    // normalizedMembers.length`. `normalizedMembers` is derived from
+    // `body.members` 1:1 (same length, just adds a normalized
+    // baseURL field), so the raw count matches. normalizedMembers
+    // itself is computed AFTER this log block, so we use body.members
+    // directly to predict whether the team branch will be taken.
+    const teamModeBranch = !!(body.teamMode || (body.members ?? []).length);
+
+    let effectiveToolCount = (body.toolDefs ?? []).length;
+    let effectiveToolChars = toolDefsChars;
+    if (body.teamMode) {
+      effectiveToolCount += 1;
+      effectiveToolChars += SPAWN_MEMBER_SCHEMA.length;
+    }
+    if (teamModeBranch) {
+      effectiveToolCount += 1;
+      effectiveToolChars += DELEGATE_INPUT_SCHEMA.length;
+    }
+
+    console.log(
+      `[agent-request] provider=${body.providerType} model=${body.model} teamMode=${!!body.teamMode} concurrency=${concurrency} ` +
+        `effectiveSystemPrompt=${effectiveSystemPrompt.length} ` +
+        `newPromptChars=${newPromptChars} ` +
+        `seededPriorMessages=${priorMessages.length}(totalChars=${priorMessageChars}) ` +
+        `effectiveTools=${effectiveToolCount}(onWireSchemaChars=${effectiveToolChars}) ` +
+        `members=${(body.members ?? []).length} maxOutputTokens=${body.maxOutputTokens ?? 'default'}`,
+    );
+  }
+
   // Validate all member baseURLs upfront before allocating any native handles
   const normalizedMembers = (body.members ?? []).map((m) => {
     try {
@@ -593,6 +713,7 @@ export default defineEventHandler(async (event) => {
       // legitimately stall visible output for >10s while the model waits.
       const pingTimer = startSSEKeepAlive(() => {
         controller.enqueue(encoder.encode(': ping\n\n'));
+        touchSession(session);
       }, 5_000);
 
       let iter;
