@@ -9,8 +9,10 @@
 
 import { spawn, execSync, type ChildProcess } from 'node:child_process'
 import { build } from 'esbuild'
+import { Socket } from 'node:net'
 import { join } from 'node:path'
 import { compileSkills } from '../../packages/pen-ai-skills/vite-plugin-skills'
+import { ensureLoopbackNoProxy, withLoopbackNoProxy } from '../../scripts/loopback-no-proxy'
 
 const DESKTOP_DIR = import.meta.dirname
 const ROOT = join(DESKTOP_DIR, '..', '..')
@@ -24,13 +26,36 @@ async function waitForServer(
   url: string,
   timeoutMs = 30_000,
 ): Promise<void> {
+  const target = new URL(url)
+  const port = Number.parseInt(target.port || '80', 10)
+  const hosts = target.hostname === 'localhost'
+    ? ['127.0.0.1', '::1', 'localhost']
+    : [target.hostname]
   const start = Date.now()
+
+  async function canConnect(host: string): Promise<boolean> {
+    return await new Promise((resolve) => {
+      const socket = new Socket()
+
+      const finish = (ok: boolean) => {
+        socket.removeAllListeners()
+        socket.destroy()
+        resolve(ok)
+      }
+
+      socket.setTimeout(800)
+      socket.once('connect', () => finish(true))
+      socket.once('timeout', () => finish(false))
+      socket.once('error', () => finish(false))
+      socket.connect(port, host)
+    })
+  }
+
   while (Date.now() - start < timeoutMs) {
-    try {
-      const res = await fetch(url)
-      if (res.ok || res.status < 500) return
-    } catch {
-      // server not ready yet
+    for (const host of hosts) {
+      if (await canConnect(host)) {
+        return
+      }
     }
     await new Promise((r) => setTimeout(r, 500))
   }
@@ -68,12 +93,17 @@ async function compileElectron(): Promise<void> {
 // ---------------------------------------------------------------------------
 
 async function main(): Promise<void> {
+  // 当前进程本身也会探活 localhost。
+  // 这里继续保留 loopback no_proxy, 让后续若有 fetch/子进程也统一走直连。
+  ensureLoopbackNoProxy(process.env)
+  const childEnv = withLoopbackNoProxy(process.env)
+
   // 1. Start Vite dev server
   console.log('[electron-dev] Starting Vite dev server...')
   const vite = spawn('bun', ['--bun', 'run', 'dev'], {
     cwd: ROOT,
     stdio: 'inherit',
-    env: { ...process.env },
+    env: childEnv,
   })
 
   // Ensure cleanup on exit
@@ -120,7 +150,7 @@ async function main(): Promise<void> {
   const electron = spawn(electronBin, [join(ROOT, 'out', 'desktop', 'main.cjs')], {
     cwd: ROOT,
     stdio: 'inherit',
-    env: { ...process.env },
+    env: childEnv,
   }) as ChildProcess
 
   electron.on('exit', () => {

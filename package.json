@@ -17,7 +17,7 @@
     "openpencil-mcp": "out/mcp-server.cjs"
   },
   "scripts": {
-    "dev": "cd apps/web && bun --bun vite dev --port 3000",
+    "dev": "bun run apps/web/dev.ts",
     "build": "cd apps/web && bun --bun vite build",
     "preview": "cd apps/web && bun --bun vite preview",
     "test": "cd apps/web && bun --bun vitest run --passWithNoTests",
