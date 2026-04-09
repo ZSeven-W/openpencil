@@ -3,7 +3,7 @@ name: codegen-react-native
 description: React Native code generation rules — View/Text/Image with StyleSheet.create()
 phase: [generation]
 trigger:
-  keywords: [react-native, rn, react native, mobile]
+  flags: [isCodeGen]
 priority: 20
 budget: 2000
 category: knowledge

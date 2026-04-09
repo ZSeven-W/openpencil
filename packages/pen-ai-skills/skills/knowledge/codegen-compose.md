@@ -3,7 +3,7 @@ name: codegen-compose
 description: Jetpack Compose (Kotlin) code generation rules — composable functions with Modifier chains
 phase: [generation]
 trigger:
-  keywords: [compose, jetpack, kotlin, android]
+  flags: [isCodeGen]
 priority: 20
 budget: 2000
 category: knowledge

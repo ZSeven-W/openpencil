@@ -3,7 +3,7 @@ name: codegen-svelte
 description: Svelte component code generation rules — markup with scoped styles
 phase: [generation]
 trigger:
-  keywords: [svelte, svelte5]
+  flags: [isCodeGen]
 priority: 20
 budget: 2000
 category: knowledge

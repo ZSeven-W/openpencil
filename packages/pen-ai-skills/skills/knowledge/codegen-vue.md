@@ -3,7 +3,7 @@ name: codegen-vue
 description: Vue 3 SFC code generation rules — single file component with scoped CSS
 phase: [generation]
 trigger:
-  keywords: [vue, vue3, sfc]
+  flags: [isCodeGen]
 priority: 20
 budget: 2000
 category: knowledge

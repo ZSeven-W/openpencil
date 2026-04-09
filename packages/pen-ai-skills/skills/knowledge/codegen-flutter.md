@@ -3,7 +3,7 @@ name: codegen-flutter
 description: Flutter/Dart code generation rules — widget tree with BoxDecoration and EdgeInsets
 phase: [generation]
 trigger:
-  keywords: [flutter, dart, mobile]
+  flags: [isCodeGen]
 priority: 20
 budget: 2000
 category: knowledge

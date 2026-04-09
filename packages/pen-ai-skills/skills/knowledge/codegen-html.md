@@ -3,7 +3,7 @@ name: codegen-html
 description: HTML + CSS code generation rules — semantic HTML5 with CSS classes in style block
 phase: [generation]
 trigger:
-  keywords: [html, css, vanilla, static]
+  flags: [isCodeGen]
 priority: 20
 budget: 2000
 category: knowledge

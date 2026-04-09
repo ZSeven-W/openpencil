@@ -3,7 +3,7 @@ name: codegen-swiftui
 description: SwiftUI code generation rules — declarative views with modifier chains
 phase: [generation]
 trigger:
-  keywords: [swiftui, swift, ios, macos, apple]
+  flags: [isCodeGen]
 priority: 20
 budget: 2000
 category: knowledge

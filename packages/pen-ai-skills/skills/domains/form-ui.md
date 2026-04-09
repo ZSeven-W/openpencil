@@ -5,34 +5,40 @@ phase: [generation]
 trigger:
   keywords:
     [
+      # English: form-specific
       form,
-      input,
+      contact form,
+      feedback form,
+      registration form,
+      # English: auth flows
       login,
+      log in,
+      signin,
+      sign in,
       signup,
       sign up,
       register,
+      registration,
       password,
-      email,
-      搜索,
+      # English: e-commerce
+      checkout,
+      # English: search & input components — multi-word so word-boundary
+      # matching doesn't false-trigger on "research" / "input slider" etc.
+      search bar,
+      search input,
+      search field,
+      input field,
+      text field,
+      text input,
+      # Chinese: form / auth
       表单,
       登录,
       注册,
-      mobile,
-      phone,
-      手机,
-      移动端,
-      app screen,
-      ios,
-      android,
-      button,
-      card,
-      nav,
-      navigation,
-      mockup,
-      按钮,
-      卡片,
-      导航,
-      模型,
+      密码,
+      # Chinese: search & input components (substring matching path)
+      搜索,
+      搜索框,
+      输入框,
     ]
 priority: 30
 budget: 1500

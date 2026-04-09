@@ -1,8 +1,9 @@
 ---
 name: design-code
-description: HTML/CSS design code generation for visual reference
+description: HTML/CSS design code generation for visual reference (codegen-only)
 phase: [generation]
-trigger: null
+trigger:
+  flags: [isCodeGen]
 priority: 20
 budget: 1000
 category: base

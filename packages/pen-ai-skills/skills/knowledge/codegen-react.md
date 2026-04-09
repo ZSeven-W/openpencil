@@ -3,7 +3,7 @@ name: codegen-react
 description: React + Tailwind CSS code generation rules — TSX output with Tailwind utility classes
 phase: [generation]
 trigger:
-  keywords: [react, tsx, tailwind]
+  flags: [isCodeGen]
 priority: 20
 budget: 2000
 category: knowledge
