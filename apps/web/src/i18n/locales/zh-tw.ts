@@ -10,6 +10,8 @@ const zhTW: TranslationKeys = {
   'common.close': '關閉',
   'common.connect': '連線',
   'common.disconnect': '中斷連線',
+  'common.yes': '是',
+  'common.no': '否',
   'common.import': '匯入',
   'common.export': '匯出',
   'common.name': '名稱',
@@ -74,6 +76,8 @@ const zhTW: TranslationKeys = {
   'statusbar.zoomOut': '縮小',
   'statusbar.zoomIn': '放大',
   'statusbar.resetZoom': '重設縮放',
+  'statusbar.focusContent': '適配全部內容',
+  'statusbar.focusSelection': '聚焦選取內容',
 
   // ── Updater ──
   'updater.softwareUpdate': '軟體更新',

@@ -10,6 +10,8 @@ const hi: TranslationKeys = {
   'common.close': 'बंद करें',
   'common.connect': 'कनेक्ट करें',
   'common.disconnect': 'डिस्कनेक्ट करें',
+  'common.yes': 'हाँ',
+  'common.no': 'नहीं',
   'common.import': 'आयात करें',
   'common.export': 'निर्यात करें',
   'common.name': 'नाम',
@@ -74,6 +76,8 @@ const hi: TranslationKeys = {
   'statusbar.zoomOut': 'ज़ूम आउट',
   'statusbar.zoomIn': 'ज़ूम इन',
   'statusbar.resetZoom': 'ज़ूम रीसेट करें',
+  'statusbar.focusContent': 'सारी सामग्री फ़िट करें',
+  'statusbar.focusSelection': 'चयन पर फ़ोकस करें',
 
   // ── Updater ──
   'updater.softwareUpdate': 'सॉफ़्टवेयर अपडेट',

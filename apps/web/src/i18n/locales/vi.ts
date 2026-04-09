@@ -10,6 +10,8 @@ const vi: TranslationKeys = {
   'common.close': 'Đóng',
   'common.connect': 'Kết nối',
   'common.disconnect': 'Ngắt kết nối',
+  'common.yes': 'Có',
+  'common.no': 'Không',
   'common.import': 'Nhập',
   'common.export': 'Xuất',
   'common.name': 'Tên',
@@ -74,6 +76,8 @@ const vi: TranslationKeys = {
   'statusbar.zoomOut': 'Thu nhỏ',
   'statusbar.zoomIn': 'Phóng to',
   'statusbar.resetZoom': 'Đặt lại thu phóng',
+  'statusbar.focusContent': 'Vừa toàn bộ nội dung',
+  'statusbar.focusSelection': 'Tập trung vào vùng chọn',
 
   // ── Updater ──
   'updater.softwareUpdate': 'Cập nhật phần mềm',

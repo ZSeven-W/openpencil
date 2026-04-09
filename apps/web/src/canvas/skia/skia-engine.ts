@@ -1,5 +1,5 @@
 import type { CanvasKit, Surface } from 'canvaskit-wasm';
-import type { EllipseNode } from '@/types/pen';
+import type { EllipseNode, PathNode } from '@/types/pen';
 import { useCanvasStore } from '@/stores/canvas-store';
 import { useDocumentStore, getActivePageChildren, getAllChildren } from '@/stores/document-store';
 import { resolveNodeForCanvas, getDefaultTheme } from '@/variables/resolve-variables';
@@ -22,6 +22,9 @@ import {
 import { getActiveAgentIndicators, getActiveAgentFrames, isPreviewNode } from '../agent-indicator';
 import { isNodeBorderReady, getNodeRevealTime } from '@/services/ai/design-animation';
 import { lookupIconByName } from '@/services/ai/icon-resolver';
+import { getEditablePathState } from './path-editing';
+import { resolveRuntimeAssetSource } from '@/utils/document-assets';
+import { fitSceneBoundsToViewport, getFocusBounds } from './focus-fit';
 
 // Re-export for use by canvas component
 export { screenToScene } from '@zseven-w/pen-renderer';
@@ -85,6 +88,19 @@ export class SkiaEngine {
     this.renderer = new SkiaRenderer(ck);
     // Wire up icon lookup for icon_font nodes
     this.renderer.setIconLookup(lookupIconByName);
+    if (
+      typeof (this.renderer as { setImageSourceResolver?: unknown }).setImageSourceResolver
+      === 'function'
+    ) {
+      this.renderer.setImageSourceResolver((src) => {
+        const filePath = useDocumentStore.getState().filePath;
+        const resolved = resolveRuntimeAssetSource(src, filePath);
+        return {
+          cacheKey: resolved.runtimeUrl ?? `missing:${filePath ?? ''}:${src}`,
+          loadUrl: resolved.runtimeUrl,
+        };
+      });
+    }
     // Wire up root children provider for layout engine fill-width fallback
     setRootChildrenProvider(() => useDocumentStore.getState().document.children);
   }
@@ -99,11 +115,7 @@ export class SkiaEngine {
     canvasEl.width = canvasEl.clientWidth * dpr;
     canvasEl.height = canvasEl.clientHeight * dpr;
 
-    this.surface = this.ck.MakeWebGLCanvasSurface(canvasEl);
-    if (!this.surface) {
-      // Fallback to software
-      this.surface = this.ck.MakeSWCanvasSurface(canvasEl);
-    }
+    this.surface = this.createSurface(canvasEl);
     if (!this.surface) {
       console.error('SkiaEngine: Failed to create surface');
       return;
@@ -126,8 +138,7 @@ export class SkiaEngine {
   dispose() {
     if (this.animFrameId) cancelAnimationFrame(this.animFrameId);
     this.renderer.dispose();
-    this.surface?.delete();
-    this.surface = null;
+    this.safeDeleteSurface(this.surface);
   }
 
   resize(width: number, height: number) {
@@ -136,13 +147,9 @@ export class SkiaEngine {
     this.canvasEl.width = width * dpr;
     this.canvasEl.height = height * dpr;
 
-    // Recreate surface
-    this.surface?.delete();
-    this.surface = this.ck.MakeWebGLCanvasSurface(this.canvasEl);
-    if (!this.surface) {
-      this.surface = this.ck.MakeSWCanvasSurface(this.canvasEl);
+    if (this.recreateSurface()) {
+      this.markDirty();
     }
-    this.render();
   }
 
   // ---------------------------------------------------------------------------
@@ -208,8 +215,10 @@ export class SkiaEngine {
 
   private render() {
     if (!this.surface || !this.canvasEl) return;
-    const canvas = this.surface.getCanvas();
-    const ck = this.ck;
+    try {
+      const surface = this.surface;
+      const canvas = surface.getCanvas();
+      const ck = this.ck;
 
     const dpr = window.devicePixelRatio || 1;
     const selectedIds = new Set(useCanvasStore.getState().selection.selectedIds);
@@ -357,6 +366,20 @@ export class SkiaEngine {
           this.zoom,
         );
       }
+      if (selRN && selRN.node.type === 'path') {
+        const pathState = getEditablePathState(
+          selRN.node as PathNode,
+          { x: selRN.absX, y: selRN.absY, width: selRN.absW, height: selRN.absH },
+        );
+        if (pathState) {
+          this.renderer.drawPathEditor(
+            canvas,
+            pathState.sceneAnchors,
+            this.zoom,
+            pathState.closed,
+          );
+        }
+      }
     }
 
     // Drawing preview shape
@@ -398,12 +421,55 @@ export class SkiaEngine {
     }
     canvas.restore();
 
-    this.surface.flush();
+      surface.flush();
 
-    // Keep animating while agent overlays are active (spinning dot + node flashes).
-    // Suppressed during captureRegion so waitForSettled can reach a stable state.
-    // Uses a ref counter so concurrent captures don't unblock each other.
-    if (hasAgentOverlays && this._captureRefcount === 0) {
+      // Keep animating while agent overlays are active (spinning dot + node flashes).
+      // Suppressed during captureRegion so waitForSettled can reach a stable state.
+      // Uses a ref counter so concurrent captures don't unblock each other.
+      if (hasAgentOverlays && this._captureRefcount === 0) {
+        this.markDirty();
+      }
+    } catch (error) {
+      this.handleSurfaceFailure('render', error);
+    }
+  }
+
+  private createSurface(canvasEl: HTMLCanvasElement): Surface | null {
+    try {
+      return this.ck.MakeWebGLCanvasSurface(canvasEl)
+        ?? this.ck.MakeSWCanvasSurface(canvasEl)
+        ?? null;
+    } catch (error) {
+      console.error('[SkiaEngine] createSurface failed:', error);
+      return null;
+    }
+  }
+
+  private safeDeleteSurface(surface: Surface | null) {
+    if (!surface) return;
+
+    try {
+      surface.delete();
+    } catch (error) {
+      console.warn('[SkiaEngine] Failed to delete surface:', error);
+    } finally {
+      if (surface === this.surface) {
+        this.surface = null;
+      }
+    }
+  }
+
+  private recreateSurface(): boolean {
+    if (!this.canvasEl) return false;
+
+    this.safeDeleteSurface(this.surface);
+    this.surface = this.createSurface(this.canvasEl);
+    return !!this.surface;
+  }
+
+  private handleSurfaceFailure(stage: string, error: unknown) {
+    console.error(`[SkiaEngine] ${stage} failed:`, error);
+    if (this.recreateSurface()) {
       this.markDirty();
     }
   }
@@ -648,30 +714,28 @@ export class SkiaEngine {
   }
 
   zoomToFitContent() {
+    this.zoomToFitSelectionOrContent([]);
+  }
+
+  zoomToFitSelectionOrContent(selectedIds = useCanvasStore.getState().selection.selectedIds) {
     if (!this.canvasEl || this.renderNodes.length === 0) return;
-    const FIT_PADDING = 64;
-    let minX = Infinity,
-      minY = Infinity,
-      maxX = -Infinity,
-      maxY = -Infinity;
-    for (const rn of this.renderNodes) {
-      if (rn.clipRect) continue; // skip children, only root bounds
-      minX = Math.min(minX, rn.absX);
-      minY = Math.min(minY, rn.absY);
-      maxX = Math.max(maxX, rn.absX + rn.absW);
-      maxY = Math.max(maxY, rn.absY + rn.absH);
-    }
-    if (!isFinite(minX)) return;
-    const contentW = maxX - minX;
-    const contentH = maxY - minY;
-    const cw = this.canvasEl.clientWidth;
-    const ch = this.canvasEl.clientHeight;
-    const scaleX = (cw - FIT_PADDING * 2) / contentW;
-    const scaleY = (ch - FIT_PADDING * 2) / contentH;
-    let zoom = Math.min(scaleX, scaleY, 1);
-    zoom = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, zoom));
-    const centerX = (minX + maxX) / 2;
-    const centerY = (minY + maxY) / 2;
-    this.setViewport(zoom, cw / 2 - centerX * zoom, ch / 2 - centerY * zoom);
+
+    const selectionSet = new Set(selectedIds);
+    const hasRenderableSelection = this.renderNodes.some((rn) => selectionSet.has(rn.node.id));
+    const bounds = getFocusBounds(this.renderNodes, selectedIds);
+    if (!bounds) return;
+
+    const viewport = fitSceneBoundsToViewport(
+      bounds,
+      this.canvasEl.clientWidth,
+      this.canvasEl.clientHeight,
+      {
+        padding: 64,
+        maxZoom: hasRenderableSelection ? 8 : 1,
+      },
+    );
+    if (!viewport) return;
+
+    this.setViewport(viewport.zoom, viewport.panX, viewport.panY);
   }
 }

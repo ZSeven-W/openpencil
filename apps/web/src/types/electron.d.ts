@@ -34,6 +34,7 @@ declare global {
   interface ElectronAPI {
     isElectron: true;
     openFile: () => Promise<{ filePath: string; content: string } | null>;
+    openImageFile: () => Promise<{ filePath: string; name: string; content: string | null } | null>;
     saveFile: (content: string, defaultPath?: string) => Promise<string | null>;
     saveToPath: (filePath: string, content: string) => Promise<string>;
     onMenuAction: (callback: (action: string) => void) => () => void;
@@ -42,6 +43,13 @@ declare global {
     getPendingFile: () => Promise<string | null>;
     syncRecentFiles: (files: Array<{ fileName: string; filePath: string }>) => void;
     confirmClose: () => void;
+    confirmUnsavedChanges: (payload: {
+      message: string;
+      detail?: string;
+      yesLabel: string;
+      noLabel: string;
+      cancelLabel: string;
+    }) => Promise<'save' | 'discard' | 'cancel'>;
     getLogDir: () => Promise<string>;
     setTheme: (theme: 'dark' | 'light', colors?: { bg: string; fg: string }) => void;
     getPreferences: () => Promise<Record<string, string>>;

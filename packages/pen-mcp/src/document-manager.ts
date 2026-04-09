@@ -2,7 +2,8 @@ import { readFile, writeFile, access, unlink } from 'node:fs/promises';
 import { constants } from 'node:fs';
 import { homedir } from 'node:os';
 import { join, resolve } from 'node:path';
-import type { PenDocument } from '@zseven-w/pen-types';
+import { normalizePenDocument } from '@zseven-w/pen-core';
+import type { PenDocument, PenNode } from '@zseven-w/pen-types';
 import { sanitizeObject } from './utils/sanitize';
 import { PORT_FILE_DIR_NAME, PORT_FILE_NAME } from './constants';
 
@@ -283,6 +284,72 @@ function validate(doc: unknown): doc is PenDocument {
   return typeof d.version === 'string' && (Array.isArray(d.children) || Array.isArray(d.pages));
 }
 
+function prepareImportedDocument(
+  raw: unknown,
+  filePath?: string | null,
+): PenDocument | null {
+  if (!validate(raw)) return null;
+
+  const normalized = normalizePenDocument(raw);
+  if (!shouldApplyLegacyPenCompatibility(raw, filePath)) {
+    return normalized;
+  }
+
+  return {
+    ...normalized,
+    children: normalized.children.map(reverseDescendantOrder),
+    pages: normalized.pages?.map((page) => ({
+      ...page,
+      children: page.children.map(reverseDescendantOrder),
+    })),
+  };
+}
+
+function shouldApplyLegacyPenCompatibility(
+  doc: PenDocument,
+  filePath?: string | null,
+): boolean {
+  if (!/\.pen$/i.test(filePath ?? '')) return false;
+  if (Array.isArray(doc.pages) && doc.pages.length > 0) return false;
+
+  const topLevel = Array.isArray(doc.children) ? doc.children : [];
+  if (topLevel.length === 0) return false;
+
+  const pageLikeFrames = topLevel.filter(isLegacyPageFrame);
+  if (pageLikeFrames.length === 0) return false;
+
+  const legacyVersion = /^2(?:\.\d+)*$/i.test(doc.version);
+  const hasLegacyShell = pageLikeFrames.some((frame) =>
+    frame.children?.some((child) =>
+      child?.type === 'frame'
+      && typeof child.name === 'string'
+      && /^(content|qa|reference)$/i.test(child.name),
+    ),
+  );
+  const pageLikeDominates = pageLikeFrames.length >= Math.max(2, Math.floor(topLevel.length / 2));
+
+  return legacyVersion || hasLegacyShell || pageLikeDominates;
+}
+
+function isLegacyPageFrame(node: PenNode): node is PenNode & { children?: PenNode[] } {
+  const rawNode = node as unknown as Record<string, unknown>;
+  return node.type === 'frame'
+    && rawNode.clip === true
+    && typeof node.name === 'string'
+    && /^Page\s+\d+/i.test(node.name);
+}
+
+function reverseDescendantOrder(node: PenNode): PenNode {
+  if (!('children' in node) || !Array.isArray(node.children) || node.children.length === 0) {
+    return node;
+  }
+
+  return {
+    ...node,
+    children: node.children.map(reverseDescendantOrder).reverse(),
+  } as PenNode;
+}
+
 // ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
@@ -307,8 +374,12 @@ export async function openDocument(filePath: string): Promise<PenDocument> {
   if (!validate(sanitized)) {
     throw new Error(`Invalid document format: ${filePath}`);
   }
-  cache.set(filePath, { doc: sanitized, mtime: Date.now() });
-  return sanitized;
+  const prepared = prepareImportedDocument(sanitized, filePath);
+  if (!prepared) {
+    throw new Error(`Invalid document format: ${filePath}`);
+  }
+  cache.set(filePath, { doc: prepared, mtime: Date.now() });
+  return prepared;
 }
 
 /** Create a new empty document (not saved to disk yet). */

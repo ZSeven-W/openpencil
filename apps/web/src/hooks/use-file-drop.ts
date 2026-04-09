@@ -1,8 +1,8 @@
-import { useEffect, useState, useCallback } from 'react';
-import { useDocumentStore } from '@/stores/document-store';
-import { useCanvasStore } from '@/stores/canvas-store';
-import { normalizePenDocument } from '@/utils/normalize-pen-file';
-import type { PenDocument } from '@/types/pen';
+import { useEffect, useState, useCallback } from 'react'
+import { useDocumentStore } from '@/stores/document-store'
+import { useCanvasStore } from '@/stores/canvas-store'
+import { parseAndPrepareImportedDocument } from '@/utils/import-pen-document'
+import type { PenDocument } from '@/types/pen'
 
 /**
  * Parse a dropped File into a PenDocument.
@@ -15,13 +15,13 @@ async function parseDroppedFile(
   if (ext !== 'op' && ext !== 'pen' && ext !== 'json') return null;
 
   try {
-    const text = await file.text();
-    const raw = JSON.parse(text) as PenDocument;
-    if (!raw.version || (!Array.isArray(raw.children) && !Array.isArray(raw.pages))) {
-      return null;
-    }
-    const doc = normalizePenDocument(raw);
-    return { doc, fileName: file.name };
+    const text = await file.text()
+    const prepared = parseAndPrepareImportedDocument(text, {
+      fileName: file.name,
+    })
+    if (!prepared) return null
+    const { doc } = prepared
+    return { doc, fileName: file.name }
   } catch {
     return null;
   }

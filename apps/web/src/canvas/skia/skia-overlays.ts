@@ -1,4 +1,5 @@
-import type { CanvasKit, Canvas, Image as SkImage } from 'canvaskit-wasm';
+import type { CanvasKit, Canvas, Image as SkImage } from 'canvaskit-wasm'
+import type { PenPathAnchor } from '@/types/pen'
 import {
   SELECTION_BLUE,
   COMPONENT_COLOR,
@@ -131,12 +132,7 @@ function drawText2D(
 // Pen tool types
 // ---------------------------------------------------------------------------
 
-export interface PenAnchor {
-  x: number;
-  y: number;
-  handleIn: { x: number; y: number } | null;
-  handleOut: { x: number; y: number } | null;
-}
+export type PenAnchor = PenPathAnchor
 
 export interface PenPreviewData {
   points: PenAnchor[];
@@ -409,6 +405,77 @@ function appendSeg(parts: string[], from: PenAnchor, to: PenAnchor) {
   }
 }
 
+function drawAnchorHandles(
+  ck: CanvasKit,
+  canvas: Canvas,
+  points: PenAnchor[],
+  zoom: number,
+  highlightFirstAnchor: boolean,
+) {
+  const invZ = 1 / zoom
+
+  const anchorStrokePaint = new ck.Paint()
+  anchorStrokePaint.setStyle(ck.PaintStyle.Stroke)
+  anchorStrokePaint.setAntiAlias(true)
+  anchorStrokePaint.setStrokeWidth(1.5 * invZ)
+  anchorStrokePaint.setColor(parseColor(ck, SELECTION_BLUE))
+
+  const anchorFillPaint = new ck.Paint()
+  anchorFillPaint.setStyle(ck.PaintStyle.Fill)
+  anchorFillPaint.setAntiAlias(true)
+  anchorFillPaint.setColor(parseColor(ck, PEN_ANCHOR_FILL))
+
+  for (let i = 0; i < points.length; i++) {
+    const pt = points[i]
+    const r = (highlightFirstAnchor && i === 0 ? PEN_ANCHOR_FIRST_RADIUS : PEN_ANCHOR_RADIUS) * invZ
+    canvas.drawCircle(pt.x, pt.y, r, anchorFillPaint)
+    canvas.drawCircle(pt.x, pt.y, r, anchorStrokePaint)
+  }
+
+  anchorStrokePaint.delete()
+  anchorFillPaint.delete()
+
+  const handleLinePaint = new ck.Paint()
+  handleLinePaint.setStyle(ck.PaintStyle.Stroke)
+  handleLinePaint.setAntiAlias(true)
+  handleLinePaint.setStrokeWidth(1 * invZ)
+  handleLinePaint.setColor(parseColor(ck, PEN_HANDLE_LINE_STROKE))
+
+  const handleDotFill = new ck.Paint()
+  handleDotFill.setStyle(ck.PaintStyle.Fill)
+  handleDotFill.setAntiAlias(true)
+  handleDotFill.setColor(parseColor(ck, SELECTION_BLUE))
+
+  const handleDotStroke = new ck.Paint()
+  handleDotStroke.setStyle(ck.PaintStyle.Stroke)
+  handleDotStroke.setAntiAlias(true)
+  handleDotStroke.setStrokeWidth(1 * invZ)
+  handleDotStroke.setColor(parseColor(ck, '#ffffff'))
+
+  const dotR = PEN_HANDLE_DOT_RADIUS * invZ
+
+  for (const pt of points) {
+    if (pt.handleOut) {
+      const hx = pt.x + pt.handleOut.x
+      const hy = pt.y + pt.handleOut.y
+      canvas.drawLine(pt.x, pt.y, hx, hy, handleLinePaint)
+      canvas.drawCircle(hx, hy, dotR, handleDotFill)
+      canvas.drawCircle(hx, hy, dotR, handleDotStroke)
+    }
+    if (pt.handleIn) {
+      const hx = pt.x + pt.handleIn.x
+      const hy = pt.y + pt.handleIn.y
+      canvas.drawLine(pt.x, pt.y, hx, hy, handleLinePaint)
+      canvas.drawCircle(hx, hy, dotR, handleDotFill)
+      canvas.drawCircle(hx, hy, dotR, handleDotStroke)
+    }
+  }
+
+  handleLinePaint.delete()
+  handleDotFill.delete()
+  handleDotStroke.delete()
+}
+
 /**
  * Draw pen tool preview: constructed path, anchor points, handles, rubber band.
  */
@@ -449,68 +516,33 @@ export function drawPenPreview(ck: CanvasKit, canvas: Canvas, data: PenPreviewDa
     paint.delete();
   }
 
-  // --- Anchor circles ---
-  const anchorStrokePaint = new ck.Paint();
-  anchorStrokePaint.setStyle(ck.PaintStyle.Stroke);
-  anchorStrokePaint.setAntiAlias(true);
-  anchorStrokePaint.setStrokeWidth(1.5 * invZ);
-  anchorStrokePaint.setColor(parseColor(ck, SELECTION_BLUE));
+  drawAnchorHandles(ck, canvas, points, zoom, true)
+}
 
-  const anchorFillPaint = new ck.Paint();
-  anchorFillPaint.setStyle(ck.PaintStyle.Fill);
-  anchorFillPaint.setAntiAlias(true);
-  anchorFillPaint.setColor(parseColor(ck, PEN_ANCHOR_FILL));
+export function drawPathEditor(
+  ck: CanvasKit,
+  canvas: Canvas,
+  points: PenAnchor[],
+  zoom: number,
+  closed: boolean,
+) {
+  if (points.length === 0) return
 
-  for (let i = 0; i < points.length; i++) {
-    const pt = points[i];
-    const r = (i === 0 ? PEN_ANCHOR_FIRST_RADIUS : PEN_ANCHOR_RADIUS) * invZ;
-    canvas.drawCircle(pt.x, pt.y, r, anchorFillPaint);
-    canvas.drawCircle(pt.x, pt.y, r, anchorStrokePaint);
+  const d = buildPenPathSvg(points, closed)
+  const skPath = ck.Path.MakeFromSVGString(d)
+  if (skPath) {
+    const paint = new ck.Paint()
+    paint.setStyle(ck.PaintStyle.Stroke)
+    paint.setAntiAlias(true)
+    paint.setStrokeWidth(1.5 / zoom)
+    paint.setColor(parseColor(ck, SELECTION_BLUE))
+    paint.setAlphaf(0.5)
+    canvas.drawPath(skPath, paint)
+    paint.delete()
+    skPath.delete()
   }
 
-  anchorStrokePaint.delete();
-  anchorFillPaint.delete();
-
-  // --- Handle lines and dots ---
-  const handleLinePaint = new ck.Paint();
-  handleLinePaint.setStyle(ck.PaintStyle.Stroke);
-  handleLinePaint.setAntiAlias(true);
-  handleLinePaint.setStrokeWidth(1 * invZ);
-  handleLinePaint.setColor(parseColor(ck, PEN_HANDLE_LINE_STROKE));
-
-  const handleDotFill = new ck.Paint();
-  handleDotFill.setStyle(ck.PaintStyle.Fill);
-  handleDotFill.setAntiAlias(true);
-  handleDotFill.setColor(parseColor(ck, SELECTION_BLUE));
-
-  const handleDotStroke = new ck.Paint();
-  handleDotStroke.setStyle(ck.PaintStyle.Stroke);
-  handleDotStroke.setAntiAlias(true);
-  handleDotStroke.setStrokeWidth(1 * invZ);
-  handleDotStroke.setColor(parseColor(ck, '#ffffff'));
-
-  const dotR = PEN_HANDLE_DOT_RADIUS * invZ;
-
-  for (const pt of points) {
-    if (pt.handleOut) {
-      const hx = pt.x + pt.handleOut.x;
-      const hy = pt.y + pt.handleOut.y;
-      canvas.drawLine(pt.x, pt.y, hx, hy, handleLinePaint);
-      canvas.drawCircle(hx, hy, dotR, handleDotFill);
-      canvas.drawCircle(hx, hy, dotR, handleDotStroke);
-    }
-    if (pt.handleIn) {
-      const hx = pt.x + pt.handleIn.x;
-      const hy = pt.y + pt.handleIn.y;
-      canvas.drawLine(pt.x, pt.y, hx, hy, handleLinePaint);
-      canvas.drawCircle(hx, hy, dotR, handleDotFill);
-      canvas.drawCircle(hx, hy, dotR, handleDotStroke);
-    }
-  }
-
-  handleLinePaint.delete();
-  handleDotFill.delete();
-  handleDotStroke.delete();
+  drawAnchorHandles(ck, canvas, points, zoom, false)
 }
 
 // ---------------------------------------------------------------------------

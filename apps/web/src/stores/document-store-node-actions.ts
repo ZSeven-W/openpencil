@@ -16,6 +16,7 @@ import {
   scaleChildrenInPlace,
   rotateChildrenInPlace,
   cloneNodeWithNewIds,
+  deepCloneNode,
   getActivePageChildren,
   setActivePageChildren,
   getAllChildren,
@@ -102,7 +103,7 @@ export function createNodeActions(
       const node = findNodeInTree(children, id);
       if (!node) return;
       const withoutNode = removeNodeFromTree(children, id);
-      const withNode = insertNodeInTree(withoutNode, newParentId, node, index);
+      const withNode = insertNodeInTree(withoutNode, newParentId, deepCloneNode(node), index);
       mutateWithHistory(get, set, () => _setChildren(state.document, withNode));
     },
 

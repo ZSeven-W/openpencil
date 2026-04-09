@@ -23,6 +23,21 @@ const text = (id: string, content: string, props: Partial<PenNode> = {}): PenNod
   }) as PenNode;
 
 describe('flattenToRenderNodes — dimension consistency', () => {
+  it('skips nodes disabled via enabled=false', () => {
+    const root = frame({
+      id: 'root', width: 400, height: 600,
+      children: [
+        { id: 'visible', type: 'rectangle', x: 0, y: 0, width: 120, height: 80 } as PenNode,
+        { id: 'disabled', type: 'rectangle', x: 20, y: 20, width: 120, height: 80, enabled: false } as PenNode,
+      ],
+    })
+
+    const nodes = flattenToRenderNodes([root])
+
+    expect(nodes.some((rn) => rn.node.id === 'visible')).toBe(true)
+    expect(nodes.some((rn) => rn.node.id === 'disabled')).toBe(false)
+  })
+
   it('absH uses getNodeHeight for text without height, not sizeToNumber 100 fallback', () => {
     // Simulates text after fixTextHeights deleted height
     const root = frame({

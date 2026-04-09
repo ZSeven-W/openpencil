@@ -1,22 +1,20 @@
-import { useState, useCallback, useRef } from 'react';
-import { useTranslation } from 'react-i18next';
-import ColorPicker from '@/components/shared/color-picker';
-import NumberInput from '@/components/shared/number-input';
-import SectionHeader from '@/components/shared/section-header';
-import VariablePicker from '@/components/shared/variable-picker';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
-import { Button } from '@/components/ui/button';
-import { Plus, X, Image as ImageIcon } from 'lucide-react';
-import { isVariableRef } from '@/variables/resolve-variables';
-import ImageFillPopover from './image-fill-popover';
-import type { PenNode } from '@/types/pen';
-import type { PenFill, GradientStop, ImageFill } from '@/types/styles';
+import { useState, useCallback, useRef } from 'react'
+import { useTranslation } from 'react-i18next'
+import ColorPicker from '@/components/shared/color-picker'
+import NumberInput from '@/components/shared/number-input'
+import SectionHeader from '@/components/shared/section-header'
+import VariablePicker from '@/components/shared/variable-picker'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Button } from '@/components/ui/button'
+import { Plus, X, Image as ImageIcon } from 'lucide-react'
+import { isVariableRef } from '@/variables/resolve-variables'
+import ImageFillPopover from './image-fill-popover'
+import type { PenNode } from '@/types/pen'
+import type { PenFill, GradientStop, ImageFill } from '@/types/styles'
+import { useDocumentStore } from '@/stores/document-store'
+import { toStoredAssetPath } from '@/utils/document-assets'
+import LocalImageWarning from './local-image-warning'
+import { useImageAssetState } from './use-image-asset-state'
 
 const FILL_TYPE_OPTIONS = [
   { value: 'solid', labelKey: 'fill.solid' },
@@ -330,11 +328,15 @@ function ImageFillEditor({
   onUpdate: (updates: Partial<PenNode>) => void;
   onFitChange: (mode: string) => void;
 }) {
-  const { t } = useTranslation();
-  const [triggerRect, setTriggerRect] = useState<DOMRect | null>(null);
-  const triggerRef = useRef<HTMLButtonElement>(null);
-  const hasImage = fill.url && !fill.url.startsWith('__');
-  const fitMode = fill.mode ?? 'fill';
+  const { t } = useTranslation()
+  const documentPath = useDocumentStore((s) => s.filePath)
+  const [triggerRect, setTriggerRect] = useState<DOMRect | null>(null)
+  const triggerRef = useRef<HTMLButtonElement>(null)
+  const { previewSrc, hasImage, warning } = useImageAssetState(
+    fill.url,
+    documentPath,
+  )
+  const fitMode = fill.mode ?? 'fill'
 
   const handleClose = useCallback(() => setTriggerRect(null), []);
 
@@ -346,6 +348,15 @@ function ImageFillEditor({
     }
   };
 
+  const handleRelink = useCallback(async () => {
+    if (!window.electronAPI?.openImageFile) return
+    const result = await window.electronAPI.openImageFile()
+    if (!result) return
+    onUpdate({
+      fill: [{ ...fill, url: toStoredAssetPath(result.filePath, documentPath) }],
+    } as Partial<PenNode>)
+  }, [documentPath, fill, onUpdate])
+
   return (
     <div>
       <button
@@ -356,7 +367,7 @@ function ImageFillEditor({
       >
         <div className="w-6 h-6 rounded border border-border shrink-0 bg-muted overflow-hidden flex items-center justify-center">
           {hasImage ? (
-            <img src={fill.url} alt="" className="w-full h-full object-cover" />
+            <img src={previewSrc} alt="" className="w-full h-full object-cover" />
           ) : (
             <ImageIcon className="w-3 h-3 text-muted-foreground" />
           )}
@@ -366,9 +377,20 @@ function ImageFillEditor({
         </span>
       </button>
 
+      {warning && (
+        <div className="mt-1.5">
+          <LocalImageWarning
+            message={warning.message}
+            assetPath={warning.assetPath}
+            onRelink={window.electronAPI?.openImageFile ? handleRelink : undefined}
+          />
+        </div>
+      )}
+
       {triggerRect && (
         <ImageFillPopover
-          imageSrc={fill.url}
+          imageSrc={previewSrc}
+          documentPath={documentPath}
           fitMode={fitMode}
           triggerRect={triggerRect}
           adjustments={{

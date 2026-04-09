@@ -126,7 +126,15 @@ export {
 export { isFabricSyncLocked, setFabricSyncLock } from './sync-lock.js';
 
 // Arc path
-export { buildEllipseArcPath, isArcEllipse } from './arc-path.js';
+export { buildEllipseArcPath, isArcEllipse } from './arc-path.js'
+export {
+  anchorsToPathData,
+  getPathBoundsFromAnchors,
+  inferPathAnchorPointType,
+  pathDataToAnchors,
+  type PathBounds,
+  type PathAnchorParseResult,
+} from './path-anchors.js'
 
 // Boolean operations
 export { type BooleanOpType, canBooleanOp, executeBooleanOp } from './boolean-ops.js';

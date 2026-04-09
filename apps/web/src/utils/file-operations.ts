@@ -1,5 +1,5 @@
-import type { PenDocument } from '@/types/pen';
-import { normalizePenDocument } from './normalize-pen-file';
+import type { PenDocument } from '@/types/pen'
+import { parseAndPrepareImportedDocument } from './import-pen-document'
 
 // ---------------------------------------------------------------------------
 // Feature detection
@@ -86,15 +86,15 @@ export async function openDocumentFS(): Promise<{
           accept: { 'application/json': ['.op', '.pen', '.json'] },
         },
       ],
-    });
-    const file = await handle.getFile();
-    const text = await file.text();
-    const raw = JSON.parse(text) as PenDocument;
-    if (!raw.version || (!Array.isArray(raw.children) && !Array.isArray(raw.pages))) {
-      throw new Error('Invalid PenDocument format');
-    }
-    const doc = normalizePenDocument(raw);
-    return { doc, fileName: file.name, handle };
+    })
+    const file = await handle.getFile()
+    const text = await file.text()
+    const prepared = parseAndPrepareImportedDocument(text, {
+      fileName: file.name,
+    })
+    if (!prepared) throw new Error('Invalid PenDocument format')
+    const { doc } = prepared
+    return { doc, fileName: file.name, handle }
   } catch {
     return null;
   }
@@ -132,13 +132,13 @@ export function openDocument(): Promise<{
         return;
       }
       try {
-        const text = await file.text();
-        const raw = JSON.parse(text) as PenDocument;
-        if (!raw.version || (!Array.isArray(raw.children) && !Array.isArray(raw.pages))) {
-          throw new Error('Invalid PenDocument format');
-        }
-        const doc = normalizePenDocument(raw);
-        resolve({ doc, fileName: file.name });
+        const text = await file.text()
+        const prepared = parseAndPrepareImportedDocument(text, {
+          fileName: file.name,
+        })
+        if (!prepared) throw new Error('Invalid PenDocument format')
+        const { doc } = prepared
+        resolve({ doc, fileName: file.name })
       } catch {
         resolve(null);
       }

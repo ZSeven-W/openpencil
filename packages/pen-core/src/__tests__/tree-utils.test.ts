@@ -100,12 +100,31 @@ describe('tree-utils', () => {
     });
 
     it('updates a nested node', () => {
-      const nodes = [frame('parent', [rect('child')])];
-      const result = updateNodeInTree(nodes, 'child', { name: 'updated' });
-      const parent = result[0] as PenNode & { children: PenNode[] };
-      expect(parent.children[0].name).toBe('updated');
-    });
-  });
+      const nodes = [frame('parent', [rect('child')])]
+      const result = updateNodeInTree(nodes, 'child', { name: 'updated' })
+      const parent = result[0] as PenNode & { children: PenNode[] }
+      expect(parent.children[0].name).toBe('updated')
+    })
+
+    it('reuses untouched branches when updating a nested node', () => {
+      const sibling = frame('sibling', [rect('sibling-child')])
+      const parent = frame('parent', [rect('child')])
+      const nodes = [parent, sibling]
+
+      const result = updateNodeInTree(nodes, 'child', { name: 'updated' })
+
+      expect(result).not.toBe(nodes)
+      expect(result[0]).not.toBe(parent)
+      expect((result[0] as PenNode & { children: PenNode[] }).children[0].name).toBe('updated')
+      expect(result[1]).toBe(sibling)
+    })
+
+    it('returns the original tree for no-op updates', () => {
+      const nodes = [rect('a')]
+      const result = updateNodeInTree(nodes, 'a', { x: 0 })
+      expect(result).toBe(nodes)
+    })
+  })
 
   describe('flattenNodes', () => {
     it('flattens a nested tree', () => {

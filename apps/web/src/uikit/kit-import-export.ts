@@ -1,7 +1,7 @@
-import { nanoid } from 'nanoid';
-import type { PenDocument, PenNode } from '@/types/pen';
-import type { UIKit } from '@/types/uikit';
-import { normalizePenDocument } from '@/utils/normalize-pen-file';
+import { nanoid } from 'nanoid'
+import type { PenDocument, PenNode } from '@/types/pen'
+import type { UIKit } from '@/types/uikit'
+import { parseAndPrepareImportedDocument } from '@/utils/import-pen-document'
 import {
   supportsFileSystemAccess,
   saveDocumentAs,
@@ -151,13 +151,7 @@ function pickFallback(): Promise<PenDocument | null> {
 }
 
 function parsePenJson(text: string): PenDocument | null {
-  try {
-    const raw = JSON.parse(text) as PenDocument;
-    if (!raw.version || !Array.isArray(raw.children)) return null;
-    return normalizePenDocument(raw);
-  } catch {
-    return null;
-  }
+  return parseAndPrepareImportedDocument(text)?.doc ?? null
 }
 
 function collectReusableNodes(nodes: PenNode[]): PenNode[] {

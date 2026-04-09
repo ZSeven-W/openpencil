@@ -34,7 +34,7 @@ import {
 } from '@/utils/file-operations';
 import { syncCanvasPositionsToStore } from '@/canvas/skia-engine-ref';
 import { zoomToFitContent } from '@/canvas/skia-engine-ref';
-import { normalizePenDocument } from '@/utils/normalize-pen-file';
+import { parseAndPrepareImportedDocument } from '@/utils/import-pen-document';
 import { addRecentFile } from '@/utils/recent-files';
 import { useAgentSettingsStore } from '@/stores/agent-settings-store';
 import type { AIProviderType } from '@/types/agent-settings';
@@ -269,10 +269,13 @@ export default function TopBar() {
       window.electronAPI!.readFile(filePath).then((result) => {
         if (!result) return;
         try {
-          const raw = JSON.parse(result.content);
-          if (!raw.version || (!Array.isArray(raw.children) && !Array.isArray(raw.pages))) return;
-          const doc = normalizePenDocument(raw);
           const name = result.filePath.split(/[/\\]/).pop() || 'untitled.op';
+          const prepared = parseAndPrepareImportedDocument(result.content, {
+            fileName: name,
+            filePath: result.filePath,
+          });
+          if (!prepared) return;
+          const { doc } = prepared;
           useDocumentStore.getState().loadDocument(doc, name, null, result.filePath);
           requestAnimationFrame(() => zoomToFitContent());
         } catch {
@@ -298,10 +301,13 @@ export default function TopBar() {
       window.electronAPI!.openFile().then((result) => {
         if (!result) return;
         try {
-          const raw = JSON.parse(result.content);
-          if (!raw.version || (!Array.isArray(raw.children) && !Array.isArray(raw.pages))) return;
-          const doc = normalizePenDocument(raw);
           const name = result.filePath.split(/[/\\]/).pop() || 'untitled.op';
+          const prepared = parseAndPrepareImportedDocument(result.content, {
+            fileName: name,
+            filePath: result.filePath,
+          });
+          if (!prepared) return;
+          const { doc } = prepared;
           useDocumentStore.getState().loadDocument(doc, name, null, result.filePath);
           requestAnimationFrame(() => zoomToFitContent());
         } catch {

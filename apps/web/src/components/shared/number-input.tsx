@@ -28,10 +28,12 @@ export default function NumberInput({
   className = '',
   readOnly = false,
 }: NumberInputProps) {
-  const [localValue, setLocalValue] = useState(String(value));
-  const [isDragging, setIsDragging] = useState(false);
-  const dragStartY = useRef(0);
-  const dragStartValue = useRef(0);
+  const [localValue, setLocalValue] = useState(String(value))
+  const [isDragging, setIsDragging] = useState(false)
+  const dragStartY = useRef(0)
+  const dragStartValue = useRef(0)
+  const frameRef = useRef<number | null>(null)
+  const pendingValueRef = useRef<number | null>(null)
 
   useEffect(() => {
     if (!isDragging) {
@@ -70,6 +72,41 @@ export default function NumberInput({
     }
   };
 
+  const flushPendingChange = useCallback((nextValue?: number) => {
+    if (frameRef.current !== null) {
+      cancelAnimationFrame(frameRef.current)
+      frameRef.current = null
+    }
+
+    const valueToApply = nextValue ?? pendingValueRef.current
+    pendingValueRef.current = null
+    if (typeof valueToApply === 'number') {
+      onChange(valueToApply)
+    }
+  }, [onChange])
+
+  const scheduleChange = useCallback((nextValue: number) => {
+    pendingValueRef.current = nextValue
+    if (frameRef.current !== null) return
+
+    frameRef.current = requestAnimationFrame(() => {
+      frameRef.current = null
+      const valueToApply = pendingValueRef.current
+      pendingValueRef.current = null
+      if (typeof valueToApply === 'number') {
+        onChange(valueToApply)
+      }
+    })
+  }, [onChange])
+
+  useEffect(() => {
+    return () => {
+      if (frameRef.current !== null) {
+        cancelAnimationFrame(frameRef.current)
+      }
+    }
+  }, [])
+
   const handleMouseDown = (e: React.MouseEvent) => {
     if (readOnly) return;
     if (e.target instanceof HTMLInputElement) return;
@@ -81,17 +118,19 @@ export default function NumberInput({
     useHistoryStore.getState().startBatch(useDocumentStore.getState().document);
 
     const handleMouseMove = (ev: MouseEvent) => {
-      const delta = dragStartY.current - ev.clientY;
-      const newValue = clamp(dragStartValue.current + delta * step);
-      onChange(newValue);
-    };
+      const delta = dragStartY.current - ev.clientY
+      const newValue = clamp(dragStartValue.current + delta * step)
+      setLocalValue(String(Math.round(newValue * 100) / 100))
+      scheduleChange(newValue)
+    }
 
     const handleMouseUp = () => {
-      setIsDragging(false);
-      useHistoryStore.getState().endBatch();
-      document.removeEventListener('mousemove', handleMouseMove);
-      document.removeEventListener('mouseup', handleMouseUp);
-    };
+      setIsDragging(false)
+      flushPendingChange()
+      useHistoryStore.getState().endBatch()
+      document.removeEventListener('mousemove', handleMouseMove)
+      document.removeEventListener('mouseup', handleMouseUp)
+    }
 
     document.addEventListener('mousemove', handleMouseMove);
     document.addEventListener('mouseup', handleMouseUp);

@@ -5,7 +5,7 @@ import { useDocumentStore } from '@/stores/document-store';
 import { useHistoryStore } from '@/stores/history-store';
 import { zoomToFitContent } from '@/canvas/skia-engine-ref';
 import { syncCanvasPositionsToStore } from '@/canvas/skia-engine-ref';
-import { normalizePenDocument } from '@/utils/normalize-pen-file';
+import { parseAndPrepareImportedDocument } from '@/utils/import-pen-document';
 import { addRecentFile, clearRecentFiles } from '@/utils/recent-files';
 import { supportsFileSystemAccess, openDocumentFS, openDocument } from '@/utils/file-operations';
 
@@ -43,10 +43,13 @@ export function useElectronMenu() {
       api.readFile?.(filePath).then((result) => {
         if (!result) return;
         try {
-          const raw = JSON.parse(result.content);
-          if (!raw.version || (!Array.isArray(raw.children) && !Array.isArray(raw.pages))) return;
-          const doc = normalizePenDocument(raw);
           const name = filePath.split(/[/\\]/).pop() || 'untitled.op';
+          const prepared = parseAndPrepareImportedDocument(result.content, {
+            fileName: name,
+            filePath,
+          });
+          if (!prepared) return;
+          const { doc } = prepared;
           useDocumentStore.getState().loadDocument(doc, name, null, filePath);
           requestAnimationFrame(() => zoomToFitContent());
         } catch {
@@ -95,11 +98,13 @@ export function useElectronMenu() {
               api.openFile().then((result) => {
                 if (!result) return;
                 try {
-                  const raw = JSON.parse(result.content);
-                  if (!raw.version || (!Array.isArray(raw.children) && !Array.isArray(raw.pages)))
-                    return;
-                  const doc = normalizePenDocument(raw);
                   const name = result.filePath.split(/[/\\]/).pop() || 'untitled.op';
+                  const prepared = parseAndPrepareImportedDocument(result.content, {
+                    fileName: name,
+                    filePath: result.filePath,
+                  });
+                  if (!prepared) return;
+                  const { doc } = prepared;
                   useDocumentStore.getState().loadDocument(doc, name, null, result.filePath);
                   requestAnimationFrame(() => zoomToFitContent());
                 } catch {

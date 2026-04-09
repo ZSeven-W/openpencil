@@ -10,6 +10,8 @@ const fr: TranslationKeys = {
   'common.close': 'Fermer',
   'common.connect': 'Connecter',
   'common.disconnect': 'Déconnecter',
+  'common.yes': 'Oui',
+  'common.no': 'Non',
   'common.import': 'Importer',
   'common.export': 'Exporter',
   'common.name': 'Nom',
@@ -74,6 +76,8 @@ const fr: TranslationKeys = {
   'statusbar.zoomOut': 'Dézoomer',
   'statusbar.zoomIn': 'Zoomer',
   'statusbar.resetZoom': 'Réinitialiser le zoom',
+  'statusbar.focusContent': 'Ajuster tout le contenu',
+  'statusbar.focusSelection': 'Centrer la sélection',
 
   // ── Updater ──
   'updater.softwareUpdate': 'Mise à jour logicielle',
