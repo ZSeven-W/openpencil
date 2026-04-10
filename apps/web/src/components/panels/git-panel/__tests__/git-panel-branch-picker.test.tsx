@@ -1,10 +1,11 @@
 // @vitest-environment jsdom
 // apps/web/src/components/panels/git-panel/__tests__/git-panel-branch-picker.test.tsx
 //
-// Phase 5 Task 2 + Task 3: branch picker tests.
+// Phase 5 Task 2 + Task 3 + Task 4: branch picker tests.
 //
 // Task 2 shell: rendering + refresh plumbing + conflict disable.
 // Task 3: inline create + branch switching + save-required close behavior.
+// Task 4: delete-confirm (plain + force) and merge selection flows.
 //
 // Selector gotcha: once the popover is open, each <GitPanelBranchRow>
 // renders its own button with aria-label={branch.name}. That collides
@@ -57,6 +58,8 @@ const mocks = vi.hoisted(() => {
     refreshBranches: vi.fn(async () => {}),
     createBranch: vi.fn(async (_opts: { name: string }) => {}),
     switchBranch: vi.fn(async (_name: string) => {}),
+    deleteBranch: vi.fn(async (_name: string, _opts?: { force?: boolean }) => {}),
+    mergeBranch: vi.fn(async (_fromBranch: string) => {}),
   };
 });
 
@@ -92,6 +95,8 @@ describe('GitPanelBranchPicker', () => {
     mocks.state = { kind: 'ready', repo: mocks.readyRepo };
     mocks.createBranch.mockImplementation(async () => {});
     mocks.switchBranch.mockImplementation(async () => {});
+    mocks.deleteBranch.mockImplementation(async () => {});
+    mocks.mergeBranch.mockImplementation(async () => {});
   });
 
   afterEach(() => {
@@ -229,6 +234,82 @@ describe('GitPanelBranchPicker', () => {
     // Give the async handler a microtask to settle.
     await new Promise((r) => setTimeout(r, 0));
     // Popover should have closed — the list-mode heading is no longer visible.
+    expect(screen.queryByText('git.branch.listHeading')).toBeNull();
+  });
+
+  // --- Task 4: delete-confirm + merge flows ---------------------------
+
+  it('shows a force-delete confirmation after branch-unmerged and retries with force', async () => {
+    mocks.readyRepo.branches = [
+      { name: 'main', isCurrent: true, ahead: 0, behind: 0, lastCommit: null },
+      { name: 'feature/login', isCurrent: false, ahead: 0, behind: 0, lastCommit: null },
+    ];
+    mocks.deleteBranch
+      .mockRejectedValueOnce(new GitError('branch-unmerged', 'feature/login has unmerged commits'))
+      .mockResolvedValueOnce(undefined);
+
+    renderWithProvider(<GitPanelBranchPicker />);
+    fireEvent.click(screen.getByTestId('branch-picker-trigger'));
+    fireEvent.click(
+      screen.getByRole('button', { name: 'git.branch.deleteLabel:{"name":"feature/login"}' }),
+    );
+    fireEvent.click(screen.getByText('git.branch.deleteConfirm'));
+    await new Promise((r) => setTimeout(r, 0));
+
+    expect(mocks.deleteBranch).toHaveBeenNthCalledWith(1, 'feature/login', undefined);
+    expect(screen.getByText('git.branch.deleteWarning:{"name":"feature/login"}')).toBeTruthy();
+
+    fireEvent.click(screen.getByText('git.branch.deleteForce'));
+    await new Promise((r) => setTimeout(r, 0));
+    expect(mocks.deleteBranch).toHaveBeenNthCalledWith(2, 'feature/login', { force: true });
+  });
+
+  it('does NOT show the force button when delete fails with a non-unmerged error', async () => {
+    mocks.readyRepo.branches = [
+      { name: 'main', isCurrent: true, ahead: 0, behind: 0, lastCommit: null },
+      { name: 'feature/login', isCurrent: false, ahead: 0, behind: 0, lastCommit: null },
+    ];
+    mocks.deleteBranch.mockRejectedValueOnce(new GitError('engine-crash', 'disk full'));
+
+    renderWithProvider(<GitPanelBranchPicker />);
+    fireEvent.click(screen.getByTestId('branch-picker-trigger'));
+    fireEvent.click(
+      screen.getByRole('button', { name: 'git.branch.deleteLabel:{"name":"feature/login"}' }),
+    );
+    fireEvent.click(screen.getByText('git.branch.deleteConfirm'));
+    await new Promise((r) => setTimeout(r, 0));
+
+    expect(screen.getByText('disk full')).toBeTruthy();
+    expect(screen.queryByText('git.branch.deleteForce')).toBeNull();
+  });
+
+  it('opens the merge view and merges the selected branch', async () => {
+    mocks.readyRepo.branches = [
+      { name: 'main', isCurrent: true, ahead: 0, behind: 0, lastCommit: null },
+      { name: 'feature/login', isCurrent: false, ahead: 0, behind: 0, lastCommit: null },
+    ];
+    renderWithProvider(<GitPanelBranchPicker />);
+    fireEvent.click(screen.getByTestId('branch-picker-trigger'));
+    fireEvent.click(screen.getByText('git.branch.mergeAction'));
+    // merge view renders non-current branches; click the feature row
+    fireEvent.click(screen.getByRole('button', { name: /feature\/login/ }));
+    await new Promise((r) => setTimeout(r, 0));
+    expect(mocks.mergeBranch).toHaveBeenCalledWith('feature/login');
+  });
+
+  it('closes the popover when merge throws save-required', async () => {
+    mocks.readyRepo.branches = [
+      { name: 'main', isCurrent: true, ahead: 0, behind: 0, lastCommit: null },
+      { name: 'feature/login', isCurrent: false, ahead: 0, behind: 0, lastCommit: null },
+    ];
+    mocks.mergeBranch.mockRejectedValueOnce(
+      new GitError('save-required', 'Document has unsaved changes'),
+    );
+    renderWithProvider(<GitPanelBranchPicker />);
+    fireEvent.click(screen.getByTestId('branch-picker-trigger'));
+    fireEvent.click(screen.getByText('git.branch.mergeAction'));
+    fireEvent.click(screen.getByRole('button', { name: /feature\/login/ }));
+    await new Promise((r) => setTimeout(r, 0));
     expect(screen.queryByText('git.branch.listHeading')).toBeNull();
   });
 });

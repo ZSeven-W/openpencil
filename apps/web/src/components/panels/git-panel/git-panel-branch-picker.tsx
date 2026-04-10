@@ -1,30 +1,32 @@
 // apps/web/src/components/panels/git-panel/git-panel-branch-picker.tsx
 //
-// Phase 5 Task 3: wires branch creation + switching through the picker.
+// Phase 5 Task 3 + Task 4: branch picker for the git panel.
 //
 // What this file DOES:
 //   - Declares the full state machine (mode, branchName, inlineError,
-//     deleteTarget, open) so Task 4 can fill in the remaining behavior
-//     without re-declaring anything.
-//   - Renders the trigger Button + Popover shell, with two sub-modes:
-//       * list — branch rows + create/merge entry buttons
-//       * create — inline branch-name form with local validation
+//     deleteTarget, canForce, open).
+//   - Renders the trigger Button + Popover shell, with four sub-modes:
+//       * list           — branch rows + create/merge entry buttons
+//       * create         — inline branch-name form with local validation
+//       * delete-confirm — destructive confirm with opt-in force retry
+//       * merge          — list of non-current branches to merge into HEAD
 //   - Dispatches switchBranch for non-current rows and closes the popover
 //     on save-required so the existing panel save alert takes over.
+//   - For delete, surfaces engine errors inline; only offers a Force
+//     Delete retry when the store returns `branch-unmerged`.
+//   - For merge, relies on the store's conflict transition — mergeBranch
+//     does NOT throw on conflict; it flips state.kind to 'conflict' which
+//     fires this component's top-level early return on the next render.
 //   - Refreshes status + branches whenever the popover opens (so external
 //     terminal changes show up the next time the user looks).
 //   - Early-returns a disabled trigger + tooltip in conflict state (one
 //     branch instead of a disabled=flag in the main render path).
 //
-// What this file DOES NOT DO (deliberately — Task 4 will add this):
-//   - Delete-confirm and merge sub-modes. The mode union is already
-//     declared so Task 4 only has to add the rendering branches.
-//
 // Conflict state is a single early return (the disabled trigger is NOT a
 // `disabled` prop toggled in the main path); that keeps the list-mode
 // code path free of conditional branches it would never hit.
 
-import { ChevronDown, GitBranch } from 'lucide-react';
+import { ChevronDown, ChevronRight, GitBranch } from 'lucide-react';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
@@ -44,18 +46,16 @@ export function GitPanelBranchPicker() {
   const refreshBranches = useGitStore((s) => s.refreshBranches);
   const createBranch = useGitStore((s) => s.createBranch);
   const switchBranch = useGitStore((s) => s.switchBranch);
+  const deleteBranch = useGitStore((s) => s.deleteBranch);
+  const mergeBranch = useGitStore((s) => s.mergeBranch);
 
   // State machine shared across list/create/merge/delete-confirm modes.
-  // Declared here so Task 4 can reach for these without re-declaring.
   const [mode, setMode] = useState<BranchPickerMode>('list');
   const [branchName, setBranchName] = useState('');
   const [inlineError, setInlineError] = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
+  const [canForce, setCanForce] = useState(false);
   const [open, setOpen] = useState(false);
-
-  // Task 4 reads deleteTarget from this closure; keep the void so the
-  // unused-variable lint stays quiet until the delete flow lands.
-  void deleteTarget;
 
   const repo = state.kind === 'ready' || state.kind === 'conflict' ? state.repo : null;
 
@@ -84,6 +84,12 @@ export function GitPanelBranchPicker() {
     );
   }
 
+  // Narrowed alias so nested handlers do not need `repo!`. TS loses the
+  // `repo` null-narrowing inside nested function expressions, and the
+  // single alias here lets every handler below speak in terms of
+  // `activeRepo.branches` / `activeRepo.currentBranch`.
+  const activeRepo = repo;
+
   async function handleSelectBranch(name: string, isCurrent: boolean) {
     if (isCurrent) return;
     setInlineError(null);
@@ -108,7 +114,7 @@ export function GitPanelBranchPicker() {
       setInlineError(t('git.branch.createEmpty'));
       return;
     }
-    if (repo!.branches.some((b) => b.name === name)) {
+    if (activeRepo.branches.some((b) => b.name === name)) {
       setInlineError(t('git.branch.createExists', { name }));
       return;
     }
@@ -124,8 +130,53 @@ export function GitPanelBranchPicker() {
     }
   }
 
-  function beginDelete(_name: string) {
-    // Task 4 will populate this to enter delete-confirm mode.
+  function beginDelete(name: string) {
+    setDeleteTarget(name);
+    setInlineError(null);
+    setCanForce(false);
+    setMode('delete-confirm');
+  }
+
+  async function handleDelete(force = false) {
+    if (!deleteTarget) return;
+    try {
+      await deleteBranch(deleteTarget, force ? { force: true } : undefined);
+      setDeleteTarget(null);
+      setCanForce(false);
+      setMode('list');
+    } catch (err) {
+      // Only upgrade to a force-delete retry when the store returns the
+      // specific `branch-unmerged` code — other errors (engine-crash,
+      // permission failures, etc.) surface as inline messages without
+      // offering force, because force cannot help in those cases.
+      if (isGitError(err) && err.code === 'branch-unmerged' && !force) {
+        setInlineError(t('git.branch.deleteWarning', { name: deleteTarget }));
+        setCanForce(true);
+        return;
+      }
+      setCanForce(false);
+      setInlineError(err instanceof Error ? err.message : String(err));
+    }
+  }
+
+  async function handleMerge(fromBranch: string) {
+    setInlineError(null);
+    try {
+      // mergeBranch does NOT throw on conflict — it flips state.kind to
+      // 'conflict' and resolves. Our top-level early return observes that
+      // and renders the disabled-trigger tooltip on the next render, so
+      // the happy path here is simply "close the popover and go home".
+      await mergeBranch(fromBranch);
+      setOpen(false);
+      setMode('list');
+    } catch (err) {
+      if (isGitError(err) && err.code === 'save-required') {
+        // The panel's <GitPanelSaveRequiredAlert> takes over.
+        setOpen(false);
+        return;
+      }
+      setInlineError(err instanceof Error ? err.message : String(err));
+    }
   }
 
   return (
@@ -142,6 +193,7 @@ export function GitPanelBranchPicker() {
           setBranchName('');
           setInlineError(null);
           setDeleteTarget(null);
+          setCanForce(false);
         }
       }}
     >
@@ -165,7 +217,7 @@ export function GitPanelBranchPicker() {
             <p className="px-2 py-1 text-[11px] font-medium text-muted-foreground">
               {t('git.branch.listHeading')}
             </p>
-            {repo.branches.map((branch) => (
+            {activeRepo.branches.map((branch) => (
               <GitPanelBranchRow
                 key={branch.name}
                 branch={branch}
@@ -230,6 +282,82 @@ export function GitPanelBranchPicker() {
               </Button>
               <Button type="button" size="sm" onClick={() => void handleCreateBranch()}>
                 {t('git.branch.createSubmit')}
+              </Button>
+            </div>
+          </div>
+        )}
+        {mode === 'delete-confirm' && deleteTarget && (
+          <div className="flex flex-col gap-2 p-2">
+            <p className="text-xs text-foreground">
+              {t('git.branch.deletePrompt', { name: deleteTarget })}
+            </p>
+            {inlineError && <p className="text-[11px] text-destructive">{inlineError}</p>}
+            <div className="flex justify-end gap-2">
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  setDeleteTarget(null);
+                  setCanForce(false);
+                  setInlineError(null);
+                  setMode('list');
+                }}
+              >
+                {t('git.branch.cancel')}
+              </Button>
+              <Button
+                type="button"
+                variant="destructive"
+                size="sm"
+                onClick={() => void handleDelete(false)}
+              >
+                {t('git.branch.deleteConfirm')}
+              </Button>
+              {canForce && (
+                <Button
+                  type="button"
+                  variant="destructive"
+                  size="sm"
+                  onClick={() => void handleDelete(true)}
+                >
+                  {t('git.branch.deleteForce')}
+                </Button>
+              )}
+            </div>
+          </div>
+        )}
+        {mode === 'merge' && (
+          <div className="flex flex-col gap-1 p-1">
+            <p className="px-2 py-1 text-[11px] font-medium text-muted-foreground">
+              {t('git.branch.mergeHeading', { name: activeRepo.currentBranch })}
+            </p>
+            {inlineError && <p className="px-2 text-[11px] text-destructive">{inlineError}</p>}
+            {activeRepo.branches
+              .filter((branch) => !branch.isCurrent)
+              .map((branch) => (
+                <button
+                  key={branch.name}
+                  type="button"
+                  onClick={() => void handleMerge(branch.name)}
+                  aria-label={branch.name}
+                  className="flex w-full items-center justify-between rounded-sm px-2 py-1.5 text-left hover:bg-accent"
+                >
+                  <span className="text-xs">{branch.name}</span>
+                  <ChevronRight size={12} strokeWidth={1.5} aria-hidden />
+                </button>
+              ))}
+            <div className="flex justify-end px-2 py-1">
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  setInlineError(null);
+                  setMode('list');
+                }}
+              >
+                {t('git.branch.cancel')}
               </Button>
             </div>
           </div>
