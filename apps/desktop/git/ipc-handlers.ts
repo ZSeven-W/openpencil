@@ -41,6 +41,7 @@ import {
 import type { ConflictResolution } from './merge-session';
 import { createDefaultAuthStore, type AuthCreds, type AuthStore } from './auth-store';
 import { createDefaultSshKeyManager, type SshKeyInfo, type SshKeyManager } from './ssh-keys';
+import { getSystemAuthor as sysGetSystemAuthor } from './git-sys';
 
 // ---------------------------------------------------------------------------
 // Module-level singletons assigned by setupGitIPC at boot. We require Electron
@@ -184,6 +185,9 @@ export const gitIpcHandlers = {
     engineResolveConflict(repoId, conflictId, choice),
   applyMerge: (repoId: string) => engineApplyMerge(repoId),
   abortMerge: (repoId: string) => engineAbortMerge(repoId),
+
+  // Phase 4a: author identity probe (system git config)
+  getSystemAuthor: () => sysGetSystemAuthor(),
 };
 
 // ---------------------------------------------------------------------------
@@ -324,6 +328,9 @@ export function setupGitIPC(): void {
   ipcMain.handle('git:abortMerge', (_e, repoId: string) =>
     runHandler(() => gitIpcHandlers.abortMerge(repoId)),
   );
+
+  // Phase 4a: author identity probe
+  ipcMain.handle('git:getSystemAuthor', () => runHandler(() => gitIpcHandlers.getSystemAuthor()));
 }
 
 /** Exposed for the renderer-side rehydrator (Phase 3). Tests use it too. */

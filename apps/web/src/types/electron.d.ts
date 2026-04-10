@@ -35,6 +35,7 @@ declare global {
     isElectron: true;
     openFile: () => Promise<{ filePath: string; content: string } | null>;
     openImageFile: () => Promise<{ filePath: string; name: string; content: string | null } | null>;
+    openDirectory: () => Promise<string | null>;
     saveFile: (content: string, defaultPath?: string) => Promise<string | null>;
     saveToPath: (filePath: string, content: string) => Promise<string>;
     onMenuAction: (callback: (action: string) => void) => () => void;

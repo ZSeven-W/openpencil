@@ -52,6 +52,17 @@ export function setupIPC(deps: IpcDeps): void {
     return { filePath, content };
   });
 
+  ipcMain.handle('dialog:openDirectory', async () => {
+    const mainWindow = getMainWindow();
+    if (!mainWindow) return null;
+    const result = await dialog.showOpenDialog(mainWindow, {
+      title: 'Open Git repository folder',
+      properties: ['openDirectory'],
+    });
+    if (result.canceled || result.filePaths.length === 0) return null;
+    return result.filePaths[0];
+  });
+
   ipcMain.handle(
     'dialog:saveFile',
     async (_event, payload: { content: string; defaultPath?: string }) => {

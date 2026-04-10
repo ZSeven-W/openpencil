@@ -19,6 +19,7 @@ import type { UnsavedResult } from '@/components/shared/unsaved-changes-dialog';
 import UpdateReadyBanner from './update-ready-banner';
 import { useAIStore } from '@/stores/ai-store';
 import { useCanvasStore } from '@/stores/canvas-store';
+import { useGitStore } from '@/stores/git-store';
 import { useDocumentStore } from '@/stores/document-store';
 import { useAgentSettingsStore } from '@/stores/agent-settings-store';
 import { useUIKitStore } from '@/stores/uikit-store';
@@ -77,6 +78,18 @@ export default function EditorLayout() {
       delete (window as any).__showUnsavedDialog;
     };
   }, [showUnsavedDialog]);
+
+  // Phase 4c: mount the Git autosave subscriber once for the editor's
+  // lifetime. initAutosaveSubscriber is idempotent (checks for existing
+  // handle), so React StrictMode's double-invocation is safe. The cleanup
+  // disposes the subscriber so dev-time HMR and unmounts don't leak
+  // handlers.
+  useEffect(() => {
+    useGitStore.getState().initAutosaveSubscriber();
+    return () => {
+      useGitStore.getState().disposeAutosaveSubscriber();
+    };
+  }, []);
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {

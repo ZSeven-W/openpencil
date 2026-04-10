@@ -61,6 +61,105 @@ const th: TranslationKeys = {
   'topbar.connected': 'เชื่อมต่อแล้ว',
   'topbar.agentStatus': '{{agents}} เอเจนต์{{agentSuffix}} · {{mcp}} MCP',
 
+  // ── พาเนล Git ──
+  'git.openPanel': 'เปิดพาเนล Git',
+  'git.closePanel': 'ปิดพาเนล Git',
+  'git.title': 'Git · {{fileName}}',
+  'git.titleNoFile': 'Git · (ไม่ได้เลือกไฟล์)',
+  'git.close': 'ปิด',
+  'git.initializing': 'กำลังเริ่มต้นที่เก็บ…',
+  'git.placeholder.trackedPicker': 'ตัวเลือกไฟล์ที่ติดตาม',
+  'git.placeholder.readyState': 'สถานะพร้อม',
+  'git.placeholder.cloneWizard': 'ตัวช่วยโคลน — มีใน Phase 6',
+  'git.conflict.title': 'ความขัดแย้งในการรวม',
+  'git.conflict.description': 'ความขัดแย้งต้องได้รับการแก้ไขด้วยตนเอง — มีใน Phase 7',
+  'git.conflict.abort': 'ยกเลิกการรวม',
+  'git.error.dismiss': 'ปิด',
+  'git.error.retry': 'ลองอีกครั้ง',
+  'git.error.title': 'เกิดข้อผิดพลาด',
+
+  // ── สถานะว่างของ Git ──
+  'git.empty.heading': 'ยังไม่มีประวัติเวอร์ชัน',
+  'git.empty.optional': 'Git เป็นทางเลือก — ข้ามได้',
+  'git.empty.requireSavedFile': 'บันทึกไฟล์ .op ก่อนเพื่อเปิดใช้งานประวัติ',
+  'git.empty.newCard': 'สร้างใหม่',
+  'git.empty.newCardDescription': 'สร้างประวัติในเครื่อง',
+  'git.empty.openCard': 'เปิด',
+  'git.empty.openCardDescription': 'ที่เก็บที่มีอยู่',
+  'git.empty.cloneCard': 'โคลน',
+  'git.empty.cloneCardDescription': 'จากระยะไกล',
+  'git.empty.cloneComingSoon': 'โคลนจะมีใน Phase 6',
+
+  // ── ฟอร์มผู้เขียน Git ──
+  'git.author.heading': 'ผู้เขียน commit',
+  'git.author.subheading': 'การบันทึก commit แรกต้องการชื่อและอีเมล',
+  'git.author.nameLabel': 'ชื่อ',
+  'git.author.namePlaceholder': 'ชื่อของคุณ',
+  'git.author.emailLabel': 'อีเมล',
+  'git.author.emailPlaceholder': 'you@example.com',
+  'git.author.submit': 'บันทึก',
+  'git.author.cancel': 'ยกเลิก',
+  'git.author.validationName': 'จำเป็นต้องมีชื่อ',
+  'git.author.validationEmail': 'ต้องการอีเมลที่ถูกต้อง',
+
+  // ── ตัวเลือก Git (Phase 4b) ──
+  'git.picker.heading': 'มี {{count}} ไฟล์ .op ในที่เก็บนี้:',
+  'git.picker.milestoneCount': '{{count}} ไมล์สโตน',
+  'git.picker.noHistory': 'ไม่มีประวัติ',
+  'git.picker.lastCommit': '{{message}} · {{time}}',
+  'git.picker.bindButton': 'ติดตามไฟล์นี้',
+  'git.picker.bindAndOpenButton': 'ติดตามและเปิด',
+  'git.picker.empty.heading': 'ไม่มีไฟล์ .op ในที่เก็บนี้',
+  'git.picker.empty.body': 'แผง Git ต้องการไฟล์ .op อย่างน้อยหนึ่งไฟล์',
+  'git.picker.empty.close': 'ปิดแผง',
+
+  // ── แบนเนอร์ Auto-Bind (Phase 4b) ──
+  'git.autoBind.confirmHeading': 'พบ {{fileName}} — เปิดหรือไม่?',
+  'git.autoBind.openButton': 'เปิด',
+  'git.autoBind.dismissButton': 'ข้าม',
+
+  // ── เวลาสัมพัทธ์ (Phase 4b) ──
+  'git.relativeTime.justNow': 'เพิ่งนี้',
+  'git.relativeTime.minutesAgo': '{{count}} นาทีที่แล้ว',
+  'git.relativeTime.hoursAgo': '{{count}} ชั่วโมงที่แล้ว',
+  'git.relativeTime.daysAgo': '{{count}} วันที่แล้ว',
+
+  // ── Git Commit Input (Phase 4c) ──
+  'git.commit.placeholder': 'อธิบายการเปลี่ยนแปลงนี้…',
+  'git.commit.submitButton': 'บันทึก milestone',
+  'git.commit.saveRequiredTitle': 'บันทึกเอกสารก่อน',
+  'git.commit.saveRequiredBody': 'คุณมีการเปลี่ยนแปลงที่ยังไม่ได้บันทึก บันทึกเอกสารเพื่อดำเนินการต่อ: {{label}}',
+  'git.commit.saveRequiredSave': 'บันทึก',
+  'git.commit.saveRequiredCancel': 'ยกเลิก',
+
+  // ── Git Header (Phase 4c) ──
+  'git.header.branchComingSoon': 'สลับ branch · มีใน Phase 5',
+  'git.header.pullComingSoon': 'Pull · มีใน Phase 6',
+  'git.header.pushComingSoon': 'Push · มีใน Phase 6',
+  'git.header.autosaveError': 'ข้อผิดพลาดการบันทึกอัตโนมัติ',
+  'git.header.autosaveErrorTitle': 'การบันทึกอัตโนมัติล่าสุดล้มเหลว',
+  'git.header.authorMissingWarning': 'ตั้งค่าผู้เขียน commit เพื่อบันทึกการอ้างอิง',
+  'git.header.overflowSwitchTracked': 'สลับไฟล์ที่ติดตาม…',
+  'git.header.overflowClearAuthor': 'ล้างผู้เขียน commit',
+  'git.header.overflowCloseRepo': 'ปิดที่เก็บ',
+  'git.header.overflowMoreActions': 'การดำเนินการเพิ่มเติม',
+
+  // ── Git History List (Phase 4c) ──
+  'git.history.empty': 'ไม่มีประวัติ',
+  'git.history.autosaveGroup_one': 'บันทึกอัตโนมัติ 1 รายการ',
+  'git.history.autosaveGroup_other': 'บันทึกอัตโนมัติ {{count}} รายการ',
+  'git.history.autosaveLabel': 'auto {{time}}',
+  'git.history.milestoneDetailTitle': 'รายละเอียด milestone',
+  'git.history.restoreButton': 'คืนค่า',
+  'git.history.copyHashButton': 'คัดลอก hash',
+  'git.history.copiedToast': 'คัดลอกแล้ว',
+  'git.history.diffComingSoon': 'มุมมอง Diff จะมีใน Phase 6',
+  'git.history.promoteButton': 'เลื่อนเป็น milestone',
+  'git.history.promoteSuccessToast': 'เลื่อนเป็น milestone แล้ว',
+  'git.history.loadMore': 'โหลดเพิ่ม',
+  'git.autosave.messagePrefix': 'auto',
+  'git.autosave.messageDiffSuffix': '',
+
   // ── Right Panel ──
   'rightPanel.design': 'ออกแบบ',
   'rightPanel.code': 'โค้ด',

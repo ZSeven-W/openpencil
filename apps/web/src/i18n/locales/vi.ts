@@ -61,6 +61,105 @@ const vi: TranslationKeys = {
   'topbar.connected': 'đã kết nối',
   'topbar.agentStatus': '{{agents}} agent{{agentSuffix}} · {{mcp}} MCP',
 
+  // ── Bảng Git ──
+  'git.openPanel': 'Mở bảng Git',
+  'git.closePanel': 'Đóng bảng Git',
+  'git.title': 'Git · {{fileName}}',
+  'git.titleNoFile': 'Git · (Chưa chọn tệp)',
+  'git.close': 'Đóng',
+  'git.initializing': 'Đang khởi tạo kho…',
+  'git.placeholder.trackedPicker': 'Trình chọn tệp theo dõi',
+  'git.placeholder.readyState': 'Trạng thái sẵn sàng',
+  'git.placeholder.cloneWizard': 'Trình hướng dẫn nhân bản — có trong Phase 6',
+  'git.conflict.title': 'Xung đột hợp nhất',
+  'git.conflict.description': 'Xung đột cần giải quyết thủ công — có trong Phase 7.',
+  'git.conflict.abort': 'Hủy hợp nhất',
+  'git.error.dismiss': 'Bỏ qua',
+  'git.error.retry': 'Thử lại',
+  'git.error.title': 'Đã xảy ra lỗi',
+
+  // ── Trạng thái trống của Git ──
+  'git.empty.heading': 'Chưa có lịch sử phiên bản',
+  'git.empty.optional': 'Git là tùy chọn — bỏ qua cũng không sao',
+  'git.empty.requireSavedFile': 'Lưu tệp .op trước để bật lịch sử',
+  'git.empty.newCard': 'Tạo mới',
+  'git.empty.newCardDescription': 'Tạo lịch sử cục bộ',
+  'git.empty.openCard': 'Mở',
+  'git.empty.openCardDescription': 'Kho hiện có',
+  'git.empty.cloneCard': 'Nhân bản',
+  'git.empty.cloneCardDescription': 'Từ xa',
+  'git.empty.cloneComingSoon': 'Nhân bản sẽ có trong Phase 6',
+
+  // ── Biểu mẫu tác giả Git ──
+  'git.author.heading': 'Tác giả commit',
+  'git.author.subheading': 'Lưu commit đầu tiên cần tên và email',
+  'git.author.nameLabel': 'Tên',
+  'git.author.namePlaceholder': 'Tên của bạn',
+  'git.author.emailLabel': 'Email',
+  'git.author.emailPlaceholder': 'ban@vidu.com',
+  'git.author.submit': 'Lưu',
+  'git.author.cancel': 'Hủy',
+  'git.author.validationName': 'Tên là bắt buộc',
+  'git.author.validationEmail': 'Cần email hợp lệ',
+
+  // ── Bộ chọn Git (Phase 4b) ──
+  'git.picker.heading': 'Kho này có {{count}} tệp .op:',
+  'git.picker.milestoneCount': '{{count}} cột mốc',
+  'git.picker.noHistory': 'Chưa có lịch sử',
+  'git.picker.lastCommit': '{{message}} · {{time}}',
+  'git.picker.bindButton': 'Theo dõi tệp này',
+  'git.picker.bindAndOpenButton': 'Theo dõi và mở',
+  'git.picker.empty.heading': 'Không có tệp .op trong kho này',
+  'git.picker.empty.body': 'Bảng Git cần ít nhất một tệp .op để hoạt động.',
+  'git.picker.empty.close': 'Đóng bảng',
+
+  // ── Banner tự động liên kết (Phase 4b) ──
+  'git.autoBind.confirmHeading': 'Đã tìm thấy {{fileName}} — mở nó?',
+  'git.autoBind.openButton': 'Mở',
+  'git.autoBind.dismissButton': 'Bỏ qua',
+
+  // ── Thời gian tương đối (Phase 4b) ──
+  'git.relativeTime.justNow': 'vừa xong',
+  'git.relativeTime.minutesAgo': '{{count}} phút trước',
+  'git.relativeTime.hoursAgo': '{{count}} giờ trước',
+  'git.relativeTime.daysAgo': '{{count}} ngày trước',
+
+  // ── Git Commit Input (Phase 4c) ──
+  'git.commit.placeholder': 'Mô tả thay đổi này…',
+  'git.commit.submitButton': 'Lưu mốc',
+  'git.commit.saveRequiredTitle': 'Hãy lưu tài liệu trước',
+  'git.commit.saveRequiredBody': 'Bạn có thay đổi chưa lưu. Lưu tài liệu để tiếp tục: {{label}}',
+  'git.commit.saveRequiredSave': 'Lưu',
+  'git.commit.saveRequiredCancel': 'Hủy',
+
+  // ── Git Header (Phase 4c) ──
+  'git.header.branchComingSoon': 'Chuyển nhánh · có trong Phase 5',
+  'git.header.pullComingSoon': 'Pull · có trong Phase 6',
+  'git.header.pushComingSoon': 'Push · có trong Phase 6',
+  'git.header.autosaveError': 'Lỗi tự động lưu',
+  'git.header.autosaveErrorTitle': 'Tự động lưu gần nhất thất bại',
+  'git.header.authorMissingWarning': 'Đặt tác giả commit để ghi lại quyền tác giả',
+  'git.header.overflowSwitchTracked': 'Chuyển tệp theo dõi…',
+  'git.header.overflowClearAuthor': 'Xóa tác giả commit',
+  'git.header.overflowCloseRepo': 'Đóng kho',
+  'git.header.overflowMoreActions': 'Thêm thao tác',
+
+  // ── Git History List (Phase 4c) ──
+  'git.history.empty': 'Chưa có lịch sử',
+  'git.history.autosaveGroup_one': '1 tự động lưu',
+  'git.history.autosaveGroup_other': '{{count}} tự động lưu',
+  'git.history.autosaveLabel': 'auto {{time}}',
+  'git.history.milestoneDetailTitle': 'Chi tiết mốc',
+  'git.history.restoreButton': 'Khôi phục',
+  'git.history.copyHashButton': 'Sao chép hash',
+  'git.history.copiedToast': 'Đã sao chép',
+  'git.history.diffComingSoon': 'Xem diff có trong Phase 6',
+  'git.history.promoteButton': 'Nâng lên mốc',
+  'git.history.promoteSuccessToast': 'Đã nâng lên mốc',
+  'git.history.loadMore': 'Tải thêm',
+  'git.autosave.messagePrefix': 'auto',
+  'git.autosave.messageDiffSuffix': '',
+
   // ── Right Panel ──
   'rightPanel.design': 'Thiết kế',
   'rightPanel.code': 'Mã',

@@ -222,35 +222,36 @@ export interface GitAPI {
   ) => Promise<void>;
   applyMerge: (repoId: string) => Promise<{ hash: string; noop: boolean }>;
   abortMerge: (repoId: string) => Promise<void>;
+
+  // Phase 4a: author identity probe (system git config)
+  getSystemAuthor: () => Promise<{ name: string; email: string } | null>;
 }
 
 export interface ElectronAPI {
-  isElectron: true
-  openFile: () => Promise<{ filePath: string; content: string } | null>
-  openImageFile: () => Promise<{ filePath: string; name: string; content: string | null } | null>
-  saveFile: (
-    content: string,
-    defaultPath?: string,
-  ) => Promise<string | null>
-  saveToPath: (filePath: string, content: string) => Promise<string>
-  onMenuAction: (callback: (action: string) => void) => () => void
-  onOpenFile: (callback: (filePath: string) => void) => () => void
-  readFile: (filePath: string) => Promise<{ filePath: string; content: string } | null>
-  getPendingFile: () => Promise<string | null>
-  getLogDir: () => Promise<string>
-  setTheme: (theme: 'dark' | 'light', colors?: { bg: string; fg: string }) => void
-  getPreferences: () => Promise<Record<string, string>>
-  setPreference: (key: string, value: string) => Promise<void>
-  removePreference: (key: string) => Promise<void>
-  confirmClose: () => void
+  isElectron: true;
+  openFile: () => Promise<{ filePath: string; content: string } | null>;
+  openImageFile: () => Promise<{ filePath: string; name: string; content: string | null } | null>;
+  openDirectory: () => Promise<string | null>;
+  saveFile: (content: string, defaultPath?: string) => Promise<string | null>;
+  saveToPath: (filePath: string, content: string) => Promise<string>;
+  onMenuAction: (callback: (action: string) => void) => () => void;
+  onOpenFile: (callback: (filePath: string) => void) => () => void;
+  readFile: (filePath: string) => Promise<{ filePath: string; content: string } | null>;
+  getPendingFile: () => Promise<string | null>;
+  getLogDir: () => Promise<string>;
+  setTheme: (theme: 'dark' | 'light', colors?: { bg: string; fg: string }) => void;
+  getPreferences: () => Promise<Record<string, string>>;
+  setPreference: (key: string, value: string) => Promise<void>;
+  removePreference: (key: string) => Promise<void>;
+  confirmClose: () => void;
   confirmUnsavedChanges: (payload: {
-    message: string
-    detail?: string
-    yesLabel: string
-    noLabel: string
-    cancelLabel: string
-  }) => Promise<'save' | 'discard' | 'cancel'>
-  syncRecentFiles: (files: Array<{ fileName: string; filePath: string }>) => void
+    message: string;
+    detail?: string;
+    yesLabel: string;
+    noLabel: string;
+    cancelLabel: string;
+  }) => Promise<'save' | 'discard' | 'cancel'>;
+  syncRecentFiles: (files: Array<{ fileName: string; filePath: string }>) => void;
   updater: {
     getState: () => Promise<UpdaterState>;
     checkForUpdates: () => Promise<UpdaterState>;
@@ -268,6 +269,8 @@ const api: ElectronAPI = {
   openFile: () => ipcRenderer.invoke('dialog:openFile'),
 
   openImageFile: () => ipcRenderer.invoke('dialog:openImageFile'),
+
+  openDirectory: () => ipcRenderer.invoke('dialog:openDirectory'),
 
   saveFile: (content: string, defaultPath?: string) =>
     ipcRenderer.invoke('dialog:saveFile', { content, defaultPath }),
@@ -383,6 +386,9 @@ const api: ElectronAPI = {
       ipcRenderer.invoke('git:resolveConflict', repoId, conflictId, choice),
     applyMerge: (repoId) => ipcRenderer.invoke('git:applyMerge', repoId),
     abortMerge: (repoId) => ipcRenderer.invoke('git:abortMerge', repoId),
+
+    // Phase 4a: author identity probe
+    getSystemAuthor: () => ipcRenderer.invoke('git:getSystemAuthor'),
   },
 };
 

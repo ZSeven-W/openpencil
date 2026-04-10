@@ -986,6 +986,34 @@ export async function engineCommit(
   }
 
   // autosave
+  //
+  // Phase 4c content-hash debounce: if the tracked file's current disk
+  // blob matches the autosave tip's blob for the same path, skip the
+  // commit and return the existing tip hash. This catches the common
+  // "multi-Cmd+S" / "undo-to-clean" case where the user fires N saves
+  // with no actual content change.
+  const tipBlobOid = await readBlobOidAt({
+    handle: session.handle,
+    ref: autoRef,
+    filepath: rel,
+  });
+  if (tipBlobOid !== null) {
+    const diskContent = await fsp.readFile(session.trackedFilePath);
+    const { oid: diskBlobHash } = await git.hashBlob({ object: diskContent });
+    if (diskBlobHash === tipBlobOid) {
+      // No content change since the last autosave — return the existing
+      // tip commit hash as a no-op. We re-resolve the ref here because
+      // readBlobOidAt only exposes the blob oid, and the API contract
+      // requires a commit hash in the return value.
+      const currentTipHash = await git.resolveRef({
+        fs,
+        gitdir: session.handle.gitdir,
+        ref: autoRef,
+      });
+      return { hash: currentTipHash };
+    }
+  }
+
   const { hash } = await commitFile({
     handle: session.handle,
     filepath: rel,

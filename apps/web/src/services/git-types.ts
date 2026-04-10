@@ -212,4 +212,8 @@ export interface GitAPI {
   ) => Promise<void>;
   applyMerge: (repoId: string) => Promise<{ hash: string; noop: boolean }>;
   abortMerge: (repoId: string) => Promise<void>;
+
+  // Phase 4a: author identity probe (system git config). Returns null if
+  // git is unavailable or either user.name/user.email key is unset.
+  getSystemAuthor: () => Promise<{ name: string; email: string } | null>;
 }

@@ -59,6 +59,106 @@ const en = {
   'topbar.connected': 'connected',
   'topbar.agentStatus': '{{agents}} agent{{agentSuffix}} · {{mcp}} MCP',
 
+  // ── Git Panel ──
+  'git.openPanel': 'Open Git panel',
+  'git.closePanel': 'Close Git panel',
+  'git.title': 'Git · {{fileName}}',
+  'git.titleNoFile': 'Git · (No file selected)',
+  'git.close': 'Close',
+  'git.initializing': 'Initializing repository…',
+  'git.placeholder.trackedPicker': 'Tracked-file picker',
+  'git.placeholder.readyState': 'Ready state',
+  'git.placeholder.cloneWizard': 'Clone wizard — coming in Phase 6',
+  'git.conflict.title': 'Merge conflict',
+  'git.conflict.description': 'Conflicts need manual resolution — coming in Phase 7.',
+  'git.conflict.abort': 'Abort merge',
+  'git.error.dismiss': 'Dismiss',
+  'git.error.retry': 'Retry',
+  'git.error.title': 'Something went wrong',
+
+  // ── Git Empty State ──
+  'git.empty.heading': 'No version history yet',
+  'git.empty.optional': 'Git is optional — skipping is fine',
+  'git.empty.requireSavedFile': 'Save the .op file first to enable history',
+  'git.empty.newCard': 'Init',
+  'git.empty.newCardDescription': 'Create local history',
+  'git.empty.openCard': 'Open',
+  'git.empty.openCardDescription': 'Existing repo',
+  'git.empty.cloneCard': 'Clone',
+  'git.empty.cloneCardDescription': 'From a remote',
+  'git.empty.cloneComingSoon': 'Clone is available in Phase 6',
+
+  // ── Git Author Form ──
+  'git.author.heading': 'Your commit author',
+  'git.author.subheading': 'Saving the first commit needs a name and email',
+  'git.author.nameLabel': 'Name',
+  'git.author.namePlaceholder': 'Your name',
+  'git.author.emailLabel': 'Email',
+  'git.author.emailPlaceholder': 'you@example.com',
+  'git.author.submit': 'Save',
+  'git.author.cancel': 'Cancel',
+  'git.author.validationName': 'Name is required',
+  'git.author.validationEmail': 'A valid email is required',
+
+  // ── Git Picker (Phase 4b) ──
+  'git.picker.heading': '{{count}} .op files in this repo:',
+  'git.picker.milestoneCount': '{{count}} milestones',
+  'git.picker.noHistory': 'No history',
+  'git.picker.lastCommit': '{{message}} · {{time}}',
+  'git.picker.bindButton': 'Track this file',
+  'git.picker.bindAndOpenButton': 'Track and open',
+  'git.picker.empty.heading': 'No .op files in this repo',
+  'git.picker.empty.body': 'The Git panel needs at least one .op file to work.',
+  'git.picker.empty.close': 'Close panel',
+
+  // ── Git Auto-Bind Banner (Phase 4b) ──
+  'git.autoBind.confirmHeading': 'Found {{fileName}} — open it?',
+  'git.autoBind.openButton': 'Open',
+  'git.autoBind.dismissButton': 'Skip',
+
+  // ── Git Relative Time (Phase 4b — also used by Phase 4c history list) ──
+  'git.relativeTime.justNow': 'just now',
+  'git.relativeTime.minutesAgo': '{{count}}m ago',
+  'git.relativeTime.hoursAgo': '{{count}}h ago',
+  'git.relativeTime.daysAgo': '{{count}}d ago',
+
+  // ── Git Commit Input (Phase 4c) ──
+  'git.commit.placeholder': 'Describe this change…',
+  'git.commit.submitButton': 'Save milestone',
+  'git.commit.saveRequiredTitle': 'Save the document first',
+  'git.commit.saveRequiredBody':
+    'You have unsaved changes. Save the document to continue: {{label}}',
+  'git.commit.saveRequiredSave': 'Save',
+  'git.commit.saveRequiredCancel': 'Cancel',
+
+  // ── Git Header (Phase 4c) ──
+  'git.header.branchComingSoon': 'Switch branch · coming in Phase 5',
+  'git.header.pullComingSoon': 'Pull · coming in Phase 6',
+  'git.header.pushComingSoon': 'Push · coming in Phase 6',
+  'git.header.autosaveError': 'Autosave error',
+  'git.header.autosaveErrorTitle': 'Last autosave failed',
+  'git.header.authorMissingWarning': 'Set your commit author to record attribution',
+  'git.header.overflowSwitchTracked': 'Switch tracked file…',
+  'git.header.overflowClearAuthor': 'Clear commit author',
+  'git.header.overflowCloseRepo': 'Close repository',
+  'git.header.overflowMoreActions': 'More actions',
+
+  // ── Git History List (Phase 4c) ──
+  'git.history.empty': 'No history yet',
+  'git.history.autosaveGroup_one': '1 autosave',
+  'git.history.autosaveGroup_other': '{{count}} autosaves',
+  'git.history.autosaveLabel': 'auto {{time}}',
+  'git.history.milestoneDetailTitle': 'Milestone details',
+  'git.history.restoreButton': 'Restore',
+  'git.history.copyHashButton': 'Copy hash',
+  'git.history.copiedToast': 'Copied',
+  'git.history.diffComingSoon': 'Diff view coming in Phase 6',
+  'git.history.promoteButton': 'Promote to milestone',
+  'git.history.promoteSuccessToast': 'Promoted to milestone',
+  'git.history.loadMore': 'Load more',
+  'git.autosave.messagePrefix': 'auto',
+  'git.autosave.messageDiffSuffix': '',
+
   // ── Right Panel ──
   'rightPanel.design': 'Design',
   'rightPanel.code': 'Code',

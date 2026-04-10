@@ -123,6 +123,9 @@ export const gitClient = {
   applyMerge: (repoId: string) => invoke(() => getApi().applyMerge(repoId)),
   abortMerge: (repoId: string) => invoke(() => getApi().abortMerge(repoId)),
 
+  // ---- Phase 4a: author identity probe -----------------------------------
+  getSystemAuthor: () => invoke(() => getApi().getSystemAuthor()),
+
   // ---- Remote ------------------------------------------------------------
   fetch: (repoId: string, auth?: GitAuthCreds) => invoke(() => getApi().fetch(repoId, auth)),
   pull: (repoId: string, auth?: GitAuthCreds) => invoke(() => getApi().pull(repoId, auth)),

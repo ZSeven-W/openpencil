@@ -1,5 +1,5 @@
 // apps/web/src/stores/__tests__/git-store.test.ts
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { GitError } from '@/services/git-error';
 
 // Mock the git-client before importing the store so the store picks up
@@ -40,8 +40,42 @@ vi.mock('@/services/git-client', () => {
       sshGenerateKey: vi.fn(),
       sshImportKey: vi.fn(),
       sshDeleteKey: vi.fn(),
+      getSystemAuthor: vi.fn(),
     },
     isGitApiAvailable: vi.fn(() => true),
+  };
+});
+
+// Mock the load helper so acknowledgeAutoBindAndOpen can be asserted on
+// without actually wiring the file IPC + document store flow.
+vi.mock('@/utils/load-op-file', () => ({
+  loadOpFileFromPath: vi.fn(async () => true),
+}));
+
+// Mock documentEvents so the autosave subscriber tests can fire 'saved'
+// events deterministically without wiring the real emitter.
+vi.mock('@/utils/document-events', () => {
+  const handlers: Array<(payload: unknown) => void> = [];
+  return {
+    documentEvents: {
+      on: (_event: string, handler: (payload: unknown) => void) => {
+        handlers.push(handler);
+        return () => {
+          const idx = handlers.indexOf(handler);
+          if (idx >= 0) handlers.splice(idx, 1);
+        };
+      },
+      emit: (_event: string, payload: unknown) => {
+        // Snapshot before iterating so a handler that unsubscribes itself
+        // mid-iteration does not cause siblings to be skipped (same pattern
+        // as the real DocumentEventEmitter, which iterates over a Set).
+        const snapshot = Array.from(handlers);
+        for (const h of snapshot) h(payload);
+      },
+      __clear: () => {
+        handlers.length = 0;
+      },
+    },
   };
 });
 
@@ -83,6 +117,8 @@ import { useGitStore, __resetGitStore } from '@/stores/git-store';
 import { gitClient } from '@/services/git-client';
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 import { useDocumentStore as mockedDocStore } from '@/stores/document-store';
+import { loadOpFileFromPath as mockedLoadOpFileFromPath } from '@/utils/load-op-file';
+import { documentEvents as mockedDocumentEvents } from '@/utils/document-events';
 
 const SAMPLE_REPO = {
   repoId: 'repo-1',
@@ -123,6 +159,8 @@ describe('git-store state machine', () => {
     __resetGitStore();
     vi.clearAllMocks();
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (mockedDocumentEvents as any).__clear?.();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (mockedDocStore as any).__setDirty(false);
     // Reset the hoisted save result so a previous test's __setSaveResult(null)
     // doesn't bleed into this one. vi.clearAllMocks() doesn't touch closure
@@ -134,6 +172,19 @@ describe('git-store state machine', () => {
     // now invoke status() and branchList() automatically.
     vi.mocked(gitClient.status).mockResolvedValue(DEFAULT_STATUS);
     vi.mocked(gitClient.branchList).mockResolvedValue([]);
+    vi.mocked(gitClient.log).mockResolvedValue([]);
+    // Phase 4a: window.electronAPI mock for author identity prefs lookup
+    vi.stubGlobal('window', {
+      electronAPI: {
+        getPreferences: vi.fn(async () => ({})),
+        setPreference: vi.fn(async () => {}),
+        git: {}, // truthy so step 2 of loadAuthorIdentity proceeds
+      },
+    });
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
   });
 
   it('initial state is no-file with panelOpen=false', () => {
@@ -193,6 +244,17 @@ describe('git-store state machine', () => {
       ...SAMPLE_REPO,
       mode: 'folder',
       trackedFilePath: null,
+      // Use multiple candidates so openRepo's Phase 4b auto-bind branch
+      // does NOT fire — we want this test to exercise the manual
+      // bindTrackedFile flow from the needs-tracked-file state.
+      candidates: [
+        { ...SAMPLE_REPO.candidates[0], relativePath: 'a.op', path: '/tmp/repo/a.op' },
+        {
+          ...SAMPLE_REPO.candidates[0],
+          relativePath: 'login.op',
+          path: '/tmp/repo/login.op',
+        },
+      ],
     });
     vi.mocked(gitClient.bindTrackedFile).mockResolvedValue({
       trackedFilePath: '/tmp/repo/login.op',
@@ -438,5 +500,462 @@ describe('git-store state machine', () => {
       name: 'GitError',
       code: 'no-file',
     });
+  });
+
+  // ---- Phase 4a: author identity slice ----------------------------------
+
+  it('loadAuthorIdentity hits prefs first when both keys are set', async () => {
+    // Stub window.electronAPI.getPreferences to return both git keys.
+    vi.stubGlobal('window', {
+      electronAPI: {
+        getPreferences: vi.fn(async () => ({
+          'git.authorName': 'Alice',
+          'git.authorEmail': 'alice@example.com',
+        })),
+        setPreference: vi.fn(async () => {}),
+        git: {},
+      },
+    });
+
+    await useGitStore.getState().loadAuthorIdentity();
+
+    const id = useGitStore.getState().authorIdentity;
+    expect(id).toEqual({ name: 'Alice', email: 'alice@example.com' });
+    // The sysGit fallback must NOT have been called when prefs hit.
+    expect(gitClient.getSystemAuthor).not.toHaveBeenCalled();
+  });
+
+  it('loadAuthorIdentity falls through to sysGit when prefs are missing', async () => {
+    vi.stubGlobal('window', {
+      electronAPI: {
+        getPreferences: vi.fn(async () => ({})),
+        setPreference: vi.fn(async () => {}),
+        git: {},
+      },
+    });
+    vi.mocked(gitClient.getSystemAuthor).mockResolvedValue({
+      name: 'Bob',
+      email: 'bob@local',
+    });
+
+    await useGitStore.getState().loadAuthorIdentity();
+
+    const id = useGitStore.getState().authorIdentity;
+    expect(id).toEqual({ name: 'Bob', email: 'bob@local' });
+    expect(gitClient.getSystemAuthor).toHaveBeenCalledTimes(1);
+  });
+
+  it('loadAuthorIdentity leaves identity null when both prefs and sysGit are empty', async () => {
+    vi.stubGlobal('window', {
+      electronAPI: {
+        getPreferences: vi.fn(async () => ({})),
+        setPreference: vi.fn(async () => {}),
+        git: {},
+      },
+    });
+    vi.mocked(gitClient.getSystemAuthor).mockResolvedValue(null);
+
+    await useGitStore.getState().loadAuthorIdentity();
+
+    expect(useGitStore.getState().authorIdentity).toBeNull();
+    expect(gitClient.getSystemAuthor).toHaveBeenCalledTimes(1);
+  });
+
+  it('setAuthorIdentity persists to prefs and updates the in-memory cache', async () => {
+    const setPrefSpy = vi.fn(async () => {});
+    vi.stubGlobal('window', {
+      electronAPI: {
+        getPreferences: vi.fn(async () => ({})),
+        setPreference: setPrefSpy,
+        git: {},
+      },
+    });
+
+    await useGitStore.getState().setAuthorIdentity('Charlie', 'charlie@example.com');
+
+    expect(setPrefSpy).toHaveBeenCalledTimes(2);
+    expect(setPrefSpy).toHaveBeenCalledWith('git.authorName', 'Charlie');
+    expect(setPrefSpy).toHaveBeenCalledWith('git.authorEmail', 'charlie@example.com');
+    expect(useGitStore.getState().authorIdentity).toEqual({
+      name: 'Charlie',
+      email: 'charlie@example.com',
+    });
+  });
+
+  // ---- Phase 4b: auto-bind banner ---------------------------------------
+
+  it('openRepo auto-binds the single candidate and sets lastAutoBindedPath', async () => {
+    vi.mocked(gitClient.open).mockResolvedValue({
+      ...SAMPLE_REPO,
+      mode: 'folder',
+      trackedFilePath: null,
+      candidates: [
+        {
+          path: '/tmp/repo/login.op',
+          relativePath: 'login.op',
+          milestoneCount: 5,
+          autosaveCount: 12,
+          lastCommitAt: 1700000000,
+          lastCommitMessage: 'init',
+        },
+      ],
+    });
+    vi.mocked(gitClient.bindTrackedFile).mockResolvedValue({
+      trackedFilePath: '/tmp/repo/login.op',
+    });
+
+    await useGitStore.getState().openRepo('/tmp/repo');
+
+    const s = useGitStore.getState();
+    expect(s.state.kind).toBe('ready');
+    if (s.state.kind === 'ready') {
+      expect(s.state.repo.trackedFilePath).toBe('/tmp/repo/login.op');
+    }
+    expect(s.lastAutoBindedPath).toBe('/tmp/repo/login.op');
+    expect(gitClient.bindTrackedFile).toHaveBeenCalledWith('repo-1', '/tmp/repo/login.op');
+  });
+
+  it('cloneRepo auto-binds the single candidate and sets lastAutoBindedPath', async () => {
+    vi.mocked(gitClient.clone).mockResolvedValue({
+      ...SAMPLE_REPO,
+      mode: 'folder',
+      trackedFilePath: null,
+      candidates: [
+        {
+          path: '/tmp/cloned/main.op',
+          relativePath: 'main.op',
+          milestoneCount: 0,
+          autosaveCount: 0,
+          lastCommitAt: null,
+          lastCommitMessage: null,
+        },
+      ],
+    });
+    vi.mocked(gitClient.bindTrackedFile).mockResolvedValue({
+      trackedFilePath: '/tmp/cloned/main.op',
+    });
+
+    await useGitStore.getState().cloneRepo({
+      url: 'https://example.com/repo.git',
+      dest: '/tmp/cloned',
+    });
+
+    const s = useGitStore.getState();
+    expect(s.state.kind).toBe('ready');
+    expect(s.lastAutoBindedPath).toBe('/tmp/cloned/main.op');
+    expect(gitClient.bindTrackedFile).toHaveBeenCalledWith('repo-1', '/tmp/cloned/main.op');
+  });
+
+  it('acknowledgeAutoBind clears lastAutoBindedPath', () => {
+    // Manually seed the flag (no need to go through openRepo here).
+    useGitStore.setState({ lastAutoBindedPath: '/tmp/repo/login.op' });
+    expect(useGitStore.getState().lastAutoBindedPath).toBe('/tmp/repo/login.op');
+
+    useGitStore.getState().acknowledgeAutoBind();
+
+    expect(useGitStore.getState().lastAutoBindedPath).toBeNull();
+  });
+
+  it('acknowledgeAutoBindAndOpen calls loadOpFileFromPath and clears the flag', async () => {
+    useGitStore.setState({ lastAutoBindedPath: '/tmp/repo/login.op' });
+
+    await useGitStore.getState().acknowledgeAutoBindAndOpen();
+
+    expect(mockedLoadOpFileFromPath).toHaveBeenCalledTimes(1);
+    expect(mockedLoadOpFileFromPath).toHaveBeenCalledWith('/tmp/repo/login.op');
+    expect(useGitStore.getState().lastAutoBindedPath).toBeNull();
+  });
+
+  // ---- Phase 4c: commit input slice -------------------------------------
+
+  it('setCommitMessage + clearCommitMessage round-trip the draft', () => {
+    useGitStore.getState().setCommitMessage('first milestone');
+    expect(useGitStore.getState().commitMessage).toBe('first milestone');
+    useGitStore.getState().clearCommitMessage();
+    expect(useGitStore.getState().commitMessage).toBe('');
+  });
+
+  it('cancelSaveRequired clears the flag without retrying', async () => {
+    vi.mocked(gitClient.init).mockResolvedValue(SAMPLE_REPO);
+    await useGitStore.getState().initRepo('/tmp/login.op');
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (mockedDocStore as any).__setDirty(true);
+
+    await expect(
+      useGitStore.getState().commitMilestone('test', { name: 't', email: 't@e.com' }),
+    ).rejects.toMatchObject({ name: 'GitError', code: 'save-required' });
+
+    const before = useGitStore.getState().state;
+    expect(before.kind).toBe('ready');
+    if (before.kind === 'ready') {
+      expect(before.saveRequiredFor).toBeDefined();
+    }
+
+    useGitStore.getState().cancelSaveRequired();
+
+    const after = useGitStore.getState().state;
+    expect(after.kind).toBe('ready');
+    if (after.kind === 'ready') {
+      expect(after.saveRequiredFor).toBeUndefined();
+    }
+  });
+
+  // ---- Phase 4c: overflow menu actions ----------------------------------
+
+  it('enterTrackedFilePicker flips ready → needs-tracked-file with the same repo', async () => {
+    vi.mocked(gitClient.init).mockResolvedValue(SAMPLE_REPO);
+    await useGitStore.getState().initRepo('/tmp/login.op');
+
+    const before = useGitStore.getState().state;
+    expect(before.kind).toBe('ready');
+
+    useGitStore.getState().enterTrackedFilePicker();
+
+    const after = useGitStore.getState().state;
+    expect(after.kind).toBe('needs-tracked-file');
+    if (after.kind === 'needs-tracked-file' && before.kind === 'ready') {
+      expect(after.repo.repoId).toBe(before.repo.repoId);
+    }
+  });
+
+  it('clearAuthorIdentity removes prefs keys and clears in-memory cache', async () => {
+    const removePrefSpy = vi.fn(async () => {});
+    vi.stubGlobal('window', {
+      electronAPI: {
+        getPreferences: vi.fn(async () => ({})),
+        setPreference: vi.fn(async () => {}),
+        removePreference: removePrefSpy,
+        git: {},
+      },
+    });
+    useGitStore.setState({
+      authorIdentity: { name: 'Alice', email: 'alice@example.com' },
+    });
+
+    await useGitStore.getState().clearAuthorIdentity();
+
+    // The action must REMOVE the keys (not set them to an empty string),
+    // otherwise the lookup chain in resolveAuthorIdentity will see blank
+    // sentinels on disk instead of absent keys.
+    expect(removePrefSpy).toHaveBeenCalledTimes(2);
+    expect(removePrefSpy).toHaveBeenCalledWith('git.authorName');
+    expect(removePrefSpy).toHaveBeenCalledWith('git.authorEmail');
+    expect(useGitStore.getState().authorIdentity).toBeNull();
+  });
+
+  // ---- Phase 4c: autosave subscriber ------------------------------------
+
+  it('initAutosaveSubscriber fires commitAutosave on saved event for tracked file', async () => {
+    vi.mocked(gitClient.init).mockResolvedValue(SAMPLE_REPO);
+    vi.mocked(gitClient.commit).mockResolvedValue({ hash: 'abc123' });
+    await useGitStore.getState().initRepo('/tmp/login.op');
+
+    useGitStore.getState().initAutosaveSubscriber();
+    expect(useGitStore.getState().__autosaveUnsub).not.toBeNull();
+
+    // Fire a saved event for the tracked file.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (mockedDocumentEvents as any).emit('saved', {
+      filePath: '/tmp/repo/login.op',
+      fileName: 'login.op',
+      document: {},
+    });
+
+    await new Promise((r) => setTimeout(r, 0));
+
+    expect(gitClient.commit).toHaveBeenCalledTimes(1);
+    expect(gitClient.commit).toHaveBeenCalledWith(
+      'repo-1',
+      expect.objectContaining({ kind: 'autosave' }),
+    );
+    expect(useGitStore.getState().autosaveError).toBeNull();
+
+    useGitStore.getState().disposeAutosaveSubscriber();
+  });
+
+  it('initAutosaveSubscriber ignores saved event for a different file', async () => {
+    vi.mocked(gitClient.init).mockResolvedValue(SAMPLE_REPO);
+    await useGitStore.getState().initRepo('/tmp/login.op');
+    useGitStore.getState().initAutosaveSubscriber();
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (mockedDocumentEvents as any).emit('saved', {
+      filePath: '/tmp/repo/other.op',
+      fileName: 'other.op',
+      document: {},
+    });
+    await new Promise((r) => setTimeout(r, 0));
+
+    expect(gitClient.commit).not.toHaveBeenCalled();
+
+    useGitStore.getState().disposeAutosaveSubscriber();
+  });
+
+  it('initAutosaveSubscriber ignores saved event when state is not ready', async () => {
+    useGitStore.getState().initAutosaveSubscriber();
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (mockedDocumentEvents as any).emit('saved', {
+      filePath: '/tmp/repo/login.op',
+      fileName: 'login.op',
+      document: {},
+    });
+    await new Promise((r) => setTimeout(r, 0));
+
+    expect(gitClient.commit).not.toHaveBeenCalled();
+
+    useGitStore.getState().disposeAutosaveSubscriber();
+  });
+
+  it('initAutosaveSubscriber is idempotent when called multiple times', async () => {
+    vi.mocked(gitClient.init).mockResolvedValue(SAMPLE_REPO);
+    vi.mocked(gitClient.commit).mockResolvedValue({ hash: 'abc123' });
+    await useGitStore.getState().initRepo('/tmp/login.op');
+
+    // Call twice — second call must be a no-op.
+    useGitStore.getState().initAutosaveSubscriber();
+    const firstUnsub = useGitStore.getState().__autosaveUnsub;
+    useGitStore.getState().initAutosaveSubscriber();
+    const secondUnsub = useGitStore.getState().__autosaveUnsub;
+    expect(secondUnsub).toBe(firstUnsub); // exact reference equality
+
+    // Fire a single saved event — only ONE commit should fire, not two.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (mockedDocumentEvents as any).emit('saved', {
+      filePath: '/tmp/repo/login.op',
+      fileName: 'login.op',
+      document: {},
+    });
+    await new Promise((r) => setTimeout(r, 0));
+
+    expect(gitClient.commit).toHaveBeenCalledTimes(1);
+
+    useGitStore.getState().disposeAutosaveSubscriber();
+  });
+
+  it('autosave error is captured without throwing', async () => {
+    vi.mocked(gitClient.init).mockResolvedValue(SAMPLE_REPO);
+    vi.mocked(gitClient.commit).mockRejectedValue(
+      new GitError('engine-crash', 'disk write failed'),
+    );
+    await useGitStore.getState().initRepo('/tmp/login.op');
+    useGitStore.getState().initAutosaveSubscriber();
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (mockedDocumentEvents as any).emit('saved', {
+      filePath: '/tmp/repo/login.op',
+      fileName: 'login.op',
+      document: {},
+    });
+    await new Promise((r) => setTimeout(r, 0));
+
+    expect(useGitStore.getState().autosaveError).toBe('disk write failed');
+
+    useGitStore.getState().disposeAutosaveSubscriber();
+  });
+
+  it('restoreCommit reloads the tracked file into document-store after IPC', async () => {
+    vi.mocked(gitClient.init).mockResolvedValue(SAMPLE_REPO);
+    vi.mocked(gitClient.restore).mockResolvedValue(undefined);
+    await useGitStore.getState().initRepo('/tmp/login.op');
+
+    vi.mocked(mockedLoadOpFileFromPath).mockClear();
+    await useGitStore.getState().restoreCommit('abc123');
+
+    // The fix: after gitClient.restore resolves, the store must reload the
+    // on-disk .op file into document-store so the in-memory document
+    // matches the restored tree. Otherwise the next Cmd+S / autosave
+    // silently overwrites the restore with the stale in-memory content.
+    expect(gitClient.restore).toHaveBeenCalledWith('repo-1', 'abc123');
+    expect(mockedLoadOpFileFromPath).toHaveBeenCalledTimes(1);
+    expect(mockedLoadOpFileFromPath).toHaveBeenCalledWith('/tmp/repo/login.op');
+  });
+
+  it('promoteAutosave reloads the tracked file into document-store after IPC', async () => {
+    vi.mocked(gitClient.init).mockResolvedValue(SAMPLE_REPO);
+    vi.mocked(gitClient.promote).mockResolvedValue({ hash: 'new-milestone-hash' });
+    await useGitStore.getState().initRepo('/tmp/login.op');
+
+    vi.mocked(mockedLoadOpFileFromPath).mockClear();
+    await useGitStore
+      .getState()
+      .promoteAutosave('autosave-hash', 'promote to milestone', { name: 't', email: 't@e.com' });
+
+    // Same reasoning as restoreCommit: promote writes a new milestone
+    // commit at the autosave's tree; reload the document unconditionally
+    // so the in-memory content cannot diverge from disk.
+    expect(gitClient.promote).toHaveBeenCalledWith(
+      'repo-1',
+      'autosave-hash',
+      'promote to milestone',
+      {
+        name: 't',
+        email: 't@e.com',
+      },
+    );
+    expect(mockedLoadOpFileFromPath).toHaveBeenCalledTimes(1);
+    expect(mockedLoadOpFileFromPath).toHaveBeenCalledWith('/tmp/repo/login.op');
+  });
+
+  it('switchBranch refreshes the log and reloads the document after the IPC', async () => {
+    vi.mocked(gitClient.init).mockResolvedValue(SAMPLE_REPO);
+    vi.mocked(gitClient.branchSwitch).mockResolvedValue(undefined);
+    vi.mocked(gitClient.status).mockResolvedValue(DEFAULT_STATUS);
+    vi.mocked(gitClient.branchList).mockResolvedValue([]);
+    vi.mocked(gitClient.log).mockResolvedValue([]);
+    await useGitStore.getState().initRepo('/tmp/login.op');
+
+    vi.mocked(mockedLoadOpFileFromPath).mockClear();
+    vi.mocked(gitClient.log).mockClear();
+    await useGitStore.getState().switchBranch('feature/x');
+
+    // A branch switch moves HEAD and rewrites the tracked file. Both the
+    // in-memory document and the history list must be refreshed — the
+    // GitPanelReady log effect keys on state.kind which does NOT change
+    // during switch, so the store is the only place that can do this.
+    expect(gitClient.branchSwitch).toHaveBeenCalledWith('repo-1', 'feature/x');
+    expect(mockedLoadOpFileFromPath).toHaveBeenCalledWith('/tmp/repo/login.op');
+    expect(gitClient.log).toHaveBeenCalledWith('repo-1', { ref: 'main', limit: 50 });
+  });
+
+  it('mergeBranch (fast-forward / clean path) refreshes the log and reloads the document', async () => {
+    vi.mocked(gitClient.init).mockResolvedValue(SAMPLE_REPO);
+    vi.mocked(gitClient.branchMerge).mockResolvedValue({ result: 'fast-forward' });
+    vi.mocked(gitClient.status).mockResolvedValue(DEFAULT_STATUS);
+    vi.mocked(gitClient.branchList).mockResolvedValue([]);
+    vi.mocked(gitClient.log).mockResolvedValue([]);
+    await useGitStore.getState().initRepo('/tmp/login.op');
+
+    vi.mocked(mockedLoadOpFileFromPath).mockClear();
+    vi.mocked(gitClient.log).mockClear();
+    await useGitStore.getState().mergeBranch('feature/x');
+
+    expect(gitClient.branchMerge).toHaveBeenCalledWith('repo-1', 'feature/x');
+    expect(mockedLoadOpFileFromPath).toHaveBeenCalledWith('/tmp/repo/login.op');
+    expect(gitClient.log).toHaveBeenCalledWith('repo-1', { ref: 'main', limit: 50 });
+  });
+
+  it('mergeBranch (conflict path) does NOT refresh log or reload document', async () => {
+    vi.mocked(gitClient.init).mockResolvedValue(SAMPLE_REPO);
+    vi.mocked(gitClient.branchMerge).mockResolvedValue({
+      result: 'conflict',
+      conflicts: { nodeConflicts: [], docFieldConflicts: [] },
+    });
+    await useGitStore.getState().initRepo('/tmp/login.op');
+
+    vi.mocked(mockedLoadOpFileFromPath).mockClear();
+    vi.mocked(gitClient.log).mockClear();
+    await useGitStore.getState().mergeBranch('feature/x');
+
+    // On conflict the store transitions to the conflict state and intentionally
+    // skips both loadLog and the document reload:
+    //   - loadLog is redundant because GitPanelConflict mounts for the first
+    //     time on the transition and runs its own loadLog effect keyed on
+    //     state.kind.
+    //   - Reloading the document would clobber any merge artifacts the engine
+    //     left on disk as part of the conflict bag.
+    expect(useGitStore.getState().state.kind).toBe('conflict');
+    expect(mockedLoadOpFileFromPath).not.toHaveBeenCalled();
+    expect(gitClient.log).not.toHaveBeenCalled();
   });
 });

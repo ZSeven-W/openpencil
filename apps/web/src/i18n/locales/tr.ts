@@ -61,6 +61,106 @@ const tr: TranslationKeys = {
   'topbar.connected': 'bağlı',
   'topbar.agentStatus': '{{agents}} ajan{{agentSuffix}} · {{mcp}} MCP',
 
+  // ── Git Paneli ──
+  'git.openPanel': 'Git panelini aç',
+  'git.closePanel': 'Git panelini kapat',
+  'git.title': 'Git · {{fileName}}',
+  'git.titleNoFile': 'Git · (Dosya seçilmedi)',
+  'git.close': 'Kapat',
+  'git.initializing': 'Depo başlatılıyor…',
+  'git.placeholder.trackedPicker': 'İzlenen dosya seçici',
+  'git.placeholder.readyState': 'Hazır durumu',
+  'git.placeholder.cloneWizard': "Klonlama sihirbazı — Phase 6'da gelecek",
+  'git.conflict.title': 'Birleştirme çakışması',
+  'git.conflict.description': "Çakışmalar manuel çözüm gerektirir — Phase 7'de gelecek.",
+  'git.conflict.abort': 'Birleştirmeyi iptal et',
+  'git.error.dismiss': 'Kapat',
+  'git.error.retry': 'Tekrar dene',
+  'git.error.title': 'Bir şeyler ters gitti',
+
+  // ── Git Boş Durum ──
+  'git.empty.heading': 'Henüz sürüm geçmişi yok',
+  'git.empty.optional': 'Git isteğe bağlı — atlamak sorun değil',
+  'git.empty.requireSavedFile': 'Geçmişi etkinleştirmek için önce .op dosyasını kaydedin',
+  'git.empty.newCard': 'Yeni',
+  'git.empty.newCardDescription': 'Yerel geçmiş oluştur',
+  'git.empty.openCard': 'Aç',
+  'git.empty.openCardDescription': 'Mevcut depo',
+  'git.empty.cloneCard': 'Klonla',
+  'git.empty.cloneCardDescription': 'Uzak depodan',
+  'git.empty.cloneComingSoon': "Klonlama Phase 6'da kullanılabilir olacak",
+
+  // ── Git Yazar Formu ──
+  'git.author.heading': 'Commit yazarı',
+  'git.author.subheading': 'İlk commit için ad ve e-posta gereklidir',
+  'git.author.nameLabel': 'Ad',
+  'git.author.namePlaceholder': 'Adınız',
+  'git.author.emailLabel': 'E-posta',
+  'git.author.emailPlaceholder': 'siz@ornek.com',
+  'git.author.submit': 'Kaydet',
+  'git.author.cancel': 'İptal',
+  'git.author.validationName': 'Ad gereklidir',
+  'git.author.validationEmail': 'Geçerli bir e-posta gereklidir',
+
+  // ── Git Seçici (Phase 4b) ──
+  'git.picker.heading': 'Bu depoda {{count}} .op dosyası var:',
+  'git.picker.milestoneCount': '{{count}} kilometre taşı',
+  'git.picker.noHistory': 'Geçmiş yok',
+  'git.picker.lastCommit': '{{message}} · {{time}}',
+  'git.picker.bindButton': 'Bu dosyayı izle',
+  'git.picker.bindAndOpenButton': 'İzle ve aç',
+  'git.picker.empty.heading': 'Bu depoda .op dosyası yok',
+  'git.picker.empty.body': 'Git paneli çalışmak için en az bir .op dosyasına ihtiyaç duyar.',
+  'git.picker.empty.close': 'Paneli kapat',
+
+  // ── Otomatik Bağlama Bandı (Phase 4b) ──
+  'git.autoBind.confirmHeading': '{{fileName}} bulundu — açılsın mı?',
+  'git.autoBind.openButton': 'Aç',
+  'git.autoBind.dismissButton': 'Atla',
+
+  // ── Göreli Zaman (Phase 4b) ──
+  'git.relativeTime.justNow': 'şimdi',
+  'git.relativeTime.minutesAgo': '{{count}}d önce',
+  'git.relativeTime.hoursAgo': '{{count}}s önce',
+  'git.relativeTime.daysAgo': '{{count}}g önce',
+
+  // ── Git Commit Input (Phase 4c) ──
+  'git.commit.placeholder': 'Bu değişikliği açıklayın…',
+  'git.commit.submitButton': 'Kilometre taşı olarak kaydet',
+  'git.commit.saveRequiredTitle': 'Önce belgeyi kaydedin',
+  'git.commit.saveRequiredBody':
+    'Kaydedilmemiş değişiklikleriniz var. Devam etmek için belgeyi kaydedin: {{label}}',
+  'git.commit.saveRequiredSave': 'Kaydet',
+  'git.commit.saveRequiredCancel': 'İptal',
+
+  // ── Git Header (Phase 4c) ──
+  'git.header.branchComingSoon': "Dal değiştir · Phase 5'te",
+  'git.header.pullComingSoon': "Pull · Phase 6'da",
+  'git.header.pushComingSoon': "Push · Phase 6'da",
+  'git.header.autosaveError': 'Otomatik kaydetme hatası',
+  'git.header.autosaveErrorTitle': 'Son otomatik kaydetme başarısız',
+  'git.header.authorMissingWarning': 'Atıf için commit yazarını ayarlayın',
+  'git.header.overflowSwitchTracked': 'İzlenen dosyayı değiştir…',
+  'git.header.overflowClearAuthor': 'Commit yazarını temizle',
+  'git.header.overflowCloseRepo': 'Depoyu kapat',
+  'git.header.overflowMoreActions': 'Diğer eylemler',
+
+  // ── Git History List (Phase 4c) ──
+  'git.history.empty': 'Henüz geçmiş yok',
+  'git.history.autosaveGroup_one': '1 otomatik kaydetme',
+  'git.history.autosaveGroup_other': '{{count}} otomatik kaydetme',
+  'git.history.autosaveLabel': 'auto {{time}}',
+  'git.history.milestoneDetailTitle': 'Kilometre taşı detayları',
+  'git.history.restoreButton': 'Geri yükle',
+  'git.history.copyHashButton': "Hash'i kopyala",
+  'git.history.copiedToast': 'Kopyalandı',
+  'git.history.diffComingSoon': "Diff görünümü Phase 6'da",
+  'git.history.promoteButton': 'Kilometre taşına yükselt',
+  'git.history.promoteSuccessToast': 'Kilometre taşına yükseltildi',
+  'git.history.loadMore': 'Daha fazla yükle',
+  'git.autosave.messagePrefix': 'auto',
+  'git.autosave.messageDiffSuffix': '',
+
   // ── Right Panel ──
   'rightPanel.design': 'Tasarım',
   'rightPanel.code': 'Kod',

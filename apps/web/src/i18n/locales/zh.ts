@@ -61,6 +61,105 @@ const zh: TranslationKeys = {
   'topbar.connected': '已连接',
   'topbar.agentStatus': '{{agents}} 个 Agent{{agentSuffix}} · {{mcp}} 个 MCP',
 
+  // ── Git 面板 ──
+  'git.openPanel': '打开 Git 面板',
+  'git.closePanel': '关闭 Git 面板',
+  'git.title': 'Git · {{fileName}}',
+  'git.titleNoFile': 'Git · (尚未选择文件)',
+  'git.close': '关闭',
+  'git.initializing': '正在初始化仓库…',
+  'git.placeholder.trackedPicker': '跟踪文件选择器',
+  'git.placeholder.readyState': '就绪状态',
+  'git.placeholder.cloneWizard': '克隆向导 — Phase 6 中提供',
+  'git.conflict.title': '合并冲突',
+  'git.conflict.description': '冲突需要手动解决 — Phase 7 中提供。',
+  'git.conflict.abort': '中止合并',
+  'git.error.dismiss': '关闭',
+  'git.error.retry': '重试',
+  'git.error.title': '出现问题',
+
+  // ── Git 空状态 ──
+  'git.empty.heading': '这份文件还没有版本历史',
+  'git.empty.optional': 'Git 是可选的 — 跳过也不影响使用',
+  'git.empty.requireSavedFile': '请先保存 .op 文件以建立历史',
+  'git.empty.newCard': '新建',
+  'git.empty.newCardDescription': '创建本地历史',
+  'git.empty.openCard': '打开',
+  'git.empty.openCardDescription': '已有仓库',
+  'git.empty.cloneCard': '克隆',
+  'git.empty.cloneCardDescription': '从远程仓库',
+  'git.empty.cloneComingSoon': '克隆功能将在 Phase 6 提供',
+
+  // ── Git 作者表单 ──
+  'git.author.heading': '提交署名',
+  'git.author.subheading': '保存第一次提交需要署名',
+  'git.author.nameLabel': '姓名',
+  'git.author.namePlaceholder': '你的名字',
+  'git.author.emailLabel': '邮箱',
+  'git.author.emailPlaceholder': 'you@example.com',
+  'git.author.submit': '保存',
+  'git.author.cancel': '取消',
+  'git.author.validationName': '请输入姓名',
+  'git.author.validationEmail': '请输入有效的邮箱',
+
+  // ── Git 选择器 (Phase 4b) ──
+  'git.picker.heading': '这个仓库里有 {{count}} 个 .op 文件:',
+  'git.picker.milestoneCount': '{{count}} 个里程碑',
+  'git.picker.noHistory': '暂无历史',
+  'git.picker.lastCommit': '{{message}} · {{time}}',
+  'git.picker.bindButton': '跟踪此文件',
+  'git.picker.bindAndOpenButton': '跟踪并打开',
+  'git.picker.empty.heading': '这个仓库里没有 .op 文件',
+  'git.picker.empty.body': 'Git 面板需要至少一个 .op 文件才能工作',
+  'git.picker.empty.close': '关闭面板',
+
+  // ── Git 自动绑定提示 (Phase 4b) ──
+  'git.autoBind.confirmHeading': '已找到 {{fileName}},要在编辑器打开吗?',
+  'git.autoBind.openButton': '打开',
+  'git.autoBind.dismissButton': '跳过',
+
+  // ── Git 相对时间 (Phase 4b) ──
+  'git.relativeTime.justNow': '刚刚',
+  'git.relativeTime.minutesAgo': '{{count}}分钟前',
+  'git.relativeTime.hoursAgo': '{{count}}小时前',
+  'git.relativeTime.daysAgo': '{{count}}天前',
+
+  // ── Git Commit Input (Phase 4c) ──
+  'git.commit.placeholder': '描述这次改动…',
+  'git.commit.submitButton': '保存为里程碑',
+  'git.commit.saveRequiredTitle': '请先保存文档',
+  'git.commit.saveRequiredBody': '当前文档有未保存的修改,需要先保存才能继续: {{label}}',
+  'git.commit.saveRequiredSave': '保存',
+  'git.commit.saveRequiredCancel': '取消',
+
+  // ── Git Header (Phase 4c) ──
+  'git.header.branchComingSoon': '切换分支 · Phase 5 中提供',
+  'git.header.pullComingSoon': '拉取 · Phase 6 中提供',
+  'git.header.pushComingSoon': '推送 · Phase 6 中提供',
+  'git.header.autosaveError': '自动保存错误',
+  'git.header.autosaveErrorTitle': '上次自动保存失败',
+  'git.header.authorMissingWarning': '请设置提交作者以记录归属',
+  'git.header.overflowSwitchTracked': '切换跟踪文件…',
+  'git.header.overflowClearAuthor': '清除提交作者',
+  'git.header.overflowCloseRepo': '关闭仓库',
+  'git.header.overflowMoreActions': '更多操作',
+
+  // ── Git History List (Phase 4c) ──
+  'git.history.empty': '暂无历史',
+  'git.history.autosaveGroup_one': '1 个自动快照',
+  'git.history.autosaveGroup_other': '{{count}} 个自动快照',
+  'git.history.autosaveLabel': 'auto {{time}}',
+  'git.history.milestoneDetailTitle': '里程碑详情',
+  'git.history.restoreButton': '恢复',
+  'git.history.copyHashButton': '复制哈希',
+  'git.history.copiedToast': '已复制',
+  'git.history.diffComingSoon': 'Diff 视图将在 Phase 6 提供',
+  'git.history.promoteButton': '提升为里程碑',
+  'git.history.promoteSuccessToast': '已提升为里程碑',
+  'git.history.loadMore': '加载更多',
+  'git.autosave.messagePrefix': 'auto',
+  'git.autosave.messageDiffSuffix': '',
+
   // ── Right Panel ──
   'rightPanel.design': '设计',
   'rightPanel.code': '代码',

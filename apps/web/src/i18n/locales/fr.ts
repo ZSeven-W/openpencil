@@ -61,6 +61,107 @@ const fr: TranslationKeys = {
   'topbar.connected': 'connecté',
   'topbar.agentStatus': '{{agents}} agent{{agentSuffix}} · {{mcp}} MCP',
 
+  // ── Panneau Git ──
+  'git.openPanel': 'Ouvrir le panneau Git',
+  'git.closePanel': 'Fermer le panneau Git',
+  'git.title': 'Git · {{fileName}}',
+  'git.titleNoFile': 'Git · (Aucun fichier)',
+  'git.close': 'Fermer',
+  'git.initializing': 'Initialisation du dépôt…',
+  'git.placeholder.trackedPicker': 'Sélecteur de fichier suivi',
+  'git.placeholder.readyState': 'État prêt',
+  'git.placeholder.cloneWizard': 'Assistant de clonage — disponible en Phase 6',
+  'git.conflict.title': 'Conflit de fusion',
+  'git.conflict.description':
+    'Les conflits nécessitent une résolution manuelle — disponible en Phase 7.',
+  'git.conflict.abort': 'Annuler la fusion',
+  'git.error.dismiss': 'Ignorer',
+  'git.error.retry': 'Réessayer',
+  'git.error.title': 'Une erreur est survenue',
+
+  // ── État vide de Git ──
+  'git.empty.heading': "Pas encore d'historique de version",
+  'git.empty.optional': 'Git est facultatif — vous pouvez ignorer',
+  'git.empty.requireSavedFile': "Enregistrez d'abord le fichier .op pour activer l'historique",
+  'git.empty.newCard': 'Nouveau',
+  'git.empty.newCardDescription': 'Créer un historique local',
+  'git.empty.openCard': 'Ouvrir',
+  'git.empty.openCardDescription': 'Dépôt existant',
+  'git.empty.cloneCard': 'Cloner',
+  'git.empty.cloneCardDescription': 'Depuis un dépôt distant',
+  'git.empty.cloneComingSoon': 'Le clonage sera disponible en Phase 6',
+
+  // ── Formulaire auteur Git ──
+  'git.author.heading': 'Auteur du commit',
+  'git.author.subheading': 'Le premier commit nécessite un nom et un email',
+  'git.author.nameLabel': 'Nom',
+  'git.author.namePlaceholder': 'Votre nom',
+  'git.author.emailLabel': 'Email',
+  'git.author.emailPlaceholder': 'vous@exemple.com',
+  'git.author.submit': 'Enregistrer',
+  'git.author.cancel': 'Annuler',
+  'git.author.validationName': 'Le nom est obligatoire',
+  'git.author.validationEmail': 'Un email valide est requis',
+
+  // ── Sélecteur Git (Phase 4b) ──
+  'git.picker.heading': '{{count}} fichiers .op dans ce dépôt :',
+  'git.picker.milestoneCount': '{{count}} jalons',
+  'git.picker.noHistory': 'Aucun historique',
+  'git.picker.lastCommit': '{{message}} · {{time}}',
+  'git.picker.bindButton': 'Suivre ce fichier',
+  'git.picker.bindAndOpenButton': 'Suivre et ouvrir',
+  'git.picker.empty.heading': 'Aucun fichier .op dans ce dépôt',
+  'git.picker.empty.body': "Le panneau Git a besoin d'au moins un fichier .op pour fonctionner.",
+  'git.picker.empty.close': 'Fermer le panneau',
+
+  // ── Bannière auto-liaison (Phase 4b) ──
+  'git.autoBind.confirmHeading': "{{fileName}} trouvé — l'ouvrir ?",
+  'git.autoBind.openButton': 'Ouvrir',
+  'git.autoBind.dismissButton': 'Ignorer',
+
+  // ── Temps relatif (Phase 4b) ──
+  'git.relativeTime.justNow': "à l'instant",
+  'git.relativeTime.minutesAgo': 'il y a {{count}}m',
+  'git.relativeTime.hoursAgo': 'il y a {{count}}h',
+  'git.relativeTime.daysAgo': 'il y a {{count}}j',
+
+  // ── Git Commit Input (Phase 4c) ──
+  'git.commit.placeholder': 'Décrire ce changement…',
+  'git.commit.submitButton': 'Enregistrer le jalon',
+  'git.commit.saveRequiredTitle': "Enregistrez d'abord le document",
+  'git.commit.saveRequiredBody':
+    'Vous avez des modifications non enregistrées. Enregistrez le document pour continuer : {{label}}',
+  'git.commit.saveRequiredSave': 'Enregistrer',
+  'git.commit.saveRequiredCancel': 'Annuler',
+
+  // ── Git Header (Phase 4c) ──
+  'git.header.branchComingSoon': 'Changer de branche · disponible en Phase 5',
+  'git.header.pullComingSoon': 'Pull · disponible en Phase 6',
+  'git.header.pushComingSoon': 'Push · disponible en Phase 6',
+  'git.header.autosaveError': "Erreur d'auto-sauvegarde",
+  'git.header.autosaveErrorTitle': 'La dernière auto-sauvegarde a échoué',
+  'git.header.authorMissingWarning': "Définissez l'auteur du commit pour l'attribution",
+  'git.header.overflowSwitchTracked': 'Changer de fichier suivi…',
+  'git.header.overflowClearAuthor': "Effacer l'auteur du commit",
+  'git.header.overflowCloseRepo': 'Fermer le dépôt',
+  'git.header.overflowMoreActions': "Plus d'actions",
+
+  // ── Git History List (Phase 4c) ──
+  'git.history.empty': 'Aucun historique',
+  'git.history.autosaveGroup_one': '1 auto-sauvegarde',
+  'git.history.autosaveGroup_other': '{{count}} auto-sauvegardes',
+  'git.history.autosaveLabel': 'auto {{time}}',
+  'git.history.milestoneDetailTitle': 'Détails du jalon',
+  'git.history.restoreButton': 'Restaurer',
+  'git.history.copyHashButton': 'Copier le hash',
+  'git.history.copiedToast': 'Copié',
+  'git.history.diffComingSoon': 'Vue diff disponible en Phase 6',
+  'git.history.promoteButton': 'Promouvoir en jalon',
+  'git.history.promoteSuccessToast': 'Promu en jalon',
+  'git.history.loadMore': 'Charger plus',
+  'git.autosave.messagePrefix': 'auto',
+  'git.autosave.messageDiffSuffix': '',
+
   // ── Right Panel ──
   'rightPanel.design': 'Design',
   'rightPanel.code': 'Code',

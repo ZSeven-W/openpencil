@@ -572,6 +572,72 @@ describe('git-engine', () => {
         }),
       ).rejects.toMatchObject({ name: 'GitError', code: 'commit-empty' });
     });
+
+    it('engineCommit autosave is a no-op when disk content matches tip blob', async () => {
+      const opFile = await writeOpFile(temp.dir, 'login.op', {
+        version: '1.0.0',
+        children: [{ id: 'r1' }],
+      });
+      const result = await engineInit(opFile);
+      // Create an initial milestone so there is a headsRef parent.
+      await engineCommit(result.repoId, {
+        kind: 'milestone',
+        message: 'initial',
+        author: { name: 't', email: 't@example.com' },
+      });
+      // Mutate the file and autosave — creates the autosave tip.
+      await writeOpFile(temp.dir, 'login.op', {
+        version: '1.0.0',
+        children: [{ id: 'r2' }],
+      });
+      const { hash: first } = await engineCommit(result.repoId, {
+        kind: 'autosave',
+        message: 'auto-1',
+        author: { name: 't', email: 't@example.com' },
+      });
+      // Second autosave with identical disk content — must be a no-op.
+      const { hash: second } = await engineCommit(result.repoId, {
+        kind: 'autosave',
+        message: 'auto-2',
+        author: { name: 't', email: 't@example.com' },
+      });
+      expect(second).toBe(first);
+    });
+
+    it('engineCommit autosave creates a new commit when disk content changed', async () => {
+      const opFile = await writeOpFile(temp.dir, 'login.op', {
+        version: '1.0.0',
+        children: [{ id: 'r1' }],
+      });
+      const result = await engineInit(opFile);
+      // Initial milestone.
+      await engineCommit(result.repoId, {
+        kind: 'milestone',
+        message: 'initial',
+        author: { name: 't', email: 't@example.com' },
+      });
+      // First autosave with mutated content.
+      await writeOpFile(temp.dir, 'login.op', {
+        version: '1.0.0',
+        children: [{ id: 'r2' }],
+      });
+      const { hash: first } = await engineCommit(result.repoId, {
+        kind: 'autosave',
+        message: 'auto-1',
+        author: { name: 't', email: 't@example.com' },
+      });
+      // Mutate again, then autosave — content differs, so a new commit is expected.
+      await writeOpFile(temp.dir, 'login.op', {
+        version: '1.0.0',
+        children: [{ id: 'r3' }],
+      });
+      const { hash: second } = await engineCommit(result.repoId, {
+        kind: 'autosave',
+        message: 'auto-2',
+        author: { name: 't', email: 't@example.com' },
+      });
+      expect(second).not.toBe(first);
+    });
   });
 
   describe('engineRestore + enginePromote', () => {

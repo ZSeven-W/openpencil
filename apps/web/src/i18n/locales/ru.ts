@@ -61,6 +61,106 @@ const ru: TranslationKeys = {
   'topbar.connected': 'подключено',
   'topbar.agentStatus': '{{agents}} агент{{agentSuffix}} · {{mcp}} MCP',
 
+  // ── Панель Git ──
+  'git.openPanel': 'Открыть панель Git',
+  'git.closePanel': 'Закрыть панель Git',
+  'git.title': 'Git · {{fileName}}',
+  'git.titleNoFile': 'Git · (Файл не выбран)',
+  'git.close': 'Закрыть',
+  'git.initializing': 'Инициализация репозитория…',
+  'git.placeholder.trackedPicker': 'Выбор отслеживаемого файла',
+  'git.placeholder.readyState': 'Готовое состояние',
+  'git.placeholder.cloneWizard': 'Мастер клонирования — доступно в Фазе 6',
+  'git.conflict.title': 'Конфликт слияния',
+  'git.conflict.description': 'Конфликты требуют ручного разрешения — доступно в Фазе 7.',
+  'git.conflict.abort': 'Отменить слияние',
+  'git.error.dismiss': 'Закрыть',
+  'git.error.retry': 'Повторить',
+  'git.error.title': 'Что-то пошло не так',
+
+  // ── Пустое состояние Git ──
+  'git.empty.heading': 'История версий ещё не создана',
+  'git.empty.optional': 'Git необязателен — можно пропустить',
+  'git.empty.requireSavedFile': 'Сначала сохраните файл .op, чтобы включить историю',
+  'git.empty.newCard': 'Создать',
+  'git.empty.newCardDescription': 'Создать локальную историю',
+  'git.empty.openCard': 'Открыть',
+  'git.empty.openCardDescription': 'Существующий репозиторий',
+  'git.empty.cloneCard': 'Клонировать',
+  'git.empty.cloneCardDescription': 'Из удалённого',
+  'git.empty.cloneComingSoon': 'Клонирование будет в Фазе 6',
+
+  // ── Форма автора Git ──
+  'git.author.heading': 'Автор коммита',
+  'git.author.subheading': 'Для первого коммита нужно имя и email',
+  'git.author.nameLabel': 'Имя',
+  'git.author.namePlaceholder': 'Ваше имя',
+  'git.author.emailLabel': 'Email',
+  'git.author.emailPlaceholder': 'vy@example.com',
+  'git.author.submit': 'Сохранить',
+  'git.author.cancel': 'Отмена',
+  'git.author.validationName': 'Имя обязательно',
+  'git.author.validationEmail': 'Требуется действительный email',
+
+  // ── Выбор файла Git (Phase 4b) ──
+  'git.picker.heading': '{{count}} файлов .op в этом репозитории:',
+  'git.picker.milestoneCount': '{{count}} вех',
+  'git.picker.noHistory': 'Нет истории',
+  'git.picker.lastCommit': '{{message}} · {{time}}',
+  'git.picker.bindButton': 'Отслеживать этот файл',
+  'git.picker.bindAndOpenButton': 'Отслеживать и открыть',
+  'git.picker.empty.heading': 'В этом репозитории нет файлов .op',
+  'git.picker.empty.body': 'Панель Git требует хотя бы один файл .op.',
+  'git.picker.empty.close': 'Закрыть панель',
+
+  // ── Баннер автопривязки (Phase 4b) ──
+  'git.autoBind.confirmHeading': 'Найден {{fileName}} — открыть?',
+  'git.autoBind.openButton': 'Открыть',
+  'git.autoBind.dismissButton': 'Пропустить',
+
+  // ── Относительное время (Phase 4b) ──
+  'git.relativeTime.justNow': 'только что',
+  'git.relativeTime.minutesAgo': '{{count}}м назад',
+  'git.relativeTime.hoursAgo': '{{count}}ч назад',
+  'git.relativeTime.daysAgo': '{{count}}д назад',
+
+  // ── Git Commit Input (Phase 4c) ──
+  'git.commit.placeholder': 'Опишите это изменение…',
+  'git.commit.submitButton': 'Сохранить веху',
+  'git.commit.saveRequiredTitle': 'Сначала сохраните документ',
+  'git.commit.saveRequiredBody':
+    'У вас есть несохранённые изменения. Сохраните документ, чтобы продолжить: {{label}}',
+  'git.commit.saveRequiredSave': 'Сохранить',
+  'git.commit.saveRequiredCancel': 'Отмена',
+
+  // ── Git Header (Phase 4c) ──
+  'git.header.branchComingSoon': 'Переключить ветку · в Фазе 5',
+  'git.header.pullComingSoon': 'Pull · в Фазе 6',
+  'git.header.pushComingSoon': 'Push · в Фазе 6',
+  'git.header.autosaveError': 'Ошибка автосохранения',
+  'git.header.autosaveErrorTitle': 'Последнее автосохранение не удалось',
+  'git.header.authorMissingWarning': 'Установите автора коммита для атрибуции',
+  'git.header.overflowSwitchTracked': 'Сменить отслеживаемый файл…',
+  'git.header.overflowClearAuthor': 'Очистить автора коммита',
+  'git.header.overflowCloseRepo': 'Закрыть репозиторий',
+  'git.header.overflowMoreActions': 'Ещё действия',
+
+  // ── Git History List (Phase 4c) ──
+  'git.history.empty': 'Нет истории',
+  'git.history.autosaveGroup_one': '1 автосохранение',
+  'git.history.autosaveGroup_other': '{{count}} автосохранений',
+  'git.history.autosaveLabel': 'auto {{time}}',
+  'git.history.milestoneDetailTitle': 'Детали вехи',
+  'git.history.restoreButton': 'Восстановить',
+  'git.history.copyHashButton': 'Копировать хеш',
+  'git.history.copiedToast': 'Скопировано',
+  'git.history.diffComingSoon': 'Просмотр diff в Фазе 6',
+  'git.history.promoteButton': 'Повысить до вехи',
+  'git.history.promoteSuccessToast': 'Повышено до вехи',
+  'git.history.loadMore': 'Загрузить ещё',
+  'git.autosave.messagePrefix': 'auto',
+  'git.autosave.messageDiffSuffix': '',
+
   // ── Right Panel ──
   'rightPanel.design': 'Дизайн',
   'rightPanel.code': 'Код',

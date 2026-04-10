@@ -61,6 +61,106 @@ const de: TranslationKeys = {
   'topbar.connected': 'verbunden',
   'topbar.agentStatus': '{{agents}} Agent{{agentSuffix}} · {{mcp}} MCP',
 
+  // ── Git-Panel ──
+  'git.openPanel': 'Git-Panel öffnen',
+  'git.closePanel': 'Git-Panel schließen',
+  'git.title': 'Git · {{fileName}}',
+  'git.titleNoFile': 'Git · (Keine Datei)',
+  'git.close': 'Schließen',
+  'git.initializing': 'Repository wird initialisiert…',
+  'git.placeholder.trackedPicker': 'Dateiauswahl',
+  'git.placeholder.readyState': 'Bereit-Status',
+  'git.placeholder.cloneWizard': 'Klon-Assistent — verfügbar in Phase 6',
+  'git.conflict.title': 'Merge-Konflikt',
+  'git.conflict.description': 'Konflikte müssen manuell gelöst werden — verfügbar in Phase 7.',
+  'git.conflict.abort': 'Merge abbrechen',
+  'git.error.dismiss': 'Verwerfen',
+  'git.error.retry': 'Erneut versuchen',
+  'git.error.title': 'Ein Fehler ist aufgetreten',
+
+  // ── Git Leerer Zustand ──
+  'git.empty.heading': 'Noch keine Versionshistorie',
+  'git.empty.optional': 'Git ist optional — Überspringen ist in Ordnung',
+  'git.empty.requireSavedFile': 'Speichern Sie die .op-Datei zuerst, um die Historie zu aktivieren',
+  'git.empty.newCard': 'Neu',
+  'git.empty.newCardDescription': 'Lokale Historie erstellen',
+  'git.empty.openCard': 'Öffnen',
+  'git.empty.openCardDescription': 'Vorhandenes Repository',
+  'git.empty.cloneCard': 'Klonen',
+  'git.empty.cloneCardDescription': 'Von einem Remote',
+  'git.empty.cloneComingSoon': 'Klonen wird in Phase 6 verfügbar sein',
+
+  // ── Git Autor-Formular ──
+  'git.author.heading': 'Commit-Autor',
+  'git.author.subheading': 'Der erste Commit benötigt Name und E-Mail',
+  'git.author.nameLabel': 'Name',
+  'git.author.namePlaceholder': 'Ihr Name',
+  'git.author.emailLabel': 'E-Mail',
+  'git.author.emailPlaceholder': 'sie@beispiel.de',
+  'git.author.submit': 'Speichern',
+  'git.author.cancel': 'Abbrechen',
+  'git.author.validationName': 'Name ist erforderlich',
+  'git.author.validationEmail': 'Eine gültige E-Mail ist erforderlich',
+
+  // ── Git Auswahl (Phase 4b) ──
+  'git.picker.heading': '{{count}} .op-Dateien in diesem Repository:',
+  'git.picker.milestoneCount': '{{count}} Meilensteine',
+  'git.picker.noHistory': 'Keine Historie',
+  'git.picker.lastCommit': '{{message}} · {{time}}',
+  'git.picker.bindButton': 'Diese Datei verfolgen',
+  'git.picker.bindAndOpenButton': 'Verfolgen und öffnen',
+  'git.picker.empty.heading': 'Keine .op-Dateien in diesem Repository',
+  'git.picker.empty.body': 'Das Git-Panel benötigt mindestens eine .op-Datei.',
+  'git.picker.empty.close': 'Panel schließen',
+
+  // ── Auto-Bind Banner (Phase 4b) ──
+  'git.autoBind.confirmHeading': '{{fileName}} gefunden — öffnen?',
+  'git.autoBind.openButton': 'Öffnen',
+  'git.autoBind.dismissButton': 'Überspringen',
+
+  // ── Relative Zeit (Phase 4b) ──
+  'git.relativeTime.justNow': 'gerade eben',
+  'git.relativeTime.minutesAgo': 'vor {{count}}m',
+  'git.relativeTime.hoursAgo': 'vor {{count}}h',
+  'git.relativeTime.daysAgo': 'vor {{count}}d',
+
+  // ── Git Commit Input (Phase 4c) ──
+  'git.commit.placeholder': 'Diese Änderung beschreiben…',
+  'git.commit.submitButton': 'Meilenstein speichern',
+  'git.commit.saveRequiredTitle': 'Dokument zuerst speichern',
+  'git.commit.saveRequiredBody':
+    'Sie haben ungespeicherte Änderungen. Speichern Sie das Dokument, um fortzufahren: {{label}}',
+  'git.commit.saveRequiredSave': 'Speichern',
+  'git.commit.saveRequiredCancel': 'Abbrechen',
+
+  // ── Git Header (Phase 4c) ──
+  'git.header.branchComingSoon': 'Branch wechseln · verfügbar in Phase 5',
+  'git.header.pullComingSoon': 'Pull · verfügbar in Phase 6',
+  'git.header.pushComingSoon': 'Push · verfügbar in Phase 6',
+  'git.header.autosaveError': 'Auto-Speichern-Fehler',
+  'git.header.autosaveErrorTitle': 'Letztes Auto-Speichern fehlgeschlagen',
+  'git.header.authorMissingWarning': 'Commit-Autor festlegen',
+  'git.header.overflowSwitchTracked': 'Verfolgte Datei wechseln…',
+  'git.header.overflowClearAuthor': 'Commit-Autor löschen',
+  'git.header.overflowCloseRepo': 'Repository schließen',
+  'git.header.overflowMoreActions': 'Weitere Aktionen',
+
+  // ── Git History List (Phase 4c) ──
+  'git.history.empty': 'Noch kein Verlauf',
+  'git.history.autosaveGroup_one': '1 Auto-Speicherung',
+  'git.history.autosaveGroup_other': '{{count}} Auto-Speicherungen',
+  'git.history.autosaveLabel': 'auto {{time}}',
+  'git.history.milestoneDetailTitle': 'Meilenstein-Details',
+  'git.history.restoreButton': 'Wiederherstellen',
+  'git.history.copyHashButton': 'Hash kopieren',
+  'git.history.copiedToast': 'Kopiert',
+  'git.history.diffComingSoon': 'Diff-Ansicht in Phase 6',
+  'git.history.promoteButton': 'Zu Meilenstein befördern',
+  'git.history.promoteSuccessToast': 'Zu Meilenstein befördert',
+  'git.history.loadMore': 'Mehr laden',
+  'git.autosave.messagePrefix': 'auto',
+  'git.autosave.messageDiffSuffix': '',
+
   // ── Right Panel ──
   'rightPanel.design': 'Design',
   'rightPanel.code': 'Code',

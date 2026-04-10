@@ -230,6 +230,48 @@ export async function sysAheadBehind(opts: {
 }
 
 /**
+ * Executor shape used by getSystemAuthor's test seam. Mirrors runGit's return
+ * type so tests can inject a fake without pulling in node:child_process.
+ */
+type RunGitExec = (args: string[]) => Promise<{ stdout: string; stderr: string }>;
+
+/**
+ * Read `user.name` / `user.email` from the system git config. Used by Phase 4a
+ * as step 2 of the author identity lookup chain (prefs → sysGit → form).
+ *
+ * The optional `injectedExec` parameter is a TEST SEAM: production callers pass
+ * no args and get the real `runGit`-backed path, while tests inject a fake to
+ * deterministically exercise both the success and null branches without
+ * depending on the host machine having a configured global git identity.
+ *
+ * Returns null on:
+ *   - system git not available (when not using injected exec)
+ *   - either config value missing / empty / whitespace-only
+ *   - git exec throwing (e.g. key not set, which git reports as exit 1)
+ * The catch block intentionally swallows errors: "no identity" is a normal
+ * state, not an operational failure, and the caller treats null as "fall
+ * through to the next step in the chain".
+ */
+export async function getSystemAuthor(
+  injectedExec?: RunGitExec,
+): Promise<{ name: string; email: string } | null> {
+  if (!injectedExec && !(await isSystemGitAvailable())) return null;
+
+  const exec: RunGitExec = injectedExec ?? ((args) => runGit(args, { timeoutMs: 5000 }));
+
+  try {
+    const nameResult = await exec(['config', '--get', 'user.name']);
+    const emailResult = await exec(['config', '--get', 'user.email']);
+    const name = nameResult.stdout.trim();
+    const email = emailResult.stdout.trim();
+    if (!name || !email) return null;
+    return { name, email };
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Build the GIT_SSH_COMMAND env value for an SSH key file. Used by the
  * engine before invoking sysClone/Fetch/Pull/Push with auth.kind === 'ssh'.
  */

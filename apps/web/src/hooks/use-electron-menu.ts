@@ -8,6 +8,7 @@ import { syncCanvasPositionsToStore } from '@/canvas/skia-engine-ref';
 import { parseAndPrepareImportedDocument } from '@/utils/import-pen-document';
 import { addRecentFile, clearRecentFiles } from '@/utils/recent-files';
 import { supportsFileSystemAccess, openDocumentFS, openDocument } from '@/utils/file-operations';
+import { loadOpFileFromPath } from '@/utils/load-op-file';
 
 async function confirmUnsaved(): Promise<boolean> {
   const showDialog = (window as any).__showUnsavedDialog;
@@ -40,22 +41,7 @@ export function useElectronMenu() {
     if (!api?.onMenuAction) return;
 
     const loadFileFromPath = (filePath: string) => {
-      api.readFile?.(filePath).then((result) => {
-        if (!result) return;
-        try {
-          const name = filePath.split(/[/\\]/).pop() || 'untitled.op';
-          const prepared = parseAndPrepareImportedDocument(result.content, {
-            fileName: name,
-            filePath,
-          });
-          if (!prepared) return;
-          const { doc } = prepared;
-          useDocumentStore.getState().loadDocument(doc, name, null, filePath);
-          requestAnimationFrame(() => zoomToFitContent());
-        } catch {
-          // Invalid file — ignore
-        }
-      });
+      void loadOpFileFromPath(filePath);
     };
 
     const cleanupOpenFile = api.onOpenFile?.(loadFileFromPath);

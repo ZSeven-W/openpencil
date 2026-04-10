@@ -61,6 +61,106 @@ const ja: TranslationKeys = {
   'topbar.connected': '接続済み',
   'topbar.agentStatus': '{{agents}} Agent{{agentSuffix}} · {{mcp}} MCP',
 
+  // ── Git パネル ──
+  'git.openPanel': 'Git パネルを開く',
+  'git.closePanel': 'Git パネルを閉じる',
+  'git.title': 'Git · {{fileName}}',
+  'git.titleNoFile': 'Git · (ファイル未選択)',
+  'git.close': '閉じる',
+  'git.initializing': 'リポジトリを初期化中…',
+  'git.placeholder.trackedPicker': '追跡ファイルピッカー',
+  'git.placeholder.readyState': 'Ready 状態',
+  'git.placeholder.cloneWizard': 'クローンウィザード — Phase 6 で提供',
+  'git.conflict.title': 'マージコンフリクト',
+  'git.conflict.description': 'コンフリクトには手動解決が必要です — Phase 7 で提供。',
+  'git.conflict.abort': 'マージを中止',
+  'git.error.dismiss': '閉じる',
+  'git.error.retry': '再試行',
+  'git.error.title': '問題が発生しました',
+
+  // ── Git 空状態 ──
+  'git.empty.heading': 'まだバージョン履歴がありません',
+  'git.empty.optional': 'Git は任意 — スキップしても問題ありません',
+  'git.empty.requireSavedFile': '履歴を作成するには .op ファイルを保存してください',
+  'git.empty.newCard': '新規',
+  'git.empty.newCardDescription': 'ローカル履歴を作成',
+  'git.empty.openCard': '開く',
+  'git.empty.openCardDescription': '既存のリポジトリ',
+  'git.empty.cloneCard': 'クローン',
+  'git.empty.cloneCardDescription': 'リモートから',
+  'git.empty.cloneComingSoon': 'クローンは Phase 6 で提供予定',
+
+  // ── Git 作者フォーム ──
+  'git.author.heading': 'コミット作者',
+  'git.author.subheading': '最初のコミットには名前とメールが必要です',
+  'git.author.nameLabel': '名前',
+  'git.author.namePlaceholder': 'あなたの名前',
+  'git.author.emailLabel': 'メール',
+  'git.author.emailPlaceholder': 'you@example.com',
+  'git.author.submit': '保存',
+  'git.author.cancel': 'キャンセル',
+  'git.author.validationName': '名前を入力してください',
+  'git.author.validationEmail': '有効なメールアドレスを入力してください',
+
+  // ── Git ピッカー (Phase 4b) ──
+  'git.picker.heading': 'このリポジトリには {{count}} 個の .op ファイルがあります:',
+  'git.picker.milestoneCount': '{{count}} マイルストーン',
+  'git.picker.noHistory': '履歴なし',
+  'git.picker.lastCommit': '{{message}} · {{time}}',
+  'git.picker.bindButton': 'このファイルを追跡',
+  'git.picker.bindAndOpenButton': '追跡して開く',
+  'git.picker.empty.heading': 'このリポジトリには .op ファイルがありません',
+  'git.picker.empty.body': 'Git パネルには少なくとも 1 つの .op ファイルが必要です',
+  'git.picker.empty.close': 'パネルを閉じる',
+
+  // ── Git 自動バインドバナー (Phase 4b) ──
+  'git.autoBind.confirmHeading': '{{fileName}} が見つかりました — エディタで開きますか?',
+  'git.autoBind.openButton': '開く',
+  'git.autoBind.dismissButton': 'スキップ',
+
+  // ── Git 相対時間 (Phase 4b) ──
+  'git.relativeTime.justNow': '今',
+  'git.relativeTime.minutesAgo': '{{count}}分前',
+  'git.relativeTime.hoursAgo': '{{count}}時間前',
+  'git.relativeTime.daysAgo': '{{count}}日前',
+
+  // ── Git Commit Input (Phase 4c) ──
+  'git.commit.placeholder': 'この変更を説明…',
+  'git.commit.submitButton': 'マイルストーンとして保存',
+  'git.commit.saveRequiredTitle': 'まず文書を保存してください',
+  'git.commit.saveRequiredBody':
+    '未保存の変更があります。続行するには文書を保存してください: {{label}}',
+  'git.commit.saveRequiredSave': '保存',
+  'git.commit.saveRequiredCancel': 'キャンセル',
+
+  // ── Git Header (Phase 4c) ──
+  'git.header.branchComingSoon': 'ブランチ切替 · Phase 5 で提供',
+  'git.header.pullComingSoon': 'プル · Phase 6 で提供',
+  'git.header.pushComingSoon': 'プッシュ · Phase 6 で提供',
+  'git.header.autosaveError': '自動保存エラー',
+  'git.header.autosaveErrorTitle': '前回の自動保存が失敗',
+  'git.header.authorMissingWarning': 'コミット作者を設定してください',
+  'git.header.overflowSwitchTracked': '追跡ファイルを切替…',
+  'git.header.overflowClearAuthor': 'コミット作者をクリア',
+  'git.header.overflowCloseRepo': 'リポジトリを閉じる',
+  'git.header.overflowMoreActions': 'その他の操作',
+
+  // ── Git History List (Phase 4c) ──
+  'git.history.empty': '履歴なし',
+  'git.history.autosaveGroup_one': '1 件の自動保存',
+  'git.history.autosaveGroup_other': '{{count}} 件の自動保存',
+  'git.history.autosaveLabel': 'auto {{time}}',
+  'git.history.milestoneDetailTitle': 'マイルストーン詳細',
+  'git.history.restoreButton': '復元',
+  'git.history.copyHashButton': 'ハッシュをコピー',
+  'git.history.copiedToast': 'コピー済み',
+  'git.history.diffComingSoon': 'Diff は Phase 6 で提供',
+  'git.history.promoteButton': 'マイルストーンに昇格',
+  'git.history.promoteSuccessToast': 'マイルストーンに昇格しました',
+  'git.history.loadMore': 'さらに読み込む',
+  'git.autosave.messagePrefix': 'auto',
+  'git.autosave.messageDiffSuffix': '',
+
   // ── Right Panel ──
   'rightPanel.design': 'デザイン',
   'rightPanel.code': 'コード',

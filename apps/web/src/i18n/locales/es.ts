@@ -61,6 +61,106 @@ const es: TranslationKeys = {
   'topbar.connected': 'conectado',
   'topbar.agentStatus': '{{agents}} agente{{agentSuffix}} · {{mcp}} MCP',
 
+  // ── Panel de Git ──
+  'git.openPanel': 'Abrir panel de Git',
+  'git.closePanel': 'Cerrar panel de Git',
+  'git.title': 'Git · {{fileName}}',
+  'git.titleNoFile': 'Git · (Sin archivo)',
+  'git.close': 'Cerrar',
+  'git.initializing': 'Inicializando repositorio…',
+  'git.placeholder.trackedPicker': 'Selector de archivo rastreado',
+  'git.placeholder.readyState': 'Estado listo',
+  'git.placeholder.cloneWizard': 'Asistente de clonación — disponible en Fase 6',
+  'git.conflict.title': 'Conflicto de fusión',
+  'git.conflict.description': 'Los conflictos requieren resolución manual — disponible en Fase 7.',
+  'git.conflict.abort': 'Abortar fusión',
+  'git.error.dismiss': 'Descartar',
+  'git.error.retry': 'Reintentar',
+  'git.error.title': 'Algo salió mal',
+
+  // ── Estado vacío de Git ──
+  'git.empty.heading': 'Aún no hay historial de versiones',
+  'git.empty.optional': 'Git es opcional — puedes omitirlo',
+  'git.empty.requireSavedFile': 'Guarda el archivo .op para habilitar el historial',
+  'git.empty.newCard': 'Nuevo',
+  'git.empty.newCardDescription': 'Crear historial local',
+  'git.empty.openCard': 'Abrir',
+  'git.empty.openCardDescription': 'Repositorio existente',
+  'git.empty.cloneCard': 'Clonar',
+  'git.empty.cloneCardDescription': 'Desde un remoto',
+  'git.empty.cloneComingSoon': 'Clonar estará disponible en Fase 6',
+
+  // ── Formulario de autor de Git ──
+  'git.author.heading': 'Autor del commit',
+  'git.author.subheading': 'Guardar el primer commit requiere nombre y correo',
+  'git.author.nameLabel': 'Nombre',
+  'git.author.namePlaceholder': 'Tu nombre',
+  'git.author.emailLabel': 'Correo',
+  'git.author.emailPlaceholder': 'tu@ejemplo.com',
+  'git.author.submit': 'Guardar',
+  'git.author.cancel': 'Cancelar',
+  'git.author.validationName': 'El nombre es obligatorio',
+  'git.author.validationEmail': 'Se requiere un correo válido',
+
+  // ── Selector de Git (Phase 4b) ──
+  'git.picker.heading': '{{count}} archivos .op en este repositorio:',
+  'git.picker.milestoneCount': '{{count}} hitos',
+  'git.picker.noHistory': 'Sin historial',
+  'git.picker.lastCommit': '{{message}} · {{time}}',
+  'git.picker.bindButton': 'Rastrear este archivo',
+  'git.picker.bindAndOpenButton': 'Rastrear y abrir',
+  'git.picker.empty.heading': 'No hay archivos .op en este repositorio',
+  'git.picker.empty.body': 'El panel de Git necesita al menos un archivo .op para funcionar.',
+  'git.picker.empty.close': 'Cerrar panel',
+
+  // ── Banner de auto-vinculación (Phase 4b) ──
+  'git.autoBind.confirmHeading': '{{fileName}} encontrado — ¿abrirlo?',
+  'git.autoBind.openButton': 'Abrir',
+  'git.autoBind.dismissButton': 'Omitir',
+
+  // ── Tiempo relativo (Phase 4b) ──
+  'git.relativeTime.justNow': 'ahora',
+  'git.relativeTime.minutesAgo': 'hace {{count}}m',
+  'git.relativeTime.hoursAgo': 'hace {{count}}h',
+  'git.relativeTime.daysAgo': 'hace {{count}}d',
+
+  // ── Git Commit Input (Phase 4c) ──
+  'git.commit.placeholder': 'Describe este cambio…',
+  'git.commit.submitButton': 'Guardar hito',
+  'git.commit.saveRequiredTitle': 'Guarda el documento primero',
+  'git.commit.saveRequiredBody':
+    'Tienes cambios sin guardar. Guarda el documento para continuar: {{label}}',
+  'git.commit.saveRequiredSave': 'Guardar',
+  'git.commit.saveRequiredCancel': 'Cancelar',
+
+  // ── Git Header (Phase 4c) ──
+  'git.header.branchComingSoon': 'Cambiar rama · disponible en Fase 5',
+  'git.header.pullComingSoon': 'Pull · disponible en Fase 6',
+  'git.header.pushComingSoon': 'Push · disponible en Fase 6',
+  'git.header.autosaveError': 'Error de auto-guardado',
+  'git.header.autosaveErrorTitle': 'El último auto-guardado falló',
+  'git.header.authorMissingWarning': 'Configura el autor del commit para registrar la atribución',
+  'git.header.overflowSwitchTracked': 'Cambiar archivo rastreado…',
+  'git.header.overflowClearAuthor': 'Borrar autor del commit',
+  'git.header.overflowCloseRepo': 'Cerrar repositorio',
+  'git.header.overflowMoreActions': 'Más acciones',
+
+  // ── Git History List (Phase 4c) ──
+  'git.history.empty': 'Sin historial',
+  'git.history.autosaveGroup_one': '1 auto-guardado',
+  'git.history.autosaveGroup_other': '{{count}} auto-guardados',
+  'git.history.autosaveLabel': 'auto {{time}}',
+  'git.history.milestoneDetailTitle': 'Detalles del hito',
+  'git.history.restoreButton': 'Restaurar',
+  'git.history.copyHashButton': 'Copiar hash',
+  'git.history.copiedToast': 'Copiado',
+  'git.history.diffComingSoon': 'Vista de diff disponible en Fase 6',
+  'git.history.promoteButton': 'Promover a hito',
+  'git.history.promoteSuccessToast': 'Promovido a hito',
+  'git.history.loadMore': 'Cargar más',
+  'git.autosave.messagePrefix': 'auto',
+  'git.autosave.messageDiffSuffix': '',
+
   // ── Right Panel ──
   'rightPanel.design': 'Diseño',
   'rightPanel.code': 'Código',

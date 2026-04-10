@@ -61,6 +61,105 @@ const hi: TranslationKeys = {
   'topbar.connected': 'कनेक्टेड',
   'topbar.agentStatus': '{{agents}} एजेंट{{agentSuffix}} · {{mcp}} MCP',
 
+  // ── Git पैनल ──
+  'git.openPanel': 'Git पैनल खोलें',
+  'git.closePanel': 'Git पैनल बंद करें',
+  'git.title': 'Git · {{fileName}}',
+  'git.titleNoFile': 'Git · (कोई फ़ाइल नहीं)',
+  'git.close': 'बंद करें',
+  'git.initializing': 'रिपॉज़िटरी आरंभ हो रही है…',
+  'git.placeholder.trackedPicker': 'ट्रैक की गई फ़ाइल चयनकर्ता',
+  'git.placeholder.readyState': 'तैयार स्थिति',
+  'git.placeholder.cloneWizard': 'क्लोन विज़ार्ड — Phase 6 में उपलब्ध',
+  'git.conflict.title': 'विलय संघर्ष',
+  'git.conflict.description': 'संघर्षों को मैन्युअल रूप से हल करना आवश्यक है — Phase 7 में उपलब्ध।',
+  'git.conflict.abort': 'विलय रद्द करें',
+  'git.error.dismiss': 'खारिज करें',
+  'git.error.retry': 'पुनः प्रयास करें',
+  'git.error.title': 'कुछ गलत हो गया',
+
+  // ── Git खाली स्थिति ──
+  'git.empty.heading': 'अभी तक कोई संस्करण इतिहास नहीं',
+  'git.empty.optional': 'Git वैकल्पिक है — छोड़ना ठीक है',
+  'git.empty.requireSavedFile': 'इतिहास सक्षम करने के लिए पहले .op फ़ाइल सहेजें',
+  'git.empty.newCard': 'नया',
+  'git.empty.newCardDescription': 'स्थानीय इतिहास बनाएँ',
+  'git.empty.openCard': 'खोलें',
+  'git.empty.openCardDescription': 'मौजूदा रिपॉज़िटरी',
+  'git.empty.cloneCard': 'क्लोन',
+  'git.empty.cloneCardDescription': 'रिमोट से',
+  'git.empty.cloneComingSoon': 'क्लोन Phase 6 में उपलब्ध होगा',
+
+  // ── Git लेखक फ़ॉर्म ──
+  'git.author.heading': 'कमिट लेखक',
+  'git.author.subheading': 'पहला कमिट सहेजने के लिए नाम और ईमेल चाहिए',
+  'git.author.nameLabel': 'नाम',
+  'git.author.namePlaceholder': 'आपका नाम',
+  'git.author.emailLabel': 'ईमेल',
+  'git.author.emailPlaceholder': 'aap@udaharan.com',
+  'git.author.submit': 'सहेजें',
+  'git.author.cancel': 'रद्द करें',
+  'git.author.validationName': 'नाम आवश्यक है',
+  'git.author.validationEmail': 'मान्य ईमेल आवश्यक है',
+
+  // ── Git चयनकर्ता (Phase 4b) ──
+  'git.picker.heading': 'इस रिपॉज़िटरी में {{count}} .op फ़ाइलें:',
+  'git.picker.milestoneCount': '{{count}} माइलस्टोन',
+  'git.picker.noHistory': 'कोई इतिहास नहीं',
+  'git.picker.lastCommit': '{{message}} · {{time}}',
+  'git.picker.bindButton': 'इस फ़ाइल को ट्रैक करें',
+  'git.picker.bindAndOpenButton': 'ट्रैक करें और खोलें',
+  'git.picker.empty.heading': 'इस रिपॉज़िटरी में कोई .op फ़ाइल नहीं',
+  'git.picker.empty.body': 'Git पैनल को काम करने के लिए कम से कम एक .op फ़ाइल चाहिए।',
+  'git.picker.empty.close': 'पैनल बंद करें',
+
+  // ── ऑटो-बाइंड बैनर (Phase 4b) ──
+  'git.autoBind.confirmHeading': '{{fileName}} मिला — खोलें?',
+  'git.autoBind.openButton': 'खोलें',
+  'git.autoBind.dismissButton': 'छोड़ें',
+
+  // ── सापेक्ष समय (Phase 4b) ──
+  'git.relativeTime.justNow': 'अभी',
+  'git.relativeTime.minutesAgo': '{{count}} मिनट पहले',
+  'git.relativeTime.hoursAgo': '{{count}} घंटे पहले',
+  'git.relativeTime.daysAgo': '{{count}} दिन पहले',
+
+  // ── Git Commit Input (Phase 4c) ──
+  'git.commit.placeholder': 'इस बदलाव का वर्णन करें…',
+  'git.commit.submitButton': 'माइलस्टोन सहेजें',
+  'git.commit.saveRequiredTitle': 'पहले दस्तावेज़ सहेजें',
+  'git.commit.saveRequiredBody': 'आपके पास सहेजे न गए बदलाव हैं। जारी रखने के लिए दस्तावेज़ सहेजें: {{label}}',
+  'git.commit.saveRequiredSave': 'सहेजें',
+  'git.commit.saveRequiredCancel': 'रद्द करें',
+
+  // ── Git Header (Phase 4c) ──
+  'git.header.branchComingSoon': 'ब्रांच बदलें · Phase 5 में उपलब्ध',
+  'git.header.pullComingSoon': 'Pull · Phase 6 में उपलब्ध',
+  'git.header.pushComingSoon': 'Push · Phase 6 में उपलब्ध',
+  'git.header.autosaveError': 'ऑटो-सेव त्रुटि',
+  'git.header.autosaveErrorTitle': 'पिछला ऑटो-सेव विफल रहा',
+  'git.header.authorMissingWarning': 'जिम्मेदारी दर्ज करने के लिए कमिट लेखक सेट करें',
+  'git.header.overflowSwitchTracked': 'ट्रैक की गई फ़ाइल बदलें…',
+  'git.header.overflowClearAuthor': 'कमिट लेखक साफ़ करें',
+  'git.header.overflowCloseRepo': 'रिपॉज़िटरी बंद करें',
+  'git.header.overflowMoreActions': 'अधिक कार्य',
+
+  // ── Git History List (Phase 4c) ──
+  'git.history.empty': 'कोई इतिहास नहीं',
+  'git.history.autosaveGroup_one': '1 ऑटो-सेव',
+  'git.history.autosaveGroup_other': '{{count}} ऑटो-सेव',
+  'git.history.autosaveLabel': 'auto {{time}}',
+  'git.history.milestoneDetailTitle': 'माइलस्टोन विवरण',
+  'git.history.restoreButton': 'पुनर्स्थापित करें',
+  'git.history.copyHashButton': 'हैश कॉपी करें',
+  'git.history.copiedToast': 'कॉपी किया गया',
+  'git.history.diffComingSoon': 'Diff दृश्य Phase 6 में',
+  'git.history.promoteButton': 'माइलस्टोन में पदोन्नत करें',
+  'git.history.promoteSuccessToast': 'माइलस्टोन में पदोन्नत किया गया',
+  'git.history.loadMore': 'और लोड करें',
+  'git.autosave.messagePrefix': 'auto',
+  'git.autosave.messageDiffSuffix': '',
+
   // ── Right Panel ──
   'rightPanel.design': 'डिज़ाइन',
   'rightPanel.code': 'कोड',

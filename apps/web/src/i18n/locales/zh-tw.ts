@@ -61,6 +61,105 @@ const zhTW: TranslationKeys = {
   'topbar.connected': '已連線',
   'topbar.agentStatus': '{{agents}} 個 Agent{{agentSuffix}} · {{mcp}} 個 MCP',
 
+  // ── Git 面板 ──
+  'git.openPanel': '開啟 Git 面板',
+  'git.closePanel': '關閉 Git 面板',
+  'git.title': 'Git · {{fileName}}',
+  'git.titleNoFile': 'Git · (尚未選擇檔案)',
+  'git.close': '關閉',
+  'git.initializing': '正在初始化儲存庫…',
+  'git.placeholder.trackedPicker': '追蹤檔案選擇器',
+  'git.placeholder.readyState': '就緒狀態',
+  'git.placeholder.cloneWizard': '複製精靈 — Phase 6 中提供',
+  'git.conflict.title': '合併衝突',
+  'git.conflict.description': '衝突需要手動解決 — Phase 7 中提供。',
+  'git.conflict.abort': '中止合併',
+  'git.error.dismiss': '關閉',
+  'git.error.retry': '重試',
+  'git.error.title': '發生問題',
+
+  // ── Git 空狀態 ──
+  'git.empty.heading': '這份檔案還沒有版本歷史',
+  'git.empty.optional': 'Git 是選擇性的 — 略過也不影響使用',
+  'git.empty.requireSavedFile': '請先儲存 .op 檔案以建立歷史',
+  'git.empty.newCard': '新建',
+  'git.empty.newCardDescription': '建立本機歷史',
+  'git.empty.openCard': '開啟',
+  'git.empty.openCardDescription': '已有儲存庫',
+  'git.empty.cloneCard': '複製',
+  'git.empty.cloneCardDescription': '從遠端儲存庫',
+  'git.empty.cloneComingSoon': '複製功能將在 Phase 6 提供',
+
+  // ── Git 作者表單 ──
+  'git.author.heading': '提交署名',
+  'git.author.subheading': '儲存第一次提交需要署名',
+  'git.author.nameLabel': '姓名',
+  'git.author.namePlaceholder': '你的名字',
+  'git.author.emailLabel': '電子郵件',
+  'git.author.emailPlaceholder': 'you@example.com',
+  'git.author.submit': '儲存',
+  'git.author.cancel': '取消',
+  'git.author.validationName': '請輸入姓名',
+  'git.author.validationEmail': '請輸入有效的電子郵件',
+
+  // ── Git 選擇器 (Phase 4b) ──
+  'git.picker.heading': '這個儲存庫裡有 {{count}} 個 .op 檔案:',
+  'git.picker.milestoneCount': '{{count}} 個里程碑',
+  'git.picker.noHistory': '暫無歷史',
+  'git.picker.lastCommit': '{{message}} · {{time}}',
+  'git.picker.bindButton': '追蹤此檔案',
+  'git.picker.bindAndOpenButton': '追蹤並開啟',
+  'git.picker.empty.heading': '這個儲存庫裡沒有 .op 檔案',
+  'git.picker.empty.body': 'Git 面板需要至少一個 .op 檔案才能運作',
+  'git.picker.empty.close': '關閉面板',
+
+  // ── Git 自動綁定提示 (Phase 4b) ──
+  'git.autoBind.confirmHeading': '已找到 {{fileName}},要在編輯器開啟嗎?',
+  'git.autoBind.openButton': '開啟',
+  'git.autoBind.dismissButton': '跳過',
+
+  // ── Git 相對時間 (Phase 4b) ──
+  'git.relativeTime.justNow': '剛剛',
+  'git.relativeTime.minutesAgo': '{{count}}分鐘前',
+  'git.relativeTime.hoursAgo': '{{count}}小時前',
+  'git.relativeTime.daysAgo': '{{count}}天前',
+
+  // ── Git Commit Input (Phase 4c) ──
+  'git.commit.placeholder': '描述這次改動…',
+  'git.commit.submitButton': '儲存為里程碑',
+  'git.commit.saveRequiredTitle': '請先儲存文件',
+  'git.commit.saveRequiredBody': '當前文件有未儲存修改,需要先儲存才能繼續: {{label}}',
+  'git.commit.saveRequiredSave': '儲存',
+  'git.commit.saveRequiredCancel': '取消',
+
+  // ── Git Header (Phase 4c) ──
+  'git.header.branchComingSoon': '切換分支 · Phase 5 中提供',
+  'git.header.pullComingSoon': '拉取 · Phase 6 中提供',
+  'git.header.pushComingSoon': '推送 · Phase 6 中提供',
+  'git.header.autosaveError': '自動儲存錯誤',
+  'git.header.autosaveErrorTitle': '上次自動儲存失敗',
+  'git.header.authorMissingWarning': '請設定提交作者以記錄歸屬',
+  'git.header.overflowSwitchTracked': '切換追蹤檔案…',
+  'git.header.overflowClearAuthor': '清除提交作者',
+  'git.header.overflowCloseRepo': '關閉儲存庫',
+  'git.header.overflowMoreActions': '更多操作',
+
+  // ── Git History List (Phase 4c) ──
+  'git.history.empty': '暫無歷史',
+  'git.history.autosaveGroup_one': '1 個自動快照',
+  'git.history.autosaveGroup_other': '{{count}} 個自動快照',
+  'git.history.autosaveLabel': 'auto {{time}}',
+  'git.history.milestoneDetailTitle': '里程碑詳情',
+  'git.history.restoreButton': '還原',
+  'git.history.copyHashButton': '複製雜湊',
+  'git.history.copiedToast': '已複製',
+  'git.history.diffComingSoon': 'Diff 檢視將在 Phase 6 提供',
+  'git.history.promoteButton': '提升為里程碑',
+  'git.history.promoteSuccessToast': '已提升為里程碑',
+  'git.history.loadMore': '載入更多',
+  'git.autosave.messagePrefix': 'auto',
+  'git.autosave.messageDiffSuffix': '',
+
   // ── Right Panel ──
   'rightPanel.design': '設計',
   'rightPanel.code': '程式碼',

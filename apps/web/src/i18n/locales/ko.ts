@@ -61,6 +61,106 @@ const ko: TranslationKeys = {
   'topbar.connected': '연결됨',
   'topbar.agentStatus': '에이전트 {{agents}}개{{agentSuffix}} · MCP {{mcp}}개',
 
+  // ── Git 패널 ──
+  'git.openPanel': 'Git 패널 열기',
+  'git.closePanel': 'Git 패널 닫기',
+  'git.title': 'Git · {{fileName}}',
+  'git.titleNoFile': 'Git · (파일 선택 안 됨)',
+  'git.close': '닫기',
+  'git.initializing': '저장소 초기화 중…',
+  'git.placeholder.trackedPicker': '추적 파일 선택기',
+  'git.placeholder.readyState': 'Ready 상태',
+  'git.placeholder.cloneWizard': '복제 마법사 — Phase 6 제공 예정',
+  'git.conflict.title': '병합 충돌',
+  'git.conflict.description': '충돌은 수동으로 해결해야 합니다 — Phase 7 제공 예정.',
+  'git.conflict.abort': '병합 중단',
+  'git.error.dismiss': '닫기',
+  'git.error.retry': '다시 시도',
+  'git.error.title': '문제가 발생했습니다',
+
+  // ── Git 빈 상태 ──
+  'git.empty.heading': '아직 버전 기록이 없습니다',
+  'git.empty.optional': 'Git은 선택 사항 — 건너뛰어도 됩니다',
+  'git.empty.requireSavedFile': '기록을 만들려면 .op 파일을 먼저 저장하세요',
+  'git.empty.newCard': '새로 만들기',
+  'git.empty.newCardDescription': '로컬 기록 생성',
+  'git.empty.openCard': '열기',
+  'git.empty.openCardDescription': '기존 저장소',
+  'git.empty.cloneCard': '복제',
+  'git.empty.cloneCardDescription': '원격에서',
+  'git.empty.cloneComingSoon': '복제는 Phase 6에서 제공됩니다',
+
+  // ── Git 작성자 양식 ──
+  'git.author.heading': '커밋 작성자',
+  'git.author.subheading': '첫 커밋을 저장하려면 이름과 이메일이 필요합니다',
+  'git.author.nameLabel': '이름',
+  'git.author.namePlaceholder': '이름',
+  'git.author.emailLabel': '이메일',
+  'git.author.emailPlaceholder': 'you@example.com',
+  'git.author.submit': '저장',
+  'git.author.cancel': '취소',
+  'git.author.validationName': '이름을 입력하세요',
+  'git.author.validationEmail': '유효한 이메일을 입력하세요',
+
+  // ── Git 선택기 (Phase 4b) ──
+  'git.picker.heading': '이 저장소에 {{count}}개의 .op 파일이 있습니다:',
+  'git.picker.milestoneCount': '{{count}}개 마일스톤',
+  'git.picker.noHistory': '기록 없음',
+  'git.picker.lastCommit': '{{message}} · {{time}}',
+  'git.picker.bindButton': '이 파일 추적',
+  'git.picker.bindAndOpenButton': '추적하고 열기',
+  'git.picker.empty.heading': '이 저장소에 .op 파일이 없습니다',
+  'git.picker.empty.body': 'Git 패널은 작동하려면 최소 하나의 .op 파일이 필요합니다',
+  'git.picker.empty.close': '패널 닫기',
+
+  // ── Git 자동 바인딩 배너 (Phase 4b) ──
+  'git.autoBind.confirmHeading': '{{fileName}}을(를) 찾았습니다 — 열까요?',
+  'git.autoBind.openButton': '열기',
+  'git.autoBind.dismissButton': '건너뛰기',
+
+  // ── Git 상대 시간 (Phase 4b) ──
+  'git.relativeTime.justNow': '방금',
+  'git.relativeTime.minutesAgo': '{{count}}분 전',
+  'git.relativeTime.hoursAgo': '{{count}}시간 전',
+  'git.relativeTime.daysAgo': '{{count}}일 전',
+
+  // ── Git Commit Input (Phase 4c) ──
+  'git.commit.placeholder': '이 변경 설명…',
+  'git.commit.submitButton': '마일스톤으로 저장',
+  'git.commit.saveRequiredTitle': '문서를 먼저 저장하세요',
+  'git.commit.saveRequiredBody':
+    '저장되지 않은 변경 사항이 있습니다. 계속하려면 문서를 저장하세요: {{label}}',
+  'git.commit.saveRequiredSave': '저장',
+  'git.commit.saveRequiredCancel': '취소',
+
+  // ── Git Header (Phase 4c) ──
+  'git.header.branchComingSoon': '브랜치 전환 · Phase 5 제공',
+  'git.header.pullComingSoon': 'Pull · Phase 6 제공',
+  'git.header.pushComingSoon': 'Push · Phase 6 제공',
+  'git.header.autosaveError': '자동 저장 오류',
+  'git.header.autosaveErrorTitle': '마지막 자동 저장 실패',
+  'git.header.authorMissingWarning': '기여 기록을 위해 커밋 작성자를 설정하세요',
+  'git.header.overflowSwitchTracked': '추적 파일 전환…',
+  'git.header.overflowClearAuthor': '커밋 작성자 지우기',
+  'git.header.overflowCloseRepo': '저장소 닫기',
+  'git.header.overflowMoreActions': '추가 작업',
+
+  // ── Git History List (Phase 4c) ──
+  'git.history.empty': '기록 없음',
+  'git.history.autosaveGroup_one': '자동 저장 1건',
+  'git.history.autosaveGroup_other': '자동 저장 {{count}}건',
+  'git.history.autosaveLabel': 'auto {{time}}',
+  'git.history.milestoneDetailTitle': '마일스톤 세부정보',
+  'git.history.restoreButton': '복원',
+  'git.history.copyHashButton': '해시 복사',
+  'git.history.copiedToast': '복사됨',
+  'git.history.diffComingSoon': 'Diff 보기는 Phase 6에서 제공',
+  'git.history.promoteButton': '마일스톤으로 승격',
+  'git.history.promoteSuccessToast': '마일스톤으로 승격됨',
+  'git.history.loadMore': '더 로드',
+  'git.autosave.messagePrefix': 'auto',
+  'git.autosave.messageDiffSuffix': '',
+
   // ── Right Panel ──
   'rightPanel.design': '디자인',
   'rightPanel.code': '코드',

@@ -11,222 +11,11 @@
 import { create } from 'zustand';
 import { gitClient } from '@/services/git-client';
 import { GitError, isGitError } from '@/services/git-error';
-import type {
-  GitAuthCreds,
-  GitBranchInfo,
-  GitCandidateFileInfo,
-  GitCommitMeta,
-  GitConflictBag,
-  GitConflictResolution,
-  GitPublicSshKeyInfo,
-  GitRepoOpenInfo,
-} from '@/services/git-types';
 import { useDocumentStore } from '@/stores/document-store';
-
-// ---------------------------------------------------------------------------
-// Types: GitState union + RepoMeta + ConflictBagState + PendingAction
-// ---------------------------------------------------------------------------
-
-export interface RepoMeta {
-  repoId: string;
-  mode: 'single-file' | 'folder';
-  rootPath: string;
-  gitdir: string;
-  engineKind: 'iso' | 'sys';
-  trackedFilePath: string | null;
-  candidateFiles: GitCandidateFileInfo[];
-  currentBranch: string;
-  branches: GitBranchInfo[];
-  workingDirty: boolean;
-  otherFilesDirty: number;
-  otherFilesPaths: string[];
-  ahead: number;
-  behind: number;
-}
-
-/**
- * Renderer-side wrapper that tracks per-conflict resolution state in a Map
- * keyed by conflictId. Built by hydrateConflictBag() from the wire-format
- * GitConflictBag when branchMerge/pull returns conflicts.
- *
- * Invariant: the backend emits conflictIds in distinct namespaces —
- * `node:<pageId|_>:<nodeId>` for node conflicts and `docField:<field>` for
- * doc-field conflicts. The two Maps therefore share no keys, and
- * resolveConflict can probe them in sequence without ambiguity. If the
- * backend ever changes this, resolveConflict's branch logic becomes
- * ambiguous and must be updated to carry an explicit kind tag.
- */
-export interface ConflictBagState {
-  nodeConflicts: Map<
-    string,
-    GitConflictBag['nodeConflicts'][number] & { resolution?: GitConflictResolution }
-  >;
-  docFieldConflicts: Map<
-    string,
-    GitConflictBag['docFieldConflicts'][number] & { resolution?: GitConflictResolution }
-  >;
-}
-
-export interface PendingAction {
-  label: string;
-  run: () => Promise<void>;
-}
-
-export type GitState =
-  | { kind: 'no-file' }
-  | { kind: 'no-repo' }
-  | { kind: 'wizard-clone' }
-  | { kind: 'initializing' }
-  | { kind: 'needs-tracked-file'; repo: RepoMeta }
-  | { kind: 'ready'; repo: RepoMeta; saveRequiredFor?: PendingAction }
-  | {
-      kind: 'conflict';
-      repo: RepoMeta;
-      conflicts: ConflictBagState;
-      saveRequiredFor?: PendingAction;
-    }
-  | { kind: 'error'; message: string; recoverable: boolean };
-
-// ---------------------------------------------------------------------------
-// Store interface
-// ---------------------------------------------------------------------------
-
-interface GitStore {
-  state: GitState;
-  panelOpen: boolean;
-  log: GitCommitMeta[];
-  sshKeys: GitPublicSshKeyInfo[];
-
-  // Panel lifecycle
-  togglePanel: () => void;
-  openPanel: () => void;
-  closePanel: () => void;
-
-  // Repo discovery / creation
-  detectRepo: (filePath: string) => Promise<void>;
-  initRepo: (filePath: string) => Promise<void>;
-  openRepo: (repoPath: string, currentFilePath?: string) => Promise<void>;
-  cloneRepo: (opts: { url: string; dest: string; auth?: GitAuthCreds }) => Promise<void>;
-  bindTrackedFile: (filePath: string) => Promise<void>;
-  refreshCandidates: () => Promise<void>;
-  closeRepo: () => Promise<void>;
-
-  // Status / log / diff
-  refreshStatus: () => Promise<void>;
-  loadLog: (opts: { ref: 'main' | 'autosaves' | string; limit: number }) => Promise<void>;
-  computeDiff: (
-    from: string,
-    to: string,
-  ) => Promise<{
-    summary: {
-      framesChanged: number;
-      nodesAdded: number;
-      nodesRemoved: number;
-      nodesModified: number;
-    };
-    patches: unknown[];
-  }>;
-
-  // Commit / restore / promote (all MUTATING, gated by withCleanWorkingTree)
-  commitMilestone: (message: string, author: { name: string; email: string }) => Promise<void>;
-  commitAutosave: (message: string, author: { name: string; email: string }) => Promise<void>;
-  restoreCommit: (commitHash: string) => Promise<void>;
-  promoteAutosave: (
-    autosaveHash: string,
-    message: string,
-    author: { name: string; email: string },
-  ) => Promise<void>;
-
-  // Branches (switch/merge MUTATING, others read-only)
-  refreshBranches: () => Promise<void>;
-  createBranch: (opts: { name: string; fromCommit?: string }) => Promise<void>;
-  switchBranch: (name: string) => Promise<void>;
-  deleteBranch: (name: string) => Promise<void>;
-  mergeBranch: (fromBranch: string) => Promise<void>;
-
-  // Merge orchestration
-  resolveConflict: (conflictId: string, choice: GitConflictResolution) => Promise<void>;
-  applyMerge: () => Promise<void>;
-  abortMerge: () => Promise<void>;
-
-  // Remote (pull/push MUTATING, fetch read-only)
-  fetchRemote: (auth?: GitAuthCreds) => Promise<void>;
-  pull: (auth?: GitAuthCreds) => Promise<void>;
-  push: (auth?: GitAuthCreds) => Promise<void>;
-
-  // Auth
-  storeAuth: (host: string, creds: GitAuthCreds) => Promise<void>;
-  getAuth: (host: string) => Promise<GitAuthCreds | null>;
-  clearAuth: (host: string) => Promise<void>;
-
-  // SSH keys
-  refreshSshKeys: () => Promise<void>;
-  generateSshKey: (opts: { host: string; comment: string }) => Promise<GitPublicSshKeyInfo>;
-  importSshKey: (opts: { privateKeyPath: string; host: string }) => Promise<GitPublicSshKeyInfo>;
-  deleteSshKey: (keyId: string) => Promise<void>;
-
-  // Retry the queued action after a successful save (Phase 4 wires the button)
-  retrySaveRequired: () => Promise<void>;
-}
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-/**
- * Build an empty RepoMeta shell from a GitRepoOpenInfo. Branches and status
- * fields are filled in by refreshStatus + refreshBranches which the store
- * calls after every init/open/clone/bind.
- */
-function metaFromOpenInfo(info: GitRepoOpenInfo): RepoMeta {
-  return {
-    repoId: info.repoId,
-    mode: info.mode,
-    rootPath: info.rootPath,
-    gitdir: info.gitdir,
-    engineKind: info.engineKind,
-    trackedFilePath: info.trackedFilePath,
-    candidateFiles: info.candidates,
-    currentBranch: 'main', // refreshStatus will correct this
-    branches: [],
-    workingDirty: false,
-    otherFilesDirty: 0,
-    otherFilesPaths: [],
-    ahead: 0,
-    behind: 0,
-  };
-}
-
-/**
- * Hydrate a wire-format GitConflictBag into the Map-backed ConflictBagState.
- */
-function hydrateConflictBag(bag: GitConflictBag): ConflictBagState {
-  const nodeConflicts = new Map<
-    string,
-    GitConflictBag['nodeConflicts'][number] & { resolution?: GitConflictResolution }
-  >();
-  for (const c of bag.nodeConflicts) nodeConflicts.set(c.id, { ...c });
-
-  const docFieldConflicts = new Map<
-    string,
-    GitConflictBag['docFieldConflicts'][number] & { resolution?: GitConflictResolution }
-  >();
-  for (const c of bag.docFieldConflicts) docFieldConflicts.set(c.id, { ...c });
-
-  return { nodeConflicts, docFieldConflicts };
-}
-
-/**
- * Get the current repoId or throw. Most actions require an active session.
- */
-function requireRepoId(state: GitState): string {
-  if (state.kind === 'ready' || state.kind === 'conflict' || state.kind === 'needs-tracked-file') {
-    return state.repo.repoId;
-  }
-  throw new GitError('no-file', 'No active repository for this action', {
-    recoverable: false,
-  });
-}
+import { documentEvents } from '@/utils/document-events';
+import { loadOpFileFromPath } from '@/utils/load-op-file';
+import { hydrateConflictBag, metaFromOpenInfo, requireRepoId } from './git-store-helpers';
+import type { GitState, GitStore, PendingAction } from './git-store-types';
 
 // ---------------------------------------------------------------------------
 // Store
@@ -290,10 +79,193 @@ export const useGitStore = create<GitStore>((set, get) => {
     log: [],
     sshKeys: [],
 
+    // Phase 4a: author identity (loadAuthorIdentity runs the lookup chain)
+    authorIdentity: null,
+    authorPromptVisible: false,
+
+    // Phase 4b: auto-bind banner flag (set by openRepo/cloneRepo when
+    // auto-binding a single candidate; cleared by acknowledge actions)
+    lastAutoBindedPath: null,
+
+    // Phase 4c: commit input draft (ephemeral)
+    commitMessage: '',
+
+    // Phase 4c: autosave error display (last error from the subscriber)
+    autosaveError: null,
+
+    // Phase 4c: subscriber lifecycle handle (internal)
+    __autosaveUnsub: null,
+
     // ---- Panel lifecycle -------------------------------------------------
     togglePanel: () => set((s) => ({ panelOpen: !s.panelOpen })),
     openPanel: () => set({ panelOpen: true }),
     closePanel: () => set({ panelOpen: false }),
+
+    // ---- Phase 4a: author identity actions ------------------------------
+    loadAuthorIdentity: async () => {
+      // All three steps are client-only by design. Skip everything on SSR
+      // (bare `window` reference would ReferenceError even under ?.).
+      if (typeof window === 'undefined') {
+        set({ authorIdentity: null });
+        return;
+      }
+
+      // Step 1: OpenPencil prefs
+      try {
+        const prefs = await window.electronAPI?.getPreferences();
+        const prefName = prefs?.['git.authorName'];
+        const prefEmail = prefs?.['git.authorEmail'];
+        if (prefName && prefEmail) {
+          set({ authorIdentity: { name: prefName, email: prefEmail } });
+          return;
+        }
+      } catch {
+        // Prefs unavailable (e.g. running in browser without Electron) —
+        // fall through to step 2.
+      }
+
+      // Step 2: System git config (only if Electron + sys git available)
+      if (window.electronAPI?.git) {
+        try {
+          const sys = await gitClient.getSystemAuthor();
+          if (sys) {
+            set({ authorIdentity: sys });
+            return;
+          }
+        } catch {
+          // sysGit unavailable or git config not set — fall through to form.
+        }
+      }
+
+      // Step 3: Leave authorIdentity null. Phase 4c's commit input checks
+      // this and surfaces the inline form via showAuthorPrompt.
+      set({ authorIdentity: null });
+    },
+
+    setAuthorIdentity: async (name, email) => {
+      // Persist to OpenPencil prefs first so a panel reopen rehydrates from
+      // them in step 1 of the chain. If preference IPC fails (e.g. browser
+      // mode), still update the in-memory cache so the current session
+      // works. SSR guard: skip the IPC entirely (bare `window` would
+      // ReferenceError) but still update the in-memory cache.
+      if (typeof window !== 'undefined') {
+        try {
+          await window.electronAPI?.setPreference('git.authorName', name);
+          await window.electronAPI?.setPreference('git.authorEmail', email);
+        } catch {
+          /* swallow — in-memory cache below still serves the session */
+        }
+      }
+      set({ authorIdentity: { name, email } });
+    },
+
+    showAuthorPrompt: () => set({ authorPromptVisible: true }),
+    hideAuthorPrompt: () => set({ authorPromptVisible: false }),
+
+    // ---- Phase 4b: auto-bind banner actions ------------------------------
+    acknowledgeAutoBind: () => set({ lastAutoBindedPath: null }),
+    acknowledgeAutoBindAndOpen: async () => {
+      const path = get().lastAutoBindedPath;
+      if (!path) return;
+      // Load the file into the editor via the shared helper. Fire-and-
+      // forget — failures are silent (the helper returns false but the
+      // banner clears regardless to avoid nagging).
+      await loadOpFileFromPath(path);
+      set({ lastAutoBindedPath: null });
+    },
+
+    // ---- Phase 4c: commit input actions ---------------------------------
+    setCommitMessage: (text) => set({ commitMessage: text }),
+    clearCommitMessage: () => set({ commitMessage: '' }),
+    cancelSaveRequired: () =>
+      set((s) => {
+        if (s.state.kind === 'ready' || s.state.kind === 'conflict') {
+          // Destructure to drop saveRequiredFor without TypeScript complaining
+          // about the narrowed variant. The cast is necessary because the
+          // new state object doesn't include the optional saveRequiredFor
+          // field, which is exactly the intent.
+          // eslint-disable-next-line @typescript-eslint/no-unused-vars
+          const { saveRequiredFor: _omit, ...rest } = s.state;
+          return { state: rest as GitState };
+        }
+        return s;
+      }),
+
+    // ---- Phase 4c: overflow menu actions --------------------------------
+    enterTrackedFilePicker: () =>
+      set((s) => {
+        if (s.state.kind !== 'ready') return s;
+        return { state: { kind: 'needs-tracked-file', repo: s.state.repo } };
+      }),
+
+    clearAuthorIdentity: async () => {
+      // Remove the OpenPencil prefs first so a reload doesn't rehydrate.
+      // We must REMOVE the keys (not `setPreference(..., '')`), otherwise
+      // the lookup chain in resolveAuthorIdentity will see empty-string
+      // sentinels on disk and treat them as set-but-blank instead of
+      // absent — diverging from the documented "clear cache AND remove
+      // both prefs keys" contract.
+      if (typeof window !== 'undefined') {
+        try {
+          await window.electronAPI?.removePreference('git.authorName');
+          await window.electronAPI?.removePreference('git.authorEmail');
+        } catch {
+          /* swallow — in-memory clear below still wins for this session */
+        }
+      }
+      set({ authorIdentity: null });
+    },
+
+    // ---- Phase 4c: autosave subscriber lifecycle ------------------------
+    initAutosaveSubscriber: () => {
+      // Idempotent: if already wired, return.
+      if (get().__autosaveUnsub !== null) return;
+
+      const handler = async (event: { filePath: string | null; fileName: string }) => {
+        const current = get().state;
+        if (current.kind !== 'ready') return; // silent no-op
+        if (event.filePath === null) return; // browser-download fallback
+        if (event.filePath !== current.repo.trackedFilePath) return; // different file
+
+        // Compose the autosave message. Phase 4c ships a minimal
+        // "auto: HH:MM" format; Phase 6 will append the diff summary
+        // once computeDiff is wired through.
+        const now = new Date();
+        const hh = String(now.getHours()).padStart(2, '0');
+        const mm = String(now.getMinutes()).padStart(2, '0');
+        const message = `auto: ${hh}:${mm}`;
+
+        // Author identity fallback: if null, use a sentinel. Spec line
+        // 281 says autosave failures are silent — we never throw here.
+        const author = get().authorIdentity ?? { name: 'Unknown', email: 'unknown@local' };
+
+        try {
+          await get().commitAutosave(message, author);
+          set({ autosaveError: null });
+        } catch (err) {
+          if (isGitError(err)) {
+            set({ autosaveError: err.message });
+          } else if (err instanceof Error) {
+            set({ autosaveError: err.message });
+          } else {
+            set({ autosaveError: 'unknown autosave error' });
+          }
+        }
+      };
+
+      const unsub = documentEvents.on('saved', handler);
+      set({ __autosaveUnsub: unsub });
+    },
+
+    disposeAutosaveSubscriber: () => {
+      const unsub = get().__autosaveUnsub;
+      if (unsub) {
+        unsub();
+        set({ __autosaveUnsub: null });
+      }
+    },
+
+    clearAutosaveError: () => set({ autosaveError: null }),
 
     // ---- Repo discovery / creation --------------------------------------
     detectRepo: async (filePath) => {
@@ -327,6 +299,26 @@ export const useGitStore = create<GitStore>((set, get) => {
       set({ state: { kind: 'initializing' } });
       await runOrError(async () => {
         const info = await gitClient.open(repoPath, currentFilePath);
+
+        // Phase 4b auto-bind: if the repo has exactly one candidate and
+        // open() didn't already set trackedFilePath, bind it now and skip
+        // the picker entirely. Surface the auto-bind banner so the user
+        // can also load the file into the editor if they want.
+        if (info.trackedFilePath === null && info.candidates.length === 1) {
+          const only = info.candidates[0];
+          await gitClient.bindTrackedFile(info.repoId, only.path);
+          set({
+            state: {
+              kind: 'ready',
+              repo: { ...metaFromOpenInfo(info), trackedFilePath: only.path },
+            },
+            lastAutoBindedPath: only.path,
+          });
+          await get().refreshStatus();
+          await get().refreshBranches();
+          return;
+        }
+
         const meta = metaFromOpenInfo(info);
         if (info.trackedFilePath === null) {
           set({ state: { kind: 'needs-tracked-file', repo: meta } });
@@ -346,7 +338,29 @@ export const useGitStore = create<GitStore>((set, get) => {
       set({ state: { kind: 'initializing' } });
       await runOrError(async () => {
         const info = await gitClient.clone(opts);
-        // Per spec line 109: clone ALWAYS lands in needs-tracked-file.
+
+        // Phase 4b auto-bind: if the cloned repo has exactly one .op
+        // file, bind it now and surface the auto-bind banner. Otherwise
+        // land in needs-tracked-file (multi-file) or empty picker
+        // (zero-file).
+        if (info.candidates.length === 1) {
+          const only = info.candidates[0];
+          await gitClient.bindTrackedFile(info.repoId, only.path);
+          set({
+            state: {
+              kind: 'ready',
+              repo: { ...metaFromOpenInfo(info), trackedFilePath: only.path },
+            },
+            lastAutoBindedPath: only.path,
+          });
+          await get().refreshStatus();
+          await get().refreshBranches();
+          return;
+        }
+
+        // Per spec line 109: clone with multiple candidates lands in
+        // needs-tracked-file regardless of which file (if any) the user
+        // had open before the clone.
         set({ state: { kind: 'needs-tracked-file', repo: metaFromOpenInfo(info) } });
         await get().refreshStatus();
         await get().refreshBranches();
@@ -423,7 +437,7 @@ export const useGitStore = create<GitStore>((set, get) => {
           // avoid a stale UI. Swallow and continue.
         }
       }
-      set({ state: { kind: 'no-file' }, log: [] });
+      set({ state: { kind: 'no-file' }, log: [], lastAutoBindedPath: null });
     },
 
     // ---- Status / log / diff --------------------------------------------
@@ -506,6 +520,10 @@ export const useGitStore = create<GitStore>((set, get) => {
       const repoId = requireRepoId(get().state);
       await withCleanWorkingTree(async () => {
         await gitClient.commit(repoId, { kind: 'milestone', message, author });
+        // Phase 4c: refresh the log and clear the draft on success so
+        // the history list shows the new commit and the input empties.
+        await get().loadLog({ ref: 'main', limit: 50 });
+        get().clearCommitMessage();
       }, 'commit milestone');
     },
 
@@ -521,6 +539,16 @@ export const useGitStore = create<GitStore>((set, get) => {
       const repoId = requireRepoId(get().state);
       await withCleanWorkingTree(async () => {
         await gitClient.restore(repoId, commitHash);
+        // The IPC overwrote the tracked .op file on disk. Reload it into
+        // document-store so the in-memory document matches the restored
+        // tree — otherwise the next Cmd+S / autosave would write the old
+        // in-memory content back to disk, silently undoing the restore.
+        // HEAD itself is unchanged by restore, so the log does not need
+        // a refresh.
+        const state = get().state;
+        if ((state.kind === 'ready' || state.kind === 'conflict') && state.repo.trackedFilePath) {
+          await loadOpFileFromPath(state.repo.trackedFilePath);
+        }
       }, 'restore');
     },
 
@@ -528,6 +556,14 @@ export const useGitStore = create<GitStore>((set, get) => {
       const repoId = requireRepoId(get().state);
       await withCleanWorkingTree(async () => {
         await gitClient.promote(repoId, autosaveHash, message, author);
+        // Promote writes a new milestone commit at the autosave's tree.
+        // Reload the document for the same reason as restoreCommit — the
+        // on-disk tree may diverge from the in-memory document.
+        const state = get().state;
+        if ((state.kind === 'ready' || state.kind === 'conflict') && state.repo.trackedFilePath) {
+          await loadOpFileFromPath(state.repo.trackedFilePath);
+        }
+        await get().loadLog({ ref: 'main', limit: 50 });
       }, 'promote autosave');
     },
 
@@ -559,6 +595,18 @@ export const useGitStore = create<GitStore>((set, get) => {
         await gitClient.branchSwitch(repoId, name);
         await get().refreshStatus();
         await get().refreshBranches();
+        // The switch updated the tracked file on disk to the new branch's
+        // tip, and HEAD now points at a different commit. Reload the
+        // document from disk (Bug 1 pattern) AND refresh the log so the
+        // history list reflects the new branch. The GitPanelReady log
+        // effect keys on state.kind, which does not change during switch,
+        // so without this explicit call the history list would stay on
+        // the previous branch's commits until the panel remounted.
+        const state = get().state;
+        if ((state.kind === 'ready' || state.kind === 'conflict') && state.repo.trackedFilePath) {
+          await loadOpFileFromPath(state.repo.trackedFilePath);
+        }
+        await get().loadLog({ ref: 'main', limit: 50 });
       }, 'switch branch');
     },
 
@@ -595,6 +643,19 @@ export const useGitStore = create<GitStore>((set, get) => {
         // stay in sync without waiting for a user-triggered refresh.
         await get().refreshStatus();
         await get().refreshBranches();
+        // Reload the tracked file + log for the same reason as switchBranch:
+        // HEAD moved, the on-disk tracked file changed, and the GitPanelReady
+        // log effect keys on state.kind which does NOT change on a clean
+        // merge. Without these calls the canvas would show the pre-merge
+        // content and the history list would miss the merge commit.
+        const postState = get().state;
+        if (
+          (postState.kind === 'ready' || postState.kind === 'conflict') &&
+          postState.repo.trackedFilePath
+        ) {
+          await loadOpFileFromPath(postState.repo.trackedFilePath);
+        }
+        await get().loadLog({ ref: 'main', limit: 50 });
       }, 'merge branch');
     },
 
@@ -740,5 +801,11 @@ export function __resetGitStore(): void {
     panelOpen: false,
     log: [],
     sshKeys: [],
+    authorIdentity: null,
+    authorPromptVisible: false,
+    lastAutoBindedPath: null,
+    commitMessage: '',
+    autosaveError: null,
+    __autosaveUnsub: null,
   });
 }

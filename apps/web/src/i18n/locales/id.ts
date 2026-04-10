@@ -61,6 +61,106 @@ const id: TranslationKeys = {
   'topbar.connected': 'terhubung',
   'topbar.agentStatus': '{{agents}} agent{{agentSuffix}} · {{mcp}} MCP',
 
+  // ── Panel Git ──
+  'git.openPanel': 'Buka panel Git',
+  'git.closePanel': 'Tutup panel Git',
+  'git.title': 'Git · {{fileName}}',
+  'git.titleNoFile': 'Git · (Tidak ada file)',
+  'git.close': 'Tutup',
+  'git.initializing': 'Menginisialisasi repositori…',
+  'git.placeholder.trackedPicker': 'Pemilih file terlacak',
+  'git.placeholder.readyState': 'Status siap',
+  'git.placeholder.cloneWizard': 'Wizard klona — tersedia di Phase 6',
+  'git.conflict.title': 'Konflik merge',
+  'git.conflict.description': 'Konflik perlu diselesaikan secara manual — tersedia di Phase 7.',
+  'git.conflict.abort': 'Batalkan merge',
+  'git.error.dismiss': 'Tutup',
+  'git.error.retry': 'Coba lagi',
+  'git.error.title': 'Terjadi kesalahan',
+
+  // ── Status Kosong Git ──
+  'git.empty.heading': 'Belum ada riwayat versi',
+  'git.empty.optional': 'Git opsional — boleh dilewati',
+  'git.empty.requireSavedFile': 'Simpan file .op terlebih dahulu untuk mengaktifkan riwayat',
+  'git.empty.newCard': 'Baru',
+  'git.empty.newCardDescription': 'Buat riwayat lokal',
+  'git.empty.openCard': 'Buka',
+  'git.empty.openCardDescription': 'Repositori yang ada',
+  'git.empty.cloneCard': 'Klona',
+  'git.empty.cloneCardDescription': 'Dari remote',
+  'git.empty.cloneComingSoon': 'Klona akan tersedia di Phase 6',
+
+  // ── Form Penulis Git ──
+  'git.author.heading': 'Penulis commit',
+  'git.author.subheading': 'Menyimpan commit pertama memerlukan nama dan email',
+  'git.author.nameLabel': 'Nama',
+  'git.author.namePlaceholder': 'Nama Anda',
+  'git.author.emailLabel': 'Email',
+  'git.author.emailPlaceholder': 'anda@contoh.com',
+  'git.author.submit': 'Simpan',
+  'git.author.cancel': 'Batal',
+  'git.author.validationName': 'Nama wajib diisi',
+  'git.author.validationEmail': 'Email yang valid diperlukan',
+
+  // ── Pemilih Git (Phase 4b) ──
+  'git.picker.heading': '{{count}} file .op di repositori ini:',
+  'git.picker.milestoneCount': '{{count}} tonggak',
+  'git.picker.noHistory': 'Tidak ada riwayat',
+  'git.picker.lastCommit': '{{message}} · {{time}}',
+  'git.picker.bindButton': 'Lacak file ini',
+  'git.picker.bindAndOpenButton': 'Lacak dan buka',
+  'git.picker.empty.heading': 'Tidak ada file .op di repositori ini',
+  'git.picker.empty.body': 'Panel Git memerlukan setidaknya satu file .op untuk bekerja.',
+  'git.picker.empty.close': 'Tutup panel',
+
+  // ── Banner auto-bind (Phase 4b) ──
+  'git.autoBind.confirmHeading': '{{fileName}} ditemukan — buka?',
+  'git.autoBind.openButton': 'Buka',
+  'git.autoBind.dismissButton': 'Lewati',
+
+  // ── Waktu relatif (Phase 4b) ──
+  'git.relativeTime.justNow': 'baru saja',
+  'git.relativeTime.minutesAgo': '{{count}}m yang lalu',
+  'git.relativeTime.hoursAgo': '{{count}}j yang lalu',
+  'git.relativeTime.daysAgo': '{{count}}h yang lalu',
+
+  // ── Git Commit Input (Phase 4c) ──
+  'git.commit.placeholder': 'Jelaskan perubahan ini…',
+  'git.commit.submitButton': 'Simpan milestone',
+  'git.commit.saveRequiredTitle': 'Simpan dokumen dulu',
+  'git.commit.saveRequiredBody':
+    'Anda memiliki perubahan yang belum disimpan. Simpan dokumen untuk melanjutkan: {{label}}',
+  'git.commit.saveRequiredSave': 'Simpan',
+  'git.commit.saveRequiredCancel': 'Batal',
+
+  // ── Git Header (Phase 4c) ──
+  'git.header.branchComingSoon': 'Ganti branch · tersedia di Phase 5',
+  'git.header.pullComingSoon': 'Pull · tersedia di Phase 6',
+  'git.header.pushComingSoon': 'Push · tersedia di Phase 6',
+  'git.header.autosaveError': 'Error auto-save',
+  'git.header.autosaveErrorTitle': 'Auto-save terakhir gagal',
+  'git.header.authorMissingWarning': 'Atur penulis commit untuk merekam atribusi',
+  'git.header.overflowSwitchTracked': 'Ganti file yang dilacak…',
+  'git.header.overflowClearAuthor': 'Bersihkan penulis commit',
+  'git.header.overflowCloseRepo': 'Tutup repositori',
+  'git.header.overflowMoreActions': 'Tindakan lainnya',
+
+  // ── Git History List (Phase 4c) ──
+  'git.history.empty': 'Belum ada riwayat',
+  'git.history.autosaveGroup_one': '1 auto-save',
+  'git.history.autosaveGroup_other': '{{count}} auto-save',
+  'git.history.autosaveLabel': 'auto {{time}}',
+  'git.history.milestoneDetailTitle': 'Detail milestone',
+  'git.history.restoreButton': 'Pulihkan',
+  'git.history.copyHashButton': 'Salin hash',
+  'git.history.copiedToast': 'Tersalin',
+  'git.history.diffComingSoon': 'Tampilan Diff di Phase 6',
+  'git.history.promoteButton': 'Promosikan ke milestone',
+  'git.history.promoteSuccessToast': 'Dipromosikan ke milestone',
+  'git.history.loadMore': 'Muat lebih',
+  'git.autosave.messagePrefix': 'auto',
+  'git.autosave.messageDiffSuffix': '',
+
   // ── Right Panel ──
   'rightPanel.design': 'Desain',
   'rightPanel.code': 'Kode',
