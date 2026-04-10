@@ -1,14 +1,14 @@
 // apps/web/src/components/panels/git-panel/git-panel-header.tsx
 //
-// Header row for the Git panel ready/conflict states (Phase 4c).
+// Header row for the Git panel ready/conflict states (Phase 4c → 5).
 // Renders a flex row with two groups:
-//   Left:  branch trigger (disabled) + pull (disabled) + push (disabled)
+//   Left:  branch picker (Phase 5) + pull (disabled) + push (disabled)
 //   Right: autosave-error dot + author-missing dot + overflow popover menu
 //
 // The component returns null unless state.kind is 'ready' or 'conflict'.
 // TooltipProvider is mounted globally in editor-layout.tsx — no local wrapper needed.
 
-import { ArrowDown, ArrowUp, GitBranch, MoreHorizontal } from 'lucide-react';
+import { ArrowDown, ArrowUp, MoreHorizontal } from 'lucide-react';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
@@ -16,6 +16,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Separator } from '@/components/ui/separator';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useGitStore } from '@/stores/git-store';
+import { GitPanelBranchPicker } from './git-panel-branch-picker';
 
 export function GitPanelHeader() {
   const { t } = useTranslation();
@@ -31,31 +32,13 @@ export function GitPanelHeader() {
 
   if (state.kind !== 'ready' && state.kind !== 'conflict') return null;
 
-  const { currentBranch } = state.repo;
-
   return (
     <div className="flex items-center justify-between gap-1 border-b border-border px-2 py-1">
       {/* ── Left group: branch + pull + push ── */}
       <div className="flex items-center gap-0.5">
-        {/* Branch trigger — disabled, coming in Phase 5 */}
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <span tabIndex={0} className="inline-flex">
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                disabled
-                aria-label={currentBranch}
-                className="pointer-events-none flex max-w-[120px] items-center gap-1 text-muted-foreground"
-              >
-                <GitBranch size={12} strokeWidth={1.5} aria-hidden />
-                <span className="truncate text-xs">{currentBranch}</span>
-              </Button>
-            </span>
-          </TooltipTrigger>
-          <TooltipContent side="bottom">{t('git.header.branchComingSoon')}</TooltipContent>
-        </Tooltip>
+        {/* Phase 5: real branch picker shell (Task 2). Mutating flows
+            land in Tasks 3 and 4. */}
+        <GitPanelBranchPicker />
 
         {/* Pull — disabled, coming in Phase 6 */}
         <Tooltip>
