@@ -284,10 +284,7 @@ function validate(doc: unknown): doc is PenDocument {
   return typeof d.version === 'string' && (Array.isArray(d.children) || Array.isArray(d.pages));
 }
 
-function prepareImportedDocument(
-  raw: unknown,
-  filePath?: string | null,
-): PenDocument | null {
+function prepareImportedDocument(raw: unknown, filePath?: string | null): PenDocument | null {
   if (!validate(raw)) return null;
 
   const normalized = normalizePenDocument(raw);
@@ -305,10 +302,7 @@ function prepareImportedDocument(
   };
 }
 
-function shouldApplyLegacyPenCompatibility(
-  doc: PenDocument,
-  filePath?: string | null,
-): boolean {
+function shouldApplyLegacyPenCompatibility(doc: PenDocument, filePath?: string | null): boolean {
   if (!/\.pen$/i.test(filePath ?? '')) return false;
   if (Array.isArray(doc.pages) && doc.pages.length > 0) return false;
 
@@ -320,10 +314,11 @@ function shouldApplyLegacyPenCompatibility(
 
   const legacyVersion = /^2(?:\.\d+)*$/i.test(doc.version);
   const hasLegacyShell = pageLikeFrames.some((frame) =>
-    frame.children?.some((child) =>
-      child?.type === 'frame'
-      && typeof child.name === 'string'
-      && /^(content|qa|reference)$/i.test(child.name),
+    frame.children?.some(
+      (child) =>
+        child?.type === 'frame' &&
+        typeof child.name === 'string' &&
+        /^(content|qa|reference)$/i.test(child.name),
     ),
   );
   const pageLikeDominates = pageLikeFrames.length >= Math.max(2, Math.floor(topLevel.length / 2));
@@ -333,10 +328,12 @@ function shouldApplyLegacyPenCompatibility(
 
 function isLegacyPageFrame(node: PenNode): node is PenNode & { children?: PenNode[] } {
   const rawNode = node as unknown as Record<string, unknown>;
-  return node.type === 'frame'
-    && rawNode.clip === true
-    && typeof node.name === 'string'
-    && /^Page\s+\d+/i.test(node.name);
+  return (
+    node.type === 'frame' &&
+    rawNode.clip === true &&
+    typeof node.name === 'string' &&
+    /^Page\s+\d+/i.test(node.name)
+  );
 }
 
 function reverseDescendantOrder(node: PenNode): PenNode {

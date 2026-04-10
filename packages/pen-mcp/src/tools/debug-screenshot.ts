@@ -9,9 +9,7 @@ export interface DebugScreenshotParams {
   timeoutMs?: number;
 }
 
-export async function handleScreenshot(
-  args: DebugScreenshotParams,
-): Promise<ToolContent[]> {
+export async function handleScreenshot(args: DebugScreenshotParams): Promise<ToolContent[]> {
   if (args.target === 'node' && !args.nodeId) {
     throw new Error('target="node" requires nodeId');
   }

@@ -1,10 +1,10 @@
-import { AlertTriangle } from 'lucide-react'
-import { Button } from '@/components/ui/button'
+import { AlertTriangle } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 
 interface LocalImageWarningProps {
-  message: string
-  assetPath: string
-  onRelink?: () => void
+  message: string;
+  assetPath: string;
+  onRelink?: () => void;
 }
 
 export default function LocalImageWarning({
@@ -17,12 +17,8 @@ export default function LocalImageWarning({
       <div className="flex items-start gap-2">
         <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-orange-400" />
         <div className="min-w-0 flex-1">
-          <div className="text-[11px] font-medium text-orange-200">
-            {message}
-          </div>
-          <div className="mt-0.5 text-[10px] text-orange-100/80 break-all">
-            {assetPath}
-          </div>
+          <div className="text-[11px] font-medium text-orange-200">{message}</div>
+          <div className="mt-0.5 text-[10px] text-orange-100/80 break-all">{assetPath}</div>
         </div>
         {onRelink && (
           <Button
@@ -36,5 +32,5 @@ export default function LocalImageWarning({
         )}
       </div>
     </div>
-  )
+  );
 }

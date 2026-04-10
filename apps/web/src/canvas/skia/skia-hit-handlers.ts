@@ -1,20 +1,20 @@
-import type { SkiaEngine } from './skia-engine'
-import { useCanvasStore } from '@/stores/canvas-store'
-import type { EllipseNode, PathNode } from '@/types/pen'
-import { computeArcHandles } from './skia-overlays'
-import { getEditablePathState } from './path-editing'
+import type { SkiaEngine } from './skia-engine';
+import { useCanvasStore } from '@/stores/canvas-store';
+import type { EllipseNode, PathNode } from '@/types/pen';
+import { computeArcHandles } from './skia-overlays';
+import { getEditablePathState } from './path-editing';
 
-type HandleDir = 'nw' | 'n' | 'ne' | 'e' | 'se' | 's' | 'sw' | 'w'
-type ArcHandleType = 'start' | 'end' | 'inner'
-type PathControlType = 'anchor' | 'handleIn' | 'handleOut'
+type HandleDir = 'nw' | 'n' | 'ne' | 'e' | 'se' | 's' | 'sw' | 'w';
+type ArcHandleType = 'start' | 'end' | 'inner';
+type PathControlType = 'anchor' | 'handleIn' | 'handleOut';
 
-export type { HandleDir, ArcHandleType, PathControlType }
+export type { HandleDir, ArcHandleType, PathControlType };
 
-export const HANDLE_HIT_RADIUS = 8
-export const ROTATE_OUTER_RADIUS = 16
-export const ARC_HANDLE_HIT_RADIUS = 8
-export const PATH_CONTROL_HIT_RADIUS = 8
-export const DRAG_THRESHOLD = 3
+export const HANDLE_HIT_RADIUS = 8;
+export const ROTATE_OUTER_RADIUS = 16;
+export const ARC_HANDLE_HIT_RADIUS = 8;
+export const PATH_CONTROL_HIT_RADIUS = 8;
+export const DRAG_THRESHOLD = 3;
 
 export const handleCursors: Record<HandleDir, string> = {
   nw: 'nwse-resize',
@@ -121,40 +121,42 @@ export function hitTestPathControl(
   sceneX: number,
   sceneY: number,
 ): { type: PathControlType; anchorIndex: number; nodeId: string } | null {
-  const rn = getSelectedRN(engine)
-  if (!rn || rn.node.type !== 'path') return null
+  const rn = getSelectedRN(engine);
+  if (!rn || rn.node.type !== 'path') return null;
 
-  const state = getEditablePathState(
-    rn.node as PathNode,
-    { x: rn.absX, y: rn.absY, width: rn.absW, height: rn.absH },
-  )
-  if (!state) return null
+  const state = getEditablePathState(rn.node as PathNode, {
+    x: rn.absX,
+    y: rn.absY,
+    width: rn.absW,
+    height: rn.absH,
+  });
+  if (!state) return null;
 
-  const hitR = PATH_CONTROL_HIT_RADIUS / engine.zoom
+  const hitR = PATH_CONTROL_HIT_RADIUS / engine.zoom;
   for (let i = 0; i < state.sceneAnchors.length; i++) {
-    const anchor = state.sceneAnchors[i]
+    const anchor = state.sceneAnchors[i];
     if (anchor.handleOut) {
-      const hx = anchor.x + anchor.handleOut.x
-      const hy = anchor.y + anchor.handleOut.y
+      const hx = anchor.x + anchor.handleOut.x;
+      const hy = anchor.y + anchor.handleOut.y;
       if (Math.hypot(sceneX - hx, sceneY - hy) <= hitR) {
-        return { type: 'handleOut', anchorIndex: i, nodeId: rn.node.id }
+        return { type: 'handleOut', anchorIndex: i, nodeId: rn.node.id };
       }
     }
     if (anchor.handleIn) {
-      const hx = anchor.x + anchor.handleIn.x
-      const hy = anchor.y + anchor.handleIn.y
+      const hx = anchor.x + anchor.handleIn.x;
+      const hy = anchor.y + anchor.handleIn.y;
       if (Math.hypot(sceneX - hx, sceneY - hy) <= hitR) {
-        return { type: 'handleIn', anchorIndex: i, nodeId: rn.node.id }
+        return { type: 'handleIn', anchorIndex: i, nodeId: rn.node.id };
       }
     }
   }
 
   for (let i = 0; i < state.sceneAnchors.length; i++) {
-    const anchor = state.sceneAnchors[i]
+    const anchor = state.sceneAnchors[i];
     if (Math.hypot(sceneX - anchor.x, sceneY - anchor.y) <= hitR) {
-      return { type: 'anchor', anchorIndex: i, nodeId: rn.node.id }
+      return { type: 'anchor', anchorIndex: i, nodeId: rn.node.id };
     }
   }
 
-  return null
+  return null;
 }

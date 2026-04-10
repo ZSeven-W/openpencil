@@ -202,10 +202,7 @@ function ringArea(node: PenNode): number {
  * is auto-centered. The outermost ring wraps the next, and so on. The
  * innermost ring contains the text/icon center label, if any.
  */
-function rewriteToNestedRingFrames(
-  original: PenNode,
-  match: StackedEllipsesMatch,
-): PenNode {
+function rewriteToNestedRingFrames(original: PenNode, match: StackedEllipsesMatch): PenNode {
   const outerW = getNum((original as { width?: unknown }).width);
   const outerH = getNum((original as { height?: unknown }).height);
 
@@ -458,7 +455,10 @@ export function normalizeRingTrackProgressGeometry(node: PenNode): void {
   const children = getChildren(node);
   if (!children || children.length < 2) return;
 
-  if (node.type === 'frame' && ((node as { layout?: string }).layout === 'none' || !(node as { layout?: string }).layout)) {
+  if (
+    node.type === 'frame' &&
+    ((node as { layout?: string }).layout === 'none' || !(node as { layout?: string }).layout)
+  ) {
     const track = children.find(isEllipseTrack);
     const progress = children.find(isProgressArcPath);
     if (track && progress) {
@@ -542,7 +542,10 @@ function rewritePseudoRingFrame(node: PenNode): void {
     | { thickness?: number; fill?: unknown }
     | undefined;
   if (rootStroke && progressStroke && typeof progressStroke.thickness === 'number') {
-    progressStroke.thickness = Math.max(2, Math.min(progressStroke.thickness, Math.round(progressStroke.thickness * 0.72)));
+    progressStroke.thickness = Math.max(
+      2,
+      Math.min(progressStroke.thickness, Math.round(progressStroke.thickness * 0.72)),
+    );
   }
 
   (progress as PenNode & { width?: number }).width = size;

@@ -148,42 +148,42 @@ export function updateNodeInTree(
   id: string,
   updates: Partial<PenNode>,
 ): PenNode[] {
-  if (Object.keys(updates).length === 0) return nodes
+  if (Object.keys(updates).length === 0) return nodes;
 
   const hasNodeChanges = (node: PenNode): boolean => {
-    const nodeRecord = node as unknown as Record<string, unknown>
+    const nodeRecord = node as unknown as Record<string, unknown>;
     for (const [key, value] of Object.entries(updates)) {
       if (!Object.is(nodeRecord[key], value)) {
-        return true
+        return true;
       }
     }
-    return false
-  }
+    return false;
+  };
 
   for (let i = 0; i < nodes.length; i++) {
-    const node = nodes[i]
+    const node = nodes[i];
 
     if (node.id === id) {
-      if (!hasNodeChanges(node)) return nodes
-      const nextNodes = [...nodes]
-      nextNodes[i] = { ...node, ...updates } as PenNode
-      return nextNodes
+      if (!hasNodeChanges(node)) return nodes;
+      const nextNodes = [...nodes];
+      nextNodes[i] = { ...node, ...updates } as PenNode;
+      return nextNodes;
     }
 
     if ('children' in node && node.children?.length) {
-      const nextChildren = updateNodeInTree(node.children, id, updates)
+      const nextChildren = updateNodeInTree(node.children, id, updates);
       if (nextChildren !== node.children) {
-        const nextNodes = [...nodes]
+        const nextNodes = [...nodes];
         nextNodes[i] = {
           ...node,
           children: nextChildren,
-        } as PenNode
-        return nextNodes
+        } as PenNode;
+        return nextNodes;
       }
     }
   }
 
-  return nodes
+  return nodes;
 }
 
 export function flattenNodes(nodes: PenNode[]): PenNode[] {

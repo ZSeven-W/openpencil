@@ -53,7 +53,9 @@ function applyFixes(issues: Issue[]): number {
       applied++;
       console.log(`[Pre-validation] ${issue.nodeId}: removed (${issue.reason})`);
     } else {
-      store.updateNode(issue.nodeId, { [issue.property]: issue.suggestedValue } as Partial<PenNode>);
+      store.updateNode(issue.nodeId, {
+        [issue.property]: issue.suggestedValue,
+      } as Partial<PenNode>);
       applied++;
       console.log(
         `[Pre-validation] ${issue.nodeId}: ${issue.property} → ${JSON.stringify(issue.suggestedValue)} (${issue.reason})`,

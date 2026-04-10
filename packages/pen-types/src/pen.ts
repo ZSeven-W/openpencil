@@ -123,31 +123,31 @@ export interface PolygonNode extends PenNodeBase {
 }
 
 export interface PenPathHandle {
-  x: number
-  y: number
+  x: number;
+  y: number;
 }
 
-export type PenPathPointType = 'corner' | 'mirrored' | 'independent'
+export type PenPathPointType = 'corner' | 'mirrored' | 'independent';
 
 export interface PenPathAnchor {
-  x: number
-  y: number
-  handleIn: PenPathHandle | null
-  handleOut: PenPathHandle | null
-  pointType?: PenPathPointType
+  x: number;
+  y: number;
+  handleIn: PenPathHandle | null;
+  handleOut: PenPathHandle | null;
+  pointType?: PenPathPointType;
 }
 
 export interface PathNode extends PenNodeBase {
-  type: 'path'
-  iconId?: string // Iconify icon ID, e.g. "lucide:home"
-  d: string
-  anchors?: PenPathAnchor[]
-  closed?: boolean
-  width?: SizingBehavior
-  height?: SizingBehavior
-  fill?: PenFill[]
-  stroke?: PenStroke
-  effects?: PenEffect[]
+  type: 'path';
+  iconId?: string; // Iconify icon ID, e.g. "lucide:home"
+  d: string;
+  anchors?: PenPathAnchor[];
+  closed?: boolean;
+  width?: SizingBehavior;
+  height?: SizingBehavior;
+  fill?: PenFill[];
+  stroke?: PenStroke;
+  effects?: PenEffect[];
 }
 
 export interface TextNode extends PenNodeBase {

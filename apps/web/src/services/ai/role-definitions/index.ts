@@ -46,9 +46,7 @@ const inputStroke = (theme?: 'dark' | 'light'): PenStroke =>
   theme === 'dark' ? INPUT_STROKE_DARK : INPUT_STROKE_LIGHT;
 
 const navbarFill = (theme?: 'dark' | 'light'): PenFill[] =>
-  theme === 'dark'
-    ? [{ type: 'solid', color: '#111111' }]
-    : [{ type: 'solid', color: '#FFFFFF' }];
+  theme === 'dark' ? [{ type: 'solid', color: '#111111' }] : [{ type: 'solid', color: '#FFFFFF' }];
 
 const navbarBottomBorder = (theme?: 'dark' | 'light'): PenStroke => ({
   thickness: [0, 0, 1, 0] as [number, number, number, number],

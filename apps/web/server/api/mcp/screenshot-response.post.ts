@@ -1,9 +1,6 @@
 // apps/web/server/api/mcp/screenshot-response.post.ts
 import { defineEventHandler, readBody } from 'h3';
-import {
-  resolvePending,
-  type ScreenshotResponse,
-} from '../../utils/mcp-screenshot-rpc';
+import { resolvePending, type ScreenshotResponse } from '../../utils/mcp-screenshot-rpc';
 
 export default defineEventHandler(async (event) => {
   const body = (await readBody(event)) as ScreenshotResponse;

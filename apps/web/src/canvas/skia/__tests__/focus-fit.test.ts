@@ -1,20 +1,19 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it } from 'vitest';
 
-import type { RenderNode } from '@zseven-w/pen-renderer'
+import type { RenderNode } from '@zseven-w/pen-renderer';
 
-import {
-  fitSceneBoundsToViewport,
-  getFocusBounds,
-} from '../focus-fit'
+import { fitSceneBoundsToViewport, getFocusBounds } from '../focus-fit';
 
-function renderNode(partial: Partial<RenderNode> & { node: { id: string; type: string } }): RenderNode {
+function renderNode(
+  partial: Partial<RenderNode> & { node: { id: string; type: string } },
+): RenderNode {
   return {
     absX: 0,
     absY: 0,
     absW: 0,
     absH: 0,
     ...partial,
-  } as RenderNode
+  } as RenderNode;
 }
 
 describe('focus fit helpers', () => {
@@ -41,15 +40,15 @@ describe('focus fit helpers', () => {
         absW: 180,
         absH: 160,
       }),
-    ]
+    ];
 
     expect(getFocusBounds(renderNodes, ['shape-1', 'shape-2'])).toEqual({
       minX: 120,
       minY: 80,
       maxX: 600,
       maxY: 360,
-    })
-  })
+    });
+  });
 
   it('falls back to top-level content bounds when nothing is selected', () => {
     const renderNodes = [
@@ -68,15 +67,15 @@ describe('focus fit helpers', () => {
         absH: 90,
         clipRect: { x: 0, y: 0, w: 1000, h: 800, rx: 0 },
       }),
-    ]
+    ];
 
     expect(getFocusBounds(renderNodes, [])).toEqual({
       minX: 0,
       minY: 0,
       maxX: 1000,
       maxY: 800,
-    })
-  })
+    });
+  });
 
   it('computes a centered fit viewport and honors max zoom', () => {
     const viewport = fitSceneBoundsToViewport(
@@ -89,12 +88,12 @@ describe('focus fit helpers', () => {
       1000,
       800,
       { padding: 100, maxZoom: 2 },
-    )
+    );
 
     expect(viewport).toEqual({
       zoom: 2,
       panX: 100,
       panY: 200,
-    })
-  })
-})
+    });
+  });
+});

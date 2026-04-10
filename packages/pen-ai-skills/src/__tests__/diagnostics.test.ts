@@ -278,9 +278,7 @@ describe('detectTextExplicitHeights', () => {
     const root: PenNode = {
       id: 'r',
       type: 'frame',
-      children: [
-        { id: 't1', type: 'text', text: 'hi', fontSize: 14 } as unknown as PenNode,
-      ],
+      children: [{ id: 't1', type: 'text', text: 'hi', fontSize: 14 } as unknown as PenNode],
     } as unknown as PenNode;
     expect(detectTextExplicitHeights(root)).toHaveLength(0);
   });
@@ -503,9 +501,7 @@ describe('detectSiblingInconsistencies', () => {
     } as unknown as PenNode;
 
     const issues = detectSiblingInconsistencies(root);
-    const footerIssue = issues.find(
-      (i) => i.nodeId === 'footer' && i.property === 'cornerRadius',
-    );
+    const footerIssue = issues.find((i) => i.nodeId === 'footer' && i.property === 'cornerRadius');
     expect(footerIssue).toBeDefined();
     expect(footerIssue!.suggestedValue).toBe(0);
     expect(footerIssue!.severity).toBe('info');

@@ -99,9 +99,11 @@ describe('icon role defaults', () => {
     resolveTreeRoles(card, 375);
     resolveTreePostPass(card, 375);
 
-    const icon = (((card as PenNode & { children: PenNode[] }).children[0] as PenNode & {
-      children: PenNode[];
-    }).children[0]) as PenNode & { iconId?: string };
+    const icon = (
+      (card as PenNode & { children: PenNode[] }).children[0] as PenNode & {
+        children: PenNode[];
+      }
+    ).children[0] as PenNode & { iconId?: string };
 
     expect(icon.iconId).toBe('lucide:activity');
   });

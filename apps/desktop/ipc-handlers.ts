@@ -12,12 +12,12 @@ import {
   setUpdaterState,
   clearUpdateTimer,
   startUpdateTimer,
-} from './auto-updater'
-import { getLogDir } from './logger'
+} from './auto-updater';
+import { getLogDir } from './logger';
 import {
   buildUnsavedChangesDialogOptions,
   mapUnsavedChangesResponse,
-} from './unsaved-changes-dialog'
+} from './unsaved-changes-dialog';
 
 interface IpcDeps {
   getMainWindow: () => BrowserWindow | null;
@@ -124,8 +124,8 @@ export function setupIPC(deps: IpcDeps): void {
   });
 
   ipcMain.handle('dialog:openImageFile', async () => {
-    const mainWindow = getMainWindow()
-    if (!mainWindow) return null
+    const mainWindow = getMainWindow();
+    if (!mainWindow) return null;
     const result = await dialog.showOpenDialog(mainWindow, {
       title: 'Open image file',
       filters: [
@@ -135,40 +135,39 @@ export function setupIPC(deps: IpcDeps): void {
         },
       ],
       properties: ['openFile'],
-    })
-    if (result.canceled || result.filePaths.length === 0) return null
+    });
+    if (result.canceled || result.filePaths.length === 0) return null;
 
-    const filePath = result.filePaths[0]
+    const filePath = result.filePaths[0];
     return {
       filePath,
       name: filePath.split(/[\\/]/).pop() ?? 'image',
-      content: extname(filePath).toLowerCase() === '.svg'
-        ? await readFile(filePath, 'utf-8')
-        : null,
-    }
-  })
+      content:
+        extname(filePath).toLowerCase() === '.svg' ? await readFile(filePath, 'utf-8') : null,
+    };
+  });
 
   ipcMain.handle(
     'dialog:confirmUnsavedChanges',
     async (
       _event,
       payload: {
-        message: string
-        detail?: string
-        yesLabel: string
-        noLabel: string
-        cancelLabel: string
+        message: string;
+        detail?: string;
+        yesLabel: string;
+        noLabel: string;
+        cancelLabel: string;
       },
     ) => {
-      const mainWindow = getMainWindow()
-      if (!mainWindow) return 'cancel'
+      const mainWindow = getMainWindow();
+      if (!mainWindow) return 'cancel';
       const { response } = await dialog.showMessageBox(
         mainWindow,
         buildUnsavedChangesDialogOptions(payload),
-      )
-      return mapUnsavedChangesResponse(response)
+      );
+      return mapUnsavedChangesResponse(response);
     },
-  )
+  );
 
   // Theme sync for Windows/Linux title bar overlay
   ipcMain.handle(

@@ -1,6 +1,6 @@
 interface SyncableEngine {
-  dragSyncSuppressed: boolean
-  syncFromDocument: () => void
+  dragSyncSuppressed: boolean;
+  syncFromDocument: () => void;
 }
 
 export function createDocumentSyncScheduler(
@@ -8,40 +8,40 @@ export function createDocumentSyncScheduler(
   requestFrame: (cb: (time: number) => void) => number = (cb) => requestAnimationFrame(cb),
   cancelFrame: (id: number) => void = (id) => cancelAnimationFrame(id),
 ) {
-  let frameId = 0
-  let pending = false
-  let disposed = false
+  let frameId = 0;
+  let pending = false;
+  let disposed = false;
 
   const flush = () => {
-    frameId = 0
-    pending = false
-    if (disposed) return
+    frameId = 0;
+    pending = false;
+    if (disposed) return;
 
-    const engine = getEngine()
-    if (!engine) return
+    const engine = getEngine();
+    if (!engine) return;
 
     if (engine.dragSyncSuppressed) {
-      schedule()
-      return
+      schedule();
+      return;
     }
 
-    engine.syncFromDocument()
-  }
+    engine.syncFromDocument();
+  };
 
   const schedule = () => {
-    if (disposed || pending) return
-    pending = true
-    frameId = requestFrame(flush)
-  }
+    if (disposed || pending) return;
+    pending = true;
+    frameId = requestFrame(flush);
+  };
 
   const dispose = () => {
-    disposed = true
-    pending = false
+    disposed = true;
+    pending = false;
     if (frameId) {
-      cancelFrame(frameId)
-      frameId = 0
+      cancelFrame(frameId);
+      frameId = 0;
     }
-  }
+  };
 
-  return { schedule, dispose }
+  return { schedule, dispose };
 }

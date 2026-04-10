@@ -1,22 +1,19 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it } from 'vitest';
 
-import type { PenDocument } from '@/types/pen'
-import {
-  parseAndPrepareImportedDocument,
-  prepareImportedDocument,
-} from '../import-pen-document'
+import type { PenDocument } from '@/types/pen';
+import { parseAndPrepareImportedDocument, prepareImportedDocument } from '../import-pen-document';
 
 function getChildrenNames(node: PenDocument['children'][number]): string[] {
-  if (!('children' in node) || !Array.isArray(node.children)) return []
-  return node.children.map((child) => child.name ?? '')
+  if (!('children' in node) || !Array.isArray(node.children)) return [];
+  return node.children.map((child) => child.name ?? '');
 }
 
 function getChildAt(
   node: PenDocument['children'][number],
   index: number,
 ): PenDocument['children'][number] | null {
-  if (!('children' in node) || !Array.isArray(node.children)) return null
-  return node.children[index] ?? null
+  if (!('children' in node) || !Array.isArray(node.children)) return null;
+  return node.children[index] ?? null;
 }
 
 function makeLegacyPen(): PenDocument {
@@ -118,46 +115,37 @@ function makeLegacyPen(): PenDocument {
         ],
       },
     ],
-  }
-  return legacyDoc as unknown as PenDocument
+  };
+  return legacyDoc as unknown as PenDocument;
 }
 
 describe('prepareImportedDocument', () => {
   it('forces legacy .pen compatibility for pencil-style page stacks', () => {
     const prepared = prepareImportedDocument(makeLegacyPen(), {
       fileName: 'layout.pen',
-    })
+    });
 
-    expect(prepared).not.toBeNull()
-    expect(prepared!.appliedLegacyPenCompatibility).toBe(true)
-    expect(prepared!.doc.children.map((node) => node.name)).toEqual([
-      'Page 01',
-      'Page 02',
-    ])
-    expect(getChildrenNames(prepared!.doc.children[0])).toEqual([
-      'QA',
-      'Content',
-    ])
-    const contentNode = getChildAt(prepared!.doc.children[0], 1)
-    expect(contentNode).not.toBeNull()
-    expect(getChildrenNames(contentNode!)).toEqual(['Title', 'Background'])
-  })
+    expect(prepared).not.toBeNull();
+    expect(prepared!.appliedLegacyPenCompatibility).toBe(true);
+    expect(prepared!.doc.children.map((node) => node.name)).toEqual(['Page 01', 'Page 02']);
+    expect(getChildrenNames(prepared!.doc.children[0])).toEqual(['QA', 'Content']);
+    const contentNode = getChildAt(prepared!.doc.children[0], 1);
+    expect(contentNode).not.toBeNull();
+    expect(getChildrenNames(contentNode!)).toEqual(['Title', 'Background']);
+  });
 
   it('does not apply legacy stack reversal to .op files', () => {
     const prepared = prepareImportedDocument(makeLegacyPen(), {
       fileName: 'layout.op',
-    })
+    });
 
-    expect(prepared).not.toBeNull()
-    expect(prepared!.appliedLegacyPenCompatibility).toBe(false)
-    expect(getChildrenNames(prepared!.doc.children[0])).toEqual([
-      'Content',
-      'QA',
-    ])
-    const contentNode = getChildAt(prepared!.doc.children[0], 0)
-    expect(contentNode).not.toBeNull()
-    expect(getChildrenNames(contentNode!)).toEqual(['Background', 'Title'])
-  })
+    expect(prepared).not.toBeNull();
+    expect(prepared!.appliedLegacyPenCompatibility).toBe(false);
+    expect(getChildrenNames(prepared!.doc.children[0])).toEqual(['Content', 'QA']);
+    const contentNode = getChildAt(prepared!.doc.children[0], 0);
+    expect(contentNode).not.toBeNull();
+    expect(getChildrenNames(contentNode!)).toEqual(['Background', 'Title']);
+  });
 
   it('parses text input and skips compatibility once the document is already page-based', () => {
     const pageBasedDoc: PenDocument = {
@@ -180,15 +168,14 @@ describe('prepareImportedDocument', () => {
         },
       ],
       children: [],
-    }
+    };
 
-    const prepared = parseAndPrepareImportedDocument(
-      JSON.stringify(pageBasedDoc),
-      { fileName: 'layout.pen' },
-    )
+    const prepared = parseAndPrepareImportedDocument(JSON.stringify(pageBasedDoc), {
+      fileName: 'layout.pen',
+    });
 
-    expect(prepared).not.toBeNull()
-    expect(prepared!.appliedLegacyPenCompatibility).toBe(false)
-    expect(prepared!.doc.pages?.[0].children[0].id).toBe('shape-1')
-  })
-})
+    expect(prepared).not.toBeNull();
+    expect(prepared!.appliedLegacyPenCompatibility).toBe(false);
+    expect(prepared!.doc.pages?.[0].children[0].id).toBe('shape-1');
+  });
+});

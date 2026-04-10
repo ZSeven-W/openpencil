@@ -1030,7 +1030,15 @@ function sanitizeNodesForInsert(nodes: PenNode[], existingIds: Set<string>): Pen
     // a card or navbar that omitted fill expecting the dark page bg to
     // show through. Without this, theme detection would fall back to
     // 'light' and paint a white default on top of a dark page.
-    resolveTreeRoles(node, generationCanvasWidth, undefined, undefined, undefined, false, activeTheme);
+    resolveTreeRoles(
+      node,
+      generationCanvasWidth,
+      undefined,
+      undefined,
+      undefined,
+      false,
+      activeTheme,
+    );
     applyGenerationHeuristics(node);
     normalizeTreeLayout(node);
     // Intentionally NOT calling stripRedundantSectionFills here: `cloned`
@@ -1069,7 +1077,15 @@ function sanitizeNodesForUpsert(nodes: PenNode[]): PenNode[] {
     // before normalizeTreeLayout's generic fallback would otherwise freeze
     // the wrong value (e.g. navbar → horizontal, not vertical fallback).
     // See sanitizeNodesForInsert for the activeTheme rationale.
-    resolveTreeRoles(node, generationCanvasWidth, undefined, undefined, undefined, false, activeTheme);
+    resolveTreeRoles(
+      node,
+      generationCanvasWidth,
+      undefined,
+      undefined,
+      undefined,
+      false,
+      activeTheme,
+    );
     applyGenerationHeuristics(node);
     normalizeTreeLayout(node);
     // Intentionally NOT calling stripRedundantSectionFills here: `cloned`

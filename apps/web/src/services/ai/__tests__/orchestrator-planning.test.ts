@@ -1,8 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import {
-  filterPlanningSkillsForPrompt,
-  parseOrchestratorResponse,
-} from '../orchestrator-planning';
+import { filterPlanningSkillsForPrompt, parseOrchestratorResponse } from '../orchestrator-planning';
 
 describe('filterPlanningSkillsForPrompt', () => {
   const skills = [

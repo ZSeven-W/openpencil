@@ -1,6 +1,6 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it } from 'vitest';
 
-import { projectTextEditStateToViewport } from '../text-edit-overlay'
+import { projectTextEditStateToViewport } from '../text-edit-overlay';
 
 describe('projectTextEditStateToViewport', () => {
   it('projects scene-space text editing bounds into the current viewport', () => {
@@ -32,8 +32,8 @@ describe('projectTextEditStateToViewport', () => {
       width: 360,
       minHeight: 96,
       fontSize: 27,
-    })
-  })
+    });
+  });
 
   it('keeps overlay dimensions positive even when zoomed far out', () => {
     expect(
@@ -64,6 +64,6 @@ describe('projectTextEditStateToViewport', () => {
       width: 1,
       minHeight: 1,
       fontSize: 0.12,
-    })
-  })
-})
+    });
+  });
+});

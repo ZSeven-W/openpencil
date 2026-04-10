@@ -2,11 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { writeFile, unlink, mkdir } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import {
-  SENSITIVE_LOG_PATTERN,
-  readDebugTail,
-  readLogTail,
-} from '../utils/log-utils';
+import { SENSITIVE_LOG_PATTERN, readDebugTail, readLogTail } from '../utils/log-utils';
 
 const TMP_DIR = join(tmpdir(), 'pen-mcp-log-utils-tests');
 
@@ -44,10 +40,7 @@ describe('readDebugTail', () => {
 
   it('strips sensitive lines from the tail', async () => {
     const path = join(TMP_DIR, 'test.log');
-    await writeFile(
-      path,
-      ['[INFO] ok', 'ANTHROPIC_API_KEY=sk-bad', '[INFO] done', ''].join('\n'),
-    );
+    await writeFile(path, ['[INFO] ok', 'ANTHROPIC_API_KEY=sk-bad', '[INFO] done', ''].join('\n'));
     const tail = await readDebugTail(path, 10);
     expect(tail).toBeDefined();
     expect(tail!).toEqual(['[INFO] ok', '[INFO] done']);
@@ -65,10 +58,7 @@ describe('readLogTail', () => {
 
   it('filters by grep regex', async () => {
     const path = join(TMP_DIR, 'test.log');
-    await writeFile(
-      path,
-      ['[INFO] a', '[WARN] b', '[INFO] c', '[ERROR] d', ''].join('\n'),
-    );
+    await writeFile(path, ['[INFO] a', '[WARN] b', '[INFO] c', '[ERROR] d', ''].join('\n'));
     const out = await readLogTail({ path, grep: '\\[INFO\\]' });
     expect(out).toEqual(['[INFO] a', '[INFO] c']);
   });

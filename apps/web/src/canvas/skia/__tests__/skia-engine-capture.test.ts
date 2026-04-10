@@ -41,7 +41,9 @@ vi.mock('@zseven-w/pen-renderer', async () => {
 });
 
 vi.mock('@/stores/document-store', () => ({
-  useDocumentStore: { getState: () => ({ document: { children: [], variables: {}, themes: undefined } }) },
+  useDocumentStore: {
+    getState: () => ({ document: { children: [], variables: {}, themes: undefined } }),
+  },
   getActivePageChildren: () => [],
   getAllChildren: () => [],
 }));
@@ -84,10 +86,13 @@ const _rafMap = new Map<number, NodeJS.Immediate>();
 if (typeof globalThis.requestAnimationFrame === 'undefined') {
   globalThis.requestAnimationFrame = (cb: FrameRequestCallback): number => {
     const id = ++_rafCounter;
-    _rafMap.set(id, setImmediate(() => {
-      _rafMap.delete(id);
-      cb(Date.now());
-    }));
+    _rafMap.set(
+      id,
+      setImmediate(() => {
+        _rafMap.delete(id);
+        cb(Date.now());
+      }),
+    );
     return id;
   };
   globalThis.cancelAnimationFrame = (id: number) => {
@@ -100,10 +105,7 @@ if (typeof globalThis.requestAnimationFrame === 'undefined') {
 }
 
 // Minimal stub renderer with the two manager APIs we need.
-function makeStubRenderer(opts: {
-  fontPending?: number;
-  imagePending?: number;
-}): unknown {
+function makeStubRenderer(opts: { fontPending?: number; imagePending?: number }): unknown {
   let fontCount = opts.fontPending ?? 0;
   let imageCount = opts.imagePending ?? 0;
   return {
@@ -149,7 +151,14 @@ describe('SkiaEngine.waitForSettled', () => {
 
     await engine.waitForSettled(2000);
     // After two stable frames, both should be drained
-    const r = (engine as unknown as { renderer: { fontManager: { pendingCount(): number }; imageLoader: { pendingCount(): number } } }).renderer;
+    const r = (
+      engine as unknown as {
+        renderer: {
+          fontManager: { pendingCount(): number };
+          imageLoader: { pendingCount(): number };
+        };
+      }
+    ).renderer;
     expect(r.fontManager.pendingCount()).toBe(0);
     expect(r.imageLoader.pendingCount()).toBe(0);
   });

@@ -39,18 +39,11 @@ export function allocateRequestId(): string {
  * Register a pending screenshot request and return a promise that resolves
  * when the renderer posts its response or rejects on timeout.
  */
-export function registerPending(
-  requestId: string,
-  timeoutMs: number,
-): Promise<ScreenshotResponse> {
+export function registerPending(requestId: string, timeoutMs: number): Promise<ScreenshotResponse> {
   return new Promise<ScreenshotResponse>((resolve, reject) => {
     const timer = setTimeout(() => {
       pendingRequests.delete(requestId);
-      reject(
-        new Error(
-          `Screenshot request ${requestId} timed out after ${timeoutMs}ms`,
-        ),
-      );
+      reject(new Error(`Screenshot request ${requestId} timed out after ${timeoutMs}ms`));
     }, timeoutMs);
     pendingRequests.set(requestId, { resolve, reject, timer });
   });

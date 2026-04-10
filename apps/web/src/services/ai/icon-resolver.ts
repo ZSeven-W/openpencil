@@ -137,10 +137,7 @@ export function applyIconPathResolution(node: PenNode): void {
   applyIconStyle(node, match.style);
 }
 
-export function resolveIconPathBySemanticName(
-  node: PathNode,
-  semanticName: string,
-): boolean {
+export function resolveIconPathBySemanticName(node: PathNode, semanticName: string): boolean {
   const match = lookupIconByName(semanticName);
   if (!match) return false;
   node.d = match.d;

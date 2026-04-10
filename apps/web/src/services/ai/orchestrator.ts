@@ -1064,14 +1064,12 @@ async function callOrchestrator(
   const timeouts = fastTimeout
     ? getBuiltinPlanningTimeouts(model)
     : getOrchestratorTimeouts(timeoutHintLength, model);
-  let lastPlanningFailure:
-    | {
-        reason: 'stream_error' | 'parse_error';
-        mode: string;
-        detail?: string;
-        preview?: string;
-      }
-    | null = null;
+  let lastPlanningFailure: {
+    reason: 'stream_error' | 'parse_error';
+    mode: string;
+    detail?: string;
+    preview?: string;
+  } | null = null;
 
   for (const [attemptIdx, mode] of attemptModes.entries()) {
     let rawResponse = '';
@@ -1172,7 +1170,10 @@ async function callOrchestrator(
         const rootWidth = typeof plan.rootFrame.width === 'number' ? plan.rootFrame.width : 1440;
         const platform = rootWidth <= 500 ? 'mobile' : 'webapp';
 
-        let selected = selectStyleGuide(styleGuideRegistry, { name: plan.styleGuideName, platform });
+        let selected = selectStyleGuide(styleGuideRegistry, {
+          name: plan.styleGuideName,
+          platform,
+        });
         if (!selected) {
           selected = selectStyleGuide(styleGuideRegistry, {
             tags: [plan.styleGuideName.toLowerCase()],

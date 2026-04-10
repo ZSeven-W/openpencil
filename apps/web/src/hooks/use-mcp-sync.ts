@@ -162,13 +162,16 @@ export function useMcpSync() {
             skipPushUntilRef.current = Date.now() + 200;
             useDocumentStore.getState().applyExternalDocument(doc);
           } else if (data.type === 'screenshot:request') {
-            void handleScreenshotRequest(data as {
-              requestId: string;
-              bounds?: { x: number; y: number; w: number; h: number } | 'root';
-              nodeId?: string;
-              opts?: { dpr?: number; padding?: number };
-              timeoutMs: number;
-            }, baseUrl);
+            void handleScreenshotRequest(
+              data as {
+                requestId: string;
+                bounds?: { x: number; y: number; w: number; h: number } | 'root';
+                nodeId?: string;
+                opts?: { dpr?: number; padding?: number };
+                timeoutMs: number;
+              },
+              baseUrl,
+            );
           }
         } catch {
           // Ignore malformed events

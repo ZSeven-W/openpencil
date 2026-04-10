@@ -258,8 +258,7 @@ export function buildCompactPlanningPrompt(prompt: string, _model?: string): Com
   const selectedGuide = selectStyleGuide(styleGuideRegistry, { tags, platform });
   const guideValues = selectedGuide ? extractStyleGuideValues(selectedGuide.content) : null;
   const backgroundColor =
-    guideValues?.colors.background ??
-    (preset.type === 'mobile-screen' ? '#111827' : '#F8FAFC');
+    guideValues?.colors.background ?? (preset.type === 'mobile-screen' ? '#111827' : '#F8FAFC');
   const defaultGap = preset.type === 'mobile-screen' || preset.type === 'desktop-screen' ? 20 : 0;
   const subtaskHint =
     preset.type === 'mobile-screen'

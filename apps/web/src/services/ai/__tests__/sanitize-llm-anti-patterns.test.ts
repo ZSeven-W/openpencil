@@ -13,13 +13,7 @@ import {
 // Fixture helpers
 // ---------------------------------------------------------------------------
 
-const strokeEllipse = (
-  id: string,
-  w: number,
-  h: number,
-  color: string,
-  thickness = 10,
-): PenNode =>
+const strokeEllipse = (id: string, w: number, h: number, color: string, thickness = 10): PenNode =>
   ({
     id,
     type: 'ellipse',
@@ -185,10 +179,7 @@ describe('rewriteStackedEllipsesToRingFrames', () => {
       height: 60,
       layout: 'horizontal',
       alignItems: 'center',
-      children: [
-        strokeEllipse('a', 40, 40, '#00D09C'),
-        strokeEllipse('b', 40, 40, '#FF8A65'),
-      ],
+      children: [strokeEllipse('a', 40, 40, '#00D09C'), strokeEllipse('b', 40, 40, '#FF8A65')],
     } as unknown as PenNode;
     const before = JSON.stringify(parent);
     rewriteStackedEllipsesToRingFrames(parent);
@@ -204,10 +195,7 @@ describe('rewriteStackedEllipsesToRingFrames', () => {
       width: 100,
       height: 40,
       layout: 'none',
-      children: [
-        strokeEllipse('a', 40, 40, '#00D09C'),
-        strokeEllipse('b', 40, 40, '#FF8A65'),
-      ],
+      children: [strokeEllipse('a', 40, 40, '#00D09C'), strokeEllipse('b', 40, 40, '#FF8A65')],
     } as unknown as PenNode;
     const before = JSON.stringify(parent);
     rewriteStackedEllipsesToRingFrames(parent);
@@ -308,7 +296,7 @@ describe('rewriteStackedEllipsesToRingFrames', () => {
     } as unknown as PenNode;
 
     rewriteStackedEllipsesToRingFrames(outer);
-    const ringParent = ((outer as unknown as { children: PenNode[] }).children[0]) as PenNode & {
+    const ringParent = (outer as unknown as { children: PenNode[] }).children[0] as PenNode & {
       layout?: string;
       children: PenNode[];
     };
@@ -497,7 +485,7 @@ describe('rewriteAlternatingBarLabelSiblings', () => {
       ],
     } as unknown as PenNode;
     rewriteAlternatingBarLabelSiblings(outer);
-    const chartWrap = ((outer as unknown as { children: PenNode[] }).children[0]) as PenNode & {
+    const chartWrap = (outer as unknown as { children: PenNode[] }).children[0] as PenNode & {
       children: PenNode[];
     };
     expect(chartWrap.children).toHaveLength(3);

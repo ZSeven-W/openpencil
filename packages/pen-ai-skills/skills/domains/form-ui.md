@@ -3,8 +3,7 @@ name: form-ui
 description: Form, input, and interactive element design guidelines
 phase: [generation]
 trigger:
-  keywords:
-    [
+  keywords: [
       # English: form-specific
       form,
       contact form,

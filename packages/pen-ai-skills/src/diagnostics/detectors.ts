@@ -147,8 +147,7 @@ export function detectInvisibleContainers(
       node.children.length > 0
     ) {
       const ratio = colorContrast(nodeFill, parentFillColor);
-      const same =
-        mode === 'strict' ? nodeFill === parentFillColor : ratio <= threshold;
+      const same = mode === 'strict' ? nodeFill === parentFillColor : ratio <= threshold;
       if (same) {
         // Theme-aware severity: on dark backgrounds the suggested
         // light-gray border (#E2E8F0) would actively damage the design.
@@ -318,8 +317,7 @@ export function detectSiblingInconsistencies(root: PenNode): Issue[] {
       const strictGroups = new Map<string, PenNode[]>();
       const typeGroups = new Map<string, PenNode[]>();
       for (const child of node.children) {
-        const childRole =
-          ((child as { role?: string }).role ?? '').toLowerCase() || '__none__';
+        const childRole = ((child as { role?: string }).role ?? '').toLowerCase() || '__none__';
         // Skip divider/spacer — visual layout primitives whose dimensions
         // are intentionally tiny and don't share structure with siblings;
         // reporting them as outliers is always noise.

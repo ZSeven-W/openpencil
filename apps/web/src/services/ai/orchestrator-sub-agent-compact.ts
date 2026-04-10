@@ -10,7 +10,10 @@ export function compactSubAgentSkills<T extends { meta: { name: string }; conten
 ): T[] {
   const filtered = skills.filter((skill) => {
     const name = skill.meta.name;
-    if (isMobileScreen && (name === 'landing-page' || name === 'copywriting' || name === 'anti-slop')) {
+    if (
+      isMobileScreen &&
+      (name === 'landing-page' || name === 'copywriting' || name === 'anti-slop')
+    ) {
       return false;
     }
     if (!isMobileScreen && name === 'mobile-app') return false;
@@ -68,7 +71,10 @@ export function buildSubAgentStyleGuideInstruction(
 
   const values = extractStyleGuideValues(content);
   const tags = styleGuideName
-    ? styleGuideRegistry.find((guide) => guide.name === styleGuideName)?.tags.slice(0, 6).join(', ')
+    ? styleGuideRegistry
+        .find((guide) => guide.name === styleGuideName)
+        ?.tags.slice(0, 6)
+        .join(', ')
     : undefined;
 
   const lines = [

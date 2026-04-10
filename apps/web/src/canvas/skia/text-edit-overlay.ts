@@ -1,12 +1,12 @@
-import type { ViewportState } from '@/types/canvas'
-import type { TextEditState } from './skia-interaction'
+import type { ViewportState } from '@/types/canvas';
+import type { TextEditState } from './skia-interaction';
 
 export interface TextEditOverlayStyle {
-  left: number
-  top: number
-  width: number
-  minHeight: number
-  fontSize: number
+  left: number;
+  top: number;
+  width: number;
+  minHeight: number;
+  fontSize: number;
 }
 
 export function projectTextEditStateToViewport(
@@ -19,5 +19,5 @@ export function projectTextEditStateToViewport(
     width: Math.max(editingText.w * viewport.zoom, 1),
     minHeight: Math.max(editingText.h * viewport.zoom, 1),
     fontSize: editingText.fontSize * viewport.zoom,
-  }
+  };
 }

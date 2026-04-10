@@ -75,10 +75,7 @@ function tryRepairPlan(text: string, prompt: string): OrchestratorPlan | null {
   }
 }
 
-function repairPlanObject(
-  obj: Record<string, unknown>,
-  prompt: string,
-): OrchestratorPlan | null {
+function repairPlanObject(obj: Record<string, unknown>, prompt: string): OrchestratorPlan | null {
   const fallback = buildFallbackPlanFromPrompt(prompt);
   const rawSubtasks = extractSubtaskCandidates(obj);
   if (rawSubtasks.length === 0) return null;
@@ -118,10 +115,7 @@ function repairPlanObject(
   return finalizePlan(repaired, obj);
 }
 
-function finalizePlan(
-  plan: OrchestratorPlan,
-  rawObj?: Record<string, unknown>,
-): OrchestratorPlan {
+function finalizePlan(plan: OrchestratorPlan, rawObj?: Record<string, unknown>): OrchestratorPlan {
   if (!plan.styleGuide && rawObj && isRecord(rawObj.styleGuide)) {
     plan.styleGuide = rawObj.styleGuide as unknown as StyleGuide;
   }

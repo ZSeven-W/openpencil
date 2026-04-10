@@ -90,10 +90,7 @@ export function isClientConnected(clientId: string): boolean {
   return clients.has(clientId);
 }
 
-export function sendToClient(
-  clientId: string,
-  payload: Record<string, unknown>,
-): boolean {
+export function sendToClient(clientId: string, payload: Record<string, unknown>): boolean {
   const client = clients.get(clientId);
   if (!client) return false;
   try {

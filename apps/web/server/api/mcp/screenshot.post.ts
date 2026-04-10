@@ -1,10 +1,6 @@
 // apps/web/server/api/mcp/screenshot.post.ts
 import { defineEventHandler, readBody, createError } from 'h3';
-import {
-  sendToClient,
-  getLastActiveClientId,
-  isClientConnected,
-} from '../../utils/mcp-sync-state';
+import { sendToClient, getLastActiveClientId, isClientConnected } from '../../utils/mcp-sync-state';
 import {
   allocateRequestId,
   registerPending,

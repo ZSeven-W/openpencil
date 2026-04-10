@@ -476,7 +476,11 @@ export function detectThemeFromNode(node: PenNode): 'dark' | 'light' {
   const m = color.match(/^#([0-9a-fA-F]{3,8})$/);
   if (!m) return 'light';
   let hex = m[1];
-  if (hex.length === 3) hex = hex.split('').map((c) => c + c).join('');
+  if (hex.length === 3)
+    hex = hex
+      .split('')
+      .map((c) => c + c)
+      .join('');
   if (hex.length !== 6 && hex.length !== 8) return 'light';
   const r = parseInt(hex.slice(0, 2), 16);
   const g = parseInt(hex.slice(2, 4), 16);
@@ -1059,7 +1063,9 @@ function repairPlaceholderIcons(node: FrameNode, parentNode?: PenNode): void {
 }
 
 function isPlaceholderCircleIcon(node: PenNode): boolean {
-  return node.type === 'path' && (node.iconId === 'lucide:circle' || node.iconId === 'feather:circle');
+  return (
+    node.type === 'path' && (node.iconId === 'lucide:circle' || node.iconId === 'feather:circle')
+  );
 }
 
 function inferSemanticIconName(
@@ -1088,11 +1094,7 @@ function inferSemanticIconName(
   return null;
 }
 
-function collectNearbyText(
-  node: PenNode,
-  depth: number,
-  exclude?: PenNode,
-): string[] {
+function collectNearbyText(node: PenNode, depth: number, exclude?: PenNode): string[] {
   if (depth < 0 || node === exclude) return [];
 
   const out: string[] = [];

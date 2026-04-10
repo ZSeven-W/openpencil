@@ -234,10 +234,7 @@ describe('normalizeTreeLayout', () => {
     const inner = frame({ id: 'inner', children: [rect('c'), rect('d')] });
     const outer = frame({
       id: 'outer',
-      children: [
-        inner,
-        { id: 'label', type: 'text', content: 'Hello' } as unknown as PenNode,
-      ],
+      children: [inner, { id: 'label', type: 'text', content: 'Hello' } as unknown as PenNode],
     });
     normalizeTreeLayout(outer);
     expect((outer as PenNode & { layout?: string }).layout).toBe('vertical');

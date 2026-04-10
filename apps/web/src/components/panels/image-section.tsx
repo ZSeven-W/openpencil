@@ -1,16 +1,16 @@
-import { useState, useCallback, useRef } from 'react'
-import { useTranslation } from 'react-i18next'
-import type { ImageNode, ImageFitMode } from '@/types/pen'
-import SectionHeader from '@/components/shared/section-header'
-import { Image as ImageIcon, Search, Sparkles } from 'lucide-react'
-import ImageFillPopover from './image-fill-popover'
-import ImageSearchPopover from './image-search-popover'
-import ImageGeneratePopover from './image-generate-popover'
-import { Button } from '@/components/ui/button'
-import { useDocumentStore } from '@/stores/document-store'
-import { toStoredAssetPath } from '@/utils/document-assets'
-import LocalImageWarning from './local-image-warning'
-import { useImageAssetState } from './use-image-asset-state'
+import { useState, useCallback, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
+import type { ImageNode, ImageFitMode } from '@/types/pen';
+import SectionHeader from '@/components/shared/section-header';
+import { Image as ImageIcon, Search, Sparkles } from 'lucide-react';
+import ImageFillPopover from './image-fill-popover';
+import ImageSearchPopover from './image-search-popover';
+import ImageGeneratePopover from './image-generate-popover';
+import { Button } from '@/components/ui/button';
+import { useDocumentStore } from '@/stores/document-store';
+import { toStoredAssetPath } from '@/utils/document-assets';
+import LocalImageWarning from './local-image-warning';
+import { useImageAssetState } from './use-image-asset-state';
 
 interface ImageSectionProps {
   node: ImageNode;
@@ -18,15 +18,12 @@ interface ImageSectionProps {
 }
 
 export default function ImageSection({ node, onUpdate }: ImageSectionProps) {
-  const { t } = useTranslation()
-  const documentPath = useDocumentStore((s) => s.filePath)
-  const [triggerRect, setTriggerRect] = useState<DOMRect | null>(null)
-  const triggerRef = useRef<HTMLButtonElement>(null)
-  const fitMode = node.objectFit ?? 'fill'
-  const { previewSrc, hasImage, warning } = useImageAssetState(
-    node.src,
-    documentPath,
-  )
+  const { t } = useTranslation();
+  const documentPath = useDocumentStore((s) => s.filePath);
+  const [triggerRect, setTriggerRect] = useState<DOMRect | null>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const fitMode = node.objectFit ?? 'fill';
+  const { previewSrc, hasImage, warning } = useImageAssetState(node.src, documentPath);
 
   const handleClose = useCallback(() => setTriggerRect(null), []);
 
@@ -39,13 +36,13 @@ export default function ImageSection({ node, onUpdate }: ImageSectionProps) {
   };
 
   const handleRelink = useCallback(async () => {
-    if (!window.electronAPI?.openImageFile) return
-    const result = await window.electronAPI.openImageFile()
-    if (!result) return
+    if (!window.electronAPI?.openImageFile) return;
+    const result = await window.electronAPI.openImageFile();
+    if (!result) return;
     onUpdate({
       src: toStoredAssetPath(result.filePath, documentPath),
-    })
-  }, [documentPath, onUpdate])
+    });
+  }, [documentPath, onUpdate]);
 
   return (
     <div className="space-y-1.5">

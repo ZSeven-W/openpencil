@@ -160,10 +160,7 @@ export class SkiaImageLoader {
     );
   }
 
-  private getSafeRasterSize(
-    sourceW: number,
-    sourceH: number,
-  ): { width: number; height: number } {
+  private getSafeRasterSize(sourceW: number, sourceH: number): { width: number; height: number } {
     let scale = 1;
     const maxDimension = Math.max(sourceW, sourceH);
     if (maxDimension > MAX_IMAGE_DIMENSION) {

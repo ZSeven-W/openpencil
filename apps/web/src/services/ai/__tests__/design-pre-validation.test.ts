@@ -191,7 +191,9 @@ describe('design-pre-validation (baseline)', () => {
           cornerRadius: 16,
           height: 62,
           layout: 'horizontal',
-          children: [{ id: 'tab-t', type: 'text', text: 'Tabs', fontSize: 12 } as unknown as PenNode],
+          children: [
+            { id: 'tab-t', type: 'text', text: 'Tabs', fontSize: 12 } as unknown as PenNode,
+          ],
         } as unknown as PenNode,
       ]),
     );

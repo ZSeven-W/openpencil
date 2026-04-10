@@ -38,8 +38,14 @@ describe('SkiaFontManager.pendingCount / flushPending', () => {
     const pB = new Promise<boolean>((resolve) => {
       releaseB = () => resolve(true);
     });
-    (fm as unknown as { pendingFetches: Map<string, Promise<boolean>> }).pendingFetches.set('a', pA);
-    (fm as unknown as { pendingFetches: Map<string, Promise<boolean>> }).pendingFetches.set('b', pB);
+    (fm as unknown as { pendingFetches: Map<string, Promise<boolean>> }).pendingFetches.set(
+      'a',
+      pA,
+    );
+    (fm as unknown as { pendingFetches: Map<string, Promise<boolean>> }).pendingFetches.set(
+      'b',
+      pB,
+    );
     expect(fm.pendingCount()).toBe(2);
 
     let flushResolved = false;

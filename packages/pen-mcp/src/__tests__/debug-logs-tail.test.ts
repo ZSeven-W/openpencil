@@ -30,7 +30,8 @@ describe('handleLogsTail', () => {
     const today = new Date().toISOString().slice(0, 10);
     await writeFile(
       join(TMP, `server-${today}.log`),
-      ['2026-04-06T10:00:00.000Z [INFO] alpha', '2026-04-06T10:00:01.000Z [INFO] beta'].join('\n') + '\n',
+      ['2026-04-06T10:00:00.000Z [INFO] alpha', '2026-04-06T10:00:01.000Z [INFO] beta'].join('\n') +
+        '\n',
     );
     const json = await handleLogsTail({ tailLines: 10 });
     const parsed = JSON.parse(json);
@@ -42,10 +43,7 @@ describe('handleLogsTail', () => {
     const d = new Date();
     d.setDate(d.getDate() - 3);
     const stamp = d.toISOString().slice(0, 10);
-    await writeFile(
-      join(TMP, `server-${stamp}.log`),
-      '2026-04-03T10:00:00.000Z [INFO] older\n',
-    );
+    await writeFile(join(TMP, `server-${stamp}.log`), '2026-04-03T10:00:00.000Z [INFO] older\n');
     const json = await handleLogsTail({});
     const parsed = JSON.parse(json);
     expect(parsed.lines).toHaveLength(1);
