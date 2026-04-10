@@ -133,7 +133,6 @@ const th: TranslationKeys = {
   'git.commit.saveRequiredCancel': 'ยกเลิก',
 
   // ── Git Header (Phase 4c) ──
-  'git.header.branchComingSoon': 'สลับ branch · มีใน Phase 5',
   'git.header.pullComingSoon': 'Pull · มีใน Phase 6',
   'git.header.pushComingSoon': 'Push · มีใน Phase 6',
   'git.header.autosaveError': 'ข้อผิดพลาดการบันทึกอัตโนมัติ',
@@ -159,6 +158,24 @@ const th: TranslationKeys = {
   'git.history.loadMore': 'โหลดเพิ่ม',
   'git.autosave.messagePrefix': 'auto',
   'git.autosave.messageDiffSuffix': '',
+
+  // ── Git ตัวเลือก Branch (Phase 5) ──
+  'git.branch.listHeading': 'Branches',
+  'git.branch.createAction': 'Branch ใหม่',
+  'git.branch.createPlaceholder': 'feature/login-redesign',
+  'git.branch.createSubmit': 'สร้าง branch',
+  'git.branch.createEmpty': 'กรอกชื่อ branch',
+  'git.branch.createExists': 'Branch {{name}} มีอยู่แล้ว',
+  'git.branch.mergeAction': 'รวม branch…',
+  'git.branch.mergeHeading': 'รวมเข้าสู่ {{name}}',
+  'git.branch.deletePrompt': 'ลบ branch {{name}}?',
+  'git.branch.deleteLabel': 'ลบ branch {{name}}',
+  'git.branch.deleteWarning': 'Branch {{name}} มี commit ที่ยังไม่ได้รวม',
+  'git.branch.deleteConfirm': 'ลบ',
+  'git.branch.deleteForce': 'บังคับลบ',
+  'git.branch.cancel': 'ยกเลิก',
+  'git.branch.conflictDisabled': 'ทำการรวมให้เสร็จก่อนสลับ branch',
+  'git.branch.noCommits': 'ยังไม่มี commit',
 
   // ── Right Panel ──
   'rightPanel.design': 'ออกแบบ',

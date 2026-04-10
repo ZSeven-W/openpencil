@@ -134,7 +134,6 @@ const de: TranslationKeys = {
   'git.commit.saveRequiredCancel': 'Abbrechen',
 
   // ── Git Header (Phase 4c) ──
-  'git.header.branchComingSoon': 'Branch wechseln · verfügbar in Phase 5',
   'git.header.pullComingSoon': 'Pull · verfügbar in Phase 6',
   'git.header.pushComingSoon': 'Push · verfügbar in Phase 6',
   'git.header.autosaveError': 'Auto-Speichern-Fehler',
@@ -160,6 +159,24 @@ const de: TranslationKeys = {
   'git.history.loadMore': 'Mehr laden',
   'git.autosave.messagePrefix': 'auto',
   'git.autosave.messageDiffSuffix': '',
+
+  // ── Git Branch-Auswahl (Phase 5) ──
+  'git.branch.listHeading': 'Branches',
+  'git.branch.createAction': 'Neuer Branch',
+  'git.branch.createPlaceholder': 'feature/login-redesign',
+  'git.branch.createSubmit': 'Branch erstellen',
+  'git.branch.createEmpty': 'Branch-Namen eingeben',
+  'git.branch.createExists': 'Branch {{name}} existiert bereits',
+  'git.branch.mergeAction': 'Branch mergen…',
+  'git.branch.mergeHeading': 'In {{name}} mergen',
+  'git.branch.deletePrompt': 'Branch {{name}} löschen?',
+  'git.branch.deleteLabel': 'Branch {{name}} löschen',
+  'git.branch.deleteWarning': 'Branch {{name}} hat nicht gemergte Commits',
+  'git.branch.deleteConfirm': 'Löschen',
+  'git.branch.deleteForce': 'Löschen erzwingen',
+  'git.branch.cancel': 'Abbrechen',
+  'git.branch.conflictDisabled': 'Merge abschließen, bevor der Branch gewechselt wird',
+  'git.branch.noCommits': 'Noch keine Commits',
 
   // ── Right Panel ──
   'rightPanel.design': 'Design',

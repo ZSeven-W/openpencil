@@ -134,7 +134,6 @@ const pt: TranslationKeys = {
   'git.commit.saveRequiredCancel': 'Cancelar',
 
   // ── Git Header (Phase 4c) ──
-  'git.header.branchComingSoon': 'Trocar ramo · disponível na Fase 5',
   'git.header.pullComingSoon': 'Pull · disponível na Fase 6',
   'git.header.pushComingSoon': 'Push · disponível na Fase 6',
   'git.header.autosaveError': 'Erro de auto-salvamento',
@@ -160,6 +159,24 @@ const pt: TranslationKeys = {
   'git.history.loadMore': 'Carregar mais',
   'git.autosave.messagePrefix': 'auto',
   'git.autosave.messageDiffSuffix': '',
+
+  // ── Git Seletor de ramos (Phase 5) ──
+  'git.branch.listHeading': 'Ramos',
+  'git.branch.createAction': 'Novo ramo',
+  'git.branch.createPlaceholder': 'feature/login-redesign',
+  'git.branch.createSubmit': 'Criar ramo',
+  'git.branch.createEmpty': 'Digite um nome de ramo',
+  'git.branch.createExists': 'O ramo {{name}} já existe',
+  'git.branch.mergeAction': 'Mesclar ramo…',
+  'git.branch.mergeHeading': 'Mesclar em {{name}}',
+  'git.branch.deletePrompt': 'Excluir o ramo {{name}}?',
+  'git.branch.deleteLabel': 'Excluir o ramo {{name}}',
+  'git.branch.deleteWarning': 'O ramo {{name}} tem commits não mesclados',
+  'git.branch.deleteConfirm': 'Excluir',
+  'git.branch.deleteForce': 'Forçar exclusão',
+  'git.branch.cancel': 'Cancelar',
+  'git.branch.conflictDisabled': 'Conclua a mesclagem antes de trocar de ramo',
+  'git.branch.noCommits': 'Ainda sem commits',
 
   // ── Right Panel ──
   'rightPanel.design': 'Design',

@@ -135,7 +135,6 @@ const fr: TranslationKeys = {
   'git.commit.saveRequiredCancel': 'Annuler',
 
   // ── Git Header (Phase 4c) ──
-  'git.header.branchComingSoon': 'Changer de branche · disponible en Phase 5',
   'git.header.pullComingSoon': 'Pull · disponible en Phase 6',
   'git.header.pushComingSoon': 'Push · disponible en Phase 6',
   'git.header.autosaveError': "Erreur d'auto-sauvegarde",
@@ -161,6 +160,24 @@ const fr: TranslationKeys = {
   'git.history.loadMore': 'Charger plus',
   'git.autosave.messagePrefix': 'auto',
   'git.autosave.messageDiffSuffix': '',
+
+  // ── Git Sélecteur de branche (Phase 5) ──
+  'git.branch.listHeading': 'Branches',
+  'git.branch.createAction': 'Nouvelle branche',
+  'git.branch.createPlaceholder': 'feature/login-redesign',
+  'git.branch.createSubmit': 'Créer la branche',
+  'git.branch.createEmpty': 'Saisissez un nom de branche',
+  'git.branch.createExists': 'La branche {{name}} existe déjà',
+  'git.branch.mergeAction': 'Fusionner une branche…',
+  'git.branch.mergeHeading': 'Fusionner dans {{name}}',
+  'git.branch.deletePrompt': 'Supprimer la branche {{name}} ?',
+  'git.branch.deleteLabel': 'Supprimer la branche {{name}}',
+  'git.branch.deleteWarning': 'La branche {{name}} a des commits non fusionnés',
+  'git.branch.deleteConfirm': 'Supprimer',
+  'git.branch.deleteForce': 'Forcer la suppression',
+  'git.branch.cancel': 'Annuler',
+  'git.branch.conflictDisabled': 'Terminez la fusion avant de changer de branche',
+  'git.branch.noCommits': 'Aucun commit pour le moment',
 
   // ── Right Panel ──
   'rightPanel.design': 'Design',

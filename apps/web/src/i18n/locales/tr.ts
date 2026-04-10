@@ -134,7 +134,6 @@ const tr: TranslationKeys = {
   'git.commit.saveRequiredCancel': 'İptal',
 
   // ── Git Header (Phase 4c) ──
-  'git.header.branchComingSoon': "Dal değiştir · Phase 5'te",
   'git.header.pullComingSoon': "Pull · Phase 6'da",
   'git.header.pushComingSoon': "Push · Phase 6'da",
   'git.header.autosaveError': 'Otomatik kaydetme hatası',
@@ -160,6 +159,24 @@ const tr: TranslationKeys = {
   'git.history.loadMore': 'Daha fazla yükle',
   'git.autosave.messagePrefix': 'auto',
   'git.autosave.messageDiffSuffix': '',
+
+  // ── Git Dal Seçici (Phase 5) ──
+  'git.branch.listHeading': 'Dallar',
+  'git.branch.createAction': 'Yeni dal',
+  'git.branch.createPlaceholder': 'feature/login-redesign',
+  'git.branch.createSubmit': 'Dal oluştur',
+  'git.branch.createEmpty': 'Bir dal adı girin',
+  'git.branch.createExists': '{{name}} dalı zaten var',
+  'git.branch.mergeAction': 'Dalı birleştir…',
+  'git.branch.mergeHeading': '{{name}} dalına birleştir',
+  'git.branch.deletePrompt': '{{name}} dalı silinsin mi?',
+  'git.branch.deleteLabel': '{{name}} dalını sil',
+  'git.branch.deleteWarning': '{{name}} dalında birleştirilmemiş commitler var',
+  'git.branch.deleteConfirm': 'Sil',
+  'git.branch.deleteForce': 'Zorla sil',
+  'git.branch.cancel': 'İptal',
+  'git.branch.conflictDisabled': 'Dal değiştirmeden önce birleştirmeyi tamamlayın',
+  'git.branch.noCommits': 'Henüz commit yok',
 
   // ── Right Panel ──
   'rightPanel.design': 'Tasarım',

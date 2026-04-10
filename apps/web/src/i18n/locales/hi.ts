@@ -133,7 +133,6 @@ const hi: TranslationKeys = {
   'git.commit.saveRequiredCancel': 'रद्द करें',
 
   // ── Git Header (Phase 4c) ──
-  'git.header.branchComingSoon': 'ब्रांच बदलें · Phase 5 में उपलब्ध',
   'git.header.pullComingSoon': 'Pull · Phase 6 में उपलब्ध',
   'git.header.pushComingSoon': 'Push · Phase 6 में उपलब्ध',
   'git.header.autosaveError': 'ऑटो-सेव त्रुटि',
@@ -159,6 +158,24 @@ const hi: TranslationKeys = {
   'git.history.loadMore': 'और लोड करें',
   'git.autosave.messagePrefix': 'auto',
   'git.autosave.messageDiffSuffix': '',
+
+  // ── Git ब्रांच पिकर (Phase 5) ──
+  'git.branch.listHeading': 'ब्रांच',
+  'git.branch.createAction': 'नई ब्रांच',
+  'git.branch.createPlaceholder': 'feature/login-redesign',
+  'git.branch.createSubmit': 'ब्रांच बनाएं',
+  'git.branch.createEmpty': 'ब्रांच का नाम दर्ज करें',
+  'git.branch.createExists': 'ब्रांच {{name}} पहले से मौजूद है',
+  'git.branch.mergeAction': 'ब्रांच मर्ज करें…',
+  'git.branch.mergeHeading': '{{name}} में मर्ज करें',
+  'git.branch.deletePrompt': 'ब्रांच {{name}} हटाएं?',
+  'git.branch.deleteLabel': 'ब्रांच {{name}} हटाएं',
+  'git.branch.deleteWarning': 'ब्रांच {{name}} में बिना मर्ज किए कमिट हैं',
+  'git.branch.deleteConfirm': 'हटाएं',
+  'git.branch.deleteForce': 'ज़बरदस्ती हटाएं',
+  'git.branch.cancel': 'रद्द करें',
+  'git.branch.conflictDisabled': 'ब्रांच बदलने से पहले मर्ज पूरा करें',
+  'git.branch.noCommits': 'अभी कोई कमिट नहीं',
 
   // ── Right Panel ──
   'rightPanel.design': 'डिज़ाइन',

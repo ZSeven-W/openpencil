@@ -133,7 +133,6 @@ const vi: TranslationKeys = {
   'git.commit.saveRequiredCancel': 'Hủy',
 
   // ── Git Header (Phase 4c) ──
-  'git.header.branchComingSoon': 'Chuyển nhánh · có trong Phase 5',
   'git.header.pullComingSoon': 'Pull · có trong Phase 6',
   'git.header.pushComingSoon': 'Push · có trong Phase 6',
   'git.header.autosaveError': 'Lỗi tự động lưu',
@@ -159,6 +158,24 @@ const vi: TranslationKeys = {
   'git.history.loadMore': 'Tải thêm',
   'git.autosave.messagePrefix': 'auto',
   'git.autosave.messageDiffSuffix': '',
+
+  // ── Git Bộ chọn nhánh (Phase 5) ──
+  'git.branch.listHeading': 'Nhánh',
+  'git.branch.createAction': 'Nhánh mới',
+  'git.branch.createPlaceholder': 'feature/login-redesign',
+  'git.branch.createSubmit': 'Tạo nhánh',
+  'git.branch.createEmpty': 'Nhập tên nhánh',
+  'git.branch.createExists': 'Nhánh {{name}} đã tồn tại',
+  'git.branch.mergeAction': 'Gộp nhánh…',
+  'git.branch.mergeHeading': 'Gộp vào {{name}}',
+  'git.branch.deletePrompt': 'Xóa nhánh {{name}}?',
+  'git.branch.deleteLabel': 'Xóa nhánh {{name}}',
+  'git.branch.deleteWarning': 'Nhánh {{name}} có commit chưa được gộp',
+  'git.branch.deleteConfirm': 'Xóa',
+  'git.branch.deleteForce': 'Bắt buộc xóa',
+  'git.branch.cancel': 'Hủy',
+  'git.branch.conflictDisabled': 'Hoàn tất gộp trước khi chuyển nhánh',
+  'git.branch.noCommits': 'Chưa có commit',
 
   // ── Right Panel ──
   'rightPanel.design': 'Thiết kế',

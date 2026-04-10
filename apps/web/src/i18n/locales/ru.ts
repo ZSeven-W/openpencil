@@ -134,7 +134,6 @@ const ru: TranslationKeys = {
   'git.commit.saveRequiredCancel': 'Отмена',
 
   // ── Git Header (Phase 4c) ──
-  'git.header.branchComingSoon': 'Переключить ветку · в Фазе 5',
   'git.header.pullComingSoon': 'Pull · в Фазе 6',
   'git.header.pushComingSoon': 'Push · в Фазе 6',
   'git.header.autosaveError': 'Ошибка автосохранения',
@@ -160,6 +159,24 @@ const ru: TranslationKeys = {
   'git.history.loadMore': 'Загрузить ещё',
   'git.autosave.messagePrefix': 'auto',
   'git.autosave.messageDiffSuffix': '',
+
+  // ── Git Выбор ветки (Phase 5) ──
+  'git.branch.listHeading': 'Ветки',
+  'git.branch.createAction': 'Новая ветка',
+  'git.branch.createPlaceholder': 'feature/login-redesign',
+  'git.branch.createSubmit': 'Создать ветку',
+  'git.branch.createEmpty': 'Введите имя ветки',
+  'git.branch.createExists': 'Ветка {{name}} уже существует',
+  'git.branch.mergeAction': 'Слить ветку…',
+  'git.branch.mergeHeading': 'Слияние в {{name}}',
+  'git.branch.deletePrompt': 'Удалить ветку {{name}}?',
+  'git.branch.deleteLabel': 'Удалить ветку {{name}}',
+  'git.branch.deleteWarning': 'В ветке {{name}} есть неслитые коммиты',
+  'git.branch.deleteConfirm': 'Удалить',
+  'git.branch.deleteForce': 'Принудительно удалить',
+  'git.branch.cancel': 'Отмена',
+  'git.branch.conflictDisabled': 'Завершите слияние перед переключением ветки',
+  'git.branch.noCommits': 'Пока нет коммитов',
 
   // ── Right Panel ──
   'rightPanel.design': 'Дизайн',

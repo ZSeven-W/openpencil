@@ -134,7 +134,6 @@ const ko: TranslationKeys = {
   'git.commit.saveRequiredCancel': '취소',
 
   // ── Git Header (Phase 4c) ──
-  'git.header.branchComingSoon': '브랜치 전환 · Phase 5 제공',
   'git.header.pullComingSoon': 'Pull · Phase 6 제공',
   'git.header.pushComingSoon': 'Push · Phase 6 제공',
   'git.header.autosaveError': '자동 저장 오류',
@@ -160,6 +159,24 @@ const ko: TranslationKeys = {
   'git.history.loadMore': '더 로드',
   'git.autosave.messagePrefix': 'auto',
   'git.autosave.messageDiffSuffix': '',
+
+  // ── Git 브랜치 피커 (Phase 5) ──
+  'git.branch.listHeading': '브랜치',
+  'git.branch.createAction': '새 브랜치',
+  'git.branch.createPlaceholder': 'feature/login-redesign',
+  'git.branch.createSubmit': '브랜치 만들기',
+  'git.branch.createEmpty': '브랜치 이름을 입력하세요',
+  'git.branch.createExists': '{{name}} 브랜치가 이미 존재합니다',
+  'git.branch.mergeAction': '브랜치 병합…',
+  'git.branch.mergeHeading': '{{name}}에 병합',
+  'git.branch.deletePrompt': '{{name}} 브랜치를 삭제할까요?',
+  'git.branch.deleteLabel': '{{name}} 브랜치 삭제',
+  'git.branch.deleteWarning': '{{name}} 브랜치에 병합되지 않은 커밋이 있습니다',
+  'git.branch.deleteConfirm': '삭제',
+  'git.branch.deleteForce': '강제 삭제',
+  'git.branch.cancel': '취소',
+  'git.branch.conflictDisabled': '브랜치를 전환하기 전에 병합을 완료하세요',
+  'git.branch.noCommits': '커밋이 없습니다',
 
   // ── Right Panel ──
   'rightPanel.design': '디자인',

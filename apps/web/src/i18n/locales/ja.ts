@@ -134,7 +134,6 @@ const ja: TranslationKeys = {
   'git.commit.saveRequiredCancel': 'キャンセル',
 
   // ── Git Header (Phase 4c) ──
-  'git.header.branchComingSoon': 'ブランチ切替 · Phase 5 で提供',
   'git.header.pullComingSoon': 'プル · Phase 6 で提供',
   'git.header.pushComingSoon': 'プッシュ · Phase 6 で提供',
   'git.header.autosaveError': '自動保存エラー',
@@ -160,6 +159,24 @@ const ja: TranslationKeys = {
   'git.history.loadMore': 'さらに読み込む',
   'git.autosave.messagePrefix': 'auto',
   'git.autosave.messageDiffSuffix': '',
+
+  // ── Git ブランチピッカー (Phase 5) ──
+  'git.branch.listHeading': 'ブランチ',
+  'git.branch.createAction': '新規ブランチ',
+  'git.branch.createPlaceholder': 'feature/login-redesign',
+  'git.branch.createSubmit': 'ブランチを作成',
+  'git.branch.createEmpty': 'ブランチ名を入力してください',
+  'git.branch.createExists': 'ブランチ {{name}} は既に存在します',
+  'git.branch.mergeAction': 'ブランチをマージ…',
+  'git.branch.mergeHeading': '{{name}} にマージ',
+  'git.branch.deletePrompt': 'ブランチ {{name}} を削除しますか?',
+  'git.branch.deleteLabel': 'ブランチ {{name}} を削除',
+  'git.branch.deleteWarning': 'ブランチ {{name}} に未マージのコミットがあります',
+  'git.branch.deleteConfirm': '削除',
+  'git.branch.deleteForce': '強制削除',
+  'git.branch.cancel': 'キャンセル',
+  'git.branch.conflictDisabled': 'ブランチを切り替える前にマージを完了してください',
+  'git.branch.noCommits': 'コミットがまだありません',
 
   // ── Right Panel ──
   'rightPanel.design': 'デザイン',

@@ -132,7 +132,6 @@ const en = {
   'git.commit.saveRequiredCancel': 'Cancel',
 
   // ── Git Header (Phase 4c) ──
-  'git.header.branchComingSoon': 'Switch branch · coming in Phase 5',
   'git.header.pullComingSoon': 'Pull · coming in Phase 6',
   'git.header.pushComingSoon': 'Push · coming in Phase 6',
   'git.header.autosaveError': 'Autosave error',
@@ -158,6 +157,24 @@ const en = {
   'git.history.loadMore': 'Load more',
   'git.autosave.messagePrefix': 'auto',
   'git.autosave.messageDiffSuffix': '',
+
+  // ── Git Branch Picker (Phase 5) ──
+  'git.branch.listHeading': 'Branches',
+  'git.branch.createAction': 'New branch',
+  'git.branch.createPlaceholder': 'feature/login-redesign',
+  'git.branch.createSubmit': 'Create branch',
+  'git.branch.createEmpty': 'Enter a branch name',
+  'git.branch.createExists': 'Branch {{name}} already exists',
+  'git.branch.mergeAction': 'Merge branch…',
+  'git.branch.mergeHeading': 'Merge into {{name}}',
+  'git.branch.deletePrompt': 'Delete branch {{name}}?',
+  'git.branch.deleteLabel': 'Delete branch {{name}}',
+  'git.branch.deleteWarning': 'Branch {{name}} has unmerged commits',
+  'git.branch.deleteConfirm': 'Delete',
+  'git.branch.deleteForce': 'Force delete',
+  'git.branch.cancel': 'Cancel',
+  'git.branch.conflictDisabled': 'Finish the merge before switching branches',
+  'git.branch.noCommits': 'No commits yet',
 
   // ── Right Panel ──
   'rightPanel.design': 'Design',

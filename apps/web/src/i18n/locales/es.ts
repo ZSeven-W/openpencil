@@ -134,7 +134,6 @@ const es: TranslationKeys = {
   'git.commit.saveRequiredCancel': 'Cancelar',
 
   // ── Git Header (Phase 4c) ──
-  'git.header.branchComingSoon': 'Cambiar rama · disponible en Fase 5',
   'git.header.pullComingSoon': 'Pull · disponible en Fase 6',
   'git.header.pushComingSoon': 'Push · disponible en Fase 6',
   'git.header.autosaveError': 'Error de auto-guardado',
@@ -160,6 +159,24 @@ const es: TranslationKeys = {
   'git.history.loadMore': 'Cargar más',
   'git.autosave.messagePrefix': 'auto',
   'git.autosave.messageDiffSuffix': '',
+
+  // ── Git Selector de ramas (Phase 5) ──
+  'git.branch.listHeading': 'Ramas',
+  'git.branch.createAction': 'Nueva rama',
+  'git.branch.createPlaceholder': 'feature/login-redesign',
+  'git.branch.createSubmit': 'Crear rama',
+  'git.branch.createEmpty': 'Escribe un nombre de rama',
+  'git.branch.createExists': 'La rama {{name}} ya existe',
+  'git.branch.mergeAction': 'Fusionar rama…',
+  'git.branch.mergeHeading': 'Fusionar en {{name}}',
+  'git.branch.deletePrompt': '¿Eliminar la rama {{name}}?',
+  'git.branch.deleteLabel': 'Eliminar la rama {{name}}',
+  'git.branch.deleteWarning': 'La rama {{name}} tiene commits sin fusionar',
+  'git.branch.deleteConfirm': 'Eliminar',
+  'git.branch.deleteForce': 'Forzar eliminación',
+  'git.branch.cancel': 'Cancelar',
+  'git.branch.conflictDisabled': 'Termina la fusión antes de cambiar de rama',
+  'git.branch.noCommits': 'Aún no hay commits',
 
   // ── Right Panel ──
   'rightPanel.design': 'Diseño',

@@ -134,7 +134,6 @@ const id: TranslationKeys = {
   'git.commit.saveRequiredCancel': 'Batal',
 
   // ── Git Header (Phase 4c) ──
-  'git.header.branchComingSoon': 'Ganti branch · tersedia di Phase 5',
   'git.header.pullComingSoon': 'Pull · tersedia di Phase 6',
   'git.header.pushComingSoon': 'Push · tersedia di Phase 6',
   'git.header.autosaveError': 'Error auto-save',
@@ -160,6 +159,24 @@ const id: TranslationKeys = {
   'git.history.loadMore': 'Muat lebih',
   'git.autosave.messagePrefix': 'auto',
   'git.autosave.messageDiffSuffix': '',
+
+  // ── Git Pemilih Branch (Phase 5) ──
+  'git.branch.listHeading': 'Branch',
+  'git.branch.createAction': 'Branch baru',
+  'git.branch.createPlaceholder': 'feature/login-redesign',
+  'git.branch.createSubmit': 'Buat branch',
+  'git.branch.createEmpty': 'Masukkan nama branch',
+  'git.branch.createExists': 'Branch {{name}} sudah ada',
+  'git.branch.mergeAction': 'Gabungkan branch…',
+  'git.branch.mergeHeading': 'Gabungkan ke {{name}}',
+  'git.branch.deletePrompt': 'Hapus branch {{name}}?',
+  'git.branch.deleteLabel': 'Hapus branch {{name}}',
+  'git.branch.deleteWarning': 'Branch {{name}} memiliki commit yang belum digabung',
+  'git.branch.deleteConfirm': 'Hapus',
+  'git.branch.deleteForce': 'Paksa hapus',
+  'git.branch.cancel': 'Batal',
+  'git.branch.conflictDisabled': 'Selesaikan penggabungan sebelum mengganti branch',
+  'git.branch.noCommits': 'Belum ada commit',
 
   // ── Right Panel ──
   'rightPanel.design': 'Desain',

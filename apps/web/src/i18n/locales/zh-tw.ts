@@ -133,7 +133,6 @@ const zhTW: TranslationKeys = {
   'git.commit.saveRequiredCancel': '取消',
 
   // ── Git Header (Phase 4c) ──
-  'git.header.branchComingSoon': '切換分支 · Phase 5 中提供',
   'git.header.pullComingSoon': '拉取 · Phase 6 中提供',
   'git.header.pushComingSoon': '推送 · Phase 6 中提供',
   'git.header.autosaveError': '自動儲存錯誤',
@@ -159,6 +158,24 @@ const zhTW: TranslationKeys = {
   'git.history.loadMore': '載入更多',
   'git.autosave.messagePrefix': 'auto',
   'git.autosave.messageDiffSuffix': '',
+
+  // ── Git 分支選擇器 (Phase 5) ──
+  'git.branch.listHeading': '分支',
+  'git.branch.createAction': '新增分支',
+  'git.branch.createPlaceholder': 'feature/login-redesign',
+  'git.branch.createSubmit': '建立分支',
+  'git.branch.createEmpty': '請輸入分支名稱',
+  'git.branch.createExists': '分支 {{name}} 已存在',
+  'git.branch.mergeAction': '合併分支…',
+  'git.branch.mergeHeading': '合併到 {{name}}',
+  'git.branch.deletePrompt': '刪除分支 {{name}}?',
+  'git.branch.deleteLabel': '刪除分支 {{name}}',
+  'git.branch.deleteWarning': '分支 {{name}} 有未合併的提交',
+  'git.branch.deleteConfirm': '刪除',
+  'git.branch.deleteForce': '強制刪除',
+  'git.branch.cancel': '取消',
+  'git.branch.conflictDisabled': '請先完成合併再切換分支',
+  'git.branch.noCommits': '尚無提交',
 
   // ── Right Panel ──
   'rightPanel.design': '設計',
