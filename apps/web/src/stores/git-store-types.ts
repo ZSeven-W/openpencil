@@ -175,7 +175,7 @@ export interface GitStore {
   refreshBranches: () => Promise<void>;
   createBranch: (opts: { name: string; fromCommit?: string }) => Promise<void>;
   switchBranch: (name: string) => Promise<void>;
-  deleteBranch: (name: string) => Promise<void>;
+  deleteBranch: (name: string, opts?: { force?: boolean }) => Promise<void>;
   mergeBranch: (fromBranch: string) => Promise<void>;
 
   // Merge orchestration

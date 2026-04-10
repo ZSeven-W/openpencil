@@ -958,4 +958,37 @@ describe('git-store state machine', () => {
     expect(mockedLoadOpFileFromPath).not.toHaveBeenCalled();
     expect(gitClient.log).not.toHaveBeenCalled();
   });
+
+  it('deleteBranch forwards the optional force flag to gitClient', async () => {
+    vi.mocked(gitClient.init).mockResolvedValue(SAMPLE_REPO);
+    vi.mocked(gitClient.branchDelete).mockResolvedValue(undefined);
+    await useGitStore.getState().initRepo('/tmp/login.op');
+
+    await useGitStore.getState().deleteBranch('feature-x', { force: true });
+    expect(gitClient.branchDelete).toHaveBeenCalledWith('repo-1', 'feature-x', { force: true });
+
+    await useGitStore.getState().deleteBranch('feature-y');
+    expect(gitClient.branchDelete).toHaveBeenLastCalledWith('repo-1', 'feature-y', undefined);
+  });
+
+  it('switchBranch refreshes the log for the current branch instead of hardcoded main', async () => {
+    vi.mocked(gitClient.init).mockResolvedValue(SAMPLE_REPO);
+    vi.mocked(gitClient.branchSwitch).mockResolvedValue(undefined);
+    // First status() call (post-init) returns main; second (post-switch) returns feature/x.
+    vi.mocked(gitClient.status)
+      .mockResolvedValueOnce(DEFAULT_STATUS)
+      .mockResolvedValueOnce({ ...DEFAULT_STATUS, branch: 'feature/x' });
+    vi.mocked(gitClient.branchList).mockResolvedValue([]);
+    vi.mocked(gitClient.log).mockResolvedValue([]);
+    await useGitStore.getState().initRepo('/tmp/login.op');
+
+    vi.mocked(gitClient.log).mockClear();
+    await useGitStore.getState().switchBranch('feature/x');
+
+    // After switch, refreshStatus updates state.repo.currentBranch to
+    // 'feature/x'. loadLog must then be called with ref: 'feature/x', not
+    // the previously hardcoded 'main', so the history list follows the
+    // actual current branch after the transition.
+    expect(gitClient.log).toHaveBeenCalledWith('repo-1', { ref: 'feature/x', limit: 50 });
+  });
 });

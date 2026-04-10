@@ -23,6 +23,18 @@ import type { GitState, GitStore, PendingAction } from './git-store-types';
 
 export const useGitStore = create<GitStore>((set, get) => {
   /**
+   * Resolve the ref the history panel should load after a mutation. Reads
+   * state.repo.currentBranch so the list follows switches/merges instead of
+   * being pinned to 'main'. Falls back to 'main' outside repo-bearing states.
+   */
+  function currentLogRef(): string {
+    const s = get().state;
+    return s.kind === 'ready' || s.kind === 'conflict' || s.kind === 'needs-tracked-file'
+      ? s.repo.currentBranch
+      : 'main';
+  }
+
+  /**
    * Guard a mutating action on `useDocumentStore.getState().isDirty`. If
    * dirty, stash a PendingAction on the current state and throw
    * GitError('save-required'). The UI catches and shows an inline alert;
@@ -522,7 +534,7 @@ export const useGitStore = create<GitStore>((set, get) => {
         await gitClient.commit(repoId, { kind: 'milestone', message, author });
         // Phase 4c: refresh the log and clear the draft on success so
         // the history list shows the new commit and the input empties.
-        await get().loadLog({ ref: 'main', limit: 50 });
+        await get().loadLog({ ref: currentLogRef(), limit: 50 });
         get().clearCommitMessage();
       }, 'commit milestone');
     },
@@ -563,7 +575,7 @@ export const useGitStore = create<GitStore>((set, get) => {
         if ((state.kind === 'ready' || state.kind === 'conflict') && state.repo.trackedFilePath) {
           await loadOpFileFromPath(state.repo.trackedFilePath);
         }
-        await get().loadLog({ ref: 'main', limit: 50 });
+        await get().loadLog({ ref: currentLogRef(), limit: 50 });
       }, 'promote autosave');
     },
 
@@ -606,13 +618,13 @@ export const useGitStore = create<GitStore>((set, get) => {
         if ((state.kind === 'ready' || state.kind === 'conflict') && state.repo.trackedFilePath) {
           await loadOpFileFromPath(state.repo.trackedFilePath);
         }
-        await get().loadLog({ ref: 'main', limit: 50 });
+        await get().loadLog({ ref: currentLogRef(), limit: 50 });
       }, 'switch branch');
     },
 
-    deleteBranch: async (name) => {
+    deleteBranch: async (name, opts) => {
       const repoId = requireRepoId(get().state);
-      await gitClient.branchDelete(repoId, name);
+      await gitClient.branchDelete(repoId, name, opts);
       await get().refreshBranches();
     },
 
@@ -655,7 +667,7 @@ export const useGitStore = create<GitStore>((set, get) => {
         ) {
           await loadOpFileFromPath(postState.repo.trackedFilePath);
         }
-        await get().loadLog({ ref: 'main', limit: 50 });
+        await get().loadLog({ ref: currentLogRef(), limit: 50 });
       }, 'merge branch');
     },
 

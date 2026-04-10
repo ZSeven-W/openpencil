@@ -1144,14 +1144,17 @@ export async function engineBranchSwitch(repoId: string, name: string): Promise<
 
 /**
  * Delete a non-current branch. The Phase 1b primitive throws 'branch-current'
- * if you try to delete the active branch; we re-throw as-is.
- *
- * Phase 2a does NOT support force-delete of unmerged branches — that flag
- * is reserved for the renderer's confirm dialog flow in Phase 5.
+ * if you try to delete the active branch and 'branch-unmerged' if the
+ * branch has commits not reachable from any other ref; Phase 5 adds the
+ * `force` flag so the renderer can retry after a confirm dialog.
  */
-export async function engineBranchDelete(repoId: string, name: string): Promise<void> {
+export async function engineBranchDelete(
+  repoId: string,
+  name: string,
+  opts: { force?: boolean } = {},
+): Promise<void> {
   const session = requireSession(repoId);
-  await deleteBranch({ handle: session.handle, name });
+  await deleteBranch({ handle: session.handle, name, force: opts.force === true });
 }
 
 /**

@@ -424,22 +424,78 @@ export async function createBranch(opts: {
 }
 
 /**
- * Delete a branch under refs/heads/. Throws GitError 'branch-current' if
- * the branch is the active HEAD.
+ * Return true if the branch `name` is reachable from the tip of any OTHER
+ * branch in refs/heads. "Reachable" means either:
+ *   - another branch's tip OID equals `name`'s tip (fast-forward case), OR
+ *   - another branch descends from `name`'s tip (merged-via-merge-commit).
+ *
+ * The equal-tip short-circuit is load-bearing: isomorphic-git's
+ * `git.isDescendent` explicitly returns false when `oid === ancestor`
+ * (see node_modules/isomorphic-git/index.cjs:12094), so without this
+ * shortcut a branch that was just fast-forward merged (or a branch that was
+ * just created from HEAD and never advanced) would be incorrectly flagged
+ * as unmerged, blocking a legitimate delete.
  */
-export async function deleteBranch(opts: { handle: IsoRepoHandle; name: string }): Promise<void> {
+async function isBranchMergedAnywhere(opts: {
+  handle: IsoRepoHandle;
+  name: string;
+}): Promise<boolean> {
   const { handle, name } = opts;
+  const targetOid = await git.resolveRef({ fs, gitdir: handle.gitdir, ref: name });
+  const branches = await git.listBranches({ fs, gitdir: handle.gitdir });
+
+  for (const candidate of branches) {
+    if (candidate === name) continue;
+    const candidateOid = await git.resolveRef({ fs, gitdir: handle.gitdir, ref: candidate });
+    if (candidateOid === targetOid) return true; // equal tips = merged (fast-forward case)
+    const merged = await git.isDescendent({
+      fs,
+      dir: handle.dir,
+      gitdir: handle.gitdir,
+      oid: candidateOid,
+      ancestor: targetOid,
+      depth: -1,
+    });
+    if (merged) return true;
+  }
+
+  return false;
+}
+
+/**
+ * Delete a branch under refs/heads/. Throws GitError 'branch-current' if
+ * the branch is the active HEAD. Throws GitError 'branch-unmerged' if the
+ * branch's tip is not reachable from any other branch, unless `force` is
+ * set — in which case the branch is deleted unconditionally.
+ *
+ * Note: `isomorphic-git`'s `deleteBranch` has no `force` option of its own,
+ * so we implement the mergedness check ourselves above the low-level call.
+ */
+export async function deleteBranch(opts: {
+  handle: IsoRepoHandle;
+  name: string;
+  force?: boolean;
+}): Promise<void> {
+  const { handle, name, force = false } = opts;
   try {
     const current = await getCurrentBranch({ handle });
     if (current === name) {
       throw new GitError('branch-current', `Cannot delete the current branch ${name}`);
+    }
+    if (!force) {
+      const merged = await isBranchMergedAnywhere({ handle, name });
+      if (!merged) {
+        throw new GitError('branch-unmerged', `Branch ${name} has unmerged commits`, {
+          detail: { name },
+        });
+      }
     }
     await git.deleteBranch({ fs, gitdir: handle.gitdir, ref: name });
   } catch (err) {
     if (err instanceof GitError) throw err;
     throw new GitError('engine-crash', `deleteBranch failed for ${name}`, {
       cause: err,
-      detail: { name },
+      detail: { name, force },
     });
   }
 }

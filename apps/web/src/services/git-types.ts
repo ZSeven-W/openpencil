@@ -163,7 +163,7 @@ export interface GitAPI {
   branchList: (repoId: string) => Promise<GitBranchInfo[]>;
   branchCreate: (repoId: string, opts: { name: string; fromCommit?: string }) => Promise<void>;
   branchSwitch: (repoId: string, name: string) => Promise<void>;
-  branchDelete: (repoId: string, name: string) => Promise<void>;
+  branchDelete: (repoId: string, name: string, opts?: { force?: boolean }) => Promise<void>;
 
   clone: (opts: { url: string; dest: string; auth?: GitAuthCreds }) => Promise<GitRepoOpenInfo>;
   fetch: (repoId: string, auth?: GitAuthCreds) => Promise<{ ahead: number; behind: number }>;

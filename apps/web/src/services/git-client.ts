@@ -113,7 +113,8 @@ export const gitClient = {
   branchCreate: (repoId: string, opts: { name: string; fromCommit?: string }) =>
     invoke(() => getApi().branchCreate(repoId, opts)),
   branchSwitch: (repoId: string, name: string) => invoke(() => getApi().branchSwitch(repoId, name)),
-  branchDelete: (repoId: string, name: string) => invoke(() => getApi().branchDelete(repoId, name)),
+  branchDelete: (repoId: string, name: string, opts?: { force?: boolean }) =>
+    invoke(() => getApi().branchDelete(repoId, name, opts)),
   branchMerge: (repoId: string, fromBranch: string) =>
     invoke(() => getApi().branchMerge(repoId, fromBranch)),
 

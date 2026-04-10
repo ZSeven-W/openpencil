@@ -393,6 +393,90 @@ describe('git-iso', () => {
       expect(branches).toContain('main');
     });
 
+    it('deleteBranch throws branch-unmerged for an unmerged branch without force', async () => {
+      const opFile = await writeOpFile(temp.dir, 'login.op', {
+        version: '1.0.0',
+        children: [{ id: 'r1' }],
+      });
+      const handle = await initSingleFile({ filePath: opFile });
+      await commitFile({
+        handle,
+        filepath: 'login.op',
+        ref: 'refs/heads/main',
+        message: 'base',
+        author: { name: 't', email: 't@example.com' },
+      });
+      await createBranch({ handle, name: 'feature-x' });
+      await writeOpFile(temp.dir, 'login.op', {
+        version: '1.0.0',
+        children: [{ id: 'r2' }],
+      });
+      await commitFile({
+        handle,
+        filepath: 'login.op',
+        ref: 'refs/heads/feature-x',
+        message: 'feature only',
+        author: { name: 't', email: 't@example.com' },
+      });
+      await expect(deleteBranch({ handle, name: 'feature-x' })).rejects.toMatchObject({
+        name: 'GitError',
+        code: 'branch-unmerged',
+      });
+    });
+
+    it('deleteBranch removes an unmerged branch when force=true', async () => {
+      const opFile = await writeOpFile(temp.dir, 'login.op', {
+        version: '1.0.0',
+        children: [{ id: 'r1' }],
+      });
+      const handle = await initSingleFile({ filePath: opFile });
+      await commitFile({
+        handle,
+        filepath: 'login.op',
+        ref: 'refs/heads/main',
+        message: 'base',
+        author: { name: 't', email: 't@example.com' },
+      });
+      await createBranch({ handle, name: 'feature-x' });
+      await writeOpFile(temp.dir, 'login.op', {
+        version: '1.0.0',
+        children: [{ id: 'r2' }],
+      });
+      await commitFile({
+        handle,
+        filepath: 'login.op',
+        ref: 'refs/heads/feature-x',
+        message: 'feature only',
+        author: { name: 't', email: 't@example.com' },
+      });
+      await deleteBranch({ handle, name: 'feature-x', force: true });
+      const branches = await listBranches({ handle });
+      expect(branches).toEqual(['main']);
+    });
+
+    it('deleteBranch treats a fast-forward-merged branch as merged (equal OID tips)', async () => {
+      const opFile = await writeOpFile(temp.dir, 'login.op', {
+        version: '1.0.0',
+        children: [{ id: 'r1' }],
+      });
+      const handle = await initSingleFile({ filePath: opFile });
+      await commitFile({
+        handle,
+        filepath: 'login.op',
+        ref: 'refs/heads/main',
+        message: 'base',
+        author: { name: 't', email: 't@example.com' },
+      });
+      // Branch off main with no additional commits: feature-ff tip === main tip.
+      await createBranch({ handle, name: 'feature-ff' });
+      // Without the equal-OID short-circuit in isBranchMergedAnywhere this would
+      // throw branch-unmerged because isomorphic-git's isDescendent returns
+      // false when oid === ancestor.
+      await deleteBranch({ handle, name: 'feature-ff' });
+      const branches = await listBranches({ handle });
+      expect(branches).toEqual(['main']);
+    });
+
     it('getCurrentBranch returns the active branch name', async () => {
       const opFile = await writeOpFile(temp.dir, 'login.op', {
         version: '1.0.0',

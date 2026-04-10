@@ -146,7 +146,8 @@ export const gitIpcHandlers = {
   branchCreate: (repoId: string, opts: { name: string; fromCommit?: string }) =>
     engineBranchCreate(repoId, opts),
   branchSwitch: (repoId: string, name: string) => engineBranchSwitch(repoId, name),
-  branchDelete: (repoId: string, name: string) => engineBranchDelete(repoId, name),
+  branchDelete: (repoId: string, name: string, opts?: { force?: boolean }) =>
+    engineBranchDelete(repoId, name, opts),
 
   // Phase 2b: remote ops
   clone: (opts: { url: string; dest: string; auth?: AuthCreds }) => engineClone(opts),
@@ -269,8 +270,10 @@ export function setupGitIPC(): void {
   ipcMain.handle('git:branchSwitch', (_e, repoId: string, name: string) =>
     runHandler(() => gitIpcHandlers.branchSwitch(repoId, name)),
   );
-  ipcMain.handle('git:branchDelete', (_e, repoId: string, name: string) =>
-    runHandler(() => gitIpcHandlers.branchDelete(repoId, name)),
+  ipcMain.handle(
+    'git:branchDelete',
+    (_e, repoId: string, name: string, opts?: { force?: boolean }) =>
+      runHandler(() => gitIpcHandlers.branchDelete(repoId, name, opts)),
   );
 
   // ---- Phase 2b: remote ops ------------------------------------------------

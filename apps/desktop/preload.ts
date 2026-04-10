@@ -132,7 +132,7 @@ export interface GitAPI {
   branchList: (repoId: string) => Promise<GitBranchInfo[]>;
   branchCreate: (repoId: string, opts: { name: string; fromCommit?: string }) => Promise<void>;
   branchSwitch: (repoId: string, name: string) => Promise<void>;
-  branchDelete: (repoId: string, name: string) => Promise<void>;
+  branchDelete: (repoId: string, name: string, opts?: { force?: boolean }) => Promise<void>;
 
   // ---- Phase 2b: remote ops ----
   clone: (opts: {
@@ -316,8 +316,7 @@ const api: ElectronAPI = {
 
   confirmClose: () => ipcRenderer.send('window:confirmClose'),
 
-  confirmUnsavedChanges: (payload) =>
-    ipcRenderer.invoke('dialog:confirmUnsavedChanges', payload),
+  confirmUnsavedChanges: (payload) => ipcRenderer.invoke('dialog:confirmUnsavedChanges', payload),
 
   getLogDir: () => ipcRenderer.invoke('log:getDir'),
 
@@ -358,8 +357,8 @@ const api: ElectronAPI = {
     branchCreate: (repoId, opts) => ipcRenderer.invoke('git:branchCreate', repoId, opts),
     branchSwitch: (repoId: string, name: string) =>
       ipcRenderer.invoke('git:branchSwitch', repoId, name),
-    branchDelete: (repoId: string, name: string) =>
-      ipcRenderer.invoke('git:branchDelete', repoId, name),
+    branchDelete: (repoId: string, name: string, opts?: { force?: boolean }) =>
+      ipcRenderer.invoke('git:branchDelete', repoId, name, opts),
 
     // Phase 2b: remote ops
     clone: (opts) => ipcRenderer.invoke('git:clone', opts),

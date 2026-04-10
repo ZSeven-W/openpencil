@@ -848,6 +848,46 @@ describe('git-engine', () => {
         code: 'branch-current',
       });
     });
+
+    it('engineBranchDelete refuses an unmerged branch without force and succeeds with force=true', async () => {
+      const opFile = await writeOpFile(temp.dir, 'login.op', {
+        version: '1.0.0',
+        children: [{ id: 'r1' }],
+      });
+      const result = await engineInit(opFile);
+      await engineCommit(result.repoId, {
+        kind: 'milestone',
+        message: 'base',
+        author: { name: 't', email: 't@example.com' },
+      });
+      await engineBranchCreate(result.repoId, { name: 'feature-x' });
+
+      // Switch to the new branch, modify the tracked file, and commit so
+      // feature-x has a commit main does not see.
+      await engineBranchSwitch(result.repoId, 'feature-x');
+      await writeOpFile(temp.dir, 'login.op', {
+        version: '1.0.0',
+        children: [{ id: 'r2' }],
+      });
+      await engineCommit(result.repoId, {
+        kind: 'milestone',
+        message: 'feature only',
+        author: { name: 't', email: 't@example.com' },
+      });
+      await engineBranchSwitch(result.repoId, 'main');
+
+      await expect(engineBranchDelete(result.repoId, 'feature-x')).rejects.toMatchObject({
+        name: 'GitError',
+        code: 'branch-unmerged',
+      });
+
+      await expect(
+        engineBranchDelete(result.repoId, 'feature-x', { force: true }),
+      ).resolves.toBeUndefined();
+
+      const list = await engineBranchList(result.repoId);
+      expect(list.map((b) => b.name)).toEqual(['main']);
+    });
   });
 
   describe('shouldUseSys dispatch', () => {
