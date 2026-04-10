@@ -1,20 +1,22 @@
 // @vitest-environment jsdom
 // apps/web/src/components/panels/git-panel/__tests__/git-panel-branch-picker.test.tsx
 //
-// Phase 5 Task 2: branch picker shell tests. The picker:
-//   - renders the current branch on a trigger Button
-//   - opens a Popover with a list of all branches (current + others)
-//   - refreshes status + branches whenever the popover opens
-//   - renders create/merge entry buttons in list mode
-//   - becomes non-interactive (disabled trigger) in conflict state
+// Phase 5 Task 2 + Task 3: branch picker tests.
 //
-// Task 2 is shell-only: select/delete handlers are stubbed no-ops. The
-// tests here only assert rendering and refresh plumbing; Tasks 3/4 will
-// add the behavior tests.
+// Task 2 shell: rendering + refresh plumbing + conflict disable.
+// Task 3: inline create + branch switching + save-required close behavior.
+//
+// Selector gotcha: once the popover is open, each <GitPanelBranchRow>
+// renders its own button with aria-label={branch.name}. That collides
+// with the trigger's aria-label (which matches the current branch name).
+// To avoid "found multiple elements" errors we click the trigger via
+// its data-testid ("branch-picker-trigger") — the tests below follow
+// that convention consistently.
 import React from 'react';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { render, screen, fireEvent, cleanup } from '@testing-library/react';
 import { TooltipProvider } from '@/components/ui/tooltip';
+import { GitError } from '@/services/git-error';
 
 const mocks = vi.hoisted(() => {
   const readyRepo = {
@@ -53,6 +55,8 @@ const mocks = vi.hoisted(() => {
     },
     refreshStatus: vi.fn(async () => {}),
     refreshBranches: vi.fn(async () => {}),
+    createBranch: vi.fn(async (_opts: { name: string }) => {}),
+    switchBranch: vi.fn(async (_name: string) => {}),
   };
 });
 
@@ -86,6 +90,8 @@ describe('GitPanelBranchPicker', () => {
       },
     ];
     mocks.state = { kind: 'ready', repo: mocks.readyRepo };
+    mocks.createBranch.mockImplementation(async () => {});
+    mocks.switchBranch.mockImplementation(async () => {});
   });
 
   afterEach(() => {
@@ -94,7 +100,7 @@ describe('GitPanelBranchPicker', () => {
 
   it('refreshes status and branches when the picker opens', () => {
     renderWithProvider(<GitPanelBranchPicker />);
-    fireEvent.click(screen.getByRole('button', { name: 'main' }));
+    fireEvent.click(screen.getByTestId('branch-picker-trigger'));
     expect(mocks.refreshStatus).toHaveBeenCalledTimes(1);
     expect(mocks.refreshBranches).toHaveBeenCalledTimes(1);
   });
@@ -105,7 +111,7 @@ describe('GitPanelBranchPicker', () => {
       { name: 'feature/login', isCurrent: false, ahead: 0, behind: 0, lastCommit: null },
     ];
     renderWithProvider(<GitPanelBranchPicker />);
-    fireEvent.click(screen.getByRole('button', { name: 'main' }));
+    fireEvent.click(screen.getByTestId('branch-picker-trigger'));
     // 'main' appears in both the trigger and a row; getAllByText covers both.
     expect(screen.getAllByText('main').length).toBeGreaterThanOrEqual(1);
     expect(screen.getByText('feature/login')).toBeTruthy();
@@ -113,14 +119,14 @@ describe('GitPanelBranchPicker', () => {
 
   it('renders create and merge entry buttons in list mode', () => {
     renderWithProvider(<GitPanelBranchPicker />);
-    fireEvent.click(screen.getByRole('button', { name: 'main' }));
+    fireEvent.click(screen.getByTestId('branch-picker-trigger'));
     expect(screen.getByText('git.branch.createAction')).toBeTruthy();
     expect(screen.getByText('git.branch.mergeAction')).toBeTruthy();
   });
 
   it('renders the list heading in list mode', () => {
     renderWithProvider(<GitPanelBranchPicker />);
-    fireEvent.click(screen.getByRole('button', { name: 'main' }));
+    fireEvent.click(screen.getByTestId('branch-picker-trigger'));
     expect(screen.getByText('git.branch.listHeading')).toBeTruthy();
   });
 
@@ -130,7 +136,7 @@ describe('GitPanelBranchPicker', () => {
       { name: 'feature/login', isCurrent: false, ahead: 0, behind: 0, lastCommit: null },
     ];
     renderWithProvider(<GitPanelBranchPicker />);
-    fireEvent.click(screen.getByRole('button', { name: 'main' }));
+    fireEvent.click(screen.getByTestId('branch-picker-trigger'));
     expect(
       screen.getByRole('button', {
         name: 'git.branch.deleteLabel:{"name":"feature/login"}',
@@ -143,7 +149,7 @@ describe('GitPanelBranchPicker', () => {
       { name: 'main', isCurrent: true, ahead: 0, behind: 0, lastCommit: null },
     ];
     renderWithProvider(<GitPanelBranchPicker />);
-    fireEvent.click(screen.getByRole('button', { name: 'main' }));
+    fireEvent.click(screen.getByTestId('branch-picker-trigger'));
     expect(
       screen.queryByRole('button', {
         name: 'git.branch.deleteLabel:{"name":"main"}',
@@ -172,5 +178,57 @@ describe('GitPanelBranchPicker', () => {
     fireEvent.click(screen.getByRole('button', { name: 'main' }));
     expect(mocks.refreshStatus).not.toHaveBeenCalled();
     expect(mocks.refreshBranches).not.toHaveBeenCalled();
+  });
+
+  // --- Task 3: create + switch behavior -------------------------------
+
+  it('creates a branch from the inline create view', async () => {
+    renderWithProvider(<GitPanelBranchPicker />);
+    fireEvent.click(screen.getByTestId('branch-picker-trigger'));
+    fireEvent.click(screen.getByText('git.branch.createAction'));
+    fireEvent.change(screen.getByPlaceholderText('git.branch.createPlaceholder'), {
+      target: { value: 'feature/login' },
+    });
+    fireEvent.click(screen.getByText('git.branch.createSubmit'));
+    expect(mocks.createBranch).toHaveBeenCalledWith({ name: 'feature/login' });
+  });
+
+  it('switches branches when a non-current branch row is clicked', async () => {
+    mocks.readyRepo.branches = [
+      { name: 'main', isCurrent: true, ahead: 0, behind: 0, lastCommit: null },
+      { name: 'feature/login', isCurrent: false, ahead: 0, behind: 0, lastCommit: null },
+    ];
+    renderWithProvider(<GitPanelBranchPicker />);
+    fireEvent.click(screen.getByTestId('branch-picker-trigger'));
+    // after the popover opens, feature/login's row has aria-label="feature/login"
+    fireEvent.click(screen.getByRole('button', { name: 'feature/login' }));
+    expect(mocks.switchBranch).toHaveBeenCalledWith('feature/login');
+  });
+
+  it('keeps the picker open and shows an inline error when create validation fails', () => {
+    renderWithProvider(<GitPanelBranchPicker />);
+    fireEvent.click(screen.getByTestId('branch-picker-trigger'));
+    fireEvent.click(screen.getByText('git.branch.createAction'));
+    fireEvent.click(screen.getByText('git.branch.createSubmit'));
+    // Empty branch name → createEmpty error shown.
+    expect(screen.getByText('git.branch.createEmpty')).toBeTruthy();
+    expect(mocks.createBranch).not.toHaveBeenCalled();
+  });
+
+  it('closes the popover when switch throws save-required so the panel alert takes over', async () => {
+    mocks.readyRepo.branches = [
+      { name: 'main', isCurrent: true, ahead: 0, behind: 0, lastCommit: null },
+      { name: 'feature/login', isCurrent: false, ahead: 0, behind: 0, lastCommit: null },
+    ];
+    mocks.switchBranch.mockRejectedValueOnce(
+      new GitError('save-required', 'Document has unsaved changes'),
+    );
+    renderWithProvider(<GitPanelBranchPicker />);
+    fireEvent.click(screen.getByTestId('branch-picker-trigger'));
+    fireEvent.click(screen.getByRole('button', { name: 'feature/login' }));
+    // Give the async handler a microtask to settle.
+    await new Promise((r) => setTimeout(r, 0));
+    // Popover should have closed — the list-mode heading is no longer visible.
+    expect(screen.queryByText('git.branch.listHeading')).toBeNull();
   });
 });
