@@ -1735,7 +1735,13 @@ describe('git-engine', () => {
       const removed = await engineRemoteSet(init.repoId, null);
       expect(removed).toEqual({ name: 'origin', url: null, host: null });
 
-      // Removing again must not throw.
+      // Removing again must not throw. Note: writeRemoteOrigin() does NOT
+      // wrap `git.deleteRemote` in a try/catch — this test proves the call
+      // is naturally idempotent because isomorphic-git implements it as a
+      // filter over parsed config entries that tolerates an absent section.
+      // Wrapping the call would silently swallow real I/O errors from
+      // GitConfigManager.save (EACCES, ENOSPC, etc.), so the lack of a
+      // catch is load-bearing.
       const removedAgain = await engineRemoteSet(init.repoId, null);
       expect(removedAgain).toEqual({ name: 'origin', url: null, host: null });
 

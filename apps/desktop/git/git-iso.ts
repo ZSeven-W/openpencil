@@ -607,9 +607,15 @@ export async function readBlobOidAt(opts: {
  *   - non-empty `url` → `git.addRemote({ remote: 'origin', url, force: true })`
  *     The `force: true` flag makes this an upsert (add OR update). isomorphic-git
  *     itself rejects an existing remote without `force`.
- *   - `null` url     → `git.deleteRemote({ remote: 'origin' })`. Tolerated if
- *     origin is already absent (we swallow that one specific failure mode and
- *     treat the call as idempotent).
+ *   - `null` url     → `git.deleteRemote({ remote: 'origin' })`. Naturally
+ *     idempotent: isomorphic-git's `deleteRemote` is implemented as
+ *     `GitConfigManager.deleteSection('remote', 'origin')`, which is a
+ *     filter over parsed config entries and never throws when the section
+ *     is absent. We therefore do NOT wrap it in a try/catch — the only
+ *     failure modes are real I/O errors (EACCES, ENOSPC, etc.) from
+ *     `GitConfigManager.save`, and those must propagate so the UI can
+ *     surface them instead of silently claiming "origin removed" while
+ *     `.git/config` still holds the old url.
  *
  * This is a LOCAL config mutation only — never opens a network socket. Lives
  * in git-iso.ts (not git-sys.ts) per the Phase 6a plan: there is no transport
@@ -622,14 +628,7 @@ export async function writeRemoteOrigin(opts: {
   const { handle, url } = opts;
   try {
     if (url === null) {
-      // Idempotent delete: if origin doesn't exist, that's fine — the caller
-      // wanted it gone and now it is. isomorphic-git surfaces that as an
-      // error from the underlying file lookup, so we catch and swallow.
-      try {
-        await git.deleteRemote({ fs, gitdir: handle.gitdir, remote: 'origin' });
-      } catch {
-        // origin already absent — treat as success.
-      }
+      await git.deleteRemote({ fs, gitdir: handle.gitdir, remote: 'origin' });
       return;
     }
     await git.addRemote({
