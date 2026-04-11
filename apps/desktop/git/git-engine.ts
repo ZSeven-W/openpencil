@@ -1599,7 +1599,6 @@ async function engineBranchMergeFolderMode(
     : null;
 
   const opConflicted = trackedRel !== null && unresolved.includes(trackedRel);
-  const nonOpConflicts = unresolved.filter((p) => p !== trackedRel);
 
   if (!opConflicted) {
     // Only non-.op files have conflicts — return conflict-non-op.
