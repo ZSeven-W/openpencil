@@ -68,10 +68,8 @@ const th: TranslationKeys = {
   'git.titleNoFile': 'Git · (ไม่ได้เลือกไฟล์)',
   'git.close': 'ปิด',
   'git.initializing': 'กำลังเริ่มต้นที่เก็บ…',
-  'git.placeholder.trackedPicker': 'ตัวเลือกไฟล์ที่ติดตาม',
-  'git.placeholder.readyState': 'สถานะพร้อม',
   'git.conflict.title': 'ความขัดแย้งในการรวม',
-  'git.conflict.description': 'ความขัดแย้งต้องได้รับการแก้ไขด้วยตนเอง — มีใน Phase 7',
+  'git.conflict.description': 'แก้ไขแต่ละความขัดแย้งโดยใช้การ์ดด้านล่าง จากนั้นใช้การรวม',
   'git.conflict.abort': 'ยกเลิกการรวม',
   'git.conflict.nonOp.title': 'การรวมหยุดชั่วคราวที่ไฟล์ที่ไม่ใช่ .op',
   'git.conflict.nonOp.description':

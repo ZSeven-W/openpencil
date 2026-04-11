@@ -68,10 +68,9 @@ const es: TranslationKeys = {
   'git.titleNoFile': 'Git · (Sin archivo)',
   'git.close': 'Cerrar',
   'git.initializing': 'Inicializando repositorio…',
-  'git.placeholder.trackedPicker': 'Selector de archivo rastreado',
-  'git.placeholder.readyState': 'Estado listo',
   'git.conflict.title': 'Conflicto de fusión',
-  'git.conflict.description': 'Los conflictos requieren resolución manual — disponible en Fase 7.',
+  'git.conflict.description':
+    'Resuelve cada conflicto usando las tarjetas de abajo y luego aplica la fusión.',
   'git.conflict.abort': 'Abortar fusión',
   'git.conflict.nonOp.title': 'Fusión pausada en archivos distintos de .op',
   'git.conflict.nonOp.description':

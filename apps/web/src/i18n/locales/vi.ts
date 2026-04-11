@@ -68,10 +68,8 @@ const vi: TranslationKeys = {
   'git.titleNoFile': 'Git · (Chưa chọn tệp)',
   'git.close': 'Đóng',
   'git.initializing': 'Đang khởi tạo kho…',
-  'git.placeholder.trackedPicker': 'Trình chọn tệp theo dõi',
-  'git.placeholder.readyState': 'Trạng thái sẵn sàng',
   'git.conflict.title': 'Xung đột hợp nhất',
-  'git.conflict.description': 'Xung đột cần giải quyết thủ công — có trong Phase 7.',
+  'git.conflict.description': 'Giải quyết từng xung đột bằng các thẻ bên dưới, sau đó áp dụng gộp.',
   'git.conflict.abort': 'Hủy hợp nhất',
   'git.conflict.nonOp.title': 'Gộp tạm dừng ở các tệp không phải .op',
   'git.conflict.nonOp.description':

@@ -68,10 +68,9 @@ const tr: TranslationKeys = {
   'git.titleNoFile': 'Git · (Dosya seçilmedi)',
   'git.close': 'Kapat',
   'git.initializing': 'Depo başlatılıyor…',
-  'git.placeholder.trackedPicker': 'İzlenen dosya seçici',
-  'git.placeholder.readyState': 'Hazır durumu',
   'git.conflict.title': 'Birleştirme çakışması',
-  'git.conflict.description': "Çakışmalar manuel çözüm gerektirir — Phase 7'de gelecek.",
+  'git.conflict.description':
+    'Aşağıdaki kartları kullanarak her çakışmayı çözün, ardından birleştirmeyi uygulayın.',
   'git.conflict.abort': 'Birleştirmeyi iptal et',
   'git.conflict.nonOp.title': '.op olmayan dosyalar nedeniyle birleştirme duraklatıldı',
   'git.conflict.nonOp.description':

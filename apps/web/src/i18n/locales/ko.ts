@@ -68,10 +68,8 @@ const ko: TranslationKeys = {
   'git.titleNoFile': 'Git · (파일 선택 안 됨)',
   'git.close': '닫기',
   'git.initializing': '저장소 초기화 중…',
-  'git.placeholder.trackedPicker': '추적 파일 선택기',
-  'git.placeholder.readyState': 'Ready 상태',
   'git.conflict.title': '병합 충돌',
-  'git.conflict.description': '충돌은 수동으로 해결해야 합니다 — Phase 7 제공 예정.',
+  'git.conflict.description': '아래 카드로 각 충돌을 해결한 다음 병합을 적용하세요.',
   'git.conflict.abort': '병합 중단',
   'git.conflict.nonOp.title': '.op 이외 파일로 병합이 일시 중지됨',
   'git.conflict.nonOp.description':

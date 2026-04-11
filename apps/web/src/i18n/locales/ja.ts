@@ -68,10 +68,9 @@ const ja: TranslationKeys = {
   'git.titleNoFile': 'Git · (ファイル未選択)',
   'git.close': '閉じる',
   'git.initializing': 'リポジトリを初期化中…',
-  'git.placeholder.trackedPicker': '追跡ファイルピッカー',
-  'git.placeholder.readyState': 'Ready 状態',
   'git.conflict.title': 'マージコンフリクト',
-  'git.conflict.description': 'コンフリクトには手動解決が必要です — Phase 7 で提供。',
+  'git.conflict.description':
+    '以下のカードで各コンフリクトを解決してから、マージを適用してください。',
   'git.conflict.abort': 'マージを中止',
   'git.conflict.nonOp.title': '.op 以外のファイルによりマージが一時停止しました',
   'git.conflict.nonOp.description':

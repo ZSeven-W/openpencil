@@ -68,10 +68,9 @@ const ru: TranslationKeys = {
   'git.titleNoFile': 'Git · (Файл не выбран)',
   'git.close': 'Закрыть',
   'git.initializing': 'Инициализация репозитория…',
-  'git.placeholder.trackedPicker': 'Выбор отслеживаемого файла',
-  'git.placeholder.readyState': 'Готовое состояние',
   'git.conflict.title': 'Конфликт слияния',
-  'git.conflict.description': 'Конфликты требуют ручного разрешения — доступно в Фазе 7.',
+  'git.conflict.description':
+    'Разрешите каждый конфликт с помощью карточек ниже, затем примените слияние.',
   'git.conflict.abort': 'Отменить слияние',
   'git.conflict.nonOp.title': 'Слияние приостановлено из-за не-.op файлов',
   'git.conflict.nonOp.description':

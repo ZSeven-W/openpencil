@@ -68,10 +68,9 @@ const de: TranslationKeys = {
   'git.titleNoFile': 'Git · (Keine Datei)',
   'git.close': 'Schließen',
   'git.initializing': 'Repository wird initialisiert…',
-  'git.placeholder.trackedPicker': 'Dateiauswahl',
-  'git.placeholder.readyState': 'Bereit-Status',
   'git.conflict.title': 'Merge-Konflikt',
-  'git.conflict.description': 'Konflikte müssen manuell gelöst werden — verfügbar in Phase 7.',
+  'git.conflict.description':
+    'Löse jeden Konflikt mithilfe der Karten unten auf, dann wende den Merge an.',
   'git.conflict.abort': 'Merge abbrechen',
   'git.conflict.nonOp.title': 'Zusammenführung wegen Nicht-.op-Dateien pausiert',
   'git.conflict.nonOp.description':

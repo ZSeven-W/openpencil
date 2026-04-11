@@ -68,10 +68,8 @@ const zh: TranslationKeys = {
   'git.titleNoFile': 'Git · (尚未选择文件)',
   'git.close': '关闭',
   'git.initializing': '正在初始化仓库…',
-  'git.placeholder.trackedPicker': '跟踪文件选择器',
-  'git.placeholder.readyState': '就绪状态',
   'git.conflict.title': '合并冲突',
-  'git.conflict.description': '冲突需要手动解决 — Phase 7 中提供。',
+  'git.conflict.description': '使用下方卡片逐一解决每个冲突，然后应用合并。',
   'git.conflict.abort': '中止合并',
   'git.conflict.nonOp.title': '合并因非 .op 文件暂停',
   'git.conflict.nonOp.description':

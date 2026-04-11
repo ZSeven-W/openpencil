@@ -68,10 +68,9 @@ const id: TranslationKeys = {
   'git.titleNoFile': 'Git · (Tidak ada file)',
   'git.close': 'Tutup',
   'git.initializing': 'Menginisialisasi repositori…',
-  'git.placeholder.trackedPicker': 'Pemilih file terlacak',
-  'git.placeholder.readyState': 'Status siap',
   'git.conflict.title': 'Konflik merge',
-  'git.conflict.description': 'Konflik perlu diselesaikan secara manual — tersedia di Phase 7.',
+  'git.conflict.description':
+    'Selesaikan setiap konflik menggunakan kartu di bawah, lalu terapkan penggabungan.',
   'git.conflict.abort': 'Batalkan merge',
   'git.conflict.nonOp.title': 'Penggabungan dijeda pada file non-.op',
   'git.conflict.nonOp.description':

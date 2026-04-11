@@ -68,10 +68,8 @@ const hi: TranslationKeys = {
   'git.titleNoFile': 'Git · (कोई फ़ाइल नहीं)',
   'git.close': 'बंद करें',
   'git.initializing': 'रिपॉज़िटरी आरंभ हो रही है…',
-  'git.placeholder.trackedPicker': 'ट्रैक की गई फ़ाइल चयनकर्ता',
-  'git.placeholder.readyState': 'तैयार स्थिति',
   'git.conflict.title': 'विलय संघर्ष',
-  'git.conflict.description': 'संघर्षों को मैन्युअल रूप से हल करना आवश्यक है — Phase 7 में उपलब्ध।',
+  'git.conflict.description': 'नीचे दिए कार्ड्स से प्रत्येक विरोध हल करें, फिर मर्ज लागू करें।',
   'git.conflict.abort': 'विलय रद्द करें',
   'git.conflict.nonOp.title': '.op से भिन्न फ़ाइलों पर विलय रोका गया',
   'git.conflict.nonOp.description':

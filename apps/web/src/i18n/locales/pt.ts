@@ -68,10 +68,9 @@ const pt: TranslationKeys = {
   'git.titleNoFile': 'Git · (Nenhum arquivo)',
   'git.close': 'Fechar',
   'git.initializing': 'Inicializando repositório…',
-  'git.placeholder.trackedPicker': 'Seletor de arquivo rastreado',
-  'git.placeholder.readyState': 'Estado pronto',
   'git.conflict.title': 'Conflito de mesclagem',
-  'git.conflict.description': 'Os conflitos precisam de resolução manual — disponível na Fase 7.',
+  'git.conflict.description':
+    'Resolva cada conflito usando os cartões abaixo, depois aplique a mesclagem.',
   'git.conflict.abort': 'Abortar mesclagem',
   'git.conflict.nonOp.title': 'Mesclagem pausada em arquivos não .op',
   'git.conflict.nonOp.description':

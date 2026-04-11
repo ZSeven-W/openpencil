@@ -68,10 +68,8 @@ const zhTW: TranslationKeys = {
   'git.titleNoFile': 'Git · (尚未選擇檔案)',
   'git.close': '關閉',
   'git.initializing': '正在初始化儲存庫…',
-  'git.placeholder.trackedPicker': '追蹤檔案選擇器',
-  'git.placeholder.readyState': '就緒狀態',
   'git.conflict.title': '合併衝突',
-  'git.conflict.description': '衝突需要手動解決 — Phase 7 中提供。',
+  'git.conflict.description': '使用下方卡片逐一解決每個衝突，然後套用合併。',
   'git.conflict.abort': '中止合併',
   'git.conflict.nonOp.title': '合併因非 .op 檔案暫停',
   'git.conflict.nonOp.description':
