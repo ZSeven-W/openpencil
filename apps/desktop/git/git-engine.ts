@@ -14,6 +14,14 @@
 //   - low-level git primitives (those live in git-iso.ts)
 //   - IPC serialization (that's ipc-handlers.ts)
 //   - clone/fetch/push/auth/SSH/merge (Phase 2b/2c)
+//
+// FILE SIZE DEBT (Phase 7a): This file is ~1982 lines — approximately 2.5×
+// the 800-line guideline. The Phase 7a addition (engineBranchMergeFolderMode)
+// could not move to worktree-merge.ts because it needs session state
+// (repoSession, setInflightMerge) and ref-resolution helpers that live here;
+// worktree-merge.ts is intentionally kept as a pure shell-wrapper boundary
+// with no session coupling. Decomposition is deferred to a future phase —
+// revisit when this file crosses ~2100 lines or when session state is extracted.
 
 import { resolve, basename, relative, join, sep } from 'node:path';
 import { promises as fsp } from 'node:fs';
@@ -1609,10 +1617,11 @@ async function engineBranchMergeFolderMode(
   ]);
 
   if (!baseBlob || !oursBlob || !theirsBlob) {
-    // One of the stages is missing — e.g. deleted-by-them rename conflict.
-    // This is non-op territory from the .op perspective.
-    if (nonOpConflicts.length > 0) return { result: 'conflict-non-op' };
-    // Unusual: tracked file deleted/renamed. Treat as non-op.
+    // One or more index stages are missing for the tracked .op file.
+    // This covers rename conflicts (e.g. theirs renamed the file so stage :3: is
+    // null) and delete/add conflicts. In all such cases a semantic 3-way merge
+    // of the document is impossible, so we surface conflict-non-op and let the
+    // user resolve it in a terminal.
     return { result: 'conflict-non-op' };
   }
 
