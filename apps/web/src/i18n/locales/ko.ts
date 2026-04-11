@@ -70,7 +70,6 @@ const ko: TranslationKeys = {
   'git.initializing': '저장소 초기화 중…',
   'git.placeholder.trackedPicker': '추적 파일 선택기',
   'git.placeholder.readyState': 'Ready 상태',
-  'git.placeholder.cloneWizard': '복제 마법사 — Phase 6 제공 예정',
   'git.conflict.title': '병합 충돌',
   'git.conflict.description': '충돌은 수동으로 해결해야 합니다 — Phase 7 제공 예정.',
   'git.conflict.abort': '병합 중단',
@@ -95,7 +94,6 @@ const ko: TranslationKeys = {
   'git.empty.openCardDescription': '기존 저장소',
   'git.empty.cloneCard': '복제',
   'git.empty.cloneCardDescription': '원격에서',
-  'git.empty.cloneComingSoon': '복제는 Phase 6에서 제공됩니다',
 
   // ── Git 작성자 양식 ──
   'git.author.heading': '커밋 작성자',
@@ -140,15 +138,15 @@ const ko: TranslationKeys = {
   'git.commit.saveRequiredSave': '저장',
   'git.commit.saveRequiredCancel': '취소',
 
-  // ── Git Header (Phase 4c) ──
-  'git.header.pullComingSoon': 'Pull · Phase 6 제공',
-  'git.header.pushComingSoon': 'Push · Phase 6 제공',
+  // ── Git Header (Phase 4c → 6c) ──
   'git.header.autosaveError': '자동 저장 오류',
   'git.header.autosaveErrorTitle': '마지막 자동 저장 실패',
   'git.header.authorMissingWarning': '기여 기록을 위해 커밋 작성자를 설정하세요',
   'git.header.overflowSwitchTracked': '추적 파일 전환…',
   'git.header.overflowClearAuthor': '커밋 작성자 지우기',
   'git.header.overflowCloseRepo': '저장소 닫기',
+  'git.header.overflowRemoteSettings': '원격 설정…',
+  'git.header.overflowSshKeys': 'SSH 키…',
   'git.header.overflowMoreActions': '추가 작업',
 
   // ── Git History List (Phase 4c) ──
@@ -234,6 +232,62 @@ const ko: TranslationKeys = {
   'git.push.rejectedDismiss': '닫기',
   'git.push.rejectedPull': '지금 풀',
   'git.remote.dismissError': '닫기',
+
+  // ── Git 원격 설정 (Phase 6c) ──
+  'git.remote.settingsLabel': '원격 설정',
+  'git.remote.settingsHeading': '원격',
+  'git.remote.back': '뒤로',
+  'git.remote.cancel': '취소',
+  'git.remote.emptyNoOrigin': '구성된 원격이 없습니다. 추가하세요:',
+  'git.remote.urlLabel': 'Origin URL',
+  'git.remote.urlPlaceholder': 'https://github.com/owner/repo.git',
+  'git.remote.saveButton': '저장',
+  'git.remote.clearButton': '삭제',
+  'git.remote.clearConfirmHeading': 'origin을 삭제할까요?',
+  'git.remote.clearConfirmBody': '이 저장소에서 origin 원격이 제거됩니다.',
+  'git.remote.clearConfirmAction': '확인',
+  'git.remote.aheadBehind': '{{ahead}} 앞서고 · {{behind}} 뒤처짐',
+  'git.remote.fetchButton': 'Fetch',
+  'git.remote.sshIsoUnsupported':
+    '내장 엔진은 SSH 전송을 지원하지 않습니다. 시스템 git을 설치하거나 HTTPS 원격 URL로 전환하세요.',
+  'git.remote.storedAuthLabel': '저장된 자격 증명',
+  'git.remote.storedAuth.token': '토큰',
+  'git.remote.storedAuth.ssh': 'SSH 키',
+  'git.remote.storedAuth.none': '없음',
+  'git.remote.storedAuth.loading': '불러오는 중…',
+  'git.remote.storedAuth.noHost': '호스트가 감지되지 않음',
+  'git.remote.clearAuthButton': '저장된 자격 증명 삭제',
+
+  // ── Git SSH 키 (Phase 6c) ──
+  'git.ssh.label': 'SSH 키',
+  'git.ssh.heading': 'SSH 키',
+  'git.ssh.back': '뒤로',
+  'git.ssh.cancel': '취소',
+  'git.ssh.isoUnsupported':
+    '현재 원격은 SSH를 사용하지만 내장 엔진은 SSH 전송을 수행할 수 없습니다. 시스템 git을 설치하거나 원격 URL을 HTTPS로 변경하세요.',
+  'git.ssh.emptyList': '아직 SSH 키가 없습니다.',
+  'git.ssh.generateAction': '새로 생성',
+  'git.ssh.importAction': '기존 항목 가져오기',
+  'git.ssh.copyPublicKey': '공개 키 복사',
+  'git.ssh.copiedHint': '복사됨',
+  'git.ssh.deleteKey': '{{name}} 삭제',
+  'git.ssh.deletePrompt': 'SSH 키 {{name}}을(를) 삭제할까요?',
+  'git.ssh.deleteConfirm': '삭제',
+  'git.ssh.currentHostBadge': '현재 호스트',
+  'git.ssh.hostLabel': '호스트',
+  'git.ssh.hostPlaceholder': 'github.com',
+  'git.ssh.commentLabel': '주석',
+  'git.ssh.commentPlaceholder': 'laptop@home',
+  'git.ssh.generateSubmit': '생성',
+  'git.ssh.importPathLabel': '개인 키 경로',
+  'git.ssh.importPathPlaceholder': '/path/to/id_ed25519',
+  'git.ssh.importBrowse': '찾아보기…',
+  'git.ssh.importSubmit': '가져오기',
+  'git.ssh.validationHost': '호스트가 필요합니다',
+  'git.ssh.validationComment': '주석이 필요합니다',
+  'git.ssh.validationImportPath': '가져올 개인 키 파일을 선택하세요',
+  'git.ssh.providerLink': '{{host}} SSH 키 설정 열기',
+  'git.ssh.genericGuidance': '공개 키를 복사하여 Git 제공업체의 SSH 키 설정에 추가하세요.',
 
   // ── Git 인증 양식 (Phase 6b) ──
   'git.auth.formLabel': 'Git 자격 증명',

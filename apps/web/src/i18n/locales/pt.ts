@@ -70,7 +70,6 @@ const pt: TranslationKeys = {
   'git.initializing': 'Inicializando repositório…',
   'git.placeholder.trackedPicker': 'Seletor de arquivo rastreado',
   'git.placeholder.readyState': 'Estado pronto',
-  'git.placeholder.cloneWizard': 'Assistente de clone — disponível na Fase 6',
   'git.conflict.title': 'Conflito de mesclagem',
   'git.conflict.description': 'Os conflitos precisam de resolução manual — disponível na Fase 7.',
   'git.conflict.abort': 'Abortar mesclagem',
@@ -95,7 +94,6 @@ const pt: TranslationKeys = {
   'git.empty.openCardDescription': 'Repositório existente',
   'git.empty.cloneCard': 'Clonar',
   'git.empty.cloneCardDescription': 'De um remoto',
-  'git.empty.cloneComingSoon': 'Clone estará disponível na Fase 6',
 
   // ── Formulário de autor do Git ──
   'git.author.heading': 'Autor do commit',
@@ -140,15 +138,15 @@ const pt: TranslationKeys = {
   'git.commit.saveRequiredSave': 'Salvar',
   'git.commit.saveRequiredCancel': 'Cancelar',
 
-  // ── Git Header (Phase 4c) ──
-  'git.header.pullComingSoon': 'Pull · disponível na Fase 6',
-  'git.header.pushComingSoon': 'Push · disponível na Fase 6',
+  // ── Git Header (Phase 4c → 6c) ──
   'git.header.autosaveError': 'Erro de auto-salvamento',
   'git.header.autosaveErrorTitle': 'Último auto-salvamento falhou',
   'git.header.authorMissingWarning': 'Defina o autor do commit para registrar a atribuição',
   'git.header.overflowSwitchTracked': 'Trocar arquivo rastreado…',
   'git.header.overflowClearAuthor': 'Limpar autor do commit',
   'git.header.overflowCloseRepo': 'Fechar repositório',
+  'git.header.overflowRemoteSettings': 'Configurações do remoto…',
+  'git.header.overflowSshKeys': 'Chaves SSH…',
   'git.header.overflowMoreActions': 'Mais ações',
 
   // ── Git History List (Phase 4c) ──
@@ -236,6 +234,63 @@ const pt: TranslationKeys = {
   'git.push.rejectedDismiss': 'Fechar',
   'git.push.rejectedPull': 'Fazer pull agora',
   'git.remote.dismissError': 'Fechar',
+
+  // ── Git Configurações do remoto (Phase 6c) ──
+  'git.remote.settingsLabel': 'Configurações do remoto',
+  'git.remote.settingsHeading': 'Remoto',
+  'git.remote.back': 'Voltar',
+  'git.remote.cancel': 'Cancelar',
+  'git.remote.emptyNoOrigin': 'Ainda não há remoto configurado. Adicione um:',
+  'git.remote.urlLabel': 'URL do origin',
+  'git.remote.urlPlaceholder': 'https://github.com/owner/repo.git',
+  'git.remote.saveButton': 'Salvar',
+  'git.remote.clearButton': 'Limpar',
+  'git.remote.clearConfirmHeading': 'Limpar origin?',
+  'git.remote.clearConfirmBody': 'Isso removerá o remoto origin deste repositório.',
+  'git.remote.clearConfirmAction': 'Confirmar',
+  'git.remote.aheadBehind': '{{ahead}} à frente · {{behind}} atrás',
+  'git.remote.fetchButton': 'Buscar',
+  'git.remote.sshIsoUnsupported':
+    'Transporte SSH não é suportado pelo motor integrado. Instale o git do sistema ou use uma URL remota HTTPS.',
+  'git.remote.storedAuthLabel': 'Credenciais salvas',
+  'git.remote.storedAuth.token': 'Token',
+  'git.remote.storedAuth.ssh': 'Chave SSH',
+  'git.remote.storedAuth.none': 'Nenhuma',
+  'git.remote.storedAuth.loading': 'Carregando…',
+  'git.remote.storedAuth.noHost': 'Nenhum host detectado',
+  'git.remote.clearAuthButton': 'Limpar credenciais salvas',
+
+  // ── Git Chaves SSH (Phase 6c) ──
+  'git.ssh.label': 'Chaves SSH',
+  'git.ssh.heading': 'Chaves SSH',
+  'git.ssh.back': 'Voltar',
+  'git.ssh.cancel': 'Cancelar',
+  'git.ssh.isoUnsupported':
+    'O remoto atual usa SSH, mas o motor integrado não pode executar transporte SSH. Instale o git do sistema ou mude a URL remota para HTTPS.',
+  'git.ssh.emptyList': 'Ainda não há chaves SSH.',
+  'git.ssh.generateAction': 'Gerar nova',
+  'git.ssh.importAction': 'Importar existente',
+  'git.ssh.copyPublicKey': 'Copiar chave pública',
+  'git.ssh.copiedHint': 'Copiada',
+  'git.ssh.deleteKey': 'Excluir {{name}}',
+  'git.ssh.deletePrompt': 'Excluir a chave SSH {{name}}?',
+  'git.ssh.deleteConfirm': 'Excluir',
+  'git.ssh.currentHostBadge': 'host atual',
+  'git.ssh.hostLabel': 'Host',
+  'git.ssh.hostPlaceholder': 'github.com',
+  'git.ssh.commentLabel': 'Comentário',
+  'git.ssh.commentPlaceholder': 'laptop@home',
+  'git.ssh.generateSubmit': 'Gerar',
+  'git.ssh.importPathLabel': 'Caminho da chave privada',
+  'git.ssh.importPathPlaceholder': '/path/to/id_ed25519',
+  'git.ssh.importBrowse': 'Procurar…',
+  'git.ssh.importSubmit': 'Importar',
+  'git.ssh.validationHost': 'O host é obrigatório',
+  'git.ssh.validationComment': 'O comentário é obrigatório',
+  'git.ssh.validationImportPath': 'Escolha um arquivo de chave privada para importar',
+  'git.ssh.providerLink': 'Abrir configurações de chaves SSH de {{host}}',
+  'git.ssh.genericGuidance':
+    'Copie a chave pública e adicione-a às configurações de chaves SSH do seu provedor Git.',
 
   // ── Git Formulário de autenticação (Phase 6b) ──
   'git.auth.formLabel': 'Credenciais do Git',

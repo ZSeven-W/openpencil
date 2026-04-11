@@ -70,7 +70,6 @@ const ru: TranslationKeys = {
   'git.initializing': 'Инициализация репозитория…',
   'git.placeholder.trackedPicker': 'Выбор отслеживаемого файла',
   'git.placeholder.readyState': 'Готовое состояние',
-  'git.placeholder.cloneWizard': 'Мастер клонирования — доступно в Фазе 6',
   'git.conflict.title': 'Конфликт слияния',
   'git.conflict.description': 'Конфликты требуют ручного разрешения — доступно в Фазе 7.',
   'git.conflict.abort': 'Отменить слияние',
@@ -95,7 +94,6 @@ const ru: TranslationKeys = {
   'git.empty.openCardDescription': 'Существующий репозиторий',
   'git.empty.cloneCard': 'Клонировать',
   'git.empty.cloneCardDescription': 'Из удалённого',
-  'git.empty.cloneComingSoon': 'Клонирование будет в Фазе 6',
 
   // ── Форма автора Git ──
   'git.author.heading': 'Автор коммита',
@@ -140,15 +138,15 @@ const ru: TranslationKeys = {
   'git.commit.saveRequiredSave': 'Сохранить',
   'git.commit.saveRequiredCancel': 'Отмена',
 
-  // ── Git Header (Phase 4c) ──
-  'git.header.pullComingSoon': 'Pull · в Фазе 6',
-  'git.header.pushComingSoon': 'Push · в Фазе 6',
+  // ── Git Header (Phase 4c → 6c) ──
   'git.header.autosaveError': 'Ошибка автосохранения',
   'git.header.autosaveErrorTitle': 'Последнее автосохранение не удалось',
   'git.header.authorMissingWarning': 'Установите автора коммита для атрибуции',
   'git.header.overflowSwitchTracked': 'Сменить отслеживаемый файл…',
   'git.header.overflowClearAuthor': 'Очистить автора коммита',
   'git.header.overflowCloseRepo': 'Закрыть репозиторий',
+  'git.header.overflowRemoteSettings': 'Настройки remote…',
+  'git.header.overflowSshKeys': 'SSH-ключи…',
   'git.header.overflowMoreActions': 'Ещё действия',
 
   // ── Git History List (Phase 4c) ──
@@ -237,6 +235,63 @@ const ru: TranslationKeys = {
   'git.push.rejectedDismiss': 'Закрыть',
   'git.push.rejectedPull': 'Выполнить pull',
   'git.remote.dismissError': 'Закрыть',
+
+  // ── Git Настройки удалённого (Phase 6c) ──
+  'git.remote.settingsLabel': 'Настройки удалённого',
+  'git.remote.settingsHeading': 'Удалённый',
+  'git.remote.back': 'Назад',
+  'git.remote.cancel': 'Отмена',
+  'git.remote.emptyNoOrigin': 'Удалённый репозиторий ещё не настроен. Добавьте:',
+  'git.remote.urlLabel': 'URL origin',
+  'git.remote.urlPlaceholder': 'https://github.com/owner/repo.git',
+  'git.remote.saveButton': 'Сохранить',
+  'git.remote.clearButton': 'Очистить',
+  'git.remote.clearConfirmHeading': 'Очистить origin?',
+  'git.remote.clearConfirmBody': 'Это удалит origin из этого репозитория.',
+  'git.remote.clearConfirmAction': 'Подтвердить',
+  'git.remote.aheadBehind': 'Впереди {{ahead}} · Позади {{behind}}',
+  'git.remote.fetchButton': 'Fetch',
+  'git.remote.sshIsoUnsupported':
+    'Встроенный движок не поддерживает SSH. Установите системный git или используйте HTTPS URL.',
+  'git.remote.storedAuthLabel': 'Сохранённые учётные данные',
+  'git.remote.storedAuth.token': 'Токен',
+  'git.remote.storedAuth.ssh': 'SSH-ключ',
+  'git.remote.storedAuth.none': 'Нет',
+  'git.remote.storedAuth.loading': 'Загрузка…',
+  'git.remote.storedAuth.noHost': 'Хост не обнаружен',
+  'git.remote.clearAuthButton': 'Очистить сохранённые учётные данные',
+
+  // ── Git SSH-ключи (Phase 6c) ──
+  'git.ssh.label': 'SSH-ключи',
+  'git.ssh.heading': 'SSH-ключи',
+  'git.ssh.back': 'Назад',
+  'git.ssh.cancel': 'Отмена',
+  'git.ssh.isoUnsupported':
+    'Текущий удалённый использует SSH, но встроенный движок не может выполнить SSH-транспорт. Установите системный git или смените URL на HTTPS.',
+  'git.ssh.emptyList': 'SSH-ключей пока нет.',
+  'git.ssh.generateAction': 'Создать новый',
+  'git.ssh.importAction': 'Импортировать существующий',
+  'git.ssh.copyPublicKey': 'Скопировать публичный ключ',
+  'git.ssh.copiedHint': 'Скопировано',
+  'git.ssh.deleteKey': 'Удалить {{name}}',
+  'git.ssh.deletePrompt': 'Удалить SSH-ключ {{name}}?',
+  'git.ssh.deleteConfirm': 'Удалить',
+  'git.ssh.currentHostBadge': 'текущий хост',
+  'git.ssh.hostLabel': 'Хост',
+  'git.ssh.hostPlaceholder': 'github.com',
+  'git.ssh.commentLabel': 'Комментарий',
+  'git.ssh.commentPlaceholder': 'laptop@home',
+  'git.ssh.generateSubmit': 'Создать',
+  'git.ssh.importPathLabel': 'Путь к приватному ключу',
+  'git.ssh.importPathPlaceholder': '/path/to/id_ed25519',
+  'git.ssh.importBrowse': 'Обзор…',
+  'git.ssh.importSubmit': 'Импортировать',
+  'git.ssh.validationHost': 'Хост обязателен',
+  'git.ssh.validationComment': 'Комментарий обязателен',
+  'git.ssh.validationImportPath': 'Выберите файл приватного ключа для импорта',
+  'git.ssh.providerLink': 'Открыть настройки SSH-ключей {{host}}',
+  'git.ssh.genericGuidance':
+    'Скопируйте публичный ключ и добавьте его в настройки SSH-ключей вашего Git-провайдера.',
 
   // ── Git Форма аутентификации (Phase 6b) ──
   'git.auth.formLabel': 'Учётные данные Git',

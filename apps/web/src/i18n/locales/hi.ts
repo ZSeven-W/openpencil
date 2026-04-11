@@ -70,7 +70,6 @@ const hi: TranslationKeys = {
   'git.initializing': 'रिपॉज़िटरी आरंभ हो रही है…',
   'git.placeholder.trackedPicker': 'ट्रैक की गई फ़ाइल चयनकर्ता',
   'git.placeholder.readyState': 'तैयार स्थिति',
-  'git.placeholder.cloneWizard': 'क्लोन विज़ार्ड — Phase 6 में उपलब्ध',
   'git.conflict.title': 'विलय संघर्ष',
   'git.conflict.description': 'संघर्षों को मैन्युअल रूप से हल करना आवश्यक है — Phase 7 में उपलब्ध।',
   'git.conflict.abort': 'विलय रद्द करें',
@@ -95,7 +94,6 @@ const hi: TranslationKeys = {
   'git.empty.openCardDescription': 'मौजूदा रिपॉज़िटरी',
   'git.empty.cloneCard': 'क्लोन',
   'git.empty.cloneCardDescription': 'रिमोट से',
-  'git.empty.cloneComingSoon': 'क्लोन Phase 6 में उपलब्ध होगा',
 
   // ── Git लेखक फ़ॉर्म ──
   'git.author.heading': 'कमिट लेखक',
@@ -139,15 +137,15 @@ const hi: TranslationKeys = {
   'git.commit.saveRequiredSave': 'सहेजें',
   'git.commit.saveRequiredCancel': 'रद्द करें',
 
-  // ── Git Header (Phase 4c) ──
-  'git.header.pullComingSoon': 'Pull · Phase 6 में उपलब्ध',
-  'git.header.pushComingSoon': 'Push · Phase 6 में उपलब्ध',
+  // ── Git Header (Phase 4c → 6c) ──
   'git.header.autosaveError': 'ऑटो-सेव त्रुटि',
   'git.header.autosaveErrorTitle': 'पिछला ऑटो-सेव विफल रहा',
   'git.header.authorMissingWarning': 'जिम्मेदारी दर्ज करने के लिए कमिट लेखक सेट करें',
   'git.header.overflowSwitchTracked': 'ट्रैक की गई फ़ाइल बदलें…',
   'git.header.overflowClearAuthor': 'कमिट लेखक साफ़ करें',
   'git.header.overflowCloseRepo': 'रिपॉज़िटरी बंद करें',
+  'git.header.overflowRemoteSettings': 'रिमोट सेटिंग्स…',
+  'git.header.overflowSshKeys': 'SSH कुंजियाँ…',
   'git.header.overflowMoreActions': 'अधिक कार्य',
 
   // ── Git History List (Phase 4c) ──
@@ -232,6 +230,62 @@ const hi: TranslationKeys = {
   'git.push.rejectedDismiss': 'बंद करें',
   'git.push.rejectedPull': 'अभी पुल करें',
   'git.remote.dismissError': 'बंद करें',
+
+  // ── Git रिमोट सेटिंग्स (Phase 6c) ──
+  'git.remote.settingsLabel': 'रिमोट सेटिंग्स',
+  'git.remote.settingsHeading': 'रिमोट',
+  'git.remote.back': 'वापस',
+  'git.remote.cancel': 'रद्द करें',
+  'git.remote.emptyNoOrigin': 'अभी तक कोई रिमोट कॉन्फ़िगर नहीं। एक जोड़ें:',
+  'git.remote.urlLabel': 'Origin URL',
+  'git.remote.urlPlaceholder': 'https://github.com/owner/repo.git',
+  'git.remote.saveButton': 'सहेजें',
+  'git.remote.clearButton': 'साफ़ करें',
+  'git.remote.clearConfirmHeading': 'origin साफ़ करें?',
+  'git.remote.clearConfirmBody': 'यह इस रिपॉज़िटरी से origin रिमोट हटा देगा।',
+  'git.remote.clearConfirmAction': 'पुष्टि करें',
+  'git.remote.aheadBehind': '{{ahead}} आगे · {{behind}} पीछे',
+  'git.remote.fetchButton': 'फ़ेच',
+  'git.remote.sshIsoUnsupported':
+    'बिल्ट-इन इंजन SSH ट्रांसपोर्ट का समर्थन नहीं करता। सिस्टम git इंस्टॉल करें या HTTPS रिमोट URL पर स्विच करें।',
+  'git.remote.storedAuthLabel': 'सहेजे गए क्रेडेंशियल',
+  'git.remote.storedAuth.token': 'टोकन',
+  'git.remote.storedAuth.ssh': 'SSH कुंजी',
+  'git.remote.storedAuth.none': 'कोई नहीं',
+  'git.remote.storedAuth.loading': 'लोड हो रहा है…',
+  'git.remote.storedAuth.noHost': 'कोई होस्ट नहीं मिला',
+  'git.remote.clearAuthButton': 'सहेजे गए क्रेडेंशियल साफ़ करें',
+
+  // ── Git SSH कुंजियाँ (Phase 6c) ──
+  'git.ssh.label': 'SSH कुंजियाँ',
+  'git.ssh.heading': 'SSH कुंजियाँ',
+  'git.ssh.back': 'वापस',
+  'git.ssh.cancel': 'रद्द करें',
+  'git.ssh.isoUnsupported':
+    'वर्तमान रिमोट SSH का उपयोग कर रहा है, लेकिन बिल्ट-इन इंजन SSH ट्रांसपोर्ट नहीं कर सकता। सिस्टम git इंस्टॉल करें या रिमोट URL को HTTPS में बदलें।',
+  'git.ssh.emptyList': 'अभी तक कोई SSH कुंजी नहीं।',
+  'git.ssh.generateAction': 'नई बनाएँ',
+  'git.ssh.importAction': 'मौजूदा आयात करें',
+  'git.ssh.copyPublicKey': 'सार्वजनिक कुंजी कॉपी करें',
+  'git.ssh.copiedHint': 'कॉपी किया गया',
+  'git.ssh.deleteKey': '{{name}} हटाएं',
+  'git.ssh.deletePrompt': 'SSH कुंजी {{name}} हटाएं?',
+  'git.ssh.deleteConfirm': 'हटाएं',
+  'git.ssh.currentHostBadge': 'वर्तमान होस्ट',
+  'git.ssh.hostLabel': 'होस्ट',
+  'git.ssh.hostPlaceholder': 'github.com',
+  'git.ssh.commentLabel': 'टिप्पणी',
+  'git.ssh.commentPlaceholder': 'laptop@home',
+  'git.ssh.generateSubmit': 'बनाएं',
+  'git.ssh.importPathLabel': 'निजी कुंजी पथ',
+  'git.ssh.importPathPlaceholder': '/path/to/id_ed25519',
+  'git.ssh.importBrowse': 'ब्राउज़ करें…',
+  'git.ssh.importSubmit': 'आयात करें',
+  'git.ssh.validationHost': 'होस्ट आवश्यक है',
+  'git.ssh.validationComment': 'टिप्पणी आवश्यक है',
+  'git.ssh.validationImportPath': 'आयात करने के लिए निजी कुंजी फ़ाइल चुनें',
+  'git.ssh.providerLink': '{{host}} SSH कुंजी सेटिंग्स खोलें',
+  'git.ssh.genericGuidance': 'सार्वजनिक कुंजी कॉपी करें और अपने Git प्रदाता की SSH कुंजी सेटिंग्स में जोड़ें।',
 
   // ── Git प्रमाणीकरण फ़ॉर्म (Phase 6b) ──
   'git.auth.formLabel': 'Git क्रेडेंशियल',

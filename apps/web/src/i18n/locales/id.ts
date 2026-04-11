@@ -70,7 +70,6 @@ const id: TranslationKeys = {
   'git.initializing': 'Menginisialisasi repositori…',
   'git.placeholder.trackedPicker': 'Pemilih file terlacak',
   'git.placeholder.readyState': 'Status siap',
-  'git.placeholder.cloneWizard': 'Wizard klona — tersedia di Phase 6',
   'git.conflict.title': 'Konflik merge',
   'git.conflict.description': 'Konflik perlu diselesaikan secara manual — tersedia di Phase 7.',
   'git.conflict.abort': 'Batalkan merge',
@@ -95,7 +94,6 @@ const id: TranslationKeys = {
   'git.empty.openCardDescription': 'Repositori yang ada',
   'git.empty.cloneCard': 'Klona',
   'git.empty.cloneCardDescription': 'Dari remote',
-  'git.empty.cloneComingSoon': 'Klona akan tersedia di Phase 6',
 
   // ── Form Penulis Git ──
   'git.author.heading': 'Penulis commit',
@@ -140,15 +138,15 @@ const id: TranslationKeys = {
   'git.commit.saveRequiredSave': 'Simpan',
   'git.commit.saveRequiredCancel': 'Batal',
 
-  // ── Git Header (Phase 4c) ──
-  'git.header.pullComingSoon': 'Pull · tersedia di Phase 6',
-  'git.header.pushComingSoon': 'Push · tersedia di Phase 6',
+  // ── Git Header (Phase 4c → 6c) ──
   'git.header.autosaveError': 'Error auto-save',
   'git.header.autosaveErrorTitle': 'Auto-save terakhir gagal',
   'git.header.authorMissingWarning': 'Atur penulis commit untuk merekam atribusi',
   'git.header.overflowSwitchTracked': 'Ganti file yang dilacak…',
   'git.header.overflowClearAuthor': 'Bersihkan penulis commit',
   'git.header.overflowCloseRepo': 'Tutup repositori',
+  'git.header.overflowRemoteSettings': 'Pengaturan remote…',
+  'git.header.overflowSshKeys': 'Kunci SSH…',
   'git.header.overflowMoreActions': 'Tindakan lainnya',
 
   // ── Git History List (Phase 4c) ──
@@ -235,6 +233,63 @@ const id: TranslationKeys = {
   'git.push.rejectedDismiss': 'Tutup',
   'git.push.rejectedPull': 'Pull sekarang',
   'git.remote.dismissError': 'Tutup',
+
+  // ── Git Pengaturan remote (Phase 6c) ──
+  'git.remote.settingsLabel': 'Pengaturan remote',
+  'git.remote.settingsHeading': 'Remote',
+  'git.remote.back': 'Kembali',
+  'git.remote.cancel': 'Batal',
+  'git.remote.emptyNoOrigin': 'Belum ada remote yang dikonfigurasi. Tambahkan satu:',
+  'git.remote.urlLabel': 'URL origin',
+  'git.remote.urlPlaceholder': 'https://github.com/owner/repo.git',
+  'git.remote.saveButton': 'Simpan',
+  'git.remote.clearButton': 'Hapus',
+  'git.remote.clearConfirmHeading': 'Hapus origin?',
+  'git.remote.clearConfirmBody': 'Ini akan menghapus remote origin dari repositori ini.',
+  'git.remote.clearConfirmAction': 'Konfirmasi',
+  'git.remote.aheadBehind': '{{ahead}} di depan · {{behind}} di belakang',
+  'git.remote.fetchButton': 'Fetch',
+  'git.remote.sshIsoUnsupported':
+    'Transport SSH tidak didukung oleh mesin bawaan. Instal git sistem atau gunakan URL remote HTTPS.',
+  'git.remote.storedAuthLabel': 'Kredensial tersimpan',
+  'git.remote.storedAuth.token': 'Token',
+  'git.remote.storedAuth.ssh': 'Kunci SSH',
+  'git.remote.storedAuth.none': 'Tidak ada',
+  'git.remote.storedAuth.loading': 'Memuat…',
+  'git.remote.storedAuth.noHost': 'Tidak ada host terdeteksi',
+  'git.remote.clearAuthButton': 'Hapus kredensial tersimpan',
+
+  // ── Git Kunci SSH (Phase 6c) ──
+  'git.ssh.label': 'Kunci SSH',
+  'git.ssh.heading': 'Kunci SSH',
+  'git.ssh.back': 'Kembali',
+  'git.ssh.cancel': 'Batal',
+  'git.ssh.isoUnsupported':
+    'Remote saat ini menggunakan SSH, tetapi mesin bawaan tidak dapat melakukan transport SSH. Instal git sistem atau ubah URL remote menjadi HTTPS.',
+  'git.ssh.emptyList': 'Belum ada kunci SSH.',
+  'git.ssh.generateAction': 'Buat baru',
+  'git.ssh.importAction': 'Impor yang ada',
+  'git.ssh.copyPublicKey': 'Salin kunci publik',
+  'git.ssh.copiedHint': 'Disalin',
+  'git.ssh.deleteKey': 'Hapus {{name}}',
+  'git.ssh.deletePrompt': 'Hapus kunci SSH {{name}}?',
+  'git.ssh.deleteConfirm': 'Hapus',
+  'git.ssh.currentHostBadge': 'host saat ini',
+  'git.ssh.hostLabel': 'Host',
+  'git.ssh.hostPlaceholder': 'github.com',
+  'git.ssh.commentLabel': 'Komentar',
+  'git.ssh.commentPlaceholder': 'laptop@home',
+  'git.ssh.generateSubmit': 'Buat',
+  'git.ssh.importPathLabel': 'Jalur kunci privat',
+  'git.ssh.importPathPlaceholder': '/path/to/id_ed25519',
+  'git.ssh.importBrowse': 'Telusuri…',
+  'git.ssh.importSubmit': 'Impor',
+  'git.ssh.validationHost': 'Host wajib diisi',
+  'git.ssh.validationComment': 'Komentar wajib diisi',
+  'git.ssh.validationImportPath': 'Pilih file kunci privat untuk diimpor',
+  'git.ssh.providerLink': 'Buka pengaturan kunci SSH {{host}}',
+  'git.ssh.genericGuidance':
+    'Salin kunci publik dan tambahkan ke pengaturan kunci SSH penyedia Git Anda.',
 
   // ── Git Formulir autentikasi (Phase 6b) ──
   'git.auth.formLabel': 'Kredensial Git',

@@ -68,7 +68,6 @@ const en = {
   'git.initializing': 'Initializing repository…',
   'git.placeholder.trackedPicker': 'Tracked-file picker',
   'git.placeholder.readyState': 'Ready state',
-  'git.placeholder.cloneWizard': 'Clone wizard — coming in Phase 6',
   'git.conflict.title': 'Merge conflict',
   'git.conflict.description': 'Conflicts need manual resolution — coming in Phase 7.',
   'git.conflict.abort': 'Abort merge',
@@ -93,7 +92,6 @@ const en = {
   'git.empty.openCardDescription': 'Existing repo',
   'git.empty.cloneCard': 'Clone',
   'git.empty.cloneCardDescription': 'From a remote',
-  'git.empty.cloneComingSoon': 'Clone is available in Phase 6',
 
   // ── Git Author Form ──
   'git.author.heading': 'Your commit author',
@@ -138,15 +136,15 @@ const en = {
   'git.commit.saveRequiredSave': 'Save',
   'git.commit.saveRequiredCancel': 'Cancel',
 
-  // ── Git Header (Phase 4c) ──
-  'git.header.pullComingSoon': 'Pull · coming in Phase 6',
-  'git.header.pushComingSoon': 'Push · coming in Phase 6',
+  // ── Git Header (Phase 4c → 6c) ──
   'git.header.autosaveError': 'Autosave error',
   'git.header.autosaveErrorTitle': 'Last autosave failed',
   'git.header.authorMissingWarning': 'Set your commit author to record attribution',
   'git.header.overflowSwitchTracked': 'Switch tracked file…',
   'git.header.overflowClearAuthor': 'Clear commit author',
   'git.header.overflowCloseRepo': 'Close repository',
+  'git.header.overflowRemoteSettings': 'Remote settings…',
+  'git.header.overflowSshKeys': 'SSH keys…',
   'git.header.overflowMoreActions': 'More actions',
 
   // ── Git History List (Phase 4c) ──
@@ -233,6 +231,63 @@ const en = {
   'git.push.rejectedDismiss': 'Dismiss',
   'git.push.rejectedPull': 'Pull now',
   'git.remote.dismissError': 'Dismiss',
+
+  // ── Git Remote Settings (Phase 6c) ──
+  'git.remote.settingsLabel': 'Remote settings',
+  'git.remote.settingsHeading': 'Remote',
+  'git.remote.back': 'Back',
+  'git.remote.cancel': 'Cancel',
+  'git.remote.emptyNoOrigin': 'No remote configured yet. Add one:',
+  'git.remote.urlLabel': 'Origin URL',
+  'git.remote.urlPlaceholder': 'https://github.com/owner/repo.git',
+  'git.remote.saveButton': 'Save',
+  'git.remote.clearButton': 'Clear',
+  'git.remote.clearConfirmHeading': 'Clear origin?',
+  'git.remote.clearConfirmBody': 'This will remove the origin remote from this repository.',
+  'git.remote.clearConfirmAction': 'Confirm',
+  'git.remote.aheadBehind': '{{ahead}} ahead · {{behind}} behind',
+  'git.remote.fetchButton': 'Fetch',
+  'git.remote.sshIsoUnsupported':
+    'SSH transport is not supported on the built-in engine. Install system git or switch to an HTTPS remote URL.',
+  'git.remote.storedAuthLabel': 'Stored credentials',
+  'git.remote.storedAuth.token': 'Token',
+  'git.remote.storedAuth.ssh': 'SSH key',
+  'git.remote.storedAuth.none': 'None',
+  'git.remote.storedAuth.loading': 'Loading…',
+  'git.remote.storedAuth.noHost': 'No host detected',
+  'git.remote.clearAuthButton': 'Clear saved auth',
+
+  // ── Git SSH Keys (Phase 6c) ──
+  'git.ssh.label': 'SSH keys',
+  'git.ssh.heading': 'SSH keys',
+  'git.ssh.back': 'Back',
+  'git.ssh.cancel': 'Cancel',
+  'git.ssh.isoUnsupported':
+    'The current remote uses SSH but the built-in engine cannot perform SSH transport. Install system git or switch the remote URL to HTTPS.',
+  'git.ssh.emptyList': 'No SSH keys yet.',
+  'git.ssh.generateAction': 'Generate new',
+  'git.ssh.importAction': 'Import existing',
+  'git.ssh.copyPublicKey': 'Copy public key',
+  'git.ssh.copiedHint': 'Copied',
+  'git.ssh.deleteKey': 'Delete {{name}}',
+  'git.ssh.deletePrompt': 'Delete SSH key {{name}}?',
+  'git.ssh.deleteConfirm': 'Delete',
+  'git.ssh.currentHostBadge': 'current host',
+  'git.ssh.hostLabel': 'Host',
+  'git.ssh.hostPlaceholder': 'github.com',
+  'git.ssh.commentLabel': 'Comment',
+  'git.ssh.commentPlaceholder': 'laptop@home',
+  'git.ssh.generateSubmit': 'Generate',
+  'git.ssh.importPathLabel': 'Private key path',
+  'git.ssh.importPathPlaceholder': '/path/to/id_ed25519',
+  'git.ssh.importBrowse': 'Browse…',
+  'git.ssh.importSubmit': 'Import',
+  'git.ssh.validationHost': 'Host is required',
+  'git.ssh.validationComment': 'Comment is required',
+  'git.ssh.validationImportPath': 'Pick a private key file to import',
+  'git.ssh.providerLink': 'Open {{host}} SSH key settings',
+  'git.ssh.genericGuidance':
+    'Copy the public key and add it to your Git provider’s SSH key settings.',
 
   // ── Git Auth form (Phase 6b) ──
   'git.auth.formLabel': 'Git credentials',

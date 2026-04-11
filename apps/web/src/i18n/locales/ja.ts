@@ -70,7 +70,6 @@ const ja: TranslationKeys = {
   'git.initializing': 'リポジトリを初期化中…',
   'git.placeholder.trackedPicker': '追跡ファイルピッカー',
   'git.placeholder.readyState': 'Ready 状態',
-  'git.placeholder.cloneWizard': 'クローンウィザード — Phase 6 で提供',
   'git.conflict.title': 'マージコンフリクト',
   'git.conflict.description': 'コンフリクトには手動解決が必要です — Phase 7 で提供。',
   'git.conflict.abort': 'マージを中止',
@@ -95,7 +94,6 @@ const ja: TranslationKeys = {
   'git.empty.openCardDescription': '既存のリポジトリ',
   'git.empty.cloneCard': 'クローン',
   'git.empty.cloneCardDescription': 'リモートから',
-  'git.empty.cloneComingSoon': 'クローンは Phase 6 で提供予定',
 
   // ── Git 作者フォーム ──
   'git.author.heading': 'コミット作者',
@@ -140,15 +138,15 @@ const ja: TranslationKeys = {
   'git.commit.saveRequiredSave': '保存',
   'git.commit.saveRequiredCancel': 'キャンセル',
 
-  // ── Git Header (Phase 4c) ──
-  'git.header.pullComingSoon': 'プル · Phase 6 で提供',
-  'git.header.pushComingSoon': 'プッシュ · Phase 6 で提供',
+  // ── Git Header (Phase 4c → 6c) ──
   'git.header.autosaveError': '自動保存エラー',
   'git.header.autosaveErrorTitle': '前回の自動保存が失敗',
   'git.header.authorMissingWarning': 'コミット作者を設定してください',
   'git.header.overflowSwitchTracked': '追跡ファイルを切替…',
   'git.header.overflowClearAuthor': 'コミット作者をクリア',
   'git.header.overflowCloseRepo': 'リポジトリを閉じる',
+  'git.header.overflowRemoteSettings': 'リモート設定…',
+  'git.header.overflowSshKeys': 'SSH 鍵…',
   'git.header.overflowMoreActions': 'その他の操作',
 
   // ── Git History List (Phase 4c) ──
@@ -237,6 +235,62 @@ const ja: TranslationKeys = {
   'git.push.rejectedDismiss': '閉じる',
   'git.push.rejectedPull': '今すぐプル',
   'git.remote.dismissError': '閉じる',
+
+  // ── Git リモート設定 (Phase 6c) ──
+  'git.remote.settingsLabel': 'リモート設定',
+  'git.remote.settingsHeading': 'リモート',
+  'git.remote.back': '戻る',
+  'git.remote.cancel': 'キャンセル',
+  'git.remote.emptyNoOrigin': 'リモートが設定されていません。追加してください:',
+  'git.remote.urlLabel': 'Origin URL',
+  'git.remote.urlPlaceholder': 'https://github.com/owner/repo.git',
+  'git.remote.saveButton': '保存',
+  'git.remote.clearButton': 'クリア',
+  'git.remote.clearConfirmHeading': 'origin をクリアしますか?',
+  'git.remote.clearConfirmBody': 'このリポジトリから origin リモートが削除されます。',
+  'git.remote.clearConfirmAction': '確認',
+  'git.remote.aheadBehind': '{{ahead}} 先行 · {{behind}} 遅延',
+  'git.remote.fetchButton': 'Fetch',
+  'git.remote.sshIsoUnsupported':
+    '内蔵エンジンは SSH トランスポートをサポートしていません。システム git をインストールするか、HTTPS リモート URL に切り替えてください。',
+  'git.remote.storedAuthLabel': '保存済み認証情報',
+  'git.remote.storedAuth.token': 'トークン',
+  'git.remote.storedAuth.ssh': 'SSH 鍵',
+  'git.remote.storedAuth.none': 'なし',
+  'git.remote.storedAuth.loading': '読み込み中…',
+  'git.remote.storedAuth.noHost': 'ホストが検出されません',
+  'git.remote.clearAuthButton': '保存済み認証情報をクリア',
+
+  // ── Git SSH 鍵 (Phase 6c) ──
+  'git.ssh.label': 'SSH 鍵',
+  'git.ssh.heading': 'SSH 鍵',
+  'git.ssh.back': '戻る',
+  'git.ssh.cancel': 'キャンセル',
+  'git.ssh.isoUnsupported':
+    '現在のリモートは SSH を使用していますが、内蔵エンジンは SSH トランスポートを実行できません。システム git をインストールするか、リモート URL を HTTPS に変更してください。',
+  'git.ssh.emptyList': 'SSH 鍵はまだありません。',
+  'git.ssh.generateAction': '新しく生成',
+  'git.ssh.importAction': '既存のものをインポート',
+  'git.ssh.copyPublicKey': '公開鍵をコピー',
+  'git.ssh.copiedHint': 'コピーしました',
+  'git.ssh.deleteKey': '{{name}} を削除',
+  'git.ssh.deletePrompt': 'SSH 鍵 {{name}} を削除しますか?',
+  'git.ssh.deleteConfirm': '削除',
+  'git.ssh.currentHostBadge': '現在のホスト',
+  'git.ssh.hostLabel': 'ホスト',
+  'git.ssh.hostPlaceholder': 'github.com',
+  'git.ssh.commentLabel': 'コメント',
+  'git.ssh.commentPlaceholder': 'laptop@home',
+  'git.ssh.generateSubmit': '生成',
+  'git.ssh.importPathLabel': '秘密鍵のパス',
+  'git.ssh.importPathPlaceholder': '/path/to/id_ed25519',
+  'git.ssh.importBrowse': '参照…',
+  'git.ssh.importSubmit': 'インポート',
+  'git.ssh.validationHost': 'ホストを入力してください',
+  'git.ssh.validationComment': 'コメントを入力してください',
+  'git.ssh.validationImportPath': 'インポートする秘密鍵ファイルを選択してください',
+  'git.ssh.providerLink': '{{host}} の SSH 鍵設定を開く',
+  'git.ssh.genericGuidance': '公開鍵をコピーして、Git プロバイダの SSH 鍵設定に追加してください。',
 
   // ── Git 認証フォーム (Phase 6b) ──
   'git.auth.formLabel': 'Git 認証情報',

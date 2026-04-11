@@ -70,7 +70,6 @@ const th: TranslationKeys = {
   'git.initializing': 'กำลังเริ่มต้นที่เก็บ…',
   'git.placeholder.trackedPicker': 'ตัวเลือกไฟล์ที่ติดตาม',
   'git.placeholder.readyState': 'สถานะพร้อม',
-  'git.placeholder.cloneWizard': 'ตัวช่วยโคลน — มีใน Phase 6',
   'git.conflict.title': 'ความขัดแย้งในการรวม',
   'git.conflict.description': 'ความขัดแย้งต้องได้รับการแก้ไขด้วยตนเอง — มีใน Phase 7',
   'git.conflict.abort': 'ยกเลิกการรวม',
@@ -95,7 +94,6 @@ const th: TranslationKeys = {
   'git.empty.openCardDescription': 'ที่เก็บที่มีอยู่',
   'git.empty.cloneCard': 'โคลน',
   'git.empty.cloneCardDescription': 'จากระยะไกล',
-  'git.empty.cloneComingSoon': 'โคลนจะมีใน Phase 6',
 
   // ── ฟอร์มผู้เขียน Git ──
   'git.author.heading': 'ผู้เขียน commit',
@@ -139,15 +137,15 @@ const th: TranslationKeys = {
   'git.commit.saveRequiredSave': 'บันทึก',
   'git.commit.saveRequiredCancel': 'ยกเลิก',
 
-  // ── Git Header (Phase 4c) ──
-  'git.header.pullComingSoon': 'Pull · มีใน Phase 6',
-  'git.header.pushComingSoon': 'Push · มีใน Phase 6',
+  // ── Git Header (Phase 4c → 6c) ──
   'git.header.autosaveError': 'ข้อผิดพลาดการบันทึกอัตโนมัติ',
   'git.header.autosaveErrorTitle': 'การบันทึกอัตโนมัติล่าสุดล้มเหลว',
   'git.header.authorMissingWarning': 'ตั้งค่าผู้เขียน commit เพื่อบันทึกการอ้างอิง',
   'git.header.overflowSwitchTracked': 'สลับไฟล์ที่ติดตาม…',
   'git.header.overflowClearAuthor': 'ล้างผู้เขียน commit',
   'git.header.overflowCloseRepo': 'ปิดที่เก็บ',
+  'git.header.overflowRemoteSettings': 'การตั้งค่ารีโมต…',
+  'git.header.overflowSshKeys': 'คีย์ SSH…',
   'git.header.overflowMoreActions': 'การดำเนินการเพิ่มเติม',
 
   // ── Git History List (Phase 4c) ──
@@ -229,6 +227,62 @@ const th: TranslationKeys = {
   'git.push.rejectedDismiss': 'ปิด',
   'git.push.rejectedPull': 'ดึงเลย',
   'git.remote.dismissError': 'ปิด',
+
+  // ── Git การตั้งค่ารีโมต (Phase 6c) ──
+  'git.remote.settingsLabel': 'การตั้งค่ารีโมต',
+  'git.remote.settingsHeading': 'รีโมต',
+  'git.remote.back': 'กลับ',
+  'git.remote.cancel': 'ยกเลิก',
+  'git.remote.emptyNoOrigin': 'ยังไม่ได้ตั้งค่ารีโมต เพิ่มหนึ่งรายการ:',
+  'git.remote.urlLabel': 'URL ของ origin',
+  'git.remote.urlPlaceholder': 'https://github.com/owner/repo.git',
+  'git.remote.saveButton': 'บันทึก',
+  'git.remote.clearButton': 'ล้าง',
+  'git.remote.clearConfirmHeading': 'ล้าง origin?',
+  'git.remote.clearConfirmBody': 'การดำเนินการนี้จะลบรีโมต origin ออกจากที่เก็บนี้',
+  'git.remote.clearConfirmAction': 'ยืนยัน',
+  'git.remote.aheadBehind': 'นำหน้า {{ahead}} · ตามหลัง {{behind}}',
+  'git.remote.fetchButton': 'Fetch',
+  'git.remote.sshIsoUnsupported':
+    'เอนจินในตัวไม่รองรับการส่งผ่าน SSH ติดตั้ง git ระบบหรือเปลี่ยนเป็น URL รีโมต HTTPS',
+  'git.remote.storedAuthLabel': 'ข้อมูลรับรองที่บันทึกไว้',
+  'git.remote.storedAuth.token': 'โทเคน',
+  'git.remote.storedAuth.ssh': 'คีย์ SSH',
+  'git.remote.storedAuth.none': 'ไม่มี',
+  'git.remote.storedAuth.loading': 'กำลังโหลด…',
+  'git.remote.storedAuth.noHost': 'ไม่พบโฮสต์',
+  'git.remote.clearAuthButton': 'ล้างข้อมูลรับรองที่บันทึก',
+
+  // ── Git คีย์ SSH (Phase 6c) ──
+  'git.ssh.label': 'คีย์ SSH',
+  'git.ssh.heading': 'คีย์ SSH',
+  'git.ssh.back': 'กลับ',
+  'git.ssh.cancel': 'ยกเลิก',
+  'git.ssh.isoUnsupported':
+    'รีโมตปัจจุบันใช้ SSH แต่เอนจินในตัวไม่สามารถส่งผ่าน SSH ได้ ติดตั้ง git ระบบหรือเปลี่ยน URL รีโมตเป็น HTTPS',
+  'git.ssh.emptyList': 'ยังไม่มีคีย์ SSH',
+  'git.ssh.generateAction': 'สร้างใหม่',
+  'git.ssh.importAction': 'นำเข้าที่มีอยู่',
+  'git.ssh.copyPublicKey': 'คัดลอกคีย์สาธารณะ',
+  'git.ssh.copiedHint': 'คัดลอกแล้ว',
+  'git.ssh.deleteKey': 'ลบ {{name}}',
+  'git.ssh.deletePrompt': 'ลบคีย์ SSH {{name}}?',
+  'git.ssh.deleteConfirm': 'ลบ',
+  'git.ssh.currentHostBadge': 'โฮสต์ปัจจุบัน',
+  'git.ssh.hostLabel': 'โฮสต์',
+  'git.ssh.hostPlaceholder': 'github.com',
+  'git.ssh.commentLabel': 'ความคิดเห็น',
+  'git.ssh.commentPlaceholder': 'laptop@home',
+  'git.ssh.generateSubmit': 'สร้าง',
+  'git.ssh.importPathLabel': 'พาธคีย์ส่วนตัว',
+  'git.ssh.importPathPlaceholder': '/path/to/id_ed25519',
+  'git.ssh.importBrowse': 'เรียกดู…',
+  'git.ssh.importSubmit': 'นำเข้า',
+  'git.ssh.validationHost': 'จำเป็นต้องระบุโฮสต์',
+  'git.ssh.validationComment': 'จำเป็นต้องระบุความคิดเห็น',
+  'git.ssh.validationImportPath': 'เลือกไฟล์คีย์ส่วนตัวเพื่อนำเข้า',
+  'git.ssh.providerLink': 'เปิดการตั้งค่าคีย์ SSH ของ {{host}}',
+  'git.ssh.genericGuidance': 'คัดลอกคีย์สาธารณะและเพิ่มลงในการตั้งค่าคีย์ SSH ของผู้ให้บริการ Git ของคุณ',
 
   // ── Git ฟอร์มยืนยันตัวตน (Phase 6b) ──
   'git.auth.formLabel': 'ข้อมูลรับรอง Git',

@@ -70,7 +70,6 @@ const vi: TranslationKeys = {
   'git.initializing': 'Đang khởi tạo kho…',
   'git.placeholder.trackedPicker': 'Trình chọn tệp theo dõi',
   'git.placeholder.readyState': 'Trạng thái sẵn sàng',
-  'git.placeholder.cloneWizard': 'Trình hướng dẫn nhân bản — có trong Phase 6',
   'git.conflict.title': 'Xung đột hợp nhất',
   'git.conflict.description': 'Xung đột cần giải quyết thủ công — có trong Phase 7.',
   'git.conflict.abort': 'Hủy hợp nhất',
@@ -95,7 +94,6 @@ const vi: TranslationKeys = {
   'git.empty.openCardDescription': 'Kho hiện có',
   'git.empty.cloneCard': 'Nhân bản',
   'git.empty.cloneCardDescription': 'Từ xa',
-  'git.empty.cloneComingSoon': 'Nhân bản sẽ có trong Phase 6',
 
   // ── Biểu mẫu tác giả Git ──
   'git.author.heading': 'Tác giả commit',
@@ -139,15 +137,15 @@ const vi: TranslationKeys = {
   'git.commit.saveRequiredSave': 'Lưu',
   'git.commit.saveRequiredCancel': 'Hủy',
 
-  // ── Git Header (Phase 4c) ──
-  'git.header.pullComingSoon': 'Pull · có trong Phase 6',
-  'git.header.pushComingSoon': 'Push · có trong Phase 6',
+  // ── Git Header (Phase 4c → 6c) ──
   'git.header.autosaveError': 'Lỗi tự động lưu',
   'git.header.autosaveErrorTitle': 'Tự động lưu gần nhất thất bại',
   'git.header.authorMissingWarning': 'Đặt tác giả commit để ghi lại quyền tác giả',
   'git.header.overflowSwitchTracked': 'Chuyển tệp theo dõi…',
   'git.header.overflowClearAuthor': 'Xóa tác giả commit',
   'git.header.overflowCloseRepo': 'Đóng kho',
+  'git.header.overflowRemoteSettings': 'Cài đặt remote…',
+  'git.header.overflowSshKeys': 'Khóa SSH…',
   'git.header.overflowMoreActions': 'Thêm thao tác',
 
   // ── Git History List (Phase 4c) ──
@@ -233,6 +231,63 @@ const vi: TranslationKeys = {
   'git.push.rejectedDismiss': 'Đóng',
   'git.push.rejectedPull': 'Pull ngay',
   'git.remote.dismissError': 'Đóng',
+
+  // ── Git Cài đặt remote (Phase 6c) ──
+  'git.remote.settingsLabel': 'Cài đặt remote',
+  'git.remote.settingsHeading': 'Remote',
+  'git.remote.back': 'Quay lại',
+  'git.remote.cancel': 'Hủy',
+  'git.remote.emptyNoOrigin': 'Chưa cấu hình remote nào. Thêm một cái:',
+  'git.remote.urlLabel': 'URL origin',
+  'git.remote.urlPlaceholder': 'https://github.com/owner/repo.git',
+  'git.remote.saveButton': 'Lưu',
+  'git.remote.clearButton': 'Xóa',
+  'git.remote.clearConfirmHeading': 'Xóa origin?',
+  'git.remote.clearConfirmBody': 'Thao tác này sẽ xóa remote origin khỏi kho lưu trữ này.',
+  'git.remote.clearConfirmAction': 'Xác nhận',
+  'git.remote.aheadBehind': 'Trước {{ahead}} · Sau {{behind}}',
+  'git.remote.fetchButton': 'Fetch',
+  'git.remote.sshIsoUnsupported':
+    'Engine tích hợp không hỗ trợ truyền tải SSH. Cài đặt git hệ thống hoặc chuyển sang URL remote HTTPS.',
+  'git.remote.storedAuthLabel': 'Thông tin xác thực đã lưu',
+  'git.remote.storedAuth.token': 'Token',
+  'git.remote.storedAuth.ssh': 'Khóa SSH',
+  'git.remote.storedAuth.none': 'Không có',
+  'git.remote.storedAuth.loading': 'Đang tải…',
+  'git.remote.storedAuth.noHost': 'Không phát hiện máy chủ',
+  'git.remote.clearAuthButton': 'Xóa thông tin xác thực đã lưu',
+
+  // ── Git Khóa SSH (Phase 6c) ──
+  'git.ssh.label': 'Khóa SSH',
+  'git.ssh.heading': 'Khóa SSH',
+  'git.ssh.back': 'Quay lại',
+  'git.ssh.cancel': 'Hủy',
+  'git.ssh.isoUnsupported':
+    'Remote hiện tại dùng SSH, nhưng engine tích hợp không thể thực hiện truyền tải SSH. Cài đặt git hệ thống hoặc đổi URL remote sang HTTPS.',
+  'git.ssh.emptyList': 'Chưa có khóa SSH nào.',
+  'git.ssh.generateAction': 'Tạo mới',
+  'git.ssh.importAction': 'Nhập khóa có sẵn',
+  'git.ssh.copyPublicKey': 'Sao chép khóa công khai',
+  'git.ssh.copiedHint': 'Đã sao chép',
+  'git.ssh.deleteKey': 'Xóa {{name}}',
+  'git.ssh.deletePrompt': 'Xóa khóa SSH {{name}}?',
+  'git.ssh.deleteConfirm': 'Xóa',
+  'git.ssh.currentHostBadge': 'máy chủ hiện tại',
+  'git.ssh.hostLabel': 'Máy chủ',
+  'git.ssh.hostPlaceholder': 'github.com',
+  'git.ssh.commentLabel': 'Ghi chú',
+  'git.ssh.commentPlaceholder': 'laptop@home',
+  'git.ssh.generateSubmit': 'Tạo',
+  'git.ssh.importPathLabel': 'Đường dẫn khóa riêng',
+  'git.ssh.importPathPlaceholder': '/path/to/id_ed25519',
+  'git.ssh.importBrowse': 'Duyệt…',
+  'git.ssh.importSubmit': 'Nhập',
+  'git.ssh.validationHost': 'Máy chủ là bắt buộc',
+  'git.ssh.validationComment': 'Ghi chú là bắt buộc',
+  'git.ssh.validationImportPath': 'Chọn tệp khóa riêng để nhập',
+  'git.ssh.providerLink': 'Mở cài đặt khóa SSH {{host}}',
+  'git.ssh.genericGuidance':
+    'Sao chép khóa công khai và thêm vào cài đặt khóa SSH của nhà cung cấp Git của bạn.',
 
   // ── Git Biểu mẫu xác thực (Phase 6b) ──
   'git.auth.formLabel': 'Thông tin xác thực Git',

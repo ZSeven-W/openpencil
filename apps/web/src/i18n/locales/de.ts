@@ -70,7 +70,6 @@ const de: TranslationKeys = {
   'git.initializing': 'Repository wird initialisiert…',
   'git.placeholder.trackedPicker': 'Dateiauswahl',
   'git.placeholder.readyState': 'Bereit-Status',
-  'git.placeholder.cloneWizard': 'Klon-Assistent — verfügbar in Phase 6',
   'git.conflict.title': 'Merge-Konflikt',
   'git.conflict.description': 'Konflikte müssen manuell gelöst werden — verfügbar in Phase 7.',
   'git.conflict.abort': 'Merge abbrechen',
@@ -95,7 +94,6 @@ const de: TranslationKeys = {
   'git.empty.openCardDescription': 'Vorhandenes Repository',
   'git.empty.cloneCard': 'Klonen',
   'git.empty.cloneCardDescription': 'Von einem Remote',
-  'git.empty.cloneComingSoon': 'Klonen wird in Phase 6 verfügbar sein',
 
   // ── Git Autor-Formular ──
   'git.author.heading': 'Commit-Autor',
@@ -140,15 +138,15 @@ const de: TranslationKeys = {
   'git.commit.saveRequiredSave': 'Speichern',
   'git.commit.saveRequiredCancel': 'Abbrechen',
 
-  // ── Git Header (Phase 4c) ──
-  'git.header.pullComingSoon': 'Pull · verfügbar in Phase 6',
-  'git.header.pushComingSoon': 'Push · verfügbar in Phase 6',
+  // ── Git Header (Phase 4c → 6c) ──
   'git.header.autosaveError': 'Auto-Speichern-Fehler',
   'git.header.autosaveErrorTitle': 'Letztes Auto-Speichern fehlgeschlagen',
   'git.header.authorMissingWarning': 'Commit-Autor festlegen',
   'git.header.overflowSwitchTracked': 'Verfolgte Datei wechseln…',
   'git.header.overflowClearAuthor': 'Commit-Autor löschen',
   'git.header.overflowCloseRepo': 'Repository schließen',
+  'git.header.overflowRemoteSettings': 'Remote-Einstellungen…',
+  'git.header.overflowSshKeys': 'SSH-Schlüssel…',
   'git.header.overflowMoreActions': 'Weitere Aktionen',
 
   // ── Git History List (Phase 4c) ──
@@ -238,6 +236,63 @@ const de: TranslationKeys = {
   'git.push.rejectedDismiss': 'Schließen',
   'git.push.rejectedPull': 'Jetzt pullen',
   'git.remote.dismissError': 'Schließen',
+
+  // ── Git Remote-Einstellungen (Phase 6c) ──
+  'git.remote.settingsLabel': 'Remote-Einstellungen',
+  'git.remote.settingsHeading': 'Remote',
+  'git.remote.back': 'Zurück',
+  'git.remote.cancel': 'Abbrechen',
+  'git.remote.emptyNoOrigin': 'Noch kein Remote konfiguriert. Eines hinzufügen:',
+  'git.remote.urlLabel': 'Origin-URL',
+  'git.remote.urlPlaceholder': 'https://github.com/owner/repo.git',
+  'git.remote.saveButton': 'Speichern',
+  'git.remote.clearButton': 'Löschen',
+  'git.remote.clearConfirmHeading': 'Origin löschen?',
+  'git.remote.clearConfirmBody': 'Dadurch wird das Origin-Remote aus diesem Repository entfernt.',
+  'git.remote.clearConfirmAction': 'Bestätigen',
+  'git.remote.aheadBehind': '{{ahead}} voraus · {{behind}} zurück',
+  'git.remote.fetchButton': 'Abrufen',
+  'git.remote.sshIsoUnsupported':
+    'SSH-Transport wird von der integrierten Engine nicht unterstützt. Installieren Sie System-Git oder wechseln Sie zu einer HTTPS-Remote-URL.',
+  'git.remote.storedAuthLabel': 'Gespeicherte Anmeldedaten',
+  'git.remote.storedAuth.token': 'Token',
+  'git.remote.storedAuth.ssh': 'SSH-Schlüssel',
+  'git.remote.storedAuth.none': 'Keine',
+  'git.remote.storedAuth.loading': 'Wird geladen…',
+  'git.remote.storedAuth.noHost': 'Kein Host erkannt',
+  'git.remote.clearAuthButton': 'Gespeicherte Anmeldedaten löschen',
+
+  // ── Git SSH-Schlüssel (Phase 6c) ──
+  'git.ssh.label': 'SSH-Schlüssel',
+  'git.ssh.heading': 'SSH-Schlüssel',
+  'git.ssh.back': 'Zurück',
+  'git.ssh.cancel': 'Abbrechen',
+  'git.ssh.isoUnsupported':
+    'Das aktuelle Remote verwendet SSH, aber die integrierte Engine kann keinen SSH-Transport ausführen. Installieren Sie System-Git oder ändern Sie die Remote-URL in HTTPS.',
+  'git.ssh.emptyList': 'Noch keine SSH-Schlüssel.',
+  'git.ssh.generateAction': 'Neuen erzeugen',
+  'git.ssh.importAction': 'Vorhandenen importieren',
+  'git.ssh.copyPublicKey': 'Öffentlichen Schlüssel kopieren',
+  'git.ssh.copiedHint': 'Kopiert',
+  'git.ssh.deleteKey': '{{name}} löschen',
+  'git.ssh.deletePrompt': 'SSH-Schlüssel {{name}} löschen?',
+  'git.ssh.deleteConfirm': 'Löschen',
+  'git.ssh.currentHostBadge': 'aktueller Host',
+  'git.ssh.hostLabel': 'Host',
+  'git.ssh.hostPlaceholder': 'github.com',
+  'git.ssh.commentLabel': 'Kommentar',
+  'git.ssh.commentPlaceholder': 'laptop@home',
+  'git.ssh.generateSubmit': 'Erzeugen',
+  'git.ssh.importPathLabel': 'Pfad zum privaten Schlüssel',
+  'git.ssh.importPathPlaceholder': '/path/to/id_ed25519',
+  'git.ssh.importBrowse': 'Durchsuchen…',
+  'git.ssh.importSubmit': 'Importieren',
+  'git.ssh.validationHost': 'Host ist erforderlich',
+  'git.ssh.validationComment': 'Kommentar ist erforderlich',
+  'git.ssh.validationImportPath': 'Wählen Sie eine private Schlüsseldatei zum Importieren',
+  'git.ssh.providerLink': '{{host}} SSH-Schlüssel-Einstellungen öffnen',
+  'git.ssh.genericGuidance':
+    'Kopiere den öffentlichen Schlüssel und füge ihn in den SSH-Schlüssel-Einstellungen deines Git-Anbieters hinzu.',
 
   // ── Git-Authentifizierungsformular (Phase 6b) ──
   'git.auth.formLabel': 'Git-Anmeldedaten',

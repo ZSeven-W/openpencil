@@ -70,7 +70,6 @@ const tr: TranslationKeys = {
   'git.initializing': 'Depo başlatılıyor…',
   'git.placeholder.trackedPicker': 'İzlenen dosya seçici',
   'git.placeholder.readyState': 'Hazır durumu',
-  'git.placeholder.cloneWizard': "Klonlama sihirbazı — Phase 6'da gelecek",
   'git.conflict.title': 'Birleştirme çakışması',
   'git.conflict.description': "Çakışmalar manuel çözüm gerektirir — Phase 7'de gelecek.",
   'git.conflict.abort': 'Birleştirmeyi iptal et',
@@ -95,7 +94,6 @@ const tr: TranslationKeys = {
   'git.empty.openCardDescription': 'Mevcut depo',
   'git.empty.cloneCard': 'Klonla',
   'git.empty.cloneCardDescription': 'Uzak depodan',
-  'git.empty.cloneComingSoon': "Klonlama Phase 6'da kullanılabilir olacak",
 
   // ── Git Yazar Formu ──
   'git.author.heading': 'Commit yazarı',
@@ -140,15 +138,15 @@ const tr: TranslationKeys = {
   'git.commit.saveRequiredSave': 'Kaydet',
   'git.commit.saveRequiredCancel': 'İptal',
 
-  // ── Git Header (Phase 4c) ──
-  'git.header.pullComingSoon': "Pull · Phase 6'da",
-  'git.header.pushComingSoon': "Push · Phase 6'da",
+  // ── Git Header (Phase 4c → 6c) ──
   'git.header.autosaveError': 'Otomatik kaydetme hatası',
   'git.header.autosaveErrorTitle': 'Son otomatik kaydetme başarısız',
   'git.header.authorMissingWarning': 'Atıf için commit yazarını ayarlayın',
   'git.header.overflowSwitchTracked': 'İzlenen dosyayı değiştir…',
   'git.header.overflowClearAuthor': 'Commit yazarını temizle',
   'git.header.overflowCloseRepo': 'Depoyu kapat',
+  'git.header.overflowRemoteSettings': 'Uzak ayarları…',
+  'git.header.overflowSshKeys': 'SSH anahtarları…',
   'git.header.overflowMoreActions': 'Diğer eylemler',
 
   // ── Git History List (Phase 4c) ──
@@ -236,6 +234,63 @@ const tr: TranslationKeys = {
   'git.push.rejectedDismiss': 'Kapat',
   'git.push.rejectedPull': 'Şimdi pull',
   'git.remote.dismissError': 'Kapat',
+
+  // ── Git Uzak ayarları (Phase 6c) ──
+  'git.remote.settingsLabel': 'Uzak ayarları',
+  'git.remote.settingsHeading': 'Uzak',
+  'git.remote.back': 'Geri',
+  'git.remote.cancel': 'İptal',
+  'git.remote.emptyNoOrigin': 'Henüz bir uzak depo yapılandırılmadı. Bir tane ekleyin:',
+  'git.remote.urlLabel': 'Origin URL',
+  'git.remote.urlPlaceholder': 'https://github.com/owner/repo.git',
+  'git.remote.saveButton': 'Kaydet',
+  'git.remote.clearButton': 'Temizle',
+  'git.remote.clearConfirmHeading': "origin'i temizle?",
+  'git.remote.clearConfirmBody': 'Bu, origin uzağını bu depodan kaldıracak.',
+  'git.remote.clearConfirmAction': 'Onayla',
+  'git.remote.aheadBehind': '{{ahead}} ilerde · {{behind}} geride',
+  'git.remote.fetchButton': 'Fetch',
+  'git.remote.sshIsoUnsupported':
+    'SSH aktarımı yerleşik motor tarafından desteklenmiyor. Sistem git kurun veya HTTPS uzak URL kullanın.',
+  'git.remote.storedAuthLabel': 'Kayıtlı kimlik bilgileri',
+  'git.remote.storedAuth.token': 'Token',
+  'git.remote.storedAuth.ssh': 'SSH anahtarı',
+  'git.remote.storedAuth.none': 'Yok',
+  'git.remote.storedAuth.loading': 'Yükleniyor…',
+  'git.remote.storedAuth.noHost': 'Ana bilgisayar algılanmadı',
+  'git.remote.clearAuthButton': 'Kayıtlı kimlik bilgilerini temizle',
+
+  // ── Git SSH anahtarları (Phase 6c) ──
+  'git.ssh.label': 'SSH anahtarları',
+  'git.ssh.heading': 'SSH anahtarları',
+  'git.ssh.back': 'Geri',
+  'git.ssh.cancel': 'İptal',
+  'git.ssh.isoUnsupported':
+    'Mevcut uzak SSH kullanıyor, ancak yerleşik motor SSH aktarımı yapamıyor. Sistem git kurun veya uzak URL’yi HTTPS olarak değiştirin.',
+  'git.ssh.emptyList': 'Henüz SSH anahtarı yok.',
+  'git.ssh.generateAction': 'Yeni oluştur',
+  'git.ssh.importAction': 'Mevcut olanı içe aktar',
+  'git.ssh.copyPublicKey': 'Genel anahtarı kopyala',
+  'git.ssh.copiedHint': 'Kopyalandı',
+  'git.ssh.deleteKey': '{{name}} sil',
+  'git.ssh.deletePrompt': '{{name}} SSH anahtarı silinsin mi?',
+  'git.ssh.deleteConfirm': 'Sil',
+  'git.ssh.currentHostBadge': 'geçerli ana bilgisayar',
+  'git.ssh.hostLabel': 'Ana bilgisayar',
+  'git.ssh.hostPlaceholder': 'github.com',
+  'git.ssh.commentLabel': 'Yorum',
+  'git.ssh.commentPlaceholder': 'laptop@home',
+  'git.ssh.generateSubmit': 'Oluştur',
+  'git.ssh.importPathLabel': 'Özel anahtar yolu',
+  'git.ssh.importPathPlaceholder': '/path/to/id_ed25519',
+  'git.ssh.importBrowse': 'Gözat…',
+  'git.ssh.importSubmit': 'İçe aktar',
+  'git.ssh.validationHost': 'Ana bilgisayar gerekli',
+  'git.ssh.validationComment': 'Yorum gerekli',
+  'git.ssh.validationImportPath': 'İçe aktarmak için bir özel anahtar dosyası seçin',
+  'git.ssh.providerLink': '{{host}} SSH anahtar ayarlarını aç',
+  'git.ssh.genericGuidance':
+    'Genel anahtarı kopyalayın ve Git sağlayıcınızın SSH anahtar ayarlarına ekleyin.',
 
   // ── Git Kimlik doğrulama formu (Phase 6b) ──
   'git.auth.formLabel': 'Git kimlik bilgileri',
