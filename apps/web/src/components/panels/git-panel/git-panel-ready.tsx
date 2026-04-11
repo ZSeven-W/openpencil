@@ -5,25 +5,19 @@
 // commit input, and history list. Also triggers loadLog whenever we
 // enter the ready state so the history list has something to show.
 
-import { useEffect } from 'react';
-import { useGitStore } from '@/stores/git-store';
+import { useGitPanelLogLoader } from './use-git-panel-log-loader';
 import { GitPanelHeader } from './git-panel-header';
 import { GitPanelSaveRequiredAlert } from './git-panel-save-required-alert';
 import { GitPanelCommitInput } from './git-panel-commit-input';
 import { GitPanelHistoryList } from './git-panel-history-list';
 
-export function GitPanelReady() {
-  const state = useGitStore((s) => s.state);
-  const loadLog = useGitStore((s) => s.loadLog);
+// Phase 7b: stable constant outside the component so the array identity
+// does not change on every render, avoiding spurious loadLog re-fires.
+const READY_KINDS = ['ready'] as const;
 
-  // Load the log whenever we enter the ready state. The history list reads
-  // useGitStore.log reactively, so it updates automatically when this call
-  // completes. Re-fires if the panel transitions from a non-ready kind
-  // (e.g. error → ready) without unmounting.
-  useEffect(() => {
-    if (state.kind !== 'ready') return;
-    void loadLog({ ref: 'main', limit: 50 });
-  }, [state.kind, loadLog]);
+export function GitPanelReady() {
+  // Phase 7b: load log for the current branch (not hardcoded 'main').
+  useGitPanelLogLoader(READY_KINDS);
 
   return (
     <div className="flex h-full flex-col">
