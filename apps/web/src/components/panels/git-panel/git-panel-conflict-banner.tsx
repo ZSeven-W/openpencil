@@ -1,17 +1,19 @@
 // apps/web/src/components/panels/git-panel/git-panel-conflict-banner.tsx
 //
-// Destructive banner shown when state.kind === 'conflict'. Phase 5
-// shipped abort-only — Phase 7 will land manual per-node / per-field
-// resolution. Phase 6b extends this banner with a dedicated recovery
-// strip for non-`.op` merge conflicts (e.g. README.md changed on both
-// sides during a pull): the user can either mark those files resolved
-// externally and hit [Continue], or abort the merge entirely.
+// Phase 7b: upgraded conflict banner. Replaces the Phase 5 abort-only shell
+// and the Phase 6b non-op strip with a unified status header that:
+//   - shows title + resolved/total progress count
+//   - lists non-.op unresolved files when present
+//   - dynamic primary button:
+//       * 应用合并 ("Apply merge") when unresolved .op conflicts remain
+//       * 继续 ("Continue") when .op conflicts are all resolved and only
+//         terminal-resolved non-.op files are still pending
+//   - always-visible 中止 merge ("Abort merge") button
+//   - inline finalizeError from applyMerge() throwing merge-still-conflicted
 //
 // The banner sits inside <GitPanelConflict /> beneath the panel header.
-// It does NOT render the history list — that's composed alongside it
-// by GitPanelConflict.
 
-import { AlertTriangle } from 'lucide-react';
+import { AlertTriangle, AlertCircle } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import { useGitStore } from '@/stores/git-store';
@@ -23,27 +25,68 @@ export function GitPanelConflictBanner() {
   const applyMerge = useGitStore((s) => s.applyMerge);
 
   // The banner is only mounted by GitPanelConflict, so state.kind is
-  // always 'conflict' here. The narrow is for TypeScript only.
+  // always 'conflict' here. The narrows are for TypeScript.
   const unresolvedFiles = state.kind === 'conflict' ? state.unresolvedFiles : [];
   const hasNonOpConflict = unresolvedFiles.length > 0;
+  const finalizeError = state.kind === 'conflict' ? state.finalizeError : null;
+
+  // Count resolved vs total .op conflicts for the progress display.
+  let resolvedCount = 0;
+  let totalCount = 0;
+  if (state.kind === 'conflict') {
+    const { nodeConflicts, docFieldConflicts } = state.conflicts;
+    for (const c of nodeConflicts.values()) {
+      totalCount++;
+      if (c.resolution != null) resolvedCount++;
+    }
+    for (const c of docFieldConflicts.values()) {
+      totalCount++;
+      if (c.resolution != null) resolvedCount++;
+    }
+  }
+
+  // Determine primary action label. Rule:
+  //   - unresolved .op conflicts remain → "Apply merge" (or "Apply" when
+  //     there are also non-.op files, to signal we're past the .op phase)
+  //   - all .op resolved (or zero .op conflicts) + non-.op files pending → "Continue"
+  const opUnresolved = totalCount - resolvedCount;
+  const useApplyLabel = opUnresolved > 0 || (totalCount === 0 && !hasNonOpConflict);
+  const primaryLabel = useApplyLabel
+    ? t('git.conflict.banner.apply')
+    : t('git.conflict.banner.continue');
+
+  const showProgress = totalCount > 0;
+  const showPrimaryButton = useApplyLabel || hasNonOpConflict;
 
   return (
     <div
       role="alert"
       className="flex flex-col gap-2 border-b border-destructive/30 bg-destructive/10 px-4 py-3 text-destructive"
     >
+      {/* Title + progress */}
       <div className="flex items-start gap-2">
         <AlertTriangle size={14} className="mt-0.5 shrink-0" aria-hidden />
-        <div className="flex flex-col gap-1">
-          <p className="text-xs font-medium">
-            {hasNonOpConflict ? t('git.conflict.nonOp.title') : t('git.conflict.title')}
-          </p>
+        <div className="flex flex-col gap-0.5 flex-1">
+          <div className="flex items-center justify-between gap-2">
+            <p className="text-xs font-medium">
+              {hasNonOpConflict ? t('git.conflict.nonOp.title') : t('git.conflict.title')}
+            </p>
+            {showProgress && (
+              <span className="text-[10px] tabular-nums shrink-0">
+                {t('git.conflict.banner.progress', {
+                  resolved: resolvedCount,
+                  total: totalCount,
+                })}
+              </span>
+            )}
+          </div>
           <p className="text-xs opacity-80">
             {hasNonOpConflict ? t('git.conflict.nonOp.description') : t('git.conflict.description')}
           </p>
         </div>
       </div>
 
+      {/* Non-.op unresolved file list */}
       {hasNonOpConflict && (
         <div className="flex flex-col gap-1 rounded border border-destructive/30 bg-background/40 px-2 py-1.5">
           <div className="text-[11px] font-medium text-destructive">
@@ -59,13 +102,24 @@ export function GitPanelConflictBanner() {
         </div>
       )}
 
+      {/* Inline finalize error from merge-still-conflicted */}
+      {finalizeError != null && (
+        <div className="flex items-start gap-1.5 rounded border border-destructive/30 bg-background/40 px-2 py-1.5">
+          <AlertCircle size={11} className="mt-0.5 shrink-0" aria-hidden />
+          <p className="text-[11px]">
+            {t('git.conflict.banner.finalizeError', { message: finalizeError })}
+          </p>
+        </div>
+      )}
+
+      {/* Action buttons */}
       <div className="flex justify-end gap-2">
         <Button type="button" variant="outline" size="sm" onClick={() => void abortMerge()}>
-          {hasNonOpConflict ? t('git.conflict.nonOp.abort') : t('git.conflict.abort')}
+          {t('git.conflict.abort')}
         </Button>
-        {hasNonOpConflict && (
+        {showPrimaryButton && (
           <Button type="button" variant="default" size="sm" onClick={() => void applyMerge()}>
-            {t('git.conflict.nonOp.continue')}
+            {primaryLabel}
           </Button>
         )}
       </div>

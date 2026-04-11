@@ -33,11 +33,13 @@ const mocks = vi.hoisted(() => {
         docFieldConflicts: new Map(),
       },
       unresolvedFiles: [] as string[],
+      finalizeError: null as string | null,
     } as {
       kind: 'conflict' | 'ready' | 'no-file';
       repo?: typeof conflictRepo;
       conflicts?: { nodeConflicts: Map<string, unknown>; docFieldConflicts: Map<string, unknown> };
       unresolvedFiles?: string[];
+      finalizeError?: string | null;
     },
     log: [] as GitCommitMeta[],
     sshKeys: [] as Array<unknown>,
@@ -61,6 +63,12 @@ const mocks = vi.hoisted(() => {
     enterTrackedFilePicker: vi.fn(),
     clearAuthorIdentity: vi.fn(async () => {}),
     closeRepo: vi.fn(async () => {}),
+    refreshStatus: vi.fn(async () => {}),
+    // Phase 7b: computeDiff needed by GitPanelHistoryDiff inside expanded rows
+    computeDiff: vi.fn(async () => ({
+      summary: { framesChanged: 0, nodesAdded: 0, nodesRemoved: 0, nodesModified: 0 },
+      patches: [],
+    })),
   };
 });
 
@@ -88,6 +96,7 @@ describe('GitPanelConflict', () => {
       repo: mocks.state.repo,
       conflicts: { nodeConflicts: new Map(), docFieldConflicts: new Map() },
       unresolvedFiles: [],
+      finalizeError: null,
     };
   });
 
@@ -154,12 +163,13 @@ describe('GitPanelConflict', () => {
     mocks.log = [];
   });
 
-  it('renders the non-op unresolved files strip with continue + abort when unresolvedFiles is non-empty', () => {
+  it('renders the non-op unresolved files strip when unresolvedFiles is non-empty', () => {
     mocks.state = {
       kind: 'conflict',
       repo: mocks.state.repo,
       conflicts: { nodeConflicts: new Map(), docFieldConflicts: new Map() },
       unresolvedFiles: ['src/README.md', 'src/package.json'],
+      finalizeError: null,
     };
 
     renderWithProvider(<GitPanelConflict />);
@@ -172,20 +182,22 @@ describe('GitPanelConflict', () => {
     expect(screen.getByText('src/README.md')).toBeTruthy();
     expect(screen.getByText('src/package.json')).toBeTruthy();
 
-    // Both recovery affordances are rendered
-    expect(screen.getByRole('button', { name: 'git.conflict.nonOp.continue' })).toBeTruthy();
-    expect(screen.getByRole('button', { name: 'git.conflict.nonOp.abort' })).toBeTruthy();
+    // Phase 7b: button labels changed to banner.* keys for unified UI.
+    // Continue + abort are both present.
+    expect(screen.getByRole('button', { name: 'git.conflict.banner.continue' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'git.conflict.abort' })).toBeTruthy();
   });
 
-  it('clicking continue in the non-op strip calls applyMerge', () => {
+  it('clicking the continue button in the non-op strip calls applyMerge', () => {
     mocks.state = {
       kind: 'conflict',
       repo: mocks.state.repo,
       conflicts: { nodeConflicts: new Map(), docFieldConflicts: new Map() },
       unresolvedFiles: ['src/README.md'],
+      finalizeError: null,
     };
     renderWithProvider(<GitPanelConflict />);
-    fireEvent.click(screen.getByRole('button', { name: 'git.conflict.nonOp.continue' }));
+    fireEvent.click(screen.getByRole('button', { name: 'git.conflict.banner.continue' }));
     expect(mocks.applyMerge).toHaveBeenCalledTimes(1);
   });
 
@@ -195,17 +207,18 @@ describe('GitPanelConflict', () => {
       repo: mocks.state.repo,
       conflicts: { nodeConflicts: new Map(), docFieldConflicts: new Map() },
       unresolvedFiles: ['src/README.md'],
+      finalizeError: null,
     };
     renderWithProvider(<GitPanelConflict />);
-    fireEvent.click(screen.getByRole('button', { name: 'git.conflict.nonOp.abort' }));
+    fireEvent.click(screen.getByRole('button', { name: 'git.conflict.abort' }));
     expect(mocks.abortMerge).toHaveBeenCalledTimes(1);
   });
 
   it('falls back to the plain abort-only banner when unresolvedFiles is empty', () => {
     renderWithProvider(<GitPanelConflict />);
-    // Default mock state has unresolvedFiles: [] — plain banner + single abort
+    // Default mock state has unresolvedFiles: [] — plain banner
     expect(screen.getByText('git.conflict.title')).toBeTruthy();
     expect(screen.queryByText('git.conflict.nonOp.title')).toBeNull();
-    expect(screen.queryByRole('button', { name: 'git.conflict.nonOp.continue' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'git.conflict.banner.continue' })).toBeNull();
   });
 });
