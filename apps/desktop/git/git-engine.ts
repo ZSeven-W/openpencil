@@ -52,6 +52,16 @@ import {
   buildSshCommand,
 } from './git-sys';
 import {
+  sysMergeNoCommit,
+  sysListUnresolved,
+  readMergeHead,
+  sysShowStageBlob,
+  sysRestoreOurs,
+  sysStageFile,
+  sysFinalizeMerge,
+  sysAbortMerge,
+} from './worktree-merge';
+import {
   registerSession,
   getSession,
   updateTrackedFile,
@@ -64,10 +74,10 @@ import {
 } from './repo-session';
 import type { AuthCreds, AuthStore } from './auth-store';
 import type { SshKeyManager } from './ssh-keys';
-import { diffDocuments, type NodePatch } from '@zseven-w/pen-core';
+import { diffDocuments, mergeDocuments, type NodePatch } from '@zseven-w/pen-core';
 import type { PenDocument } from '@zseven-w/pen-types';
 import { runMerge, applyResolutions } from './merge-orchestrator';
-import type { ConflictBag, ConflictResolution } from './merge-session';
+import { buildConflictBag, type ConflictBag, type ConflictResolution } from './merge-session';
 
 // ---------------------------------------------------------------------------
 // Public types — these are the wire shapes returned to the IPC layer.
@@ -677,19 +687,17 @@ export async function engineStatus(repoId: string): Promise<StatusInfo> {
     }
   }
 
-  // Populate merge fields from session state. Phase 2c only tracks
-  // single-file in-flight merges — folder-mode MERGE_HEAD detection is
-  // deferred. When session.inflightMerge is null we report mergeInProgress
-  // false even if the on-disk gitdir has a MERGE_HEAD left over from a
-  // terminal-initiated merge.
+  // Populate merge fields from two sources (Phase 7a):
+  //   1. session.inflightMerge  — in-memory state for .op-level conflicts
+  //   2. on-disk MERGE_HEAD     — survives session close/reopen, covers
+  //      non-.op conflicts, and reflects terminal-initiated merges
   let mergeInProgress = false;
   let unresolvedFiles: string[] = [];
   let conflicts: ConflictBag | null = null;
+
   if (session.inflightMerge) {
     mergeInProgress = true;
-    // Build the wire-format bag from the in-flight conflict map. Same
-    // encoding as merge-session's buildConflictBag, inlined here to avoid
-    // an extra import dependency.
+    // Build the wire-format bag from the in-flight conflict map.
     const merged = session.inflightMerge.mergeResult;
     conflicts = {
       nodeConflicts: merged.nodeConflicts.map((c) => ({
@@ -701,12 +709,32 @@ export async function engineStatus(repoId: string): Promise<StatusInfo> {
         id: `field:${c.field}:${c.path}`,
       })),
     };
-    // Mark the tracked file as unresolved as long as ANY conflict is still
-    // pending. Phase 2c operates on the single tracked file, so this is at
-    // most one entry.
+    // Tracked .op file is "unresolved" until all conflicts have resolutions.
     const totalConflicts = merged.nodeConflicts.length + merged.docFieldConflicts.length;
     if (session.inflightMerge.resolutions.size < totalConflicts && session.trackedFilePath) {
       unresolvedFiles = [toPosixPath(relative(session.handle.dir, session.trackedFilePath))];
+    }
+    // Also check for non-.op files still unresolved on-disk (mixed conflict).
+    if (session.handle.mode === 'folder') {
+      const onDiskUnresolved = (await readMergeHead(session.handle.gitdir))
+        ? await sysListUnresolved({ cwd: session.handle.dir })
+        : [];
+      const trackedRel = session.trackedFilePath
+        ? toPosixPath(relative(session.handle.dir, session.trackedFilePath))
+        : null;
+      for (const p of onDiskUnresolved) {
+        if (p !== trackedRel && !unresolvedFiles.includes(p)) {
+          unresolvedFiles.push(p);
+        }
+      }
+    }
+  } else if (session.handle.mode === 'folder') {
+    // No in-memory merge, but check on-disk MERGE_HEAD (e.g. after panel
+    // close/reopen mid-merge, or terminal-initiated merge).
+    const mergeHead = await readMergeHead(session.handle.gitdir);
+    if (mergeHead) {
+      mergeInProgress = true;
+      unresolvedFiles = await sysListUnresolved({ cwd: session.handle.dir });
     }
   }
 
@@ -1510,16 +1538,142 @@ export async function engineDiff(
 }
 
 /**
- * Merge another branch into the current branch. Single-file mode uses the
- * pen-core merge directly; folder mode falls through to a fast-forward
- * attempt (same semantics as Phase 2b's pull) since multi-file conflict
- * orchestration isn't built yet.
+ * Folder-mode 3-way merge path. Delegates to system-git worktree helpers
+ * in worktree-merge.ts. Returns the same result union as engineBranchMerge.
  *
- * Single-file return shape:
+ * Contract (Phase 7a):
+ *   - fast-forward / clean merge → 'merge' (handled by caller before reaching here)
+ *   - .op conflict (possibly mixed) → 'conflict' with InflightMerge stashed in session
+ *   - non-.op-only conflict → 'conflict-non-op' (no InflightMerge — renderer shows
+ *     "unresolved non-design files" message)
+ */
+async function engineBranchMergeFolderMode(
+  repoId: string,
+  session: RepoSession,
+  branch: string,
+  fromBranch: string,
+  theirsRef: string,
+  oursRef: string,
+): Promise<{
+  result: 'fast-forward' | 'merge' | 'conflict' | 'conflict-non-op';
+  conflicts?: ConflictBag;
+}> {
+  if (!(await isSystemGitAvailable())) {
+    throw new GitError(
+      'engine-crash',
+      'Folder-mode divergent merge requires system git, which is not available',
+    );
+  }
+
+  const mergeResult = await sysMergeNoCommit({ cwd: session.handle.dir, ref: theirsRef });
+
+  if (mergeResult.kind === 'clean') {
+    // No conflicts — finalize the merge commit right away.
+    const hash = await sysFinalizeMerge({
+      cwd: session.handle.dir,
+      message: `Merge ${fromBranch} into ${branch}`,
+      author: { name: 'OpenPencil', email: 'noreply@openpencil' },
+    });
+    // Sync the isomorphic-git refs to the new HEAD so the engine stays consistent.
+    await setRef({ handle: session.handle, ref: oursRef, value: hash });
+    await setRef({
+      handle: session.handle,
+      ref: `refs/openpencil/autosaves/${branch}`,
+      value: hash,
+    });
+    return { result: 'merge' };
+  }
+
+  // Conflicts present. Classify them: which files are unresolved?
+  const unresolved = await sysListUnresolved({ cwd: session.handle.dir });
+  const trackedRel = session.trackedFilePath
+    ? toPosixPath(relative(session.handle.dir, session.trackedFilePath))
+    : null;
+
+  const opConflicted = trackedRel !== null && unresolved.includes(trackedRel);
+  const nonOpConflicts = unresolved.filter((p) => p !== trackedRel);
+
+  if (!opConflicted) {
+    // Only non-.op files have conflicts — return conflict-non-op.
+    // We do NOT abort: the renderer must surface the non-.op conflicts so
+    // the user can resolve them in a terminal or external tool.
+    return { result: 'conflict-non-op' };
+  }
+
+  // The tracked .op file is among the conflicts. Read base/ours/theirs from
+  // the index stages so the pen-core merge can produce a semantic merge result.
+  const [baseBlob, oursBlob, theirsBlob] = await Promise.all([
+    sysShowStageBlob({ cwd: session.handle.dir, stage: 1, filepath: trackedRel! }),
+    sysShowStageBlob({ cwd: session.handle.dir, stage: 2, filepath: trackedRel! }),
+    sysShowStageBlob({ cwd: session.handle.dir, stage: 3, filepath: trackedRel! }),
+  ]);
+
+  if (!baseBlob || !oursBlob || !theirsBlob) {
+    // One of the stages is missing — e.g. deleted-by-them rename conflict.
+    // This is non-op territory from the .op perspective.
+    if (nonOpConflicts.length > 0) return { result: 'conflict-non-op' };
+    // Unusual: tracked file deleted/renamed. Treat as non-op.
+    return { result: 'conflict-non-op' };
+  }
+
+  let base: PenDocument;
+  let ours: PenDocument;
+  let theirs: PenDocument;
+  try {
+    base = JSON.parse(baseBlob);
+    ours = JSON.parse(oursBlob);
+    theirs = JSON.parse(theirsBlob);
+  } catch (err) {
+    throw new GitError('engine-crash', 'Failed to parse .op blobs during folder-mode merge', {
+      cause: err,
+    });
+  }
+
+  const opMergeResult = mergeDocuments({ base, ours, theirs });
+  const { bag, conflictMap } = buildConflictBag(opMergeResult);
+
+  // Restore the tracked .op file to readable JSON (stage 2 = ours) so the
+  // renderer can open the document without seeing conflict markers. MERGE_HEAD
+  // and any non-.op unresolved files remain alive.
+  await sysRestoreOurs({ cwd: session.handle.dir, filepath: trackedRel! });
+
+  // Read the commit hashes for InflightMerge.
+  const oursCommit = await git.resolveRef({ fs, gitdir: session.handle.gitdir, ref: oursRef });
+  const theirsCommit = await git.resolveRef({
+    fs,
+    gitdir: session.handle.gitdir,
+    ref: theirsRef,
+  });
+  const baseCommit = await findMergeBase({
+    handle: session.handle,
+    oid1: oursCommit,
+    oid2: theirsCommit,
+  });
+
+  setInflightMerge(repoId, {
+    oursCommit,
+    theirsCommit,
+    baseCommit,
+    mergeResult: opMergeResult,
+    conflictMap,
+    resolutions: new Map(),
+    defaultMessage: `Merge ${fromBranch} into ${branch}`,
+  });
+
+  return { result: 'conflict', conflicts: bag };
+}
+
+/**
+ * Merge another branch into the current branch. Single-file mode uses the
+ * pen-core merge directly; folder mode uses system-git merge machinery
+ * (Phase 7a+).
+ *
+ * Return shape:
  *   - { result: 'fast-forward' }       — theirs is a descendant of ours, or
  *                                        theirs is an ancestor of ours (up-to-date)
- *   - { result: 'merge' }              — clean merge produced new merge commit on heads ref
+ *   - { result: 'merge' }              — clean merge produced new merge commit
  *   - { result: 'conflict', conflicts } — .op-level conflicts; InflightMerge stashed in session
+ *   - { result: 'conflict-non-op' }    — conflicts only in non-.op files
  */
 export async function engineBranchMerge(
   repoId: string,
@@ -1590,13 +1744,9 @@ export async function engineBranchMerge(
     return { result: 'fast-forward' };
   }
 
-  // From here on we need a true 3-way merge. Folder mode is deferred — the
-  // multi-file conflict UI requires work that's out of scope for Phase 2c.
+  // From here on we need a true 3-way merge.
   if (session.handle.mode === 'folder') {
-    throw new GitError(
-      'pull-non-fast-forward',
-      'Folder-mode branch merge with divergent history is not yet supported in-app; use git CLI',
-    );
+    return engineBranchMergeFolderMode(repoId, session, branch, fromBranch, theirsRef, oursRef);
   }
 
   if (!session.trackedFilePath) {
@@ -1671,22 +1821,44 @@ export async function engineResolveConflict(
 }
 
 /**
- * Finalize the in-flight merge. Walks the InflightMerge state, applies all
- * accumulated resolutions to the merged document, writes the result to disk,
- * creates a merge commit (parent = [oursCommit, theirsCommit]), advances both
- * heads + autosaves refs, and clears the session's inflightMerge.
+ * Finalize the in-flight merge. Applies all accumulated resolutions to the
+ * merged document, writes the result to disk, creates a merge commit, advances
+ * both heads + autosaves refs, and clears the session's inflightMerge.
  *
- * If the user already applied the merge (e.g. via terminal), the call is a
- * no-op and returns the current HEAD with noop: true. Phase 2c detects this
- * via `inflightMerge === null`.
- *
- * Phase 2c only handles the single-file case. Folder mode mixed-conflict
- * cases (spec sub-cases 2 and 3) are deferred.
+ * Handles three cases uniformly (Phase 7a):
+ *   1. .op conflicts only (single-file or folder mode with no non-.op unresolved)
+ *   2. Mixed .op + non-.op conflicts — throws merge-still-conflicted if non-.op
+ *      files remain unresolved (the user must fix those in a terminal first)
+ *   3. Merge committed externally (inflightMerge === null and no MERGE_HEAD)
+ *      → returns { noop: true }
  */
 export async function engineApplyMerge(repoId: string): Promise<{ hash: string; noop: boolean }> {
   const session = requireSession(repoId);
+
   if (!session.inflightMerge) {
-    // No in-flight merge — return the current HEAD as a no-op.
+    // Check whether an on-disk merge was already committed (e.g. via terminal).
+    // If MERGE_HEAD is gone, the merge is done → noop.
+    if (session.handle.mode === 'folder') {
+      const mergeHead = await readMergeHead(session.handle.gitdir);
+      if (!mergeHead) {
+        const branch = await getCurrentBranch({ handle: session.handle });
+        if (!branch) throw new GitError('engine-crash', 'HEAD is detached');
+        const head = await git.resolveRef({
+          fs,
+          gitdir: session.handle.gitdir,
+          ref: `refs/heads/${branch}`,
+        });
+        return { hash: head, noop: true };
+      }
+      // MERGE_HEAD present but no inflightMerge in session — conflict was
+      // detected in a different session (e.g. after panel reopen) but the
+      // user tried to apply before we re-established the InflightMerge.
+      throw new GitError(
+        'merge-still-conflicted',
+        'Merge in progress but no in-flight merge state — call status() first to re-establish',
+      );
+    }
+    // Single-file mode: no inflightMerge → noop.
     const branch = await getCurrentBranch({ handle: session.handle });
     if (!branch) throw new GitError('engine-crash', 'HEAD is detached');
     const head = await git.resolveRef({
@@ -1696,6 +1868,7 @@ export async function engineApplyMerge(repoId: string): Promise<{ hash: string; 
     });
     return { hash: head, noop: true };
   }
+
   if (!session.trackedFilePath) {
     throw new GitError('no-file', 'Session has no trackedFilePath');
   }
@@ -1703,19 +1876,32 @@ export async function engineApplyMerge(repoId: string): Promise<{ hash: string; 
   const branch = await getCurrentBranch({ handle: session.handle });
   if (!branch) throw new GitError('engine-crash', 'HEAD is detached');
 
-  // Verify all conflicts have a resolution. Phase 2c is strict — partial
-  // resolutions are a programming error.
-  const { conflictMap, resolutions, mergeResult, oursCommit, theirsCommit } = session.inflightMerge;
-  const unresolved: string[] = [];
+  // Verify all .op conflicts have a resolution.
+  const { conflictMap, resolutions, mergeResult } = session.inflightMerge;
+  const unresolvedConflicts: string[] = [];
   for (const id of conflictMap.keys()) {
-    if (!resolutions.has(id)) unresolved.push(id);
+    if (!resolutions.has(id)) unresolvedConflicts.push(id);
   }
-  if (unresolved.length > 0) {
+  if (unresolvedConflicts.length > 0) {
     throw new GitError(
       'merge-still-conflicted',
-      `Cannot apply merge: ${unresolved.length} unresolved conflicts`,
-      { detail: { unresolved } },
+      `Cannot apply merge: ${unresolvedConflicts.length} unresolved .op conflicts`,
+      { detail: { unresolved: unresolvedConflicts } },
     );
+  }
+
+  // For folder mode, check whether non-.op files are still unresolved.
+  if (session.handle.mode === 'folder') {
+    const trackedRel = toPosixPath(relative(session.handle.dir, session.trackedFilePath));
+    const onDiskUnresolved = await sysListUnresolved({ cwd: session.handle.dir });
+    const nonOpUnresolved = onDiskUnresolved.filter((p) => p !== trackedRel);
+    if (nonOpUnresolved.length > 0) {
+      throw new GitError(
+        'merge-still-conflicted',
+        `Cannot apply merge: ${nonOpUnresolved.length} non-.op file(s) still unresolved`,
+        { detail: { unresolved: nonOpUnresolved } },
+      );
+    }
   }
 
   // Build the final document.
@@ -1729,39 +1915,68 @@ export async function engineApplyMerge(repoId: string): Promise<{ hash: string; 
   const rel = toPosixPath(relative(session.handle.dir, session.trackedFilePath));
   await fsp.writeFile(session.trackedFilePath, JSON.stringify(finalDoc), 'utf-8');
 
-  // Create the merge commit with two parents.
-  const oursRef = `refs/heads/${branch}`;
-  const { hash } = await commitFile({
-    handle: session.handle,
-    filepath: rel,
-    ref: oursRef,
-    message: session.inflightMerge.defaultMessage,
-    author: { name: 'OpenPencil', email: 'noreply@openpencil' },
-    parents: [oursCommit, theirsCommit],
-  });
-  await setRef({
-    handle: session.handle,
-    ref: `refs/openpencil/autosaves/${branch}`,
-    value: hash,
-  });
+  let hash: string;
+
+  if (session.handle.mode === 'folder') {
+    // Folder mode: stage the .op file and finalize with system git.
+    await sysStageFile({ cwd: session.handle.dir, filepath: rel });
+    hash = await sysFinalizeMerge({
+      cwd: session.handle.dir,
+      message: session.inflightMerge.defaultMessage,
+      author: { name: 'OpenPencil', email: 'noreply@openpencil' },
+    });
+    // Sync isomorphic-git refs to the new HEAD.
+    const oursRef = `refs/heads/${branch}`;
+    await setRef({ handle: session.handle, ref: oursRef, value: hash });
+    await setRef({
+      handle: session.handle,
+      ref: `refs/openpencil/autosaves/${branch}`,
+      value: hash,
+    });
+  } else {
+    // Single-file mode: use isomorphic-git commit (same as before).
+    const { oursCommit, theirsCommit } = session.inflightMerge;
+    const oursRef = `refs/heads/${branch}`;
+    const commitResult = await commitFile({
+      handle: session.handle,
+      filepath: rel,
+      ref: oursRef,
+      message: session.inflightMerge.defaultMessage,
+      author: { name: 'OpenPencil', email: 'noreply@openpencil' },
+      parents: [oursCommit, theirsCommit],
+    });
+    hash = commitResult.hash;
+    await setRef({
+      handle: session.handle,
+      ref: `refs/openpencil/autosaves/${branch}`,
+      value: hash,
+    });
+  }
 
   clearInflightMerge(repoId);
   return { hash, noop: false };
 }
 
 /**
- * Abort the in-flight merge. Phase 2c just clears the session state — we
- * never wrote to disk during the conflict path, so the working tree is
- * already correct. (The user's working file is still the pre-merge ours.)
+ * Abort the in-flight merge. Clears both in-memory session state and on-disk
+ * merge state (MERGE_HEAD) for folder mode.
  *
- * Folder-mode `git merge --abort` is deferred along with folder-mode merge
- * itself.
+ * In single-file mode, the working tree was never modified by the engine
+ * during the conflict path, so only session state needs clearing.
+ *
+ * In folder mode, `git merge --abort` restores the working tree and index.
  */
 export async function engineAbortMerge(repoId: string): Promise<void> {
   const session = requireSession(repoId);
-  if (!session.inflightMerge) {
-    // Idempotent: nothing to abort.
-    return;
-  }
+
+  // Clear in-memory state.
   clearInflightMerge(repoId);
+
+  // Abort on-disk merge state for folder mode.
+  if (session.handle.mode === 'folder') {
+    const mergeHead = await readMergeHead(session.handle.gitdir);
+    if (mergeHead) {
+      await sysAbortMerge({ cwd: session.handle.dir });
+    }
+  }
 }

@@ -1033,37 +1033,68 @@ describe('git-engine', () => {
     });
 
     it.skipIf(!systemGitAvailable)(
-      'enginePull in folder mode throws pull-non-fast-forward when histories diverge (Phase 2c defers folder-mode merge)',
+      'enginePull in folder mode enters merge workflow when histories diverge (Phase 7a)',
       async () => {
         const { aDir, bDir } = await setupClonePair();
-        // Both a and b commit divergently.
-        await fsp.writeFile(join(aDir, 'design.op'), '{"version":"1.0.0","children":[{"id":"a"}]}');
+        // Both a and b commit divergently with conflicting fill values on node 'r1'.
+        await fsp.writeFile(
+          join(aDir, 'design.op'),
+          JSON.stringify({
+            version: '1.0.0',
+            children: [
+              {
+                id: 'r1',
+                type: 'rectangle',
+                x: 0,
+                y: 0,
+                width: 1,
+                height: 1,
+                fill: [{ type: 'solid', color: '#0000ff' }],
+              },
+            ],
+          }),
+        );
         await execFileAsync('git', ['-C', aDir, 'add', '.']);
         await execFileAsync(
           'git',
-          ['-C', aDir, '-c', 'user.name=t', '-c', 'user.email=t@e.com', 'commit', '-m', 'a'],
+          ['-C', aDir, '-c', 'user.name=t', '-c', 'user.email=t@e.com', 'commit', '-m', 'a: blue'],
           {},
         );
         await execFileAsync('git', ['-C', aDir, 'push']);
 
-        await fsp.writeFile(join(bDir, 'design.op'), '{"version":"1.0.0","children":[{"id":"b"}]}');
+        await fsp.writeFile(
+          join(bDir, 'design.op'),
+          JSON.stringify({
+            version: '1.0.0',
+            children: [
+              {
+                id: 'r1',
+                type: 'rectangle',
+                x: 0,
+                y: 0,
+                width: 1,
+                height: 1,
+                fill: [{ type: 'solid', color: '#00ff00' }],
+              },
+            ],
+          }),
+        );
         await execFileAsync('git', ['-C', bDir, 'add', '.']);
         await execFileAsync(
           'git',
-          ['-C', bDir, '-c', 'user.name=t', '-c', 'user.email=t@e.com', 'commit', '-m', 'b'],
+          ['-C', bDir, '-c', 'user.name=t', '-c', 'user.email=t@e.com', 'commit', '-m', 'b: green'],
           {},
         );
 
         const result = await engineOpen(bDir, join(bDir, 'design.op'));
-        // Folder-mode divergent pull → throws pull-non-fast-forward. The
-        // in-process pen-core merge path is single-file-mode only; folder
-        // mode is explicitly deferred in Phase 2c (see engineBranchMerge
-        // folder-mode check). The single-file-mode merge path is covered
-        // by the engineBranchMerge describe block.
-        await expect(enginePull(result.repoId)).rejects.toMatchObject({
-          name: 'GitError',
-          code: 'pull-non-fast-forward',
-        });
+        // Phase 7a: folder-mode divergent pull should now enter the merge workflow,
+        // returning 'conflict' (or 'merge' if pen-core finds no semantic conflicts).
+        const pullResult = await enginePull(result.repoId);
+        expect(['conflict', 'merge', 'fast-forward']).toContain(pullResult.result);
+
+        // design.op on disk must be readable JSON (not conflict markers).
+        const onDisk = await fsp.readFile(join(bDir, 'design.op'), 'utf-8');
+        expect(() => JSON.parse(onDisk)).not.toThrow();
       },
     );
   });
@@ -1758,5 +1789,382 @@ describe('git-engine', () => {
       expect(result.host).toBe('github.com');
       expect(result.url).toBe('git@github.com:foo/bar.git');
     });
+  });
+
+  // ---------------------------------------------------------------------------
+  // Phase 7a: folder-mode divergent merge (system git gated)
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Helper: set up two local folder-mode repos sharing a bare remote.
+   * Both have an initial commit with design.op. Returns paths for both clones.
+   */
+  async function setupFolderClonePair(): Promise<{ aDir: string; bDir: string }> {
+    const remoteDir = join(temp.dir, 'remote.git');
+    const aDir = join(temp.dir, 'a');
+    const bDir = join(temp.dir, 'b');
+
+    await execFileAsync('git', ['init', '--bare', remoteDir]);
+    await execFileAsync('git', ['clone', remoteDir, aDir]);
+    await execFileAsync('git', ['-C', aDir, 'checkout', '-b', 'main']);
+    await fsp.writeFile(
+      join(aDir, 'design.op'),
+      JSON.stringify({ version: '1.0.0', children: [{ id: 'base', fill: '#ff0000' }] }),
+    );
+    await fsp.writeFile(join(aDir, 'README.md'), '# Base\n');
+    await execFileAsync('git', ['-C', aDir, 'add', '.']);
+    await execFileAsync('git', [
+      '-C',
+      aDir,
+      '-c',
+      'user.name=t',
+      '-c',
+      'user.email=t@e.com',
+      'commit',
+      '-m',
+      'base',
+    ]);
+    await execFileAsync('git', ['-C', aDir, 'push', '-u', 'origin', 'main']);
+    await execFileAsync('git', ['clone', remoteDir, bDir]);
+    return { aDir, bDir };
+  }
+
+  describe('Phase 7a: folder-mode divergent merge (system git gated)', () => {
+    it.skipIf(!systemGitAvailable)(
+      'folder-mode divergent pull returns conflict when .op file conflicts',
+      async () => {
+        const { aDir, bDir } = await setupFolderClonePair();
+
+        // a makes a change to design.op and pushes.
+        await fsp.writeFile(
+          join(aDir, 'design.op'),
+          JSON.stringify({ version: '1.0.0', children: [{ id: 'base', fill: '#0000ff' }] }),
+        );
+        await execFileAsync('git', ['-C', aDir, 'add', 'design.op']);
+        await execFileAsync('git', [
+          '-C',
+          aDir,
+          '-c',
+          'user.name=t',
+          '-c',
+          'user.email=t@e.com',
+          'commit',
+          '-m',
+          'a: blue',
+        ]);
+        await execFileAsync('git', ['-C', aDir, 'push']);
+
+        // b makes a divergent change to design.op.
+        await fsp.writeFile(
+          join(bDir, 'design.op'),
+          JSON.stringify({ version: '1.0.0', children: [{ id: 'base', fill: '#00ff00' }] }),
+        );
+        await execFileAsync('git', ['-C', bDir, 'add', 'design.op']);
+        await execFileAsync('git', [
+          '-C',
+          bDir,
+          '-c',
+          'user.name=t',
+          '-c',
+          'user.email=t@e.com',
+          'commit',
+          '-m',
+          'b: green',
+        ]);
+
+        const bResult = await engineOpen(bDir, join(bDir, 'design.op'));
+
+        // Phase 7a: folder-mode divergent pull should now return conflict (not throw).
+        const pullResult = await enginePull(bResult.repoId);
+        expect(pullResult.result).toBe('conflict');
+        expect(pullResult.conflicts).toBeDefined();
+        expect(pullResult.conflicts!.nodeConflicts.length).toBeGreaterThan(0);
+
+        // design.op on disk must be readable JSON (not conflict markers).
+        const onDisk = await fsp.readFile(join(bDir, 'design.op'), 'utf-8');
+        expect(() => JSON.parse(onDisk)).not.toThrow();
+      },
+    );
+
+    it.skipIf(!systemGitAvailable)(
+      'folder-mode divergent pull returns conflict-non-op when only non-.op files conflict',
+      async () => {
+        const { aDir, bDir } = await setupFolderClonePair();
+
+        // a changes only README.md and pushes.
+        await fsp.writeFile(join(aDir, 'README.md'), '# From A\n');
+        await execFileAsync('git', ['-C', aDir, 'add', 'README.md']);
+        await execFileAsync('git', [
+          '-C',
+          aDir,
+          '-c',
+          'user.name=t',
+          '-c',
+          'user.email=t@e.com',
+          'commit',
+          '-m',
+          'a: readme',
+        ]);
+        await execFileAsync('git', ['-C', aDir, 'push']);
+
+        // b also changes README.md (divergently) but leaves design.op alone.
+        await fsp.writeFile(join(bDir, 'README.md'), '# From B\n');
+        await execFileAsync('git', ['-C', bDir, 'add', 'README.md']);
+        await execFileAsync('git', [
+          '-C',
+          bDir,
+          '-c',
+          'user.name=t',
+          '-c',
+          'user.email=t@e.com',
+          'commit',
+          '-m',
+          'b: readme',
+        ]);
+
+        const bResult = await engineOpen(bDir, join(bDir, 'design.op'));
+
+        const pullResult = await enginePull(bResult.repoId);
+        expect(pullResult.result).toBe('conflict-non-op');
+      },
+    );
+
+    it.skipIf(!systemGitAvailable)(
+      'engineStatus reports mergeInProgress from on-disk MERGE_HEAD after session close/reopen',
+      async () => {
+        const { aDir, bDir } = await setupFolderClonePair();
+
+        // Create divergent commits in a and b.
+        await fsp.writeFile(
+          join(aDir, 'design.op'),
+          JSON.stringify({ version: '1.0.0', children: [{ id: 'base', fill: '#0000ff' }] }),
+        );
+        await execFileAsync('git', ['-C', aDir, 'add', 'design.op']);
+        await execFileAsync('git', [
+          '-C',
+          aDir,
+          '-c',
+          'user.name=t',
+          '-c',
+          'user.email=t@e.com',
+          'commit',
+          '-m',
+          'a',
+        ]);
+        await execFileAsync('git', ['-C', aDir, 'push']);
+
+        await fsp.writeFile(
+          join(bDir, 'design.op'),
+          JSON.stringify({ version: '1.0.0', children: [{ id: 'base', fill: '#00ff00' }] }),
+        );
+        await execFileAsync('git', ['-C', bDir, 'add', 'design.op']);
+        await execFileAsync('git', [
+          '-C',
+          bDir,
+          '-c',
+          'user.name=t',
+          '-c',
+          'user.email=t@e.com',
+          'commit',
+          '-m',
+          'b',
+        ]);
+
+        // First session: open and pull (enters conflict).
+        const session1 = await engineOpen(bDir, join(bDir, 'design.op'));
+        await enginePull(session1.repoId);
+        await engineClose(session1.repoId);
+
+        // Clear in-memory sessions (simulate panel close/reopen).
+        clearAllSessions();
+
+        // Second session: reopen — must detect on-disk merge state.
+        const session2 = await engineOpen(bDir, join(bDir, 'design.op'));
+        const status = await engineStatus(session2.repoId);
+        expect(status.mergeInProgress).toBe(true);
+      },
+    );
+
+    it.skipIf(!systemGitAvailable)(
+      'engineApplyMerge with on-disk merge state resolves .op conflicts and creates merge commit',
+      async () => {
+        const { aDir, bDir } = await setupFolderClonePair();
+
+        await fsp.writeFile(
+          join(aDir, 'design.op'),
+          JSON.stringify({ version: '1.0.0', children: [{ id: 'base', fill: '#0000ff' }] }),
+        );
+        await execFileAsync('git', ['-C', aDir, 'add', 'design.op']);
+        await execFileAsync('git', [
+          '-C',
+          aDir,
+          '-c',
+          'user.name=t',
+          '-c',
+          'user.email=t@e.com',
+          'commit',
+          '-m',
+          'a',
+        ]);
+        await execFileAsync('git', ['-C', aDir, 'push']);
+
+        await fsp.writeFile(
+          join(bDir, 'design.op'),
+          JSON.stringify({ version: '1.0.0', children: [{ id: 'base', fill: '#00ff00' }] }),
+        );
+        await execFileAsync('git', ['-C', bDir, 'add', 'design.op']);
+        await execFileAsync('git', [
+          '-C',
+          bDir,
+          '-c',
+          'user.name=t',
+          '-c',
+          'user.email=t@e.com',
+          'commit',
+          '-m',
+          'b',
+        ]);
+
+        const bResult = await engineOpen(bDir, join(bDir, 'design.op'));
+        const pullResult = await enginePull(bResult.repoId);
+
+        expect(pullResult.result).toBe('conflict');
+        const conflictId = pullResult.conflicts!.nodeConflicts[0].id;
+        await engineResolveConflict(bResult.repoId, conflictId, { kind: 'theirs' });
+
+        const applied = await engineApplyMerge(bResult.repoId);
+        expect(applied.noop).toBe(false);
+        expect(applied.hash).toMatch(/^[a-f0-9]{40}$/);
+
+        // design.op must be readable JSON with theirs's fill.
+        const onDisk = JSON.parse(await fsp.readFile(join(bDir, 'design.op'), 'utf-8'));
+        expect(onDisk.children[0].fill).toBe('#0000ff');
+
+        // Session inflightMerge cleared.
+        const { getSession: gs } = await import('../repo-session');
+        const sess = gs(bResult.repoId)!;
+        expect(sess.inflightMerge).toBeNull();
+      },
+    );
+
+    it.skipIf(!systemGitAvailable)(
+      'engineApplyMerge throws merge-still-conflicted when non-.op files remain unresolved',
+      async () => {
+        const { aDir, bDir } = await setupFolderClonePair();
+
+        // Both change design.op and README.md.
+        await fsp.writeFile(
+          join(aDir, 'design.op'),
+          JSON.stringify({ version: '1.0.0', children: [{ id: 'base', fill: '#0000ff' }] }),
+        );
+        await fsp.writeFile(join(aDir, 'README.md'), '# A\n');
+        await execFileAsync('git', ['-C', aDir, 'add', '.']);
+        await execFileAsync('git', [
+          '-C',
+          aDir,
+          '-c',
+          'user.name=t',
+          '-c',
+          'user.email=t@e.com',
+          'commit',
+          '-m',
+          'a',
+        ]);
+        await execFileAsync('git', ['-C', aDir, 'push']);
+
+        await fsp.writeFile(
+          join(bDir, 'design.op'),
+          JSON.stringify({ version: '1.0.0', children: [{ id: 'base', fill: '#00ff00' }] }),
+        );
+        await fsp.writeFile(join(bDir, 'README.md'), '# B\n');
+        await execFileAsync('git', ['-C', bDir, 'add', '.']);
+        await execFileAsync('git', [
+          '-C',
+          bDir,
+          '-c',
+          'user.name=t',
+          '-c',
+          'user.email=t@e.com',
+          'commit',
+          '-m',
+          'b',
+        ]);
+
+        const bResult = await engineOpen(bDir, join(bDir, 'design.op'));
+        const pullResult = await enginePull(bResult.repoId);
+        expect(pullResult.result).toBe('conflict');
+
+        // Resolve the .op conflict.
+        const conflictId = pullResult.conflicts!.nodeConflicts[0].id;
+        await engineResolveConflict(bResult.repoId, conflictId, { kind: 'ours' });
+
+        // README.md is still unresolved → must throw merge-still-conflicted.
+        await expect(engineApplyMerge(bResult.repoId)).rejects.toMatchObject({
+          name: 'GitError',
+          code: 'merge-still-conflicted',
+        });
+      },
+    );
+
+    it.skipIf(!systemGitAvailable)(
+      'engineAbortMerge in folder mode aborts on-disk merge state',
+      async () => {
+        const { aDir, bDir } = await setupFolderClonePair();
+
+        await fsp.writeFile(
+          join(aDir, 'design.op'),
+          JSON.stringify({ version: '1.0.0', children: [{ id: 'base', fill: '#0000ff' }] }),
+        );
+        await execFileAsync('git', ['-C', aDir, 'add', 'design.op']);
+        await execFileAsync('git', [
+          '-C',
+          aDir,
+          '-c',
+          'user.name=t',
+          '-c',
+          'user.email=t@e.com',
+          'commit',
+          '-m',
+          'a',
+        ]);
+        await execFileAsync('git', ['-C', aDir, 'push']);
+
+        await fsp.writeFile(
+          join(bDir, 'design.op'),
+          JSON.stringify({ version: '1.0.0', children: [{ id: 'base', fill: '#00ff00' }] }),
+        );
+        await execFileAsync('git', ['-C', bDir, 'add', 'design.op']);
+        await execFileAsync('git', [
+          '-C',
+          bDir,
+          '-c',
+          'user.name=t',
+          '-c',
+          'user.email=t@e.com',
+          'commit',
+          '-m',
+          'b',
+        ]);
+
+        const bResult = await engineOpen(bDir, join(bDir, 'design.op'));
+        await enginePull(bResult.repoId);
+
+        await engineAbortMerge(bResult.repoId);
+
+        // Session inflightMerge cleared.
+        const { getSession: gs } = await import('../repo-session');
+        const sess = gs(bResult.repoId)!;
+        expect(sess.inflightMerge).toBeNull();
+
+        // On-disk MERGE_HEAD gone.
+        const { readMergeHead: rmh } = await import('../worktree-merge');
+        const mergeHead = await rmh(join(bDir, '.git'));
+        expect(mergeHead).toBeNull();
+
+        // design.op is clean JSON.
+        const onDisk = await fsp.readFile(join(bDir, 'design.op'), 'utf-8');
+        expect(() => JSON.parse(onDisk)).not.toThrow();
+      },
+    );
   });
 });
