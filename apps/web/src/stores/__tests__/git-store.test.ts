@@ -1376,4 +1376,225 @@ describe('git-store state machine', () => {
 
     expect(useGitStore.getState().state.kind).toBe('ready');
   });
+
+  // ---- Phase 7b: finalizeError, exitTrackedFilePicker, reconciler -------
+
+  it('conflict state includes finalizeError: null by default when entering via mergeBranch', async () => {
+    vi.mocked(gitClient.init).mockResolvedValue(SAMPLE_REPO);
+    vi.mocked(gitClient.branchMerge).mockResolvedValue({
+      result: 'conflict',
+      conflicts: { nodeConflicts: [], docFieldConflicts: [] },
+    });
+    await useGitStore.getState().initRepo('/tmp/login.op');
+    await useGitStore.getState().mergeBranch('feature');
+    const s = useGitStore.getState().state;
+    expect(s.kind).toBe('conflict');
+    if (s.kind === 'conflict') {
+      expect(s.finalizeError).toBeNull();
+    }
+  });
+
+  it('applyMerge sets finalizeError when backend throws merge-still-conflicted', async () => {
+    vi.mocked(gitClient.init).mockResolvedValue(SAMPLE_REPO);
+    vi.mocked(gitClient.branchMerge).mockResolvedValue({
+      result: 'conflict',
+      conflicts: { nodeConflicts: [], docFieldConflicts: [] },
+    });
+    vi.mocked(gitClient.applyMerge).mockRejectedValue(
+      new GitError('merge-still-conflicted', 'some conflicts remain unresolved'),
+    );
+    await useGitStore.getState().initRepo('/tmp/login.op');
+    await useGitStore.getState().mergeBranch('feature');
+    expect(useGitStore.getState().state.kind).toBe('conflict');
+
+    // applyMerge with merge-still-conflicted must NOT throw to the caller —
+    // it surfaces the error inline on the banner.
+    await expect(useGitStore.getState().applyMerge()).resolves.toBeUndefined();
+
+    const s = useGitStore.getState().state;
+    expect(s.kind).toBe('conflict');
+    if (s.kind === 'conflict') {
+      expect(s.finalizeError).toBe('some conflicts remain unresolved');
+    }
+  });
+
+  it('applyMerge clears finalizeError and transitions to ready on success', async () => {
+    vi.mocked(gitClient.init).mockResolvedValue(SAMPLE_REPO);
+    vi.mocked(gitClient.branchMerge).mockResolvedValue({
+      result: 'conflict',
+      conflicts: { nodeConflicts: [], docFieldConflicts: [] },
+    });
+    vi.mocked(gitClient.applyMerge).mockResolvedValue({ hash: 'merge-hash', noop: false });
+    await useGitStore.getState().initRepo('/tmp/login.op');
+    await useGitStore.getState().mergeBranch('feature');
+
+    await useGitStore.getState().applyMerge();
+
+    expect(useGitStore.getState().state.kind).toBe('ready');
+  });
+
+  it('applyMerge rethrows non-merge-still-conflicted errors (e.g. engine-crash)', async () => {
+    vi.mocked(gitClient.init).mockResolvedValue(SAMPLE_REPO);
+    vi.mocked(gitClient.branchMerge).mockResolvedValue({
+      result: 'conflict',
+      conflicts: { nodeConflicts: [], docFieldConflicts: [] },
+    });
+    vi.mocked(gitClient.applyMerge).mockRejectedValue(
+      new GitError('engine-crash', 'disk full', { recoverable: false }),
+    );
+    await useGitStore.getState().initRepo('/tmp/login.op');
+    await useGitStore.getState().mergeBranch('feature');
+
+    await expect(useGitStore.getState().applyMerge()).rejects.toMatchObject({
+      name: 'GitError',
+      code: 'engine-crash',
+    });
+  });
+
+  it('resolveConflict clears finalizeError when the user resolves a conflict', async () => {
+    vi.mocked(gitClient.init).mockResolvedValue(SAMPLE_REPO);
+    vi.mocked(gitClient.branchMerge).mockResolvedValue({
+      result: 'conflict',
+      conflicts: {
+        nodeConflicts: [
+          {
+            id: 'node:_:rect-1',
+            pageId: null,
+            nodeId: 'rect-1',
+            reason: 'both-modified-same-field',
+            base: null,
+            ours: null,
+            theirs: null,
+          },
+        ],
+        docFieldConflicts: [],
+      },
+    });
+    vi.mocked(gitClient.applyMerge).mockRejectedValue(
+      new GitError('merge-still-conflicted', 'still conflicted'),
+    );
+    vi.mocked(gitClient.resolveConflict).mockResolvedValue(undefined);
+    await useGitStore.getState().initRepo('/tmp/login.op');
+    await useGitStore.getState().mergeBranch('feature');
+    // Set finalizeError via applyMerge
+    await useGitStore.getState().applyMerge();
+    let s = useGitStore.getState().state;
+    expect(s.kind).toBe('conflict');
+    if (s.kind === 'conflict') {
+      expect(s.finalizeError).not.toBeNull();
+    }
+
+    // Resolving a conflict should clear the finalizeError
+    await useGitStore.getState().resolveConflict('node:_:rect-1', { kind: 'ours' });
+    s = useGitStore.getState().state;
+    expect(s.kind).toBe('conflict');
+    if (s.kind === 'conflict') {
+      expect(s.finalizeError).toBeNull();
+    }
+  });
+
+  it('refreshStatus promotes ready → conflict with finalizeError: null', async () => {
+    vi.mocked(gitClient.init).mockResolvedValue(SAMPLE_REPO);
+    await useGitStore.getState().initRepo('/tmp/login.op');
+    vi.mocked(gitClient.status).mockResolvedValue({
+      ...DEFAULT_STATUS,
+      mergeInProgress: true,
+      unresolvedFiles: [],
+      conflicts: {
+        nodeConflicts: [
+          {
+            id: 'node:_:rect-1',
+            pageId: null,
+            nodeId: 'rect-1',
+            reason: 'both-modified-same-field',
+            base: null,
+            ours: null,
+            theirs: null,
+          },
+        ],
+        docFieldConflicts: [],
+      },
+    });
+    await useGitStore.getState().refreshStatus();
+    const s = useGitStore.getState().state;
+    expect(s.kind).toBe('conflict');
+    if (s.kind === 'conflict') {
+      expect(s.finalizeError).toBeNull();
+    }
+  });
+
+  it('refreshStatus mergeInProgress=true with unresolvedFiles but conflicts=null → conflict with empty maps', async () => {
+    vi.mocked(gitClient.init).mockResolvedValue(SAMPLE_REPO);
+    await useGitStore.getState().initRepo('/tmp/login.op');
+    vi.mocked(gitClient.status).mockResolvedValue({
+      ...DEFAULT_STATUS,
+      mergeInProgress: true,
+      unresolvedFiles: ['README.md'],
+      conflicts: null,
+    });
+    await useGitStore.getState().refreshStatus();
+    const s = useGitStore.getState().state;
+    expect(s.kind).toBe('conflict');
+    if (s.kind === 'conflict') {
+      expect(s.conflicts.nodeConflicts.size).toBe(0);
+      expect(s.conflicts.docFieldConflicts.size).toBe(0);
+      expect(s.unresolvedFiles).toEqual(['README.md']);
+      expect(s.finalizeError).toBeNull();
+    }
+  });
+
+  it('exitTrackedFilePicker from rebind (trackedFilePath non-null) returns to ready', async () => {
+    vi.mocked(gitClient.init).mockResolvedValue(SAMPLE_REPO);
+    await useGitStore.getState().initRepo('/tmp/login.op');
+    // Enter picker from ready (rebind scenario)
+    useGitStore.getState().enterTrackedFilePicker();
+    expect(useGitStore.getState().state.kind).toBe('needs-tracked-file');
+    const s = useGitStore.getState().state;
+    // trackedFilePath is set (from SAMPLE_REPO.trackedFilePath)
+    if (s.kind === 'needs-tracked-file') {
+      expect(s.repo.trackedFilePath).toBe('/tmp/repo/login.op');
+    }
+    await useGitStore.getState().exitTrackedFilePicker();
+    expect(useGitStore.getState().state.kind).toBe('ready');
+  });
+
+  it('exitTrackedFilePicker from first-open (trackedFilePath null) closes repo and returns to no-file', async () => {
+    vi.mocked(gitClient.open).mockResolvedValue({
+      ...SAMPLE_REPO,
+      mode: 'folder',
+      trackedFilePath: null,
+      candidates: [
+        { ...SAMPLE_REPO.candidates[0], relativePath: 'a.op', path: '/tmp/repo/a.op' },
+        { ...SAMPLE_REPO.candidates[0], relativePath: 'b.op', path: '/tmp/repo/b.op' },
+      ],
+    });
+    vi.mocked(gitClient.close).mockResolvedValue(undefined);
+    await useGitStore.getState().openRepo('/tmp/repo');
+    expect(useGitStore.getState().state.kind).toBe('needs-tracked-file');
+    const s = useGitStore.getState().state;
+    if (s.kind === 'needs-tracked-file') {
+      expect(s.repo.trackedFilePath).toBeNull();
+    }
+    await useGitStore.getState().exitTrackedFilePicker();
+    // Should have called close and returned to no-file
+    expect(gitClient.close).toHaveBeenCalledWith('repo-1');
+    expect(useGitStore.getState().state.kind).toBe('no-file');
+  });
+
+  it('exitTrackedFilePicker swallows close errors and still resets to no-file', async () => {
+    vi.mocked(gitClient.open).mockResolvedValue({
+      ...SAMPLE_REPO,
+      mode: 'folder',
+      trackedFilePath: null,
+      candidates: [
+        { ...SAMPLE_REPO.candidates[0], relativePath: 'a.op', path: '/tmp/repo/a.op' },
+        { ...SAMPLE_REPO.candidates[0], relativePath: 'b.op', path: '/tmp/repo/b.op' },
+      ],
+    });
+    vi.mocked(gitClient.close).mockRejectedValue(new Error('session gone'));
+    await useGitStore.getState().openRepo('/tmp/repo');
+    expect(useGitStore.getState().state.kind).toBe('needs-tracked-file');
+    await expect(useGitStore.getState().exitTrackedFilePicker()).resolves.toBeUndefined();
+    expect(useGitStore.getState().state.kind).toBe('no-file');
+  });
 });

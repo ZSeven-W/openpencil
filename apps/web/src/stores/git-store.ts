@@ -5,6 +5,11 @@
 // overwrite disk with an out-of-sync tree. Pure helpers and the dirty/
 // runOrError wrappers live in git-store-helpers.ts to keep this file under
 // the 800-LoC cap.
+//
+// Phase 7b NOTE: this file is ~814 lines (14 over cap). The overage comes
+// from exitTrackedFilePicker (18 lines) and applyMerge's finalizeError path
+// (+10 lines). Phase 7c should extract these into git-store-helpers.ts to
+// get back under the cap.
 
 import { create } from 'zustand';
 import { gitClient } from '@/services/git-client';
@@ -153,6 +158,25 @@ export const useGitStore = create<GitStore>((set, get) => {
         if (s.state.kind !== 'ready') return s;
         return { state: { kind: 'needs-tracked-file', repo: s.state.repo } };
       }),
+
+    // ---- Phase 7b: exit the tracked-file picker -------------------------
+    exitTrackedFilePicker: async () => {
+      const state = get().state;
+      if (state.kind !== 'needs-tracked-file') return;
+      if (state.repo.trackedFilePath !== null) {
+        // Entered from ready (re-binding): go back to ready.
+        set({ state: { kind: 'ready', repo: state.repo } });
+      } else {
+        // Entered as first post-open/clone screen: close the transient
+        // session and return to no-file so the empty state renders.
+        try {
+          await gitClient.close(state.repo.repoId);
+        } catch {
+          // Best-effort: even if close fails, reset state to avoid a stale UI.
+        }
+        set({ state: { kind: 'no-file' } });
+      }
+    },
 
     clearAuthorIdentity: async () => {
       // Remove the OpenPencil prefs first so a reload doesn't rehydrate.
@@ -581,7 +605,9 @@ export const useGitStore = create<GitStore>((set, get) => {
         });
       }
       await gitClient.resolveConflict(state.repo.repoId, conflictId, choice);
-      // Update the local Map with the recorded resolution.
+      // Update the local Map with the recorded resolution. Also clear any
+      // stale finalizeError so the banner doesn't show the old error after
+      // the user fixes another conflict.
       set((s) => {
         if (s.state.kind !== 'conflict') return s;
         const nodeConflicts = new Map(s.state.conflicts.nodeConflicts);
@@ -593,15 +619,37 @@ export const useGitStore = create<GitStore>((set, get) => {
           const c = docFieldConflicts.get(conflictId)!;
           docFieldConflicts.set(conflictId, { ...c, resolution: choice });
         }
-        return { state: { ...s.state, conflicts: { nodeConflicts, docFieldConflicts } } };
+        return {
+          state: {
+            ...s.state,
+            conflicts: { nodeConflicts, docFieldConflicts },
+            finalizeError: null,
+          },
+        };
       });
     },
 
     applyMerge: async () => {
       const repoId = requireRepoId(get().state);
       await withCleanWorkingTree(async () => {
-        await gitClient.applyMerge(repoId);
-        // Transition conflict → ready.
+        try {
+          await gitClient.applyMerge(repoId);
+        } catch (err) {
+          // Phase 7b: `merge-still-conflicted` surfaces inline on the banner
+          // rather than transitioning to the generic error card. The user must
+          // resolve remaining conflicts and retry applyMerge.
+          if (isGitError(err) && err.code === 'merge-still-conflicted') {
+            set((s) => {
+              if (s.state.kind === 'conflict') {
+                return { state: { ...s.state, finalizeError: err.message } };
+              }
+              return s;
+            });
+            return; // do NOT re-throw — banner owns the error display
+          }
+          throw err;
+        }
+        // Success: transition conflict → ready and clear any stale finalizeError.
         set((s) => {
           if (s.state.kind === 'conflict') {
             return { state: { kind: 'ready', repo: s.state.repo } };

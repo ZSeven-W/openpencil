@@ -309,6 +309,7 @@ export function buildConflictState(
   repo: RepoMeta,
   bag: GitConflictBag | null,
   unresolvedFiles: string[],
+  finalizeError: string | null = null,
 ): Extract<GitState, { kind: 'conflict' }> {
   return {
     kind: 'conflict',
@@ -317,5 +318,6 @@ export function buildConflictState(
       ? hydrateConflictBag(bag)
       : { nodeConflicts: new Map(), docFieldConflicts: new Map() },
     unresolvedFiles,
+    finalizeError,
   };
 }

@@ -146,6 +146,13 @@ export type GitState =
        * recovery affordances when this is non-empty.
        */
       unresolvedFiles: string[];
+      /**
+       * Phase 7b: inline error from the last applyMerge() call that threw
+       * `merge-still-conflicted`. Cleared when the user resolves more
+       * conflicts and retries, or when refreshStatus() reconciles the state.
+       * Null means no finalize error is pending.
+       */
+      finalizeError: string | null;
       saveRequiredFor?: PendingAction;
     }
   | { kind: 'error'; message: string; recoverable: boolean };
@@ -200,6 +207,15 @@ export interface GitStore {
 
   // Phase 4c: overflow menu actions
   enterTrackedFilePicker: () => void;
+  /**
+   * Phase 7b: exit the tracked-file picker.
+   * - If the picker was entered from `ready` (repo.trackedFilePath non-null)
+   *   → transition back to `ready` with the same repo.
+   * - If the picker is the first post-open/post-clone screen
+   *   (repo.trackedFilePath === null) → close the transient repo session
+   *   and return to `no-file`.
+   */
+  exitTrackedFilePicker: () => Promise<void>;
   clearAuthorIdentity: () => Promise<void>;
 
   // Phase 4c: autosave subscriber lifecycle
