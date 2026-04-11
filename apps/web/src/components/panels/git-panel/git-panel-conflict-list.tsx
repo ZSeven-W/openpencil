@@ -9,7 +9,6 @@
 // items — no new IPC call is required. The banner already owns the primary
 // apply/continue button; the list owns only the bulk action shortcuts.
 
-import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
@@ -38,12 +37,9 @@ export function GitPanelConflictList() {
   // the current document depth-first so ours/theirs previews appear in the same
   // sequence as the layer panel. Orphan conflicts (node deleted in theirs) are
   // appended at the end; doc-field conflicts follow, sorted alphabetically by path.
-  // eslint-disable-next-line react-hooks/rules-of-hooks
-  const ordered = useMemo(
-    () => orderConflicts(document, nodeConflicts, docFieldConflicts),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [document, nodeConflicts, docFieldConflicts],
-  );
+  // useMemo is intentionally omitted — the conflict list is small and the tree
+  // walk is O(n) over a modest set, so memoisation adds complexity without benefit.
+  const ordered = orderConflicts(document, nodeConflicts, docFieldConflicts);
 
   const items: ConflictItemData[] = ordered.map((c) => {
     if ('nodeId' in c) {
