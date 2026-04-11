@@ -375,6 +375,16 @@ Kontribusi sangat disambut! Lihat [CLAUDE.md](./CLAUDE.md) untuk detail arsitekt
   <img src="https://contrib.rocks/image?repo=ZSeven-W/openpencil" alt="Contributors" />
 </a>
 
+## Sponsor
+
+OpenPencil gratis dan open source. Pengembangan didanai oleh orang-orang yang merasa terbantu — terima kasih telah menjaga kanvas tetap terbuka.
+
+<a href="https://github.com/mrqyun" title="MrQyun">
+  <img src="https://github.com/mrqyun.png" width="64" height="64" alt="MrQyun" style="border-radius: 50%" />
+</a>
+
+Terima kasih kepada **[MrQyun](https://github.com/mrqyun)** — ingin nama Anda muncul di sini? **[Jadi sponsor →](https://github.com/sponsors/ZSeven-W)**
+
 ## Komunitas
 
 <a href="https://discord.gg/h9Fmyy6pVh">
