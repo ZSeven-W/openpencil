@@ -15,7 +15,7 @@ import { loadOpFileFromPath } from '@/utils/load-op-file';
 import {
   buildConflictState,
   classifyCloneError,
-  currentLogRef as helperCurrentLogRef,
+  currentLogRef,
   dropSaveRequired,
   makeAutosaveHandler,
   makeSyncAfterHeadMove,
@@ -27,8 +27,6 @@ import {
 import type { GitStore, PendingAction } from './git-store-types';
 
 export const useGitStore = create<GitStore>((set, get) => {
-  /** Active branch ref for log queries; falls back to 'main' outside a repo. */
-  const currentLogRef = () => helperCurrentLogRef(get());
   /**
    * Phase 6b: shared head-move sync (refreshStatus + refreshBranches +
    * reload tracked file + loadLog). Called from pull/switchBranch/mergeBranch
@@ -440,15 +438,11 @@ export const useGitStore = create<GitStore>((set, get) => {
       const current = get().state;
       const unresolved = status.unresolvedFiles ?? [];
       if (status.mergeInProgress && (status.conflicts || unresolved.length > 0)) {
-        // Backend reports an in-flight merge. Promote ready → conflict,
-        // or refresh the conflict bag + unresolved files if already
-        // in conflict (e.g. resolutions or unresolved-file list changed).
-        if (current.kind === 'ready') {
+        // Backend reports an in-flight merge. Promote ready → conflict or
+        // refresh the bag + unresolved file list if already in conflict
+        // (resolutions or the unresolved list may have shifted).
+        if (current.kind === 'ready' || current.kind === 'conflict') {
           set({ state: buildConflictState(current.repo, status.conflicts ?? null, unresolved) });
-        } else if (current.kind === 'conflict') {
-          set({
-            state: buildConflictState(current.repo, status.conflicts ?? null, unresolved),
-          });
         }
       } else if (!status.mergeInProgress && current.kind === 'conflict') {
         // Backend says no merge in flight, but the renderer is in conflict
@@ -476,7 +470,7 @@ export const useGitStore = create<GitStore>((set, get) => {
         await gitClient.commit(repoId, { kind: 'milestone', message, author });
         // Phase 4c: refresh the log and clear the draft on success so
         // the history list shows the new commit and the input empties.
-        await get().loadLog({ ref: currentLogRef(), limit: 50 });
+        await get().loadLog({ ref: currentLogRef(get()), limit: 50 });
         get().clearCommitMessage();
       }, 'commit milestone');
     },
@@ -517,7 +511,7 @@ export const useGitStore = create<GitStore>((set, get) => {
         if ((state.kind === 'ready' || state.kind === 'conflict') && state.repo.trackedFilePath) {
           await loadOpFileFromPath(state.repo.trackedFilePath);
         }
-        await get().loadLog({ ref: currentLogRef(), limit: 50 });
+        await get().loadLog({ ref: currentLogRef(get()), limit: 50 });
       }, 'promote autosave');
     },
 
@@ -658,21 +652,11 @@ export const useGitStore = create<GitStore>((set, get) => {
         }
         // result === 'conflict-non-op': the merge is in flight but the
         // engine could not apply the .op merge because non-`.op` files
-        // are unresolved. Probe status() to pick up the unresolvedFiles
-        // list and transition into a recoverable conflict state with an
-        // empty node-conflicts bag. The banner reads unresolvedFiles.length
-        // and renders the continue/abort strip.
-        const status = await gitClient.status(repoId);
-        set((s) => {
-          if (s.state.kind !== 'ready') return s;
-          return {
-            state: buildConflictState(
-              s.state.repo,
-              status.conflicts ?? null,
-              status.unresolvedFiles ?? [],
-            ),
-          };
-        });
+        // are unresolved. refreshStatus performs the full repo-meta
+        // update (branch / ahead / behind / working dirty) AND promotes
+        // ready → conflict with the unresolvedFiles list via the shared
+        // mergeInProgress branch — no manual state build needed.
+        await get().refreshStatus();
       }, 'pull');
     },
 

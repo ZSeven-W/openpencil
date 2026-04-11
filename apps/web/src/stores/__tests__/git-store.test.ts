@@ -1264,10 +1264,18 @@ describe('git-store state machine', () => {
     vi.mocked(gitClient.pull).mockResolvedValue({ result: 'conflict-non-op' });
     await useGitStore.getState().initRepo('/tmp/login.op');
 
-    // The store follows up with status() to learn the unresolved file list
-    // because pull's IPC shape for conflict-non-op does not include them.
+    // After the conflict-non-op result, pull() delegates to refreshStatus(),
+    // which calls gitClient.status() once. The mock below reports the
+    // in-flight merge with the unresolved file list AND the updated repo
+    // meta (branch / ahead / behind / working dirty) — refreshStatus mirrors
+    // the full status payload, not just the conflict fields.
+    vi.mocked(gitClient.status).mockClear();
     vi.mocked(gitClient.status).mockResolvedValueOnce({
       ...DEFAULT_STATUS,
+      branch: 'feature/merge-target',
+      ahead: 1,
+      behind: 3,
+      workingDirty: true,
       mergeInProgress: true,
       unresolvedFiles: ['src/README.md', 'src/package.json'],
       conflicts: null,
@@ -1276,6 +1284,10 @@ describe('git-store state machine', () => {
     vi.mocked(mockedLoadOpFileFromPath).mockClear();
     await useGitStore.getState().pull();
 
+    // pull must have delegated the state rebuild to refreshStatus — i.e.
+    // gitClient.status was consulted exactly once.
+    expect(gitClient.status).toHaveBeenCalledTimes(1);
+
     const s = useGitStore.getState().state;
     expect(s.kind).toBe('conflict');
     if (s.kind === 'conflict') {
@@ -1283,6 +1295,12 @@ describe('git-store state machine', () => {
       expect(s.conflicts.nodeConflicts.size).toBe(0);
       expect(s.conflicts.docFieldConflicts.size).toBe(0);
       expect(s.unresolvedFiles).toEqual(['src/README.md', 'src/package.json']);
+      // Repo-meta fields must reflect the status payload — the pre-fix
+      // path skipped this update and the branch/ahead/behind stayed stale.
+      expect(s.repo.currentBranch).toBe('feature/merge-target');
+      expect(s.repo.ahead).toBe(1);
+      expect(s.repo.behind).toBe(3);
+      expect(s.repo.workingDirty).toBe(true);
     }
     // Non-op conflict must NOT blow away the in-memory document, since
     // the .op file on disk is still the user's pre-merge tree.
