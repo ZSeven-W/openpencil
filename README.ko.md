@@ -380,7 +380,7 @@ bun run cli:compile        # CLI를 dist로 컴파일
 OpenPencil은 무료이며 오픈소스입니다. 개발은 이 도구를 유용하게 쓰는 분들의 후원으로 이어집니다 — 캔버스를 열어 두어 주셔서 감사합니다.
 
 <a href="https://github.com/mrqyun" title="MrQyun">
-  <img src="https://github.com/mrqyun.png" width="64" height="64" alt="MrQyun" style="border-radius: 50%" />
+  <img src="https://wsrv.nl/?url=github.com/mrqyun.png&w=128&h=128&mask=circle&maxage=7d" width="64" height="64" alt="MrQyun" />
 </a>
 
 **[MrQyun](https://github.com/mrqyun)** 님, 감사합니다 — 여기에 이름을 올리고 싶으신가요? **[스폰서 되기 →](https://github.com/sponsors/ZSeven-W)**

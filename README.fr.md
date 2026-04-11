@@ -380,7 +380,7 @@ Les contributions sont les bienvenues ! Consultez [CLAUDE.md](./CLAUDE.md) pour 
 OpenPencil est gratuit et open source. Le développement est financé par celles et ceux qui le trouvent utile — merci de garder le canevas ouvert.
 
 <a href="https://github.com/mrqyun" title="MrQyun">
-  <img src="https://github.com/mrqyun.png" width="64" height="64" alt="MrQyun" style="border-radius: 50%" />
+  <img src="https://wsrv.nl/?url=github.com/mrqyun.png&w=128&h=128&mask=circle&maxage=7d" width="64" height="64" alt="MrQyun" />
 </a>
 
 Merci à **[MrQyun](https://github.com/mrqyun)** — vous voulez voir votre nom ici ? **[Devenir sponsor →](https://github.com/sponsors/ZSeven-W)**

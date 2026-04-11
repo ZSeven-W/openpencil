@@ -380,7 +380,7 @@ Chào mừng đóng góp! Xem [CLAUDE.md](./CLAUDE.md) để biết chi tiết v
 OpenPencil miễn phí và mã nguồn mở. Việc phát triển được tài trợ bởi những người thấy nó hữu ích — cảm ơn bạn đã giữ cho canvas luôn mở.
 
 <a href="https://github.com/mrqyun" title="MrQyun">
-  <img src="https://github.com/mrqyun.png" width="64" height="64" alt="MrQyun" style="border-radius: 50%" />
+  <img src="https://wsrv.nl/?url=github.com/mrqyun.png&w=128&h=128&mask=circle&maxage=7d" width="64" height="64" alt="MrQyun" />
 </a>
 
 Cảm ơn **[MrQyun](https://github.com/mrqyun)** — muốn tên mình xuất hiện ở đây? **[Trở thành nhà tài trợ →](https://github.com/sponsors/ZSeven-W)**

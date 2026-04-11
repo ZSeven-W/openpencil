@@ -380,7 +380,7 @@ bun run cli:compile        # Компиляция CLI в dist
 OpenPencil бесплатен и open source. Разработка финансируется теми, кому он полезен — спасибо, что держите холст открытым.
 
 <a href="https://github.com/mrqyun" title="MrQyun">
-  <img src="https://github.com/mrqyun.png" width="64" height="64" alt="MrQyun" style="border-radius: 50%" />
+  <img src="https://wsrv.nl/?url=github.com/mrqyun.png&w=128&h=128&mask=circle&maxage=7d" width="64" height="64" alt="MrQyun" />
 </a>
 
 Спасибо **[MrQyun](https://github.com/mrqyun)** — хотите видеть здесь своё имя? **[Стать спонсором →](https://github.com/sponsors/ZSeven-W)**

@@ -380,7 +380,7 @@ Kontribusi sangat disambut! Lihat [CLAUDE.md](./CLAUDE.md) untuk detail arsitekt
 OpenPencil gratis dan open source. Pengembangan didanai oleh orang-orang yang merasa terbantu — terima kasih telah menjaga kanvas tetap terbuka.
 
 <a href="https://github.com/mrqyun" title="MrQyun">
-  <img src="https://github.com/mrqyun.png" width="64" height="64" alt="MrQyun" style="border-radius: 50%" />
+  <img src="https://wsrv.nl/?url=github.com/mrqyun.png&w=128&h=128&mask=circle&maxage=7d" width="64" height="64" alt="MrQyun" />
 </a>
 
 Terima kasih kepada **[MrQyun](https://github.com/mrqyun)** — ingin nama Anda muncul di sini? **[Jadi sponsor →](https://github.com/sponsors/ZSeven-W)**

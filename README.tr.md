@@ -380,7 +380,7 @@ Katkılarınızı bekliyoruz! Mimari ayrıntılar ve kod stili için [CLAUDE.md]
 OpenPencil ücretsiz ve açık kaynaklıdır. Geliştirme, onu faydalı bulanlar tarafından finanse ediliyor — tuvali açık tuttuğunuz için teşekkürler.
 
 <a href="https://github.com/mrqyun" title="MrQyun">
-  <img src="https://github.com/mrqyun.png" width="64" height="64" alt="MrQyun" style="border-radius: 50%" />
+  <img src="https://wsrv.nl/?url=github.com/mrqyun.png&w=128&h=128&mask=circle&maxage=7d" width="64" height="64" alt="MrQyun" />
 </a>
 
 **[MrQyun](https://github.com/mrqyun)**'a teşekkürler — isminizi burada görmek ister misiniz? **[Sponsor ol →](https://github.com/sponsors/ZSeven-W)**
