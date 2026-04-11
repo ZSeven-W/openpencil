@@ -15,6 +15,7 @@ import { Button } from '@/components/ui/button';
 import { GitPanelConflictJsonEditor } from './git-panel-conflict-json-editor';
 import { formatConflictReason, prettyJson } from './conflict-formatters';
 import type { GitConflictBag, GitConflictResolution } from '@/services/git-types';
+import { useDocumentStore } from '@/stores/document-store';
 
 /** Minimal inline badge — shadcn Badge not available in this project. */
 function InlineBadge({
@@ -43,6 +44,7 @@ export interface GitPanelNodeConflictCardProps {
 export function GitPanelNodeConflictCard({ conflict, onResolve }: GitPanelNodeConflictCardProps) {
   const { t } = useTranslation();
   const [showEditor, setShowEditor] = useState(false);
+  const penDocument = useDocumentStore((s) => s.document);
 
   // Thumbnail data URLs — null means "not rendered yet" or "unavailable".
   const [oursThumbnail, setOursThumbnail] = useState<string | null>(null);
@@ -58,8 +60,9 @@ export function GitPanelNodeConflictCard({ conflict, onResolve }: GitPanelNodeCo
     async function renderThumbnails() {
       try {
         const { renderNodeThumbnail } = await import('@zseven-w/pen-renderer');
-        const fakeDoc = { id: 'preview', name: '', children: [] } as never;
-        const ctx = { document: fakeDoc, pageId: conflict.pageId, size: 120 };
+        // Use the real document so $variable references and ref-type nodes resolve
+        // correctly. A stub document with empty children silently broke resolution.
+        const ctx = { document: penDocument, pageId: conflict.pageId, size: 120 };
 
         if (conflict.ours && typeof conflict.ours === 'object') {
           const url = await renderNodeThumbnail(
@@ -84,7 +87,7 @@ export function GitPanelNodeConflictCard({ conflict, onResolve }: GitPanelNodeCo
     return () => {
       cancelled = true;
     };
-  }, [conflict.ours, conflict.theirs, conflict.pageId]);
+  }, [conflict.ours, conflict.theirs, conflict.pageId, penDocument]);
 
   function handleEditorSubmit(value: unknown) {
     onResolve({ kind: 'manual-node', node: value });
