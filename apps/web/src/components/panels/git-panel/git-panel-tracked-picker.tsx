@@ -27,6 +27,9 @@ export function GitPanelTrackedPicker() {
   const bindTrackedFile = useGitStore((s) => s.bindTrackedFile);
   const closePanel = useGitStore((s) => s.closePanel);
   const closeRepo = useGitStore((s) => s.closeRepo);
+  // Phase 7b: exitTrackedFilePicker drives the back/cancel navigation rule
+  // (back → ready when rebinding, cancel → no-file when first open).
+  const exitTrackedFilePicker = useGitStore((s) => s.exitTrackedFilePicker);
   const [selectedPath, setSelectedPath] = useState<string | null>(null);
 
   // Defensive guard — git-panel.tsx's body switch only mounts us in the
@@ -35,6 +38,11 @@ export function GitPanelTrackedPicker() {
   if (state.kind !== 'needs-tracked-file') return null;
 
   const candidates = state.repo.candidateFiles;
+  // Phase 7b: determine back/cancel label based on whether a tracked file
+  // is already bound. isRebind=true → entered from ready → back label.
+  // isRebind=false → first post-open/clone screen → cancel label.
+  const isRebind = state.repo.trackedFilePath !== null;
+  const backLabel = isRebind ? t('git.picker.back') : t('git.picker.backClose');
 
   // Edge case: zero candidates
   if (candidates.length === 0) {
@@ -101,25 +109,37 @@ export function GitPanelTrackedPicker() {
           />
         ))}
       </div>
-      <div className="flex items-center justify-end gap-2 pt-1">
+      <div className="flex items-center justify-between gap-2 pt-1">
+        {/* Phase 7b: back/cancel affordance — navigates back to ready when
+            rebinding, or closes the transient session when first opened. */}
         <Button
           type="button"
-          variant="outline"
+          variant="ghost"
           size="sm"
-          disabled={!selectedPath}
-          onClick={() => void handleBindOnly()}
+          onClick={() => void exitTrackedFilePicker()}
         >
-          {t('git.picker.bindButton')}
+          {backLabel}
         </Button>
-        <Button
-          type="button"
-          variant="default"
-          size="sm"
-          disabled={!selectedPath}
-          onClick={() => void handleBindAndOpen()}
-        >
-          {t('git.picker.bindAndOpenButton')}
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            disabled={!selectedPath}
+            onClick={() => void handleBindOnly()}
+          >
+            {t('git.picker.bindButton')}
+          </Button>
+          <Button
+            type="button"
+            variant="default"
+            size="sm"
+            disabled={!selectedPath}
+            onClick={() => void handleBindAndOpen()}
+          >
+            {t('git.picker.bindAndOpenButton')}
+          </Button>
+        </div>
       </div>
     </div>
   );

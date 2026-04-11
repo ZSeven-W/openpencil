@@ -16,6 +16,7 @@ type MockedState = {
   kind: 'needs-tracked-file' | 'no-file';
   repo?: {
     candidateFiles: CandidateFile[];
+    trackedFilePath?: string | null;
   };
 };
 
@@ -27,8 +28,13 @@ const mocks = vi.hoisted(() => {
     bindTrackedFile: vi.fn(async (_: string) => {}),
     closePanel: vi.fn(),
     closeRepo: vi.fn(async () => {}),
+    // Phase 7b: exitTrackedFilePicker drives back/cancel navigation
+    exitTrackedFilePicker: vi.fn(async () => {}),
     loadOpFileFromPath: vi.fn(async (_: string) => true),
-    mockedState: { kind: 'needs-tracked-file', repo: { candidateFiles: [] } } as MockedState,
+    mockedState: {
+      kind: 'needs-tracked-file',
+      repo: { candidateFiles: [], trackedFilePath: null },
+    } as MockedState,
   };
 });
 
@@ -39,6 +45,7 @@ vi.mock('@/stores/git-store', () => ({
       bindTrackedFile: typeof mocks.bindTrackedFile;
       closePanel: typeof mocks.closePanel;
       closeRepo: typeof mocks.closeRepo;
+      exitTrackedFilePicker: typeof mocks.exitTrackedFilePicker;
     }) => unknown,
   ) =>
     selector({
@@ -46,6 +53,7 @@ vi.mock('@/stores/git-store', () => ({
       bindTrackedFile: mocks.bindTrackedFile,
       closePanel: mocks.closePanel,
       closeRepo: mocks.closeRepo,
+      exitTrackedFilePicker: mocks.exitTrackedFilePicker,
     }),
 }));
 
@@ -93,7 +101,7 @@ describe('GitPanelTrackedPicker', () => {
     vi.clearAllMocks();
     mocks.mockedState = {
       kind: 'needs-tracked-file',
-      repo: { candidateFiles: SAMPLE_CANDIDATES },
+      repo: { candidateFiles: SAMPLE_CANDIDATES, trackedFilePath: null },
     };
   });
 
@@ -169,7 +177,10 @@ describe('GitPanelTrackedPicker', () => {
   });
 
   it('zero candidates renders the empty card with closeRepo + closePanel chain', async () => {
-    mocks.mockedState = { kind: 'needs-tracked-file', repo: { candidateFiles: [] } };
+    mocks.mockedState = {
+      kind: 'needs-tracked-file',
+      repo: { candidateFiles: [], trackedFilePath: null },
+    };
     render(<GitPanelTrackedPicker />);
 
     expect(screen.getByText('git.picker.empty.heading')).toBeTruthy();
@@ -181,5 +192,48 @@ describe('GitPanelTrackedPicker', () => {
 
     expect(mocks.closeRepo).toHaveBeenCalledTimes(1);
     expect(mocks.closePanel).toHaveBeenCalledTimes(1);
+  });
+
+  // ---- Phase 7b: back button / exitTrackedFilePicker --------------------
+
+  it('back button shows "Back" label when rebinding (trackedFilePath set)', async () => {
+    mocks.mockedState = {
+      kind: 'needs-tracked-file',
+      repo: { candidateFiles: SAMPLE_CANDIDATES, trackedFilePath: '/tmp/repo/login.op' },
+    };
+    render(<GitPanelTrackedPicker />);
+    // The back button should show the "Back" label (git.picker.back)
+    expect(screen.getByRole('button', { name: 'git.picker.back' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'git.picker.backClose' })).toBeNull();
+  });
+
+  it('back button shows "Cancel" label when first opened (trackedFilePath null)', async () => {
+    // Default state from beforeEach: trackedFilePath: null
+    render(<GitPanelTrackedPicker />);
+    expect(screen.getByRole('button', { name: 'git.picker.backClose' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'git.picker.back' })).toBeNull();
+  });
+
+  it('clicking the back button calls exitTrackedFilePicker', async () => {
+    render(<GitPanelTrackedPicker />);
+    fireEvent.click(screen.getByRole('button', { name: 'git.picker.backClose' }));
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(mocks.exitTrackedFilePicker).toHaveBeenCalledTimes(1);
+  });
+
+  it('clicking back in rebind mode calls exitTrackedFilePicker (not closeRepo)', async () => {
+    mocks.mockedState = {
+      kind: 'needs-tracked-file',
+      repo: { candidateFiles: SAMPLE_CANDIDATES, trackedFilePath: '/tmp/repo/login.op' },
+    };
+    render(<GitPanelTrackedPicker />);
+    fireEvent.click(screen.getByRole('button', { name: 'git.picker.back' }));
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(mocks.exitTrackedFilePicker).toHaveBeenCalledTimes(1);
+    // closeRepo must NOT be called — the store's exitTrackedFilePicker handles
+    // the navigation logic without closing the repo session.
+    expect(mocks.closeRepo).not.toHaveBeenCalled();
   });
 });
