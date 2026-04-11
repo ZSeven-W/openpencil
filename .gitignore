@@ -22,3 +22,4 @@ electron-dist/
 dist-electron/
 .claude
 .omx
+.worktrees/
