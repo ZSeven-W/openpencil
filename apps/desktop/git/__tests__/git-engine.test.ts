@@ -2166,5 +2166,258 @@ describe('git-engine', () => {
         expect(() => JSON.parse(onDisk)).not.toThrow();
       },
     );
+
+    // -------------------------------------------------------------------------
+    // Issue 1 (engine assertion): rename conflict is classified as conflict-non-op
+    //
+    // When the feature branch renames the tracked .op file, git places it in
+    // conflict state as "deleted-by-them" (stage 3 missing for the original
+    // path). The engine detects that stage 3 blob is absent for the tracked
+    // file and classifies the merge as { result: 'conflict-non-op' } — the user
+    // must resolve the rename in a terminal.
+    // -------------------------------------------------------------------------
+    it.skipIf(!systemGitAvailable)(
+      'engineBranchMerge returns conflict-non-op when theirs renames the tracked .op file',
+      async () => {
+        const repoDir = join(temp.dir, 'repo-rename-engine');
+        await fsp.mkdir(repoDir, { recursive: true });
+
+        const g = (...args: string[]) => execFileAsync('git', args, { cwd: repoDir });
+        const gc = (...args: string[]) =>
+          execFileAsync('git', ['-c', 'user.name=t', '-c', 'user.email=t@e.com', ...args], {
+            cwd: repoDir,
+          });
+
+        // Base: design.op on main.
+        await g('init', '-b', 'main');
+        await fsp.writeFile(
+          join(repoDir, 'design.op'),
+          JSON.stringify({ version: '1.0.0', children: [{ id: 'base' }] }),
+        );
+        await g('add', '.');
+        await gc('commit', '-m', 'base');
+
+        // feature branch: rename design.op → design-v2.op AND modify content.
+        await g('checkout', '-b', 'feature');
+        await fsp.rename(join(repoDir, 'design.op'), join(repoDir, 'design-v2.op'));
+        await fsp.writeFile(
+          join(repoDir, 'design-v2.op'),
+          JSON.stringify({ version: '1.0.0', children: [{ id: 'theirs' }] }),
+        );
+        await g('add', '-A');
+        await gc('commit', '-m', 'rename to design-v2.op');
+
+        // main: make a divergent change on the ORIGINAL design.op.
+        await g('checkout', 'main');
+        await fsp.writeFile(
+          join(repoDir, 'design.op'),
+          JSON.stringify({ version: '1.0.0', children: [{ id: 'ours' }] }),
+        );
+        await g('add', '.');
+        await gc('commit', '-m', 'ours');
+
+        // Restore design.op (it was renamed away on feature; main's checkout
+        // puts it back with 'ours' content).
+        // Open via engine with design.op as the tracked file.
+        const result = await engineOpen(repoDir, join(repoDir, 'design.op'));
+        expect(result.trackedFilePath).toBe(resolve(join(repoDir, 'design.op')));
+
+        // Also manually set the autosaves ref so the engine can resolve commits.
+        const isoGit = await import('isomorphic-git');
+        const fsMod = await import('node:fs');
+        const mainHash = await isoGit.resolveRef({
+          fs: fsMod,
+          dir: repoDir,
+          ref: 'refs/heads/main',
+        });
+        const { setRef } = await import('../git-iso');
+        const session = (await import('../repo-session')).getSession(result.repoId)!;
+        await setRef({
+          handle: session.handle,
+          ref: 'refs/openpencil/autosaves/main',
+          value: mainHash,
+        });
+        const featureHash = await isoGit.resolveRef({
+          fs: fsMod,
+          dir: repoDir,
+          ref: 'refs/heads/feature',
+        });
+        await setRef({
+          handle: session.handle,
+          ref: 'refs/openpencil/autosaves/feature',
+          value: featureHash,
+        });
+
+        // Merge feature into main.
+        const mergeResult = await engineBranchMerge(result.repoId, 'feature');
+
+        // ASSERTION: rename conflict → stage 3 blob missing for tracked file
+        // → classified as conflict-non-op (user must resolve rename in terminal).
+        expect(mergeResult.result).toBe('conflict-non-op');
+
+        // Cleanup: abort the merge so the temp directory can be removed cleanly.
+        await engineAbortMerge(result.repoId);
+      },
+    );
+
+    // -------------------------------------------------------------------------
+    // Issue 2: engineApplyMerge folder-mode noop path
+    // The `noop: true` branch is reached when inflightMerge is null AND
+    // MERGE_HEAD is absent (merge was committed externally, e.g. via terminal).
+    // -------------------------------------------------------------------------
+    it.skipIf(!systemGitAvailable)(
+      'engineApplyMerge returns noop=true when merge was already committed externally',
+      async () => {
+        const { aDir, bDir } = await setupFolderClonePair();
+
+        // Create a conflict between a and b.
+        await fsp.writeFile(
+          join(aDir, 'design.op'),
+          JSON.stringify({ version: '1.0.0', children: [{ id: 'base', fill: '#0000ff' }] }),
+        );
+        await execFileAsync('git', ['-C', aDir, 'add', 'design.op']);
+        await execFileAsync('git', [
+          '-C',
+          aDir,
+          '-c',
+          'user.name=t',
+          '-c',
+          'user.email=t@e.com',
+          'commit',
+          '-m',
+          'a',
+        ]);
+        await execFileAsync('git', ['-C', aDir, 'push']);
+
+        await fsp.writeFile(
+          join(bDir, 'design.op'),
+          JSON.stringify({ version: '1.0.0', children: [{ id: 'base', fill: '#00ff00' }] }),
+        );
+        await execFileAsync('git', ['-C', bDir, 'add', 'design.op']);
+        await execFileAsync('git', [
+          '-C',
+          bDir,
+          '-c',
+          'user.name=t',
+          '-c',
+          'user.email=t@e.com',
+          'commit',
+          '-m',
+          'b',
+        ]);
+
+        // Open b, pull to enter conflict state.
+        const bResult = await engineOpen(bDir, join(bDir, 'design.op'));
+        const pullResult = await enginePull(bResult.repoId);
+        expect(pullResult.result).toBe('conflict');
+
+        // Externally finalize the merge via sysFinalizeMerge (simulating a user
+        // resolving the conflict in a terminal). First write a resolved file.
+        await fsp.writeFile(
+          join(bDir, 'design.op'),
+          JSON.stringify({ version: '1.0.0', children: [{ id: 'base', fill: '#ff00ff' }] }),
+        );
+        const { sysStageFile: sf, sysFinalizeMerge: sfm } = await import('../worktree-merge');
+        await sf({ cwd: bDir, filepath: 'design.op' });
+        await sfm({
+          cwd: bDir,
+          message: 'merge resolved externally',
+          author: { name: 'External', email: 'ext@test.com' },
+        });
+
+        // Now clear the in-memory inflightMerge to simulate what the engine
+        // session holds after the external commit (inflightMerge still set from
+        // pullResult, but MERGE_HEAD is now gone).
+        // We simulate this by clearing the session's inflightMerge manually.
+        const { clearInflightMerge } = await import('../repo-session');
+        clearInflightMerge(bResult.repoId);
+
+        // engineApplyMerge should detect: no inflightMerge, no MERGE_HEAD →
+        // return { noop: true } with the current HEAD hash.
+        const applied = await engineApplyMerge(bResult.repoId);
+        expect(applied.noop).toBe(true);
+        expect(applied.hash).toMatch(/^[a-f0-9]{40}$/);
+      },
+    );
+
+    // -------------------------------------------------------------------------
+    // Issue 3: panel reopen without calling status() first (Option A contract)
+    //
+    // When MERGE_HEAD is present on disk but session.inflightMerge is null
+    // (e.g. panel closed and reopened mid-conflict), engineApplyMerge must
+    // throw a clear, caller-actionable error directing the caller to call
+    // status() first. This is the deliberate Option A contract.
+    //
+    // The Phase 7b renderer always calls refreshStatus() on conflict-panel
+    // entry, so this path is only hit by direct callers (CLI, test harnesses)
+    // that skip the status() call.
+    // -------------------------------------------------------------------------
+    it.skipIf(!systemGitAvailable)(
+      'engineApplyMerge throws merge-still-conflicted with actionable message when called without status() after panel reopen',
+      async () => {
+        const { aDir, bDir } = await setupFolderClonePair();
+
+        // Create a conflict in b.
+        await fsp.writeFile(
+          join(aDir, 'design.op'),
+          JSON.stringify({ version: '1.0.0', children: [{ id: 'base', fill: '#0000ff' }] }),
+        );
+        await execFileAsync('git', ['-C', aDir, 'add', 'design.op']);
+        await execFileAsync('git', [
+          '-C',
+          aDir,
+          '-c',
+          'user.name=t',
+          '-c',
+          'user.email=t@e.com',
+          'commit',
+          '-m',
+          'a',
+        ]);
+        await execFileAsync('git', ['-C', aDir, 'push']);
+
+        await fsp.writeFile(
+          join(bDir, 'design.op'),
+          JSON.stringify({ version: '1.0.0', children: [{ id: 'base', fill: '#00ff00' }] }),
+        );
+        await execFileAsync('git', ['-C', bDir, 'add', 'design.op']);
+        await execFileAsync('git', [
+          '-C',
+          bDir,
+          '-c',
+          'user.name=t',
+          '-c',
+          'user.email=t@e.com',
+          'commit',
+          '-m',
+          'b',
+        ]);
+
+        // Session 1: open and pull (enters conflict — MERGE_HEAD on disk).
+        const session1 = await engineOpen(bDir, join(bDir, 'design.op'));
+        await enginePull(session1.repoId);
+        await engineClose(session1.repoId);
+
+        // Simulate panel close/reopen: clear all in-memory sessions.
+        clearAllSessions();
+
+        // Session 2: reopen the same repo. inflightMerge is null (new session),
+        // but MERGE_HEAD is still on disk.
+        const session2 = await engineOpen(bDir, join(bDir, 'design.op'));
+
+        // Verify MERGE_HEAD is still on disk (the conflict is still active).
+        const { readMergeHead: rmh } = await import('../worktree-merge');
+        const mergeHead = await rmh(join(bDir, '.git'));
+        expect(mergeHead).not.toBeNull();
+
+        // Call engineApplyMerge WITHOUT calling status() first.
+        // Must throw merge-still-conflicted with a message that guides the caller.
+        await expect(engineApplyMerge(session2.repoId)).rejects.toMatchObject({
+          name: 'GitError',
+          code: 'merge-still-conflicted',
+          message: expect.stringMatching(/call status\(\) first/i),
+        });
+      },
+    );
   });
 });
