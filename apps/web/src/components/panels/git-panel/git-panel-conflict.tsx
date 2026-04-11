@@ -18,6 +18,7 @@ import { useGitStore } from '@/stores/git-store';
 import { useGitPanelLogLoader } from './use-git-panel-log-loader';
 import { GitPanelHeader } from './git-panel-header';
 import { GitPanelConflictBanner } from './git-panel-conflict-banner';
+import { GitPanelConflictList } from './git-panel-conflict-list';
 import { GitPanelHistoryList } from './git-panel-history-list';
 
 const CONFLICT_KINDS = ['conflict'] as const;
@@ -88,6 +89,8 @@ export function GitPanelConflict() {
           <span>{t('git.conflict.banner.pollError', { message: pollError })}</span>
         </div>
       )}
+      {/* Phase 7c: conflict resolution list — mounted between banner and history */}
+      <GitPanelConflictList />
       <div className="flex-1 overflow-y-auto">
         <GitPanelHistoryList readOnly />
       </div>
