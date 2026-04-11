@@ -17,6 +17,11 @@ const mocks = vi.hoisted(() => ({
     name: string;
     email: string;
   } | null,
+  // Phase 7b: computeDiff is used by GitPanelHistoryDiff inside expanded rows.
+  computeDiff: vi.fn(async () => ({
+    summary: { framesChanged: 0, nodesAdded: 0, nodesRemoved: 0, nodesModified: 0 },
+    patches: [],
+  })),
 }));
 
 vi.mock('@/stores/git-store', () => ({
@@ -26,6 +31,7 @@ vi.mock('@/stores/git-store', () => ({
       restoreCommit: typeof mocks.restoreCommit;
       promoteAutosave: typeof mocks.promoteAutosave;
       authorIdentity: typeof mocks.authorIdentity;
+      computeDiff: typeof mocks.computeDiff;
     }) => unknown,
   ) =>
     selector({
@@ -33,6 +39,7 @@ vi.mock('@/stores/git-store', () => ({
       restoreCommit: mocks.restoreCommit,
       promoteAutosave: mocks.promoteAutosave,
       authorIdentity: mocks.authorIdentity,
+      computeDiff: mocks.computeDiff,
     }),
 }));
 
@@ -137,7 +144,9 @@ describe('GitPanelHistoryList', () => {
 
     // Detail card is now visible
     expect(screen.getByText('git.history.milestoneDetailTitle')).toBeTruthy();
-    expect(screen.getByText('git.history.diffComingSoon')).toBeTruthy();
+    // Phase 7b: diff block renders (loading state since computeDiff is async;
+    // no parent hash → initial-commit state for this makeCommit default).
+    expect(screen.getByText('git.history.diff.initialCommit')).toBeTruthy();
 
     // Click restore
     fireEvent.click(screen.getByText('git.history.restoreButton').closest('button')!);

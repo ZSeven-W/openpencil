@@ -21,6 +21,7 @@ import { Button } from '@/components/ui/button';
 import { useGitStore } from '@/stores/git-store';
 import type { GitCommitMeta } from '@/services/git-types';
 import { parseAutosaveMessage } from './format-commit-message';
+import { GitPanelHistoryDiff } from './git-panel-history-diff';
 
 const AUTOSAVE_GROUP_THRESHOLD = 3;
 
@@ -136,7 +137,8 @@ function HistoryMilestoneRow({ commit, readOnly }: { commit: GitCommitMeta; read
           <div className="text-[11px] font-medium text-foreground">
             {t('git.history.milestoneDetailTitle')}
           </div>
-          <div className="text-[10px] text-muted-foreground">{t('git.history.diffComingSoon')}</div>
+          {/* Phase 7b: inline diff block (replaces diffComingSoon placeholder) */}
+          <GitPanelHistoryDiff commit={commit} />
           <div className="flex items-center gap-2 pt-1">
             {!readOnly && (
               <Button
@@ -192,7 +194,8 @@ function HistoryAutosaveRow({ commit, readOnly }: { commit: GitCommitMeta; readO
       </button>
       {expanded && (
         <div className="flex flex-col gap-2 bg-muted/30 px-8 py-2">
-          <div className="text-[10px] text-muted-foreground">{t('git.history.diffComingSoon')}</div>
+          {/* Phase 7b: inline diff block for autosave rows */}
+          <GitPanelHistoryDiff commit={commit} />
           {!readOnly && (
             <div className="flex items-center gap-2 pt-1">
               <Button

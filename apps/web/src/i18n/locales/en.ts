@@ -78,6 +78,16 @@ const en = {
   'git.conflict.nonOp.unresolvedHeading_other': '{{count}} files need attention',
   'git.conflict.nonOp.continue': 'Continue merge',
   'git.conflict.nonOp.abort': 'Abort merge',
+
+  // ── Git Conflict Banner (Phase 7b) ──
+  'git.conflict.banner.progress': 'Resolved {{resolved}} / {{total}}',
+  'git.conflict.banner.apply': 'Apply merge',
+  'git.conflict.banner.continue': 'Continue',
+  'git.conflict.banner.finalizeError': 'Could not apply: {{message}}',
+
+  // ── Git Tracked-File Picker Back (Phase 7b) ──
+  'git.picker.back': 'Back',
+  'git.picker.backClose': 'Cancel',
   'git.error.dismiss': 'Dismiss',
   'git.error.retry': 'Retry',
   'git.error.title': 'Something went wrong',
@@ -157,6 +167,20 @@ const en = {
   'git.history.copyHashButton': 'Copy hash',
   'git.history.copiedToast': 'Copied',
   'git.history.diffComingSoon': 'Diff view coming in Phase 6',
+
+  // ── Git History Diff (Phase 7b) ──
+  'git.history.diff.loading': 'Loading diff…',
+  'git.history.diff.initialCommit': 'Initial commit — no parent to diff against',
+  'git.history.diff.noChanges': 'No changes detected',
+  'git.history.diff.error': 'Diff unavailable: {{message}}',
+  'git.history.diff.framesChanged_one': '1 frame changed',
+  'git.history.diff.framesChanged_other': '{{count}} frames changed',
+  'git.history.diff.nodesAdded_one': '1 node added',
+  'git.history.diff.nodesAdded_other': '{{count}} nodes added',
+  'git.history.diff.nodesRemoved_one': '1 node removed',
+  'git.history.diff.nodesRemoved_other': '{{count}} nodes removed',
+  'git.history.diff.nodesModified_one': '1 node modified',
+  'git.history.diff.nodesModified_other': '{{count}} nodes modified',
   'git.history.promoteButton': 'Promote to milestone',
   'git.history.promoteSuccessToast': 'Promoted to milestone',
   'git.history.loadMore': 'Load more',
