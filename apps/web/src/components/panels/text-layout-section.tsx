@@ -1,37 +1,32 @@
-import NumberInput from '@/components/shared/number-input'
-import SectionHeader from '@/components/shared/section-header'
-import {
-  MoveHorizontal,
-  WrapText,
-  Maximize2,
-  Check,
-} from 'lucide-react'
-import { cn } from '@/lib/utils'
-import { useTranslation } from 'react-i18next'
-import type { PenNode, TextNode, SizingBehavior } from '@/types/pen'
+import NumberInput from '@/components/shared/number-input';
+import SectionHeader from '@/components/shared/section-header';
+import { MoveHorizontal, WrapText, Maximize2, Check } from 'lucide-react';
+import { cn } from '@/lib/utils';
+import { useTranslation } from 'react-i18next';
+import type { PenNode, TextNode, SizingBehavior } from '@/types/pen';
 
 interface TextLayoutSectionProps {
-  node: TextNode
-  onUpdate: (updates: Partial<PenNode>) => void
+  node: TextNode;
+  onUpdate: (updates: Partial<PenNode>) => void;
 }
 
-type TextResizing = 'auto' | 'fixed-width' | 'fixed-width-height'
+type TextResizing = 'auto' | 'fixed-width' | 'fixed-width-height';
 
 function resolveTextGrowth(node: TextNode): TextResizing {
-  if (node.textGrowth) return node.textGrowth
-  const w = node.width
-  if (typeof w === 'number' && w > 0) return 'fixed-width'
-  if (typeof w === 'string' && w.startsWith('fill_container')) return 'fixed-width'
-  return 'auto'
+  if (node.textGrowth) return node.textGrowth;
+  const w = node.width;
+  if (typeof w === 'number' && w > 0) return 'fixed-width';
+  if (typeof w === 'string' && w.startsWith('fill_container')) return 'fixed-width';
+  return 'auto';
 }
 
 function extractNumericSize(value: SizingBehavior | undefined): number {
-  if (typeof value === 'number') return value
+  if (typeof value === 'number') return value;
   if (typeof value === 'string') {
-    const match = value.match(/\((\d+)\)/)
-    if (match) return parseInt(match[1], 10)
+    const match = value.match(/\((\d+)\)/);
+    if (match) return parseInt(match[1], 10);
   }
-  return 100
+  return 100;
 }
 
 function ResizingToggle({
@@ -40,10 +35,10 @@ function ResizingToggle({
   children,
   title,
 }: {
-  active: boolean
-  onClick: () => void
-  children: React.ReactNode
-  title: string
+  active: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+  title: string;
 }) {
   return (
     <button
@@ -59,7 +54,7 @@ function ResizingToggle({
     >
       {children}
     </button>
-  )
+  );
 }
 
 function SizingCheckbox({
@@ -67,9 +62,9 @@ function SizingCheckbox({
   checked,
   onChange,
 }: {
-  label: string
-  checked: boolean
-  onChange: (checked: boolean) => void
+  label: string;
+  checked: boolean;
+  onChange: (checked: boolean) => void;
 }) {
   return (
     <label className="flex items-center gap-1.5 cursor-pointer group">
@@ -85,65 +80,60 @@ function SizingCheckbox({
             : 'border-muted-foreground/40 group-hover:border-muted-foreground',
         )}
       >
-        {checked && (
-          <Check className="w-3 h-3 text-primary-foreground" strokeWidth={3} />
-        )}
+        {checked && <Check className="w-3 h-3 text-primary-foreground" strokeWidth={3} />}
       </button>
-      <span className="text-[11px] text-muted-foreground select-none">
-        {label}
-      </span>
+      <span className="text-[11px] text-muted-foreground select-none">{label}</span>
     </label>
-  )
+  );
 }
 
-export default function TextLayoutSection({
-  node,
-  onUpdate,
-}: TextLayoutSectionProps) {
-  const { t } = useTranslation()
-  const resizing = resolveTextGrowth(node)
-  const widthStr = typeof node.width === 'string' ? node.width : ''
-  const heightStr = typeof node.height === 'string' ? node.height : ''
-  const fillWidth = widthStr.startsWith('fill_container')
-  const fillHeight = heightStr.startsWith('fill_container')
-  const numericWidth = typeof node.width === 'number' && node.width > 0 ? node.width : undefined
-  const numericHeight = typeof node.height === 'number' && node.height > 0 ? node.height : undefined
-  const fallbackW = extractNumericSize(node.width)
-  const fallbackH = extractNumericSize(node.height)
+export default function TextLayoutSection({ node, onUpdate }: TextLayoutSectionProps) {
+  const { t } = useTranslation();
+  const resizing = resolveTextGrowth(node);
+  const widthStr = typeof node.width === 'string' ? node.width : '';
+  const heightStr = typeof node.height === 'string' ? node.height : '';
+  const fillWidth = widthStr.startsWith('fill_container');
+  const fillHeight = heightStr.startsWith('fill_container');
+  const numericWidth = typeof node.width === 'number' && node.width > 0 ? node.width : undefined;
+  const numericHeight =
+    typeof node.height === 'number' && node.height > 0 ? node.height : undefined;
+  const fallbackW = extractNumericSize(node.width);
+  const fallbackH = extractNumericSize(node.height);
 
   const handleResizingChange = (mode: TextResizing) => {
-    const updates: Record<string, unknown> = { textGrowth: mode }
+    const updates: Record<string, unknown> = { textGrowth: mode };
     switch (mode) {
       case 'auto':
-        updates.width = 0
-        updates.height = 0
-        break
+        updates.width = 0;
+        updates.height = 0;
+        break;
       case 'fixed-width':
         if (!fillWidth && (typeof node.width !== 'number' || node.width <= 0)) {
-          updates.width = fallbackW > 0 ? fallbackW : 200
+          updates.width = fallbackW > 0 ? fallbackW : 200;
         }
         if (!fillHeight && (typeof node.height !== 'number' || node.height <= 0)) {
-          updates.height = fallbackH > 0 ? fallbackH : 44
+          updates.height = fallbackH > 0 ? fallbackH : 44;
         }
-        break
+        break;
       case 'fixed-width-height':
         if (!fillWidth && (typeof node.width !== 'number' || node.width <= 0)) {
-          updates.width = fallbackW > 0 ? fallbackW : 200
+          updates.width = fallbackW > 0 ? fallbackW : 200;
         }
         if (!fillHeight && (typeof node.height !== 'number' || node.height <= 0)) {
-          updates.height = fallbackH > 0 ? fallbackH : 100
+          updates.height = fallbackH > 0 ? fallbackH : 100;
         }
-        break
+        break;
     }
-    onUpdate(updates as Partial<PenNode>)
-  }
+    onUpdate(updates as Partial<PenNode>);
+  };
 
   // Always show dimensions — read-only when not directly editable
-  const canEditWidth = resizing !== 'auto' && !fillWidth && numericWidth !== undefined
-  const canEditHeight = resizing === 'fixed-width-height' && !fillHeight && numericHeight !== undefined
+  const canEditWidth = resizing !== 'auto' && !fillWidth && numericWidth !== undefined;
+  const canEditHeight =
+    resizing === 'fixed-width-height' && !fillHeight && numericHeight !== undefined;
   // Display value: prefer numeric, fallback to extracted size from fill_container(N)
-  const displayW = numericWidth ?? fallbackW
-  const displayH = numericHeight ?? fallbackH
+  const displayW = numericWidth ?? fallbackW;
+  const displayH = numericHeight ?? fallbackH;
 
   return (
     <div className="space-y-1.5">
@@ -158,18 +148,14 @@ export default function TextLayoutSection({
           <NumberInput
             label="W"
             value={Math.round(displayW)}
-            onChange={(v) =>
-              onUpdate({ width: v } as Partial<PenNode>)
-            }
+            onChange={(v) => onUpdate({ width: v } as Partial<PenNode>)}
             min={1}
             readOnly={!canEditWidth}
           />
           <NumberInput
             label="H"
             value={Math.round(displayH)}
-            onChange={(v) =>
-              onUpdate({ height: v } as Partial<PenNode>)
-            }
+            onChange={(v) => onUpdate({ height: v } as Partial<PenNode>)}
             min={1}
             readOnly={!canEditHeight}
           />
@@ -184,7 +170,7 @@ export default function TextLayoutSection({
             checked={fillWidth}
             onChange={(v) =>
               onUpdate({
-                width: v ? 'fill_container' : (fallbackW > 0 ? fallbackW : 200),
+                width: v ? 'fill_container' : fallbackW > 0 ? fallbackW : 200,
               } as Partial<PenNode>)
             }
           />
@@ -193,7 +179,7 @@ export default function TextLayoutSection({
             checked={fillHeight}
             onChange={(v) =>
               onUpdate({
-                height: v ? 'fill_container' : (fallbackH > 0 ? fallbackH : 100),
+                height: v ? 'fill_container' : fallbackH > 0 ? fallbackH : 100,
               } as Partial<PenNode>)
             }
           />
@@ -233,5 +219,5 @@ export default function TextLayoutSection({
         </div>
       </div>
     </div>
-  )
+  );
 }

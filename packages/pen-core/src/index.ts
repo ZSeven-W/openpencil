@@ -1,5 +1,5 @@
 // ID generation
-export { generateId } from './id.js'
+export { generateId } from './id.js';
 
 // Tree utilities
 export {
@@ -26,7 +26,8 @@ export {
   deepCloneNode,
   cloneNodeWithNewIds,
   cloneNodesWithNewIds,
-} from './tree-utils.js'
+  nodeTreeToSummary,
+} from './tree-utils.js';
 
 // Variables
 export {
@@ -36,11 +37,11 @@ export {
   resolveColorRef,
   resolveNumericRef,
   resolveNodeForCanvas,
-} from './variables/resolve.js'
-export { replaceVariableRefsInTree } from './variables/replace-refs.js'
+} from './variables/resolve.js';
+export { replaceVariableRefsInTree } from './variables/replace-refs.js';
 
 // Normalization
-export { normalizePenDocument } from './normalize.js'
+export { normalizePenDocument } from './normalize.js';
 
 // Layout
 export {
@@ -55,7 +56,11 @@ export {
   getNodeWidth,
   getNodeHeight,
   computeLayoutPositions,
-} from './layout/engine.js'
+} from './layout/engine.js';
+export { normalizeTreeLayout } from './layout/normalize-tree.js';
+export { unwrapFakePhoneMockups } from './layout/unwrap-fake-phone-mockup.js';
+export { stripRedundantSectionFills } from './layout/strip-redundant-section-fills.js';
+export { normalizeStrokeFillSchema } from './normalize/normalize-stroke-fill-schema.js';
 
 // Text measurement
 export {
@@ -75,7 +80,7 @@ export {
   type WrappedLineCounter,
   setWrappedLineCounter,
   estimateTextHeight,
-} from './layout/text-measure.js'
+} from './layout/text-measure.js';
 
 // Constants
 export {
@@ -115,19 +120,48 @@ export {
   GUIDE_COLOR,
   GUIDE_LINE_WIDTH,
   GUIDE_DASH,
-} from './constants.js'
+} from './constants.js';
 
 // Sync lock
-export { isFabricSyncLocked, setFabricSyncLock } from './sync-lock.js'
+export { isFabricSyncLocked, setFabricSyncLock } from './sync-lock.js';
 
 // Arc path
-export { buildEllipseArcPath, isArcEllipse } from './arc-path.js'
+export { buildEllipseArcPath, isArcEllipse } from './arc-path.js';
+export {
+  anchorsToPathData,
+  getPathBoundsFromAnchors,
+  inferPathAnchorPointType,
+  pathDataToAnchors,
+  type PathBounds,
+  type PathAnchorParseResult,
+} from './path-anchors.js';
 
 // Boolean operations
-export { type BooleanOpType, canBooleanOp, executeBooleanOp } from './boolean-ops.js'
+export { type BooleanOpType, canBooleanOp, executeBooleanOp } from './boolean-ops.js';
 
 // Font utilities
-export { cssFontFamily } from './font-utils.js'
+export { cssFontFamily } from './font-utils.js';
 
 // Node helpers
-export { isBadgeOverlayNode } from './node-helpers.js'
+export { isBadgeOverlayNode, sanitizeName } from './node-helpers.js';
+
+// Design-MD parser
+export {
+  parseDesignMd,
+  generateDesignMd,
+  designMdColorsToVariables,
+  extractDesignMdFromDocument,
+} from './design-md-parser.js';
+
+// --- Merge module ---
+export type { NodePatch } from './merge/node-diff.js';
+export { diffDocuments } from './merge/node-diff.js';
+export type {
+  MergeInput,
+  MergeResult,
+  NodeConflict,
+  NodeConflictReason,
+  DocFieldConflict,
+  DocFieldName,
+} from './merge/node-merge.js';
+export { mergeDocuments } from './merge/node-merge.js';

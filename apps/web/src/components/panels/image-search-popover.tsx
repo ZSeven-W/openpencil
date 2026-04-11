@@ -1,100 +1,99 @@
-import { useState, useCallback, useRef } from 'react'
-import { Search, Loader2, Image as ImageIcon } from 'lucide-react'
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
-import { useAgentSettingsStore } from '@/stores/agent-settings-store'
-import type { ImageSearchResult, ImageSearchResponse } from '@/types/image-service'
+import { useState, useCallback, useRef } from 'react';
+import { Search, Loader2, Image as ImageIcon } from 'lucide-react';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { useAgentSettingsStore } from '@/stores/agent-settings-store';
+import type { ImageSearchResult, ImageSearchResponse } from '@/types/image-service';
 
 interface ImageSearchPopoverProps {
-  initialQuery: string
-  onSelect: (url: string) => void
-  children: React.ReactNode
+  initialQuery: string;
+  onSelect: (url: string) => void;
+  children: React.ReactNode;
 }
 
-export default function ImageSearchPopover({ initialQuery, onSelect, children }: ImageSearchPopoverProps) {
-  const [open, setOpen] = useState(false)
-  const [query, setQuery] = useState(initialQuery)
-  const [loading, setLoading] = useState(false)
-  const [results, setResults] = useState<ImageSearchResult[]>([])
-  const [source, setSource] = useState<'openverse' | 'wikimedia' | null>(null)
-  const [hasSearched, setHasSearched] = useState(false)
-  const inputRef = useRef<HTMLInputElement>(null)
+export default function ImageSearchPopover({
+  initialQuery,
+  onSelect,
+  children,
+}: ImageSearchPopoverProps) {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState(initialQuery);
+  const [loading, setLoading] = useState(false);
+  const [results, setResults] = useState<ImageSearchResult[]>([]);
+  const [source, setSource] = useState<'openverse' | 'wikimedia' | null>(null);
+  const [hasSearched, setHasSearched] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
 
-  const openverseOAuth = useAgentSettingsStore((s) => s.openverseOAuth)
+  const openverseOAuth = useAgentSettingsStore((s) => s.openverseOAuth);
 
   const handleSearch = useCallback(async () => {
-    const trimmed = query.trim()
-    if (!trimmed || loading) return
+    const trimmed = query.trim();
+    if (!trimmed || loading) return;
 
-    setLoading(true)
-    setHasSearched(true)
+    setLoading(true);
+    setHasSearched(true);
 
     try {
-      const body: Record<string, unknown> = { query: trimmed, count: 5 }
+      const body: Record<string, unknown> = { query: trimmed, count: 5 };
       if (openverseOAuth) {
-        body.openverseClientId = openverseOAuth.clientId
-        body.openverseClientSecret = openverseOAuth.clientSecret
+        body.openverseClientId = openverseOAuth.clientId;
+        body.openverseClientSecret = openverseOAuth.clientSecret;
       }
 
       const res = await fetch('/api/ai/image-search', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
-      })
+      });
 
       if (res.ok) {
-        const data = (await res.json()) as ImageSearchResponse
-        setResults(data.results ?? [])
-        setSource(data.source ?? null)
+        const data = (await res.json()) as ImageSearchResponse;
+        setResults(data.results ?? []);
+        setSource(data.source ?? null);
       } else {
-        setResults([])
-        setSource(null)
+        setResults([]);
+        setSource(null);
       }
     } catch {
-      setResults([])
-      setSource(null)
+      setResults([]);
+      setSource(null);
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }, [query, loading, openverseOAuth])
+  }, [query, loading, openverseOAuth]);
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLInputElement>) => {
       if (e.key === 'Enter') {
-        e.preventDefault()
-        void handleSearch()
+        e.preventDefault();
+        void handleSearch();
       }
     },
     [handleSearch],
-  )
+  );
 
   const handleSelect = useCallback(
     (url: string) => {
-      onSelect(url)
-      setOpen(false)
+      onSelect(url);
+      setOpen(false);
     },
     [onSelect],
-  )
+  );
 
   const handleOpenChange = useCallback((next: boolean) => {
-    setOpen(next)
+    setOpen(next);
     if (next) {
       // Reset search state when re-opening
-      setHasSearched(false)
-      setResults([])
-      setSource(null)
+      setHasSearched(false);
+      setResults([]);
+      setSource(null);
     }
-  }, [])
+  }, []);
 
   return (
     <Popover open={open} onOpenChange={handleOpenChange}>
       <PopoverTrigger asChild>{children}</PopoverTrigger>
 
-      <PopoverContent
-        className="w-80 p-3"
-        side="left"
-        align="start"
-        sideOffset={8}
-      >
+      <PopoverContent className="w-80 p-3" side="left" align="start" sideOffset={8}>
         {/* Search bar */}
         <div className="flex gap-1.5 mb-3">
           <input
@@ -168,5 +167,5 @@ export default function ImageSearchPopover({ initialQuery, onSelect, children }:
         )}
       </PopoverContent>
     </Popover>
-  )
+  );
 }

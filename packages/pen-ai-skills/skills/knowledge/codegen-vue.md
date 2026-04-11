@@ -3,7 +3,7 @@ name: codegen-vue
 description: Vue 3 SFC code generation rules — single file component with scoped CSS
 phase: [generation]
 trigger:
-  keywords: [vue, vue3, sfc]
+  flags: [isCodeGen]
 priority: 20
 budget: 2000
 category: knowledge
@@ -14,6 +14,7 @@ category: knowledge
 Generate Vue 3 Single File Components with `<script setup>`, `<template>`, and `<style scoped>`.
 
 ## Output Format
+
 - Vue 3 SFC (`.vue`)
 - `<script setup lang="ts">` for component logic
 - `<template>` with semantic HTML markup
@@ -21,6 +22,7 @@ Generate Vue 3 Single File Components with `<script setup>`, `<template>`, and `
 - Each node gets a unique, descriptive CSS class name derived from `node.name`
 
 ## Layout Mapping
+
 - `layout: "vertical"` → `display: flex; flex-direction: column`
 - `layout: "horizontal"` → `display: flex; flex-direction: row`
 - `gap: N` → `gap: Npx`
@@ -37,6 +39,7 @@ Generate Vue 3 Single File Components with `<script setup>`, `<template>`, and `
 - `clipContent: true` → `overflow: hidden`
 
 ## Color & Fill Mapping
+
 - Solid fill `#hex` → `background: #hex`
 - Variable ref `$name` → `background: var(--name)`
 - Text fill → `color: #hex` or `color: var(--name)`
@@ -44,21 +47,25 @@ Generate Vue 3 Single File Components with `<script setup>`, `<template>`, and `
 - Radial gradient → `background: radial-gradient(circle, color1 0%, color2 100%)`
 
 ## Border & Stroke Mapping
+
 - `stroke.thickness` → `border-width: Npx; border-style: solid`
 - `stroke.color` → `border-color: #hex`
 - Variable ref → `border-width: var(--name)`, `border-color: var(--name)`
 
 ## Corner Radius
+
 - Uniform → `border-radius: Npx`
 - Per-corner `[tl, tr, br, bl]` → `border-radius: TLpx TRpx BRpx BLpx`
 - Ellipse → `border-radius: 50%`
 
 ## Effects
+
 - Drop shadow → `box-shadow: offsetXpx offsetYpx blurpx spreadpx color`
 - Inner shadow → `box-shadow: inset offsetXpx offsetYpx blurpx spreadpx color`
 - Multiple shadows comma-separated
 
 ## Typography
+
 - `fontSize` → `font-size: Npx`
 - `fontWeight` → `font-weight: N`
 - `fontStyle: "italic"` → `font-style: italic`
@@ -70,22 +77,27 @@ Generate Vue 3 Single File Components with `<script setup>`, `<template>`, and `
 - `strikethrough` → `text-decoration: line-through`
 
 ## Dimensions
+
 - Fixed → `width: Npx; height: Npx`
 - `fill_container` → `width: 100%` or `height: 100%`
 
 ## Image Handling
+
 - `<img class="className" :src="src" :alt="name" />`
 - `object-fit: contain|cover|fill` based on `objectFit` property
 - Corner radius applied via CSS class
 
 ## Opacity & Transform
+
 - `opacity: N` → `opacity: N`
 - `rotation: N` → `transform: rotate(Ndeg)`
 
 ## Positioning
+
 - Absolute children → `position: absolute; left: Xpx; top: Ypx`
 
 ## Semantic HTML Tags
+
 - Font size >= 32 → `<h1>`
 - Font size >= 24 → `<h2>`
 - Font size >= 20 → `<h3>`
@@ -94,10 +106,12 @@ Generate Vue 3 Single File Components with `<script setup>`, `<template>`, and `
 - Use semantic elements (`<nav>`, `<header>`, `<main>`, `<section>`, `<footer>`)
 
 ## Icon Handling
+
 - Icon font nodes → `<i class="className" data-lucide="icon-name" />`
 - Set `width`, `height`, and `color` via CSS class
 
 ## Vue-Specific Patterns
+
 - Use `v-for` for repeated items: `<div v-for="item in items" :key="item.id">`
 - Use `v-if` / `v-else` for conditional rendering
 - Use `:class` binding for dynamic classes
@@ -106,6 +120,7 @@ Generate Vue 3 Single File Components with `<script setup>`, `<template>`, and `
 - Emits defined with `defineEmits<{ ... }>()`
 
 ## Variable References
+
 - `$variable` refs → `var(--variable-name)` in CSS
 - Background: `background: var(--name)`
 - Text color: `color: var(--name)`

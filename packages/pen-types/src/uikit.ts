@@ -1,4 +1,4 @@
-import type { PenDocument } from './pen.js'
+import type { PenDocument } from './pen.js';
 
 export type ComponentCategory =
   | 'buttons'
@@ -8,35 +8,35 @@ export type ComponentCategory =
   | 'layout'
   | 'feedback'
   | 'data-display'
-  | 'other'
+  | 'other';
 
 export interface KitComponent {
   /** Node ID of the reusable FrameNode in the kit document */
-  id: string
+  id: string;
   /** Display name */
-  name: string
+  name: string;
   /** Category for organization in the browser */
-  category: ComponentCategory
+  category: ComponentCategory;
   /** Tags for search */
-  tags: string[]
+  tags: string[];
   /** Component dimensions for preview sizing */
-  width: number
-  height: number
+  width: number;
+  height: number;
 }
 
 export interface UIKit {
   /** Unique identifier */
-  id: string
+  id: string;
   /** Display name */
-  name: string
+  name: string;
   /** Optional description */
-  description?: string
+  description?: string;
   /** Version string */
-  version: string
+  version: string;
   /** Whether this is a built-in kit that ships with the app */
-  builtIn: boolean
+  builtIn: boolean;
   /** Backing PenDocument containing the reusable nodes */
-  document: PenDocument
+  document: PenDocument;
   /** Extracted component metadata for browsing */
-  components: KitComponent[]
+  components: KitComponent[];
 }

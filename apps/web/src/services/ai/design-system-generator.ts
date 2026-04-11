@@ -7,11 +7,11 @@
  * 2. Map to PenDocument.variables for design system integration
  */
 
-import type { DesignSystem } from './ai-types'
-import type { AIProviderType } from '@/types/agent-settings'
-import type { VariableDefinition } from '@/types/variables'
-import { generateCompletion } from './ai-service'
-import { getSkillByName } from '@zseven-w/pen-ai-skills'
+import type { DesignSystem } from './ai-types';
+import type { AIProviderType } from '@/types/agent-settings';
+import type { VariableDefinition } from '@/types/variables';
+import { generateCompletion } from './ai-service';
+import { getSkillByName } from '@zseven-w/pen-ai-skills';
 
 /**
  * Generate a design system from a user's prompt.
@@ -22,15 +22,10 @@ export async function generateDesignSystem(
   model?: string,
   provider?: AIProviderType,
 ): Promise<DesignSystem> {
-  const designSystemPrompt = getSkillByName('design-system')?.content ?? ''
-  const response = await generateCompletion(
-    designSystemPrompt,
-    prompt,
-    model,
-    provider,
-  )
+  const designSystemPrompt = getSkillByName('design-system')?.content ?? '';
+  const response = await generateCompletion(designSystemPrompt, prompt, model, provider);
 
-  return parseDesignSystem(response)
+  return parseDesignSystem(response);
 }
 
 /**
@@ -38,40 +33,43 @@ export async function generateDesignSystem(
  * Tolerant of code fences and surrounding text.
  */
 function parseDesignSystem(text: string): DesignSystem {
-  const trimmed = text.trim()
+  const trimmed = text.trim();
 
   // Try direct parse
-  const direct = tryParseDS(trimmed)
-  if (direct) return direct
+  const direct = tryParseDS(trimmed);
+  if (direct) return direct;
 
   // Try extracting from code fences
-  const fenceMatch = trimmed.match(/```(?:json)?\s*\n?([\s\S]*?)\n?```/)
+  const fenceMatch = trimmed.match(/```(?:json)?\s*\n?([\s\S]*?)\n?```/);
   if (fenceMatch) {
-    const fenced = tryParseDS(fenceMatch[1].trim())
-    if (fenced) return fenced
+    const fenced = tryParseDS(fenceMatch[1].trim());
+    if (fenced) return fenced;
   }
 
   // Try extracting first { ... } block
-  const firstBrace = trimmed.indexOf('{')
-  const lastBrace = trimmed.lastIndexOf('}')
+  const firstBrace = trimmed.indexOf('{');
+  const lastBrace = trimmed.lastIndexOf('}');
   if (firstBrace >= 0 && lastBrace > firstBrace) {
-    const braced = tryParseDS(trimmed.slice(firstBrace, lastBrace + 1))
-    if (braced) return braced
+    const braced = tryParseDS(trimmed.slice(firstBrace, lastBrace + 1));
+    if (braced) return braced;
   }
 
   // Fallback: return default design system
-  return DEFAULT_DESIGN_SYSTEM
+  return DEFAULT_DESIGN_SYSTEM;
 }
 
 function tryParseDS(json: string): DesignSystem | null {
   try {
-    const obj = JSON.parse(json) as Record<string, unknown>
-    if (!obj.palette || typeof obj.palette !== 'object') return null
-    if (!obj.typography || typeof obj.typography !== 'object') return null
+    const obj = JSON.parse(json) as Record<string, unknown>;
+    if (!obj.palette || typeof obj.palette !== 'object') return null;
+    if (!obj.typography || typeof obj.typography !== 'object') return null;
 
-    const p = obj.palette as Record<string, string>
-    const t = obj.typography as Record<string, unknown>
-    const s = (obj.spacing as Record<string, unknown>) ?? { unit: 8, scale: [8, 16, 24, 32, 48, 64] }
+    const p = obj.palette as Record<string, string>;
+    const t = obj.typography as Record<string, unknown>;
+    const s = (obj.spacing as Record<string, unknown>) ?? {
+      unit: 8,
+      scale: [8, 16, 24, 32, 48, 64],
+    };
 
     return {
       palette: {
@@ -95,9 +93,9 @@ function tryParseDS(json: string): DesignSystem | null {
       },
       radius: Array.isArray(obj.radius) ? (obj.radius as number[]) : [8, 12, 16],
       aesthetic: (obj.aesthetic as string) ?? 'clean modern',
-    }
+    };
   } catch {
-    return null
+    return null;
   }
 }
 
@@ -123,7 +121,7 @@ const DEFAULT_DESIGN_SYSTEM: DesignSystem = {
   },
   radius: [8, 12, 16],
   aesthetic: 'clean modern blue',
-}
+};
 
 // ---------------------------------------------------------------------------
 // Map design system → PenDocument.variables
@@ -134,43 +132,43 @@ const DEFAULT_DESIGN_SYSTEM: DesignSystem = {
  * These are stored in the document and referenced as $variable-name in nodes.
  */
 export function designSystemToVariables(ds: DesignSystem): Record<string, VariableDefinition> {
-  const vars: Record<string, VariableDefinition> = {}
+  const vars: Record<string, VariableDefinition> = {};
 
   // Colors
   for (const [key, value] of Object.entries(ds.palette)) {
-    const name = `color-${kebab(key)}`
-    vars[name] = { type: 'color', value }
+    const name = `color-${kebab(key)}`;
+    vars[name] = { type: 'color', value };
   }
 
   // Spacing
-  const spacingNames = ['xs', 'sm', 'md', 'lg', 'xl', '2xl', '3xl', '4xl', '5xl', '6xl']
+  const spacingNames = ['xs', 'sm', 'md', 'lg', 'xl', '2xl', '3xl', '4xl', '5xl', '6xl'];
   for (let i = 0; i < ds.spacing.scale.length && i < spacingNames.length; i++) {
-    vars[`spacing-${spacingNames[i]}`] = { type: 'number', value: ds.spacing.scale[i] }
+    vars[`spacing-${spacingNames[i]}`] = { type: 'number', value: ds.spacing.scale[i] };
   }
 
   // Radius
-  const radiusNames = ['sm', 'md', 'lg', 'xl']
+  const radiusNames = ['sm', 'md', 'lg', 'xl'];
   for (let i = 0; i < ds.radius.length && i < radiusNames.length; i++) {
-    vars[`radius-${radiusNames[i]}`] = { type: 'number', value: ds.radius[i] }
+    vars[`radius-${radiusNames[i]}`] = { type: 'number', value: ds.radius[i] };
   }
 
-  return vars
+  return vars;
 }
 
 /**
  * Build a concise design system context string for AI prompts.
  */
 export function designSystemToPromptContext(ds: DesignSystem): string {
-  const p = ds.palette
+  const p = ds.palette;
   return `DESIGN SYSTEM (use these values consistently):
 Colors: bg ${p.background}, surface ${p.surface}, text ${p.text}, muted ${p.textSecondary}, primary ${p.primary}, primaryLight ${p.primaryLight}, accent ${p.accent}, border ${p.border}
 Fonts: heading "${ds.typography.headingFont}", body "${ds.typography.bodyFont}"
 Type scale: ${ds.typography.scale.join(', ')}px
 Spacing: ${ds.spacing.scale.join(', ')}px (${ds.spacing.unit}px grid)
 Radius: ${ds.radius.join(', ')}px
-Style: ${ds.aesthetic}`
+Style: ${ds.aesthetic}`;
 }
 
 function kebab(str: string): string {
-  return str.replace(/([a-z])([A-Z])/g, '$1-$2').toLowerCase()
+  return str.replace(/([a-z])([A-Z])/g, '$1-$2').toLowerCase();
 }

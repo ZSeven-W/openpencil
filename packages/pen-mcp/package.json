@@ -1,0 +1,31 @@
+{
+  "name": "@zseven-w/pen-mcp",
+  "version": "0.7.0",
+  "description": "MCP server, document manager, and tools for OpenPencil",
+  "files": [
+    "src"
+  ],
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "import": "./src/index.ts"
+    }
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@iconify-json/feather": "^1.2.1",
+    "@iconify-json/lucide": "^1.2.93",
+    "@modelcontextprotocol/sdk": "^1.12.1",
+    "@zseven-w/pen-ai-skills": "workspace:*",
+    "@zseven-w/pen-core": "workspace:*",
+    "@zseven-w/pen-engine": "workspace:*",
+    "@zseven-w/pen-types": "workspace:*",
+    "nanoid": "^5.1.6"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.2"
+  }
+}

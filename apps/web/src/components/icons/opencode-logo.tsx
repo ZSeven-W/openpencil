@@ -1,13 +1,8 @@
-import type { SVGProps } from 'react'
+import type { SVGProps } from 'react';
 
 export default function OpenCodeLogo(props: SVGProps<SVGSVGElement>) {
   return (
-    <svg
-      viewBox="0 0 64 64"
-      fill="none"
-      xmlns="http://www.w3.org/2000/svg"
-      {...props}
-    >
+    <svg viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg" {...props}>
       <g clipPath="url(#oc-clip)">
         {/* Terminal window frame */}
         <rect
@@ -21,14 +16,7 @@ export default function OpenCodeLogo(props: SVGProps<SVGSVGElement>) {
           fill="none"
         />
         {/* Title bar line */}
-        <line
-          x1="12"
-          y1="22"
-          x2="52"
-          y2="22"
-          stroke="currentColor"
-          strokeWidth="2"
-        />
+        <line x1="12" y1="22" x2="52" y2="22" stroke="currentColor" strokeWidth="2" />
         {/* Title bar dots */}
         <circle cx="18" cy="18" r="1.5" fill="currentColor" />
         <circle cx="23" cy="18" r="1.5" fill="currentColor" />
@@ -59,5 +47,5 @@ export default function OpenCodeLogo(props: SVGProps<SVGSVGElement>) {
         </clipPath>
       </defs>
     </svg>
-  )
+  );
 }

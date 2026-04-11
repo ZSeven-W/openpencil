@@ -1,5 +1,5 @@
-import type { PenDocument, PenNode } from '@/types/pen'
-import { extraComponents } from './shadcn-kit-extra'
+import type { PenDocument, PenNode } from '@/types/pen';
+import { extraComponents } from './shadcn-kit-extra';
 
 // ---------------------------------------------------------------------------
 // Buttons
@@ -31,7 +31,7 @@ const btnPrimary: PenNode = {
       fill: [{ type: 'solid', color: '#FAFAFA' }],
     },
   ],
-}
+};
 
 const btnSecondary: PenNode = {
   id: 'shadcn-btn-secondary',
@@ -60,7 +60,7 @@ const btnSecondary: PenNode = {
       fill: [{ type: 'solid', color: '#18181B' }],
     },
   ],
-}
+};
 
 const btnGhost: PenNode = {
   id: 'shadcn-btn-ghost',
@@ -87,7 +87,7 @@ const btnGhost: PenNode = {
       fill: [{ type: 'solid', color: '#18181B' }],
     },
   ],
-}
+};
 
 const btnDestructive: PenNode = {
   id: 'shadcn-btn-destructive',
@@ -115,7 +115,7 @@ const btnDestructive: PenNode = {
       fill: [{ type: 'solid', color: '#FAFAFA' }],
     },
   ],
-}
+};
 
 // ---------------------------------------------------------------------------
 // Inputs
@@ -146,7 +146,7 @@ const inputText: PenNode = {
       fill: [{ type: 'solid', color: '#A1A1AA' }],
     },
   ],
-}
+};
 
 const inputTextarea: PenNode = {
   id: 'shadcn-input-textarea',
@@ -173,7 +173,7 @@ const inputTextarea: PenNode = {
       width: 'fill_container',
     },
   ],
-}
+};
 
 const inputCheckbox: PenNode = {
   id: 'shadcn-input-checkbox',
@@ -207,7 +207,7 @@ const inputCheckbox: PenNode = {
       fill: [{ type: 'solid', color: '#18181B' }],
     },
   ],
-}
+};
 
 const inputToggle: PenNode = {
   id: 'shadcn-input-toggle',
@@ -232,7 +232,7 @@ const inputToggle: PenNode = {
       fill: [{ type: 'solid', color: '#FFFFFF' }],
     },
   ],
-}
+};
 
 const inputRadio: PenNode = {
   id: 'shadcn-input-radio',
@@ -265,7 +265,7 @@ const inputRadio: PenNode = {
       fill: [{ type: 'solid', color: '#18181B' }],
     },
   ],
-}
+};
 
 // ---------------------------------------------------------------------------
 // Cards
@@ -286,7 +286,9 @@ const cardBasic: PenNode = {
   cornerRadius: 12,
   fill: [{ type: 'solid', color: '#FFFFFF' }],
   stroke: { thickness: 1, fill: [{ type: 'solid', color: '#E4E4E7' }] },
-  effects: [{ type: 'shadow', offsetX: 0, offsetY: 1, blur: 3, spread: 0, color: 'rgba(0,0,0,0.05)' }],
+  effects: [
+    { type: 'shadow', offsetX: 0, offsetY: 1, blur: 3, spread: 0, color: 'rgba(0,0,0,0.05)' },
+  ],
   children: [
     {
       id: 'shadcn-card-basic-title',
@@ -308,7 +310,7 @@ const cardBasic: PenNode = {
       width: 'fill_container',
     },
   ],
-}
+};
 
 const cardStats: PenNode = {
   id: 'shadcn-card-stats',
@@ -325,7 +327,9 @@ const cardStats: PenNode = {
   cornerRadius: 12,
   fill: [{ type: 'solid', color: '#FFFFFF' }],
   stroke: { thickness: 1, fill: [{ type: 'solid', color: '#E4E4E7' }] },
-  effects: [{ type: 'shadow', offsetX: 0, offsetY: 1, blur: 3, spread: 0, color: 'rgba(0,0,0,0.05)' }],
+  effects: [
+    { type: 'shadow', offsetX: 0, offsetY: 1, blur: 3, spread: 0, color: 'rgba(0,0,0,0.05)' },
+  ],
   children: [
     {
       id: 'shadcn-card-stats-label',
@@ -354,7 +358,7 @@ const cardStats: PenNode = {
       fill: [{ type: 'solid', color: '#16A34A' }],
     },
   ],
-}
+};
 
 const cardImage: PenNode = {
   id: 'shadcn-card-image',
@@ -369,7 +373,9 @@ const cardImage: PenNode = {
   cornerRadius: 12,
   fill: [{ type: 'solid', color: '#FFFFFF' }],
   stroke: { thickness: 1, fill: [{ type: 'solid', color: '#E4E4E7' }] },
-  effects: [{ type: 'shadow', offsetX: 0, offsetY: 1, blur: 3, spread: 0, color: 'rgba(0,0,0,0.05)' }],
+  effects: [
+    { type: 'shadow', offsetX: 0, offsetY: 1, blur: 3, spread: 0, color: 'rgba(0,0,0,0.05)' },
+  ],
   children: [
     {
       id: 'shadcn-card-image-placeholder',
@@ -409,7 +415,7 @@ const cardImage: PenNode = {
       ],
     },
   ],
-}
+};
 
 // ---------------------------------------------------------------------------
 // Navigation
@@ -478,7 +484,7 @@ const navbar: PenNode = {
       ],
     },
   ],
-}
+};
 
 const tabBar: PenNode = {
   id: 'shadcn-tab-bar',
@@ -563,7 +569,7 @@ const tabBar: PenNode = {
       ],
     },
   ],
-}
+};
 
 const breadcrumb: PenNode = {
   id: 'shadcn-breadcrumb',
@@ -620,7 +626,7 @@ const breadcrumb: PenNode = {
       fill: [{ type: 'solid', color: '#18181B' }],
     },
   ],
-}
+};
 
 // ---------------------------------------------------------------------------
 // Feedback
@@ -660,7 +666,7 @@ const alertBanner: PenNode = {
       fill: [{ type: 'solid', color: '#18181B' }],
     },
   ],
-}
+};
 
 const badge: PenNode = {
   id: 'shadcn-badge',
@@ -688,7 +694,7 @@ const badge: PenNode = {
       fill: [{ type: 'solid', color: '#18181B' }],
     },
   ],
-}
+};
 
 const avatar: PenNode = {
   id: 'shadcn-avatar',
@@ -715,7 +721,7 @@ const avatar: PenNode = {
       fill: [{ type: 'solid', color: '#18181B' }],
     },
   ],
-}
+};
 
 // ---------------------------------------------------------------------------
 // Layout
@@ -731,7 +737,7 @@ const divider: PenNode = {
   width: 400,
   height: 1,
   fill: [{ type: 'solid', color: '#E4E4E7' }],
-}
+};
 
 // ---------------------------------------------------------------------------
 // Document
@@ -762,4 +768,4 @@ export const SHADCN_KIT_DOCUMENT: PenDocument = {
     divider,
     ...extraComponents,
   ],
-}
+};

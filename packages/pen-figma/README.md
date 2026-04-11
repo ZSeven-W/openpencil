@@ -21,30 +21,34 @@ npm install @zseven-w/pen-figma
 ### Parse a `.fig` file
 
 ```ts
-import { parseFigFile, figmaAllPagesToPenDocument } from '@zseven-w/pen-figma'
+import { parseFigFile, figmaAllPagesToPenDocument } from '@zseven-w/pen-figma';
 
-const figFile = parseFigFile(buffer)
-const document = figmaAllPagesToPenDocument(figFile)
+const figFile = parseFigFile(buffer);
+const document = figmaAllPagesToPenDocument(figFile);
 ```
 
 ### Single page import
 
 ```ts
-import { parseFigFile, getFigmaPages, figmaToPenDocument } from '@zseven-w/pen-figma'
+import { parseFigFile, getFigmaPages, figmaToPenDocument } from '@zseven-w/pen-figma';
 
-const figFile = parseFigFile(buffer)
-const pages = getFigmaPages(figFile)
-const document = figmaToPenDocument(figFile, pages[0])
+const figFile = parseFigFile(buffer);
+const pages = getFigmaPages(figFile);
+const document = figmaToPenDocument(figFile, pages[0]);
 ```
 
 ### Clipboard paste
 
 ```ts
-import { isFigmaClipboardHtml, extractFigmaClipboardData, figmaClipboardToNodes } from '@zseven-w/pen-figma'
+import {
+  isFigmaClipboardHtml,
+  extractFigmaClipboardData,
+  figmaClipboardToNodes,
+} from '@zseven-w/pen-figma';
 
 if (isFigmaClipboardHtml(html)) {
-  const data = extractFigmaClipboardData(html)
-  const nodes = figmaClipboardToNodes(data)
+  const data = extractFigmaClipboardData(html);
+  const nodes = figmaClipboardToNodes(data);
 }
 ```
 

@@ -5,6 +5,7 @@ Shared libraries consumed by `apps/web` and `apps/desktop`. All re-exported via 
 ## pen-types (`pen-types/src/`)
 
 Type definitions (9 files):
+
 - `pen.ts` — PenDocument/PenNode (frame, group, rectangle, ellipse, line, polygon, path, text, image, ref), ContainerProps, `PenPage`; `PenDocument.variables`, `PenDocument.themes`, `PenDocument.pages`
 - `canvas.ts` — ToolType, ViewportState, SelectionState, CanvasInteraction
 - `styles.ts` — PenFill (solid, linear_gradient, radial_gradient), PenStroke, PenEffect, BlendMode, StyledTextSegment
@@ -18,6 +19,7 @@ Type definitions (9 files):
 ## pen-core (`pen-core/src/`)
 
 Core document operations (11 files + `layout/` + `variables/` subdirs):
+
 - `tree-utils.ts` — Pure tree helpers: `findNodeInTree`, `findParentInTree`, `removeNodeFromTree`, `updateNodeInTree`, `flattenNodes`, `insertNodeInTree`, `isDescendantOf`, `getNodeBounds`, `findClearX`, `scaleChildrenInPlace`, `rotateChildrenInPlace`, `createEmptyDocument`, `DEFAULT_FRAME_ID`; Clone utilities: `deepCloneNode`, `cloneNodeWithNewIds`, `cloneNodesWithNewIds` (canonical source for all node cloning)
 - `normalize.ts` — Pen file normalization (format fixes only, preserves `$variable` refs)
 - `boolean-ops.ts` — Union/subtract/intersect via Paper.js
@@ -35,6 +37,7 @@ Core document operations (11 files + `layout/` + `variables/` subdirs):
 ## pen-codegen (`pen-codegen/src/`)
 
 Multi-platform code generators (9 files, output `var(--name)` for `$variable` refs):
+
 - `react-generator.ts` — React + Tailwind CSS
 - `html-generator.ts` — HTML + CSS
 - `css-variables-generator.ts` — CSS Variables from design tokens
@@ -48,6 +51,7 @@ Multi-platform code generators (9 files, output `var(--name)` for `$variable` re
 ## pen-figma (`pen-figma/src/`)
 
 Figma `.fig` file import pipeline (17 files):
+
 - `fig-parser.ts` — Binary `.fig` file parser
 - `figma-node-mapper.ts` — Maps Figma nodes to PenNodes (uses injectable icon lookup via `setIconLookup()`)
 - `figma-node-converters.ts` — Figma node conversion utilities
@@ -64,6 +68,7 @@ Figma `.fig` file import pipeline (17 files):
 ## pen-renderer (`pen-renderer/src/`)
 
 Standalone CanvasKit/Skia renderer (13 files):
+
 - `renderer.ts` — Core renderer class
 - `document-flattener.ts` — Document tree flattening with layout resolution
 - `node-renderer.ts` — Node-level draw calls

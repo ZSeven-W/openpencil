@@ -27,6 +27,7 @@ You assemble multiple code chunks into a single production-ready file.
 ## Output
 
 A single, complete, production-ready source file that:
+
 1. Imports all dependencies (deduplicated)
 2. Defines all chunk components
 3. Exports a root component that composes all chunks according to rootLayout
@@ -35,29 +36,35 @@ A single, complete, production-ready source file that:
 ## Assembly Rules
 
 ### Import Deduplication
+
 - Merge imports from the same source: `{ source: "react", specifiers: ["useState"] }` + `{ source: "react", specifiers: ["useEffect"] }` → `import { useState, useEffect } from 'react'`
 - Remove duplicate specifiers
 - Order: framework imports first, then external libraries, then local components
 
 ### Root Component
+
 - Name: use the page/document name or default to "Design"
 - Layout: apply `rootLayout.direction` and `rootLayout.gap` to arrange chunk components
 - If `responsive: true`: add responsive breakpoints (mobile-first)
 
 ### Shared Styles
+
 - Extract shared styles described in the plan into reusable CSS classes or styled components
 - Reference them in chunk components instead of duplicating
 
 ### Design Variables
+
 - Generate CSS custom property definitions (`:root { --name: value }`) from the provided variables
 - Include theme variants if themes are defined
 
 ### Handling Degraded/Failed Chunks
+
 - For **degraded** chunks (code present, no contract): infer component names and imports from the raw code
 - For **failed** chunks: insert a placeholder comment: `/* TODO: {chunkName} — generation failed */`
 - Always note which chunks were degraded in a comment at the top of the file
 
 ### Quality Rules
+
 - Replace absolute pixel positioning with flex/grid layout where possible
 - Use semantic HTML elements (nav, header, main, section, footer, article)
 - Ensure all text is readable (sufficient contrast, reasonable font sizes)

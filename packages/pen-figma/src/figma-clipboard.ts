@@ -1,7 +1,7 @@
-import type { PenNode } from '@zseven-w/pen-types'
-import { parseFigFile } from './fig-parser'
-import { figmaNodeChangesToPenNodes } from './figma-node-mapper'
-import { resolveImageBlobs } from './figma-image-resolver'
+import type { PenNode } from '@zseven-w/pen-types';
+import { parseFigFile } from './fig-parser';
+import { figmaNodeChangesToPenNodes } from './figma-node-mapper';
+import { resolveImageBlobs } from './figma-image-resolver';
 
 /**
  * Quick check: does this HTML string contain Figma clipboard markers?
@@ -9,17 +9,17 @@ import { resolveImageBlobs } from './figma-image-resolver'
  * `data-metadata` / `data-buffer` attributes.
  */
 export function isFigmaClipboardHtml(html: string): boolean {
-  return html.includes('figmeta') || html.includes('data-buffer')
+  return html.includes('figmeta') || html.includes('data-buffer');
 }
 
 // Standard base64 lookup table
-const B64_LOOKUP = new Uint8Array(256)
+const B64_LOOKUP = new Uint8Array(256);
 {
-  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'
-  for (let i = 0; i < chars.length; i++) B64_LOOKUP[chars.charCodeAt(i)] = i
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+  for (let i = 0; i < chars.length; i++) B64_LOOKUP[chars.charCodeAt(i)] = i;
   // URL-safe variants
-  B64_LOOKUP['-'.charCodeAt(0)] = 62
-  B64_LOOKUP['_'.charCodeAt(0)] = 63
+  B64_LOOKUP['-'.charCodeAt(0)] = 62;
+  B64_LOOKUP['_'.charCodeAt(0)] = 63;
 }
 
 /**
@@ -28,41 +28,41 @@ const B64_LOOKUP = new Uint8Array(256)
  */
 function decodeBase64ToBytes(input: string): Uint8Array {
   // Strip everything except valid base64 characters
-  const b64 = input.replace(/[^A-Za-z0-9+/\-_=]/g, '')
+  const b64 = input.replace(/[^A-Za-z0-9+/\-_=]/g, '');
 
-  const len = b64.length
+  const len = b64.length;
   // Compute output byte length (ignoring padding)
-  const padding = b64.endsWith('==') ? 2 : b64.endsWith('=') ? 1 : 0
-  const byteLen = Math.floor(len * 3 / 4) - padding
+  const padding = b64.endsWith('==') ? 2 : b64.endsWith('=') ? 1 : 0;
+  const byteLen = Math.floor((len * 3) / 4) - padding;
 
-  const bytes = new Uint8Array(byteLen)
-  let p = 0
+  const bytes = new Uint8Array(byteLen);
+  let p = 0;
 
   for (let i = 0; i < len; i += 4) {
-    const a = B64_LOOKUP[b64.charCodeAt(i)]
-    const b = B64_LOOKUP[b64.charCodeAt(i + 1)]
-    const c = B64_LOOKUP[b64.charCodeAt(i + 2)]
-    const d = B64_LOOKUP[b64.charCodeAt(i + 3)]
+    const a = B64_LOOKUP[b64.charCodeAt(i)];
+    const b = B64_LOOKUP[b64.charCodeAt(i + 1)];
+    const c = B64_LOOKUP[b64.charCodeAt(i + 2)];
+    const d = B64_LOOKUP[b64.charCodeAt(i + 3)];
 
-    if (p < byteLen) bytes[p++] = (a << 2) | (b >> 4)
-    if (p < byteLen) bytes[p++] = ((b & 0x0F) << 4) | (c >> 2)
-    if (p < byteLen) bytes[p++] = ((c & 0x03) << 6) | d
+    if (p < byteLen) bytes[p++] = (a << 2) | (b >> 4);
+    if (p < byteLen) bytes[p++] = ((b & 0x0f) << 4) | (c >> 2);
+    if (p < byteLen) bytes[p++] = ((c & 0x03) << 6) | d;
   }
 
-  return bytes
+  return bytes;
 }
 
 /**
  * Decode a base64 string to a UTF-8 string.
  */
 function decodeBase64(input: string): string {
-  const bytes = decodeBase64ToBytes(input)
-  return new TextDecoder().decode(bytes)
+  const bytes = decodeBase64ToBytes(input);
+  return new TextDecoder().decode(bytes);
 }
 
 interface FigmaClipboardData {
-  meta: Record<string, unknown>
-  buffer: ArrayBuffer
+  meta: Record<string, unknown>;
+  buffer: ArrayBuffer;
 }
 
 /**
@@ -77,60 +77,58 @@ interface FigmaClipboardData {
  *     <span data-buffer="BASE64_BINARY"></span>
  */
 export function extractFigmaClipboardData(html: string): FigmaClipboardData | null {
-  let metaB64: string | null = null
-  let bufferB64: string | null = null
+  let metaB64: string | null = null;
+  let bufferB64: string | null = null;
 
   // Strategy 1: comment-wrapped format
   // Figma uses <!--(figmeta)BASE64<!--(figmeta)--> (opening lacks -->)
   // or <!--(figmeta)-->BASE64<!--(figmeta)--> (both have -->)
-  const metaCommentMatch = html.match(/<!--\(figmeta\)(?:-->)?([\s\S]*?)<!--\(figmeta\)-->/)
-  const bufferCommentMatch = html.match(/<!--\(figma\)(?:-->)?([\s\S]*?)<!--\(figma\)-->/)
+  const metaCommentMatch = html.match(/<!--\(figmeta\)(?:-->)?([\s\S]*?)<!--\(figmeta\)-->/);
+  const bufferCommentMatch = html.match(/<!--\(figma\)(?:-->)?([\s\S]*?)<!--\(figma\)-->/);
 
   if (metaCommentMatch && bufferCommentMatch) {
-    metaB64 = metaCommentMatch[1].trim()
-    bufferB64 = bufferCommentMatch[1].trim()
+    metaB64 = metaCommentMatch[1].trim();
+    bufferB64 = bufferCommentMatch[1].trim();
   }
 
   // Strategy 2: data-attribute format (the comments may be inside attribute values)
   if (!metaB64 || !bufferB64) {
-    const attrMetaMatch = html.match(/data-metadata="([^"]*)"/)
-    const attrBufferMatch = html.match(/data-buffer="([^"]*)"/)
+    const attrMetaMatch = html.match(/data-metadata="([^"]*)"/);
+    const attrBufferMatch = html.match(/data-buffer="([^"]*)"/);
 
     if (attrMetaMatch && attrBufferMatch) {
       // Strip comment wrappers from attribute values if present.
       // Opening marker may lack --> (e.g. "<!--(figmeta)BASE64<!--(figmeta)-->")
-      metaB64 = attrMetaMatch[1]
-        .replace(/<!--\(figmeta\)(-->)?/g, '')
-        .trim()
-      bufferB64 = attrBufferMatch[1]
-        .replace(/<!--\(figma\)(-->)?/g, '')
-        .trim()
+      metaB64 = attrMetaMatch[1].replace(/<!--\(figmeta\)(-->)?/g, '').trim();
+      bufferB64 = attrBufferMatch[1].replace(/<!--\(figma\)(-->)?/g, '').trim();
     }
   }
 
   // Strategy 3: HTML-encoded comment markers inside attributes
   if (!metaB64 || !bufferB64) {
-    const encodedMetaMatch = html.match(/&lt;!--\(figmeta\)--&gt;([\s\S]*?)&lt;!--\(figmeta\)--&gt;/)
-    const encodedBufferMatch = html.match(/&lt;!--\(figma\)--&gt;([\s\S]*?)&lt;!--\(figma\)--&gt;/)
+    const encodedMetaMatch = html.match(
+      /&lt;!--\(figmeta\)--&gt;([\s\S]*?)&lt;!--\(figmeta\)--&gt;/,
+    );
+    const encodedBufferMatch = html.match(/&lt;!--\(figma\)--&gt;([\s\S]*?)&lt;!--\(figma\)--&gt;/);
 
     if (encodedMetaMatch && encodedBufferMatch) {
-      metaB64 = encodedMetaMatch[1].trim()
-      bufferB64 = encodedBufferMatch[1].trim()
+      metaB64 = encodedMetaMatch[1].trim();
+      bufferB64 = encodedBufferMatch[1].trim();
     }
   }
 
-  if (!metaB64 || !bufferB64) return null
+  if (!metaB64 || !bufferB64) return null;
 
   try {
-    const metaRaw = decodeBase64(metaB64)
+    const metaRaw = decodeBase64(metaB64);
     // Trim trailing junk bytes from base64 padding — extract only the JSON object
-    const jsonEnd = metaRaw.lastIndexOf('}')
-    const metaJson = jsonEnd >= 0 ? metaRaw.slice(0, jsonEnd + 1) : metaRaw
-    const meta = JSON.parse(metaJson)
-    const bytes = decodeBase64ToBytes(bufferB64)
-    return { meta, buffer: bytes.buffer as ArrayBuffer }
+    const jsonEnd = metaRaw.lastIndexOf('}');
+    const metaJson = jsonEnd >= 0 ? metaRaw.slice(0, jsonEnd + 1) : metaRaw;
+    const meta = JSON.parse(metaJson);
+    const bytes = decodeBase64ToBytes(bufferB64);
+    return { meta, buffer: bytes.buffer as ArrayBuffer };
   } catch {
-    return null
+    return null;
   }
 }
 
@@ -147,33 +145,33 @@ export function figmaClipboardToNodes(
   buffer: ArrayBuffer,
   html?: string,
 ): { nodes: PenNode[]; warnings: string[] } {
-  const decoded = parseFigFile(buffer)
+  const decoded = parseFigFile(buffer);
   // Use 'preserve' layout mode (same as .fig file import) so that:
   // 1. Auto-layout children are reversed to correct flow order
   // 2. Image nodes get numeric pixel dimensions instead of sizing strings
-  const { nodes, warnings, imageBlobs } = figmaNodeChangesToPenNodes(decoded, 'preserve')
+  const { nodes, warnings, imageBlobs } = figmaNodeChangesToPenNodes(decoded, 'preserve');
 
   // Resolve embedded image blobs to data URLs
   if (imageBlobs.size > 0 || decoded.imageFiles.size > 0) {
-    resolveImageBlobs(nodes, imageBlobs, decoded.imageFiles)
+    resolveImageBlobs(nodes, imageBlobs, decoded.imageFiles);
   }
 
   // Handle unresolved image references — clipboard data often lacks image
   // binary data.  Convert unresolvable image nodes to placeholder rectangles.
-  fixUnresolvedImages(nodes)
+  fixUnresolvedImages(nodes);
 
   // Enrich nodes with style hints extracted from the clipboard HTML.
   // Figma clipboard HTML contains styled elements (with inline CSS) that
   // may carry color/font information lost during binary parsing (e.g. when
   // shared style nodes are not included in the clipboard data).
   if (html) {
-    const hints = parseClipboardHtmlStyles(html)
+    const hints = parseClipboardHtmlStyles(html);
     if (hints.size > 0) {
-      enrichNodesFromHtmlHints(nodes, hints)
+      enrichNodesFromHtmlHints(nodes, hints);
     }
   }
 
-  return { nodes, warnings }
+  return { nodes, warnings };
 }
 
 /**
@@ -184,9 +182,13 @@ export function figmaClipboardToNodes(
  */
 function fixUnresolvedImages(nodes: PenNode[]): void {
   for (let i = 0; i < nodes.length; i++) {
-    const node = nodes[i]
+    const node = nodes[i];
     // Convert standalone image nodes with unresolved references to rectangles
-    if (node.type === 'image' && node.src && (node.src.startsWith('__blob:') || node.src.startsWith('__hash:'))) {
+    if (
+      node.type === 'image' &&
+      node.src &&
+      (node.src.startsWith('__blob:') || node.src.startsWith('__hash:'))
+    ) {
       const rect: PenNode = {
         type: 'rectangle',
         id: node.id,
@@ -198,26 +200,26 @@ function fixUnresolvedImages(nodes: PenNode[]): void {
         cornerRadius: node.cornerRadius,
         opacity: node.opacity,
         fill: [{ type: 'solid', color: '#E5E7EB' }],
-      }
-      nodes[i] = rect
+      };
+      nodes[i] = rect;
     }
     // Fix unresolved image fills on rectangles/ellipses/frames —
     // __blob: and __hash: are internal references that the image loader
     // cannot fetch; replace with a placeholder solid fill.
     if ('fill' in node && Array.isArray(node.fill)) {
       for (let j = node.fill.length - 1; j >= 0; j--) {
-        const fill = node.fill[j]
+        const fill = node.fill[j];
         if (fill.type === 'image' && 'url' in fill) {
-          const url = (fill as any).url as string
+          const url = (fill as any).url as string;
           if (url?.startsWith('__blob:') || url?.startsWith('__hash:')) {
-            node.fill[j] = { type: 'solid', color: '#E5E7EB' }
+            node.fill[j] = { type: 'solid', color: '#E5E7EB' };
           }
         }
       }
     }
     // Recurse into children
     if ('children' in node && Array.isArray(node.children)) {
-      fixUnresolvedImages(node.children)
+      fixUnresolvedImages(node.children);
     }
   }
 }
@@ -228,37 +230,37 @@ function fixUnresolvedImages(nodes: PenNode[]): void {
 // ---------------------------------------------------------------------------
 
 interface HtmlStyleHint {
-  color?: string
-  fontFamily?: string
-  fontSize?: number
-  fontWeight?: number
-  backgroundColor?: string
+  color?: string;
+  fontFamily?: string;
+  fontSize?: number;
+  fontWeight?: number;
+  backgroundColor?: string;
 }
 
 /**
  * Convert a CSS color value (hex, rgb, rgba) to a #RRGGBB(AA) hex string.
  */
 function cssColorToHex(css: string): string | undefined {
-  const c = css.trim()
+  const c = css.trim();
   if (c.startsWith('#')) {
     // Normalize 3-digit to 6-digit hex
     if (c.length === 4) {
-      return `#${c[1]}${c[1]}${c[2]}${c[2]}${c[3]}${c[3]}`
+      return `#${c[1]}${c[1]}${c[2]}${c[2]}${c[3]}${c[3]}`;
     }
-    return c
+    return c;
   }
-  const rgbaMatch = c.match(/rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*(?:,\s*([\d.]+)\s*)?\)/)
+  const rgbaMatch = c.match(/rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*(?:,\s*([\d.]+)\s*)?\)/);
   if (rgbaMatch) {
-    const r = parseInt(rgbaMatch[1]).toString(16).padStart(2, '0')
-    const g = parseInt(rgbaMatch[2]).toString(16).padStart(2, '0')
-    const b = parseInt(rgbaMatch[3]).toString(16).padStart(2, '0')
+    const r = parseInt(rgbaMatch[1]).toString(16).padStart(2, '0');
+    const g = parseInt(rgbaMatch[2]).toString(16).padStart(2, '0');
+    const b = parseInt(rgbaMatch[3]).toString(16).padStart(2, '0');
     if (rgbaMatch[4] !== undefined) {
-      const a = Math.round(parseFloat(rgbaMatch[4]) * 255)
-      if (a < 255) return `#${r}${g}${b}${a.toString(16).padStart(2, '0')}`
+      const a = Math.round(parseFloat(rgbaMatch[4]) * 255);
+      if (a < 255) return `#${r}${g}${b}${a.toString(16).padStart(2, '0')}`;
     }
-    return `#${r}${g}${b}`
+    return `#${r}${g}${b}`;
   }
-  return undefined
+  return undefined;
 }
 
 /**
@@ -272,7 +274,7 @@ function decodeHtmlEntities(text: string): string {
     .replace(/&lt;/g, '<')
     .replace(/&gt;/g, '>')
     .replace(/&quot;/g, '"')
-    .replace(/&nbsp;/g, ' ')
+    .replace(/&nbsp;/g, ' ');
 }
 
 /**
@@ -289,53 +291,53 @@ function parseClipboardHtmlStyles(html: string): Map<string, HtmlStyleHint> {
   // Remove the binary data comment blocks to isolate the styled HTML content
   const cleanHtml = html
     .replace(/<!--\(figmeta\)[\s\S]*?<!--\(figmeta\)-->/g, '')
-    .replace(/<!--\(figma\)[\s\S]*?<!--\(figma\)-->/g, '')
+    .replace(/<!--\(figma\)[\s\S]*?<!--\(figma\)-->/g, '');
 
-  const hints = new Map<string, HtmlStyleHint>()
+  const hints = new Map<string, HtmlStyleHint>();
 
   // Match elements with style attributes and text content.
   // Captures: style attribute value, text content between tags.
-  const elemRegex = /style="([^"]*)"[^>]*>([^<]+)</gi
-  let match
+  const elemRegex = /style="([^"]*)"[^>]*>([^<]+)</gi;
+  let match;
   while ((match = elemRegex.exec(cleanHtml)) !== null) {
-    const styleAttr = match[1]
-    const rawText = decodeHtmlEntities(match[2]).trim()
-    if (!rawText || rawText.length > 200) continue
+    const styleAttr = match[1];
+    const rawText = decodeHtmlEntities(match[2]).trim();
+    if (!rawText || rawText.length > 200) continue;
 
-    const hint: HtmlStyleHint = {}
+    const hint: HtmlStyleHint = {};
 
     // color (text color) — avoid matching background-color
-    const colorMatch = styleAttr.match(/(?:^|;\s*)color:\s*((?:rgba?\([^)]+\)|#[0-9a-fA-F]{3,8}))/)
-    if (colorMatch) hint.color = cssColorToHex(colorMatch[1])
+    const colorMatch = styleAttr.match(/(?:^|;\s*)color:\s*((?:rgba?\([^)]+\)|#[0-9a-fA-F]{3,8}))/);
+    if (colorMatch) hint.color = cssColorToHex(colorMatch[1]);
 
     // font-family
-    const fontMatch = styleAttr.match(/font-family:\s*([^;]+)/)
+    const fontMatch = styleAttr.match(/font-family:\s*([^;]+)/);
     if (fontMatch) {
-      const family = fontMatch[1].trim().replace(/['"]/g, '').split(',')[0].trim()
-      if (family) hint.fontFamily = family
+      const family = fontMatch[1].trim().replace(/['"]/g, '').split(',')[0].trim();
+      if (family) hint.fontFamily = family;
     }
 
     // font-size
-    const sizeMatch = styleAttr.match(/font-size:\s*(\d+(?:\.\d+)?)px/)
-    if (sizeMatch) hint.fontSize = parseFloat(sizeMatch[1])
+    const sizeMatch = styleAttr.match(/font-size:\s*(\d+(?:\.\d+)?)px/);
+    if (sizeMatch) hint.fontSize = parseFloat(sizeMatch[1]);
 
     // font-weight
-    const weightMatch = styleAttr.match(/font-weight:\s*(\d+)/)
-    if (weightMatch) hint.fontWeight = parseInt(weightMatch[1])
+    const weightMatch = styleAttr.match(/font-weight:\s*(\d+)/);
+    if (weightMatch) hint.fontWeight = parseInt(weightMatch[1]);
 
     // background-color (for div/frame enrichment)
-    const bgMatch = styleAttr.match(/background-color:\s*((?:rgba?\([^)]+\)|#[0-9a-fA-F]{3,8}))/)
-    if (bgMatch) hint.backgroundColor = cssColorToHex(bgMatch[1])
+    const bgMatch = styleAttr.match(/background-color:\s*((?:rgba?\([^)]+\)|#[0-9a-fA-F]{3,8}))/);
+    if (bgMatch) hint.backgroundColor = cssColorToHex(bgMatch[1]);
 
     if (Object.keys(hint).length > 0) {
       // Use first occurrence — later duplicates may be nested/overridden
       if (!hints.has(rawText)) {
-        hints.set(rawText, hint)
+        hints.set(rawText, hint);
       }
     }
   }
 
-  return hints
+  return hints;
 }
 
 /**
@@ -344,55 +346,53 @@ function parseClipboardHtmlStyles(html: string): Map<string, HtmlStyleHint> {
  * undefined/missing — explicit values from the binary parser are never
  * overwritten.
  */
-function enrichNodesFromHtmlHints(
-  nodes: PenNode[],
-  hints: Map<string, HtmlStyleHint>,
-): void {
+function enrichNodesFromHtmlHints(nodes: PenNode[], hints: Map<string, HtmlStyleHint>): void {
   for (const node of nodes) {
     if (node.type === 'text') {
       // Build plain text content for lookup
-      const content = typeof node.content === 'string'
-        ? node.content
-        : Array.isArray(node.content)
-          ? node.content.map(s => s.text).join('')
-          : ''
-      const trimmed = content.trim()
-      if (!trimmed) continue
+      const content =
+        typeof node.content === 'string'
+          ? node.content
+          : Array.isArray(node.content)
+            ? node.content.map((s) => s.text).join('')
+            : '';
+      const trimmed = content.trim();
+      if (!trimmed) continue;
 
       // Try exact match first, then try individual lines
-      const hint = hints.get(trimmed) ?? findPartialHint(trimmed, hints)
+      const hint = hints.get(trimmed) ?? findPartialHint(trimmed, hints);
       if (hint) {
         // Fill in missing text color
         if (!node.fill && hint.color) {
-          node.fill = [{ type: 'solid', color: hint.color }]
+          node.fill = [{ type: 'solid', color: hint.color }];
         }
         // Fill in missing font properties
         if (!node.fontFamily && hint.fontFamily) {
-          node.fontFamily = hint.fontFamily
+          node.fontFamily = hint.fontFamily;
         }
         if (!node.fontSize && hint.fontSize) {
-          node.fontSize = hint.fontSize
+          node.fontSize = hint.fontSize;
         }
         if (!node.fontWeight && hint.fontWeight) {
-          node.fontWeight = hint.fontWeight
+          node.fontWeight = hint.fontWeight;
         }
       }
     }
 
     // For frames/rectangles without fill, check if HTML has background-color
     if ((node.type === 'frame' || node.type === 'rectangle') && !node.fill) {
-      const name = node.name?.trim()
+      const name = node.name?.trim();
       if (name) {
-        const hint = hints.get(name)
+        const hint = hints.get(name);
         if (hint?.backgroundColor) {
-          node.fill = [{ type: 'solid', color: hint.backgroundColor }]
+          node.fill = [{ type: 'solid', color: hint.backgroundColor }];
         }
       }
     }
 
     // Recurse into children
     if ('children' in node && Array.isArray(node.children)) {
-      enrichNodesFromHtmlHints(node.children, hints)
+      enrichNodesFromHtmlHints(node.children, hints);
     }
   }
 }
@@ -408,8 +408,8 @@ function findPartialHint(
   // Check if text starts with any hint key
   for (const [key, hint] of hints) {
     if (text.startsWith(key) || key.startsWith(text)) {
-      return hint
+      return hint;
     }
   }
-  return undefined
+  return undefined;
 }

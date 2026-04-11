@@ -3,13 +3,21 @@
     "target": "ES2022",
     "module": "CommonJS",
     "moduleResolution": "node",
-    "outDir": "../../out/desktop",
-    "rootDir": ".",
     "strict": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
-    "resolveJsonModule": true
+    "resolveJsonModule": true,
+    "baseUrl": ".",
+    "paths": {
+      "@zseven-w/pen-core": ["../../packages/pen-core/src/index.ts"],
+      "@zseven-w/pen-types": ["../../packages/pen-types/src/index.ts"]
+    }
   },
-  "include": ["./**/*.ts"]
+  "include": ["./**/*.ts"],
+  // dev.ts is a Bun-only orchestrator script (uses ESM import.meta and
+  // imports from packages/) — it's executed directly via `bun run`, never
+  // emitted to out/desktop, so it must not share the bundle constraints
+  // of the electron main/preload bundle.
+  "exclude": ["dev.ts", "git/__tests__/**"]
 }

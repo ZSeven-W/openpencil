@@ -3,7 +3,7 @@ name: codegen-html
 description: HTML + CSS code generation rules — semantic HTML5 with CSS classes in style block
 phase: [generation]
 trigger:
-  keywords: [html, css, vanilla, static]
+  flags: [isCodeGen]
 priority: 20
 budget: 2000
 category: knowledge
@@ -14,6 +14,7 @@ category: knowledge
 Generate semantic HTML5 markup with CSS classes defined in a `<style>` block. No build tools, no framework dependencies.
 
 ## Output Format
+
 - HTML5 (`.html`)
 - Semantic HTML elements
 - All styling via CSS classes in a `<style>` block
@@ -22,6 +23,7 @@ Generate semantic HTML5 markup with CSS classes defined in a `<style>` block. No
 - Each node gets a unique, descriptive CSS class name derived from `node.name`
 
 ## Layout Mapping
+
 - `layout: "vertical"` → `display: flex; flex-direction: column`
 - `layout: "horizontal"` → `display: flex; flex-direction: row`
 - `gap: N` → `gap: Npx`
@@ -38,6 +40,7 @@ Generate semantic HTML5 markup with CSS classes defined in a `<style>` block. No
 - `clipContent: true` → `overflow: hidden`
 
 ## Color & Fill Mapping
+
 - Solid fill `#hex` → `background: #hex`
 - Variable ref `$name` → `background: var(--name)`
 - Text fill → `color: #hex` or `color: var(--name)`
@@ -45,21 +48,25 @@ Generate semantic HTML5 markup with CSS classes defined in a `<style>` block. No
 - Radial gradient → `background: radial-gradient(circle, color1 0%, color2 100%)`
 
 ## Border & Stroke Mapping
+
 - `stroke.thickness` → `border-width: Npx; border-style: solid`
 - `stroke.color` → `border-color: #hex`
 - Variable ref → `border-width: var(--name)`, `border-color: var(--name)`
 
 ## Corner Radius
+
 - Uniform → `border-radius: Npx`
 - Per-corner `[tl, tr, br, bl]` → `border-radius: TLpx TRpx BRpx BLpx`
 - Ellipse → `border-radius: 50%`
 
 ## Effects
+
 - Drop shadow → `box-shadow: offsetXpx offsetYpx blurpx spreadpx color`
 - Inner shadow → `box-shadow: inset offsetXpx offsetYpx blurpx spreadpx color`
 - Multiple shadows comma-separated
 
 ## Typography
+
 - `fontSize` → `font-size: Npx`
 - `fontWeight` → `font-weight: N`
 - `fontStyle: "italic"` → `font-style: italic`
@@ -74,11 +81,13 @@ Generate semantic HTML5 markup with CSS classes defined in a `<style>` block. No
 - `strikethrough` → `text-decoration: line-through`
 
 ## Dimensions
+
 - Fixed → `width: Npx; height: Npx`
 - `fill_container` → `width: 100%` or `height: 100%`
 - Root container → `max-width: Npx; width: 100%; margin: 0 auto` for responsive centering
 
 ## Image Handling
+
 - `<img class="className" src="src" alt="name" />`
 - `object-fit: contain|cover|fill` based on `objectFit` property:
   - `objectFit: "fit"` → `object-fit: contain`
@@ -87,14 +96,17 @@ Generate semantic HTML5 markup with CSS classes defined in a `<style>` block. No
 - Corner radius applied via CSS class
 
 ## Opacity & Transform
+
 - `opacity: N` → `opacity: N`
 - `rotation: N` → `transform: rotate(Ndeg)`
 
 ## Positioning
+
 - Absolute children → `position: absolute; left: Xpx; top: Ypx`
 - Container → `position: relative`
 
 ## Semantic HTML Tags
+
 - Font size >= 32 → `<h1>`
 - Font size >= 24 → `<h2>`
 - Font size >= 20 → `<h3>`
@@ -103,15 +115,18 @@ Generate semantic HTML5 markup with CSS classes defined in a `<style>` block. No
 - Use `<nav>`, `<header>`, `<main>`, `<section>`, `<footer>`, `<article>` appropriately
 
 ## Icon Handling
+
 - Icon font nodes → `<i class="className" data-lucide="icon-name"></i>`
 - Set `width`, `height`, and `color` via CSS class
 - Include Lucide CDN script for icon rendering
 
 ## SVG Elements
+
 - Path nodes → inline `<svg>` with `<path d="..." fill="color" />`
 - Set `viewBox`, `width`, `height` on SVG element
 
 ## Variable References
+
 - `$variable` refs → `var(--variable-name)` CSS custom properties
 - Define variables in `:root { --name: value; }` block
 - Background: `background: var(--name)`
@@ -119,6 +134,7 @@ Generate semantic HTML5 markup with CSS classes defined in a `<style>` block. No
 - Border: `border-color: var(--name)`
 
 ## Responsive Design
+
 - Use `max-width` with `width: 100%` for fluid containers
 - Media queries at common breakpoints: `@media (min-width: 640px)`, `768px`, `1024px`, `1280px`
 - Use relative units where appropriate (`em`, `rem`, `%`)

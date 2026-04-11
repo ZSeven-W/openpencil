@@ -1,11 +1,6 @@
 export default function FigmaLogo({ className }: { className?: string }) {
   return (
-    <svg
-      className={className}
-      viewBox="0 0 38 57"
-      fill="none"
-      xmlns="http://www.w3.org/2000/svg"
-    >
+    <svg className={className} viewBox="0 0 38 57" fill="none" xmlns="http://www.w3.org/2000/svg">
       <path
         d="M19 28.5C19 23.2533 23.2533 19 28.5 19C33.7467 19 38 23.2533 38 28.5C38 33.7467 33.7467 38 28.5 38C23.2533 38 19 33.7467 19 28.5Z"
         fill="currentColor"
@@ -32,5 +27,5 @@ export default function FigmaLogo({ className }: { className?: string }) {
         opacity="0.6"
       />
     </svg>
-  )
+  );
 }

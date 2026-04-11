@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState } from 'react';
 import {
   Check,
   ChevronDown,
@@ -7,21 +7,21 @@ import {
   Loader2,
   Plus,
   Trash2,
-} from 'lucide-react'
-import { cn } from '@/lib/utils'
-import { Button } from '@/components/ui/button'
+} from 'lucide-react';
+import { cn } from '@/lib/utils';
+import { Button } from '@/components/ui/button';
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from '@/components/ui/select'
-import { useAgentSettingsStore } from '@/stores/agent-settings-store'
-import type { ImageGenProvider, ImageGenProfile } from '@/types/image-service'
-import { MODEL_PLACEHOLDERS } from '@/types/image-service'
+} from '@/components/ui/select';
+import { useAgentSettingsStore } from '@/stores/agent-settings-store';
+import type { ImageGenProvider, ImageGenProfile } from '@/types/image-service';
+import { MODEL_PLACEHOLDERS } from '@/types/image-service';
 
-type TestStatus = 'idle' | 'testing' | 'valid' | 'invalid'
+type TestStatus = 'idle' | 'testing' | 'valid' | 'invalid';
 
 /* ---------- Shared UI ---------- */
 
@@ -31,7 +31,7 @@ function FieldRow({ label, children }: { label: string; children: React.ReactNod
       <span className="text-[12px] text-muted-foreground w-[110px] shrink-0">{label}</span>
       <div className="flex-1">{children}</div>
     </div>
-  )
+  );
 }
 
 function TextInput({
@@ -41,11 +41,11 @@ function TextInput({
   type = 'text',
   className,
 }: {
-  value: string
-  onChange: (v: string) => void
-  placeholder?: string
-  type?: string
-  className?: string
+  value: string;
+  onChange: (v: string) => void;
+  placeholder?: string;
+  type?: string;
+  className?: string;
 }) {
   return (
     <input
@@ -58,7 +58,7 @@ function TextInput({
         className,
       )}
     />
-  )
+  );
 }
 
 function Collapsible({
@@ -66,11 +66,11 @@ function Collapsible({
   children,
   defaultOpen = false,
 }: {
-  label: string
-  children: React.ReactNode
-  defaultOpen?: boolean
+  label: string;
+  children: React.ReactNode;
+  defaultOpen?: boolean;
 }) {
-  const [open, setOpen] = useState(defaultOpen)
+  const [open, setOpen] = useState(defaultOpen);
   return (
     <div>
       <button
@@ -82,57 +82,57 @@ function Collapsible({
       </button>
       {open && <div className="pl-3 border-l border-border/50 space-y-2">{children}</div>}
     </div>
-  )
+  );
 }
 
 function TestStatusBadge({ status }: { status: TestStatus }) {
-  if (status === 'idle') return null
+  if (status === 'idle') return null;
   if (status === 'testing') {
-    return <Loader2 size={11} className="animate-spin text-muted-foreground shrink-0" />
+    return <Loader2 size={11} className="animate-spin text-muted-foreground shrink-0" />;
   }
   if (status === 'valid') {
-    return <Check size={11} className="text-green-500 shrink-0" />
+    return <Check size={11} className="text-green-500 shrink-0" />;
   }
-  return <span className="text-[10px] text-destructive shrink-0">Invalid</span>
+  return <span className="text-[10px] text-destructive shrink-0">Invalid</span>;
 }
 
 /* ---------- Image Search section ---------- */
 
 function ImageSearchSection() {
-  const openverseOAuth = useAgentSettingsStore((s) => s.openverseOAuth)
-  const setOpenverseOAuth = useAgentSettingsStore((s) => s.setOpenverseOAuth)
-  const persist = useAgentSettingsStore((s) => s.persist)
+  const openverseOAuth = useAgentSettingsStore((s) => s.openverseOAuth);
+  const setOpenverseOAuth = useAgentSettingsStore((s) => s.setOpenverseOAuth);
+  const persist = useAgentSettingsStore((s) => s.persist);
 
-  const [clientId, setClientId] = useState(openverseOAuth?.clientId ?? '')
-  const [clientSecret, setClientSecret] = useState(openverseOAuth?.clientSecret ?? '')
-  const [testStatus, setTestStatus] = useState<TestStatus>('idle')
+  const [clientId, setClientId] = useState(openverseOAuth?.clientId ?? '');
+  const [clientSecret, setClientSecret] = useState(openverseOAuth?.clientSecret ?? '');
+  const [testStatus, setTestStatus] = useState<TestStatus>('idle');
 
   const handleChange = (field: 'clientId' | 'clientSecret', value: string) => {
     const updated = {
       clientId: field === 'clientId' ? value : clientId,
       clientSecret: field === 'clientSecret' ? value : clientSecret,
-    }
-    if (field === 'clientId') setClientId(value)
-    else setClientSecret(value)
+    };
+    if (field === 'clientId') setClientId(value);
+    else setClientSecret(value);
 
-    const hasContent = updated.clientId || updated.clientSecret
-    setOpenverseOAuth(hasContent ? updated : null)
-    persist()
-  }
+    const hasContent = updated.clientId || updated.clientSecret;
+    setOpenverseOAuth(hasContent ? updated : null);
+    persist();
+  };
 
   const handleTest = async () => {
-    setTestStatus('testing')
+    setTestStatus('testing');
     try {
       const res = await fetch('/api/ai/image-service-test', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ service: 'openverse', clientId, clientSecret }),
-      })
-      setTestStatus(res.ok ? 'valid' : 'invalid')
+      });
+      setTestStatus(res.ok ? 'valid' : 'invalid');
     } catch {
-      setTestStatus('invalid')
+      setTestStatus('invalid');
     }
-  }
+  };
 
   return (
     <div className="mb-6">
@@ -189,7 +189,7 @@ function ImageSearchSection() {
         </div>
       </Collapsible>
     </div>
-  )
+  );
 }
 
 /* ---------- Provider labels ---------- */
@@ -199,7 +199,7 @@ const PROVIDER_LABELS: Record<ImageGenProvider, string> = {
   gemini: 'Google Gemini',
   replicate: 'Replicate',
   custom: 'Custom',
-}
+};
 
 /* ---------- Single profile editor ---------- */
 
@@ -207,13 +207,13 @@ function ProfileEditor({
   profile,
   onUpdate,
 }: {
-  profile: ImageGenProfile
-  onUpdate: (updates: Partial<Omit<ImageGenProfile, 'id'>>) => void
+  profile: ImageGenProfile;
+  onUpdate: (updates: Partial<Omit<ImageGenProfile, 'id'>>) => void;
 }) {
-  const [testStatus, setTestStatus] = useState<TestStatus>('idle')
+  const [testStatus, setTestStatus] = useState<TestStatus>('idle');
 
   const handleTest = async () => {
-    setTestStatus('testing')
+    setTestStatus('testing');
     try {
       const res = await fetch('/api/ai/image-service-test', {
         method: 'POST',
@@ -224,12 +224,12 @@ function ProfileEditor({
           model: profile.model,
           baseUrl: profile.baseUrl,
         }),
-      })
-      setTestStatus(res.ok ? 'valid' : 'invalid')
+      });
+      setTestStatus(res.ok ? 'valid' : 'invalid');
     } catch {
-      setTestStatus('invalid')
+      setTestStatus('invalid');
     }
-  }
+  };
 
   return (
     <div className="space-y-2">
@@ -301,21 +301,21 @@ function ProfileEditor({
         </FieldRow>
       </Collapsible>
     </div>
-  )
+  );
 }
 
 /* ---------- Image Generation section ---------- */
 
 function ImageGenerationSection() {
-  const profiles = useAgentSettingsStore((s) => s.imageGenProfiles)
-  const activeId = useAgentSettingsStore((s) => s.activeImageGenProfileId)
-  const addProfile = useAgentSettingsStore((s) => s.addImageGenProfile)
-  const updateProfile = useAgentSettingsStore((s) => s.updateImageGenProfile)
-  const removeProfile = useAgentSettingsStore((s) => s.removeImageGenProfile)
-  const setActive = useAgentSettingsStore((s) => s.setActiveImageGenProfile)
-  const persist = useAgentSettingsStore((s) => s.persist)
+  const profiles = useAgentSettingsStore((s) => s.imageGenProfiles);
+  const activeId = useAgentSettingsStore((s) => s.activeImageGenProfileId);
+  const addProfile = useAgentSettingsStore((s) => s.addImageGenProfile);
+  const updateProfile = useAgentSettingsStore((s) => s.updateImageGenProfile);
+  const removeProfile = useAgentSettingsStore((s) => s.removeImageGenProfile);
+  const setActive = useAgentSettingsStore((s) => s.setActiveImageGenProfile);
+  const persist = useAgentSettingsStore((s) => s.persist);
 
-  const [editingId, setEditingId] = useState<string | null>(null)
+  const [editingId, setEditingId] = useState<string | null>(null);
 
   const handleAdd = () => {
     const id = addProfile({
@@ -323,39 +323,34 @@ function ImageGenerationSection() {
       provider: 'openai',
       apiKey: '',
       model: '',
-    })
-    setEditingId(id)
-    persist()
-  }
+    });
+    setEditingId(id);
+    persist();
+  };
 
   const handleUpdate = (id: string, updates: Partial<Omit<ImageGenProfile, 'id'>>) => {
-    updateProfile(id, updates)
-    persist()
-  }
+    updateProfile(id, updates);
+    persist();
+  };
 
   const handleRemove = (id: string) => {
-    removeProfile(id)
-    if (editingId === id) setEditingId(null)
-    persist()
-  }
+    removeProfile(id);
+    if (editingId === id) setEditingId(null);
+    persist();
+  };
 
   const handleActivate = (id: string) => {
-    setActive(id)
-    persist()
-  }
+    setActive(id);
+    persist();
+  };
 
-  const effectiveActiveId = activeId ?? profiles[0]?.id
+  const effectiveActiveId = activeId ?? profiles[0]?.id;
 
   return (
     <div>
       <div className="flex items-center justify-between mb-3">
         <h3 className="text-[15px] font-semibold text-foreground">Image Generation</h3>
-        <Button
-          size="sm"
-          variant="outline"
-          onClick={handleAdd}
-          className="h-6 px-2 text-[11px]"
-        >
+        <Button size="sm" variant="outline" onClick={handleAdd} className="h-6 px-2 text-[11px]">
           <Plus size={12} className="mr-1" />
           Add
         </Button>
@@ -368,8 +363,8 @@ function ImageGenerationSection() {
       ) : (
         <div className="space-y-1.5">
           {profiles.map((profile) => {
-            const isActive = profile.id === effectiveActiveId
-            const isEditing = profile.id === editingId
+            const isActive = profile.id === effectiveActiveId;
+            const isEditing = profile.id === editingId;
 
             return (
               <div key={profile.id}>
@@ -386,8 +381,8 @@ function ImageGenerationSection() {
                   {/* Active indicator */}
                   <button
                     onClick={(e) => {
-                      e.stopPropagation()
-                      handleActivate(profile.id)
+                      e.stopPropagation();
+                      handleActivate(profile.id);
                     }}
                     className={cn(
                       'w-3.5 h-3.5 rounded-full border-2 shrink-0 transition-colors',
@@ -397,7 +392,9 @@ function ImageGenerationSection() {
                     )}
                     title={isActive ? 'Active' : 'Set as active'}
                   >
-                    {isActive && <Check size={8} className="text-primary-foreground m-auto block" />}
+                    {isActive && (
+                      <Check size={8} className="text-primary-foreground m-auto block" />
+                    )}
                   </button>
 
                   {/* Name + provider */}
@@ -409,13 +406,17 @@ function ImageGenerationSection() {
                   </span>
 
                   {/* Expand/Collapse */}
-                  {isEditing ? <ChevronDown size={12} className="text-muted-foreground shrink-0" /> : <ChevronRight size={12} className="text-muted-foreground shrink-0" />}
+                  {isEditing ? (
+                    <ChevronDown size={12} className="text-muted-foreground shrink-0" />
+                  ) : (
+                    <ChevronRight size={12} className="text-muted-foreground shrink-0" />
+                  )}
 
                   {/* Delete */}
                   <button
                     onClick={(e) => {
-                      e.stopPropagation()
-                      handleRemove(profile.id)
+                      e.stopPropagation();
+                      handleRemove(profile.id);
                     }}
                     className="text-muted-foreground hover:text-destructive transition-colors shrink-0"
                     title="Remove"
@@ -434,12 +435,12 @@ function ImageGenerationSection() {
                   </div>
                 )}
               </div>
-            )
+            );
           })}
         </div>
       )}
     </div>
-  )
+  );
 }
 
 /* ---------- Main export ---------- */
@@ -450,5 +451,5 @@ export function ImagesPage() {
       <ImageSearchSection />
       <ImageGenerationSection />
     </div>
-  )
+  );
 }

@@ -14,10 +14,10 @@ npm install -g @zseven-w/openpencil
 
 CLI tự động phát hiện và khởi chạy ứng dụng desktop OpenPencil trên tất cả các nền tảng:
 
-| Nền tảng    | Đường dẫn cài đặt được phát hiện                                                                    |
-| ----------- | --------------------------------------------------------------------------------------------------- |
-| **macOS**   | `/Applications/OpenPencil.app`, `~/Applications/OpenPencil.app`                                     |
-| **Windows** | NSIS theo người dùng (`%LOCALAPPDATA%`), theo máy (`%PROGRAMFILES%`), di động                       |
+| Nền tảng    | Đường dẫn cài đặt được phát hiện                                                                        |
+| ----------- | ------------------------------------------------------------------------------------------------------- |
+| **macOS**   | `/Applications/OpenPencil.app`, `~/Applications/OpenPencil.app`                                         |
+| **Windows** | NSIS theo người dùng (`%LOCALAPPDATA%`), theo máy (`%PROGRAMFILES%`), di động                           |
 | **Linux**   | `/usr/bin`, `/usr/local/bin`, `~/.local/bin`, AppImage (`~/Applications`, `~/Downloads`), Snap, Flatpak |
 
 ## Sử dụng

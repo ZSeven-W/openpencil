@@ -1,11 +1,11 @@
-import { useState, useRef, useEffect } from 'react'
-import { ChevronDown } from 'lucide-react'
-import type { PenNode, PathNode, IconFontNode } from '@/types/pen'
-import type { PenFill, PenStroke } from '@/types/styles'
-import SectionHeader from '@/components/shared/section-header'
-import IconPickerDialog, { type IconPickerPosition } from '@/components/shared/icon-picker-dialog'
-import { parseSvgToNodes } from '@/utils/svg-parser'
-import { useTranslation } from 'react-i18next'
+import { useState, useRef, useEffect } from 'react';
+import { ChevronDown } from 'lucide-react';
+import type { PenNode, PathNode, IconFontNode } from '@/types/pen';
+import type { PenFill, PenStroke } from '@/types/styles';
+import SectionHeader from '@/components/shared/section-header';
+import IconPickerDialog, { type IconPickerPosition } from '@/components/shared/icon-picker-dialog';
+import { parseSvgToNodes } from '@/utils/svg-parser';
+import { useTranslation } from 'react-i18next';
 
 const POPULAR_COLLECTIONS = [
   { id: 'feather', name: 'Feather' },
@@ -17,11 +17,11 @@ const POPULAR_COLLECTIONS = [
   { id: 'heroicons', name: 'Heroicons' },
   { id: 'fa6-solid', name: 'Font Awesome' },
   { id: 'simple-icons', name: 'Brand Icons' },
-]
+];
 
 interface IconSectionProps {
-  node: PathNode | IconFontNode
-  onUpdate: (updates: Partial<PathNode> | Partial<IconFontNode>) => void
+  node: PathNode | IconFontNode;
+  onUpdate: (updates: Partial<PathNode> | Partial<IconFontNode>) => void;
 }
 
 /**
@@ -31,64 +31,64 @@ interface IconSectionProps {
  */
 function nodeToPathD(node: PenNode): string | null {
   if (node.type === 'path') {
-    return typeof (node as PathNode).d === 'string' ? (node as PathNode).d : null
+    return typeof (node as PathNode).d === 'string' ? (node as PathNode).d : null;
   }
   if (node.type === 'ellipse') {
     // Center + radii from the node's bounding box position
-    const rx = typeof node.width === 'number' ? node.width / 2 : 12
-    const ry = typeof node.height === 'number' ? node.height / 2 : 12
-    const cx = (node.x ?? 0) + rx
-    const cy = (node.y ?? 0) + ry
+    const rx = typeof node.width === 'number' ? node.width / 2 : 12;
+    const ry = typeof node.height === 'number' ? node.height / 2 : 12;
+    const cx = (node.x ?? 0) + rx;
+    const cy = (node.y ?? 0) + ry;
     // Two half-arc commands form a closed ellipse/circle
-    return `M ${cx - rx} ${cy} a ${rx} ${ry} 0 1 0 ${rx * 2} 0 a ${rx} ${ry} 0 1 0 ${-rx * 2} 0 Z`
+    return `M ${cx - rx} ${cy} a ${rx} ${ry} 0 1 0 ${rx * 2} 0 a ${rx} ${ry} 0 1 0 ${-rx * 2} 0 Z`;
   }
   if (node.type === 'rectangle') {
-    const x = node.x ?? 0
-    const y = node.y ?? 0
-    const w = typeof node.width === 'number' ? node.width : 24
-    const h = typeof node.height === 'number' ? node.height : 24
-    return `M ${x} ${y} L ${x + w} ${y} L ${x + w} ${y + h} L ${x} ${y + h} Z`
+    const x = node.x ?? 0;
+    const y = node.y ?? 0;
+    const w = typeof node.width === 'number' ? node.width : 24;
+    const h = typeof node.height === 'number' ? node.height : 24;
+    return `M ${x} ${y} L ${x + w} ${y} L ${x + w} ${y + h} L ${x} ${y + h} Z`;
   }
   if (node.type === 'line') {
-    return `M ${node.x ?? 0} ${node.y ?? 0} L ${node.x2 ?? 0} ${node.y2 ?? 0}`
+    return `M ${node.x ?? 0} ${node.y ?? 0} L ${node.x2 ?? 0} ${node.y2 ?? 0}`;
   }
-  return null
+  return null;
 }
 
 export default function IconSection({ node, onUpdate }: IconSectionProps) {
-  const { t } = useTranslation()
-  const [pickerOpen, setPickerOpen] = useState(false)
-  const [pickerInitialQuery, setPickerInitialQuery] = useState('')
-  const [pickerCollection, setPickerCollection] = useState<string | undefined>(undefined)
-  const [pickerPosition, setPickerPosition] = useState<IconPickerPosition | undefined>(undefined)
+  const { t } = useTranslation();
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [pickerInitialQuery, setPickerInitialQuery] = useState('');
+  const [pickerCollection, setPickerCollection] = useState<string | undefined>(undefined);
+  const [pickerPosition, setPickerPosition] = useState<IconPickerPosition | undefined>(undefined);
   // Local display state for the library select — updates immediately on change
-  const [displayCollection, setDisplayCollection] = useState<string>('')
+  const [displayCollection, setDisplayCollection] = useState<string>('');
 
-  const triggerRef = useRef<HTMLButtonElement>(null)
-  const isIconFont = node.type === 'icon_font'
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const isIconFont = node.type === 'icon_font';
 
   // Derive iconId from either PathNode.iconId or IconFontNode fields
   const iconId = isIconFont
     ? `${(node as IconFontNode).iconFontFamily || 'lucide'}:${(node as IconFontNode).iconFontName}`
-    : (node as PathNode).iconId!
-  const colonIdx = iconId.indexOf(':')
-  const collection = colonIdx >= 0 ? iconId.slice(0, colonIdx) : ''
-  const iconName = colonIdx >= 0 ? iconId.slice(colonIdx + 1) : iconId
+    : (node as PathNode).iconId!;
+  const colonIdx = iconId.indexOf(':');
+  const collection = colonIdx >= 0 ? iconId.slice(0, colonIdx) : '';
+  const iconName = colonIdx >= 0 ? iconId.slice(colonIdx + 1) : iconId;
 
   // Sync displayCollection when the node changes (e.g. after icon replacement)
   useEffect(() => {
-    setDisplayCollection(collection)
-  }, [collection])
+    setDisplayCollection(collection);
+  }, [collection]);
 
   const openPicker = (query: string, collectionFilter?: string) => {
     if (triggerRef.current) {
-      const rect = triggerRef.current.getBoundingClientRect()
-      setPickerPosition({ top: rect.top, right: 0 })
+      const rect = triggerRef.current.getBoundingClientRect();
+      setPickerPosition({ top: rect.top, right: 0 });
     }
-    setPickerInitialQuery(query)
-    setPickerCollection(collectionFilter)
-    setPickerOpen(true)
-  }
+    setPickerInitialQuery(query);
+    setPickerCollection(collectionFilter);
+    setPickerOpen(true);
+  };
 
   /**
    * Parse the selected SVG and update the icon node.
@@ -102,96 +102,108 @@ export default function IconSection({ node, onUpdate }: IconSectionProps) {
   const handleIconSelect = (svgText: string, newIconId: string) => {
     // For icon_font nodes, just update the name/family — no SVG parsing needed
     if (isIconFont) {
-      const colonIdx2 = newIconId.indexOf(':')
-      const newFamily = colonIdx2 >= 0 ? newIconId.slice(0, colonIdx2) : 'lucide'
-      const newName = colonIdx2 >= 0 ? newIconId.slice(colonIdx2 + 1) : newIconId
-      onUpdate({ iconFontName: newName, iconFontFamily: newFamily, name: newIconId } as Partial<IconFontNode>)
-      return
+      const colonIdx2 = newIconId.indexOf(':');
+      const newFamily = colonIdx2 >= 0 ? newIconId.slice(0, colonIdx2) : 'lucide';
+      const newName = colonIdx2 >= 0 ? newIconId.slice(colonIdx2 + 1) : newIconId;
+      onUpdate({
+        iconFontName: newName,
+        iconFontFamily: newFamily,
+        name: newIconId,
+      } as Partial<IconFontNode>);
+      return;
     }
 
-    const nodes = parseSvgToNodes(svgText)
-    if (nodes.length === 0) return
+    const nodes = parseSvgToNodes(svgText);
+    if (nodes.length === 0) return;
 
-    const first = nodes[0]
-    let d: string
-    let fill: PenFill[] | undefined = (node as PathNode).fill
-    let stroke: PenStroke | undefined = (node as PathNode).stroke
+    const first = nodes[0];
+    let d: string;
+    let fill: PenFill[] | undefined = (node as PathNode).fill;
+    let stroke: PenStroke | undefined = (node as PathNode).stroke;
 
     if (first.type === 'path') {
-      d = first.d
-      fill = first.fill
-      stroke = first.stroke
+      d = first.d;
+      fill = first.fill;
+      stroke = first.stroke;
     } else if (first.type === 'frame' && first.children && first.children.length > 0) {
       // Collect path `d` from ALL child element types (paths, circles, rects, lines).
       // This preserves every shape in the icon — e.g. the circle in a face emoji.
-      interface Part { d: string; fill: PenFill[] | undefined; stroke: PenStroke | undefined }
-      const parts: Part[] = []
+      interface Part {
+        d: string;
+        fill: PenFill[] | undefined;
+        stroke: PenStroke | undefined;
+      }
+      const parts: Part[] = [];
 
       for (const child of first.children) {
-        const childFill = ('fill' in child ? (child as PathNode).fill : undefined) as PenFill[] | undefined
-        const childStroke = ('stroke' in child ? (child as PathNode).stroke : undefined) as PenStroke | undefined
+        const childFill = ('fill' in child ? (child as PathNode).fill : undefined) as
+          | PenFill[]
+          | undefined;
+        const childStroke = ('stroke' in child ? (child as PathNode).stroke : undefined) as
+          | PenStroke
+          | undefined;
 
         // Skip invisible bounding-box paths only (e.g. Tabler's <path stroke="none" d="M0 0h24v24H0z" fill="none"/>)
         // Non-path shapes (ellipse, rect, line) are never bounding boxes — always include them.
         if (child.type === 'path') {
           const isInvisible =
             childStroke === undefined &&
-            (!childFill || childFill.every((f) => f.type === 'solid' && f.color === 'transparent'))
-          if (isInvisible) continue
+            (!childFill || childFill.every((f) => f.type === 'solid' && f.color === 'transparent'));
+          if (isInvisible) continue;
         }
 
-        const pathD = nodeToPathD(child)
-        if (pathD) parts.push({ d: pathD, fill: childFill, stroke: childStroke })
+        const pathD = nodeToPathD(child);
+        if (pathD) parts.push({ d: pathD, fill: childFill, stroke: childStroke });
       }
 
-      if (parts.length === 0) return
-      d = parts.map((p) => p.d).join(' ')
-      fill = parts[0].fill
-      stroke = parts[0].stroke
+      if (parts.length === 0) return;
+      d = parts.map((p) => p.d).join(' ');
+      fill = parts[0].fill;
+      stroke = parts[0].stroke;
     } else {
-      return
+      return;
     }
 
     // Carry over the old icon's display color to the new icon.
     // Check stroke first (stroke-based icons like Feather/Lucide), then fill.
     const oldColor = (() => {
-      const strokeFill0 = (node as PathNode).stroke?.fill?.[0]
+      const strokeFill0 = (node as PathNode).stroke?.fill?.[0];
       if (strokeFill0?.type === 'solid') {
-        if (strokeFill0.color !== 'transparent') return strokeFill0.color
+        if (strokeFill0.color !== 'transparent') return strokeFill0.color;
       }
-      const fill0 = (node as PathNode).fill?.[0]
+      const fill0 = (node as PathNode).fill?.[0];
       if (fill0?.type === 'solid') {
-        if (fill0.color !== 'transparent') return fill0.color
+        if (fill0.color !== 'transparent') return fill0.color;
       }
-      return null
-    })()
+      return null;
+    })();
 
     if (oldColor) {
       if (stroke !== undefined) {
-        stroke = { ...stroke, fill: [{ type: 'solid', color: oldColor }] }
+        stroke = { ...stroke, fill: [{ type: 'solid', color: oldColor }] };
       }
       if (fill?.some((f) => f.type === 'solid' && f.color !== 'transparent')) {
         fill = fill.map((f) =>
           f.type === 'solid' && f.color !== 'transparent' ? { ...f, color: oldColor } : f,
-        )
+        );
       }
     }
 
     // Preserve original width/height — canvas factory scales path to fit existing bounds
-    onUpdate({ d, fill, stroke, iconId: newIconId, name: newIconId })
+    onUpdate({ d, fill, stroke, iconId: newIconId, name: newIconId });
     // Keep picker open so user can browse and try other icons
-  }
+  };
 
   const handleLibraryChange = (newCollection: string) => {
-    setDisplayCollection(newCollection)
-    openPicker('', newCollection)
-  }
+    setDisplayCollection(newCollection);
+    openPicker('', newCollection);
+  };
 
   const handlePickerClose = () => {
     // Reset display collection to actual node collection if user cancelled
-    setDisplayCollection(collection)
-    setPickerOpen(false)
-  }
+    setDisplayCollection(collection);
+    setPickerOpen(false);
+  };
 
   return (
     <div className="space-y-1.5">
@@ -240,5 +252,5 @@ export default function IconSection({ node, onUpdate }: IconSectionProps) {
         position={pickerPosition}
       />
     </div>
-  )
+  );
 }

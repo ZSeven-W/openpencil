@@ -1,19 +1,30 @@
+# syntax=docker/dockerfile:1
 # ── Stage 1: Build web app ──
 FROM oven/bun:1 AS builder
 
+# Install Zig. agent-native postinstall prefers downloading a prebuilt .node
+# matching the submodule commit from the ZSeven-W/agent release, but falls
+# back to `zig build napi` when no matching asset exists (e.g. building for
+# an arch we don't publish yet). Pin 0.15.2 because the Zig source uses the
+# unmanaged ArrayList / std.process.getEnvVarOwned shape introduced in 0.15.
+RUN apt-get update && apt-get install -y --no-install-recommends curl xz-utils ca-certificates \
+    && ARCH="$(uname -m)" \
+    && case "$ARCH" in \
+        x86_64) ZIG_ARCH=x86_64 ;; \
+        aarch64) ZIG_ARCH=aarch64 ;; \
+        *) echo "Unsupported arch: $ARCH" && exit 1 ;; \
+       esac \
+    && curl -fsSL "https://ziglang.org/download/0.15.2/zig-${ZIG_ARCH}-linux-0.15.2.tar.xz" \
+       | tar -xJ -C /usr/local \
+    && ln -sf "/usr/local/zig-${ZIG_ARCH}-linux-0.15.2/zig" /usr/local/bin/zig \
+    && rm -rf /var/lib/apt/lists/*
+
 WORKDIR /app
 COPY package.json bun.lock ./
-COPY packages/pen-types/package.json packages/pen-types/
-COPY packages/pen-core/package.json packages/pen-core/
-COPY packages/pen-codegen/package.json packages/pen-codegen/
-COPY packages/pen-figma/package.json packages/pen-figma/
-COPY packages/pen-renderer/package.json packages/pen-renderer/
-COPY packages/pen-sdk/package.json packages/pen-sdk/
-COPY packages/pen-ai-skills/package.json packages/pen-ai-skills/
-COPY packages/agent/package.json packages/agent/
-COPY apps/web/package.json apps/web/
-COPY apps/desktop/package.json apps/desktop/
-COPY apps/cli/package.json apps/cli/
+COPY --parents packages/*/package.json apps/*/package.json ./
+# agent-native is a git submodule with a nested workspace package (napi/)
+# and Zig sources needed by the postinstall hook — copy it whole.
+COPY packages/agent-native ./packages/agent-native
 RUN bun install --frozen-lockfile
 COPY . .
 ENV NODE_OPTIONS="--max-old-space-size=4096"

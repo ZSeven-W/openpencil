@@ -1,86 +1,91 @@
-import { useEffect, useState } from 'react'
-import { AlertCircle, CheckCircle2, Download, Loader2, RefreshCw, Sparkles } from 'lucide-react'
-import { useTranslation } from 'react-i18next'
-import { Button } from '@/components/ui/button'
+import { useEffect, useState } from 'react';
+import { AlertCircle, CheckCircle2, Download, Loader2, RefreshCw, Sparkles } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
+import { Button } from '@/components/ui/button';
 
 export default function UpdateReadyBanner() {
-  const { t } = useTranslation()
-  const [updateState, setUpdateState] = useState<UpdaterState | null>(null)
-  const [isInstalling, setIsInstalling] = useState(false)
-  const [isChecking, setIsChecking] = useState(false)
-  const [dismissed, setDismissed] = useState(false)
+  const { t } = useTranslation();
+  const [updateState, setUpdateState] = useState<UpdaterState | null>(null);
+  const [isInstalling, setIsInstalling] = useState(false);
+  const [isChecking, setIsChecking] = useState(false);
+  const [dismissed, setDismissed] = useState(false);
 
   useEffect(() => {
-    const updater = window.electronAPI?.updater
-    if (!updater) return
+    const updater = window.electronAPI?.updater;
+    if (!updater) return;
 
-    let mounted = true
+    let mounted = true;
 
     updater
       .getState()
       .then((state) => {
-        if (mounted) setUpdateState(state)
+        if (mounted) setUpdateState(state);
       })
-      .catch(() => {})
+      .catch(() => {});
 
     const unsubscribe = updater.onStateChange((state) => {
-      if (mounted) setUpdateState(state)
-    })
+      if (mounted) setUpdateState(state);
+    });
 
     return () => {
-      mounted = false
-      unsubscribe()
-    }
-  }, [])
+      mounted = false;
+      unsubscribe();
+    };
+  }, []);
 
   useEffect(() => {
-    if (!updateState) return
-    if (updateState.status === 'available' || updateState.status === 'downloading' || updateState.status === 'downloaded' || updateState.status === 'error') {
-      setDismissed(false)
+    if (!updateState) return;
+    if (
+      updateState.status === 'available' ||
+      updateState.status === 'downloading' ||
+      updateState.status === 'downloaded' ||
+      updateState.status === 'error'
+    ) {
+      setDismissed(false);
     }
-  }, [updateState])
+  }, [updateState]);
 
   const handleInstall = async () => {
-    if (!window.electronAPI?.updater) return
+    if (!window.electronAPI?.updater) return;
 
-    setIsInstalling(true)
-    const accepted = await window.electronAPI.updater.quitAndInstall()
+    setIsInstalling(true);
+    const accepted = await window.electronAPI.updater.quitAndInstall();
     if (!accepted) {
-      setIsInstalling(false)
+      setIsInstalling(false);
     }
-  }
+  };
 
   const handleCheckUpdates = async () => {
-    if (!window.electronAPI?.updater) return
-    setIsChecking(true)
+    if (!window.electronAPI?.updater) return;
+    setIsChecking(true);
     try {
-      const next = await window.electronAPI.updater.checkForUpdates()
-      setUpdateState(next)
+      const next = await window.electronAPI.updater.checkForUpdates();
+      setUpdateState(next);
     } finally {
-      setIsChecking(false)
+      setIsChecking(false);
     }
-  }
+  };
 
   if (!updateState) {
-    return null
+    return null;
   }
 
   const visible =
-    !dismissed
-    && (updateState.status === 'checking'
-      || updateState.status === 'available'
-      || updateState.status === 'downloading'
-      || updateState.status === 'downloaded'
-      || updateState.status === 'error')
+    !dismissed &&
+    (updateState.status === 'checking' ||
+      updateState.status === 'available' ||
+      updateState.status === 'downloading' ||
+      updateState.status === 'downloaded' ||
+      updateState.status === 'error');
 
   if (!visible) {
-    return null
+    return null;
   }
 
-  const progress = Math.max(0, Math.min(100, Math.round(updateState.downloadProgress ?? 0)))
+  const progress = Math.max(0, Math.min(100, Math.round(updateState.downloadProgress ?? 0)));
   const releaseDate = updateState.releaseDate
     ? new Date(updateState.releaseDate).toLocaleDateString()
-    : null
+    : null;
 
   const titleByStatus: Partial<Record<UpdaterStatus, string>> = {
     checking: t('updater.title.checking'),
@@ -88,11 +93,13 @@ export default function UpdateReadyBanner() {
     downloading: t('updater.title.downloading'),
     downloaded: t('updater.title.downloaded'),
     error: t('updater.title.error'),
-  }
+  };
 
   const subtitleByStatus: Partial<Record<UpdaterStatus, string>> = {
     checking: t('updater.subtitle.checking'),
-    available: updateState.latestVersion ? t('updater.subtitle.available', { version: updateState.latestVersion }) : t('updater.subtitle.availableGeneric'),
+    available: updateState.latestVersion
+      ? t('updater.subtitle.available', { version: updateState.latestVersion })
+      : t('updater.subtitle.availableGeneric'),
     downloading: updateState.latestVersion
       ? t('updater.subtitle.downloading', { version: updateState.latestVersion })
       : t('updater.subtitle.downloadingGeneric'),
@@ -100,7 +107,7 @@ export default function UpdateReadyBanner() {
       ? t('updater.subtitle.downloaded', { version: updateState.latestVersion })
       : t('updater.subtitle.downloadedGeneric'),
     error: updateState.error || t('updater.subtitle.error'),
-  }
+  };
 
   return (
     <div className="fixed top-12 right-5 z-50 app-region-no-drag">
@@ -132,12 +139,20 @@ export default function UpdateReadyBanner() {
         <div className="px-5 py-4 space-y-3">
           <div className="grid grid-cols-2 gap-2 text-xs text-muted-foreground">
             <div className="rounded-lg border border-border/70 px-3 py-2">
-              <span className="block text-[10px] uppercase tracking-wider mb-1">{t('updater.current')}</span>
-              <span className="text-foreground font-medium">{updateState.currentVersion || t('updater.unknown')}</span>
+              <span className="block text-[10px] uppercase tracking-wider mb-1">
+                {t('updater.current')}
+              </span>
+              <span className="text-foreground font-medium">
+                {updateState.currentVersion || t('updater.unknown')}
+              </span>
             </div>
             <div className="rounded-lg border border-border/70 px-3 py-2">
-              <span className="block text-[10px] uppercase tracking-wider mb-1">{t('updater.latest')}</span>
-              <span className="text-foreground font-medium">{updateState.latestVersion || t('updater.checking')}</span>
+              <span className="block text-[10px] uppercase tracking-wider mb-1">
+                {t('updater.latest')}
+              </span>
+              <span className="text-foreground font-medium">
+                {updateState.latestVersion || t('updater.checking')}
+              </span>
             </div>
           </div>
 
@@ -162,7 +177,9 @@ export default function UpdateReadyBanner() {
           {updateState.status === 'error' && (
             <div className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-700 dark:text-red-300 inline-flex items-start gap-2">
               <AlertCircle className="h-4 w-4 mt-0.5 shrink-0" />
-              <span className="leading-relaxed break-words">{updateState.error || t('updater.unknownError')}</span>
+              <span className="leading-relaxed break-words">
+                {updateState.error || t('updater.unknownError')}
+              </span>
             </div>
           )}
 
@@ -186,19 +203,17 @@ export default function UpdateReadyBanner() {
               disabled={isChecking || isInstalling}
               className="h-9"
             >
-              {(isChecking || updateState.status === 'checking')
-                ? (
-                  <>
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                    {t('updater.checking')}
-                  </>
-                )
-                : (
-                  <>
-                    <RefreshCw className="h-4 w-4" />
-                    {t('updater.checkAgain')}
-                  </>
-                )}
+              {isChecking || updateState.status === 'checking' ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  {t('updater.checking')}
+                </>
+              ) : (
+                <>
+                  <RefreshCw className="h-4 w-4" />
+                  {t('updater.checkAgain')}
+                </>
+              )}
             </Button>
 
             <Button
@@ -206,18 +221,18 @@ export default function UpdateReadyBanner() {
               disabled={isInstalling || updateState.status !== 'downloaded'}
               className="h-9 bg-foreground text-background hover:bg-foreground/90"
             >
-              {isInstalling
-                ? (
-                  <>
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                    {t('updater.installing')}
-                  </>
-                )
-                : t('updater.restartInstall')}
+              {isInstalling ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  {t('updater.installing')}
+                </>
+              ) : (
+                t('updater.restartInstall')
+              )}
             </Button>
           </div>
         </div>
       </div>
     </div>
-  )
+  );
 }

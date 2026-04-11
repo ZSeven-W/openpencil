@@ -14,19 +14,20 @@
  */
 
 // ---- Primary API ----
-export { loadCanvasKit, getCanvasKit } from './init.js'
-export { PenRenderer } from './renderer.js'
+export { loadCanvasKit, getCanvasKit } from './init.js';
+export type { LoadCanvasKitOptions } from './init.js';
+export { PenRenderer } from './renderer.js';
 
 // ---- Types ----
-export type { RenderNode, ViewportState, PenRendererOptions, IconLookupFn } from './types.js'
+export type { RenderNode, ViewportState, PenRendererOptions, IconLookupFn } from './types.js';
 
 // ---- Low-level utilities (for apps/web editor re-use) ----
-export { SkiaNodeRenderer } from './node-renderer.js'
-export { SkiaTextRenderer } from './text-renderer.js'
-export { SkiaFontManager, BUNDLED_FONT_FAMILIES } from './font-manager.js'
-export type { FontManagerOptions } from './font-manager.js'
-export { SkiaImageLoader } from './image-loader.js'
-export { SpatialIndex } from './spatial-index.js'
+export { SkiaNodeRenderer } from './node-renderer.js';
+export { SkiaTextRenderer } from './text-renderer.js';
+export { SkiaFontManager, BUNDLED_FONT_FAMILIES } from './font-manager.js';
+export type { FontManagerOptions } from './font-manager.js';
+export { SkiaImageLoader } from './image-loader.js';
+export { SpatialIndex } from './spatial-index.js';
 export {
   flattenToRenderNodes,
   resolveRefs,
@@ -34,7 +35,7 @@ export {
   premeasureTextHeights,
   collectReusableIds,
   collectInstanceIds,
-} from './document-flattener.js'
+} from './document-flattener.js';
 export {
   viewportMatrix,
   screenToScene,
@@ -42,7 +43,7 @@ export {
   zoomToPoint,
   getViewportBounds,
   isRectInViewport,
-} from './viewport.js'
+} from './viewport.js';
 export {
   parseColor,
   cornerRadiusValue,
@@ -52,9 +53,9 @@ export {
   resolveStrokeWidth,
   wrapLine,
   cssFontFamily,
-} from './paint-utils.js'
-export {
-  sanitizeSvgPath,
-  hasInvalidNumbers,
-  tryManualPathParse,
-} from './path-utils.js'
+} from './paint-utils.js';
+export { sanitizeSvgPath, hasInvalidNumbers, tryManualPathParse } from './path-utils.js';
+
+// ---- Thumbnail helper (Phase 7c) ----
+export { renderNodeThumbnail } from './render-node-thumbnail.js';
+export type { ThumbnailContext } from './render-node-thumbnail.js';

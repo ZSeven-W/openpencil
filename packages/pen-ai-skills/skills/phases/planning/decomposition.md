@@ -29,9 +29,10 @@ CRITICAL — "MOBILE" MEANS MOBILE-SIZED SCREEN, NOT A PHONE MOCKUP:
 When the user says "mobile"/"移动端"/"手机" + a screen type (login, profile, settings, etc.), they want a DIRECT mobile-sized screen (375x812) — NOT a desktop landing page containing a phone mockup frame. A "mobile login page" = type 2 (375x812 login screen). Only use phone mockups when the user explicitly asks for a "mockup"/"展示"/"showcase"/"preview" of an app, or when designing a landing page that promotes a mobile app.
 
 FORMAT:
-{"rootFrame":{"id":"page","name":"Page","width":1200,"height":0,"layout":"vertical","gap":0,"fill":[{"type":"solid","color":"#F8FAFC"}]},"styleGuide":{"palette":{"background":"#F8FAFC","surface":"#FFFFFF","text":"#0F172A","secondary":"#64748B","accent":"#2563EB","accent2":"#0EA5E9","border":"#E2E8F0"},"fonts":{"heading":"Space Grotesk","body":"Inter"},"aesthetic":"clean modern with blue accents"},"subtasks":[{"id":"nav","label":"Navigation Bar","elements":"logo, nav links (Home, Features, Pricing, Blog), sign-in button, get-started CTA button","region":{"width":1200,"height":72}},{"id":"hero","label":"Hero Section","elements":"headline, subtitle, CTA button, hero illustration or phone mockup","region":{"width":1200,"height":560}},{"id":"features","label":"Feature Cards","elements":"section title, 3 feature cards each with icon + title + description","region":{"width":1200,"height":480}}]}
+{"rootFrame":{"id":"page","name":"Page","width":1200,"height":0,"layout":"vertical","gap":0,"fill":[{"type":"solid","color":"<bg color from selected style guide, shown after bg: in the guide list>"}]},"styleGuideName":"terminal-minimal-dark","subtasks":[{"id":"nav","label":"Navigation Bar","elements":"logo, nav links (Home, Features, Pricing, Blog), sign-in button, get-started CTA button","region":{"width":1200,"height":72}},{"id":"hero","label":"Hero Section","elements":"headline, subtitle, CTA button, hero illustration or phone mockup","region":{"width":1200,"height":560}},{"id":"features","label":"Feature Cards","elements":"section title, 3 feature cards each with icon + title + description","region":{"width":1200,"height":480}}]}
 
 RULES:
+
 - ELEMENT BOUNDARIES: Each subtask MUST have an "elements" field listing the specific UI elements it contains. Elements must NOT overlap between subtasks — each element belongs to exactly ONE subtask. Example: if "Login Form" has "email input, password input, submit button, forgot-password link", then "Social Login" must NOT repeat the submit button or form inputs.
 - STYLE SELECTION: Choose light or dark theme based on user intent. Dark: user mentions dark/cyber/terminal/neon/夜间/暗黑/deep/gaming/noir. Light (default): all other cases — SaaS, marketing, education, e-commerce, productivity, social. Never default to dark unless the content clearly calls for it.
 - Detect the design type FIRST, then choose the appropriate structure and subtask count.
@@ -40,13 +41,13 @@ RULES:
 - FORM INTEGRITY: Keep a form's core elements (inputs + submit button) in the same subtask. Splitting inputs into one subtask and the button into another causes duplicate buttons.
 - Combine related elements: "Hero with title + image + CTA" = ONE subtask, not three.
 - Each subtask generates a meaningful section (~10-30 nodes). Only split if it would exceed 40 nodes.
-- REQUIRED: "styleGuide" must ALWAYS be included. Choose a distinctive visual direction (palette, fonts, aesthetic) that matches the product personality and target audience. Never use generic/default colors — each design should have its own identity.
+- REQUIRED: "styleGuideName" must ALWAYS be included. Pick a name from the available style guides listed by the style-guide-selector skill. If none fit, use the closest match. The system will load the full style specifications automatically.
 - CJK FONT RULE: If the user's request is in Chinese/Japanese/Korean or the product targets CJK audiences, the styleGuide fonts MUST use CJK-compatible fonts: heading="Noto Sans SC" (Chinese) / "Noto Sans JP" (Japanese) / "Noto Sans KR" (Korean), body="Inter". NEVER use "Space Grotesk" or "Manrope" as heading font for CJK content — they have no CJK character support.
-- Root frame fill must use the styleGuide palette background color.
+- Root frame fill must use the background color from the selected style guide. Each guide in the list shows its bg color (e.g. bg:#0A0F1C). Use that exact hex value for the rootFrame fill color.
 - Root frame gap: Landing pages with distinct section backgrounds - gap=0 (sections flush). Mobile screens and dashboards - gap=16-24 (breathing room between sections). Always include "gap" in rootFrame.
 - Root frame height: Mobile (width=375) - set height=812 (fixed viewport). Desktop (width=1200) - set height=0 (auto-expands as sections are generated).
 - Landing page height hints: nav 64-80px, hero 500-600px, feature sections 400-600px, testimonials 300-400px, CTA 200-300px, footer 200-300px.
-- App screen height hints: status bar 44px, header 56-64px, form fields 48-56px each, buttons 48px, spacing 16-24px.
+- App screen height hints: status bar is pre-inserted (62px, do NOT plan a "Status Bar" section). Header 56-64px, form fields 48-56px each, buttons 48px, spacing 16-24px.
 - If a section is about "App截图"/"XX截图"/"screenshot"/"mockup", plan it as a phone mockup placeholder block, not a detailed mini-app reconstruction.
 - For landing pages: navigation sections should preserve good horizontal balance, links evenly distributed in the center group.
 - Regions tile to fill rootFrame. vertical = top-to-bottom.

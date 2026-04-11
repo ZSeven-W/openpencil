@@ -1,4 +1,4 @@
-import type { TranslationKeys } from './en'
+import type { TranslationKeys } from './en';
 
 const zhTW: TranslationKeys = {
   // ── Common ──
@@ -10,6 +10,8 @@ const zhTW: TranslationKeys = {
   'common.close': '關閉',
   'common.connect': '連線',
   'common.disconnect': '中斷連線',
+  'common.yes': '是',
+  'common.no': '否',
   'common.import': '匯入',
   'common.export': '匯出',
   'common.name': '名稱',
@@ -59,6 +61,298 @@ const zhTW: TranslationKeys = {
   'topbar.connected': '已連線',
   'topbar.agentStatus': '{{agents}} 個 Agent{{agentSuffix}} · {{mcp}} 個 MCP',
 
+  // ── Git 面板 ──
+  'git.openPanel': '開啟 Git 面板',
+  'git.closePanel': '關閉 Git 面板',
+  'git.title': 'Git · {{fileName}}',
+  'git.titleNoFile': 'Git · (尚未選擇檔案)',
+  'git.close': '關閉',
+  'git.initializing': '正在初始化儲存庫…',
+  'git.conflict.title': '合併衝突',
+  'git.conflict.description': '使用下方卡片逐一解決每個衝突，然後套用合併。',
+  'git.conflict.abort': '中止合併',
+  'git.conflict.nonOp.title': '合併因非 .op 檔案暫停',
+  'git.conflict.nonOp.description':
+    '.op 檔案合併已完成,但儲存庫中仍有其他檔案未解決。請在 OpenPencil 之外解決它們,然後繼續。',
+  'git.conflict.nonOp.unresolvedHeading_one': '1 個檔案需要處理',
+  'git.conflict.nonOp.unresolvedHeading_other': '{{count}} 個檔案需要處理',
+  'git.conflict.nonOp.continue': '繼續合併',
+  'git.conflict.nonOp.abort': '中止合併',
+  // ── Git 衝突橫幅 (Phase 7b) ──
+  'git.conflict.banner.progress': '已解決 {{resolved}} / {{total}}',
+  'git.conflict.banner.apply': '套用合併',
+  'git.conflict.banner.continue': '繼續',
+  'git.conflict.banner.finalizeError': '無法套用：{{message}}',
+  'git.conflict.banner.pollError': '狀態輪詢因錯誤暫停：{{message}}',
+  // placeholder — future localization
+  'git.conflict.banner.reopenMessage': '面板在合併過程中重新打開 — 請中止並重新拉取。',
+
+  // ── Git 衝突列表 (Phase 7c) ──
+  'git.conflict.list.heading': '所有衝突',
+  'git.conflict.list.progress': '{{resolved}} / {{total}} 已解決',
+  'git.conflict.list.allResolved': '全部解決',
+  'git.conflict.list.allOurs': '全用我的',
+  'git.conflict.list.allTheirs': '全用對方的',
+
+  // ── Git 衝突項目 (Phase 7c) ──
+  'git.conflict.item.nodeConflict': '節點衝突',
+  'git.conflict.item.fieldConflict': '欄位衝突',
+  'git.conflict.item.resolved': '已解決',
+
+  // ── Git 衝突卡片 (Phase 7c) ──
+  'git.conflict.card.ours': '我的',
+  'git.conflict.card.theirs': '對方的',
+  'git.conflict.card.base': '基底',
+  'git.conflict.card.keepMine': '保留我的',
+  'git.conflict.card.keepTheirs': '保留對方的',
+  'git.conflict.card.oursThumbnailAlt': '我的版本',
+  'git.conflict.card.theirsThumbnailAlt': '對方的版本',
+
+  // ── Git 衝突 JSON 編輯器 (Phase 7c) ──
+  'git.conflict.editor.editManually': '手動編輯',
+  'git.conflict.editor.cancel': '取消',
+  'git.conflict.editor.apply': '套用',
+  'git.conflict.editor.invalidJson': 'JSON 格式錯誤',
+  'git.conflict.editor.textareaLabel': '編輯 JSON 值',
+
+  'git.error.dismiss': '關閉',
+  'git.error.retry': '重試',
+  'git.error.title': '發生問題',
+
+  // ── Git 空狀態 ──
+  'git.empty.heading': '這份檔案還沒有版本歷史',
+  'git.empty.optional': 'Git 是選擇性的 — 略過也不影響使用',
+  'git.empty.requireSavedFile': '請先儲存 .op 檔案以建立歷史',
+  'git.empty.newCard': '新建',
+  'git.empty.newCardDescription': '建立本機歷史',
+  'git.empty.openCard': '開啟',
+  'git.empty.openCardDescription': '已有儲存庫',
+  'git.empty.cloneCard': '複製',
+  'git.empty.cloneCardDescription': '從遠端儲存庫',
+
+  // ── Git 作者表單 ──
+  'git.author.heading': '提交署名',
+  'git.author.subheading': '儲存第一次提交需要署名',
+  'git.author.nameLabel': '姓名',
+  'git.author.namePlaceholder': '你的名字',
+  'git.author.emailLabel': '電子郵件',
+  'git.author.emailPlaceholder': 'you@example.com',
+  'git.author.submit': '儲存',
+  'git.author.cancel': '取消',
+  'git.author.validationName': '請輸入姓名',
+  'git.author.validationEmail': '請輸入有效的電子郵件',
+
+  // ── Git 選擇器 (Phase 4b) ──
+  'git.picker.heading': '這個儲存庫裡有 {{count}} 個 .op 檔案:',
+  'git.picker.milestoneCount': '{{count}} 個里程碑',
+  'git.picker.noHistory': '暫無歷史',
+  'git.picker.lastCommit': '{{message}} · {{time}}',
+  'git.picker.bindButton': '追蹤此檔案',
+  'git.picker.bindAndOpenButton': '追蹤並開啟',
+  'git.picker.back': '返回',
+  'git.picker.backClose': '取消',
+  'git.picker.empty.heading': '這個儲存庫裡沒有 .op 檔案',
+  'git.picker.empty.body': 'Git 面板需要至少一個 .op 檔案才能運作',
+  'git.picker.empty.close': '關閉面板',
+
+  // ── Git 自動綁定提示 (Phase 4b) ──
+  'git.autoBind.confirmHeading': '已找到 {{fileName}},要在編輯器開啟嗎?',
+  'git.autoBind.openButton': '開啟',
+  'git.autoBind.dismissButton': '跳過',
+
+  // ── Git 相對時間 (Phase 4b) ──
+  'git.relativeTime.justNow': '剛剛',
+  'git.relativeTime.minutesAgo': '{{count}}分鐘前',
+  'git.relativeTime.hoursAgo': '{{count}}小時前',
+  'git.relativeTime.daysAgo': '{{count}}天前',
+
+  // ── Git Commit Input (Phase 4c) ──
+  'git.commit.placeholder': '描述這次改動…',
+  'git.commit.submitButton': '儲存為里程碑',
+  'git.commit.saveRequiredTitle': '請先儲存文件',
+  'git.commit.saveRequiredBody': '當前文件有未儲存修改,需要先儲存才能繼續: {{label}}',
+  'git.commit.saveRequiredSave': '儲存',
+  'git.commit.saveRequiredCancel': '取消',
+
+  // ── Git Header (Phase 4c → 6c) ──
+  'git.header.autosaveError': '自動儲存錯誤',
+  'git.header.autosaveErrorTitle': '上次自動儲存失敗',
+  'git.header.authorMissingWarning': '請設定提交作者以記錄歸屬',
+  'git.header.overflowSwitchTracked': '切換追蹤檔案…',
+  'git.header.overflowClearAuthor': '清除提交作者',
+  'git.header.overflowCloseRepo': '關閉儲存庫',
+  'git.header.overflowRemoteSettings': '遠端設定…',
+  'git.header.overflowSshKeys': 'SSH 金鑰…',
+  'git.header.overflowMoreActions': '更多操作',
+
+  // ── Git History List (Phase 4c) ──
+  'git.history.empty': '暫無歷史',
+  'git.history.autosaveGroup_one': '1 個自動快照',
+  'git.history.autosaveGroup_other': '{{count}} 個自動快照',
+  'git.history.autosaveLabel': 'auto {{time}}',
+  'git.history.milestoneDetailTitle': '里程碑詳情',
+  'git.history.restoreButton': '還原',
+  'git.history.copyHashButton': '複製雜湊',
+  'git.history.copiedToast': '已複製',
+  // ── Git 歷史差異 (Phase 7b) ──
+  'git.history.diff.loading': '載入差異中…',
+  'git.history.diff.initialCommit': '初始提交 — 沒有父提交可對比',
+  'git.history.diff.noChanges': '未偵測到變更',
+  'git.history.diff.error': '差異不可用：{{message}}',
+  'git.history.diff.framesChanged_one': '1 個畫框已變更',
+  'git.history.diff.framesChanged_other': '{{count}} 個畫框已變更',
+  'git.history.diff.nodesAdded_one': '新增 1 個節點',
+  'git.history.diff.nodesAdded_other': '新增 {{count}} 個節點',
+  'git.history.diff.nodesRemoved_one': '刪除 1 個節點',
+  'git.history.diff.nodesRemoved_other': '刪除 {{count}} 個節點',
+  'git.history.diff.nodesModified_one': '修改 1 個節點',
+  'git.history.diff.nodesModified_other': '修改 {{count}} 個節點',
+  'git.history.promoteButton': '提升為里程碑',
+  'git.history.promoteSuccessToast': '已提升為里程碑',
+  'git.history.loadMore': '載入更多',
+  'git.autosave.messagePrefix': 'auto',
+  'git.autosave.messageDiffSuffix': '',
+
+  // ── Git 分支選擇器 (Phase 5) ──
+  'git.branch.listHeading': '分支',
+  'git.branch.createAction': '新增分支',
+  'git.branch.createPlaceholder': 'feature/login-redesign',
+  'git.branch.createSubmit': '建立分支',
+  'git.branch.createEmpty': '請輸入分支名稱',
+  'git.branch.createExists': '分支 {{name}} 已存在',
+  'git.branch.mergeAction': '合併分支…',
+  'git.branch.mergeHeading': '合併到 {{name}}',
+  'git.branch.deletePrompt': '刪除分支 {{name}}?',
+  'git.branch.deleteLabel': '刪除分支 {{name}}',
+  'git.branch.deleteWarning': '分支 {{name}} 有未合併的提交',
+  'git.branch.deleteConfirm': '刪除',
+  'git.branch.deleteForce': '強制刪除',
+  'git.branch.cancel': '取消',
+  'git.branch.conflictDisabled': '請先完成合併再切換分支',
+  'git.branch.noCommits': '尚無提交',
+
+  // ── Git Clone Wizard (Phase 6a) ──
+  'git.wizard.clone.heading': '複製遠端儲存庫',
+  'git.wizard.clone.subheading': '選擇遠端網址與目標資料夾。',
+  'git.wizard.clone.urlLabel': '遠端網址',
+  'git.wizard.clone.urlPlaceholder': 'https://github.com/owner/repo.git',
+  'git.wizard.clone.destLabel': '目標資料夾',
+  'git.wizard.clone.destPlaceholder': '/複製/路徑',
+  'git.wizard.clone.destPickButton': '瀏覽…',
+  'git.wizard.clone.usernameLabel': '使用者名稱(選填)',
+  'git.wizard.clone.tokenLabel': '存取權杖(選填)',
+  'git.wizard.clone.tokenPlaceholder': 'ghp_… 公開儲存庫可留空',
+  'git.wizard.clone.anonymousHint': '留空表示匿名複製(僅限公開儲存庫)。',
+  'git.wizard.clone.sshHint': '此網址需要 SSH 金鑰驗證。',
+  'git.wizard.clone.hostDetected': '偵測到:{{host}} · {{mode}}',
+  'git.wizard.clone.authMode.token-or-anon': '權杖或匿名',
+  'git.wizard.clone.authMode.ssh': 'SSH 金鑰',
+  'git.wizard.clone.cancel': '取消',
+  'git.wizard.clone.submit': '複製',
+  'git.wizard.clone.validationUrl': '請輸入遠端網址',
+  'git.wizard.clone.validationDest': '請選擇目標資料夾',
+  'git.wizard.clone.validationTokenUsername': '提供權杖時必須填寫使用者名稱',
+  'git.wizard.clone.error.clone-network': '複製時發生網路錯誤,請檢查連線後重試。',
+  'git.wizard.clone.error.network': '網路錯誤,請檢查連線後重試。',
+  'git.wizard.clone.error.timeout': '複製逾時,請重試或選擇較小的儲存庫。',
+  'git.wizard.clone.error.auth-required': '此儲存庫需要進行身分驗證。',
+  'git.wizard.clone.error.auth-failed': '身分驗證失敗,請檢查使用者名稱與權杖。',
+  'git.wizard.clone.error.auth-token-invalid': '存取權杖被拒絕,請產生新權杖後重試。',
+  'git.wizard.clone.error.clone-failed': '複製失敗,請確認網址指向真實存在的儲存庫。',
+  'git.wizard.clone.error.clone-target-exists': '目標資料夾已存在或不是空的。',
+  // ── Git 拉取 / 推送 (Phase 6b) ──
+  'git.pull.label': '拉取',
+  'git.pull.tooltip': '從 origin 拉取',
+  'git.pull.noRemote': '未設定遠端 — 請在 Git 設定中新增',
+  'git.pull.retry': '重試拉取',
+  'git.push.label': '推送',
+  'git.push.tooltip_one': '推送 1 個提交到 origin',
+  'git.push.tooltip_other': '推送 {{count}} 個提交到 origin',
+  'git.push.noRemote': '未設定遠端 — 請在 Git 設定中新增',
+  'git.push.upToDate': '沒有需要推送的內容 — 已是最新',
+  'git.push.retry': '重試推送',
+  'git.push.rejectedBody': '遠端有你尚未同步的提交。請先拉取,然後再推送。',
+  'git.push.rejectedDismiss': '關閉',
+  'git.push.rejectedPull': '立即拉取',
+  'git.remote.dismissError': '關閉',
+
+  // ── Git 遠端設定 (Phase 6c) ──
+  'git.remote.settingsLabel': '遠端設定',
+  'git.remote.settingsHeading': '遠端',
+  'git.remote.back': '返回',
+  'git.remote.cancel': '取消',
+  'git.remote.emptyNoOrigin': '尚未設定遠端儲存庫,現在新增一個:',
+  'git.remote.urlLabel': 'Origin 網址',
+  'git.remote.urlPlaceholder': 'https://github.com/owner/repo.git',
+  'git.remote.saveButton': '儲存',
+  'git.remote.clearButton': '清除',
+  'git.remote.clearConfirmHeading': '清除 origin?',
+  'git.remote.clearConfirmBody': '這會從此儲存庫移除 origin 遠端。',
+  'git.remote.clearConfirmAction': '確認',
+  'git.remote.aheadBehind': '領先 {{ahead}} · 落後 {{behind}}',
+  'git.remote.fetchButton': '取得',
+  'git.remote.sshIsoUnsupported': '內建引擎不支援 SSH 傳輸。請安裝系統 git,或改用 HTTPS 遠端網址。',
+  'git.remote.storedAuthLabel': '已儲存的憑證',
+  'git.remote.storedAuth.token': '權杖',
+  'git.remote.storedAuth.ssh': 'SSH 金鑰',
+  'git.remote.storedAuth.none': '無',
+  'git.remote.storedAuth.loading': '載入中…',
+  'git.remote.storedAuth.noHost': '未偵測到主機',
+  'git.remote.clearAuthButton': '清除已儲存的憑證',
+
+  // ── Git SSH 金鑰 (Phase 6c) ──
+  'git.ssh.label': 'SSH 金鑰',
+  'git.ssh.heading': 'SSH 金鑰',
+  'git.ssh.back': '返回',
+  'git.ssh.cancel': '取消',
+  'git.ssh.isoUnsupported':
+    '目前的遠端使用 SSH,但內建引擎無法執行 SSH 傳輸。請安裝系統 git,或將遠端網址改為 HTTPS。',
+  'git.ssh.emptyList': '尚無 SSH 金鑰。',
+  'git.ssh.generateAction': '產生新金鑰',
+  'git.ssh.importAction': '匯入現有金鑰',
+  'git.ssh.copyPublicKey': '複製公鑰',
+  'git.ssh.copiedHint': '已複製',
+  'git.ssh.copyUnsupported': '剪貼簿無法使用——請手動複製此金鑰。',
+  'git.ssh.deleteKey': '刪除 {{name}}',
+  'git.ssh.deletePrompt': '刪除 SSH 金鑰 {{name}}?',
+  'git.ssh.deleteConfirm': '刪除',
+  'git.ssh.currentHostBadge': '目前主機',
+  'git.ssh.hostLabel': '主機',
+  'git.ssh.hostPlaceholder': 'github.com',
+  'git.ssh.commentLabel': '備註',
+  'git.ssh.commentPlaceholder': 'laptop@home',
+  'git.ssh.generateSubmit': '產生',
+  'git.ssh.importPathLabel': '私鑰路徑',
+  'git.ssh.importPathPlaceholder': '/path/to/id_ed25519',
+  'git.ssh.importBrowse': '瀏覽…',
+  'git.ssh.importSubmit': '匯入',
+  'git.ssh.validationHost': '請輸入主機',
+  'git.ssh.validationComment': '請輸入備註',
+  'git.ssh.validationImportPath': '請選擇要匯入的私鑰檔案',
+  'git.ssh.providerLink': '開啟 {{host}} SSH 金鑰設定',
+  'git.ssh.genericGuidance': '複製公鑰並新增到你的 Git 提供商 SSH 金鑰設定中。',
+
+  // ── Git 驗證表單 (Phase 6b) ──
+  'git.auth.formLabel': 'Git 憑證',
+  'git.auth.heading': '向 {{host}} 驗證',
+  'git.auth.headingUnknown': '向該遠端驗證',
+  'git.auth.modeToggleLabel': '憑證類型',
+  'git.auth.modeToken': '權杖',
+  'git.auth.modeSsh': 'SSH',
+  'git.auth.usernameLabel': '使用者名稱(選填)',
+  'git.auth.tokenLabel': '存取權杖',
+  'git.auth.tokenPlaceholder': 'ghp_… 或 PAT',
+  'git.auth.sshKeyLabel': 'SSH 金鑰',
+  'git.auth.sshNoKeys': '沒有可用的 SSH 金鑰。請先在 Git 設定中匯入或產生一個。',
+  'git.auth.rememberLabel': '記住此主機的憑證',
+  'git.auth.rememberHint': '記住此主機的憑證',
+  'git.auth.cancel': '取消',
+  'git.auth.validationToken': '存取權杖是必填項',
+  'git.auth.validationSshKey': '請選擇一個 SSH 金鑰',
+  'git.auth.error.auth-required': '此遠端需要驗證。',
+  'git.auth.error.auth-failed': '驗證失敗。請檢查你的憑證後再試。',
+  'git.auth.error.auth-token-invalid': '存取權杖被拒絕。請產生新權杖後再試。',
+
   // ── Right Panel ──
   'rightPanel.design': '設計',
   'rightPanel.code': '程式碼',
@@ -74,6 +368,8 @@ const zhTW: TranslationKeys = {
   'statusbar.zoomOut': '縮小',
   'statusbar.zoomIn': '放大',
   'statusbar.resetZoom': '重設縮放',
+  'statusbar.focusContent': '適配全部內容',
+  'statusbar.focusSelection': '聚焦選取內容',
 
   // ── Updater ──
   'updater.softwareUpdate': '軟體更新',
@@ -236,6 +532,7 @@ const zhTW: TranslationKeys = {
   'export.selectedOnly': '僅匯出選取項目',
   'export.exportFormat': '匯出 {{format}}',
   'export.exportLayer': '匯出圖層',
+  'export.pdfMultiPage': 'PDF 將包含全部 {{count}} 個頁面。',
 
   // ── Polygon ──
   'polygon.sides': '邊數',
@@ -315,14 +612,40 @@ const zhTW: TranslationKeys = {
   'ai.quickAction.loginScreenPrompt':
     '設計一個現代的行動裝置登入頁面，包含電子郵件輸入框、密碼輸入框、登入按鈕和社群登入選項',
   'ai.quickAction.foodApp': '美食App首頁',
-  'ai.quickAction.foodAppPrompt':
-    'Generate a well-designed food mobile app homepage',
+  'ai.quickAction.foodAppPrompt': 'Generate a well-designed food mobile app homepage',
   'ai.quickAction.bottomNav': '設計底部導覽列',
   'ai.quickAction.bottomNavPrompt':
     '設計一個包含 5 個標籤的行動應用程式底部導覽列：首頁、搜尋、新增、訊息、個人',
   'ai.quickAction.colorPalette': '為我的應用程式推薦配色方案',
-  'ai.quickAction.colorPalettePrompt':
-    '為一個寵物照護應用程式推薦一套現代配色方案',
+  'ai.quickAction.colorPalettePrompt': '為一個寵物照護應用程式推薦一套現代配色方案',
+  'ai.startDesigning': '用 AI 開始設計',
+  'ai.maximize': '最大化',
+  'ai.restore': '還原',
+  'ai.quickAction.loginScreenDesc': '帶社交登入的行動端頁面',
+  'ai.quickAction.foodAppDesc': 'App 首頁設計',
+  'ai.quickAction.bottomNavDesc': '5 個 Tab 導航列',
+  'ai.quickAction.colorPaletteDesc': '應用配色推薦',
+
+  // ── File Menu ──
+  'fileMenu.newFile': '新建檔案',
+  'fileMenu.openFile': '開啟檔案...',
+  'fileMenu.save': '儲存',
+  'fileMenu.saveAs': '另存為...',
+  'fileMenu.exportImage': '匯出圖片...',
+  'fileMenu.recentFiles': '最近檔案',
+  'fileMenu.clearHistory': '清除歷史',
+  'fileMenu.noRecentFiles': '暫無最近檔案',
+  'fileMenu.saved': '已儲存',
+  'fileMenu.justNow': '剛剛',
+  'fileMenu.minutesAgo': '{{count}}分鐘前',
+  'fileMenu.hoursAgo': '{{count}}小時前',
+  'fileMenu.yesterday': '昨天',
+  'fileMenu.daysAgo': '{{count}}天前',
+
+  // ── Unsaved Changes ──
+  'unsaved.title': '未儲存的變更',
+  'unsaved.message': '是否儲存對 "{{name}}" 的變更？',
+  'unsaved.dontSave': '不儲存',
 
   // ── Code Panel ──
   'code.reactTailwind': 'React + Tailwind',
@@ -425,7 +748,8 @@ const zhTW: TranslationKeys = {
   'builtin.errorApiKeyEmpty': 'API 金鑰為空，請在設定中新增您的 API 金鑰。',
   'builtin.parallelAgents': '並行子代理：{{count}}x（點擊切換）',
   'builtin.baseUrlPlaceholder': 'https://api.example.com/v1',
-  'builtin.teamDescription': '選擇用於設計生成的模型。設定後，設計任務將自動委派給使用此模型的專業 Agent。',
+  'builtin.teamDescription':
+    '選擇用於設計生成的模型。設定後，設計任務將自動委派給使用此模型的專業 Agent。',
   'builtin.teamDesignModel': '設計模型',
   'builtin.teamSelectModel': '無（單 Agent）',
 
@@ -486,6 +810,6 @@ const zhTW: TranslationKeys = {
   'variablePicker.bindToVariable': '綁定到變數',
   'variablePicker.unbind': '解除綁定',
   'variablePicker.noVariables': '未定義 {{type}} 類型的變數',
-} as const
+} as const;
 
-export default zhTW
+export default zhTW;

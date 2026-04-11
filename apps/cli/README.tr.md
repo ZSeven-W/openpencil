@@ -14,10 +14,10 @@ npm install -g @zseven-w/openpencil
 
 CLI, tum platformlarda OpenPencil masaustu uygulamasini otomatik olarak algilar ve baslatir:
 
-| Platform    | Algilanan kurulum yollari                                                                           |
-| ----------- | --------------------------------------------------------------------------------------------------- |
-| **macOS**   | `/Applications/OpenPencil.app`, `~/Applications/OpenPencil.app`                                     |
-| **Windows** | Kullanici basina NSIS (`%LOCALAPPDATA%`), makine basina (`%PROGRAMFILES%`), tasinabilir              |
+| Platform    | Algilanan kurulum yollari                                                                               |
+| ----------- | ------------------------------------------------------------------------------------------------------- |
+| **macOS**   | `/Applications/OpenPencil.app`, `~/Applications/OpenPencil.app`                                         |
+| **Windows** | Kullanici basina NSIS (`%LOCALAPPDATA%`), makine basina (`%PROGRAMFILES%`), tasinabilir                 |
 | **Linux**   | `/usr/bin`, `/usr/local/bin`, `~/.local/bin`, AppImage (`~/Applications`, `~/Downloads`), Snap, Flatpak |
 
 ## Kullanim

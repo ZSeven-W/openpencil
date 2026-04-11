@@ -1,25 +1,22 @@
-import { useTranslation } from 'react-i18next'
-import NumberInput from '@/components/shared/number-input'
-import SectionHeader from '@/components/shared/section-header'
-import VariablePicker from '@/components/shared/variable-picker'
-import { isVariableRef } from '@/variables/resolve-variables'
-import type { PenNode, PolygonNode, EllipseNode } from '@/types/pen'
+import { useTranslation } from 'react-i18next';
+import NumberInput from '@/components/shared/number-input';
+import SectionHeader from '@/components/shared/section-header';
+import VariablePicker from '@/components/shared/variable-picker';
+import { isVariableRef } from '@/variables/resolve-variables';
+import type { PenNode, PolygonNode, EllipseNode } from '@/types/pen';
 
 interface AppearanceSectionProps {
-  node: PenNode
-  onUpdate: (updates: Partial<PenNode>) => void
+  node: PenNode;
+  onUpdate: (updates: Partial<PenNode>) => void;
 }
 
-export default function AppearanceSection({
-  node,
-  onUpdate,
-}: AppearanceSectionProps) {
-  const { t } = useTranslation()
-  const rawOpacity = node.opacity
-  const isBound = typeof rawOpacity === 'string' && isVariableRef(rawOpacity)
-  const opacity = typeof rawOpacity === 'number' ? rawOpacity * 100 : 100
-  const isPolygon = node.type === 'polygon'
-  const isEllipse = node.type === 'ellipse'
+export default function AppearanceSection({ node, onUpdate }: AppearanceSectionProps) {
+  const { t } = useTranslation();
+  const rawOpacity = node.opacity;
+  const isBound = typeof rawOpacity === 'string' && isVariableRef(rawOpacity);
+  const opacity = typeof rawOpacity === 'number' ? rawOpacity * 100 : 100;
+  const isPolygon = node.type === 'polygon';
+  const isEllipse = node.type === 'ellipse';
 
   return (
     <div className="space-y-1.5">
@@ -90,5 +87,5 @@ export default function AppearanceSection({
         </>
       )}
     </div>
-  )
+  );
 }

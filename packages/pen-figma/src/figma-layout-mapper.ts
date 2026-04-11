@@ -1,11 +1,11 @@
-import type { FigmaNodeChange } from './figma-types'
-import type { ContainerProps, SizingBehavior } from '@zseven-w/pen-types'
+import type { FigmaNodeChange } from './figma-types';
+import type { ContainerProps, SizingBehavior } from '@zseven-w/pen-types';
 
 /**
  * Map Figma stack (auto-layout) properties to PenNode ContainerProps.
  */
 export function mapFigmaLayout(
-  node: FigmaNodeChange
+  node: FigmaNodeChange,
 ): Pick<
   ContainerProps,
   'layout' | 'gap' | 'padding' | 'justifyContent' | 'alignItems' | 'clipContent'
@@ -13,90 +13,99 @@ export function mapFigmaLayout(
   const result: Pick<
     ContainerProps,
     'layout' | 'gap' | 'padding' | 'justifyContent' | 'alignItems' | 'clipContent'
-  > = {}
+  > = {};
 
   if (node.stackMode && node.stackMode !== 'NONE') {
-    result.layout = node.stackMode === 'HORIZONTAL' ? 'horizontal' : 'vertical'
+    result.layout = node.stackMode === 'HORIZONTAL' ? 'horizontal' : 'vertical';
   }
 
   if (node.stackPrimaryAlignItems) {
-    result.justifyContent = mapJustifyContent(node.stackPrimaryAlignItems)
+    result.justifyContent = mapJustifyContent(node.stackPrimaryAlignItems);
   }
 
   // Set gap from stackSpacing, but skip when justifyContent is space_between.
   // Figma stores the COMPUTED inter-item spacing in stackSpacing for
   // SPACE_EVENLY mode — using it as an explicit gap would conflict with
   // the dynamic spacing that space_between already provides.
-  if (node.stackSpacing !== undefined && node.stackSpacing !== 0 && result.justifyContent !== 'space_between') {
-    result.gap = node.stackSpacing
+  if (
+    node.stackSpacing !== undefined &&
+    node.stackSpacing !== 0 &&
+    result.justifyContent !== 'space_between'
+  ) {
+    result.gap = node.stackSpacing;
   }
 
-  const padding = mapPadding(node)
+  const padding = mapPadding(node);
   if (padding !== undefined) {
-    result.padding = padding
+    result.padding = padding;
   }
 
   if (node.stackCounterAlignItems) {
-    result.alignItems = mapAlignItems(node.stackCounterAlignItems)
+    result.alignItems = mapAlignItems(node.stackCounterAlignItems);
   }
 
   // Frames clip by default in Figma (frameMaskDisabled defaults to false).
   // Only skip clipContent when explicitly disabled.
   if (node.frameMaskDisabled !== true) {
-    result.clipContent = true
+    result.clipContent = true;
   }
 
-  return result
+  return result;
 }
 
 function mapPadding(
-  node: FigmaNodeChange
+  node: FigmaNodeChange,
 ): number | [number, number] | [number, number, number, number] | undefined {
   // Check individual padding values first
-  const hasHorizontal = node.stackHorizontalPadding !== undefined
-  const hasVertical = node.stackVerticalPadding !== undefined
-  const hasRight = node.stackPaddingRight !== undefined
-  const hasBottom = node.stackPaddingBottom !== undefined
+  const hasHorizontal = node.stackHorizontalPadding !== undefined;
+  const hasVertical = node.stackVerticalPadding !== undefined;
+  const hasRight = node.stackPaddingRight !== undefined;
+  const hasBottom = node.stackPaddingBottom !== undefined;
 
   if (!hasHorizontal && !hasVertical && !hasRight && !hasBottom) {
     // Uniform padding
-    if (node.stackPadding && node.stackPadding > 0) return node.stackPadding
-    return undefined
+    if (node.stackPadding && node.stackPadding > 0) return node.stackPadding;
+    return undefined;
   }
 
-  const vPad = node.stackVerticalPadding ?? node.stackPadding ?? 0
-  const hPad = node.stackHorizontalPadding ?? node.stackPadding ?? 0
-  const top = vPad
-  const bottom = node.stackPaddingBottom ?? vPad
-  const left = hPad
-  const right = node.stackPaddingRight ?? hPad
+  const vPad = node.stackVerticalPadding ?? node.stackPadding ?? 0;
+  const hPad = node.stackHorizontalPadding ?? node.stackPadding ?? 0;
+  const top = vPad;
+  const bottom = node.stackPaddingBottom ?? vPad;
+  const left = hPad;
+  const right = node.stackPaddingRight ?? hPad;
 
-  if (top === 0 && right === 0 && bottom === 0 && left === 0) return undefined
-  if (top === right && right === bottom && bottom === left) return top
-  if (top === bottom && left === right) return [top, right]
-  return [top, right, bottom, left]
+  if (top === 0 && right === 0 && bottom === 0 && left === 0) return undefined;
+  if (top === right && right === bottom && bottom === left) return top;
+  if (top === bottom && left === right) return [top, right];
+  return [top, right, bottom, left];
 }
 
-function mapJustifyContent(
-  align: string
-): ContainerProps['justifyContent'] {
+function mapJustifyContent(align: string): ContainerProps['justifyContent'] {
   switch (align) {
-    case 'MIN': return 'start'
-    case 'CENTER': return 'center'
-    case 'MAX': return 'end'
-    case 'SPACE_EVENLY': return 'space_between'
-    default: return undefined
+    case 'MIN':
+      return 'start';
+    case 'CENTER':
+      return 'center';
+    case 'MAX':
+      return 'end';
+    case 'SPACE_EVENLY':
+      return 'space_between';
+    default:
+      return undefined;
   }
 }
 
-function mapAlignItems(
-  align: string
-): ContainerProps['alignItems'] {
+function mapAlignItems(align: string): ContainerProps['alignItems'] {
   switch (align) {
-    case 'MIN': return 'start'
-    case 'CENTER': return 'center'
-    case 'MAX': return 'end'
-    default: return undefined
+    case 'MIN':
+      return 'start';
+    case 'CENTER':
+      return 'center';
+    case 'MAX':
+      return 'end';
+    default:
+      return undefined;
   }
 }
 
@@ -106,21 +115,21 @@ function mapAlignItems(
 export function mapWidthSizing(node: FigmaNodeChange, parentStackMode?: string): SizingBehavior {
   // Check stack sizing for containers
   if (node.stackPrimarySizing === 'RESIZE_TO_FIT' && node.stackMode === 'HORIZONTAL') {
-    return 'fit_content'
+    return 'fit_content';
   }
   if (node.stackCounterSizing === 'RESIZE_TO_FIT' && node.stackMode === 'VERTICAL') {
-    return 'fit_content'
+    return 'fit_content';
   }
 
   // Check child sizing within parent
   if (node.stackChildPrimaryGrow === 1 && parentStackMode === 'HORIZONTAL') {
-    return 'fill_container'
+    return 'fill_container';
   }
   if (node.stackChildAlignSelf === 'STRETCH' && parentStackMode === 'VERTICAL') {
-    return 'fill_container'
+    return 'fill_container';
   }
 
-  return node.size?.x ?? 100
+  return node.size?.x ?? 100;
 }
 
 /**
@@ -128,18 +137,18 @@ export function mapWidthSizing(node: FigmaNodeChange, parentStackMode?: string):
  */
 export function mapHeightSizing(node: FigmaNodeChange, parentStackMode?: string): SizingBehavior {
   if (node.stackPrimarySizing === 'RESIZE_TO_FIT' && node.stackMode === 'VERTICAL') {
-    return 'fit_content'
+    return 'fit_content';
   }
   if (node.stackCounterSizing === 'RESIZE_TO_FIT' && node.stackMode === 'HORIZONTAL') {
-    return 'fit_content'
+    return 'fit_content';
   }
 
   if (node.stackChildPrimaryGrow === 1 && parentStackMode === 'VERTICAL') {
-    return 'fill_container'
+    return 'fill_container';
   }
   if (node.stackChildAlignSelf === 'STRETCH' && parentStackMode === 'HORIZONTAL') {
-    return 'fill_container'
+    return 'fill_container';
   }
 
-  return node.size?.y ?? 100
+  return node.size?.y ?? 100;
 }

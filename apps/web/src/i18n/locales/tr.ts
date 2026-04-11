@@ -1,4 +1,4 @@
-import type { TranslationKeys } from './en'
+import type { TranslationKeys } from './en';
 
 const tr: TranslationKeys = {
   // ── Common ──
@@ -10,6 +10,8 @@ const tr: TranslationKeys = {
   'common.close': 'Kapat',
   'common.connect': 'Bağlan',
   'common.disconnect': 'Bağlantıyı Kes',
+  'common.yes': 'Evet',
+  'common.no': 'Hayır',
   'common.import': 'İçe Aktar',
   'common.export': 'Dışa Aktar',
   'common.name': 'Ad',
@@ -59,6 +61,312 @@ const tr: TranslationKeys = {
   'topbar.connected': 'bağlı',
   'topbar.agentStatus': '{{agents}} ajan{{agentSuffix}} · {{mcp}} MCP',
 
+  // ── Git Paneli ──
+  'git.openPanel': 'Git panelini aç',
+  'git.closePanel': 'Git panelini kapat',
+  'git.title': 'Git · {{fileName}}',
+  'git.titleNoFile': 'Git · (Dosya seçilmedi)',
+  'git.close': 'Kapat',
+  'git.initializing': 'Depo başlatılıyor…',
+  'git.conflict.title': 'Birleştirme çakışması',
+  'git.conflict.description':
+    'Aşağıdaki kartları kullanarak her çakışmayı çözün, ardından birleştirmeyi uygulayın.',
+  'git.conflict.abort': 'Birleştirmeyi iptal et',
+  'git.conflict.nonOp.title': '.op olmayan dosyalar nedeniyle birleştirme duraklatıldı',
+  'git.conflict.nonOp.description':
+    '.op birleştirmesi tamamlandı, ancak depodaki diğer dosyalar hâlâ çözülmedi. OpenPencil dışında çözün, ardından devam edin.',
+  'git.conflict.nonOp.unresolvedHeading_one': '1 dosya ilgilenmeyi bekliyor',
+  'git.conflict.nonOp.unresolvedHeading_other': '{{count}} dosya ilgilenmeyi bekliyor',
+  'git.conflict.nonOp.continue': 'Birleştirmeye devam et',
+  'git.conflict.nonOp.abort': 'Birleştirmeyi iptal et',
+  // ── Git çakışma — banner (Phase 7b) ──
+  'git.conflict.banner.progress': '{{resolved}} / {{total}} çözüldü',
+  'git.conflict.banner.apply': 'Birleştirmeyi uygula',
+  'git.conflict.banner.continue': 'Devam et',
+  'git.conflict.banner.finalizeError': 'Uygulanamadı: {{message}}',
+  'git.conflict.banner.pollError': 'Bir hata nedeniyle durum kontrolü duraklatıldı: {{message}}',
+  // placeholder — future localization
+  'git.conflict.banner.reopenMessage':
+    'Panel birleştirme sırasında yeniden açıldı — lütfen iptal edip tekrar pull yapın.',
+
+  // ── Git çakışma — liste (Phase 7c) ──
+  'git.conflict.list.heading': 'Tüm çakışmalar',
+  'git.conflict.list.progress': '{{resolved}} / {{total}} çözüldü',
+  'git.conflict.list.allResolved': 'Hepsi çözüldü',
+  'git.conflict.list.allOurs': 'Hepsi benim',
+  'git.conflict.list.allTheirs': 'Hepsi onların',
+
+  // ── Git çakışma — öğe (Phase 7c) ──
+  'git.conflict.item.nodeConflict': 'Düğüm çakışması',
+  'git.conflict.item.fieldConflict': 'Alan çakışması',
+  'git.conflict.item.resolved': 'Çözüldü',
+
+  // ── Git çakışma — kart (Phase 7c) ──
+  'git.conflict.card.ours': 'Benimki',
+  'git.conflict.card.theirs': 'Onlarınki',
+  'git.conflict.card.base': 'Temel',
+  'git.conflict.card.keepMine': 'Benimkini koru',
+  'git.conflict.card.keepTheirs': 'Onlarınkini koru',
+  'git.conflict.card.oursThumbnailAlt': 'Benim versiyonum',
+  'git.conflict.card.theirsThumbnailAlt': 'Onların versiyonu',
+
+  // ── Git çakışma — JSON düzenleyici (Phase 7c) ──
+  'git.conflict.editor.editManually': 'Manuel düzenle',
+  'git.conflict.editor.cancel': 'İptal',
+  'git.conflict.editor.apply': 'Uygula',
+  'git.conflict.editor.invalidJson': 'Geçersiz JSON',
+  'git.conflict.editor.textareaLabel': 'JSON değerini düzenle',
+
+  'git.error.dismiss': 'Kapat',
+  'git.error.retry': 'Tekrar dene',
+  'git.error.title': 'Bir şeyler ters gitti',
+
+  // ── Git Boş Durum ──
+  'git.empty.heading': 'Henüz sürüm geçmişi yok',
+  'git.empty.optional': 'Git isteğe bağlı — atlamak sorun değil',
+  'git.empty.requireSavedFile': 'Geçmişi etkinleştirmek için önce .op dosyasını kaydedin',
+  'git.empty.newCard': 'Yeni',
+  'git.empty.newCardDescription': 'Yerel geçmiş oluştur',
+  'git.empty.openCard': 'Aç',
+  'git.empty.openCardDescription': 'Mevcut depo',
+  'git.empty.cloneCard': 'Klonla',
+  'git.empty.cloneCardDescription': 'Uzak depodan',
+
+  // ── Git Yazar Formu ──
+  'git.author.heading': 'Commit yazarı',
+  'git.author.subheading': 'İlk commit için ad ve e-posta gereklidir',
+  'git.author.nameLabel': 'Ad',
+  'git.author.namePlaceholder': 'Adınız',
+  'git.author.emailLabel': 'E-posta',
+  'git.author.emailPlaceholder': 'siz@ornek.com',
+  'git.author.submit': 'Kaydet',
+  'git.author.cancel': 'İptal',
+  'git.author.validationName': 'Ad gereklidir',
+  'git.author.validationEmail': 'Geçerli bir e-posta gereklidir',
+
+  // ── Git Seçici (Phase 4b) ──
+  'git.picker.heading': 'Bu depoda {{count}} .op dosyası var:',
+  'git.picker.milestoneCount': '{{count}} kilometre taşı',
+  'git.picker.noHistory': 'Geçmiş yok',
+  'git.picker.lastCommit': '{{message}} · {{time}}',
+  'git.picker.bindButton': 'Bu dosyayı izle',
+  'git.picker.bindAndOpenButton': 'İzle ve aç',
+  'git.picker.back': 'Geri',
+  'git.picker.backClose': 'İptal',
+  'git.picker.empty.heading': 'Bu depoda .op dosyası yok',
+  'git.picker.empty.body': 'Git paneli çalışmak için en az bir .op dosyasına ihtiyaç duyar.',
+  'git.picker.empty.close': 'Paneli kapat',
+
+  // ── Otomatik Bağlama Bandı (Phase 4b) ──
+  'git.autoBind.confirmHeading': '{{fileName}} bulundu — açılsın mı?',
+  'git.autoBind.openButton': 'Aç',
+  'git.autoBind.dismissButton': 'Atla',
+
+  // ── Göreli Zaman (Phase 4b) ──
+  'git.relativeTime.justNow': 'şimdi',
+  'git.relativeTime.minutesAgo': '{{count}}d önce',
+  'git.relativeTime.hoursAgo': '{{count}}s önce',
+  'git.relativeTime.daysAgo': '{{count}}g önce',
+
+  // ── Git Commit Input (Phase 4c) ──
+  'git.commit.placeholder': 'Bu değişikliği açıklayın…',
+  'git.commit.submitButton': 'Kilometre taşı olarak kaydet',
+  'git.commit.saveRequiredTitle': 'Önce belgeyi kaydedin',
+  'git.commit.saveRequiredBody':
+    'Kaydedilmemiş değişiklikleriniz var. Devam etmek için belgeyi kaydedin: {{label}}',
+  'git.commit.saveRequiredSave': 'Kaydet',
+  'git.commit.saveRequiredCancel': 'İptal',
+
+  // ── Git Header (Phase 4c → 6c) ──
+  'git.header.autosaveError': 'Otomatik kaydetme hatası',
+  'git.header.autosaveErrorTitle': 'Son otomatik kaydetme başarısız',
+  'git.header.authorMissingWarning': 'Atıf için commit yazarını ayarlayın',
+  'git.header.overflowSwitchTracked': 'İzlenen dosyayı değiştir…',
+  'git.header.overflowClearAuthor': 'Commit yazarını temizle',
+  'git.header.overflowCloseRepo': 'Depoyu kapat',
+  'git.header.overflowRemoteSettings': 'Uzak ayarları…',
+  'git.header.overflowSshKeys': 'SSH anahtarları…',
+  'git.header.overflowMoreActions': 'Diğer eylemler',
+
+  // ── Git History List (Phase 4c) ──
+  'git.history.empty': 'Henüz geçmiş yok',
+  'git.history.autosaveGroup_one': '1 otomatik kaydetme',
+  'git.history.autosaveGroup_other': '{{count}} otomatik kaydetme',
+  'git.history.autosaveLabel': 'auto {{time}}',
+  'git.history.milestoneDetailTitle': 'Kilometre taşı detayları',
+  'git.history.restoreButton': 'Geri yükle',
+  'git.history.copyHashButton': "Hash'i kopyala",
+  'git.history.copiedToast': 'Kopyalandı',
+  // ── Git geçmiş diff (Phase 7b) ──
+  'git.history.diff.loading': 'Diff yükleniyor…',
+  'git.history.diff.initialCommit': 'İlk commit — karşılaştırılacak üst yok',
+  'git.history.diff.noChanges': 'Değişiklik tespit edilmedi',
+  'git.history.diff.error': 'Diff mevcut değil: {{message}}',
+  'git.history.diff.framesChanged_one': '1 çerçeve değişti',
+  'git.history.diff.framesChanged_other': '{{count}} çerçeve değişti',
+  'git.history.diff.nodesAdded_one': '1 düğüm eklendi',
+  'git.history.diff.nodesAdded_other': '{{count}} düğüm eklendi',
+  'git.history.diff.nodesRemoved_one': '1 düğüm kaldırıldı',
+  'git.history.diff.nodesRemoved_other': '{{count}} düğüm kaldırıldı',
+  'git.history.diff.nodesModified_one': '1 düğüm değiştirildi',
+  'git.history.diff.nodesModified_other': '{{count}} düğüm değiştirildi',
+  'git.history.promoteButton': 'Kilometre taşına yükselt',
+  'git.history.promoteSuccessToast': 'Kilometre taşına yükseltildi',
+  'git.history.loadMore': 'Daha fazla yükle',
+  'git.autosave.messagePrefix': 'auto',
+  'git.autosave.messageDiffSuffix': '',
+
+  // ── Git Dal Seçici (Phase 5) ──
+  'git.branch.listHeading': 'Dallar',
+  'git.branch.createAction': 'Yeni dal',
+  'git.branch.createPlaceholder': 'feature/login-redesign',
+  'git.branch.createSubmit': 'Dal oluştur',
+  'git.branch.createEmpty': 'Bir dal adı girin',
+  'git.branch.createExists': '{{name}} dalı zaten var',
+  'git.branch.mergeAction': 'Dalı birleştir…',
+  'git.branch.mergeHeading': '{{name}} dalına birleştir',
+  'git.branch.deletePrompt': '{{name}} dalı silinsin mi?',
+  'git.branch.deleteLabel': '{{name}} dalını sil',
+  'git.branch.deleteWarning': '{{name}} dalında birleştirilmemiş commitler var',
+  'git.branch.deleteConfirm': 'Sil',
+  'git.branch.deleteForce': 'Zorla sil',
+  'git.branch.cancel': 'İptal',
+  'git.branch.conflictDisabled': 'Dal değiştirmeden önce birleştirmeyi tamamlayın',
+  'git.branch.noCommits': 'Henüz commit yok',
+
+  // ── Git Clone Wizard (Phase 6a) ──
+  'git.wizard.clone.heading': 'Uzak depoyu klonla',
+  'git.wizard.clone.subheading': 'Uzak URL ve hedef klasör seçin.',
+  'git.wizard.clone.urlLabel': 'Uzak URL',
+  'git.wizard.clone.urlPlaceholder': 'https://github.com/owner/repo.git',
+  'git.wizard.clone.destLabel': 'Hedef klasör',
+  'git.wizard.clone.destPlaceholder': '/klon/yolu',
+  'git.wizard.clone.destPickButton': 'Gözat…',
+  'git.wizard.clone.usernameLabel': 'Kullanıcı adı (isteğe bağlı)',
+  'git.wizard.clone.tokenLabel': 'Erişim belirteci (isteğe bağlı)',
+  'git.wizard.clone.tokenPlaceholder': 'ghp_… veya genel depolar için boş bırakın',
+  'git.wizard.clone.anonymousHint': 'Anonim klonlamak için boş bırakın (yalnızca genel depolar).',
+  'git.wizard.clone.sshHint': 'Bu URL için SSH anahtar kimlik doğrulaması gerekir.',
+  'git.wizard.clone.hostDetected': 'Algılandı: {{host}} · {{mode}}',
+  'git.wizard.clone.authMode.token-or-anon': 'belirteç veya anonim',
+  'git.wizard.clone.authMode.ssh': 'SSH anahtarı',
+  'git.wizard.clone.cancel': 'İptal',
+  'git.wizard.clone.submit': 'Klonla',
+  'git.wizard.clone.validationUrl': 'Uzak URL gerekli',
+  'git.wizard.clone.validationDest': 'Hedef klasör gerekli',
+  'git.wizard.clone.validationTokenUsername': 'Belirteç sağlandığında kullanıcı adı gerekli',
+  'git.wizard.clone.error.clone-network':
+    'Klonlama sırasında ağ hatası. Bağlantınızı kontrol edip tekrar deneyin.',
+  'git.wizard.clone.error.network': 'Ağ hatası. Bağlantınızı kontrol edip tekrar deneyin.',
+  'git.wizard.clone.error.timeout':
+    'Klonlama zaman aşımına uğradı. Tekrar deneyin veya daha küçük bir depo kullanın.',
+  'git.wizard.clone.error.auth-required': 'Bu depo kimlik doğrulama gerektiriyor.',
+  'git.wizard.clone.error.auth-failed':
+    'Kimlik doğrulama başarısız. Kullanıcı adınızı ve belirtecinizi kontrol edin.',
+  'git.wizard.clone.error.auth-token-invalid':
+    'Erişim belirteci reddedildi. Yenisini oluşturup tekrar deneyin.',
+  'git.wizard.clone.error.clone-failed':
+    "Klonlama başarısız. URL'nin gerçek bir depoya işaret ettiğini doğrulayın.",
+  'git.wizard.clone.error.clone-target-exists': 'Hedef klasör zaten var veya boş değil.',
+
+  // ── Git Pull / Push (Phase 6b) ──
+  'git.pull.label': 'Pull',
+  'git.pull.tooltip': "origin'den pull",
+  'git.pull.noRemote': 'Remote yapılandırılmamış — Git ayarlarından ekleyin',
+  'git.pull.retry': "Pull'u yeniden dene",
+  'git.push.label': 'Push',
+  'git.push.tooltip_one': "origin'e 1 commit push",
+  'git.push.tooltip_other': "origin'e {{count}} commit push",
+  'git.push.noRemote': 'Remote yapılandırılmamış — Git ayarlarından ekleyin',
+  'git.push.upToDate': 'Push edilecek bir şey yok — güncelsiniz',
+  'git.push.retry': "Push'u yeniden dene",
+  'git.push.rejectedBody':
+    "Remote'da henüz sizde olmayan commit'ler var. Önce pull yapın, sonra tekrar push yapın.",
+  'git.push.rejectedDismiss': 'Kapat',
+  'git.push.rejectedPull': 'Şimdi pull',
+  'git.remote.dismissError': 'Kapat',
+
+  // ── Git Uzak ayarları (Phase 6c) ──
+  'git.remote.settingsLabel': 'Uzak ayarları',
+  'git.remote.settingsHeading': 'Uzak',
+  'git.remote.back': 'Geri',
+  'git.remote.cancel': 'İptal',
+  'git.remote.emptyNoOrigin': 'Henüz bir uzak depo yapılandırılmadı. Bir tane ekleyin:',
+  'git.remote.urlLabel': 'Origin URL',
+  'git.remote.urlPlaceholder': 'https://github.com/owner/repo.git',
+  'git.remote.saveButton': 'Kaydet',
+  'git.remote.clearButton': 'Temizle',
+  'git.remote.clearConfirmHeading': "origin'i temizle?",
+  'git.remote.clearConfirmBody': 'Bu, origin uzağını bu depodan kaldıracak.',
+  'git.remote.clearConfirmAction': 'Onayla',
+  'git.remote.aheadBehind': '{{ahead}} ilerde · {{behind}} geride',
+  'git.remote.fetchButton': 'Fetch',
+  'git.remote.sshIsoUnsupported':
+    'SSH aktarımı yerleşik motor tarafından desteklenmiyor. Sistem git kurun veya HTTPS uzak URL kullanın.',
+  'git.remote.storedAuthLabel': 'Kayıtlı kimlik bilgileri',
+  'git.remote.storedAuth.token': 'Token',
+  'git.remote.storedAuth.ssh': 'SSH anahtarı',
+  'git.remote.storedAuth.none': 'Yok',
+  'git.remote.storedAuth.loading': 'Yükleniyor…',
+  'git.remote.storedAuth.noHost': 'Ana bilgisayar algılanmadı',
+  'git.remote.clearAuthButton': 'Kayıtlı kimlik bilgilerini temizle',
+
+  // ── Git SSH anahtarları (Phase 6c) ──
+  'git.ssh.label': 'SSH anahtarları',
+  'git.ssh.heading': 'SSH anahtarları',
+  'git.ssh.back': 'Geri',
+  'git.ssh.cancel': 'İptal',
+  'git.ssh.isoUnsupported':
+    'Mevcut uzak SSH kullanıyor, ancak yerleşik motor SSH aktarımı yapamıyor. Sistem git kurun veya uzak URL’yi HTTPS olarak değiştirin.',
+  'git.ssh.emptyList': 'Henüz SSH anahtarı yok.',
+  'git.ssh.generateAction': 'Yeni oluştur',
+  'git.ssh.importAction': 'Mevcut olanı içe aktar',
+  'git.ssh.copyPublicKey': 'Genel anahtarı kopyala',
+  'git.ssh.copiedHint': 'Kopyalandı',
+  'git.ssh.copyUnsupported': 'Pano kullanılamıyor — bu anahtarı elle kopyalayın.',
+  'git.ssh.deleteKey': '{{name}} sil',
+  'git.ssh.deletePrompt': '{{name}} SSH anahtarı silinsin mi?',
+  'git.ssh.deleteConfirm': 'Sil',
+  'git.ssh.currentHostBadge': 'geçerli ana bilgisayar',
+  'git.ssh.hostLabel': 'Ana bilgisayar',
+  'git.ssh.hostPlaceholder': 'github.com',
+  'git.ssh.commentLabel': 'Yorum',
+  'git.ssh.commentPlaceholder': 'laptop@home',
+  'git.ssh.generateSubmit': 'Oluştur',
+  'git.ssh.importPathLabel': 'Özel anahtar yolu',
+  'git.ssh.importPathPlaceholder': '/path/to/id_ed25519',
+  'git.ssh.importBrowse': 'Gözat…',
+  'git.ssh.importSubmit': 'İçe aktar',
+  'git.ssh.validationHost': 'Ana bilgisayar gerekli',
+  'git.ssh.validationComment': 'Yorum gerekli',
+  'git.ssh.validationImportPath': 'İçe aktarmak için bir özel anahtar dosyası seçin',
+  'git.ssh.providerLink': '{{host}} SSH anahtar ayarlarını aç',
+  'git.ssh.genericGuidance':
+    'Genel anahtarı kopyalayın ve Git sağlayıcınızın SSH anahtar ayarlarına ekleyin.',
+
+  // ── Git Kimlik doğrulama formu (Phase 6b) ──
+  'git.auth.formLabel': 'Git kimlik bilgileri',
+  'git.auth.heading': '{{host}} ile kimlik doğrula',
+  'git.auth.headingUnknown': 'Bu remote ile kimlik doğrula',
+  'git.auth.modeToggleLabel': 'Kimlik bilgisi türü',
+  'git.auth.modeToken': 'Token',
+  'git.auth.modeSsh': 'SSH',
+  'git.auth.usernameLabel': 'Kullanıcı adı (isteğe bağlı)',
+  'git.auth.tokenLabel': "Erişim token'ı",
+  'git.auth.tokenPlaceholder': 'ghp_… veya PAT',
+  'git.auth.sshKeyLabel': 'SSH anahtarı',
+  'git.auth.sshNoKeys':
+    'Kullanılabilir SSH anahtarı yok. Önce Git ayarlarından içe aktarın veya oluşturun.',
+  'git.auth.rememberLabel': 'Bu host için kimlik bilgilerini hatırla',
+  'git.auth.rememberHint': 'Bu host için kimlik bilgilerini hatırla',
+  'git.auth.cancel': 'İptal',
+  'git.auth.validationToken': "Erişim token'ı gereklidir",
+  'git.auth.validationSshKey': 'Bir SSH anahtarı seçin',
+  'git.auth.error.auth-required': 'Bu remote kimlik doğrulaması gerektiriyor.',
+  'git.auth.error.auth-failed':
+    'Kimlik doğrulama başarısız. Kimlik bilgilerinizi kontrol edin ve tekrar deneyin.',
+  'git.auth.error.auth-token-invalid':
+    "Erişim token'ı reddedildi. Yeni bir tane oluşturun ve tekrar deneyin.",
   // ── Right Panel ──
   'rightPanel.design': 'Tasarım',
   'rightPanel.code': 'Kod',
@@ -74,6 +382,8 @@ const tr: TranslationKeys = {
   'statusbar.zoomOut': 'Uzaklaştır',
   'statusbar.zoomIn': 'Yakınlaştır',
   'statusbar.resetZoom': 'Yakınlaştırmayı sıfırla',
+  'statusbar.focusContent': 'Tüm içeriği sığdır',
+  'statusbar.focusSelection': 'Seçime odaklan',
 
   // ── Updater ──
   'updater.softwareUpdate': 'Yazılım Güncellemesi',
@@ -98,10 +408,8 @@ const tr: TranslationKeys = {
   'updater.subtitle.checking': 'En son sürüm aranıyor...',
   'updater.subtitle.available': 'Sürüm {{version}} kullanılabilir.',
   'updater.subtitle.availableGeneric': 'Yeni bir sürüm kullanılabilir.',
-  'updater.subtitle.downloading':
-    'Sürüm {{version}} arka planda indiriliyor.',
-  'updater.subtitle.downloadingGeneric':
-    'Güncelleme paketi arka planda indiriliyor.',
+  'updater.subtitle.downloading': 'Sürüm {{version}} arka planda indiriliyor.',
+  'updater.subtitle.downloadingGeneric': 'Güncelleme paketi arka planda indiriliyor.',
   'updater.subtitle.downloaded': 'Sürüm {{version}} indirildi.',
   'updater.subtitle.downloadedGeneric': 'Güncelleme indirildi.',
   'updater.subtitle.error': 'Güncelleme kontrol edilemedi veya indirilemedi.',
@@ -222,8 +530,7 @@ const tr: TranslationKeys = {
   'textLayout.autoHeightDesc':
     'Otomatik Yükseklik \u2014 sabit genişlik, yükseklik otomatik ayarlanır',
   'textLayout.fixed': 'Sabit',
-  'textLayout.fixedDesc':
-    'Sabit Boyut \u2014 hem genişlik hem yükseklik sabit',
+  'textLayout.fixedDesc': 'Sabit Boyut \u2014 hem genişlik hem yükseklik sabit',
   'textLayout.fillWidth': 'Genişliği Doldur',
   'textLayout.fillHeight': 'Yüksekliği Doldur',
 
@@ -241,6 +548,7 @@ const tr: TranslationKeys = {
   'export.selectedOnly': 'Yalnızca seçilenleri dışa aktar',
   'export.exportFormat': '{{format}} Dışa Aktar',
   'export.exportLayer': 'Katmanı dışa aktar',
+  'export.pdfMultiPage': 'PDF tüm {{count}} sayfayı içerecek.',
 
   // ── Polygon ──
   'polygon.sides': 'Kenar',
@@ -306,8 +614,7 @@ const tr: TranslationKeys = {
   'ai.newChat': 'Yeni sohbet',
   'ai.collapse': 'Daralt',
   'ai.tryExample': 'Tasarlamak için bir örnek deneyin...',
-  'ai.tipSelectElements':
-    'İpucu: Bağlam için sohbet etmeden önce tuvaldeki ögeleri seçin.',
+  'ai.tipSelectElements': 'İpucu: Bağlam için sohbet etmeden önce tuvaldeki ögeleri seçin.',
   'ai.generating': 'Oluşturuluyor...',
   'ai.designWithAgent': 'Ajanla Tasarla...',
   'ai.attachImage': 'Görsel ekle',
@@ -321,14 +628,41 @@ const tr: TranslationKeys = {
   'ai.quickAction.loginScreenPrompt':
     'E-posta girişi, şifre girişi, giriş butonu ve sosyal giriş seçenekleri ile modern bir mobil giriş ekranı tasarla',
   'ai.quickAction.foodApp': 'Yemek uygulaması ana sayfası',
-  'ai.quickAction.foodAppPrompt':
-    'Generate a well-designed food mobile app homepage',
+  'ai.quickAction.foodAppPrompt': 'Generate a well-designed food mobile app homepage',
   'ai.quickAction.bottomNav': 'Alt gezinme çubuğu tasarla',
   'ai.quickAction.bottomNavPrompt':
     '5 sekmeli bir mobil uygulama alt gezinme çubuğu tasarla: Ana Sayfa, Ara, Ekle, Mesajlar, Profil',
   'ai.quickAction.colorPalette': 'Uygulamam için renk paleti öner',
   'ai.quickAction.colorPalettePrompt':
     'Evcil hayvan bakım uygulaması için modern bir renk paleti öner',
+  'ai.startDesigning': 'Start designing with AI',
+  'ai.maximize': 'Maximize',
+  'ai.restore': 'Restore',
+  'ai.quickAction.loginScreenDesc': 'Mobile login with social auth',
+  'ai.quickAction.foodAppDesc': 'App homepage design',
+  'ai.quickAction.bottomNavDesc': '5-tab navigation bar',
+  'ai.quickAction.colorPaletteDesc': 'Color palette recommendation',
+
+  // ── File Menu ──
+  'fileMenu.newFile': 'New file',
+  'fileMenu.openFile': 'Open file...',
+  'fileMenu.save': 'Save',
+  'fileMenu.saveAs': 'Save as...',
+  'fileMenu.exportImage': 'Görseli dışa aktar...',
+  'fileMenu.recentFiles': 'Recent files',
+  'fileMenu.clearHistory': 'Clear history',
+  'fileMenu.noRecentFiles': 'No recent files',
+  'fileMenu.saved': 'Saved',
+  'fileMenu.justNow': 'just now',
+  'fileMenu.minutesAgo': '{{count}}m ago',
+  'fileMenu.hoursAgo': '{{count}}h ago',
+  'fileMenu.yesterday': 'yesterday',
+  'fileMenu.daysAgo': '{{count}}d ago',
+
+  // ── Unsaved Changes ──
+  'unsaved.title': 'Unsaved changes',
+  'unsaved.message': 'Save changes to "{{name}}"?',
+  'unsaved.dontSave': "Don't Save",
 
   // ── Code Panel ──
   'code.reactTailwind': 'React + Tailwind',
@@ -339,8 +673,7 @@ const tr: TranslationKeys = {
   'code.download': 'Kod dosyasını indir',
   'code.closeCodePanel': 'Kod panelini kapat',
   'code.genCssVars': 'Tüm belge için CSS değişkenleri oluşturuluyor',
-  'code.genSelected':
-    '{{count}} seçili öge için kod oluşturuluyor',
+  'code.genSelected': '{{count}} seçili öge için kod oluşturuluyor',
   'code.genDocument': 'Tüm belge için kod oluşturuluyor',
   'code.aiEnhance': 'AI ile geliştir',
   'code.cancelEnhance': 'Geliştirmeyi iptal et',
@@ -358,10 +691,9 @@ const tr: TranslationKeys = {
   'agents.mcpIntegrations': 'Terminalde MCP Entegrasyonları',
   'agents.transport': 'Aktarım',
   'agents.port': 'Port',
-  'agents.mcpRestart':
-    'MCP entegrasyonları terminal yeniden başlatıldıktan sonra etkin olacaktır.',
+  'agents.mcpRestart': 'MCP entegrasyonları terminal yeniden başlatıldıktan sonra etkin olacaktır.',
   'agents.mcpReinstallHint':
-    'OpenPencil\'i yükselttikten sonra uyumluluğu sağlamak için MCP entegrasyonlarını yeniden yükleyin.',
+    "OpenPencil'i yükselttikten sonra uyumluluğu sağlamak için MCP entegrasyonlarını yeniden yükleyin.",
   'agents.modelCount': '{{count}} model',
   'agents.connectionFailed': 'Bağlantı başarısız',
   'agents.serverError': 'Sunucu hatası {{status}}',
@@ -430,27 +762,28 @@ const tr: TranslationKeys = {
   'builtin.custom': 'Özel',
   'builtin.apiKeyBadge': 'API Key',
   'builtin.viaApiKey': '{{name}} API Key ile',
-  'builtin.errorProviderNotFound': 'Yerleşik sağlayıcı bulunamadı. Lütfen ayarlarınızı kontrol edin.',
+  'builtin.errorProviderNotFound':
+    'Yerleşik sağlayıcı bulunamadı. Lütfen ayarlarınızı kontrol edin.',
   'builtin.errorApiKeyEmpty': 'API Key boş. Lütfen ayarlardan API Key ekleyin.',
   'builtin.parallelAgents': 'Paralel alt ajanlar: {{count}}x (döngü için tıklayın)',
   'builtin.baseUrlPlaceholder': 'https://api.example.com/v1',
-  'builtin.teamDescription': 'Tasarım oluşturma için bir model seçin. Ayarlandığında, tasarım görevleri otomatik olarak bu modeli kullanan uzman bir ajana devredilir.',
+  'builtin.teamDescription':
+    'Tasarım oluşturma için bir model seçin. Ayarlandığında, tasarım görevleri otomatik olarak bu modeli kullanan uzman bir ajana devredilir.',
   'builtin.teamDesignModel': 'Tasarım Modeli',
   'builtin.teamSelectModel': 'Yok (tek ajan)',
 
   // ── Figma Import ──
-  'figma.title': 'Figma\'dan İçe Aktar',
+  'figma.title': "Figma'dan İçe Aktar",
   'figma.dropFile': 'Bir .fig dosyasını buraya bırakın',
   'figma.orBrowse': 'veya göz atmak için tıklayın',
-  'figma.exportTip': 'Figma\'dan dışa aktar: File \u2192 Save local copy (.fig)',
+  'figma.exportTip': "Figma'dan dışa aktar: File \u2192 Save local copy (.fig)",
   'figma.selectFigFile': 'Lütfen bir .fig dosyası seçin',
   'figma.noPages': '.fig dosyasında sayfa bulunamadı',
   'figma.parseFailed': '.fig dosyası ayrıştırılamadı',
   'figma.convertFailed': 'Figma dosyası dönüştürülemedi',
   'figma.parsing': '.fig dosyası ayrıştırılıyor...',
   'figma.converting': 'Düğümler dönüştürülüyor...',
-  'figma.selectPage':
-    'Bu dosyada {{count}} sayfa var. İçe aktarılacakları seçin:',
+  'figma.selectPage': 'Bu dosyada {{count}} sayfa var. İçe aktarılacakları seçin:',
   'figma.layers': '{{count}} katman',
   'figma.importAll': 'Tüm Sayfaları İçe Aktar',
   'figma.importComplete': 'İçe aktarma tamamlandı!',
@@ -496,6 +829,6 @@ const tr: TranslationKeys = {
   'variablePicker.bindToVariable': 'Değişkene bağla',
   'variablePicker.unbind': 'Değişken bağını kaldır',
   'variablePicker.noVariables': 'Tanımlanmış {{type}} değişkeni yok',
-} as const
+} as const;
 
-export default tr
+export default tr;

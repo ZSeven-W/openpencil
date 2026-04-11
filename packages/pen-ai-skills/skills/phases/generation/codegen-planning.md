@@ -16,6 +16,7 @@ You are a code generation planner. Given a PenNode tree summary and a target fra
 ## Input
 
 You receive:
+
 1. A text summary of the PenNode tree. Each line includes: `[nodeId]`, type, name, dimensions, role, and child count. The `nodeId` values are stable identifiers — use them in your `nodeIds` arrays.
 2. The target framework name
 

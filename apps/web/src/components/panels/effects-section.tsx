@@ -1,30 +1,27 @@
-import { useTranslation } from 'react-i18next'
-import ColorPicker from '@/components/shared/color-picker'
-import NumberInput from '@/components/shared/number-input'
-import SectionHeader from '@/components/shared/section-header'
-import { Button } from '@/components/ui/button'
-import { Plus, Minus } from 'lucide-react'
-import type { PenNode } from '@/types/pen'
-import type { PenEffect, ShadowEffect } from '@/types/styles'
+import { useTranslation } from 'react-i18next';
+import ColorPicker from '@/components/shared/color-picker';
+import NumberInput from '@/components/shared/number-input';
+import SectionHeader from '@/components/shared/section-header';
+import { Button } from '@/components/ui/button';
+import { Plus, Minus } from 'lucide-react';
+import type { PenNode } from '@/types/pen';
+import type { PenEffect, ShadowEffect } from '@/types/styles';
 
 interface EffectsSectionProps {
-  effects?: PenEffect[]
-  onUpdate: (updates: Partial<PenNode>) => void
+  effects?: PenEffect[];
+  onUpdate: (updates: Partial<PenNode>) => void;
 }
 
 function findShadow(effects?: PenEffect[]): ShadowEffect | undefined {
-  return effects?.find((e): e is ShadowEffect => e.type === 'shadow')
+  return effects?.find((e): e is ShadowEffect => e.type === 'shadow');
 }
 
-export default function EffectsSection({
-  effects,
-  onUpdate,
-}: EffectsSectionProps) {
-  const { t } = useTranslation()
-  const shadow = findShadow(effects)
+export default function EffectsSection({ effects, onUpdate }: EffectsSectionProps) {
+  const { t } = useTranslation();
+  const shadow = findShadow(effects);
 
   const handleAddShadow = () => {
-    const current = effects ?? []
+    const current = effects ?? [];
     const newEffect: ShadowEffect = {
       type: 'shadow',
       offsetX: 4,
@@ -32,27 +29,27 @@ export default function EffectsSection({
       blur: 8,
       spread: 0,
       color: 'rgba(0,0,0,0.25)',
-    }
+    };
     onUpdate({
       effects: [...current, newEffect],
-    } as Partial<PenNode>)
-  }
+    } as Partial<PenNode>);
+  };
 
   const handleRemoveShadow = () => {
-    const current = effects ?? []
+    const current = effects ?? [];
     onUpdate({
       effects: current.filter((e) => e.type !== 'shadow'),
-    } as Partial<PenNode>)
-  }
+    } as Partial<PenNode>);
+  };
 
   const handleUpdateShadow = (updates: Partial<ShadowEffect>) => {
-    if (!shadow || !effects) return
+    if (!shadow || !effects) return;
     const newEffects = effects.map((e) => {
-      if (e.type === 'shadow') return { ...e, ...updates }
-      return e
-    })
-    onUpdate({ effects: newEffects } as Partial<PenNode>)
-  }
+      if (e.type === 'shadow') return { ...e, ...updates };
+      return e;
+    });
+    onUpdate({ effects: newEffects } as Partial<PenNode>);
+  };
 
   return (
     <div className="space-y-1.5">
@@ -60,11 +57,7 @@ export default function EffectsSection({
         title={t('effects.title')}
         actions={
           !shadow ? (
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              onClick={handleAddShadow}
-            >
+            <Button variant="ghost" size="icon-sm" onClick={handleAddShadow}>
               <Plus className="w-3.5 h-3.5" />
             </Button>
           ) : undefined
@@ -74,15 +67,8 @@ export default function EffectsSection({
       {shadow && (
         <div className="space-y-1 bg-secondary/50 rounded p-1.5">
           <div className="flex items-center justify-between h-5">
-            <span className="text-[11px] text-foreground">
-              {t('effects.dropShadow')}
-            </span>
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              onClick={handleRemoveShadow}
-              className="h-5 w-5"
-            >
+            <span className="text-[11px] text-foreground">{t('effects.dropShadow')}</span>
+            <Button variant="ghost" size="icon-sm" onClick={handleRemoveShadow} className="h-5 w-5">
               <Minus className="w-3 h-3" />
             </Button>
           </div>
@@ -120,5 +106,5 @@ export default function EffectsSection({
         </div>
       )}
     </div>
-  )
+  );
 }

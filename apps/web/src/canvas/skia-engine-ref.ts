@@ -5,16 +5,16 @@
  * engine methods like zoomToFitContent() without prop-drilling.
  */
 
-import type { SkiaEngine } from './skia/skia-engine'
+import type { SkiaEngine } from './skia/skia-engine';
 
-let _engine: SkiaEngine | null = null
+let _engine: SkiaEngine | null = null;
 
 export function setSkiaEngineRef(engine: SkiaEngine | null) {
-  _engine = engine
+  _engine = engine;
 }
 
 export function getSkiaEngineRef(): SkiaEngine | null {
-  return _engine
+  return _engine;
 }
 
 /**
@@ -22,7 +22,7 @@ export function getSkiaEngineRef(): SkiaEngine | null {
  * Delegates to the active SkiaEngine instance.
  */
 export function zoomToFitContent() {
-  _engine?.zoomToFitContent()
+  _engine?.zoomToFitContent();
 }
 
 /**
@@ -30,7 +30,7 @@ export function zoomToFitContent() {
  * Falls back to 800x600 if no engine is mounted.
  */
 export function getCanvasSize(): { width: number; height: number } {
-  return _engine?.getCanvasSize() ?? { width: 800, height: 600 }
+  return _engine?.getCanvasSize() ?? { width: 800, height: 600 };
 }
 
 /**
@@ -47,12 +47,12 @@ export function syncCanvasPositionsToStore() {
  * Used by layer panel to programmatically select children without
  * auto-resolving them to their parent group.
  */
-let _skipNextDepthResolve = false
+let _skipNextDepthResolve = false;
 export function setSkipNextDepthResolve() {
-  _skipNextDepthResolve = true
+  _skipNextDepthResolve = true;
 }
 export function consumeSkipNextDepthResolve(): boolean {
-  const v = _skipNextDepthResolve
-  _skipNextDepthResolve = false
-  return v
+  const v = _skipNextDepthResolve;
+  _skipNextDepthResolve = false;
+  return v;
 }

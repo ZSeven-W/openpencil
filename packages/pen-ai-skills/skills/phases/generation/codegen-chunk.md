@@ -28,6 +28,7 @@ You MUST output TWO things separated by a line containing only `---CONTRACT---`:
 2. A JSON contract block
 
 Example output:
+
 ```
 import React from 'react'
 
@@ -57,6 +58,7 @@ export function NavBar() {
 ## Node-to-Code Mapping Rules
 
 ### Layout Nodes (type: "frame" with layout property)
+
 - `layout: "vertical"` → vertical stack (flexbox column, VStack, Column, etc.)
 - `layout: "horizontal"` → horizontal stack (flexbox row, HStack, Row, etc.)
 - `layout: "none"` or absent → absolute/relative positioning
@@ -66,12 +68,14 @@ export function NavBar() {
 - `clipContent: true` → overflow hidden
 
 ### Dimension Handling
+
 - Fixed `width`/`height` in pixels → use exact values
 - `width: "fill_container"` → stretch to fill parent (width: 100%, flex: 1, etc.)
 - `height: "fill_container"` → stretch to fill parent height
 - Root component: use the frame's actual dimensions as max-width with responsive scaling
 
 ### Text Nodes (type: "text")
+
 - `characters` → text content
 - `fontSize`, `fontWeight`, `fontFamily` → typography
 - `lineHeight` → line spacing
@@ -80,6 +84,7 @@ export function NavBar() {
 - Use semantic HTML tags when appropriate (h1-h6 for headings, p for body text)
 
 ### Shape Nodes (type: "rectangle", "ellipse", "polygon", "line", "path")
+
 - Convert to CSS shapes where possible (border-radius for ellipse, etc.)
 - `fill` → background color/gradient
 - `stroke` → border
@@ -89,21 +94,25 @@ export function NavBar() {
 - `rotation` → transform: rotate()
 
 ### Image Nodes (type: "image")
+
 - `src` → image source URL
 - `objectFit` → object-fit CSS property
 - Use `<img>` with proper alt text derived from node name
 
 ### Variable References
+
 - Values starting with `$` are variable references
 - Web frameworks: output as `var(--variable-name)` using CSS custom properties
 - Mobile frameworks: output as literal value with `/* var(--name) */` comment
 
 ### Naming
+
 - Component name: use the chunk's `suggestedComponentName`
 - CSS classes/variable names: derive from node names, kebab-case
 - Internal variables: camelCase, descriptive
 
 ### Using Dependency Contracts
+
 - If a dependency chunk exported a component, import and use it by its `componentName`
 - Respect the dependency's `exportedProps` — pass required props
 - Use dependency's `slots` as children/content areas
