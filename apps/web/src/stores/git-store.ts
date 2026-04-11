@@ -6,10 +6,11 @@
 // runOrError wrappers live in git-store-helpers.ts to keep this file under
 // the 800-LoC cap.
 //
-// Phase 7b NOTE: this file is ~814 lines (14 over cap). The overage comes
-// from exitTrackedFilePicker (18 lines) and applyMerge's finalizeError path
-// (+10 lines). Phase 7c should extract these into git-store-helpers.ts to
-// get back under the cap.
+// Phase 7b NOTE: this file is ~831 lines (31 over cap). The overage comes
+// from exitTrackedFilePicker (18 lines), applyMerge's finalizeError path
+// (+10 lines), and the refreshStatus conflict-preservation branch (+8 lines).
+// Phase 7c should extract these into git-store-helpers.ts to get back under
+// the cap.
 
 import { create } from 'zustand';
 import { gitClient } from '@/services/git-client';
