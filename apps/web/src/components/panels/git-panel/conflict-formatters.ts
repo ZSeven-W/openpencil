@@ -3,7 +3,95 @@
 // Pure helpers for formatting conflict-resolution UI labels. No React, no store
 // dependencies — safe to import anywhere and easy to unit-test.
 
-import type { GitConflictBag } from '@/services/git-types';
+import type { PenDocument, PenNode } from '@/types/pen';
+import type { GitConflictBag, GitConflictResolution } from '@/services/git-types';
+
+// ---------------------------------------------------------------------------
+// Document-order conflict sorting
+// ---------------------------------------------------------------------------
+
+/**
+ * A node conflict entry with optional resolution state (matches ConflictBagState's
+ * nodeConflicts value shape — typed here to avoid importing from git-store-types
+ * which carries Zustand store baggage).
+ */
+export type NodeConflictEntry = GitConflictBag['nodeConflicts'][number] & {
+  resolution?: GitConflictResolution;
+};
+
+export type FieldConflictEntry = GitConflictBag['docFieldConflicts'][number] & {
+  resolution?: GitConflictResolution;
+};
+
+/**
+ * Walk a PenNode tree depth-first, invoking `visit` for every node.
+ * Visits `node.children` when present (not all PenNode variants have children).
+ */
+function walkTreeDfs(nodes: PenNode[], visit: (n: PenNode) => void): void {
+  for (const node of nodes) {
+    visit(node);
+    if ('children' in node && node.children && (node.children as PenNode[]).length > 0) {
+      walkTreeDfs(node.children as PenNode[], visit);
+    }
+  }
+}
+
+/**
+ * Produce an ordered flat list of conflict entries for the conflict-list UI.
+ *
+ * Ordering rules:
+ *   1. Node conflicts in document tree order (depth-first).  The conflict Map
+ *      is keyed by `node:<pageId|_>:<nodeId>`, so we derive the nodeId by
+ *      splitting on ":" and taking the last segment.
+ *   2. Doc-field conflicts are document-level with no tree position.  They are
+ *      emitted after the in-tree node conflicts, sorted alphabetically by the
+ *      `path` field for a stable, user-readable sequence.
+ *   3. Orphan node conflicts — conflicts whose nodeId is not present in the
+ *      current document tree (e.g. theirs deleted the node) — are emitted last,
+ *      preserving Map insertion order for stability.
+ */
+export function orderConflicts(
+  document: PenDocument,
+  nodeConflicts: Map<string, NodeConflictEntry>,
+  fieldConflicts: Map<string, FieldConflictEntry>,
+): Array<NodeConflictEntry | FieldConflictEntry> {
+  const result: Array<NodeConflictEntry | FieldConflictEntry> = [];
+
+  // Build a set of node-conflict entries ordered by document tree position.
+  const emitted = new Set<string>();
+
+  // Collect all document nodes in depth-first order.
+  const treeChildren: PenNode[] = document?.children ?? [];
+  walkTreeDfs(treeChildren, (node) => {
+    // Each node conflict's key is `node:<pageId|_>:<nodeId>`.  We need to find
+    // the entry whose nodeId matches this node's id.
+    for (const [key, entry] of nodeConflicts) {
+      if (emitted.has(key)) continue;
+      if (entry.nodeId === node.id) {
+        result.push(entry);
+        emitted.add(key);
+        break; // At most one conflict per nodeId.
+      }
+    }
+  });
+
+  // Orphan node conflicts: referenced nodeId not found in current tree.
+  for (const [key, entry] of nodeConflicts) {
+    if (!emitted.has(key)) {
+      result.push(entry);
+      emitted.add(key);
+    }
+  }
+
+  // Doc-field conflicts: alphabetical by path.
+  const fieldEntries = Array.from(fieldConflicts.values());
+  fieldEntries.sort((a, b) => a.path.localeCompare(b.path));
+  for (const entry of fieldEntries) {
+    result.push(entry);
+  }
+
+  return result;
+}
 
 // ---------------------------------------------------------------------------
 // Reason label mapping

@@ -1,12 +1,13 @@
 // @vitest-environment jsdom
 // apps/web/src/components/panels/git-panel/__tests__/git-panel-conflict-list.test.tsx
 //
-// Tests: interleaving, bulk ours/theirs, all-resolved state, null render
-// when totalCount === 0.
+// Tests: document-order interleaving, orphan handling, field-ordering, bulk
+// ours/theirs, all-resolved state, null render when totalCount === 0.
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { render, screen, cleanup, fireEvent } from '@testing-library/react';
 import type { GitConflictResolution } from '@/services/git-types';
+import type { PenDocument } from '@/types/pen';
 
 // ---------------------------------------------------------------------------
 // Shared mock state and actions
@@ -88,8 +89,20 @@ const mocks = vi.hoisted(() => ({
   resolveConflict: vi.fn(async (_id: string, _choice: GitConflictResolution) => {}),
 }));
 
+// Document store mock — set currentDocument via the exported ref.
+let mockDocument: PenDocument = {
+  id: 'doc-1',
+  name: 'Test',
+  children: [],
+} as unknown as PenDocument;
+
 vi.mock('@/stores/git-store', () => ({
   useGitStore: (selector: (s: typeof mocks) => unknown) => selector(mocks),
+}));
+
+vi.mock('@/stores/document-store', () => ({
+  useDocumentStore: (selector: (s: { document: PenDocument }) => unknown) =>
+    selector({ document: mockDocument }),
 }));
 
 vi.mock('react-i18next', () => ({
@@ -128,6 +141,10 @@ vi.mock('@/components/panels/git-panel/git-panel-conflict-item', () => ({
 
 import { GitPanelConflictList } from '@/components/panels/git-panel/git-panel-conflict-list';
 
+function makeNode(id: string) {
+  return { id, type: 'rectangle', x: 0, y: 0, width: 10, height: 10, children: [] };
+}
+
 function makeNodeConflict(id: string, resolved = false): NodeConflict {
   return {
     id,
@@ -158,6 +175,11 @@ describe('GitPanelConflictList', () => {
     vi.clearAllMocks();
     mocks.state.conflicts.nodeConflicts = new Map();
     mocks.state.conflicts.docFieldConflicts = new Map();
+    mockDocument = {
+      id: 'doc-1',
+      name: 'Test',
+      children: [],
+    } as unknown as PenDocument;
   });
 
   afterEach(() => {
@@ -194,20 +216,100 @@ describe('GitPanelConflictList', () => {
     expect(screen.getByTestId('conflict-item-docField:name')).toBeTruthy();
   });
 
-  it('interleaves node and field conflicts in order (nodes first)', () => {
+  // ---------------------------------------------------------------------------
+  // Document-order tests (Gap 1)
+  // ---------------------------------------------------------------------------
+
+  it('emits node conflicts in document tree order (A before C, B not emitted)', () => {
+    // Document has nodes A, B, C in that order.
+    mockDocument = {
+      id: 'doc-1',
+      name: 'Test',
+      children: [makeNode('A'), makeNode('B'), makeNode('C')],
+    } as unknown as PenDocument;
+
+    // Conflicts for A and C only — B has no conflict.
+    mocks.state.conflicts.nodeConflicts.set('node:_:C', makeNodeConflict('node:_:C'));
     mocks.state.conflicts.nodeConflicts.set('node:_:A', makeNodeConflict('node:_:A'));
-    mocks.state.conflicts.nodeConflicts.set('node:_:B', makeNodeConflict('node:_:B'));
+
+    render(<GitPanelConflictList />);
+    const items = screen.getAllByTestId(/conflict-item-/);
+    expect(items).toHaveLength(2);
+    // A appears before C because A precedes C in the document tree.
+    expect(items[0].getAttribute('data-testid')).toBe('conflict-item-node:_:A');
+    expect(items[1].getAttribute('data-testid')).toBe('conflict-item-node:_:C');
+    // B is not emitted because it has no conflict.
+    expect(screen.queryByTestId('conflict-item-node:_:B')).toBeNull();
+  });
+
+  it('respects depth-first document order for nested children', () => {
+    // Tree: parent (children: childA, childB)
+    mockDocument = {
+      id: 'doc-1',
+      name: 'Test',
+      children: [
+        {
+          ...makeNode('parent'),
+          children: [makeNode('childA'), makeNode('childB')],
+        },
+      ],
+    } as unknown as PenDocument;
+
+    // Register conflicts in reverse insertion order to prove we sort by tree.
+    mocks.state.conflicts.nodeConflicts.set('node:_:childB', makeNodeConflict('node:_:childB'));
+    mocks.state.conflicts.nodeConflicts.set('node:_:childA', makeNodeConflict('node:_:childA'));
+
+    render(<GitPanelConflictList />);
+    const items = screen.getAllByTestId(/conflict-item-node/);
+    expect(items[0].getAttribute('data-testid')).toBe('conflict-item-node:_:childA');
+    expect(items[1].getAttribute('data-testid')).toBe('conflict-item-node:_:childB');
+  });
+
+  it('appends orphan node conflicts (nodeId not in document tree) at the end', () => {
+    // Document has only node A.
+    mockDocument = {
+      id: 'doc-1',
+      name: 'Test',
+      children: [makeNode('A')],
+    } as unknown as PenDocument;
+
+    // Conflict for A (in-tree) and Z (orphan — not in document).
+    mocks.state.conflicts.nodeConflicts.set('node:_:A', makeNodeConflict('node:_:A'));
+    mocks.state.conflicts.nodeConflicts.set('node:_:Z', makeNodeConflict('node:_:Z'));
+
+    render(<GitPanelConflictList />);
+    const items = screen.getAllByTestId(/conflict-item-node/);
+    expect(items).toHaveLength(2);
+    // In-tree A first, orphan Z last.
+    expect(items[0].getAttribute('data-testid')).toBe('conflict-item-node:_:A');
+    expect(items[1].getAttribute('data-testid')).toBe('conflict-item-node:_:Z');
+  });
+
+  it('emits doc-field conflicts after node conflicts, sorted alphabetically by path', () => {
+    mocks.state.conflicts.nodeConflicts.set('node:_:A', makeNodeConflict('node:_:A'));
+    // Fields in reverse alphabetical order to prove we sort.
     mocks.state.conflicts.docFieldConflicts.set(
       'docField:name',
       makeFieldConflict('docField:name'),
     );
+    mocks.state.conflicts.docFieldConflicts.set(
+      'docField:author',
+      makeFieldConflict('docField:author'),
+    );
+
     render(<GitPanelConflictList />);
     const items = screen.getAllByTestId(/conflict-item-/);
     expect(items).toHaveLength(3);
-    // Nodes come first, then fields
-    expect(items[0].getAttribute('data-testid')).toMatch(/node/);
-    expect(items[2].getAttribute('data-testid')).toMatch(/docField/);
+    // Node conflict first.
+    expect(items[0].getAttribute('data-testid')).toBe('conflict-item-node:_:A');
+    // Fields alphabetical: author < name.
+    expect(items[1].getAttribute('data-testid')).toBe('conflict-item-docField:author');
+    expect(items[2].getAttribute('data-testid')).toBe('conflict-item-docField:name');
   });
+
+  // ---------------------------------------------------------------------------
+  // Existing state / bulk-action tests
+  // ---------------------------------------------------------------------------
 
   it('shows progress summary when not all resolved', () => {
     mocks.state.conflicts.nodeConflicts.set('node:_:A', makeNodeConflict('node:_:A', true));

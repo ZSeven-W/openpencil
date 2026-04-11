@@ -1,17 +1,21 @@
 // apps/web/src/components/panels/git-panel/git-panel-conflict-list.tsx
 //
 // Conflict workspace mounted below the banner in GitPanelConflict. Renders all
-// node conflicts and doc-field conflicts interleaved in declaration order, with
-// bulk-action buttons to choose all-ours or all-theirs across unresolved items.
+// node conflicts and doc-field conflicts interleaved in document tree order,
+// with bulk-action buttons to choose all-ours or all-theirs across unresolved
+// items.
 //
 // Bulk actions stay renderer-side by looping resolveConflict() over unresolved
 // items — no new IPC call is required. The banner already owns the primary
 // apply/continue button; the list owns only the bulk action shortcuts.
 
+import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { useGitStore } from '@/stores/git-store';
+import { useDocumentStore } from '@/stores/document-store';
+import { orderConflicts } from './conflict-formatters';
 import { GitPanelConflictItem } from './git-panel-conflict-item';
 import type {
   ConflictItemData,
@@ -23,18 +27,27 @@ export function GitPanelConflictList() {
   const { t } = useTranslation();
   const state = useGitStore((s) => s.state);
   const resolveConflict = useGitStore((s) => s.resolveConflict);
+  const document = useDocumentStore((s) => s.document);
 
   // Only render in conflict state.
   if (state.kind !== 'conflict') return null;
 
   const { nodeConflicts, docFieldConflicts } = state.conflicts;
 
-  // Build a flat ordered list: node conflicts first, then doc-field conflicts.
-  // In a future phase this could be sorted by document order; for now we
-  // maintain declaration order from the wire bag.
-  const items: ConflictItemData[] = [
-    ...Array.from(nodeConflicts.values()).map(
-      (c): NodeConflictItemData => ({
+  // Build a flat list ordered by document tree position. orderConflicts walks
+  // the current document depth-first so ours/theirs previews appear in the same
+  // sequence as the layer panel. Orphan conflicts (node deleted in theirs) are
+  // appended at the end; doc-field conflicts follow, sorted alphabetically by path.
+  // eslint-disable-next-line react-hooks/rules-of-hooks
+  const ordered = useMemo(
+    () => orderConflicts(document, nodeConflicts, docFieldConflicts),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [document, nodeConflicts, docFieldConflicts],
+  );
+
+  const items: ConflictItemData[] = ordered.map((c) => {
+    if ('nodeId' in c) {
+      return {
         kind: 'node',
         id: c.id,
         pageId: c.pageId,
@@ -44,21 +57,19 @@ export function GitPanelConflictList() {
         ours: c.ours,
         theirs: c.theirs,
         resolution: c.resolution,
-      }),
-    ),
-    ...Array.from(docFieldConflicts.values()).map(
-      (c): FieldConflictItemData => ({
-        kind: 'field',
-        id: c.id,
-        field: c.field,
-        path: c.path,
-        base: c.base,
-        ours: c.ours,
-        theirs: c.theirs,
-        resolution: c.resolution,
-      }),
-    ),
-  ];
+      } satisfies NodeConflictItemData;
+    }
+    return {
+      kind: 'field',
+      id: c.id,
+      field: c.field,
+      path: c.path,
+      base: c.base,
+      ours: c.ours,
+      theirs: c.theirs,
+      resolution: c.resolution,
+    } satisfies FieldConflictItemData;
+  });
 
   const totalCount = items.length;
   const resolvedCount = items.filter((i) => i.resolution != null).length;
