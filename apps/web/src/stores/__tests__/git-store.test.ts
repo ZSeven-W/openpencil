@@ -1407,6 +1407,16 @@ describe('git-store state machine', () => {
     await useGitStore.getState().mergeBranch('feature');
     expect(useGitStore.getState().state.kind).toBe('conflict');
 
+    // Phase 7c: applyMerge calls refreshStatus() after merge-still-conflicted
+    // so the unresolved-file list is current. Mock status to return mergeInProgress:
+    // true so the refreshStatus call does not demote the state to ready.
+    vi.mocked(gitClient.status).mockResolvedValue({
+      ...DEFAULT_STATUS,
+      mergeInProgress: true,
+      unresolvedFiles: [],
+      conflicts: { nodeConflicts: [], docFieldConflicts: [] },
+    });
+
     // applyMerge with merge-still-conflicted must NOT throw to the caller —
     // it surfaces the error inline on the banner.
     await expect(useGitStore.getState().applyMerge()).resolves.toBeUndefined();
@@ -1476,6 +1486,27 @@ describe('git-store state machine', () => {
     vi.mocked(gitClient.resolveConflict).mockResolvedValue(undefined);
     await useGitStore.getState().initRepo('/tmp/login.op');
     await useGitStore.getState().mergeBranch('feature');
+    // Phase 7c: applyMerge calls refreshStatus() after merge-still-conflicted.
+    // Mock status to keep the merge in progress so refreshStatus doesn't demote to ready.
+    vi.mocked(gitClient.status).mockResolvedValue({
+      ...DEFAULT_STATUS,
+      mergeInProgress: true,
+      unresolvedFiles: [],
+      conflicts: {
+        nodeConflicts: [
+          {
+            id: 'node:_:rect-1',
+            pageId: null,
+            nodeId: 'rect-1',
+            reason: 'both-modified-same-field',
+            base: null,
+            ours: null,
+            theirs: null,
+          },
+        ],
+        docFieldConflicts: [],
+      },
+    });
     // Set finalizeError via applyMerge
     await useGitStore.getState().applyMerge();
     let s = useGitStore.getState().state;
@@ -1695,6 +1726,15 @@ describe('git-store state machine', () => {
     );
     await useGitStore.getState().initRepo('/tmp/login.op');
     await useGitStore.getState().mergeBranch('feature');
+    // Phase 7c: set up status to return mergeInProgress:true before applyMerge
+    // so the refreshStatus() call inside the merge-still-conflicted handler
+    // does not demote the state to ready.
+    vi.mocked(gitClient.status).mockResolvedValue({
+      ...DEFAULT_STATUS,
+      mergeInProgress: true,
+      unresolvedFiles: [],
+      conflicts: { nodeConflicts: [], docFieldConflicts: [] },
+    });
     // Trigger a finalizeError by attempting applyMerge with unresolved conflicts.
     await useGitStore.getState().applyMerge();
     let s = useGitStore.getState().state;
@@ -1783,5 +1823,121 @@ describe('git-store state machine', () => {
       // The nodeA resolution must be preserved.
       expect(s.conflicts.nodeConflicts.get('node:_:nodeA')?.resolution).toEqual({ kind: 'theirs' });
     }
+  });
+
+  // ---- Phase 7c: applyMerge reload + noop + merge-still-conflicted -------
+
+  it('applyMerge (success) reloads the tracked file and refreshes the log', async () => {
+    vi.mocked(gitClient.init).mockResolvedValue(SAMPLE_REPO);
+    vi.mocked(gitClient.branchMerge).mockResolvedValue({
+      result: 'conflict',
+      conflicts: { nodeConflicts: [], docFieldConflicts: [] },
+    });
+    vi.mocked(gitClient.applyMerge).mockResolvedValue({ hash: 'merge-commit-hash', noop: false });
+    vi.mocked(gitClient.status).mockResolvedValue(DEFAULT_STATUS);
+    vi.mocked(gitClient.log).mockResolvedValue([]);
+    await useGitStore.getState().initRepo('/tmp/login.op');
+    await useGitStore.getState().mergeBranch('feature');
+    expect(useGitStore.getState().state.kind).toBe('conflict');
+
+    vi.mocked(mockedLoadOpFileFromPath).mockClear();
+    vi.mocked(gitClient.log).mockClear();
+
+    await useGitStore.getState().applyMerge();
+
+    // Phase 7c: success must transition to ready AND reload the tracked file
+    // and refresh the log so the canvas reflects the merged result and the
+    // history list shows the new merge commit.
+    expect(useGitStore.getState().state.kind).toBe('ready');
+    expect(mockedLoadOpFileFromPath).toHaveBeenCalledWith('/tmp/repo/login.op');
+    expect(gitClient.log).toHaveBeenCalledTimes(1);
+  });
+
+  it('applyMerge (noop: true) transitions to ready and reloads tracked file', async () => {
+    vi.mocked(gitClient.init).mockResolvedValue(SAMPLE_REPO);
+    vi.mocked(gitClient.branchMerge).mockResolvedValue({
+      result: 'conflict',
+      conflicts: { nodeConflicts: [], docFieldConflicts: [] },
+    });
+    // noop: true means the backend had nothing to write (all conflicts were trivial)
+    vi.mocked(gitClient.applyMerge).mockResolvedValue({ hash: '', noop: true });
+    vi.mocked(gitClient.status).mockResolvedValue(DEFAULT_STATUS);
+    vi.mocked(gitClient.log).mockResolvedValue([]);
+    await useGitStore.getState().initRepo('/tmp/login.op');
+    await useGitStore.getState().mergeBranch('feature');
+
+    vi.mocked(mockedLoadOpFileFromPath).mockClear();
+    vi.mocked(gitClient.log).mockClear();
+
+    await useGitStore.getState().applyMerge();
+
+    // Even a noop result must transition to ready and run the reload cascade.
+    expect(useGitStore.getState().state.kind).toBe('ready');
+    expect(mockedLoadOpFileFromPath).toHaveBeenCalledWith('/tmp/repo/login.op');
+    expect(gitClient.log).toHaveBeenCalledTimes(1);
+  });
+
+  it('applyMerge (merge-still-conflicted) stays in conflict and calls refreshStatus', async () => {
+    vi.mocked(gitClient.init).mockResolvedValue(SAMPLE_REPO);
+    vi.mocked(gitClient.branchMerge).mockResolvedValue({
+      result: 'conflict',
+      conflicts: {
+        nodeConflicts: [
+          {
+            id: 'node:_:rect-1',
+            pageId: null,
+            nodeId: 'rect-1',
+            reason: 'both-modified-same-field',
+            base: null,
+            ours: null,
+            theirs: null,
+          },
+        ],
+        docFieldConflicts: [],
+      },
+    });
+    vi.mocked(gitClient.applyMerge).mockRejectedValue(
+      new GitError('merge-still-conflicted', '1 conflict remains'),
+    );
+    // refreshStatus is called after merge-still-conflicted to keep unresolved file list current.
+    vi.mocked(gitClient.status).mockResolvedValue({
+      ...DEFAULT_STATUS,
+      mergeInProgress: true,
+      unresolvedFiles: [],
+      conflicts: {
+        nodeConflicts: [
+          {
+            id: 'node:_:rect-1',
+            pageId: null,
+            nodeId: 'rect-1',
+            reason: 'both-modified-same-field',
+            base: null,
+            ours: null,
+            theirs: null,
+          },
+        ],
+        docFieldConflicts: [],
+      },
+    });
+    await useGitStore.getState().initRepo('/tmp/login.op');
+    await useGitStore.getState().mergeBranch('feature');
+    expect(useGitStore.getState().state.kind).toBe('conflict');
+
+    vi.mocked(gitClient.status).mockClear();
+    vi.mocked(mockedLoadOpFileFromPath).mockClear();
+
+    // Must not throw — banner owns the error display.
+    await expect(useGitStore.getState().applyMerge()).resolves.toBeUndefined();
+
+    const s = useGitStore.getState().state;
+    // Still in conflict with the error recorded.
+    expect(s.kind).toBe('conflict');
+    if (s.kind === 'conflict') {
+      expect(s.finalizeError).toBe('1 conflict remains');
+    }
+    // Phase 7c: refreshStatus must have been called to update unresolved-file list.
+    expect(gitClient.status).toHaveBeenCalledTimes(1);
+    // Document must NOT have been reloaded — the merge is not complete.
+    expect(mockedLoadOpFileFromPath).not.toHaveBeenCalled();
   });
 });
