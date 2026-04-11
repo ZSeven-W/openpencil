@@ -12,6 +12,7 @@
 //   - The output shape (data URL | null) is stable for test assertions.
 
 import type { PenDocument, PenNode } from '@zseven-w/pen-types';
+import { getDefaultTheme, resolveNodeForCanvas } from '@zseven-w/pen-core';
 import { flattenToRenderNodes, resolveRefs } from './document-flattener.js';
 
 export interface ThumbnailContext {
@@ -58,11 +59,19 @@ export async function renderNodeThumbnail(
 
     const resolvedNode = resolvedNodes[0] ?? node;
 
+    // Resolve design $variable references so fill colors, stroke widths, etc.
+    // render with their concrete values rather than the raw "$color-primary"
+    // strings.  Mirrors the same step in renderer.ts (line ~279).
+    const variables = ctx.document?.variables ?? {};
+    const themes = ctx.document?.themes;
+    const activeTheme = getDefaultTheme(themes);
+    const variableResolved = resolveNodeForCanvas(resolvedNode, variables, activeTheme);
+
     // Flatten to RenderNode array so we have absolute coordinates, auto-layout
     // positions, and text pre-measurements for all descendants.
     let renderNodes;
     try {
-      renderNodes = flattenToRenderNodes([resolvedNode]);
+      renderNodes = flattenToRenderNodes([variableResolved]);
     } catch {
       return null;
     }

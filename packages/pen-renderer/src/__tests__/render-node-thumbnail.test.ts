@@ -141,4 +141,72 @@ describe('renderNodeThumbnail — output shape / fallback contract', () => {
       expect(result).toBeNull();
     }
   });
+
+  // ---------------------------------------------------------------------------
+  // Gap 2: $variable resolution
+  // ---------------------------------------------------------------------------
+
+  it('does not throw when node has a $variable fill reference and document has variables', async () => {
+    // Node with a $color-primary fill reference.
+    const nodeWithVar = {
+      id: 'var-node-1',
+      type: 'rectangle',
+      x: 0,
+      y: 0,
+      width: 100,
+      height: 100,
+      fill: [{ type: 'solid', color: '$color-primary' }],
+    } as unknown as PenNode;
+
+    const docWithVars: PenDocument = {
+      id: 'doc-vars',
+      name: 'Doc With Variables',
+      children: [],
+      variables: {
+        'color-primary': { value: '#ff0000' },
+      },
+    } as unknown as PenDocument;
+
+    // In test env CanvasKit is unavailable so result is null, but the
+    // resolveNodeForCanvas code path must execute without throwing.
+    const result = await renderNodeThumbnail(nodeWithVar, {
+      document: docWithVars,
+      pageId: null,
+    });
+    expect(result).toBeNull();
+  });
+
+  it('does not throw when document has themes and node uses themed variable', async () => {
+    const nodeWithVar = {
+      id: 'themed-node-1',
+      type: 'rectangle',
+      x: 0,
+      y: 0,
+      width: 50,
+      height: 50,
+      fill: [{ type: 'solid', color: '$bg-color' }],
+    } as unknown as PenNode;
+
+    const docWithThemes: PenDocument = {
+      id: 'doc-themed',
+      name: 'Themed Doc',
+      children: [],
+      variables: {
+        'bg-color': {
+          value: [
+            { theme: { Mode: 'Light' }, value: '#ffffff' },
+            { theme: { Mode: 'Dark' }, value: '#000000' },
+          ],
+        },
+      },
+      themes: { Mode: ['Light', 'Dark'] },
+    } as unknown as PenDocument;
+
+    const result = await renderNodeThumbnail(nodeWithVar, {
+      document: docWithThemes,
+      pageId: null,
+    });
+    // Still null in test env, but must not throw.
+    expect(result).toBeNull();
+  });
 });
