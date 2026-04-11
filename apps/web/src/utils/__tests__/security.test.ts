@@ -133,8 +133,9 @@ describe('SVG parser getAttr ReDoS safety', () => {
   });
 });
 
-// NOTE: Figma parser decompression limits (MAX_UNZIPPED_SIZE = 100MB,
-// MAX_IMAGE_SIZE = 50MB) are internal constants in fig-parser.ts. They guard
-// against zip bombs during .fig file decompression. Testing requires crafting
-// valid .fig binaries with oversized payloads, and the WASM-based parser
-// hangs vitest's jsdom environment, so these are verified via code review.
+// NOTE: Figma parser decompression limits are internal constants in
+// fig-parser.ts (MAX_COMPRESSED_SIZE / MAX_UNZIPPED_SIZE / MAX_IMAGE_SIZE).
+// They guard against zip bombs during .fig file decompression. Testing them
+// requires crafting valid .fig binaries with oversized payloads, and the
+// WASM-based parser hangs vitest's jsdom environment, so these are verified
+// via code review.

@@ -11,10 +11,19 @@ const ZSTD_MAGIC = [0x28, 0xb5, 0x2f, 0xfd];
 const PNG_MAGIC_0 = 137;
 const PNG_MAGIC_1 = 80;
 
-const MAX_COMPRESSED_SIZE = 150 * 1024 * 1024; // 150MB compressed input
-const MAX_UNZIPPED_SIZE = 300 * 1024 * 1024; // 300MB total decompressed
-const MAX_IMAGE_SIZE = 150 * 1024 * 1024; // 150MB per image
+const MB = 1024 * 1024;
+// Ceilings exist purely as zip-bomb defence — reject inputs whose decompressed
+// footprint would obviously blow up memory before we even hand them to UZIP.
+// Raised from the earlier 150/300/150 MB cap (issue #94) because real design
+// systems exported from Figma can clear the old limit with normal content.
+const MAX_COMPRESSED_SIZE = 1024 * MB; // 1 GiB compressed input
+const MAX_UNZIPPED_SIZE = 2048 * MB; // 2 GiB total decompressed
+const MAX_IMAGE_SIZE = 512 * MB; // 512 MiB per embedded image
 const MAX_ZIP_ENTRIES = 10_000; // guard against zip bombs with many small entries
+
+function formatMiB(bytes: number): string {
+  return `${Math.round(bytes / MB)}MB`;
+}
 
 const int32 = new Int32Array(1);
 const uint8 = new Uint8Array(int32.buffer);
@@ -98,7 +107,9 @@ function figToBinaryParts(fileBuffer: ArrayBuffer): FigBinaryResult {
     // Pre-decompression size check: reject oversized compressed input before
     // UZIP.parse loads the full archive into memory (mitigates zip bombs).
     if (fileBuffer.byteLength > MAX_COMPRESSED_SIZE) {
-      throw new Error('Compressed .fig file exceeds maximum size limit (150MB)');
+      throw new Error(
+        `Compressed .fig file exceeds maximum size limit (${formatMiB(MAX_COMPRESSED_SIZE)})`,
+      );
     }
 
     let unzipped: Record<string, Uint8Array>;
@@ -120,11 +131,13 @@ function figToBinaryParts(fileBuffer: ArrayBuffer): FigBinaryResult {
     for (const [path, bytes] of Object.entries(unzipped)) {
       totalSize += bytes.length;
       if (totalSize > MAX_UNZIPPED_SIZE) {
-        throw new Error('Decompressed file exceeds maximum size limit (300MB)');
+        throw new Error(
+          `Decompressed file exceeds maximum size limit (${formatMiB(MAX_UNZIPPED_SIZE)})`,
+        );
       }
       if (path.startsWith('images/') && bytes.length > 0) {
         if (bytes.length > MAX_IMAGE_SIZE) {
-          throw new Error('Image exceeds maximum size limit (150MB)');
+          throw new Error(`Image exceeds maximum size limit (${formatMiB(MAX_IMAGE_SIZE)})`);
         }
         const key = path.slice(7); // Remove "images/" prefix
         imageFiles.set(key, bytes);
