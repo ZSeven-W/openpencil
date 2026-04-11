@@ -215,6 +215,10 @@ describe('worktree-merge real-git spike (gated on system git)', () => {
       });
 
     await g('init', '-b', 'main');
+    // sysMergeNoCommit reads identity during git's internal bookkeeping;
+    // make tests self-sufficient for machines without global git config.
+    await g('config', 'user.name', 'Test');
+    await g('config', 'user.email', 'test@test.com');
     await fsp.writeFile(
       join(repoDir, 'design.op'),
       JSON.stringify({ version: '1.0.0', children: [{ id: 'base' }] }),

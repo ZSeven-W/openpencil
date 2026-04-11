@@ -90,6 +90,10 @@ async function runGitTolerant(args: string[], opts: RunOpts): Promise<RunResult>
  *   - { kind: 'conflict' }  — one or more conflicts; MERGE_HEAD is set, unresolved
  *                             files remain in the index at conflict stages.
  *   - throws GitError       — on engine-level failures (not available, unknown ref, etc.)
+ *
+ * NOTE: some git versions read user identity during merge bookkeeping even with
+ * --no-commit. Callers must ensure the repo has user.name/user.email configured
+ * (or inject them via opts.env) — machines without a global git config will fail.
  */
 export async function sysMergeNoCommit(opts: {
   cwd: string;
