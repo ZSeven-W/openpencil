@@ -24,6 +24,7 @@ import {
   currentLogRef,
   dropSaveRequired,
   makeAutosaveHandler,
+  makeReloadAfterApply,
   makeSyncAfterHeadMove,
   metaFromOpenInfo,
   patchRepoRemote,
@@ -39,6 +40,13 @@ export const useGitStore = create<GitStore>((set, get) => {
    * clean paths so all three head-moving actions stay in lockstep.
    */
   const syncAfterHeadMove = makeSyncAfterHeadMove(get);
+
+  /**
+   * Phase 7c: post-apply reload (reload tracked file + refreshStatus +
+   * loadLog). Called from applyMerge() on both the normal-success and noop
+   * paths. Extracted to git-store-helpers.ts to keep this file under the cap.
+   */
+  const reloadAfterApply = makeReloadAfterApply(get);
 
   /**
    * Guard a mutating action on `useDocumentStore.getState().isDirty`. Dirty →
@@ -644,8 +652,9 @@ export const useGitStore = create<GitStore>((set, get) => {
     applyMerge: async () => {
       const repoId = requireRepoId(get().state);
       await withCleanWorkingTree(async () => {
+        let result: { hash: string; noop: boolean } | undefined;
         try {
-          await gitClient.applyMerge(repoId);
+          result = await gitClient.applyMerge(repoId);
         } catch (err) {
           // Phase 7b: `merge-still-conflicted` surfaces inline on the banner
           // rather than transitioning to the generic error card. The user must
@@ -657,17 +666,25 @@ export const useGitStore = create<GitStore>((set, get) => {
               }
               return s;
             });
+            // Immediately refresh status so the unresolved-file list is current.
+            await get().refreshStatus();
             return; // do NOT re-throw — banner owns the error display
           }
           throw err;
         }
-        // Success: transition conflict → ready and clear any stale finalizeError.
+        // Phase 7c: success (including noop: true) → transition conflict → ready
+        // and clear any stale finalizeError, then reload the tracked .op file
+        // and refresh the history log.
         set((s) => {
           if (s.state.kind === 'conflict') {
             return { state: { kind: 'ready', repo: s.state.repo } };
           }
           return s;
         });
+        // Reload the tracked file and refresh log. reloadAfterApply reads the
+        // current state (now 'ready') so it can find trackedFilePath.
+        await reloadAfterApply();
+        void result; // satisfy no-unused-vars for the noop discriminant
       }, 'apply merge');
     },
 

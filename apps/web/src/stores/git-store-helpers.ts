@@ -272,6 +272,30 @@ export function makeSyncAfterHeadMove(get: () => GitStore): () => Promise<void> 
 }
 
 /**
+ * Phase 7c: after applyMerge() succeeds, reload the tracked .op file from
+ * disk and refresh the history log so the UI reflects the merged result.
+ *
+ * Mirrors the reload done in makeSyncAfterHeadMove but scoped to the post-
+ * merge path: we do NOT call refreshBranches() here because the branch did
+ * not change during a merge (we stayed on the same branch and integrated the
+ * incoming changes). refreshStatus() is called to update dirty/ahead-behind
+ * so the "push N commits" button picks up the new merge commit.
+ */
+export function makeReloadAfterApply(get: () => GitStore): () => Promise<void> {
+  return async () => {
+    const state = get().state;
+    // After applyMerge transitions to 'ready', reload the tracked file.
+    if (state.kind === 'ready' && state.repo.trackedFilePath) {
+      await loadOpFileFromPath(state.repo.trackedFilePath);
+    }
+    // Refresh status to pick up the new merge commit in ahead/behind counts.
+    await get().refreshStatus();
+    // Reload the log so the history list shows the merge commit.
+    await get().loadLog({ ref: currentLogRef(get()), limit: 50 });
+  };
+}
+
+/**
  * Phase 6b: classify a thrown remote-action error. Returns an `'auth'`
  * verdict for recoverable auth codes (so the pull/push buttons can open
  * the shared auth form) or `'other'` for everything else (so the caller
