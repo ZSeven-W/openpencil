@@ -85,6 +85,7 @@ const es: TranslationKeys = {
   'git.conflict.banner.apply': 'Aplicar fusión',
   'git.conflict.banner.continue': 'Continuar',
   'git.conflict.banner.finalizeError': 'No se pudo aplicar: {{message}}',
+  'git.conflict.banner.pollError': 'Sondeo de estado pausado por un error: {{message}}',
   'git.error.dismiss': 'Descartar',
   'git.error.retry': 'Reintentar',
   'git.error.title': 'Algo salió mal',

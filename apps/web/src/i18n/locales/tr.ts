@@ -85,6 +85,7 @@ const tr: TranslationKeys = {
   'git.conflict.banner.apply': 'Apply merge',
   'git.conflict.banner.continue': 'Continue',
   'git.conflict.banner.finalizeError': 'Could not apply: {{message}}',
+  'git.conflict.banner.pollError': 'Status polling paused due to an error: {{message}}', // placeholder — Phase 7c localises
   'git.error.dismiss': 'Kapat',
   'git.error.retry': 'Tekrar dene',
   'git.error.title': 'Bir şeyler ters gitti',

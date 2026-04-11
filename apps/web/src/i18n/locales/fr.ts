@@ -86,6 +86,7 @@ const fr: TranslationKeys = {
   'git.conflict.banner.apply': 'Appliquer la fusion',
   'git.conflict.banner.continue': 'Continuer',
   'git.conflict.banner.finalizeError': "Impossible d'appliquer : {{message}}",
+  'git.conflict.banner.pollError': "Sondage d'état suspendu en raison d'une erreur : {{message}}",
   'git.error.dismiss': 'Ignorer',
   'git.error.retry': 'Réessayer',
   'git.error.title': 'Une erreur est survenue',

@@ -84,6 +84,7 @@ const en = {
   'git.conflict.banner.apply': 'Apply merge',
   'git.conflict.banner.continue': 'Continue',
   'git.conflict.banner.finalizeError': 'Could not apply: {{message}}',
+  'git.conflict.banner.pollError': 'Status polling paused due to an error: {{message}}',
 
   // ── Git Tracked-File Picker Back (Phase 7b) ──
   'git.picker.back': 'Back',

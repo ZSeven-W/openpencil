@@ -85,6 +85,7 @@ const de: TranslationKeys = {
   'git.conflict.banner.apply': 'Merge anwenden',
   'git.conflict.banner.continue': 'Fortfahren',
   'git.conflict.banner.finalizeError': 'Konnte nicht anwenden: {{message}}',
+  'git.conflict.banner.pollError': 'Status-Polling wegen eines Fehlers pausiert: {{message}}',
   'git.error.dismiss': 'Verwerfen',
   'git.error.retry': 'Erneut versuchen',
   'git.error.title': 'Ein Fehler ist aufgetreten',

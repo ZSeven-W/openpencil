@@ -85,6 +85,7 @@ const zh: TranslationKeys = {
   'git.conflict.banner.apply': 'Apply merge',
   'git.conflict.banner.continue': 'Continue',
   'git.conflict.banner.finalizeError': 'Could not apply: {{message}}',
+  'git.conflict.banner.pollError': 'Status polling paused due to an error: {{message}}', // placeholder — Phase 7c localises
   'git.error.dismiss': '关闭',
   'git.error.retry': '重试',
   'git.error.title': '出现问题',

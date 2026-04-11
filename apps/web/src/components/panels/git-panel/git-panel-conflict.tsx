@@ -11,7 +11,9 @@
 // Phase 7b: polling for non-.op unresolved files lives here so it only
 // runs while the conflict workspace is visible.
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { AlertCircle } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { useGitStore } from '@/stores/git-store';
 import { useGitPanelLogLoader } from './use-git-panel-log-loader';
 import { GitPanelHeader } from './git-panel-header';
@@ -22,6 +24,7 @@ const CONFLICT_KINDS = ['conflict'] as const;
 const POLL_INTERVAL_MS = 3000;
 
 export function GitPanelConflict() {
+  const { t } = useTranslation();
   const state = useGitStore((s) => s.state);
   const refreshStatus = useGitStore((s) => s.refreshStatus);
 
@@ -38,28 +41,32 @@ export function GitPanelConflict() {
   //   - stop polling on first error (surface error once, then stop)
   //   - cleanup on unmount
   const inFlightRef = useRef<boolean>(false);
-  const pollErrorRef = useRef<string | null>(null);
+  const pollStoppedRef = useRef<boolean>(false);
+  const [pollError, setPollError] = useState<string | null>(null);
 
   const unresolvedCount = state.kind === 'conflict' ? state.unresolvedFiles.length : 0;
   const shouldPoll = state.kind === 'conflict' && unresolvedCount > 0;
 
   useEffect(() => {
     if (!shouldPoll) return;
-    // Reset the error sentinel on each new poll session (e.g. unresolvedCount
+    // Reset error state on each new poll session (e.g. unresolvedCount
     // went 0 → non-zero after a state refresh).
-    pollErrorRef.current = null;
+    setPollError(null);
+    pollStoppedRef.current = false;
 
     const id = setInterval(async () => {
       // Skip if a refresh is already in flight.
       if (inFlightRef.current) return;
       // Stop if we already hit an error this session.
-      if (pollErrorRef.current !== null) return;
+      if (pollStoppedRef.current) return;
 
       inFlightRef.current = true;
       try {
         await refreshStatus();
       } catch (err) {
-        pollErrorRef.current = err instanceof Error ? err.message : String(err);
+        const message = err instanceof Error ? err.message : String(err);
+        pollStoppedRef.current = true;
+        setPollError(message);
       } finally {
         inFlightRef.current = false;
       }
@@ -75,6 +82,12 @@ export function GitPanelConflict() {
     <div className="flex h-full flex-col">
       <GitPanelHeader />
       <GitPanelConflictBanner />
+      {pollError !== null && (
+        <div className="mx-3 mb-2 flex items-start gap-1.5 rounded border border-destructive/20 bg-destructive/10 px-2 py-1.5 text-xs text-destructive">
+          <AlertCircle className="mt-px size-3 shrink-0" />
+          <span>{t('git.conflict.banner.pollError', { message: pollError })}</span>
+        </div>
+      )}
       <div className="flex-1 overflow-y-auto">
         <GitPanelHistoryList readOnly />
       </div>

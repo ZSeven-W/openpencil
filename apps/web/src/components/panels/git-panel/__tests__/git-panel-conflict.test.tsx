@@ -2,7 +2,7 @@
 // apps/web/src/components/panels/git-panel/__tests__/git-panel-conflict.test.tsx
 import React from 'react';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { render, screen, cleanup, fireEvent } from '@testing-library/react';
+import { render, screen, cleanup, fireEvent, act } from '@testing-library/react';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import type { GitCommitMeta } from '@/services/git-types';
 
@@ -220,5 +220,47 @@ describe('GitPanelConflict', () => {
     expect(screen.getByText('git.conflict.title')).toBeTruthy();
     expect(screen.queryByText('git.conflict.nonOp.title')).toBeNull();
     expect(screen.queryByRole('button', { name: 'git.conflict.banner.continue' })).toBeNull();
+  });
+
+  describe('polling error surface', () => {
+    beforeEach(() => {
+      vi.useFakeTimers();
+    });
+
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it('displays the poll error inline and stops polling after a single failure', async () => {
+      mocks.state = {
+        kind: 'conflict',
+        repo: mocks.state.repo,
+        conflicts: { nodeConflicts: new Map(), docFieldConflicts: new Map() },
+        unresolvedFiles: ['src/README.md'],
+        finalizeError: null,
+      };
+      mocks.refreshStatus.mockRejectedValueOnce(new Error('git: network timeout'));
+
+      renderWithProvider(<GitPanelConflict />);
+
+      // Advance to trigger the first poll (3 s) and flush React state updates
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(3000);
+      });
+
+      // The error message should now be visible in the UI
+      expect(
+        screen.getByText('git.conflict.banner.pollError:{"message":"git: network timeout"}'),
+      ).toBeTruthy();
+
+      // refreshStatus was called exactly once (the failed call)
+      expect(mocks.refreshStatus).toHaveBeenCalledTimes(1);
+
+      // Advance another 3 s — polling has stopped so refreshStatus is NOT called again
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(3000);
+      });
+      expect(mocks.refreshStatus).toHaveBeenCalledTimes(1);
+    });
   });
 });
