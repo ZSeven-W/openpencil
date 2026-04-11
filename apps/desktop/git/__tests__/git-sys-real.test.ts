@@ -5,6 +5,17 @@ import { join } from 'node:path';
 import { execFile, execFileSync } from 'node:child_process';
 import { promisify } from 'node:util';
 import { sysClone, sysFetch, sysPush, sysAheadBehind, mapSysError } from '../git-sys';
+import {
+  sysMergeNoCommit,
+  sysListUnresolved,
+  readMergeHead,
+  sysShowStageBlob,
+  sysRestoreOurs,
+  sysStageFile,
+  sysFinalizeMerge,
+  sysAbortMerge,
+  sysReadHead,
+} from '../worktree-merge';
 import { mkTempDir } from './test-helpers';
 
 const execFileAsync = promisify(execFile);
@@ -169,6 +180,285 @@ describe('git-sys real (gated on system git)', () => {
       code: 'push-rejected',
     });
   });
+});
+
+// ---------------------------------------------------------------------------
+// Phase 7a: worktree-merge real-git spike tests
+// ---------------------------------------------------------------------------
+
+describe('worktree-merge real-git spike (gated on system git)', () => {
+  let temp: { dir: string; dispose: () => Promise<void> };
+
+  beforeEach(async () => {
+    temp = await mkTempDir();
+  });
+
+  afterEach(async () => {
+    if (temp) await temp.dispose();
+  });
+
+  /**
+   * Helper: create a repo with two divergent branches, each modifying the
+   * tracked .op file (and optionally a README.md side file).
+   */
+  async function setupDivergentRepo(opts: {
+    withReadme?: boolean;
+    readmeConflict?: boolean;
+  }): Promise<{ repoDir: string; gitdir: string }> {
+    const repoDir = join(temp.dir, 'repo');
+    await fsp.mkdir(repoDir, { recursive: true });
+
+    const g = (...args: string[]) => execFileAsync('git', args, { cwd: repoDir });
+    const gc = (...args: string[]) =>
+      execFileAsync('git', ['-c', 'user.name=t', '-c', 'user.email=t@e.com', ...args], {
+        cwd: repoDir,
+      });
+
+    await g('init', '-b', 'main');
+    await fsp.writeFile(
+      join(repoDir, 'design.op'),
+      JSON.stringify({ version: '1.0.0', children: [{ id: 'base' }] }),
+    );
+    if (opts.withReadme) {
+      await fsp.writeFile(join(repoDir, 'README.md'), '# Base\n');
+    }
+    await g('add', '.');
+    await gc('commit', '-m', 'base');
+
+    // Branch off: feature changes
+    await g('checkout', '-b', 'feature');
+    await fsp.writeFile(
+      join(repoDir, 'design.op'),
+      JSON.stringify({ version: '1.0.0', children: [{ id: 'theirs' }] }),
+    );
+    if (opts.withReadme && opts.readmeConflict) {
+      await fsp.writeFile(join(repoDir, 'README.md'), '# Feature\n');
+    }
+    await g('add', '.');
+    await gc('commit', '-m', 'theirs');
+
+    // Return to main: ours changes
+    await g('checkout', 'main');
+    await fsp.writeFile(
+      join(repoDir, 'design.op'),
+      JSON.stringify({ version: '1.0.0', children: [{ id: 'ours' }] }),
+    );
+    if (opts.withReadme && opts.readmeConflict) {
+      await fsp.writeFile(join(repoDir, 'README.md'), '# Main\n');
+    }
+    await g('add', '.');
+    await gc('commit', '-m', 'ours');
+
+    const gitdir = join(repoDir, '.git');
+    return { repoDir, gitdir };
+  }
+
+  it.skipIf(!systemGitAvailable)(
+    'sysMergeNoCommit returns conflict and MERGE_HEAD is set',
+    async () => {
+      const { repoDir, gitdir } = await setupDivergentRepo({});
+
+      const result = await sysMergeNoCommit({ cwd: repoDir, ref: 'feature' });
+      expect(result.kind).toBe('conflict');
+
+      const mergeHead = await readMergeHead(gitdir);
+      expect(mergeHead).not.toBeNull();
+      expect(mergeHead).toMatch(/^[a-f0-9]{40}$/);
+    },
+  );
+
+  it.skipIf(!systemGitAvailable)(
+    'sysListUnresolved lists the tracked .op file as unresolved',
+    async () => {
+      const { repoDir } = await setupDivergentRepo({});
+      await sysMergeNoCommit({ cwd: repoDir, ref: 'feature' });
+
+      const unresolved = await sysListUnresolved({ cwd: repoDir });
+      expect(unresolved).toContain('design.op');
+    },
+  );
+
+  it.skipIf(!systemGitAvailable)(
+    'sysListUnresolved lists both .op and README when both conflict',
+    async () => {
+      const { repoDir } = await setupDivergentRepo({ withReadme: true, readmeConflict: true });
+      await sysMergeNoCommit({ cwd: repoDir, ref: 'feature' });
+
+      const unresolved = await sysListUnresolved({ cwd: repoDir });
+      expect(unresolved).toContain('design.op');
+      expect(unresolved).toContain('README.md');
+    },
+  );
+
+  it.skipIf(!systemGitAvailable)(
+    'sysShowStageBlob reads base/ours/theirs from the index',
+    async () => {
+      const { repoDir } = await setupDivergentRepo({});
+      await sysMergeNoCommit({ cwd: repoDir, ref: 'feature' });
+
+      const base = await sysShowStageBlob({ cwd: repoDir, stage: 1, filepath: 'design.op' });
+      const ours = await sysShowStageBlob({ cwd: repoDir, stage: 2, filepath: 'design.op' });
+      const theirs = await sysShowStageBlob({ cwd: repoDir, stage: 3, filepath: 'design.op' });
+
+      expect(JSON.parse(base!).children[0].id).toBe('base');
+      expect(JSON.parse(ours!).children[0].id).toBe('ours');
+      expect(JSON.parse(theirs!).children[0].id).toBe('theirs');
+    },
+  );
+
+  it.skipIf(!systemGitAvailable)(
+    'sysRestoreOurs writes readable JSON and keeps MERGE_HEAD alive',
+    async () => {
+      const { repoDir, gitdir } = await setupDivergentRepo({});
+      await sysMergeNoCommit({ cwd: repoDir, ref: 'feature' });
+
+      await sysRestoreOurs({ cwd: repoDir, filepath: 'design.op' });
+
+      // File on disk is now readable JSON.
+      const content = await fsp.readFile(join(repoDir, 'design.op'), 'utf-8');
+      expect(() => JSON.parse(content)).not.toThrow();
+      expect(JSON.parse(content).children[0].id).toBe('ours');
+
+      // MERGE_HEAD is still set.
+      const mergeHead = await readMergeHead(gitdir);
+      expect(mergeHead).not.toBeNull();
+
+      // File is still listed as unresolved in the index.
+      const unresolved = await sysListUnresolved({ cwd: repoDir });
+      expect(unresolved).toContain('design.op');
+    },
+  );
+
+  it.skipIf(!systemGitAvailable)(
+    'sysStageFile marks file as resolved so sysListUnresolved no longer includes it',
+    async () => {
+      const { repoDir } = await setupDivergentRepo({});
+      await sysMergeNoCommit({ cwd: repoDir, ref: 'feature' });
+
+      // Write the final content and stage it.
+      await fsp.writeFile(
+        join(repoDir, 'design.op'),
+        JSON.stringify({ version: '1.0.0', children: [{ id: 'resolved' }] }),
+      );
+      await sysStageFile({ cwd: repoDir, filepath: 'design.op' });
+
+      const unresolved = await sysListUnresolved({ cwd: repoDir });
+      expect(unresolved).not.toContain('design.op');
+    },
+  );
+
+  it.skipIf(!systemGitAvailable)(
+    'sysFinalizeMerge creates a 2-parent merge commit and clears MERGE_HEAD',
+    async () => {
+      const { repoDir, gitdir } = await setupDivergentRepo({});
+      const headBefore = await sysReadHead({ cwd: repoDir });
+      await sysMergeNoCommit({ cwd: repoDir, ref: 'feature' });
+
+      // Resolve the conflict.
+      await fsp.writeFile(
+        join(repoDir, 'design.op'),
+        JSON.stringify({ version: '1.0.0', children: [{ id: 'resolved' }] }),
+      );
+      await sysStageFile({ cwd: repoDir, filepath: 'design.op' });
+
+      const mergeCommit = await sysFinalizeMerge({
+        cwd: repoDir,
+        message: 'Merge feature into main',
+        author: { name: 'Test', email: 'test@test.com' },
+      });
+
+      expect(mergeCommit).toMatch(/^[a-f0-9]{40}$/);
+      expect(mergeCommit).not.toBe(headBefore);
+
+      // MERGE_HEAD is gone.
+      const mergeHead = await readMergeHead(gitdir);
+      expect(mergeHead).toBeNull();
+
+      // Verify 2-parent commit via git cat-file.
+      const catResult = await execFileAsync('git', ['cat-file', '-p', 'HEAD'], { cwd: repoDir });
+      const parentLines = catResult.stdout.split('\n').filter((line) => line.startsWith('parent '));
+      expect(parentLines).toHaveLength(2);
+    },
+  );
+
+  it.skipIf(!systemGitAvailable)(
+    'sysAbortMerge restores working tree and clears MERGE_HEAD',
+    async () => {
+      const { repoDir, gitdir } = await setupDivergentRepo({});
+      const headBefore = await sysReadHead({ cwd: repoDir });
+      await sysMergeNoCommit({ cwd: repoDir, ref: 'feature' });
+
+      await sysAbortMerge({ cwd: repoDir });
+
+      // MERGE_HEAD is gone.
+      const mergeHead = await readMergeHead(gitdir);
+      expect(mergeHead).toBeNull();
+
+      // HEAD is unchanged.
+      const headAfter = await sysReadHead({ cwd: repoDir });
+      expect(headAfter).toBe(headBefore);
+
+      // design.op is the ours version (clean JSON, no conflict markers).
+      const content = await fsp.readFile(join(repoDir, 'design.op'), 'utf-8');
+      expect(() => JSON.parse(content)).not.toThrow();
+      expect(JSON.parse(content).children[0].id).toBe('ours');
+    },
+  );
+
+  it.skipIf(!systemGitAvailable)(
+    'sysAbortMerge is idempotent when no merge is in progress',
+    async () => {
+      const { repoDir } = await setupDivergentRepo({});
+      // No merge started — abort should not throw.
+      await expect(sysAbortMerge({ cwd: repoDir })).resolves.toBeUndefined();
+    },
+  );
+
+  it.skipIf(!systemGitAvailable)(
+    'full workflow: tracked .op conflict + non-.op conflict, then finalize',
+    async () => {
+      const { repoDir, gitdir } = await setupDivergentRepo({
+        withReadme: true,
+        readmeConflict: true,
+      });
+      await sysMergeNoCommit({ cwd: repoDir, ref: 'feature' });
+
+      // Confirm both conflict.
+      const unresolved = await sysListUnresolved({ cwd: repoDir });
+      expect(unresolved).toContain('design.op');
+      expect(unresolved).toContain('README.md');
+
+      // Resolve .op by writing final merged content and staging.
+      await fsp.writeFile(
+        join(repoDir, 'design.op'),
+        JSON.stringify({ version: '1.0.0', children: [{ id: 'merged' }] }),
+      );
+      await sysStageFile({ cwd: repoDir, filepath: 'design.op' });
+
+      // .op is resolved; README still unresolved.
+      const afterOp = await sysListUnresolved({ cwd: repoDir });
+      expect(afterOp).not.toContain('design.op');
+      expect(afterOp).toContain('README.md');
+
+      // Resolve README (take ours).
+      await sysRestoreOurs({ cwd: repoDir, filepath: 'README.md' });
+      await sysStageFile({ cwd: repoDir, filepath: 'README.md' });
+
+      // All resolved.
+      const afterAll = await sysListUnresolved({ cwd: repoDir });
+      expect(afterAll).toHaveLength(0);
+
+      // Finalize.
+      const mergeCommit = await sysFinalizeMerge({
+        cwd: repoDir,
+        message: 'Merge feature: mixed conflict',
+        author: { name: 'Test', email: 'test@test.com' },
+      });
+      expect(mergeCommit).toMatch(/^[a-f0-9]{40}$/);
+      const mergeHead = await readMergeHead(gitdir);
+      expect(mergeHead).toBeNull();
+    },
+  );
 });
 
 describe('mapSysError', () => {
