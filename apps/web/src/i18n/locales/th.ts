@@ -265,6 +265,7 @@ const th: TranslationKeys = {
   'git.ssh.importAction': 'นำเข้าที่มีอยู่',
   'git.ssh.copyPublicKey': 'คัดลอกคีย์สาธารณะ',
   'git.ssh.copiedHint': 'คัดลอกแล้ว',
+  'git.ssh.copyUnsupported': 'ไม่สามารถใช้คลิปบอร์ดได้ — โปรดคัดลอกคีย์นี้ด้วยตนเอง',
   'git.ssh.deleteKey': 'ลบ {{name}}',
   'git.ssh.deletePrompt': 'ลบคีย์ SSH {{name}}?',
   'git.ssh.deleteConfirm': 'ลบ',

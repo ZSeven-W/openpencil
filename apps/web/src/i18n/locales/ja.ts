@@ -273,6 +273,7 @@ const ja: TranslationKeys = {
   'git.ssh.importAction': '既存のものをインポート',
   'git.ssh.copyPublicKey': '公開鍵をコピー',
   'git.ssh.copiedHint': 'コピーしました',
+  'git.ssh.copyUnsupported': 'クリップボードを利用できません。この鍵を手動でコピーしてください。',
   'git.ssh.deleteKey': '{{name}} を削除',
   'git.ssh.deletePrompt': 'SSH 鍵 {{name}} を削除しますか?',
   'git.ssh.deleteConfirm': '削除',

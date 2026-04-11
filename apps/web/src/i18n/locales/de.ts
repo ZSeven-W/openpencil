@@ -274,6 +274,8 @@ const de: TranslationKeys = {
   'git.ssh.importAction': 'Vorhandenen importieren',
   'git.ssh.copyPublicKey': 'Öffentlichen Schlüssel kopieren',
   'git.ssh.copiedHint': 'Kopiert',
+  'git.ssh.copyUnsupported':
+    'Zwischenablage nicht verfügbar – diesen Schlüssel bitte manuell kopieren.',
   'git.ssh.deleteKey': '{{name}} löschen',
   'git.ssh.deletePrompt': 'SSH-Schlüssel {{name}} löschen?',
   'git.ssh.deleteConfirm': 'Löschen',

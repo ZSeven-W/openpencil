@@ -269,6 +269,7 @@ const vi: TranslationKeys = {
   'git.ssh.importAction': 'Nhập khóa có sẵn',
   'git.ssh.copyPublicKey': 'Sao chép khóa công khai',
   'git.ssh.copiedHint': 'Đã sao chép',
+  'git.ssh.copyUnsupported': 'Không có clipboard — vui lòng sao chép khóa này theo cách thủ công.',
   'git.ssh.deleteKey': 'Xóa {{name}}',
   'git.ssh.deletePrompt': 'Xóa khóa SSH {{name}}?',
   'git.ssh.deleteConfirm': 'Xóa',

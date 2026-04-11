@@ -269,6 +269,7 @@ const en = {
   'git.ssh.importAction': 'Import existing',
   'git.ssh.copyPublicKey': 'Copy public key',
   'git.ssh.copiedHint': 'Copied',
+  'git.ssh.copyUnsupported': 'Clipboard not available — copy this key manually.',
   'git.ssh.deleteKey': 'Delete {{name}}',
   'git.ssh.deletePrompt': 'Delete SSH key {{name}}?',
   'git.ssh.deleteConfirm': 'Delete',

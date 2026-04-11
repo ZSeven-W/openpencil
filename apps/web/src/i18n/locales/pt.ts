@@ -272,6 +272,7 @@ const pt: TranslationKeys = {
   'git.ssh.importAction': 'Importar existente',
   'git.ssh.copyPublicKey': 'Copiar chave pública',
   'git.ssh.copiedHint': 'Copiada',
+  'git.ssh.copyUnsupported': 'Área de transferência indisponível — copie esta chave manualmente.',
   'git.ssh.deleteKey': 'Excluir {{name}}',
   'git.ssh.deletePrompt': 'Excluir a chave SSH {{name}}?',
   'git.ssh.deleteConfirm': 'Excluir',

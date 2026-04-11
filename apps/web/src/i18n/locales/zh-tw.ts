@@ -263,6 +263,7 @@ const zhTW: TranslationKeys = {
   'git.ssh.importAction': '匯入現有金鑰',
   'git.ssh.copyPublicKey': '複製公鑰',
   'git.ssh.copiedHint': '已複製',
+  'git.ssh.copyUnsupported': '剪貼簿無法使用——請手動複製此金鑰。',
   'git.ssh.deleteKey': '刪除 {{name}}',
   'git.ssh.deletePrompt': '刪除 SSH 金鑰 {{name}}?',
   'git.ssh.deleteConfirm': '刪除',

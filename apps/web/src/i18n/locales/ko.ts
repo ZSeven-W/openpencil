@@ -270,6 +270,7 @@ const ko: TranslationKeys = {
   'git.ssh.importAction': '기존 항목 가져오기',
   'git.ssh.copyPublicKey': '공개 키 복사',
   'git.ssh.copiedHint': '복사됨',
+  'git.ssh.copyUnsupported': '클립보드를 사용할 수 없습니다. 이 키를 수동으로 복사하세요.',
   'git.ssh.deleteKey': '{{name}} 삭제',
   'git.ssh.deletePrompt': 'SSH 키 {{name}}을(를) 삭제할까요?',
   'git.ssh.deleteConfirm': '삭제',

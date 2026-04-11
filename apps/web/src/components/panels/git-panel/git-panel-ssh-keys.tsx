@@ -16,7 +16,7 @@
 // overflow popover and doesn't need to survive across opens.
 
 import { ArrowLeft, Copy, ExternalLink, Loader2, Plus, Trash2, Upload } from 'lucide-react';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
@@ -53,6 +53,11 @@ export function GitPanelSshKeys({ onBack }: GitPanelSshKeysProps) {
   const [busy, setBusy] = useState(false);
   const [inlineError, setInlineError] = useState<string | null>(null);
   const [copiedKeyId, setCopiedKeyId] = useState<string | null>(null);
+  // Track the pending "copied" flash timer so it can be cleared on a second
+  // copy (debounces the flash) and, critically, on unmount — otherwise the
+  // timeout fires after the popover closes and setCopiedKeyId runs on a
+  // stale component.
+  const copyTimerRef = useRef<number | null>(null);
 
   // Generate form fields
   const [genHost, setGenHost] = useState<string>(currentHost ?? '');
@@ -70,6 +75,17 @@ export function GitPanelSshKeys({ onBack }: GitPanelSshKeysProps) {
   useEffect(() => {
     void refreshSshKeys();
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Clean up any in-flight "copied" flash timer on unmount so it can't call
+  // setCopiedKeyId after the subview is gone.
+  useEffect(() => {
+    return () => {
+      if (copyTimerRef.current !== null) {
+        window.clearTimeout(copyTimerRef.current);
+        copyTimerRef.current = null;
+      }
+    };
   }, []);
 
   // Float keys bound to the current remote host to the top of the list.
@@ -110,7 +126,14 @@ export function GitPanelSshKeys({ onBack }: GitPanelSshKeysProps) {
       setView('list');
       resetForms();
     } catch (err) {
-      setInlineError(extractMessage(err));
+      // Symmetric with git-panel-remote-settings: translate the iso SSH
+      // transport gate to its localized hint so the user doesn't see a raw
+      // engine-level error string.
+      if (isGitError(err) && err.code === 'ssh-not-supported-iso') {
+        setInlineError(t('git.ssh.isoUnsupported'));
+      } else {
+        setInlineError(extractMessage(err));
+      }
     } finally {
       setBusy(false);
     }
@@ -143,7 +166,11 @@ export function GitPanelSshKeys({ onBack }: GitPanelSshKeysProps) {
       setView('list');
       resetForms();
     } catch (err) {
-      setInlineError(extractMessage(err));
+      if (isGitError(err) && err.code === 'ssh-not-supported-iso') {
+        setInlineError(t('git.ssh.isoUnsupported'));
+      } else {
+        setInlineError(extractMessage(err));
+      }
     } finally {
       setBusy(false);
     }
@@ -165,11 +192,25 @@ export function GitPanelSshKeys({ onBack }: GitPanelSshKeysProps) {
   }
 
   async function handleCopyPublicKey(key: GitPublicSshKeyInfo) {
+    // Feature-gate: navigator.clipboard is undefined in non-secure contexts
+    // (http://, file://, some jsdom test environments). Blindly reading
+    // `.writeText` would throw a raw TypeError with a confusing message.
+    if (typeof navigator === 'undefined' || !navigator.clipboard?.writeText) {
+      setInlineError(t('git.ssh.copyUnsupported'));
+      return;
+    }
     try {
       await navigator.clipboard.writeText(key.publicKey);
       setCopiedKeyId(key.id);
       // Clear the copied hint after a moment so a later copy still flashes.
-      window.setTimeout(() => {
+      // Cancel any previous pending clear so rapid successive copies on
+      // different rows don't race each other, and store the handle so the
+      // unmount effect can cancel it if the subview closes first.
+      if (copyTimerRef.current !== null) {
+        window.clearTimeout(copyTimerRef.current);
+      }
+      copyTimerRef.current = window.setTimeout(() => {
+        copyTimerRef.current = null;
         setCopiedKeyId((prev) => (prev === key.id ? null : prev));
       }, 1600);
     } catch (err) {
@@ -478,7 +519,7 @@ function ListView({
               </div>
             </div>
             {copiedKeyId === k.id && (
-              <span className="text-[10px] text-muted-foreground" role="status">
+              <span className="text-[10px] text-muted-foreground" role="status" aria-live="polite">
                 {t('git.ssh.copiedHint')}
               </span>
             )}

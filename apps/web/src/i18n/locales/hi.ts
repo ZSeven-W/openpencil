@@ -268,6 +268,7 @@ const hi: TranslationKeys = {
   'git.ssh.importAction': 'मौजूदा आयात करें',
   'git.ssh.copyPublicKey': 'सार्वजनिक कुंजी कॉपी करें',
   'git.ssh.copiedHint': 'कॉपी किया गया',
+  'git.ssh.copyUnsupported': 'क्लिपबोर्ड उपलब्ध नहीं है — इस कुंजी को मैन्युअल रूप से कॉपी करें।',
   'git.ssh.deleteKey': '{{name}} हटाएं',
   'git.ssh.deletePrompt': 'SSH कुंजी {{name}} हटाएं?',
   'git.ssh.deleteConfirm': 'हटाएं',

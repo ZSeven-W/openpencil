@@ -273,6 +273,7 @@ const ru: TranslationKeys = {
   'git.ssh.importAction': 'Импортировать существующий',
   'git.ssh.copyPublicKey': 'Скопировать публичный ключ',
   'git.ssh.copiedHint': 'Скопировано',
+  'git.ssh.copyUnsupported': 'Буфер обмена недоступен — скопируйте этот ключ вручную.',
   'git.ssh.deleteKey': 'Удалить {{name}}',
   'git.ssh.deletePrompt': 'Удалить SSH-ключ {{name}}?',
   'git.ssh.deleteConfirm': 'Удалить',

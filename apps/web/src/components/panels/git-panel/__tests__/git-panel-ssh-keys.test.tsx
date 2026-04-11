@@ -9,6 +9,7 @@
 //   - SSH iso gating banner
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { render, screen, fireEvent, cleanup, waitFor } from '@testing-library/react';
+import { GitError } from '@/services/git-error';
 import type { GitPublicSshKeyInfo, GitRemoteInfo } from '@/services/git-types';
 
 interface ReadyStateMock {
@@ -154,8 +155,34 @@ describe('GitPanelSshKeys', () => {
     const copyBtn = screen.getByLabelText('git.ssh.copyPublicKey');
     fireEvent.click(copyBtn);
     await waitFor(() => expect(clipboardWriteSpy).toHaveBeenCalledWith('ssh-ed25519 AAAA'));
-    // Success hint renders
-    await waitFor(() => expect(screen.getByText('git.ssh.copiedHint')).toBeTruthy());
+    // Success hint renders and is announced to assistive tech.
+    const hint = await waitFor(() => screen.getByText('git.ssh.copiedHint'));
+    expect(hint.getAttribute('aria-live')).toBe('polite');
+    expect(hint.getAttribute('role')).toBe('status');
+  });
+
+  it('copy falls back to copyUnsupported inline error when navigator.clipboard is undefined', async () => {
+    fx.sshKeys = [
+      {
+        id: 'gh',
+        host: 'github.com',
+        publicKey: 'ssh-ed25519 AAAA',
+        fingerprint: 'SHA256:aaa',
+        comment: 'gh',
+      },
+    ];
+    // Simulate a non-secure context (http:// or file://) where the
+    // Clipboard API is gated off and `navigator.clipboard` is undefined.
+    Object.defineProperty(global.navigator, 'clipboard', {
+      configurable: true,
+      value: undefined,
+    });
+    render(<GitPanelSshKeys onBack={() => {}} />);
+    const copyBtn = screen.getByLabelText('git.ssh.copyPublicKey');
+    fireEvent.click(copyBtn);
+    await waitFor(() => expect(screen.getByText('git.ssh.copyUnsupported')).toBeTruthy());
+    // The copied flash must NOT appear when clipboard is unavailable.
+    expect(screen.queryByText('git.ssh.copiedHint')).toBeNull();
   });
 
   // ---- Provider link visibility ----------------------------------------
@@ -238,6 +265,26 @@ describe('GitPanelSshKeys', () => {
     fireEvent.click(screen.getByText('git.ssh.generateSubmit'));
     await waitFor(() => expect(screen.getByText('git.ssh.validationHost')).toBeTruthy());
     expect(fx.generateSshKey).not.toHaveBeenCalled();
+  });
+
+  it('maps ssh-not-supported-iso from generateSshKey to the localized hint', async () => {
+    // Mirror the remote-settings pattern: a GitError with the iso gate code
+    // must surface the localized `git.ssh.isoUnsupported` string, NOT the
+    // raw engine-level error message.
+    fx.generateSshKey.mockRejectedValueOnce(
+      new GitError('ssh-not-supported-iso', 'raw engine error text'),
+    );
+    render(<GitPanelSshKeys onBack={() => {}} />);
+    fireEvent.click(screen.getByText('git.ssh.generateAction'));
+    fireEvent.change(screen.getByLabelText('git.ssh.hostLabel'), {
+      target: { value: 'github.com' },
+    });
+    fireEvent.change(screen.getByLabelText('git.ssh.commentLabel'), {
+      target: { value: 'laptop' },
+    });
+    fireEvent.click(screen.getByText('git.ssh.generateSubmit'));
+    await waitFor(() => expect(screen.getByText('git.ssh.isoUnsupported')).toBeTruthy());
+    expect(screen.queryByText('raw engine error text')).toBeNull();
   });
 
   // ---- Import flow ------------------------------------------------------

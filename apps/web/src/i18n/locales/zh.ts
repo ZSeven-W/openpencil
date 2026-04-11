@@ -264,6 +264,7 @@ const zh: TranslationKeys = {
   'git.ssh.importAction': '导入现有密钥',
   'git.ssh.copyPublicKey': '复制公钥',
   'git.ssh.copiedHint': '已复制',
+  'git.ssh.copyUnsupported': '剪贴板不可用——请手动复制此密钥。',
   'git.ssh.deleteKey': '删除 {{name}}',
   'git.ssh.deletePrompt': '删除 SSH 密钥 {{name}}?',
   'git.ssh.deleteConfirm': '删除',

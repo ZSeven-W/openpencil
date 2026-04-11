@@ -271,6 +271,7 @@ const id: TranslationKeys = {
   'git.ssh.importAction': 'Impor yang ada',
   'git.ssh.copyPublicKey': 'Salin kunci publik',
   'git.ssh.copiedHint': 'Disalin',
+  'git.ssh.copyUnsupported': 'Papan klip tidak tersedia — salin kunci ini secara manual.',
   'git.ssh.deleteKey': 'Hapus {{name}}',
   'git.ssh.deletePrompt': 'Hapus kunci SSH {{name}}?',
   'git.ssh.deleteConfirm': 'Hapus',

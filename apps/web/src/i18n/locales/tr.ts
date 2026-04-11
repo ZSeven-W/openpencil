@@ -272,6 +272,7 @@ const tr: TranslationKeys = {
   'git.ssh.importAction': 'Mevcut olanı içe aktar',
   'git.ssh.copyPublicKey': 'Genel anahtarı kopyala',
   'git.ssh.copiedHint': 'Kopyalandı',
+  'git.ssh.copyUnsupported': 'Pano kullanılamıyor — bu anahtarı elle kopyalayın.',
   'git.ssh.deleteKey': '{{name}} sil',
   'git.ssh.deletePrompt': '{{name}} SSH anahtarı silinsin mi?',
   'git.ssh.deleteConfirm': 'Sil',
