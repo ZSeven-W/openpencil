@@ -7,6 +7,9 @@ const PUSH_DEBOUNCE_MS = 2000;
 const SELECTION_DEBOUNCE_MS = 300;
 const RECONNECT_DELAY_MS = 3000;
 const MAX_RECONNECT_ATTEMPTS = 3;
+const SYNC_MAX_BODY_BYTES = 2 * 1024 * 1024;
+
+let oversizeSyncWarned = false;
 
 async function handleScreenshotRequest(
   req: {
@@ -92,13 +95,38 @@ function getBaseUrl(): string {
   return window.location.origin;
 }
 
-function pushDocumentToServer(clientId: string | null) {
+async function pushDocumentToServer(clientId: string | null) {
   const doc = useDocumentStore.getState().document;
-  fetch(`${getBaseUrl()}/api/mcp/document`, {
+  const body = JSON.stringify({ document: doc, sourceClientId: clientId });
+  const bodyBytes = new TextEncoder().encode(body).byteLength;
+
+  if (bodyBytes > SYNC_MAX_BODY_BYTES) {
+    if (!oversizeSyncWarned) {
+      oversizeSyncWarned = true;
+      console.warn(
+        `[mcp-sync] Skip oversized document push: ${(bodyBytes / (1024 * 1024)).toFixed(
+          2,
+        )}MiB > ${(SYNC_MAX_BODY_BYTES / (1024 * 1024)).toFixed(2)}MiB`,
+      );
+    }
+    return;
+  }
+
+  oversizeSyncWarned = false;
+
+  await fetch(`${getBaseUrl()}/api/mcp/document`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ document: doc, sourceClientId: clientId }),
-  }).catch(() => {});
+    headers: {
+      'Content-Type': 'application/json',
+      'x-openpencil-client-id': clientId ?? 'renderer:unknown',
+      'x-openpencil-body-bytes': String(bodyBytes),
+    },
+    // Keep smaller requests alive through page transitions and HMR churn.
+    ...(bodyBytes <= 60_000 ? { keepalive: true } : {}),
+    // Large local sync payloads need a wider timeout budget than the fetch default.
+    signal: AbortSignal.timeout(30_000),
+    body,
+  });
 }
 
 /**
@@ -109,6 +137,9 @@ function pushDocumentToServer(clientId: string | null) {
 export function useMcpSync() {
   const clientIdRef = useRef<string | null>(null);
   const pushTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pushInFlightRef = useRef(false);
+  const pushQueuedRef = useRef(false);
+  const queuedClientIdRef = useRef<string | null>(null);
   // Skip debounce pushes briefly after applying an external document.
   // Use a timestamp instead of a boolean so cascading setState calls
   // (e.g. canvas sync page switch handler) are also suppressed.
@@ -120,6 +151,30 @@ export function useMcpSync() {
     let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
     let disposed = false;
     let reconnectAttempts = 0;
+
+    async function flushDocumentPush(clientId: string | null) {
+      if (disposed) return;
+      if (pushInFlightRef.current) {
+        pushQueuedRef.current = true;
+        queuedClientIdRef.current = clientId;
+        return;
+      }
+
+      pushInFlightRef.current = true;
+      try {
+        await pushDocumentToServer(clientId);
+      } catch {
+        // MCP sync is a best-effort enhancement and should not interrupt editing.
+      } finally {
+        pushInFlightRef.current = false;
+        if (pushQueuedRef.current && !disposed) {
+          const nextClientId = queuedClientIdRef.current;
+          pushQueuedRef.current = false;
+          queuedClientIdRef.current = null;
+          void flushDocumentPush(nextClientId);
+        }
+      }
+    }
 
     // ---- Focus / visibility ping: keep lastActiveClientId accurate ----
     const sendActivePing = () => {
@@ -150,7 +205,7 @@ export function useMcpSync() {
           if (data.type === 'client:id') {
             clientIdRef.current = data.clientId;
             // Push current document so MCP can read it immediately
-            pushDocumentToServer(data.clientId);
+            void flushDocumentPush(data.clientId);
             // Announce this tab as the active one
             sendActivePing();
           } else if (data.type === 'document:update' || data.type === 'document:init') {
@@ -203,17 +258,20 @@ export function useMcpSync() {
     // On loadDocument/newDocument (isDirty transitions to false), push
     // immediately so the server cache is replaced without waiting 2s.
     const unsubDoc = useDocumentStore.subscribe((state, prevState) => {
+      const documentChanged = state.document !== prevState.document;
+      const dirtyChanged = state.isDirty !== prevState.isDirty;
+      if (!documentChanged && !dirtyChanged) return;
       if (Date.now() < skipPushUntilRef.current) return;
       if (pushTimerRef.current) clearTimeout(pushTimerRef.current);
 
       const isLoadEvent = !state.isDirty && prevState.isDirty !== state.isDirty;
       if (isLoadEvent) {
-        pushDocumentToServer(clientIdRef.current);
+        void flushDocumentPush(clientIdRef.current);
         return;
       }
 
       pushTimerRef.current = setTimeout(() => {
-        pushDocumentToServer(clientIdRef.current);
+        void flushDocumentPush(clientIdRef.current);
       }, PUSH_DEBOUNCE_MS);
     });
 
