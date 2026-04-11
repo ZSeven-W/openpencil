@@ -651,9 +651,8 @@ export const useGitStore = create<GitStore>((set, get) => {
     applyMerge: async () => {
       const repoId = requireRepoId(get().state);
       await withCleanWorkingTree(async () => {
-        let result: { hash: string; noop: boolean } | undefined;
         try {
-          result = await gitClient.applyMerge(repoId);
+          await gitClient.applyMerge(repoId);
         } catch (err) {
           // Phase 7b: `merge-still-conflicted` surfaces inline on the banner
           // rather than transitioning to the generic error card. The user must
@@ -683,7 +682,6 @@ export const useGitStore = create<GitStore>((set, get) => {
         // Reload the tracked file and refresh log. reloadAfterApply reads the
         // current state (now 'ready') so it can find trackedFilePath.
         await reloadAfterApply();
-        void result; // satisfy no-unused-vars for the noop discriminant
       }, 'apply merge');
     },
 
