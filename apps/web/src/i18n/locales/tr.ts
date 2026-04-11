@@ -74,6 +74,13 @@ const tr: TranslationKeys = {
   'git.conflict.title': 'Birleştirme çakışması',
   'git.conflict.description': "Çakışmalar manuel çözüm gerektirir — Phase 7'de gelecek.",
   'git.conflict.abort': 'Birleştirmeyi iptal et',
+  'git.conflict.nonOp.title': '.op olmayan dosyalar nedeniyle birleştirme duraklatıldı',
+  'git.conflict.nonOp.description':
+    '.op birleştirmesi tamamlandı, ancak depodaki diğer dosyalar hâlâ çözülmedi. OpenPencil dışında çözün, ardından devam edin.',
+  'git.conflict.nonOp.unresolvedHeading_one': '1 dosya ilgilenmeyi bekliyor',
+  'git.conflict.nonOp.unresolvedHeading_other': '{{count}} dosya ilgilenmeyi bekliyor',
+  'git.conflict.nonOp.continue': 'Birleştirmeye devam et',
+  'git.conflict.nonOp.abort': 'Birleştirmeyi iptal et',
   'git.error.dismiss': 'Kapat',
   'git.error.retry': 'Tekrar dene',
   'git.error.title': 'Bir şeyler ters gitti',
@@ -213,6 +220,46 @@ const tr: TranslationKeys = {
     "Klonlama başarısız. URL'nin gerçek bir depoya işaret ettiğini doğrulayın.",
   'git.wizard.clone.error.clone-target-exists': 'Hedef klasör zaten var veya boş değil.',
 
+  // ── Git Pull / Push (Phase 6b) ──
+  'git.pull.label': 'Pull',
+  'git.pull.tooltip': "origin'den pull",
+  'git.pull.noRemote': 'Remote yapılandırılmamış — Git ayarlarından ekleyin',
+  'git.pull.retry': "Pull'u yeniden dene",
+  'git.push.label': 'Push',
+  'git.push.tooltip_one': "origin'e 1 commit push",
+  'git.push.tooltip_other': "origin'e {{count}} commit push",
+  'git.push.noRemote': 'Remote yapılandırılmamış — Git ayarlarından ekleyin',
+  'git.push.upToDate': 'Push edilecek bir şey yok — güncelsiniz',
+  'git.push.retry': "Push'u yeniden dene",
+  'git.push.rejectedBody':
+    "Remote'da henüz sizde olmayan commit'ler var. Önce pull yapın, sonra tekrar push yapın.",
+  'git.push.rejectedDismiss': 'Kapat',
+  'git.push.rejectedPull': 'Şimdi pull',
+  'git.remote.dismissError': 'Kapat',
+
+  // ── Git Kimlik doğrulama formu (Phase 6b) ──
+  'git.auth.formLabel': 'Git kimlik bilgileri',
+  'git.auth.heading': '{{host}} ile kimlik doğrula',
+  'git.auth.headingUnknown': 'Bu remote ile kimlik doğrula',
+  'git.auth.modeToggleLabel': 'Kimlik bilgisi türü',
+  'git.auth.modeToken': 'Token',
+  'git.auth.modeSsh': 'SSH',
+  'git.auth.usernameLabel': 'Kullanıcı adı (isteğe bağlı)',
+  'git.auth.tokenLabel': "Erişim token'ı",
+  'git.auth.tokenPlaceholder': 'ghp_… veya PAT',
+  'git.auth.sshKeyLabel': 'SSH anahtarı',
+  'git.auth.sshNoKeys':
+    'Kullanılabilir SSH anahtarı yok. Önce Git ayarlarından içe aktarın veya oluşturun.',
+  'git.auth.rememberLabel': 'Bu host için kimlik bilgilerini hatırla',
+  'git.auth.rememberHint': 'Bu host için kimlik bilgilerini hatırla',
+  'git.auth.cancel': 'İptal',
+  'git.auth.validationToken': "Erişim token'ı gereklidir",
+  'git.auth.validationSshKey': 'Bir SSH anahtarı seçin',
+  'git.auth.error.auth-required': 'Bu remote kimlik doğrulaması gerektiriyor.',
+  'git.auth.error.auth-failed':
+    'Kimlik doğrulama başarısız. Kimlik bilgilerinizi kontrol edin ve tekrar deneyin.',
+  'git.auth.error.auth-token-invalid':
+    "Erişim token'ı reddedildi. Yeni bir tane oluşturun ve tekrar deneyin.",
   // ── Right Panel ──
   'rightPanel.design': 'Tasarım',
   'rightPanel.code': 'Kod',

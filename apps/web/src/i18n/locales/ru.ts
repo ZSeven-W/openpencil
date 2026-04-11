@@ -74,6 +74,13 @@ const ru: TranslationKeys = {
   'git.conflict.title': 'Конфликт слияния',
   'git.conflict.description': 'Конфликты требуют ручного разрешения — доступно в Фазе 7.',
   'git.conflict.abort': 'Отменить слияние',
+  'git.conflict.nonOp.title': 'Слияние приостановлено из-за не-.op файлов',
+  'git.conflict.nonOp.description':
+    'Слияние .op файлов завершено, но другие файлы в репозитории ещё не разрешены. Разрешите их вне OpenPencil и продолжите.',
+  'git.conflict.nonOp.unresolvedHeading_one': '1 файл требует внимания',
+  'git.conflict.nonOp.unresolvedHeading_other': '{{count}} файлов требуют внимания',
+  'git.conflict.nonOp.continue': 'Продолжить слияние',
+  'git.conflict.nonOp.abort': 'Отменить слияние',
   'git.error.dismiss': 'Закрыть',
   'git.error.retry': 'Повторить',
   'git.error.title': 'Что-то пошло не так',
@@ -214,6 +221,46 @@ const ru: TranslationKeys = {
     'Клонирование не удалось. Убедитесь, что URL указывает на существующий репозиторий.',
   'git.wizard.clone.error.clone-target-exists': 'Папка назначения уже существует или не пуста.',
 
+  // ── Git Pull / Push (Phase 6b) ──
+  'git.pull.label': 'Pull',
+  'git.pull.tooltip': 'Pull из origin',
+  'git.pull.noRemote': 'Удалённый репозиторий не настроен — добавьте его в настройках Git',
+  'git.pull.retry': 'Повторить pull',
+  'git.push.label': 'Push',
+  'git.push.tooltip_one': 'Отправить 1 коммит в origin',
+  'git.push.tooltip_other': 'Отправить {{count}} коммитов в origin',
+  'git.push.noRemote': 'Удалённый репозиторий не настроен — добавьте его в настройках Git',
+  'git.push.upToDate': 'Нечего отправлять — вы в курсе',
+  'git.push.retry': 'Повторить push',
+  'git.push.rejectedBody':
+    'В удалённом репозитории есть коммиты, которых у вас ещё нет. Сначала выполните pull, затем повторите push.',
+  'git.push.rejectedDismiss': 'Закрыть',
+  'git.push.rejectedPull': 'Выполнить pull',
+  'git.remote.dismissError': 'Закрыть',
+
+  // ── Git Форма аутентификации (Phase 6b) ──
+  'git.auth.formLabel': 'Учётные данные Git',
+  'git.auth.heading': 'Аутентификация на {{host}}',
+  'git.auth.headingUnknown': 'Аутентификация с этим удалённым',
+  'git.auth.modeToggleLabel': 'Тип учётных данных',
+  'git.auth.modeToken': 'Токен',
+  'git.auth.modeSsh': 'SSH',
+  'git.auth.usernameLabel': 'Имя пользователя (необязательно)',
+  'git.auth.tokenLabel': 'Токен доступа',
+  'git.auth.tokenPlaceholder': 'ghp_… или PAT',
+  'git.auth.sshKeyLabel': 'SSH-ключ',
+  'git.auth.sshNoKeys':
+    'Нет доступных SSH-ключей. Сначала импортируйте или сгенерируйте один в настройках Git.',
+  'git.auth.rememberLabel': 'Запомнить эти учётные данные для этого хоста',
+  'git.auth.rememberHint': 'Запомнить эти учётные данные для этого хоста',
+  'git.auth.cancel': 'Отмена',
+  'git.auth.validationToken': 'Токен доступа обязателен',
+  'git.auth.validationSshKey': 'Выберите SSH-ключ',
+  'git.auth.error.auth-required': 'Этот удалённый репозиторий требует аутентификации.',
+  'git.auth.error.auth-failed':
+    'Ошибка аутентификации. Проверьте свои учётные данные и повторите попытку.',
+  'git.auth.error.auth-token-invalid':
+    'Токен доступа был отклонён. Сгенерируйте новый и повторите попытку.',
   // ── Right Panel ──
   'rightPanel.design': 'Дизайн',
   'rightPanel.code': 'Код',

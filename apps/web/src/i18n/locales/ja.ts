@@ -74,6 +74,13 @@ const ja: TranslationKeys = {
   'git.conflict.title': 'マージコンフリクト',
   'git.conflict.description': 'コンフリクトには手動解決が必要です — Phase 7 で提供。',
   'git.conflict.abort': 'マージを中止',
+  'git.conflict.nonOp.title': '.op 以外のファイルによりマージが一時停止しました',
+  'git.conflict.nonOp.description':
+    '.op ファイルのマージは完了しましたが、このリポジトリ内の他のファイルがまだ未解決です。OpenPencil の外で解決してから続行してください。',
+  'git.conflict.nonOp.unresolvedHeading_one': '1 個のファイルに対応が必要',
+  'git.conflict.nonOp.unresolvedHeading_other': '{{count}} 個のファイルに対応が必要',
+  'git.conflict.nonOp.continue': 'マージを続行',
+  'git.conflict.nonOp.abort': 'マージを中止',
   'git.error.dismiss': '閉じる',
   'git.error.retry': '再試行',
   'git.error.title': '問題が発生しました',
@@ -214,6 +221,45 @@ const ja: TranslationKeys = {
   'git.wizard.clone.error.clone-target-exists':
     'コピー先フォルダが既に存在するか、空ではありません。',
 
+  // ── Git プル / プッシュ (Phase 6b) ──
+  'git.pull.label': 'プル',
+  'git.pull.tooltip': 'origin からプル',
+  'git.pull.noRemote': 'リモートが設定されていません — Git 設定で追加してください',
+  'git.pull.retry': 'プルを再試行',
+  'git.push.label': 'プッシュ',
+  'git.push.tooltip_one': '1 件のコミットを origin にプッシュ',
+  'git.push.tooltip_other': '{{count}} 件のコミットを origin にプッシュ',
+  'git.push.noRemote': 'リモートが設定されていません — Git 設定で追加してください',
+  'git.push.upToDate': 'プッシュする内容はありません — 最新の状態です',
+  'git.push.retry': 'プッシュを再試行',
+  'git.push.rejectedBody':
+    'リモートに未取得のコミットがあります。先にプルしてから再度プッシュしてください。',
+  'git.push.rejectedDismiss': '閉じる',
+  'git.push.rejectedPull': '今すぐプル',
+  'git.remote.dismissError': '閉じる',
+
+  // ── Git 認証フォーム (Phase 6b) ──
+  'git.auth.formLabel': 'Git 認証情報',
+  'git.auth.heading': '{{host}} に対して認証',
+  'git.auth.headingUnknown': 'このリモートに対して認証',
+  'git.auth.modeToggleLabel': '認証情報の種類',
+  'git.auth.modeToken': 'トークン',
+  'git.auth.modeSsh': 'SSH',
+  'git.auth.usernameLabel': 'ユーザー名(任意)',
+  'git.auth.tokenLabel': 'アクセストークン',
+  'git.auth.tokenPlaceholder': 'ghp_… または PAT',
+  'git.auth.sshKeyLabel': 'SSH キー',
+  'git.auth.sshNoKeys':
+    '利用可能な SSH キーがありません。先に Git 設定でインポートまたは生成してください。',
+  'git.auth.rememberLabel': 'このホストの認証情報を記憶する',
+  'git.auth.rememberHint': 'このホストの認証情報を記憶する',
+  'git.auth.cancel': 'キャンセル',
+  'git.auth.validationToken': 'アクセストークンは必須です',
+  'git.auth.validationSshKey': 'SSH キーを選択してください',
+  'git.auth.error.auth-required': 'このリモートには認証が必要です。',
+  'git.auth.error.auth-failed': '認証に失敗しました。認証情報を確認して再度お試しください。',
+  'git.auth.error.auth-token-invalid':
+    'アクセストークンが拒否されました。新しいトークンを生成してから再試行してください。',
   // ── Right Panel ──
   'rightPanel.design': 'デザイン',
   'rightPanel.code': 'コード',

@@ -74,6 +74,13 @@ const de: TranslationKeys = {
   'git.conflict.title': 'Merge-Konflikt',
   'git.conflict.description': 'Konflikte müssen manuell gelöst werden — verfügbar in Phase 7.',
   'git.conflict.abort': 'Merge abbrechen',
+  'git.conflict.nonOp.title': 'Zusammenführung wegen Nicht-.op-Dateien pausiert',
+  'git.conflict.nonOp.description':
+    'Die .op-Zusammenführung ist abgeschlossen, aber andere Dateien im Repository sind noch nicht aufgelöst. Beheben Sie sie außerhalb von OpenPencil und fahren Sie dann fort.',
+  'git.conflict.nonOp.unresolvedHeading_one': '1 Datei benötigt Aufmerksamkeit',
+  'git.conflict.nonOp.unresolvedHeading_other': '{{count}} Dateien benötigen Aufmerksamkeit',
+  'git.conflict.nonOp.continue': 'Zusammenführung fortsetzen',
+  'git.conflict.nonOp.abort': 'Zusammenführung abbrechen',
   'git.error.dismiss': 'Verwerfen',
   'git.error.retry': 'Erneut versuchen',
   'git.error.title': 'Ein Fehler ist aufgetreten',
@@ -215,6 +222,46 @@ const de: TranslationKeys = {
   'git.wizard.clone.error.clone-target-exists':
     'Der Zielordner existiert bereits oder ist nicht leer.',
 
+  // ── Git Pull / Push (Phase 6b) ──
+  'git.pull.label': 'Pull',
+  'git.pull.tooltip': 'Von origin pullen',
+  'git.pull.noRemote': 'Kein Remote konfiguriert — fügen Sie eines in den Git-Einstellungen hinzu',
+  'git.pull.retry': 'Pull erneut versuchen',
+  'git.push.label': 'Push',
+  'git.push.tooltip_one': '1 Commit zu origin pushen',
+  'git.push.tooltip_other': '{{count}} Commits zu origin pushen',
+  'git.push.noRemote': 'Kein Remote konfiguriert — fügen Sie eines in den Git-Einstellungen hinzu',
+  'git.push.upToDate': 'Nichts zu pushen — Sie sind auf dem neuesten Stand',
+  'git.push.retry': 'Push erneut versuchen',
+  'git.push.rejectedBody':
+    'Das Remote hat Commits, die Sie noch nicht haben. Pullen Sie zuerst, dann pushen Sie erneut.',
+  'git.push.rejectedDismiss': 'Schließen',
+  'git.push.rejectedPull': 'Jetzt pullen',
+  'git.remote.dismissError': 'Schließen',
+
+  // ── Git-Authentifizierungsformular (Phase 6b) ──
+  'git.auth.formLabel': 'Git-Anmeldedaten',
+  'git.auth.heading': 'Bei {{host}} authentifizieren',
+  'git.auth.headingUnknown': 'Bei diesem Remote authentifizieren',
+  'git.auth.modeToggleLabel': 'Anmeldetyp',
+  'git.auth.modeToken': 'Token',
+  'git.auth.modeSsh': 'SSH',
+  'git.auth.usernameLabel': 'Benutzername (optional)',
+  'git.auth.tokenLabel': 'Zugriffstoken',
+  'git.auth.tokenPlaceholder': 'ghp_… oder PAT',
+  'git.auth.sshKeyLabel': 'SSH-Schlüssel',
+  'git.auth.sshNoKeys':
+    'Keine SSH-Schlüssel verfügbar. Importieren oder generieren Sie zuerst einen in den Git-Einstellungen.',
+  'git.auth.rememberLabel': 'Diese Anmeldedaten für diesen Host merken',
+  'git.auth.rememberHint': 'Diese Anmeldedaten für diesen Host merken',
+  'git.auth.cancel': 'Abbrechen',
+  'git.auth.validationToken': 'Zugriffstoken ist erforderlich',
+  'git.auth.validationSshKey': 'Wählen Sie einen SSH-Schlüssel',
+  'git.auth.error.auth-required': 'Dieses Remote erfordert eine Authentifizierung.',
+  'git.auth.error.auth-failed':
+    'Authentifizierung fehlgeschlagen. Überprüfen Sie Ihre Anmeldedaten und versuchen Sie es erneut.',
+  'git.auth.error.auth-token-invalid':
+    'Das Zugriffstoken wurde abgelehnt. Generieren Sie ein neues und versuchen Sie es erneut.',
   // ── Right Panel ──
   'rightPanel.design': 'Design',
   'rightPanel.code': 'Code',

@@ -72,6 +72,13 @@ const en = {
   'git.conflict.title': 'Merge conflict',
   'git.conflict.description': 'Conflicts need manual resolution — coming in Phase 7.',
   'git.conflict.abort': 'Abort merge',
+  'git.conflict.nonOp.title': 'Merge paused on non-.op files',
+  'git.conflict.nonOp.description':
+    'The .op merge finished, but other files in this repo are still unresolved. Fix them outside OpenPencil, then continue.',
+  'git.conflict.nonOp.unresolvedHeading_one': '1 file needs attention',
+  'git.conflict.nonOp.unresolvedHeading_other': '{{count}} files need attention',
+  'git.conflict.nonOp.continue': 'Continue merge',
+  'git.conflict.nonOp.abort': 'Abort merge',
   'git.error.dismiss': 'Dismiss',
   'git.error.retry': 'Retry',
   'git.error.title': 'Something went wrong',
@@ -209,6 +216,45 @@ const en = {
     'Clone failed. Verify the URL points at a real repository.',
   'git.wizard.clone.error.clone-target-exists':
     'The destination folder already exists or is not empty.',
+
+  // ── Git Pull / Push (Phase 6b) ──
+  'git.pull.label': 'Pull',
+  'git.pull.tooltip': 'Pull from origin',
+  'git.pull.noRemote': 'No remote configured — add one in Git settings',
+  'git.pull.retry': 'Retry pull',
+  'git.push.label': 'Push',
+  'git.push.tooltip_one': 'Push 1 commit to origin',
+  'git.push.tooltip_other': 'Push {{count}} commits to origin',
+  'git.push.noRemote': 'No remote configured — add one in Git settings',
+  'git.push.upToDate': 'Nothing to push — you are up to date',
+  'git.push.retry': 'Retry push',
+  'git.push.rejectedBody':
+    'The remote has commits you do not have yet. Pull first, then push again.',
+  'git.push.rejectedDismiss': 'Dismiss',
+  'git.push.rejectedPull': 'Pull now',
+  'git.remote.dismissError': 'Dismiss',
+
+  // ── Git Auth form (Phase 6b) ──
+  'git.auth.formLabel': 'Git credentials',
+  'git.auth.heading': 'Authenticate with {{host}}',
+  'git.auth.headingUnknown': 'Authenticate with this remote',
+  'git.auth.modeToggleLabel': 'Credential type',
+  'git.auth.modeToken': 'Token',
+  'git.auth.modeSsh': 'SSH',
+  'git.auth.usernameLabel': 'Username (optional)',
+  'git.auth.tokenLabel': 'Access token',
+  'git.auth.tokenPlaceholder': 'ghp_… or PAT',
+  'git.auth.sshKeyLabel': 'SSH key',
+  'git.auth.sshNoKeys': 'No SSH keys available. Import or generate one in Git settings first.',
+  'git.auth.rememberLabel': 'Remember this credential for this host',
+  'git.auth.rememberHint': 'Remember this credential for this host',
+  'git.auth.cancel': 'Cancel',
+  'git.auth.validationToken': 'Access token is required',
+  'git.auth.validationSshKey': 'Select an SSH key',
+  'git.auth.error.auth-required': 'Authentication is required for this remote.',
+  'git.auth.error.auth-failed': 'Authentication failed. Check your credentials and try again.',
+  'git.auth.error.auth-token-invalid':
+    'The access token was rejected. Generate a new one and try again.',
 
   // ── Right Panel ──
   'rightPanel.design': 'Design',

@@ -74,6 +74,13 @@ const es: TranslationKeys = {
   'git.conflict.title': 'Conflicto de fusión',
   'git.conflict.description': 'Los conflictos requieren resolución manual — disponible en Fase 7.',
   'git.conflict.abort': 'Abortar fusión',
+  'git.conflict.nonOp.title': 'Fusión pausada en archivos distintos de .op',
+  'git.conflict.nonOp.description':
+    'La fusión de .op terminó, pero otros archivos del repositorio siguen sin resolverse. Resuélvelos fuera de OpenPencil y luego continúa.',
+  'git.conflict.nonOp.unresolvedHeading_one': '1 archivo necesita atención',
+  'git.conflict.nonOp.unresolvedHeading_other': '{{count}} archivos necesitan atención',
+  'git.conflict.nonOp.continue': 'Continuar fusión',
+  'git.conflict.nonOp.abort': 'Cancelar fusión',
   'git.error.dismiss': 'Descartar',
   'git.error.retry': 'Reintentar',
   'git.error.title': 'Algo salió mal',
@@ -214,6 +221,46 @@ const es: TranslationKeys = {
     'Error al clonar. Verifica que la URL apunte a un repositorio real.',
   'git.wizard.clone.error.clone-target-exists': 'La carpeta de destino ya existe o no está vacía.',
 
+  // ── Git Pull / Push (Phase 6b) ──
+  'git.pull.label': 'Pull',
+  'git.pull.tooltip': 'Pull desde origin',
+  'git.pull.noRemote': 'Sin remoto configurado — añádelo en la configuración de Git',
+  'git.pull.retry': 'Reintentar pull',
+  'git.push.label': 'Push',
+  'git.push.tooltip_one': 'Push 1 commit a origin',
+  'git.push.tooltip_other': 'Push {{count}} commits a origin',
+  'git.push.noRemote': 'Sin remoto configurado — añádelo en la configuración de Git',
+  'git.push.upToDate': 'Nada que enviar — estás al día',
+  'git.push.retry': 'Reintentar push',
+  'git.push.rejectedBody':
+    'El remoto tiene commits que aún no tienes. Haz pull primero y luego push de nuevo.',
+  'git.push.rejectedDismiss': 'Cerrar',
+  'git.push.rejectedPull': 'Pull ahora',
+  'git.remote.dismissError': 'Cerrar',
+
+  // ── Git Formulario de autenticación (Phase 6b) ──
+  'git.auth.formLabel': 'Credenciales de Git',
+  'git.auth.heading': 'Autenticar con {{host}}',
+  'git.auth.headingUnknown': 'Autenticar con este remoto',
+  'git.auth.modeToggleLabel': 'Tipo de credencial',
+  'git.auth.modeToken': 'Token',
+  'git.auth.modeSsh': 'SSH',
+  'git.auth.usernameLabel': 'Usuario (opcional)',
+  'git.auth.tokenLabel': 'Token de acceso',
+  'git.auth.tokenPlaceholder': 'ghp_… o PAT',
+  'git.auth.sshKeyLabel': 'Clave SSH',
+  'git.auth.sshNoKeys':
+    'No hay claves SSH disponibles. Importa o genera una primero en la configuración de Git.',
+  'git.auth.rememberLabel': 'Recordar esta credencial para este host',
+  'git.auth.rememberHint': 'Recordar esta credencial para este host',
+  'git.auth.cancel': 'Cancelar',
+  'git.auth.validationToken': 'El token de acceso es obligatorio',
+  'git.auth.validationSshKey': 'Selecciona una clave SSH',
+  'git.auth.error.auth-required': 'Se requiere autenticación para este remoto.',
+  'git.auth.error.auth-failed':
+    'Autenticación fallida. Comprueba tus credenciales y vuelve a intentarlo.',
+  'git.auth.error.auth-token-invalid':
+    'El token de acceso fue rechazado. Genera uno nuevo e inténtalo de nuevo.',
   // ── Right Panel ──
   'rightPanel.design': 'Diseño',
   'rightPanel.code': 'Código',
