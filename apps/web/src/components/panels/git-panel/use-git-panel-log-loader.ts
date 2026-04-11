@@ -18,17 +18,17 @@ import { useGitStore } from '@/stores/git-store';
  * always show the right log.
  */
 export function useGitPanelLogLoader(kinds: ReadonlyArray<string>): void {
-  const state = useGitStore((s) => s.state);
+  const stateKind = useGitStore((s) => s.state.kind);
+  const currentBranch = useGitStore((s) =>
+    s.state.kind === 'ready' || s.state.kind === 'conflict' || s.state.kind === 'needs-tracked-file'
+      ? s.state.repo.currentBranch
+      : null,
+  );
   const loadLog = useGitStore((s) => s.loadLog);
 
-  const currentBranch =
-    state.kind === 'ready' || state.kind === 'conflict' || state.kind === 'needs-tracked-file'
-      ? state.repo.currentBranch
-      : null;
-
   useEffect(() => {
-    if (!kinds.includes(state.kind)) return;
+    if (!kinds.includes(stateKind)) return;
     if (currentBranch === null) return;
     void loadLog({ ref: currentBranch, limit: 50 });
-  }, [state.kind, currentBranch, loadLog, kinds]);
+  }, [stateKind, currentBranch, loadLog, kinds]);
 }
