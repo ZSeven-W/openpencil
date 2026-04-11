@@ -118,6 +118,10 @@ export async function sysMergeNoCommit(opts: {
  * Uses `git ls-files -u` which reports ALL conflict types (both-modified,
  * deleted-by-them, etc.), not just `--diff-filter=U` which only reports
  * "both modified". Returns deduplicated, sorted paths.
+ *
+ * MINIMUM GIT VERSION: `--format=%(path)` requires git ≥ 2.35 (Feb 2022).
+ * No version check or fallback is provided here — callers must ensure the
+ * system git is new enough. Document this floor in deployment requirements.
  */
 export async function sysListUnresolved(opts: { cwd: string }): Promise<string[]> {
   const result = await runGitTolerant(['ls-files', '-u', '--format=%(path)'], {
