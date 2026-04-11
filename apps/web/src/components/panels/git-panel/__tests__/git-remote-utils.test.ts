@@ -1,6 +1,12 @@
 // apps/web/src/components/panels/git-panel/__tests__/git-remote-utils.test.ts
 import { describe, it, expect } from 'vitest';
-import { defaultTokenUsername, inferCloneAuthMode, parseRemoteHost } from '../git-remote-utils';
+import {
+  defaultTokenUsername,
+  getProviderSshSettingsUrl,
+  inferCloneAuthMode,
+  isSshRemoteUrl,
+  parseRemoteHost,
+} from '../git-remote-utils';
 
 describe('inferCloneAuthMode', () => {
   it('returns token-or-anon for empty input', () => {
@@ -64,5 +70,51 @@ describe('defaultTokenUsername', () => {
   it('matches subdomains via endsWith', () => {
     expect(defaultTokenUsername('api.github.com')).toBe('git');
     expect(defaultTokenUsername('gitlab.example.gitlab.com')).toBe('oauth2');
+  });
+});
+
+describe('getProviderSshSettingsUrl', () => {
+  it('returns a github settings URL for github.com (exact match)', () => {
+    expect(getProviderSshSettingsUrl('github.com')).toBe('https://github.com/settings/keys');
+  });
+
+  it('returns a gitlab settings URL for gitlab.com (exact match)', () => {
+    expect(getProviderSshSettingsUrl('gitlab.com')).toBe('https://gitlab.com/-/profile/keys');
+  });
+
+  it('is case-insensitive', () => {
+    expect(getProviderSshSettingsUrl('GitHub.COM')).toBe('https://github.com/settings/keys');
+  });
+
+  it('returns null for subdomains (exact match only)', () => {
+    expect(getProviderSshSettingsUrl('api.github.com')).toBeNull();
+    expect(getProviderSshSettingsUrl('gitlab.example.com')).toBeNull();
+  });
+
+  it('returns null for unknown hosts and null', () => {
+    expect(getProviderSshSettingsUrl(null)).toBeNull();
+    expect(getProviderSshSettingsUrl('')).toBeNull();
+    expect(getProviderSshSettingsUrl('bitbucket.org')).toBeNull();
+  });
+});
+
+describe('isSshRemoteUrl', () => {
+  it('returns true for ssh:// URLs', () => {
+    expect(isSshRemoteUrl('ssh://git@github.com/foo/bar.git')).toBe(true);
+  });
+
+  it('returns true for SCP-style git@host:path URLs', () => {
+    expect(isSshRemoteUrl('git@github.com:foo/bar.git')).toBe(true);
+  });
+
+  it('returns false for HTTPS / HTTP URLs', () => {
+    expect(isSshRemoteUrl('https://github.com/foo/bar.git')).toBe(false);
+    expect(isSshRemoteUrl('http://gitea.local/foo/bar.git')).toBe(false);
+  });
+
+  it('returns false for empty / null', () => {
+    expect(isSshRemoteUrl(null)).toBe(false);
+    expect(isSshRemoteUrl('')).toBe(false);
+    expect(isSshRemoteUrl('   ')).toBe(false);
   });
 });

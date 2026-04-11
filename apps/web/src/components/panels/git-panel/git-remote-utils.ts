@@ -72,3 +72,35 @@ export function defaultTokenUsername(host: string | null): string {
   if (host.endsWith('bitbucket.org')) return 'x-token-auth';
   return 'git';
 }
+
+/**
+ * Return a provider-specific SSH-key settings URL so the Phase 6c SSH keys
+ * view can offer a "open in browser" deeplink after generating or importing
+ * a key. The match is case-insensitive on the FULL host (no subdomain
+ * traversal) so `api.github.com` or `gitlab.example.com` fall through to
+ * null and the caller renders generic "copy the public key" guidance.
+ *
+ * Returns null when the host is unknown, null, or doesn't match the
+ * closed list of supported providers.
+ */
+export function getProviderSshSettingsUrl(host: string | null): string | null {
+  if (!host) return null;
+  const normalized = host.toLowerCase();
+  if (normalized === 'github.com') return 'https://github.com/settings/keys';
+  if (normalized === 'gitlab.com') return 'https://gitlab.com/-/profile/keys';
+  return null;
+}
+
+/**
+ * Return true when the URL is an SSH-style remote (git@host:path or
+ * ssh://...). Empty / HTTPS / HTTP returns false. Used by the Phase 6c
+ * remote settings view to surface SSH transport gating guidance.
+ */
+export function isSshRemoteUrl(url: string | null): boolean {
+  if (!url) return false;
+  const trimmed = url.trim();
+  if (trimmed === '') return false;
+  if (trimmed.startsWith('ssh://')) return true;
+  // SCP-style: user@host:path
+  return /^[^@\s]+@[^:\s]+:/.test(trimmed);
+}

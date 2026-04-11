@@ -5,7 +5,7 @@
 // The "renders null when closed/minimized" tests are gone — the Popover
 // ancestor controls visibility, so GitPanel always renders when visible.
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { render, screen, cleanup } from '@testing-library/react';
+import { render, screen, cleanup, fireEvent } from '@testing-library/react';
 import { TooltipProvider } from '@/components/ui/tooltip';
 
 // Mock the store before importing the component.
@@ -44,6 +44,37 @@ vi.mock('@/stores/git-store', () => {
     setAuthorIdentity: vi.fn(async () => {}),
     commitMilestone: vi.fn(async () => {}),
     retrySaveRequired: vi.fn(async () => {}),
+    // Phase 6b + 6c stubs: the ready-state header pulls these via selectors.
+    pull: vi.fn(async () => {}),
+    push: vi.fn(async () => {}),
+    getAuth: vi.fn(async () => null),
+    storeAuth: vi.fn(async () => {}),
+    clearAuth: vi.fn(async () => {}),
+    refreshRemote: vi.fn(async () => {}),
+    setRemoteUrl: vi.fn(async () => {}),
+    fetchRemote: vi.fn(async () => {}),
+    refreshSshKeys: vi.fn(async () => {}),
+    generateSshKey: vi.fn(async () => ({
+      id: 'k',
+      host: 'github.com',
+      publicKey: 'ssh',
+      fingerprint: 'SHA256:a',
+      comment: 'k',
+    })),
+    importSshKey: vi.fn(async () => ({
+      id: 'k',
+      host: 'github.com',
+      publicKey: 'ssh',
+      fingerprint: 'SHA256:a',
+      comment: 'k',
+    })),
+    deleteSshKey: vi.fn(async () => {}),
+    refreshStatus: vi.fn(async () => {}),
+    refreshBranches: vi.fn(async () => {}),
+    createBranch: vi.fn(async () => {}),
+    switchBranch: vi.fn(async () => {}),
+    deleteBranch: vi.fn(async () => {}),
+    mergeBranch: vi.fn(async () => {}),
   };
   let current = { ...baseState };
   const useGitStore = (selector: (s: typeof current) => unknown) => selector(current);
@@ -154,18 +185,81 @@ describe('GitPanel (dropdown body)', () => {
           remote: null,
         },
       },
-      // Phase 6b: GitPanelRemoteControls pulls these off the store via
-      // its own selectors. Keep them as stubs so the component mounts
-      // without blowing up when a test targets the ready body.
-      pull: vi.fn(async () => {}),
-      push: vi.fn(async () => {}),
-      getAuth: vi.fn(async () => null),
-      storeAuth: vi.fn(async () => {}),
     });
     renderWithProvider(<GitPanel />);
     // Header renders the current branch name
     expect(screen.getByText('main')).toBeTruthy();
     // Commit input renders
     expect(screen.getByPlaceholderText('git.commit.placeholder')).toBeTruthy();
+  });
+
+  // ---- Phase 6c smoke: overflow -> remote-settings / ssh-keys ----
+
+  it('overflow menu can enter and exit the remote-settings subview', () => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (useGitStore as any).__set({
+      state: {
+        kind: 'ready',
+        repo: {
+          repoId: 'r1',
+          currentBranch: 'main',
+          mode: 'single-file',
+          rootPath: '/tmp/repo',
+          gitdir: '/tmp/repo/.git',
+          engineKind: 'iso',
+          trackedFilePath: '/tmp/repo/login.op',
+          candidateFiles: [],
+          branches: [],
+          workingDirty: false,
+          otherFilesDirty: 0,
+          otherFilesPaths: [],
+          ahead: 1,
+          behind: 2,
+          remote: { name: 'origin', url: 'https://github.com/foo/bar.git', host: 'github.com' },
+        },
+      },
+    });
+    renderWithProvider(<GitPanel />);
+    // Open overflow popover
+    fireEvent.click(screen.getByLabelText('git.header.overflowMoreActions'));
+    // Enter the remote settings subview
+    fireEvent.click(screen.getByTestId('overflow-open-remote-settings'));
+    // Subview heading renders
+    expect(screen.getByText('git.remote.settingsHeading')).toBeTruthy();
+    // Back → menu (entry buttons reappear)
+    fireEvent.click(screen.getByLabelText('git.remote.back'));
+    expect(screen.getByTestId('overflow-open-remote-settings')).toBeTruthy();
+  });
+
+  it('overflow menu can enter and exit the ssh-keys subview', () => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (useGitStore as any).__set({
+      state: {
+        kind: 'ready',
+        repo: {
+          repoId: 'r1',
+          currentBranch: 'main',
+          mode: 'single-file',
+          rootPath: '/tmp/repo',
+          gitdir: '/tmp/repo/.git',
+          engineKind: 'iso',
+          trackedFilePath: '/tmp/repo/login.op',
+          candidateFiles: [],
+          branches: [],
+          workingDirty: false,
+          otherFilesDirty: 0,
+          otherFilesPaths: [],
+          ahead: 0,
+          behind: 0,
+          remote: null,
+        },
+      },
+    });
+    renderWithProvider(<GitPanel />);
+    fireEvent.click(screen.getByLabelText('git.header.overflowMoreActions'));
+    fireEvent.click(screen.getByTestId('overflow-open-ssh-keys'));
+    expect(screen.getByText('git.ssh.heading')).toBeTruthy();
+    fireEvent.click(screen.getByLabelText('git.ssh.back'));
+    expect(screen.getByTestId('overflow-open-ssh-keys')).toBeTruthy();
   });
 });

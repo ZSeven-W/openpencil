@@ -1,16 +1,21 @@
 // apps/web/src/components/panels/git-panel/git-panel-header.tsx
 //
-// Header row for the Git panel ready/conflict states (Phase 4c → 6b).
+// Header row for the Git panel ready/conflict states (Phase 4c → 6c).
 // Renders a flex row with two groups:
 //   Left:  branch picker (Phase 5) + pull/push remote controls (Phase 6b)
 //   Right: autosave-error dot + author-missing dot + overflow popover menu
 //
+// Phase 6c expands the overflow popover into a LOCAL state machine mirroring
+// the Phase 5 branch picker pattern:
+//   { view: 'menu' | 'remote-settings' | 'ssh-keys' }
+// The menu view shows the existing three entries plus two new entries that
+// swap the popover content into the subviews defined in git-panel-remote-
+// settings.tsx / git-panel-ssh-keys.tsx. Subview state is NOT persisted to
+// the store — it lives entirely in this file and resets on popover close.
+//
 // The component returns null unless state.kind is 'ready' or 'conflict'.
-// Pull and push are delegated to <GitPanelRemoteControls /> so this file
-// stays thin — the remote-action state machine, auth retry flow, and
-// push-rejected recovery strip all live inside that component.
 
-import { MoreHorizontal } from 'lucide-react';
+import { ChevronRight, MoreHorizontal } from 'lucide-react';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
@@ -20,10 +25,15 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { useGitStore } from '@/stores/git-store';
 import { GitPanelBranchPicker } from './git-panel-branch-picker';
 import { GitPanelRemoteControls } from './git-panel-remote-controls';
+import { GitPanelRemoteSettings } from './git-panel-remote-settings';
+import { GitPanelSshKeys } from './git-panel-ssh-keys';
+
+type OverflowView = 'menu' | 'remote-settings' | 'ssh-keys';
 
 export function GitPanelHeader() {
   const { t } = useTranslation();
   const [overflowOpen, setOverflowOpen] = useState(false);
+  const [overflowView, setOverflowView] = useState<OverflowView>('menu');
 
   const state = useGitStore((s) => s.state);
   const autosaveError = useGitStore((s) => s.autosaveError);
@@ -34,6 +44,9 @@ export function GitPanelHeader() {
   const authorIdentity = useGitStore((s) => s.authorIdentity);
 
   if (state.kind !== 'ready' && state.kind !== 'conflict') return null;
+
+  const popoverWidth =
+    overflowView === 'menu' ? 'w-56' : overflowView === 'remote-settings' ? 'w-[300px]' : 'w-80';
 
   return (
     <div className="flex items-center justify-between gap-1 border-b border-border px-2 py-1">
@@ -86,7 +99,17 @@ export function GitPanelHeader() {
         )}
 
         {/* Overflow menu */}
-        <Popover open={overflowOpen} onOpenChange={setOverflowOpen}>
+        <Popover
+          open={overflowOpen}
+          onOpenChange={(next) => {
+            setOverflowOpen(next);
+            if (next) {
+              // Always open on the menu view — a previous session's subview
+              // should never leak back in when the user reopens the popover.
+              setOverflowView('menu');
+            }
+          }}
+        >
           <PopoverTrigger asChild>
             <Button
               type="button"
@@ -98,41 +121,72 @@ export function GitPanelHeader() {
               <MoreHorizontal size={13} strokeWidth={1.5} aria-hidden />
             </Button>
           </PopoverTrigger>
-          <PopoverContent align="end" className="w-56 p-1" role="menu">
-            <button
-              type="button"
-              role="menuitem"
-              onClick={() => {
-                setOverflowOpen(false);
-                enterTrackedFilePicker();
-              }}
-              className="flex w-full items-center rounded-sm px-2 py-1.5 text-xs text-foreground hover:bg-accent"
-            >
-              {t('git.header.overflowSwitchTracked')}
-            </button>
-            <button
-              type="button"
-              role="menuitem"
-              onClick={() => {
-                setOverflowOpen(false);
-                void clearAuthorIdentity();
-              }}
-              className="flex w-full items-center rounded-sm px-2 py-1.5 text-xs text-foreground hover:bg-accent"
-            >
-              {t('git.header.overflowClearAuthor')}
-            </button>
-            <Separator className="my-1" />
-            <button
-              type="button"
-              role="menuitem"
-              onClick={() => {
-                setOverflowOpen(false);
-                void closeRepo();
-              }}
-              className="flex w-full items-center rounded-sm px-2 py-1.5 text-xs text-foreground hover:bg-accent"
-            >
-              {t('git.header.overflowCloseRepo')}
-            </button>
+          <PopoverContent align="end" className={`${popoverWidth} p-1`} role="menu">
+            {overflowView === 'menu' && (
+              <>
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={() => {
+                    setOverflowOpen(false);
+                    enterTrackedFilePicker();
+                  }}
+                  className="flex w-full items-center rounded-sm px-2 py-1.5 text-xs text-foreground hover:bg-accent"
+                >
+                  {t('git.header.overflowSwitchTracked')}
+                </button>
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={() => {
+                    setOverflowOpen(false);
+                    void clearAuthorIdentity();
+                  }}
+                  className="flex w-full items-center rounded-sm px-2 py-1.5 text-xs text-foreground hover:bg-accent"
+                >
+                  {t('git.header.overflowClearAuthor')}
+                </button>
+                <Separator className="my-1" />
+                <button
+                  type="button"
+                  role="menuitem"
+                  data-testid="overflow-open-remote-settings"
+                  onClick={() => setOverflowView('remote-settings')}
+                  className="flex w-full items-center justify-between rounded-sm px-2 py-1.5 text-xs text-foreground hover:bg-accent"
+                >
+                  <span>{t('git.header.overflowRemoteSettings')}</span>
+                  <ChevronRight size={12} strokeWidth={1.5} aria-hidden />
+                </button>
+                <button
+                  type="button"
+                  role="menuitem"
+                  data-testid="overflow-open-ssh-keys"
+                  onClick={() => setOverflowView('ssh-keys')}
+                  className="flex w-full items-center justify-between rounded-sm px-2 py-1.5 text-xs text-foreground hover:bg-accent"
+                >
+                  <span>{t('git.header.overflowSshKeys')}</span>
+                  <ChevronRight size={12} strokeWidth={1.5} aria-hidden />
+                </button>
+                <Separator className="my-1" />
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={() => {
+                    setOverflowOpen(false);
+                    void closeRepo();
+                  }}
+                  className="flex w-full items-center rounded-sm px-2 py-1.5 text-xs text-foreground hover:bg-accent"
+                >
+                  {t('git.header.overflowCloseRepo')}
+                </button>
+              </>
+            )}
+            {overflowView === 'remote-settings' && (
+              <GitPanelRemoteSettings onBack={() => setOverflowView('menu')} />
+            )}
+            {overflowView === 'ssh-keys' && (
+              <GitPanelSshKeys onBack={() => setOverflowView('menu')} />
+            )}
           </PopoverContent>
         </Popover>
       </div>
