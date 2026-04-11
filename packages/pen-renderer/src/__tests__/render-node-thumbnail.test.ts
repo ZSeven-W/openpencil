@@ -7,9 +7,19 @@
 //   2. Returns null for invalid / null inputs
 //   3. Returns null when size is invalid
 //   4. The function is exported and callable
+//   5. resolveNodeForCanvas is called with document variables + active theme (I6)
 
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import type { PenDocument, PenNode } from '@zseven-w/pen-types';
+import * as penCore from '@zseven-w/pen-core';
+
+// Mock @zseven-w/pen-core to allow spying on resolveNodeForCanvas while
+// keeping all other exports from the real module intact.
+vi.mock('@zseven-w/pen-core', async () => {
+  const actual = await vi.importActual<typeof penCore>('@zseven-w/pen-core');
+  return { ...actual };
+});
+
 import { renderNodeThumbnail } from '../render-node-thumbnail';
 
 // CanvasKit WASM is NOT available in the vitest/jsdom environment.
@@ -208,5 +218,95 @@ describe('renderNodeThumbnail — output shape / fallback contract', () => {
     });
     // Still null in test env, but must not throw.
     expect(result).toBeNull();
+  });
+
+  // ---------------------------------------------------------------------------
+  // I6: Verify resolveNodeForCanvas is called with document variables + theme
+  // ---------------------------------------------------------------------------
+
+  describe('resolveNodeForCanvas invocation (I6)', () => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let spy: ReturnType<typeof vi.spyOn<any, any>>;
+
+    beforeEach(() => {
+      spy = vi.spyOn(penCore, 'resolveNodeForCanvas');
+    });
+
+    afterEach(() => {
+      spy.mockRestore();
+    });
+
+    it('calls resolveNodeForCanvas with the node, document variables, and active theme', async () => {
+      const nodeWithVar = {
+        id: 'spy-node-1',
+        type: 'rectangle',
+        x: 0,
+        y: 0,
+        width: 100,
+        height: 100,
+        fill: [{ type: 'solid', color: '$color-primary' }],
+      } as unknown as PenNode;
+
+      const docWithVars: PenDocument = {
+        id: 'doc-spy',
+        name: 'Doc With Variables',
+        children: [],
+        variables: {
+          'color-primary': { value: '#ff0000' },
+        },
+      } as unknown as PenDocument;
+
+      await renderNodeThumbnail(nodeWithVar, {
+        document: docWithVars,
+        pageId: null,
+      });
+
+      // resolveNodeForCanvas must have been called — confirms the variable
+      // resolution code path executes rather than being silently bypassed.
+      expect(spy).toHaveBeenCalled();
+      // The first argument should be the node (or ref-resolved equivalent).
+      const [calledNode, calledVars] = spy.mock.calls[0] as [PenNode, Record<string, unknown>];
+      expect(calledNode).toMatchObject({ id: 'spy-node-1' });
+      // Variables must be the document's variables map.
+      expect(calledVars).toEqual(docWithVars.variables);
+    });
+
+    it('calls resolveNodeForCanvas with active theme derived from document themes', async () => {
+      const node = {
+        id: 'spy-node-2',
+        type: 'rectangle',
+        x: 0,
+        y: 0,
+        width: 50,
+        height: 50,
+        fill: [{ type: 'solid', color: '$bg' }],
+      } as unknown as PenNode;
+
+      const docWithThemes: PenDocument = {
+        id: 'doc-spy-themed',
+        name: 'Themed Doc',
+        children: [],
+        variables: {
+          bg: {
+            value: [
+              { theme: { Mode: 'Light' }, value: '#fff' },
+              { theme: { Mode: 'Dark' }, value: '#000' },
+            ],
+          },
+        },
+        themes: { Mode: ['Light', 'Dark'] },
+      } as unknown as PenDocument;
+
+      await renderNodeThumbnail(node, {
+        document: docWithThemes,
+        pageId: null,
+      });
+
+      expect(spy).toHaveBeenCalled();
+      // Third argument is the active theme object derived from getDefaultTheme.
+      const [, , calledTheme] = spy.mock.calls[0] as [PenNode, unknown, Record<string, string>];
+      // getDefaultTheme({'Mode': ['Light','Dark']}) returns { Mode: 'Light' }
+      expect(calledTheme).toMatchObject({ Mode: 'Light' });
+    });
   });
 });
