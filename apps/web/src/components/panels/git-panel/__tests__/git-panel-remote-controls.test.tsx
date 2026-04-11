@@ -48,6 +48,10 @@ const fx = {
     },
   } as ReadyStateMock | ConflictStateMock,
   sshKeys: [] as Array<unknown>,
+  // The embedded auth form reads refreshSshKeys on mount (Phase 6b fix
+  // for first-time SSH pulls). Provide a no-op so the effect doesn't
+  // crash the render.
+  refreshSshKeys: vi.fn(async () => {}),
   pull: vi.fn(async (_auth?: unknown) => {}),
   push: vi.fn(async (_auth?: unknown) => {}),
   // Explicit return type so mockResolvedValueOnce can return either null
@@ -203,6 +207,45 @@ describe('GitPanelRemoteControls', () => {
     // for this host was an SSH key.
     expect(
       screen.getByRole('tab', { name: 'git.auth.modeSsh' }).getAttribute('aria-selected'),
+    ).toBe('true');
+  });
+
+  it('pull auth-required: preseeds SSH tab for SSH remote URLs even without stored auth', async () => {
+    // The regression this guards against: a user opens a repo with an
+    // SSH remote (git@...) and never visits the SSH Keys subview, so
+    // the store has no cached auth. Previously `preseedAuthMode` would
+    // default to 'token' here, dead-ending the user on the wrong tab.
+    setReady({
+      remote: { name: 'origin', url: 'git@github.com:foo/bar.git', host: 'github.com' },
+    });
+    fx.getAuth.mockResolvedValueOnce(null);
+    fx.pull.mockRejectedValueOnce(new GitError('auth-required', 'HTTP 401'));
+
+    renderWithProvider(<GitPanelRemoteControls />);
+    fireEvent.click(screen.getByLabelText('git.pull.label'));
+
+    await waitFor(() => expect(screen.getByLabelText('git.auth.formLabel')).toBeTruthy());
+    expect(
+      screen.getByRole('tab', { name: 'git.auth.modeSsh' }).getAttribute('aria-selected'),
+    ).toBe('true');
+  });
+
+  it('pull auth-required: preseeds token tab for HTTPS remote URLs without stored auth', async () => {
+    // Counter-test to the SSH case above: an HTTPS remote with no
+    // stored auth should still land on the token tab — we only switch
+    // to SSH when the URL scheme calls for it.
+    setReady({
+      remote: { name: 'origin', url: 'https://github.com/foo/bar.git', host: 'github.com' },
+    });
+    fx.getAuth.mockResolvedValueOnce(null);
+    fx.pull.mockRejectedValueOnce(new GitError('auth-required', 'HTTP 401'));
+
+    renderWithProvider(<GitPanelRemoteControls />);
+    fireEvent.click(screen.getByLabelText('git.pull.label'));
+
+    await waitFor(() => expect(screen.getByLabelText('git.auth.formLabel')).toBeTruthy());
+    expect(
+      screen.getByRole('tab', { name: 'git.auth.modeToken' }).getAttribute('aria-selected'),
     ).toBe('true');
   });
 

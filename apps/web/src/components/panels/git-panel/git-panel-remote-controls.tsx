@@ -29,6 +29,7 @@ import type { GitAuthCreds } from '@/services/git-types';
 import { useGitStore } from '@/stores/git-store';
 import { classifyRemoteAuthError } from '@/stores/git-store-helpers';
 import { GitPanelAuthForm, type GitPanelAuthFormMode } from './git-panel-auth-form';
+import { isSshRemoteUrl } from './git-remote-utils';
 
 type RemoteControlsStep =
   | { step: 'idle' }
@@ -95,8 +96,9 @@ export function GitPanelRemoteControls() {
       if (classification.kind === 'auth') {
         // Surface the shared auth form. Seed the mode from any previously
         // stored credential so the user lands on the right tab without a
-        // click.
-        const mode = await preseedAuthMode(host, getAuth);
+        // click. When there is no stored credential, fall back to the
+        // URL scheme so SSH remotes open on the SSH tab (not token).
+        const mode = await preseedAuthMode(host, remoteUrl, getAuth);
         setStep({
           step: 'pull-auth',
           host,
@@ -131,7 +133,7 @@ export function GitPanelRemoteControls() {
     } catch (err) {
       const classification = classifyRemoteAuthError(err, 'push');
       if (classification.kind === 'auth') {
-        const mode = await preseedAuthMode(host, getAuth);
+        const mode = await preseedAuthMode(host, remoteUrl, getAuth);
         setStep({
           step: 'push-auth',
           host,
@@ -304,16 +306,22 @@ export function GitPanelRemoteControls() {
 
 async function preseedAuthMode(
   host: string | null,
+  remoteUrl: string | null,
   getAuth: (h: string) => Promise<GitAuthCreds | null>,
 ): Promise<GitPanelAuthFormMode> {
-  if (!host) return 'token';
-  try {
-    const stored = await getAuth(host);
-    if (stored?.kind === 'ssh') return 'ssh';
-    return 'token';
-  } catch {
-    return 'token';
+  if (host) {
+    try {
+      const stored = await getAuth(host);
+      if (stored) return stored.kind === 'ssh' ? 'ssh' : 'token';
+    } catch {
+      // Fall through to URL-scheme inference on lookup failure.
+    }
   }
+  // No stored credential for this host — infer from the remote URL so
+  // SSH remotes open on the SSH tab. Without this, a user with an SSH
+  // remote but no stored creds would land on the token tab, a hard
+  // dead-end for first-time pull/push attempts.
+  return remoteUrl && isSshRemoteUrl(remoteUrl) ? 'ssh' : 'token';
 }
 
 function extractMessage(err: unknown): string {

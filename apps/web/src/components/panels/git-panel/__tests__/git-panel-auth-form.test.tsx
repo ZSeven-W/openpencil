@@ -7,16 +7,24 @@
 //   2. SSH-mode selection from sshKeys
 //   3. remember toggle flows through to onSubmit
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { render, screen, fireEvent, cleanup } from '@testing-library/react';
+import { render, screen, fireEvent, cleanup, waitFor } from '@testing-library/react';
 import type { GitPublicSshKeyInfo } from '@/services/git-types';
 
 // Mutable sshKeys so individual tests can seed the picker. The store mock
 // below re-reads the live value on every selector call.
 let mockedSshKeys: GitPublicSshKeyInfo[] = [];
+// Mutable refreshSshKeys mock so tests can observe the mount-time fetch
+// and swap implementations. Reset in beforeEach.
+let mockedRefreshSshKeys = vi.fn(async () => {});
+
+interface StoreShape {
+  sshKeys: GitPublicSshKeyInfo[];
+  refreshSshKeys: () => Promise<void>;
+}
 
 vi.mock('@/stores/git-store', () => {
-  const useGitStore = (selector: (s: { sshKeys: GitPublicSshKeyInfo[] }) => unknown) =>
-    selector({ sshKeys: mockedSshKeys });
+  const useGitStore = (selector: (s: StoreShape) => unknown) =>
+    selector({ sshKeys: mockedSshKeys, refreshSshKeys: mockedRefreshSshKeys });
   return { useGitStore };
 });
 
@@ -31,6 +39,7 @@ import { GitPanelAuthForm } from '@/components/panels/git-panel/git-panel-auth-f
 describe('GitPanelAuthForm', () => {
   beforeEach(() => {
     mockedSshKeys = [];
+    mockedRefreshSshKeys = vi.fn(async () => {});
   });
 
   afterEach(() => {
@@ -263,5 +272,75 @@ describe('GitPanelAuthForm', () => {
     );
     const alert = screen.getByRole('alert');
     expect(alert.textContent).toContain('token rejected');
+  });
+
+  // ---- Mount-time SSH refresh ------------------------------------------
+
+  it('refreshes SSH keys once on mount so a first-time pull sees keys on disk', async () => {
+    // Start with an empty picker — the store hasn't fetched keys yet.
+    // The form must kick off refreshSshKeys() itself so a user who never
+    // visited the SSH Keys subview isn't dead-ended on their first pull.
+    mockedSshKeys = [];
+    render(
+      <GitPanelAuthForm
+        mode="ssh"
+        host="github.com"
+        retryLabel="retry"
+        onSubmit={() => {}}
+        onCancel={() => {}}
+      />,
+    );
+    await waitFor(() => expect(mockedRefreshSshKeys).toHaveBeenCalledTimes(1));
+  });
+
+  it('auto-selects the first key when keys arrive async after mount', async () => {
+    // Mount with an empty store value. `sshKeyId` would otherwise get
+    // stuck at '' since the useState lazy initializer only runs once.
+    mockedSshKeys = [];
+    const onSubmit = vi.fn();
+    const { rerender } = render(
+      <GitPanelAuthForm
+        mode="ssh"
+        host="github.com"
+        retryLabel="retry"
+        onSubmit={onSubmit}
+        onCancel={() => {}}
+      />,
+    );
+    // Starts in the empty-picker fallback.
+    expect(screen.getByText('git.auth.sshNoKeys')).toBeTruthy();
+
+    // Simulate the async refresh landing: store populates and the
+    // selector returns a non-empty list on the next render.
+    mockedSshKeys = [
+      {
+        id: 'key-late',
+        host: 'github.com',
+        publicKey: 'ssh-ed25519 LATE…',
+        fingerprint: 'SHA256:late',
+        comment: 'gh',
+      },
+    ];
+    rerender(
+      <GitPanelAuthForm
+        mode="ssh"
+        host="github.com"
+        retryLabel="retry"
+        onSubmit={onSubmit}
+        onCancel={() => {}}
+      />,
+    );
+    // The <select> should now be present and pre-seeded with the first
+    // (and only) key — not stuck at ''.
+    const select = (await waitFor(
+      () => screen.getByLabelText('git.auth.sshKeyLabel') as HTMLSelectElement,
+    )) as HTMLSelectElement;
+    expect(select.value).toBe('key-late');
+
+    // And submit should flow through without a "select a key" validation
+    // error — the real regression this guards against.
+    fireEvent.click(screen.getByText('retry'));
+    await Promise.resolve();
+    expect(onSubmit).toHaveBeenCalledWith({ kind: 'ssh', keyId: 'key-late' }, true);
   });
 });
