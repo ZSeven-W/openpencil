@@ -1,4 +1,4 @@
-import type { TranslationKeys } from './en'
+import type { TranslationKeys } from './en';
 
 const ru: TranslationKeys = {
   // ── Common ──
@@ -10,6 +10,8 @@ const ru: TranslationKeys = {
   'common.close': 'Закрыть',
   'common.connect': 'Подключить',
   'common.disconnect': 'Отключить',
+  'common.yes': 'Да',
+  'common.no': 'Нет',
   'common.import': 'Импорт',
   'common.export': 'Экспорт',
   'common.name': 'Имя',
@@ -59,6 +61,313 @@ const ru: TranslationKeys = {
   'topbar.connected': 'подключено',
   'topbar.agentStatus': '{{agents}} агент{{agentSuffix}} · {{mcp}} MCP',
 
+  // ── Панель Git ──
+  'git.openPanel': 'Открыть панель Git',
+  'git.closePanel': 'Закрыть панель Git',
+  'git.title': 'Git · {{fileName}}',
+  'git.titleNoFile': 'Git · (Файл не выбран)',
+  'git.close': 'Закрыть',
+  'git.initializing': 'Инициализация репозитория…',
+  'git.conflict.title': 'Конфликт слияния',
+  'git.conflict.description':
+    'Разрешите каждый конфликт с помощью карточек ниже, затем примените слияние.',
+  'git.conflict.abort': 'Отменить слияние',
+  'git.conflict.nonOp.title': 'Слияние приостановлено из-за не-.op файлов',
+  'git.conflict.nonOp.description':
+    'Слияние .op файлов завершено, но другие файлы в репозитории ещё не разрешены. Разрешите их вне OpenPencil и продолжите.',
+  'git.conflict.nonOp.unresolvedHeading_one': '1 файл требует внимания',
+  'git.conflict.nonOp.unresolvedHeading_other': '{{count}} файлов требуют внимания',
+  'git.conflict.nonOp.continue': 'Продолжить слияние',
+  'git.conflict.nonOp.abort': 'Отменить слияние',
+  // ── Git конфликт — баннер (Phase 7b) ──
+  'git.conflict.banner.progress': '{{resolved}} / {{total}} разрешено',
+  'git.conflict.banner.apply': 'Применить слияние',
+  'git.conflict.banner.continue': 'Продолжить',
+  'git.conflict.banner.finalizeError': 'Не удалось применить: {{message}}',
+  'git.conflict.banner.pollError': 'Опрос статуса приостановлен из-за ошибки: {{message}}',
+  // placeholder — future localization
+  'git.conflict.banner.reopenMessage':
+    'Панель была открыта повторно в процессе слияния — пожалуйста, прервите и повторите pull.',
+
+  // ── Git конфликт — список (Phase 7c) ──
+  'git.conflict.list.heading': 'Все конфликты',
+  'git.conflict.list.progress': '{{resolved}} / {{total}} разрешено',
+  'git.conflict.list.allResolved': 'Всё разрешено',
+  'git.conflict.list.allOurs': 'Всё моё',
+  'git.conflict.list.allTheirs': 'Всё их',
+
+  // ── Git конфликт — элемент (Phase 7c) ──
+  'git.conflict.item.nodeConflict': 'Конфликт узла',
+  'git.conflict.item.fieldConflict': 'Конфликт поля',
+  'git.conflict.item.resolved': 'Разрешено',
+
+  // ── Git конфликт — карточка (Phase 7c) ──
+  'git.conflict.card.ours': 'Моё',
+  'git.conflict.card.theirs': 'Их',
+  'git.conflict.card.base': 'База',
+  'git.conflict.card.keepMine': 'Оставить моё',
+  'git.conflict.card.keepTheirs': 'Оставить их',
+  'git.conflict.card.oursThumbnailAlt': 'Моя версия',
+  'git.conflict.card.theirsThumbnailAlt': 'Их версия',
+
+  // ── Git конфликт — JSON редактор (Phase 7c) ──
+  'git.conflict.editor.editManually': 'Редактировать вручную',
+  'git.conflict.editor.cancel': 'Отмена',
+  'git.conflict.editor.apply': 'Применить',
+  'git.conflict.editor.invalidJson': 'Неверный JSON',
+  'git.conflict.editor.textareaLabel': 'Редактировать значение JSON',
+
+  'git.error.dismiss': 'Закрыть',
+  'git.error.retry': 'Повторить',
+  'git.error.title': 'Что-то пошло не так',
+
+  // ── Пустое состояние Git ──
+  'git.empty.heading': 'История версий ещё не создана',
+  'git.empty.optional': 'Git необязателен — можно пропустить',
+  'git.empty.requireSavedFile': 'Сначала сохраните файл .op, чтобы включить историю',
+  'git.empty.newCard': 'Создать',
+  'git.empty.newCardDescription': 'Создать локальную историю',
+  'git.empty.openCard': 'Открыть',
+  'git.empty.openCardDescription': 'Существующий репозиторий',
+  'git.empty.cloneCard': 'Клонировать',
+  'git.empty.cloneCardDescription': 'Из удалённого',
+
+  // ── Форма автора Git ──
+  'git.author.heading': 'Автор коммита',
+  'git.author.subheading': 'Для первого коммита нужно имя и email',
+  'git.author.nameLabel': 'Имя',
+  'git.author.namePlaceholder': 'Ваше имя',
+  'git.author.emailLabel': 'Email',
+  'git.author.emailPlaceholder': 'vy@example.com',
+  'git.author.submit': 'Сохранить',
+  'git.author.cancel': 'Отмена',
+  'git.author.validationName': 'Имя обязательно',
+  'git.author.validationEmail': 'Требуется действительный email',
+
+  // ── Выбор файла Git (Phase 4b) ──
+  'git.picker.heading': '{{count}} файлов .op в этом репозитории:',
+  'git.picker.milestoneCount': '{{count}} вех',
+  'git.picker.noHistory': 'Нет истории',
+  'git.picker.lastCommit': '{{message}} · {{time}}',
+  'git.picker.bindButton': 'Отслеживать этот файл',
+  'git.picker.bindAndOpenButton': 'Отслеживать и открыть',
+  'git.picker.back': 'Назад',
+  'git.picker.backClose': 'Отмена',
+  'git.picker.empty.heading': 'В этом репозитории нет файлов .op',
+  'git.picker.empty.body': 'Панель Git требует хотя бы один файл .op.',
+  'git.picker.empty.close': 'Закрыть панель',
+
+  // ── Баннер автопривязки (Phase 4b) ──
+  'git.autoBind.confirmHeading': 'Найден {{fileName}} — открыть?',
+  'git.autoBind.openButton': 'Открыть',
+  'git.autoBind.dismissButton': 'Пропустить',
+
+  // ── Относительное время (Phase 4b) ──
+  'git.relativeTime.justNow': 'только что',
+  'git.relativeTime.minutesAgo': '{{count}}м назад',
+  'git.relativeTime.hoursAgo': '{{count}}ч назад',
+  'git.relativeTime.daysAgo': '{{count}}д назад',
+
+  // ── Git Commit Input (Phase 4c) ──
+  'git.commit.placeholder': 'Опишите это изменение…',
+  'git.commit.submitButton': 'Сохранить веху',
+  'git.commit.saveRequiredTitle': 'Сначала сохраните документ',
+  'git.commit.saveRequiredBody':
+    'У вас есть несохранённые изменения. Сохраните документ, чтобы продолжить: {{label}}',
+  'git.commit.saveRequiredSave': 'Сохранить',
+  'git.commit.saveRequiredCancel': 'Отмена',
+
+  // ── Git Header (Phase 4c → 6c) ──
+  'git.header.autosaveError': 'Ошибка автосохранения',
+  'git.header.autosaveErrorTitle': 'Последнее автосохранение не удалось',
+  'git.header.authorMissingWarning': 'Установите автора коммита для атрибуции',
+  'git.header.overflowSwitchTracked': 'Сменить отслеживаемый файл…',
+  'git.header.overflowClearAuthor': 'Очистить автора коммита',
+  'git.header.overflowCloseRepo': 'Закрыть репозиторий',
+  'git.header.overflowRemoteSettings': 'Настройки remote…',
+  'git.header.overflowSshKeys': 'SSH-ключи…',
+  'git.header.overflowMoreActions': 'Ещё действия',
+
+  // ── Git History List (Phase 4c) ──
+  'git.history.empty': 'Нет истории',
+  'git.history.autosaveGroup_one': '1 автосохранение',
+  'git.history.autosaveGroup_other': '{{count}} автосохранений',
+  'git.history.autosaveLabel': 'auto {{time}}',
+  'git.history.milestoneDetailTitle': 'Детали вехи',
+  'git.history.restoreButton': 'Восстановить',
+  'git.history.copyHashButton': 'Копировать хеш',
+  'git.history.copiedToast': 'Скопировано',
+  // ── Git diff истории (Phase 7b) ──
+  'git.history.diff.loading': 'Загрузка diff…',
+  'git.history.diff.initialCommit': 'Первый коммит — нет родителя для сравнения',
+  'git.history.diff.noChanges': 'Изменений не обнаружено',
+  'git.history.diff.error': 'Diff недоступен: {{message}}',
+  'git.history.diff.framesChanged_one': '1 фрейм изменён',
+  'git.history.diff.framesChanged_other': '{{count}} фреймов изменено',
+  'git.history.diff.nodesAdded_one': '1 узел добавлен',
+  'git.history.diff.nodesAdded_other': '{{count}} узлов добавлено',
+  'git.history.diff.nodesRemoved_one': '1 узел удалён',
+  'git.history.diff.nodesRemoved_other': '{{count}} узлов удалено',
+  'git.history.diff.nodesModified_one': '1 узел изменён',
+  'git.history.diff.nodesModified_other': '{{count}} узлов изменено',
+  'git.history.promoteButton': 'Повысить до вехи',
+  'git.history.promoteSuccessToast': 'Повышено до вехи',
+  'git.history.loadMore': 'Загрузить ещё',
+  'git.autosave.messagePrefix': 'auto',
+  'git.autosave.messageDiffSuffix': '',
+
+  // ── Git Выбор ветки (Phase 5) ──
+  'git.branch.listHeading': 'Ветки',
+  'git.branch.createAction': 'Новая ветка',
+  'git.branch.createPlaceholder': 'feature/login-redesign',
+  'git.branch.createSubmit': 'Создать ветку',
+  'git.branch.createEmpty': 'Введите имя ветки',
+  'git.branch.createExists': 'Ветка {{name}} уже существует',
+  'git.branch.mergeAction': 'Слить ветку…',
+  'git.branch.mergeHeading': 'Слияние в {{name}}',
+  'git.branch.deletePrompt': 'Удалить ветку {{name}}?',
+  'git.branch.deleteLabel': 'Удалить ветку {{name}}',
+  'git.branch.deleteWarning': 'В ветке {{name}} есть неслитые коммиты',
+  'git.branch.deleteConfirm': 'Удалить',
+  'git.branch.deleteForce': 'Принудительно удалить',
+  'git.branch.cancel': 'Отмена',
+  'git.branch.conflictDisabled': 'Завершите слияние перед переключением ветки',
+  'git.branch.noCommits': 'Пока нет коммитов',
+
+  // ── Git Clone Wizard (Phase 6a) ──
+  'git.wizard.clone.heading': 'Клонировать удалённый репозиторий',
+  'git.wizard.clone.subheading': 'Выберите URL удалённого репозитория и папку назначения.',
+  'git.wizard.clone.urlLabel': 'URL удалённого репозитория',
+  'git.wizard.clone.urlPlaceholder': 'https://github.com/owner/repo.git',
+  'git.wizard.clone.destLabel': 'Папка назначения',
+  'git.wizard.clone.destPlaceholder': '/путь/для/клона',
+  'git.wizard.clone.destPickButton': 'Обзор…',
+  'git.wizard.clone.usernameLabel': 'Имя пользователя (необязательно)',
+  'git.wizard.clone.tokenLabel': 'Токен доступа (необязательно)',
+  'git.wizard.clone.tokenPlaceholder': 'ghp_… для публичных можно оставить пустым',
+  'git.wizard.clone.anonymousHint':
+    'Оставьте пустым для анонимного клонирования (только публичные репозитории).',
+  'git.wizard.clone.sshHint': 'Этот URL требует аутентификации по SSH-ключу.',
+  'git.wizard.clone.hostDetected': 'Обнаружено: {{host}} · {{mode}}',
+  'git.wizard.clone.authMode.token-or-anon': 'токен или анонимно',
+  'git.wizard.clone.authMode.ssh': 'SSH-ключ',
+  'git.wizard.clone.cancel': 'Отмена',
+  'git.wizard.clone.submit': 'Клонировать',
+  'git.wizard.clone.validationUrl': 'Требуется URL удалённого репозитория',
+  'git.wizard.clone.validationDest': 'Требуется папка назначения',
+  'git.wizard.clone.validationTokenUsername': 'Имя пользователя обязательно при указании токена',
+  'git.wizard.clone.error.clone-network':
+    'Сетевая ошибка при клонировании. Проверьте подключение и повторите попытку.',
+  'git.wizard.clone.error.network': 'Сетевая ошибка. Проверьте подключение и повторите попытку.',
+  'git.wizard.clone.error.timeout':
+    'Истекло время ожидания клонирования. Повторите попытку или используйте репозиторий поменьше.',
+  'git.wizard.clone.error.auth-required': 'Этот репозиторий требует аутентификации.',
+  'git.wizard.clone.error.auth-failed':
+    'Аутентификация не удалась. Проверьте имя пользователя и токен.',
+  'git.wizard.clone.error.auth-token-invalid':
+    'Токен доступа отклонён. Создайте новый и повторите попытку.',
+  'git.wizard.clone.error.clone-failed':
+    'Клонирование не удалось. Убедитесь, что URL указывает на существующий репозиторий.',
+  'git.wizard.clone.error.clone-target-exists': 'Папка назначения уже существует или не пуста.',
+
+  // ── Git Pull / Push (Phase 6b) ──
+  'git.pull.label': 'Pull',
+  'git.pull.tooltip': 'Pull из origin',
+  'git.pull.noRemote': 'Удалённый репозиторий не настроен — добавьте его в настройках Git',
+  'git.pull.retry': 'Повторить pull',
+  'git.push.label': 'Push',
+  'git.push.tooltip_one': 'Отправить 1 коммит в origin',
+  'git.push.tooltip_other': 'Отправить {{count}} коммитов в origin',
+  'git.push.noRemote': 'Удалённый репозиторий не настроен — добавьте его в настройках Git',
+  'git.push.upToDate': 'Нечего отправлять — вы в курсе',
+  'git.push.retry': 'Повторить push',
+  'git.push.rejectedBody':
+    'В удалённом репозитории есть коммиты, которых у вас ещё нет. Сначала выполните pull, затем повторите push.',
+  'git.push.rejectedDismiss': 'Закрыть',
+  'git.push.rejectedPull': 'Выполнить pull',
+  'git.remote.dismissError': 'Закрыть',
+
+  // ── Git Настройки удалённого (Phase 6c) ──
+  'git.remote.settingsLabel': 'Настройки удалённого',
+  'git.remote.settingsHeading': 'Удалённый',
+  'git.remote.back': 'Назад',
+  'git.remote.cancel': 'Отмена',
+  'git.remote.emptyNoOrigin': 'Удалённый репозиторий ещё не настроен. Добавьте:',
+  'git.remote.urlLabel': 'URL origin',
+  'git.remote.urlPlaceholder': 'https://github.com/owner/repo.git',
+  'git.remote.saveButton': 'Сохранить',
+  'git.remote.clearButton': 'Очистить',
+  'git.remote.clearConfirmHeading': 'Очистить origin?',
+  'git.remote.clearConfirmBody': 'Это удалит origin из этого репозитория.',
+  'git.remote.clearConfirmAction': 'Подтвердить',
+  'git.remote.aheadBehind': 'Впереди {{ahead}} · Позади {{behind}}',
+  'git.remote.fetchButton': 'Fetch',
+  'git.remote.sshIsoUnsupported':
+    'Встроенный движок не поддерживает SSH. Установите системный git или используйте HTTPS URL.',
+  'git.remote.storedAuthLabel': 'Сохранённые учётные данные',
+  'git.remote.storedAuth.token': 'Токен',
+  'git.remote.storedAuth.ssh': 'SSH-ключ',
+  'git.remote.storedAuth.none': 'Нет',
+  'git.remote.storedAuth.loading': 'Загрузка…',
+  'git.remote.storedAuth.noHost': 'Хост не обнаружен',
+  'git.remote.clearAuthButton': 'Очистить сохранённые учётные данные',
+
+  // ── Git SSH-ключи (Phase 6c) ──
+  'git.ssh.label': 'SSH-ключи',
+  'git.ssh.heading': 'SSH-ключи',
+  'git.ssh.back': 'Назад',
+  'git.ssh.cancel': 'Отмена',
+  'git.ssh.isoUnsupported':
+    'Текущий удалённый использует SSH, но встроенный движок не может выполнить SSH-транспорт. Установите системный git или смените URL на HTTPS.',
+  'git.ssh.emptyList': 'SSH-ключей пока нет.',
+  'git.ssh.generateAction': 'Создать новый',
+  'git.ssh.importAction': 'Импортировать существующий',
+  'git.ssh.copyPublicKey': 'Скопировать публичный ключ',
+  'git.ssh.copiedHint': 'Скопировано',
+  'git.ssh.copyUnsupported': 'Буфер обмена недоступен — скопируйте этот ключ вручную.',
+  'git.ssh.deleteKey': 'Удалить {{name}}',
+  'git.ssh.deletePrompt': 'Удалить SSH-ключ {{name}}?',
+  'git.ssh.deleteConfirm': 'Удалить',
+  'git.ssh.currentHostBadge': 'текущий хост',
+  'git.ssh.hostLabel': 'Хост',
+  'git.ssh.hostPlaceholder': 'github.com',
+  'git.ssh.commentLabel': 'Комментарий',
+  'git.ssh.commentPlaceholder': 'laptop@home',
+  'git.ssh.generateSubmit': 'Создать',
+  'git.ssh.importPathLabel': 'Путь к приватному ключу',
+  'git.ssh.importPathPlaceholder': '/path/to/id_ed25519',
+  'git.ssh.importBrowse': 'Обзор…',
+  'git.ssh.importSubmit': 'Импортировать',
+  'git.ssh.validationHost': 'Хост обязателен',
+  'git.ssh.validationComment': 'Комментарий обязателен',
+  'git.ssh.validationImportPath': 'Выберите файл приватного ключа для импорта',
+  'git.ssh.providerLink': 'Открыть настройки SSH-ключей {{host}}',
+  'git.ssh.genericGuidance':
+    'Скопируйте публичный ключ и добавьте его в настройки SSH-ключей вашего Git-провайдера.',
+
+  // ── Git Форма аутентификации (Phase 6b) ──
+  'git.auth.formLabel': 'Учётные данные Git',
+  'git.auth.heading': 'Аутентификация на {{host}}',
+  'git.auth.headingUnknown': 'Аутентификация с этим удалённым',
+  'git.auth.modeToggleLabel': 'Тип учётных данных',
+  'git.auth.modeToken': 'Токен',
+  'git.auth.modeSsh': 'SSH',
+  'git.auth.usernameLabel': 'Имя пользователя (необязательно)',
+  'git.auth.tokenLabel': 'Токен доступа',
+  'git.auth.tokenPlaceholder': 'ghp_… или PAT',
+  'git.auth.sshKeyLabel': 'SSH-ключ',
+  'git.auth.sshNoKeys':
+    'Нет доступных SSH-ключей. Сначала импортируйте или сгенерируйте один в настройках Git.',
+  'git.auth.rememberLabel': 'Запомнить эти учётные данные для этого хоста',
+  'git.auth.rememberHint': 'Запомнить эти учётные данные для этого хоста',
+  'git.auth.cancel': 'Отмена',
+  'git.auth.validationToken': 'Токен доступа обязателен',
+  'git.auth.validationSshKey': 'Выберите SSH-ключ',
+  'git.auth.error.auth-required': 'Этот удалённый репозиторий требует аутентификации.',
+  'git.auth.error.auth-failed':
+    'Ошибка аутентификации. Проверьте свои учётные данные и повторите попытку.',
+  'git.auth.error.auth-token-invalid':
+    'Токен доступа был отклонён. Сгенерируйте новый и повторите попытку.',
   // ── Right Panel ──
   'rightPanel.design': 'Дизайн',
   'rightPanel.code': 'Код',
@@ -74,6 +383,8 @@ const ru: TranslationKeys = {
   'statusbar.zoomOut': 'Уменьшить масштаб',
   'statusbar.zoomIn': 'Увеличить масштаб',
   'statusbar.resetZoom': 'Сбросить масштаб',
+  'statusbar.focusContent': 'Показать всё содержимое',
+  'statusbar.focusSelection': 'Сфокусировать выделение',
 
   // ── Updater ──
   'updater.softwareUpdate': 'Обновление ПО',
@@ -98,19 +409,15 @@ const ru: TranslationKeys = {
   'updater.subtitle.checking': 'Поиск последней версии...',
   'updater.subtitle.available': 'Доступна версия {{version}}.',
   'updater.subtitle.availableGeneric': 'Доступна новая версия.',
-  'updater.subtitle.downloading':
-    'Версия {{version}} загружается в фоновом режиме.',
-  'updater.subtitle.downloadingGeneric':
-    'Пакет обновления загружается в фоновом режиме.',
+  'updater.subtitle.downloading': 'Версия {{version}} загружается в фоновом режиме.',
+  'updater.subtitle.downloadingGeneric': 'Пакет обновления загружается в фоновом режиме.',
   'updater.subtitle.downloaded': 'Версия {{version}} загружена.',
   'updater.subtitle.downloadedGeneric': 'Обновление загружено.',
-  'updater.subtitle.error':
-    'Не удалось проверить или загрузить обновление.',
+  'updater.subtitle.error': 'Не удалось проверить или загрузить обновление.',
 
   // ── Layers ──
   'layers.title': 'Слои',
-  'layers.empty':
-    'Слоёв пока нет. Используйте панель инструментов для рисования фигур.',
+  'layers.empty': 'Слоёв пока нет. Используйте панель инструментов для рисования фигур.',
 
   // ── Layer Context Menu ──
   'layerMenu.groupSelection': 'Сгруппировать выделение',
@@ -221,11 +528,9 @@ const ru: TranslationKeys = {
   'textLayout.autoWidth': 'Авто Ш',
   'textLayout.autoWidthDesc': 'Авто ширина — текст расширяется горизонтально',
   'textLayout.autoHeight': 'Авто В',
-  'textLayout.autoHeightDesc':
-    'Авто высота — фиксированная ширина, высота подстраивается',
+  'textLayout.autoHeightDesc': 'Авто высота — фиксированная ширина, высота подстраивается',
   'textLayout.fixed': 'Фикс.',
-  'textLayout.fixedDesc':
-    'Фиксированный размер — ширина и высота зафиксированы',
+  'textLayout.fixedDesc': 'Фиксированный размер — ширина и высота зафиксированы',
   'textLayout.fillWidth': 'Заполнить ширину',
   'textLayout.fillHeight': 'Заполнить высоту',
 
@@ -243,6 +548,7 @@ const ru: TranslationKeys = {
   'export.selectedOnly': 'Экспортировать только выделенное',
   'export.exportFormat': 'Экспорт {{format}}',
   'export.exportLayer': 'Экспортировать слой',
+  'export.pdfMultiPage': 'PDF будет включать все {{count}} страниц.',
 
   // ── Polygon ──
   'polygon.sides': 'Стороны',
@@ -308,8 +614,7 @@ const ru: TranslationKeys = {
   'ai.newChat': 'Новый чат',
   'ai.collapse': 'Свернуть',
   'ai.tryExample': 'Попробуйте пример для дизайна...',
-  'ai.tipSelectElements':
-    'Совет: Выделите элементы на холсте перед чатом для контекста.',
+  'ai.tipSelectElements': 'Совет: Выделите элементы на холсте перед чатом для контекста.',
   'ai.generating': 'Генерация...',
   'ai.designWithAgent': 'Дизайн с агентом...',
   'ai.attachImage': 'Прикрепить изображение',
@@ -323,14 +628,40 @@ const ru: TranslationKeys = {
   'ai.quickAction.loginScreenPrompt':
     'Design a modern mobile login screen with email input, password input, login button, and social login options',
   'ai.quickAction.foodApp': 'Главная страница приложения еды',
-  'ai.quickAction.foodAppPrompt':
-    'Generate a well-designed food mobile app homepage',
+  'ai.quickAction.foodAppPrompt': 'Generate a well-designed food mobile app homepage',
   'ai.quickAction.bottomNav': 'Создать нижнюю панель навигации',
   'ai.quickAction.bottomNavPrompt':
     'Design a mobile app bottom navigation bar with 5 tabs: Home, Search, Add, Messages, Profile',
   'ai.quickAction.colorPalette': 'Предложить цветовую палитру для приложения',
-  'ai.quickAction.colorPalettePrompt':
-    'Suggest a modern color palette for a pet care app',
+  'ai.quickAction.colorPalettePrompt': 'Suggest a modern color palette for a pet care app',
+  'ai.startDesigning': 'Start designing with AI',
+  'ai.maximize': 'Maximize',
+  'ai.restore': 'Restore',
+  'ai.quickAction.loginScreenDesc': 'Mobile login with social auth',
+  'ai.quickAction.foodAppDesc': 'App homepage design',
+  'ai.quickAction.bottomNavDesc': '5-tab navigation bar',
+  'ai.quickAction.colorPaletteDesc': 'Color palette recommendation',
+
+  // ── File Menu ──
+  'fileMenu.newFile': 'New file',
+  'fileMenu.openFile': 'Open file...',
+  'fileMenu.save': 'Save',
+  'fileMenu.saveAs': 'Save as...',
+  'fileMenu.exportImage': 'Экспорт изображения...',
+  'fileMenu.recentFiles': 'Recent files',
+  'fileMenu.clearHistory': 'Clear history',
+  'fileMenu.noRecentFiles': 'No recent files',
+  'fileMenu.saved': 'Saved',
+  'fileMenu.justNow': 'just now',
+  'fileMenu.minutesAgo': '{{count}}m ago',
+  'fileMenu.hoursAgo': '{{count}}h ago',
+  'fileMenu.yesterday': 'yesterday',
+  'fileMenu.daysAgo': '{{count}}d ago',
+
+  // ── Unsaved Changes ──
+  'unsaved.title': 'Unsaved changes',
+  'unsaved.message': 'Save changes to "{{name}}"?',
+  'unsaved.dontSave': "Don't Save",
 
   // ── Code Panel ──
   'code.reactTailwind': 'React + Tailwind',
@@ -341,8 +672,7 @@ const ru: TranslationKeys = {
   'code.download': 'Скачать файл с кодом',
   'code.closeCodePanel': 'Закрыть панель кода',
   'code.genCssVars': 'Генерация CSS-переменных для всего документа',
-  'code.genSelected':
-    'Генерация кода для {{count}} выделенных элементов',
+  'code.genSelected': 'Генерация кода для {{count}} выделенных элементов',
   'code.genDocument': 'Генерация кода для всего документа',
   'code.aiEnhance': 'Улучшить с ИИ',
   'code.cancelEnhance': 'Отменить улучшение',
@@ -360,8 +690,7 @@ const ru: TranslationKeys = {
   'agents.mcpIntegrations': 'Интеграции MCP в терминале',
   'agents.transport': 'Транспорт',
   'agents.port': 'Порт',
-  'agents.mcpRestart':
-    'Интеграции MCP вступят в силу после перезапуска терминала.',
+  'agents.mcpRestart': 'Интеграции MCP вступят в силу после перезапуска терминала.',
   'agents.mcpReinstallHint':
     'После обновления OpenPencil переустановите интеграции MCP для обеспечения совместимости.',
   'agents.modelCount': '{{count}} модель(ей)',
@@ -432,11 +761,13 @@ const ru: TranslationKeys = {
   'builtin.custom': 'Пользовательский',
   'builtin.apiKeyBadge': 'API Key',
   'builtin.viaApiKey': 'через API Key {{name}}',
-  'builtin.errorProviderNotFound': 'Встроенный провайдер не найден. Пожалуйста, проверьте настройки.',
+  'builtin.errorProviderNotFound':
+    'Встроенный провайдер не найден. Пожалуйста, проверьте настройки.',
   'builtin.errorApiKeyEmpty': 'API key пуст. Пожалуйста, добавьте API key в настройках.',
   'builtin.parallelAgents': 'Параллельные суб-агенты: {{count}}x (нажмите для переключения)',
   'builtin.baseUrlPlaceholder': 'https://api.example.com/v1',
-  'builtin.teamDescription': 'Выберите модель для генерации дизайна. При установке задачи дизайна автоматически делегируются специализированному агенту, использующему эту модель.',
+  'builtin.teamDescription':
+    'Выберите модель для генерации дизайна. При установке задачи дизайна автоматически делегируются специализированному агенту, использующему эту модель.',
   'builtin.teamDesignModel': 'Модель дизайна',
   'builtin.teamSelectModel': 'Нет (один агент)',
 
@@ -451,8 +782,7 @@ const ru: TranslationKeys = {
   'figma.convertFailed': 'Не удалось конвертировать файл Figma',
   'figma.parsing': 'Разбор файла .fig...',
   'figma.converting': 'Конвертация узлов...',
-  'figma.selectPage':
-    'В этом файле {{count}} страниц. Выберите, какие импортировать:',
+  'figma.selectPage': 'В этом файле {{count}} страниц. Выберите, какие импортировать:',
   'figma.layers': '{{count}} слоёв',
   'figma.importAll': 'Импортировать все страницы',
   'figma.importComplete': 'Импорт завершён!',
@@ -466,8 +796,7 @@ const ru: TranslationKeys = {
   // ── Landing Page ──
   'landing.open': 'Open',
   'landing.pencil': 'Pencil',
-  'landing.tagline':
-    'Векторный дизайн-инструмент с открытым исходным кодом. Design as Code.',
+  'landing.tagline': 'Векторный дизайн-инструмент с открытым исходным кодом. Design as Code.',
   'landing.newDesign': 'Новый дизайн',
   'landing.shortcutHint': 'Нажмите {{key1}} + {{key2}} для создания нового дизайна',
 
@@ -499,6 +828,6 @@ const ru: TranslationKeys = {
   'variablePicker.bindToVariable': 'Привязать к переменной',
   'variablePicker.unbind': 'Отвязать переменную',
   'variablePicker.noVariables': 'Нет переменных типа {{type}}',
-} as const
+} as const;
 
-export default ru
+export default ru;

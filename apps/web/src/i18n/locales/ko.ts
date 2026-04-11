@@ -1,4 +1,4 @@
-import type { TranslationKeys } from './en'
+import type { TranslationKeys } from './en';
 
 const ko: TranslationKeys = {
   // ── Common ──
@@ -10,6 +10,8 @@ const ko: TranslationKeys = {
   'common.close': '닫기',
   'common.connect': '연결',
   'common.disconnect': '연결 해제',
+  'common.yes': '예',
+  'common.no': '아니요',
   'common.import': '가져오기',
   'common.export': '내보내기',
   'common.name': '이름',
@@ -59,6 +61,306 @@ const ko: TranslationKeys = {
   'topbar.connected': '연결됨',
   'topbar.agentStatus': '에이전트 {{agents}}개{{agentSuffix}} · MCP {{mcp}}개',
 
+  // ── Git 패널 ──
+  'git.openPanel': 'Git 패널 열기',
+  'git.closePanel': 'Git 패널 닫기',
+  'git.title': 'Git · {{fileName}}',
+  'git.titleNoFile': 'Git · (파일 선택 안 됨)',
+  'git.close': '닫기',
+  'git.initializing': '저장소 초기화 중…',
+  'git.conflict.title': '병합 충돌',
+  'git.conflict.description': '아래 카드로 각 충돌을 해결한 다음 병합을 적용하세요.',
+  'git.conflict.abort': '병합 중단',
+  'git.conflict.nonOp.title': '.op 이외 파일로 병합이 일시 중지됨',
+  'git.conflict.nonOp.description':
+    '.op 파일 병합은 완료되었지만 저장소의 다른 파일이 아직 해결되지 않았습니다. OpenPencil 외부에서 해결한 후 계속하세요.',
+  'git.conflict.nonOp.unresolvedHeading_one': '1개 파일에 조치가 필요함',
+  'git.conflict.nonOp.unresolvedHeading_other': '{{count}}개 파일에 조치가 필요함',
+  'git.conflict.nonOp.continue': '병합 계속',
+  'git.conflict.nonOp.abort': '병합 중단',
+  // ── Git 충돌 배너 (Phase 7b) ──
+  'git.conflict.banner.progress': '{{resolved}} / {{total}} 해결됨',
+  'git.conflict.banner.apply': '병합 적용',
+  'git.conflict.banner.continue': '계속',
+  'git.conflict.banner.finalizeError': '적용 실패: {{message}}',
+  'git.conflict.banner.pollError': '오류로 인해 상태 폴링이 일시 중지됨: {{message}}',
+  // placeholder — future localization
+  'git.conflict.banner.reopenMessage':
+    '패널이 병합 중 다시 열렸습니다 — 중단하고 다시 pull 하세요.',
+
+  // ── Git 충돌 목록 (Phase 7c) ──
+  'git.conflict.list.heading': '모든 충돌',
+  'git.conflict.list.progress': '{{resolved}} / {{total}} 해결됨',
+  'git.conflict.list.allResolved': '모두 해결됨',
+  'git.conflict.list.allOurs': '모두 내 것으로',
+  'git.conflict.list.allTheirs': '모두 상대 것으로',
+
+  // ── Git 충돌 항목 (Phase 7c) ──
+  'git.conflict.item.nodeConflict': '노드 충돌',
+  'git.conflict.item.fieldConflict': '필드 충돌',
+  'git.conflict.item.resolved': '해결됨',
+
+  // ── Git 충돌 카드 (Phase 7c) ──
+  'git.conflict.card.ours': '내 것',
+  'git.conflict.card.theirs': '상대 것',
+  'git.conflict.card.base': '기본',
+  'git.conflict.card.keepMine': '내 것 유지',
+  'git.conflict.card.keepTheirs': '상대 것 유지',
+  'git.conflict.card.oursThumbnailAlt': '내 버전',
+  'git.conflict.card.theirsThumbnailAlt': '상대 버전',
+
+  // ── Git 충돌 JSON 편집기 (Phase 7c) ──
+  'git.conflict.editor.editManually': '수동 편집',
+  'git.conflict.editor.cancel': '취소',
+  'git.conflict.editor.apply': '적용',
+  'git.conflict.editor.invalidJson': '유효하지 않은 JSON',
+  'git.conflict.editor.textareaLabel': 'JSON 값 편집',
+
+  'git.error.dismiss': '닫기',
+  'git.error.retry': '다시 시도',
+  'git.error.title': '문제가 발생했습니다',
+
+  // ── Git 빈 상태 ──
+  'git.empty.heading': '아직 버전 기록이 없습니다',
+  'git.empty.optional': 'Git은 선택 사항 — 건너뛰어도 됩니다',
+  'git.empty.requireSavedFile': '기록을 만들려면 .op 파일을 먼저 저장하세요',
+  'git.empty.newCard': '새로 만들기',
+  'git.empty.newCardDescription': '로컬 기록 생성',
+  'git.empty.openCard': '열기',
+  'git.empty.openCardDescription': '기존 저장소',
+  'git.empty.cloneCard': '복제',
+  'git.empty.cloneCardDescription': '원격에서',
+
+  // ── Git 작성자 양식 ──
+  'git.author.heading': '커밋 작성자',
+  'git.author.subheading': '첫 커밋을 저장하려면 이름과 이메일이 필요합니다',
+  'git.author.nameLabel': '이름',
+  'git.author.namePlaceholder': '이름',
+  'git.author.emailLabel': '이메일',
+  'git.author.emailPlaceholder': 'you@example.com',
+  'git.author.submit': '저장',
+  'git.author.cancel': '취소',
+  'git.author.validationName': '이름을 입력하세요',
+  'git.author.validationEmail': '유효한 이메일을 입력하세요',
+
+  // ── Git 선택기 (Phase 4b) ──
+  'git.picker.heading': '이 저장소에 {{count}}개의 .op 파일이 있습니다:',
+  'git.picker.milestoneCount': '{{count}}개 마일스톤',
+  'git.picker.noHistory': '기록 없음',
+  'git.picker.lastCommit': '{{message}} · {{time}}',
+  'git.picker.bindButton': '이 파일 추적',
+  'git.picker.bindAndOpenButton': '추적하고 열기',
+  'git.picker.back': '뒤로',
+  'git.picker.backClose': '취소',
+  'git.picker.empty.heading': '이 저장소에 .op 파일이 없습니다',
+  'git.picker.empty.body': 'Git 패널은 작동하려면 최소 하나의 .op 파일이 필요합니다',
+  'git.picker.empty.close': '패널 닫기',
+
+  // ── Git 자동 바인딩 배너 (Phase 4b) ──
+  'git.autoBind.confirmHeading': '{{fileName}}을(를) 찾았습니다 — 열까요?',
+  'git.autoBind.openButton': '열기',
+  'git.autoBind.dismissButton': '건너뛰기',
+
+  // ── Git 상대 시간 (Phase 4b) ──
+  'git.relativeTime.justNow': '방금',
+  'git.relativeTime.minutesAgo': '{{count}}분 전',
+  'git.relativeTime.hoursAgo': '{{count}}시간 전',
+  'git.relativeTime.daysAgo': '{{count}}일 전',
+
+  // ── Git Commit Input (Phase 4c) ──
+  'git.commit.placeholder': '이 변경 설명…',
+  'git.commit.submitButton': '마일스톤으로 저장',
+  'git.commit.saveRequiredTitle': '문서를 먼저 저장하세요',
+  'git.commit.saveRequiredBody':
+    '저장되지 않은 변경 사항이 있습니다. 계속하려면 문서를 저장하세요: {{label}}',
+  'git.commit.saveRequiredSave': '저장',
+  'git.commit.saveRequiredCancel': '취소',
+
+  // ── Git Header (Phase 4c → 6c) ──
+  'git.header.autosaveError': '자동 저장 오류',
+  'git.header.autosaveErrorTitle': '마지막 자동 저장 실패',
+  'git.header.authorMissingWarning': '기여 기록을 위해 커밋 작성자를 설정하세요',
+  'git.header.overflowSwitchTracked': '추적 파일 전환…',
+  'git.header.overflowClearAuthor': '커밋 작성자 지우기',
+  'git.header.overflowCloseRepo': '저장소 닫기',
+  'git.header.overflowRemoteSettings': '원격 설정…',
+  'git.header.overflowSshKeys': 'SSH 키…',
+  'git.header.overflowMoreActions': '추가 작업',
+
+  // ── Git History List (Phase 4c) ──
+  'git.history.empty': '기록 없음',
+  'git.history.autosaveGroup_one': '자동 저장 1건',
+  'git.history.autosaveGroup_other': '자동 저장 {{count}}건',
+  'git.history.autosaveLabel': 'auto {{time}}',
+  'git.history.milestoneDetailTitle': '마일스톤 세부정보',
+  'git.history.restoreButton': '복원',
+  'git.history.copyHashButton': '해시 복사',
+  'git.history.copiedToast': '복사됨',
+  // ── Git 기록 diff (Phase 7b) ──
+  'git.history.diff.loading': 'diff 로딩 중…',
+  'git.history.diff.initialCommit': '초기 커밋 — 비교할 부모 커밋 없음',
+  'git.history.diff.noChanges': '변경 사항 없음',
+  'git.history.diff.error': 'diff 사용 불가: {{message}}',
+  'git.history.diff.framesChanged_one': '프레임 1개 변경됨',
+  'git.history.diff.framesChanged_other': '프레임 {{count}}개 변경됨',
+  'git.history.diff.nodesAdded_one': '노드 1개 추가됨',
+  'git.history.diff.nodesAdded_other': '노드 {{count}}개 추가됨',
+  'git.history.diff.nodesRemoved_one': '노드 1개 삭제됨',
+  'git.history.diff.nodesRemoved_other': '노드 {{count}}개 삭제됨',
+  'git.history.diff.nodesModified_one': '노드 1개 수정됨',
+  'git.history.diff.nodesModified_other': '노드 {{count}}개 수정됨',
+  'git.history.promoteButton': '마일스톤으로 승격',
+  'git.history.promoteSuccessToast': '마일스톤으로 승격됨',
+  'git.history.loadMore': '더 로드',
+  'git.autosave.messagePrefix': 'auto',
+  'git.autosave.messageDiffSuffix': '',
+
+  // ── Git 브랜치 피커 (Phase 5) ──
+  'git.branch.listHeading': '브랜치',
+  'git.branch.createAction': '새 브랜치',
+  'git.branch.createPlaceholder': 'feature/login-redesign',
+  'git.branch.createSubmit': '브랜치 만들기',
+  'git.branch.createEmpty': '브랜치 이름을 입력하세요',
+  'git.branch.createExists': '{{name}} 브랜치가 이미 존재합니다',
+  'git.branch.mergeAction': '브랜치 병합…',
+  'git.branch.mergeHeading': '{{name}}에 병합',
+  'git.branch.deletePrompt': '{{name}} 브랜치를 삭제할까요?',
+  'git.branch.deleteLabel': '{{name}} 브랜치 삭제',
+  'git.branch.deleteWarning': '{{name}} 브랜치에 병합되지 않은 커밋이 있습니다',
+  'git.branch.deleteConfirm': '삭제',
+  'git.branch.deleteForce': '강제 삭제',
+  'git.branch.cancel': '취소',
+  'git.branch.conflictDisabled': '브랜치를 전환하기 전에 병합을 완료하세요',
+  'git.branch.noCommits': '커밋이 없습니다',
+
+  // ── Git Clone Wizard (Phase 6a) ──
+  'git.wizard.clone.heading': '원격 저장소 복제',
+  'git.wizard.clone.subheading': '원격 URL과 대상 폴더를 선택하세요.',
+  'git.wizard.clone.urlLabel': '원격 URL',
+  'git.wizard.clone.urlPlaceholder': 'https://github.com/owner/repo.git',
+  'git.wizard.clone.destLabel': '대상 폴더',
+  'git.wizard.clone.destPlaceholder': '/path/to/clone',
+  'git.wizard.clone.destPickButton': '찾아보기…',
+  'git.wizard.clone.usernameLabel': '사용자 이름(선택)',
+  'git.wizard.clone.tokenLabel': '액세스 토큰(선택)',
+  'git.wizard.clone.tokenPlaceholder': 'ghp_… 공개 저장소는 비워두세요',
+  'git.wizard.clone.anonymousHint': '비워두면 익명으로 복제합니다(공개 저장소만 가능).',
+  'git.wizard.clone.sshHint': '이 URL은 SSH 키 인증이 필요합니다.',
+  'git.wizard.clone.hostDetected': '감지됨: {{host}} · {{mode}}',
+  'git.wizard.clone.authMode.token-or-anon': '토큰 또는 익명',
+  'git.wizard.clone.authMode.ssh': 'SSH 키',
+  'git.wizard.clone.cancel': '취소',
+  'git.wizard.clone.submit': '복제',
+  'git.wizard.clone.validationUrl': '원격 URL을 입력하세요',
+  'git.wizard.clone.validationDest': '대상 폴더를 선택하세요',
+  'git.wizard.clone.validationTokenUsername': '토큰을 제공할 때 사용자 이름이 필요합니다',
+  'git.wizard.clone.error.clone-network':
+    '복제 중 네트워크 오류가 발생했습니다. 연결을 확인하고 다시 시도하세요.',
+  'git.wizard.clone.error.network': '네트워크 오류. 연결을 확인하고 다시 시도하세요.',
+  'git.wizard.clone.error.timeout':
+    '복제 시간이 초과되었습니다. 다시 시도하거나 더 작은 저장소를 사용하세요.',
+  'git.wizard.clone.error.auth-required': '이 저장소는 인증이 필요합니다.',
+  'git.wizard.clone.error.auth-failed': '인증에 실패했습니다. 사용자 이름과 토큰을 확인하세요.',
+  'git.wizard.clone.error.auth-token-invalid':
+    '액세스 토큰이 거부되었습니다. 새 토큰을 생성하고 다시 시도하세요.',
+  'git.wizard.clone.error.clone-failed':
+    '복제에 실패했습니다. URL이 실제 저장소를 가리키는지 확인하세요.',
+  'git.wizard.clone.error.clone-target-exists': '대상 폴더가 이미 존재하거나 비어 있지 않습니다.',
+
+  // ── Git 풀 / 푸시 (Phase 6b) ──
+  'git.pull.label': '풀',
+  'git.pull.tooltip': 'origin에서 풀',
+  'git.pull.noRemote': '원격이 구성되지 않음 — Git 설정에서 추가하세요',
+  'git.pull.retry': '풀 다시 시도',
+  'git.push.label': '푸시',
+  'git.push.tooltip_one': '1개 커밋을 origin으로 푸시',
+  'git.push.tooltip_other': '{{count}}개 커밋을 origin으로 푸시',
+  'git.push.noRemote': '원격이 구성되지 않음 — Git 설정에서 추가하세요',
+  'git.push.upToDate': '푸시할 내용이 없음 — 최신 상태입니다',
+  'git.push.retry': '푸시 다시 시도',
+  'git.push.rejectedBody': '원격에 아직 받지 않은 커밋이 있습니다. 먼저 풀한 뒤 다시 푸시하세요.',
+  'git.push.rejectedDismiss': '닫기',
+  'git.push.rejectedPull': '지금 풀',
+  'git.remote.dismissError': '닫기',
+
+  // ── Git 원격 설정 (Phase 6c) ──
+  'git.remote.settingsLabel': '원격 설정',
+  'git.remote.settingsHeading': '원격',
+  'git.remote.back': '뒤로',
+  'git.remote.cancel': '취소',
+  'git.remote.emptyNoOrigin': '구성된 원격이 없습니다. 추가하세요:',
+  'git.remote.urlLabel': 'Origin URL',
+  'git.remote.urlPlaceholder': 'https://github.com/owner/repo.git',
+  'git.remote.saveButton': '저장',
+  'git.remote.clearButton': '삭제',
+  'git.remote.clearConfirmHeading': 'origin을 삭제할까요?',
+  'git.remote.clearConfirmBody': '이 저장소에서 origin 원격이 제거됩니다.',
+  'git.remote.clearConfirmAction': '확인',
+  'git.remote.aheadBehind': '{{ahead}} 앞서고 · {{behind}} 뒤처짐',
+  'git.remote.fetchButton': 'Fetch',
+  'git.remote.sshIsoUnsupported':
+    '내장 엔진은 SSH 전송을 지원하지 않습니다. 시스템 git을 설치하거나 HTTPS 원격 URL로 전환하세요.',
+  'git.remote.storedAuthLabel': '저장된 자격 증명',
+  'git.remote.storedAuth.token': '토큰',
+  'git.remote.storedAuth.ssh': 'SSH 키',
+  'git.remote.storedAuth.none': '없음',
+  'git.remote.storedAuth.loading': '불러오는 중…',
+  'git.remote.storedAuth.noHost': '호스트가 감지되지 않음',
+  'git.remote.clearAuthButton': '저장된 자격 증명 삭제',
+
+  // ── Git SSH 키 (Phase 6c) ──
+  'git.ssh.label': 'SSH 키',
+  'git.ssh.heading': 'SSH 키',
+  'git.ssh.back': '뒤로',
+  'git.ssh.cancel': '취소',
+  'git.ssh.isoUnsupported':
+    '현재 원격은 SSH를 사용하지만 내장 엔진은 SSH 전송을 수행할 수 없습니다. 시스템 git을 설치하거나 원격 URL을 HTTPS로 변경하세요.',
+  'git.ssh.emptyList': '아직 SSH 키가 없습니다.',
+  'git.ssh.generateAction': '새로 생성',
+  'git.ssh.importAction': '기존 항목 가져오기',
+  'git.ssh.copyPublicKey': '공개 키 복사',
+  'git.ssh.copiedHint': '복사됨',
+  'git.ssh.copyUnsupported': '클립보드를 사용할 수 없습니다. 이 키를 수동으로 복사하세요.',
+  'git.ssh.deleteKey': '{{name}} 삭제',
+  'git.ssh.deletePrompt': 'SSH 키 {{name}}을(를) 삭제할까요?',
+  'git.ssh.deleteConfirm': '삭제',
+  'git.ssh.currentHostBadge': '현재 호스트',
+  'git.ssh.hostLabel': '호스트',
+  'git.ssh.hostPlaceholder': 'github.com',
+  'git.ssh.commentLabel': '주석',
+  'git.ssh.commentPlaceholder': 'laptop@home',
+  'git.ssh.generateSubmit': '생성',
+  'git.ssh.importPathLabel': '개인 키 경로',
+  'git.ssh.importPathPlaceholder': '/path/to/id_ed25519',
+  'git.ssh.importBrowse': '찾아보기…',
+  'git.ssh.importSubmit': '가져오기',
+  'git.ssh.validationHost': '호스트가 필요합니다',
+  'git.ssh.validationComment': '주석이 필요합니다',
+  'git.ssh.validationImportPath': '가져올 개인 키 파일을 선택하세요',
+  'git.ssh.providerLink': '{{host}} SSH 키 설정 열기',
+  'git.ssh.genericGuidance': '공개 키를 복사하여 Git 제공업체의 SSH 키 설정에 추가하세요.',
+
+  // ── Git 인증 양식 (Phase 6b) ──
+  'git.auth.formLabel': 'Git 자격 증명',
+  'git.auth.heading': '{{host}}에 인증',
+  'git.auth.headingUnknown': '이 원격에 인증',
+  'git.auth.modeToggleLabel': '자격 증명 유형',
+  'git.auth.modeToken': '토큰',
+  'git.auth.modeSsh': 'SSH',
+  'git.auth.usernameLabel': '사용자 이름(선택)',
+  'git.auth.tokenLabel': '액세스 토큰',
+  'git.auth.tokenPlaceholder': 'ghp_… 또는 PAT',
+  'git.auth.sshKeyLabel': 'SSH 키',
+  'git.auth.sshNoKeys': '사용 가능한 SSH 키가 없습니다. 먼저 Git 설정에서 가져오거나 생성하세요.',
+  'git.auth.rememberLabel': '이 호스트의 자격 증명 기억',
+  'git.auth.rememberHint': '이 호스트의 자격 증명 기억',
+  'git.auth.cancel': '취소',
+  'git.auth.validationToken': '액세스 토큰은 필수입니다',
+  'git.auth.validationSshKey': 'SSH 키를 선택하세요',
+  'git.auth.error.auth-required': '이 원격에는 인증이 필요합니다.',
+  'git.auth.error.auth-failed': '인증 실패. 자격 증명을 확인하고 다시 시도하세요.',
+  'git.auth.error.auth-token-invalid':
+    '액세스 토큰이 거부되었습니다. 새 토큰을 생성한 후 다시 시도하세요.',
   // ── Right Panel ──
   'rightPanel.design': '디자인',
   'rightPanel.code': '코드',
@@ -74,6 +376,8 @@ const ko: TranslationKeys = {
   'statusbar.zoomOut': '축소',
   'statusbar.zoomIn': '확대',
   'statusbar.resetZoom': '확대/축소 초기화',
+  'statusbar.focusContent': '전체 콘텐츠 맞추기',
+  'statusbar.focusSelection': '선택 항목에 초점 맞추기',
 
   // ── Updater ──
   'updater.softwareUpdate': '소프트웨어 업데이트',
@@ -87,8 +391,7 @@ const ko: TranslationKeys = {
   'updater.restartInstall': '재시작 및 설치',
   'updater.installing': '설치 중...',
   'updater.releaseDate': '출시일: {{date}}',
-  'updater.restartHint':
-    '업데이트를 적용하려면 재시작하세요. 재실행은 보통 10~15초 소요됩니다.',
+  'updater.restartHint': '업데이트를 적용하려면 재시작하세요. 재실행은 보통 10~15초 소요됩니다.',
   'updater.unknownError': '알 수 없는 업데이트 오류입니다.',
   'updater.title.checking': '업데이트 확인 중',
   'updater.title.available': '업데이트 발견',
@@ -98,10 +401,8 @@ const ko: TranslationKeys = {
   'updater.subtitle.checking': '최신 릴리스를 확인하고 있습니다...',
   'updater.subtitle.available': '버전 {{version}}을 사용할 수 있습니다.',
   'updater.subtitle.availableGeneric': '새 버전을 사용할 수 있습니다.',
-  'updater.subtitle.downloading':
-    '버전 {{version}}을 백그라운드에서 다운로드 중입니다.',
-  'updater.subtitle.downloadingGeneric':
-    '업데이트 패키지를 백그라운드에서 다운로드 중입니다.',
+  'updater.subtitle.downloading': '버전 {{version}}을 백그라운드에서 다운로드 중입니다.',
+  'updater.subtitle.downloadingGeneric': '업데이트 패키지를 백그라운드에서 다운로드 중입니다.',
   'updater.subtitle.downloaded': '버전 {{version}}이 다운로드되었습니다.',
   'updater.subtitle.downloadedGeneric': '업데이트가 다운로드되었습니다.',
   'updater.subtitle.error': '업데이트를 확인하거나 다운로드할 수 없습니다.',
@@ -219,11 +520,9 @@ const ko: TranslationKeys = {
   'textLayout.autoWidth': '자동 W',
   'textLayout.autoWidthDesc': '자동 너비 — 텍스트가 가로로 확장됩니다',
   'textLayout.autoHeight': '자동 H',
-  'textLayout.autoHeightDesc':
-    '자동 높이 — 고정 너비, 높이가 자동 조절됩니다',
+  'textLayout.autoHeightDesc': '자동 높이 — 고정 너비, 높이가 자동 조절됩니다',
   'textLayout.fixed': '고정',
-  'textLayout.fixedDesc':
-    '고정 크기 — 너비와 높이가 모두 고정됩니다',
+  'textLayout.fixedDesc': '고정 크기 — 너비와 높이가 모두 고정됩니다',
   'textLayout.fillWidth': '너비 채우기',
   'textLayout.fillHeight': '높이 채우기',
 
@@ -241,6 +540,7 @@ const ko: TranslationKeys = {
   'export.selectedOnly': '선택 항목만 내보내기',
   'export.exportFormat': '{{format}} 내보내기',
   'export.exportLayer': '레이어 내보내기',
+  'export.pdfMultiPage': 'PDF에 {{count}}개의 모든 페이지가 포함됩니다.',
 
   // ── Polygon ──
   'polygon.sides': '변 수',
@@ -306,8 +606,7 @@ const ko: TranslationKeys = {
   'ai.newChat': '새 대화',
   'ai.collapse': '접기',
   'ai.tryExample': '예시로 디자인 해보세요...',
-  'ai.tipSelectElements':
-    '팁: 대화 전에 캔버스에서 요소를 선택하면 컨텍스트를 제공할 수 있습니다.',
+  'ai.tipSelectElements': '팁: 대화 전에 캔버스에서 요소를 선택하면 컨텍스트를 제공할 수 있습니다.',
   'ai.generating': '생성 중...',
   'ai.designWithAgent': '에이전트로 디자인...',
   'ai.attachImage': '이미지 첨부',
@@ -321,14 +620,41 @@ const ko: TranslationKeys = {
   'ai.quickAction.loginScreenPrompt':
     '이메일 입력, 비밀번호 입력, 로그인 버튼, 소셜 로그인 옵션이 있는 모던 모바일 로그인 화면을 디자인해 주세요',
   'ai.quickAction.foodApp': '음식 앱 홈페이지',
-  'ai.quickAction.foodAppPrompt':
-    'Generate a well-designed food mobile app homepage',
+  'ai.quickAction.foodAppPrompt': 'Generate a well-designed food mobile app homepage',
   'ai.quickAction.bottomNav': '하단 네비게이션 바 디자인',
   'ai.quickAction.bottomNavPrompt':
     '홈, 검색, 추가, 메시지, 프로필 5개 탭이 있는 모바일 앱 하단 네비게이션 바를 디자인해 주세요',
   'ai.quickAction.colorPalette': '앱에 맞는 색상 팔레트 추천',
   'ai.quickAction.colorPalettePrompt':
     '반려동물 관리 앱에 어울리는 모던한 색상 팔레트를 추천해 주세요',
+  'ai.startDesigning': 'Start designing with AI',
+  'ai.maximize': 'Maximize',
+  'ai.restore': 'Restore',
+  'ai.quickAction.loginScreenDesc': 'Mobile login with social auth',
+  'ai.quickAction.foodAppDesc': 'App homepage design',
+  'ai.quickAction.bottomNavDesc': '5-tab navigation bar',
+  'ai.quickAction.colorPaletteDesc': 'Color palette recommendation',
+
+  // ── File Menu ──
+  'fileMenu.newFile': 'New file',
+  'fileMenu.openFile': 'Open file...',
+  'fileMenu.save': 'Save',
+  'fileMenu.saveAs': 'Save as...',
+  'fileMenu.exportImage': '이미지 내보내기...',
+  'fileMenu.recentFiles': 'Recent files',
+  'fileMenu.clearHistory': 'Clear history',
+  'fileMenu.noRecentFiles': 'No recent files',
+  'fileMenu.saved': 'Saved',
+  'fileMenu.justNow': 'just now',
+  'fileMenu.minutesAgo': '{{count}}m ago',
+  'fileMenu.hoursAgo': '{{count}}h ago',
+  'fileMenu.yesterday': 'yesterday',
+  'fileMenu.daysAgo': '{{count}}d ago',
+
+  // ── Unsaved Changes ──
+  'unsaved.title': 'Unsaved changes',
+  'unsaved.message': 'Save changes to "{{name}}"?',
+  'unsaved.dontSave': "Don't Save",
 
   // ── Code Panel ──
   'code.reactTailwind': 'React + Tailwind',
@@ -339,8 +665,7 @@ const ko: TranslationKeys = {
   'code.download': '코드 파일 다운로드',
   'code.closeCodePanel': '코드 패널 닫기',
   'code.genCssVars': '전체 문서의 CSS 변수를 생성 중',
-  'code.genSelected':
-    '선택한 요소 {{count}}개의 코드를 생성 중',
+  'code.genSelected': '선택한 요소 {{count}}개의 코드를 생성 중',
   'code.genDocument': '전체 문서의 코드를 생성 중',
   'code.aiEnhance': 'AI 개선',
   'code.cancelEnhance': '개선 취소',
@@ -358,8 +683,7 @@ const ko: TranslationKeys = {
   'agents.mcpIntegrations': '터미널 MCP 연동',
   'agents.transport': '전송 방식',
   'agents.port': '포트',
-  'agents.mcpRestart':
-    'MCP 연동은 터미널을 재시작한 후 적용됩니다.',
+  'agents.mcpRestart': 'MCP 연동은 터미널을 재시작한 후 적용됩니다.',
   'agents.mcpReinstallHint':
     'OpenPencil 버전 업그레이드 후 호환성을 위해 MCP 통합을 다시 설치해 주세요.',
   'agents.modelCount': '모델 {{count}}개',
@@ -434,7 +758,8 @@ const ko: TranslationKeys = {
   'builtin.errorApiKeyEmpty': 'API 키가 비어 있습니다. 설정에서 API 키를 추가해 주세요.',
   'builtin.parallelAgents': '병렬 하위 에이전트: {{count}}x (클릭하여 전환)',
   'builtin.baseUrlPlaceholder': 'https://api.example.com/v1',
-  'builtin.teamDescription': '디자인 생성용 모델을 선택하세요. 설정하면 디자인 작업이 이 모델을 사용하는 전문 에이전트에 자동으로 위임됩니다.',
+  'builtin.teamDescription':
+    '디자인 생성용 모델을 선택하세요. 설정하면 디자인 작업이 이 모델을 사용하는 전문 에이전트에 자동으로 위임됩니다.',
   'builtin.teamDesignModel': '디자인 모델',
   'builtin.teamSelectModel': '없음 (단일 에이전트)',
 
@@ -449,8 +774,7 @@ const ko: TranslationKeys = {
   'figma.convertFailed': 'Figma 파일 변환에 실패했습니다',
   'figma.parsing': '.fig 파일 파싱 중...',
   'figma.converting': '노드 변환 중...',
-  'figma.selectPage':
-    '이 파일에는 {{count}}개의 페이지가 있습니다. 가져올 페이지를 선택하세요:',
+  'figma.selectPage': '이 파일에는 {{count}}개의 페이지가 있습니다. 가져올 페이지를 선택하세요:',
   'figma.layers': '{{count}}개 레이어',
   'figma.importAll': '모든 페이지 가져오기',
   'figma.importComplete': '가져오기 완료!',
@@ -496,6 +820,6 @@ const ko: TranslationKeys = {
   'variablePicker.bindToVariable': '변수에 바인딩',
   'variablePicker.unbind': '변수 바인딩 해제',
   'variablePicker.noVariables': '{{type}} 변수가 정의되지 않았습니다',
-} as const
+} as const;
 
-export default ko
+export default ko;

@@ -11,6 +11,8 @@ Detailed module docs are in `packages/CLAUDE.md`, `apps/web/CLAUDE.md`, `apps/de
 - **Run all tests:** `bun --bun run test` (Vitest)
 - **Run a single test:** `bun --bun vitest run path/to/test.ts`
 - **Type check:** `npx tsc --noEmit`
+- **Lint:** `bun run lint` (oxlint)
+- **Format:** `bun run format` (oxfmt)
 - **Install dependencies:** `bun install`
 - **Bump version:** `bun run bump <version>` (syncs all package.json files)
 - **Electron dev:** `bun run electron:dev` (starts Vite + Electron together)
@@ -18,6 +20,7 @@ Detailed module docs are in `packages/CLAUDE.md`, `apps/web/CLAUDE.md`, `apps/de
 - **Electron build:** `bun run electron:build` (full web build + compile + electron-builder package)
 - **CLI compile:** `bun run cli:compile` (esbuild CLI to apps/cli/dist/)
 - **CLI dev:** `bun run cli:dev` (run CLI from source via Bun)
+- **MCP dev:** `bun run mcp:dev` (run MCP server from source)
 - **Publish beta:** `bun run publish:beta [N]` (publish all npm packages with beta tag)
 
 ## Architecture
@@ -33,17 +36,20 @@ openpencil/
 ├── packages/
 │   ├── pen-types/     Type definitions for PenDocument model
 │   ├── pen-core/      Document tree ops, layout engine, variables, boolean ops, clone utilities
+│   ├── pen-engine/    Headless design engine — framework-free document, selection, history, viewport
+│   ├── pen-react/     React UI SDK — DesignProvider, DesignCanvas, hooks, panels, toolbar
 │   ├── pen-codegen/   Multi-platform code generators
 │   ├── pen-figma/     Figma .fig file parser and converter
 │   ├── pen-renderer/  Standalone CanvasKit/Skia renderer
+│   ├── pen-mcp/       MCP server — tools, routes, document manager for external CLI integration
 │   ├── pen-sdk/       Umbrella SDK (re-exports all packages)
 │   ├── pen-ai-skills/ AI prompt skill engine (phase-driven prompt loading + design memory)
-│   └── agent/         Domain-agnostic AI agent SDK (Vercel AI SDK, multi-provider, agent teams)
+│   └── agent-native/  Native AI agent runtime (Zig NAPI, multi-provider, agent teams)
 ├── scripts/           Build and publish scripts
 └── .githooks/         Pre-commit version sync from branch name
 ```
 
-**Key technologies:** React 19, CanvasKit/Skia WASM (canvas engine), Paper.js (boolean path operations), Zustand v5 (state management), TanStack Router (file-based routing), Tailwind CSS v4, shadcn/ui (UI primitives), Vite 7, Nitro (server), Electron 35 (desktop), Vercel AI SDK v6 (agent framework), i18next (15 locales), TypeScript (strict mode).
+**Key technologies:** React 19, CanvasKit/Skia WASM (canvas engine), Paper.js (boolean path operations), Zustand v5 (state management), TanStack Router (file-based routing), Tailwind CSS v4, shadcn/ui (UI primitives), Vite 7, Nitro (server), Electron 35 (desktop), Vercel AI SDK v6 (agent framework), i18next (15 locales), TypeScript (strict mode), oxlint/oxfmt (linting & formatting).
 
 ### Data Flow
 

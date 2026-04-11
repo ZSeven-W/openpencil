@@ -1,13 +1,8 @@
-import type { SVGProps } from 'react'
+import type { SVGProps } from 'react';
 
 export default function CopilotLogo(props: SVGProps<SVGSVGElement>) {
   return (
-    <svg
-      viewBox="-14 -14 126 124"
-      fill="none"
-      xmlns="http://www.w3.org/2000/svg"
-      {...props}
-    >
+    <svg viewBox="-14 -14 126 124" fill="none" xmlns="http://www.w3.org/2000/svg" {...props}>
       <path
         fillRule="evenodd"
         clipRule="evenodd"
@@ -15,5 +10,5 @@ export default function CopilotLogo(props: SVGProps<SVGSVGElement>) {
         fill="currentColor"
       />
     </svg>
-  )
+  );
 }

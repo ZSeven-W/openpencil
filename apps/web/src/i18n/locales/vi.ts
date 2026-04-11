@@ -1,4 +1,4 @@
-import type { TranslationKeys } from './en'
+import type { TranslationKeys } from './en';
 
 const vi: TranslationKeys = {
   // ── Common ──
@@ -10,6 +10,8 @@ const vi: TranslationKeys = {
   'common.close': 'Đóng',
   'common.connect': 'Kết nối',
   'common.disconnect': 'Ngắt kết nối',
+  'common.yes': 'Có',
+  'common.no': 'Không',
   'common.import': 'Nhập',
   'common.export': 'Xuất',
   'common.name': 'Tên',
@@ -59,6 +61,305 @@ const vi: TranslationKeys = {
   'topbar.connected': 'đã kết nối',
   'topbar.agentStatus': '{{agents}} agent{{agentSuffix}} · {{mcp}} MCP',
 
+  // ── Bảng Git ──
+  'git.openPanel': 'Mở bảng Git',
+  'git.closePanel': 'Đóng bảng Git',
+  'git.title': 'Git · {{fileName}}',
+  'git.titleNoFile': 'Git · (Chưa chọn tệp)',
+  'git.close': 'Đóng',
+  'git.initializing': 'Đang khởi tạo kho…',
+  'git.conflict.title': 'Xung đột hợp nhất',
+  'git.conflict.description': 'Giải quyết từng xung đột bằng các thẻ bên dưới, sau đó áp dụng gộp.',
+  'git.conflict.abort': 'Hủy hợp nhất',
+  'git.conflict.nonOp.title': 'Gộp tạm dừng ở các tệp không phải .op',
+  'git.conflict.nonOp.description':
+    'Gộp .op đã hoàn tất, nhưng các tệp khác trong kho vẫn chưa được giải quyết. Giải quyết chúng bên ngoài OpenPencil, sau đó tiếp tục.',
+  'git.conflict.nonOp.unresolvedHeading_one': '1 tệp cần xử lý',
+  'git.conflict.nonOp.unresolvedHeading_other': '{{count}} tệp cần xử lý',
+  'git.conflict.nonOp.continue': 'Tiếp tục gộp',
+  'git.conflict.nonOp.abort': 'Hủy gộp',
+  // ── Git xung đột — banner (Phase 7b) ──
+  'git.conflict.banner.progress': '{{resolved}} / {{total}} đã giải quyết',
+  'git.conflict.banner.apply': 'Áp dụng gộp',
+  'git.conflict.banner.continue': 'Tiếp tục',
+  'git.conflict.banner.finalizeError': 'Không thể áp dụng: {{message}}',
+  'git.conflict.banner.pollError': 'Kiểm tra trạng thái tạm dừng do lỗi: {{message}}',
+  // placeholder — future localization
+  'git.conflict.banner.reopenMessage':
+    'Bảng điều khiển được mở lại trong khi hợp nhất — vui lòng hủy và pull lại.',
+
+  // ── Git xung đột — danh sách (Phase 7c) ──
+  'git.conflict.list.heading': 'Tất cả xung đột',
+  'git.conflict.list.progress': '{{resolved}} / {{total}} đã giải quyết',
+  'git.conflict.list.allResolved': 'Đã giải quyết tất cả',
+  'git.conflict.list.allOurs': 'Tất cả của tôi',
+  'git.conflict.list.allTheirs': 'Tất cả của họ',
+
+  // ── Git xung đột — mục (Phase 7c) ──
+  'git.conflict.item.nodeConflict': 'Xung đột node',
+  'git.conflict.item.fieldConflict': 'Xung đột trường',
+  'git.conflict.item.resolved': 'Đã giải quyết',
+
+  // ── Git xung đột — thẻ (Phase 7c) ──
+  'git.conflict.card.ours': 'Của tôi',
+  'git.conflict.card.theirs': 'Của họ',
+  'git.conflict.card.base': 'Cơ sở',
+  'git.conflict.card.keepMine': 'Giữ của tôi',
+  'git.conflict.card.keepTheirs': 'Giữ của họ',
+  'git.conflict.card.oursThumbnailAlt': 'Phiên bản của tôi',
+  'git.conflict.card.theirsThumbnailAlt': 'Phiên bản của họ',
+
+  // ── Git xung đột — trình soạn thảo JSON (Phase 7c) ──
+  'git.conflict.editor.editManually': 'Chỉnh sửa thủ công',
+  'git.conflict.editor.cancel': 'Hủy',
+  'git.conflict.editor.apply': 'Áp dụng',
+  'git.conflict.editor.invalidJson': 'JSON không hợp lệ',
+  'git.conflict.editor.textareaLabel': 'Chỉnh sửa giá trị JSON',
+
+  'git.error.dismiss': 'Bỏ qua',
+  'git.error.retry': 'Thử lại',
+  'git.error.title': 'Đã xảy ra lỗi',
+
+  // ── Trạng thái trống của Git ──
+  'git.empty.heading': 'Chưa có lịch sử phiên bản',
+  'git.empty.optional': 'Git là tùy chọn — bỏ qua cũng không sao',
+  'git.empty.requireSavedFile': 'Lưu tệp .op trước để bật lịch sử',
+  'git.empty.newCard': 'Tạo mới',
+  'git.empty.newCardDescription': 'Tạo lịch sử cục bộ',
+  'git.empty.openCard': 'Mở',
+  'git.empty.openCardDescription': 'Kho hiện có',
+  'git.empty.cloneCard': 'Nhân bản',
+  'git.empty.cloneCardDescription': 'Từ xa',
+
+  // ── Biểu mẫu tác giả Git ──
+  'git.author.heading': 'Tác giả commit',
+  'git.author.subheading': 'Lưu commit đầu tiên cần tên và email',
+  'git.author.nameLabel': 'Tên',
+  'git.author.namePlaceholder': 'Tên của bạn',
+  'git.author.emailLabel': 'Email',
+  'git.author.emailPlaceholder': 'ban@vidu.com',
+  'git.author.submit': 'Lưu',
+  'git.author.cancel': 'Hủy',
+  'git.author.validationName': 'Tên là bắt buộc',
+  'git.author.validationEmail': 'Cần email hợp lệ',
+
+  // ── Bộ chọn Git (Phase 4b) ──
+  'git.picker.heading': 'Kho này có {{count}} tệp .op:',
+  'git.picker.milestoneCount': '{{count}} cột mốc',
+  'git.picker.noHistory': 'Chưa có lịch sử',
+  'git.picker.lastCommit': '{{message}} · {{time}}',
+  'git.picker.bindButton': 'Theo dõi tệp này',
+  'git.picker.bindAndOpenButton': 'Theo dõi và mở',
+  'git.picker.back': 'Quay lại',
+  'git.picker.backClose': 'Hủy',
+  'git.picker.empty.heading': 'Không có tệp .op trong kho này',
+  'git.picker.empty.body': 'Bảng Git cần ít nhất một tệp .op để hoạt động.',
+  'git.picker.empty.close': 'Đóng bảng',
+
+  // ── Banner tự động liên kết (Phase 4b) ──
+  'git.autoBind.confirmHeading': 'Đã tìm thấy {{fileName}} — mở nó?',
+  'git.autoBind.openButton': 'Mở',
+  'git.autoBind.dismissButton': 'Bỏ qua',
+
+  // ── Thời gian tương đối (Phase 4b) ──
+  'git.relativeTime.justNow': 'vừa xong',
+  'git.relativeTime.minutesAgo': '{{count}} phút trước',
+  'git.relativeTime.hoursAgo': '{{count}} giờ trước',
+  'git.relativeTime.daysAgo': '{{count}} ngày trước',
+
+  // ── Git Commit Input (Phase 4c) ──
+  'git.commit.placeholder': 'Mô tả thay đổi này…',
+  'git.commit.submitButton': 'Lưu mốc',
+  'git.commit.saveRequiredTitle': 'Hãy lưu tài liệu trước',
+  'git.commit.saveRequiredBody': 'Bạn có thay đổi chưa lưu. Lưu tài liệu để tiếp tục: {{label}}',
+  'git.commit.saveRequiredSave': 'Lưu',
+  'git.commit.saveRequiredCancel': 'Hủy',
+
+  // ── Git Header (Phase 4c → 6c) ──
+  'git.header.autosaveError': 'Lỗi tự động lưu',
+  'git.header.autosaveErrorTitle': 'Tự động lưu gần nhất thất bại',
+  'git.header.authorMissingWarning': 'Đặt tác giả commit để ghi lại quyền tác giả',
+  'git.header.overflowSwitchTracked': 'Chuyển tệp theo dõi…',
+  'git.header.overflowClearAuthor': 'Xóa tác giả commit',
+  'git.header.overflowCloseRepo': 'Đóng kho',
+  'git.header.overflowRemoteSettings': 'Cài đặt remote…',
+  'git.header.overflowSshKeys': 'Khóa SSH…',
+  'git.header.overflowMoreActions': 'Thêm thao tác',
+
+  // ── Git History List (Phase 4c) ──
+  'git.history.empty': 'Chưa có lịch sử',
+  'git.history.autosaveGroup_one': '1 tự động lưu',
+  'git.history.autosaveGroup_other': '{{count}} tự động lưu',
+  'git.history.autosaveLabel': 'auto {{time}}',
+  'git.history.milestoneDetailTitle': 'Chi tiết mốc',
+  'git.history.restoreButton': 'Khôi phục',
+  'git.history.copyHashButton': 'Sao chép hash',
+  'git.history.copiedToast': 'Đã sao chép',
+  // ── Git diff lịch sử (Phase 7b) ──
+  'git.history.diff.loading': 'Đang tải diff…',
+  'git.history.diff.initialCommit': 'Commit đầu tiên — không có cha để so sánh',
+  'git.history.diff.noChanges': 'Không phát hiện thay đổi',
+  'git.history.diff.error': 'Diff không khả dụng: {{message}}',
+  'git.history.diff.framesChanged_one': '1 khung đã thay đổi',
+  'git.history.diff.framesChanged_other': '{{count}} khung đã thay đổi',
+  'git.history.diff.nodesAdded_one': '1 nút được thêm',
+  'git.history.diff.nodesAdded_other': '{{count}} nút được thêm',
+  'git.history.diff.nodesRemoved_one': '1 nút bị xóa',
+  'git.history.diff.nodesRemoved_other': '{{count}} nút bị xóa',
+  'git.history.diff.nodesModified_one': '1 nút bị sửa đổi',
+  'git.history.diff.nodesModified_other': '{{count}} nút bị sửa đổi',
+  'git.history.promoteButton': 'Nâng lên mốc',
+  'git.history.promoteSuccessToast': 'Đã nâng lên mốc',
+  'git.history.loadMore': 'Tải thêm',
+  'git.autosave.messagePrefix': 'auto',
+  'git.autosave.messageDiffSuffix': '',
+
+  // ── Git Bộ chọn nhánh (Phase 5) ──
+  'git.branch.listHeading': 'Nhánh',
+  'git.branch.createAction': 'Nhánh mới',
+  'git.branch.createPlaceholder': 'feature/login-redesign',
+  'git.branch.createSubmit': 'Tạo nhánh',
+  'git.branch.createEmpty': 'Nhập tên nhánh',
+  'git.branch.createExists': 'Nhánh {{name}} đã tồn tại',
+  'git.branch.mergeAction': 'Gộp nhánh…',
+  'git.branch.mergeHeading': 'Gộp vào {{name}}',
+  'git.branch.deletePrompt': 'Xóa nhánh {{name}}?',
+  'git.branch.deleteLabel': 'Xóa nhánh {{name}}',
+  'git.branch.deleteWarning': 'Nhánh {{name}} có commit chưa được gộp',
+  'git.branch.deleteConfirm': 'Xóa',
+  'git.branch.deleteForce': 'Bắt buộc xóa',
+  'git.branch.cancel': 'Hủy',
+  'git.branch.conflictDisabled': 'Hoàn tất gộp trước khi chuyển nhánh',
+  'git.branch.noCommits': 'Chưa có commit',
+
+  // ── Git Clone Wizard (Phase 6a) ──
+  'git.wizard.clone.heading': 'Sao chép kho lưu trữ từ xa',
+  'git.wizard.clone.subheading': 'Chọn URL từ xa và thư mục đích.',
+  'git.wizard.clone.urlLabel': 'URL từ xa',
+  'git.wizard.clone.urlPlaceholder': 'https://github.com/owner/repo.git',
+  'git.wizard.clone.destLabel': 'Thư mục đích',
+  'git.wizard.clone.destPlaceholder': '/đường/dẫn/clone',
+  'git.wizard.clone.destPickButton': 'Duyệt…',
+  'git.wizard.clone.usernameLabel': 'Tên người dùng (tùy chọn)',
+  'git.wizard.clone.tokenLabel': 'Mã thông báo truy cập (tùy chọn)',
+  'git.wizard.clone.tokenPlaceholder': 'ghp_… để trống cho repo công khai',
+  'git.wizard.clone.anonymousHint': 'Để trống để sao chép ẩn danh (chỉ repo công khai).',
+  'git.wizard.clone.sshHint': 'URL này yêu cầu xác thực bằng khóa SSH.',
+  'git.wizard.clone.hostDetected': 'Đã phát hiện: {{host}} · {{mode}}',
+  'git.wizard.clone.authMode.token-or-anon': 'mã thông báo hoặc ẩn danh',
+  'git.wizard.clone.authMode.ssh': 'khóa SSH',
+  'git.wizard.clone.cancel': 'Hủy',
+  'git.wizard.clone.submit': 'Sao chép',
+  'git.wizard.clone.validationUrl': 'Cần URL từ xa',
+  'git.wizard.clone.validationDest': 'Cần thư mục đích',
+  'git.wizard.clone.validationTokenUsername': 'Cần tên người dùng khi cung cấp mã thông báo',
+  'git.wizard.clone.error.clone-network': 'Lỗi mạng khi sao chép. Kiểm tra kết nối và thử lại.',
+  'git.wizard.clone.error.network': 'Lỗi mạng. Kiểm tra kết nối và thử lại.',
+  'git.wizard.clone.error.timeout':
+    'Sao chép hết thời gian. Thử lại hoặc dùng kho lưu trữ nhỏ hơn.',
+  'git.wizard.clone.error.auth-required': 'Kho lưu trữ này cần xác thực.',
+  'git.wizard.clone.error.auth-failed':
+    'Xác thực thất bại. Kiểm tra tên người dùng và mã thông báo.',
+  'git.wizard.clone.error.auth-token-invalid':
+    'Mã thông báo truy cập bị từ chối. Tạo mã mới và thử lại.',
+  'git.wizard.clone.error.clone-failed':
+    'Sao chép thất bại. Hãy xác minh URL trỏ đến một kho lưu trữ thực sự.',
+  'git.wizard.clone.error.clone-target-exists': 'Thư mục đích đã tồn tại hoặc không trống.',
+
+  // ── Git Pull / Push (Phase 6b) ──
+  'git.pull.label': 'Pull',
+  'git.pull.tooltip': 'Pull từ origin',
+  'git.pull.noRemote': 'Chưa cấu hình remote — thêm trong cài đặt Git',
+  'git.pull.retry': 'Thử lại pull',
+  'git.push.label': 'Push',
+  'git.push.tooltip_one': 'Push 1 commit lên origin',
+  'git.push.tooltip_other': 'Push {{count}} commit lên origin',
+  'git.push.noRemote': 'Chưa cấu hình remote — thêm trong cài đặt Git',
+  'git.push.upToDate': 'Không có gì để push — bạn đã cập nhật',
+  'git.push.retry': 'Thử lại push',
+  'git.push.rejectedBody': 'Remote có các commit bạn chưa có. Hãy pull trước rồi push lại.',
+  'git.push.rejectedDismiss': 'Đóng',
+  'git.push.rejectedPull': 'Pull ngay',
+  'git.remote.dismissError': 'Đóng',
+
+  // ── Git Cài đặt remote (Phase 6c) ──
+  'git.remote.settingsLabel': 'Cài đặt remote',
+  'git.remote.settingsHeading': 'Remote',
+  'git.remote.back': 'Quay lại',
+  'git.remote.cancel': 'Hủy',
+  'git.remote.emptyNoOrigin': 'Chưa cấu hình remote nào. Thêm một cái:',
+  'git.remote.urlLabel': 'URL origin',
+  'git.remote.urlPlaceholder': 'https://github.com/owner/repo.git',
+  'git.remote.saveButton': 'Lưu',
+  'git.remote.clearButton': 'Xóa',
+  'git.remote.clearConfirmHeading': 'Xóa origin?',
+  'git.remote.clearConfirmBody': 'Thao tác này sẽ xóa remote origin khỏi kho lưu trữ này.',
+  'git.remote.clearConfirmAction': 'Xác nhận',
+  'git.remote.aheadBehind': 'Trước {{ahead}} · Sau {{behind}}',
+  'git.remote.fetchButton': 'Fetch',
+  'git.remote.sshIsoUnsupported':
+    'Engine tích hợp không hỗ trợ truyền tải SSH. Cài đặt git hệ thống hoặc chuyển sang URL remote HTTPS.',
+  'git.remote.storedAuthLabel': 'Thông tin xác thực đã lưu',
+  'git.remote.storedAuth.token': 'Token',
+  'git.remote.storedAuth.ssh': 'Khóa SSH',
+  'git.remote.storedAuth.none': 'Không có',
+  'git.remote.storedAuth.loading': 'Đang tải…',
+  'git.remote.storedAuth.noHost': 'Không phát hiện máy chủ',
+  'git.remote.clearAuthButton': 'Xóa thông tin xác thực đã lưu',
+
+  // ── Git Khóa SSH (Phase 6c) ──
+  'git.ssh.label': 'Khóa SSH',
+  'git.ssh.heading': 'Khóa SSH',
+  'git.ssh.back': 'Quay lại',
+  'git.ssh.cancel': 'Hủy',
+  'git.ssh.isoUnsupported':
+    'Remote hiện tại dùng SSH, nhưng engine tích hợp không thể thực hiện truyền tải SSH. Cài đặt git hệ thống hoặc đổi URL remote sang HTTPS.',
+  'git.ssh.emptyList': 'Chưa có khóa SSH nào.',
+  'git.ssh.generateAction': 'Tạo mới',
+  'git.ssh.importAction': 'Nhập khóa có sẵn',
+  'git.ssh.copyPublicKey': 'Sao chép khóa công khai',
+  'git.ssh.copiedHint': 'Đã sao chép',
+  'git.ssh.copyUnsupported': 'Không có clipboard — vui lòng sao chép khóa này theo cách thủ công.',
+  'git.ssh.deleteKey': 'Xóa {{name}}',
+  'git.ssh.deletePrompt': 'Xóa khóa SSH {{name}}?',
+  'git.ssh.deleteConfirm': 'Xóa',
+  'git.ssh.currentHostBadge': 'máy chủ hiện tại',
+  'git.ssh.hostLabel': 'Máy chủ',
+  'git.ssh.hostPlaceholder': 'github.com',
+  'git.ssh.commentLabel': 'Ghi chú',
+  'git.ssh.commentPlaceholder': 'laptop@home',
+  'git.ssh.generateSubmit': 'Tạo',
+  'git.ssh.importPathLabel': 'Đường dẫn khóa riêng',
+  'git.ssh.importPathPlaceholder': '/path/to/id_ed25519',
+  'git.ssh.importBrowse': 'Duyệt…',
+  'git.ssh.importSubmit': 'Nhập',
+  'git.ssh.validationHost': 'Máy chủ là bắt buộc',
+  'git.ssh.validationComment': 'Ghi chú là bắt buộc',
+  'git.ssh.validationImportPath': 'Chọn tệp khóa riêng để nhập',
+  'git.ssh.providerLink': 'Mở cài đặt khóa SSH {{host}}',
+  'git.ssh.genericGuidance':
+    'Sao chép khóa công khai và thêm vào cài đặt khóa SSH của nhà cung cấp Git của bạn.',
+
+  // ── Git Biểu mẫu xác thực (Phase 6b) ──
+  'git.auth.formLabel': 'Thông tin xác thực Git',
+  'git.auth.heading': 'Xác thực với {{host}}',
+  'git.auth.headingUnknown': 'Xác thực với remote này',
+  'git.auth.modeToggleLabel': 'Loại thông tin xác thực',
+  'git.auth.modeToken': 'Token',
+  'git.auth.modeSsh': 'SSH',
+  'git.auth.usernameLabel': 'Tên người dùng (tùy chọn)',
+  'git.auth.tokenLabel': 'Access token',
+  'git.auth.tokenPlaceholder': 'ghp_… hoặc PAT',
+  'git.auth.sshKeyLabel': 'Khóa SSH',
+  'git.auth.sshNoKeys': 'Không có khóa SSH khả dụng. Nhập hoặc tạo mới trong cài đặt Git trước.',
+  'git.auth.rememberLabel': 'Ghi nhớ thông tin xác thực cho máy chủ này',
+  'git.auth.rememberHint': 'Ghi nhớ thông tin xác thực cho máy chủ này',
+  'git.auth.cancel': 'Hủy',
+  'git.auth.validationToken': 'Cần access token',
+  'git.auth.validationSshKey': 'Chọn một khóa SSH',
+  'git.auth.error.auth-required': 'Remote này cần xác thực.',
+  'git.auth.error.auth-failed': 'Xác thực thất bại. Kiểm tra thông tin và thử lại.',
+  'git.auth.error.auth-token-invalid': 'Access token bị từ chối. Tạo mới và thử lại.',
   // ── Right Panel ──
   'rightPanel.design': 'Thiết kế',
   'rightPanel.code': 'Mã',
@@ -74,6 +375,8 @@ const vi: TranslationKeys = {
   'statusbar.zoomOut': 'Thu nhỏ',
   'statusbar.zoomIn': 'Phóng to',
   'statusbar.resetZoom': 'Đặt lại thu phóng',
+  'statusbar.focusContent': 'Vừa toàn bộ nội dung',
+  'statusbar.focusSelection': 'Tập trung vào vùng chọn',
 
   // ── Updater ──
   'updater.softwareUpdate': 'Cập nhật phần mềm',
@@ -98,10 +401,8 @@ const vi: TranslationKeys = {
   'updater.subtitle.checking': 'Đang tìm bản phát hành mới nhất...',
   'updater.subtitle.available': 'Phiên bản {{version}} đã sẵn sàng.',
   'updater.subtitle.availableGeneric': 'Đã có phiên bản mới.',
-  'updater.subtitle.downloading':
-    'Phiên bản {{version}} đang được tải xuống trong nền.',
-  'updater.subtitle.downloadingGeneric':
-    'Đang tải gói cập nhật trong nền.',
+  'updater.subtitle.downloading': 'Phiên bản {{version}} đang được tải xuống trong nền.',
+  'updater.subtitle.downloadingGeneric': 'Đang tải gói cập nhật trong nền.',
   'updater.subtitle.downloaded': 'Phiên bản {{version}} đã được tải xuống.',
   'updater.subtitle.downloadedGeneric': 'Bản cập nhật đã được tải xuống.',
   'updater.subtitle.error': 'Không thể kiểm tra hoặc tải bản cập nhật.',
@@ -222,8 +523,7 @@ const vi: TranslationKeys = {
   'textLayout.autoHeightDesc':
     'Tự động chiều cao \u2014 chiều rộng cố định, chiều cao tự điều chỉnh',
   'textLayout.fixed': 'Cố định',
-  'textLayout.fixedDesc':
-    'Kích thước cố định \u2014 cả chiều rộng và chiều cao đều cố định',
+  'textLayout.fixedDesc': 'Kích thước cố định \u2014 cả chiều rộng và chiều cao đều cố định',
   'textLayout.fillWidth': 'Lấp đầy chiều rộng',
   'textLayout.fillHeight': 'Lấp đầy chiều cao',
 
@@ -241,6 +541,7 @@ const vi: TranslationKeys = {
   'export.selectedOnly': 'Chỉ xuất phần đã chọn',
   'export.exportFormat': 'Xuất {{format}}',
   'export.exportLayer': 'Xuất lớp',
+  'export.pdfMultiPage': 'PDF sẽ bao gồm tất cả {{count}} trang.',
 
   // ── Polygon ──
   'polygon.sides': 'Cạnh',
@@ -321,14 +622,40 @@ const vi: TranslationKeys = {
   'ai.quickAction.loginScreenPrompt':
     'Thiết kế màn hình đăng nhập di động hiện đại với ô nhập email, ô nhập mật khẩu, nút đăng nhập và các tuỳ chọn đăng nhập bằng mạng xã hội',
   'ai.quickAction.foodApp': 'Trang chủ ứng dụng ẩm thực',
-  'ai.quickAction.foodAppPrompt':
-    'Generate a well-designed food mobile app homepage',
+  'ai.quickAction.foodAppPrompt': 'Generate a well-designed food mobile app homepage',
   'ai.quickAction.bottomNav': 'Thiết kế thanh điều hướng dưới cùng',
   'ai.quickAction.bottomNavPrompt':
     'Thiết kế thanh điều hướng dưới cùng cho ứng dụng di động với 5 tab: Trang chủ, Tìm kiếm, Thêm, Tin nhắn, Hồ sơ',
   'ai.quickAction.colorPalette': 'Gợi ý bảng màu cho ứng dụng',
-  'ai.quickAction.colorPalettePrompt':
-    'Gợi ý bảng màu hiện đại cho ứng dụng chăm sóc thú cưng',
+  'ai.quickAction.colorPalettePrompt': 'Gợi ý bảng màu hiện đại cho ứng dụng chăm sóc thú cưng',
+  'ai.startDesigning': 'Start designing with AI',
+  'ai.maximize': 'Maximize',
+  'ai.restore': 'Restore',
+  'ai.quickAction.loginScreenDesc': 'Mobile login with social auth',
+  'ai.quickAction.foodAppDesc': 'App homepage design',
+  'ai.quickAction.bottomNavDesc': '5-tab navigation bar',
+  'ai.quickAction.colorPaletteDesc': 'Color palette recommendation',
+
+  // ── File Menu ──
+  'fileMenu.newFile': 'New file',
+  'fileMenu.openFile': 'Open file...',
+  'fileMenu.save': 'Save',
+  'fileMenu.saveAs': 'Save as...',
+  'fileMenu.exportImage': 'Xuất hình ảnh...',
+  'fileMenu.recentFiles': 'Recent files',
+  'fileMenu.clearHistory': 'Clear history',
+  'fileMenu.noRecentFiles': 'No recent files',
+  'fileMenu.saved': 'Saved',
+  'fileMenu.justNow': 'just now',
+  'fileMenu.minutesAgo': '{{count}}m ago',
+  'fileMenu.hoursAgo': '{{count}}h ago',
+  'fileMenu.yesterday': 'yesterday',
+  'fileMenu.daysAgo': '{{count}}d ago',
+
+  // ── Unsaved Changes ──
+  'unsaved.title': 'Unsaved changes',
+  'unsaved.message': 'Save changes to "{{name}}"?',
+  'unsaved.dontSave': "Don't Save",
 
   // ── Code Panel ──
   'code.reactTailwind': 'React + Tailwind',
@@ -339,8 +666,7 @@ const vi: TranslationKeys = {
   'code.download': 'Tải xuống tệp mã',
   'code.closeCodePanel': 'Đóng bảng mã',
   'code.genCssVars': 'Đang tạo CSS variables cho toàn bộ tài liệu',
-  'code.genSelected':
-    'Đang tạo mã cho {{count}} phần tử đã chọn',
+  'code.genSelected': 'Đang tạo mã cho {{count}} phần tử đã chọn',
   'code.genDocument': 'Đang tạo mã cho toàn bộ tài liệu',
   'code.aiEnhance': 'Cải thiện bằng AI',
   'code.cancelEnhance': 'Hủy cải thiện',
@@ -358,8 +684,7 @@ const vi: TranslationKeys = {
   'agents.mcpIntegrations': 'Tích hợp MCP trong Terminal',
   'agents.transport': 'Giao thức',
   'agents.port': 'Cổng',
-  'agents.mcpRestart':
-    'Các tích hợp MCP sẽ có hiệu lực sau khi khởi động lại terminal.',
+  'agents.mcpRestart': 'Các tích hợp MCP sẽ có hiệu lực sau khi khởi động lại terminal.',
   'agents.mcpReinstallHint':
     'Sau khi nâng cấp OpenPencil, vui lòng cài đặt lại tích hợp MCP để đảm bảo tương thích.',
   'agents.modelCount': '{{count}} mô hình',
@@ -430,11 +755,13 @@ const vi: TranslationKeys = {
   'builtin.custom': 'Tùy chỉnh',
   'builtin.apiKeyBadge': 'API Key',
   'builtin.viaApiKey': 'qua API Key của {{name}}',
-  'builtin.errorProviderNotFound': 'Không tìm thấy nhà cung cấp tích hợp. Vui lòng kiểm tra cài đặt của bạn.',
+  'builtin.errorProviderNotFound':
+    'Không tìm thấy nhà cung cấp tích hợp. Vui lòng kiểm tra cài đặt của bạn.',
   'builtin.errorApiKeyEmpty': 'API Key đang trống. Vui lòng thêm API Key trong cài đặt.',
   'builtin.parallelAgents': 'Tác nhân phụ song song: {{count}}x (nhấn để chuyển đổi)',
   'builtin.baseUrlPlaceholder': 'https://api.example.com/v1',
-  'builtin.teamDescription': 'Chọn mô hình để tạo thiết kế. Khi được đặt, các tác vụ thiết kế sẽ tự động được giao cho agent chuyên dụng sử dụng mô hình này.',
+  'builtin.teamDescription':
+    'Chọn mô hình để tạo thiết kế. Khi được đặt, các tác vụ thiết kế sẽ tự động được giao cho agent chuyên dụng sử dụng mô hình này.',
   'builtin.teamDesignModel': 'Mô hình thiết kế',
   'builtin.teamSelectModel': 'Không (agent đơn)',
 
@@ -449,8 +776,7 @@ const vi: TranslationKeys = {
   'figma.convertFailed': 'Không thể chuyển đổi tệp Figma',
   'figma.parsing': 'Đang phân tích tệp .fig...',
   'figma.converting': 'Đang chuyển đổi các nút...',
-  'figma.selectPage':
-    'Tệp này có {{count}} trang. Chọn trang để nhập:',
+  'figma.selectPage': 'Tệp này có {{count}} trang. Chọn trang để nhập:',
   'figma.layers': '{{count}} lớp',
   'figma.importAll': 'Nhập tất cả các trang',
   'figma.importComplete': 'Nhập hoàn tất!',
@@ -496,6 +822,6 @@ const vi: TranslationKeys = {
   'variablePicker.bindToVariable': 'Gắn với biến',
   'variablePicker.unbind': 'Huỷ gắn biến',
   'variablePicker.noVariables': 'Chưa có biến {{type}} nào được định nghĩa',
-} as const
+} as const;
 
-export default vi
+export default vi;

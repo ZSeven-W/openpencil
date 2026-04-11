@@ -1,7 +1,10 @@
 {
   "name": "@zseven-w/pen-types",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "description": "Type definitions for OpenPencil document model",
+  "files": [
+    "src"
+  ],
   "type": "module",
   "exports": {
     ".": {
@@ -9,9 +12,6 @@
       "import": "./src/index.ts"
     }
   },
-  "files": [
-    "src"
-  ],
   "scripts": {
     "typecheck": "tsc --noEmit"
   },

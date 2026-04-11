@@ -3,7 +3,7 @@ name: codegen-compose
 description: Jetpack Compose (Kotlin) code generation rules — composable functions with Modifier chains
 phase: [generation]
 trigger:
-  keywords: [compose, jetpack, kotlin, android]
+  flags: [isCodeGen]
 priority: 20
 budget: 2000
 category: knowledge
@@ -14,12 +14,14 @@ category: knowledge
 Generate Kotlin composable functions using Jetpack Compose UI toolkit.
 
 ## Output Format
+
 - Kotlin file (`.kt`)
 - `@Composable fun ComponentName() { ... }`
 - Standard Compose imports: `androidx.compose.foundation.*`, `androidx.compose.material3.*`, `androidx.compose.ui.*`
 - Use `dp` for dimensions, `sp` for font sizes
 
 ## Layout Mapping
+
 - `layout: "vertical"` → `Column(modifier, verticalArrangement, horizontalAlignment) { ... }`
 - `layout: "horizontal"` → `Row(modifier, horizontalArrangement, verticalAlignment) { ... }`
 - No layout / stacked children → `Box(modifier) { ... }`
@@ -34,6 +36,7 @@ Generate Kotlin composable functions using Jetpack Compose UI toolkit.
   - `"end"` → `verticalAlignment = Alignment.Bottom`
 
 ## Modifier Chain Pattern
+
 - Compose uses `Modifier` chains: `Modifier.size().background().border().padding()`
 - Order matters: modifiers apply outside-in
 - Size before background: `.size(width = N.dp, height = N.dp)`
@@ -44,6 +47,7 @@ Generate Kotlin composable functions using Jetpack Compose UI toolkit.
 - Opacity: `.alpha(Nf)`
 
 ## Color & Fill Mapping
+
 - Solid fill `#RRGGBB` → `Color(0xFFRRGGBB)` (uppercase hex, FF alpha prefix)
 - 8-digit hex `#RRGGBBAA` → `Color(0xAARRGGBB)` (alpha moved to front)
 - Variable ref `$name` → `Color.Unspecified /* var(--name) */` placeholder
@@ -54,21 +58,25 @@ Generate Kotlin composable functions using Jetpack Compose UI toolkit.
 - Radial gradient → `Brush.radialGradient(listOf(Color(...), Color(...)))` as background
 
 ## Border & Stroke Mapping
+
 - `stroke` → `.border(N.dp, Color(...), shape)`
 - Shape defaults to `RectangleShape` if no corner radius
 - With corner radius → `.border(N.dp, Color(...), RoundedCornerShape(N.dp))`
 - Variable ref thickness → `/* var(--name) */ 1.dp` placeholder
 
 ## Corner Radius
+
 - Uniform → `RoundedCornerShape(N.dp)`
 - Per-corner → `RoundedCornerShape(topStart = TL.dp, topEnd = TR.dp, bottomEnd = BR.dp, bottomStart = BL.dp)`
 - Applied via `.clip(shape)` or as parameter in `.background(color, shape)` / `.border()`
 
 ## Effects
+
 - Shadow → `.shadow(elevation = N.dp, shape = RoundedCornerShape(0.dp))`
 - Blur → `// .blur(radius = N.dp) — requires custom implementation` (not natively supported as modifier)
 
 ## Typography
+
 - Text nodes → `Text(text = "content", fontSize, fontWeight, color, ...)`
 - `fontSize` → `fontSize = N.sp`
 - `fontWeight` → `fontWeight = FontWeight.Thin|ExtraLight|Light|Normal|Medium|SemiBold|Bold|ExtraBold|Black`
@@ -84,17 +92,20 @@ Generate Kotlin composable functions using Jetpack Compose UI toolkit.
 - Long param list → multi-line with indentation
 
 ## Padding
+
 - Uniform → `.padding(N.dp)`
 - Symmetric → `.padding(vertical = V.dp, horizontal = H.dp)`
 - Per-side → `.padding(start = L.dp, top = T.dp, end = R.dp, bottom = B.dp)`
 - Variable ref → `.padding(/* var(--name) */ 0.dp)` placeholder
 
 ## Dimensions
+
 - Both → `.size(width = N.dp, height = N.dp)`
 - Width only → `.width(N.dp)`
 - Height only → `.height(N.dp)`
 
 ## Image Handling
+
 - Network URL → `AsyncImage(model = "url", contentDescription = "name", modifier, contentScale)`
 - Local resource → `Image(painter = painterResource(id = R.drawable.name), contentDescription, modifier, contentScale)`
 - Data URI → decode at runtime with `BitmapFactory.decodeByteArray()` → `Image(bitmap = bitmap.asImageBitmap())`
@@ -104,20 +115,25 @@ Generate Kotlin composable functions using Jetpack Compose UI toolkit.
 - Corner radius on images → `.clip(RoundedCornerShape(N.dp))`
 
 ## Ellipse
+
 - Ellipse node → `Box(modifier = Modifier.size(...).clip(CircleShape).background(color))`
 
 ## Icon Handling
+
 - Icon font nodes → `Icon(LucideIcons.IconName, contentDescription = "name", modifier = Modifier.size(N.dp), tint = Color(...))`
 - Icon name: kebab-case converted to PascalCase
 
 ## Line Nodes
+
 - Line → `Divider(color = Color(...), thickness = N.dp, modifier = Modifier.width(W.dp))`
 
 ## Path & Polygon
+
 - Path nodes → `Canvas(modifier) { drawPath(PathParser().parsePathString(data).toPath(), color) }`
 - Polygon nodes → `Canvas(modifier) { ... }` with polygon path calculation using trigonometry
 
 ## Responsive Design
+
 - Use `BoxWithConstraints { ... }` for parent-relative sizing
 - `maxWidth` and `maxHeight` constraints available
 - Use `Modifier.fillMaxWidth()` / `.fillMaxHeight()` for full-size containers

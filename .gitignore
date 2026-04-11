@@ -10,6 +10,7 @@ count.txt
 __unconfig*
 todos.json
 .openpencil-tmp/
+.superpowers/
 
 docs/
 
@@ -20,3 +21,5 @@ dist-ssr/
 electron-dist/
 dist-electron/
 .claude
+.omx
+.worktrees/

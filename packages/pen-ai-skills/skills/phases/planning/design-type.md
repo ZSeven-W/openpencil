@@ -24,10 +24,12 @@ Classify by the design's PURPOSE — reason about intent, do not keyword-match:
    - Structure: sidebar or topbar + content panels
 
 WIDTH SELECTION RULES:
+
 - Single-task screens (type 2) - ALWAYS width=375, height=812 (mobile).
 - Multi-section pages and data-rich workspaces (types 1 & 3) - width=1200, height=0 (desktop).
 - This mapping is mandatory.
 
 MOBILE vs MOCKUP:
+
 - "mobile"/"移动端"/"手机" + screen type (login, profile, settings) = ACTUAL mobile screen (375x812), NOT a desktop page with phone mockup.
 - Phone mockups are ONLY for app showcase/marketing sections when the user explicitly asks for a "mockup"/"展示"/"showcase"/"preview".

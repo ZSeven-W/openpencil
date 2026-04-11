@@ -5,7 +5,7 @@
 #   bun run publish:beta          # auto-increment beta number
 #   bun run publish:beta 5        # force beta.5
 #
-# Publishes: pen-types → pen-core → pen-codegen, pen-figma → pen-renderer → pen-sdk → openpencil CLI
+# Publishes: pen-types → pen-core → pen-figma → pen-renderer → pen-sdk → openpencil CLI
 # All under the "beta" dist-tag, so `npm install` won't pick them up by default.
 # Install with: npm install @zseven-w/openpencil@beta
 
@@ -28,9 +28,9 @@ fi
 PACKAGES=(
   packages/pen-types
   packages/pen-core
-  packages/pen-codegen
   packages/pen-figma
   packages/pen-renderer
+  packages/pen-mcp
   packages/pen-sdk
   apps/cli
 )

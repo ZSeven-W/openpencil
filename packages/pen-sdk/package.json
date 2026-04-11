@@ -1,7 +1,10 @@
 {
   "name": "@zseven-w/pen-sdk",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "description": "OpenPencil SDK — parse, manipulate, and generate code from .op design files",
+  "files": [
+    "src"
+  ],
   "type": "module",
   "exports": {
     ".": {
@@ -9,18 +12,16 @@
       "import": "./src/index.ts"
     }
   },
-  "files": [
-    "src"
-  ],
   "scripts": {
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@zseven-w/pen-types": "workspace:*",
     "@zseven-w/pen-core": "workspace:*",
-    "@zseven-w/pen-codegen": "workspace:*",
+    "@zseven-w/pen-engine": "workspace:*",
     "@zseven-w/pen-figma": "workspace:*",
-    "@zseven-w/pen-renderer": "workspace:*"
+    "@zseven-w/pen-react": "workspace:*",
+    "@zseven-w/pen-renderer": "workspace:*",
+    "@zseven-w/pen-types": "workspace:*"
   },
   "devDependencies": {
     "typescript": "^5.7.2"

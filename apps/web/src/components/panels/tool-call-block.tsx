@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState } from 'react';
 import {
   ChevronRight,
   ChevronDown,
@@ -11,32 +11,32 @@ import {
   Plus,
   Pencil,
   Trash2,
-} from 'lucide-react'
-import { cn } from '@/lib/utils'
-import type { AuthLevel } from '@zseven-w/agent'
+} from 'lucide-react';
+import { cn } from '@/lib/utils';
+import type { AuthLevel } from '@/types/agent';
 
 export interface ToolCallBlockData {
-  id: string
-  name: string
-  args: unknown
-  level: AuthLevel
-  result?: { success: boolean; data?: unknown; error?: string }
-  status: 'pending' | 'running' | 'done' | 'error'
-  source?: string
+  id: string;
+  name: string;
+  args: unknown;
+  level: AuthLevel;
+  result?: { success: boolean; data?: unknown; error?: string };
+  status: 'pending' | 'running' | 'done' | 'error';
+  source?: string;
 }
 
 interface ToolCallBlockProps {
-  block: ToolCallBlockData
-  onUndo?: (toolCallId: string) => void
+  block: ToolCallBlockData;
+  onUndo?: (toolCallId: string) => void;
 }
 
 const levelConfig: Record<
   AuthLevel,
   {
-    icon: typeof Search
-    defaultOpen: boolean
-    className: string
-    label: string
+    icon: typeof Search;
+    defaultOpen: boolean;
+    className: string;
+    label: string;
   }
 > = {
   read: {
@@ -69,13 +69,13 @@ const levelConfig: Record<
     className: 'text-primary',
     label: 'Delegate',
   },
-}
+};
 
 export function ToolCallBlock({ block, onUndo }: ToolCallBlockProps) {
-  const config = levelConfig[block.level] ?? levelConfig.read
-  const [isOpen, setIsOpen] = useState(config.defaultOpen)
-  const Icon = config.icon
-  const ChevronIcon = isOpen ? ChevronDown : ChevronRight
+  const config = levelConfig[block.level] ?? levelConfig.read;
+  const [isOpen, setIsOpen] = useState(config.defaultOpen);
+  const Icon = config.icon;
+  const ChevronIcon = isOpen ? ChevronDown : ChevronRight;
 
   return (
     <div
@@ -85,50 +85,42 @@ export function ToolCallBlock({ block, onUndo }: ToolCallBlockProps) {
       )}
     >
       <button
-        className={cn(
-          'flex w-full items-center gap-1.5 px-2 py-1 text-left',
-          config.className,
-        )}
+        className={cn('flex w-full items-center gap-1.5 px-2 py-1 text-left', config.className)}
         onClick={() => setIsOpen(!isOpen)}
       >
         <ChevronIcon className="h-3 w-3 shrink-0 opacity-50" />
         <Icon className="h-3.5 w-3.5 shrink-0" />
         <span className="truncate font-medium">{block.name}</span>
         {block.source && block.source !== 'lead' && (
-          <span className="shrink-0 rounded bg-primary/10 px-1 py-0.5 text-[10px] text-primary">{block.source}</span>
+          <span className="shrink-0 rounded bg-primary/10 px-1 py-0.5 text-[10px] text-primary">
+            {block.source}
+          </span>
         )}
         <span className="ml-auto flex items-center gap-1">
-          {block.status === 'running' && (
-            <Loader2 className="h-3 w-3 animate-spin" />
-          )}
+          {block.status === 'running' && <Loader2 className="h-3 w-3 animate-spin" />}
           {block.status === 'done' && block.result?.success && (
             <Check className="h-3 w-3 text-green-500" />
           )}
-          {(block.status === 'error' ||
-            (block.status === 'done' && !block.result?.success)) && (
+          {(block.status === 'error' || (block.status === 'done' && !block.result?.success)) && (
             <X className="h-3 w-3 text-destructive" />
           )}
-          {block.level === 'delete' &&
-            block.status === 'done' &&
-            onUndo && (
-              <button
-                className="ml-1 rounded px-1.5 py-0.5 text-xs text-destructive hover:bg-destructive/10"
-                onClick={(e) => {
-                  e.stopPropagation()
-                  onUndo(block.id)
-                }}
-              >
-                <Undo2 className="inline h-3 w-3 mr-0.5" />
-                Undo
-              </button>
-            )}
+          {block.level === 'delete' && block.status === 'done' && onUndo && (
+            <button
+              className="ml-1 rounded px-1.5 py-0.5 text-xs text-destructive hover:bg-destructive/10"
+              onClick={(e) => {
+                e.stopPropagation();
+                onUndo(block.id);
+              }}
+            >
+              <Undo2 className="inline h-3 w-3 mr-0.5" />
+              Undo
+            </button>
+          )}
         </span>
       </button>
       {isOpen && (
         <div className="border-t border-border px-2 py-1.5 text-xs text-muted-foreground">
-          <pre className="whitespace-pre-wrap break-all">
-            {JSON.stringify(block.args, null, 2)}
-          </pre>
+          <pre className="whitespace-pre-wrap break-all">{JSON.stringify(block.args, null, 2)}</pre>
           {block.result && (
             <div
               className={cn(
@@ -148,5 +140,5 @@ export function ToolCallBlock({ block, onUndo }: ToolCallBlockProps) {
         </div>
       )}
     </div>
-  )
+  );
 }

@@ -1,22 +1,22 @@
-export type ThinkingMode = 'adaptive' | 'disabled' | 'enabled'
-export type ThinkingEffort = 'low' | 'medium' | 'high' | 'max'
+export type ThinkingMode = 'adaptive' | 'disabled' | 'enabled';
+export type ThinkingEffort = 'low' | 'medium' | 'high' | 'max';
 
-export const DEFAULT_THINKING_MODE: ThinkingMode = 'adaptive'
-export const DEFAULT_THINKING_EFFORT: ThinkingEffort = 'low'
+export const DEFAULT_THINKING_MODE: ThinkingMode = 'adaptive';
+export const DEFAULT_THINKING_EFFORT: ThinkingEffort = 'low';
 
 export const DEFAULT_THINKING_CONFIG = {
   thinkingMode: DEFAULT_THINKING_MODE,
   effort: DEFAULT_THINKING_EFFORT,
-} as const
+} as const;
 
 export const CHAT_STREAM_THINKING_CONFIG = {
   ...DEFAULT_THINKING_CONFIG,
-} as const
+} as const;
 
-export const STREAM_TIMEOUT_MIN_MS = 10_000
-export const DEFAULT_STREAM_HARD_TIMEOUT_MS = 600_000
-export const DEFAULT_STREAM_NO_TEXT_TIMEOUT_MS = 300_000
-export const DEFAULT_GENERATE_TIMEOUT_MS = 180_000
+export const STREAM_TIMEOUT_MIN_MS = 10_000;
+export const DEFAULT_STREAM_HARD_TIMEOUT_MS = 600_000;
+export const DEFAULT_STREAM_NO_TEXT_TIMEOUT_MS = 300_000;
+export const DEFAULT_GENERATE_TIMEOUT_MS = 180_000;
 
 export const PROMPT_OPTIMIZER_LIMITS = {
   longPromptCharThreshold: 2200,
@@ -25,17 +25,17 @@ export const PROMPT_OPTIMIZER_LIMITS = {
   maxFeatureLines: 12,
   maxSectionLines: 14,
   maxFallbackSections: 8,
-} as const
+} as const;
 
 export const SUB_AGENT_TIMEOUT_BASE = {
   hardTimeoutMs: 420_000,
   noTextTimeoutMs: 210_000,
   thinkingResetsTimeout: true,
-} as const
+} as const;
 
 export const PROMPT_TIMEOUT_BUCKETS = {
   mediumPromptMaxChars: 4200,
-} as const
+} as const;
 
 export const SUB_AGENT_TIMEOUT_PROFILES = {
   short: {
@@ -63,7 +63,7 @@ export const SUB_AGENT_TIMEOUT_PROFILES = {
     thinkingMode: DEFAULT_THINKING_MODE,
     effort: DEFAULT_THINKING_EFFORT,
   },
-} as const
+} as const;
 
 export const ORCHESTRATOR_TIMEOUT_PROFILES = {
   short: {
@@ -93,7 +93,7 @@ export const ORCHESTRATOR_TIMEOUT_PROFILES = {
     thinkingMode: DEFAULT_THINKING_MODE,
     effort: DEFAULT_THINKING_EFFORT,
   },
-} as const
+} as const;
 
 export const DESIGN_STREAM_TIMEOUTS = {
   hardTimeoutMs: 900_000,
@@ -103,19 +103,18 @@ export const DESIGN_STREAM_TIMEOUTS = {
   firstTextTimeoutMs: 900_000,
   thinkingMode: DEFAULT_THINKING_MODE,
   effort: DEFAULT_THINKING_EFFORT,
-} as const
+} as const;
 
 /** When false, skips the vision LLM validation loop (pre-validation heuristics still run) */
-export const VALIDATION_ENABLED = false
+export const VALIDATION_ENABLED = false;
 
-export const VALIDATION_TIMEOUT_MS = 180_000
-export const MAX_VALIDATION_ROUNDS = 3
-export const VALIDATION_QUALITY_THRESHOLD = 8
+export const VALIDATION_TIMEOUT_MS = 180_000;
+export const MAX_VALIDATION_ROUNDS = 3;
+export const VALIDATION_QUALITY_THRESHOLD = 8;
 
 export const RETRY_TIMEOUT_CONFIG = {
   multiplier: 2,
   hardTimeoutMaxMs: 1_200_000,
   noTextTimeoutMaxMs: 480_000,
   firstTextTimeoutMaxMs: 1_200_000,
-} as const
-
+} as const;

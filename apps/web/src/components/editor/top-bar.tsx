@@ -1,62 +1,56 @@
-import { useCallback, useEffect, useState } from 'react'
-import { appStorage, initAppStorage } from '@/utils/app-storage'
-import type { ComponentType, SVGProps } from 'react'
+import { useCallback, useEffect, useState } from 'react';
+import { appStorage, initAppStorage } from '@/utils/app-storage';
+import type { ComponentType, SVGProps } from 'react';
 import {
   PanelLeft,
-  Plus,
   Folder,
-  Save,
+  ChevronDown,
   Sun,
   Moon,
   Maximize,
   Minimize,
   Blocks,
-} from 'lucide-react'
-import { useTranslation } from 'react-i18next'
-import ClaudeLogo from '@/components/icons/claude-logo'
-import OpenAILogo from '@/components/icons/openai-logo'
-import OpenCodeLogo from '@/components/icons/opencode-logo'
-import CopilotLogo from '@/components/icons/copilot-logo'
-import GeminiLogo from '@/components/icons/gemini-logo'
-import FigmaLogo from '@/components/icons/figma-logo'
-import LanguageSelector from '@/components/shared/language-selector'
-import { cn } from '@/lib/utils'
-import { Button } from '@/components/ui/button'
-import {
-  Tooltip,
-  TooltipTrigger,
-  TooltipContent,
-} from '@/components/ui/tooltip'
-import { useCanvasStore } from '@/stores/canvas-store'
-import { useDocumentStore } from '@/stores/document-store'
+} from 'lucide-react';
+import { useTranslation } from 'react-i18next';
+import ClaudeLogo from '@/components/icons/claude-logo';
+import OpenAILogo from '@/components/icons/openai-logo';
+import OpenCodeLogo from '@/components/icons/opencode-logo';
+import CopilotLogo from '@/components/icons/copilot-logo';
+import GeminiLogo from '@/components/icons/gemini-logo';
+import FigmaLogo from '@/components/icons/figma-logo';
+import FileMenu from '@/components/shared/file-menu';
+import LanguageSelector from '@/components/shared/language-selector';
+import { GitButton } from '@/components/editor/git-button';
+import { cn } from '@/lib/utils';
+import { Button } from '@/components/ui/button';
+import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
+import { useCanvasStore } from '@/stores/canvas-store';
+import { useDocumentStore } from '@/stores/document-store';
 import {
   supportsFileSystemAccess,
   isElectron,
-  writeToFileHandle,
-  writeToFilePath,
-  saveDocumentAs,
-  downloadDocument,
   openDocumentFS,
   openDocument,
-} from '@/utils/file-operations'
-import { syncCanvasPositionsToStore } from '@/canvas/skia-engine-ref'
-import { zoomToFitContent } from '@/canvas/skia-engine-ref'
-import { normalizePenDocument } from '@/utils/normalize-pen-file'
-import { useAgentSettingsStore } from '@/stores/agent-settings-store'
-import type { AIProviderType } from '@/types/agent-settings'
+} from '@/utils/file-operations';
+import { syncCanvasPositionsToStore } from '@/canvas/skia-engine-ref';
+import { zoomToFitContent } from '@/canvas/skia-engine-ref';
+import { parseAndPrepareImportedDocument } from '@/utils/import-pen-document';
+import { addRecentFile } from '@/utils/recent-files';
+import { useAgentSettingsStore } from '@/stores/agent-settings-store';
+import type { AIProviderType } from '@/types/agent-settings';
 
 /** Convert a computed CSS color value (oklch/rgb/etc.) to #rrggbb via an offscreen canvas. */
 function cssToHex(raw: string): string | null {
-  const v = raw.trim()
-  if (!v) return null
+  const v = raw.trim();
+  if (!v) return null;
   try {
-    const ctx = document.createElement('canvas').getContext('2d')
-    if (!ctx) return null
-    ctx.fillStyle = v
-    const hex = ctx.fillStyle // browser normalises to #rrggbb
-    return hex.startsWith('#') ? hex : null
+    const ctx = document.createElement('canvas').getContext('2d');
+    if (!ctx) return null;
+    ctx.fillStyle = v;
+    const hex = ctx.fillStyle; // browser normalises to #rrggbb
+    return hex.startsWith('#') ? hex : null;
   } catch {
-    return null
+    return null;
   }
 }
 
@@ -66,22 +60,22 @@ const PROVIDER_ICONS: Record<AIProviderType, ComponentType<SVGProps<SVGSVGElemen
   opencode: OpenCodeLogo,
   copilot: CopilotLogo,
   gemini: GeminiLogo,
-}
+};
 
-const PROVIDER_ORDER: AIProviderType[] = ['anthropic', 'openai', 'opencode', 'copilot', 'gemini']
+const PROVIDER_ORDER: AIProviderType[] = ['anthropic', 'openai', 'opencode', 'copilot', 'gemini'];
 
 function AgentStatusButton() {
-  const { t } = useTranslation()
-  const providers = useAgentSettingsStore((s) => s.providers)
-  const mcpIntegrations = useAgentSettingsStore((s) => s.mcpIntegrations)
-  const connectedTypes = PROVIDER_ORDER.filter((tp) => providers[tp].isConnected)
-  const agentCount = connectedTypes.length
-  const mcpCount = mcpIntegrations.filter((m) => m.enabled).length
-  const hasAny = agentCount > 0 || mcpCount > 0
+  const { t } = useTranslation();
+  const providers = useAgentSettingsStore((s) => s.providers);
+  const mcpIntegrations = useAgentSettingsStore((s) => s.mcpIntegrations);
+  const connectedTypes = PROVIDER_ORDER.filter((tp) => providers[tp].isConnected);
+  const agentCount = connectedTypes.length;
+  const mcpCount = mcpIntegrations.filter((m) => m.enabled).length;
+  const hasAny = agentCount > 0 || mcpCount > 0;
 
-  const tooltipParts: string[] = []
-  if (agentCount > 0) tooltipParts.push(`${agentCount} agent${agentCount !== 1 ? 's' : ''}`)
-  if (mcpCount > 0) tooltipParts.push(`${mcpCount} MCP`)
+  const tooltipParts: string[] = [];
+  if (agentCount > 0) tooltipParts.push(`${agentCount} agent${agentCount !== 1 ? 's' : ''}`);
+  if (mcpCount > 0) tooltipParts.push(`${mcpCount} MCP`);
 
   return (
     <Tooltip>
@@ -97,7 +91,7 @@ function AgentStatusButton() {
               {agentCount > 0 && (
                 <div className="flex items-center -space-x-1.5">
                   {connectedTypes.map((type) => {
-                    const Icon = PROVIDER_ICONS[type]
+                    const Icon = PROVIDER_ICONS[type];
                     return (
                       <div
                         key={type}
@@ -105,13 +99,11 @@ function AgentStatusButton() {
                       >
                         <Icon className="w-3 h-3" />
                       </div>
-                    )
+                    );
                   })}
                 </div>
               )}
-              {agentCount === 0 && (
-                <Blocks size={14} strokeWidth={1.5} />
-              )}
+              {agentCount === 0 && <Blocks size={14} strokeWidth={1.5} />}
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
               <span className="text-[11px] text-muted-foreground hidden sm:inline">
                 {tooltipParts.join(' · ')}
@@ -128,199 +120,218 @@ function AgentStatusButton() {
         </Button>
       </TooltipTrigger>
       <TooltipContent side="bottom">
-        {hasAny ? tooltipParts.join(' · ') + ' ' + t('topbar.connected') : t('topbar.setupAgentsMcp')}
+        {hasAny
+          ? tooltipParts.join(' · ') + ' ' + t('topbar.connected')
+          : t('topbar.setupAgentsMcp')}
       </TooltipContent>
     </Tooltip>
-  )
+  );
 }
 
 export default function TopBar() {
-  const { t } = useTranslation()
-  const toggleLayerPanel = useCanvasStore((s) => s.toggleLayerPanel)
-  const layerPanelOpen = useCanvasStore((s) => s.layerPanelOpen)
-  const fileName = useDocumentStore((s) => s.fileName)
-  const isDirty = useDocumentStore((s) => s.isDirty)
+  const { t } = useTranslation();
+  const toggleLayerPanel = useCanvasStore((s) => s.toggleLayerPanel);
+  const layerPanelOpen = useCanvasStore((s) => s.layerPanelOpen);
+  const fileName = useDocumentStore((s) => s.fileName);
+  const isDirty = useDocumentStore((s) => s.isDirty);
 
-  const [theme, setTheme] = useState<'dark' | 'light'>('dark')
-  const [isFullscreen, setIsFullscreen] = useState(false)
+  const [theme, setTheme] = useState<'dark' | 'light'>('dark');
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [fileMenuOpen, setFileMenuOpen] = useState(false);
+  const [saveIndicator, setSaveIndicator] = useState(false);
 
   // Read computed CSS --card and --card-foreground as hex for Electron overlay
   const syncOverlayColors = useCallback((t: 'dark' | 'light') => {
-    if (!window.electronAPI?.setTheme) return
+    if (!window.electronAPI?.setTheme) return;
     // Allow a frame for CSS to apply after class toggle
     requestAnimationFrame(() => {
-      const s = getComputedStyle(document.documentElement)
-      const bg = cssToHex(s.getPropertyValue('--card'))
-      const fg = cssToHex(s.getPropertyValue('--card-foreground'))
-      window.electronAPI!.setTheme(t, bg && fg ? { bg, fg } : undefined)
-    })
-  }, [])
+      const s = getComputedStyle(document.documentElement);
+      const bg = cssToHex(s.getPropertyValue('--card'));
+      const fg = cssToHex(s.getPropertyValue('--card-foreground'));
+      window.electronAPI!.setTheme(t, bg && fg ? { bg, fg } : undefined);
+    });
+  }, []);
 
   // Restore saved theme after hydration.
   // initAppStorage() must run first in Electron to populate the IPC cache,
   // since appStorage.getItem is synchronous.
   useEffect(() => {
     const restore = async () => {
-      await initAppStorage()
-      const saved = appStorage.getItem('openpencil-theme')
+      await initAppStorage();
+      const saved = appStorage.getItem('openpencil-theme');
       if (saved === 'light') {
-        document.documentElement.classList.add('light')
-        setTheme('light')
-        syncOverlayColors('light')
+        document.documentElement.classList.add('light');
+        setTheme('light');
+        syncOverlayColors('light');
       } else {
-        syncOverlayColors('dark')
+        syncOverlayColors('dark');
       }
-    }
-    restore()
-  }, [syncOverlayColors])
+    };
+    restore();
+  }, [syncOverlayColors]);
 
   // Listen to fullscreen changes
   useEffect(() => {
-    const handler = () => setIsFullscreen(!!document.fullscreenElement)
-    document.addEventListener('fullscreenchange', handler)
-    return () => document.removeEventListener('fullscreenchange', handler)
-  }, [])
+    const handler = () => setIsFullscreen(!!document.fullscreenElement);
+    document.addEventListener('fullscreenchange', handler);
+    return () => document.removeEventListener('fullscreenchange', handler);
+  }, []);
 
   const toggleTheme = useCallback(() => {
-    const next = theme === 'dark' ? 'light' : 'dark'
+    const next = theme === 'dark' ? 'light' : 'dark';
     if (next === 'light') {
-      document.documentElement.classList.add('light')
+      document.documentElement.classList.add('light');
     } else {
-      document.documentElement.classList.remove('light')
+      document.documentElement.classList.remove('light');
     }
-    setTheme(next)
-    syncOverlayColors(next)
-    appStorage.setItem('openpencil-theme', next)
-  }, [theme, syncOverlayColors])
+    setTheme(next);
+    syncOverlayColors(next);
+    appStorage.setItem('openpencil-theme', next);
+  }, [theme, syncOverlayColors]);
 
   const toggleFullscreen = useCallback(() => {
     if (document.fullscreenElement) {
-      document.exitFullscreen()
+      document.exitFullscreen();
     } else {
-      document.documentElement.requestFullscreen()
+      document.documentElement.requestFullscreen();
     }
-  }, [])
+  }, []);
 
-  const handleNew = useCallback(() => {
-    if (useDocumentStore.getState().isDirty) {
-      if (!window.confirm(t('topbar.closeConfirmMessage'))) return
-    }
-    useDocumentStore.getState().newDocument()
-    requestAnimationFrame(() => zoomToFitContent())
-  }, [t])
-
-  /**
-   * Unified save: if the current file is .op with a known handle/path, save
-   * in-place; otherwise trigger "save as .op".
-   */
-  const handleSave = useCallback(async () => {
+  // Bare save: delegates to the store. Used by handleNew/handleOpenRecent
+  // when they need to save before discarding the current doc; the indicator
+  // flash is owned by handleSaveWithFeedback below.
+  const handleSave = useCallback(async (): Promise<string | null> => {
     try {
-      syncCanvasPositionsToStore()
+      syncCanvasPositionsToStore();
     } catch (err) {
-      console.error('[Save] syncCanvasPositionsToStore failed:', err)
+      console.error('[Save] syncCanvasPositionsToStore failed:', err);
     }
-    const store = useDocumentStore.getState()
-    const { document: doc, fileName: fn, fileHandle, filePath } = store
+    return useDocumentStore.getState().save();
+  }, []);
 
-    const isOpFile = fn ? /\.op$/i.test(fn) : false
-    const suggestedName = fn
-      ? fn.replace(/\.(pen|op|json)$/i, '') + '.op'
-      : 'untitled.op'
+  const handleSaveWithFeedback = useCallback(async () => {
+    const savedName = await handleSave();
+    if (!savedName) {
+      // User cancelled the save dialog or save failed.
+      // Critically: do NOT add to recent files and do NOT flash the indicator.
+      return;
+    }
+    const filePath = useDocumentStore.getState().filePath;
+    addRecentFile({ fileName: savedName, filePath: filePath ?? null });
+    setSaveIndicator(true);
+    setTimeout(() => setSaveIndicator(false), 2000);
+  }, [handleSave]);
 
+  const handleSaveAs = useCallback(async () => {
     try {
-      // Electron with known .op path → direct write
-      if (isElectron() && filePath && isOpFile) {
-        await writeToFilePath(filePath, doc)
-        store.markClean()
-        return
-      }
+      syncCanvasPositionsToStore();
+    } catch (err) {
+      console.error('[SaveAs] syncCanvasPositionsToStore failed:', err);
+    }
+    // Direct saveAs() — does NOT pre-mutate filePath/fileHandle. The store
+    // action handles the dialog and only updates state on confirmed success.
+    const savedName = await useDocumentStore.getState().saveAs();
+    if (!savedName) return;
+    const filePath = useDocumentStore.getState().filePath;
+    addRecentFile({ fileName: savedName, filePath: filePath ?? null });
+    setSaveIndicator(true);
+    setTimeout(() => setSaveIndicator(false), 2000);
+  }, []);
 
-      // Browser with valid .op file handle → direct write
-      if (fileHandle && isOpFile) {
+  const handleNew = useCallback(async () => {
+    if (useDocumentStore.getState().isDirty) {
+      const showDialog = (window as any).__showUnsavedDialog;
+      if (showDialog) {
+        const result = await showDialog(
+          useDocumentStore.getState().fileName || t('common.untitled'),
+        );
+        if (result === 'cancel') return;
+        if (result === 'save') await handleSaveWithFeedback();
+      }
+    }
+    useDocumentStore.getState().newDocument();
+    requestAnimationFrame(() => zoomToFitContent());
+  }, [t, handleSaveWithFeedback]);
+
+  const handleOpenRecent = useCallback(
+    async (filePath: string) => {
+      if (!isElectron()) return;
+      if (useDocumentStore.getState().isDirty) {
+        const showDialog = (window as any).__showUnsavedDialog;
+        if (showDialog) {
+          const result = await showDialog(
+            useDocumentStore.getState().fileName || t('common.untitled'),
+          );
+          if (result === 'cancel') return;
+          if (result === 'save') await handleSaveWithFeedback();
+        }
+      }
+      window.electronAPI!.readFile(filePath).then((result) => {
+        if (!result) return;
         try {
-          await writeToFileHandle(fileHandle, doc)
-          store.markClean()
-          return
-        } catch (err) {
-          console.warn('[Save] File handle write failed, falling back:', err)
-          useDocumentStore.setState({ fileHandle: null })
+          const name = result.filePath.split(/[/\\]/).pop() || 'untitled.op';
+          const prepared = parseAndPrepareImportedDocument(result.content, {
+            fileName: name,
+            filePath: result.filePath,
+          });
+          if (!prepared) return;
+          const { doc } = prepared;
+          useDocumentStore.getState().loadDocument(doc, name, null, result.filePath);
+          requestAnimationFrame(() => zoomToFitContent());
+        } catch {
+          /* invalid file */
         }
-      }
+      });
+    },
+    [t, handleSaveWithFeedback],
+  );
 
-      // No in-place target (new file, .pen file, or stale handle) → save as .op
-      if (isElectron()) {
-        const savedPath = await window.electronAPI!.saveFile(
-          JSON.stringify(doc),
-          suggestedName,
-        )
-        if (savedPath) {
-          useDocumentStore.setState({
-            fileName: savedPath.split(/[/\\]/).pop() || suggestedName,
-            filePath: savedPath,
-            fileHandle: null,
-            isDirty: false,
-          })
-        }
-      } else if (supportsFileSystemAccess()) {
-        const result = await saveDocumentAs(doc, suggestedName)
-        if (result) {
-          useDocumentStore.setState({
-            fileName: result.fileName,
-            fileHandle: result.handle,
-            isDirty: false,
-          })
-        }
-      } else {
-        downloadDocument(doc, suggestedName)
-        store.markClean()
-      }
-    } catch (err) {
-      console.error('[Save] Failed to save document:', err)
-      try {
-        downloadDocument(doc, suggestedName)
-        store.markClean()
-      } catch (dlErr) {
-        console.error('[Save] Download fallback also failed:', dlErr)
-      }
-    }
-  }, [])
-
-  const handleOpen = useCallback(() => {
+  const handleOpen = useCallback(async () => {
     if (useDocumentStore.getState().isDirty) {
-      if (!window.confirm(t('topbar.closeConfirmMessage'))) return
+      const showDialog = (window as any).__showUnsavedDialog;
+      if (showDialog) {
+        const result = await showDialog(
+          useDocumentStore.getState().fileName || t('common.untitled'),
+        );
+        if (result === 'cancel') return;
+        if (result === 'save') await handleSaveWithFeedback();
+      }
     }
     if (isElectron()) {
       window.electronAPI!.openFile().then((result) => {
-        if (!result) return
+        if (!result) return;
         try {
-          const raw = JSON.parse(result.content)
-          if (!raw.version || (!Array.isArray(raw.children) && !Array.isArray(raw.pages))) return
-          const doc = normalizePenDocument(raw)
-          const name = result.filePath.split(/[/\\]/).pop() || 'untitled.op'
-          useDocumentStore.getState().loadDocument(doc, name, null, result.filePath)
-          requestAnimationFrame(() => zoomToFitContent())
-        } catch { /* invalid file */ }
-      })
+          const name = result.filePath.split(/[/\\]/).pop() || 'untitled.op';
+          const prepared = parseAndPrepareImportedDocument(result.content, {
+            fileName: name,
+            filePath: result.filePath,
+          });
+          if (!prepared) return;
+          const { doc } = prepared;
+          useDocumentStore.getState().loadDocument(doc, name, null, result.filePath);
+          requestAnimationFrame(() => zoomToFitContent());
+        } catch {
+          /* invalid file */
+        }
+      });
     } else if (supportsFileSystemAccess()) {
       openDocumentFS().then((result) => {
         if (result) {
-          useDocumentStore
-            .getState()
-            .loadDocument(result.doc, result.fileName, result.handle)
-          requestAnimationFrame(() => zoomToFitContent())
+          useDocumentStore.getState().loadDocument(result.doc, result.fileName, result.handle);
+          requestAnimationFrame(() => zoomToFitContent());
         }
-      })
+      });
     } else {
       openDocument().then((result) => {
         if (result) {
-          useDocumentStore.getState().loadDocument(result.doc, result.fileName)
-          requestAnimationFrame(() => zoomToFitContent())
+          useDocumentStore.getState().loadDocument(result.doc, result.fileName);
+          requestAnimationFrame(() => zoomToFitContent());
         }
-      })
+      });
     }
-  }, [t])
+  }, [t, handleSaveWithFeedback]);
 
-  const displayName = fileName ?? t('common.untitled')
+  const displayName = fileName ?? t('common.untitled');
 
   return (
     <div className="h-10 bg-card border-b border-border flex items-center px-2 shrink-0 select-none app-region-drag">
@@ -344,32 +355,33 @@ export default function TopBar() {
 
         <div className="w-px h-3.5 bg-border/60 mx-1" />
 
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button variant="ghost" size="icon-sm" className="text-muted-foreground" onClick={handleNew}>
-              <Plus size={16} strokeWidth={1.5} />
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent side="bottom">{t('topbar.new')}</TooltipContent>
-        </Tooltip>
-
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button variant="ghost" size="icon-sm" className="text-muted-foreground" onClick={handleOpen}>
-              <Folder size={15} strokeWidth={1.5} />
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent side="bottom">{t('topbar.open')}</TooltipContent>
-        </Tooltip>
-
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button variant="ghost" size="icon-sm" className="text-muted-foreground" onClick={handleSave}>
-              <Save size={15} strokeWidth={1.5} />
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent side="bottom">{t('topbar.save')}</TooltipContent>
-        </Tooltip>
+        {/* File menu dropdown trigger */}
+        <div className="relative">
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="text-muted-foreground h-7 px-1.5 gap-0.5"
+                onClick={() => setFileMenuOpen((v) => !v)}
+              >
+                <Folder size={15} strokeWidth={1.5} />
+                <ChevronDown size={10} className="text-muted-foreground/60" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom">{t('topbar.open')}</TooltipContent>
+          </Tooltip>
+          <FileMenu
+            open={fileMenuOpen}
+            onClose={() => setFileMenuOpen(false)}
+            onNew={handleNew}
+            onOpen={handleOpen}
+            onSave={handleSaveWithFeedback}
+            onSaveAs={handleSaveAs}
+            onExport={() => useCanvasStore.getState().setExportDialogOpen(true)}
+            onOpenRecent={handleOpenRecent}
+          />
+        </div>
 
         <div className="w-px h-3.5 bg-border/60 mx-1" />
 
@@ -388,16 +400,22 @@ export default function TopBar() {
         </Tooltip>
       </div>
 
-      {/* Center section — file name */}
-      <div className="flex-1 flex items-center justify-center min-w-0">
-        <span className="text-xs text-foreground truncate" suppressHydrationWarning>
+      {/* Center section — file name + git indicator */}
+      <div className="flex min-w-0 flex-1 items-center justify-center gap-1.5">
+        <span className="truncate text-xs leading-none text-foreground" suppressHydrationWarning>
           {displayName}
         </span>
         {isDirty && (
-          <span className="text-xs text-muted-foreground ml-1.5">
-            {t('topbar.edited')}
+          <span className="text-xs leading-none text-muted-foreground">{t('topbar.edited')}</span>
+        )}
+        {saveIndicator && (
+          <span className="text-[10px] leading-none text-emerald-500 animate-pulse">
+            {t('fileMenu.saved')}
           </span>
         )}
+        <div className="app-region-no-drag flex items-center">
+          <GitButton />
+        </div>
       </div>
 
       {/* Right section */}
@@ -410,8 +428,17 @@ export default function TopBar() {
 
         <Tooltip>
           <TooltipTrigger asChild>
-            <Button variant="ghost" size="icon-sm" className="text-muted-foreground" onClick={toggleTheme}>
-              {theme === 'dark' ? <Sun size={15} strokeWidth={1.5} /> : <Moon size={15} strokeWidth={1.5} />}
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              className="text-muted-foreground"
+              onClick={toggleTheme}
+            >
+              {theme === 'dark' ? (
+                <Sun size={15} strokeWidth={1.5} />
+              ) : (
+                <Moon size={15} strokeWidth={1.5} />
+              )}
             </Button>
           </TooltipTrigger>
           <TooltipContent side="bottom">
@@ -421,8 +448,17 @@ export default function TopBar() {
 
         <Tooltip>
           <TooltipTrigger asChild>
-            <Button variant="ghost" size="icon-sm" className="text-muted-foreground" onClick={toggleFullscreen}>
-              {isFullscreen ? <Minimize size={15} strokeWidth={1.5} /> : <Maximize size={15} strokeWidth={1.5} />}
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              className="text-muted-foreground"
+              onClick={toggleFullscreen}
+            >
+              {isFullscreen ? (
+                <Minimize size={15} strokeWidth={1.5} />
+              ) : (
+                <Maximize size={15} strokeWidth={1.5} />
+              )}
             </Button>
           </TooltipTrigger>
           <TooltipContent side="bottom">
@@ -431,5 +467,5 @@ export default function TopBar() {
         </Tooltip>
       </div>
     </div>
-  )
+  );
 }

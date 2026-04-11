@@ -1,34 +1,34 @@
 #!/usr/bin/env node
 
-import pkg from '../package.json'
-import { setPretty, output, outputError } from './output'
+import pkg from '../package.json';
+import { setPretty, output, outputError } from './output';
 
 // --- Arg parsing ---
 
 interface ParsedArgs {
-  command: string
-  positionals: string[]
-  flags: Record<string, string | boolean>
+  command: string;
+  positionals: string[];
+  flags: Record<string, string | boolean>;
 }
 
 function parseArgs(argv: string[]): ParsedArgs {
-  const args = argv.slice(2)
-  const positionals: string[] = []
-  const flags: Record<string, string | boolean> = {}
+  const args = argv.slice(2);
+  const positionals: string[] = [];
+  const flags: Record<string, string | boolean> = {};
 
   for (let i = 0; i < args.length; i++) {
-    const arg = args[i]
+    const arg = args[i];
     if (arg.startsWith('--')) {
-      const key = arg.slice(2)
-      const next = args[i + 1]
+      const key = arg.slice(2);
+      const next = args[i + 1];
       if (next && !next.startsWith('--')) {
-        flags[key] = next
-        i++
+        flags[key] = next;
+        i++;
       } else {
-        flags[key] = true
+        flags[key] = true;
       }
     } else {
-      positionals.push(arg)
+      positionals.push(arg);
     }
   }
 
@@ -36,7 +36,7 @@ function parseArgs(argv: string[]): ParsedArgs {
     command: positionals[0] ?? '',
     positionals: positionals.slice(1),
     flags,
-  }
+  };
 }
 
 // --- Help ---
@@ -70,9 +70,15 @@ Design:
   op design:content <section-id> <json|@file|->
   op design:refine --root-id <id>
 
-Export:
-  op export <format> [--out file]
-  Formats: react, html, vue, svelte, flutter, swiftui, compose, rn, css
+Read Nodes:
+  op read-nodes [ids] [--depth N] [--vars] [--page P] [--file F]
+  ids: comma-separated node IDs (omit to read all)
+
+Codegen Pipeline:
+  op codegen:plan <plan-json|@file|->
+  op codegen:submit <planId> <chunk-result|@file|->
+  op codegen:assemble <planId> [--framework react]
+  op codegen:clean <planId>
 
 Variables & Themes:
   op vars                       Get variables
@@ -110,64 +116,63 @@ Global Flags:
   --pretty          Human-readable JSON output
   --help            Show this help
   --version         Show version
-`
+`;
 
 // --- Main ---
 
 async function main(): Promise<void> {
-  const { command, positionals, flags } = parseArgs(process.argv)
+  const { command, positionals, flags } = parseArgs(process.argv);
 
-  if (flags.pretty) setPretty(true)
+  if (flags.pretty) setPretty(true);
   if (flags.help || command === 'help') {
-    process.stdout.write(HELP)
-    return
+    process.stdout.write(HELP);
+    return;
   }
   if (flags.version || command === 'version') {
-    output({ version: pkg.version })
-    return
+    output({ version: pkg.version });
+    return;
   }
   if (!command) {
-    process.stdout.write(HELP)
-    return
+    process.stdout.write(HELP);
+    return;
   }
 
   const globalFlags = {
     file: flags.file as string | undefined,
     page: flags.page as string | undefined,
-  }
-
+  };
 
   switch (command) {
     // --- App ---
     case 'start': {
-      const { cmdStart } = await import('./commands/app')
-      await cmdStart({ desktop: !!flags.desktop, web: !!flags.web })
-      break
+      const { cmdStart } = await import('./commands/app');
+      await cmdStart({ desktop: !!flags.desktop, web: !!flags.web });
+      break;
     }
     case 'stop': {
-      const { cmdStop } = await import('./commands/app')
-      await cmdStop()
-      break
+      const { cmdStop } = await import('./commands/app');
+      await cmdStop();
+      break;
     }
     case 'status': {
-      const { cmdStatus } = await import('./commands/app')
-      await cmdStatus()
-      break
+      const { cmdStatus } = await import('./commands/app');
+      await cmdStatus();
+      break;
     }
 
     // --- Document ---
     case 'open': {
-      const { cmdOpen } = await import('./commands/document')
-      await cmdOpen(positionals, globalFlags)
-      break
+      const { cmdOpen } = await import('./commands/document');
+      await cmdOpen(positionals, globalFlags);
+      break;
     }
     case 'save': {
-      const { cmdSave } = await import('./commands/document')
-      await cmdSave(positionals, globalFlags)
-      break
+      const { cmdSave } = await import('./commands/document');
+      await cmdSave(positionals, globalFlags);
+      break;
     }
     case 'get': {
-      const { cmdGet } = await import('./commands/document')
+      const { cmdGet } = await import('./commands/document');
       await cmdGet(positionals, {
         ...globalFlags,
         type: flags.type as string | undefined,
@@ -175,230 +180,259 @@ async function main(): Promise<void> {
         id: flags.id as string | undefined,
         depth: flags.depth as string | undefined,
         parent: flags.parent as string | undefined,
-      })
-      break
+      });
+      break;
     }
     case 'selection': {
-      const { cmdSelection } = await import('./commands/document')
-      await cmdSelection({ ...globalFlags, depth: flags.depth as string | undefined })
-      break
+      const { cmdSelection } = await import('./commands/document');
+      await cmdSelection({ ...globalFlags, depth: flags.depth as string | undefined });
+      break;
     }
 
     // --- Nodes ---
     case 'insert': {
-      const { cmdInsert } = await import('./commands/nodes')
+      const { cmdInsert } = await import('./commands/nodes');
       await cmdInsert(positionals, {
         ...globalFlags,
         parent: flags.parent as string | undefined,
         index: flags.index as string | undefined,
         postProcess: !!flags['post-process'],
-      })
-      break
+      });
+      break;
     }
     case 'update': {
-      const { cmdUpdate } = await import('./commands/nodes')
+      const { cmdUpdate } = await import('./commands/nodes');
       await cmdUpdate(positionals, {
         ...globalFlags,
         postProcess: !!flags['post-process'],
-      })
-      break
+      });
+      break;
     }
     case 'delete': {
-      const { cmdDelete } = await import('./commands/nodes')
-      await cmdDelete(positionals, globalFlags)
-      break
+      const { cmdDelete } = await import('./commands/nodes');
+      await cmdDelete(positionals, globalFlags);
+      break;
     }
     case 'move': {
-      const { cmdMove } = await import('./commands/nodes')
+      const { cmdMove } = await import('./commands/nodes');
       await cmdMove(positionals, {
         ...globalFlags,
         parent: flags.parent as string | undefined,
         index: flags.index as string | undefined,
-      })
-      break
+      });
+      break;
     }
     case 'copy': {
-      const { cmdCopy } = await import('./commands/nodes')
+      const { cmdCopy } = await import('./commands/nodes');
       await cmdCopy(positionals, {
         ...globalFlags,
         parent: flags.parent as string | undefined,
-      })
-      break
+      });
+      break;
     }
     case 'replace': {
-      const { cmdReplace } = await import('./commands/nodes')
+      const { cmdReplace } = await import('./commands/nodes');
       await cmdReplace(positionals, {
         ...globalFlags,
         postProcess: !!flags['post-process'],
-      })
-      break
+      });
+      break;
     }
 
     // --- Design ---
     case 'design': {
-      const { cmdDesign } = await import('./commands/design')
+      const { cmdDesign } = await import('./commands/design');
       await cmdDesign(positionals, {
         ...globalFlags,
         postProcess: flags['post-process'] !== false ? true : undefined,
         canvasWidth: flags['canvas-width'] as string | undefined,
-      })
-      break
+      });
+      break;
     }
     case 'design:skeleton': {
-      const { cmdDesignSkeleton } = await import('./commands/design')
-      await cmdDesignSkeleton(positionals, globalFlags)
-      break
+      const { cmdDesignSkeleton } = await import('./commands/design');
+      await cmdDesignSkeleton(positionals, globalFlags);
+      break;
     }
     case 'design:content': {
-      const { cmdDesignContent } = await import('./commands/design')
+      const { cmdDesignContent } = await import('./commands/design');
       await cmdDesignContent(positionals, {
         ...globalFlags,
         canvasWidth: flags['canvas-width'] as string | undefined,
-      })
-      break
+      });
+      break;
     }
     case 'design:refine': {
-      const { cmdDesignRefine } = await import('./commands/design')
+      const { cmdDesignRefine } = await import('./commands/design');
       await cmdDesignRefine(positionals, {
         ...globalFlags,
         rootId: flags['root-id'] as string | undefined,
         canvasWidth: flags['canvas-width'] as string | undefined,
-      })
-      break
+      });
+      break;
     }
 
-    // --- Export ---
-    case 'export': {
-      const { cmdExport } = await import('./commands/export')
-      await cmdExport(positionals, {
+    // --- Read Nodes ---
+    case 'read-nodes': {
+      const { cmdReadNodes } = await import('./commands/read-nodes');
+      await cmdReadNodes(positionals, {
         file: globalFlags.file,
-        out: flags.out as string | undefined,
-      })
-      break
+        page: globalFlags.page,
+        depth: flags.depth as string | undefined,
+        vars: !!flags.vars,
+      });
+      break;
+    }
+
+    // --- Codegen Pipeline ---
+    case 'codegen:plan': {
+      const { cmdCodegenPlan } = await import('./commands/codegen');
+      await cmdCodegenPlan(positionals, globalFlags);
+      break;
+    }
+    case 'codegen:submit': {
+      const { cmdCodegenSubmit } = await import('./commands/codegen');
+      await cmdCodegenSubmit(positionals, globalFlags);
+      break;
+    }
+    case 'codegen:assemble': {
+      const { cmdCodegenAssemble } = await import('./commands/codegen');
+      await cmdCodegenAssemble(positionals, {
+        ...globalFlags,
+        framework: flags.framework as string | undefined,
+      });
+      break;
+    }
+    case 'codegen:clean': {
+      const { cmdCodegenClean } = await import('./commands/codegen');
+      await cmdCodegenClean(positionals, globalFlags);
+      break;
     }
 
     // --- Variables & Themes ---
     case 'vars': {
-      const { cmdVars } = await import('./commands/variables')
-      await cmdVars(globalFlags)
-      break
+      const { cmdVars } = await import('./commands/variables');
+      await cmdVars(globalFlags);
+      break;
     }
     case 'vars:set': {
-      const { cmdVarsSet } = await import('./commands/variables')
-      await cmdVarsSet(positionals, { ...globalFlags, replace: !!flags.replace })
-      break
+      const { cmdVarsSet } = await import('./commands/variables');
+      await cmdVarsSet(positionals, { ...globalFlags, replace: !!flags.replace });
+      break;
     }
     case 'themes': {
-      const { cmdThemes } = await import('./commands/variables')
-      await cmdThemes(globalFlags)
-      break
+      const { cmdThemes } = await import('./commands/variables');
+      await cmdThemes(globalFlags);
+      break;
     }
     case 'themes:set': {
-      const { cmdThemesSet } = await import('./commands/variables')
-      await cmdThemesSet(positionals, { ...globalFlags, replace: !!flags.replace })
-      break
+      const { cmdThemesSet } = await import('./commands/variables');
+      await cmdThemesSet(positionals, { ...globalFlags, replace: !!flags.replace });
+      break;
     }
     case 'theme:save': {
-      const { cmdThemeSave } = await import('./commands/variables')
-      await cmdThemeSave(positionals, globalFlags)
-      break
+      const { cmdThemeSave } = await import('./commands/variables');
+      await cmdThemeSave(positionals, globalFlags);
+      break;
     }
     case 'theme:load': {
-      const { cmdThemeLoad } = await import('./commands/variables')
-      await cmdThemeLoad(positionals, globalFlags)
-      break
+      const { cmdThemeLoad } = await import('./commands/variables');
+      await cmdThemeLoad(positionals, globalFlags);
+      break;
     }
     case 'theme:list': {
-      const { cmdThemeList } = await import('./commands/variables')
-      await cmdThemeList(positionals)
-      break
+      const { cmdThemeList } = await import('./commands/variables');
+      await cmdThemeList(positionals);
+      break;
     }
 
     // --- Pages ---
     case 'page': {
-      const subCmd = positionals[0]
-      const subArgs = positionals.slice(1)
+      const subCmd = positionals[0];
+      const subArgs = positionals.slice(1);
       switch (subCmd) {
         case 'list': {
-          const { cmdPageList } = await import('./commands/pages')
-          await cmdPageList(globalFlags)
-          break
+          const { cmdPageList } = await import('./commands/pages');
+          await cmdPageList(globalFlags);
+          break;
         }
         case 'add': {
-          const { cmdPageAdd } = await import('./commands/pages')
-          await cmdPageAdd(subArgs, { ...globalFlags, name: flags.name as string | undefined })
-          break
+          const { cmdPageAdd } = await import('./commands/pages');
+          await cmdPageAdd(subArgs, { ...globalFlags, name: flags.name as string | undefined });
+          break;
         }
         case 'remove': {
-          const { cmdPageRemove } = await import('./commands/pages')
-          await cmdPageRemove(subArgs, globalFlags)
-          break
+          const { cmdPageRemove } = await import('./commands/pages');
+          await cmdPageRemove(subArgs, globalFlags);
+          break;
         }
         case 'rename': {
-          const { cmdPageRename } = await import('./commands/pages')
-          await cmdPageRename(subArgs, globalFlags)
-          break
+          const { cmdPageRename } = await import('./commands/pages');
+          await cmdPageRename(subArgs, globalFlags);
+          break;
         }
         case 'reorder': {
-          const { cmdPageReorder } = await import('./commands/pages')
-          await cmdPageReorder(subArgs, globalFlags)
-          break
+          const { cmdPageReorder } = await import('./commands/pages');
+          await cmdPageReorder(subArgs, globalFlags);
+          break;
         }
         case 'duplicate': {
-          const { cmdPageDuplicate } = await import('./commands/pages')
-          await cmdPageDuplicate(subArgs, globalFlags)
-          break
+          const { cmdPageDuplicate } = await import('./commands/pages');
+          await cmdPageDuplicate(subArgs, globalFlags);
+          break;
         }
         default:
-          outputError(`Unknown page subcommand: "${subCmd}". Use: list, add, remove, rename, reorder, duplicate`)
+          outputError(
+            `Unknown page subcommand: "${subCmd}". Use: list, add, remove, rename, reorder, duplicate`,
+          );
       }
-      break
+      break;
     }
 
     // --- Import ---
     case 'import:svg': {
-      const { cmdImportSvg } = await import('./commands/import')
+      const { cmdImportSvg } = await import('./commands/import');
       await cmdImportSvg(positionals, {
         ...globalFlags,
         parent: flags.parent as string | undefined,
-      })
-      break
+      });
+      break;
     }
     case 'import:figma': {
-      const { cmdImportFigma } = await import('./commands/import')
+      const { cmdImportFigma } = await import('./commands/import');
       await cmdImportFigma(positionals, {
         ...globalFlags,
         out: flags.out as string | undefined,
-      })
-      break
+      });
+      break;
     }
 
     // --- Layout ---
     case 'layout': {
-      const { cmdLayout } = await import('./commands/layout')
+      const { cmdLayout } = await import('./commands/layout');
       await cmdLayout({
         ...globalFlags,
         parent: flags.parent as string | undefined,
         depth: flags.depth as string | undefined,
-      })
-      break
+      });
+      break;
     }
     case 'find-space': {
-      const { cmdFindSpace } = await import('./commands/layout')
+      const { cmdFindSpace } = await import('./commands/layout');
       await cmdFindSpace({
         ...globalFlags,
         direction: flags.direction as string | undefined,
         width: flags.width as string | undefined,
         height: flags.height as string | undefined,
-      })
-      break
+      });
+      break;
     }
 
     default:
-      outputError(`Unknown command: "${command}". Run "op --help" for usage.`)
+      outputError(`Unknown command: "${command}". Run "op --help" for usage.`);
   }
 }
 
 main().catch((err) => {
-  outputError(err instanceof Error ? err.message : String(err))
-})
+  outputError(err instanceof Error ? err.message : String(err));
+});

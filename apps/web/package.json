@@ -1,16 +1,18 @@
 {
   "name": "@zseven-w/web",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "private": true,
   "type": "module",
   "dependencies": {
-    "@zseven-w/pen-types": "workspace:*",
-    "@zseven-w/pen-core": "workspace:*",
-    "@zseven-w/pen-codegen": "workspace:*",
-    "@zseven-w/pen-figma": "workspace:*",
-    "@zseven-w/pen-renderer": "workspace:*",
+    "@zseven-w/agent-native": "workspace:*",
     "@zseven-w/pen-ai-skills": "workspace:*",
-    "@zseven-w/agent": "workspace:*",
+    "@zseven-w/pen-core": "workspace:*",
+    "@zseven-w/pen-engine": "workspace:*",
+    "@zseven-w/pen-figma": "workspace:*",
+    "@zseven-w/pen-mcp": "workspace:*",
+    "@zseven-w/pen-react": "workspace:*",
+    "@zseven-w/pen-renderer": "workspace:*",
+    "@zseven-w/pen-types": "workspace:*",
     "zod": "^3.24"
   }
 }

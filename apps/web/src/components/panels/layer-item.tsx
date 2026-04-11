@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState } from 'react';
 import {
   Square,
   Circle,
@@ -18,8 +18,8 @@ import {
   ChevronRight,
   Diamond,
   Smile,
-} from 'lucide-react'
-import type { PenNodeType } from '@/types/pen'
+} from 'lucide-react';
+import type { PenNodeType } from '@/types/pen';
 
 const TYPE_ICONS: Record<PenNodeType, typeof Square> = {
   rectangle: Square,
@@ -33,32 +33,32 @@ const TYPE_ICONS: Record<PenNodeType, typeof Square> = {
   image: ImageIcon,
   icon_font: Smile,
   ref: Link,
-}
+};
 
-export type DropPosition = 'above' | 'below' | 'inside' | null
+export type DropPosition = 'above' | 'below' | 'inside' | null;
 
 interface LayerItemProps {
-  id: string
-  name: string
-  type: PenNodeType
-  depth: number
-  selected: boolean
-  visible: boolean
-  locked: boolean
-  hasChildren: boolean
-  expanded: boolean
-  isReusable: boolean
-  isInstance: boolean
-  dropPosition: DropPosition
-  onSelect: (id: string) => void
-  onRename: (id: string, name: string) => void
-  onToggleVisibility: (id: string) => void
-  onToggleLock: (id: string) => void
-  onToggleExpand: (id: string) => void
-  onContextMenu: (e: React.MouseEvent, id: string) => void
-  onDragStart: (id: string) => void
-  onDragOver: (id: string, e: React.PointerEvent) => void
-  onDragEnd: () => void
+  id: string;
+  name: string;
+  type: PenNodeType;
+  depth: number;
+  selected: boolean;
+  visible: boolean;
+  locked: boolean;
+  hasChildren: boolean;
+  expanded: boolean;
+  isReusable: boolean;
+  isInstance: boolean;
+  dropPosition: DropPosition;
+  onSelect: (id: string) => void;
+  onRename: (id: string, name: string) => void;
+  onToggleVisibility: (id: string) => void;
+  onToggleLock: (id: string) => void;
+  onToggleExpand: (id: string) => void;
+  onContextMenu: (e: React.MouseEvent, id: string) => void;
+  onDragStart: (id: string) => void;
+  onDragOver: (id: string, e: React.PointerEvent) => void;
+  onDragEnd: () => void;
 }
 
 export default function LayerItem({
@@ -84,40 +84,40 @@ export default function LayerItem({
   onDragOver,
   onDragEnd,
 }: LayerItemProps) {
-  const [isEditing, setIsEditing] = useState(false)
-  const [editName, setEditName] = useState(name)
+  const [isEditing, setIsEditing] = useState(false);
+  const [editName, setEditName] = useState(name);
 
-  const Icon = isReusable || isInstance ? Diamond : (TYPE_ICONS[type] ?? Square)
+  const Icon = isReusable || isInstance ? Diamond : (TYPE_ICONS[type] ?? Square);
 
   const handleDoubleClick = () => {
-    setEditName(name)
-    setIsEditing(true)
-  }
+    setEditName(name);
+    setIsEditing(true);
+  };
 
   const handleRenameBlur = () => {
-    setIsEditing(false)
+    setIsEditing(false);
     if (editName.trim() && editName !== name) {
-      onRename(id, editName.trim())
+      onRename(id, editName.trim());
     }
-  }
+  };
 
   const handleRenameKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter') handleRenameBlur()
+    if (e.key === 'Enter') handleRenameBlur();
     if (e.key === 'Escape') {
-      setIsEditing(false)
-      setEditName(name)
+      setIsEditing(false);
+      setEditName(name);
     }
-  }
+  };
 
   const handlePointerDown = (e: React.PointerEvent) => {
-    if (isEditing) return
+    if (isEditing) return;
     // Prevent browser text selection during drag
-    e.preventDefault()
-    onDragStart(id)
-  }
+    e.preventDefault();
+    onDragStart(id);
+  };
 
   const dropInsideHighlight =
-    dropPosition === 'inside' ? 'ring-2 ring-inset ring-blue-500 bg-blue-500/10' : ''
+    dropPosition === 'inside' ? 'ring-2 ring-inset ring-blue-500 bg-blue-500/10' : '';
 
   return (
     <div className="relative" data-layer-id={id}>
@@ -150,8 +150,8 @@ export default function LayerItem({
           <button
             type="button"
             onClick={(e) => {
-              e.stopPropagation()
-              onToggleExpand(id)
+              e.stopPropagation();
+              onToggleExpand(id);
             }}
             className="shrink-0 opacity-60 hover:opacity-100"
           >
@@ -161,7 +161,10 @@ export default function LayerItem({
           <span className="shrink-0 w-3" />
         )}
 
-        <Icon size={12} className={`shrink-0 ${isReusable ? 'text-purple-400' : isInstance ? 'text-[#9281f7]' : 'opacity-60'}`} />
+        <Icon
+          size={12}
+          className={`shrink-0 ${isReusable ? 'text-purple-400' : isInstance ? 'text-[#9281f7]' : 'opacity-60'}`}
+        />
 
         {isEditing ? (
           <input
@@ -180,13 +183,11 @@ export default function LayerItem({
         <button
           type="button"
           onClick={(e) => {
-            e.stopPropagation()
-            onToggleVisibility(id)
+            e.stopPropagation();
+            onToggleVisibility(id);
           }}
           className={`p-0.5 transition-opacity ${
-            !visible
-              ? 'opacity-100 text-yellow-400'
-              : 'opacity-0 group-hover/layer:opacity-100'
+            !visible ? 'opacity-100 text-yellow-400' : 'opacity-0 group-hover/layer:opacity-100'
           }`}
           title={visible ? 'Hide' : 'Show'}
         >
@@ -195,13 +196,11 @@ export default function LayerItem({
         <button
           type="button"
           onClick={(e) => {
-            e.stopPropagation()
-            onToggleLock(id)
+            e.stopPropagation();
+            onToggleLock(id);
           }}
           className={`p-0.5 transition-opacity ${
-            locked
-              ? 'opacity-100 text-orange-400'
-              : 'opacity-0 group-hover/layer:opacity-100'
+            locked ? 'opacity-100 text-orange-400' : 'opacity-0 group-hover/layer:opacity-100'
           }`}
           title={locked ? 'Unlock' : 'Lock'}
         >
@@ -212,5 +211,5 @@ export default function LayerItem({
         <div className="absolute bottom-0 left-2 right-2 h-0.5 bg-blue-500 rounded-full z-10" />
       )}
     </div>
-  )
+  );
 }

@@ -1,4 +1,4 @@
-import type { TranslationKeys } from './en'
+import type { TranslationKeys } from './en';
 
 const fr: TranslationKeys = {
   // ── Common ──
@@ -10,6 +10,8 @@ const fr: TranslationKeys = {
   'common.close': 'Fermer',
   'common.connect': 'Connecter',
   'common.disconnect': 'Déconnecter',
+  'common.yes': 'Oui',
+  'common.no': 'Non',
   'common.import': 'Importer',
   'common.export': 'Exporter',
   'common.name': 'Nom',
@@ -59,6 +61,316 @@ const fr: TranslationKeys = {
   'topbar.connected': 'connecté',
   'topbar.agentStatus': '{{agents}} agent{{agentSuffix}} · {{mcp}} MCP',
 
+  // ── Panneau Git ──
+  'git.openPanel': 'Ouvrir le panneau Git',
+  'git.closePanel': 'Fermer le panneau Git',
+  'git.title': 'Git · {{fileName}}',
+  'git.titleNoFile': 'Git · (Aucun fichier)',
+  'git.close': 'Fermer',
+  'git.initializing': 'Initialisation du dépôt…',
+  'git.conflict.title': 'Conflit de fusion',
+  'git.conflict.description':
+    'Résolvez chaque conflit via les cartes ci-dessous, puis appliquez la fusion.',
+  'git.conflict.abort': 'Annuler la fusion',
+  'git.conflict.nonOp.title': 'Fusion en pause sur des fichiers non .op',
+  'git.conflict.nonOp.description':
+    "La fusion des fichiers .op est terminée, mais d'autres fichiers du dépôt ne sont pas résolus. Résolvez-les en dehors d'OpenPencil, puis continuez.",
+  'git.conflict.nonOp.unresolvedHeading_one': '1 fichier nécessite une action',
+  'git.conflict.nonOp.unresolvedHeading_other': '{{count}} fichiers nécessitent une action',
+  'git.conflict.nonOp.continue': 'Continuer la fusion',
+  'git.conflict.nonOp.abort': 'Annuler la fusion',
+  // ── Conflit Git — bannière (Phase 7b) ──
+  'git.conflict.banner.progress': 'Résolu {{resolved}} / {{total}}',
+  'git.conflict.banner.apply': 'Appliquer la fusion',
+  'git.conflict.banner.continue': 'Continuer',
+  'git.conflict.banner.finalizeError': "Impossible d'appliquer : {{message}}",
+  'git.conflict.banner.pollError': "Sondage d'état suspendu en raison d'une erreur : {{message}}",
+  // placeholder — future localization
+  'git.conflict.banner.reopenMessage':
+    'Panneau rouvert en cours de fusion — veuillez abandonner et re-tirer.',
+
+  // ── Conflit Git — liste (Phase 7c) ──
+  'git.conflict.list.heading': 'Tous les conflits',
+  'git.conflict.list.progress': '{{resolved}} / {{total}} résolus',
+  'git.conflict.list.allResolved': 'Tout résolu',
+  'git.conflict.list.allOurs': 'Tout prendre le mien',
+  'git.conflict.list.allTheirs': 'Tout prendre le leur',
+
+  // ── Conflit Git — élément (Phase 7c) ──
+  'git.conflict.item.nodeConflict': 'Conflit de nœud',
+  'git.conflict.item.fieldConflict': 'Conflit de champ',
+  'git.conflict.item.resolved': 'Résolu',
+
+  // ── Conflit Git — carte (Phase 7c) ──
+  'git.conflict.card.ours': 'Le mien',
+  'git.conflict.card.theirs': 'Le leur',
+  'git.conflict.card.base': 'Base',
+  'git.conflict.card.keepMine': 'Garder le mien',
+  'git.conflict.card.keepTheirs': 'Garder le leur',
+  'git.conflict.card.oursThumbnailAlt': 'Ma version',
+  'git.conflict.card.theirsThumbnailAlt': 'Leur version',
+
+  // ── Conflit Git — éditeur JSON (Phase 7c) ──
+  'git.conflict.editor.editManually': 'Modifier manuellement',
+  'git.conflict.editor.cancel': 'Annuler',
+  'git.conflict.editor.apply': 'Appliquer',
+  'git.conflict.editor.invalidJson': 'JSON invalide',
+  'git.conflict.editor.textareaLabel': 'Modifier la valeur JSON',
+
+  'git.error.dismiss': 'Ignorer',
+  'git.error.retry': 'Réessayer',
+  'git.error.title': 'Une erreur est survenue',
+
+  // ── État vide de Git ──
+  'git.empty.heading': "Pas encore d'historique de version",
+  'git.empty.optional': 'Git est facultatif — vous pouvez ignorer',
+  'git.empty.requireSavedFile': "Enregistrez d'abord le fichier .op pour activer l'historique",
+  'git.empty.newCard': 'Nouveau',
+  'git.empty.newCardDescription': 'Créer un historique local',
+  'git.empty.openCard': 'Ouvrir',
+  'git.empty.openCardDescription': 'Dépôt existant',
+  'git.empty.cloneCard': 'Cloner',
+  'git.empty.cloneCardDescription': 'Depuis un dépôt distant',
+
+  // ── Formulaire auteur Git ──
+  'git.author.heading': 'Auteur du commit',
+  'git.author.subheading': 'Le premier commit nécessite un nom et un email',
+  'git.author.nameLabel': 'Nom',
+  'git.author.namePlaceholder': 'Votre nom',
+  'git.author.emailLabel': 'Email',
+  'git.author.emailPlaceholder': 'vous@exemple.com',
+  'git.author.submit': 'Enregistrer',
+  'git.author.cancel': 'Annuler',
+  'git.author.validationName': 'Le nom est obligatoire',
+  'git.author.validationEmail': 'Un email valide est requis',
+
+  // ── Sélecteur Git (Phase 4b) ──
+  'git.picker.heading': '{{count}} fichiers .op dans ce dépôt :',
+  'git.picker.milestoneCount': '{{count}} jalons',
+  'git.picker.noHistory': 'Aucun historique',
+  'git.picker.lastCommit': '{{message}} · {{time}}',
+  'git.picker.bindButton': 'Suivre ce fichier',
+  'git.picker.bindAndOpenButton': 'Suivre et ouvrir',
+  // Phase 7b: back/cancel navigation
+  'git.picker.back': 'Retour',
+  'git.picker.backClose': 'Annuler',
+  'git.picker.empty.heading': 'Aucun fichier .op dans ce dépôt',
+  'git.picker.empty.body': "Le panneau Git a besoin d'au moins un fichier .op pour fonctionner.",
+  'git.picker.empty.close': 'Fermer le panneau',
+
+  // ── Bannière auto-liaison (Phase 4b) ──
+  'git.autoBind.confirmHeading': "{{fileName}} trouvé — l'ouvrir ?",
+  'git.autoBind.openButton': 'Ouvrir',
+  'git.autoBind.dismissButton': 'Ignorer',
+
+  // ── Temps relatif (Phase 4b) ──
+  'git.relativeTime.justNow': "à l'instant",
+  'git.relativeTime.minutesAgo': 'il y a {{count}}m',
+  'git.relativeTime.hoursAgo': 'il y a {{count}}h',
+  'git.relativeTime.daysAgo': 'il y a {{count}}j',
+
+  // ── Git Commit Input (Phase 4c) ──
+  'git.commit.placeholder': 'Décrire ce changement…',
+  'git.commit.submitButton': 'Enregistrer le jalon',
+  'git.commit.saveRequiredTitle': "Enregistrez d'abord le document",
+  'git.commit.saveRequiredBody':
+    'Vous avez des modifications non enregistrées. Enregistrez le document pour continuer : {{label}}',
+  'git.commit.saveRequiredSave': 'Enregistrer',
+  'git.commit.saveRequiredCancel': 'Annuler',
+
+  // ── Git Header (Phase 4c → 6c) ──
+  'git.header.autosaveError': "Erreur d'auto-sauvegarde",
+  'git.header.autosaveErrorTitle': 'La dernière auto-sauvegarde a échoué',
+  'git.header.authorMissingWarning': "Définissez l'auteur du commit pour l'attribution",
+  'git.header.overflowSwitchTracked': 'Changer de fichier suivi…',
+  'git.header.overflowClearAuthor': "Effacer l'auteur du commit",
+  'git.header.overflowCloseRepo': 'Fermer le dépôt',
+  'git.header.overflowRemoteSettings': 'Paramètres du remote…',
+  'git.header.overflowSshKeys': 'Clés SSH…',
+  'git.header.overflowMoreActions': "Plus d'actions",
+
+  // ── Git History List (Phase 4c) ──
+  'git.history.empty': 'Aucun historique',
+  'git.history.autosaveGroup_one': '1 auto-sauvegarde',
+  'git.history.autosaveGroup_other': '{{count}} auto-sauvegardes',
+  'git.history.autosaveLabel': 'auto {{time}}',
+  'git.history.milestoneDetailTitle': 'Détails du jalon',
+  'git.history.restoreButton': 'Restaurer',
+  'git.history.copyHashButton': 'Copier le hash',
+  'git.history.copiedToast': 'Copié',
+  // Phase 7b: inline diff block
+  'git.history.diff.loading': 'Chargement du diff…',
+  'git.history.diff.initialCommit': 'Commit initial — pas de parent à comparer',
+  'git.history.diff.noChanges': 'Aucun changement détecté',
+  'git.history.diff.error': 'Diff indisponible : {{message}}',
+  'git.history.diff.framesChanged_one': '1 cadre modifié',
+  'git.history.diff.framesChanged_other': '{{count}} cadres modifiés',
+  'git.history.diff.nodesAdded_one': '1 nœud ajouté',
+  'git.history.diff.nodesAdded_other': '{{count}} nœuds ajoutés',
+  'git.history.diff.nodesRemoved_one': '1 nœud supprimé',
+  'git.history.diff.nodesRemoved_other': '{{count}} nœuds supprimés',
+  'git.history.diff.nodesModified_one': '1 nœud modifié',
+  'git.history.diff.nodesModified_other': '{{count}} nœuds modifiés',
+  'git.history.promoteButton': 'Promouvoir en jalon',
+  'git.history.promoteSuccessToast': 'Promu en jalon',
+  'git.history.loadMore': 'Charger plus',
+  'git.autosave.messagePrefix': 'auto',
+  'git.autosave.messageDiffSuffix': '',
+
+  // ── Git Sélecteur de branche (Phase 5) ──
+  'git.branch.listHeading': 'Branches',
+  'git.branch.createAction': 'Nouvelle branche',
+  'git.branch.createPlaceholder': 'feature/login-redesign',
+  'git.branch.createSubmit': 'Créer la branche',
+  'git.branch.createEmpty': 'Saisissez un nom de branche',
+  'git.branch.createExists': 'La branche {{name}} existe déjà',
+  'git.branch.mergeAction': 'Fusionner une branche…',
+  'git.branch.mergeHeading': 'Fusionner dans {{name}}',
+  'git.branch.deletePrompt': 'Supprimer la branche {{name}} ?',
+  'git.branch.deleteLabel': 'Supprimer la branche {{name}}',
+  'git.branch.deleteWarning': 'La branche {{name}} a des commits non fusionnés',
+  'git.branch.deleteConfirm': 'Supprimer',
+  'git.branch.deleteForce': 'Forcer la suppression',
+  'git.branch.cancel': 'Annuler',
+  'git.branch.conflictDisabled': 'Terminez la fusion avant de changer de branche',
+  'git.branch.noCommits': 'Aucun commit pour le moment',
+
+  // ── Git Clone Wizard (Phase 6a) ──
+  'git.wizard.clone.heading': 'Cloner un dépôt distant',
+  'git.wizard.clone.subheading': 'Choisissez une URL distante et un dossier de destination.',
+  'git.wizard.clone.urlLabel': 'URL distante',
+  'git.wizard.clone.urlPlaceholder': 'https://github.com/owner/repo.git',
+  'git.wizard.clone.destLabel': 'Dossier de destination',
+  'git.wizard.clone.destPlaceholder': '/chemin/du/clone',
+  'git.wizard.clone.destPickButton': 'Parcourir…',
+  'git.wizard.clone.usernameLabel': "Nom d'utilisateur (optionnel)",
+  'git.wizard.clone.tokenLabel': "Jeton d'accès (optionnel)",
+  'git.wizard.clone.tokenPlaceholder': 'ghp_… laisser vide pour les dépôts publics',
+  'git.wizard.clone.anonymousHint':
+    'Laissez vide pour cloner anonymement (dépôts publics uniquement).',
+  'git.wizard.clone.sshHint': 'Cette URL nécessite une authentification par clé SSH.',
+  'git.wizard.clone.hostDetected': 'Détecté : {{host}} · {{mode}}',
+  'git.wizard.clone.authMode.token-or-anon': 'jeton ou anonyme',
+  'git.wizard.clone.authMode.ssh': 'clé SSH',
+  'git.wizard.clone.cancel': 'Annuler',
+  'git.wizard.clone.submit': 'Cloner',
+  'git.wizard.clone.validationUrl': "L'URL distante est requise",
+  'git.wizard.clone.validationDest': 'Le dossier de destination est requis',
+  'git.wizard.clone.validationTokenUsername':
+    "Un nom d'utilisateur est requis lorsqu'un jeton est fourni",
+  'git.wizard.clone.error.clone-network':
+    'Erreur réseau lors du clonage. Vérifiez votre connexion et réessayez.',
+  'git.wizard.clone.error.network': 'Erreur réseau. Vérifiez votre connexion et réessayez.',
+  'git.wizard.clone.error.timeout':
+    'Le clonage a expiré. Réessayez ou utilisez un dépôt plus petit.',
+  'git.wizard.clone.error.auth-required': 'Ce dépôt nécessite une authentification.',
+  'git.wizard.clone.error.auth-failed':
+    "Échec de l'authentification. Vérifiez votre nom d'utilisateur et votre jeton.",
+  'git.wizard.clone.error.auth-token-invalid':
+    "Le jeton d'accès a été refusé. Générez-en un nouveau et réessayez.",
+  'git.wizard.clone.error.clone-failed':
+    "Échec du clonage. Vérifiez que l'URL pointe vers un dépôt réel.",
+  'git.wizard.clone.error.clone-target-exists':
+    "Le dossier de destination existe déjà ou n'est pas vide.",
+
+  // ── Git Pull / Push (Phase 6b) ──
+  'git.pull.label': 'Pull',
+  'git.pull.tooltip': 'Pull depuis origin',
+  'git.pull.noRemote': 'Aucun remote configuré — ajoutez-en un dans les paramètres Git',
+  'git.pull.retry': 'Réessayer le pull',
+  'git.push.label': 'Push',
+  'git.push.tooltip_one': 'Pousser 1 commit vers origin',
+  'git.push.tooltip_other': 'Pousser {{count}} commits vers origin',
+  'git.push.noRemote': 'Aucun remote configuré — ajoutez-en un dans les paramètres Git',
+  'git.push.upToDate': 'Rien à pousser — vous êtes à jour',
+  'git.push.retry': 'Réessayer le push',
+  'git.push.rejectedBody':
+    "Le remote a des commits que vous n'avez pas encore. Faites un pull d'abord, puis un push.",
+  'git.push.rejectedDismiss': 'Fermer',
+  'git.push.rejectedPull': 'Pull maintenant',
+  'git.remote.dismissError': 'Fermer',
+
+  // ── Git Paramètres du remote (Phase 6c) ──
+  'git.remote.settingsLabel': 'Paramètres du remote',
+  'git.remote.settingsHeading': 'Remote',
+  'git.remote.back': 'Retour',
+  'git.remote.cancel': 'Annuler',
+  'git.remote.emptyNoOrigin': "Aucun remote configuré pour l'instant. En ajouter un :",
+  'git.remote.urlLabel': 'URL origin',
+  'git.remote.urlPlaceholder': 'https://github.com/owner/repo.git',
+  'git.remote.saveButton': 'Enregistrer',
+  'git.remote.clearButton': 'Effacer',
+  'git.remote.clearConfirmHeading': 'Effacer origin ?',
+  'git.remote.clearConfirmBody': 'Cela supprimera le remote origin de ce dépôt.',
+  'git.remote.clearConfirmAction': 'Confirmer',
+  'git.remote.aheadBehind': '{{ahead}} en avance · {{behind}} en retard',
+  'git.remote.fetchButton': 'Fetch',
+  'git.remote.sshIsoUnsupported':
+    "Le transport SSH n'est pas pris en charge par le moteur intégré. Installez git système ou passez à une URL HTTPS.",
+  'git.remote.storedAuthLabel': 'Identifiants enregistrés',
+  'git.remote.storedAuth.token': 'Jeton',
+  'git.remote.storedAuth.ssh': 'Clé SSH',
+  'git.remote.storedAuth.none': 'Aucun',
+  'git.remote.storedAuth.loading': 'Chargement…',
+  'git.remote.storedAuth.noHost': 'Aucun hôte détecté',
+  'git.remote.clearAuthButton': 'Effacer les identifiants enregistrés',
+
+  // ── Git Clés SSH (Phase 6c) ──
+  'git.ssh.label': 'Clés SSH',
+  'git.ssh.heading': 'Clés SSH',
+  'git.ssh.back': 'Retour',
+  'git.ssh.cancel': 'Annuler',
+  'git.ssh.isoUnsupported':
+    "Le remote actuel utilise SSH, mais le moteur intégré ne peut pas effectuer de transport SSH. Installez git système ou passez l'URL du remote en HTTPS.",
+  'git.ssh.emptyList': 'Aucune clé SSH pour le moment.',
+  'git.ssh.generateAction': 'Générer une nouvelle',
+  'git.ssh.importAction': 'Importer une existante',
+  'git.ssh.copyPublicKey': 'Copier la clé publique',
+  'git.ssh.copiedHint': 'Copiée',
+  'git.ssh.copyUnsupported': 'Presse-papiers indisponible — copiez cette clé manuellement.',
+  'git.ssh.deleteKey': 'Supprimer {{name}}',
+  'git.ssh.deletePrompt': 'Supprimer la clé SSH {{name}} ?',
+  'git.ssh.deleteConfirm': 'Supprimer',
+  'git.ssh.currentHostBadge': 'hôte actuel',
+  'git.ssh.hostLabel': 'Hôte',
+  'git.ssh.hostPlaceholder': 'github.com',
+  'git.ssh.commentLabel': 'Commentaire',
+  'git.ssh.commentPlaceholder': 'laptop@home',
+  'git.ssh.generateSubmit': 'Générer',
+  'git.ssh.importPathLabel': 'Chemin de la clé privée',
+  'git.ssh.importPathPlaceholder': '/path/to/id_ed25519',
+  'git.ssh.importBrowse': 'Parcourir…',
+  'git.ssh.importSubmit': 'Importer',
+  'git.ssh.validationHost': "L'hôte est obligatoire",
+  'git.ssh.validationComment': 'Le commentaire est obligatoire',
+  'git.ssh.validationImportPath': 'Choisissez un fichier de clé privée à importer',
+  'git.ssh.providerLink': 'Ouvrir les paramètres de clés SSH {{host}}',
+  'git.ssh.genericGuidance':
+    'Copiez la clé publique et ajoutez-la aux paramètres de clés SSH de votre fournisseur Git.',
+
+  // ── Git Formulaire d'authentification (Phase 6b) ──
+  'git.auth.formLabel': 'Identifiants Git',
+  'git.auth.heading': "S'authentifier auprès de {{host}}",
+  'git.auth.headingUnknown': "S'authentifier auprès de ce remote",
+  'git.auth.modeToggleLabel': "Type d'identifiant",
+  'git.auth.modeToken': 'Jeton',
+  'git.auth.modeSsh': 'SSH',
+  'git.auth.usernameLabel': "Nom d'utilisateur (optionnel)",
+  'git.auth.tokenLabel': "Jeton d'accès",
+  'git.auth.tokenPlaceholder': 'ghp_… ou PAT',
+  'git.auth.sshKeyLabel': 'Clé SSH',
+  'git.auth.sshNoKeys':
+    "Aucune clé SSH disponible. Importez-en ou générez-en une d'abord dans les paramètres Git.",
+  'git.auth.rememberLabel': 'Mémoriser ces identifiants pour cet hôte',
+  'git.auth.rememberHint': 'Mémoriser ces identifiants pour cet hôte',
+  'git.auth.cancel': 'Annuler',
+  'git.auth.validationToken': "Le jeton d'accès est requis",
+  'git.auth.validationSshKey': 'Sélectionnez une clé SSH',
+  'git.auth.error.auth-required': 'Ce remote nécessite une authentification.',
+  'git.auth.error.auth-failed':
+    "Échec de l'authentification. Vérifiez vos identifiants et réessayez.",
+  'git.auth.error.auth-token-invalid':
+    "Le jeton d'accès a été rejeté. Générez-en un nouveau et réessayez.",
   // ── Right Panel ──
   'rightPanel.design': 'Design',
   'rightPanel.code': 'Code',
@@ -74,6 +386,8 @@ const fr: TranslationKeys = {
   'statusbar.zoomOut': 'Dézoomer',
   'statusbar.zoomIn': 'Zoomer',
   'statusbar.resetZoom': 'Réinitialiser le zoom',
+  'statusbar.focusContent': 'Ajuster tout le contenu',
+  'statusbar.focusSelection': 'Centrer la sélection',
 
   // ── Updater ──
   'updater.softwareUpdate': 'Mise à jour logicielle',
@@ -100,12 +414,10 @@ const fr: TranslationKeys = {
   'updater.subtitle.availableGeneric': 'Une nouvelle version est disponible.',
   'updater.subtitle.downloading':
     'La version {{version}} est en cours de téléchargement en arrière-plan.',
-  'updater.subtitle.downloadingGeneric':
-    'Téléchargement du paquet de mise à jour en arrière-plan.',
+  'updater.subtitle.downloadingGeneric': 'Téléchargement du paquet de mise à jour en arrière-plan.',
   'updater.subtitle.downloaded': 'La version {{version}} a été téléchargée.',
   'updater.subtitle.downloadedGeneric': 'La mise à jour a été téléchargée.',
-  'updater.subtitle.error':
-    'Impossible de vérifier ou de télécharger la mise à jour.',
+  'updater.subtitle.error': 'Impossible de vérifier ou de télécharger la mise à jour.',
 
   // ── Layers ──
   'layers.title': 'Calques',
@@ -219,14 +531,11 @@ const fr: TranslationKeys = {
   'textLayout.dimensions': 'Dimensions',
   'textLayout.resizing': 'Redimensionnement',
   'textLayout.autoWidth': 'Auto W',
-  'textLayout.autoWidthDesc':
-    'Largeur automatique — le texte s\u2019étend horizontalement',
+  'textLayout.autoWidthDesc': 'Largeur automatique — le texte s\u2019étend horizontalement',
   'textLayout.autoHeight': 'Auto H',
-  'textLayout.autoHeightDesc':
-    'Hauteur automatique — largeur fixe, hauteur auto-ajustée',
+  'textLayout.autoHeightDesc': 'Hauteur automatique — largeur fixe, hauteur auto-ajustée',
   'textLayout.fixed': 'Fixe',
-  'textLayout.fixedDesc':
-    'Taille fixe — la largeur et la hauteur sont fixes',
+  'textLayout.fixedDesc': 'Taille fixe — la largeur et la hauteur sont fixes',
   'textLayout.fillWidth': 'Remplir la largeur',
   'textLayout.fillHeight': 'Remplir la hauteur',
 
@@ -244,6 +553,7 @@ const fr: TranslationKeys = {
   'export.selectedOnly': 'Exporter la sélection uniquement',
   'export.exportFormat': 'Exporter en {{format}}',
   'export.exportLayer': 'Exporter le calque',
+  'export.pdfMultiPage': 'Le PDF inclura les {{count}} pages.',
 
   // ── Polygon ──
   'polygon.sides': 'Côtés',
@@ -323,16 +633,42 @@ const fr: TranslationKeys = {
   'ai.quickAction.loginScreen': 'Concevoir un écran de connexion mobile',
   'ai.quickAction.loginScreenPrompt':
     'Concevez un écran de connexion mobile moderne avec un champ e-mail, un champ mot de passe, un bouton de connexion et des options de connexion sociale',
-  'ai.quickAction.foodApp': 'Page d\'accueil appli cuisine',
-  'ai.quickAction.foodAppPrompt':
-    'Generate a well-designed food mobile app homepage',
+  'ai.quickAction.foodApp': "Page d'accueil appli cuisine",
+  'ai.quickAction.foodAppPrompt': 'Generate a well-designed food mobile app homepage',
   'ai.quickAction.bottomNav': 'Concevoir une barre de navigation inférieure',
   'ai.quickAction.bottomNavPrompt':
     'Concevez une barre de navigation inférieure pour application mobile avec 5 onglets : Accueil, Recherche, Ajouter, Messages, Profil',
-  'ai.quickAction.colorPalette':
-    'Suggérer une palette de couleurs pour mon application',
+  'ai.quickAction.colorPalette': 'Suggérer une palette de couleurs pour mon application',
   'ai.quickAction.colorPalettePrompt':
     'Suggérez une palette de couleurs moderne pour une application de soins pour animaux',
+  'ai.startDesigning': 'Start designing with AI',
+  'ai.maximize': 'Maximize',
+  'ai.restore': 'Restore',
+  'ai.quickAction.loginScreenDesc': 'Mobile login with social auth',
+  'ai.quickAction.foodAppDesc': 'App homepage design',
+  'ai.quickAction.bottomNavDesc': '5-tab navigation bar',
+  'ai.quickAction.colorPaletteDesc': 'Color palette recommendation',
+
+  // ── File Menu ──
+  'fileMenu.newFile': 'New file',
+  'fileMenu.openFile': 'Open file...',
+  'fileMenu.save': 'Save',
+  'fileMenu.saveAs': 'Save as...',
+  'fileMenu.exportImage': "Exporter l'image...",
+  'fileMenu.recentFiles': 'Recent files',
+  'fileMenu.clearHistory': 'Clear history',
+  'fileMenu.noRecentFiles': 'No recent files',
+  'fileMenu.saved': 'Saved',
+  'fileMenu.justNow': 'just now',
+  'fileMenu.minutesAgo': '{{count}}m ago',
+  'fileMenu.hoursAgo': '{{count}}h ago',
+  'fileMenu.yesterday': 'yesterday',
+  'fileMenu.daysAgo': '{{count}}d ago',
+
+  // ── Unsaved Changes ──
+  'unsaved.title': 'Unsaved changes',
+  'unsaved.message': 'Save changes to "{{name}}"?',
+  'unsaved.dontSave': "Don't Save",
 
   // ── Code Panel ──
   'code.reactTailwind': 'React + Tailwind',
@@ -342,10 +678,8 @@ const fr: TranslationKeys = {
   'code.copied': 'Copié !',
   'code.download': 'Télécharger le fichier de code',
   'code.closeCodePanel': 'Fermer le panneau de code',
-  'code.genCssVars':
-    'Génération des variables CSS pour l\u2019ensemble du document',
-  'code.genSelected':
-    'Génération du code pour {{count}} élément(s) sélectionné(s)',
+  'code.genCssVars': 'Génération des variables CSS pour l\u2019ensemble du document',
+  'code.genSelected': 'Génération du code pour {{count}} élément(s) sélectionné(s)',
   'code.genDocument': 'Génération du code pour l\u2019ensemble du document',
   'code.aiEnhance': 'Améliorer par IA',
   'code.cancelEnhance': 'Annuler l\u2019amélioration',
@@ -363,10 +697,9 @@ const fr: TranslationKeys = {
   'agents.mcpIntegrations': 'Intégrations MCP dans le terminal',
   'agents.transport': 'Transport',
   'agents.port': 'Port',
-  'agents.mcpRestart':
-    'Les intégrations MCP prendront effet après le redémarrage du terminal.',
+  'agents.mcpRestart': 'Les intégrations MCP prendront effet après le redémarrage du terminal.',
   'agents.mcpReinstallHint':
-    'Après la mise à jour d\'OpenPencil, veuillez réinstaller les intégrations MCP pour assurer la compatibilité.',
+    "Après la mise à jour d'OpenPencil, veuillez réinstaller les intégrations MCP pour assurer la compatibilité.",
   'agents.modelCount': '{{count}} modèle(s)',
   'agents.connectionFailed': 'Échec de la connexion',
   'agents.serverError': 'Erreur serveur {{status}}',
@@ -406,15 +739,17 @@ const fr: TranslationKeys = {
   'settings.images': 'Images',
   'settings.system': 'Système',
   'settings.autoUpdateDesc': 'Vérifier automatiquement les nouvelles versions au démarrage',
-  'settings.systemDesktopOnly': 'Les paramètres système sont disponibles dans l\'application de bureau.',
-  'settings.envHint': 'Vous pouvez définir des variables d\'environnement supplémentaires dans {{path}}.',
+  'settings.systemDesktopOnly':
+    "Les paramètres système sont disponibles dans l'application de bureau.",
+  'settings.envHint':
+    "Vous pouvez définir des variables d'environnement supplémentaires dans {{path}}.",
 
   // ── Builtin Providers ──
   'builtin.title': 'Fournisseurs intégrés',
   'builtin.description': 'Configurez les clés API directement — aucun outil CLI requis.',
   'builtin.addProvider': 'Ajouter un fournisseur',
   'builtin.empty': 'Aucun fournisseur intégré configuré.',
-  'builtin.displayName': 'Nom d\'affichage',
+  'builtin.displayName': "Nom d'affichage",
   'builtin.displayNamePlaceholder': 'ex. Ma clé Anthropic',
   'builtin.provider': 'Fournisseur',
   'builtin.region': 'Région',
@@ -435,11 +770,14 @@ const fr: TranslationKeys = {
   'builtin.custom': 'Personnalisé',
   'builtin.apiKeyBadge': 'API Key',
   'builtin.viaApiKey': 'via API Key {{name}}',
-  'builtin.errorProviderNotFound': 'Fournisseur intégré introuvable. Veuillez vérifier vos paramètres.',
-  'builtin.errorApiKeyEmpty': 'La clé API est vide. Veuillez ajouter votre clé API dans les paramètres.',
+  'builtin.errorProviderNotFound':
+    'Fournisseur intégré introuvable. Veuillez vérifier vos paramètres.',
+  'builtin.errorApiKeyEmpty':
+    'La clé API est vide. Veuillez ajouter votre clé API dans les paramètres.',
   'builtin.parallelAgents': 'Sous-agents parallèles : {{count}}x (cliquez pour changer)',
   'builtin.baseUrlPlaceholder': 'https://api.example.com/v1',
-  'builtin.teamDescription': 'Sélectionnez un modèle pour la génération de design. Une fois défini, les tâches de design sont automatiquement déléguées à un agent spécialisé utilisant ce modèle.',
+  'builtin.teamDescription':
+    'Sélectionnez un modèle pour la génération de design. Une fois défini, les tâches de design sont automatiquement déléguées à un agent spécialisé utilisant ce modèle.',
   'builtin.teamDesignModel': 'Modèle de design',
   'builtin.teamSelectModel': 'Aucun (agent unique)',
 
@@ -447,16 +785,14 @@ const fr: TranslationKeys = {
   'figma.title': 'Importer depuis Figma',
   'figma.dropFile': 'Déposez un fichier .fig ici',
   'figma.orBrowse': 'ou cliquez pour parcourir',
-  'figma.exportTip':
-    'Exporter depuis Figma : Fichier \u2192 Enregistrer une copie locale (.fig)',
+  'figma.exportTip': 'Exporter depuis Figma : Fichier \u2192 Enregistrer une copie locale (.fig)',
   'figma.selectFigFile': 'Veuillez sélectionner un fichier .fig',
   'figma.noPages': 'Aucune page trouvée dans le fichier .fig',
   'figma.parseFailed': 'Échec de l\u2019analyse du fichier .fig',
   'figma.convertFailed': 'Échec de la conversion du fichier Figma',
   'figma.parsing': 'Analyse du fichier .fig...',
   'figma.converting': 'Conversion des nœuds...',
-  'figma.selectPage':
-    'Ce fichier contient {{count}} pages. Sélectionnez celles à importer :',
+  'figma.selectPage': 'Ce fichier contient {{count}} pages. Sélectionnez celles à importer :',
   'figma.layers': '{{count}} calques',
   'figma.importAll': 'Importer toutes les pages',
   'figma.importComplete': 'Importation terminée !',
@@ -470,11 +806,9 @@ const fr: TranslationKeys = {
   // ── Landing Page ──
   'landing.open': 'Open',
   'landing.pencil': 'Pencil',
-  'landing.tagline':
-    'Outil de design vectoriel open source. Design as Code.',
+  'landing.tagline': 'Outil de design vectoriel open source. Design as Code.',
   'landing.newDesign': 'Nouveau design',
-  'landing.shortcutHint':
-    'Appuyez sur {{key1}} + {{key2}} pour créer un nouveau design',
+  'landing.shortcutHint': 'Appuyez sur {{key1}} + {{key2}} pour créer un nouveau design',
 
   // ── 404 ──
   'notFound.message': 'Page introuvable',
@@ -504,6 +838,6 @@ const fr: TranslationKeys = {
   'variablePicker.bindToVariable': 'Lier à une variable',
   'variablePicker.unbind': 'Délier la variable',
   'variablePicker.noVariables': 'Aucune variable {{type}} définie',
-} as const
+} as const;
 
-export default fr
+export default fr;

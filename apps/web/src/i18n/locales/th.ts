@@ -1,4 +1,4 @@
-import type { TranslationKeys } from './en'
+import type { TranslationKeys } from './en';
 
 const th: TranslationKeys = {
   // ── Common ──
@@ -10,6 +10,8 @@ const th: TranslationKeys = {
   'common.close': 'ปิด',
   'common.connect': 'เชื่อมต่อ',
   'common.disconnect': 'ตัดการเชื่อมต่อ',
+  'common.yes': 'ใช่',
+  'common.no': 'ไม่',
   'common.import': 'นำเข้า',
   'common.export': 'ส่งออก',
   'common.name': 'ชื่อ',
@@ -59,6 +61,299 @@ const th: TranslationKeys = {
   'topbar.connected': 'เชื่อมต่อแล้ว',
   'topbar.agentStatus': '{{agents}} เอเจนต์{{agentSuffix}} · {{mcp}} MCP',
 
+  // ── พาเนล Git ──
+  'git.openPanel': 'เปิดพาเนล Git',
+  'git.closePanel': 'ปิดพาเนล Git',
+  'git.title': 'Git · {{fileName}}',
+  'git.titleNoFile': 'Git · (ไม่ได้เลือกไฟล์)',
+  'git.close': 'ปิด',
+  'git.initializing': 'กำลังเริ่มต้นที่เก็บ…',
+  'git.conflict.title': 'ความขัดแย้งในการรวม',
+  'git.conflict.description': 'แก้ไขแต่ละความขัดแย้งโดยใช้การ์ดด้านล่าง จากนั้นใช้การรวม',
+  'git.conflict.abort': 'ยกเลิกการรวม',
+  'git.conflict.nonOp.title': 'การรวมหยุดชั่วคราวที่ไฟล์ที่ไม่ใช่ .op',
+  'git.conflict.nonOp.description':
+    'การรวมไฟล์ .op เสร็จแล้ว แต่ไฟล์อื่นในที่เก็บยังไม่ได้แก้ไข แก้ไขนอก OpenPencil แล้วดำเนินการต่อ',
+  'git.conflict.nonOp.unresolvedHeading_one': 'ต้องการการแก้ไข 1 ไฟล์',
+  'git.conflict.nonOp.unresolvedHeading_other': 'ต้องการการแก้ไข {{count}} ไฟล์',
+  'git.conflict.nonOp.continue': 'ดำเนินการรวมต่อ',
+  'git.conflict.nonOp.abort': 'ยกเลิกการรวม',
+  // ── Git ความขัดแย้ง — แบนเนอร์ (Phase 7b) ──
+  'git.conflict.banner.progress': 'แก้ไขแล้ว {{resolved}} / {{total}}',
+  'git.conflict.banner.apply': 'ใช้การรวม',
+  'git.conflict.banner.continue': 'ดำเนินการต่อ',
+  'git.conflict.banner.finalizeError': 'ไม่สามารถใช้ได้: {{message}}',
+  'git.conflict.banner.pollError': 'การตรวจสอบสถานะหยุดชั่วคราวเนื่องจากข้อผิดพลาด: {{message}}',
+  // placeholder — future localization
+  'git.conflict.banner.reopenMessage': 'แผงถูกเปิดอีกครั้งระหว่างการรวม — โปรดยกเลิกและดึงข้อมูลใหม่',
+
+  // ── Git ความขัดแย้ง — รายการ (Phase 7c) ──
+  'git.conflict.list.heading': 'ความขัดแย้งทั้งหมด',
+  'git.conflict.list.progress': '{{resolved}} / {{total}} แก้ไขแล้ว',
+  'git.conflict.list.allResolved': 'แก้ไขทั้งหมดแล้ว',
+  'git.conflict.list.allOurs': 'ใช้ของฉันทั้งหมด',
+  'git.conflict.list.allTheirs': 'ใช้ของพวกเขาทั้งหมด',
+
+  // ── Git ความขัดแย้ง — รายการ (Phase 7c) ──
+  'git.conflict.item.nodeConflict': 'ความขัดแย้งของ node',
+  'git.conflict.item.fieldConflict': 'ความขัดแย้งของ field',
+  'git.conflict.item.resolved': 'แก้ไขแล้ว',
+
+  // ── Git ความขัดแย้ง — การ์ด (Phase 7c) ──
+  'git.conflict.card.ours': 'ของฉัน',
+  'git.conflict.card.theirs': 'ของพวกเขา',
+  'git.conflict.card.base': 'ฐาน',
+  'git.conflict.card.keepMine': 'เก็บของฉัน',
+  'git.conflict.card.keepTheirs': 'เก็บของพวกเขา',
+  'git.conflict.card.oursThumbnailAlt': 'เวอร์ชันของฉัน',
+  'git.conflict.card.theirsThumbnailAlt': 'เวอร์ชันของพวกเขา',
+
+  // ── Git ความขัดแย้ง — ตัวแก้ไข JSON (Phase 7c) ──
+  'git.conflict.editor.editManually': 'แก้ไขด้วยตนเอง',
+  'git.conflict.editor.cancel': 'ยกเลิก',
+  'git.conflict.editor.apply': 'ใช้',
+  'git.conflict.editor.invalidJson': 'JSON ไม่ถูกต้อง',
+  'git.conflict.editor.textareaLabel': 'แก้ไขค่า JSON',
+
+  'git.error.dismiss': 'ปิด',
+  'git.error.retry': 'ลองอีกครั้ง',
+  'git.error.title': 'เกิดข้อผิดพลาด',
+
+  // ── สถานะว่างของ Git ──
+  'git.empty.heading': 'ยังไม่มีประวัติเวอร์ชัน',
+  'git.empty.optional': 'Git เป็นทางเลือก — ข้ามได้',
+  'git.empty.requireSavedFile': 'บันทึกไฟล์ .op ก่อนเพื่อเปิดใช้งานประวัติ',
+  'git.empty.newCard': 'สร้างใหม่',
+  'git.empty.newCardDescription': 'สร้างประวัติในเครื่อง',
+  'git.empty.openCard': 'เปิด',
+  'git.empty.openCardDescription': 'ที่เก็บที่มีอยู่',
+  'git.empty.cloneCard': 'โคลน',
+  'git.empty.cloneCardDescription': 'จากระยะไกล',
+
+  // ── ฟอร์มผู้เขียน Git ──
+  'git.author.heading': 'ผู้เขียน commit',
+  'git.author.subheading': 'การบันทึก commit แรกต้องการชื่อและอีเมล',
+  'git.author.nameLabel': 'ชื่อ',
+  'git.author.namePlaceholder': 'ชื่อของคุณ',
+  'git.author.emailLabel': 'อีเมล',
+  'git.author.emailPlaceholder': 'you@example.com',
+  'git.author.submit': 'บันทึก',
+  'git.author.cancel': 'ยกเลิก',
+  'git.author.validationName': 'จำเป็นต้องมีชื่อ',
+  'git.author.validationEmail': 'ต้องการอีเมลที่ถูกต้อง',
+
+  // ── ตัวเลือก Git (Phase 4b) ──
+  'git.picker.heading': 'มี {{count}} ไฟล์ .op ในที่เก็บนี้:',
+  'git.picker.milestoneCount': '{{count}} ไมล์สโตน',
+  'git.picker.noHistory': 'ไม่มีประวัติ',
+  'git.picker.lastCommit': '{{message}} · {{time}}',
+  'git.picker.bindButton': 'ติดตามไฟล์นี้',
+  'git.picker.bindAndOpenButton': 'ติดตามและเปิด',
+  'git.picker.back': 'กลับ',
+  'git.picker.backClose': 'ยกเลิก',
+  'git.picker.empty.heading': 'ไม่มีไฟล์ .op ในที่เก็บนี้',
+  'git.picker.empty.body': 'แผง Git ต้องการไฟล์ .op อย่างน้อยหนึ่งไฟล์',
+  'git.picker.empty.close': 'ปิดแผง',
+
+  // ── แบนเนอร์ Auto-Bind (Phase 4b) ──
+  'git.autoBind.confirmHeading': 'พบ {{fileName}} — เปิดหรือไม่?',
+  'git.autoBind.openButton': 'เปิด',
+  'git.autoBind.dismissButton': 'ข้าม',
+
+  // ── เวลาสัมพัทธ์ (Phase 4b) ──
+  'git.relativeTime.justNow': 'เพิ่งนี้',
+  'git.relativeTime.minutesAgo': '{{count}} นาทีที่แล้ว',
+  'git.relativeTime.hoursAgo': '{{count}} ชั่วโมงที่แล้ว',
+  'git.relativeTime.daysAgo': '{{count}} วันที่แล้ว',
+
+  // ── Git Commit Input (Phase 4c) ──
+  'git.commit.placeholder': 'อธิบายการเปลี่ยนแปลงนี้…',
+  'git.commit.submitButton': 'บันทึก milestone',
+  'git.commit.saveRequiredTitle': 'บันทึกเอกสารก่อน',
+  'git.commit.saveRequiredBody': 'คุณมีการเปลี่ยนแปลงที่ยังไม่ได้บันทึก บันทึกเอกสารเพื่อดำเนินการต่อ: {{label}}',
+  'git.commit.saveRequiredSave': 'บันทึก',
+  'git.commit.saveRequiredCancel': 'ยกเลิก',
+
+  // ── Git Header (Phase 4c → 6c) ──
+  'git.header.autosaveError': 'ข้อผิดพลาดการบันทึกอัตโนมัติ',
+  'git.header.autosaveErrorTitle': 'การบันทึกอัตโนมัติล่าสุดล้มเหลว',
+  'git.header.authorMissingWarning': 'ตั้งค่าผู้เขียน commit เพื่อบันทึกการอ้างอิง',
+  'git.header.overflowSwitchTracked': 'สลับไฟล์ที่ติดตาม…',
+  'git.header.overflowClearAuthor': 'ล้างผู้เขียน commit',
+  'git.header.overflowCloseRepo': 'ปิดที่เก็บ',
+  'git.header.overflowRemoteSettings': 'การตั้งค่ารีโมต…',
+  'git.header.overflowSshKeys': 'คีย์ SSH…',
+  'git.header.overflowMoreActions': 'การดำเนินการเพิ่มเติม',
+
+  // ── Git History List (Phase 4c) ──
+  'git.history.empty': 'ไม่มีประวัติ',
+  'git.history.autosaveGroup_one': 'บันทึกอัตโนมัติ 1 รายการ',
+  'git.history.autosaveGroup_other': 'บันทึกอัตโนมัติ {{count}} รายการ',
+  'git.history.autosaveLabel': 'auto {{time}}',
+  'git.history.milestoneDetailTitle': 'รายละเอียด milestone',
+  'git.history.restoreButton': 'คืนค่า',
+  'git.history.copyHashButton': 'คัดลอก hash',
+  'git.history.copiedToast': 'คัดลอกแล้ว',
+  // ── Git diff ประวัติ (Phase 7b) ──
+  'git.history.diff.loading': 'กำลังโหลด diff…',
+  'git.history.diff.initialCommit': 'commit แรก — ไม่มี parent ให้เปรียบเทียบ',
+  'git.history.diff.noChanges': 'ไม่พบการเปลี่ยนแปลง',
+  'git.history.diff.error': 'ไม่มี diff: {{message}}',
+  'git.history.diff.framesChanged_one': 'เปลี่ยน 1 เฟรม',
+  'git.history.diff.framesChanged_other': 'เปลี่ยน {{count}} เฟรม',
+  'git.history.diff.nodesAdded_one': 'เพิ่ม 1 โหนด',
+  'git.history.diff.nodesAdded_other': 'เพิ่ม {{count}} โหนด',
+  'git.history.diff.nodesRemoved_one': 'ลบ 1 โหนด',
+  'git.history.diff.nodesRemoved_other': 'ลบ {{count}} โหนด',
+  'git.history.diff.nodesModified_one': 'แก้ไข 1 โหนด',
+  'git.history.diff.nodesModified_other': 'แก้ไข {{count}} โหนด',
+  'git.history.promoteButton': 'เลื่อนเป็น milestone',
+  'git.history.promoteSuccessToast': 'เลื่อนเป็น milestone แล้ว',
+  'git.history.loadMore': 'โหลดเพิ่ม',
+  'git.autosave.messagePrefix': 'auto',
+  'git.autosave.messageDiffSuffix': '',
+
+  // ── Git ตัวเลือก Branch (Phase 5) ──
+  'git.branch.listHeading': 'Branches',
+  'git.branch.createAction': 'Branch ใหม่',
+  'git.branch.createPlaceholder': 'feature/login-redesign',
+  'git.branch.createSubmit': 'สร้าง branch',
+  'git.branch.createEmpty': 'กรอกชื่อ branch',
+  'git.branch.createExists': 'Branch {{name}} มีอยู่แล้ว',
+  'git.branch.mergeAction': 'รวม branch…',
+  'git.branch.mergeHeading': 'รวมเข้าสู่ {{name}}',
+  'git.branch.deletePrompt': 'ลบ branch {{name}}?',
+  'git.branch.deleteLabel': 'ลบ branch {{name}}',
+  'git.branch.deleteWarning': 'Branch {{name}} มี commit ที่ยังไม่ได้รวม',
+  'git.branch.deleteConfirm': 'ลบ',
+  'git.branch.deleteForce': 'บังคับลบ',
+  'git.branch.cancel': 'ยกเลิก',
+  'git.branch.conflictDisabled': 'ทำการรวมให้เสร็จก่อนสลับ branch',
+  'git.branch.noCommits': 'ยังไม่มี commit',
+
+  // ── Git Clone Wizard (Phase 6a) ──
+  'git.wizard.clone.heading': 'โคลน repository ระยะไกล',
+  'git.wizard.clone.subheading': 'เลือก URL ระยะไกลและโฟลเดอร์ปลายทาง',
+  'git.wizard.clone.urlLabel': 'URL ระยะไกล',
+  'git.wizard.clone.urlPlaceholder': 'https://github.com/owner/repo.git',
+  'git.wizard.clone.destLabel': 'โฟลเดอร์ปลายทาง',
+  'git.wizard.clone.destPlaceholder': '/path/to/clone',
+  'git.wizard.clone.destPickButton': 'เรียกดู…',
+  'git.wizard.clone.usernameLabel': 'ชื่อผู้ใช้ (ไม่บังคับ)',
+  'git.wizard.clone.tokenLabel': 'โทเคนเข้าถึง (ไม่บังคับ)',
+  'git.wizard.clone.tokenPlaceholder': 'ghp_… หรือเว้นว่างสำหรับ repo สาธารณะ',
+  'git.wizard.clone.anonymousHint': 'เว้นว่างเพื่อโคลนแบบไม่ระบุตัวตน (เฉพาะ repo สาธารณะ)',
+  'git.wizard.clone.sshHint': 'URL นี้ต้องใช้การยืนยันด้วยคีย์ SSH',
+  'git.wizard.clone.hostDetected': 'ตรวจพบ: {{host}} · {{mode}}',
+  'git.wizard.clone.authMode.token-or-anon': 'โทเคนหรือไม่ระบุตัวตน',
+  'git.wizard.clone.authMode.ssh': 'คีย์ SSH',
+  'git.wizard.clone.cancel': 'ยกเลิก',
+  'git.wizard.clone.submit': 'โคลน',
+  'git.wizard.clone.validationUrl': 'จำเป็นต้องระบุ URL ระยะไกล',
+  'git.wizard.clone.validationDest': 'จำเป็นต้องระบุโฟลเดอร์ปลายทาง',
+  'git.wizard.clone.validationTokenUsername': 'ต้องระบุชื่อผู้ใช้เมื่อใช้โทเคน',
+  'git.wizard.clone.error.clone-network': 'เกิดข้อผิดพลาดเครือข่ายขณะโคลน ตรวจสอบการเชื่อมต่อแล้วลองใหม่',
+  'git.wizard.clone.error.network': 'ข้อผิดพลาดเครือข่าย ตรวจสอบการเชื่อมต่อแล้วลองใหม่',
+  'git.wizard.clone.error.timeout': 'การโคลนหมดเวลา ลองใหม่หรือใช้ repository ที่เล็กกว่า',
+  'git.wizard.clone.error.auth-required': 'repository นี้ต้องการการยืนยันตัวตน',
+  'git.wizard.clone.error.auth-failed': 'การยืนยันตัวตนล้มเหลว ตรวจสอบชื่อผู้ใช้และโทเคน',
+  'git.wizard.clone.error.auth-token-invalid': 'โทเคนเข้าถึงถูกปฏิเสธ สร้างโทเคนใหม่แล้วลองอีกครั้ง',
+  'git.wizard.clone.error.clone-failed': 'การโคลนล้มเหลว ตรวจสอบว่า URL ชี้ไปยัง repository ที่มีอยู่จริง',
+  'git.wizard.clone.error.clone-target-exists': 'โฟลเดอร์ปลายทางมีอยู่แล้วหรือไม่ว่างเปล่า',
+
+  // ── Git Pull / Push (Phase 6b) ──
+  'git.pull.label': 'ดึง',
+  'git.pull.tooltip': 'ดึงจาก origin',
+  'git.pull.noRemote': 'ยังไม่ได้ตั้งค่ารีโมต — เพิ่มในการตั้งค่า Git',
+  'git.pull.retry': 'ลองดึงอีกครั้ง',
+  'git.push.label': 'พุช',
+  'git.push.tooltip_one': 'พุช 1 คอมมิตไปยัง origin',
+  'git.push.tooltip_other': 'พุช {{count}} คอมมิตไปยัง origin',
+  'git.push.noRemote': 'ยังไม่ได้ตั้งค่ารีโมต — เพิ่มในการตั้งค่า Git',
+  'git.push.upToDate': 'ไม่มีอะไรให้พุช — คุณอัปเดตแล้ว',
+  'git.push.retry': 'ลองพุชอีกครั้ง',
+  'git.push.rejectedBody': 'รีโมตมีคอมมิตที่คุณยังไม่มี ดึงก่อนแล้วลองพุชใหม่',
+  'git.push.rejectedDismiss': 'ปิด',
+  'git.push.rejectedPull': 'ดึงเลย',
+  'git.remote.dismissError': 'ปิด',
+
+  // ── Git การตั้งค่ารีโมต (Phase 6c) ──
+  'git.remote.settingsLabel': 'การตั้งค่ารีโมต',
+  'git.remote.settingsHeading': 'รีโมต',
+  'git.remote.back': 'กลับ',
+  'git.remote.cancel': 'ยกเลิก',
+  'git.remote.emptyNoOrigin': 'ยังไม่ได้ตั้งค่ารีโมต เพิ่มหนึ่งรายการ:',
+  'git.remote.urlLabel': 'URL ของ origin',
+  'git.remote.urlPlaceholder': 'https://github.com/owner/repo.git',
+  'git.remote.saveButton': 'บันทึก',
+  'git.remote.clearButton': 'ล้าง',
+  'git.remote.clearConfirmHeading': 'ล้าง origin?',
+  'git.remote.clearConfirmBody': 'การดำเนินการนี้จะลบรีโมต origin ออกจากที่เก็บนี้',
+  'git.remote.clearConfirmAction': 'ยืนยัน',
+  'git.remote.aheadBehind': 'นำหน้า {{ahead}} · ตามหลัง {{behind}}',
+  'git.remote.fetchButton': 'Fetch',
+  'git.remote.sshIsoUnsupported':
+    'เอนจินในตัวไม่รองรับการส่งผ่าน SSH ติดตั้ง git ระบบหรือเปลี่ยนเป็น URL รีโมต HTTPS',
+  'git.remote.storedAuthLabel': 'ข้อมูลรับรองที่บันทึกไว้',
+  'git.remote.storedAuth.token': 'โทเคน',
+  'git.remote.storedAuth.ssh': 'คีย์ SSH',
+  'git.remote.storedAuth.none': 'ไม่มี',
+  'git.remote.storedAuth.loading': 'กำลังโหลด…',
+  'git.remote.storedAuth.noHost': 'ไม่พบโฮสต์',
+  'git.remote.clearAuthButton': 'ล้างข้อมูลรับรองที่บันทึก',
+
+  // ── Git คีย์ SSH (Phase 6c) ──
+  'git.ssh.label': 'คีย์ SSH',
+  'git.ssh.heading': 'คีย์ SSH',
+  'git.ssh.back': 'กลับ',
+  'git.ssh.cancel': 'ยกเลิก',
+  'git.ssh.isoUnsupported':
+    'รีโมตปัจจุบันใช้ SSH แต่เอนจินในตัวไม่สามารถส่งผ่าน SSH ได้ ติดตั้ง git ระบบหรือเปลี่ยน URL รีโมตเป็น HTTPS',
+  'git.ssh.emptyList': 'ยังไม่มีคีย์ SSH',
+  'git.ssh.generateAction': 'สร้างใหม่',
+  'git.ssh.importAction': 'นำเข้าที่มีอยู่',
+  'git.ssh.copyPublicKey': 'คัดลอกคีย์สาธารณะ',
+  'git.ssh.copiedHint': 'คัดลอกแล้ว',
+  'git.ssh.copyUnsupported': 'ไม่สามารถใช้คลิปบอร์ดได้ — โปรดคัดลอกคีย์นี้ด้วยตนเอง',
+  'git.ssh.deleteKey': 'ลบ {{name}}',
+  'git.ssh.deletePrompt': 'ลบคีย์ SSH {{name}}?',
+  'git.ssh.deleteConfirm': 'ลบ',
+  'git.ssh.currentHostBadge': 'โฮสต์ปัจจุบัน',
+  'git.ssh.hostLabel': 'โฮสต์',
+  'git.ssh.hostPlaceholder': 'github.com',
+  'git.ssh.commentLabel': 'ความคิดเห็น',
+  'git.ssh.commentPlaceholder': 'laptop@home',
+  'git.ssh.generateSubmit': 'สร้าง',
+  'git.ssh.importPathLabel': 'พาธคีย์ส่วนตัว',
+  'git.ssh.importPathPlaceholder': '/path/to/id_ed25519',
+  'git.ssh.importBrowse': 'เรียกดู…',
+  'git.ssh.importSubmit': 'นำเข้า',
+  'git.ssh.validationHost': 'จำเป็นต้องระบุโฮสต์',
+  'git.ssh.validationComment': 'จำเป็นต้องระบุความคิดเห็น',
+  'git.ssh.validationImportPath': 'เลือกไฟล์คีย์ส่วนตัวเพื่อนำเข้า',
+  'git.ssh.providerLink': 'เปิดการตั้งค่าคีย์ SSH ของ {{host}}',
+  'git.ssh.genericGuidance': 'คัดลอกคีย์สาธารณะและเพิ่มลงในการตั้งค่าคีย์ SSH ของผู้ให้บริการ Git ของคุณ',
+
+  // ── Git ฟอร์มยืนยันตัวตน (Phase 6b) ──
+  'git.auth.formLabel': 'ข้อมูลรับรอง Git',
+  'git.auth.heading': 'ยืนยันตัวตนกับ {{host}}',
+  'git.auth.headingUnknown': 'ยืนยันตัวตนกับรีโมตนี้',
+  'git.auth.modeToggleLabel': 'ประเภทข้อมูลรับรอง',
+  'git.auth.modeToken': 'โทเคน',
+  'git.auth.modeSsh': 'SSH',
+  'git.auth.usernameLabel': 'ชื่อผู้ใช้ (ไม่บังคับ)',
+  'git.auth.tokenLabel': 'โทเคนการเข้าถึง',
+  'git.auth.tokenPlaceholder': 'ghp_… หรือ PAT',
+  'git.auth.sshKeyLabel': 'คีย์ SSH',
+  'git.auth.sshNoKeys': 'ไม่มีคีย์ SSH ที่ใช้ได้ นำเข้าหรือสร้างใหม่ในการตั้งค่า Git ก่อน',
+  'git.auth.rememberLabel': 'จดจำข้อมูลรับรองสำหรับโฮสต์นี้',
+  'git.auth.rememberHint': 'จดจำข้อมูลรับรองสำหรับโฮสต์นี้',
+  'git.auth.cancel': 'ยกเลิก',
+  'git.auth.validationToken': 'ต้องระบุโทเคนการเข้าถึง',
+  'git.auth.validationSshKey': 'เลือกคีย์ SSH',
+  'git.auth.error.auth-required': 'รีโมตนี้ต้องการการยืนยันตัวตน',
+  'git.auth.error.auth-failed': 'การยืนยันตัวตนล้มเหลว ตรวจสอบข้อมูลรับรองและลองอีกครั้ง',
+  'git.auth.error.auth-token-invalid': 'โทเคนการเข้าถึงถูกปฏิเสธ สร้างใหม่แล้วลองอีกครั้ง',
   // ── Right Panel ──
   'rightPanel.design': 'ออกแบบ',
   'rightPanel.code': 'โค้ด',
@@ -74,6 +369,8 @@ const th: TranslationKeys = {
   'statusbar.zoomOut': 'ซูมออก',
   'statusbar.zoomIn': 'ซูมเข้า',
   'statusbar.resetZoom': 'รีเซ็ตการซูม',
+  'statusbar.focusContent': 'พอดีกับเนื้อหาทั้งหมด',
+  'statusbar.focusSelection': 'โฟกัสที่สิ่งที่เลือก',
 
   // ── Updater ──
   'updater.softwareUpdate': 'อัปเดตซอฟต์แวร์',
@@ -87,8 +384,7 @@ const th: TranslationKeys = {
   'updater.restartInstall': 'รีสตาร์ทและติดตั้ง',
   'updater.installing': 'กำลังติดตั้ง...',
   'updater.releaseDate': 'วันที่เผยแพร่: {{date}}',
-  'updater.restartHint':
-    'รีสตาร์ทเพื่อใช้งานอัปเดต การเปิดใหม่โดยปกติใช้เวลา 10-15 วินาที',
+  'updater.restartHint': 'รีสตาร์ทเพื่อใช้งานอัปเดต การเปิดใหม่โดยปกติใช้เวลา 10-15 วินาที',
   'updater.unknownError': 'ข้อผิดพลาดของตัวอัปเดตที่ไม่ทราบสาเหตุ',
   'updater.title.checking': 'กำลังตรวจสอบอัปเดต',
   'updater.title.available': 'พบอัปเดต',
@@ -98,10 +394,8 @@ const th: TranslationKeys = {
   'updater.subtitle.checking': 'กำลังค้นหาเวอร์ชันล่าสุด...',
   'updater.subtitle.available': 'เวอร์ชัน {{version}} พร้อมใช้งาน',
   'updater.subtitle.availableGeneric': 'มีเวอร์ชันใหม่พร้อมใช้งาน',
-  'updater.subtitle.downloading':
-    'เวอร์ชัน {{version}} กำลังดาวน์โหลดในพื้นหลัง',
-  'updater.subtitle.downloadingGeneric':
-    'กำลังดาวน์โหลดแพ็คเกจอัปเดตในพื้นหลัง',
+  'updater.subtitle.downloading': 'เวอร์ชัน {{version}} กำลังดาวน์โหลดในพื้นหลัง',
+  'updater.subtitle.downloadingGeneric': 'กำลังดาวน์โหลดแพ็คเกจอัปเดตในพื้นหลัง',
   'updater.subtitle.downloaded': 'เวอร์ชัน {{version}} ดาวน์โหลดเสร็จแล้ว',
   'updater.subtitle.downloadedGeneric': 'ดาวน์โหลดอัปเดตเสร็จแล้ว',
   'updater.subtitle.error': 'ไม่สามารถตรวจสอบหรือดาวน์โหลดอัปเดตได้',
@@ -219,11 +513,9 @@ const th: TranslationKeys = {
   'textLayout.autoWidth': 'กว้างอัตโนมัติ',
   'textLayout.autoWidthDesc': 'ความกว้างอัตโนมัติ \u2014 ข้อความขยายในแนวนอน',
   'textLayout.autoHeight': 'สูงอัตโนมัติ',
-  'textLayout.autoHeightDesc':
-    'ความสูงอัตโนมัติ \u2014 ความกว้างคงที่ ความสูงปรับอัตโนมัติ',
+  'textLayout.autoHeightDesc': 'ความสูงอัตโนมัติ \u2014 ความกว้างคงที่ ความสูงปรับอัตโนมัติ',
   'textLayout.fixed': 'คงที่',
-  'textLayout.fixedDesc':
-    'ขนาดคงที่ \u2014 ทั้งความกว้างและความสูงคงที่',
+  'textLayout.fixedDesc': 'ขนาดคงที่ \u2014 ทั้งความกว้างและความสูงคงที่',
   'textLayout.fillWidth': 'เต็มความกว้าง',
   'textLayout.fillHeight': 'เต็มความสูง',
 
@@ -241,6 +533,7 @@ const th: TranslationKeys = {
   'export.selectedOnly': 'ส่งออกเฉพาะที่เลือก',
   'export.exportFormat': 'ส่งออก {{format}}',
   'export.exportLayer': 'ส่งออกเลเยอร์',
+  'export.pdfMultiPage': 'PDF จะรวมทั้งหมด {{count}} หน้า',
 
   // ── Polygon ──
   'polygon.sides': 'ด้าน',
@@ -306,8 +599,7 @@ const th: TranslationKeys = {
   'ai.newChat': 'แชทใหม่',
   'ai.collapse': 'ย่อ',
   'ai.tryExample': 'ลองตัวอย่างเพื่อออกแบบ...',
-  'ai.tipSelectElements':
-    'เคล็ดลับ: เลือกองค์ประกอบบนแคนวาสก่อนแชทเพื่อให้บริบท',
+  'ai.tipSelectElements': 'เคล็ดลับ: เลือกองค์ประกอบบนแคนวาสก่อนแชทเพื่อให้บริบท',
   'ai.generating': 'กำลังสร้าง...',
   'ai.designWithAgent': 'ออกแบบด้วยเอเจนต์...',
   'ai.attachImage': 'แนบรูปภาพ',
@@ -321,14 +613,40 @@ const th: TranslationKeys = {
   'ai.quickAction.loginScreenPrompt':
     'ออกแบบหน้าจอเข้าสู่ระบบมือถือที่ทันสมัย พร้อมช่องกรอกอีเมล รหัสผ่าน ปุ่มเข้าสู่ระบบ และตัวเลือกเข้าสู่ระบบผ่านโซเชียล',
   'ai.quickAction.foodApp': 'หน้าแรกแอปอาหาร',
-  'ai.quickAction.foodAppPrompt':
-    'Generate a well-designed food mobile app homepage',
+  'ai.quickAction.foodAppPrompt': 'Generate a well-designed food mobile app homepage',
   'ai.quickAction.bottomNav': 'ออกแบบแถบนำทางด้านล่าง',
   'ai.quickAction.bottomNavPrompt':
     'ออกแบบแถบนำทางด้านล่างของแอปมือถือ 5 แท็บ: หน้าแรก, ค้นหา, เพิ่ม, ข้อความ, โปรไฟล์',
   'ai.quickAction.colorPalette': 'แนะนำจานสีสำหรับแอปของฉัน',
-  'ai.quickAction.colorPalettePrompt':
-    'แนะนำจานสีที่ทันสมัยสำหรับแอปดูแลสัตว์เลี้ยง',
+  'ai.quickAction.colorPalettePrompt': 'แนะนำจานสีที่ทันสมัยสำหรับแอปดูแลสัตว์เลี้ยง',
+  'ai.startDesigning': 'Start designing with AI',
+  'ai.maximize': 'Maximize',
+  'ai.restore': 'Restore',
+  'ai.quickAction.loginScreenDesc': 'Mobile login with social auth',
+  'ai.quickAction.foodAppDesc': 'App homepage design',
+  'ai.quickAction.bottomNavDesc': '5-tab navigation bar',
+  'ai.quickAction.colorPaletteDesc': 'Color palette recommendation',
+
+  // ── File Menu ──
+  'fileMenu.newFile': 'New file',
+  'fileMenu.openFile': 'Open file...',
+  'fileMenu.save': 'Save',
+  'fileMenu.saveAs': 'Save as...',
+  'fileMenu.exportImage': 'ส่งออกภาพ...',
+  'fileMenu.recentFiles': 'Recent files',
+  'fileMenu.clearHistory': 'Clear history',
+  'fileMenu.noRecentFiles': 'No recent files',
+  'fileMenu.saved': 'Saved',
+  'fileMenu.justNow': 'just now',
+  'fileMenu.minutesAgo': '{{count}}m ago',
+  'fileMenu.hoursAgo': '{{count}}h ago',
+  'fileMenu.yesterday': 'yesterday',
+  'fileMenu.daysAgo': '{{count}}d ago',
+
+  // ── Unsaved Changes ──
+  'unsaved.title': 'Unsaved changes',
+  'unsaved.message': 'Save changes to "{{name}}"?',
+  'unsaved.dontSave': "Don't Save",
 
   // ── Code Panel ──
   'code.reactTailwind': 'React + Tailwind',
@@ -339,8 +657,7 @@ const th: TranslationKeys = {
   'code.download': 'ดาวน์โหลดไฟล์โค้ด',
   'code.closeCodePanel': 'ปิดแผงโค้ด',
   'code.genCssVars': 'กำลังสร้าง CSS Variables สำหรับเอกสารทั้งหมด',
-  'code.genSelected':
-    'กำลังสร้างโค้ดสำหรับ {{count}} องค์ประกอบที่เลือก',
+  'code.genSelected': 'กำลังสร้างโค้ดสำหรับ {{count}} องค์ประกอบที่เลือก',
   'code.genDocument': 'กำลังสร้างโค้ดสำหรับเอกสารทั้งหมด',
   'code.aiEnhance': 'ปรับปรุงด้วย AI',
   'code.cancelEnhance': 'ยกเลิกการปรับปรุง',
@@ -358,8 +675,7 @@ const th: TranslationKeys = {
   'agents.mcpIntegrations': 'การผสานรวม MCP ในเทอร์มินัล',
   'agents.transport': 'การส่งข้อมูล',
   'agents.port': 'พอร์ต',
-  'agents.mcpRestart':
-    'การผสานรวม MCP จะมีผลหลังจากรีสตาร์ทเทอร์มินัล',
+  'agents.mcpRestart': 'การผสานรวม MCP จะมีผลหลังจากรีสตาร์ทเทอร์มินัล',
   'agents.mcpReinstallHint':
     'หลังจากอัปเกรด OpenPencil กรุณาติดตั้ง MCP Integration ใหม่เพื่อให้แน่ใจว่าเข้ากันได้',
   'agents.modelCount': '{{count}} โมเดล',
@@ -434,7 +750,8 @@ const th: TranslationKeys = {
   'builtin.errorApiKeyEmpty': 'API Key ว่างเปล่า กรุณาเพิ่ม API Key ในการตั้งค่า',
   'builtin.parallelAgents': 'ตัวแทนย่อยแบบขนาน: {{count}}x (คลิกเพื่อสลับ)',
   'builtin.baseUrlPlaceholder': 'https://api.example.com/v1',
-  'builtin.teamDescription': 'เลือกโมเดลสำหรับสร้างงานออกแบบ เมื่อตั้งค่าแล้ว งานออกแบบจะถูกมอบหมายให้เอเจนต์ผู้เชี่ยวชาญที่ใช้โมเดลนี้โดยอัตโนมัติ',
+  'builtin.teamDescription':
+    'เลือกโมเดลสำหรับสร้างงานออกแบบ เมื่อตั้งค่าแล้ว งานออกแบบจะถูกมอบหมายให้เอเจนต์ผู้เชี่ยวชาญที่ใช้โมเดลนี้โดยอัตโนมัติ',
   'builtin.teamDesignModel': 'โมเดลออกแบบ',
   'builtin.teamSelectModel': 'ไม่มี (เอเจนต์เดี่ยว)',
 
@@ -449,8 +766,7 @@ const th: TranslationKeys = {
   'figma.convertFailed': 'ไม่สามารถแปลงไฟล์ Figma ได้',
   'figma.parsing': 'กำลังแยกวิเคราะห์ไฟล์ .fig...',
   'figma.converting': 'กำลังแปลงโหนด...',
-  'figma.selectPage':
-    'ไฟล์นี้มี {{count}} หน้า เลือกหน้าที่จะนำเข้า:',
+  'figma.selectPage': 'ไฟล์นี้มี {{count}} หน้า เลือกหน้าที่จะนำเข้า:',
   'figma.layers': '{{count}} เลเยอร์',
   'figma.importAll': 'นำเข้าทุกหน้า',
   'figma.importComplete': 'นำเข้าเสร็จสมบูรณ์!',
@@ -496,6 +812,6 @@ const th: TranslationKeys = {
   'variablePicker.bindToVariable': 'ผูกกับตัวแปร',
   'variablePicker.unbind': 'ยกเลิกการผูกตัวแปร',
   'variablePicker.noVariables': 'ยังไม่มีตัวแปร {{type}} ที่กำหนดไว้',
-} as const
+} as const;
 
-export default th
+export default th;
