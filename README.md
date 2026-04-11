@@ -301,6 +301,32 @@ Supports three input methods: inline string, `@filepath` (read from file), or `-
 - Multi-theme support — multiple axes, each with variants (Light/Dark, Compact/Comfortable)
 - Component system — reusable components with instances and overrides
 - CSS sync — auto-generated custom properties, `var(--name)` in code output
+- Reusable UIKits — import/export component kits from `.pen` files
+
+**AI & Agents**
+
+- Prompt-to-canvas with streaming generation and orchestrator-driven spatial decomposition
+- Concurrent Agent Teams — multiple designers work on different sections in parallel with per-member canvas indicators
+- Layered workflow — `design_skeleton` → `design_content` → `design_refine` with focused prompts per phase
+- Style Guides — 50+ built-in styles (glassmorphism, brutalist, retro, etc.) with tag-based fuzzy matching, wired into planning and generation
+- Multi-model capability profiles — auto-adapts thinking mode, effort, and prompt shape per model tier
+- Built-in agent runtime (`agent-native`, Zig NAPI) + Anthropic, Claude Agent SDK, OpenCode, Codex, Copilot, Gemini providers
+- Anthropic-format passthrough for Chinese LLM providers — Kimi, Zhipu, GLM, DouBao, Ark, Bailian/DashScope, ModelScope, Coding Plans
+
+**Git Integration**
+
+- Clone wizard with SSH / HTTPS auth and SSH key management
+- Branch picker — create, switch, delete, merge, all from the git panel
+- Pull / push cascades with auth retry and non-fast-forward handling
+- Folder-mode three-way merge with on-disk `MERGE_HEAD` state tracking
+- Conflict panel with per-node / per-field three-way cards, inline JSON editor, bulk actions, and inline diff block
+- Remote settings and SSH keys UI; 15-locale i18n across the whole Git surface
+
+**Export**
+
+- Canvas export — PNG, JPEG, WEBP, PDF (`Cmd+Shift+P`)
+- Code export — React + Tailwind, HTML + CSS, Vue, Svelte, Flutter, SwiftUI, Jetpack Compose, React Native
+- Incremental MCP codegen pipeline — `codegen_plan`, `codegen_submit_chunk`, `codegen_assemble`, `codegen_clean`
 
 **Figma Import**
 
@@ -311,7 +337,8 @@ Supports three input methods: inline string, `@filepath` (read from file), or `-
 - Native macOS, Windows, and Linux via Electron
 - `.op` file association — double-click to open, single-instance lock
 - Auto-update from GitHub Releases
-- Native application menu and file dialogs
+- Native application menu with Save As, Open Recent, and an unsaved-changes dialog on close
+- Recent files persistence
 
 ## Tech Stack
 
@@ -373,21 +400,21 @@ openpencil/
 
 ## Keyboard Shortcuts
 
-| Key         | Action            |     | Key           | Action                   |
-| ----------- | ----------------- | --- | ------------- | ------------------------ |
-| `V`         | Select            |     | `Cmd+S`       | Save                     |
-| `R`         | Rectangle         |     | `Cmd+Z`       | Undo                     |
-| `O`         | Ellipse           |     | `Cmd+Shift+Z` | Redo                     |
-| `L`         | Line              |     | `Cmd+C/X/V/D` | Copy/Cut/Paste/Duplicate |
-| `T`         | Text              |     | `Cmd+G`       | Group                    |
-| `F`         | Frame             |     | `Cmd+Shift+G` | Ungroup                  |
-| `P`         | Pen tool          |     | `Cmd+Shift+E` | Export                   |
-| `H`         | Hand (pan)        |     | `Cmd+Shift+C` | Code panel               |
-| `Del`       | Delete            |     | `Cmd+Shift+V` | Variables panel          |
-| `[ / ]`     | Reorder           |     | `Cmd+J`       | AI chat                  |
-| Arrows      | Nudge 1px         |     | `Cmd+,`       | Agent settings           |
-| `Cmd+Alt+U` | Boolean union     |     | `Cmd+Alt+S`   | Boolean subtract         |
-| `Cmd+Alt+I` | Boolean intersect |     |               |                          |
+| Key         | Action            |     | Key           | Action                    |
+| ----------- | ----------------- | --- | ------------- | ------------------------- |
+| `V`         | Select            |     | `Cmd+S`       | Save                      |
+| `R`         | Rectangle         |     | `Cmd+Z`       | Undo                      |
+| `O`         | Ellipse           |     | `Cmd+Shift+Z` | Redo                      |
+| `L`         | Line              |     | `Cmd+C/X/V/D` | Copy/Cut/Paste/Duplicate  |
+| `T`         | Text              |     | `Cmd+G`       | Group                     |
+| `F`         | Frame             |     | `Cmd+Shift+G` | Ungroup                   |
+| `P`         | Pen tool          |     | `Cmd+Shift+P` | Export (PNG/JPG/WEBP/PDF) |
+| `H`         | Hand (pan)        |     | `Cmd+Shift+C` | Code panel                |
+| `Del`       | Delete            |     | `Cmd+Shift+V` | Variables panel           |
+| `[ / ]`     | Reorder           |     | `Cmd+J`       | AI chat                   |
+| Arrows      | Nudge 1px         |     | `Cmd+,`       | Agent settings            |
+| `Cmd+Alt+U` | Boolean union     |     | `Cmd+Alt+S`   | Boolean subtract          |
+| `Cmd+Alt+I` | Boolean intersect |     | `Cmd+Shift+S` | Save As                   |
 
 ## Scripts
 
@@ -435,6 +462,8 @@ Contributions are welcome! See [CLAUDE.md](./CLAUDE.md) for architecture details
 - [x] Style Guides with tag-based matching and MCP tools
 - [x] Concurrent Agent Teams with delegate tool and canvas indicators
 - [x] Native agent runtime (`agent-native` — Zig NAPI)
+- [x] Git integration — clone, branch, push/pull, folder-mode three-way merge
+- [x] Canvas raster export (PNG / JPEG / WEBP / PDF)
 - [ ] Collaborative editing
 - [ ] Plugin system
 
