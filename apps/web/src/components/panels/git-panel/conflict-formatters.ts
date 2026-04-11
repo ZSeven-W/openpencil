@@ -60,20 +60,31 @@ export function orderConflicts(
   // Build a set of node-conflict entries ordered by document tree position.
   const emitted = new Set<string>();
 
-  // Collect all document nodes in depth-first order.
-  const treeChildren: PenNode[] = document?.children ?? [];
-  walkTreeDfs(treeChildren, (node) => {
-    // Each node conflict's key is `node:<pageId|_>:<nodeId>`.  We need to find
-    // the entry whose nodeId matches this node's id.
-    for (const [key, entry] of nodeConflicts) {
-      if (emitted.has(key)) continue;
-      if (entry.nodeId === node.id) {
-        result.push(entry);
-        emitted.add(key);
-        break; // At most one conflict per nodeId.
+  // Walk each page separately so we can scope conflict matching by pageId.
+  // For single-page docs (no doc.pages), synthesise a virtual page with
+  // pageId === null so the key `node:_:<nodeId>` still matches.
+  //
+  // Node conflict key schema: `node:<pageId|_>:<nodeId>`
+  //   pageId stored in entry.pageId (null for single-page docs)
+  const pages: Array<{ pageId: string | null; children: PenNode[] }> =
+    document?.pages && document.pages.length > 0
+      ? document.pages.map((p) => ({ pageId: p.id, children: p.children }))
+      : [{ pageId: null, children: document?.children ?? [] }];
+
+  for (const { pageId, children } of pages) {
+    walkTreeDfs(children, (node) => {
+      // Each node conflict's key is `node:<pageId|_>:<nodeId>`.  We need to
+      // find the entry whose nodeId AND pageId both match this node.
+      for (const [key, entry] of nodeConflicts) {
+        if (emitted.has(key)) continue;
+        if (entry.nodeId === node.id && entry.pageId === pageId) {
+          result.push(entry);
+          emitted.add(key);
+          break; // At most one conflict per (pageId, nodeId) pair.
+        }
       }
-    }
-  });
+    });
+  }
 
   // Orphan node conflicts: referenced nodeId not found in current tree.
   for (const [key, entry] of nodeConflicts) {

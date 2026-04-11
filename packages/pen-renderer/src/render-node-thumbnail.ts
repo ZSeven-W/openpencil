@@ -12,7 +12,7 @@
 //   - The output shape (data URL | null) is stable for test assertions.
 
 import type { PenDocument, PenNode } from '@zseven-w/pen-types';
-import { getDefaultTheme, resolveNodeForCanvas } from '@zseven-w/pen-core';
+import { getAllChildren, getDefaultTheme, resolveNodeForCanvas } from '@zseven-w/pen-core';
 import { flattenToRenderNodes, resolveRefs } from './document-flattener.js';
 
 export interface ThumbnailContext {
@@ -48,7 +48,9 @@ export async function renderNodeThumbnail(
     // Resolve ref nodes using the root document tree as the component registry.
     // resolveRefs walks the node tree and substitutes `ref` nodes with their
     // component originals. For non-ref nodes it is a shallow identity pass.
-    const rootNodes: PenNode[] = ctx.document?.children ?? [];
+    // getAllChildren handles both single-page (document.children) and multi-page
+    // (document.pages[i].children) layouts — refs can cross pages so we need all.
+    const rootNodes: PenNode[] = ctx.document ? getAllChildren(ctx.document) : [];
     let resolvedNodes: PenNode[];
     try {
       resolvedNodes = resolveRefs([node], rootNodes);

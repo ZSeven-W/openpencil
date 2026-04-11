@@ -15,7 +15,7 @@ import type { PenDocument } from '@/types/pen';
 
 type NodeConflict = {
   id: string;
-  pageId: null;
+  pageId: string | null;
   nodeId: string;
   reason: 'both-modified-same-field';
   base: null;
@@ -155,6 +155,19 @@ function makeNodeConflict(id: string, resolved = false): NodeConflict {
     ours: null,
     theirs: null,
     ...(resolved ? { resolution: { kind: 'ours' as const } } : {}),
+  };
+}
+
+/** Build a node conflict scoped to a specific page. Key schema: `node:<pageId>:<nodeId>`. */
+function makePagedNodeConflict(pageId: string, nodeId: string): NodeConflict {
+  return {
+    id: `node:${pageId}:${nodeId}`,
+    pageId,
+    nodeId,
+    reason: 'both-modified-same-field',
+    base: null,
+    ours: null,
+    theirs: null,
   };
 }
 
@@ -372,5 +385,57 @@ describe('GitPanelConflictList', () => {
     // Only node:_:B (unresolved)
     expect(mocks.resolveConflict).toHaveBeenCalledTimes(1);
     expect(mocks.resolveConflict).toHaveBeenCalledWith('node:_:B', { kind: 'ours' });
+  });
+
+  // ---------------------------------------------------------------------------
+  // C2: Multi-page document ordering
+  // ---------------------------------------------------------------------------
+
+  it('orders conflicts across pages in document page order (p1:A before p2:C)', () => {
+    // Multi-page document: page p1 has [A, B], page p2 has [C].
+    mockDocument = {
+      id: 'doc-multi',
+      name: 'Multi-page',
+      children: [],
+      pages: [
+        { id: 'p1', name: 'Page 1', children: [makeNode('A'), makeNode('B')] },
+        { id: 'p2', name: 'Page 2', children: [makeNode('C')] },
+      ],
+    } as unknown as PenDocument;
+
+    // Register conflicts for A (p1) and C (p2) in reverse Map insertion order.
+    mocks.state.conflicts.nodeConflicts.set('node:p2:C', makePagedNodeConflict('p2', 'C'));
+    mocks.state.conflicts.nodeConflicts.set('node:p1:A', makePagedNodeConflict('p1', 'A'));
+
+    render(<GitPanelConflictList />);
+    const items = screen.getAllByTestId(/conflict-item-node:/);
+    expect(items).toHaveLength(2);
+    // p1:A comes before p2:C because p1 precedes p2 in document.pages order.
+    expect(items[0].getAttribute('data-testid')).toBe('conflict-item-node:p1:A');
+    expect(items[1].getAttribute('data-testid')).toBe('conflict-item-node:p2:C');
+  });
+
+  it('matches node conflicts by pageId so same-named nodes on different pages are separate', () => {
+    // Both pages have a node named 'A' (same id 'A', but on different pages).
+    mockDocument = {
+      id: 'doc-same-name',
+      name: 'Same name multi-page',
+      children: [],
+      pages: [
+        { id: 'p1', name: 'Page 1', children: [makeNode('A')] },
+        { id: 'p2', name: 'Page 2', children: [makeNode('A')] },
+      ],
+    } as unknown as PenDocument;
+
+    // Two distinct conflicts: one for p1:A and one for p2:A.
+    mocks.state.conflicts.nodeConflicts.set('node:p1:A', makePagedNodeConflict('p1', 'A'));
+    mocks.state.conflicts.nodeConflicts.set('node:p2:A', makePagedNodeConflict('p2', 'A'));
+
+    render(<GitPanelConflictList />);
+    const items = screen.getAllByTestId(/conflict-item-node:/);
+    // Both conflicts appear — one per page.
+    expect(items).toHaveLength(2);
+    expect(items[0].getAttribute('data-testid')).toBe('conflict-item-node:p1:A');
+    expect(items[1].getAttribute('data-testid')).toBe('conflict-item-node:p2:A');
   });
 });
