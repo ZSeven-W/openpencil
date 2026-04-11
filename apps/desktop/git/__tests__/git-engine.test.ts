@@ -2353,6 +2353,70 @@ describe('git-engine', () => {
     // that skip the status() call.
     // -------------------------------------------------------------------------
     it.skipIf(!systemGitAvailable)(
+      'engineStatus panel-reopen: returns reopenedMidMerge=true and tracked .op excluded from unresolvedFiles',
+      async () => {
+        const { aDir, bDir } = await setupFolderClonePair();
+
+        // Create a conflict between a and b on design.op.
+        await fsp.writeFile(
+          join(aDir, 'design.op'),
+          JSON.stringify({ version: '1.0.0', children: [{ id: 'base', fill: '#0000ff' }] }),
+        );
+        await execFileAsync('git', ['-C', aDir, 'add', 'design.op']);
+        await execFileAsync('git', [
+          '-C',
+          aDir,
+          '-c',
+          'user.name=t',
+          '-c',
+          'user.email=t@e.com',
+          'commit',
+          '-m',
+          'a',
+        ]);
+        await execFileAsync('git', ['-C', aDir, 'push']);
+
+        await fsp.writeFile(
+          join(bDir, 'design.op'),
+          JSON.stringify({ version: '1.0.0', children: [{ id: 'base', fill: '#00ff00' }] }),
+        );
+        await execFileAsync('git', ['-C', bDir, 'add', 'design.op']);
+        await execFileAsync('git', [
+          '-C',
+          bDir,
+          '-c',
+          'user.name=t',
+          '-c',
+          'user.email=t@e.com',
+          'commit',
+          '-m',
+          'b',
+        ]);
+
+        // First session: open and pull (enters conflict).
+        const session1 = await engineOpen(bDir, join(bDir, 'design.op'));
+        await enginePull(session1.repoId);
+        await engineClose(session1.repoId);
+
+        // Simulate panel close/reopen: clear all in-memory sessions.
+        clearAllSessions();
+
+        // Second session: reopen — must detect on-disk merge state.
+        const session2 = await engineOpen(bDir, join(bDir, 'design.op'));
+        const status = await engineStatus(session2.repoId);
+
+        // I2: must signal degraded panel-reopen mode.
+        expect(status.reopenedMidMerge).toBe(true);
+
+        // I2: tracked .op file must NOT appear in unresolvedFiles.
+        // (It is in the git index with stages 1/2/3, but filtering prevents
+        // the renderer from showing it as a misleading "non-op file".)
+        const trackedRel = 'design.op';
+        expect(status.unresolvedFiles).not.toContain(trackedRel);
+      },
+    );
+
+    it.skipIf(!systemGitAvailable)(
       'engineApplyMerge throws merge-still-conflicted with actionable message when called without status() after panel reopen',
       async () => {
         const { aDir, bDir } = await setupFolderClonePair();

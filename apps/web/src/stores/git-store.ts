@@ -469,7 +469,14 @@ export const useGitStore = create<GitStore>((set, get) => {
       // AND the non-`.op` file banner.
       const current = get().state;
       const unresolved = status.unresolvedFiles ?? [];
-      if (status.mergeInProgress && (status.conflicts || unresolved.length > 0)) {
+      const reopenedMidMerge = status.reopenedMidMerge ?? false;
+      // I2: also enter conflict state for the panel-reopen degraded mode —
+      // mergeInProgress + reopenedMidMerge is true even when unresolvedFiles
+      // is empty (tracked .op was filtered out) and conflicts is null.
+      if (
+        status.mergeInProgress &&
+        (status.conflicts || unresolved.length > 0 || reopenedMidMerge)
+      ) {
         // Backend reports an in-flight merge.
         if (current.kind === 'conflict') {
           // Already in conflict state: preserve in-memory resolutions and
@@ -481,11 +488,20 @@ export const useGitStore = create<GitStore>((set, get) => {
             state: {
               ...current,
               unresolvedFiles: unresolved,
+              reopenedMidMerge,
             },
           });
         } else if (current.kind === 'ready') {
           // Promote ready → conflict with a fresh bag (new entry into conflict state).
-          set({ state: buildConflictState(current.repo, status.conflicts ?? null, unresolved) });
+          set({
+            state: buildConflictState(
+              current.repo,
+              status.conflicts ?? null,
+              unresolved,
+              null,
+              reopenedMidMerge,
+            ),
+          });
         }
       } else if (!status.mergeInProgress && current.kind === 'conflict') {
         // Backend says no merge in flight, but the renderer is in conflict

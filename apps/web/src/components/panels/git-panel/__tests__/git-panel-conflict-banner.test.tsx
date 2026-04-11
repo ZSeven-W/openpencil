@@ -46,6 +46,7 @@ type MockState = {
   };
   unresolvedFiles: string[];
   finalizeError: string | null;
+  reopenedMidMerge: boolean;
 };
 
 const mocks = vi.hoisted(() => ({
@@ -74,6 +75,7 @@ const mocks = vi.hoisted(() => ({
     },
     unresolvedFiles: [] as string[],
     finalizeError: null as string | null,
+    reopenedMidMerge: false,
   } as MockState,
   abortMerge: vi.fn(async () => {}),
   applyMerge: vi.fn(async () => {}),
@@ -116,6 +118,7 @@ describe('GitPanelConflictBanner', () => {
       },
       unresolvedFiles: [],
       finalizeError: null,
+      reopenedMidMerge: false,
     };
   });
 
@@ -205,5 +208,42 @@ describe('GitPanelConflictBanner', () => {
     mocks.state.finalizeError = null;
     render(<GitPanelConflictBanner />);
     expect(screen.queryByText(/git\.conflict\.banner\.finalizeError/)).toBeNull();
+  });
+
+  // ── I2: panel-reopen degraded mode ────────────────────────────────────
+
+  it('shows reopenMessage and hides primary button when reopenedMidMerge=true', () => {
+    mocks.state.reopenedMidMerge = true;
+    render(<GitPanelConflictBanner />);
+    // Abort button must still be present.
+    expect(screen.getByRole('button', { name: 'git.conflict.abort' })).toBeTruthy();
+    // Primary action button must NOT be present.
+    expect(screen.queryByRole('button', { name: 'git.conflict.banner.apply' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'git.conflict.banner.continue' })).toBeNull();
+    // Reopen warning message must be shown.
+    expect(screen.getByText('git.conflict.banner.reopenMessage')).toBeTruthy();
+  });
+
+  it('shows primary button normally when reopenedMidMerge=false (default)', () => {
+    mocks.state.reopenedMidMerge = false;
+    render(<GitPanelConflictBanner />);
+    // In the zero-conflict state (totalCount=0, no non-op files), the apply
+    // button should still be visible (normal "Apply merge" path).
+    expect(screen.getByRole('button', { name: 'git.conflict.banner.apply' })).toBeTruthy();
+    // No reopen message.
+    expect(screen.queryByText('git.conflict.banner.reopenMessage')).toBeNull();
+  });
+
+  it('does not show primary button for reopened state even when unresolvedFiles is non-empty', () => {
+    // If somehow unresolvedFiles is non-empty AND reopenedMidMerge=true, the
+    // primary button must still be suppressed (abort-only is unconditional
+    // in reopen state).
+    mocks.state.reopenedMidMerge = true;
+    mocks.state.unresolvedFiles = ['README.md'];
+    render(<GitPanelConflictBanner />);
+    expect(screen.queryByRole('button', { name: 'git.conflict.banner.continue' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'git.conflict.banner.apply' })).toBeNull();
+    expect(screen.getByRole('button', { name: 'git.conflict.abort' })).toBeTruthy();
+    expect(screen.getByText('git.conflict.banner.reopenMessage')).toBeTruthy();
   });
 });

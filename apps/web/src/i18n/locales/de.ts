@@ -86,6 +86,9 @@ const de: TranslationKeys = {
   'git.conflict.banner.continue': 'Fortfahren',
   'git.conflict.banner.finalizeError': 'Konnte nicht anwenden: {{message}}',
   'git.conflict.banner.pollError': 'Status-Polling wegen eines Fehlers pausiert: {{message}}',
+  // placeholder — future localization
+  'git.conflict.banner.reopenMessage':
+    'Panel wurde mitten im Merge neu geöffnet — bitte abbrechen und erneut pullen.',
 
   // ── Git Konflikt-Liste (Phase 7c) ──
   'git.conflict.list.heading': 'Alle Konflikte',

@@ -86,6 +86,8 @@ const zhTW: TranslationKeys = {
   'git.conflict.banner.continue': '繼續',
   'git.conflict.banner.finalizeError': '無法套用：{{message}}',
   'git.conflict.banner.pollError': '狀態輪詢因錯誤暫停：{{message}}',
+  // placeholder — future localization
+  'git.conflict.banner.reopenMessage': '面板在合併過程中重新打開 — 請中止並重新拉取。',
 
   // ── Git 衝突列表 (Phase 7c) ──
   'git.conflict.list.heading': '所有衝突',

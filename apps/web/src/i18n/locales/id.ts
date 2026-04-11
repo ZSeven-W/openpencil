@@ -86,6 +86,9 @@ const id: TranslationKeys = {
   'git.conflict.banner.continue': 'Lanjutkan',
   'git.conflict.banner.finalizeError': 'Tidak dapat diterapkan: {{message}}',
   'git.conflict.banner.pollError': 'Polling status dijeda karena kesalahan: {{message}}',
+  // placeholder — future localization
+  'git.conflict.banner.reopenMessage':
+    'Panel dibuka kembali saat penggabungan — silakan batalkan dan pull ulang.',
 
   // ── Konflik Git — daftar (Phase 7c) ──
   'git.conflict.list.heading': 'Semua konflik',

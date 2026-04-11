@@ -86,6 +86,9 @@ const tr: TranslationKeys = {
   'git.conflict.banner.continue': 'Devam et',
   'git.conflict.banner.finalizeError': 'Uygulanamadı: {{message}}',
   'git.conflict.banner.pollError': 'Bir hata nedeniyle durum kontrolü duraklatıldı: {{message}}',
+  // placeholder — future localization
+  'git.conflict.banner.reopenMessage':
+    'Panel birleştirme sırasında yeniden açıldı — lütfen iptal edip tekrar pull yapın.',
 
   // ── Git çakışma — liste (Phase 7c) ──
   'git.conflict.list.heading': 'Tüm çakışmalar',

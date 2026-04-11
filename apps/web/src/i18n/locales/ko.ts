@@ -86,6 +86,9 @@ const ko: TranslationKeys = {
   'git.conflict.banner.continue': '계속',
   'git.conflict.banner.finalizeError': '적용 실패: {{message}}',
   'git.conflict.banner.pollError': '오류로 인해 상태 폴링이 일시 중지됨: {{message}}',
+  // placeholder — future localization
+  'git.conflict.banner.reopenMessage':
+    '패널이 병합 중 다시 열렸습니다 — 중단하고 다시 pull 하세요.',
 
   // ── Git 충돌 목록 (Phase 7c) ──
   'git.conflict.list.heading': '모든 충돌',

@@ -105,6 +105,13 @@ export interface GitStatusInfo {
   mergeInProgress: boolean;
   unresolvedFiles: string[];
   conflicts: GitConflictBag | null;
+  /**
+   * I2: true when the panel was reopened mid-merge — MERGE_HEAD is present
+   * on disk but session.inflightMerge is null (new session). The renderer
+   * uses this to show an abort-only UI instead of the normal conflict view.
+   * False (or absent) in all normal merge flows.
+   */
+  reopenedMidMerge?: boolean;
 }
 
 export interface GitCommitMeta {

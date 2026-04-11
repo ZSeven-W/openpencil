@@ -29,6 +29,8 @@ export function GitPanelConflictBanner() {
   const unresolvedFiles = state.kind === 'conflict' ? state.unresolvedFiles : [];
   const hasNonOpConflict = unresolvedFiles.length > 0;
   const finalizeError = state.kind === 'conflict' ? state.finalizeError : null;
+  // I2: panel reopened mid-merge — in-memory conflict state was lost.
+  const reopenedMidMerge = state.kind === 'conflict' ? state.reopenedMidMerge : false;
 
   // Count resolved vs total .op conflicts for the progress display.
   let resolvedCount = 0;
@@ -56,7 +58,9 @@ export function GitPanelConflictBanner() {
     : t('git.conflict.banner.continue');
 
   const showProgress = totalCount > 0;
-  const showPrimaryButton = useApplyLabel || hasNonOpConflict;
+  // I2: in the panel-reopen degraded mode, hide the primary button entirely —
+  // only the abort button is actionable.
+  const showPrimaryButton = !reopenedMidMerge && (useApplyLabel || hasNonOpConflict);
 
   return (
     <div
@@ -85,6 +89,14 @@ export function GitPanelConflictBanner() {
           </p>
         </div>
       </div>
+
+      {/* I2: panel-reopen warning — shown instead of normal primary action */}
+      {reopenedMidMerge && (
+        <div className="flex items-start gap-1.5 rounded border border-destructive/30 bg-background/40 px-2 py-1.5">
+          <AlertCircle size={11} className="mt-0.5 shrink-0" aria-hidden />
+          <p className="text-[11px]">{t('git.conflict.banner.reopenMessage')}</p>
+        </div>
+      )}
 
       {/* Non-.op unresolved file list */}
       {hasNonOpConflict && (

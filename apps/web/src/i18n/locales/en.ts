@@ -85,6 +85,9 @@ const en = {
   'git.conflict.banner.continue': 'Continue',
   'git.conflict.banner.finalizeError': 'Could not apply: {{message}}',
   'git.conflict.banner.pollError': 'Status polling paused due to an error: {{message}}',
+  // I2: shown when the panel is reopened mid-merge and in-memory state was lost.
+  'git.conflict.banner.reopenMessage':
+    'Panel reopened mid-merge — in-memory conflict state was lost. Please abort and re-pull.',
 
   // ── Git Conflict List (Phase 7c) ──
   'git.conflict.list.heading': 'All conflicts',

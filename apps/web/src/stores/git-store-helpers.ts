@@ -334,6 +334,7 @@ export function buildConflictState(
   bag: GitConflictBag | null,
   unresolvedFiles: string[],
   finalizeError: string | null = null,
+  reopenedMidMerge = false,
 ): Extract<GitState, { kind: 'conflict' }> {
   return {
     kind: 'conflict',
@@ -343,5 +344,6 @@ export function buildConflictState(
       : { nodeConflicts: new Map(), docFieldConflicts: new Map() },
     unresolvedFiles,
     finalizeError,
+    reopenedMidMerge,
   };
 }

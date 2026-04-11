@@ -86,6 +86,9 @@ const hi: TranslationKeys = {
   'git.conflict.banner.continue': 'जारी रखें',
   'git.conflict.banner.finalizeError': 'लागू नहीं हो सका: {{message}}',
   'git.conflict.banner.pollError': 'एक त्रुटि के कारण स्थिति जाँच रुकी हुई है: {{message}}',
+  // placeholder — future localization
+  'git.conflict.banner.reopenMessage':
+    'पैनल मर्ज के बीच में फिर से खोला गया — कृपया रद्द करें और फिर से pull करें।',
 
   // ── Git संघर्ष — सूची (Phase 7c) ──
   'git.conflict.list.heading': 'सभी संघर्ष',

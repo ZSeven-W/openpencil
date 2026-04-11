@@ -86,6 +86,8 @@ const th: TranslationKeys = {
   'git.conflict.banner.continue': 'ดำเนินการต่อ',
   'git.conflict.banner.finalizeError': 'ไม่สามารถใช้ได้: {{message}}',
   'git.conflict.banner.pollError': 'การตรวจสอบสถานะหยุดชั่วคราวเนื่องจากข้อผิดพลาด: {{message}}',
+  // placeholder — future localization
+  'git.conflict.banner.reopenMessage': 'แผงถูกเปิดอีกครั้งระหว่างการรวม — โปรดยกเลิกและดึงข้อมูลใหม่',
 
   // ── Git ความขัดแย้ง — รายการ (Phase 7c) ──
   'git.conflict.list.heading': 'ความขัดแย้งทั้งหมด',

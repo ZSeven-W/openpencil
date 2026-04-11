@@ -86,6 +86,9 @@ const vi: TranslationKeys = {
   'git.conflict.banner.continue': 'Tiếp tục',
   'git.conflict.banner.finalizeError': 'Không thể áp dụng: {{message}}',
   'git.conflict.banner.pollError': 'Kiểm tra trạng thái tạm dừng do lỗi: {{message}}',
+  // placeholder — future localization
+  'git.conflict.banner.reopenMessage':
+    'Bảng điều khiển được mở lại trong khi hợp nhất — vui lòng hủy và pull lại.',
 
   // ── Git xung đột — danh sách (Phase 7c) ──
   'git.conflict.list.heading': 'Tất cả xung đột',

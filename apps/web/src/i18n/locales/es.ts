@@ -86,6 +86,9 @@ const es: TranslationKeys = {
   'git.conflict.banner.continue': 'Continuar',
   'git.conflict.banner.finalizeError': 'No se pudo aplicar: {{message}}',
   'git.conflict.banner.pollError': 'Sondeo de estado pausado por un error: {{message}}',
+  // placeholder — future localization
+  'git.conflict.banner.reopenMessage':
+    'Panel reabierto durante la fusión — por favor, cancela y vuelve a hacer pull.',
 
   // ── Conflicto Git — lista (Phase 7c) ──
   'git.conflict.list.heading': 'Todos los conflictos',

@@ -86,6 +86,9 @@ const ja: TranslationKeys = {
   'git.conflict.banner.continue': '続行',
   'git.conflict.banner.finalizeError': '適用できませんでした: {{message}}',
   'git.conflict.banner.pollError': 'エラーのためステータスポーリングを一時停止中: {{message}}',
+  // placeholder — future localization
+  'git.conflict.banner.reopenMessage':
+    'マージ中にパネルが再開されました — 中止して再度プルしてください。',
 
   // ── Git 競合リスト (Phase 7c) ──
   'git.conflict.list.heading': 'すべての競合',

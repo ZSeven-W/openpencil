@@ -86,6 +86,8 @@ const zh: TranslationKeys = {
   'git.conflict.banner.continue': '继续',
   'git.conflict.banner.finalizeError': '无法应用: {{message}}',
   'git.conflict.banner.pollError': '状态轮询因错误暂停: {{message}}',
+  // placeholder — future localization
+  'git.conflict.banner.reopenMessage': '面板在合并过程中重新打开 — 请中止并重新拉取。',
   // Phase 7c: conflict list / item / card / editor keys
   'git.conflict.list.heading': '所有冲突',
   'git.conflict.list.progress': '已解决 {{resolved}} / {{total}}',

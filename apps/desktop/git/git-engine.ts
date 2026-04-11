@@ -147,6 +147,13 @@ export interface StatusInfo {
    * conflicts. null otherwise. Phase 2c populates this from the session's
    * inflightMerge state. */
   conflicts: ConflictBag | null;
+  /**
+   * I2: true when the panel was reopened mid-merge — MERGE_HEAD is present
+   * on disk but session.inflightMerge is null (new session, lost in-memory
+   * state). The renderer uses this to show an abort-only UI instead of the
+   * normal conflict resolution view.
+   */
+  reopenedMidMerge: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -702,6 +709,7 @@ export async function engineStatus(repoId: string): Promise<StatusInfo> {
   let mergeInProgress = false;
   let unresolvedFiles: string[] = [];
   let conflicts: ConflictBag | null = null;
+  let reopenedMidMerge = false;
 
   if (session.inflightMerge) {
     mergeInProgress = true;
@@ -742,7 +750,18 @@ export async function engineStatus(repoId: string): Promise<StatusInfo> {
     const mergeHead = await readMergeHead(session.handle.gitdir);
     if (mergeHead) {
       mergeInProgress = true;
-      unresolvedFiles = await sysListUnresolved({ cwd: session.handle.dir });
+      // I2: filter the tracked .op file out of unresolvedFiles so the renderer
+      // does not misleadingly label it as a "non-op file". The tracked file
+      // appears in the git index with stages 1/2/3 after a conflict, but the
+      // renderer has no UI to resolve it in the degraded panel-reopen state.
+      const sysUnresolved = await sysListUnresolved({ cwd: session.handle.dir });
+      const trackedRel = session.trackedFilePath
+        ? toPosixPath(relative(session.handle.dir, session.trackedFilePath))
+        : null;
+      unresolvedFiles = trackedRel ? sysUnresolved.filter((f) => f !== trackedRel) : sysUnresolved;
+      // Signal the degraded panel-reopen state so the renderer can show
+      // abort-only UI instead of the normal conflict resolution view.
+      reopenedMidMerge = true;
     }
   }
 
@@ -757,6 +776,7 @@ export async function engineStatus(repoId: string): Promise<StatusInfo> {
     mergeInProgress,
     unresolvedFiles,
     conflicts,
+    reopenedMidMerge,
   };
 }
 

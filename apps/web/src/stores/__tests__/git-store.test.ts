@@ -352,6 +352,33 @@ describe('git-store state machine', () => {
     }
   });
 
+  it('refreshStatus promotes ready → conflict with reopenedMidMerge=true when backend signals degraded panel-reopen state', async () => {
+    // I2: when engineStatus returns mergeInProgress=true + reopenedMidMerge=true
+    // with no conflicts bag and empty unresolvedFiles (tracked .op filtered out),
+    // refreshStatus must still promote to conflict state and pass the flag through.
+    vi.mocked(gitClient.init).mockResolvedValue(SAMPLE_REPO);
+    await useGitStore.getState().initRepo('/tmp/login.op');
+    expect(useGitStore.getState().state.kind).toBe('ready');
+
+    vi.mocked(gitClient.status).mockResolvedValue({
+      ...DEFAULT_STATUS,
+      mergeInProgress: true,
+      unresolvedFiles: [],
+      conflicts: null,
+      reopenedMidMerge: true,
+    });
+
+    await useGitStore.getState().refreshStatus();
+    const s = useGitStore.getState().state;
+    expect(s.kind).toBe('conflict');
+    if (s.kind === 'conflict') {
+      expect(s.reopenedMidMerge).toBe(true);
+      expect(s.unresolvedFiles).toEqual([]);
+      expect(s.conflicts.nodeConflicts.size).toBe(0);
+      expect(s.conflicts.docFieldConflicts.size).toBe(0);
+    }
+  });
+
   it('refreshStatus demotes conflict → ready when backend says merge is no longer in flight', async () => {
     // Set up a conflict state via mergeBranch.
     vi.mocked(gitClient.init).mockResolvedValue(SAMPLE_REPO);

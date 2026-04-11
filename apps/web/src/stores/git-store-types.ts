@@ -153,6 +153,13 @@ export type GitState =
        * Null means no finalize error is pending.
        */
       finalizeError: string | null;
+      /**
+       * I2: true when the panel was reopened mid-merge and the in-memory
+       * conflict state was lost (session.inflightMerge === null, MERGE_HEAD
+       * on disk). The banner renders an abort-only UI when this is true.
+       * False (or absent) in all normal merge flows.
+       */
+      reopenedMidMerge: boolean;
       saveRequiredFor?: PendingAction;
     }
   | { kind: 'error'; message: string; recoverable: boolean };

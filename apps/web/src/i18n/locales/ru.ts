@@ -86,6 +86,9 @@ const ru: TranslationKeys = {
   'git.conflict.banner.continue': 'Продолжить',
   'git.conflict.banner.finalizeError': 'Не удалось применить: {{message}}',
   'git.conflict.banner.pollError': 'Опрос статуса приостановлен из-за ошибки: {{message}}',
+  // placeholder — future localization
+  'git.conflict.banner.reopenMessage':
+    'Панель была открыта повторно в процессе слияния — пожалуйста, прервите и повторите pull.',
 
   // ── Git конфликт — список (Phase 7c) ──
   'git.conflict.list.heading': 'Все конфликты',
