@@ -375,6 +375,16 @@ bun run cli:compile        # 编译 CLI 到 dist
   <img src="https://contrib.rocks/image?repo=ZSeven-W/openpencil" alt="Contributors" />
 </a>
 
+## 赞助者
+
+OpenPencil 免费开源,开发完全由觉得它好用的人们资助 —— 感谢你让这块画布一直保持开放。
+
+<a href="https://github.com/mrqyun" title="MrQyun">
+  <img src="https://github.com/mrqyun.png" width="64" height="64" alt="MrQyun" style="border-radius: 50%" />
+</a>
+
+感谢 **[MrQyun](https://github.com/mrqyun)** —— 想把自己的名字也放在这里?**[成为赞助者 →](https://github.com/sponsors/ZSeven-W)**
+
 ## 社区
 
 <a href="https://discord.gg/h9Fmyy6pVh">

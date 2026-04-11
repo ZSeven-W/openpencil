@@ -375,6 +375,16 @@ Beiträge sind willkommen! Siehe [CLAUDE.md](./CLAUDE.md) für Architekturdetail
   <img src="https://contrib.rocks/image?repo=ZSeven-W/openpencil" alt="Contributors" />
 </a>
 
+## Sponsoren
+
+OpenPencil ist kostenlos und Open Source. Die Entwicklung wird von Menschen finanziert, die es nützlich finden — danke, dass ihr die Leinwand offen haltet.
+
+<a href="https://github.com/mrqyun" title="MrQyun">
+  <img src="https://github.com/mrqyun.png" width="64" height="64" alt="MrQyun" style="border-radius: 50%" />
+</a>
+
+Danke an **[MrQyun](https://github.com/mrqyun)** — soll dein Name auch hier stehen? **[Sponsor werden →](https://github.com/sponsors/ZSeven-W)**
+
 ## Community
 
 <a href="https://discord.gg/h9Fmyy6pVh">
