@@ -53,26 +53,26 @@ export function GitPanelConflict() {
     // went 0 → non-zero after a state refresh).
     setPollError(null);
     pollStoppedRef.current = false;
+    let cancelled = false;
 
     const id = setInterval(async () => {
       // Skip if a refresh is already in flight.
-      if (inFlightRef.current) return;
-      // Stop if we already hit an error this session.
-      if (pollStoppedRef.current) return;
+      if (inFlightRef.current || pollStoppedRef.current) return;
 
       inFlightRef.current = true;
       try {
         await refreshStatus();
       } catch (err) {
-        const message = err instanceof Error ? err.message : String(err);
+        if (cancelled) return;
         pollStoppedRef.current = true;
-        setPollError(message);
+        setPollError(err instanceof Error ? err.message : String(err));
       } finally {
         inFlightRef.current = false;
       }
     }, POLL_INTERVAL_MS);
 
     return () => {
+      cancelled = true;
       clearInterval(id);
       inFlightRef.current = false;
     };
