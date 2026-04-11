@@ -14,6 +14,7 @@ import { documentEvents } from '@/utils/document-events';
 import { loadOpFileFromPath } from '@/utils/load-op-file';
 import {
   classifyCloneError,
+  dropSaveRequired,
   hydrateConflictBag,
   makeAutosaveHandler,
   metaFromOpenInfo,
@@ -21,7 +22,7 @@ import {
   requireRepoId,
   resolveAuthorIdentity,
 } from './git-store-helpers';
-import type { GitState, GitStore, PendingAction } from './git-store-types';
+import type { GitStore, PendingAction } from './git-store-types';
 
 export const useGitStore = create<GitStore>((set, get) => {
   /** Active branch ref for log queries; falls back to 'main' outside a repo. */
@@ -143,16 +144,7 @@ export const useGitStore = create<GitStore>((set, get) => {
     // ---- Phase 4c: commit input actions ---------------------------------
     setCommitMessage: (text) => set({ commitMessage: text }),
     clearCommitMessage: () => set({ commitMessage: '' }),
-    cancelSaveRequired: () =>
-      set((s) => {
-        if (s.state.kind === 'ready' || s.state.kind === 'conflict') {
-          // Drop saveRequiredFor via destructure; cast keeps TS happy.
-          // eslint-disable-next-line @typescript-eslint/no-unused-vars
-          const { saveRequiredFor: _omit, ...rest } = s.state;
-          return { state: rest as GitState };
-        }
-        return s;
-      }),
+    cancelSaveRequired: () => set((s) => ({ state: dropSaveRequired(s.state) })),
 
     // ---- Phase 4c: overflow menu actions --------------------------------
     enterTrackedFilePicker: () =>
@@ -274,13 +266,24 @@ export const useGitStore = create<GitStore>((set, get) => {
       // Phase 6a: a wizard-launched clone catches recoverable errors inline
       // (so the form keeps its state for retry); a CLI-driven clone treats
       // every code as fatal. classifyCloneError() encodes that policy.
+      //
+      // CRITICAL: when entering from the wizard we must NOT transition to
+      // `initializing` mid-flight — that would unmount the <GitPanelCloneForm>
+      // and wipe the URL/dest/token inputs on a recoverable retry. Instead we
+      // stay in `wizard-clone` and flip a `busy` flag the form reads as its
+      // loading indicator.
       const prevWasWizard = get().state.kind === 'wizard-clone';
-      set({ state: { kind: 'initializing' } });
+      if (prevWasWizard) {
+        set({ state: { kind: 'wizard-clone', busy: true, error: null } });
+      } else {
+        set({ state: { kind: 'initializing' } });
+      }
       try {
         const info = await gitClient.clone(opts);
 
         // Phase 4b auto-bind: single candidate → ready + banner. Multi /
-        // zero candidates land in needs-tracked-file per spec line 109.
+        // zero candidates land in needs-tracked-file per spec line 109. Both
+        // branches naturally leave the wizard, so the form unmounts cleanly.
         if (info.candidates.length === 1) {
           const only = info.candidates[0];
           await gitClient.bindTrackedFile(info.repoId, only.path);
@@ -300,9 +303,12 @@ export const useGitStore = create<GitStore>((set, get) => {
       } catch (err) {
         const decision = classifyCloneError(err, prevWasWizard);
         if (decision.kind === 'inline') {
+          // Keep the wizard mounted with the form state intact; flip busy
+          // off and surface the inline banner so the user can retry.
           set({
             state: {
               kind: 'wizard-clone',
+              busy: false,
               error: { code: decision.code, message: decision.message },
             },
           });
@@ -704,7 +710,7 @@ export const useGitStore = create<GitStore>((set, get) => {
     clearAuth: (host) => gitClient.authClear(host),
 
     // ---- Phase 6a: clone wizard + remote metadata -----------------------
-    enterCloneWizard: () => set({ state: { kind: 'wizard-clone', error: null } }),
+    enterCloneWizard: () => set({ state: { kind: 'wizard-clone', busy: false, error: null } }),
 
     cancelCloneWizard: () => {
       // Always land in no-file. The git-panel.tsx detect-repo effect will
@@ -769,14 +775,7 @@ export const useGitStore = create<GitStore>((set, get) => {
       const saved = await useDocumentStore.getState().save();
       if (!saved) return;
       // Clear the pending flag, then re-run.
-      set((s) => {
-        if (s.state.kind === 'ready' || s.state.kind === 'conflict') {
-          // eslint-disable-next-line @typescript-eslint/no-unused-vars
-          const { saveRequiredFor: _omit, ...rest } = s.state;
-          return { state: rest as GitState };
-        }
-        return s;
-      });
+      set((s) => ({ state: dropSaveRequired(s.state) }));
       await pending.run();
     },
   };

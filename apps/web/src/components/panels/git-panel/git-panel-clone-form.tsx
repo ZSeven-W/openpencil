@@ -36,22 +36,26 @@ interface ValidationErrors {
 }
 
 /**
- * Body of the wizard-clone screen. Reads the inline error from the wizard
- * state (if any) and renders it under the submit row. Submit is disabled
- * while a clone is in flight to prevent double-fires.
+ * Body of the wizard-clone screen. Reads the inline error and the `busy`
+ * flag directly from the wizard-clone state. `busy` MUST live in the store
+ * (not a local useState) so the form survives the wizard-clone → busy →
+ * wizard-clone round-trip: a recoverable clone failure must leave the URL/
+ * dest/token inputs exactly as the user typed them for retry. Keeping the
+ * flag local would tie it to a component that, under the previous design,
+ * unmounted mid-clone and wiped all the fields.
  */
 export function GitPanelCloneForm() {
   const { t } = useTranslation();
   const cloneRepo = useGitStore((s) => s.cloneRepo);
   const cancelCloneWizard = useGitStore((s) => s.cancelCloneWizard);
   const wizardError = useGitStore((s) => (s.state.kind === 'wizard-clone' ? s.state.error : null));
+  const busy = useGitStore((s) => (s.state.kind === 'wizard-clone' ? s.state.busy : false));
 
   const [url, setUrl] = useState('');
   const [dest, setDest] = useState('');
   const [tokenUsername, setTokenUsername] = useState('');
   const [token, setToken] = useState('');
   const [errors, setErrors] = useState<ValidationErrors>({});
-  const [busy, setBusy] = useState(false);
 
   const authMode: CloneAuthMode = useMemo(() => inferCloneAuthMode(url), [url]);
   const host = useMemo(() => parseRemoteHost(url), [url]);
@@ -77,20 +81,20 @@ export function GitPanelCloneForm() {
   const handleSubmit = async () => {
     if (busy) return;
     if (!validate()) return;
-    setBusy(true);
-    try {
-      const auth =
-        authMode === 'token-or-anon' && token.trim()
-          ? {
-              kind: 'token' as const,
-              username: tokenUsername.trim() || defaultTokenUsername(host),
-              token: token.trim(),
-            }
-          : undefined;
-      await cloneRepo({ url: url.trim(), dest: dest.trim(), auth });
-    } finally {
-      setBusy(false);
-    }
+    // No local busy tracking — the store flips wizard-clone.busy inside
+    // cloneRepo and flips it back on recoverable failure. On success the
+    // store transitions out of wizard-clone entirely, which unmounts this
+    // component; any `finally { setBusy(false) }` would hit an unmounted
+    // component and leak a state-update warning.
+    const auth =
+      authMode === 'token-or-anon' && token.trim()
+        ? {
+            kind: 'token' as const,
+            username: tokenUsername.trim() || defaultTokenUsername(host),
+            token: token.trim(),
+          }
+        : undefined;
+    await cloneRepo({ url: url.trim(), dest: dest.trim(), auth });
   };
 
   return (

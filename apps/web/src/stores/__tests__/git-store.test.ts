@@ -1009,12 +1009,13 @@ describe('git-store state machine', () => {
 
   // ---- Phase 6a: clone wizard + remote contract -------------------------
 
-  it('enterCloneWizard transitions to wizard-clone with no inline error', () => {
+  it('enterCloneWizard transitions to wizard-clone with busy=false and no inline error', () => {
     useGitStore.getState().enterCloneWizard();
     const s = useGitStore.getState().state;
     expect(s.kind).toBe('wizard-clone');
     if (s.kind === 'wizard-clone') {
       expect(s.error).toBeNull();
+      expect(s.busy).toBe(false);
     }
   });
 
@@ -1038,13 +1039,62 @@ describe('git-store state machine', () => {
       dest: '/tmp/clone',
     });
 
+    // Critical: we stay in wizard-clone (no `initializing` round-trip) so
+    // the form component survives and its URL/dest/token inputs keep their
+    // values. busy flips back to false so the Submit button re-enables.
     const s = useGitStore.getState().state;
     expect(s.kind).toBe('wizard-clone');
     if (s.kind === 'wizard-clone') {
+      expect(s.busy).toBe(false);
       expect(s.error).not.toBeNull();
       expect(s.error?.code).toBe('auth-failed');
       expect(s.error?.message).toBe('bad credentials');
     }
+  });
+
+  it('cloneRepo launched from wizard never transitions through initializing', async () => {
+    // Before the fix, cloneRepo set state.kind = 'initializing' for the
+    // duration of the IPC, which unmounted GitPanelCloneForm and wiped the
+    // user's form inputs. We now stay in `wizard-clone` with busy=true.
+    useGitStore.getState().enterCloneWizard();
+
+    // Resolve with a single candidate so the clone succeeds and leaves
+    // the wizard cleanly (ready state).
+    vi.mocked(gitClient.clone).mockImplementationOnce(async () => {
+      // Snapshot state mid-IPC: it must still be wizard-clone with busy=true.
+      const mid = useGitStore.getState().state;
+      expect(mid.kind).toBe('wizard-clone');
+      if (mid.kind === 'wizard-clone') {
+        expect(mid.busy).toBe(true);
+        expect(mid.error).toBeNull();
+      }
+      return {
+        ...SAMPLE_REPO,
+        mode: 'folder',
+        trackedFilePath: null,
+        candidates: [
+          {
+            path: '/tmp/cloned/main.op',
+            relativePath: 'main.op',
+            milestoneCount: 0,
+            autosaveCount: 0,
+            lastCommitAt: null,
+            lastCommitMessage: null,
+          },
+        ],
+      };
+    });
+    vi.mocked(gitClient.bindTrackedFile).mockResolvedValue({
+      trackedFilePath: '/tmp/cloned/main.op',
+    });
+
+    await useGitStore.getState().cloneRepo({
+      url: 'https://example.com/repo.git',
+      dest: '/tmp/cloned',
+    });
+
+    // On success we exit the wizard entirely — single-candidate auto-bind.
+    expect(useGitStore.getState().state.kind).toBe('ready');
   });
 
   it('cloneRepo with a non-recoverable error transitions to the generic error state', async () => {

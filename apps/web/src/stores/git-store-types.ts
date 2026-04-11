@@ -97,6 +97,14 @@ export type GitState =
   | {
       kind: 'wizard-clone';
       /**
+       * True while `cloneRepo()` is in flight from inside the wizard. The
+       * wizard stays mounted across the round-trip (no transition to
+       * `initializing`) so the form's URL/dest/token inputs survive a
+       * recoverable failure. The clone form reads this directly instead of
+       * keeping a local `useState` that would be lost on unmount.
+       */
+      busy: boolean;
+      /**
        * Inline error surfaced under the clone form. Set when cloneRepo()
        * caught a recoverable code (see CLONE_INLINE_ERROR_CODES). The wizard
        * stays mounted so the user can fix the URL/auth and retry without

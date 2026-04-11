@@ -83,6 +83,22 @@ export function patchRepoRemote(state: GitState, remote: GitRemoteInfo): GitStat
 }
 
 /**
+ * Strip the `saveRequiredFor` pending action from a `ready`/`conflict`
+ * state. No-op on any other variant. Extracted so the store's
+ * `cancelSaveRequired` and `retrySaveRequired` don't have to repeat the
+ * same destructure-and-cast dance (shaves ~10 lines off git-store.ts, which
+ * sits at the 800-LoC cap).
+ */
+export function dropSaveRequired(state: GitState): GitState {
+  if (state.kind === 'ready' || state.kind === 'conflict') {
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const { saveRequiredFor: _omit, ...rest } = state;
+    return rest as GitState;
+  }
+  return state;
+}
+
+/**
  * Get the current repoId or throw. Most actions require an active session.
  */
 export function requireRepoId(state: GitState): string {
