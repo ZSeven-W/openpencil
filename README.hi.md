@@ -375,6 +375,16 @@ bun run cli:compile        # CLI को dist में कंपाइल कर
   <img src="https://contrib.rocks/image?repo=ZSeven-W/openpencil" alt="Contributors" />
 </a>
 
+## प्रायोजक
+
+OpenPencil मुफ़्त और ओपन-सोर्स है। इसका विकास उन लोगों के सहयोग से चलता है जिन्हें यह उपयोगी लगता है — कैनवस को खुला रखने के लिए धन्यवाद।
+
+<a href="https://github.com/mrqyun" title="MrQyun">
+  <img src="https://github.com/mrqyun.png" width="64" height="64" alt="MrQyun" style="border-radius: 50%" />
+</a>
+
+**[MrQyun](https://github.com/mrqyun)** को धन्यवाद — अपना नाम यहाँ देखना चाहते हैं? **[प्रायोजक बनें →](https://github.com/sponsors/ZSeven-W)**
+
 ## समुदाय
 
 <a href="https://discord.gg/h9Fmyy6pVh">
