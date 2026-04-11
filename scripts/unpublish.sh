@@ -28,7 +28,6 @@ PACKAGES=(
   @zseven-w/openpencil
   @zseven-w/pen-sdk
   @zseven-w/pen-renderer
-  @zseven-w/pen-codegen
   @zseven-w/pen-figma
   @zseven-w/pen-core
   @zseven-w/pen-types

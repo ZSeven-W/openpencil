@@ -1,4 +1,4 @@
-import type { TranslationKeys } from './en'
+import type { TranslationKeys } from './en';
 
 const hi: TranslationKeys = {
   // ── Common ──
@@ -10,6 +10,8 @@ const hi: TranslationKeys = {
   'common.close': 'बंद करें',
   'common.connect': 'कनेक्ट करें',
   'common.disconnect': 'डिस्कनेक्ट करें',
+  'common.yes': 'हाँ',
+  'common.no': 'नहीं',
   'common.import': 'आयात करें',
   'common.export': 'निर्यात करें',
   'common.name': 'नाम',
@@ -59,6 +61,303 @@ const hi: TranslationKeys = {
   'topbar.connected': 'कनेक्टेड',
   'topbar.agentStatus': '{{agents}} एजेंट{{agentSuffix}} · {{mcp}} MCP',
 
+  // ── Git पैनल ──
+  'git.openPanel': 'Git पैनल खोलें',
+  'git.closePanel': 'Git पैनल बंद करें',
+  'git.title': 'Git · {{fileName}}',
+  'git.titleNoFile': 'Git · (कोई फ़ाइल नहीं)',
+  'git.close': 'बंद करें',
+  'git.initializing': 'रिपॉज़िटरी आरंभ हो रही है…',
+  'git.conflict.title': 'विलय संघर्ष',
+  'git.conflict.description': 'नीचे दिए कार्ड्स से प्रत्येक विरोध हल करें, फिर मर्ज लागू करें।',
+  'git.conflict.abort': 'विलय रद्द करें',
+  'git.conflict.nonOp.title': '.op से भिन्न फ़ाइलों पर विलय रोका गया',
+  'git.conflict.nonOp.description':
+    '.op विलय पूरा हो गया है, लेकिन रेपो की अन्य फ़ाइलें अभी भी अनसुलझी हैं। उन्हें OpenPencil के बाहर हल करें, फिर जारी रखें।',
+  'git.conflict.nonOp.unresolvedHeading_one': '1 फ़ाइल को ध्यान चाहिए',
+  'git.conflict.nonOp.unresolvedHeading_other': '{{count}} फ़ाइलों को ध्यान चाहिए',
+  'git.conflict.nonOp.continue': 'विलय जारी रखें',
+  'git.conflict.nonOp.abort': 'विलय रद्द करें',
+  // ── Git संघर्ष — बैनर (Phase 7b) ──
+  'git.conflict.banner.progress': '{{resolved}} / {{total}} हल किए',
+  'git.conflict.banner.apply': 'मर्ज लागू करें',
+  'git.conflict.banner.continue': 'जारी रखें',
+  'git.conflict.banner.finalizeError': 'लागू नहीं हो सका: {{message}}',
+  'git.conflict.banner.pollError': 'एक त्रुटि के कारण स्थिति जाँच रुकी हुई है: {{message}}',
+  // placeholder — future localization
+  'git.conflict.banner.reopenMessage':
+    'पैनल मर्ज के बीच में फिर से खोला गया — कृपया रद्द करें और फिर से pull करें।',
+
+  // ── Git संघर्ष — सूची (Phase 7c) ──
+  'git.conflict.list.heading': 'सभी संघर्ष',
+  'git.conflict.list.progress': '{{resolved}} / {{total}} हल किए',
+  'git.conflict.list.allResolved': 'सब हल हो गया',
+  'git.conflict.list.allOurs': 'सब मेरा',
+  'git.conflict.list.allTheirs': 'सब उनका',
+
+  // ── Git संघर्ष — आइटम (Phase 7c) ──
+  'git.conflict.item.nodeConflict': 'नोड संघर्ष',
+  'git.conflict.item.fieldConflict': 'फ़ील्ड संघर्ष',
+  'git.conflict.item.resolved': 'हल किया गया',
+
+  // ── Git संघर्ष — कार्ड (Phase 7c) ──
+  'git.conflict.card.ours': 'मेरा',
+  'git.conflict.card.theirs': 'उनका',
+  'git.conflict.card.base': 'आधार',
+  'git.conflict.card.keepMine': 'मेरा रखें',
+  'git.conflict.card.keepTheirs': 'उनका रखें',
+  'git.conflict.card.oursThumbnailAlt': 'मेरा संस्करण',
+  'git.conflict.card.theirsThumbnailAlt': 'उनका संस्करण',
+
+  // ── Git संघर्ष — JSON संपादक (Phase 7c) ──
+  'git.conflict.editor.editManually': 'मैन्युअल रूप से संपादित करें',
+  'git.conflict.editor.cancel': 'रद्द करें',
+  'git.conflict.editor.apply': 'लागू करें',
+  'git.conflict.editor.invalidJson': 'अमान्य JSON',
+  'git.conflict.editor.textareaLabel': 'JSON मान संपादित करें',
+
+  'git.error.dismiss': 'खारिज करें',
+  'git.error.retry': 'पुनः प्रयास करें',
+  'git.error.title': 'कुछ गलत हो गया',
+
+  // ── Git खाली स्थिति ──
+  'git.empty.heading': 'अभी तक कोई संस्करण इतिहास नहीं',
+  'git.empty.optional': 'Git वैकल्पिक है — छोड़ना ठीक है',
+  'git.empty.requireSavedFile': 'इतिहास सक्षम करने के लिए पहले .op फ़ाइल सहेजें',
+  'git.empty.newCard': 'नया',
+  'git.empty.newCardDescription': 'स्थानीय इतिहास बनाएँ',
+  'git.empty.openCard': 'खोलें',
+  'git.empty.openCardDescription': 'मौजूदा रिपॉज़िटरी',
+  'git.empty.cloneCard': 'क्लोन',
+  'git.empty.cloneCardDescription': 'रिमोट से',
+
+  // ── Git लेखक फ़ॉर्म ──
+  'git.author.heading': 'कमिट लेखक',
+  'git.author.subheading': 'पहला कमिट सहेजने के लिए नाम और ईमेल चाहिए',
+  'git.author.nameLabel': 'नाम',
+  'git.author.namePlaceholder': 'आपका नाम',
+  'git.author.emailLabel': 'ईमेल',
+  'git.author.emailPlaceholder': 'aap@udaharan.com',
+  'git.author.submit': 'सहेजें',
+  'git.author.cancel': 'रद्द करें',
+  'git.author.validationName': 'नाम आवश्यक है',
+  'git.author.validationEmail': 'मान्य ईमेल आवश्यक है',
+
+  // ── Git चयनकर्ता (Phase 4b) ──
+  'git.picker.heading': 'इस रिपॉज़िटरी में {{count}} .op फ़ाइलें:',
+  'git.picker.milestoneCount': '{{count}} माइलस्टोन',
+  'git.picker.noHistory': 'कोई इतिहास नहीं',
+  'git.picker.lastCommit': '{{message}} · {{time}}',
+  'git.picker.bindButton': 'इस फ़ाइल को ट्रैक करें',
+  'git.picker.bindAndOpenButton': 'ट्रैक करें और खोलें',
+  'git.picker.back': 'वापस',
+  'git.picker.backClose': 'रद्द करें',
+  'git.picker.empty.heading': 'इस रिपॉज़िटरी में कोई .op फ़ाइल नहीं',
+  'git.picker.empty.body': 'Git पैनल को काम करने के लिए कम से कम एक .op फ़ाइल चाहिए।',
+  'git.picker.empty.close': 'पैनल बंद करें',
+
+  // ── ऑटो-बाइंड बैनर (Phase 4b) ──
+  'git.autoBind.confirmHeading': '{{fileName}} मिला — खोलें?',
+  'git.autoBind.openButton': 'खोलें',
+  'git.autoBind.dismissButton': 'छोड़ें',
+
+  // ── सापेक्ष समय (Phase 4b) ──
+  'git.relativeTime.justNow': 'अभी',
+  'git.relativeTime.minutesAgo': '{{count}} मिनट पहले',
+  'git.relativeTime.hoursAgo': '{{count}} घंटे पहले',
+  'git.relativeTime.daysAgo': '{{count}} दिन पहले',
+
+  // ── Git Commit Input (Phase 4c) ──
+  'git.commit.placeholder': 'इस बदलाव का वर्णन करें…',
+  'git.commit.submitButton': 'माइलस्टोन सहेजें',
+  'git.commit.saveRequiredTitle': 'पहले दस्तावेज़ सहेजें',
+  'git.commit.saveRequiredBody': 'आपके पास सहेजे न गए बदलाव हैं। जारी रखने के लिए दस्तावेज़ सहेजें: {{label}}',
+  'git.commit.saveRequiredSave': 'सहेजें',
+  'git.commit.saveRequiredCancel': 'रद्द करें',
+
+  // ── Git Header (Phase 4c → 6c) ──
+  'git.header.autosaveError': 'ऑटो-सेव त्रुटि',
+  'git.header.autosaveErrorTitle': 'पिछला ऑटो-सेव विफल रहा',
+  'git.header.authorMissingWarning': 'जिम्मेदारी दर्ज करने के लिए कमिट लेखक सेट करें',
+  'git.header.overflowSwitchTracked': 'ट्रैक की गई फ़ाइल बदलें…',
+  'git.header.overflowClearAuthor': 'कमिट लेखक साफ़ करें',
+  'git.header.overflowCloseRepo': 'रिपॉज़िटरी बंद करें',
+  'git.header.overflowRemoteSettings': 'रिमोट सेटिंग्स…',
+  'git.header.overflowSshKeys': 'SSH कुंजियाँ…',
+  'git.header.overflowMoreActions': 'अधिक कार्य',
+
+  // ── Git History List (Phase 4c) ──
+  'git.history.empty': 'कोई इतिहास नहीं',
+  'git.history.autosaveGroup_one': '1 ऑटो-सेव',
+  'git.history.autosaveGroup_other': '{{count}} ऑटो-सेव',
+  'git.history.autosaveLabel': 'auto {{time}}',
+  'git.history.milestoneDetailTitle': 'माइलस्टोन विवरण',
+  'git.history.restoreButton': 'पुनर्स्थापित करें',
+  'git.history.copyHashButton': 'हैश कॉपी करें',
+  'git.history.copiedToast': 'कॉपी किया गया',
+  // ── Git इतिहास diff (Phase 7b) ──
+  'git.history.diff.loading': 'Diff लोड हो रहा है…',
+  'git.history.diff.initialCommit': 'प्रारंभिक कमिट — तुलना के लिए कोई पैरेंट नहीं',
+  'git.history.diff.noChanges': 'कोई बदलाव नहीं मिला',
+  'git.history.diff.error': 'Diff उपलब्ध नहीं: {{message}}',
+  'git.history.diff.framesChanged_one': '1 फ्रेम बदला',
+  'git.history.diff.framesChanged_other': '{{count}} फ्रेम बदले',
+  'git.history.diff.nodesAdded_one': '1 नोड जोड़ा गया',
+  'git.history.diff.nodesAdded_other': '{{count}} नोड जोड़े गए',
+  'git.history.diff.nodesRemoved_one': '1 नोड हटाया गया',
+  'git.history.diff.nodesRemoved_other': '{{count}} नोड हटाए गए',
+  'git.history.diff.nodesModified_one': '1 नोड बदला गया',
+  'git.history.diff.nodesModified_other': '{{count}} नोड बदले गए',
+  'git.history.promoteButton': 'माइलस्टोन में पदोन्नत करें',
+  'git.history.promoteSuccessToast': 'माइलस्टोन में पदोन्नत किया गया',
+  'git.history.loadMore': 'और लोड करें',
+  'git.autosave.messagePrefix': 'auto',
+  'git.autosave.messageDiffSuffix': '',
+
+  // ── Git ब्रांच पिकर (Phase 5) ──
+  'git.branch.listHeading': 'ब्रांच',
+  'git.branch.createAction': 'नई ब्रांच',
+  'git.branch.createPlaceholder': 'feature/login-redesign',
+  'git.branch.createSubmit': 'ब्रांच बनाएं',
+  'git.branch.createEmpty': 'ब्रांच का नाम दर्ज करें',
+  'git.branch.createExists': 'ब्रांच {{name}} पहले से मौजूद है',
+  'git.branch.mergeAction': 'ब्रांच मर्ज करें…',
+  'git.branch.mergeHeading': '{{name}} में मर्ज करें',
+  'git.branch.deletePrompt': 'ब्रांच {{name}} हटाएं?',
+  'git.branch.deleteLabel': 'ब्रांच {{name}} हटाएं',
+  'git.branch.deleteWarning': 'ब्रांच {{name}} में बिना मर्ज किए कमिट हैं',
+  'git.branch.deleteConfirm': 'हटाएं',
+  'git.branch.deleteForce': 'ज़बरदस्ती हटाएं',
+  'git.branch.cancel': 'रद्द करें',
+  'git.branch.conflictDisabled': 'ब्रांच बदलने से पहले मर्ज पूरा करें',
+  'git.branch.noCommits': 'अभी कोई कमिट नहीं',
+
+  // ── Git Clone Wizard (Phase 6a) ──
+  'git.wizard.clone.heading': 'रिमोट रिपॉज़िटरी क्लोन करें',
+  'git.wizard.clone.subheading': 'एक रिमोट URL और गंतव्य फ़ोल्डर चुनें।',
+  'git.wizard.clone.urlLabel': 'रिमोट URL',
+  'git.wizard.clone.urlPlaceholder': 'https://github.com/owner/repo.git',
+  'git.wizard.clone.destLabel': 'गंतव्य फ़ोल्डर',
+  'git.wizard.clone.destPlaceholder': '/path/to/clone',
+  'git.wizard.clone.destPickButton': 'ब्राउज़ करें…',
+  'git.wizard.clone.usernameLabel': 'उपयोगकर्ता नाम (वैकल्पिक)',
+  'git.wizard.clone.tokenLabel': 'एक्सेस टोकन (वैकल्पिक)',
+  'git.wizard.clone.tokenPlaceholder': 'ghp_… सार्वजनिक के लिए खाली छोड़ें',
+  'git.wizard.clone.anonymousHint': 'गुमनाम रूप से क्लोन करने के लिए खाली छोड़ें (केवल सार्वजनिक रिपॉज़िटरी)।',
+  'git.wizard.clone.sshHint': 'इस URL के लिए SSH कुंजी प्रमाणीकरण आवश्यक है।',
+  'git.wizard.clone.hostDetected': 'पहचाना गया: {{host}} · {{mode}}',
+  'git.wizard.clone.authMode.token-or-anon': 'टोकन या गुमनाम',
+  'git.wizard.clone.authMode.ssh': 'SSH कुंजी',
+  'git.wizard.clone.cancel': 'रद्द करें',
+  'git.wizard.clone.submit': 'क्लोन करें',
+  'git.wizard.clone.validationUrl': 'रिमोट URL आवश्यक है',
+  'git.wizard.clone.validationDest': 'गंतव्य फ़ोल्डर आवश्यक है',
+  'git.wizard.clone.validationTokenUsername': 'टोकन प्रदान करते समय उपयोगकर्ता नाम आवश्यक है',
+  'git.wizard.clone.error.clone-network':
+    'क्लोन करते समय नेटवर्क त्रुटि। अपना कनेक्शन जांचें और फिर से प्रयास करें।',
+  'git.wizard.clone.error.network': 'नेटवर्क त्रुटि। अपना कनेक्शन जांचें और फिर से प्रयास करें।',
+  'git.wizard.clone.error.timeout':
+    'क्लोन का समय समाप्त हो गया। फिर से प्रयास करें या छोटी रिपॉज़िटरी का उपयोग करें।',
+  'git.wizard.clone.error.auth-required': 'इस रिपॉज़िटरी के लिए प्रमाणीकरण आवश्यक है।',
+  'git.wizard.clone.error.auth-failed': 'प्रमाणीकरण विफल। अपना उपयोगकर्ता नाम और टोकन जांचें।',
+  'git.wizard.clone.error.auth-token-invalid': 'एक्सेस टोकन अस्वीकृत। नया टोकन बनाएं और फिर से प्रयास करें।',
+  'git.wizard.clone.error.clone-failed':
+    'क्लोन विफल। सत्यापित करें कि URL किसी वास्तविक रिपॉज़िटरी की ओर इशारा करता है।',
+  'git.wizard.clone.error.clone-target-exists': 'गंतव्य फ़ोल्डर पहले से मौजूद है या खाली नहीं है।',
+
+  // ── Git पुल / पुश (Phase 6b) ──
+  'git.pull.label': 'पुल',
+  'git.pull.tooltip': 'origin से पुल',
+  'git.pull.noRemote': 'कोई रिमोट कॉन्फ़िगर नहीं किया — Git सेटिंग्स में जोड़ें',
+  'git.pull.retry': 'पुल फिर से आज़माएँ',
+  'git.push.label': 'पुश',
+  'git.push.tooltip_one': 'origin पर 1 कमिट पुश करें',
+  'git.push.tooltip_other': 'origin पर {{count}} कमिट पुश करें',
+  'git.push.noRemote': 'कोई रिमोट कॉन्फ़िगर नहीं किया — Git सेटिंग्स में जोड़ें',
+  'git.push.upToDate': 'पुश करने के लिए कुछ नहीं — आप अद्यतित हैं',
+  'git.push.retry': 'पुश फिर से आज़माएँ',
+  'git.push.rejectedBody': 'रिमोट पर ऐसे कमिट हैं जो आपके पास नहीं हैं। पहले पुल करें, फिर पुश करें।',
+  'git.push.rejectedDismiss': 'बंद करें',
+  'git.push.rejectedPull': 'अभी पुल करें',
+  'git.remote.dismissError': 'बंद करें',
+
+  // ── Git रिमोट सेटिंग्स (Phase 6c) ──
+  'git.remote.settingsLabel': 'रिमोट सेटिंग्स',
+  'git.remote.settingsHeading': 'रिमोट',
+  'git.remote.back': 'वापस',
+  'git.remote.cancel': 'रद्द करें',
+  'git.remote.emptyNoOrigin': 'अभी तक कोई रिमोट कॉन्फ़िगर नहीं। एक जोड़ें:',
+  'git.remote.urlLabel': 'Origin URL',
+  'git.remote.urlPlaceholder': 'https://github.com/owner/repo.git',
+  'git.remote.saveButton': 'सहेजें',
+  'git.remote.clearButton': 'साफ़ करें',
+  'git.remote.clearConfirmHeading': 'origin साफ़ करें?',
+  'git.remote.clearConfirmBody': 'यह इस रिपॉज़िटरी से origin रिमोट हटा देगा।',
+  'git.remote.clearConfirmAction': 'पुष्टि करें',
+  'git.remote.aheadBehind': '{{ahead}} आगे · {{behind}} पीछे',
+  'git.remote.fetchButton': 'फ़ेच',
+  'git.remote.sshIsoUnsupported':
+    'बिल्ट-इन इंजन SSH ट्रांसपोर्ट का समर्थन नहीं करता। सिस्टम git इंस्टॉल करें या HTTPS रिमोट URL पर स्विच करें।',
+  'git.remote.storedAuthLabel': 'सहेजे गए क्रेडेंशियल',
+  'git.remote.storedAuth.token': 'टोकन',
+  'git.remote.storedAuth.ssh': 'SSH कुंजी',
+  'git.remote.storedAuth.none': 'कोई नहीं',
+  'git.remote.storedAuth.loading': 'लोड हो रहा है…',
+  'git.remote.storedAuth.noHost': 'कोई होस्ट नहीं मिला',
+  'git.remote.clearAuthButton': 'सहेजे गए क्रेडेंशियल साफ़ करें',
+
+  // ── Git SSH कुंजियाँ (Phase 6c) ──
+  'git.ssh.label': 'SSH कुंजियाँ',
+  'git.ssh.heading': 'SSH कुंजियाँ',
+  'git.ssh.back': 'वापस',
+  'git.ssh.cancel': 'रद्द करें',
+  'git.ssh.isoUnsupported':
+    'वर्तमान रिमोट SSH का उपयोग कर रहा है, लेकिन बिल्ट-इन इंजन SSH ट्रांसपोर्ट नहीं कर सकता। सिस्टम git इंस्टॉल करें या रिमोट URL को HTTPS में बदलें।',
+  'git.ssh.emptyList': 'अभी तक कोई SSH कुंजी नहीं।',
+  'git.ssh.generateAction': 'नई बनाएँ',
+  'git.ssh.importAction': 'मौजूदा आयात करें',
+  'git.ssh.copyPublicKey': 'सार्वजनिक कुंजी कॉपी करें',
+  'git.ssh.copiedHint': 'कॉपी किया गया',
+  'git.ssh.copyUnsupported': 'क्लिपबोर्ड उपलब्ध नहीं है — इस कुंजी को मैन्युअल रूप से कॉपी करें।',
+  'git.ssh.deleteKey': '{{name}} हटाएं',
+  'git.ssh.deletePrompt': 'SSH कुंजी {{name}} हटाएं?',
+  'git.ssh.deleteConfirm': 'हटाएं',
+  'git.ssh.currentHostBadge': 'वर्तमान होस्ट',
+  'git.ssh.hostLabel': 'होस्ट',
+  'git.ssh.hostPlaceholder': 'github.com',
+  'git.ssh.commentLabel': 'टिप्पणी',
+  'git.ssh.commentPlaceholder': 'laptop@home',
+  'git.ssh.generateSubmit': 'बनाएं',
+  'git.ssh.importPathLabel': 'निजी कुंजी पथ',
+  'git.ssh.importPathPlaceholder': '/path/to/id_ed25519',
+  'git.ssh.importBrowse': 'ब्राउज़ करें…',
+  'git.ssh.importSubmit': 'आयात करें',
+  'git.ssh.validationHost': 'होस्ट आवश्यक है',
+  'git.ssh.validationComment': 'टिप्पणी आवश्यक है',
+  'git.ssh.validationImportPath': 'आयात करने के लिए निजी कुंजी फ़ाइल चुनें',
+  'git.ssh.providerLink': '{{host}} SSH कुंजी सेटिंग्स खोलें',
+  'git.ssh.genericGuidance': 'सार्वजनिक कुंजी कॉपी करें और अपने Git प्रदाता की SSH कुंजी सेटिंग्स में जोड़ें।',
+
+  // ── Git प्रमाणीकरण फ़ॉर्म (Phase 6b) ──
+  'git.auth.formLabel': 'Git क्रेडेंशियल',
+  'git.auth.heading': '{{host}} के साथ प्रमाणीकरण',
+  'git.auth.headingUnknown': 'इस रिमोट के साथ प्रमाणीकरण',
+  'git.auth.modeToggleLabel': 'क्रेडेंशियल प्रकार',
+  'git.auth.modeToken': 'टोकन',
+  'git.auth.modeSsh': 'SSH',
+  'git.auth.usernameLabel': 'उपयोगकर्ता नाम (वैकल्पिक)',
+  'git.auth.tokenLabel': 'एक्सेस टोकन',
+  'git.auth.tokenPlaceholder': 'ghp_… या PAT',
+  'git.auth.sshKeyLabel': 'SSH कुंजी',
+  'git.auth.sshNoKeys': 'कोई SSH कुंजी उपलब्ध नहीं। पहले Git सेटिंग्स में आयात या उत्पन्न करें।',
+  'git.auth.rememberLabel': 'इस होस्ट के लिए यह क्रेडेंशियल याद रखें',
+  'git.auth.rememberHint': 'इस होस्ट के लिए यह क्रेडेंशियल याद रखें',
+  'git.auth.cancel': 'रद्द करें',
+  'git.auth.validationToken': 'एक्सेस टोकन आवश्यक है',
+  'git.auth.validationSshKey': 'एक SSH कुंजी चुनें',
+  'git.auth.error.auth-required': 'इस रिमोट के लिए प्रमाणीकरण आवश्यक है।',
+  'git.auth.error.auth-failed': 'प्रमाणीकरण विफल। अपने क्रेडेंशियल जांचें और पुनः प्रयास करें।',
+  'git.auth.error.auth-token-invalid': 'एक्सेस टोकन अस्वीकृत किया गया। नया बनाएं और फिर से प्रयास करें।',
   // ── Right Panel ──
   'rightPanel.design': 'डिज़ाइन',
   'rightPanel.code': 'कोड',
@@ -74,6 +373,8 @@ const hi: TranslationKeys = {
   'statusbar.zoomOut': 'ज़ूम आउट',
   'statusbar.zoomIn': 'ज़ूम इन',
   'statusbar.resetZoom': 'ज़ूम रीसेट करें',
+  'statusbar.focusContent': 'सारी सामग्री फ़िट करें',
+  'statusbar.focusSelection': 'चयन पर फ़ोकस करें',
 
   // ── Updater ──
   'updater.softwareUpdate': 'सॉफ़्टवेयर अपडेट',
@@ -87,8 +388,7 @@ const hi: TranslationKeys = {
   'updater.restartInstall': 'पुनः आरंभ करें और इंस्टॉल करें',
   'updater.installing': 'इंस्टॉल हो रहा है...',
   'updater.releaseDate': 'रिलीज़ तिथि: {{date}}',
-  'updater.restartHint':
-    'अपडेट लागू करने के लिए पुनः आरंभ करें। पुनः लॉन्च में आमतौर पर 10-15 सेकंड लगते हैं।',
+  'updater.restartHint': 'अपडेट लागू करने के लिए पुनः आरंभ करें। पुनः लॉन्च में आमतौर पर 10-15 सेकंड लगते हैं।',
   'updater.unknownError': 'अज्ञात अपडेटर त्रुटि।',
   'updater.title.checking': 'अपडेट की जाँच हो रही है',
   'updater.title.available': 'अपडेट मिला',
@@ -98,10 +398,8 @@ const hi: TranslationKeys = {
   'updater.subtitle.checking': 'नवीनतम रिलीज़ की खोज हो रही है...',
   'updater.subtitle.available': 'संस्करण {{version}} उपलब्ध है।',
   'updater.subtitle.availableGeneric': 'एक नया संस्करण उपलब्ध है।',
-  'updater.subtitle.downloading':
-    'संस्करण {{version}} बैकग्राउंड में डाउनलोड हो रहा है।',
-  'updater.subtitle.downloadingGeneric':
-    'अपडेट पैकेज बैकग्राउंड में डाउनलोड हो रहा है।',
+  'updater.subtitle.downloading': 'संस्करण {{version}} बैकग्राउंड में डाउनलोड हो रहा है।',
+  'updater.subtitle.downloadingGeneric': 'अपडेट पैकेज बैकग्राउंड में डाउनलोड हो रहा है।',
   'updater.subtitle.downloaded': 'संस्करण {{version}} डाउनलोड हो गया है।',
   'updater.subtitle.downloadedGeneric': 'अपडेट डाउनलोड हो गया है।',
   'updater.subtitle.error': 'अपडेट की जाँच या डाउनलोड नहीं हो सका।',
@@ -219,11 +517,9 @@ const hi: TranslationKeys = {
   'textLayout.autoWidth': 'ऑटो W',
   'textLayout.autoWidthDesc': 'ऑटो चौड़ाई \u2014 टेक्स्ट क्षैतिज रूप से फैलता है',
   'textLayout.autoHeight': 'ऑटो H',
-  'textLayout.autoHeightDesc':
-    'ऑटो ऊँचाई \u2014 निश्चित चौड़ाई, ऊँचाई स्वतः समायोजित',
+  'textLayout.autoHeightDesc': 'ऑटो ऊँचाई \u2014 निश्चित चौड़ाई, ऊँचाई स्वतः समायोजित',
   'textLayout.fixed': 'निश्चित',
-  'textLayout.fixedDesc':
-    'निश्चित आकार \u2014 चौड़ाई और ऊँचाई दोनों निश्चित हैं',
+  'textLayout.fixedDesc': 'निश्चित आकार \u2014 चौड़ाई और ऊँचाई दोनों निश्चित हैं',
   'textLayout.fillWidth': 'चौड़ाई भरें',
   'textLayout.fillHeight': 'ऊँचाई भरें',
 
@@ -241,6 +537,7 @@ const hi: TranslationKeys = {
   'export.selectedOnly': 'केवल चयनित निर्यात करें',
   'export.exportFormat': '{{format}} निर्यात करें',
   'export.exportLayer': 'लेयर निर्यात करें',
+  'export.pdfMultiPage': 'PDF में सभी {{count}} पृष्ठ शामिल होंगे।',
 
   // ── Polygon ──
   'polygon.sides': 'भुजाएँ',
@@ -306,8 +603,7 @@ const hi: TranslationKeys = {
   'ai.newChat': 'नई चैट',
   'ai.collapse': 'संक्षिप्त करें',
   'ai.tryExample': 'डिज़ाइन करने के लिए एक उदाहरण आज़माएँ...',
-  'ai.tipSelectElements':
-    'सुझाव: संदर्भ के लिए चैट से पहले कैनवस पर तत्वों का चयन करें।',
+  'ai.tipSelectElements': 'सुझाव: संदर्भ के लिए चैट से पहले कैनवस पर तत्वों का चयन करें।',
   'ai.generating': 'जनरेट हो रहा है...',
   'ai.designWithAgent': 'एजेंट के साथ डिज़ाइन करें...',
   'ai.attachImage': 'इमेज संलग्न करें',
@@ -321,14 +617,40 @@ const hi: TranslationKeys = {
   'ai.quickAction.loginScreenPrompt':
     'ईमेल इनपुट, पासवर्ड इनपुट, लॉगिन बटन और सोशल लॉगिन विकल्पों के साथ एक आधुनिक मोबाइल लॉगिन स्क्रीन डिज़ाइन करें',
   'ai.quickAction.foodApp': 'फ़ूड ऐप होमपेज',
-  'ai.quickAction.foodAppPrompt':
-    'Generate a well-designed food mobile app homepage',
+  'ai.quickAction.foodAppPrompt': 'Generate a well-designed food mobile app homepage',
   'ai.quickAction.bottomNav': 'बॉटम नेविगेशन बार डिज़ाइन करें',
   'ai.quickAction.bottomNavPrompt':
     '5 टैब के साथ एक मोबाइल ऐप बॉटम नेविगेशन बार डिज़ाइन करें: होम, खोजें, जोड़ें, संदेश, प्रोफ़ाइल',
   'ai.quickAction.colorPalette': 'मेरे ऐप के लिए कलर पैलेट सुझाएँ',
-  'ai.quickAction.colorPalettePrompt':
-    'एक पेट केयर ऐप के लिए आधुनिक कलर पैलेट सुझाएँ',
+  'ai.quickAction.colorPalettePrompt': 'एक पेट केयर ऐप के लिए आधुनिक कलर पैलेट सुझाएँ',
+  'ai.startDesigning': 'Start designing with AI',
+  'ai.maximize': 'Maximize',
+  'ai.restore': 'Restore',
+  'ai.quickAction.loginScreenDesc': 'Mobile login with social auth',
+  'ai.quickAction.foodAppDesc': 'App homepage design',
+  'ai.quickAction.bottomNavDesc': '5-tab navigation bar',
+  'ai.quickAction.colorPaletteDesc': 'Color palette recommendation',
+
+  // ── File Menu ──
+  'fileMenu.newFile': 'New file',
+  'fileMenu.openFile': 'Open file...',
+  'fileMenu.save': 'Save',
+  'fileMenu.saveAs': 'Save as...',
+  'fileMenu.exportImage': 'छवि निर्यात करें...',
+  'fileMenu.recentFiles': 'Recent files',
+  'fileMenu.clearHistory': 'Clear history',
+  'fileMenu.noRecentFiles': 'No recent files',
+  'fileMenu.saved': 'Saved',
+  'fileMenu.justNow': 'just now',
+  'fileMenu.minutesAgo': '{{count}}m ago',
+  'fileMenu.hoursAgo': '{{count}}h ago',
+  'fileMenu.yesterday': 'yesterday',
+  'fileMenu.daysAgo': '{{count}}d ago',
+
+  // ── Unsaved Changes ──
+  'unsaved.title': 'Unsaved changes',
+  'unsaved.message': 'Save changes to "{{name}}"?',
+  'unsaved.dontSave': "Don't Save",
 
   // ── Code Panel ──
   'code.reactTailwind': 'React + Tailwind',
@@ -339,8 +661,7 @@ const hi: TranslationKeys = {
   'code.download': 'कोड फ़ाइल डाउनलोड करें',
   'code.closeCodePanel': 'कोड पैनल बंद करें',
   'code.genCssVars': 'संपूर्ण डॉक्यूमेंट के लिए CSS वेरिएबल जनरेट हो रहे हैं',
-  'code.genSelected':
-    '{{count}} चयनित तत्व(ओं) के लिए कोड जनरेट हो रहा है',
+  'code.genSelected': '{{count}} चयनित तत्व(ओं) के लिए कोड जनरेट हो रहा है',
   'code.genDocument': 'संपूर्ण डॉक्यूमेंट के लिए कोड जनरेट हो रहा है',
   'code.aiEnhance': 'AI से सुधारें',
   'code.cancelEnhance': 'सुधार रद्द करें',
@@ -358,8 +679,7 @@ const hi: TranslationKeys = {
   'agents.mcpIntegrations': 'टर्मिनल में MCP इंटीग्रेशन',
   'agents.transport': 'ट्रांसपोर्ट',
   'agents.port': 'पोर्ट',
-  'agents.mcpRestart':
-    'MCP इंटीग्रेशन टर्मिनल पुनः आरंभ करने के बाद प्रभावी होंगे।',
+  'agents.mcpRestart': 'MCP इंटीग्रेशन टर्मिनल पुनः आरंभ करने के बाद प्रभावी होंगे।',
   'agents.mcpReinstallHint':
     'OpenPencil अपग्रेड करने के बाद, संगतता सुनिश्चित करने के लिए कृपया MCP इंटीग्रेशन पुनः इंस्टॉल करें।',
   'agents.modelCount': '{{count}} मॉडल',
@@ -434,7 +754,8 @@ const hi: TranslationKeys = {
   'builtin.errorApiKeyEmpty': 'API key खाली है। कृपया सेटिंग्स में अपनी API key जोड़ें।',
   'builtin.parallelAgents': 'समानांतर सब-एजेंट: {{count}}x (बदलने के लिए क्लिक करें)',
   'builtin.baseUrlPlaceholder': 'https://api.example.com/v1',
-  'builtin.teamDescription': 'डिज़ाइन जनरेशन के लिए एक मॉडल चुनें। सेट करने पर, डिज़ाइन कार्य स्वचालित रूप से इस मॉडल का उपयोग करने वाले विशेषज्ञ एजेंट को सौंपे जाते हैं।',
+  'builtin.teamDescription':
+    'डिज़ाइन जनरेशन के लिए एक मॉडल चुनें। सेट करने पर, डिज़ाइन कार्य स्वचालित रूप से इस मॉडल का उपयोग करने वाले विशेषज्ञ एजेंट को सौंपे जाते हैं।',
   'builtin.teamDesignModel': 'डिज़ाइन मॉडल',
   'builtin.teamSelectModel': 'कोई नहीं (एकल एजेंट)',
 
@@ -449,8 +770,7 @@ const hi: TranslationKeys = {
   'figma.convertFailed': 'Figma फ़ाइल कन्वर्ट नहीं हो सकी',
   'figma.parsing': '.fig फ़ाइल पार्स हो रही है...',
   'figma.converting': 'नोड्स कन्वर्ट हो रहे हैं...',
-  'figma.selectPage':
-    'इस फ़ाइल में {{count}} पेज हैं। आयात के लिए चुनें:',
+  'figma.selectPage': 'इस फ़ाइल में {{count}} पेज हैं। आयात के लिए चुनें:',
   'figma.layers': '{{count}} लेयर',
   'figma.importAll': 'सभी पेज आयात करें',
   'figma.importComplete': 'आयात पूरा हुआ!',
@@ -496,6 +816,6 @@ const hi: TranslationKeys = {
   'variablePicker.bindToVariable': 'वेरिएबल से बाइंड करें',
   'variablePicker.unbind': 'वेरिएबल अनबाइंड करें',
   'variablePicker.noVariables': 'कोई {{type}} वेरिएबल परिभाषित नहीं है',
-} as const
+} as const;
 
-export default hi
+export default hi;

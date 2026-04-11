@@ -1,16 +1,16 @@
-import type { PenDocument } from '@/types/pen'
-import { normalizePenDocument } from './normalize-pen-file'
+import type { PenDocument } from '@/types/pen';
+import { parseAndPrepareImportedDocument } from './import-pen-document';
 
 // ---------------------------------------------------------------------------
 // Feature detection
 // ---------------------------------------------------------------------------
 
 export function supportsFileSystemAccess(): boolean {
-  return 'showSaveFilePicker' in window
+  return 'showSaveFilePicker' in window;
 }
 
 export function isElectron(): boolean {
-  return !!window.electronAPI?.isElectron
+  return !!window.electronAPI?.isElectron;
 }
 
 // ---------------------------------------------------------------------------
@@ -19,7 +19,7 @@ export function isElectron(): boolean {
 
 /** Serialize document to JSON string. Throws on failure. */
 function serializeDocument(doc: PenDocument): string {
-  return JSON.stringify(doc)
+  return JSON.stringify(doc);
 }
 
 /** Write document JSON to a FileSystemFileHandle. */
@@ -27,21 +27,18 @@ export async function writeToFileHandle(
   handle: FileSystemFileHandle,
   doc: PenDocument,
 ): Promise<void> {
-  const json = serializeDocument(doc)
-  const writable = await handle.createWritable()
-  await writable.write(json)
-  await writable.close()
+  const json = serializeDocument(doc);
+  const writable = await handle.createWritable();
+  await writable.write(json);
+  await writable.close();
 }
 
 /** Write document to a known file path via Electron IPC. */
-export async function writeToFilePath(
-  filePath: string,
-  doc: PenDocument,
-): Promise<void> {
-  const api = window.electronAPI
-  if (!api?.saveToPath) throw new Error('Electron saveToPath not available')
-  const json = serializeDocument(doc)
-  await api.saveToPath(filePath, json)
+export async function writeToFilePath(filePath: string, doc: PenDocument): Promise<void> {
+  const api = window.electronAPI;
+  if (!api?.saveToPath) throw new Error('Electron saveToPath not available');
+  const json = serializeDocument(doc);
+  await api.saveToPath(filePath, json);
 }
 
 /** Show native save-file picker, write, and return the handle + name. */
@@ -52,7 +49,7 @@ export async function saveDocumentAs(
   try {
     const handle: FileSystemFileHandle = await (
       window as unknown as {
-        showSaveFilePicker: (opts: unknown) => Promise<FileSystemFileHandle>
+        showSaveFilePicker: (opts: unknown) => Promise<FileSystemFileHandle>;
       }
     ).showSaveFilePicker({
       suggestedName: suggestedName || 'untitled.op',
@@ -62,27 +59,25 @@ export async function saveDocumentAs(
           accept: { 'application/json': ['.op'] },
         },
       ],
-    })
-    await writeToFileHandle(handle, doc)
-    return { handle, fileName: handle.name }
+    });
+    await writeToFileHandle(handle, doc);
+    return { handle, fileName: handle.name };
   } catch {
     // User cancelled or API error
-    return null
+    return null;
   }
 }
 
 /** Open file via native picker, return doc + handle. */
 export async function openDocumentFS(): Promise<{
-  doc: PenDocument
-  fileName: string
-  handle: FileSystemFileHandle
+  doc: PenDocument;
+  fileName: string;
+  handle: FileSystemFileHandle;
 } | null> {
   try {
     const [handle]: FileSystemFileHandle[] = await (
       window as unknown as {
-        showOpenFilePicker: (
-          opts: unknown,
-        ) => Promise<FileSystemFileHandle[]>
+        showOpenFilePicker: (opts: unknown) => Promise<FileSystemFileHandle[]>;
       }
     ).showOpenFilePicker({
       types: [
@@ -91,17 +86,17 @@ export async function openDocumentFS(): Promise<{
           accept: { 'application/json': ['.op', '.pen', '.json'] },
         },
       ],
-    })
-    const file = await handle.getFile()
-    const text = await file.text()
-    const raw = JSON.parse(text) as PenDocument
-    if (!raw.version || (!Array.isArray(raw.children) && !Array.isArray(raw.pages))) {
-      throw new Error('Invalid PenDocument format')
-    }
-    const doc = normalizePenDocument(raw)
-    return { doc, fileName: file.name, handle }
+    });
+    const file = await handle.getFile();
+    const text = await file.text();
+    const prepared = parseAndPrepareImportedDocument(text, {
+      fileName: file.name,
+    });
+    if (!prepared) throw new Error('Invalid PenDocument format');
+    const { doc } = prepared;
+    return { doc, fileName: file.name, handle };
   } catch {
-    return null
+    return null;
   }
 }
 
@@ -111,44 +106,44 @@ export async function openDocumentFS(): Promise<{
 
 /** Download document as a file (browser download). */
 export function downloadDocument(doc: PenDocument, fileName: string): void {
-  const json = JSON.stringify(doc)
-  const blob = new Blob([json], { type: 'application/json' })
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = fileName
-  a.click()
-  URL.revokeObjectURL(url)
+  const json = JSON.stringify(doc);
+  const blob = new Blob([json], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = fileName;
+  a.click();
+  URL.revokeObjectURL(url);
 }
 
 /** Open file via <input type="file"> (fallback). */
 export function openDocument(): Promise<{
-  doc: PenDocument
-  fileName: string
+  doc: PenDocument;
+  fileName: string;
 } | null> {
   return new Promise((resolve) => {
-    const input = document.createElement('input')
-    input.type = 'file'
-    input.accept = '.op,.pen,.json'
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.op,.pen,.json';
     input.onchange = async () => {
-      const file = input.files?.[0]
+      const file = input.files?.[0];
       if (!file) {
-        resolve(null)
-        return
+        resolve(null);
+        return;
       }
       try {
-        const text = await file.text()
-        const raw = JSON.parse(text) as PenDocument
-        if (!raw.version || (!Array.isArray(raw.children) && !Array.isArray(raw.pages))) {
-          throw new Error('Invalid PenDocument format')
-        }
-        const doc = normalizePenDocument(raw)
-        resolve({ doc, fileName: file.name })
+        const text = await file.text();
+        const prepared = parseAndPrepareImportedDocument(text, {
+          fileName: file.name,
+        });
+        if (!prepared) throw new Error('Invalid PenDocument format');
+        const { doc } = prepared;
+        resolve({ doc, fileName: file.name });
       } catch {
-        resolve(null)
+        resolve(null);
       }
-    }
-    input.oncancel = () => resolve(null)
-    input.click()
-  })
+    };
+    input.oncancel = () => resolve(null);
+    input.click();
+  });
 }

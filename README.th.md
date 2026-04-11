@@ -124,15 +124,15 @@ bun run electron:dev
 
 มี image หลายรูปแบบให้เลือก — เลือกแบบที่เหมาะกับความต้องการของคุณ:
 
-| Image | ขนาด | รวม |
-| --- | --- | --- |
-| `openpencil:latest` | ~226 MB | เว็บแอปเท่านั้น |
-| `openpencil-claude:latest` | — | + Claude Code CLI |
-| `openpencil-codex:latest` | — | + Codex CLI |
-| `openpencil-opencode:latest` | — | + OpenCode CLI |
-| `openpencil-copilot:latest` | — | + GitHub Copilot CLI |
-| `openpencil-gemini:latest` | — | + Gemini CLI |
-| `openpencil-full:latest` | ~1 GB | เครื่องมือ CLI ทั้งหมด |
+| Image                        | ขนาด    | รวม                    |
+| ---------------------------- | ------- | ---------------------- |
+| `openpencil:latest`          | ~226 MB | เว็บแอปเท่านั้น        |
+| `openpencil-claude:latest`   | —       | + Claude Code CLI      |
+| `openpencil-codex:latest`    | —       | + Codex CLI            |
+| `openpencil-opencode:latest` | —       | + OpenCode CLI         |
+| `openpencil-copilot:latest`  | —       | + GitHub Copilot CLI   |
+| `openpencil-gemini:latest`   | —       | + Gemini CLI           |
+| `openpencil-full:latest`     | ~1 GB   | เครื่องมือ CLI ทั้งหมด |
 
 **รัน (เว็บเท่านั้น):**
 
@@ -173,6 +173,7 @@ docker build --target full -t openpencil-full .
 ## การออกแบบที่ขับเคลื่อนด้วย AI
 
 **จาก Prompt สู่ UI**
+
 - **ข้อความเป็นดีไซน์** — อธิบายหน้า แล้วสร้างขึ้นบน Canvas แบบเรียลไทม์พร้อม animation แบบ streaming
 - **Orchestrator** — แบ่งหน้าที่ซับซ้อนออกเป็น sub-task เชิงพื้นที่เพื่อการสร้างแบบขนาน
 - **การแก้ไขดีไซน์** — เลือกองค์ประกอบ แล้วอธิบายการเปลี่ยนแปลงด้วยภาษาธรรมชาติ
@@ -180,20 +181,21 @@ docker build --target full -t openpencil-full .
 
 **รองรับหลาย Agent**
 
-| Agent | วิธีตั้งค่า |
-| --- | --- |
+| Agent                       | วิธีตั้งค่า                                                                                    |
+| --------------------------- | ---------------------------------------------------------------------------------------------- |
 | **ในตัว (9+ ผู้ให้บริการ)** | เลือกจากพรีเซ็ตผู้ให้บริการพร้อมตัวสลับภูมิภาค — Anthropic, OpenAI, Google, DeepSeek และอื่น ๆ |
-| **Claude Code** | ไม่ต้องตั้งค่า — ใช้ Claude Agent SDK พร้อม local OAuth |
-| **Codex CLI** | เชื่อมต่อใน Agent Settings (`Cmd+,`) |
-| **OpenCode** | เชื่อมต่อใน Agent Settings (`Cmd+,`) |
-| **GitHub Copilot** | `copilot login` จากนั้นเชื่อมต่อใน Agent Settings (`Cmd+,`) |
-| **Gemini CLI** | เชื่อมต่อใน Agent Settings (`Cmd+,`) |
+| **Claude Code**             | ไม่ต้องตั้งค่า — ใช้ Claude Agent SDK พร้อม local OAuth                                        |
+| **Codex CLI**               | เชื่อมต่อใน Agent Settings (`Cmd+,`)                                                           |
+| **OpenCode**                | เชื่อมต่อใน Agent Settings (`Cmd+,`)                                                           |
+| **GitHub Copilot**          | `copilot login` จากนั้นเชื่อมต่อใน Agent Settings (`Cmd+,`)                                    |
+| **Gemini CLI**              | เชื่อมต่อใน Agent Settings (`Cmd+,`)                                                           |
 
 **โปรไฟล์ความสามารถของโมเดล** — ปรับ prompt, โหมด thinking และ timeout ตามระดับโมเดลโดยอัตโนมัติ โมเดลระดับเต็ม (Claude) ได้ prompt ครบถ้วน; โมเดลระดับมาตรฐาน (GPT-4o, Gemini, DeepSeek) ปิด thinking; โมเดลระดับพื้นฐาน (MiniMax, Qwen, Llama, Mistral) ได้ prompt แบบ nested-JSON ที่ย่อลงเพื่อความเสถียรสูงสุด
 
 **i18n** — การแปลภาษาเต็มรูปแบบใน 15 ภาษา: English, 简体中文, 繁體中文, 日本語, 한국어, Français, Español, Deutsch, Português, Русский, हिन्दी, Türkçe, ไทย, Tiếng Việt, Bahasa Indonesia
 
 **MCP Server**
+
 - MCP Server ในตัว — ติดตั้งได้ด้วยคลิกเดียวใน Claude Code / Codex / Gemini / OpenCode / Kiro / Copilot CLIs
 - ตรวจจับ Node.js อัตโนมัติ — หากไม่ได้ติดตั้ง จะสำรองไปใช้ HTTP transport และเริ่ม MCP HTTP server โดยอัตโนมัติ
 - การทำ Design automation จาก terminal: อ่าน สร้าง และแก้ไขไฟล์ `.op` ผ่าน agent ที่รองรับ MCP
@@ -202,6 +204,7 @@ docker build --target full -t openpencil-full .
 - รองรับหลายหน้า — สร้าง เปลี่ยนชื่อ เรียงลำดับ และทำซ้ำหน้าผ่าน MCP tools
 
 **การสร้างโค้ด**
+
 - React + Tailwind CSS, HTML + CSS, CSS Variables
 - Vue, Svelte, Flutter, SwiftUI, Jetpack Compose, React Native
 
@@ -229,6 +232,7 @@ cat design.dsl | op design - # Pipe จาก stdin
 ## ฟีเจอร์
 
 **Canvas และการวาด**
+
 - Canvas ไม่จำกัดขนาดพร้อม pan, zoom, smart alignment guides และ snapping
 - Rectangle, Ellipse, Line, Polygon, Pen (Bezier), Frame, Text
 - การดำเนินการบูลีน — รวม ลบ ตัดกัน พร้อมแถบเครื่องมือตามบริบท
@@ -237,15 +241,18 @@ cat design.dsl | op design - # Pipe จาก stdin
 - เอกสารหลายหน้าพร้อมการนำทางด้วย tab
 
 **Design System**
+
 - Design variables — color, number, string tokens พร้อมการอ้างอิง `$variable`
 - รองรับหลาย theme — หลาย axis แต่ละ axis มี variants (Light/Dark, Compact/Comfortable)
 - ระบบ Component — component ที่นำกลับมาใช้ใหม่ได้พร้อม instance และ override
 - CSS sync — สร้าง custom properties อัตโนมัติ, `var(--name)` ในผลลัพธ์โค้ด
 
 **นำเข้าจาก Figma**
+
 - นำเข้าไฟล์ `.fig` โดยคงไว้ซึ่ง layout, fills, strokes, effects, text, images และ vectors
 
 **Desktop App**
+
 - รองรับ macOS, Windows และ Linux แบบ native ผ่าน Electron
 - เชื่อมโยงไฟล์ `.op` — ดับเบิลคลิกเพื่อเปิด, single-instance lock
 - อัปเดตอัตโนมัติจาก GitHub Releases
@@ -253,17 +260,17 @@ cat design.dsl | op design - # Pipe จาก stdin
 
 ## Tech Stack
 
-| | |
-| --- | --- |
-| **Frontend** | React 19 · TanStack Start · Tailwind CSS v4 · shadcn/ui · i18next |
-| **Canvas** | CanvasKit/Skia (WASM, GPU-accelerated) |
-| **State** | Zustand v5 |
-| **Server** | Nitro |
-| **Desktop** | Electron 35 |
-| **CLI** | `op` — ควบคุมจาก terminal, batch design DSL, ส่งออกโค้ด |
-| **AI** | Vercel AI SDK v6 · Anthropic SDK · Claude Agent SDK · OpenCode SDK · Copilot SDK |
-| **Runtime** | Bun · Vite 7 |
-| **รูปแบบไฟล์** | `.op` — ใช้ JSON, อ่านได้โดยมนุษย์, Git-friendly |
+|                |                                                                                  |
+| -------------- | -------------------------------------------------------------------------------- |
+| **Frontend**   | React 19 · TanStack Start · Tailwind CSS v4 · shadcn/ui · i18next                |
+| **Canvas**     | CanvasKit/Skia (WASM, GPU-accelerated)                                           |
+| **State**      | Zustand v5                                                                       |
+| **Server**     | Nitro                                                                            |
+| **Desktop**    | Electron 35                                                                      |
+| **CLI**        | `op` — ควบคุมจาก terminal, batch design DSL, ส่งออกโค้ด                          |
+| **AI**         | Vercel AI SDK v6 · Anthropic SDK · Claude Agent SDK · OpenCode SDK · Copilot SDK |
+| **Runtime**    | Bun · Vite 7                                                                     |
+| **รูปแบบไฟล์** | `.op` — ใช้ JSON, อ่านได้โดยมนุษย์, Git-friendly                                 |
 
 ## โครงสร้างโปรเจกต์
 
@@ -304,21 +311,21 @@ openpencil/
 
 ## คีย์ลัด
 
-| คีย์ | การทำงาน | | คีย์ | การทำงาน |
-| --- | --- | --- | --- | --- |
-| `V` | เลือก | | `Cmd+S` | บันทึก |
-| `R` | Rectangle | | `Cmd+Z` | เลิกทำ |
-| `O` | Ellipse | | `Cmd+Shift+Z` | ทำซ้ำ |
-| `L` | Line | | `Cmd+C/X/V/D` | คัดลอก/ตัด/วาง/ทำซ้ำ |
-| `T` | Text | | `Cmd+G` | จัดกลุ่ม |
-| `F` | Frame | | `Cmd+Shift+G` | ยกเลิกการจัดกลุ่ม |
-| `P` | Pen tool | | `Cmd+Shift+E` | ส่งออก |
-| `H` | Hand (pan) | | `Cmd+Shift+C` | Code panel |
-| `Del` | ลบ | | `Cmd+Shift+V` | Variables panel |
-| `[ / ]` | เรียงลำดับ | | `Cmd+J` | AI chat |
-| ลูกศร | เลื่อน 1px | | `Cmd+,` | Agent settings |
-| `Cmd+Alt+U` | รวมบูลีน | | `Cmd+Alt+S` | ลบบูลีน |
-| `Cmd+Alt+I` | ตัดกันบูลีน | | | |
+| คีย์        | การทำงาน    |     | คีย์          | การทำงาน             |
+| ----------- | ----------- | --- | ------------- | -------------------- |
+| `V`         | เลือก       |     | `Cmd+S`       | บันทึก               |
+| `R`         | Rectangle   |     | `Cmd+Z`       | เลิกทำ               |
+| `O`         | Ellipse     |     | `Cmd+Shift+Z` | ทำซ้ำ                |
+| `L`         | Line        |     | `Cmd+C/X/V/D` | คัดลอก/ตัด/วาง/ทำซ้ำ |
+| `T`         | Text        |     | `Cmd+G`       | จัดกลุ่ม             |
+| `F`         | Frame       |     | `Cmd+Shift+G` | ยกเลิกการจัดกลุ่ม    |
+| `P`         | Pen tool    |     | `Cmd+Shift+E` | ส่งออก               |
+| `H`         | Hand (pan)  |     | `Cmd+Shift+C` | Code panel           |
+| `Del`       | ลบ          |     | `Cmd+Shift+V` | Variables panel      |
+| `[ / ]`     | เรียงลำดับ  |     | `Cmd+J`       | AI chat              |
+| ลูกศร       | เลื่อน 1px  |     | `Cmd+,`       | Agent settings       |
+| `Cmd+Alt+U` | รวมบูลีน    |     | `Cmd+Alt+S`   | ลบบูลีน              |
+| `Cmd+Alt+I` | ตัดกันบูลีน |     |               |                      |
 
 ## Scripts
 

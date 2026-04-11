@@ -1,5 +1,6 @@
-import type { PenNode, ContainerProps, SizingBehavior } from '@zseven-w/pen-types'
-import { isBadgeOverlayNode } from '../node-helpers.js'
+import type { PenNode, ContainerProps, SizingBehavior, Padding } from '@zseven-w/pen-types';
+export type { Padding } from '@zseven-w/pen-types';
+import { isBadgeOverlayNode } from '../node-helpers.js';
 import {
   parseSizing,
   estimateTextWidth,
@@ -9,45 +10,31 @@ import {
   resolveTextContent,
   countExplicitTextLines,
   defaultLineHeight,
-} from './text-measure.js'
-
+} from './text-measure.js';
 
 // ---------------------------------------------------------------------------
 // Padding
 // ---------------------------------------------------------------------------
 
-export interface Padding {
-  top: number
-  right: number
-  bottom: number
-  left: number
-}
-
 export function resolvePadding(
-  padding:
-    | number
-    | [number, number]
-    | [number, number, number, number]
-    | string
-    | undefined,
+  padding: number | [number, number] | [number, number, number, number] | string | undefined,
 ): Padding {
-  if (!padding || typeof padding === 'string')
-    return { top: 0, right: 0, bottom: 0, left: 0 }
+  if (!padding || typeof padding === 'string') return { top: 0, right: 0, bottom: 0, left: 0 };
   if (typeof padding === 'number')
-    return { top: padding, right: padding, bottom: padding, left: padding }
+    return { top: padding, right: padding, bottom: padding, left: padding };
   if (padding.length === 2)
     return {
       top: padding[0],
       right: padding[1],
       bottom: padding[0],
       left: padding[1],
-    }
+    };
   return {
     top: padding[0],
     right: padding[1],
     bottom: padding[2],
     left: padding[3],
-  }
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -55,42 +42,56 @@ export function resolvePadding(
 // ---------------------------------------------------------------------------
 
 export function isNodeVisible(node: PenNode): boolean {
-  return ('visible' in node ? node.visible : undefined) !== false
+  return (
+    ('visible' in node ? node.visible : undefined) !== false &&
+    ('enabled' in node ? node.enabled : undefined) !== false
+  );
 }
 
 // ---------------------------------------------------------------------------
 // Root fill-width fallback
 // ---------------------------------------------------------------------------
 
-const DEFAULT_FRAME_ID = 'root-frame'
+const DEFAULT_FRAME_ID = 'root-frame';
 
 /** Resolve root fill-width fallback. Pass root children to avoid store coupling. */
-let _rootChildrenProvider: (() => PenNode[]) | null = null
+let _rootChildrenProvider: (() => PenNode[]) | null = null;
 
 /** Set a provider function for root children (called once from app initialization). */
 export function setRootChildrenProvider(provider: () => PenNode[]): void {
-  _rootChildrenProvider = provider
+  _rootChildrenProvider = provider;
 }
 
 export function getRootFillWidthFallback(): number {
-  const roots = _rootChildrenProvider?.() ?? []
+  const roots = _rootChildrenProvider?.() ?? [];
   const rootFrame = roots.find(
-    (n) => n.type === 'frame'
-      && n.id === DEFAULT_FRAME_ID
-      && 'width' in n
-      && typeof n.width === 'number'
-      && n.width > 0,
-  )
-  if (rootFrame && 'width' in rootFrame && typeof rootFrame.width === 'number' && rootFrame.width > 0) {
-    return rootFrame.width
+    (n) =>
+      n.type === 'frame' &&
+      n.id === DEFAULT_FRAME_ID &&
+      'width' in n &&
+      typeof n.width === 'number' &&
+      n.width > 0,
+  );
+  if (
+    rootFrame &&
+    'width' in rootFrame &&
+    typeof rootFrame.width === 'number' &&
+    rootFrame.width > 0
+  ) {
+    return rootFrame.width;
   }
   const anyTopFrame = roots.find(
     (n) => n.type === 'frame' && 'width' in n && typeof n.width === 'number' && n.width > 0,
-  )
-  if (anyTopFrame && 'width' in anyTopFrame && typeof anyTopFrame.width === 'number' && anyTopFrame.width > 0) {
-    return anyTopFrame.width
+  );
+  if (
+    anyTopFrame &&
+    'width' in anyTopFrame &&
+    typeof anyTopFrame.width === 'number' &&
+    anyTopFrame.width > 0
+  ) {
+    return anyTopFrame.width;
   }
-  return 1200
+  return 1200;
 }
 
 // ---------------------------------------------------------------------------
@@ -98,17 +99,17 @@ export function getRootFillWidthFallback(): number {
 // ---------------------------------------------------------------------------
 
 export function inferLayout(node: PenNode): 'horizontal' | undefined {
-  if (node.type !== 'frame') return undefined
-  const c = node as PenNode & ContainerProps
-  if (c.gap != null || c.justifyContent || c.alignItems) return 'horizontal'
-  if (c.padding != null) return 'horizontal'
+  if (node.type !== 'frame') return undefined;
+  const c = node as PenNode & ContainerProps;
+  if (c.gap != null || c.justifyContent || c.alignItems) return 'horizontal';
+  if (c.padding != null) return 'horizontal';
   if ('children' in node && node.children?.length) {
     for (const child of node.children) {
-      if ('width' in child && child.width === 'fill_container') return 'horizontal'
-      if ('height' in child && child.height === 'fill_container') return 'horizontal'
+      if ('width' in child && child.width === 'fill_container') return 'horizontal';
+      if ('height' in child && child.height === 'fill_container') return 'horizontal';
     }
   }
-  return undefined
+  return undefined;
 }
 
 // ---------------------------------------------------------------------------
@@ -116,49 +117,58 @@ export function inferLayout(node: PenNode): 'horizontal' | undefined {
 // ---------------------------------------------------------------------------
 
 export function fitContentWidth(node: PenNode, parentAvail?: number): number {
-  if (!('children' in node) || !node.children?.length) return 0
+  if (!('children' in node) || !node.children?.length) return 0;
   const visibleChildren = node.children.filter(
     (child) => isNodeVisible(child) && !isBadgeOverlayNode(child),
-  )
-  if (visibleChildren.length === 0) return 0
-  const c = node as PenNode & ContainerProps
-  const layout = c.layout || inferLayout(node)
-  const pad = resolvePadding(c.padding)
-  const nodeGap = typeof c.gap === 'number' ? c.gap : 0
+  );
+  if (visibleChildren.length === 0) return 0;
+  const c = node as PenNode & ContainerProps;
+  const layout = c.layout || inferLayout(node);
+  const pad = resolvePadding(c.padding);
+  const nodeGap = typeof c.gap === 'number' ? c.gap : 0;
   if (layout === 'horizontal') {
-    const gapTotal = nodeGap * Math.max(0, visibleChildren.length - 1)
-    const childAvail = parentAvail !== undefined
-      ? Math.max(0, parentAvail - pad.left - pad.right - gapTotal)
-      : undefined
-    const childTotal = visibleChildren.reduce((sum, ch) => sum + getNodeWidth(ch, childAvail), 0)
-    return childTotal + gapTotal + pad.left + pad.right
+    const gapTotal = nodeGap * Math.max(0, visibleChildren.length - 1);
+    const childAvail =
+      parentAvail !== undefined
+        ? Math.max(0, parentAvail - pad.left - pad.right - gapTotal)
+        : undefined;
+    const childTotal = visibleChildren.reduce((sum, ch) => sum + getNodeWidth(ch, childAvail), 0);
+    return childTotal + gapTotal + pad.left + pad.right;
   }
-  const childAvail = parentAvail !== undefined
-    ? Math.max(0, parentAvail - pad.left - pad.right)
-    : undefined
-  const maxChildW = visibleChildren.reduce((max, ch) => Math.max(max, getNodeWidth(ch, childAvail)), 0)
-  return maxChildW + pad.left + pad.right
+  const childAvail =
+    parentAvail !== undefined ? Math.max(0, parentAvail - pad.left - pad.right) : undefined;
+  const maxChildW = visibleChildren.reduce(
+    (max, ch) => Math.max(max, getNodeWidth(ch, childAvail)),
+    0,
+  );
+  return maxChildW + pad.left + pad.right;
 }
 
 export function fitContentHeight(node: PenNode, parentAvailW?: number): number {
-  if (!('children' in node) || !node.children?.length) return 0
+  if (!('children' in node) || !node.children?.length) return 0;
   const visibleChildren = node.children.filter(
     (child) => isNodeVisible(child) && !isBadgeOverlayNode(child),
-  )
-  if (visibleChildren.length === 0) return 0
-  const c = node as PenNode & ContainerProps
-  const layout = c.layout || inferLayout(node)
-  const pad = resolvePadding(c.padding)
-  const nodeGap = typeof c.gap === 'number' ? c.gap : 0
-  const nodeW = getNodeWidth(node, parentAvailW)
-  const childAvailW = nodeW > 0 ? Math.max(0, nodeW - pad.left - pad.right) : parentAvailW
+  );
+  if (visibleChildren.length === 0) return 0;
+  const c = node as PenNode & ContainerProps;
+  const layout = c.layout || inferLayout(node);
+  const pad = resolvePadding(c.padding);
+  const nodeGap = typeof c.gap === 'number' ? c.gap : 0;
+  const nodeW = getNodeWidth(node, parentAvailW);
+  const childAvailW = nodeW > 0 ? Math.max(0, nodeW - pad.left - pad.right) : parentAvailW;
   if (layout === 'vertical') {
-    const childTotal = visibleChildren.reduce((sum, ch) => sum + getNodeHeight(ch, undefined, childAvailW), 0)
-    const gapTotal = nodeGap * Math.max(0, visibleChildren.length - 1)
-    return childTotal + gapTotal + pad.top + pad.bottom
+    const childTotal = visibleChildren.reduce(
+      (sum, ch) => sum + getNodeHeight(ch, undefined, childAvailW),
+      0,
+    );
+    const gapTotal = nodeGap * Math.max(0, visibleChildren.length - 1);
+    return childTotal + gapTotal + pad.top + pad.bottom;
   }
-  const maxChildH = visibleChildren.reduce((max, ch) => Math.max(max, getNodeHeight(ch, undefined, childAvailW)), 0)
-  return maxChildH + pad.top + pad.bottom
+  const maxChildH = visibleChildren.reduce(
+    (max, ch) => Math.max(max, getNodeHeight(ch, undefined, childAvailW)),
+    0,
+  );
+  return maxChildH + pad.top + pad.bottom;
 }
 
 // ---------------------------------------------------------------------------
@@ -167,210 +177,206 @@ export function fitContentHeight(node: PenNode, parentAvailW?: number): number {
 
 export function getNodeWidth(node: PenNode, parentAvail?: number): number {
   if ('width' in node) {
-    const s = parseSizing(node.width)
-    if (typeof s === 'number' && s > 0) return s
+    const s = parseSizing(node.width);
+    if (typeof s === 'number' && s > 0) return s;
     if (s === 'fill') {
-      if (parentAvail && parentAvail > 0) return parentAvail
+      if (parentAvail && parentAvail > 0) return parentAvail;
       if (node.type !== 'text') {
-        const fallbackFillW = getRootFillWidthFallback()
-        if (fallbackFillW > 0) return fallbackFillW
+        const fallbackFillW = getRootFillWidthFallback();
+        if (fallbackFillW > 0) return fallbackFillW;
       }
       if ('children' in node && node.children?.length) {
-        const intrinsic = fitContentWidth(node)
-        if (intrinsic > 0) return intrinsic
+        const intrinsic = fitContentWidth(node);
+        if (intrinsic > 0) return intrinsic;
       }
       if (node.type === 'text') {
-        const fontSize = node.fontSize ?? 16
-        const letterSpacing = node.letterSpacing ?? 0
-        const fontWeight = node.fontWeight
-        const content = resolveTextContent(node)
-        return Math.max(Math.ceil(estimateTextWidth(content, fontSize, letterSpacing, fontWeight)), 1)
+        const fontSize = node.fontSize ?? 16;
+        const letterSpacing = node.letterSpacing ?? 0;
+        const fontWeight = node.fontWeight;
+        const content = resolveTextContent(node);
+        return Math.max(
+          Math.ceil(estimateTextWidth(content, fontSize, letterSpacing, fontWeight)),
+          1,
+        );
       }
     }
     if (s === 'fit') {
-      const fit = fitContentWidth(node, parentAvail)
-      if (fit > 0) return fit
+      const fit = fitContentWidth(node, parentAvail);
+      if (fit > 0) return fit;
     }
   }
   if ('children' in node && node.children?.length) {
-    const fit = fitContentWidth(node, parentAvail)
-    if (fit > 0) return fit
+    const fit = fitContentWidth(node, parentAvail);
+    if (fit > 0) return fit;
   }
   if (node.type === 'text') {
-    const fontSize = node.fontSize ?? 16
-    const letterSpacing = node.letterSpacing ?? 0
-    const fontWeight = node.fontWeight
-    const content = resolveTextContent(node)
-    return Math.max(Math.ceil(estimateTextWidthPrecise(content, fontSize, letterSpacing, fontWeight)), 1)
+    const fontSize = node.fontSize ?? 16;
+    const letterSpacing = node.letterSpacing ?? 0;
+    const fontWeight = node.fontWeight;
+    const content = resolveTextContent(node);
+    return Math.max(
+      Math.ceil(estimateTextWidthPrecise(content, fontSize, letterSpacing, fontWeight)),
+      1,
+    );
   }
-  return 0
+  return 0;
 }
 
 export function getNodeHeight(node: PenNode, parentAvail?: number, parentAvailW?: number): number {
   if ('height' in node) {
-    const s = parseSizing(node.height)
-    if (typeof s === 'number' && s > 0) return s
-    if (s === 'fill' && parentAvail) return parentAvail
+    const s = parseSizing(node.height);
+    if (typeof s === 'number' && s > 0) return s;
+    if (s === 'fill' && parentAvail) return parentAvail;
     if (s === 'fit') {
-      const fit = fitContentHeight(node, parentAvailW)
-      if (fit > 0) return fit
+      const fit = fitContentHeight(node, parentAvailW);
+      if (fit > 0) return fit;
     }
   }
   if ('children' in node && node.children?.length) {
-    const fit = fitContentHeight(node, parentAvailW)
-    if (fit > 0) return fit
+    const fit = fitContentHeight(node, parentAvailW);
+    if (fit > 0) return fit;
   }
   if (node.type === 'text') {
-    return estimateTextHeight(node, parentAvailW)
+    return estimateTextHeight(node, parentAvailW);
   }
-  return 0
+  return 0;
 }
 
 // ---------------------------------------------------------------------------
 // Auto-layout position computation
 // ---------------------------------------------------------------------------
 
-export function computeLayoutPositions(
-  parent: PenNode,
-  children: PenNode[],
-): PenNode[] {
-  if (children.length === 0) return children
-  const visibleChildren = children.filter((child) => isNodeVisible(child))
-  if (visibleChildren.length === 0) return []
-  const c = parent as PenNode & ContainerProps
-  const layout = c.layout || inferLayout(parent)
-  if (!layout || layout === 'none') return visibleChildren
+export function computeLayoutPositions(parent: PenNode, children: PenNode[]): PenNode[] {
+  if (children.length === 0) return children;
+  const visibleChildren = children.filter((child) => isNodeVisible(child));
+  if (visibleChildren.length === 0) return [];
+  const c = parent as PenNode & ContainerProps;
+  const layout = c.layout || inferLayout(parent);
+  if (!layout || layout === 'none') return visibleChildren;
 
-  const badgeNodes = visibleChildren.filter(isBadgeOverlayNode)
-  const layoutChildren = visibleChildren.filter((ch) => !isBadgeOverlayNode(ch))
-  if (layoutChildren.length === 0) return visibleChildren
+  const badgeNodes = visibleChildren.filter(isBadgeOverlayNode);
+  const layoutChildren = visibleChildren.filter((ch) => !isBadgeOverlayNode(ch));
+  if (layoutChildren.length === 0) return visibleChildren;
 
-  const pW = parseSizing(c.width)
-  const pH = parseSizing(c.height)
-  const parentW = (typeof pW === 'number' && pW > 0) ? pW : (getNodeWidth(parent) || 100)
-  const parentH = (typeof pH === 'number' && pH > 0) ? pH : (getNodeHeight(parent) || 100)
-  const pad = resolvePadding(c.padding)
-  const gap = typeof c.gap === 'number' ? c.gap : 0
-  const justify = normalizeJustifyContent(c.justifyContent)
-  const align = normalizeAlignItems(c.alignItems)
+  const pW = parseSizing(c.width);
+  const pH = parseSizing(c.height);
+  const parentW = typeof pW === 'number' && pW > 0 ? pW : getNodeWidth(parent) || 100;
+  const parentH = typeof pH === 'number' && pH > 0 ? pH : getNodeHeight(parent) || 100;
+  const pad = resolvePadding(c.padding);
+  const gap = typeof c.gap === 'number' ? c.gap : 0;
+  const justify = normalizeJustifyContent(c.justifyContent);
+  const align = normalizeAlignItems(c.alignItems);
 
-  const isVertical = layout === 'vertical'
-  const availW = parentW - pad.left - pad.right
-  const availH = parentH - pad.top - pad.bottom
-  const availMain = isVertical ? availH : availW
-  const totalGapSpace = gap * Math.max(0, layoutChildren.length - 1)
+  const isVertical = layout === 'vertical';
+  const availW = parentW - pad.left - pad.right;
+  const availH = parentH - pad.top - pad.bottom;
+  const availMain = isVertical ? availH : availW;
+  const totalGapSpace = gap * Math.max(0, layoutChildren.length - 1);
 
   const mainSizing = layoutChildren.map((ch) => {
-    const prop = isVertical ? 'height' : 'width'
+    const prop = isVertical ? 'height' : 'width';
     if (prop in ch) {
-      const s = parseSizing((ch as PenNode & { width?: SizingBehavior; height?: SizingBehavior })[prop])
-      if (s === 'fill') return 'fill' as const
+      const s = parseSizing(
+        (ch as PenNode & { width?: SizingBehavior; height?: SizingBehavior })[prop],
+      );
+      if (s === 'fill') return 'fill' as const;
     }
-    return isVertical ? getNodeHeight(ch, availH, availW) : getNodeWidth(ch, availW)
-  })
+    return isVertical ? getNodeHeight(ch, availH, availW) : getNodeWidth(ch, availW);
+  });
   const fixedTotal = mainSizing.reduce<number>(
     (sum, s) => sum + (typeof s === 'number' ? s : 0),
     0,
-  )
-  const fillCount = mainSizing.filter((s) => s === 'fill').length
-  const remainingMain = Math.max(0, availMain - fixedTotal - totalGapSpace)
-  const fillSize = fillCount > 0 ? remainingMain / fillCount : 0
+  );
+  const fillCount = mainSizing.filter((s) => s === 'fill').length;
+  const remainingMain = Math.max(0, availMain - fixedTotal - totalGapSpace);
+  const fillSize = fillCount > 0 ? remainingMain / fillCount : 0;
 
   const sizes = layoutChildren.map((ch, i) => {
-    let mainSize = mainSizing[i] === 'fill' ? fillSize : (mainSizing[i] as number)
+    let mainSize = mainSizing[i] === 'fill' ? fillSize : (mainSizing[i] as number);
     if (isVertical && ch.type === 'text' && mainSizing[i] !== 'fill') {
-      const content = resolveTextContent(ch)
+      const content = resolveTextContent(ch);
       if (countExplicitTextLines(content) <= 1) {
-        const fontSize = ch.fontSize ?? 16
-        const lineHeight = ch.lineHeight ?? defaultLineHeight(fontSize)
-        const singleLineH = fontSize * lineHeight
-        const estH = estimateTextHeight(ch, availW)
+        const fontSize = ch.fontSize ?? 16;
+        const lineHeight = ch.lineHeight ?? defaultLineHeight(fontSize);
+        const singleLineH = fontSize * lineHeight;
+        const estH = estimateTextHeight(ch, availW);
         if (estH <= singleLineH + 1) {
-          mainSize = singleLineH
+          mainSize = singleLineH;
         }
       }
     }
     return {
       w: isVertical ? getNodeWidth(ch, availW) : mainSize,
       h: isVertical ? mainSize : getNodeHeight(ch, availH, isVertical ? availW : mainSize),
-    }
-  })
+    };
+  });
 
-  const totalMain = sizes.reduce(
-    (sum, s) => sum + (isVertical ? s.h : s.w),
-    0,
-  )
-  const freeSpace = Math.max(0, availMain - totalMain - totalGapSpace)
+  const totalMain = sizes.reduce((sum, s) => sum + (isVertical ? s.h : s.w), 0);
+  const freeSpace = Math.max(0, availMain - totalMain - totalGapSpace);
 
-  let mainPos = 0
-  let effectiveGap = gap
+  let mainPos = 0;
+  let effectiveGap = gap;
 
   switch (justify) {
     case 'center':
-      mainPos = freeSpace / 2
-      break
+      mainPos = freeSpace / 2;
+      break;
     case 'end':
-      mainPos = freeSpace
-      break
+      mainPos = freeSpace;
+      break;
     case 'space_between':
       effectiveGap =
-        layoutChildren.length > 1
-          ? (availMain - totalMain) / (layoutChildren.length - 1)
-          : 0
-      break
+        layoutChildren.length > 1 ? (availMain - totalMain) / (layoutChildren.length - 1) : 0;
+      break;
     case 'space_around': {
       const spacing =
-        layoutChildren.length > 0
-          ? (availMain - totalMain) / layoutChildren.length
-          : 0
-      mainPos = spacing / 2
-      effectiveGap = spacing
-      break
+        layoutChildren.length > 0 ? (availMain - totalMain) / layoutChildren.length : 0;
+      mainPos = spacing / 2;
+      effectiveGap = spacing;
+      break;
     }
     default:
-      break
+      break;
   }
 
   const positioned = layoutChildren.map((child, i) => {
-    const size = sizes[i]
-    const crossAvail = isVertical ? availW : availH
-    const childCross = isVertical ? size.w : size.h
-    let crossPos = 0
+    const size = sizes[i];
+    const crossAvail = isVertical ? availW : availH;
+    const childCross = isVertical ? size.w : size.h;
+    let crossPos = 0;
 
-    let effectiveChildCross = childCross
+    let effectiveChildCross = childCross;
     if (align === 'center' && !isVertical && child.type === 'text') {
-      const fontSize = child.fontSize ?? 16
-      const lineHeight = child.lineHeight ?? defaultLineHeight(fontSize)
-      const content = resolveTextContent(child)
-      const isSingleLine = countExplicitTextLines(content) <= 1
+      const fontSize = child.fontSize ?? 16;
+      const lineHeight = child.lineHeight ?? defaultLineHeight(fontSize);
+      const content = resolveTextContent(child);
+      const isSingleLine = countExplicitTextLines(content) <= 1;
       if (isSingleLine) {
-        effectiveChildCross = fontSize * lineHeight
+        effectiveChildCross = fontSize * lineHeight;
       }
     }
 
     switch (align) {
       case 'center':
-        crossPos = (crossAvail - effectiveChildCross) / 2
-        break
+        crossPos = (crossAvail - effectiveChildCross) / 2;
+        break;
       case 'end':
-        crossPos = crossAvail - childCross
-        break
+        crossPos = crossAvail - childCross;
+        break;
       default:
-        break
+        break;
     }
 
     const clampCrossSize =
-      (!isVertical && align === 'center' && child.type === 'text')
-        ? effectiveChildCross
-        : childCross
+      !isVertical && align === 'center' && child.type === 'text' ? effectiveChildCross : childCross;
     if (crossAvail >= clampCrossSize) {
-      crossPos = Math.max(0, Math.min(crossPos, crossAvail - clampCrossSize))
+      crossPos = Math.max(0, Math.min(crossPos, crossAvail - clampCrossSize));
     }
 
-    const computedX = Math.round(isVertical ? pad.left + crossPos : pad.left + mainPos)
-    const computedY = Math.round(isVertical ? pad.top + mainPos : pad.top + crossPos)
+    const computedX = Math.round(isVertical ? pad.left + crossPos : pad.left + mainPos);
+    const computedY = Math.round(isVertical ? pad.top + mainPos : pad.top + crossPos);
 
-    mainPos += (isVertical ? size.h : size.w) + effectiveGap
+    mainPos += (isVertical ? size.h : size.w) + effectiveGap;
 
     const out: Record<string, unknown> = {
       ...child,
@@ -378,77 +384,102 @@ export function computeLayoutPositions(
       y: computedY,
       width: size.w,
       height: size.h,
-    }
+    };
 
     if (isVertical && align === 'center' && child.type === 'text') {
-      const hasExplicitAlign = 'textAlign' in child && child.textAlign && child.textAlign !== 'left'
+      const hasExplicitAlign =
+        'textAlign' in child && child.textAlign && child.textAlign !== 'left';
       if (!hasExplicitAlign) {
-        out.width = availW
-        out.x = Math.round(pad.left)
-        out.textAlign = 'center'
+        out.width = availW;
+        out.x = Math.round(pad.left);
+        out.textAlign = 'center';
       }
     }
 
-    return out as unknown as PenNode
-  })
+    return out as unknown as PenNode;
+  });
 
   if (badgeNodes.length > 0) {
-    return [...badgeNodes, ...positioned]
+    return [...badgeNodes, ...positioned];
   }
-  return positioned
+  return positioned;
 }
 
 function normalizeJustifyContent(
   value: unknown,
 ): 'start' | 'center' | 'end' | 'space_between' | 'space_around' {
-  if (typeof value !== 'string') return 'start'
-  const v = value.trim().toLowerCase()
+  if (typeof value !== 'string') return 'start';
+  const v = value.trim().toLowerCase();
   switch (v) {
     case 'start':
     case 'flex-start':
     case 'left':
     case 'top':
-      return 'start'
+      return 'start';
     case 'center':
     case 'middle':
-      return 'center'
+      return 'center';
     case 'end':
     case 'flex-end':
     case 'right':
     case 'bottom':
-      return 'end'
+      return 'end';
     case 'space_between':
     case 'space-between':
-      return 'space_between'
+      return 'space_between';
     case 'space_around':
     case 'space-around':
-      return 'space_around'
+      return 'space_around';
     default:
-      return 'start'
+      return 'start';
   }
 }
 
+/**
+ * Normalize a raw `alignItems` string into the three values the layout
+ * engine actually implements: `start`, `center`, `end`.
+ *
+ * Accepts a generous set of aliases from CSS/flexbox terminology so
+ * AI-generated designs (and copy-pasted web snippets) don't silently
+ * fall through to the `start` default when they meant something else.
+ *
+ * `baseline` specifically is treated as `end`:
+ *   OpenPencil's layout engine doesn't implement text-baseline
+ *   alignment (there's no font-metrics pipeline in the position step).
+ *   LLMs routinely emit `alignItems: 'baseline'` from web CSS reflex
+ *   for patterns like "big number + small unit" (e.g. "72 BPM"), where
+ *   the intent is that the small text bottom-aligns with the big
+ *   text's visual baseline. The best approximation we can render is
+ *   `end` — it bottom-aligns both children to the cross-axis end,
+ *   which for a horizontal row of a large heading and a small unit
+ *   looks essentially identical to true baseline alignment. Falling
+ *   through to `start` (the old behavior) would top-align the unit,
+ *   which is visually wrong.
+ */
 function normalizeAlignItems(value: unknown): 'start' | 'center' | 'end' {
-  if (typeof value !== 'string') return 'start'
-  const v = value.trim().toLowerCase()
+  if (typeof value !== 'string') return 'start';
+  const v = value.trim().toLowerCase();
   switch (v) {
     case 'start':
     case 'flex-start':
     case 'left':
     case 'top':
-      return 'start'
+      return 'start';
     case 'center':
     case 'middle':
-      return 'center'
+      return 'center';
     case 'end':
     case 'flex-end':
     case 'right':
     case 'bottom':
-      return 'end'
+    case 'baseline':
+    case 'last baseline':
+    case 'first baseline':
+      return 'end';
     default:
-      return 'start'
+      return 'start';
   }
 }
 
 // Re-export estimateLineWidth for convenience
-export { estimateLineWidth }
+export { estimateLineWidth };

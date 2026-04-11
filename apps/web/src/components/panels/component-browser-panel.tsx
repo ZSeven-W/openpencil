@@ -1,17 +1,17 @@
-import { useState, useRef, useCallback, useMemo } from 'react'
-import { X, Search, Upload, Download, Trash2 } from 'lucide-react'
-import { cn } from '@/lib/utils'
-import { useTranslation } from 'react-i18next'
-import { useUIKitStore } from '@/stores/uikit-store'
-import { useDocumentStore } from '@/stores/document-store'
-import { importKitFromFile, exportKit } from '@/uikit/kit-import-export'
-import ComponentBrowserGrid from './component-browser-grid'
-import type { ComponentCategory } from '@/types/uikit'
+import { useState, useRef, useCallback, useMemo } from 'react';
+import { X, Search, Upload, Download, Trash2 } from 'lucide-react';
+import { cn } from '@/lib/utils';
+import { useTranslation } from 'react-i18next';
+import { useUIKitStore } from '@/stores/uikit-store';
+import { useDocumentStore } from '@/stores/document-store';
+import { importKitFromFile, exportKit } from '@/uikit/kit-import-export';
+import ComponentBrowserGrid from './component-browser-grid';
+import type { ComponentCategory } from '@/types/uikit';
 
-const MIN_WIDTH = 420
-const MIN_HEIGHT = 300
-const DEFAULT_WIDTH = 520
-const DEFAULT_HEIGHT = 460
+const MIN_WIDTH = 420;
+const MIN_HEIGHT = 300;
+const DEFAULT_WIDTH = 520;
+const DEFAULT_HEIGHT = 460;
 
 const CATEGORIES: { value: ComponentCategory | null; labelKey: string }[] = [
   { value: null, labelKey: 'componentBrowser.category.all' },
@@ -23,104 +23,107 @@ const CATEGORIES: { value: ComponentCategory | null; labelKey: string }[] = [
   { value: 'feedback', labelKey: 'componentBrowser.category.feedback' },
   { value: 'data-display', labelKey: 'componentBrowser.category.data' },
   { value: 'other', labelKey: 'componentBrowser.category.other' },
-]
+];
 
 export default function ComponentBrowserPanel() {
-  const { t } = useTranslation()
-  const kits = useUIKitStore((s) => s.kits)
-  const searchQuery = useUIKitStore((s) => s.searchQuery)
-  const setSearchQuery = useUIKitStore((s) => s.setSearchQuery)
-  const activeCategory = useUIKitStore((s) => s.activeCategory)
-  const setActiveCategory = useUIKitStore((s) => s.setActiveCategory)
-  const activeKitId = useUIKitStore((s) => s.activeKitId)
-  const setActiveKitId = useUIKitStore((s) => s.setActiveKitId)
-  const toggleBrowser = useUIKitStore((s) => s.toggleBrowser)
-  const importKitAction = useUIKitStore((s) => s.importKit)
-  const removeKit = useUIKitStore((s) => s.removeKit)
+  const { t } = useTranslation();
+  const kits = useUIKitStore((s) => s.kits);
+  const searchQuery = useUIKitStore((s) => s.searchQuery);
+  const setSearchQuery = useUIKitStore((s) => s.setSearchQuery);
+  const activeCategory = useUIKitStore((s) => s.activeCategory);
+  const setActiveCategory = useUIKitStore((s) => s.setActiveCategory);
+  const activeKitId = useUIKitStore((s) => s.activeKitId);
+  const setActiveKitId = useUIKitStore((s) => s.setActiveKitId);
+  const toggleBrowser = useUIKitStore((s) => s.toggleBrowser);
+  const importKitAction = useUIKitStore((s) => s.importKit);
+  const removeKit = useUIKitStore((s) => s.removeKit);
 
-  const [panelWidth, setPanelWidth] = useState(DEFAULT_WIDTH)
-  const [panelHeight, setPanelHeight] = useState(DEFAULT_HEIGHT)
-  const [confirmDeleteKitId, setConfirmDeleteKitId] = useState<string | null>(null)
+  const [panelWidth, setPanelWidth] = useState(DEFAULT_WIDTH);
+  const [panelHeight, setPanelHeight] = useState(DEFAULT_HEIGHT);
+  const [confirmDeleteKitId, setConfirmDeleteKitId] = useState<string | null>(null);
 
-  const panelRef = useRef<HTMLDivElement>(null)
+  const panelRef = useRef<HTMLDivElement>(null);
   const resizeRef = useRef<{
-    edge: 'right' | 'bottom' | 'corner'
-    startX: number; startY: number; startW: number; startH: number
-  } | null>(null)
+    edge: 'right' | 'bottom' | 'corner';
+    startX: number;
+    startY: number;
+    startW: number;
+    startH: number;
+  } | null>(null);
 
   /* --- Resize --- */
   const handleResizeStart = useCallback(
     (edge: 'right' | 'bottom' | 'corner', e: React.PointerEvent) => {
-      e.preventDefault()
-      e.stopPropagation()
+      e.preventDefault();
+      e.stopPropagation();
       resizeRef.current = {
         edge,
         startX: e.clientX,
         startY: e.clientY,
         startW: panelWidth,
         startH: panelHeight,
-      }
-      e.currentTarget.setPointerCapture(e.pointerId)
+      };
+      e.currentTarget.setPointerCapture(e.pointerId);
     },
     [panelWidth, panelHeight],
-  )
+  );
 
   const handleResizeMove = useCallback((e: React.PointerEvent) => {
-    if (!resizeRef.current) return
-    e.preventDefault()
-    const { edge, startX, startY, startW, startH } = resizeRef.current
-    const container = panelRef.current?.parentElement
-    const maxW = container ? container.clientWidth - 72 : 1400
-    const maxH = container ? container.clientHeight - 16 : 900
+    if (!resizeRef.current) return;
+    e.preventDefault();
+    const { edge, startX, startY, startW, startH } = resizeRef.current;
+    const container = panelRef.current?.parentElement;
+    const maxW = container ? container.clientWidth - 72 : 1400;
+    const maxH = container ? container.clientHeight - 16 : 900;
     if (edge === 'right' || edge === 'corner')
-      setPanelWidth(Math.max(MIN_WIDTH, Math.min(maxW, startW + e.clientX - startX)))
+      setPanelWidth(Math.max(MIN_WIDTH, Math.min(maxW, startW + e.clientX - startX)));
     if (edge === 'bottom' || edge === 'corner')
-      setPanelHeight(Math.max(MIN_HEIGHT, Math.min(maxH, startH + e.clientY - startY)))
-  }, [])
+      setPanelHeight(Math.max(MIN_HEIGHT, Math.min(maxH, startH + e.clientY - startY)));
+  }, []);
 
   const handleResizeEnd = useCallback((e: React.PointerEvent) => {
-    if (!resizeRef.current) return
-    resizeRef.current = null
-    e.currentTarget.releasePointerCapture(e.pointerId)
-  }, [])
+    if (!resizeRef.current) return;
+    resizeRef.current = null;
+    e.currentTarget.releasePointerCapture(e.pointerId);
+  }, []);
 
   /* --- Import --- */
   const handleImport = useCallback(async () => {
-    const kit = await importKitFromFile()
+    const kit = await importKitFromFile();
     if (kit) {
-      importKitAction(kit)
+      importKitAction(kit);
     }
-  }, [importKitAction])
+  }, [importKitAction]);
 
   /* --- Export --- */
   const handleExport = useCallback(async () => {
-    const doc = useDocumentStore.getState().document
-    await exportKit(doc, [], doc.name ?? 'My Kit')
-  }, [])
+    const doc = useDocumentStore.getState().document;
+    await exportKit(doc, [], doc.name ?? 'My Kit');
+  }, []);
 
   /* --- Delete imported kit --- */
   const handleDeleteKit = useCallback(
     (kitId: string) => {
-      removeKit(kitId)
-      setConfirmDeleteKitId(null)
+      removeKit(kitId);
+      setConfirmDeleteKitId(null);
     },
     [removeKit],
-  )
+  );
 
   /* --- Imported kits for delete list --- */
-  const importedKits = useMemo(() => kits.filter((k) => !k.builtIn), [kits])
+  const importedKits = useMemo(() => kits.filter((k) => !k.builtIn), [kits]);
 
   /* --- Visible categories (only show tabs that have components) --- */
   const visibleCategories = useMemo(() => {
-    const categorySet = new Set<ComponentCategory>()
-    const targetKits = activeKitId ? kits.filter((k) => k.id === activeKitId) : kits
+    const categorySet = new Set<ComponentCategory>();
+    const targetKits = activeKitId ? kits.filter((k) => k.id === activeKitId) : kits;
     for (const kit of targetKits) {
       for (const comp of kit.components) {
-        categorySet.add(comp.category)
+        categorySet.add(comp.category);
       }
     }
-    return CATEGORIES.filter((c) => c.value === null || categorySet.has(c.value))
-  }, [kits, activeKitId])
+    return CATEGORIES.filter((c) => c.value === null || categorySet.has(c.value));
+  }, [kits, activeKitId]);
 
   return (
     <div
@@ -165,7 +168,9 @@ export default function ComponentBrowserPanel() {
       <div className="relative shrink-0">
         {/* Kit selector row */}
         <div className="flex items-center gap-1.5 px-3 py-1.5 border-b border-border">
-          <span className="text-xs text-muted-foreground shrink-0">{t('componentBrowser.kit')}</span>
+          <span className="text-xs text-muted-foreground shrink-0">
+            {t('componentBrowser.kit')}
+          </span>
           <select
             value={activeKitId ?? ''}
             onChange={(e) => setActiveKitId(e.target.value || null)}
@@ -174,7 +179,8 @@ export default function ComponentBrowserPanel() {
             <option value="">{t('componentBrowser.all')}</option>
             {kits.map((k) => (
               <option key={k.id} value={k.id}>
-                {k.name}{k.builtIn ? '' : ` ${t('componentBrowser.imported')}`}
+                {k.name}
+                {k.builtIn ? '' : ` ${t('componentBrowser.imported')}`}
               </option>
             ))}
           </select>
@@ -288,5 +294,5 @@ export default function ComponentBrowserPanel() {
         onPointerUp={handleResizeEnd}
       />
     </div>
-  )
+  );
 }

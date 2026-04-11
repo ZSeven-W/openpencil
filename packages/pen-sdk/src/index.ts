@@ -10,7 +10,6 @@
  *   type PenDocument,
  *   createEmptyDocument,
  *   normalizePenDocument,
- *   generateReactFromDocument,
  *   parseFigFile,
  * } from '@zseven-w/pen-sdk'
  * ```
@@ -65,7 +64,7 @@ export type {
   // Theme presets
   ThemePreset,
   ThemePresetFile,
-} from '@zseven-w/pen-types'
+} from '@zseven-w/pen-types';
 
 // ── Core: Document operations ──────────────────────────────────────────
 export {
@@ -121,38 +120,28 @@ export {
   type BooleanOpType,
   canBooleanOp,
   executeBooleanOp,
-} from '@zseven-w/pen-core'
+} from '@zseven-w/pen-core';
 
-// ── Codegen: Multi-platform code generation ────────────────────────────
-export {
-  // CSS Variables
-  variableNameToCSS,
-  generateCSSVariables,
-  // React + Tailwind
-  generateReactCode,
-  generateReactFromDocument,
-  // HTML + CSS
-  generateHTMLCode,
-  generateHTMLFromDocument,
-  // Vue 3
-  generateVueCode,
-  generateVueFromDocument,
-  // Svelte
-  generateSvelteCode,
-  generateSvelteFromDocument,
-  // Flutter
-  generateFlutterCode,
-  generateFlutterFromDocument,
-  // SwiftUI
-  generateSwiftUICode,
-  generateSwiftUIFromDocument,
-  // Android Compose
-  generateComposeCode,
-  generateComposeFromDocument,
-  // React Native
-  generateReactNativeCode,
-  generateReactNativeFromDocument,
-} from '@zseven-w/pen-codegen'
+// ── Codegen types (from pen-types) ──────────────────────────────────────
+export type {
+  Framework,
+  PlannedChunk,
+  CodePlanFromAI,
+  ExecutableChunk,
+  CodeExecutionPlan,
+  ChunkContract,
+  PropDef,
+  SlotDef,
+  ImportDef,
+  ChunkResult,
+  ChunkStatus,
+  CodeGenProgress,
+  ContractValidationResult,
+  NodeSnapshot,
+  ExecutableChunkPayload,
+  ResolvedDepContract,
+} from '@zseven-w/pen-types';
+export { FRAMEWORKS } from '@zseven-w/pen-types';
 
 // ── Figma: .fig file import ────────────────────────────────────────────
 export {
@@ -168,7 +157,30 @@ export {
   setIconLookup,
   type FigmaDecodedFile,
   type FigmaImportLayoutMode,
-} from '@zseven-w/pen-figma'
+} from '@zseven-w/pen-figma';
+
+// ── Engine: Headless design engine ────────────────────────────────────
+export {
+  DesignEngine,
+  TypedEventEmitter,
+  HistoryManager,
+  DocumentManager,
+  SelectionManager,
+  PageManager,
+  VariableManager,
+  ViewportController,
+  EngineSpatialIndex,
+  createNodeForTool,
+  isDrawingTool,
+  parseSvgToNodes,
+  type DesignEngineOptions,
+  type DesignEngineEvents,
+  type CodePlatform,
+  type CodeResult,
+} from '@zseven-w/pen-engine';
+
+// ── React: React hooks and components ─────────────────────────────────
+export * from '@zseven-w/pen-react';
 
 // ── Renderer: CanvasKit/Skia rendering engine ────────────────────────
 export {
@@ -192,4 +204,4 @@ export {
   type RenderNode,
   type PenRendererOptions,
   type IconLookupFn,
-} from '@zseven-w/pen-renderer'
+} from '@zseven-w/pen-renderer';

@@ -1,72 +1,72 @@
-import { useState, useRef, useEffect } from 'react'
-import { Plus, X } from 'lucide-react'
-import { useTranslation } from 'react-i18next'
-import { cn } from '@/lib/utils'
-import { useCanvasStore } from '@/stores/canvas-store'
-import { useDocumentStore } from '@/stores/document-store'
-import { zoomToFitContent } from '@/canvas/skia-engine-ref'
+import { useState, useRef, useEffect } from 'react';
+import { Plus, X } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
+import { cn } from '@/lib/utils';
+import { useCanvasStore } from '@/stores/canvas-store';
+import { useDocumentStore } from '@/stores/document-store';
+import { zoomToFitContent } from '@/canvas/skia-engine-ref';
 
 export default function PageTabs() {
-  const { t } = useTranslation()
-  const pages = useDocumentStore((s) => s.document.pages)
-  const activePageId = useCanvasStore((s) => s.activePageId)
-  const setActivePageId = useCanvasStore((s) => s.setActivePageId)
-  const addPage = useDocumentStore((s) => s.addPage)
-  const removePage = useDocumentStore((s) => s.removePage)
-  const renamePage = useDocumentStore((s) => s.renamePage)
-  const reorderPage = useDocumentStore((s) => s.reorderPage)
-  const duplicatePage = useDocumentStore((s) => s.duplicatePage)
+  const { t } = useTranslation();
+  const pages = useDocumentStore((s) => s.document.pages);
+  const activePageId = useCanvasStore((s) => s.activePageId);
+  const setActivePageId = useCanvasStore((s) => s.setActivePageId);
+  const addPage = useDocumentStore((s) => s.addPage);
+  const removePage = useDocumentStore((s) => s.removePage);
+  const renamePage = useDocumentStore((s) => s.renamePage);
+  const reorderPage = useDocumentStore((s) => s.reorderPage);
+  const duplicatePage = useDocumentStore((s) => s.duplicatePage);
 
-  const [editingId, setEditingId] = useState<string | null>(null)
-  const [editValue, setEditValue] = useState('')
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editValue, setEditValue] = useState('');
   const [contextMenu, setContextMenu] = useState<{
-    x: number
-    y: number
-    pageId: string
-  } | null>(null)
-  const inputRef = useRef<HTMLInputElement>(null)
+    x: number;
+    y: number;
+    pageId: string;
+  } | null>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
 
-  if (!pages || pages.length === 0) return null
+  if (!pages || pages.length === 0) return null;
 
-  const canDelete = pages.length > 1
+  const canDelete = pages.length > 1;
 
   const handleSwitchPage = (pageId: string) => {
-    if (pageId === activePageId) return
-    useCanvasStore.getState().clearSelection()
-    useCanvasStore.getState().exitAllFrames()
-    setActivePageId(pageId)
-    requestAnimationFrame(() => zoomToFitContent())
-  }
+    if (pageId === activePageId) return;
+    useCanvasStore.getState().clearSelection();
+    useCanvasStore.getState().exitAllFrames();
+    setActivePageId(pageId);
+    requestAnimationFrame(() => zoomToFitContent());
+  };
 
   const handleDoubleClick = (pageId: string, name: string) => {
-    setEditingId(pageId)
-    setEditValue(name)
-    requestAnimationFrame(() => inputRef.current?.select())
-  }
+    setEditingId(pageId);
+    setEditValue(name);
+    requestAnimationFrame(() => inputRef.current?.select());
+  };
 
   const commitRename = () => {
     if (editingId && editValue.trim()) {
-      renamePage(editingId, editValue.trim())
+      renamePage(editingId, editValue.trim());
     }
-    setEditingId(null)
-  }
+    setEditingId(null);
+  };
 
   const handleContextMenu = (e: React.MouseEvent, pageId: string) => {
-    e.preventDefault()
-    setContextMenu({ x: e.clientX, y: e.clientY, pageId })
-  }
+    e.preventDefault();
+    setContextMenu({ x: e.clientX, y: e.clientY, pageId });
+  };
 
   const handleAdd = () => {
-    addPage()
-    requestAnimationFrame(() => zoomToFitContent())
-  }
+    addPage();
+    requestAnimationFrame(() => zoomToFitContent());
+  };
 
   const handleClose = (e: React.MouseEvent, pageId: string) => {
-    e.stopPropagation()
-    if (!canDelete) return
-    removePage(pageId)
-    requestAnimationFrame(() => zoomToFitContent())
-  }
+    e.stopPropagation();
+    if (!canDelete) return;
+    removePage(pageId);
+    requestAnimationFrame(() => zoomToFitContent());
+  };
 
   return (
     <>
@@ -88,7 +88,7 @@ export default function PageTabs() {
         {/* Page list */}
         <div className="py-1 px-1">
           {pages.map((page) => {
-            const isActive = page.id === activePageId
+            const isActive = page.id === activePageId;
             return (
               <button
                 key={page.id}
@@ -110,8 +110,8 @@ export default function PageTabs() {
                     onChange={(e) => setEditValue(e.target.value)}
                     onBlur={commitRename}
                     onKeyDown={(e) => {
-                      if (e.key === 'Enter') commitRename()
-                      if (e.key === 'Escape') setEditingId(null)
+                      if (e.key === 'Enter') commitRename();
+                      if (e.key === 'Escape') setEditingId(null);
                     }}
                     onClick={(e) => e.stopPropagation()}
                   />
@@ -135,7 +135,7 @@ export default function PageTabs() {
                   </>
                 )}
               </button>
-            )
+            );
           })}
         </div>
       </div>
@@ -147,33 +147,33 @@ export default function PageTabs() {
           y={contextMenu.y}
           canDelete={canDelete}
           onRename={() => {
-            const page = pages?.find((p) => p.id === contextMenu.pageId)
-            if (page) handleDoubleClick(page.id, page.name)
-            setContextMenu(null)
+            const page = pages?.find((p) => p.id === contextMenu.pageId);
+            if (page) handleDoubleClick(page.id, page.name);
+            setContextMenu(null);
           }}
           onDuplicate={() => {
-            duplicatePage(contextMenu.pageId)
-            setContextMenu(null)
-            requestAnimationFrame(() => zoomToFitContent())
+            duplicatePage(contextMenu.pageId);
+            setContextMenu(null);
+            requestAnimationFrame(() => zoomToFitContent());
           }}
           onDelete={() => {
-            removePage(contextMenu.pageId)
-            setContextMenu(null)
-            requestAnimationFrame(() => zoomToFitContent())
+            removePage(contextMenu.pageId);
+            setContextMenu(null);
+            requestAnimationFrame(() => zoomToFitContent());
           }}
           onMoveLeft={() => {
-            reorderPage(contextMenu.pageId, 'left')
-            setContextMenu(null)
+            reorderPage(contextMenu.pageId, 'left');
+            setContextMenu(null);
           }}
           onMoveRight={() => {
-            reorderPage(contextMenu.pageId, 'right')
-            setContextMenu(null)
+            reorderPage(contextMenu.pageId, 'right');
+            setContextMenu(null);
           }}
           onClose={() => setContextMenu(null)}
         />
       )}
     </>
-  )
+  );
 }
 
 function PageContextMenu({
@@ -187,45 +187,43 @@ function PageContextMenu({
   onMoveRight,
   onClose,
 }: {
-  x: number
-  y: number
-  canDelete: boolean
-  onRename: () => void
-  onDuplicate: () => void
-  onDelete: () => void
-  onMoveLeft: () => void
-  onMoveRight: () => void
-  onClose: () => void
+  x: number;
+  y: number;
+  canDelete: boolean;
+  onRename: () => void;
+  onDuplicate: () => void;
+  onDelete: () => void;
+  onMoveLeft: () => void;
+  onMoveRight: () => void;
+  onClose: () => void;
 }) {
-  const { t } = useTranslation()
-  const menuRef = useRef<HTMLDivElement>(null)
+  const { t } = useTranslation();
+  const menuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
       if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
-        onClose()
+        onClose();
       }
-    }
+    };
     const handleEsc = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose()
-    }
-    document.addEventListener('mousedown', handleClickOutside)
-    document.addEventListener('keydown', handleEsc)
+      if (e.key === 'Escape') onClose();
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    document.addEventListener('keydown', handleEsc);
     return () => {
-      document.removeEventListener('mousedown', handleClickOutside)
-      document.removeEventListener('keydown', handleEsc)
-    }
-  }, [onClose])
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('keydown', handleEsc);
+    };
+  }, [onClose]);
 
   const items = [
     { label: 'common.rename', action: onRename },
     { label: 'common.duplicate', action: onDuplicate },
     { label: 'pages.moveUp', action: onMoveLeft },
     { label: 'pages.moveDown', action: onMoveRight },
-    ...(canDelete
-      ? [{ label: 'common.delete', action: onDelete, danger: true }]
-      : []),
-  ]
+    ...(canDelete ? [{ label: 'common.delete', action: onDelete, danger: true }] : []),
+  ];
 
   return (
     <div
@@ -238,9 +236,7 @@ function PageContextMenu({
           key={item.label}
           className={cn(
             'w-full text-left px-3 py-1.5 text-xs hover:bg-accent transition-colors',
-            'danger' in item && item.danger
-              ? 'text-destructive'
-              : 'text-popover-foreground',
+            'danger' in item && item.danger ? 'text-destructive' : 'text-popover-foreground',
           )}
           onClick={item.action}
         >
@@ -248,5 +244,5 @@ function PageContextMenu({
         </button>
       ))}
     </div>
-  )
+  );
 }

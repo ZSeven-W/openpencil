@@ -11,6 +11,9 @@ export type {
   EllipseNode,
   LineNode,
   PolygonNode,
+  PenPathHandle,
+  PenPathAnchor,
+  PenPathPointType,
   PathNode,
   TextNode,
   ImageFitMode,
@@ -18,4 +21,4 @@ export type {
   IconFontNode,
   RefNode,
   PenNode,
-} from '@zseven-w/pen-types'
+} from '@zseven-w/pen-types';

@@ -3,13 +3,49 @@ name: form-ui
 description: Form, input, and interactive element design guidelines
 phase: [generation]
 trigger:
-  keywords: [form, input, login, signup, sign up, register, password, email, 搜索, 表单, 登录, 注册, mobile, phone, 手机, 移动端, app screen, ios, android, button, card, nav, navigation, mockup, 按钮, 卡片, 导航, 模型]
+  keywords: [
+      # English: form-specific
+      form,
+      contact form,
+      feedback form,
+      registration form,
+      # English: auth flows
+      login,
+      log in,
+      signin,
+      sign in,
+      signup,
+      sign up,
+      register,
+      registration,
+      password,
+      # English: e-commerce
+      checkout,
+      # English: search & input components — multi-word so word-boundary
+      # matching doesn't false-trigger on "research" / "input slider" etc.
+      search bar,
+      search input,
+      search field,
+      input field,
+      text field,
+      text input,
+      # Chinese: form / auth
+      表单,
+      登录,
+      注册,
+      密码,
+      # Chinese: search & input components (substring matching path)
+      搜索,
+      搜索框,
+      输入框,
+    ]
 priority: 30
 budget: 1500
 category: domain
 ---
 
 DESIGN GUIDELINES:
+
 - Mobile: 375x812. Web: 1200x800 (single) or 1200x3000-5000 (landing page).
 - "mobile"/"移动端" + screen type = ACTUAL 375x812 screen, NOT desktop with phone mockup.
 - Buttons: height 44-52px, cornerRadius 8-12, padding [12, 24]. Icon+text: layout="horizontal", gap=8.

@@ -28,3 +28,35 @@ done
 if [ "$CHANGED" = "1" ]; then
   echo "[version-sync] branch $BRANCH → $VERSION"
 fi
+
+# --- Auto-format via the same script CI uses, then re-stage staged files ---
+#
+# Run `bun run format:check` first; if it fails, run `bun run format` to
+# auto-fix and re-stage only the files that were already staged. New
+# files added without going through the formatter (the most common cause
+# of CI format-check failures) get fixed silently here. The format
+# scripts already respect .prettierignore so the agent-native submodule
+# and generated files are untouched.
+#
+# NOTE: re-adding files pulls in any unstaged hunks from a partially
+# staged file. Stage cleanly if that matters to you.
+if ! bun run format:check > /dev/null 2>&1; then
+  echo "[pre-commit] format drift detected — running \`bun run format\`"
+  if ! bun run format > /dev/null 2>&1; then
+    echo "[pre-commit] \`bun run format\` failed"; exit 1;
+  fi
+  STAGED=$(git diff --cached --name-only --diff-filter=d \
+    | grep -E '\.(ts|tsx|js|jsx|cjs|mjs|json|jsonc|md|yml|yaml)$' || true)
+  if [ -n "$STAGED" ]; then
+    echo "$STAGED" | xargs git add
+  fi
+fi
+
+# --- Lint staged TS/JS files (no auto-fix, fail loudly on errors) ---
+LINT_STAGED=$(git diff --cached --name-only --diff-filter=d \
+  | grep -E '\.(ts|tsx|js|jsx|cjs|mjs)$' || true)
+if [ -n "$LINT_STAGED" ]; then
+  echo "$LINT_STAGED" | xargs npx oxlint || {
+    echo "[pre-commit] lint failed. Run: bun run lint:fix"; exit 1;
+  }
+fi

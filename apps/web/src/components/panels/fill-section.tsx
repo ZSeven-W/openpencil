@@ -1,161 +1,185 @@
-import { useState, useCallback, useRef } from 'react'
-import { useTranslation } from 'react-i18next'
-import ColorPicker from '@/components/shared/color-picker'
-import NumberInput from '@/components/shared/number-input'
-import SectionHeader from '@/components/shared/section-header'
-import VariablePicker from '@/components/shared/variable-picker'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Button } from '@/components/ui/button'
-import { Plus, X, Image as ImageIcon } from 'lucide-react'
-import { isVariableRef } from '@/variables/resolve-variables'
-import ImageFillPopover from './image-fill-popover'
-import type { PenNode } from '@/types/pen'
-import type { PenFill, GradientStop, ImageFill } from '@/types/styles'
+import { useState, useCallback, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
+import ColorPicker from '@/components/shared/color-picker';
+import NumberInput from '@/components/shared/number-input';
+import SectionHeader from '@/components/shared/section-header';
+import VariablePicker from '@/components/shared/variable-picker';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { Button } from '@/components/ui/button';
+import { Plus, X, Image as ImageIcon } from 'lucide-react';
+import { isVariableRef } from '@/variables/resolve-variables';
+import ImageFillPopover from './image-fill-popover';
+import type { PenNode } from '@/types/pen';
+import type { PenFill, GradientStop, ImageFill } from '@/types/styles';
+import { useDocumentStore } from '@/stores/document-store';
+import { toStoredAssetPath } from '@/utils/document-assets';
+import LocalImageWarning from './local-image-warning';
+import { useImageAssetState } from './use-image-asset-state';
 
 const FILL_TYPE_OPTIONS = [
   { value: 'solid', labelKey: 'fill.solid' },
   { value: 'linear_gradient', labelKey: 'fill.linear' },
   { value: 'radial_gradient', labelKey: 'fill.radial' },
   { value: 'image', labelKey: 'fill.image' },
-]
+];
 
 function defaultStops(): GradientStop[] {
   return [
     { offset: 0, color: '#000000' },
     { offset: 1, color: '#ffffff' },
-  ]
+  ];
 }
 
 /** Build a CSS gradient preview string for a gradient fill. */
 function gradientPreviewCss(fill: PenFill): string | undefined {
   if (fill.type === 'linear_gradient') {
-    const angle = fill.angle ?? 0
-    const stops = fill.stops.map(s => `${s.color} ${Math.round(s.offset * 100)}%`).join(', ')
-    return `linear-gradient(${angle}deg, ${stops})`
+    const angle = fill.angle ?? 0;
+    const stops = fill.stops.map((s) => `${s.color} ${Math.round(s.offset * 100)}%`).join(', ');
+    return `linear-gradient(${angle}deg, ${stops})`;
   }
   if (fill.type === 'radial_gradient') {
-    const stops = fill.stops.map(s => `${s.color} ${Math.round(s.offset * 100)}%`).join(', ')
-    return `radial-gradient(circle, ${stops})`
+    const stops = fill.stops.map((s) => `${s.color} ${Math.round(s.offset * 100)}%`).join(', ');
+    return `radial-gradient(circle, ${stops})`;
   }
-  return undefined
+  return undefined;
 }
 
 interface FillSectionProps {
-  fills?: PenFill[]
-  onUpdate: (updates: Partial<PenNode>) => void
+  fills?: PenFill[];
+  onUpdate: (updates: Partial<PenNode>) => void;
 }
 
-export default function FillSection({
-  fills,
-  onUpdate,
-}: FillSectionProps) {
-  const { t } = useTranslation()
+export default function FillSection({ fills, onUpdate }: FillSectionProps) {
+  const { t } = useTranslation();
   // Guard: AI-generated nodes may store fill as a plain string (e.g. "#000000")
   // instead of a PenFill[] array, causing "'opacity' in string" crashes.
   const safeFills: PenFill[] | undefined =
     typeof fills === 'string'
       ? [{ type: 'solid', color: fills }]
       : Array.isArray(fills)
-        ? fills.map((f) => typeof f === 'string' ? { type: 'solid' as const, color: f } : f)
-        : undefined
-  const firstFill = safeFills?.[0]
-  const fillType = firstFill?.type ?? 'solid'
+        ? fills.map((f) => (typeof f === 'string' ? { type: 'solid' as const, color: f } : f))
+        : undefined;
+  const firstFill = safeFills?.[0];
+  const fillType = firstFill?.type ?? 'solid';
 
-  const currentColor =
-    firstFill?.type === 'solid' ? firstFill.color : '#d1d5db'
+  const currentColor = firstFill?.type === 'solid' ? firstFill.color : '#d1d5db';
 
-  const currentAngle =
-    firstFill?.type === 'linear_gradient' ? (firstFill.angle ?? 0) : 0
+  const currentAngle = firstFill?.type === 'linear_gradient' ? (firstFill.angle ?? 0) : 0;
 
   const currentStops: GradientStop[] =
-    firstFill &&
-    (firstFill.type === 'linear_gradient' ||
-      firstFill.type === 'radial_gradient')
+    firstFill && (firstFill.type === 'linear_gradient' || firstFill.type === 'radial_gradient')
       ? firstFill.stops
-      : defaultStops()
+      : defaultStops();
 
-  const fillOpacity = firstFill && 'opacity' in firstFill
-    ? Math.round((firstFill.opacity ?? 1) * 100)
-    : 100
+  const fillOpacity =
+    firstFill && 'opacity' in firstFill ? Math.round((firstFill.opacity ?? 1) * 100) : 100;
 
   const handleTypeChange = (type: string) => {
-    let newFills: PenFill[]
+    let newFills: PenFill[];
     if (type === 'solid') {
-      newFills = [{ type: 'solid', color: currentColor }]
+      newFills = [{ type: 'solid', color: currentColor }];
     } else if (type === 'linear_gradient') {
-      newFills = [{
-        type: 'linear_gradient',
-        angle: currentAngle,
-        stops: currentStops,
-      }]
+      newFills = [
+        {
+          type: 'linear_gradient',
+          angle: currentAngle,
+          stops: currentStops,
+        },
+      ];
     } else if (type === 'radial_gradient') {
-      newFills = [{
-        type: 'radial_gradient',
-        cx: 0.5, cy: 0.5, radius: 0.5,
-        stops: currentStops,
-      }]
+      newFills = [
+        {
+          type: 'radial_gradient',
+          cx: 0.5,
+          cy: 0.5,
+          radius: 0.5,
+          stops: currentStops,
+        },
+      ];
     } else {
-      newFills = [{ type: 'image', url: '' }]
+      newFills = [{ type: 'image', url: '' }];
     }
-    onUpdate({ fill: newFills } as Partial<PenNode>)
-  }
+    onUpdate({ fill: newFills } as Partial<PenNode>);
+  };
 
   const handleColorChange = (color: string) => {
-    onUpdate({ fill: [{ type: 'solid', color }] } as Partial<PenNode>)
-  }
+    onUpdate({ fill: [{ type: 'solid', color }] } as Partial<PenNode>);
+  };
 
   const handleOpacityChange = (val: number) => {
-    if (!firstFill) return
-    const opacity = Math.max(0, Math.min(100, val)) / 100
-    onUpdate({ fill: [{ ...firstFill, opacity }] } as Partial<PenNode>)
-  }
+    if (!firstFill) return;
+    const opacity = Math.max(0, Math.min(100, val)) / 100;
+    onUpdate({ fill: [{ ...firstFill, opacity }] } as Partial<PenNode>);
+  };
 
   const handleAngleChange = (angle: number) => {
     if (firstFill?.type === 'linear_gradient') {
-      onUpdate({ fill: [{ ...firstFill, angle }] } as Partial<PenNode>)
+      onUpdate({ fill: [{ ...firstFill, angle }] } as Partial<PenNode>);
     }
-  }
+  };
 
   const handleStopColorChange = (index: number, color: string) => {
-    if (!firstFill || (firstFill.type !== 'linear_gradient' && firstFill.type !== 'radial_gradient')) return
-    const newStops = [...firstFill.stops]
-    newStops[index] = { ...newStops[index], color }
-    onUpdate({ fill: [{ ...firstFill, stops: newStops }] } as Partial<PenNode>)
-  }
+    if (
+      !firstFill ||
+      (firstFill.type !== 'linear_gradient' && firstFill.type !== 'radial_gradient')
+    )
+      return;
+    const newStops = [...firstFill.stops];
+    newStops[index] = { ...newStops[index], color };
+    onUpdate({ fill: [{ ...firstFill, stops: newStops }] } as Partial<PenNode>);
+  };
 
   const handleStopOffsetChange = (index: number, offset: number) => {
-    if (!firstFill || (firstFill.type !== 'linear_gradient' && firstFill.type !== 'radial_gradient')) return
-    const newStops = [...firstFill.stops]
-    newStops[index] = { ...newStops[index], offset: offset / 100 }
-    onUpdate({ fill: [{ ...firstFill, stops: newStops }] } as Partial<PenNode>)
-  }
+    if (
+      !firstFill ||
+      (firstFill.type !== 'linear_gradient' && firstFill.type !== 'radial_gradient')
+    )
+      return;
+    const newStops = [...firstFill.stops];
+    newStops[index] = { ...newStops[index], offset: offset / 100 };
+    onUpdate({ fill: [{ ...firstFill, stops: newStops }] } as Partial<PenNode>);
+  };
 
   const handleAddStop = () => {
-    if (!firstFill || (firstFill.type !== 'linear_gradient' && firstFill.type !== 'radial_gradient')) return
-    const stops = [...firstFill.stops]
-    const lastOffset = stops[stops.length - 1]?.offset ?? 0.5
-    stops.push({ offset: Math.min(1, lastOffset + 0.1), color: '#888888' })
-    onUpdate({ fill: [{ ...firstFill, stops }] } as Partial<PenNode>)
-  }
+    if (
+      !firstFill ||
+      (firstFill.type !== 'linear_gradient' && firstFill.type !== 'radial_gradient')
+    )
+      return;
+    const stops = [...firstFill.stops];
+    const lastOffset = stops[stops.length - 1]?.offset ?? 0.5;
+    stops.push({ offset: Math.min(1, lastOffset + 0.1), color: '#888888' });
+    onUpdate({ fill: [{ ...firstFill, stops }] } as Partial<PenNode>);
+  };
 
   const handleRemoveStop = (index: number) => {
-    if (!firstFill || (firstFill.type !== 'linear_gradient' && firstFill.type !== 'radial_gradient')) return
-    if (firstFill.stops.length <= 2) return
-    const stops = firstFill.stops.filter((_, i) => i !== index)
-    onUpdate({ fill: [{ ...firstFill, stops }] } as Partial<PenNode>)
-  }
+    if (
+      !firstFill ||
+      (firstFill.type !== 'linear_gradient' && firstFill.type !== 'radial_gradient')
+    )
+      return;
+    if (firstFill.stops.length <= 2) return;
+    const stops = firstFill.stops.filter((_, i) => i !== index);
+    onUpdate({ fill: [{ ...firstFill, stops }] } as Partial<PenNode>);
+  };
 
   const handleRemoveFill = () => {
-    onUpdate({ fill: [] } as Partial<PenNode>)
-  }
+    onUpdate({ fill: [] } as Partial<PenNode>);
+  };
 
   const handleImageFitChange = (mode: string) => {
-    if (firstFill?.type !== 'image') return
-    onUpdate({ fill: [{ ...firstFill, mode: mode as ImageFill['mode'] }] } as Partial<PenNode>)
-  }
+    if (firstFill?.type !== 'image') return;
+    onUpdate({ fill: [{ ...firstFill, mode: mode as ImageFill['mode'] }] } as Partial<PenNode>);
+  };
 
   // Gradient preview swatch
-  const gradientCss = firstFill ? gradientPreviewCss(firstFill) : undefined
+  const gradientCss = firstFill ? gradientPreviewCss(firstFill) : undefined;
 
   return (
     <div className="space-y-1.5">
@@ -236,8 +260,12 @@ export default function FillSection({
           <VariablePicker
             type="color"
             currentValue={currentColor}
-            onBind={(ref) => onUpdate({ fill: [{ type: 'solid', color: ref }] } as Partial<PenNode>)}
-            onUnbind={(val) => onUpdate({ fill: [{ type: 'solid', color: String(val) }] } as Partial<PenNode>)}
+            onBind={(ref) =>
+              onUpdate({ fill: [{ type: 'solid', color: ref }] } as Partial<PenNode>)
+            }
+            onUnbind={(val) =>
+              onUpdate({ fill: [{ type: 'solid', color: String(val) }] } as Partial<PenNode>)
+            }
           />
         </div>
       )}
@@ -258,21 +286,20 @@ export default function FillSection({
 
           <div className="space-y-1">
             <div className="flex items-center justify-between">
-              <span className="text-[10px] text-muted-foreground">
-                {t('fill.stops')}
-              </span>
+              <span className="text-[10px] text-muted-foreground">{t('fill.stops')}</span>
               <Button variant="ghost" size="icon-sm" onClick={handleAddStop}>
                 <Plus className="w-3 h-3" />
               </Button>
             </div>
             {currentStops.map((stop, i) => (
               <div key={i} className="flex items-center gap-1">
-                <ColorPicker
-                  value={stop.color}
-                  onChange={(c) => handleStopColorChange(i, c)}
-                />
+                <ColorPicker value={stop.color} onChange={(c) => handleStopColorChange(i, c)} />
                 <NumberInput
-                  value={Math.round((Number.isFinite(stop.offset) ? stop.offset : i / Math.max(currentStops.length - 1, 1)) * 100)}
+                  value={Math.round(
+                    (Number.isFinite(stop.offset)
+                      ? stop.offset
+                      : i / Math.max(currentStops.length - 1, 1)) * 100,
+                  )}
                   onChange={(v) => handleStopOffsetChange(i, v)}
                   min={0}
                   max={100}
@@ -295,7 +322,7 @@ export default function FillSection({
         <ImageFillEditor fill={firstFill} onUpdate={onUpdate} onFitChange={handleImageFitChange} />
       )}
     </div>
-  )
+  );
 }
 
 function ImageFillEditor({
@@ -303,25 +330,35 @@ function ImageFillEditor({
   onUpdate,
   onFitChange,
 }: {
-  fill: ImageFill
-  onUpdate: (updates: Partial<PenNode>) => void
-  onFitChange: (mode: string) => void
+  fill: ImageFill;
+  onUpdate: (updates: Partial<PenNode>) => void;
+  onFitChange: (mode: string) => void;
 }) {
-  const { t } = useTranslation()
-  const [triggerRect, setTriggerRect] = useState<DOMRect | null>(null)
-  const triggerRef = useRef<HTMLButtonElement>(null)
-  const hasImage = fill.url && !fill.url.startsWith('__')
-  const fitMode = fill.mode ?? 'fill'
+  const { t } = useTranslation();
+  const documentPath = useDocumentStore((s) => s.filePath);
+  const [triggerRect, setTriggerRect] = useState<DOMRect | null>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const { previewSrc, hasImage, warning } = useImageAssetState(fill.url, documentPath);
+  const fitMode = fill.mode ?? 'fill';
 
-  const handleClose = useCallback(() => setTriggerRect(null), [])
+  const handleClose = useCallback(() => setTriggerRect(null), []);
 
   const handleToggle = () => {
     if (triggerRect) {
-      setTriggerRect(null)
+      setTriggerRect(null);
     } else if (triggerRef.current) {
-      setTriggerRect(triggerRef.current.getBoundingClientRect())
+      setTriggerRect(triggerRef.current.getBoundingClientRect());
     }
-  }
+  };
+
+  const handleRelink = useCallback(async () => {
+    if (!window.electronAPI?.openImageFile) return;
+    const result = await window.electronAPI.openImageFile();
+    if (!result) return;
+    onUpdate({
+      fill: [{ ...fill, url: toStoredAssetPath(result.filePath, documentPath) }],
+    } as Partial<PenNode>);
+  }, [documentPath, fill, onUpdate]);
 
   return (
     <div>
@@ -333,7 +370,7 @@ function ImageFillEditor({
       >
         <div className="w-6 h-6 rounded border border-border shrink-0 bg-muted overflow-hidden flex items-center justify-center">
           {hasImage ? (
-            <img src={fill.url} alt="" className="w-full h-full object-cover" />
+            <img src={previewSrc} alt="" className="w-full h-full object-cover" />
           ) : (
             <ImageIcon className="w-3 h-3 text-muted-foreground" />
           )}
@@ -343,9 +380,20 @@ function ImageFillEditor({
         </span>
       </button>
 
+      {warning && (
+        <div className="mt-1.5">
+          <LocalImageWarning
+            message={warning.message}
+            assetPath={warning.assetPath}
+            onRelink={window.electronAPI?.openImageFile ? handleRelink : undefined}
+          />
+        </div>
+      )}
+
       {triggerRect && (
         <ImageFillPopover
-          imageSrc={fill.url}
+          imageSrc={previewSrc}
+          documentPath={documentPath}
           fitMode={fitMode}
           triggerRect={triggerRect}
           adjustments={{
@@ -359,17 +407,30 @@ function ImageFillEditor({
           }}
           onFitModeChange={(mode) => onFitChange(mode)}
           onAdjustmentChange={(key, value) => {
-            onUpdate({ fill: [{ ...fill, [key]: value }] } as Partial<PenNode>)
+            onUpdate({ fill: [{ ...fill, [key]: value }] } as Partial<PenNode>);
           }}
           onResetAdjustments={() => {
-            onUpdate({ fill: [{ ...fill, exposure: 0, contrast: 0, saturation: 0, temperature: 0, tint: 0, highlights: 0, shadows: 0 }] } as Partial<PenNode>)
+            onUpdate({
+              fill: [
+                {
+                  ...fill,
+                  exposure: 0,
+                  contrast: 0,
+                  saturation: 0,
+                  temperature: 0,
+                  tint: 0,
+                  highlights: 0,
+                  shadows: 0,
+                },
+              ],
+            } as Partial<PenNode>);
           }}
           onImageChange={(dataUrl) => {
-            onUpdate({ fill: [{ ...fill, url: dataUrl }] } as Partial<PenNode>)
+            onUpdate({ fill: [{ ...fill, url: dataUrl }] } as Partial<PenNode>);
           }}
           onClose={handleClose}
         />
       )}
     </div>
-  )
+  );
 }

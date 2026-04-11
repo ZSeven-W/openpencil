@@ -1,35 +1,48 @@
-import { useState, useCallback, useRef } from 'react'
-import { useTranslation } from 'react-i18next'
-import type { ImageNode, ImageFitMode } from '@/types/pen'
-import SectionHeader from '@/components/shared/section-header'
-import { Image as ImageIcon, Search, Sparkles } from 'lucide-react'
-import ImageFillPopover from './image-fill-popover'
-import ImageSearchPopover from './image-search-popover'
-import ImageGeneratePopover from './image-generate-popover'
-import { Button } from '@/components/ui/button'
+import { useState, useCallback, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
+import type { ImageNode, ImageFitMode } from '@/types/pen';
+import SectionHeader from '@/components/shared/section-header';
+import { Image as ImageIcon, Search, Sparkles } from 'lucide-react';
+import ImageFillPopover from './image-fill-popover';
+import ImageSearchPopover from './image-search-popover';
+import ImageGeneratePopover from './image-generate-popover';
+import { Button } from '@/components/ui/button';
+import { useDocumentStore } from '@/stores/document-store';
+import { toStoredAssetPath } from '@/utils/document-assets';
+import LocalImageWarning from './local-image-warning';
+import { useImageAssetState } from './use-image-asset-state';
 
 interface ImageSectionProps {
-  node: ImageNode
-  onUpdate: (updates: Partial<ImageNode>) => void
+  node: ImageNode;
+  onUpdate: (updates: Partial<ImageNode>) => void;
 }
 
 export default function ImageSection({ node, onUpdate }: ImageSectionProps) {
-  const { t } = useTranslation()
-  const [triggerRect, setTriggerRect] = useState<DOMRect | null>(null)
-  const triggerRef = useRef<HTMLButtonElement>(null)
+  const { t } = useTranslation();
+  const documentPath = useDocumentStore((s) => s.filePath);
+  const [triggerRect, setTriggerRect] = useState<DOMRect | null>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const fitMode = node.objectFit ?? 'fill';
+  const { previewSrc, hasImage, warning } = useImageAssetState(node.src, documentPath);
 
-  const fitMode = node.objectFit ?? 'fill'
-  const hasImage = node.src && !node.src.startsWith('__')
-
-  const handleClose = useCallback(() => setTriggerRect(null), [])
+  const handleClose = useCallback(() => setTriggerRect(null), []);
 
   const handleToggle = () => {
     if (triggerRect) {
-      setTriggerRect(null)
+      setTriggerRect(null);
     } else if (triggerRef.current) {
-      setTriggerRect(triggerRef.current.getBoundingClientRect())
+      setTriggerRect(triggerRef.current.getBoundingClientRect());
     }
-  }
+  };
+
+  const handleRelink = useCallback(async () => {
+    if (!window.electronAPI?.openImageFile) return;
+    const result = await window.electronAPI.openImageFile();
+    if (!result) return;
+    onUpdate({
+      src: toStoredAssetPath(result.filePath, documentPath),
+    });
+  }, [documentPath, onUpdate]);
 
   return (
     <div className="space-y-1.5">
@@ -43,7 +56,7 @@ export default function ImageSection({ node, onUpdate }: ImageSectionProps) {
       >
         <div className="w-6 h-6 rounded border border-border shrink-0 bg-muted overflow-hidden flex items-center justify-center">
           {hasImage ? (
-            <img src={node.src} alt="" className="w-full h-full object-cover" />
+            <img src={previewSrc} alt="" className="w-full h-full object-cover" />
           ) : (
             <ImageIcon className="w-3 h-3 text-muted-foreground" />
           )}
@@ -52,6 +65,14 @@ export default function ImageSection({ node, onUpdate }: ImageSectionProps) {
           {t(`image.${fitMode === 'fit' ? 'fitMode' : fitMode}`)}
         </span>
       </button>
+
+      {warning && (
+        <LocalImageWarning
+          message={warning.message}
+          assetPath={warning.assetPath}
+          onRelink={window.electronAPI?.openImageFile ? handleRelink : undefined}
+        />
+      )}
 
       <div className="flex gap-1 mt-1.5">
         <ImageSearchPopover
@@ -79,8 +100,9 @@ export default function ImageSection({ node, onUpdate }: ImageSectionProps) {
 
       {triggerRect && (
         <ImageFillPopover
-          imageSrc={node.src}
+          imageSrc={previewSrc}
           fitMode={fitMode}
+          documentPath={documentPath}
           triggerRect={triggerRect}
           adjustments={{
             exposure: node.exposure,
@@ -93,11 +115,21 @@ export default function ImageSection({ node, onUpdate }: ImageSectionProps) {
           }}
           onFitModeChange={(mode) => onUpdate({ objectFit: mode as ImageFitMode })}
           onAdjustmentChange={(key, value) => onUpdate({ [key]: value } as Partial<ImageNode>)}
-          onResetAdjustments={() => onUpdate({ exposure: 0, contrast: 0, saturation: 0, temperature: 0, tint: 0, highlights: 0, shadows: 0 } as Partial<ImageNode>)}
+          onResetAdjustments={() =>
+            onUpdate({
+              exposure: 0,
+              contrast: 0,
+              saturation: 0,
+              temperature: 0,
+              tint: 0,
+              highlights: 0,
+              shadows: 0,
+            } as Partial<ImageNode>)
+          }
           onImageChange={(dataUrl) => onUpdate({ src: dataUrl })}
           onClose={handleClose}
         />
       )}
     </div>
-  )
+  );
 }

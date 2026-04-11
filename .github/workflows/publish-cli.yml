@@ -17,6 +17,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          submodules: recursive
 
       - uses: oven-sh/setup-bun@v2
         with:
@@ -26,6 +28,10 @@ jobs:
         with:
           node-version: 20
           registry-url: https://registry.npmjs.org
+
+      - uses: mlugg/setup-zig@v2
+        with:
+          version: 0.15.2
 
       - name: Install dependencies
         run: bun install --frozen-lockfile
@@ -74,12 +80,6 @@ jobs:
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
-      - name: Publish pen-codegen
-        run: npm publish --access public 2>&1 || npm view "@zseven-w/pen-codegen@${{ steps.version.outputs.version }}" version
-        working-directory: packages/pen-codegen
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-
       - name: Publish pen-figma
         run: npm publish --access public 2>&1 || npm view "@zseven-w/pen-figma@${{ steps.version.outputs.version }}" version
         working-directory: packages/pen-figma
@@ -89,6 +89,12 @@ jobs:
       - name: Publish pen-renderer
         run: npm publish --access public 2>&1 || npm view "@zseven-w/pen-renderer@${{ steps.version.outputs.version }}" version
         working-directory: packages/pen-renderer
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Publish pen-mcp
+        run: npm publish --access public 2>&1 || npm view "@zseven-w/pen-mcp@${{ steps.version.outputs.version }}" version
+        working-directory: packages/pen-mcp
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 

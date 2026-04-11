@@ -1,4 +1,4 @@
-import type { TranslationKeys } from './en'
+import type { TranslationKeys } from './en';
 
 const id: TranslationKeys = {
   // ── Common ──
@@ -10,6 +10,8 @@ const id: TranslationKeys = {
   'common.close': 'Tutup',
   'common.connect': 'Hubungkan',
   'common.disconnect': 'Putuskan',
+  'common.yes': 'Ya',
+  'common.no': 'Tidak',
   'common.import': 'Impor',
   'common.export': 'Ekspor',
   'common.name': 'Nama',
@@ -59,6 +61,309 @@ const id: TranslationKeys = {
   'topbar.connected': 'terhubung',
   'topbar.agentStatus': '{{agents}} agent{{agentSuffix}} · {{mcp}} MCP',
 
+  // ── Panel Git ──
+  'git.openPanel': 'Buka panel Git',
+  'git.closePanel': 'Tutup panel Git',
+  'git.title': 'Git · {{fileName}}',
+  'git.titleNoFile': 'Git · (Tidak ada file)',
+  'git.close': 'Tutup',
+  'git.initializing': 'Menginisialisasi repositori…',
+  'git.conflict.title': 'Konflik merge',
+  'git.conflict.description':
+    'Selesaikan setiap konflik menggunakan kartu di bawah, lalu terapkan penggabungan.',
+  'git.conflict.abort': 'Batalkan merge',
+  'git.conflict.nonOp.title': 'Penggabungan dijeda pada file non-.op',
+  'git.conflict.nonOp.description':
+    'Penggabungan .op selesai, tetapi file lain di repo masih belum terselesaikan. Selesaikan di luar OpenPencil, lalu lanjutkan.',
+  'git.conflict.nonOp.unresolvedHeading_one': '1 file perlu perhatian',
+  'git.conflict.nonOp.unresolvedHeading_other': '{{count}} file perlu perhatian',
+  'git.conflict.nonOp.continue': 'Lanjutkan penggabungan',
+  'git.conflict.nonOp.abort': 'Batalkan penggabungan',
+  // ── Konflik Git — banner (Phase 7b) ──
+  'git.conflict.banner.progress': '{{resolved}} / {{total}} diselesaikan',
+  'git.conflict.banner.apply': 'Terapkan penggabungan',
+  'git.conflict.banner.continue': 'Lanjutkan',
+  'git.conflict.banner.finalizeError': 'Tidak dapat diterapkan: {{message}}',
+  'git.conflict.banner.pollError': 'Polling status dijeda karena kesalahan: {{message}}',
+  // placeholder — future localization
+  'git.conflict.banner.reopenMessage':
+    'Panel dibuka kembali saat penggabungan — silakan batalkan dan pull ulang.',
+
+  // ── Konflik Git — daftar (Phase 7c) ──
+  'git.conflict.list.heading': 'Semua konflik',
+  'git.conflict.list.progress': '{{resolved}} / {{total}} diselesaikan',
+  'git.conflict.list.allResolved': 'Semua selesai',
+  'git.conflict.list.allOurs': 'Semua milik saya',
+  'git.conflict.list.allTheirs': 'Semua milik mereka',
+
+  // ── Konflik Git — item (Phase 7c) ──
+  'git.conflict.item.nodeConflict': 'Konflik node',
+  'git.conflict.item.fieldConflict': 'Konflik field',
+  'git.conflict.item.resolved': 'Diselesaikan',
+
+  // ── Konflik Git — kartu (Phase 7c) ──
+  'git.conflict.card.ours': 'Milik saya',
+  'git.conflict.card.theirs': 'Milik mereka',
+  'git.conflict.card.base': 'Dasar',
+  'git.conflict.card.keepMine': 'Pertahankan milik saya',
+  'git.conflict.card.keepTheirs': 'Pertahankan milik mereka',
+  'git.conflict.card.oursThumbnailAlt': 'Versi saya',
+  'git.conflict.card.theirsThumbnailAlt': 'Versi mereka',
+
+  // ── Konflik Git — editor JSON (Phase 7c) ──
+  'git.conflict.editor.editManually': 'Edit secara manual',
+  'git.conflict.editor.cancel': 'Batal',
+  'git.conflict.editor.apply': 'Terapkan',
+  'git.conflict.editor.invalidJson': 'JSON tidak valid',
+  'git.conflict.editor.textareaLabel': 'Edit nilai JSON',
+
+  'git.error.dismiss': 'Tutup',
+  'git.error.retry': 'Coba lagi',
+  'git.error.title': 'Terjadi kesalahan',
+
+  // ── Status Kosong Git ──
+  'git.empty.heading': 'Belum ada riwayat versi',
+  'git.empty.optional': 'Git opsional — boleh dilewati',
+  'git.empty.requireSavedFile': 'Simpan file .op terlebih dahulu untuk mengaktifkan riwayat',
+  'git.empty.newCard': 'Baru',
+  'git.empty.newCardDescription': 'Buat riwayat lokal',
+  'git.empty.openCard': 'Buka',
+  'git.empty.openCardDescription': 'Repositori yang ada',
+  'git.empty.cloneCard': 'Klona',
+  'git.empty.cloneCardDescription': 'Dari remote',
+
+  // ── Form Penulis Git ──
+  'git.author.heading': 'Penulis commit',
+  'git.author.subheading': 'Menyimpan commit pertama memerlukan nama dan email',
+  'git.author.nameLabel': 'Nama',
+  'git.author.namePlaceholder': 'Nama Anda',
+  'git.author.emailLabel': 'Email',
+  'git.author.emailPlaceholder': 'anda@contoh.com',
+  'git.author.submit': 'Simpan',
+  'git.author.cancel': 'Batal',
+  'git.author.validationName': 'Nama wajib diisi',
+  'git.author.validationEmail': 'Email yang valid diperlukan',
+
+  // ── Pemilih Git (Phase 4b) ──
+  'git.picker.heading': '{{count}} file .op di repositori ini:',
+  'git.picker.milestoneCount': '{{count}} tonggak',
+  'git.picker.noHistory': 'Tidak ada riwayat',
+  'git.picker.lastCommit': '{{message}} · {{time}}',
+  'git.picker.bindButton': 'Lacak file ini',
+  'git.picker.bindAndOpenButton': 'Lacak dan buka',
+  'git.picker.back': 'Kembali',
+  'git.picker.backClose': 'Batal',
+  'git.picker.empty.heading': 'Tidak ada file .op di repositori ini',
+  'git.picker.empty.body': 'Panel Git memerlukan setidaknya satu file .op untuk bekerja.',
+  'git.picker.empty.close': 'Tutup panel',
+
+  // ── Banner auto-bind (Phase 4b) ──
+  'git.autoBind.confirmHeading': '{{fileName}} ditemukan — buka?',
+  'git.autoBind.openButton': 'Buka',
+  'git.autoBind.dismissButton': 'Lewati',
+
+  // ── Waktu relatif (Phase 4b) ──
+  'git.relativeTime.justNow': 'baru saja',
+  'git.relativeTime.minutesAgo': '{{count}}m yang lalu',
+  'git.relativeTime.hoursAgo': '{{count}}j yang lalu',
+  'git.relativeTime.daysAgo': '{{count}}h yang lalu',
+
+  // ── Git Commit Input (Phase 4c) ──
+  'git.commit.placeholder': 'Jelaskan perubahan ini…',
+  'git.commit.submitButton': 'Simpan milestone',
+  'git.commit.saveRequiredTitle': 'Simpan dokumen dulu',
+  'git.commit.saveRequiredBody':
+    'Anda memiliki perubahan yang belum disimpan. Simpan dokumen untuk melanjutkan: {{label}}',
+  'git.commit.saveRequiredSave': 'Simpan',
+  'git.commit.saveRequiredCancel': 'Batal',
+
+  // ── Git Header (Phase 4c → 6c) ──
+  'git.header.autosaveError': 'Error auto-save',
+  'git.header.autosaveErrorTitle': 'Auto-save terakhir gagal',
+  'git.header.authorMissingWarning': 'Atur penulis commit untuk merekam atribusi',
+  'git.header.overflowSwitchTracked': 'Ganti file yang dilacak…',
+  'git.header.overflowClearAuthor': 'Bersihkan penulis commit',
+  'git.header.overflowCloseRepo': 'Tutup repositori',
+  'git.header.overflowRemoteSettings': 'Pengaturan remote…',
+  'git.header.overflowSshKeys': 'Kunci SSH…',
+  'git.header.overflowMoreActions': 'Tindakan lainnya',
+
+  // ── Git History List (Phase 4c) ──
+  'git.history.empty': 'Belum ada riwayat',
+  'git.history.autosaveGroup_one': '1 auto-save',
+  'git.history.autosaveGroup_other': '{{count}} auto-save',
+  'git.history.autosaveLabel': 'auto {{time}}',
+  'git.history.milestoneDetailTitle': 'Detail milestone',
+  'git.history.restoreButton': 'Pulihkan',
+  'git.history.copyHashButton': 'Salin hash',
+  'git.history.copiedToast': 'Tersalin',
+  // ── Git diff riwayat (Phase 7b) ──
+  'git.history.diff.loading': 'Memuat diff…',
+  'git.history.diff.initialCommit': 'Commit awal — tidak ada induk untuk dibandingkan',
+  'git.history.diff.noChanges': 'Tidak ada perubahan yang terdeteksi',
+  'git.history.diff.error': 'Diff tidak tersedia: {{message}}',
+  'git.history.diff.framesChanged_one': '1 frame berubah',
+  'git.history.diff.framesChanged_other': '{{count}} frame berubah',
+  'git.history.diff.nodesAdded_one': '1 node ditambahkan',
+  'git.history.diff.nodesAdded_other': '{{count}} node ditambahkan',
+  'git.history.diff.nodesRemoved_one': '1 node dihapus',
+  'git.history.diff.nodesRemoved_other': '{{count}} node dihapus',
+  'git.history.diff.nodesModified_one': '1 node diubah',
+  'git.history.diff.nodesModified_other': '{{count}} node diubah',
+  'git.history.promoteButton': 'Promosikan ke milestone',
+  'git.history.promoteSuccessToast': 'Dipromosikan ke milestone',
+  'git.history.loadMore': 'Muat lebih',
+  'git.autosave.messagePrefix': 'auto',
+  'git.autosave.messageDiffSuffix': '',
+
+  // ── Git Pemilih Branch (Phase 5) ──
+  'git.branch.listHeading': 'Branch',
+  'git.branch.createAction': 'Branch baru',
+  'git.branch.createPlaceholder': 'feature/login-redesign',
+  'git.branch.createSubmit': 'Buat branch',
+  'git.branch.createEmpty': 'Masukkan nama branch',
+  'git.branch.createExists': 'Branch {{name}} sudah ada',
+  'git.branch.mergeAction': 'Gabungkan branch…',
+  'git.branch.mergeHeading': 'Gabungkan ke {{name}}',
+  'git.branch.deletePrompt': 'Hapus branch {{name}}?',
+  'git.branch.deleteLabel': 'Hapus branch {{name}}',
+  'git.branch.deleteWarning': 'Branch {{name}} memiliki commit yang belum digabung',
+  'git.branch.deleteConfirm': 'Hapus',
+  'git.branch.deleteForce': 'Paksa hapus',
+  'git.branch.cancel': 'Batal',
+  'git.branch.conflictDisabled': 'Selesaikan penggabungan sebelum mengganti branch',
+  'git.branch.noCommits': 'Belum ada commit',
+
+  // ── Git Clone Wizard (Phase 6a) ──
+  'git.wizard.clone.heading': 'Klon repositori jarak jauh',
+  'git.wizard.clone.subheading': 'Pilih URL jarak jauh dan folder tujuan.',
+  'git.wizard.clone.urlLabel': 'URL jarak jauh',
+  'git.wizard.clone.urlPlaceholder': 'https://github.com/owner/repo.git',
+  'git.wizard.clone.destLabel': 'Folder tujuan',
+  'git.wizard.clone.destPlaceholder': '/path/ke/klon',
+  'git.wizard.clone.destPickButton': 'Telusuri…',
+  'git.wizard.clone.usernameLabel': 'Nama pengguna (opsional)',
+  'git.wizard.clone.tokenLabel': 'Token akses (opsional)',
+  'git.wizard.clone.tokenPlaceholder': 'ghp_… atau kosongkan untuk repo publik',
+  'git.wizard.clone.anonymousHint': 'Kosongkan untuk klon anonim (hanya repo publik).',
+  'git.wizard.clone.sshHint': 'URL ini memerlukan autentikasi kunci SSH.',
+  'git.wizard.clone.hostDetected': 'Terdeteksi: {{host}} · {{mode}}',
+  'git.wizard.clone.authMode.token-or-anon': 'token atau anonim',
+  'git.wizard.clone.authMode.ssh': 'kunci SSH',
+  'git.wizard.clone.cancel': 'Batal',
+  'git.wizard.clone.submit': 'Klon',
+  'git.wizard.clone.validationUrl': 'URL jarak jauh wajib diisi',
+  'git.wizard.clone.validationDest': 'Folder tujuan wajib diisi',
+  'git.wizard.clone.validationTokenUsername': 'Nama pengguna wajib diisi saat token disediakan',
+  'git.wizard.clone.error.clone-network':
+    'Kesalahan jaringan saat klon. Periksa koneksi Anda dan coba lagi.',
+  'git.wizard.clone.error.network': 'Kesalahan jaringan. Periksa koneksi Anda dan coba lagi.',
+  'git.wizard.clone.error.timeout':
+    'Klon kehabisan waktu. Coba lagi atau gunakan repositori yang lebih kecil.',
+  'git.wizard.clone.error.auth-required': 'Repositori ini memerlukan autentikasi.',
+  'git.wizard.clone.error.auth-failed': 'Autentikasi gagal. Periksa nama pengguna dan token Anda.',
+  'git.wizard.clone.error.auth-token-invalid':
+    'Token akses ditolak. Buat token baru dan coba lagi.',
+  'git.wizard.clone.error.clone-failed':
+    'Klon gagal. Pastikan URL menunjuk ke repositori yang sebenarnya.',
+  'git.wizard.clone.error.clone-target-exists': 'Folder tujuan sudah ada atau tidak kosong.',
+
+  // ── Git Pull / Push (Phase 6b) ──
+  'git.pull.label': 'Pull',
+  'git.pull.tooltip': 'Pull dari origin',
+  'git.pull.noRemote': 'Tidak ada remote yang dikonfigurasi — tambahkan di pengaturan Git',
+  'git.pull.retry': 'Coba pull lagi',
+  'git.push.label': 'Push',
+  'git.push.tooltip_one': 'Push 1 commit ke origin',
+  'git.push.tooltip_other': 'Push {{count}} commit ke origin',
+  'git.push.noRemote': 'Tidak ada remote yang dikonfigurasi — tambahkan di pengaturan Git',
+  'git.push.upToDate': 'Tidak ada yang di-push — Anda sudah up-to-date',
+  'git.push.retry': 'Coba push lagi',
+  'git.push.rejectedBody':
+    'Remote memiliki commit yang belum Anda miliki. Pull terlebih dahulu, lalu push lagi.',
+  'git.push.rejectedDismiss': 'Tutup',
+  'git.push.rejectedPull': 'Pull sekarang',
+  'git.remote.dismissError': 'Tutup',
+
+  // ── Git Pengaturan remote (Phase 6c) ──
+  'git.remote.settingsLabel': 'Pengaturan remote',
+  'git.remote.settingsHeading': 'Remote',
+  'git.remote.back': 'Kembali',
+  'git.remote.cancel': 'Batal',
+  'git.remote.emptyNoOrigin': 'Belum ada remote yang dikonfigurasi. Tambahkan satu:',
+  'git.remote.urlLabel': 'URL origin',
+  'git.remote.urlPlaceholder': 'https://github.com/owner/repo.git',
+  'git.remote.saveButton': 'Simpan',
+  'git.remote.clearButton': 'Hapus',
+  'git.remote.clearConfirmHeading': 'Hapus origin?',
+  'git.remote.clearConfirmBody': 'Ini akan menghapus remote origin dari repositori ini.',
+  'git.remote.clearConfirmAction': 'Konfirmasi',
+  'git.remote.aheadBehind': '{{ahead}} di depan · {{behind}} di belakang',
+  'git.remote.fetchButton': 'Fetch',
+  'git.remote.sshIsoUnsupported':
+    'Transport SSH tidak didukung oleh mesin bawaan. Instal git sistem atau gunakan URL remote HTTPS.',
+  'git.remote.storedAuthLabel': 'Kredensial tersimpan',
+  'git.remote.storedAuth.token': 'Token',
+  'git.remote.storedAuth.ssh': 'Kunci SSH',
+  'git.remote.storedAuth.none': 'Tidak ada',
+  'git.remote.storedAuth.loading': 'Memuat…',
+  'git.remote.storedAuth.noHost': 'Tidak ada host terdeteksi',
+  'git.remote.clearAuthButton': 'Hapus kredensial tersimpan',
+
+  // ── Git Kunci SSH (Phase 6c) ──
+  'git.ssh.label': 'Kunci SSH',
+  'git.ssh.heading': 'Kunci SSH',
+  'git.ssh.back': 'Kembali',
+  'git.ssh.cancel': 'Batal',
+  'git.ssh.isoUnsupported':
+    'Remote saat ini menggunakan SSH, tetapi mesin bawaan tidak dapat melakukan transport SSH. Instal git sistem atau ubah URL remote menjadi HTTPS.',
+  'git.ssh.emptyList': 'Belum ada kunci SSH.',
+  'git.ssh.generateAction': 'Buat baru',
+  'git.ssh.importAction': 'Impor yang ada',
+  'git.ssh.copyPublicKey': 'Salin kunci publik',
+  'git.ssh.copiedHint': 'Disalin',
+  'git.ssh.copyUnsupported': 'Papan klip tidak tersedia — salin kunci ini secara manual.',
+  'git.ssh.deleteKey': 'Hapus {{name}}',
+  'git.ssh.deletePrompt': 'Hapus kunci SSH {{name}}?',
+  'git.ssh.deleteConfirm': 'Hapus',
+  'git.ssh.currentHostBadge': 'host saat ini',
+  'git.ssh.hostLabel': 'Host',
+  'git.ssh.hostPlaceholder': 'github.com',
+  'git.ssh.commentLabel': 'Komentar',
+  'git.ssh.commentPlaceholder': 'laptop@home',
+  'git.ssh.generateSubmit': 'Buat',
+  'git.ssh.importPathLabel': 'Jalur kunci privat',
+  'git.ssh.importPathPlaceholder': '/path/to/id_ed25519',
+  'git.ssh.importBrowse': 'Telusuri…',
+  'git.ssh.importSubmit': 'Impor',
+  'git.ssh.validationHost': 'Host wajib diisi',
+  'git.ssh.validationComment': 'Komentar wajib diisi',
+  'git.ssh.validationImportPath': 'Pilih file kunci privat untuk diimpor',
+  'git.ssh.providerLink': 'Buka pengaturan kunci SSH {{host}}',
+  'git.ssh.genericGuidance':
+    'Salin kunci publik dan tambahkan ke pengaturan kunci SSH penyedia Git Anda.',
+
+  // ── Git Formulir autentikasi (Phase 6b) ──
+  'git.auth.formLabel': 'Kredensial Git',
+  'git.auth.heading': 'Autentikasi dengan {{host}}',
+  'git.auth.headingUnknown': 'Autentikasi dengan remote ini',
+  'git.auth.modeToggleLabel': 'Jenis kredensial',
+  'git.auth.modeToken': 'Token',
+  'git.auth.modeSsh': 'SSH',
+  'git.auth.usernameLabel': 'Nama pengguna (opsional)',
+  'git.auth.tokenLabel': 'Token akses',
+  'git.auth.tokenPlaceholder': 'ghp_… atau PAT',
+  'git.auth.sshKeyLabel': 'Kunci SSH',
+  'git.auth.sshNoKeys':
+    'Tidak ada kunci SSH yang tersedia. Impor atau buat satu di pengaturan Git terlebih dahulu.',
+  'git.auth.rememberLabel': 'Ingat kredensial ini untuk host ini',
+  'git.auth.rememberHint': 'Ingat kredensial ini untuk host ini',
+  'git.auth.cancel': 'Batal',
+  'git.auth.validationToken': 'Token akses diperlukan',
+  'git.auth.validationSshKey': 'Pilih kunci SSH',
+  'git.auth.error.auth-required': 'Remote ini memerlukan autentikasi.',
+  'git.auth.error.auth-failed': 'Autentikasi gagal. Periksa kredensial Anda dan coba lagi.',
+  'git.auth.error.auth-token-invalid': 'Token akses ditolak. Buat yang baru dan coba lagi.',
   // ── Right Panel ──
   'rightPanel.design': 'Desain',
   'rightPanel.code': 'Kode',
@@ -74,6 +379,8 @@ const id: TranslationKeys = {
   'statusbar.zoomOut': 'Perkecil',
   'statusbar.zoomIn': 'Perbesar',
   'statusbar.resetZoom': 'Atur ulang zoom',
+  'statusbar.focusContent': 'Sesuaikan seluruh konten',
+  'statusbar.focusSelection': 'Fokus ke pilihan',
 
   // ── Updater ──
   'updater.softwareUpdate': 'Pembaruan Perangkat Lunak',
@@ -98,10 +405,8 @@ const id: TranslationKeys = {
   'updater.subtitle.checking': 'Mencari rilis terbaru...',
   'updater.subtitle.available': 'Versi {{version}} tersedia.',
   'updater.subtitle.availableGeneric': 'Versi baru tersedia.',
-  'updater.subtitle.downloading':
-    'Versi {{version}} sedang diunduh di latar belakang.',
-  'updater.subtitle.downloadingGeneric':
-    'Paket pembaruan sedang diunduh di latar belakang.',
+  'updater.subtitle.downloading': 'Versi {{version}} sedang diunduh di latar belakang.',
+  'updater.subtitle.downloadingGeneric': 'Paket pembaruan sedang diunduh di latar belakang.',
   'updater.subtitle.downloaded': 'Versi {{version}} telah diunduh.',
   'updater.subtitle.downloadedGeneric': 'Pembaruan telah diunduh.',
   'updater.subtitle.error': 'Tidak dapat memeriksa atau mengunduh pembaruan.',
@@ -219,11 +524,9 @@ const id: TranslationKeys = {
   'textLayout.autoWidth': 'Auto L',
   'textLayout.autoWidthDesc': 'Lebar Otomatis \u2014 teks meluas secara horizontal',
   'textLayout.autoHeight': 'Auto T',
-  'textLayout.autoHeightDesc':
-    'Tinggi Otomatis \u2014 lebar tetap, tinggi menyesuaikan otomatis',
+  'textLayout.autoHeightDesc': 'Tinggi Otomatis \u2014 lebar tetap, tinggi menyesuaikan otomatis',
   'textLayout.fixed': 'Tetap',
-  'textLayout.fixedDesc':
-    'Ukuran Tetap \u2014 lebar dan tinggi tetap',
+  'textLayout.fixedDesc': 'Ukuran Tetap \u2014 lebar dan tinggi tetap',
   'textLayout.fillWidth': 'Isi Lebar',
   'textLayout.fillHeight': 'Isi Tinggi',
 
@@ -241,6 +544,7 @@ const id: TranslationKeys = {
   'export.selectedOnly': 'Ekspor pilihan saja',
   'export.exportFormat': 'Ekspor {{format}}',
   'export.exportLayer': 'Ekspor layer',
+  'export.pdfMultiPage': 'PDF akan menyertakan semua {{count}} halaman.',
 
   // ── Polygon ──
   'polygon.sides': 'Sisi',
@@ -306,8 +610,7 @@ const id: TranslationKeys = {
   'ai.newChat': 'Chat baru',
   'ai.collapse': 'Ciutkan',
   'ai.tryExample': 'Coba contoh untuk mendesain...',
-  'ai.tipSelectElements':
-    'Tips: Pilih elemen di canvas sebelum chat untuk memberikan konteks.',
+  'ai.tipSelectElements': 'Tips: Pilih elemen di canvas sebelum chat untuk memberikan konteks.',
   'ai.generating': 'Membuat...',
   'ai.designWithAgent': 'Desain dengan Agent...',
   'ai.attachImage': 'Lampirkan gambar',
@@ -321,14 +624,41 @@ const id: TranslationKeys = {
   'ai.quickAction.loginScreenPrompt':
     'Desain layar login mobile modern dengan input email, input kata sandi, tombol login, dan opsi login sosial',
   'ai.quickAction.foodApp': 'Beranda aplikasi makanan',
-  'ai.quickAction.foodAppPrompt':
-    'Generate a well-designed food mobile app homepage',
+  'ai.quickAction.foodAppPrompt': 'Generate a well-designed food mobile app homepage',
   'ai.quickAction.bottomNav': 'Desain bilah navigasi bawah',
   'ai.quickAction.bottomNavPrompt':
     'Desain bilah navigasi bawah aplikasi mobile dengan 5 tab: Beranda, Cari, Tambah, Pesan, Profil',
   'ai.quickAction.colorPalette': 'Sarankan palet warna untuk aplikasi saya',
   'ai.quickAction.colorPalettePrompt':
     'Sarankan palet warna modern untuk aplikasi perawatan hewan peliharaan',
+  'ai.startDesigning': 'Start designing with AI',
+  'ai.maximize': 'Maximize',
+  'ai.restore': 'Restore',
+  'ai.quickAction.loginScreenDesc': 'Mobile login with social auth',
+  'ai.quickAction.foodAppDesc': 'App homepage design',
+  'ai.quickAction.bottomNavDesc': '5-tab navigation bar',
+  'ai.quickAction.colorPaletteDesc': 'Color palette recommendation',
+
+  // ── File Menu ──
+  'fileMenu.newFile': 'New file',
+  'fileMenu.openFile': 'Open file...',
+  'fileMenu.save': 'Save',
+  'fileMenu.saveAs': 'Save as...',
+  'fileMenu.exportImage': 'Ekspor gambar...',
+  'fileMenu.recentFiles': 'Recent files',
+  'fileMenu.clearHistory': 'Clear history',
+  'fileMenu.noRecentFiles': 'No recent files',
+  'fileMenu.saved': 'Saved',
+  'fileMenu.justNow': 'just now',
+  'fileMenu.minutesAgo': '{{count}}m ago',
+  'fileMenu.hoursAgo': '{{count}}h ago',
+  'fileMenu.yesterday': 'yesterday',
+  'fileMenu.daysAgo': '{{count}}d ago',
+
+  // ── Unsaved Changes ──
+  'unsaved.title': 'Unsaved changes',
+  'unsaved.message': 'Save changes to "{{name}}"?',
+  'unsaved.dontSave': "Don't Save",
 
   // ── Code Panel ──
   'code.reactTailwind': 'React + Tailwind',
@@ -339,8 +669,7 @@ const id: TranslationKeys = {
   'code.download': 'Unduh file kode',
   'code.closeCodePanel': 'Tutup panel kode',
   'code.genCssVars': 'Membuat CSS variables untuk seluruh dokumen',
-  'code.genSelected':
-    'Membuat kode untuk {{count}} elemen yang dipilih',
+  'code.genSelected': 'Membuat kode untuk {{count}} elemen yang dipilih',
   'code.genDocument': 'Membuat kode untuk seluruh dokumen',
   'code.aiEnhance': 'Tingkatkan dengan AI',
   'code.cancelEnhance': 'Batalkan peningkatan',
@@ -358,8 +687,7 @@ const id: TranslationKeys = {
   'agents.mcpIntegrations': 'Integrasi MCP di Terminal',
   'agents.transport': 'Transport',
   'agents.port': 'Port',
-  'agents.mcpRestart':
-    'Integrasi MCP akan berlaku setelah terminal dimulai ulang.',
+  'agents.mcpRestart': 'Integrasi MCP akan berlaku setelah terminal dimulai ulang.',
   'agents.mcpReinstallHint':
     'Setelah memperbarui OpenPencil, silakan instal ulang integrasi MCP untuk memastikan kompatibilitas.',
   'agents.modelCount': '{{count}} model',
@@ -430,11 +758,13 @@ const id: TranslationKeys = {
   'builtin.custom': 'Kustom',
   'builtin.apiKeyBadge': 'API Key',
   'builtin.viaApiKey': 'melalui API Key {{name}}',
-  'builtin.errorProviderNotFound': 'Penyedia bawaan tidak ditemukan. Silakan periksa pengaturan Anda.',
+  'builtin.errorProviderNotFound':
+    'Penyedia bawaan tidak ditemukan. Silakan periksa pengaturan Anda.',
   'builtin.errorApiKeyEmpty': 'API Key kosong. Silakan tambahkan API Key di pengaturan.',
   'builtin.parallelAgents': 'Sub-agen paralel: {{count}}x (klik untuk berganti)',
   'builtin.baseUrlPlaceholder': 'https://api.example.com/v1',
-  'builtin.teamDescription': 'Pilih model untuk pembuatan desain. Jika diatur, tugas desain akan otomatis didelegasikan ke agen spesialis yang menggunakan model ini.',
+  'builtin.teamDescription':
+    'Pilih model untuk pembuatan desain. Jika diatur, tugas desain akan otomatis didelegasikan ke agen spesialis yang menggunakan model ini.',
   'builtin.teamDesignModel': 'Model Desain',
   'builtin.teamSelectModel': 'Tidak ada (agen tunggal)',
 
@@ -449,8 +779,7 @@ const id: TranslationKeys = {
   'figma.convertFailed': 'Gagal mengonversi file Figma',
   'figma.parsing': 'Mengurai file .fig...',
   'figma.converting': 'Mengonversi node...',
-  'figma.selectPage':
-    'File ini memiliki {{count}} halaman. Pilih yang akan diimpor:',
+  'figma.selectPage': 'File ini memiliki {{count}} halaman. Pilih yang akan diimpor:',
   'figma.layers': '{{count}} layer',
   'figma.importAll': 'Impor Semua Halaman',
   'figma.importComplete': 'Impor selesai!',
@@ -496,6 +825,6 @@ const id: TranslationKeys = {
   'variablePicker.bindToVariable': 'Ikat ke variabel',
   'variablePicker.unbind': 'Lepaskan variabel',
   'variablePicker.noVariables': 'Belum ada variabel {{type}} yang didefinisikan',
-} as const
+} as const;
 
-export default id
+export default id;

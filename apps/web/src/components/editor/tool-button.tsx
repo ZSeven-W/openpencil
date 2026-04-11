@@ -1,28 +1,19 @@
-import type { ReactNode } from 'react'
-import type { ToolType } from '@/types/canvas'
-import { useCanvasStore } from '@/stores/canvas-store'
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from '@/components/ui/tooltip'
+import type { ReactNode } from 'react';
+import type { ToolType } from '@/types/canvas';
+import { useCanvasStore } from '@/stores/canvas-store';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 
 interface ToolButtonProps {
-  tool: ToolType
-  icon: ReactNode
-  label: string
-  shortcut?: string
+  tool: ToolType;
+  icon: ReactNode;
+  label: string;
+  shortcut?: string;
 }
 
-export default function ToolButton({
-  tool,
-  icon,
-  label,
-  shortcut,
-}: ToolButtonProps) {
-  const activeTool = useCanvasStore((s) => s.activeTool)
-  const setActiveTool = useCanvasStore((s) => s.setActiveTool)
-  const isActive = activeTool === tool
+export default function ToolButton({ tool, icon, label, shortcut }: ToolButtonProps) {
+  const activeTool = useCanvasStore((s) => s.activeTool);
+  const setActiveTool = useCanvasStore((s) => s.setActiveTool);
+  const isActive = activeTool === tool;
 
   return (
     <Tooltip>
@@ -50,5 +41,5 @@ export default function ToolButton({
         )}
       </TooltipContent>
     </Tooltip>
-  )
+  );
 }

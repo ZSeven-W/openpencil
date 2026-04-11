@@ -124,15 +124,15 @@ bun run electron:dev
 
 여러 이미지 변형을 사용할 수 있습니다 — 필요에 맞는 것을 선택하세요:
 
-| 이미지 | 크기 | 포함 내용 |
-| --- | --- | --- |
-| `openpencil:latest` | ~226 MB | 웹 앱만 |
-| `openpencil-claude:latest` | — | + Claude Code CLI |
-| `openpencil-codex:latest` | — | + Codex CLI |
-| `openpencil-opencode:latest` | — | + OpenCode CLI |
-| `openpencil-copilot:latest` | — | + GitHub Copilot CLI |
-| `openpencil-gemini:latest` | — | + Gemini CLI |
-| `openpencil-full:latest` | ~1 GB | 모든 CLI 도구 |
+| 이미지                       | 크기    | 포함 내용            |
+| ---------------------------- | ------- | -------------------- |
+| `openpencil:latest`          | ~226 MB | 웹 앱만              |
+| `openpencil-claude:latest`   | —       | + Claude Code CLI    |
+| `openpencil-codex:latest`    | —       | + Codex CLI          |
+| `openpencil-opencode:latest` | —       | + OpenCode CLI       |
+| `openpencil-copilot:latest`  | —       | + GitHub Copilot CLI |
+| `openpencil-gemini:latest`   | —       | + Gemini CLI         |
+| `openpencil-full:latest`     | ~1 GB   | 모든 CLI 도구        |
 
 **실행 (웹만):**
 
@@ -173,6 +173,7 @@ docker build --target full -t openpencil-full .
 ## AI 네이티브 디자인
 
 **프롬프트에서 UI로**
+
 - **텍스트-투-디자인** — 페이지를 설명하면 스트리밍 애니메이션으로 실시간으로 캔버스에 생성
 - **오케스트레이터** — 복잡한 페이지를 공간적 서브태스크로 분해하여 병렬 생성
 - **디자인 수정** — 요소를 선택하고 자연어로 변경 사항을 설명
@@ -180,20 +181,21 @@ docker build --target full -t openpencil-full .
 
 **멀티 에이전트 지원**
 
-| 에이전트 | 설정 방법 |
-| --- | --- |
+| 에이전트             | 설정 방법                                                                       |
+| -------------------- | ------------------------------------------------------------------------------- |
 | **내장 (9+ 제공자)** | 제공자 프리셋에서 선택하고 지역을 전환 — Anthropic, OpenAI, Google, DeepSeek 등 |
-| **Claude Code** | 설정 불필요 — 로컬 OAuth로 Claude Agent SDK 사용 |
-| **Codex CLI** | 에이전트 설정에서 연결 (`Cmd+,`) |
-| **OpenCode** | 에이전트 설정에서 연결 (`Cmd+,`) |
-| **GitHub Copilot** | `copilot login` 후 에이전트 설정에서 연결 (`Cmd+,`) |
-| **Gemini CLI** | 에이전트 설정에서 연결 (`Cmd+,`) |
+| **Claude Code**      | 설정 불필요 — 로컬 OAuth로 Claude Agent SDK 사용                                |
+| **Codex CLI**        | 에이전트 설정에서 연결 (`Cmd+,`)                                                |
+| **OpenCode**         | 에이전트 설정에서 연결 (`Cmd+,`)                                                |
+| **GitHub Copilot**   | `copilot login` 후 에이전트 설정에서 연결 (`Cmd+,`)                             |
+| **Gemini CLI**       | 에이전트 설정에서 연결 (`Cmd+,`)                                                |
 
 **모델 역량 프로파일** — 모델 티어에 따라 프롬프트, 사고 모드, 타임아웃을 자동 조정합니다. 풀 티어 모델(Claude)은 완전한 프롬프트를 받고, 스탠다드 티어(GPT-4o, Gemini, DeepSeek)는 사고 모드를 비활성화하며, 베이직 티어(MiniMax, Qwen, Llama, Mistral)는 최대 안정성을 위해 단순화된 중첩 JSON 프롬프트를 받습니다.
 
 **i18n** — 15개 언어로 완전한 인터페이스 지역화: English, 简体中文, 繁體中文, 日本語, 한국어, Français, Español, Deutsch, Português, Русский, हिन्दी, Türkçe, ไทย, Tiếng Việt, Bahasa Indonesia.
 
 **MCP 서버**
+
 - 내장 MCP 서버 — Claude Code / Codex / Gemini / OpenCode / Kiro / Copilot CLI에 원클릭 설치
 - Node.js 자동 감지 — 설치되지 않은 경우 HTTP 전송 모드로 자동 대체하고 MCP HTTP 서버를 자동 시작
 - 터미널에서 디자인 자동화: MCP 호환 에이전트를 통해 `.op` 파일 읽기, 생성, 편집
@@ -202,6 +204,7 @@ docker build --target full -t openpencil-full .
 - 멀티 페이지 지원 — MCP 도구를 통해 페이지 생성, 이름 변경, 순서 변경, 복제
 
 **코드 생성**
+
 - React + Tailwind CSS, HTML + CSS, CSS Variables
 - Vue, Svelte, Flutter, SwiftUI, Jetpack Compose, React Native
 
@@ -229,6 +232,7 @@ cat design.dsl | op design - # stdin에서 파이프 입력
 ## 기능
 
 **캔버스 & 드로잉**
+
 - 팬, 줌, 스마트 정렬 가이드, 스냅 지원의 무한 캔버스
 - Rectangle, Ellipse, Line, Polygon, Pen(Bezier), Frame, Text
 - 불리언 연산 — 합치기, 빼기, 교차 (컨텍스트 툴바)
@@ -237,15 +241,18 @@ cat design.dsl | op design - # stdin에서 파이프 입력
 - 탭 내비게이션이 있는 멀티 페이지 문서
 
 **디자인 시스템**
+
 - 디자인 변수 — 컬러, 숫자, 문자열 토큰, `$variable` 참조 지원
 - 멀티 테마 지원 — 여러 테마 축, 각 축에 변형(Light/Dark, Compact/Comfortable)
 - 컴포넌트 시스템 — 인스턴스와 오버라이드를 가진 재사용 가능한 컴포넌트
 - CSS 동기화 — 커스텀 프로퍼티 자동 생성, 코드 출력에 `var(--name)` 사용
 
 **Figma 가져오기**
+
 - 레이아웃, 채우기, 선, 효과, 텍스트, 이미지, 벡터를 유지하며 `.fig` 파일 가져오기
 
 **데스크톱 앱**
+
 - Electron을 통한 네이티브 macOS, Windows, Linux 지원
 - `.op` 파일 연결 — 더블 클릭으로 열기, 단일 인스턴스 잠금
 - GitHub Releases에서 자동 업데이트
@@ -253,17 +260,17 @@ cat design.dsl | op design - # stdin에서 파이프 입력
 
 ## 기술 스택
 
-| | |
-| --- | --- |
-| **프론트엔드** | React 19 · TanStack Start · Tailwind CSS v4 · shadcn/ui · i18next |
-| **캔버스** | CanvasKit/Skia (WASM, GPU 가속) |
-| **상태 관리** | Zustand v5 |
-| **서버** | Nitro |
-| **데스크톱** | Electron 35 |
-| **CLI** | `op` — 터미널 제어, 배치 디자인 DSL, 코드 내보내기 |
-| **AI** | Vercel AI SDK v6 · Anthropic SDK · Claude Agent SDK · OpenCode SDK · Copilot SDK |
-| **런타임** | Bun · Vite 7 |
-| **파일 형식** | `.op` — JSON 기반, 사람이 읽을 수 있는, Git 친화적 |
+|                |                                                                                  |
+| -------------- | -------------------------------------------------------------------------------- |
+| **프론트엔드** | React 19 · TanStack Start · Tailwind CSS v4 · shadcn/ui · i18next                |
+| **캔버스**     | CanvasKit/Skia (WASM, GPU 가속)                                                  |
+| **상태 관리**  | Zustand v5                                                                       |
+| **서버**       | Nitro                                                                            |
+| **데스크톱**   | Electron 35                                                                      |
+| **CLI**        | `op` — 터미널 제어, 배치 디자인 DSL, 코드 내보내기                               |
+| **AI**         | Vercel AI SDK v6 · Anthropic SDK · Claude Agent SDK · OpenCode SDK · Copilot SDK |
+| **런타임**     | Bun · Vite 7                                                                     |
+| **파일 형식**  | `.op` — JSON 기반, 사람이 읽을 수 있는, Git 친화적                               |
 
 ## 프로젝트 구조
 
@@ -304,21 +311,21 @@ openpencil/
 
 ## 키보드 단축키
 
-| 키 | 동작 | | 키 | 동작 |
-| --- | --- | --- | --- | --- |
-| `V` | 선택 | | `Cmd+S` | 저장 |
-| `R` | 사각형 | | `Cmd+Z` | 실행 취소 |
-| `O` | 타원 | | `Cmd+Shift+Z` | 다시 실행 |
-| `L` | 직선 | | `Cmd+C/X/V/D` | 복사/잘라내기/붙여넣기/복제 |
-| `T` | 텍스트 | | `Cmd+G` | 그룹화 |
-| `F` | Frame | | `Cmd+Shift+G` | 그룹 해제 |
-| `P` | 펜 툴 | | `Cmd+Shift+E` | 내보내기 |
-| `H` | 핸드(팬) | | `Cmd+Shift+C` | 코드 패널 |
-| `Del` | 삭제 | | `Cmd+Shift+V` | 변수 패널 |
-| `[ / ]` | 순서 변경 | | `Cmd+J` | AI 채팅 |
-| 화살표 키 | 1px 이동 | | `Cmd+,` | 에이전트 설정 |
-| `Cmd+Alt+U` | 불리언 합치기 | | `Cmd+Alt+S` | 불리언 빼기 |
-| `Cmd+Alt+I` | 불리언 교차 | | | |
+| 키          | 동작          |     | 키            | 동작                        |
+| ----------- | ------------- | --- | ------------- | --------------------------- |
+| `V`         | 선택          |     | `Cmd+S`       | 저장                        |
+| `R`         | 사각형        |     | `Cmd+Z`       | 실행 취소                   |
+| `O`         | 타원          |     | `Cmd+Shift+Z` | 다시 실행                   |
+| `L`         | 직선          |     | `Cmd+C/X/V/D` | 복사/잘라내기/붙여넣기/복제 |
+| `T`         | 텍스트        |     | `Cmd+G`       | 그룹화                      |
+| `F`         | Frame         |     | `Cmd+Shift+G` | 그룹 해제                   |
+| `P`         | 펜 툴         |     | `Cmd+Shift+E` | 내보내기                    |
+| `H`         | 핸드(팬)      |     | `Cmd+Shift+C` | 코드 패널                   |
+| `Del`       | 삭제          |     | `Cmd+Shift+V` | 변수 패널                   |
+| `[ / ]`     | 순서 변경     |     | `Cmd+J`       | AI 채팅                     |
+| 화살표 키   | 1px 이동      |     | `Cmd+,`       | 에이전트 설정               |
+| `Cmd+Alt+U` | 불리언 합치기 |     | `Cmd+Alt+S`   | 불리언 빼기                 |
+| `Cmd+Alt+I` | 불리언 교차   |     |               |                             |
 
 ## 스크립트
 

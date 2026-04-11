@@ -71,6 +71,7 @@ TanStack Start full-stack React app (Vite + Nitro). Routes in `src/routes/`, aut
 ## AI Services (`src/services/ai/`)
 
 35 files + `role-definitions/` + `design-principles/` subdirs:
+
 - `ai-service.ts` — Main AI chat API wrapper, model negotiation, provider selection
 - `ai-prompts.ts` — System prompts for design generation
 - `ai-types.ts` — ChatMessage, ChatAttachment, AIDesignRequest, OrchestratorPlan
@@ -93,12 +94,9 @@ TanStack Start full-stack React app (Vite + Nitro). Routes in `src/routes/`, aut
 - `use-mcp-sync.ts` — MCP live canvas sync
 - `use-system-fonts.ts` — System font detection
 
-## MCP Server (`src/mcp/`)
+## MCP Server
 
-- `server.ts` — MCP server entry point, tool registration (stdio + HTTP modes)
-- `document-manager.ts` — Document read/write/cache; live canvas sync via Nitro API
-- `tools/` — Core (open-document, batch-get, get-selection, batch-design, node-crud), Layout (snapshot-layout, find-empty-space, import-svg), Variables, Pages, Layered design (design-prompt, design-skeleton, design-content, design-refine)
-- `utils/` — `id.ts`, `node-operations.ts` (re-exports `cloneNodeWithNewIds` from pen-core), `sanitize.ts`, `svg-node-parser.ts`
+MCP server code lives in `packages/pen-mcp/`. The web app communicates with it via HTTP API routes (`server/api/mcp/*.ts`) using `server/utils/mcp-server-manager.ts` to spawn/manage the server process.
 
 ## UIKit (`src/uikit/`)
 

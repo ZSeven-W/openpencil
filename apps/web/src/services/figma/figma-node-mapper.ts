@@ -4,4 +4,4 @@ export {
   figmaAllPagesToPenDocument,
   getFigmaPages,
   figmaNodeChangesToPenNodes,
-} from '@zseven-w/pen-figma'
+} from '@zseven-w/pen-figma';

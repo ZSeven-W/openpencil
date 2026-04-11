@@ -1,6 +1,11 @@
 {
   "name": "@zseven-w/pen-ai-skills",
-  "version": "0.6.0",
+  "version": "0.7.0",
+  "files": [
+    "src",
+    "skills",
+    "vite-plugin-skills.ts"
+  ],
   "type": "module",
   "exports": {
     ".": {
@@ -10,14 +15,19 @@
     "./vite-plugin": {
       "types": "./vite-plugin-skills.ts",
       "import": "./vite-plugin-skills.ts"
+    },
+    "./style-guide": {
+      "types": "./src/style-guide/index.ts",
+      "import": "./src/style-guide/index.ts"
+    },
+    "./_generated/style-guide-registry": {
+      "types": "./src/_generated/style-guide-registry.ts",
+      "import": "./src/_generated/style-guide-registry.ts"
     }
   },
-  "files": [
-    "src",
-    "skills",
-    "vite-plugin-skills.ts"
-  ],
   "dependencies": {
-    "gray-matter": "^4.0.3"
+    "@zseven-w/pen-types": "workspace:*",
+    "gray-matter": "^4.0.3",
+    "js-yaml": "^4.1.1"
   }
 }

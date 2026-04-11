@@ -1,22 +1,22 @@
-import { defineEventHandler, readBody, setResponseHeaders } from 'h3'
-import { resolveClaudeCli } from '../../utils/resolve-claude-cli'
+import { defineEventHandler, readBody, setResponseHeaders } from 'h3';
+import { resolveClaudeCli } from '../../utils/resolve-claude-cli';
 import {
   buildClaudeAgentEnv,
   buildSpawnClaudeCodeProcess,
   getClaudeAgentDebugFilePath,
   resolveAgentModel,
-} from '../../utils/resolve-claude-agent-env'
-import { writeFile, mkdtemp, rm } from 'node:fs/promises'
-import { tmpdir } from 'node:os'
-import { join } from 'node:path'
-import { runCodexExec } from '../../utils/codex-client'
+} from '../../utils/resolve-claude-agent-env';
+import { writeFile, mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { runCodexExec } from '../../utils/codex-client';
 
 interface ValidateBody {
-  system: string
-  message: string
-  imageBase64: string
-  model?: string
-  provider?: 'anthropic' | 'openai' | 'opencode' | 'gemini'
+  system: string;
+  message: string;
+  imageBase64: string;
+  model?: string;
+  provider?: 'anthropic' | 'openai' | 'opencode' | 'gemini';
 }
 
 /**
@@ -28,41 +28,41 @@ interface ValidateBody {
  * built-in Read tool.
  */
 export default defineEventHandler(async (event) => {
-  const body = await readBody<ValidateBody>(event)
+  const body = await readBody<ValidateBody>(event);
 
   if (!body?.system || !body?.message || !body?.imageBase64) {
-    setResponseHeaders(event, { 'Content-Type': 'application/json' })
-    return { error: 'Missing required fields: system, message, imageBase64' }
+    setResponseHeaders(event, { 'Content-Type': 'application/json' });
+    return { error: 'Missing required fields: system, message, imageBase64' };
   }
 
   if (!body.model?.trim()) {
-    setResponseHeaders(event, { 'Content-Type': 'application/json' })
-    return { error: 'Missing model. Model fallback is disabled.' }
+    setResponseHeaders(event, { 'Content-Type': 'application/json' });
+    return { error: 'Missing model. Model fallback is disabled.' };
   }
 
   try {
     if (body.provider === 'anthropic') {
-      return await validateViaAgentSDK(body, body.model)
+      return await validateViaAgentSDK(body, body.model);
     }
     if (body.provider === 'openai') {
-      return await validateViaCodex(body, body.model)
+      return await validateViaCodex(body, body.model);
     }
     if (body.provider === 'opencode') {
-      return await validateViaOpenCode(body, body.model)
+      return await validateViaOpenCode(body, body.model);
     }
     if (body.provider === 'gemini') {
-      return await validateViaGemini(body, body.model)
+      return await validateViaGemini(body, body.model);
     }
-    return { error: 'Missing or unsupported provider. Provider fallback is disabled.' }
+    return { error: 'Missing or unsupported provider. Provider fallback is disabled.' };
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'Unknown error'
-    return { error: message }
+    const message = error instanceof Error ? error.message : 'Unknown error';
+    return { error: message };
   }
-})
+});
 
 function toImageBase64(data: string): string {
-  const dataUrlPrefix = 'data:image/png;base64,'
-  return data.startsWith(dataUrlPrefix) ? data.slice(dataUrlPrefix.length) : data
+  const dataUrlPrefix = 'data:image/png;base64,';
+  return data.startsWith(dataUrlPrefix) ? data.slice(dataUrlPrefix.length) : data;
 }
 
 async function withTempImageFile<T>(
@@ -70,24 +70,24 @@ async function withTempImageFile<T>(
   run: (tempPath: string) => Promise<T>,
   insideProject = false,
 ): Promise<T> {
-  let tempDir: string
+  let tempDir: string;
   if (insideProject) {
     // Save inside the project directory so Claude Code Agent SDK (plan mode)
     // can read the file — it restricts reads to the project directory.
-    const { mkdirSync, chmodSync } = await import('node:fs')
-    const baseDir = join(process.cwd(), '.openpencil-tmp')
-    mkdirSync(baseDir, { recursive: true })
-    chmodSync(baseDir, 0o700)
-    tempDir = await mkdtemp(join(baseDir, 'validate-'))
+    const { mkdirSync, chmodSync } = await import('node:fs');
+    const baseDir = join(process.cwd(), '.openpencil-tmp');
+    mkdirSync(baseDir, { recursive: true });
+    chmodSync(baseDir, 0o700);
+    tempDir = await mkdtemp(join(baseDir, 'validate-'));
   } else {
-    tempDir = await mkdtemp(join(tmpdir(), 'openpencil-validate-'))
+    tempDir = await mkdtemp(join(tmpdir(), 'openpencil-validate-'));
   }
-  const tempPath = join(tempDir, 'screenshot.png')
+  const tempPath = join(tempDir, 'screenshot.png');
   try {
-    await writeFile(tempPath, Buffer.from(toImageBase64(imageBase64), 'base64'))
-    return await run(tempPath)
+    await writeFile(tempPath, Buffer.from(toImageBase64(imageBase64), 'base64'));
+    return await run(tempPath);
   } finally {
-    await rm(tempDir, { recursive: true, force: true }).catch(() => {})
+    await rm(tempDir, { recursive: true, force: true }).catch(() => {});
   }
 }
 
@@ -101,15 +101,17 @@ async function validateViaAgentSDK(
   body: ValidateBody,
   requestedModel?: string,
 ): Promise<{ text: string; skipped?: boolean; error?: string }> {
-  return await withTempImageFile(body.imageBase64, async (tempPath) => {
-    const { query } = await import('@anthropic-ai/claude-agent-sdk')
+  return await withTempImageFile(
+    body.imageBase64,
+    async (tempPath) => {
+      const { query } = await import('@anthropic-ai/claude-agent-sdk');
 
-    const env = buildClaudeAgentEnv()
-    const debugFile = getClaudeAgentDebugFilePath()
-    const claudePath = resolveClaudeCli()
-    const model = resolveAgentModel(requestedModel, env)
+      const env = buildClaudeAgentEnv();
+      const debugFile = getClaudeAgentDebugFilePath();
+      const claudePath = resolveClaudeCli();
+      const model = resolveAgentModel(requestedModel, env);
 
-    const prompt = `IMPORTANT: First, use the Read tool to read the image file at "${tempPath}". This is a PNG screenshot of a UI design.
+      const prompt = `IMPORTANT: First, use the Read tool to read the image file at "${tempPath}". This is a PNG screenshot of a UI design.
 
 After viewing the image, analyze it according to these instructions:
 
@@ -117,42 +119,50 @@ ${body.system}
 
 ${body.message}
 
-CRITICAL: Your ENTIRE response must be a single JSON object. No markdown, no explanation, no tool calls after reading the image. Just the JSON.`
+CRITICAL: Your ENTIRE response must be a single JSON object. No markdown, no explanation, no tool calls after reading the image. Just the JSON.`;
 
-    const q = query({
-      prompt,
-      options: {
-        ...(model ? { model } : {}),
-        maxTurns: 3,
-        tools: [],
-        plugins: [],
-        permissionMode: 'plan',
-        persistSession: false,
-        env,
-        ...(debugFile ? { debugFile } : {}),
-        ...(claudePath ? { pathToClaudeCodeExecutable: claudePath } : {}),
-        ...(buildSpawnClaudeCodeProcess() ? { spawnClaudeCodeProcess: buildSpawnClaudeCodeProcess() } : {}),
-      },
-    })
+      const q = query({
+        prompt,
+        options: {
+          ...(model ? { model } : {}),
+          maxTurns: 3,
+          tools: [],
+          plugins: [],
+          permissionMode: 'plan',
+          persistSession: false,
+          env,
+          ...(debugFile ? { debugFile } : {}),
+          ...(claudePath ? { pathToClaudeCodeExecutable: claudePath } : {}),
+          ...(buildSpawnClaudeCodeProcess()
+            ? { spawnClaudeCodeProcess: buildSpawnClaudeCodeProcess() }
+            : {}),
+        },
+      });
 
-    try {
-      for await (const message of q) {
-        if (message.type === 'result') {
-          const isErrorResult = 'is_error' in message && Boolean((message as { is_error?: boolean }).is_error)
-          if (message.subtype === 'success' && !isErrorResult) {
-            return { text: message.result }
+      try {
+        for await (const message of q) {
+          if (message.type === 'result') {
+            const isErrorResult =
+              'is_error' in message && Boolean((message as { is_error?: boolean }).is_error);
+            if (message.subtype === 'success' && !isErrorResult) {
+              return { text: message.result };
+            }
+            const errors = 'errors' in message ? (message.errors as string[]) : [];
+            const resultText = 'result' in message ? String(message.result ?? '') : '';
+            return {
+              error: errors.join('; ') || resultText || `Query ended with: ${message.subtype}`,
+              text: '',
+            };
           }
-          const errors = 'errors' in message ? (message.errors as string[]) : []
-          const resultText = 'result' in message ? String(message.result ?? '') : ''
-          return { error: errors.join('; ') || resultText || `Query ended with: ${message.subtype}`, text: '' }
         }
+      } finally {
+        q.close();
       }
-    } finally {
-      q.close()
-    }
 
-    return { text: '', skipped: true }
-  }, true)
+      return { text: '', skipped: true };
+    },
+    true,
+  );
 }
 
 async function validateViaCodex(
@@ -167,50 +177,50 @@ async function validateViaCodex(
         systemPrompt: body.system,
         imageFiles: [tempPath],
       },
-    )
+    );
     if (result.error) {
-      return { text: '', error: result.error }
+      return { text: '', error: result.error };
     }
-    return { text: result.text ?? '' }
-  })
+    return { text: result.text ?? '' };
+  });
 }
 
 function parseOpenCodeModel(model?: string): { providerID: string; modelID: string } | undefined {
-  if (!model || !model.includes('/')) return undefined
-  const idx = model.indexOf('/')
-  return { providerID: model.slice(0, idx), modelID: model.slice(idx + 1) }
+  if (!model || !model.includes('/')) return undefined;
+  const idx = model.indexOf('/');
+  return { providerID: model.slice(0, idx), modelID: model.slice(idx + 1) };
 }
 
 async function validateViaOpenCode(
   body: ValidateBody,
   model?: string,
 ): Promise<{ text: string; skipped?: boolean; error?: string }> {
-  let ocServer: { close(): void } | undefined
+  let ocServer: { close(): void } | undefined;
   try {
-    const { getOpencodeClient } = await import('../../utils/opencode-client')
-    const oc = await getOpencodeClient()
-    const ocClient: any = oc.client
-    ocServer = oc.server
+    const { getOpencodeClient } = await import('../../utils/opencode-client');
+    const oc = await getOpencodeClient();
+    const ocClient: any = oc.client;
+    ocServer = oc.server;
 
     const { data: session, error: sessionError } = await ocClient.session.create({
       title: 'OpenPencil Validate',
-    })
+    });
     if (sessionError || !session) {
-      return { text: '', error: 'Failed to create OpenCode session' }
+      return { text: '', error: 'Failed to create OpenCode session' };
     }
 
     await ocClient.session.prompt({
       sessionID: session.id,
       noReply: true,
       parts: [{ type: 'text', text: body.system }],
-    })
+    });
 
-    const parsed = parseOpenCodeModel(model)
+    const parsed = parseOpenCodeModel(model);
     if (!parsed) {
-      return { text: '', error: 'Invalid OpenCode model format. Expected "provider/model".' }
+      return { text: '', error: 'Invalid OpenCode model format. Expected "provider/model".' };
     }
 
-    const base64 = toImageBase64(body.imageBase64)
+    const base64 = toImageBase64(body.imageBase64);
     const promptPayload = {
       sessionID: session.id,
       model: parsed,
@@ -221,28 +231,28 @@ async function validateViaOpenCode(
           text: `${body.message}\n\nOutput ONLY the JSON object, no markdown fences, no explanation.`,
         },
       ],
-    }
+    };
 
-    const { data: result, error: promptError } = await ocClient.session.prompt(promptPayload)
+    const { data: result, error: promptError } = await ocClient.session.prompt(promptPayload);
     if (promptError) {
-      return { text: '', error: 'OpenCode validation failed' }
+      return { text: '', error: 'OpenCode validation failed' };
     }
 
-    const texts: string[] = []
+    const texts: string[] = [];
     if (result?.parts) {
       for (const part of result.parts) {
         if (part.type === 'text' && part.text) {
-          texts.push(part.text)
+          texts.push(part.text);
         }
       }
     }
-    return { text: texts.join('') }
+    return { text: texts.join('') };
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'Unknown error'
-    return { text: '', error: message }
+    const message = error instanceof Error ? error.message : 'Unknown error';
+    return { text: '', error: message };
   } finally {
-    const { releaseOpencodeServer } = await import('../../utils/opencode-client')
-    releaseOpencodeServer(ocServer)
+    const { releaseOpencodeServer } = await import('../../utils/opencode-client');
+    releaseOpencodeServer(ocServer);
   }
 }
 
@@ -252,15 +262,15 @@ async function validateViaGemini(
   model?: string,
 ): Promise<{ text: string; skipped?: boolean; error?: string }> {
   return await withTempImageFile(body.imageBase64, async (tempPath) => {
-    const { runGeminiExec } = await import('../../utils/gemini-client')
-    const prompt = `Read the image file at "${tempPath}". This is a PNG screenshot of a UI design.\n\n${body.message}\n\nOutput ONLY the JSON object, no markdown fences, no explanation.`
+    const { runGeminiExec } = await import('../../utils/gemini-client');
+    const prompt = `Read the image file at "${tempPath}". This is a PNG screenshot of a UI design.\n\n${body.message}\n\nOutput ONLY the JSON object, no markdown fences, no explanation.`;
     const result = await runGeminiExec(prompt, {
       model,
       systemPrompt: body.system,
-    })
+    });
     if (result.error) {
-      return { text: '', error: result.error }
+      return { text: '', error: result.error };
     }
-    return { text: result.text ?? '' }
-  })
+    return { text: result.text ?? '' };
+  });
 }

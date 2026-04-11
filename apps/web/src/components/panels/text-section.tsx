@@ -1,13 +1,13 @@
-import NumberInput from '@/components/shared/number-input'
-import SectionHeader from '@/components/shared/section-header'
-import FontPicker from '@/components/shared/font-picker'
+import NumberInput from '@/components/shared/number-input';
+import SectionHeader from '@/components/shared/section-header';
+import FontPicker from '@/components/shared/font-picker';
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from '@/components/ui/select'
+} from '@/components/ui/select';
 import {
   AlignLeft,
   AlignCenter,
@@ -16,14 +16,14 @@ import {
   AlignVerticalJustifyStart,
   AlignVerticalJustifyCenter,
   AlignVerticalJustifyEnd,
-} from 'lucide-react'
-import { cn } from '@/lib/utils'
-import { useTranslation } from 'react-i18next'
-import type { PenNode, TextNode } from '@/types/pen'
+} from 'lucide-react';
+import { cn } from '@/lib/utils';
+import { useTranslation } from 'react-i18next';
+import type { PenNode, TextNode } from '@/types/pen';
 
 interface TextSectionProps {
-  node: TextNode
-  onUpdate: (updates: Partial<PenNode>) => void
+  node: TextNode;
+  onUpdate: (updates: Partial<PenNode>) => void;
 }
 
 const WEIGHT_OPTIONS = [
@@ -34,23 +34,29 @@ const WEIGHT_OPTIONS = [
   { value: '600', labelKey: 'text.weight.semibold' },
   { value: '700', labelKey: 'text.weight.bold' },
   { value: '900', labelKey: 'text.weight.black' },
-]
+];
 
 const H_ALIGN_OPTIONS = [
   { value: 'left', icon: AlignLeft, labelKey: 'text.alignLeft' },
   { value: 'center', icon: AlignCenter, labelKey: 'text.alignCenter' },
   { value: 'right', icon: AlignRight, labelKey: 'text.alignRight' },
   { value: 'justify', icon: AlignJustify, labelKey: 'text.justify' },
-]
+];
 
 const V_ALIGN_OPTIONS = [
   { value: 'top', icon: AlignVerticalJustifyStart, labelKey: 'text.top' },
   { value: 'middle', icon: AlignVerticalJustifyCenter, labelKey: 'text.middle' },
   { value: 'bottom', icon: AlignVerticalJustifyEnd, labelKey: 'text.bottom' },
-]
+];
 
 const LineHeightIcon = (
-  <svg viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round">
+  <svg
+    viewBox="0 0 12 12"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="1.4"
+    strokeLinecap="round"
+  >
     <line x1="1" y1="2" x2="1" y2="10" />
     <polyline points="3,4 1,2 -1,4" transform="translate(0,0)" />
     <polyline points="3,8 1,10 -1,8" transform="translate(0,0)" />
@@ -58,7 +64,7 @@ const LineHeightIcon = (
     <line x1="5" y1="3" x2="9" y2="3" />
     <line x1="5" y1="9" x2="9" y2="9" />
   </svg>
-)
+);
 
 function AlignButton({
   active,
@@ -66,10 +72,10 @@ function AlignButton({
   icon: Icon,
   label,
 }: {
-  active: boolean
-  onClick: () => void
-  icon: React.ComponentType<{ className?: string }>
-  label: string
+  active: boolean;
+  onClick: () => void;
+  icon: React.ComponentType<{ className?: string }>;
+  label: string;
 }) {
   return (
     <button
@@ -85,21 +91,18 @@ function AlignButton({
     >
       <Icon className="w-3.5 h-3.5" />
     </button>
-  )
+  );
 }
 
-export default function TextSection({
-  node,
-  onUpdate,
-}: TextSectionProps) {
-  const { t } = useTranslation()
-  const fontFamily = node.fontFamily ?? 'Inter, sans-serif'
-  const fontSize = node.fontSize ?? 16
-  const fontWeight = String(node.fontWeight ?? '400')
-  const lineHeight = node.lineHeight ?? 1.2
-  const letterSpacing = node.letterSpacing ?? 0
-  const textAlign = node.textAlign ?? 'left'
-  const textAlignVertical = node.textAlignVertical ?? 'top'
+export default function TextSection({ node, onUpdate }: TextSectionProps) {
+  const { t } = useTranslation();
+  const fontFamily = node.fontFamily ?? 'Inter, sans-serif';
+  const fontSize = node.fontSize ?? 16;
+  const fontWeight = String(node.fontWeight ?? '400');
+  const lineHeight = node.lineHeight ?? 1.2;
+  const letterSpacing = node.letterSpacing ?? 0;
+  const textAlign = node.textAlign ?? 'left';
+  const textAlignVertical = node.textAlignVertical ?? 'top';
 
   return (
     <div className="space-y-1.5">
@@ -115,9 +118,7 @@ export default function TextSection({
       <div className="grid grid-cols-2 gap-1">
         <Select
           value={fontWeight}
-          onValueChange={(v) =>
-            onUpdate({ fontWeight: Number(v) } as Partial<PenNode>)
-          }
+          onValueChange={(v) => onUpdate({ fontWeight: Number(v) } as Partial<PenNode>)}
         >
           <SelectTrigger className="h-6 text-[11px]">
             <SelectValue />
@@ -133,9 +134,7 @@ export default function TextSection({
         <NumberInput
           label="S"
           value={fontSize}
-          onChange={(v) =>
-            onUpdate({ fontSize: v } as Partial<PenNode>)
-          }
+          onChange={(v) => onUpdate({ fontSize: v } as Partial<PenNode>)}
           min={1}
           max={999}
         />
@@ -150,9 +149,7 @@ export default function TextSection({
         <NumberInput
           icon={LineHeightIcon}
           value={Math.round(lineHeight * 100)}
-          onChange={(v) =>
-            onUpdate({ lineHeight: v / 100 } as Partial<PenNode>)
-          }
+          onChange={(v) => onUpdate({ lineHeight: v / 100 } as Partial<PenNode>)}
           min={50}
           max={400}
           suffix="%"
@@ -160,9 +157,7 @@ export default function TextSection({
         <NumberInput
           label="|A|"
           value={letterSpacing}
-          onChange={(v) =>
-            onUpdate({ letterSpacing: v } as Partial<PenNode>)
-          }
+          onChange={(v) => onUpdate({ letterSpacing: v } as Partial<PenNode>)}
         />
       </div>
 
@@ -206,5 +201,5 @@ export default function TextSection({
         </div>
       </div>
     </div>
-  )
+  );
 }

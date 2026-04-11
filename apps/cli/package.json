@@ -1,20 +1,24 @@
 {
   "name": "@zseven-w/openpencil",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "description": "CLI for OpenPencil — control the design tool from your terminal",
+  "license": "MIT",
   "author": {
     "name": "ZSeven-W",
     "email": "xkayshen@gmail.com"
   },
-  "license": "MIT",
-  "type": "module",
   "bin": {
     "op": "dist/openpencil-cli.cjs"
   },
   "files": [
     "dist"
   ],
+  "type": "module",
   "scripts": {
-    "compile": "cd ../web && esbuild ../cli/src/index.ts --bundle --platform=node --target=node20 --outfile=../cli/dist/openpencil-cli.cjs --format=cjs --sourcemap --alias:@=src --alias:@zseven-w/pen-types=../../packages/pen-types/src --alias:@zseven-w/pen-core=../../packages/pen-core/src --alias:@zseven-w/pen-codegen=../../packages/pen-codegen/src --alias:@zseven-w/pen-figma=../../packages/pen-figma/src --alias:@zseven-w/pen-renderer=../../packages/pen-renderer/src --alias:@zseven-w/pen-sdk=../../packages/pen-sdk/src --define:import.meta.env={} --external:canvas --external:paper"
+    "compile": "cd ../.. && bun run cli:compile"
+  },
+  "dependencies": {
+    "@zseven-w/pen-figma": "workspace:*",
+    "@zseven-w/pen-mcp": "workspace:*"
   }
 }

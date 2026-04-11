@@ -1,4 +1,4 @@
-import type { TranslationKeys } from './en'
+import type { TranslationKeys } from './en';
 
 const ja: TranslationKeys = {
   // ── Common ──
@@ -10,6 +10,8 @@ const ja: TranslationKeys = {
   'common.close': '閉じる',
   'common.connect': '接続',
   'common.disconnect': '切断',
+  'common.yes': 'はい',
+  'common.no': 'いいえ',
   'common.import': 'インポート',
   'common.export': 'エクスポート',
   'common.name': '名前',
@@ -59,6 +61,311 @@ const ja: TranslationKeys = {
   'topbar.connected': '接続済み',
   'topbar.agentStatus': '{{agents}} Agent{{agentSuffix}} · {{mcp}} MCP',
 
+  // ── Git パネル ──
+  'git.openPanel': 'Git パネルを開く',
+  'git.closePanel': 'Git パネルを閉じる',
+  'git.title': 'Git · {{fileName}}',
+  'git.titleNoFile': 'Git · (ファイル未選択)',
+  'git.close': '閉じる',
+  'git.initializing': 'リポジトリを初期化中…',
+  'git.conflict.title': 'マージコンフリクト',
+  'git.conflict.description':
+    '以下のカードで各コンフリクトを解決してから、マージを適用してください。',
+  'git.conflict.abort': 'マージを中止',
+  'git.conflict.nonOp.title': '.op 以外のファイルによりマージが一時停止しました',
+  'git.conflict.nonOp.description':
+    '.op ファイルのマージは完了しましたが、このリポジトリ内の他のファイルがまだ未解決です。OpenPencil の外で解決してから続行してください。',
+  'git.conflict.nonOp.unresolvedHeading_one': '1 個のファイルに対応が必要',
+  'git.conflict.nonOp.unresolvedHeading_other': '{{count}} 個のファイルに対応が必要',
+  'git.conflict.nonOp.continue': 'マージを続行',
+  'git.conflict.nonOp.abort': 'マージを中止',
+  // ── Git 競合バナー (Phase 7b) ──
+  'git.conflict.banner.progress': '{{resolved}} / {{total}} 解決済み',
+  'git.conflict.banner.apply': 'マージを適用',
+  'git.conflict.banner.continue': '続行',
+  'git.conflict.banner.finalizeError': '適用できませんでした: {{message}}',
+  'git.conflict.banner.pollError': 'エラーのためステータスポーリングを一時停止中: {{message}}',
+  // placeholder — future localization
+  'git.conflict.banner.reopenMessage':
+    'マージ中にパネルが再開されました — 中止して再度プルしてください。',
+
+  // ── Git 競合リスト (Phase 7c) ──
+  'git.conflict.list.heading': 'すべての競合',
+  'git.conflict.list.progress': '{{resolved}} / {{total}} 解決済み',
+  'git.conflict.list.allResolved': 'すべて解決済み',
+  'git.conflict.list.allOurs': 'すべて自分のものに',
+  'git.conflict.list.allTheirs': 'すべて相手のものに',
+
+  // ── Git 競合アイテム (Phase 7c) ──
+  'git.conflict.item.nodeConflict': 'ノード競合',
+  'git.conflict.item.fieldConflict': 'フィールド競合',
+  'git.conflict.item.resolved': '解決済み',
+
+  // ── Git 競合カード (Phase 7c) ──
+  'git.conflict.card.ours': '自分',
+  'git.conflict.card.theirs': '相手',
+  'git.conflict.card.base': 'ベース',
+  'git.conflict.card.keepMine': '自分のものを使用',
+  'git.conflict.card.keepTheirs': '相手のものを使用',
+  'git.conflict.card.oursThumbnailAlt': '自分のバージョン',
+  'git.conflict.card.theirsThumbnailAlt': '相手のバージョン',
+
+  // ── Git 競合 JSON エディタ (Phase 7c) ──
+  'git.conflict.editor.editManually': '手動で編集',
+  'git.conflict.editor.cancel': 'キャンセル',
+  'git.conflict.editor.apply': '適用',
+  'git.conflict.editor.invalidJson': '無効な JSON',
+  'git.conflict.editor.textareaLabel': 'JSON 値を編集',
+
+  'git.error.dismiss': '閉じる',
+  'git.error.retry': '再試行',
+  'git.error.title': '問題が発生しました',
+
+  // ── Git 空状態 ──
+  'git.empty.heading': 'まだバージョン履歴がありません',
+  'git.empty.optional': 'Git は任意 — スキップしても問題ありません',
+  'git.empty.requireSavedFile': '履歴を作成するには .op ファイルを保存してください',
+  'git.empty.newCard': '新規',
+  'git.empty.newCardDescription': 'ローカル履歴を作成',
+  'git.empty.openCard': '開く',
+  'git.empty.openCardDescription': '既存のリポジトリ',
+  'git.empty.cloneCard': 'クローン',
+  'git.empty.cloneCardDescription': 'リモートから',
+
+  // ── Git 作者フォーム ──
+  'git.author.heading': 'コミット作者',
+  'git.author.subheading': '最初のコミットには名前とメールが必要です',
+  'git.author.nameLabel': '名前',
+  'git.author.namePlaceholder': 'あなたの名前',
+  'git.author.emailLabel': 'メール',
+  'git.author.emailPlaceholder': 'you@example.com',
+  'git.author.submit': '保存',
+  'git.author.cancel': 'キャンセル',
+  'git.author.validationName': '名前を入力してください',
+  'git.author.validationEmail': '有効なメールアドレスを入力してください',
+
+  // ── Git ピッカー (Phase 4b) ──
+  'git.picker.heading': 'このリポジトリには {{count}} 個の .op ファイルがあります:',
+  'git.picker.milestoneCount': '{{count}} マイルストーン',
+  'git.picker.noHistory': '履歴なし',
+  'git.picker.lastCommit': '{{message}} · {{time}}',
+  'git.picker.bindButton': 'このファイルを追跡',
+  'git.picker.bindAndOpenButton': '追跡して開く',
+  'git.picker.back': '戻る',
+  'git.picker.backClose': 'キャンセル',
+  'git.picker.empty.heading': 'このリポジトリには .op ファイルがありません',
+  'git.picker.empty.body': 'Git パネルには少なくとも 1 つの .op ファイルが必要です',
+  'git.picker.empty.close': 'パネルを閉じる',
+
+  // ── Git 自動バインドバナー (Phase 4b) ──
+  'git.autoBind.confirmHeading': '{{fileName}} が見つかりました — エディタで開きますか?',
+  'git.autoBind.openButton': '開く',
+  'git.autoBind.dismissButton': 'スキップ',
+
+  // ── Git 相対時間 (Phase 4b) ──
+  'git.relativeTime.justNow': '今',
+  'git.relativeTime.minutesAgo': '{{count}}分前',
+  'git.relativeTime.hoursAgo': '{{count}}時間前',
+  'git.relativeTime.daysAgo': '{{count}}日前',
+
+  // ── Git Commit Input (Phase 4c) ──
+  'git.commit.placeholder': 'この変更を説明…',
+  'git.commit.submitButton': 'マイルストーンとして保存',
+  'git.commit.saveRequiredTitle': 'まず文書を保存してください',
+  'git.commit.saveRequiredBody':
+    '未保存の変更があります。続行するには文書を保存してください: {{label}}',
+  'git.commit.saveRequiredSave': '保存',
+  'git.commit.saveRequiredCancel': 'キャンセル',
+
+  // ── Git Header (Phase 4c → 6c) ──
+  'git.header.autosaveError': '自動保存エラー',
+  'git.header.autosaveErrorTitle': '前回の自動保存が失敗',
+  'git.header.authorMissingWarning': 'コミット作者を設定してください',
+  'git.header.overflowSwitchTracked': '追跡ファイルを切替…',
+  'git.header.overflowClearAuthor': 'コミット作者をクリア',
+  'git.header.overflowCloseRepo': 'リポジトリを閉じる',
+  'git.header.overflowRemoteSettings': 'リモート設定…',
+  'git.header.overflowSshKeys': 'SSH 鍵…',
+  'git.header.overflowMoreActions': 'その他の操作',
+
+  // ── Git History List (Phase 4c) ──
+  'git.history.empty': '履歴なし',
+  'git.history.autosaveGroup_one': '1 件の自動保存',
+  'git.history.autosaveGroup_other': '{{count}} 件の自動保存',
+  'git.history.autosaveLabel': 'auto {{time}}',
+  'git.history.milestoneDetailTitle': 'マイルストーン詳細',
+  'git.history.restoreButton': '復元',
+  'git.history.copyHashButton': 'ハッシュをコピー',
+  'git.history.copiedToast': 'コピー済み',
+  // ── Git 履歴差分 (Phase 7b) ──
+  'git.history.diff.loading': '差分を読み込み中…',
+  'git.history.diff.initialCommit': '初回コミット — 比較できる親コミットがありません',
+  'git.history.diff.noChanges': '変更なし',
+  'git.history.diff.error': '差分を利用できません: {{message}}',
+  'git.history.diff.framesChanged_one': '1 件のフレームが変更されました',
+  'git.history.diff.framesChanged_other': '{{count}} 件のフレームが変更されました',
+  'git.history.diff.nodesAdded_one': 'ノードが 1 件追加されました',
+  'git.history.diff.nodesAdded_other': 'ノードが {{count}} 件追加されました',
+  'git.history.diff.nodesRemoved_one': 'ノードが 1 件削除されました',
+  'git.history.diff.nodesRemoved_other': 'ノードが {{count}} 件削除されました',
+  'git.history.diff.nodesModified_one': 'ノードが 1 件変更されました',
+  'git.history.diff.nodesModified_other': 'ノードが {{count}} 件変更されました',
+  'git.history.promoteButton': 'マイルストーンに昇格',
+  'git.history.promoteSuccessToast': 'マイルストーンに昇格しました',
+  'git.history.loadMore': 'さらに読み込む',
+  'git.autosave.messagePrefix': 'auto',
+  'git.autosave.messageDiffSuffix': '',
+
+  // ── Git ブランチピッカー (Phase 5) ──
+  'git.branch.listHeading': 'ブランチ',
+  'git.branch.createAction': '新規ブランチ',
+  'git.branch.createPlaceholder': 'feature/login-redesign',
+  'git.branch.createSubmit': 'ブランチを作成',
+  'git.branch.createEmpty': 'ブランチ名を入力してください',
+  'git.branch.createExists': 'ブランチ {{name}} は既に存在します',
+  'git.branch.mergeAction': 'ブランチをマージ…',
+  'git.branch.mergeHeading': '{{name}} にマージ',
+  'git.branch.deletePrompt': 'ブランチ {{name}} を削除しますか?',
+  'git.branch.deleteLabel': 'ブランチ {{name}} を削除',
+  'git.branch.deleteWarning': 'ブランチ {{name}} に未マージのコミットがあります',
+  'git.branch.deleteConfirm': '削除',
+  'git.branch.deleteForce': '強制削除',
+  'git.branch.cancel': 'キャンセル',
+  'git.branch.conflictDisabled': 'ブランチを切り替える前にマージを完了してください',
+  'git.branch.noCommits': 'コミットがまだありません',
+
+  // ── Git Clone Wizard (Phase 6a) ──
+  'git.wizard.clone.heading': 'リモートリポジトリをクローン',
+  'git.wizard.clone.subheading': 'リモート URL とコピー先フォルダを選択してください。',
+  'git.wizard.clone.urlLabel': 'リモート URL',
+  'git.wizard.clone.urlPlaceholder': 'https://github.com/owner/repo.git',
+  'git.wizard.clone.destLabel': 'コピー先フォルダ',
+  'git.wizard.clone.destPlaceholder': '/path/to/clone',
+  'git.wizard.clone.destPickButton': '参照…',
+  'git.wizard.clone.usernameLabel': 'ユーザー名(任意)',
+  'git.wizard.clone.tokenLabel': 'アクセストークン(任意)',
+  'git.wizard.clone.tokenPlaceholder': 'ghp_… 公開リポジトリは空欄可',
+  'git.wizard.clone.anonymousHint': '空欄のままにすると匿名でクローンします(公開リポジトリのみ)。',
+  'git.wizard.clone.sshHint': 'この URL には SSH 鍵認証が必要です。',
+  'git.wizard.clone.hostDetected': '検出: {{host}} · {{mode}}',
+  'git.wizard.clone.authMode.token-or-anon': 'トークンまたは匿名',
+  'git.wizard.clone.authMode.ssh': 'SSH 鍵',
+  'git.wizard.clone.cancel': 'キャンセル',
+  'git.wizard.clone.submit': 'クローン',
+  'git.wizard.clone.validationUrl': 'リモート URL を入力してください',
+  'git.wizard.clone.validationDest': 'コピー先フォルダを選択してください',
+  'git.wizard.clone.validationTokenUsername': 'トークンを指定する場合はユーザー名が必要です',
+  'git.wizard.clone.error.clone-network':
+    'クローン中にネットワークエラーが発生しました。接続を確認して再試行してください。',
+  'git.wizard.clone.error.network': 'ネットワークエラー。接続を確認して再試行してください。',
+  'git.wizard.clone.error.timeout':
+    'クローンがタイムアウトしました。再試行するか、より小さなリポジトリを使用してください。',
+  'git.wizard.clone.error.auth-required': 'このリポジトリは認証が必要です。',
+  'git.wizard.clone.error.auth-failed':
+    '認証に失敗しました。ユーザー名とトークンを確認してください。',
+  'git.wizard.clone.error.auth-token-invalid':
+    'アクセストークンが拒否されました。新しいトークンを生成して再試行してください。',
+  'git.wizard.clone.error.clone-failed':
+    'クローンに失敗しました。URL が実在するリポジトリを指していることを確認してください。',
+  'git.wizard.clone.error.clone-target-exists':
+    'コピー先フォルダが既に存在するか、空ではありません。',
+
+  // ── Git プル / プッシュ (Phase 6b) ──
+  'git.pull.label': 'プル',
+  'git.pull.tooltip': 'origin からプル',
+  'git.pull.noRemote': 'リモートが設定されていません — Git 設定で追加してください',
+  'git.pull.retry': 'プルを再試行',
+  'git.push.label': 'プッシュ',
+  'git.push.tooltip_one': '1 件のコミットを origin にプッシュ',
+  'git.push.tooltip_other': '{{count}} 件のコミットを origin にプッシュ',
+  'git.push.noRemote': 'リモートが設定されていません — Git 設定で追加してください',
+  'git.push.upToDate': 'プッシュする内容はありません — 最新の状態です',
+  'git.push.retry': 'プッシュを再試行',
+  'git.push.rejectedBody':
+    'リモートに未取得のコミットがあります。先にプルしてから再度プッシュしてください。',
+  'git.push.rejectedDismiss': '閉じる',
+  'git.push.rejectedPull': '今すぐプル',
+  'git.remote.dismissError': '閉じる',
+
+  // ── Git リモート設定 (Phase 6c) ──
+  'git.remote.settingsLabel': 'リモート設定',
+  'git.remote.settingsHeading': 'リモート',
+  'git.remote.back': '戻る',
+  'git.remote.cancel': 'キャンセル',
+  'git.remote.emptyNoOrigin': 'リモートが設定されていません。追加してください:',
+  'git.remote.urlLabel': 'Origin URL',
+  'git.remote.urlPlaceholder': 'https://github.com/owner/repo.git',
+  'git.remote.saveButton': '保存',
+  'git.remote.clearButton': 'クリア',
+  'git.remote.clearConfirmHeading': 'origin をクリアしますか?',
+  'git.remote.clearConfirmBody': 'このリポジトリから origin リモートが削除されます。',
+  'git.remote.clearConfirmAction': '確認',
+  'git.remote.aheadBehind': '{{ahead}} 先行 · {{behind}} 遅延',
+  'git.remote.fetchButton': 'Fetch',
+  'git.remote.sshIsoUnsupported':
+    '内蔵エンジンは SSH トランスポートをサポートしていません。システム git をインストールするか、HTTPS リモート URL に切り替えてください。',
+  'git.remote.storedAuthLabel': '保存済み認証情報',
+  'git.remote.storedAuth.token': 'トークン',
+  'git.remote.storedAuth.ssh': 'SSH 鍵',
+  'git.remote.storedAuth.none': 'なし',
+  'git.remote.storedAuth.loading': '読み込み中…',
+  'git.remote.storedAuth.noHost': 'ホストが検出されません',
+  'git.remote.clearAuthButton': '保存済み認証情報をクリア',
+
+  // ── Git SSH 鍵 (Phase 6c) ──
+  'git.ssh.label': 'SSH 鍵',
+  'git.ssh.heading': 'SSH 鍵',
+  'git.ssh.back': '戻る',
+  'git.ssh.cancel': 'キャンセル',
+  'git.ssh.isoUnsupported':
+    '現在のリモートは SSH を使用していますが、内蔵エンジンは SSH トランスポートを実行できません。システム git をインストールするか、リモート URL を HTTPS に変更してください。',
+  'git.ssh.emptyList': 'SSH 鍵はまだありません。',
+  'git.ssh.generateAction': '新しく生成',
+  'git.ssh.importAction': '既存のものをインポート',
+  'git.ssh.copyPublicKey': '公開鍵をコピー',
+  'git.ssh.copiedHint': 'コピーしました',
+  'git.ssh.copyUnsupported': 'クリップボードを利用できません。この鍵を手動でコピーしてください。',
+  'git.ssh.deleteKey': '{{name}} を削除',
+  'git.ssh.deletePrompt': 'SSH 鍵 {{name}} を削除しますか?',
+  'git.ssh.deleteConfirm': '削除',
+  'git.ssh.currentHostBadge': '現在のホスト',
+  'git.ssh.hostLabel': 'ホスト',
+  'git.ssh.hostPlaceholder': 'github.com',
+  'git.ssh.commentLabel': 'コメント',
+  'git.ssh.commentPlaceholder': 'laptop@home',
+  'git.ssh.generateSubmit': '生成',
+  'git.ssh.importPathLabel': '秘密鍵のパス',
+  'git.ssh.importPathPlaceholder': '/path/to/id_ed25519',
+  'git.ssh.importBrowse': '参照…',
+  'git.ssh.importSubmit': 'インポート',
+  'git.ssh.validationHost': 'ホストを入力してください',
+  'git.ssh.validationComment': 'コメントを入力してください',
+  'git.ssh.validationImportPath': 'インポートする秘密鍵ファイルを選択してください',
+  'git.ssh.providerLink': '{{host}} の SSH 鍵設定を開く',
+  'git.ssh.genericGuidance': '公開鍵をコピーして、Git プロバイダの SSH 鍵設定に追加してください。',
+
+  // ── Git 認証フォーム (Phase 6b) ──
+  'git.auth.formLabel': 'Git 認証情報',
+  'git.auth.heading': '{{host}} に対して認証',
+  'git.auth.headingUnknown': 'このリモートに対して認証',
+  'git.auth.modeToggleLabel': '認証情報の種類',
+  'git.auth.modeToken': 'トークン',
+  'git.auth.modeSsh': 'SSH',
+  'git.auth.usernameLabel': 'ユーザー名(任意)',
+  'git.auth.tokenLabel': 'アクセストークン',
+  'git.auth.tokenPlaceholder': 'ghp_… または PAT',
+  'git.auth.sshKeyLabel': 'SSH キー',
+  'git.auth.sshNoKeys':
+    '利用可能な SSH キーがありません。先に Git 設定でインポートまたは生成してください。',
+  'git.auth.rememberLabel': 'このホストの認証情報を記憶する',
+  'git.auth.rememberHint': 'このホストの認証情報を記憶する',
+  'git.auth.cancel': 'キャンセル',
+  'git.auth.validationToken': 'アクセストークンは必須です',
+  'git.auth.validationSshKey': 'SSH キーを選択してください',
+  'git.auth.error.auth-required': 'このリモートには認証が必要です。',
+  'git.auth.error.auth-failed': '認証に失敗しました。認証情報を確認して再度お試しください。',
+  'git.auth.error.auth-token-invalid':
+    'アクセストークンが拒否されました。新しいトークンを生成してから再試行してください。',
   // ── Right Panel ──
   'rightPanel.design': 'デザイン',
   'rightPanel.code': 'コード',
@@ -74,6 +381,8 @@ const ja: TranslationKeys = {
   'statusbar.zoomOut': '縮小',
   'statusbar.zoomIn': '拡大',
   'statusbar.resetZoom': 'ズームをリセット',
+  'statusbar.focusContent': 'すべての内容を表示',
+  'statusbar.focusSelection': '選択範囲にフォーカス',
 
   // ── Updater ──
   'updater.softwareUpdate': 'ソフトウェアアップデート',
@@ -87,8 +396,7 @@ const ja: TranslationKeys = {
   'updater.restartInstall': '再起動してインストール',
   'updater.installing': 'インストール中...',
   'updater.releaseDate': 'リリース日：{{date}}',
-  'updater.restartHint':
-    '再起動してアップデートを適用します。再起動には通常 10〜15 秒かかります。',
+  'updater.restartHint': '再起動してアップデートを適用します。再起動には通常 10〜15 秒かかります。',
   'updater.unknownError': '不明なアップデートエラーです。',
   'updater.title.checking': 'アップデートを確認中',
   'updater.title.available': 'アップデートが見つかりました',
@@ -98,21 +406,16 @@ const ja: TranslationKeys = {
   'updater.subtitle.checking': '最新リリースを確認中...',
   'updater.subtitle.available': 'バージョン {{version}} が利用可能です。',
   'updater.subtitle.availableGeneric': '新しいバージョンが利用可能です。',
-  'updater.subtitle.downloading':
-    'バージョン {{version}} をバックグラウンドでダウンロード中。',
+  'updater.subtitle.downloading': 'バージョン {{version}} をバックグラウンドでダウンロード中。',
   'updater.subtitle.downloadingGeneric':
     'アップデートパッケージをバックグラウンドでダウンロード中。',
-  'updater.subtitle.downloaded':
-    'バージョン {{version}} のダウンロードが完了しました。',
-  'updater.subtitle.downloadedGeneric':
-    'アップデートのダウンロードが完了しました。',
-  'updater.subtitle.error':
-    'アップデートの確認またはダウンロードができませんでした。',
+  'updater.subtitle.downloaded': 'バージョン {{version}} のダウンロードが完了しました。',
+  'updater.subtitle.downloadedGeneric': 'アップデートのダウンロードが完了しました。',
+  'updater.subtitle.error': 'アップデートの確認またはダウンロードができませんでした。',
 
   // ── Layers ──
   'layers.title': 'レイヤー',
-  'layers.empty':
-    'レイヤーがありません。ツールバーからシェイプを描画してください。',
+  'layers.empty': 'レイヤーがありません。ツールバーからシェイプを描画してください。',
 
   // ── Layer Context Menu ──
   'layerMenu.groupSelection': '選択をグループ化',
@@ -223,11 +526,9 @@ const ja: TranslationKeys = {
   'textLayout.autoWidth': '自動 W',
   'textLayout.autoWidthDesc': '自動幅 \u2014 テキストが水平に拡張',
   'textLayout.autoHeight': '自動 H',
-  'textLayout.autoHeightDesc':
-    '自動高さ \u2014 幅固定、高さが自動調整',
+  'textLayout.autoHeightDesc': '自動高さ \u2014 幅固定、高さが自動調整',
   'textLayout.fixed': '固定',
-  'textLayout.fixedDesc':
-    '固定サイズ \u2014 幅と高さの両方が固定',
+  'textLayout.fixedDesc': '固定サイズ \u2014 幅と高さの両方が固定',
   'textLayout.fillWidth': '幅を埋める',
   'textLayout.fillHeight': '高さを埋める',
 
@@ -245,6 +546,7 @@ const ja: TranslationKeys = {
   'export.selectedOnly': '選択項目のみエクスポート',
   'export.exportFormat': '{{format}} をエクスポート',
   'export.exportLayer': 'レイヤーをエクスポート',
+  'export.pdfMultiPage': 'PDF にはすべての {{count}} ページが含まれます。',
 
   // ── Polygon ──
   'polygon.sides': '辺の数',
@@ -325,14 +627,41 @@ const ja: TranslationKeys = {
   'ai.quickAction.loginScreenPrompt':
     'メール入力、パスワード入力、ログインボタン、ソーシャルログインオプションを含む、モダンなモバイルログイン画面をデザインしてください',
   'ai.quickAction.foodApp': 'フードアプリのホームページ',
-  'ai.quickAction.foodAppPrompt':
-    'Generate a well-designed food mobile app homepage',
+  'ai.quickAction.foodAppPrompt': 'Generate a well-designed food mobile app homepage',
   'ai.quickAction.bottomNav': 'ボトムナビゲーションバーをデザイン',
   'ai.quickAction.bottomNavPrompt':
     'ホーム、検索、追加、メッセージ、プロフィールの 5 つのタブを含むモバイルアプリのボトムナビゲーションバーをデザインしてください',
   'ai.quickAction.colorPalette': 'アプリのカラーパレットを提案',
   'ai.quickAction.colorPalettePrompt':
     'ペットケアアプリ向けのモダンなカラーパレットを提案してください',
+  'ai.startDesigning': 'Start designing with AI',
+  'ai.maximize': 'Maximize',
+  'ai.restore': 'Restore',
+  'ai.quickAction.loginScreenDesc': 'Mobile login with social auth',
+  'ai.quickAction.foodAppDesc': 'App homepage design',
+  'ai.quickAction.bottomNavDesc': '5-tab navigation bar',
+  'ai.quickAction.colorPaletteDesc': 'Color palette recommendation',
+
+  // ── File Menu ──
+  'fileMenu.newFile': 'New file',
+  'fileMenu.openFile': 'Open file...',
+  'fileMenu.save': 'Save',
+  'fileMenu.saveAs': 'Save as...',
+  'fileMenu.exportImage': '画像をエクスポート...',
+  'fileMenu.recentFiles': 'Recent files',
+  'fileMenu.clearHistory': 'Clear history',
+  'fileMenu.noRecentFiles': 'No recent files',
+  'fileMenu.saved': 'Saved',
+  'fileMenu.justNow': 'just now',
+  'fileMenu.minutesAgo': '{{count}}m ago',
+  'fileMenu.hoursAgo': '{{count}}h ago',
+  'fileMenu.yesterday': 'yesterday',
+  'fileMenu.daysAgo': '{{count}}d ago',
+
+  // ── Unsaved Changes ──
+  'unsaved.title': 'Unsaved changes',
+  'unsaved.message': 'Save changes to "{{name}}"?',
+  'unsaved.dontSave': "Don't Save",
 
   // ── Code Panel ──
   'code.reactTailwind': 'React + Tailwind',
@@ -361,8 +690,7 @@ const ja: TranslationKeys = {
   'agents.mcpIntegrations': 'ターミナルでの MCP 連携',
   'agents.transport': 'トランスポート',
   'agents.port': 'ポート',
-  'agents.mcpRestart':
-    'MCP 連携はターミナルの再起動後に有効になります。',
+  'agents.mcpRestart': 'MCP 連携はターミナルの再起動後に有効になります。',
   'agents.mcpReinstallHint':
     'OpenPencil のバージョンアップ後、互換性を確保するため MCP 統合を再インストールしてください。',
   'agents.modelCount': '{{count}} 個のモデル',
@@ -437,7 +765,8 @@ const ja: TranslationKeys = {
   'builtin.errorApiKeyEmpty': 'API キーが空です。設定で API キーを追加してください。',
   'builtin.parallelAgents': '並列サブエージェント：{{count}}x（クリックで切替）',
   'builtin.baseUrlPlaceholder': 'https://api.example.com/v1',
-  'builtin.teamDescription': 'デザイン生成用のモデルを選択します。設定すると、デザインタスクはこのモデルを使用する専門エージェントに自動的に委任されます。',
+  'builtin.teamDescription':
+    'デザイン生成用のモデルを選択します。設定すると、デザインタスクはこのモデルを使用する専門エージェントに自動的に委任されます。',
   'builtin.teamDesignModel': 'デザインモデル',
   'builtin.teamSelectModel': 'なし（シングルエージェント）',
 
@@ -445,8 +774,7 @@ const ja: TranslationKeys = {
   'figma.title': 'Figma からインポート',
   'figma.dropFile': '.fig ファイルをここにドロップ',
   'figma.orBrowse': 'またはクリックして参照',
-  'figma.exportTip':
-    'Figma からエクスポート：ファイル \u2192 ローカルコピーを保存 (.fig)',
+  'figma.exportTip': 'Figma からエクスポート：ファイル \u2192 ローカルコピーを保存 (.fig)',
   'figma.selectFigFile': '.fig ファイルを選択してください',
   'figma.noPages': '.fig ファイルにページが見つかりません',
   'figma.parseFailed': '.fig ファイルの解析に失敗しました',
@@ -468,11 +796,9 @@ const ja: TranslationKeys = {
   // ── Landing Page ──
   'landing.open': 'Open',
   'landing.pencil': 'Pencil',
-  'landing.tagline':
-    'オープンソースのベクターデザインツール。Design as Code。',
+  'landing.tagline': 'オープンソースのベクターデザインツール。Design as Code。',
   'landing.newDesign': '新規デザイン',
-  'landing.shortcutHint':
-    '{{key1}} + {{key2}} を押して新規デザインを作成',
+  'landing.shortcutHint': '{{key1}} + {{key2}} を押して新規デザインを作成',
 
   // ── 404 ──
   'notFound.message': 'ページが見つかりません',
@@ -502,6 +828,6 @@ const ja: TranslationKeys = {
   'variablePicker.bindToVariable': '変数にバインド',
   'variablePicker.unbind': 'バインドを解除',
   'variablePicker.noVariables': '{{type}} 型の変数が定義されていません',
-} as const
+} as const;
 
-export default ja
+export default ja;
