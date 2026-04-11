@@ -55,3 +55,7 @@ export {
   cssFontFamily,
 } from './paint-utils.js';
 export { sanitizeSvgPath, hasInvalidNumbers, tryManualPathParse } from './path-utils.js';
+
+// ---- Thumbnail helper (Phase 7c) ----
+export { renderNodeThumbnail } from './render-node-thumbnail.js';
+export type { ThumbnailContext } from './render-node-thumbnail.js';
