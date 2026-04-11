@@ -179,6 +179,44 @@ const fr: TranslationKeys = {
   'git.branch.conflictDisabled': 'Terminez la fusion avant de changer de branche',
   'git.branch.noCommits': 'Aucun commit pour le moment',
 
+  // ── Git Clone Wizard (Phase 6a) ──
+  'git.wizard.clone.heading': 'Cloner un dépôt distant',
+  'git.wizard.clone.subheading': 'Choisissez une URL distante et un dossier de destination.',
+  'git.wizard.clone.urlLabel': 'URL distante',
+  'git.wizard.clone.urlPlaceholder': 'https://github.com/owner/repo.git',
+  'git.wizard.clone.destLabel': 'Dossier de destination',
+  'git.wizard.clone.destPlaceholder': '/chemin/du/clone',
+  'git.wizard.clone.destPickButton': 'Parcourir…',
+  'git.wizard.clone.usernameLabel': "Nom d'utilisateur (optionnel)",
+  'git.wizard.clone.tokenLabel': "Jeton d'accès (optionnel)",
+  'git.wizard.clone.tokenPlaceholder': 'ghp_… laisser vide pour les dépôts publics',
+  'git.wizard.clone.anonymousHint':
+    'Laissez vide pour cloner anonymement (dépôts publics uniquement).',
+  'git.wizard.clone.sshHint': 'Cette URL nécessite une authentification par clé SSH.',
+  'git.wizard.clone.hostDetected': 'Détecté : {{host}} · {{mode}}',
+  'git.wizard.clone.authMode.token-or-anon': 'jeton ou anonyme',
+  'git.wizard.clone.authMode.ssh': 'clé SSH',
+  'git.wizard.clone.cancel': 'Annuler',
+  'git.wizard.clone.submit': 'Cloner',
+  'git.wizard.clone.validationUrl': "L'URL distante est requise",
+  'git.wizard.clone.validationDest': 'Le dossier de destination est requis',
+  'git.wizard.clone.validationTokenUsername':
+    "Un nom d'utilisateur est requis lorsqu'un jeton est fourni",
+  'git.wizard.clone.error.clone-network':
+    'Erreur réseau lors du clonage. Vérifiez votre connexion et réessayez.',
+  'git.wizard.clone.error.network': 'Erreur réseau. Vérifiez votre connexion et réessayez.',
+  'git.wizard.clone.error.timeout':
+    'Le clonage a expiré. Réessayez ou utilisez un dépôt plus petit.',
+  'git.wizard.clone.error.auth-required': 'Ce dépôt nécessite une authentification.',
+  'git.wizard.clone.error.auth-failed':
+    "Échec de l'authentification. Vérifiez votre nom d'utilisateur et votre jeton.",
+  'git.wizard.clone.error.auth-token-invalid':
+    "Le jeton d'accès a été refusé. Générez-en un nouveau et réessayez.",
+  'git.wizard.clone.error.clone-failed':
+    "Échec du clonage. Vérifiez que l'URL pointe vers un dépôt réel.",
+  'git.wizard.clone.error.clone-target-exists':
+    "Le dossier de destination existe déjà ou n'est pas vide.",
+
   // ── Right Panel ──
   'rightPanel.design': 'Design',
   'rightPanel.code': 'Code',

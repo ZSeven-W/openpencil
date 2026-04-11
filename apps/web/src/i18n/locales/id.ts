@@ -178,6 +178,40 @@ const id: TranslationKeys = {
   'git.branch.conflictDisabled': 'Selesaikan penggabungan sebelum mengganti branch',
   'git.branch.noCommits': 'Belum ada commit',
 
+  // ── Git Clone Wizard (Phase 6a) ──
+  'git.wizard.clone.heading': 'Klon repositori jarak jauh',
+  'git.wizard.clone.subheading': 'Pilih URL jarak jauh dan folder tujuan.',
+  'git.wizard.clone.urlLabel': 'URL jarak jauh',
+  'git.wizard.clone.urlPlaceholder': 'https://github.com/owner/repo.git',
+  'git.wizard.clone.destLabel': 'Folder tujuan',
+  'git.wizard.clone.destPlaceholder': '/path/ke/klon',
+  'git.wizard.clone.destPickButton': 'Telusuri…',
+  'git.wizard.clone.usernameLabel': 'Nama pengguna (opsional)',
+  'git.wizard.clone.tokenLabel': 'Token akses (opsional)',
+  'git.wizard.clone.tokenPlaceholder': 'ghp_… atau kosongkan untuk repo publik',
+  'git.wizard.clone.anonymousHint': 'Kosongkan untuk klon anonim (hanya repo publik).',
+  'git.wizard.clone.sshHint': 'URL ini memerlukan autentikasi kunci SSH.',
+  'git.wizard.clone.hostDetected': 'Terdeteksi: {{host}} · {{mode}}',
+  'git.wizard.clone.authMode.token-or-anon': 'token atau anonim',
+  'git.wizard.clone.authMode.ssh': 'kunci SSH',
+  'git.wizard.clone.cancel': 'Batal',
+  'git.wizard.clone.submit': 'Klon',
+  'git.wizard.clone.validationUrl': 'URL jarak jauh wajib diisi',
+  'git.wizard.clone.validationDest': 'Folder tujuan wajib diisi',
+  'git.wizard.clone.validationTokenUsername': 'Nama pengguna wajib diisi saat token disediakan',
+  'git.wizard.clone.error.clone-network':
+    'Kesalahan jaringan saat klon. Periksa koneksi Anda dan coba lagi.',
+  'git.wizard.clone.error.network': 'Kesalahan jaringan. Periksa koneksi Anda dan coba lagi.',
+  'git.wizard.clone.error.timeout':
+    'Klon kehabisan waktu. Coba lagi atau gunakan repositori yang lebih kecil.',
+  'git.wizard.clone.error.auth-required': 'Repositori ini memerlukan autentikasi.',
+  'git.wizard.clone.error.auth-failed': 'Autentikasi gagal. Periksa nama pengguna dan token Anda.',
+  'git.wizard.clone.error.auth-token-invalid':
+    'Token akses ditolak. Buat token baru dan coba lagi.',
+  'git.wizard.clone.error.clone-failed':
+    'Klon gagal. Pastikan URL menunjuk ke repositori yang sebenarnya.',
+  'git.wizard.clone.error.clone-target-exists': 'Folder tujuan sudah ada atau tidak kosong.',
+
   // ── Right Panel ──
   'rightPanel.design': 'Desain',
   'rightPanel.code': 'Kode',

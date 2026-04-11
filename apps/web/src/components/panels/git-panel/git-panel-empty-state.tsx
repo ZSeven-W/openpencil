@@ -3,9 +3,7 @@
 // 3-card chooser for the no-repo state. Per spec lines 91-111:
 //   - 新建: initRepo(currentFilePath). Disabled if no file path.
 //   - 打开: native folder picker → openRepo(repoPath, currentFilePath).
-//   - 克隆: disabled in Phase 4a (Phase 6 wires it).
-//
-// The footer text reminds the user that Git is optional.
+//   - 克隆: enterCloneWizard() (Phase 6a — was disabled-with-tooltip in 4a).
 
 import { FilePlus, FolderOpen, GitFork } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
@@ -64,6 +62,7 @@ export function GitPanelEmptyState() {
   const { t } = useTranslation();
   const initRepo = useGitStore((s) => s.initRepo);
   const openRepo = useGitStore((s) => s.openRepo);
+  const enterCloneWizard = useGitStore((s) => s.enterCloneWizard);
 
   // Reactive read — re-renders when the user saves a previously-unsaved
   // document, opens a different file via the file menu, or any other
@@ -112,8 +111,7 @@ export function GitPanelEmptyState() {
           icon={<GitFork size={20} strokeWidth={1.5} />}
           label={t('git.empty.cloneCard')}
           description={t('git.empty.cloneCardDescription')}
-          disabled
-          disabledReason={t('git.empty.cloneComingSoon')}
+          onClick={() => enterCloneWizard()}
         />
       </div>
 

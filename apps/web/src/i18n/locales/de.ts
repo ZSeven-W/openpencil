@@ -178,6 +178,43 @@ const de: TranslationKeys = {
   'git.branch.conflictDisabled': 'Merge abschließen, bevor der Branch gewechselt wird',
   'git.branch.noCommits': 'Noch keine Commits',
 
+  // ── Git Clone Wizard (Phase 6a) ──
+  'git.wizard.clone.heading': 'Remote-Repository klonen',
+  'git.wizard.clone.subheading': 'Wähle eine Remote-URL und einen Zielordner.',
+  'git.wizard.clone.urlLabel': 'Remote-URL',
+  'git.wizard.clone.urlPlaceholder': 'https://github.com/owner/repo.git',
+  'git.wizard.clone.destLabel': 'Zielordner',
+  'git.wizard.clone.destPlaceholder': '/pfad/zum/klon',
+  'git.wizard.clone.destPickButton': 'Durchsuchen…',
+  'git.wizard.clone.usernameLabel': 'Benutzername (optional)',
+  'git.wizard.clone.tokenLabel': 'Zugriffstoken (optional)',
+  'git.wizard.clone.tokenPlaceholder': 'ghp_… für öffentliche Repos leer lassen',
+  'git.wizard.clone.anonymousHint': 'Leer lassen für anonymes Klonen (nur öffentliche Repos).',
+  'git.wizard.clone.sshHint': 'Diese URL erfordert SSH-Schlüssel-Authentifizierung.',
+  'git.wizard.clone.hostDetected': 'Erkannt: {{host}} · {{mode}}',
+  'git.wizard.clone.authMode.token-or-anon': 'Token oder anonym',
+  'git.wizard.clone.authMode.ssh': 'SSH-Schlüssel',
+  'git.wizard.clone.cancel': 'Abbrechen',
+  'git.wizard.clone.submit': 'Klonen',
+  'git.wizard.clone.validationUrl': 'Remote-URL ist erforderlich',
+  'git.wizard.clone.validationDest': 'Zielordner ist erforderlich',
+  'git.wizard.clone.validationTokenUsername':
+    'Benutzername ist erforderlich, wenn ein Token angegeben wird',
+  'git.wizard.clone.error.clone-network':
+    'Netzwerkfehler beim Klonen. Verbindung prüfen und erneut versuchen.',
+  'git.wizard.clone.error.network': 'Netzwerkfehler. Verbindung prüfen und erneut versuchen.',
+  'git.wizard.clone.error.timeout':
+    'Zeitüberschreitung beim Klonen. Erneut versuchen oder ein kleineres Repository verwenden.',
+  'git.wizard.clone.error.auth-required': 'Dieses Repository erfordert eine Authentifizierung.',
+  'git.wizard.clone.error.auth-failed':
+    'Authentifizierung fehlgeschlagen. Benutzername und Token prüfen.',
+  'git.wizard.clone.error.auth-token-invalid':
+    'Zugriffstoken wurde abgelehnt. Neues Token erstellen und erneut versuchen.',
+  'git.wizard.clone.error.clone-failed':
+    'Klonen fehlgeschlagen. Stelle sicher, dass die URL auf ein echtes Repository zeigt.',
+  'git.wizard.clone.error.clone-target-exists':
+    'Der Zielordner existiert bereits oder ist nicht leer.',
+
   // ── Right Panel ──
   'rightPanel.design': 'Design',
   'rightPanel.code': 'Code',

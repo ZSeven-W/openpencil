@@ -177,6 +177,39 @@ const hi: TranslationKeys = {
   'git.branch.conflictDisabled': 'ब्रांच बदलने से पहले मर्ज पूरा करें',
   'git.branch.noCommits': 'अभी कोई कमिट नहीं',
 
+  // ── Git Clone Wizard (Phase 6a) ──
+  'git.wizard.clone.heading': 'रिमोट रिपॉज़िटरी क्लोन करें',
+  'git.wizard.clone.subheading': 'एक रिमोट URL और गंतव्य फ़ोल्डर चुनें।',
+  'git.wizard.clone.urlLabel': 'रिमोट URL',
+  'git.wizard.clone.urlPlaceholder': 'https://github.com/owner/repo.git',
+  'git.wizard.clone.destLabel': 'गंतव्य फ़ोल्डर',
+  'git.wizard.clone.destPlaceholder': '/path/to/clone',
+  'git.wizard.clone.destPickButton': 'ब्राउज़ करें…',
+  'git.wizard.clone.usernameLabel': 'उपयोगकर्ता नाम (वैकल्पिक)',
+  'git.wizard.clone.tokenLabel': 'एक्सेस टोकन (वैकल्पिक)',
+  'git.wizard.clone.tokenPlaceholder': 'ghp_… सार्वजनिक के लिए खाली छोड़ें',
+  'git.wizard.clone.anonymousHint': 'गुमनाम रूप से क्लोन करने के लिए खाली छोड़ें (केवल सार्वजनिक रिपॉज़िटरी)।',
+  'git.wizard.clone.sshHint': 'इस URL के लिए SSH कुंजी प्रमाणीकरण आवश्यक है।',
+  'git.wizard.clone.hostDetected': 'पहचाना गया: {{host}} · {{mode}}',
+  'git.wizard.clone.authMode.token-or-anon': 'टोकन या गुमनाम',
+  'git.wizard.clone.authMode.ssh': 'SSH कुंजी',
+  'git.wizard.clone.cancel': 'रद्द करें',
+  'git.wizard.clone.submit': 'क्लोन करें',
+  'git.wizard.clone.validationUrl': 'रिमोट URL आवश्यक है',
+  'git.wizard.clone.validationDest': 'गंतव्य फ़ोल्डर आवश्यक है',
+  'git.wizard.clone.validationTokenUsername': 'टोकन प्रदान करते समय उपयोगकर्ता नाम आवश्यक है',
+  'git.wizard.clone.error.clone-network':
+    'क्लोन करते समय नेटवर्क त्रुटि। अपना कनेक्शन जांचें और फिर से प्रयास करें।',
+  'git.wizard.clone.error.network': 'नेटवर्क त्रुटि। अपना कनेक्शन जांचें और फिर से प्रयास करें।',
+  'git.wizard.clone.error.timeout':
+    'क्लोन का समय समाप्त हो गया। फिर से प्रयास करें या छोटी रिपॉज़िटरी का उपयोग करें।',
+  'git.wizard.clone.error.auth-required': 'इस रिपॉज़िटरी के लिए प्रमाणीकरण आवश्यक है।',
+  'git.wizard.clone.error.auth-failed': 'प्रमाणीकरण विफल। अपना उपयोगकर्ता नाम और टोकन जांचें।',
+  'git.wizard.clone.error.auth-token-invalid': 'एक्सेस टोकन अस्वीकृत। नया टोकन बनाएं और फिर से प्रयास करें।',
+  'git.wizard.clone.error.clone-failed':
+    'क्लोन विफल। सत्यापित करें कि URL किसी वास्तविक रिपॉज़िटरी की ओर इशारा करता है।',
+  'git.wizard.clone.error.clone-target-exists': 'गंतव्य फ़ोल्डर पहले से मौजूद है या खाली नहीं है।',
+
   // ── Right Panel ──
   'rightPanel.design': 'डिज़ाइन',
   'rightPanel.code': 'कोड',

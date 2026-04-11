@@ -178,6 +178,41 @@ const tr: TranslationKeys = {
   'git.branch.conflictDisabled': 'Dal değiştirmeden önce birleştirmeyi tamamlayın',
   'git.branch.noCommits': 'Henüz commit yok',
 
+  // ── Git Clone Wizard (Phase 6a) ──
+  'git.wizard.clone.heading': 'Uzak depoyu klonla',
+  'git.wizard.clone.subheading': 'Uzak URL ve hedef klasör seçin.',
+  'git.wizard.clone.urlLabel': 'Uzak URL',
+  'git.wizard.clone.urlPlaceholder': 'https://github.com/owner/repo.git',
+  'git.wizard.clone.destLabel': 'Hedef klasör',
+  'git.wizard.clone.destPlaceholder': '/klon/yolu',
+  'git.wizard.clone.destPickButton': 'Gözat…',
+  'git.wizard.clone.usernameLabel': 'Kullanıcı adı (isteğe bağlı)',
+  'git.wizard.clone.tokenLabel': 'Erişim belirteci (isteğe bağlı)',
+  'git.wizard.clone.tokenPlaceholder': 'ghp_… veya genel depolar için boş bırakın',
+  'git.wizard.clone.anonymousHint': 'Anonim klonlamak için boş bırakın (yalnızca genel depolar).',
+  'git.wizard.clone.sshHint': 'Bu URL için SSH anahtar kimlik doğrulaması gerekir.',
+  'git.wizard.clone.hostDetected': 'Algılandı: {{host}} · {{mode}}',
+  'git.wizard.clone.authMode.token-or-anon': 'belirteç veya anonim',
+  'git.wizard.clone.authMode.ssh': 'SSH anahtarı',
+  'git.wizard.clone.cancel': 'İptal',
+  'git.wizard.clone.submit': 'Klonla',
+  'git.wizard.clone.validationUrl': 'Uzak URL gerekli',
+  'git.wizard.clone.validationDest': 'Hedef klasör gerekli',
+  'git.wizard.clone.validationTokenUsername': 'Belirteç sağlandığında kullanıcı adı gerekli',
+  'git.wizard.clone.error.clone-network':
+    'Klonlama sırasında ağ hatası. Bağlantınızı kontrol edip tekrar deneyin.',
+  'git.wizard.clone.error.network': 'Ağ hatası. Bağlantınızı kontrol edip tekrar deneyin.',
+  'git.wizard.clone.error.timeout':
+    'Klonlama zaman aşımına uğradı. Tekrar deneyin veya daha küçük bir depo kullanın.',
+  'git.wizard.clone.error.auth-required': 'Bu depo kimlik doğrulama gerektiriyor.',
+  'git.wizard.clone.error.auth-failed':
+    'Kimlik doğrulama başarısız. Kullanıcı adınızı ve belirtecinizi kontrol edin.',
+  'git.wizard.clone.error.auth-token-invalid':
+    'Erişim belirteci reddedildi. Yenisini oluşturup tekrar deneyin.',
+  'git.wizard.clone.error.clone-failed':
+    "Klonlama başarısız. URL'nin gerçek bir depoya işaret ettiğini doğrulayın.",
+  'git.wizard.clone.error.clone-target-exists': 'Hedef klasör zaten var veya boş değil.',
+
   // ── Right Panel ──
   'rightPanel.design': 'Tasarım',
   'rightPanel.code': 'Kod',

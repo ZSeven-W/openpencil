@@ -178,6 +178,42 @@ const ru: TranslationKeys = {
   'git.branch.conflictDisabled': 'Завершите слияние перед переключением ветки',
   'git.branch.noCommits': 'Пока нет коммитов',
 
+  // ── Git Clone Wizard (Phase 6a) ──
+  'git.wizard.clone.heading': 'Клонировать удалённый репозиторий',
+  'git.wizard.clone.subheading': 'Выберите URL удалённого репозитория и папку назначения.',
+  'git.wizard.clone.urlLabel': 'URL удалённого репозитория',
+  'git.wizard.clone.urlPlaceholder': 'https://github.com/owner/repo.git',
+  'git.wizard.clone.destLabel': 'Папка назначения',
+  'git.wizard.clone.destPlaceholder': '/путь/для/клона',
+  'git.wizard.clone.destPickButton': 'Обзор…',
+  'git.wizard.clone.usernameLabel': 'Имя пользователя (необязательно)',
+  'git.wizard.clone.tokenLabel': 'Токен доступа (необязательно)',
+  'git.wizard.clone.tokenPlaceholder': 'ghp_… для публичных можно оставить пустым',
+  'git.wizard.clone.anonymousHint':
+    'Оставьте пустым для анонимного клонирования (только публичные репозитории).',
+  'git.wizard.clone.sshHint': 'Этот URL требует аутентификации по SSH-ключу.',
+  'git.wizard.clone.hostDetected': 'Обнаружено: {{host}} · {{mode}}',
+  'git.wizard.clone.authMode.token-or-anon': 'токен или анонимно',
+  'git.wizard.clone.authMode.ssh': 'SSH-ключ',
+  'git.wizard.clone.cancel': 'Отмена',
+  'git.wizard.clone.submit': 'Клонировать',
+  'git.wizard.clone.validationUrl': 'Требуется URL удалённого репозитория',
+  'git.wizard.clone.validationDest': 'Требуется папка назначения',
+  'git.wizard.clone.validationTokenUsername': 'Имя пользователя обязательно при указании токена',
+  'git.wizard.clone.error.clone-network':
+    'Сетевая ошибка при клонировании. Проверьте подключение и повторите попытку.',
+  'git.wizard.clone.error.network': 'Сетевая ошибка. Проверьте подключение и повторите попытку.',
+  'git.wizard.clone.error.timeout':
+    'Истекло время ожидания клонирования. Повторите попытку или используйте репозиторий поменьше.',
+  'git.wizard.clone.error.auth-required': 'Этот репозиторий требует аутентификации.',
+  'git.wizard.clone.error.auth-failed':
+    'Аутентификация не удалась. Проверьте имя пользователя и токен.',
+  'git.wizard.clone.error.auth-token-invalid':
+    'Токен доступа отклонён. Создайте новый и повторите попытку.',
+  'git.wizard.clone.error.clone-failed':
+    'Клонирование не удалось. Убедитесь, что URL указывает на существующий репозиторий.',
+  'git.wizard.clone.error.clone-target-exists': 'Папка назначения уже существует или не пуста.',
+
   // ── Right Panel ──
   'rightPanel.design': 'Дизайн',
   'rightPanel.code': 'Код',

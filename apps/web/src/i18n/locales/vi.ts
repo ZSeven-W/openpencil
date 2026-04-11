@@ -177,6 +177,40 @@ const vi: TranslationKeys = {
   'git.branch.conflictDisabled': 'Hoàn tất gộp trước khi chuyển nhánh',
   'git.branch.noCommits': 'Chưa có commit',
 
+  // ── Git Clone Wizard (Phase 6a) ──
+  'git.wizard.clone.heading': 'Sao chép kho lưu trữ từ xa',
+  'git.wizard.clone.subheading': 'Chọn URL từ xa và thư mục đích.',
+  'git.wizard.clone.urlLabel': 'URL từ xa',
+  'git.wizard.clone.urlPlaceholder': 'https://github.com/owner/repo.git',
+  'git.wizard.clone.destLabel': 'Thư mục đích',
+  'git.wizard.clone.destPlaceholder': '/đường/dẫn/clone',
+  'git.wizard.clone.destPickButton': 'Duyệt…',
+  'git.wizard.clone.usernameLabel': 'Tên người dùng (tùy chọn)',
+  'git.wizard.clone.tokenLabel': 'Mã thông báo truy cập (tùy chọn)',
+  'git.wizard.clone.tokenPlaceholder': 'ghp_… để trống cho repo công khai',
+  'git.wizard.clone.anonymousHint': 'Để trống để sao chép ẩn danh (chỉ repo công khai).',
+  'git.wizard.clone.sshHint': 'URL này yêu cầu xác thực bằng khóa SSH.',
+  'git.wizard.clone.hostDetected': 'Đã phát hiện: {{host}} · {{mode}}',
+  'git.wizard.clone.authMode.token-or-anon': 'mã thông báo hoặc ẩn danh',
+  'git.wizard.clone.authMode.ssh': 'khóa SSH',
+  'git.wizard.clone.cancel': 'Hủy',
+  'git.wizard.clone.submit': 'Sao chép',
+  'git.wizard.clone.validationUrl': 'Cần URL từ xa',
+  'git.wizard.clone.validationDest': 'Cần thư mục đích',
+  'git.wizard.clone.validationTokenUsername': 'Cần tên người dùng khi cung cấp mã thông báo',
+  'git.wizard.clone.error.clone-network': 'Lỗi mạng khi sao chép. Kiểm tra kết nối và thử lại.',
+  'git.wizard.clone.error.network': 'Lỗi mạng. Kiểm tra kết nối và thử lại.',
+  'git.wizard.clone.error.timeout':
+    'Sao chép hết thời gian. Thử lại hoặc dùng kho lưu trữ nhỏ hơn.',
+  'git.wizard.clone.error.auth-required': 'Kho lưu trữ này cần xác thực.',
+  'git.wizard.clone.error.auth-failed':
+    'Xác thực thất bại. Kiểm tra tên người dùng và mã thông báo.',
+  'git.wizard.clone.error.auth-token-invalid':
+    'Mã thông báo truy cập bị từ chối. Tạo mã mới và thử lại.',
+  'git.wizard.clone.error.clone-failed':
+    'Sao chép thất bại. Hãy xác minh URL trỏ đến một kho lưu trữ thực sự.',
+  'git.wizard.clone.error.clone-target-exists': 'Thư mục đích đã tồn tại hoặc không trống.',
+
   // ── Right Panel ──
   'rightPanel.design': 'Thiết kế',
   'rightPanel.code': 'Mã',

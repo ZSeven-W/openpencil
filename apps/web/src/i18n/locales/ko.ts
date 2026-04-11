@@ -178,6 +178,40 @@ const ko: TranslationKeys = {
   'git.branch.conflictDisabled': '브랜치를 전환하기 전에 병합을 완료하세요',
   'git.branch.noCommits': '커밋이 없습니다',
 
+  // ── Git Clone Wizard (Phase 6a) ──
+  'git.wizard.clone.heading': '원격 저장소 복제',
+  'git.wizard.clone.subheading': '원격 URL과 대상 폴더를 선택하세요.',
+  'git.wizard.clone.urlLabel': '원격 URL',
+  'git.wizard.clone.urlPlaceholder': 'https://github.com/owner/repo.git',
+  'git.wizard.clone.destLabel': '대상 폴더',
+  'git.wizard.clone.destPlaceholder': '/path/to/clone',
+  'git.wizard.clone.destPickButton': '찾아보기…',
+  'git.wizard.clone.usernameLabel': '사용자 이름(선택)',
+  'git.wizard.clone.tokenLabel': '액세스 토큰(선택)',
+  'git.wizard.clone.tokenPlaceholder': 'ghp_… 공개 저장소는 비워두세요',
+  'git.wizard.clone.anonymousHint': '비워두면 익명으로 복제합니다(공개 저장소만 가능).',
+  'git.wizard.clone.sshHint': '이 URL은 SSH 키 인증이 필요합니다.',
+  'git.wizard.clone.hostDetected': '감지됨: {{host}} · {{mode}}',
+  'git.wizard.clone.authMode.token-or-anon': '토큰 또는 익명',
+  'git.wizard.clone.authMode.ssh': 'SSH 키',
+  'git.wizard.clone.cancel': '취소',
+  'git.wizard.clone.submit': '복제',
+  'git.wizard.clone.validationUrl': '원격 URL을 입력하세요',
+  'git.wizard.clone.validationDest': '대상 폴더를 선택하세요',
+  'git.wizard.clone.validationTokenUsername': '토큰을 제공할 때 사용자 이름이 필요합니다',
+  'git.wizard.clone.error.clone-network':
+    '복제 중 네트워크 오류가 발생했습니다. 연결을 확인하고 다시 시도하세요.',
+  'git.wizard.clone.error.network': '네트워크 오류. 연결을 확인하고 다시 시도하세요.',
+  'git.wizard.clone.error.timeout':
+    '복제 시간이 초과되었습니다. 다시 시도하거나 더 작은 저장소를 사용하세요.',
+  'git.wizard.clone.error.auth-required': '이 저장소는 인증이 필요합니다.',
+  'git.wizard.clone.error.auth-failed': '인증에 실패했습니다. 사용자 이름과 토큰을 확인하세요.',
+  'git.wizard.clone.error.auth-token-invalid':
+    '액세스 토큰이 거부되었습니다. 새 토큰을 생성하고 다시 시도하세요.',
+  'git.wizard.clone.error.clone-failed':
+    '복제에 실패했습니다. URL이 실제 저장소를 가리키는지 확인하세요.',
+  'git.wizard.clone.error.clone-target-exists': '대상 폴더가 이미 존재하거나 비어 있지 않습니다.',
+
   // ── Right Panel ──
   'rightPanel.design': '디자인',
   'rightPanel.code': '코드',

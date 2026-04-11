@@ -5,12 +5,22 @@ import { render, screen, fireEvent, cleanup } from '@testing-library/react';
 
 const initRepoMock = vi.fn(async () => {});
 const openRepoMock = vi.fn(async () => {});
+const enterCloneWizardMock = vi.fn(() => {});
 
 vi.mock('@/stores/git-store', () => {
   return {
     useGitStore: (
-      selector: (s: { initRepo: typeof initRepoMock; openRepo: typeof openRepoMock }) => unknown,
-    ) => selector({ initRepo: initRepoMock, openRepo: openRepoMock }),
+      selector: (s: {
+        initRepo: typeof initRepoMock;
+        openRepo: typeof openRepoMock;
+        enterCloneWizard: typeof enterCloneWizardMock;
+      }) => unknown,
+    ) =>
+      selector({
+        initRepo: initRepoMock,
+        openRepo: openRepoMock,
+        enterCloneWizard: enterCloneWizardMock,
+      }),
   };
 });
 
@@ -88,10 +98,12 @@ describe('GitPanelEmptyState', () => {
     expect(openRepoMock).toHaveBeenCalledWith('/tmp/repo', '/tmp/test.op');
   });
 
-  it('the clone card is always disabled in Phase 4a', () => {
+  it('clicking the clone card opens the clone wizard (Phase 6a)', () => {
     renderWithProvider(<GitPanelEmptyState />);
     const cloneButton = screen.getByText('git.empty.cloneCard').closest('button');
     expect(cloneButton).toBeTruthy();
-    expect(cloneButton?.hasAttribute('disabled')).toBe(true);
+    expect(cloneButton?.hasAttribute('disabled')).toBe(false);
+    fireEvent.click(cloneButton!);
+    expect(enterCloneWizardMock).toHaveBeenCalledTimes(1);
   });
 });

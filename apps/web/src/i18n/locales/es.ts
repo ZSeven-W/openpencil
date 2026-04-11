@@ -178,6 +178,42 @@ const es: TranslationKeys = {
   'git.branch.conflictDisabled': 'Termina la fusión antes de cambiar de rama',
   'git.branch.noCommits': 'Aún no hay commits',
 
+  // ── Git Clone Wizard (Phase 6a) ──
+  'git.wizard.clone.heading': 'Clonar un repositorio remoto',
+  'git.wizard.clone.subheading': 'Elige una URL remota y una carpeta de destino.',
+  'git.wizard.clone.urlLabel': 'URL remota',
+  'git.wizard.clone.urlPlaceholder': 'https://github.com/owner/repo.git',
+  'git.wizard.clone.destLabel': 'Carpeta de destino',
+  'git.wizard.clone.destPlaceholder': '/ruta/del/clon',
+  'git.wizard.clone.destPickButton': 'Examinar…',
+  'git.wizard.clone.usernameLabel': 'Usuario (opcional)',
+  'git.wizard.clone.tokenLabel': 'Token de acceso (opcional)',
+  'git.wizard.clone.tokenPlaceholder': 'ghp_… déjalo vacío para repos públicos',
+  'git.wizard.clone.anonymousHint':
+    'Déjalo vacío para clonar de forma anónima (solo repos públicos).',
+  'git.wizard.clone.sshHint': 'Esta URL requiere autenticación con clave SSH.',
+  'git.wizard.clone.hostDetected': 'Detectado: {{host}} · {{mode}}',
+  'git.wizard.clone.authMode.token-or-anon': 'token o anónimo',
+  'git.wizard.clone.authMode.ssh': 'clave SSH',
+  'git.wizard.clone.cancel': 'Cancelar',
+  'git.wizard.clone.submit': 'Clonar',
+  'git.wizard.clone.validationUrl': 'La URL remota es obligatoria',
+  'git.wizard.clone.validationDest': 'La carpeta de destino es obligatoria',
+  'git.wizard.clone.validationTokenUsername':
+    'Se necesita un usuario cuando se proporciona un token',
+  'git.wizard.clone.error.clone-network':
+    'Error de red al clonar. Comprueba tu conexión y vuelve a intentarlo.',
+  'git.wizard.clone.error.network': 'Error de red. Comprueba tu conexión y vuelve a intentarlo.',
+  'git.wizard.clone.error.timeout':
+    'El clon agotó el tiempo. Inténtalo de nuevo o usa un repositorio más pequeño.',
+  'git.wizard.clone.error.auth-required': 'Este repositorio requiere autenticación.',
+  'git.wizard.clone.error.auth-failed': 'La autenticación falló. Comprueba tu usuario y token.',
+  'git.wizard.clone.error.auth-token-invalid':
+    'El token de acceso fue rechazado. Genera uno nuevo y vuelve a intentarlo.',
+  'git.wizard.clone.error.clone-failed':
+    'Error al clonar. Verifica que la URL apunte a un repositorio real.',
+  'git.wizard.clone.error.clone-target-exists': 'La carpeta de destino ya existe o no está vacía.',
+
   // ── Right Panel ──
   'rightPanel.design': 'Diseño',
   'rightPanel.code': 'Código',

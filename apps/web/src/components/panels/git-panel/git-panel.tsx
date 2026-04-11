@@ -18,6 +18,7 @@ import { Loader2 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useGitStore } from '@/stores/git-store';
 import { useDocumentStore } from '@/stores/document-store';
+import { GitPanelCloneForm } from './git-panel-clone-form';
 import { GitPanelConflict } from './git-panel-conflict';
 import { GitPanelEmptyState } from './git-panel-empty-state';
 import { GitPanelErrorCard } from './git-panel-error-card';
@@ -69,9 +70,7 @@ export function GitPanel() {
         />
       )}
       {(state.kind === 'no-file' || state.kind === 'no-repo') && <GitPanelEmptyState />}
-      {state.kind === 'wizard-clone' && (
-        <PlaceholderBody>{t('git.placeholder.cloneWizard')}</PlaceholderBody>
-      )}
+      {state.kind === 'wizard-clone' && <GitPanelCloneForm />}
       {state.kind === 'initializing' && (
         <div className="flex flex-col items-center justify-center gap-2 p-6 text-muted-foreground">
           <Loader2 size={20} className="animate-spin" aria-hidden />
@@ -84,14 +83,6 @@ export function GitPanel() {
       {state.kind === 'error' && (
         <GitPanelErrorCard message={state.message} recoverable={state.recoverable} />
       )}
-    </div>
-  );
-}
-
-function PlaceholderBody({ children }: { children: React.ReactNode }) {
-  return (
-    <div className="flex items-center justify-center p-6 text-xs text-muted-foreground text-center">
-      {children}
     </div>
   );
 }

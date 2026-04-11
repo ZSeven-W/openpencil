@@ -176,6 +176,40 @@ const en = {
   'git.branch.conflictDisabled': 'Finish the merge before switching branches',
   'git.branch.noCommits': 'No commits yet',
 
+  // ── Git Clone Wizard (Phase 6a) ──
+  'git.wizard.clone.heading': 'Clone a remote repository',
+  'git.wizard.clone.subheading': 'Pick a remote URL and a destination folder.',
+  'git.wizard.clone.urlLabel': 'Remote URL',
+  'git.wizard.clone.urlPlaceholder': 'https://github.com/owner/repo.git',
+  'git.wizard.clone.destLabel': 'Destination folder',
+  'git.wizard.clone.destPlaceholder': '/path/to/clone',
+  'git.wizard.clone.destPickButton': 'Browse…',
+  'git.wizard.clone.usernameLabel': 'Username (optional)',
+  'git.wizard.clone.tokenLabel': 'Access token (optional)',
+  'git.wizard.clone.tokenPlaceholder': 'ghp_… or leave blank for public',
+  'git.wizard.clone.anonymousHint': 'Leave blank to clone anonymously (public repos only).',
+  'git.wizard.clone.sshHint': 'SSH key authentication is required for this URL.',
+  'git.wizard.clone.hostDetected': 'Detected: {{host}} · {{mode}}',
+  'git.wizard.clone.authMode.token-or-anon': 'token or anonymous',
+  'git.wizard.clone.authMode.ssh': 'SSH key',
+  'git.wizard.clone.cancel': 'Cancel',
+  'git.wizard.clone.submit': 'Clone',
+  'git.wizard.clone.validationUrl': 'Remote URL is required',
+  'git.wizard.clone.validationDest': 'Destination folder is required',
+  'git.wizard.clone.validationTokenUsername': 'Username is required when a token is provided',
+  'git.wizard.clone.error.clone-network':
+    'Network error while cloning. Check your connection and try again.',
+  'git.wizard.clone.error.network': 'Network error. Check your connection and try again.',
+  'git.wizard.clone.error.timeout': 'Clone timed out. Try again or use a smaller repository.',
+  'git.wizard.clone.error.auth-required': 'Authentication is required for this repository.',
+  'git.wizard.clone.error.auth-failed': 'Authentication failed. Check your username and token.',
+  'git.wizard.clone.error.auth-token-invalid':
+    'The access token was rejected. Generate a new one and try again.',
+  'git.wizard.clone.error.clone-failed':
+    'Clone failed. Verify the URL points at a real repository.',
+  'git.wizard.clone.error.clone-target-exists':
+    'The destination folder already exists or is not empty.',
+
   // ── Right Panel ──
   'rightPanel.design': 'Design',
   'rightPanel.code': 'Code',

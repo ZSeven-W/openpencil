@@ -178,6 +178,42 @@ const ja: TranslationKeys = {
   'git.branch.conflictDisabled': 'ブランチを切り替える前にマージを完了してください',
   'git.branch.noCommits': 'コミットがまだありません',
 
+  // ── Git Clone Wizard (Phase 6a) ──
+  'git.wizard.clone.heading': 'リモートリポジトリをクローン',
+  'git.wizard.clone.subheading': 'リモート URL とコピー先フォルダを選択してください。',
+  'git.wizard.clone.urlLabel': 'リモート URL',
+  'git.wizard.clone.urlPlaceholder': 'https://github.com/owner/repo.git',
+  'git.wizard.clone.destLabel': 'コピー先フォルダ',
+  'git.wizard.clone.destPlaceholder': '/path/to/clone',
+  'git.wizard.clone.destPickButton': '参照…',
+  'git.wizard.clone.usernameLabel': 'ユーザー名(任意)',
+  'git.wizard.clone.tokenLabel': 'アクセストークン(任意)',
+  'git.wizard.clone.tokenPlaceholder': 'ghp_… 公開リポジトリは空欄可',
+  'git.wizard.clone.anonymousHint': '空欄のままにすると匿名でクローンします(公開リポジトリのみ)。',
+  'git.wizard.clone.sshHint': 'この URL には SSH 鍵認証が必要です。',
+  'git.wizard.clone.hostDetected': '検出: {{host}} · {{mode}}',
+  'git.wizard.clone.authMode.token-or-anon': 'トークンまたは匿名',
+  'git.wizard.clone.authMode.ssh': 'SSH 鍵',
+  'git.wizard.clone.cancel': 'キャンセル',
+  'git.wizard.clone.submit': 'クローン',
+  'git.wizard.clone.validationUrl': 'リモート URL を入力してください',
+  'git.wizard.clone.validationDest': 'コピー先フォルダを選択してください',
+  'git.wizard.clone.validationTokenUsername': 'トークンを指定する場合はユーザー名が必要です',
+  'git.wizard.clone.error.clone-network':
+    'クローン中にネットワークエラーが発生しました。接続を確認して再試行してください。',
+  'git.wizard.clone.error.network': 'ネットワークエラー。接続を確認して再試行してください。',
+  'git.wizard.clone.error.timeout':
+    'クローンがタイムアウトしました。再試行するか、より小さなリポジトリを使用してください。',
+  'git.wizard.clone.error.auth-required': 'このリポジトリは認証が必要です。',
+  'git.wizard.clone.error.auth-failed':
+    '認証に失敗しました。ユーザー名とトークンを確認してください。',
+  'git.wizard.clone.error.auth-token-invalid':
+    'アクセストークンが拒否されました。新しいトークンを生成して再試行してください。',
+  'git.wizard.clone.error.clone-failed':
+    'クローンに失敗しました。URL が実在するリポジトリを指していることを確認してください。',
+  'git.wizard.clone.error.clone-target-exists':
+    'コピー先フォルダが既に存在するか、空ではありません。',
+
   // ── Right Panel ──
   'rightPanel.design': 'デザイン',
   'rightPanel.code': 'コード',
