@@ -16,14 +16,12 @@ import type {
 } from '@/services/git-types';
 import {
   CLONE_INLINE_ERROR_CODES,
-  PULL_AUTH_ERROR_CODES,
-  PUSH_AUTH_ERROR_CODES,
+  REMOTE_AUTH_ERROR_CODES,
   type CloneInlineErrorCode,
   type ConflictBagState,
   type GitState,
   type GitStore,
-  type PullAuthErrorCode,
-  type PushAuthErrorCode,
+  type RemoteAuthErrorCode,
   type RepoMeta,
 } from './git-store-types';
 
@@ -276,25 +274,29 @@ export function makeSyncAfterHeadMove(get: () => GitStore): () => Promise<void> 
 /**
  * Phase 6b: classify a thrown remote-action error. Returns an `'auth'`
  * verdict for recoverable auth codes (so the pull/push buttons can open
- * the shared auth form) or `'other'` for everything else (so the store's
- * runOrError wrapper transitions into the generic error state). Mirrors
- * the clone-side `classifyCloneError` shape so the store doesn't grow
- * four slightly different classifier patterns.
+ * the shared auth form) or `'other'` for everything else (so the caller
+ * falls through to its generic error handling). Mirrors the clone-side
+ * `classifyCloneError` shape so the store doesn't grow four slightly
+ * different classifier patterns.
+ *
+ * The `which` argument is retained for call-site readability and to leave
+ * a slot for a pull/push divergence if one ever lands — today both flows
+ * share `REMOTE_AUTH_ERROR_CODES`.
  */
 export function classifyRemoteAuthError(
   err: unknown,
-  which: 'pull' | 'push',
-): { kind: 'auth'; code: PullAuthErrorCode | PushAuthErrorCode; message: string } | null {
-  if (!isGitError(err)) return null;
-  const codes = which === 'pull' ? PULL_AUTH_ERROR_CODES : PUSH_AUTH_ERROR_CODES;
-  if ((codes as readonly string[]).includes(err.code)) {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  _which: 'pull' | 'push',
+): { kind: 'auth'; code: RemoteAuthErrorCode; message: string } | { kind: 'other' } {
+  if (!isGitError(err)) return { kind: 'other' };
+  if ((REMOTE_AUTH_ERROR_CODES as readonly string[]).includes(err.code)) {
     return {
       kind: 'auth',
-      code: err.code as PullAuthErrorCode | PushAuthErrorCode,
+      code: err.code as RemoteAuthErrorCode,
       message: err.message,
     };
   }
-  return null;
+  return { kind: 'other' };
 }
 
 /**

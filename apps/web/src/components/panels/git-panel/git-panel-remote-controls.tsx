@@ -24,15 +24,10 @@ import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import { GitError, isGitError } from '@/services/git-error';
+import { isGitError } from '@/services/git-error';
 import type { GitAuthCreds } from '@/services/git-types';
 import { useGitStore } from '@/stores/git-store';
-import {
-  PULL_AUTH_ERROR_CODES,
-  PUSH_AUTH_ERROR_CODES,
-  type PullAuthErrorCode,
-  type PushAuthErrorCode,
-} from '@/stores/git-store-types';
+import { classifyRemoteAuthError } from '@/stores/git-store-helpers';
 import { GitPanelAuthForm, type GitPanelAuthFormMode } from './git-panel-auth-form';
 
 type RemoteControlsStep =
@@ -56,14 +51,6 @@ type RemoteControlsStep =
   | { step: 'push-rejected' }
   | { step: 'error'; message: string };
 
-function isPullAuthCode(code: string): code is PullAuthErrorCode {
-  return (PULL_AUTH_ERROR_CODES as readonly string[]).includes(code);
-}
-
-function isPushAuthCode(code: string): code is PushAuthErrorCode {
-  return (PUSH_AUTH_ERROR_CODES as readonly string[]).includes(code);
-}
-
 export function GitPanelRemoteControls() {
   const { t } = useTranslation();
   const state = useGitStore((s) => s.state);
@@ -77,13 +64,16 @@ export function GitPanelRemoteControls() {
   // Reset local state whenever the repo/remote changes so a stale pull-auth
   // panel can't leak between repositories. `remote` may be absent in test
   // fixtures that predate Phase 6a; treat undefined like null.
-  const remoteUrl =
-    state.kind === 'ready' || state.kind === 'conflict' ? (state.repo.remote?.url ?? null) : null;
+  const remoteUrl = state.kind === 'ready' ? (state.repo.remote?.url ?? null) : null;
   useEffect(() => {
     setStep({ step: 'idle' });
   }, [remoteUrl]);
 
-  if (state.kind !== 'ready' && state.kind !== 'conflict') return null;
+  // Only render while the repo is in a clean `ready` state. During a
+  // `conflict` the user must finish the in-flight merge before they can
+  // pull/push again — the conflict banner owns the recovery UI and both
+  // IPCs would fail deterministically against a half-merged tree.
+  if (state.kind !== 'ready') return null;
   const repo = state.repo;
   // Defensive: `remote` is `GitRemoteInfo | null` per the contract, but
   // tests that stub repo without the field still land here — treat a
@@ -101,7 +91,8 @@ export function GitPanelRemoteControls() {
       setStep({ step: 'idle' });
       return 'ok';
     } catch (err) {
-      if (isGitError(err) && isPullAuthCode(err.code)) {
+      const classification = classifyRemoteAuthError(err, 'pull');
+      if (classification.kind === 'auth') {
         // Surface the shared auth form. Seed the mode from any previously
         // stored credential so the user lands on the right tab without a
         // click.
@@ -110,7 +101,9 @@ export function GitPanelRemoteControls() {
           step: 'pull-auth',
           host,
           mode,
-          error: t(`git.auth.error.${err.code}`, { defaultValue: err.message }),
+          error: t(`git.auth.error.${classification.code}`, {
+            defaultValue: classification.message,
+          }),
           busy: false,
         });
         return 'handled';
@@ -136,18 +129,21 @@ export function GitPanelRemoteControls() {
       setStep({ step: 'idle' });
       return 'ok';
     } catch (err) {
+      const classification = classifyRemoteAuthError(err, 'push');
+      if (classification.kind === 'auth') {
+        const mode = await preseedAuthMode(host, getAuth);
+        setStep({
+          step: 'push-auth',
+          host,
+          mode,
+          error: t(`git.auth.error.${classification.code}`, {
+            defaultValue: classification.message,
+          }),
+          busy: false,
+        });
+        return 'handled';
+      }
       if (isGitError(err)) {
-        if (isPushAuthCode(err.code)) {
-          const mode = await preseedAuthMode(host, getAuth);
-          setStep({
-            step: 'push-auth',
-            host,
-            mode,
-            error: t(`git.auth.error.${err.code}`, { defaultValue: err.message }),
-            busy: false,
-          });
-          return 'handled';
-        }
         if (err.code === 'push-rejected') {
           setStep({ step: 'push-rejected' });
           return 'handled';
@@ -322,7 +318,6 @@ async function preseedAuthMode(
 
 function extractMessage(err: unknown): string {
   if (isGitError(err)) return err.message;
-  if (err instanceof GitError) return err.message;
   if (err instanceof Error) return err.message;
   return String(err);
 }

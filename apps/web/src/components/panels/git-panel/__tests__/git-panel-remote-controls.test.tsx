@@ -27,6 +27,16 @@ interface ReadyStateMock {
     remote: GitRemoteInfo | null;
   };
 }
+interface ConflictStateMock {
+  kind: 'conflict';
+  repo: {
+    repoId: string;
+    ahead: number;
+    remote: GitRemoteInfo | null;
+  };
+  conflicts: { nodeConflicts: Map<string, unknown>; docFieldConflicts: Map<string, unknown> };
+  unresolvedFiles: string[];
+}
 
 const fx = {
   state: {
@@ -36,7 +46,7 @@ const fx = {
       ahead: 0,
       remote: null,
     },
-  } as ReadyStateMock,
+  } as ReadyStateMock | ConflictStateMock,
   sshKeys: [] as Array<unknown>,
   pull: vi.fn(async (_auth?: unknown) => {}),
   push: vi.fn(async (_auth?: unknown) => {}),
@@ -74,6 +84,20 @@ function setReady(repo: Partial<ReadyStateMock['repo']> = {}) {
   };
 }
 
+function setConflict(repo: Partial<ConflictStateMock['repo']> = {}) {
+  fx.state = {
+    kind: 'conflict',
+    repo: {
+      repoId: 'r1',
+      ahead: 0,
+      remote: null,
+      ...repo,
+    },
+    conflicts: { nodeConflicts: new Map(), docFieldConflicts: new Map() },
+    unresolvedFiles: [],
+  };
+}
+
 describe('GitPanelRemoteControls', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -82,6 +106,25 @@ describe('GitPanelRemoteControls', () => {
 
   afterEach(() => {
     cleanup();
+  });
+
+  // ---- Conflict gating --------------------------------------------------
+
+  it('renders nothing while the repo is in conflict state (the conflict banner owns recovery)', () => {
+    // Pull/push during an in-flight merge is a footgun — pull fails
+    // deterministically and push would try to push a half-merged tree.
+    // The component must bail out cleanly so the conflict banner can
+    // drive recovery without racing a stray button click.
+    setConflict({
+      remote: { name: 'origin', url: 'https://github.com/foo/bar.git', host: 'github.com' },
+      ahead: 2,
+    });
+    const { container } = renderWithProvider(<GitPanelRemoteControls />);
+    // TooltipProvider wraps the component; the component itself renders
+    // null, so the provider's children set must be empty.
+    expect(container.firstChild?.childNodes.length ?? 0).toBe(0);
+    expect(screen.queryByLabelText('git.pull.label')).toBeNull();
+    expect(screen.queryByLabelText('git.push.label')).toBeNull();
   });
 
   // ---- Disabled / no-remote --------------------------------------------
