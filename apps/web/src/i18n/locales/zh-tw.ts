@@ -166,7 +166,6 @@ const zhTW: TranslationKeys = {
   'git.history.restoreButton': '還原',
   'git.history.copyHashButton': '複製雜湊',
   'git.history.copiedToast': '已複製',
-  'git.history.diffComingSoon': 'Diff 檢視將在 Phase 6 提供',
   // Phase 7b: inline diff block (placeholder — Phase 7c localises)
   'git.history.diff.loading': 'Loading diff…',
   'git.history.diff.initialCommit': 'Initial commit — no parent to diff against',

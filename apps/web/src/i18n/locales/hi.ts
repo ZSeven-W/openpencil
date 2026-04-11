@@ -166,7 +166,6 @@ const hi: TranslationKeys = {
   'git.history.restoreButton': 'पुनर्स्थापित करें',
   'git.history.copyHashButton': 'हैश कॉपी करें',
   'git.history.copiedToast': 'कॉपी किया गया',
-  'git.history.diffComingSoon': 'Diff दृश्य Phase 6 में',
   // Phase 7b: inline diff block (placeholder — Phase 7c localises)
   'git.history.diff.loading': 'Loading diff…',
   'git.history.diff.initialCommit': 'Initial commit — no parent to diff against',

@@ -167,7 +167,6 @@ const de: TranslationKeys = {
   'git.history.restoreButton': 'Wiederherstellen',
   'git.history.copyHashButton': 'Hash kopieren',
   'git.history.copiedToast': 'Kopiert',
-  'git.history.diffComingSoon': 'Diff-Ansicht in Phase 6',
   // Phase 7b: inline diff block
   'git.history.diff.loading': 'Diff wird geladen…',
   'git.history.diff.initialCommit': 'Erster Commit — kein übergeordneter Diff',

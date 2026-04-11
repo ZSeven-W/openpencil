@@ -166,7 +166,6 @@ const th: TranslationKeys = {
   'git.history.restoreButton': 'คืนค่า',
   'git.history.copyHashButton': 'คัดลอก hash',
   'git.history.copiedToast': 'คัดลอกแล้ว',
-  'git.history.diffComingSoon': 'มุมมอง Diff จะมีใน Phase 6',
   // Phase 7b: inline diff block (placeholder — Phase 7c localises)
   'git.history.diff.loading': 'Loading diff…',
   'git.history.diff.initialCommit': 'Initial commit — no parent to diff against',

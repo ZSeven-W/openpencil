@@ -167,7 +167,6 @@ const ja: TranslationKeys = {
   'git.history.restoreButton': '復元',
   'git.history.copyHashButton': 'ハッシュをコピー',
   'git.history.copiedToast': 'コピー済み',
-  'git.history.diffComingSoon': 'Diff は Phase 6 で提供',
   // Phase 7b: inline diff block (placeholder — Phase 7c localises)
   'git.history.diff.loading': 'Loading diff…',
   'git.history.diff.initialCommit': 'Initial commit — no parent to diff against',

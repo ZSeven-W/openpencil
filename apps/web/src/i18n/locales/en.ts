@@ -167,8 +167,6 @@ const en = {
   'git.history.restoreButton': 'Restore',
   'git.history.copyHashButton': 'Copy hash',
   'git.history.copiedToast': 'Copied',
-  'git.history.diffComingSoon': 'Diff view coming in Phase 6',
-
   // ── Git History Diff (Phase 7b) ──
   'git.history.diff.loading': 'Loading diff…',
   'git.history.diff.initialCommit': 'Initial commit — no parent to diff against',

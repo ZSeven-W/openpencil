@@ -167,7 +167,6 @@ const ko: TranslationKeys = {
   'git.history.restoreButton': '복원',
   'git.history.copyHashButton': '해시 복사',
   'git.history.copiedToast': '복사됨',
-  'git.history.diffComingSoon': 'Diff 보기는 Phase 6에서 제공',
   // Phase 7b: inline diff block (placeholder — Phase 7c localises)
   'git.history.diff.loading': 'Loading diff…',
   'git.history.diff.initialCommit': 'Initial commit — no parent to diff against',

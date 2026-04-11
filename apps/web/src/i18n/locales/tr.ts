@@ -167,7 +167,6 @@ const tr: TranslationKeys = {
   'git.history.restoreButton': 'Geri yükle',
   'git.history.copyHashButton': "Hash'i kopyala",
   'git.history.copiedToast': 'Kopyalandı',
-  'git.history.diffComingSoon': "Diff görünümü Phase 6'da",
   // Phase 7b: inline diff block (placeholder — Phase 7c localises)
   'git.history.diff.loading': 'Loading diff…',
   'git.history.diff.initialCommit': 'Initial commit — no parent to diff against',

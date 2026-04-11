@@ -166,7 +166,6 @@ const vi: TranslationKeys = {
   'git.history.restoreButton': 'Khôi phục',
   'git.history.copyHashButton': 'Sao chép hash',
   'git.history.copiedToast': 'Đã sao chép',
-  'git.history.diffComingSoon': 'Xem diff có trong Phase 6',
   // Phase 7b: inline diff block (placeholder — Phase 7c localises)
   'git.history.diff.loading': 'Loading diff…',
   'git.history.diff.initialCommit': 'Initial commit — no parent to diff against',

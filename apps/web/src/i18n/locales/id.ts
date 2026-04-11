@@ -167,7 +167,6 @@ const id: TranslationKeys = {
   'git.history.restoreButton': 'Pulihkan',
   'git.history.copyHashButton': 'Salin hash',
   'git.history.copiedToast': 'Tersalin',
-  'git.history.diffComingSoon': 'Tampilan Diff di Phase 6',
   // Phase 7b: inline diff block (placeholder — Phase 7c localises)
   'git.history.diff.loading': 'Loading diff…',
   'git.history.diff.initialCommit': 'Initial commit — no parent to diff against',
