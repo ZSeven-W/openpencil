@@ -28,7 +28,7 @@ function rulePlaceholderKey(entries: [string, string][]): Violation[] {
   return entries
     .filter(([key]) => {
       if (GIT_COPY_AUDIT_ALLOWLIST.has(key)) return false;
-      return /^git\.placeholder\./.test(key);
+      return key.startsWith('git.placeholder.');
     })
     .map(([key, value]) => ({
       key,
