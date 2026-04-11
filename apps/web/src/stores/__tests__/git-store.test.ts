@@ -1597,4 +1597,191 @@ describe('git-store state machine', () => {
     await expect(useGitStore.getState().exitTrackedFilePicker()).resolves.toBeUndefined();
     expect(useGitStore.getState().state.kind).toBe('no-file');
   });
+
+  // ---- C1: refreshStatus must not wipe in-memory conflict resolutions ----
+
+  it('refreshStatus preserves in-memory resolutions when already in conflict', async () => {
+    // Set up conflict state with one node conflict via mergeBranch.
+    vi.mocked(gitClient.init).mockResolvedValue(SAMPLE_REPO);
+    vi.mocked(gitClient.branchMerge).mockResolvedValue({
+      result: 'conflict',
+      conflicts: {
+        nodeConflicts: [
+          {
+            id: 'node:_:nodeA',
+            pageId: null,
+            nodeId: 'nodeA',
+            reason: 'both-modified-same-field',
+            base: null,
+            ours: null,
+            theirs: null,
+          },
+          {
+            id: 'node:_:nodeB',
+            pageId: null,
+            nodeId: 'nodeB',
+            reason: 'both-modified-same-field',
+            base: null,
+            ours: null,
+            theirs: null,
+          },
+        ],
+        docFieldConflicts: [],
+      },
+    });
+    vi.mocked(gitClient.resolveConflict).mockResolvedValue(undefined);
+    await useGitStore.getState().initRepo('/tmp/login.op');
+    await useGitStore.getState().mergeBranch('feature');
+    expect(useGitStore.getState().state.kind).toBe('conflict');
+
+    // User resolves nodeA.
+    await useGitStore.getState().resolveConflict('node:_:nodeA', { kind: 'ours' });
+    let s = useGitStore.getState().state;
+    expect(s.kind).toBe('conflict');
+    if (s.kind === 'conflict') {
+      expect(s.conflicts.nodeConflicts.get('node:_:nodeA')?.resolution).toEqual({ kind: 'ours' });
+    }
+
+    // Polling fires: backend still reports merge in progress with the same bag.
+    vi.mocked(gitClient.status).mockResolvedValue({
+      ...DEFAULT_STATUS,
+      mergeInProgress: true,
+      unresolvedFiles: [],
+      conflicts: {
+        nodeConflicts: [
+          {
+            id: 'node:_:nodeA',
+            pageId: null,
+            nodeId: 'nodeA',
+            reason: 'both-modified-same-field',
+            base: null,
+            ours: null,
+            theirs: null,
+          },
+          {
+            id: 'node:_:nodeB',
+            pageId: null,
+            nodeId: 'nodeB',
+            reason: 'both-modified-same-field',
+            base: null,
+            ours: null,
+            theirs: null,
+          },
+        ],
+        docFieldConflicts: [],
+      },
+    });
+    await useGitStore.getState().refreshStatus();
+
+    // CRITICAL: the resolution on nodeA must still be present after the poll.
+    s = useGitStore.getState().state;
+    expect(s.kind).toBe('conflict');
+    if (s.kind === 'conflict') {
+      expect(s.conflicts.nodeConflicts.get('node:_:nodeA')?.resolution).toEqual({ kind: 'ours' });
+      // nodeB is still unresolved.
+      expect(s.conflicts.nodeConflicts.get('node:_:nodeB')?.resolution).toBeUndefined();
+    }
+  });
+
+  it('refreshStatus preserves finalizeError when already in conflict', async () => {
+    // Set up conflict state via mergeBranch.
+    vi.mocked(gitClient.init).mockResolvedValue(SAMPLE_REPO);
+    vi.mocked(gitClient.branchMerge).mockResolvedValue({
+      result: 'conflict',
+      conflicts: { nodeConflicts: [], docFieldConflicts: [] },
+    });
+    vi.mocked(gitClient.applyMerge).mockRejectedValue(
+      new GitError('merge-still-conflicted', 'some conflicts remain unresolved'),
+    );
+    await useGitStore.getState().initRepo('/tmp/login.op');
+    await useGitStore.getState().mergeBranch('feature');
+    // Trigger a finalizeError by attempting applyMerge with unresolved conflicts.
+    await useGitStore.getState().applyMerge();
+    let s = useGitStore.getState().state;
+    expect(s.kind).toBe('conflict');
+    if (s.kind === 'conflict') {
+      expect(s.finalizeError).toBe('some conflicts remain unresolved');
+    }
+
+    // Polling fires: backend still reports merge in progress.
+    vi.mocked(gitClient.status).mockResolvedValue({
+      ...DEFAULT_STATUS,
+      mergeInProgress: true,
+      unresolvedFiles: [],
+      conflicts: { nodeConflicts: [], docFieldConflicts: [] },
+    });
+    await useGitStore.getState().refreshStatus();
+
+    // CRITICAL: finalizeError must still be set after the poll.
+    s = useGitStore.getState().state;
+    expect(s.kind).toBe('conflict');
+    if (s.kind === 'conflict') {
+      expect(s.finalizeError).toBe('some conflicts remain unresolved');
+    }
+  });
+
+  it('refreshStatus updates unresolvedFiles mid-session without wiping resolutions', async () => {
+    // Set up conflict state with one node conflict and two unresolved files.
+    vi.mocked(gitClient.init).mockResolvedValue(SAMPLE_REPO);
+    vi.mocked(gitClient.branchMerge).mockResolvedValue({
+      result: 'conflict',
+      conflicts: {
+        nodeConflicts: [
+          {
+            id: 'node:_:nodeA',
+            pageId: null,
+            nodeId: 'nodeA',
+            reason: 'both-modified-same-field',
+            base: null,
+            ours: null,
+            theirs: null,
+          },
+        ],
+        docFieldConflicts: [],
+      },
+    });
+    vi.mocked(gitClient.resolveConflict).mockResolvedValue(undefined);
+    await useGitStore.getState().initRepo('/tmp/login.op');
+    await useGitStore.getState().mergeBranch('feature');
+
+    // Seed unresolvedFiles manually — branch merge doesn't set them.
+    useGitStore.setState((s) => {
+      if (s.state.kind !== 'conflict') return s;
+      return { state: { ...s.state, unresolvedFiles: ['README.md', 'package.json'] } };
+    });
+
+    // User resolves nodeA.
+    await useGitStore.getState().resolveConflict('node:_:nodeA', { kind: 'theirs' });
+
+    // Backend now reports only one unresolved file (user resolved README externally).
+    vi.mocked(gitClient.status).mockResolvedValue({
+      ...DEFAULT_STATUS,
+      mergeInProgress: true,
+      unresolvedFiles: ['package.json'],
+      conflicts: {
+        nodeConflicts: [
+          {
+            id: 'node:_:nodeA',
+            pageId: null,
+            nodeId: 'nodeA',
+            reason: 'both-modified-same-field',
+            base: null,
+            ours: null,
+            theirs: null,
+          },
+        ],
+        docFieldConflicts: [],
+      },
+    });
+    await useGitStore.getState().refreshStatus();
+
+    const s = useGitStore.getState().state;
+    expect(s.kind).toBe('conflict');
+    if (s.kind === 'conflict') {
+      // unresolvedFiles must reflect the backend update.
+      expect(s.unresolvedFiles).toEqual(['package.json']);
+      // The nodeA resolution must be preserved.
+      expect(s.conflicts.nodeConflicts.get('node:_:nodeA')?.resolution).toEqual({ kind: 'theirs' });
+    }
+  });
 });

@@ -462,10 +462,21 @@ export const useGitStore = create<GitStore>((set, get) => {
       const current = get().state;
       const unresolved = status.unresolvedFiles ?? [];
       if (status.mergeInProgress && (status.conflicts || unresolved.length > 0)) {
-        // Backend reports an in-flight merge. Promote ready → conflict or
-        // refresh the bag + unresolved file list if already in conflict
-        // (resolutions or the unresolved list may have shifted).
-        if (current.kind === 'ready' || current.kind === 'conflict') {
+        // Backend reports an in-flight merge.
+        if (current.kind === 'conflict') {
+          // Already in conflict state: preserve in-memory resolutions and
+          // finalizeError — the .op conflict bag does not mutate during a
+          // merge session, and the user's resolution choices must survive
+          // the 3-second polling cycle. Only unresolvedFiles can change as
+          // the user resolves non-.op files externally.
+          set({
+            state: {
+              ...current,
+              unresolvedFiles: unresolved,
+            },
+          });
+        } else if (current.kind === 'ready') {
+          // Promote ready → conflict with a fresh bag (new entry into conflict state).
           set({ state: buildConflictState(current.repo, status.conflicts ?? null, unresolved) });
         }
       } else if (!status.mergeInProgress && current.kind === 'conflict') {
