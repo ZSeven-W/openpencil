@@ -4,7 +4,6 @@
 // Phase 7b: verifies the inline diff block loads on expand, handles initial
 // commit, surfaces compute errors inline, and renders the diff summary.
 
-import React from 'react';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { render, screen, cleanup, act } from '@testing-library/react';
 import type { GitCommitMeta } from '@/services/git-types';
@@ -12,7 +11,7 @@ import type { GitCommitMeta } from '@/services/git-types';
 const mocks = vi.hoisted(() => ({
   computeDiff: vi.fn(async () => ({
     summary: { framesChanged: 0, nodesAdded: 0, nodesRemoved: 0, nodesModified: 0 },
-    patches: [],
+    patches: [] as unknown[],
   })),
 }));
 

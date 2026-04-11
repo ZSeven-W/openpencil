@@ -19,6 +19,35 @@ type NodeConflict = {
   resolution?: { kind: 'ours' } | { kind: 'theirs' };
 };
 
+type MockRepo = {
+  repoId: string;
+  currentBranch: string;
+  mode: 'single-file';
+  rootPath: string;
+  gitdir: string;
+  engineKind: 'iso';
+  trackedFilePath: string;
+  candidateFiles: never[];
+  branches: never[];
+  workingDirty: boolean;
+  otherFilesDirty: number;
+  otherFilesPaths: never[];
+  ahead: number;
+  behind: number;
+  remote: null;
+};
+
+type MockState = {
+  kind: 'conflict';
+  repo: MockRepo;
+  conflicts: {
+    nodeConflicts: Map<string, NodeConflict>;
+    docFieldConflicts: Map<string, never>;
+  };
+  unresolvedFiles: string[];
+  finalizeError: string | null;
+};
+
 const mocks = vi.hoisted(() => ({
   state: {
     kind: 'conflict' as const,
@@ -45,16 +74,7 @@ const mocks = vi.hoisted(() => ({
     },
     unresolvedFiles: [] as string[],
     finalizeError: null as string | null,
-  } as {
-    kind: 'conflict';
-    repo: typeof mocks.state.repo;
-    conflicts: {
-      nodeConflicts: Map<string, NodeConflict>;
-      docFieldConflicts: Map<string, never>;
-    };
-    unresolvedFiles: string[];
-    finalizeError: string | null;
-  },
+  } as MockState,
   abortMerge: vi.fn(async () => {}),
   applyMerge: vi.fn(async () => {}),
 }));
@@ -91,8 +111,8 @@ describe('GitPanelConflictBanner', () => {
       kind: 'conflict',
       repo: mocks.state.repo,
       conflicts: {
-        nodeConflicts: new Map(),
-        docFieldConflicts: new Map(),
+        nodeConflicts: new Map<string, NodeConflict>(),
+        docFieldConflicts: new Map<string, never>(),
       },
       unresolvedFiles: [],
       finalizeError: null,

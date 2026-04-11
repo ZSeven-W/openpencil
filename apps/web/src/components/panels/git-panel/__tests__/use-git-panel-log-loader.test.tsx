@@ -5,7 +5,6 @@
 // instead of a hardcoded 'main' so branch switches and conflict → ready
 // transitions both see the correct log.
 
-import React from 'react';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { render, cleanup } from '@testing-library/react';
 
@@ -100,7 +99,6 @@ describe('useGitPanelLogLoader', () => {
   });
 
   it('loads the log for the current branch in conflict state', () => {
-    // @ts-expect-error mock state shape
     mocks.state = {
       kind: 'conflict',
       repo: {
