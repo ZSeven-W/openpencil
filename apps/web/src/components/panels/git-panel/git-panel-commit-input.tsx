@@ -12,6 +12,7 @@
 //      trips, the store sets saveRequiredFor which the parent renders
 //      via <GitPanelSaveRequiredAlert>.
 
+import { Milestone } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
@@ -67,29 +68,41 @@ export function GitPanelCommitInput() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pendingCommitAfterAuth, authorIdentity, authorPromptVisible]);
 
+  const canSubmit = commitMessage.trim().length > 0;
+
   return (
-    <div className="border-b border-border">
+    <div className="border-b border-border/60">
       {authorPromptVisible ? (
         <GitPanelAuthorForm />
       ) : (
-        <div className="flex flex-col gap-2 p-3">
-          <textarea
-            value={commitMessage}
-            onChange={(e) => setCommitMessage(e.target.value)}
-            placeholder={t('git.commit.placeholder')}
-            rows={2}
-            className="w-full resize-none rounded-md border border-input bg-secondary px-2 py-1.5 text-xs text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none"
-          />
-          <div className="flex items-center justify-end">
-            <Button
-              type="button"
-              variant="default"
-              size="sm"
-              disabled={commitMessage.trim().length === 0}
-              onClick={() => void handleSubmit()}
-            >
-              {t('git.commit.submitButton')}
-            </Button>
+        <div className="p-3">
+          <div className="group rounded-lg border border-border/70 bg-card shadow-[0_1px_0_rgba(0,0,0,0.02)] transition-[border-color,box-shadow] focus-within:border-primary/50 focus-within:shadow-[0_0_0_3px_rgba(99,102,241,0.08)]">
+            <textarea
+              value={commitMessage}
+              onChange={(e) => setCommitMessage(e.target.value)}
+              onKeyDown={(e) => {
+                if ((e.metaKey || e.ctrlKey) && e.key === 'Enter' && canSubmit) {
+                  e.preventDefault();
+                  void handleSubmit();
+                }
+              }}
+              placeholder={t('git.commit.placeholder')}
+              rows={2}
+              className="w-full resize-none bg-transparent px-3 pt-2.5 pb-1 text-xs leading-relaxed text-foreground placeholder:text-muted-foreground/70 focus:outline-none"
+            />
+            <div className="flex items-center justify-end gap-2 px-1.5 pb-1.5">
+              <Button
+                type="button"
+                variant="default"
+                size="sm"
+                disabled={!canSubmit}
+                onClick={() => void handleSubmit()}
+                className="h-6 gap-1 rounded-md px-2.5 text-[11px] font-medium shadow-none"
+              >
+                <Milestone size={11} strokeWidth={2} aria-hidden />
+                {t('git.commit.submitButton')}
+              </Button>
+            </div>
           </div>
         </div>
       )}

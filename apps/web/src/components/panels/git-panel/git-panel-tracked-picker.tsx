@@ -14,6 +14,7 @@
 // cloneRepo actions (auto-bind), so this component never has to show
 // a single-row picker.
 
+import { Check, FileText } from 'lucide-react';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
@@ -95,7 +96,7 @@ export function GitPanelTrackedPicker() {
 
   return (
     <div className="flex flex-col gap-3 p-4">
-      <div className="text-xs text-foreground">
+      <div className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
         {t('git.picker.heading', { count: candidates.length })}
       </div>
       <div className="flex flex-col gap-1.5">
@@ -117,16 +118,18 @@ export function GitPanelTrackedPicker() {
           variant="ghost"
           size="sm"
           onClick={() => void exitTrackedFilePicker()}
+          className="h-7 rounded-md px-2.5 text-[11px]"
         >
           {backLabel}
         </Button>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1.5">
           <Button
             type="button"
             variant="outline"
             size="sm"
             disabled={!selectedPath}
             onClick={() => void handleBindOnly()}
+            className="h-7 rounded-md px-2.5 text-[11px]"
           >
             {t('git.picker.bindButton')}
           </Button>
@@ -136,6 +139,7 @@ export function GitPanelTrackedPicker() {
             size="sm"
             disabled={!selectedPath}
             onClick={() => void handleBindAndOpen()}
+            className="h-7 rounded-md px-2.5 text-[11px]"
           >
             {t('git.picker.bindAndOpenButton')}
           </Button>
@@ -162,24 +166,41 @@ function TrackedPickerRow({ candidate, selected, onSelect, t }: TrackedPickerRow
     <button
       type="button"
       onClick={onSelect}
-      className={`flex flex-col items-start gap-0.5 rounded-md border p-2 text-left transition-colors ${
-        selected ? 'border-primary bg-primary/5' : 'border-border hover:bg-accent'
+      aria-pressed={selected}
+      className={`group relative flex items-start gap-2.5 rounded-lg border p-2.5 text-left transition-all ${
+        selected
+          ? 'border-primary/60 bg-primary/5 shadow-[0_0_0_3px_hsl(var(--primary)/0.08)]'
+          : 'border-border/70 bg-card hover:border-border hover:bg-accent/40'
       }`}
     >
-      <div className="flex w-full items-center justify-between gap-2">
-        <span className="text-xs font-medium text-foreground truncate">
-          {candidate.relativePath}
-        </span>
-        <span className="text-[10px] text-muted-foreground shrink-0">{milestoneLabel}</span>
-      </div>
-      {candidate.lastCommitMessage && (
-        <div className="text-[10px] text-muted-foreground truncate w-full">
-          {t('git.picker.lastCommit', {
-            message: candidate.lastCommitMessage,
-            time: formatRelativeTime(candidate.lastCommitAt, t),
-          })}
+      <span
+        className={`mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-md transition-colors ${
+          selected ? 'bg-primary/15 text-primary' : 'bg-muted text-muted-foreground'
+        }`}
+        aria-hidden
+      >
+        {selected ? (
+          <Check size={13} strokeWidth={2.25} />
+        ) : (
+          <FileText size={13} strokeWidth={1.75} />
+        )}
+      </span>
+      <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+        <div className="flex w-full items-center justify-between gap-2">
+          <span className="truncate text-[12px] font-medium text-foreground">
+            {candidate.relativePath}
+          </span>
+          <span className="shrink-0 text-[10px] text-muted-foreground">{milestoneLabel}</span>
         </div>
-      )}
+        {candidate.lastCommitMessage && (
+          <div className="w-full truncate text-[10px] text-muted-foreground/80">
+            {t('git.picker.lastCommit', {
+              message: candidate.lastCommitMessage,
+              time: formatRelativeTime(candidate.lastCommitAt, t),
+            })}
+          </div>
+        )}
+      </div>
     </button>
   );
 }

@@ -15,7 +15,15 @@
 //
 // The component returns null unless state.kind is 'ready' or 'conflict'.
 
-import { ChevronRight, MoreHorizontal } from 'lucide-react';
+import {
+  ChevronRight,
+  FileSearch,
+  Key,
+  LogOut,
+  MoreHorizontal,
+  Settings2,
+  UserX,
+} from 'lucide-react';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
@@ -49,7 +57,7 @@ export function GitPanelHeader() {
     overflowView === 'menu' ? 'w-56' : overflowView === 'remote-settings' ? 'w-[300px]' : 'w-80';
 
   return (
-    <div className="flex items-center justify-between gap-1 border-b border-border px-2 py-1">
+    <div className="flex items-center justify-between gap-1 border-b border-border/60 bg-card/40 px-2.5 py-1.5 backdrop-blur-sm">
       {/* ── Left group: branch + remote controls ── */}
       <div className="flex items-center gap-0.5">
         <GitPanelBranchPicker />
@@ -121,7 +129,11 @@ export function GitPanelHeader() {
               <MoreHorizontal size={13} strokeWidth={1.5} aria-hidden />
             </Button>
           </PopoverTrigger>
-          <PopoverContent align="end" className={`${popoverWidth} p-1`} role="menu">
+          <PopoverContent
+            align="end"
+            className={`${popoverWidth} rounded-lg border-border/70 p-1 shadow-lg`}
+            role="menu"
+          >
             {overflowView === 'menu' && (
               <>
                 <button
@@ -131,8 +143,14 @@ export function GitPanelHeader() {
                     setOverflowOpen(false);
                     enterTrackedFilePicker();
                   }}
-                  className="flex w-full items-center rounded-sm px-2 py-1.5 text-xs text-foreground hover:bg-accent"
+                  className="flex w-full items-center gap-2.5 rounded-md px-2 py-1.5 text-[12px] text-foreground transition-colors hover:bg-accent/60"
                 >
+                  <FileSearch
+                    size={13}
+                    strokeWidth={1.75}
+                    className="text-muted-foreground"
+                    aria-hidden
+                  />
                   {t('git.header.overflowSwitchTracked')}
                 </button>
                 <button
@@ -142,32 +160,55 @@ export function GitPanelHeader() {
                     setOverflowOpen(false);
                     void clearAuthorIdentity();
                   }}
-                  className="flex w-full items-center rounded-sm px-2 py-1.5 text-xs text-foreground hover:bg-accent"
+                  className="flex w-full items-center gap-2.5 rounded-md px-2 py-1.5 text-[12px] text-foreground transition-colors hover:bg-accent/60"
                 >
+                  <UserX
+                    size={13}
+                    strokeWidth={1.75}
+                    className="text-muted-foreground"
+                    aria-hidden
+                  />
                   {t('git.header.overflowClearAuthor')}
                 </button>
-                <Separator className="my-1" />
+                <Separator className="my-1 bg-border/50" />
                 <button
                   type="button"
                   role="menuitem"
                   data-testid="overflow-open-remote-settings"
                   onClick={() => setOverflowView('remote-settings')}
-                  className="flex w-full items-center justify-between rounded-sm px-2 py-1.5 text-xs text-foreground hover:bg-accent"
+                  className="flex w-full items-center gap-2.5 rounded-md px-2 py-1.5 text-[12px] text-foreground transition-colors hover:bg-accent/60"
                 >
-                  <span>{t('git.header.overflowRemoteSettings')}</span>
-                  <ChevronRight size={12} strokeWidth={1.5} aria-hidden />
+                  <Settings2
+                    size={13}
+                    strokeWidth={1.75}
+                    className="text-muted-foreground"
+                    aria-hidden
+                  />
+                  <span className="flex-1 text-left">{t('git.header.overflowRemoteSettings')}</span>
+                  <ChevronRight
+                    size={12}
+                    strokeWidth={1.5}
+                    className="text-muted-foreground/70"
+                    aria-hidden
+                  />
                 </button>
                 <button
                   type="button"
                   role="menuitem"
                   data-testid="overflow-open-ssh-keys"
                   onClick={() => setOverflowView('ssh-keys')}
-                  className="flex w-full items-center justify-between rounded-sm px-2 py-1.5 text-xs text-foreground hover:bg-accent"
+                  className="flex w-full items-center gap-2.5 rounded-md px-2 py-1.5 text-[12px] text-foreground transition-colors hover:bg-accent/60"
                 >
-                  <span>{t('git.header.overflowSshKeys')}</span>
-                  <ChevronRight size={12} strokeWidth={1.5} aria-hidden />
+                  <Key size={13} strokeWidth={1.75} className="text-muted-foreground" aria-hidden />
+                  <span className="flex-1 text-left">{t('git.header.overflowSshKeys')}</span>
+                  <ChevronRight
+                    size={12}
+                    strokeWidth={1.5}
+                    className="text-muted-foreground/70"
+                    aria-hidden
+                  />
                 </button>
-                <Separator className="my-1" />
+                <Separator className="my-1 bg-border/50" />
                 <button
                   type="button"
                   role="menuitem"
@@ -175,8 +216,14 @@ export function GitPanelHeader() {
                     setOverflowOpen(false);
                     void closeRepo();
                   }}
-                  className="flex w-full items-center rounded-sm px-2 py-1.5 text-xs text-foreground hover:bg-accent"
+                  className="flex w-full items-center gap-2.5 rounded-md px-2 py-1.5 text-[12px] text-foreground transition-colors hover:bg-accent/60"
                 >
+                  <LogOut
+                    size={13}
+                    strokeWidth={1.75}
+                    className="text-muted-foreground"
+                    aria-hidden
+                  />
                   {t('git.header.overflowCloseRepo')}
                 </button>
               </>

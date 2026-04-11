@@ -5,7 +5,7 @@
 //   - 打开: native folder picker → openRepo(repoPath, currentFilePath).
 //   - 克隆: enterCloneWizard() (Phase 6a — was disabled-with-tooltip in 4a).
 
-import { FilePlus, FolderOpen, GitFork } from 'lucide-react';
+import { FilePlus, FolderOpen, GitFork, History } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useGitStore } from '@/stores/git-store';
 import { useDocumentStore } from '@/stores/document-store';
@@ -33,15 +33,23 @@ function EmptyStateCard({
       type="button"
       disabled={disabled}
       onClick={onClick}
-      className={`flex flex-col items-center gap-1.5 p-3 rounded-lg border border-border bg-card transition-colors w-[90px] h-[88px] ${
+      className={`group flex h-[104px] w-[96px] flex-col items-center justify-center gap-2 rounded-xl border bg-card p-3 transition-all ${
         disabled
-          ? 'opacity-50 cursor-not-allowed'
-          : 'hover:bg-accent hover:border-accent-foreground/20 cursor-pointer'
+          ? 'cursor-not-allowed border-border/60 opacity-50'
+          : 'cursor-pointer border-border/70 shadow-[0_1px_0_rgba(0,0,0,0.02)] hover:-translate-y-px hover:border-primary/40 hover:bg-accent/30 hover:shadow-[0_4px_12px_-6px_rgba(0,0,0,0.08)]'
       }`}
     >
-      <div className="text-foreground">{icon}</div>
-      <div className="text-xs font-medium text-foreground">{label}</div>
-      <div className="text-[10px] text-muted-foreground text-center leading-tight">
+      <div
+        className={`flex h-9 w-9 items-center justify-center rounded-lg transition-colors ${
+          disabled
+            ? 'bg-muted/50 text-muted-foreground'
+            : 'bg-muted/60 text-foreground/80 group-hover:bg-primary/10 group-hover:text-primary'
+        }`}
+      >
+        {icon}
+      </div>
+      <div className="text-[11px] font-semibold text-foreground">{label}</div>
+      <div className="text-center text-[9px] leading-tight text-muted-foreground">
         {description}
       </div>
     </button>
@@ -89,12 +97,18 @@ export function GitPanelEmptyState() {
   };
 
   return (
-    <div className="flex flex-col items-center gap-4 px-4 py-6">
-      <div className="text-sm text-foreground text-center">{t('git.empty.heading')}</div>
+    <div className="flex flex-col items-center gap-5 px-4 pb-6 pt-8">
+      <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-muted/60 to-muted/20 ring-1 ring-inset ring-border/60">
+        <History size={22} strokeWidth={1.5} className="text-muted-foreground" aria-hidden />
+      </div>
 
-      <div className="flex items-center gap-2">
+      <div className="text-center text-[13px] font-medium text-foreground">
+        {t('git.empty.heading')}
+      </div>
+
+      <div className="flex items-stretch gap-2">
         <EmptyStateCard
-          icon={<FilePlus size={20} strokeWidth={1.5} />}
+          icon={<FilePlus size={18} strokeWidth={1.75} />}
           label={t('git.empty.newCard')}
           description={t('git.empty.newCardDescription')}
           disabled={newDisabled}
@@ -102,20 +116,22 @@ export function GitPanelEmptyState() {
           onClick={() => void handleNew()}
         />
         <EmptyStateCard
-          icon={<FolderOpen size={20} strokeWidth={1.5} />}
+          icon={<FolderOpen size={18} strokeWidth={1.75} />}
           label={t('git.empty.openCard')}
           description={t('git.empty.openCardDescription')}
           onClick={() => void handleOpen()}
         />
         <EmptyStateCard
-          icon={<GitFork size={20} strokeWidth={1.5} />}
+          icon={<GitFork size={18} strokeWidth={1.75} />}
           label={t('git.empty.cloneCard')}
           description={t('git.empty.cloneCardDescription')}
           onClick={() => enterCloneWizard()}
         />
       </div>
 
-      <div className="text-[11px] text-muted-foreground text-center">{t('git.empty.optional')}</div>
+      <div className="text-center text-[11px] text-muted-foreground/80">
+        {t('git.empty.optional')}
+      </div>
     </div>
   );
 }

@@ -400,26 +400,27 @@ export default function TopBar() {
         </Tooltip>
       </div>
 
-      {/* Center section — file name */}
-      <div className="flex-1 flex items-center justify-center min-w-0">
-        <span className="text-xs text-foreground truncate" suppressHydrationWarning>
+      {/* Center section — file name + git indicator */}
+      <div className="flex min-w-0 flex-1 items-center justify-center gap-1.5">
+        <span className="truncate text-xs leading-none text-foreground" suppressHydrationWarning>
           {displayName}
         </span>
         {isDirty && (
-          <span className="text-xs text-muted-foreground ml-1.5">{t('topbar.edited')}</span>
+          <span className="text-xs leading-none text-muted-foreground">{t('topbar.edited')}</span>
         )}
         {saveIndicator && (
-          <span className="ml-2 text-[10px] text-emerald-500 animate-pulse">
+          <span className="text-[10px] leading-none text-emerald-500 animate-pulse">
             {t('fileMenu.saved')}
           </span>
         )}
+        <div className="app-region-no-drag flex items-center">
+          <GitButton />
+        </div>
       </div>
 
       {/* Right section */}
       <div className="flex items-center gap-0.5 app-region-no-drag electron-win-controls-pad">
         <AgentStatusButton />
-
-        <GitButton />
 
         <div className="w-px h-3.5 bg-border/60 mx-1" />
 

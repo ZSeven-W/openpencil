@@ -24,7 +24,7 @@ export function GitPanelSaveRequiredAlert() {
   const label = state.saveRequiredFor.label;
 
   return (
-    <div className="border-b border-border bg-destructive/10 px-4 py-3 flex flex-col gap-2">
+    <div className="border-b border-border/60 bg-destructive/10 px-4 py-3 flex flex-col gap-2">
       <div className="flex items-start gap-2">
         <AlertCircle size={14} className="text-destructive mt-0.5 shrink-0" aria-hidden />
         <div className="flex flex-col gap-0.5">

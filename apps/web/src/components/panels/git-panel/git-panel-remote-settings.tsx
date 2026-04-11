@@ -25,7 +25,7 @@ import { useGitStore } from '@/stores/git-store';
 import { isSshRemoteUrl } from './git-remote-utils';
 
 const INPUT_CLASS =
-  'h-8 w-full rounded border border-input bg-secondary px-2 text-xs text-foreground focus:border-ring focus:outline-none';
+  'h-8 w-full rounded-md border border-border/70 bg-card px-2.5 text-xs text-foreground transition-[border-color,box-shadow] placeholder:text-muted-foreground/60 focus:border-primary/50 focus:outline-none focus:ring-[3px] focus:ring-primary/10';
 
 type StoredAuthMode = 'token' | 'ssh' | 'none' | 'unknown';
 
@@ -157,19 +157,19 @@ export function GitPanelRemoteSettings({ onBack }: GitPanelRemoteSettingsProps) 
 
   return (
     <div className="flex flex-col p-1" role="group" aria-label={t('git.remote.settingsLabel')}>
-      <div className="flex items-center justify-between gap-2 px-1 py-1">
+      <div className="flex items-center justify-between gap-2 px-1 pb-1.5 pt-0.5">
         <button
           type="button"
           onClick={onBack}
           aria-label={t('git.remote.back')}
-          className="flex items-center gap-1 rounded-sm px-1 py-0.5 text-[11px] text-muted-foreground hover:bg-accent"
+          className="flex items-center gap-1 rounded-md px-1.5 py-1 text-[11px] text-muted-foreground transition-colors hover:bg-accent/60 hover:text-foreground"
         >
-          <ArrowLeft size={12} strokeWidth={1.5} aria-hidden />
+          <ArrowLeft size={12} strokeWidth={1.75} aria-hidden />
           {t('git.remote.back')}
         </button>
       </div>
 
-      <p className="px-2 py-1 text-[11px] font-medium text-muted-foreground">
+      <p className="px-2 pb-1 pt-0.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/80">
         {t('git.remote.settingsHeading')}
       </p>
 
@@ -192,7 +192,7 @@ export function GitPanelRemoteSettings({ onBack }: GitPanelRemoteSettingsProps) 
           />
         </label>
 
-        <div className="flex items-center justify-end gap-2">
+        <div className="flex items-center justify-end gap-1.5">
           {currentUrl !== null && !confirmClear && (
             <Button
               type="button"
@@ -200,6 +200,7 @@ export function GitPanelRemoteSettings({ onBack }: GitPanelRemoteSettingsProps) 
               size="sm"
               disabled={busyAction !== null}
               onClick={() => setConfirmClear(true)}
+              className="h-7 rounded-md px-2.5 text-[11px]"
             >
               {t('git.remote.clearButton')}
             </Button>
@@ -209,10 +210,9 @@ export function GitPanelRemoteSettings({ onBack }: GitPanelRemoteSettingsProps) 
             size="sm"
             disabled={busyAction !== null || trimmed === '' || !isDirty}
             onClick={() => void handleSave()}
+            className="h-7 gap-1 rounded-md px-2.5 text-[11px] shadow-none"
           >
-            {busyAction === 'save' && (
-              <Loader2 size={12} className="mr-1 animate-spin" aria-hidden />
-            )}
+            {busyAction === 'save' && <Loader2 size={12} className="animate-spin" aria-hidden />}
             {t('git.remote.saveButton')}
           </Button>
         </div>
@@ -221,15 +221,16 @@ export function GitPanelRemoteSettings({ onBack }: GitPanelRemoteSettingsProps) 
           <div
             role="alertdialog"
             aria-label={t('git.remote.clearConfirmHeading')}
-            className="flex flex-col gap-2 rounded border border-destructive/40 bg-destructive/10 p-2 text-[11px] text-destructive"
+            className="flex flex-col gap-2 rounded-md border border-destructive/30 bg-destructive/10 p-2.5 text-[11px] text-destructive"
           >
             <div>{t('git.remote.clearConfirmBody')}</div>
-            <div className="flex items-center justify-end gap-2">
+            <div className="flex items-center justify-end gap-1.5">
               <Button
                 type="button"
                 variant="ghost"
                 size="sm"
                 onClick={() => setConfirmClear(false)}
+                className="h-7 rounded-md px-2.5 text-[11px]"
               >
                 {t('git.remote.cancel')}
               </Button>
@@ -239,6 +240,7 @@ export function GitPanelRemoteSettings({ onBack }: GitPanelRemoteSettingsProps) 
                 size="sm"
                 disabled={busyAction !== null}
                 onClick={() => void handleConfirmClear()}
+                className="h-7 rounded-md px-2.5 text-[11px]"
               >
                 {t('git.remote.clearConfirmAction')}
               </Button>
@@ -247,7 +249,7 @@ export function GitPanelRemoteSettings({ onBack }: GitPanelRemoteSettingsProps) 
         )}
       </div>
 
-      <Separator className="my-1" />
+      <Separator className="my-1 bg-border/50" />
 
       <div className="flex flex-col gap-2 px-2 py-2">
         <div className="flex items-center justify-between gap-2">
@@ -260,10 +262,9 @@ export function GitPanelRemoteSettings({ onBack }: GitPanelRemoteSettingsProps) 
             size="sm"
             disabled={busyAction !== null || currentUrl === null}
             onClick={() => void handleFetch()}
+            className="h-7 gap-1 rounded-md px-2.5 text-[11px]"
           >
-            {busyAction === 'fetch' && (
-              <Loader2 size={12} className="mr-1 animate-spin" aria-hidden />
-            )}
+            {busyAction === 'fetch' && <Loader2 size={12} className="animate-spin" aria-hidden />}
             {t('git.remote.fetchButton')}
           </Button>
         </div>
@@ -275,7 +276,7 @@ export function GitPanelRemoteSettings({ onBack }: GitPanelRemoteSettingsProps) 
         )}
       </div>
 
-      <Separator className="my-1" />
+      <Separator className="my-1 bg-border/50" />
 
       <div className="flex flex-col gap-2 px-2 py-2">
         <div className="flex items-center justify-between gap-2">
@@ -298,9 +299,10 @@ export function GitPanelRemoteSettings({ onBack }: GitPanelRemoteSettingsProps) 
               size="sm"
               disabled={busyAction !== null}
               onClick={() => void handleClearAuth()}
+              className="h-7 gap-1 rounded-md px-2.5 text-[11px]"
             >
               {busyAction === 'clear-auth' && (
-                <Loader2 size={12} className="mr-1 animate-spin" aria-hidden />
+                <Loader2 size={12} className="animate-spin" aria-hidden />
               )}
               {t('git.remote.clearAuthButton')}
             </Button>

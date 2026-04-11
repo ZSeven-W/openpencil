@@ -80,7 +80,12 @@ export function GitPanelHistoryList({ readOnly = false }: { readOnly?: boolean }
   }
 
   return (
-    <div className="flex flex-col">
+    <div className="relative flex flex-col py-1.5">
+      {/* Timeline rail — a 1px line running down the icon-slot center. */}
+      <div
+        className="pointer-events-none absolute left-5 top-0 h-full w-px bg-border/60"
+        aria-hidden
+      />
       {entries.map((entry, idx) => {
         if (entry.kind === 'milestone') {
           return (
@@ -118,51 +123,60 @@ function HistoryMilestoneRow({ commit, readOnly }: { commit: GitCommitMeta; read
   const authorShort = commit.author.name.split(/\s+/)[0] ?? commit.author.name;
 
   return (
-    <div className="border-b border-border/50">
+    <div className="relative">
       <button
         type="button"
         onClick={() => setExpanded((v) => !v)}
-        className="flex w-full items-center gap-2 px-3 py-2 text-left hover:bg-accent/50"
+        className="relative flex w-full items-center gap-3 px-3 py-[7px] text-left transition-colors hover:bg-accent/40"
       >
-        <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-foreground" aria-hidden />
-        <span className="flex-1 truncate text-xs font-medium text-foreground">
+        <span className="relative z-10 flex w-4 shrink-0 items-center justify-center">
+          <span
+            className="block h-[7px] w-[7px] rounded-full bg-foreground shadow-[0_0_0_3px_hsl(var(--background))]"
+            aria-hidden
+          />
+        </span>
+        <span className="flex-1 truncate text-[12px] font-medium text-foreground">
           {commit.message}
         </span>
-        <span className="text-[10px] text-muted-foreground shrink-0">
+        <span className="shrink-0 font-mono text-[10px] tabular-nums text-muted-foreground/80">
           {authorShort} · {timeAgo}
         </span>
       </button>
       {expanded && (
-        <div className="flex flex-col gap-2 bg-muted/30 px-4 py-3">
-          <div className="text-[11px] font-medium text-foreground">
-            {t('git.history.milestoneDetailTitle')}
-          </div>
-          {/* Phase 7b: inline diff block (replaces diffComingSoon placeholder) */}
-          <GitPanelHistoryDiff commit={commit} />
-          <div className="flex items-center gap-2 pt-1">
-            {!readOnly && (
+        <div className="relative bg-muted/30">
+          <div className="flex flex-col gap-2 pl-10 pr-4 py-3">
+            <div className="text-[11px] font-medium text-foreground">
+              {t('git.history.milestoneDetailTitle')}
+            </div>
+            {/* Phase 7b: inline diff block (replaces diffComingSoon placeholder) */}
+            <GitPanelHistoryDiff commit={commit} />
+            <div className="flex items-center gap-1.5 pt-1">
+              {!readOnly && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => void restoreCommit(commit.hash)}
+                  className="h-6 rounded-md px-2.5 text-[11px]"
+                >
+                  {t('git.history.restoreButton')}
+                </Button>
+              )}
               <Button
                 type="button"
-                variant="outline"
+                variant="ghost"
                 size="sm"
-                onClick={() => void restoreCommit(commit.hash)}
+                onClick={() => {
+                  if (typeof navigator !== 'undefined' && navigator.clipboard) {
+                    void navigator.clipboard.writeText(commit.hash);
+                    // git.history.copiedToast exists for a future "Copied!" feedback toast (Phase 4d).
+                  }
+                }}
+                className="h-6 rounded-md px-2.5 text-[11px]"
               >
-                {t('git.history.restoreButton')}
+                {t('git.history.copyHashButton')}
               </Button>
-            )}
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              onClick={() => {
-                if (typeof navigator !== 'undefined' && navigator.clipboard) {
-                  void navigator.clipboard.writeText(commit.hash);
-                  // git.history.copiedToast exists for a future "Copied!" feedback toast (Phase 4d).
-                }
-              }}
-            >
-              {t('git.history.copyHashButton')}
-            </Button>
+            </div>
           </div>
         </div>
       )}
@@ -180,53 +194,64 @@ function HistoryAutosaveRow({ commit, readOnly }: { commit: GitCommitMeta; readO
   const timeLabel = parsed?.time ?? '—';
 
   return (
-    <div className="border-b border-border/30">
+    <div className="relative">
       <button
         type="button"
         onClick={() => setExpanded((v) => !v)}
-        className="flex w-full items-center gap-2 px-6 py-1.5 text-left text-[10px] text-muted-foreground hover:bg-accent/50"
+        className="relative flex w-full items-center gap-3 px-3 py-[5px] text-left transition-colors hover:bg-accent/40"
       >
-        <span
-          className="h-1 w-1 shrink-0 rounded-full border border-muted-foreground"
-          aria-hidden
-        />
-        <span>{t('git.history.autosaveLabel', { time: timeLabel })}</span>
+        <span className="relative z-10 flex w-4 shrink-0 items-center justify-center">
+          <span
+            className="block h-[5px] w-[5px] rounded-full border border-muted-foreground/80 bg-background shadow-[0_0_0_3px_hsl(var(--background))]"
+            aria-hidden
+          />
+        </span>
+        <span className="flex-1 truncate text-[11px] text-muted-foreground">
+          {t('git.history.autosaveLabel', { time: timeLabel })}
+        </span>
       </button>
       {expanded && (
-        <div className="flex flex-col gap-2 bg-muted/30 px-8 py-2">
-          {/* Phase 7b: inline diff block for autosave rows */}
-          <GitPanelHistoryDiff commit={commit} />
-          {!readOnly && (
-            <div className="flex items-center gap-2 pt-1">
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => void restoreCommit(commit.hash)}
-              >
-                {t('git.history.restoreButton')}
-              </Button>
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                onClick={() => {
-                  // git.history.promoteSuccessToast exists for a future success toast (Phase 4d).
-                  // Phase 4c: promote reuses the autosave's own message as the
-                  // milestone message (parsed autosave messages are "auto: HH:MM",
-                  // which is ugly but wired). A dedicated message prompt is
-                  // deferred until the inline author/message form is generalized
-                  // (Phase 4d+). Author falls back to the sentinel used by the
-                  // autosave subscriber so promote never blocks on missing
-                  // identity; the user can clean up the name afterward.
-                  const author = authorIdentity ?? { name: 'Unknown', email: 'unknown@local' };
-                  void promoteAutosave(commit.hash, commit.message, author);
-                }}
-              >
-                {t('git.history.promoteButton')}
-              </Button>
-            </div>
-          )}
+        <div className="bg-muted/30">
+          <div className="flex flex-col gap-2 pl-10 pr-4 py-2.5">
+            {/* Phase 7b: inline diff block for autosave rows */}
+            <GitPanelHistoryDiff commit={commit} />
+            {!readOnly && (
+              <div className="flex items-center gap-1.5 pt-1">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => void restoreCommit(commit.hash)}
+                  className="h-6 rounded-md px-2.5 text-[11px]"
+                >
+                  {t('git.history.restoreButton')}
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="h-6 rounded-md px-2.5 text-[11px]"
+                  onClick={() => {
+                    // git.history.promoteSuccessToast exists for a future success toast (Phase 4d).
+                    // Phase 4c: promote reuses the autosave's own message as the
+                    // milestone message (parsed autosave messages are "auto: HH:MM",
+                    // which is ugly but wired). A dedicated message prompt is
+                    // deferred until the inline author/message form is generalized
+                    // (Phase 4d+). Author falls back to the sentinel used by the
+                    // autosave subscriber so promote never blocks on missing
+                    // identity; the user can clean up the name afterward.
+                    const author = authorIdentity ?? {
+                      name: 'Unknown',
+                      email: 'unknown@local',
+                    };
+                    void promoteAutosave(commit.hash, commit.message, author);
+                  }}
+                >
+                  {t('git.history.promoteButton')}
+                </Button>
+              </div>
+            )}
+          </div>
         </div>
       )}
     </div>
@@ -244,18 +269,20 @@ function HistoryAutosaveGroup({
   const [expanded, setExpanded] = useState(false);
 
   return (
-    <div className="border-b border-border/30">
+    <div className="relative">
       <button
         type="button"
         onClick={() => setExpanded((v) => !v)}
-        className="flex w-full items-center gap-2 px-3 py-1.5 text-left hover:bg-accent/50"
+        className="relative flex w-full items-center gap-3 px-3 py-[5px] text-left transition-colors hover:bg-accent/40"
       >
-        {expanded ? (
-          <ChevronDown size={11} className="text-muted-foreground" aria-hidden />
-        ) : (
-          <ChevronRight size={11} className="text-muted-foreground" aria-hidden />
-        )}
-        <span className="text-[10px] text-muted-foreground">
+        <span className="relative z-10 flex w-4 shrink-0 items-center justify-center bg-background">
+          {expanded ? (
+            <ChevronDown size={11} className="text-muted-foreground" aria-hidden />
+          ) : (
+            <ChevronRight size={11} className="text-muted-foreground" aria-hidden />
+          )}
+        </span>
+        <span className="text-[11px] text-muted-foreground">
           {t(
             commits.length === 1
               ? 'git.history.autosaveGroup_one'
