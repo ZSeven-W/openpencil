@@ -1001,6 +1001,41 @@ describe('git-store state machine', () => {
     expect(gitClient.log).not.toHaveBeenCalled();
   });
 
+  it('mergeBranch (conflict-non-op path) calls refreshStatus and does NOT call loadOpFileFromPath', async () => {
+    // I3: conflict-non-op result must call refreshStatus() (which promotes
+    // ready → conflict) instead of falling through to syncAfterHeadMove
+    // (which would reload the .op file and log — semantically wrong during
+    // an incomplete merge).
+    vi.mocked(gitClient.init).mockResolvedValue(SAMPLE_REPO);
+    vi.mocked(gitClient.branchMerge).mockResolvedValue({ result: 'conflict-non-op' });
+    // refreshStatus needs status() to return mergeInProgress so it can
+    // promote to conflict state. Provide a minimal status that satisfies
+    // the mergeInProgress branch (unresolvedFiles non-empty).
+    vi.mocked(gitClient.status)
+      .mockResolvedValueOnce(DEFAULT_STATUS) // post-init
+      .mockResolvedValueOnce({
+        ...DEFAULT_STATUS,
+        mergeInProgress: true,
+        unresolvedFiles: ['README.md'],
+      }); // refreshStatus inside conflict-non-op
+    await useGitStore.getState().initRepo('/tmp/login.op');
+
+    vi.mocked(mockedLoadOpFileFromPath).mockClear();
+    vi.mocked(gitClient.log).mockClear();
+    await useGitStore.getState().mergeBranch('feature/x');
+
+    // refreshStatus was called (status IPC was called a second time).
+    expect(gitClient.status).toHaveBeenCalledTimes(2);
+    // Store must be in conflict state with the non-op files listed.
+    const s = useGitStore.getState().state;
+    expect(s.kind).toBe('conflict');
+    if (s.kind === 'conflict') {
+      expect(s.unresolvedFiles).toEqual(['README.md']);
+    }
+    // loadOpFileFromPath must NOT have been called — HEAD has not moved.
+    expect(mockedLoadOpFileFromPath).not.toHaveBeenCalled();
+  });
+
   it('deleteBranch forwards the optional force flag to gitClient', async () => {
     vi.mocked(gitClient.init).mockResolvedValue(SAMPLE_REPO);
     vi.mocked(gitClient.branchDelete).mockResolvedValue(undefined);

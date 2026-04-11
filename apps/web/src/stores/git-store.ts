@@ -625,6 +625,14 @@ export const useGitStore = create<GitStore>((set, get) => {
           // Conflict path: state is fully hydrated — skip the sync cascade.
           return;
         }
+        if (result.result === 'conflict-non-op') {
+          // I3: non-.op conflict — merge is in flight but engine couldn't apply
+          // .op merge because non-`.op` files are unresolved. refreshStatus
+          // performs the full repo-meta update AND promotes ready → conflict
+          // with the unresolvedFiles list via the shared mergeInProgress branch.
+          await get().refreshStatus();
+          return;
+        }
         // Success paths (fast-forward, merge): HEAD moved. Delegate the
         // cascade to the shared helper (see switchBranch for details).
         await syncAfterHeadMove();
