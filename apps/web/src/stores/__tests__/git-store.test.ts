@@ -41,6 +41,8 @@ vi.mock('@/services/git-client', () => {
       sshImportKey: vi.fn(),
       sshDeleteKey: vi.fn(),
       getSystemAuthor: vi.fn(),
+      remoteGet: vi.fn(),
+      remoteSet: vi.fn(),
     },
     isGitApiAvailable: vi.fn(() => true),
   };
@@ -173,6 +175,19 @@ describe('git-store state machine', () => {
     vi.mocked(gitClient.status).mockResolvedValue(DEFAULT_STATUS);
     vi.mocked(gitClient.branchList).mockResolvedValue([]);
     vi.mocked(gitClient.log).mockResolvedValue([]);
+    // Phase 6a: refreshRemote() is invoked from init/open/clone too. Default
+    // to a "no remote configured" stub so existing test expectations still
+    // hold; individual tests override this.
+    vi.mocked(gitClient.remoteGet).mockResolvedValue({
+      name: 'origin',
+      url: null,
+      host: null,
+    });
+    vi.mocked(gitClient.remoteSet).mockResolvedValue({
+      name: 'origin',
+      url: null,
+      host: null,
+    });
     // Phase 4a: window.electronAPI mock for author identity prefs lookup
     vi.stubGlobal('window', {
       electronAPI: {
@@ -990,5 +1005,137 @@ describe('git-store state machine', () => {
     // the previously hardcoded 'main', so the history list follows the
     // actual current branch after the transition.
     expect(gitClient.log).toHaveBeenCalledWith('repo-1', { ref: 'feature/x', limit: 50 });
+  });
+
+  // ---- Phase 6a: clone wizard + remote contract -------------------------
+
+  it('enterCloneWizard transitions to wizard-clone with no inline error', () => {
+    useGitStore.getState().enterCloneWizard();
+    const s = useGitStore.getState().state;
+    expect(s.kind).toBe('wizard-clone');
+    if (s.kind === 'wizard-clone') {
+      expect(s.error).toBeNull();
+    }
+  });
+
+  it('cancelCloneWizard always transitions to no-file', () => {
+    useGitStore.getState().enterCloneWizard();
+    expect(useGitStore.getState().state.kind).toBe('wizard-clone');
+    useGitStore.getState().cancelCloneWizard();
+    expect(useGitStore.getState().state).toEqual({ kind: 'no-file' });
+  });
+
+  it('cloneRepo with a recoverable error keeps the wizard mounted with state.error set', async () => {
+    // Enter the wizard so cloneRepo's prevWasWizard branch fires.
+    useGitStore.getState().enterCloneWizard();
+
+    vi.mocked(gitClient.clone).mockRejectedValue(
+      new GitError('auth-failed', 'bad credentials', { recoverable: true }),
+    );
+
+    await useGitStore.getState().cloneRepo({
+      url: 'https://github.com/foo/bar.git',
+      dest: '/tmp/clone',
+    });
+
+    const s = useGitStore.getState().state;
+    expect(s.kind).toBe('wizard-clone');
+    if (s.kind === 'wizard-clone') {
+      expect(s.error).not.toBeNull();
+      expect(s.error?.code).toBe('auth-failed');
+      expect(s.error?.message).toBe('bad credentials');
+    }
+  });
+
+  it('cloneRepo with a non-recoverable error transitions to the generic error state', async () => {
+    useGitStore.getState().enterCloneWizard();
+
+    vi.mocked(gitClient.clone).mockRejectedValue(
+      new GitError('engine-crash', 'disk full', { recoverable: false }),
+    );
+
+    await expect(
+      useGitStore.getState().cloneRepo({
+        url: 'https://github.com/foo/bar.git',
+        dest: '/tmp/clone',
+      }),
+    ).rejects.toBeInstanceOf(GitError);
+
+    const s = useGitStore.getState().state;
+    expect(s.kind).toBe('error');
+    if (s.kind === 'error') {
+      expect(s.message).toBe('disk full');
+      expect(s.recoverable).toBe(false);
+    }
+  });
+
+  it('refreshRemote pulls origin metadata into state.repo.remote', async () => {
+    vi.mocked(gitClient.init).mockResolvedValue(SAMPLE_REPO);
+    await useGitStore.getState().initRepo('/tmp/login.op');
+
+    // initRepo already invoked refreshRemote() once with the default null
+    // stub. Override and call again to verify the round-trip.
+    vi.mocked(gitClient.remoteGet).mockResolvedValue({
+      name: 'origin',
+      url: 'https://github.com/foo/bar.git',
+      host: 'github.com',
+    });
+    await useGitStore.getState().refreshRemote();
+
+    const s = useGitStore.getState().state;
+    expect(s.kind).toBe('ready');
+    if (s.kind === 'ready') {
+      expect(s.repo.remote).toEqual({
+        name: 'origin',
+        url: 'https://github.com/foo/bar.git',
+        host: 'github.com',
+      });
+    }
+    expect(gitClient.remoteGet).toHaveBeenCalledWith('repo-1');
+  });
+
+  it('setRemoteUrl updates state.repo.remote immediately from the IPC return value', async () => {
+    vi.mocked(gitClient.init).mockResolvedValue(SAMPLE_REPO);
+    await useGitStore.getState().initRepo('/tmp/login.op');
+
+    vi.mocked(gitClient.remoteSet).mockResolvedValue({
+      name: 'origin',
+      url: 'https://github.com/new/repo.git',
+      host: 'github.com',
+    });
+
+    await useGitStore.getState().setRemoteUrl('https://github.com/new/repo.git');
+
+    // Renderer state must reflect the new url WITHOUT a follow-up
+    // refreshRemote() call. Per the Phase 6a contract, the IPC return
+    // value is the source of truth for the immediate update.
+    const s = useGitStore.getState().state;
+    expect(s.kind).toBe('ready');
+    if (s.kind === 'ready') {
+      expect(s.repo.remote).toEqual({
+        name: 'origin',
+        url: 'https://github.com/new/repo.git',
+        host: 'github.com',
+      });
+    }
+    expect(gitClient.remoteSet).toHaveBeenCalledWith('repo-1', 'https://github.com/new/repo.git');
+  });
+
+  it('setRemoteUrl normalizes whitespace-only input to null before sending to IPC', async () => {
+    vi.mocked(gitClient.init).mockResolvedValue(SAMPLE_REPO);
+    await useGitStore.getState().initRepo('/tmp/login.op');
+
+    vi.mocked(gitClient.remoteSet).mockResolvedValue({
+      name: 'origin',
+      url: null,
+      host: null,
+    });
+
+    await useGitStore.getState().setRemoteUrl('   ');
+    expect(gitClient.remoteSet).toHaveBeenLastCalledWith('repo-1', null);
+
+    // null also passes through unchanged.
+    await useGitStore.getState().setRemoteUrl(null);
+    expect(gitClient.remoteSet).toHaveBeenLastCalledWith('repo-1', null);
   });
 });

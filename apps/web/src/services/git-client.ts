@@ -19,6 +19,7 @@ import type {
   GitConflictBag,
   GitConflictResolution,
   GitPublicSshKeyInfo,
+  GitRemoteInfo,
   GitRepoOpenInfo,
   GitStatusInfo,
 } from './git-types';
@@ -132,6 +133,10 @@ export const gitClient = {
   pull: (repoId: string, auth?: GitAuthCreds) => invoke(() => getApi().pull(repoId, auth)),
   push: (repoId: string, auth?: GitAuthCreds) => invoke(() => getApi().push(repoId, auth)),
 
+  // ---- Phase 6a: remote metadata + config (no network) -------------------
+  remoteGet: (repoId: string) => invoke(() => getApi().remoteGet(repoId)),
+  remoteSet: (repoId: string, url: string | null) => invoke(() => getApi().remoteSet(repoId, url)),
+
   // ---- Auth --------------------------------------------------------------
   authStore: (host: string, creds: GitAuthCreds) => invoke(() => getApi().authStore(host, creds)),
   authGet: (host: string) => invoke(() => getApi().authGet(host)),
@@ -158,4 +163,5 @@ export type {
   GitConflictResolution,
   GitAuthCreds,
   GitPublicSshKeyInfo,
+  GitRemoteInfo,
 };

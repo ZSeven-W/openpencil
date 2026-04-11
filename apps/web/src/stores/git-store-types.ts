@@ -13,6 +13,7 @@ import type {
   GitConflictBag,
   GitConflictResolution,
   GitPublicSshKeyInfo,
+  GitRemoteInfo,
 } from '@/services/git-types';
 
 // ---------------------------------------------------------------------------
@@ -34,6 +35,14 @@ export interface RepoMeta {
   otherFilesPaths: string[];
   ahead: number;
   behind: number;
+  /**
+   * Phase 6a: cached remote metadata for the single 'origin' remote, or
+   * null when no probe has been issued yet. Hydrated by `refreshRemote()`,
+   * mutated by `setRemoteUrl()`. The store reads `.git/config` only — no
+   * network. The Phase 6b pull/push controls and the Phase 6c remote
+   * settings UI both branch on this field.
+   */
+  remote: GitRemoteInfo | null;
 }
 
 /**
@@ -64,10 +73,38 @@ export interface PendingAction {
   run: () => Promise<void>;
 }
 
+/**
+ * Recoverable GitErrorCodes that the clone wizard catches inline instead of
+ * letting them escape into the generic `error` state. Defined here so the
+ * store action and the wizard component agree on the exact set.
+ */
+export const CLONE_INLINE_ERROR_CODES = [
+  'clone-network',
+  'network',
+  'timeout',
+  'auth-required',
+  'auth-failed',
+  'auth-token-invalid',
+  'clone-failed',
+  'clone-target-exists',
+] as const;
+
+export type CloneInlineErrorCode = (typeof CLONE_INLINE_ERROR_CODES)[number];
+
 export type GitState =
   | { kind: 'no-file' }
   | { kind: 'no-repo' }
-  | { kind: 'wizard-clone' }
+  | {
+      kind: 'wizard-clone';
+      /**
+       * Inline error surfaced under the clone form. Set when cloneRepo()
+       * caught a recoverable code (see CLONE_INLINE_ERROR_CODES). The wizard
+       * stays mounted so the user can fix the URL/auth and retry without
+       * losing form state. Cleared on the next cloneRepo() attempt or
+       * cancelCloneWizard().
+       */
+      error: { code: CloneInlineErrorCode; message: string } | null;
+    }
   | { kind: 'initializing' }
   | { kind: 'needs-tracked-file'; repo: RepoMeta }
   | { kind: 'ready'; repo: RepoMeta; saveRequiredFor?: PendingAction }
@@ -187,6 +224,33 @@ export interface GitStore {
   fetchRemote: (auth?: GitAuthCreds) => Promise<void>;
   pull: (auth?: GitAuthCreds) => Promise<void>;
   push: (auth?: GitAuthCreds) => Promise<void>;
+
+  // Phase 6a: clone wizard + remote metadata/config
+  /**
+   * Transition any state into `wizard-clone` with no inline error. The
+   * empty-state clone card is the only entry point in 6a; later phases
+   * may add a settings entry from `ready`.
+   */
+  enterCloneWizard: () => void;
+  /**
+   * Always transitions back to `no-file`. The git-panel.tsx detect-repo
+   * effect immediately rehydrates the correct `no-repo` / `ready` state
+   * from the currently-open document path, so we don't need a smarter
+   * cancel target here.
+   */
+  cancelCloneWizard: () => void;
+  /**
+   * Refresh the cached `repo.remote` from the desktop side via remoteGet.
+   * Reads only `.git/config` — no network. No-op when state has no repo.
+   */
+  refreshRemote: () => Promise<void>;
+  /**
+   * Set or clear the single 'origin' remote. Pass a non-empty url to
+   * add/update; pass `null` to remove. Updates `repo.remote` immediately
+   * from the IPC return value so a single round-trip is enough — callers
+   * MUST NOT rely on a follow-up refreshRemote() to see the new value.
+   */
+  setRemoteUrl: (url: string | null) => Promise<void>;
 
   // Auth
   storeAuth: (host: string, creds: GitAuthCreds) => Promise<void>;

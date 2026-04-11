@@ -1,12 +1,10 @@
 // apps/web/src/stores/git-store.ts
 //
-// Zustand store implementing the GitState state machine from the spec
-// (line 847-898). Every mutating action goes through withCleanWorkingTree
-// so the renderer can never overwrite the disk with an out-of-sync tree.
-//
-// Phase 3 ships the complete action surface (all 31 IPC channels wrapped)
-// but NO autosave subscriber, NO panel UI, NO i18n. Phase 4 wires the
-// panel and the documentEvents.on('saved') hook.
+// Zustand store implementing the GitState state machine. Every mutating
+// action goes through withCleanWorkingTree so the renderer can never
+// overwrite disk with an out-of-sync tree. Pure helpers and the dirty/
+// runOrError wrappers live in git-store-helpers.ts to keep this file under
+// the 800-LoC cap.
 
 import { create } from 'zustand';
 import { gitClient } from '@/services/git-client';
@@ -14,19 +12,19 @@ import { GitError, isGitError } from '@/services/git-error';
 import { useDocumentStore } from '@/stores/document-store';
 import { documentEvents } from '@/utils/document-events';
 import { loadOpFileFromPath } from '@/utils/load-op-file';
-import { hydrateConflictBag, metaFromOpenInfo, requireRepoId } from './git-store-helpers';
+import {
+  classifyCloneError,
+  hydrateConflictBag,
+  makeAutosaveHandler,
+  metaFromOpenInfo,
+  patchRepoRemote,
+  requireRepoId,
+  resolveAuthorIdentity,
+} from './git-store-helpers';
 import type { GitState, GitStore, PendingAction } from './git-store-types';
 
-// ---------------------------------------------------------------------------
-// Store
-// ---------------------------------------------------------------------------
-
 export const useGitStore = create<GitStore>((set, get) => {
-  /**
-   * Resolve the ref the history panel should load after a mutation. Reads
-   * state.repo.currentBranch so the list follows switches/merges instead of
-   * being pinned to 'main'. Falls back to 'main' outside repo-bearing states.
-   */
+  /** Active branch ref for log queries; falls back to 'main' outside a repo. */
   function currentLogRef(): string {
     const s = get().state;
     return s.kind === 'ready' || s.kind === 'conflict' || s.kind === 'needs-tracked-file'
@@ -35,10 +33,9 @@ export const useGitStore = create<GitStore>((set, get) => {
   }
 
   /**
-   * Guard a mutating action on `useDocumentStore.getState().isDirty`. If
-   * dirty, stash a PendingAction on the current state and throw
-   * GitError('save-required'). The UI catches and shows an inline alert;
-   * on save-and-retry the store re-runs the action.
+   * Guard a mutating action on `useDocumentStore.getState().isDirty`. Dirty →
+   * stash a PendingAction and throw GitError('save-required'); the UI shows
+   * an inline alert and retrySaveRequired re-runs the action after save.
    */
   async function withCleanWorkingTree<T>(action: () => Promise<T>, label: string): Promise<T> {
     if (useDocumentStore.getState().isDirty) {
@@ -59,11 +56,7 @@ export const useGitStore = create<GitStore>((set, get) => {
     return action();
   }
 
-  /**
-   * Wrap any action so thrown GitError transitions the store to error state.
-   * Phase 3 uses this for the user-initiated init/open/clone paths. Other
-   * actions propagate the error to the caller for local handling.
-   */
+  /** Run an action; thrown GitError transitions to the generic error state. */
   async function runOrError<T>(action: () => Promise<T>): Promise<T | undefined> {
     try {
       return await action();
@@ -74,13 +67,7 @@ export const useGitStore = create<GitStore>((set, get) => {
           ? err.message
           : String(err);
       const recoverable = isGitError(err) ? err.recoverable : false;
-      set({
-        state: {
-          kind: 'error',
-          message,
-          recoverable,
-        },
-      });
+      set({ state: { kind: 'error', message, recoverable } });
       throw err;
     }
   }
@@ -115,43 +102,10 @@ export const useGitStore = create<GitStore>((set, get) => {
 
     // ---- Phase 4a: author identity actions ------------------------------
     loadAuthorIdentity: async () => {
-      // All three steps are client-only by design. Skip everything on SSR
-      // (bare `window` reference would ReferenceError even under ?.).
-      if (typeof window === 'undefined') {
-        set({ authorIdentity: null });
-        return;
-      }
-
-      // Step 1: OpenPencil prefs
-      try {
-        const prefs = await window.electronAPI?.getPreferences();
-        const prefName = prefs?.['git.authorName'];
-        const prefEmail = prefs?.['git.authorEmail'];
-        if (prefName && prefEmail) {
-          set({ authorIdentity: { name: prefName, email: prefEmail } });
-          return;
-        }
-      } catch {
-        // Prefs unavailable (e.g. running in browser without Electron) —
-        // fall through to step 2.
-      }
-
-      // Step 2: System git config (only if Electron + sys git available)
-      if (window.electronAPI?.git) {
-        try {
-          const sys = await gitClient.getSystemAuthor();
-          if (sys) {
-            set({ authorIdentity: sys });
-            return;
-          }
-        } catch {
-          // sysGit unavailable or git config not set — fall through to form.
-        }
-      }
-
-      // Step 3: Leave authorIdentity null. Phase 4c's commit input checks
-      // this and surfaces the inline form via showAuthorPrompt.
-      set({ authorIdentity: null });
+      // The resolution chain (prefs → system git → null) lives in
+      // git-store-helpers.ts to keep this file under the 800-LoC cap.
+      const id = await resolveAuthorIdentity();
+      set({ authorIdentity: id });
     },
 
     setAuthorIdentity: async (name, email) => {
@@ -192,10 +146,7 @@ export const useGitStore = create<GitStore>((set, get) => {
     cancelSaveRequired: () =>
       set((s) => {
         if (s.state.kind === 'ready' || s.state.kind === 'conflict') {
-          // Destructure to drop saveRequiredFor without TypeScript complaining
-          // about the narrowed variant. The cast is necessary because the
-          // new state object doesn't include the optional saveRequiredFor
-          // field, which is exactly the intent.
+          // Drop saveRequiredFor via destructure; cast keeps TS happy.
           // eslint-disable-next-line @typescript-eslint/no-unused-vars
           const { saveRequiredFor: _omit, ...rest } = s.state;
           return { state: rest as GitState };
@@ -232,39 +183,7 @@ export const useGitStore = create<GitStore>((set, get) => {
     initAutosaveSubscriber: () => {
       // Idempotent: if already wired, return.
       if (get().__autosaveUnsub !== null) return;
-
-      const handler = async (event: { filePath: string | null; fileName: string }) => {
-        const current = get().state;
-        if (current.kind !== 'ready') return; // silent no-op
-        if (event.filePath === null) return; // browser-download fallback
-        if (event.filePath !== current.repo.trackedFilePath) return; // different file
-
-        // Compose the autosave message. Phase 4c ships a minimal
-        // "auto: HH:MM" format; Phase 6 will append the diff summary
-        // once computeDiff is wired through.
-        const now = new Date();
-        const hh = String(now.getHours()).padStart(2, '0');
-        const mm = String(now.getMinutes()).padStart(2, '0');
-        const message = `auto: ${hh}:${mm}`;
-
-        // Author identity fallback: if null, use a sentinel. Spec line
-        // 281 says autosave failures are silent — we never throw here.
-        const author = get().authorIdentity ?? { name: 'Unknown', email: 'unknown@local' };
-
-        try {
-          await get().commitAutosave(message, author);
-          set({ autosaveError: null });
-        } catch (err) {
-          if (isGitError(err)) {
-            set({ autosaveError: err.message });
-          } else if (err instanceof Error) {
-            set({ autosaveError: err.message });
-          } else {
-            set({ autosaveError: 'unknown autosave error' });
-          }
-        }
-      };
-
+      const handler = makeAutosaveHandler(get, set);
       const unsub = documentEvents.on('saved', handler);
       set({ __autosaveUnsub: unsub });
     },
@@ -290,10 +209,12 @@ export const useGitStore = create<GitStore>((set, get) => {
         }
         set({ state: { kind: 'ready', repo: metaFromOpenInfo(result) } });
         // Hydrate the placeholder fields in metaFromOpenInfo (currentBranch,
-        // branches, workingDirty, ahead/behind) by polling status + branches.
-        // Also reconciles in-flight merge state if the backend reports one.
+        // branches, workingDirty, ahead/behind, remote) by polling status,
+        // branches, and remote metadata. Also reconciles in-flight merge
+        // state if the backend reports one.
         await get().refreshStatus();
         await get().refreshBranches();
+        await get().refreshRemote();
       });
     },
 
@@ -304,6 +225,7 @@ export const useGitStore = create<GitStore>((set, get) => {
         set({ state: { kind: 'ready', repo: metaFromOpenInfo(info) } });
         await get().refreshStatus();
         await get().refreshBranches();
+        await get().refreshRemote();
       });
     },
 
@@ -328,6 +250,7 @@ export const useGitStore = create<GitStore>((set, get) => {
           });
           await get().refreshStatus();
           await get().refreshBranches();
+          await get().refreshRemote();
           return;
         }
 
@@ -343,18 +266,21 @@ export const useGitStore = create<GitStore>((set, get) => {
         // picker can show "main · 3 ahead" header info.
         await get().refreshStatus();
         await get().refreshBranches();
+        await get().refreshRemote();
       });
     },
 
     cloneRepo: async (opts) => {
+      // Phase 6a: a wizard-launched clone catches recoverable errors inline
+      // (so the form keeps its state for retry); a CLI-driven clone treats
+      // every code as fatal. classifyCloneError() encodes that policy.
+      const prevWasWizard = get().state.kind === 'wizard-clone';
       set({ state: { kind: 'initializing' } });
-      await runOrError(async () => {
+      try {
         const info = await gitClient.clone(opts);
 
-        // Phase 4b auto-bind: if the cloned repo has exactly one .op
-        // file, bind it now and surface the auto-bind banner. Otherwise
-        // land in needs-tracked-file (multi-file) or empty picker
-        // (zero-file).
+        // Phase 4b auto-bind: single candidate → ready + banner. Multi /
+        // zero candidates land in needs-tracked-file per spec line 109.
         if (info.candidates.length === 1) {
           const only = info.candidates[0];
           await gitClient.bindTrackedFile(info.repoId, only.path);
@@ -365,18 +291,32 @@ export const useGitStore = create<GitStore>((set, get) => {
             },
             lastAutoBindedPath: only.path,
           });
-          await get().refreshStatus();
-          await get().refreshBranches();
-          return;
+        } else {
+          set({ state: { kind: 'needs-tracked-file', repo: metaFromOpenInfo(info) } });
         }
-
-        // Per spec line 109: clone with multiple candidates lands in
-        // needs-tracked-file regardless of which file (if any) the user
-        // had open before the clone.
-        set({ state: { kind: 'needs-tracked-file', repo: metaFromOpenInfo(info) } });
         await get().refreshStatus();
         await get().refreshBranches();
-      });
+        await get().refreshRemote();
+      } catch (err) {
+        const decision = classifyCloneError(err, prevWasWizard);
+        if (decision.kind === 'inline') {
+          set({
+            state: {
+              kind: 'wizard-clone',
+              error: { code: decision.code, message: decision.message },
+            },
+          });
+          return;
+        }
+        set({
+          state: {
+            kind: 'error',
+            message: decision.message,
+            recoverable: decision.recoverable,
+          },
+        });
+        throw err;
+      }
     },
 
     bindTrackedFile: async (filePath) => {
@@ -762,6 +702,42 @@ export const useGitStore = create<GitStore>((set, get) => {
     storeAuth: (host, creds) => gitClient.authStore(host, creds),
     getAuth: (host) => gitClient.authGet(host),
     clearAuth: (host) => gitClient.authClear(host),
+
+    // ---- Phase 6a: clone wizard + remote metadata -----------------------
+    enterCloneWizard: () => set({ state: { kind: 'wizard-clone', error: null } }),
+
+    cancelCloneWizard: () => {
+      // Always land in no-file. The git-panel.tsx detect-repo effect will
+      // immediately rehydrate the correct no-repo / ready state from the
+      // currently-open document path on the next render.
+      set({ state: { kind: 'no-file' } });
+    },
+
+    refreshRemote: async () => {
+      const state = get().state;
+      if (
+        state.kind !== 'ready' &&
+        state.kind !== 'conflict' &&
+        state.kind !== 'needs-tracked-file'
+      ) {
+        return;
+      }
+      const remote = await gitClient.remoteGet(state.repo.repoId);
+      set((s) => ({ state: patchRepoRemote(s.state, remote) }));
+    },
+
+    setRemoteUrl: async (url) => {
+      const repoId = requireRepoId(get().state);
+      // Normalize empty/whitespace-only strings to null so the desktop
+      // side can treat blank input as "remove origin" — form layer
+      // doesn't have to coerce.
+      const normalized = url === null || url.trim() === '' ? null : url.trim();
+      const remote = await gitClient.remoteSet(repoId, normalized);
+      // Update renderer state IMMEDIATELY from the IPC return value. Per
+      // the Phase 6a contract, callers MUST NOT rely on a follow-up
+      // refreshRemote() to see the new value.
+      set((s) => ({ state: patchRepoRemote(s.state, remote) }));
+    },
 
     // ---- SSH keys -------------------------------------------------------
     refreshSshKeys: async () => {

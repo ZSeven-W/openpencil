@@ -131,6 +131,21 @@ export interface GitPublicSshKeyInfo {
   comment: string;
 }
 
+/**
+ * Renderer-visible remote metadata for the single 'origin' remote.
+ *
+ * Phase 6a's contract: there is exactly one remote — `origin`. The renderer
+ * never inspects multi-remote setups; if a user has more than one remote in
+ * `.git/config`, only `origin` is reported. `url` is the configured URL or
+ * null when origin is absent. `host` is parsed from the URL (HTTPS, ssh://,
+ * and SCP-style git@host:path) or null for unparseable URLs / null URLs.
+ */
+export interface GitRemoteInfo {
+  name: 'origin';
+  url: string | null;
+  host: string | null;
+}
+
 export interface GitAPI {
   detect: (filePath: string) => Promise<{ mode: 'none' } | GitRepoOpenInfo>;
   init: (filePath: string) => Promise<GitRepoOpenInfo>;
@@ -216,4 +231,12 @@ export interface GitAPI {
   // Phase 4a: author identity probe (system git config). Returns null if
   // git is unavailable or either user.name/user.email key is unset.
   getSystemAuthor: () => Promise<{ name: string; email: string } | null>;
+
+  // Phase 6a: remote metadata + config. remoteGet reads only .git/config
+  // (no network). remoteSet owns exactly one remote ('origin') — pass a
+  // non-empty url to set/update it, or `null` to remove it. Both calls
+  // return the fresh GitRemoteInfo so the renderer can update state from
+  // a single round-trip.
+  remoteGet: (repoId: string) => Promise<GitRemoteInfo>;
+  remoteSet: (repoId: string, url: string | null) => Promise<GitRemoteInfo>;
 }
