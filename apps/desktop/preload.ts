@@ -102,6 +102,17 @@ export interface GitBranchInfo {
   lastCommit: { hash: string; message: string; timestamp: number } | null;
 }
 
+/**
+ * Phase 6a: renderer-visible remote metadata for the single 'origin' remote.
+ * Mirrors apps/web/src/services/git-types.ts so the renderer can type its
+ * IPC calls without importing from the desktop side.
+ */
+export interface GitRemoteInfo {
+  name: 'origin';
+  url: string | null;
+  host: string | null;
+}
+
 export interface GitAPI {
   detect: (filePath: string) => Promise<{ mode: 'none' } | GitRepoOpenInfo>;
   init: (filePath: string) => Promise<GitRepoOpenInfo>;
@@ -225,6 +236,10 @@ export interface GitAPI {
 
   // Phase 4a: author identity probe (system git config)
   getSystemAuthor: () => Promise<{ name: string; email: string } | null>;
+
+  // Phase 6a: remote metadata + config (no network)
+  remoteGet: (repoId: string) => Promise<GitRemoteInfo>;
+  remoteSet: (repoId: string, url: string | null) => Promise<GitRemoteInfo>;
 }
 
 export interface ElectronAPI {
@@ -388,6 +403,11 @@ const api: ElectronAPI = {
 
     // Phase 4a: author identity probe
     getSystemAuthor: () => ipcRenderer.invoke('git:getSystemAuthor'),
+
+    // Phase 6a: remote metadata + config
+    remoteGet: (repoId: string) => ipcRenderer.invoke('git:remoteGet', repoId),
+    remoteSet: (repoId: string, url: string | null) =>
+      ipcRenderer.invoke('git:remoteSet', repoId, url),
   },
 };
 

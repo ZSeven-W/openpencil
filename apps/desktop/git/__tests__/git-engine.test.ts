@@ -29,6 +29,8 @@ import {
   engineResolveConflict,
   engineApplyMerge,
   engineAbortMerge,
+  engineRemoteGet,
+  engineRemoteSet,
 } from '../git-engine';
 import { clearAllSessions, sessionCount } from '../repo-session';
 import { mkTempDir, writeOpFile, mkSubdir } from './test-helpers';
@@ -1680,6 +1682,75 @@ describe('git-engine', () => {
       expect(status.conflicts).not.toBeNull();
       expect(status.conflicts!.nodeConflicts.length).toBeGreaterThan(0);
       expect(status.unresolvedFiles).toEqual(['login.op']);
+    });
+  });
+
+  describe('engineRemoteGet + engineRemoteSet (Phase 6a)', () => {
+    it('returns { url: null, host: null } when origin is absent', async () => {
+      const opFile = await writeOpFile(temp.dir, 'login.op');
+      const init = await engineInit(opFile);
+      const info = await engineRemoteGet(init.repoId);
+      expect(info).toEqual({ name: 'origin', url: null, host: null });
+    });
+
+    it('engineRemoteSet adds origin when it does not exist and parses the host', async () => {
+      const opFile = await writeOpFile(temp.dir, 'login.op');
+      const init = await engineInit(opFile);
+
+      const result = await engineRemoteSet(init.repoId, 'https://github.com/foo/bar.git');
+      expect(result).toEqual({
+        name: 'origin',
+        url: 'https://github.com/foo/bar.git',
+        host: 'github.com',
+      });
+
+      // engineRemoteGet now returns the same thing.
+      const got = await engineRemoteGet(init.repoId);
+      expect(got).toEqual(result);
+    });
+
+    it('engineRemoteSet updates an existing origin in place', async () => {
+      const opFile = await writeOpFile(temp.dir, 'login.op');
+      const init = await engineInit(opFile);
+
+      await engineRemoteSet(init.repoId, 'https://github.com/foo/bar.git');
+      const updated = await engineRemoteSet(init.repoId, 'https://gitlab.com/foo/bar.git');
+      expect(updated).toEqual({
+        name: 'origin',
+        url: 'https://gitlab.com/foo/bar.git',
+        host: 'gitlab.com',
+      });
+
+      // Read back to confirm there is exactly one origin and it is the new url.
+      const got = await engineRemoteGet(init.repoId);
+      expect(got.url).toBe('https://gitlab.com/foo/bar.git');
+    });
+
+    it('engineRemoteSet(null) removes origin and is idempotent', async () => {
+      const opFile = await writeOpFile(temp.dir, 'login.op');
+      const init = await engineInit(opFile);
+
+      // Add then remove.
+      await engineRemoteSet(init.repoId, 'https://github.com/foo/bar.git');
+      const removed = await engineRemoteSet(init.repoId, null);
+      expect(removed).toEqual({ name: 'origin', url: null, host: null });
+
+      // Removing again must not throw.
+      const removedAgain = await engineRemoteSet(init.repoId, null);
+      expect(removedAgain).toEqual({ name: 'origin', url: null, host: null });
+
+      // engineRemoteGet confirms origin is gone.
+      const got = await engineRemoteGet(init.repoId);
+      expect(got.url).toBeNull();
+    });
+
+    it('parses SCP-style ssh URLs into the host field', async () => {
+      const opFile = await writeOpFile(temp.dir, 'login.op');
+      const init = await engineInit(opFile);
+
+      const result = await engineRemoteSet(init.repoId, 'git@github.com:foo/bar.git');
+      expect(result.host).toBe('github.com');
+      expect(result.url).toBe('git@github.com:foo/bar.git');
     });
   });
 });

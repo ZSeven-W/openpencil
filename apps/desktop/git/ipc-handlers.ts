@@ -35,6 +35,8 @@ import {
   engineResolveConflict,
   engineApplyMerge,
   engineAbortMerge,
+  engineRemoteGet,
+  engineRemoteSet,
   setSshKeyManager,
   setAuthStore,
 } from './git-engine';
@@ -154,6 +156,10 @@ export const gitIpcHandlers = {
   fetch: (repoId: string, auth?: AuthCreds) => engineFetch(repoId, auth),
   pull: (repoId: string, auth?: AuthCreds) => enginePull(repoId, auth),
   push: (repoId: string, auth?: AuthCreds) => enginePush(repoId, auth),
+
+  // Phase 6a: remote metadata + config (no network)
+  remoteGet: (repoId: string) => engineRemoteGet(repoId),
+  remoteSet: (repoId: string, url: string | null) => engineRemoteSet(repoId, url),
 
   // Phase 2b: auth
   authStore: (host: string, creds: AuthCreds) => requireAuthStore().set(host, creds),
@@ -288,6 +294,14 @@ export function setupGitIPC(): void {
   );
   ipcMain.handle('git:push', (_e, repoId: string, auth?: AuthCreds) =>
     runHandler(() => gitIpcHandlers.push(repoId, auth)),
+  );
+
+  // ---- Phase 6a: remote metadata + config ---------------------------------
+  ipcMain.handle('git:remoteGet', (_e, repoId: string) =>
+    runHandler(() => gitIpcHandlers.remoteGet(repoId)),
+  );
+  ipcMain.handle('git:remoteSet', (_e, repoId: string, url: string | null) =>
+    runHandler(() => gitIpcHandlers.remoteSet(repoId, url)),
   );
 
   // ---- Phase 2b: auth ------------------------------------------------------

@@ -39,6 +39,7 @@ import {
   setRef,
   readBlobOidAt,
   findMergeBase,
+  writeRemoteOrigin,
   type IsoRepoHandle,
   type CommitMetaIso,
 } from './git-iso';
@@ -97,6 +98,16 @@ export interface BranchInfo {
   ahead: number; // always 0 in Phase 2a (no remote tracking)
   behind: number; // always 0 in Phase 2a
   lastCommit: { hash: string; message: string; timestamp: number } | null;
+}
+
+/**
+ * Phase 6a: renderer-visible remote metadata for the single 'origin' remote.
+ * Mirrors the wire shape declared in apps/web/src/services/git-types.ts.
+ */
+export interface RemoteInfo {
+  name: 'origin';
+  url: string | null;
+  host: string | null;
 }
 
 export interface StatusInfo {
@@ -1244,6 +1255,44 @@ export async function engineClone(opts: {
     engineKind: 'iso',
   });
   return toOpenInfo(session);
+}
+
+/**
+ * Phase 6a: read the configured `origin` remote from `.git/config` only.
+ * No network, no IO outside the gitdir. Returns `{ name: 'origin', url:
+ * null, host: null }` when origin is absent.
+ */
+export async function engineRemoteGet(repoId: string): Promise<RemoteInfo> {
+  const session = requireSession(repoId);
+  const url = await getRemoteUrl(session.handle, 'origin');
+  return {
+    name: 'origin',
+    url,
+    host: url ? parseHost(url) : null,
+  };
+}
+
+/**
+ * Phase 6a: set, update, or remove the single 'origin' remote.
+ *
+ *   - non-empty `url` → upsert in `.git/config`
+ *   - `null`           → remove from `.git/config` (idempotent if absent)
+ *
+ * Returns the fresh RemoteInfo so the renderer can update its cached state
+ * from a single round-trip without a follow-up engineRemoteGet().
+ */
+export async function engineRemoteSet(repoId: string, url: string | null): Promise<RemoteInfo> {
+  const session = requireSession(repoId);
+  await writeRemoteOrigin({ handle: session.handle, url });
+  // Read back through the same getRemoteUrl path to guarantee the renderer
+  // sees exactly what `.git/config` now holds (handles trailing-slash and
+  // any other normalization that addRemote may apply).
+  const stored = await getRemoteUrl(session.handle, 'origin');
+  return {
+    name: 'origin',
+    url: stored,
+    host: stored ? parseHost(stored) : null,
+  };
 }
 
 /**

@@ -602,6 +602,52 @@ export async function readBlobOidAt(opts: {
 }
 
 /**
+ * Phase 6a: write the single 'origin' remote in `.git/config`.
+ *
+ *   - non-empty `url` → `git.addRemote({ remote: 'origin', url, force: true })`
+ *     The `force: true` flag makes this an upsert (add OR update). isomorphic-git
+ *     itself rejects an existing remote without `force`.
+ *   - `null` url     → `git.deleteRemote({ remote: 'origin' })`. Tolerated if
+ *     origin is already absent (we swallow that one specific failure mode and
+ *     treat the call as idempotent).
+ *
+ * This is a LOCAL config mutation only — never opens a network socket. Lives
+ * in git-iso.ts (not git-sys.ts) per the Phase 6a plan: there is no transport
+ * decision to make here, so the dispatch helper in git-engine.ts isn't needed.
+ */
+export async function writeRemoteOrigin(opts: {
+  handle: IsoRepoHandle;
+  url: string | null;
+}): Promise<void> {
+  const { handle, url } = opts;
+  try {
+    if (url === null) {
+      // Idempotent delete: if origin doesn't exist, that's fine — the caller
+      // wanted it gone and now it is. isomorphic-git surfaces that as an
+      // error from the underlying file lookup, so we catch and swallow.
+      try {
+        await git.deleteRemote({ fs, gitdir: handle.gitdir, remote: 'origin' });
+      } catch {
+        // origin already absent — treat as success.
+      }
+      return;
+    }
+    await git.addRemote({
+      fs,
+      gitdir: handle.gitdir,
+      remote: 'origin',
+      url,
+      force: true, // upsert
+    });
+  } catch (err) {
+    throw new GitError('engine-crash', `writeRemoteOrigin failed`, {
+      cause: err,
+      detail: { url },
+    });
+  }
+}
+
+/**
  * Find the merge base (common ancestor) of two commits. Used by the merge
  * orchestrator to load the `base` document for 3-way merge.
  *
