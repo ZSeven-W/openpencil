@@ -7,6 +7,7 @@
 
 import { gitClient } from '@/services/git-client';
 import { GitError, isGitError } from '@/services/git-error';
+import { loadOpFileFromPath } from '@/utils/load-op-file';
 import type {
   GitConflictBag,
   GitConflictResolution,
@@ -15,10 +16,14 @@ import type {
 } from '@/services/git-types';
 import {
   CLONE_INLINE_ERROR_CODES,
+  PULL_AUTH_ERROR_CODES,
+  PUSH_AUTH_ERROR_CODES,
   type CloneInlineErrorCode,
   type ConflictBagState,
   type GitState,
   type GitStore,
+  type PullAuthErrorCode,
+  type PushAuthErrorCode,
   type RepoMeta,
 } from './git-store-types';
 
@@ -222,5 +227,93 @@ export function makeAutosaveHandler(
         set({ autosaveError: 'unknown autosave error' });
       }
     }
+  };
+}
+
+/**
+ * Phase 6b: Active branch ref for log queries. Returns the current branch
+ * when a repo-bearing state is active, falling back to 'main' outside a
+ * repo. Extracted out of git-store.ts (where it was inlined) so the shared
+ * `syncAfterHeadMove` helper can reuse it.
+ */
+export function currentLogRef(store: GitStore): string {
+  const s = store.state;
+  return s.kind === 'ready' || s.kind === 'conflict' || s.kind === 'needs-tracked-file'
+    ? s.repo.currentBranch
+    : 'main';
+}
+
+/**
+ * Phase 6b: build the shared post-head-move sync routine. Invoked from
+ * `pull` (fast-forward / clean merge), `switchBranch`, and `mergeBranch`
+ * (clean paths). Each head-moving action needs the exact same cascade:
+ *
+ *   1. refreshStatus()   — updates branch + ahead/behind + merge state
+ *   2. refreshBranches() — keeps the branch picker in sync
+ *   3. reload the tracked .op file from disk — HEAD moved, the on-disk
+ *      blob changed, and the in-memory document must match or the next
+ *      save silently overwrites the new HEAD with stale content
+ *   4. loadLog()         — the GitPanelReady log effect keys on state.kind
+ *      which does NOT change across head moves; without an explicit reload
+ *      the history list would stay stale until the panel remounts
+ *
+ * Consolidating this in one helper prevents the three call sites from
+ * drifting out of sync (pre-6b, `pull` skipped steps 3 and 4 entirely,
+ * which is why a successful pull never refreshed the canvas or history).
+ */
+export function makeSyncAfterHeadMove(get: () => GitStore): () => Promise<void> {
+  return async () => {
+    await get().refreshStatus();
+    await get().refreshBranches();
+    const state = get().state;
+    if ((state.kind === 'ready' || state.kind === 'conflict') && state.repo.trackedFilePath) {
+      await loadOpFileFromPath(state.repo.trackedFilePath);
+    }
+    await get().loadLog({ ref: currentLogRef(get()), limit: 50 });
+  };
+}
+
+/**
+ * Phase 6b: classify a thrown remote-action error. Returns an `'auth'`
+ * verdict for recoverable auth codes (so the pull/push buttons can open
+ * the shared auth form) or `'other'` for everything else (so the store's
+ * runOrError wrapper transitions into the generic error state). Mirrors
+ * the clone-side `classifyCloneError` shape so the store doesn't grow
+ * four slightly different classifier patterns.
+ */
+export function classifyRemoteAuthError(
+  err: unknown,
+  which: 'pull' | 'push',
+): { kind: 'auth'; code: PullAuthErrorCode | PushAuthErrorCode; message: string } | null {
+  if (!isGitError(err)) return null;
+  const codes = which === 'pull' ? PULL_AUTH_ERROR_CODES : PUSH_AUTH_ERROR_CODES;
+  if ((codes as readonly string[]).includes(err.code)) {
+    return {
+      kind: 'auth',
+      code: err.code as PullAuthErrorCode | PushAuthErrorCode,
+      message: err.message,
+    };
+  }
+  return null;
+}
+
+/**
+ * Phase 6b: turn a wire-format conflict bag (plus the optional unresolved
+ * non-`.op` file list) into the renderer-side conflict-state payload. Used
+ * by `pull`, `mergeBranch`, and `refreshStatus` so all three transitions
+ * into `conflict` share the exact same shape.
+ */
+export function buildConflictState(
+  repo: RepoMeta,
+  bag: GitConflictBag | null,
+  unresolvedFiles: string[],
+): Extract<GitState, { kind: 'conflict' }> {
+  return {
+    kind: 'conflict',
+    repo,
+    conflicts: bag
+      ? hydrateConflictBag(bag)
+      : { nodeConflicts: new Map(), docFieldConflicts: new Map() },
+    unresolvedFiles,
   };
 }

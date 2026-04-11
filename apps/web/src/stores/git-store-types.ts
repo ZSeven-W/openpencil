@@ -91,6 +91,36 @@ export const CLONE_INLINE_ERROR_CODES = [
 
 export type CloneInlineErrorCode = (typeof CLONE_INLINE_ERROR_CODES)[number];
 
+/**
+ * Phase 6b: recoverable auth-related GitErrorCodes the pull button catches
+ * inline and surfaces the shared auth form for. `auth-required` covers the
+ * "no credentials at all" case; `auth-failed` and `auth-token-invalid` cover
+ * "stored credentials rejected by the server". Anything else escapes to the
+ * generic error state.
+ */
+export const PULL_AUTH_ERROR_CODES = [
+  'auth-required',
+  'auth-failed',
+  'auth-token-invalid',
+] as const;
+
+export type PullAuthErrorCode = (typeof PULL_AUTH_ERROR_CODES)[number];
+
+/**
+ * Phase 6b: recoverable auth-related GitErrorCodes the push button catches
+ * inline. Same shape as the pull set — the auth form is shared between the
+ * two flows, so a single constant would also work, but keeping them distinct
+ * leaves room for Phase 6c to diverge (e.g. push-specific `push-rejected`
+ * which the button handles separately from auth).
+ */
+export const PUSH_AUTH_ERROR_CODES = [
+  'auth-required',
+  'auth-failed',
+  'auth-token-invalid',
+] as const;
+
+export type PushAuthErrorCode = (typeof PUSH_AUTH_ERROR_CODES)[number];
+
 export type GitState =
   | { kind: 'no-file' }
   | { kind: 'no-repo' }
@@ -120,6 +150,16 @@ export type GitState =
       kind: 'conflict';
       repo: RepoMeta;
       conflicts: ConflictBagState;
+      /**
+       * Phase 6b: paths (relative to repo root) of non-`.op` files the
+       * backend reported as unresolved. Empty array means the conflict is
+       * purely over `.op` node/field data and the existing per-node
+       * resolution UI covers it. Non-empty means the user must either
+       * resolve those files externally and hit "continue", or abort the
+       * merge entirely — the conflict banner renders a strip with both
+       * recovery affordances when this is non-empty.
+       */
+      unresolvedFiles: string[];
       saveRequiredFor?: PendingAction;
     }
   | { kind: 'error'; message: string; recoverable: boolean };

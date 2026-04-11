@@ -13,10 +13,12 @@ import { useDocumentStore } from '@/stores/document-store';
 import { documentEvents } from '@/utils/document-events';
 import { loadOpFileFromPath } from '@/utils/load-op-file';
 import {
+  buildConflictState,
   classifyCloneError,
+  currentLogRef as helperCurrentLogRef,
   dropSaveRequired,
-  hydrateConflictBag,
   makeAutosaveHandler,
+  makeSyncAfterHeadMove,
   metaFromOpenInfo,
   patchRepoRemote,
   requireRepoId,
@@ -26,12 +28,13 @@ import type { GitStore, PendingAction } from './git-store-types';
 
 export const useGitStore = create<GitStore>((set, get) => {
   /** Active branch ref for log queries; falls back to 'main' outside a repo. */
-  function currentLogRef(): string {
-    const s = get().state;
-    return s.kind === 'ready' || s.kind === 'conflict' || s.kind === 'needs-tracked-file'
-      ? s.repo.currentBranch
-      : 'main';
-  }
+  const currentLogRef = () => helperCurrentLogRef(get());
+  /**
+   * Phase 6b: shared head-move sync (refreshStatus + refreshBranches +
+   * reload tracked file + loadLog). Called from pull/switchBranch/mergeBranch
+   * clean paths so all three head-moving actions stay in lockstep.
+   */
+  const syncAfterHeadMove = makeSyncAfterHeadMove(get);
 
   /**
    * Guard a mutating action on `useDocumentStore.getState().isDirty`. Dirty →
@@ -430,28 +433,21 @@ export const useGitStore = create<GitStore>((set, get) => {
       });
 
       // Step 2: reconcile the conflict state. Phase 2c's engineStatus
-      // populates `mergeInProgress` and `conflicts` from the backend
-      // session's inflightMerge. We mirror that into the renderer state
-      // machine so a panel reopened mid-merge sees the conflict view.
+      // populates `mergeInProgress`, `conflicts`, and (Phase 6b)
+      // `unresolvedFiles`. We mirror all three into the renderer state
+      // machine so a panel reopened mid-merge sees the conflict view
+      // AND the non-`.op` file banner.
       const current = get().state;
-      if (status.mergeInProgress && status.conflicts) {
-        // Backend reports an in-flight merge. Promote ready → conflict, or
-        // refresh the conflict bag if we're already in conflict (e.g.
-        // resolutions changed since last status).
+      const unresolved = status.unresolvedFiles ?? [];
+      if (status.mergeInProgress && (status.conflicts || unresolved.length > 0)) {
+        // Backend reports an in-flight merge. Promote ready → conflict,
+        // or refresh the conflict bag + unresolved files if already
+        // in conflict (e.g. resolutions or unresolved-file list changed).
         if (current.kind === 'ready') {
-          set({
-            state: {
-              kind: 'conflict',
-              repo: current.repo,
-              conflicts: hydrateConflictBag(status.conflicts),
-            },
-          });
+          set({ state: buildConflictState(current.repo, status.conflicts ?? null, unresolved) });
         } else if (current.kind === 'conflict') {
           set({
-            state: {
-              ...current,
-              conflicts: hydrateConflictBag(status.conflicts),
-            },
+            state: buildConflictState(current.repo, status.conflicts ?? null, unresolved),
           });
         }
       } else if (!status.mergeInProgress && current.kind === 'conflict') {
@@ -551,20 +547,10 @@ export const useGitStore = create<GitStore>((set, get) => {
       const repoId = requireRepoId(get().state);
       await withCleanWorkingTree(async () => {
         await gitClient.branchSwitch(repoId, name);
-        await get().refreshStatus();
-        await get().refreshBranches();
-        // The switch updated the tracked file on disk to the new branch's
-        // tip, and HEAD now points at a different commit. Reload the
-        // document from disk (Bug 1 pattern) AND refresh the log so the
-        // history list reflects the new branch. The GitPanelReady log
-        // effect keys on state.kind, which does not change during switch,
-        // so without this explicit call the history list would stay on
-        // the previous branch's commits until the panel remounted.
-        const state = get().state;
-        if ((state.kind === 'ready' || state.kind === 'conflict') && state.repo.trackedFilePath) {
-          await loadOpFileFromPath(state.repo.trackedFilePath);
-        }
-        await get().loadLog({ ref: currentLogRef(), limit: 50 });
+        // HEAD moved. syncAfterHeadMove refreshes status/branches, reloads
+        // the on-disk tracked file into document-store, and refreshes the
+        // history list for the now-active branch.
+        await syncAfterHeadMove();
       }, 'switch branch');
     },
 
@@ -580,40 +566,15 @@ export const useGitStore = create<GitStore>((set, get) => {
         const result = await gitClient.branchMerge(repoId, fromBranch);
         if (result.result === 'conflict' && result.conflicts) {
           set((s) => {
-            if (s.state.kind === 'ready') {
-              return {
-                state: {
-                  kind: 'conflict',
-                  repo: s.state.repo,
-                  conflicts: hydrateConflictBag(result.conflicts!),
-                },
-              };
-            }
-            return s;
+            if (s.state.kind !== 'ready') return s;
+            return { state: buildConflictState(s.state.repo, result.conflicts!, []) };
           });
-          // On conflict we do NOT refresh — the conflict state is already
-          // hydrated from the result above, and refreshStatus would be
-          // redundant (it would just re-confirm mergeInProgress=true).
+          // Conflict path: state is fully hydrated — skip the sync cascade.
           return;
         }
-        // Success paths (fast-forward, merge) advance HEAD and may update the
-        // branch list — refresh both so the panel header and branch dropdown
-        // stay in sync without waiting for a user-triggered refresh.
-        await get().refreshStatus();
-        await get().refreshBranches();
-        // Reload the tracked file + log for the same reason as switchBranch:
-        // HEAD moved, the on-disk tracked file changed, and the GitPanelReady
-        // log effect keys on state.kind which does NOT change on a clean
-        // merge. Without these calls the canvas would show the pre-merge
-        // content and the history list would miss the merge commit.
-        const postState = get().state;
-        if (
-          (postState.kind === 'ready' || postState.kind === 'conflict') &&
-          postState.repo.trackedFilePath
-        ) {
-          await loadOpFileFromPath(postState.repo.trackedFilePath);
-        }
-        await get().loadLog({ ref: currentLogRef(), limit: 50 });
+        // Success paths (fast-forward, merge): HEAD moved. Delegate the
+        // cascade to the shared helper (see switchBranch for details).
+        await syncAfterHeadMove();
       }, 'merge branch');
     },
 
@@ -678,28 +639,56 @@ export const useGitStore = create<GitStore>((set, get) => {
       const repoId = requireRepoId(get().state);
       await withCleanWorkingTree(async () => {
         const result = await gitClient.pull(repoId, auth);
-        if (result.result === 'conflict' && result.conflicts) {
-          set((s) => {
-            if (s.state.kind === 'ready') {
-              return {
-                state: {
-                  kind: 'conflict',
-                  repo: s.state.repo,
-                  conflicts: hydrateConflictBag(result.conflicts!),
-                },
-              };
-            }
-            return s;
-          });
+        if (result.result === 'fast-forward' || result.result === 'merge') {
+          // Clean head-move. Delegate the cascade so pull behaves like
+          // switchBranch / mergeBranch success paths — refresh status +
+          // branches, reload the tracked .op file, refresh the log.
+          await syncAfterHeadMove();
+          return;
         }
-        await get().refreshStatus();
+        if (result.result === 'conflict') {
+          // `.op` conflict bag. Transition ready → conflict with no
+          // unresolved non-op files; the manual-resolution UI covers
+          // everything here (landing in Phase 7).
+          set((s) => {
+            if (s.state.kind !== 'ready') return s;
+            return { state: buildConflictState(s.state.repo, result.conflicts ?? null, []) };
+          });
+          return;
+        }
+        // result === 'conflict-non-op': the merge is in flight but the
+        // engine could not apply the .op merge because non-`.op` files
+        // are unresolved. Probe status() to pick up the unresolvedFiles
+        // list and transition into a recoverable conflict state with an
+        // empty node-conflicts bag. The banner reads unresolvedFiles.length
+        // and renders the continue/abort strip.
+        const status = await gitClient.status(repoId);
+        set((s) => {
+          if (s.state.kind !== 'ready') return s;
+          return {
+            state: buildConflictState(
+              s.state.repo,
+              status.conflicts ?? null,
+              status.unresolvedFiles ?? [],
+            ),
+          };
+        });
       }, 'pull');
     },
 
     push: async (auth) => {
       const repoId = requireRepoId(get().state);
+      // Note: push IPC currently throws GitError('push-rejected') or
+      // GitError('auth-failed') on failure rather than returning a tagged
+      // result. We let those escape from here (not via runOrError) so the
+      // remote-controls button can catch and branch on err.code: a rejected
+      // push opens the "pull first" retry strip; an auth-failed push opens
+      // the shared auth form. Anything else propagates as a normal throw
+      // and the button shows a compact inline error.
       await withCleanWorkingTree(async () => {
         await gitClient.push(repoId, auth);
+        // Success: refresh status so ahead/behind zero out and the "nothing
+        // to push" hint takes over. No head move → no syncAfterHeadMove.
         await get().refreshStatus();
       }, 'push');
     },

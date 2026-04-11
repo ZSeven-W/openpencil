@@ -1188,4 +1188,174 @@ describe('git-store state machine', () => {
     await useGitStore.getState().setRemoteUrl(null);
     expect(gitClient.remoteSet).toHaveBeenLastCalledWith('repo-1', null);
   });
+
+  // ---- Phase 6b: pull / push + syncAfterHeadMove ------------------------
+
+  it('pull (fast-forward) refreshes status/branches, reloads the tracked file, and refreshes the log', async () => {
+    vi.mocked(gitClient.init).mockResolvedValue(SAMPLE_REPO);
+    vi.mocked(gitClient.pull).mockResolvedValue({ result: 'fast-forward' });
+    await useGitStore.getState().initRepo('/tmp/login.op');
+
+    vi.mocked(gitClient.status).mockClear();
+    vi.mocked(gitClient.branchList).mockClear();
+    vi.mocked(mockedLoadOpFileFromPath).mockClear();
+    vi.mocked(gitClient.log).mockClear();
+
+    await useGitStore.getState().pull();
+
+    // syncAfterHeadMove fires all four cascades: status, branches, tracked
+    // file reload, and log refresh for the active branch. Without this a
+    // successful pull would leave the canvas and history list stale.
+    expect(gitClient.pull).toHaveBeenCalledWith('repo-1', undefined);
+    expect(gitClient.status).toHaveBeenCalledTimes(1);
+    expect(gitClient.branchList).toHaveBeenCalledTimes(1);
+    expect(mockedLoadOpFileFromPath).toHaveBeenCalledWith('/tmp/repo/login.op');
+    expect(gitClient.log).toHaveBeenCalledWith('repo-1', { ref: 'main', limit: 50 });
+  });
+
+  it('pull (merge) runs the same head-move cascade as fast-forward', async () => {
+    vi.mocked(gitClient.init).mockResolvedValue(SAMPLE_REPO);
+    vi.mocked(gitClient.pull).mockResolvedValue({ result: 'merge' });
+    await useGitStore.getState().initRepo('/tmp/login.op');
+
+    vi.mocked(mockedLoadOpFileFromPath).mockClear();
+    vi.mocked(gitClient.log).mockClear();
+    await useGitStore.getState().pull();
+
+    expect(mockedLoadOpFileFromPath).toHaveBeenCalledWith('/tmp/repo/login.op');
+    expect(gitClient.log).toHaveBeenCalledWith('repo-1', { ref: 'main', limit: 50 });
+  });
+
+  it('pull (conflict) transitions into conflict state without reloading the document', async () => {
+    vi.mocked(gitClient.init).mockResolvedValue(SAMPLE_REPO);
+    vi.mocked(gitClient.pull).mockResolvedValue({
+      result: 'conflict',
+      conflicts: {
+        nodeConflicts: [
+          {
+            id: 'node:_:rect-1',
+            pageId: null,
+            nodeId: 'rect-1',
+            reason: 'both-modified-same-field',
+            base: null,
+            ours: null,
+            theirs: null,
+          },
+        ],
+        docFieldConflicts: [],
+      },
+    });
+    await useGitStore.getState().initRepo('/tmp/login.op');
+
+    vi.mocked(mockedLoadOpFileFromPath).mockClear();
+    await useGitStore.getState().pull();
+
+    const s = useGitStore.getState().state;
+    expect(s.kind).toBe('conflict');
+    if (s.kind === 'conflict') {
+      expect(s.conflicts.nodeConflicts.size).toBe(1);
+      expect(s.unresolvedFiles).toEqual([]);
+    }
+    expect(mockedLoadOpFileFromPath).not.toHaveBeenCalled();
+  });
+
+  it('pull (conflict-non-op) threads unresolvedFiles into conflict state without refreshing the document', async () => {
+    vi.mocked(gitClient.init).mockResolvedValue(SAMPLE_REPO);
+    vi.mocked(gitClient.pull).mockResolvedValue({ result: 'conflict-non-op' });
+    await useGitStore.getState().initRepo('/tmp/login.op');
+
+    // The store follows up with status() to learn the unresolved file list
+    // because pull's IPC shape for conflict-non-op does not include them.
+    vi.mocked(gitClient.status).mockResolvedValueOnce({
+      ...DEFAULT_STATUS,
+      mergeInProgress: true,
+      unresolvedFiles: ['src/README.md', 'src/package.json'],
+      conflicts: null,
+    });
+
+    vi.mocked(mockedLoadOpFileFromPath).mockClear();
+    await useGitStore.getState().pull();
+
+    const s = useGitStore.getState().state;
+    expect(s.kind).toBe('conflict');
+    if (s.kind === 'conflict') {
+      // Empty node bag — this is a pure non-op conflict.
+      expect(s.conflicts.nodeConflicts.size).toBe(0);
+      expect(s.conflicts.docFieldConflicts.size).toBe(0);
+      expect(s.unresolvedFiles).toEqual(['src/README.md', 'src/package.json']);
+    }
+    // Non-op conflict must NOT blow away the in-memory document, since
+    // the .op file on disk is still the user's pre-merge tree.
+    expect(mockedLoadOpFileFromPath).not.toHaveBeenCalled();
+  });
+
+  it('pull surfaces auth-required as a GitError the button can catch (no error state transition)', async () => {
+    vi.mocked(gitClient.init).mockResolvedValue(SAMPLE_REPO);
+    await useGitStore.getState().initRepo('/tmp/login.op');
+
+    vi.mocked(gitClient.pull).mockRejectedValue(
+      new GitError('auth-required', 'HTTP 401', { recoverable: true }),
+    );
+
+    await expect(useGitStore.getState().pull()).rejects.toMatchObject({
+      name: 'GitError',
+      code: 'auth-required',
+    });
+
+    // Renderer stays in ready — the button owns the auth-form retry loop
+    // and must not race against the generic error card.
+    expect(useGitStore.getState().state.kind).toBe('ready');
+  });
+
+  it('push success refreshes status without firing the head-move cascade', async () => {
+    vi.mocked(gitClient.init).mockResolvedValue(SAMPLE_REPO);
+    vi.mocked(gitClient.push).mockResolvedValue({ result: 'ok' });
+    await useGitStore.getState().initRepo('/tmp/login.op');
+
+    vi.mocked(gitClient.status).mockClear();
+    vi.mocked(mockedLoadOpFileFromPath).mockClear();
+    vi.mocked(gitClient.log).mockClear();
+
+    await useGitStore.getState().push();
+
+    expect(gitClient.push).toHaveBeenCalledWith('repo-1', undefined);
+    expect(gitClient.status).toHaveBeenCalledTimes(1);
+    // Push does not move HEAD on our side → no document reload, no log
+    // refresh. Only status() needs to re-run so ahead/behind zero out.
+    expect(mockedLoadOpFileFromPath).not.toHaveBeenCalled();
+    expect(gitClient.log).not.toHaveBeenCalled();
+  });
+
+  it('push surfaces push-rejected as a GitError the button can catch', async () => {
+    vi.mocked(gitClient.init).mockResolvedValue(SAMPLE_REPO);
+    await useGitStore.getState().initRepo('/tmp/login.op');
+
+    vi.mocked(gitClient.push).mockRejectedValue(
+      new GitError('push-rejected', 'non-fast-forward', { recoverable: true }),
+    );
+
+    await expect(useGitStore.getState().push()).rejects.toMatchObject({
+      name: 'GitError',
+      code: 'push-rejected',
+    });
+
+    // Stays ready so the button can render its "pull first" inline strip.
+    expect(useGitStore.getState().state.kind).toBe('ready');
+  });
+
+  it('push surfaces auth-failed as a GitError the button can catch', async () => {
+    vi.mocked(gitClient.init).mockResolvedValue(SAMPLE_REPO);
+    await useGitStore.getState().initRepo('/tmp/login.op');
+
+    vi.mocked(gitClient.push).mockRejectedValue(
+      new GitError('auth-failed', 'HTTP 403', { recoverable: true }),
+    );
+
+    await expect(useGitStore.getState().push()).rejects.toMatchObject({
+      name: 'GitError',
+      code: 'auth-failed',
+    });
+
+    expect(useGitStore.getState().state.kind).toBe('ready');
+  });
 });
