@@ -66,10 +66,8 @@ const en = {
   'git.titleNoFile': 'Git · (No file selected)',
   'git.close': 'Close',
   'git.initializing': 'Initializing repository…',
-  'git.placeholder.trackedPicker': 'Tracked-file picker',
-  'git.placeholder.readyState': 'Ready state',
   'git.conflict.title': 'Merge conflict',
-  'git.conflict.description': 'Conflicts need manual resolution — coming in Phase 7.',
+  'git.conflict.description': 'Resolve each conflict using the cards below, then apply the merge.',
   'git.conflict.abort': 'Abort merge',
   'git.conflict.nonOp.title': 'Merge paused on non-.op files',
   'git.conflict.nonOp.description':
