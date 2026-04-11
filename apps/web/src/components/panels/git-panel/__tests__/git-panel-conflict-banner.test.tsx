@@ -4,7 +4,12 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { render, screen, cleanup, fireEvent } from '@testing-library/react';
 
 const mocks = vi.hoisted(() => ({
+  state: {
+    kind: 'conflict' as const,
+    unresolvedFiles: [] as string[],
+  },
   abortMerge: vi.fn(async () => {}),
+  applyMerge: vi.fn(async () => {}),
 }));
 
 vi.mock('@/stores/git-store', () => ({
@@ -22,6 +27,7 @@ import { GitPanelConflictBanner } from '@/components/panels/git-panel/git-panel-
 describe('GitPanelConflictBanner', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.state = { kind: 'conflict', unresolvedFiles: [] };
   });
 
   afterEach(() => {

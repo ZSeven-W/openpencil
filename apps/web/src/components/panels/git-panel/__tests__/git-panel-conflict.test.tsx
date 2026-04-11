@@ -22,6 +22,7 @@ const mocks = vi.hoisted(() => {
     otherFilesPaths: [],
     ahead: 0,
     behind: 0,
+    remote: null as { name: 'origin'; url: string | null; host: string | null } | null,
   };
   return {
     state: {
@@ -31,12 +32,15 @@ const mocks = vi.hoisted(() => {
         nodeConflicts: new Map(),
         docFieldConflicts: new Map(),
       },
+      unresolvedFiles: [] as string[],
     } as {
       kind: 'conflict' | 'ready' | 'no-file';
       repo?: typeof conflictRepo;
       conflicts?: { nodeConflicts: Map<string, unknown>; docFieldConflicts: Map<string, unknown> };
+      unresolvedFiles?: string[];
     },
     log: [] as GitCommitMeta[],
+    sshKeys: [] as Array<unknown>,
     authorIdentity: { name: 'Alice', email: 'a@e.com' } as {
       name: string;
       email: string;
@@ -46,6 +50,11 @@ const mocks = vi.hoisted(() => {
     commitMessage: '',
     loadLog: vi.fn(async () => {}),
     abortMerge: vi.fn(async () => {}),
+    applyMerge: vi.fn(async () => {}),
+    pull: vi.fn(async () => {}),
+    push: vi.fn(async () => {}),
+    getAuth: vi.fn(async () => null),
+    storeAuth: vi.fn(async () => {}),
     restoreCommit: vi.fn(async () => {}),
     promoteAutosave: vi.fn(async () => {}),
     clearAutosaveError: vi.fn(),
@@ -74,6 +83,12 @@ function renderWithProvider(ui: React.ReactElement) {
 describe('GitPanelConflict', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.state = {
+      kind: 'conflict',
+      repo: mocks.state.repo,
+      conflicts: { nodeConflicts: new Map(), docFieldConflicts: new Map() },
+      unresolvedFiles: [],
+    };
   });
 
   afterEach(() => {
@@ -137,5 +152,60 @@ describe('GitPanelConflict', () => {
 
     // Reset log for the beforeEach in the next test (though cleanup also runs)
     mocks.log = [];
+  });
+
+  it('renders the non-op unresolved files strip with continue + abort when unresolvedFiles is non-empty', () => {
+    mocks.state = {
+      kind: 'conflict',
+      repo: mocks.state.repo,
+      conflicts: { nodeConflicts: new Map(), docFieldConflicts: new Map() },
+      unresolvedFiles: ['src/README.md', 'src/package.json'],
+    };
+
+    renderWithProvider(<GitPanelConflict />);
+
+    // Non-op banner title/description replaces the plain merge-conflict copy
+    expect(screen.getByText('git.conflict.nonOp.title')).toBeTruthy();
+    expect(screen.getByText('git.conflict.nonOp.description')).toBeTruthy();
+
+    // Unresolved file paths render as a monospace list
+    expect(screen.getByText('src/README.md')).toBeTruthy();
+    expect(screen.getByText('src/package.json')).toBeTruthy();
+
+    // Both recovery affordances are rendered
+    expect(screen.getByRole('button', { name: 'git.conflict.nonOp.continue' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'git.conflict.nonOp.abort' })).toBeTruthy();
+  });
+
+  it('clicking continue in the non-op strip calls applyMerge', () => {
+    mocks.state = {
+      kind: 'conflict',
+      repo: mocks.state.repo,
+      conflicts: { nodeConflicts: new Map(), docFieldConflicts: new Map() },
+      unresolvedFiles: ['src/README.md'],
+    };
+    renderWithProvider(<GitPanelConflict />);
+    fireEvent.click(screen.getByRole('button', { name: 'git.conflict.nonOp.continue' }));
+    expect(mocks.applyMerge).toHaveBeenCalledTimes(1);
+  });
+
+  it('clicking abort in the non-op strip calls abortMerge', () => {
+    mocks.state = {
+      kind: 'conflict',
+      repo: mocks.state.repo,
+      conflicts: { nodeConflicts: new Map(), docFieldConflicts: new Map() },
+      unresolvedFiles: ['src/README.md'],
+    };
+    renderWithProvider(<GitPanelConflict />);
+    fireEvent.click(screen.getByRole('button', { name: 'git.conflict.nonOp.abort' }));
+    expect(mocks.abortMerge).toHaveBeenCalledTimes(1);
+  });
+
+  it('falls back to the plain abort-only banner when unresolvedFiles is empty', () => {
+    renderWithProvider(<GitPanelConflict />);
+    // Default mock state has unresolvedFiles: [] — plain banner + single abort
+    expect(screen.getByText('git.conflict.title')).toBeTruthy();
+    expect(screen.queryByText('git.conflict.nonOp.title')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'git.conflict.nonOp.continue' })).toBeNull();
   });
 });

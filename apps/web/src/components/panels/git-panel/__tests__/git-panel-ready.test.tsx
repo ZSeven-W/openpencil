@@ -21,6 +21,7 @@ const mocks = vi.hoisted(() => {
     otherFilesPaths: [],
     ahead: 0,
     behind: 0,
+    remote: null as { name: 'origin'; url: string | null; host: string | null } | null,
   };
   return {
     state: { kind: 'ready' as const, repo: readyRepo } as {
@@ -29,6 +30,7 @@ const mocks = vi.hoisted(() => {
       saveRequiredFor?: { label: string };
     },
     log: [] as Array<unknown>,
+    sshKeys: [] as Array<unknown>,
     authorIdentity: { name: 'Alice', email: 'a@e.com' } as { name: string; email: string } | null,
     authorPromptVisible: false,
     autosaveError: null as string | null,
@@ -47,6 +49,10 @@ const mocks = vi.hoisted(() => {
     clearAutosaveError: vi.fn(),
     restoreCommit: vi.fn(async () => {}),
     promoteAutosave: vi.fn(async () => {}),
+    pull: vi.fn(async () => {}),
+    push: vi.fn(async () => {}),
+    getAuth: vi.fn(async () => null),
+    storeAuth: vi.fn(async () => {}),
   };
 });
 
@@ -86,6 +92,7 @@ describe('GitPanelReady', () => {
         otherFilesPaths: [],
         ahead: 0,
         behind: 0,
+        remote: null,
       },
     };
     mocks.log = [];
@@ -149,6 +156,7 @@ describe('GitPanelReady', () => {
         otherFilesPaths: [],
         ahead: 0,
         behind: 0,
+        remote: null,
       },
     };
     rerender(

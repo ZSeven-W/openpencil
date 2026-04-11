@@ -151,8 +151,16 @@ describe('GitPanel (dropdown body)', () => {
           otherFilesPaths: [],
           ahead: 0,
           behind: 0,
+          remote: null,
         },
       },
+      // Phase 6b: GitPanelRemoteControls pulls these off the store via
+      // its own selectors. Keep them as stubs so the component mounts
+      // without blowing up when a test targets the ready body.
+      pull: vi.fn(async () => {}),
+      push: vi.fn(async () => {}),
+      getAuth: vi.fn(async () => null),
+      storeAuth: vi.fn(async () => {}),
     });
     renderWithProvider(<GitPanel />);
     // Header renders the current branch name

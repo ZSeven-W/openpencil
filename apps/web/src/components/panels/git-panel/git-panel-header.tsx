@@ -1,14 +1,16 @@
 // apps/web/src/components/panels/git-panel/git-panel-header.tsx
 //
-// Header row for the Git panel ready/conflict states (Phase 4c → 5).
+// Header row for the Git panel ready/conflict states (Phase 4c → 6b).
 // Renders a flex row with two groups:
-//   Left:  branch picker (Phase 5) + pull (disabled) + push (disabled)
+//   Left:  branch picker (Phase 5) + pull/push remote controls (Phase 6b)
 //   Right: autosave-error dot + author-missing dot + overflow popover menu
 //
 // The component returns null unless state.kind is 'ready' or 'conflict'.
-// TooltipProvider is mounted globally in editor-layout.tsx — no local wrapper needed.
+// Pull and push are delegated to <GitPanelRemoteControls /> so this file
+// stays thin — the remote-action state machine, auth retry flow, and
+// push-rejected recovery strip all live inside that component.
 
-import { ArrowDown, ArrowUp, MoreHorizontal } from 'lucide-react';
+import { MoreHorizontal } from 'lucide-react';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
@@ -17,6 +19,7 @@ import { Separator } from '@/components/ui/separator';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useGitStore } from '@/stores/git-store';
 import { GitPanelBranchPicker } from './git-panel-branch-picker';
+import { GitPanelRemoteControls } from './git-panel-remote-controls';
 
 export function GitPanelHeader() {
   const { t } = useTranslation();
@@ -34,49 +37,10 @@ export function GitPanelHeader() {
 
   return (
     <div className="flex items-center justify-between gap-1 border-b border-border px-2 py-1">
-      {/* ── Left group: branch + pull + push ── */}
+      {/* ── Left group: branch + remote controls ── */}
       <div className="flex items-center gap-0.5">
-        {/* Phase 5: real branch picker shell (Task 2). Mutating flows
-            land in Tasks 3 and 4. */}
         <GitPanelBranchPicker />
-
-        {/* Pull — disabled, coming in Phase 6 */}
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <span tabIndex={0} className="inline-flex">
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon-sm"
-                disabled
-                aria-label={t('git.header.pullComingSoon')}
-                className="pointer-events-none text-muted-foreground"
-              >
-                <ArrowDown size={12} strokeWidth={1.5} aria-hidden />
-              </Button>
-            </span>
-          </TooltipTrigger>
-          <TooltipContent side="bottom">{t('git.header.pullComingSoon')}</TooltipContent>
-        </Tooltip>
-
-        {/* Push — disabled, coming in Phase 6 */}
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <span tabIndex={0} className="inline-flex">
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon-sm"
-                disabled
-                aria-label={t('git.header.pushComingSoon')}
-                className="pointer-events-none text-muted-foreground"
-              >
-                <ArrowUp size={12} strokeWidth={1.5} aria-hidden />
-              </Button>
-            </span>
-          </TooltipTrigger>
-          <TooltipContent side="bottom">{t('git.header.pushComingSoon')}</TooltipContent>
-        </Tooltip>
+        <GitPanelRemoteControls />
       </div>
 
       {/* ── Right group: status dots + overflow menu ── */}
