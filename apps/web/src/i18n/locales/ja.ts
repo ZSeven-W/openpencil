@@ -80,12 +80,41 @@ const ja: TranslationKeys = {
   'git.conflict.nonOp.unresolvedHeading_other': '{{count}} 個のファイルに対応が必要',
   'git.conflict.nonOp.continue': 'マージを続行',
   'git.conflict.nonOp.abort': 'マージを中止',
-  // Phase 7b: unified banner keys (placeholder — Phase 7c localises)
-  'git.conflict.banner.progress': 'Resolved {{resolved}} / {{total}}',
-  'git.conflict.banner.apply': 'Apply merge',
-  'git.conflict.banner.continue': 'Continue',
-  'git.conflict.banner.finalizeError': 'Could not apply: {{message}}',
-  'git.conflict.banner.pollError': 'Status polling paused due to an error: {{message}}', // placeholder — Phase 7c localises
+  // ── Git 競合バナー (Phase 7b) ──
+  'git.conflict.banner.progress': '{{resolved}} / {{total}} 解決済み',
+  'git.conflict.banner.apply': 'マージを適用',
+  'git.conflict.banner.continue': '続行',
+  'git.conflict.banner.finalizeError': '適用できませんでした: {{message}}',
+  'git.conflict.banner.pollError': 'エラーのためステータスポーリングを一時停止中: {{message}}',
+
+  // ── Git 競合リスト (Phase 7c) ──
+  'git.conflict.list.heading': 'すべての競合',
+  'git.conflict.list.progress': '{{resolved}} / {{total}} 解決済み',
+  'git.conflict.list.allResolved': 'すべて解決済み',
+  'git.conflict.list.allOurs': 'すべて自分のものに',
+  'git.conflict.list.allTheirs': 'すべて相手のものに',
+
+  // ── Git 競合アイテム (Phase 7c) ──
+  'git.conflict.item.nodeConflict': 'ノード競合',
+  'git.conflict.item.fieldConflict': 'フィールド競合',
+  'git.conflict.item.resolved': '解決済み',
+
+  // ── Git 競合カード (Phase 7c) ──
+  'git.conflict.card.ours': '自分',
+  'git.conflict.card.theirs': '相手',
+  'git.conflict.card.base': 'ベース',
+  'git.conflict.card.keepMine': '自分のものを使用',
+  'git.conflict.card.keepTheirs': '相手のものを使用',
+  'git.conflict.card.oursThumbnailAlt': '自分のバージョン',
+  'git.conflict.card.theirsThumbnailAlt': '相手のバージョン',
+
+  // ── Git 競合 JSON エディタ (Phase 7c) ──
+  'git.conflict.editor.editManually': '手動で編集',
+  'git.conflict.editor.cancel': 'キャンセル',
+  'git.conflict.editor.apply': '適用',
+  'git.conflict.editor.invalidJson': '無効な JSON',
+  'git.conflict.editor.textareaLabel': 'JSON 値を編集',
+
   'git.error.dismiss': '閉じる',
   'git.error.retry': '再試行',
   'git.error.title': '問題が発生しました',
@@ -120,9 +149,8 @@ const ja: TranslationKeys = {
   'git.picker.lastCommit': '{{message}} · {{time}}',
   'git.picker.bindButton': 'このファイルを追跡',
   'git.picker.bindAndOpenButton': '追跡して開く',
-  // Phase 7b: back/cancel navigation (placeholder — Phase 7c localises)
-  'git.picker.back': 'Back',
-  'git.picker.backClose': 'Cancel',
+  'git.picker.back': '戻る',
+  'git.picker.backClose': 'キャンセル',
   'git.picker.empty.heading': 'このリポジトリには .op ファイルがありません',
   'git.picker.empty.body': 'Git パネルには少なくとも 1 つの .op ファイルが必要です',
   'git.picker.empty.close': 'パネルを閉じる',
@@ -167,19 +195,19 @@ const ja: TranslationKeys = {
   'git.history.restoreButton': '復元',
   'git.history.copyHashButton': 'ハッシュをコピー',
   'git.history.copiedToast': 'コピー済み',
-  // Phase 7b: inline diff block (placeholder — Phase 7c localises)
-  'git.history.diff.loading': 'Loading diff…',
-  'git.history.diff.initialCommit': 'Initial commit — no parent to diff against',
-  'git.history.diff.noChanges': 'No changes detected',
-  'git.history.diff.error': 'Diff unavailable: {{message}}',
-  'git.history.diff.framesChanged_one': '1 frame changed',
-  'git.history.diff.framesChanged_other': '{{count}} frames changed',
-  'git.history.diff.nodesAdded_one': '1 node added',
-  'git.history.diff.nodesAdded_other': '{{count}} nodes added',
-  'git.history.diff.nodesRemoved_one': '1 node removed',
-  'git.history.diff.nodesRemoved_other': '{{count}} nodes removed',
-  'git.history.diff.nodesModified_one': '1 node modified',
-  'git.history.diff.nodesModified_other': '{{count}} nodes modified',
+  // ── Git 履歴差分 (Phase 7b) ──
+  'git.history.diff.loading': '差分を読み込み中…',
+  'git.history.diff.initialCommit': '初回コミット — 比較できる親コミットがありません',
+  'git.history.diff.noChanges': '変更なし',
+  'git.history.diff.error': '差分を利用できません: {{message}}',
+  'git.history.diff.framesChanged_one': '1 件のフレームが変更されました',
+  'git.history.diff.framesChanged_other': '{{count}} 件のフレームが変更されました',
+  'git.history.diff.nodesAdded_one': 'ノードが 1 件追加されました',
+  'git.history.diff.nodesAdded_other': 'ノードが {{count}} 件追加されました',
+  'git.history.diff.nodesRemoved_one': 'ノードが 1 件削除されました',
+  'git.history.diff.nodesRemoved_other': 'ノードが {{count}} 件削除されました',
+  'git.history.diff.nodesModified_one': 'ノードが 1 件変更されました',
+  'git.history.diff.nodesModified_other': 'ノードが {{count}} 件変更されました',
   'git.history.promoteButton': 'マイルストーンに昇格',
   'git.history.promoteSuccessToast': 'マイルストーンに昇格しました',
   'git.history.loadMore': 'さらに読み込む',

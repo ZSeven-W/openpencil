@@ -81,12 +81,41 @@ const fr: TranslationKeys = {
   'git.conflict.nonOp.unresolvedHeading_other': '{{count}} fichiers nécessitent une action',
   'git.conflict.nonOp.continue': 'Continuer la fusion',
   'git.conflict.nonOp.abort': 'Annuler la fusion',
-  // Phase 7b: unified banner keys
+  // ── Conflit Git — bannière (Phase 7b) ──
   'git.conflict.banner.progress': 'Résolu {{resolved}} / {{total}}',
   'git.conflict.banner.apply': 'Appliquer la fusion',
   'git.conflict.banner.continue': 'Continuer',
   'git.conflict.banner.finalizeError': "Impossible d'appliquer : {{message}}",
   'git.conflict.banner.pollError': "Sondage d'état suspendu en raison d'une erreur : {{message}}",
+
+  // ── Conflit Git — liste (Phase 7c) ──
+  'git.conflict.list.heading': 'Tous les conflits',
+  'git.conflict.list.progress': '{{resolved}} / {{total}} résolus',
+  'git.conflict.list.allResolved': 'Tout résolu',
+  'git.conflict.list.allOurs': 'Tout prendre le mien',
+  'git.conflict.list.allTheirs': 'Tout prendre le leur',
+
+  // ── Conflit Git — élément (Phase 7c) ──
+  'git.conflict.item.nodeConflict': 'Conflit de nœud',
+  'git.conflict.item.fieldConflict': 'Conflit de champ',
+  'git.conflict.item.resolved': 'Résolu',
+
+  // ── Conflit Git — carte (Phase 7c) ──
+  'git.conflict.card.ours': 'Le mien',
+  'git.conflict.card.theirs': 'Le leur',
+  'git.conflict.card.base': 'Base',
+  'git.conflict.card.keepMine': 'Garder le mien',
+  'git.conflict.card.keepTheirs': 'Garder le leur',
+  'git.conflict.card.oursThumbnailAlt': 'Ma version',
+  'git.conflict.card.theirsThumbnailAlt': 'Leur version',
+
+  // ── Conflit Git — éditeur JSON (Phase 7c) ──
+  'git.conflict.editor.editManually': 'Modifier manuellement',
+  'git.conflict.editor.cancel': 'Annuler',
+  'git.conflict.editor.apply': 'Appliquer',
+  'git.conflict.editor.invalidJson': 'JSON invalide',
+  'git.conflict.editor.textareaLabel': 'Modifier la valeur JSON',
+
   'git.error.dismiss': 'Ignorer',
   'git.error.retry': 'Réessayer',
   'git.error.title': 'Une erreur est survenue',

@@ -80,12 +80,41 @@ const ko: TranslationKeys = {
   'git.conflict.nonOp.unresolvedHeading_other': '{{count}}개 파일에 조치가 필요함',
   'git.conflict.nonOp.continue': '병합 계속',
   'git.conflict.nonOp.abort': '병합 중단',
-  // Phase 7b: unified banner keys (placeholder — Phase 7c localises)
-  'git.conflict.banner.progress': 'Resolved {{resolved}} / {{total}}',
-  'git.conflict.banner.apply': 'Apply merge',
-  'git.conflict.banner.continue': 'Continue',
-  'git.conflict.banner.finalizeError': 'Could not apply: {{message}}',
-  'git.conflict.banner.pollError': 'Status polling paused due to an error: {{message}}', // placeholder — Phase 7c localises
+  // ── Git 충돌 배너 (Phase 7b) ──
+  'git.conflict.banner.progress': '{{resolved}} / {{total}} 해결됨',
+  'git.conflict.banner.apply': '병합 적용',
+  'git.conflict.banner.continue': '계속',
+  'git.conflict.banner.finalizeError': '적용 실패: {{message}}',
+  'git.conflict.banner.pollError': '오류로 인해 상태 폴링이 일시 중지됨: {{message}}',
+
+  // ── Git 충돌 목록 (Phase 7c) ──
+  'git.conflict.list.heading': '모든 충돌',
+  'git.conflict.list.progress': '{{resolved}} / {{total}} 해결됨',
+  'git.conflict.list.allResolved': '모두 해결됨',
+  'git.conflict.list.allOurs': '모두 내 것으로',
+  'git.conflict.list.allTheirs': '모두 상대 것으로',
+
+  // ── Git 충돌 항목 (Phase 7c) ──
+  'git.conflict.item.nodeConflict': '노드 충돌',
+  'git.conflict.item.fieldConflict': '필드 충돌',
+  'git.conflict.item.resolved': '해결됨',
+
+  // ── Git 충돌 카드 (Phase 7c) ──
+  'git.conflict.card.ours': '내 것',
+  'git.conflict.card.theirs': '상대 것',
+  'git.conflict.card.base': '기본',
+  'git.conflict.card.keepMine': '내 것 유지',
+  'git.conflict.card.keepTheirs': '상대 것 유지',
+  'git.conflict.card.oursThumbnailAlt': '내 버전',
+  'git.conflict.card.theirsThumbnailAlt': '상대 버전',
+
+  // ── Git 충돌 JSON 편집기 (Phase 7c) ──
+  'git.conflict.editor.editManually': '수동 편집',
+  'git.conflict.editor.cancel': '취소',
+  'git.conflict.editor.apply': '적용',
+  'git.conflict.editor.invalidJson': '유효하지 않은 JSON',
+  'git.conflict.editor.textareaLabel': 'JSON 값 편집',
+
   'git.error.dismiss': '닫기',
   'git.error.retry': '다시 시도',
   'git.error.title': '문제가 발생했습니다',
@@ -120,9 +149,8 @@ const ko: TranslationKeys = {
   'git.picker.lastCommit': '{{message}} · {{time}}',
   'git.picker.bindButton': '이 파일 추적',
   'git.picker.bindAndOpenButton': '추적하고 열기',
-  // Phase 7b: back/cancel navigation (placeholder — Phase 7c localises)
-  'git.picker.back': 'Back',
-  'git.picker.backClose': 'Cancel',
+  'git.picker.back': '뒤로',
+  'git.picker.backClose': '취소',
   'git.picker.empty.heading': '이 저장소에 .op 파일이 없습니다',
   'git.picker.empty.body': 'Git 패널은 작동하려면 최소 하나의 .op 파일이 필요합니다',
   'git.picker.empty.close': '패널 닫기',
@@ -167,19 +195,19 @@ const ko: TranslationKeys = {
   'git.history.restoreButton': '복원',
   'git.history.copyHashButton': '해시 복사',
   'git.history.copiedToast': '복사됨',
-  // Phase 7b: inline diff block (placeholder — Phase 7c localises)
-  'git.history.diff.loading': 'Loading diff…',
-  'git.history.diff.initialCommit': 'Initial commit — no parent to diff against',
-  'git.history.diff.noChanges': 'No changes detected',
-  'git.history.diff.error': 'Diff unavailable: {{message}}',
-  'git.history.diff.framesChanged_one': '1 frame changed',
-  'git.history.diff.framesChanged_other': '{{count}} frames changed',
-  'git.history.diff.nodesAdded_one': '1 node added',
-  'git.history.diff.nodesAdded_other': '{{count}} nodes added',
-  'git.history.diff.nodesRemoved_one': '1 node removed',
-  'git.history.diff.nodesRemoved_other': '{{count}} nodes removed',
-  'git.history.diff.nodesModified_one': '1 node modified',
-  'git.history.diff.nodesModified_other': '{{count}} nodes modified',
+  // ── Git 기록 diff (Phase 7b) ──
+  'git.history.diff.loading': 'diff 로딩 중…',
+  'git.history.diff.initialCommit': '초기 커밋 — 비교할 부모 커밋 없음',
+  'git.history.diff.noChanges': '변경 사항 없음',
+  'git.history.diff.error': 'diff 사용 불가: {{message}}',
+  'git.history.diff.framesChanged_one': '프레임 1개 변경됨',
+  'git.history.diff.framesChanged_other': '프레임 {{count}}개 변경됨',
+  'git.history.diff.nodesAdded_one': '노드 1개 추가됨',
+  'git.history.diff.nodesAdded_other': '노드 {{count}}개 추가됨',
+  'git.history.diff.nodesRemoved_one': '노드 1개 삭제됨',
+  'git.history.diff.nodesRemoved_other': '노드 {{count}}개 삭제됨',
+  'git.history.diff.nodesModified_one': '노드 1개 수정됨',
+  'git.history.diff.nodesModified_other': '노드 {{count}}개 수정됨',
   'git.history.promoteButton': '마일스톤으로 승격',
   'git.history.promoteSuccessToast': '마일스톤으로 승격됨',
   'git.history.loadMore': '더 로드',

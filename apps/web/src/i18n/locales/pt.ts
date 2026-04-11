@@ -80,12 +80,41 @@ const pt: TranslationKeys = {
   'git.conflict.nonOp.unresolvedHeading_other': '{{count}} arquivos precisam de atenção',
   'git.conflict.nonOp.continue': 'Continuar mesclagem',
   'git.conflict.nonOp.abort': 'Cancelar mesclagem',
-  // Phase 7b: unified banner keys (placeholder — Phase 7c localises)
-  'git.conflict.banner.progress': 'Resolved {{resolved}} / {{total}}',
-  'git.conflict.banner.apply': 'Apply merge',
-  'git.conflict.banner.continue': 'Continue',
-  'git.conflict.banner.finalizeError': 'Could not apply: {{message}}',
-  'git.conflict.banner.pollError': 'Status polling paused due to an error: {{message}}', // placeholder — Phase 7c localises
+  // ── Conflito Git — banner (Phase 7b) ──
+  'git.conflict.banner.progress': '{{resolved}} / {{total}} resolvidos',
+  'git.conflict.banner.apply': 'Aplicar mesclagem',
+  'git.conflict.banner.continue': 'Continuar',
+  'git.conflict.banner.finalizeError': 'Não foi possível aplicar: {{message}}',
+  'git.conflict.banner.pollError': 'Sondagem de status pausada devido a um erro: {{message}}',
+
+  // ── Conflito Git — lista (Phase 7c) ──
+  'git.conflict.list.heading': 'Todos os conflitos',
+  'git.conflict.list.progress': '{{resolved}} / {{total}} resolvidos',
+  'git.conflict.list.allResolved': 'Tudo resolvido',
+  'git.conflict.list.allOurs': 'Tudo o meu',
+  'git.conflict.list.allTheirs': 'Tudo o deles',
+
+  // ── Conflito Git — item (Phase 7c) ──
+  'git.conflict.item.nodeConflict': 'Conflito de nó',
+  'git.conflict.item.fieldConflict': 'Conflito de campo',
+  'git.conflict.item.resolved': 'Resolvido',
+
+  // ── Conflito Git — cartão (Phase 7c) ──
+  'git.conflict.card.ours': 'O meu',
+  'git.conflict.card.theirs': 'O deles',
+  'git.conflict.card.base': 'Base',
+  'git.conflict.card.keepMine': 'Manter o meu',
+  'git.conflict.card.keepTheirs': 'Manter o deles',
+  'git.conflict.card.oursThumbnailAlt': 'Minha versão',
+  'git.conflict.card.theirsThumbnailAlt': 'Versão deles',
+
+  // ── Conflito Git — editor JSON (Phase 7c) ──
+  'git.conflict.editor.editManually': 'Editar manualmente',
+  'git.conflict.editor.cancel': 'Cancelar',
+  'git.conflict.editor.apply': 'Aplicar',
+  'git.conflict.editor.invalidJson': 'JSON inválido',
+  'git.conflict.editor.textareaLabel': 'Editar valor JSON',
+
   'git.error.dismiss': 'Descartar',
   'git.error.retry': 'Tentar novamente',
   'git.error.title': 'Algo deu errado',
@@ -120,9 +149,8 @@ const pt: TranslationKeys = {
   'git.picker.lastCommit': '{{message}} · {{time}}',
   'git.picker.bindButton': 'Rastrear este arquivo',
   'git.picker.bindAndOpenButton': 'Rastrear e abrir',
-  // Phase 7b: back/cancel navigation (placeholder — Phase 7c localises)
-  'git.picker.back': 'Back',
-  'git.picker.backClose': 'Cancel',
+  'git.picker.back': 'Voltar',
+  'git.picker.backClose': 'Cancelar',
   'git.picker.empty.heading': 'Nenhum arquivo .op neste repositório',
   'git.picker.empty.body': 'O painel Git precisa de pelo menos um arquivo .op para funcionar.',
   'git.picker.empty.close': 'Fechar painel',
@@ -167,19 +195,19 @@ const pt: TranslationKeys = {
   'git.history.restoreButton': 'Restaurar',
   'git.history.copyHashButton': 'Copiar hash',
   'git.history.copiedToast': 'Copiado',
-  // Phase 7b: inline diff block (placeholder — Phase 7c localises)
-  'git.history.diff.loading': 'Loading diff…',
-  'git.history.diff.initialCommit': 'Initial commit — no parent to diff against',
-  'git.history.diff.noChanges': 'No changes detected',
-  'git.history.diff.error': 'Diff unavailable: {{message}}',
-  'git.history.diff.framesChanged_one': '1 frame changed',
-  'git.history.diff.framesChanged_other': '{{count}} frames changed',
-  'git.history.diff.nodesAdded_one': '1 node added',
-  'git.history.diff.nodesAdded_other': '{{count}} nodes added',
-  'git.history.diff.nodesRemoved_one': '1 node removed',
-  'git.history.diff.nodesRemoved_other': '{{count}} nodes removed',
-  'git.history.diff.nodesModified_one': '1 node modified',
-  'git.history.diff.nodesModified_other': '{{count}} nodes modified',
+  // ── Git Diff de histórico (Phase 7b) ──
+  'git.history.diff.loading': 'Carregando diff…',
+  'git.history.diff.initialCommit': 'Commit inicial — sem pai para comparar',
+  'git.history.diff.noChanges': 'Nenhuma alteração detectada',
+  'git.history.diff.error': 'Diff indisponível: {{message}}',
+  'git.history.diff.framesChanged_one': '1 quadro alterado',
+  'git.history.diff.framesChanged_other': '{{count}} quadros alterados',
+  'git.history.diff.nodesAdded_one': '1 nó adicionado',
+  'git.history.diff.nodesAdded_other': '{{count}} nós adicionados',
+  'git.history.diff.nodesRemoved_one': '1 nó removido',
+  'git.history.diff.nodesRemoved_other': '{{count}} nós removidos',
+  'git.history.diff.nodesModified_one': '1 nó modificado',
+  'git.history.diff.nodesModified_other': '{{count}} nós modificados',
   'git.history.promoteButton': 'Promover a marco',
   'git.history.promoteSuccessToast': 'Promovido a marco',
   'git.history.loadMore': 'Carregar mais',

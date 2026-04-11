@@ -80,12 +80,41 @@ const vi: TranslationKeys = {
   'git.conflict.nonOp.unresolvedHeading_other': '{{count}} tệp cần xử lý',
   'git.conflict.nonOp.continue': 'Tiếp tục gộp',
   'git.conflict.nonOp.abort': 'Hủy gộp',
-  // Phase 7b: unified banner keys (placeholder — Phase 7c localises)
-  'git.conflict.banner.progress': 'Resolved {{resolved}} / {{total}}',
-  'git.conflict.banner.apply': 'Apply merge',
-  'git.conflict.banner.continue': 'Continue',
-  'git.conflict.banner.finalizeError': 'Could not apply: {{message}}',
-  'git.conflict.banner.pollError': 'Status polling paused due to an error: {{message}}', // placeholder — Phase 7c localises
+  // ── Git xung đột — banner (Phase 7b) ──
+  'git.conflict.banner.progress': '{{resolved}} / {{total}} đã giải quyết',
+  'git.conflict.banner.apply': 'Áp dụng gộp',
+  'git.conflict.banner.continue': 'Tiếp tục',
+  'git.conflict.banner.finalizeError': 'Không thể áp dụng: {{message}}',
+  'git.conflict.banner.pollError': 'Kiểm tra trạng thái tạm dừng do lỗi: {{message}}',
+
+  // ── Git xung đột — danh sách (Phase 7c) ──
+  'git.conflict.list.heading': 'Tất cả xung đột',
+  'git.conflict.list.progress': '{{resolved}} / {{total}} đã giải quyết',
+  'git.conflict.list.allResolved': 'Đã giải quyết tất cả',
+  'git.conflict.list.allOurs': 'Tất cả của tôi',
+  'git.conflict.list.allTheirs': 'Tất cả của họ',
+
+  // ── Git xung đột — mục (Phase 7c) ──
+  'git.conflict.item.nodeConflict': 'Xung đột node',
+  'git.conflict.item.fieldConflict': 'Xung đột trường',
+  'git.conflict.item.resolved': 'Đã giải quyết',
+
+  // ── Git xung đột — thẻ (Phase 7c) ──
+  'git.conflict.card.ours': 'Của tôi',
+  'git.conflict.card.theirs': 'Của họ',
+  'git.conflict.card.base': 'Cơ sở',
+  'git.conflict.card.keepMine': 'Giữ của tôi',
+  'git.conflict.card.keepTheirs': 'Giữ của họ',
+  'git.conflict.card.oursThumbnailAlt': 'Phiên bản của tôi',
+  'git.conflict.card.theirsThumbnailAlt': 'Phiên bản của họ',
+
+  // ── Git xung đột — trình soạn thảo JSON (Phase 7c) ──
+  'git.conflict.editor.editManually': 'Chỉnh sửa thủ công',
+  'git.conflict.editor.cancel': 'Hủy',
+  'git.conflict.editor.apply': 'Áp dụng',
+  'git.conflict.editor.invalidJson': 'JSON không hợp lệ',
+  'git.conflict.editor.textareaLabel': 'Chỉnh sửa giá trị JSON',
+
   'git.error.dismiss': 'Bỏ qua',
   'git.error.retry': 'Thử lại',
   'git.error.title': 'Đã xảy ra lỗi',
@@ -120,9 +149,8 @@ const vi: TranslationKeys = {
   'git.picker.lastCommit': '{{message}} · {{time}}',
   'git.picker.bindButton': 'Theo dõi tệp này',
   'git.picker.bindAndOpenButton': 'Theo dõi và mở',
-  // Phase 7b: back/cancel navigation (placeholder — Phase 7c localises)
-  'git.picker.back': 'Back',
-  'git.picker.backClose': 'Cancel',
+  'git.picker.back': 'Quay lại',
+  'git.picker.backClose': 'Hủy',
   'git.picker.empty.heading': 'Không có tệp .op trong kho này',
   'git.picker.empty.body': 'Bảng Git cần ít nhất một tệp .op để hoạt động.',
   'git.picker.empty.close': 'Đóng bảng',
@@ -166,19 +194,19 @@ const vi: TranslationKeys = {
   'git.history.restoreButton': 'Khôi phục',
   'git.history.copyHashButton': 'Sao chép hash',
   'git.history.copiedToast': 'Đã sao chép',
-  // Phase 7b: inline diff block (placeholder — Phase 7c localises)
-  'git.history.diff.loading': 'Loading diff…',
-  'git.history.diff.initialCommit': 'Initial commit — no parent to diff against',
-  'git.history.diff.noChanges': 'No changes detected',
-  'git.history.diff.error': 'Diff unavailable: {{message}}',
-  'git.history.diff.framesChanged_one': '1 frame changed',
-  'git.history.diff.framesChanged_other': '{{count}} frames changed',
-  'git.history.diff.nodesAdded_one': '1 node added',
-  'git.history.diff.nodesAdded_other': '{{count}} nodes added',
-  'git.history.diff.nodesRemoved_one': '1 node removed',
-  'git.history.diff.nodesRemoved_other': '{{count}} nodes removed',
-  'git.history.diff.nodesModified_one': '1 node modified',
-  'git.history.diff.nodesModified_other': '{{count}} nodes modified',
+  // ── Git diff lịch sử (Phase 7b) ──
+  'git.history.diff.loading': 'Đang tải diff…',
+  'git.history.diff.initialCommit': 'Commit đầu tiên — không có cha để so sánh',
+  'git.history.diff.noChanges': 'Không phát hiện thay đổi',
+  'git.history.diff.error': 'Diff không khả dụng: {{message}}',
+  'git.history.diff.framesChanged_one': '1 khung đã thay đổi',
+  'git.history.diff.framesChanged_other': '{{count}} khung đã thay đổi',
+  'git.history.diff.nodesAdded_one': '1 nút được thêm',
+  'git.history.diff.nodesAdded_other': '{{count}} nút được thêm',
+  'git.history.diff.nodesRemoved_one': '1 nút bị xóa',
+  'git.history.diff.nodesRemoved_other': '{{count}} nút bị xóa',
+  'git.history.diff.nodesModified_one': '1 nút bị sửa đổi',
+  'git.history.diff.nodesModified_other': '{{count}} nút bị sửa đổi',
   'git.history.promoteButton': 'Nâng lên mốc',
   'git.history.promoteSuccessToast': 'Đã nâng lên mốc',
   'git.history.loadMore': 'Tải thêm',

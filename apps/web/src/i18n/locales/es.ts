@@ -80,12 +80,41 @@ const es: TranslationKeys = {
   'git.conflict.nonOp.unresolvedHeading_other': '{{count}} archivos necesitan atención',
   'git.conflict.nonOp.continue': 'Continuar fusión',
   'git.conflict.nonOp.abort': 'Cancelar fusión',
-  // Phase 7b: unified banner keys
+  // ── Conflicto Git — banner (Phase 7b) ──
   'git.conflict.banner.progress': 'Resuelto {{resolved}} / {{total}}',
   'git.conflict.banner.apply': 'Aplicar fusión',
   'git.conflict.banner.continue': 'Continuar',
   'git.conflict.banner.finalizeError': 'No se pudo aplicar: {{message}}',
   'git.conflict.banner.pollError': 'Sondeo de estado pausado por un error: {{message}}',
+
+  // ── Conflicto Git — lista (Phase 7c) ──
+  'git.conflict.list.heading': 'Todos los conflictos',
+  'git.conflict.list.progress': '{{resolved}} / {{total}} resueltos',
+  'git.conflict.list.allResolved': 'Todo resuelto',
+  'git.conflict.list.allOurs': 'Todo el mío',
+  'git.conflict.list.allTheirs': 'Todo el suyo',
+
+  // ── Conflicto Git — ítem (Phase 7c) ──
+  'git.conflict.item.nodeConflict': 'Conflicto de nodo',
+  'git.conflict.item.fieldConflict': 'Conflicto de campo',
+  'git.conflict.item.resolved': 'Resuelto',
+
+  // ── Conflicto Git — tarjeta (Phase 7c) ──
+  'git.conflict.card.ours': 'El mío',
+  'git.conflict.card.theirs': 'El suyo',
+  'git.conflict.card.base': 'Base',
+  'git.conflict.card.keepMine': 'Usar el mío',
+  'git.conflict.card.keepTheirs': 'Usar el suyo',
+  'git.conflict.card.oursThumbnailAlt': 'Mi versión',
+  'git.conflict.card.theirsThumbnailAlt': 'Su versión',
+
+  // ── Conflicto Git — editor JSON (Phase 7c) ──
+  'git.conflict.editor.editManually': 'Editar manualmente',
+  'git.conflict.editor.cancel': 'Cancelar',
+  'git.conflict.editor.apply': 'Aplicar',
+  'git.conflict.editor.invalidJson': 'JSON inválido',
+  'git.conflict.editor.textareaLabel': 'Editar valor JSON',
+
   'git.error.dismiss': 'Descartar',
   'git.error.retry': 'Reintentar',
   'git.error.title': 'Algo salió mal',

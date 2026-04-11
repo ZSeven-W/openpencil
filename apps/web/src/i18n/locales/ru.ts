@@ -80,12 +80,41 @@ const ru: TranslationKeys = {
   'git.conflict.nonOp.unresolvedHeading_other': '{{count}} файлов требуют внимания',
   'git.conflict.nonOp.continue': 'Продолжить слияние',
   'git.conflict.nonOp.abort': 'Отменить слияние',
-  // Phase 7b: unified banner keys (placeholder — Phase 7c localises)
-  'git.conflict.banner.progress': 'Resolved {{resolved}} / {{total}}',
-  'git.conflict.banner.apply': 'Apply merge',
-  'git.conflict.banner.continue': 'Continue',
-  'git.conflict.banner.finalizeError': 'Could not apply: {{message}}',
-  'git.conflict.banner.pollError': 'Status polling paused due to an error: {{message}}', // placeholder — Phase 7c localises
+  // ── Git конфликт — баннер (Phase 7b) ──
+  'git.conflict.banner.progress': '{{resolved}} / {{total}} разрешено',
+  'git.conflict.banner.apply': 'Применить слияние',
+  'git.conflict.banner.continue': 'Продолжить',
+  'git.conflict.banner.finalizeError': 'Не удалось применить: {{message}}',
+  'git.conflict.banner.pollError': 'Опрос статуса приостановлен из-за ошибки: {{message}}',
+
+  // ── Git конфликт — список (Phase 7c) ──
+  'git.conflict.list.heading': 'Все конфликты',
+  'git.conflict.list.progress': '{{resolved}} / {{total}} разрешено',
+  'git.conflict.list.allResolved': 'Всё разрешено',
+  'git.conflict.list.allOurs': 'Всё моё',
+  'git.conflict.list.allTheirs': 'Всё их',
+
+  // ── Git конфликт — элемент (Phase 7c) ──
+  'git.conflict.item.nodeConflict': 'Конфликт узла',
+  'git.conflict.item.fieldConflict': 'Конфликт поля',
+  'git.conflict.item.resolved': 'Разрешено',
+
+  // ── Git конфликт — карточка (Phase 7c) ──
+  'git.conflict.card.ours': 'Моё',
+  'git.conflict.card.theirs': 'Их',
+  'git.conflict.card.base': 'База',
+  'git.conflict.card.keepMine': 'Оставить моё',
+  'git.conflict.card.keepTheirs': 'Оставить их',
+  'git.conflict.card.oursThumbnailAlt': 'Моя версия',
+  'git.conflict.card.theirsThumbnailAlt': 'Их версия',
+
+  // ── Git конфликт — JSON редактор (Phase 7c) ──
+  'git.conflict.editor.editManually': 'Редактировать вручную',
+  'git.conflict.editor.cancel': 'Отмена',
+  'git.conflict.editor.apply': 'Применить',
+  'git.conflict.editor.invalidJson': 'Неверный JSON',
+  'git.conflict.editor.textareaLabel': 'Редактировать значение JSON',
+
   'git.error.dismiss': 'Закрыть',
   'git.error.retry': 'Повторить',
   'git.error.title': 'Что-то пошло не так',
@@ -120,9 +149,8 @@ const ru: TranslationKeys = {
   'git.picker.lastCommit': '{{message}} · {{time}}',
   'git.picker.bindButton': 'Отслеживать этот файл',
   'git.picker.bindAndOpenButton': 'Отслеживать и открыть',
-  // Phase 7b: back/cancel navigation (placeholder — Phase 7c localises)
-  'git.picker.back': 'Back',
-  'git.picker.backClose': 'Cancel',
+  'git.picker.back': 'Назад',
+  'git.picker.backClose': 'Отмена',
   'git.picker.empty.heading': 'В этом репозитории нет файлов .op',
   'git.picker.empty.body': 'Панель Git требует хотя бы один файл .op.',
   'git.picker.empty.close': 'Закрыть панель',
@@ -167,19 +195,19 @@ const ru: TranslationKeys = {
   'git.history.restoreButton': 'Восстановить',
   'git.history.copyHashButton': 'Копировать хеш',
   'git.history.copiedToast': 'Скопировано',
-  // Phase 7b: inline diff block (placeholder — Phase 7c localises)
-  'git.history.diff.loading': 'Loading diff…',
-  'git.history.diff.initialCommit': 'Initial commit — no parent to diff against',
-  'git.history.diff.noChanges': 'No changes detected',
-  'git.history.diff.error': 'Diff unavailable: {{message}}',
-  'git.history.diff.framesChanged_one': '1 frame changed',
-  'git.history.diff.framesChanged_other': '{{count}} frames changed',
-  'git.history.diff.nodesAdded_one': '1 node added',
-  'git.history.diff.nodesAdded_other': '{{count}} nodes added',
-  'git.history.diff.nodesRemoved_one': '1 node removed',
-  'git.history.diff.nodesRemoved_other': '{{count}} nodes removed',
-  'git.history.diff.nodesModified_one': '1 node modified',
-  'git.history.diff.nodesModified_other': '{{count}} nodes modified',
+  // ── Git diff истории (Phase 7b) ──
+  'git.history.diff.loading': 'Загрузка diff…',
+  'git.history.diff.initialCommit': 'Первый коммит — нет родителя для сравнения',
+  'git.history.diff.noChanges': 'Изменений не обнаружено',
+  'git.history.diff.error': 'Diff недоступен: {{message}}',
+  'git.history.diff.framesChanged_one': '1 фрейм изменён',
+  'git.history.diff.framesChanged_other': '{{count}} фреймов изменено',
+  'git.history.diff.nodesAdded_one': '1 узел добавлен',
+  'git.history.diff.nodesAdded_other': '{{count}} узлов добавлено',
+  'git.history.diff.nodesRemoved_one': '1 узел удалён',
+  'git.history.diff.nodesRemoved_other': '{{count}} узлов удалено',
+  'git.history.diff.nodesModified_one': '1 узел изменён',
+  'git.history.diff.nodesModified_other': '{{count}} узлов изменено',
   'git.history.promoteButton': 'Повысить до вехи',
   'git.history.promoteSuccessToast': 'Повышено до вехи',
   'git.history.loadMore': 'Загрузить ещё',

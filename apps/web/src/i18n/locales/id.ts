@@ -80,12 +80,41 @@ const id: TranslationKeys = {
   'git.conflict.nonOp.unresolvedHeading_other': '{{count}} file perlu perhatian',
   'git.conflict.nonOp.continue': 'Lanjutkan penggabungan',
   'git.conflict.nonOp.abort': 'Batalkan penggabungan',
-  // Phase 7b: unified banner keys (placeholder — Phase 7c localises)
-  'git.conflict.banner.progress': 'Resolved {{resolved}} / {{total}}',
-  'git.conflict.banner.apply': 'Apply merge',
-  'git.conflict.banner.continue': 'Continue',
-  'git.conflict.banner.finalizeError': 'Could not apply: {{message}}',
-  'git.conflict.banner.pollError': 'Status polling paused due to an error: {{message}}', // placeholder — Phase 7c localises
+  // ── Konflik Git — banner (Phase 7b) ──
+  'git.conflict.banner.progress': '{{resolved}} / {{total}} diselesaikan',
+  'git.conflict.banner.apply': 'Terapkan penggabungan',
+  'git.conflict.banner.continue': 'Lanjutkan',
+  'git.conflict.banner.finalizeError': 'Tidak dapat diterapkan: {{message}}',
+  'git.conflict.banner.pollError': 'Polling status dijeda karena kesalahan: {{message}}',
+
+  // ── Konflik Git — daftar (Phase 7c) ──
+  'git.conflict.list.heading': 'Semua konflik',
+  'git.conflict.list.progress': '{{resolved}} / {{total}} diselesaikan',
+  'git.conflict.list.allResolved': 'Semua selesai',
+  'git.conflict.list.allOurs': 'Semua milik saya',
+  'git.conflict.list.allTheirs': 'Semua milik mereka',
+
+  // ── Konflik Git — item (Phase 7c) ──
+  'git.conflict.item.nodeConflict': 'Konflik node',
+  'git.conflict.item.fieldConflict': 'Konflik field',
+  'git.conflict.item.resolved': 'Diselesaikan',
+
+  // ── Konflik Git — kartu (Phase 7c) ──
+  'git.conflict.card.ours': 'Milik saya',
+  'git.conflict.card.theirs': 'Milik mereka',
+  'git.conflict.card.base': 'Dasar',
+  'git.conflict.card.keepMine': 'Pertahankan milik saya',
+  'git.conflict.card.keepTheirs': 'Pertahankan milik mereka',
+  'git.conflict.card.oursThumbnailAlt': 'Versi saya',
+  'git.conflict.card.theirsThumbnailAlt': 'Versi mereka',
+
+  // ── Konflik Git — editor JSON (Phase 7c) ──
+  'git.conflict.editor.editManually': 'Edit secara manual',
+  'git.conflict.editor.cancel': 'Batal',
+  'git.conflict.editor.apply': 'Terapkan',
+  'git.conflict.editor.invalidJson': 'JSON tidak valid',
+  'git.conflict.editor.textareaLabel': 'Edit nilai JSON',
+
   'git.error.dismiss': 'Tutup',
   'git.error.retry': 'Coba lagi',
   'git.error.title': 'Terjadi kesalahan',
@@ -120,9 +149,8 @@ const id: TranslationKeys = {
   'git.picker.lastCommit': '{{message}} · {{time}}',
   'git.picker.bindButton': 'Lacak file ini',
   'git.picker.bindAndOpenButton': 'Lacak dan buka',
-  // Phase 7b: back/cancel navigation (placeholder — Phase 7c localises)
-  'git.picker.back': 'Back',
-  'git.picker.backClose': 'Cancel',
+  'git.picker.back': 'Kembali',
+  'git.picker.backClose': 'Batal',
   'git.picker.empty.heading': 'Tidak ada file .op di repositori ini',
   'git.picker.empty.body': 'Panel Git memerlukan setidaknya satu file .op untuk bekerja.',
   'git.picker.empty.close': 'Tutup panel',
@@ -167,19 +195,19 @@ const id: TranslationKeys = {
   'git.history.restoreButton': 'Pulihkan',
   'git.history.copyHashButton': 'Salin hash',
   'git.history.copiedToast': 'Tersalin',
-  // Phase 7b: inline diff block (placeholder — Phase 7c localises)
-  'git.history.diff.loading': 'Loading diff…',
-  'git.history.diff.initialCommit': 'Initial commit — no parent to diff against',
-  'git.history.diff.noChanges': 'No changes detected',
-  'git.history.diff.error': 'Diff unavailable: {{message}}',
-  'git.history.diff.framesChanged_one': '1 frame changed',
-  'git.history.diff.framesChanged_other': '{{count}} frames changed',
-  'git.history.diff.nodesAdded_one': '1 node added',
-  'git.history.diff.nodesAdded_other': '{{count}} nodes added',
-  'git.history.diff.nodesRemoved_one': '1 node removed',
-  'git.history.diff.nodesRemoved_other': '{{count}} nodes removed',
-  'git.history.diff.nodesModified_one': '1 node modified',
-  'git.history.diff.nodesModified_other': '{{count}} nodes modified',
+  // ── Git diff riwayat (Phase 7b) ──
+  'git.history.diff.loading': 'Memuat diff…',
+  'git.history.diff.initialCommit': 'Commit awal — tidak ada induk untuk dibandingkan',
+  'git.history.diff.noChanges': 'Tidak ada perubahan yang terdeteksi',
+  'git.history.diff.error': 'Diff tidak tersedia: {{message}}',
+  'git.history.diff.framesChanged_one': '1 frame berubah',
+  'git.history.diff.framesChanged_other': '{{count}} frame berubah',
+  'git.history.diff.nodesAdded_one': '1 node ditambahkan',
+  'git.history.diff.nodesAdded_other': '{{count}} node ditambahkan',
+  'git.history.diff.nodesRemoved_one': '1 node dihapus',
+  'git.history.diff.nodesRemoved_other': '{{count}} node dihapus',
+  'git.history.diff.nodesModified_one': '1 node diubah',
+  'git.history.diff.nodesModified_other': '{{count}} node diubah',
   'git.history.promoteButton': 'Promosikan ke milestone',
   'git.history.promoteSuccessToast': 'Dipromosikan ke milestone',
   'git.history.loadMore': 'Muat lebih',

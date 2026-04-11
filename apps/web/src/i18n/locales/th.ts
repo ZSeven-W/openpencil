@@ -80,12 +80,41 @@ const th: TranslationKeys = {
   'git.conflict.nonOp.unresolvedHeading_other': 'ต้องการการแก้ไข {{count}} ไฟล์',
   'git.conflict.nonOp.continue': 'ดำเนินการรวมต่อ',
   'git.conflict.nonOp.abort': 'ยกเลิกการรวม',
-  // Phase 7b: unified banner keys (placeholder — Phase 7c localises)
-  'git.conflict.banner.progress': 'Resolved {{resolved}} / {{total}}',
-  'git.conflict.banner.apply': 'Apply merge',
-  'git.conflict.banner.continue': 'Continue',
-  'git.conflict.banner.finalizeError': 'Could not apply: {{message}}',
-  'git.conflict.banner.pollError': 'Status polling paused due to an error: {{message}}', // placeholder — Phase 7c localises
+  // ── Git ความขัดแย้ง — แบนเนอร์ (Phase 7b) ──
+  'git.conflict.banner.progress': 'แก้ไขแล้ว {{resolved}} / {{total}}',
+  'git.conflict.banner.apply': 'ใช้การรวม',
+  'git.conflict.banner.continue': 'ดำเนินการต่อ',
+  'git.conflict.banner.finalizeError': 'ไม่สามารถใช้ได้: {{message}}',
+  'git.conflict.banner.pollError': 'การตรวจสอบสถานะหยุดชั่วคราวเนื่องจากข้อผิดพลาด: {{message}}',
+
+  // ── Git ความขัดแย้ง — รายการ (Phase 7c) ──
+  'git.conflict.list.heading': 'ความขัดแย้งทั้งหมด',
+  'git.conflict.list.progress': '{{resolved}} / {{total}} แก้ไขแล้ว',
+  'git.conflict.list.allResolved': 'แก้ไขทั้งหมดแล้ว',
+  'git.conflict.list.allOurs': 'ใช้ของฉันทั้งหมด',
+  'git.conflict.list.allTheirs': 'ใช้ของพวกเขาทั้งหมด',
+
+  // ── Git ความขัดแย้ง — รายการ (Phase 7c) ──
+  'git.conflict.item.nodeConflict': 'ความขัดแย้งของ node',
+  'git.conflict.item.fieldConflict': 'ความขัดแย้งของ field',
+  'git.conflict.item.resolved': 'แก้ไขแล้ว',
+
+  // ── Git ความขัดแย้ง — การ์ด (Phase 7c) ──
+  'git.conflict.card.ours': 'ของฉัน',
+  'git.conflict.card.theirs': 'ของพวกเขา',
+  'git.conflict.card.base': 'ฐาน',
+  'git.conflict.card.keepMine': 'เก็บของฉัน',
+  'git.conflict.card.keepTheirs': 'เก็บของพวกเขา',
+  'git.conflict.card.oursThumbnailAlt': 'เวอร์ชันของฉัน',
+  'git.conflict.card.theirsThumbnailAlt': 'เวอร์ชันของพวกเขา',
+
+  // ── Git ความขัดแย้ง — ตัวแก้ไข JSON (Phase 7c) ──
+  'git.conflict.editor.editManually': 'แก้ไขด้วยตนเอง',
+  'git.conflict.editor.cancel': 'ยกเลิก',
+  'git.conflict.editor.apply': 'ใช้',
+  'git.conflict.editor.invalidJson': 'JSON ไม่ถูกต้อง',
+  'git.conflict.editor.textareaLabel': 'แก้ไขค่า JSON',
+
   'git.error.dismiss': 'ปิด',
   'git.error.retry': 'ลองอีกครั้ง',
   'git.error.title': 'เกิดข้อผิดพลาด',
@@ -120,9 +149,8 @@ const th: TranslationKeys = {
   'git.picker.lastCommit': '{{message}} · {{time}}',
   'git.picker.bindButton': 'ติดตามไฟล์นี้',
   'git.picker.bindAndOpenButton': 'ติดตามและเปิด',
-  // Phase 7b: back/cancel navigation (placeholder — Phase 7c localises)
-  'git.picker.back': 'Back',
-  'git.picker.backClose': 'Cancel',
+  'git.picker.back': 'กลับ',
+  'git.picker.backClose': 'ยกเลิก',
   'git.picker.empty.heading': 'ไม่มีไฟล์ .op ในที่เก็บนี้',
   'git.picker.empty.body': 'แผง Git ต้องการไฟล์ .op อย่างน้อยหนึ่งไฟล์',
   'git.picker.empty.close': 'ปิดแผง',
@@ -166,19 +194,19 @@ const th: TranslationKeys = {
   'git.history.restoreButton': 'คืนค่า',
   'git.history.copyHashButton': 'คัดลอก hash',
   'git.history.copiedToast': 'คัดลอกแล้ว',
-  // Phase 7b: inline diff block (placeholder — Phase 7c localises)
-  'git.history.diff.loading': 'Loading diff…',
-  'git.history.diff.initialCommit': 'Initial commit — no parent to diff against',
-  'git.history.diff.noChanges': 'No changes detected',
-  'git.history.diff.error': 'Diff unavailable: {{message}}',
-  'git.history.diff.framesChanged_one': '1 frame changed',
-  'git.history.diff.framesChanged_other': '{{count}} frames changed',
-  'git.history.diff.nodesAdded_one': '1 node added',
-  'git.history.diff.nodesAdded_other': '{{count}} nodes added',
-  'git.history.diff.nodesRemoved_one': '1 node removed',
-  'git.history.diff.nodesRemoved_other': '{{count}} nodes removed',
-  'git.history.diff.nodesModified_one': '1 node modified',
-  'git.history.diff.nodesModified_other': '{{count}} nodes modified',
+  // ── Git diff ประวัติ (Phase 7b) ──
+  'git.history.diff.loading': 'กำลังโหลด diff…',
+  'git.history.diff.initialCommit': 'commit แรก — ไม่มี parent ให้เปรียบเทียบ',
+  'git.history.diff.noChanges': 'ไม่พบการเปลี่ยนแปลง',
+  'git.history.diff.error': 'ไม่มี diff: {{message}}',
+  'git.history.diff.framesChanged_one': 'เปลี่ยน 1 เฟรม',
+  'git.history.diff.framesChanged_other': 'เปลี่ยน {{count}} เฟรม',
+  'git.history.diff.nodesAdded_one': 'เพิ่ม 1 โหนด',
+  'git.history.diff.nodesAdded_other': 'เพิ่ม {{count}} โหนด',
+  'git.history.diff.nodesRemoved_one': 'ลบ 1 โหนด',
+  'git.history.diff.nodesRemoved_other': 'ลบ {{count}} โหนด',
+  'git.history.diff.nodesModified_one': 'แก้ไข 1 โหนด',
+  'git.history.diff.nodesModified_other': 'แก้ไข {{count}} โหนด',
   'git.history.promoteButton': 'เลื่อนเป็น milestone',
   'git.history.promoteSuccessToast': 'เลื่อนเป็น milestone แล้ว',
   'git.history.loadMore': 'โหลดเพิ่ม',

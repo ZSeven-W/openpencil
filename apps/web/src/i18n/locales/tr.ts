@@ -80,12 +80,41 @@ const tr: TranslationKeys = {
   'git.conflict.nonOp.unresolvedHeading_other': '{{count}} dosya ilgilenmeyi bekliyor',
   'git.conflict.nonOp.continue': 'Birleştirmeye devam et',
   'git.conflict.nonOp.abort': 'Birleştirmeyi iptal et',
-  // Phase 7b: unified banner keys (placeholder — Phase 7c localises)
-  'git.conflict.banner.progress': 'Resolved {{resolved}} / {{total}}',
-  'git.conflict.banner.apply': 'Apply merge',
-  'git.conflict.banner.continue': 'Continue',
-  'git.conflict.banner.finalizeError': 'Could not apply: {{message}}',
-  'git.conflict.banner.pollError': 'Status polling paused due to an error: {{message}}', // placeholder — Phase 7c localises
+  // ── Git çakışma — banner (Phase 7b) ──
+  'git.conflict.banner.progress': '{{resolved}} / {{total}} çözüldü',
+  'git.conflict.banner.apply': 'Birleştirmeyi uygula',
+  'git.conflict.banner.continue': 'Devam et',
+  'git.conflict.banner.finalizeError': 'Uygulanamadı: {{message}}',
+  'git.conflict.banner.pollError': 'Bir hata nedeniyle durum kontrolü duraklatıldı: {{message}}',
+
+  // ── Git çakışma — liste (Phase 7c) ──
+  'git.conflict.list.heading': 'Tüm çakışmalar',
+  'git.conflict.list.progress': '{{resolved}} / {{total}} çözüldü',
+  'git.conflict.list.allResolved': 'Hepsi çözüldü',
+  'git.conflict.list.allOurs': 'Hepsi benim',
+  'git.conflict.list.allTheirs': 'Hepsi onların',
+
+  // ── Git çakışma — öğe (Phase 7c) ──
+  'git.conflict.item.nodeConflict': 'Düğüm çakışması',
+  'git.conflict.item.fieldConflict': 'Alan çakışması',
+  'git.conflict.item.resolved': 'Çözüldü',
+
+  // ── Git çakışma — kart (Phase 7c) ──
+  'git.conflict.card.ours': 'Benimki',
+  'git.conflict.card.theirs': 'Onlarınki',
+  'git.conflict.card.base': 'Temel',
+  'git.conflict.card.keepMine': 'Benimkini koru',
+  'git.conflict.card.keepTheirs': 'Onlarınkini koru',
+  'git.conflict.card.oursThumbnailAlt': 'Benim versiyonum',
+  'git.conflict.card.theirsThumbnailAlt': 'Onların versiyonu',
+
+  // ── Git çakışma — JSON düzenleyici (Phase 7c) ──
+  'git.conflict.editor.editManually': 'Manuel düzenle',
+  'git.conflict.editor.cancel': 'İptal',
+  'git.conflict.editor.apply': 'Uygula',
+  'git.conflict.editor.invalidJson': 'Geçersiz JSON',
+  'git.conflict.editor.textareaLabel': 'JSON değerini düzenle',
+
   'git.error.dismiss': 'Kapat',
   'git.error.retry': 'Tekrar dene',
   'git.error.title': 'Bir şeyler ters gitti',
@@ -120,9 +149,8 @@ const tr: TranslationKeys = {
   'git.picker.lastCommit': '{{message}} · {{time}}',
   'git.picker.bindButton': 'Bu dosyayı izle',
   'git.picker.bindAndOpenButton': 'İzle ve aç',
-  // Phase 7b: back/cancel navigation (placeholder — Phase 7c localises)
-  'git.picker.back': 'Back',
-  'git.picker.backClose': 'Cancel',
+  'git.picker.back': 'Geri',
+  'git.picker.backClose': 'İptal',
   'git.picker.empty.heading': 'Bu depoda .op dosyası yok',
   'git.picker.empty.body': 'Git paneli çalışmak için en az bir .op dosyasına ihtiyaç duyar.',
   'git.picker.empty.close': 'Paneli kapat',
@@ -167,19 +195,19 @@ const tr: TranslationKeys = {
   'git.history.restoreButton': 'Geri yükle',
   'git.history.copyHashButton': "Hash'i kopyala",
   'git.history.copiedToast': 'Kopyalandı',
-  // Phase 7b: inline diff block (placeholder — Phase 7c localises)
-  'git.history.diff.loading': 'Loading diff…',
-  'git.history.diff.initialCommit': 'Initial commit — no parent to diff against',
-  'git.history.diff.noChanges': 'No changes detected',
-  'git.history.diff.error': 'Diff unavailable: {{message}}',
-  'git.history.diff.framesChanged_one': '1 frame changed',
-  'git.history.diff.framesChanged_other': '{{count}} frames changed',
-  'git.history.diff.nodesAdded_one': '1 node added',
-  'git.history.diff.nodesAdded_other': '{{count}} nodes added',
-  'git.history.diff.nodesRemoved_one': '1 node removed',
-  'git.history.diff.nodesRemoved_other': '{{count}} nodes removed',
-  'git.history.diff.nodesModified_one': '1 node modified',
-  'git.history.diff.nodesModified_other': '{{count}} nodes modified',
+  // ── Git geçmiş diff (Phase 7b) ──
+  'git.history.diff.loading': 'Diff yükleniyor…',
+  'git.history.diff.initialCommit': 'İlk commit — karşılaştırılacak üst yok',
+  'git.history.diff.noChanges': 'Değişiklik tespit edilmedi',
+  'git.history.diff.error': 'Diff mevcut değil: {{message}}',
+  'git.history.diff.framesChanged_one': '1 çerçeve değişti',
+  'git.history.diff.framesChanged_other': '{{count}} çerçeve değişti',
+  'git.history.diff.nodesAdded_one': '1 düğüm eklendi',
+  'git.history.diff.nodesAdded_other': '{{count}} düğüm eklendi',
+  'git.history.diff.nodesRemoved_one': '1 düğüm kaldırıldı',
+  'git.history.diff.nodesRemoved_other': '{{count}} düğüm kaldırıldı',
+  'git.history.diff.nodesModified_one': '1 düğüm değiştirildi',
+  'git.history.diff.nodesModified_other': '{{count}} düğüm değiştirildi',
   'git.history.promoteButton': 'Kilometre taşına yükselt',
   'git.history.promoteSuccessToast': 'Kilometre taşına yükseltildi',
   'git.history.loadMore': 'Daha fazla yükle',

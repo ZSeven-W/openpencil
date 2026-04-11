@@ -80,12 +80,41 @@ const hi: TranslationKeys = {
   'git.conflict.nonOp.unresolvedHeading_other': '{{count}} फ़ाइलों को ध्यान चाहिए',
   'git.conflict.nonOp.continue': 'विलय जारी रखें',
   'git.conflict.nonOp.abort': 'विलय रद्द करें',
-  // Phase 7b: unified banner keys (placeholder — Phase 7c localises)
-  'git.conflict.banner.progress': 'Resolved {{resolved}} / {{total}}',
-  'git.conflict.banner.apply': 'Apply merge',
-  'git.conflict.banner.continue': 'Continue',
-  'git.conflict.banner.finalizeError': 'Could not apply: {{message}}',
-  'git.conflict.banner.pollError': 'Status polling paused due to an error: {{message}}', // placeholder — Phase 7c localises
+  // ── Git संघर्ष — बैनर (Phase 7b) ──
+  'git.conflict.banner.progress': '{{resolved}} / {{total}} हल किए',
+  'git.conflict.banner.apply': 'मर्ज लागू करें',
+  'git.conflict.banner.continue': 'जारी रखें',
+  'git.conflict.banner.finalizeError': 'लागू नहीं हो सका: {{message}}',
+  'git.conflict.banner.pollError': 'एक त्रुटि के कारण स्थिति जाँच रुकी हुई है: {{message}}',
+
+  // ── Git संघर्ष — सूची (Phase 7c) ──
+  'git.conflict.list.heading': 'सभी संघर्ष',
+  'git.conflict.list.progress': '{{resolved}} / {{total}} हल किए',
+  'git.conflict.list.allResolved': 'सब हल हो गया',
+  'git.conflict.list.allOurs': 'सब मेरा',
+  'git.conflict.list.allTheirs': 'सब उनका',
+
+  // ── Git संघर्ष — आइटम (Phase 7c) ──
+  'git.conflict.item.nodeConflict': 'नोड संघर्ष',
+  'git.conflict.item.fieldConflict': 'फ़ील्ड संघर्ष',
+  'git.conflict.item.resolved': 'हल किया गया',
+
+  // ── Git संघर्ष — कार्ड (Phase 7c) ──
+  'git.conflict.card.ours': 'मेरा',
+  'git.conflict.card.theirs': 'उनका',
+  'git.conflict.card.base': 'आधार',
+  'git.conflict.card.keepMine': 'मेरा रखें',
+  'git.conflict.card.keepTheirs': 'उनका रखें',
+  'git.conflict.card.oursThumbnailAlt': 'मेरा संस्करण',
+  'git.conflict.card.theirsThumbnailAlt': 'उनका संस्करण',
+
+  // ── Git संघर्ष — JSON संपादक (Phase 7c) ──
+  'git.conflict.editor.editManually': 'मैन्युअल रूप से संपादित करें',
+  'git.conflict.editor.cancel': 'रद्द करें',
+  'git.conflict.editor.apply': 'लागू करें',
+  'git.conflict.editor.invalidJson': 'अमान्य JSON',
+  'git.conflict.editor.textareaLabel': 'JSON मान संपादित करें',
+
   'git.error.dismiss': 'खारिज करें',
   'git.error.retry': 'पुनः प्रयास करें',
   'git.error.title': 'कुछ गलत हो गया',
@@ -120,9 +149,8 @@ const hi: TranslationKeys = {
   'git.picker.lastCommit': '{{message}} · {{time}}',
   'git.picker.bindButton': 'इस फ़ाइल को ट्रैक करें',
   'git.picker.bindAndOpenButton': 'ट्रैक करें और खोलें',
-  // Phase 7b: back/cancel navigation (placeholder — Phase 7c localises)
-  'git.picker.back': 'Back',
-  'git.picker.backClose': 'Cancel',
+  'git.picker.back': 'वापस',
+  'git.picker.backClose': 'रद्द करें',
   'git.picker.empty.heading': 'इस रिपॉज़िटरी में कोई .op फ़ाइल नहीं',
   'git.picker.empty.body': 'Git पैनल को काम करने के लिए कम से कम एक .op फ़ाइल चाहिए।',
   'git.picker.empty.close': 'पैनल बंद करें',
@@ -166,19 +194,19 @@ const hi: TranslationKeys = {
   'git.history.restoreButton': 'पुनर्स्थापित करें',
   'git.history.copyHashButton': 'हैश कॉपी करें',
   'git.history.copiedToast': 'कॉपी किया गया',
-  // Phase 7b: inline diff block (placeholder — Phase 7c localises)
-  'git.history.diff.loading': 'Loading diff…',
-  'git.history.diff.initialCommit': 'Initial commit — no parent to diff against',
-  'git.history.diff.noChanges': 'No changes detected',
-  'git.history.diff.error': 'Diff unavailable: {{message}}',
-  'git.history.diff.framesChanged_one': '1 frame changed',
-  'git.history.diff.framesChanged_other': '{{count}} frames changed',
-  'git.history.diff.nodesAdded_one': '1 node added',
-  'git.history.diff.nodesAdded_other': '{{count}} nodes added',
-  'git.history.diff.nodesRemoved_one': '1 node removed',
-  'git.history.diff.nodesRemoved_other': '{{count}} nodes removed',
-  'git.history.diff.nodesModified_one': '1 node modified',
-  'git.history.diff.nodesModified_other': '{{count}} nodes modified',
+  // ── Git इतिहास diff (Phase 7b) ──
+  'git.history.diff.loading': 'Diff लोड हो रहा है…',
+  'git.history.diff.initialCommit': 'प्रारंभिक कमिट — तुलना के लिए कोई पैरेंट नहीं',
+  'git.history.diff.noChanges': 'कोई बदलाव नहीं मिला',
+  'git.history.diff.error': 'Diff उपलब्ध नहीं: {{message}}',
+  'git.history.diff.framesChanged_one': '1 फ्रेम बदला',
+  'git.history.diff.framesChanged_other': '{{count}} फ्रेम बदले',
+  'git.history.diff.nodesAdded_one': '1 नोड जोड़ा गया',
+  'git.history.diff.nodesAdded_other': '{{count}} नोड जोड़े गए',
+  'git.history.diff.nodesRemoved_one': '1 नोड हटाया गया',
+  'git.history.diff.nodesRemoved_other': '{{count}} नोड हटाए गए',
+  'git.history.diff.nodesModified_one': '1 नोड बदला गया',
+  'git.history.diff.nodesModified_other': '{{count}} नोड बदले गए',
   'git.history.promoteButton': 'माइलस्टोन में पदोन्नत करें',
   'git.history.promoteSuccessToast': 'माइलस्टोन में पदोन्नत किया गया',
   'git.history.loadMore': 'और लोड करें',

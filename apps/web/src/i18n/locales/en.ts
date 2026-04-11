@@ -86,6 +86,34 @@ const en = {
   'git.conflict.banner.finalizeError': 'Could not apply: {{message}}',
   'git.conflict.banner.pollError': 'Status polling paused due to an error: {{message}}',
 
+  // ── Git Conflict List (Phase 7c) ──
+  'git.conflict.list.heading': 'All conflicts',
+  'git.conflict.list.progress': '{{resolved}} / {{total}} resolved',
+  'git.conflict.list.allResolved': 'All resolved',
+  'git.conflict.list.allOurs': 'All mine',
+  'git.conflict.list.allTheirs': 'All theirs',
+
+  // ── Git Conflict Item (Phase 7c) ──
+  'git.conflict.item.nodeConflict': 'Node conflict',
+  'git.conflict.item.fieldConflict': 'Field conflict',
+  'git.conflict.item.resolved': 'Resolved',
+
+  // ── Git Conflict Card (Phase 7c) ──
+  'git.conflict.card.ours': 'Mine',
+  'git.conflict.card.theirs': 'Theirs',
+  'git.conflict.card.base': 'Base',
+  'git.conflict.card.keepMine': 'Keep mine',
+  'git.conflict.card.keepTheirs': 'Keep theirs',
+  'git.conflict.card.oursThumbnailAlt': 'Our version',
+  'git.conflict.card.theirsThumbnailAlt': 'Their version',
+
+  // ── Git Conflict JSON Editor (Phase 7c) ──
+  'git.conflict.editor.editManually': 'Edit manually',
+  'git.conflict.editor.cancel': 'Cancel',
+  'git.conflict.editor.apply': 'Apply',
+  'git.conflict.editor.invalidJson': 'Invalid JSON',
+  'git.conflict.editor.textareaLabel': 'Edit JSON value',
+
   // ── Git Tracked-File Picker Back (Phase 7b) ──
   'git.picker.back': 'Back',
   'git.picker.backClose': 'Cancel',

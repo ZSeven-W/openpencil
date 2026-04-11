@@ -80,12 +80,41 @@ const de: TranslationKeys = {
   'git.conflict.nonOp.unresolvedHeading_other': '{{count}} Dateien benötigen Aufmerksamkeit',
   'git.conflict.nonOp.continue': 'Zusammenführung fortsetzen',
   'git.conflict.nonOp.abort': 'Zusammenführung abbrechen',
-  // Phase 7b: unified banner keys
+  // ── Git Konflikt-Banner (Phase 7b) ──
   'git.conflict.banner.progress': 'Gelöst {{resolved}} / {{total}}',
   'git.conflict.banner.apply': 'Merge anwenden',
   'git.conflict.banner.continue': 'Fortfahren',
   'git.conflict.banner.finalizeError': 'Konnte nicht anwenden: {{message}}',
   'git.conflict.banner.pollError': 'Status-Polling wegen eines Fehlers pausiert: {{message}}',
+
+  // ── Git Konflikt-Liste (Phase 7c) ──
+  'git.conflict.list.heading': 'Alle Konflikte',
+  'git.conflict.list.progress': '{{resolved}} / {{total}} gelöst',
+  'git.conflict.list.allResolved': 'Alle gelöst',
+  'git.conflict.list.allOurs': 'Alles meins',
+  'git.conflict.list.allTheirs': 'Alles ihres',
+
+  // ── Git Konflikt-Element (Phase 7c) ──
+  'git.conflict.item.nodeConflict': 'Elementkonflikt',
+  'git.conflict.item.fieldConflict': 'Feldkonflikt',
+  'git.conflict.item.resolved': 'Gelöst',
+
+  // ── Git Konflikt-Karte (Phase 7c) ──
+  'git.conflict.card.ours': 'Meins',
+  'git.conflict.card.theirs': 'Ihres',
+  'git.conflict.card.base': 'Basis',
+  'git.conflict.card.keepMine': 'Meine Version behalten',
+  'git.conflict.card.keepTheirs': 'Ihre Version behalten',
+  'git.conflict.card.oursThumbnailAlt': 'Meine Version',
+  'git.conflict.card.theirsThumbnailAlt': 'Ihre Version',
+
+  // ── Git Konflikt JSON-Editor (Phase 7c) ──
+  'git.conflict.editor.editManually': 'Manuell bearbeiten',
+  'git.conflict.editor.cancel': 'Abbrechen',
+  'git.conflict.editor.apply': 'Anwenden',
+  'git.conflict.editor.invalidJson': 'Ungültiges JSON',
+  'git.conflict.editor.textareaLabel': 'JSON-Wert bearbeiten',
+
   'git.error.dismiss': 'Verwerfen',
   'git.error.retry': 'Erneut versuchen',
   'git.error.title': 'Ein Fehler ist aufgetreten',

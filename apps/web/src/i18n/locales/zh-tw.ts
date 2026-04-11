@@ -80,12 +80,41 @@ const zhTW: TranslationKeys = {
   'git.conflict.nonOp.unresolvedHeading_other': '{{count}} 個檔案需要處理',
   'git.conflict.nonOp.continue': '繼續合併',
   'git.conflict.nonOp.abort': '中止合併',
-  // Phase 7b: unified banner keys (placeholder — Phase 7c localises)
-  'git.conflict.banner.progress': 'Resolved {{resolved}} / {{total}}',
-  'git.conflict.banner.apply': 'Apply merge',
-  'git.conflict.banner.continue': 'Continue',
-  'git.conflict.banner.finalizeError': 'Could not apply: {{message}}',
-  'git.conflict.banner.pollError': 'Status polling paused due to an error: {{message}}', // placeholder — Phase 7c localises
+  // ── Git 衝突橫幅 (Phase 7b) ──
+  'git.conflict.banner.progress': '已解決 {{resolved}} / {{total}}',
+  'git.conflict.banner.apply': '套用合併',
+  'git.conflict.banner.continue': '繼續',
+  'git.conflict.banner.finalizeError': '無法套用：{{message}}',
+  'git.conflict.banner.pollError': '狀態輪詢因錯誤暫停：{{message}}',
+
+  // ── Git 衝突列表 (Phase 7c) ──
+  'git.conflict.list.heading': '所有衝突',
+  'git.conflict.list.progress': '{{resolved}} / {{total}} 已解決',
+  'git.conflict.list.allResolved': '全部解決',
+  'git.conflict.list.allOurs': '全用我的',
+  'git.conflict.list.allTheirs': '全用對方的',
+
+  // ── Git 衝突項目 (Phase 7c) ──
+  'git.conflict.item.nodeConflict': '節點衝突',
+  'git.conflict.item.fieldConflict': '欄位衝突',
+  'git.conflict.item.resolved': '已解決',
+
+  // ── Git 衝突卡片 (Phase 7c) ──
+  'git.conflict.card.ours': '我的',
+  'git.conflict.card.theirs': '對方的',
+  'git.conflict.card.base': '基底',
+  'git.conflict.card.keepMine': '保留我的',
+  'git.conflict.card.keepTheirs': '保留對方的',
+  'git.conflict.card.oursThumbnailAlt': '我的版本',
+  'git.conflict.card.theirsThumbnailAlt': '對方的版本',
+
+  // ── Git 衝突 JSON 編輯器 (Phase 7c) ──
+  'git.conflict.editor.editManually': '手動編輯',
+  'git.conflict.editor.cancel': '取消',
+  'git.conflict.editor.apply': '套用',
+  'git.conflict.editor.invalidJson': 'JSON 格式錯誤',
+  'git.conflict.editor.textareaLabel': '編輯 JSON 值',
+
   'git.error.dismiss': '關閉',
   'git.error.retry': '重試',
   'git.error.title': '發生問題',
@@ -120,9 +149,8 @@ const zhTW: TranslationKeys = {
   'git.picker.lastCommit': '{{message}} · {{time}}',
   'git.picker.bindButton': '追蹤此檔案',
   'git.picker.bindAndOpenButton': '追蹤並開啟',
-  // Phase 7b: back/cancel navigation (placeholder — Phase 7c localises)
-  'git.picker.back': 'Back',
-  'git.picker.backClose': 'Cancel',
+  'git.picker.back': '返回',
+  'git.picker.backClose': '取消',
   'git.picker.empty.heading': '這個儲存庫裡沒有 .op 檔案',
   'git.picker.empty.body': 'Git 面板需要至少一個 .op 檔案才能運作',
   'git.picker.empty.close': '關閉面板',
@@ -166,19 +194,19 @@ const zhTW: TranslationKeys = {
   'git.history.restoreButton': '還原',
   'git.history.copyHashButton': '複製雜湊',
   'git.history.copiedToast': '已複製',
-  // Phase 7b: inline diff block (placeholder — Phase 7c localises)
-  'git.history.diff.loading': 'Loading diff…',
-  'git.history.diff.initialCommit': 'Initial commit — no parent to diff against',
-  'git.history.diff.noChanges': 'No changes detected',
-  'git.history.diff.error': 'Diff unavailable: {{message}}',
-  'git.history.diff.framesChanged_one': '1 frame changed',
-  'git.history.diff.framesChanged_other': '{{count}} frames changed',
-  'git.history.diff.nodesAdded_one': '1 node added',
-  'git.history.diff.nodesAdded_other': '{{count}} nodes added',
-  'git.history.diff.nodesRemoved_one': '1 node removed',
-  'git.history.diff.nodesRemoved_other': '{{count}} nodes removed',
-  'git.history.diff.nodesModified_one': '1 node modified',
-  'git.history.diff.nodesModified_other': '{{count}} nodes modified',
+  // ── Git 歷史差異 (Phase 7b) ──
+  'git.history.diff.loading': '載入差異中…',
+  'git.history.diff.initialCommit': '初始提交 — 沒有父提交可對比',
+  'git.history.diff.noChanges': '未偵測到變更',
+  'git.history.diff.error': '差異不可用：{{message}}',
+  'git.history.diff.framesChanged_one': '1 個畫框已變更',
+  'git.history.diff.framesChanged_other': '{{count}} 個畫框已變更',
+  'git.history.diff.nodesAdded_one': '新增 1 個節點',
+  'git.history.diff.nodesAdded_other': '新增 {{count}} 個節點',
+  'git.history.diff.nodesRemoved_one': '刪除 1 個節點',
+  'git.history.diff.nodesRemoved_other': '刪除 {{count}} 個節點',
+  'git.history.diff.nodesModified_one': '修改 1 個節點',
+  'git.history.diff.nodesModified_other': '修改 {{count}} 個節點',
   'git.history.promoteButton': '提升為里程碑',
   'git.history.promoteSuccessToast': '已提升為里程碑',
   'git.history.loadMore': '載入更多',
