@@ -2,7 +2,11 @@
 # ── Stage 1: Build web app ──
 FROM oven/bun:1 AS builder
 
-# Install Zig (required to build agent-native NAPI addon during postinstall)
+# Install Zig. agent-native postinstall prefers downloading a prebuilt .node
+# matching the submodule commit from the ZSeven-W/agent release, but falls
+# back to `zig build napi` when no matching asset exists (e.g. building for
+# an arch we don't publish yet). Pin 0.15.2 because the Zig source uses the
+# unmanaged ArrayList / std.process.getEnvVarOwned shape introduced in 0.15.
 RUN apt-get update && apt-get install -y --no-install-recommends curl xz-utils ca-certificates \
     && ARCH="$(uname -m)" \
     && case "$ARCH" in \
@@ -10,9 +14,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends curl xz-utils c
         aarch64) ZIG_ARCH=aarch64 ;; \
         *) echo "Unsupported arch: $ARCH" && exit 1 ;; \
        esac \
-    && curl -fsSL "https://ziglang.org/download/0.14.0/zig-linux-${ZIG_ARCH}-0.14.0.tar.xz" \
+    && curl -fsSL "https://ziglang.org/download/0.15.2/zig-${ZIG_ARCH}-linux-0.15.2.tar.xz" \
        | tar -xJ -C /usr/local \
-    && ln -sf "/usr/local/zig-linux-${ZIG_ARCH}-0.14.0/zig" /usr/local/bin/zig \
+    && ln -sf "/usr/local/zig-${ZIG_ARCH}-linux-0.15.2/zig" /usr/local/bin/zig \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
