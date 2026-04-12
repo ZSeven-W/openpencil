@@ -1,6 +1,6 @@
 {
   "name": "@zseven-w/pen-renderer",
-  "version": "0.7.0",
+  "version": "0.7.1",
   "description": "Standalone CanvasKit/Skia renderer for OpenPencil (.op) design files",
   "files": [
     "src"

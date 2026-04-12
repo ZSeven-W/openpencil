@@ -1,6 +1,6 @@
 {
   "name": "@zseven-w/pen-types",
-  "version": "0.7.0",
+  "version": "0.7.1",
   "description": "Type definitions for OpenPencil document model",
   "files": [
     "src"

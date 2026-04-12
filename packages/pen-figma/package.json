@@ -1,6 +1,6 @@
 {
   "name": "@zseven-w/pen-figma",
-  "version": "0.7.0",
+  "version": "0.7.1",
   "description": "Figma .fig file parser and converter for OpenPencil",
   "files": [
     "src"

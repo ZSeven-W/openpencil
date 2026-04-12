@@ -261,10 +261,16 @@ async function pushLiveDocument(doc: PenDocument): Promise<void> {
   const syncUrl = cachedUrl ?? (await getSyncUrl());
   if (!syncUrl) return;
   try {
+    const body = JSON.stringify({ document: doc });
+    const bodyBytes = new TextEncoder().encode(body).byteLength;
     await fetch(`${syncUrl}/api/mcp/document`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ document: doc }),
+      headers: {
+        'Content-Type': 'application/json',
+        'x-openpencil-client-id': 'mcp-server:live-canvas',
+        'x-openpencil-body-bytes': String(bodyBytes),
+      },
+      body,
     });
   } catch {
     // Network error — Electron might have quit between check and request
