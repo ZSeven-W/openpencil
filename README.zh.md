@@ -246,6 +246,32 @@ cat design.dsl | op design - # 从 stdin 管道输入
 - 多主题支持 — 多个主题轴，每个轴有多个变体（浅色/深色、紧凑/舒适）
 - 组件系统 — 可复用组件，支持实例和覆盖
 - CSS 同步 — 自动生成自定义属性，代码输出中使用 `var(--name)`
+- 可复用 UIKit — 从 `.pen` 文件导入/导出组件套件
+
+**AI 与智能体**
+
+- 提示词转画布，支持流式生成与编排器驱动的空间分解
+- 并发 Agent 团队 — 多个设计师并行处理不同区块，每位成员带画布指示器
+- 分层工作流 — `design_skeleton` → `design_content` → `design_refine`，每个阶段使用聚焦的提示词
+- 风格指南 — 50+ 内置风格（glassmorphism、brutalist、retro 等），支持基于标签的模糊匹配，并接入规划与生成流程
+- 多模型能力配置 — 按模型层级自动适配思考模式、推理强度与提示词形态
+- 内置智能体运行时（`agent-native`，Zig NAPI）+ Anthropic、Claude Agent SDK、OpenCode、Codex、Copilot、Gemini 提供商
+- 国产大模型 Anthropic 格式透传 — Kimi、Zhipu、GLM、DouBao、Ark、Bailian/DashScope、ModelScope、Coding Plans
+
+**Git 集成**
+
+- 克隆向导，支持 SSH / HTTPS 认证与 SSH 密钥管理
+- 分支选择器 — 创建、切换、删除、合并，全部在 Git 面板中完成
+- 拉取 / 推送级联，支持认证重试与非快进推送处理
+- 文件夹模式三路合并，在磁盘上跟踪 `MERGE_HEAD` 状态
+- 冲突面板 — 提供逐节点 / 逐字段三路卡片、内联 JSON 编辑器、批量操作与内联 diff 块
+- 远程设置与 SSH 密钥界面；整个 Git 功能覆盖 15 种语言的 i18n
+
+**导出**
+
+- 画布导出 — PNG、JPEG、WEBP、PDF（`Cmd+Shift+P`）
+- 代码导出 — React + Tailwind、HTML + CSS、Vue、Svelte、Flutter、SwiftUI、Jetpack Compose、React Native
+- 增量 MCP 代码生成流水线 — `codegen_plan`、`codegen_submit_chunk`、`codegen_assemble`、`codegen_clean`
 
 **Figma 导入**
 
@@ -256,7 +282,8 @@ cat design.dsl | op design - # 从 stdin 管道输入
 - 通过 Electron 支持原生 macOS、Windows 和 Linux
 - `.op` 文件关联 — 双击即可打开，单实例锁定
 - 从 GitHub Releases 自动更新
-- 原生应用菜单和文件对话框
+- 原生应用菜单，支持另存为、打开最近使用，以及关闭时的未保存更改对话框
+- 最近使用文件持久化
 
 ## 技术栈
 
@@ -311,21 +338,21 @@ openpencil/
 
 ## 键盘快捷键
 
-| 按键        | 操作         |     | 按键          | 操作                |
-| ----------- | ------------ | --- | ------------- | ------------------- |
-| `V`         | 选择         |     | `Cmd+S`       | 保存                |
-| `R`         | 矩形         |     | `Cmd+Z`       | 撤销                |
-| `O`         | 椭圆         |     | `Cmd+Shift+Z` | 重做                |
-| `L`         | 直线         |     | `Cmd+C/X/V/D` | 复制/剪切/粘贴/重复 |
-| `T`         | 文本         |     | `Cmd+G`       | 编组                |
-| `F`         | Frame        |     | `Cmd+Shift+G` | 取消编组            |
-| `P`         | 钢笔工具     |     | `Cmd+Shift+E` | 导出                |
-| `H`         | 手形（平移） |     | `Cmd+Shift+C` | 代码面板            |
-| `Del`       | 删除         |     | `Cmd+Shift+V` | 变量面板            |
-| `[ / ]`     | 调整层级顺序 |     | `Cmd+J`       | AI 聊天             |
-| 方向键      | 微移 1px     |     | `Cmd+,`       | 智能体设置          |
-| `Cmd+Alt+U` | 布尔联合     |     | `Cmd+Alt+S`   | 布尔减去            |
-| `Cmd+Alt+I` | 布尔交集     |     |               |                     |
+| 按键        | 操作         |     | 按键          | 操作                    |
+| ----------- | ------------ | --- | ------------- | ----------------------- |
+| `V`         | 选择         |     | `Cmd+S`       | 保存                    |
+| `R`         | 矩形         |     | `Cmd+Z`       | 撤销                    |
+| `O`         | 椭圆         |     | `Cmd+Shift+Z` | 重做                    |
+| `L`         | 直线         |     | `Cmd+C/X/V/D` | 复制/剪切/粘贴/重复     |
+| `T`         | 文本         |     | `Cmd+G`       | 编组                    |
+| `F`         | Frame        |     | `Cmd+Shift+G` | 取消编组                |
+| `P`         | 钢笔工具     |     | `Cmd+Shift+P` | 导出 (PNG/JPG/WEBP/PDF) |
+| `H`         | 手形（平移） |     | `Cmd+Shift+C` | 代码面板                |
+| `Del`       | 删除         |     | `Cmd+Shift+V` | 变量面板                |
+| `[ / ]`     | 调整层级顺序 |     | `Cmd+J`       | AI 聊天                 |
+| 方向键      | 微移 1px     |     | `Cmd+,`       | 智能体设置              |
+| `Cmd+Alt+U` | 布尔联合     |     | `Cmd+Alt+S`   | 布尔减去                |
+| `Cmd+Alt+I` | 布尔交集     |     | `Cmd+Shift+S` | 另存为                  |
 
 ## 脚本命令
 
@@ -366,6 +393,8 @@ bun run cli:compile        # 编译 CLI 到 dist
 - [x] CLI 工具（`op`）终端控制
 - [x] 内置 AI Agent SDK，支持多提供商
 - [x] 国际化 — 15 种语言
+- [x] Git 集成（克隆、分支、推送/拉取、文件夹模式三路合并）
+- [x] 画布栅格导出（PNG / JPEG / WEBP / PDF）
 - [ ] 协同编辑
 - [ ] 插件系统
 
@@ -380,7 +409,7 @@ bun run cli:compile        # 编译 CLI 到 dist
 OpenPencil 免费开源,开发完全由觉得它好用的人们资助 —— 感谢你让这块画布一直保持开放。
 
 <a href="https://github.com/mrqyun" title="MrQyun">
-  <img src="https://github.com/mrqyun.png" width="64" height="64" alt="MrQyun" style="border-radius: 50%" />
+  <img src="https://wsrv.nl/?url=github.com/mrqyun.png&w=128&h=128&mask=circle&maxage=7d" width="64" height="64" alt="MrQyun" />
 </a>
 
 感谢 **[MrQyun](https://github.com/mrqyun)** —— 想把自己的名字也放在这里?**[成为赞助者 →](https://github.com/sponsors/ZSeven-W)**

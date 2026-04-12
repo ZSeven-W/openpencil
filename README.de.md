@@ -246,6 +246,32 @@ Unterstützt drei Eingabemethoden: Inline-String, `@filepath` (aus Datei lesen) 
 - Multi-Theme-Unterstützung — mehrere Achsen, jeweils mit Varianten (Hell/Dunkel, Kompakt/Komfortabel)
 - Komponentensystem — wiederverwendbare Komponenten mit Instanzen und Überschreibungen
 - CSS-Synchronisierung — automatisch generierte benutzerdefinierte Eigenschaften, `var(--name)` in der Code-Ausgabe
+- Wiederverwendbare UIKits — Import/Export von Komponenten-Kits aus `.pen`-Dateien
+
+**KI & Agenten**
+
+- Prompt-zu-Canvas mit Streaming-Generierung und orchestrator-gesteuerter räumlicher Zerlegung
+- Parallele Agententeams — mehrere Designer arbeiten parallel an verschiedenen Abschnitten, mit Canvas-Indikatoren pro Mitglied
+- Mehrstufiger Workflow — `design_skeleton` → `design_content` → `design_refine` mit fokussierten Prompts pro Phase
+- Style Guides — 50+ eingebaute Stile (glassmorphism, brutalist, retro usw.) mit tag-basiertem Fuzzy-Matching, eingebunden in Planung und Generierung
+- Multi-Modell-Fähigkeitsprofile — passt Denkmodus, Aufwand und Promptform automatisch an die Modellstufe an
+- Integrierte Agent-Laufzeit (`agent-native`, Zig NAPI) + Anthropic, Claude Agent SDK, OpenCode, Codex, Copilot, Gemini-Anbieter
+- Anthropic-Format-Passthrough für chinesische LLM-Anbieter — Kimi, Zhipu, GLM, DouBao, Ark, Bailian/DashScope, ModelScope, Coding Plans
+
+**Git-Integration**
+
+- Clone-Assistent mit SSH-/HTTPS-Authentifizierung und SSH-Schlüsselverwaltung
+- Branch-Auswahl — Erstellen, Wechseln, Löschen, Mergen, alles im Git-Panel
+- Pull-/Push-Kaskaden mit Auth-Wiederholung und Non-Fast-Forward-Handhabung
+- Ordnermodus-Dreiwege-Merge mit Disk-basierter `MERGE_HEAD`-Statusverfolgung
+- Konfliktpanel mit Dreiwege-Karten pro Knoten/Feld, Inline-JSON-Editor, Bulk-Aktionen und Inline-Diff-Block
+- Remote-Einstellungen und SSH-Schlüssel-UI; 15-Sprachen-i18n für die gesamte Git-Oberfläche
+
+**Export**
+
+- Canvas-Export — PNG, JPEG, WEBP, PDF (`Cmd+Shift+P`)
+- Code-Export — React + Tailwind, HTML + CSS, Vue, Svelte, Flutter, SwiftUI, Jetpack Compose, React Native
+- Inkrementelle MCP-Codegen-Pipeline — `codegen_plan`, `codegen_submit_chunk`, `codegen_assemble`, `codegen_clean`
 
 **Figma-Import**
 
@@ -256,7 +282,8 @@ Unterstützt drei Eingabemethoden: Inline-String, `@filepath` (aus Datei lesen) 
 - Natives macOS, Windows und Linux über Electron
 - `.op`-Dateizuordnung — Doppelklick zum Öffnen, Einzelinstanzsperre
 - Automatische Aktualisierung über GitHub Releases
-- Natives Anwendungsmenü und Dateidialoge
+- Natives Anwendungsmenü mit „Speichern unter“, „Zuletzt verwendete öffnen“ und einem Dialog zu ungespeicherten Änderungen beim Schließen
+- Persistenz der zuletzt verwendeten Dateien
 
 ## Technologie-Stack
 
@@ -319,13 +346,13 @@ openpencil/
 | `L`         | Linie                  |     | `Cmd+C/X/V/D` | Kopieren/Ausschneiden/Einfügen/Duplizieren |
 | `T`         | Text                   |     | `Cmd+G`       | Gruppieren                                 |
 | `F`         | Frame                  |     | `Cmd+Shift+G` | Gruppierung aufheben                       |
-| `P`         | Stiftwerkzeug          |     | `Cmd+Shift+E` | Exportieren                                |
+| `P`         | Stiftwerkzeug          |     | `Cmd+Shift+P` | Export (PNG/JPG/WEBP/PDF)                  |
 | `H`         | Hand (Pan)             |     | `Cmd+Shift+C` | Code-Panel                                 |
 | `Del`       | Löschen                |     | `Cmd+Shift+V` | Variablen-Panel                            |
 | `[ / ]`     | Reihenfolge ändern     |     | `Cmd+J`       | KI-Chat                                    |
 | Pfeiltasten | 1px verschieben        |     | `Cmd+,`       | Agenteneinstellungen                       |
 | `Cmd+Alt+U` | Boolesche Vereinigung  |     | `Cmd+Alt+S`   | Boolesche Subtraktion                      |
-| `Cmd+Alt+I` | Boolesche Schnittmenge |     |               |                                            |
+| `Cmd+Alt+I` | Boolesche Schnittmenge |     | `Cmd+Shift+S` | Speichern unter                            |
 
 ## Skripte
 
@@ -366,6 +393,8 @@ Beiträge sind willkommen! Siehe [CLAUDE.md](./CLAUDE.md) für Architekturdetail
 - [x] CLI-Tool (`op`) für Terminal-Steuerung
 - [x] Integriertes KI-Agenten-SDK mit Multi-Anbieter-Unterstützung
 - [x] i18n — 15 Sprachen
+- [x] Git-Integration (Klonen, Branches, Push/Pull, Ordnermodus-Dreiwege-Merge)
+- [x] Canvas-Rasterexport (PNG / JPEG / WEBP / PDF)
 - [ ] Kollaboratives Bearbeiten
 - [ ] Plugin-System
 
@@ -380,7 +409,7 @@ Beiträge sind willkommen! Siehe [CLAUDE.md](./CLAUDE.md) für Architekturdetail
 OpenPencil ist kostenlos und Open Source. Die Entwicklung wird von Menschen finanziert, die es nützlich finden — danke, dass ihr die Leinwand offen haltet.
 
 <a href="https://github.com/mrqyun" title="MrQyun">
-  <img src="https://github.com/mrqyun.png" width="64" height="64" alt="MrQyun" style="border-radius: 50%" />
+  <img src="https://wsrv.nl/?url=github.com/mrqyun.png&w=128&h=128&mask=circle&maxage=7d" width="64" height="64" alt="MrQyun" />
 </a>
 
 Danke an **[MrQyun](https://github.com/mrqyun)** — soll dein Name auch hier stehen? **[Sponsor werden →](https://github.com/sponsors/ZSeven-W)**
