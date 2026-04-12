@@ -246,6 +246,32 @@ Supporte trois méthodes d'entrée : chaîne en ligne, `@filepath` (lecture depu
 - Support multi-thèmes — plusieurs axes, chacun avec des variantes (Clair/Sombre, Compact/Confortable)
 - Système de composants — composants réutilisables avec instances et substitutions
 - Synchronisation CSS — propriétés personnalisées auto-générées, `var(--name)` dans la sortie de code
+- UIKits réutilisables — import/export de kits de composants depuis des fichiers `.pen`
+
+**IA et agents**
+
+- Prompt-vers-canevas avec génération en streaming et décomposition spatiale pilotée par l'orchestrateur
+- Équipes d'agents concurrentes — plusieurs designers travaillent sur différentes sections en parallèle, avec des indicateurs sur le canevas par membre
+- Workflow en couches — `design_skeleton` → `design_content` → `design_refine` avec des prompts ciblés par phase
+- Guides de style — plus de 50 styles intégrés (glassmorphism, brutalist, retro, etc.) avec appariement flou basé sur les tags, intégrés dans la planification et la génération
+- Profils de capacités multi-modèles — adapte automatiquement le mode de réflexion, l'effort et la forme du prompt selon le niveau du modèle
+- Runtime d'agent intégré (`agent-native`, Zig NAPI) + fournisseurs Anthropic, Claude Agent SDK, OpenCode, Codex, Copilot, Gemini
+- Passthrough au format Anthropic pour les fournisseurs LLM chinois — Kimi, Zhipu, GLM, DouBao, Ark, Bailian/DashScope, ModelScope, Coding Plans
+
+**Intégration Git**
+
+- Assistant de clonage avec authentification SSH / HTTPS et gestion des clés SSH
+- Sélecteur de branches — créer, changer, supprimer, fusionner, tout depuis le panneau Git
+- Cascades pull / push avec réessai d'authentification et gestion non-fast-forward
+- Fusion à trois voies en mode dossier avec suivi d'état `MERGE_HEAD` sur disque
+- Panneau de conflits avec cartes à trois voies par nœud / champ, éditeur JSON inline, actions groupées et bloc diff inline
+- UI de paramètres distants et de clés SSH ; i18n en 15 langues sur toute la surface Git
+
+**Export**
+
+- Export du canevas — PNG, JPEG, WEBP, PDF (`Cmd+Shift+P`)
+- Export de code — React + Tailwind, HTML + CSS, Vue, Svelte, Flutter, SwiftUI, Jetpack Compose, React Native
+- Pipeline de codegen MCP incrémental — `codegen_plan`, `codegen_submit_chunk`, `codegen_assemble`, `codegen_clean`
 
 **Import Figma**
 
@@ -256,7 +282,8 @@ Supporte trois méthodes d'entrée : chaîne en ligne, `@filepath` (lecture depu
 - macOS, Windows et Linux natifs via Electron
 - Association de fichiers `.op` — double-cliquez pour ouvrir, verrouillage d'instance unique
 - Mise à jour automatique depuis GitHub Releases
-- Menu d'application natif et boîtes de dialogue de fichiers
+- Menu d'application natif avec Enregistrer sous, Ouvrir les récents et une boîte de dialogue de modifications non enregistrées à la fermeture
+- Persistance des fichiers récents
 
 ## Stack technique
 
@@ -319,13 +346,13 @@ openpencil/
 | `L`         | Ligne                  |     | `Cmd+C/X/V/D` | Copier/Couper/Coller/Dupliquer |
 | `T`         | Texte                  |     | `Cmd+G`       | Grouper                        |
 | `F`         | Frame                  |     | `Cmd+Shift+G` | Dégrouper                      |
-| `P`         | Outil plume            |     | `Cmd+Shift+E` | Exporter                       |
+| `P`         | Outil plume            |     | `Cmd+Shift+P` | Exporter (PNG/JPG/WEBP/PDF)    |
 | `H`         | Main (panoramique)     |     | `Cmd+Shift+C` | Panneau de code                |
 | `Del`       | Supprimer              |     | `Cmd+Shift+V` | Panneau des variables          |
 | `[ / ]`     | Réordonner             |     | `Cmd+J`       | Chat IA                        |
 | Flèches     | Déplacer de 1px        |     | `Cmd+,`       | Paramètres de l'agent          |
 | `Cmd+Alt+U` | Union booléenne        |     | `Cmd+Alt+S`   | Soustraction booléenne         |
-| `Cmd+Alt+I` | Intersection booléenne |     |               |                                |
+| `Cmd+Alt+I` | Intersection booléenne |     | `Cmd+Shift+S` | Enregistrer sous               |
 
 ## Scripts
 
@@ -366,6 +393,8 @@ Les contributions sont les bienvenues ! Consultez [CLAUDE.md](./CLAUDE.md) pour 
 - [x] Outil CLI (`op`) pour le contrôle depuis le terminal
 - [x] SDK agent AI intégré avec support multi-fournisseurs
 - [x] i18n — 15 langues
+- [x] Intégration Git (clone, branche, push/pull, fusion à trois voies en mode dossier)
+- [x] Export raster du canevas (PNG / JPEG / WEBP / PDF)
 - [ ] Édition collaborative
 - [ ] Système de plugins
 
@@ -380,7 +409,7 @@ Les contributions sont les bienvenues ! Consultez [CLAUDE.md](./CLAUDE.md) pour 
 OpenPencil est gratuit et open source. Le développement est financé par celles et ceux qui le trouvent utile — merci de garder le canevas ouvert.
 
 <a href="https://github.com/mrqyun" title="MrQyun">
-  <img src="https://github.com/mrqyun.png" width="64" height="64" alt="MrQyun" style="border-radius: 50%" />
+  <img src="https://wsrv.nl/?url=github.com/mrqyun.png&w=128&h=128&mask=circle&maxage=7d" width="64" height="64" alt="MrQyun" />
 </a>
 
 Merci à **[MrQyun](https://github.com/mrqyun)** — vous voulez voir votre nom ici ? **[Devenir sponsor →](https://github.com/sponsors/ZSeven-W)**
