@@ -246,6 +246,32 @@ cat design.dsl | op design - # Pipe จาก stdin
 - รองรับหลาย theme — หลาย axis แต่ละ axis มี variants (Light/Dark, Compact/Comfortable)
 - ระบบ Component — component ที่นำกลับมาใช้ใหม่ได้พร้อม instance และ override
 - CSS sync — สร้าง custom properties อัตโนมัติ, `var(--name)` ในผลลัพธ์โค้ด
+- UIKits ที่นำกลับมาใช้ใหม่ได้ — นำเข้า/ส่งออกชุด component จากไฟล์ `.pen`
+
+**AI และ Agents**
+
+- Prompt-to-canvas พร้อมการสร้างแบบ streaming และการแตกย่อยเชิงพื้นที่ที่ขับเคลื่อนโดย orchestrator
+- Concurrent Agent Teams — นักออกแบบหลายคนทำงานกับส่วนต่าง ๆ พร้อมกัน พร้อมตัวบ่งชี้บน canvas สำหรับแต่ละสมาชิก
+- Layered workflow — `design_skeleton` → `design_content` → `design_refine` พร้อม prompt ที่เน้นเฉพาะในแต่ละเฟส
+- Style Guides — สไตล์ในตัวกว่า 50 แบบ (glassmorphism, brutalist, retro ฯลฯ) พร้อม fuzzy matching ตาม tag ใช้ในการวางแผนและการสร้าง
+- โปรไฟล์ความสามารถหลายโมเดล — ปรับโหมดการคิด ความพยายาม และรูปแบบ prompt อัตโนมัติตามระดับโมเดล
+- Agent runtime ในตัว (`agent-native`, Zig NAPI) + ผู้ให้บริการ Anthropic, Claude Agent SDK, OpenCode, Codex, Copilot, Gemini
+- Passthrough รูปแบบ Anthropic สำหรับผู้ให้บริการ LLM จีน — Kimi, Zhipu, GLM, DouBao, Ark, Bailian/DashScope, ModelScope, Coding Plans
+
+**การเชื่อมต่อ Git**
+
+- ตัวช่วย Clone พร้อมการยืนยันตัวตน SSH / HTTPS และการจัดการ SSH key
+- ตัวเลือก branch — สร้าง สลับ ลบ merge ทั้งหมดจาก Git panel
+- Cascade สำหรับ pull / push พร้อม auth retry และการจัดการ non-fast-forward
+- Three-way merge โหมดโฟลเดอร์พร้อมการติดตามสถานะ `MERGE_HEAD` บนดิสก์
+- Conflict panel พร้อมการ์ด three-way ต่อ node / field, ตัวแก้ไข JSON inline, bulk actions และบล็อก diff inline
+- UI สำหรับตั้งค่า remote และ SSH keys; i18n 15 ภาษาครอบคลุมทั้งส่วนของ Git
+
+**การส่งออก**
+
+- ส่งออก Canvas — PNG, JPEG, WEBP, PDF (`Cmd+Shift+P`)
+- ส่งออกโค้ด — React + Tailwind, HTML + CSS, Vue, Svelte, Flutter, SwiftUI, Jetpack Compose, React Native
+- Pipeline การสร้างโค้ด MCP แบบเพิ่มทีละส่วน — `codegen_plan`, `codegen_submit_chunk`, `codegen_assemble`, `codegen_clean`
 
 **นำเข้าจาก Figma**
 
@@ -256,7 +282,8 @@ cat design.dsl | op design - # Pipe จาก stdin
 - รองรับ macOS, Windows และ Linux แบบ native ผ่าน Electron
 - เชื่อมโยงไฟล์ `.op` — ดับเบิลคลิกเพื่อเปิด, single-instance lock
 - อัปเดตอัตโนมัติจาก GitHub Releases
-- เมนูแอปพลิเคชันและ file dialog แบบ native
+- เมนูแอปพลิเคชันแบบ native พร้อม Save As, Open Recent และกล่องโต้ตอบการเปลี่ยนแปลงที่ไม่ได้บันทึกเมื่อปิด
+- การเก็บรักษาไฟล์ล่าสุด
 
 ## Tech Stack
 
@@ -311,21 +338,21 @@ openpencil/
 
 ## คีย์ลัด
 
-| คีย์        | การทำงาน    |     | คีย์          | การทำงาน             |
-| ----------- | ----------- | --- | ------------- | -------------------- |
-| `V`         | เลือก       |     | `Cmd+S`       | บันทึก               |
-| `R`         | Rectangle   |     | `Cmd+Z`       | เลิกทำ               |
-| `O`         | Ellipse     |     | `Cmd+Shift+Z` | ทำซ้ำ                |
-| `L`         | Line        |     | `Cmd+C/X/V/D` | คัดลอก/ตัด/วาง/ทำซ้ำ |
-| `T`         | Text        |     | `Cmd+G`       | จัดกลุ่ม             |
-| `F`         | Frame       |     | `Cmd+Shift+G` | ยกเลิกการจัดกลุ่ม    |
-| `P`         | Pen tool    |     | `Cmd+Shift+E` | ส่งออก               |
-| `H`         | Hand (pan)  |     | `Cmd+Shift+C` | Code panel           |
-| `Del`       | ลบ          |     | `Cmd+Shift+V` | Variables panel      |
-| `[ / ]`     | เรียงลำดับ  |     | `Cmd+J`       | AI chat              |
-| ลูกศร       | เลื่อน 1px  |     | `Cmd+,`       | Agent settings       |
-| `Cmd+Alt+U` | รวมบูลีน    |     | `Cmd+Alt+S`   | ลบบูลีน              |
-| `Cmd+Alt+I` | ตัดกันบูลีน |     |               |                      |
+| คีย์        | การทำงาน    |     | คีย์          | การทำงาน                  |
+| ----------- | ----------- | --- | ------------- | ------------------------- |
+| `V`         | เลือก       |     | `Cmd+S`       | บันทึก                    |
+| `R`         | Rectangle   |     | `Cmd+Z`       | เลิกทำ                    |
+| `O`         | Ellipse     |     | `Cmd+Shift+Z` | ทำซ้ำ                     |
+| `L`         | Line        |     | `Cmd+C/X/V/D` | คัดลอก/ตัด/วาง/ทำซ้ำ      |
+| `T`         | Text        |     | `Cmd+G`       | จัดกลุ่ม                  |
+| `F`         | Frame       |     | `Cmd+Shift+G` | ยกเลิกการจัดกลุ่ม         |
+| `P`         | Pen tool    |     | `Cmd+Shift+P` | ส่งออก (PNG/JPG/WEBP/PDF) |
+| `H`         | Hand (pan)  |     | `Cmd+Shift+C` | Code panel                |
+| `Del`       | ลบ          |     | `Cmd+Shift+V` | Variables panel           |
+| `[ / ]`     | เรียงลำดับ  |     | `Cmd+J`       | AI chat                   |
+| ลูกศร       | เลื่อน 1px  |     | `Cmd+,`       | Agent settings            |
+| `Cmd+Alt+U` | รวมบูลีน    |     | `Cmd+Alt+S`   | ลบบูลีน                   |
+| `Cmd+Alt+I` | ตัดกันบูลีน |     | `Cmd+Shift+S` | บันทึกเป็น                |
 
 ## Scripts
 
@@ -366,6 +393,8 @@ bun run cli:compile        # คอมไพล์ CLI ไปยัง dist
 - [x] เครื่องมือ CLI (`op`) ควบคุมจาก terminal
 - [x] AI Agent SDK ในตัว รองรับหลายผู้ให้บริการ
 - [x] i18n — 15 ภาษา
+- [x] การเชื่อมต่อ Git (clone, branch, push/pull, three-way merge โหมดโฟลเดอร์)
+- [x] การส่งออก Canvas แบบ raster (PNG / JPEG / WEBP / PDF)
 - [ ] การแก้ไขร่วมกัน
 - [ ] ระบบปลั๊กอิน
 
@@ -380,7 +409,7 @@ bun run cli:compile        # คอมไพล์ CLI ไปยัง dist
 OpenPencil เป็นซอฟต์แวร์ฟรีและโอเพนซอร์ส การพัฒนาได้รับการสนับสนุนจากผู้ที่เห็นว่ามันมีประโยชน์ — ขอบคุณที่ช่วยให้ผืนผ้าใบยังคงเปิดอยู่
 
 <a href="https://github.com/mrqyun" title="MrQyun">
-  <img src="https://github.com/mrqyun.png" width="64" height="64" alt="MrQyun" style="border-radius: 50%" />
+  <img src="https://wsrv.nl/?url=github.com/mrqyun.png&w=128&h=128&mask=circle&maxage=7d" width="64" height="64" alt="MrQyun" />
 </a>
 
 ขอบคุณ **[MrQyun](https://github.com/mrqyun)** — อยากเห็นชื่อของคุณตรงนี้ใช่ไหม? **[เป็นผู้สนับสนุน →](https://github.com/sponsors/ZSeven-W)**

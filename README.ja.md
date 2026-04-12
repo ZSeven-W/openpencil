@@ -246,6 +246,32 @@ cat design.dsl | op design - # stdin からパイプ入力
 - マルチテーマサポート — 複数のテーマ軸、各軸に複数バリアント（Light/Dark、Compact/Comfortable）
 - コンポーネントシステム — インスタンスとオーバーライドを持つ再利用可能なコンポーネント
 - CSS 同期 — カスタムプロパティの自動生成、コード出力に `var(--name)` を使用
+- 再利用可能な UIKit — `.pen` ファイルからコンポーネントキットをインポート/エクスポート
+
+**AI とエージェント**
+
+- ストリーミング生成とオーケストレーター駆動の空間分解によるプロンプトからキャンバスへの変換
+- 並行エージェントチーム — 複数のデザイナーが異なるセクションを並列で処理し、各メンバーにキャンバスインジケーター
+- レイヤードワークフロー — `design_skeleton` → `design_content` → `design_refine`、各フェーズごとに焦点を絞ったプロンプト
+- スタイルガイド — 50+ のビルトインスタイル（glassmorphism、brutalist、retro など）、タグベースのファジーマッチング対応、プランニングと生成に統合
+- マルチモデル能力プロファイル — モデル階層に応じてシンキングモード、エフォート、プロンプト形状を自動適応
+- ビルトインエージェントランタイム（`agent-native`、Zig NAPI）+ Anthropic、Claude Agent SDK、OpenCode、Codex、Copilot、Gemini プロバイダー
+- 中国系 LLM プロバイダー向け Anthropic フォーマットパススルー — Kimi、Zhipu、GLM、DouBao、Ark、Bailian/DashScope、ModelScope、Coding Plans
+
+**Git 統合**
+
+- SSH / HTTPS 認証と SSH キー管理を備えたクローンウィザード
+- ブランチピッカー — 作成、切り替え、削除、マージをすべて Git パネルから
+- プル / プッシュカスケード — 認証リトライとノンファストフォワード処理対応
+- フォルダーモード三方向マージ — ディスク上の `MERGE_HEAD` 状態追跡付き
+- コンフリクトパネル — ノード/フィールド単位の三方向カード、インライン JSON エディター、一括操作、インライン diff ブロック
+- リモート設定と SSH キー UI、Git サーフェス全体にわたる 15 ロケール i18n
+
+**エクスポート**
+
+- キャンバスエクスポート — PNG、JPEG、WEBP、PDF（`Cmd+Shift+P`）
+- コードエクスポート — React + Tailwind、HTML + CSS、Vue、Svelte、Flutter、SwiftUI、Jetpack Compose、React Native
+- インクリメンタル MCP コード生成パイプライン — `codegen_plan`、`codegen_submit_chunk`、`codegen_assemble`、`codegen_clean`
 
 **Figma インポート**
 
@@ -256,7 +282,8 @@ cat design.dsl | op design - # stdin からパイプ入力
 - Electron によるネイティブ macOS・Windows・Linux 対応
 - `.op` ファイル関連付け — ダブルクリックで開く、シングルインスタンスロック
 - GitHub Releases からの自動アップデート
-- ネイティブアプリケーションメニューとファイルダイアログ
+- 名前を付けて保存、最近使った項目を開く、および終了時の未保存変更ダイアログを備えたネイティブアプリケーションメニュー
+- 最近使ったファイルの永続化
 
 ## 技術スタック
 
@@ -311,21 +338,21 @@ openpencil/
 
 ## キーボードショートカット
 
-| キー        | 操作           |     | キー          | 操作                        |
-| ----------- | -------------- | --- | ------------- | --------------------------- |
-| `V`         | 選択           |     | `Cmd+S`       | 保存                        |
-| `R`         | 矩形           |     | `Cmd+Z`       | 元に戻す                    |
-| `O`         | 楕円           |     | `Cmd+Shift+Z` | やり直す                    |
-| `L`         | 直線           |     | `Cmd+C/X/V/D` | コピー/カット/ペースト/複製 |
-| `T`         | テキスト       |     | `Cmd+G`       | グループ化                  |
-| `F`         | Frame          |     | `Cmd+Shift+G` | グループ解除                |
-| `P`         | ペンツール     |     | `Cmd+Shift+E` | エクスポート                |
-| `H`         | ハンド（パン） |     | `Cmd+Shift+C` | コードパネル                |
-| `Del`       | 削除           |     | `Cmd+Shift+V` | 変数パネル                  |
-| `[ / ]`     | 重ね順の変更   |     | `Cmd+J`       | AI チャット                 |
-| 矢印キー    | 1px 微調整     |     | `Cmd+,`       | エージェント設定            |
-| `Cmd+Alt+U` | ブーリアン合体 |     | `Cmd+Alt+S`   | ブーリアン型抜き            |
-| `Cmd+Alt+I` | ブーリアン交差 |     |               |                             |
+| キー        | 操作           |     | キー          | 操作                            |
+| ----------- | -------------- | --- | ------------- | ------------------------------- |
+| `V`         | 選択           |     | `Cmd+S`       | 保存                            |
+| `R`         | 矩形           |     | `Cmd+Z`       | 元に戻す                        |
+| `O`         | 楕円           |     | `Cmd+Shift+Z` | やり直す                        |
+| `L`         | 直線           |     | `Cmd+C/X/V/D` | コピー/カット/ペースト/複製     |
+| `T`         | テキスト       |     | `Cmd+G`       | グループ化                      |
+| `F`         | Frame          |     | `Cmd+Shift+G` | グループ解除                    |
+| `P`         | ペンツール     |     | `Cmd+Shift+P` | エクスポート (PNG/JPG/WEBP/PDF) |
+| `H`         | ハンド（パン） |     | `Cmd+Shift+C` | コードパネル                    |
+| `Del`       | 削除           |     | `Cmd+Shift+V` | 変数パネル                      |
+| `[ / ]`     | 重ね順の変更   |     | `Cmd+J`       | AI チャット                     |
+| 矢印キー    | 1px 微調整     |     | `Cmd+,`       | エージェント設定                |
+| `Cmd+Alt+U` | ブーリアン合体 |     | `Cmd+Alt+S`   | ブーリアン型抜き                |
+| `Cmd+Alt+I` | ブーリアン交差 |     | `Cmd+Shift+S` | 名前を付けて保存                |
 
 ## スクリプト
 
@@ -366,6 +393,8 @@ bun run cli:compile        # CLI を dist にコンパイル
 - [x] CLIツール（`op`）ターミナル制御
 - [x] ビルトイン AI エージェント SDK（マルチプロバイダー対応）
 - [x] i18n — 15言語対応
+- [x] Git 統合（クローン、ブランチ、プッシュ/プル、フォルダーモード三方向マージ）
+- [x] キャンバスのラスターエクスポート（PNG / JPEG / WEBP / PDF）
 - [ ] 共同編集
 - [ ] プラグインシステム
 
@@ -380,7 +409,7 @@ bun run cli:compile        # CLI を dist にコンパイル
 OpenPencil は無料でオープンソースです。開発は、これを便利だと感じてくださる皆さんの支援で成り立っています — キャンバスを開いたままにしてくれてありがとう。
 
 <a href="https://github.com/mrqyun" title="MrQyun">
-  <img src="https://github.com/mrqyun.png" width="64" height="64" alt="MrQyun" style="border-radius: 50%" />
+  <img src="https://wsrv.nl/?url=github.com/mrqyun.png&w=128&h=128&mask=circle&maxage=7d" width="64" height="64" alt="MrQyun" />
 </a>
 
 **[MrQyun](https://github.com/mrqyun)** さん、ありがとうございます — あなたの名前もここに並べませんか？**[スポンサーになる →](https://github.com/sponsors/ZSeven-W)**

@@ -246,6 +246,32 @@ cat design.dsl | op design - # stdin'den pipe ile besle
 - Çok tema desteği — birden fazla tema ekseni, her biri varyantlarıyla (Açık/Koyu, Kompakt/Rahat)
 - Bileşen sistemi — örnekler ve geçersiz kılmalarla yeniden kullanılabilir bileşenler
 - CSS senkronizasyonu — otomatik oluşturulan özel özellikler, kod çıktısında `var(--name)`
+- Yeniden kullanılabilir UIKit'ler — `.pen` dosyalarından bileşen kitlerini içe/dışa aktarın
+
+**AI ve Ajanlar**
+
+- Akışlı üretim ve orkestratör güdümlü uzamsal ayrıştırma ile prompt-to-canvas
+- Eşzamanlı Ajan Ekipleri — birden çok tasarımcı farklı bölümler üzerinde paralel çalışır, üye başına kanvas göstergeleri ile
+- Katmanlı iş akışı — `design_skeleton` → `design_content` → `design_refine`, her aşamada odaklı prompt'lar
+- Stil Rehberleri — 50+ yerleşik stil (glassmorphism, brutalist, retro vb.), etiket tabanlı bulanık eşleştirme ile planlama ve üretime entegre
+- Çoklu model yetenek profilleri — model katmanına göre düşünme modunu, çabayı ve prompt biçimini otomatik olarak uyarlar
+- Yerleşik ajan çalışma ortamı (`agent-native`, Zig NAPI) + Anthropic, Claude Agent SDK, OpenCode, Codex, Copilot, Gemini sağlayıcıları
+- Çinli LLM sağlayıcıları için Anthropic formatlı geçiş — Kimi, Zhipu, GLM, DouBao, Ark, Bailian/DashScope, ModelScope, Coding Plans
+
+**Git Entegrasyonu**
+
+- SSH / HTTPS kimlik doğrulama ve SSH anahtarı yönetimi ile klonlama sihirbazı
+- Dal seçici — oluştur, değiştir, sil, birleştir, hepsi Git panelinden
+- Kimlik doğrulama yeniden denemeleri ve non-fast-forward yönetimi ile pull / push kademeleri
+- Diskte `MERGE_HEAD` durum takibi ile klasör modu üç yönlü birleştirme
+- Düğüm/alan başına üç yönlü kartlar, satır içi JSON editörü, toplu eylemler ve satır içi diff bloğu ile çakışma paneli
+- Uzak ayarlar ve SSH anahtarları arayüzü; tüm Git yüzeyinde 15 dilde i18n
+
+**Dışa Aktarma**
+
+- Kanvas dışa aktarma — PNG, JPEG, WEBP, PDF (`Cmd+Shift+P`)
+- Kod dışa aktarma — React + Tailwind, HTML + CSS, Vue, Svelte, Flutter, SwiftUI, Jetpack Compose, React Native
+- Artımlı MCP kod üretimi hattı — `codegen_plan`, `codegen_submit_chunk`, `codegen_assemble`, `codegen_clean`
 
 **Figma İçe Aktarma**
 
@@ -256,7 +282,8 @@ cat design.dsl | op design - # stdin'den pipe ile besle
 - Electron aracılığıyla yerel macOS, Windows ve Linux desteği
 - `.op` dosya ilişkilendirmesi — açmak için çift tıklayın, tekli örnek kilidi
 - GitHub Releases'ten otomatik güncelleme
-- Yerel uygulama menüsü ve dosya iletişim kutuları
+- Farklı Kaydet, Son Kullanılanları Aç ve kapatırken kaydedilmemiş değişiklikler iletişim kutusu içeren yerel uygulama menüsü
+- Son kullanılan dosyaların kalıcılığı
 
 ## Teknoloji Yığını
 
@@ -311,21 +338,21 @@ openpencil/
 
 ## Klavye Kısayolları
 
-| Tuş         | İşlem             |     | Tuş           | İşlem                       |
-| ----------- | ----------------- | --- | ------------- | --------------------------- |
-| `V`         | Seç               |     | `Cmd+S`       | Kaydet                      |
-| `R`         | Dikdörtgen        |     | `Cmd+Z`       | Geri Al                     |
-| `O`         | Elips             |     | `Cmd+Shift+Z` | Yeniden Yap                 |
-| `L`         | Çizgi             |     | `Cmd+C/X/V/D` | Kopyala/Kes/Yapıştır/Çoğalt |
-| `T`         | Metin             |     | `Cmd+G`       | Grupla                      |
-| `F`         | Frame             |     | `Cmd+Shift+G` | Grubu Çöz                   |
-| `P`         | Kalem aracı       |     | `Cmd+Shift+E` | Dışa Aktar                  |
-| `H`         | El (kaydır)       |     | `Cmd+Shift+C` | Kod paneli                  |
-| `Del`       | Sil               |     | `Cmd+Shift+V` | Değişkenler paneli          |
-| `[ / ]`     | Yeniden sırala    |     | `Cmd+J`       | AI sohbet                   |
-| Oklar       | 1px kaydır        |     | `Cmd+,`       | Ajan ayarları               |
-| `Cmd+Alt+U` | Boolean birleştir |     | `Cmd+Alt+S`   | Boolean çıkar               |
-| `Cmd+Alt+I` | Boolean kesiştir  |     |               |                             |
+| Tuş         | İşlem             |     | Tuş           | İşlem                         |
+| ----------- | ----------------- | --- | ------------- | ----------------------------- |
+| `V`         | Seç               |     | `Cmd+S`       | Kaydet                        |
+| `R`         | Dikdörtgen        |     | `Cmd+Z`       | Geri Al                       |
+| `O`         | Elips             |     | `Cmd+Shift+Z` | Yeniden Yap                   |
+| `L`         | Çizgi             |     | `Cmd+C/X/V/D` | Kopyala/Kes/Yapıştır/Çoğalt   |
+| `T`         | Metin             |     | `Cmd+G`       | Grupla                        |
+| `F`         | Frame             |     | `Cmd+Shift+G` | Grubu Çöz                     |
+| `P`         | Kalem aracı       |     | `Cmd+Shift+P` | Dışa Aktar (PNG/JPG/WEBP/PDF) |
+| `H`         | El (kaydır)       |     | `Cmd+Shift+C` | Kod paneli                    |
+| `Del`       | Sil               |     | `Cmd+Shift+V` | Değişkenler paneli            |
+| `[ / ]`     | Yeniden sırala    |     | `Cmd+J`       | AI sohbet                     |
+| Oklar       | 1px kaydır        |     | `Cmd+,`       | Ajan ayarları                 |
+| `Cmd+Alt+U` | Boolean birleştir |     | `Cmd+Alt+S`   | Boolean çıkar                 |
+| `Cmd+Alt+I` | Boolean kesiştir  |     | `Cmd+Shift+S` | Farklı Kaydet                 |
 
 ## Betikler
 
@@ -366,6 +393,8 @@ Katkılarınızı bekliyoruz! Mimari ayrıntılar ve kod stili için [CLAUDE.md]
 - [x] CLI aracı (`op`) terminal kontrolü
 - [x] Çoklu sağlayıcı destekli yerleşik AI ajan SDK'sı
 - [x] i18n — 15 dil
+- [x] Git entegrasyonu (klonlama, dal, push/pull, klasör modu üç yönlü birleştirme)
+- [x] Kanvas raster dışa aktarma (PNG / JPEG / WEBP / PDF)
 - [ ] Ortak düzenleme
 - [ ] Eklenti sistemi
 
@@ -380,7 +409,7 @@ Katkılarınızı bekliyoruz! Mimari ayrıntılar ve kod stili için [CLAUDE.md]
 OpenPencil ücretsiz ve açık kaynaklıdır. Geliştirme, onu faydalı bulanlar tarafından finanse ediliyor — tuvali açık tuttuğunuz için teşekkürler.
 
 <a href="https://github.com/mrqyun" title="MrQyun">
-  <img src="https://github.com/mrqyun.png" width="64" height="64" alt="MrQyun" style="border-radius: 50%" />
+  <img src="https://wsrv.nl/?url=github.com/mrqyun.png&w=128&h=128&mask=circle&maxage=7d" width="64" height="64" alt="MrQyun" />
 </a>
 
 **[MrQyun](https://github.com/mrqyun)**'a teşekkürler — isminizi burada görmek ister misiniz? **[Sponsor ol →](https://github.com/sponsors/ZSeven-W)**

@@ -246,6 +246,32 @@ Hỗ trợ ba phương thức nhập liệu: chuỗi inline, `@filepath` (đọc
 - Hỗ trợ đa chủ đề — nhiều trục, mỗi trục có các biến thể (Sáng/Tối, Thu gọn/Thoải mái)
 - Hệ thống component — các component có thể tái sử dụng với instances và overrides
 - Đồng bộ CSS — thuộc tính tùy chỉnh tự động tạo, `var(--name)` trong đầu ra mã
+- UIKits có thể tái sử dụng — nhập/xuất các kit component từ tệp `.pen`
+
+**AI và Tác nhân**
+
+- Prompt-to-canvas với tạo streaming và phân rã không gian theo orchestrator
+- Đội tác nhân song song — nhiều nhà thiết kế làm việc trên các phần khác nhau song song, với chỉ báo canvas theo từng thành viên
+- Quy trình phân lớp — `design_skeleton` → `design_content` → `design_refine` với prompt tập trung cho từng giai đoạn
+- Style Guides — hơn 50 style tích hợp (glassmorphism, brutalist, retro, v.v.) với khớp mờ dựa trên tag, tích hợp vào lập kế hoạch và tạo
+- Hồ sơ năng lực đa mô hình — tự động điều chỉnh chế độ tư duy, nỗ lực và hình thức prompt theo cấp mô hình
+- Runtime tác nhân tích hợp (`agent-native`, Zig NAPI) + nhà cung cấp Anthropic, Claude Agent SDK, OpenCode, Codex, Copilot, Gemini
+- Chuyển tiếp định dạng Anthropic cho các nhà cung cấp LLM Trung Quốc — Kimi, Zhipu, GLM, DouBao, Ark, Bailian/DashScope, ModelScope, Coding Plans
+
+**Tích hợp Git**
+
+- Wizard clone với xác thực SSH / HTTPS và quản lý khóa SSH
+- Bộ chọn branch — tạo, chuyển, xóa, merge, tất cả từ bảng Git
+- Pull / push theo tầng với thử lại xác thực và xử lý non-fast-forward
+- Merge ba chiều chế độ thư mục với theo dõi trạng thái `MERGE_HEAD` trên đĩa
+- Bảng xung đột với thẻ ba chiều theo từng node / field, trình chỉnh sửa JSON nội tuyến, hành động hàng loạt và khối diff nội tuyến
+- Giao diện cài đặt remote và khóa SSH; i18n 15 ngôn ngữ trên toàn bộ bề mặt Git
+
+**Xuất**
+
+- Xuất canvas — PNG, JPEG, WEBP, PDF (`Cmd+Shift+P`)
+- Xuất mã — React + Tailwind, HTML + CSS, Vue, Svelte, Flutter, SwiftUI, Jetpack Compose, React Native
+- Pipeline codegen MCP tăng dần — `codegen_plan`, `codegen_submit_chunk`, `codegen_assemble`, `codegen_clean`
 
 **Nhập từ Figma**
 
@@ -256,7 +282,8 @@ Hỗ trợ ba phương thức nhập liệu: chuỗi inline, `@filepath` (đọc
 - macOS, Windows và Linux gốc qua Electron
 - Liên kết tệp `.op` — nhấp đúp để mở, khóa phiên bản đơn
 - Tự động cập nhật từ GitHub Releases
-- Menu ứng dụng gốc và hộp thoại tệp
+- Menu ứng dụng gốc với Lưu thành, Mở gần đây và hộp thoại thay đổi chưa lưu khi đóng
+- Lưu danh sách tệp gần đây
 
 ## Công nghệ
 
@@ -319,13 +346,13 @@ openpencil/
 | `L`         | Đường thẳng       |     | `Cmd+C/X/V/D` | Sao chép/Cắt/Dán/Nhân bản |
 | `T`         | Văn bản           |     | `Cmd+G`       | Nhóm                      |
 | `F`         | Frame             |     | `Cmd+Shift+G` | Bỏ nhóm                   |
-| `P`         | Công cụ bút       |     | `Cmd+Shift+E` | Xuất                      |
+| `P`         | Công cụ bút       |     | `Cmd+Shift+P` | Xuất (PNG/JPG/WEBP/PDF)   |
 | `H`         | Tay (pan)         |     | `Cmd+Shift+C` | Bảng mã                   |
 | `Del`       | Xóa               |     | `Cmd+Shift+V` | Bảng biến                 |
 | `[ / ]`     | Sắp xếp lại       |     | `Cmd+J`       | AI chat                   |
 | Mũi tên     | Dịch chuyển 1px   |     | `Cmd+,`       | Cài đặt tác nhân          |
 | `Cmd+Alt+U` | Hợp nhất Boolean  |     | `Cmd+Alt+S`   | Trừ Boolean               |
-| `Cmd+Alt+I` | Giao nhau Boolean |     |               |                           |
+| `Cmd+Alt+I` | Giao nhau Boolean |     | `Cmd+Shift+S` | Lưu thành                 |
 
 ## Scripts
 
@@ -366,6 +393,8 @@ Chào mừng đóng góp! Xem [CLAUDE.md](./CLAUDE.md) để biết chi tiết v
 - [x] Công cụ CLI (`op`) điều khiển từ terminal
 - [x] SDK tác nhân AI tích hợp sẵn với hỗ trợ đa nhà cung cấp
 - [x] i18n — 15 ngôn ngữ
+- [x] Tích hợp Git (clone, branch, push/pull, merge ba chiều chế độ thư mục)
+- [x] Xuất raster canvas (PNG / JPEG / WEBP / PDF)
 - [ ] Chỉnh sửa cộng tác
 - [ ] Hệ thống plugin
 
@@ -380,7 +409,7 @@ Chào mừng đóng góp! Xem [CLAUDE.md](./CLAUDE.md) để biết chi tiết v
 OpenPencil miễn phí và mã nguồn mở. Việc phát triển được tài trợ bởi những người thấy nó hữu ích — cảm ơn bạn đã giữ cho canvas luôn mở.
 
 <a href="https://github.com/mrqyun" title="MrQyun">
-  <img src="https://github.com/mrqyun.png" width="64" height="64" alt="MrQyun" style="border-radius: 50%" />
+  <img src="https://wsrv.nl/?url=github.com/mrqyun.png&w=128&h=128&mask=circle&maxage=7d" width="64" height="64" alt="MrQyun" />
 </a>
 
 Cảm ơn **[MrQyun](https://github.com/mrqyun)** — muốn tên mình xuất hiện ở đây? **[Trở thành nhà tài trợ →](https://github.com/sponsors/ZSeven-W)**

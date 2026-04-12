@@ -246,6 +246,32 @@ Mendukung tiga metode input: string inline, `@filepath` (baca dari file), atau `
 - Dukungan multi-tema — beberapa sumbu, masing-masing dengan varian (Terang/Gelap, Ringkas/Nyaman)
 - Sistem komponen — komponen yang dapat digunakan ulang dengan instans dan penggantian
 - Sinkronisasi CSS — properti kustom yang dibuat otomatis, `var(--name)` dalam keluaran kode
+- UIKit yang dapat digunakan ulang — impor/ekspor kit komponen dari file `.pen`
+
+**AI & Agen**
+
+- Prompt-ke-kanvas dengan pembuatan streaming dan dekomposisi spasial yang digerakkan orkestrator
+- Tim Agen Bersamaan — beberapa desainer mengerjakan bagian yang berbeda secara paralel dengan indikator kanvas per anggota
+- Alur kerja berlapis — `design_skeleton` → `design_content` → `design_refine` dengan prompt yang terfokus per fase
+- Panduan Gaya — 50+ gaya bawaan (glassmorphism, brutalist, retro, dll.) dengan pencocokan fuzzy berbasis tag, terintegrasi ke perencanaan dan pembuatan
+- Profil kemampuan multi-model — secara otomatis menyesuaikan mode berpikir, upaya, dan bentuk prompt berdasarkan tingkat model
+- Runtime agen bawaan (`agent-native`, Zig NAPI) + penyedia Anthropic, Claude Agent SDK, OpenCode, Codex, Copilot, Gemini
+- Passthrough format Anthropic untuk penyedia LLM Tiongkok — Kimi, Zhipu, GLM, DouBao, Ark, Bailian/DashScope, ModelScope, Coding Plans
+
+**Integrasi Git**
+
+- Wizard clone dengan autentikasi SSH / HTTPS dan manajemen kunci SSH
+- Pemilih branch — buat, beralih, hapus, merge, semua dari panel Git
+- Kaskade pull / push dengan percobaan ulang autentikasi dan penanganan non-fast-forward
+- Merge tiga arah mode folder dengan pelacakan status `MERGE_HEAD` di disk
+- Panel konflik dengan kartu tiga arah per node / field, editor JSON inline, aksi massal, dan blok diff inline
+- UI pengaturan remote dan kunci SSH; i18n 15 bahasa di seluruh permukaan Git
+
+**Ekspor**
+
+- Ekspor kanvas — PNG, JPEG, WEBP, PDF (`Cmd+Shift+P`)
+- Ekspor kode — React + Tailwind, HTML + CSS, Vue, Svelte, Flutter, SwiftUI, Jetpack Compose, React Native
+- Pipeline codegen MCP inkremental — `codegen_plan`, `codegen_submit_chunk`, `codegen_assemble`, `codegen_clean`
 
 **Impor Figma**
 
@@ -256,7 +282,8 @@ Mendukung tiga metode input: string inline, `@filepath` (baca dari file), atau `
 - macOS, Windows, dan Linux native melalui Electron
 - Asosiasi file `.op` — klik dua kali untuk membuka, kunci instans tunggal
 - Pembaruan otomatis dari GitHub Releases
-- Menu aplikasi native dan dialog file
+- Menu aplikasi native dengan Simpan sebagai, Buka Terbaru, dan dialog perubahan belum tersimpan saat ditutup
+- Persistensi file terbaru
 
 ## Tumpukan Teknologi
 
@@ -319,13 +346,13 @@ openpencil/
 | `L`         | Garis             |     | `Cmd+C/X/V/D` | Salin/Potong/Tempel/Duplikat |
 | `T`         | Teks              |     | `Cmd+G`       | Grup                         |
 | `F`         | Frame             |     | `Cmd+Shift+G` | Pisahkan grup                |
-| `P`         | Alat pen          |     | `Cmd+Shift+E` | Ekspor                       |
+| `P`         | Alat pen          |     | `Cmd+Shift+P` | Ekspor (PNG/JPG/WEBP/PDF)    |
 | `H`         | Hand (pan)        |     | `Cmd+Shift+C` | Panel kode                   |
 | `Del`       | Hapus             |     | `Cmd+Shift+V` | Panel variabel               |
 | `[ / ]`     | Ubah urutan       |     | `Cmd+J`       | Chat AI                      |
 | Panah       | Geser 1px         |     | `Cmd+,`       | Pengaturan agen              |
 | `Cmd+Alt+U` | Union Boolean     |     | `Cmd+Alt+S`   | Subtract Boolean             |
-| `Cmd+Alt+I` | Intersect Boolean |     |               |                              |
+| `Cmd+Alt+I` | Intersect Boolean |     | `Cmd+Shift+S` | Simpan sebagai               |
 
 ## Skrip
 
@@ -366,6 +393,8 @@ Kontribusi sangat disambut! Lihat [CLAUDE.md](./CLAUDE.md) untuk detail arsitekt
 - [x] Alat CLI (`op`) kontrol terminal
 - [x] SDK agen AI bawaan dengan dukungan multi-penyedia
 - [x] i18n — 15 bahasa
+- [x] Integrasi Git (clone, branch, push/pull, merge tiga arah mode folder)
+- [x] Ekspor raster kanvas (PNG / JPEG / WEBP / PDF)
 - [ ] Pengeditan kolaboratif
 - [ ] Sistem plugin
 
@@ -380,7 +409,7 @@ Kontribusi sangat disambut! Lihat [CLAUDE.md](./CLAUDE.md) untuk detail arsitekt
 OpenPencil gratis dan open source. Pengembangan didanai oleh orang-orang yang merasa terbantu — terima kasih telah menjaga kanvas tetap terbuka.
 
 <a href="https://github.com/mrqyun" title="MrQyun">
-  <img src="https://github.com/mrqyun.png" width="64" height="64" alt="MrQyun" style="border-radius: 50%" />
+  <img src="https://wsrv.nl/?url=github.com/mrqyun.png&w=128&h=128&mask=circle&maxage=7d" width="64" height="64" alt="MrQyun" />
 </a>
 
 Terima kasih kepada **[MrQyun](https://github.com/mrqyun)** — ingin nama Anda muncul di sini? **[Jadi sponsor →](https://github.com/sponsors/ZSeven-W)**

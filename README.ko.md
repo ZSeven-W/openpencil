@@ -246,6 +246,32 @@ cat design.dsl | op design - # stdin에서 파이프 입력
 - 멀티 테마 지원 — 여러 테마 축, 각 축에 변형(Light/Dark, Compact/Comfortable)
 - 컴포넌트 시스템 — 인스턴스와 오버라이드를 가진 재사용 가능한 컴포넌트
 - CSS 동기화 — 커스텀 프로퍼티 자동 생성, 코드 출력에 `var(--name)` 사용
+- 재사용 가능한 UIKit — `.pen` 파일에서 컴포넌트 킷을 가져오기/내보내기
+
+**AI & 에이전트**
+
+- 스트리밍 생성과 오케스트레이터 기반 공간 분해를 통한 프롬프트-투-캔버스
+- 동시 에이전트 팀 — 여러 디자이너가 다양한 섹션에서 병렬로 작업하며 멤버별 캔버스 인디케이터 제공
+- 계층적 워크플로 — `design_skeleton` → `design_content` → `design_refine`, 각 단계에 집중된 프롬프트 사용
+- 스타일 가이드 — 50개 이상의 내장 스타일(glassmorphism, brutalist, retro 등), 태그 기반 퍼지 매칭 지원, 플래닝과 생성에 통합
+- 멀티 모델 역량 프로파일 — 모델 등급별로 싱킹 모드, 노력도, 프롬프트 형태를 자동 적응
+- 내장 에이전트 런타임(`agent-native`, Zig NAPI) + Anthropic, Claude Agent SDK, OpenCode, Codex, Copilot, Gemini 제공자
+- 중국 LLM 제공자를 위한 Anthropic 형식 패스스루 — Kimi, Zhipu, GLM, DouBao, Ark, Bailian/DashScope, ModelScope, Coding Plans
+
+**Git 통합**
+
+- SSH / HTTPS 인증과 SSH 키 관리를 지원하는 클론 마법사
+- 브랜치 피커 — 생성, 전환, 삭제, 병합을 모두 Git 패널에서
+- 인증 재시도와 non-fast-forward 처리가 포함된 Pull / Push 캐스케이드
+- 디스크 상의 `MERGE_HEAD` 상태 추적을 포함한 폴더 모드 3방향 병합
+- 노드/필드 단위 3방향 카드, 인라인 JSON 편집기, 일괄 작업, 인라인 diff 블록을 갖춘 충돌 패널
+- 원격 설정 및 SSH 키 UI; Git 전반에 걸친 15개 언어 i18n
+
+**내보내기**
+
+- 캔버스 내보내기 — PNG, JPEG, WEBP, PDF (`Cmd+Shift+P`)
+- 코드 내보내기 — React + Tailwind, HTML + CSS, Vue, Svelte, Flutter, SwiftUI, Jetpack Compose, React Native
+- 증분 MCP 코드 생성 파이프라인 — `codegen_plan`, `codegen_submit_chunk`, `codegen_assemble`, `codegen_clean`
 
 **Figma 가져오기**
 
@@ -256,7 +282,8 @@ cat design.dsl | op design - # stdin에서 파이프 입력
 - Electron을 통한 네이티브 macOS, Windows, Linux 지원
 - `.op` 파일 연결 — 더블 클릭으로 열기, 단일 인스턴스 잠금
 - GitHub Releases에서 자동 업데이트
-- 네이티브 애플리케이션 메뉴와 파일 다이얼로그
+- 다른 이름으로 저장, 최근 항목 열기, 닫을 때 저장되지 않은 변경 사항 대화상자를 지원하는 네이티브 애플리케이션 메뉴
+- 최근 파일 영속성
 
 ## 기술 스택
 
@@ -319,13 +346,13 @@ openpencil/
 | `L`         | 직선          |     | `Cmd+C/X/V/D` | 복사/잘라내기/붙여넣기/복제 |
 | `T`         | 텍스트        |     | `Cmd+G`       | 그룹화                      |
 | `F`         | Frame         |     | `Cmd+Shift+G` | 그룹 해제                   |
-| `P`         | 펜 툴         |     | `Cmd+Shift+E` | 내보내기                    |
+| `P`         | 펜 툴         |     | `Cmd+Shift+P` | 내보내기 (PNG/JPG/WEBP/PDF) |
 | `H`         | 핸드(팬)      |     | `Cmd+Shift+C` | 코드 패널                   |
 | `Del`       | 삭제          |     | `Cmd+Shift+V` | 변수 패널                   |
 | `[ / ]`     | 순서 변경     |     | `Cmd+J`       | AI 채팅                     |
 | 화살표 키   | 1px 이동      |     | `Cmd+,`       | 에이전트 설정               |
 | `Cmd+Alt+U` | 불리언 합치기 |     | `Cmd+Alt+S`   | 불리언 빼기                 |
-| `Cmd+Alt+I` | 불리언 교차   |     |               |                             |
+| `Cmd+Alt+I` | 불리언 교차   |     | `Cmd+Shift+S` | 다른 이름으로 저장          |
 
 ## 스크립트
 
@@ -366,6 +393,8 @@ bun run cli:compile        # CLI를 dist로 컴파일
 - [x] CLI 도구 (`op`) 터미널 제어
 - [x] 내장 AI 에이전트 SDK (멀티 제공자 지원)
 - [x] i18n — 15개 언어
+- [x] Git 통합 (클론, 브랜치, 푸시/풀, 폴더 모드 3방향 병합)
+- [x] 캔버스 래스터 내보내기 (PNG / JPEG / WEBP / PDF)
 - [ ] 공동 편집
 - [ ] 플러그인 시스템
 
@@ -380,7 +409,7 @@ bun run cli:compile        # CLI를 dist로 컴파일
 OpenPencil은 무료이며 오픈소스입니다. 개발은 이 도구를 유용하게 쓰는 분들의 후원으로 이어집니다 — 캔버스를 열어 두어 주셔서 감사합니다.
 
 <a href="https://github.com/mrqyun" title="MrQyun">
-  <img src="https://github.com/mrqyun.png" width="64" height="64" alt="MrQyun" style="border-radius: 50%" />
+  <img src="https://wsrv.nl/?url=github.com/mrqyun.png&w=128&h=128&mask=circle&maxage=7d" width="64" height="64" alt="MrQyun" />
 </a>
 
 **[MrQyun](https://github.com/mrqyun)** 님, 감사합니다 — 여기에 이름을 올리고 싶으신가요? **[스폰서 되기 →](https://github.com/sponsors/ZSeven-W)**
