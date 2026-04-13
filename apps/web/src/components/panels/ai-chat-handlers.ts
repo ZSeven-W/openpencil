@@ -2,6 +2,7 @@ import { useState, useCallback } from 'react';
 import { nanoid } from 'nanoid';
 import i18n from '@/i18n';
 import type { AgentEvent } from '@/types/agent';
+import type { AIProviderType } from '@/types/agent-settings';
 
 function decodeAgentEvent(raw: string): AgentEvent | null {
   const eventMatch = raw.match(/^event:\s*(\S+)/);
@@ -41,6 +42,7 @@ import type { ToolCallBlockData } from '@/components/panels/tool-call-block';
 import { CHAT_STREAM_THINKING_CONFIG } from '@/services/ai/ai-runtime-config';
 import { classifyIntent } from './ai-chat-intent-classifier';
 import { buildContextString } from './ai-chat-context-builder';
+import { detectAgentIntent, getCrudToolDefs } from '@/services/ai/agent-tools';
 
 // Re-export for any external consumers
 export { buildContextString } from './ai-chat-context-builder';
@@ -74,22 +76,40 @@ RULE 3: Do NOT call generate_design more than once unless the user asks for a ne
 
 FORBIDDEN: Do not output JSON, code blocks, or node definitions directly. Always use generate_design instead.`;
 
+/** Lightweight prompt for CRUD operations — no design skills, just tool usage. */
+const AGENT_TOOL_INSTRUCTIONS_CRUD = `You are a design editor. Use tools to inspect, modify, insert, and delete elements on the canvas.
+
+WORKFLOW:
+1. Use snapshot_layout or batch_get FIRST to see the tree structure and find node IDs.
+2. Use the appropriate tool: insert_node to add, update_node to modify, delete_node to remove, move_node to reparent.
+3. When inserting, use "after" parameter with a sibling ID to place the new node in the correct position.
+4. After each operation, write 1-2 sentences summarizing what changed.
+
+INSERT_NODE GUIDE — always include complete node data with children:
+- Button example: {"type":"frame","name":"My Button","width":"fill_container","height":50,"cornerRadius":8,"fill":[{"type":"solid","color":"#1877F2"}],"layout":"horizontal","gap":8,"alignItems":"center","justifyContent":"center","children":[{"type":"icon_font","name":"Icon","iconName":"facebook","width":20,"height":20,"fill":[{"type":"solid","color":"#FFFFFF"}]},{"type":"text","name":"Label","text":"Continue with Facebook","fontSize":15,"fontWeight":600,"fill":[{"type":"solid","color":"#FFFFFF"}]}]}
+- Text example: {"type":"text","name":"Title","text":"Hello","fontSize":24,"fontWeight":700,"fill":[{"type":"solid","color":"#1A1A2E"}]}
+- When adding next to a similar element, use batch_get to read that element's full data first, then create matching structure.
+
+Focus on the specific operation the user requested.`;
+
 /** Agent instructions for lead agents coordinating a team. */
 const AGENT_TOOL_INSTRUCTIONS_TEAM = `You are a design lead coordinating a team.
 
 Do not create the design directly in this mode. Analyze the request, delegate the work to team members, then summarize the outcome for the user.`;
 
 /**
- * Build the agent system prompt based on provider type.
- * Builtin providers get direct design instructions (plan_layout + batch_insert).
- * CLI providers get generate_design tool instructions (orchestrator pipeline).
+ * Build the agent system prompt based on provider type and detected intent.
+ * CRUD intents (read/update/delete) get a lightweight prompt with no design skills.
+ * Design intents get the full design generation pipeline.
  */
 function buildAgentSystemPrompt(
-  _userMessage: string,
+  userMessage: string,
   isBuiltin: boolean,
   teamMode: boolean,
 ): string {
   if (teamMode) return AGENT_TOOL_INSTRUCTIONS_TEAM;
+  const intent = detectAgentIntent(userMessage);
+  if (intent === 'crud') return AGENT_TOOL_INSTRUCTIONS_CRUD;
   return isBuiltin ? AGENT_TOOL_INSTRUCTIONS_BUILTIN : AGENT_TOOL_INSTRUCTIONS_CLI;
 }
 
@@ -128,7 +148,7 @@ async function* parseAgentSSE(
 
 /** Provider config for the agent pipeline */
 interface AgentProviderConfig {
-  providerType: 'anthropic' | 'openai-compat';
+  providerType: 'anthropic' | 'openai-compat' | 'acp';
   apiKey: string;
   model: string;
   baseURL?: string;
@@ -204,7 +224,8 @@ async function runAgentStream(
   const { useAIStore: concurrencyStore } = await import('@/stores/ai-store');
   const concurrency = concurrencyStore.getState().concurrency;
   const teamMode = concurrency > 1;
-  const toolDefs = getDesignToolDefs();
+  const intent = detectAgentIntent(lastUserMsg);
+  const toolDefs = intent === 'crud' ? getCrudToolDefs() : getDesignToolDefs();
   const systemPrompt = buildAgentSystemPrompt(lastUserMsg, isBuiltin, teamMode) + context;
 
   const agentBody: Record<string, unknown> = {
@@ -226,6 +247,15 @@ async function runAgentStream(
     ...(hasVariables ? { hasVariables } : {}),
   };
 
+  // ACP: add agentId + config to the request body (config enables server-side
+  // auto-reconnect if the in-memory connection was lost due to dev server restart).
+  if (providerConfig.providerType === 'acp') {
+    const agentId = providerConfig.model.slice(4);
+    const acpConfig = useAgentSettingsStore.getState().acpAgents.find((a) => a.id === agentId);
+    (agentBody as any).acpAgentId = agentId;
+    if (acpConfig) (agentBody as any).acpConfig = acpConfig;
+  }
+
   const response = await fetch('/api/ai/agent', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -235,7 +265,17 @@ async function runAgentStream(
 
   if (!response.ok || !response.body) {
     const errText = await response.text().catch(() => 'Unknown error');
-    throw new Error(`Agent request failed: ${errText}`);
+    // h3 errors come as JSON: { message, error, status, ... } — extract just the message.
+    let errorMessage = errText;
+    try {
+      const parsed = JSON.parse(errText);
+      if (parsed && typeof parsed === 'object' && typeof parsed.message === 'string') {
+        errorMessage = parsed.message;
+      }
+    } catch {
+      /* not JSON — use raw text */
+    }
+    throw new Error(errorMessage);
   }
 
   const reader = response.body.getReader();
@@ -254,6 +294,10 @@ async function runAgentStream(
   let identityPool: AgentIdentity[] = [];
   let nextIdentityIdx = 0;
   const memberIdentities = new Map<string, AgentIdentity>();
+  // Track the most recent failed tool call so terminal `error_server` events
+  // (which carry no detail from the Zig engine) can surface what actually broke.
+  const toolNames = new Map<string, string>();
+  let lastToolError: { name: string; message: string } | null = null;
 
   try {
     for await (const evt of parseAgentSSE(reader, abortController.signal)) {
@@ -293,6 +337,7 @@ async function runAgentStream(
           // Skip internal team coordination tools — they are resolved by agent-team, not the client
           if (evt.level === 'orchestrate') break;
 
+          toolNames.set(evt.id, evt.name);
           executor
             .execute(evt as Extract<AgentEvent, { type: 'tool_call' }>)
             .then((result) => {
@@ -303,12 +348,19 @@ async function runAgentStream(
                   result: result ?? undefined,
                 });
               }
+              if (result && result.success === false) {
+                lastToolError = {
+                  name: evt.name,
+                  message: String(result.error ?? 'unknown error'),
+                };
+              }
             })
             .catch((err) => {
               useAIStore.getState().updateToolCallBlock(evt.id, {
                 status: 'error',
                 result: { success: false, error: String(err) },
               });
+              lastToolError = { name: evt.name, message: String(err) };
             });
           break;
         }
@@ -319,6 +371,12 @@ async function runAgentStream(
             status: evt.result.success ? 'done' : 'error',
             result: evt.result,
           });
+          if (!evt.result.success) {
+            lastToolError = {
+              name: toolNames.get(evt.id) ?? 'tool',
+              message: String((evt.result as { error?: unknown }).error ?? 'unknown error'),
+            };
+          }
           break;
         }
 
@@ -356,7 +414,15 @@ async function runAgentStream(
         }
 
         case 'error': {
-          accumulated += `\n\n**Error:** ${evt.message}`;
+          // Terminal `Agent error: error_server` events from the Zig engine
+          // carry no detail. Fall back to the last failed tool call so the
+          // user sees the actual cause (e.g. an upstream 529 surfaced via
+          // a tool error, or a runtime exception inside the design pipeline).
+          let detail = '';
+          if (lastToolError && /^Agent error:/i.test(evt.message)) {
+            detail = `\n> Last tool failure (\`${lastToolError.name}\`): ${lastToolError.message}`;
+          }
+          accumulated += `\n\n**Error:** ${evt.message}${detail}`;
           updateLastMessage(accumulated);
           renderer.finish();
           if (evt.fatal) return stripThinkTags(accumulated);
@@ -545,6 +611,64 @@ export function useChatHandlers() {
       }
 
       // -----------------------------------------------------------------------
+      // ACP AGENT MODE — routes to ACP agent via runAgentStream()
+      // -----------------------------------------------------------------------
+      if (model.startsWith('acp:')) {
+        const agentId = model.slice(4);
+        const { acpAgents } = useAgentSettingsStore.getState();
+        const acpConfig = acpAgents.find((a: any) => a.id === agentId);
+        if (!acpConfig) {
+          useAIStore.setState((s) => {
+            const msgs = [...s.messages];
+            const last = msgs[msgs.length - 1];
+            if (last) {
+              last.content = 'ACP agent not found. Please check your settings.';
+              last.isStreaming = false;
+            }
+            return { messages: msgs };
+          });
+          return;
+        }
+
+        useAIStore.getState().clearToolCallBlocks();
+        try {
+          await runAgentStream(
+            assistantMsg.id,
+            {
+              providerType: 'acp',
+              apiKey: 'acp',
+              model: model,
+            },
+            abortController,
+          );
+        } catch (err) {
+          const errorMsg = err instanceof Error ? err.message : String(err);
+          useAIStore.setState((s) => {
+            const msgs = [...s.messages];
+            const last = msgs[msgs.length - 1];
+            if (last) {
+              last.content = last.content
+                ? `${last.content}\n\n**Error:** ${errorMsg}`
+                : `**Error:** ${errorMsg}`;
+              last.isStreaming = false;
+            }
+            return { messages: msgs };
+          });
+        } finally {
+          // Always clear streaming state — both on success and on error.
+          useAIStore.getState().setAbortController(null);
+          setStreaming(false);
+          useAIStore.setState((s) => {
+            const msgs = [...s.messages];
+            const last = msgs[msgs.length - 1];
+            if (last?.isStreaming) last.isStreaming = false;
+            return { messages: msgs };
+          });
+        }
+        return;
+      }
+
+      // -----------------------------------------------------------------------
       // STANDARD MODE — design/chat pipeline (external CLI providers)
       // -----------------------------------------------------------------------
       const chatHistory = messages.map((m) => ({
@@ -596,7 +720,7 @@ export function useChatHandlers() {
                 themes: modDoc.themes,
                 designMd: useDesignMdStore.getState().designMd,
                 model,
-                provider: currentProvider,
+                provider: currentProvider as AIProviderType | undefined,
               },
               abortController.signal,
             );
@@ -612,7 +736,7 @@ export function useChatHandlers() {
               {
                 prompt: fullUserMessage,
                 model,
-                provider: currentProvider,
+                provider: currentProvider as AIProviderType | undefined,
                 concurrency,
                 context: {
                   canvasSize: { width: 1200, height: 800 },

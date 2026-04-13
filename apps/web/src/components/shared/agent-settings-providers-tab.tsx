@@ -6,6 +6,7 @@ import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { useAgentSettingsStore } from '@/stores/agent-settings-store';
 import { BuiltinProvidersSection } from './builtin-provider-settings';
+import { AcpAgentSection } from './acp-agent-settings';
 import type { AIProviderType, GroupedModel } from '@/types/agent-settings';
 import ClaudeLogo from '@/components/icons/claude-logo';
 import OpenAILogo from '@/components/icons/openai-logo';
@@ -311,6 +312,9 @@ export function ProvidersTab() {
     <div>
       <div className="mb-6">
         <BuiltinProvidersSection />
+      </div>
+      <div className="mb-6">
+        <AcpAgentSection />
       </div>
       <h3 className="text-[15px] font-semibold text-foreground mb-4">{t('settings.agents')}</h3>
       <div className="space-y-1">

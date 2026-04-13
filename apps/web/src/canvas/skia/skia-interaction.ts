@@ -79,6 +79,13 @@ export function toolToCursor(tool: ToolType): string {
   }
 }
 
+function hasImageVisual(node: PenNode | undefined): boolean {
+  if (!node) return false;
+  if (node.type === 'image') return true;
+  if (!('fill' in node)) return false;
+  return Array.isArray(node.fill) && node.fill.some((fill: any) => fill?.type === 'image');
+}
+
 /**
  * Encapsulates all canvas mouse/keyboard interaction state and handlers.
  * Extracted from SkiaCanvas to keep the component focused on lifecycle and rendering.
@@ -371,8 +378,13 @@ export class SkiaInteractionManager {
       if (isChildOfSelected) {
         // Don't change selection
       } else if (!currentSelection.includes(nodeId)) {
+        const clickedNode = docStore.getNodeById(nodeId);
         const parent = docStore.getParentOf(nodeId);
-        if (parent && (parent.type === 'frame' || parent.type === 'group')) {
+        if (
+          !hasImageVisual(clickedNode) &&
+          parent &&
+          (parent.type === 'frame' || parent.type === 'group')
+        ) {
           const grandparent = docStore.getParentOf(parent.id);
           if (!grandparent || grandparent.type === 'frame') {
             nodeId = parent.id;
@@ -906,6 +918,13 @@ export class SkiaInteractionManager {
       if (this.dragAllIds!.has(rn.node.id)) {
         rn.absX += incrDx;
         rn.absY += incrDy;
+        if (rn.clipRect) {
+          rn.clipRect = {
+            ...rn.clipRect,
+            x: rn.clipRect.x + incrDx,
+            y: rn.clipRect.y + incrDy,
+          };
+        }
         rn.node = { ...rn.node, x: rn.absX, y: rn.absY };
       }
     }

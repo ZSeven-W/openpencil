@@ -82,8 +82,12 @@ export async function handleOpenDocument(params: OpenDocumentParams): Promise<Op
     context: buildDocumentContext(doc),
     designPrompt: isEmpty
       ? buildDesignPrompt()
-      : 'Document has existing content. Use batch_design or insert_node with postProcess=true to add/modify designs. ' +
-        'For complex multi-section designs, use the layered workflow: design_skeleton → design_content (per section) → design_refine. ' +
+      : 'Document has existing content. Match your action to the user intent:\n' +
+        '- READ/INSPECT: Use batch_get (search by type/name/ID) or snapshot_layout to see what is on the canvas.\n' +
+        '- DELETE/REMOVE: Use batch_get to find the target node ID, then delete_node to remove it.\n' +
+        '- MODIFY: Use update_node to change properties of existing nodes.\n' +
+        '- ADD NEW: Use batch_design or insert_node with postProcess=true.\n' +
+        'For complex multi-section designs, use the layered workflow: design_skeleton → design_content → design_refine. ' +
         'Call get_design_prompt(section="planning") for layered workflow guide, or get_design_prompt() for full guidelines.',
   };
 }

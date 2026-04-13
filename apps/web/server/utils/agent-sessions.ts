@@ -5,6 +5,7 @@ import type {
   ToolRegistryHandle,
   TeamHandle,
 } from '@zseven-w/agent-native';
+import type { ClientSideConnection } from '@agentclientprotocol/sdk';
 import type { LayoutPhase } from './agent-tool-guard';
 import {
   abortEngine,
@@ -16,7 +17,8 @@ import {
   destroyTeam,
 } from '@zseven-w/agent-native';
 
-export interface AgentSession {
+export interface NativeAgentSession {
+  type: 'native';
   engine?: QueryEngineHandle;
   team?: TeamHandle;
   iter?: IteratorHandle;
@@ -36,26 +38,60 @@ export interface AgentSession {
   layoutRootId: string | null;
 }
 
-/** Create a session with required defaults. */
+export interface AcpAgentSession {
+  type: 'acp';
+  acpSessionId: string;
+  acpAgentId: string;
+  connection: ClientSideConnection;
+  createdAt: number;
+  lastActivity: number;
+  toolNames: Map<string, string>;
+  toolOwners: Map<string, string>;
+  layoutPhase: LayoutPhase;
+  layoutRootId: string | null;
+}
+
+export type AgentSession = NativeAgentSession | AcpAgentSession;
+
+/** Create a native session with required defaults. */
 export function createSession(
   fields: Omit<
-    AgentSession,
-    'toolOwners' | 'toolNames' | 'memberRoles' | 'layoutPhase' | 'layoutRootId'
+    NativeAgentSession,
+    'type' | 'toolOwners' | 'toolNames' | 'memberRoles' | 'layoutPhase' | 'layoutRootId'
   > &
     Partial<
       Pick<
-        AgentSession,
+        NativeAgentSession,
         'toolOwners' | 'toolNames' | 'memberRoles' | 'layoutPhase' | 'layoutRootId'
       >
     >,
-): AgentSession {
+): NativeAgentSession {
   return {
+    type: 'native',
     ...fields,
     toolOwners: fields.toolOwners ?? new Map(),
     toolNames: fields.toolNames ?? new Map(),
     memberRoles: fields.memberRoles ?? new Map(),
     layoutPhase: fields.layoutPhase ?? 'idle',
     layoutRootId: fields.layoutRootId ?? null,
+  };
+}
+
+/** Create an ACP session with required defaults. */
+export function createAcpSession(fields: {
+  acpSessionId: string;
+  acpAgentId: string;
+  connection: ClientSideConnection;
+}): AcpAgentSession {
+  return {
+    type: 'acp',
+    ...fields,
+    createdAt: Date.now(),
+    lastActivity: Date.now(),
+    toolNames: new Map(),
+    toolOwners: new Map(),
+    layoutPhase: 'idle',
+    layoutRootId: null,
   };
 }
 
@@ -68,6 +104,7 @@ export function touchSession(session: Pick<AgentSession, 'lastActivity'>, now = 
 
 /** Idempotent cleanup — nullifies handles after destroying to prevent double-free. */
 export function cleanup(session: AgentSession): void {
+  if (session.type === 'acp') return; // ACP connections managed by acp-connection-manager
   if (session.iter) {
     destroyIterator(session.iter);
     session.iter = undefined;
@@ -100,6 +137,12 @@ export function cleanup(session: AgentSession): void {
 
 /** Abort a session — makes pending nextEvent resolve null. */
 export function abortSession(session: AgentSession): void {
+  if (session.type === 'acp') {
+    try {
+      (session.connection as any).cancel?.({ sessionId: session.acpSessionId });
+    } catch {}
+    return;
+  }
   if (session.team) abortTeam(session.team);
   else if (session.engine) abortEngine(session.engine);
 }

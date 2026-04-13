@@ -1,7 +1,22 @@
 # CLAUDE.md
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
-Detailed module docs are in `packages/CLAUDE.md`, `apps/web/CLAUDE.md`, `apps/desktop/CLAUDE.md`, and `apps/cli/CLAUDE.md` — loaded automatically when working in those directories.
+Detailed module docs are loaded automatically when working in subdirectories:
+
+- **`packages/CLAUDE.md`** — Package overview (all packages at a glance)
+- **`packages/pen-types/CLAUDE.md`** — Type definitions for PenDocument model
+- **`packages/pen-core/CLAUDE.md`** — Document tree ops, layout engine, variables, boolean ops
+- **`packages/pen-engine/CLAUDE.md`** — Headless design engine (document, selection, history, viewport)
+- **`packages/pen-react/CLAUDE.md`** — React UI SDK (provider, hooks, panels, canvas)
+- **`packages/pen-figma/CLAUDE.md`** — Figma .fig file parser and converter
+- **`packages/pen-renderer/CLAUDE.md`** — Standalone CanvasKit/Skia renderer
+- **`packages/pen-mcp/CLAUDE.md`** — MCP server (tools, routes, document manager)
+- **`packages/pen-ai-skills/CLAUDE.md`** — AI prompt skill engine (phase-driven loading)
+- **`packages/pen-sdk/CLAUDE.md`** — Umbrella SDK (re-exports all packages)
+- **`packages/agent-native/CLAUDE.md`** — Zig agent runtime (NAPI addon)
+- **`apps/web/CLAUDE.md`** — Web app (canvas engine, stores, components, AI services)
+- **`apps/desktop/CLAUDE.md`** — Electron desktop app (IPC, file association, auto-updater)
+- **`apps/cli/CLAUDE.md`** — CLI tool (`op` commands, input methods, connection)
 
 ## Commands
 
