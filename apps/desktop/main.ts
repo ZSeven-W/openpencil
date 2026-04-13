@@ -9,7 +9,8 @@ import { execSync } from 'node:child_process';
 import { fork, type ChildProcess } from 'node:child_process';
 import { createServer } from 'node:net';
 import { join, extname } from 'node:path';
-import { homedir } from 'node:os';
+import { homedir, tmpdir } from 'node:os';
+import { existsSync, readFileSync, unlinkSync } from 'node:fs';
 import { readFile, writeFile, mkdir, unlink } from 'node:fs/promises';
 
 import { buildAppMenu } from './app-menu';
@@ -691,8 +692,38 @@ app.on('activate', () => {
 app.on('before-quit', () => {
   clearUpdateTimer();
   killNitroProcess();
+  killMcpServer();
   cleanupPortFile().catch(() => {});
 });
+
+/** Kill the detached MCP server child (spawned by Nitro via mcp-server-manager). */
+function killMcpServer(): void {
+  // PID file path matches apps/web/server/utils/mcp-server-manager.ts
+  const pidFile = join(tmpdir(), 'openpencil-mcp-server.pid');
+  const portFile = join(tmpdir(), 'openpencil-mcp-server.port');
+  try {
+    if (!existsSync(pidFile)) return;
+    const pid = parseInt(readFileSync(pidFile, 'utf-8').trim(), 10);
+    if (!Number.isFinite(pid)) return;
+    try {
+      process.kill(pid, 'SIGTERM');
+    } catch {
+      /* already dead */
+    }
+  } catch {
+    /* ignore */
+  }
+  try {
+    unlinkSync(pidFile);
+  } catch {
+    /* ignore */
+  }
+  try {
+    unlinkSync(portFile);
+  } catch {
+    /* ignore */
+  }
+}
 
 /** Platform-aware Nitro process termination. */
 function killNitroProcess(): void {

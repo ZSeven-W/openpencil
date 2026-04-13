@@ -17,6 +17,7 @@ docs/
 # Build outputs
 out/
 dist/
+apps/cli/src/commands/skill-bundle.json
 dist-ssr/
 electron-dist/
 dist-electron/

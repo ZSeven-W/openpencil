@@ -61,6 +61,12 @@ jobs:
             fi
           done
 
+      - name: Checkout openpencil-skill
+        uses: actions/checkout@v4
+        with:
+          repository: zseven-w/openpencil-skill
+          path: ../openpencil-skill
+
       - name: Compile CLI
         run: bun run cli:compile
 
@@ -89,6 +95,18 @@ jobs:
       - name: Publish pen-renderer
         run: npm publish --access public 2>&1 || npm view "@zseven-w/pen-renderer@${{ steps.version.outputs.version }}" version
         working-directory: packages/pen-renderer
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Publish pen-engine
+        run: npm publish --access public 2>&1 || npm view "@zseven-w/pen-engine@${{ steps.version.outputs.version }}" version
+        working-directory: packages/pen-engine
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Publish pen-react
+        run: npm publish --access public 2>&1 || npm view "@zseven-w/pen-react@${{ steps.version.outputs.version }}" version
+        working-directory: packages/pen-react
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 

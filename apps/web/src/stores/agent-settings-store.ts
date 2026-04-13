@@ -5,6 +5,7 @@ import type {
   MCPCliIntegration,
   MCPTransportMode,
   GroupedModel,
+  AcpAgentConfig,
 } from '@/types/agent-settings';
 import type { ImageGenConfig, ImageGenProfile } from '@/types/image-service';
 import { DEFAULT_IMAGE_GEN_CONFIG } from '@/types/image-service';
@@ -56,11 +57,16 @@ interface PersistedState {
   activeImageGenProfileId: string | null;
   openverseOAuth: { clientId: string; clientSecret: string } | null;
   builtinProviders: BuiltinProviderConfig[];
+  acpAgents: AcpAgentConfig[];
   teamEnabled: boolean;
   teamDesignModel: string | null;
 }
 
 interface AgentSettingsState extends PersistedState {
+  acpConnectionStatus: Record<
+    string,
+    { isConnected: boolean; agentInfo?: { name: string; title?: string; version?: string } }
+  >;
   dialogOpen: boolean;
   isHydrated: boolean;
   mcpServerRunning: boolean;
@@ -88,6 +94,16 @@ interface AgentSettingsState extends PersistedState {
   addBuiltinProvider: (config: Omit<BuiltinProviderConfig, 'id'>) => string;
   updateBuiltinProvider: (id: string, updates: Partial<BuiltinProviderConfig>) => void;
   removeBuiltinProvider: (id: string) => void;
+  addAcpAgent: (config: Omit<AcpAgentConfig, 'id'>) => string;
+  updateAcpAgent: (id: string, updates: Partial<AcpAgentConfig>) => void;
+  removeAcpAgent: (id: string) => void;
+  setAcpConnectionStatus: (
+    id: string,
+    status: {
+      isConnected: boolean;
+      agentInfo?: { name: string; title?: string; version?: string };
+    },
+  ) => void;
   setTeamEnabled: (enabled: boolean) => void;
   setTeamDesignModel: (model: string | null) => void;
   persist: () => void;
@@ -151,8 +167,10 @@ export const useAgentSettingsStore = create<AgentSettingsState>((set, get) => ({
   activeImageGenProfileId: null,
   openverseOAuth: null,
   builtinProviders: [],
+  acpAgents: [],
   teamEnabled: false,
   teamDesignModel: null,
+  acpConnectionStatus: {},
   dialogOpen: false,
   isHydrated: false,
   mcpServerRunning: false,
@@ -264,6 +282,33 @@ export const useAgentSettingsStore = create<AgentSettingsState>((set, get) => ({
       builtinProviders: s.builtinProviders.filter((p) => p.id !== id),
     })),
 
+  addAcpAgent: (config) => {
+    const id = `acp-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
+    set((s) => ({ acpAgents: [...s.acpAgents, { ...config, id }] }));
+    get().persist();
+    return id;
+  },
+  updateAcpAgent: (id, updates) => {
+    set((s) => ({
+      acpAgents: s.acpAgents.map((a) => (a.id === id ? { ...a, ...updates } : a)),
+    }));
+    get().persist();
+  },
+  removeAcpAgent: (id) => {
+    set((s) => ({
+      acpAgents: s.acpAgents.filter((a) => a.id !== id),
+      acpConnectionStatus: Object.fromEntries(
+        Object.entries(s.acpConnectionStatus).filter(([k]) => k !== id),
+      ),
+    }));
+    get().persist();
+  },
+  setAcpConnectionStatus: (id, status) => {
+    set((s) => ({
+      acpConnectionStatus: { ...s.acpConnectionStatus, [id]: status },
+    }));
+  },
+
   setTeamEnabled: (teamEnabled) => set({ teamEnabled }),
   setTeamDesignModel: (teamDesignModel) => set({ teamDesignModel }),
 
@@ -279,6 +324,7 @@ export const useAgentSettingsStore = create<AgentSettingsState>((set, get) => ({
         activeImageGenProfileId,
         openverseOAuth,
         builtinProviders,
+        acpAgents,
         teamEnabled,
         teamDesignModel,
       } = get();
@@ -294,6 +340,7 @@ export const useAgentSettingsStore = create<AgentSettingsState>((set, get) => ({
           activeImageGenProfileId,
           openverseOAuth,
           builtinProviders,
+          acpAgents,
           teamEnabled,
           teamDesignModel,
         }),
@@ -357,6 +404,10 @@ export const useAgentSettingsStore = create<AgentSettingsState>((set, get) => ({
           ) as BuiltinProviderConfig[],
         });
       }
+      const stored = data as Record<string, unknown>;
+      set({
+        acpAgents: Array.isArray(stored.acpAgents) ? (stored.acpAgents as AcpAgentConfig[]) : [],
+      });
       if ((data as Record<string, unknown>).teamEnabled !== undefined) {
         set({ teamEnabled: (data as Record<string, unknown>).teamEnabled as boolean });
       }

@@ -17,6 +17,7 @@ apps/cli/
 │       ├── document.ts   open, save, get, selection
 │       ├── export.ts     export (react, html, vue, svelte, flutter, swiftui, compose, rn, css)
 │       ├── import.ts     import:svg, import:figma
+│       ├── install.ts    install, uninstall (openpencil-skill for AI agents)
 │       ├── layout.ts     layout, find-space
 │       ├── nodes.ts      insert, update, delete, move, copy, replace
 │       ├── pages.ts      page list/add/remove/rename/reorder/duplicate
@@ -36,6 +37,7 @@ apps/cli/
 - **Input methods:** Commands accepting JSON/DSL support inline string, `@filepath`, or `-` (stdin)
 - **Connection:** WebSocket to running app instance (desktop or web server)
 - **Launcher:** Auto-detects installed desktop app paths per platform (macOS, Windows, Linux)
+- **Skill bundle:** `bun run cli:bundle-skill` pre-generates `skill-bundle.json` from `../openpencil-skill/`, embedded into the binary by esbuild. Falls back to git clone at runtime if the bundle is empty.
 - **esbuild:** Compiles with `--alias:@=src` to resolve web app imports, `--external:canvas --external:paper`
 - **Output:** All commands output JSON; `--pretty` flag for human-readable formatting
 - **Global flags:** `--file <path>` (target .op file), `--page <id>` (target page)

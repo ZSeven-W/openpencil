@@ -184,6 +184,95 @@ describe('builtin provider presets', () => {
     ).toBe('https://api.minimaxi.com/anthropic');
   });
 
+  it('preserves alternative-format baseURL on canonicalize (e.g. Bailian Coding Plan + Anthropic)', () => {
+    // Repro for the regression where switching a default-OpenAI preset to
+    // its Anthropic alt URL would silently get reset to the OpenAI URL on
+    // save, and the request then went to .../v1/messages → 404.
+    const altFormat = canonicalizeBuiltinProviderConfig({
+      id: 'bp-bailian-coding-anthropic',
+      displayName: 'Bailian Coding Plan',
+      preset: 'bailian-coding',
+      type: 'anthropic',
+      apiKey: 'sk-test',
+      model: 'qwen3-coder-plus',
+      baseURL: 'https://coding.dashscope.aliyuncs.com/apps/anthropic',
+      enabled: true,
+    });
+
+    expect(altFormat.preset).toBe('bailian-coding');
+    expect(altFormat.type).toBe('anthropic');
+    expect(altFormat.baseURL).toBe('https://coding.dashscope.aliyuncs.com/apps/anthropic');
+  });
+
+  it('round-trips the default OpenAI URL on canonicalize for the same preset', () => {
+    // Sanity: we did not break the default-format path while fixing the alt-format one.
+    const defaultFormat = canonicalizeBuiltinProviderConfig({
+      id: 'bp-bailian-coding-openai',
+      displayName: 'Bailian Coding Plan',
+      preset: 'bailian-coding',
+      type: 'openai-compat',
+      apiKey: 'sk-test',
+      model: 'qwen3-coder-plus',
+      baseURL: 'https://coding.dashscope.aliyuncs.com/v1',
+      enabled: true,
+    });
+
+    expect(defaultFormat.preset).toBe('bailian-coding');
+    expect(defaultFormat.type).toBe('openai-compat');
+    expect(defaultFormat.baseURL).toBe('https://coding.dashscope.aliyuncs.com/v1');
+  });
+
+  it('infers a unique preset from its alternative-format URL (so reload restores it correctly)', () => {
+    // Previously the URL→preset reverse lookup only knew about default-format
+    // URLs; an alt-format URL would fall through to 'custom' and lose the
+    // preset selection on the next reload.
+    expect(
+      inferBuiltinProviderPreset({
+        type: 'anthropic',
+        baseURL: 'https://coding.dashscope.aliyuncs.com/apps/anthropic',
+      } as any),
+    ).toBe('bailian-coding');
+  });
+
+  it('preserves an explicit preset when two presets share the same alt URL', () => {
+    // zhipu and glm-coding both point at https://open.bigmodel.cn/api/anthropic
+    // for their Anthropic alt format. The user's dropdown choice must win.
+    const glmCoding = canonicalizeBuiltinProviderConfig({
+      id: 'bp-glm-coding-anthropic',
+      displayName: 'GLM Coding Plan',
+      preset: 'glm-coding',
+      type: 'anthropic',
+      apiKey: 'key',
+      model: 'glm-4.7',
+      baseURL: 'https://open.bigmodel.cn/api/anthropic',
+      enabled: true,
+    });
+    expect(glmCoding.preset).toBe('glm-coding');
+    expect(glmCoding.baseURL).toBe('https://open.bigmodel.cn/api/anthropic');
+
+    const zhipu = canonicalizeBuiltinProviderConfig({
+      id: 'bp-zhipu-anthropic',
+      displayName: 'Zhipu',
+      preset: 'zhipu',
+      type: 'anthropic',
+      apiKey: 'key',
+      model: 'glm-5',
+      baseURL: 'https://open.bigmodel.cn/api/anthropic',
+      enabled: true,
+    });
+    expect(zhipu.preset).toBe('zhipu');
+    expect(zhipu.baseURL).toBe('https://open.bigmodel.cn/api/anthropic');
+  });
+
+  it('detects global region from an alt-format URL', () => {
+    expect(
+      inferBuiltinProviderRegion({
+        type: 'anthropic',
+        baseURL: 'https://coding-intl.dashscope.aliyuncs.com/apps/anthropic',
+      } as any),
+    ).toBe('global');
+  });
+
   it('prefers a recognized legacy URL over stale built-in preset metadata during migration', () => {
     const migrated = canonicalizeBuiltinProviderConfig({
       id: 'bp-stale',

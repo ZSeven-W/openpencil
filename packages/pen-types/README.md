@@ -1,6 +1,6 @@
 # @zseven-w/pen-types
 
-Type definitions for the [OpenPencil](https://github.com/nicepkg/openpencil) document model.
+Type definitions for the [OpenPencil](https://github.com/ZSeven-W/openpencil) document model.
 
 ## Install
 

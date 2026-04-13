@@ -84,7 +84,11 @@ export const NODE_TOOL_DEFINITIONS = [
   },
   {
     name: 'delete_node',
-    description: 'Delete a node (and all its children) from an .op file.',
+    description:
+      'Delete a node (and all its children) from the document. ' +
+      'Use this when the user asks to remove, delete, or clear specific elements. ' +
+      'Always call batch_get or snapshot_layout first to find the correct nodeId before deleting. ' +
+      'Returns confirmation of the deleted node.',
     inputSchema: {
       type: 'object' as const,
       properties: {

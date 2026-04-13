@@ -60,4 +60,23 @@ describe('mcp-sync-state: active client tracking', () => {
   it('sendToClient returns false for unknown client', () => {
     expect(sendToClient('nope', { type: 'x' })).toBe(false);
   });
+
+  it('broadcasts document updates to other clients and prunes broken writers', () => {
+    const received: string[] = [];
+    registerSSEClient('client-source', { push: () => {} });
+    registerSSEClient('client-target', { push: (data: string) => received.push(data) });
+    registerSSEClient('client-broken', {
+      push: () => {
+        throw new Error('writer closed');
+      },
+    });
+
+    setSyncDocument({ version: '1.0.0', children: [] } as PenDocument, 'client-source');
+
+    expect(received).toHaveLength(1);
+    expect(JSON.parse(received[0]).type).toBe('document:update');
+    expect(isClientConnected('client-source')).toBe(true);
+    expect(isClientConnected('client-target')).toBe(true);
+    expect(isClientConnected('client-broken')).toBe(false);
+  });
 });

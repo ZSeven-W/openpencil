@@ -38,9 +38,12 @@ interface OpResult {
  *   M(nodeId, parent, index?)               — Move
  *   D(nodeId)                               — Delete
  */
-export async function handleBatchDesign(
-  params: BatchDesignParams,
-): Promise<{ results: OpResult[]; nodeCount: number; postProcessed?: boolean }> {
+export async function handleBatchDesign(params: BatchDesignParams): Promise<{
+  results: OpResult[];
+  nodeCount: number;
+  postProcessed?: boolean;
+  errors?: Array<{ line: string; error: string }>;
+}> {
   const filePath = resolveDocPath(params.filePath);
   let doc = await openDocument(filePath);
   doc = structuredClone(doc);
@@ -48,18 +51,20 @@ export async function handleBatchDesign(
   const pageId = params.pageId;
   const bindings = new Map<string, string>();
   const results: OpResult[] = [];
-  const lines = params.operations
-    .split('\n')
-    .map((l) => l.trim())
-    .filter((l) => l && !l.startsWith('//'));
+  const errors: Array<{ line: string; error: string }> = [];
+  const lines = splitOperations(params.operations);
 
   for (const line of lines) {
     try {
       await executeLine(line, doc, bindings, results, pageId);
     } catch (err) {
-      throw new Error(
-        `Error executing "${line}": ${err instanceof Error ? err.message : String(err)}`,
-      );
+      // Best-effort: don't abort the entire batch on a single bad operation.
+      // Collect errors so the agent can see what failed and retry selectively.
+      const preview = line.length > 200 ? `${line.slice(0, 200)}...` : line;
+      errors.push({
+        line: preview,
+        error: err instanceof Error ? err.message : String(err),
+      });
     }
   }
 
@@ -105,7 +110,49 @@ export async function handleBatchDesign(
     results,
     nodeCount: countNodes(getDocChildren(doc, pageId)),
     postProcessed: postProcessed || undefined,
+    errors: errors.length > 0 ? errors : undefined,
   };
+}
+
+/**
+ * Split DSL operations handling multi-line JSON bodies. Splits on newlines
+ * that are OUTSIDE quoted strings and balanced brackets. This lets agents
+ * pretty-print JSON across multiple lines inside a single operation.
+ */
+function splitOperations(raw: string): string[] {
+  const result: string[] = [];
+  let buf = '';
+  let depth = 0;
+  let inString = false;
+  let escape = false;
+
+  for (let i = 0; i < raw.length; i++) {
+    const ch = raw[i];
+    buf += ch;
+    if (escape) {
+      escape = false;
+      continue;
+    }
+    if (ch === '\\' && inString) {
+      escape = true;
+      continue;
+    }
+    if (ch === '"') {
+      inString = !inString;
+      continue;
+    }
+    if (inString) continue;
+    if (ch === '(' || ch === '[' || ch === '{') depth++;
+    else if (ch === ')' || ch === ']' || ch === '}') depth--;
+    else if (ch === '\n' && depth === 0) {
+      const trimmed = buf.trim();
+      if (trimmed && !trimmed.startsWith('//')) result.push(trimmed);
+      buf = '';
+    }
+  }
+  const tail = buf.trim();
+  if (tail && !tail.startsWith('//')) result.push(tail);
+  return result;
 }
 
 async function executeLine(
@@ -116,11 +163,27 @@ async function executeLine(
   pageId?: string,
 ): Promise<void> {
   // Parse: binding=OP(args) or OP(args)
+  // Binding is optional for I/C/R/G — auto-generated when omitted (agents
+  // sometimes write `I(parent, data)` without the binding prefix).
   const assignMatch = line.match(/^(\w+)\s*=\s*([ICRMG])\((.+)\)$/);
+  const bindlessAssignMatch = !assignMatch && line.match(/^([ICRG])\((.+)\)$/);
   const callMatch = line.match(/^([UDM])\((.+)\)$/);
 
-  if (assignMatch) {
-    const [, binding, op, argsStr] = assignMatch;
+  // Normalize bindless form to an auto-generated binding so the rest of the
+  // logic below can treat it uniformly.
+  const effectiveAssign =
+    assignMatch ??
+    (bindlessAssignMatch
+      ? ([
+          line,
+          `_auto_${results.length}_${bindlessAssignMatch[1]}`,
+          bindlessAssignMatch[1],
+          bindlessAssignMatch[2],
+        ] as RegExpMatchArray)
+      : null);
+
+  if (effectiveAssign) {
+    const [, binding, op, argsStr] = effectiveAssign;
     switch (op) {
       case 'I': {
         const { parent, data } = parseInsertArgs(argsStr, bindings);
@@ -464,22 +527,105 @@ function applyDescendantOverrides(node: PenNode, descendants: Record<string, unk
 function parseJsonArg(str: string): Record<string, unknown> {
   const trimmed = str.trim();
   // Try strict JSON first (most common case — avoids mangling values like "Don't")
+  let parsed: unknown;
   try {
-    return sanitizeObject(JSON.parse(trimmed));
+    parsed = JSON.parse(trimmed);
   } catch {
     /* fall through to lenient parsing */
   }
 
-  let normalized = trimmed;
-  // Convert JavaScript-style object to JSON: unquoted keys → quoted
-  normalized = normalized.replace(/(?<=\{|,)\s*(\w+)\s*:/g, ' "$1":');
-  // Replace single-quoted string delimiters with double quotes (not quotes inside strings)
-  normalized = replaceSingleQuoteDelimiters(normalized);
-  try {
-    return sanitizeObject(JSON.parse(normalized));
-  } catch {
-    throw new Error(`Failed to parse JSON: ${str.slice(0, 200)}`);
+  if (parsed === undefined) {
+    let normalized = trimmed;
+    // Convert JavaScript-style object to JSON: unquoted keys → quoted
+    normalized = normalized.replace(/(?<=\{|,)\s*(\w+)\s*:/g, ' "$1":');
+    // Replace single-quoted string delimiters with double quotes (not quotes inside strings)
+    normalized = replaceSingleQuoteDelimiters(normalized);
+    // Remove empty keys like `, ": 50,` (agent truncation artifact) —
+    // skip the property entirely so the rest of the object still parses.
+    normalized = normalized.replace(/,\s*""\s*:\s*[^,}\]]+/g, '');
+    // Remove trailing commas before } or ] (common agent mistake)
+    normalized = normalized.replace(/,(\s*[}\]])/g, '$1');
+    try {
+      parsed = JSON.parse(normalized);
+    } catch (err) {
+      const snippet = str.slice(0, 300);
+      throw new Error(
+        `Failed to parse JSON (${err instanceof Error ? err.message : 'unknown'}): ${snippet}${str.length > 300 ? '...' : ''}`,
+      );
+    }
   }
+
+  return sanitizeObject(normalizeNodeShape(parsed)) as Record<string, unknown>;
+}
+
+/**
+ * Normalize common agent shorthand into canonical PenNode format.
+ * Applied before sanitizeObject so downstream code sees a consistent shape.
+ */
+function normalizeNodeShape(input: unknown): unknown {
+  if (Array.isArray(input)) return input.map(normalizeNodeShape);
+  if (!input || typeof input !== 'object') return input;
+  const obj = input as Record<string, unknown>;
+
+  // fill: "#hex" | "solid#hex" → [{ type: 'solid', color: '#hex' }]
+  // fill: { type, color } → [{ ... }]
+  if ('fill' in obj) {
+    obj.fill = normalizeFillField(obj.fill);
+  }
+
+  // stroke: { thickness, color } | { thickness, color: '#hex' } →
+  //   { thickness, fill: [{ type: 'solid', color: '#hex' }] }
+  // stroke: '#hex' → { thickness: 1, fill: [{ type: 'solid', color: '#hex' }] }
+  if ('stroke' in obj) {
+    obj.stroke = normalizeStrokeField(obj.stroke);
+  }
+
+  // Recurse into children
+  if (Array.isArray(obj.children)) {
+    obj.children = obj.children.map((c) => normalizeNodeShape(c));
+  }
+
+  return obj;
+}
+
+function normalizeFillField(value: unknown): unknown {
+  if (value == null) return value;
+  // '#hex' shorthand
+  if (typeof value === 'string') {
+    return [{ type: 'solid', color: value }];
+  }
+  // Single fill object → wrap in array
+  if (typeof value === 'object' && !Array.isArray(value)) {
+    return [value];
+  }
+  // Already an array — leave as-is
+  return value;
+}
+
+function normalizeStrokeField(value: unknown): unknown {
+  if (value == null) return value;
+  // '#hex' shorthand → stroke with solid fill
+  if (typeof value === 'string') {
+    return { thickness: 1, fill: [{ type: 'solid', color: value }] };
+  }
+  if (typeof value !== 'object') return value;
+  const stroke = value as Record<string, unknown>;
+  // { thickness, color: '#hex' } → { thickness, fill: [...] }
+  if (stroke.color != null && stroke.fill == null) {
+    stroke.fill = [{ type: 'solid', color: stroke.color }];
+    delete stroke.color;
+  }
+  // { fill: '#hex' | object } → { fill: [...] }
+  if (stroke.fill != null) {
+    stroke.fill = normalizeFillField(stroke.fill);
+  }
+  // { thickness, type, color } variant
+  if (stroke.type != null && stroke.color != null && stroke.fill == null) {
+    stroke.fill = [{ type: stroke.type, color: stroke.color }];
+    delete stroke.type;
+    delete stroke.color;
+  }
+  return stroke;
 }
 
 /** Replace single-quote string delimiters with double quotes, leaving apostrophes inside strings. */

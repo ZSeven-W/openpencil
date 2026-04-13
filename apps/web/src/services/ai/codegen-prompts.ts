@@ -10,6 +10,36 @@ function loadSkill(name: string): string {
 }
 
 /**
+ * Strip fields that don't influence code generation. Keeps request bodies small
+ * enough that proxies don't reject them with 403/413, and reduces input tokens.
+ */
+function stripNoise(input: unknown): unknown {
+  if (Array.isArray(input)) return input.map(stripNoise);
+  if (!input || typeof input !== 'object') return input;
+  const obj = input as Record<string, unknown>;
+  const out: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(obj)) {
+    // Drop fields the generator doesn't need:
+    //  - id (model picks its own names)
+    //  - parentId / pageId (tree structure is implicit in nesting)
+    //  - x/y on auto-layout children (layout engine positions them)
+    //  - effects we typically can't translate (skip noisy nested props)
+    //  - rotation/opacity/visible when default
+    if (k === 'id' || k === 'parentId' || k === 'pageId' || k === '_meta') continue;
+    if (k === 'rotation' && v === 0) continue;
+    if (k === 'opacity' && v === 1) continue;
+    if (k === 'visible' && v === true) continue;
+    out[k] = stripNoise(v);
+  }
+  return out;
+}
+
+/** Compact JSON for AI prompts (no indentation, drops noise fields). */
+function compactNodes(nodes: PenNode[]): string {
+  return JSON.stringify(stripNoise(nodes));
+}
+
+/**
  * Build system prompt for Step 1: planning.
  */
 export function buildPlanningPrompt(
@@ -67,7 +97,7 @@ export function buildChunkPrompt(
       `Generate a ${framework} component named "${suggestedComponentName}".`,
       '',
       'Nodes (JSON):',
-      JSON.stringify(nodes, null, 2),
+      compactNodes(nodes),
       depSection,
       '',
       'Output the code followed by ---CONTRACT--- and the JSON contract.',

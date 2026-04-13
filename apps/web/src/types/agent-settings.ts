@@ -34,13 +34,24 @@ export interface GroupedModel {
   value: string;
   displayName: string;
   description: string;
-  provider: AIProviderType;
+  provider: AIProviderType | string;
   /** When set, this model came from a built-in provider (API key) rather than a CLI tool */
   builtinProviderId?: string;
 }
 
 export interface ModelGroup {
-  provider: AIProviderType;
+  provider: AIProviderType | string;
   providerName: string;
   models: GroupedModel[];
+}
+
+export interface AcpAgentConfig {
+  id: string;
+  displayName: string;
+  connectionType: 'local' | 'remote';
+  command?: string;
+  args?: string[];
+  env?: Record<string, string>;
+  url?: string;
+  enabled: boolean;
 }

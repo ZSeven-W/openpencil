@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 
 import { createEmptyDocument } from '@/stores/document-tree-utils';
 import { useCanvasStore } from '@/stores/canvas-store';
@@ -70,8 +70,11 @@ function resetStores() {
 }
 
 describe('SkiaInteractionManager continuous interaction commits', () => {
-  it('defers resize store writes until mouseup', () => {
+  beforeEach(() => {
     resetStores();
+  });
+
+  it('defers resize store writes until mouseup', () => {
     let node: any = {
       id: 'path-1',
       type: 'path',
@@ -143,7 +146,6 @@ describe('SkiaInteractionManager continuous interaction commits', () => {
   });
 
   it('defers rotate store writes until mouseup', () => {
-    resetStores();
     let node: any = {
       id: 'rect-1',
       type: 'rectangle',
@@ -199,7 +201,6 @@ describe('SkiaInteractionManager continuous interaction commits', () => {
   });
 
   it('defers arc handle store writes until mouseup', () => {
-    resetStores();
     let node: any = {
       id: 'ellipse-1',
       type: 'ellipse',
@@ -252,5 +253,102 @@ describe('SkiaInteractionManager continuous interaction commits', () => {
 
     expect(updateNodeCalls).toHaveLength(1);
     expect(updateNodeCalls[0]?.[1]).toHaveProperty('innerRadius');
+  });
+
+  it('keeps an image-backed node selected instead of auto-selecting its parent frame', () => {
+    const frame = {
+      id: 'frame-1',
+      type: 'frame',
+      x: 0,
+      y: 0,
+      width: 300,
+      height: 300,
+      children: [],
+    } as PenNode;
+    const imageBackedRect = {
+      id: 'child-1',
+      type: 'rectangle',
+      x: 10,
+      y: 20,
+      width: 120,
+      height: 80,
+      fill: [{ type: 'image', url: 'memory://image.png' }],
+    } as PenNode;
+
+    useDocumentStore.setState({
+      getNodeById: (id: string) => {
+        if (id === frame.id) return frame;
+        if (id === imageBackedRect.id) return imageBackedRect;
+        return undefined;
+      },
+      getParentOf: (id: string) => (id === imageBackedRect.id ? frame : null),
+      isDescendantOf: () => false,
+    } as any);
+
+    const engine = createEngineStub([
+      {
+        node: { ...imageBackedRect },
+        absX: 10,
+        absY: 20,
+        absW: 120,
+        absH: 80,
+      },
+    ]);
+    (engine as any).spatialIndex.hitTest = () => [{ node: imageBackedRect } as any];
+
+    const manager = new SkiaInteractionManager(
+      { current: engine as any },
+      createCanvasStub(),
+      () => {},
+    ) as any;
+
+    manager.handleSelectMouseDown(
+      { shiftKey: false } as MouseEvent,
+      { x: 20, y: 30 },
+      engine as any,
+    );
+
+    expect(useCanvasStore.getState().selection.selectedIds).toEqual(['child-1']);
+    expect(useCanvasStore.getState().selection.activeId).toBe('child-1');
+  });
+
+  it('moves clip rects together with dragged render nodes', () => {
+    const node = {
+      id: 'frame-1',
+      type: 'frame',
+      x: 50,
+      y: 60,
+      width: 200,
+      height: 120,
+      children: [],
+    } as PenNode;
+
+    const renderNode = {
+      node: { ...node },
+      absX: 50,
+      absY: 60,
+      absW: 200,
+      absH: 120,
+      clipRect: { x: 45, y: 55, w: 210, h: 130, rx: 8 },
+    };
+    const engine = createEngineStub([renderNode]);
+    const manager = new SkiaInteractionManager(
+      { current: engine as any },
+      createCanvasStub(),
+      () => {},
+    ) as any;
+
+    manager.isDragging = true;
+    manager.dragNodeIds = ['frame-1'];
+    manager.dragStartSceneX = 0;
+    manager.dragStartSceneY = 0;
+
+    manager.handleDragMove({ x: 20, y: 15 }, engine as any);
+
+    expect(renderNode.absX).toBe(70);
+    expect(renderNode.absY).toBe(75);
+    expect(renderNode.clipRect).toMatchObject({ x: 65, y: 70, w: 210, h: 130, rx: 8 });
+    expect(engine.rebuildCount).toBeGreaterThan(0);
+    expect(engine.dirtyCount).toBeGreaterThan(0);
   });
 });

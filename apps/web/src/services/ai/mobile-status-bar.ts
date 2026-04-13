@@ -185,8 +185,12 @@ export function createMobileStatusBar(variant: StatusBarVariant = 'dark'): PenNo
  * Determines the best status bar variant based on a background color.
  * Returns 'light' (white icons) for dark backgrounds, 'dark' (black icons) for light ones.
  */
-export function inferStatusBarVariant(bgColor?: string): StatusBarVariant {
-  if (!bgColor) return 'dark';
+export function inferStatusBarVariant(bgColor?: string | unknown): StatusBarVariant {
+  // Defensive: callers occasionally pass non-string values (e.g. a fill
+  // object or a `$variable` ref-shaped object) when the upstream PenNode
+  // hasn't been variable-resolved yet. Bail to the safe default instead
+  // of throwing `bgColor.replace is not a function`.
+  if (typeof bgColor !== 'string' || !bgColor) return 'dark';
   const hex = bgColor.replace(/^#/, '').slice(0, 6);
   if (hex.length !== 6) return 'dark';
   const r = parseInt(hex.slice(0, 2), 16);

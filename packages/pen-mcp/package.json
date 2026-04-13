@@ -1,7 +1,21 @@
 {
   "name": "@zseven-w/pen-mcp",
-  "version": "0.7.0",
+  "version": "0.7.1",
   "description": "MCP server, document manager, and tools for OpenPencil",
+  "homepage": "https://github.com/ZSeven-W/openpencil/tree/main/packages/pen-mcp",
+  "bugs": {
+    "url": "https://github.com/ZSeven-W/openpencil/issues"
+  },
+  "license": "MIT",
+  "author": {
+    "name": "ZSeven-W",
+    "email": "xkayshen@gmail.com"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ZSeven-W/openpencil.git",
+    "directory": "packages/pen-mcp"
+  },
   "files": [
     "src"
   ],

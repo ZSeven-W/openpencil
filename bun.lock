@@ -5,6 +5,7 @@
     "": {
       "name": "openpencil",
       "dependencies": {
+        "@agentclientprotocol/sdk": "^0.18.2",
         "@anthropic-ai/claude-agent-sdk": "^0.2.47",
         "@anthropic-ai/sdk": "^0.77.0",
         "@github/copilot-sdk": "^0.1.32",
@@ -78,7 +79,7 @@
     },
     "apps/cli": {
       "name": "@zseven-w/openpencil",
-      "version": "0.6.1",
+      "version": "0.7.1",
       "bin": {
         "op": "dist/openpencil-cli.cjs",
       },
@@ -89,13 +90,14 @@
     },
     "apps/desktop": {
       "name": "@zseven-w/desktop",
-      "version": "0.6.1",
+      "version": "0.7.1",
     },
     "apps/web": {
       "name": "@zseven-w/web",
-      "version": "0.6.1",
+      "version": "0.7.1",
       "dependencies": {
         "@zseven-w/agent-native": "workspace:*",
+        "@zseven-w/pen-acp": "workspace:*",
         "@zseven-w/pen-ai-skills": "workspace:*",
         "@zseven-w/pen-core": "workspace:*",
         "@zseven-w/pen-engine": "workspace:*",
@@ -109,11 +111,23 @@
     },
     "packages/agent-native/napi": {
       "name": "@zseven-w/agent-native",
-      "version": "0.1.0",
+      "version": "0.2.0",
+    },
+    "packages/pen-acp": {
+      "name": "@zseven-w/pen-acp",
+      "version": "0.7.1",
+      "dependencies": {
+        "@agentclientprotocol/sdk": "^0.18.2",
+        "ws": "^8.18.0",
+      },
+      "devDependencies": {
+        "@types/ws": "^8.5.0",
+        "typescript": "^5.7.2",
+      },
     },
     "packages/pen-ai-skills": {
       "name": "@zseven-w/pen-ai-skills",
-      "version": "0.6.1",
+      "version": "0.7.1",
       "dependencies": {
         "@zseven-w/pen-types": "workspace:*",
         "gray-matter": "^4.0.3",
@@ -122,7 +136,7 @@
     },
     "packages/pen-core": {
       "name": "@zseven-w/pen-core",
-      "version": "0.6.1",
+      "version": "0.7.1",
       "dependencies": {
         "@zseven-w/pen-types": "workspace:*",
         "nanoid": "^5.1.6",
@@ -134,7 +148,7 @@
     },
     "packages/pen-engine": {
       "name": "@zseven-w/pen-engine",
-      "version": "0.6.1",
+      "version": "0.7.1",
       "dependencies": {
         "@zseven-w/pen-core": "workspace:*",
         "@zseven-w/pen-figma": "workspace:*",
@@ -155,7 +169,7 @@
     },
     "packages/pen-figma": {
       "name": "@zseven-w/pen-figma",
-      "version": "0.6.1",
+      "version": "0.7.1",
       "dependencies": {
         "@zseven-w/pen-types": "workspace:*",
         "fzstd": "^0.1.1",
@@ -169,7 +183,7 @@
     },
     "packages/pen-mcp": {
       "name": "@zseven-w/pen-mcp",
-      "version": "0.6.1",
+      "version": "0.7.1",
       "dependencies": {
         "@iconify-json/feather": "^1.2.1",
         "@iconify-json/lucide": "^1.2.93",
@@ -186,7 +200,7 @@
     },
     "packages/pen-react": {
       "name": "@zseven-w/pen-react",
-      "version": "0.6.1",
+      "version": "0.7.1",
       "dependencies": {
         "@zseven-w/pen-core": "workspace:*",
         "@zseven-w/pen-engine": "workspace:*",
@@ -215,7 +229,7 @@
     },
     "packages/pen-renderer": {
       "name": "@zseven-w/pen-renderer",
-      "version": "0.6.1",
+      "version": "0.7.1",
       "dependencies": {
         "@zseven-w/pen-core": "workspace:*",
         "@zseven-w/pen-types": "workspace:*",
@@ -232,7 +246,7 @@
     },
     "packages/pen-sdk": {
       "name": "@zseven-w/pen-sdk",
-      "version": "0.6.1",
+      "version": "0.7.1",
       "dependencies": {
         "@zseven-w/pen-core": "workspace:*",
         "@zseven-w/pen-engine": "workspace:*",
@@ -247,7 +261,7 @@
     },
     "packages/pen-types": {
       "name": "@zseven-w/pen-types",
-      "version": "0.6.1",
+      "version": "0.7.1",
       "devDependencies": {
         "typescript": "^5.7.2",
       },
@@ -257,6 +271,8 @@
     "7zip-bin": ["7zip-bin@5.2.0", "", {}, "sha512-ukTPVhqG4jNzMro2qA9HSCSSVJN3aN7tlb+hfqYCt3ER0yWroeA2VR38MNrOHLQ/cVj+DaIMad0kFCtWWowh/A=="],
 
     "@acemir/cssom": ["@acemir/cssom@0.9.31", "", {}, "sha512-ZnR3GSaH+/vJ0YlHau21FjfLYjMpYVIzTD8M8vIEQvIGxeOXyXdzCI140rrCY862p/C/BbzWsjc1dgnM9mkoTA=="],
+
+    "@agentclientprotocol/sdk": ["@agentclientprotocol/sdk@0.18.2", "", { "peerDependencies": { "zod": "^3.25.0 || ^4.0.0" } }, "sha512-l/o9NKvUc00GPa6RFJ4AccQq2O/PAf83xQ75mThHuL3H571iN4+PEdwnTBez67sS8Nv2aSA373xCZ5CbTXEwzA=="],
 
     "@anthropic-ai/claude-agent-sdk": ["@anthropic-ai/claude-agent-sdk@0.2.97", "", { "dependencies": { "@anthropic-ai/sdk": "^0.80.0", "@modelcontextprotocol/sdk": "^1.27.1" }, "optionalDependencies": { "@img/sharp-darwin-arm64": "^0.34.2", "@img/sharp-darwin-x64": "^0.34.2", "@img/sharp-linux-arm": "^0.34.2", "@img/sharp-linux-arm64": "^0.34.2", "@img/sharp-linux-x64": "^0.34.2", "@img/sharp-linuxmusl-arm64": "^0.34.2", "@img/sharp-linuxmusl-x64": "^0.34.2", "@img/sharp-win32-arm64": "^0.34.2", "@img/sharp-win32-x64": "^0.34.2" }, "peerDependencies": { "zod": "^4.0.0" } }, "sha512-754teaU0nfrn9BC0YWzPjSbJj253GfPUtuUnkrde7LGsaKtFSjEEuQJq5skJvpozqcn+B8frrtWVPkvFdnupTw=="],
 
@@ -892,6 +908,8 @@
 
     "@types/verror": ["@types/verror@1.10.11", "", {}, "sha512-RlDm9K7+o5stv0Co8i8ZRGxDbrTxhJtgjqjFyVh/tXQyl/rYtTKlnTvZ88oSTeYREWurwx20Js4kTuKCsFkUtg=="],
 
+    "@types/ws": ["@types/ws@8.18.1", "", { "dependencies": { "@types/node": "*" } }, "sha512-ThVF6DCVhA8kUGy+aazFQ4kXQ7E1Ty7A3ypFOe0IcJV8O/M511G99AW24irKrW56Wt44yG9+ij8FaqoBGkuBXg=="],
+
     "@types/yauzl": ["@types/yauzl@2.10.3", "", { "dependencies": { "@types/node": "*" } }, "sha512-oJoftv0LSuaDZE3Le4DbKX+KS9G36NzOeSap90UIK0yMA/NhKJhqlSGtNDORNRaIbQfzjXDrQa0ytJ6mNRGz/Q=="],
 
     "@vitejs/plugin-react": ["@vitejs/plugin-react@5.2.0", "", { "dependencies": { "@babel/core": "^7.29.0", "@babel/plugin-transform-react-jsx-self": "^7.27.1", "@babel/plugin-transform-react-jsx-source": "^7.27.1", "@rolldown/pluginutils": "1.0.0-rc.3", "@types/babel__core": "^7.20.5", "react-refresh": "^0.18.0" }, "peerDependencies": { "vite": "^4.2.0 || ^5.0.0 || ^6.0.0 || ^7.0.0 || ^8.0.0" } }, "sha512-YmKkfhOAi3wsB1PhJq5Scj3GXMn3WvtQ/JC0xoopuHoXSdmtdStOpFrYaT1kie2YgFBcIe64ROzMYRjCrYOdYw=="],
@@ -919,6 +937,8 @@
     "@zseven-w/desktop": ["@zseven-w/desktop@workspace:apps/desktop"],
 
     "@zseven-w/openpencil": ["@zseven-w/openpencil@workspace:apps/cli"],
+
+    "@zseven-w/pen-acp": ["@zseven-w/pen-acp@workspace:packages/pen-acp"],
 
     "@zseven-w/pen-ai-skills": ["@zseven-w/pen-ai-skills@workspace:packages/pen-ai-skills"],
 

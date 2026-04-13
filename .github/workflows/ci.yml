@@ -43,6 +43,9 @@ jobs:
       - name: Format check
         run: bun run format:check
 
+      - name: Bundle CLI skill
+        run: bun run cli:bundle-skill
+
       - name: Type check
         run: npx tsc --noEmit
 

@@ -101,6 +101,11 @@ Import:
   op import:svg <file.svg>      Import SVG file
   op import:figma <file.fig>    Import Figma file
 
+Skill:
+  op install [--target T]       Install openpencil-skill for AI agents
+  op uninstall [--target T]     Uninstall openpencil-skill
+    Targets: claude, codex, cursor, gemini, opencode (auto-detected if omitted)
+
 Layout:
   op layout [--parent P] [--depth N]
   op find-space [--direction right|bottom|left|top]
@@ -404,6 +409,18 @@ async function main(): Promise<void> {
         ...globalFlags,
         out: flags.out as string | undefined,
       });
+      break;
+    }
+
+    // --- Skill install ---
+    case 'install': {
+      const { cmdInstall } = await import('./commands/install');
+      cmdInstall({ target: flags.target as string | undefined });
+      break;
+    }
+    case 'uninstall': {
+      const { cmdUninstall } = await import('./commands/install');
+      cmdUninstall({ target: flags.target as string | undefined });
       break;
     }
 
