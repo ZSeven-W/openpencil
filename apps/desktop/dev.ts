@@ -17,6 +17,7 @@ import {
   getElectronBinaryPath,
   getElectronSpawnEnv,
 } from './dev-utils';
+import { ensureLoopbackNoProxy, withLoopbackNoProxy } from '../../scripts/loopback-no-proxy';
 
 const DESKTOP_DIR = import.meta.dirname;
 const ROOT = join(DESKTOP_DIR, '..', '..');
@@ -135,6 +136,11 @@ async function compileElectron(): Promise<void> {
 // ---------------------------------------------------------------------------
 
 async function main(): Promise<void> {
+  // 当前进程本身也会探活 localhost。
+  // 这里继续保留 loopback no_proxy, 让后续 fetch/子进程都统一直连。
+  ensureLoopbackNoProxy(process.env);
+  const childEnv = withLoopbackNoProxy(process.env);
+
   // 1. Start Vite dev server
   console.log('[electron-dev] Starting Vite dev server...');
   // Launch Vite directly on Windows. Spawning through `bun run dev` can tear
@@ -143,7 +149,7 @@ async function main(): Promise<void> {
   const vite = spawn('bun', ['--bun', 'vite', 'dev', '--port', String(VITE_DEV_PORT)], {
     cwd: WEB_DIR,
     stdio: 'inherit',
-    env: { ...process.env },
+    env: childEnv,
   });
 
   const stopVite = () => {
@@ -220,7 +226,7 @@ async function main(): Promise<void> {
   const electron = spawn(electronBin, [ROOT], {
     cwd: ROOT,
     stdio: 'inherit',
-    env: getElectronSpawnEnv(process.env),
+    env: getElectronSpawnEnv(childEnv),
   }) as ChildProcess;
 
   electron.on('exit', () => {

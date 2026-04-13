@@ -92,13 +92,15 @@ function getBaseUrl(): string {
   return window.location.origin;
 }
 
-function pushDocumentToServer(clientId: string | null) {
+async function pushDocumentToServer(clientId: string | null) {
   const doc = useDocumentStore.getState().document;
-  fetch(`${getBaseUrl()}/api/mcp/document`, {
+  await fetch(`${getBaseUrl()}/api/mcp/document`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
+    // 给大文档同步留出更长的本地回环传输窗口, 避免默认超时过早打断。
+    signal: AbortSignal.timeout(30_000),
     body: JSON.stringify({ document: doc, sourceClientId: clientId }),
-  }).catch(() => {});
+  });
 }
 
 /**
@@ -109,6 +111,9 @@ function pushDocumentToServer(clientId: string | null) {
 export function useMcpSync() {
   const clientIdRef = useRef<string | null>(null);
   const pushTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pushInFlightRef = useRef(false);
+  const pushQueuedRef = useRef(false);
+  const queuedClientIdRef = useRef<string | null>(null);
   // Skip debounce pushes briefly after applying an external document.
   // Use a timestamp instead of a boolean so cascading setState calls
   // (e.g. canvas sync page switch handler) are also suppressed.
@@ -138,6 +143,30 @@ export function useMcpSync() {
       document.addEventListener('visibilitychange', sendActivePing);
     }
 
+    async function flushDocumentPush(clientId: string | null) {
+      if (disposed) return;
+      if (pushInFlightRef.current) {
+        pushQueuedRef.current = true;
+        queuedClientIdRef.current = clientId;
+        return;
+      }
+
+      pushInFlightRef.current = true;
+      try {
+        await pushDocumentToServer(clientId);
+      } catch {
+        // MCP sync 是增强能力, 失败时不打断主编辑器流程。
+      } finally {
+        pushInFlightRef.current = false;
+        if (pushQueuedRef.current && !disposed) {
+          const nextClientId = queuedClientIdRef.current;
+          pushQueuedRef.current = false;
+          queuedClientIdRef.current = null;
+          void flushDocumentPush(nextClientId);
+        }
+      }
+    }
+
     function connect() {
       if (disposed) return;
       eventSource = new EventSource(`${baseUrl}/api/mcp/events`);
@@ -150,7 +179,7 @@ export function useMcpSync() {
           if (data.type === 'client:id') {
             clientIdRef.current = data.clientId;
             // Push current document so MCP can read it immediately
-            pushDocumentToServer(data.clientId);
+            void flushDocumentPush(data.clientId);
             // Announce this tab as the active one
             sendActivePing();
           } else if (data.type === 'document:update' || data.type === 'document:init') {
@@ -208,12 +237,12 @@ export function useMcpSync() {
 
       const isLoadEvent = !state.isDirty && prevState.isDirty !== state.isDirty;
       if (isLoadEvent) {
-        pushDocumentToServer(clientIdRef.current);
+        void flushDocumentPush(clientIdRef.current);
         return;
       }
 
       pushTimerRef.current = setTimeout(() => {
-        pushDocumentToServer(clientIdRef.current);
+        void flushDocumentPush(clientIdRef.current);
       }, PUSH_DEBOUNCE_MS);
     });
 
