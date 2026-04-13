@@ -43,7 +43,15 @@ jobs:
       - name: Format check
         run: bun run format:check
 
+      - name: Checkout openpencil-skill
+        uses: actions/checkout@v4
+        with:
+          repository: zseven-w/openpencil-skill
+          path: external/openpencil-skill
+
       - name: Bundle CLI skill
+        env:
+          SKILL_ROOT: ${{ github.workspace }}/external/openpencil-skill
         run: bun run cli:bundle-skill
 
       - name: Type check
@@ -77,7 +85,15 @@ jobs:
       - name: Build
         run: bun --bun run build
 
+      - name: Checkout openpencil-skill
+        uses: actions/checkout@v4
+        with:
+          repository: zseven-w/openpencil-skill
+          path: external/openpencil-skill
+
       - name: Build CLI
+        env:
+          SKILL_ROOT: ${{ github.workspace }}/external/openpencil-skill
         run: bun run cli:compile
 
       - name: Upload web build artifact
