@@ -1,7 +1,7 @@
 import { getSkillByName } from '@zseven-w/pen-ai-skills';
-import type { Framework, ChunkContract, CodePlanFromAI } from '@zseven-w/pen-codegen';
+import type { Framework, ChunkContract, CodePlanFromAI } from '@zseven-w/pen-types';
 import type { PenNode } from '@zseven-w/pen-types';
-import { nodeTreeToSummary } from '@zseven-w/pen-codegen';
+import { nodeTreeToSummary } from '@zseven-w/pen-core';
 import type { CodegenAssetHint } from './codegen-assets';
 
 function loadSkill(name: string): string {

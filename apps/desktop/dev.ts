@@ -10,6 +10,7 @@
 import { spawn, execSync, type ChildProcess } from 'node:child_process';
 import { build } from 'esbuild';
 import { existsSync } from 'node:fs';
+import { Socket } from 'node:net';
 import { join } from 'node:path';
 import { compileSkills } from '../../packages/pen-ai-skills/vite-plugin-skills';
 import {
@@ -23,6 +24,7 @@ const DESKTOP_DIR = import.meta.dirname;
 const ROOT = join(DESKTOP_DIR, '..', '..');
 const WEB_DIR = join(ROOT, 'apps', 'web');
 const VITE_DEV_PORT = 3000;
+const VITE_CLI = join(ROOT, 'node_modules', 'vite', 'bin', 'vite.js');
 const GENERATED_SKILL_REGISTRY = join(
   ROOT,
   'packages',
@@ -47,6 +49,27 @@ async function waitForViteServer(
   const handleExit = (code: number | null, signal: NodeJS.Signals | null) => {
     viteExit = { code, signal };
   };
+  const target = new URL(baseUrl);
+  const hosts = target.hostname === 'localhost'
+    ? ['127.0.0.1', '::1', 'localhost']
+    : [target.hostname];
+
+  const canConnect = async (host: string): Promise<boolean> =>
+    await new Promise((resolve) => {
+      const socket = new Socket();
+
+      const finish = (ok: boolean) => {
+        socket.removeAllListeners();
+        socket.destroy();
+        resolve(ok);
+      };
+
+      socket.setTimeout(800);
+      socket.once('connect', () => finish(true));
+      socket.once('timeout', () => finish(false));
+      socket.once('error', () => finish(false));
+      socket.connect(port, host);
+    });
 
   vite.once('exit', handleExit);
   while (Date.now() - start < timeoutMs) {
@@ -98,6 +121,13 @@ async function waitForViteServer(
       throw new Error(`Vite dev server exited before becoming ready (${detail}).`);
     }
 
+    for (const host of hosts) {
+      if (await canConnect(host)) {
+        vite.off('exit', handleExit);
+        return;
+      }
+    }
+
     await new Promise((r) => setTimeout(r, 500));
   }
 
@@ -143,10 +173,10 @@ async function main(): Promise<void> {
 
   // 1. Start Vite dev server
   console.log('[electron-dev] Starting Vite dev server...');
-  // Launch Vite directly on Windows. Spawning through `bun run dev` can tear
-  // down the inner `vite.exe` process after startup, leaving Electron with a
-  // ready log but no live dev server to connect to.
-  const vite = spawn('bun', ['--bun', 'vite', 'dev', '--port', String(VITE_DEV_PORT)], {
+  // Run Vite under Node, not Bun. Nitro's dev worker returns NodeResponse
+  // objects today, which Bun's Vite path mishandles as "Expected a Response
+  // object", causing /api and /editor requests to fail in dev.
+  const vite = spawn('node', [VITE_CLI, 'dev', '--port', String(VITE_DEV_PORT)], {
     cwd: WEB_DIR,
     stdio: 'inherit',
     env: childEnv,
