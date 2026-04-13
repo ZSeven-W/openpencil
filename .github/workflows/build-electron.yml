@@ -67,9 +67,11 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: zseven-w/openpencil-skill
-          path: ../openpencil-skill
+          path: external/openpencil-skill
 
       - name: Compile CLI
+        env:
+          SKILL_ROOT: ${{ github.workspace }}/external/openpencil-skill
         run: bun run cli:compile
 
       - name: Build Electron app
