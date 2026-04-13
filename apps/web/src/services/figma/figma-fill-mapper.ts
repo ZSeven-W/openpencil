@@ -1,5 +1,5 @@
 import type { FigmaPaint, FigmaMatrix } from './figma-types';
-import type { PenFill } from '@/types/styles';
+import type { ImageOriginalSize, PenFill } from '@/types/styles';
 import { figmaColorToHex } from './figma-color-utils';
 
 /**
@@ -74,6 +74,7 @@ function mapSingleFill(paint: FigmaPaint): PenFill | null {
         type: 'image',
         url,
         mode: mapScaleMode(paint.imageScaleMode),
+        originalSize: normalizeOriginalSize(paint.originalImageWidth, paint.originalImageHeight),
         opacity: paint.opacity,
       };
     }
@@ -89,6 +90,24 @@ function gradientAngleFromTransform(m: FigmaMatrix): number {
   // Convert to CSS gradient convention (0° = bottom-to-top, 90° = left-to-right).
   const mathAngle = Math.atan2(m.m10, m.m00) * (180 / Math.PI);
   return Math.round(90 - mathAngle);
+}
+
+function normalizeOriginalSize(
+  width?: number,
+  height?: number,
+): ImageOriginalSize | undefined {
+  if (
+    typeof width !== 'number' ||
+    typeof height !== 'number' ||
+    !Number.isFinite(width) ||
+    !Number.isFinite(height) ||
+    width <= 0 ||
+    height <= 0
+  ) {
+    return undefined;
+  }
+
+  return { width, height };
 }
 
 function mapScaleMode(mode?: string): 'stretch' | 'fill' | 'fit' {

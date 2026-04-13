@@ -13,17 +13,36 @@ describe('codegen-assets', () => {
         id: 'node-1',
         type: 'rectangle',
         name: 'Hero Card',
-        x: 0,
-        y: 0,
-        width: 300,
-        height: 200,
-        fill: [{ type: 'image', url: dataUrl, mode: 'crop' }],
+        x: 0.05,
+        y: -0.39,
+        width: 2560,
+        height: 1600,
+        fill: [{
+          type: 'image',
+          url: dataUrl,
+          mode: 'stretch',
+          transform: {
+            m00: 0.9682299494743347,
+            m01: 0,
+            m02: 0.019307976588606834,
+            m10: 0,
+            m11: 0.9433962106704712,
+            m12: 0.041042111814022064,
+          },
+        }],
       } as any,
     ])
 
     expect(assets).toHaveLength(1)
     expect(assets[0].relativePath).toMatch(/^\.\/assets\/hero-card-1\.png$/)
     expect((nodes[0] as any).fill[0].url).toBe(assets[0].relativePath)
+    expect((nodes[0] as any).fill[0].originalSize).toEqual({
+      width: 2644,
+      height: 1696,
+    })
+    expect((nodes[0] as any).fill[0].explain).toBe(
+      '这不是整图 stretch, 而是先裁剪原图后再映射到目标框',
+    )
   })
 
   it('extracts image node src and deduplicates identical data urls', () => {
