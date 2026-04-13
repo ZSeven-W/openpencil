@@ -1,5 +1,6 @@
 import type { PenNode } from '@/types/pen'
 import type { PenFill } from '@/types/styles'
+import { enrichNodeLocallyForAIConsumerView } from './consumer-view-enrichment'
 
 export interface CodegenAssetFile {
   id: string
@@ -173,7 +174,7 @@ export function extractCodegenAssets(
       nextNode.children = nextNode.children.map(visit)
     }
 
-    return nextNode
+    return enrichNodeLocallyForAIConsumerView(nextNode)
   }
 
   return {

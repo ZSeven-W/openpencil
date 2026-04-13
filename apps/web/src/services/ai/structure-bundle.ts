@@ -23,6 +23,8 @@ export interface AIStructureBundleViewFile {
   view: 'raw' | 'sanitized'
   consumer: boolean
   nodeCount: number
+  summary?: string
+  highlights?: string[]
   nodes: PenNode[]
 }
 
@@ -119,6 +121,64 @@ function countNodes(nodes: PenNode[]): number {
 
   for (const node of nodes) visit(node)
   return total
+}
+
+function buildSanitizedViewSummary(nodes: PenNode[]): { summary: string; highlights: string[] } {
+  const signals = {
+    hasVariables: false,
+    hasThemeOverrides: false,
+    hasReusableOrRef: false,
+    hasImageTransform: false,
+    hasGradients: false,
+    hasLayout: false,
+    hasClip: false,
+    hasTextSemantics: false,
+  }
+
+  const visit = (node: PenNode) => {
+    if (typeof node.explain === 'string') {
+      if (node.explain.includes('设计变量')) signals.hasVariables = true
+      if (node.explain.includes('主题覆写上下文')) signals.hasThemeOverrides = true
+      if (node.explain.includes('可复用组件定义节点') || node.explain.includes('组件实例节点')) {
+        signals.hasReusableOrRef = true
+      }
+      if (node.explain.includes('auto-layout')) signals.hasLayout = true
+      if (node.explain.includes('裁剪超出自身边界')) signals.hasClip = true
+      if (node.explain.includes('文本节点') || node.explain.includes('行高倍率')) {
+        signals.hasTextSemantics = true
+      }
+    }
+
+    const fillNode = node as PenNode & { fill?: Array<{ type?: string; transform?: unknown }> }
+    if (Array.isArray(fillNode.fill)) {
+      for (const fill of fillNode.fill) {
+        if (fill.type === 'image' && fill.transform) signals.hasImageTransform = true
+        if (fill.type === 'linear_gradient' || fill.type === 'radial_gradient') signals.hasGradients = true
+      }
+    }
+
+    if ('children' in node && Array.isArray(node.children)) {
+      for (const child of node.children) visit(child)
+    }
+  }
+
+  for (const node of nodes) visit(node)
+
+  const highlights: string[] = []
+  if (signals.hasVariables) highlights.push('包含设计变量引用')
+  if (signals.hasThemeOverrides) highlights.push('包含主题覆写上下文')
+  if (signals.hasReusableOrRef) highlights.push('包含组件定义与实例引用关系')
+  if (signals.hasImageTransform) highlights.push('包含图片裁剪/映射语义')
+  if (signals.hasGradients) highlights.push('包含渐变填充语义')
+  if (signals.hasLayout) highlights.push('包含 auto-layout 容器语义')
+  if (signals.hasClip) highlights.push('包含裁剪容器语义')
+  if (signals.hasTextSemantics) highlights.push('包含文本排版语义')
+  if (highlights.length === 0) highlights.push('以基础几何与样式结构为主')
+
+  return {
+    summary: `这是给 AI 直接消费的 sanitized 结构视图, 共 ${countNodes(nodes)} 个节点。主要特征: ${highlights.join('、')}。读取具体节点前, 建议先把这些高层语义作为默认约束。`,
+    highlights,
+  }
 }
 
 function buildScope(options: BuildAIStructureBundleOptions): AIStructureBundleScope {
@@ -248,6 +308,8 @@ function buildViews(options: {
   rawNodes: PenNode[]
   sanitizedNodes: PenNode[]
 }): { rawView: AIStructureBundleViewFile; sanitizedView: AIStructureBundleViewFile } {
+  const sanitizedSummary = buildSanitizedViewSummary(options.sanitizedNodes)
+
   return {
     rawView: {
       kind: 'ai-structure-view',
@@ -263,6 +325,8 @@ function buildViews(options: {
       view: 'sanitized',
       consumer: true,
       nodeCount: countNodes(options.sanitizedNodes),
+      summary: sanitizedSummary.summary,
+      highlights: sanitizedSummary.highlights,
       nodes: options.sanitizedNodes,
     },
   }

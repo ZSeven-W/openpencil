@@ -19,11 +19,23 @@ describe('structure-bundle', () => {
           id: 'node-1',
           type: 'rectangle',
           name: 'Hero Card',
-          x: 0,
-          y: 0,
-          width: 320,
-          height: 180,
-          fill: [{ type: 'image', url: dataUrl, mode: 'crop' }],
+          x: 0.05,
+          y: -0.39,
+          width: 2560,
+          height: 1600,
+          fill: [{
+            type: 'image',
+            url: dataUrl,
+            mode: 'stretch',
+            transform: {
+              m00: 0.9682299494743347,
+              m01: 0,
+              m02: 0.019307976588606834,
+              m10: 0,
+              m11: 0.9433962106704712,
+              m12: 0.041042111814022064,
+            },
+          }],
         } as any,
       ],
       activePageId: 'page-1',
@@ -47,7 +59,16 @@ describe('structure-bundle', () => {
 
     expect(bundle.sanitizedView.view).toBe('sanitized')
     expect(bundle.sanitizedView.consumer).toBe(true)
+    expect(bundle.sanitizedView.summary).toContain('这是给 AI 直接消费的 sanitized 结构视图')
+    expect(bundle.sanitizedView.highlights).toContain('包含图片裁剪/映射语义')
     expect((bundle.sanitizedView.nodes[0] as any).fill[0].url).toBe('./assets/hero-card-1.png')
+    expect((bundle.sanitizedView.nodes[0] as any).fill[0].originalSize).toEqual({
+      width: 2644,
+      height: 1696,
+    })
+    expect((bundle.sanitizedView.nodes[0] as any).fill[0].explain).toBe(
+      '这不是整图 stretch, 而是先裁剪原图后再映射到目标框',
+    )
 
     expect(bundle.manifest.assets).toHaveLength(1)
     expect(bundle.manifest.assets[0]).toMatchObject({
@@ -149,6 +170,11 @@ describe('structure-bundle', () => {
       'views/sanitized.json',
     ])
     expect(bundle.manifest.assets).toEqual([])
-    expect(bundle.rawView.nodes).toEqual(bundle.sanitizedView.nodes)
+    expect(bundle.sanitizedView.summary).toContain('共 1 个节点')
+    expect(bundle.sanitizedView.highlights).toEqual(['以基础几何与样式结构为主'])
+    expect((bundle.rawView.nodes[0] as any).explain).toBeUndefined()
+    expect((bundle.sanitizedView.nodes[0] as any).explain).toBe(
+      '宽度固定为 200px, 高度固定为 40px',
+    )
   })
 })
