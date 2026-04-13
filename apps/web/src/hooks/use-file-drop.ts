@@ -75,7 +75,12 @@ export function useFileDrop() {
     const result = await parseDroppedFile(file);
     if (!result) return;
 
-    useDocumentStore.getState().loadDocument(result.doc, result.fileName);
+    // In Electron, resolve the absolute filesystem path so the recent files
+    // entry is clickable later. In a plain browser this returns null.
+    const filePath =
+      (typeof window !== 'undefined' && window.electronAPI?.getPathForFile?.(file)) || null;
+
+    useDocumentStore.getState().loadDocument(result.doc, result.fileName, null, filePath);
 
     // Let the canvas sync, then zoom to fit
     const { zoomToFitContent } = await import('@/canvas/skia-engine-ref');

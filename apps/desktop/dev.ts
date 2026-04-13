@@ -9,14 +9,12 @@
 
 import { spawn, execSync, type ChildProcess } from 'node:child_process';
 import { build } from 'esbuild';
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync, unlinkSync } from 'node:fs';
+import { Socket } from 'node:net';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { compileSkills } from '../../packages/pen-ai-skills/vite-plugin-skills';
-import {
-  getDevServerConflictMessage,
-  getElectronBinaryPath,
-  getElectronSpawnEnv,
-} from './dev-utils';
+import { getElectronBinaryPath, getElectronSpawnEnv } from './dev-utils';
 
 const DESKTOP_DIR = import.meta.dirname;
 const ROOT = join(DESKTOP_DIR, '..', '..');
@@ -38,55 +36,43 @@ const GENERATED_SKILL_REGISTRY = join(
 async function waitForViteServer(
   baseUrl: string,
   vite: ChildProcess,
-  port: number,
   timeoutMs = 30_000,
 ): Promise<void> {
+  const target = new URL(baseUrl);
+  const port = Number.parseInt(target.port || '80', 10);
+  const hosts =
+    target.hostname === 'localhost' ? ['127.0.0.1', '::1', 'localhost'] : [target.hostname];
   const start = Date.now();
   let viteExit: { code: number | null; signal: NodeJS.Signals | null } | null = null;
   const handleExit = (code: number | null, signal: NodeJS.Signals | null) => {
     viteExit = { code, signal };
   };
 
+  async function canConnect(host: string): Promise<boolean> {
+    return await new Promise((resolve) => {
+      const socket = new Socket();
+
+      const finish = (ok: boolean) => {
+        socket.removeAllListeners();
+        socket.destroy();
+        resolve(ok);
+      };
+
+      socket.setTimeout(800);
+      socket.once('connect', () => finish(true));
+      socket.once('timeout', () => finish(false));
+      socket.once('error', () => finish(false));
+      socket.connect(port, host);
+    });
+  }
+
   vite.once('exit', handleExit);
   while (Date.now() - start < timeoutMs) {
-    let baseReachable = false;
-    let viteClientReachable = false;
-    let viteClientStatus: number | null = null;
-
-    try {
-      const res = await fetch(baseUrl, {
-        signal: AbortSignal.timeout(500),
-      });
-      baseReachable = res.ok || res.status < 500;
-    } catch {
-      // server not ready yet
-    }
-
-    try {
-      const res = await fetch(`${baseUrl}/@vite/client`, {
-        signal: AbortSignal.timeout(500),
-      });
-      viteClientStatus = res.status;
-      viteClientReachable = res.ok;
-      if (viteClientReachable) {
+    for (const host of hosts) {
+      if (await canConnect(host)) {
         vite.off('exit', handleExit);
         return;
       }
-    } catch {
-      // Vite client not ready yet.
-    }
-
-    const conflict = getDevServerConflictMessage(
-      {
-        baseReachable,
-        viteClientReachable,
-        viteClientStatus,
-      },
-      port,
-    );
-    if (conflict) {
-      vite.off('exit', handleExit);
-      throw new Error(conflict);
     }
 
     if (viteExit) {
@@ -159,18 +145,47 @@ async function main(): Promise<void> {
     vite.kill();
   };
 
+  /** Kill the detached MCP server spawned by Nitro (survives Vite teardown). */
+  const stopMcpServer = () => {
+    const pidFile = join(tmpdir(), 'openpencil-mcp-server.pid');
+    const portFile = join(tmpdir(), 'openpencil-mcp-server.port');
+    try {
+      if (existsSync(pidFile)) {
+        const pid = parseInt(readFileSync(pidFile, 'utf-8').trim(), 10);
+        if (Number.isFinite(pid)) {
+          try {
+            process.kill(pid, 'SIGTERM');
+          } catch {
+            /* already gone */
+          }
+        }
+      }
+    } catch {
+      /* ignore */
+    }
+    for (const f of [pidFile, portFile]) {
+      try {
+        unlinkSync(f);
+      } catch {
+        /* ignore */
+      }
+    }
+  };
+
   // Ensure cleanup on exit
   const cleanup = () => {
     stopVite();
+    stopMcpServer();
     process.exit();
   };
   process.on('SIGINT', cleanup);
   process.on('SIGTERM', cleanup);
+  process.on('exit', stopMcpServer);
 
   // 2. Wait for Vite to be ready
   console.log(`[electron-dev] Waiting for Vite on port ${VITE_DEV_PORT}...`);
   try {
-    await waitForViteServer(`http://localhost:${VITE_DEV_PORT}`, vite, VITE_DEV_PORT);
+    await waitForViteServer(`http://localhost:${VITE_DEV_PORT}`, vite);
   } catch (error) {
     stopVite();
     throw error;

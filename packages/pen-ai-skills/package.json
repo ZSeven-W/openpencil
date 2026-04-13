@@ -1,6 +1,20 @@
 {
   "name": "@zseven-w/pen-ai-skills",
-  "version": "0.7.0",
+  "version": "0.7.1",
+  "homepage": "https://github.com/ZSeven-W/openpencil/tree/main/packages/pen-ai-skills",
+  "bugs": {
+    "url": "https://github.com/ZSeven-W/openpencil/issues"
+  },
+  "license": "MIT",
+  "author": {
+    "name": "ZSeven-W",
+    "email": "xkayshen@gmail.com"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ZSeven-W/openpencil.git",
+    "directory": "packages/pen-ai-skills"
+  },
   "files": [
     "src",
     "skills",

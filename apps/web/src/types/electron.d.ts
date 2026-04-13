@@ -43,6 +43,8 @@ declare global {
     readFile: (filePath: string) => Promise<{ filePath: string; content: string } | null>;
     getPendingFile: () => Promise<string | null>;
     syncRecentFiles: (files: Array<{ fileName: string; filePath: string }>) => void;
+    /** Resolve the absolute filesystem path of a File from drag-and-drop. */
+    getPathForFile: (file: File) => string | null;
     confirmClose: () => void;
     confirmUnsavedChanges: (payload: {
       message: string;

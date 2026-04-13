@@ -30,9 +30,18 @@ function getSkillContent(key: string): string {
 // Named prompt sections — can be retrieved individually via section parameter
 // ---------------------------------------------------------------------------
 
-const INTRO = `You are generating designs for OpenPencil, a vector design tool.
-Use batch_design (for multi-node designs with DSL) or insert_node (for single node trees with JSON).
-Both support postProcess=true for automatic role defaults, icon resolution, and layout sanitization.
+const INTRO = `You are working with OpenPencil, a vector design tool.
+
+TOOL SELECTION — match the user's intent:
+- READ/INSPECT the canvas: batch_get (search nodes, get IDs), snapshot_layout (spatial overview), get_selection (selected nodes)
+- CREATE new designs: batch_design (DSL, multi-node), insert_node (JSON, single tree) — both support postProcess=true
+- MODIFY existing nodes: update_node (change properties), replace_node (swap entirely)
+- DELETE/REMOVE elements: delete_node (remove by ID) — always batch_get first to find the correct ID
+- MOVE/COPY: move_node, copy_node
+
+IMPORTANT: When the user asks to read, inspect, find, or look at existing content, use batch_get or snapshot_layout — do NOT create new nodes.
+When the user asks to delete or remove something, use batch_get to find it, then delete_node — do NOT create new nodes.
+
 Each node must follow the PenNode schema below.`;
 
 const DESIGN_TYPE_DETECTION = `DESIGN TYPE DETECTION:

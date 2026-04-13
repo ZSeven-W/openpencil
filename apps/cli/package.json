@@ -1,11 +1,20 @@
 {
   "name": "@zseven-w/openpencil",
-  "version": "0.7.0",
+  "version": "0.7.1",
   "description": "CLI for OpenPencil — control the design tool from your terminal",
+  "homepage": "https://github.com/ZSeven-W/openpencil/tree/main/apps/cli",
+  "bugs": {
+    "url": "https://github.com/ZSeven-W/openpencil/issues"
+  },
   "license": "MIT",
   "author": {
     "name": "ZSeven-W",
     "email": "xkayshen@gmail.com"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ZSeven-W/openpencil.git",
+    "directory": "apps/cli"
   },
   "bin": {
     "op": "dist/openpencil-cli.cjs"

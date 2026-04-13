@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback } from 'react';
-import { Send, ChevronUp, Paperclip, X, Square, Key } from 'lucide-react';
+import { Send, ChevronUp, Paperclip, X, Square, Key, Plug } from 'lucide-react';
 import { nanoid } from 'nanoid';
 import { cn } from '@/lib/utils';
 import { useTranslation } from 'react-i18next';
@@ -157,25 +157,17 @@ export function AIChatInput({ input, setInput, onSend }: AIChatInputProps) {
           >
             {(() => {
               if (model.startsWith('builtin:')) {
-                const currentGroup = modelGroups.find((g) =>
-                  g.models.some((m) => m.value === model),
-                );
-                if (currentGroup) {
-                  const ProvIcon = PROVIDER_ICON[currentGroup.provider];
-                  return ProvIcon ? (
-                    <ProvIcon className="w-3.5 h-3.5 shrink-0" />
-                  ) : (
-                    <Key size={12} className="shrink-0 text-muted-foreground" />
-                  );
-                }
                 return <Key size={12} className="shrink-0 text-muted-foreground" />;
+              }
+              if (model.startsWith('acp:')) {
+                return <Plug size={12} className="shrink-0 text-muted-foreground" />;
               }
               const currentProvider = modelGroups.find((g) =>
                 g.models.some((m) => m.value === model),
               )?.provider;
               if (currentProvider) {
-                const ProvIcon = PROVIDER_ICON[currentProvider];
-                return <ProvIcon className="w-3.5 h-3.5 shrink-0" />;
+                const ProvIcon = PROVIDER_ICON[currentProvider as keyof typeof PROVIDER_ICON];
+                return ProvIcon ? <ProvIcon className="w-3.5 h-3.5 shrink-0" /> : null;
               }
               return null;
             })()}

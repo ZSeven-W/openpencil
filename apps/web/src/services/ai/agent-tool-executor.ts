@@ -94,10 +94,17 @@ export class AgentToolExecutor {
         return this.handleBatchInsert(args as { parentId: string | null; nodes: unknown[] });
       case 'insert_node':
         return this.handleInsertNode(
-          args as { parent: string | null; data: Record<string, unknown>; pageId?: string },
+          args as {
+            parent?: string | null;
+            after?: string;
+            data: Record<string, unknown>;
+            pageId?: string;
+          },
         );
       case 'update_node':
         return this.handleUpdateNode(args as { id: string; data: Record<string, unknown> });
+      case 'move_node':
+        return this.handleMoveNode(args as { id: string; parent: string; index?: number });
       case 'delete_node':
         return this.handleDeleteNode(args as { id: string });
       case 'find_empty_space':
@@ -490,7 +497,8 @@ export class AgentToolExecutor {
    * 5. Auto-zoom to show new design
    */
   private async handleInsertNode(args: {
-    parent: string | null;
+    parent?: string | null;
+    after?: string;
     data: Record<string, unknown>;
     pageId?: string;
   }): Promise<ToolResult> {
@@ -536,32 +544,58 @@ export class AgentToolExecutor {
     };
     const totalNodes = countNodes(node);
 
-    // Use insertStreamingNode — the SAME function the CLI streaming pipeline uses.
-    // MUST call resetGenerationRemapping() first to initialize generation state
-    // (preExistingNodeIds, generationRootFrameId, generationRemappedIds).
-    // Without this, insertStreamingNode's ID dedup and parent resolution break.
-    const { insertStreamingNode, resetGenerationRemapping, setGenerationCanvasWidth } =
-      await import('@/services/ai/design-canvas-ops');
-    resetGenerationRemapping();
-    // Set canvas width for role resolution (mobile: 375, desktop: 1200)
-    const isMobile = (node as any).width && (node as any).width <= 500;
-    setGenerationCanvasWidth(isMobile ? 375 : 1200);
-    const insertRecursive = (n: PenNode, parentId: string | null) => {
-      const children = 'children' in n && Array.isArray(n.children) ? [...n.children] : [];
-      const nodeForInsert = { ...n } as PenNode;
-      if (children.length > 0) {
-        (nodeForInsert as any).children = [];
+    const { useDocumentStore } = await import('@/stores/document-store');
+    const { findParentInTree, getActivePageChildren } =
+      await import('@/stores/document-tree-utils');
+    const { useCanvasStore } = await import('@/stores/canvas-store');
+    const docStore = useDocumentStore.getState();
+
+    // Resolve "after" → parent + index
+    let parentId: string | null = args.parent ?? null;
+    let insertIndex: number | undefined;
+
+    if (args.after) {
+      const doc = docStore.document;
+      const activePageId = useCanvasStore.getState().activePageId;
+      const children = getActivePageChildren(doc, activePageId);
+      const parent = findParentInTree(children, args.after);
+      if (parent) {
+        parentId = parent.id;
+        const siblings =
+          'children' in parent && Array.isArray(parent.children) ? parent.children : [];
+        const siblingIdx = siblings.findIndex((n) => n.id === args.after);
+        if (siblingIdx >= 0) insertIndex = siblingIdx + 1;
       }
-      insertStreamingNode(nodeForInsert, parentId);
-      // Use nodeForInsert.id (not n.id) — ensureUniqueNodeIds inside
-      // insertStreamingNode may have renamed it, and replaceEmptyFrame
-      // maps from the renamed ID to root-frame via generationRemappedIds.
-      const actualId = nodeForInsert.id;
-      for (const child of children) {
-        insertRecursive(child, actualId);
+    }
+
+    // When inserting into an existing parent, use addNode directly — simple and reliable.
+    // Only fall back to insertStreamingNode for root-level generation (parent=null)
+    // where we need the full pipeline (replace empty frame, role resolution, etc.).
+    if (parentId && docStore.getNodeById(parentId)) {
+      const parentNode = docStore.getNodeById(parentId)!;
+      // Strip absolute x/y if parent has auto-layout — let the layout engine position
+      if ('layout' in parentNode && parentNode.layout && parentNode.layout !== 'none') {
+        if ('x' in node) delete (node as { x?: number }).x;
+        if ('y' in node) delete (node as { y?: number }).y;
       }
-    };
-    insertRecursive(node, args.parent);
+      docStore.addNode(parentId, node, insertIndex);
+    } else {
+      // Root-level insert or unknown parent — use streaming pipeline
+      const { insertStreamingNode, resetGenerationRemapping, setGenerationCanvasWidth } =
+        await import('@/services/ai/design-canvas-ops');
+      resetGenerationRemapping();
+      const isMobile = (node as any).width && (node as any).width <= 500;
+      setGenerationCanvasWidth(isMobile ? 375 : 1200);
+      const insertRecursive = (n: PenNode, pid: string | null) => {
+        const ch = 'children' in n && Array.isArray(n.children) ? [...n.children] : [];
+        const nodeForInsert = { ...n } as PenNode;
+        if (ch.length > 0) (nodeForInsert as any).children = [];
+        insertStreamingNode(nodeForInsert, pid);
+        const actualId = nodeForInsert.id;
+        for (const child of ch) insertRecursive(child, actualId);
+      };
+      insertRecursive(node, parentId);
+    }
     this.markContentStarted();
 
     // Auto-zoom to show the new design
@@ -593,6 +627,23 @@ export class AgentToolExecutor {
       return { success: false, error: `Node not found: ${args.id}` };
     }
     docStore.updateNode(args.id, args.data as Partial<PenNode>);
+    return { success: true };
+  }
+
+  private async handleMoveNode(args: {
+    id: string;
+    parent: string;
+    index?: number;
+  }): Promise<ToolResult> {
+    const { useDocumentStore } = await import('@/stores/document-store');
+    const docStore = useDocumentStore.getState();
+    if (!docStore.getNodeById(args.id)) {
+      return { success: false, error: `Node not found: ${args.id}` };
+    }
+    if (!docStore.getNodeById(args.parent)) {
+      return { success: false, error: `Parent not found: ${args.parent}` };
+    }
+    docStore.moveNode(args.id, args.parent, args.index ?? -1);
     return { success: true };
   }
 

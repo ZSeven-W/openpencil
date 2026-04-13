@@ -777,6 +777,31 @@ const es: TranslationKeys = {
   'builtin.teamDesignModel': 'Modelo de diseño',
   'builtin.teamSelectModel': 'Ninguno (agente único)',
 
+  // ── ACP Agents ──
+  'acp.title': 'ACP Agent',
+  'acp.description': 'Conectar Agent compatibles con ACP.',
+  'acp.addAgent': 'Agregar Agent',
+  'acp.empty': 'No hay ACP Agent configurados.',
+  'acp.displayName': 'Nombre',
+  'acp.displayNamePlaceholder': 'ej. Mi Agent de diseño',
+  'acp.connectionType': 'Tipo de conexión',
+  'acp.local': 'Local',
+  'acp.remote': 'Remoto',
+  'acp.command': 'Comando',
+  'acp.commandPlaceholder': '/usr/bin/myagent',
+  'acp.args': 'Argumentos',
+  'acp.argsPlaceholder': '--stdio',
+  'acp.env': 'Variables de entorno',
+  'acp.envPlaceholder': 'KEY=VALUE (una por línea)',
+  'acp.url': 'URL',
+  'acp.urlPlaceholder': 'ws://localhost:8100',
+  'acp.connected': 'Conectado',
+  'acp.notConnected': 'No conectado',
+  'acp.connect': 'Conectar',
+  'acp.disconnect': 'Desconectar',
+  'acp.localDesktopOnly':
+    'Los Agent locales solo están disponibles en la aplicación de escritorio.',
+
   // ── Figma Import ──
   'figma.title': 'Importar desde Figma',
   'figma.dropFile': 'Suelte un archivo .fig aquí',

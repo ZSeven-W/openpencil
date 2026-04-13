@@ -46,7 +46,7 @@ export const DESIGN_TOOL_DEFINITIONS = [
       '  binding=C(sourceId, parent, { overrides })  — Copy node\n' +
       '  binding=R(path, { ...newNodeData }) — Replace node\n' +
       '  M(nodeId, parent, index?)           — Move node\n' +
-      '  D(nodeId)                           — Delete node\n' +
+      '  D(nodeId)                           — Delete node (use batch_get to find IDs first)\n' +
       'Use null for root-level parent. Reference previous bindings by name. ' +
       'Path expressions support binding+"/ childId" for nested access. ' +
       'Always set postProcess=true when generating designs for best visual quality.',

@@ -65,13 +65,20 @@ export function unregisterSSEClient(id: string): void {
 }
 
 function broadcast(payload: Record<string, unknown>, excludeClientId?: string): void {
-  const data = JSON.stringify(payload);
+  const recipients: SSEClient[] = [];
   for (const [id, client] of clients) {
     if (id === excludeClientId) continue;
+    recipients.push(client);
+  }
+
+  if (recipients.length === 0) return;
+
+  const data = JSON.stringify(payload);
+  for (const client of recipients) {
     try {
       client.writer.push(data);
     } catch {
-      clients.delete(id);
+      clients.delete(client.id);
     }
   }
 }
