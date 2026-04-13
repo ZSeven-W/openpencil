@@ -51,11 +51,21 @@ export interface ImageOriginalSize {
   height: number;
 }
 
+export interface ImageTransform {
+  m00: number;
+  m01: number;
+  m02: number;
+  m10: number;
+  m11: number;
+  m12: number;
+}
+
 export interface ImageFill {
   type: 'image';
   url: string;
   mode?: 'fill' | 'fit' | 'crop' | 'tile' | 'stretch';
   originalSize?: ImageOriginalSize;
+  transform?: ImageTransform;
   explain?: string;
   opacity?: number;
   exposure?: number; // -100 to 100
