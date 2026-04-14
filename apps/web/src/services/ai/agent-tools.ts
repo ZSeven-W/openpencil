@@ -47,11 +47,162 @@ const TOOL_AUTH_MAP: Record<string, AuthLevel> = {
   remove_page: 'delete',
 };
 
+// ---------------------------------------------------------------------------
+// Intent detection — determines which tools and prompts to load
+// ---------------------------------------------------------------------------
+
+export type AgentIntent = 'design' | 'crud';
+
+// CJK characters aren't `\w`, so `\b` boundaries silently fail for them.
+// Keep the English list boundary-anchored (avoids `app` matching `approach`,
+// `add` matching `address`, etc.) and run a separate boundary-free pass for
+// CJK keywords.
+const DESIGN_KEYWORDS_EN =
+  /\b(design|create|make|build|generate|add|insert|landing|page|screen|app|dashboard|card|hero|navbar|form|layout)\b/i;
+const DESIGN_KEYWORDS_CJK =
+  /(设计|创建|生成|画|做一个|新建|增加|添加|加一个|插入|页面|界面|登录|首页|仪表盘|卡片|表单)/;
+
+/** Detect whether the user's message is a design intent or a CRUD operation. */
+export function detectAgentIntent(message: string): AgentIntent {
+  return DESIGN_KEYWORDS_EN.test(message) || DESIGN_KEYWORDS_CJK.test(message) ? 'design' : 'crud';
+}
+
+// ---------------------------------------------------------------------------
+// Tool definitions by intent
+// ---------------------------------------------------------------------------
+
+/** CRUD-only tools — lightweight set for read/update/delete/move/insert operations. */
+export function getCrudToolDefs(): ToolDef[] {
+  return [
+    {
+      name: 'batch_get',
+      description:
+        'Search and read nodes from the document. ALWAYS call this first before update_node or delete_node to find the correct node IDs. ' +
+        'With no arguments, returns top-level children (current page structure). Search by type/name patterns or read specific IDs.',
+      level: TOOL_AUTH_MAP.batch_get,
+      parameters: {
+        type: 'object',
+        properties: {
+          ids: { type: 'array', items: { type: 'string' }, description: 'Node IDs to retrieve' },
+          patterns: {
+            type: 'array',
+            items: { type: 'string' },
+            description: 'Search patterns to match',
+          },
+        },
+      },
+    },
+    {
+      name: 'snapshot_layout',
+      description:
+        'Get a compact layout snapshot of the current page showing node positions and sizes',
+      level: TOOL_AUTH_MAP.snapshot_layout,
+      parameters: {
+        type: 'object',
+        properties: {
+          pageId: { type: 'string' },
+        },
+      },
+    },
+    {
+      name: 'insert_node',
+      description:
+        'Insert a new node into the document tree. Always call snapshot_layout or batch_get first. ' +
+        'Use "after" to insert next to a sibling (auto-finds parent and position), or "parent" for explicit placement.',
+      level: TOOL_AUTH_MAP.insert_node,
+      parameters: {
+        type: 'object',
+        properties: {
+          after: {
+            type: 'string',
+            description:
+              'Insert after this sibling node ID (preferred). Automatically uses the same parent and places the new node right after it.',
+          },
+          parent: {
+            type: ['string', 'null'],
+            description:
+              'Explicit parent node ID. Use "after" instead when adding next to existing elements.',
+          },
+          data: {
+            type: 'object',
+            description: 'PenNode data (type, name, width, height, fills, children, etc.)',
+          },
+        },
+        required: ['data'],
+      },
+    },
+    {
+      name: 'update_node',
+      description: 'Update properties of an existing node by ID',
+      level: TOOL_AUTH_MAP.update_node,
+      parameters: {
+        type: 'object',
+        properties: {
+          id: { type: 'string', description: 'Node ID to update' },
+          data: { type: 'object', description: 'Properties to update' },
+        },
+        required: ['id', 'data'],
+      },
+    },
+    {
+      name: 'move_node',
+      description:
+        'Move a node to a different parent container. Use when you need to reparent a node (e.g. move an element into a frame). ' +
+        "The node will be placed at the end of the parent's children list by default.",
+      level: TOOL_AUTH_MAP.move_node,
+      parameters: {
+        type: 'object',
+        properties: {
+          id: { type: 'string', description: 'Node ID to move' },
+          parent: { type: 'string', description: 'New parent node ID' },
+          index: { type: 'number', description: 'Position index within parent (optional)' },
+        },
+        required: ['id', 'parent'],
+      },
+    },
+    {
+      name: 'delete_node',
+      description:
+        'Delete a node (and all its children) from the document. ' +
+        'Use when the user asks to remove, delete, or clear elements. ' +
+        'Always call batch_get first to find the correct node ID before deleting.',
+      level: TOOL_AUTH_MAP.delete_node,
+      parameters: {
+        type: 'object',
+        properties: {
+          id: { type: 'string', description: 'Node ID to delete' },
+        },
+        required: ['id'],
+      },
+    },
+    {
+      name: 'get_selection',
+      description: 'Get the currently selected nodes on the canvas with their full data',
+      level: TOOL_AUTH_MAP.get_selection,
+      parameters: {
+        type: 'object',
+        properties: {},
+      },
+    },
+  ];
+}
+
+/**
+ * Design tools — minimal set forcing the model through `generate_design`.
+ *
+ * Weak models (e.g. MiniMax-M2.7) prefer per-node `insert_node` calls when
+ * given the choice, producing scattered output instead of a coherent design.
+ * Read tools (`batch_get`, `snapshot_layout`) stay so the model can inspect
+ * existing context before generating. CRUD tools live in `getCrudToolDefs()`
+ * and are reached via `detectAgentIntent('crud')` for surgical edits.
+ */
 export function getDesignToolDefs(): ToolDef[] {
   return [
     {
       name: 'batch_get',
-      description: 'Get nodes by IDs or search patterns from the document tree',
+      description:
+        'Search and read nodes from the document. ALWAYS call this first before update_node or delete_node to find the correct node IDs. ' +
+        'With no arguments, returns top-level children (current page structure). Search by type/name patterns or read specific IDs.',
       level: TOOL_AUTH_MAP.batch_get,
       parameters: {
         type: 'object',
@@ -92,31 +243,6 @@ export function getDesignToolDefs(): ToolDef[] {
           },
         },
         required: ['prompt'],
-      },
-    },
-    {
-      name: 'update_node',
-      description: 'Update properties of an existing node by ID',
-      level: TOOL_AUTH_MAP.update_node,
-      parameters: {
-        type: 'object',
-        properties: {
-          id: { type: 'string', description: 'Node ID to update' },
-          data: { type: 'object', description: 'Properties to update' },
-        },
-        required: ['id', 'data'],
-      },
-    },
-    {
-      name: 'delete_node',
-      description: 'Delete a node from the document by ID',
-      level: TOOL_AUTH_MAP.delete_node,
-      parameters: {
-        type: 'object',
-        properties: {
-          id: { type: 'string', description: 'Node ID to delete' },
-        },
-        required: ['id'],
       },
     },
   ];
@@ -177,14 +303,22 @@ export function getAllToolDefs(): ToolDef[] {
     },
     {
       name: 'insert_node',
-      description: 'Insert a new node into the document tree with full support for nested children',
+      description:
+        'Insert a new node into the document tree. Always call snapshot_layout or batch_get first. ' +
+        'Use "after" to insert next to a sibling (auto-finds parent and position), or "parent" for explicit placement.',
       level: TOOL_AUTH_MAP.insert_node,
       parameters: {
         type: 'object',
         properties: {
+          after: {
+            type: 'string',
+            description:
+              'Insert after this sibling node ID (preferred). Automatically uses the same parent and places the new node right after it.',
+          },
           parent: {
             type: ['string', 'null'],
-            description: 'Parent node ID, or null for root-level insertion',
+            description:
+              'Explicit parent node ID. Use "after" instead when adding next to existing elements.',
           },
           data: {
             type: 'object',
@@ -195,7 +329,7 @@ export function getAllToolDefs(): ToolDef[] {
             description: 'Target page ID (optional, defaults to active page)',
           },
         },
-        required: ['parent', 'data'],
+        required: ['data'],
       },
     },
     {

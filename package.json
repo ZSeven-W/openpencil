@@ -1,6 +1,6 @@
 {
   "name": "openpencil",
-  "version": "0.7.0",
+  "version": "0.7.1",
   "private": true,
   "description": "The world's first open-source AI-native vector design tool and the first to feature concurrent Agent Teams. Design-as-Code. Turn prompts into UI directly on the live canvas. A modern alternative to Pencil.",
   "author": {
@@ -26,13 +26,16 @@
     "mcp:dev": "bun run packages/pen-mcp/src/server.ts",
     "electron:dev": "bun run apps/desktop/dev.ts",
     "electron:compile": "esbuild apps/desktop/main.ts apps/desktop/preload.ts --bundle --platform=node --target=node20 --outdir=out/desktop --external:electron --format=cjs --out-extension:.js=.cjs --sourcemap --alias:@zseven-w/pen-engine=./packages/pen-engine/src --alias:@zseven-w/pen-react=./packages/pen-react/src --alias:@zseven-w/pen-core=./packages/pen-core/src --alias:@zseven-w/pen-types=./packages/pen-types/src",
-    "electron:build": "BUILD_TARGET=electron bun --bun run build && bun run electron:compile && bun run mcp:compile && bun run cli:compile && npx electron-builder --config apps/desktop/electron-builder.yml",
+    "electron:build": "BUILD_TARGET=electron bun --bun run build && bun run electron:compile && bun run mcp:compile && bun run cli:compile && bun run agent-native:bundle && npx electron-builder --config apps/desktop/electron-builder.yml",
     "electron:build:mac-arm64": "BUILD_TARGET=electron bun --bun run build && bun run electron:compile && bun run mcp:compile && bun run cli:compile && npx electron-builder --config apps/desktop/electron-builder.yml --mac --arm64 && if [ -f out/release/latest-mac.yml ]; then mv out/release/latest-mac.yml out/release/latest-mac-arm64.yml; fi",
     "electron:build:mac-x64": "BUILD_TARGET=electron bun --bun run build && bun run electron:compile && bun run mcp:compile && bun run cli:compile && npx electron-builder --config apps/desktop/electron-builder.yml --mac --x64",
     "electron:build:mac-universal": "BUILD_TARGET=electron bun --bun run build && bun run electron:compile && bun run mcp:compile && bun run cli:compile && npx electron-builder --config apps/desktop/electron-builder.yml --mac --arm64 --x64",
     "electron:build:mac-both": "bun run electron:build:mac-arm64 && bun run electron:build:mac-x64",
-    "cli:compile": "esbuild apps/cli/src/index.ts --bundle --platform=node --target=node20 --outfile=apps/cli/dist/openpencil-cli.cjs --format=cjs --sourcemap --alias:@zseven-w/pen-types=./packages/pen-types/src --alias:@zseven-w/pen-core=./packages/pen-core/src --alias:@zseven-w/pen-figma=./packages/pen-figma/src --alias:@zseven-w/pen-renderer=./packages/pen-renderer/src --alias:@zseven-w/pen-sdk=./packages/pen-sdk/src --alias:@zseven-w/pen-ai-skills=./packages/pen-ai-skills/src --alias:@zseven-w/pen-mcp=./packages/pen-mcp/src --alias:@zseven-w/pen-engine=./packages/pen-engine/src --alias:@zseven-w/pen-react=./packages/pen-react/src --define:import.meta.env={} --external:canvas --external:paper",
+    "cli:bundle-skill": "bun scripts/bundle-skill.ts",
+    "cli:compile": "bun run cli:bundle-skill && esbuild apps/cli/src/index.ts --bundle --platform=node --target=node20 --outfile=apps/cli/dist/openpencil-cli.cjs --format=cjs --sourcemap --alias:@zseven-w/pen-types=./packages/pen-types/src --alias:@zseven-w/pen-core=./packages/pen-core/src --alias:@zseven-w/pen-figma=./packages/pen-figma/src --alias:@zseven-w/pen-renderer=./packages/pen-renderer/src --alias:@zseven-w/pen-sdk=./packages/pen-sdk/src --alias:@zseven-w/pen-ai-skills=./packages/pen-ai-skills/src --alias:@zseven-w/pen-mcp=./packages/pen-mcp/src --alias:@zseven-w/pen-engine=./packages/pen-engine/src --alias:@zseven-w/pen-react=./packages/pen-react/src --alias:@zseven-w/pen-acp=./packages/pen-acp/src --define:import.meta.env={} --external:canvas --external:paper",
     "cli:dev": "bun run apps/cli/src/index.ts",
+    "acp:dev": "bun run packages/pen-acp/src/server.ts",
+    "acp:compile": "esbuild packages/pen-acp/src/server.ts --bundle --platform=node --target=node20 --outfile=out/acp-server.cjs --format=cjs --sourcemap --alias:@zseven-w/pen-types=./packages/pen-types/src --alias:@zseven-w/pen-core=./packages/pen-core/src --alias:@zseven-w/pen-figma=./packages/pen-figma/src --alias:@zseven-w/pen-renderer=./packages/pen-renderer/src --alias:@zseven-w/pen-sdk=./packages/pen-sdk/src --alias:@zseven-w/pen-ai-skills=./packages/pen-ai-skills/src --alias:@zseven-w/pen-mcp=./packages/pen-mcp/src --alias:@zseven-w/pen-engine=./packages/pen-engine/src --alias:@zseven-w/pen-react=./packages/pen-react/src --define:import.meta.env={} --external:canvas --external:paper",
     "publish:beta": "bash scripts/publish-beta.sh",
     "unpublish": "bash scripts/unpublish.sh",
     "bump": "sh -c 'V=$0; [ -z \"$V\" ] && echo \"Usage: bun run bump <version>\" && exit 1; for f in package.json apps/*/package.json packages/*/package.json; do [ -f \"$f\" ] && jq --arg v \"$V\" \".version=\\$v\" \"$f\" > \"$f.tmp\" && mv \"$f.tmp\" \"$f\" && echo \"$f → $V\"; done'",
@@ -42,9 +45,11 @@
     "format:check": "oxfmt --check .",
     "generate": "bun -e \"import { compileSkills } from './packages/pen-ai-skills/vite-plugin-skills'; compileSkills('./packages/pen-ai-skills')\"",
     "agent:build": "cd packages/agent-native && zig build napi -Doptimize=ReleaseFast",
+    "agent-native:bundle": "node -e \"const fs=require('fs'),p=require('path');const src=p.resolve('packages/agent-native/zig-out/napi/agent_napi.node');const dst=p.resolve('packages/agent-native/napi/agent_napi.node');if(!fs.existsSync(src)){console.error('Native binary missing at '+src+'. Run bun run agent:build first.');process.exit(1)}fs.copyFileSync(src,dst);console.log('[agent-native:bundle] copied to '+dst)\"",
     "postinstall": "(bun scripts/patch-srvx-bun.ts && bun run generate && node scripts/ensure-agent-native.cjs) || true"
   },
   "dependencies": {
+    "@agentclientprotocol/sdk": "^0.18.2",
     "@anthropic-ai/claude-agent-sdk": "^0.2.47",
     "@anthropic-ai/sdk": "^0.77.0",
     "@github/copilot-sdk": "^0.1.32",

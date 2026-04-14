@@ -7,6 +7,9 @@ const PUSH_DEBOUNCE_MS = 2000;
 const SELECTION_DEBOUNCE_MS = 300;
 const RECONNECT_DELAY_MS = 3000;
 const MAX_RECONNECT_ATTEMPTS = 3;
+const SYNC_MAX_BODY_BYTES = 2 * 1024 * 1024;
+
+let oversizeSyncWarned = false;
 
 async function handleScreenshotRequest(
   req: {
@@ -94,12 +97,35 @@ function getBaseUrl(): string {
 
 async function pushDocumentToServer(clientId: string | null) {
   const doc = useDocumentStore.getState().document;
+  const body = JSON.stringify({ document: doc, sourceClientId: clientId });
+  const bodyBytes = new TextEncoder().encode(body).byteLength;
+
+  if (bodyBytes > SYNC_MAX_BODY_BYTES) {
+    if (!oversizeSyncWarned) {
+      oversizeSyncWarned = true;
+      console.warn(
+        `[mcp-sync] Skip oversized document push: ${(bodyBytes / (1024 * 1024)).toFixed(
+          2,
+        )}MiB > ${(SYNC_MAX_BODY_BYTES / (1024 * 1024)).toFixed(2)}MiB`,
+      );
+    }
+    return;
+  }
+
+  oversizeSyncWarned = false;
+
   await fetch(`${getBaseUrl()}/api/mcp/document`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    // 给大文档同步留出更长的本地回环传输窗口, 避免默认超时过早打断。
+    headers: {
+      'Content-Type': 'application/json',
+      'x-openpencil-client-id': clientId ?? 'renderer:unknown',
+      'x-openpencil-body-bytes': String(bodyBytes),
+    },
+    // Keep smaller requests alive through page transitions and HMR churn.
+    ...(bodyBytes <= 60_000 ? { keepalive: true } : {}),
+    // Large local sync payloads need a wider timeout budget than the fetch default.
     signal: AbortSignal.timeout(30_000),
-    body: JSON.stringify({ document: doc, sourceClientId: clientId }),
+    body,
   });
 }
 
@@ -126,6 +152,30 @@ export function useMcpSync() {
     let disposed = false;
     let reconnectAttempts = 0;
 
+    async function flushDocumentPush(clientId: string | null) {
+      if (disposed) return;
+      if (pushInFlightRef.current) {
+        pushQueuedRef.current = true;
+        queuedClientIdRef.current = clientId;
+        return;
+      }
+
+      pushInFlightRef.current = true;
+      try {
+        await pushDocumentToServer(clientId);
+      } catch {
+        // MCP sync is a best-effort enhancement and should not interrupt editing.
+      } finally {
+        pushInFlightRef.current = false;
+        if (pushQueuedRef.current && !disposed) {
+          const nextClientId = queuedClientIdRef.current;
+          pushQueuedRef.current = false;
+          queuedClientIdRef.current = null;
+          void flushDocumentPush(nextClientId);
+        }
+      }
+    }
+
     // ---- Focus / visibility ping: keep lastActiveClientId accurate ----
     const sendActivePing = () => {
       if (typeof document !== 'undefined' && document.hidden) return;
@@ -141,30 +191,6 @@ export function useMcpSync() {
     if (typeof window !== 'undefined') {
       window.addEventListener('focus', sendActivePing);
       document.addEventListener('visibilitychange', sendActivePing);
-    }
-
-    async function flushDocumentPush(clientId: string | null) {
-      if (disposed) return;
-      if (pushInFlightRef.current) {
-        pushQueuedRef.current = true;
-        queuedClientIdRef.current = clientId;
-        return;
-      }
-
-      pushInFlightRef.current = true;
-      try {
-        await pushDocumentToServer(clientId);
-      } catch {
-        // MCP sync 是增强能力, 失败时不打断主编辑器流程。
-      } finally {
-        pushInFlightRef.current = false;
-        if (pushQueuedRef.current && !disposed) {
-          const nextClientId = queuedClientIdRef.current;
-          pushQueuedRef.current = false;
-          queuedClientIdRef.current = null;
-          void flushDocumentPush(nextClientId);
-        }
-      }
     }
 
     function connect() {
@@ -232,6 +258,9 @@ export function useMcpSync() {
     // On loadDocument/newDocument (isDirty transitions to false), push
     // immediately so the server cache is replaced without waiting 2s.
     const unsubDoc = useDocumentStore.subscribe((state, prevState) => {
+      const documentChanged = state.document !== prevState.document;
+      const dirtyChanged = state.isDirty !== prevState.isDirty;
+      if (!documentChanged && !dirtyChanged) return;
       if (Date.now() < skipPushUntilRef.current) return;
       if (pushTimerRef.current) clearTimeout(pushTimerRef.current);
 

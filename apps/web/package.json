@@ -1,10 +1,11 @@
 {
   "name": "@zseven-w/web",
-  "version": "0.7.0",
+  "version": "0.7.1",
   "private": true,
   "type": "module",
   "dependencies": {
     "@zseven-w/agent-native": "workspace:*",
+    "@zseven-w/pen-acp": "workspace:*",
     "@zseven-w/pen-ai-skills": "workspace:*",
     "@zseven-w/pen-core": "workspace:*",
     "@zseven-w/pen-engine": "workspace:*",

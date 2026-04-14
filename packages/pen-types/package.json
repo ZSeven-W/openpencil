@@ -1,7 +1,21 @@
 {
   "name": "@zseven-w/pen-types",
-  "version": "0.7.0",
+  "version": "0.7.1",
   "description": "Type definitions for OpenPencil document model",
+  "homepage": "https://github.com/ZSeven-W/openpencil/tree/main/packages/pen-types",
+  "bugs": {
+    "url": "https://github.com/ZSeven-W/openpencil/issues"
+  },
+  "license": "MIT",
+  "author": {
+    "name": "ZSeven-W",
+    "email": "xkayshen@gmail.com"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ZSeven-W/openpencil.git",
+    "directory": "packages/pen-types"
+  },
   "files": [
     "src"
   ],

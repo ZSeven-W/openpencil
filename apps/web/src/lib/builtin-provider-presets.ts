@@ -219,10 +219,20 @@ export const BUILTIN_PROVIDER_PRESETS: Record<BuiltinProviderPreset, BuiltinPres
 
 const PRESET_URL_LOOKUP = Object.entries(BUILTIN_PROVIDER_PRESETS).reduce(
   (acc, [key, cfg]) => {
-    if (cfg.baseURL) acc[cfg.baseURL] = key as BuiltinProviderPreset;
+    const k = key as BuiltinProviderPreset;
+    if (cfg.baseURL) acc[cfg.baseURL] = k;
     if (cfg.regions) {
-      acc[cfg.regions.cn.baseURL] = key as BuiltinProviderPreset;
-      acc[cfg.regions.global.baseURL] = key as BuiltinProviderPreset;
+      acc[cfg.regions.cn.baseURL] = k;
+      acc[cfg.regions.global.baseURL] = k;
+    }
+    // Include alternative-format URLs so a saved Anthropic-format config
+    // for an OpenAI-default preset (or vice versa) still maps back to the
+    // correct preset on reload. Without this the canonicalize pass falls
+    // through to inferBuiltinProviderPreset and may collapse to 'custom'.
+    if (cfg.altBaseURL) acc[cfg.altBaseURL] = k;
+    if (cfg.altRegions) {
+      acc[cfg.altRegions.cn] = k;
+      acc[cfg.altRegions.global] = k;
     }
     return acc;
   },
@@ -255,15 +265,27 @@ function lookupPresetByURL(url?: string): BuiltinProviderPreset | undefined {
   return PRESET_URL_LOOKUP[normalizedURL] ?? LEGACY_URL_LOOKUP[normalizedURL];
 }
 
+/** Whether `url` equals `base`, or `base` followed by a `/v<digits>` segment.
+ *  Catches legacy entries where an extra version suffix was appended manually
+ *  (`/v1`, `/v3`, etc.) on top of a base that already has its own version. */
+function urlMatchesIgnoringVersionSuffix(url: string, base: string): boolean {
+  if (url === base) return true;
+  if (!url.startsWith(base + '/')) return false;
+  const tail = url.slice(base.length + 1);
+  return /^v\d+$/.test(tail);
+}
+
 function inferRegionFromURL(preset: BuiltinProviderPreset, normalizedURL: string): 'cn' | 'global' {
-  const regions = BUILTIN_PROVIDER_PRESETS[preset].regions;
-  if (!regions) return 'cn';
+  const cfg = BUILTIN_PROVIDER_PRESETS[preset];
+  const regions = cfg.regions;
+  const altRegions = cfg.altRegions;
+  if (!regions && !altRegions) return 'cn';
   const legacyGlobalURLs = LEGACY_GLOBAL_URL_LOOKUP[preset];
-  return normalizedURL === regions.global.baseURL ||
-    normalizedURL === `${regions.global.baseURL}/v1` ||
-    legacyGlobalURLs?.has(normalizedURL)
-    ? 'global'
-    : 'cn';
+  const isGlobal =
+    (regions && urlMatchesIgnoringVersionSuffix(normalizedURL, regions.global.baseURL)) ||
+    (altRegions && urlMatchesIgnoringVersionSuffix(normalizedURL, altRegions.global)) ||
+    legacyGlobalURLs?.has(normalizedURL);
+  return isGlobal ? 'global' : 'cn';
 }
 
 export function inferBuiltinProviderPreset(
@@ -318,16 +340,49 @@ export function getCanonicalBuiltinBaseURL(
   return cfg.baseURL;
 }
 
+/** Whether the given preset's URL family covers `normalizedURL`. */
+function presetMatchesURL(preset: BuiltinProviderPreset, normalizedURL: string): boolean {
+  const cfg = BUILTIN_PROVIDER_PRESETS[preset];
+  if (cfg.baseURL && urlMatchesIgnoringVersionSuffix(normalizedURL, cfg.baseURL)) return true;
+  if (cfg.regions) {
+    if (urlMatchesIgnoringVersionSuffix(normalizedURL, cfg.regions.cn.baseURL)) return true;
+    if (urlMatchesIgnoringVersionSuffix(normalizedURL, cfg.regions.global.baseURL)) return true;
+  }
+  if (cfg.altBaseURL && urlMatchesIgnoringVersionSuffix(normalizedURL, cfg.altBaseURL)) return true;
+  if (cfg.altRegions) {
+    if (urlMatchesIgnoringVersionSuffix(normalizedURL, cfg.altRegions.cn)) return true;
+    if (urlMatchesIgnoringVersionSuffix(normalizedURL, cfg.altRegions.global)) return true;
+  }
+  return false;
+}
+
 export function canonicalizeBuiltinProviderConfig(
   config: BuiltinProviderConfig,
 ): BuiltinProviderConfig {
   if (config.preset === 'custom') return config;
 
-  const preset = lookupPresetByURL(config.baseURL) ?? inferBuiltinProviderPreset(config);
+  const normalizedURL = normalizeURL(config.baseURL);
+  // Respect an explicit preset when its URL family covers the configured
+  // baseURL — this is the path that disambiguates presets sharing the same
+  // alt URL (e.g. zhipu vs glm-coding both point at /api/anthropic). When
+  // the explicit preset is genuinely stale (URL no longer fits the family),
+  // fall back to URL-based lookup so legacy entries can self-heal.
+  // Note: config.preset === 'custom' is already handled by the early return above,
+  // so config.preset here is non-custom (or undefined).
+  const preset =
+    config.preset &&
+    BUILTIN_PROVIDER_PRESETS[config.preset] &&
+    presetMatchesURL(config.preset, normalizedURL)
+      ? config.preset
+      : (lookupPresetByURL(config.baseURL) ?? inferBuiltinProviderPreset(config));
   if (preset === 'custom') return config;
 
-  const region = inferRegionFromURL(preset, normalizeURL(config.baseURL));
-  const canonicalBaseURL = getCanonicalBuiltinBaseURL(preset, region);
+  const region = inferRegionFromURL(preset, normalizedURL);
+  // Pick the canonical URL for the user's chosen API format. Without this
+  // the alternative-format selection (e.g. Anthropic on a preset whose
+  // default is OpenAI-compat) would be silently overwritten on save.
+  const canonicalBaseURL =
+    getBaseURLForFormat(preset, config.type, region) ?? getCanonicalBuiltinBaseURL(preset, region);
 
   return {
     ...config,

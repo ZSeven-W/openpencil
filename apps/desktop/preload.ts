@@ -1,4 +1,4 @@
-import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron';
+import { contextBridge, ipcRenderer, webUtils, type IpcRendererEvent } from 'electron';
 
 export type UpdaterStatus =
   | 'disabled'
@@ -267,6 +267,8 @@ export interface ElectronAPI {
     cancelLabel: string;
   }) => Promise<'save' | 'discard' | 'cancel'>;
   syncRecentFiles: (files: Array<{ fileName: string; filePath: string }>) => void;
+  /** Resolve the absolute filesystem path of a File object obtained from drag-and-drop. */
+  getPathForFile: (file: File) => string | null;
   updater: {
     getState: () => Promise<UpdaterState>;
     checkForUpdates: () => Promise<UpdaterState>;
@@ -328,6 +330,15 @@ const api: ElectronAPI = {
 
   syncRecentFiles: (files: Array<{ fileName: string; filePath: string }>) =>
     ipcRenderer.send('recent-files:sync', files),
+
+  getPathForFile: (file: File) => {
+    try {
+      const p = webUtils.getPathForFile(file);
+      return p && p.length > 0 ? p : null;
+    } catch {
+      return null;
+    }
+  },
 
   confirmClose: () => ipcRenderer.send('window:confirmClose'),
 

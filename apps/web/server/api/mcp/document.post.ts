@@ -1,10 +1,4 @@
-import {
-  createError,
-  defineEventHandler,
-  getRequestHeader,
-  readBody,
-  setResponseStatus,
-} from 'h3';
+import { defineEventHandler, readBody, createError, getRequestHeader, setResponseStatus } from 'h3';
 import { setSyncDocument } from '../../utils/mcp-sync-state';
 import { serverLog } from '../../utils/server-logger';
 import type { PenDocument } from '../../../src/types/pen';
@@ -74,21 +68,29 @@ function isConnectionClosedError(error: unknown): boolean {
   if (!error || typeof error !== 'object') return false;
   const maybeError = error as { name?: string; message?: string; cause?: unknown };
   const message = maybeError.message ?? '';
-  const causeMessage = typeof maybeError.cause === 'object' && maybeError.cause
-    ? String((maybeError.cause as { message?: string }).message ?? '')
-    : '';
+  const causeMessage =
+    typeof maybeError.cause === 'object' && maybeError.cause
+      ? String((maybeError.cause as { message?: string }).message ?? '')
+      : '';
 
-  return maybeError.name === 'AbortError'
-    || /connection was closed/i.test(message)
-    || /connection was closed/i.test(causeMessage)
-    || /abort/i.test(message);
+  return (
+    maybeError.name === 'AbortError' ||
+    /connection was closed/i.test(message) ||
+    /connection was closed/i.test(causeMessage) ||
+    /abort/i.test(message)
+  );
 }
 
 /** POST /api/mcp/document — Receives document update from MCP or renderer, triggers SSE broadcast. */
 export default defineEventHandler(async (event) => {
   const startedAt = Date.now();
   const contentLengthHeader = getRequestHeader(event, 'content-length');
-  const contentLength = contentLengthHeader ? Number.parseInt(contentLengthHeader, 10) : null;
+  const bodyBytesHeader = getRequestHeader(event, 'x-openpencil-body-bytes');
+  const contentLength = contentLengthHeader
+    ? Number.parseInt(contentLengthHeader, 10)
+    : bodyBytesHeader
+      ? Number.parseInt(bodyBytesHeader, 10)
+      : null;
   const sourceClientIdHeader = getRequestHeader(event, 'x-openpencil-client-id') ?? 'unknown';
   let phase = 'readBody';
 
@@ -108,9 +110,9 @@ export default defineEventHandler(async (event) => {
     const elapsedMs = Date.now() - startedAt;
 
     serverLog.info(
-      `[mcp-document] ok version=${version} sourceClientId=${body.sourceClientId ?? sourceClientIdHeader} `
-      + `contentLength=${formatBytes(contentLength)} nodes=${stats.nodeCount} images=${stats.imageCount} `
-      + `dataUrlImages=${stats.dataUrlImageCount} dataUrlChars=${stats.dataUrlChars} elapsedMs=${elapsedMs}`,
+      `[mcp-document] ok version=${version} sourceClientId=${body.sourceClientId ?? sourceClientIdHeader} ` +
+        `contentLength=${formatBytes(contentLength)} nodes=${stats.nodeCount} images=${stats.imageCount} ` +
+        `dataUrlImages=${stats.dataUrlImageCount} dataUrlChars=${stats.dataUrlChars} elapsedMs=${elapsedMs}`,
     );
 
     return { ok: true, version };
@@ -120,12 +122,12 @@ export default defineEventHandler(async (event) => {
 
     if (isConnectionClosedError(error)) {
       serverLog.warn(
-        `[mcp-document] connection-closed phase=${phase} contentLength=${formatBytes(contentLength)} `
-        + `sourceClientId=${sourceClientIdHeader} elapsedMs=${elapsedMs} message=${message}`,
+        `[mcp-document] connection-closed phase=${phase} contentLength=${formatBytes(contentLength)} ` +
+          `sourceClientId=${sourceClientIdHeader} elapsedMs=${elapsedMs} message=${message}`,
       );
 
-      // 这类请求在 readBody 阶段就已经被客户端中断。
-      // 继续抛错只会把预期内的同步噪音放大成 Vite/Nitro 500 日志。
+      // The client already closed the request while Nitro was still reading it.
+      // Returning a soft status keeps expected sync churn out of the 500 logs.
       setResponseStatus(event, 202, 'Client closed request during MCP document sync');
       return {
         ok: false,
@@ -135,8 +137,8 @@ export default defineEventHandler(async (event) => {
     }
 
     serverLog.error(
-      `[mcp-document] failed phase=${phase} contentLength=${formatBytes(contentLength)} `
-      + `sourceClientId=${sourceClientIdHeader} elapsedMs=${elapsedMs} message=${message}`,
+      `[mcp-document] failed phase=${phase} contentLength=${formatBytes(contentLength)} ` +
+        `sourceClientId=${sourceClientIdHeader} elapsedMs=${elapsedMs} message=${message}`,
     );
     throw error;
   }

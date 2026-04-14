@@ -31,7 +31,9 @@ export const DOCUMENT_TOOL_DEFINITIONS = [
   {
     name: 'batch_get',
     description:
-      'Search and read nodes. With no patterns/nodeIds, returns top-level children. Search by type/name regex, or read specific IDs. ' +
+      'Search and read nodes from the document. ALWAYS call this first before update_node or delete_node to find the correct node IDs. ' +
+      'With no patterns/nodeIds, returns top-level children (use this to see the current page structure). ' +
+      'Search by type/name regex, or read specific IDs. ' +
       'readDepth controls how deep children are included in results (default 1, use higher to see nested structure). ' +
       'Returns nodes with children truncated to "..." beyond readDepth.',
     inputSchema: {
@@ -100,7 +102,8 @@ export const DOCUMENT_TOOL_DEFINITIONS = [
   {
     name: 'snapshot_layout',
     description:
-      'Get the hierarchical bounding box layout tree of an .op file. Useful for understanding spatial arrangement.',
+      'Get the hierarchical bounding box layout tree of the document. ' +
+      'Use this to understand the current page structure, spatial arrangement, and node hierarchy before making changes.',
     inputSchema: {
       type: 'object' as const,
       properties: {
