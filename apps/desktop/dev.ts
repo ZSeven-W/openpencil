@@ -14,18 +14,12 @@ import { Socket } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { compileSkills } from '../../packages/pen-ai-skills/vite-plugin-skills';
-import {
-  getDevServerConflictMessage,
-  getElectronBinaryPath,
-  getElectronSpawnEnv,
-} from './dev-utils';
-import { ensureLoopbackNoProxy, withLoopbackNoProxy } from '../../scripts/loopback-no-proxy';
+import { getElectronBinaryPath, getElectronSpawnEnv } from './dev-utils';
 
 const DESKTOP_DIR = import.meta.dirname;
 const ROOT = join(DESKTOP_DIR, '..', '..');
 const WEB_DIR = join(ROOT, 'apps', 'web');
 const VITE_DEV_PORT = 3000;
-const VITE_CLI = join(ROOT, 'node_modules', 'vite', 'bin', 'vite.js');
 const GENERATED_SKILL_REGISTRY = join(
   ROOT,
   'packages',
@@ -42,17 +36,17 @@ const GENERATED_SKILL_REGISTRY = join(
 async function waitForViteServer(
   baseUrl: string,
   vite: ChildProcess,
-  port: number,
   timeoutMs = 30_000,
 ): Promise<void> {
+  const target = new URL(baseUrl);
+  const port = Number.parseInt(target.port || '80', 10);
+  const hosts =
+    target.hostname === 'localhost' ? ['127.0.0.1', '::1', 'localhost'] : [target.hostname];
   const start = Date.now();
   let viteExit: { code: number | null; signal: NodeJS.Signals | null } | null = null;
   const handleExit = (code: number | null, signal: NodeJS.Signals | null) => {
     viteExit = { code, signal };
   };
-  const target = new URL(baseUrl);
-  const hosts =
-    target.hostname === 'localhost' ? ['127.0.0.1', '::1', 'localhost'] : [target.hostname];
 
   async function canConnect(host: string): Promise<boolean> {
     return await new Promise((resolve) => {
@@ -74,44 +68,11 @@ async function waitForViteServer(
 
   vite.once('exit', handleExit);
   while (Date.now() - start < timeoutMs) {
-    let baseReachable = false;
-    let viteClientReachable = false;
-    let viteClientStatus: number | null = null;
-
-    try {
-      const res = await fetch(baseUrl, {
-        signal: AbortSignal.timeout(500),
-      });
-      baseReachable = res.ok || res.status < 500;
-    } catch {
-      // server not ready yet
-    }
-
-    try {
-      const res = await fetch(`${baseUrl}/@vite/client`, {
-        signal: AbortSignal.timeout(500),
-      });
-      viteClientStatus = res.status;
-      viteClientReachable = res.ok;
-      if (viteClientReachable) {
+    for (const host of hosts) {
+      if (await canConnect(host)) {
         vite.off('exit', handleExit);
         return;
       }
-    } catch {
-      // Vite client not ready yet.
-    }
-
-    const conflict = getDevServerConflictMessage(
-      {
-        baseReachable,
-        viteClientReachable,
-        viteClientStatus,
-      },
-      port,
-    );
-    if (conflict) {
-      vite.off('exit', handleExit);
-      throw new Error(conflict);
     }
 
     if (viteExit) {
@@ -120,13 +81,6 @@ async function waitForViteServer(
         ? `signal ${viteExit.signal}`
         : `exit code ${viteExit.code ?? 'unknown'}`;
       throw new Error(`Vite dev server exited before becoming ready (${detail}).`);
-    }
-
-    for (const host of hosts) {
-      if (await canConnect(host)) {
-        vite.off('exit', handleExit);
-        return;
-      }
     }
 
     await new Promise((r) => setTimeout(r, 500));
@@ -167,20 +121,15 @@ async function compileElectron(): Promise<void> {
 // ---------------------------------------------------------------------------
 
 async function main(): Promise<void> {
-  // This process also probes localhost directly.
-  // Keep the loopback no_proxy override so later fetches and child processes stay direct.
-  ensureLoopbackNoProxy(process.env);
-  const childEnv = withLoopbackNoProxy(process.env);
-
   // 1. Start Vite dev server
   console.log('[electron-dev] Starting Vite dev server...');
-  // Run Vite under Node, not Bun. Nitro's dev worker returns NodeResponse
-  // objects today, which Bun's Vite path mishandles as "Expected a Response
-  // object", causing /api and /editor requests to fail in dev.
-  const vite = spawn('node', [VITE_CLI, 'dev', '--port', String(VITE_DEV_PORT)], {
+  // Launch Vite directly on Windows. Spawning through `bun run dev` can tear
+  // down the inner `vite.exe` process after startup, leaving Electron with a
+  // ready log but no live dev server to connect to.
+  const vite = spawn('bun', ['--bun', 'vite', 'dev', '--port', String(VITE_DEV_PORT)], {
     cwd: WEB_DIR,
     stdio: 'inherit',
-    env: childEnv,
+    env: { ...process.env },
   });
 
   const stopVite = () => {
@@ -236,7 +185,7 @@ async function main(): Promise<void> {
   // 2. Wait for Vite to be ready
   console.log(`[electron-dev] Waiting for Vite on port ${VITE_DEV_PORT}...`);
   try {
-    await waitForViteServer(`http://localhost:${VITE_DEV_PORT}`, vite, VITE_DEV_PORT);
+    await waitForViteServer(`http://localhost:${VITE_DEV_PORT}`, vite);
   } catch (error) {
     stopVite();
     throw error;
@@ -286,7 +235,7 @@ async function main(): Promise<void> {
   const electron = spawn(electronBin, [ROOT], {
     cwd: ROOT,
     stdio: 'inherit',
-    env: getElectronSpawnEnv(childEnv),
+    env: getElectronSpawnEnv(process.env),
   }) as ChildProcess;
 
   electron.on('exit', () => {

@@ -18,7 +18,7 @@
   "type": "module",
   "main": "out/desktop/main.cjs",
   "scripts": {
-    "dev": "bun run apps/web/dev.ts",
+    "dev": "cd apps/web && bun --bun vite dev --port 3000",
     "build": "cd apps/web && bun --bun vite build",
     "preview": "cd apps/web && bun --bun vite preview",
     "test": "cd apps/web && bun --bun vitest run --passWithNoTests",
