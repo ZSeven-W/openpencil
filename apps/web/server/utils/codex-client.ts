@@ -52,10 +52,11 @@ const CODEX_ENV_ALLOWLIST = new Set([
 ]);
 
 /**
- * 从 ~/.codex/config.toml 里提取 provider 明确声明的 env_key。
+ * Extract provider-declared env_key entries from ~/.codex/config.toml.
  *
- * 这样做可以继续保持“默认不透传敏感环境变量”的安全边界,
- * 同时允许用户自己的 Codex provider 按 config.toml 的单一真相源取 key。
+ * This preserves the default safety boundary of not forwarding sensitive
+ * environment variables automatically, while still letting user-defined
+ * Codex providers opt in through config.toml as the single source of truth.
  */
 export function extractCodexConfigEnvKeys(configToml: string): string[] {
   return Array.from(

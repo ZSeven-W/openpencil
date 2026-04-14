@@ -167,8 +167,8 @@ async function compileElectron(): Promise<void> {
 // ---------------------------------------------------------------------------
 
 async function main(): Promise<void> {
-  // 当前进程本身也会探活 localhost。
-  // 这里继续保留 loopback no_proxy, 让后续 fetch/子进程都统一直连。
+  // This process also probes localhost directly.
+  // Keep the loopback no_proxy override so later fetches and child processes stay direct.
   ensureLoopbackNoProxy(process.env);
   const childEnv = withLoopbackNoProxy(process.env);
 

@@ -6,8 +6,8 @@
 export const DEFAULT_MAX_MESSAGES = 10;
 export const DEFAULT_MAX_CHARS = 32_000;
 /**
- * 给上游 1,048,576 chars 限制预留安全余量。
- * 这里不是精确上游 token/char 计费器, 而是本地防线。
+ * Leave a safety margin below the upstream 1,048,576 character limit.
+ * This is a local guardrail, not an exact upstream token/character calculator.
  */
 export const MAX_CHAT_REQUEST_CHARS = 900_000;
 
@@ -31,11 +31,12 @@ function stripHistoricalAttachments<T extends MessageWithOptionalAttachments>(
 }
 
 /**
- * 估算 chat 请求体字符数。
+ * Estimate the character count of a chat request payload.
  *
- * 注意:
- * - 这是给本地预检用的近似值, 不是上游真实计费或模型上下文长度。
- * - 目标是尽早拦下明显过大的请求, 给用户可行动的错误提示。
+ * Notes:
+ * - This is an approximation for local preflight checks, not upstream billing
+ *   or the true model context length.
+ * - The goal is to reject obviously oversized requests early with an actionable error.
  */
 export function estimateChatPayloadChars(payload: unknown): number {
   try {

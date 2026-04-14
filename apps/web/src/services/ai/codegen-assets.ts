@@ -103,10 +103,11 @@ export async function hashBytesToSha256Hex(bytes: Uint8Array): Promise<string> {
 }
 
 /**
- * 将代码生成相关节点中的 data URL / base64 抽成真实资产文件描述,
- * 并把节点中的 `src` / `fill.url` 改写为稳定的相对路径。
+ * Extract data URL / base64 payloads from codegen-related nodes into concrete
+ * asset file descriptors and rewrite `src` / `fill.url` to stable relative paths.
  *
- * 这样 prompt 里只会看到 `./assets/...` 路径, 不会再把整段 base64 送给模型。
+ * This keeps prompts focused on `./assets/...` paths instead of sending raw base64
+ * blobs to the model.
  */
 export function extractCodegenAssets(
   nodes: PenNode[],

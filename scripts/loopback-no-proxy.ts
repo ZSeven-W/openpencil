@@ -1,9 +1,9 @@
 /**
- * 本地回环地址必须直连。
+ * Loopback addresses must always bypass proxies.
  *
- * 在带代理环境里, 如果 dev server 或 Electron 子进程没有正确补齐
- * NO_PROXY/no_proxy, 那么发往 localhost 的请求可能会被错误转发给代理。
- * 对 OpenPencil 来说, 这会直接打断本地 SSR 和 Electron dev 的加载链路。
+ * In proxy-heavy environments, localhost requests can be forwarded to the proxy
+ * if dev-server or Electron child processes do not have NO_PROXY/no_proxy set
+ * correctly. For OpenPencil, that breaks the local SSR and Electron dev chain.
  */
 
 export const loopbackBypassHosts = ['127.0.0.1', 'localhost', '::1'] as const
@@ -17,7 +17,7 @@ function splitNoProxy(value?: string): string[] {
 }
 
 /**
- * 合并已有的 NO_PROXY/no_proxy, 并确保本地回环地址永远在绕过名单里。
+ * Merge existing NO_PROXY/no_proxy values and always keep loopback hosts in the bypass list.
  */
 export function mergeLoopbackNoProxyValue(value?: string): string {
   const entries = new Set(splitNoProxy(value))
@@ -28,10 +28,10 @@ export function mergeLoopbackNoProxyValue(value?: string): string {
 }
 
 /**
- * 返回一个带本地回环绕过规则的新环境变量对象。
+ * Return a new environment object with loopback bypass rules applied.
  *
- * 这里同时写回 NO_PROXY 和 no_proxy。
- * 这样可以兼容不同工具对大小写环境变量的读取习惯。
+ * Update both NO_PROXY and no_proxy so tools with different case expectations
+ * read the same bypass configuration.
  */
 export function withLoopbackNoProxy(
   env: NodeJS.ProcessEnv,
@@ -45,7 +45,7 @@ export function withLoopbackNoProxy(
 }
 
 /**
- * 原地补齐当前进程的本地回环绕过规则。
+ * Apply loopback bypass rules to the current process environment in place.
  */
 export function ensureLoopbackNoProxy(env: NodeJS.ProcessEnv): void {
   const merged = mergeLoopbackNoProxyValue(env.NO_PROXY ?? env.no_proxy)

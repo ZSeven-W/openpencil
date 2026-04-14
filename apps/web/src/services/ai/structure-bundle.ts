@@ -239,8 +239,9 @@ function collectAssetRefs(options: {
     const sanitizedNodeWithImage = sanitizedNode as PenNode & { src?: string; fill?: Array<{ type?: string; url?: string }> }
 
     // ---------------------------------------------------------------------
-    // 图像节点: raw 视图用 `asset://asset-id` 保留“这里原本是图片源字段”的语义,
-    // sanitized 视图继续沿用当前 codegen 的 `./assets/...` 相对路径。
+    // Image nodes: keep `asset://asset-id` in the raw view so the original
+    // image-source field remains explicit, while the sanitized view continues
+    // to use the existing `./assets/...` relative path convention.
     // ---------------------------------------------------------------------
     if (typeof sanitizedNodeWithImage.src === 'string') {
       const asset = assetByPath.get(sanitizedNodeWithImage.src)
@@ -253,8 +254,9 @@ function collectAssetRefs(options: {
     }
 
     // ---------------------------------------------------------------------
-    // 图片填充: 保留原始 fill 结构, 只把超大的 data URL 用稳定 asset:// 引用替换掉,
-    // 这样 raw / sanitized 两边都能顺着同一 asset id 去追查。
+    // Image fills: preserve the original fill structure and only replace large
+    // data URLs with stable asset:// references so both raw and sanitized
+    // views can trace back through the same asset id.
     // ---------------------------------------------------------------------
     if (Array.isArray(rawNodeWithImage.fill) && Array.isArray(sanitizedNodeWithImage.fill)) {
       const fillCount = Math.min(rawNodeWithImage.fill.length, sanitizedNodeWithImage.fill.length)
@@ -388,8 +390,9 @@ export async function buildAIStructureBundle(
   })
 
   // -----------------------------------------------------------------------
-  // `sha256` 需要真正对资产字节计算, 所以放在 collectAssetRefs 之后统一补齐,
-  // 保证 manifest 既有引用关系, 也有可追溯的内容哈希。
+  // `sha256` must be computed from the actual asset bytes, so fill it in
+  // after collectAssetRefs to keep both reference relationships and a
+  // traceable content hash in the manifest.
   // -----------------------------------------------------------------------
   const assetIndex = await Promise.all(
     assetIndexRecords.map(async (record) => {

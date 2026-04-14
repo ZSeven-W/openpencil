@@ -584,15 +584,16 @@ export function enrichNodeLocallyForAIConsumerView(node: PenNode): PenNode {
 }
 
 /**
- * 为 canonical AI consumer view 做轻量语义补强。
+ * Add lightweight semantic enrichment to the canonical AI consumer view.
  *
- * 设计原则:
- * - 不改节点拓扑
- * - 不引入运行态噪音
- * - 只补“模型直接看不懂, 但又会影响还原质量”的解释层字段
+ * Design principles:
+ * - do not change node topology
+ * - do not introduce runtime noise
+ * - only add explanation fields for details the model cannot infer directly
+ *   but that still affect reconstruction quality
  *
- * 当前已覆盖 image / gradient / sizing / layout / clip / effects / reusable/ref。
- * 后续若要继续扩展文本排版或变量语义, 继续沿这层追加即可。
+ * Current coverage includes image / gradient / sizing / layout / clip / effects /
+ * reusable/ref. Future text-layout or variable semantics should extend this layer.
  */
 export function enrichNodeForAIConsumerView(node: PenNode): PenNode {
   const nextNode = enrichNodeLocallyForAIConsumerView(node)

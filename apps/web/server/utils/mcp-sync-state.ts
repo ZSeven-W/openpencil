@@ -71,7 +71,7 @@ function broadcast(payload: Record<string, unknown>, excludeClientId?: string): 
     recipients.push(client);
   }
 
-  // 没有接收者时直接返回, 避免对大文档做无意义的 JSON 序列化。
+  // Return early when there are no recipients to avoid pointless JSON serialization for large documents.
   if (recipients.length === 0) return;
 
   const data = JSON.stringify(payload);

@@ -6,10 +6,10 @@ import { withLoopbackNoProxy } from '../../scripts/loopback-no-proxy'
 const VITE_CLI = join(import.meta.dirname, '..', '..', 'node_modules', 'vite', 'bin', 'vite.js')
 
 /**
- * 在真正启动 Vite 前先补齐本地回环地址的代理绕过规则。
+ * Ensure loopback proxy bypass rules are in place before Vite starts.
  *
- * 这一步必须发生在 Vite 进程启动之前。
- * 否则带代理环境下, SSR 文档请求仍可能被错误送去代理并返回 502。
+ * This must happen before the Vite process launches.
+ * Otherwise SSR document requests can still be routed through a proxy and return 502.
  */
 const child = spawn('node', [VITE_CLI, 'dev', '--port', '3000'], {
   cwd: import.meta.dirname,
