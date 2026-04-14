@@ -241,10 +241,12 @@ export function flattenToRenderNodes(
       const positioned =
         layout && layout !== 'none' ? computeLayoutPositions(resolved, children) : children;
 
-      // Clipping — only clip for root frames (artboard behavior).
+      // Clipping — root frames always clip like artboards. Nested containers
+      // clip only when clipContent is enabled.
       let childClip = clipCtx;
       const isRootFrame = node.type === 'frame' && depth === 0;
-      if (isRootFrame) {
+      const explicitClip = 'clipContent' in resolved && resolved.clipContent === true;
+      if (isRootFrame || explicitClip) {
         const crRaw = 'cornerRadius' in node ? cornerRadiusVal(node.cornerRadius) : 0;
         const cr = Math.min(crRaw, nodeH / 2);
         childClip = { x: absX, y: absY, w: nodeW, h: nodeH, rx: cr };

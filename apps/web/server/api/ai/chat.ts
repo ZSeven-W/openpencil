@@ -9,7 +9,6 @@ import {
   buildClaudeAgentEnv,
   buildSpawnClaudeCodeProcess,
   getClaudeAgentDebugFilePath,
-  resolveAgentModel,
 } from '../../utils/resolve-claude-agent-env';
 import { normalizeOptionalBaseURL, requireOpenAICompatBaseURL } from './provider-url';
 // SENSITIVE_LOG_PATTERN + readDebugTail are now canonical in @zseven-w/pen-mcp.
@@ -72,7 +71,7 @@ function buildClaudeExitHint(rawError: string, debugTail?: string[]): string | u
       /Connection error|Could not resolve host|Failed to connect|ECONNREFUSED|ETIMEDOUT/i.test(text)
     ) {
       hints.push(
-        'Upstream API connection failed. Check proxy/DNS/network reachability to your ANTHROPIC_BASE_URL.',
+        'Upstream API connection failed. Check DNS and network reachability to your configured endpoint.',
       );
     }
     if (/ANTHROPIC_CUSTOM_HEADERS present: false, has Authorization header: false/i.test(text)) {
@@ -89,26 +88,14 @@ function buildClaudeExitHint(rawError: string, debugTail?: string[]): string | u
     }
     if (/ENOTFOUND|getaddrinfo/i.test(text)) {
       hints.push(
-        'DNS resolution failed for the API endpoint. Check your ANTHROPIC_BASE_URL is correct.',
+        'DNS resolution failed for the API endpoint. Check that your configured endpoint is correct.',
       );
     }
     if (/certificate|CERT_|ssl|tls/i.test(text)) {
       hints.push(
-        'TLS/SSL certificate error. If using a corporate proxy, set NODE_TLS_REJECT_UNAUTHORIZED=0 in ~/.claude/settings.json env (not recommended for production).',
+        'TLS/SSL certificate error. Check the endpoint certificate chain and your local trust settings.',
       );
     }
-  }
-
-  // Detect proxy/custom endpoint — most common cause of exit-code-1 on Windows
-  const env = process.env;
-  const hasProxy = !!(env.http_proxy || env.https_proxy || env.HTTP_PROXY || env.HTTPS_PROXY);
-  const hasCustomBaseUrl = !!env.ANTHROPIC_BASE_URL;
-  if ((hasProxy || hasCustomBaseUrl) && !env.NODE_TLS_REJECT_UNAUTHORIZED) {
-    hints.push(
-      'Proxy or custom ANTHROPIC_BASE_URL detected but NODE_TLS_REJECT_UNAUTHORIZED is not set. ' +
-        'If your proxy uses a self-signed or corporate certificate, add ' +
-        '"NODE_TLS_REJECT_UNAUTHORIZED": "0" to the env section of ~/.claude/settings.json.',
-    );
   }
 
   // If no debug info available, provide generic Windows guidance
@@ -118,8 +105,7 @@ function buildClaudeExitHint(rawError: string, debugTail?: string[]): string | u
       hints.push(
         'Claude Code process crashed on Windows. Common fixes: ' +
           '(1) Ensure ~/.claude.json exists: echo {} > %USERPROFILE%\\.claude.json ' +
-          '(2) Check ANTHROPIC_API_KEY and ANTHROPIC_BASE_URL in ~/.claude/settings.json ' +
-          '(3) If using a proxy, set NODE_TLS_REJECT_UNAUTHORIZED=0 in env.',
+          '(2) Check your Claude authentication and endpoint configuration in ~/.claude/settings.json.',
       );
     } else {
       return undefined;
@@ -294,11 +280,7 @@ function streamViaAgentSDK(body: ChatBody, requestedModel?: string) {
         // Remove CLAUDECODE env to allow running from within a CC terminal
         const env = buildClaudeAgentEnv();
         debugFile = getClaudeAgentDebugFilePath();
-
-        // When using a custom proxy (ANTHROPIC_BASE_URL), skip explicit model
-        // so Claude Code uses ANTHROPIC_MODEL from env — the proxy may not
-        // recognize standard Claude model IDs.
-        const model = resolveAgentModel(requestedModel, env);
+        const model = requestedModel;
 
         const claudePath = resolveClaudeCli();
         const spawnProcess = buildSpawnClaudeCodeProcess();
@@ -1092,7 +1074,16 @@ function streamViaBuiltin(body: ChatBody) {
                 ),
               );
             } else if (evt.result?.is_error) {
-              const errMsg = `Provider error: ${evt.result.subtype ?? 'unknown'}`;
+              // Zig attaches the provider's last_error string in result.errors[0]
+              // (e.g. "Content blocked by provider safety filter (HTTP 451)...").
+              // Surface that instead of the opaque subtype so users see the
+              // actual reason — "content blocked" vs. "rate limit" vs. "auth"
+              // is information they can act on.
+              const detail =
+                (Array.isArray(evt.result.errors) && evt.result.errors[0]) ||
+                evt.result.subtype ||
+                'unknown';
+              const errMsg = `Provider error: ${detail}`;
               console.error('[builtin]', errMsg);
               controller.enqueue(
                 encoder.encode(`data: ${JSON.stringify({ type: 'error', content: errMsg })}\n\n`),

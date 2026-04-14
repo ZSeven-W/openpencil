@@ -32,6 +32,7 @@ export type BuiltinProviderPreset =
   | 'xiaomi'
   | 'modelscope'
   | 'stepfun'
+  | 'stepfun-coding'
   | 'nvidia'
   | 'custom';
 

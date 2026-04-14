@@ -18,7 +18,21 @@
     "noUncheckedSideEffectImports": true,
     "baseUrl": ".",
     "paths": {
-      "@/*": ["./src/*"]
+      "@/*": ["./src/*"],
+      "@zseven-w/pen-types": ["../../packages/pen-types/src/index.ts"],
+      "@zseven-w/pen-core": ["../../packages/pen-core/src/index.ts"],
+      "@zseven-w/pen-figma": ["../../packages/pen-figma/src/index.ts"],
+      "@zseven-w/pen-renderer": ["../../packages/pen-renderer/src/index.ts"],
+      "@zseven-w/pen-engine": ["../../packages/pen-engine/src/index.ts"],
+      "@zseven-w/pen-react": ["../../packages/pen-react/src/index.ts"],
+      "@zseven-w/pen-mcp": ["../../packages/pen-mcp/src/index.ts"],
+      "@zseven-w/pen-ai-skills": ["../../packages/pen-ai-skills/src/index.ts"],
+      "@zseven-w/pen-ai-skills/style-guide": [
+        "../../packages/pen-ai-skills/src/style-guide/index.ts"
+      ],
+      "@zseven-w/pen-ai-skills/_generated/style-guide-registry": [
+        "../../packages/pen-ai-skills/src/_generated/style-guide-registry.ts"
+      ]
     }
   }
 }

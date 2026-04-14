@@ -1,8 +1,6 @@
 import { readFileSync, readdirSync, writeFileSync, mkdirSync, existsSync } from 'fs';
 import { join } from 'path';
 import matter from 'gray-matter';
-// @ts-expect-error js-yaml is installed without ambient types in this workspace.
-import yaml from 'js-yaml';
 import type { Plugin } from 'vite';
 import type { SkillMeta } from './src/engine/types';
 
@@ -11,20 +9,6 @@ const STYLE_GUIDES_DIR = 'skills/style-guides';
 const OUTPUT_DIR = 'src/_generated';
 const OUTPUT_FILE = 'skill-registry.ts';
 const STYLE_GUIDE_OUTPUT_FILE = 'style-guide-registry.ts';
-const MATTER_OPTIONS = {
-  engines: {
-    yaml: {
-      parse(source: string) {
-        const parsed = yaml.load(source);
-        return parsed && typeof parsed === 'object' ? parsed : {};
-      },
-      stringify(value: unknown) {
-        return yaml.dump(value);
-      },
-    },
-  },
-};
-
 function scanMarkdownFiles(dir: string, excludeDirs: string[] = []): string[] {
   const results: string[] = [];
   if (!existsSync(dir)) return results;
@@ -47,7 +31,7 @@ function scanMarkdownFiles(dir: string, excludeDirs: string[] = []): string[] {
 
 function parseFrontmatter(filePath: string): { meta: SkillMeta; content: string } | null {
   const raw = readFileSync(filePath, 'utf-8');
-  const { data, content } = matter(raw, MATTER_OPTIONS);
+  const { data, content } = matter(raw);
 
   if (!data.name || !data.phase) {
     console.warn(

@@ -48,6 +48,7 @@ const PRESET_ORDER: BuiltinProviderPreset[] = [
   'xiaomi',
   'modelscope',
   'stepfun',
+  'stepfun-coding',
   'nvidia',
   'custom',
 ];

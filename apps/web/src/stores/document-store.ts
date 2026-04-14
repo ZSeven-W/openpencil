@@ -40,7 +40,12 @@ interface DocumentStoreState {
   addNode: (parentId: string | null, node: PenNode, index?: number) => void;
   updateNode: (id: string, updates: Partial<PenNode>) => void;
   removeNode: (id: string) => void;
-  moveNode: (id: string, newParentId: string | null, index: number) => void;
+  moveNode: (
+    id: string,
+    newParentId: string | null,
+    index: number,
+    options?: { preserveAbsolutePosition?: boolean },
+  ) => void;
   reorderNode: (id: string, direction: 'up' | 'down') => void;
   toggleVisibility: (id: string) => void;
   toggleLock: (id: string) => void;

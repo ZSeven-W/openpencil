@@ -16,6 +16,12 @@ import type {
 import { sanitizeName } from '@zseven-w/pen-core';
 import { buildPlanningPrompt, buildChunkPrompt, buildAssemblyPrompt } from './codegen-prompts';
 import { streamChat } from './ai-service';
+import {
+  collectChunkAssetHints,
+  extractCodegenAssets,
+  type CodegenAssetFile,
+  type CodegenAssetHint,
+} from './codegen-assets';
 
 // Inlined to avoid importing from @zseven-w/pen-mcp, which transitively pulls
 // node:fs/promises via document-manager and breaks Vite browser builds.
@@ -223,19 +229,20 @@ export async function generateCode(
   model: string,
   provider: string | undefined,
   abortSignal?: AbortSignal,
-): Promise<string> {
+): Promise<{ code: string; degraded: boolean; assets: CodegenAssetFile[] }> {
+  const { nodes: sanitizedNodes, assets } = extractCodegenAssets(nodes);
   // ── Step 1: Planning ──
   onProgress({ step: 'planning', status: 'running' });
 
   let planFromAI: CodePlanFromAI;
   try {
-    planFromAI = await runPlanning(nodes, framework, model, provider, abortSignal);
+    planFromAI = await runPlanning(sanitizedNodes, framework, model, provider, abortSignal);
     onProgress({ step: 'planning', status: 'done', plan: planFromAI });
   } catch (err) {
     if (abortSignal?.aborted) throw err;
     // Retry once with stricter prompt
     try {
-      planFromAI = await runPlanning(nodes, framework, model, provider, abortSignal, true);
+      planFromAI = await runPlanning(sanitizedNodes, framework, model, provider, abortSignal, true);
       onProgress({ step: 'planning', status: 'done', plan: planFromAI });
     } catch (retryErr) {
       const msg = retryErr instanceof Error ? retryErr.message : 'Planning failed';
@@ -246,7 +253,7 @@ export async function generateCode(
   }
 
   // Hydrate plan with actual node data
-  const execPlan = hydratePlan(planFromAI, nodes);
+  const execPlan = hydratePlan(planFromAI, sanitizedNodes);
   if (execPlan.chunks.length === 0) {
     const msg = 'Planning produced no valid chunks';
     onProgress({ step: 'planning', status: 'failed', error: msg });
@@ -287,6 +294,7 @@ export async function generateCode(
       onProgress({ step: 'chunk', chunkId: chunk.id, name: chunk.name, status: 'running' });
 
       try {
+        const assetHints = collectChunkAssetHints(chunk.nodes, assets);
         const result = await runChunkGeneration(
           chunk.nodes,
           framework,
@@ -296,6 +304,7 @@ export async function generateCode(
           model,
           provider,
           abortSignal,
+          assetHints,
         );
 
         // Ensure componentName is valid PascalCase — AI may return kebab-case or empty
@@ -327,11 +336,13 @@ export async function generateCode(
             name: chunk.name,
             status: 'degraded',
             result,
+            error: validation.issues.join('; ') || 'Chunk contract validation failed',
           });
         }
       } catch (err) {
         // Retry once
         try {
+          const assetHints = collectChunkAssetHints(chunk.nodes, assets);
           const result = await runChunkGeneration(
             chunk.nodes,
             framework,
@@ -341,6 +352,7 @@ export async function generateCode(
             model,
             provider,
             abortSignal,
+            assetHints,
           );
           if (
             !result.contract.componentName ||
@@ -357,6 +369,9 @@ export async function generateCode(
             name: chunk.name,
             status: statuses.get(chunk.id)!,
             result,
+            ...(validation.valid
+              ? {}
+              : { error: validation.issues.join('; ') || 'Chunk contract validation failed' }),
           });
         } catch (retryErr) {
           statuses.set(chunk.id, 'failed');
@@ -403,6 +418,7 @@ export async function generateCode(
 
   let finalCode: string;
   let degraded = chunkInputs.some((c) => c.status !== 'successful');
+  const exportedAssetPaths = assets.map((asset) => asset.relativePath);
 
   try {
     finalCode = await runAssembly(
@@ -413,6 +429,7 @@ export async function generateCode(
       model,
       provider,
       abortSignal,
+      exportedAssetPaths,
     );
     onProgress({ step: 'assembly', status: 'done' });
   } catch {
@@ -426,6 +443,7 @@ export async function generateCode(
         model,
         provider,
         abortSignal,
+        exportedAssetPaths,
       );
       onProgress({ step: 'assembly', status: 'done' });
     } catch {
@@ -444,7 +462,7 @@ export async function generateCode(
   }
 
   onProgress({ step: 'complete', finalCode, degraded });
-  return finalCode;
+  return { code: finalCode, degraded, assets };
 }
 
 // ── Internal AI call wrappers ──
@@ -516,8 +534,15 @@ async function runChunkGeneration(
   model: string,
   provider: string | undefined,
   abortSignal?: AbortSignal,
+  assetHints: CodegenAssetHint[] = [],
 ): Promise<ChunkResult> {
-  const { system, user } = buildChunkPrompt(nodes, framework, suggestedComponentName, depContracts);
+  const { system, user } = buildChunkPrompt(
+    nodes,
+    framework,
+    suggestedComponentName,
+    depContracts,
+    assetHints,
+  );
 
   const fullResponse = await collectStreamText(system, user, model, provider, abortSignal);
 
@@ -538,8 +563,15 @@ async function runAssembly(
   model: string,
   provider: string | undefined,
   abortSignal?: AbortSignal,
+  exportedAssetPaths: string[] = [],
 ): Promise<string> {
-  const { system, user } = buildAssemblyPrompt(chunkResults, plan, framework, variables);
+  const { system, user } = buildAssemblyPrompt(
+    chunkResults,
+    plan,
+    framework,
+    variables,
+    exportedAssetPaths,
+  );
 
   const fullResponse = await collectStreamText(system, user, model, provider, abortSignal);
 
