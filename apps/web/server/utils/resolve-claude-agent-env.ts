@@ -149,12 +149,6 @@ export function buildClaudeAgentEnv(): EnvLike {
     merged.DEBUG_CLAUDE_AGENT_SDK = '1';
   }
 
-  // Apply NODE_TLS_REJECT_UNAUTHORIZED to the current process as well,
-  // so Node.js HTTP/TLS in this process (used by the SDK internals) respects it.
-  if (merged.NODE_TLS_REJECT_UNAUTHORIZED && !process.env.NODE_TLS_REJECT_UNAUTHORIZED) {
-    process.env.NODE_TLS_REJECT_UNAUTHORIZED = merged.NODE_TLS_REJECT_UNAUTHORIZED;
-  }
-
   if (IS_WIN) {
     // Redirect Claude debug output to temp to avoid write permission issues
     if (!merged.CLAUDE_DEBUG_FILE) {
@@ -185,37 +179,6 @@ export function buildClaudeAgentEnv(): EnvLike {
   }
 
   return merged;
-}
-
-/**
- * Resolve the model to pass to Claude Code Agent SDK.
- *
- * When a custom ANTHROPIC_BASE_URL is set (proxy mode), the proxy may not
- * recognize standard Claude model IDs like "claude-sonnet-4-6". Map the
- * requested model tier to the proxy's real model via ANTHROPIC_DEFAULT_*_MODEL
- * env vars (read from ~/.claude/settings.json).
- *
- * Example: user selects "Claude Sonnet 4.6" → detected as sonnet tier →
- *   mapped to ANTHROPIC_DEFAULT_SONNET_MODEL (e.g. "gpt-5.3-codex")
- */
-export function resolveAgentModel(
-  requestedModel: string | undefined,
-  env: Record<string, string | undefined>,
-): string | undefined {
-  if (!requestedModel) return undefined;
-  if (!env.ANTHROPIC_BASE_URL) return requestedModel;
-
-  // Proxy mode: map model tier to the proxy's model via env vars
-  const lower = requestedModel.toLowerCase();
-  if (lower.includes('opus'))
-    return env.ANTHROPIC_DEFAULT_OPUS_MODEL || env.ANTHROPIC_MODEL || undefined;
-  if (lower.includes('haiku'))
-    return env.ANTHROPIC_DEFAULT_HAIKU_MODEL || env.ANTHROPIC_MODEL || undefined;
-  if (lower.includes('sonnet'))
-    return env.ANTHROPIC_DEFAULT_SONNET_MODEL || env.ANTHROPIC_MODEL || undefined;
-
-  // Unknown tier: use the general default
-  return env.ANTHROPIC_MODEL || undefined;
 }
 
 /**

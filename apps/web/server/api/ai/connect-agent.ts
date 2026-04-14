@@ -209,11 +209,13 @@ async function connectClaudeCode(): Promise<ConnectResult> {
   } catch (error) {
     const msg = error instanceof Error ? error.message : 'Failed to connect';
     serverLog.error(`[connect-agent] claude connection error: ${msg}`);
-    // Third-party API proxies often don't support the supportedModels() call,
+    // Some custom base-URL setups do not support the supportedModels() call,
     // causing "query closed before response". Fall back to a default model list
     // so users can still connect and choose a model.
     if (/closed before|closed early|query closed/i.test(msg)) {
-      serverLog.info('[connect-agent] using fallback model list (proxy detected)');
+      serverLog.info(
+        '[connect-agent] using fallback model list after supportedModels() closed early',
+      );
       const fallbackEnv = buildClaudeAgentEnv();
       const claudeInfo = buildClaudeConnectionInfo(fallbackEnv, null);
 
@@ -230,7 +232,7 @@ async function connectClaudeCode(): Promise<ConnectResult> {
             // Surface specific issues as warnings
             if (/certificate|CERT_|ssl|tls/i.test(tail)) {
               warning =
-                'TLS/SSL error detected. If using a proxy, add "NODE_TLS_REJECT_UNAUTHORIZED": "0" to ~/.claude/settings.json env.';
+                'TLS/SSL error detected. Check the endpoint certificate chain and local trust configuration.';
             } else if (/EPERM|operation not permitted/i.test(tail)) {
               warning =
                 'Permission error writing config. Try: echo {} > %USERPROFILE%\\.claude.json';
@@ -282,7 +284,7 @@ function buildClaudeConnectionInfo(
     return { connectionInfo: `Connected via ${sub} (${account.email})`, hintPath: hp };
   }
   if (apiKey && baseUrl) {
-    return { connectionInfo: 'Connected via API key (custom endpoint)', hintPath: hp };
+    return { connectionInfo: 'Connected via API key (custom base URL)', hintPath: hp };
   }
   if (apiKey) {
     const masked = apiKey.length > 12 ? `${apiKey.slice(0, 8)}...` : '***';
