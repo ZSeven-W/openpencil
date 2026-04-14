@@ -27,6 +27,7 @@ import {
   hitTestPathControl,
 } from './skia-hit-handlers';
 import { bakeSceneAnchorsToPathNode, getEditablePathState, movePathControl } from './path-editing';
+import { shouldAutoReparentOnDragOutsideParent } from './drag-reparent-policy';
 
 export interface TextEditState {
   nodeId: string;
@@ -1132,6 +1133,7 @@ export class SkiaInteractionManager {
 
     for (const orig of this.dragOrigPositions) {
       const parent = docStore.getParentOf(orig.id);
+      const draggedNode = docStore.getNodeById(orig.id);
       const draggedRN = engine.renderNodes.find((rn) => rn.node.id === orig.id);
       const objBounds = draggedRN
         ? { x: draggedRN.absX, y: draggedRN.absY, w: draggedRN.absW, h: draggedRN.absH }
@@ -1153,7 +1155,7 @@ export class SkiaInteractionManager {
             objBounds.y + objBounds.h <= pBounds.y ||
             objBounds.y >= pBounds.y + pBounds.h;
 
-          if (outside) {
+          if (outside && shouldAutoReparentOnDragOutsideParent(draggedNode)) {
             docStore.updateNode(orig.id, { x: objBounds.x, y: objBounds.y } as Partial<PenNode>);
             docStore.moveNode(orig.id, null, 0);
             continue;

@@ -71,6 +71,7 @@ function broadcast(payload: Record<string, unknown>, excludeClientId?: string): 
     recipients.push(client);
   }
 
+  // Return early when there are no recipients to avoid pointless JSON serialization for large documents.
   if (recipients.length === 0) return;
 
   const data = JSON.stringify(payload);

@@ -62,6 +62,8 @@ export interface FigmaPaint {
   transform?: FigmaMatrix;
   image?: FigmaImage;
   imageScaleMode?: 'STRETCH' | 'FIT' | 'FILL' | 'TILE';
+  originalImageWidth?: number;
+  originalImageHeight?: number;
 }
 
 export type FigmaEffectType =

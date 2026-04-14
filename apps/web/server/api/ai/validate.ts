@@ -4,7 +4,6 @@ import {
   buildClaudeAgentEnv,
   buildSpawnClaudeCodeProcess,
   getClaudeAgentDebugFilePath,
-  resolveAgentModel,
 } from '../../utils/resolve-claude-agent-env';
 import { writeFile, mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -109,7 +108,7 @@ async function validateViaAgentSDK(
       const env = buildClaudeAgentEnv();
       const debugFile = getClaudeAgentDebugFilePath();
       const claudePath = resolveClaudeCli();
-      const model = resolveAgentModel(requestedModel, env);
+      const model = requestedModel;
 
       const prompt = `IMPORTANT: First, use the Read tool to read the image file at "${tempPath}". This is a PNG screenshot of a UI design.
 

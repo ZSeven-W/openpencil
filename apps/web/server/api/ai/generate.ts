@@ -5,7 +5,6 @@ import {
   buildClaudeAgentEnv,
   buildSpawnClaudeCodeProcess,
   getClaudeAgentDebugFilePath,
-  resolveAgentModel,
 } from '../../utils/resolve-claude-agent-env';
 import { formatOpenCodeError } from './chat';
 import { createSSEResponse } from '../../utils/sse-stream';
@@ -69,7 +68,7 @@ async function generateViaAgentSDK(
     // Remove CLAUDECODE env to allow running from within a CC terminal
     const env = buildClaudeAgentEnv();
     const debugFile = getClaudeAgentDebugFilePath();
-    const model = resolveAgentModel(requestedModel, env);
+    const model = requestedModel;
 
     const claudePath = resolveClaudeCli();
 
@@ -310,7 +309,7 @@ function streamViaAgentSDK(body: GenerateBody, requestedModel?: string) {
     const { query } = await import('@anthropic-ai/claude-agent-sdk');
     const env = buildClaudeAgentEnv();
     const debugFile = getClaudeAgentDebugFilePath();
-    const model = resolveAgentModel(requestedModel, env);
+    const model = requestedModel;
     const claudePath = resolveClaudeCli();
 
     const q = query({
