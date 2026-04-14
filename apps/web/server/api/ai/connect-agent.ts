@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import type { GroupedModel } from '../../../src/types/agent-settings';
 import { resolveClaudeCli } from '../../utils/resolve-claude-cli';
 import { serverLog } from '../../utils/server-logger';
+import { posixUserBinDirs, probeViaLoginShell } from '../../utils/cli-resolver-helpers';
 import {
   buildClaudeAgentEnv,
   buildSpawnClaudeCodeProcess,
@@ -421,7 +422,11 @@ async function connectCodexCli(): Promise<ConnectResult> {
     const { join } = await import('node:path');
     const isWin = process.platform === 'win32';
 
-    // Check if codex binary exists — PATH, npm prefix, then common locations
+    serverLog.info(
+      `[connect-agent] codex platform=${process.platform}, SHELL=${process.env.SHELL ?? 'unset'}`,
+    );
+
+    // Check if codex binary exists — PATH, login shell (macOS/Linux), npm prefix, common locations
     let which = '';
 
     // 1. PATH lookup
@@ -446,7 +451,13 @@ async function connectCodexCli(): Promise<ConnectResult> {
       );
     }
 
-    // 2. npm prefix -g (Windows: npm global creates .cmd or .ps1 wrappers)
+    // 2. macOS/Linux: probe the user's login shell for nvm/pnpm/bun/mise shims
+    if (!which && !isWin) {
+      const viaShell = probeViaLoginShell('codex', 'connect-agent:codex');
+      if (viaShell) which = viaShell;
+    }
+
+    // 3. npm prefix -g (Windows: npm global creates .cmd or .ps1 wrappers)
     if (!which && isWin) {
       try {
         serverLog.info('[connect-agent] codex: trying npm.cmd prefix -g');
@@ -473,13 +484,15 @@ async function connectCodexCli(): Promise<ConnectResult> {
       }
     }
 
-    // 3. Common install locations
-    if (!which && isWin) {
-      const candidates = [
-        ...winNpmCandidates(join(process.env.APPDATA || '', 'npm'), 'codex'),
-        ...winNpmCandidates(join(process.env.NVM_SYMLINK || ''), 'codex'),
-        ...winNpmCandidates(join(process.env.FNM_MULTISHELL_PATH || ''), 'codex'),
-      ];
+    // 4. Common install locations
+    if (!which) {
+      const candidates = isWin
+        ? [
+            ...winNpmCandidates(join(process.env.APPDATA || '', 'npm'), 'codex'),
+            ...winNpmCandidates(join(process.env.NVM_SYMLINK || ''), 'codex'),
+            ...winNpmCandidates(join(process.env.FNM_MULTISHELL_PATH || ''), 'codex'),
+          ]
+        : posixUserBinDirs().map((dir) => join(dir, 'codex'));
       for (const c of candidates) {
         const exists = c ? existsSync(c) : false;
         serverLog.info(`[connect-agent] codex candidate: "${c}" (exists=${exists})`);
@@ -535,7 +548,7 @@ async function connectCodexCli(): Promise<ConnectResult> {
           }));
       }
     } catch {
-      serverLog.info(`[connect-agent] codex models cache not available`);
+      serverLog.info('[connect-agent] codex models cache not available');
     }
 
     // Fallback: parse models from Codex's bundled latest-model.md reference
@@ -570,7 +583,9 @@ async function resolveOpencodeBinary(): Promise<string | undefined> {
   const { join } = await import('node:path');
   const isWin = process.platform === 'win32';
 
-  serverLog.info(`[resolve-opencode] platform=${process.platform}, isWindows=${isWin}`);
+  serverLog.info(
+    `[resolve-opencode] platform=${process.platform}, isWindows=${isWin}, SHELL=${process.env.SHELL ?? 'unset'}`,
+  );
 
   // 1. Try PATH lookup
   try {
@@ -590,7 +605,13 @@ async function resolveOpencodeBinary(): Promise<string | undefined> {
     );
   }
 
-  // 2. Try `npm prefix -g` to find actual npm global bin directory
+  // 2. macOS/Linux login-shell probe for nvm/pnpm/bun/mise/asdf shims
+  if (!isWin) {
+    const viaShell = probeViaLoginShell('opencode', 'resolve-opencode');
+    if (viaShell) return viaShell;
+  }
+
+  // 3. Try `npm prefix -g` to find actual npm global bin directory
   //    On Windows, must use `npm.cmd` since Electron spawns cmd.exe
   try {
     const npmCmd = isWin ? 'npm.cmd prefix -g' : 'npm prefix -g';
@@ -615,10 +636,7 @@ async function resolveOpencodeBinary(): Promise<string | undefined> {
     );
   }
 
-  // 3. Common install locations
-  //    npm -g → %APPDATA%\npm (Windows), /usr/local (macOS/Linux)
-  //    curl installer → ~/.opencode/bin (macOS/Linux)
-  //    Homebrew → /usr/local/bin or /opt/homebrew/bin (macOS)
+  // 4. Common install locations
   const home = homedir();
   const candidates = isWin
     ? [
@@ -635,12 +653,10 @@ async function resolveOpencodeBinary(): Promise<string | undefined> {
     : [
         // curl installer (https://opencode.ai/install)
         join(home, '.opencode', 'bin', 'opencode'),
-        // npm global
+        // npm global (non-standard prefix)
         join(home, '.npm-global', 'bin', 'opencode'),
-        '/usr/local/bin/opencode',
-        // Homebrew
-        '/opt/homebrew/bin/opencode',
-        join(home, '.local', 'bin', 'opencode'),
+        // All the common user-local/package-manager bin dirs
+        ...posixUserBinDirs().map((dir) => join(dir, 'opencode')),
       ];
   for (const c of candidates) {
     const exists = c ? existsSync(c) : false;
@@ -648,7 +664,9 @@ async function resolveOpencodeBinary(): Promise<string | undefined> {
     if (c && exists) return c;
   }
 
-  serverLog.info('[resolve-opencode] no opencode binary found');
+  serverLog.warn(
+    '[resolve-opencode] no opencode binary found after PATH, login-shell probe, and candidate scan',
+  );
   return undefined;
 }
 

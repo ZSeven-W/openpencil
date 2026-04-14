@@ -202,6 +202,17 @@ export const BUILTIN_PROVIDER_PRESETS: Record<BuiltinProviderPreset, BuiltinPres
       global: { baseURL: 'https://api.stepfun.ai/v1' },
     },
   },
+  'stepfun-coding': {
+    label: 'StepFun Coding Plan',
+    type: 'openai-compat',
+    baseURL: 'https://api.stepfun.com/step_plan/v1',
+    placeholder: 'API Key',
+    modelPlaceholder: 'step-3-coding',
+    regions: {
+      cn: { baseURL: 'https://api.stepfun.com/step_plan/v1' },
+      global: { baseURL: 'https://api.stepfun.ai/step_plan/v1' },
+    },
+  },
   nvidia: {
     label: 'NVIDIA NIM',
     type: 'openai-compat',

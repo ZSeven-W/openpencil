@@ -2,6 +2,7 @@ import { execSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { serverLog } from './server-logger';
+import { posixUserBinDirs, probeViaLoginShell } from './cli-resolver-helpers';
 
 const isWindows = process.platform === 'win32';
 
@@ -22,7 +23,9 @@ function resolveWinExtension(binPath: string): string {
 
 /** Resolve the standalone copilot CLI binary path to avoid Bun's node:sqlite issue */
 export function resolveCopilotCli(): string | undefined {
-  serverLog.info(`[resolve-copilot] platform=${process.platform}, isWindows=${isWindows}`);
+  serverLog.info(
+    `[resolve-copilot] platform=${process.platform}, isWindows=${isWindows}, SHELL=${process.env.SHELL ?? 'unset'}`,
+  );
 
   // 1. Try PATH lookup
   try {
@@ -41,7 +44,13 @@ export function resolveCopilotCli(): string | undefined {
     );
   }
 
-  // 2. Try `npm prefix -g` on Windows (npm install -g creates .cmd wrappers)
+  // 2. macOS/Linux login-shell probe
+  if (!isWindows) {
+    const viaShell = probeViaLoginShell('copilot', 'resolve-copilot');
+    if (viaShell) return viaShell;
+  }
+
+  // 3. Try `npm prefix -g` on Windows (npm install -g creates .cmd wrappers)
   if (isWindows) {
     try {
       serverLog.info('[resolve-copilot] trying npm.cmd prefix -g');
@@ -63,25 +72,27 @@ export function resolveCopilotCli(): string | undefined {
     }
   }
 
-  // 3. Common install locations
-  if (isWindows) {
-    const candidates = [
-      // npm global (.cmd + .ps1)
-      ...winNpmCandidates(join(process.env.APPDATA || '', 'npm'), 'copilot'),
-      // nvm-windows / fnm
-      ...winNpmCandidates(join(process.env.NVM_SYMLINK || ''), 'copilot'),
-      ...winNpmCandidates(join(process.env.FNM_MULTISHELL_PATH || ''), 'copilot'),
-      // winget / native
-      join(process.env.LOCALAPPDATA || '', 'Microsoft', 'WinGet', 'Links', 'copilot.exe'),
-    ];
-    for (const c of candidates) {
-      const exists = c ? existsSync(c) : false;
-      serverLog.info(`[resolve-copilot] candidate: "${c}" (exists=${exists})`);
-      if (c && exists) return c;
-    }
+  // 4. Common install locations
+  const candidates = isWindows
+    ? [
+        // npm global (.cmd + .ps1)
+        ...winNpmCandidates(join(process.env.APPDATA || '', 'npm'), 'copilot'),
+        // nvm-windows / fnm
+        ...winNpmCandidates(join(process.env.NVM_SYMLINK || ''), 'copilot'),
+        ...winNpmCandidates(join(process.env.FNM_MULTISHELL_PATH || ''), 'copilot'),
+        // winget / native
+        join(process.env.LOCALAPPDATA || '', 'Microsoft', 'WinGet', 'Links', 'copilot.exe'),
+      ]
+    : posixUserBinDirs().map((dir) => join(dir, 'copilot'));
+  for (const c of candidates) {
+    const exists = c ? existsSync(c) : false;
+    serverLog.info(`[resolve-copilot] candidate: "${c}" (exists=${exists})`);
+    if (c && exists) return c;
   }
 
-  serverLog.warn('[resolve-copilot] no copilot binary found');
+  serverLog.warn(
+    '[resolve-copilot] no copilot binary found after PATH, login-shell probe, and candidate scan',
+  );
   return undefined;
 }
 

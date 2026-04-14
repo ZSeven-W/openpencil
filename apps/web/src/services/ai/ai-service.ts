@@ -282,6 +282,10 @@ export async function* streamChat(
               chunk.content.trim().length > 0 &&
               thinkingResetsTimeout
             ) {
+              // Active reasoning is progress — the model isn't silent, so the
+              // "no first text yet" watchdog should stand down. noTextTimeout
+              // + hardTimeout still bound genuinely runaway reasoning.
+              clearFirstTextTimeout();
               resetActivityTimeout();
             }
 

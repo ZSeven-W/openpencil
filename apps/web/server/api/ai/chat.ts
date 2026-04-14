@@ -1074,7 +1074,16 @@ function streamViaBuiltin(body: ChatBody) {
                 ),
               );
             } else if (evt.result?.is_error) {
-              const errMsg = `Provider error: ${evt.result.subtype ?? 'unknown'}`;
+              // Zig attaches the provider's last_error string in result.errors[0]
+              // (e.g. "Content blocked by provider safety filter (HTTP 451)...").
+              // Surface that instead of the opaque subtype so users see the
+              // actual reason — "content blocked" vs. "rate limit" vs. "auth"
+              // is information they can act on.
+              const detail =
+                (Array.isArray(evt.result.errors) && evt.result.errors[0]) ||
+                evt.result.subtype ||
+                'unknown';
+              const errMsg = `Provider error: ${detail}`;
               console.error('[builtin]', errMsg);
               controller.enqueue(
                 encoder.encode(`data: ${JSON.stringify({ type: 'error', content: errMsg })}\n\n`),
