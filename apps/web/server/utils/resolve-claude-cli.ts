@@ -3,6 +3,7 @@ import { existsSync } from 'node:fs';
 import { homedir, platform } from 'node:os';
 import { join } from 'node:path';
 import { serverLog } from './server-logger';
+import { posixUserBinDirs, probeViaLoginShell } from './cli-resolver-helpers';
 
 const isWindows = platform() === 'win32';
 
@@ -31,7 +32,10 @@ function resolveWinExtension(binPath: string): string {
  * binaries and spawns them directly (no `node` wrapper needed).
  */
 export function resolveClaudeCli(): string | undefined {
-  serverLog.info(`[resolve-claude-cli] platform=${platform()}, isWindows=${isWindows}`);
+  serverLog.info(
+    `[resolve-claude-cli] platform=${platform()}, isWindows=${isWindows}, SHELL=${process.env.SHELL ?? 'unset'}`,
+  );
+  serverLog.info(`[resolve-claude-cli] PATH=${(process.env.PATH ?? '').slice(0, 400)}`);
 
   // 1. Try PATH lookup
   try {
@@ -52,7 +56,16 @@ export function resolveClaudeCli(): string | undefined {
     );
   }
 
-  // 2. Try `npm prefix -g` to find actual npm global bin directory
+  // 2. On macOS/Linux, ask the user's login shell — Electron does not
+  //    inherit the user's shell config, so nvm/pnpm/bun/mise/asdf shims are
+  //    invisible to a bare `which`. This is the single most common cause of
+  //    "CLI installed but OpenPencil can't find it" reports on Mac.
+  if (!isWindows) {
+    const viaShell = probeViaLoginShell('claude', 'resolve-claude-cli');
+    if (viaShell) return viaShell;
+  }
+
+  // 3. Try `npm prefix -g` to find actual npm global bin directory
   //    On Windows, must use `npm.cmd` since Electron spawns cmd.exe
   if (isWindows) {
     try {
@@ -77,7 +90,7 @@ export function resolveClaudeCli(): string | undefined {
     }
   }
 
-  // 3. Common install locations
+  // 4. Common install locations
   const candidates = isWindows
     ? [
         // npm global (.cmd + .ps1)
@@ -91,17 +104,15 @@ export function resolveClaudeCli(): string | undefined {
         join(homedir(), '.claude', 'local', 'claude.exe'),
         join(homedir(), 'AppData', 'Local', 'Programs', 'claude-code', 'claude.exe'),
       ]
-    : [
-        join(homedir(), '.local', 'bin', 'claude'),
-        '/usr/local/bin/claude',
-        '/opt/homebrew/bin/claude',
-      ];
+    : posixUserBinDirs().map((dir) => join(dir, 'claude'));
   for (const c of candidates) {
     const exists = c ? existsSync(c) : false;
     serverLog.info(`[resolve-claude-cli] candidate: "${c}" (exists=${exists})`);
     if (c && exists) return c;
   }
 
-  serverLog.warn('[resolve-claude-cli] no claude binary found');
+  serverLog.warn(
+    '[resolve-claude-cli] no claude binary found after PATH, login-shell probe, and candidate scan',
+  );
   return undefined;
 }

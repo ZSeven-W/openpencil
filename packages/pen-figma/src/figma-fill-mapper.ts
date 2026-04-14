@@ -1,6 +1,8 @@
 import type { FigmaPaint, FigmaMatrix } from './figma-types';
-import type { PenFill } from '@zseven-w/pen-types';
+import type { ImageOriginalSize, ImageTransform, PenFill } from '@zseven-w/pen-types';
 import { figmaColorToHex } from './figma-color-utils';
+
+const IMAGE_TRANSFORM_EPSILON = 0.000001;
 
 /**
  * Convert Figma fillPaints (internal format) to PenFill[].
@@ -74,6 +76,8 @@ function mapSingleFill(paint: FigmaPaint): PenFill | null {
         type: 'image',
         url,
         mode: mapScaleMode(paint.imageScaleMode),
+        originalSize: normalizeOriginalSize(paint.originalImageWidth, paint.originalImageHeight),
+        transform: normalizeImageTransform(paint.transform),
         opacity: paint.opacity,
       };
     }
@@ -89,6 +93,45 @@ function gradientAngleFromTransform(m: FigmaMatrix): number {
   // Convert to CSS gradient convention (0° = bottom-to-top, 90° = left-to-right).
   const mathAngle = Math.atan2(m.m10, m.m00) * (180 / Math.PI);
   return Math.round(90 - mathAngle);
+}
+
+function normalizeOriginalSize(width?: number, height?: number): ImageOriginalSize | undefined {
+  if (
+    typeof width !== 'number' ||
+    typeof height !== 'number' ||
+    !Number.isFinite(width) ||
+    !Number.isFinite(height) ||
+    width <= 0 ||
+    height <= 0
+  ) {
+    return undefined;
+  }
+
+  return { width, height };
+}
+
+function normalizeImageTransform(transform?: FigmaMatrix): ImageTransform | undefined {
+  if (!transform) return undefined;
+
+  if (
+    Math.abs(transform.m00 - 1) <= IMAGE_TRANSFORM_EPSILON &&
+    Math.abs(transform.m01) <= IMAGE_TRANSFORM_EPSILON &&
+    Math.abs(transform.m02) <= IMAGE_TRANSFORM_EPSILON &&
+    Math.abs(transform.m10) <= IMAGE_TRANSFORM_EPSILON &&
+    Math.abs(transform.m11 - 1) <= IMAGE_TRANSFORM_EPSILON &&
+    Math.abs(transform.m12) <= IMAGE_TRANSFORM_EPSILON
+  ) {
+    return undefined;
+  }
+
+  return {
+    m00: transform.m00,
+    m01: transform.m01,
+    m02: transform.m02,
+    m10: transform.m10,
+    m11: transform.m11,
+    m12: transform.m12,
+  };
 }
 
 function mapScaleMode(mode?: string): 'stretch' | 'fill' | 'fit' {

@@ -89,8 +89,14 @@ export async function executeSubAgents(
         abortSignal,
       );
 
-      // Retry once on failure (e.g. socket closed by provider)
-      if (result.error && result.nodes.length === 0 && !abortSignal?.aborted) {
+      // Retry once on failure (e.g. socket closed by provider). Skip retry
+      // when the provider refused the request shape or content (HTTP 400/451)
+      // — retrying the same prompt will hit the same determinstic refusal and
+      // just wastes another round-trip (StepFun's 451 scan can take minutes).
+      const isNonRetryable =
+        !!result.error &&
+        /HTTP 4(0[01]|29|51)|content blocked|authentication failed|censorship/i.test(result.error);
+      if (result.error && result.nodes.length === 0 && !abortSignal?.aborted && !isNonRetryable) {
         console.warn(`[orchestrator] subtask ${i} failed, retrying: ${result.error}`);
         result = await executeSubAgent(
           plan.subtasks[i],
@@ -104,6 +110,31 @@ export async function executeSubAgents(
           undefined,
           abortSignal,
           resolveModelProfile(request.model).tier === 'basic',
+        );
+      }
+
+      // Minimal-skills fallback: re-run just this failing subtask with a
+      // ~3KB kernel prompt (schema + jsonl-format only). Don't re-run any
+      // earlier successful subtasks. Skip when the provider gave a
+      // deterministic refusal (401/451/content-blocked) — a smaller prompt
+      // won't get past the same policy check.
+      if (result.error && result.nodes.length === 0 && !abortSignal?.aborted && !isNonRetryable) {
+        console.warn(
+          `[orchestrator] subtask ${i} still empty after retry, falling back to minimal skills: ${result.error}`,
+        );
+        result = await executeSubAgent(
+          plan.subtasks[i],
+          plan,
+          request,
+          preparedPrompt,
+          timeoutOptions,
+          progress,
+          i,
+          callbacks,
+          undefined,
+          abortSignal,
+          true, // reducedComplexity
+          true, // minimalSkills
         );
       }
 
@@ -166,7 +197,7 @@ export async function executeSubAgents(
 
       await acquireSlot();
       try {
-        const result = await executeSubAgent(
+        let result = await executeSubAgent(
           plan.subtasks[idx],
           plan,
           request,
@@ -178,6 +209,36 @@ export async function executeSubAgents(
           undefined,
           abortSignal,
         );
+
+        // Minimal-skills fallback — retry just this subtask with a ~3KB
+        // kernel prompt if the full-skills attempt produced no nodes.
+        // See the sequential path for rationale.
+        if (result.error && result.nodes.length === 0 && !abortSignal?.aborted) {
+          const nonRetryable =
+            /HTTP 4(0[01]|29|51)|content blocked|authentication failed|censorship/i.test(
+              result.error,
+            );
+          if (!nonRetryable) {
+            console.warn(
+              `[orchestrator] subtask ${idx} empty, falling back to minimal skills: ${result.error}`,
+            );
+            result = await executeSubAgent(
+              plan.subtasks[idx],
+              plan,
+              request,
+              preparedPrompt,
+              timeoutOptions,
+              progress,
+              idx,
+              callbacks,
+              undefined,
+              abortSignal,
+              true, // reducedComplexity
+              true, // minimalSkills
+            );
+          }
+        }
+
         results[idx] = result;
 
         if (result.nodes.length > 0) {
@@ -232,6 +293,7 @@ async function executeSubAgent(
   promptOverride?: string,
   abortSignal?: AbortSignal,
   reducedComplexity = false,
+  minimalSkills = false,
 ): Promise<SubAgentResult> {
   const animated = callbacks?.animated ?? false;
   const progressEntry = progress.subtasks[index];
@@ -275,7 +337,17 @@ async function executeSubAgent(
   // See `sub-agent-debug-flags.ts` for the toggles. All branches here
   // are no-ops when the corresponding flag is false (the default).
   let resolvedSkills = genCtx.skills;
-  if (SUB_AGENT_DEBUG_FLAGS.SKILLS_MINIMAL_ONLY) {
+  // `minimalSkills` is the last-ditch fallback: after a full-skill attempt
+  // and a reduced-complexity retry both returned empty, re-run this ONE
+  // subtask with just the schema + JSONL-format kernel. A 19KB system
+  // prompt times out StepFun's safety scanner and occasionally yields
+  // pure-reasoning streams on weaker models; the ~3KB kernel gives the
+  // model a much better chance of actually emitting nodes.
+  if (minimalSkills) {
+    resolvedSkills = resolvedSkills.filter(
+      (s) => s.meta.name === 'schema' || s.meta.name === 'jsonl-format',
+    );
+  } else if (SUB_AGENT_DEBUG_FLAGS.SKILLS_MINIMAL_ONLY) {
     resolvedSkills = resolvedSkills.filter(
       (s) => s.meta.name === 'schema' || s.meta.name === 'jsonl-format',
     );

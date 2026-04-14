@@ -16,6 +16,7 @@ export type BlendMode =
 export interface SolidFill {
   type: 'solid';
   color: string; // #RRGGBB or #RRGGBBAA
+  explain?: string;
   opacity?: number;
   blendMode?: BlendMode;
 }
@@ -29,6 +30,7 @@ export interface LinearGradientFill {
   type: 'linear_gradient';
   angle?: number;
   stops: GradientStop[];
+  explain?: string;
   opacity?: number;
   blendMode?: BlendMode;
 }
@@ -39,14 +41,32 @@ export interface RadialGradientFill {
   cy?: number;
   radius?: number;
   stops: GradientStop[];
+  explain?: string;
   opacity?: number;
   blendMode?: BlendMode;
+}
+
+export interface ImageOriginalSize {
+  width: number;
+  height: number;
+}
+
+export interface ImageTransform {
+  m00: number;
+  m01: number;
+  m02: number;
+  m10: number;
+  m11: number;
+  m12: number;
 }
 
 export interface ImageFill {
   type: 'image';
   url: string;
   mode?: 'fill' | 'fit' | 'crop' | 'tile' | 'stretch';
+  originalSize?: ImageOriginalSize;
+  transform?: ImageTransform;
+  explain?: string;
   opacity?: number;
   exposure?: number; // -100 to 100
   contrast?: number; // -100 to 100

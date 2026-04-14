@@ -5,6 +5,8 @@ export type {
   GradientStop,
   LinearGradientFill,
   RadialGradientFill,
+  ImageOriginalSize,
+  ImageTransform,
   ImageFill,
   PenFill,
   PenStroke,
