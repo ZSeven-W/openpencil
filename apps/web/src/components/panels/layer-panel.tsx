@@ -323,13 +323,7 @@ function LayerPanelInner() {
   const handleDragEnd = useCallback(() => {
     const { dragId, overId, dropPosition: pos } = dragRef.current;
     if (dragId && overId && dragId !== overId && pos) {
-      const move = resolveLayerDropMove(
-        dragId,
-        overId,
-        pos,
-        children,
-        getParentOf,
-      );
+      const move = resolveLayerDropMove(dragId, overId, pos, children, getParentOf);
 
       if (move && pos === 'inside') {
         moveNode(

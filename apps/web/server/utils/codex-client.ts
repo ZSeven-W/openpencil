@@ -61,10 +61,7 @@ const CODEX_ENV_ALLOWLIST = new Set([
 export function extractCodexConfigEnvKeys(configToml: string): string[] {
   return Array.from(
     new Set(
-      Array.from(
-        configToml.matchAll(/^\s*env_key\s*=\s*"([^"]+)"\s*$/gm),
-        (match) => match[1],
-      ),
+      Array.from(configToml.matchAll(/^\s*env_key\s*=\s*"([^"]+)"\s*$/gm), (match) => match[1]),
     ),
   );
 }
@@ -87,10 +84,10 @@ export function filterCodexEnv(
   const extraAllowed = new Set(extraAllowedKeys);
   for (const [k, v] of Object.entries(env)) {
     if (
-      CODEX_ENV_ALLOWLIST.has(k)
-      || extraAllowed.has(k)
-      || k.startsWith('OPENAI_')
-      || k.startsWith('CODEX_')
+      CODEX_ENV_ALLOWLIST.has(k) ||
+      extraAllowed.has(k) ||
+      k.startsWith('OPENAI_') ||
+      k.startsWith('CODEX_')
     ) {
       result[k] = v;
     }
@@ -273,10 +270,7 @@ async function executeCodexCommand(
   return await new Promise((resolve, reject) => {
     const codexConfigEnvKeys = loadCodexConfigEnvKeys();
     const child = spawn('codex', args, {
-      env: filterCodexEnv(
-        process.env as Record<string, string | undefined>,
-        codexConfigEnvKeys,
-      ),
+      env: filterCodexEnv(process.env as Record<string, string | undefined>, codexConfigEnvKeys),
       stdio: [stdinText ? 'pipe' : 'ignore', 'pipe', 'pipe'],
       // On Windows, npm-installed CLIs are .cmd scripts — need shell to resolve.
       ...(process.platform === 'win32' && { shell: true }),

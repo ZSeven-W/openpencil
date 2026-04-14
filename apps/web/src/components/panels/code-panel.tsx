@@ -18,10 +18,7 @@ import { useDocumentStore, getActivePageChildren } from '@/stores/document-store
 import { useAIStore } from '@/stores/ai-store';
 import { generateCode } from '@/services/ai/code-generation-pipeline';
 import { buildCodegenBundleManifest, type CodegenAssetFile } from '@/services/ai/codegen-assets';
-import {
-  buildAIStructureBundle,
-  encodeAIStructureBundleZip,
-} from '@/services/ai/structure-bundle';
+import { buildAIStructureBundle, encodeAIStructureBundleZip } from '@/services/ai/structure-bundle';
 import { highlightCode } from '@/utils/syntax-highlight';
 import type { Framework, CodeGenProgress, ChunkStatus } from '@zseven-w/pen-types';
 import { FRAMEWORKS } from '@zseven-w/pen-types';
@@ -260,26 +257,30 @@ function CodePanelInner() {
     const codeBytes = new TextEncoder().encode(generatedCode);
 
     void (async () => {
-      const blob = assets.length > 0
-        ? new Blob([
-            encodeZip({
-              [codeFileName]: codeBytes,
-              'manifest.json': new TextEncoder().encode(
-                JSON.stringify(
-                  await buildCodegenBundleManifest({
-                    framework: activeTab,
-                    codeFile: codeFileName,
-                    codeBytes,
-                    assets,
-                  }),
-                  null,
-                  2,
-                ),
-              ),
-              ...Object.fromEntries(assets.map((asset) => [asset.zipPath, asset.bytes])),
-            }),
-          ], { type: 'application/zip' })
-        : new Blob([generatedCode], { type: 'text/plain;charset=utf-8' });
+      const blob =
+        assets.length > 0
+          ? new Blob(
+              [
+                encodeZip({
+                  [codeFileName]: codeBytes,
+                  'manifest.json': new TextEncoder().encode(
+                    JSON.stringify(
+                      await buildCodegenBundleManifest({
+                        framework: activeTab,
+                        codeFile: codeFileName,
+                        codeBytes,
+                        assets,
+                      }),
+                      null,
+                      2,
+                    ),
+                  ),
+                  ...Object.fromEntries(assets.map((asset) => [asset.zipPath, asset.bytes])),
+                }),
+              ],
+              { type: 'application/zip' },
+            )
+          : new Blob([generatedCode], { type: 'text/plain;charset=utf-8' });
 
       triggerDownload(blob, assets.length > 0 ? `design-${activeTab}.zip` : codeFileName);
     })();

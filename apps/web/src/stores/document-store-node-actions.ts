@@ -109,22 +109,25 @@ export function createNodeActions(
       const node = findNodeInTree(children, id);
       if (!node) return;
       const withNode = options?.preserveAbsolutePosition
-        ? (
-            moveNodePreservingVisualPosition(
-              state.document,
-              useCanvasStore.getState().activePageId,
-              id,
-              newParentId,
-              index,
-            )
-            ?? insertNodeInTree(
-              removeNodeFromTree(children, id),
-              newParentId,
-              deepCloneNode(node),
-              index,
-            )
-          )
-        : insertNodeInTree(removeNodeFromTree(children, id), newParentId, deepCloneNode(node), index);
+        ? (moveNodePreservingVisualPosition(
+            state.document,
+            useCanvasStore.getState().activePageId,
+            id,
+            newParentId,
+            index,
+          ) ??
+          insertNodeInTree(
+            removeNodeFromTree(children, id),
+            newParentId,
+            deepCloneNode(node),
+            index,
+          ))
+        : insertNodeInTree(
+            removeNodeFromTree(children, id),
+            newParentId,
+            deepCloneNode(node),
+            index,
+          );
       mutateWithHistory(get, set, () => _setChildren(state.document, withNode));
     },
 

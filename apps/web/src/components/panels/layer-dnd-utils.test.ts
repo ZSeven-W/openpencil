@@ -55,7 +55,9 @@ describe('resolveLayerDropMove', () => {
 
   it('preserves absolute position when moving into a different container', () => {
     const tree = [frame('source', [rect('child')]), frame('target')];
-    expect(resolveLayerDropMove('child', 'target', 'inside', tree, (id) => findParent(tree, id))).toEqual({
+    expect(
+      resolveLayerDropMove('child', 'target', 'inside', tree, (id) => findParent(tree, id)),
+    ).toEqual({
       parentId: 'target',
       index: 0,
       preserveAbsolutePosition: true,

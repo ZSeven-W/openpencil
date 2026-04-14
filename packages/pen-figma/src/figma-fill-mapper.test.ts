@@ -1,5 +1,5 @@
-import { describe, expect, it } from 'vitest'
-import { mapFigmaFills } from './figma-fill-mapper'
+import { describe, expect, it } from 'vitest';
+import { mapFigmaFills } from './figma-fill-mapper';
 
 describe('mapFigmaFills', () => {
   it('preserves non-identity image transforms for cropped image fills', () => {
@@ -21,12 +21,12 @@ describe('mapFigmaFills', () => {
         },
         image: {
           hash: Uint8Array.from([
-            0x1a, 0x5f, 0x26, 0xdd, 0xcd, 0x1f, 0xf2, 0xdb, 0x35, 0x95,
-            0xb8, 0x45, 0xfb, 0xe9, 0xa1, 0x77, 0x1c, 0x46, 0xae, 0x3f,
+            0x1a, 0x5f, 0x26, 0xdd, 0xcd, 0x1f, 0xf2, 0xdb, 0x35, 0x95, 0xb8, 0x45, 0xfb, 0xe9,
+            0xa1, 0x77, 0x1c, 0x46, 0xae, 0x3f,
           ]),
         },
       },
-    ])
+    ]);
 
     expect(fills).toEqual([
       {
@@ -47,8 +47,8 @@ describe('mapFigmaFills', () => {
           m12: 0.041042111814022064,
         },
       },
-    ])
-  })
+    ]);
+  });
 
   it('drops identity image transforms to avoid noisy documents', () => {
     const fills = mapFigmaFills([
@@ -68,7 +68,7 @@ describe('mapFigmaFills', () => {
           dataBlob: 42,
         },
       },
-    ])
+    ]);
 
     expect(fills).toEqual([
       {
@@ -78,6 +78,6 @@ describe('mapFigmaFills', () => {
         opacity: undefined,
         transform: undefined,
       },
-    ])
-  })
-})
+    ]);
+  });
+});

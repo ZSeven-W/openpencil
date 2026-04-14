@@ -30,9 +30,7 @@ export function resolveLayerDropMove(
 
   const parent = getParentOf(overId);
   const parentId = parent?.id ?? null;
-  const siblings = parent
-    ? ('children' in parent ? parent.children ?? [] : [])
-    : rootChildren;
+  const siblings = parent ? ('children' in parent ? (parent.children ?? []) : []) : rootChildren;
   const targetIdx = siblings.findIndex((n) => n.id === overId);
   if (targetIdx === -1) return null;
 

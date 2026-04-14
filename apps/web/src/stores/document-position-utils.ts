@@ -20,9 +20,7 @@ export function getNodeVisualPosition(
   const resolved = resolveRefs(pageChildren, allNodes);
   const variables = doc.variables ?? {};
   const theme = getDefaultTheme(doc.themes);
-  const variableResolved = resolved.map((node) =>
-    resolveNodeForCanvas(node, variables, theme),
-  );
+  const variableResolved = resolved.map((node) => resolveNodeForCanvas(node, variables, theme));
   const measured = premeasureTextHeights(variableResolved);
   const renderNode = flattenToRenderNodes(measured).find((rn) => rn.node.id === nodeId);
   return renderNode ? { x: renderNode.absX, y: renderNode.absY } : undefined;

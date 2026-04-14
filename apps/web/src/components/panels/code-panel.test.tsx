@@ -74,7 +74,10 @@ vi.mock('@/services/ai/codegen-assets', () => ({
 }));
 
 vi.mock('@/services/ai/structure-bundle', () => ({
-  buildAIStructureBundle: vi.fn(async () => ({ fileName: 'ai-structure-bundle.zip', zipEntries: {} })),
+  buildAIStructureBundle: vi.fn(async () => ({
+    fileName: 'ai-structure-bundle.zip',
+    zipEntries: {},
+  })),
   encodeAIStructureBundleZip: vi.fn(() => new ArrayBuffer(0)),
 }));
 

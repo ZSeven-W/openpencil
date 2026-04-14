@@ -91,17 +91,19 @@ export function buildChunkPrompt(
         ].join('\n')
       : '';
 
-  const assetSection = assetHints.length > 0
-    ? [
-        '',
-        '## Exported Image Assets',
-        'The following image assets were exported from the design. Use these relative paths directly as src/background-image URLs. Do NOT inline base64.',
-        '',
-        ...assetHints.map((asset) =>
-          `- ${asset.relativePath} (${asset.sourceKind}, node: ${asset.sourceNodeName ?? asset.sourceNodeId})`,
-        ),
-      ].join('\n')
-    : '';
+  const assetSection =
+    assetHints.length > 0
+      ? [
+          '',
+          '## Exported Image Assets',
+          'The following image assets were exported from the design. Use these relative paths directly as src/background-image URLs. Do NOT inline base64.',
+          '',
+          ...assetHints.map(
+            (asset) =>
+              `- ${asset.relativePath} (${asset.sourceKind}, node: ${asset.sourceNodeName ?? asset.sourceNodeId})`,
+          ),
+        ].join('\n')
+      : '';
 
   return {
     system: [chunkSkill, '', '---', '', frameworkSkill].join('\n'),
@@ -150,14 +152,15 @@ export function buildAssemblyPrompt(
     })
     .join('\n\n');
 
-  const assetSection = exportedAssetPaths.length > 0
-    ? [
-        'Exported image assets are available under ./assets/.',
-        'Keep any existing ./assets/... references unchanged in the final code.',
-        `Assets: ${exportedAssetPaths.join(', ')}`,
-        '',
-      ].join('\n')
-    : '';
+  const assetSection =
+    exportedAssetPaths.length > 0
+      ? [
+          'Exported image assets are available under ./assets/.',
+          'Keep any existing ./assets/... references unchanged in the final code.',
+          `Assets: ${exportedAssetPaths.join(', ')}`,
+          '',
+        ].join('\n')
+      : '';
 
   return {
     system: [assemblySkill, '', '---', '', frameworkSkill].join('\n'),

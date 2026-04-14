@@ -95,10 +95,7 @@ function gradientAngleFromTransform(m: FigmaMatrix): number {
   return Math.round(90 - mathAngle);
 }
 
-function normalizeOriginalSize(
-  width?: number,
-  height?: number,
-): ImageOriginalSize | undefined {
+function normalizeOriginalSize(width?: number, height?: number): ImageOriginalSize | undefined {
   if (
     typeof width !== 'number' ||
     typeof height !== 'number' ||
@@ -113,18 +110,16 @@ function normalizeOriginalSize(
   return { width, height };
 }
 
-function normalizeImageTransform(
-  transform?: FigmaMatrix,
-): ImageTransform | undefined {
+function normalizeImageTransform(transform?: FigmaMatrix): ImageTransform | undefined {
   if (!transform) return undefined;
 
   if (
-    Math.abs(transform.m00 - 1) <= IMAGE_TRANSFORM_EPSILON
-    && Math.abs(transform.m01) <= IMAGE_TRANSFORM_EPSILON
-    && Math.abs(transform.m02) <= IMAGE_TRANSFORM_EPSILON
-    && Math.abs(transform.m10) <= IMAGE_TRANSFORM_EPSILON
-    && Math.abs(transform.m11 - 1) <= IMAGE_TRANSFORM_EPSILON
-    && Math.abs(transform.m12) <= IMAGE_TRANSFORM_EPSILON
+    Math.abs(transform.m00 - 1) <= IMAGE_TRANSFORM_EPSILON &&
+    Math.abs(transform.m01) <= IMAGE_TRANSFORM_EPSILON &&
+    Math.abs(transform.m02) <= IMAGE_TRANSFORM_EPSILON &&
+    Math.abs(transform.m10) <= IMAGE_TRANSFORM_EPSILON &&
+    Math.abs(transform.m11 - 1) <= IMAGE_TRANSFORM_EPSILON &&
+    Math.abs(transform.m12) <= IMAGE_TRANSFORM_EPSILON
   ) {
     return undefined;
   }

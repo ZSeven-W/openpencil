@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { PenNode } from '@/types/pen';
 import { shouldAutoReparentOnDragOutsideParent } from './drag-reparent-policy';
 
-const node = (type: PenNode['type']): PenNode => ({ id: type, type } as PenNode);
+const node = (type: PenNode['type']): PenNode => ({ id: type, type }) as PenNode;
 
 describe('shouldAutoReparentOnDragOutsideParent', () => {
   it('keeps frame and shape-style nodes parented while dragging', () => {

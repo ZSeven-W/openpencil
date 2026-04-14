@@ -242,14 +242,7 @@ export async function generateCode(
     if (abortSignal?.aborted) throw err;
     // Retry once with stricter prompt
     try {
-      planFromAI = await runPlanning(
-        sanitizedNodes,
-        framework,
-        model,
-        provider,
-        abortSignal,
-        true,
-      );
+      planFromAI = await runPlanning(sanitizedNodes, framework, model, provider, abortSignal, true);
       onProgress({ step: 'planning', status: 'done', plan: planFromAI });
     } catch (retryErr) {
       const msg = retryErr instanceof Error ? retryErr.message : 'Planning failed';

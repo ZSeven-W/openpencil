@@ -1,10 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { ContainerProps, FrameNode, PenDocument, PenNode } from '@/types/pen';
 import { DEFAULT_PAGE_ID, findNodeInTree } from './document-tree-utils';
-import {
-  getNodeVisualPosition,
-  moveNodePreservingVisualPosition,
-} from './document-position-utils';
+import { getNodeVisualPosition, moveNodePreservingVisualPosition } from './document-position-utils';
 
 const rect = (id: string, x?: number, y?: number): PenNode => ({
   id,
@@ -33,19 +30,21 @@ describe('document-position-utils', () => {
     const doc: PenDocument = {
       version: '1.0.0',
       children: [],
-      pages: [{
-        id: DEFAULT_PAGE_ID,
-        name: 'Page 1',
-        children: [
-          frame('parent', {
-            x: 100,
-            y: 50,
-            layout: 'vertical',
-            padding: [10, 20],
-            children: [rect('child', 0, 0)],
-          }),
-        ],
-      }],
+      pages: [
+        {
+          id: DEFAULT_PAGE_ID,
+          name: 'Page 1',
+          children: [
+            frame('parent', {
+              x: 100,
+              y: 50,
+              layout: 'vertical',
+              padding: [10, 20],
+              children: [rect('child', 0, 0)],
+            }),
+          ],
+        },
+      ],
     };
 
     expect(getNodeVisualPosition(doc, DEFAULT_PAGE_ID, 'child')).toEqual({ x: 120, y: 60 });
@@ -55,29 +54,25 @@ describe('document-position-utils', () => {
     const doc: PenDocument = {
       version: '1.0.0',
       children: [],
-      pages: [{
-        id: DEFAULT_PAGE_ID,
-        name: 'Page 1',
-        children: [
-          frame('parent', {
-            x: 100,
-            y: 50,
-            layout: 'vertical',
-            padding: [10, 20],
-            children: [rect('child', 0, 0)],
-          }),
-          rect('root-sibling', 300, 300),
-        ],
-      }],
+      pages: [
+        {
+          id: DEFAULT_PAGE_ID,
+          name: 'Page 1',
+          children: [
+            frame('parent', {
+              x: 100,
+              y: 50,
+              layout: 'vertical',
+              padding: [10, 20],
+              children: [rect('child', 0, 0)],
+            }),
+            rect('root-sibling', 300, 300),
+          ],
+        },
+      ],
     };
 
-    const movedChildren = moveNodePreservingVisualPosition(
-      doc,
-      DEFAULT_PAGE_ID,
-      'child',
-      null,
-      1,
-    );
+    const movedChildren = moveNodePreservingVisualPosition(doc, DEFAULT_PAGE_ID, 'child', null, 1);
 
     expect(movedChildren).toBeDefined();
     const moved = findNodeInTree(movedChildren ?? [], 'child');
@@ -89,23 +84,25 @@ describe('document-position-utils', () => {
     const doc: PenDocument = {
       version: '1.0.0',
       children: [],
-      pages: [{
-        id: DEFAULT_PAGE_ID,
-        name: 'Page 1',
-        children: [
-          frame('outer', {
-            x: 300,
-            y: 100,
-            children: [],
-          }),
-          frame('root-frame', {
-            x: 20,
-            y: 30,
-            cornerRadius: 16,
-            children: [rect('child', 0, 0)],
-          }),
-        ],
-      }],
+      pages: [
+        {
+          id: DEFAULT_PAGE_ID,
+          name: 'Page 1',
+          children: [
+            frame('outer', {
+              x: 300,
+              y: 100,
+              children: [],
+            }),
+            frame('root-frame', {
+              x: 20,
+              y: 30,
+              cornerRadius: 16,
+              children: [rect('child', 0, 0)],
+            }),
+          ],
+        },
+      ],
     };
 
     const movedChildren = moveNodePreservingVisualPosition(

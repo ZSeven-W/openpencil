@@ -6,9 +6,7 @@ import type { PenNode } from '@/types/pen';
  * their parent while being repositioned. Primitive content nodes can still use
  * the legacy "drag out to detach" behavior.
  */
-export function shouldAutoReparentOnDragOutsideParent(
-  node: PenNode | undefined,
-): boolean {
+export function shouldAutoReparentOnDragOutsideParent(node: PenNode | undefined): boolean {
   if (!node) return true;
 
   switch (node.type) {
