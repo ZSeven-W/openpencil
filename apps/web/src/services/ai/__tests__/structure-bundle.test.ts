@@ -61,15 +61,17 @@ describe('structure-bundle', () => {
 
     expect(bundle.sanitizedView.view).toBe('sanitized');
     expect(bundle.sanitizedView.consumer).toBe(true);
-    expect(bundle.sanitizedView.summary).toContain('这是给 AI 直接消费的 sanitized 结构视图');
-    expect(bundle.sanitizedView.highlights).toContain('包含图片裁剪/映射语义');
+    expect(bundle.sanitizedView.summary).toContain(
+      'This is the sanitized structural view intended for direct AI consumption',
+    );
+    expect(bundle.sanitizedView.highlights).toContain('Includes image crop/mapping semantics');
     expect((bundle.sanitizedView.nodes[0] as any).fill[0].url).toBe('./assets/hero-card-1.png');
     expect((bundle.sanitizedView.nodes[0] as any).fill[0].originalSize).toEqual({
       width: 2644,
       height: 1696,
     });
     expect((bundle.sanitizedView.nodes[0] as any).fill[0].explain).toBe(
-      '这不是整图 stretch, 而是先裁剪原图后再映射到目标框',
+      'This is not a full-image stretch; the source image is cropped before being mapped into the target bounds',
     );
 
     expect(bundle.manifest.assets).toHaveLength(1);
@@ -178,11 +180,13 @@ describe('structure-bundle', () => {
 
     expect(entryNames).toEqual(['manifest.json', 'views/raw.json', 'views/sanitized.json']);
     expect(bundle.manifest.assets).toEqual([]);
-    expect(bundle.sanitizedView.summary).toContain('共 1 个节点');
-    expect(bundle.sanitizedView.highlights).toEqual(['以基础几何与样式结构为主']);
+    expect(bundle.sanitizedView.summary).toContain('containing 1 nodes');
+    expect(bundle.sanitizedView.highlights).toEqual([
+      'Primarily basic geometry and style structure',
+    ]);
     expect((bundle.rawView.nodes[0] as any).explain).toBeUndefined();
     expect((bundle.sanitizedView.nodes[0] as any).explain).toBe(
-      '宽度固定为 200px, 高度固定为 40px',
+      'Width is fixed at 200px, Height is fixed at 40px',
     );
   });
 });

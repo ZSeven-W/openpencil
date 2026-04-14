@@ -185,7 +185,7 @@ function buildImageFillExplain(fill: ImageFill): string | undefined {
   if (!fill.transform) return undefined;
 
   const mode = fill.mode ?? 'fill';
-  return `这不是整图 ${mode}, 而是先裁剪原图后再映射到目标框`;
+  return `This is not a full-image ${mode}; the source image is cropped before being mapped into the target bounds`;
 }
 
 export function enrichImageFillForAIConsumerView(node: PenNode, fill: ImageFill): ImageFill {
@@ -205,7 +205,7 @@ function buildLinearGradientExplain(
   if (typeof fill.explain === 'string' && fill.explain.trim().length > 0) return fill.explain;
   const stopCount = Array.isArray(fill.stops) ? fill.stops.length : 0;
   const angle = typeof fill.angle === 'number' ? Math.round(fill.angle * 100) / 100 : 0;
-  return `这是线性渐变填充, 角度 ${angle}deg, 共 ${stopCount} 个色标, 表示颜色会沿该方向平滑过渡`;
+  return `This is a linear gradient fill angled at ${angle}deg with ${stopCount} color stops, so colors transition smoothly along that direction`;
 }
 
 function buildRadialGradientExplain(
@@ -216,7 +216,7 @@ function buildRadialGradientExplain(
   const cx = typeof fill.cx === 'number' ? Math.round(fill.cx * 100) : 50;
   const cy = typeof fill.cy === 'number' ? Math.round(fill.cy * 100) : 50;
   const radius = typeof fill.radius === 'number' ? Math.round(fill.radius * 100) : 50;
-  return `这是径向渐变填充, 中心约在 ${cx}% ${cy}%, 半径约 ${radius}%, 共 ${stopCount} 个色标`;
+  return `This is a radial gradient fill centered around ${cx}% ${cy}% with a radius of about ${radius}% and ${stopCount} color stops`;
 }
 
 function enrichFillForAIConsumerView(node: PenNode, fill: PenFill): PenFill {
@@ -237,13 +237,13 @@ function buildImageNodeExplain(node: PenNode): string | undefined {
   const fit = node.objectFit ?? 'fill';
   switch (fit) {
     case 'fit':
-      return '这是图像节点, objectFit=fit 表示完整显示整张图, 允许出现留白';
+      return 'This is an image node. objectFit=fit keeps the whole image visible and may leave empty space';
     case 'crop':
-      return '这是图像节点, objectFit=crop 表示按 cover 铺满容器, 可能裁掉边缘';
+      return 'This is an image node. objectFit=crop uses cover to fill the container and may crop the edges';
     case 'tile':
-      return '这是图像节点, objectFit=tile 表示用原图重复平铺容器';
+      return 'This is an image node. objectFit=tile repeats the source image to tile the container';
     default:
-      return '这是图像节点, objectFit=fill 表示拉伸图片以填满容器';
+      return 'This is an image node. objectFit=fill stretches the image to fill the container';
   }
 }
 
@@ -254,30 +254,32 @@ function buildTextNodeExplain(node: PenNode): string | undefined {
 
   if (node.textGrowth === 'auto') {
     parts.push(
-      '这是文本节点, textGrowth=auto 表示文本更偏向单行自然展开, 一般不会主动按固定宽度换行',
+      'This is a text node. textGrowth=auto prefers natural single-line expansion and usually does not wrap at a fixed width',
     );
   } else if (node.textGrowth === 'fixed-width') {
-    parts.push('这是文本节点, textGrowth=fixed-width 表示文本会按当前宽度换行, 高度随内容自动增长');
+    parts.push(
+      'This is a text node. textGrowth=fixed-width wraps text to the current width and grows vertically with the content',
+    );
   } else if (node.textGrowth === 'fixed-width-height') {
     parts.push(
-      '这是文本节点, textGrowth=fixed-width-height 表示文本在固定宽高框内排版, 内容过多时可能被裁切',
+      'This is a text node. textGrowth=fixed-width-height lays text out inside a fixed width/height box and may clip overflow',
     );
   }
 
   if (typeof node.lineHeight === 'number') {
-    parts.push(`行高倍率为 ${Math.round(node.lineHeight * 1000) / 1000}`);
+    parts.push(`Line-height multiplier is ${Math.round(node.lineHeight * 1000) / 1000}`);
   }
 
   if (node.textAlign && node.textAlign !== 'left') {
-    parts.push(`水平对齐方式为 ${describeTextAlign(node.textAlign)}`);
+    parts.push(`Horizontal alignment is ${describeTextAlign(node.textAlign)}`);
   }
 
   if (node.textAlignVertical && node.textAlignVertical !== 'top') {
-    parts.push(`垂直对齐方式为 ${describeTextAlignVertical(node.textAlignVertical)}`);
+    parts.push(`Vertical alignment is ${describeTextAlignVertical(node.textAlignVertical)}`);
   }
 
   if (parts.length === 0) return undefined;
-  return parts.join('。');
+  return parts.join('. ');
 }
 
 function buildLayoutExplain(node: PenNode): string | undefined {
@@ -291,16 +293,16 @@ function buildLayoutExplain(node: PenNode): string | undefined {
   if (containerNode.layout !== 'vertical' && containerNode.layout !== 'horizontal')
     return undefined;
 
-  const layoutLabel = containerNode.layout === 'vertical' ? '纵向' : '横向';
-  const parts = [`这是一个${layoutLabel} auto-layout 容器`];
+  const layoutLabel = containerNode.layout === 'vertical' ? 'vertical' : 'horizontal';
+  const parts = [`This is a ${layoutLabel} auto-layout container`];
 
-  if (containerNode.gap !== undefined) parts.push(`子元素间距为 ${String(containerNode.gap)}`);
+  if (containerNode.gap !== undefined) parts.push(`Child gap is ${String(containerNode.gap)}`);
   if (containerNode.padding !== undefined)
-    parts.push(`容器内边距为 ${formatPadding(containerNode.padding)}`);
+    parts.push(`Container padding is ${formatPadding(containerNode.padding)}`);
   if (containerNode.justifyContent)
-    parts.push(`主轴对齐方式为 ${describeFlexAlign(containerNode.justifyContent)}`);
+    parts.push(`Main-axis alignment is ${describeFlexAlign(containerNode.justifyContent)}`);
   if (containerNode.alignItems)
-    parts.push(`交叉轴对齐方式为 ${describeFlexAlign(containerNode.alignItems)}`);
+    parts.push(`Cross-axis alignment is ${describeFlexAlign(containerNode.alignItems)}`);
 
   return parts.join(', ');
 }
@@ -308,7 +310,7 @@ function buildLayoutExplain(node: PenNode): string | undefined {
 function buildClipExplain(node: PenNode): string | undefined {
   const containerNode = node as PenNode & { clipContent?: boolean };
   if (containerNode.clipContent !== true) return undefined;
-  return '该容器会裁剪超出自身边界的子元素';
+  return 'This container clips children that overflow its bounds';
 }
 
 function parseSizingHint(value: string): { kind: string; hint?: string } {
@@ -325,23 +327,23 @@ function describeSizingValue(
   value: number | string | undefined,
 ): string | undefined {
   if (typeof value === 'number') {
-    return `${axis === 'width' ? '宽度' : '高度'}固定为 ${value}px`;
+    return `${axis === 'width' ? 'Width' : 'Height'} is fixed at ${value}px`;
   }
 
   if (typeof value !== 'string' || value.length === 0) return undefined;
   const { kind, hint } = parseSizingHint(value);
 
   if (kind === 'fill_container') {
-    const base = `${axis === 'width' ? '宽度' : '高度'}会跟随父容器可用空间拉伸`;
-    return hint ? `${base}, 提示值约 ${hint}px` : base;
+    const base = `${axis === 'width' ? 'Width' : 'Height'} stretches to fill the available space in the parent container`;
+    return hint ? `${base}, with a suggested value of about ${hint}px` : base;
   }
 
   if (kind === 'fit_content') {
-    const base = `${axis === 'width' ? '宽度' : '高度'}会由内容自动撑开`;
-    return hint ? `${base}, 提示值约 ${hint}px` : base;
+    const base = `${axis === 'width' ? 'Width' : 'Height'} grows automatically with its content`;
+    return hint ? `${base}, with a suggested value of about ${hint}px` : base;
   }
 
-  return `${axis === 'width' ? '宽度' : '高度'}使用表达式 ${value}`;
+  return `${axis === 'width' ? 'Width' : 'Height'} uses expression ${value}`;
 }
 
 function buildSizingExplain(node: PenNode): string | undefined {
@@ -362,13 +364,13 @@ function isVariableRef(value: unknown): value is string {
 function collectVariableRefHints(node: PenNode): string[] {
   const hints = new Set<string>();
 
-  if (isVariableRef(node.opacity)) hints.add(`opacity 使用设计变量 ${node.opacity}`);
+  if (isVariableRef(node.opacity)) hints.add(`opacity uses design token ${node.opacity}`);
 
   const fillNode = node as PenNode & { fill?: PenFill[] };
   if (Array.isArray(fillNode.fill)) {
     for (const fill of fillNode.fill) {
       if (fill.type === 'solid' && isVariableRef(fill.color)) {
-        hints.add(`填充颜色使用设计变量 ${fill.color}`);
+        hints.add(`fill color uses design token ${fill.color}`);
       }
       if (
         (fill.type === 'linear_gradient' || fill.type === 'radial_gradient') &&
@@ -376,7 +378,7 @@ function collectVariableRefHints(node: PenNode): string[] {
       ) {
         for (const stop of fill.stops) {
           if (isVariableRef(stop.color)) {
-            hints.add(`渐变色标使用设计变量 ${stop.color}`);
+            hints.add(`gradient stop color uses design token ${stop.color}`);
           }
         }
       }
@@ -391,12 +393,12 @@ function collectVariableRefHints(node: PenNode): string[] {
   };
   if (strokeNode.stroke) {
     if (isVariableRef(strokeNode.stroke.thickness)) {
-      hints.add(`描边粗细使用设计变量 ${strokeNode.stroke.thickness}`);
+      hints.add(`stroke thickness uses design token ${strokeNode.stroke.thickness}`);
     }
     if (Array.isArray(strokeNode.stroke.fill)) {
       for (const fill of strokeNode.stroke.fill) {
         if (fill.type === 'solid' && isVariableRef(fill.color)) {
-          hints.add(`描边颜色使用设计变量 ${fill.color}`);
+          hints.add(`stroke color uses design token ${fill.color}`);
         }
       }
     }
@@ -406,18 +408,23 @@ function collectVariableRefHints(node: PenNode): string[] {
   if (Array.isArray(effectNode.effects)) {
     for (const effect of effectNode.effects) {
       if (effect.type === 'shadow') {
-        if (isVariableRef(effect.color)) hints.add(`阴影颜色使用设计变量 ${effect.color}`);
-        if (isVariableRef(effect.blur)) hints.add(`阴影模糊半径使用设计变量 ${effect.blur}`);
-        if (isVariableRef(effect.offsetX)) hints.add(`阴影水平偏移使用设计变量 ${effect.offsetX}`);
-        if (isVariableRef(effect.offsetY)) hints.add(`阴影垂直偏移使用设计变量 ${effect.offsetY}`);
-        if (isVariableRef(effect.spread)) hints.add(`阴影扩散使用设计变量 ${effect.spread}`);
+        if (isVariableRef(effect.color))
+          hints.add(`shadow color uses design token ${effect.color}`);
+        if (isVariableRef(effect.blur))
+          hints.add(`shadow blur radius uses design token ${effect.blur}`);
+        if (isVariableRef(effect.offsetX))
+          hints.add(`shadow X offset uses design token ${effect.offsetX}`);
+        if (isVariableRef(effect.offsetY))
+          hints.add(`shadow Y offset uses design token ${effect.offsetY}`);
+        if (isVariableRef(effect.spread))
+          hints.add(`shadow spread uses design token ${effect.spread}`);
       }
       if (
         (effect.type === 'blur' || effect.type === 'background_blur') &&
         isVariableRef(effect.radius)
       ) {
         hints.add(
-          `${effect.type === 'blur' ? '模糊半径' : '背景模糊半径'}使用设计变量 ${effect.radius}`,
+          `${effect.type === 'blur' ? 'blur radius' : 'background blur radius'} uses design token ${effect.radius}`,
         );
       }
     }
@@ -429,13 +436,13 @@ function collectVariableRefHints(node: PenNode): string[] {
 function buildVariableExplain(node: PenNode): string | undefined {
   const hints = collectVariableRefHints(node);
   if (hints.length === 0) return undefined;
-  return `${hints.join('。')}。这些值来自设计系统变量, 不是普通硬编码常量`;
+  return `${hints.join('. ')}. These values come from design-system tokens rather than hard-coded constants`;
 }
 
 function buildThemeExplain(node: PenNode): string | undefined {
   if (!node.theme || Object.keys(node.theme).length === 0) return undefined;
   const pairs = Object.entries(node.theme).map(([axis, value]) => `${axis}=${value}`);
-  return `该节点带有主题覆写上下文: ${pairs.join(', ')}`;
+  return `This node carries theme override context: ${pairs.join(', ')}`;
 }
 
 function buildEffectsExplain(node: PenNode): string | undefined {
@@ -445,7 +452,7 @@ function buildEffectsExplain(node: PenNode): string | undefined {
   const parts: string[] = [];
   for (const effect of effectNode.effects) {
     if (effect.type === 'shadow') {
-      const shadowKind = effect.inner ? '内阴影' : '投影';
+      const shadowKind = effect.inner ? 'inner shadow' : 'shadow';
       const usesVariable =
         isVariableRef(effect.offsetX) ||
         isVariableRef(effect.offsetY) ||
@@ -454,10 +461,10 @@ function buildEffectsExplain(node: PenNode): string | undefined {
         isVariableRef(effect.color);
 
       if (usesVariable) {
-        parts.push(`带有${shadowKind}效果`);
+        parts.push(`Has ${shadowKind} effect`);
       } else {
         parts.push(
-          `带有${shadowKind}, 偏移 ${effect.offsetX}px ${effect.offsetY}px, 模糊 ${effect.blur}px, 扩散 ${effect.spread}px`,
+          `Has ${shadowKind} with offset ${effect.offsetX}px ${effect.offsetY}px, blur ${effect.blur}px, spread ${effect.spread}px`,
         );
       }
       continue;
@@ -465,20 +472,24 @@ function buildEffectsExplain(node: PenNode): string | undefined {
 
     if (effect.type === 'blur') {
       parts.push(
-        isVariableRef(effect.radius) ? '带有前景模糊效果' : `带有前景模糊, 半径 ${effect.radius}px`,
+        isVariableRef(effect.radius)
+          ? 'Has foreground blur effect'
+          : `Has foreground blur with radius ${effect.radius}px`,
       );
       continue;
     }
 
     if (effect.type === 'background_blur') {
       parts.push(
-        isVariableRef(effect.radius) ? '带有背景模糊效果' : `带有背景模糊, 半径 ${effect.radius}px`,
+        isVariableRef(effect.radius)
+          ? 'Has background blur effect'
+          : `Has background blur with radius ${effect.radius}px`,
       );
     }
   }
 
   if (parts.length === 0) return undefined;
-  return parts.join('。');
+  return parts.join('. ');
 }
 
 function buildReusableExplain(node: PenNode): string | undefined {
@@ -487,14 +498,14 @@ function buildReusableExplain(node: PenNode): string | undefined {
 
   const parts: string[] = [];
   if (frameNode.reusable === true) {
-    parts.push('这是一个可复用组件定义节点, 其他实例可以引用它');
+    parts.push('This is a reusable component definition node that other instances can reference');
   }
   if (Array.isArray(frameNode.slot) && frameNode.slot.length > 0) {
-    parts.push(`它声明了可插槽区域: ${frameNode.slot.join(', ')}`);
+    parts.push(`It declares slot regions: ${frameNode.slot.join(', ')}`);
   }
 
   if (parts.length === 0) return undefined;
-  return parts.join('。');
+  return parts.join('. ');
 }
 
 function buildRefExplain(node: PenNode): string | undefined {
@@ -505,11 +516,11 @@ function buildRefExplain(node: PenNode): string | undefined {
   };
 
   const overrideCount = refNode.descendants ? Object.keys(refNode.descendants).length : 0;
-  const parts = [`这是一个组件实例节点, 引用源节点 ${refNode.ref}`];
+  const parts = [`This is a component instance node referencing source node ${refNode.ref}`];
   if (overrideCount > 0) {
-    parts.push(`当前实例对 ${overrideCount} 个后代节点带有覆写`);
+    parts.push(`This instance overrides ${overrideCount} descendant nodes`);
   }
-  return parts.join('。');
+  return parts.join('. ');
 }
 
 function appendExplain(
@@ -520,7 +531,7 @@ function appendExplain(
     (segment): segment is string => Boolean(segment && segment.length > 0),
   );
   if (segments.length === 0) return undefined;
-  return Array.from(new Set(segments)).join('。');
+  return Array.from(new Set(segments)).join('. ');
 }
 
 function formatPadding(
@@ -535,15 +546,15 @@ function formatPadding(
 function describeFlexAlign(value: string): string {
   switch (value) {
     case 'start':
-      return '起点对齐';
+      return 'start aligned';
     case 'center':
-      return '居中对齐';
+      return 'center aligned';
     case 'end':
-      return '终点对齐';
+      return 'end aligned';
     case 'space_between':
-      return '两端分布';
+      return 'space between';
     case 'space_around':
-      return '环绕分布';
+      return 'space around';
     default:
       return value;
   }
@@ -552,11 +563,11 @@ function describeFlexAlign(value: string): string {
 function describeTextAlign(value: string): string {
   switch (value) {
     case 'center':
-      return '居中';
+      return 'center';
     case 'right':
-      return '右对齐';
+      return 'right';
     case 'justify':
-      return '两端对齐';
+      return 'justified';
     default:
       return value;
   }
@@ -565,9 +576,9 @@ function describeTextAlign(value: string): string {
 function describeTextAlignVertical(value: string): string {
   switch (value) {
     case 'middle':
-      return '垂直居中';
+      return 'middle';
     case 'bottom':
-      return '底部对齐';
+      return 'bottom';
     default:
       return value;
   }

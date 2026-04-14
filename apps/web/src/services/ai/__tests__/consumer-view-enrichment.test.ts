@@ -6,7 +6,7 @@ describe('consumer-view-enrichment', () => {
     const enriched = enrichNodeForAIConsumerView({
       id: 'node-1',
       type: 'rectangle',
-      name: '背景11',
+      name: 'Background 11',
       x: 0.05,
       y: -0.39,
       width: 2560,
@@ -48,7 +48,8 @@ describe('consumer-view-enrichment', () => {
         m11: 0.9433962106704712,
         m12: 0.041042111814022064,
       },
-      explain: '这不是整图 stretch, 而是先裁剪原图后再映射到目标框',
+      explain:
+        'This is not a full-image stretch; the source image is cropped before being mapped into the target bounds',
     });
   });
 
@@ -81,7 +82,7 @@ describe('consumer-view-enrichment', () => {
       height: 1696,
     });
     expect((enriched as any).fill[0].explain).toBe(
-      '这不是整图 stretch, 而是先裁剪原图后再映射到目标框',
+      'This is not a full-image stretch; the source image is cropped before being mapped into the target bounds',
     );
   });
 
@@ -122,13 +123,13 @@ describe('consumer-view-enrichment', () => {
     } as any);
 
     expect((enriched as any).fill[0].explain).toBe(
-      '这是线性渐变填充, 角度 135deg, 共 2 个色标, 表示颜色会沿该方向平滑过渡',
+      'This is a linear gradient fill angled at 135deg with 2 color stops, so colors transition smoothly along that direction',
     );
     expect((enriched as any).explain).toBe(
-      '这是一个横向 auto-layout 容器, 子元素间距为 24, 容器内边距为 32 24, 主轴对齐方式为 两端分布, 交叉轴对齐方式为 居中对齐。宽度会跟随父容器可用空间拉伸, 高度会由内容自动撑开。该容器会裁剪超出自身边界的子元素',
+      'This is a horizontal auto-layout container, Child gap is 24, Container padding is 32 24, Main-axis alignment is space between, Cross-axis alignment is center aligned. Width stretches to fill the available space in the parent container, Height grows automatically with its content. This container clips children that overflow its bounds',
     );
     expect((enriched as any).children[0].explain).toBe(
-      '这是图像节点, objectFit=crop 表示按 cover 铺满容器, 可能裁掉边缘。宽度固定为 320px, 高度固定为 180px',
+      'This is an image node. objectFit=crop uses cover to fill the container and may crop the edges. Width is fixed at 320px, Height is fixed at 180px',
     );
   });
 
@@ -141,7 +142,7 @@ describe('consumer-view-enrichment', () => {
     } as any);
 
     expect((enriched as any).explain).toBe(
-      '宽度会跟随父容器可用空间拉伸, 提示值约 300px, 高度会由内容自动撑开, 提示值约 120px',
+      'Width stretches to fill the available space in the parent container, with a suggested value of about 300px, Height grows automatically with its content, with a suggested value of about 120px',
     );
   });
 
@@ -165,7 +166,7 @@ describe('consumer-view-enrichment', () => {
     } as any);
 
     expect((reusable as any).explain).toBe(
-      '带有投影, 偏移 0px 4px, 模糊 12px, 扩散 -2px。这是一个可复用组件定义节点, 其他实例可以引用它。它声明了可插槽区域: media, actions',
+      'Has shadow with offset 0px 4px, blur 12px, spread -2px. This is a reusable component definition node that other instances can reference. It declares slot regions: media, actions',
     );
 
     const instance = enrichNodeForAIConsumerView({
@@ -179,7 +180,7 @@ describe('consumer-view-enrichment', () => {
     } as any);
 
     expect((instance as any).explain).toBe(
-      '这是一个组件实例节点, 引用源节点 component-1。当前实例对 2 个后代节点带有覆写',
+      'This is a component instance node referencing source node component-1. This instance overrides 2 descendant nodes',
     );
   });
 
@@ -196,7 +197,7 @@ describe('consumer-view-enrichment', () => {
     } as any);
 
     expect((textNode as any).explain).toBe(
-      '这是文本节点, textGrowth=fixed-width 表示文本会按当前宽度换行, 高度随内容自动增长。行高倍率为 1.5。水平对齐方式为 居中。垂直对齐方式为 垂直居中。宽度会跟随父容器可用空间拉伸',
+      'This is a text node. textGrowth=fixed-width wraps text to the current width and grows vertically with the content. Line-height multiplier is 1.5. Horizontal alignment is center. Vertical alignment is middle. Width stretches to fill the available space in the parent container',
     );
   });
 
@@ -227,7 +228,7 @@ describe('consumer-view-enrichment', () => {
     } as any);
 
     expect((themed as any).explain).toBe(
-      '带有投影效果。opacity 使用设计变量 $opacity-soft。填充颜色使用设计变量 $surface-bg。描边粗细使用设计变量 $border-width。描边颜色使用设计变量 $border-color。阴影颜色使用设计变量 $shadow-color。阴影模糊半径使用设计变量 $shadow-blur。阴影水平偏移使用设计变量 $shadow-x。阴影垂直偏移使用设计变量 $shadow-y。阴影扩散使用设计变量 $shadow-spread。这些值来自设计系统变量, 不是普通硬编码常量。该节点带有主题覆写上下文: ColorScheme=Dark, Density=Compact',
+      'Has shadow effect. opacity uses design token $opacity-soft. fill color uses design token $surface-bg. stroke thickness uses design token $border-width. stroke color uses design token $border-color. shadow color uses design token $shadow-color. shadow blur radius uses design token $shadow-blur. shadow X offset uses design token $shadow-x. shadow Y offset uses design token $shadow-y. shadow spread uses design token $shadow-spread. These values come from design-system tokens rather than hard-coded constants. This node carries theme override context: ColorScheme=Dark, Density=Compact',
     );
   });
 });

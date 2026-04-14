@@ -43,7 +43,7 @@ describe('codegen-assets', () => {
       height: 1696,
     });
     expect((nodes[0] as any).fill[0].explain).toBe(
-      '这不是整图 stretch, 而是先裁剪原图后再映射到目标框',
+      'This is not a full-image stretch; the source image is cropped before being mapped into the target bounds',
     );
   });
 

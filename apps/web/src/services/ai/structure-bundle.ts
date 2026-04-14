@@ -137,14 +137,17 @@ function buildSanitizedViewSummary(nodes: PenNode[]): { summary: string; highlig
 
   const visit = (node: PenNode) => {
     if (typeof node.explain === 'string') {
-      if (node.explain.includes('设计变量')) signals.hasVariables = true;
-      if (node.explain.includes('主题覆写上下文')) signals.hasThemeOverrides = true;
-      if (node.explain.includes('可复用组件定义节点') || node.explain.includes('组件实例节点')) {
+      if (node.explain.includes('design token')) signals.hasVariables = true;
+      if (node.explain.includes('theme override context')) signals.hasThemeOverrides = true;
+      if (
+        node.explain.includes('reusable component definition node') ||
+        node.explain.includes('component instance node')
+      ) {
         signals.hasReusableOrRef = true;
       }
       if (node.explain.includes('auto-layout')) signals.hasLayout = true;
-      if (node.explain.includes('裁剪超出自身边界')) signals.hasClip = true;
-      if (node.explain.includes('文本节点') || node.explain.includes('行高倍率')) {
+      if (node.explain.includes('clips children that overflow its bounds')) signals.hasClip = true;
+      if (node.explain.includes('text node') || node.explain.includes('Line-height multiplier')) {
         signals.hasTextSemantics = true;
       }
     }
@@ -166,18 +169,19 @@ function buildSanitizedViewSummary(nodes: PenNode[]): { summary: string; highlig
   for (const node of nodes) visit(node);
 
   const highlights: string[] = [];
-  if (signals.hasVariables) highlights.push('包含设计变量引用');
-  if (signals.hasThemeOverrides) highlights.push('包含主题覆写上下文');
-  if (signals.hasReusableOrRef) highlights.push('包含组件定义与实例引用关系');
-  if (signals.hasImageTransform) highlights.push('包含图片裁剪/映射语义');
-  if (signals.hasGradients) highlights.push('包含渐变填充语义');
-  if (signals.hasLayout) highlights.push('包含 auto-layout 容器语义');
-  if (signals.hasClip) highlights.push('包含裁剪容器语义');
-  if (signals.hasTextSemantics) highlights.push('包含文本排版语义');
-  if (highlights.length === 0) highlights.push('以基础几何与样式结构为主');
+  if (signals.hasVariables) highlights.push('Includes design token references');
+  if (signals.hasThemeOverrides) highlights.push('Includes theme override context');
+  if (signals.hasReusableOrRef)
+    highlights.push('Includes component definitions and instance reference relationships');
+  if (signals.hasImageTransform) highlights.push('Includes image crop/mapping semantics');
+  if (signals.hasGradients) highlights.push('Includes gradient fill semantics');
+  if (signals.hasLayout) highlights.push('Includes auto-layout container semantics');
+  if (signals.hasClip) highlights.push('Includes clipping container semantics');
+  if (signals.hasTextSemantics) highlights.push('Includes text layout semantics');
+  if (highlights.length === 0) highlights.push('Primarily basic geometry and style structure');
 
   return {
-    summary: `这是给 AI 直接消费的 sanitized 结构视图, 共 ${countNodes(nodes)} 个节点。主要特征: ${highlights.join('、')}。读取具体节点前, 建议先把这些高层语义作为默认约束。`,
+    summary: `This is the sanitized structural view intended for direct AI consumption, containing ${countNodes(nodes)} nodes. Key traits: ${highlights.join(', ')}. Treat these higher-level semantics as default constraints before reading individual nodes.`,
     highlights,
   };
 }
