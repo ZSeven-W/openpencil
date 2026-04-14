@@ -3,6 +3,7 @@ import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { homedir } from 'node:os';
 import { serverLog } from './server-logger';
+import { posixUserBinDirs, probeViaLoginShell } from './cli-resolver-helpers';
 
 const isWindows = process.platform === 'win32';
 
@@ -23,7 +24,9 @@ function resolveWinExtension(binPath: string): string {
 
 /** Resolve the Gemini CLI binary path across macOS, Linux, and Windows. */
 export function resolveGeminiCli(): string | undefined {
-  serverLog.info(`[resolve-gemini] platform=${process.platform}, isWindows=${isWindows}`);
+  serverLog.info(
+    `[resolve-gemini] platform=${process.platform}, isWindows=${isWindows}, SHELL=${process.env.SHELL ?? 'unset'}`,
+  );
 
   // 1. Try PATH lookup
   try {
@@ -42,7 +45,13 @@ export function resolveGeminiCli(): string | undefined {
     );
   }
 
-  // 2. Try `npm prefix -g` (Windows uses npm.cmd; Unix uses npm)
+  // 2. macOS/Linux login-shell probe
+  if (!isWindows) {
+    const viaShell = probeViaLoginShell('gemini', 'resolve-gemini');
+    if (viaShell) return viaShell;
+  }
+
+  // 3. Try `npm prefix -g` (Windows uses npm.cmd; Unix uses npm)
   try {
     const npmCmd = isWindows ? 'npm.cmd prefix -g' : 'npm prefix -g';
     serverLog.info(`[resolve-gemini] npm prefix lookup: ${npmCmd}`);
@@ -66,7 +75,7 @@ export function resolveGeminiCli(): string | undefined {
     );
   }
 
-  // 3. Common install locations
+  // 4. Common install locations
   const home = homedir();
   const candidates = isWindows
     ? [
@@ -79,13 +88,9 @@ export function resolveGeminiCli(): string | undefined {
         join(process.env.LOCALAPPDATA || '', 'Microsoft', 'WinGet', 'Links', 'gemini.exe'),
       ]
     : [
-        // npm global
-        '/usr/local/bin/gemini',
-        // Homebrew (macOS)
-        '/opt/homebrew/bin/gemini',
-        // User-local
-        join(home, '.local', 'bin', 'gemini'),
+        // Explicit npm-global prefix some users set manually
         join(home, '.npm-global', 'bin', 'gemini'),
+        ...posixUserBinDirs().map((dir) => join(dir, 'gemini')),
       ];
 
   for (const c of candidates) {
@@ -94,6 +99,8 @@ export function resolveGeminiCli(): string | undefined {
     if (c && exists) return c;
   }
 
-  serverLog.warn('[resolve-gemini] no gemini binary found');
+  serverLog.warn(
+    '[resolve-gemini] no gemini binary found after PATH, login-shell probe, and candidate scan',
+  );
   return undefined;
 }

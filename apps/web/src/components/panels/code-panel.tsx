@@ -2,6 +2,7 @@ import { useState, useRef, useCallback, useEffect, useMemo, memo } from 'react';
 import {
   Copy,
   Download,
+  FileJson,
   RefreshCw,
   Sparkles,
   Check,
@@ -16,11 +17,14 @@ import { useCanvasStore } from '@/stores/canvas-store';
 import { useDocumentStore, getActivePageChildren } from '@/stores/document-store';
 import { useAIStore } from '@/stores/ai-store';
 import { generateCode } from '@/services/ai/code-generation-pipeline';
+import { buildCodegenBundleManifest, type CodegenAssetFile } from '@/services/ai/codegen-assets';
+import { buildAIStructureBundle, encodeAIStructureBundleZip } from '@/services/ai/structure-bundle';
 import { highlightCode } from '@/utils/syntax-highlight';
 import type { Framework, CodeGenProgress, ChunkStatus } from '@zseven-w/pen-types';
 import { FRAMEWORKS } from '@zseven-w/pen-types';
 import type { PenNode } from '@/types/pen';
 import type { SyntaxLanguage } from '@/utils/syntax-highlight';
+import { encode as encodeZip } from 'uzip';
 
 type PanelState = 'empty' | 'generating' | 'complete';
 
@@ -29,6 +33,12 @@ interface ChunkProgress {
   name: string;
   status: ChunkStatus;
   error?: string;
+}
+
+interface GeneratedCodeBundle {
+  code: string;
+  degraded: boolean;
+  assets: CodegenAssetFile[];
 }
 
 const TAB_LABELS: Record<Framework, string> = {
@@ -53,11 +63,20 @@ const HIGHLIGHT_LANG: Record<Framework, SyntaxLanguage> = {
   'react-native': 'jsx',
 };
 
+function triggerDownload(blob: Blob, fileName: string) {
+  const url = URL.createObjectURL(blob);
+  const link = globalThis.document.createElement('a');
+  link.href = url;
+  link.download = fileName;
+  globalThis.document.body.appendChild(link);
+  link.click();
+  globalThis.document.body.removeChild(link);
+  setTimeout(() => URL.revokeObjectURL(url), 0);
+}
+
 function CodePanelInner() {
   const [activeTab, setActiveTab] = useState<Framework>('react');
-  const [codeCache, setCodeCache] = useState<
-    Partial<Record<Framework, { code: string; degraded: boolean }>>
-  >({});
+  const [codeCache, setCodeCache] = useState<Partial<Record<Framework, GeneratedCodeBundle>>>({});
   const [isDegraded, setIsDegraded] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -74,6 +93,8 @@ function CodePanelInner() {
 
   const cached = codeCache[activeTab];
   const generatedCode = cached?.code ?? '';
+  const exportedAssets = cached?.assets ?? [];
+  const hasExportedAssets = exportedAssets.length > 0;
   const panelState: PanelState = isGenerating ? 'generating' : cached ? 'complete' : 'empty';
 
   const abortRef = useRef<AbortController | null>(null);
@@ -162,10 +183,6 @@ function CodePanelInner() {
           setAssemblyStatus(event.status);
           break;
         case 'complete':
-          setCodeCache((prev) => ({
-            ...prev,
-            [activeTab]: { code: event.finalCode, degraded: event.degraded },
-          }));
           setIsDegraded(event.degraded);
           setIsGenerating(false);
           break;
@@ -177,7 +194,7 @@ function CodePanelInner() {
     };
 
     try {
-      await generateCode(
+      const result = await generateCode(
         nodes,
         activeTab,
         variables,
@@ -186,6 +203,15 @@ function CodePanelInner() {
         provider,
         abortRef.current.signal,
       );
+      setCodeCache((prev) => ({
+        ...prev,
+        [activeTab]: {
+          code: result.code,
+          degraded: result.degraded,
+          assets: result.assets,
+        },
+      }));
+      setIsDegraded(result.degraded);
     } catch (err) {
       if (!abortRef.current?.signal.aborted) {
         const msg = err instanceof Error ? err.message : 'Code generation failed';
@@ -226,14 +252,58 @@ function CodePanelInner() {
       compose: '.kt',
       'react-native': '.tsx',
     };
-    const blob = new Blob([generatedCode], { type: 'text/plain;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const a = globalThis.document.createElement('a');
-    a.href = url;
-    a.download = `design${extensions[activeTab]}`;
-    a.click();
-    URL.revokeObjectURL(url);
-  }, [generatedCode, activeTab]);
+    const codeFileName = `design${extensions[activeTab]}`;
+    const assets = exportedAssets;
+    const codeBytes = new TextEncoder().encode(generatedCode);
+
+    void (async () => {
+      const blob =
+        assets.length > 0
+          ? new Blob(
+              [
+                encodeZip({
+                  [codeFileName]: codeBytes,
+                  'manifest.json': new TextEncoder().encode(
+                    JSON.stringify(
+                      await buildCodegenBundleManifest({
+                        framework: activeTab,
+                        codeFile: codeFileName,
+                        codeBytes,
+                        assets,
+                      }),
+                      null,
+                      2,
+                    ),
+                  ),
+                  ...Object.fromEntries(assets.map((asset) => [asset.zipPath, asset.bytes])),
+                }),
+              ],
+              { type: 'application/zip' },
+            )
+          : new Blob([generatedCode], { type: 'text/plain;charset=utf-8' });
+
+      triggerDownload(blob, assets.length > 0 ? `design-${activeTab}.zip` : codeFileName);
+    })();
+  }, [generatedCode, activeTab, exportedAssets]);
+
+  const handleDownloadStructureBundle = useCallback(() => {
+    const nodes = getTargetNodes();
+    if (nodes.length === 0) return;
+
+    void (async () => {
+      const bundle = await buildAIStructureBundle({
+        nodes,
+        activePageId,
+        selectedIds,
+      });
+
+      const blob = new Blob([encodeAIStructureBundleZip(bundle.zipEntries)], {
+        type: 'application/zip',
+      });
+
+      triggerDownload(blob, bundle.fileName);
+    })();
+  }, [getTargetNodes, activePageId, selectedIds]);
 
   const handleTabChange = useCallback(
     (tab: Framework) => {
@@ -342,6 +412,16 @@ function CodePanelInner() {
               <Sparkles className="h-3.5 w-3.5" />
               Generate {TAB_LABELS[activeTab]}
             </Button>
+            <Button
+              variant="ghost"
+              onClick={() => void handleDownloadStructureBundle()}
+              disabled={nodeCount === 0}
+              size="sm"
+              className="h-8 gap-1.5 text-xs"
+            >
+              <FileJson className="h-3.5 w-3.5" />
+              Export AI Bundle
+            </Button>
             {generateError && (
               <div className="max-w-[260px] rounded-lg border border-destructive/20 bg-destructive/8 px-3 py-2 text-xs text-destructive">
                 <div className="font-medium">Generation failed</div>
@@ -448,6 +528,20 @@ function CodePanelInner() {
                 </button>
               </div>
             )}
+            {hasExportedAssets && (
+              <div className="border-b border-border/50 bg-muted/40 px-3 py-2 shrink-0">
+                <div className="flex items-center gap-2 text-xs font-medium text-foreground">
+                  <Download className="h-3.5 w-3.5 shrink-0" />
+                  This generation includes {exportedAssets.length} image asset
+                  {exportedAssets.length > 1 ? 's' : ''}. Download will export a ZIP bundle.
+                </div>
+                <div className="mt-1 text-[11px] text-muted-foreground">
+                  The ZIP contains the code file, exported assets, and a
+                  <code className="font-mono"> manifest.json </code>
+                  index.
+                </div>
+              </div>
+            )}
             <div className="flex-1 min-h-0 overflow-auto p-2">
               <pre className="text-[10px] leading-relaxed font-mono text-foreground/80 whitespace-pre-wrap break-all">
                 <code dangerouslySetInnerHTML={{ __html: highlightedHTML }} />
@@ -478,7 +572,17 @@ function CodePanelInner() {
                 onClick={handleDownload}
               >
                 <Download className="mr-1 h-3 w-3 shrink-0" />
-                <span className="truncate">Download</span>
+                <span className="truncate">{hasExportedAssets ? 'Download ZIP' : 'Download'}</span>
+              </Button>
+              <div className="w-px h-4 bg-border/50" />
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-7 flex-1 px-1 text-[11px] text-muted-foreground hover:text-foreground"
+                onClick={() => void handleDownloadStructureBundle()}
+              >
+                <FileJson className="mr-1 h-3 w-3 shrink-0" />
+                <span className="truncate">AI Bundle</span>
               </Button>
               <div className="w-px h-4 bg-border/50" />
               <Button

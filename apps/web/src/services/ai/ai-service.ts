@@ -6,6 +6,11 @@ import {
   DEFAULT_STREAM_NO_TEXT_TIMEOUT_MS,
   STREAM_TIMEOUT_MIN_MS,
 } from './ai-runtime-config';
+import {
+  estimateChatPayloadChars,
+  formatChatPayloadTooLargeError,
+  MAX_CHAT_REQUEST_CHARS,
+} from './context-optimizer';
 
 interface StreamChatOptions {
   hardTimeoutMs?: number;
@@ -137,23 +142,37 @@ export async function* streamChat(
       }
     }
 
+    const requestPayload = {
+      system: systemPrompt,
+      messages: messages.map((m) => ({
+        role: m.role,
+        content: m.content,
+        ...(m.attachments?.length ? { attachments: m.attachments } : {}),
+      })),
+      model,
+      provider,
+      thinkingMode: options?.thinkingMode,
+      thinkingBudgetTokens: options?.thinkingBudgetTokens,
+      effort: options?.effort,
+      ...builtinFields,
+    };
+
+    const payloadChars = estimateChatPayloadChars(requestPayload);
+    if (payloadChars > MAX_CHAT_REQUEST_CHARS) {
+      yield {
+        type: 'error',
+        content: formatChatPayloadTooLargeError(payloadChars),
+      };
+      clearTimeout(hardTimeout);
+      clearNoTextTimeout();
+      clearFirstTextTimeout();
+      return;
+    }
+
     const response = await fetch('/api/ai/chat', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        system: systemPrompt,
-        messages: messages.map((m) => ({
-          role: m.role,
-          content: m.content,
-          ...(m.attachments?.length ? { attachments: m.attachments } : {}),
-        })),
-        model,
-        provider,
-        thinkingMode: options?.thinkingMode,
-        thinkingBudgetTokens: options?.thinkingBudgetTokens,
-        effort: options?.effort,
-        ...builtinFields,
-      }),
+      body: JSON.stringify(requestPayload),
       signal: fetchSignal,
     });
 
@@ -263,6 +282,10 @@ export async function* streamChat(
               chunk.content.trim().length > 0 &&
               thinkingResetsTimeout
             ) {
+              // Active reasoning is progress — the model isn't silent, so the
+              // "no first text yet" watchdog should stand down. noTextTimeout
+              // + hardTimeout still bound genuinely runaway reasoning.
+              clearFirstTextTimeout();
               resetActivityTimeout();
             }
 

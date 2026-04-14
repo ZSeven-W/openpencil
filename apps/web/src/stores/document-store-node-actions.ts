@@ -21,6 +21,7 @@ import {
   setActivePageChildren,
   getAllChildren,
 } from './document-tree-utils';
+import { moveNodePreservingVisualPosition } from './document-position-utils';
 
 type SetState = {
   (partial: Partial<{ document: PenDocument; isDirty: boolean }>): void;
@@ -53,7 +54,12 @@ interface NodeActions {
   addNode: (parentId: string | null, node: PenNode, index?: number) => void;
   updateNode: (id: string, updates: Partial<PenNode>) => void;
   removeNode: (id: string) => void;
-  moveNode: (id: string, newParentId: string | null, index: number) => void;
+  moveNode: (
+    id: string,
+    newParentId: string | null,
+    index: number,
+    options?: { preserveAbsolutePosition?: boolean },
+  ) => void;
   reorderNode: (id: string, direction: 'up' | 'down') => void;
   toggleVisibility: (id: string) => void;
   toggleLock: (id: string) => void;
@@ -97,13 +103,31 @@ export function createNodeActions(
       );
     },
 
-    moveNode: (id, newParentId, index) => {
+    moveNode: (id, newParentId, index, options) => {
       const state = get();
       const children = _children(state);
       const node = findNodeInTree(children, id);
       if (!node) return;
-      const withoutNode = removeNodeFromTree(children, id);
-      const withNode = insertNodeInTree(withoutNode, newParentId, deepCloneNode(node), index);
+      const withNode = options?.preserveAbsolutePosition
+        ? (moveNodePreservingVisualPosition(
+            state.document,
+            useCanvasStore.getState().activePageId,
+            id,
+            newParentId,
+            index,
+          ) ??
+          insertNodeInTree(
+            removeNodeFromTree(children, id),
+            newParentId,
+            deepCloneNode(node),
+            index,
+          ))
+        : insertNodeInTree(
+            removeNodeFromTree(children, id),
+            newParentId,
+            deepCloneNode(node),
+            index,
+          );
       mutateWithHistory(get, set, () => _setChildren(state.document, withNode));
     },
 

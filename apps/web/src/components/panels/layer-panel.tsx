@@ -9,8 +9,9 @@ import LayerItem from './layer-item';
 import type { DropPosition } from './layer-item';
 import LayerContextMenu from './layer-context-menu';
 import PageTabs from '@/components/editor/page-tabs';
+import { resolveLayerDropMove } from './layer-dnd-utils';
 
-const CONTAINER_TYPES = new Set(['frame', 'group', 'ref']);
+const CONTAINER_TYPES = new Set(['frame', 'group', 'rectangle', 'ref']);
 
 const LAYER_MIN_WIDTH = 180;
 const LAYER_MAX_WIDTH = 480;
@@ -322,22 +323,28 @@ function LayerPanelInner() {
   const handleDragEnd = useCallback(() => {
     const { dragId, overId, dropPosition: pos } = dragRef.current;
     if (dragId && overId && dragId !== overId && pos) {
-      const parent = getParentOf(overId);
-      const parentId = parent ? parent.id : null;
-      const siblings = parent ? ('children' in parent ? (parent.children ?? []) : []) : children;
-      const targetIdx = siblings.findIndex((n) => n.id === overId);
+      const move = resolveLayerDropMove(dragId, overId, pos, children, getParentOf);
 
-      if (pos === 'inside') {
-        moveNode(dragId, overId, 0);
+      if (move && pos === 'inside') {
+        moveNode(
+          dragId,
+          move.parentId,
+          move.index,
+          move.preserveAbsolutePosition ? { preserveAbsolutePosition: true } : undefined,
+        );
         // Auto-expand the target so the dropped item is visible
         setCollapsedIds((prev) => {
           const next = new Set(prev);
           next.delete(overId);
           return next;
         });
-      } else if (targetIdx !== -1) {
-        const insertIdx = pos === 'above' ? targetIdx : targetIdx + 1;
-        moveNode(dragId, parentId, insertIdx);
+      } else if (move) {
+        moveNode(
+          dragId,
+          move.parentId,
+          move.index,
+          move.preserveAbsolutePosition ? { preserveAbsolutePosition: true } : undefined,
+        );
       }
     }
     dragRef.current = { dragId: null, overId: null, dropPosition: null };

@@ -274,4 +274,35 @@ describe('flattenToRenderNodes — dimension consistency', () => {
     expect(t1.clipRect!.h).toBe(rootRN.absH);
     expect(t1.clipRect!.w).toBe(rootRN.absW);
   });
+
+  it('nested frame with clipContent clips its descendants using its own bounds/radius', () => {
+    const root = frame({
+      id: 'root',
+      width: 400,
+      height: 400,
+      children: [
+        frame({
+          id: 'card',
+          x: 40,
+          y: 50,
+          width: 200,
+          height: 120,
+          cornerRadius: 16,
+          clipContent: true,
+          children: [text('inner', 'Nested content', { width: 'fill_container' as any })],
+        }),
+      ],
+    });
+
+    const nodes = flattenToRenderNodes([root]);
+    const card = nodes.find((rn) => rn.node.id === 'card')!;
+    const inner = nodes.find((rn) => rn.node.id === 'inner')!;
+
+    expect(inner.clipRect).toBeDefined();
+    expect(inner.clipRect!.x).toBe(card.absX);
+    expect(inner.clipRect!.y).toBe(card.absY);
+    expect(inner.clipRect!.w).toBe(card.absW);
+    expect(inner.clipRect!.h).toBe(card.absH);
+    expect(inner.clipRect!.rx).toBe(16);
+  });
 });

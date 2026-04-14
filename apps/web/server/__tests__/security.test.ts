@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { filterCodexEnv } from '../utils/codex-client';
+import { extractCodexConfigEnvKeys, filterCodexEnv } from '../utils/codex-client';
 import { SENSITIVE_LOG_PATTERN, ALLOWED_MEDIA_TYPES, resolveMediaExtension } from '../api/ai/chat';
 
 // ---------------------------------------------------------------------------
@@ -54,6 +54,28 @@ describe('codex client env allowlist', () => {
     expect(filtered.OPENAI_ORG_ID).toBe('org-xxx');
     expect(filtered.CODEX_TOKEN).toBe('codex-xxx');
     expect(filtered.CODEX_SANDBOX).toBe('read-only');
+  });
+
+  it('should keep custom provider env keys declared in codex config', () => {
+    const env = {
+      PATH: '/usr/bin',
+      HOME: '/home/user',
+      agw_CODE: 'sk-agw-xxx',
+      PACKYCODE: 'sk-packy-xxx',
+      OTHER_SECRET: 'bad',
+    };
+    const extraAllowed = extractCodexConfigEnvKeys(`
+[model_providers.agw]
+env_key = "agw_CODE"
+
+[model_providers.packycode]
+env_key = "PACKYCODE"
+`);
+    const filtered = filterCodexEnv(env, extraAllowed);
+
+    expect(filtered.agw_CODE).toBe('sk-agw-xxx');
+    expect(filtered.PACKYCODE).toBe('sk-packy-xxx');
+    expect(filtered).not.toHaveProperty('OTHER_SECRET');
   });
 
   it('should not leak vars with similar prefixes', () => {

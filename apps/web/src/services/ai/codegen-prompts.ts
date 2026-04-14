@@ -1,9 +1,8 @@
-// apps/web/src/services/ai/codegen-prompts.ts
-
 import { getSkillByName } from '@zseven-w/pen-ai-skills';
 import type { Framework, ChunkContract, CodePlanFromAI } from '@zseven-w/pen-types';
 import type { PenNode } from '@zseven-w/pen-types';
 import { nodeTreeToSummary } from '@zseven-w/pen-core';
+import type { CodegenAssetHint } from './codegen-assets';
 
 function loadSkill(name: string): string {
   return getSkillByName(name)?.content ?? '';
@@ -73,6 +72,7 @@ export function buildChunkPrompt(
   framework: Framework,
   suggestedComponentName: string,
   depContracts: ChunkContract[],
+  assetHints: CodegenAssetHint[] = [],
 ): { system: string; user: string } {
   const chunkSkill = loadSkill('codegen-chunk');
   const frameworkSkill = loadSkill(`codegen-${framework}`);
@@ -91,6 +91,20 @@ export function buildChunkPrompt(
         ].join('\n')
       : '';
 
+  const assetSection =
+    assetHints.length > 0
+      ? [
+          '',
+          '## Exported Image Assets',
+          'The following image assets were exported from the design. Use these relative paths directly as src/background-image URLs. Do NOT inline base64.',
+          '',
+          ...assetHints.map(
+            (asset) =>
+              `- ${asset.relativePath} (${asset.sourceKind}, node: ${asset.sourceNodeName ?? asset.sourceNodeId})`,
+          ),
+        ].join('\n')
+      : '';
+
   return {
     system: [chunkSkill, '', '---', '', frameworkSkill].join('\n'),
     user: [
@@ -99,6 +113,7 @@ export function buildChunkPrompt(
       'Nodes (JSON):',
       compactNodes(nodes),
       depSection,
+      assetSection,
       '',
       'Output the code followed by ---CONTRACT--- and the JSON contract.',
     ].join('\n'),
@@ -119,6 +134,7 @@ export function buildAssemblyPrompt(
   plan: CodePlanFromAI,
   framework: Framework,
   variables?: Record<string, unknown>,
+  exportedAssetPaths: string[] = [],
 ): { system: string; user: string } {
   const assemblySkill = loadSkill('codegen-assembly');
   const frameworkSkill = loadSkill(`codegen-${framework}`);
@@ -136,6 +152,16 @@ export function buildAssemblyPrompt(
     })
     .join('\n\n');
 
+  const assetSection =
+    exportedAssetPaths.length > 0
+      ? [
+          'Exported image assets are available under ./assets/.',
+          'Keep any existing ./assets/... references unchanged in the final code.',
+          `Assets: ${exportedAssetPaths.join(', ')}`,
+          '',
+        ].join('\n')
+      : '';
+
   return {
     system: [assemblySkill, '', '---', '', frameworkSkill].join('\n'),
     user: [
@@ -145,6 +171,7 @@ export function buildAssemblyPrompt(
       `Shared styles: ${JSON.stringify(plan.sharedStyles)}`,
       variables ? `Design variables: ${JSON.stringify(variables)}` : '',
       '',
+      assetSection,
       '## Chunks',
       '',
       chunksSection,
