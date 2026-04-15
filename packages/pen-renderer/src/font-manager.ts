@@ -7,6 +7,18 @@ export interface FontManagerOptions {
   googleFontsCssUrl?: string;
 }
 
+/** Permission state for the native font access (Local Font Access API) */
+export type NativeFontPermission = 'prompt' | 'granted' | 'denied' | 'unavailable';
+
+/** Native font entry from the Local Font Access API with blob accessor */
+interface NativeFontEntry {
+  family: string;
+  fullName: string;
+  postscriptName: string;
+  style: string;
+  blob: () => Promise<Blob>;
+}
+
 /**
  * Bundled font files (relative paths, prepended with fontBasePath at load time).
  * Key = lowercase family name, values = relative file names.
@@ -88,6 +100,12 @@ export class SkiaFontManager {
   private systemFontFamilies = new Set<string>();
   /** In-flight font fetch promises to avoid duplicate requests */
   private pendingFetches = new Map<string, Promise<boolean>>();
+  /** Cached set of native (OS-installed) font families from Local Font Access API (lowercase) */
+  private nativeFontSet: Set<string> | null = null;
+  /** Full native font entries with blob accessors, keyed by lowercase family name */
+  private nativeFontMap = new Map<string, NativeFontEntry[]>();
+  /** Current permission state for native font access (Local Font Access API) */
+  nativeFontPermission: NativeFontPermission = 'prompt';
 
   constructor(ck: CanvasKit, options?: FontManagerOptions) {
     this.provider = ck.TypefaceFontProvider.Make();
@@ -95,6 +113,9 @@ export class SkiaFontManager {
     // Ensure trailing slash
     if (!this.fontBasePath.endsWith('/')) this.fontBasePath += '/';
     this.googleFontsCssUrl = options?.googleFontsCssUrl ?? 'https://fonts.googleapis.com/css2';
+
+    // Check initial permission state (non-blocking)
+    this._checkPermissionState();
   }
 
   getProvider(): TypefaceFontProvider {
@@ -176,7 +197,8 @@ export class SkiaFontManager {
   }
 
   /**
-   * Ensure a font family is loaded. Tries bundled fonts first, then Google Fonts.
+   * Ensure a font family is loaded. Tries bundled fonts first, then native
+   * fonts (Local Font Access API + canvas heuristic), then Google Fonts CDN.
    */
   async ensureFont(family: string, weights: number[] = [400, 500, 600, 700]): Promise<boolean> {
     const key = family.toLowerCase();
@@ -193,6 +215,7 @@ export class SkiaFontManager {
     this.pendingFetches.delete(key);
     if (!result) {
       if (isSystemFont(family)) {
+        console.warn(`[FontManager] "${family}" is now a system font fallback after failed load.`);
         this.systemFontFamilies.add(key);
       } else {
         this.failedFamilies.add(key);
@@ -214,6 +237,117 @@ export class SkiaFontManager {
     return loaded;
   }
 
+  /**
+   * Request native font access from the user via the Local Font Access API.
+   * Must be called from a user gesture context (click handler) for the
+   * browser to show the permission prompt.
+   *
+   * Returns true if access was granted and fonts were enumerated.
+   */
+  async requestNativeFontAccess(): Promise<boolean> {
+    if (typeof window === 'undefined') {
+      this.nativeFontPermission = 'unavailable';
+      return false;
+    }
+
+    if (!('queryLocalFonts' in window)) {
+      console.warn('[FontManager] Local Font Access API not available in this browser.');
+      this.nativeFontPermission = 'unavailable';
+      return false;
+    }
+
+    try {
+      const fonts = await (
+        window as unknown as {
+          queryLocalFonts(): Promise<
+            Array<{
+              family: string;
+              fullName: string;
+              postscriptName: string;
+              style: string;
+              blob(): Promise<Blob>;
+            }>
+          >;
+        }
+      ).queryLocalFonts();
+
+      const families = new Set<string>();
+      this.nativeFontMap.clear();
+
+      for (const f of fonts) {
+        const key = f.family.toLowerCase();
+        families.add(key);
+
+        const entry: NativeFontEntry = {
+          family: f.family,
+          fullName: f.fullName,
+          postscriptName: f.postscriptName,
+          style: f.style,
+          blob: f.blob.bind(f),
+        };
+
+        const existing = this.nativeFontMap.get(key) ?? [];
+        existing.push(entry);
+        this.nativeFontMap.set(key, existing);
+      }
+
+      this.nativeFontSet = families;
+      this.nativeFontPermission = 'granted';
+      console.log(`[FontManager] Native font access granted — ${families.size} families found.`);
+      return true;
+    } catch (e: unknown) {
+      const errMsg = e instanceof Error ? e.message : String(e);
+      if (e instanceof DOMException && e.name === 'NotAllowedError') {
+        // Distinguish: never prompted (no user gesture) vs. user actually denied
+        try {
+          const status = await navigator.permissions.query({
+            name: 'local-fonts' as PermissionName,
+          });
+          if (status.state === 'prompt') {
+            // Not yet prompted — likely called without user gesture. Keep prompt
+            // state so getNativeFontSet() will retry on the next ensureFont() call.
+            console.warn(
+              '[FontManager] Native font access not yet prompted — will retry on next user gesture.',
+            );
+            this.nativeFontPermission = 'prompt';
+            this.nativeFontSet = null;
+            return false;
+          }
+        } catch {
+          // permissions.query() not supported — assume denied
+        }
+        console.warn('[FontManager] Native font access denied by user.');
+        this.nativeFontPermission = 'denied';
+      } else {
+        console.warn('[FontManager] Native font access failed:', errMsg);
+        this.nativeFontPermission = 'denied';
+      }
+      this.nativeFontSet = new Set();
+      return false;
+    }
+  }
+
+  /**
+   * Check the current permission state without triggering a prompt.
+   */
+  private async _checkPermissionState(): Promise<void> {
+    if (typeof navigator === 'undefined' || !navigator.permissions) {
+      return;
+    }
+    try {
+      const result = await navigator.permissions.query({
+        name: 'local-fonts' as PermissionName,
+      });
+      this.nativeFontPermission = result.state as NativeFontPermission;
+      // If already granted, eagerly enumerate fonts
+      if (result.state === 'granted') {
+        this.requestNativeFontAccess().catch(() => {});
+      }
+    } catch {
+      // Permission name not supported — will need explicit request
+    }
+  }
+
   private async _loadFont(family: string, weights: number[]): Promise<boolean> {
     // 1. Try bundled fonts first (no network dependency)
     const bundled = BUNDLED_FONTS[family.toLowerCase()];
@@ -223,13 +357,74 @@ export class SkiaFontManager {
       if (ok) return true;
     }
 
-    // 2. Skip Google Fonts for system/proprietary fonts
-    if (isSystemFont(family)) {
+    // 2. Skip further loading for known system/proprietary fonts
+    if (isKnownNonGoogleFont(family)) {
       return false;
     }
 
-    // 3. Fall back to Google Fonts CDN
-    return this._fetchGoogleFont(family, weights);
+    // 3. Try loading from native fonts via Local Font Access API (vector rendering)
+    //    If we have the font data cached, load it into CanvasKit for vector rendering.
+    const nativeLoaded = await this._loadNativeFontData(family);
+    if (nativeLoaded) return true;
+
+    // 4. Check if font is installed natively via Local Font Access API
+    const nativeFonts = await this.getNativeFontSet();
+    if (nativeFonts.has(family.toLowerCase())) {
+      // Found natively — try blob loading for vector rendering
+      const blobLoaded = await this._loadNativeFontData(family);
+      if (blobLoaded) return true;
+      // Can't load blob data — mark as system font for bitmap fallback
+      this.systemFontFamilies.add(family.toLowerCase());
+      return false;
+    }
+
+    // 5. Canvas-based width comparison heuristic (fast, no permission needed)
+    if (isFontLocallyAvailable(family)) {
+      this.systemFontFamilies.add(family.toLowerCase());
+      return false;
+    }
+
+    // 6. Fall back to Google Fonts CDN (network request — last resort)
+    const isFontFromGoogle = await this._fetchGoogleFont(family, weights);
+    if (isFontFromGoogle) return true;
+
+    return false;
+  }
+
+  /**
+   * Attempt to load a native font from the Local Font Access API blob data
+   * into CanvasKit's TypefaceFontProvider for vector rendering.
+   */
+  private async _loadNativeFontData(family: string): Promise<boolean> {
+    const key = family.toLowerCase();
+    const entries = this.nativeFontMap.get(key);
+    if (!entries || entries.length === 0) return false;
+
+    // Try each variant (regular, bold, italic, etc.)
+    let registered = 0;
+    for (const entry of entries) {
+      try {
+        const blob = await entry.blob();
+        const buffer = await blob.arrayBuffer();
+        if (buffer.byteLength > 0 && this.registerFont(buffer, family)) {
+          registered++;
+        }
+      } catch (e) {
+        // Individual variant may fail — try the next one
+        console.warn(
+          `[FontManager] Failed to load native font blob for "${entry.fullName}":`,
+          e instanceof Error ? e.message : String(e),
+        );
+      }
+    }
+
+    if (registered > 0) {
+      console.log(
+        `[FontManager] Loaded "${family}" from native fonts (${registered}/${entries.length} variants).`,
+      );
+      return true;
+    }
+    return false;
   }
 
   private async _fetchLocalFonts(
@@ -294,8 +489,8 @@ export class SkiaFontManager {
         const fontBuffers = await Promise.all(
           urls.map(async (url) => {
             try {
-              const resp = await fetchWithTimeout(url, 8000);
-              return resp.ok ? resp.arrayBuffer() : null;
+              const resp = fetchWithTimeout(url, 8000);
+              return (await resp).ok ? (await resp).arrayBuffer() : null;
             } catch {
               return null;
             }
@@ -314,12 +509,31 @@ export class SkiaFontManager {
     return false;
   }
 
+  /**
+   * Build a set of all native (OS-installed) font families using the
+   * Local Font Access API (Chrome 103+, Edge 103+).
+   * Falls back to empty set if API is unavailable or permission denied.
+   * Results are cached after the first successful call.
+   */
+  private async getNativeFontSet(): Promise<Set<string>> {
+    if (this.nativeFontSet) return this.nativeFontSet;
+
+    // Try to enumerate native fonts if we haven't already
+    if (this.nativeFontPermission !== 'denied' && this.nativeFontPermission !== 'unavailable') {
+      await this.requestNativeFontAccess();
+    }
+
+    return this.nativeFontSet ?? new Set();
+  }
+
   dispose() {
     this.provider.delete();
     this.loadedFamilies.clear();
     this.failedFamilies.clear();
     this.systemFontFamilies.clear();
     this.pendingFetches.clear();
+    this.nativeFontSet = null;
+    this.nativeFontMap.clear();
   }
 }
 
