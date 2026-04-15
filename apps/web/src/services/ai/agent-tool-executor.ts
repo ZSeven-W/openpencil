@@ -1,6 +1,7 @@
 import type { AgentEvent, ToolResult, AuthLevel } from '@/types/agent';
 import type { PenNode } from '@/types/pen';
 import { createEmptyDocument, DEFAULT_FRAME_ID, useDocumentStore } from '@/stores/document-store';
+import { detectAppendIntent } from './append-intent-detector';
 
 type ToolCallEvent = Extract<AgentEvent, { type: 'tool_call' }>;
 
@@ -228,6 +229,10 @@ export class AgentToolExecutor {
       progressStore.getState().setAgentOrchestrationSteps(text);
     };
 
+    const activePageId = (await import('@/stores/canvas-store')).useCanvasStore.getState()
+      .activePageId;
+    const appendContext = detectAppendIntent(prompt, doc, activePageId);
+
     let result: { nodes: unknown[] };
     try {
       result = await generateDesign(
@@ -242,6 +247,7 @@ export class AgentToolExecutor {
             variables: doc.variables,
             themes: doc.themes,
             designMd,
+            ...(appendContext ? { appendContext } : {}),
           },
         },
         {

@@ -1,6 +1,12 @@
 import type { OrchestratorPlan, StyleGuide, SubTask } from './ai-types';
+import type { DesignMdSpec } from '@/types/design-md';
 import { detectDesignType } from './design-type-presets';
-import { buildFallbackPlanFromPrompt } from './orchestrator-prompt-optimizer';
+import {
+  buildFallbackPlanFromPrompt,
+  DESIGN_MD_STYLE_GUIDE_NAME,
+  guessNeutralBackgroundFromTheme,
+  inferDesignMdBackground,
+} from './orchestrator-prompt-optimizer';
 
 export function filterPlanningSkillsForPrompt<T extends { meta: { name: string } }>(
   skills: T[],
@@ -14,22 +20,23 @@ export function filterPlanningSkillsForPrompt<T extends { meta: { name: string }
 export function parseOrchestratorResponse(
   raw: string,
   prompt: string,
+  designMd?: DesignMdSpec,
 ): { plan: OrchestratorPlan; repaired: boolean } | null {
   const trimmed = raw.trim();
 
-  const direct = tryParsePlan(trimmed);
+  const direct = tryParsePlan(trimmed, designMd);
   if (direct) return { plan: direct, repaired: false };
 
-  const repairedDirect = tryRepairPlan(trimmed, prompt);
+  const repairedDirect = tryRepairPlan(trimmed, prompt, designMd);
   if (repairedDirect) return { plan: repairedDirect, repaired: true };
 
   const fenceMatch = trimmed.match(/```(?:json)?\s*\n?([\s\S]*?)\n?```/);
   if (fenceMatch) {
     const fencedText = fenceMatch[1].trim();
-    const fenced = tryParsePlan(fencedText);
+    const fenced = tryParsePlan(fencedText, designMd);
     if (fenced) return { plan: fenced, repaired: false };
 
-    const repairedFenced = tryRepairPlan(fencedText, prompt);
+    const repairedFenced = tryRepairPlan(fencedText, prompt, designMd);
     if (repairedFenced) return { plan: repairedFenced, repaired: true };
   }
 
@@ -37,17 +44,17 @@ export function parseOrchestratorResponse(
   const lastBrace = trimmed.lastIndexOf('}');
   if (firstBrace >= 0 && lastBrace > firstBrace) {
     const bracedText = trimmed.slice(firstBrace, lastBrace + 1);
-    const braced = tryParsePlan(bracedText);
+    const braced = tryParsePlan(bracedText, designMd);
     if (braced) return { plan: braced, repaired: false };
 
-    const repairedBraced = tryRepairPlan(bracedText, prompt);
+    const repairedBraced = tryRepairPlan(bracedText, prompt, designMd);
     if (repairedBraced) return { plan: repairedBraced, repaired: true };
   }
 
   return null;
 }
 
-function tryParsePlan(text: string): OrchestratorPlan | null {
+function tryParsePlan(text: string, designMd?: DesignMdSpec): OrchestratorPlan | null {
   try {
     const obj = JSON.parse(text) as Record<string, unknown>;
     if (!obj.rootFrame || typeof obj.rootFrame !== 'object') return null;
@@ -60,29 +67,40 @@ function tryParsePlan(text: string): OrchestratorPlan | null {
       if (!st.id || !st.region) return null;
     }
 
-    return finalizePlan(obj as unknown as OrchestratorPlan, obj);
+    return finalizePlan(obj as unknown as OrchestratorPlan, obj, designMd);
   } catch {
     return null;
   }
 }
 
-function tryRepairPlan(text: string, prompt: string): OrchestratorPlan | null {
+function tryRepairPlan(
+  text: string,
+  prompt: string,
+  designMd?: DesignMdSpec,
+): OrchestratorPlan | null {
   try {
     const obj = JSON.parse(text) as Record<string, unknown>;
-    return repairPlanObject(obj, prompt);
+    return repairPlanObject(obj, prompt, designMd);
   } catch {
     return null;
   }
 }
 
-function repairPlanObject(obj: Record<string, unknown>, prompt: string): OrchestratorPlan | null {
-  const fallback = buildFallbackPlanFromPrompt(prompt);
+function repairPlanObject(
+  obj: Record<string, unknown>,
+  prompt: string,
+  designMd?: DesignMdSpec,
+): OrchestratorPlan | null {
+  const fallback = buildFallbackPlanFromPrompt(prompt, designMd);
   const rawSubtasks = extractSubtaskCandidates(obj);
   if (rawSubtasks.length === 0) return null;
 
   const rootSource = isRecord(obj.rootFrame) ? obj.rootFrame : obj;
   const fallbackHeights = buildFallbackHeights(fallback, rawSubtasks.length);
 
+  // Shape the rootFrame first — finalizePlan will re-stamp rootFrame.fill
+  // below when design.md is present, so we don't need to special-case the fill
+  // here. For non-design.md flows, honor the model's fill when coercible.
   const rootFrame: OrchestratorPlan['rootFrame'] = {
     id: asString(rootSource.id) ?? fallback.rootFrame.id,
     name: asString(rootSource.name) ?? fallback.rootFrame.name,
@@ -103,19 +121,43 @@ function repairPlanObject(obj: Record<string, unknown>, prompt: string): Orchest
 
   const repaired: OrchestratorPlan = {
     rootFrame,
-    styleGuideName:
-      asString(obj.styleGuideName) ?? asString(obj.style_guide) ?? fallback.styleGuideName,
+    // When design.md is present, force the design-md style guide name so a
+    // stale catalog name left over from invalid planner JSON can't leak into
+    // downstream sub-agent prompts.
+    styleGuideName: designMd
+      ? DESIGN_MD_STYLE_GUIDE_NAME
+      : (asString(obj.styleGuideName) ?? asString(obj.style_guide) ?? fallback.styleGuideName),
     subtasks,
   };
 
-  if (isRecord(obj.styleGuide)) {
+  if (!designMd && isRecord(obj.styleGuide)) {
     repaired.styleGuide = obj.styleGuide as unknown as StyleGuide;
   }
 
-  return finalizePlan(repaired, obj);
+  return finalizePlan(repaired, obj, designMd);
 }
 
-function finalizePlan(plan: OrchestratorPlan, rawObj?: Record<string, unknown>): OrchestratorPlan {
+function finalizePlan(
+  plan: OrchestratorPlan,
+  rawObj?: Record<string, unknown>,
+  designMd?: DesignMdSpec,
+): OrchestratorPlan {
+  // design.md always wins: strip any catalog styleGuideName/styleGuide the
+  // model might have emitted, force the root background to the design.md
+  // primary palette color (or a neutral default biased by visualTheme when no
+  // palette entry is tagged as background — DO NOT trust the model's own
+  // rootFrame.fill here because it often lifts a brand/CTA color from the
+  // palette), and leave plan.styleGuide unset so downstream consumers fall
+  // back to the buildDesignMdStylePolicy path.
+  if (designMd) {
+    plan.styleGuideName = DESIGN_MD_STYLE_GUIDE_NAME;
+    plan.styleGuide = undefined;
+    const bg =
+      inferDesignMdBackground(designMd) ?? guessNeutralBackgroundFromTheme(designMd.visualTheme);
+    plan.rootFrame.fill = [{ type: 'solid', color: bg }];
+    return plan;
+  }
+
   if (!plan.styleGuide && rawObj && isRecord(rawObj.styleGuide)) {
     plan.styleGuide = rawObj.styleGuide as unknown as StyleGuide;
   }

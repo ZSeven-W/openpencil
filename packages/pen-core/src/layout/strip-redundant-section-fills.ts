@@ -126,13 +126,41 @@ const SAFE_DARK_HEXES = new Set([
   '#202020',
 ]);
 
+/**
+ * Light-mode counterparts of SAFE_DARK_HEXES. Two sources produce these
+ * on section roots:
+ *   1. Weaker sub-agents that hedge with pure white / near-white instead
+ *      of the role-correct transparent fill.
+ *   2. The legacy `fixSectionAlternation` post-pass that painted an
+ *      #FFFFFF / #F8FAFC ladder on every run of ≥3 unfilled sections.
+ *      On dark pages that ladder leaves visible white strips; if a doc
+ *      with those stale fills is re-opened or re-rendered after the
+ *      alternation skip landed, the fills are still there and the skip
+ *      alone won't remove them.
+ * Treat these the same as safe-dark hedges: strip on any section root.
+ */
+const SAFE_LIGHT_HEXES = new Set([
+  '#ffffff',
+  '#fff',
+  '#fefefe',
+  '#fdfdfd',
+  '#fcfcfc',
+  '#fafafa',
+  '#f9fafb',
+  '#f8f8f8',
+  '#f8fafc',
+  '#f5f5f5',
+  '#f4f4f5',
+  '#f3f4f6',
+]);
+
 function shouldStripFill(childFill: string, rootFill: string | null): boolean {
   const childKey = normalizeHex(childFill);
   if (rootFill) {
     const rootKey = normalizeHex(rootFill);
     if (childKey === rootKey) return true;
   }
-  return SAFE_DARK_HEXES.has(childKey);
+  return SAFE_DARK_HEXES.has(childKey) || SAFE_LIGHT_HEXES.has(childKey);
 }
 
 function normalizeHex(color: string): string {

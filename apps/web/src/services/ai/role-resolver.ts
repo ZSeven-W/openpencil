@@ -781,6 +781,15 @@ const ALTERNATING_BG = ['#FFFFFF', '#F8FAFC'];
 function fixSectionAlternation(parent: FrameNode, children: PenNode[]): void {
   if (parent.layout !== 'vertical') return;
 
+  // Only alternate on light-themed pages. ALTERNATING_BG is hardcoded to
+  // #FFFFFF/#F8FAFC, which paints visible white strips over a dark root
+  // background — the opposite of what the user wants. Dark themes rely on
+  // card/component internal contrast to group sections, not an outer
+  // section-background wash. When the parent has no solid fill we fall
+  // through to the existing (light-mode) behavior.
+  const parentBg = getFirstSolidColor(parent);
+  if (parentBg && hexLuminance(parentBg) < 0.5) return;
+
   const runs: PenNode[][] = [];
   let current: PenNode[] = [];
 

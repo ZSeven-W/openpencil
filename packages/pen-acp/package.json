@@ -1,6 +1,6 @@
 {
   "name": "@zseven-w/pen-acp",
-  "version": "0.7.2",
+  "version": "0.7.3",
   "description": "ACP (Agent Client Protocol) client for OpenPencil — connect to external ACP agents",
   "files": [
     "src"

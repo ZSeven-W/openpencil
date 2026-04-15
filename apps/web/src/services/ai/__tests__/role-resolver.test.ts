@@ -1028,6 +1028,67 @@ describe('resolveTreePostPass — section background alternation', () => {
     expect((children[0] as any).fill).toBeUndefined();
     expect((children[1] as any).fill).toBeUndefined();
   });
+
+  // Regression guard for 2026-04-15: when design.md forces a dark rootFrame,
+  // the hardcoded #FFFFFF/#F8FAFC alternation painted visible white strips
+  // over the dark page background. On dark pages sections must stay
+  // transparent — internal card contrast already groups them visually.
+  it('does NOT alternate on a dark-themed parent (luminance < 0.5)', () => {
+    const children = [
+      {
+        id: 's0',
+        type: 'frame' as const,
+        name: 'Hero',
+        x: 0,
+        y: 0,
+        width: 375,
+        height: 400,
+        role: 'hero',
+        layout: 'vertical' as const,
+        children: [],
+      },
+      {
+        id: 's1',
+        type: 'frame' as const,
+        name: 'Stats',
+        x: 0,
+        y: 0,
+        width: 375,
+        height: 400,
+        role: 'stats-section',
+        layout: 'vertical' as const,
+        children: [],
+      },
+      {
+        id: 's2',
+        type: 'frame' as const,
+        name: 'CTA',
+        x: 0,
+        y: 0,
+        width: 375,
+        height: 400,
+        role: 'cta-section',
+        layout: 'vertical' as const,
+        children: [],
+      },
+    ] as PenNode[];
+    const root: PenNode = {
+      id: 'root',
+      type: 'frame',
+      name: 'Root',
+      x: 0,
+      y: 0,
+      width: 375,
+      height: 1200,
+      layout: 'vertical',
+      fill: [{ type: 'solid', color: '#111111' }],
+      children,
+    } as PenNode;
+    resolveTreePostPass(root, 375);
+    expect((children[0] as any).fill).toBeUndefined();
+    expect((children[1] as any).fill).toBeUndefined();
+    expect((children[2] as any).fill).toBeUndefined();
+  });
 });
 
 describe('resolveTreePostPass — orphan container contrast', () => {

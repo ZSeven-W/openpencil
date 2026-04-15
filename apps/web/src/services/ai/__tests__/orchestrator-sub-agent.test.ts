@@ -83,3 +83,45 @@ platform: mobile
     expect(summary).not.toContain('## Color System');
   });
 });
+
+import { buildSubAgentUserPromptForTest } from '../orchestrator-sub-agent';
+
+describe('buildSubAgentUserPrompt in append mode', () => {
+  const plan = {
+    rootFrame: { id: 'content-root', name: 'Page Content Root', width: 375, height: 0 },
+    subtasks: [
+      {
+        id: 'workout-cards',
+        label: 'Workout Type Cards',
+        region: { width: 375, height: 200 },
+        idPrefix: 'workoutCards',
+        parentFrameId: 'content-root',
+        existingSectionLabels: ['Greeting Section', 'Activity Rings Section'],
+      },
+    ],
+  };
+
+  it('injects APPEND MODE instructions and existing-section list', () => {
+    const prompt = buildSubAgentUserPromptForTest({
+      subtask: plan.subtasks[0] as any,
+      plan: plan as any,
+      compactPrompt: 'Continue the fitness app',
+      fullPrompt: 'Continue the fitness app',
+    });
+    expect(prompt).toMatch(/APPEND MODE/);
+    expect(prompt).toMatch(/Greeting Section/);
+    expect(prompt).toMatch(/Activity Rings Section/);
+    expect(prompt).toMatch(/do NOT.*status bar|no.{0,8}status bar/i);
+    expect(prompt).toMatch(/do NOT re-emit|off-limits/i);
+  });
+
+  it('does not inject APPEND MODE when existingSectionLabels is absent', () => {
+    const prompt = buildSubAgentUserPromptForTest({
+      subtask: { ...(plan.subtasks[0] as any), existingSectionLabels: undefined },
+      plan: plan as any,
+      compactPrompt: 'new landing page',
+      fullPrompt: 'new landing page',
+    });
+    expect(prompt).not.toMatch(/APPEND MODE/);
+  });
+});

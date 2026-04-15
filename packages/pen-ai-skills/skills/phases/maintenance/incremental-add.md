@@ -1,9 +1,9 @@
 ---
 name: incremental-add
 description: Rules for adding new elements to existing designs
-phase: [maintenance]
+phase: [maintenance, generation]
 trigger:
-  keywords: [add, insert, new section, append]
+  keywords: [add, insert, new section, append, continue, 继续, 再加, 追加]
 priority: 20
 budget: 1500
 category: domain

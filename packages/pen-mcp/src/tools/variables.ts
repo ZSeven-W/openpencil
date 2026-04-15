@@ -31,7 +31,7 @@ export async function handleSetVariables(
   if (params.replace) {
     doc.variables = params.variables;
   } else {
-    doc.variables = { ...(doc.variables ?? {}), ...params.variables };
+    doc.variables = { ...doc.variables, ...params.variables };
   }
 
   await saveDocument(filePath, doc);
@@ -68,7 +68,7 @@ export async function handleSetThemes(
   if (params.replace) {
     doc.themes = params.themes;
   } else {
-    doc.themes = { ...(doc.themes ?? {}), ...params.themes };
+    doc.themes = { ...doc.themes, ...params.themes };
   }
 
   await saveDocument(filePath, doc);

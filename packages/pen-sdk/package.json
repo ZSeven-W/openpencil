@@ -1,6 +1,6 @@
 {
   "name": "@zseven-w/pen-sdk",
-  "version": "0.7.2",
+  "version": "0.7.3",
   "description": "OpenPencil SDK — parse, manipulate, and generate code from .op design files",
   "homepage": "https://github.com/ZSeven-W/openpencil/tree/main/packages/pen-sdk",
   "bugs": {
