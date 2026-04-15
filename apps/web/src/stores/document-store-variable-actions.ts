@@ -29,7 +29,7 @@ export function createVariableActions(
       set((s) => ({
         document: {
           ...s.document,
-          variables: { ...(s.document.variables ?? {}), [name]: definition },
+          variables: { ...s.document.variables, [name]: definition },
         },
         isDirty: true,
       }));

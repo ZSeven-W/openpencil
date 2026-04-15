@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 
 /** Check if a JSON string looks like PenNode data */
 export function isDesignJson(code: string): boolean {
-  return /^\s*[\[{]/.test(code) && /"type"\s*:/.test(code) && /"id"\s*:/.test(code);
+  return /^\s*[[{]/.test(code) && /"type"\s*:/.test(code) && /"id"\s*:/.test(code);
 }
 
 export function parseMarkdown(

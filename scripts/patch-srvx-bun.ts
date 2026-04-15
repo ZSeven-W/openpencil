@@ -12,7 +12,6 @@
  */
 import { readFileSync, writeFileSync, existsSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { globSync } from 'node:fs';
 
 // Find srvx node adapter in various possible locations
 const candidates = [

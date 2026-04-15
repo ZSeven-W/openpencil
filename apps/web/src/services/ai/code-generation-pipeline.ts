@@ -339,7 +339,7 @@ export async function generateCode(
             error: validation.issues.join('; ') || 'Chunk contract validation failed',
           });
         }
-      } catch (err) {
+      } catch {
         // Retry once
         try {
           const assetHints = collectChunkAssetHints(chunk.nodes, assets);

@@ -57,13 +57,10 @@ export async function handleLoadThemePreset(
   }
 
   // Merge themes
-  doc.themes = { ...(doc.themes ?? {}), ...data.themes };
+  doc.themes = { ...doc.themes, ...data.themes };
 
   // Merge variables
-  doc.variables = { ...(doc.variables ?? {}), ...data.variables } as Record<
-    string,
-    VariableDefinition
-  >;
+  doc.variables = { ...doc.variables, ...data.variables } as Record<string, VariableDefinition>;
 
   await saveDocument(filePath, doc);
   return {
