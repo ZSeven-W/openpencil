@@ -78,21 +78,35 @@ describe('system font detection via Local Font Access API', () => {
 
   it('marks unknown local font as systemFont when Google Fonts fails', async () => {
     // Mock fetch to simulate Google Fonts returning 400
-    globalThis.fetch = vi.fn().mockResolvedValue(
-      new Response(null, { status: 400, statusText: 'Bad Request' }),
-    );
+    globalThis.fetch = vi
+      .fn()
+      .mockResolvedValue(new Response(null, { status: 400, statusText: 'Bad Request' }));
 
     // Mock window.queryLocalFonts to include "HeyMeow Rnd"
     const origQuery = (globalThis as unknown as Record<string, unknown>).queryLocalFonts;
     (globalThis as unknown as Record<string, unknown>).queryLocalFonts = async () => [
-      { family: 'HeyMeow Rnd', fullName: 'HeyMeow Rnd Regular', postscriptName: 'HeyMeowRnd-Regular', style: 'Regular', blob: async () => new Blob([]) },
-      { family: 'Arial', fullName: 'Arial Regular', postscriptName: 'ArialMT', style: 'Regular', blob: async () => new Blob([]) },
+      {
+        family: 'HeyMeow Rnd',
+        fullName: 'HeyMeow Rnd Regular',
+        postscriptName: 'HeyMeowRnd-Regular',
+        style: 'Regular',
+        blob: async () => new Blob([]),
+      },
+      {
+        family: 'Arial',
+        fullName: 'Arial Regular',
+        postscriptName: 'ArialMT',
+        style: 'Regular',
+        blob: async () => new Blob([]),
+      },
     ];
 
     // Mock window for the Local Font Access API check
     const origWindow = globalThis.window;
     vi.stubGlobal('window', {
-      queryLocalFonts: (globalThis as unknown as Record<string, () => Promise<Array<{ family: string }>>>).queryLocalFonts,
+      queryLocalFonts: (
+        globalThis as unknown as Record<string, () => Promise<Array<{ family: string }>>>
+      ).queryLocalFonts,
     });
 
     const fm = new SkiaFontManager(makeMockCk() as never);
@@ -114,15 +128,27 @@ describe('system font detection via Local Font Access API', () => {
 
   it('marks font as failed when not found locally either', async () => {
     // Mock fetch to simulate Google Fonts returning 400
-    globalThis.fetch = vi.fn().mockResolvedValue(
-      new Response(null, { status: 400, statusText: 'Bad Request' }),
-    );
+    globalThis.fetch = vi
+      .fn()
+      .mockResolvedValue(new Response(null, { status: 400, statusText: 'Bad Request' }));
 
     // Mock window.queryLocalFonts WITHOUT "SomeRandomFont"
     vi.stubGlobal('window', {
       queryLocalFonts: async () => [
-        { family: 'Arial', fullName: 'Arial Regular', postscriptName: 'ArialMT', style: 'Regular', blob: async () => new Blob([]) },
-        { family: 'Inter', fullName: 'Inter Regular', postscriptName: 'Inter-Regular', style: 'Regular', blob: async () => new Blob([]) },
+        {
+          family: 'Arial',
+          fullName: 'Arial Regular',
+          postscriptName: 'ArialMT',
+          style: 'Regular',
+          blob: async () => new Blob([]),
+        },
+        {
+          family: 'Inter',
+          fullName: 'Inter Regular',
+          postscriptName: 'Inter-Regular',
+          style: 'Regular',
+          blob: async () => new Blob([]),
+        },
       ],
     });
 
@@ -224,9 +250,9 @@ describe('local font blob loading into CanvasKit', () => {
     const mockBlob = new Blob([fontBuffer]);
 
     // Mock fetch to fail (no bundled, no Google Fonts)
-    globalThis.fetch = vi.fn().mockResolvedValue(
-      new Response(null, { status: 400, statusText: 'Bad Request' }),
-    );
+    globalThis.fetch = vi
+      .fn()
+      .mockResolvedValue(new Response(null, { status: 400, statusText: 'Bad Request' }));
 
     vi.stubGlobal('window', {
       queryLocalFonts: async () => [

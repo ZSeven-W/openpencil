@@ -21,16 +21,20 @@ function isStatusBarLike(frame: FrameNode): boolean {
 }
 
 function pickContentRoot(page: FrameNode): { target: FrameNode; sectionLabels: string[] } {
-  const children = ('children' in page && Array.isArray(page.children) ? page.children : []) as PenNode[];
+  const children = (
+    'children' in page && Array.isArray(page.children) ? page.children : []
+  ) as PenNode[];
   const frames = children.filter(isFrame);
   const contentFrames = frames.filter((f) => !isStatusBarLike(f));
 
   const CONTENT_NAME = /\b(content|main|body|root)\b/i;
   const contentCandidate = contentFrames.find((f) => CONTENT_NAME.test(f.name ?? ''));
   if (contentCandidate) {
-    const grand = ('children' in contentCandidate && Array.isArray(contentCandidate.children)
-      ? contentCandidate.children
-      : []) as PenNode[];
+    const grand = (
+      'children' in contentCandidate && Array.isArray(contentCandidate.children)
+        ? contentCandidate.children
+        : []
+    ) as PenNode[];
     return {
       target: contentCandidate,
       sectionLabels: grand
@@ -87,9 +91,10 @@ export function detectAppendIntent(
   const pageFrame = pickActivePageFrame(doc, activePageId);
   if (!pageFrame) return null;
 
-  const pageHasContent = ('children' in pageFrame &&
+  const pageHasContent =
+    'children' in pageFrame &&
     Array.isArray(pageFrame.children) &&
-    pageFrame.children.some((c) => isFrame(c) && !isStatusBarLike(c)));
+    pageFrame.children.some((c) => isFrame(c) && !isStatusBarLike(c));
   if (!pageHasContent) return null;
 
   const { target, sectionLabels } = pickContentRoot(pageFrame);

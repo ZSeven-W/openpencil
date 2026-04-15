@@ -229,8 +229,8 @@ export class AgentToolExecutor {
       progressStore.getState().setAgentOrchestrationSteps(text);
     };
 
-    const activePageId = (await import('@/stores/canvas-store'))
-      .useCanvasStore.getState().activePageId;
+    const activePageId = (await import('@/stores/canvas-store')).useCanvasStore.getState()
+      .activePageId;
     const appendContext = detectAppendIntent(prompt, doc, activePageId);
 
     let result: { nodes: unknown[] };

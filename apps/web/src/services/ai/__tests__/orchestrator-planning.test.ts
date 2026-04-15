@@ -103,9 +103,7 @@ describe('parseOrchestratorResponse', () => {
   it('strips stale catalog styling from the repair path when design.md is present', () => {
     const designMd: DesignMdSpec = {
       raw: '# Test',
-      colorPalette: [
-        { name: 'Midnight Canvas', hex: '#111111', role: 'Primary app background' },
-      ],
+      colorPalette: [{ name: 'Midnight Canvas', hex: '#111111', role: 'Primary app background' }],
     };
 
     // Invalid JSON (missing rootFrame) with stale catalog styleGuideName + fill
@@ -118,11 +116,7 @@ describe('parseOrchestratorResponse', () => {
       ],
     });
 
-    const parsed = parseOrchestratorResponse(
-      raw,
-      'design a mobile wellness home screen',
-      designMd,
-    );
+    const parsed = parseOrchestratorResponse(raw, 'design a mobile wellness home screen', designMd);
 
     expect(parsed?.repaired).toBe(true);
     expect(parsed?.plan.styleGuideName).toBe(DESIGN_MD_STYLE_GUIDE_NAME);
@@ -133,9 +127,7 @@ describe('parseOrchestratorResponse', () => {
   it('strips stale catalog styling from a fully-parsed plan when design.md is present', () => {
     const designMd: DesignMdSpec = {
       raw: '# Test',
-      colorPalette: [
-        { name: 'Midnight Canvas', hex: '#111111', role: 'Primary app background' },
-      ],
+      colorPalette: [{ name: 'Midnight Canvas', hex: '#111111', role: 'Primary app background' }],
     };
 
     const raw = JSON.stringify({
@@ -162,11 +154,7 @@ describe('parseOrchestratorResponse', () => {
       ],
     });
 
-    const parsed = parseOrchestratorResponse(
-      raw,
-      'design a mobile wellness home screen',
-      designMd,
-    );
+    const parsed = parseOrchestratorResponse(raw, 'design a mobile wellness home screen', designMd);
 
     expect(parsed?.repaired).toBe(false);
     expect(parsed?.plan.styleGuideName).toBe(DESIGN_MD_STYLE_GUIDE_NAME);

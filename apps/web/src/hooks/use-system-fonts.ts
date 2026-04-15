@@ -78,14 +78,16 @@ async function querySystemFonts(): Promise<{ fonts: string[]; permission: FontPe
         return { fonts: FALLBACK_SYSTEM_FONTS, permission: 'denied' };
       }
       // Other error — API may be unavailable
-      console.warn('[useSystemFonts] queryLocalFonts failed:', e instanceof Error ? e.message : String(e));
+      console.warn(
+        '[useSystemFonts] queryLocalFonts failed:',
+        e instanceof Error ? e.message : String(e),
+      );
     }
 
     // API not available or failed
     if (!cachedPermissionState) {
-      cachedPermissionState = typeof window !== 'undefined' && 'queryLocalFonts' in window
-        ? 'denied'
-        : 'unavailable';
+      cachedPermissionState =
+        typeof window !== 'undefined' && 'queryLocalFonts' in window ? 'denied' : 'unavailable';
     }
     cachedSystemFonts = FALLBACK_SYSTEM_FONTS;
     return { fonts: FALLBACK_SYSTEM_FONTS, permission: cachedPermissionState };
@@ -141,5 +143,12 @@ export function useSystemFonts() {
     ...systemFonts.map((f) => ({ family: f, source: 'system' as const })),
   ];
 
-  return { allFonts, systemFonts, bundledFonts: BUNDLED_FAMILIES, loading, permissionState, requestAccess };
+  return {
+    allFonts,
+    systemFonts,
+    bundledFonts: BUNDLED_FAMILIES,
+    loading,
+    permissionState,
+    requestAccess,
+  };
 }

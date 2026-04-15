@@ -148,10 +148,7 @@ describe('buildFallbackPlanFromPrompt', () => {
       ],
     };
 
-    const plan = buildFallbackPlanFromPrompt(
-      'design a mobile wellness app home screen',
-      designMd,
-    );
+    const plan = buildFallbackPlanFromPrompt('design a mobile wellness app home screen', designMd);
 
     expect(plan.styleGuideName).toBe(DESIGN_MD_STYLE_GUIDE_NAME);
     expect(plan.selectedStyleGuideContent).toBeUndefined();

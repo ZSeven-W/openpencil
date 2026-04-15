@@ -611,7 +611,9 @@ export async function executeOrchestration(
     // root frames which conflicts with reusing an existing content-root.
     const effectiveConcurrency = appendResult.skipRootInsertion
       ? 1
-      : (screenGroups.length > 1 ? concurrency : 1);
+      : screenGroups.length > 1
+        ? concurrency
+        : 1;
 
     // Assign agent identities — one per screen group (concurrent) or per subtask (sequential)
     const subtaskIdentity = new Map<number, { color: string; name: string }>();

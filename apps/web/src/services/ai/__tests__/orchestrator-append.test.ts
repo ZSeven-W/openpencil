@@ -6,9 +6,27 @@ function basePlan(): OrchestratorPlan {
   return {
     rootFrame: { id: 'new-root', name: 'Page', width: 375, height: 812 },
     subtasks: [
-      { id: 'status-bar', label: 'Status Bar', region: { width: 375, height: 44 }, idPrefix: '', parentFrameId: null },
-      { id: 'header', label: 'Screen Header', region: { width: 375, height: 120 }, idPrefix: '', parentFrameId: null },
-      { id: 'cards', label: 'Workout Type Cards', region: { width: 375, height: 200 }, idPrefix: '', parentFrameId: null },
+      {
+        id: 'status-bar',
+        label: 'Status Bar',
+        region: { width: 375, height: 44 },
+        idPrefix: '',
+        parentFrameId: null,
+      },
+      {
+        id: 'header',
+        label: 'Screen Header',
+        region: { width: 375, height: 120 },
+        idPrefix: '',
+        parentFrameId: null,
+      },
+      {
+        id: 'cards',
+        label: 'Workout Type Cards',
+        region: { width: 375, height: 200 },
+        idPrefix: '',
+        parentFrameId: null,
+      },
     ],
   };
 }
