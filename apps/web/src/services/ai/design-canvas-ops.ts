@@ -123,6 +123,11 @@ export function getGenerationRootFrameId(): string {
   return generationRootFrameId;
 }
 
+/** Override the root frame ID — used by append-mode to reuse an existing page frame. */
+export function setGenerationRootFrameId(id: string): void {
+  generationRootFrameId = id;
+}
+
 /** Expose the current remapped IDs map for use by other modules (read-only). */
 export function getGenerationRemappedIds(): Map<string, string> {
   return generationRemappedIds;

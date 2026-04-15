@@ -41,6 +41,7 @@ import {
   getGenerationRemappedIds,
   getGenerationRootFrameId,
 } from './design-generator';
+import { setGenerationRootFrameId } from './design-canvas-ops';
 import { useDocumentStore, DEFAULT_FRAME_ID, createEmptyDocument } from '@/stores/document-store';
 import { useHistoryStore } from '@/stores/history-store';
 import { zoomToFitContent } from '@/canvas/skia-engine-ref';
@@ -481,6 +482,10 @@ function reorderDashboardMainChildren(plan: OrchestratorPlan, mainParentId: stri
   });
 }
 
+import { applyAppendContextToPlan } from './orchestrator-append';
+export { applyAppendContextToPlan } from './orchestrator-append';
+export type { AppendPlanResult } from './orchestrator-append';
+
 export async function executeOrchestration(
   request: AIDesignRequest,
   callbacks?: {
@@ -535,9 +540,13 @@ export async function executeOrchestration(
       normalizeDashboardMainSubtasks(plan);
     }
 
-    // Remove status-bar subtasks on mobile — the bar is pre-injected
+    const appendResult = applyAppendContextToPlan(plan, request.context?.appendContext);
+
+    // Remove status-bar subtasks on mobile — the bar is pre-injected.
+    // In append mode the existing page already carries the status bar, so the
+    // planner-emitted one is stripped by applyAppendContextToPlan above.
     const isMobileScreen = plan.rootFrame.width <= 480;
-    if (isMobileScreen) {
+    if (isMobileScreen && !appendResult.skipStatusBar) {
       plan.subtasks = plan.subtasks.filter(
         (st) => !STATUS_BAR_NAME_RE.test(`${st.id} ${st.label}`),
       );
@@ -597,8 +606,12 @@ export async function executeOrchestration(
       }
     }
 
-    // Effective concurrency: only parallel when there are multiple screen groups
-    const effectiveConcurrency = screenGroups.length > 1 ? concurrency : 1;
+    // Effective concurrency: only parallel when there are multiple screen groups.
+    // Append mode is forced sequential — the concurrent branch creates multiple
+    // root frames which conflicts with reusing an existing content-root.
+    const effectiveConcurrency = appendResult.skipRootInsertion
+      ? 1
+      : (screenGroups.length > 1 ? concurrency : 1);
 
     // Assign agent identities — one per screen group (concurrent) or per subtask (sequential)
     const subtaskIdentity = new Map<number, { color: string; name: string }>();
@@ -719,80 +732,92 @@ export async function executeOrchestration(
         nextX += plan.rootFrame.width + gap;
       }
     } else {
-      // Sequential mode: single root frame containing all sections
-      const totalPlannedHeight = plan.subtasks.reduce((sum, st) => sum + st.region.height, 0);
-      const initialHeight = isMobile
-        ? plan.rootFrame.height || 812
-        : useDashboardColumns
-          ? getDashboardPlaceholderHeight(plan)
-          : Math.max(320, totalPlannedHeight);
-      const rootNode: FrameNode = {
-        id: plan.rootFrame.id,
-        type: 'frame',
-        name: plan.rootFrame.name,
-        x: 0,
-        y: 0,
-        width: plan.rootFrame.width,
-        height: useDashboardColumns ? `fit_content(${initialHeight})` : initialHeight,
-        layout: useDashboardColumns ? 'horizontal' : (plan.rootFrame.layout ?? 'vertical'),
-        gap: useDashboardColumns
-          ? 0
-          : isMobile
-            ? plan.rootFrame.gap || 16
-            : (plan.rootFrame.gap ?? 16),
-        ...(plan.rootFrame.padding != null ? { padding: plan.rootFrame.padding } : {}),
-        fill: defaultFill,
-        children: [],
-      };
-      insertStreamingNode(rootNode, null);
-      // insertStreamingNode may remap ID (e.g. replacing empty frame)
-      const actualRootId = getGenerationRootFrameId();
-      rootNode.id = actualRootId;
-      rootNodes.push(rootNode);
-
-      // Inject fixed iPhone status bar for iOS mobile screens
-      if (isMobile) {
-        const bgColor = (defaultFill as Array<{ color?: string }>)?.[0]?.color;
-        const statusBar = createMobileStatusBar(inferStatusBarVariant(bgColor));
-        insertStreamingNode(statusBar, actualRootId);
-      }
-
-      // Register agent badge on the actual root frame
-      const firstIdentity = subtaskIdentity.get(0);
-      if (firstIdentity) {
-        addAgentFrame(actualRootId, firstIdentity.color, firstIdentity.name);
-      }
-
-      if (useDashboardColumns) {
-        const dashboardColumns = createDashboardColumnFrames(
-          plan,
-          actualRootId,
-          request.context?.designMd,
-        );
-        insertStreamingNode(dashboardColumns.sidebar, actualRootId);
-        insertStreamingNode(dashboardColumns.main, actualRootId);
-        dashboardColumnIds = {
-          sidebarId: dashboardColumns.sidebar.id,
-          mainId: dashboardColumns.main.id,
-        };
-        for (const st of plan.subtasks) {
-          st.parentFrameId = isSidebarSubtask(st) ? dashboardColumns.sidebar.id : null;
-        }
-        const mainRowFrames = assignDashboardMainParents(plan, dashboardColumns.main.id);
-        for (const frame of mainRowFrames) {
-          insertStreamingNode(frame.node, frame.parentId);
-        }
-        for (const st of plan.subtasks) {
-          if (isSidebarSubtask(st) && st.parentFrameId == null) {
-            st.parentFrameId = dashboardColumns.sidebar.id;
-          }
-          if (!isSidebarSubtask(st) && st.parentFrameId == null) {
-            st.parentFrameId = dashboardColumns.main.id;
-          }
-        }
-      } else {
+      // Sequential mode: single root frame containing all sections.
+      // In append mode we reuse the caller-provided content-root instead
+      // of creating a new root + status bar + dashboard columns.
+      if (appendResult.skipRootInsertion) {
+        const actualRootId = plan.rootFrame.id;
+        setGenerationRootFrameId(actualRootId);
         for (const st of plan.subtasks) {
           st.parentFrameId = actualRootId;
+        }
+        // No root frame insert, no status bar, no agent badge, no dashboard
+        // columns — the existing page already has all of that.
+      } else {
+        const totalPlannedHeight = plan.subtasks.reduce((sum, st) => sum + st.region.height, 0);
+        const initialHeight = isMobile
+          ? plan.rootFrame.height || 812
+          : useDashboardColumns
+            ? getDashboardPlaceholderHeight(plan)
+            : Math.max(320, totalPlannedHeight);
+        const rootNode: FrameNode = {
+          id: plan.rootFrame.id,
+          type: 'frame',
+          name: plan.rootFrame.name,
+          x: 0,
+          y: 0,
+          width: plan.rootFrame.width,
+          height: useDashboardColumns ? `fit_content(${initialHeight})` : initialHeight,
+          layout: useDashboardColumns ? 'horizontal' : (plan.rootFrame.layout ?? 'vertical'),
+          gap: useDashboardColumns
+            ? 0
+            : isMobile
+              ? plan.rootFrame.gap || 16
+              : (plan.rootFrame.gap ?? 16),
+          ...(plan.rootFrame.padding != null ? { padding: plan.rootFrame.padding } : {}),
+          fill: defaultFill,
+          children: [],
+        };
+        insertStreamingNode(rootNode, null);
+        // insertStreamingNode may remap ID (e.g. replacing empty frame)
+        const actualRootId = getGenerationRootFrameId();
+        rootNode.id = actualRootId;
+        rootNodes.push(rootNode);
+
+        // Inject fixed iPhone status bar for iOS mobile screens
+        if (isMobile) {
+          const bgColor = (defaultFill as Array<{ color?: string }>)?.[0]?.color;
+          const statusBar = createMobileStatusBar(inferStatusBarVariant(bgColor));
+          insertStreamingNode(statusBar, actualRootId);
+        }
+
+        // Register agent badge on the actual root frame
+        const firstIdentity = subtaskIdentity.get(0);
+        if (firstIdentity) {
+          addAgentFrame(actualRootId, firstIdentity.color, firstIdentity.name);
+        }
+
+        if (useDashboardColumns) {
+          const dashboardColumns = createDashboardColumnFrames(
+            plan,
+            actualRootId,
+            request.context?.designMd,
+          );
+          insertStreamingNode(dashboardColumns.sidebar, actualRootId);
+          insertStreamingNode(dashboardColumns.main, actualRootId);
+          dashboardColumnIds = {
+            sidebarId: dashboardColumns.sidebar.id,
+            mainId: dashboardColumns.main.id,
+          };
+          for (const st of plan.subtasks) {
+            st.parentFrameId = isSidebarSubtask(st) ? dashboardColumns.sidebar.id : null;
+          }
+          const mainRowFrames = assignDashboardMainParents(plan, dashboardColumns.main.id);
+          for (const frame of mainRowFrames) {
+            insertStreamingNode(frame.node, frame.parentId);
+          }
+          for (const st of plan.subtasks) {
+            if (isSidebarSubtask(st) && st.parentFrameId == null) {
+              st.parentFrameId = dashboardColumns.sidebar.id;
+            }
+            if (!isSidebarSubtask(st) && st.parentFrameId == null) {
+              st.parentFrameId = dashboardColumns.main.id;
+            }
+          }
+        } else {
+          for (const st of plan.subtasks) {
+            st.parentFrameId = actualRootId;
+          }
         }
       }
     }
