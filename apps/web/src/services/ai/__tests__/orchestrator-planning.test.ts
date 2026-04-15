@@ -121,7 +121,9 @@ describe('parseOrchestratorResponse', () => {
     expect(parsed?.repaired).toBe(true);
     expect(parsed?.plan.styleGuideName).toBe(DESIGN_MD_STYLE_GUIDE_NAME);
     expect(parsed?.plan.styleGuide).toBeUndefined();
-    expect((parsed?.plan.rootFrame.fill as Array<{ color?: string }>)[0]?.color).toBe('#111111');
+    expect((parsed?.plan.rootFrame.fill as Array<{ color?: string }> | undefined)?.[0]?.color).toBe(
+      '#111111',
+    );
   });
 
   it('strips stale catalog styling from a fully-parsed plan when design.md is present', () => {
@@ -159,7 +161,9 @@ describe('parseOrchestratorResponse', () => {
     expect(parsed?.repaired).toBe(false);
     expect(parsed?.plan.styleGuideName).toBe(DESIGN_MD_STYLE_GUIDE_NAME);
     expect(parsed?.plan.styleGuide).toBeUndefined();
-    expect((parsed?.plan.rootFrame.fill as Array<{ color?: string }>)[0]?.color).toBe('#111111');
+    expect((parsed?.plan.rootFrame.fill as Array<{ color?: string }> | undefined)?.[0]?.color).toBe(
+      '#111111',
+    );
   });
 
   it('does not use a surface/card color as the page background', () => {
@@ -192,7 +196,9 @@ describe('parseOrchestratorResponse', () => {
     const parsed = parseOrchestratorResponse(raw, 'design a mobile screen', designMd);
 
     // Should fall back to neutral dark (#111111), NOT the card surface color.
-    expect((parsed?.plan.rootFrame.fill as Array<{ color?: string }>)[0]?.color).toBe('#111111');
+    expect((parsed?.plan.rootFrame.fill as Array<{ color?: string }> | undefined)?.[0]?.color).toBe(
+      '#111111',
+    );
   });
 
   it('enforces the neutral fallback on parsed planner output when design.md lacks a background role', () => {
@@ -225,7 +231,9 @@ describe('parseOrchestratorResponse', () => {
 
     const parsed = parseOrchestratorResponse(raw, 'design a mobile screen', designMd);
 
-    expect((parsed?.plan.rootFrame.fill as Array<{ color?: string }>)[0]?.color).toBe('#111111');
+    expect((parsed?.plan.rootFrame.fill as Array<{ color?: string }> | undefined)?.[0]?.color).toBe(
+      '#111111',
+    );
   });
 });
 

@@ -190,7 +190,7 @@ function installMcpServer(
   return {
     ...config,
     mcpServers: {
-      ...(config.mcpServers ?? {}),
+      ...config.mcpServers,
       [MCP_SERVER_NAME]: buildMcpServerEntry(serverPath, transportMode, httpPort),
     },
   };
@@ -204,14 +204,14 @@ function installMcpServerHttpUrl(
   return {
     ...config,
     mcpServers: {
-      ...(config.mcpServers ?? {}),
+      ...config.mcpServers,
       [MCP_SERVER_NAME]: buildMcpHttpUrlEntry(httpPort),
     },
   };
 }
 
 function uninstallMcpServer(config: Record<string, any>): Record<string, any> {
-  const servers = { ...(config.mcpServers ?? {}) };
+  const servers = { ...config.mcpServers };
   delete servers[MCP_SERVER_NAME];
   return { ...config, mcpServers: Object.keys(servers).length > 0 ? servers : undefined };
 }
