@@ -19,6 +19,23 @@ export interface ChatMessage {
   source?: string;
 }
 
+/**
+ * Emitted by `detectAppendIntent()` when the user asks to *extend* an existing
+ * non-empty page rather than generate a fresh screen. When present, the
+ * orchestrator skips creating a new root frame and inserts generated sections
+ * into the existing content-root frame.
+ */
+export interface AppendContext {
+  /** ID of the frame that new sub-agent sections should be inserted into. */
+  targetParentId: string;
+  /** Width of the target parent (used to size sub-agent regions). */
+  targetWidth: number;
+  /** Labels of existing top-level sections — sub-agents are told not to duplicate these. */
+  existingSectionLabels: string[];
+  /** True when `targetParentId` belongs to a mobile page (width <= 480). */
+  isMobile: boolean;
+}
+
 export interface AIDesignRequest {
   prompt: string;
   model?: string;
@@ -31,6 +48,7 @@ export interface AIDesignRequest {
     variables?: Record<string, import('@/types/variables').VariableDefinition>;
     themes?: Record<string, string[]>;
     designMd?: DesignMdSpec;
+    appendContext?: AppendContext;
   };
 }
 
@@ -112,6 +130,8 @@ export interface SubTask {
   htmlReference?: string;
   /** Actual generated root node ID for this subtask (captured at runtime) */
   generatedRootId?: string;
+  /** Propagated from AppendContext so the sub-agent prompt can avoid duplicates. */
+  existingSectionLabels?: string[];
 }
 
 /** Style guide produced by the orchestrator for visual consistency */

@@ -17,13 +17,21 @@ function displayName(value: string): string {
 
 export default function FontPicker({ value, onChange, className }: FontPickerProps) {
   const { t } = useTranslation();
-  const { allFonts, loading } = useSystemFonts();
+  const { allFonts, loading, permissionState, requestAccess } = useSystemFonts();
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState('');
   const [highlightIndex, setHighlightIndex] = useState(-1);
   const containerRef = useRef<HTMLDivElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  const handleToggle = useCallback(() => {
+    const opening = !open;
+    setOpen(opening);
+    if (opening && permissionState === 'prompt') {
+      requestAccess(); // user gesture context — browser shows permission prompt
+    }
+  }, [open, permissionState, requestAccess]);
 
   // Filter fonts by search
   const filtered = useMemo(() => {
@@ -86,7 +94,7 @@ export default function FontPicker({ value, onChange, className }: FontPickerPro
     if (!open) {
       if (e.key === 'Enter' || e.key === ' ' || e.key === 'ArrowDown') {
         e.preventDefault();
-        setOpen(true);
+        handleToggle();
       }
       return;
     }
@@ -127,7 +135,7 @@ export default function FontPicker({ value, onChange, className }: FontPickerPro
       {/* Trigger button */}
       <button
         type="button"
-        onClick={() => setOpen(!open)}
+        onClick={handleToggle}
         className={cn(
           'flex items-center justify-between w-full h-6 px-2 text-[11px] rounded-md',
           'border border-border bg-card text-foreground',
@@ -137,7 +145,11 @@ export default function FontPicker({ value, onChange, className }: FontPickerPro
         style={{ fontFamily: value }}
       >
         <span className="truncate">{currentDisplay}</span>
-        <ChevronDown className="w-3 h-3 shrink-0 text-muted-foreground ml-1" />
+        {loading ? (
+          <Loader2 className="w-3 h-3 shrink-0 text-muted-foreground ml-1 animate-spin" />
+        ) : (
+          <ChevronDown className="w-3 h-3 shrink-0 text-muted-foreground ml-1" />
+        )}
       </button>
 
       {/* Dropdown */}
@@ -172,6 +184,15 @@ export default function FontPicker({ value, onChange, className }: FontPickerPro
               <div className="flex items-center justify-center py-3 gap-1.5 text-[11px] text-muted-foreground">
                 <Loader2 className="w-3 h-3 animate-spin" />
                 {t('text.font.loading')}
+              </div>
+            )}
+
+            {/* Permission denied info — user must change browser settings */}
+            {permissionState === 'denied' && (
+              <div className="px-2 py-1.5 border-b border-border">
+                <p className="text-[9px] text-muted-foreground leading-tight">
+                  System fonts unavailable. Allow local fonts in browser settings to enable them.
+                </p>
               </div>
             )}
 

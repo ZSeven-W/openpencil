@@ -1,6 +1,6 @@
 {
   "name": "@zseven-w/pen-react",
-  "version": "0.7.2",
+  "version": "0.7.3",
   "description": "React UI SDK for OpenPencil — hooks, components, and state bridges for pen-engine",
   "homepage": "https://github.com/ZSeven-W/openpencil/tree/main/packages/pen-react",
   "bugs": {

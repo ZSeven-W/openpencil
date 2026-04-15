@@ -139,7 +139,7 @@ function ThemeTabsHeaderInner({
     themes: Record<string, string[]>;
     variables: Record<string, VariableDefinition>;
   }) => {
-    const mergedThemes = { ...(themes ?? {}), ...preset.themes };
+    const mergedThemes = { ...themes, ...preset.themes };
     setThemes(mergedThemes);
     const currentVars = variables ?? {};
     for (const [name, def] of Object.entries(preset.variables)) {

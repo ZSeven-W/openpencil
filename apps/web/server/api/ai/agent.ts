@@ -608,7 +608,7 @@ export default defineEventHandler(async (event) => {
           if (streamClosed) return;
           try {
             controller.enqueue(chunk);
-          } catch (err) {
+          } catch {
             // Controller may have closed mid-notification (e.g. client disconnect,
             // idle timeout). Mark closed and stop enqueuing to avoid noise.
             streamClosed = true;

@@ -33,6 +33,7 @@ import {
 } from './design-generator';
 import { emitProgress } from './orchestrator-progress';
 import { StreamingDesignRenderer } from './streaming-design-renderer';
+import { buildDesignMdStylePolicy } from './ai-prompts';
 
 export { ensureIdPrefix, ensurePrefixStr } from './streaming-design-renderer';
 
@@ -318,17 +319,28 @@ async function executeSubAgent(
   const variables = request.context?.variables;
   const modelProfile = resolveModelProfile(request.model);
   const isMobileScreen = plan.rootFrame.width <= 480;
+
+  // Build design.md payload for the skill template. If the structured summary
+  // is empty (a bare-minimum design.md with only free-form text), fall back to
+  // the raw markdown source so the sub-agent still sees the user's spec.
+  let designMdContent = '';
+  if (designMd) {
+    const structured = buildDesignMdStylePolicy(designMd).trim();
+    designMdContent = structured || designMd.raw.trim();
+  }
+  const hasDesignMdContent = designMdContent.length > 0;
+
   const genCtx = resolveSkills('generation', request.prompt, {
     flags: {
       hasVariables: !!variables && Object.keys(variables).length > 0,
-      hasDesignMd: !!designMd,
+      hasDesignMd: hasDesignMdContent,
       isBasicTier: modelProfile.tier === 'basic',
       // style-defaults.md only loads when no style direction exists at all:
       // - no pre-built style guide selected
-      // - no design.md present (even without colorPalette, design.md provides visual direction)
-      noStyleGuideMatch: !plan.selectedStyleGuideContent && !designMd,
+      // - no usable design.md content (empty raw + empty structured summary)
+      noStyleGuideMatch: !plan.selectedStyleGuideContent && !hasDesignMdContent,
     },
-    dynamicContent: designMd ? { designMdContent: JSON.stringify(designMd) } : undefined,
+    dynamicContent: hasDesignMdContent ? { designMdContent } : undefined,
     budgetOverride:
       modelProfile.tier === 'basic' ? 5200 : modelProfile.tier === 'standard' ? 6500 : undefined,
   });
@@ -527,6 +539,12 @@ function buildSubAgentUserPrompt(
     ? `The page root frame already has background color ${rootBgColor} — your section inherits it.`
     : `The page root frame already carries the background color — your section inherits it.`;
 
+  // When the user has a design.md, any numeric padding/spacing hint below must
+  // defer to design.md. Otherwise use the legacy desktop default.
+  const paddingHint = designMd
+    ? `Use padding/spacing that matches the design.md "LAYOUT PRINCIPLES" and "COMPONENT STYLES" blocks below — those numbers OVERRIDE any generic defaults in these layout constraints.`
+    : `Use padding=[0,80] for horizontal page margins.`;
+
   let prompt = `Page sections:\n${sectionList}\n\nGenerate ONLY "${subtask.label}" (~${region.height}px of content).${myElements}\n${compactPrompt}
 
 CRITICAL LAYOUT CONSTRAINTS:
@@ -535,7 +553,7 @@ CRITICAL LAYOUT CONSTRAINTS:
 - ALL nodes must be descendants of the root frame. No floating/orphan nodes.
 - NEVER set x or y on children inside layout frames.
 - Use "fill_container" for children that stretch, "fit_content" for shrink-wrap sizing.
-- Use justifyContent="space_between" to distribute items (e.g. navbar: logo | links | CTA). Use padding=[0,80] for horizontal page margins.
+- Use justifyContent="space_between" to distribute items (e.g. navbar: logo | links | CTA). ${paddingHint}
 - For side-by-side layouts, nest a horizontal frame with child frames using "fill_container" width.
 - SECTION BACKGROUND: do NOT set \`fill\` on your section root frame. ${rootBgHint} Hardcoding a "safe dark" fill (e.g. #000 / #0A0A0A / #111) will cover the intended background and break theme switching. Only set \`fill\` on cards, buttons, chips, badges, and other visually distinct components — never on the section container itself.
 - IDs prefix="${subtask.idPrefix}-". No <step> tags. Output \`\`\`json immediately.`;
@@ -556,6 +574,17 @@ CRITICAL LAYOUT CONSTRAINTS:
   if (plan.rootFrame.width <= 480) {
     prompt += `\n\nMOBILE STATUS BAR: A status bar (time, signal, wifi, battery) has ALREADY been pre-inserted as the first child of the root page frame. Do NOT generate any status bar, system chrome, or OS-level indicators. Start your content directly.`;
     prompt += `\n\nNO PHONE MOCKUP WRAPPER: The whole design IS a mobile screen. Do NOT wrap your section in a phone-shaped frame (cornerRadius 32 dark bezel, fixed 260-300px width, name "Phone Mockup"). Your section's root frame must use width="fill_container" and contain only the content that belongs to this section — never the entire app's children.`;
+  }
+
+  if (subtask.existingSectionLabels && subtask.existingSectionLabels.length > 0) {
+    const existing = subtask.existingSectionLabels.map((n) => `"${n}"`).join(', ');
+    prompt += `\n\nAPPEND MODE: The page already contains these sibling sections (read-only, already on canvas): ${existing}.
+- Your root frame will be inserted as a NEW sibling at the end of that list.
+- Do NOT re-emit any of the sections listed above. Do NOT emit any status bar or system chrome — that is also already on the page.
+- Do NOT wrap your output in a phone mockup or a full-page container.
+- Internal headings/titles within YOUR new section are fine — only the top-level sibling sections above are off-limits.
+- Match the visual style (colors, cornerRadius, padding, gap) already established by those existing siblings.
+- Output ONLY this one new section — a single root frame with its content.`;
   }
 
   if (needsNativeDenseCardInstruction(subtask.label, compactPrompt, fullPrompt)) {
@@ -582,17 +611,13 @@ CRITICAL LAYOUT CONSTRAINTS:
   }
 
   // Style guide injection precedence:
-  // 1. designMd color palette (user's own design system) — highest
+  // 1. designMd (user's own design system) — highest, OVERRIDES everything else
   // 2. Selected pre-built style guide content — middle
   // 3. AI-generated styleGuide from planning (existing fallback) — lowest
-  if (designMd?.colorPalette?.length) {
-    const colors = designMd.colorPalette
-      .slice(0, 8)
-      .map((c) => `${c.name} (${c.hex}) — ${c.role}`)
-      .join('\n- ');
-    prompt += `\n\nDESIGN SYSTEM (from design.md — use these consistently):\n- ${colors}`;
-    if (designMd.typography?.fontFamily) {
-      prompt += `\nFont: ${designMd.typography.fontFamily}`;
+  if (designMd) {
+    const policy = buildDesignMdStylePolicy(designMd);
+    if (policy) {
+      prompt += `\n\nDESIGN SYSTEM (from design.md — follow these EXACTLY; they OVERRIDE any other style guide, default padding, or component convention):\n${policy}`;
     }
   } else if (plan.selectedStyleGuideContent) {
     prompt += `\n\n${buildSubAgentStyleGuideInstruction(
@@ -714,5 +739,28 @@ function needsPhoneMockupInstruction(
   const text = `${subtaskLabel}\n${compactPrompt}\n${fullPrompt}`.toLowerCase();
   return /(phone\s*mockup|app\s*mockup|app\s*screen|app\s*screenshot|device\s*frame|手机\s*样机|手机\s*模型|应用\s*截图|应用\s*预览)/.test(
     text,
+  );
+}
+
+/** Test-only entry point so unit tests don't have to stand up real model calls. */
+export function buildSubAgentUserPromptForTest(args: {
+  subtask: SubTask;
+  plan: OrchestratorPlan;
+  compactPrompt: string;
+  fullPrompt: string;
+  modelId?: string;
+  variables?: Record<string, VariableDefinition>;
+  themes?: Record<string, string[]>;
+  designMd?: DesignMdSpec;
+}): string {
+  return buildSubAgentUserPrompt(
+    args.subtask,
+    args.plan,
+    args.compactPrompt,
+    args.fullPrompt,
+    args.modelId,
+    args.variables,
+    args.themes,
+    args.designMd,
   );
 }

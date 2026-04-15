@@ -41,7 +41,7 @@ class DocumentEventEmitter {
     const set = this.handlers[event] as Set<Handler<E>> | undefined;
     if (!set) return;
     // Snapshot to avoid re-entry mutation issues if a handler unsubscribes.
-    for (const handler of [...set]) {
+    for (const handler of Array.from(set)) {
       try {
         handler(payload);
       } catch (err) {

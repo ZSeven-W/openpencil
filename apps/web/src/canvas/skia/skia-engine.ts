@@ -148,7 +148,14 @@ export class SkiaEngine {
     this.canvasEl.height = height * dpr;
 
     if (this.recreateSurface()) {
-      this.markDirty();
+      // Render synchronously so the new surface is filled before the browser
+      // paints. Setting canvas.width/height clears the pixel buffer to
+      // transparent; ResizeObserver fires between layout and paint, so writing
+      // pixels here lands in the same frame's composite. Without this, the
+      // canvas flashes through to its container background (e.g. bg-muted)
+      // for one frame whenever a sibling panel mounts and the flex layout shifts.
+      this.dirty = false;
+      this.render();
     }
   }
 

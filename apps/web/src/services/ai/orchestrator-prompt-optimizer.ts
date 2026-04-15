@@ -1,4 +1,5 @@
 import type { OrchestratorPlan } from './ai-types';
+import type { DesignMdSpec } from '@/types/design-md';
 import {
   ORCHESTRATOR_TIMEOUT_PROFILES,
   PROMPT_TIMEOUT_BUCKETS,
@@ -10,6 +11,9 @@ import { getSkillByName } from '@zseven-w/pen-ai-skills';
 import { extractStyleGuideValues, selectStyleGuide } from '@zseven-w/pen-ai-skills/style-guide';
 import { styleGuideRegistry } from '@zseven-w/pen-ai-skills/_generated/style-guide-registry';
 import { resolveModelProfile, applyProfileToTimeouts, type ModelTier } from './model-profiles';
+import { buildDesignMdStylePolicy } from './ai-prompts';
+
+export const DESIGN_MD_STYLE_GUIDE_NAME = 'design-md-custom';
 
 export interface PreparedDesignPrompt {
   original: string;
@@ -122,17 +126,30 @@ export function prepareDesignPrompt(prompt: string): PreparedDesignPrompt {
   };
 }
 
-export function buildFallbackPlanFromPrompt(prompt: string): OrchestratorPlan {
+export function buildFallbackPlanFromPrompt(
+  prompt: string,
+  designMd?: DesignMdSpec,
+): OrchestratorPlan {
   const preset = detectDesignType(prompt);
 
-  // Try to select a style guide based on prompt keywords
+  // If the user has a design.md, seed the fallback plan from it so basic-tier
+  // models that fall through to this path still honor the user's custom theme.
+  const designMdBg = designMd ? inferDesignMdBackground(designMd) : null;
+
+  // Try to select a style guide based on prompt keywords (only when no design.md)
   const platform = preset.width <= 500 ? 'mobile' : 'webapp';
   const tags = inferTagsFromPrompt(prompt);
-  const guide = selectStyleGuide(styleGuideRegistry, { tags, platform });
+  const guide = designMd ? null : selectStyleGuide(styleGuideRegistry, { tags, platform });
 
-  // Extract background color from selected guide, or use default
-  let bgColor = '#FFFFFF';
-  if (guide) {
+  // Extract background color from selected guide, or use default.
+  // When design.md is present but has no palette entry tagged as background,
+  // fall back to a neutral color derived from visualTheme rather than the
+  // catalog — picking any palette color here risks painting the page with a
+  // brand/CTA/accent color.
+  let bgColor = designMd ? guessNeutralBackgroundFromTheme(designMd.visualTheme) : '#FFFFFF';
+  if (designMdBg) {
+    bgColor = designMdBg;
+  } else if (guide) {
     const bgMatch =
       guide.content.match(/(#[0-9A-Fa-f]{6})\s*[—–-]\s*(?:Page )?Background/i) ??
       guide.content.match(/Background[^#]*(#[0-9A-Fa-f]{6})/i);
@@ -175,8 +192,12 @@ export function buildFallbackPlanFromPrompt(prompt: string): OrchestratorPlan {
     })),
   };
 
-  // Attach selected style guide for downstream injection
-  if (guide) {
+  // Attach selected style guide for downstream injection.
+  // When design.md is present, we intentionally skip catalog content so it
+  // doesn't override the user's custom design system downstream.
+  if (designMd) {
+    plan.styleGuideName = DESIGN_MD_STYLE_GUIDE_NAME;
+  } else if (guide) {
     plan.styleGuideName = guide.name;
     plan.selectedStyleGuideContent = guide.content;
   }
@@ -218,7 +239,37 @@ export function buildPlanningStyleGuideContext(
   prompt: string,
   model?: string,
   mode: PlanningContextMode = 'rich',
+  designMd?: DesignMdSpec,
 ): PlanningStyleGuideContext {
+  if (designMd) {
+    const policy = buildDesignMdStylePolicy(designMd);
+    const bgHint = inferDesignMdBackground(designMd);
+    // When design.md has no palette entry explicitly marked as background/
+    // surface/canvas, do NOT ask the model to "pick" from the palette — it will
+    // happily pick a brand/CTA color and paint the whole page that color. Give
+    // it a neutral default instead, biased by visualTheme keywords.
+    const neutralDefault = guessNeutralBackgroundFromTheme(designMd.visualTheme);
+    const lines = [
+      `The user has a custom design system (design.md). DO NOT pick a style guide from a catalog.`,
+      `Use the rules below for all style decisions:`,
+      '',
+      policy || '(design.md is present but has no extractable policy; use project defaults)',
+      '',
+      `Output directives:`,
+      `- Set "styleGuideName": "${DESIGN_MD_STYLE_GUIDE_NAME}" (exact string).`,
+      bgHint
+        ? `- Set rootFrame.fill color to "${bgHint}" (the primary background color from the design.md palette).`
+        : `- Set rootFrame.fill color to "${neutralDefault}" (neutral page background — design.md has no palette entry tagged as background, so DO NOT pick a brand/CTA/accent/text color from the palette for the page background).`,
+    ];
+    return {
+      availableStyleGuides: lines.join('\n'),
+      metadataCount: 0,
+      snippetCount: 0,
+      topGuideNames: [DESIGN_MD_STYLE_GUIDE_NAME],
+      snippetGuideNames: [],
+    };
+  }
+
   const preset = detectDesignType(prompt);
   const platform = preset.width <= 500 ? 'mobile' : 'webapp';
   const tags = inferTagsFromPrompt(prompt);
@@ -251,14 +302,69 @@ export function buildPlanningStyleGuideContext(
   };
 }
 
-export function buildCompactPlanningPrompt(prompt: string, _model?: string): CompactPlanningPrompt {
+/**
+ * Pick the color in design.md most likely to be the root/app background.
+ * Returns null when no palette entry has a role that clearly marks it as a
+ * background — guessing at the first palette color is dangerous because it is
+ * often a brand/accent color, which would turn the entire page that color.
+ */
+/**
+ * Pick a safe neutral page background when design.md lacks an explicit
+ * background role. Biases toward dark when the visual theme hints at dark mode,
+ * otherwise defaults to a light page color.
+ */
+export function guessNeutralBackgroundFromTheme(theme?: string): string {
+  if (!theme) return '#FFFFFF';
+  if (/\b(dark|night|noir|cyber|neon|terminal|midnight|obsidian|onyx)\b/i.test(theme)) {
+    return '#111111';
+  }
+  return '#FFFFFF';
+}
+
+export function inferDesignMdBackground(spec: DesignMdSpec): string | null {
+  const palette = spec.colorPalette;
+  if (!palette?.length) return null;
+  const scoreRole = (role: string): number => {
+    const r = role.toLowerCase();
+    // A surface/card role is NOT a page background — e.g. dark-mode palettes
+    // often use #0A0F1C for the page and #1A1F2E for cards, and painting the
+    // whole page with the card color produces a flat result that hides the
+    // card boundaries. Only accept roles that explicitly describe a page/app
+    // background or the root canvas.
+    if (/primary.*background|app background|main background|page background|canvas/.test(r)) {
+      return 3;
+    }
+    if (/\bbackground\b/.test(r) && !/surface|card|tile|chip|panel/.test(r)) return 2;
+    return 0;
+  };
+  let best: (typeof palette)[number] | null = null;
+  let bestScore = 0;
+  for (const c of palette) {
+    const s = scoreRole(c.role || '');
+    if (s > bestScore) {
+      best = c;
+      bestScore = s;
+    }
+  }
+  return best ? best.hex : null;
+}
+
+export function buildCompactPlanningPrompt(
+  prompt: string,
+  _model?: string,
+  designMd?: DesignMdSpec,
+): CompactPlanningPrompt {
   const preset = detectDesignType(prompt);
   const platform = preset.width <= 500 ? 'mobile' : 'webapp';
   const tags = inferTagsFromPrompt(prompt);
-  const selectedGuide = selectStyleGuide(styleGuideRegistry, { tags, platform });
+  const designMdBg = designMd ? inferDesignMdBackground(designMd) : null;
+  const selectedGuide = designMd ? null : selectStyleGuide(styleGuideRegistry, { tags, platform });
   const guideValues = selectedGuide ? extractStyleGuideValues(selectedGuide.content) : null;
   const backgroundColor =
-    guideValues?.colors.background ?? (preset.type === 'mobile-screen' ? '#111827' : '#F8FAFC');
+    designMdBg ??
+    (designMd ? guessNeutralBackgroundFromTheme(designMd.visualTheme) : null) ??
+    guideValues?.colors.background ??
+    (preset.type === 'mobile-screen' ? '#111827' : '#F8FAFC');
   const defaultGap = preset.type === 'mobile-screen' || preset.type === 'desktop-screen' ? 20 : 0;
   const subtaskHint =
     preset.type === 'mobile-screen'
@@ -274,9 +380,20 @@ export function buildCompactPlanningPrompt(prompt: string, _model?: string): Com
           'Use width=375 and height=812 on the root frame.',
         ]
       : ['Use width=1200 and height=0 on the root frame.'];
-  const styleRule = selectedGuide
-    ? `Use styleGuideName="${selectedGuide.name}" and rootFrame background ${backgroundColor}.`
-    : `Pick a suitable styleGuideName for platform=${platform} and set rootFrame background to ${backgroundColor}.`;
+  const styleRule = designMd
+    ? `Use styleGuideName="${DESIGN_MD_STYLE_GUIDE_NAME}" and rootFrame background ${backgroundColor} (from the user's design.md — overrides any catalog default).`
+    : selectedGuide
+      ? `Use styleGuideName="${selectedGuide.name}" and rootFrame background ${backgroundColor}.`
+      : `Pick a suitable styleGuideName for platform=${platform} and set rootFrame background to ${backgroundColor}.`;
+
+  const designMdPolicy = designMd ? buildDesignMdStylePolicy(designMd) : '';
+  const designMdBlock = designMdPolicy
+    ? [
+        '',
+        'USER DESIGN SYSTEM (design.md — follow these EXACTLY; they OVERRIDE any default):',
+        designMdPolicy,
+      ]
+    : [];
 
   return {
     systemPrompt: [
@@ -290,9 +407,10 @@ export function buildCompactPlanningPrompt(prompt: string, _model?: string): Com
       styleRule,
       ...mobileRules,
       `Always set rootFrame layout="vertical" and gap=${defaultGap}.`,
+      ...designMdBlock,
     ].join('\n'),
     userPrompt: prompt,
-    selectedStyleGuideName: selectedGuide?.name,
+    selectedStyleGuideName: designMd ? DESIGN_MD_STYLE_GUIDE_NAME : selectedGuide?.name,
   };
 }
 
