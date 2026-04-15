@@ -576,6 +576,17 @@ CRITICAL LAYOUT CONSTRAINTS:
     prompt += `\n\nNO PHONE MOCKUP WRAPPER: The whole design IS a mobile screen. Do NOT wrap your section in a phone-shaped frame (cornerRadius 32 dark bezel, fixed 260-300px width, name "Phone Mockup"). Your section's root frame must use width="fill_container" and contain only the content that belongs to this section — never the entire app's children.`;
   }
 
+  if (subtask.existingSectionLabels && subtask.existingSectionLabels.length > 0) {
+    const existing = subtask.existingSectionLabels.map((n) => `"${n}"`).join(', ');
+    prompt += `\n\nAPPEND MODE: The page already contains these sibling sections (read-only, already on canvas): ${existing}.
+- Your root frame will be inserted as a NEW sibling at the end of that list.
+- Do NOT re-emit any of the sections listed above. Do NOT emit any status bar or system chrome — that is also already on the page.
+- Do NOT wrap your output in a phone mockup or a full-page container.
+- Internal headings/titles within YOUR new section are fine — only the top-level sibling sections above are off-limits.
+- Match the visual style (colors, cornerRadius, padding, gap) already established by those existing siblings.
+- Output ONLY this one new section — a single root frame with its content.`;
+  }
+
   if (needsNativeDenseCardInstruction(subtask.label, compactPrompt, fullPrompt)) {
     prompt += `\n\nNATIVE DENSE-CARD MODE (must be solved during generation):
 - If you create a horizontal row with 5+ cards (or cards become narrow), compact each card natively BEFORE output.
@@ -728,5 +739,28 @@ function needsPhoneMockupInstruction(
   const text = `${subtaskLabel}\n${compactPrompt}\n${fullPrompt}`.toLowerCase();
   return /(phone\s*mockup|app\s*mockup|app\s*screen|app\s*screenshot|device\s*frame|手机\s*样机|手机\s*模型|应用\s*截图|应用\s*预览)/.test(
     text,
+  );
+}
+
+/** Test-only entry point so unit tests don't have to stand up real model calls. */
+export function buildSubAgentUserPromptForTest(args: {
+  subtask: SubTask;
+  plan: OrchestratorPlan;
+  compactPrompt: string;
+  fullPrompt: string;
+  modelId?: string;
+  variables?: Record<string, VariableDefinition>;
+  themes?: Record<string, string[]>;
+  designMd?: DesignMdSpec;
+}): string {
+  return buildSubAgentUserPrompt(
+    args.subtask,
+    args.plan,
+    args.compactPrompt,
+    args.fullPrompt,
+    args.modelId,
+    args.variables,
+    args.themes,
+    args.designMd,
   );
 }
