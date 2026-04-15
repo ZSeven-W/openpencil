@@ -235,6 +235,58 @@ describe('stripRedundantSectionFills', () => {
     expect((deepInner as PenNode & { fill?: unknown }).fill).toEqual(solidFill('#0A0A0A'));
   });
 
+  it('strips stale #FFFFFF section fills on a dark root (legacy alternation residue)', () => {
+    // Regression guard for 2026-04-15: the legacy fixSectionAlternation
+    // painted #FFFFFF / #F8FAFC on unfilled section runs regardless of
+    // page theme. After the alternation skip for dark parents landed,
+    // stale docs (and weak-model hedges) still carry those whites.
+    // stripRedundantSectionFills must now clean them up.
+    const section1 = frame({
+      id: 's1',
+      name: 'Hero',
+      role: 'hero',
+      fill: solidFill('#FFFFFF'),
+    });
+    const section2 = frame({
+      id: 's2',
+      name: 'Stats',
+      role: 'stats-section',
+      fill: solidFill('#F8FAFC'),
+    });
+    const section3 = frame({
+      id: 's3',
+      name: 'CTA',
+      role: 'cta-section',
+      fill: solidFill('#FFFFFF'),
+    });
+    const root = frame({
+      id: 'root',
+      fill: solidFill('#111111'),
+      children: [section1, section2, section3],
+    });
+    const changed = stripRedundantSectionFills(root);
+    expect(changed).toBe(true);
+    expect((section1 as PenNode & { fill?: unknown }).fill).toBeUndefined();
+    expect((section2 as PenNode & { fill?: unknown }).fill).toBeUndefined();
+    expect((section3 as PenNode & { fill?: unknown }).fill).toBeUndefined();
+  });
+
+  it('strips a safe-light hedge even when the root has no fill', () => {
+    // Mirror of the existing "root frame without a fill" dark case: a
+    // bare #FFFFFF on a section root is almost certainly the sub-agent
+    // hedging against a missing background spec, not a deliberate choice.
+    const section = frame({
+      id: 'sec',
+      fill: solidFill('#FAFAFA'),
+    });
+    const root = frame({
+      id: 'root',
+      children: [section],
+    });
+    stripRedundantSectionFills(root);
+    expect((section as PenNode & { fill?: unknown }).fill).toBeUndefined();
+  });
+
   it('reproduces the M2.7 health-tracker case', () => {
     // Direct repro of the actual failure: root #1a1a2e, six section roots
     // all hardcoded #0A0A0A, including one real card. The six section

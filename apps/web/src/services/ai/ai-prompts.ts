@@ -24,6 +24,23 @@ export function buildDesignMdStylePolicy(spec: DesignMdSpec): string {
       .map((c) => `${c.name} (${c.hex}) — ${c.role}`)
       .join('\n- ');
     parts.push(`COLOR PALETTE:\n- ${colors}`);
+
+    // Call out surface/card/panel/sidebar colors explicitly. The page
+    // background uses the primary-background color, but cards, panels, and
+    // sidebars MUST use these surface colors — otherwise dashboards flatten
+    // into a single-color wash and lose their layered look.
+    const surfaces = spec.colorPalette.filter((c) =>
+      /surface|card|panel|sidebar|tile|chip/i.test(c.role || ''),
+    );
+    if (surfaces.length > 0) {
+      const surfaceLines = surfaces
+        .slice(0, 6)
+        .map((c) => `${c.name} (${c.hex}) — ${c.role}`)
+        .join('\n- ');
+      parts.push(
+        `SURFACE COLORS (use ONLY as \`fill\` on visually distinct components placed on top of the page background — cards, sidebars, floating panels, chips, badges. DO NOT fill section root frames or generic wrapper frames with these; section containers must stay transparent and inherit the page background. NEVER use these as the page/rootFrame fill):\n- ${surfaceLines}`,
+      );
+    }
   }
 
   if (spec.typography?.fontFamily) {
@@ -42,6 +59,22 @@ export function buildDesignMdStylePolicy(spec: DesignMdSpec): string {
         ? spec.componentStyles.substring(0, 300) + '...'
         : spec.componentStyles;
     parts.push(`COMPONENT STYLES:\n${styles}`);
+  }
+
+  if (spec.layoutPrinciples) {
+    const layout =
+      spec.layoutPrinciples.length > 400
+        ? spec.layoutPrinciples.substring(0, 400) + '...'
+        : spec.layoutPrinciples;
+    parts.push(`LAYOUT PRINCIPLES:\n${layout}`);
+  }
+
+  if (spec.generationNotes) {
+    const notes =
+      spec.generationNotes.length > 400
+        ? spec.generationNotes.substring(0, 400) + '...'
+        : spec.generationNotes;
+    parts.push(`GENERATION NOTES:\n${notes}`);
   }
 
   return parts.join('\n\n');

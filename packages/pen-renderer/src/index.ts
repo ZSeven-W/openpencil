@@ -25,7 +25,10 @@ export type { RenderNode, ViewportState, PenRendererOptions, IconLookupFn } from
 export { SkiaNodeRenderer } from './node-renderer.js';
 export { SkiaTextRenderer } from './text-renderer.js';
 export { SkiaFontManager, BUNDLED_FONT_FAMILIES } from './font-manager.js';
-export type { FontManagerOptions } from './font-manager.js';
+export type {
+  FontManagerOptions,
+  NativeFontPermission as LocalFontPermission,
+} from './font-manager.js';
 export { SkiaImageLoader } from './image-loader.js';
 export { SpatialIndex } from './spatial-index.js';
 export {

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 
 export interface FontInfo {
   family: string;
@@ -35,12 +35,18 @@ const FALLBACK_SYSTEM_FONTS = [
   'Comic Sans MS',
 ];
 
+/** Permission state for the Local Font Access API */
+export type FontPermissionState = 'prompt' | 'granted' | 'denied' | 'unavailable';
+
 /** Cached system font families to avoid re-querying */
 let cachedSystemFonts: string[] | null = null;
-let fetchPromise: Promise<string[]> | null = null;
+let cachedPermissionState: FontPermissionState | null = null;
+let fetchPromise: Promise<{ fonts: string[]; permission: FontPermissionState }> | null = null;
 
-async function querySystemFonts(): Promise<string[]> {
-  if (cachedSystemFonts) return cachedSystemFonts;
+async function querySystemFonts(): Promise<{ fonts: string[]; permission: FontPermissionState }> {
+  if (cachedSystemFonts && cachedPermissionState) {
+    return { fonts: cachedSystemFonts, permission: cachedPermissionState };
+  }
 
   if (fetchPromise) return fetchPromise;
 
@@ -61,16 +67,46 @@ async function querySystemFonts(): Promise<string[]> {
           .filter((f) => !bundledSet.has(f.toLowerCase()))
           .sort((a, b) => a.localeCompare(b));
         cachedSystemFonts = systemFonts;
-        return systemFonts;
+        cachedPermissionState = 'granted';
+        return { fonts: systemFonts, permission: 'granted' as FontPermissionState };
       }
-    } catch {
-      // Permission denied or API not available
+    } catch (e: unknown) {
+      // Check if it was a permission denial
+      if (e instanceof DOMException && e.name === 'NotAllowedError') {
+        cachedPermissionState = 'denied';
+        cachedSystemFonts = FALLBACK_SYSTEM_FONTS;
+        return { fonts: FALLBACK_SYSTEM_FONTS, permission: 'denied' };
+      }
+      // Other error — API may be unavailable
+      console.warn(
+        '[useSystemFonts] queryLocalFonts failed:',
+        e instanceof Error ? e.message : String(e),
+      );
+    }
+
+    // API not available or failed
+    if (!cachedPermissionState) {
+      cachedPermissionState =
+        typeof window !== 'undefined' && 'queryLocalFonts' in window ? 'denied' : 'unavailable';
     }
     cachedSystemFonts = FALLBACK_SYSTEM_FONTS;
-    return FALLBACK_SYSTEM_FONTS;
+    return { fonts: FALLBACK_SYSTEM_FONTS, permission: cachedPermissionState };
   })();
 
   return fetchPromise;
+}
+
+/**
+ * Request local font access permission from the user.
+ * Must be called from a user gesture context (click handler).
+ * Resets cached state and re-queries fonts.
+ */
+async function requestFontAccess(): Promise<{ fonts: string[]; permission: FontPermissionState }> {
+  // Reset cache to force re-query
+  cachedSystemFonts = null;
+  cachedPermissionState = null;
+  fetchPromise = null;
+  return querySystemFonts();
 }
 
 /**
@@ -79,24 +115,27 @@ async function querySystemFonts(): Promise<string[]> {
  */
 export function useSystemFonts() {
   const [systemFonts, setSystemFonts] = useState<string[]>(cachedSystemFonts ?? []);
-  const [loading, setLoading] = useState(!cachedSystemFonts);
+  const [loading, setLoading] = useState(false);
+  const [permissionState, setPermissionState] = useState<FontPermissionState>(
+    cachedPermissionState ?? 'prompt',
+  );
 
+  // Only read from module-level cache on mount — do NOT call queryLocalFonts()
+  // here because it requires a user gesture context. Fonts are populated via
+  // requestAccess() when the user opens the font picker dropdown.
   useEffect(() => {
-    if (cachedSystemFonts) {
+    if (cachedSystemFonts && cachedPermissionState) {
       setSystemFonts(cachedSystemFonts);
-      setLoading(false);
-      return;
+      setPermissionState(cachedPermissionState);
     }
-    let cancelled = false;
-    querySystemFonts().then((fonts) => {
-      if (!cancelled) {
-        setSystemFonts(fonts);
-        setLoading(false);
-      }
-    });
-    return () => {
-      cancelled = true;
-    };
+  }, []);
+
+  const requestAccess = useCallback(async () => {
+    setLoading(true);
+    const { fonts, permission } = await requestFontAccess();
+    setSystemFonts(fonts);
+    setPermissionState(permission);
+    setLoading(false);
   }, []);
 
   const allFonts: FontInfo[] = [
@@ -104,5 +143,12 @@ export function useSystemFonts() {
     ...systemFonts.map((f) => ({ family: f, source: 'system' as const })),
   ];
 
-  return { allFonts, systemFonts, bundledFonts: BUNDLED_FAMILIES, loading };
+  return {
+    allFonts,
+    systemFonts,
+    bundledFonts: BUNDLED_FAMILIES,
+    loading,
+    permissionState,
+    requestAccess,
+  };
 }

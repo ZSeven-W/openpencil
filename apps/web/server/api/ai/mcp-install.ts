@@ -190,7 +190,7 @@ function installMcpServer(
   return {
     ...config,
     mcpServers: {
-      ...(config.mcpServers ?? {}),
+      ...config.mcpServers,
       [MCP_SERVER_NAME]: buildMcpServerEntry(serverPath, transportMode, httpPort),
     },
   };
@@ -204,14 +204,14 @@ function installMcpServerHttpUrl(
   return {
     ...config,
     mcpServers: {
-      ...(config.mcpServers ?? {}),
+      ...config.mcpServers,
       [MCP_SERVER_NAME]: buildMcpHttpUrlEntry(httpPort),
     },
   };
 }
 
 function uninstallMcpServer(config: Record<string, any>): Record<string, any> {
-  const servers = { ...(config.mcpServers ?? {}) };
+  const servers = { ...config.mcpServers };
   delete servers[MCP_SERVER_NAME];
   return { ...config, mcpServers: Object.keys(servers).length > 0 ? servers : undefined };
 }
@@ -261,8 +261,32 @@ async function writeJsonConfig(filePath: string, config: Record<string, any>): P
   await writeFile(filePath, JSON.stringify(config, null, 2) + '\n', 'utf-8');
 }
 
-function codexBinary(): string {
-  return process.platform === 'win32' ? 'codex.cmd' : 'codex';
+/**
+ * Run the codex CLI with args, handling Windows shim spawning.
+ *
+ * Since Node 18.20/20.12 (CVE-2024-27980), execFileSync refuses to spawn
+ * .cmd/.bat files directly (throws EINVAL). On Windows we route through the
+ * shell so PATHEXT resolves whichever shim exists (codex.exe / codex.cmd /
+ * codex.ps1). Args here are internal (no user input) — we just quote paths
+ * that contain spaces.
+ */
+function runCodex(args: string[]): void {
+  if (process.platform === 'win32') {
+    const cmdLine = ['codex', ...args].map(quoteWinArg).join(' ');
+    execSync(cmdLine, { encoding: 'utf-8', timeout: 15_000, stdio: 'pipe' });
+    return;
+  }
+  execFileSync('codex', args, {
+    encoding: 'utf-8',
+    timeout: 15_000,
+    stdio: 'pipe',
+  });
+}
+
+function quoteWinArg(arg: string): string {
+  if (arg.length === 0) return '""';
+  if (!/[\s"&|<>^%]/.test(arg)) return arg;
+  return `"${arg.replace(/"/g, '""')}"`;
 }
 
 async function installCodexMcp(
@@ -287,28 +311,16 @@ async function installCodexMcp(
       // Non-fatal: server may already be running or will be started manually
     }
 
-    execFileSync(
-      codexBinary(),
-      ['mcp', 'add', MCP_SERVER_NAME, '--url', `http://127.0.0.1:${port}/mcp`],
-      { encoding: 'utf-8', timeout: 15_000, stdio: 'pipe' },
-    );
+    runCodex(['mcp', 'add', MCP_SERVER_NAME, '--url', `http://127.0.0.1:${port}/mcp`]);
     return { configPath: CODEX_CONFIG_PATH, fallbackHttp: true };
   }
 
-  execFileSync(
-    codexBinary(),
-    ['mcp', 'add', MCP_SERVER_NAME, '--', resolveNodeCommand(), serverPath],
-    { encoding: 'utf-8', timeout: 15_000, stdio: 'pipe' },
-  );
+  runCodex(['mcp', 'add', MCP_SERVER_NAME, '--', resolveNodeCommand(), serverPath]);
   return { configPath: CODEX_CONFIG_PATH, fallbackHttp: false };
 }
 
 function uninstallCodexMcp(): { configPath: string } {
-  execFileSync(codexBinary(), ['mcp', 'remove', MCP_SERVER_NAME], {
-    encoding: 'utf-8',
-    timeout: 15_000,
-    stdio: 'pipe',
-  });
+  runCodex(['mcp', 'remove', MCP_SERVER_NAME]);
   return { configPath: CODEX_CONFIG_PATH };
 }
 

@@ -138,7 +138,7 @@ function toRelativePath(baseDir: string, targetPath: string): string | null {
     shared += 1;
   }
 
-  const up = new Array(baseParts.length - shared).fill('..');
+  const up: string[] = Array.from({ length: baseParts.length - shared }, () => '..');
   const down = targetParts.slice(shared);
   const relative = [...up, ...down].join('/');
   return relative || '.';

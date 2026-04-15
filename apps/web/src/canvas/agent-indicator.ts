@@ -86,7 +86,7 @@ export function removeAgentIndicatorsByPrefix(prefix: string): void {
   const map = getIndicatorMap();
   const set = getPreviewSet();
   const prefixDash = `${prefix}-`;
-  for (const key of [...map.keys()]) {
+  for (const key of Array.from(map.keys())) {
     if (key.startsWith(prefixDash)) {
       map.delete(key);
       set.delete(key);
