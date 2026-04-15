@@ -33,12 +33,53 @@ Every card in the row MUST:
 Example - 6 workout cards inside a 375px-wide mobile page:
 
 ```json
-{"id":"cards-scroll","type":"frame","name":"Workouts Scroll","width":"fill_container","height":"fit_content","layout":"vertical","clipContent":true,"children":[
-  {"id":"cards-row","type":"frame","name":"Workouts Row","width":"fit_content","height":"fit_content","layout":"horizontal","gap":12,"padding":[0,20],"children":[
-    {"id":"card-hiit","type":"frame","width":140,"height":160,"cornerRadius":20,"layout":"vertical","gap":8,"padding":16,"fill":[{"type":"solid","color":"#1a1a1a"}],"children":[]},
-    {"id":"card-strength","type":"frame","width":140,"height":160,"cornerRadius":20,"layout":"vertical","gap":8,"padding":16,"fill":[{"type":"solid","color":"#1a1a1a"}],"children":[]}
-  ]}
-]}
+{
+  "id": "cards-scroll",
+  "type": "frame",
+  "name": "Workouts Scroll",
+  "width": "fill_container",
+  "height": "fit_content",
+  "layout": "vertical",
+  "clipContent": true,
+  "children": [
+    {
+      "id": "cards-row",
+      "type": "frame",
+      "name": "Workouts Row",
+      "width": "fit_content",
+      "height": "fit_content",
+      "layout": "horizontal",
+      "gap": 12,
+      "padding": [0, 20],
+      "children": [
+        {
+          "id": "card-hiit",
+          "type": "frame",
+          "width": 140,
+          "height": 160,
+          "cornerRadius": 20,
+          "layout": "vertical",
+          "gap": 8,
+          "padding": 16,
+          "fill": [{ "type": "solid", "color": "#1a1a1a" }],
+          "children": []
+        },
+        {
+          "id": "card-strength",
+          "type": "frame",
+          "width": 140,
+          "height": 160,
+          "cornerRadius": 20,
+          "layout": "vertical",
+          "gap": 8,
+          "padding": 16,
+          "fill": [{ "type": "solid", "color": "#1a1a1a" }],
+          "children": []
+        }
+      ]
+    }
+  ]
+}
 ```
 
 Anti-patterns (do NOT emit any of these):
