@@ -3,6 +3,17 @@ import { useCanvasStore } from '@/stores/canvas-store';
 import { useDocumentStore } from '@/stores/document-store';
 import { cloneNodesWithNewIds } from '@/utils/node-clone';
 import { tryPasteFigmaFromClipboard } from '@/hooks/use-figma-paste';
+import {
+  findNodeInTree,
+  findParentInTree,
+  getActivePageChildren,
+} from '@/stores/document-tree-utils';
+import type { PenNode } from '@zseven-w/pen-types';
+
+// Container types (extend ContainerProps in pen-types) — only these can hold children.
+function canHoldChildren(node: PenNode): boolean {
+  return node.type === 'frame' || node.type === 'group' || node.type === 'rectangle';
+}
 
 export function useClipboardShortcuts() {
   useEffect(() => {
@@ -46,9 +57,37 @@ export function useClipboardShortcuts() {
 
       // Paste: Cmd/Ctrl+V
       if (isMod && e.key === 'v' && !e.shiftKey) {
-        const { clipboard } = useCanvasStore.getState();
+        const canvasState = useCanvasStore.getState();
+        const { clipboard } = canvasState;
         if (clipboard.length > 0) {
           e.preventDefault();
+
+          // Anchor paste to the active selection:
+          //  - If the selected node is a container, paste inside it (as last child).
+          //  - Otherwise paste as a sibling, right after the selected node.
+          //  - Falls back to root when nothing is selected.
+          const anchorId = canvasState.selection.selectedIds[0];
+          const docState = useDocumentStore.getState();
+          const children = getActivePageChildren(docState.document, canvasState.activePageId);
+
+          let parentId: string | null = null;
+          let insertIndex: number | undefined;
+          if (anchorId) {
+            const anchor = findNodeInTree(children, anchorId);
+            if (anchor && canHoldChildren(anchor)) {
+              // Paste inside the selected container
+              parentId = anchor.id;
+              insertIndex = undefined; // append to end
+            } else {
+              // Paste as sibling of the selected node
+              const parent = findParentInTree(children, anchorId);
+              parentId = parent ? parent.id : null;
+              const siblings = parent && 'children' in parent ? (parent.children ?? []) : children;
+              const idx = siblings.findIndex((n) => n.id === anchorId);
+              if (idx >= 0) insertIndex = idx + 1;
+            }
+          }
+
           const newIds: string[] = [];
           for (const original of clipboard) {
             // Pasting a reusable component creates an instance (RefNode)
@@ -64,8 +103,9 @@ export function useClipboardShortcuts() {
             }
             // Regular paste for non-reusable nodes
             const [cloned] = cloneNodesWithNewIds([original], { offset: 10 });
-            useDocumentStore.getState().addNode(null, cloned);
+            useDocumentStore.getState().addNode(parentId, cloned, insertIndex);
             newIds.push(cloned.id);
+            if (insertIndex !== undefined) insertIndex += 1;
           }
           useCanvasStore.getState().setSelection(newIds, newIds[0] ?? null);
         } else {
