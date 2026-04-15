@@ -75,63 +75,39 @@ jobs:
       - name: Verify CLI build
         run: node apps/cli/dist/openpencil-cli.cjs --version
 
-      # Publish in topological order — skip packages already published at this version
-      - name: Publish pen-types
-        run: npm publish --access public 2>&1 || [[ $? -eq 0 ]] || npm view "@zseven-w/pen-types@${{ steps.version.outputs.version }}" version
-        working-directory: packages/pen-types
+      # Publish in topological order. For each package:
+      #   1. Resolve the real name from its package.json (no hand-written
+      #      name — avoids drift between workflow and package manifest).
+      #   2. Query the registry for that exact name@version. If it already
+      #      exists, skip (idempotent re-runs of the same tag are safe).
+      #   3. Otherwise, publish. Real errors (auth, network, notarize, etc.)
+      #      still fail the step because we only skip on a verified hit.
+      - name: Publish all packages (skip versions already on registry)
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-
-      - name: Publish pen-core
-        run: npm publish --access public 2>&1 || npm view "@zseven-w/pen-core@${{ steps.version.outputs.version }}" version
-        working-directory: packages/pen-core
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-
-      - name: Publish pen-figma
-        run: npm publish --access public 2>&1 || npm view "@zseven-w/pen-figma@${{ steps.version.outputs.version }}" version
-        working-directory: packages/pen-figma
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-
-      - name: Publish pen-renderer
-        run: npm publish --access public 2>&1 || npm view "@zseven-w/pen-renderer@${{ steps.version.outputs.version }}" version
-        working-directory: packages/pen-renderer
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-
-      - name: Publish pen-engine
-        run: npm publish --access public 2>&1 || npm view "@zseven-w/pen-engine@${{ steps.version.outputs.version }}" version
-        working-directory: packages/pen-engine
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-
-      - name: Publish pen-react
-        run: npm publish --access public 2>&1 || npm view "@zseven-w/pen-react@${{ steps.version.outputs.version }}" version
-        working-directory: packages/pen-react
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-
-      - name: Publish pen-mcp
-        run: npm publish --access public 2>&1 || npm view "@zseven-w/pen-mcp@${{ steps.version.outputs.version }}" version
-        working-directory: packages/pen-mcp
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-
-      - name: Publish pen-sdk
-        run: npm publish --access public 2>&1 || npm view "@zseven-w/pen-sdk@${{ steps.version.outputs.version }}" version
-        working-directory: packages/pen-sdk
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-
-      - name: Publish pen-ai-skills
-        run: npm publish --access public 2>&1 || npm view "@zseven-w/pen-ai-skills@${{ steps.version.outputs.version }}" version
-        working-directory: packages/pen-ai-skills
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-
-      - name: Publish CLI
-        run: npm publish --access public 2>&1 || npm view "@zseven-w/openpencil-cli@${{ steps.version.outputs.version }}" version
-        working-directory: apps/cli
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          PACKAGES=(
+            packages/pen-types
+            packages/pen-core
+            packages/pen-figma
+            packages/pen-renderer
+            packages/pen-engine
+            packages/pen-react
+            packages/pen-mcp
+            packages/pen-sdk
+            packages/pen-ai-skills
+            apps/cli
+          )
+          for dir in "${PACKAGES[@]}"; do
+            name=$(jq -r .name "$dir/package.json")
+            echo "::group::$name@$VERSION  ($dir)"
+            if npm view "$name@$VERSION" version >/dev/null 2>&1; then
+              echo "✓ already on registry — skipping"
+            else
+              ( cd "$dir" && npm publish --access public )
+              echo "✓ published"
+            fi
+            echo "::endgroup::"
+          done
