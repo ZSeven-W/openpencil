@@ -126,11 +126,11 @@ describe('normalizeTreeLayout', () => {
     expect('y' in kids[1]).toBe(false);
   });
 
-  it('keeps x and y on badge overlay children', () => {
-    const badge: PenNode = {
-      id: 'badge1',
+  it('keeps x and y on overlay children', () => {
+    const overlay: PenNode = {
+      id: 'overlay1',
       type: 'rectangle',
-      role: 'badge',
+      role: 'overlay',
       width: 8,
       height: 8,
       x: 40,
@@ -138,7 +138,7 @@ describe('normalizeTreeLayout', () => {
     } as PenNode;
     const node = frame({
       layout: 'horizontal',
-      children: [rect('a', { x: 5, y: 5 }), badge],
+      children: [rect('a', { x: 5, y: 5 }), overlay],
     });
     normalizeTreeLayout(node);
     const kids = (node as PenNode & { children: PenNode[] }).children;
@@ -178,25 +178,25 @@ describe('normalizeTreeLayout', () => {
   });
 
   it('overlay-only children do not block the vertical fallback', () => {
-    // A container whose only positioned children are overlays (badges) is
-    // still considered "model forgot layout" — the overlays retain their
+    // A container whose only positioned children are overlays is still
+    // considered "model forgot layout" — the overlays retain their
     // coordinates while the base frame gets a vertical layout for the rest.
-    const badge: PenNode = {
-      id: 'badge1',
+    const overlay: PenNode = {
+      id: 'overlay1',
       type: 'rectangle',
-      role: 'badge',
+      role: 'overlay',
       width: 8,
       height: 8,
       x: 40,
       y: 0,
     } as PenNode;
     const node = frame({
-      children: [rect('a'), rect('b'), badge],
+      children: [rect('a'), rect('b'), overlay],
     });
     normalizeTreeLayout(node);
     expect((node as PenNode & { layout?: string }).layout).toBe('vertical');
     const kids = (node as PenNode & { children: PenNode[] }).children;
-    // badge still carries its absolute coordinates
+    // overlay still carries its absolute coordinates
     expect(kids[2].x).toBe(40);
     expect(kids[2].y).toBe(0);
   });

@@ -1,16 +1,23 @@
 import type { PenNode } from '@zseven-w/pen-types';
 
 /**
- * Check if a node is a badge/overlay that uses absolute positioning
- * and should not participate in layout flow.
+ * Check if a node is an overlay that uses absolute positioning and should
+ * not participate in layout flow.
+ *
+ * Requires explicit `role: 'overlay'`. Earlier versions matched on
+ * `role: 'badge' | 'pill' | 'tag'` plus name regexes, but those are
+ * inline-component markers in this repo (see `role-resolver.ts` and
+ * `strip-redundant-section-fills.ts` PROTECTED_ROLES) — pulling them out
+ * of layout flow collapsed them to (0,0) of their parent and stacked
+ * them on top of siblings. `role: 'overlay'` is the dedicated opt-in for
+ * notification dots and true floating decorations.
  */
-export function isBadgeOverlayNode(node: PenNode): boolean {
+export function isOverlayNode(node: PenNode): boolean {
   if ('role' in node) {
     const role = (node as { role?: string }).role;
-    if (role === 'badge' || role === 'pill' || role === 'tag') return true;
+    if (role === 'overlay') return true;
   }
-  const name = (node.name ?? '').toLowerCase();
-  return /badge|indicator|notification[-_\s]?dot|overlay|floating/i.test(name);
+  return false;
 }
 
 /**
