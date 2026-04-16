@@ -394,11 +394,11 @@ export class AgentToolExecutor {
 
     const { getNodeBounds } = await import('@/stores/document-tree-utils');
 
-    const buildLayout = (
-      nodes: typeof children,
-      maxDepth: number,
-      depth = 0,
-    ): {
+    // Overlap accumulator — flat list of sibling pairs whose rendered bounds
+    // intersect. Gives the agent a text-based "screenshot equivalent" so it can
+    // spot layout bugs (notably `layout:"none"` parents stacking children at
+    // the same y) without needing a vision-capable model.
+    type LayoutEntry = {
       id: string;
       name?: string;
       type: string;
@@ -407,21 +407,44 @@ export class AgentToolExecutor {
       width: number;
       height: number;
       children?: unknown[];
-    }[] =>
-      nodes.map((node) => {
+    };
+    const overlaps: Array<{ parentId: string | null; a: string; b: string; reason: string }> = [];
+    const OVERLAP_EPS = 4; // ignore sub-pixel touches
+
+    const detectSiblingOverlaps = (
+      entries: LayoutEntry[],
+      parentId: string | null,
+      parentLayout: string | undefined,
+    ) => {
+      for (let i = 0; i < entries.length; i++) {
+        for (let j = i + 1; j < entries.length; j++) {
+          const a = entries[i];
+          const b = entries[j];
+          if (a.width <= 0 || a.height <= 0 || b.width <= 0 || b.height <= 0) continue;
+          const xOverlap = Math.min(a.x + a.width, b.x + b.width) - Math.max(a.x, b.x);
+          const yOverlap = Math.min(a.y + a.height, b.y + b.height) - Math.max(a.y, b.y);
+          if (xOverlap > OVERLAP_EPS && yOverlap > OVERLAP_EPS) {
+            const reason = !parentLayout || parentLayout === 'none'
+              ? 'parent has layout:"none" — absolute x/y can stack children at the same position; switch parent to layout:"vertical"|"horizontal" with gap'
+              : `siblings overlap by ~${Math.round(xOverlap)}x${Math.round(yOverlap)} px — check gap/padding on parent`;
+            overlaps.push({ parentId, a: a.id, b: b.id, reason });
+          }
+        }
+      }
+    };
+
+    const buildLayout = (
+      nodes: typeof children,
+      maxDepth: number,
+      parentId: string | null,
+      parentLayout: string | undefined,
+      depth = 0,
+    ): LayoutEntry[] => {
+      const entries = nodes.map((node) => {
         // Use layout-computed bounds from SkiaEngine, fall back to stored values
         const computed = renderNodeMap.get(node.id);
         const b = computed ?? getNodeBounds(node, allChildren);
-        const entry: {
-          id: string;
-          name?: string;
-          type: string;
-          x: number;
-          y: number;
-          width: number;
-          height: number;
-          children?: unknown[];
-        } = {
+        const entry: LayoutEntry = {
           id: node.id,
           name: node.name,
           type: node.type,
@@ -431,12 +454,25 @@ export class AgentToolExecutor {
           height: Math.round(b.h),
         };
         if ('children' in node && node.children?.length && depth < maxDepth) {
-          entry.children = buildLayout(node.children, maxDepth, depth + 1);
+          const childLayout = (node as { layout?: string }).layout;
+          entry.children = buildLayout(
+            node.children,
+            maxDepth,
+            node.id,
+            childLayout,
+            depth + 1,
+          );
         }
         return entry;
       });
+      detectSiblingOverlaps(entries, parentId, parentLayout);
+      return entries;
+    };
 
-    return { success: true, data: buildLayout(children, 3) };
+    const tree = buildLayout(children, 3, null, undefined);
+    return overlaps.length > 0
+      ? { success: true, data: { tree, overlaps } }
+      : { success: true, data: tree };
   }
 
   private async handleFindEmptySpace(args: {
