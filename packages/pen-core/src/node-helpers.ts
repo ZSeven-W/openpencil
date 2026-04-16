@@ -21,6 +21,15 @@ export function isOverlayNode(node: PenNode): boolean {
 }
 
 /**
+ * @deprecated Renamed to `isOverlayNode`. Semantics also tightened:
+ * this alias no longer returns true for `role: 'badge' | 'pill' | 'tag'`
+ * (those are inline-component roles in this repo and should flow in
+ * auto-layout, not float). Use `isOverlayNode` and mark true floating
+ * decorations with `role: 'overlay'`.
+ */
+export const isBadgeOverlayNode = isOverlayNode;
+
+/**
  * Convert a name string to PascalCase.
  * Strips non-alphanumeric characters and joins words.
  */
