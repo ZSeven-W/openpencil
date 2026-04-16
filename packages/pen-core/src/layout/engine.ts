@@ -1,6 +1,6 @@
 import type { PenNode, ContainerProps, SizingBehavior, Padding } from '@zseven-w/pen-types';
 export type { Padding } from '@zseven-w/pen-types';
-import { isBadgeOverlayNode } from '../node-helpers.js';
+import { isOverlayNode } from '../node-helpers.js';
 import {
   parseSizing,
   estimateTextWidth,
@@ -119,7 +119,7 @@ export function inferLayout(node: PenNode): 'horizontal' | undefined {
 export function fitContentWidth(node: PenNode, parentAvail?: number): number {
   if (!('children' in node) || !node.children?.length) return 0;
   const visibleChildren = node.children.filter(
-    (child) => isNodeVisible(child) && !isBadgeOverlayNode(child),
+    (child) => isNodeVisible(child) && !isOverlayNode(child),
   );
   if (visibleChildren.length === 0) return 0;
   const c = node as PenNode & ContainerProps;
@@ -147,7 +147,7 @@ export function fitContentWidth(node: PenNode, parentAvail?: number): number {
 export function fitContentHeight(node: PenNode, parentAvailW?: number): number {
   if (!('children' in node) || !node.children?.length) return 0;
   const visibleChildren = node.children.filter(
-    (child) => isNodeVisible(child) && !isBadgeOverlayNode(child),
+    (child) => isNodeVisible(child) && !isOverlayNode(child),
   );
   if (visibleChildren.length === 0) return 0;
   const c = node as PenNode & ContainerProps;
@@ -254,8 +254,8 @@ export function computeLayoutPositions(parent: PenNode, children: PenNode[]): Pe
   const layout = c.layout || inferLayout(parent);
   if (!layout || layout === 'none') return visibleChildren;
 
-  const badgeNodes = visibleChildren.filter(isBadgeOverlayNode);
-  const layoutChildren = visibleChildren.filter((ch) => !isBadgeOverlayNode(ch));
+  const overlayNodes = visibleChildren.filter(isOverlayNode);
+  const layoutChildren = visibleChildren.filter((ch) => !isOverlayNode(ch));
   if (layoutChildren.length === 0) return visibleChildren;
 
   const pW = parseSizing(c.width);
@@ -399,8 +399,8 @@ export function computeLayoutPositions(parent: PenNode, children: PenNode[]): Pe
     return out as unknown as PenNode;
   });
 
-  if (badgeNodes.length > 0) {
-    return [...badgeNodes, ...positioned];
+  if (overlayNodes.length > 0) {
+    return [...overlayNodes, ...positioned];
   }
   return positioned;
 }

@@ -50,7 +50,7 @@ import {
   sanitizeLayoutChildPositions,
   sanitizeScreenFrameBounds,
   hasActiveLayout,
-  isBadgeOverlayNode,
+  isOverlayNode,
 } from './design-node-sanitization';
 
 // ---------------------------------------------------------------------------
@@ -224,7 +224,7 @@ export function insertStreamingNode(node: PenNode, parentId: string | null): voi
 
   const parentNode = resolvedParent ? getNodeById(resolvedParent) : null;
 
-  if (parentNode && hasActiveLayout(parentNode) && !isBadgeOverlayNode(node)) {
+  if (parentNode && hasActiveLayout(parentNode) && !isOverlayNode(node)) {
     if ('x' in node) delete (node as { x?: number }).x;
     if ('y' in node) delete (node as { y?: number }).y;
     // Text defaults inside layout frames:
@@ -362,7 +362,7 @@ export function insertStreamingNode(node: PenNode, parentId: string | null): voi
 
     // Badge/overlay nodes prepend (index 0) so they render on top (earlier = higher z-order).
     // All other nodes append to preserve auto-layout generation order.
-    addNode(insertParent, node, isBadgeOverlayNode(node) ? 0 : Infinity);
+    addNode(insertParent, node, isOverlayNode(node) ? 0 : Infinity);
 
     // When a frame is inserted into a horizontal layout, equalize sibling card widths
     // to prevent overflow when multiple cards are placed in the same row.
