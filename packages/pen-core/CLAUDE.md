@@ -11,7 +11,7 @@ Pure document tree operations, layout engine, variables, normalization, boolean 
 - `src/arc-path.ts` — `buildEllipseArcPath`, `isArcEllipse`: SVG arc path generation for partial ellipses
 - `src/path-anchors.ts` — `anchorsToPathData`, `pathDataToAnchors`, `getPathBoundsFromAnchors`, `inferPathAnchorPointType`
 - `src/font-utils.ts` — `cssFontFamily`: CSS font-family string builder
-- `src/node-helpers.ts` — `isBadgeOverlayNode`, `sanitizeName` (PascalCase conversion)
+- `src/node-helpers.ts` — `isOverlayNode` (detects `role: 'overlay'`), `sanitizeName` (PascalCase conversion)
 - `src/design-md-parser.ts` — `parseDesignMd`, `generateDesignMd`, `designMdColorsToVariables`, `extractDesignMdFromDocument`
 - `src/constants.ts` — Canvas rendering constants (zoom limits, colors, snap thresholds, pen tool sizes, guide styling)
 - `src/id.ts` — `generateId` (nanoid wrapper)

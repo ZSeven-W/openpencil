@@ -77,6 +77,10 @@ Media roles:
 - avatar: width/height=48, cornerRadius=24, clipContent=true (size adapts to explicit width)
 - icon: width=24, height=24
 
+Layout-escape roles:
+
+- overlay: the ONLY way to place a child at absolute x/y inside a parent that uses `layout: vertical|horizontal`. Use for notification dots on an icon, corner ribbons on a card, floating status indicators. The child keeps its explicit `x`/`y` while siblings flow normally. Do NOT use `role: 'overlay'` for inline components — `badge`, `pill`, `tag` are inline (they flow in layout like any other child, NOT floating). Do NOT use `role: 'overlay'` as a substitute for `layout: 'none'` on the parent.
+
 Typography roles:
 
 - heading: lineHeight=1.2 (CJK: 1.35), letterSpacing=-0.5 (CJK: 0). In vertical layout: textGrowth=fixed-width, width=fill_container

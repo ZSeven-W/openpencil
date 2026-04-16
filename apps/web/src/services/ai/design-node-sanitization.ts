@@ -1,7 +1,7 @@
 import type { PenNode } from '@/types/pen';
 import { clamp } from './generation-utils';
-export { isBadgeOverlayNode } from '@/canvas/node-helpers';
-import { isBadgeOverlayNode } from '@/canvas/node-helpers';
+export { isOverlayNode } from '@/canvas/node-helpers';
+import { isOverlayNode } from '@/canvas/node-helpers';
 export { deepCloneNode } from '@/stores/document-tree-utils';
 
 // ---------------------------------------------------------------------------
@@ -59,11 +59,11 @@ export function hasActiveLayout(node: PenNode): boolean {
   return node.layout === 'vertical' || node.layout === 'horizontal';
 }
 
-// isBadgeOverlayNode moved to @/canvas/node-helpers — re-exported above
+// isOverlayNode moved to @/canvas/node-helpers — re-exported above
 
 export function sanitizeLayoutChildPositions(node: PenNode, parentHasLayout: boolean): void {
-  // Badge/overlay nodes retain their x/y for absolute positioning
-  if (parentHasLayout && !isBadgeOverlayNode(node)) {
+  // Overlay nodes (role: 'overlay') retain their x/y for absolute positioning
+  if (parentHasLayout && !isOverlayNode(node)) {
     if ('x' in node) delete (node as { x?: number }).x;
     if ('y' in node) delete (node as { y?: number }).y;
   }

@@ -1,5 +1,5 @@
 import type { PenNode, ContainerProps } from '@zseven-w/pen-types';
-import { isBadgeOverlayNode } from '../node-helpers.js';
+import { isOverlayNode } from '../node-helpers.js';
 import { inferLayout } from './engine.js';
 
 /**
@@ -17,8 +17,8 @@ import { inferLayout } from './engine.js';
  *      images with floating overlays, etc.) and we leave it alone.
  *
  * 2. When a frame has an active layout (`vertical` or `horizontal`), strip
- *    `x`/`y` from every non-overlay child. Overlay children (badges, pills,
- *    tags, floating indicators) keep their absolute coordinates.
+ *    `x`/`y` from every non-overlay child. Overlay children (opt-in via
+ *    `role: 'overlay'`) keep their absolute coordinates.
  *
  * Used as a post-generation pass after an AI model produces a subtree. It
  * corrects two common model mistakes:
@@ -58,7 +58,7 @@ export function normalizeTreeLayout(node: PenNode): void {
     // (2) Strip x/y from non-overlay children of active-layout frames.
     if (c.layout === 'vertical' || c.layout === 'horizontal') {
       for (const child of children) {
-        if (!isBadgeOverlayNode(child)) {
+        if (!isOverlayNode(child)) {
           if ('x' in child) delete (child as { x?: number }).x;
           if ('y' in child) delete (child as { y?: number }).y;
         }
@@ -105,9 +105,9 @@ export function normalizeTreeLayout(node: PenNode): void {
  *      still get the vertical fallback, because those are typically
  *      content stacks where verticalization is the right call.
  *
- * Overlay nodes (badges/pills/tags via `isBadgeOverlayNode`) are excluded
- * from the count — they legitimately carry x/y inside auto-layout frames
- * and shouldn't tip the heuristic.
+ * Overlay nodes (opt-in via `role: 'overlay'`, detected by `isOverlayNode`)
+ * are excluded from the count — they legitimately carry x/y inside
+ * auto-layout frames and shouldn't tip the heuristic.
  *
  * This is intentionally conservative: it accepts a few false negatives
  * (some genuinely vertical all-shape stacks will be left un-normalized,
@@ -120,7 +120,7 @@ const COMPOSITION_PRIMITIVE_TYPES = new Set(['frame', 'ellipse', 'path']);
 function hasAbsolutePositionedChild(children: PenNode[]): boolean {
   // Signal 1: explicit numeric x/y on any non-overlay child.
   for (const child of children) {
-    if (isBadgeOverlayNode(child)) continue;
+    if (isOverlayNode(child)) continue;
     const c = child as PenNode & { x?: number; y?: number };
     if (typeof c.x === 'number' || typeof c.y === 'number') return true;
   }
@@ -130,7 +130,7 @@ function hasAbsolutePositionedChild(children: PenNode[]): boolean {
   let nonOverlayCount = 0;
   let primitiveCount = 0;
   for (const child of children) {
-    if (isBadgeOverlayNode(child)) continue;
+    if (isOverlayNode(child)) continue;
     nonOverlayCount++;
     if (COMPOSITION_PRIMITIVE_TYPES.has(child.type)) primitiveCount++;
   }
