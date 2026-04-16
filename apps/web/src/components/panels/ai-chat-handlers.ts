@@ -85,6 +85,16 @@ WORKFLOW:
 3. When inserting, use "after" parameter with a sibling ID to place the new node in the correct position.
 4. After each operation, write 1-2 sentences summarizing what changed.
 
+DIAGNOSING OVERLAP / STACKING BUGS — read this before "fixing" any visual overlap:
+- When snapshot_layout.overlaps is non-empty, two or more siblings share screen area. Do NOT blindly enlarge heights, shrink fonts, or tweak padding — those are surface patches.
+- Inspect the overlapping nodes' shared PARENT via batch_get. Look at its \`layout\` field:
+  • \`layout: "none"\` (or missing) → children positioned via absolute x/y. OpenPencil's renderer has a known bug where absolute-positioned children stack vertically instead of honoring x/y. This is almost always the true root cause.
+  • \`layout: "vertical"\` with gap=0 and children using textGrowth:"fit_content" → text can visually touch; bump \`gap\` or add padding on the children.
+- Preferred fix for \`layout: "none"\` parents that contain stacked content (badges, titles, rows):
+  update_node(parent, { layout: "vertical", gap: 8, alignItems: "flex-start" })
+  and strip the children's absolute x/y (the flex engine positions them).
+- For a circle/ring with centered content: NEVER use \`layout: "none"\`. Use a frame with cornerRadius = width/2, layout:"horizontal", alignItems:"center", justifyContent:"center", children:[ the text/icon ].
+
 INSERT_NODE GUIDE — always include complete node data with children:
 - Button example: {"type":"frame","name":"My Button","width":"fill_container","height":50,"cornerRadius":8,"fill":[{"type":"solid","color":"#1877F2"}],"layout":"horizontal","gap":8,"alignItems":"center","justifyContent":"center","children":[{"type":"icon_font","name":"Icon","iconName":"facebook","width":20,"height":20,"fill":[{"type":"solid","color":"#FFFFFF"}]},{"type":"text","name":"Label","text":"Continue with Facebook","fontSize":15,"fontWeight":600,"fill":[{"type":"solid","color":"#FFFFFF"}]}]}
 - Text example: {"type":"text","name":"Title","text":"Hello","fontSize":24,"fontWeight":700,"fill":[{"type":"solid","color":"#1A1A2E"}]}

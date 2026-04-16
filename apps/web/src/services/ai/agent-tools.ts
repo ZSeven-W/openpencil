@@ -95,7 +95,11 @@ export function getCrudToolDefs(): ToolDef[] {
     {
       name: 'snapshot_layout',
       description:
-        'Get a compact layout snapshot of the current page showing node positions and sizes',
+        'Get a compact layout snapshot of the current page showing node positions and sizes. ' +
+        'When sibling nodes visually overlap, the result includes an `overlaps` array (parentId, a, b, reason) — ' +
+        'use it as a text-only screenshot-replacement to diagnose visual bugs like stacked badges or overlapping text. ' +
+        'If an overlap reason mentions `layout:"none"`, fix the PARENT frame (set layout to "vertical" or "horizontal" with a gap); ' +
+        'do not just resize the overlapping children.',
       level: TOOL_AUTH_MAP.snapshot_layout,
       parameters: {
         type: 'object',
@@ -219,7 +223,11 @@ export function getDesignToolDefs(): ToolDef[] {
     {
       name: 'snapshot_layout',
       description:
-        'Get a compact layout snapshot of the current page showing node positions and sizes',
+        'Get a compact layout snapshot of the current page showing node positions and sizes. ' +
+        'When sibling nodes visually overlap, the result includes an `overlaps` array (parentId, a, b, reason) — ' +
+        'use it as a text-only screenshot-replacement to diagnose visual bugs like stacked badges or overlapping text. ' +
+        'If an overlap reason mentions `layout:"none"`, fix the PARENT frame (set layout to "vertical" or "horizontal" with a gap); ' +
+        'do not just resize the overlapping children.',
       level: TOOL_AUTH_MAP.snapshot_layout,
       parameters: {
         type: 'object',
