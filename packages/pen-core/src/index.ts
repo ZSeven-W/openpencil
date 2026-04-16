@@ -143,7 +143,7 @@ export { type BooleanOpType, canBooleanOp, executeBooleanOp } from './boolean-op
 export { cssFontFamily } from './font-utils.js';
 
 // Node helpers
-export { isOverlayNode, sanitizeName } from './node-helpers.js';
+export { isOverlayNode, isBadgeOverlayNode, sanitizeName } from './node-helpers.js';
 
 // Design-MD parser
 export {
