@@ -1,6 +1,6 @@
 {
   "name": "@zseven-w/pen-mcp",
-  "version": "0.7.3",
+  "version": "0.7.4",
   "description": "MCP server, document manager, and tools for OpenPencil",
   "homepage": "https://github.com/ZSeven-W/openpencil/tree/main/packages/pen-mcp",
   "bugs": {
