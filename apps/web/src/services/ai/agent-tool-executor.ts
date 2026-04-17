@@ -424,9 +424,10 @@ export class AgentToolExecutor {
           const xOverlap = Math.min(a.x + a.width, b.x + b.width) - Math.max(a.x, b.x);
           const yOverlap = Math.min(a.y + a.height, b.y + b.height) - Math.max(a.y, b.y);
           if (xOverlap > OVERLAP_EPS && yOverlap > OVERLAP_EPS) {
-            const reason = !parentLayout || parentLayout === 'none'
-              ? 'parent has layout:"none" — absolute x/y can stack children at the same position; switch parent to layout:"vertical"|"horizontal" with gap'
-              : `siblings overlap by ~${Math.round(xOverlap)}x${Math.round(yOverlap)} px — check gap/padding on parent`;
+            const reason =
+              !parentLayout || parentLayout === 'none'
+                ? 'parent has layout:"none" — absolute x/y can stack children at the same position; switch parent to layout:"vertical"|"horizontal" with gap'
+                : `siblings overlap by ~${Math.round(xOverlap)}x${Math.round(yOverlap)} px — check gap/padding on parent`;
             overlaps.push({ parentId, a: a.id, b: b.id, reason });
           }
         }
@@ -455,13 +456,7 @@ export class AgentToolExecutor {
         };
         if ('children' in node && node.children?.length && depth < maxDepth) {
           const childLayout = (node as { layout?: string }).layout;
-          entry.children = buildLayout(
-            node.children,
-            maxDepth,
-            node.id,
-            childLayout,
-            depth + 1,
-          );
+          entry.children = buildLayout(node.children, maxDepth, node.id, childLayout, depth + 1);
         }
         return entry;
       });
