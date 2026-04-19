@@ -40,6 +40,8 @@ const ELEMENT_TOOL_NAMES = [
   'add_body_text_v0',
   'add_icon_label_v0',
   'add_list_row_v0',
+  'add_search_bar_v0',
+  'add_form_field_v0',
 ];
 
 describe('element tools — v0-MUST contract', () => {

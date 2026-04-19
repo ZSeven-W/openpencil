@@ -63,7 +63,12 @@ Composition:
 16. Icon + text inline pair (menu items, breadcrumbs, status indicators) → `add_icon_label_v0`
 17. iOS/Material list row (leading icon + title/subtitle stack + trailing icon) → `add_list_row_v0`
 
-18. None match → fall through to `batch_design`
+Forms:
+
+18. Search bar (height=44, cornerRadius=22, leading search icon) → `add_search_bar_v0`
+19. Form field (label + 48px input with optional affordance icons) → `add_form_field_v0`
+
+20. None match → fall through to `batch_design`
 
 **Disambiguation**: if you need a ROW of 3 metrics that should NOT scroll (e.g. a stats strip inside a card), use `add_stat_grid_v0`, NOT `add_metric_row_v0`. The grid uses `fill_container` per cell so it never overflows; the metric row uses fixed-px cells + scroll wrapper.
 
@@ -88,6 +93,8 @@ PREFER an element tool when the spec says any of:
 - "body paragraph", "description text", "intro copy" (包含 CJK 时尤其推荐) → `add_body_text_v0`
 - "icon with label", "menu item (inline)", "breadcrumb segment", "status indicator text" → `add_icon_label_v0`
 - "settings row", "list item", "iOS list cell", "table row with chevron" → `add_list_row_v0`
+- "search bar", "search input", "filter search", "搜索栏" → `add_search_bar_v0`
+- "form field", "email input", "password field", "labeled input", "required field" → `add_form_field_v0`
 
 STILL use batch_design when:
 
@@ -188,6 +195,22 @@ add_list_row_v0({
   leading_icon: "bell",
   trailing_icon: "chevron-right",
 })
+
+add_search_bar_v0({ placeholder: "Search workouts..." })
+
+add_form_field_v0({
+  label: "Email",
+  placeholder: "you@example.com",
+  leading_icon: "mail",
+  required: true,
+})
+add_form_field_v0({
+  label: "Password",
+  placeholder: "Enter password",
+  leading_icon: "lock",
+  trailing_icon: "eye",
+  required: true,
+})
 ```
 
 ## Composition pattern
@@ -206,7 +229,7 @@ The tool guarantees — you cannot break them from the input side:
 - `bottom-tab-bar` is inline (no empty spacer sibling needed, do NOT add one)
 - Activity ring is frame+cornerRadius=size/2+stroke+centered text — NEVER emit ellipse+sibling text for rings
 - Every emitted node has a unique id (you can reference it later)
-- Roles are set (`card` / `metric-tile` / `nav-chip` / `nav-chip-active` / `bottom-tab-bar` / `nav-item` / `nav-item-active` / `activity-ring` / `stat-grid` / `stat-cell` / `section-header` / `section-header-title` / `section-header-action` / `top-nav-bar` / `nav-spacer` / `icon-button` / `divider` / `badge` / `avatar` / `button` / `heading` / `body` / `label` / `icon-label` / `list-row` / `list-row-text`)
+- Roles are set (`card` / `metric-tile` / `nav-chip` / `nav-chip-active` / `bottom-tab-bar` / `nav-item` / `nav-item-active` / `activity-ring` / `stat-grid` / `stat-cell` / `section-header` / `section-header-title` / `section-header-action` / `top-nav-bar` / `nav-spacer` / `icon-button` / `divider` / `badge` / `avatar` / `button` / `heading` / `body` / `label` / `icon-label` / `list-row` / `list-row-text` / `search-bar` / `form-field` / `form-input`)
 
 ## Failure mode
 
