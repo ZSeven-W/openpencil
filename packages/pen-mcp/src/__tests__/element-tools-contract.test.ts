@@ -32,6 +32,9 @@ const ELEMENT_TOOL_NAMES = [
   'add_section_header_v0',
   'add_top_nav_bar_v0',
   'add_icon_button_v0',
+  'add_divider_v0',
+  'add_badge_v0',
+  'add_avatar_v0',
 ];
 
 describe('element tools — v0-MUST contract', () => {
