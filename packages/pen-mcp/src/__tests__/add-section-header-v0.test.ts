@@ -45,23 +45,29 @@ describe('add_section_header_v0', () => {
     expect(def?.inputSchema.required).toEqual(['title']);
   });
 
-  it('title-only: horizontal + space_between + 1 child (the title)', async () => {
+  it('title-only: title uses fill_container (overlap-safe), NOT justifyContent:space_between', async () => {
     const fp = await fresh('a.op');
     await handleAddSectionHeaderV0({ filePath: fp, title: 'Recent Activity' });
     const header = getRoot(await readDoc(fp));
     expect(header.role).toBe('section-header');
     expect(header.width).toBe('fill_container');
     expect(header.layout).toBe('horizontal');
-    expect(header.justifyContent).toBe('space_between');
     expect(header.alignItems).toBe('center');
+    expect(header.gap).toBe(16);
+    // Must NOT use space_between — that causes overlap when title is long
+    // and both children are at natural (fit_content) width.
+    expect(header.justifyContent).toBeUndefined();
     const kids = header.children as Record<string, unknown>[];
     expect(kids.length).toBe(1);
     expect(kids[0].type).toBe('text');
     expect(kids[0].content).toBe('Recent Activity');
     expect(kids[0].role).toBe('heading');
+    // Title fills remaining width + wraps instead of overflowing horizontally
+    expect(kids[0].width).toBe('fill_container');
+    expect(kids[0].textGrowth).toBe('fixed-width');
   });
 
-  it('with action: title + action group (label + icon)', async () => {
+  it('with action: title + action group (label + icon); title fill_container prevents overlap', async () => {
     const fp = await fresh('a.op');
     await handleAddSectionHeaderV0({
       filePath: fp,
@@ -71,14 +77,38 @@ describe('add_section_header_v0', () => {
     const header = getRoot(await readDoc(fp));
     const kids = header.children as Record<string, unknown>[];
     expect(kids.length).toBe(2);
+    // Title: fill_container + fixed-width — cannot overlap action
     expect(kids[0].content).toBe('Workouts');
+    expect(kids[0].width).toBe('fill_container');
+    expect(kids[0].textGrowth).toBe('fixed-width');
+    // Action: fit_content on its own — always sits flush right
     const action = kids[1];
     expect(action.role).toBe('section-header-action');
     expect(action.layout).toBe('horizontal');
+    expect(action.width).toBe('fit_content');
     const actionKids = action.children as Record<string, unknown>[];
     expect(actionKids.length).toBe(2);
     expect(actionKids[0].content).toBe('See all');
     expect(actionKids[1].iconFontName).toBe('arrow-right');
+  });
+
+  it('long title + short action: title wraps, does NOT overlap action (regression for Codex #9)', async () => {
+    const fp = await fresh('a.op');
+    await handleAddSectionHeaderV0({
+      filePath: fp,
+      title: 'A Very Long Section Header Title That Would Otherwise Overflow',
+      action: { label: 'See all' },
+    });
+    const header = getRoot(await readDoc(fp));
+    const kids = header.children as Record<string, unknown>[];
+    // The no-overlap invariant: title is fill_container + fixed-width so it
+    // wraps vertically; action is fit_content so it always occupies just its
+    // natural width on the right. space_between is intentionally absent.
+    expect(kids[0].width).toBe('fill_container');
+    expect(kids[0].textGrowth).toBe('fixed-width');
+    expect(kids[1].width).toBe('fit_content');
+    expect(header.justifyContent).toBeUndefined();
+    expect(header.gap).toBe(16);
   });
 
   it('action without icon emits label-only', async () => {

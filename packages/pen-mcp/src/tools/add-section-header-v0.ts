@@ -34,6 +34,14 @@ export async function handleAddSectionHeaderV0(
   params: AddSectionHeaderV0Params,
 ): Promise<Awaited<ReturnType<typeof handleBatchDesign>>> {
   await ensureParentExists(params);
+  // CRITICAL no-overlap invariant: title uses `fill_container` + fixed-width
+  // text growth so a long title cannot push past the action and overlap it.
+  // The old implementation used justifyContent:space_between with both
+  // children at natural width — which overflows when title is long enough.
+  // Now title takes all remaining width (after action + gap); action stays
+  // fit_content at its natural width on the right. Long titles wrap
+  // vertically (height is still fit_content on the header) instead of
+  // invading the action's horizontal space.
   const children: Record<string, unknown>[] = [
     {
       type: 'text',
@@ -42,6 +50,8 @@ export async function handleAddSectionHeaderV0(
       content: params.title,
       fontSize: 20,
       fontWeight: 700,
+      width: 'fill_container',
+      textGrowth: 'fixed-width',
     },
   ];
   if (params.action) {
@@ -54,8 +64,8 @@ export async function handleAddSectionHeaderV0(
     width: 'fill_container',
     height: 'fit_content',
     layout: 'horizontal',
-    justifyContent: 'space_between',
     alignItems: 'center',
+    gap: 16, // guaranteed breathing room between title and action
     children,
   };
   assignIdsRecursively(header);
