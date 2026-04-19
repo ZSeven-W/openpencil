@@ -14,8 +14,13 @@
  *     route through handleBatchDesign → saveDocument)
  */
 
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { writeFile, unlink, readFile, mkdir } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { DESIGN_TOOL_DEFINITIONS } from '../routes/design-routes';
+import { handleAddBottomNavV0 } from '../tools/add-bottom-nav-v0';
+import { invalidateCache } from '../document-manager';
 
 const ELEMENT_TOOL_NAMES = [
   'add_card_row_v0',
@@ -88,5 +93,63 @@ describe('element tools — v0-MUST contract', () => {
       expect(props?.children_type, `${name} must NOT have children_type`).toBeUndefined();
       expect(props?.variant, `${name} must NOT have variant union`).toBeUndefined();
     }
+  });
+});
+
+// Regression test for the post-insert verification path in
+// insertElementTree. Triggered when parent_id contains characters that
+// batch_design's resolveRef (`/^"|"$/g` quote-strip, no JSON-unescape)
+// cannot round-trip with JSON.stringify → literal mismatch → silent
+// insertNodeInTree no-op. ensureParentExists happily passes because it
+// uses the raw string for direct equality on the pre-insert tree.
+describe('element tools — silent no-op guards (P0.1 + post-insert check)', () => {
+  const TMP = join(tmpdir(), 'openpencil-element-silent-noop');
+  beforeEach(async () => {
+    await mkdir(TMP, { recursive: true });
+  });
+  afterEach(async () => {
+    for (const f of ['quoted-parent.op']) {
+      try {
+        const fp = join(TMP, f);
+        invalidateCache(fp);
+        await unlink(fp);
+      } catch {}
+    }
+  });
+
+  it('throws (not silent success) when parent_id contains a literal quote', async () => {
+    const fp = join(TMP, 'quoted-parent.op');
+    // Manually construct a document whose parent frame has a quote in
+    // its id. nanoid never produces such an id, but imported / migrated
+    // documents could; we must not silently fail.
+    await writeFile(
+      fp,
+      JSON.stringify({
+        version: '1.0.0',
+        children: [
+          {
+            id: 'weird"id',
+            type: 'frame',
+            name: 'Parent',
+            width: 1200,
+            height: 0,
+            layout: 'vertical',
+            children: [],
+          },
+        ],
+      }),
+      'utf-8',
+    );
+    const before = await readFile(fp, 'utf-8');
+    await expect(
+      handleAddBottomNavV0({
+        filePath: fp,
+        parent_id: 'weird"id',
+        items: [{ title: 'Home', icon: 'home' }],
+      }),
+    ).rejects.toThrow(/silently failed|not present in the document/);
+    // File must remain unchanged (no orphan tree written)
+    const after = await readFile(fp, 'utf-8');
+    expect(after).toBe(before);
   });
 });
