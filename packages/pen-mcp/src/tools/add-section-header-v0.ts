@@ -34,24 +34,42 @@ export async function handleAddSectionHeaderV0(
   params: AddSectionHeaderV0Params,
 ): Promise<Awaited<ReturnType<typeof handleBatchDesign>>> {
   await ensureParentExists(params);
-  // CRITICAL no-overlap invariant: title uses `fill_container` + fixed-width
-  // text growth so a long title cannot push past the action and overlap it.
-  // The old implementation used justifyContent:space_between with both
-  // children at natural width — which overflows when title is long enough.
-  // Now title takes all remaining width (after action + gap); action stays
-  // fit_content at its natural width on the right. Long titles wrap
-  // vertically (height is still fit_content on the header) instead of
-  // invading the action's horizontal space.
+  // CRITICAL no-overlap invariants:
+  //   1. Title CAN NOT horizontally overflow the action — solved by putting
+  //      the title inside a fill_container sibling that absorbs all
+  //      remaining horizontal space; action stays fit_content on the right.
+  //   2. Title wrap height MUST propagate to the header's fit_content
+  //      height so the NEXT sibling in the parent vertical layout gets
+  //      pushed down by the wrapped title. Per
+  //      packages/pen-ai-skills/skills/phases/generation/overflow.md:
+  //        "Text in VERTICAL layout: width=fill_container + textGrowth=
+  //         fixed-width. In horizontal: width=fit_content."
+  //      If we put fill_container+fixed-width text directly inside a
+  //      HORIZONTAL parent the layout engine does not compute wrap height
+  //      correctly, so header.height:fit_content stays at 1-line height
+  //      and following content overlaps the wrapped lines. Fix: wrap the
+  //      title in a vertical container so the documented rule applies
+  //      and wrap height is measured correctly.
   const children: Record<string, unknown>[] = [
     {
-      type: 'text',
-      name: 'Title',
-      role: 'heading',
-      content: params.title,
-      fontSize: 20,
-      fontWeight: 700,
+      type: 'frame',
+      name: 'Title Container',
+      role: 'section-header-title',
       width: 'fill_container',
-      textGrowth: 'fixed-width',
+      height: 'fit_content',
+      layout: 'vertical',
+      children: [
+        {
+          type: 'text',
+          name: 'Title',
+          role: 'heading',
+          content: params.title,
+          fontSize: 20,
+          fontWeight: 700,
+          width: 'fill_container',
+          textGrowth: 'fixed-width',
+        },
+      ],
     },
   ];
   if (params.action) {
