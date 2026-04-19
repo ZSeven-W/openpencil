@@ -45,7 +45,7 @@ describe('add_tabs_v0', () => {
     expect(def?.inputSchema.required).toEqual(['items']);
   });
 
-  it('3 tabs, active gets bottom stroke + fontWeight 600', async () => {
+  it('3 tabs, active gets sibling underline rect + fontWeight 600', async () => {
     const fp = await fresh('a.op');
     await handleAddTabsV0({
       filePath: fp,
@@ -60,20 +60,36 @@ describe('add_tabs_v0', () => {
     expect(tabs[0].role).toBe('tab-active');
     expect(tabs[1].role).toBe('tab');
     expect(tabs[2].role).toBe('tab');
-    // active tab has directional bottom stroke
-    const activeStroke = tabs[0].stroke as Record<string, unknown>;
-    expect((activeStroke.thickness as Record<string, unknown>).bottom).toBe(2);
-    // non-active tab has no stroke
-    expect(tabs[1].stroke).toBeUndefined();
-    // active label weight 600
-    const activeLabel = (tabs[0].children as Record<string, unknown>[])[0];
+    // tabs never use directional-object stroke (unsupported by renderer)
+    for (const tab of tabs) {
+      if (tab.stroke !== undefined) {
+        const strokeObj = tab.stroke as Record<string, unknown>;
+        expect(typeof strokeObj.thickness === 'number' || Array.isArray(strokeObj.thickness)).toBe(
+          true,
+        );
+      }
+    }
+    // active tab: 2 children (inner + underline rect)
+    const activeChildren = tabs[0].children as Record<string, unknown>[];
+    expect(activeChildren.length).toBe(2);
+    const underline = activeChildren[1];
+    expect(underline.type).toBe('rectangle');
+    expect(underline.role).toBe('tab-underline');
+    expect(underline.width).toBe('fill_container');
+    expect(underline.height).toBe(2);
+    // inactive tab: 1 child (inner only)
+    const inactiveChildren = tabs[1].children as Record<string, unknown>[];
+    expect(inactiveChildren.length).toBe(1);
+    // active label weight 600 (reached via inner wrapper)
+    const activeInner = activeChildren[0] as Record<string, unknown>;
+    const activeLabel = (activeInner.children as Record<string, unknown>[])[0];
     expect(activeLabel.fontWeight).toBe(600);
-    // non-active label weight 500
-    const inactiveLabel = (tabs[1].children as Record<string, unknown>[])[0];
+    const inactiveInner = inactiveChildren[0] as Record<string, unknown>;
+    const inactiveLabel = (inactiveInner.children as Record<string, unknown>[])[0];
     expect(inactiveLabel.fontWeight).toBe(500);
   });
 
-  it('all tabs inactive: none get stroke', async () => {
+  it('all tabs inactive: no underline rects anywhere', async () => {
     const fp = await fresh('a.op');
     await handleAddTabsV0({
       filePath: fp,
@@ -82,11 +98,13 @@ describe('add_tabs_v0', () => {
     const tabs = getRoot(await readDoc(fp)).children as Record<string, unknown>[];
     for (const tab of tabs) {
       expect(tab.role).toBe('tab');
-      expect(tab.stroke).toBeUndefined();
+      const kids = tab.children as Record<string, unknown>[];
+      expect(kids.length).toBe(1);
+      expect(kids[0].type).toBe('frame'); // inner only, no underline rect
     }
   });
 
-  it('every tab + label has unique id', async () => {
+  it('every tab + inner + label + underline has unique id', async () => {
     const fp = await fresh('a.op');
     await handleAddTabsV0({
       filePath: fp,
@@ -101,8 +119,8 @@ describe('add_tabs_v0', () => {
         );
     }
     walk(getRoot(await readDoc(fp)));
-    // bar + 2 tabs + 2 labels = 5
-    expect(ids.length).toBe(5);
+    // bar + (tab_A + inner_A + label_A + underline_A) + (tab_B + inner_B + label_B) = 8
+    expect(ids.length).toBe(8);
     expect(new Set(ids).size).toBe(ids.length);
   });
 
