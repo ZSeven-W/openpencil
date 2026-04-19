@@ -138,4 +138,15 @@ describe('add_bottom_nav_v0 — structure', () => {
     // 1 bar + 2 tabs + 2 * 2 kids = 7
     expect(ids.length).toBe(7);
   });
+
+  it('throws when parent_id refers to non-existent node (no silent no-op)', async () => {
+    const fp = await fresh('nav.op');
+    await expect(
+      handleAddBottomNavV0({
+        filePath: fp,
+        items: [{ title: 'Home', icon: 'home' }],
+        parent_id: 'bogus-parent',
+      }),
+    ).rejects.toThrow(/parent_id.*not found/);
+  });
 });

@@ -352,6 +352,61 @@ describe('add_scroll_row_v0 — persistence', () => {
   });
 });
 
+describe('add_scroll_row_v0 — parent_id validation (fail-fast, no silent no-op)', () => {
+  it('throws when parent_id refers to non-existent node', async () => {
+    const fp = await fresh('cards.op');
+    await expect(
+      handleAddScrollRowV0({
+        filePath: fp,
+        children_type: 'card',
+        items: [{ title: 'A' }],
+        parent_id: 'bogus-id-does-not-exist',
+      }),
+    ).rejects.toThrow(/parent_id.*not found/);
+  });
+
+  it('inserts under a valid parent_id', async () => {
+    const fp = await fresh('cards.op');
+    // Seed with a container node first
+    const { writeFile: wf } = await import('node:fs/promises');
+    await wf(
+      fp,
+      JSON.stringify({
+        version: '1.0.0',
+        children: [
+          {
+            id: 'container-1',
+            type: 'frame',
+            name: 'Container',
+            width: 1200,
+            height: 0,
+            layout: 'vertical',
+            children: [],
+          },
+        ],
+      }),
+      'utf-8',
+    );
+    invalidateCache(fp);
+    const result = await handleAddScrollRowV0({
+      filePath: fp,
+      children_type: 'card',
+      items: [{ title: 'A' }, { title: 'B' }],
+      parent_id: 'container-1',
+    });
+    expect(result.results).toHaveLength(1);
+    // Read back and verify wrapper was inserted under container-1
+    const doc = await readDoc(fp);
+    const pages = doc['pages'] as Array<{ children?: Record<string, unknown>[] }> | undefined;
+    const topLevel = doc['children'] as Record<string, unknown>[] | undefined;
+    const topChildren = topLevel ?? pages?.[0]?.children ?? [];
+    const container = topChildren[0];
+    expect(container.id).toBe('container-1');
+    const wrapper = (container.children as Record<string, unknown>[])[0];
+    expect(wrapper.role).toBe('scroll-row-wrapper');
+  });
+});
+
 describe('add_scroll_row_v0 — snapshot golden output', () => {
   it('golden: 3 cards with title+subtitle+icon', async () => {
     const fp = await fresh('cards.op');

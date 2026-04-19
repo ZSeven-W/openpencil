@@ -1,5 +1,6 @@
 import { handleBatchDesign } from './batch-design';
 import { generateId } from '../utils/id';
+import { ensureParentExists } from './element-tool-helpers';
 
 export interface AddActivityRingV0Params {
   size?: number;
@@ -36,6 +37,7 @@ export interface AddActivityRingV0Params {
 export async function handleAddActivityRingV0(
   params: AddActivityRingV0Params,
 ): Promise<Awaited<ReturnType<typeof handleBatchDesign>>> {
+  await ensureParentExists(params);
   const size = params.size ?? 80;
   const thickness = params.thickness ?? 8;
   const ringColor = params.ring_color ?? '#000000';
