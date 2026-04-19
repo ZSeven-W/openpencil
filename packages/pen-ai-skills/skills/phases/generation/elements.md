@@ -2,11 +2,28 @@
 name: elements
 description: N-tool element family reference — when and how to call add_card_row_v0 / add_metric_row_v0 / add_nav_chip_row_v0 / add_bottom_nav_v0 / add_activity_ring_v0 instead of hand-building via batch_design
 phase: [generation]
-trigger: null
+trigger:
+  flags: [hasMcpTools]
 priority: 14
 budget: 1500
 category: base
 ---
+
+<!--
+  IMPORTANT: This skill is gated by the `hasMcpTools` flag. It only
+  auto-loads into the generation-phase prompt when the caller declares
+  the AI has live access to MCP element tools (external clients:
+  Claude Code / Codex / Gemini CLI / Cursor). The embedded orchestrator
+  in apps/web emits single-shot JSON and cannot call MCP tools — this
+  skill would be 1500 tokens of dead weight there, so it stays excluded.
+
+  External MCP clients still retrieve the content explicitly via
+  get_design_prompt(section='elements'), which bypasses resolveSkills'
+  trigger filter (uses getSkillByName for direct lookup).
+
+  To opt-in auto-loading from a new caller: pass `{ flags: { hasMcpTools: true } }`
+  to resolveSkills('generation', prompt, opts).
+-->
 
 ELEMENT TOOLS (schema-constrained alternatives to batch_design):
 
