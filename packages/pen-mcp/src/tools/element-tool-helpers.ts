@@ -1,5 +1,7 @@
 import { openDocument, resolveDocPath } from '../document-manager';
 import { findNodeInTree, getDocChildren } from '../utils/node-operations';
+import { generateId } from '../utils/id';
+import { handleBatchDesign } from './batch-design';
 
 /**
  * Validate that `parent_id` refers to an existing node before passing it to
@@ -29,4 +31,83 @@ export async function ensureParentExists(params: {
       }. Pass a valid parent node id or omit parent_id for root-level insertion.`,
     );
   }
+}
+
+/**
+ * Walk a node subtree and stamp every node with a fresh id. batch_design's
+ * downstream DSL only assigns an id to the TOP-level inserted node —
+ * nested children arrive unchanged, leaving them unreferenceable by any
+ * later tree operation.
+ */
+export function assignIdsRecursively(node: Record<string, unknown>): void {
+  if (typeof node.id !== 'string') node.id = generateId();
+  const children = node.children;
+  if (Array.isArray(children)) {
+    for (const child of children) {
+      if (child && typeof child === 'object') {
+        assignIdsRecursively(child as Record<string, unknown>);
+      }
+    }
+  }
+}
+
+/**
+ * Build the canonical scroll-row wrapper taught in
+ * `packages/pen-ai-skills/skills/phases/generation/overflow.md` §HORIZONTAL
+ * SCROLL ROWS: outer wrapper (fill_container + clipContent + vertical) >
+ * inner row (fit_content + horizontal + gap + padding=[0,20]) > children.
+ *
+ * Shared by all three narrow row tools (add_card_row_v0 /
+ * add_metric_row_v0 / add_nav_chip_row_v0). Each tool only differs in the
+ * per-item node builder; the wrapper is identical.
+ */
+export function buildScrollWrapper(opts: {
+  rowName: string;
+  innerChildren: Record<string, unknown>[];
+  gap: number;
+}): Record<string, unknown> {
+  return {
+    type: 'frame',
+    name: opts.rowName,
+    role: 'scroll-row-wrapper',
+    width: 'fill_container',
+    height: 'fit_content',
+    layout: 'vertical',
+    clipContent: true,
+    children: [
+      {
+        type: 'frame',
+        name: 'Scroll Inner Row',
+        role: 'scroll-row',
+        width: 'fit_content',
+        height: 'fit_content',
+        layout: 'horizontal',
+        gap: opts.gap,
+        padding: [0, 20],
+        children: opts.innerChildren,
+      },
+    ],
+  };
+}
+
+/**
+ * Insert a fully-built node subtree via handleBatchDesign's single-insert
+ * DSL. Centralizes the parent_ref serialization + batch_design call
+ * shape used by every element tool.
+ */
+export async function insertElementTree(args: {
+  binding: string;
+  tree: Record<string, unknown>;
+  parent_id?: string;
+  filePath?: string;
+  pageId?: string;
+}): Promise<Awaited<ReturnType<typeof handleBatchDesign>>> {
+  const parentRef = args.parent_id ? `"${args.parent_id}"` : 'null';
+  const dsl = `${args.binding}=I(${parentRef}, ${JSON.stringify(args.tree)})`;
+  return handleBatchDesign({
+    operations: dsl,
+    filePath: args.filePath,
+    pageId: args.pageId,
+    postProcess: false,
+  });
 }
