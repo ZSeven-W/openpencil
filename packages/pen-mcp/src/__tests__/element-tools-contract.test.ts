@@ -48,6 +48,12 @@ const ELEMENT_TOOL_NAMES = [
   'add_tabs_v0',
   'add_segmented_control_v0',
   'add_empty_state_v0',
+  'add_alert_v0',
+  'add_toast_v0',
+  'add_progress_bar_v0',
+  'add_fab_v0',
+  'add_breadcrumb_v0',
+  'add_stepper_v0',
 ];
 
 describe('element tools — v0-MUST contract', () => {
