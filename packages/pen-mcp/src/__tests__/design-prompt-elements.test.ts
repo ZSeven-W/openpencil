@@ -10,6 +10,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
+import { getSkillByName, resolveSkills } from '@zseven-w/pen-ai-skills';
 import { buildDesignPrompt, listPromptSections } from '../tools/design-prompt';
 import { DESIGN_TOOL_DEFINITIONS } from '../routes/design-routes';
 
@@ -80,5 +81,38 @@ describe('get_design_prompt — elements section', () => {
     const unknown = buildDesignPrompt('does-not-exist');
     const full = buildDesignPrompt();
     expect(unknown).toBe(full);
+  });
+});
+
+describe('elements skill — flag-gated auto-loading (no prompt pollution)', () => {
+  it('getSkillByName("elements") returns the skill regardless of flags (direct lookup)', () => {
+    const skill = getSkillByName('elements');
+    expect(skill).toBeDefined();
+    expect(skill?.meta.name).toBe('elements');
+    // Trigger is a flag gate, not unconditional loading
+    expect(skill?.meta.trigger).toEqual({ flags: ['hasMcpTools'] });
+  });
+
+  it('resolveSkills("generation") WITHOUT hasMcpTools flag → elements NOT auto-included', () => {
+    const ctx = resolveSkills('generation', 'create a dashboard', { flags: {} });
+    const names = ctx.skills.map((s) => s.meta.name);
+    expect(names).not.toContain('elements');
+  });
+
+  it('resolveSkills("generation") WITH hasMcpTools flag → elements IS auto-included', () => {
+    const ctx = resolveSkills('generation', 'create a dashboard', {
+      flags: { hasMcpTools: true },
+    });
+    const names = ctx.skills.map((s) => s.meta.name);
+    expect(names).toContain('elements');
+  });
+
+  it('buildDesignPrompt("elements") returns content regardless of flags (uses direct lookup, not resolver)', () => {
+    // get_design_prompt's section path bypasses resolveSkills — it uses
+    // getSkillByName directly. So the flag gate doesn't affect this path:
+    // external MCP clients asking for the section explicitly still get it.
+    const content = buildDesignPrompt('elements');
+    expect(content.length).toBeGreaterThan(500);
+    expect(content).toContain('add_card_row_v0');
   });
 });
