@@ -28,6 +28,12 @@ import { handleAddRadioV0 } from '../tools/add-radio-v0';
 import { handleAddTabsV0 } from '../tools/add-tabs-v0';
 import { handleAddSegmentedControlV0 } from '../tools/add-segmented-control-v0';
 import { handleAddEmptyStateV0 } from '../tools/add-empty-state-v0';
+import { handleAddAlertV0 } from '../tools/add-alert-v0';
+import { handleAddToastV0 } from '../tools/add-toast-v0';
+import { handleAddProgressBarV0 } from '../tools/add-progress-bar-v0';
+import { handleAddFabV0 } from '../tools/add-fab-v0';
+import { handleAddBreadcrumbV0 } from '../tools/add-breadcrumb-v0';
+import { handleAddStepperV0 } from '../tools/add-stepper-v0';
 import { ELEMENT_TOOL_DEFINITIONS_EXT } from './element-tool-defs-ext';
 
 export const ELEMENT_TOOL_DEFINITIONS = [
@@ -766,6 +772,18 @@ export async function handleElementToolCall(name: string, a: any): Promise<strin
       return JSON.stringify(await handleAddSegmentedControlV0(a), null, 2);
     case 'add_empty_state_v0':
       return JSON.stringify(await handleAddEmptyStateV0(a), null, 2);
+    case 'add_alert_v0':
+      return JSON.stringify(await handleAddAlertV0(a), null, 2);
+    case 'add_toast_v0':
+      return JSON.stringify(await handleAddToastV0(a), null, 2);
+    case 'add_progress_bar_v0':
+      return JSON.stringify(await handleAddProgressBarV0(a), null, 2);
+    case 'add_fab_v0':
+      return JSON.stringify(await handleAddFabV0(a), null, 2);
+    case 'add_breadcrumb_v0':
+      return JSON.stringify(await handleAddBreadcrumbV0(a), null, 2);
+    case 'add_stepper_v0':
+      return JSON.stringify(await handleAddStepperV0(a), null, 2);
     default:
       return '';
   }

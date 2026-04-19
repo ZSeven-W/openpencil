@@ -154,6 +154,146 @@ export const ELEMENT_TOOL_DEFINITIONS_EXT = [
     },
   },
   {
+    name: 'add_alert_v0',
+    description:
+      'Inline alert/callout banner. One-row layout: [icon?] + message + [close-x when dismissible]. ' +
+      'width=fill_container, cornerRadius=8. Semantic color (info/success/warning/error) applied by ' +
+      'caller via follow-up batch_design U-op. Use for "banner", "callout", "notification bar", ' +
+      '"告知条". schemaVersion 1.0',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        schemaVersion: schemaVersionProp,
+        filePath: filePathProp,
+        message: { type: 'string', description: 'Alert body text' },
+        icon: { type: 'string', description: 'Optional 20×20 lucide icon name' },
+        dismissible: {
+          type: 'boolean',
+          description: 'If true, appends a trailing close (x) icon (default false)',
+        },
+        parent_id: parentIdProp,
+        pageId: pageIdProp,
+      },
+      required: ['message'],
+    },
+  },
+  {
+    name: 'add_toast_v0',
+    description:
+      'Floating pill-shaped notification. Dark fill, cornerRadius=24, width=fit_content so it ' +
+      'does not stretch across the canvas. Caller positions at bottom/top of screen via parent_id. ' +
+      'Use for "toast", "snackbar", "popup notification", "轻提示". schemaVersion 1.0',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        schemaVersion: schemaVersionProp,
+        filePath: filePathProp,
+        message: { type: 'string', description: 'Toast body text' },
+        icon: { type: 'string', description: 'Optional 18×18 lucide icon name' },
+        parent_id: parentIdProp,
+        pageId: pageIdProp,
+      },
+      required: ['message'],
+    },
+  },
+  {
+    name: 'add_progress_bar_v0',
+    description:
+      'Linear progress bar. Fixed-pixel bar_width (default 240) so the fill can be computed as a ' +
+      'deterministic sub-width (value/100 × bar_width) — pen-core has no percent/flex-basis sizing. ' +
+      'value clamped 0-100. Use for "progress bar", "loading bar", "线性进度条". schemaVersion 1.0',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        schemaVersion: schemaVersionProp,
+        filePath: filePathProp,
+        value: {
+          type: 'number',
+          description: 'Progress percentage 0-100 (default 50, clamped)',
+        },
+        bar_width: {
+          type: 'number',
+          description: 'Total track width in pixels (default 240)',
+        },
+        parent_id: parentIdProp,
+        pageId: pageIdProp,
+      },
+      required: [],
+    },
+  },
+  {
+    name: 'add_fab_v0',
+    description:
+      'Floating action button — circular 56×56 (Material FAB default) with centered icon at 43% of ' +
+      'the button size. Caller handles positioning (pen-core has no reliable absolute positioning). ' +
+      'Use for "FAB", "floating action button", "新建按钮", "compose button". schemaVersion 1.0',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        schemaVersion: schemaVersionProp,
+        filePath: filePathProp,
+        icon: { type: 'string', description: 'lucide icon name for the FAB' },
+        size: { type: 'number', description: 'Button diameter in pixels (default 56)' },
+        parent_id: parentIdProp,
+        pageId: pageIdProp,
+      },
+      required: ['icon'],
+    },
+  },
+  {
+    name: 'add_breadcrumb_v0',
+    description:
+      'Breadcrumb trail: interleaves item text with chevron-right separators (e.g. Home › Settings › ' +
+      'Billing). The last item (or any item marked active=true) gets fontWeight=600 + active role. ' +
+      'Use for "breadcrumb", "nav path", "面包屑". schemaVersion 1.0',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        schemaVersion: schemaVersionProp,
+        filePath: filePathProp,
+        items: {
+          type: 'array',
+          description: 'Crumb items. Each needs label; mark the current crumb active=true.',
+          items: {
+            type: 'object',
+            properties: {
+              label: { type: 'string' },
+              active: { type: 'boolean' },
+            },
+            required: ['label'],
+          },
+        },
+        parent_id: parentIdProp,
+        pageId: pageIdProp,
+      },
+      required: ['items'],
+    },
+  },
+  {
+    name: 'add_stepper_v0',
+    description:
+      'Horizontal numbered stepper: (1)───(2)───(3). Circles are 24×24 with step index (1-based ' +
+      'display). Connectors use rectangle(fill_container, h=2) so they fill space between adjacent ' +
+      'circles (pen-core splits fill_container siblings equally). Done circles + connectors through ' +
+      'current use primary fill; rest gray. Use for "stepper", "progress steps", "wizard nav", ' +
+      '"步骤条". schemaVersion 1.0',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        schemaVersion: schemaVersionProp,
+        filePath: filePathProp,
+        total: { type: 'number', description: 'Total step count (>= 1)' },
+        current: {
+          type: 'number',
+          description: '0-indexed current step (default 0, clamped to 0..total-1)',
+        },
+        parent_id: parentIdProp,
+        pageId: pageIdProp,
+      },
+      required: ['total'],
+    },
+  },
+  {
     name: 'add_empty_state_v0',
     description:
       'Empty-state block: icon + title + optional subtitle + optional CTA button, stacked vertically ' +
