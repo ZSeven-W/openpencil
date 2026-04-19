@@ -972,7 +972,7 @@ describe('git-engine', () => {
       const aDir = join(temp.dir, 'a');
       const bDir = join(temp.dir, 'b');
 
-      await execFileAsync('git', ['init', '--bare', remoteDir]);
+      await execFileAsync('git', ['init', '--bare', '-b', 'main', remoteDir]);
       await execFileAsync('git', ['clone', remoteDir, aDir]);
       await execFileAsync('git', ['-C', aDir, 'checkout', '-b', 'main']);
       await fsp.writeFile(join(aDir, 'design.op'), '{"version":"1.0.0","children":[{"id":"r1"}]}');
@@ -1106,7 +1106,7 @@ describe('git-engine', () => {
         const remoteDir = join(temp.dir, 'remote.git');
         const cloneDir = join(temp.dir, 'clone');
 
-        await execFileAsync('git', ['init', '--bare', remoteDir]);
+        await execFileAsync('git', ['init', '--bare', '-b', 'main', remoteDir]);
         await execFileAsync('git', ['clone', remoteDir, cloneDir]);
         await execFileAsync('git', ['-C', cloneDir, 'checkout', '-b', 'main']);
         await fsp.writeFile(
@@ -1804,7 +1804,7 @@ describe('git-engine', () => {
     const aDir = join(temp.dir, 'a');
     const bDir = join(temp.dir, 'b');
 
-    await execFileAsync('git', ['init', '--bare', remoteDir]);
+    await execFileAsync('git', ['init', '--bare', '-b', 'main', remoteDir]);
     await execFileAsync('git', ['clone', remoteDir, aDir]);
     await execFileAsync('git', ['-C', aDir, 'checkout', '-b', 'main']);
     await fsp.writeFile(
