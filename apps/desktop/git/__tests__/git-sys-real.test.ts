@@ -48,7 +48,7 @@ describe('git-sys real (gated on system git)', () => {
     const cloneDir = join(temp.dir, 'clone');
 
     // Set up: bare remote, source repo with one commit, push source → remote.
-    await execFileAsync('git', ['init', '--bare', remoteDir]);
+    await execFileAsync('git', ['init', '--bare', '-b', 'main', remoteDir]);
     await fsp.mkdir(sourceDir, { recursive: true });
     await execFileAsync('git', ['init', '-b', 'main', sourceDir]);
     await fsp.writeFile(join(sourceDir, 'README.md'), '# test\n');
@@ -74,7 +74,7 @@ describe('git-sys real (gated on system git)', () => {
     const aDir = join(temp.dir, 'a');
     const bDir = join(temp.dir, 'b');
 
-    await execFileAsync('git', ['init', '--bare', remoteDir]);
+    await execFileAsync('git', ['init', '--bare', '-b', 'main', remoteDir]);
     // a: clone, commit, push
     await execFileAsync('git', ['clone', remoteDir, aDir]);
     await execFileAsync('git', ['-C', aDir, 'checkout', '-b', 'main']);
@@ -114,7 +114,7 @@ describe('git-sys real (gated on system git)', () => {
     const remoteDir = join(temp.dir, 'remote.git');
     const cloneDir = join(temp.dir, 'clone');
 
-    await execFileAsync('git', ['init', '--bare', remoteDir]);
+    await execFileAsync('git', ['init', '--bare', '-b', 'main', remoteDir]);
     await execFileAsync('git', ['clone', remoteDir, cloneDir]);
     await execFileAsync('git', ['-C', cloneDir, 'checkout', '-b', 'main']);
     await fsp.writeFile(join(cloneDir, 'a.txt'), 'a');
@@ -143,7 +143,7 @@ describe('git-sys real (gated on system git)', () => {
     const aDir = join(temp.dir, 'a');
     const bDir = join(temp.dir, 'b');
 
-    await execFileAsync('git', ['init', '--bare', remoteDir]);
+    await execFileAsync('git', ['init', '--bare', '-b', 'main', remoteDir]);
     // a: seed remote with one commit
     await execFileAsync('git', ['clone', remoteDir, aDir]);
     await execFileAsync('git', ['-C', aDir, 'checkout', '-b', 'main']);
