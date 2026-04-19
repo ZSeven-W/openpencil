@@ -58,7 +58,12 @@ Text + button primitives:
 14. Heading with enforced fontSize/lineHeight per level + AUTO CJK script detection (SC/JP/KR) → `add_heading_v0`
 15. Body text (Inter everywhere — CJK gets lineHeight 1.6 + letterSpacing 0, Latin 1.5) → `add_body_text_v0`
 
-16. None match → fall through to `batch_design`
+Composition:
+
+16. Icon + text inline pair (menu items, breadcrumbs, status indicators) → `add_icon_label_v0`
+17. iOS/Material list row (leading icon + title/subtitle stack + trailing icon) → `add_list_row_v0`
+
+18. None match → fall through to `batch_design`
 
 **Disambiguation**: if you need a ROW of 3 metrics that should NOT scroll (e.g. a stats strip inside a card), use `add_stat_grid_v0`, NOT `add_metric_row_v0`. The grid uses `fill_container` per cell so it never overflows; the metric row uses fixed-px cells + scroll wrapper.
 
@@ -81,6 +86,8 @@ PREFER an element tool when the spec says any of:
 - "primary button", "secondary button", "CTA", "submit button" (short label) → `add_text_button_v0`
 - "hero headline", "section title", "card title" / 特定字号标题 → `add_heading_v0`
 - "body paragraph", "description text", "intro copy" (包含 CJK 时尤其推荐) → `add_body_text_v0`
+- "icon with label", "menu item (inline)", "breadcrumb segment", "status indicator text" → `add_icon_label_v0`
+- "settings row", "list item", "iOS list cell", "table row with chevron" → `add_list_row_v0`
 
 STILL use batch_design when:
 
@@ -172,6 +179,15 @@ add_body_text_v0({ content: "こんにちは、これは本文です。" })  // 
 add_body_text_v0({ content: "안녕하세요, 이것은 본문입니다." }) // Inter + 1.6 + letterSpacing 0
 // body ALWAYS Inter per text-rules.md. Only HEADINGS dispatch to
 // Noto Sans SC/JP/KR (see add_heading_v0). Inter uses system CJK fallback.
+
+add_icon_label_v0({ icon: "info", label: "Learn more" })
+
+add_list_row_v0({
+  title: "Notifications",
+  subtitle: "Push, email, and in-app",
+  leading_icon: "bell",
+  trailing_icon: "chevron-right",
+})
 ```
 
 ## Composition pattern
@@ -190,7 +206,7 @@ The tool guarantees — you cannot break them from the input side:
 - `bottom-tab-bar` is inline (no empty spacer sibling needed, do NOT add one)
 - Activity ring is frame+cornerRadius=size/2+stroke+centered text — NEVER emit ellipse+sibling text for rings
 - Every emitted node has a unique id (you can reference it later)
-- Roles are set (`card` / `metric-tile` / `nav-chip` / `nav-chip-active` / `bottom-tab-bar` / `nav-item` / `nav-item-active` / `activity-ring` / `stat-grid` / `stat-cell` / `section-header` / `section-header-title` / `section-header-action` / `top-nav-bar` / `nav-spacer` / `icon-button` / `divider` / `badge` / `avatar` / `button` / `heading` / `body` / `label`)
+- Roles are set (`card` / `metric-tile` / `nav-chip` / `nav-chip-active` / `bottom-tab-bar` / `nav-item` / `nav-item-active` / `activity-ring` / `stat-grid` / `stat-cell` / `section-header` / `section-header-title` / `section-header-action` / `top-nav-bar` / `nav-spacer` / `icon-button` / `divider` / `badge` / `avatar` / `button` / `heading` / `body` / `label` / `icon-label` / `list-row` / `list-row-text`)
 
 ## Failure mode
 

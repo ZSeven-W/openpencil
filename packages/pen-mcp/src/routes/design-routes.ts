@@ -20,6 +20,8 @@ import { handleAddAvatarV0 } from '../tools/add-avatar-v0';
 import { handleAddTextButtonV0 } from '../tools/add-text-button-v0';
 import { handleAddHeadingV0 } from '../tools/add-heading-v0';
 import { handleAddBodyTextV0 } from '../tools/add-body-text-v0';
+import { handleAddIconLabelV0 } from '../tools/add-icon-label-v0';
+import { handleAddListRowV0 } from '../tools/add-list-row-v0';
 
 export const DESIGN_TOOL_DEFINITIONS = [
   {
@@ -629,6 +631,74 @@ export const DESIGN_TOOL_DEFINITIONS = [
       required: ['content'],
     },
   },
+  {
+    name: 'add_icon_label_v0',
+    description:
+      'Atomic icon + label pair (horizontal, alignItems=center, gap=8). Common building block ' +
+      'for menu items, breadcrumbs, status indicators, any "icon with text" inline composition. ' +
+      'Narrow schema: icons always lead; size/weight fixed (icon 16×16, text 14/500). ' +
+      'schemaVersion 1.0',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        schemaVersion: {
+          type: 'string',
+          enum: ['1.0'],
+          description: 'Schema version (v0-MUST §4.2). Clients MAY omit.',
+        },
+        filePath: { type: 'string', description: 'Path to .op file, or omit for live canvas' },
+        icon: { type: 'string', description: 'lucide icon name' },
+        label: { type: 'string', description: 'Text label' },
+        gap: { type: 'number', description: 'Gap between icon and label (default 8)' },
+        parent_id: {
+          type: 'string',
+          description: 'Target parent node id (must exist). Omit for root-level insertion.',
+        },
+        pageId: { type: 'string', description: 'Target page ID (defaults to first page)' },
+      },
+      required: ['icon', 'label'],
+    },
+  },
+  {
+    name: 'add_list_row_v0',
+    description:
+      'iOS / Material-style list row: optional leading icon + center text stack (title + ' +
+      'optional subtitle) + optional trailing icon (typically chevron-right). The middle text ' +
+      'stack is wrapped in a VERTICAL container with width=fill_container — long titles wrap ' +
+      'vertically and the row grows height-wise WITHOUT pushing the trailing icon out of frame ' +
+      '(same pattern as add_section_header_v0; per overflow.md: text with fill_container + ' +
+      'fixed-width only works inside vertical-layout parents). schemaVersion 1.0',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        schemaVersion: {
+          type: 'string',
+          enum: ['1.0'],
+          description: 'Schema version (v0-MUST §4.2). Clients MAY omit.',
+        },
+        filePath: { type: 'string', description: 'Path to .op file, or omit for live canvas' },
+        title: { type: 'string', description: 'Main row title (bold, 15/500)' },
+        subtitle: {
+          type: 'string',
+          description: 'Optional secondary text (smaller, 13/400) shown below title',
+        },
+        leading_icon: {
+          type: 'string',
+          description: 'Optional 24×24 lucide icon before the text stack',
+        },
+        trailing_icon: {
+          type: 'string',
+          description: 'Optional 16×16 lucide icon after the text stack (e.g. "chevron-right")',
+        },
+        parent_id: {
+          type: 'string',
+          description: 'Target parent node id (must exist). Omit for root-level insertion.',
+        },
+        pageId: { type: 'string', description: 'Target page ID (defaults to first page)' },
+      },
+      required: ['title'],
+    },
+  },
 ];
 
 export const DESIGN_TOOL_NAMES = new Set([
@@ -652,6 +722,8 @@ export const DESIGN_TOOL_NAMES = new Set([
   'add_text_button_v0',
   'add_heading_v0',
   'add_body_text_v0',
+  'add_icon_label_v0',
+  'add_list_row_v0',
 ]);
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -709,6 +781,10 @@ export async function handleDesignToolCall(
       return JSON.stringify(await handleAddHeadingV0(a), null, 2);
     case 'add_body_text_v0':
       return JSON.stringify(await handleAddBodyTextV0(a), null, 2);
+    case 'add_icon_label_v0':
+      return JSON.stringify(await handleAddIconLabelV0(a), null, 2);
+    case 'add_list_row_v0':
+      return JSON.stringify(await handleAddListRowV0(a), null, 2);
     default:
       return '';
   }
