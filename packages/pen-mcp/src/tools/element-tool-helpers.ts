@@ -11,6 +11,58 @@ import { generateId } from '../utils/id';
 import { handleBatchDesign } from './batch-design';
 
 /**
+ * Script detection for text content. Used by element tools (heading /
+ * body_text / future CJK-aware tools) to pick the correct
+ * `fontFamily` per the repo's CJK font contract documented in
+ * packages/pen-ai-skills/skills/phases/generation/text-rules.md:
+ *
+ *   "CJK font selection: heading='Noto Sans SC' (Chinese) /
+ *    'Noto Sans JP' (Japanese) / 'Noto Sans KR' (Korean),
+ *    body='Inter'. NEVER use 'Space Grotesk' or 'Manrope' for CJK
+ *    content — they have no CJK glyphs."
+ *
+ * Detection order matters:
+ *   1. Hiragana / Katakana present → Japanese (these scripts are unique
+ *      to Japanese even when mixed with Han ideographs)
+ *   2. Hangul syllables present → Korean
+ *   3. Any Han ideograph / CJK punctuation → Chinese (Simplified default)
+ *   4. Otherwise null (Latin / other)
+ *
+ * Mixed-script edge: text containing both hiragana and hangul resolves
+ * to Japanese (hiragana is checked first). In practice this almost never
+ * happens in a single heading / body paragraph.
+ */
+export type CjkScript = null | 'chinese' | 'japanese' | 'korean';
+
+export function detectCjkScript(s: string): CjkScript {
+  // Hiragana U+3040-309F + Katakana U+30A0-30FF → Japanese
+  if (/[\u3040-\u309f\u30a0-\u30ff]/.test(s)) return 'japanese';
+  // Hangul Syllables U+AC00-D7AF → Korean
+  if (/[\uac00-\ud7af]/.test(s)) return 'korean';
+  // CJK Symbols / Punctuation U+3000-303F + CJK Unified Ideographs U+4E00-9FFF → Chinese
+  if (/[\u3000-\u303f\u4e00-\u9fff]/.test(s)) return 'chinese';
+  return null;
+}
+
+/**
+ * Map a CJK script to its Noto Sans font family. Returns undefined for
+ * non-CJK so callers can fall back to theme default (Inter for body,
+ * theme heading for headings).
+ */
+export function cjkFontFamily(script: CjkScript): string | undefined {
+  switch (script) {
+    case 'japanese':
+      return 'Noto Sans JP';
+    case 'korean':
+      return 'Noto Sans KR';
+    case 'chinese':
+      return 'Noto Sans SC';
+    default:
+      return undefined;
+  }
+}
+
+/**
  * Simulate how batch-design.ts:resolveRef will interpret a JSON.stringify'd
  * parent_id. The parser does `raw.replace(/^"|"$/g, '')` — strip one leading
  * and one trailing `"` — and does NOT JSON-unescape. So any id containing
