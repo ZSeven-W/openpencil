@@ -33,6 +33,7 @@ export async function handleAddToastV0(
       iconFontFamily: 'lucide',
       width: 18,
       height: 18,
+      fill: [{ type: 'solid', color: '#FFFFFF' }],
     });
   }
   children.push({
@@ -42,6 +43,7 @@ export async function handleAddToastV0(
     content: params.message,
     fontSize: 14,
     fontWeight: 500,
+    fill: [{ type: 'solid', color: '#FFFFFF' }],
   });
   const toast = {
     type: 'frame',

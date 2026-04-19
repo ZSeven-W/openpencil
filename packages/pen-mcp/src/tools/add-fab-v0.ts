@@ -46,6 +46,7 @@ export async function handleAddFabV0(
         iconFontFamily: 'lucide',
         width: iconSize,
         height: iconSize,
+        fill: [{ type: 'solid', color: '#FFFFFF' }],
       },
     ],
   };
