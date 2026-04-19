@@ -3,11 +3,15 @@
 exports[`D0 parity spike — additive & gated tool registration > pre-D0 production design tool DEFINITIONS are unchanged (snapshot) > pre-d0-design-tool-definitions 1`] = `
 [
   {
-    "description": "Get design knowledge prompt. Use "section" to retrieve a focused subset instead of the full prompt. Sections: schema (PenNode types), layout (flexbox rules), roles (semantic roles), text (typography/CJK/copywriting), style (visual style policy), icons (icon names), examples (design examples), guidelines (design tips), planning (layered workflow guide), elements (N-tool element-tool family reference — decision tree, PREFER/FALLBACK rules, composition pattern; the section itself enumerates the current tools). Omit section for the full prompt.",
+    "description": "Get design knowledge prompt. Use "section" to retrieve a focused subset instead of the full prompt. Sections: schema (PenNode types), layout (flexbox rules), roles (semantic roles), text (typography/CJK/copywriting), style (visual style policy — reads the active document's design.md when present), icons (icon names), examples (design examples), guidelines (design tips), planning (layered workflow guide), elements (N-tool element-tool family reference), design-md (raw style policy derived from the active document's design.md, or a "no design.md" notice). Omit section for the full prompt.",
     "inputSchema": {
       "properties": {
+        "filePath": {
+          "description": "Path to .op file, or omit to use the live canvas. The prompt's 'style' / 'design-md' sections are derived from THIS document's design.md so the reply never leaks another file's design system.",
+          "type": "string",
+        },
         "section": {
-          "description": "Which section of design knowledge to retrieve. Default: all. Use "planning" for layered generation workflow; "elements" for N-tool element tool reference.",
+          "description": "Which section of design knowledge to retrieve. Default: all. Use "planning" for layered generation workflow; "elements" for N-tool element tool reference; "design-md" for the active document's design system.",
           "enum": [
             "all",
             "schema",
@@ -20,6 +24,7 @@ exports[`D0 parity spike — additive & gated tool registration > pre-D0 product
             "guidelines",
             "planning",
             "elements",
+            "design-md",
           ],
           "type": "string",
         },
