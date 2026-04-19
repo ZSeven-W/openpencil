@@ -52,7 +52,13 @@ Atoms (1-2 node building blocks):
 11. Short inline pill / tag / "NEW" / "BETA" / count badge → `add_badge_v0`
 12. Circular avatar (with optional initial / empty for later image fill) → `add_avatar_v0`
 
-13. None match → fall through to `batch_design`
+Text + button primitives:
+
+13. Padding-based button with text (optional leading icon) → `add_text_button_v0`
+14. Heading with enforced fontSize/lineHeight per level (display/h1/h2/h3) → `add_heading_v0`
+15. Body text with AUTO CJK detection (correct fontFamily + lineHeight) → `add_body_text_v0`
+
+16. None match → fall through to `batch_design`
 
 **Disambiguation**: if you need a ROW of 3 metrics that should NOT scroll (e.g. a stats strip inside a card), use `add_stat_grid_v0`, NOT `add_metric_row_v0`. The grid uses `fill_container` per cell so it never overflows; the metric row uses fixed-px cells + scroll wrapper.
 
@@ -72,6 +78,9 @@ PREFER an element tool when the spec says any of:
 - "hairline divider", "separator", "row divider", "section separator" → `add_divider_v0`
 - "badge", "pill", "tag", "NEW label", "count bubble" (≤16 Latin / ≤8 CJK chars) → `add_badge_v0`
 - "avatar", "profile picture", "user circle", "initial bubble" → `add_avatar_v0`
+- "primary button", "secondary button", "CTA", "submit button" (short label) → `add_text_button_v0`
+- "hero headline", "section title", "card title" / 特定字号标题 → `add_heading_v0`
+- "body paragraph", "description text", "intro copy" (包含 CJK 时尤其推荐) → `add_body_text_v0`
 
 STILL use batch_design when:
 
@@ -150,6 +159,15 @@ add_badge_v0({ label: "NEW" })
 
 add_avatar_v0({ initial: "JD", size: 56 })   // with initial
 add_avatar_v0({ size: 40 })                  // empty circle (fill via batch_design image later)
+
+add_text_button_v0({ label: "Get Started" })
+add_text_button_v0({ label: "Add item", leading_icon: "plus" })
+
+add_heading_v0({ content: "Welcome back" })                   // defaults to h2 (24/600/1.2)
+add_heading_v0({ content: "Hero Headline", level: "display" }) // 48/700/1.0/-0.5
+
+add_body_text_v0({ content: "Lorem ipsum dolor sit amet…" })   // auto Inter + 1.5 lineHeight
+add_body_text_v0({ content: "你好世界，这是一段中文正文。" })  // auto Noto Sans SC + 1.6
 ```
 
 ## Composition pattern
@@ -168,7 +186,7 @@ The tool guarantees — you cannot break them from the input side:
 - `bottom-tab-bar` is inline (no empty spacer sibling needed, do NOT add one)
 - Activity ring is frame+cornerRadius=size/2+stroke+centered text — NEVER emit ellipse+sibling text for rings
 - Every emitted node has a unique id (you can reference it later)
-- Roles are set (`card` / `metric-tile` / `nav-chip` / `nav-chip-active` / `bottom-tab-bar` / `nav-item` / `nav-item-active` / `activity-ring` / `stat-grid` / `stat-cell` / `section-header` / `section-header-title` / `section-header-action` / `top-nav-bar` / `nav-spacer` / `icon-button` / `divider` / `badge` / `avatar`)
+- Roles are set (`card` / `metric-tile` / `nav-chip` / `nav-chip-active` / `bottom-tab-bar` / `nav-item` / `nav-item-active` / `activity-ring` / `stat-grid` / `stat-cell` / `section-header` / `section-header-title` / `section-header-action` / `top-nav-bar` / `nav-spacer` / `icon-button` / `divider` / `badge` / `avatar` / `button` / `heading` / `body` / `label`)
 
 ## Failure mode
 
