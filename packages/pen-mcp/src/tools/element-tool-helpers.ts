@@ -3,8 +3,8 @@ import {
   LIVE_CANVAS_PATH,
   invalidateCache,
   openDocument,
+  pushLiveDocument,
   resolveDocPath,
-  saveDocument,
 } from '../document-manager';
 import { findNodeInTree, findParentInTree, getDocChildren } from '../utils/node-operations';
 import { generateId } from '../utils/id';
@@ -177,32 +177,33 @@ export async function insertElementTree(args: {
 
   const rollback = async (reason: string): Promise<never> => {
     if (!isLive && fileSnapshot !== null) {
-      // Restore disk content first so on-disk state is correct even if
-      // the subsequent live-canvas sync fails.
+      // Preserve the snapshot's EXACT bytes on disk (don't go through
+      // saveDocument → JSON.stringify, which would re-serialize and could
+      // change indentation, key order, or number formatting vs what the
+      // user originally had).
       await writeFile(resolvedFp, fileSnapshot, 'utf-8');
       invalidateCache(resolvedFp);
-      // saveDocument is DUAL-WRITE for file-backed paths (document-manager.ts:411):
-      // it writes to disk AND calls pushLiveDocument. Our earlier
-      // handleBatchDesign call already pushed the bad insert to the live
-      // canvas; we must push the restored doc so the renderer state
-      // matches disk again. If no sync URL is active, pushLiveDocument
-      // is a no-op, so this is safe in all scenarios.
+      // handleBatchDesign's saveDocument already pushed the BAD insert to
+      // the live canvas (document-manager.ts:411 dual-writes disk + live).
+      // Push the restored doc so the renderer re-syncs without rewriting
+      // the on-disk file we just restored. If no sync URL is active,
+      // pushLiveDocument is a no-op, so this is safe in all scenarios.
       try {
         const restoredDoc = await openDocument(resolvedFp);
-        await saveDocument(resolvedFp, restoredDoc);
+        await pushLiveDocument(restoredDoc);
       } catch (syncErr) {
-        // Disk is the source of truth and is already restored; surface
-        // the sync failure so the caller knows live canvas may be stale
-        // but don't swallow the original insert failure.
+        // Disk is the source of truth and is already restored with original
+        // bytes; surface the sync failure but don't swallow the original
+        // insert-failure reason.
         throw new Error(
-          `${reason} (document restored to pre-insert state on disk, but re-syncing live canvas ` +
-            `after rollback failed: ${syncErr instanceof Error ? syncErr.message : String(syncErr)}. ` +
+          `${reason} (document bytes restored to pre-insert snapshot on disk, but re-syncing ` +
+            `live canvas after rollback failed: ${syncErr instanceof Error ? syncErr.message : String(syncErr)}. ` +
             `Live canvas may show stale state until next refresh.)`,
         );
       }
     }
     throw new Error(
-      `${reason} ${isLive ? '(live canvas cannot be atomically rolled back — the bad insert may still be visible until next refresh)' : '(document restored to pre-insert state on disk and re-synced to live canvas)'}`,
+      `${reason} ${isLive ? '(live canvas cannot be atomically rolled back — the bad insert may still be visible until next refresh)' : '(document bytes restored to pre-insert snapshot on disk and re-synced to live canvas)'}`,
     );
   };
 
