@@ -1,6 +1,8 @@
 import type { handleBatchDesign } from './batch-design';
 import {
   assignIdsRecursively,
+  cjkFontFamily,
+  detectCjkScript,
   ensureParentExists,
   insertElementTree,
 } from './element-tool-helpers';
@@ -49,28 +51,31 @@ const LATIN_PRESETS: Record<AddHeadingV0Level, HeadingPreset> = {
   h3: { fontSize: 20, fontWeight: 600, lineHeight: 1.25 },
 };
 
-// CJK rules (from project_pencil_optimization memory + text-rules.md):
-//   - lineHeight 1.3-1.4 for headings (NOT 1.1-1.2)
+// CJK presets (from project_pencil_optimization memory + text-rules.md):
+//   - lineHeight 1.3-1.4 for headings (NOT 1.1-1.2 like Latin)
 //   - letterSpacing: 0, NEVER negative (negative causes character overlap)
-//   - fontFamily: Noto Sans SC (Chinese) — also works as a reasonable
-//     default for JP/KR since we're emitting from a single string input;
-//     callers wanting JP-specific font can override via batch_design U-op.
-const CJK_PRESETS: Record<AddHeadingV0Level, HeadingPreset> = {
-  display: { fontSize: 48, fontWeight: 700, lineHeight: 1.3, fontFamily: 'Noto Sans SC' },
-  h1: { fontSize: 32, fontWeight: 700, lineHeight: 1.3, fontFamily: 'Noto Sans SC' },
-  h2: { fontSize: 24, fontWeight: 600, lineHeight: 1.35, fontFamily: 'Noto Sans SC' },
-  h3: { fontSize: 20, fontWeight: 600, lineHeight: 1.4, fontFamily: 'Noto Sans SC' },
+//   - fontFamily: script-specific — Chinese Noto Sans SC, Japanese Noto
+//     Sans JP, Korean Noto Sans KR. Using SC for JP/KR is technically
+//     possible (broad Unicode coverage) but violates the repo's explicit
+//     font contract. Each script's dedicated Noto face handles
+//     font-native punctuation + glyph variants correctly.
+const CJK_BASE: Record<AddHeadingV0Level, Omit<HeadingPreset, 'fontFamily'>> = {
+  display: { fontSize: 48, fontWeight: 700, lineHeight: 1.3 },
+  h1: { fontSize: 32, fontWeight: 700, lineHeight: 1.3 },
+  h2: { fontSize: 24, fontWeight: 600, lineHeight: 1.35 },
+  h3: { fontSize: 20, fontWeight: 600, lineHeight: 1.4 },
 };
-
-const CJK_REGEX = /[\u3000-\u303f\u3040-\u309f\u30a0-\u30ff\u4e00-\u9fff\uac00-\ud7af]/;
 
 export async function handleAddHeadingV0(
   params: AddHeadingV0Params,
 ): Promise<Awaited<ReturnType<typeof handleBatchDesign>>> {
   await ensureParentExists(params);
   const level = params.level ?? 'h2';
-  const isCjk = CJK_REGEX.test(params.content);
-  const preset = (isCjk ? CJK_PRESETS : LATIN_PRESETS)[level];
+  const script = detectCjkScript(params.content);
+  const cjkFont = cjkFontFamily(script);
+  const preset: HeadingPreset = cjkFont
+    ? { ...CJK_BASE[level], fontFamily: cjkFont }
+    : LATIN_PRESETS[level];
   const heading: Record<string, unknown> = {
     type: 'text',
     name: `Heading (${level})`,
