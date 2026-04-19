@@ -49,6 +49,7 @@ export async function handleAddSegmentedControlV0(
           content: item.label,
           fontSize: 13,
           fontWeight: item.active ? 600 : 500,
+          fill: [{ type: 'solid', color: item.active ? '#111827' : '#4B5563' }],
         },
       ],
     };
