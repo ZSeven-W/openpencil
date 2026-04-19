@@ -5,6 +5,7 @@ import { handleDesignContent } from '../tools/design-content';
 import { handleDesignRefine } from '../tools/design-refine';
 import { LAYERED_DESIGN_TOOLS } from '../tools/layered-design-defs';
 import { handleAddSectionV0 } from '../tools/add-section-v0';
+import { handleAddScrollRowV0 } from '../tools/add-scroll-row-v0';
 
 export const DESIGN_TOOL_DEFINITIONS = [
   {
@@ -78,6 +79,57 @@ export const DESIGN_TOOL_DEFINITIONS = [
     },
   },
   ...LAYERED_DESIGN_TOOLS,
+  {
+    name: 'add_scroll_row_v0',
+    description:
+      'Create a horizontal scroll row (card / metric_tile / nav_item) with guaranteed overflow safety. ' +
+      'Builds the exact nested wrapper + clipContent + fit_content inner-row structure that batch_design ' +
+      'generates incorrectly ~X% of the time on non-Claude models (see ' +
+      'packages/pen-ai-skills/skills/phases/generation/overflow.md §HORIZONTAL SCROLL ROWS). ' +
+      'Always prefer this tool over batch_design when the spec mentions "horizontal scrolling cards", ' +
+      '"swipeable row", "chip row", "metric tiles" or similar. schemaVersion 1.0',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        filePath: {
+          type: 'string',
+          description: 'Path to .op file, or omit to use the live canvas (default)',
+        },
+        children_type: {
+          type: 'string',
+          enum: ['card', 'metric_tile', 'nav_item'],
+          description:
+            'Kind of children to lay out. card = 140x160 vertical card with title/subtitle/icon; ' +
+            'metric_tile = 120x100 with small label + big value; nav_item = 72 auto-height icon+label.',
+        },
+        items: {
+          type: 'array',
+          description: 'Row items. Each needs title; subtitle and icon are optional.',
+          items: {
+            type: 'object',
+            properties: {
+              title: { type: 'string' },
+              subtitle: { type: 'string' },
+              icon: { type: 'string', description: 'lucide icon name (e.g. "activity")' },
+            },
+            required: ['title'],
+          },
+        },
+        card_width: {
+          type: 'number',
+          description:
+            'Fixed numeric width per item (overrides default: card=140, metric_tile=120, nav_item=72)',
+        },
+        gap: { type: 'number', description: 'Inner-row gap in px (default 12)' },
+        parent_id: {
+          type: 'string',
+          description: 'Target parent node id. Omit for root-level insertion.',
+        },
+        pageId: { type: 'string', description: 'Target page ID (defaults to first page)' },
+      },
+      required: ['children_type', 'items'],
+    },
+  },
 ];
 
 export const DESIGN_TOOL_NAMES = new Set([
@@ -86,6 +138,7 @@ export const DESIGN_TOOL_NAMES = new Set([
   'design_skeleton',
   'design_content',
   'design_refine',
+  'add_scroll_row_v0',
 ]);
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -113,6 +166,8 @@ export async function handleDesignToolCall(
       return JSON.stringify(await handleDesignContent(a), null, 2);
     case 'design_refine':
       return JSON.stringify(await handleDesignRefine(a), null, 2);
+    case 'add_scroll_row_v0':
+      return JSON.stringify(await handleAddScrollRowV0(a), null, 2);
     default:
       return '';
   }

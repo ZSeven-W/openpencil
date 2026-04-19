@@ -67,19 +67,35 @@ describe('D0 parity spike — additive & gated tool registration', () => {
     expect(D0_SPIKE_TOOL_NAMES.has('add_section_v0')).toBe(true);
   });
 
-  it('existing design tool names are exactly the pre-spike set', () => {
-    const names = DESIGN_TOOL_DEFINITIONS.map((t) => t.name).sort();
-    expect(names).toEqual([
+  it('pre-D0 production design tools still present (no regression)', () => {
+    // These 5 existed when D0 spike validated Sugar route. They must remain
+    // present for any future additive changes. New tools (add_scroll_row_v0
+    // and beyond) may be added, but none of these 5 may disappear.
+    const names = DESIGN_TOOL_DEFINITIONS.map((t) => t.name);
+    for (const preD0 of [
+      'batch_design',
+      'design_content',
+      'design_refine',
+      'design_skeleton',
+      'get_design_prompt',
+    ]) {
+      expect(names).toContain(preD0);
+    }
+  });
+
+  it('pre-D0 production design tool DEFINITIONS are unchanged (snapshot)', () => {
+    // Snapshot only the 5 pre-D0 tools. Any future MVP tool
+    // (add_scroll_row_v0 etc.) is excluded from this snapshot so it keeps
+    // its D0-baseline role: detecting drift in pre-existing tool schemas.
+    const preD0Names = new Set([
       'batch_design',
       'design_content',
       'design_refine',
       'design_skeleton',
       'get_design_prompt',
     ]);
-  });
-
-  it('existing tool DEFINITIONS are unchanged (snapshot)', () => {
-    expect(DESIGN_TOOL_DEFINITIONS).toMatchSnapshot('existing-design-tool-definitions');
+    const preD0Tools = DESIGN_TOOL_DEFINITIONS.filter((t) => preD0Names.has(t.name));
+    expect(preD0Tools).toMatchSnapshot('pre-d0-design-tool-definitions');
   });
 });
 
