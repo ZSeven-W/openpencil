@@ -8,7 +8,7 @@ import {
 
 export interface AddNavChipRowV0Item {
   label: string;
-  icon: string;
+  icon?: string;
   active?: boolean;
 }
 
@@ -48,6 +48,25 @@ export async function handleAddNavChipRowV0(
 }
 
 function buildChip(item: AddNavChipRowV0Item, chipWidth: number): Record<string, unknown> {
+  const children: Record<string, unknown>[] = [];
+  if (item.icon) {
+    children.push({
+      type: 'icon_font',
+      name: 'Icon',
+      iconFontName: item.icon,
+      iconFontFamily: 'lucide',
+      width: 24,
+      height: 24,
+    });
+  }
+  children.push({
+    type: 'text',
+    name: 'Label',
+    role: 'label',
+    content: item.label,
+    fontSize: 11,
+    fontWeight: item.active ? 600 : 500,
+  });
   return {
     type: 'frame',
     name: `Chip (${item.label})`,
@@ -59,23 +78,6 @@ function buildChip(item: AddNavChipRowV0Item, chipWidth: number): Record<string,
     layout: 'vertical',
     alignItems: 'center',
     gap: 4,
-    children: [
-      {
-        type: 'icon_font',
-        name: 'Icon',
-        iconFontName: item.icon,
-        iconFontFamily: 'lucide',
-        width: 24,
-        height: 24,
-      },
-      {
-        type: 'text',
-        name: 'Label',
-        role: 'label',
-        content: item.label,
-        fontSize: 11,
-        fontWeight: item.active ? 600 : 500,
-      },
-    ],
+    children,
   };
 }
