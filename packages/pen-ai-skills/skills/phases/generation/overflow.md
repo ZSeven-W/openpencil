@@ -15,9 +15,32 @@ OVERFLOW PREVENTION (CRITICAL):
 - Fixed-width children must be <= parent content area (parent width - padding).
 - Badges: short labels only (CJK <=8 chars / Latin <=16 chars).
 
-## HORIZONTAL SCROLL ROWS (cards / chips / categories)
+## HORIZONTAL SCROLL ROWS (cards / chips / categories / metric tiles)
 
-When the spec says "horizontal scrolling cards", "swipeable row", "chip row", or similar, generate EXACTLY this structure — do NOT just emit 6 cards inside a horizontal layout, the children will spill outside the page frame.
+When the spec says "horizontal scrolling cards", "swipeable row", "chip row", "metric tiles", or similar, use ONE of the two paths below.
+
+### Preferred (MCP tool path): `add_scroll_row_v0`
+
+If you have access to MCP tools (external client: Claude Code / Codex / Gemini CLI / Cursor), **call the `add_scroll_row_v0` tool**. It forces the exact wrapper+clipContent+fit_content structure, assigns ids, sets roles, and cannot be made incorrectly by schema. You only supply `children_type` (card | metric_tile | nav_item) + `items` array.
+
+Example:
+
+```
+add_scroll_row_v0({
+  children_type: "metric_tile",
+  items: [
+    { title: "Steps",  subtitle: "8,432",  icon: "activity" },
+    { title: "Kcal",   subtitle: "512",    icon: "flame" },
+    { title: "Sleep",  subtitle: "7h 24m", icon: "moon" },
+  ],
+})
+```
+
+Add per-tile fills / colors afterwards with a separate `batch_design` U-op (the tool is style-guide orthogonal and ships colorless on purpose).
+
+### Fallback (hand-built JSON path)
+
+ONLY when the MCP tool is unavailable (embedded AI flow / JSON-only output), generate EXACTLY this structure — do NOT just emit 6 cards inside a horizontal layout, the children will spill outside the page frame.
 
 Structure:
 
