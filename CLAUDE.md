@@ -28,6 +28,7 @@ Detailed module docs are loaded automatically when working in subdirectories:
 - **Type check:** `npx tsc --noEmit`
 - **Lint:** `bun run lint` (oxlint)
 - **Format:** `bun run format` (oxfmt)
+- **Format check:** `bun run format:check` (oxfmt `--check`, required before commit)
 - **Install dependencies:** `bun install`
 - **Bump version:** `bun run bump <version>` (syncs all package.json files)
 - **Electron dev:** `bun run electron:dev` (starts Vite + Electron together)
@@ -144,6 +145,29 @@ The `op` command-line tool controls the desktop app or web server from the termi
 - **Pre-commit hook** (`.githooks/pre-commit`): extracts version from branch name (e.g. `v0.5.0` → `0.5.0`) and syncs to all `package.json` files
 - **Manual bump:** `bun run bump <version>` to set a specific version across all workspaces
 - Requires `git config core.hooksPath .githooks` (one-time setup per clone)
+
+## Working Principles
+
+Behavioral guidelines adapted from [Karpathy's coding principles](https://github.com/multica-ai/andrej-karpathy-skills) to OpenPencil's multi-layer, multi-app structure. These supplement (do not replace) the general system prompt.
+
+### Think before coding
+
+A single bug often spans layers. A canvas render issue may live in `pen-core/layout`, `apps/web/canvas/skia`, or `pen-react/hooks`. An LLM-generated-design issue may live in `pen-ai-skills/skills/`, the MCP tool, or the post-generation validator. Identify the owning layer before patching — don't fix the symptom at a higher layer when the cause is deeper. When the target surface is ambiguous (desktop / web / cli / MCP / docs), say so and ask rather than guessing.
+
+### Simplicity first
+
+Add abstractions when a second concrete case arrives, not in anticipation of one. No strategy classes for single-use logic, no speculative config options, no premature helper layers. The 800-line file limit is a ceiling, not a split target — a healthy 400-line file doesn't need slicing.
+
+### Surgical changes
+
+Fix only what the task names. A validation bug fix doesn't include added type hints, renamed identifiers, or reformatted siblings. Match existing style (shadcn tokens, kebab-case filenames, existing quote/brace style). When an LLM-generated design reproduces the same bug across many nodes, fix the prompt / role resolver / validator in `pen-ai-skills` — never touch up each instance via `batch_design`.
+
+### Verify before declaring done
+
+- **Any TS/JS change:** `bun run format:check && npx tsc --noEmit && bun --bun run test` must pass before commit or push. Docs-only changes in a separate `openpencil-docs` repo are exempt.
+- **UI / canvas change:** start `bun --bun run dev` and exercise the feature in a browser. Type-checking proves compilation, not feature correctness.
+- **MCP / `pen-ai-skills` change:** verify via the `op` CLI, `debug_validation_report`, or `debug_screenshot` — not by reading the diff.
+- Report what was verified, not only what was edited.
 
 ## Code Style
 
