@@ -3,7 +3,7 @@
 exports[`D0 parity spike — additive & gated tool registration > pre-D0 production design tool DEFINITIONS are unchanged (snapshot) > pre-d0-design-tool-definitions 1`] = `
 [
   {
-    "description": "Get design knowledge prompt. Use "section" to retrieve a focused subset instead of the full prompt. Sections: schema (PenNode types), layout (flexbox rules), roles (semantic roles), text (typography/CJK/copywriting), style (visual style policy), icons (icon names), examples (design examples), guidelines (design tips), planning (layered workflow guide), elements (N-tool element reference — add_card_row_v0 / add_metric_row_v0 / add_nav_chip_row_v0 / add_bottom_nav_v0 / add_activity_ring_v0 usage + decision tree). Omit section for the full prompt.",
+    "description": "Get design knowledge prompt. Use "section" to retrieve a focused subset instead of the full prompt. Sections: schema (PenNode types), layout (flexbox rules), roles (semantic roles), text (typography/CJK/copywriting), style (visual style policy), icons (icon names), examples (design examples), guidelines (design tips), planning (layered workflow guide), elements (N-tool element-tool family — 12 tools covering rows [card/metric/nav_chip/stat_grid], containers [bottom_nav/top_nav_bar/section_header/icon_button/activity_ring], atoms [divider/badge/avatar] — decision tree + PREFER/FALLBACK rules + composition pattern). Omit section for the full prompt.",
     "inputSchema": {
       "properties": {
         "section": {

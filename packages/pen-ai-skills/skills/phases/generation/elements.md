@@ -1,11 +1,11 @@
 ---
 name: elements
-description: N-tool element family reference — when and how to call add_card_row_v0 / add_metric_row_v0 / add_nav_chip_row_v0 / add_bottom_nav_v0 / add_activity_ring_v0 instead of hand-building via batch_design
+description: N-tool element family (12 tools) reference — rows (card/metric/nav_chip/stat_grid), containers (bottom_nav/top_nav_bar/section_header/icon_button/activity_ring), atoms (divider/badge/avatar). Each tool replaces a documented batch_design failure mode
 phase: [generation]
 trigger:
   flags: [hasMcpTools]
 priority: 14
-budget: 1500
+budget: 1800
 category: base
 ---
 
@@ -38,7 +38,7 @@ Rows (horizontal, in-card or scrolling):
 3. Row of filter chips / category tabs (label + optional icon, active state) → `add_nav_chip_row_v0` (scroll)
 4. Non-scrolling 2-5 stats inline (auto-share width) → `add_stat_grid_v0`
 
-Single elements:
+Containers and single elements:
 
 5. Section header (big title + optional "See all" action) → `add_section_header_v0`
 6. Bottom tab bar (inline flow, 3-5 nav items) → `add_bottom_nav_v0`
@@ -46,7 +46,13 @@ Single elements:
 8. Icon-only button (44×44, hit-target safe) → `add_icon_button_v0`
 9. Apple-style progress ring with centered text → `add_activity_ring_v0`
 
-10. None match → fall through to `batch_design`
+Atoms (1-2 node building blocks):
+
+10. Hairline separator between list rows / sections → `add_divider_v0`
+11. Short inline pill / tag / "NEW" / "BETA" / count badge → `add_badge_v0`
+12. Circular avatar (with optional initial / empty for later image fill) → `add_avatar_v0`
+
+13. None match → fall through to `batch_design`
 
 **Disambiguation**: if you need a ROW of 3 metrics that should NOT scroll (e.g. a stats strip inside a card), use `add_stat_grid_v0`, NOT `add_metric_row_v0`. The grid uses `fill_container` per cell so it never overflows; the metric row uses fixed-px cells + scroll wrapper.
 
@@ -63,6 +69,9 @@ PREFER an element tool when the spec says any of:
 - "top bar", "app bar", "header with back button", "页面标题栏" → `add_top_nav_bar_v0`
 - "icon-only button", "close button", "menu button" (toolbar-style) → `add_icon_button_v0`
 - "activity ring", "progress ring", "circular progress", "Apple health ring" → `add_activity_ring_v0`
+- "hairline divider", "separator", "row divider", "section separator" → `add_divider_v0`
+- "badge", "pill", "tag", "NEW label", "count bubble" (≤16 Latin / ≤8 CJK chars) → `add_badge_v0`
+- "avatar", "profile picture", "user circle", "initial bubble" → `add_avatar_v0`
 
 STILL use batch_design when:
 
@@ -133,6 +142,14 @@ add_top_nav_bar_v0({
 add_icon_button_v0({
   icon: "search",
 })
+
+add_divider_v0({})                           // horizontal hairline (h=1 fill_container)
+add_divider_v0({ orientation: "vertical" })  // vertical hairline
+
+add_badge_v0({ label: "NEW" })
+
+add_avatar_v0({ initial: "JD", size: 56 })   // with initial
+add_avatar_v0({ size: 40 })                  // empty circle (fill via batch_design image later)
 ```
 
 ## Composition pattern
@@ -151,7 +168,7 @@ The tool guarantees — you cannot break them from the input side:
 - `bottom-tab-bar` is inline (no empty spacer sibling needed, do NOT add one)
 - Activity ring is frame+cornerRadius=size/2+stroke+centered text — NEVER emit ellipse+sibling text for rings
 - Every emitted node has a unique id (you can reference it later)
-- Roles are set (`card` / `metric-tile` / `nav-chip` / `nav-chip-active` / `bottom-tab-bar` / `nav-item` / `nav-item-active` / `activity-ring` / `stat-grid` / `stat-cell` / `section-header` / `section-header-action` / `top-nav-bar` / `nav-spacer` / `icon-button`)
+- Roles are set (`card` / `metric-tile` / `nav-chip` / `nav-chip-active` / `bottom-tab-bar` / `nav-item` / `nav-item-active` / `activity-ring` / `stat-grid` / `stat-cell` / `section-header` / `section-header-title` / `section-header-action` / `top-nav-bar` / `nav-spacer` / `icon-button` / `divider` / `badge` / `avatar`)
 
 ## Failure mode
 

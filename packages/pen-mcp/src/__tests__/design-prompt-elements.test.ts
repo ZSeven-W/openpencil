@@ -27,19 +27,45 @@ describe('get_design_prompt — elements section', () => {
     expect(sectionProp?.enum).toContain('elements');
   });
 
+  it('get_design_prompt description references current element-tool count (no hardcoded stale list)', () => {
+    // The tool description is what clients use to understand the section.
+    // If it enumerates specific tool names and those names grow stale,
+    // clients get misleading guidance. Assert the description references
+    // the family generically OR that every named element tool is real.
+    const def = DESIGN_TOOL_DEFINITIONS.find((t) => t.name === 'get_design_prompt');
+    const description = def?.description ?? '';
+    const elementTools = DESIGN_TOOL_DEFINITIONS.map((t) => t.name).filter((n) =>
+      /^add_.*_v0$/.test(n),
+    );
+    // Any element-tool name appearing in the description must correspond to
+    // an actually-registered tool (no stale references to removed tools).
+    const namedInDescription = description.match(/add_[a-z_]+_v0/g) ?? [];
+    for (const named of namedInDescription) {
+      expect(elementTools, `description references ${named} which is not in registry`).toContain(
+        named,
+      );
+    }
+  });
+
   it('buildDesignPrompt("elements") returns non-empty content', () => {
     const content = buildDesignPrompt('elements');
     expect(content.length).toBeGreaterThan(0);
     expect(content).toMatch(/ELEMENT TOOLS/i);
   });
 
-  it('elements section names all 5 production element tools', () => {
+  it('elements section names EVERY production element tool (stale-integration guard)', () => {
+    // Derive the expected list from the actual registry so adding a new
+    // element tool without updating the skill triggers a test failure —
+    // this regression test prevents "new tool exposed but AI-facing
+    // integration stale" drift (Codex stop-hook #11).
     const content = buildDesignPrompt('elements');
-    expect(content).toContain('add_card_row_v0');
-    expect(content).toContain('add_metric_row_v0');
-    expect(content).toContain('add_nav_chip_row_v0');
-    expect(content).toContain('add_bottom_nav_v0');
-    expect(content).toContain('add_activity_ring_v0');
+    const elementTools = DESIGN_TOOL_DEFINITIONS.map((t) => t.name).filter((n) =>
+      /^add_.*_v0$/.test(n),
+    );
+    expect(elementTools.length).toBeGreaterThanOrEqual(12);
+    for (const n of elementTools) {
+      expect(content, `elements skill should mention ${n}`).toContain(n);
+    }
   });
 
   it('elements section teaches a decision tree (pick first match)', () => {
