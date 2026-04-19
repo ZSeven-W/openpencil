@@ -99,8 +99,16 @@ export function buildScrollWrapper(opts: {
  *   1. parent_id is JSON.stringify'd so ids containing quotes / backslashes
  *      cannot escape the DSL quoting and inject additional operations
  *   2. per-item batch_design errors are re-thrown rather than silently
- *      collected in the result.errors array (N-tool single-insert
- *      semantics: either the node lands or the tool fails loudly)
+ *      collected in the result.errors array
+ *   3. **post-insert verification**: re-read the document and confirm the
+ *      inserted nodeId is actually present. Guards against silent no-op
+ *      paths in the DSL parser — notably `resolveRef` (batch-design.ts)
+ *      does simplistic `/^"|"$/g` quote-stripping and does NOT JSON-
+ *      unescape, so parent_ids containing `"` or `\` pass JSON.stringify
+ *      cleanly but the parser extracts a different literal, causing
+ *      insertNodeInTree to silently return the original tree. The
+ *      read-back check is the single source of truth for "did the
+ *      insert actually land?" regardless of parser subtleties.
  */
 export async function insertElementTree(args: {
   binding: string;
@@ -120,6 +128,24 @@ export async function insertElementTree(args: {
   if (result.errors && result.errors.length > 0) {
     const summary = result.errors.map((e) => `${e.line.slice(0, 80)}: ${e.error}`).join('; ');
     throw new Error(`Element tool insert failed: ${summary}`);
+  }
+  const insertedId = result.results[0]?.nodeId;
+  if (!insertedId) {
+    throw new Error(
+      'Element tool insert returned no nodeId; batch_design did not report any result',
+    );
+  }
+  const fp = resolveDocPath(args.filePath);
+  const postDoc = await openDocument(fp);
+  const postChildren = getDocChildren(postDoc, args.pageId);
+  const landed = findNodeInTree(postChildren, insertedId);
+  if (!landed) {
+    throw new Error(
+      `Element tool insert silently failed: inserted node ${insertedId} is not present in the ` +
+        `document after insertion. This usually means parent_id escaping did not match the ` +
+        `document's actual id (batch_design's DSL parser strips quotes but does not JSON-unescape). ` +
+        `parent_id=${JSON.stringify(args.parent_id)}, pageId=${JSON.stringify(args.pageId)}.`,
+    );
   }
   return result;
 }
