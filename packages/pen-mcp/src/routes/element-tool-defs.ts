@@ -19,6 +19,8 @@ import { handleAddHeadingV0 } from '../tools/add-heading-v0';
 import { handleAddBodyTextV0 } from '../tools/add-body-text-v0';
 import { handleAddIconLabelV0 } from '../tools/add-icon-label-v0';
 import { handleAddListRowV0 } from '../tools/add-list-row-v0';
+import { handleAddSearchBarV0 } from '../tools/add-search-bar-v0';
+import { handleAddFormFieldV0 } from '../tools/add-form-field-v0';
 
 export const ELEMENT_TOOL_DEFINITIONS = [
   {
@@ -583,6 +585,80 @@ export const ELEMENT_TOOL_DEFINITIONS = [
     },
   },
   {
+    name: 'add_search_bar_v0',
+    description:
+      'Rounded search bar (height=44, cornerRadius=22, width=fill_container) matching the ' +
+      'search-bar role spec in ROLE_GUIDE. Leading icon default "search" — override for ' +
+      'custom affordance (e.g. "filter", "map-pin"). Placeholder text default "Search...". ' +
+      'Use when spec shows a standalone search input, header search, or list filter bar. ' +
+      'schemaVersion 1.0',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        schemaVersion: {
+          type: 'string',
+          enum: ['1.0'],
+          description: 'Schema version (v0-MUST §4.2). Clients MAY omit.',
+        },
+        filePath: { type: 'string', description: 'Path to .op file, or omit for live canvas' },
+        placeholder: {
+          type: 'string',
+          description: 'Placeholder text (default "Search...")',
+        },
+        leading_icon: {
+          type: 'string',
+          description: 'lucide icon name (default "search")',
+        },
+        parent_id: {
+          type: 'string',
+          description: 'Target parent node id (must exist). Omit for root-level insertion.',
+        },
+        pageId: { type: 'string', description: 'Target page ID (defaults to first page)' },
+      },
+      required: [],
+    },
+  },
+  {
+    name: 'add_form_field_v0',
+    description:
+      'Label + input vertical pair. Enforces FORMS rule from DESIGN_GUIDELINES ("ALL inputs ' +
+      'MUST use width=fill_container, vertical layout, gap=16-20") and ROLE_GUIDE input specs ' +
+      '(height=48, padding=[12,16]). Affordance icons: leading_icon for email/search leads, ' +
+      'trailing_icon for password-toggle. required=true appends " *" to the label. Intended ' +
+      'for use inside a vertical form container with its siblings at gap=16-20. schemaVersion 1.0',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        schemaVersion: {
+          type: 'string',
+          enum: ['1.0'],
+          description: 'Schema version (v0-MUST §4.2). Clients MAY omit.',
+        },
+        filePath: { type: 'string', description: 'Path to .op file, or omit for live canvas' },
+        label: { type: 'string', description: 'Field label text' },
+        placeholder: { type: 'string', description: 'Optional input placeholder' },
+        leading_icon: {
+          type: 'string',
+          description: 'Optional leading icon (e.g. "mail" for email, "search" for search)',
+        },
+        trailing_icon: {
+          type: 'string',
+          description: 'Optional trailing icon (e.g. "eye" for password toggle)',
+        },
+        required: {
+          type: 'boolean',
+          description: 'When true, appends " *" to the label text',
+        },
+        parent_id: {
+          type: 'string',
+          description: 'Target parent node id (must exist). Omit for root-level insertion.',
+        },
+        pageId: { type: 'string', description: 'Target page ID (defaults to first page)' },
+      },
+      required: ['label'],
+    },
+  },
+  {
     name: 'add_list_row_v0',
     description:
       'iOS / Material-style list row: optional leading icon + center text stack (title + ' +
@@ -665,6 +741,10 @@ export async function handleElementToolCall(name: string, a: any): Promise<strin
       return JSON.stringify(await handleAddIconLabelV0(a), null, 2);
     case 'add_list_row_v0':
       return JSON.stringify(await handleAddListRowV0(a), null, 2);
+    case 'add_search_bar_v0':
+      return JSON.stringify(await handleAddSearchBarV0(a), null, 2);
+    case 'add_form_field_v0':
+      return JSON.stringify(await handleAddFormFieldV0(a), null, 2);
     default:
       return '';
   }
