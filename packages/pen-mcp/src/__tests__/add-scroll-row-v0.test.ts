@@ -243,6 +243,99 @@ describe('add_scroll_row_v0 — overrides', () => {
   });
 });
 
+describe('add_scroll_row_v0 — id assignment (every node must have a valid id)', () => {
+  function collectIds(
+    node: Record<string, unknown>,
+    out: { total: number; missing: string[] },
+    path = 'root',
+  ): void {
+    const id = node.id;
+    if (typeof id !== 'string' || id.length === 0) {
+      out.missing.push(`${path} (type=${String(node.type)} name=${String(node.name)})`);
+    }
+    out.total += 1;
+    const children = node.children;
+    if (Array.isArray(children)) {
+      children.forEach((c, i) => {
+        if (c && typeof c === 'object') {
+          collectIds(c as Record<string, unknown>, out, `${path}/${i}`);
+        }
+      });
+    }
+  }
+
+  it('every node in a card row (wrapper+row+cards+grandchildren) has a non-empty id', async () => {
+    const fp = await fresh('cards.op');
+    await handleAddScrollRowV0({
+      filePath: fp,
+      children_type: 'card',
+      items: [{ title: 'A', subtitle: 'x', icon: 'i' }, { title: 'B' }],
+    });
+    const wrapper = getRoot(await readDoc(fp));
+    const collected = { total: 0, missing: [] as string[] };
+    collectIds(wrapper, collected);
+    expect(collected.missing).toEqual([]);
+    // wrapper + row + 2 cards + (3 + 1) card children = 8
+    expect(collected.total).toBe(8);
+  });
+
+  it('every node in a metric_tile row has a non-empty id', async () => {
+    const fp = await fresh('metrics.op');
+    await handleAddScrollRowV0({
+      filePath: fp,
+      children_type: 'metric_tile',
+      items: [
+        { title: 'Steps', subtitle: '8,432' },
+        { title: 'Kcal', subtitle: '512', icon: 'flame' },
+      ],
+    });
+    const wrapper = getRoot(await readDoc(fp));
+    const collected = { total: 0, missing: [] as string[] };
+    collectIds(wrapper, collected);
+    expect(collected.missing).toEqual([]);
+  });
+
+  it('every node in a nav_item row has a non-empty id', async () => {
+    const fp = await fresh('nav.op');
+    await handleAddScrollRowV0({
+      filePath: fp,
+      children_type: 'nav_item',
+      items: [
+        { title: 'Home', icon: 'home' },
+        { title: 'Search', icon: 'search' },
+      ],
+    });
+    const wrapper = getRoot(await readDoc(fp));
+    const collected = { total: 0, missing: [] as string[] };
+    collectIds(wrapper, collected);
+    expect(collected.missing).toEqual([]);
+  });
+
+  it('all ids in the tree are unique', async () => {
+    const fp = await fresh('cards.op');
+    await handleAddScrollRowV0({
+      filePath: fp,
+      children_type: 'card',
+      items: [
+        { title: 'A', subtitle: 'x', icon: 'i' },
+        { title: 'B', subtitle: 'y', icon: 'j' },
+        { title: 'C' },
+      ],
+    });
+    const wrapper = getRoot(await readDoc(fp));
+    const ids: string[] = [];
+    function collect(n: Record<string, unknown>): void {
+      if (typeof n.id === 'string') ids.push(n.id);
+      const kids = n.children;
+      if (Array.isArray(kids)) {
+        for (const k of kids) if (k && typeof k === 'object') collect(k as Record<string, unknown>);
+      }
+    }
+    collect(wrapper);
+    expect(new Set(ids).size).toBe(ids.length);
+  });
+});
+
 describe('add_scroll_row_v0 — persistence', () => {
   it('result.nodeCount reflects full node tree (wrapper+row+cards+children)', async () => {
     const fp = await fresh('persist.op');
