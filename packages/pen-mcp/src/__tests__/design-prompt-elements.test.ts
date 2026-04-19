@@ -27,24 +27,34 @@ describe('get_design_prompt — elements section', () => {
     expect(sectionProp?.enum).toContain('elements');
   });
 
-  it('get_design_prompt description references current element-tool count (no hardcoded stale list)', () => {
-    // The tool description is what clients use to understand the section.
-    // If it enumerates specific tool names and those names grow stale,
-    // clients get misleading guidance. Assert the description references
-    // the family generically OR that every named element tool is real.
+  it('get_design_prompt description: stale tool names + stale counts both forbidden', () => {
+    // The tool description is read directly by MCP clients. Two rot vectors:
+    //   1. Named element tools that have been removed (stale references)
+    //   2. Hardcoded counts like "12 tools" that drift as the family grows
+    // Assert the description has neither. The `elements` section itself
+    // should carry the specific names and count, not the generic tool
+    // description which gets re-published on every server start.
     const def = DESIGN_TOOL_DEFINITIONS.find((t) => t.name === 'get_design_prompt');
     const description = def?.description ?? '';
     const elementTools = DESIGN_TOOL_DEFINITIONS.map((t) => t.name).filter((n) =>
       /^add_.*_v0$/.test(n),
     );
-    // Any element-tool name appearing in the description must correspond to
-    // an actually-registered tool (no stale references to removed tools).
+    // (1) any element-tool name that DOES appear must be in the registry
     const namedInDescription = description.match(/add_[a-z_]+_v0/g) ?? [];
     for (const named of namedInDescription) {
       expect(elementTools, `description references ${named} which is not in registry`).toContain(
         named,
       );
     }
+    // (2) no hardcoded element-tool count — matching /\d+ tools?/ adjacent
+    // to "element" would become stale as the family grows. Allow "tools"
+    // without a preceding number (generic) or with the word "many" etc.
+    const staleCountPattern = /(\d+)\s+tools?\s+(?:covering|in|across)/i;
+    expect(
+      staleCountPattern.test(description),
+      `description should not hardcode an element-tool count (found match: ` +
+        `${description.match(staleCountPattern)?.[0] ?? 'n/a'})`,
+    ).toBe(false);
   });
 
   it('buildDesignPrompt("elements") returns non-empty content', () => {
@@ -57,12 +67,18 @@ describe('get_design_prompt — elements section', () => {
     // Derive the expected list from the actual registry so adding a new
     // element tool without updating the skill triggers a test failure —
     // this regression test prevents "new tool exposed but AI-facing
-    // integration stale" drift (Codex stop-hook #11).
+    // integration stale" drift (Codex stop-hook #11 / #12).
+    //
+    // Do NOT hardcode a count (>= 12 etc.) — that just creates a new
+    // stale number that must be updated each time we grow or shrink
+    // the family. Instead assert: registry must have at least one
+    // element tool (so the test isn't trivially vacuous), and every
+    // such tool MUST be mentioned in the elements skill content.
     const content = buildDesignPrompt('elements');
     const elementTools = DESIGN_TOOL_DEFINITIONS.map((t) => t.name).filter((n) =>
       /^add_.*_v0$/.test(n),
     );
-    expect(elementTools.length).toBeGreaterThanOrEqual(12);
+    expect(elementTools.length).toBeGreaterThan(0);
     for (const n of elementTools) {
       expect(content, `elements skill should mention ${n}`).toContain(n);
     }
