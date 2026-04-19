@@ -88,28 +88,26 @@ describe('add_activity_ring_v0 — structure matches anti-pattern fix', () => {
     expect(kids[0].fontWeight).toBe(700);
   });
 
-  it('respects size/thickness/ring_color/text_size/text_weight overrides', async () => {
+  it('respects geometric overrides (size / thickness); typography is hardcoded (style orthogonal)', async () => {
     const fp = await fresh('custom.op');
     await handleAddActivityRingV0({
       filePath: fp,
       size: 120,
       thickness: 12,
-      ring_color: '#ff3b30',
       center_text: '75%',
-      text_size: 28,
-      text_weight: 800,
     });
     const ring = getRoot(await readDoc(fp));
     expect(ring.width).toBe(120);
     expect(ring.height).toBe(120);
-    expect(ring.cornerRadius).toBe(60);
+    expect(ring.cornerRadius).toBe(60); // always size / 2
     expect(ring.stroke).toEqual({
       thickness: 12,
-      fill: [{ type: 'solid', color: '#ff3b30' }],
+      fill: [{ type: 'solid', color: '#000000' }], // hardcoded, not tunable
     });
     const text = (ring.children as Record<string, unknown>[])[0];
-    expect(text.fontSize).toBe(28);
-    expect(text.fontWeight).toBe(800);
+    // typography is hardcoded per spec D6 — override via batch_design U-op
+    expect(text.fontSize).toBe(16);
+    expect(text.fontWeight).toBe(700);
   });
 
   it('every node has a valid unique id', async () => {
@@ -128,8 +126,9 @@ describe('add_activity_ring_v0 — structure matches anti-pattern fix', () => {
     expect((textId as string).length).toBeGreaterThan(0);
   });
 
-  it('throws when parent_id refers to non-existent node (no silent no-op)', async () => {
+  it('throws on bogus parent_id AND leaves file untouched (side-effect invariant)', async () => {
     const fp = await fresh('ring.op');
+    const before = await readFile(fp, 'utf-8');
     await expect(
       handleAddActivityRingV0({
         filePath: fp,
@@ -137,5 +136,7 @@ describe('add_activity_ring_v0 — structure matches anti-pattern fix', () => {
         parent_id: 'bogus-parent',
       }),
     ).rejects.toThrow(/parent_id.*not found/);
+    const after = await readFile(fp, 'utf-8');
+    expect(after).toBe(before);
   });
 });
