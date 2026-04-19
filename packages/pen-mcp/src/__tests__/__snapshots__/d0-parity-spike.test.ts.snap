@@ -1,0 +1,253 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`D0 parity spike — additive tool registration > existing tool DEFINITIONS are unchanged (snapshot) > existing-design-tool-definitions 1`] = `
+[
+  {
+    "description": "Get design knowledge prompt. Use "section" to retrieve a focused subset instead of the full prompt. Sections: schema (PenNode types), layout (flexbox rules), roles (semantic roles), text (typography/CJK/copywriting), style (visual style policy), icons (icon names), examples (design examples), guidelines (design tips), planning (layered workflow guide). Omit section for the full prompt.",
+    "inputSchema": {
+      "properties": {
+        "section": {
+          "description": "Which section of design knowledge to retrieve. Default: all. Use "planning" for layered generation workflow.",
+          "enum": [
+            "all",
+            "schema",
+            "layout",
+            "roles",
+            "text",
+            "style",
+            "icons",
+            "examples",
+            "guidelines",
+            "planning",
+          ],
+          "type": "string",
+        },
+      },
+      "required": [],
+      "type": "object",
+    },
+    "name": "get_design_prompt",
+  },
+  {
+    "description": "Execute batch design operations in a compact DSL. Each line is one operation:
+  binding=I(parent, { ...nodeData })  — Insert node (binding captures new ID)
+  U(path, { ...updates })             — Update node properties
+  binding=C(sourceId, parent, { overrides })  — Copy node
+  binding=R(path, { ...newNodeData }) — Replace node
+  M(nodeId, parent, index?)           — Move node
+  D(nodeId)                           — Delete node (use batch_get to find IDs first)
+Use null for root-level parent. Reference previous bindings by name. Path expressions support binding+"/ childId" for nested access. Always set postProcess=true when generating designs for best visual quality.",
+    "inputSchema": {
+      "properties": {
+        "canvasWidth": {
+          "description": "Canvas width for post-processing (default 1200, use 375 for mobile).",
+          "type": "number",
+        },
+        "filePath": {
+          "description": "Path to .op file, or omit to use the live canvas (default)",
+          "type": "string",
+        },
+        "operations": {
+          "description": "DSL operations, one per line. Example:
+root=I(null, { "type": "frame", "name": "Page", "width": 1200, "height": 0, "layout": "vertical", "children": [...] })",
+          "type": "string",
+        },
+        "pageId": {
+          "description": "Target page ID (defaults to first page)",
+          "type": "string",
+        },
+        "postProcess": {
+          "description": "Apply post-processing (role defaults, icon resolution, layout sanitization). Always true for design generation.",
+          "type": "boolean",
+        },
+      },
+      "required": [
+        "operations",
+      ],
+      "type": "object",
+    },
+    "name": "batch_design",
+  },
+  {
+    "description": "Create a layout skeleton with root frame + section frames. Part of the layered design workflow. Returns section IDs with per-section content guidelines and suggested roles. After creating skeleton, call design_content for each section, then design_refine.",
+    "inputSchema": {
+      "properties": {
+        "canvasWidth": {
+          "description": "Canvas width (default: rootFrame.width)",
+          "type": "number",
+        },
+        "filePath": {
+          "description": "Path to .op file, or omit for live canvas",
+          "type": "string",
+        },
+        "pageId": {
+          "description": "Target page ID (defaults to first page)",
+          "type": "string",
+        },
+        "rootFrame": {
+          "description": "Root frame definition. Props: name, width (1200 desktop/375 mobile), height (0 for auto-expand, 812 for mobile), layout, gap, fill, padding.",
+          "properties": {
+            "fill": {
+              "items": {
+                "type": "object",
+              },
+              "type": "array",
+            },
+            "gap": {
+              "type": "number",
+            },
+            "height": {
+              "type": "number",
+            },
+            "layout": {
+              "enum": [
+                "vertical",
+                "horizontal",
+              ],
+              "type": "string",
+            },
+            "name": {
+              "type": "string",
+            },
+            "padding": {
+              "type": "object",
+            },
+            "width": {
+              "type": "number",
+            },
+          },
+          "required": [
+            "width",
+            "height",
+          ],
+          "type": "object",
+        },
+        "sections": {
+          "description": "Section frame definitions. Each section becomes a direct child of root. Props: name (required), height, layout, padding, gap, fill, role, justifyContent, alignItems.",
+          "items": {
+            "properties": {
+              "alignItems": {
+                "type": "string",
+              },
+              "fill": {
+                "items": {
+                  "type": "object",
+                },
+                "type": "array",
+              },
+              "gap": {
+                "type": "number",
+              },
+              "height": {
+                "type": "number",
+              },
+              "justifyContent": {
+                "type": "string",
+              },
+              "layout": {
+                "enum": [
+                  "vertical",
+                  "horizontal",
+                ],
+                "type": "string",
+              },
+              "name": {
+                "type": "string",
+              },
+              "padding": {
+                "type": "object",
+              },
+              "role": {
+                "type": "string",
+              },
+            },
+            "required": [
+              "name",
+            ],
+            "type": "object",
+          },
+          "type": "array",
+        },
+        "styleGuide": {
+          "description": "Style guide for per-section content guidelines. Props: palette (Record<string,string>), fonts ({heading,body}), aesthetic (string).",
+          "type": "object",
+        },
+      },
+      "required": [
+        "rootFrame",
+        "sections",
+      ],
+      "type": "object",
+    },
+    "name": "design_skeleton",
+  },
+  {
+    "description": "Populate a section with content nodes. Part of the layered design workflow. Inserts children into an existing section frame created by design_skeleton. Runs per-section post-processing (role defaults, icon resolution, sanitization). Returns inserted count, warnings, and a depth-limited snapshot of the section.",
+    "inputSchema": {
+      "properties": {
+        "canvasWidth": {
+          "description": "Canvas width for layout (default 1200)",
+          "type": "number",
+        },
+        "children": {
+          "description": "Array of PenNode objects to insert as children of the section. Each node can have nested children. IDs are auto-generated if not provided. Node types: frame, text, path, rectangle, ellipse, image, group. Use roles for smart defaults (button, card, heading, etc.).",
+          "items": {
+            "type": "object",
+          },
+          "type": "array",
+        },
+        "filePath": {
+          "description": "Path to .op file, or omit for live canvas",
+          "type": "string",
+        },
+        "pageId": {
+          "description": "Target page ID (defaults to first page)",
+          "type": "string",
+        },
+        "postProcess": {
+          "description": "Apply post-processing (default true). Set false to skip.",
+          "type": "boolean",
+        },
+        "sectionId": {
+          "description": "ID of the section frame (from design_skeleton result)",
+          "type": "string",
+        },
+      },
+      "required": [
+        "sectionId",
+        "children",
+      ],
+      "type": "object",
+    },
+    "name": "design_content",
+  },
+  {
+    "description": "Run full-tree validation and auto-fixes on a design. Part of the layered design workflow. Call after all sections are populated via design_content. Applies: role resolution, card row equalization, overflow fixes, text height estimation, icon resolution, layout sanitization, clipContent enforcement. Returns a list of fixes applied and a layout snapshot.",
+    "inputSchema": {
+      "properties": {
+        "canvasWidth": {
+          "description": "Canvas width for layout (default 1200)",
+          "type": "number",
+        },
+        "filePath": {
+          "description": "Path to .op file, or omit for live canvas",
+          "type": "string",
+        },
+        "pageId": {
+          "description": "Target page ID (defaults to first page)",
+          "type": "string",
+        },
+        "rootId": {
+          "description": "ID of the root frame (from design_skeleton result)",
+          "type": "string",
+        },
+      },
+      "required": [
+        "rootId",
+      ],
+      "type": "object",
+    },
+    "name": "design_refine",
+  },
+]
+`;
