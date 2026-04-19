@@ -4,6 +4,7 @@ import { handleDesignSkeleton } from '../tools/design-skeleton';
 import { handleDesignContent } from '../tools/design-content';
 import { handleDesignRefine } from '../tools/design-refine';
 import { LAYERED_DESIGN_TOOLS } from '../tools/layered-design-defs';
+import { handleAddSectionV0 } from '../tools/add-section-v0';
 
 export const DESIGN_TOOL_DEFINITIONS = [
   {
@@ -77,6 +78,31 @@ export const DESIGN_TOOL_DEFINITIONS = [
     },
   },
   ...LAYERED_DESIGN_TOOLS,
+  {
+    name: 'add_section_v0',
+    description:
+      'D0 parity spike tool (not for production). Insert one section frame with minimal schema: ' +
+      'title (becomes frame.name) + layout (horizontal|vertical). Validates N-tool additive-only ' +
+      'hypothesis. See spec openpencil-docs/superpowers/specs/2026-04-19-element-tools-v0.md §D0. ' +
+      'schemaVersion 1.0',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        filePath: {
+          type: 'string',
+          description: 'Path to .op file, or omit to use the live canvas (default)',
+        },
+        title: { type: 'string', description: 'Section name (becomes frame.name)' },
+        layout: {
+          type: 'string',
+          enum: ['horizontal', 'vertical'],
+          description: 'Flex direction',
+        },
+        pageId: { type: 'string', description: 'Target page ID (defaults to first page)' },
+      },
+      required: ['title', 'layout'],
+    },
+  },
 ];
 
 export const DESIGN_TOOL_NAMES = new Set([
@@ -85,6 +111,7 @@ export const DESIGN_TOOL_NAMES = new Set([
   'design_skeleton',
   'design_content',
   'design_refine',
+  'add_section_v0',
 ]);
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -112,6 +139,8 @@ export async function handleDesignToolCall(
       return JSON.stringify(await handleDesignContent(a), null, 2);
     case 'design_refine':
       return JSON.stringify(await handleDesignRefine(a), null, 2);
+    case 'add_section_v0':
+      return JSON.stringify(await handleAddSectionV0(a), null, 2);
     default:
       return '';
   }
