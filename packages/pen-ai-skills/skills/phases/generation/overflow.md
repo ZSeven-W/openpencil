@@ -25,7 +25,7 @@ If you have access to MCP tools (external client: Claude Code / Codex / Gemini C
 
 - **`add_card_row_v0`** — items with `title` + optional `subtitle` + optional `icon` (workout cards, feature tiles, content cards). Default card size 140×160.
 - **`add_metric_row_v0`** — items with `label` + `value` + optional `icon` (dashboard stats: Steps/Kcal/Sleep/Revenue). Default tile size 120×100, value rendered 28/700.
-- **`add_nav_chip_row_v0`** — items with `label` + `icon` + optional `active` flag (filter chips, category tabs). Default chip size 72×fit_content.
+- **`add_nav_chip_row_v0`** — items with `label` + optional `icon` + optional `active` flag. Label-only chips supported (plain-text filter tags like "All / Videos / Photos"). Default chip size 72×fit_content.
 
 Example:
 
