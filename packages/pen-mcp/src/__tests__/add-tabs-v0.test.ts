@@ -45,7 +45,7 @@ describe('add_tabs_v0', () => {
     expect(def?.inputSchema.required).toEqual(['items']);
   });
 
-  it('3 tabs, active gets sibling underline rect + fontWeight 600', async () => {
+  it('3 tabs, all fill_container (equal width) + active gets sibling underline + fontWeight 600', async () => {
     const fp = await fresh('a.op');
     await handleAddTabsV0({
       filePath: fp,
@@ -57,6 +57,10 @@ describe('add_tabs_v0', () => {
     expect(bar.width).toBe('fill_container');
     const tabs = bar.children as Record<string, unknown>[];
     expect(tabs.length).toBe(3);
+    // every tab fills equally so the bar splits evenly (active never blows up)
+    for (const tab of tabs) {
+      expect(tab.width).toBe('fill_container');
+    }
     expect(tabs[0].role).toBe('tab-active');
     expect(tabs[1].role).toBe('tab');
     expect(tabs[2].role).toBe('tab');
@@ -82,6 +86,7 @@ describe('add_tabs_v0', () => {
     expect(inactiveChildren.length).toBe(1);
     // active label weight 600 (reached via inner wrapper)
     const activeInner = activeChildren[0] as Record<string, unknown>;
+    expect(activeInner.width).toBe('fill_container');
     const activeLabel = (activeInner.children as Record<string, unknown>[])[0];
     expect(activeLabel.fontWeight).toBe(600);
     const inactiveInner = inactiveChildren[0] as Record<string, unknown>;
