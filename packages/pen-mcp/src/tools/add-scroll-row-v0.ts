@@ -1,4 +1,5 @@
 import { handleBatchDesign } from './batch-design';
+import { generateId } from '../utils/id';
 
 export interface AddScrollRowV0Item {
   title: string;
@@ -37,6 +38,11 @@ export async function handleAddScrollRowV0(
   const gap = params.gap ?? 12;
   const cardWidth = params.card_width ?? defaultCardWidth(params.children_type);
   const wrapper = buildWrapperNode(params, gap, cardWidth);
+  // batch_design only assigns an id to the top-level inserted node; nested
+  // children come through untouched. Without ids on nested nodes, later
+  // tree traversal / update / delete / move all fail. Assign ids to the
+  // entire subtree here (batch_design harmlessly overwrites the top id).
+  assignIdsRecursively(wrapper);
   const parentRef = params.parent_id ? `"${params.parent_id}"` : 'null';
   const dsl = `row=I(${parentRef}, ${JSON.stringify(wrapper)})`;
   return handleBatchDesign({
@@ -45,6 +51,18 @@ export async function handleAddScrollRowV0(
     pageId: params.pageId,
     postProcess: false,
   });
+}
+
+function assignIdsRecursively(node: Record<string, unknown>): void {
+  if (typeof node.id !== 'string') node.id = generateId();
+  const children = node.children;
+  if (Array.isArray(children)) {
+    for (const child of children) {
+      if (child && typeof child === 'object') {
+        assignIdsRecursively(child as Record<string, unknown>);
+      }
+    }
+  }
 }
 
 function defaultCardWidth(kind: AddScrollRowV0ChildrenType): number {
