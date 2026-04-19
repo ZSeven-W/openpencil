@@ -601,13 +601,14 @@ export const DESIGN_TOOL_DEFINITIONS = [
   {
     name: 'add_body_text_v0',
     description:
-      'Body / description text with AUTO script detection + script-specific CJK font. ' +
-      'Chinese → Noto Sans SC, Japanese → Noto Sans JP, Korean → Noto Sans KR, Latin → Inter. ' +
-      'Japanese takes precedence when hiragana/katakana present (disambiguates kanji-heavy text ' +
-      'like "今日は"). CJK bodies get lineHeight=1.6 + letterSpacing=0 (NEVER negative — causes ' +
-      'CJK character overlap). Latin gets lineHeight=1.5. Always sets width=fill_container + ' +
-      'textGrowth=fixed-width so long text wraps (overflow.md: fixed-width required or >15-char ' +
-      'text does not wrap). Intended for VERTICAL-layout parents only. schemaVersion 1.0',
+      'Body / description text. fontFamily ALWAYS Inter (per text-rules.md rule "body=Inter" — ' +
+      'Inter uses system CJK fallback, so script-specific Noto faces apply ONLY to headings, ' +
+      'not body). Script is auto-detected just to set the right lineHeight + letterSpacing: ' +
+      'CJK (Chinese / Japanese / Korean) body gets lineHeight=1.6 + letterSpacing=0 (NEVER ' +
+      'negative — causes CJK character overlap); Latin body gets lineHeight=1.5 + no letterSpacing ' +
+      'override. Always sets width=fill_container + textGrowth=fixed-width so long text wraps ' +
+      '(overflow.md: fixed-width required for >15-char text to wrap). Intended for VERTICAL-layout ' +
+      'parents only. schemaVersion 1.0',
     inputSchema: {
       type: 'object' as const,
       properties: {
