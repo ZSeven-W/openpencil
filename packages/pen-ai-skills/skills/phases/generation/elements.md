@@ -1,6 +1,6 @@
 ---
 name: elements
-description: N-tool element family reference — rows, containers, atoms, text/button primitives, composition, forms, controls (switch/checkbox/radio/tabs/segmented), empty state. Each tool replaces a documented batch_design failure mode
+description: N-tool element family reference — rows, containers, atoms, text/button primitives, composition, forms, controls (switch/checkbox/radio/tabs/segmented), state/feedback (empty_state/alert/toast/progress_bar), floating/nav (fab/breadcrumb/stepper). Each tool replaces a documented batch_design failure mode
 phase: [generation]
 trigger:
   flags: [hasMcpTools]
@@ -79,8 +79,17 @@ Controls (toggle / choice / tabs):
 State / feedback:
 
 25. Empty state (icon + title + optional subtitle + optional CTA button, centered) → `add_empty_state_v0`
+26. Inline banner / callout (icon + message + optional close x, fill_container) → `add_alert_v0`
+27. Floating pill notification (dark fit_content pill) → `add_toast_v0`
+28. Linear progress bar (fixed bar_width + value 0-100) → `add_progress_bar_v0`
 
-26. None match → fall through to `batch_design`
+Floating / nav / wizard:
+
+29. Floating action button (circular 56×56, icon centered) → `add_fab_v0`
+30. Breadcrumb trail with chevron separators (last crumb auto-active) → `add_breadcrumb_v0`
+31. Horizontal numbered stepper (circles + fill_container connectors) → `add_stepper_v0`
+
+32. None match → fall through to `batch_design`
 
 **Disambiguation**: if you need a ROW of 3 metrics that should NOT scroll (e.g. a stats strip inside a card), use `add_stat_grid_v0`, NOT `add_metric_row_v0`. The grid uses `fill_container` per cell so it never overflows; the metric row uses fixed-px cells + scroll wrapper.
 
@@ -113,6 +122,12 @@ PREFER an element tool when the spec says any of:
 - "top tabs", "underline tabs", "secondary nav", "下划线 tab" → `add_tabs_v0`
 - "segmented control", "iOS pill tabs", "filter toggle group", "iOS 分段控制" → `add_segmented_control_v0`
 - "empty state", "no results", "nothing here yet", "first-run state", "空状态" → `add_empty_state_v0`
+- "alert", "callout", "banner", "notification bar", "告知条", "warning banner" → `add_alert_v0`
+- "toast", "snackbar", "popup notification", "轻提示" → `add_toast_v0`
+- "progress bar", "loading bar", "线性进度条", "linear progress" → `add_progress_bar_v0`
+- "FAB", "floating action button", "compose button", "新建按钮" → `add_fab_v0`
+- "breadcrumb", "nav path", "面包屑" → `add_breadcrumb_v0`
+- "stepper", "progress steps", "wizard nav", "步骤条" → `add_stepper_v0`
 
 STILL use batch_design when:
 
@@ -261,6 +276,22 @@ add_empty_state_v0({
   icon: "inbox",
   cta_label: "Create new",
 })
+
+add_alert_v0({ message: "Your changes are saved.", icon: "check", dismissible: true })
+
+add_toast_v0({ message: "Copied to clipboard", icon: "check" })
+
+add_progress_bar_v0({ value: 60 })               // default bar_width=240 → fill=144
+add_progress_bar_v0({ value: 25, bar_width: 400 })
+
+add_fab_v0({ icon: "plus" })                      // default 56×56
+add_fab_v0({ icon: "edit", size: 40 })
+
+add_breadcrumb_v0({
+  items: [{ label: "Home" }, { label: "Settings" }, { label: "Billing" }],
+})
+
+add_stepper_v0({ total: 4, current: 1 })          // steps 1+2 done, 3+4 pending
 ```
 
 ## Composition pattern
@@ -279,7 +310,7 @@ The tool guarantees — you cannot break them from the input side:
 - `bottom-tab-bar` is inline (no empty spacer sibling needed, do NOT add one)
 - Activity ring is frame+cornerRadius=size/2+stroke+centered text — NEVER emit ellipse+sibling text for rings
 - Every emitted node has a unique id (you can reference it later)
-- Roles are set (`card` / `metric-tile` / `nav-chip` / `nav-chip-active` / `bottom-tab-bar` / `nav-item` / `nav-item-active` / `activity-ring` / `stat-grid` / `stat-cell` / `section-header` / `section-header-title` / `section-header-action` / `top-nav-bar` / `nav-spacer` / `icon-button` / `divider` / `badge` / `avatar` / `button` / `heading` / `body` / `label` / `icon-label` / `list-row` / `list-row-text` / `search-bar` / `form-field` / `form-input` / `switch` / `switch-thumb` / `checkbox` / `checkbox-checked` / `checkbox-row` / `radio` / `radio-selected` / `radio-row` / `radio-dot` / `tabs` / `tab` / `tab-active` / `segmented-control` / `segment` / `segment-active` / `empty-state` / `empty-state-icon` / `empty-state-title` / `empty-state-subtitle`)
+- Roles are set (`card` / `metric-tile` / `nav-chip` / `nav-chip-active` / `bottom-tab-bar` / `nav-item` / `nav-item-active` / `activity-ring` / `stat-grid` / `stat-cell` / `section-header` / `section-header-title` / `section-header-action` / `top-nav-bar` / `nav-spacer` / `icon-button` / `divider` / `badge` / `avatar` / `button` / `heading` / `body` / `label` / `icon-label` / `list-row` / `list-row-text` / `search-bar` / `form-field` / `form-input` / `switch` / `switch-thumb` / `checkbox` / `checkbox-checked` / `checkbox-row` / `radio` / `radio-selected` / `radio-row` / `radio-dot` / `tabs` / `tab` / `tab-active` / `segmented-control` / `segment` / `segment-active` / `empty-state` / `empty-state-icon` / `empty-state-title` / `empty-state-subtitle` / `alert` / `alert-message` / `alert-close` / `toast` / `toast-message` / `progress-bar` / `progress-bar-fill` / `fab` / `breadcrumb` / `breadcrumb-item` / `breadcrumb-item-active` / `breadcrumb-separator` / `stepper` / `step` / `step-active` / `step-connector` / `step-connector-active`)
 
 ## Failure mode
 
