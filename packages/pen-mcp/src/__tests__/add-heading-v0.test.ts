@@ -103,3 +103,84 @@ describe('add_heading_v0', () => {
     expect(await readFile(fp, 'utf-8')).toBe(before);
   });
 });
+
+describe('add_heading_v0 — CJK typography (regression for Codex #13)', () => {
+  it('Chinese display: Noto Sans SC + lineHeight 1.3 + NO negative letterSpacing', async () => {
+    const fp = await fresh('a.op');
+    await handleAddHeadingV0({ filePath: fp, content: '你好世界', level: 'display' });
+    const h = getRoot(await readDoc(fp));
+    // Memory: "NEVER use Space Grotesk/Manrope for CJK — no CJK glyphs"
+    expect(h.fontFamily).toBe('Noto Sans SC');
+    // Memory: "CJK headings 1.3-1.4 (NOT 1.1-1.2 like Latin)" —
+    // Latin display is 1.0, CJK display bumps to 1.3
+    expect(h.lineHeight).toBe(1.3);
+    // Memory: "CJK letterSpacing: 0, NEVER negative" — Latin display
+    // has letterSpacing -0.5, CJK display drops it entirely
+    expect(h.letterSpacing).toBeUndefined();
+    // Structural parity: fontSize / fontWeight unchanged
+    expect(h.fontSize).toBe(48);
+    expect(h.fontWeight).toBe(700);
+  });
+
+  it('Chinese h1 / h2 / h3: lineHeight 1.3 / 1.35 / 1.4, Noto Sans SC', async () => {
+    // Use unique filenames per iteration — reusing one path confuses
+    // openDocument's cache across iterations of the same test run.
+    const cases: Array<{ level: 'h1' | 'h2' | 'h3'; lh: number; file: string }> = [
+      { level: 'h1', lh: 1.3, file: 'cjk-h1.op' },
+      { level: 'h2', lh: 1.35, file: 'cjk-h2.op' },
+      { level: 'h3', lh: 1.4, file: 'cjk-h3.op' },
+    ];
+    try {
+      for (const { level, lh, file } of cases) {
+        const fp = join(TMP, file);
+        await writeFile(fp, EMPTY, 'utf-8');
+        await handleAddHeadingV0({ filePath: fp, content: '中文标题', level });
+        const h = getRoot(await readDoc(fp));
+        expect(h.fontFamily, `${level} fontFamily`).toBe('Noto Sans SC');
+        expect(h.lineHeight, `${level} lineHeight`).toBe(lh);
+        // CJK never has letterSpacing (and never negative)
+        expect(h.letterSpacing, `${level} letterSpacing`).toBeUndefined();
+      }
+    } finally {
+      for (const { file } of cases) {
+        try {
+          const fp = join(TMP, file);
+          invalidateCache(fp);
+          await unlink(fp);
+        } catch {}
+      }
+    }
+  });
+
+  it('Japanese content triggers CJK preset', async () => {
+    const fp = await fresh('a.op');
+    await handleAddHeadingV0({ filePath: fp, content: 'こんにちは' });
+    const h = getRoot(await readDoc(fp));
+    expect(h.fontFamily).toBe('Noto Sans SC');
+    expect(h.lineHeight).toBe(1.35); // h2 CJK
+  });
+
+  it('Korean content triggers CJK preset', async () => {
+    const fp = await fresh('a.op');
+    await handleAddHeadingV0({ filePath: fp, content: '안녕하세요' });
+    const h = getRoot(await readDoc(fp));
+    expect(h.fontFamily).toBe('Noto Sans SC');
+    expect(h.lineHeight).toBe(1.35);
+  });
+
+  it('mixed Latin + CJK content takes CJK preset (any CJK char wins)', async () => {
+    const fp = await fresh('a.op');
+    await handleAddHeadingV0({ filePath: fp, content: 'Hello 世界' });
+    const h = getRoot(await readDoc(fp));
+    expect(h.fontFamily).toBe('Noto Sans SC');
+    expect(h.lineHeight).toBe(1.35);
+  });
+
+  it('pure Latin content keeps Latin preset (no fontFamily, original lineHeight)', async () => {
+    const fp = await fresh('a.op');
+    await handleAddHeadingV0({ filePath: fp, content: 'Hello World', level: 'h1' });
+    const h = getRoot(await readDoc(fp));
+    expect(h.fontFamily).toBeUndefined(); // Latin inherits theme default
+    expect(h.lineHeight).toBe(1.1);
+  });
+});
