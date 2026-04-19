@@ -5,7 +5,9 @@ import { handleDesignContent } from '../tools/design-content';
 import { handleDesignRefine } from '../tools/design-refine';
 import { LAYERED_DESIGN_TOOLS } from '../tools/layered-design-defs';
 import { handleAddSectionV0 } from '../tools/add-section-v0';
-import { handleAddScrollRowV0 } from '../tools/add-scroll-row-v0';
+import { handleAddCardRowV0 } from '../tools/add-card-row-v0';
+import { handleAddMetricRowV0 } from '../tools/add-metric-row-v0';
+import { handleAddNavChipRowV0 } from '../tools/add-nav-chip-row-v0';
 import { handleAddBottomNavV0 } from '../tools/add-bottom-nav-v0';
 import { handleAddActivityRingV0 } from '../tools/add-activity-ring-v0';
 
@@ -82,54 +84,112 @@ export const DESIGN_TOOL_DEFINITIONS = [
   },
   ...LAYERED_DESIGN_TOOLS,
   {
-    name: 'add_scroll_row_v0',
+    name: 'add_card_row_v0',
     description:
-      'Create a horizontal scroll row (card / metric_tile / nav_item) with guaranteed overflow safety. ' +
-      'Builds the exact nested wrapper + clipContent + fit_content inner-row structure that batch_design ' +
-      'generates incorrectly ~X% of the time on non-Claude models (see ' +
-      'packages/pen-ai-skills/skills/phases/generation/overflow.md §HORIZONTAL SCROLL ROWS). ' +
-      'Always prefer this tool over batch_design when the spec mentions "horizontal scrolling cards", ' +
-      '"swipeable row", "chip row", "metric tiles" or similar. schemaVersion 1.0',
+      'Create a horizontal scroll row of CARDS (title + subtitle + optional icon). Each card is ' +
+      '140×160, cornerRadius=20. Forces the overflow-safe wrapper+clipContent+fit_content structure ' +
+      'taught in packages/pen-ai-skills/skills/phases/generation/overflow.md §HORIZONTAL SCROLL ROWS. ' +
+      'Use when spec mentions "workout cards", "feature cards", "swipeable content cards", "pills", ' +
+      'or any row where each item has a prominent title plus descriptive subtext. schemaVersion 1.0',
     inputSchema: {
       type: 'object' as const,
       properties: {
-        filePath: {
-          type: 'string',
-          description: 'Path to .op file, or omit to use the live canvas (default)',
-        },
-        children_type: {
-          type: 'string',
-          enum: ['card', 'metric_tile', 'nav_item'],
-          description:
-            'Kind of children to lay out. card = 140x160 vertical card with title/subtitle/icon; ' +
-            'metric_tile = 120x100 with small label + big value; nav_item = 72 auto-height icon+label.',
-        },
+        filePath: { type: 'string', description: 'Path to .op file, or omit for live canvas' },
         items: {
           type: 'array',
-          description: 'Row items. Each needs title; subtitle and icon are optional.',
+          description: 'Card items. Each needs title; subtitle and icon are optional.',
           items: {
             type: 'object',
             properties: {
               title: { type: 'string' },
               subtitle: { type: 'string' },
-              icon: { type: 'string', description: 'lucide icon name (e.g. "activity")' },
+              icon: { type: 'string', description: 'lucide icon name' },
             },
             required: ['title'],
           },
         },
-        card_width: {
-          type: 'number',
-          description:
-            'Fixed numeric width per item (overrides default: card=140, metric_tile=120, nav_item=72)',
-        },
+        card_width: { type: 'number', description: 'Fixed width per card (default 140)' },
         gap: { type: 'number', description: 'Inner-row gap in px (default 12)' },
         parent_id: {
           type: 'string',
-          description: 'Target parent node id. Omit for root-level insertion.',
+          description:
+            'Target parent node id (must exist in the document). Omit for root-level insertion.',
         },
         pageId: { type: 'string', description: 'Target page ID (defaults to first page)' },
       },
-      required: ['children_type', 'items'],
+      required: ['items'],
+    },
+  },
+  {
+    name: 'add_metric_row_v0',
+    description:
+      'Create a horizontal scroll row of METRIC TILES (small label + big value + optional icon). ' +
+      'Each tile is 120×100, cornerRadius=16, value rendered at 28/700 heading. Forces the ' +
+      'overflow-safe wrapper+clipContent+fit_content structure. Use when spec mentions "dashboard ' +
+      'stats", "KPI cards", "metric tiles", or shows Steps/Kcal/Sleep/Revenue-style rows. schemaVersion 1.0',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        filePath: { type: 'string', description: 'Path to .op file, or omit for live canvas' },
+        items: {
+          type: 'array',
+          description: 'Metric items. Each needs label + value; icon is optional.',
+          items: {
+            type: 'object',
+            properties: {
+              label: { type: 'string', description: 'Small descriptive label (e.g. "Steps")' },
+              value: { type: 'string', description: 'Big number / formatted value (e.g. "8,432")' },
+              icon: { type: 'string', description: 'lucide icon name' },
+            },
+            required: ['label', 'value'],
+          },
+        },
+        tile_width: { type: 'number', description: 'Fixed width per tile (default 120)' },
+        gap: { type: 'number', description: 'Inner-row gap in px (default 12)' },
+        parent_id: {
+          type: 'string',
+          description:
+            'Target parent node id (must exist in the document). Omit for root-level insertion.',
+        },
+        pageId: { type: 'string', description: 'Target page ID (defaults to first page)' },
+      },
+      required: ['items'],
+    },
+  },
+  {
+    name: 'add_nav_chip_row_v0',
+    description:
+      'Create a horizontal scroll row of NAV CHIPS (icon + small label, each with optional active ' +
+      'state). Each chip is 72×fit_content, cornerRadius=12. Forces the overflow-safe ' +
+      'wrapper+clipContent+fit_content structure. Use when spec mentions "category filter chips", ' +
+      '"quick access shortcuts", "horizontal tab chips", "swipeable nav items". schemaVersion 1.0',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        filePath: { type: 'string', description: 'Path to .op file, or omit for live canvas' },
+        items: {
+          type: 'array',
+          description: 'Chip items. Each needs label + icon; active marks current chip.',
+          items: {
+            type: 'object',
+            properties: {
+              label: { type: 'string' },
+              icon: { type: 'string', description: 'lucide icon name' },
+              active: { type: 'boolean' },
+            },
+            required: ['label', 'icon'],
+          },
+        },
+        chip_width: { type: 'number', description: 'Fixed width per chip (default 72)' },
+        gap: { type: 'number', description: 'Inner-row gap in px (default 12)' },
+        parent_id: {
+          type: 'string',
+          description:
+            'Target parent node id (must exist in the document). Omit for root-level insertion.',
+        },
+        pageId: { type: 'string', description: 'Target page ID (defaults to first page)' },
+      },
+      required: ['items'],
     },
   },
   {
@@ -203,7 +263,9 @@ export const DESIGN_TOOL_NAMES = new Set([
   'design_skeleton',
   'design_content',
   'design_refine',
-  'add_scroll_row_v0',
+  'add_card_row_v0',
+  'add_metric_row_v0',
+  'add_nav_chip_row_v0',
   'add_bottom_nav_v0',
   'add_activity_ring_v0',
 ]);
@@ -233,8 +295,12 @@ export async function handleDesignToolCall(
       return JSON.stringify(await handleDesignContent(a), null, 2);
     case 'design_refine':
       return JSON.stringify(await handleDesignRefine(a), null, 2);
-    case 'add_scroll_row_v0':
-      return JSON.stringify(await handleAddScrollRowV0(a), null, 2);
+    case 'add_card_row_v0':
+      return JSON.stringify(await handleAddCardRowV0(a), null, 2);
+    case 'add_metric_row_v0':
+      return JSON.stringify(await handleAddMetricRowV0(a), null, 2);
+    case 'add_nav_chip_row_v0':
+      return JSON.stringify(await handleAddNavChipRowV0(a), null, 2);
     case 'add_bottom_nav_v0':
       return JSON.stringify(await handleAddBottomNavV0(a), null, 2);
     case 'add_activity_ring_v0':

@@ -19,24 +19,27 @@ OVERFLOW PREVENTION (CRITICAL):
 
 When the spec says "horizontal scrolling cards", "swipeable row", "chip row", "metric tiles", or similar, use ONE of the two paths below.
 
-### Preferred (MCP tool path): `add_scroll_row_v0`
+### Preferred (MCP tool path): pick one of 3 narrow row tools
 
-If you have access to MCP tools (external client: Claude Code / Codex / Gemini CLI / Cursor), **call the `add_scroll_row_v0` tool**. It forces the exact wrapper+clipContent+fit_content structure, assigns ids, sets roles, and cannot be made incorrectly by schema. You only supply `children_type` (card | metric_tile | nav_item) + `items` array.
+If you have access to MCP tools (external client: Claude Code / Codex / Gemini CLI / Cursor), call the tool matching what's in the row — all three produce the overflow-safe wrapper+clipContent+fit_content structure and cannot be made incorrectly by schema.
+
+- **`add_card_row_v0`** — items with `title` + optional `subtitle` + optional `icon` (workout cards, feature tiles, content cards). Default card size 140×160.
+- **`add_metric_row_v0`** — items with `label` + `value` + optional `icon` (dashboard stats: Steps/Kcal/Sleep/Revenue). Default tile size 120×100, value rendered 28/700.
+- **`add_nav_chip_row_v0`** — items with `label` + `icon` + optional `active` flag (filter chips, category tabs). Default chip size 72×fit_content.
 
 Example:
 
 ```
-add_scroll_row_v0({
-  children_type: "metric_tile",
+add_metric_row_v0({
   items: [
-    { title: "Steps",  subtitle: "8,432",  icon: "activity" },
-    { title: "Kcal",   subtitle: "512",    icon: "flame" },
-    { title: "Sleep",  subtitle: "7h 24m", icon: "moon" },
+    { label: "Steps",  value: "8,432",  icon: "activity" },
+    { label: "Kcal",   value: "512",    icon: "flame" },
+    { label: "Sleep",  value: "7h 24m", icon: "moon" },
   ],
 })
 ```
 
-Add per-tile fills / colors afterwards with a separate `batch_design` U-op (the tool is style-guide orthogonal and ships colorless on purpose).
+Add per-tile fills / colors afterwards with a separate `batch_design` U-op (these tools are style-guide orthogonal and ship colorless on purpose).
 
 ### Fallback (hand-built JSON path)
 
