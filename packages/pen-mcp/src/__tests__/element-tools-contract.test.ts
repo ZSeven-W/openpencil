@@ -42,6 +42,12 @@ const ELEMENT_TOOL_NAMES = [
   'add_list_row_v0',
   'add_search_bar_v0',
   'add_form_field_v0',
+  'add_switch_v0',
+  'add_checkbox_v0',
+  'add_radio_v0',
+  'add_tabs_v0',
+  'add_segmented_control_v0',
+  'add_empty_state_v0',
 ];
 
 describe('element tools — v0-MUST contract', () => {

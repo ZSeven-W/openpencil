@@ -1,11 +1,11 @@
 ---
 name: elements
-description: N-tool element family (12 tools) reference — rows (card/metric/nav_chip/stat_grid), containers (bottom_nav/top_nav_bar/section_header/icon_button/activity_ring), atoms (divider/badge/avatar). Each tool replaces a documented batch_design failure mode
+description: N-tool element family reference — rows, containers, atoms, text/button primitives, composition, forms, controls (switch/checkbox/radio/tabs/segmented), empty state. Each tool replaces a documented batch_design failure mode
 phase: [generation]
 trigger:
   flags: [hasMcpTools]
 priority: 14
-budget: 1800
+budget: 2100
 category: base
 ---
 
@@ -68,7 +68,19 @@ Forms:
 18. Search bar (height=44, cornerRadius=22, leading search icon) → `add_search_bar_v0`
 19. Form field (label + 48px input with optional affordance icons) → `add_form_field_v0`
 
-20. None match → fall through to `batch_design`
+Controls (toggle / choice / tabs):
+
+20. iOS/Material toggle switch (51×31, thumb floats) → `add_switch_v0`
+21. Checkbox + inline label (20×20 box, `check` icon inside when checked) → `add_checkbox_v0`
+22. Radio button + inline label (20×20 ring, dot inside when selected) → `add_radio_v0`
+23. Horizontal top tabs with underline on active (fontWeight 600 + 2px bottom stroke) → `add_tabs_v0`
+24. iOS pill-style segmented control (equal-width segments, active floats white) → `add_segmented_control_v0`
+
+State / feedback:
+
+25. Empty state (icon + title + optional subtitle + optional CTA button, centered) → `add_empty_state_v0`
+
+26. None match → fall through to `batch_design`
 
 **Disambiguation**: if you need a ROW of 3 metrics that should NOT scroll (e.g. a stats strip inside a card), use `add_stat_grid_v0`, NOT `add_metric_row_v0`. The grid uses `fill_container` per cell so it never overflows; the metric row uses fixed-px cells + scroll wrapper.
 
@@ -95,6 +107,12 @@ PREFER an element tool when the spec says any of:
 - "settings row", "list item", "iOS list cell", "table row with chevron" → `add_list_row_v0`
 - "search bar", "search input", "filter search", "搜索栏" → `add_search_bar_v0`
 - "form field", "email input", "password field", "labeled input", "required field" → `add_form_field_v0`
+- "toggle", "switch", "on/off", "开关" → `add_switch_v0`
+- "checkbox", "agreement", "select option", "复选框" → `add_checkbox_v0`
+- "radio", "single choice", "单选" → `add_radio_v0` (stack multiple in a vertical parent)
+- "top tabs", "underline tabs", "secondary nav", "下划线 tab" → `add_tabs_v0`
+- "segmented control", "iOS pill tabs", "filter toggle group", "iOS 分段控制" → `add_segmented_control_v0`
+- "empty state", "no results", "nothing here yet", "first-run state", "空状态" → `add_empty_state_v0`
 
 STILL use batch_design when:
 
@@ -211,6 +229,38 @@ add_form_field_v0({
   trailing_icon: "eye",
   required: true,
 })
+
+add_switch_v0({})                          // off (default)
+add_switch_v0({ active: true })             // on — iOS green
+
+add_checkbox_v0({ label: "Accept terms" })
+add_checkbox_v0({ label: "Done", checked: true })
+
+add_radio_v0({ label: "Small" })
+add_radio_v0({ label: "Medium", selected: true })
+
+add_tabs_v0({
+  items: [
+    { label: "Overview", active: true },
+    { label: "Details" },
+    { label: "Reviews" },
+  ],
+})
+
+add_segmented_control_v0({
+  items: [
+    { label: "Day" },
+    { label: "Week", active: true },
+    { label: "Month" },
+  ],
+})
+
+add_empty_state_v0({
+  title: "No items yet",
+  subtitle: "Add one to get started",
+  icon: "inbox",
+  cta_label: "Create new",
+})
 ```
 
 ## Composition pattern
@@ -229,7 +279,7 @@ The tool guarantees — you cannot break them from the input side:
 - `bottom-tab-bar` is inline (no empty spacer sibling needed, do NOT add one)
 - Activity ring is frame+cornerRadius=size/2+stroke+centered text — NEVER emit ellipse+sibling text for rings
 - Every emitted node has a unique id (you can reference it later)
-- Roles are set (`card` / `metric-tile` / `nav-chip` / `nav-chip-active` / `bottom-tab-bar` / `nav-item` / `nav-item-active` / `activity-ring` / `stat-grid` / `stat-cell` / `section-header` / `section-header-title` / `section-header-action` / `top-nav-bar` / `nav-spacer` / `icon-button` / `divider` / `badge` / `avatar` / `button` / `heading` / `body` / `label` / `icon-label` / `list-row` / `list-row-text` / `search-bar` / `form-field` / `form-input`)
+- Roles are set (`card` / `metric-tile` / `nav-chip` / `nav-chip-active` / `bottom-tab-bar` / `nav-item` / `nav-item-active` / `activity-ring` / `stat-grid` / `stat-cell` / `section-header` / `section-header-title` / `section-header-action` / `top-nav-bar` / `nav-spacer` / `icon-button` / `divider` / `badge` / `avatar` / `button` / `heading` / `body` / `label` / `icon-label` / `list-row` / `list-row-text` / `search-bar` / `form-field` / `form-input` / `switch` / `switch-thumb` / `checkbox` / `checkbox-checked` / `checkbox-row` / `radio` / `radio-selected` / `radio-row` / `radio-dot` / `tabs` / `tab` / `tab-active` / `segmented-control` / `segment` / `segment-active` / `empty-state` / `empty-state-icon` / `empty-state-title` / `empty-state-subtitle`)
 
 ## Failure mode
 
