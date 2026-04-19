@@ -17,6 +17,9 @@ import { handleAddIconButtonV0 } from '../tools/add-icon-button-v0';
 import { handleAddDividerV0 } from '../tools/add-divider-v0';
 import { handleAddBadgeV0 } from '../tools/add-badge-v0';
 import { handleAddAvatarV0 } from '../tools/add-avatar-v0';
+import { handleAddTextButtonV0 } from '../tools/add-text-button-v0';
+import { handleAddHeadingV0 } from '../tools/add-heading-v0';
+import { handleAddBodyTextV0 } from '../tools/add-body-text-v0';
 
 export const DESIGN_TOOL_DEFINITIONS = [
   {
@@ -530,6 +533,98 @@ export const DESIGN_TOOL_DEFINITIONS = [
       required: [],
     },
   },
+  {
+    name: 'add_text_button_v0',
+    description:
+      'Padding-based text button matching the Pencil demo pattern (documented in memory): ' +
+      'frame(padding=[12,20], horizontal, alignItems=center, justifyContent=center, cornerRadius=8) ' +
+      '+ optional leading icon + label text. Height auto-derives from padding + text; NO explicit ' +
+      'fixed height. Use for primary / secondary buttons with a short text label. schemaVersion 1.0',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        schemaVersion: {
+          type: 'string',
+          enum: ['1.0'],
+          description: 'Schema version (v0-MUST §4.2). Clients MAY omit.',
+        },
+        filePath: { type: 'string', description: 'Path to .op file, or omit for live canvas' },
+        label: { type: 'string', description: 'Button text (1-3 words recommended)' },
+        leading_icon: {
+          type: 'string',
+          description: 'Optional leading lucide icon name (e.g. "plus", "arrow-right")',
+        },
+        parent_id: {
+          type: 'string',
+          description: 'Target parent node id (must exist). Omit for root-level insertion.',
+        },
+        pageId: { type: 'string', description: 'Target page ID (defaults to first page)' },
+      },
+      required: ['label'],
+    },
+  },
+  {
+    name: 'add_heading_v0',
+    description:
+      'Typographic heading with Pencil-demo-derived fontSize / fontWeight / lineHeight / ' +
+      'letterSpacing presets per level. display=48/700/1.0/-0.5, h1=32/700/1.1, h2=24/600/1.2 ' +
+      '(DEFAULT), h3=20/600/1.25. Encodes the preset so non-Claude models cannot forget the ' +
+      'correct lineHeight (1.5 default stacks multi-word headings too tight, per memory Pencil ' +
+      'demo data). Emits a single text node with role=heading. schemaVersion 1.0',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        schemaVersion: {
+          type: 'string',
+          enum: ['1.0'],
+          description: 'Schema version (v0-MUST §4.2). Clients MAY omit.',
+        },
+        filePath: { type: 'string', description: 'Path to .op file, or omit for live canvas' },
+        content: { type: 'string', description: 'Heading text' },
+        level: {
+          type: 'string',
+          enum: ['display', 'h1', 'h2', 'h3'],
+          description: 'Typography level. Default: h2.',
+        },
+        parent_id: {
+          type: 'string',
+          description: 'Target parent node id (must exist). Omit for root-level insertion.',
+        },
+        pageId: { type: 'string', description: 'Target page ID (defaults to first page)' },
+      },
+      required: ['content'],
+    },
+  },
+  {
+    name: 'add_body_text_v0',
+    description:
+      'Body / description text with AUTO CJK detection: Chinese/Japanese/Korean content gets ' +
+      'fontFamily=Noto Sans SC + lineHeight=1.6 + letterSpacing=0 (per memory: NEVER use Space ' +
+      'Grotesk / Manrope for CJK — no CJK glyphs); Latin gets Inter + 1.5. Always sets ' +
+      'width=fill_container + textGrowth=fixed-width so long text wraps (overflow.md: fixed-width ' +
+      'is required or >15-char text does not wrap). Intended for use in VERTICAL-layout parents — ' +
+      'the only context where fill_container + fixed-width is respected by the layout engine. ' +
+      'schemaVersion 1.0',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        schemaVersion: {
+          type: 'string',
+          enum: ['1.0'],
+          description: 'Schema version (v0-MUST §4.2). Clients MAY omit.',
+        },
+        filePath: { type: 'string', description: 'Path to .op file, or omit for live canvas' },
+        content: { type: 'string', description: 'Body text content (single paragraph)' },
+        parent_id: {
+          type: 'string',
+          description:
+            'Target parent node id (must exist; MUST be a vertical-layout frame). Omit for root insertion.',
+        },
+        pageId: { type: 'string', description: 'Target page ID (defaults to first page)' },
+      },
+      required: ['content'],
+    },
+  },
 ];
 
 export const DESIGN_TOOL_NAMES = new Set([
@@ -550,6 +645,9 @@ export const DESIGN_TOOL_NAMES = new Set([
   'add_divider_v0',
   'add_badge_v0',
   'add_avatar_v0',
+  'add_text_button_v0',
+  'add_heading_v0',
+  'add_body_text_v0',
 ]);
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -601,6 +699,12 @@ export async function handleDesignToolCall(
       return JSON.stringify(await handleAddBadgeV0(a), null, 2);
     case 'add_avatar_v0':
       return JSON.stringify(await handleAddAvatarV0(a), null, 2);
+    case 'add_text_button_v0':
+      return JSON.stringify(await handleAddTextButtonV0(a), null, 2);
+    case 'add_heading_v0':
+      return JSON.stringify(await handleAddHeadingV0(a), null, 2);
+    case 'add_body_text_v0':
+      return JSON.stringify(await handleAddBodyTextV0(a), null, 2);
     default:
       return '';
   }
