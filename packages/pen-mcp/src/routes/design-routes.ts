@@ -14,6 +14,9 @@ import { handleAddStatGridV0 } from '../tools/add-stat-grid-v0';
 import { handleAddSectionHeaderV0 } from '../tools/add-section-header-v0';
 import { handleAddTopNavBarV0 } from '../tools/add-top-nav-bar-v0';
 import { handleAddIconButtonV0 } from '../tools/add-icon-button-v0';
+import { handleAddDividerV0 } from '../tools/add-divider-v0';
+import { handleAddBadgeV0 } from '../tools/add-badge-v0';
+import { handleAddAvatarV0 } from '../tools/add-avatar-v0';
 
 export const DESIGN_TOOL_DEFINITIONS = [
   {
@@ -437,6 +440,96 @@ export const DESIGN_TOOL_DEFINITIONS = [
       required: ['icon'],
     },
   },
+  {
+    name: 'add_divider_v0',
+    description:
+      'Hairline divider (rectangle, not stroke). Forces the pattern documented in pen-ai-skills memory: ' +
+      'rectangle with height=1 + width=fill_container (horizontal) or width=1 + height=fill_container ' +
+      '(vertical). Use between list rows, between form sections, between a card content and its footer. ' +
+      'Ships colorless — override fill via a follow-up batch_design U-op. schemaVersion 1.0',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        schemaVersion: {
+          type: 'string',
+          enum: ['1.0'],
+          description: 'Schema version (v0-MUST §4.2). Clients MAY omit.',
+        },
+        filePath: { type: 'string', description: 'Path to .op file, or omit for live canvas' },
+        orientation: {
+          type: 'string',
+          enum: ['horizontal', 'vertical'],
+          description: 'Default horizontal',
+        },
+        thickness: { type: 'number', description: 'Divider thickness in px (default 1)' },
+        parent_id: {
+          type: 'string',
+          description: 'Target parent node id (must exist). Omit for root-level insertion.',
+        },
+        pageId: { type: 'string', description: 'Target page ID (defaults to first page)' },
+      },
+      required: [],
+    },
+  },
+  {
+    name: 'add_badge_v0',
+    description:
+      'Short inline badge / pill / tag ("NEW", "BETA", "42", "Sale"). Forces the standard pill ' +
+      'layout (cornerRadius=999, padding=[4,10], font 11/600). Documented constraint (overflow.md): ' +
+      'CJK ≤8 chars, Latin ≤16 chars — longer labels are NOT a badge, use batch_design. schemaVersion 1.0',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        schemaVersion: {
+          type: 'string',
+          enum: ['1.0'],
+          description: 'Schema version (v0-MUST §4.2). Clients MAY omit.',
+        },
+        filePath: { type: 'string', description: 'Path to .op file, or omit for live canvas' },
+        label: {
+          type: 'string',
+          description: 'Short label (Latin ≤16 chars / CJK ≤8 chars)',
+        },
+        parent_id: {
+          type: 'string',
+          description: 'Target parent node id (must exist). Omit for root-level insertion.',
+        },
+        pageId: { type: 'string', description: 'Target page ID (defaults to first page)' },
+      },
+      required: ['label'],
+    },
+  },
+  {
+    name: 'add_avatar_v0',
+    description:
+      'Circular avatar with optional centered initial. Forces the same frame+cornerRadius=size/2+flex-' +
+      'centering pattern as add_activity_ring_v0 — NEVER the ellipse+sibling text anti-pattern ' +
+      'documented in layout.md. Default size 40 (inline). For larger profile avatars pass size: 56 ' +
+      'or 96. Without `initial`, emits an empty circle ready for an image child via batch_design. ' +
+      'schemaVersion 1.0',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        schemaVersion: {
+          type: 'string',
+          enum: ['1.0'],
+          description: 'Schema version (v0-MUST §4.2). Clients MAY omit.',
+        },
+        filePath: { type: 'string', description: 'Path to .op file, or omit for live canvas' },
+        initial: {
+          type: 'string',
+          description: 'Single character / short initial (e.g. "A", "JD"). Omit for empty circle.',
+        },
+        size: { type: 'number', description: 'Diameter in px (default 40)' },
+        parent_id: {
+          type: 'string',
+          description: 'Target parent node id (must exist). Omit for root-level insertion.',
+        },
+        pageId: { type: 'string', description: 'Target page ID (defaults to first page)' },
+      },
+      required: [],
+    },
+  },
 ];
 
 export const DESIGN_TOOL_NAMES = new Set([
@@ -454,6 +547,9 @@ export const DESIGN_TOOL_NAMES = new Set([
   'add_section_header_v0',
   'add_top_nav_bar_v0',
   'add_icon_button_v0',
+  'add_divider_v0',
+  'add_badge_v0',
+  'add_avatar_v0',
 ]);
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -499,6 +595,12 @@ export async function handleDesignToolCall(
       return JSON.stringify(await handleAddTopNavBarV0(a), null, 2);
     case 'add_icon_button_v0':
       return JSON.stringify(await handleAddIconButtonV0(a), null, 2);
+    case 'add_divider_v0':
+      return JSON.stringify(await handleAddDividerV0(a), null, 2);
+    case 'add_badge_v0':
+      return JSON.stringify(await handleAddBadgeV0(a), null, 2);
+    case 'add_avatar_v0':
+      return JSON.stringify(await handleAddAvatarV0(a), null, 2);
     default:
       return '';
   }
