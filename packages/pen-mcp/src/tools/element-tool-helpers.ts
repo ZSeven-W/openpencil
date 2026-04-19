@@ -1,5 +1,5 @@
 import { openDocument, resolveDocPath } from '../document-manager';
-import { findNodeInTree, getDocChildren } from '../utils/node-operations';
+import { findNodeInTree, findParentInTree, getDocChildren } from '../utils/node-operations';
 import { generateId } from '../utils/id';
 import { handleBatchDesign } from './batch-design';
 
@@ -146,6 +146,26 @@ export async function insertElementTree(args: {
         `document's actual id (batch_design's DSL parser strips quotes but does not JSON-unescape). ` +
         `parent_id=${JSON.stringify(args.parent_id)}, pageId=${JSON.stringify(args.pageId)}.`,
     );
+  }
+  // Parent-location verification: node exists in tree but may have landed
+  // under the wrong parent. Can happen if batch_design's resolveRef
+  // quote-strip produces a literal that matches a DIFFERENT node than the
+  // one pre-check validated. Example: doc has both `A"B` (user intent)
+  // AND `A\"B` (literal 4-char id with backslash); after JSON.stringify
+  // + quote-strip, parser resolves to `A\"B` and inserts under it.
+  // ensureParentExists and the "landed in tree" check both pass, but
+  // the insert went to the wrong place.
+  if (args.parent_id) {
+    const actualParent = findParentInTree(postChildren, insertedId);
+    const actualParentId = actualParent?.id ?? null;
+    if (actualParentId !== args.parent_id) {
+      throw new Error(
+        `Element tool insert landed under the wrong parent: expected ` +
+          `${JSON.stringify(args.parent_id)}, got ${JSON.stringify(actualParentId ?? 'root')}. ` +
+          `This is typically a DSL-parser escape mismatch where the resolved parent id ` +
+          `happens to collide with a different node's literal id.`,
+      );
+    }
   }
   return result;
 }
