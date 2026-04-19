@@ -18,13 +18,17 @@ export interface AddTabsV0Params {
 }
 
 /**
- * Horizontal top tabs with underline on the active tab. PenStroke only
- * supports `thickness: number | [number,number,number,number]` — no
- * per-side stroke rendering (paint-utils.ts::resolveStrokeWidth returns 0
- * for object shapes, thickness[0] for arrays). So the active underline is
- * a sibling rectangle, NOT a directional stroke. Each tab becomes a
- * vertical frame: [content wrapper with padding] + [underline rect when
- * active].
+ * Horizontal top tabs with underline on the active tab. Each tab is
+ * `width=fill_container` so the bar splits evenly across all tabs — this
+ * matches the common Twitter/Material underline-tabs pattern AND avoids
+ * a layout-engine trap: a `fill_container` child inside a `fit_content`
+ * parent resolves to the grandparent's width (pen-core engine.ts:182-187),
+ * which would blow up only the active tab.
+ *
+ * The underline is a sibling rectangle (NOT a directional stroke — PenStroke
+ * doesn't support per-side rendering; see project_stroke_contract.md).
+ * Each tab is a vertical frame: [padded content wrapper] + [underline rect
+ * when active].
  *
  * roles: 'tabs' / 'tab' | 'tab-active' / 'tab-underline'.
  * Use for "tabs with underline", "secondary navigation".
@@ -37,6 +41,7 @@ export async function handleAddTabsV0(
     const inner = {
       type: 'frame',
       name: 'Tab Content',
+      width: 'fill_container',
       padding: [12, 16],
       layout: 'horizontal',
       alignItems: 'center',
@@ -67,6 +72,7 @@ export async function handleAddTabsV0(
       type: 'frame',
       name: `Tab (${item.label})`,
       role: item.active ? 'tab-active' : 'tab',
+      width: 'fill_container',
       layout: 'vertical',
       alignItems: 'stretch',
       children,
