@@ -56,7 +56,7 @@ Text + button primitives:
 
 13. Padding-based button with text (optional leading icon) → `add_text_button_v0`
 14. Heading with enforced fontSize/lineHeight per level + AUTO CJK script detection (SC/JP/KR) → `add_heading_v0`
-15. Body text with AUTO script detection (script-specific Noto Sans: SC/JP/KR; Latin → Inter) → `add_body_text_v0`
+15. Body text (Inter everywhere — CJK gets lineHeight 1.6 + letterSpacing 0, Latin 1.5) → `add_body_text_v0`
 
 16. None match → fall through to `batch_design`
 
@@ -166,10 +166,12 @@ add_text_button_v0({ label: "Add item", leading_icon: "plus" })
 add_heading_v0({ content: "Welcome back" })                   // defaults to h2 (24/600/1.2)
 add_heading_v0({ content: "Hero Headline", level: "display" }) // 48/700/1.0/-0.5
 
-add_body_text_v0({ content: "Lorem ipsum dolor sit amet…" })   // auto Inter + 1.5
-add_body_text_v0({ content: "你好世界，这是一段中文正文。" })  // auto Noto Sans SC + 1.6 + 0 ls
-add_body_text_v0({ content: "こんにちは、これは本文です。" })  // auto Noto Sans JP (NOT SC) + 1.6
-add_body_text_v0({ content: "안녕하세요, 이것은 본문입니다." }) // auto Noto Sans KR + 1.6
+add_body_text_v0({ content: "Lorem ipsum dolor sit amet…" })   // Inter + 1.5
+add_body_text_v0({ content: "你好世界，这是一段中文正文。" })  // Inter + 1.6 + letterSpacing 0
+add_body_text_v0({ content: "こんにちは、これは本文です。" })  // Inter + 1.6 + letterSpacing 0
+add_body_text_v0({ content: "안녕하세요, 이것은 본문입니다." }) // Inter + 1.6 + letterSpacing 0
+// body ALWAYS Inter per text-rules.md. Only HEADINGS dispatch to
+// Noto Sans SC/JP/KR (see add_heading_v0). Inter uses system CJK fallback.
 ```
 
 ## Composition pattern
