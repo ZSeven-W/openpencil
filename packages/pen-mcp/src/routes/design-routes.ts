@@ -10,6 +10,10 @@ import { handleAddMetricRowV0 } from '../tools/add-metric-row-v0';
 import { handleAddNavChipRowV0 } from '../tools/add-nav-chip-row-v0';
 import { handleAddBottomNavV0 } from '../tools/add-bottom-nav-v0';
 import { handleAddActivityRingV0 } from '../tools/add-activity-ring-v0';
+import { handleAddStatGridV0 } from '../tools/add-stat-grid-v0';
+import { handleAddSectionHeaderV0 } from '../tools/add-section-header-v0';
+import { handleAddTopNavBarV0 } from '../tools/add-top-nav-bar-v0';
+import { handleAddIconButtonV0 } from '../tools/add-icon-button-v0';
 
 export const DESIGN_TOOL_DEFINITIONS = [
   {
@@ -291,6 +295,148 @@ export const DESIGN_TOOL_DEFINITIONS = [
       required: ['center_text'],
     },
   },
+  {
+    name: 'add_stat_grid_v0',
+    description:
+      'Create a NON-scrolling stat grid (2-5 items share the row via fill_container). ' +
+      'Different from add_metric_row_v0: this emits an inline grid that auto-distributes ' +
+      'available width, solving the documented activity-rings overflow bug in ' +
+      'packages/pen-ai-skills/skills/phases/generation/layout.md (three fixed 100px items in ' +
+      'a 279px inner card silently clip the third item). Each cell is width=fill_container; ' +
+      'renderer does the division. Use when spec mentions "stats row", "3 metrics side by side", ' +
+      '"summary bar", or an inline (non-scrollable) row of KPIs. schemaVersion 1.0',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        schemaVersion: {
+          type: 'string',
+          enum: ['1.0'],
+          description: 'Schema version (v0-MUST §4.2). Clients MAY omit.',
+        },
+        filePath: { type: 'string', description: 'Path to .op file, or omit for live canvas' },
+        items: {
+          type: 'array',
+          description:
+            'Stat cells. Each needs value + label; icon is optional. 2-5 items work best.',
+          items: {
+            type: 'object',
+            properties: {
+              value: { type: 'string', description: 'Big numeric value (e.g. "8,432")' },
+              label: { type: 'string', description: 'Small descriptive label (e.g. "Steps")' },
+              icon: { type: 'string', description: 'lucide icon name (optional)' },
+            },
+            required: ['value', 'label'],
+          },
+        },
+        gap: { type: 'number', description: 'Gap between cells in px (default 16)' },
+        parent_id: {
+          type: 'string',
+          description: 'Target parent node id (must exist). Omit for root-level insertion.',
+        },
+        pageId: { type: 'string', description: 'Target page ID (defaults to first page)' },
+      },
+      required: ['items'],
+    },
+  },
+  {
+    name: 'add_section_header_v0',
+    description:
+      'Section header with big title on left + optional trailing action (e.g. "See all", ' +
+      '"View more"). Forces horizontal space_between alignItems=center layout so the action ' +
+      'always sits flush-right. Use when spec shows "Section Title" with a "See all" or "→" link, ' +
+      'or any heading + secondary action pair. schemaVersion 1.0',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        schemaVersion: {
+          type: 'string',
+          enum: ['1.0'],
+          description: 'Schema version (v0-MUST §4.2). Clients MAY omit.',
+        },
+        filePath: { type: 'string', description: 'Path to .op file, or omit for live canvas' },
+        title: { type: 'string', description: 'Section title (big heading)' },
+        action: {
+          type: 'object',
+          description: 'Optional trailing action (e.g. { label: "See all", icon: "arrow-right" })',
+          properties: {
+            label: { type: 'string' },
+            icon: { type: 'string', description: 'lucide icon name (optional)' },
+          },
+          required: ['label'],
+        },
+        parent_id: {
+          type: 'string',
+          description: 'Target parent node id (must exist). Omit for root-level insertion.',
+        },
+        pageId: { type: 'string', description: 'Target page ID (defaults to first page)' },
+      },
+      required: ['title'],
+    },
+  },
+  {
+    name: 'add_top_nav_bar_v0',
+    description:
+      'Mobile top navigation bar: optional leading icon (back/menu) + centered title + ' +
+      'optional trailing icon (search/more). Dual of add_bottom_nav_v0. Title always centered; ' +
+      'empty slots become 44×44 spacers so the title visually stays centered. Use when spec ' +
+      'mentions "top bar", "app bar", "header with back button", "页面标题栏". schemaVersion 1.0',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        schemaVersion: {
+          type: 'string',
+          enum: ['1.0'],
+          description: 'Schema version (v0-MUST §4.2). Clients MAY omit.',
+        },
+        filePath: { type: 'string', description: 'Path to .op file, or omit for live canvas' },
+        title: { type: 'string', description: 'Centered title text' },
+        leading_icon: {
+          type: 'string',
+          description: 'lucide icon name for the left slot (e.g. "chevron-left", "menu")',
+        },
+        trailing_icon: {
+          type: 'string',
+          description: 'lucide icon name for the right slot (e.g. "search", "more-vertical")',
+        },
+        height: { type: 'number', description: 'Bar height in px (default 56)' },
+        parent_id: {
+          type: 'string',
+          description: 'Target parent node id (must exist). Omit for root-level insertion.',
+        },
+        pageId: { type: 'string', description: 'Target page ID (defaults to first page)' },
+      },
+      required: ['title'],
+    },
+  },
+  {
+    name: 'add_icon_button_v0',
+    description:
+      'Icon-only button. Forces 44×44 minimum hit target (Apple HIG + Material) with ' +
+      'flex-centered icon — NEVER emits the layout=none + absolute-positioned icon anti-pattern ' +
+      'documented in pen-ai-skills memory (layout=none + nested children renders unreliably). ' +
+      'Use when the spec shows "icon-only" buttons, search/close/menu buttons, or iconic actions ' +
+      'in toolbars. schemaVersion 1.0',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        schemaVersion: {
+          type: 'string',
+          enum: ['1.0'],
+          description: 'Schema version (v0-MUST §4.2). Clients MAY omit.',
+        },
+        filePath: { type: 'string', description: 'Path to .op file, or omit for live canvas' },
+        icon: { type: 'string', description: 'lucide icon name' },
+        size: { type: 'number', description: 'Button size (hit-target) in px (default 44)' },
+        icon_size: { type: 'number', description: 'Icon glyph size in px (default 24)' },
+        parent_id: {
+          type: 'string',
+          description: 'Target parent node id (must exist). Omit for root-level insertion.',
+        },
+        pageId: { type: 'string', description: 'Target page ID (defaults to first page)' },
+      },
+      required: ['icon'],
+    },
+  },
 ];
 
 export const DESIGN_TOOL_NAMES = new Set([
@@ -304,6 +450,10 @@ export const DESIGN_TOOL_NAMES = new Set([
   'add_nav_chip_row_v0',
   'add_bottom_nav_v0',
   'add_activity_ring_v0',
+  'add_stat_grid_v0',
+  'add_section_header_v0',
+  'add_top_nav_bar_v0',
+  'add_icon_button_v0',
 ]);
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -341,6 +491,14 @@ export async function handleDesignToolCall(
       return JSON.stringify(await handleAddBottomNavV0(a), null, 2);
     case 'add_activity_ring_v0':
       return JSON.stringify(await handleAddActivityRingV0(a), null, 2);
+    case 'add_stat_grid_v0':
+      return JSON.stringify(await handleAddStatGridV0(a), null, 2);
+    case 'add_section_header_v0':
+      return JSON.stringify(await handleAddSectionHeaderV0(a), null, 2);
+    case 'add_top_nav_bar_v0':
+      return JSON.stringify(await handleAddTopNavBarV0(a), null, 2);
+    case 'add_icon_button_v0':
+      return JSON.stringify(await handleAddIconButtonV0(a), null, 2);
     default:
       return '';
   }

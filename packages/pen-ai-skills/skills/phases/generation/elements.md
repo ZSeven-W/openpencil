@@ -31,22 +31,38 @@ These narrow MCP tools emit well-known structures that batch_design frequently g
 
 ## Decision tree (pick first match)
 
-1. Row of items with title + subtitle + optional icon → `add_card_row_v0`
-2. Row of items with small label + big numeric value → `add_metric_row_v0`
-3. Row of filter chips / category tabs (label + optional icon, active state) → `add_nav_chip_row_v0`
-4. Bottom tab bar (inline flow, 3-5 nav items) → `add_bottom_nav_v0`
-5. Apple-style progress ring with centered text → `add_activity_ring_v0`
-6. None match → fall through to `batch_design`
+Rows (horizontal, in-card or scrolling):
+
+1. Row of items with title + subtitle + optional icon → `add_card_row_v0` (scroll)
+2. Row of items with small label + big numeric value → `add_metric_row_v0` (scroll)
+3. Row of filter chips / category tabs (label + optional icon, active state) → `add_nav_chip_row_v0` (scroll)
+4. Non-scrolling 2-5 stats inline (auto-share width) → `add_stat_grid_v0`
+
+Single elements:
+
+5. Section header (big title + optional "See all" action) → `add_section_header_v0`
+6. Bottom tab bar (inline flow, 3-5 nav items) → `add_bottom_nav_v0`
+7. Mobile top bar (leading icon + centered title + trailing icon) → `add_top_nav_bar_v0`
+8. Icon-only button (44×44, hit-target safe) → `add_icon_button_v0`
+9. Apple-style progress ring with centered text → `add_activity_ring_v0`
+
+10. None match → fall through to `batch_design`
+
+**Disambiguation**: if you need a ROW of 3 metrics that should NOT scroll (e.g. a stats strip inside a card), use `add_stat_grid_v0`, NOT `add_metric_row_v0`. The grid uses `fill_container` per cell so it never overflows; the metric row uses fixed-px cells + scroll wrapper.
 
 ## When to use vs batch_design
 
 PREFER an element tool when the spec says any of:
 
-- "horizontal scrolling cards", "swipeable row", "chip row", "pills"
-- "metric tiles", "KPI cards", "dashboard stats", "Steps / Kcal / Sleep" row
-- "category filter chips", "quick-access shortcuts"
-- "bottom nav", "tab bar", "tabbar", "底部导航"
-- "activity ring", "progress ring", "circular progress", "Apple health ring"
+- "horizontal scrolling cards", "swipeable row", "chip row", "pills" → `add_card_row_v0`
+- "metric tiles", "KPI cards", "dashboard stats" (SCROLLING row) → `add_metric_row_v0`
+- "stats row", "3 metrics side by side", "summary bar" (NON-scrolling grid) → `add_stat_grid_v0`
+- "category filter chips", "quick-access shortcuts" → `add_nav_chip_row_v0`
+- "section title with See all / View more" → `add_section_header_v0`
+- "bottom nav", "tab bar", "tabbar", "底部导航" → `add_bottom_nav_v0`
+- "top bar", "app bar", "header with back button", "页面标题栏" → `add_top_nav_bar_v0`
+- "icon-only button", "close button", "menu button" (toolbar-style) → `add_icon_button_v0`
+- "activity ring", "progress ring", "circular progress", "Apple health ring" → `add_activity_ring_v0`
 
 STILL use batch_design when:
 
@@ -94,6 +110,29 @@ add_activity_ring_v0({
   size: 80,
   thickness: 8,
 })
+
+add_stat_grid_v0({
+  items: [
+    { value: "8,432", label: "Steps",  icon: "activity" },
+    { value: "512",   label: "Kcal",   icon: "flame" },
+    { value: "7h",    label: "Sleep",  icon: "moon" },
+  ],
+})
+
+add_section_header_v0({
+  title: "Recent Workouts",
+  action: { label: "See all", icon: "arrow-right" },
+})
+
+add_top_nav_bar_v0({
+  title: "Settings",
+  leading_icon: "chevron-left",
+  trailing_icon: "more-vertical",
+})
+
+add_icon_button_v0({
+  icon: "search",
+})
 ```
 
 ## Composition pattern
@@ -112,7 +151,7 @@ The tool guarantees — you cannot break them from the input side:
 - `bottom-tab-bar` is inline (no empty spacer sibling needed, do NOT add one)
 - Activity ring is frame+cornerRadius=size/2+stroke+centered text — NEVER emit ellipse+sibling text for rings
 - Every emitted node has a unique id (you can reference it later)
-- Roles are set (`card` / `metric-tile` / `nav-chip` / `nav-chip-active` / `bottom-tab-bar` / `nav-item` / `nav-item-active` / `activity-ring`)
+- Roles are set (`card` / `metric-tile` / `nav-chip` / `nav-chip-active` / `bottom-tab-bar` / `nav-item` / `nav-item-active` / `activity-ring` / `stat-grid` / `stat-cell` / `section-header` / `section-header-action` / `top-nav-bar` / `nav-spacer` / `icon-button`)
 
 ## Failure mode
 
