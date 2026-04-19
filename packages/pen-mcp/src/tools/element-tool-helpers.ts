@@ -94,6 +94,13 @@ export function buildScrollWrapper(opts: {
  * Insert a fully-built node subtree via handleBatchDesign's single-insert
  * DSL. Centralizes the parent_ref serialization + batch_design call
  * shape used by every element tool.
+ *
+ * Safety invariants (enforced here, not per-handler):
+ *   1. parent_id is JSON.stringify'd so ids containing quotes / backslashes
+ *      cannot escape the DSL quoting and inject additional operations
+ *   2. per-item batch_design errors are re-thrown rather than silently
+ *      collected in the result.errors array (N-tool single-insert
+ *      semantics: either the node lands or the tool fails loudly)
  */
 export async function insertElementTree(args: {
   binding: string;
@@ -102,12 +109,17 @@ export async function insertElementTree(args: {
   filePath?: string;
   pageId?: string;
 }): Promise<Awaited<ReturnType<typeof handleBatchDesign>>> {
-  const parentRef = args.parent_id ? `"${args.parent_id}"` : 'null';
+  const parentRef = args.parent_id ? JSON.stringify(args.parent_id) : 'null';
   const dsl = `${args.binding}=I(${parentRef}, ${JSON.stringify(args.tree)})`;
-  return handleBatchDesign({
+  const result = await handleBatchDesign({
     operations: dsl,
     filePath: args.filePath,
     pageId: args.pageId,
     postProcess: false,
   });
+  if (result.errors && result.errors.length > 0) {
+    const summary = result.errors.map((e) => `${e.line.slice(0, 80)}: ${e.error}`).join('; ');
+    throw new Error(`Element tool insert failed: ${summary}`);
+  }
+  return result;
 }

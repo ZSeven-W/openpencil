@@ -90,8 +90,38 @@ describe('add_nav_chip_row_v0', () => {
     expect((chips[1].children as Record<string, unknown>[])[1].fontWeight).toBe(500);
   });
 
-  it('throws on bogus parent_id', async () => {
+  it('every node has a unique non-empty id', async () => {
     const fp = await fresh('a.op');
+    await handleAddNavChipRowV0({
+      filePath: fp,
+      items: [
+        { label: 'All', icon: 'grid', active: true },
+        { label: 'Videos' }, // label-only
+        { label: 'Photos', icon: 'image' },
+      ],
+    });
+    const wrapper = getRoot(await readDoc(fp));
+    const ids: string[] = [];
+    const missing: string[] = [];
+    function walk(n: Record<string, unknown>, path = 'root'): void {
+      if (typeof n.id !== 'string' || n.id.length === 0) missing.push(path);
+      else ids.push(n.id);
+      if (Array.isArray(n.children)) {
+        (n.children as Record<string, unknown>[]).forEach((c, i) => {
+          if (c && typeof c === 'object') walk(c, `${path}/${i}`);
+        });
+      }
+    }
+    walk(wrapper);
+    expect(missing).toEqual([]);
+    expect(new Set(ids).size).toBe(ids.length);
+    // wrapper + row + 3 chips + (2 + 1 + 2) kids = 10
+    expect(ids.length).toBe(10);
+  });
+
+  it('throws on bogus parent_id AND leaves file untouched (side-effect invariant)', async () => {
+    const fp = await fresh('a.op');
+    const before = await readFile(fp, 'utf-8');
     await expect(
       handleAddNavChipRowV0({
         filePath: fp,
@@ -99,5 +129,7 @@ describe('add_nav_chip_row_v0', () => {
         parent_id: 'nope',
       }),
     ).rejects.toThrow(/parent_id.*not found/);
+    const after = await readFile(fp, 'utf-8');
+    expect(after).toBe(before);
   });
 });

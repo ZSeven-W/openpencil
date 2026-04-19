@@ -139,8 +139,9 @@ describe('add_bottom_nav_v0 — structure', () => {
     expect(ids.length).toBe(7);
   });
 
-  it('throws when parent_id refers to non-existent node (no silent no-op)', async () => {
+  it('throws on bogus parent_id AND leaves file untouched (side-effect invariant)', async () => {
     const fp = await fresh('nav.op');
+    const before = await readFile(fp, 'utf-8');
     await expect(
       handleAddBottomNavV0({
         filePath: fp,
@@ -148,5 +149,7 @@ describe('add_bottom_nav_v0 — structure', () => {
         parent_id: 'bogus-parent',
       }),
     ).rejects.toThrow(/parent_id.*not found/);
+    const after = await readFile(fp, 'utf-8');
+    expect(after).toBe(before);
   });
 });

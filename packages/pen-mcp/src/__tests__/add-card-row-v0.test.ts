@@ -103,8 +103,9 @@ describe('add_card_row_v0', () => {
     expect(new Set(ids).size).toBe(ids.length);
   });
 
-  it('throws on bogus parent_id', async () => {
+  it('throws on bogus parent_id AND leaves file untouched (side-effect invariant)', async () => {
     const fp = await fresh('a.op');
+    const before = await readFile(fp, 'utf-8');
     await expect(
       handleAddCardRowV0({
         filePath: fp,
@@ -112,5 +113,7 @@ describe('add_card_row_v0', () => {
         parent_id: 'nope',
       }),
     ).rejects.toThrow(/parent_id.*not found/);
+    const after = await readFile(fp, 'utf-8');
+    expect(after).toBe(before);
   });
 });

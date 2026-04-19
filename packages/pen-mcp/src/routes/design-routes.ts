@@ -94,6 +94,12 @@ export const DESIGN_TOOL_DEFINITIONS = [
     inputSchema: {
       type: 'object' as const,
       properties: {
+        schemaVersion: {
+          type: 'string',
+          enum: ['1.0'],
+          description:
+            'Schema version this tool was authored against (v0-MUST §4.2). Clients MAY omit. Breaking schema changes ship as a new tool with _v1 suffix; old tools are kept one stage before being removed from ListTools.',
+        },
         filePath: { type: 'string', description: 'Path to .op file, or omit for live canvas' },
         items: {
           type: 'array',
@@ -130,6 +136,12 @@ export const DESIGN_TOOL_DEFINITIONS = [
     inputSchema: {
       type: 'object' as const,
       properties: {
+        schemaVersion: {
+          type: 'string',
+          enum: ['1.0'],
+          description:
+            'Schema version this tool was authored against (v0-MUST §4.2). Clients MAY omit. Breaking schema changes ship as a new tool with _v1 suffix; old tools are kept one stage before being removed from ListTools.',
+        },
         filePath: { type: 'string', description: 'Path to .op file, or omit for live canvas' },
         items: {
           type: 'array',
@@ -166,6 +178,12 @@ export const DESIGN_TOOL_DEFINITIONS = [
     inputSchema: {
       type: 'object' as const,
       properties: {
+        schemaVersion: {
+          type: 'string',
+          enum: ['1.0'],
+          description:
+            'Schema version this tool was authored against (v0-MUST §4.2). Clients MAY omit. Breaking schema changes ship as a new tool with _v1 suffix; old tools are kept one stage before being removed from ListTools.',
+        },
         filePath: { type: 'string', description: 'Path to .op file, or omit for live canvas' },
         items: {
           type: 'array',
@@ -205,6 +223,12 @@ export const DESIGN_TOOL_DEFINITIONS = [
     inputSchema: {
       type: 'object' as const,
       properties: {
+        schemaVersion: {
+          type: 'string',
+          enum: ['1.0'],
+          description:
+            'Schema version this tool was authored against (v0-MUST §4.2). Clients MAY omit. Breaking schema changes ship as a new tool with _v1 suffix; old tools are kept one stage before being removed from ListTools.',
+        },
         filePath: { type: 'string', description: 'Path to .op file, or omit for live canvas' },
         items: {
           type: 'array',
@@ -237,20 +261,28 @@ export const DESIGN_TOOL_DEFINITIONS = [
       'Create an Apple-style activity ring (progress ring) with centered text. Forces the ' +
       'frame+cornerRadius+stroke+centered-text pattern taught in ' +
       'packages/pen-ai-skills/skills/phases/generation/layout.md §RING / CIRCLE WITH CENTER CONTENT. ' +
-      'NEVER emits the documented anti-patterns (ellipse+sibling text, layout=none+absolute). Use ' +
-      'when the spec mentions "activity ring", "progress ring", "circular progress", "ring with ' +
-      'number", "Apple health ring". schemaVersion 1.0',
+      'NEVER emits the documented anti-patterns (ellipse+sibling text, layout=none+absolute). ' +
+      'Ships colorless with fixed typography (Style Guide orthogonal) — override ring color / text ' +
+      'size / weight via a follow-up batch_design U-op. Use when the spec mentions "activity ring", ' +
+      '"progress ring", "circular progress", "ring with number", "Apple health ring". schemaVersion 1.0',
     inputSchema: {
       type: 'object' as const,
       properties: {
+        schemaVersion: {
+          type: 'string',
+          enum: ['1.0'],
+          description:
+            'Schema version this tool was authored against (v0-MUST §4.2). Clients MAY omit. Breaking schema changes ship as a new tool with _v1 suffix; old tools are kept one stage before being removed from ListTools.',
+        },
         filePath: { type: 'string', description: 'Path to .op file, or omit for live canvas' },
         size: { type: 'number', description: 'Ring outer diameter in px (default 80)' },
         thickness: { type: 'number', description: 'Stroke thickness in px (default 8)' },
-        ring_color: { type: 'string', description: 'Stroke color (default "#000000")' },
         center_text: { type: 'string', description: 'Text displayed in the ring center' },
-        text_size: { type: 'number', description: 'Center text fontSize (default 16)' },
-        text_weight: { type: 'number', description: 'Center text fontWeight (default 700)' },
-        parent_id: { type: 'string', description: 'Parent node id; omit for root-level' },
+        parent_id: {
+          type: 'string',
+          description:
+            'Target parent node id (must exist in the document). Omit for root-level insertion.',
+        },
         pageId: { type: 'string', description: 'Target page ID (defaults to first page)' },
       },
       required: ['center_text'],
@@ -330,6 +362,12 @@ export const D0_SPIKE_TOOL_DEFINITIONS = [
     inputSchema: {
       type: 'object' as const,
       properties: {
+        schemaVersion: {
+          type: 'string',
+          enum: ['1.0'],
+          description:
+            'Schema version this tool was authored against (v0-MUST §4.2). Clients MAY omit.',
+        },
         filePath: {
           type: 'string',
           description: 'Path to .op file, or omit to use the live canvas (default)',
