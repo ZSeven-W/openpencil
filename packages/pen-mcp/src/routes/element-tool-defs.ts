@@ -1,6 +1,7 @@
-// 17 element-tool JSON schema definitions + names + dispatcher.
+// Element-tool JSON schema definitions + names + dispatcher.
 // Split out from design-routes.ts (2026-04-19) so that file stays under
 // the repo's 800-line limit as the element-tool family continues to grow.
+// Base (19) + ext (6) = 25 element tools → aggregated here.
 
 import { handleAddCardRowV0 } from '../tools/add-card-row-v0';
 import { handleAddMetricRowV0 } from '../tools/add-metric-row-v0';
@@ -21,6 +22,13 @@ import { handleAddIconLabelV0 } from '../tools/add-icon-label-v0';
 import { handleAddListRowV0 } from '../tools/add-list-row-v0';
 import { handleAddSearchBarV0 } from '../tools/add-search-bar-v0';
 import { handleAddFormFieldV0 } from '../tools/add-form-field-v0';
+import { handleAddSwitchV0 } from '../tools/add-switch-v0';
+import { handleAddCheckboxV0 } from '../tools/add-checkbox-v0';
+import { handleAddRadioV0 } from '../tools/add-radio-v0';
+import { handleAddTabsV0 } from '../tools/add-tabs-v0';
+import { handleAddSegmentedControlV0 } from '../tools/add-segmented-control-v0';
+import { handleAddEmptyStateV0 } from '../tools/add-empty-state-v0';
+import { ELEMENT_TOOL_DEFINITIONS_EXT } from './element-tool-defs-ext';
 
 export const ELEMENT_TOOL_DEFINITIONS = [
   {
@@ -698,6 +706,7 @@ export const ELEMENT_TOOL_DEFINITIONS = [
       required: ['title'],
     },
   },
+  ...ELEMENT_TOOL_DEFINITIONS_EXT,
 ];
 
 export const ELEMENT_TOOL_NAMES: ReadonlySet<string> = new Set(
@@ -745,6 +754,18 @@ export async function handleElementToolCall(name: string, a: any): Promise<strin
       return JSON.stringify(await handleAddSearchBarV0(a), null, 2);
     case 'add_form_field_v0':
       return JSON.stringify(await handleAddFormFieldV0(a), null, 2);
+    case 'add_switch_v0':
+      return JSON.stringify(await handleAddSwitchV0(a), null, 2);
+    case 'add_checkbox_v0':
+      return JSON.stringify(await handleAddCheckboxV0(a), null, 2);
+    case 'add_radio_v0':
+      return JSON.stringify(await handleAddRadioV0(a), null, 2);
+    case 'add_tabs_v0':
+      return JSON.stringify(await handleAddTabsV0(a), null, 2);
+    case 'add_segmented_control_v0':
+      return JSON.stringify(await handleAddSegmentedControlV0(a), null, 2);
+    case 'add_empty_state_v0':
+      return JSON.stringify(await handleAddEmptyStateV0(a), null, 2);
     default:
       return '';
   }
