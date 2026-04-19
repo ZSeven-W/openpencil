@@ -35,6 +35,9 @@ const ELEMENT_TOOL_NAMES = [
   'add_divider_v0',
   'add_badge_v0',
   'add_avatar_v0',
+  'add_text_button_v0',
+  'add_heading_v0',
+  'add_body_text_v0',
 ];
 
 describe('element tools — v0-MUST contract', () => {
