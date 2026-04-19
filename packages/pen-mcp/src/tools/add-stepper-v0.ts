@@ -52,6 +52,7 @@ export async function handleAddStepperV0(
           content: String(i + 1),
           fontSize: 13,
           fontWeight: 600,
+          fill: [{ type: 'solid', color: done ? '#FFFFFF' : '#6B7280' }],
         },
       ],
     });

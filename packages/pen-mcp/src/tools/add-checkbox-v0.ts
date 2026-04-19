@@ -46,6 +46,7 @@ export async function handleAddCheckboxV0(
       iconFontFamily: 'lucide',
       width: 14,
       height: 14,
+      fill: [{ type: 'solid', color: '#FFFFFF' }],
     });
   } else {
     box.fill = [];
