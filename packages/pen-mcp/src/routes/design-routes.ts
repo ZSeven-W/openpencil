@@ -566,11 +566,14 @@ export const DESIGN_TOOL_DEFINITIONS = [
   {
     name: 'add_heading_v0',
     description:
-      'Typographic heading with Pencil-demo-derived fontSize / fontWeight / lineHeight / ' +
-      'letterSpacing presets per level. display=48/700/1.0/-0.5, h1=32/700/1.1, h2=24/600/1.2 ' +
-      '(DEFAULT), h3=20/600/1.25. Encodes the preset so non-Claude models cannot forget the ' +
-      'correct lineHeight (1.5 default stacks multi-word headings too tight, per memory Pencil ' +
-      'demo data). Emits a single text node with role=heading. schemaVersion 1.0',
+      'Typographic heading with Pencil-demo-derived presets + AUTO CJK script handling. ' +
+      'Latin (default) per-level: display=48/700/1.0/letterSpacing=-0.5, h1=32/700/1.1, ' +
+      'h2=24/600/1.2 (DEFAULT), h3=20/600/1.25. CJK content switches to: display=48/700/1.3 + ' +
+      'NO negative letterSpacing, h1=32/700/1.3, h2=24/600/1.35, h3=20/600/1.4 + script-specific ' +
+      'fontFamily (Chinese → Noto Sans SC / Japanese → Noto Sans JP / Korean → Noto Sans KR — ' +
+      'text-rules.md: NEVER use SC for JP or KR). Encodes the preset so non-Claude models cannot ' +
+      'forget lineHeight (default 1.5 stacks multi-word headings tight) or pick the wrong font for ' +
+      'JP/KR content. Emits a single text node with role=heading. schemaVersion 1.0',
     inputSchema: {
       type: 'object' as const,
       properties: {
@@ -598,13 +601,13 @@ export const DESIGN_TOOL_DEFINITIONS = [
   {
     name: 'add_body_text_v0',
     description:
-      'Body / description text with AUTO CJK detection: Chinese/Japanese/Korean content gets ' +
-      'fontFamily=Noto Sans SC + lineHeight=1.6 + letterSpacing=0 (per memory: NEVER use Space ' +
-      'Grotesk / Manrope for CJK — no CJK glyphs); Latin gets Inter + 1.5. Always sets ' +
-      'width=fill_container + textGrowth=fixed-width so long text wraps (overflow.md: fixed-width ' +
-      'is required or >15-char text does not wrap). Intended for use in VERTICAL-layout parents — ' +
-      'the only context where fill_container + fixed-width is respected by the layout engine. ' +
-      'schemaVersion 1.0',
+      'Body / description text with AUTO script detection + script-specific CJK font. ' +
+      'Chinese → Noto Sans SC, Japanese → Noto Sans JP, Korean → Noto Sans KR, Latin → Inter. ' +
+      'Japanese takes precedence when hiragana/katakana present (disambiguates kanji-heavy text ' +
+      'like "今日は"). CJK bodies get lineHeight=1.6 + letterSpacing=0 (NEVER negative — causes ' +
+      'CJK character overlap). Latin gets lineHeight=1.5. Always sets width=fill_container + ' +
+      'textGrowth=fixed-width so long text wraps (overflow.md: fixed-width required or >15-char ' +
+      'text does not wrap). Intended for VERTICAL-layout parents only. schemaVersion 1.0',
     inputSchema: {
       type: 'object' as const,
       properties: {
