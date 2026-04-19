@@ -147,7 +147,9 @@ describe('element tools — silent no-op guards (P0.1 + post-insert check)', () 
         parent_id: 'weird"id',
         items: [{ title: 'Home', icon: 'home' }],
       }),
-    ).rejects.toThrow(/silently failed|not present in the document/);
+    ).rejects.toThrow(
+      /cannot be safely passed through batch_design's DSL parser|silently failed|not present in the document/,
+    );
     // File must remain unchanged (no orphan tree written)
     const after = await readFile(fp, 'utf-8');
     expect(after).toBe(before);
@@ -191,12 +193,17 @@ describe('element tools — silent no-op guards (P0.1 + post-insert check)', () 
       }),
       'utf-8',
     );
+    const before = await readFile(fp, 'utf-8');
     await expect(
       handleAddBottomNavV0({
         filePath: fp,
         parent_id: 'A"B',
         items: [{ title: 'Home', icon: 'home' }],
       }),
-    ).rejects.toThrow(/wrong parent|not present/);
+    ).rejects.toThrow(/cannot be safely passed|wrong parent|not present/);
+    // File must remain unchanged — either pre-check prevented the write, or
+    // post-check detected a bad insert and rolled back to the snapshot.
+    const after = await readFile(fp, 'utf-8');
+    expect(after).toBe(before);
   });
 });
