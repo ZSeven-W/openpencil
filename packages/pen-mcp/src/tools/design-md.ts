@@ -5,7 +5,6 @@ import {
   extractDesignMdFromDocument,
 } from '../utils/design-md-parser';
 import type { DesignMdSpec } from '@zseven-w/pen-types';
-import { setDesignMdForPrompt } from './design-prompt';
 
 /**
  * design.md is now stored on the PenDocument (`doc.designMd`). It travels
@@ -46,7 +45,6 @@ export async function handleGetDesignMd(
   const doc = await openDocument(filePath);
 
   if (doc.designMd) {
-    setDesignMdForPrompt(doc.designMd);
     return {
       hasDesignMd: true,
       spec: doc.designMd,
@@ -85,7 +83,6 @@ export async function handleSetDesignMd(
 
   doc.designMd = spec;
   await saveDocument(filePath, doc);
-  setDesignMdForPrompt(spec);
 
   return { success: true, spec };
 }

@@ -1,5 +1,10 @@
 import { handleBatchDesign } from '../tools/batch-design';
-import { buildDesignPrompt, listPromptSections } from '../tools/design-prompt';
+import {
+  buildDesignPrompt,
+  listPromptSections,
+  designMdSpecToPromptPolicy,
+} from '../tools/design-prompt';
+import { openDocument, resolveDocPath } from '../document-manager';
 import { handleDesignSkeleton } from '../tools/design-skeleton';
 import { handleDesignContent } from '../tools/design-content';
 import { handleDesignRefine } from '../tools/design-refine';
@@ -22,10 +27,10 @@ const CORE_DESIGN_TOOL_DEFINITIONS = [
     description:
       'Get design knowledge prompt. Use "section" to retrieve a focused subset instead of the full prompt. ' +
       'Sections: schema (PenNode types), layout (flexbox rules), roles (semantic roles), text (typography/CJK/copywriting), ' +
-      'style (visual style policy), icons (icon names), examples (design examples), guidelines (design tips), ' +
-      'planning (layered workflow guide), elements (N-tool element-tool family reference — decision tree, ' +
-      'PREFER/FALLBACK rules, composition pattern; the section itself enumerates the current tools). ' +
-      'Omit section for the full prompt.',
+      "style (visual style policy — reads the active document's design.md when present), icons (icon names), " +
+      'examples (design examples), guidelines (design tips), planning (layered workflow guide), ' +
+      'elements (N-tool element-tool family reference), design-md (raw style policy derived from the active ' +
+      'document\'s design.md, or a "no design.md" notice). Omit section for the full prompt.',
     inputSchema: {
       type: 'object' as const,
       properties: {
@@ -43,9 +48,15 @@ const CORE_DESIGN_TOOL_DEFINITIONS = [
             'guidelines',
             'planning',
             'elements',
+            'design-md',
           ],
           description:
-            'Which section of design knowledge to retrieve. Default: all. Use "planning" for layered generation workflow; "elements" for N-tool element tool reference.',
+            'Which section of design knowledge to retrieve. Default: all. Use "planning" for layered generation workflow; "elements" for N-tool element tool reference; "design-md" for the active document\'s design system.',
+        },
+        filePath: {
+          type: 'string',
+          description:
+            "Path to .op file, or omit to use the live canvas. The prompt's 'style' / 'design-md' sections are derived from THIS document's design.md so the reply never leaks another file's design system.",
         },
       },
       required: [],
@@ -118,16 +129,26 @@ export async function handleDesignToolCall(
 ): Promise<string> {
   const a = args as any; // eslint-disable-line @typescript-eslint/no-explicit-any
   switch (name) {
-    case 'get_design_prompt':
+    case 'get_design_prompt': {
+      // Derive design.md policy from THIS document so the prompt cannot
+      // leak another document's design system (per-document isolation).
+      let designMdPolicy: string | null = null;
+      try {
+        const doc = await openDocument(resolveDocPath(a.filePath as string | undefined));
+        designMdPolicy = designMdSpecToPromptPolicy(doc.designMd);
+      } catch {
+        // live canvas / file unavailable — prompt still works without policy
+      }
       return JSON.stringify(
         {
           section: (a.section as string | undefined) ?? 'all',
           availableSections: listPromptSections(),
-          designPrompt: buildDesignPrompt(a.section as string | undefined),
+          designPrompt: buildDesignPrompt(a.section as string | undefined, designMdPolicy),
         },
         null,
         2,
       );
+    }
     case 'batch_design':
       return JSON.stringify(await handleBatchDesign(a), null, 2);
     case 'design_skeleton':
