@@ -1,6 +1,6 @@
 // Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
 
-exports[`D0 parity spike — additive & gated tool registration > existing tool DEFINITIONS are unchanged (snapshot) > existing-design-tool-definitions 1`] = `
+exports[`D0 parity spike — additive & gated tool registration > pre-D0 production design tool DEFINITIONS are unchanged (snapshot) > pre-d0-design-tool-definitions 1`] = `
 [
   {
     "description": "Get design knowledge prompt. Use "section" to retrieve a focused subset instead of the full prompt. Sections: schema (PenNode types), layout (flexbox rules), roles (semantic roles), text (typography/CJK/copywriting), style (visual style policy), icons (icon names), examples (design examples), guidelines (design tips), planning (layered workflow guide). Omit section for the full prompt.",
