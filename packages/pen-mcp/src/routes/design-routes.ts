@@ -169,15 +169,16 @@ export const DESIGN_TOOL_DEFINITIONS = [
         filePath: { type: 'string', description: 'Path to .op file, or omit for live canvas' },
         items: {
           type: 'array',
-          description: 'Chip items. Each needs label + icon; active marks current chip.',
+          description:
+            'Chip items. Each needs label; icon and active are optional. Label-only chips are supported (text-only filter tags).',
           items: {
             type: 'object',
             properties: {
               label: { type: 'string' },
-              icon: { type: 'string', description: 'lucide icon name' },
+              icon: { type: 'string', description: 'lucide icon name (optional)' },
               active: { type: 'boolean' },
             },
-            required: ['label', 'icon'],
+            required: ['label'],
           },
         },
         chip_width: { type: 'number', description: 'Fixed width per chip (default 72)' },
