@@ -1,13 +1,16 @@
 /**
  * D0 Parity Spike — validates the N-tool "additive-only" hypothesis by
- * adding a minimal `add_section_v0` tool and asserting:
+ * adding a minimal `add_section_v0` tool BEHIND an env flag and asserting:
  *
- *   1. `add_section_v0` is registered (new tool appears)
- *   2. Existing design tools' names and definitions are unchanged
+ *   1. `add_section_v0` is NOT in default DESIGN_TOOL_DEFINITIONS
+ *      (not exposed to external MCP clients by default)
+ *   2. `add_section_v0` IS in D0_SPIKE_TOOL_DEFINITIONS
+ *      (reachable only when OPENPENCIL_D0_SPIKE=1)
+ *   3. Existing design tools' names and definitions are unchanged
  *      (snapshot-pinned to detect any drift)
- *   3. `batch_design` keeps producing identical output on a baseline
+ *   4. `batch_design` keeps producing identical output on a baseline
  *      fixture (proves no shared-helper contamination)
- *   4. `add_section_v0` produces expected PenNode via sugar over
+ *   5. `add_section_v0` handler produces expected PenNode via sugar over
  *      handleBatchDesign
  *
  * See spec: openpencil-docs/superpowers/specs/2026-04-19-element-tools-v0.md §D0
@@ -17,7 +20,12 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { writeFile, unlink, readFile, mkdir } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { DESIGN_TOOL_DEFINITIONS, DESIGN_TOOL_NAMES } from '../routes/design-routes';
+import {
+  DESIGN_TOOL_DEFINITIONS,
+  DESIGN_TOOL_NAMES,
+  D0_SPIKE_TOOL_DEFINITIONS,
+  D0_SPIKE_TOOL_NAMES,
+} from '../routes/design-routes';
 import { handleAddSectionV0 } from '../tools/add-section-v0';
 import { handleBatchDesign } from '../tools/batch-design';
 import { invalidateCache } from '../document-manager';
@@ -40,20 +48,27 @@ afterEach(async () => {
   }
 });
 
-describe('D0 parity spike — additive tool registration', () => {
-  it('add_section_v0 is registered in DESIGN_TOOL_DEFINITIONS', () => {
+describe('D0 parity spike — additive & gated tool registration', () => {
+  it('add_section_v0 is NOT in default DESIGN_TOOL_DEFINITIONS (not exposed by default)', () => {
     const names = DESIGN_TOOL_DEFINITIONS.map((t) => t.name);
+    expect(names).not.toContain('add_section_v0');
+  });
+
+  it('add_section_v0 is NOT in default DESIGN_TOOL_NAMES', () => {
+    expect(DESIGN_TOOL_NAMES.has('add_section_v0')).toBe(false);
+  });
+
+  it('add_section_v0 IS in D0_SPIKE_TOOL_DEFINITIONS (reachable when flag set)', () => {
+    const names = D0_SPIKE_TOOL_DEFINITIONS.map((t) => t.name);
     expect(names).toContain('add_section_v0');
   });
 
-  it('add_section_v0 is registered in DESIGN_TOOL_NAMES', () => {
-    expect(DESIGN_TOOL_NAMES.has('add_section_v0')).toBe(true);
+  it('add_section_v0 IS in D0_SPIKE_TOOL_NAMES', () => {
+    expect(D0_SPIKE_TOOL_NAMES.has('add_section_v0')).toBe(true);
   });
 
   it('existing design tool names are exactly the pre-spike set', () => {
-    const names = DESIGN_TOOL_DEFINITIONS.map((t) => t.name)
-      .filter((n) => n !== 'add_section_v0')
-      .sort();
+    const names = DESIGN_TOOL_DEFINITIONS.map((t) => t.name).sort();
     expect(names).toEqual([
       'batch_design',
       'design_content',
@@ -64,8 +79,7 @@ describe('D0 parity spike — additive tool registration', () => {
   });
 
   it('existing tool DEFINITIONS are unchanged (snapshot)', () => {
-    const existing = DESIGN_TOOL_DEFINITIONS.filter((t) => t.name !== 'add_section_v0');
-    expect(existing).toMatchSnapshot('existing-design-tool-definitions');
+    expect(DESIGN_TOOL_DEFINITIONS).toMatchSnapshot('existing-design-tool-definitions');
   });
 });
 
