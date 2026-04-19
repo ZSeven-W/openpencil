@@ -71,29 +71,39 @@ describe('add_body_text_v0', () => {
       content: '你好世界，这是一段中文正文测试。',
     });
     const t = getRoot(await readDoc(fp));
-    // Memory: "NEVER use Space Grotesk / Manrope for CJK — no CJK glyphs"
+    // text-rules.md: body Chinese → Noto Sans SC
     expect(t.fontFamily).toBe('Noto Sans SC');
-    expect(t.lineHeight).toBe(1.6); // CJK body 1.6-1.8, NOT 1.4-1.6
-    expect(t.letterSpacing).toBe(0); // CJK: NEVER negative
+    expect(t.lineHeight).toBe(1.6);
+    expect(t.letterSpacing).toBe(0);
   });
 
-  it('Japanese content also detected as CJK', async () => {
+  it('Japanese content: Noto Sans JP (NOT SC — respects script-specific font contract)', async () => {
     const fp = await fresh('a.op');
     await handleAddBodyTextV0({ filePath: fp, content: 'こんにちは、テキストです。' });
     const t = getRoot(await readDoc(fp));
-    expect(t.fontFamily).toBe('Noto Sans SC');
+    // text-rules.md: "body='Noto Sans JP' (Japanese)"
+    expect(t.fontFamily).toBe('Noto Sans JP');
     expect(t.lineHeight).toBe(1.6);
+    expect(t.letterSpacing).toBe(0);
   });
 
-  it('Korean content also detected as CJK', async () => {
+  it('Korean content: Noto Sans KR (script-specific, not SC fallback)', async () => {
     const fp = await fresh('a.op');
     await handleAddBodyTextV0({ filePath: fp, content: '안녕하세요, 본문입니다.' });
     const t = getRoot(await readDoc(fp));
-    expect(t.fontFamily).toBe('Noto Sans SC');
+    // text-rules.md: "body='Noto Sans KR' (Korean)"
+    expect(t.fontFamily).toBe('Noto Sans KR');
     expect(t.lineHeight).toBe(1.6);
   });
 
-  it('mixed CJK + Latin content triggers CJK (any CJK char wins)', async () => {
+  it('Japanese with Han ideographs (kanji+hiragana) still detects Japanese', async () => {
+    const fp = await fresh('a.op');
+    await handleAddBodyTextV0({ filePath: fp, content: '今日は良い天気です。' });
+    const t = getRoot(await readDoc(fp));
+    expect(t.fontFamily).toBe('Noto Sans JP');
+  });
+
+  it('mixed Chinese + Latin content triggers Chinese (any Han char wins)', async () => {
     const fp = await fresh('a.op');
     await handleAddBodyTextV0({ filePath: fp, content: 'Hello 你好' });
     const t = getRoot(await readDoc(fp));

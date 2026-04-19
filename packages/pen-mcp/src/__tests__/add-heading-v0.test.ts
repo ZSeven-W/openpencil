@@ -152,23 +152,41 @@ describe('add_heading_v0 — CJK typography (regression for Codex #13)', () => {
     }
   });
 
-  it('Japanese content triggers CJK preset', async () => {
+  it('Japanese content gets Noto Sans JP (NOT SC — respects script-specific font contract)', async () => {
     const fp = await fresh('a.op');
     await handleAddHeadingV0({ filePath: fp, content: 'こんにちは' });
     const h = getRoot(await readDoc(fp));
-    expect(h.fontFamily).toBe('Noto Sans SC');
+    // text-rules.md: "heading='Noto Sans JP' (Japanese)"
+    expect(h.fontFamily).toBe('Noto Sans JP');
     expect(h.lineHeight).toBe(1.35); // h2 CJK
   });
 
-  it('Korean content triggers CJK preset', async () => {
+  it('Korean content gets Noto Sans KR (script-specific, not SC fallback)', async () => {
     const fp = await fresh('a.op');
     await handleAddHeadingV0({ filePath: fp, content: '안녕하세요' });
     const h = getRoot(await readDoc(fp));
-    expect(h.fontFamily).toBe('Noto Sans SC');
+    // text-rules.md: "heading='Noto Sans KR' (Korean)"
+    expect(h.fontFamily).toBe('Noto Sans KR');
     expect(h.lineHeight).toBe(1.35);
   });
 
-  it('mixed Latin + CJK content takes CJK preset (any CJK char wins)', async () => {
+  it('Chinese content gets Noto Sans SC', async () => {
+    const fp = await fresh('a.op');
+    await handleAddHeadingV0({ filePath: fp, content: '你好世界' });
+    const h = getRoot(await readDoc(fp));
+    expect(h.fontFamily).toBe('Noto Sans SC');
+  });
+
+  it('Japanese with Han ideographs (kanji+hiragana) still detects Japanese', async () => {
+    // "今日は" (konnichiwa) — Chinese-looking kanji but hiragana
+    // marker makes it Japanese
+    const fp = await fresh('a.op');
+    await handleAddHeadingV0({ filePath: fp, content: '今日は' });
+    const h = getRoot(await readDoc(fp));
+    expect(h.fontFamily).toBe('Noto Sans JP');
+  });
+
+  it('mixed Latin + Chinese takes Chinese preset (any Han ideograph wins)', async () => {
     const fp = await fresh('a.op');
     await handleAddHeadingV0({ filePath: fp, content: 'Hello 世界' });
     const h = getRoot(await readDoc(fp));
