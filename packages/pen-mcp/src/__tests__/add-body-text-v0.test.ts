@@ -56,58 +56,62 @@ describe('add_body_text_v0', () => {
     expect(t.role).toBe('body');
     expect(t.fontFamily).toBe('Inter');
     expect(t.lineHeight).toBe(1.5);
-    expect(t.letterSpacing).toBeUndefined(); // NOT set for Latin
+    expect(t.letterSpacing).toBeUndefined();
     expect(t.fontSize).toBe(16);
     expect(t.fontWeight).toBe(400);
-    // Wrap-safe: fill_container + fixed-width in vertical parent
     expect(t.width).toBe('fill_container');
     expect(t.textGrowth).toBe('fixed-width');
   });
 
-  it('Chinese content: Noto Sans SC + lineHeight 1.6 + letterSpacing 0', async () => {
+  it('Chinese body: Inter (not SC — text-rules says body=Inter) + lineHeight 1.6 + letterSpacing 0', async () => {
     const fp = await fresh('a.op');
     await handleAddBodyTextV0({
       filePath: fp,
       content: '你好世界，这是一段中文正文测试。',
     });
     const t = getRoot(await readDoc(fp));
-    // text-rules.md: body Chinese → Noto Sans SC
-    expect(t.fontFamily).toBe('Noto Sans SC');
+    // text-rules.md TEXT_RULES block: "body='Inter'" — Inter uses system
+    // CJK fallback. Heading gets script-specific Noto face; body does NOT.
+    // Previous impl emitted Noto Sans SC here; contradicted the rule.
+    expect(t.fontFamily).toBe('Inter');
     expect(t.lineHeight).toBe(1.6);
     expect(t.letterSpacing).toBe(0);
   });
 
-  it('Japanese content: Noto Sans JP (NOT SC — respects script-specific font contract)', async () => {
+  it('Japanese body: Inter (NOT Noto Sans JP) + CJK lineHeight/letterSpacing', async () => {
     const fp = await fresh('a.op');
     await handleAddBodyTextV0({ filePath: fp, content: 'こんにちは、テキストです。' });
     const t = getRoot(await readDoc(fp));
-    // text-rules.md: "body='Noto Sans JP' (Japanese)"
-    expect(t.fontFamily).toBe('Noto Sans JP');
+    // Rule: body always Inter; only heading dispatches to Noto Sans JP
+    expect(t.fontFamily).toBe('Inter');
     expect(t.lineHeight).toBe(1.6);
     expect(t.letterSpacing).toBe(0);
   });
 
-  it('Korean content: Noto Sans KR (script-specific, not SC fallback)', async () => {
+  it('Korean body: Inter (NOT Noto Sans KR) + CJK lineHeight/letterSpacing', async () => {
     const fp = await fresh('a.op');
     await handleAddBodyTextV0({ filePath: fp, content: '안녕하세요, 본문입니다.' });
     const t = getRoot(await readDoc(fp));
-    // text-rules.md: "body='Noto Sans KR' (Korean)"
-    expect(t.fontFamily).toBe('Noto Sans KR');
+    expect(t.fontFamily).toBe('Inter');
     expect(t.lineHeight).toBe(1.6);
+    expect(t.letterSpacing).toBe(0);
   });
 
-  it('Japanese with Han ideographs (kanji+hiragana) still detects Japanese', async () => {
+  it('Japanese with kanji+hiragana: CJK detected → Inter + 1.6 (body rule unaffected)', async () => {
     const fp = await fresh('a.op');
     await handleAddBodyTextV0({ filePath: fp, content: '今日は良い天気です。' });
     const t = getRoot(await readDoc(fp));
-    expect(t.fontFamily).toBe('Noto Sans JP');
+    expect(t.fontFamily).toBe('Inter');
+    expect(t.lineHeight).toBe(1.6);
   });
 
-  it('mixed Chinese + Latin content triggers Chinese (any Han char wins)', async () => {
+  it('mixed Chinese + Latin: CJK lineHeight wins → Inter + 1.6', async () => {
     const fp = await fresh('a.op');
     await handleAddBodyTextV0({ filePath: fp, content: 'Hello 你好' });
     const t = getRoot(await readDoc(fp));
-    expect(t.fontFamily).toBe('Noto Sans SC');
+    expect(t.fontFamily).toBe('Inter');
+    expect(t.lineHeight).toBe(1.6);
+    expect(t.letterSpacing).toBe(0);
   });
 
   it('throws on bogus parent_id AND leaves file untouched', async () => {
