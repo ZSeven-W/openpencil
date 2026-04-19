@@ -18,6 +18,7 @@ const SECTION_NAME_MAP: Record<string, string> = {
   copywriting: 'copywriting',
   cjk: 'cjk-typography',
   examples: 'examples',
+  elements: 'elements',
 };
 
 /** Look up a skill by legacy section key or skill name. */
@@ -235,6 +236,7 @@ type PromptSection =
   | 'examples'
   | 'guidelines'
   | 'planning'
+  | 'elements'
   | 'design-md'
   | 'copywriting'
   | 'overflow'
@@ -264,6 +266,7 @@ const SECTION_MAP: Record<PromptSection, () => string> = {
   examples: () => getSkillContent('examples'),
   guidelines: () => DESIGN_GUIDELINES,
   planning: () => PLANNING_GUIDE,
+  elements: () => getSkillContent('elements'),
   'design-md': () => _designMdContent ?? 'No design.md loaded in the current document.',
   copywriting: () => getSkillContent('copywriting'),
   overflow: () => getSkillContent('overflow'),
