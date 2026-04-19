@@ -1,6 +1,9 @@
-import { handleBatchDesign } from './batch-design';
-import { generateId } from '../utils/id';
-import { ensureParentExists } from './element-tool-helpers';
+import type { handleBatchDesign } from './batch-design';
+import {
+  assignIdsRecursively,
+  ensureParentExists,
+  insertElementTree,
+} from './element-tool-helpers';
 
 export interface AddBottomNavV0Item {
   title: string;
@@ -36,14 +39,7 @@ export async function handleAddBottomNavV0(
   const height = params.height ?? 62;
   const nav = buildNav(params, height);
   assignIdsRecursively(nav);
-  const parentRef = params.parent_id ? `"${params.parent_id}"` : 'null';
-  const dsl = `nav=I(${parentRef}, ${JSON.stringify(nav)})`;
-  return handleBatchDesign({
-    operations: dsl,
-    filePath: params.filePath,
-    pageId: params.pageId,
-    postProcess: false,
-  });
+  return insertElementTree({ binding: 'nav', tree: nav, ...params });
 }
 
 function buildNav(params: AddBottomNavV0Params, height: number): Record<string, unknown> {
@@ -91,16 +87,4 @@ function buildTab(item: AddBottomNavV0Item): Record<string, unknown> {
       },
     ],
   };
-}
-
-function assignIdsRecursively(node: Record<string, unknown>): void {
-  if (typeof node.id !== 'string') node.id = generateId();
-  const children = node.children;
-  if (Array.isArray(children)) {
-    for (const child of children) {
-      if (child && typeof child === 'object') {
-        assignIdsRecursively(child as Record<string, unknown>);
-      }
-    }
-  }
 }

@@ -1,6 +1,9 @@
-import { handleBatchDesign } from './batch-design';
-import { generateId } from '../utils/id';
-import { ensureParentExists } from './element-tool-helpers';
+import type { handleBatchDesign } from './batch-design';
+import {
+  assignIdsRecursively,
+  ensureParentExists,
+  insertElementTree,
+} from './element-tool-helpers';
 
 export interface AddActivityRingV0Params {
   size?: number;
@@ -45,14 +48,7 @@ export async function handleAddActivityRingV0(
   const textWeight = params.text_weight ?? 700;
   const ring = buildRing(params, size, thickness, ringColor, textSize, textWeight);
   assignIdsRecursively(ring);
-  const parentRef = params.parent_id ? `"${params.parent_id}"` : 'null';
-  const dsl = `ring=I(${parentRef}, ${JSON.stringify(ring)})`;
-  return handleBatchDesign({
-    operations: dsl,
-    filePath: params.filePath,
-    pageId: params.pageId,
-    postProcess: false,
-  });
+  return insertElementTree({ binding: 'ring', tree: ring, ...params });
 }
 
 function buildRing(
@@ -89,16 +85,4 @@ function buildRing(
       },
     ],
   };
-}
-
-function assignIdsRecursively(node: Record<string, unknown>): void {
-  if (typeof node.id !== 'string') node.id = generateId();
-  const children = node.children;
-  if (Array.isArray(children)) {
-    for (const child of children) {
-      if (child && typeof child === 'object') {
-        assignIdsRecursively(child as Record<string, unknown>);
-      }
-    }
-  }
 }
