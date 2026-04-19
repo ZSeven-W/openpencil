@@ -93,12 +93,13 @@ export const ELEMENT_TOOL_DEFINITIONS_EXT = [
   {
     name: 'add_tabs_v0',
     description:
-      'Horizontal TOP TABS with active underline. Each tab is a vertical frame: ' +
-      '[padded content wrapper] + [2px sibling rectangle as underline] (when active). ' +
-      'Active tab also gets fontWeight=600. Underline is a sibling rect rather than a ' +
-      'directional stroke because PenStroke only supports uniform/array thickness. ' +
-      'Use for "top tabs", "secondary nav", "underline tabs", "下划线 tab". For iOS-style ' +
-      'pill tabs use add_segmented_control_v0 instead. schemaVersion 1.0',
+      'Horizontal TOP TABS with active underline. Every tab uses width=fill_container so the bar ' +
+      'splits evenly (Twitter/Material pattern, avoids the fill_container-in-fit_content layout ' +
+      'trap that would blow up the active tab). Each tab is a vertical frame: [padded content ' +
+      'wrapper] + [2px sibling rectangle underline when active]. Active tab also gets fontWeight=600. ' +
+      'Underline is a sibling rect rather than a directional stroke because PenStroke only supports ' +
+      'uniform/array thickness. Use for "top tabs", "secondary nav", "underline tabs", "下划线 tab". ' +
+      'For iOS-style pill tabs use add_segmented_control_v0 instead. schemaVersion 1.0',
     inputSchema: {
       type: 'object' as const,
       properties: {
