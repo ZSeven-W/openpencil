@@ -18,12 +18,15 @@ export interface AddTabsV0Params {
 }
 
 /**
- * Horizontal top tabs with underline on the active tab. Each tab is
- * fit_content width, padding=[12,16]. Active tab gets a 2px bottom stroke
- * via directional `stroke.thickness={bottom:2}` (per Pencil divider pattern)
- * and fontWeight=600.
+ * Horizontal top tabs with underline on the active tab. PenStroke only
+ * supports `thickness: number | [number,number,number,number]` — no
+ * per-side stroke rendering (paint-utils.ts::resolveStrokeWidth returns 0
+ * for object shapes, thickness[0] for arrays). So the active underline is
+ * a sibling rectangle, NOT a directional stroke. Each tab becomes a
+ * vertical frame: [content wrapper with padding] + [underline rect when
+ * active].
  *
- * roles: 'tabs' / 'tab' | 'tab-active'.
+ * roles: 'tabs' / 'tab' | 'tab-active' / 'tab-underline'.
  * Use for "tabs with underline", "secondary navigation".
  */
 export async function handleAddTabsV0(
@@ -31,10 +34,9 @@ export async function handleAddTabsV0(
 ): Promise<Awaited<ReturnType<typeof handleBatchDesign>>> {
   await ensureParentExists(params);
   const tabs = params.items.map((item) => {
-    const tab: Record<string, unknown> = {
+    const inner = {
       type: 'frame',
-      name: `Tab (${item.label})`,
-      role: item.active ? 'tab-active' : 'tab',
+      name: 'Tab Content',
       padding: [12, 16],
       layout: 'horizontal',
       alignItems: 'center',
@@ -50,13 +52,25 @@ export async function handleAddTabsV0(
         },
       ],
     };
+    const children: Record<string, unknown>[] = [inner];
     if (item.active) {
-      tab.stroke = {
-        thickness: { bottom: 2 },
+      children.push({
+        type: 'rectangle',
+        name: 'Underline',
+        role: 'tab-underline',
+        width: 'fill_container',
+        height: 2,
         fill: [{ type: 'solid', color: '#2563EB' }],
-      };
+      });
     }
-    return tab;
+    return {
+      type: 'frame',
+      name: `Tab (${item.label})`,
+      role: item.active ? 'tab-active' : 'tab',
+      layout: 'vertical',
+      alignItems: 'stretch',
+      children,
+    };
   });
   const bar = {
     type: 'frame',

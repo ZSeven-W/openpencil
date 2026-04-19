@@ -73,7 +73,7 @@ Controls (toggle / choice / tabs):
 20. iOS/Material toggle switch (51×31, thumb floats) → `add_switch_v0`
 21. Checkbox + inline label (20×20 box, `check` icon inside when checked) → `add_checkbox_v0`
 22. Radio button + inline label (20×20 ring, dot inside when selected) → `add_radio_v0`
-23. Horizontal top tabs with underline on active (fontWeight 600 + 2px bottom stroke) → `add_tabs_v0`
+23. Horizontal top tabs with underline on active (fontWeight 600 + 2px sibling rectangle underline) → `add_tabs_v0`
 24. iOS pill-style segmented control (equal-width segments, active floats white) → `add_segmented_control_v0`
 
 State / feedback:
