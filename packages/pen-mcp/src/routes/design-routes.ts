@@ -6,6 +6,8 @@ import { handleDesignRefine } from '../tools/design-refine';
 import { LAYERED_DESIGN_TOOLS } from '../tools/layered-design-defs';
 import { handleAddSectionV0 } from '../tools/add-section-v0';
 import { handleAddScrollRowV0 } from '../tools/add-scroll-row-v0';
+import { handleAddBottomNavV0 } from '../tools/add-bottom-nav-v0';
+import { handleAddActivityRingV0 } from '../tools/add-activity-ring-v0';
 
 export const DESIGN_TOOL_DEFINITIONS = [
   {
@@ -130,6 +132,65 @@ export const DESIGN_TOOL_DEFINITIONS = [
       required: ['children_type', 'items'],
     },
   },
+  {
+    name: 'add_bottom_nav_v0',
+    description:
+      'Create a bottom tab bar (inline, not fixed-position). Forces the pattern taught in ' +
+      'packages/pen-ai-skills/skills/phases/generation/layout.md §NO FIXED-POSITION LAYOUT: ' +
+      'bottom-tab-bar is an inline child of the page (no empty spacer sibling needed, no ' +
+      'position:fixed since the engine does not support it). Always prefer this over batch_design ' +
+      'when the spec mentions "bottom nav", "tab bar", "tabbar", "底部导航", "tab bar with icons". ' +
+      'schemaVersion 1.0',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        filePath: { type: 'string', description: 'Path to .op file, or omit for live canvas' },
+        items: {
+          type: 'array',
+          description:
+            'Tab items. Each needs title + icon (lucide name). active marks current tab.',
+          items: {
+            type: 'object',
+            properties: {
+              title: { type: 'string' },
+              icon: { type: 'string', description: 'lucide icon name (e.g. "home")' },
+              active: { type: 'boolean' },
+            },
+            required: ['title', 'icon'],
+          },
+        },
+        height: { type: 'number', description: 'Bar height in px (default 62)' },
+        parent_id: { type: 'string', description: 'Page id; omit for root-level' },
+        pageId: { type: 'string', description: 'Target page ID (defaults to first page)' },
+      },
+      required: ['items'],
+    },
+  },
+  {
+    name: 'add_activity_ring_v0',
+    description:
+      'Create an Apple-style activity ring (progress ring) with centered text. Forces the ' +
+      'frame+cornerRadius+stroke+centered-text pattern taught in ' +
+      'packages/pen-ai-skills/skills/phases/generation/layout.md §RING / CIRCLE WITH CENTER CONTENT. ' +
+      'NEVER emits the documented anti-patterns (ellipse+sibling text, layout=none+absolute). Use ' +
+      'when the spec mentions "activity ring", "progress ring", "circular progress", "ring with ' +
+      'number", "Apple health ring". schemaVersion 1.0',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        filePath: { type: 'string', description: 'Path to .op file, or omit for live canvas' },
+        size: { type: 'number', description: 'Ring outer diameter in px (default 80)' },
+        thickness: { type: 'number', description: 'Stroke thickness in px (default 8)' },
+        ring_color: { type: 'string', description: 'Stroke color (default "#000000")' },
+        center_text: { type: 'string', description: 'Text displayed in the ring center' },
+        text_size: { type: 'number', description: 'Center text fontSize (default 16)' },
+        text_weight: { type: 'number', description: 'Center text fontWeight (default 700)' },
+        parent_id: { type: 'string', description: 'Parent node id; omit for root-level' },
+        pageId: { type: 'string', description: 'Target page ID (defaults to first page)' },
+      },
+      required: ['center_text'],
+    },
+  },
 ];
 
 export const DESIGN_TOOL_NAMES = new Set([
@@ -139,6 +200,8 @@ export const DESIGN_TOOL_NAMES = new Set([
   'design_content',
   'design_refine',
   'add_scroll_row_v0',
+  'add_bottom_nav_v0',
+  'add_activity_ring_v0',
 ]);
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -168,6 +231,10 @@ export async function handleDesignToolCall(
       return JSON.stringify(await handleDesignRefine(a), null, 2);
     case 'add_scroll_row_v0':
       return JSON.stringify(await handleAddScrollRowV0(a), null, 2);
+    case 'add_bottom_nav_v0':
+      return JSON.stringify(await handleAddBottomNavV0(a), null, 2);
+    case 'add_activity_ring_v0':
+      return JSON.stringify(await handleAddActivityRingV0(a), null, 2);
     default:
       return '';
   }
