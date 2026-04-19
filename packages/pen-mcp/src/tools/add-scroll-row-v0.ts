@@ -1,5 +1,6 @@
 import { handleBatchDesign } from './batch-design';
 import { generateId } from '../utils/id';
+import { ensureParentExists } from './element-tool-helpers';
 
 export interface AddScrollRowV0Item {
   title: string;
@@ -35,6 +36,7 @@ export interface AddScrollRowV0Params {
 export async function handleAddScrollRowV0(
   params: AddScrollRowV0Params,
 ): Promise<Awaited<ReturnType<typeof handleBatchDesign>>> {
+  await ensureParentExists(params);
   const gap = params.gap ?? 12;
   const cardWidth = params.card_width ?? defaultCardWidth(params.children_type);
   const wrapper = buildWrapperNode(params, gap, cardWidth);

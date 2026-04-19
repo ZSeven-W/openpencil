@@ -160,7 +160,11 @@ export const DESIGN_TOOL_DEFINITIONS = [
           },
         },
         height: { type: 'number', description: 'Bar height in px (default 62)' },
-        parent_id: { type: 'string', description: 'Page id; omit for root-level' },
+        parent_id: {
+          type: 'string',
+          description:
+            'Target parent node id (must exist in the document; validated before insertion). Omit for root-level insertion.',
+        },
         pageId: { type: 'string', description: 'Target page ID (defaults to first page)' },
       },
       required: ['items'],

@@ -1,5 +1,6 @@
 import { handleBatchDesign } from './batch-design';
 import { generateId } from '../utils/id';
+import { ensureParentExists } from './element-tool-helpers';
 
 export interface AddBottomNavV0Item {
   title: string;
@@ -31,6 +32,7 @@ export interface AddBottomNavV0Params {
 export async function handleAddBottomNavV0(
   params: AddBottomNavV0Params,
 ): Promise<Awaited<ReturnType<typeof handleBatchDesign>>> {
+  await ensureParentExists(params);
   const height = params.height ?? 62;
   const nav = buildNav(params, height);
   assignIdsRecursively(nav);

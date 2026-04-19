@@ -127,4 +127,15 @@ describe('add_activity_ring_v0 — structure matches anti-pattern fix', () => {
     expect((ringId as string).length).toBeGreaterThan(0);
     expect((textId as string).length).toBeGreaterThan(0);
   });
+
+  it('throws when parent_id refers to non-existent node (no silent no-op)', async () => {
+    const fp = await fresh('ring.op');
+    await expect(
+      handleAddActivityRingV0({
+        filePath: fp,
+        center_text: 'X',
+        parent_id: 'bogus-parent',
+      }),
+    ).rejects.toThrow(/parent_id.*not found/);
+  });
 });
