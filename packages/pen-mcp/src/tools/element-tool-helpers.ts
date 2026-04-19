@@ -1,7 +1,25 @@
-import { openDocument, resolveDocPath } from '../document-manager';
+import { readFile, writeFile } from 'node:fs/promises';
+import {
+  LIVE_CANVAS_PATH,
+  invalidateCache,
+  openDocument,
+  resolveDocPath,
+} from '../document-manager';
 import { findNodeInTree, findParentInTree, getDocChildren } from '../utils/node-operations';
 import { generateId } from '../utils/id';
 import { handleBatchDesign } from './batch-design';
+
+/**
+ * Simulate how batch-design.ts:resolveRef will interpret a JSON.stringify'd
+ * parent_id. The parser does `raw.replace(/^"|"$/g, '')` — strip one leading
+ * and one trailing `"` — and does NOT JSON-unescape. So any id containing
+ * `"` or `\` will round-trip to a different literal than the caller
+ * intended. Return value === original parent_id iff the DSL round-trip is
+ * lossless.
+ */
+function simulateDslParentResolve(parentId: string): string {
+  return JSON.stringify(parentId).replace(/^"|"$/g, '');
+}
 
 /**
  * Validate that `parent_id` refers to an existing node before passing it to
@@ -117,6 +135,36 @@ export async function insertElementTree(args: {
   filePath?: string;
   pageId?: string;
 }): Promise<Awaited<ReturnType<typeof handleBatchDesign>>> {
+  // ---- Pre-check: reject parent_ids that cannot safely round-trip through
+  // batch_design's DSL parser. This runs BEFORE any disk write so we don't
+  // have to roll back. See simulateDslParentResolve JSDoc for the exact
+  // rule. Covers ids containing `"` or `\` (nanoid never produces these,
+  // but imported / migrated documents might).
+  if (args.parent_id && simulateDslParentResolve(args.parent_id) !== args.parent_id) {
+    throw new Error(
+      `parent_id ${JSON.stringify(args.parent_id)} contains characters (quote or backslash) ` +
+        `that cannot be safely passed through batch_design's DSL parser. The parser strips one ` +
+        `leading/trailing quote and does NOT JSON-unescape, so the resolved id would differ ` +
+        `from the value you provided. Rename the parent node to remove these characters, or ` +
+        `omit parent_id to insert at root.`,
+    );
+  }
+
+  const resolvedFp = resolveDocPath(args.filePath);
+  const isLive = resolvedFp === LIVE_CANVAS_PATH;
+
+  // ---- Snapshot for rollback (file-backed docs only; live canvas can't
+  // atomically roll back because pushLiveDocument is a one-way push).
+  let fileSnapshot: string | null = null;
+  if (!isLive) {
+    try {
+      fileSnapshot = await readFile(resolvedFp, 'utf-8');
+    } catch {
+      // File may not exist yet — treat as empty snapshot (restore by delete)
+      fileSnapshot = null;
+    }
+  }
+
   const parentRef = args.parent_id ? JSON.stringify(args.parent_id) : 'null';
   const dsl = `${args.binding}=I(${parentRef}, ${JSON.stringify(args.tree)})`;
   const result = await handleBatchDesign({
@@ -125,45 +173,48 @@ export async function insertElementTree(args: {
     pageId: args.pageId,
     postProcess: false,
   });
+
+  const rollback = async (reason: string): Promise<never> => {
+    if (!isLive && fileSnapshot !== null) {
+      await writeFile(resolvedFp, fileSnapshot, 'utf-8');
+      invalidateCache(resolvedFp);
+    }
+    throw new Error(
+      `${reason} ${isLive ? '(live canvas cannot be atomically rolled back — the bad insert may still be visible until next refresh)' : '(document restored to pre-insert state)'}`,
+    );
+  };
+
   if (result.errors && result.errors.length > 0) {
     const summary = result.errors.map((e) => `${e.line.slice(0, 80)}: ${e.error}`).join('; ');
-    throw new Error(`Element tool insert failed: ${summary}`);
+    await rollback(`Element tool insert failed: ${summary}`);
   }
   const insertedId = result.results[0]?.nodeId;
   if (!insertedId) {
-    throw new Error(
-      'Element tool insert returned no nodeId; batch_design did not report any result',
+    await rollback(
+      'Element tool insert returned no nodeId; batch_design did not report any result.',
     );
   }
-  const fp = resolveDocPath(args.filePath);
-  const postDoc = await openDocument(fp);
+
+  // ---- Post-check: verify insertion actually landed in the expected
+  // location. With the pre-check above these paths should be unreachable
+  // for well-formed parent_ids, but we keep them as defense-in-depth for
+  // future DSL-parser changes or silent-failure modes we haven't thought of.
+  const postDoc = await openDocument(resolvedFp);
   const postChildren = getDocChildren(postDoc, args.pageId);
-  const landed = findNodeInTree(postChildren, insertedId);
+  const landed = findNodeInTree(postChildren, insertedId as string);
   if (!landed) {
-    throw new Error(
+    await rollback(
       `Element tool insert silently failed: inserted node ${insertedId} is not present in the ` +
-        `document after insertion. This usually means parent_id escaping did not match the ` +
-        `document's actual id (batch_design's DSL parser strips quotes but does not JSON-unescape). ` +
-        `parent_id=${JSON.stringify(args.parent_id)}, pageId=${JSON.stringify(args.pageId)}.`,
+        `document after insertion. parent_id=${JSON.stringify(args.parent_id)}, pageId=${JSON.stringify(args.pageId)}.`,
     );
   }
-  // Parent-location verification: node exists in tree but may have landed
-  // under the wrong parent. Can happen if batch_design's resolveRef
-  // quote-strip produces a literal that matches a DIFFERENT node than the
-  // one pre-check validated. Example: doc has both `A"B` (user intent)
-  // AND `A\"B` (literal 4-char id with backslash); after JSON.stringify
-  // + quote-strip, parser resolves to `A\"B` and inserts under it.
-  // ensureParentExists and the "landed in tree" check both pass, but
-  // the insert went to the wrong place.
   if (args.parent_id) {
-    const actualParent = findParentInTree(postChildren, insertedId);
+    const actualParent = findParentInTree(postChildren, insertedId as string);
     const actualParentId = actualParent?.id ?? null;
     if (actualParentId !== args.parent_id) {
-      throw new Error(
+      await rollback(
         `Element tool insert landed under the wrong parent: expected ` +
-          `${JSON.stringify(args.parent_id)}, got ${JSON.stringify(actualParentId ?? 'root')}. ` +
-          `This is typically a DSL-parser escape mismatch where the resolved parent id ` +
-          `happens to collide with a different node's literal id.`,
+          `${JSON.stringify(args.parent_id)}, got ${JSON.stringify(actualParentId ?? 'root')}.`,
       );
     }
   }
