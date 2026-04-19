@@ -78,31 +78,6 @@ export const DESIGN_TOOL_DEFINITIONS = [
     },
   },
   ...LAYERED_DESIGN_TOOLS,
-  {
-    name: 'add_section_v0',
-    description:
-      'D0 parity spike tool (not for production). Insert one section frame with minimal schema: ' +
-      'title (becomes frame.name) + layout (horizontal|vertical). Validates N-tool additive-only ' +
-      'hypothesis. See spec openpencil-docs/superpowers/specs/2026-04-19-element-tools-v0.md §D0. ' +
-      'schemaVersion 1.0',
-    inputSchema: {
-      type: 'object' as const,
-      properties: {
-        filePath: {
-          type: 'string',
-          description: 'Path to .op file, or omit to use the live canvas (default)',
-        },
-        title: { type: 'string', description: 'Section name (becomes frame.name)' },
-        layout: {
-          type: 'string',
-          enum: ['horizontal', 'vertical'],
-          description: 'Flex direction',
-        },
-        pageId: { type: 'string', description: 'Target page ID (defaults to first page)' },
-      },
-      required: ['title', 'layout'],
-    },
-  },
 ];
 
 export const DESIGN_TOOL_NAMES = new Set([
@@ -111,7 +86,6 @@ export const DESIGN_TOOL_NAMES = new Set([
   'design_skeleton',
   'design_content',
   'design_refine',
-  'add_section_v0',
 ]);
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -139,6 +113,56 @@ export async function handleDesignToolCall(
       return JSON.stringify(await handleDesignContent(a), null, 2);
     case 'design_refine':
       return JSON.stringify(await handleDesignRefine(a), null, 2);
+    default:
+      return '';
+  }
+}
+
+// --- D0 parity spike tool (gated behind OPENPENCIL_D0_SPIKE=1) ---
+//
+// add_section_v0 是一次性 parity 验证工具，不进生产工具集。与 debug tools
+// 同样走环境变量条件暴露模式（见 server.ts 里对 DEBUG_TOOL_DEFINITIONS 的处理）。
+// 默认不出现在 ListTools 响应里，避免外部 MCP 客户端误用。
+// Spec: openpencil-docs/superpowers/specs/2026-04-19-element-tools-v0.md §D0
+
+export const D0_SPIKE_TOOL_DEFINITIONS = [
+  {
+    name: 'add_section_v0',
+    description:
+      'D0 parity spike tool (not for production, gated by OPENPENCIL_D0_SPIKE=1). ' +
+      'Insert one section frame with minimal schema: title (becomes frame.name) + ' +
+      'layout (horizontal|vertical). Validates N-tool additive-only hypothesis. ' +
+      'See spec openpencil-docs/superpowers/specs/2026-04-19-element-tools-v0.md §D0. ' +
+      'schemaVersion 1.0',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        filePath: {
+          type: 'string',
+          description: 'Path to .op file, or omit to use the live canvas (default)',
+        },
+        title: { type: 'string', description: 'Section name (becomes frame.name)' },
+        layout: {
+          type: 'string',
+          enum: ['horizontal', 'vertical'],
+          description: 'Flex direction',
+        },
+        pageId: { type: 'string', description: 'Target page ID (defaults to first page)' },
+      },
+      required: ['title', 'layout'],
+    },
+  },
+];
+
+export const D0_SPIKE_TOOL_NAMES = new Set(['add_section_v0']);
+
+export async function handleD0SpikeToolCall(
+  name: string,
+  args: Record<string, unknown>,
+): Promise<string> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const a = args as any;
+  switch (name) {
     case 'add_section_v0':
       return JSON.stringify(await handleAddSectionV0(a), null, 2);
     default:
