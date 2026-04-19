@@ -152,4 +152,51 @@ describe('element tools — silent no-op guards (P0.1 + post-insert check)', () 
     const after = await readFile(fp, 'utf-8');
     expect(after).toBe(before);
   });
+
+  it('throws when DSL-resolved parent_id collides with a different node (wrong-parent insert)', async () => {
+    // Seed the document with TWO frames:
+    //   - intended parent, id = `A"B` (3 chars: A, ", B) — the user's target
+    //   - decoy parent,    id = `A\"B` (4 chars: A, \, ", B) — happens to
+    //     be what batch_design's resolveRef produces after quote-strip on
+    //     our JSON.stringify output for 'A"B'
+    // Expected: ensureParentExists finds the intended parent (raw string
+    // match ✓), but insertNodeInTree resolves to the decoy (literal match
+    // on the 4-char id). Without parent-location verification, the node
+    // would silently land under the wrong parent.
+    const fp = join(TMP, 'quoted-parent.op');
+    await writeFile(
+      fp,
+      JSON.stringify({
+        version: '1.0.0',
+        children: [
+          {
+            id: 'A"B',
+            type: 'frame',
+            name: 'Intended Parent',
+            width: 1200,
+            height: 0,
+            layout: 'vertical',
+            children: [],
+          },
+          {
+            id: 'A\\"B',
+            type: 'frame',
+            name: 'Decoy Parent',
+            width: 1200,
+            height: 0,
+            layout: 'vertical',
+            children: [],
+          },
+        ],
+      }),
+      'utf-8',
+    );
+    await expect(
+      handleAddBottomNavV0({
+        filePath: fp,
+        parent_id: 'A"B',
+        items: [{ title: 'Home', icon: 'home' }],
+      }),
+    ).rejects.toThrow(/wrong parent|not present/);
+  });
 });
