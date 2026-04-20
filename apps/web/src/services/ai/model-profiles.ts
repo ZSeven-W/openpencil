@@ -105,6 +105,45 @@ export function needsSimplifiedPrompt(profile: ModelProfile): boolean {
 }
 
 /**
+ * Environment variable that gates N-tool element integration in the
+ * embedded orchestrator. Default off so production behavior is
+ * unchanged until the flag is explicitly flipped. Any truthy value
+ * (`"1"`, `"true"`, `"yes"`, case-insensitive) enables the feature.
+ *
+ * Rollout per plan §4 (openpencil-docs
+ * superpowers/plans/2026-04-21-element-tools-orchestrator-integration.md):
+ *   Phase 1: ship with flag off (scaffolding only, zero behavior change)
+ *   Phase 2: flip on for basic + standard tiers in a canary env
+ *   Phase 3: remove the flag once stable across a monitoring window
+ */
+const ELEMENT_TOOLS_FLAG_ENV = 'ENABLE_ELEMENT_TOOLS_IN_ORCHESTRATOR';
+
+function isElementToolsFlagEnabled(): boolean {
+  const raw = process.env[ELEMENT_TOOLS_FLAG_ENV];
+  if (!raw) return false;
+  const lower = raw.trim().toLowerCase();
+  return lower === '1' || lower === 'true' || lower === 'yes' || lower === 'on';
+}
+
+/**
+ * Whether to inject elements.md + teach the `<op_tool>` output format
+ * for a given model profile. Returns `true` iff the feature flag env
+ * var is enabled AND the model is in a tier that benefits from the
+ * element-tool surface.
+ *
+ * A/B v1 (openpencil-docs superpowers/notes/2026-04-20-ab-v1-results.md)
+ * observed consistent wins on the basic + standard tiers (Δ M1 +8 to
+ * +21pp on MiniMax/GLM5/GLM5.1) and a ceiling-effect regression on
+ * the one full-tier weak model tested (Kimi K2.5: Δ M1 -12.5pp). We
+ * therefore default full-tier models OFF; caller-level override is
+ * anticipated but not yet wired (plan §7.2).
+ */
+export function needsElementTools(profile: ModelProfile): boolean {
+  if (!isElementToolsFlagEnabled()) return false;
+  return profile.tier === 'basic' || profile.tier === 'standard';
+}
+
+/**
  * Apply profile overrides to a timeout config object (mutates a copy).
  */
 export function applyProfileToTimeouts<
