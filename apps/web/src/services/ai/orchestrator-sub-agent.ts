@@ -25,7 +25,8 @@ import {
   buildSubAgentStyleGuideInstruction,
   compactSubAgentSkills,
 } from './orchestrator-sub-agent-compact';
-import { resolveModelProfile } from './model-profiles';
+import { tryParseElementToolOutput } from './design-parser';
+import { needsElementTools, resolveModelProfile } from './model-profiles';
 import {
   expandRootFrameHeight,
   buildVariableContext,
@@ -51,6 +52,37 @@ export interface StreamTimeoutConfig {
   thinkingBudgetTokens?: number;
   effort?: 'low' | 'medium' | 'high' | 'max';
 }
+
+// ---------------------------------------------------------------------------
+// Element-tool output-format contract
+// ---------------------------------------------------------------------------
+//
+// When `needsElementTools(modelProfile)` is true we append this block to
+// the sub-agent's system prompt so the model emits the same `<op_tool>`
+// wrapper measured in the A/B v1 treatment arm (see openpencil-docs
+// superpowers/notes/2026-04-20-ab-v1-results.md). Kept verbatim against
+// scripts/ab-corpus/build-prompt.ts::T_TOOL_CALL_INSTRUCTIONS so the
+// production path reproduces the behavior that cleared the decision gate.
+//
+// §3.4 of the integration plan adds a parser that detects these tags
+// BEFORE the legacy JSONL parser so existing flows stay intact when the
+// flag is off or when the model bypasses the wrapper.
+const ELEMENT_TOOL_OUTPUT_FORMAT = [
+  '',
+  'OUTPUT FORMAT — EMIT AS TOOL CALL:',
+  '',
+  'Respond with one `<op_tool>` tag, nothing else. Choose based on intent:',
+  '',
+  'PRIMARY: when your intent matches an add_*_v0 element tool above, emit:',
+  '  <op_tool>{"name": "add_X_v0", "arguments": {...}}</op_tool>',
+  '',
+  'FALLBACK: when no element tool fits (heterogeneous layout, composite section, post-hoc styling), emit:',
+  '  <op_tool>{"name": "batch_design", "arguments": {"operations": "<DSL_STRING>"}}</op_tool>',
+  'The `operations` value is a single string containing the batch_design DSL.',
+  '',
+  'Do not combine multiple tags. Do not add prose before or after.',
+  '',
+].join('\n');
 
 // ---------------------------------------------------------------------------
 // Sub-agent execution (sequential or concurrent)
@@ -330,6 +362,16 @@ async function executeSubAgent(
   }
   const hasDesignMdContent = designMdContent.length > 0;
 
+  // Feature-flagged gate for N-tool element-surface integration.
+  // Only fires when ENABLE_ELEMENT_TOOLS_IN_ORCHESTRATOR env var is
+  // truthy AND the model is in the basic/standard tier; full-tier
+  // models stay on the legacy path per A/B v1 ceiling-effect finding
+  // (Kimi K2.5 Δ M1 -12.5pp). Default production state is off, so
+  // this wiring is a no-op until rollout flips the env var.
+  // Plan: openpencil-docs
+  // superpowers/plans/2026-04-21-element-tools-orchestrator-integration.md
+  const elementToolsEnabled = needsElementTools(modelProfile);
+
   const genCtx = resolveSkills('generation', request.prompt, {
     flags: {
       hasVariables: !!variables && Object.keys(variables).length > 0,
@@ -339,6 +381,13 @@ async function executeSubAgent(
       // - no pre-built style guide selected
       // - no usable design.md content (empty raw + empty structured summary)
       noStyleGuideMatch: !plan.selectedStyleGuideContent && !hasDesignMdContent,
+      // hasMcpTools gates `elements.md` auto-loading in the skill
+      // registry. When true, the generation prompt picks up the
+      // 39-tool decision-tree + invariants reference. §3.3 of the
+      // plan teaches the matching `<op_tool>` output format so the
+      // model actually emits tool calls rather than pseudo-call
+      // syntax the legacy parser would reject.
+      hasMcpTools: elementToolsEnabled,
     },
     dynamicContent: hasDesignMdContent ? { designMdContent } : undefined,
     budgetOverride:
@@ -382,7 +431,10 @@ async function executeSubAgent(
     reducedComplexity,
   );
 
-  const systemPrompt = resolvedSkills.map((s) => s.content).join('\n\n');
+  const skillPrompt = resolvedSkills.map((s) => s.content).join('\n\n');
+  const systemPrompt = elementToolsEnabled
+    ? skillPrompt + '\n\n' + ELEMENT_TOOL_OUTPUT_FORMAT
+    : skillPrompt;
 
   if (SUB_AGENT_DEBUG_FLAGS.LOG_PROMPT_SIZE) {
     const skillNames = resolvedSkills.map((s) => s.meta.name).join(',');
@@ -433,6 +485,42 @@ async function executeSubAgent(
           nodes: renderer.getInsertedNodes(),
           rawResponse,
           error: chunk.content,
+        };
+      }
+    }
+
+    // Element-tool shape detection (§3.4 of the plan). When the
+    // feature flag is on and streaming produced no nodes (expected
+    // because weak models emit `<op_tool>` at the end, not incremental
+    // JSON), check if the completed response is an element-tool call
+    // we can dispatch. §3.5 apply-path is a Phase 2 item — for now we
+    // surface a clear error so dev runs with the flag on see exactly
+    // what happened.
+    if (
+      elementToolsEnabled &&
+      renderer.getAppliedIds().size === 0 &&
+      rawResponse.trim().length > 0
+    ) {
+      const elementShape = tryParseElementToolOutput(rawResponse);
+      if (elementShape !== null) {
+        renderer.finish();
+        progressEntry.status = 'error';
+        emitProgress(plan, progress, callbacks);
+        const detectedName =
+          elementShape.kind === 'element-tool'
+            ? elementShape.name
+            : 'batch_design (DSL wrapped in op_tool)';
+        return {
+          subtaskId: subtask.id,
+          nodes: renderer.getInsertedNodes(),
+          rawResponse,
+          error:
+            `Element-tool output detected (${detectedName}) but the ` +
+            `apply pipeline is not yet wired into the embedded ` +
+            `orchestrator. Set ENABLE_ELEMENT_TOOLS_IN_ORCHESTRATOR=0 ` +
+            `to fall back to the legacy JSONL path, or wait for ` +
+            `integration plan §3.5 (openpencil-docs ` +
+            `superpowers/plans/2026-04-21-element-tools-orchestrator-integration.md).`,
         };
       }
     }
