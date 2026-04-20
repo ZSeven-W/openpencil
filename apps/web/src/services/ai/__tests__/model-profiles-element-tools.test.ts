@@ -98,3 +98,61 @@ describe('needsElementTools — truthy-value parsing', () => {
     });
   }
 });
+
+describe('needsElementTools — browser-safe env access (no ReferenceError)', () => {
+  // Codex stop-hook regression guard: this helper is imported by
+  // orchestrator-sub-agent.ts which runs in the Vite browser bundle.
+  // Vite does not polyfill `process` by default; a bare
+  // `process.env.X` read there raises `ReferenceError: process is
+  // not defined` BEFORE the flag check can return the safe default.
+  // The helper must swallow that failure mode.
+
+  it('returns false when `process` is temporarily undefined (simulated browser)', () => {
+    const originalProcess = globalThis.process;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (globalThis as any).process = undefined;
+    try {
+      expect(needsElementTools(profile('basic'))).toBe(false);
+    } finally {
+      globalThis.process = originalProcess;
+    }
+  });
+
+  it('returns false when `process.env` is missing (simulated sandbox)', () => {
+    const originalEnv = globalThis.process?.env;
+    if (globalThis.process) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (globalThis.process as any).env = undefined;
+    }
+    try {
+      expect(needsElementTools(profile('basic'))).toBe(false);
+    } finally {
+      if (globalThis.process && originalEnv) {
+        globalThis.process.env = originalEnv;
+      }
+    }
+  });
+
+  it('returns false when reading `process.env` throws (simulated Deno/workerd)', () => {
+    const originalEnv = globalThis.process?.env;
+    if (globalThis.process) {
+      Object.defineProperty(globalThis.process, 'env', {
+        configurable: true,
+        get() {
+          throw new Error('env access denied in this sandbox');
+        },
+      });
+    }
+    try {
+      expect(needsElementTools(profile('basic'))).toBe(false);
+    } finally {
+      if (globalThis.process && originalEnv) {
+        Object.defineProperty(globalThis.process, 'env', {
+          configurable: true,
+          writable: true,
+          value: originalEnv,
+        });
+      }
+    }
+  });
+});

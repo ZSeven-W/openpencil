@@ -118,8 +118,42 @@ export function needsSimplifiedPrompt(profile: ModelProfile): boolean {
  */
 const ELEMENT_TOOLS_FLAG_ENV = 'ENABLE_ELEMENT_TOOLS_IN_ORCHESTRATOR';
 
+/**
+ * Read the element-tools feature flag from env in a way that's safe
+ * to call from browser bundles. Vite doesn't polyfill `process` by
+ * default, and `orchestrator-sub-agent.ts` runs client-side inside
+ * the streaming design flow — a bare `process.env.X` read would
+ * throw `ReferenceError: process is not defined` BEFORE we can
+ * return the safe-default `false`. Guard both `process` and
+ * `process.env` existence (and the access itself, for sandboxes that
+ * throw on `process.env` read like Deno/workerd); treat ANY failure
+ * as "flag unset".
+ *
+ * Also checks import.meta.env (Vite's canonical browser env) so devs
+ * can toggle via `.env.local` with the same name and see the same
+ * behavior on either side of the SSR boundary.
+ */
+function readFlagFromEnv(name: string): string | undefined {
+  try {
+    if (typeof process !== 'undefined' && process.env && typeof process.env[name] === 'string') {
+      return process.env[name];
+    }
+  } catch {
+    // process.env access can throw in some sandboxes — fall through.
+  }
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const viteEnv = (import.meta as any).env as Record<string, unknown> | undefined;
+    const val = viteEnv?.[name];
+    if (typeof val === 'string') return val;
+  } catch {
+    // import.meta.env unavailable (bundled CJS) — fall through.
+  }
+  return undefined;
+}
+
 function isElementToolsFlagEnabled(): boolean {
-  const raw = process.env[ELEMENT_TOOLS_FLAG_ENV];
+  const raw = readFlagFromEnv(ELEMENT_TOOLS_FLAG_ENV);
   if (!raw) return false;
   const lower = raw.trim().toLowerCase();
   return lower === '1' || lower === 'true' || lower === 'yes' || lower === 'on';
