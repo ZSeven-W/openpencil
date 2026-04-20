@@ -110,13 +110,22 @@ export function needsSimplifiedPrompt(profile: ModelProfile): boolean {
  * unchanged until the flag is explicitly flipped. Any truthy value
  * (`"1"`, `"true"`, `"yes"`, case-insensitive) enables the feature.
  *
+ * Name MUST start with `VITE_` — the sub-agent that reads this helper
+ * runs inside the Vite browser bundle, and Vite's default `envPrefix`
+ * only exposes `VITE_`-prefixed variables to `import.meta.env`. A
+ * bare name (e.g. `ENABLE_ELEMENT_TOOLS_IN_ORCHESTRATOR`) would be
+ * inlined as `undefined` at build time for the client, silently
+ * defeating the rollout flip. Server-side `process.env` reads work
+ * fine with any name, so this dual-compatible name is an alias that
+ * functions on both sides of the SSR boundary.
+ *
  * Rollout per plan §4 (openpencil-docs
  * superpowers/plans/2026-04-21-element-tools-orchestrator-integration.md):
  *   Phase 1: ship with flag off (scaffolding only, zero behavior change)
  *   Phase 2: flip on for basic + standard tiers in a canary env
  *   Phase 3: remove the flag once stable across a monitoring window
  */
-const ELEMENT_TOOLS_FLAG_ENV = 'ENABLE_ELEMENT_TOOLS_IN_ORCHESTRATOR';
+const ELEMENT_TOOLS_FLAG_ENV = 'VITE_ENABLE_ELEMENT_TOOLS';
 
 /**
  * Read the element-tools feature flag from env in a way that's safe
