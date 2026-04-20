@@ -363,7 +363,7 @@ async function executeSubAgent(
   const hasDesignMdContent = designMdContent.length > 0;
 
   // Feature-flagged gate for N-tool element-surface integration.
-  // Only fires when ENABLE_ELEMENT_TOOLS_IN_ORCHESTRATOR env var is
+  // Only fires when VITE_ENABLE_ELEMENT_TOOLS env var is
   // truthy AND the model is in the basic/standard tier; full-tier
   // models stay on the legacy path per A/B v1 ceiling-effect finding
   // (Kimi K2.5 Δ M1 -12.5pp). Default production state is off, so
@@ -517,8 +517,8 @@ async function executeSubAgent(
           error:
             `Element-tool output detected (${detectedName}) but the ` +
             `apply pipeline is not yet wired into the embedded ` +
-            `orchestrator. Set ENABLE_ELEMENT_TOOLS_IN_ORCHESTRATOR=0 ` +
-            `to fall back to the legacy JSONL path, or wait for ` +
+            `orchestrator. Unset VITE_ENABLE_ELEMENT_TOOLS (or set ` +
+            `it to 0) to fall back to the legacy JSONL path, or wait for ` +
             `integration plan §3.5 (openpencil-docs ` +
             `superpowers/plans/2026-04-21-element-tools-orchestrator-integration.md).`,
         };
