@@ -39,6 +39,11 @@ export {
   postProcessNode,
 } from './tools/node-crud';
 export { handleBatchDesign } from './tools/batch-design';
+export {
+  ELEMENT_TOOL_NAMES,
+  ELEMENT_TOOL_DEFINITIONS,
+  handleElementToolCall,
+} from './routes/element-tool-defs';
 export { handleDesignSkeleton } from './tools/design-skeleton';
 export { handleDesignContent } from './tools/design-content';
 export { handleDesignRefine } from './tools/design-refine';

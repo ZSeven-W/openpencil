@@ -359,5 +359,7 @@ ${VARIABLE_RULES}
 
 ${AUTO_REPLACE_RULES}
 
-${POST_PROCESSING}`;
+${POST_PROCESSING}
+
+${getSkillContent('elements')}`;
 }

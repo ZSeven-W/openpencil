@@ -1,7 +1,7 @@
 // Element-tool JSON schema definitions + names + dispatcher.
 // Split out from design-routes.ts (2026-04-19) so that file stays under
 // the repo's 800-line limit as the element-tool family continues to grow.
-// Base (19) + ext (6) = 25 element tools → aggregated here.
+// Base (19) + ext (20) = 39 element tools → aggregated here.
 
 import { handleAddCardRowV0 } from '../tools/add-card-row-v0';
 import { handleAddMetricRowV0 } from '../tools/add-metric-row-v0';
@@ -34,6 +34,14 @@ import { handleAddProgressBarV0 } from '../tools/add-progress-bar-v0';
 import { handleAddFabV0 } from '../tools/add-fab-v0';
 import { handleAddBreadcrumbV0 } from '../tools/add-breadcrumb-v0';
 import { handleAddStepperV0 } from '../tools/add-stepper-v0';
+import { handleAddRatingStarsV0 } from '../tools/add-rating-stars-v0';
+import { handleAddLinkV0 } from '../tools/add-link-v0';
+import { handleAddKbdV0 } from '../tools/add-kbd-v0';
+import { handleAddCarouselDotsV0 } from '../tools/add-carousel-dots-v0';
+import { handleAddPriceV0 } from '../tools/add-price-v0';
+import { handleAddQuoteBlockV0 } from '../tools/add-quote-block-v0';
+import { handleAddCodeBlockV0 } from '../tools/add-code-block-v0';
+import { handleAddColorSwatchV0 } from '../tools/add-color-swatch-v0';
 import { ELEMENT_TOOL_DEFINITIONS_EXT } from './element-tool-defs-ext';
 
 export const ELEMENT_TOOL_DEFINITIONS = [
@@ -784,6 +792,22 @@ export async function handleElementToolCall(name: string, a: any): Promise<strin
       return JSON.stringify(await handleAddBreadcrumbV0(a), null, 2);
     case 'add_stepper_v0':
       return JSON.stringify(await handleAddStepperV0(a), null, 2);
+    case 'add_rating_stars_v0':
+      return JSON.stringify(await handleAddRatingStarsV0(a), null, 2);
+    case 'add_link_v0':
+      return JSON.stringify(await handleAddLinkV0(a), null, 2);
+    case 'add_kbd_v0':
+      return JSON.stringify(await handleAddKbdV0(a), null, 2);
+    case 'add_carousel_dots_v0':
+      return JSON.stringify(await handleAddCarouselDotsV0(a), null, 2);
+    case 'add_price_v0':
+      return JSON.stringify(await handleAddPriceV0(a), null, 2);
+    case 'add_quote_block_v0':
+      return JSON.stringify(await handleAddQuoteBlockV0(a), null, 2);
+    case 'add_code_block_v0':
+      return JSON.stringify(await handleAddCodeBlockV0(a), null, 2);
+    case 'add_color_swatch_v0':
+      return JSON.stringify(await handleAddColorSwatchV0(a), null, 2);
     default:
       return '';
   }
