@@ -54,6 +54,14 @@ const ELEMENT_TOOL_NAMES = [
   'add_fab_v0',
   'add_breadcrumb_v0',
   'add_stepper_v0',
+  'add_rating_stars_v0',
+  'add_link_v0',
+  'add_kbd_v0',
+  'add_carousel_dots_v0',
+  'add_price_v0',
+  'add_quote_block_v0',
+  'add_code_block_v0',
+  'add_color_swatch_v0',
 ];
 
 describe('element tools — v0-MUST contract', () => {

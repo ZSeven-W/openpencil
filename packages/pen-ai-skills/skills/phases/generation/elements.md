@@ -1,11 +1,11 @@
 ---
 name: elements
-description: N-tool element family reference — rows, containers, atoms, text/button primitives, composition, forms, controls (switch/checkbox/radio/tabs/segmented), state/feedback (empty_state/alert/toast/progress_bar), floating/nav (fab/breadcrumb/stepper). Each tool replaces a documented batch_design failure mode
+description: N-tool element family reference — rows, containers, atoms, text/button primitives, composition, forms, controls (switch/checkbox/radio/tabs/segmented), state/feedback (empty_state/alert/toast/progress_bar), floating/nav (fab/breadcrumb/stepper), ratings & pagination (rating_stars/carousel_dots), inline primitives (link/kbd/price), content blocks (quote_block/code_block), design system (color_swatch). Each tool replaces a documented batch_design failure mode
 phase: [generation]
 trigger:
   flags: [hasMcpTools]
 priority: 14
-budget: 2100
+budget: 2400
 category: base
 ---
 
@@ -89,7 +89,27 @@ Floating / nav / wizard:
 30. Breadcrumb trail with chevron separators (last crumb auto-active) → `add_breadcrumb_v0`
 31. Horizontal numbered stepper (circles + fill_container connectors) → `add_stepper_v0`
 
-32. None match → fall through to `batch_design`
+Ratings & pagination:
+
+32. N-of-M star rating (filled + empty stars using lucide `star`) → `add_rating_stars_v0`
+33. Carousel / slide dots (active becomes elongated pill, inactive circles) → `add_carousel_dots_v0`
+
+Inline text primitives:
+
+34. Text link with optional trailing icon ("Learn more →") → `add_link_v0`
+35. Keyboard shortcut glyph ("⌘ K" / "Ctrl + Shift + P") → `add_kbd_v0`
+36. Pricing typography ("$29/month": currency 20/500 + amount 40/700 + period 14/500) → `add_price_v0`
+
+Content blocks:
+
+37. Quoted passage with optional author attribution → `add_quote_block_v0`
+38. Preformatted code block (fill_container, wraps, gray-50 bg) → `add_code_block_v0`
+
+Design-system:
+
+39. Color swatch (colored square + optional token label) → `add_color_swatch_v0`
+
+40. None match → fall through to `batch_design`
 
 **Disambiguation**: if you need a ROW of 3 metrics that should NOT scroll (e.g. a stats strip inside a card), use `add_stat_grid_v0`, NOT `add_metric_row_v0`. The grid uses `fill_container` per cell so it never overflows; the metric row uses fixed-px cells + scroll wrapper.
 
@@ -128,6 +148,14 @@ PREFER an element tool when the spec says any of:
 - "FAB", "floating action button", "compose button", "新建按钮" → `add_fab_v0`
 - "breadcrumb", "nav path", "面包屑" → `add_breadcrumb_v0`
 - "stepper", "progress steps", "wizard nav", "步骤条" → `add_stepper_v0`
+- "rating", "review stars", "评分" → `add_rating_stars_v0`
+- "carousel dots", "slide indicator", "轮播指示" → `add_carousel_dots_v0`
+- "text link", "learn more", "inline link" → `add_link_v0`
+- "keyboard shortcut", "hotkey", "⌘K", "快捷键" → `add_kbd_v0`
+- "price", "plan cost", "$29/month", "定价" → `add_price_v0`
+- "quote", "testimonial quote", "引言" → `add_quote_block_v0`
+- "code snippet", "code block", "代码块" → `add_code_block_v0`
+- "color swatch", "palette", "token", "色板" → `add_color_swatch_v0`
 
 STILL use batch_design when:
 
@@ -213,12 +241,9 @@ add_text_button_v0({ label: "Add item", leading_icon: "plus" })
 add_heading_v0({ content: "Welcome back" })                   // defaults to h2 (24/600/1.2)
 add_heading_v0({ content: "Hero Headline", level: "display" }) // 48/700/1.0/-0.5
 
-add_body_text_v0({ content: "Lorem ipsum dolor sit amet…" })   // Inter + 1.5
-add_body_text_v0({ content: "你好世界，这是一段中文正文。" })  // Inter + 1.6 + letterSpacing 0
-add_body_text_v0({ content: "こんにちは、これは本文です。" })  // Inter + 1.6 + letterSpacing 0
-add_body_text_v0({ content: "안녕하세요, 이것은 본문입니다." }) // Inter + 1.6 + letterSpacing 0
-// body ALWAYS Inter per text-rules.md. Only HEADINGS dispatch to
-// Noto Sans SC/JP/KR (see add_heading_v0). Inter uses system CJK fallback.
+add_body_text_v0({ content: "Lorem ipsum dolor sit amet…" })  // Inter + 1.5
+add_body_text_v0({ content: "你好世界，这是一段中文正文。" })  // CJK: Inter + 1.6 + letterSpacing 0
+// body ALWAYS Inter; only HEADINGS dispatch to Noto Sans SC/JP/KR.
 
 add_icon_label_v0({ icon: "info", label: "Learn more" })
 
@@ -231,19 +256,8 @@ add_list_row_v0({
 
 add_search_bar_v0({ placeholder: "Search workouts..." })
 
-add_form_field_v0({
-  label: "Email",
-  placeholder: "you@example.com",
-  leading_icon: "mail",
-  required: true,
-})
-add_form_field_v0({
-  label: "Password",
-  placeholder: "Enter password",
-  leading_icon: "lock",
-  trailing_icon: "eye",
-  required: true,
-})
+add_form_field_v0({ label: "Email", placeholder: "you@example.com", leading_icon: "mail", required: true })
+add_form_field_v0({ label: "Password", leading_icon: "lock", trailing_icon: "eye", required: true })
 
 add_switch_v0({})                          // off (default)
 add_switch_v0({ active: true })             // on — iOS green
@@ -292,6 +306,15 @@ add_breadcrumb_v0({
 })
 
 add_stepper_v0({ total: 4, current: 1 })          // steps 1+2 done, 3+4 pending
+
+add_rating_stars_v0({ filled: 4 })                           // 4/5 (default total)
+add_carousel_dots_v0({ total: 5, current: 2 })
+add_link_v0({ label: "Learn more", trailing_icon: "arrow-right" })
+add_kbd_v0({ keys: ["Ctrl", "Shift", "P"] })                 // default "+" separator
+add_price_v0({ amount: "29", period: "/month" })             // currency defaults to "$"
+add_quote_block_v0({ quote: "Stay hungry.", author: "Steve Jobs" })
+add_code_block_v0({ code: "const x = 1;", language: "typescript" })
+add_color_swatch_v0({ color: "#2563EB", label: "Primary" })  // hex OR $ref both accepted
 ```
 
 ## Composition pattern
@@ -310,7 +333,7 @@ The tool guarantees — you cannot break them from the input side:
 - `bottom-tab-bar` is inline (no empty spacer sibling needed, do NOT add one)
 - Activity ring is frame+cornerRadius=size/2+stroke+centered text — NEVER emit ellipse+sibling text for rings
 - Every emitted node has a unique id (you can reference it later)
-- Roles are set (`card` / `metric-tile` / `nav-chip` / `nav-chip-active` / `bottom-tab-bar` / `nav-item` / `nav-item-active` / `activity-ring` / `stat-grid` / `stat-cell` / `section-header` / `section-header-title` / `section-header-action` / `top-nav-bar` / `nav-spacer` / `icon-button` / `divider` / `badge` / `avatar` / `button` / `heading` / `body` / `label` / `icon-label` / `list-row` / `list-row-text` / `search-bar` / `form-field` / `form-input` / `switch` / `switch-thumb` / `checkbox` / `checkbox-checked` / `checkbox-row` / `radio` / `radio-selected` / `radio-row` / `radio-dot` / `tabs` / `tab` / `tab-active` / `segmented-control` / `segment` / `segment-active` / `empty-state` / `empty-state-icon` / `empty-state-title` / `empty-state-subtitle` / `alert` / `alert-message` / `alert-close` / `toast` / `toast-message` / `progress-bar` / `progress-bar-fill` / `fab` / `breadcrumb` / `breadcrumb-item` / `breadcrumb-item-active` / `breadcrumb-separator` / `stepper` / `step` / `step-active` / `step-connector` / `step-connector-active`)
+- Roles are set (`card` / `metric-tile` / `nav-chip` / `nav-chip-active` / `bottom-tab-bar` / `nav-item` / `nav-item-active` / `activity-ring` / `stat-grid` / `stat-cell` / `section-header` / `section-header-title` / `section-header-action` / `top-nav-bar` / `nav-spacer` / `icon-button` / `divider` / `badge` / `avatar` / `button` / `heading` / `body` / `label` / `icon-label` / `list-row` / `list-row-text` / `search-bar` / `form-field` / `form-input` / `switch` / `switch-thumb` / `checkbox` / `checkbox-checked` / `checkbox-row` / `radio` / `radio-selected` / `radio-row` / `radio-dot` / `tabs` / `tab` / `tab-active` / `segmented-control` / `segment` / `segment-active` / `empty-state` / `empty-state-icon` / `empty-state-title` / `empty-state-subtitle` / `alert` / `alert-message` / `alert-close` / `toast` / `toast-message` / `progress-bar` / `progress-bar-fill` / `fab` / `breadcrumb` / `breadcrumb-item` / `breadcrumb-item-active` / `breadcrumb-separator` / `stepper` / `step` / `step-active` / `step-connector` / `step-connector-active` / `rating-stars` / `star-filled` / `star-empty` / `link` / `link-label` / `link-icon` / `kbd` / `kbd-key` / `kbd-glyph` / `kbd-separator` / `carousel-dots` / `dot` / `dot-active` / `price` / `price-currency` / `price-amount` / `price-period` / `quote-block` / `quote-text` / `quote-author` / `code-block` / `code` / `color-swatch` / `color-swatch-square` / `color-swatch-label`)
 
 ## Failure mode
 

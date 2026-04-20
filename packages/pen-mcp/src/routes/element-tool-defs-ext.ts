@@ -318,4 +318,211 @@ export const ELEMENT_TOOL_DEFINITIONS_EXT = [
       required: ['title'],
     },
   },
+  {
+    name: 'add_rating_stars_v0',
+    description:
+      'Star rating row (e.g. review 4/5). Emits `total` lucide star icons; the first `filled` get ' +
+      "role='star-filled' and the rest role='star-empty' so a follow-up batch_design U-op can apply " +
+      'semantic colors. Style-Guide orthogonal — no bundled gold / gray palette. Use for "rating", ' +
+      '"review stars", "评分". schemaVersion 1.0',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        schemaVersion: schemaVersionProp,
+        filePath: filePathProp,
+        filled: {
+          type: 'number',
+          description: 'Number of filled stars (clamped to [0, total])',
+        },
+        total: {
+          type: 'number',
+          description: 'Total star count (default 5)',
+        },
+        size: {
+          type: 'number',
+          description: 'Per-star icon size in px (default 16)',
+        },
+        parent_id: parentIdProp,
+        pageId: pageIdProp,
+      },
+      required: ['filled'],
+    },
+  },
+  {
+    name: 'add_link_v0',
+    description:
+      'Inline text link, optionally with trailing icon ("Learn more →"). Emits horizontal fit_content ' +
+      "frame with role='link' / 'link-label' / 'link-icon'. Underline + color applied by follow-up " +
+      'batch_design U-op. Use for "learn more link", "CTA text link", "read more". schemaVersion 1.0',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        schemaVersion: schemaVersionProp,
+        filePath: filePathProp,
+        label: { type: 'string', description: 'Link text' },
+        trailing_icon: {
+          type: 'string',
+          description:
+            'Optional lucide icon name to append (e.g. "arrow-right"). Omit for plain text.',
+        },
+        parent_id: parentIdProp,
+        pageId: pageIdProp,
+      },
+      required: ['label'],
+    },
+  },
+  {
+    name: 'add_kbd_v0',
+    description:
+      'Keyboard shortcut display ("⌘ K" / "Ctrl + Shift + P"). Each entry in `keys` becomes a ' +
+      "bordered cell with role='kbd-key'; entries are joined with `separator` text between them " +
+      '(default "+"). Use for "keyboard shortcut", "hotkey", "快捷键". schemaVersion 1.0',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        schemaVersion: schemaVersionProp,
+        filePath: filePathProp,
+        keys: {
+          type: 'array',
+          description: 'Key glyphs in display order (e.g. ["⌘","K"] or ["Ctrl","Shift","P"])',
+          items: { type: 'string' },
+        },
+        separator: {
+          type: 'string',
+          description: 'Glyph rendered between keys (default "+"). Pass "" for no separator.',
+        },
+        parent_id: parentIdProp,
+        pageId: pageIdProp,
+      },
+      required: ['keys'],
+    },
+  },
+  {
+    name: 'add_carousel_dots_v0',
+    description:
+      'Carousel pagination dots. `total` dots laid out horizontally; the `current` dot (0-indexed, ' +
+      'clamped) is stretched into a 16×6 pill, inactive dots are 6×6 circles. Emitted as ' +
+      'frame+cornerRadius (not ellipse) per the layout.md §RING rule. Use for "carousel dots", ' +
+      '"pagination indicator", "slide indicator", "轮播指示". schemaVersion 1.0',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        schemaVersion: schemaVersionProp,
+        filePath: filePathProp,
+        total: { type: 'number', description: 'Total dot count (>= 1)' },
+        current: {
+          type: 'number',
+          description: '0-indexed current slide (default 0, clamped to 0..total-1)',
+        },
+        parent_id: parentIdProp,
+        pageId: pageIdProp,
+      },
+      required: ['total'],
+    },
+  },
+  {
+    name: 'add_price_v0',
+    description:
+      'Price display ("$29/month" typography). Three inline text parts: currency (20/500), big ' +
+      'amount (40/700), optional period (14/500). `amount` is a STRING so callers can pass ' +
+      'pre-formatted values ("1,299" / "29.99"). Use for "pricing card price", "plan cost", ' +
+      '"monthly fee", "定价". schemaVersion 1.0',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        schemaVersion: schemaVersionProp,
+        filePath: filePathProp,
+        amount: {
+          type: 'string',
+          description: 'Formatted amount, e.g. "29" / "1,299" / "29.99"',
+        },
+        currency: {
+          type: 'string',
+          description: 'Currency glyph (default "$"). Pass "€" / "¥" / "£" as needed.',
+        },
+        period: {
+          type: 'string',
+          description: 'Optional trailing period like "/month" or "/yr". Omit for one-time prices.',
+        },
+        parent_id: parentIdProp,
+        pageId: pageIdProp,
+      },
+      required: ['amount'],
+    },
+  },
+  {
+    name: 'add_quote_block_v0',
+    description:
+      'Quoted passage block — rounded padded container with quote text above an optional attribution ' +
+      'line ("— Author"). fill_container so it wraps naturally. No left vertical bar: pen-core has no ' +
+      'alignItems=stretch, so a bar sibling would collide with the fit_content circular-dep rule. ' +
+      'role="quote-block" is enough for the style engine to apply a bar via batch_design U-op later. ' +
+      'Use for "quote", "testimonial quote", "pull quote", "引言". schemaVersion 1.0',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        schemaVersion: schemaVersionProp,
+        filePath: filePathProp,
+        quote: { type: 'string', description: 'Quoted text (wraps multi-line)' },
+        author: {
+          type: 'string',
+          description: 'Optional attribution. Rendered as "— <author>" in a smaller weight.',
+        },
+        parent_id: parentIdProp,
+        pageId: pageIdProp,
+      },
+      required: ['quote'],
+    },
+  },
+  {
+    name: 'add_code_block_v0',
+    description:
+      'Preformatted code block. fill_container frame (padding=[12,16], cornerRadius=8, gray-50 fill) ' +
+      'with one text child that preserves `code` verbatim including newlines. `language` becomes part ' +
+      'of the frame name only — no syntax highlighting (pen-core has no highlighter). Font family is ' +
+      'unset (renderer default); inject JetBrains Mono via batch_design U-op if needed. Use for ' +
+      '"code snippet", "preformatted text", "代码块". schemaVersion 1.0',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        schemaVersion: schemaVersionProp,
+        filePath: filePathProp,
+        code: { type: 'string', description: 'Raw code text (newlines preserved)' },
+        language: {
+          type: 'string',
+          description: 'Optional language hint ("typescript", "python"). Shown in frame name only.',
+        },
+        parent_id: parentIdProp,
+        pageId: pageIdProp,
+      },
+      required: ['code'],
+    },
+  },
+  {
+    name: 'add_color_swatch_v0',
+    description:
+      'Design-system color swatch: colored square (default 64×64, cornerRadius=12) with optional ' +
+      'label underneath. `color` accepts literal hex ("#2563EB") or a $variable ref ("$color-primary") ' +
+      'which pen-core resolves per active theme. Use for "color token display", "palette card", ' +
+      '"swatch", "色板". schemaVersion 1.0',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        schemaVersion: schemaVersionProp,
+        filePath: filePathProp,
+        color: {
+          type: 'string',
+          description: 'Hex string or $variable ref used as solid fill on the square',
+        },
+        label: {
+          type: 'string',
+          description: 'Optional token name / description shown below the swatch',
+        },
+        size: { type: 'number', description: 'Square side length in px (default 64, min 16)' },
+        parent_id: parentIdProp,
+        pageId: pageIdProp,
+      },
+      required: ['color'],
+    },
+  },
 ];
