@@ -14,13 +14,14 @@
 import { mkdirSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import {
-  loadCorpus,
-  parseModelOutput,
-  scoreRun,
-  aggregate,
-  type ScoreRow,
-} from '@zseven-w/pen-ai-skills';
+import { parseModelOutput, scoreRun, aggregate, type ScoreRow } from '@zseven-w/pen-ai-skills';
+// Node-only: pulls in `node:fs`, so it's NOT re-exported from the
+// package barrel (which must stay browser-safe for the embedded
+// orchestrator's design-parser). Package.json `exports` only declares
+// the main entry, so sub-path imports via the package name fail at
+// runtime — use a relative path to the source file instead. Harness
+// runs under Bun from the repo root so this path is stable.
+import { loadCorpus } from '../../packages/pen-ai-skills/src/corpus/corpus-loader';
 import { applyToFreshDoc } from './apply';
 import { stubModelCall, type ModelCall } from './stub-model';
 import { realModelCall } from './real-model';
