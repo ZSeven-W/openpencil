@@ -1,0 +1,15 @@
+id: dashboard-alert-banner
+category: dashboard
+difficulty: obvious
+prompt: |
+  Design ONLY a dismissible warning alert banner (one row): leading
+  triangle-alert icon, message "Your subscription expires in 7
+  days. Renew to avoid service interruption.", trailing close (x)
+  icon. Do NOT include surrounding page, header, or content below
+  — just the alert banner.
+expected:
+  must_contain_roles:
+    - alert
+    - alert-message
+    - alert-close
+expected_tool_if_any: add_alert_v0
