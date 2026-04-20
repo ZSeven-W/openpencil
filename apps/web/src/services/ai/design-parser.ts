@@ -1,4 +1,5 @@
 import type { PenNode } from '@/types/pen';
+import { parseModelOutput } from '@zseven-w/pen-ai-skills';
 
 // ---------------------------------------------------------------------------
 // Streaming JSONL parser result
@@ -7,6 +8,68 @@ import type { PenNode } from '@/types/pen';
 export interface StreamingNodeResult {
   node: PenNode;
   parentId: string | null;
+}
+
+// ---------------------------------------------------------------------------
+// Element-tool output shape detection
+// ---------------------------------------------------------------------------
+//
+// When `needsElementTools(modelProfile)` is true the sub-agent prompt
+// teaches the model to wrap its response in `<op_tool>{...}</op_tool>`
+// (see orchestrator-sub-agent.ts::ELEMENT_TOOL_OUTPUT_FORMAT). This
+// helper detects that wrapper BEFORE the caller hands the raw output
+// to the legacy `extractJsonFromResponse`, so the dispatch layer can
+// route element-tool calls through pen-mcp's handler family instead
+// of the legacy JSONL path.
+//
+// Returns `null` when the output isn't `<op_tool>`-wrapped — caller
+// should then try `extractJsonFromResponse` as a fallback. Never
+// throws; malformed or partial tags degrade to the legacy path.
+
+export type DesignOutputShape =
+  | {
+      kind: 'element-tool';
+      /** Element-tool name, e.g. `add_card_row_v0`. Matches pen-mcp's ELEMENT_TOOL_NAMES. */
+      name: string;
+      /** Raw tool arguments from the model. Pen-mcp handler validates shape. */
+      arguments: Record<string, unknown>;
+      raw: string;
+    }
+  | {
+      kind: 'batch-design-dsl';
+      /** DSL string (single operation per line), ready for handleBatchDesign. */
+      dsl: string;
+      raw: string;
+    };
+
+/**
+ * Try to detect an `<op_tool>`-wrapped output. Returns a tagged-union
+ * route hint when detected; null otherwise.
+ *
+ * Precedence mirrors the corpus A/B parser:
+ *   1. If ANY `<op_tool>` tag names an `add_*_v0` element tool, that
+ *      wins (multi-tag outputs where batch_design is used as
+ *      scaffolding still route through the element tool — intent
+ *      matching is the metric of interest)
+ *   2. Otherwise if an `<op_tool>` names `batch_design`, return the
+ *      extracted `operations` as DSL
+ *   3. Otherwise the output uses the legacy format — return null so
+ *      the caller falls through to `extractJsonFromResponse`
+ */
+export function tryParseElementToolOutput(raw: string): DesignOutputShape | null {
+  const parsed = parseModelOutput(raw);
+  if (parsed.kind === 'tool_call') {
+    return {
+      kind: 'element-tool',
+      name: parsed.name,
+      arguments: parsed.arguments,
+      raw: parsed.raw,
+    };
+  }
+  if (parsed.kind === 'batch_design') {
+    return { kind: 'batch-design-dsl', dsl: parsed.dsl, raw: parsed.raw };
+  }
+  return null;
 }
 
 // ---------------------------------------------------------------------------
