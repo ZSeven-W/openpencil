@@ -8,7 +8,7 @@ import type { ModelProfile } from '../model-profiles';
  * Contract (per plan §3.1 — openpencil-docs
  * superpowers/plans/2026-04-21-element-tools-orchestrator-integration.md):
  *   needsElementTools(p) === true
- *     iff  ENABLE_ELEMENT_TOOLS_IN_ORCHESTRATOR env var is truthy
+ *     iff  VITE_ENABLE_ELEMENT_TOOLS env var is truthy
  *     AND  p.tier is 'basic' or 'standard'
  *
  * Why the tier gate: A/B v1 showed ceiling regression on the one
@@ -17,7 +17,7 @@ import type { ModelProfile } from '../model-profiles';
  * by default even when the global flag is on.
  */
 
-const FLAG = 'ENABLE_ELEMENT_TOOLS_IN_ORCHESTRATOR';
+const FLAG = 'VITE_ENABLE_ELEMENT_TOOLS';
 
 function profile(tier: ModelProfile['tier']): ModelProfile {
   return { match: '', tier, label: `Test ${tier}` };
