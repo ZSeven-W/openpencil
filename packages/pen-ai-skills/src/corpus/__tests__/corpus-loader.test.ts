@@ -1,0 +1,215 @@
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { mkdtempSync, writeFileSync, mkdirSync, rmSync } from 'node:fs';
+import { join } from 'node:path';
+import { tmpdir } from 'node:os';
+import { loadCorpus } from '../corpus-loader';
+
+const REPO_CORPUS_DIR = join(__dirname, '..', '..', '..', 'corpus', 'ab-v0');
+
+let tmp: string;
+
+beforeEach(() => {
+  tmp = mkdtempSync(join(tmpdir(), 'corpus-loader-'));
+});
+afterEach(() => {
+  rmSync(tmp, { recursive: true, force: true });
+});
+
+describe('loadCorpus — real corpus', () => {
+  it('loads all 24 yaml files (stable order)', () => {
+    const prompts = loadCorpus(REPO_CORPUS_DIR);
+    expect(prompts).toHaveLength(24);
+    const ids = prompts.map((p) => p.id);
+    expect(new Set(ids).size).toBe(24);
+  });
+
+  it('24 prompts split 8 per category', () => {
+    const prompts = loadCorpus(REPO_CORPUS_DIR);
+    const byCat = new Map<string, number>();
+    for (const p of prompts) byCat.set(p.category, (byCat.get(p.category) ?? 0) + 1);
+    expect(byCat.get('mobile')).toBe(8);
+    expect(byCat.get('dashboard')).toBe(8);
+    expect(byCat.get('landing')).toBe(8);
+  });
+
+  it('each category has 4 obvious + 4 optional', () => {
+    const prompts = loadCorpus(REPO_CORPUS_DIR);
+    for (const cat of ['mobile', 'dashboard', 'landing'] as const) {
+      const forCat = prompts.filter((p) => p.category === cat);
+      const obvious = forCat.filter((p) => p.difficulty === 'obvious').length;
+      const optional = forCat.filter((p) => p.difficulty === 'optional').length;
+      expect(obvious, `${cat} obvious count`).toBe(4);
+      expect(optional, `${cat} optional count`).toBe(4);
+    }
+  });
+
+  it('every obvious prompt has expected_tool_if_any (loader contract)', () => {
+    const prompts = loadCorpus(REPO_CORPUS_DIR);
+    const obviousMissingTool = prompts
+      .filter((p) => p.difficulty === 'obvious' && !p.expected_tool_if_any)
+      .map((p) => p.id);
+    expect(obviousMissingTool).toEqual([]);
+  });
+
+  it('expected_tool_if_any references a real add_*_v0 name shape', () => {
+    const prompts = loadCorpus(REPO_CORPUS_DIR);
+    for (const p of prompts) {
+      if (p.expected_tool_if_any) {
+        expect(p.expected_tool_if_any).toMatch(/^add_[a-z_]+_v0$/);
+      }
+    }
+  });
+});
+
+describe('loadCorpus — validation errors', () => {
+  function writeYaml(name: string, body: string): void {
+    writeFileSync(join(tmp, name), body, 'utf-8');
+  }
+
+  it('rejects missing id', () => {
+    writeYaml(
+      'bad.yaml',
+      `category: mobile
+difficulty: optional
+prompt: hi
+expected: {}
+`,
+    );
+    expect(() => loadCorpus(tmp)).toThrow(/field "id" must be a non-empty string/);
+  });
+
+  it('rejects invalid category', () => {
+    writeYaml(
+      'bad.yaml',
+      `id: x
+category: web
+difficulty: optional
+prompt: hi
+expected: {}
+`,
+    );
+    expect(() => loadCorpus(tmp)).toThrow(/invalid category "web"/);
+  });
+
+  it('rejects invalid difficulty', () => {
+    writeYaml(
+      'bad.yaml',
+      `id: x
+category: mobile
+difficulty: hard
+prompt: hi
+expected: {}
+`,
+    );
+    expect(() => loadCorpus(tmp)).toThrow(/invalid difficulty "hard"/);
+  });
+
+  it('rejects obvious without expected_tool_if_any', () => {
+    writeYaml(
+      'bad.yaml',
+      `id: x
+category: mobile
+difficulty: obvious
+prompt: hi
+expected: {}
+`,
+    );
+    expect(() => loadCorpus(tmp)).toThrow(/obvious requires expected_tool_if_any/);
+  });
+
+  it('rejects duplicate ids across files', () => {
+    writeYaml(
+      'a.yaml',
+      `id: same
+category: mobile
+difficulty: optional
+prompt: a
+expected: {}
+`,
+    );
+    writeYaml(
+      'b.yaml',
+      `id: same
+category: mobile
+difficulty: optional
+prompt: b
+expected: {}
+`,
+    );
+    expect(() => loadCorpus(tmp)).toThrow(/duplicate prompt id "same"/);
+  });
+
+  it('rejects malformed min_roles values', () => {
+    writeYaml(
+      'bad.yaml',
+      `id: x
+category: mobile
+difficulty: optional
+prompt: hi
+expected:
+  min_roles:
+    card: negative
+`,
+    );
+    expect(() => loadCorpus(tmp)).toThrow(/min_roles.card must be a non-negative number/);
+  });
+
+  it('accepts empty expected object', () => {
+    writeYaml(
+      'ok.yaml',
+      `id: x
+category: mobile
+difficulty: optional
+prompt: hi
+expected: {}
+`,
+    );
+    const out = loadCorpus(tmp);
+    expect(out).toHaveLength(1);
+    expect(out[0].expected).toEqual({});
+  });
+
+  it('ignores non-yaml files in directory', () => {
+    writeYaml('README.md', '# hi');
+    writeYaml(
+      'ok.yaml',
+      `id: x
+category: mobile
+difficulty: optional
+prompt: hi
+expected: {}
+`,
+    );
+    const out = loadCorpus(tmp);
+    expect(out).toHaveLength(1);
+  });
+
+  it('throws on nonexistent directory', () => {
+    const missing = join(tmp, 'does-not-exist');
+    expect(() => loadCorpus(missing)).toThrow(/cannot read directory/);
+  });
+
+  it('yaml files sorted by filename (deterministic)', () => {
+    mkdirSync(tmp, { recursive: true });
+    writeYaml(
+      'z.yaml',
+      `id: z-id
+category: mobile
+difficulty: optional
+prompt: z
+expected: {}
+`,
+    );
+    writeYaml(
+      'a.yaml',
+      `id: a-id
+category: mobile
+difficulty: optional
+prompt: a
+expected: {}
+`,
+    );
+    const out = loadCorpus(tmp);
+    expect(out.map((p) => p.id)).toEqual(['a-id', 'z-id']);
+  });
+});

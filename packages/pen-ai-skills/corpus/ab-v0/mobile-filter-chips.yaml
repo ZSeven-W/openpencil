@@ -1,0 +1,15 @@
+id: mobile-filter-chips
+category: mobile
+difficulty: obvious
+prompt: |
+  Design ONLY a horizontal scrolling row of 8 filter chips: "All"
+  (active), "Videos", "Photos", "Music", "Articles", "Podcasts",
+  "Events", "Books". Each chip has a label and optional small
+  icon. Do NOT include page background, header, tab bar, or any
+  other content — just the chip row.
+expected:
+  must_contain_roles:
+    - scroll-row-wrapper
+  min_roles:
+    nav-chip: 6
+expected_tool_if_any: add_nav_chip_row_v0
