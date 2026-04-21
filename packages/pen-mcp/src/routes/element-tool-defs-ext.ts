@@ -639,6 +639,39 @@ export const ELEMENT_TOOL_DEFINITIONS_EXT = [
     },
   },
   {
+    name: 'add_skeleton_v0',
+    description:
+      'Loading skeleton placeholder. N stacked gray rectangles (cornerRadius=4) mimicking future ' +
+      'text lines while content fetches. Last row defaults to ~60% width (220px) to suggest an ' +
+      'unfinished paragraph. Use for "loading state", "placeholder", "shimmer". schemaVersion 1.0',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        schemaVersion: schemaVersionProp,
+        filePath: filePathProp,
+        rows: {
+          type: 'number',
+          description: 'Number of skeleton rows (clamped 1..20, default 3)',
+        },
+        row_height: {
+          type: 'number',
+          description: 'Height per row in px (clamped 4..48, default 16)',
+        },
+        row_gap: {
+          type: 'number',
+          description: 'Gap between rows in px (clamped 0..32, default 12)',
+        },
+        last_row_short: {
+          type: 'boolean',
+          description: 'When true (default), last row is ~60% width to look unfinished',
+        },
+        parent_id: parentIdProp,
+        pageId: pageIdProp,
+      },
+      required: [],
+    },
+  },
+  {
     name: 'add_textarea_v0',
     description:
       'Multi-line text input for notes, bio, feedback. Same vertical label-above-input shape as ' +

@@ -38,6 +38,7 @@ export { buildBreadcrumb, type BreadcrumbItem, type BreadcrumbParams } from './b
 export { buildStepper, type StepperParams } from './stepper.js';
 export { buildFormField, type FormFieldParams } from './form-field.js';
 export { buildTextarea, type TextareaParams } from './textarea.js';
+export { buildSkeleton, type SkeletonParams } from './skeleton.js';
 export { buildNavChipRow, type NavChipRowItem, type NavChipRowParams } from './nav-chip-row.js';
 export { buildActivityRing, type ActivityRingParams } from './activity-ring.js';
 export { buildRatingStars, type RatingStarsParams } from './rating-stars.js';

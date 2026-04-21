@@ -42,6 +42,7 @@ import {
   buildSearchBar,
   buildSectionHeader,
   buildSegmentedControl,
+  buildSkeleton,
   buildStatGrid,
   buildStepper,
   buildSwitch,
@@ -241,6 +242,11 @@ const CASES: BuilderCase[] = [
     toolName: 'add_textarea_v0',
     args: { label: 'Bio', placeholder: 'Tell us about yourself', rows: 5 },
     build: (a) => buildTextarea(a as unknown as Parameters<typeof buildTextarea>[0]),
+  },
+  {
+    toolName: 'add_skeleton_v0',
+    args: { rows: 3 },
+    build: (a) => buildSkeleton(a as unknown as Parameters<typeof buildSkeleton>[0]),
   },
   {
     toolName: 'add_form_field_v0',
