@@ -639,6 +639,42 @@ export const ELEMENT_TOOL_DEFINITIONS_EXT = [
     },
   },
   {
+    name: 'add_select_v0',
+    description:
+      'Dropdown select (display / closed state). Label above input box matching add_form_field_v0 ' +
+      'shape, but the input trailing slot is ALWAYS a chevron-down icon affordance. When `value` ' +
+      'is set: input shows value text (black). When absent: input shows placeholder text (gray ' +
+      '#94A3B8). The OPEN state (menu list) is NOT modeled here — compose via batch_design when ' +
+      'needed. Use for "dropdown", "select", "picker", "下拉选择". schemaVersion 1.0',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        schemaVersion: schemaVersionProp,
+        filePath: filePathProp,
+        label: { type: 'string', description: 'Field label text' },
+        value: {
+          type: 'string',
+          description: 'Currently selected value text. Omit to show placeholder instead.',
+        },
+        placeholder: {
+          type: 'string',
+          description: 'Placeholder when value is absent. Default "Select…".',
+        },
+        trailing_icon: {
+          type: 'string',
+          description: 'Trailing icon. Default "chevron-down" (closed state).',
+        },
+        required: {
+          type: 'boolean',
+          description: 'When true, appends " *" to the label text',
+        },
+        parent_id: parentIdProp,
+        pageId: pageIdProp,
+      },
+      required: ['label'],
+    },
+  },
+  {
     name: 'add_skeleton_v0',
     description:
       'Loading skeleton placeholder. N stacked gray rectangles (cornerRadius=4) mimicking future ' +
