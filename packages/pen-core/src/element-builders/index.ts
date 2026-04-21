@@ -20,3 +20,12 @@ export { buildAvatar, type AvatarParams } from './avatar.js';
 export { buildIconButton, type IconButtonParams } from './icon-button.js';
 export { buildIconLabel, type IconLabelParams } from './icon-label.js';
 export { buildStatGrid, type StatGridItem, type StatGridParams } from './stat-grid.js';
+export { buildSwitch, type SwitchParams } from './switch.js';
+export { buildCheckbox, type CheckboxParams } from './checkbox.js';
+export { buildRadio, type RadioParams } from './radio.js';
+export { buildTabs, type TabsItem, type TabsParams } from './tabs.js';
+export {
+  buildSegmentedControl,
+  type SegmentedControlItem,
+  type SegmentedControlParams,
+} from './segmented-control.js';
