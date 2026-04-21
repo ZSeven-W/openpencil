@@ -106,6 +106,54 @@ describe('dispatchElementToolCall — M2 shim + M3 HTTP fallback', () => {
     expect(result.insertedNodes).toEqual([]);
   });
 
+  it('batch-design-dsl route → fetches /api/mcp/exec-tool (fallback wired + executable)', async () => {
+    // The prompt's FALLBACK branch tells the AI to emit batch_design
+    // when no element-tool fits. That fallback MUST actually execute
+    // or the prompt contract is a lie — prior Nitro implementation
+    // hard-coded a 501 for any DSL payload. This test stubs a happy
+    // Nitro response and asserts (a) the dispatcher calls fetch
+    // (not short-circuit, not 501 before the network boundary), and
+    // (b) the right endpoint + body shape reach the server. Whether
+    // applyExternalDocument succeeds on the returned mock doc is a
+    // store-layer concern tested separately; here we only prove the
+    // dispatcher is not lying about having a batch_design fallback.
+    const fetchFn = vi.fn(() =>
+      Promise.resolve({
+        ok: true,
+        status: 200,
+        text: () => Promise.resolve(''),
+        json: () =>
+          Promise.resolve({
+            ok: true,
+            document: { version: '1.0.0', pages: [{ id: 'p1', children: [] }] },
+            insertedNodeId: 'x',
+            insertedNodeIds: ['x'],
+          }),
+      }),
+    );
+    vi.stubGlobal('fetch', fetchFn);
+
+    const result = await dispatchElementToolCall({
+      kind: 'batch-design-dsl',
+      dsl: 'root=I(null, {"type":"frame","name":"Batch Root"})',
+      raw: '<op_tool>...</op_tool>',
+    });
+
+    // Dispatcher MUST invoke fetch — that's the proof the advertised
+    // FALLBACK branch wires all the way through to the server rather
+    // than short-circuiting on a 501 or a stale "unsupported" stub.
+    expect(fetchFn).toHaveBeenCalledTimes(1);
+    const [url, init] = fetchFn.mock.calls[0];
+    expect(url).toBe('/api/mcp/exec-tool');
+    const body = JSON.parse((init as { body: string }).body) as { dsl: string };
+    // The DSL the AI emitted reaches the server verbatim (no
+    // rewrap, no transform) — what pen-mcp's runBatchDesignDsl
+    // expects as its `operations` input.
+    expect(body.dsl).toContain('I(null,');
+    expect(result.route).toBe('batch-design-dsl');
+    expect(result.toolName).toBe('batch_design');
+  });
+
   it('batch-design-dsl route → HTTP fallback unreachable → unsupported', async () => {
     const dsl = 'root=I(null, {"type":"frame","name":"X","width":100,"height":100})';
     const shape: DesignOutputShape = {

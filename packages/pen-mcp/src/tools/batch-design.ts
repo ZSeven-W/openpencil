@@ -38,6 +38,49 @@ interface OpResult {
  *   M(nodeId, parent, index?)               — Move
  *   D(nodeId)                               — Delete
  */
+/**
+ * Run a batch_design DSL string against an in-memory document,
+ * no file I/O. Callers hand in a doc they've already fetched (from
+ * `openDocument` for server-side file-backed flows, or from
+ * `mcp-sync-state.getSyncDocument()` for embedded live-canvas
+ * flows) plus the DSL; the function mutates the doc in place and
+ * returns results + per-line errors.
+ *
+ * Exposed for apps/web Nitro's `/api/mcp/exec-tool` endpoint so the
+ * batch_design fallback advertised to the embedded orchestrator's
+ * AI can actually execute. Also reused internally by
+ * `handleBatchDesign` which wraps it with `openDocument` +
+ * `saveDocument` on either side.
+ */
+export async function runBatchDesignDsl(
+  doc: PenDocument,
+  operations: string,
+  opts: { pageId?: string } = {},
+): Promise<{
+  results: OpResult[];
+  errors: Array<{ line: string; error: string }>;
+}> {
+  const bindings = new Map<string, string>();
+  const results: OpResult[] = [];
+  const errors: Array<{ line: string; error: string }> = [];
+  const lines = splitOperations(operations);
+  for (const line of lines) {
+    try {
+      await executeLine(line, doc, bindings, results, opts.pageId);
+    } catch (err) {
+      // Best-effort: don't abort the entire batch on a single bad
+      // operation. Collect errors so the agent can see what failed
+      // and retry selectively.
+      const preview = line.length > 200 ? `${line.slice(0, 200)}...` : line;
+      errors.push({
+        line: preview,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
+  return { results, errors };
+}
+
 export async function handleBatchDesign(params: BatchDesignParams): Promise<{
   results: OpResult[];
   nodeCount: number;
@@ -49,24 +92,7 @@ export async function handleBatchDesign(params: BatchDesignParams): Promise<{
   doc = structuredClone(doc);
 
   const pageId = params.pageId;
-  const bindings = new Map<string, string>();
-  const results: OpResult[] = [];
-  const errors: Array<{ line: string; error: string }> = [];
-  const lines = splitOperations(params.operations);
-
-  for (const line of lines) {
-    try {
-      await executeLine(line, doc, bindings, results, pageId);
-    } catch (err) {
-      // Best-effort: don't abort the entire batch on a single bad operation.
-      // Collect errors so the agent can see what failed and retry selectively.
-      const preview = line.length > 200 ? `${line.slice(0, 200)}...` : line;
-      errors.push({
-        line: preview,
-        error: err instanceof Error ? err.message : String(err),
-      });
-    }
-  }
+  const { results, errors } = await runBatchDesignDsl(doc, params.operations, { pageId });
 
   // --- Post-processing ---
   let postProcessed = false;
