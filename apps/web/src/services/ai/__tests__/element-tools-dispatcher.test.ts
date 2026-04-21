@@ -281,73 +281,50 @@ describe('dispatchElementToolCall — M2 shim + M3 HTTP fallback', () => {
     expect(result.insertedNodes).toEqual([]);
   });
 
-  it('batch-design-dsl route → fetches /api/mcp/exec-tool (fallback wired + executable)', async () => {
-    // The prompt's FALLBACK branch tells the AI to emit batch_design
-    // when no element-tool fits. That fallback MUST actually execute
-    // or the prompt contract is a lie — prior Nitro implementation
-    // hard-coded a 501 for any DSL payload. This test stubs a happy
-    // Nitro response and asserts (a) the dispatcher calls fetch
-    // (not short-circuit, not 501 before the network boundary), and
-    // (b) the right endpoint + body shape reach the server. Whether
-    // applyExternalDocument succeeds on the returned mock doc is a
-    // store-layer concern tested separately; here we only prove the
-    // dispatcher is not lying about having a batch_design fallback.
-    const fetchFn = vi.fn(() =>
-      Promise.resolve({
-        ok: true,
-        status: 200,
-        text: () => Promise.resolve(''),
-        json: () =>
-          Promise.resolve({
-            ok: true,
-            document: { version: '1.0.0', pages: [{ id: 'p1', children: [] }] },
-            insertedNodeId: 'x',
-            insertedNodeIds: ['x'],
-          }),
-      }),
-    );
+  it('batch-design-dsl route → runs in-browser (no HTTP), status=applied', async () => {
+    // Post-#44: The advertised FALLBACK branch runs runBatchDesignDsl
+    // directly against the document-store. The pure executor lives in
+    // `@zseven-w/pen-mcp` and is guarded browser-safe by
+    // `batch-design-dsl-browser-safe.test.ts`. HTTP is only the error
+    // fallback now — this happy path MUST NOT hit the network.
+    const fetchFn = vi.fn(() => Promise.reject(new Error('should not be called')));
     vi.stubGlobal('fetch', fetchFn);
 
     const result = await dispatchElementToolCall({
       kind: 'batch-design-dsl',
-      dsl: 'root=I(null, {"type":"frame","name":"Batch Root"})',
+      dsl: 'root=I(null, {"type":"frame","name":"Batch Root","width":200,"height":200})',
       raw: '<op_tool>...</op_tool>',
     });
 
-    // Dispatcher MUST invoke fetch — that's the proof the advertised
-    // FALLBACK branch wires all the way through to the server rather
-    // than short-circuiting on a 501 or a stale "unsupported" stub.
-    expect(fetchFn).toHaveBeenCalledTimes(1);
-    // fetch(url, init) — destructured via assertion below since the
-    // call tuple type is inferred as `[]` when fetchFn's call signature
-    // wasn't annotated. Cast to unknown first (TS2352 safeguard).
-    const callArgs = fetchFn.mock.calls[0] as unknown as [string, { body: string } | undefined];
-    expect(callArgs[0]).toBe('/api/mcp/exec-tool');
-    const requestBody = callArgs[1]?.body;
-    expect(typeof requestBody).toBe('string');
-    const parsed = JSON.parse(requestBody as string) as { dsl: string };
-    // The DSL the AI emitted reaches the server verbatim (no
-    // rewrap, no transform) — what pen-mcp's runBatchDesignDsl
-    // expects as its `operations` input.
-    expect(parsed.dsl).toContain('I(null,');
+    expect(fetchFn).not.toHaveBeenCalled();
+    expect(result.status).toBe('applied');
     expect(result.route).toBe('batch-design-dsl');
     expect(result.toolName).toBe('batch_design');
+    // Pure executor emits one result per I() op → dispatcher extracts
+    // the inserted node and forwards to caller for orchestrator accounting.
+    expect(result.insertedNodes.length).toBeGreaterThanOrEqual(1);
   });
 
-  it('batch-design-dsl route → HTTP fallback unreachable → unsupported', async () => {
-    const dsl = 'root=I(null, {"type":"frame","name":"X","width":100,"height":100})';
+  it('batch-design-dsl route → malformed DSL surfaces per-op errors (status=failed)', async () => {
+    // The pure executor collects per-line errors instead of throwing.
+    // Dispatcher surfaces those verbatim so the user / orchestrator
+    // sees which specific op failed, not a generic HTTP 500.
+    const fetchFn = vi.fn(() => Promise.reject(new Error('should not be called')));
+    vi.stubGlobal('fetch', fetchFn);
+
     const shape: DesignOutputShape = {
       kind: 'batch-design-dsl',
-      dsl,
-      raw: `<op_tool>...${dsl}...</op_tool>`,
+      dsl: 'not valid DSL at all',
+      raw: '<op_tool>...</op_tool>',
     };
 
     const result = await dispatchElementToolCall(shape);
 
-    expect(result.status).toBe('unsupported');
+    expect(fetchFn).not.toHaveBeenCalled();
+    expect(result.status).toBe('failed');
     expect(result.route).toBe('batch-design-dsl');
     expect(result.toolName).toBe('batch_design');
-    expect(result.message).toContain('batch_design');
+    expect(result.message).toContain('failing operation');
   });
 
   it('wraps every dispatch in exactly one startBatch/endBatch pair', async () => {
