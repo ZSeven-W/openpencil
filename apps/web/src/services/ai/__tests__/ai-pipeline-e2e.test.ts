@@ -72,8 +72,10 @@ describe('AI output → dispatcher → store (end-to-end)', () => {
     expect(useDocumentStore.getState().document).toBe(docBefore);
   });
 
-  it('batch_design fallback: AI emits DSL-wrapped tag → route detected, HTTP attempted', async () => {
-    const fetchFn = vi.fn(() => Promise.reject(new Error('network down')));
+  it('batch_design: AI emits DSL-wrapped tag → in-browser executor applies (no HTTP)', async () => {
+    // Post-#44: dispatcher runs runBatchDesignDsl in-browser. HTTP
+    // path is only the error fallback.
+    const fetchFn = vi.fn(() => Promise.reject(new Error('should not be called')));
     vi.stubGlobal('fetch', fetchFn);
 
     const rawAi = `<op_tool>{"name":"batch_design","arguments":{"operations":"root=I(null, {\\"type\\":\\"frame\\",\\"name\\":\\"X\\",\\"width\\":100,\\"height\\":100})"}}</op_tool>`;
@@ -81,9 +83,9 @@ describe('AI output → dispatcher → store (end-to-end)', () => {
     expect(shape?.kind).toBe('batch-design-dsl');
 
     const result = await dispatchElementToolCall(shape!, {});
-    // fetch failed → unsupported (not silent drop)
-    expect(result.status).toBe('unsupported');
-    expect(fetchFn).toHaveBeenCalledTimes(1);
+    expect(result.status).toBe('applied');
+    expect(result.route).toBe('batch-design-dsl');
+    expect(fetchFn).not.toHaveBeenCalled();
   });
 
   it('multi-tag response: all tags parse + batch dispatch one undo entry', async () => {

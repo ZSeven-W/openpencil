@@ -31,6 +31,7 @@ import { useHistoryStore } from '@/stores/history-store';
 import { useCanvasStore } from '@/stores/canvas-store';
 import { getElementShim, SUPPORTED_EMBEDDED_ELEMENT_TOOLS } from './element-tool-shims';
 import { insertStreamingNode } from './design-canvas-ops';
+import { runBatchDesignDsl } from '@zseven-w/pen-mcp';
 import type { PenNode } from '@/types/pen';
 
 /**
@@ -415,23 +416,79 @@ async function applyElementTool(
 /**
  * Apply a `batch_design` DSL string emitted inside an `<op_tool>` wrapper.
  *
- * No client-side parser — DSL parsing is server-side only because
- * it requires pen-mcp's `splitOperations` + `executeLine`, which
- * are Node module code. Dispatcher forwards the DSL to the
- * `/api/mcp/exec-tool` Nitro endpoint, which invokes pen-mcp's
- * `runBatchDesignDsl` against the in-memory sync-state doc (no
- * file I/O, no post-processing hooks) and returns the updated
- * document + a list of inserted node ids.
+ * Runs the pure DSL executor (`runBatchDesignDsl` from
+ * `@zseven-w/pen-mcp`) DIRECTLY in the browser against the live
+ * document-store snapshot. No HTTP round-trip. The executor is
+ * browser-safe — its transitive import tree excludes node:fs /
+ * document-manager (guarded by `batch-design-dsl-browser-safe.test.ts`
+ * in pen-mcp).
  *
- * Client applies the response doc via `applyExternalDocument` so
- * the canvas reflects the change without waiting for the SSE
- * broadcast (which would be async relative to the batch wrap).
- * This is the documented AI fallback for element-tools that fall
- * outside the embedded shim registry — it MUST execute or the
- * prompt's "FALLBACK" branch would lie.
+ * Falls back to `fallbackViaHttp` only when the in-browser attempt
+ * throws an unexpected exception (e.g. a future DSL op adds a
+ * server-only dependency). This preserves the Phase 2 M3 contract
+ * ("batch_design MUST execute") while removing the HTTP latency on
+ * the common path.
+ *
+ * `ctx.defaultParentId` is intentionally NOT honored here: the DSL
+ * is the AI's verbatim instruction set, and rewriting `null` parents
+ * to the generation root would silently change the AI's intent.
+ * Element-tool calls still honor it (via `applyElementToolCall`).
  */
 async function applyBatchDesignDsl(dsl: string, ctx: DispatchContext): Promise<DispatchResult> {
-  return fallbackViaHttp('batch-design-dsl', 'batch_design', ctx, { dsl });
+  try {
+    const { document } = useDocumentStore.getState();
+    const cloned = structuredClone(document) as typeof document;
+    // runBatchDesignDsl mutates the doc in place + returns per-op
+    // results + errors. No image-search fetcher supplied — browser
+    // G() ops leave src empty, which the apps/web image pipeline
+    // (scanAndFillImages) will pick up and enrich after insert.
+    const { results, errors } = await runBatchDesignDsl(cloned, dsl, {});
+    if (errors.length > 0) {
+      return {
+        status: 'failed',
+        route: 'batch-design-dsl',
+        toolName: 'batch_design',
+        message:
+          `batch_design DSL had ${errors.length} failing operation(s): ` +
+          errors.map((e) => `${e.line.slice(0, 80)}: ${e.error}`).join('; '),
+        insertedNodes: [],
+      };
+    }
+
+    // Apply the mutated doc back to the live store. applyExternalDocument
+    // snapshots for history so the dispatcher's surrounding startBatch/
+    // endBatch wrapper still produces exactly one undo entry.
+    useDocumentStore.getState().applyExternalDocument(cloned);
+
+    const insertedNodes: PenNode[] = [];
+    for (const r of results) {
+      if (!r.nodeId) continue;
+      const node = findNodeByIdInDoc(cloned, r.nodeId);
+      if (node) insertedNodes.push(node);
+    }
+    return {
+      status: 'applied',
+      route: 'batch-design-dsl',
+      toolName: 'batch_design',
+      message: `Applied batch_design DSL in-browser (${results.length} op result(s)).`,
+      insertedNodes,
+    };
+  } catch (err) {
+    // In-browser executor threw (should be rare — usually caller
+    // error in the DSL). Fall back to HTTP so the server can log +
+    // return a structured error. ctx is forwarded so the server
+    // still honors defaultParentId for the server-side element-tool
+    // paths that share the endpoint.
+    const message = err instanceof Error ? err.message : String(err);
+    const httpResult = await fallbackViaHttp('batch-design-dsl', 'batch_design', ctx, { dsl });
+    // Note: HTTP may succeed even if in-browser threw. Preserve its
+    // result as-is; only annotate the message when both paths fail.
+    if (httpResult.status === 'applied') return httpResult;
+    return {
+      ...httpResult,
+      message: `In-browser DSL failed (${message}); HTTP fallback also: ${httpResult.message}`,
+    };
+  }
 }
 
 /**
