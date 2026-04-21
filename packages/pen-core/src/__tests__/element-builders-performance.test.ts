@@ -34,6 +34,7 @@ import {
   buildSearchBar,
   buildSectionHeader,
   buildSegmentedControl,
+  buildSkeleton,
   buildStatGrid,
   buildStepper,
   buildSwitch,
@@ -148,6 +149,7 @@ const CASES: PerfCase[] = [
   { name: 'search-bar', build: () => buildSearchBar({}) },
   { name: 'form-field', build: () => buildFormField({ label: 'Email' }) },
   { name: 'textarea', build: () => buildTextarea({ label: 'Bio', rows: 5 }) },
+  { name: 'skeleton', build: () => buildSkeleton({ rows: 3 }) },
   { name: 'chart-bars', build: () => buildChartBars({ values: [4, 7, 3, 9, 5, 8] }) },
   {
     name: 'empty-state',

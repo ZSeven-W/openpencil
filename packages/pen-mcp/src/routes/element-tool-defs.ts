@@ -35,6 +35,7 @@ import { handleAddListRowV0 } from '../tools/add-list-row-v0';
 import { handleAddSearchBarV0 } from '../tools/add-search-bar-v0';
 import { handleAddFormFieldV0 } from '../tools/add-form-field-v0';
 import { handleAddTextareaV0 } from '../tools/add-textarea-v0';
+import { handleAddSkeletonV0 } from '../tools/add-skeleton-v0';
 import { handleAddSwitchV0 } from '../tools/add-switch-v0';
 import { handleAddCheckboxV0 } from '../tools/add-checkbox-v0';
 import { handleAddRadioV0 } from '../tools/add-radio-v0';
@@ -113,6 +114,8 @@ export async function handleElementToolCall(name: string, a: any): Promise<strin
       return JSON.stringify(await handleAddFormFieldV0(a), null, 2);
     case 'add_textarea_v0':
       return JSON.stringify(await handleAddTextareaV0(a), null, 2);
+    case 'add_skeleton_v0':
+      return JSON.stringify(await handleAddSkeletonV0(a), null, 2);
     case 'add_switch_v0':
       return JSON.stringify(await handleAddSwitchV0(a), null, 2);
     case 'add_checkbox_v0':
