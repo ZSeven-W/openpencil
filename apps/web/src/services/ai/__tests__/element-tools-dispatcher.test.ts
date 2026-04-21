@@ -1,9 +1,43 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { ELEMENT_TOOL_NAMES } from '@zseven-w/pen-mcp';
 import { dispatchElementToolCall } from '../element-tools-dispatcher';
+import { SUPPORTED_EMBEDDED_ELEMENT_TOOLS } from '../element-tool-shims';
 import { useHistoryStore } from '@/stores/history-store';
 import { useDocumentStore } from '@/stores/document-store';
 import { useCanvasStore } from '@/stores/canvas-store';
 import type { DesignOutputShape } from '../design-parser';
+
+/**
+ * Drift-guard: the embedded shim registry MUST cover every tool
+ * name pen-mcp exposes. Adding a pen-mcp element tool without
+ * adding a matching pen-core builder + shim + Nitro SERVER_BUILDERS
+ * entry silently breaks AI generation under the flag (tool gets
+ * short-circuited to `unsupported` and the AI sees
+ * advertised-but-not-executable output).
+ */
+describe('SUPPORTED_EMBEDDED_ELEMENT_TOOLS drift guard', () => {
+  it('covers every add_*_v0 name pen-mcp exposes', () => {
+    const penMcpAddNames = [...ELEMENT_TOOL_NAMES].filter((n) => /^add_.+_v0$/.test(n));
+    const shimSet = new Set(SUPPORTED_EMBEDDED_ELEMENT_TOOLS);
+    const missing = penMcpAddNames.filter((n) => !shimSet.has(n));
+    expect(
+      missing,
+      `Embedded shim registry is missing the following pen-mcp tools — add pen-core builder + ` +
+        `shim + Nitro SERVER_BUILDERS entry together: ${missing.join(', ')}`,
+    ).toEqual([]);
+  });
+
+  it('does not register shims for names pen-mcp does not expose', () => {
+    // The other direction: a stale shim for a removed tool would
+    // silently send stale output. Keep shim ⊆ pen-mcp exactly.
+    const penMcpSet = new Set(ELEMENT_TOOL_NAMES);
+    const orphaned = SUPPORTED_EMBEDDED_ELEMENT_TOOLS.filter((n) => !penMcpSet.has(n));
+    expect(
+      orphaned,
+      `Shim registry has entries pen-mcp does not expose (stale / renamed tool): ${orphaned.join(', ')}`,
+    ).toEqual([]);
+  });
+});
 
 /**
  * Phase 2 M2/M3 invariants under test:
