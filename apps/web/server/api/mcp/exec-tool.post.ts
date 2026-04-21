@@ -15,6 +15,7 @@ import {
   insertNodeInTree,
   type ElementTree,
 } from '@zseven-w/pen-core';
+import { runBatchDesignDsl } from '@zseven-w/pen-mcp';
 import { getSyncDocument, setSyncDocument } from '../../utils/mcp-sync-state';
 import { serverLog } from '../../utils/server-logger';
 import type { PenDocument, PenNode } from '../../../src/types/pen';
@@ -30,18 +31,22 @@ import type { PenDocument, PenNode } from '../../../src/types/pen';
  *
  * For known element tools, the endpoint uses the SAME pen-core
  * builders the client shim uses, so the tree shape is byte-identical
- * across paths. The constructed tree is inserted at the root of the
- * currently-active page's live document; the updated doc is
- * broadcast via SSE and returned in the response body so the
- * dispatching client can `applyExternalDocument` immediately without
- * waiting for its own SSE to arrive.
+ * across paths. The constructed tree is inserted under the
+ * explicitly-named parent (parent_id) or the caller-supplied
+ * default (default_parent_id) or the first page's root.
  *
- * For batch_design DSL, the endpoint currently rejects — pen-mcp's
- * `handleBatchDesign` relies on `document-manager` (file I/O,
- * live-canvas URL dance) and would need a Nitro-local adaptation.
- * That's a follow-up once the element-tool shim family shows the
- * bulk of wins in the embedded orchestrator. Client dispatcher
- * surfaces this error verbatim so dev runs see exactly why.
+ * For batch_design DSL, the endpoint runs pen-mcp's
+ * `runBatchDesignDsl` against the in-memory sync-state doc — no
+ * file I/O, no post-processing hooks (those live in the pen-mcp
+ * server process). This is the fallback path advertised to the
+ * embedded orchestrator's AI when no covered `add_*_v0` matches
+ * its intent; it must actually execute or the prompt contract is
+ * broken.
+ *
+ * Both paths call `setSyncDocument` to broadcast via SSE and
+ * return the updated doc in the response body so the dispatching
+ * client can `applyExternalDocument` immediately without waiting
+ * for its own SSE to arrive.
  */
 
 type BuilderFn = (args: unknown) => ElementTree;
@@ -96,7 +101,18 @@ interface ExecToolError {
 interface ExecToolSuccess {
   ok: true;
   document: PenDocument;
+  /**
+   * Single inserted root id (element-tool path) or the first node
+   * produced by a batch_design run. Kept for legacy callers that
+   * only read one id.
+   */
   insertedNodeId: string;
+  /**
+   * All inserted root ids. Element-tool path populates exactly one;
+   * batch_design DSL can populate many (one per top-level I / C / R
+   * binding). Orchestrator uses this to update progress tallies.
+   */
+  insertedNodeIds: string[];
 }
 
 export default defineEventHandler(async (event): Promise<ExecToolSuccess | ExecToolError> => {
@@ -107,14 +123,80 @@ export default defineEventHandler(async (event): Promise<ExecToolSuccess | ExecT
   }
 
   if (body.dsl) {
-    // Reject with actionable diagnostic — client dispatcher surfaces this to the UI.
-    setResponseStatus(event, 501);
+    const { doc: currentDsl } = getSyncDocument();
+    if (!currentDsl) {
+      setResponseStatus(event, 409);
+      return {
+        ok: false,
+        error:
+          'No live canvas document is currently synced. Open a document before invoking ' +
+          '/api/mcp/exec-tool with a DSL payload.',
+      };
+    }
+
+    // Resolve pageId for the DSL executor. `live://canvas` sentinel +
+    // real filePaths are already rejected above; DSL writes always
+    // target the in-memory sync-state (which represents the live
+    // canvas). Reject real filePaths here too for parity with the
+    // element-tool branch.
+    const LIVE_CANVAS_SENTINEL_DSL = 'live://canvas';
+    const rawDslFilePath =
+      typeof (body as Record<string, unknown>).filePath === 'string'
+        ? ((body as Record<string, unknown>).filePath as string)
+        : null;
+    if (
+      rawDslFilePath !== null &&
+      rawDslFilePath.length > 0 &&
+      rawDslFilePath !== LIVE_CANVAS_SENTINEL_DSL
+    ) {
+      setResponseStatus(event, 501);
+      return {
+        ok: false,
+        error:
+          `filePath="${rawDslFilePath}" is not supported by /api/mcp/exec-tool's DSL path — ` +
+          `this endpoint mutates the in-memory live canvas only. Route through pen-mcp's ` +
+          `stdio / HTTP transport for file-backed DSL.`,
+      };
+    }
+    const dslPageId =
+      typeof (body as Record<string, unknown>).pageId === 'string' &&
+      ((body as Record<string, unknown>).pageId as string).length > 0
+        ? ((body as Record<string, unknown>).pageId as string)
+        : undefined;
+
+    // runBatchDesignDsl mutates the cloned doc in place; bindings +
+    // per-line errors are collected and surfaced in the response so
+    // the dispatcher / user sees exactly which ops failed.
+    const nextDsl = structuredClone(currentDsl) as PenDocument;
+    const { results: dslResults, errors: dslErrors } = await runBatchDesignDsl(nextDsl, body.dsl, {
+      pageId: dslPageId,
+    });
+    if (dslErrors.length > 0) {
+      setResponseStatus(event, 400);
+      return {
+        ok: false,
+        error:
+          `batch_design DSL had ${dslErrors.length} failing operation(s): ` +
+          dslErrors
+            .map((e: { line: string; error: string }) => `${e.line.slice(0, 80)}: ${e.error}`)
+            .join('; '),
+      };
+    }
+
+    setSyncDocument(nextDsl);
+    const insertedIds = dslResults
+      .map((r: { nodeId: string }) => r.nodeId)
+      .filter((id: string) => typeof id === 'string' && id.length > 0);
+    const firstId = insertedIds[0] ?? '';
+    serverLog.info(
+      `[exec-tool] applied batch_design DSL → ${insertedIds.length} op result(s)` +
+        (dslPageId ? ` on page ${dslPageId}` : ''),
+    );
     return {
-      ok: false,
-      error:
-        'batch_design DSL via /api/mcp/exec-tool is not yet wired (Phase 2 M3 covers ' +
-        'element tools only; full DSL support is a follow-up). Use a specific add_*_v0 ' +
-        'tool or unset VITE_ENABLE_ELEMENT_TOOLS to fall back to the legacy JSONL path.',
+      ok: true,
+      document: nextDsl,
+      insertedNodeId: firstId,
+      insertedNodeIds: insertedIds,
     };
   }
 
@@ -286,5 +368,10 @@ export default defineEventHandler(async (event): Promise<ExecToolSuccess | ExecT
       (targetPageId !== null ? ` on page ${targetPageId}` : ''),
   );
 
-  return { ok: true, document: next, insertedNodeId };
+  return {
+    ok: true,
+    document: next,
+    insertedNodeId,
+    insertedNodeIds: [insertedNodeId],
+  };
 });

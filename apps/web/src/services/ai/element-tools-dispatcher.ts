@@ -342,16 +342,20 @@ async function applyElementTool(
 /**
  * Apply a `batch_design` DSL string emitted inside an `<op_tool>` wrapper.
  *
- * Phase 2 M3 path: no client-side parser — DSL parsing is server-side
- * only because it requires pen-mcp's `splitOperations` +
- * `executeLine` which are Node-only (via document-manager /
- * `openDocument` file I/O). Dispatcher forwards the DSL string to
- * the `/api/mcp/exec-tool` Nitro endpoint, which hands it to
- * `handleBatchDesign` and returns the updated document.
+ * No client-side parser — DSL parsing is server-side only because
+ * it requires pen-mcp's `splitOperations` + `executeLine`, which
+ * are Node module code. Dispatcher forwards the DSL to the
+ * `/api/mcp/exec-tool` Nitro endpoint, which invokes pen-mcp's
+ * `runBatchDesignDsl` against the in-memory sync-state doc (no
+ * file I/O, no post-processing hooks) and returns the updated
+ * document + a list of inserted node ids.
  *
  * Client applies the response doc via `applyExternalDocument` so
  * the canvas reflects the change without waiting for the SSE
  * broadcast (which would be async relative to the batch wrap).
+ * This is the documented AI fallback for element-tools that fall
+ * outside the embedded shim registry — it MUST execute or the
+ * prompt's "FALLBACK" branch would lie.
  */
 async function applyBatchDesignDsl(dsl: string, ctx: DispatchContext): Promise<DispatchResult> {
   return fallbackViaHttp('batch-design-dsl', 'batch_design', ctx, { dsl });
@@ -399,6 +403,7 @@ async function fallbackViaHttp(
       ok?: boolean;
       document?: unknown;
       insertedNodeId?: string;
+      insertedNodeIds?: string[];
       error?: string;
     };
     if (data.ok === true && data.document && typeof data.document === 'object') {
@@ -406,16 +411,21 @@ async function fallbackViaHttp(
       const doc = data.document as any;
       useDocumentStore.getState().applyExternalDocument(doc);
 
-      // Surface the inserted node to the orchestrator so renderer-based
+      // Surface inserted nodes to the orchestrator so renderer-based
       // tallies (progressEntry.nodeCount / progress.totalNodes /
-      // onApplyPartial) reflect the real apply. The endpoint stamps
-      // `insertedNodeId` on the response; we fish the node back out of
-      // the returned doc rather than relying on the orchestrator to
-      // walk the store after the fact (doc is already structured here,
-      // and keeps the dispatcher's contract self-contained).
+      // onApplyPartial) reflect the real apply. Prefer the array
+      // form because batch_design can insert multiple top-level
+      // nodes; fall back to the legacy single-id field for servers
+      // that haven't been upgraded.
+      const idList = Array.isArray(data.insertedNodeIds)
+        ? data.insertedNodeIds
+        : typeof data.insertedNodeId === 'string'
+          ? [data.insertedNodeId]
+          : [];
       const insertedNodes: PenNode[] = [];
-      if (typeof data.insertedNodeId === 'string') {
-        const found = findNodeByIdInDoc(doc, data.insertedNodeId);
+      for (const id of idList) {
+        if (typeof id !== 'string' || id.length === 0) continue;
+        const found = findNodeByIdInDoc(doc, id);
         if (found) insertedNodes.push(found);
       }
       return {
