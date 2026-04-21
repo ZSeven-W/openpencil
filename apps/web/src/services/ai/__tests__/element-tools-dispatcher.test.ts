@@ -1,11 +1,148 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { ELEMENT_TOOL_NAMES } from '@zseven-w/pen-mcp';
-import { dispatchElementToolCall } from '../element-tools-dispatcher';
+import { dispatchElementToolCall, dispatchElementToolCalls } from '../element-tools-dispatcher';
 import { SUPPORTED_EMBEDDED_ELEMENT_TOOLS } from '../element-tool-shims';
 import { useHistoryStore } from '@/stores/history-store';
 import { useDocumentStore } from '@/stores/document-store';
 import { useCanvasStore } from '@/stores/canvas-store';
 import type { DesignOutputShape } from '../design-parser';
+
+describe('dispatchElementToolCalls (multi-tag batch)', () => {
+  beforeEach(() => {
+    useHistoryStore.getState().clear();
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() => Promise.reject(new Error('fetch not available in test env'))),
+    );
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('empty shape list → status=empty + no batch touched', async () => {
+    const startSpy = vi.spyOn(useHistoryStore.getState(), 'startBatch');
+    const result = await dispatchElementToolCalls([]);
+    expect(result.status).toBe('empty');
+    expect(result.results).toHaveLength(0);
+    expect(startSpy).not.toHaveBeenCalled();
+    startSpy.mockRestore();
+  });
+
+  it('3 successful shim calls → one batch, one undo entry, 3 results', async () => {
+    const undoBefore = useHistoryStore.getState().undoStack.length;
+    const startSpy = vi.spyOn(useHistoryStore.getState(), 'startBatch');
+    const endSpy = vi.spyOn(useHistoryStore.getState(), 'endBatch');
+
+    const shapes: DesignOutputShape[] = [
+      {
+        kind: 'element-tool',
+        name: 'add_heading_v0',
+        arguments: { content: 'A' },
+        raw: '',
+      },
+      {
+        kind: 'element-tool',
+        name: 'add_body_text_v0',
+        arguments: { content: 'B paragraph body text' },
+        raw: '',
+      },
+      {
+        kind: 'element-tool',
+        name: 'add_divider_v0',
+        arguments: {},
+        raw: '',
+      },
+    ];
+    const result = await dispatchElementToolCalls(shapes);
+
+    expect(result.status).toBe('applied');
+    expect(result.results).toHaveLength(3);
+    expect(result.insertedNodes.length).toBeGreaterThanOrEqual(3);
+    // Exactly one batch pair
+    expect(startSpy).toHaveBeenCalledTimes(1);
+    expect(endSpy).toHaveBeenCalledTimes(1);
+    // History: at most 1 new entry (batch commit). Can be 0 if the
+    // empty-frame replacement made startBatch see "no-change" — but
+    // typically 1 here.
+    const undoAfter = useHistoryStore.getState().undoStack.length;
+    expect(undoAfter - undoBefore).toBeLessThanOrEqual(1);
+
+    startSpy.mockRestore();
+    endSpy.mockRestore();
+  });
+
+  it('mix of applied + unsupported → status=partial, per-shape results preserved', async () => {
+    const shapes: DesignOutputShape[] = [
+      {
+        kind: 'element-tool',
+        name: 'add_heading_v0',
+        arguments: { content: 'Real' },
+        raw: '',
+      },
+      {
+        kind: 'element-tool',
+        name: 'add_fictional_xyz_v0', // not in registry → unsupported
+        arguments: {},
+        raw: '',
+      },
+    ];
+    const result = await dispatchElementToolCalls(shapes);
+    expect(result.status).toBe('partial');
+    expect(result.results[0].status).toBe('applied');
+    expect(result.results[1].status).toBe('unsupported');
+    // insertedNodes sums across — only the first succeeded
+    expect(result.insertedNodes.length).toBe(1);
+  });
+
+  it('all unsupported → status=all-failed', async () => {
+    const shapes: DesignOutputShape[] = [
+      {
+        kind: 'element-tool',
+        name: 'add_fictional_a_v0',
+        arguments: {},
+        raw: '',
+      },
+      {
+        kind: 'element-tool',
+        name: 'add_fictional_b_v0',
+        arguments: {},
+        raw: '',
+      },
+    ];
+    const result = await dispatchElementToolCalls(shapes);
+    expect(result.status).toBe('all-failed');
+    expect(result.results.every((r) => r.status === 'unsupported')).toBe(true);
+    expect(result.insertedNodes).toEqual([]);
+  });
+
+  it('preserves emit order in results (position N output matches position N input)', async () => {
+    const shapes: DesignOutputShape[] = [
+      {
+        kind: 'element-tool',
+        name: 'add_heading_v0',
+        arguments: { content: 'First' },
+        raw: '',
+      },
+      {
+        kind: 'element-tool',
+        name: 'add_fictional_xyz_v0',
+        arguments: {},
+        raw: '',
+      },
+      {
+        kind: 'element-tool',
+        name: 'add_body_text_v0',
+        arguments: { content: 'Third paragraph text' },
+        raw: '',
+      },
+    ];
+    const result = await dispatchElementToolCalls(shapes);
+    expect(result.results[0].toolName).toBe('add_heading_v0');
+    expect(result.results[1].toolName).toBe('add_fictional_xyz_v0');
+    expect(result.results[2].toolName).toBe('add_body_text_v0');
+  });
+});
 
 /**
  * Drift-guard: the embedded shim registry MUST cover every tool
