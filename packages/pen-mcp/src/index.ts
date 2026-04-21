@@ -38,7 +38,7 @@ export {
   handleReplaceNode,
   postProcessNode,
 } from './tools/node-crud';
-export { handleBatchDesign } from './tools/batch-design';
+export { handleBatchDesign, runBatchDesignDsl } from './tools/batch-design';
 export {
   ELEMENT_TOOL_NAMES,
   ELEMENT_TOOL_DEFINITIONS,
