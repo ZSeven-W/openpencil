@@ -1,0 +1,151 @@
+/**
+ * Client-side element-tool shims — Phase 2 M2.
+ *
+ * Each shim is a pure tree-build function matching its pen-mcp
+ * `add_*_v0` counterpart. Both sides delegate to the same builders
+ * in `@zseven-w/pen-core/element-builders`, so the shape produced
+ * by `apps/web` and by external MCP clients (pen-mcp HTTP) is
+ * byte-identical — drift is impossible by construction.
+ *
+ * Meta parameters (`parent_id`, `pageId`) that appear alongside
+ * tool-specific args in the `<op_tool>` payload are stripped BEFORE
+ * invoking the builder (builder signatures only accept their own
+ * params) and re-surfaced on the shim's return shape so the
+ * dispatcher can honor them during insert. Without this split the
+ * shim would silently drop parent_id / pageId and return `applied`
+ * even when the AI explicitly named a target container — that's
+ * the 2026-04-21 stop-hook regression that's now guarded by tests.
+ */
+
+import {
+  assignIdsRecursively,
+  buildBodyText,
+  buildBottomNav,
+  buildCardRow,
+  buildHeading,
+  buildListRow,
+  buildMetricRow,
+  buildSearchBar,
+  buildSectionHeader,
+  buildTextButton,
+  buildTopNavBar,
+  type BodyTextParams,
+  type BottomNavParams,
+  type CardRowParams,
+  type ElementTree,
+  type HeadingParams,
+  type ListRowParams,
+  type MetricRowParams,
+  type SearchBarParams,
+  type SectionHeaderParams,
+  type TextButtonParams,
+  type TopNavBarParams,
+} from '@zseven-w/pen-core';
+import type { PenNode } from '@/types/pen';
+
+/**
+ * Result of running a client shim. The dispatcher owns the insert
+ * step so shims stay pure (pen-core builder + id stamping only).
+ */
+export interface ElementShimResult {
+  /** Root node of the subtree — already id-stamped by the shim. */
+  node: PenNode;
+  /**
+   * Target parent node id, from `args.parent_id` if present.
+   * `null` means "insert at page root" (matches document-store.addNode
+   * convention). Caller validates parent existence before applying.
+   */
+  parentId: string | null;
+  /**
+   * Target page id, from `args.pageId` if present. `null` means
+   * "use the currently active page". Currently only honored in the
+   * HTTP fallback; the client shim path always targets the active
+   * page (document-store doesn't expose cross-page insert). Caller
+   * validates presence + returns a failed result if the pageId
+   * diverges from the active one so we never silently drop it.
+   */
+  pageId: string | null;
+  /**
+   * Target .op file path, from `args.filePath` if present. `null`
+   * means "live canvas (document-store / mcp-sync-state)". The
+   * browser-side path has no file I/O surface — `addNode` only
+   * writes to the in-memory document-store. When a caller names
+   * a filePath they want pen-mcp's file-aware handler, not the
+   * client shim. Caller must route to pen-mcp stdio transport
+   * (external MCP clients) or return `failed` with a clear hint
+   * — never silently drop it and report `applied`.
+   */
+  filePath: string | null;
+}
+
+export type ElementShim = (args: Record<string, unknown>) => ElementShimResult;
+
+/**
+ * pen-mcp's `document-manager.ts::resolveDocPath` treats both
+ * `undefined` and the literal string `"live://canvas"` as the live
+ * canvas target. The shim must accept the sentinel the same way —
+ * rejecting it as "unsupported filePath" would be wrong because it
+ * IS the default. Only genuine filesystem paths (anything else that
+ * looks like a string) go through the filePath-rejection branch.
+ */
+const LIVE_CANVAS_SENTINEL = 'live://canvas';
+
+/**
+ * Wrap a pen-core builder as an ElementShim. Splits meta parameters
+ * (`parent_id`, `pageId`, `filePath`) out of the payload before
+ * invoking the builder — the builder only knows tool-specific fields
+ * and would reject / misbehave if handed `parent_id` as an unknown
+ * param. Meta parameters are re-surfaced on the shim's return shape
+ * so the dispatcher can honor them during insert (or reject with a
+ * clear diagnostic if it cannot).
+ */
+function wrap<TParams>(build: (p: TParams) => ElementTree): ElementShim {
+  return (args) => {
+    const source = (args ?? {}) as Record<string, unknown>;
+    const { parent_id, pageId, filePath, ...rest } = source as {
+      parent_id?: unknown;
+      pageId?: unknown;
+      filePath?: unknown;
+    };
+    const tree = build(rest as TParams);
+    assignIdsRecursively(tree);
+    // Normalize the live-canvas sentinel to null so the dispatcher's
+    // "filePath !== null → fail" branch only fires for real file paths.
+    const rawFilePath = typeof filePath === 'string' && filePath.length > 0 ? filePath : null;
+    return {
+      node: tree as unknown as PenNode,
+      parentId: typeof parent_id === 'string' && parent_id.length > 0 ? parent_id : null,
+      pageId: typeof pageId === 'string' && pageId.length > 0 ? pageId : null,
+      filePath: rawFilePath === LIVE_CANVAS_SENTINEL ? null : rawFilePath,
+    };
+  };
+}
+
+/**
+ * Shim registry. Keys match pen-mcp element-tool names verbatim so
+ * the dispatcher can look up by the `name` field of a parsed
+ * `<op_tool>` tag directly. Covers the 10 most common tools from
+ * A/B v1 routing data (openpencil-docs/superpowers/notes/
+ * 2026-04-20-ab-v1-results.md); more can be added as builders are
+ * extracted into pen-core's element-builders module.
+ */
+export const ELEMENT_SHIMS: Record<string, ElementShim> = {
+  add_card_row_v0: wrap<CardRowParams>(buildCardRow),
+  add_metric_row_v0: wrap<MetricRowParams>(buildMetricRow),
+  add_bottom_nav_v0: wrap<BottomNavParams>(buildBottomNav),
+  add_section_header_v0: wrap<SectionHeaderParams>(buildSectionHeader),
+  add_top_nav_bar_v0: wrap<TopNavBarParams>(buildTopNavBar),
+  add_heading_v0: wrap<HeadingParams>(buildHeading),
+  add_body_text_v0: wrap<BodyTextParams>(buildBodyText),
+  add_text_button_v0: wrap<TextButtonParams>(buildTextButton),
+  add_search_bar_v0: wrap<SearchBarParams>(buildSearchBar),
+  add_list_row_v0: wrap<ListRowParams>(buildListRow),
+};
+
+export function getElementShim(name: string): ElementShim | undefined {
+  return ELEMENT_SHIMS[name];
+}
+
+export function hasElementShim(name: string): boolean {
+  return name in ELEMENT_SHIMS;
+}
