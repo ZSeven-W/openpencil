@@ -13,6 +13,8 @@ import {
   buildCardRow,
   buildCarouselDots,
   buildChartBars,
+  buildChartLine,
+  buildChartPie,
   buildCheckbox,
   buildCodeBlock,
   buildColorSwatch,
@@ -172,6 +174,8 @@ const CASES: BuilderCase[] = [
   { name: 'textarea', build: () => buildTextarea({ label: 'Bio', rows: 5 }) },
   { name: 'skeleton', build: () => buildSkeleton({ rows: 3 }) },
   { name: 'select', build: () => buildSelect({ label: 'Country', value: 'US' }) },
+  { name: 'chart-line', build: () => buildChartLine({ values: [1, 3, 2, 5, 4, 6] }) },
+  { name: 'chart-pie', build: () => buildChartPie({ values: [40, 30, 20, 10] }) },
   { name: 'chart-bars', build: () => buildChartBars({ values: [4, 7, 3, 9, 5] }) },
   {
     name: 'empty-state',
