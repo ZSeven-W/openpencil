@@ -72,6 +72,57 @@ export function tryParseElementToolOutput(raw: string): DesignOutputShape | null
   return null;
 }
 
+/**
+ * Parse ALL `<op_tool>` tags in a response into a list of
+ * DesignOutputShape. Current prompt in ELEMENT_TOOL_OUTPUT_FORMAT
+ * instructs the model to emit exactly one tag, so at runtime this
+ * usually returns a 0- or 1-length array. But the plumbing is here
+ * for future prompts that allow multi-tool composition (e.g. "emit
+ * one add_* per section" — each wrapped separately).
+ *
+ * Order preserved: tags appear in the array in emit order. Element
+ * tool names come through as `kind: 'element-tool'`; `batch_design`
+ * tags come through as `kind: 'batch-design-dsl'`. Unknown tool
+ * names are dropped (same as single-tag path's "wrong-tool"
+ * classification — we only surface shapes the dispatcher can
+ * route).
+ *
+ * Does NOT cross-check against the covered shim registry — that's
+ * the dispatcher's job (short-circuit with canonical list on miss).
+ */
+export function tryParseAllElementToolOutputs(raw: string): DesignOutputShape[] {
+  if (typeof raw !== 'string' || raw.trim().length === 0) return [];
+  const shapes: DesignOutputShape[] = [];
+  const tagRe = /<op_tool>\s*([\s\S]*?)\s*<\/op_tool>/g;
+  for (const match of raw.matchAll(tagRe)) {
+    const body = match[1].trim();
+    try {
+      const parsed = JSON.parse(body) as { name?: unknown; arguments?: unknown };
+      if (typeof parsed.name !== 'string') continue;
+      const args =
+        parsed.arguments && typeof parsed.arguments === 'object'
+          ? (parsed.arguments as Record<string, unknown>)
+          : {};
+      if (/^add_[a-z_]+_v0$/.test(parsed.name)) {
+        shapes.push({ kind: 'element-tool', name: parsed.name, arguments: args, raw: match[0] });
+      } else if (parsed.name === 'batch_design') {
+        const dsl = typeof args.operations === 'string' ? args.operations : '';
+        if (dsl.length > 0) {
+          shapes.push({ kind: 'batch-design-dsl', dsl, raw: match[0] });
+        }
+      }
+      // Unknown name → silently skipped; single-tag path routes as
+      // "wrong-tool" but the multi-tag path keeps only dispatchable
+      // shapes so the batch loop doesn't need special-casing.
+    } catch {
+      // Malformed tag body → skip. The single-tag path has DSL-
+      // recovery for this; add if needed here, but multi-tag flows
+      // are expected to be well-formed (whole prompt effort).
+    }
+  }
+  return shapes;
+}
+
 // ---------------------------------------------------------------------------
 // JSON extraction from AI response text
 // ---------------------------------------------------------------------------

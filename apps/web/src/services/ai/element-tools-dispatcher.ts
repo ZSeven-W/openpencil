@@ -123,6 +123,79 @@ export async function dispatchElementToolCall(
   }
 }
 
+export interface BatchDispatchResult {
+  /** Status summary: 'applied' iff every shape applied; 'partial' if some
+   *  applied and some failed; 'all-failed' if none did; 'empty' for no shapes. */
+  status: 'applied' | 'partial' | 'all-failed' | 'empty';
+  /** Per-shape result, in emit order — same index maps to input shapes. */
+  results: DispatchResult[];
+  /** Union of all inserted nodes across the batch. Orchestrator uses
+   *  this for progress accounting (sum of insertedNodes[]). */
+  insertedNodes: PenNode[];
+}
+
+/**
+ * Apply multiple `<op_tool>` tags in a single history batch. One
+ * startBatch/endBatch pair wraps the whole loop so N tags collapse
+ * to one undo unit — independent of how many actual store writes
+ * each shape performs (element-tool shim: 1 addNode; HTTP fallback:
+ * 1 applyExternalDocument; DSL HTTP: 1 applyExternalDocument with
+ * possibly-many child nodes inside the returned doc).
+ *
+ * Error handling: a failing shape does NOT abort the batch. The
+ * per-shape `DispatchResult` captures success/failure; caller
+ * inspects `status` for rollup. This matches the pen-mcp
+ * handleBatchDesign's "collect-errors-keep-going" philosophy —
+ * partial progress is better than an atomic all-or-nothing because
+ * the AI's next call may refer to nodes from successful earlier
+ * tags in the same response.
+ *
+ * ctx.defaultParentId applies to every shape identically; callers
+ * that need per-shape parent routing should wire that via shape's
+ * own `parent_id` arg.
+ */
+export async function dispatchElementToolCalls(
+  shapes: DesignOutputShape[],
+  ctx: DispatchContext = {},
+): Promise<BatchDispatchResult> {
+  if (shapes.length === 0) {
+    return { status: 'empty', results: [], insertedNodes: [] };
+  }
+  const historyStore = useHistoryStore.getState();
+  const baseDoc = useDocumentStore.getState().document;
+  historyStore.startBatch(baseDoc);
+  const results: DispatchResult[] = [];
+  try {
+    for (const shape of shapes) {
+      try {
+        if (shape.kind === 'element-tool') {
+          results.push(await applyElementTool(shape.name, shape.arguments, ctx));
+        } else {
+          results.push(await applyBatchDesignDsl(shape.dsl, ctx));
+        }
+      } catch (err) {
+        // applyX shouldn't throw (they catch + return failed); defend
+        // anyway so the loop never aborts mid-batch.
+        results.push({
+          status: 'failed',
+          route: shape.kind === 'element-tool' ? 'element-tool' : 'batch-design-dsl',
+          toolName: shape.kind === 'element-tool' ? shape.name : 'batch_design',
+          message: `Unexpected throw during dispatch: ${err instanceof Error ? err.message : String(err)}`,
+          insertedNodes: [],
+        });
+      }
+    }
+  } finally {
+    const finalDoc = useDocumentStore.getState().document;
+    historyStore.endBatch(finalDoc);
+  }
+  const insertedNodes = results.flatMap((r) => r.insertedNodes);
+  const appliedCount = results.filter((r) => r.status === 'applied').length;
+  const status: BatchDispatchResult['status'] =
+    appliedCount === results.length ? 'applied' : appliedCount === 0 ? 'all-failed' : 'partial';
+  return { status, results, insertedNodes };
+}
+
 /**
  * Apply a single `add_X_v0` element-tool call.
  *
