@@ -7,38 +7,20 @@ import {
   resolveDocPath,
 } from '../document-manager';
 import { findNodeInTree, findParentInTree, getDocChildren } from '../utils/node-operations';
-import { generateId } from '../utils/id';
 import { handleBatchDesign } from './batch-design';
 
-export type CjkScript = null | 'chinese' | 'japanese' | 'korean';
-
-export function detectCjkScript(s: string): CjkScript {
-  // Hiragana U+3040-309F + Katakana U+30A0-30FF → Japanese
-  if (/[\u3040-\u309f\u30a0-\u30ff]/.test(s)) return 'japanese';
-  // Hangul Syllables U+AC00-D7AF → Korean
-  if (/[\uac00-\ud7af]/.test(s)) return 'korean';
-  // CJK Symbols / Punctuation U+3000-303F + CJK Unified Ideographs U+4E00-9FFF → Chinese
-  if (/[\u3000-\u303f\u4e00-\u9fff]/.test(s)) return 'chinese';
-  return null;
-}
-
-/**
- * Map a CJK script to its Noto Sans font family. Returns undefined for
- * non-CJK so callers can fall back to theme default (Inter for body,
- * theme heading for headings).
- */
-export function cjkFontFamily(script: CjkScript): string | undefined {
-  switch (script) {
-    case 'japanese':
-      return 'Noto Sans JP';
-    case 'korean':
-      return 'Noto Sans KR';
-    case 'chinese':
-      return 'Noto Sans SC';
-    default:
-      return undefined;
-  }
-}
+// CJK script detection + font-family dispatch + tree-build helpers all
+// moved to @zseven-w/pen-core/element-builders so apps/web client shims
+// and pen-mcp handlers share identical logic. Re-export here so any
+// external caller that imported these from `./element-tool-helpers`
+// keeps compiling without churn.
+export {
+  assignIdsRecursively,
+  buildScrollWrapper,
+  cjkFontFamily,
+  detectCjkScript,
+  type CjkScript,
+} from '@zseven-w/pen-core';
 
 /**
  * Simulate how batch-design.ts:resolveRef will interpret a JSON.stringify'd
@@ -57,8 +39,7 @@ function simulateDslParentResolve(parentId: string): string {
  * handleBatchDesign. batch_design's underlying `insertNodeInTree` silently
  * returns the original tree when the parent is missing, producing a
  * success-looking response (binding + nodeId) with an orphaned node that
- * never lands on disk. Element tools (add_scroll_row_v0 / add_bottom_nav_v0
- * / add_activity_ring_v0) must fail fast with a clear error instead.
+ * never lands on disk. Element tools must fail fast with a clear error.
  *
  * Skips validation when parent_id is falsy (root-level insertion is always
  * valid). Throws a descriptive Error otherwise.
@@ -80,63 +61,6 @@ export async function ensureParentExists(params: {
       }. Pass a valid parent node id or omit parent_id for root-level insertion.`,
     );
   }
-}
-
-/**
- * Walk a node subtree and stamp every node with a fresh id. batch_design's
- * downstream DSL only assigns an id to the TOP-level inserted node —
- * nested children arrive unchanged, leaving them unreferenceable by any
- * later tree operation.
- */
-export function assignIdsRecursively(node: Record<string, unknown>): void {
-  if (typeof node.id !== 'string') node.id = generateId();
-  const children = node.children;
-  if (Array.isArray(children)) {
-    for (const child of children) {
-      if (child && typeof child === 'object') {
-        assignIdsRecursively(child as Record<string, unknown>);
-      }
-    }
-  }
-}
-
-/**
- * Build the canonical scroll-row wrapper taught in
- * `packages/pen-ai-skills/skills/phases/generation/overflow.md` §HORIZONTAL
- * SCROLL ROWS: outer wrapper (fill_container + clipContent + vertical) >
- * inner row (fit_content + horizontal + gap + padding=[0,20]) > children.
- *
- * Shared by all three narrow row tools (add_card_row_v0 /
- * add_metric_row_v0 / add_nav_chip_row_v0). Each tool only differs in the
- * per-item node builder; the wrapper is identical.
- */
-export function buildScrollWrapper(opts: {
-  rowName: string;
-  innerChildren: Record<string, unknown>[];
-  gap: number;
-}): Record<string, unknown> {
-  return {
-    type: 'frame',
-    name: opts.rowName,
-    role: 'scroll-row-wrapper',
-    width: 'fill_container',
-    height: 'fit_content',
-    layout: 'vertical',
-    clipContent: true,
-    children: [
-      {
-        type: 'frame',
-        name: 'Scroll Inner Row',
-        role: 'scroll-row',
-        width: 'fit_content',
-        height: 'fit_content',
-        layout: 'horizontal',
-        gap: opts.gap,
-        padding: [0, 20],
-        children: opts.innerChildren,
-      },
-    ],
-  };
 }
 
 /**
