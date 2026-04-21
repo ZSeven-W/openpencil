@@ -27,6 +27,7 @@ import {
 } from './orchestrator-sub-agent-compact';
 import { tryParseElementToolOutput } from './design-parser';
 import { dispatchElementToolCall } from './element-tools-dispatcher';
+import { SUPPORTED_EMBEDDED_ELEMENT_TOOLS } from './element-tool-shims';
 import { needsElementTools, resolveModelProfile } from './model-profiles';
 import {
   expandRootFrameHeight,
@@ -68,16 +69,31 @@ export interface StreamTimeoutConfig {
 // §3.4 of the integration plan adds a parser that detects these tags
 // BEFORE the legacy JSONL parser so existing flows stay intact when the
 // flag is off or when the model bypasses the wrapper.
+// elements.md documents 42 add_*_v0 tools for external MCP clients
+// that talk to pen-mcp's full handler set via stdio/HTTP transport.
+// The embedded orchestrator (this file's runtime) can only execute
+// a subset — tools with both a client-side shim (element-tool-shims)
+// AND a matching Nitro SERVER_BUILDERS entry. Tell the AI which
+// subset is live so it doesn't emit `<op_tool>` for uncovered tools
+// and see them fail through to error. Uncovered tools should fall
+// back to batch_design (documented FALLBACK branch below).
+const EMBEDDED_AVAILABLE = SUPPORTED_EMBEDDED_ELEMENT_TOOLS.join(', ');
 const ELEMENT_TOOL_OUTPUT_FORMAT = [
   '',
   'OUTPUT FORMAT — EMIT AS TOOL CALL:',
   '',
   'Respond with one `<op_tool>` tag, nothing else. Choose based on intent:',
   '',
-  'PRIMARY: when your intent matches an add_*_v0 element tool above, emit:',
+  'PRIMARY: when your intent matches an add_*_v0 element tool, emit:',
   '  <op_tool>{"name": "add_X_v0", "arguments": {...}}</op_tool>',
   '',
-  'FALLBACK: when no element tool fits (heterogeneous layout, composite section, post-hoc styling), emit:',
+  'EMBEDDED COVERAGE: in THIS runtime only the following element tools ',
+  'can actually execute — other add_*_v0 names in the skill doc will ',
+  'return an unsupported error. Prefer these, and fall back to ',
+  'batch_design below for any element not in this list:',
+  `  ${EMBEDDED_AVAILABLE}`,
+  '',
+  'FALLBACK: when no listed element tool fits (heterogeneous layout, composite section, post-hoc styling, or intent matches an element tool outside the list above), emit:',
   '  <op_tool>{"name": "batch_design", "arguments": {"operations": "<DSL_STRING>"}}</op_tool>',
   'The `operations` value is a single string containing the batch_design DSL.',
   '',

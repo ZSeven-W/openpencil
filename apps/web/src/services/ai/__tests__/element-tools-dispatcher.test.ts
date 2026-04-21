@@ -75,10 +75,18 @@ describe('dispatchElementToolCall — M2 shim + M3 HTTP fallback', () => {
     expect(matched || anyCardFrame).toBe(true);
   });
 
-  it('unknown element tool → HTTP fallback unreachable → unsupported', async () => {
+  it('element tool outside SUPPORTED_EMBEDDED_ELEMENT_TOOLS → short-circuits before HTTP', async () => {
+    // The dispatcher must NOT waste an HTTP roundtrip on a tool the
+    // Nitro endpoint is guaranteed to 404 (shim/server registries
+    // are kept identical by convention). Fail fast with the canonical
+    // supported list in the diagnostic so callers / UI can route to
+    // batch_design instead.
+    const fetchFn = vi.fn(() => Promise.reject(new Error('should not be called')));
+    vi.stubGlobal('fetch', fetchFn);
+
     const shape: DesignOutputShape = {
       kind: 'element-tool',
-      name: 'add_not_yet_shimmed_v0',
+      name: 'add_divider_v0', // real pen-mcp tool but not in shim registry
       arguments: {},
       raw: '<op_tool>...</op_tool>',
     };
@@ -87,11 +95,14 @@ describe('dispatchElementToolCall — M2 shim + M3 HTTP fallback', () => {
 
     expect(result.status).toBe('unsupported');
     expect(result.route).toBe('element-tool');
-    expect(result.toolName).toBe('add_not_yet_shimmed_v0');
-    expect(result.message).toContain('add_not_yet_shimmed_v0');
-    expect(result.message).toContain('HTTP fallback');
-    // Failed / unsupported results carry an empty inserted-nodes list
-    // — the orchestrator treats this as "no progress credit".
+    expect(result.toolName).toBe('add_divider_v0');
+    expect(result.message).toContain('add_divider_v0');
+    // The canonical covered list is embedded in the diagnostic
+    expect(result.message).toContain('add_card_row_v0');
+    expect(result.message).toContain('batch_design');
+    // Critical: no HTTP fallback attempt — we already know the
+    // endpoint cannot handle this name either.
+    expect(fetchFn).not.toHaveBeenCalled();
     expect(result.insertedNodes).toEqual([]);
   });
 

@@ -47,10 +47,19 @@ import type { PenDocument, PenNode } from '../../../src/types/pen';
 type BuilderFn = (args: unknown) => ElementTree;
 
 /**
- * Server-side builder registry. Keep in sync with
- * `apps/web/src/services/ai/element-tool-shims/index.ts`. Both
- * dispatch through pen-core `buildX` so drift is impossible; this
- * registry exists only to gate unknown tool names.
+ * Server-side builder registry. MUST stay in sync with
+ * `apps/web/src/services/ai/element-tool-shims/index.ts`
+ * (SUPPORTED_EMBEDDED_ELEMENT_TOOLS) — when extending one, extend
+ * the other in the same commit. Both dispatch through pen-core
+ * `buildX` so the tree shape is drift-free; this registry exists
+ * only to gate unknown tool names + own the sync-state mutation.
+ *
+ * Coverage gap: elements.md names 42 element tools (the full
+ * pen-mcp catalog for external MCP clients). Embedded runtime —
+ * shim + this file — covers a subset until more builders are
+ * extracted to pen-core. Until then, unsupported names return 404
+ * with the canonical supported list and the dispatcher short-
+ * circuits before calling us.
  */
 const SERVER_BUILDERS: Record<string, BuilderFn> = {
   add_card_row_v0: (a) => buildCardRow(a as Parameters<typeof buildCardRow>[0]),
