@@ -86,7 +86,11 @@ describe('dispatchElementToolCall — M2 shim + M3 HTTP fallback', () => {
 
     const shape: DesignOutputShape = {
       kind: 'element-tool',
-      name: 'add_divider_v0', // real pen-mcp tool but not in shim registry
+      // Fictional tool name — all 42 pen-mcp element tools are now in
+      // the shim registry so any real name would succeed. This name
+      // is what the assertion below hinges on (short-circuit for
+      // anything NOT in SUPPORTED_EMBEDDED_ELEMENT_TOOLS).
+      name: 'add_fictional_future_v1',
       arguments: {},
       raw: '<op_tool>...</op_tool>',
     };
@@ -95,8 +99,8 @@ describe('dispatchElementToolCall — M2 shim + M3 HTTP fallback', () => {
 
     expect(result.status).toBe('unsupported');
     expect(result.route).toBe('element-tool');
-    expect(result.toolName).toBe('add_divider_v0');
-    expect(result.message).toContain('add_divider_v0');
+    expect(result.toolName).toBe('add_fictional_future_v1');
+    expect(result.message).toContain('add_fictional_future_v1');
     // The canonical covered list is embedded in the diagnostic
     expect(result.message).toContain('add_card_row_v0');
     expect(result.message).toContain('batch_design');
