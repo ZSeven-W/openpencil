@@ -42,7 +42,11 @@ export function buildChartPie(params: ChartPieParams): ElementTree {
   }
   const diameter = Math.max(40, Math.floor(params.diameter ?? 160));
   const innerRatio = Math.max(0, Math.min(0.9, params.inner_radius_ratio ?? 0));
-  const innerRadius = innerRatio > 0 ? Math.round((diameter / 2) * innerRatio) : undefined;
+  // EllipseNode.innerRadius is a RATIO 0..1 (the renderer does `rx * inner`
+  // — see packages/pen-core/src/arc-path.ts docstring + skia-interaction.ts
+  // which clamps to [0, 0.99]). Pass the ratio directly; storing pixels
+  // would be interpreted as a huge ratio and clip all slices.
+  const innerRadius = innerRatio > 0 ? innerRatio : undefined;
   const colors = params.colors ?? [];
 
   const children: ElementTree[] = [];
