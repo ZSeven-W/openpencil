@@ -143,13 +143,18 @@ describe('dispatchElementToolCall — M2 shim + M3 HTTP fallback', () => {
     // FALLBACK branch wires all the way through to the server rather
     // than short-circuiting on a 501 or a stale "unsupported" stub.
     expect(fetchFn).toHaveBeenCalledTimes(1);
-    const [url, init] = fetchFn.mock.calls[0];
-    expect(url).toBe('/api/mcp/exec-tool');
-    const body = JSON.parse((init as { body: string }).body) as { dsl: string };
+    // fetch(url, init) — destructured via assertion below since the
+    // call tuple type is inferred as `[]` when fetchFn's call signature
+    // wasn't annotated. Cast to unknown first (TS2352 safeguard).
+    const callArgs = fetchFn.mock.calls[0] as unknown as [string, { body: string } | undefined];
+    expect(callArgs[0]).toBe('/api/mcp/exec-tool');
+    const requestBody = callArgs[1]?.body;
+    expect(typeof requestBody).toBe('string');
+    const parsed = JSON.parse(requestBody as string) as { dsl: string };
     // The DSL the AI emitted reaches the server verbatim (no
     // rewrap, no transform) — what pen-mcp's runBatchDesignDsl
     // expects as its `operations` input.
-    expect(body.dsl).toContain('I(null,');
+    expect(parsed.dsl).toContain('I(null,');
     expect(result.route).toBe('batch-design-dsl');
     expect(result.toolName).toBe('batch_design');
   });
