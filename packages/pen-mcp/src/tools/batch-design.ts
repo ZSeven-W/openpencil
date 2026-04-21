@@ -165,9 +165,19 @@ async function executeLine(
   // Parse: binding=OP(args) or OP(args)
   // Binding is optional for I/C/R/G — auto-generated when omitted (agents
   // sometimes write `I(parent, data)` without the binding prefix).
-  const assignMatch = line.match(/^(\w+)\s*=\s*([ICRMG])\((.+)\)$/);
-  const bindlessAssignMatch = !assignMatch && line.match(/^([ICRG])\((.+)\)$/);
-  const callMatch = line.match(/^([UDM])\((.+)\)$/);
+  //
+  // `s` flag (dotAll) is REQUIRED: splitOperations above yields one logical
+  // line per top-level op and does NOT split on newlines inside balanced
+  // `()`/`[]`/`{}`. Pretty-printed JSON bodies (e.g. Kimi K2.5 in the
+  // 2026-04-21 A/B regression) carry literal `\n` inside the arg list; a
+  // `.+` without `s` stops at the first newline and mis-fails the whole
+  // line. See
+  // openpencil-docs/superpowers/notes/2026-04-21-kimi-k25-regression-rca.md
+  // for the exact failure mode. `^`/`$` still anchor to string boundaries
+  // (no `m` flag), which is what we want.
+  const assignMatch = line.match(/^(\w+)\s*=\s*([ICRMG])\((.+)\)$/s);
+  const bindlessAssignMatch = !assignMatch && line.match(/^([ICRG])\((.+)\)$/s);
+  const callMatch = line.match(/^([UDM])\((.+)\)$/s);
 
   // Normalize bindless form to an auto-generated binding so the rest of the
   // logic below can treat it uniformly.
