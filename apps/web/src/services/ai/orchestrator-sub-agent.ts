@@ -26,6 +26,7 @@ import {
   compactSubAgentSkills,
 } from './orchestrator-sub-agent-compact';
 import { tryParseElementToolOutput } from './design-parser';
+import { dispatchElementToolCall } from './element-tools-dispatcher';
 import { needsElementTools, resolveModelProfile } from './model-profiles';
 import {
   expandRootFrameHeight,
@@ -489,13 +490,16 @@ async function executeSubAgent(
       }
     }
 
-    // Element-tool shape detection (§3.4 of the plan). When the
+    // Element-tool shape detection + dispatch (Phase 2 M1). When the
     // feature flag is on and streaming produced no nodes (expected
     // because weak models emit `<op_tool>` at the end, not incremental
-    // JSON), check if the completed response is an element-tool call
-    // we can dispatch. §3.5 apply-path is a Phase 2 item — for now we
-    // surface a clear error so dev runs with the flag on see exactly
-    // what happened.
+    // JSON), parse the completed response and hand it to the
+    // dispatcher. Dispatcher wraps everything in one history batch
+    // (startBatch/endBatch) so the full generation becomes a single
+    // undo unit once M2/M3 land the real apply handlers. For M1 the
+    // dispatcher returns `unsupported` — we surface that message to
+    // the UI verbatim (it already names the milestone and the fallback
+    // flag to unset).
     if (
       elementToolsEnabled &&
       renderer.getAppliedIds().size === 0 &&
@@ -504,23 +508,36 @@ async function executeSubAgent(
       const elementShape = tryParseElementToolOutput(rawResponse);
       if (elementShape !== null) {
         renderer.finish();
-        progressEntry.status = 'error';
+        // Pass subtask/root parent context so rootless `<op_tool>`
+        // payloads (e.g. `elements.md` examples that omit parent_id)
+        // land inside the generation's target frame, matching the
+        // streaming path. Without this default the dispatcher would
+        // prepend at page root, outside root-frame layout adjustments.
+        const dispatchResult = await dispatchElementToolCall(elementShape, {
+          defaultParentId: subtask.parentFrameId ?? plan.rootFrame.id,
+        });
+        const inserted = dispatchResult.insertedNodes;
+        if (dispatchResult.status === 'applied' && inserted.length > 0) {
+          // Keep orchestrator accounting consistent with the store.
+          // Dispatcher already wrote via document-store.addNode (shim)
+          // or applyExternalDocument (HTTP fallback); the renderer
+          // doesn't know about those paths, so its getInsertedNodes()
+          // stays empty and the caller would treat a successful
+          // element-tool apply as "0 nodes produced" (= subtask fail).
+          // Push the inserted count through the same progress surface
+          // the streaming path uses so the UI checklist + aggregate
+          // counters match reality.
+          progressEntry.nodeCount += inserted.length;
+          progress.totalNodes += inserted.length;
+          callbacks?.onApplyPartial?.(progress.totalNodes);
+        }
+        progressEntry.status = dispatchResult.status === 'applied' ? 'done' : 'error';
         emitProgress(plan, progress, callbacks);
-        const detectedName =
-          elementShape.kind === 'element-tool'
-            ? elementShape.name
-            : 'batch_design (DSL wrapped in op_tool)';
         return {
           subtaskId: subtask.id,
-          nodes: renderer.getInsertedNodes(),
+          nodes: inserted.length > 0 ? inserted : renderer.getInsertedNodes(),
           rawResponse,
-          error:
-            `Element-tool output detected (${detectedName}) but the ` +
-            `apply pipeline is not yet wired into the embedded ` +
-            `orchestrator. Unset VITE_ENABLE_ELEMENT_TOOLS (or set ` +
-            `it to 0) to fall back to the legacy JSONL path, or wait for ` +
-            `integration plan §3.5 (openpencil-docs ` +
-            `superpowers/plans/2026-04-21-element-tools-orchestrator-integration.md).`,
+          error: dispatchResult.status === 'applied' ? undefined : dispatchResult.message,
         };
       }
     }
