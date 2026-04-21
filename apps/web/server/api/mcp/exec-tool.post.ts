@@ -6,15 +6,20 @@ import {
   buildBodyText,
   buildBottomNav,
   buildCardRow,
+  buildCheckbox,
   buildDivider,
   buildHeading,
   buildIconButton,
   buildIconLabel,
   buildListRow,
   buildMetricRow,
+  buildRadio,
   buildSearchBar,
   buildSectionHeader,
+  buildSegmentedControl,
   buildStatGrid,
+  buildSwitch,
+  buildTabs,
   buildTextButton,
   buildTopNavBar,
   findNodeInTree,
@@ -89,6 +94,12 @@ const SERVER_BUILDERS: Record<string, BuilderFn> = {
   add_icon_button_v0: (a) => buildIconButton(a as Parameters<typeof buildIconButton>[0]),
   add_icon_label_v0: (a) => buildIconLabel(a as Parameters<typeof buildIconLabel>[0]),
   add_stat_grid_v0: (a) => buildStatGrid(a as Parameters<typeof buildStatGrid>[0]),
+  add_switch_v0: (a) => buildSwitch(a as Parameters<typeof buildSwitch>[0]),
+  add_checkbox_v0: (a) => buildCheckbox(a as Parameters<typeof buildCheckbox>[0]),
+  add_radio_v0: (a) => buildRadio(a as Parameters<typeof buildRadio>[0]),
+  add_tabs_v0: (a) => buildTabs(a as Parameters<typeof buildTabs>[0]),
+  add_segmented_control_v0: (a) =>
+    buildSegmentedControl(a as Parameters<typeof buildSegmentedControl>[0]),
 };
 
 interface ExecToolBody {
