@@ -42,6 +42,7 @@ import {
   buildSearchBar,
   buildSectionHeader,
   buildSegmentedControl,
+  buildSelect,
   buildSkeleton,
   buildStatGrid,
   buildStepper,
@@ -247,6 +248,11 @@ const CASES: BuilderCase[] = [
     toolName: 'add_skeleton_v0',
     args: { rows: 3 },
     build: (a) => buildSkeleton(a as unknown as Parameters<typeof buildSkeleton>[0]),
+  },
+  {
+    toolName: 'add_select_v0',
+    args: { label: 'Country', value: 'US' },
+    build: (a) => buildSelect(a as unknown as Parameters<typeof buildSelect>[0]),
   },
   {
     toolName: 'add_form_field_v0',

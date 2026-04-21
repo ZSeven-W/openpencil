@@ -38,6 +38,7 @@ import {
   buildSearchBar,
   buildSectionHeader,
   buildSegmentedControl,
+  buildSelect,
   buildSkeleton,
   buildStatGrid,
   buildStepper,
@@ -179,6 +180,11 @@ const CASES: LayoutCase[] = [
   { name: 'buildFormField', tree: () => buildFormField({ label: 'Email' }), wrap: true },
   { name: 'buildTextarea', tree: () => buildTextarea({ label: 'Bio', rows: 5 }), wrap: true },
   { name: 'buildSkeleton', tree: () => buildSkeleton({ rows: 3 }), wrap: true },
+  {
+    name: 'buildSelect',
+    tree: () => buildSelect({ label: 'Country', value: 'US' }),
+    wrap: true,
+  },
   { name: 'buildChartBars', tree: () => buildChartBars({ values: [4, 7, 3, 9, 5] }) },
 
   // Composites

@@ -36,6 +36,7 @@ import {
   buildSearchBar,
   buildSectionHeader,
   buildSegmentedControl,
+  buildSelect,
   buildSkeleton,
   buildStatGrid,
   buildStepper,
@@ -168,6 +169,7 @@ const CASES: BuilderCase[] = [
   { name: 'form-field', build: () => buildFormField({ label: 'Email' }) },
   { name: 'textarea', build: () => buildTextarea({ label: 'Bio', rows: 5 }) },
   { name: 'skeleton', build: () => buildSkeleton({ rows: 3 }) },
+  { name: 'select', build: () => buildSelect({ label: 'Country', value: 'US' }) },
   { name: 'chart-bars', build: () => buildChartBars({ values: [4, 7, 3, 9, 5] }) },
   {
     name: 'empty-state',
