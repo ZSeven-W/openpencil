@@ -149,3 +149,25 @@ export function getElementShim(name: string): ElementShim | undefined {
 export function hasElementShim(name: string): boolean {
   return name in ELEMENT_SHIMS;
 }
+
+/**
+ * Canonical list of element-tool names the embedded orchestrator
+ * can actually execute — shim set + Nitro SERVER_BUILDERS set
+ * (which are kept byte-identical by convention; extend this list,
+ * the SHIM registry, and `apps/web/server/api/mcp/exec-tool.post.ts`
+ * together).
+ *
+ * Dispatcher uses this to short-circuit on tool names that are in
+ * `elements.md`'s 42-tool catalog but NOT wired into embedded
+ * runtime, avoiding a wasted HTTP roundtrip and giving the caller
+ * a more actionable "not supported yet" message instead of a raw
+ * 404 from the Nitro endpoint.
+ *
+ * Externally-run MCP clients (Claude Code / Codex / Gemini CLI)
+ * talk to pen-mcp's full 42-tool handler set via stdio/HTTP
+ * transport — the embedded-vs-external coverage asymmetry is
+ * why this list exists separately.
+ */
+export const SUPPORTED_EMBEDDED_ELEMENT_TOOLS: readonly string[] = Object.freeze(
+  Object.keys(ELEMENT_SHIMS),
+);
