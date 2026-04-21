@@ -10,28 +10,6 @@ import { findNodeInTree, findParentInTree, getDocChildren } from '../utils/node-
 import { generateId } from '../utils/id';
 import { handleBatchDesign } from './batch-design';
 
-/**
- * Script detection for text content. Used by element tools (heading /
- * body_text / future CJK-aware tools) to pick the correct
- * `fontFamily` per the repo's CJK font contract documented in
- * packages/pen-ai-skills/skills/phases/generation/text-rules.md:
- *
- *   "CJK font selection: heading='Noto Sans SC' (Chinese) /
- *    'Noto Sans JP' (Japanese) / 'Noto Sans KR' (Korean),
- *    body='Inter'. NEVER use 'Space Grotesk' or 'Manrope' for CJK
- *    content — they have no CJK glyphs."
- *
- * Detection order matters:
- *   1. Hiragana / Katakana present → Japanese (these scripts are unique
- *      to Japanese even when mixed with Han ideographs)
- *   2. Hangul syllables present → Korean
- *   3. Any Han ideograph / CJK punctuation → Chinese (Simplified default)
- *   4. Otherwise null (Latin / other)
- *
- * Mixed-script edge: text containing both hiragana and hangul resolves
- * to Japanese (hiragana is checked first). In practice this almost never
- * happens in a single heading / body paragraph.
- */
 export type CjkScript = null | 'chinese' | 'japanese' | 'korean';
 
 export function detectCjkScript(s: string): CjkScript {
