@@ -638,4 +638,32 @@ export const ELEMENT_TOOL_DEFINITIONS_EXT = [
       required: [],
     },
   },
+  {
+    name: 'add_textarea_v0',
+    description:
+      'Multi-line text input for notes, bio, feedback. Same vertical label-above-input shape as ' +
+      'add_form_field_v0 but input height grows by `rows` (default 4, clamped 2..12). Input area ' +
+      'is vertical layout with placeholder top-aligned — matches native iOS/Material multi-line. ' +
+      'Use for "description", "comments", "bio", "message". schemaVersion 1.0',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        schemaVersion: schemaVersionProp,
+        filePath: filePathProp,
+        label: { type: 'string', description: 'Field label text' },
+        placeholder: { type: 'string', description: 'Optional input placeholder' },
+        rows: {
+          type: 'number',
+          description: 'Visible text rows (clamped 2..12, default 4). Initial visible height only.',
+        },
+        required: {
+          type: 'boolean',
+          description: 'When true, appends " *" to the label text',
+        },
+        parent_id: parentIdProp,
+        pageId: pageIdProp,
+      },
+      required: ['label'],
+    },
+  },
 ];

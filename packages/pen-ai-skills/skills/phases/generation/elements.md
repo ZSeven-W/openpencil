@@ -67,6 +67,7 @@ Forms:
 
 18. Search bar (height=44, cornerRadius=22, leading search icon) → `add_search_bar_v0`
 19. Form field (label + 48px input with optional affordance icons) → `add_form_field_v0`
+    19b. Multi-line textarea (label + N-row input for notes / bio / feedback) → `add_textarea_v0`
 
 Controls (toggle / choice / tabs):
 
@@ -148,6 +149,7 @@ PREFER an element tool when the spec says any of:
 - "settings row", "list item", "iOS list cell", "table row with chevron" → `add_list_row_v0`
 - "search bar", "search input", "filter search", "搜索栏" → `add_search_bar_v0`
 - "form field", "email input", "password field", "labeled input", "required field" → `add_form_field_v0`
+- "textarea", "multi-line input", "notes field", "description box", "bio input", "feedback box", "多行输入", "备注" → `add_textarea_v0`
 - "toggle", "switch", "on/off", "开关" → `add_switch_v0`
 - "checkbox", "agreement", "select option", "复选框" → `add_checkbox_v0`
 - "radio", "single choice", "单选" → `add_radio_v0` (stack multiple in a vertical parent)
@@ -273,6 +275,8 @@ add_search_bar_v0({ placeholder: "Search workouts..." })
 
 add_form_field_v0({ label: "Email", placeholder: "you@example.com", leading_icon: "mail", required: true })
 add_form_field_v0({ label: "Password", leading_icon: "lock", trailing_icon: "eye", required: true })
+add_textarea_v0({ label: "Bio", placeholder: "Tell us about yourself", rows: 5 })
+add_textarea_v0({ label: "Feedback", rows: 4, required: true })
 
 add_switch_v0({})                          // off (default)
 add_switch_v0({ active: true })             // on — iOS green
