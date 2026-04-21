@@ -122,7 +122,11 @@ Calendars:
 
 42. Month calendar grid (weekday header + 7-col day rows, today/selected tint) → `add_calendar_grid_v0`
 
-43. None match → fall through to `batch_design`
+Loading / placeholder:
+
+43. Loading skeleton (N gray rectangles, last row ~60% width) → `add_skeleton_v0`
+
+44. None match → fall through to `batch_design`
 
 **Disambiguation**: if you need a ROW of 3 metrics that should NOT scroll (e.g. a stats strip inside a card), use `add_stat_grid_v0`, NOT `add_metric_row_v0`. The grid uses `fill_container` per cell so it never overflows; the metric row uses fixed-px cells + scroll wrapper.
 
@@ -150,6 +154,7 @@ PREFER an element tool when the spec says any of:
 - "search bar", "search input", "filter search", "搜索栏" → `add_search_bar_v0`
 - "form field", "email input", "password field", "labeled input", "required field" → `add_form_field_v0`
 - "textarea", "multi-line input", "notes field", "description box", "bio input", "feedback box", "多行输入", "备注" → `add_textarea_v0`
+- "skeleton", "loading placeholder", "shimmer", "loading state", "placeholder lines", "骨架屏", "加载中占位" → `add_skeleton_v0`
 - "toggle", "switch", "on/off", "开关" → `add_switch_v0`
 - "checkbox", "agreement", "select option", "复选框" → `add_checkbox_v0`
 - "radio", "single choice", "单选" → `add_radio_v0` (stack multiple in a vertical parent)
@@ -277,6 +282,8 @@ add_form_field_v0({ label: "Email", placeholder: "you@example.com", leading_icon
 add_form_field_v0({ label: "Password", leading_icon: "lock", trailing_icon: "eye", required: true })
 add_textarea_v0({ label: "Bio", placeholder: "Tell us about yourself", rows: 5 })
 add_textarea_v0({ label: "Feedback", rows: 4, required: true })
+add_skeleton_v0({})                                  // default 3 rows, last short
+add_skeleton_v0({ rows: 5, row_height: 20, row_gap: 8 })
 
 add_switch_v0({})                          // off (default)
 add_switch_v0({ active: true })             // on — iOS green
