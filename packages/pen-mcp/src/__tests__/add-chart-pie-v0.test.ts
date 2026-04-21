@@ -111,7 +111,10 @@ describe('add_chart_pie_v0', () => {
     expect(c.width).toBe(40); // clamped
   });
 
-  it('inner_radius_ratio > 0 → donut (each slice gets innerRadius)', async () => {
+  it('inner_radius_ratio > 0 → donut (innerRadius stored as ratio 0..1, NOT pixels)', async () => {
+    // Renderer interprets EllipseNode.innerRadius as a ratio multiplied
+    // by rx at paint time. Storing pixels here would blow past the
+    // outer radius and clip every slice.
     const fp = await fresh('a.op');
     await handleAddChartPieV0({
       filePath: fp,
@@ -121,8 +124,33 @@ describe('add_chart_pie_v0', () => {
     });
     const slices = getRoot(await readDoc(fp)).children as Record<string, unknown>[];
     for (const s of slices) {
-      expect(s.innerRadius).toBe(40); // 160/2 * 0.5
+      expect(s.innerRadius).toBe(0.5);
     }
+  });
+
+  it('inner_radius_ratio is invariant across diameter (ratio, not pixels)', async () => {
+    const fp = await fresh('a.op');
+    await handleAddChartPieV0({
+      filePath: fp,
+      values: [1, 1],
+      diameter: 80,
+      inner_radius_ratio: 0.6,
+    });
+    const slicesSmall = getRoot(await readDoc(fp)).children as Record<string, unknown>[];
+
+    await writeFile(fp, EMPTY, 'utf-8');
+    invalidateCache(fp);
+    await handleAddChartPieV0({
+      filePath: fp,
+      values: [1, 1],
+      diameter: 300,
+      inner_radius_ratio: 0.6,
+    });
+    const slicesBig = getRoot(await readDoc(fp)).children as Record<string, unknown>[];
+
+    // Same ratio regardless of diameter — pixels-based storage would diverge.
+    expect(slicesSmall[0].innerRadius).toBe(0.6);
+    expect(slicesBig[0].innerRadius).toBe(0.6);
   });
 
   it('all-zero values throws (degenerate chart)', async () => {
