@@ -114,6 +114,8 @@ Design-system:
 Charts / data visualization:
 
 40. Bar-chart skeleton (one rectangle per value, bottom-aligned) → `add_chart_bars_v0`
+    40b. Line-chart skeleton (polyline + optional dots) → `add_chart_line_v0`
+    40c. Pie-chart skeleton (colored ellipse slices via arc angles) → `add_chart_pie_v0`
 
 Activity / history:
 
@@ -157,6 +159,8 @@ PREFER an element tool when the spec says any of:
 - "textarea", "multi-line input", "notes field", "description box", "bio input", "feedback box", "多行输入", "备注" → `add_textarea_v0`
 - "dropdown", "select", "picker", "combo box", "下拉选择", "选择器" → `add_select_v0`
 - "skeleton", "loading placeholder", "shimmer", "loading state", "placeholder lines", "骨架屏", "加载中占位" → `add_skeleton_v0`
+- "line chart", "trend chart", "折线图" → `add_chart_line_v0`
+- "pie chart", "donut chart", "饼图" → `add_chart_pie_v0`
 - "toggle", "switch", "on/off", "开关" → `add_switch_v0`
 - "checkbox", "agreement", "select option", "复选框" → `add_checkbox_v0`
 - "radio", "single choice", "单选" → `add_radio_v0` (stack multiple in a vertical parent)
@@ -288,6 +292,9 @@ add_skeleton_v0({})                                  // default 3 rows, last sho
 add_skeleton_v0({ rows: 5, row_height: 20, row_gap: 8 })
 add_select_v0({ label: "Country", value: "United States" })
 add_select_v0({ label: "Currency", placeholder: "Choose currency", required: true })
+add_chart_line_v0({ values: [2, 5, 3, 7, 4, 8, 6] })
+add_chart_pie_v0({ values: [40, 30, 20, 10], diameter: 200 })
+add_chart_pie_v0({ values: [1, 1, 1, 1], inner_radius_ratio: 0.5 })  // donut
 
 add_switch_v0({})                          // off (default)
 add_switch_v0({ active: true })             // on — iOS green
