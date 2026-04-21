@@ -1,27 +1,17 @@
+import { assignIdsRecursively, buildIconLabel, type IconLabelParams } from '@zseven-w/pen-core';
 import type { handleBatchDesign } from './batch-design';
-import {
-  assignIdsRecursively,
-  ensureParentExists,
-  insertElementTree,
-} from './element-tool-helpers';
+import { ensureParentExists, insertElementTree } from './element-tool-helpers';
 
-export interface AddIconLabelV0Params {
-  icon: string;
-  label: string;
-  gap?: number;
+export interface AddIconLabelV0Params extends IconLabelParams {
   parent_id?: string;
   filePath?: string;
   pageId?: string;
 }
 
 /**
- * Atomic icon + label pair (horizontal). Common building block for menu
- * items, breadcrumbs, status indicators, "with icon" inline text.
- *
- * Forces the alignItems=center pattern so icon and text baseline-align
- * visually. Narrow schema: no alignment enum (icons always lead), no
- * size/weight overrides (defaults 16/14/500). Callers wanting variants
- * (trailing icon, large size) compose via batch_design instead.
+ * Atomic icon + label pair (horizontal). Tree build delegated to
+ * `@zseven-w/pen-core`'s `buildIconLabel` — alignItems=center for
+ * baseline alignment; icon always leads; defaults 16/14/500.
  *
  * Spec: openpencil-docs/superpowers/specs/2026-04-19-element-tools-v0.md §7
  */
@@ -29,35 +19,7 @@ export async function handleAddIconLabelV0(
   params: AddIconLabelV0Params,
 ): Promise<Awaited<ReturnType<typeof handleBatchDesign>>> {
   await ensureParentExists(params);
-  const gap = params.gap ?? 8;
-  const node = {
-    type: 'frame',
-    name: 'Icon Label',
-    role: 'icon-label',
-    width: 'fit_content',
-    height: 'fit_content',
-    layout: 'horizontal',
-    alignItems: 'center',
-    gap,
-    children: [
-      {
-        type: 'icon_font',
-        name: 'Icon',
-        iconFontName: params.icon,
-        iconFontFamily: 'lucide',
-        width: 16,
-        height: 16,
-      },
-      {
-        type: 'text',
-        name: 'Label',
-        role: 'label',
-        content: params.label,
-        fontSize: 14,
-        fontWeight: 500,
-      },
-    ],
-  };
+  const node = buildIconLabel(params);
   assignIdsRecursively(node);
   return insertElementTree({ binding: 'icon_label', tree: node, ...params });
 }

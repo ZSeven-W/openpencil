@@ -1,14 +1,20 @@
 import { defineEventHandler, readBody, setResponseStatus } from 'h3';
 import {
   assignIdsRecursively,
+  buildAvatar,
+  buildBadge,
   buildBodyText,
   buildBottomNav,
   buildCardRow,
+  buildDivider,
   buildHeading,
+  buildIconButton,
+  buildIconLabel,
   buildListRow,
   buildMetricRow,
   buildSearchBar,
   buildSectionHeader,
+  buildStatGrid,
   buildTextButton,
   buildTopNavBar,
   findNodeInTree,
@@ -77,6 +83,12 @@ const SERVER_BUILDERS: Record<string, BuilderFn> = {
   add_text_button_v0: (a) => buildTextButton(a as Parameters<typeof buildTextButton>[0]),
   add_search_bar_v0: (a) => buildSearchBar(a as Parameters<typeof buildSearchBar>[0]),
   add_list_row_v0: (a) => buildListRow(a as Parameters<typeof buildListRow>[0]),
+  add_divider_v0: (a) => buildDivider(a as Parameters<typeof buildDivider>[0]),
+  add_badge_v0: (a) => buildBadge(a as Parameters<typeof buildBadge>[0]),
+  add_avatar_v0: (a) => buildAvatar(a as Parameters<typeof buildAvatar>[0]),
+  add_icon_button_v0: (a) => buildIconButton(a as Parameters<typeof buildIconButton>[0]),
+  add_icon_label_v0: (a) => buildIconLabel(a as Parameters<typeof buildIconLabel>[0]),
+  add_stat_grid_v0: (a) => buildStatGrid(a as Parameters<typeof buildStatGrid>[0]),
 };
 
 interface ExecToolBody {
