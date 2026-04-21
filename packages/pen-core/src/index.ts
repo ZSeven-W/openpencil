@@ -165,3 +165,42 @@ export type {
   DocFieldName,
 } from './merge/node-merge.js';
 export { mergeDocuments } from './merge/node-merge.js';
+
+// --- Element builders (shared by pen-mcp handlers + apps/web client shims) ---
+// Pure tree-build functions matching pen-mcp's add_*_v0 tools. Browser-safe:
+// no node:fs, no document-manager imports — just PenNode shape generation.
+// Callers layer their own insert pipeline on top (pen-mcp adds parent_id
+// validation + rollback; apps/web client shim calls document-store.addNode).
+export {
+  assignIdsRecursively,
+  buildScrollWrapper,
+  buildCardRow,
+  buildMetricRow,
+  buildBottomNav,
+  buildSectionHeader,
+  buildTopNavBar,
+  buildHeading,
+  buildBodyText,
+  buildTextButton,
+  buildSearchBar,
+  buildListRow,
+  cjkFontFamily,
+  detectCjkScript,
+  type ElementTree,
+  type CjkScript,
+  type CardRowItem,
+  type CardRowParams,
+  type MetricRowItem,
+  type MetricRowParams,
+  type BottomNavItem,
+  type BottomNavParams,
+  type SectionHeaderAction,
+  type SectionHeaderParams,
+  type TopNavBarParams,
+  type HeadingLevel,
+  type HeadingParams,
+  type BodyTextParams,
+  type TextButtonParams,
+  type SearchBarParams,
+  type ListRowParams,
+} from './element-builders/index.js';
