@@ -29,7 +29,7 @@ import type { DesignOutputShape } from './design-parser';
 import { useDocumentStore } from '@/stores/document-store';
 import { useHistoryStore } from '@/stores/history-store';
 import { useCanvasStore } from '@/stores/canvas-store';
-import { getElementShim } from './element-tool-shims';
+import { getElementShim, SUPPORTED_EMBEDDED_ELEMENT_TOOLS } from './element-tool-shims';
 import { insertStreamingNode } from './design-canvas-ops';
 import type { PenNode } from '@/types/pen';
 
@@ -132,21 +132,32 @@ export async function dispatchElementToolCall(
  *      `@zseven-w/pen-core/element-builders` — same builders the
  *      pen-mcp handlers use, so the shape is drift-free by
  *      construction.
- *   2. If a shim exists, build the PenNode tree and call
- *      `document-store.addNode(null, node)` to insert at root of the
- *      active page. The store write triggers `pushState`, which is
- *      suppressed by the surrounding `startBatch` so multiple tool
- *      calls collapse into a single undo entry.
- *   3. If no shim exists, try the M3 HTTP fallback (POST to
- *      `/api/mcp/exec-tool`). Returns the resulting document in the
- *      response body so the client applies it without waiting for
- *      the SSE broadcast.
- *   4. If HTTP fallback also fails, return `unsupported` with a clear
- *      diagnostic so the UI can show actionable text.
+ *   2. If a shim exists, build the PenNode tree via pen-core and
+ *      call `insertStreamingNode` (not raw addNode) so the insert
+ *      goes through the same canonical path the streaming
+ *      renderer uses: id collision guard, parent remap, layout-
+ *      aware child normalization, phone-placeholder guards,
+ *      overlay z-order rules, auto expandRootFrameHeight, and
+ *      append semantics. The surrounding `startBatch` suppresses
+ *      `pushState` so multiple tool calls collapse to one undo.
+ *   3. If the tool name is NOT in the embedded shim/server registry
+ *      (SUPPORTED_EMBEDDED_ELEMENT_TOOLS), short-circuit with an
+ *      actionable `unsupported` result — do not waste an HTTP
+ *      roundtrip on a tool the endpoint is also guaranteed to 404.
+ *      elements.md names 42 tools (for external MCP clients that
+ *      talk to pen-mcp's full handler set); embedded coverage is
+ *      a subset until more builders are extracted to pen-core.
+ *   4. If the name IS supported but the browser shim lookup missed
+ *      (shouldn't happen today since the two registries are kept
+ *      byte-identical, but keeps the code correct if they drift),
+ *      try the M3 HTTP fallback. Nitro endpoint uses the same
+ *      pen-core builders + returns the resulting document so the
+ *      client applies it via applyExternalDocument immediately.
  *
- * Shim miss is NOT an error — the M3 fallback is the documented
- * recovery path. We only return `unsupported` when both shim and
- * fallback fail.
+ * Shim miss for a SUPPORTED tool is NOT an error — HTTP fallback
+ * is the documented recovery path. Miss for an UNSUPPORTED tool
+ * is surfaced up without a roundtrip, carrying the canonical
+ * supported list in the message.
  */
 async function applyElementTool(
   name: string,
@@ -298,6 +309,30 @@ async function applyElementTool(
             (parentId === null ? ' (dispatcher default)' : '') +
             '.',
       insertedNodes: [node],
+    };
+  }
+
+  // Shim miss. Pre-check whether the tool name is even in the
+  // embedded registry (shim + Nitro SERVER_BUILDERS are kept in
+  // sync by convention). If not, skip the HTTP roundtrip — the
+  // endpoint is guaranteed to 404 for the same name, so we can
+  // deliver a better diagnostic immediately with the canonical
+  // supported list. Prevents the AI / user from seeing a raw HTTP
+  // error when the real story is "this tool is in elements.md's
+  // 42-tool catalog but not yet wired into the embedded runtime."
+  if (!SUPPORTED_EMBEDDED_ELEMENT_TOOLS.includes(name)) {
+    return {
+      status: 'unsupported',
+      route: 'element-tool',
+      toolName: name,
+      message:
+        `Element tool "${name}" is not wired into the embedded orchestrator ` +
+        `(shim + Nitro builders cover ${SUPPORTED_EMBEDDED_ELEMENT_TOOLS.length} ` +
+        `tools so far: ${SUPPORTED_EMBEDDED_ELEMENT_TOOLS.join(', ')}). Fall back to ` +
+        `batch_design for this element, or extend the shim + Nitro registries ` +
+        `together. External MCP clients (Claude Code / Codex / Gemini CLI) can ` +
+        `still call the full 42-tool pen-mcp set via stdio / HTTP transport.`,
+      insertedNodes: [],
     };
   }
 
