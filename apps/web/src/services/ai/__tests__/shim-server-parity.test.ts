@@ -46,6 +46,7 @@ import {
   buildStepper,
   buildSwitch,
   buildTabs,
+  buildTextarea,
   buildTextButton,
   buildTimeline,
   buildToast,
@@ -235,6 +236,11 @@ const CASES: BuilderCase[] = [
     toolName: 'add_stepper_v0',
     args: { total: 3, current: 1 },
     build: (a) => buildStepper(a as unknown as Parameters<typeof buildStepper>[0]),
+  },
+  {
+    toolName: 'add_textarea_v0',
+    args: { label: 'Bio', placeholder: 'Tell us about yourself', rows: 5 },
+    build: (a) => buildTextarea(a as unknown as Parameters<typeof buildTextarea>[0]),
   },
   {
     toolName: 'add_form_field_v0',

@@ -38,6 +38,7 @@ import {
   buildStepper,
   buildSwitch,
   buildTabs,
+  buildTextarea,
   buildTextButton,
   buildTimeline,
   buildToast,
@@ -146,6 +147,7 @@ const CASES: PerfCase[] = [
   },
   { name: 'search-bar', build: () => buildSearchBar({}) },
   { name: 'form-field', build: () => buildFormField({ label: 'Email' }) },
+  { name: 'textarea', build: () => buildTextarea({ label: 'Bio', rows: 5 }) },
   { name: 'chart-bars', build: () => buildChartBars({ values: [4, 7, 3, 9, 5, 8] }) },
   {
     name: 'empty-state',
