@@ -525,4 +525,117 @@ export const ELEMENT_TOOL_DEFINITIONS_EXT = [
       required: ['color'],
     },
   },
+  {
+    name: 'add_chart_bars_v0',
+    description:
+      'Horizontal bar-chart skeleton — one rectangle per `values` entry, bottom-aligned via ' +
+      'alignItems=flex-end so bars read as axis-anchored. Heights scale to max(values); zero-valued ' +
+      'bars get a 2px floor so pen-core does not collapse them. Negative / non-finite values clamp ' +
+      'to 0. No axes / labels / grid — caller stitches those via batch_design U-op. Use for ' +
+      '"bar chart", "histogram skeleton", "weekly steps chart", "柱状图". schemaVersion 1.0',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        schemaVersion: schemaVersionProp,
+        filePath: filePathProp,
+        values: {
+          type: 'array',
+          description: 'Bar values in display order (≥0). Max value determines chart scale.',
+          items: { type: 'number' },
+        },
+        bar_width: {
+          type: 'number',
+          description: 'Per-bar width in px (default 24, min 4)',
+        },
+        gap: {
+          type: 'number',
+          description: 'Inter-bar gap in px (default 12, min 0)',
+        },
+        chart_height: {
+          type: 'number',
+          description: 'Tallest-bar height in px, also sets frame height (default 160, min 40)',
+        },
+        parent_id: parentIdProp,
+        pageId: pageIdProp,
+      },
+      required: ['values'],
+    },
+  },
+  {
+    name: 'add_timeline_v0',
+    description:
+      'Vertical timeline — per-item row of (24×24 dot + fixed 24px connector) + ' +
+      '(title [+ subtitle]) content column. Connector is a fixed-height rectangle (NOT ' +
+      'fill_container — pen-core has no minHeight/stretch, so a fill_container connector ' +
+      'would collapse to 0 when content col is shorter than the dot). Icon col uses ' +
+      "fit_content = 24 dot + 24 connector = 48 (gap=0 between them) to drive the row's " +
+      'cross-axis height. NO row padding, NO outer-timeline gap, NO icon-col gap — so the ' +
+      'connector IS the FULL 24px inter-item spacing and dots land flush against both ' +
+      'connector ends. Last item drops the connector. `active` items get primary fill on ' +
+      'the dot. Known limitation: content taller than 48px (e.g. wrapped 3-line title) ' +
+      'extends past the connector, creating a small visual break before the next dot — ' +
+      'for that case build the timeline via batch_design instead. Use for "timeline", ' +
+      '"activity history", "vertical stepper", "时间线", "动态". schemaVersion 1.0',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        schemaVersion: schemaVersionProp,
+        filePath: filePathProp,
+        items: {
+          type: 'array',
+          description:
+            'Timeline entries top-to-bottom. `active=true` highlights the dot; `subtitle` is optional.',
+          items: {
+            type: 'object',
+            properties: {
+              title: { type: 'string' },
+              subtitle: { type: 'string' },
+              active: { type: 'boolean' },
+            },
+            required: ['title'],
+          },
+        },
+        parent_id: parentIdProp,
+        pageId: pageIdProp,
+      },
+      required: ['items'],
+    },
+  },
+  {
+    name: 'add_calendar_grid_v0',
+    description:
+      'Month calendar grid — weekday header (Sun..Sat) + up to 6 week rows × 7 cells. ' +
+      '`start_day_offset` blanks leading cells so day 1 lands on the correct weekday (0=Sun..6=Sat). ' +
+      '`today` gets a light-blue tint; `selected_day` gets a solid primary fill (selected wins when ' +
+      "they overlap). Fixed cell size 40px — pen-core has no grid primitive so it's emitted as " +
+      'nested vertical-of-horizontal frames. Use for "calendar", "date picker grid", "month view", ' +
+      '"日历". schemaVersion 1.0',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        schemaVersion: schemaVersionProp,
+        filePath: filePathProp,
+        days_in_month: {
+          type: 'number',
+          description: 'Days in this month (clamped 1..31, default 30)',
+        },
+        start_day_offset: {
+          type: 'number',
+          description:
+            'Weekday of day 1 (0=Sunday..6=Saturday, clamped; default 0). Blank cells fill the offset.',
+        },
+        today: {
+          type: 'number',
+          description: 'Optional day-of-month to highlight as today (light tint)',
+        },
+        selected_day: {
+          type: 'number',
+          description: 'Optional day-of-month to mark as selected (solid primary fill)',
+        },
+        parent_id: parentIdProp,
+        pageId: pageIdProp,
+      },
+      required: [],
+    },
+  },
 ];

@@ -109,7 +109,19 @@ Design-system:
 
 39. Color swatch (colored square + optional token label) → `add_color_swatch_v0`
 
-40. None match → fall through to `batch_design`
+Charts / data visualization:
+
+40. Bar-chart skeleton (one rectangle per value, bottom-aligned) → `add_chart_bars_v0`
+
+Activity / history:
+
+41. Vertical timeline (dots + fixed 24px connectors + content; no padding/gap) → `add_timeline_v0`
+
+Calendars:
+
+42. Month calendar grid (weekday header + 7-col day rows, today/selected tint) → `add_calendar_grid_v0`
+
+43. None match → fall through to `batch_design`
 
 **Disambiguation**: if you need a ROW of 3 metrics that should NOT scroll (e.g. a stats strip inside a card), use `add_stat_grid_v0`, NOT `add_metric_row_v0`. The grid uses `fill_container` per cell so it never overflows; the metric row uses fixed-px cells + scroll wrapper.
 
@@ -156,6 +168,9 @@ PREFER an element tool when the spec says any of:
 - "quote", "testimonial quote", "引言" → `add_quote_block_v0`
 - "code snippet", "code block", "代码块" → `add_code_block_v0`
 - "color swatch", "palette", "token", "色板" → `add_color_swatch_v0`
+- "bar chart", "histogram skeleton", "weekly steps", "柱状图" → `add_chart_bars_v0`
+- "timeline", "activity history", "vertical stepper", "时间线", "动态" → `add_timeline_v0`
+- "calendar", "date picker grid", "month view", "日历" → `add_calendar_grid_v0`
 
 STILL use batch_design when:
 
@@ -315,6 +330,21 @@ add_price_v0({ amount: "29", period: "/month" })             // currency default
 add_quote_block_v0({ quote: "Stay hungry.", author: "Steve Jobs" })
 add_code_block_v0({ code: "const x = 1;", language: "typescript" })
 add_color_swatch_v0({ color: "#2563EB", label: "Primary" })  // hex OR $ref both accepted
+
+add_chart_bars_v0({ values: [4, 7, 3, 9, 5, 8, 6] })          // weekly steps skeleton
+add_chart_bars_v0({ values: [10, 20], bar_width: 40, chart_height: 200 })
+
+add_timeline_v0({
+  items: [
+    { title: "Order placed",   subtitle: "10:42 AM", active: true },
+    { title: "Preparing" },
+    { title: "Out for delivery" },
+    { title: "Delivered" },
+  ],
+})
+
+add_calendar_grid_v0({})                                       // vanilla 30-day month, Sun-start
+add_calendar_grid_v0({ days_in_month: 31, start_day_offset: 2, today: 15, selected_day: 22 })
 ```
 
 ## Composition pattern
@@ -333,7 +363,7 @@ The tool guarantees — you cannot break them from the input side:
 - `bottom-tab-bar` is inline (no empty spacer sibling needed, do NOT add one)
 - Activity ring is frame+cornerRadius=size/2+stroke+centered text — NEVER emit ellipse+sibling text for rings
 - Every emitted node has a unique id (you can reference it later)
-- Roles are set (`card` / `metric-tile` / `nav-chip` / `nav-chip-active` / `bottom-tab-bar` / `nav-item` / `nav-item-active` / `activity-ring` / `stat-grid` / `stat-cell` / `section-header` / `section-header-title` / `section-header-action` / `top-nav-bar` / `nav-spacer` / `icon-button` / `divider` / `badge` / `avatar` / `button` / `heading` / `body` / `label` / `icon-label` / `list-row` / `list-row-text` / `search-bar` / `form-field` / `form-input` / `switch` / `switch-thumb` / `checkbox` / `checkbox-checked` / `checkbox-row` / `radio` / `radio-selected` / `radio-row` / `radio-dot` / `tabs` / `tab` / `tab-active` / `segmented-control` / `segment` / `segment-active` / `empty-state` / `empty-state-icon` / `empty-state-title` / `empty-state-subtitle` / `alert` / `alert-message` / `alert-close` / `toast` / `toast-message` / `progress-bar` / `progress-bar-fill` / `fab` / `breadcrumb` / `breadcrumb-item` / `breadcrumb-item-active` / `breadcrumb-separator` / `stepper` / `step` / `step-active` / `step-connector` / `step-connector-active` / `rating-stars` / `star-filled` / `star-empty` / `link` / `link-label` / `link-icon` / `kbd` / `kbd-key` / `kbd-glyph` / `kbd-separator` / `carousel-dots` / `dot` / `dot-active` / `price` / `price-currency` / `price-amount` / `price-period` / `quote-block` / `quote-text` / `quote-author` / `code-block` / `code` / `color-swatch` / `color-swatch-square` / `color-swatch-label`)
+- Roles are set (`card` / `metric-tile` / `nav-chip` / `nav-chip-active` / `bottom-tab-bar` / `nav-item` / `nav-item-active` / `activity-ring` / `stat-grid` / `stat-cell` / `section-header` / `section-header-title` / `section-header-action` / `top-nav-bar` / `nav-spacer` / `icon-button` / `divider` / `badge` / `avatar` / `button` / `heading` / `body` / `label` / `icon-label` / `list-row` / `list-row-text` / `search-bar` / `form-field` / `form-input` / `switch` / `switch-thumb` / `checkbox` / `checkbox-checked` / `checkbox-row` / `radio` / `radio-selected` / `radio-row` / `radio-dot` / `tabs` / `tab` / `tab-active` / `segmented-control` / `segment` / `segment-active` / `empty-state` / `empty-state-icon` / `empty-state-title` / `empty-state-subtitle` / `alert` / `alert-message` / `alert-close` / `toast` / `toast-message` / `progress-bar` / `progress-bar-fill` / `fab` / `breadcrumb` / `breadcrumb-item` / `breadcrumb-item-active` / `breadcrumb-separator` / `stepper` / `step` / `step-active` / `step-connector` / `step-connector-active` / `rating-stars` / `star-filled` / `star-empty` / `link` / `link-label` / `link-icon` / `kbd` / `kbd-key` / `kbd-glyph` / `kbd-separator` / `carousel-dots` / `dot` / `dot-active` / `price` / `price-currency` / `price-amount` / `price-period` / `quote-block` / `quote-text` / `quote-author` / `code-block` / `code` / `color-swatch` / `color-swatch-square` / `color-swatch-label` / `chart-bars` / `chart-bar` / `timeline` / `timeline-item` / `timeline-icon-column` / `timeline-dot` / `timeline-dot-active` / `timeline-connector` / `timeline-content` / `timeline-title` / `timeline-subtitle` / `calendar-grid` / `calendar-header-row` / `calendar-header` / `calendar-week` / `calendar-day` / `calendar-day-today` / `calendar-day-selected` / `calendar-day-empty`)
 
 ## Failure mode
 
