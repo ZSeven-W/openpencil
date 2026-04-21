@@ -131,6 +131,33 @@ describe('element tools — v0-MUST contract', () => {
       expect(props?.variant, `${name} must NOT have variant union`).toBeUndefined();
     }
   });
+
+  it('drift-guard: every add_*_v0 has a matching pen-core builder export', async () => {
+    // Pairs with the apps/web `SUPPORTED_EMBEDDED_ELEMENT_TOOLS`
+    // drift-guard — from the server side, verify each pen-mcp tool
+    // name maps to a pen-core `buildX` export. Catches the case
+    // where a handler is added/renamed but the pen-core builder
+    // (the drift-free source) isn't.
+    const penCore = await import('@zseven-w/pen-core');
+    const missing: string[] = [];
+    for (const name of ELEMENT_TOOL_NAMES) {
+      // add_xxx_v0 → buildXxx (camelCase)
+      const stem = name.replace(/^add_/, '').replace(/_v\d+$/, '');
+      const builderKey = `build${stem
+        .split('_')
+        .map((p) => p.charAt(0).toUpperCase() + p.slice(1))
+        .join('')}`;
+      if (typeof (penCore as Record<string, unknown>)[builderKey] !== 'function') {
+        missing.push(`${name} → ${builderKey}`);
+      }
+    }
+    expect(
+      missing,
+      `Element tools without a pen-core builder — add the buildX export to ` +
+        `packages/pen-core/src/element-builders/ (and wire it through the index.ts + ` +
+        `src/index.ts barrel): ${missing.join(', ')}`,
+    ).toEqual([]);
+  });
 });
 
 // Regression test for the post-insert verification path in
