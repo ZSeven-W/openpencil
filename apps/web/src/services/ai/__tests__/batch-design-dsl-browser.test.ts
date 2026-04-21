@@ -155,6 +155,24 @@ describe('batch_design DSL — browser executor integration', () => {
     expect(result.insertedNodes).toEqual([]);
   });
 
+  it('applyExternalDocument called once per batch (not per op)', async () => {
+    // Defensive: the browser executor structuredClones the doc, runs
+    // ALL ops against the clone, then applies the clone back in one
+    // call. Applying per-op would thrash the React tree + history
+    // state for no benefit. Spy to confirm the one-shot apply.
+    const applySpy = vi.spyOn(useDocumentStore.getState(), 'applyExternalDocument');
+    const dsl = [
+      'a=I(null, {"type":"frame","name":"A","width":100,"height":100,"layout":"none"})',
+      'b=I(null, {"type":"frame","name":"B","width":100,"height":100,"layout":"none"})',
+      'c=I(null, {"type":"frame","name":"C","width":100,"height":100,"layout":"none"})',
+      'd=I(null, {"type":"frame","name":"D","width":100,"height":100,"layout":"none"})',
+    ].join('\n');
+
+    await dispatchElementToolCall(dslShape(dsl));
+    expect(applySpy).toHaveBeenCalledTimes(1);
+    applySpy.mockRestore();
+  });
+
   it('G() op without fetcher: image node inserted with empty src', async () => {
     // G() regex requires a quoted parent; use a seeded root frame
     // as the anchor so the insert actually lands in the tree.
