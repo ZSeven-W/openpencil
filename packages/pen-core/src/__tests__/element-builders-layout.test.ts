@@ -14,6 +14,8 @@ import {
   buildCardRow,
   buildCarouselDots,
   buildChartBars,
+  buildChartLine,
+  buildChartPie,
   buildCheckbox,
   buildCodeBlock,
   buildColorSwatch,
@@ -185,6 +187,8 @@ const CASES: LayoutCase[] = [
     tree: () => buildSelect({ label: 'Country', value: 'US' }),
     wrap: true,
   },
+  { name: 'buildChartLine', tree: () => buildChartLine({ values: [1, 3, 2, 5, 4, 6] }) },
+  { name: 'buildChartPie', tree: () => buildChartPie({ values: [40, 30, 20, 10] }) },
   { name: 'buildChartBars', tree: () => buildChartBars({ values: [4, 7, 3, 9, 5] }) },
 
   // Composites

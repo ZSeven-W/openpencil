@@ -19,6 +19,8 @@ import {
   buildCardRow,
   buildCarouselDots,
   buildChartBars,
+  buildChartLine,
+  buildChartPie,
   buildCheckbox,
   buildCodeBlock,
   buildColorSwatch,
@@ -253,6 +255,16 @@ const CASES: BuilderCase[] = [
     toolName: 'add_select_v0',
     args: { label: 'Country', value: 'US' },
     build: (a) => buildSelect(a as unknown as Parameters<typeof buildSelect>[0]),
+  },
+  {
+    toolName: 'add_chart_line_v0',
+    args: { values: [1, 3, 2, 5, 4, 6] },
+    build: (a) => buildChartLine(a as unknown as Parameters<typeof buildChartLine>[0]),
+  },
+  {
+    toolName: 'add_chart_pie_v0',
+    args: { values: [40, 30, 20, 10] },
+    build: (a) => buildChartPie(a as unknown as Parameters<typeof buildChartPie>[0]),
   },
   {
     toolName: 'add_form_field_v0',

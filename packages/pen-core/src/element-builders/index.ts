@@ -40,6 +40,8 @@ export { buildFormField, type FormFieldParams } from './form-field.js';
 export { buildTextarea, type TextareaParams } from './textarea.js';
 export { buildSkeleton, type SkeletonParams } from './skeleton.js';
 export { buildSelect, type SelectParams } from './select.js';
+export { buildChartLine, type ChartLineParams } from './chart-line.js';
+export { buildChartPie, type ChartPieParams } from './chart-pie.js';
 export { buildNavChipRow, type NavChipRowItem, type NavChipRowParams } from './nav-chip-row.js';
 export { buildActivityRing, type ActivityRingParams } from './activity-ring.js';
 export { buildRatingStars, type RatingStarsParams } from './rating-stars.js';

@@ -639,6 +639,73 @@ export const ELEMENT_TOOL_DEFINITIONS_EXT = [
     },
   },
   {
+    name: 'add_chart_line_v0',
+    description:
+      'Line-chart skeleton: polyline through N data points (normalized to max), optional dots at ' +
+      'each vertex. fit_content width = values.length × point_spacing (default 32px). Use for ' +
+      '"line chart", "trend chart", "折线图". schemaVersion 1.0',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        schemaVersion: schemaVersionProp,
+        filePath: filePathProp,
+        values: {
+          type: 'array',
+          items: { type: 'number' },
+          description: 'Data points. Non-finite / negative values clamp to 0. Must not be empty.',
+        },
+        point_spacing: {
+          type: 'number',
+          description: 'Width per data point slot (px, default 32, min 8)',
+        },
+        chart_height: { type: 'number', description: 'Chart height in px (default 160, min 40)' },
+        dots: { type: 'boolean', description: 'Emit a filled dot at each vertex (default true)' },
+        stroke_color: { type: 'string', description: 'Line stroke hex color (default #2563EB)' },
+        parent_id: parentIdProp,
+        pageId: pageIdProp,
+      },
+      required: ['values'],
+    },
+  },
+  {
+    name: 'add_chart_pie_v0',
+    description:
+      'Pie-chart skeleton: N colored slice ellipses via startAngle/sweepAngle arc support (NOT ' +
+      'stacked full ellipses — that would be the ring anti-pattern). Slice angles sum to 360°. ' +
+      'Set inner_radius_ratio > 0 for a donut. Use for "pie chart", "donut chart", "饼图". ' +
+      'schemaVersion 1.0',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        schemaVersion: schemaVersionProp,
+        filePath: filePathProp,
+        values: {
+          type: 'array',
+          items: { type: 'number' },
+          description:
+            'Slice values (any scale; normalized internally). All-zero input throws. Non-finite / negative clamp to 0.',
+        },
+        diameter: {
+          type: 'number',
+          description: 'Pie diameter (px, width=height; default 160, min 40)',
+        },
+        colors: {
+          type: 'array',
+          items: { type: 'string' },
+          description:
+            'Optional per-slice hex colors. If shorter than values.length, default palette fills the rest.',
+        },
+        inner_radius_ratio: {
+          type: 'number',
+          description: 'Donut hole radius as fraction of outer (0..0.9). Default 0 (full pie).',
+        },
+        parent_id: parentIdProp,
+        pageId: pageIdProp,
+      },
+      required: ['values'],
+    },
+  },
+  {
     name: 'add_select_v0',
     description:
       'Dropdown select (display / closed state). Label above input box matching add_form_field_v0 ' +
