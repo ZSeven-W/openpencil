@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os';
 import { loadCorpus } from '../corpus-loader';
 
 const REPO_CORPUS_DIR = join(__dirname, '..', '..', '..', 'corpus', 'ab-v0');
+const REPO_CORPUS_V1_DIR = join(__dirname, '..', '..', '..', 'corpus', 'ab-v1');
 
 let tmp: string;
 
@@ -57,6 +58,49 @@ describe('loadCorpus — real corpus', () => {
       if (p.expected_tool_if_any) {
         expect(p.expected_tool_if_any).toMatch(/^add_[a-z_]+_v0$/);
       }
+    }
+  });
+});
+
+describe('loadCorpus — v1 supplemental corpus (new tools)', () => {
+  // v1 covers the 5 tools added after the v0 freeze (textarea,
+  // skeleton, select, chart_line, chart_pie). All obvious — one
+  // prompt per new tool so an A/B v2 run can measure routing +
+  // legality on the new surface without re-running all 24 v0
+  // prompts. See `corpus/ab-v1/README.md`.
+  it('loads 5 prompts, all obvious, one per new tool', () => {
+    const prompts = loadCorpus(REPO_CORPUS_V1_DIR);
+    expect(prompts).toHaveLength(5);
+    expect(new Set(prompts.map((p) => p.id)).size).toBe(5);
+    for (const p of prompts) {
+      expect(p.difficulty).toBe('obvious');
+      expect(p.expected_tool_if_any).toMatch(/^add_[a-z_]+_v0$/);
+    }
+  });
+
+  it('covers the 5 specific tools added 2026-04-22', () => {
+    const prompts = loadCorpus(REPO_CORPUS_V1_DIR);
+    const tools = new Set(prompts.map((p) => p.expected_tool_if_any));
+    expect(tools).toEqual(
+      new Set([
+        'add_textarea_v0',
+        'add_skeleton_v0',
+        'add_select_v0',
+        'add_chart_line_v0',
+        'add_chart_pie_v0',
+      ]),
+    );
+  });
+
+  it('every prompt has must_contain_roles anchoring to its expected tool', () => {
+    // Structural gate: every v1 prompt names at least one role in
+    // expected.must_contain_roles so the scorer can check the LLM's
+    // output actually emitted the shape. Empty expected would let a
+    // blank design pass.
+    const prompts = loadCorpus(REPO_CORPUS_V1_DIR);
+    for (const p of prompts) {
+      expect(p.expected.must_contain_roles, `${p.id} missing must_contain_roles`).toBeDefined();
+      expect((p.expected.must_contain_roles ?? []).length).toBeGreaterThan(0);
     }
   });
 });
