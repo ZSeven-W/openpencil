@@ -72,6 +72,7 @@ const ELEMENT_TOOL_NAMES = [
   'add_action_menu_v0',
   'add_date_picker_v0',
   'add_modal_shell_v1',
+  'add_upload_dropzone_v0',
 ];
 
 describe('element tools — v0-MUST contract', () => {

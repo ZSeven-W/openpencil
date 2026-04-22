@@ -41,6 +41,7 @@ import {
   buildVideoPlaceholder,
   buildModalShell,
   buildModalShellV1,
+  buildUploadDropzone,
   buildKbd,
   buildLink,
   buildListRow,
@@ -440,6 +441,11 @@ const CASES: BuilderCase[] = [
     toolName: 'add_modal_shell_v1',
     args: { title: 'Delete item?', subtitle: 'This cannot be undone.', theme: 'dark' },
     build: (a) => buildModalShellV1(a as unknown as Parameters<typeof buildModalShellV1>[0]),
+  },
+  {
+    toolName: 'add_upload_dropzone_v0',
+    args: { width: 480, title: 'Drop PDFs here', subtitle: 'Max 10 MB', icon: 'upload' },
+    build: (a) => buildUploadDropzone(a as unknown as Parameters<typeof buildUploadDropzone>[0]),
   },
 ];
 
