@@ -22,6 +22,7 @@ import {
   buildChartLine,
   buildChartPie,
   buildCheckbox,
+  buildChipInput,
   buildComment,
   buildCodeBlock,
   buildColorSwatch,
@@ -404,6 +405,11 @@ const CASES: BuilderCase[] = [
     toolName: 'add_faq_item_v0',
     args: { question: 'How do I cancel?', answer: 'Email support.', expanded: true },
     build: (a) => buildFaqItem(a as unknown as Parameters<typeof buildFaqItem>[0]),
+  },
+  {
+    toolName: 'add_chip_input_v0',
+    args: { label: 'Tags', chips: ['design', 'mobile'], placeholder: 'Add tag…' },
+    build: (a) => buildChipInput(a as unknown as Parameters<typeof buildChipInput>[0]),
   },
 ];
 

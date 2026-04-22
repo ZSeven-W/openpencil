@@ -15,6 +15,7 @@ import {
   buildChartLine,
   buildChartPie,
   buildCheckbox,
+  buildChipInput,
   buildComment,
   buildCodeBlock,
   buildColorSwatch,
@@ -178,6 +179,7 @@ const SERVER_BUILDERS: Record<string, BuilderFn> = {
   add_calendar_grid_v0: (a) => buildCalendarGrid(a as Parameters<typeof buildCalendarGrid>[0]),
   add_pagination_v0: (a) => buildPagination(a as Parameters<typeof buildPagination>[0]),
   add_faq_item_v0: (a) => buildFaqItem(a as Parameters<typeof buildFaqItem>[0]),
+  add_chip_input_v0: (a) => buildChipInput(a as Parameters<typeof buildChipInput>[0]),
 };
 
 interface ExecToolBody {

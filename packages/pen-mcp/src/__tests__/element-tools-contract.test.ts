@@ -67,6 +67,7 @@ const ELEMENT_TOOL_NAMES = [
   'add_calendar_grid_v0',
   'add_pagination_v0',
   'add_faq_item_v0',
+  'add_chip_input_v0',
 ];
 
 describe('element tools — v0-MUST contract', () => {

@@ -33,6 +33,7 @@ import {
   buildChartLine,
   buildChartPie,
   buildCheckbox,
+  buildChipInput,
   buildComment,
   buildCodeBlock,
   buildColorSwatch,
@@ -91,6 +92,7 @@ import {
   type ChartLineParams,
   type ChartPieParams,
   type CheckboxParams,
+  type ChipInputParams,
   type CommentParams,
   type CodeBlockParams,
   type ColorSwatchParams,
@@ -284,6 +286,7 @@ export const ELEMENT_SHIMS: Record<string, ElementShim> = {
   add_calendar_grid_v0: wrap<CalendarGridParams>(buildCalendarGrid),
   add_pagination_v0: wrap<PaginationParams>(buildPagination),
   add_faq_item_v0: wrap<FaqItemParams>(buildFaqItem),
+  add_chip_input_v0: wrap<ChipInputParams>(buildChipInput),
 };
 
 export function getElementShim(name: string): ElementShim | undefined {
