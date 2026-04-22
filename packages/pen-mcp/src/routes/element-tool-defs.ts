@@ -42,6 +42,7 @@ import { handleAddChartPieV0 } from '../tools/add-chart-pie-v0';
 import { handleAddImagePlaceholderV0 } from '../tools/add-image-placeholder-v0';
 import { handleAddCommentV0 } from '../tools/add-comment-v0';
 import { handleAddModalShellV0 } from '../tools/add-modal-shell-v0';
+import { handleAddStatusBadgeV0 } from '../tools/add-status-badge-v0';
 import { handleAddSwitchV0 } from '../tools/add-switch-v0';
 import { handleAddCheckboxV0 } from '../tools/add-checkbox-v0';
 import { handleAddRadioV0 } from '../tools/add-radio-v0';
@@ -134,6 +135,8 @@ export async function handleElementToolCall(name: string, a: any): Promise<strin
       return JSON.stringify(await handleAddCommentV0(a), null, 2);
     case 'add_modal_shell_v0':
       return JSON.stringify(await handleAddModalShellV0(a), null, 2);
+    case 'add_status_badge_v0':
+      return JSON.stringify(await handleAddStatusBadgeV0(a), null, 2);
     case 'add_switch_v0':
       return JSON.stringify(await handleAddSwitchV0(a), null, 2);
     case 'add_checkbox_v0':

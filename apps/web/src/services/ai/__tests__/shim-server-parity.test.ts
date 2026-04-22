@@ -50,6 +50,7 @@ import {
   buildSelect,
   buildSkeleton,
   buildStatGrid,
+  buildStatusBadge,
   buildStepper,
   buildSwitch,
   buildTabs,
@@ -284,6 +285,11 @@ const CASES: BuilderCase[] = [
     toolName: 'add_modal_shell_v0',
     args: { title: 'Confirm', subtitle: 'Are you sure?' },
     build: (a) => buildModalShell(a as unknown as Parameters<typeof buildModalShell>[0]),
+  },
+  {
+    toolName: 'add_status_badge_v0',
+    args: { label: 'Online', tone: 'success' },
+    build: (a) => buildStatusBadge(a as unknown as Parameters<typeof buildStatusBadge>[0]),
   },
   {
     toolName: 'add_form_field_v0',
