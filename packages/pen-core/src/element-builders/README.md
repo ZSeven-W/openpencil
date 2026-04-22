@@ -16,7 +16,7 @@ The N-tool system has **three executable paths** that all need to produce identi
            ▼                            ▼                            ▼
            ┌──────────────────────────────────────────────────────────┐
            │              @zseven-w/pen-core/element-builders         │
-           │  (buildHeading, buildCardRow, buildTopNavBar, …, 42×)    │
+           │  (buildHeading, buildCardRow, buildTopNavBar, …, 50×)    │
            └──────────────────────────────────────────────────────────┘
 ```
 
@@ -27,7 +27,7 @@ If all three paths import the same `buildX` here, the tree is **drift-free by co
 - `index.ts` — barrel; **every new builder must be re-exported here**
 - `helpers.ts` — `assignIdsRecursively`, `buildScrollWrapper`, `ElementTree`
 - `cjk-detect.ts` — `detectCjkScript`, `cjkFontFamily` (Noto Sans SC/JP/KR dispatch)
-- `<name>.ts` — one file per tool (42 today), each exporting `build<Name>` + its params type
+- `<name>.ts` — one file per tool (50 today, as of 2026-04-22), each exporting `build<Name>` + its params type
 
 ## What a builder is
 
