@@ -31,7 +31,16 @@ import { useHistoryStore } from '@/stores/history-store';
 import { useCanvasStore } from '@/stores/canvas-store';
 import { getElementShim, SUPPORTED_EMBEDDED_ELEMENT_TOOLS } from './element-tool-shims';
 import { insertStreamingNode } from './design-canvas-ops';
-import { runBatchDesignDsl } from '@zseven-w/pen-mcp';
+// Import from the pen-mcp package's browser-safe `./dsl` subpath (not
+// the top-level barrel). The barrel re-exports node-only modules —
+// `document-manager`, `log-utils`, `theme-presets` — that pull in
+// `node:fs` / `node:path`. Vite / esbuild resolve the barrel before
+// tree-shaking can drop those branches, so the browser build fails
+// on the unresolved node built-ins. The `./dsl` subpath points
+// directly at `tools/batch-design-dsl.ts`, which is the only module
+// this dispatcher actually needs and is kept rigorously browser-safe
+// (enforced by `packages/pen-mcp/src/__tests__/batch-design-dsl-browser-safe.test.ts`).
+import { runBatchDesignDsl } from '@zseven-w/pen-mcp/dsl';
 import type { PenNode } from '@/types/pen';
 
 /**
@@ -438,11 +447,21 @@ async function applyBatchDesignDsl(dsl: string, ctx: DispatchContext): Promise<D
   try {
     const { document } = useDocumentStore.getState();
     const cloned = structuredClone(document) as typeof document;
+    // Route the DSL to whichever page the user is viewing. Without
+    // this, `runBatchDesignDsl` falls back to `doc.pages[0]` — on a
+    // multi-page document that means the generation lands on page 1
+    // while the UI shows the user's active page, producing invisible
+    // output. `activePageId` may be `null` on single-page docs, in
+    // which case the executor's default is correct (there's only one
+    // page).
+    const activePageId = useCanvasStore.getState().activePageId ?? undefined;
     // runBatchDesignDsl mutates the doc in place + returns per-op
     // results + errors. No image-search fetcher supplied — browser
     // G() ops leave src empty, which the apps/web image pipeline
     // (scanAndFillImages) will pick up and enrich after insert.
-    const { results, errors } = await runBatchDesignDsl(cloned, dsl, {});
+    const { results, errors } = await runBatchDesignDsl(cloned, dsl, {
+      pageId: activePageId,
+    });
     if (errors.length > 0) {
       return {
         status: 'failed',
@@ -480,7 +499,18 @@ async function applyBatchDesignDsl(dsl: string, ctx: DispatchContext): Promise<D
     // still honors defaultParentId for the server-side element-tool
     // paths that share the endpoint.
     const message = err instanceof Error ? err.message : String(err);
-    const httpResult = await fallbackViaHttp('batch-design-dsl', 'batch_design', ctx, { dsl });
+    // Forward active pageId so the server-side path applies on the
+    // same page the user is viewing — same rationale as the in-browser
+    // path above. If activePageId is null (single-page doc), omit
+    // rather than send an explicit null so the server's default (first
+    // page) still works. The `pageId` field is read by
+    // server/api/mcp/exec-tool.post.ts:283 for the DSL branch.
+    const activePageId = useCanvasStore.getState().activePageId;
+    const dslBody: Record<string, unknown> =
+      typeof activePageId === 'string' && activePageId.length > 0
+        ? { dsl, pageId: activePageId }
+        : { dsl };
+    const httpResult = await fallbackViaHttp('batch-design-dsl', 'batch_design', ctx, dslBody);
     // Note: HTTP may succeed even if in-browser threw. Preserve its
     // result as-is; only annotate the message when both paths fail.
     if (httpResult.status === 'applied') return httpResult;

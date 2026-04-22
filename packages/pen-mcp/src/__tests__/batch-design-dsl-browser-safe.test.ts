@@ -130,4 +130,20 @@ describe('batch-design-dsl — browser-safe transitive import tree', () => {
     const importsDocManager = wrapper.includes("from '../document-manager");
     expect(importsDocManager).toBe(true);
   });
+
+  it('package.json exposes `./dsl` subpath export pointing at the browser-safe file', () => {
+    // Guards against a regression where someone removes the subpath
+    // export — apps/web imports `@zseven-w/pen-mcp/dsl` specifically
+    // to skip the barrel (which pulls node:fs via document-manager).
+    // If this key disappears, Vite falls back to the `.` export, the
+    // barrel resolves, and the browser build breaks.
+    const pkgPath = join(__dirname, '..', '..', 'package.json');
+    const pkg = JSON.parse(readFileSync(pkgPath, 'utf-8')) as {
+      exports?: Record<string, { types?: string; import?: string }>;
+    };
+    const dsl = pkg.exports?.['./dsl'];
+    expect(dsl, 'package.json must expose `./dsl` subpath export').toBeDefined();
+    expect(dsl?.import).toMatch(/batch-design-dsl\.ts$/);
+    expect(dsl?.types).toMatch(/batch-design-dsl\.ts$/);
+  });
 });
