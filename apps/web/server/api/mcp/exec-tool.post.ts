@@ -33,6 +33,7 @@ import {
   buildImagePlaceholder,
   buildVideoPlaceholder,
   buildModalShell,
+  buildModalShellV1,
   buildKbd,
   buildLink,
   buildListRow,
@@ -186,6 +187,7 @@ const SERVER_BUILDERS: Record<string, BuilderFn> = {
   add_empty_chart_v0: (a) => buildEmptyChart(a as Parameters<typeof buildEmptyChart>[0]),
   add_action_menu_v0: (a) => buildActionMenu(a as Parameters<typeof buildActionMenu>[0]),
   add_date_picker_v0: (a) => buildDatePicker(a as Parameters<typeof buildDatePicker>[0]),
+  add_modal_shell_v1: (a) => buildModalShellV1(a as Parameters<typeof buildModalShellV1>[0]),
 };
 
 interface ExecToolBody {

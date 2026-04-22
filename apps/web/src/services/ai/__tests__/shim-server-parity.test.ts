@@ -40,6 +40,7 @@ import {
   buildImagePlaceholder,
   buildVideoPlaceholder,
   buildModalShell,
+  buildModalShellV1,
   buildKbd,
   buildLink,
   buildListRow,
@@ -434,6 +435,11 @@ const CASES: BuilderCase[] = [
     toolName: 'add_date_picker_v0',
     args: { label: 'Due date', value: 'Jan 15, 2026', clearable: true },
     build: (a) => buildDatePicker(a as unknown as Parameters<typeof buildDatePicker>[0]),
+  },
+  {
+    toolName: 'add_modal_shell_v1',
+    args: { title: 'Delete item?', subtitle: 'This cannot be undone.', theme: 'dark' },
+    build: (a) => buildModalShellV1(a as unknown as Parameters<typeof buildModalShellV1>[0]),
   },
 ];
 
