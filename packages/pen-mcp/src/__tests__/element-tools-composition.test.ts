@@ -26,6 +26,11 @@ import { handleAddActionMenuV0 } from '../tools/add-action-menu-v0';
 import { handleAddDatePickerV0 } from '../tools/add-date-picker-v0';
 import { handleAddEmptyChartV0 } from '../tools/add-empty-chart-v0';
 import { handleAddChipInputV0 } from '../tools/add-chip-input-v0';
+import { handleAddModalShellV1 } from '../tools/add-modal-shell-v1';
+import { handleAddUploadDropzoneV0 } from '../tools/add-upload-dropzone-v0';
+import { handleAddOtpInputV0 } from '../tools/add-otp-input-v0';
+import { handleAddAttachmentRowV0 } from '../tools/add-attachment-row-v0';
+import { handleAddChatBubbleV0 } from '../tools/add-chat-bubble-v0';
 
 /**
  * End-to-end composition tests — verifies that N element-tool calls
@@ -108,7 +113,14 @@ beforeEach(async () => {
   await mkdir(TMP, { recursive: true });
 });
 afterEach(async () => {
-  for (const f of ['settings.op', 'dashboard.op', 'login.op', 'profile.op', 'listing.op']) {
+  for (const f of [
+    'settings.op',
+    'dashboard.op',
+    'login.op',
+    'profile.op',
+    'listing.op',
+    'support-chat.op',
+  ]) {
     try {
       const fp = join(TMP, f);
       invalidateCache(fp);
@@ -426,5 +438,133 @@ describe('element-tools composition — N-tool real screens', () => {
     // And the row should NOT appear at root (if it did, parent_id threading failed silently)
     const rootLevel = children.filter((n) => n.id === rowId);
     expect(rootLevel.length).toBe(0);
+  });
+
+  it('support chat: exercises every tool added after the 62-mark (#63-#67 + v1)', async () => {
+    const fp = await fresh('support-chat.op');
+
+    // Mimics a realistic customer-support screen: header + two
+    // chat bubbles (from-others then from-self) + one attachment
+    // on the self message + an upload dropzone + chip input for
+    // tagging + an open action menu + a dark-theme confirm modal
+    // floating + an OTP input (phone verification step). Purpose
+    // isn't "this is a real product screen", it's "every new tool
+    // composes into the same document without throwing, with
+    // expected roles + finite parent_id threading".
+
+    // Top nav (existing 62-family)
+    await handleAddTopNavBarV0({
+      filePath: fp,
+      title: 'Support',
+      leading_icon: 'chevron-left',
+    });
+
+    // 2 chat bubbles
+    const leftBubble = await handleAddChatBubbleV0({
+      filePath: fp,
+      message: 'Hi! How can I help you today?',
+      side: 'left',
+      author: 'Support Agent',
+      timestamp: 'Just now',
+    });
+    const rightBubble = await handleAddChatBubbleV0({
+      filePath: fp,
+      message: "My order hasn't arrived and I can't find the tracking number.",
+      side: 'right',
+      timestamp: '2m',
+    });
+
+    // Attachment riding on the self message (compose pattern)
+    const attachment = await handleAddAttachmentRowV0({
+      filePath: fp,
+      filename: 'order-confirmation.pdf',
+      size: '340 KB',
+      icon: 'file-text',
+    });
+
+    // Upload dropzone for additional evidence
+    const dropzone = await handleAddUploadDropzoneV0({
+      filePath: fp,
+      title: 'Drop screenshots here',
+      subtitle: 'PNG or JPG, max 5 MB',
+      icon: 'upload-cloud',
+    });
+
+    // Chip input for conversation tags
+    const chips = await handleAddChipInputV0({
+      filePath: fp,
+      label: 'Tags',
+      chips: ['billing', 'shipping'],
+      placeholder: 'Add tag…',
+    });
+
+    // Action menu (would be floating from a ⋯ button)
+    const menu = await handleAddActionMenuV0({
+      filePath: fp,
+      items: [
+        { label: 'Mark resolved', icon: 'check' },
+        { label: 'Escalate', icon: 'arrow-up' },
+        { label: 'Archive', icon: 'archive', divider_before: true },
+      ],
+    });
+
+    // Dark-theme confirm modal (v1 tool)
+    const modal = await handleAddModalShellV1({
+      filePath: fp,
+      title: 'Escalate to supervisor?',
+      subtitle: 'The customer will receive an email update.',
+      theme: 'dark',
+    });
+
+    // OTP input (phone verification step)
+    const otp = await handleAddOtpInputV0({
+      filePath: fp,
+      length: 6,
+      focused_index: 0,
+    });
+
+    // Every call must have produced a nodeId
+    for (const r of [leftBubble, rightBubble, attachment, dropzone, chips, menu, modal, otp]) {
+      expect(r.results?.[0]?.nodeId).toBeDefined();
+    }
+
+    // Validate the doc has all expected roles
+    const doc = await readDoc(fp);
+    const children = getRootChildren(doc);
+    // 1 top_nav + 2 chat bubbles + 1 attachment + 1 dropzone + 1 chip input
+    // + 1 action menu + 1 modal + 1 otp = 9
+    expect(children.length).toBe(9);
+
+    expect(findRoleInTree(children, 'top-nav-bar')).toBeDefined();
+    expect(findRoleInTree(children, 'chat-bubble-left')).toBeDefined();
+    expect(findRoleInTree(children, 'chat-bubble-right')).toBeDefined();
+    expect(findRoleInTree(children, 'attachment-row')).toBeDefined();
+    expect(findRoleInTree(children, 'upload-dropzone')).toBeDefined();
+    expect(findRoleInTree(children, 'chip-input')).toBeDefined();
+    expect(findRoleInTree(children, 'action-menu')).toBeDefined();
+    expect(findRoleInTree(children, 'modal-scrim')).toBeDefined();
+    expect(findRoleInTree(children, 'otp-input')).toBeDefined();
+
+    // Dark modal: surface fill must be dark (not light #FFFFFF)
+    const modalCard = findRoleInTree(children, 'modal-shell-card')!;
+    const modalFill = (modalCard.fill as Array<{ color: string }>)[0].color;
+    expect(modalFill, 'v1 theme=dark should emit dark surface').toBe('#1E293B');
+
+    // Self bubble: accent fill (#2563EB default)
+    const rightBubbleSurface = findRoleInTree(children, 'chat-bubble-surface');
+    expect(rightBubbleSurface).toBeDefined();
+    // The LEFT bubble surface is also role chat-bubble-surface, so search
+    // for the one under chat-bubble-right specifically.
+    const selfBubbleRoot = findRoleInTree(children, 'chat-bubble-right')!;
+    const selfSurface = findRoleInTree(
+      [selfBubbleRoot] as Record<string, unknown>[],
+      'chat-bubble-surface',
+    )!;
+    expect((selfSurface.fill as Array<{ color: string }>)[0].color).toBe('#2563EB');
+
+    // OTP focused slot: accent border
+    const otpFocused = findRoleInTree(children, 'otp-slot-focused')!;
+    const otpStroke = otpFocused.stroke as { fill: Array<{ color: string }> };
+    expect(otpStroke.fill[0].color).toBe('#2563EB');
   });
 });
