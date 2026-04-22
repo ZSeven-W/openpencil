@@ -120,6 +120,7 @@ Charts / data visualization:
 Media / placeholder:
 
 44. Image placeholder (gray box + centered icon + optional caption — future image slot) → `add_image_placeholder_v0`
+    44b. Video placeholder (dark box + play icon + optional caption — future video embed) → `add_video_placeholder_v0`
 
 Social / UGC:
 
@@ -191,6 +192,7 @@ PREFER an element tool when the spec says any of:
 - "line chart", "trend chart", "折线图" → `add_chart_line_v0`
 - "pie chart", "donut chart", "饼图" → `add_chart_pie_v0`
 - "image placeholder", "photo slot", "upload zone", "hero image area", "cover placeholder", "图片占位" → `add_image_placeholder_v0`
+- "video placeholder", "video slot", "play placeholder", "upcoming video", "视频占位" → `add_video_placeholder_v0`
 - "comment", "reply", "feedback row", "review row", "评论" → `add_comment_v0`
 - "modal", "dialog", "popup", "confirm dialog", "模态框", "弹窗" → `add_modal_shell_v0`
 - "status", "online indicator", "presence dot", "health status", "busy indicator", "状态", "在线" → `add_status_badge_v0`
@@ -331,6 +333,7 @@ add_chart_line_v0({ values: [2, 5, 3, 7, 4, 8, 6] })
 add_chart_pie_v0({ values: [40, 30, 20, 10], diameter: 200 })
 add_chart_pie_v0({ values: [1, 1, 1, 1], inner_radius_ratio: 0.5 })  // donut
 add_image_placeholder_v0({ width: 320, height: 200, label: "Upload cover" })
+add_video_placeholder_v0({ width: 320, height: 180, label: "Coming soon" })
 add_comment_v0({ author: "Sarah", timestamp: "2h ago", body: "Looks great!", avatar_initial: "S" })
 add_modal_shell_v0({ title: "Confirm delete", subtitle: "This cannot be undone." })
 add_status_badge_v0({ label: "Online", tone: "success" })

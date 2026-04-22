@@ -26,6 +26,7 @@ import {
   buildIconButton,
   buildIconLabel,
   buildImagePlaceholder,
+  buildVideoPlaceholder,
   buildModalShell,
   buildKbd,
   buildLink,
@@ -149,6 +150,8 @@ const SERVER_BUILDERS: Record<string, BuilderFn> = {
   add_chart_pie_v0: (a) => buildChartPie(a as Parameters<typeof buildChartPie>[0]),
   add_image_placeholder_v0: (a) =>
     buildImagePlaceholder(a as Parameters<typeof buildImagePlaceholder>[0]),
+  add_video_placeholder_v0: (a) =>
+    buildVideoPlaceholder(a as Parameters<typeof buildVideoPlaceholder>[0]),
   add_comment_v0: (a) => buildComment(a as Parameters<typeof buildComment>[0]),
   add_modal_shell_v0: (a) => buildModalShell(a as Parameters<typeof buildModalShell>[0]),
   add_status_badge_v0: (a) => buildStatusBadge(a as Parameters<typeof buildStatusBadge>[0]),

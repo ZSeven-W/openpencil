@@ -817,6 +817,29 @@ export const ELEMENT_TOOL_DEFINITIONS_EXT = [
     },
   },
   {
+    name: 'add_video_placeholder_v0',
+    description:
+      'Video placeholder — dark slate (#334155) box with centered white play triangle + optional ' +
+      'caption (white/70). Default 320×180 (16:9). The "future video embed" affordance. Structurally ' +
+      'similar to add_image_placeholder_v0 but semantically distinct: dark bg + play icon reads as ' +
+      '"play me later", not "picture coming". Use for "video slot", "video embed placeholder", ' +
+      '"upcoming video", "视频占位". schemaVersion 1.0',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        schemaVersion: schemaVersionProp,
+        filePath: filePathProp,
+        width: { type: 'number', description: 'Width in px (default 320, min 80)' },
+        height: { type: 'number', description: 'Height in px (default 180 for 16:9, min 60)' },
+        label: { type: 'string', description: 'Optional caption (e.g. "Coming soon")' },
+        corner_radius: { type: 'number', description: 'Corner radius (default 12)' },
+        parent_id: parentIdProp,
+        pageId: pageIdProp,
+      },
+      required: [],
+    },
+  },
+  {
     name: 'add_comment_v0',
     description:
       'Single comment row: circular avatar + (author + timestamp inline header) + body text. ' +

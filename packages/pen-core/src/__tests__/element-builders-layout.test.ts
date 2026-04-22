@@ -28,6 +28,7 @@ import {
   buildHeading,
   buildIconButton,
   buildImagePlaceholder,
+  buildVideoPlaceholder,
   buildModalShell,
   buildIconLabel,
   buildKbd,
@@ -198,6 +199,7 @@ const CASES: LayoutCase[] = [
   { name: 'buildChartLine', tree: () => buildChartLine({ values: [1, 3, 2, 5, 4, 6] }) },
   { name: 'buildChartPie', tree: () => buildChartPie({ values: [40, 30, 20, 10] }) },
   { name: 'buildImagePlaceholder', tree: () => buildImagePlaceholder({}), wrap: true },
+  { name: 'buildVideoPlaceholder', tree: () => buildVideoPlaceholder({}), wrap: true },
   {
     name: 'buildComment',
     tree: () => buildComment({ author: 'Alice', body: 'Nice', avatar_initial: 'A' }),

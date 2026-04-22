@@ -27,6 +27,7 @@ import {
   buildIconButton,
   buildIconLabel,
   buildImagePlaceholder,
+  buildVideoPlaceholder,
   buildModalShell,
   buildKbd,
   buildLink,
@@ -189,6 +190,7 @@ const CASES: BuilderCase[] = [
   { name: 'chart-line', build: () => buildChartLine({ values: [1, 3, 2, 5, 4, 6] }) },
   { name: 'chart-pie', build: () => buildChartPie({ values: [40, 30, 20, 10] }) },
   { name: 'image-placeholder', build: () => buildImagePlaceholder({}) },
+  { name: 'video-placeholder', build: () => buildVideoPlaceholder({}) },
   {
     name: 'comment',
     build: () => buildComment({ author: 'Alice', body: 'Great post!', avatar_initial: 'A' }),

@@ -43,6 +43,7 @@ export { buildSelect, type SelectParams } from './select.js';
 export { buildChartLine, type ChartLineParams } from './chart-line.js';
 export { buildChartPie, type ChartPieParams } from './chart-pie.js';
 export { buildImagePlaceholder, type ImagePlaceholderParams } from './image-placeholder.js';
+export { buildVideoPlaceholder, type VideoPlaceholderParams } from './video-placeholder.js';
 export { buildComment, type CommentParams } from './comment.js';
 export { buildModalShell, type ModalShellParams } from './modal-shell.js';
 export { buildStatusBadge, type StatusBadgeParams, type StatusBadgeTone } from './status-badge.js';
