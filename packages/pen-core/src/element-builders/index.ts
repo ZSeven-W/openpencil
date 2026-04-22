@@ -79,3 +79,4 @@ export {
   type ModalShellV1Params,
   type ModalShellV1Theme,
 } from './modal-shell-v1.js';
+export { buildUploadDropzone, type UploadDropzoneParams } from './upload-dropzone.js';

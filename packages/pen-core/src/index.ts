@@ -250,6 +250,7 @@ export {
   buildActionMenu,
   buildDatePicker,
   buildModalShellV1,
+  buildUploadDropzone,
   cjkFontFamily,
   detectCjkScript,
   type ElementTree,
@@ -333,4 +334,5 @@ export {
   type DatePickerParams,
   type ModalShellV1Params,
   type ModalShellV1Theme,
+  type UploadDropzoneParams,
 } from './element-builders/index.js';

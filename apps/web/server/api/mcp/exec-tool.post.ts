@@ -34,6 +34,7 @@ import {
   buildVideoPlaceholder,
   buildModalShell,
   buildModalShellV1,
+  buildUploadDropzone,
   buildKbd,
   buildLink,
   buildListRow,
@@ -188,6 +189,8 @@ const SERVER_BUILDERS: Record<string, BuilderFn> = {
   add_action_menu_v0: (a) => buildActionMenu(a as Parameters<typeof buildActionMenu>[0]),
   add_date_picker_v0: (a) => buildDatePicker(a as Parameters<typeof buildDatePicker>[0]),
   add_modal_shell_v1: (a) => buildModalShellV1(a as Parameters<typeof buildModalShellV1>[0]),
+  add_upload_dropzone_v0: (a) =>
+    buildUploadDropzone(a as Parameters<typeof buildUploadDropzone>[0]),
 };
 
 interface ExecToolBody {

@@ -52,6 +52,7 @@ import {
   buildVideoPlaceholder,
   buildModalShell,
   buildModalShellV1,
+  buildUploadDropzone,
   buildKbd,
   buildLink,
   buildListRow,
@@ -116,6 +117,7 @@ import {
   type VideoPlaceholderParams,
   type ModalShellParams,
   type ModalShellV1Params,
+  type UploadDropzoneParams,
   type KbdParams,
   type LinkParams,
   type ListRowParams,
@@ -299,6 +301,7 @@ export const ELEMENT_SHIMS: Record<string, ElementShim> = {
   add_action_menu_v0: wrap<ActionMenuParams>(buildActionMenu),
   add_date_picker_v0: wrap<DatePickerParams>(buildDatePicker),
   add_modal_shell_v1: wrap<ModalShellV1Params>(buildModalShellV1),
+  add_upload_dropzone_v0: wrap<UploadDropzoneParams>(buildUploadDropzone),
 };
 
 export function getElementShim(name: string): ElementShim | undefined {
