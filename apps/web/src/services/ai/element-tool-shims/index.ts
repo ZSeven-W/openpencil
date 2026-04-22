@@ -39,6 +39,7 @@ import {
   buildDivider,
   buildEmptyState,
   buildFab,
+  buildFaqItem,
   buildFormField,
   buildHeading,
   buildIconButton,
@@ -97,6 +98,7 @@ import {
   type ElementTree,
   type EmptyStateParams,
   type FabParams,
+  type FaqItemParams,
   type FormFieldParams,
   type HeadingParams,
   type IconButtonParams,
@@ -281,6 +283,7 @@ export const ELEMENT_SHIMS: Record<string, ElementShim> = {
   add_timeline_v0: wrap<TimelineParams>(buildTimeline),
   add_calendar_grid_v0: wrap<CalendarGridParams>(buildCalendarGrid),
   add_pagination_v0: wrap<PaginationParams>(buildPagination),
+  add_faq_item_v0: wrap<FaqItemParams>(buildFaqItem),
 };
 
 export function getElementShim(name: string): ElementShim | undefined {

@@ -163,7 +163,11 @@ Pagination:
 
 52. Pagination bar (numbered pills + prev/next arrows, Google-style ellipses for big ranges) → `add_pagination_v0`
 
-53. None match → fall through to `batch_design`
+Collapsible content:
+
+53. FAQ / accordion item (question + chevron; expanded variant shows answer paragraph) → `add_faq_item_v0`
+
+54. None match → fall through to `batch_design`
 
 **Disambiguation**: if you need a ROW of 3 metrics that should NOT scroll (e.g. a stats strip inside a card), use `add_stat_grid_v0`, NOT `add_metric_row_v0`. The grid uses `fill_container` per cell so it never overflows; the metric row uses fixed-px cells + scroll wrapper.
 
@@ -226,6 +230,7 @@ PREFER an element tool when the spec says any of:
 - "timeline", "activity history", "vertical stepper", "时间线", "动态" → `add_timeline_v0`
 - "calendar", "date picker grid", "month view", "日历" → `add_calendar_grid_v0`
 - "pagination", "page nav", "page numbers", "prev/next pages", "分页", "分页条" → `add_pagination_v0`
+- "FAQ", "accordion", "collapsible item", "Q&A", "expandable row", "常见问题", "折叠面板" → `add_faq_item_v0`
 
 STILL use batch_design when:
 
@@ -422,6 +427,9 @@ add_calendar_grid_v0({ days_in_month: 31, start_day_offset: 2, today: 15, select
 
 add_pagination_v0({ total: 10, current: 5 })                   // 1 … 4 [5] 6 … 10
 add_pagination_v0({ total: 3, current: 1, show_arrows: false })  // no prev/next
+
+add_faq_item_v0({ question: "Can I cancel anytime?" })                                 // collapsed
+add_faq_item_v0({ question: "How do refunds work?", answer: "Email billing@…", expanded: true })
 ```
 
 ## Composition pattern

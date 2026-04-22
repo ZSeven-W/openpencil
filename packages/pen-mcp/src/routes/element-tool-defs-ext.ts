@@ -1064,6 +1064,40 @@ export const ELEMENT_TOOL_DEFINITIONS_EXT = [
     },
   },
   {
+    name: 'add_faq_item_v0',
+    description:
+      'FAQ / accordion item — ONE question row in a frequently-asked list. Collapsed (expanded=false, ' +
+      'default): shows header only (bold question + chevron-right). Expanded (expanded=true): shows ' +
+      'header (chevron-down) + answer paragraph below. Caller stacks multiple items in a vertical parent ' +
+      'to build the full list; set show_divider=true for 1px hairline below each row. Use for "FAQ", ' +
+      '"accordion", "collapsible item", "expandable section", "Q&A", "常见问题", "折叠面板". ' +
+      'schemaVersion 1.0',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        schemaVersion: schemaVersionProp,
+        filePath: filePathProp,
+        question: { type: 'string', description: 'Question text (bold, shown in header)' },
+        answer: {
+          type: 'string',
+          description: 'Answer paragraph (only rendered when expanded=true)',
+        },
+        expanded: {
+          type: 'boolean',
+          description: 'When true, renders expanded with answer + chevron-down (default false)',
+        },
+        show_divider: {
+          type: 'boolean',
+          description:
+            'When true, appends a 1px slate-200 divider rect inside the row (default false)',
+        },
+        parent_id: parentIdProp,
+        pageId: pageIdProp,
+      },
+      required: ['question'],
+    },
+  },
+  {
     name: 'add_pagination_v0',
     description:
       'Pagination bar for list/table footers: row of page-number pills flanked by optional prev/next ' +
