@@ -44,6 +44,7 @@ import {
   buildSelect,
   buildSkeleton,
   buildStatGrid,
+  buildStatusBadge,
   buildStepper,
   buildSwitch,
   buildTabs,
@@ -183,6 +184,7 @@ const CASES: BuilderCase[] = [
     build: () => buildComment({ author: 'Alice', body: 'Great post!', avatar_initial: 'A' }),
   },
   { name: 'modal-shell', build: () => buildModalShell({ title: 'Confirm' }) },
+  { name: 'status-badge', build: () => buildStatusBadge({ label: 'Online', tone: 'success' }) },
   { name: 'chart-bars', build: () => buildChartBars({ values: [4, 7, 3, 9, 5] }) },
   {
     name: 'empty-state',

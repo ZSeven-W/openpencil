@@ -129,6 +129,10 @@ Chrome / modals:
 
 46. Modal dialog shell (dimmed backdrop + centered card + title — body composed separately) → `add_modal_shell_v0`
 
+Status / presence:
+
+47. Status badge (small colored dot + short label, "● Online" pattern, tone-enum'd) → `add_status_badge_v0`
+
 Activity / history:
 
 41. Vertical timeline (dots + fixed 24px connectors + content; no padding/gap) → `add_timeline_v0`
@@ -176,6 +180,7 @@ PREFER an element tool when the spec says any of:
 - "image placeholder", "photo slot", "upload zone", "hero image area", "cover placeholder", "图片占位" → `add_image_placeholder_v0`
 - "comment", "reply", "feedback row", "review row", "评论" → `add_comment_v0`
 - "modal", "dialog", "popup", "confirm dialog", "模态框", "弹窗" → `add_modal_shell_v0`
+- "status", "online indicator", "presence dot", "health status", "busy indicator", "状态", "在线" → `add_status_badge_v0`
 - "toggle", "switch", "on/off", "开关" → `add_switch_v0`
 - "checkbox", "agreement", "select option", "复选框" → `add_checkbox_v0`
 - "radio", "single choice", "单选" → `add_radio_v0` (stack multiple in a vertical parent)
@@ -313,6 +318,8 @@ add_chart_pie_v0({ values: [1, 1, 1, 1], inner_radius_ratio: 0.5 })  // donut
 add_image_placeholder_v0({ width: 320, height: 200, label: "Upload cover" })
 add_comment_v0({ author: "Sarah", timestamp: "2h ago", body: "Looks great!", avatar_initial: "S" })
 add_modal_shell_v0({ title: "Confirm delete", subtitle: "This cannot be undone." })
+add_status_badge_v0({ label: "Online", tone: "success" })
+add_status_badge_v0({ label: "Degraded", tone: "warning" })
 
 add_switch_v0({})                          // off (default)
 add_switch_v0({ active: true })             // on — iOS green
