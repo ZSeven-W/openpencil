@@ -19,6 +19,7 @@
 
 import {
   assignIdsRecursively,
+  buildActionMenu,
   buildActivityRing,
   buildAlert,
   buildAvatar,
@@ -79,6 +80,7 @@ import {
   buildToast,
   buildTooltip,
   buildTopNavBar,
+  type ActionMenuParams,
   type ActivityRingParams,
   type AlertParams,
   type AvatarParams,
@@ -290,6 +292,7 @@ export const ELEMENT_SHIMS: Record<string, ElementShim> = {
   add_faq_item_v0: wrap<FaqItemParams>(buildFaqItem),
   add_chip_input_v0: wrap<ChipInputParams>(buildChipInput),
   add_empty_chart_v0: wrap<EmptyChartParams>(buildEmptyChart),
+  add_action_menu_v0: wrap<ActionMenuParams>(buildActionMenu),
 };
 
 export function getElementShim(name: string): ElementShim | undefined {

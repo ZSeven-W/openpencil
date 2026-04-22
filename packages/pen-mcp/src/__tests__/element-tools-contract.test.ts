@@ -69,6 +69,7 @@ const ELEMENT_TOOL_NAMES = [
   'add_faq_item_v0',
   'add_chip_input_v0',
   'add_empty_chart_v0',
+  'add_action_menu_v0',
 ];
 
 describe('element tools — v0-MUST contract', () => {

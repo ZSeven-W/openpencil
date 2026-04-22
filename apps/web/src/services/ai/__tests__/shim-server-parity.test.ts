@@ -8,6 +8,7 @@ vi.mock('@/canvas/canvas-text-measure', () => ({
 }));
 
 import {
+  buildActionMenu,
   buildActivityRing,
   buildAlert,
   buildAvatar,
@@ -416,6 +417,17 @@ const CASES: BuilderCase[] = [
     toolName: 'add_empty_chart_v0',
     args: { width: 320, height: 200, icon: 'line-chart', title: 'No data yet' },
     build: (a) => buildEmptyChart(a as unknown as Parameters<typeof buildEmptyChart>[0]),
+  },
+  {
+    toolName: 'add_action_menu_v0',
+    args: {
+      items: [
+        { label: 'Edit', icon: 'pencil' },
+        { label: 'Share', icon: 'share' },
+        { label: 'Delete', icon: 'trash', destructive: true, divider_before: true },
+      ],
+    },
+    build: (a) => buildActionMenu(a as unknown as Parameters<typeof buildActionMenu>[0]),
   },
 ];
 
