@@ -81,3 +81,4 @@ export {
 } from './modal-shell-v1.js';
 export { buildUploadDropzone, type UploadDropzoneParams } from './upload-dropzone.js';
 export { buildOtpInput, type OtpInputParams } from './otp-input.js';
+export { buildAttachmentRow, type AttachmentRowParams } from './attachment-row.js';

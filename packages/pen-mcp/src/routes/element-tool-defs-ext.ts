@@ -628,4 +628,41 @@ export const ELEMENT_TOOL_DEFINITIONS_EXT = [
       required: [],
     },
   },
+  {
+    name: 'add_attachment_row_v0',
+    description:
+      'File attachment row — compact list unit: type-icon + filename (bold) + optional size (muted) + ' +
+      'optional removable × affordance. Pattern from email composers, chat attachments, form upload ' +
+      "summaries. Caller picks the `icon` from lucide's file-* set (file / file-text / file-image / " +
+      'file-video / file-audio / file-archive / file-spreadsheet / file-code) so the row reads ' +
+      'semantically. For upload-in-progress state, compose `add_progress_bar_v0` directly below this ' +
+      'row — the attachment builder intentionally stays focused on the 95% static case. Use for ' +
+      '"attached file", "uploaded file", "file item", "message attachment", "附件", "已上传文件". ' +
+      'schemaVersion 1.0',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        schemaVersion: schemaVersionProp,
+        filePath: filePathProp,
+        filename: { type: 'string', description: 'File name (bold, left-aligned)' },
+        size: {
+          type: 'string',
+          description:
+            'Optional size label (e.g. "1.2 MB", "340 KB"); rendered muted below the filename',
+        },
+        icon: {
+          type: 'string',
+          description:
+            'Lucide file-* icon name (default "file"; try file-text / file-image / file-video / file-code)',
+        },
+        removable: {
+          type: 'boolean',
+          description: 'When true (default), appends a right-side × icon for the remove affordance',
+        },
+        parent_id: parentIdProp,
+        pageId: pageIdProp,
+      },
+      required: ['filename'],
+    },
+  },
 ];
