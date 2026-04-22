@@ -55,6 +55,7 @@ import {
   buildUploadDropzone,
   buildOtpInput,
   buildAttachmentRow,
+  buildChatBubble,
   buildKbd,
   buildLink,
   buildListRow,
@@ -122,6 +123,7 @@ import {
   type UploadDropzoneParams,
   type OtpInputParams,
   type AttachmentRowParams,
+  type ChatBubbleParams,
   type KbdParams,
   type LinkParams,
   type ListRowParams,
@@ -308,6 +310,7 @@ export const ELEMENT_SHIMS: Record<string, ElementShim> = {
   add_upload_dropzone_v0: wrap<UploadDropzoneParams>(buildUploadDropzone),
   add_otp_input_v0: wrap<OtpInputParams>(buildOtpInput),
   add_attachment_row_v0: wrap<AttachmentRowParams>(buildAttachmentRow),
+  add_chat_bubble_v0: wrap<ChatBubbleParams>(buildChatBubble),
 };
 
 export function getElementShim(name: string): ElementShim | undefined {

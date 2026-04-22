@@ -196,7 +196,11 @@ Attachments:
 
 60. File attachment row (type-icon + filename + optional size + remove ×) → `add_attachment_row_v0`
 
-61. None match → fall through to `batch_design`
+Messaging:
+
+61. Chat message bubble (left=from-others slate bg / right=from-self accent bg; optional author + timestamp) → `add_chat_bubble_v0`
+
+62. None match → fall through to `batch_design`
 
 **Disambiguation**: if you need a ROW of 3 metrics that should NOT scroll (e.g. a stats strip inside a card), use `add_stat_grid_v0`, NOT `add_metric_row_v0`. The grid uses `fill_container` per cell so it never overflows; the metric row uses fixed-px cells + scroll wrapper.
 
@@ -268,6 +272,7 @@ PREFER an element tool when the spec says any of:
 - "upload", "drop files here", "drag and drop", "file picker", "dropzone", "upload area", "上传区", "文件拖放" → `add_upload_dropzone_v0` (visually similar to empty-chart but semantically different — pick by intent)
 - "OTP", "PIN code", "verification code", "2FA code", "6-digit code", "enter code", "验证码", "PIN 码" → `add_otp_input_v0`
 - "attachment", "attached file", "uploaded file", "file item", "file list row", "附件", "已上传文件" → `add_attachment_row_v0` (for upload-in-progress state, compose `add_progress_bar_v0` below)
+- "chat message", "message bubble", "conversation row", "iMessage bubble", "chat UI", "聊天气泡", "消息气泡" → `add_chat_bubble_v0` (side="left" for from-others, side="right" for from-self)
 
 STILL use batch_design when:
 
@@ -497,6 +502,9 @@ add_otp_input_v0({ length: 4, digits: ["1","2","3","4"] })                      
 
 add_attachment_row_v0({ filename: "report.pdf", size: "1.2 MB", icon: "file-text" })
 add_attachment_row_v0({ filename: "sealed.zip", icon: "file-archive", removable: false })
+
+add_chat_bubble_v0({ message: "Hi! How can I help?", author: "Support", timestamp: "Just now" })  // left (from-others)
+add_chat_bubble_v0({ message: "My order hasn't arrived.", side: "right", timestamp: "2m" })      // right (from-self)
 ```
 
 ## Composition pattern

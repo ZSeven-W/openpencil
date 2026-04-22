@@ -82,3 +82,4 @@ export {
 export { buildUploadDropzone, type UploadDropzoneParams } from './upload-dropzone.js';
 export { buildOtpInput, type OtpInputParams } from './otp-input.js';
 export { buildAttachmentRow, type AttachmentRowParams } from './attachment-row.js';
+export { buildChatBubble, type ChatBubbleParams, type ChatBubbleSide } from './chat-bubble.js';
