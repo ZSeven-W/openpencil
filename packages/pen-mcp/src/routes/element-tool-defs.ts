@@ -73,6 +73,7 @@ import { handleAddTimelineV0 } from '../tools/add-timeline-v0';
 import { handleAddCalendarGridV0 } from '../tools/add-calendar-grid-v0';
 import { handleAddPaginationV0 } from '../tools/add-pagination-v0';
 import { handleAddFaqItemV0 } from '../tools/add-faq-item-v0';
+import { handleAddChipInputV0 } from '../tools/add-chip-input-v0';
 import { ELEMENT_TOOL_DEFINITIONS_BASE } from './element-tool-defs-base';
 import { ELEMENT_TOOL_DEFINITIONS_EXT } from './element-tool-defs-ext';
 
@@ -204,6 +205,8 @@ export async function handleElementToolCall(name: string, a: any): Promise<strin
       return JSON.stringify(await handleAddPaginationV0(a), null, 2);
     case 'add_faq_item_v0':
       return JSON.stringify(await handleAddFaqItemV0(a), null, 2);
+    case 'add_chip_input_v0':
+      return JSON.stringify(await handleAddChipInputV0(a), null, 2);
     default:
       return '';
   }
