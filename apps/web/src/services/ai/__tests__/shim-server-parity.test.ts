@@ -27,6 +27,7 @@ import {
   buildCodeBlock,
   buildColorSwatch,
   buildDivider,
+  buildEmptyChart,
   buildEmptyState,
   buildFab,
   buildFaqItem,
@@ -410,6 +411,11 @@ const CASES: BuilderCase[] = [
     toolName: 'add_chip_input_v0',
     args: { label: 'Tags', chips: ['design', 'mobile'], placeholder: 'Add tag…' },
     build: (a) => buildChipInput(a as unknown as Parameters<typeof buildChipInput>[0]),
+  },
+  {
+    toolName: 'add_empty_chart_v0',
+    args: { width: 320, height: 200, icon: 'line-chart', title: 'No data yet' },
+    build: (a) => buildEmptyChart(a as unknown as Parameters<typeof buildEmptyChart>[0]),
   },
 ];
 

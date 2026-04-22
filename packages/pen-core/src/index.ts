@@ -233,6 +233,7 @@ export {
   buildPagination,
   buildFaqItem,
   buildChipInput,
+  buildEmptyChart,
   cjkFontFamily,
   detectCjkScript,
   type ElementTree,
@@ -310,4 +311,5 @@ export {
   type PaginationParams,
   type FaqItemParams,
   type ChipInputParams,
+  type EmptyChartParams,
 } from './element-builders/index.js';

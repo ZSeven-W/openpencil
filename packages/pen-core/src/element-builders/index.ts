@@ -71,3 +71,4 @@ export { buildCalendarGrid, type CalendarGridParams } from './calendar-grid.js';
 export { buildPagination, type PaginationParams } from './pagination.js';
 export { buildFaqItem, type FaqItemParams } from './faq-item.js';
 export { buildChipInput, type ChipInputParams } from './chip-input.js';
+export { buildEmptyChart, type EmptyChartParams } from './empty-chart.js';

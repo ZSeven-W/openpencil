@@ -20,6 +20,7 @@ import {
   buildCodeBlock,
   buildColorSwatch,
   buildDivider,
+  buildEmptyChart,
   buildEmptyState,
   buildFab,
   buildFaqItem,
@@ -180,6 +181,7 @@ const SERVER_BUILDERS: Record<string, BuilderFn> = {
   add_pagination_v0: (a) => buildPagination(a as Parameters<typeof buildPagination>[0]),
   add_faq_item_v0: (a) => buildFaqItem(a as Parameters<typeof buildFaqItem>[0]),
   add_chip_input_v0: (a) => buildChipInput(a as Parameters<typeof buildChipInput>[0]),
+  add_empty_chart_v0: (a) => buildEmptyChart(a as Parameters<typeof buildEmptyChart>[0]),
 };
 
 interface ExecToolBody {
