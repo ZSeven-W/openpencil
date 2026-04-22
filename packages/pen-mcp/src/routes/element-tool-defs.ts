@@ -76,6 +76,7 @@ import { handleAddFaqItemV0 } from '../tools/add-faq-item-v0';
 import { handleAddChipInputV0 } from '../tools/add-chip-input-v0';
 import { handleAddEmptyChartV0 } from '../tools/add-empty-chart-v0';
 import { handleAddActionMenuV0 } from '../tools/add-action-menu-v0';
+import { handleAddDatePickerV0 } from '../tools/add-date-picker-v0';
 import { ELEMENT_TOOL_DEFINITIONS_BASE } from './element-tool-defs-base';
 import { ELEMENT_TOOL_DEFINITIONS_EXT } from './element-tool-defs-ext';
 
@@ -213,6 +214,8 @@ export async function handleElementToolCall(name: string, a: any): Promise<strin
       return JSON.stringify(await handleAddEmptyChartV0(a), null, 2);
     case 'add_action_menu_v0':
       return JSON.stringify(await handleAddActionMenuV0(a), null, 2);
+    case 'add_date_picker_v0':
+      return JSON.stringify(await handleAddDatePickerV0(a), null, 2);
     default:
       return '';
   }

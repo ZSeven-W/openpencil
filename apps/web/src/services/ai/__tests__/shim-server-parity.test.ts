@@ -27,6 +27,7 @@ import {
   buildComment,
   buildCodeBlock,
   buildColorSwatch,
+  buildDatePicker,
   buildDivider,
   buildEmptyChart,
   buildEmptyState,
@@ -428,6 +429,11 @@ const CASES: BuilderCase[] = [
       ],
     },
     build: (a) => buildActionMenu(a as unknown as Parameters<typeof buildActionMenu>[0]),
+  },
+  {
+    toolName: 'add_date_picker_v0',
+    args: { label: 'Due date', value: 'Jan 15, 2026', clearable: true },
+    build: (a) => buildDatePicker(a as unknown as Parameters<typeof buildDatePicker>[0]),
   },
 ];
 

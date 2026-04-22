@@ -1064,6 +1064,44 @@ export const ELEMENT_TOOL_DEFINITIONS_EXT = [
     },
   },
   {
+    name: 'add_date_picker_v0',
+    description:
+      'Date picker closed state — labeled input showing the selected date (or placeholder) plus a ' +
+      'trailing calendar icon. Emits ONLY the closed trigger shape; for the open month-view panel ' +
+      'use add_calendar_grid_v0 (typically shown inside a popover, not stacked directly below). ' +
+      'Set `value` to render the populated state (slate-900 text); omit for placeholder state ' +
+      '(slate-400 text). Set `clearable: true` to render a small X affordance when value is present ' +
+      '(clear does nothing in static design; it signals the interaction shape). Use for "date picker", ' +
+      '"date input", "date field", "picker closed", "日期选择器", "日期输入". schemaVersion 1.0',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        schemaVersion: schemaVersionProp,
+        filePath: filePathProp,
+        label: { type: 'string', description: 'Field label shown above the input' },
+        value: {
+          type: 'string',
+          description: 'Selected date text (e.g. "Jan 15, 2026"). Omit for placeholder state.',
+        },
+        placeholder: {
+          type: 'string',
+          description: 'Placeholder shown when value is empty (default "Select date")',
+        },
+        required: {
+          type: 'boolean',
+          description: 'When true, appends " *" to the label',
+        },
+        clearable: {
+          type: 'boolean',
+          description: 'When true + value present, renders an X clear affordance (default false)',
+        },
+        parent_id: parentIdProp,
+        pageId: pageIdProp,
+      },
+      required: ['label'],
+    },
+  },
+  {
     name: 'add_action_menu_v0',
     description:
       'Action / context menu panel — the floating card that drops from a "⋯ more" button or appears on ' +

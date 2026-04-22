@@ -235,6 +235,7 @@ export {
   buildChipInput,
   buildEmptyChart,
   buildActionMenu,
+  buildDatePicker,
   cjkFontFamily,
   detectCjkScript,
   type ElementTree,
@@ -315,4 +316,5 @@ export {
   type EmptyChartParams,
   type ActionMenuItem,
   type ActionMenuParams,
+  type DatePickerParams,
 } from './element-builders/index.js';
