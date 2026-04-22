@@ -28,6 +28,7 @@ import {
   buildDivider,
   buildEmptyState,
   buildFab,
+  buildFaqItem,
   buildFormField,
   buildHeading,
   buildIconButton,
@@ -398,6 +399,11 @@ const CASES: BuilderCase[] = [
     toolName: 'add_pagination_v0',
     args: { total: 10, current: 5 },
     build: (a) => buildPagination(a as unknown as Parameters<typeof buildPagination>[0]),
+  },
+  {
+    toolName: 'add_faq_item_v0',
+    args: { question: 'How do I cancel?', answer: 'Email support.', expanded: true },
+    build: (a) => buildFaqItem(a as unknown as Parameters<typeof buildFaqItem>[0]),
   },
 ];
 

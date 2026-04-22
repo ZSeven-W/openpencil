@@ -69,3 +69,4 @@ export { buildChartBars, type ChartBarsParams } from './chart-bars.js';
 export { buildTimeline, type TimelineItem, type TimelineParams } from './timeline.js';
 export { buildCalendarGrid, type CalendarGridParams } from './calendar-grid.js';
 export { buildPagination, type PaginationParams } from './pagination.js';
+export { buildFaqItem, type FaqItemParams } from './faq-item.js';
