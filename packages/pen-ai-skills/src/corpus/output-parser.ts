@@ -15,7 +15,10 @@ import type { ParsedOutput } from './types';
  */
 const OP_TOOL_RE_G = /<op_tool>\s*([\s\S]*?)\s*<\/op_tool>/g;
 
-const ELEMENT_TOOL_NAME_RE = /^add_[a-z_]+_v0$/;
+// Accepts any numeric version suffix (_v0, _v1, …). The family
+// currently ships v0 (byte-parity, hex literals) and v1 (theme-
+// aware with $color-* refs). Future _v2+ lands here automatically.
+const ELEMENT_TOOL_NAME_RE = /^add_[a-z_]+_v\d+$/;
 
 /**
  * Reasoning-model chain-of-thought wrapper. MiniMax M-series,

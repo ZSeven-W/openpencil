@@ -37,10 +37,10 @@ describe('get_design_prompt — elements section', () => {
     const def = DESIGN_TOOL_DEFINITIONS.find((t) => t.name === 'get_design_prompt');
     const description = def?.description ?? '';
     const elementTools = DESIGN_TOOL_DEFINITIONS.map((t) => t.name).filter((n) =>
-      /^add_.*_v0$/.test(n),
+      /^add_.*_v\d+$/.test(n),
     );
     // (1) any element-tool name that DOES appear must be in the registry
-    const namedInDescription = description.match(/add_[a-z_]+_v0/g) ?? [];
+    const namedInDescription = description.match(/add_[a-z_]+_v\d+/g) ?? [];
     for (const named of namedInDescription) {
       expect(elementTools, `description references ${named} which is not in registry`).toContain(
         named,
@@ -76,7 +76,7 @@ describe('get_design_prompt — elements section', () => {
     // such tool MUST be mentioned in the elements skill content.
     const content = buildDesignPrompt('elements');
     const elementTools = DESIGN_TOOL_DEFINITIONS.map((t) => t.name).filter((n) =>
-      /^add_.*_v0$/.test(n),
+      /^add_.*_v\d+$/.test(n),
     );
     expect(elementTools.length).toBeGreaterThan(0);
     for (const n of elementTools) {
