@@ -29,8 +29,10 @@ import {
   buildKbd,
   buildLink,
   buildListRow,
+  buildMetricComparison,
   buildMetricRow,
   buildNavChipRow,
+  buildNotificationRow,
   buildPrice,
   buildProgressBar,
   buildQuoteBlock,
@@ -171,6 +173,21 @@ const CASES: PerfCase[] = [
   { name: 'status-badge', build: () => buildStatusBadge({ label: 'Online', tone: 'success' }) },
   { name: 'spinner', build: () => buildSpinner({}) },
   { name: 'tooltip', build: () => buildTooltip({ text: 'Help' }) },
+  {
+    name: 'metric-comparison',
+    build: () =>
+      buildMetricComparison({ label: 'Revenue', value: '$12k', change: '8%', trend: 'up' }),
+  },
+  {
+    name: 'notification-row',
+    build: () =>
+      buildNotificationRow({
+        title: 'New follower',
+        body: 'Alice is now following you.',
+        timestamp: '2m',
+        unread: true,
+      }),
+  },
   { name: 'chart-bars', build: () => buildChartBars({ values: [4, 7, 3, 9, 5, 8] }) },
   {
     name: 'empty-state',

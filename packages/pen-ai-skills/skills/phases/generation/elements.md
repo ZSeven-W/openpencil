@@ -138,6 +138,14 @@ Feedback / loading:
 48. Loading spinner (static ring + 3/4 arc) → `add_spinner_v0`
 49. Tooltip pill (dark pill + white text, hover-hint appearance) → `add_tooltip_v0`
 
+Analytics / KPIs:
+
+50. KPI cell with trend arrow + change ("$12k ↑ 8%") → `add_metric_comparison_v0`
+
+Notifications:
+
+51. Notification list row (icon + title/timestamp header + optional body preview + optional unread dot) → `add_notification_row_v0`
+
 Activity / history:
 
 41. Vertical timeline (dots + fixed 24px connectors + content; no padding/gap) → `add_timeline_v0`
@@ -329,6 +337,8 @@ add_status_badge_v0({ label: "Online", tone: "success" })
 add_status_badge_v0({ label: "Degraded", tone: "warning" })
 add_spinner_v0({ size: 40 })
 add_tooltip_v0({ text: "Click to delete" })
+add_metric_comparison_v0({ label: "Revenue", value: "$12,480", change: "8%", trend: "up" })
+add_notification_row_v0({ title: "New follower", body: "Alice started following you.", timestamp: "2m", unread: true, icon: "user-plus" })
 
 add_switch_v0({})                          // off (default)
 add_switch_v0({ active: true })             // on — iOS green

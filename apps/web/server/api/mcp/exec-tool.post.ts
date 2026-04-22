@@ -30,8 +30,10 @@ import {
   buildKbd,
   buildLink,
   buildListRow,
+  buildMetricComparison,
   buildMetricRow,
   buildNavChipRow,
+  buildNotificationRow,
   buildPrice,
   buildProgressBar,
   buildQuoteBlock,
@@ -152,6 +154,10 @@ const SERVER_BUILDERS: Record<string, BuilderFn> = {
   add_status_badge_v0: (a) => buildStatusBadge(a as Parameters<typeof buildStatusBadge>[0]),
   add_spinner_v0: (a) => buildSpinner(a as Parameters<typeof buildSpinner>[0]),
   add_tooltip_v0: (a) => buildTooltip(a as Parameters<typeof buildTooltip>[0]),
+  add_metric_comparison_v0: (a) =>
+    buildMetricComparison(a as Parameters<typeof buildMetricComparison>[0]),
+  add_notification_row_v0: (a) =>
+    buildNotificationRow(a as Parameters<typeof buildNotificationRow>[0]),
   add_nav_chip_row_v0: (a) => buildNavChipRow(a as Parameters<typeof buildNavChipRow>[0]),
   add_activity_ring_v0: (a) => buildActivityRing(a as Parameters<typeof buildActivityRing>[0]),
   add_rating_stars_v0: (a) => buildRatingStars(a as Parameters<typeof buildRatingStars>[0]),
