@@ -33,6 +33,7 @@ import {
   buildIconButton,
   buildIconLabel,
   buildImagePlaceholder,
+  buildVideoPlaceholder,
   buildModalShell,
   buildKbd,
   buildLink,
@@ -279,6 +280,12 @@ const CASES: BuilderCase[] = [
     args: { width: 200, height: 140, label: 'Upload' },
     build: (a) =>
       buildImagePlaceholder(a as unknown as Parameters<typeof buildImagePlaceholder>[0]),
+  },
+  {
+    toolName: 'add_video_placeholder_v0',
+    args: { width: 320, height: 180, label: 'Coming soon' },
+    build: (a) =>
+      buildVideoPlaceholder(a as unknown as Parameters<typeof buildVideoPlaceholder>[0]),
   },
   {
     toolName: 'add_comment_v0',
