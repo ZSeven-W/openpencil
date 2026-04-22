@@ -230,6 +230,7 @@ export {
   buildChartBars,
   buildTimeline,
   buildCalendarGrid,
+  buildPagination,
   cjkFontFamily,
   detectCjkScript,
   type ElementTree,
@@ -304,4 +305,5 @@ export {
   type TimelineItem,
   type TimelineParams,
   type CalendarGridParams,
+  type PaginationParams,
 } from './element-builders/index.js';
