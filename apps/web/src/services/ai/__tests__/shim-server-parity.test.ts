@@ -43,6 +43,7 @@ import {
   buildModalShellV1,
   buildUploadDropzone,
   buildOtpInput,
+  buildAttachmentRow,
   buildKbd,
   buildLink,
   buildListRow,
@@ -452,6 +453,11 @@ const CASES: BuilderCase[] = [
     toolName: 'add_otp_input_v0',
     args: { length: 6, digits: ['1', '2', '3'], focused_index: 3 },
     build: (a) => buildOtpInput(a as unknown as Parameters<typeof buildOtpInput>[0]),
+  },
+  {
+    toolName: 'add_attachment_row_v0',
+    args: { filename: 'report.pdf', size: '1.2 MB', icon: 'file-text' },
+    build: (a) => buildAttachmentRow(a as unknown as Parameters<typeof buildAttachmentRow>[0]),
   },
 ];
 
