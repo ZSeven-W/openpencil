@@ -1064,6 +1064,49 @@ export const ELEMENT_TOOL_DEFINITIONS_EXT = [
     },
   },
   {
+    name: 'add_action_menu_v0',
+    description:
+      'Action / context menu panel — the floating card that drops from a "⋯ more" button or appears on ' +
+      'right-click. Emits the OPEN state: vertical stack of padded rows (optional leading icon + ' +
+      'label), white card with subtle stroke + shadow. Mark items with destructive=true to render ' +
+      'red (e.g. "Delete"); use divider_before=true on an item to separate groups (like the "Share / ' +
+      'Report / Delete" grouping). Positioning and show/hide animation are caller concerns. Use for ' +
+      '"context menu", "dropdown menu", "more menu", "kebab menu", "action sheet", "下拉菜单", "操作菜单". ' +
+      'schemaVersion 1.0',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        schemaVersion: schemaVersionProp,
+        filePath: filePathProp,
+        items: {
+          type: 'array',
+          description:
+            'Menu items. Each needs `label`; `icon` + `destructive` + `divider_before` optional.',
+          items: {
+            type: 'object',
+            properties: {
+              label: { type: 'string' },
+              icon: { type: 'string', description: 'Optional lucide icon name' },
+              destructive: {
+                type: 'boolean',
+                description: 'When true, label and icon render red (for Delete / Remove)',
+              },
+              divider_before: {
+                type: 'boolean',
+                description: 'When true, draws a 1px divider ABOVE this item (group boundary)',
+              },
+            },
+            required: ['label'],
+          },
+        },
+        width: { type: 'number', description: 'Panel width in px (default 200, min 140)' },
+        parent_id: parentIdProp,
+        pageId: pageIdProp,
+      },
+      required: ['items'],
+    },
+  },
+  {
     name: 'add_empty_chart_v0',
     description:
       'Empty-state placeholder for a chart widget — a dashed-border tile in the same footprint as the ' +

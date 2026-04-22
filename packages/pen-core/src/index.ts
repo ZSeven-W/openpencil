@@ -234,6 +234,7 @@ export {
   buildFaqItem,
   buildChipInput,
   buildEmptyChart,
+  buildActionMenu,
   cjkFontFamily,
   detectCjkScript,
   type ElementTree,
@@ -312,4 +313,6 @@ export {
   type FaqItemParams,
   type ChipInputParams,
   type EmptyChartParams,
+  type ActionMenuItem,
+  type ActionMenuParams,
 } from './element-builders/index.js';
