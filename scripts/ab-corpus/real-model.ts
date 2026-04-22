@@ -65,14 +65,21 @@ export async function realModelCall(call: ModelCall): Promise<string> {
   if (/^(gpt-|o1|o3|o4)/i.test(model)) {
     return callCodex({ model, system: built.system, user });
   }
-  if (/^glm-5\.1/i.test(model)) {
+  // Anchored match: `glm-5.1`, `glm-5.1-coding`, `glm-5.1-ark`.
+  // Without `$` + suffix allowlist, `glm-5.10` (a hypothetical later
+  // minor) would prefix-match and wrongly route here.
+  if (/^glm-5\.1(-coding|-ark)?$/i.test(model)) {
     return callArk({
       model: mapGlmArkId(model),
       system: built.system,
       user,
     });
   }
-  if (/^kimi-k2\.6/i.test(model)) {
+  // Match both `kimi-k2.6` (canonical) and `kimi-2.6` (no-prefix
+  // alias). Without the optional `k` the alias falls through to the
+  // generic `/^kimi/i` branch below and wrongly lands on Bailian
+  // (which doesn't serve K2.6). Trailing `-ark` suffix also allowed.
+  if (/^kimi-k?2\.6(-ark)?$/i.test(model)) {
     return callArk({
       model: mapKimiArkId(model),
       system: built.system,
@@ -132,8 +139,15 @@ function mapGlmArkId(id: string): string {
 function mapKimiArkId(id: string): string {
   // 方舟 CP exposes Moonshot Kimi K2.6 on the coding-plan endpoint.
   // Volcengine accepts the promoted short name `kimi-k2.6` directly.
+  // Anything that matched the Ark router regex (kimi-k?2.6[-ark]?)
+  // normalizes to the canonical on-Ark id.
   const lower = id.toLowerCase();
-  if (lower === 'kimi-k2.6' || lower === 'kimi-2.6' || lower === 'kimi-k2.6-ark') {
+  if (
+    lower === 'kimi-k2.6' ||
+    lower === 'kimi-2.6' ||
+    lower === 'kimi-k2.6-ark' ||
+    lower === 'kimi-2.6-ark'
+  ) {
     return 'kimi-k2.6';
   }
   return id;
