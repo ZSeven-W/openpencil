@@ -73,3 +73,4 @@ export { buildFaqItem, type FaqItemParams } from './faq-item.js';
 export { buildChipInput, type ChipInputParams } from './chip-input.js';
 export { buildEmptyChart, type EmptyChartParams } from './empty-chart.js';
 export { buildActionMenu, type ActionMenuItem, type ActionMenuParams } from './action-menu.js';
+export { buildDatePicker, type DatePickerParams } from './date-picker.js';

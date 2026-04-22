@@ -20,6 +20,7 @@ import {
   buildComment,
   buildCodeBlock,
   buildColorSwatch,
+  buildDatePicker,
   buildDivider,
   buildEmptyChart,
   buildEmptyState,
@@ -184,6 +185,7 @@ const SERVER_BUILDERS: Record<string, BuilderFn> = {
   add_chip_input_v0: (a) => buildChipInput(a as Parameters<typeof buildChipInput>[0]),
   add_empty_chart_v0: (a) => buildEmptyChart(a as Parameters<typeof buildEmptyChart>[0]),
   add_action_menu_v0: (a) => buildActionMenu(a as Parameters<typeof buildActionMenu>[0]),
+  add_date_picker_v0: (a) => buildDatePicker(a as Parameters<typeof buildDatePicker>[0]),
 };
 
 interface ExecToolBody {

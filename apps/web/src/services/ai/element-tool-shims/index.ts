@@ -38,6 +38,7 @@ import {
   buildComment,
   buildCodeBlock,
   buildColorSwatch,
+  buildDatePicker,
   buildDivider,
   buildEmptyChart,
   buildEmptyState,
@@ -99,6 +100,7 @@ import {
   type CommentParams,
   type CodeBlockParams,
   type ColorSwatchParams,
+  type DatePickerParams,
   type DividerParams,
   type ElementTree,
   type EmptyChartParams,
@@ -293,6 +295,7 @@ export const ELEMENT_SHIMS: Record<string, ElementShim> = {
   add_chip_input_v0: wrap<ChipInputParams>(buildChipInput),
   add_empty_chart_v0: wrap<EmptyChartParams>(buildEmptyChart),
   add_action_menu_v0: wrap<ActionMenuParams>(buildActionMenu),
+  add_date_picker_v0: wrap<DatePickerParams>(buildDatePicker),
 };
 
 export function getElementShim(name: string): ElementShim | undefined {
