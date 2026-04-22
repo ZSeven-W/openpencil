@@ -39,6 +39,9 @@ import { handleAddSkeletonV0 } from '../tools/add-skeleton-v0';
 import { handleAddSelectV0 } from '../tools/add-select-v0';
 import { handleAddChartLineV0 } from '../tools/add-chart-line-v0';
 import { handleAddChartPieV0 } from '../tools/add-chart-pie-v0';
+import { handleAddImagePlaceholderV0 } from '../tools/add-image-placeholder-v0';
+import { handleAddCommentV0 } from '../tools/add-comment-v0';
+import { handleAddModalShellV0 } from '../tools/add-modal-shell-v0';
 import { handleAddSwitchV0 } from '../tools/add-switch-v0';
 import { handleAddCheckboxV0 } from '../tools/add-checkbox-v0';
 import { handleAddRadioV0 } from '../tools/add-radio-v0';
@@ -125,6 +128,12 @@ export async function handleElementToolCall(name: string, a: any): Promise<strin
       return JSON.stringify(await handleAddChartLineV0(a), null, 2);
     case 'add_chart_pie_v0':
       return JSON.stringify(await handleAddChartPieV0(a), null, 2);
+    case 'add_image_placeholder_v0':
+      return JSON.stringify(await handleAddImagePlaceholderV0(a), null, 2);
+    case 'add_comment_v0':
+      return JSON.stringify(await handleAddCommentV0(a), null, 2);
+    case 'add_modal_shell_v0':
+      return JSON.stringify(await handleAddModalShellV0(a), null, 2);
     case 'add_switch_v0':
       return JSON.stringify(await handleAddSwitchV0(a), null, 2);
     case 'add_checkbox_v0':

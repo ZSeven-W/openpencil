@@ -22,6 +22,7 @@ import {
   buildChartLine,
   buildChartPie,
   buildCheckbox,
+  buildComment,
   buildCodeBlock,
   buildColorSwatch,
   buildDivider,
@@ -31,6 +32,8 @@ import {
   buildHeading,
   buildIconButton,
   buildIconLabel,
+  buildImagePlaceholder,
+  buildModalShell,
   buildKbd,
   buildLink,
   buildListRow,
@@ -265,6 +268,22 @@ const CASES: BuilderCase[] = [
     toolName: 'add_chart_pie_v0',
     args: { values: [40, 30, 20, 10] },
     build: (a) => buildChartPie(a as unknown as Parameters<typeof buildChartPie>[0]),
+  },
+  {
+    toolName: 'add_image_placeholder_v0',
+    args: { width: 200, height: 140, label: 'Upload' },
+    build: (a) =>
+      buildImagePlaceholder(a as unknown as Parameters<typeof buildImagePlaceholder>[0]),
+  },
+  {
+    toolName: 'add_comment_v0',
+    args: { author: 'Alice', body: 'Nice!', avatar_initial: 'A', timestamp: '2h ago' },
+    build: (a) => buildComment(a as unknown as Parameters<typeof buildComment>[0]),
+  },
+  {
+    toolName: 'add_modal_shell_v0',
+    args: { title: 'Confirm', subtitle: 'Are you sure?' },
+    build: (a) => buildModalShell(a as unknown as Parameters<typeof buildModalShell>[0]),
   },
   {
     toolName: 'add_form_field_v0',
