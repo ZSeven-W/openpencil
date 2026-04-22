@@ -1064,6 +1064,39 @@ export const ELEMENT_TOOL_DEFINITIONS_EXT = [
     },
   },
   {
+    name: 'add_chip_input_v0',
+    description:
+      'Multi-tag input field — labeled control that holds a variable number of pill-shaped chips ' +
+      'plus an inline text cursor for adding the next tag. Wrap layout so chips flow onto multiple ' +
+      'rows as they accumulate. Each chip has a small × icon for removal. Use for "tag input", ' +
+      '"recipient list", "multi-select field", "email chips", "keyword tags", "标签输入", "多选标签". ' +
+      'schemaVersion 1.0',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        schemaVersion: schemaVersionProp,
+        filePath: filePathProp,
+        label: { type: 'string', description: 'Field label shown above the input' },
+        chips: {
+          type: 'array',
+          description: 'Current chip values; each renders as a removable pill. Pass [] for empty.',
+          items: { type: 'string' },
+        },
+        placeholder: {
+          type: 'string',
+          description: 'Caret placeholder text. Defaults to "Add tag…" when chips is empty.',
+        },
+        required: {
+          type: 'boolean',
+          description: 'When true, appends " *" to the label',
+        },
+        parent_id: parentIdProp,
+        pageId: pageIdProp,
+      },
+      required: ['label'],
+    },
+  },
+  {
     name: 'add_faq_item_v0',
     description:
       'FAQ / accordion item — ONE question row in a frequently-asked list. Collapsed (expanded=false, ' +

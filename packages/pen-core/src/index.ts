@@ -232,6 +232,7 @@ export {
   buildCalendarGrid,
   buildPagination,
   buildFaqItem,
+  buildChipInput,
   cjkFontFamily,
   detectCjkScript,
   type ElementTree,
@@ -308,4 +309,5 @@ export {
   type CalendarGridParams,
   type PaginationParams,
   type FaqItemParams,
+  type ChipInputParams,
 } from './element-builders/index.js';
