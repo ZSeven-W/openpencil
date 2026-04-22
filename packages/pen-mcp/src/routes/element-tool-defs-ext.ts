@@ -1,13 +1,16 @@
-// Extension tool definitions — shard 1 of 2 (second shard is
-// `element-tool-defs-ext-2.ts`). Both shards are concatenated in
-// `element-tool-defs.ts` to form the final registry. Splitting the
-// original single ext file in half keeps each shard under the
-// repo's 800-line ceiling while the element-tool family continues
-// to grow toward ~100.
+// Extension tool definitions — shard 1 of 3 (shards 2 and 3 are
+// `element-tool-defs-ext-2.ts` and `element-tool-defs-ext-3.ts`).
+// All three shards are concatenated in `element-tool-defs.ts` to
+// form the final registry. The three-way split keeps each file
+// under the repo's 800-line ceiling while the element-tool family
+// continues to grow past 67.
 //
-// When adding a new tool: pick whichever shard has the fewer tools
-// to keep the split balanced. Run `wc -l` on both files before
-// committing.
+// When adding a new tool: pick whichever shard has the fewest tools
+// to keep the split balanced. Run `wc -l` on all three files before
+// committing. ext-2 crossed the limit at 832 lines after the 67-tool
+// milestone — same trap the original single ext file hit at 1329
+// lines. Next rebalance target: if any shard crosses 700, carve a
+// ~5-tool chunk into the shortest shard.
 
 import {
   schemaVersionProp,
