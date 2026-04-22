@@ -171,7 +171,11 @@ Tag / multi-value inputs:
 
 54. Chip input / tag input (pills + removable × + inline caret, wrap layout) → `add_chip_input_v0`
 
-55. None match → fall through to `batch_design`
+Chart empty state:
+
+55. Empty chart placeholder (dashed tile in chart footprint; "No data yet" message) → `add_empty_chart_v0`
+
+56. None match → fall through to `batch_design`
 
 **Disambiguation**: if you need a ROW of 3 metrics that should NOT scroll (e.g. a stats strip inside a card), use `add_stat_grid_v0`, NOT `add_metric_row_v0`. The grid uses `fill_container` per cell so it never overflows; the metric row uses fixed-px cells + scroll wrapper.
 
@@ -236,6 +240,7 @@ PREFER an element tool when the spec says any of:
 - "pagination", "page nav", "page numbers", "prev/next pages", "分页", "分页条" → `add_pagination_v0`
 - "FAQ", "accordion", "collapsible item", "Q&A", "expandable row", "常见问题", "折叠面板" → `add_faq_item_v0`
 - "chip input", "tag input", "multi-select field", "recipient list", "email chips", "标签输入", "多选标签" → `add_chip_input_v0`
+- "empty chart", "no data chart", "chart placeholder", "empty analytics tile", "暂无数据", "空图表" → `add_empty_chart_v0`
 
 STILL use batch_design when:
 
@@ -438,6 +443,9 @@ add_faq_item_v0({ question: "How do refunds work?", answer: "Email billing@…",
 
 add_chip_input_v0({ label: "Tags", chips: ["design", "mobile", "a11y"], placeholder: "Add tag…" })
 add_chip_input_v0({ label: "Send to", chips: [], placeholder: "Enter emails" })         // empty
+
+add_empty_chart_v0({})                                                     // default 320×200 bar-chart-2 icon
+add_empty_chart_v0({ icon: "line-chart", title: "No trends yet", subtitle: "Come back after 7 days" })
 ```
 
 ## Composition pattern

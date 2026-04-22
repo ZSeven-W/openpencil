@@ -38,6 +38,7 @@ import {
   buildCodeBlock,
   buildColorSwatch,
   buildDivider,
+  buildEmptyChart,
   buildEmptyState,
   buildFab,
   buildFaqItem,
@@ -98,6 +99,7 @@ import {
   type ColorSwatchParams,
   type DividerParams,
   type ElementTree,
+  type EmptyChartParams,
   type EmptyStateParams,
   type FabParams,
   type FaqItemParams,
@@ -287,6 +289,7 @@ export const ELEMENT_SHIMS: Record<string, ElementShim> = {
   add_pagination_v0: wrap<PaginationParams>(buildPagination),
   add_faq_item_v0: wrap<FaqItemParams>(buildFaqItem),
   add_chip_input_v0: wrap<ChipInputParams>(buildChipInput),
+  add_empty_chart_v0: wrap<EmptyChartParams>(buildEmptyChart),
 };
 
 export function getElementShim(name: string): ElementShim | undefined {

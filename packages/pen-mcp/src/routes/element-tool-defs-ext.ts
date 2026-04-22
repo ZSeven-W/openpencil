@@ -1064,6 +1064,42 @@ export const ELEMENT_TOOL_DEFINITIONS_EXT = [
     },
   },
   {
+    name: 'add_empty_chart_v0',
+    description:
+      'Empty-state placeholder for a chart widget — a dashed-border tile in the same footprint as the ' +
+      'real chart, with icon + "No data yet" title + hint subtitle. Use instead of an empty ' +
+      'add_chart_line_v0 / add_chart_bars_v0 / add_chart_pie_v0 when the data array would be empty. ' +
+      'Size defaults (320×200) match the line/bar chart default footprint; pass `icon` = ' +
+      '"line-chart"/"pie-chart"/"bar-chart-2" to hint at the widget type it replaces. Use for ' +
+      '"no data chart", "empty analytics tile", "chart placeholder", "空图表", "暂无数据". ' +
+      'For non-chart empty states (inbox / onboarding / no results), use add_empty_state_v0. ' +
+      'schemaVersion 1.0',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        schemaVersion: schemaVersionProp,
+        filePath: filePathProp,
+        width: { type: 'number', description: 'Width in px (default 320, min 120)' },
+        height: { type: 'number', description: 'Height in px (default 200, min 100)' },
+        title: { type: 'string', description: 'Headline above subtitle (default "No data yet")' },
+        subtitle: {
+          type: 'string',
+          description:
+            'Secondary hint line below title (default "Data will appear here once tracking begins.")',
+        },
+        icon: {
+          type: 'string',
+          description:
+            'Lucide icon (default "bar-chart-2"; try "line-chart"/"pie-chart" to match widget)',
+        },
+        corner_radius: { type: 'number', description: 'Corner radius (default 12)' },
+        parent_id: parentIdProp,
+        pageId: pageIdProp,
+      },
+      required: [],
+    },
+  },
+  {
     name: 'add_chip_input_v0',
     description:
       'Multi-tag input field — labeled control that holds a variable number of pill-shaped chips ' +
