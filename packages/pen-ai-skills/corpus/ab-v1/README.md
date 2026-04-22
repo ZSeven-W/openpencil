@@ -1,11 +1,11 @@
 # A/B Corpus v1
 
-Supplemental corpus covering the 10 element tools added after the
+Supplemental corpus covering the 12 element tools added after the
 ab-v0 baseline was frozen (2026-04-20). Intended for an A/B v2 run
 that measures routing + legality on the new tool surface without
 re-running the full 24-prompt v0 corpus.
 
-Split: 10 `obvious` prompts, one per new tool. No `optional` prompts
+Split: 12 `obvious` prompts, one per new tool. No `optional` prompts
 in v1 — the new tools are narrow enough that any reasonable design
 request either maps to them directly or doesn't, and the optional
 slot is already well-populated in v0.

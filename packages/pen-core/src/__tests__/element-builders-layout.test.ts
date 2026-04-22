@@ -33,8 +33,10 @@ import {
   buildKbd,
   buildLink,
   buildListRow,
+  buildMetricComparison,
   buildMetricRow,
   buildNavChipRow,
+  buildNotificationRow,
   buildPrice,
   buildProgressBar,
   buildQuoteBlock,
@@ -209,6 +211,22 @@ const CASES: LayoutCase[] = [
   },
   { name: 'buildSpinner', tree: () => buildSpinner({}) },
   { name: 'buildTooltip', tree: () => buildTooltip({ text: 'Help' }), wrap: true },
+  {
+    name: 'buildMetricComparison',
+    tree: () =>
+      buildMetricComparison({ label: 'Revenue', value: '$12k', change: '8%', trend: 'up' }),
+  },
+  {
+    name: 'buildNotificationRow',
+    tree: () =>
+      buildNotificationRow({
+        title: 'New follower',
+        body: 'Alice is following you.',
+        timestamp: '2m',
+        unread: true,
+      }),
+    wrap: true,
+  },
   { name: 'buildChartBars', tree: () => buildChartBars({ values: [4, 7, 3, 9, 5] }) },
 
   // Composites

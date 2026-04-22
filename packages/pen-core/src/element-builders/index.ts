@@ -48,6 +48,12 @@ export { buildModalShell, type ModalShellParams } from './modal-shell.js';
 export { buildStatusBadge, type StatusBadgeParams, type StatusBadgeTone } from './status-badge.js';
 export { buildSpinner, type SpinnerParams } from './spinner.js';
 export { buildTooltip, type TooltipParams } from './tooltip.js';
+export {
+  buildMetricComparison,
+  type MetricComparisonParams,
+  type MetricTrend,
+} from './metric-comparison.js';
+export { buildNotificationRow, type NotificationRowParams } from './notification-row.js';
 export { buildNavChipRow, type NavChipRowItem, type NavChipRowParams } from './nav-chip-row.js';
 export { buildActivityRing, type ActivityRingParams } from './activity-ring.js';
 export { buildRatingStars, type RatingStarsParams } from './rating-stars.js';

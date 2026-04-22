@@ -37,8 +37,10 @@ import {
   buildKbd,
   buildLink,
   buildListRow,
+  buildMetricComparison,
   buildMetricRow,
   buildNavChipRow,
+  buildNotificationRow,
   buildPrice,
   buildProgressBar,
   buildQuoteBlock,
@@ -302,6 +304,17 @@ const CASES: BuilderCase[] = [
     toolName: 'add_tooltip_v0',
     args: { text: 'Help' },
     build: (a) => buildTooltip(a as unknown as Parameters<typeof buildTooltip>[0]),
+  },
+  {
+    toolName: 'add_metric_comparison_v0',
+    args: { label: 'Revenue', value: '$12k', change: '8%', trend: 'up' },
+    build: (a) =>
+      buildMetricComparison(a as unknown as Parameters<typeof buildMetricComparison>[0]),
+  },
+  {
+    toolName: 'add_notification_row_v0',
+    args: { title: 'New follower', body: 'Alice is following you.', timestamp: '2m', unread: true },
+    build: (a) => buildNotificationRow(a as unknown as Parameters<typeof buildNotificationRow>[0]),
   },
   {
     toolName: 'add_form_field_v0',
