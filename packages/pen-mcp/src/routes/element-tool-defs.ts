@@ -86,11 +86,13 @@ import { recordElementToolCall } from '../metrics/element-tool-metrics';
 import { ELEMENT_TOOL_DEFINITIONS_BASE } from './element-tool-defs-base';
 import { ELEMENT_TOOL_DEFINITIONS_EXT } from './element-tool-defs-ext';
 import { ELEMENT_TOOL_DEFINITIONS_EXT_2 } from './element-tool-defs-ext-2';
+import { ELEMENT_TOOL_DEFINITIONS_EXT_3 } from './element-tool-defs-ext-3';
 
 export const ELEMENT_TOOL_DEFINITIONS = [
   ...ELEMENT_TOOL_DEFINITIONS_BASE,
   ...ELEMENT_TOOL_DEFINITIONS_EXT,
   ...ELEMENT_TOOL_DEFINITIONS_EXT_2,
+  ...ELEMENT_TOOL_DEFINITIONS_EXT_3,
 ];
 
 export const ELEMENT_TOOL_NAMES: ReadonlySet<string> = new Set(
