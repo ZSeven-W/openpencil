@@ -44,6 +44,7 @@ import {
   buildUploadDropzone,
   buildOtpInput,
   buildAttachmentRow,
+  buildChatBubble,
   buildKbd,
   buildLink,
   buildListRow,
@@ -458,6 +459,11 @@ const CASES: BuilderCase[] = [
     toolName: 'add_attachment_row_v0',
     args: { filename: 'report.pdf', size: '1.2 MB', icon: 'file-text' },
     build: (a) => buildAttachmentRow(a as unknown as Parameters<typeof buildAttachmentRow>[0]),
+  },
+  {
+    toolName: 'add_chat_bubble_v0',
+    args: { message: 'Hello!', side: 'left', author: 'Sarah', timestamp: '2m' },
+    build: (a) => buildChatBubble(a as unknown as Parameters<typeof buildChatBubble>[0]),
   },
 ];
 

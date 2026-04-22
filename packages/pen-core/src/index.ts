@@ -253,6 +253,7 @@ export {
   buildUploadDropzone,
   buildOtpInput,
   buildAttachmentRow,
+  buildChatBubble,
   cjkFontFamily,
   detectCjkScript,
   type ElementTree,
@@ -339,4 +340,6 @@ export {
   type UploadDropzoneParams,
   type OtpInputParams,
   type AttachmentRowParams,
+  type ChatBubbleParams,
+  type ChatBubbleSide,
 } from './element-builders/index.js';
