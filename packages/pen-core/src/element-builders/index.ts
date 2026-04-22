@@ -80,3 +80,4 @@ export {
   type ModalShellV1Theme,
 } from './modal-shell-v1.js';
 export { buildUploadDropzone, type UploadDropzoneParams } from './upload-dropzone.js';
+export { buildOtpInput, type OtpInputParams } from './otp-input.js';
