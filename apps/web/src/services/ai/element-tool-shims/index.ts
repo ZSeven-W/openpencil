@@ -54,6 +54,7 @@ import {
   buildModalShellV1,
   buildUploadDropzone,
   buildOtpInput,
+  buildAttachmentRow,
   buildKbd,
   buildLink,
   buildListRow,
@@ -120,6 +121,7 @@ import {
   type ModalShellV1Params,
   type UploadDropzoneParams,
   type OtpInputParams,
+  type AttachmentRowParams,
   type KbdParams,
   type LinkParams,
   type ListRowParams,
@@ -305,6 +307,7 @@ export const ELEMENT_SHIMS: Record<string, ElementShim> = {
   add_modal_shell_v1: wrap<ModalShellV1Params>(buildModalShellV1),
   add_upload_dropzone_v0: wrap<UploadDropzoneParams>(buildUploadDropzone),
   add_otp_input_v0: wrap<OtpInputParams>(buildOtpInput),
+  add_attachment_row_v0: wrap<AttachmentRowParams>(buildAttachmentRow),
 };
 
 export function getElementShim(name: string): ElementShim | undefined {

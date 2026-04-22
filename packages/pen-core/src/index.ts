@@ -252,6 +252,7 @@ export {
   buildModalShellV1,
   buildUploadDropzone,
   buildOtpInput,
+  buildAttachmentRow,
   cjkFontFamily,
   detectCjkScript,
   type ElementTree,
@@ -337,4 +338,5 @@ export {
   type ModalShellV1Theme,
   type UploadDropzoneParams,
   type OtpInputParams,
+  type AttachmentRowParams,
 } from './element-builders/index.js';

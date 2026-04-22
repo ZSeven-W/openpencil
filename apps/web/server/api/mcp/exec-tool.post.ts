@@ -36,6 +36,7 @@ import {
   buildModalShellV1,
   buildUploadDropzone,
   buildOtpInput,
+  buildAttachmentRow,
   buildKbd,
   buildLink,
   buildListRow,
@@ -193,6 +194,7 @@ const SERVER_BUILDERS: Record<string, BuilderFn> = {
   add_upload_dropzone_v0: (a) =>
     buildUploadDropzone(a as Parameters<typeof buildUploadDropzone>[0]),
   add_otp_input_v0: (a) => buildOtpInput(a as Parameters<typeof buildOtpInput>[0]),
+  add_attachment_row_v0: (a) => buildAttachmentRow(a as Parameters<typeof buildAttachmentRow>[0]),
 };
 
 interface ExecToolBody {
