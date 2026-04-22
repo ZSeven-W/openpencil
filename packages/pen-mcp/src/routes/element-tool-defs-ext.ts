@@ -639,6 +639,99 @@ export const ELEMENT_TOOL_DEFINITIONS_EXT = [
     },
   },
   {
+    name: 'add_image_placeholder_v0',
+    description:
+      'Image placeholder — gray box with centered lucide icon + optional caption label. ' +
+      'The "this will be an image later" affordance. Use for "photo slot", "hero image area", ' +
+      '"upload zone", "cover placeholder", "图片占位". Separate from G() (which fetches real ' +
+      'images via search) — this emits a visual placeholder frame, not an image node. ' +
+      'schemaVersion 1.0',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        schemaVersion: schemaVersionProp,
+        filePath: filePathProp,
+        width: { type: 'number', description: 'Width in px (default 200, min 40)' },
+        height: { type: 'number', description: 'Height in px (default 140, min 40)' },
+        label: {
+          type: 'string',
+          description: 'Optional caption below the icon (e.g. "Upload", "Hero image")',
+        },
+        icon: {
+          type: 'string',
+          description: 'Lucide icon name (default "image"). Common: image-plus, video, camera',
+        },
+        corner_radius: {
+          type: 'number',
+          description: 'Corner radius (default 8). Use larger for card-style, 0 for sharp.',
+        },
+        parent_id: parentIdProp,
+        pageId: pageIdProp,
+      },
+      required: [],
+    },
+  },
+  {
+    name: 'add_comment_v0',
+    description:
+      'Single comment row: circular avatar + (author + timestamp inline header) + body text. ' +
+      'Social / UGC / feedback list unit. Compose multiple comments by calling this N times ' +
+      'inside a vertical parent. Does NOT handle threaded replies / like count / action menu — ' +
+      'compose those via batch_design. Use for "comment", "reply", "feedback row", "评论". ' +
+      'schemaVersion 1.0',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        schemaVersion: schemaVersionProp,
+        filePath: filePathProp,
+        author: { type: 'string', description: 'Author display name (shown bold inline)' },
+        timestamp: { type: 'string', description: 'Relative time string ("2h ago", "Just now")' },
+        body: { type: 'string', description: 'Comment body text (multi-line supported)' },
+        avatar_initial: {
+          type: 'string',
+          description: '1-2 char initial for the avatar circle. Omit for blank placeholder.',
+        },
+        avatar_size: {
+          type: 'number',
+          description: 'Avatar diameter in px (default 40, min 24)',
+        },
+        parent_id: parentIdProp,
+        pageId: pageIdProp,
+      },
+      required: ['author', 'body'],
+    },
+  },
+  {
+    name: 'add_modal_shell_v0',
+    description:
+      'Modal dialog shell: full-bleed dimmed backdrop + centered card (rounded, shadowed) ' +
+      'containing a title + optional subtitle. BODY content (form fields, CTA button, etc.) ' +
+      'is composed by the caller into the `modal-shell-card` role via a follow-up insert. ' +
+      'This tool emits ONLY the chrome (scrim + card + header) — `shell` in the name is deliberate. ' +
+      'Use for "modal", "dialog", "popup chrome", "confirm dialog shell", "模态框". schemaVersion 1.0',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        schemaVersion: schemaVersionProp,
+        filePath: filePathProp,
+        title: { type: 'string', description: 'Modal heading text' },
+        subtitle: { type: 'string', description: 'Optional description below title' },
+        card_width: {
+          type: 'number',
+          description: 'Centered card width in px (default 400, min 280)',
+        },
+        card_padding: { type: 'number', description: 'Card inner padding (default 24, min 12)' },
+        scrim_opacity: {
+          type: 'number',
+          description: 'Backdrop dim opacity 0..1 (default 0.5). 0 = borderless no-scrim.',
+        },
+        parent_id: parentIdProp,
+        pageId: pageIdProp,
+      },
+      required: ['title'],
+    },
+  },
+  {
     name: 'add_chart_line_v0',
     description:
       'Line-chart skeleton: polyline through N data points (normalized to max), optional dots at ' +
