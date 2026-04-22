@@ -231,6 +231,7 @@ export {
   buildTimeline,
   buildCalendarGrid,
   buildPagination,
+  buildFaqItem,
   cjkFontFamily,
   detectCjkScript,
   type ElementTree,
@@ -306,4 +307,5 @@ export {
   type TimelineParams,
   type CalendarGridParams,
   type PaginationParams,
+  type FaqItemParams,
 } from './element-builders/index.js';

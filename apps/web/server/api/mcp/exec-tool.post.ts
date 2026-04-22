@@ -21,6 +21,7 @@ import {
   buildDivider,
   buildEmptyState,
   buildFab,
+  buildFaqItem,
   buildFormField,
   buildHeading,
   buildIconButton,
@@ -176,6 +177,7 @@ const SERVER_BUILDERS: Record<string, BuilderFn> = {
   add_timeline_v0: (a) => buildTimeline(a as Parameters<typeof buildTimeline>[0]),
   add_calendar_grid_v0: (a) => buildCalendarGrid(a as Parameters<typeof buildCalendarGrid>[0]),
   add_pagination_v0: (a) => buildPagination(a as Parameters<typeof buildPagination>[0]),
+  add_faq_item_v0: (a) => buildFaqItem(a as Parameters<typeof buildFaqItem>[0]),
 };
 
 interface ExecToolBody {
