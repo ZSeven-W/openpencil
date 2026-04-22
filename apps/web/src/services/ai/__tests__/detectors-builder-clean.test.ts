@@ -45,6 +45,7 @@ import {
   buildSkeleton,
   buildStatGrid,
   buildStatusBadge,
+  buildSpinner,
   buildStepper,
   buildSwitch,
   buildTabs,
@@ -52,6 +53,7 @@ import {
   buildTextButton,
   buildTimeline,
   buildToast,
+  buildTooltip,
   buildTopNavBar,
   type ElementTree,
 } from '@zseven-w/pen-core';
@@ -185,6 +187,8 @@ const CASES: BuilderCase[] = [
   },
   { name: 'modal-shell', build: () => buildModalShell({ title: 'Confirm' }) },
   { name: 'status-badge', build: () => buildStatusBadge({ label: 'Online', tone: 'success' }) },
+  { name: 'spinner', build: () => buildSpinner({}) },
+  { name: 'tooltip', build: () => buildTooltip({ text: 'Help' }) },
   { name: 'chart-bars', build: () => buildChartBars({ values: [4, 7, 3, 9, 5] }) },
   {
     name: 'empty-state',
