@@ -51,6 +51,7 @@ import {
   buildImagePlaceholder,
   buildVideoPlaceholder,
   buildModalShell,
+  buildModalShellV1,
   buildKbd,
   buildLink,
   buildListRow,
@@ -114,6 +115,7 @@ import {
   type ImagePlaceholderParams,
   type VideoPlaceholderParams,
   type ModalShellParams,
+  type ModalShellV1Params,
   type KbdParams,
   type LinkParams,
   type ListRowParams,
@@ -296,6 +298,7 @@ export const ELEMENT_SHIMS: Record<string, ElementShim> = {
   add_empty_chart_v0: wrap<EmptyChartParams>(buildEmptyChart),
   add_action_menu_v0: wrap<ActionMenuParams>(buildActionMenu),
   add_date_picker_v0: wrap<DatePickerParams>(buildDatePicker),
+  add_modal_shell_v1: wrap<ModalShellV1Params>(buildModalShellV1),
 };
 
 export function getElementShim(name: string): ElementShim | undefined {

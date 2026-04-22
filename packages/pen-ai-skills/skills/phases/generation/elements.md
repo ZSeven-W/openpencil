@@ -129,6 +129,7 @@ Social / UGC:
 Chrome / modals:
 
 46. Modal dialog shell (dimmed backdrop + centered card + title — body composed separately) → `add_modal_shell_v0`
+    46b. Theme-aware variant (supports `theme: 'light' | 'dark' | 'system'`) → `add_modal_shell_v1`
 
 Status / presence:
 
@@ -219,6 +220,7 @@ PREFER an element tool when the spec says any of:
 - "video placeholder", "video slot", "play placeholder", "upcoming video", "视频占位" → `add_video_placeholder_v0`
 - "comment", "reply", "feedback row", "review row", "评论" → `add_comment_v0`
 - "modal", "dialog", "popup", "confirm dialog", "模态框", "弹窗" → `add_modal_shell_v0`
+- "dark modal", "dark-mode dialog", "theme-aware modal", "system theme modal", "暗色弹窗", "主题感知弹窗" → `add_modal_shell_v1` (accepts `theme` param; use `"system"` when the document has `applySemanticPalette(doc)` seeded)
 - "status", "online indicator", "presence dot", "health status", "busy indicator", "状态", "在线" → `add_status_badge_v0`
 - "spinner", "loading spinner", "progress circle", "loader", "加载圈" → `add_spinner_v0`
 - "tooltip", "hover hint", "help tip", "提示浮层" → `add_tooltip_v0`
@@ -366,6 +368,8 @@ add_image_placeholder_v0({ width: 320, height: 200, label: "Upload cover" })
 add_video_placeholder_v0({ width: 320, height: 180, label: "Coming soon" })
 add_comment_v0({ author: "Sarah", timestamp: "2h ago", body: "Looks great!", avatar_initial: "S" })
 add_modal_shell_v0({ title: "Confirm delete", subtitle: "This cannot be undone." })
+add_modal_shell_v1({ title: "Confirm delete", subtitle: "This cannot be undone.", theme: "dark" })
+add_modal_shell_v1({ title: "Confirm delete", theme: "system" })      // $color-* refs; requires seeded palette
 add_status_badge_v0({ label: "Online", tone: "success" })
 add_status_badge_v0({ label: "Degraded", tone: "warning" })
 add_spinner_v0({ size: 40 })

@@ -77,6 +77,7 @@ import { handleAddChipInputV0 } from '../tools/add-chip-input-v0';
 import { handleAddEmptyChartV0 } from '../tools/add-empty-chart-v0';
 import { handleAddActionMenuV0 } from '../tools/add-action-menu-v0';
 import { handleAddDatePickerV0 } from '../tools/add-date-picker-v0';
+import { handleAddModalShellV1 } from '../tools/add-modal-shell-v1';
 import { recordElementToolCall } from '../metrics/element-tool-metrics';
 import { ELEMENT_TOOL_DEFINITIONS_BASE } from './element-tool-defs-base';
 import { ELEMENT_TOOL_DEFINITIONS_EXT } from './element-tool-defs-ext';
@@ -229,6 +230,8 @@ async function dispatchElementToolCall(name: string, a: any): Promise<string> {
       return JSON.stringify(await handleAddActionMenuV0(a), null, 2);
     case 'add_date_picker_v0':
       return JSON.stringify(await handleAddDatePickerV0(a), null, 2);
+    case 'add_modal_shell_v1':
+      return JSON.stringify(await handleAddModalShellV1(a), null, 2);
     default:
       return '';
   }
