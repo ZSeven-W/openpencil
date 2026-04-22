@@ -1063,4 +1063,40 @@ export const ELEMENT_TOOL_DEFINITIONS_EXT = [
       required: ['label'],
     },
   },
+  {
+    name: 'add_pagination_v0',
+    description:
+      'Pagination bar for list/table footers: row of page-number pills flanked by optional prev/next ' +
+      'arrow buttons. Active page renders as a filled pill (accent color, white text); inactive ' +
+      'pages are ghost (no fill). Collapses long page ranges with "…" ellipses Google-style ' +
+      '(always shows 1 and total, plus a ±siblings window around current). Use for "pagination", ' +
+      '"page nav", "分页", "分页条". schemaVersion 1.0',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        schemaVersion: schemaVersionProp,
+        filePath: filePathProp,
+        total: { type: 'number', description: 'Total number of pages (>= 1)' },
+        current: {
+          type: 'number',
+          description: '1-based current page (clamped to [1, total], default 1)',
+        },
+        siblings: {
+          type: 'number',
+          description: 'Pages shown on each side of current before ellipsis (default 1, min 0)',
+        },
+        show_arrows: {
+          type: 'boolean',
+          description: 'Include prev/next chevron buttons (default true)',
+        },
+        accent_color: {
+          type: 'string',
+          description: 'Hex color for active page pill (default #0F172A slate-900)',
+        },
+        parent_id: parentIdProp,
+        pageId: pageIdProp,
+      },
+      required: ['total'],
+    },
+  },
 ];

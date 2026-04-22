@@ -65,6 +65,7 @@ const ELEMENT_TOOL_NAMES = [
   'add_chart_bars_v0',
   'add_timeline_v0',
   'add_calendar_grid_v0',
+  'add_pagination_v0',
 ];
 
 describe('element tools — v0-MUST contract', () => {

@@ -159,7 +159,11 @@ Loading / placeholder:
 
 43. Loading skeleton (N gray rectangles, last row ~60% width) → `add_skeleton_v0`
 
-44. None match → fall through to `batch_design`
+Pagination:
+
+52. Pagination bar (numbered pills + prev/next arrows, Google-style ellipses for big ranges) → `add_pagination_v0`
+
+53. None match → fall through to `batch_design`
 
 **Disambiguation**: if you need a ROW of 3 metrics that should NOT scroll (e.g. a stats strip inside a card), use `add_stat_grid_v0`, NOT `add_metric_row_v0`. The grid uses `fill_container` per cell so it never overflows; the metric row uses fixed-px cells + scroll wrapper.
 
@@ -221,6 +225,7 @@ PREFER an element tool when the spec says any of:
 - "bar chart", "histogram skeleton", "weekly steps", "柱状图" → `add_chart_bars_v0`
 - "timeline", "activity history", "vertical stepper", "时间线", "动态" → `add_timeline_v0`
 - "calendar", "date picker grid", "month view", "日历" → `add_calendar_grid_v0`
+- "pagination", "page nav", "page numbers", "prev/next pages", "分页", "分页条" → `add_pagination_v0`
 
 STILL use batch_design when:
 
@@ -414,6 +419,9 @@ add_timeline_v0({
 
 add_calendar_grid_v0({})                                       // vanilla 30-day month, Sun-start
 add_calendar_grid_v0({ days_in_month: 31, start_day_offset: 2, today: 15, selected_day: 22 })
+
+add_pagination_v0({ total: 10, current: 5 })                   // 1 … 4 [5] 6 … 10
+add_pagination_v0({ total: 3, current: 1, show_arrows: false })  // no prev/next
 ```
 
 ## Composition pattern

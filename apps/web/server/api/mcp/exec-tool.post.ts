@@ -35,6 +35,7 @@ import {
   buildMetricRow,
   buildNavChipRow,
   buildNotificationRow,
+  buildPagination,
   buildPrice,
   buildProgressBar,
   buildQuoteBlock,
@@ -174,6 +175,7 @@ const SERVER_BUILDERS: Record<string, BuilderFn> = {
   add_chart_bars_v0: (a) => buildChartBars(a as Parameters<typeof buildChartBars>[0]),
   add_timeline_v0: (a) => buildTimeline(a as Parameters<typeof buildTimeline>[0]),
   add_calendar_grid_v0: (a) => buildCalendarGrid(a as Parameters<typeof buildCalendarGrid>[0]),
+  add_pagination_v0: (a) => buildPagination(a as Parameters<typeof buildPagination>[0]),
 };
 
 interface ExecToolBody {
