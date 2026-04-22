@@ -593,4 +593,39 @@ export const ELEMENT_TOOL_DEFINITIONS_EXT = [
       required: ['items'],
     },
   },
+  {
+    name: 'add_upload_dropzone_v0',
+    description:
+      'File upload dropzone — dashed-border tile with cloud icon + two-line instruction. Default ' +
+      '480×200 footprint with `upload-cloud` icon. Structurally similar to add_empty_chart_v0 ' +
+      '(also dashed + icon + title/subtitle) but semantically different: dropzone = "where users ' +
+      'upload", empty_chart = "where a chart will render". Pick by intent; do NOT use dropzone ' +
+      'for chart placeholders or vice versa. Use for "upload area", "drop files here", "file ' +
+      'picker", "drag-and-drop zone", "上传区", "文件拖放区". schemaVersion 1.0',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        schemaVersion: schemaVersionProp,
+        filePath: filePathProp,
+        width: { type: 'number', description: 'Width in px (default 480, min 200)' },
+        height: { type: 'number', description: 'Height in px (default 200, min 120)' },
+        title: {
+          type: 'string',
+          description: 'Main instruction text (default "Drop files to upload")',
+        },
+        subtitle: {
+          type: 'string',
+          description: 'Secondary hint — file types / size limits (default "or click to browse")',
+        },
+        icon: {
+          type: 'string',
+          description: 'Lucide icon name (default "upload-cloud"; try "upload" / "file-up")',
+        },
+        corner_radius: { type: 'number', description: 'Corner radius (default 12)' },
+        parent_id: parentIdProp,
+        pageId: pageIdProp,
+      },
+      required: [],
+    },
+  },
 ];
