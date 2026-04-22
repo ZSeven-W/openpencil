@@ -639,6 +639,69 @@ export const ELEMENT_TOOL_DEFINITIONS_EXT = [
     },
   },
   {
+    name: 'add_metric_comparison_v0',
+    description:
+      'KPI with trend: label (small, slate) above value (big 28/700) with optional arrow + ' +
+      'change amount on the right. trend enum (up/down/flat) drives arrow icon (trending-up/-down/' +
+      'minus) + color (emerald/red/slate). The "$12k ↑ 8%" card-cell pattern. Distinct from ' +
+      'add_metric_row_v0 which is a scroll row of label+value cells without trend. Use for ' +
+      '"KPI trend", "dashboard metric with change", "仪表盘带趋势指标". schemaVersion 1.0',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        schemaVersion: schemaVersionProp,
+        filePath: filePathProp,
+        label: { type: 'string', description: 'Small label above the value (e.g. "Revenue")' },
+        value: {
+          type: 'string',
+          description: 'Formatted metric (caller formats — "$12,480" / "98.7%" / "2.3k")',
+        },
+        change: {
+          type: 'string',
+          description: 'Change amount ("8%" / "1.2k"). Triggers arrow + colored change text.',
+        },
+        trend: {
+          type: 'string',
+          enum: ['up', 'down', 'flat'],
+          description:
+            'up=green+trending-up, down=red+trending-down, flat=slate+minus. Default flat.',
+        },
+        parent_id: parentIdProp,
+        pageId: pageIdProp,
+      },
+      required: ['label', 'value'],
+    },
+  },
+  {
+    name: 'add_notification_row_v0',
+    description:
+      'Notification list row: leading icon + title (inline with optional timestamp + optional ' +
+      'unread red dot) + optional body preview line. Distinct from add_list_row_v0 (no timestamp ' +
+      'affordance, no unread marker). Use for "notification item", "alert row", "通知条目". ' +
+      'schemaVersion 1.0',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        schemaVersion: schemaVersionProp,
+        filePath: filePathProp,
+        title: { type: 'string', description: 'Notification title (bold, one line)' },
+        body: {
+          type: 'string',
+          description: 'Optional body preview (one line, truncated visually)',
+        },
+        timestamp: { type: 'string', description: 'Optional relative time ("2h ago", "Now")' },
+        icon: { type: 'string', description: 'Leading lucide icon slug. Default "bell".' },
+        unread: {
+          type: 'boolean',
+          description: 'When true, renders a small red dot next to the title (unread marker)',
+        },
+        parent_id: parentIdProp,
+        pageId: pageIdProp,
+      },
+      required: ['title'],
+    },
+  },
+  {
     name: 'add_status_badge_v0',
     description:
       'Semantic status indicator: small colored dot + short label (e.g. "● Online", "● Busy", ' +

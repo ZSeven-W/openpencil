@@ -1,0 +1,20 @@
+id: mobile-notification-item
+category: mobile
+difficulty: obvious
+prompt: |
+  Design ONLY a single notification list row: a bell icon on the
+  left, then the title "New follower" in bold (with a small red
+  dot marker indicating unread) and "2m" as the timestamp on the
+  right of the same line, and below on a new line the preview text
+  "Alice Chen started following you." in a lighter gray. Horizontal
+  padding. Do NOT include surrounding list container, other rows,
+  action buttons, or any other page chrome — just the single row.
+expected:
+  must_contain_roles:
+    - notification-row
+    - notification-icon
+    - notification-title
+    - notification-unread-dot
+    - notification-timestamp
+    - notification-body
+expected_tool_if_any: add_notification_row_v0
