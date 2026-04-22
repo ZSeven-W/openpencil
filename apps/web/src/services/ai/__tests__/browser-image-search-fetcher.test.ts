@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { describe, it, expect, afterEach, vi } from 'vitest';
 import { makeBrowserImageSearchFetcher } from '../browser-image-search-fetcher';
 
 /**
@@ -28,9 +28,9 @@ describe('makeBrowserImageSearchFetcher', () => {
 
       expect(result).toBe('https://img.example/x.jpg');
       expect(spy).toHaveBeenCalledOnce();
-      const [url, init] = spy.mock.calls[0];
-      expect(url).toBe('/api/ai/image-search');
-      expect((init as RequestInit).method).toBe('POST');
+      const firstCall = spy.mock.calls[0] as unknown as [string, RequestInit];
+      expect(firstCall[0]).toBe('/api/ai/image-search');
+      expect(firstCall[1].method).toBe('POST');
     });
 
     it('sends the query in the request body', async () => {

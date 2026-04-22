@@ -133,7 +133,10 @@ describe('chart builders — visual smoke', () => {
       { name: 'two points only', args: { values: [1, 10] } },
       { name: 'spike in middle', args: { values: [1, 1, 1, 100, 1, 1, 1] } },
       { name: 'fractional values', args: { values: [0.5, 1.5, 2.25, 3.75] } },
-      { name: 'custom dimensions', args: { values: [1, 2, 3], width: 400, height: 200 } },
+      {
+        name: 'custom dimensions',
+        args: { values: [1, 2, 3], point_spacing: 50, chart_height: 200 },
+      },
     ];
 
     for (const c of cases) {
