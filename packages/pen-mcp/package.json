@@ -24,6 +24,10 @@
     ".": {
       "types": "./src/index.ts",
       "import": "./src/index.ts"
+    },
+    "./dsl": {
+      "types": "./src/tools/batch-design-dsl.ts",
+      "import": "./src/tools/batch-design-dsl.ts"
     }
   },
   "scripts": {
