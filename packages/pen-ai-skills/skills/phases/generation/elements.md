@@ -117,6 +117,18 @@ Charts / data visualization:
     40b. Line-chart skeleton (polyline + optional dots) → `add_chart_line_v0`
     40c. Pie-chart skeleton (colored ellipse slices via arc angles) → `add_chart_pie_v0`
 
+Media / placeholder:
+
+44. Image placeholder (gray box + centered icon + optional caption — future image slot) → `add_image_placeholder_v0`
+
+Social / UGC:
+
+45. Comment row (circular avatar + author/timestamp header + body) → `add_comment_v0`
+
+Chrome / modals:
+
+46. Modal dialog shell (dimmed backdrop + centered card + title — body composed separately) → `add_modal_shell_v0`
+
 Activity / history:
 
 41. Vertical timeline (dots + fixed 24px connectors + content; no padding/gap) → `add_timeline_v0`
@@ -161,6 +173,9 @@ PREFER an element tool when the spec says any of:
 - "skeleton", "loading placeholder", "shimmer", "loading state", "placeholder lines", "骨架屏", "加载中占位" → `add_skeleton_v0`
 - "line chart", "trend chart", "折线图" → `add_chart_line_v0`
 - "pie chart", "donut chart", "饼图" → `add_chart_pie_v0`
+- "image placeholder", "photo slot", "upload zone", "hero image area", "cover placeholder", "图片占位" → `add_image_placeholder_v0`
+- "comment", "reply", "feedback row", "review row", "评论" → `add_comment_v0`
+- "modal", "dialog", "popup", "confirm dialog", "模态框", "弹窗" → `add_modal_shell_v0`
 - "toggle", "switch", "on/off", "开关" → `add_switch_v0`
 - "checkbox", "agreement", "select option", "复选框" → `add_checkbox_v0`
 - "radio", "single choice", "单选" → `add_radio_v0` (stack multiple in a vertical parent)
@@ -295,6 +310,9 @@ add_select_v0({ label: "Currency", placeholder: "Choose currency", required: tru
 add_chart_line_v0({ values: [2, 5, 3, 7, 4, 8, 6] })
 add_chart_pie_v0({ values: [40, 30, 20, 10], diameter: 200 })
 add_chart_pie_v0({ values: [1, 1, 1, 1], inner_radius_ratio: 0.5 })  // donut
+add_image_placeholder_v0({ width: 320, height: 200, label: "Upload cover" })
+add_comment_v0({ author: "Sarah", timestamp: "2h ago", body: "Looks great!", avatar_initial: "S" })
+add_modal_shell_v0({ title: "Confirm delete", subtitle: "This cannot be undone." })
 
 add_switch_v0({})                          // off (default)
 add_switch_v0({ active: true })             // on — iOS green

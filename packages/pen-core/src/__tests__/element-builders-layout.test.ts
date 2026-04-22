@@ -17,6 +17,7 @@ import {
   buildChartLine,
   buildChartPie,
   buildCheckbox,
+  buildComment,
   buildCodeBlock,
   buildColorSwatch,
   buildDivider,
@@ -26,6 +27,8 @@ import {
   buildTextarea,
   buildHeading,
   buildIconButton,
+  buildImagePlaceholder,
+  buildModalShell,
   buildIconLabel,
   buildKbd,
   buildLink,
@@ -189,6 +192,13 @@ const CASES: LayoutCase[] = [
   },
   { name: 'buildChartLine', tree: () => buildChartLine({ values: [1, 3, 2, 5, 4, 6] }) },
   { name: 'buildChartPie', tree: () => buildChartPie({ values: [40, 30, 20, 10] }) },
+  { name: 'buildImagePlaceholder', tree: () => buildImagePlaceholder({}), wrap: true },
+  {
+    name: 'buildComment',
+    tree: () => buildComment({ author: 'Alice', body: 'Nice', avatar_initial: 'A' }),
+    wrap: true,
+  },
+  { name: 'buildModalShell', tree: () => buildModalShell({ title: 'Confirm' }), wrap: true },
   { name: 'buildChartBars', tree: () => buildChartBars({ values: [4, 7, 3, 9, 5] }) },
 
   // Composites
