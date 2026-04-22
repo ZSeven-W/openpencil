@@ -69,17 +69,17 @@ describe('loadCorpus — v1 supplemental corpus (new tools)', () => {
   // comment, modal_shell). All obvious — one prompt per tool so an
   // A/B v2 run can measure routing + legality on the new surface
   // without re-running all 24 v0 prompts. See `corpus/ab-v1/README.md`.
-  it('loads 9 prompts, all obvious, one per new tool', () => {
+  it('loads 10 prompts, all obvious, one per new tool', () => {
     const prompts = loadCorpus(REPO_CORPUS_V1_DIR);
-    expect(prompts).toHaveLength(9);
-    expect(new Set(prompts.map((p) => p.id)).size).toBe(9);
+    expect(prompts).toHaveLength(10);
+    expect(new Set(prompts.map((p) => p.id)).size).toBe(10);
     for (const p of prompts) {
       expect(p.difficulty).toBe('obvious');
       expect(p.expected_tool_if_any).toMatch(/^add_[a-z_]+_v0$/);
     }
   });
 
-  it('covers the 9 specific tools added 2026-04-22', () => {
+  it('covers the 10 specific tools added 2026-04-22', () => {
     const prompts = loadCorpus(REPO_CORPUS_V1_DIR);
     const tools = new Set(prompts.map((p) => p.expected_tool_if_any));
     expect(tools).toEqual(
@@ -93,6 +93,7 @@ describe('loadCorpus — v1 supplemental corpus (new tools)', () => {
         'add_comment_v0',
         'add_modal_shell_v0',
         'add_status_badge_v0',
+        'add_tooltip_v0',
       ]),
     );
   });
