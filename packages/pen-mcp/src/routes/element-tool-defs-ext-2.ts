@@ -741,4 +741,47 @@ export const ELEMENT_TOOL_DEFINITIONS_EXT_2 = [
       required: ['total'],
     },
   },
+  {
+    name: 'add_otp_input_v0',
+    description:
+      'OTP / PIN code input — horizontal row of N square slots, one digit per slot. Common in 2FA ' +
+      'verification, PIN unlock, email/phone confirmation flows. Renders the blank awaiting-input ' +
+      'state by default, or a partial/full state if `digits` is supplied. The `focused_index` ' +
+      'slot shows an accent-color 2px outline (the "currently typing here" visual). Use for ' +
+      '"OTP input", "PIN code", "verification code", "6-digit code", "2FA code", "验证码", "PIN 码". ' +
+      'schemaVersion 1.0',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        schemaVersion: schemaVersionProp,
+        filePath: filePathProp,
+        length: {
+          type: 'number',
+          description: 'Number of code slots (clamped 4..8, default 6)',
+        },
+        digits: {
+          type: 'array',
+          description:
+            'Optional digits — digits[i] fills slot i. Omit (or pass shorter array) for the blank / partial state.',
+          items: { type: 'string' },
+        },
+        focused_index: {
+          type: 'number',
+          description: '0-based index of the slot with the accent outline (default 0)',
+        },
+        slot_size: {
+          type: 'number',
+          description: 'Slot side length in px (clamped 32..80, default 48)',
+        },
+        gap: { type: 'number', description: 'Gap between slots in px (clamped 0..24, default 12)' },
+        accent_color: {
+          type: 'string',
+          description: 'Hex color for the focused-slot border (default #2563EB)',
+        },
+        parent_id: parentIdProp,
+        pageId: pageIdProp,
+      },
+      required: [],
+    },
+  },
 ];

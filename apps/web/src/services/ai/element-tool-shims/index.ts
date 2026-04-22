@@ -53,6 +53,7 @@ import {
   buildModalShell,
   buildModalShellV1,
   buildUploadDropzone,
+  buildOtpInput,
   buildKbd,
   buildLink,
   buildListRow,
@@ -118,6 +119,7 @@ import {
   type ModalShellParams,
   type ModalShellV1Params,
   type UploadDropzoneParams,
+  type OtpInputParams,
   type KbdParams,
   type LinkParams,
   type ListRowParams,
@@ -302,6 +304,7 @@ export const ELEMENT_SHIMS: Record<string, ElementShim> = {
   add_date_picker_v0: wrap<DatePickerParams>(buildDatePicker),
   add_modal_shell_v1: wrap<ModalShellV1Params>(buildModalShellV1),
   add_upload_dropzone_v0: wrap<UploadDropzoneParams>(buildUploadDropzone),
+  add_otp_input_v0: wrap<OtpInputParams>(buildOtpInput),
 };
 
 export function getElementShim(name: string): ElementShim | undefined {
