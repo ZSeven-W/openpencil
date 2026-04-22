@@ -37,6 +37,7 @@ import {
   buildUploadDropzone,
   buildOtpInput,
   buildAttachmentRow,
+  buildChatBubble,
   buildKbd,
   buildLink,
   buildListRow,
@@ -195,6 +196,7 @@ const SERVER_BUILDERS: Record<string, BuilderFn> = {
     buildUploadDropzone(a as Parameters<typeof buildUploadDropzone>[0]),
   add_otp_input_v0: (a) => buildOtpInput(a as Parameters<typeof buildOtpInput>[0]),
   add_attachment_row_v0: (a) => buildAttachmentRow(a as Parameters<typeof buildAttachmentRow>[0]),
+  add_chat_bubble_v0: (a) => buildChatBubble(a as Parameters<typeof buildChatBubble>[0]),
 };
 
 interface ExecToolBody {

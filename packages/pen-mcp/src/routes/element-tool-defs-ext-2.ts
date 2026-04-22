@@ -784,4 +784,49 @@ export const ELEMENT_TOOL_DEFINITIONS_EXT_2 = [
       required: [],
     },
   },
+  {
+    name: 'add_chat_bubble_v0',
+    description:
+      'Chat message bubble for messaging / customer-support / AI chat UIs. Left-aligned (side=left, ' +
+      'default): from-others bubble — slate-100 fill, slate-900 text, optional author label above, ' +
+      'justified to flex-start. Right-aligned (side=right): from-self bubble — accent-color fill, ' +
+      'white text, author suppressed (the self-bubble never carries "You:"), justified to flex-end. ' +
+      'Optional timestamp below either side. Caller stacks multiple bubbles in a vertical parent to ' +
+      'build the conversation. Use for "chat message", "message bubble", "conversation row", "聊天 ' +
+      'bubble", "消息气泡". schemaVersion 1.0',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        schemaVersion: schemaVersionProp,
+        filePath: filePathProp,
+        message: { type: 'string', description: 'Message body text (wraps within max_width)' },
+        side: {
+          type: 'string',
+          enum: ['left', 'right'],
+          description:
+            'Alignment / color variant. "left" (default) = from-others (slate bg, author allowed). "right" = from-self (accent bg, no author).',
+        },
+        author: {
+          type: 'string',
+          description:
+            'Sender display name. ONLY shown on side=left. Ignored on right (self bubbles never carry their own name).',
+        },
+        timestamp: {
+          type: 'string',
+          description: 'Optional relative time shown below the bubble (e.g. "2m", "Just now")',
+        },
+        max_width: {
+          type: 'number',
+          description: 'Bubble max width in px (clamped 160..480, default 280)',
+        },
+        accent_color: {
+          type: 'string',
+          description: 'Hex fill for self-side (side=right) bubbles (default #2563EB)',
+        },
+        parent_id: parentIdProp,
+        pageId: pageIdProp,
+      },
+      required: ['message'],
+    },
+  },
 ];
