@@ -42,6 +42,7 @@ import {
   buildModalShell,
   buildModalShellV1,
   buildUploadDropzone,
+  buildOtpInput,
   buildKbd,
   buildLink,
   buildListRow,
@@ -446,6 +447,11 @@ const CASES: BuilderCase[] = [
     toolName: 'add_upload_dropzone_v0',
     args: { width: 480, title: 'Drop PDFs here', subtitle: 'Max 10 MB', icon: 'upload' },
     build: (a) => buildUploadDropzone(a as unknown as Parameters<typeof buildUploadDropzone>[0]),
+  },
+  {
+    toolName: 'add_otp_input_v0',
+    args: { length: 6, digits: ['1', '2', '3'], focused_index: 3 },
+    build: (a) => buildOtpInput(a as unknown as Parameters<typeof buildOtpInput>[0]),
   },
 ];
 

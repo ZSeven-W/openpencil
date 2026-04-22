@@ -251,6 +251,7 @@ export {
   buildDatePicker,
   buildModalShellV1,
   buildUploadDropzone,
+  buildOtpInput,
   cjkFontFamily,
   detectCjkScript,
   type ElementTree,
@@ -335,4 +336,5 @@ export {
   type ModalShellV1Params,
   type ModalShellV1Theme,
   type UploadDropzoneParams,
+  type OtpInputParams,
 } from './element-builders/index.js';

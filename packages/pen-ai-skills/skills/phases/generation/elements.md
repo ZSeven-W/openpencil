@@ -188,7 +188,11 @@ Upload / file intake:
 
 58. File upload dropzone (dashed tile + cloud icon + "Drop files / click to browse") → `add_upload_dropzone_v0`
 
-59. None match → fall through to `batch_design`
+Auth / verification:
+
+59. OTP / PIN code input (row of N square slots, 4..8 digits; blank / partial / full states) → `add_otp_input_v0`
+
+60. None match → fall through to `batch_design`
 
 **Disambiguation**: if you need a ROW of 3 metrics that should NOT scroll (e.g. a stats strip inside a card), use `add_stat_grid_v0`, NOT `add_metric_row_v0`. The grid uses `fill_container` per cell so it never overflows; the metric row uses fixed-px cells + scroll wrapper.
 
@@ -258,6 +262,7 @@ PREFER an element tool when the spec says any of:
 - "action menu", "context menu", "dropdown menu", "more menu", "kebab menu", "action sheet", "下拉菜单", "操作菜单" → `add_action_menu_v0`
 - "date picker", "date input", "date field", "due date", "picker closed", "日期选择器", "日期输入" → `add_date_picker_v0` (for the calendar grid shown after clicking, use `add_calendar_grid_v0`)
 - "upload", "drop files here", "drag and drop", "file picker", "dropzone", "upload area", "上传区", "文件拖放" → `add_upload_dropzone_v0` (visually similar to empty-chart but semantically different — pick by intent)
+- "OTP", "PIN code", "verification code", "2FA code", "6-digit code", "enter code", "验证码", "PIN 码" → `add_otp_input_v0`
 
 STILL use batch_design when:
 
@@ -480,6 +485,10 @@ add_date_picker_v0({ label: "Due date", value: "Jan 15, 2026", clearable: true }
 
 add_upload_dropzone_v0({})                                                              // default 480×200 cloud icon
 add_upload_dropzone_v0({ icon: "file-up", title: "Drop resume here", subtitle: "PDF or DOCX, max 5 MB" })
+
+add_otp_input_v0({})                                                                    // 6 blank slots, first focused
+add_otp_input_v0({ length: 6, digits: ["1","2","3"], focused_index: 3 })               // partial state, 4th slot focused
+add_otp_input_v0({ length: 4, digits: ["1","2","3","4"] })                             // 4-digit PIN, all filled
 ```
 
 ## Composition pattern

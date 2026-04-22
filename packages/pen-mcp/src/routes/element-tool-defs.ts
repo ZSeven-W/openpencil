@@ -79,6 +79,7 @@ import { handleAddActionMenuV0 } from '../tools/add-action-menu-v0';
 import { handleAddDatePickerV0 } from '../tools/add-date-picker-v0';
 import { handleAddModalShellV1 } from '../tools/add-modal-shell-v1';
 import { handleAddUploadDropzoneV0 } from '../tools/add-upload-dropzone-v0';
+import { handleAddOtpInputV0 } from '../tools/add-otp-input-v0';
 import { recordElementToolCall } from '../metrics/element-tool-metrics';
 import { ELEMENT_TOOL_DEFINITIONS_BASE } from './element-tool-defs-base';
 import { ELEMENT_TOOL_DEFINITIONS_EXT } from './element-tool-defs-ext';
@@ -237,6 +238,8 @@ async function dispatchElementToolCall(name: string, a: any): Promise<string> {
       return JSON.stringify(await handleAddModalShellV1(a), null, 2);
     case 'add_upload_dropzone_v0':
       return JSON.stringify(await handleAddUploadDropzoneV0(a), null, 2);
+    case 'add_otp_input_v0':
+      return JSON.stringify(await handleAddOtpInputV0(a), null, 2);
     default:
       return '';
   }
