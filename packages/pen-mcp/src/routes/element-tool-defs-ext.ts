@@ -1064,6 +1064,49 @@ export const ELEMENT_TOOL_DEFINITIONS_EXT = [
     },
   },
   {
+    name: 'add_modal_shell_v1',
+    description:
+      'Theme-aware variant of add_modal_shell_v0 — same structure (scrim + centered card + title + ' +
+      'optional subtitle) with an additional `theme` param controlling fill colors. ' +
+      'theme="light" (default): byte-parity with v0 (white card, slate-500 muted subtitle, ' +
+      'unstyled title). theme="dark": slate-800 card, slate-200 title, slate-400 muted subtitle — ' +
+      'hardcoded dark palette, no ref resolution needed. theme="system": emits $color-surface / ' +
+      '$color-text-primary / $color-text-muted refs; render color tracks themes.Mode at paint time. ' +
+      'REQUIRES `applySemanticPalette(doc)` to have seeded the 14-token semantic palette when ' +
+      'theme="system" — otherwise refs resolve to undefined. Scrim stays black in both themes ' +
+      '(modal backdrops are always dark-dimming regardless of surface theme). ' +
+      'Use when the spec says "dark-mode modal", "theme-aware dialog", "supports light/dark ' +
+      'toggle"; stick with add_modal_shell_v0 for single-theme light designs (v0 is simpler to ' +
+      'apply styling overrides on top of). schemaVersion 1.0',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        schemaVersion: schemaVersionProp,
+        filePath: filePathProp,
+        title: { type: 'string', description: 'Modal title shown as heading' },
+        subtitle: { type: 'string', description: 'Optional subtitle / description' },
+        card_width: { type: 'number', description: 'Card width in px (default 400, min 280)' },
+        card_padding: {
+          type: 'number',
+          description: 'Inner padding, all sides (default 24, min 12)',
+        },
+        scrim_opacity: {
+          type: 'number',
+          description: 'Backdrop scrim opacity 0..1 (default 0.5; 0 = no backdrop)',
+        },
+        theme: {
+          type: 'string',
+          enum: ['light', 'dark', 'system'],
+          description:
+            'Theme variant. "light" (default) = v0 parity. "dark" = hardcoded dark hex. "system" = emits $color-* refs, requires applySemanticPalette(doc) seeded.',
+        },
+        parent_id: parentIdProp,
+        pageId: pageIdProp,
+      },
+      required: ['title'],
+    },
+  },
+  {
     name: 'add_date_picker_v0',
     description:
       'Date picker closed state — labeled input showing the selected date (or placeholder) plus a ' +
