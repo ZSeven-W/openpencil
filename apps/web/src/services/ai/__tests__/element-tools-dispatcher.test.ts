@@ -153,8 +153,8 @@ describe('dispatchElementToolCalls (multi-tag batch)', () => {
  * advertised-but-not-executable output).
  */
 describe('SUPPORTED_EMBEDDED_ELEMENT_TOOLS drift guard', () => {
-  it('covers every add_*_v0 name pen-mcp exposes', () => {
-    const penMcpAddNames = [...ELEMENT_TOOL_NAMES].filter((n) => /^add_.+_v0$/.test(n));
+  it('covers every add_*_vN name pen-mcp exposes', () => {
+    const penMcpAddNames = [...ELEMENT_TOOL_NAMES].filter((n) => /^add_.+_v\d+$/.test(n));
     const shimSet = new Set(SUPPORTED_EMBEDDED_ELEMENT_TOOLS);
     const missing = penMcpAddNames.filter((n) => !shimSet.has(n));
     expect(

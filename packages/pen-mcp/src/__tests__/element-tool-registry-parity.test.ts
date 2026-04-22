@@ -52,9 +52,9 @@ describe('pen-mcp element-tool registry parity', () => {
     expect(ELEMENT_TOOL_DEFINITIONS.length).toBeGreaterThanOrEqual(42);
   });
 
-  it('Every tool name matches the add_X_v0 convention', () => {
+  it('Every tool name matches the add_X_vN convention (accepts _v0, _v1, …)', () => {
     for (const def of ELEMENT_TOOL_DEFINITIONS) {
-      expect(def.name, `tool definition: ${def.name}`).toMatch(/^add_[a-z_]+_v0$/);
+      expect(def.name, `tool definition: ${def.name}`).toMatch(/^add_[a-z_]+_v\d+$/);
     }
   });
 

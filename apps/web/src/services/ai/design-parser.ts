@@ -103,7 +103,7 @@ export function tryParseAllElementToolOutputs(raw: string): DesignOutputShape[] 
         parsed.arguments && typeof parsed.arguments === 'object'
           ? (parsed.arguments as Record<string, unknown>)
           : {};
-      if (/^add_[a-z_]+_v0$/.test(parsed.name)) {
+      if (/^add_[a-z_]+_v\d+$/.test(parsed.name)) {
         shapes.push({ kind: 'element-tool', name: parsed.name, arguments: args, raw: match[0] });
       } else if (parsed.name === 'batch_design') {
         const dsl = typeof args.operations === 'string' ? args.operations : '';
