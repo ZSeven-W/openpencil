@@ -249,6 +249,7 @@ export {
   buildEmptyChart,
   buildActionMenu,
   buildDatePicker,
+  buildModalShellV1,
   cjkFontFamily,
   detectCjkScript,
   type ElementTree,
@@ -330,4 +331,6 @@ export {
   type ActionMenuItem,
   type ActionMenuParams,
   type DatePickerParams,
+  type ModalShellV1Params,
+  type ModalShellV1Theme,
 } from './element-builders/index.js';
