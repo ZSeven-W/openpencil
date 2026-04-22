@@ -45,6 +45,7 @@ export { buildChartPie, type ChartPieParams } from './chart-pie.js';
 export { buildImagePlaceholder, type ImagePlaceholderParams } from './image-placeholder.js';
 export { buildComment, type CommentParams } from './comment.js';
 export { buildModalShell, type ModalShellParams } from './modal-shell.js';
+export { buildStatusBadge, type StatusBadgeParams, type StatusBadgeTone } from './status-badge.js';
 export { buildNavChipRow, type NavChipRowItem, type NavChipRowParams } from './nav-chip-row.js';
 export { buildActivityRing, type ActivityRingParams } from './activity-ring.js';
 export { buildRatingStars, type RatingStarsParams } from './rating-stars.js';

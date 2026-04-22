@@ -1,0 +1,15 @@
+id: dashboard-server-status
+category: dashboard
+difficulty: obvious
+prompt: |
+  Design ONLY a single status indicator: a small green dot (about
+  8px) with the label "Online" next to it, suggesting a server or
+  service is healthy. Compact inline layout. Do NOT include
+  surrounding dashboard chrome, service name, metrics, or any
+  other content — just the dot + label.
+expected:
+  must_contain_roles:
+    - status-badge
+    - status-dot
+    - status-label
+expected_tool_if_any: add_status_badge_v0

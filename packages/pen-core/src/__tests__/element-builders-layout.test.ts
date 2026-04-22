@@ -46,6 +46,7 @@ import {
   buildSelect,
   buildSkeleton,
   buildStatGrid,
+  buildStatusBadge,
   buildStepper,
   buildSwitch,
   buildTabs,
@@ -199,6 +200,11 @@ const CASES: LayoutCase[] = [
     wrap: true,
   },
   { name: 'buildModalShell', tree: () => buildModalShell({ title: 'Confirm' }), wrap: true },
+  {
+    name: 'buildStatusBadge',
+    tree: () => buildStatusBadge({ label: 'Online', tone: 'success' }),
+    wrap: true,
+  },
   { name: 'buildChartBars', tree: () => buildChartBars({ values: [4, 7, 3, 9, 5] }) },
 
   // Composites

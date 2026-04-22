@@ -639,6 +639,31 @@ export const ELEMENT_TOOL_DEFINITIONS_EXT = [
     },
   },
   {
+    name: 'add_status_badge_v0',
+    description:
+      'Semantic status indicator: small colored dot + short label (e.g. "● Online", "● Busy", ' +
+      '"● Error"). ALWAYS has a dot — that is what makes it visually a status, distinguishing ' +
+      'from the more general add_badge_v0 (pill label without dot). tone picks dot color: ' +
+      'success (green) / warning (amber) / error (red) / info (blue) / neutral (slate, default). ' +
+      'Use for "status", "presence", "health indicator", "状态". schemaVersion 1.0',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        schemaVersion: schemaVersionProp,
+        filePath: filePathProp,
+        label: { type: 'string', description: 'Label text (e.g. "Online")' },
+        tone: {
+          type: 'string',
+          enum: ['success', 'warning', 'error', 'info', 'neutral'],
+          description: 'Dot color tone. Default "neutral" (slate gray).',
+        },
+        parent_id: parentIdProp,
+        pageId: pageIdProp,
+      },
+      required: ['label'],
+    },
+  },
+  {
     name: 'add_image_placeholder_v0',
     description:
       'Image placeholder — gray box with centered lucide icon + optional caption label. ' +
