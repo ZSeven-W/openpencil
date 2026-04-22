@@ -1,0 +1,14 @@
+id: mobile-help-tooltip
+category: mobile
+difficulty: obvious
+prompt: |
+  Design ONLY a small dark tooltip pill with the help text "Click
+  to remove" — hover-hint appearance, rounded dark background,
+  white compact text. Do NOT include the button/element it would
+  point to, no arrow pointer, no surrounding chrome — just the
+  tooltip pill itself.
+expected:
+  must_contain_roles:
+    - tooltip-top
+    - tooltip-text
+expected_tool_if_any: add_tooltip_v0

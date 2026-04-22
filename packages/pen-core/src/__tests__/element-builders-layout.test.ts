@@ -47,12 +47,14 @@ import {
   buildSkeleton,
   buildStatGrid,
   buildStatusBadge,
+  buildSpinner,
   buildStepper,
   buildSwitch,
   buildTabs,
   buildTextButton,
   buildTimeline,
   buildToast,
+  buildTooltip,
   buildTopNavBar,
   type ElementTree,
 } from '../element-builders/index.js';
@@ -205,6 +207,8 @@ const CASES: LayoutCase[] = [
     tree: () => buildStatusBadge({ label: 'Online', tone: 'success' }),
     wrap: true,
   },
+  { name: 'buildSpinner', tree: () => buildSpinner({}) },
+  { name: 'buildTooltip', tree: () => buildTooltip({ text: 'Help' }), wrap: true },
   { name: 'buildChartBars', tree: () => buildChartBars({ values: [4, 7, 3, 9, 5] }) },
 
   // Composites

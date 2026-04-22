@@ -664,6 +664,63 @@ export const ELEMENT_TOOL_DEFINITIONS_EXT = [
     },
   },
   {
+    name: 'add_spinner_v0',
+    description:
+      'Loading spinner (static): a ring + 3/4-sweep active arc. No animation — pen-core is ' +
+      'still-frame, so use size + thickness to match the desired visual and rely on the app to ' +
+      'animate if needed. Use for "loading spinner", "progress circle", "loader", "加载圈". ' +
+      'schemaVersion 1.0',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        schemaVersion: schemaVersionProp,
+        filePath: filePathProp,
+        size: { type: 'number', description: 'Outer diameter in px (default 32, clamped 16..128)' },
+        thickness: {
+          type: 'number',
+          description: 'Stroke thickness in px (default 3, clamped 1..16)',
+        },
+        track_color: {
+          type: 'string',
+          description: 'Track ring color (default #E2E8F0 slate-200)',
+        },
+        active_color: {
+          type: 'string',
+          description: 'Active arc color (default #2563EB blue-600)',
+        },
+        parent_id: parentIdProp,
+        pageId: pageIdProp,
+      },
+      required: [],
+    },
+  },
+  {
+    name: 'add_tooltip_v0',
+    description:
+      'Tooltip pill: small dark (#111827) pill with white text, typical hover-hint appearance. ' +
+      'Only emits the open-state body — caller positions it. position ("top"/"bottom"/"left"/"right") ' +
+      'encodes a role hint for downstream positioning logic but the visual body is identical. ' +
+      'NO arrow pointer (pen-core has no clean triangle primitive); compose one via batch_design ' +
+      'rectangle + rotate if needed. Use for "tooltip", "help hint", "hover label", "提示浮层". ' +
+      'schemaVersion 1.0',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        schemaVersion: schemaVersionProp,
+        filePath: filePathProp,
+        text: { type: 'string', description: 'Tooltip body text (1-2 short lines)' },
+        position: {
+          type: 'string',
+          enum: ['top', 'bottom', 'left', 'right'],
+          description: 'Position hint; sets `tooltip-<position>` on outer role. Default "top".',
+        },
+        parent_id: parentIdProp,
+        pageId: pageIdProp,
+      },
+      required: ['text'],
+    },
+  },
+  {
     name: 'add_image_placeholder_v0',
     description:
       'Image placeholder — gray box with centered lucide icon + optional caption label. ' +

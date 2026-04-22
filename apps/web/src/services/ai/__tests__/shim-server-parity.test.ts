@@ -51,6 +51,7 @@ import {
   buildSkeleton,
   buildStatGrid,
   buildStatusBadge,
+  buildSpinner,
   buildStepper,
   buildSwitch,
   buildTabs,
@@ -58,6 +59,7 @@ import {
   buildTextButton,
   buildTimeline,
   buildToast,
+  buildTooltip,
   buildTopNavBar,
 } from '@zseven-w/pen-core';
 import { ELEMENT_TOOL_NAMES } from '@zseven-w/pen-mcp';
@@ -290,6 +292,16 @@ const CASES: BuilderCase[] = [
     toolName: 'add_status_badge_v0',
     args: { label: 'Online', tone: 'success' },
     build: (a) => buildStatusBadge(a as unknown as Parameters<typeof buildStatusBadge>[0]),
+  },
+  {
+    toolName: 'add_spinner_v0',
+    args: {},
+    build: (a) => buildSpinner(a as unknown as Parameters<typeof buildSpinner>[0]),
+  },
+  {
+    toolName: 'add_tooltip_v0',
+    args: { text: 'Help' },
+    build: (a) => buildTooltip(a as unknown as Parameters<typeof buildTooltip>[0]),
   },
   {
     toolName: 'add_form_field_v0',

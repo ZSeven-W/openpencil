@@ -46,6 +46,8 @@ export { buildImagePlaceholder, type ImagePlaceholderParams } from './image-plac
 export { buildComment, type CommentParams } from './comment.js';
 export { buildModalShell, type ModalShellParams } from './modal-shell.js';
 export { buildStatusBadge, type StatusBadgeParams, type StatusBadgeTone } from './status-badge.js';
+export { buildSpinner, type SpinnerParams } from './spinner.js';
+export { buildTooltip, type TooltipParams } from './tooltip.js';
 export { buildNavChipRow, type NavChipRowItem, type NavChipRowParams } from './nav-chip-row.js';
 export { buildActivityRing, type ActivityRingParams } from './activity-ring.js';
 export { buildRatingStars, type RatingStarsParams } from './rating-stars.js';
