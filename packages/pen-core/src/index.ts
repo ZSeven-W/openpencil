@@ -39,6 +39,19 @@ export {
   resolveNodeForCanvas,
 } from './variables/resolve.js';
 export { replaceVariableRefsInTree } from './variables/replace-refs.js';
+export {
+  applySemanticPalette,
+  getSemanticPalette,
+  getSemanticPaletteDescription,
+  getSemanticPaletteHex,
+  hasSemanticPalette,
+  SEMANTIC_PALETTE_NAMES,
+  SEMANTIC_PALETTE_THEME_AXIS,
+  SEMANTIC_PALETTE_THEME_DARK,
+  SEMANTIC_PALETTE_THEME_LIGHT,
+  type SemanticPalette,
+  type SemanticPaletteMode,
+} from './variables/semantic-palette.js';
 
 // Normalization
 export { normalizePenDocument } from './normalize.js';
