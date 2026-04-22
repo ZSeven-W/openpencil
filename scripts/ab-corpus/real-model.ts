@@ -15,7 +15,7 @@
 import { callMinimax } from './clients/minimax';
 import { callCodex } from './clients/codex-cli';
 import { callBailian } from './clients/bailian';
-import { callGlm } from './clients/glm';
+import { callArk } from './clients/ark';
 import { buildSystemPrompt } from './build-prompt';
 import type { ModelCall } from './stub-model';
 
@@ -24,15 +24,31 @@ import type { ModelCall } from './stub-model';
  *
  *   - `minimax*`    → clients/minimax.ts       (MINIMAX_API_KEY)
  *   - `gpt-*` / o*  → clients/codex-cli.ts     (Codex CLI subscription)
- *   - `glm-5.1`     → clients/glm.ts           (GLM_OFFICIAL_CODING_KEY,
- *                                               GLM-official coding-plan endpoint)
+ *   - `glm-5.1`     → clients/ark.ts           (ARK_CODING_KEY;
+ *                                               Volcengine 方舟 now hosts
+ *                                               GLM-5.1 on its coding plan
+ *                                               as of 2026-04-22. Replaces
+ *                                               the earlier GLM-official
+ *                                               CP route via open.bigmodel.cn
+ *                                               — clients/glm.ts is kept on
+ *                                               disk for historical reference
+ *                                               but no longer auto-routed.)
+ *   - `kimi-k2.6`   → clients/ark.ts           (ARK_CODING_KEY; Volcengine
+ *                                               added K2.6 to 方舟 CP on
+ *                                               2026-04-22)
  *   - `glm-*`       → clients/bailian.ts       (DASHSCOPE_BAILIAN_CODING_KEY,
  *                                               earlier GLM versions hosted on
  *                                               Bailian's DashScope aggregator)
  *   - `kimi-*`      → clients/bailian.ts       (DASHSCOPE_BAILIAN_CODING_KEY,
- *                                               Kimi K-series also on Bailian)
+ *                                               Kimi K2.5 and earlier on Bailian)
  *
  * Anything else → throw with the supported list.
+ *
+ * When benchmarking across routes (e.g. to compare the new Ark GLM-5.1
+ * vs. the legacy GLM-official route), import `callGlm` from
+ * `./clients/glm.ts` directly and wire it here under a different model
+ * alias (say `glm-5.1-legacy`). The default router picks Ark because
+ * that's the path we're actively promoting.
  */
 export async function realModelCall(call: ModelCall): Promise<string> {
   const built = buildSystemPrompt(call.variant);
@@ -50,8 +66,15 @@ export async function realModelCall(call: ModelCall): Promise<string> {
     return callCodex({ model, system: built.system, user });
   }
   if (/^glm-5\.1/i.test(model)) {
-    return callGlm({
-      model: mapGlmOfficialId(model),
+    return callArk({
+      model: mapGlmArkId(model),
+      system: built.system,
+      user,
+    });
+  }
+  if (/^kimi-k2\.6/i.test(model)) {
+    return callArk({
+      model: mapKimiArkId(model),
       system: built.system,
       user,
     });
@@ -71,7 +94,7 @@ export async function realModelCall(call: ModelCall): Promise<string> {
     });
   }
   throw new Error(
-    `No live adapter for model "${model}". Supported: minimax-* (MINIMAX_API_KEY), gpt-*/o1/o3/o4 (Codex CLI), glm-5.1 (GLM_OFFICIAL_CODING_KEY), glm-5 / kimi-* (DASHSCOPE_BAILIAN_CODING_KEY).`,
+    `No live adapter for model "${model}". Supported: minimax-* (MINIMAX_API_KEY), gpt-*/o1/o3/o4 (Codex CLI), glm-5.1 / kimi-k2.6 (ARK_CODING_KEY), glm-5 / kimi-k2.5 (DASHSCOPE_BAILIAN_CODING_KEY).`,
   );
 }
 
@@ -84,11 +107,35 @@ function mapMinimaxId(id: string): string {
 }
 
 function mapGlmOfficialId(id: string): string {
-  // GLM official CP ships "glm-4.7" as the current coding model
-  // (per builtin-provider-presets.ts modelPlaceholder). User's
-  // preferred short form "glm-5.1" maps to that id here.
+  // GLM official CP (open.bigmodel.cn) used to ship "glm-4.7" as the
+  // current coding model. The harness no longer routes `glm-5.1` here
+  // (Ark took over, see mapGlmArkId) but this mapper is kept so
+  // callers who manually import `./clients/glm.ts` for A/B comparison
+  // can still get the canonical id.
   const lower = id.toLowerCase();
   if (lower === 'glm-5.1' || lower === 'glm-5.1-coding') return 'glm-4.7';
+  return id;
+}
+
+function mapGlmArkId(id: string): string {
+  // 方舟 CP exposes Zhipu GLM-5.1 on the coding-plan endpoint. The
+  // on-Ark model name is "glm-5.1" verbatim (no endpoint-ID alias
+  // required as of 2026-04-22 — earlier Ark models needed `ep-xxx`
+  // but GLM-5.1 was onboarded with the promoted short name).
+  const lower = id.toLowerCase();
+  if (lower === 'glm-5.1' || lower === 'glm-5.1-coding' || lower === 'glm-5.1-ark') {
+    return 'glm-5.1';
+  }
+  return id;
+}
+
+function mapKimiArkId(id: string): string {
+  // 方舟 CP exposes Moonshot Kimi K2.6 on the coding-plan endpoint.
+  // Volcengine accepts the promoted short name `kimi-k2.6` directly.
+  const lower = id.toLowerCase();
+  if (lower === 'kimi-k2.6' || lower === 'kimi-2.6' || lower === 'kimi-k2.6-ark') {
+    return 'kimi-k2.6';
+  }
   return id;
 }
 
