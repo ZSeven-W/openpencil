@@ -77,6 +77,7 @@ import { handleAddChipInputV0 } from '../tools/add-chip-input-v0';
 import { handleAddEmptyChartV0 } from '../tools/add-empty-chart-v0';
 import { handleAddActionMenuV0 } from '../tools/add-action-menu-v0';
 import { handleAddDatePickerV0 } from '../tools/add-date-picker-v0';
+import { recordElementToolCall } from '../metrics/element-tool-metrics';
 import { ELEMENT_TOOL_DEFINITIONS_BASE } from './element-tool-defs-base';
 import { ELEMENT_TOOL_DEFINITIONS_EXT } from './element-tool-defs-ext';
 
@@ -91,6 +92,18 @@ export const ELEMENT_TOOL_NAMES: ReadonlySet<string> = new Set(
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export async function handleElementToolCall(name: string, a: any): Promise<string> {
+  try {
+    const out = await dispatchElementToolCall(name, a);
+    recordElementToolCall(name, true);
+    return out;
+  } catch (err) {
+    recordElementToolCall(name, false, err instanceof Error ? err.message : String(err));
+    throw err;
+  }
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function dispatchElementToolCall(name: string, a: any): Promise<string> {
   switch (name) {
     case 'add_card_row_v0':
       return JSON.stringify(await handleAddCardRowV0(a), null, 2);
