@@ -42,6 +42,7 @@ import {
   buildMetricRow,
   buildNavChipRow,
   buildNotificationRow,
+  buildPagination,
   buildPrice,
   buildProgressBar,
   buildQuoteBlock,
@@ -392,6 +393,11 @@ const CASES: BuilderCase[] = [
     toolName: 'add_calendar_grid_v0',
     args: {},
     build: (a) => buildCalendarGrid(a as unknown as Parameters<typeof buildCalendarGrid>[0]),
+  },
+  {
+    toolName: 'add_pagination_v0',
+    args: { total: 10, current: 5 },
+    build: (a) => buildPagination(a as unknown as Parameters<typeof buildPagination>[0]),
   },
 ];
 

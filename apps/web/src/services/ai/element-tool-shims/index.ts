@@ -53,6 +53,7 @@ import {
   buildMetricRow,
   buildNavChipRow,
   buildNotificationRow,
+  buildPagination,
   buildPrice,
   buildProgressBar,
   buildQuoteBlock,
@@ -110,6 +111,7 @@ import {
   type MetricRowParams,
   type NavChipRowParams,
   type NotificationRowParams,
+  type PaginationParams,
   type PriceParams,
   type ProgressBarParams,
   type QuoteBlockParams,
@@ -278,6 +280,7 @@ export const ELEMENT_SHIMS: Record<string, ElementShim> = {
   add_chart_bars_v0: wrap<ChartBarsParams>(buildChartBars),
   add_timeline_v0: wrap<TimelineParams>(buildTimeline),
   add_calendar_grid_v0: wrap<CalendarGridParams>(buildCalendarGrid),
+  add_pagination_v0: wrap<PaginationParams>(buildPagination),
 };
 
 export function getElementShim(name: string): ElementShim | undefined {
