@@ -74,3 +74,8 @@ export { buildChipInput, type ChipInputParams } from './chip-input.js';
 export { buildEmptyChart, type EmptyChartParams } from './empty-chart.js';
 export { buildActionMenu, type ActionMenuItem, type ActionMenuParams } from './action-menu.js';
 export { buildDatePicker, type DatePickerParams } from './date-picker.js';
+export {
+  buildModalShellV1,
+  type ModalShellV1Params,
+  type ModalShellV1Theme,
+} from './modal-shell-v1.js';
