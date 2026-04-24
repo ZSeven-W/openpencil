@@ -36,28 +36,61 @@ export interface CallOpenAICompatArgs {
   maxTokens?: number;
   /** Label for error messages so "<label> HTTP 401" points at the right provider. */
   label?: string;
+  /**
+   * Per-call wall-clock timeout in ms. Default 120000 (2 minutes).
+   * Override via `AB_CORPUS_CALL_TIMEOUT_MS` env var.
+   *
+   * Why this matters: without a timeout, a hung provider connection
+   * freezes the whole corpus sweep. Happened 2026-04-25 on a 48-run
+   * live sweep — 9/12 prompts completed, then one call on Ark Kimi
+   * never responded and stalled the remaining 3 prompts + 12 extra
+   * runs. With a timeout, the harness records it as a
+   * `__HARNESS_ERROR__` garbage run and moves on.
+   */
+  timeoutMs?: number;
 }
+
+const DEFAULT_TIMEOUT_MS = (() => {
+  const env = process.env.AB_CORPUS_CALL_TIMEOUT_MS;
+  if (env && /^\d+$/.test(env)) {
+    const n = Number(env);
+    if (n > 0) return n;
+  }
+  return 120_000;
+})();
 
 export async function callOpenAICompat(args: CallOpenAICompatArgs): Promise<string> {
   const label = args.label ?? 'openai-compat';
+  const timeoutMs = args.timeoutMs ?? DEFAULT_TIMEOUT_MS;
   const messages: ChatMessage[] = [
     { role: 'system', content: args.system },
     { role: 'user', content: args.user },
   ];
-  const res = await fetch(`${args.baseURL}/chat/completions`, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${args.apiKey}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      model: args.model,
-      messages,
-      temperature: args.temperature ?? 0.2,
-      max_tokens: args.maxTokens ?? 4096,
-      stream: false,
-    }),
-  });
+  const ctrl = new AbortController();
+  const timer = setTimeout(
+    () => ctrl.abort(new Error(`${label} call exceeded ${timeoutMs}ms (model=${args.model})`)),
+    timeoutMs,
+  );
+  let res: Response;
+  try {
+    res = await fetch(`${args.baseURL}/chat/completions`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${args.apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: args.model,
+        messages,
+        temperature: args.temperature ?? 0.2,
+        max_tokens: args.maxTokens ?? 4096,
+        stream: false,
+      }),
+      signal: ctrl.signal,
+    });
+  } finally {
+    clearTimeout(timer);
+  }
   if (!res.ok) {
     const body = await res.text();
     throw new Error(`${label} HTTP ${res.status}: ${body.slice(0, 300)}`);

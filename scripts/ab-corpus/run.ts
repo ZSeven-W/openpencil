@@ -12,7 +12,7 @@
  */
 
 import { mkdirSync } from 'node:fs';
-import { join, dirname } from 'node:path';
+import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseModelOutput, scoreRun, aggregate, type ScoreRow } from '@zseven-w/pen-ai-skills';
 // Node-only: pulls in `node:fs`, so it's NOT re-exported from the
@@ -104,6 +104,17 @@ async function main(): Promise<void> {
   process.stderr.write(`Output: ${args.outDir}\n`);
   process.stderr.write(`Mode: ${args.dryRun ? 'DRY-RUN (stub model)' : 'LIVE'}\n\n`);
 
+  // Stream scores to scores.jsonl as each run completes so a
+  // kill-at-minute-30 (hung API call, accidental ^C) doesn't lose
+  // all results. Final report.md still requires a full sweep for
+  // aggregate counts — but scores.jsonl alone is useful for any
+  // partial-run analysis.
+  const scoresPath = join(args.outDir, 'scores.jsonl');
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const fs = require('node:fs') as typeof import('node:fs');
+  // Truncate on start so a re-run into the same dir overwrites.
+  fs.writeFileSync(scoresPath, '', 'utf-8');
+
   const rows: ScoreRow[] = [];
   for (const prompt of prompts) {
     for (const model of args.models) {
@@ -134,24 +145,19 @@ async function main(): Promise<void> {
           variant,
         });
         rows.push(row);
+        // Append this row to scores.jsonl immediately — durable
+        // partial state for crash recovery.
+        fs.appendFileSync(scoresPath, JSON.stringify(row) + '\n', 'utf-8');
       }
     }
     process.stderr.write(`  · ${prompt.id}\n`);
   }
 
-  writeJsonl(join(args.outDir, 'scores.jsonl'), rows);
   const report = aggregate(rows);
   const { mdPath, jsonPath } = writeReport(args.outDir, report);
   process.stderr.write(`\nReport: ${mdPath}\n`);
   process.stderr.write(`JSON:   ${jsonPath}\n`);
   process.stderr.write(`Scores: ${join(args.outDir, 'scores.jsonl')}\n`);
-}
-
-function writeJsonl(path: string, rows: ScoreRow[]): void {
-  const body = rows.map((r) => JSON.stringify(r)).join('\n') + '\n';
-  mkdirSync(dirname(path), { recursive: true });
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  require('node:fs').writeFileSync(path, body, 'utf-8');
 }
 
 main().catch((err) => {
