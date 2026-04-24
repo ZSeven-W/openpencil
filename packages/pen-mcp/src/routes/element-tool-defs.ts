@@ -82,6 +82,7 @@ import { handleAddUploadDropzoneV0 } from '../tools/add-upload-dropzone-v0';
 import { handleAddOtpInputV0 } from '../tools/add-otp-input-v0';
 import { handleAddAttachmentRowV0 } from '../tools/add-attachment-row-v0';
 import { handleAddChatBubbleV0 } from '../tools/add-chat-bubble-v0';
+import { handleAddStatCardV0 } from '../tools/add-stat-card-v0';
 import { recordElementToolCall } from '../metrics/element-tool-metrics';
 import { ELEMENT_TOOL_DEFINITIONS_BASE } from './element-tool-defs-base';
 import { ELEMENT_TOOL_DEFINITIONS_EXT } from './element-tool-defs-ext';
@@ -248,6 +249,8 @@ async function dispatchElementToolCall(name: string, a: any): Promise<string> {
       return JSON.stringify(await handleAddAttachmentRowV0(a), null, 2);
     case 'add_chat_bubble_v0':
       return JSON.stringify(await handleAddChatBubbleV0(a), null, 2);
+    case 'add_stat_card_v0':
+      return JSON.stringify(await handleAddStatCardV0(a), null, 2);
     default:
       return '';
   }
