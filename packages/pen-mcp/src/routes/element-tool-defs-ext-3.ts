@@ -537,4 +537,36 @@ export const ELEMENT_TOOL_DEFINITIONS_EXT_3 = [
       required: ['message'],
     },
   },
+  {
+    name: 'add_range_slider_v0',
+    description:
+      'Single-thumb range slider — the "Volume 60%" / "Filter from N" horizontal control. Visual ' +
+      'static representation (no interaction wiring). Optional label + value readout shown in a row ' +
+      'above the track. Track renders as: filled accent portion (left of thumb) + 20×20 thumb with ' +
+      'accent stroke + remaining slate portion (right of thumb). Value clamps to [min, max]. Use for ' +
+      '"slider", "range input", "volume control", "opacity slider", "brightness slider", "滑块", ' +
+      '"滑动条". schemaVersion 1.0',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        schemaVersion: schemaVersionProp,
+        filePath: filePathProp,
+        value: { type: 'number', description: 'Current value (default mid-point)' },
+        min: { type: 'number', description: 'Min value (default 0)' },
+        max: { type: 'number', description: 'Max value (default 100)' },
+        label: { type: 'string', description: 'Optional label above the track' },
+        show_value: {
+          type: 'boolean',
+          description: 'When true, renders the current value on the right side of the header row',
+        },
+        value_suffix: {
+          type: 'string',
+          description: 'Optional suffix on rendered value (e.g. "%", "px", "°")',
+        },
+        width: { type: 'number', description: 'Track width in px (default 320, min 160)' },
+        parent_id: parentIdProp,
+        pageId: pageIdProp,
+      },
+    },
+  },
 ];

@@ -91,3 +91,4 @@ export {
 } from './social-login-row.js';
 export { buildPricingCard, type PricingCardParams } from './pricing-card.js';
 export { buildToastV1, type ToastV1Params, type ToastV1Theme } from './toast-v1.js';
+export { buildRangeSlider, type RangeSliderParams } from './range-slider.js';

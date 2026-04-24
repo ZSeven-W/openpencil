@@ -80,6 +80,7 @@ const ELEMENT_TOOL_NAMES = [
   'add_social_login_row_v0',
   'add_pricing_card_v0',
   'add_toast_v1',
+  'add_range_slider_v0',
 ];
 
 describe('element tools — v0-MUST contract', () => {
