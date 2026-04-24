@@ -254,6 +254,7 @@ PREFER an element tool when the spec says any of:
 - "modal", "dialog", "popup", "confirm dialog", "模态框", "弹窗" → `add_modal_shell_v0`
 - "dark modal", "dark-mode dialog", "theme-aware modal", "system theme modal", "暗色弹窗", "主题感知弹窗" → `add_modal_shell_v1` (accepts `theme` param; use `"system"` when the document has `applySemanticPalette(doc)` seeded)
 - "dark toast", "dark-mode snackbar", "theme-aware toast", "system theme toast", "暗色 toast", "暗色浮层通知" → `add_toast_v1` (accepts `theme` param; toasts use INVERTED contrast — `"dark"` gives a light pill with dark fg. Use `"system"` when `applySemanticPalette(doc)` is seeded)
+- "dark empty chart", "dark-mode no-data placeholder", "theme-aware chart empty state", "暗色空图表", "暗色无数据占位" → `add_empty_chart_v1` (accepts `theme` param; use inside dark-theme dashboards so the empty slot doesn't punch a light rectangle into dark surfaces. Use `"system"` when `applySemanticPalette(doc)` is seeded)
 - "status", "online indicator", "presence dot", "health status", "busy indicator", "状态", "在线" → `add_status_badge_v0`
 - "spinner", "loading spinner", "progress circle", "loader", "加载圈" → `add_spinner_v0`
 - "tooltip", "hover hint", "help tip", "提示浮层" → `add_tooltip_v0`
@@ -543,6 +544,10 @@ add_toast_v1({ message: "Changes saved", theme: "system" })                   //
 
 add_range_slider_v0({ value: 60, label: "Volume", show_value: true, value_suffix: "%" })
 add_range_slider_v0({ value: 128, min: 0, max: 255, label: "Brightness", show_value: true })
+
+add_empty_chart_v1({ icon: "line-chart" })                           // default light = v0 parity
+add_empty_chart_v1({ icon: "pie-chart", theme: "dark" })              // dashboard dark-mode "no data" slot
+add_empty_chart_v1({ icon: "bar-chart-2", theme: "system" })          // $color-* refs — requires applySemanticPalette(doc) seeded
 ```
 
 ## Composition pattern

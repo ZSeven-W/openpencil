@@ -259,6 +259,7 @@ export {
   buildPricingCard,
   buildToastV1,
   buildRangeSlider,
+  buildEmptyChartV1,
   cjkFontFamily,
   detectCjkScript,
   type ElementTree,
@@ -355,4 +356,6 @@ export {
   type ToastV1Params,
   type ToastV1Theme,
   type RangeSliderParams,
+  type EmptyChartV1Params,
+  type EmptyChartV1Theme,
 } from './element-builders/index.js';

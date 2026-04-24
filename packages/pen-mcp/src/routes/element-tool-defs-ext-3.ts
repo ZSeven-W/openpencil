@@ -569,4 +569,42 @@ export const ELEMENT_TOOL_DEFINITIONS_EXT_3 = [
       },
     },
   },
+  {
+    name: 'add_empty_chart_v1',
+    description:
+      'Theme-aware variant of add_empty_chart_v0 — same dashed-border "no data yet" tile shape with ' +
+      'an added `theme` param controlling 5 colors (bg, border, icon, title, subtitle). ' +
+      'theme="light" (default): byte-parity with v0 (slate-50 bg, slate-300 dashed border). ' +
+      'theme="dark": hardcoded dark-mode palette (slate-800 bg, slate-600 border, slate-200 title) — ' +
+      'use inside dark-theme dashboards so the empty slot matches surrounding card surfaces. ' +
+      'theme="system": emits $color-surface-2 bg / $color-border stroke / $color-text-muted + ' +
+      '$color-text-primary text refs; render tracks themes.Mode. REQUIRES `applySemanticPalette(doc)` ' +
+      'seeded when theme="system". Use when the spec says "dark-mode empty chart", "empty state in ' +
+      'dark dashboard", "theme-aware no-data placeholder". schemaVersion 1.0',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        schemaVersion: schemaVersionProp,
+        filePath: filePathProp,
+        width: { type: 'number', description: 'Width in px (default 320, min 120)' },
+        height: { type: 'number', description: 'Height in px (default 200, min 100)' },
+        title: { type: 'string', description: 'Headline above subtitle (default "No data yet")' },
+        subtitle: { type: 'string', description: 'Hint beneath title' },
+        icon: {
+          type: 'string',
+          description:
+            'Lucide icon above title (default "bar-chart-2"; "line-chart" / "pie-chart" to match the widget it replaces)',
+        },
+        corner_radius: { type: 'number', description: 'Corner radius (default 12)' },
+        theme: {
+          type: 'string',
+          enum: ['light', 'dark', 'system'],
+          description:
+            'Theme variant. "light" (default) = v0 parity. "dark" = hardcoded dark hex. "system" = $color-* refs; requires applySemanticPalette(doc).',
+        },
+        parent_id: parentIdProp,
+        pageId: pageIdProp,
+      },
+    },
+  },
 ];
