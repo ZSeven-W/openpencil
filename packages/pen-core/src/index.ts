@@ -260,6 +260,7 @@ export {
   buildToastV1,
   buildRangeSlider,
   buildEmptyChartV1,
+  buildPhoneInput,
   cjkFontFamily,
   detectCjkScript,
   type ElementTree,
@@ -358,4 +359,5 @@ export {
   type RangeSliderParams,
   type EmptyChartV1Params,
   type EmptyChartV1Theme,
+  type PhoneInputParams,
 } from './element-builders/index.js';
