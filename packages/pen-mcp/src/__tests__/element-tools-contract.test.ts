@@ -78,6 +78,7 @@ const ELEMENT_TOOL_NAMES = [
   'add_chat_bubble_v0',
   'add_stat_card_v0',
   'add_social_login_row_v0',
+  'add_pricing_card_v0',
 ];
 
 describe('element tools — v0-MUST contract', () => {

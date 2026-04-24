@@ -256,6 +256,7 @@ export {
   buildChatBubble,
   buildStatCard,
   buildSocialLoginRow,
+  buildPricingCard,
   cjkFontFamily,
   detectCjkScript,
   type ElementTree,
@@ -348,4 +349,5 @@ export {
   type StatCardTrend,
   type SocialLoginRowParams,
   type SocialLoginProvider,
+  type PricingCardParams,
 } from './element-builders/index.js';
