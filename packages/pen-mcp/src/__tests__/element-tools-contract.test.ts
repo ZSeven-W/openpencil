@@ -76,6 +76,7 @@ const ELEMENT_TOOL_NAMES = [
   'add_otp_input_v0',
   'add_attachment_row_v0',
   'add_chat_bubble_v0',
+  'add_stat_card_v0',
 ];
 
 describe('element tools — v0-MUST contract', () => {

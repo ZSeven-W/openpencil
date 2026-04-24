@@ -56,6 +56,7 @@ import {
   buildOtpInput,
   buildAttachmentRow,
   buildChatBubble,
+  buildStatCard,
   buildKbd,
   buildLink,
   buildListRow,
@@ -124,6 +125,7 @@ import {
   type OtpInputParams,
   type AttachmentRowParams,
   type ChatBubbleParams,
+  type StatCardParams,
   type KbdParams,
   type LinkParams,
   type ListRowParams,
@@ -311,6 +313,7 @@ export const ELEMENT_SHIMS: Record<string, ElementShim> = {
   add_otp_input_v0: wrap<OtpInputParams>(buildOtpInput),
   add_attachment_row_v0: wrap<AttachmentRowParams>(buildAttachmentRow),
   add_chat_bubble_v0: wrap<ChatBubbleParams>(buildChatBubble),
+  add_stat_card_v0: wrap<StatCardParams>(buildStatCard),
 };
 
 export function getElementShim(name: string): ElementShim | undefined {

@@ -368,4 +368,45 @@ export const ELEMENT_TOOL_DEFINITIONS_EXT_3 = [
       required: ['message'],
     },
   },
+  {
+    name: 'add_stat_card_v0',
+    description:
+      'Big-number stat card — standalone featured-metric tile: label (uppercase muted) + huge 32/700 ' +
+      'value + optional delta line (tone-colored by trend) + optional corner icon. Dashboard KPI / ' +
+      '"your XYZ today" pattern. Distinct from: `add_stat_grid_v0` (multi-cell side-by-side, smaller ' +
+      'per-cell value), `add_metric_comparison_v0` (horizontal labeled KPI with inline trend arrow). ' +
+      'Pick stat_card for "featured single metric"; use the others for compact rows. Use for "KPI card", ' +
+      '"big number card", "metric tile", "stat widget", "关键指标卡", "数据大屏卡片". schemaVersion 1.0',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        schemaVersion: schemaVersionProp,
+        filePath: filePathProp,
+        label: {
+          type: 'string',
+          description: 'Small label above the big number (rendered uppercase)',
+        },
+        value: {
+          type: 'string',
+          description: 'Primary metric string, e.g. "$12.4k" / "1,284" / "98.2%"',
+        },
+        icon: { type: 'string', description: 'Optional lucide icon shown in the top-right corner' },
+        delta: {
+          type: 'string',
+          description: 'Optional delta text below the value (e.g. "+8% vs last week")',
+        },
+        trend: {
+          type: 'string',
+          enum: ['up', 'down', 'flat'],
+          description:
+            'Tone for the delta line. up=emerald, down=red, flat=slate (default). Value is always slate-900 regardless.',
+        },
+        width: { type: 'number', description: 'Card width in px (default 240, min 160)' },
+        corner_radius: { type: 'number', description: 'Corner radius (default 16)' },
+        parent_id: parentIdProp,
+        pageId: pageIdProp,
+      },
+      required: ['label', 'value'],
+    },
+  },
 ];
