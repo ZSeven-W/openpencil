@@ -208,7 +208,11 @@ Auth / login:
 
 63. Social auth provider buttons ("Continue with Google / Apple / Microsoft", OAuth/SSO row, third-party sign-in) → `add_social_login_row_v0`
 
-64. None match → fall through to `batch_design`
+Pricing / monetization:
+
+64. Pricing plan tier card (SaaS pricing table column: tier name + big price + feature list + CTA; emphasize the recommended tier with `emphasis="featured"`) → `add_pricing_card_v0`
+
+65. None match → fall through to `batch_design`
 
 **Disambiguation**: if you need a ROW of 3 metrics that should NOT scroll (e.g. a stats strip inside a card), use `add_stat_grid_v0`, NOT `add_metric_row_v0`. The grid uses `fill_container` per cell so it never overflows; the metric row uses fixed-px cells + scroll wrapper.
 
@@ -283,6 +287,7 @@ PREFER an element tool when the spec says any of:
 - "chat message", "message bubble", "conversation row", "iMessage bubble", "chat UI", "聊天气泡", "消息气泡" → `add_chat_bubble_v0` (side="left" for from-others, side="right" for from-self)
 - "KPI card", "big number card", "metric tile", "stat widget", "featured metric", "关键指标卡", "数据大屏卡片" → `add_stat_card_v0` (distinct from `add_stat_grid_v0` which is multi-cell side-by-side)
 - "Continue with Google", "Sign in with Apple", "social login", "OAuth buttons", "SSO providers", "third-party login", "第三方登录", "社交登录", "OAuth 登录" → `add_social_login_row_v0` (orientation="vertical" for stacked full-width on mobile; orientation="horizontal" for the compact "or sign in with..." icon-only row)
+- "pricing card", "plan card", "SaaS tier", "subscription plan", "pricing tier", "billing card", "价格卡", "套餐卡", "定价卡片" → `add_pricing_card_v0` (set one tile's `emphasis: "featured"` to visually recommend it — auto-gets "Most popular" badge unless `badge` overrides). For a 3-tier pricing section, call this 3× under the same parent section.
 
 STILL use batch_design when:
 
@@ -521,6 +526,10 @@ add_stat_card_v0({ label: "Active users", value: "1,284", icon: "users" })      
 
 add_social_login_row_v0({ providers: [{ name: "Google" }, { name: "Apple" }, { name: "Microsoft" }] })  // stacked "Continue with X" buttons
 add_social_login_row_v0({ providers: [{ name: "Google" }, { name: "GitHub" }, { name: "Slack" }], orientation: "horizontal" })  // compact icon-only row
+
+add_pricing_card_v0({ tier: "Starter", price: "0", period: "/month", features: ["3 projects", "Community support"], cta: "Get started" })
+add_pricing_card_v0({ tier: "Pro", price: "29", period: "/month", features: ["Unlimited projects", "Priority support", "Advanced analytics"], emphasis: "featured" })  // highlighted recommended tier
+add_pricing_card_v0({ tier: "Enterprise", price: "Custom", features: ["Dedicated support", "SSO", "SLA"], cta: "Contact sales" })
 ```
 
 ## Composition pattern

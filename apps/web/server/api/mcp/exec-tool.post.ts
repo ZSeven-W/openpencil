@@ -40,6 +40,7 @@ import {
   buildChatBubble,
   buildStatCard,
   buildSocialLoginRow,
+  buildPricingCard,
   buildKbd,
   buildLink,
   buildListRow,
@@ -202,6 +203,7 @@ const SERVER_BUILDERS: Record<string, BuilderFn> = {
   add_stat_card_v0: (a) => buildStatCard(a as Parameters<typeof buildStatCard>[0]),
   add_social_login_row_v0: (a) =>
     buildSocialLoginRow(a as Parameters<typeof buildSocialLoginRow>[0]),
+  add_pricing_card_v0: (a) => buildPricingCard(a as Parameters<typeof buildPricingCard>[0]),
 };
 
 interface ExecToolBody {

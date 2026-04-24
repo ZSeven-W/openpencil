@@ -58,6 +58,7 @@ import {
   buildChatBubble,
   buildStatCard,
   buildSocialLoginRow,
+  buildPricingCard,
   buildKbd,
   buildLink,
   buildListRow,
@@ -128,6 +129,7 @@ import {
   type ChatBubbleParams,
   type StatCardParams,
   type SocialLoginRowParams,
+  type PricingCardParams,
   type KbdParams,
   type LinkParams,
   type ListRowParams,
@@ -317,6 +319,7 @@ export const ELEMENT_SHIMS: Record<string, ElementShim> = {
   add_chat_bubble_v0: wrap<ChatBubbleParams>(buildChatBubble),
   add_stat_card_v0: wrap<StatCardParams>(buildStatCard),
   add_social_login_row_v0: wrap<SocialLoginRowParams>(buildSocialLoginRow),
+  add_pricing_card_v0: wrap<PricingCardParams>(buildPricingCard),
 };
 
 export function getElementShim(name: string): ElementShim | undefined {
