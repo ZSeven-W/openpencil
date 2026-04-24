@@ -12,6 +12,9 @@ todos.json
 .openpencil-tmp/
 .superpowers/
 .playwright-cli/
+.playwright-mcp/
+editor-*.png
+scripts/ab-corpus/runs/
 
 docs/
 
