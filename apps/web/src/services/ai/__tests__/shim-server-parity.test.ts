@@ -45,6 +45,7 @@ import {
   buildOtpInput,
   buildAttachmentRow,
   buildChatBubble,
+  buildStatCard,
   buildKbd,
   buildLink,
   buildListRow,
@@ -464,6 +465,17 @@ const CASES: BuilderCase[] = [
     toolName: 'add_chat_bubble_v0',
     args: { message: 'Hello!', side: 'left', author: 'Sarah', timestamp: '2m' },
     build: (a) => buildChatBubble(a as unknown as Parameters<typeof buildChatBubble>[0]),
+  },
+  {
+    toolName: 'add_stat_card_v0',
+    args: {
+      label: 'Monthly revenue',
+      value: '$12.4k',
+      icon: 'trending-up',
+      delta: '+8%',
+      trend: 'up',
+    },
+    build: (a) => buildStatCard(a as unknown as Parameters<typeof buildStatCard>[0]),
   },
 ];
 

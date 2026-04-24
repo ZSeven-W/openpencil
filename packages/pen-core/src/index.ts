@@ -254,6 +254,7 @@ export {
   buildOtpInput,
   buildAttachmentRow,
   buildChatBubble,
+  buildStatCard,
   cjkFontFamily,
   detectCjkScript,
   type ElementTree,
@@ -342,4 +343,6 @@ export {
   type AttachmentRowParams,
   type ChatBubbleParams,
   type ChatBubbleSide,
+  type StatCardParams,
+  type StatCardTrend,
 } from './element-builders/index.js';

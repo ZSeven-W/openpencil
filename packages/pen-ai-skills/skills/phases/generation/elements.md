@@ -200,7 +200,11 @@ Messaging:
 
 61. Chat message bubble (left=from-others slate bg / right=from-self accent bg; optional author + timestamp) → `add_chat_bubble_v0`
 
-62. None match → fall through to `batch_design`
+Dashboard KPIs:
+
+62. Big-number stat card (standalone metric tile — label + huge value + optional delta/icon) → `add_stat_card_v0`
+
+63. None match → fall through to `batch_design`
 
 **Disambiguation**: if you need a ROW of 3 metrics that should NOT scroll (e.g. a stats strip inside a card), use `add_stat_grid_v0`, NOT `add_metric_row_v0`. The grid uses `fill_container` per cell so it never overflows; the metric row uses fixed-px cells + scroll wrapper.
 
@@ -273,6 +277,7 @@ PREFER an element tool when the spec says any of:
 - "OTP", "PIN code", "verification code", "2FA code", "6-digit code", "enter code", "验证码", "PIN 码" → `add_otp_input_v0`
 - "attachment", "attached file", "uploaded file", "file item", "file list row", "附件", "已上传文件" → `add_attachment_row_v0` (for upload-in-progress state, compose `add_progress_bar_v0` below)
 - "chat message", "message bubble", "conversation row", "iMessage bubble", "chat UI", "聊天气泡", "消息气泡" → `add_chat_bubble_v0` (side="left" for from-others, side="right" for from-self)
+- "KPI card", "big number card", "metric tile", "stat widget", "featured metric", "关键指标卡", "数据大屏卡片" → `add_stat_card_v0` (distinct from `add_stat_grid_v0` which is multi-cell side-by-side)
 
 STILL use batch_design when:
 
@@ -505,6 +510,9 @@ add_attachment_row_v0({ filename: "sealed.zip", icon: "file-archive", removable:
 
 add_chat_bubble_v0({ message: "Hi! How can I help?", author: "Support", timestamp: "Just now" })  // left (from-others)
 add_chat_bubble_v0({ message: "My order hasn't arrived.", side: "right", timestamp: "2m" })      // right (from-self)
+
+add_stat_card_v0({ label: "Monthly revenue", value: "$12.4k", icon: "trending-up", delta: "+8% vs last week", trend: "up" })
+add_stat_card_v0({ label: "Active users", value: "1,284", icon: "users" })                        // no delta = static snapshot
 ```
 
 ## Composition pattern
