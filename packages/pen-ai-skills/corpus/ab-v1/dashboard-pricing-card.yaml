@@ -1,0 +1,30 @@
+id: dashboard-pricing-card
+category: dashboard
+difficulty: obvious
+prompt: |
+  Design ONLY one pricing card for a SaaS pricing table: the "Pro"
+  tier. The card has a rounded container with an accent (blue)
+  border since this is the featured tier. Contents from top to
+  bottom:
+    - a "Most popular" ribbon / badge
+    - tier name "Pro"
+    - small description "For growing teams"
+    - the price "$29" with "/month" suffix rendered in the common
+      baseline-aligned currency + amount + period pattern
+    - a feature list with check icons:
+        • Unlimited projects
+        • Priority support
+        • Advanced analytics
+    - a primary CTA button "Get started" at the bottom
+  Do NOT include other pricing tiers or surrounding section chrome
+  — just one single pricing card.
+expected:
+  must_contain_roles:
+    - pricing-card
+    - pricing-tier
+    - pricing-amount
+    - pricing-feature
+    - pricing-cta
+  min_roles:
+    pricing-feature: 3
+expected_tool_if_any: add_pricing_card_v0
