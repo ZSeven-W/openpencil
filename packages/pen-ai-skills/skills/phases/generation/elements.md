@@ -212,7 +212,11 @@ Pricing / monetization:
 
 64. Pricing plan tier card (SaaS pricing table column: tier name + big price + feature list + CTA; emphasize the recommended tier with `emphasis="featured"`) → `add_pricing_card_v0`
 
-65. None match → fall through to `batch_design`
+Input / forms:
+
+65. Range slider (single-thumb horizontal slider showing current value: volume, opacity, brightness, price range) → `add_range_slider_v0`
+
+66. None match → fall through to `batch_design`
 
 **Disambiguation**: if you need a ROW of 3 metrics that should NOT scroll (e.g. a stats strip inside a card), use `add_stat_grid_v0`, NOT `add_metric_row_v0`. The grid uses `fill_container` per cell so it never overflows; the metric row uses fixed-px cells + scroll wrapper.
 
@@ -289,6 +293,7 @@ PREFER an element tool when the spec says any of:
 - "KPI card", "big number card", "metric tile", "stat widget", "featured metric", "关键指标卡", "数据大屏卡片" → `add_stat_card_v0` (distinct from `add_stat_grid_v0` which is multi-cell side-by-side)
 - "Continue with Google", "Sign in with Apple", "social login", "OAuth buttons", "SSO providers", "third-party login", "第三方登录", "社交登录", "OAuth 登录" → `add_social_login_row_v0` (orientation="vertical" for stacked full-width on mobile; orientation="horizontal" for the compact "or sign in with..." icon-only row)
 - "pricing card", "plan card", "SaaS tier", "subscription plan", "pricing tier", "billing card", "价格卡", "套餐卡", "定价卡片" → `add_pricing_card_v0` (set one tile's `emphasis: "featured"` to visually recommend it — auto-gets "Most popular" badge unless `badge` overrides). For a 3-tier pricing section, call this 3× under the same parent section.
+- "slider", "range input", "volume control", "opacity slider", "brightness slider", "filter slider", "滑块", "滑动条", "音量条" → `add_range_slider_v0` (single-handle; set `show_value=true` + `value_suffix="%"` to render the readout). For a dual-handle range (min+max), still fall through to batch_design.
 
 STILL use batch_design when:
 
@@ -535,6 +540,9 @@ add_pricing_card_v0({ tier: "Enterprise", price: "Custom", features: ["Dedicated
 add_toast_v1({ message: "Changes saved", icon: "check" })                     // default light = v0 parity (dark pill)
 add_toast_v1({ message: "Changes saved", icon: "check", theme: "dark" })      // inverted light pill for dark-surface screens
 add_toast_v1({ message: "Changes saved", theme: "system" })                   // $color-* refs — requires applySemanticPalette(doc) seeded
+
+add_range_slider_v0({ value: 60, label: "Volume", show_value: true, value_suffix: "%" })
+add_range_slider_v0({ value: 128, min: 0, max: 255, label: "Brightness", show_value: true })
 ```
 
 ## Composition pattern

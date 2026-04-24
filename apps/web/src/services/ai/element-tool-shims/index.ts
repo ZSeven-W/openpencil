@@ -60,6 +60,7 @@ import {
   buildSocialLoginRow,
   buildPricingCard,
   buildToastV1,
+  buildRangeSlider,
   buildKbd,
   buildLink,
   buildListRow,
@@ -132,6 +133,7 @@ import {
   type SocialLoginRowParams,
   type PricingCardParams,
   type ToastV1Params,
+  type RangeSliderParams,
   type KbdParams,
   type LinkParams,
   type ListRowParams,
@@ -323,6 +325,7 @@ export const ELEMENT_SHIMS: Record<string, ElementShim> = {
   add_social_login_row_v0: wrap<SocialLoginRowParams>(buildSocialLoginRow),
   add_pricing_card_v0: wrap<PricingCardParams>(buildPricingCard),
   add_toast_v1: wrap<ToastV1Params>(buildToastV1),
+  add_range_slider_v0: wrap<RangeSliderParams>(buildRangeSlider),
 };
 
 export function getElementShim(name: string): ElementShim | undefined {

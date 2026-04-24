@@ -258,6 +258,7 @@ export {
   buildSocialLoginRow,
   buildPricingCard,
   buildToastV1,
+  buildRangeSlider,
   cjkFontFamily,
   detectCjkScript,
   type ElementTree,
@@ -353,4 +354,5 @@ export {
   type PricingCardParams,
   type ToastV1Params,
   type ToastV1Theme,
+  type RangeSliderParams,
 } from './element-builders/index.js';

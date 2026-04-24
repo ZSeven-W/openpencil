@@ -60,6 +60,7 @@ import {
   buildProgressBar,
   buildQuoteBlock,
   buildRadio,
+  buildRangeSlider,
   buildRatingStars,
   buildSearchBar,
   buildSectionHeader,
@@ -500,6 +501,11 @@ const CASES: BuilderCase[] = [
     toolName: 'add_toast_v1',
     args: { message: 'Copied to clipboard', icon: 'check', theme: 'dark' },
     build: (a) => buildToastV1(a as unknown as Parameters<typeof buildToastV1>[0]),
+  },
+  {
+    toolName: 'add_range_slider_v0',
+    args: { value: 40, label: 'Volume', show_value: true, value_suffix: '%' },
+    build: (a) => buildRangeSlider(a as unknown as Parameters<typeof buildRangeSlider>[0]),
   },
 ];
 
