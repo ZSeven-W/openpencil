@@ -30,6 +30,7 @@ import {
   buildDatePicker,
   buildDivider,
   buildEmptyChart,
+  buildEmptyChartV1,
   buildEmptyState,
   buildFab,
   buildFaqItem,
@@ -506,6 +507,11 @@ const CASES: BuilderCase[] = [
     toolName: 'add_range_slider_v0',
     args: { value: 40, label: 'Volume', show_value: true, value_suffix: '%' },
     build: (a) => buildRangeSlider(a as unknown as Parameters<typeof buildRangeSlider>[0]),
+  },
+  {
+    toolName: 'add_empty_chart_v1',
+    args: { width: 320, height: 200, icon: 'line-chart', title: 'No data yet', theme: 'dark' },
+    build: (a) => buildEmptyChartV1(a as unknown as Parameters<typeof buildEmptyChartV1>[0]),
   },
 ];
 
