@@ -249,6 +249,7 @@ PREFER an element tool when the spec says any of:
 - "comment", "reply", "feedback row", "review row", "评论" → `add_comment_v0`
 - "modal", "dialog", "popup", "confirm dialog", "模态框", "弹窗" → `add_modal_shell_v0`
 - "dark modal", "dark-mode dialog", "theme-aware modal", "system theme modal", "暗色弹窗", "主题感知弹窗" → `add_modal_shell_v1` (accepts `theme` param; use `"system"` when the document has `applySemanticPalette(doc)` seeded)
+- "dark toast", "dark-mode snackbar", "theme-aware toast", "system theme toast", "暗色 toast", "暗色浮层通知" → `add_toast_v1` (accepts `theme` param; toasts use INVERTED contrast — `"dark"` gives a light pill with dark fg. Use `"system"` when `applySemanticPalette(doc)` is seeded)
 - "status", "online indicator", "presence dot", "health status", "busy indicator", "状态", "在线" → `add_status_badge_v0`
 - "spinner", "loading spinner", "progress circle", "loader", "加载圈" → `add_spinner_v0`
 - "tooltip", "hover hint", "help tip", "提示浮层" → `add_tooltip_v0`
@@ -530,6 +531,10 @@ add_social_login_row_v0({ providers: [{ name: "Google" }, { name: "GitHub" }, { 
 add_pricing_card_v0({ tier: "Starter", price: "0", period: "/month", features: ["3 projects", "Community support"], cta: "Get started" })
 add_pricing_card_v0({ tier: "Pro", price: "29", period: "/month", features: ["Unlimited projects", "Priority support", "Advanced analytics"], emphasis: "featured" })  // highlighted recommended tier
 add_pricing_card_v0({ tier: "Enterprise", price: "Custom", features: ["Dedicated support", "SSO", "SLA"], cta: "Contact sales" })
+
+add_toast_v1({ message: "Changes saved", icon: "check" })                     // default light = v0 parity (dark pill)
+add_toast_v1({ message: "Changes saved", icon: "check", theme: "dark" })      // inverted light pill for dark-surface screens
+add_toast_v1({ message: "Changes saved", theme: "system" })                   // $color-* refs — requires applySemanticPalette(doc) seeded
 ```
 
 ## Composition pattern

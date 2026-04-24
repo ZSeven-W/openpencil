@@ -59,6 +59,7 @@ import {
   buildStatCard,
   buildSocialLoginRow,
   buildPricingCard,
+  buildToastV1,
   buildKbd,
   buildLink,
   buildListRow,
@@ -130,6 +131,7 @@ import {
   type StatCardParams,
   type SocialLoginRowParams,
   type PricingCardParams,
+  type ToastV1Params,
   type KbdParams,
   type LinkParams,
   type ListRowParams,
@@ -320,6 +322,7 @@ export const ELEMENT_SHIMS: Record<string, ElementShim> = {
   add_stat_card_v0: wrap<StatCardParams>(buildStatCard),
   add_social_login_row_v0: wrap<SocialLoginRowParams>(buildSocialLoginRow),
   add_pricing_card_v0: wrap<PricingCardParams>(buildPricingCard),
+  add_toast_v1: wrap<ToastV1Params>(buildToastV1),
 };
 
 export function getElementShim(name: string): ElementShim | undefined {

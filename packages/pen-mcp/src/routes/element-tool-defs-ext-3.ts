@@ -506,4 +506,35 @@ export const ELEMENT_TOOL_DEFINITIONS_EXT_3 = [
       required: ['tier', 'price'],
     },
   },
+  {
+    name: 'add_toast_v1',
+    description:
+      'Theme-aware variant of add_toast_v0 — same floating pill notification (fit_content, ' +
+      'cornerRadius=24, optional leading icon + message) with an added `theme` param. ' +
+      'theme="light" (default): byte-parity with v0 (dark pill #111827 + white fg). ' +
+      'theme="dark": inverted contrast pill (#F1F5F9 light pill + #0F172A dark fg) — toasts use ' +
+      'INVERTED contrast so a light pill sits on a dark surface. theme="system": emits ' +
+      '$color-text-primary as bg + $color-surface as fg (inverted swap); render tracks themes.Mode. ' +
+      'REQUIRES `applySemanticPalette(doc)` seeded when theme="system". Use when the spec says ' +
+      '"dark-mode toast", "theme-aware snackbar", "supports light/dark toggle"; stick with ' +
+      'add_toast_v0 for single-theme designs. schemaVersion 1.0',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        schemaVersion: schemaVersionProp,
+        filePath: filePathProp,
+        message: { type: 'string', description: 'Toast message' },
+        icon: { type: 'string', description: 'Optional leading lucide icon' },
+        theme: {
+          type: 'string',
+          enum: ['light', 'dark', 'system'],
+          description:
+            'Theme variant. "light" (default) = v0 parity (dark pill). "dark" = inverted light pill. "system" = $color-* refs, requires applySemanticPalette(doc).',
+        },
+        parent_id: parentIdProp,
+        pageId: pageIdProp,
+      },
+      required: ['message'],
+    },
+  },
 ];
