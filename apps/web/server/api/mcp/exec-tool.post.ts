@@ -44,6 +44,7 @@ import {
   buildToastV1,
   buildRangeSlider,
   buildEmptyChartV1,
+  buildPhoneInput,
   buildKbd,
   buildLink,
   buildListRow,
@@ -210,6 +211,7 @@ const SERVER_BUILDERS: Record<string, BuilderFn> = {
   add_toast_v1: (a) => buildToastV1(a as Parameters<typeof buildToastV1>[0]),
   add_range_slider_v0: (a) => buildRangeSlider(a as Parameters<typeof buildRangeSlider>[0]),
   add_empty_chart_v1: (a) => buildEmptyChartV1(a as Parameters<typeof buildEmptyChartV1>[0]),
+  add_phone_input_v0: (a) => buildPhoneInput(a as Parameters<typeof buildPhoneInput>[0]),
 };
 
 interface ExecToolBody {

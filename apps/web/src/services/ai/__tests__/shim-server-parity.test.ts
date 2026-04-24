@@ -57,6 +57,7 @@ import {
   buildNavChipRow,
   buildNotificationRow,
   buildPagination,
+  buildPhoneInput,
   buildPrice,
   buildProgressBar,
   buildQuoteBlock,
@@ -512,6 +513,11 @@ const CASES: BuilderCase[] = [
     toolName: 'add_empty_chart_v1',
     args: { width: 320, height: 200, icon: 'line-chart', title: 'No data yet', theme: 'dark' },
     build: (a) => buildEmptyChartV1(a as unknown as Parameters<typeof buildEmptyChartV1>[0]),
+  },
+  {
+    toolName: 'add_phone_input_v0',
+    args: { label: 'Phone number', country_code: '+1', country_flag: '🇺🇸', value: '555 123 4567' },
+    build: (a) => buildPhoneInput(a as unknown as Parameters<typeof buildPhoneInput>[0]),
   },
 ];
 
