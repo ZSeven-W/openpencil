@@ -81,6 +81,7 @@ const ELEMENT_TOOL_NAMES = [
   'add_pricing_card_v0',
   'add_toast_v1',
   'add_range_slider_v0',
+  'add_empty_chart_v1',
 ];
 
 describe('element tools — v0-MUST contract', () => {

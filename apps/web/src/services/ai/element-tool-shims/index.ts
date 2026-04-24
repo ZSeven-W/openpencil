@@ -61,6 +61,7 @@ import {
   buildPricingCard,
   buildToastV1,
   buildRangeSlider,
+  buildEmptyChartV1,
   buildKbd,
   buildLink,
   buildListRow,
@@ -134,6 +135,7 @@ import {
   type PricingCardParams,
   type ToastV1Params,
   type RangeSliderParams,
+  type EmptyChartV1Params,
   type KbdParams,
   type LinkParams,
   type ListRowParams,
@@ -326,6 +328,7 @@ export const ELEMENT_SHIMS: Record<string, ElementShim> = {
   add_pricing_card_v0: wrap<PricingCardParams>(buildPricingCard),
   add_toast_v1: wrap<ToastV1Params>(buildToastV1),
   add_range_slider_v0: wrap<RangeSliderParams>(buildRangeSlider),
+  add_empty_chart_v1: wrap<EmptyChartV1Params>(buildEmptyChartV1),
 };
 
 export function getElementShim(name: string): ElementShim | undefined {

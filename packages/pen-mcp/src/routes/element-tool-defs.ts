@@ -87,6 +87,7 @@ import { handleAddSocialLoginRowV0 } from '../tools/add-social-login-row-v0';
 import { handleAddPricingCardV0 } from '../tools/add-pricing-card-v0';
 import { handleAddToastV1 } from '../tools/add-toast-v1';
 import { handleAddRangeSliderV0 } from '../tools/add-range-slider-v0';
+import { handleAddEmptyChartV1 } from '../tools/add-empty-chart-v1';
 import { recordElementToolCall } from '../metrics/element-tool-metrics';
 import { ELEMENT_TOOL_DEFINITIONS_BASE } from './element-tool-defs-base';
 import { ELEMENT_TOOL_DEFINITIONS_EXT } from './element-tool-defs-ext';
@@ -263,6 +264,8 @@ async function dispatchElementToolCall(name: string, a: any): Promise<string> {
       return JSON.stringify(await handleAddToastV1(a), null, 2);
     case 'add_range_slider_v0':
       return JSON.stringify(await handleAddRangeSliderV0(a), null, 2);
+    case 'add_empty_chart_v1':
+      return JSON.stringify(await handleAddEmptyChartV1(a), null, 2);
     default:
       return '';
   }
