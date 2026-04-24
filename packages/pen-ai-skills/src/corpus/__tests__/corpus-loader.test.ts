@@ -63,24 +63,22 @@ describe('loadCorpus — real corpus', () => {
 });
 
 describe('loadCorpus — v1 supplemental corpus (new tools)', () => {
-  // v1 covers the 8 tools added after the v0 freeze: 5 from the
-  // 2026-04-22 morning batch (textarea, skeleton, select, chart_line,
-  // chart_pie) + 3 from the afternoon batch (image_placeholder,
-  // comment, modal_shell). All obvious — one prompt per tool so an
-  // A/B v2 run can measure routing + legality on the new surface
-  // without re-running all 24 v0 prompts. See `corpus/ab-v1/README.md`.
-  it('loads 17 prompts, all obvious, one per new tool', () => {
+  // v1 covers tools added after the v0 freeze, in chronological batches:
+  // 2026-04-22 (12 tools) / 2026-04-24 (5 tools, 4 v0 + first v1) /
+  // 2026-04-25 (6 tools, 4 v0 + 2 v1). All obvious — one prompt per
+  // tool so A/B runs can measure routing + legality on the new surface
+  // without re-running the v0 corpus. See `corpus/ab-v1/README.md`.
+  it('loads 23 prompts, all obvious, one per new tool', () => {
     const prompts = loadCorpus(REPO_CORPUS_V1_DIR);
-    expect(prompts).toHaveLength(17);
-    expect(new Set(prompts.map((p) => p.id)).size).toBe(17);
+    expect(prompts).toHaveLength(23);
+    expect(new Set(prompts.map((p) => p.id)).size).toBe(23);
     for (const p of prompts) {
       expect(p.difficulty).toBe('obvious');
-      // Accept _v0 or _v1 — the family now includes add_modal_shell_v1.
       expect(p.expected_tool_if_any).toMatch(/^add_[a-z_]+_v\d+$/);
     }
   });
 
-  it('covers the 12 tools from the 2026-04-22 batch + 5 tools from the 2026-04-24 batch', () => {
+  it('covers 2026-04-22 (12) + 2026-04-24 (5) + 2026-04-25 (6) batches', () => {
     const prompts = loadCorpus(REPO_CORPUS_V1_DIR);
     const tools = new Set(prompts.map((p) => p.expected_tool_if_any));
     expect(tools).toEqual(
@@ -104,6 +102,13 @@ describe('loadCorpus — v1 supplemental corpus (new tools)', () => {
         'add_attachment_row_v0',
         'add_chat_bubble_v0',
         'add_modal_shell_v1',
+        // 2026-04-25 batch (6 tools) — 4 new v0 + 2 new v1
+        'add_social_login_row_v0',
+        'add_pricing_card_v0',
+        'add_stat_card_v0',
+        'add_range_slider_v0',
+        'add_toast_v1',
+        'add_empty_chart_v1',
       ]),
     );
   });
