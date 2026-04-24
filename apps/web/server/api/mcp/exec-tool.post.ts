@@ -39,6 +39,7 @@ import {
   buildAttachmentRow,
   buildChatBubble,
   buildStatCard,
+  buildSocialLoginRow,
   buildKbd,
   buildLink,
   buildListRow,
@@ -199,6 +200,8 @@ const SERVER_BUILDERS: Record<string, BuilderFn> = {
   add_attachment_row_v0: (a) => buildAttachmentRow(a as Parameters<typeof buildAttachmentRow>[0]),
   add_chat_bubble_v0: (a) => buildChatBubble(a as Parameters<typeof buildChatBubble>[0]),
   add_stat_card_v0: (a) => buildStatCard(a as Parameters<typeof buildStatCard>[0]),
+  add_social_login_row_v0: (a) =>
+    buildSocialLoginRow(a as Parameters<typeof buildSocialLoginRow>[0]),
 };
 
 interface ExecToolBody {

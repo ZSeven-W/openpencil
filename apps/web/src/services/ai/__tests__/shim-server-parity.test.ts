@@ -45,6 +45,7 @@ import {
   buildOtpInput,
   buildAttachmentRow,
   buildChatBubble,
+  buildSocialLoginRow,
   buildStatCard,
   buildKbd,
   buildLink,
@@ -476,6 +477,11 @@ const CASES: BuilderCase[] = [
       trend: 'up',
     },
     build: (a) => buildStatCard(a as unknown as Parameters<typeof buildStatCard>[0]),
+  },
+  {
+    toolName: 'add_social_login_row_v0',
+    args: { providers: [{ name: 'google' }, { name: 'apple' }] },
+    build: (a) => buildSocialLoginRow(a as unknown as Parameters<typeof buildSocialLoginRow>[0]),
   },
 ];
 

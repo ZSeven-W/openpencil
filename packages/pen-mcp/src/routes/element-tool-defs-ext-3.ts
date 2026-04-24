@@ -409,4 +409,48 @@ export const ELEMENT_TOOL_DEFINITIONS_EXT_3 = [
       required: ['label', 'value'],
     },
   },
+  {
+    name: 'add_social_login_row_v0',
+    description:
+      'Social-auth provider button row — the "Continue with Google / Apple / Microsoft" pattern ' +
+      'on login / signup screens. Two orientations: "vertical" (default, full-width stacked buttons ' +
+      'with icon + "Continue with {Name}" label) and "horizontal" (compact icon-only square pills ' +
+      'side-by-side). Known provider names (google / apple / microsoft / github / facebook / twitter ' +
+      '/ x / linkedin / discord / slack / email / phone) auto-resolve to lucide icons; override via ' +
+      '`providers[i].icon`. Use for "social login", "Sign in with Google", "OAuth buttons", "SSO row", ' +
+      '"第三方登录", "社交登录". schemaVersion 1.0',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        schemaVersion: schemaVersionProp,
+        filePath: filePathProp,
+        providers: {
+          type: 'array',
+          description:
+            'Provider list, 1-6 items. Each item: { name: string, icon?: string }. Known names auto-map icons.',
+          items: {
+            type: 'object',
+            properties: {
+              name: { type: 'string' },
+              icon: { type: 'string', description: 'Optional lucide icon override' },
+            },
+            required: ['name'],
+          },
+        },
+        orientation: {
+          type: 'string',
+          enum: ['vertical', 'horizontal'],
+          description:
+            '"vertical" (default) = full-width stacked buttons w/ label. "horizontal" = compact icon-only pills.',
+        },
+        width: {
+          type: 'number',
+          description: 'Button width in px (default 320, min 200, vertical only)',
+        },
+        parent_id: parentIdProp,
+        pageId: pageIdProp,
+      },
+      required: ['providers'],
+    },
+  },
 ];
