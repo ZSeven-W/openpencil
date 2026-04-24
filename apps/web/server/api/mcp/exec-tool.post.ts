@@ -41,6 +41,7 @@ import {
   buildStatCard,
   buildSocialLoginRow,
   buildPricingCard,
+  buildToastV1,
   buildKbd,
   buildLink,
   buildListRow,
@@ -204,6 +205,7 @@ const SERVER_BUILDERS: Record<string, BuilderFn> = {
   add_social_login_row_v0: (a) =>
     buildSocialLoginRow(a as Parameters<typeof buildSocialLoginRow>[0]),
   add_pricing_card_v0: (a) => buildPricingCard(a as Parameters<typeof buildPricingCard>[0]),
+  add_toast_v1: (a) => buildToastV1(a as Parameters<typeof buildToastV1>[0]),
 };
 
 interface ExecToolBody {

@@ -76,6 +76,7 @@ import {
   buildTextButton,
   buildTimeline,
   buildToast,
+  buildToastV1,
   buildTooltip,
   buildTopNavBar,
 } from '@zseven-w/pen-core';
@@ -494,6 +495,11 @@ const CASES: BuilderCase[] = [
       emphasis: 'featured',
     },
     build: (a) => buildPricingCard(a as unknown as Parameters<typeof buildPricingCard>[0]),
+  },
+  {
+    toolName: 'add_toast_v1',
+    args: { message: 'Copied to clipboard', icon: 'check', theme: 'dark' },
+    build: (a) => buildToastV1(a as unknown as Parameters<typeof buildToastV1>[0]),
   },
 ];
 
