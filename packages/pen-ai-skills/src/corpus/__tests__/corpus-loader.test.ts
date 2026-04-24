@@ -69,21 +69,23 @@ describe('loadCorpus — v1 supplemental corpus (new tools)', () => {
   // comment, modal_shell). All obvious — one prompt per tool so an
   // A/B v2 run can measure routing + legality on the new surface
   // without re-running all 24 v0 prompts. See `corpus/ab-v1/README.md`.
-  it('loads 12 prompts, all obvious, one per new tool', () => {
+  it('loads 17 prompts, all obvious, one per new tool', () => {
     const prompts = loadCorpus(REPO_CORPUS_V1_DIR);
-    expect(prompts).toHaveLength(12);
-    expect(new Set(prompts.map((p) => p.id)).size).toBe(12);
+    expect(prompts).toHaveLength(17);
+    expect(new Set(prompts.map((p) => p.id)).size).toBe(17);
     for (const p of prompts) {
       expect(p.difficulty).toBe('obvious');
-      expect(p.expected_tool_if_any).toMatch(/^add_[a-z_]+_v0$/);
+      // Accept _v0 or _v1 — the family now includes add_modal_shell_v1.
+      expect(p.expected_tool_if_any).toMatch(/^add_[a-z_]+_v\d+$/);
     }
   });
 
-  it('covers the 12 specific tools added 2026-04-22', () => {
+  it('covers the 12 tools from the 2026-04-22 batch + 5 tools from the 2026-04-24 batch', () => {
     const prompts = loadCorpus(REPO_CORPUS_V1_DIR);
     const tools = new Set(prompts.map((p) => p.expected_tool_if_any));
     expect(tools).toEqual(
       new Set([
+        // 2026-04-22 batch (12 tools)
         'add_textarea_v0',
         'add_skeleton_v0',
         'add_select_v0',
@@ -96,6 +98,12 @@ describe('loadCorpus — v1 supplemental corpus (new tools)', () => {
         'add_tooltip_v0',
         'add_metric_comparison_v0',
         'add_notification_row_v0',
+        // 2026-04-24 batch (5 tools) — 4 v0 + first v1
+        'add_upload_dropzone_v0',
+        'add_otp_input_v0',
+        'add_attachment_row_v0',
+        'add_chat_bubble_v0',
+        'add_modal_shell_v1',
       ]),
     );
   });
