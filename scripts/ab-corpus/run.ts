@@ -32,6 +32,7 @@ interface CliArgs {
   models: string[];
   only?: string;
   outDir: string;
+  corpus: 'ab-v0' | 'ab-v1';
 }
 
 function parseArgs(argv: string[]): CliArgs {
@@ -43,6 +44,7 @@ function parseArgs(argv: string[]): CliArgs {
     // default set until keys / adapters land.
     models: ['gpt-5.4', 'minimax-m2.7'],
     outDir: defaultOutDir(),
+    corpus: 'ab-v0',
   };
   for (let i = 0; i < argv.length; i += 1) {
     const a = argv[i];
@@ -50,7 +52,14 @@ function parseArgs(argv: string[]): CliArgs {
     else if (a === '--models') args.models = (argv[++i] ?? '').split(',').filter(Boolean);
     else if (a === '--only') args.only = argv[++i];
     else if (a === '--out') args.outDir = argv[++i] ?? args.outDir;
-    else if (a === '--help' || a === '-h') {
+    else if (a === '--corpus') {
+      const v = argv[++i];
+      if (v !== 'ab-v0' && v !== 'ab-v1') {
+        process.stderr.write(`--corpus must be 'ab-v0' or 'ab-v1', got: ${v}\n`);
+        process.exit(1);
+      }
+      args.corpus = v;
+    } else if (a === '--help' || a === '-h') {
       printUsage();
       process.exit(0);
     }
@@ -65,7 +74,7 @@ function defaultOutDir(): string {
 
 function printUsage(): void {
   process.stderr.write(
-    `Usage: bun scripts/ab-corpus/run.ts [--dry-run] [--models ID,ID,...] [--only prompt-id] [--out DIR]\n`,
+    `Usage: bun scripts/ab-corpus/run.ts [--dry-run] [--models ID,ID,...] [--only prompt-id] [--out DIR] [--corpus ab-v0|ab-v1]\n`,
   );
 }
 
@@ -78,7 +87,7 @@ async function main(): Promise<void> {
     'packages',
     'pen-ai-skills',
     'corpus',
-    'ab-v0',
+    args.corpus,
   );
   const prompts = loadCorpus(corpusDir).filter((p) => (args.only ? p.id === args.only : true));
   if (prompts.length === 0) {
