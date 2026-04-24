@@ -204,7 +204,11 @@ Dashboard KPIs:
 
 62. Big-number stat card (standalone metric tile — label + huge value + optional delta/icon) → `add_stat_card_v0`
 
-63. None match → fall through to `batch_design`
+Auth / login:
+
+63. Social auth provider buttons ("Continue with Google / Apple / Microsoft", OAuth/SSO row, third-party sign-in) → `add_social_login_row_v0`
+
+64. None match → fall through to `batch_design`
 
 **Disambiguation**: if you need a ROW of 3 metrics that should NOT scroll (e.g. a stats strip inside a card), use `add_stat_grid_v0`, NOT `add_metric_row_v0`. The grid uses `fill_container` per cell so it never overflows; the metric row uses fixed-px cells + scroll wrapper.
 
@@ -278,6 +282,7 @@ PREFER an element tool when the spec says any of:
 - "attachment", "attached file", "uploaded file", "file item", "file list row", "附件", "已上传文件" → `add_attachment_row_v0` (for upload-in-progress state, compose `add_progress_bar_v0` below)
 - "chat message", "message bubble", "conversation row", "iMessage bubble", "chat UI", "聊天气泡", "消息气泡" → `add_chat_bubble_v0` (side="left" for from-others, side="right" for from-self)
 - "KPI card", "big number card", "metric tile", "stat widget", "featured metric", "关键指标卡", "数据大屏卡片" → `add_stat_card_v0` (distinct from `add_stat_grid_v0` which is multi-cell side-by-side)
+- "Continue with Google", "Sign in with Apple", "social login", "OAuth buttons", "SSO providers", "third-party login", "第三方登录", "社交登录", "OAuth 登录" → `add_social_login_row_v0` (orientation="vertical" for stacked full-width on mobile; orientation="horizontal" for the compact "or sign in with..." icon-only row)
 
 STILL use batch_design when:
 
@@ -513,6 +518,9 @@ add_chat_bubble_v0({ message: "My order hasn't arrived.", side: "right", timesta
 
 add_stat_card_v0({ label: "Monthly revenue", value: "$12.4k", icon: "trending-up", delta: "+8% vs last week", trend: "up" })
 add_stat_card_v0({ label: "Active users", value: "1,284", icon: "users" })                        // no delta = static snapshot
+
+add_social_login_row_v0({ providers: [{ name: "Google" }, { name: "Apple" }, { name: "Microsoft" }] })  // stacked "Continue with X" buttons
+add_social_login_row_v0({ providers: [{ name: "Google" }, { name: "GitHub" }, { name: "Slack" }], orientation: "horizontal" })  // compact icon-only row
 ```
 
 ## Composition pattern
