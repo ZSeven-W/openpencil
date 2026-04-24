@@ -82,6 +82,7 @@ const ELEMENT_TOOL_NAMES = [
   'add_toast_v1',
   'add_range_slider_v0',
   'add_empty_chart_v1',
+  'add_phone_input_v0',
 ];
 
 describe('element tools — v0-MUST contract', () => {

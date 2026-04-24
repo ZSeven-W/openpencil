@@ -62,6 +62,7 @@ import {
   buildToastV1,
   buildRangeSlider,
   buildEmptyChartV1,
+  buildPhoneInput,
   buildKbd,
   buildLink,
   buildListRow,
@@ -136,6 +137,7 @@ import {
   type ToastV1Params,
   type RangeSliderParams,
   type EmptyChartV1Params,
+  type PhoneInputParams,
   type KbdParams,
   type LinkParams,
   type ListRowParams,
@@ -329,6 +331,7 @@ export const ELEMENT_SHIMS: Record<string, ElementShim> = {
   add_toast_v1: wrap<ToastV1Params>(buildToastV1),
   add_range_slider_v0: wrap<RangeSliderParams>(buildRangeSlider),
   add_empty_chart_v1: wrap<EmptyChartV1Params>(buildEmptyChartV1),
+  add_phone_input_v0: wrap<PhoneInputParams>(buildPhoneInput),
 };
 
 export function getElementShim(name: string): ElementShim | undefined {

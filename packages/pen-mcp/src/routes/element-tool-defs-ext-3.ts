@@ -607,4 +607,48 @@ export const ELEMENT_TOOL_DEFINITIONS_EXT_3 = [
       },
     },
   },
+  {
+    name: 'add_phone_input_v0',
+    description:
+      'International phone input with leading country-code selector — the "+1 (555) …" pattern from ' +
+      'every modern signup / login screen. Different from add_form_field_v0 (single text input, no ' +
+      'prefix); use this when the spec calls for an international phone field with a country picker. ' +
+      'Country selector renders as a button-shape (no actual menu); caller handles the picker UX as ' +
+      'a separate concern. Set `value` to render the populated state (slate-900 text); omit for ' +
+      'placeholder state (slate-400 text). Set `country_flag` (emoji or abbrev) to add a leading ' +
+      'flag glyph next to the dial code. Use for "phone input", "phone field", "international phone", ' +
+      '"country code input", "电话号码输入", "手机号输入". schemaVersion 1.0',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        schemaVersion: schemaVersionProp,
+        filePath: filePathProp,
+        label: { type: 'string', description: 'Optional label above the input' },
+        country_code: {
+          type: 'string',
+          description: 'Dial code shown in the leading button (default "+1")',
+        },
+        country_flag: {
+          type: 'string',
+          description: 'Optional flag emoji or country abbreviation shown next to the dial code',
+        },
+        placeholder: {
+          type: 'string',
+          description: 'Placeholder for the digits input (default "(555) 555-5555")',
+        },
+        value: {
+          type: 'string',
+          description:
+            'Pre-filled phone digits (without country code). Omit for placeholder state.',
+        },
+        required: {
+          type: 'boolean',
+          description: 'When true, appends " *" to the label',
+        },
+        width: { type: 'number', description: 'Field width in px (default 320, min 240)' },
+        parent_id: parentIdProp,
+        pageId: pageIdProp,
+      },
+    },
+  },
 ];
