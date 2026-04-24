@@ -46,6 +46,7 @@ import {
   buildAttachmentRow,
   buildChatBubble,
   buildSocialLoginRow,
+  buildPricingCard,
   buildStatCard,
   buildKbd,
   buildLink,
@@ -482,6 +483,17 @@ const CASES: BuilderCase[] = [
     toolName: 'add_social_login_row_v0',
     args: { providers: [{ name: 'google' }, { name: 'apple' }] },
     build: (a) => buildSocialLoginRow(a as unknown as Parameters<typeof buildSocialLoginRow>[0]),
+  },
+  {
+    toolName: 'add_pricing_card_v0',
+    args: {
+      tier: 'Pro',
+      price: '29',
+      period: '/month',
+      features: ['Unlimited projects', 'Priority support'],
+      emphasis: 'featured',
+    },
+    build: (a) => buildPricingCard(a as unknown as Parameters<typeof buildPricingCard>[0]),
   },
 ];
 

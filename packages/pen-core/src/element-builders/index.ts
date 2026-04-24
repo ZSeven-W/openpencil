@@ -89,3 +89,4 @@ export {
   type SocialLoginRowParams,
   type SocialLoginProvider,
 } from './social-login-row.js';
+export { buildPricingCard, type PricingCardParams } from './pricing-card.js';

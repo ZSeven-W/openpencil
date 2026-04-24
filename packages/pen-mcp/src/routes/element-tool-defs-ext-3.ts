@@ -453,4 +453,57 @@ export const ELEMENT_TOOL_DEFINITIONS_EXT_3 = [
       required: ['providers'],
     },
   },
+  {
+    name: 'add_pricing_card_v0',
+    description:
+      'SaaS pricing-tier card — the "Pro $29/month" column from pricing tables. Columns: tier name + ' +
+      'optional description, big price (currency + amount + period), feature list with check icons, ' +
+      'and a primary CTA at the bottom. Two emphases: "default" (white bg, slate border, slate CTA) ' +
+      'and "featured" (accent border + CTA, auto-adds "Most popular" badge unless `badge` overrides). ' +
+      'Use for "pricing card", "plan card", "SaaS tier", "subscription plan", "价格卡", "套餐卡". ' +
+      'For a 3-column pricing section: call this 3× with different `tier`/`price`/`emphasis` values under ' +
+      'the same section parent_id. schemaVersion 1.0',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        schemaVersion: schemaVersionProp,
+        filePath: filePathProp,
+        tier: { type: 'string', description: 'Tier name (e.g. "Pro", "Team", "Enterprise")' },
+        price: {
+          type: 'string',
+          description: 'Price amount (number only — currency rendered separately, e.g. "29", "0")',
+        },
+        currency: { type: 'string', description: 'Currency symbol before price (default "$")' },
+        period: {
+          type: 'string',
+          description: 'Billing period after price (e.g. "/month", "/year", "/seat")',
+        },
+        features: {
+          type: 'array',
+          description: 'Feature list, 3-6 items typical. Each rendered with a leading check icon.',
+          items: { type: 'string' },
+        },
+        description: {
+          type: 'string',
+          description: 'Small description beneath the tier name (e.g. "For growing teams")',
+        },
+        badge: {
+          type: 'string',
+          description:
+            'Optional ribbon label (e.g. "Most popular"). Auto-shown on featured if omitted.',
+        },
+        cta: { type: 'string', description: 'Primary CTA label (default "Get started")' },
+        emphasis: {
+          type: 'string',
+          enum: ['default', 'featured'],
+          description: '"default" (slate) or "featured" (accent — highlights the recommended tier)',
+        },
+        width: { type: 'number', description: 'Card width in px (default 280, min 220)' },
+        corner_radius: { type: 'number', description: 'Corner radius (default 16)' },
+        parent_id: parentIdProp,
+        pageId: pageIdProp,
+      },
+      required: ['tier', 'price'],
+    },
+  },
 ];
