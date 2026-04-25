@@ -38,6 +38,7 @@ import {
   buildHeading,
   buildIconButton,
   buildIconLabel,
+  buildInputWithAction,
   buildImagePlaceholder,
   buildVideoPlaceholder,
   buildModalShell,
@@ -518,6 +519,11 @@ const CASES: BuilderCase[] = [
     toolName: 'add_phone_input_v0',
     args: { label: 'Phone number', country_code: '+1', country_flag: '🇺🇸', value: '555 123 4567' },
     build: (a) => buildPhoneInput(a as unknown as Parameters<typeof buildPhoneInput>[0]),
+  },
+  {
+    toolName: 'add_input_with_action_v0',
+    args: { placeholder: 'Enter your email', action_label: 'Subscribe', leading_icon: 'mail' },
+    build: (a) => buildInputWithAction(a as unknown as Parameters<typeof buildInputWithAction>[0]),
   },
 ];
 
