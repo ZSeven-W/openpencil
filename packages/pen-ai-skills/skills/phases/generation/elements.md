@@ -220,7 +220,11 @@ Input / forms:
 
 67. Input field with inline action button (newsletter signup, apply discount code, send chat message) → `add_input_with_action_v0`
 
-68. None match → fall through to `batch_design`
+Compliance / disclosure:
+
+68. Cookie consent / GDPR / privacy banner (sticky bottom-of-page disclosure card with accept / decline / settings) → `add_cookie_banner_v0`
+
+69. None match → fall through to `batch_design`
 
 **Disambiguation**: if you need a ROW of 3 metrics that should NOT scroll (e.g. a stats strip inside a card), use `add_stat_grid_v0`, NOT `add_metric_row_v0`. The grid uses `fill_container` per cell so it never overflows; the metric row uses fixed-px cells + scroll wrapper.
 
@@ -301,6 +305,7 @@ PREFER an element tool when the spec says any of:
 - "slider", "range input", "volume control", "opacity slider", "brightness slider", "filter slider", "滑块", "滑动条", "音量条" → `add_range_slider_v0` (single-handle; set `show_value=true` + `value_suffix="%"` to render the readout). For a dual-handle range (min+max), still fall through to batch_design.
 - "phone input", "phone field", "international phone", "country code input", "+1 (555) ...", "电话号码", "手机号输入", "国际电话" → `add_phone_input_v0` (renders country dial code button + digits input in a 44px row; pass `country_flag` for emoji prefix). For a plain single-line text input without the country prefix, use `add_form_field_v0`.
 - "newsletter signup", "subscribe form", "subscribe to newsletter", "promo code input", "apply discount", "send message input", "chat composer", "search with submit", "订阅", "应用优惠码", "发送消息" → `add_input_with_action_v0` (action_kind="text" for "Subscribe" pill button, action_kind="icon" for chat send arrow). Different from `add_form_field_v0` (no inline button) and `add_search_bar_v0` (no trailing action button).
+- "cookie banner", "cookie consent", "GDPR banner", "CCPA banner", "privacy notice", "cookie disclosure", "cookie 提示", "隐私同意条" → `add_cookie_banner_v0` (set `show_settings_link: true` for fine-grained GDPR consent UX). Caller positions sticky-bottom; the tool emits the banner card itself.
 
 STILL use batch_design when:
 
@@ -561,6 +566,10 @@ add_phone_input_v0({ country_code: "+86", country_flag: "🇨🇳", value: "138 
 add_input_with_action_v0({ placeholder: "Enter your email", action_label: "Subscribe", leading_icon: "mail" })  // newsletter signup
 add_input_with_action_v0({ placeholder: "Apply discount code", action_label: "Apply" })                          // checkout discount
 add_input_with_action_v0({ placeholder: "Type a message…", action_kind: "icon", action_icon: "send" })          // chat composer
+
+add_cookie_banner_v0({})                                                                                          // default GDPR banner
+add_cookie_banner_v0({ show_settings_link: true })                                                                // with fine-grained consent link
+add_cookie_banner_v0({ title: "Privacy choices", body: "We use cookies for analytics.", accept_label: "Allow", decline_label: "Decline" })
 ```
 
 ## Composition pattern

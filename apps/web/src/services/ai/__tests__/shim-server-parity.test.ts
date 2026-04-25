@@ -27,6 +27,7 @@ import {
   buildComment,
   buildCodeBlock,
   buildColorSwatch,
+  buildCookieBanner,
   buildDatePicker,
   buildDivider,
   buildEmptyChart,
@@ -524,6 +525,11 @@ const CASES: BuilderCase[] = [
     toolName: 'add_input_with_action_v0',
     args: { placeholder: 'Enter your email', action_label: 'Subscribe', leading_icon: 'mail' },
     build: (a) => buildInputWithAction(a as unknown as Parameters<typeof buildInputWithAction>[0]),
+  },
+  {
+    toolName: 'add_cookie_banner_v0',
+    args: { title: 'We use cookies', show_settings_link: true },
+    build: (a) => buildCookieBanner(a as unknown as Parameters<typeof buildCookieBanner>[0]),
   },
 ];
 

@@ -262,6 +262,7 @@ export {
   buildEmptyChartV1,
   buildPhoneInput,
   buildInputWithAction,
+  buildCookieBanner,
   cjkFontFamily,
   detectCjkScript,
   type ElementTree,
@@ -363,4 +364,5 @@ export {
   type PhoneInputParams,
   type InputWithActionParams,
   type InputWithActionKind,
+  type CookieBannerParams,
 } from './element-builders/index.js';
