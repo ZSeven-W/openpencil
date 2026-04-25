@@ -224,7 +224,11 @@ Compliance / disclosure:
 
 68. Cookie consent / GDPR / privacy banner (sticky bottom-of-page disclosure card with accept / decline / settings) → `add_cookie_banner_v0`
 
-69. None match → fall through to `batch_design`
+Desktop / dashboard rails:
+
+69. Persistent vertical sidebar (left rail with icon+label rows, optional brand title, active item gets pill bg) → `add_sidebar_nav_v0`
+
+70. None match → fall through to `batch_design`
 
 **Disambiguation**: if you need a ROW of 3 metrics that should NOT scroll (e.g. a stats strip inside a card), use `add_stat_grid_v0`, NOT `add_metric_row_v0`. The grid uses `fill_container` per cell so it never overflows; the metric row uses fixed-px cells + scroll wrapper.
 
@@ -306,6 +310,7 @@ PREFER an element tool when the spec says any of:
 - "phone input", "phone field", "international phone", "country code input", "+1 (555) ...", "电话号码", "手机号输入", "国际电话" → `add_phone_input_v0` (renders country dial code button + digits input in a 44px row; pass `country_flag` for emoji prefix). For a plain single-line text input without the country prefix, use `add_form_field_v0`.
 - "newsletter signup", "subscribe form", "subscribe to newsletter", "promo code input", "apply discount", "send message input", "chat composer", "search with submit", "订阅", "应用优惠码", "发送消息" → `add_input_with_action_v0` (action_kind="text" for "Subscribe" pill button, action_kind="icon" for chat send arrow). Different from `add_form_field_v0` (no inline button) and `add_search_bar_v0` (no trailing action button).
 - "cookie banner", "cookie consent", "GDPR banner", "CCPA banner", "privacy notice", "cookie disclosure", "cookie 提示", "隐私同意条" → `add_cookie_banner_v0` (set `show_settings_link: true` for fine-grained GDPR consent UX). Caller positions sticky-bottom; the tool emits the banner card itself.
+- "sidebar", "side nav", "sidebar nav", "left rail", "dashboard nav rail", "admin sidebar", "settings sidebar", "docs sidebar", "vertical nav", "侧边栏", "侧边导航", "左侧导航" → `add_sidebar_nav_v0` (desktop persistent rail; pass `title` for a brand row above the items, mark current page with `active: true` on the item). Different from `add_bottom_nav_v0` (mobile bottom tabs) and `add_top_nav_bar_v0` (mobile top header).
 
 STILL use batch_design when:
 
@@ -570,6 +575,18 @@ add_input_with_action_v0({ placeholder: "Type a message…", action_kind: "icon"
 add_cookie_banner_v0({})                                                                                          // default GDPR banner
 add_cookie_banner_v0({ show_settings_link: true })                                                                // with fine-grained consent link
 add_cookie_banner_v0({ title: "Privacy choices", body: "We use cookies for analytics.", accept_label: "Allow", decline_label: "Decline" })
+
+add_sidebar_nav_v0({
+  title: "Acme",
+  items: [
+    { label: "Dashboard", icon: "layout-dashboard", active: true },
+    { label: "Customers", icon: "users" },
+    { label: "Orders",    icon: "shopping-cart" },
+    { label: "Reports",   icon: "bar-chart-3" },
+    { label: "Settings",  icon: "settings" },
+  ],
+})
+add_sidebar_nav_v0({ items: [{ label: "Home", icon: "home", active: true }, { label: "Profile", icon: "user" }] })  // titleless minimal
 ```
 
 ## Composition pattern

@@ -263,6 +263,7 @@ export {
   buildPhoneInput,
   buildInputWithAction,
   buildCookieBanner,
+  buildSidebarNav,
   cjkFontFamily,
   detectCjkScript,
   type ElementTree,
@@ -365,4 +366,6 @@ export {
   type InputWithActionParams,
   type InputWithActionKind,
   type CookieBannerParams,
+  type SidebarNavItem,
+  type SidebarNavParams,
 } from './element-builders/index.js';
