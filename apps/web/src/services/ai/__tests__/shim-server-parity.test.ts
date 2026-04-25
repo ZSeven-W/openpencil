@@ -28,6 +28,7 @@ import {
   buildCodeBlock,
   buildColorSwatch,
   buildCookieBanner,
+  buildSidebarNav,
   buildDatePicker,
   buildDivider,
   buildEmptyChart,
@@ -530,6 +531,17 @@ const CASES: BuilderCase[] = [
     toolName: 'add_cookie_banner_v0',
     args: { title: 'We use cookies', show_settings_link: true },
     build: (a) => buildCookieBanner(a as unknown as Parameters<typeof buildCookieBanner>[0]),
+  },
+  {
+    toolName: 'add_sidebar_nav_v0',
+    args: {
+      title: 'Acme',
+      items: [
+        { label: 'Dashboard', icon: 'home', active: true },
+        { label: 'Settings', icon: 'settings' },
+      ],
+    },
+    build: (a) => buildSidebarNav(a as unknown as Parameters<typeof buildSidebarNav>[0]),
   },
 ];
 

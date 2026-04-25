@@ -479,4 +479,51 @@ export const ELEMENT_TOOL_DEFINITIONS_EXT_2 = [
       required: ['label'],
     },
   },
+  {
+    name: 'add_sidebar_nav_v0',
+    description:
+      'Persistent vertical sidebar navigation — desktop / dashboard left rail. Stack of icon+' +
+      'label rows with an optional brand/title row at top. Active item gets a slate-100 pill ' +
+      'background + bolder darker label; inactive items have no fill and a muted slate label. ' +
+      'Distinct from add_bottom_nav_v0 (mobile bottom tab bar — horizontal flow, label below ' +
+      'icon) and add_top_nav_bar_v0 (mobile single-row header). Use for "sidebar", "side nav", ' +
+      '"dashboard nav", "admin rail", "docs sidebar", "侧边栏", "侧边导航". schemaVersion 1.0',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        schemaVersion: schemaVersionProp,
+        filePath: filePathProp,
+        items: {
+          type: 'array',
+          description: 'Nav items in vertical order. Set one item.active=true to mark current.',
+          items: {
+            type: 'object',
+            properties: {
+              label: { type: 'string', description: 'Nav item label (e.g. "Dashboard")' },
+              icon: {
+                type: 'string',
+                description: 'Lucide icon slug (e.g. "home", "users", "settings")',
+              },
+              active: {
+                type: 'boolean',
+                description: 'Marks this row as the current page (slate-100 pill bg + bolder).',
+              },
+            },
+            required: ['label', 'icon'],
+          },
+        },
+        title: {
+          type: 'string',
+          description: 'Optional brand / section title row above the items (16/700).',
+        },
+        width: {
+          type: 'number',
+          description: 'Sidebar width in px. Default 240. Clamped 180..320.',
+        },
+        parent_id: parentIdProp,
+        pageId: pageIdProp,
+      },
+      required: ['items'],
+    },
+  },
 ];

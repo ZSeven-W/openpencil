@@ -91,6 +91,7 @@ import { handleAddEmptyChartV1 } from '../tools/add-empty-chart-v1';
 import { handleAddPhoneInputV0 } from '../tools/add-phone-input-v0';
 import { handleAddInputWithActionV0 } from '../tools/add-input-with-action-v0';
 import { handleAddCookieBannerV0 } from '../tools/add-cookie-banner-v0';
+import { handleAddSidebarNavV0 } from '../tools/add-sidebar-nav-v0';
 import { recordElementToolCall } from '../metrics/element-tool-metrics';
 import { ELEMENT_TOOL_DEFINITIONS_BASE } from './element-tool-defs-base';
 import { ELEMENT_TOOL_DEFINITIONS_EXT } from './element-tool-defs-ext';
@@ -275,6 +276,8 @@ async function dispatchElementToolCall(name: string, a: any): Promise<string> {
       return JSON.stringify(await handleAddInputWithActionV0(a), null, 2);
     case 'add_cookie_banner_v0':
       return JSON.stringify(await handleAddCookieBannerV0(a), null, 2);
+    case 'add_sidebar_nav_v0':
+      return JSON.stringify(await handleAddSidebarNavV0(a), null, 2);
     default:
       return '';
   }
