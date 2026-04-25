@@ -1,25 +1,27 @@
 # A/B Corpus v1
 
-Supplemental corpus covering the 12 element tools added after the
-ab-v0 baseline was frozen (2026-04-20). Intended for an A/B v2 run
-that measures routing + legality on the new tool surface without
-re-running the full 24-prompt v0 corpus.
+Supplemental corpus covering element tools added after the ab-v0
+baseline was frozen (2026-04-20). Intended for an A/B v2 run that
+measures routing + legality on the new tool surface without re-running
+the full 24-prompt v0 corpus.
 
-Split: 12 `obvious` prompts, one per new tool. No `optional` prompts
-in v1 — the new tools are narrow enough that any reasonable design
-request either maps to them directly or doesn't, and the optional
-slot is already well-populated in v0.
+All `obvious` prompts, one per new tool. Loaded by
+`loadCorpus('corpus/ab-v1')` and asserted by
+`src/corpus/__tests__/corpus-loader.test.ts` (which is the canonical
+count + tool-list source of truth — keep it in sync when adding
+prompts).
 
-| Prompt                     | Tool                       | Category  |
-| -------------------------- | -------------------------- | --------- |
-| `mobile-bio-textarea`      | `add_textarea_v0`          | mobile    |
-| `mobile-loading-skeleton`  | `add_skeleton_v0`          | mobile    |
-| `mobile-country-select`    | `add_select_v0`            | mobile    |
-| `dashboard-revenue-line`   | `add_chart_line_v0`        | dashboard |
-| `dashboard-category-pie`   | `add_chart_pie_v0`         | dashboard |
-| `mobile-image-placeholder` | `add_image_placeholder_v0` | mobile    |
-| `mobile-single-comment`    | `add_comment_v0`           | mobile    |
-| `dashboard-confirm-modal`  | `add_modal_shell_v0`       | dashboard |
+Batches:
+
+- 2026-04-22 — 12 prompts (textarea / skeleton / select / chart_line /
+  chart_pie / image_placeholder / comment / modal_shell_v0 / status_badge
+  / tooltip / metric_comparison / notification_row)
+- 2026-04-24 — 5 prompts (upload_dropzone / otp_input / attachment_row /
+  chat_bubble / modal_shell_v1)
+- 2026-04-25 — 9 prompts (social_login_row / pricing_card / stat_card /
+  range_slider / phone_input / input_with_action / cookie_banner /
+  toast_v1 / empty_chart_v1)
+- 2026-04-27 — 1 prompt (sidebar_nav_v0 — desktop persistent left rail)
 
 ab-v0 stays frozen (the A/B v1 results in
 `openpencil-docs/superpowers/notes/2026-04-20-ab-v1-results.md` are

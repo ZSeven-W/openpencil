@@ -65,20 +65,21 @@ describe('loadCorpus — real corpus', () => {
 describe('loadCorpus — v1 supplemental corpus (new tools)', () => {
   // v1 covers tools added after the v0 freeze, in chronological batches:
   // 2026-04-22 (12 tools) / 2026-04-24 (5 tools, 4 v0 + first v1) /
-  // 2026-04-25 (9 tools, 7 v0 + 2 v1). All obvious — one prompt per
-  // tool so A/B runs can measure routing + legality on the new surface
-  // without re-running the v0 corpus. See `corpus/ab-v1/README.md`.
-  it('loads 26 prompts, all obvious, one per new tool', () => {
+  // 2026-04-25 (9 tools, 7 v0 + 2 v1) / 2026-04-27 (1 tool, sidebar nav).
+  // All obvious — one prompt per tool so A/B runs can measure routing +
+  // legality on the new surface without re-running the v0 corpus. See
+  // `corpus/ab-v1/README.md`.
+  it('loads 27 prompts, all obvious, one per new tool', () => {
     const prompts = loadCorpus(REPO_CORPUS_V1_DIR);
-    expect(prompts).toHaveLength(26);
-    expect(new Set(prompts.map((p) => p.id)).size).toBe(26);
+    expect(prompts).toHaveLength(27);
+    expect(new Set(prompts.map((p) => p.id)).size).toBe(27);
     for (const p of prompts) {
       expect(p.difficulty).toBe('obvious');
       expect(p.expected_tool_if_any).toMatch(/^add_[a-z_]+_v\d+$/);
     }
   });
 
-  it('covers 2026-04-22 (12) + 2026-04-24 (5) + 2026-04-25 (9) batches', () => {
+  it('covers 2026-04-22 (12) + 2026-04-24 (5) + 2026-04-25 (9) + 2026-04-27 (1) batches', () => {
     const prompts = loadCorpus(REPO_CORPUS_V1_DIR);
     const tools = new Set(prompts.map((p) => p.expected_tool_if_any));
     expect(tools).toEqual(
@@ -112,6 +113,8 @@ describe('loadCorpus — v1 supplemental corpus (new tools)', () => {
         'add_cookie_banner_v0',
         'add_toast_v1',
         'add_empty_chart_v1',
+        // 2026-04-27 batch (1 tool) — desktop sidebar nav rail
+        'add_sidebar_nav_v0',
       ]),
     );
   });
