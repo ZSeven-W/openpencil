@@ -35,6 +35,11 @@ export interface SidebarNavParams {
  *                 padding=[0,12], optional fill=[#F1F5F9] when active)
  *           ├ icon_font(18, lucide, role='sidebar-nav-icon')
  *           └ text(label, 14/500 or 14/600 if active)
+ *
+ * NOTE: pen-core's layout engine only reads the unified `padding`
+ * field (`number | [T,R] | [T,R,B,L] | string`); the CSS-style
+ * `paddingTop/Right/Bottom/Left` siblings are silently dropped. Stay
+ * on the array form here so insets actually render.
  */
 export function buildSidebarNav(params: SidebarNavParams): ElementTree {
   const width = Math.min(320, Math.max(180, Math.floor(params.width ?? 240)));
@@ -48,10 +53,7 @@ export function buildSidebarNav(params: SidebarNavParams): ElementTree {
       height: 'fit_content',
       layout: 'horizontal',
       alignItems: 'center',
-      paddingTop: 8,
-      paddingBottom: 24,
-      paddingLeft: 12,
-      paddingRight: 12,
+      padding: [8, 12, 24, 12],
       children: [
         {
           type: 'text',
@@ -76,10 +78,7 @@ export function buildSidebarNav(params: SidebarNavParams): ElementTree {
     height: 'fill_container',
     layout: 'vertical',
     gap: 4,
-    paddingTop: 16,
-    paddingBottom: 16,
-    paddingLeft: 12,
-    paddingRight: 12,
+    padding: [16, 12],
     fill: [{ type: 'solid', color: '#FFFFFF' }],
     children,
   };
@@ -97,8 +96,7 @@ function buildItem(item: SidebarNavItem): ElementTree {
     layout: 'horizontal',
     alignItems: 'center',
     gap: 12,
-    paddingLeft: 12,
-    paddingRight: 12,
+    padding: [0, 12],
     children: [
       {
         type: 'icon_font',
