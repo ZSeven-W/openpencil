@@ -84,6 +84,7 @@ const ELEMENT_TOOL_NAMES = [
   'add_empty_chart_v1',
   'add_phone_input_v0',
   'add_input_with_action_v0',
+  'add_cookie_banner_v0',
 ];
 
 describe('element tools — v0-MUST contract', () => {
