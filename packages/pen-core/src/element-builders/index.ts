@@ -103,3 +103,4 @@ export {
   type InputWithActionParams,
   type InputWithActionKind,
 } from './input-with-action.js';
+export { buildCookieBanner, type CookieBannerParams } from './cookie-banner.js';

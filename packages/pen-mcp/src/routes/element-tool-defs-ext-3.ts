@@ -698,4 +698,37 @@ export const ELEMENT_TOOL_DEFINITIONS_EXT_3 = [
       required: ['placeholder'],
     },
   },
+  {
+    name: 'add_cookie_banner_v0',
+    description:
+      'Cookie consent banner — sticky bottom-of-page GDPR/CCPA disclosure with title, body, ' +
+      'accept / decline buttons, and an optional "Cookie settings" link for fine-grained consent. ' +
+      'Caller positions the banner (typically `position: sticky; bottom: 0` on web, or as a layered ' +
+      'bottom child in mockups); the tool emits the banner card itself, not the positioning chrome. ' +
+      'Set `show_settings_link: true` to render the third settings affordance below the buttons. ' +
+      'Use for "cookie banner", "cookie consent", "GDPR banner", "privacy notice", "cookie 提示", ' +
+      '"隐私同意条". schemaVersion 1.0',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        schemaVersion: schemaVersionProp,
+        filePath: filePathProp,
+        title: { type: 'string', description: 'Headline (default "We use cookies")' },
+        body: { type: 'string', description: 'Body / disclosure text' },
+        accept_label: { type: 'string', description: 'Accept button label (default "Accept all")' },
+        decline_label: { type: 'string', description: 'Decline button label (default "Reject")' },
+        show_settings_link: {
+          type: 'boolean',
+          description: 'When true, renders a "Cookie settings" link below the buttons',
+        },
+        settings_label: {
+          type: 'string',
+          description: 'Settings link label (default "Cookie settings")',
+        },
+        width: { type: 'number', description: 'Banner width in px (default 720, min 320)' },
+        parent_id: parentIdProp,
+        pageId: pageIdProp,
+      },
+    },
+  },
 ];

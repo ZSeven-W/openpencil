@@ -46,6 +46,7 @@ import {
   buildEmptyChartV1,
   buildPhoneInput,
   buildInputWithAction,
+  buildCookieBanner,
   buildKbd,
   buildLink,
   buildListRow,
@@ -215,6 +216,7 @@ const SERVER_BUILDERS: Record<string, BuilderFn> = {
   add_phone_input_v0: (a) => buildPhoneInput(a as Parameters<typeof buildPhoneInput>[0]),
   add_input_with_action_v0: (a) =>
     buildInputWithAction(a as Parameters<typeof buildInputWithAction>[0]),
+  add_cookie_banner_v0: (a) => buildCookieBanner(a as Parameters<typeof buildCookieBanner>[0]),
 };
 
 interface ExecToolBody {
