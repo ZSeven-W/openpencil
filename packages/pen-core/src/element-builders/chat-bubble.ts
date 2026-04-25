@@ -84,10 +84,7 @@ export function buildChatBubble(params: ChatBubbleParams): ElementTree {
     height: 'fit_content',
     cornerRadius: 16,
     layout: 'vertical',
-    paddingTop: 10,
-    paddingBottom: 10,
-    paddingLeft: 14,
-    paddingRight: 14,
+    padding: [10, 14],
     fill: [{ type: 'solid', color: surfaceBg }],
     children: [
       {
