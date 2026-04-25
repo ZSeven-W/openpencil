@@ -102,10 +102,7 @@ export function buildEmptyChartV1(params: EmptyChartV1Params): ElementTree {
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
-    paddingTop: 24,
-    paddingBottom: 24,
-    paddingLeft: 24,
-    paddingRight: 24,
+    padding: 24,
     fill: [{ type: 'solid', color: c.bg }],
     stroke: {
       thickness: 1,

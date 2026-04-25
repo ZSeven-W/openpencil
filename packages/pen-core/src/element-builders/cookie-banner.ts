@@ -60,8 +60,7 @@ export function buildCookieBanner(params: CookieBannerParams): ElementTree {
     layout: 'horizontal',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingLeft: 18,
-    paddingRight: 18,
+    padding: [0, 18],
     fill: [{ type: 'solid', color: '#F1F5F9' }],
     children: [
       {
@@ -86,8 +85,7 @@ export function buildCookieBanner(params: CookieBannerParams): ElementTree {
     layout: 'horizontal',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingLeft: 18,
-    paddingRight: 18,
+    padding: [0, 18],
     fill: [{ type: 'solid', color: '#2563EB' }],
     children: [
       {
@@ -156,10 +154,7 @@ export function buildCookieBanner(params: CookieBannerParams): ElementTree {
     cornerRadius: 12,
     layout: 'vertical',
     gap: 12,
-    paddingTop: 20,
-    paddingBottom: 20,
-    paddingLeft: 20,
-    paddingRight: 20,
+    padding: 20,
     fill: [{ type: 'solid', color: '#FFFFFF' }],
     stroke: { thickness: 1, fill: [{ type: 'solid', color: '#E2E8F0' }] },
     effects: [

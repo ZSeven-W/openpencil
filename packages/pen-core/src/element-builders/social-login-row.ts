@@ -112,8 +112,7 @@ export function buildSocialLoginRow(params: SocialLoginRowParams): ElementTree {
         layout: 'horizontal',
         alignItems: 'center',
         gap: 12,
-        paddingLeft: 16,
-        paddingRight: 16,
+        padding: [0, 16],
         fill: [{ type: 'solid', color: '#FFFFFF' }],
         stroke: { thickness: 1, fill: [{ type: 'solid', color: '#E2E8F0' }] },
         children: [
