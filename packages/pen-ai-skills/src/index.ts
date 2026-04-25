@@ -31,6 +31,3 @@ export {
 
 // Diagnostics (pure detectors for design quality issues)
 export * from './diagnostics';
-
-// Corpus (A/B evaluation harness types + pure scoring logic)
-export * from './corpus';

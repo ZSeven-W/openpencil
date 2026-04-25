@@ -48,12 +48,8 @@ export const BUILTIN_MODEL_LISTS: Partial<
     { id: 'doubao-seed-2.0-pro', name: 'Doubao Seed 2.0 Pro' },
     { id: 'doubao-seed-2.0-lite', name: 'Doubao Seed 2.0 Lite' },
     { id: 'glm-4.7', name: 'GLM-4.7' },
-    // ARK Coding Plan ships its own DeepSeek catalog (deepseek-v3.2 only
-    // per https://developer.volcengine.com/articles/7615528054736945158).
-    // Do NOT replace with deepseek-v4-pro / v4-flash here — those are
-    // direct DeepSeek API IDs and ARK responds 404 "model does not
-    // support the coding plan feature" for them.
-    { id: 'deepseek-v3.2', name: 'DeepSeek V3.2' },
+    { id: 'deepseek-v4-pro', name: 'DeepSeek V4 Pro' },
+    { id: 'deepseek-v4-flash', name: 'DeepSeek V4 Flash' },
     { id: 'kimi-k2.5', name: 'Kimi K2.5' },
     { id: 'minimax-m2.5', name: 'MiniMax M2.5' },
   ],
