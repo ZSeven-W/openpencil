@@ -45,6 +45,7 @@ import {
   buildRangeSlider,
   buildEmptyChartV1,
   buildPhoneInput,
+  buildInputWithAction,
   buildKbd,
   buildLink,
   buildListRow,
@@ -212,6 +213,8 @@ const SERVER_BUILDERS: Record<string, BuilderFn> = {
   add_range_slider_v0: (a) => buildRangeSlider(a as Parameters<typeof buildRangeSlider>[0]),
   add_empty_chart_v1: (a) => buildEmptyChartV1(a as Parameters<typeof buildEmptyChartV1>[0]),
   add_phone_input_v0: (a) => buildPhoneInput(a as Parameters<typeof buildPhoneInput>[0]),
+  add_input_with_action_v0: (a) =>
+    buildInputWithAction(a as Parameters<typeof buildInputWithAction>[0]),
 };
 
 interface ExecToolBody {

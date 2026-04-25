@@ -98,3 +98,8 @@ export {
   type EmptyChartV1Theme,
 } from './empty-chart-v1.js';
 export { buildPhoneInput, type PhoneInputParams } from './phone-input.js';
+export {
+  buildInputWithAction,
+  type InputWithActionParams,
+  type InputWithActionKind,
+} from './input-with-action.js';
