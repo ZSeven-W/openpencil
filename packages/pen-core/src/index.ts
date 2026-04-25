@@ -261,6 +261,7 @@ export {
   buildRangeSlider,
   buildEmptyChartV1,
   buildPhoneInput,
+  buildInputWithAction,
   cjkFontFamily,
   detectCjkScript,
   type ElementTree,
@@ -360,4 +361,6 @@ export {
   type EmptyChartV1Params,
   type EmptyChartV1Theme,
   type PhoneInputParams,
+  type InputWithActionParams,
+  type InputWithActionKind,
 } from './element-builders/index.js';

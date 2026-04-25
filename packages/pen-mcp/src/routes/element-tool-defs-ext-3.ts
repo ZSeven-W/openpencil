@@ -651,4 +651,51 @@ export const ELEMENT_TOOL_DEFINITIONS_EXT_3 = [
       },
     },
   },
+  {
+    name: 'add_input_with_action_v0',
+    description:
+      'Input field with inline action button on the right — the "Subscribe to newsletter" / ' +
+      '"Apply discount code" / "Send chat message" pattern. Different from add_form_field_v0 ' +
+      '(label-above, no inline button) and add_search_bar_v0 (leading search icon, no trailing ' +
+      'action). Two action variants: action_kind="text" (default, pill button with label like ' +
+      '"Subscribe") or action_kind="icon" (44×44 square icon button — chat send arrow / search ' +
+      'apply). Set `value` to render populated state (slate-900 text); omit for placeholder ' +
+      'state (slate-400). Optional `leading_icon` adds an icon inside the input itself. Use for ' +
+      '"newsletter signup", "apply discount code", "send message", "subscribe form", "promo code", ' +
+      '"订阅输入", "发送消息输入". schemaVersion 1.0',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        schemaVersion: schemaVersionProp,
+        filePath: filePathProp,
+        placeholder: { type: 'string', description: 'Placeholder text (e.g. "Enter email")' },
+        value: {
+          type: 'string',
+          description: 'Pre-filled input value. Omit for placeholder state.',
+        },
+        action_label: {
+          type: 'string',
+          description: 'Button text when action_kind="text" (default "Submit")',
+        },
+        action_icon: {
+          type: 'string',
+          description: 'Lucide icon name when action_kind="icon" (default "arrow-right")',
+        },
+        action_kind: {
+          type: 'string',
+          enum: ['text', 'icon'],
+          description:
+            '"text" (default) = pill button with label. "icon" = 44×44 square icon button.',
+        },
+        leading_icon: {
+          type: 'string',
+          description: 'Optional lucide icon shown inside the input itself (left side)',
+        },
+        width: { type: 'number', description: 'Field width in px (default 400, min 280)' },
+        parent_id: parentIdProp,
+        pageId: pageIdProp,
+      },
+      required: ['placeholder'],
+    },
+  },
 ];

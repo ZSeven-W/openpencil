@@ -63,6 +63,7 @@ import {
   buildRangeSlider,
   buildEmptyChartV1,
   buildPhoneInput,
+  buildInputWithAction,
   buildKbd,
   buildLink,
   buildListRow,
@@ -138,6 +139,7 @@ import {
   type RangeSliderParams,
   type EmptyChartV1Params,
   type PhoneInputParams,
+  type InputWithActionParams,
   type KbdParams,
   type LinkParams,
   type ListRowParams,
@@ -332,6 +334,7 @@ export const ELEMENT_SHIMS: Record<string, ElementShim> = {
   add_range_slider_v0: wrap<RangeSliderParams>(buildRangeSlider),
   add_empty_chart_v1: wrap<EmptyChartV1Params>(buildEmptyChartV1),
   add_phone_input_v0: wrap<PhoneInputParams>(buildPhoneInput),
+  add_input_with_action_v0: wrap<InputWithActionParams>(buildInputWithAction),
 };
 
 export function getElementShim(name: string): ElementShim | undefined {
