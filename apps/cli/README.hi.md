@@ -73,13 +73,6 @@ op copy <id> [--parent P]
 op replace <id> <json> [--post-process]
 ```
 
-### कोड निर्यात
-
-```bash
-op export <format> [--out file]
-# प्रारूप: react, html, vue, svelte, flutter, swiftui, compose, rn, css
-```
-
 ### वेरिएबल और थीम
 
 ```bash

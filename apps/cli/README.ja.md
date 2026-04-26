@@ -73,13 +73,6 @@ op copy <id> [--parent P]
 op replace <id> <json> [--post-process]
 ```
 
-### コードエクスポート
-
-```bash
-op export <format> [--out file]
-# フォーマット: react, html, vue, svelte, flutter, swiftui, compose, rn, css
-```
-
 ### 変数とテーマ
 
 ```bash

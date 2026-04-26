@@ -96,7 +96,7 @@ Web app + native desktop on macOS, Windows, and Linux via Electron. Auto-updates
 
 ### ⌨️ CLI — `op`
 
-Control the design tool from your terminal. `op design`, `op insert`, `op export` — batch design DSL, node manipulation, code export. Pipe in from files or stdin. Works with desktop app or web server.
+Control the design tool from your terminal. `op design`, `op insert` — batch design DSL, node manipulation. Pipe in from files or stdin. Works with desktop app or web server.
 
 </td>
 </tr>
@@ -275,7 +275,6 @@ npm install -g @zseven-w/openpencil
 op start                     # Launch desktop app
 op design @landing.txt       # Batch design from file
 op insert '{"type":"RECT"}'  # Insert a node
-op export react --out .      # Export to React + Tailwind
 op import:figma design.fig   # Import Figma file
 cat design.dsl | op design - # Pipe from stdin
 ```
@@ -350,7 +349,7 @@ Supports three input methods: inline string, `@filepath` (read from file), or `-
 | **State**       | Zustand v5                                                                              |
 | **Server**      | Nitro                                                                                   |
 | **Desktop**     | Electron 35                                                                             |
-| **CLI**         | `op` — terminal control, batch design DSL, code export                                  |
+| **CLI**         | `op` — terminal control, batch design DSL                                               |
 | **AI**          | agent-native (Zig NAPI) · Anthropic SDK · Claude Agent SDK · OpenCode SDK · Copilot SDK |
 | **Runtime**     | Bun · Vite 7                                                                            |
 | **Lint**        | oxlint · oxfmt                                                                          |

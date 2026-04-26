@@ -73,13 +73,6 @@ op copy <id> [--parent P]
 op replace <id> <json> [--post-process]
 ```
 
-### การส่งออกโค้ด
-
-```bash
-op export <format> [--out file]
-# รูปแบบ: react, html, vue, svelte, flutter, swiftui, compose, rn, css
-```
-
 ### ตัวแปรและธีม
 
 ```bash

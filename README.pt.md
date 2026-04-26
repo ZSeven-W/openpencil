@@ -89,7 +89,7 @@ App web + desktop nativo no macOS, Windows e Linux via Electron. Atualização a
 
 ### ⌨️ CLI — `op`
 
-Controle a ferramenta de design pelo terminal. `op design`, `op insert`, `op export` — DSL de design em lote, manipulação de nós, exportação de código. Entrada por pipe de arquivos ou stdin. Funciona com o app desktop ou servidor web.
+Controle a ferramenta de design pelo terminal. `op design`, `op insert` — DSL de design em lote, manipulação de nós. Entrada por pipe de arquivos ou stdin. Funciona com o app desktop ou servidor web.
 
 </td>
 <td width="50%">
@@ -220,7 +220,6 @@ npm install -g @zseven-w/openpencil
 op start                     # Iniciar app desktop
 op design @landing.txt       # Design em lote a partir de arquivo
 op insert '{"type":"RECT"}'  # Inserir um nó
-op export react --out .      # Exportar para React + Tailwind
 op import:figma design.fig   # Importar arquivo Figma
 cat design.dsl | op design - # Entrada por pipe via stdin
 ```
@@ -294,7 +293,7 @@ Suporta três métodos de entrada: string inline, `@filepath` (ler de arquivo) o
 | **Estado**             | Zustand v5                                                                       |
 | **Servidor**           | Nitro                                                                            |
 | **Desktop**            | Electron 35                                                                      |
-| **CLI**                | `op` — controle pelo terminal, DSL de design em lote, exportação de código       |
+| **CLI**                | `op` — controle pelo terminal, DSL de design em lote                             |
 | **IA**                 | Vercel AI SDK v6 · Anthropic SDK · Claude Agent SDK · OpenCode SDK · Copilot SDK |
 | **Runtime**            | Bun · Vite 7                                                                     |
 | **Formato de arquivo** | `.op` — baseado em JSON, legível por humanos, compatível com Git                 |

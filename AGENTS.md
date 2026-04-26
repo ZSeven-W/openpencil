@@ -108,7 +108,6 @@ The `op` command-line tool controls the desktop app or web server from the termi
 - **Design:** `op design <dsl|@file|->` — batch design DSL operations
 - **Document:** `op open`, `op save`, `op get`, `op selection`
 - **Nodes:** `op insert`, `op update`, `op delete`, `op move`, `op copy`, `op replace`
-- **Export:** `op export <react|html|vue|svelte|flutter|swiftui|compose|rn|css>`
 - **Cross-platform:** macOS, Windows (NSIS/portable), Linux (AppImage/deb/snap/flatpak)
 
 ### CI / CD
