@@ -73,13 +73,6 @@ op copy <id> [--parent P]
 op replace <id> <json> [--post-process]
 ```
 
-### 代码导出
-
-```bash
-op export <format> [--out file]
-# 格式：react, html, vue, svelte, flutter, swiftui, compose, rn, css
-```
-
 ### 变量与主题
 
 ```bash

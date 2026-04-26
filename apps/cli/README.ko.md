@@ -73,13 +73,6 @@ op copy <id> [--parent P]
 op replace <id> <json> [--post-process]
 ```
 
-### 코드 내보내기
-
-```bash
-op export <format> [--out file]
-# 형식: react, html, vue, svelte, flutter, swiftui, compose, rn, css
-```
-
 ### 변수 및 테마
 
 ```bash

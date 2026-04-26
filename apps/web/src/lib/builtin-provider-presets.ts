@@ -50,7 +50,7 @@ export const BUILTIN_PROVIDER_PRESETS: Record<BuiltinProviderPreset, BuiltinPres
     altBaseURL: 'https://api.deepseek.com/anthropic',
     altType: 'anthropic',
     placeholder: 'sk-...',
-    modelPlaceholder: 'deepseek-chat',
+    modelPlaceholder: 'deepseek-v4-pro',
   },
   gemini: {
     label: 'Google Gemini',

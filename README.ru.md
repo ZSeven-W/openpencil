@@ -89,7 +89,7 @@
 
 ### ⌨️ CLI — `op`
 
-Управляйте инструментом дизайна из терминала. `op design`, `op insert`, `op export` — пакетный DSL дизайна, манипуляция узлами, экспорт кода. Ввод через pipe из файлов или stdin. Работает с десктопным приложением или веб-сервером.
+Управляйте инструментом дизайна из терминала. `op design`, `op insert` — пакетный DSL дизайна, манипуляция узлами. Ввод через pipe из файлов или stdin. Работает с десктопным приложением или веб-сервером.
 
 </td>
 <td width="50%">
@@ -220,7 +220,6 @@ npm install -g @zseven-w/openpencil
 op start                     # Запустить десктопное приложение
 op design @landing.txt       # Пакетный дизайн из файла
 op insert '{"type":"RECT"}'  # Вставить узел
-op export react --out .      # Экспорт в React + Tailwind
 op import:figma design.fig   # Импортировать файл Figma
 cat design.dsl | op design - # Передача через stdin
 ```
@@ -294,7 +293,7 @@ cat design.dsl | op design - # Передача через stdin
 | **Состояние**        | Zustand v5                                                                       |
 | **Сервер**           | Nitro                                                                            |
 | **Десктоп**          | Electron 35                                                                      |
-| **CLI**              | `op` — управление из терминала, пакетный DSL дизайна, экспорт кода               |
+| **CLI**              | `op` — управление из терминала, пакетный DSL дизайна                             |
 | **AI**               | Vercel AI SDK v6 · Anthropic SDK · Claude Agent SDK · OpenCode SDK · Copilot SDK |
 | **Среда выполнения** | Bun · Vite 7                                                                     |
 | **Формат файла**     | `.op` — на основе JSON, удобочитаемый, дружественный к Git                       |
