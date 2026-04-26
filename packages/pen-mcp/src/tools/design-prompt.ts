@@ -18,6 +18,7 @@ const SECTION_NAME_MAP: Record<string, string> = {
   copywriting: 'copywriting',
   cjk: 'cjk-typography',
   examples: 'examples',
+  elements: 'elements',
 };
 
 /** Look up a skill by legacy section key or skill name. */
@@ -235,6 +236,7 @@ type PromptSection =
   | 'examples'
   | 'guidelines'
   | 'planning'
+  | 'elements'
   | 'design-md'
   | 'copywriting'
   | 'overflow'
@@ -264,7 +266,8 @@ const SECTION_MAP: Record<PromptSection, () => string> = {
   examples: () => getSkillContent('examples'),
   guidelines: () => DESIGN_GUIDELINES,
   planning: () => PLANNING_GUIDE,
-  'design-md': () => _designMdContent ?? 'No design.md loaded in the current document.',
+  elements: () => getSkillContent('elements'),
+  'design-md': () => 'No design.md loaded in the current document.',
   copywriting: () => getSkillContent('copywriting'),
   overflow: () => getSkillContent('overflow'),
   cjk: () => getSkillContent('cjk'),
@@ -282,17 +285,13 @@ const SECTION_MAP: Record<PromptSection, () => string> = {
   'codegen-react-native': () => getSkillContent('codegen-react-native'),
 };
 
-// Design.md content injected via setDesignMdForPrompt()
-let _designMdContent: string | null = null;
-
-/** Set the design.md content to be returned by the 'design-md' section. */
-export function setDesignMdForPrompt(spec: DesignMdSpec | undefined): void {
-  _designMdContent = spec ? buildDesignMdStylePolicy(spec) : null;
-}
-
-/** Get the design.md style policy, or null if not loaded. */
-export function getDesignMdForPrompt(): string | null {
-  return _designMdContent;
+/**
+ * Derive the design.md style policy string for a spec, or null if no spec.
+ * Stateless — callers thread the result through `buildDesignPrompt` so
+ * there is no process-level global that could leak between documents.
+ */
+export function designMdSpecToPromptPolicy(spec: DesignMdSpec | null | undefined): string | null {
+  return spec ? buildDesignMdStylePolicy(spec) : null;
 }
 
 // ---------------------------------------------------------------------------
@@ -305,12 +304,21 @@ export function getDesignMdForPrompt(): string | null {
  * When `section` is provided, returns only that focused subset of design
  * knowledge. This allows external LLMs to load context incrementally
  * instead of consuming the full prompt at once.
+ *
+ * `designMdPolicy` (caller-supplied, derived from the active document's
+ * `doc.designMd`) replaces the generic "style" section content and fills
+ * the "design-md" section. Pass null when the caller's document has no
+ * design.md — the prompt falls back to the generic style rules.
  */
-export function buildDesignPrompt(section?: string): string {
+export function buildDesignPrompt(section?: string, designMdPolicy?: string | null): string {
   if (section) {
-    // When design-md is loaded, 'style' section returns it instead of default
-    if (section === 'style' && _designMdContent) {
-      return `DESIGN SYSTEM (from design.md):\n${_designMdContent}`;
+    if (designMdPolicy) {
+      if (section === 'style') {
+        return `DESIGN SYSTEM (from design.md):\n${designMdPolicy}`;
+      }
+      if (section === 'design-md') {
+        return designMdPolicy;
+      }
     }
     if (section in SECTION_MAP) {
       return SECTION_MAP[section as PromptSection]();
@@ -351,5 +359,7 @@ ${VARIABLE_RULES}
 
 ${AUTO_REPLACE_RULES}
 
-${POST_PROCESSING}`;
+${POST_PROCESSING}
+
+${getSkillContent('elements')}`;
 }

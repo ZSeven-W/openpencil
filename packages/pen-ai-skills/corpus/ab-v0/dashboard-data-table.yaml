@@ -1,0 +1,12 @@
+id: dashboard-data-table
+category: dashboard
+difficulty: optional
+prompt: |
+  Design a data table for an orders dashboard (1200 wide). Columns:
+  Order ID, Customer, Total, Status, Date. Show a header row and 6
+  data rows with varied status badges (Paid, Pending, Refunded).
+  Above the table, a title "Recent orders" and a pagination control
+  showing "Page 2 of 14" with previous/next arrow buttons.
+expected:
+  must_contain_roles:
+    - heading

@@ -25,7 +25,10 @@ import {
   buildSubAgentStyleGuideInstruction,
   compactSubAgentSkills,
 } from './orchestrator-sub-agent-compact';
-import { resolveModelProfile } from './model-profiles';
+import { tryParseElementToolOutput } from './design-parser';
+import { dispatchElementToolCall } from './element-tools-dispatcher';
+import { SUPPORTED_EMBEDDED_ELEMENT_TOOLS } from './element-tool-shims';
+import { needsElementTools, resolveModelProfile } from './model-profiles';
 import {
   expandRootFrameHeight,
   buildVariableContext,
@@ -51,6 +54,52 @@ export interface StreamTimeoutConfig {
   thinkingBudgetTokens?: number;
   effort?: 'low' | 'medium' | 'high' | 'max';
 }
+
+// ---------------------------------------------------------------------------
+// Element-tool output-format contract
+// ---------------------------------------------------------------------------
+//
+// When `needsElementTools(modelProfile)` is true we append this block to
+// the sub-agent's system prompt so the model emits the same `<op_tool>`
+// wrapper measured in the A/B v1 treatment arm (see openpencil-docs
+// superpowers/notes/2026-04-20-ab-v1-results.md). Kept verbatim against
+// scripts/ab-corpus/build-prompt.ts::T_TOOL_CALL_INSTRUCTIONS so the
+// production path reproduces the behavior that cleared the decision gate.
+//
+// §3.4 of the integration plan adds a parser that detects these tags
+// BEFORE the legacy JSONL parser so existing flows stay intact when the
+// flag is off or when the model bypasses the wrapper.
+// elements.md documents 42 add_*_v0 tools for external MCP clients
+// that talk to pen-mcp's full handler set via stdio/HTTP transport.
+// The embedded orchestrator (this file's runtime) can only execute
+// a subset — tools with both a client-side shim (element-tool-shims)
+// AND a matching Nitro SERVER_BUILDERS entry. Tell the AI which
+// subset is live so it doesn't emit `<op_tool>` for uncovered tools
+// and see them fail through to error. Uncovered tools should fall
+// back to batch_design (documented FALLBACK branch below).
+const EMBEDDED_AVAILABLE = SUPPORTED_EMBEDDED_ELEMENT_TOOLS.join(', ');
+const ELEMENT_TOOL_OUTPUT_FORMAT = [
+  '',
+  'OUTPUT FORMAT — EMIT AS TOOL CALL:',
+  '',
+  'Respond with one `<op_tool>` tag, nothing else. Choose based on intent:',
+  '',
+  'PRIMARY: when your intent matches an add_*_v0 element tool, emit:',
+  '  <op_tool>{"name": "add_X_v0", "arguments": {...}}</op_tool>',
+  '',
+  'EMBEDDED COVERAGE: in THIS runtime only the following element tools ',
+  'can actually execute — other add_*_v0 names in the skill doc will ',
+  'return an unsupported error. Prefer these, and fall back to ',
+  'batch_design below for any element not in this list:',
+  `  ${EMBEDDED_AVAILABLE}`,
+  '',
+  'FALLBACK: when no listed element tool fits (heterogeneous layout, composite section, post-hoc styling, or intent matches an element tool outside the list above), emit:',
+  '  <op_tool>{"name": "batch_design", "arguments": {"operations": "<DSL_STRING>"}}</op_tool>',
+  'The `operations` value is a single string containing the batch_design DSL.',
+  '',
+  'Do not combine multiple tags. Do not add prose before or after.',
+  '',
+].join('\n');
 
 // ---------------------------------------------------------------------------
 // Sub-agent execution (sequential or concurrent)
@@ -330,6 +379,16 @@ async function executeSubAgent(
   }
   const hasDesignMdContent = designMdContent.length > 0;
 
+  // Feature-flagged gate for N-tool element-surface integration.
+  // Only fires when VITE_ENABLE_ELEMENT_TOOLS env var is
+  // truthy AND the model is in the basic/standard tier; full-tier
+  // models stay on the legacy path per A/B v1 ceiling-effect finding
+  // (Kimi K2.5 Δ M1 -12.5pp). Default production state is off, so
+  // this wiring is a no-op until rollout flips the env var.
+  // Plan: openpencil-docs
+  // superpowers/plans/2026-04-21-element-tools-orchestrator-integration.md
+  const elementToolsEnabled = needsElementTools(modelProfile);
+
   const genCtx = resolveSkills('generation', request.prompt, {
     flags: {
       hasVariables: !!variables && Object.keys(variables).length > 0,
@@ -339,6 +398,13 @@ async function executeSubAgent(
       // - no pre-built style guide selected
       // - no usable design.md content (empty raw + empty structured summary)
       noStyleGuideMatch: !plan.selectedStyleGuideContent && !hasDesignMdContent,
+      // hasMcpTools gates `elements.md` auto-loading in the skill
+      // registry. When true, the generation prompt picks up the
+      // 39-tool decision-tree + invariants reference. §3.3 of the
+      // plan teaches the matching `<op_tool>` output format so the
+      // model actually emits tool calls rather than pseudo-call
+      // syntax the legacy parser would reject.
+      hasMcpTools: elementToolsEnabled,
     },
     dynamicContent: hasDesignMdContent ? { designMdContent } : undefined,
     budgetOverride:
@@ -382,7 +448,10 @@ async function executeSubAgent(
     reducedComplexity,
   );
 
-  const systemPrompt = resolvedSkills.map((s) => s.content).join('\n\n');
+  const skillPrompt = resolvedSkills.map((s) => s.content).join('\n\n');
+  const systemPrompt = elementToolsEnabled
+    ? skillPrompt + '\n\n' + ELEMENT_TOOL_OUTPUT_FORMAT
+    : skillPrompt;
 
   if (SUB_AGENT_DEBUG_FLAGS.LOG_PROMPT_SIZE) {
     const skillNames = resolvedSkills.map((s) => s.meta.name).join(',');
@@ -433,6 +502,58 @@ async function executeSubAgent(
           nodes: renderer.getInsertedNodes(),
           rawResponse,
           error: chunk.content,
+        };
+      }
+    }
+
+    // Element-tool shape detection + dispatch (Phase 2 M1). When the
+    // feature flag is on and streaming produced no nodes (expected
+    // because weak models emit `<op_tool>` at the end, not incremental
+    // JSON), parse the completed response and hand it to the
+    // dispatcher. Dispatcher wraps everything in one history batch
+    // (startBatch/endBatch) so the full generation becomes a single
+    // undo unit once M2/M3 land the real apply handlers. For M1 the
+    // dispatcher returns `unsupported` — we surface that message to
+    // the UI verbatim (it already names the milestone and the fallback
+    // flag to unset).
+    if (
+      elementToolsEnabled &&
+      renderer.getAppliedIds().size === 0 &&
+      rawResponse.trim().length > 0
+    ) {
+      const elementShape = tryParseElementToolOutput(rawResponse);
+      if (elementShape !== null) {
+        renderer.finish();
+        // Pass subtask/root parent context so rootless `<op_tool>`
+        // payloads (e.g. `elements.md` examples that omit parent_id)
+        // land inside the generation's target frame, matching the
+        // streaming path. Without this default the dispatcher would
+        // prepend at page root, outside root-frame layout adjustments.
+        const dispatchResult = await dispatchElementToolCall(elementShape, {
+          defaultParentId: subtask.parentFrameId ?? plan.rootFrame.id,
+        });
+        const inserted = dispatchResult.insertedNodes;
+        if (dispatchResult.status === 'applied' && inserted.length > 0) {
+          // Keep orchestrator accounting consistent with the store.
+          // Dispatcher already wrote via document-store.addNode (shim)
+          // or applyExternalDocument (HTTP fallback); the renderer
+          // doesn't know about those paths, so its getInsertedNodes()
+          // stays empty and the caller would treat a successful
+          // element-tool apply as "0 nodes produced" (= subtask fail).
+          // Push the inserted count through the same progress surface
+          // the streaming path uses so the UI checklist + aggregate
+          // counters match reality.
+          progressEntry.nodeCount += inserted.length;
+          progress.totalNodes += inserted.length;
+          callbacks?.onApplyPartial?.(progress.totalNodes);
+        }
+        progressEntry.status = dispatchResult.status === 'applied' ? 'done' : 'error';
+        emitProgress(plan, progress, callbacks);
+        return {
+          subtaskId: subtask.id,
+          nodes: inserted.length > 0 ? inserted : renderer.getInsertedNodes(),
+          rawResponse,
+          error: dispatchResult.status === 'applied' ? undefined : dispatchResult.message,
         };
       }
     }

@@ -1,0 +1,13 @@
+id: mobile-settings-list
+category: mobile
+difficulty: obvious
+prompt: |
+  Design ONLY one iOS-style settings list row. It should have a
+  leading icon (bell), a title "Notifications", a subtitle "Push,
+  email, and in-app alerts", and a trailing chevron-right icon. Do
+  NOT include page chrome, navigation, or other rows — just this
+  one row.
+expected:
+  must_contain_roles:
+    - list-row
+expected_tool_if_any: add_list_row_v0

@@ -1,0 +1,15 @@
+id: landing-code-showcase
+category: landing
+difficulty: obvious
+prompt: |
+  Design ONLY a preformatted code block showing this TypeScript
+  snippet (preserve newlines): "npm install @zseven-w/pen-sdk\n
+  import { open } from '@zseven-w/pen-sdk';\nopen('./design.pen');"
+  Light gray fill, rounded corners, monospace text. Do NOT include
+  surrounding headline, body copy, or any other content — just
+  the code block.
+expected:
+  must_contain_roles:
+    - code-block
+    - code
+expected_tool_if_any: add_code_block_v0

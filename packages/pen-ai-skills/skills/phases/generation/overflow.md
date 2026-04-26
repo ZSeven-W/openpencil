@@ -15,9 +15,35 @@ OVERFLOW PREVENTION (CRITICAL):
 - Fixed-width children must be <= parent content area (parent width - padding).
 - Badges: short labels only (CJK <=8 chars / Latin <=16 chars).
 
-## HORIZONTAL SCROLL ROWS (cards / chips / categories)
+## HORIZONTAL SCROLL ROWS (cards / chips / categories / metric tiles)
 
-When the spec says "horizontal scrolling cards", "swipeable row", "chip row", or similar, generate EXACTLY this structure — do NOT just emit 6 cards inside a horizontal layout, the children will spill outside the page frame.
+When the spec says "horizontal scrolling cards", "swipeable row", "chip row", "metric tiles", or similar, use ONE of the two paths below.
+
+### Preferred (MCP tool path): pick one of 3 narrow row tools
+
+If you have access to MCP tools (external client: Claude Code / Codex / Gemini CLI / Cursor), call the tool matching what's in the row — all three produce the overflow-safe wrapper+clipContent+fit_content structure and cannot be made incorrectly by schema.
+
+- **`add_card_row_v0`** — items with `title` + optional `subtitle` + optional `icon` (workout cards, feature tiles, content cards). Default card size 140×160.
+- **`add_metric_row_v0`** — items with `label` + `value` + optional `icon` (dashboard stats: Steps/Kcal/Sleep/Revenue). Default tile size 120×100, value rendered 28/700.
+- **`add_nav_chip_row_v0`** — items with `label` + optional `icon` + optional `active` flag. Label-only chips supported (plain-text filter tags like "All / Videos / Photos"). Default chip size 72×fit_content.
+
+Example:
+
+```
+add_metric_row_v0({
+  items: [
+    { label: "Steps",  value: "8,432",  icon: "activity" },
+    { label: "Kcal",   value: "512",    icon: "flame" },
+    { label: "Sleep",  value: "7h 24m", icon: "moon" },
+  ],
+})
+```
+
+Add per-tile fills / colors afterwards with a separate `batch_design` U-op (these tools are style-guide orthogonal and ship colorless on purpose).
+
+### Fallback (hand-built JSON path)
+
+ONLY when the MCP tool is unavailable (embedded AI flow / JSON-only output), generate EXACTLY this structure — do NOT just emit 6 cards inside a horizontal layout, the children will spill outside the page frame.
 
 Structure:
 
