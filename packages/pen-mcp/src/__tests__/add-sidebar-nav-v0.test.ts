@@ -84,6 +84,13 @@ describe('add_sidebar_nav_v0 — structure', () => {
     expect(nav.width).toBe(240);
     expect(nav.height).toBe('fill_container');
     expect(nav.layout).toBe('vertical');
+    // Padding MUST use the unified `padding` field (number | [T,R] |
+    // [T,R,B,L]); the CSS-style paddingTop/Right/Bottom/Left siblings
+    // are silently dropped by the layout engine, leaving the rail with
+    // no insets. Assert the array form survived to catch regressions.
+    expect(nav.padding).toEqual([16, 12]);
+    expect(nav.paddingTop).toBeUndefined();
+    expect(nav.paddingLeft).toBeUndefined();
     const fill = nav.fill as Array<{ color: string }>;
     expect(fill[0].color).toBe('#FFFFFF');
     const items = nav.children as Record<string, unknown>[];
@@ -115,6 +122,8 @@ describe('add_sidebar_nav_v0 — structure', () => {
     expect(titleText.fontSize).toBe(16);
     expect(titleText.fontWeight).toBe(700);
     expect(kids[1].role).toBe('sidebar-nav-item');
+    expect(kids[0].padding).toEqual([8, 12, 24, 12]);
+    expect(kids[0].paddingTop).toBeUndefined();
   });
 
   it('marks active item with sidebar-nav-item-active role + slate-100 fill + bolder darker label', async () => {
