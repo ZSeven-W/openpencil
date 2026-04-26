@@ -2,13 +2,7 @@
 
 [MCP](https://modelcontextprotocol.io/) server for [OpenPencil](https://github.com/ZSeven-W/openpencil) — enables Claude, GPT, Gemini, and other LLMs to read, create, and modify designs through a standard tool protocol.
 
-## Install
-
-```bash
-npm install @zseven-w/pen-mcp
-# or
-bun add @zseven-w/pen-mcp
-```
+> **Note:** `pen-mcp` is shipped as part of the OpenPencil app (desktop + web) and is **not a standalone CLI**. The published package ships TypeScript source against workspace-only dependencies and has no `bin` entry, so `npx @zseven-w/pen-mcp` does not work. Run the server from the OpenPencil monorepo or connect external clients to the HTTP endpoint exposed by a running OpenPencil instance.
 
 ## Overview
 
@@ -22,28 +16,26 @@ Three workflows are supported:
 | **Layered**     | `design_skeleton` → `design_content` × N → `design_refine` | Full-page designs with high fidelity |
 | **CRUD**        | `batch_get` → `update_node` / `delete_node`                | Reading & modifying existing content |
 
-## Quick Start
+## Running the MCP Server
+
+The server supports both **stdio** and **streamable HTTP** transports. The default HTTP endpoint is `http://localhost:3100/mcp`.
+
+### From the monorepo (development)
 
 ```bash
-# Run as stdio MCP server (for Claude Desktop, Cursor, etc.)
-npx @zseven-w/pen-mcp
-
-# Or connect to a running OpenPencil instance
-op mcp:dev
+git clone https://github.com/ZSeven-W/openpencil.git
+cd openpencil && bun install
+bun run mcp:dev              # starts stdio + HTTP on port 3100
+# flags: --http (HTTP only), --stdio (stdio only), --port <n>
 ```
 
-### Claude Desktop Configuration
+### Built-in to the OpenPencil app
 
-```json
-{
-  "mcpServers": {
-    "openpencil": {
-      "command": "npx",
-      "args": ["@zseven-w/pen-mcp"]
-    }
-  }
-}
-```
+Launching the desktop or web app automatically starts the MCP server in the background. External MCP clients should connect over HTTP to the running instance — no separate install required.
+
+### Connecting an MCP client
+
+Most MCP-aware clients (Claude Desktop, Cursor, Continue, etc.) accept an HTTP URL pointing at a running server. Point them at `http://localhost:3100/mcp` while the OpenPencil app or `bun run mcp:dev` is running.
 
 ## Tools
 
