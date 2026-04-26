@@ -89,7 +89,7 @@ Aplikasi web + desktop native di macOS, Windows, dan Linux melalui Electron. Pem
 
 ### ⌨️ CLI — `op`
 
-Kontrol alat desain dari terminal Anda. `op design`, `op insert`, `op export` — batch design DSL, manipulasi node, ekspor kode. Pipe dari file atau stdin. Bekerja dengan aplikasi desktop atau web server.
+Kontrol alat desain dari terminal Anda. `op design`, `op insert` — batch design DSL, manipulasi node. Pipe dari file atau stdin. Bekerja dengan aplikasi desktop atau web server.
 
 </td>
 <td width="50%">
@@ -220,7 +220,6 @@ npm install -g @zseven-w/openpencil
 op start                     # Jalankan aplikasi desktop
 op design @landing.txt       # Desain batch dari file
 op insert '{"type":"RECT"}'  # Sisipkan sebuah node
-op export react --out .      # Ekspor ke React + Tailwind
 op import:figma design.fig   # Impor file Figma
 cat design.dsl | op design - # Pipe dari stdin
 ```
@@ -294,7 +293,7 @@ Mendukung tiga metode input: string inline, `@filepath` (baca dari file), atau `
 | **State**       | Zustand v5                                                                       |
 | **Server**      | Nitro                                                                            |
 | **Desktop**     | Electron 35                                                                      |
-| **CLI**         | `op` — kontrol terminal, batch design DSL, ekspor kode                           |
+| **CLI**         | `op` — kontrol terminal, batch design DSL                                        |
 | **AI**          | Vercel AI SDK v6 · Anthropic SDK · Claude Agent SDK · OpenCode SDK · Copilot SDK |
 | **Runtime**     | Bun · Vite 7                                                                     |
 | **Format file** | `.op` — berbasis JSON, mudah dibaca manusia, ramah Git                           |

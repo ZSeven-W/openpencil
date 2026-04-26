@@ -44,7 +44,42 @@ const MODEL_PROFILES: ModelProfile[] = [
   },
   { match: 'gemini-pro', tier: 'standard', thinkingMode: 'disabled', label: 'Gemini Pro' },
   { match: /^gemini-2/, tier: 'standard', thinkingMode: 'disabled', label: 'Gemini 2' },
-  { match: 'deepseek', tier: 'standard', thinkingMode: 'disabled', label: 'DeepSeek' },
+  // DeepSeek v4 series — v4-pro and v4-flash default to thinking enabled;
+  // the API toggles it via `{"thinking":{"type":"disabled"}}`. Mark
+  // these as disabled so the app keeps its fast/non-thinking default —
+  // server reasoning paths that wire DeepSeek's toggle will honor it.
+  // The Zig openai-compat path doesn't emit the toggle yet, so calls
+  // through that path still see provider-default thinking until the
+  // parameter is wired there.
+  {
+    match: 'deepseek-v4-pro',
+    tier: 'full',
+    thinkingMode: 'disabled',
+    // Until the Zig openai-compat path actually sends
+    // `thinking:{type:disabled}`, v4-pro keeps reasoning enabled on
+    // every request and reasoning tokens explode on long planning
+    // prompts. Double the timeout windows so orchestrator planning
+    // doesn't fall back on the first big request. Drop this back to 1
+    // once the toggle is wired.
+    timeoutMultiplier: 2,
+    label: 'DeepSeek V4 Pro',
+  },
+  {
+    match: 'deepseek-v4-flash',
+    tier: 'standard',
+    thinkingMode: 'disabled',
+    label: 'DeepSeek V4 Flash',
+  },
+  // Legacy aliases — exact match only so future deepseek-* variants
+  // (e.g. a hypothetical deepseek-r2 with native reasoning) don't
+  // inherit a forced disabled thinkingMode. These two sunset 2026-07-24
+  // and DeepSeek auto-routes them to v4-flash today.
+  {
+    match: /^deepseek-(chat|reasoner)$/,
+    tier: 'standard',
+    thinkingMode: 'disabled',
+    label: 'DeepSeek (legacy)',
+  },
 
   // Basic tier — disable thinking, use simplified prompt
   { match: 'claude-haiku', tier: 'basic', thinkingMode: 'disabled', label: 'Claude Haiku' },
