@@ -10,7 +10,11 @@ import {
   buildSpawnClaudeCodeProcess,
   getClaudeAgentDebugFilePath,
 } from '../../utils/resolve-claude-agent-env';
-import { normalizeOptionalBaseURL, requireOpenAICompatBaseURL } from './provider-url';
+import {
+  formatFetchError,
+  normalizeOptionalBaseURL,
+  requireOpenAICompatBaseURL,
+} from './provider-url';
 // SENSITIVE_LOG_PATTERN + readDebugTail are now canonical in @zseven-w/pen-mcp.
 // Re-export here to keep existing consumers (tests, other modules) working.
 import { SENSITIVE_LOG_PATTERN, readDebugTail } from '@zseven-w/pen-mcp';
@@ -1101,7 +1105,7 @@ function streamViaBuiltin(body: ChatBody) {
           destroyProvider(builtinProvider);
         }
       } catch (error) {
-        const content = error instanceof Error ? error.message : 'Unknown error';
+        const content = formatFetchError(error);
         controller.enqueue(
           encoder.encode(`data: ${JSON.stringify({ type: 'error', content })}\n\n`),
         );
