@@ -89,7 +89,7 @@ Web 應用程式 + 透過 Electron 在 macOS、Windows 和 Linux 上原生執行
 
 ### ⌨️ CLI — `op`
 
-從終端機控制設計工具。`op design`、`op insert`、`op export` — 批次設計 DSL、節點操作、程式碼匯出。支援從檔案或 stdin 管道輸入。可搭配桌面應用程式或 Web 伺服器使用。
+從終端機控制設計工具。`op design`、`op insert` — 批次設計 DSL、節點操作。支援從檔案或 stdin 管道輸入。可搭配桌面應用程式或 Web 伺服器使用。
 
 </td>
 <td width="50%">
@@ -220,7 +220,6 @@ npm install -g @zseven-w/openpencil
 op start                     # 啟動桌面應用程式
 op design @landing.txt       # 從檔案批次設計
 op insert '{"type":"RECT"}'  # 插入節點
-op export react --out .      # 匯出為 React + Tailwind
 op import:figma design.fig   # 匯入 Figma 檔案
 cat design.dsl | op design - # 從 stdin 管道輸入
 ```
@@ -294,7 +293,7 @@ cat design.dsl | op design - # 從 stdin 管道輸入
 | **狀態管理** | Zustand v5                                                                       |
 | **伺服器**   | Nitro                                                                            |
 | **桌面端**   | Electron 35                                                                      |
-| **CLI**      | `op` — 終端機控制、批次設計 DSL、程式碼匯出                                      |
+| **CLI**      | `op` — 終端機控制、批次設計 DSL                                                  |
 | **AI**       | Vercel AI SDK v6 · Anthropic SDK · Claude Agent SDK · OpenCode SDK · Copilot SDK |
 | **執行環境** | Bun · Vite 7                                                                     |
 | **檔案格式** | `.op` — 基於 JSON，人類可讀，對 Git 友好                                         |

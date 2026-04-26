@@ -73,13 +73,6 @@ op copy <id> [--parent P]
 op replace <id> <json> [--post-process]
 ```
 
-### Exportacion de codigo
-
-```bash
-op export <format> [--out file]
-# Formatos: react, html, vue, svelte, flutter, swiftui, compose, rn, css
-```
-
 ### Variables y temas
 
 ```bash
