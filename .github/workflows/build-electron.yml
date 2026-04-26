@@ -22,15 +22,19 @@ jobs:
           - os: macos-latest
             platform: mac-arm64
             build_args: --mac --arm64
+            zig_target: aarch64-macos
           - os: macos-latest
             platform: mac-x64
             build_args: --mac --x64
+            zig_target: x86_64-macos
           - os: windows-latest
             platform: win
             build_args: --win
+            zig_target: x86_64-windows
           - os: ubuntu-latest
             platform: linux
             build_args: --linux
+            zig_target: x86_64-linux
 
     steps:
       - uses: actions/checkout@v4
@@ -50,7 +54,19 @@ jobs:
           version: 0.15.2
 
       - name: Install dependencies
+        env:
+          OPENPENCIL_REQUIRE_AGENT_NATIVE: '1'
+          ZIG_TARGET: ${{ matrix.zig_target }}
         run: bun install --frozen-lockfile
+
+      - name: Verify agent-native binary
+        shell: bash
+        run: |
+          if [ ! -f packages/agent-native/napi/agent_napi.node ]; then
+            echo "::error::packages/agent-native/napi/agent_napi.node missing — electron-builder would ship without it."
+            exit 1
+          fi
+          ls -la packages/agent-native/napi/agent_napi.node
 
       - name: Build web (electron target)
         run: bun --bun run build

@@ -254,17 +254,29 @@ async function fetchFromOpenverse(
     }
   }
 
-  const res = await fetch(url.toString(), { headers });
-  if (res.status === 429) {
-    // Rate limited — signal fallback
-    return null;
-  }
-  if (!res.ok) {
-    return null;
-  }
+  // Network failures (ConnectTimeoutError on restricted networks, DNS
+  // failures, etc.) need to behave like a 429: return null so the caller
+  // falls back to Wikimedia. Without this, fetch() throws, the throw
+  // bubbles up to nitro's default handler, and the user sees a 500
+  // instead of placeholder images.
+  try {
+    const res = await fetch(url.toString(), {
+      headers,
+      signal: AbortSignal.timeout(8000),
+    });
+    if (res.status === 429) {
+      // Rate limited — signal fallback
+      return null;
+    }
+    if (!res.ok) {
+      return null;
+    }
 
-  const data = (await res.json()) as OpenverseSearchResponse;
-  return (data.results ?? []).map(mapOpenverseResult);
+    const data = (await res.json()) as OpenverseSearchResponse;
+    return (data.results ?? []).map(mapOpenverseResult);
+  } catch {
+    return null;
+  }
 }
 
 async function fetchFromWikimedia(query: string, count: number): Promise<ImageSearchResult[]> {
@@ -280,14 +292,21 @@ async function fetchFromWikimedia(query: string, count: number): Promise<ImageSe
   url.searchParams.set('format', 'json');
   url.searchParams.set('origin', '*');
 
-  const res = await fetch(url.toString());
-  if (!res.ok) return [];
+  // Same network-failure shielding as Openverse: an empty result is the
+  // documented fallback signal, returning [] keeps the endpoint at 200
+  // with placeholder-friendly results instead of bubbling the throw.
+  try {
+    const res = await fetch(url.toString(), { signal: AbortSignal.timeout(8000) });
+    if (!res.ok) return [];
 
-  const data = (await res.json()) as WikimediaQueryResponse;
-  const pages = data.query?.pages;
-  if (!pages) return [];
+    const data = (await res.json()) as WikimediaQueryResponse;
+    const pages = data.query?.pages;
+    if (!pages) return [];
 
-  return mapWikimediaPages(pages);
+    return mapWikimediaPages(pages);
+  } catch {
+    return [];
+  }
 }
 
 // ---------------------------------------------------------------------------

@@ -89,7 +89,7 @@ Claude Code, Codex, Gemini, OpenCode, Kiro, या Copilot CLIs में वन
 
 ### ⌨️ CLI — `op`
 
-अपने टर्मिनल से डिज़ाइन टूल को नियंत्रित करें। `op design`, `op insert`, `op export` — बैच डिज़ाइन DSL, नोड मैनिपुलेशन, कोड एक्सपोर्ट। फ़ाइलों या stdin से पाइप करें। डेस्कटॉप ऐप या वेब सर्वर के साथ काम करता है।
+अपने टर्मिनल से डिज़ाइन टूल को नियंत्रित करें। `op design`, `op insert` — बैच डिज़ाइन DSL, नोड मैनिपुलेशन। फ़ाइलों या stdin से पाइप करें। डेस्कटॉप ऐप या वेब सर्वर के साथ काम करता है।
 
 </td>
 <td width="50%">
@@ -220,7 +220,6 @@ npm install -g @zseven-w/openpencil
 op start                     # डेस्कटॉप ऐप लॉन्च करें
 op design @landing.txt       # फ़ाइल से बैच डिज़ाइन
 op insert '{"type":"RECT"}'  # एक नोड डालें
-op export react --out .      # React + Tailwind में एक्सपोर्ट
 op import:figma design.fig   # Figma फ़ाइल इम्पोर्ट करें
 cat design.dsl | op design - # stdin से पाइप करें
 ```
@@ -294,7 +293,7 @@ cat design.dsl | op design - # stdin से पाइप करें
 | **स्टेट**          | Zustand v5                                                                       |
 | **सर्वर**          | Nitro                                                                            |
 | **डेस्कटॉप**       | Electron 35                                                                      |
-| **CLI**            | `op` — टर्मिनल नियंत्रण, बैच डिज़ाइन DSL, कोड एक्सपोर्ट                          |
+| **CLI**            | `op` — टर्मिनल नियंत्रण, बैच डिज़ाइन DSL                                         |
 | **AI**             | Vercel AI SDK v6 · Anthropic SDK · Claude Agent SDK · OpenCode SDK · Copilot SDK |
 | **रनटाइम**         | Bun · Vite 7                                                                     |
 | **फ़ाइल फ़ॉर्मेट** | `.op` — JSON-आधारित, मानव-पठनीय, Git-फ्रेंडली                                    |
