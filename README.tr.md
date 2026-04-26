@@ -89,7 +89,7 @@ Web uygulaması + Electron ile macOS, Windows ve Linux'ta yerel masaüstü. GitH
 
 ### ⌨️ CLI — `op`
 
-Tasarım aracını terminalinizden kontrol edin. `op design`, `op insert`, `op export` — toplu tasarım DSL, düğüm manipülasyonu, kod dışa aktarımı. Dosyalardan veya stdin'den pipe ile besleyin. Masaüstü uygulama veya web sunucusuyla çalışır.
+Tasarım aracını terminalinizden kontrol edin. `op design`, `op insert` — toplu tasarım DSL, düğüm manipülasyonu. Dosyalardan veya stdin'den pipe ile besleyin. Masaüstü uygulama veya web sunucusuyla çalışır.
 
 </td>
 <td width="50%">
@@ -220,7 +220,6 @@ npm install -g @zseven-w/openpencil
 op start                     # Masaüstü uygulamayı başlat
 op design @landing.txt       # Dosyadan toplu tasarım
 op insert '{"type":"RECT"}'  # Bir düğüm ekle
-op export react --out .      # React + Tailwind'e dışa aktar
 op import:figma design.fig   # Figma dosyasını içe aktar
 cat design.dsl | op design - # stdin'den pipe ile besle
 ```
@@ -294,7 +293,7 @@ cat design.dsl | op design - # stdin'den pipe ile besle
 | **Durum Yönetimi** | Zustand v5                                                                       |
 | **Sunucu**         | Nitro                                                                            |
 | **Masaüstü**       | Electron 35                                                                      |
-| **CLI**            | `op` — terminal kontrolü, toplu tasarım DSL, kod dışa aktarımı                   |
+| **CLI**            | `op` — terminal kontrolü, toplu tasarım DSL                                      |
 | **AI**             | Vercel AI SDK v6 · Anthropic SDK · Claude Agent SDK · OpenCode SDK · Copilot SDK |
 | **Çalışma Ortamı** | Bun · Vite 7                                                                     |
 | **Dosya Formatı**  | `.op` — JSON tabanlı, insan tarafından okunabilir, Git dostu                     |

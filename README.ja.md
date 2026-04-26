@@ -89,7 +89,7 @@ Web アプリ + Electron による macOS・Windows・Linux ネイティブデス
 
 ### ⌨️ CLI — `op`
 
-ターミナルからデザインツールを操作。`op design`、`op insert`、`op export` — バッチデザインDSL、ノード操作、コードエクスポート。ファイルやstdinからのパイプ入力に対応。デスクトップアプリまたはWebサーバーと連携。
+ターミナルからデザインツールを操作。`op design`、`op insert` — バッチデザインDSL、ノード操作。ファイルやstdinからのパイプ入力に対応。デスクトップアプリまたはWebサーバーと連携。
 
 </td>
 <td width="50%">
@@ -220,7 +220,6 @@ npm install -g @zseven-w/openpencil
 op start                     # デスクトップアプリを起動
 op design @landing.txt       # ファイルからバッチデザイン
 op insert '{"type":"RECT"}'  # ノードを挿入
-op export react --out .      # React + Tailwind にエクスポート
 op import:figma design.fig   # Figma ファイルをインポート
 cat design.dsl | op design - # stdin からパイプ入力
 ```
@@ -294,7 +293,7 @@ cat design.dsl | op design - # stdin からパイプ入力
 | **状態管理**       | Zustand v5                                                                       |
 | **サーバー**       | Nitro                                                                            |
 | **デスクトップ**   | Electron 35                                                                      |
-| **CLI**            | `op` — ターミナル制御、バッチデザインDSL、コードエクスポート                     |
+| **CLI**            | `op` — ターミナル制御、バッチデザインDSL                                         |
 | **AI**             | Vercel AI SDK v6 · Anthropic SDK · Claude Agent SDK · OpenCode SDK · Copilot SDK |
 | **ランタイム**     | Bun · Vite 7                                                                     |
 | **ファイル形式**   | `.op` — JSON ベース、人間が読みやすく、Git フレンドリー                          |
