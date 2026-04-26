@@ -63,3 +63,44 @@ export function normalizeMemberBaseURL(
 export function buildProviderModelsURL(baseURL: string): string {
   return `${normalizeOpenAICompatBaseURL(baseURL) ?? normalizeBaseURL(baseURL)}/models`;
 }
+
+/**
+ * Node's `fetch` (undici) collapses every network-level failure — DNS, TLS,
+ * refused connection, timeout — into a single opaque `TypeError: fetch failed`.
+ * The real reason lives on `error.cause` as a SystemError with `code`/`syscall`/
+ * `hostname`. Surface that so users can act on it ("ENOTFOUND api.foo.com",
+ * "self-signed certificate", "ECONNREFUSED 127.0.0.1:443") instead of staring
+ * at "fetch failed".
+ *
+ * Walks the `cause` chain (some failures wrap multiple times) and unwraps
+ * AggregateError (undici emits one when DNS returns multiple A records and
+ * every connect attempt fails) so each leaf reason makes it to the user.
+ */
+export function formatFetchError(error: unknown): string {
+  const reasons = collectFetchErrorReasons(error);
+  if (reasons.length === 0) {
+    return error instanceof Error ? error.message || 'Unknown error' : 'Unknown error';
+  }
+  return Array.from(new Set(reasons)).join('; ');
+}
+
+function collectFetchErrorReasons(error: unknown, depth = 0): string[] {
+  if (depth > 5 || !(error instanceof Error)) return [];
+
+  const aggregate = (error as { errors?: unknown }).errors;
+  if (Array.isArray(aggregate) && aggregate.length > 0) {
+    return aggregate.flatMap((sub) => collectFetchErrorReasons(sub, depth + 1));
+  }
+
+  const cause = (error as { cause?: unknown }).cause;
+  if (cause instanceof Error) {
+    return collectFetchErrorReasons(cause, depth + 1);
+  }
+
+  const code = (error as { code?: string }).code;
+  const message = error.message?.trim();
+  if (code && message && !message.includes(code)) return [`${code}: ${message}`];
+  if (message) return [message];
+  if (code) return [code];
+  return [];
+}
