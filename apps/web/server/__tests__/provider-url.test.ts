@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   buildProviderModelsURL,
+  formatFetchError,
   normalizeBaseURL,
   normalizeMemberBaseURL,
   normalizeOptionalBaseURL,
@@ -60,6 +61,68 @@ describe('provider-url helpers', () => {
     expect(normalizeMemberBaseURL('lead', 'anthropic', undefined)).toBeUndefined();
     expect(normalizeMemberBaseURL('lead', 'anthropic', 'https://custom.api.com/')).toBe(
       'https://custom.api.com',
+    );
+  });
+});
+
+describe('formatFetchError', () => {
+  it('unwraps undici "fetch failed" by reading error.cause', () => {
+    const cause = Object.assign(new Error('Client network socket disconnected'), {
+      code: 'ECONNRESET',
+    });
+    const err = Object.assign(new TypeError('fetch failed'), { cause });
+    expect(formatFetchError(err)).toBe('ECONNRESET: Client network socket disconnected');
+  });
+
+  it('skips the prefix when the cause message already contains the code', () => {
+    const cause = Object.assign(new Error('getaddrinfo ENOTFOUND api.example.com'), {
+      code: 'ENOTFOUND',
+    });
+    const err = Object.assign(new TypeError('fetch failed'), { cause });
+    expect(formatFetchError(err)).toBe('getaddrinfo ENOTFOUND api.example.com');
+  });
+
+  it('returns just the cause code when message is missing', () => {
+    const cause = Object.assign(new Error(''), { code: 'ECONNREFUSED' });
+    const err = Object.assign(new TypeError('fetch failed'), { cause });
+    expect(formatFetchError(err)).toBe('ECONNREFUSED');
+  });
+
+  it('returns just the cause message when no code', () => {
+    const cause = new Error('self-signed certificate in certificate chain');
+    const err = Object.assign(new TypeError('fetch failed'), { cause });
+    expect(formatFetchError(err)).toBe('self-signed certificate in certificate chain');
+  });
+
+  it('falls back to error.message when no cause', () => {
+    expect(formatFetchError(new Error('Provider returned 401'))).toBe('Provider returned 401');
+  });
+
+  it('handles non-Error inputs', () => {
+    expect(formatFetchError('boom')).toBe('Unknown error');
+    expect(formatFetchError(undefined)).toBe('Unknown error');
+  });
+
+  it('walks nested cause chains', () => {
+    const root = Object.assign(new Error('Hostname does not match certificate'), {
+      code: 'ERR_TLS_CERT_ALTNAME_INVALID',
+    });
+    const wrapper = Object.assign(new Error('TLS handshake failed'), { cause: root });
+    const outer = Object.assign(new TypeError('fetch failed'), { cause: wrapper });
+    expect(formatFetchError(outer)).toBe(
+      'ERR_TLS_CERT_ALTNAME_INVALID: Hostname does not match certificate',
+    );
+  });
+
+  it('unwraps AggregateError so per-IP attempt reasons reach the user', () => {
+    const a = Object.assign(new Error('connect ECONNREFUSED 127.0.0.1:8080'), {
+      code: 'ECONNREFUSED',
+    });
+    const b = Object.assign(new Error('connect ECONNREFUSED ::1:8080'), { code: 'ECONNREFUSED' });
+    const agg = Object.assign(new AggregateError([a, b], 'all attempts failed'));
+    const err = Object.assign(new TypeError('fetch failed'), { cause: agg });
+    expect(formatFetchError(err)).toBe(
+      'connect ECONNREFUSED 127.0.0.1:8080; connect ECONNREFUSED ::1:8080',
     );
   });
 });
