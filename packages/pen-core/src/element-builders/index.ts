@@ -3,6 +3,7 @@ export { cjkFontFamily, detectCjkScript, type CjkScript } from './cjk-detect.js'
 export { buildCardRow, type CardRowItem, type CardRowParams } from './card-row.js';
 export { buildMetricRow, type MetricRowItem, type MetricRowParams } from './metric-row.js';
 export { buildBottomNav, type BottomNavItem, type BottomNavParams } from './bottom-nav.js';
+export { buildSidebarNav, type SidebarNavItem, type SidebarNavParams } from './sidebar-nav.js';
 export {
   buildSectionHeader,
   type SectionHeaderAction,
