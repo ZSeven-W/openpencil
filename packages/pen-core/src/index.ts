@@ -264,6 +264,7 @@ export {
   buildInputWithAction,
   buildCookieBanner,
   buildSidebarNav,
+  buildAvatarGroup,
   cjkFontFamily,
   detectCjkScript,
   type ElementTree,
@@ -368,4 +369,6 @@ export {
   type CookieBannerParams,
   type SidebarNavItem,
   type SidebarNavParams,
+  type AvatarGroupItem,
+  type AvatarGroupParams,
 } from './element-builders/index.js';

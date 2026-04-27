@@ -29,6 +29,7 @@ import {
   buildColorSwatch,
   buildCookieBanner,
   buildSidebarNav,
+  buildAvatarGroup,
   buildDatePicker,
   buildDivider,
   buildEmptyChart,
@@ -542,6 +543,20 @@ const CASES: BuilderCase[] = [
       ],
     },
     build: (a) => buildSidebarNav(a as unknown as Parameters<typeof buildSidebarNav>[0]),
+  },
+  {
+    toolName: 'add_avatar_group_v0',
+    args: {
+      max_visible: 3,
+      items: [
+        { initial: 'JD' },
+        { initial: 'SK' },
+        { initial: 'MN' },
+        { initial: 'AL' },
+        { initial: 'BR' },
+      ],
+    },
+    build: (a) => buildAvatarGroup(a as unknown as Parameters<typeof buildAvatarGroup>[0]),
   },
 ];
 
