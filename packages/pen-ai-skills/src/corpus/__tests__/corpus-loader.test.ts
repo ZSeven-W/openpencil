@@ -65,21 +65,21 @@ describe('loadCorpus — real corpus', () => {
 describe('loadCorpus — v1 supplemental corpus (new tools)', () => {
   // v1 covers tools added after the v0 freeze, in chronological batches:
   // 2026-04-22 (12 tools) / 2026-04-24 (5 tools, 4 v0 + first v1) /
-  // 2026-04-25 (9 tools, 7 v0 + 2 v1) / 2026-04-27 (3 tools, sidebar nav
-  // + avatar group + data-table row). All obvious — one prompt per tool
-  // so A/B runs can measure routing + legality on the new surface
-  // without re-running the v0 corpus. See `corpus/ab-v1/README.md`.
-  it('loads 29 prompts, all obvious, one per new tool', () => {
+  // 2026-04-25 (9 tools, 7 v0 + 2 v1) / 2026-04-27 (4 tools: sidebar nav
+  // + avatar group + data-table row + tag). All obvious — one prompt
+  // per tool so A/B runs can measure routing + legality on the new
+  // surface without re-running the v0 corpus. See `corpus/ab-v1/README.md`.
+  it('loads 30 prompts, all obvious, one per new tool', () => {
     const prompts = loadCorpus(REPO_CORPUS_V1_DIR);
-    expect(prompts).toHaveLength(29);
-    expect(new Set(prompts.map((p) => p.id)).size).toBe(29);
+    expect(prompts).toHaveLength(30);
+    expect(new Set(prompts.map((p) => p.id)).size).toBe(30);
     for (const p of prompts) {
       expect(p.difficulty).toBe('obvious');
       expect(p.expected_tool_if_any).toMatch(/^add_[a-z_]+_v\d+$/);
     }
   });
 
-  it('covers 2026-04-22 (12) + 2026-04-24 (5) + 2026-04-25 (9) + 2026-04-27 (3) batches', () => {
+  it('covers 2026-04-22 (12) + 2026-04-24 (5) + 2026-04-25 (9) + 2026-04-27 (4) batches', () => {
     const prompts = loadCorpus(REPO_CORPUS_V1_DIR);
     const tools = new Set(prompts.map((p) => p.expected_tool_if_any));
     expect(tools).toEqual(
@@ -113,10 +113,11 @@ describe('loadCorpus — v1 supplemental corpus (new tools)', () => {
         'add_cookie_banner_v0',
         'add_toast_v1',
         'add_empty_chart_v1',
-        // 2026-04-27 batch (3 tools) — desktop sidebar nav rail + avatar group + data-table row
+        // 2026-04-27 batch (4 tools) — desktop sidebar nav + avatar group + data-table row + tag
         'add_sidebar_nav_v0',
         'add_avatar_group_v0',
         'add_data_table_row_v0',
+        'add_tag_v0',
       ]),
     );
   });
