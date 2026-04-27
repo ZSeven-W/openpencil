@@ -36,23 +36,15 @@ const CORE_DESIGN_TOOL_DEFINITIONS = [
       properties: {
         section: {
           type: 'string',
-          enum: [
-            'all',
-            'schema',
-            'layout',
-            'roles',
-            'text',
-            'style',
-            'icons',
-            'examples',
-            'guidelines',
-            'planning',
-            'elements',
-            'elements-cookbook',
-            'design-md',
-          ],
+          // Derived from SECTION_MAP at server-start — keeping the
+          // schema in sync with the implementation so external clients
+          // never get an "advertised section can't actually be fetched"
+          // mismatch (or its inverse). Drift between the union, the
+          // SECTION_MAP, and this enum was exactly the trap Codex
+          // caught when elements-cookbook landed.
+          enum: listPromptSections(),
           description:
-            'Which section of design knowledge to retrieve. Default: all. Use "planning" for layered generation workflow; "elements" for N-tool element tool decision tree; "elements-cookbook" for the per-tool arg-shape examples that pair with the elements section; "design-md" for the active document\'s design system.',
+            'Which section of design knowledge to retrieve. Default: all. Use "planning" for the layered generation workflow; "elements" for the N-tool element-tool decision tree; "elements-cookbook" for the per-tool arg-shape examples that pair with elements; "design-md" for the active document\'s design system; "codegen-*" for per-target codegen guides; otherwise see listPromptSections() for the full set.',
         },
         filePath: {
           type: 'string',
