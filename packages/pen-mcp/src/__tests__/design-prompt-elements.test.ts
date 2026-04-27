@@ -27,6 +27,19 @@ describe('get_design_prompt — elements section', () => {
     expect(sectionProp?.enum).toContain('elements');
   });
 
+  it('section enum stays in sync with listPromptSections (no advertised-but-unfetchable section, no fetchable-but-unadvertised)', () => {
+    // Drift guard: every section the implementation can serve must
+    // appear in the published MCP schema, and every advertised section
+    // must be fetchable. This is what Codex caught when elements-
+    // cookbook was added to SECTION_MAP but not to the enum.
+    const def = DESIGN_TOOL_DEFINITIONS.find((t) => t.name === 'get_design_prompt');
+    const sectionProp = (def?.inputSchema.properties as Record<string, unknown> | undefined)
+      ?.section as { enum?: string[] } | undefined;
+    const enumSet = new Set(sectionProp?.enum ?? []);
+    const sectionsSet = new Set(listPromptSections());
+    expect([...enumSet].sort()).toEqual([...sectionsSet].sort());
+  });
+
   it('get_design_prompt description: stale tool names + stale counts both forbidden', () => {
     // The tool description is read directly by MCP clients. Two rot vectors:
     //   1. Named element tools that have been removed (stale references)
