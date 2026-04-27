@@ -25,6 +25,16 @@ export {
   type DataTableRowParams,
 } from './data-table-row.js';
 export { buildTag, type TagParams, type TagTone } from './tag.js';
+export { buildUserCard, type UserCardParams } from './user-card.js';
+export { buildDrawerShell, type DrawerSide, type DrawerShellParams } from './drawer-shell.js';
+export { buildCombobox, type ComboboxOption, type ComboboxParams } from './combobox.js';
+export { buildToolbar, type ToolbarItem, type ToolbarParams } from './toolbar.js';
+export { buildCallout, type CalloutTone, type CalloutParams } from './callout.js';
+export { buildShareRow, type ShareTarget, type ShareRowParams } from './share-row.js';
+export { buildInlineAction, type InlineActionParams } from './inline-action.js';
+export { buildLegendItem, type LegendItemParams } from './legend-item.js';
+export { buildInboxMessage, type InboxMessageParams } from './inbox-message.js';
+export { buildProfileHeader, type ProfileHeaderParams } from './profile-header.js';
 export { buildIconButton, type IconButtonParams } from './icon-button.js';
 export { buildIconLabel, type IconLabelParams } from './icon-label.js';
 export { buildStatGrid, type StatGridItem, type StatGridParams } from './stat-grid.js';

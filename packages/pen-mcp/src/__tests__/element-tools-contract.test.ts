@@ -89,6 +89,16 @@ const ELEMENT_TOOL_NAMES = [
   'add_avatar_group_v0',
   'add_data_table_row_v0',
   'add_tag_v0',
+  'add_user_card_v0',
+  'add_drawer_shell_v0',
+  'add_combobox_v0',
+  'add_toolbar_v0',
+  'add_callout_v0',
+  'add_share_row_v0',
+  'add_inline_action_v0',
+  'add_legend_item_v0',
+  'add_inbox_message_v0',
+  'add_profile_header_v0',
 ];
 
 describe('element tools — v0-MUST contract', () => {
