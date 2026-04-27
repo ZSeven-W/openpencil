@@ -73,13 +73,6 @@ op copy <id> [--parent P]
 op replace <id> <json> [--post-process]
 ```
 
-### Xuất mã nguồn
-
-```bash
-op export <format> [--out file]
-# Định dạng: react, html, vue, svelte, flutter, swiftui, compose, rn, css
-```
-
 ### Biến và giao diện
 
 ```bash

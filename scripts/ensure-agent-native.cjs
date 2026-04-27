@@ -1,165 +1,105 @@
 #!/usr/bin/env node
-// Ensures the Zig NAPI addon binary exists.
+// Provisions the Zig NAPI addon binary by building it from source.
 //
-// Strategy (fastest to slowest):
-//   1. Already built / bundled — use it.
-//   2. Download prebuilt from the ZSeven-W/agent release whose tag points at
-//      the submodule's currently checked-out commit. This means CI and local
-//      installs never need Zig installed, as long as whoever bumped the
-//      submodule also tagged + published a matching release.
-//   3. Build from source with local Zig (slow but authoritative).
+// We always build from source on the host so the resulting `agent_napi.node`
+// matches the runner's platform/arch. Earlier revisions also tried to download
+// a prebuilt from a sibling release repo, but that path was racy: when the
+// prebuilt was missing for the current submodule SHA the build fell through
+// to source compilation, deposited the binary at `zig-out/napi/...`, and
+// electron-builder (which only ships `packages/agent-native/napi/`) silently
+// shipped without the addon — every chat request then died at the dynamic
+// `@zseven-w/agent-native` import.
 //
-// Failing all of those is non-fatal — the postinstall wrapper swallows exit
-// codes so `bun install` never breaks. Tests / runtime will surface a clear
-// "could not locate agent_napi.node" error instead, with instructions.
+// Build prerequisite: Zig 0.15+ on PATH. CI workflows install it via
+// `mlugg/setup-zig`; local devs install once via their package manager.
+//
+// Set OPENPENCIL_REQUIRE_AGENT_NATIVE=1 to fail the install when the build
+// can't run (electron CI uses this to surface missing prerequisites early).
+//
+// Set OPENPENCIL_SKIP_AGENT_NATIVE=1 to no-op the script entirely. Useful for
+// workflows (npm publish, lint-only CI) that never load the addon at runtime
+// and would otherwise pay for a Zig build on every install.
+//
+// Set ZIG_TARGET to cross-compile for a non-host triple (e.g. on a macOS arm64
+// runner build for x86_64-macos with `ZIG_TARGET=x86_64-macos`). Without it
+// the build follows the host arch — fine for native runs, wrong when the
+// runner doesn't match the artifact you intend to ship.
 
 const fs = require('fs');
 const path = require('path');
 const { execSync } = require('child_process');
 
-const REPO = 'ZSeven-W/agent';
-const NAPI_DIR = path.join(__dirname, '..', 'packages', 'agent-native', 'napi');
 const AGENT_DIR = path.join(__dirname, '..', 'packages', 'agent-native');
+const NAPI_DIR = path.join(AGENT_DIR, 'napi');
 const ZIG_OUT = path.join(AGENT_DIR, 'zig-out', 'napi', 'agent_napi.node');
 const BUNDLED = path.join(NAPI_DIR, 'agent_napi.node');
+const STRICT = process.env.OPENPENCIL_REQUIRE_AGENT_NATIVE === '1';
 
 function log(msg) {
   console.log(`[agent-native] ${msg}`);
 }
 
-function assetNameForHost() {
-  const p = process.platform; // 'darwin' | 'linux' | 'win32'
-  const a = process.arch; // 'arm64' | 'x64'
-  const os = p === 'darwin' ? 'macos' : p === 'win32' ? 'windows' : 'linux';
-  return `agent_napi-${os}-${a}.node`;
+function fail(msg) {
+  log(msg);
+  return STRICT ? 1 : 0;
 }
 
-function readSubmoduleSha() {
-  try {
-    return execSync('git rev-parse HEAD', {
-      cwd: AGENT_DIR,
-      encoding: 'utf8',
-      stdio: ['ignore', 'pipe', 'ignore'],
-    }).trim();
-  } catch {
-    return null;
-  }
-}
-
-function ghJson(url) {
-  const headers = ['-H', 'Accept: application/vnd.github+json'];
-  if (process.env.GITHUB_TOKEN) {
-    headers.push('-H', `Authorization: Bearer ${process.env.GITHUB_TOKEN}`);
-  }
-  const raw = execSync(`curl -sLf ${headers.join(' ')} "${url}"`, { encoding: 'utf8' });
-  return JSON.parse(raw);
-}
-
-function findMatchingRelease(submoduleSha) {
-  if (!submoduleSha) return null;
-  // Walk tags (paginated) until we find one whose commit SHA matches the
-  // submodule pointer. Tags are listed newest first, so for a freshly bumped
-  // submodule we almost always hit on the first page.
-  for (let page = 1; page <= 3; page += 1) {
-    let tags;
-    try {
-      tags = ghJson(`https://api.github.com/repos/${REPO}/tags?per_page=30&page=${page}`);
-    } catch {
-      return null;
-    }
-    if (!Array.isArray(tags) || tags.length === 0) return null;
-    for (const t of tags) {
-      if (t?.commit?.sha === submoduleSha) return t.name;
-    }
-  }
-  return null;
-}
-
-function downloadPrebuilt(tagName) {
-  let release;
-  try {
-    release = ghJson(`https://api.github.com/repos/${REPO}/releases/tags/${tagName}`);
-  } catch (err) {
-    log(`No release for tag ${tagName}: ${err.message}`);
-    return false;
-  }
-  const assetName = assetNameForHost();
-  const asset = release.assets?.find((a) => a.name === assetName);
-  if (!asset) {
-    log(
-      `Release ${tagName} has no asset ${assetName} (built: ${(release.assets ?? []).map((a) => a.name).join(', ') || 'none'}).`,
-    );
-    return false;
-  }
-  log(`Downloading ${assetName} from release ${tagName}…`);
-  try {
-    fs.mkdirSync(NAPI_DIR, { recursive: true });
-    execSync(`curl -sLf -o "${BUNDLED}" "${asset.browser_download_url}"`, { stdio: 'inherit' });
-  } catch (err) {
-    log(`Download failed: ${err.message}`);
-    return false;
-  }
-  return fs.existsSync(BUNDLED);
+function bundleBinary() {
+  fs.mkdirSync(NAPI_DIR, { recursive: true });
+  fs.copyFileSync(ZIG_OUT, BUNDLED);
+  log(`Bundled binary at ${BUNDLED}.`);
 }
 
 function buildFromSource() {
   try {
     execSync('zig version', { stdio: 'ignore' });
   } catch {
-    log('Zig not installed; cannot build from source.');
-    return false;
+    return fail(
+      'Zig not installed (need 0.15+). Skipping. Install Zig and re-run `bun run agent:build`.',
+    );
   }
-  log('Building NAPI addon from source (zig build napi)…');
+  const target = process.env.ZIG_TARGET?.trim();
+  const targetFlag = target ? ` -Dtarget=${target}` : '';
+  log(`Building NAPI addon (zig build napi -Doptimize=ReleaseFast${targetFlag})…`);
   try {
-    execSync('zig build napi -Doptimize=ReleaseFast', {
+    execSync(`zig build napi -Doptimize=ReleaseFast${targetFlag}`, {
       cwd: AGENT_DIR,
       stdio: 'inherit',
     });
   } catch (err) {
-    log(`Source build failed: ${err.message}`);
-    return false;
+    return fail(`Zig build failed: ${err.message}`);
   }
-  return fs.existsSync(ZIG_OUT);
+  if (!fs.existsSync(ZIG_OUT)) {
+    return fail(`Zig build produced no output at ${ZIG_OUT}.`);
+  }
+  bundleBinary();
+  return 0;
 }
 
 function main() {
-  // 1. Already have it?
-  if (fs.existsSync(ZIG_OUT) || fs.existsSync(BUNDLED)) {
-    log('Binary already present, skipping.');
+  if (process.env.OPENPENCIL_SKIP_AGENT_NATIVE === '1') {
+    log('OPENPENCIL_SKIP_AGENT_NATIVE=1, skipping native binary provisioning.');
     return 0;
   }
 
-  // Submodule initialized?
   if (!fs.existsSync(path.join(NAPI_DIR, 'package.json'))) {
-    log('Submodule not initialized; run `git submodule update --init`. Skipping.');
+    return fail('Submodule not initialized; run `git submodule update --init`. Skipping.');
+  }
+
+  // Fast path: binary already in place. Make sure both lookup locations are
+  // populated so electron-builder (`napi/`) and the runtime loader (which
+  // checks `zig-out/` first) both find it without re-running the build.
+  if (fs.existsSync(BUNDLED)) {
+    log('Binary already present, skipping rebuild.');
+    return 0;
+  }
+  if (fs.existsSync(ZIG_OUT)) {
+    log('Binary already built; copying into napi/ for electron-builder.');
+    bundleBinary();
     return 0;
   }
 
-  // 2. Prebuilt release matching submodule SHA?
-  const sha = readSubmoduleSha();
-  if (sha) {
-    const tag = findMatchingRelease(sha);
-    if (tag) {
-      if (downloadPrebuilt(tag)) {
-        log(`Prebuilt ready at ${BUNDLED}.`);
-        return 0;
-      }
-    } else {
-      log(`No release tag matches submodule ${sha.slice(0, 7)}.`);
-    }
-  }
-
-  // 3. Source build fallback.
-  if (buildFromSource()) {
-    log(`Built at ${ZIG_OUT}.`);
-    return 0;
-  }
-
-  log('Could not provision agent_napi.node. Tests / runtime will fail loudly until resolved.');
-  log(
-    'Options: bump + tag the agent submodule, or install Zig 0.15+ and run `bun run agent:build`.',
-  );
-  return 0; // Non-fatal: let the wrapper keep install green, real error surfaces at test time.
+  return buildFromSource();
 }
 
 process.exit(main());

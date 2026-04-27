@@ -1,5 +1,5 @@
 import { defineEventHandler, readBody } from 'h3';
-import { buildProviderModelsURL, normalizeOptionalBaseURL } from './provider-url';
+import { buildProviderModelsURL, formatFetchError, normalizeOptionalBaseURL } from './provider-url';
 
 interface ProviderModelsBody {
   baseURL: string;
@@ -63,7 +63,6 @@ export default defineEventHandler(async (event) => {
 
     return { models };
   } catch (err) {
-    const message = err instanceof Error ? err.message : 'Unknown error';
-    return { models: [], error: message };
+    return { models: [], error: formatFetchError(err) };
   }
 });
