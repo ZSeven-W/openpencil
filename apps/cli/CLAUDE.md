@@ -15,7 +15,7 @@ apps/cli/
 │       ├── app.ts        start, stop, status
 │       ├── design.ts     design, design:skeleton, design:content, design:refine
 │       ├── document.ts   open, save, get, selection
-│       ├── export.ts     export (react, html, vue, svelte, flutter, swiftui, compose, rn, css)
+│       ├── codegen.ts    codegen:plan, codegen:submit, codegen:assemble, codegen:clean
 │       ├── import.ts     import:svg, import:figma
 │       ├── install.ts    install, uninstall (openpencil-skill for AI agents)
 │       ├── layout.ts     layout, find-space
