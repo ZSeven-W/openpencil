@@ -228,7 +228,11 @@ Desktop / dashboard rails:
 
 69. Persistent vertical sidebar (left rail with icon+label rows, optional brand title, active item gets pill bg) → `add_sidebar_nav_v0`
 
-70. None match → fall through to `batch_design`
+Presence / collaboration:
+
+70. Stacked avatar group (team / online users / "+N more" tile, white-ringed circles in a tight horizontal row) → `add_avatar_group_v0`
+
+71. None match → fall through to `batch_design`
 
 **Disambiguation**: if you need a ROW of 3 metrics that should NOT scroll (e.g. a stats strip inside a card), use `add_stat_grid_v0`, NOT `add_metric_row_v0`. The grid uses `fill_container` per cell so it never overflows; the metric row uses fixed-px cells + scroll wrapper.
 
@@ -311,6 +315,7 @@ PREFER an element tool when the spec says any of:
 - "newsletter signup", "subscribe form", "subscribe to newsletter", "promo code input", "apply discount", "send message input", "chat composer", "search with submit", "订阅", "应用优惠码", "发送消息" → `add_input_with_action_v0` (action_kind="text" for "Subscribe" pill button, action_kind="icon" for chat send arrow). Different from `add_form_field_v0` (no inline button) and `add_search_bar_v0` (no trailing action button).
 - "cookie banner", "cookie consent", "GDPR banner", "CCPA banner", "privacy notice", "cookie disclosure", "cookie 提示", "隐私同意条" → `add_cookie_banner_v0` (set `show_settings_link: true` for fine-grained GDPR consent UX). Caller positions sticky-bottom; the tool emits the banner card itself.
 - "sidebar", "side nav", "sidebar nav", "left rail", "dashboard nav rail", "admin sidebar", "settings sidebar", "docs sidebar", "vertical nav", "侧边栏", "侧边导航", "左侧导航" → `add_sidebar_nav_v0` (desktop persistent rail; pass `title` for a brand row above the items, mark current page with `active: true` on the item). Different from `add_bottom_nav_v0` (mobile bottom tabs) and `add_top_nav_bar_v0` (mobile top header).
+- "stacked avatars", "avatar group", "avatar stack", "team avatars", "5 contributors", "online users", "+N more", "viewers row", "presence indicator", "团队成员", "在线用户", "头像组" → `add_avatar_group_v0` (renders up to `max_visible` ringed avatar circles + a "+N" overflow tile; pen-core flex doesn't allow negative gap so the white ring + 4px gap is the affordance, not literal overlap). Different from `add_avatar_v0` which is a single tile.
 
 STILL use batch_design when:
 
@@ -587,6 +592,20 @@ add_sidebar_nav_v0({
   ],
 })
 add_sidebar_nav_v0({ items: [{ label: "Home", icon: "home", active: true }, { label: "Profile", icon: "user" }] })  // titleless minimal
+
+add_avatar_group_v0({
+  items: [
+    { initial: "JD" },
+    { initial: "SK" },
+    { initial: "MN" },
+    { initial: "AL" },
+    { initial: "BR" },
+    { initial: "CT" },
+    { initial: "EF" },
+  ],
+  max_visible: 4,
+})  // renders 4 ringed circles + "+3" overflow tile
+add_avatar_group_v0({ items: [{ initial: "A" }, { initial: "B" }, { initial: "C" }], size: 24 })  // compact 3-up
 ```
 
 ## Composition pattern

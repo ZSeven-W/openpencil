@@ -18,6 +18,7 @@ export { buildListRow, type ListRowParams } from './list-row.js';
 export { buildDivider, type DividerOrientation, type DividerParams } from './divider.js';
 export { buildBadge, type BadgeParams } from './badge.js';
 export { buildAvatar, type AvatarParams } from './avatar.js';
+export { buildAvatarGroup, type AvatarGroupItem, type AvatarGroupParams } from './avatar-group.js';
 export { buildIconButton, type IconButtonParams } from './icon-button.js';
 export { buildIconLabel, type IconLabelParams } from './icon-label.js';
 export { buildStatGrid, type StatGridItem, type StatGridParams } from './stat-grid.js';
