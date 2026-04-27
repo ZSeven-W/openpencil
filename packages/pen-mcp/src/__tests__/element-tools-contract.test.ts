@@ -76,6 +76,16 @@ const ELEMENT_TOOL_NAMES = [
   'add_otp_input_v0',
   'add_attachment_row_v0',
   'add_chat_bubble_v0',
+  'add_stat_card_v0',
+  'add_social_login_row_v0',
+  'add_pricing_card_v0',
+  'add_toast_v1',
+  'add_range_slider_v0',
+  'add_empty_chart_v1',
+  'add_phone_input_v0',
+  'add_input_with_action_v0',
+  'add_cookie_banner_v0',
+  'add_sidebar_nav_v0',
 ];
 
 describe('element tools — v0-MUST contract', () => {

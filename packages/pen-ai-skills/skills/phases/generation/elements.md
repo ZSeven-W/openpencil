@@ -200,7 +200,35 @@ Messaging:
 
 61. Chat message bubble (left=from-others slate bg / right=from-self accent bg; optional author + timestamp) → `add_chat_bubble_v0`
 
-62. None match → fall through to `batch_design`
+Dashboard KPIs:
+
+62. Big-number stat card (standalone metric tile — label + huge value + optional delta/icon) → `add_stat_card_v0`
+
+Auth / login:
+
+63. Social auth provider buttons ("Continue with Google / Apple / Microsoft", OAuth/SSO row, third-party sign-in) → `add_social_login_row_v0`
+
+Pricing / monetization:
+
+64. Pricing plan tier card (SaaS pricing table column: tier name + big price + feature list + CTA; emphasize the recommended tier with `emphasis="featured"`) → `add_pricing_card_v0`
+
+Input / forms:
+
+65. Range slider (single-thumb horizontal slider showing current value: volume, opacity, brightness, price range) → `add_range_slider_v0`
+
+66. International phone number input with country-code prefix selector → `add_phone_input_v0`
+
+67. Input field with inline action button (newsletter signup, apply discount code, send chat message) → `add_input_with_action_v0`
+
+Compliance / disclosure:
+
+68. Cookie consent / GDPR / privacy banner (sticky bottom-of-page disclosure card with accept / decline / settings) → `add_cookie_banner_v0`
+
+Desktop / dashboard rails:
+
+69. Persistent vertical sidebar (left rail with icon+label rows, optional brand title, active item gets pill bg) → `add_sidebar_nav_v0`
+
+70. None match → fall through to `batch_design`
 
 **Disambiguation**: if you need a ROW of 3 metrics that should NOT scroll (e.g. a stats strip inside a card), use `add_stat_grid_v0`, NOT `add_metric_row_v0`. The grid uses `fill_container` per cell so it never overflows; the metric row uses fixed-px cells + scroll wrapper.
 
@@ -237,6 +265,8 @@ PREFER an element tool when the spec says any of:
 - "comment", "reply", "feedback row", "review row", "评论" → `add_comment_v0`
 - "modal", "dialog", "popup", "confirm dialog", "模态框", "弹窗" → `add_modal_shell_v0`
 - "dark modal", "dark-mode dialog", "theme-aware modal", "system theme modal", "暗色弹窗", "主题感知弹窗" → `add_modal_shell_v1` (accepts `theme` param; use `"system"` when the document has `applySemanticPalette(doc)` seeded)
+- "dark toast", "dark-mode snackbar", "theme-aware toast", "system theme toast", "暗色 toast", "暗色浮层通知" → `add_toast_v1` (accepts `theme` param; toasts use INVERTED contrast — `"dark"` gives a light pill with dark fg. Use `"system"` when `applySemanticPalette(doc)` is seeded)
+- "dark empty chart", "dark-mode no-data placeholder", "theme-aware chart empty state", "暗色空图表", "暗色无数据占位" → `add_empty_chart_v1` (accepts `theme` param; use inside dark-theme dashboards so the empty slot doesn't punch a light rectangle into dark surfaces. Use `"system"` when `applySemanticPalette(doc)` is seeded)
 - "status", "online indicator", "presence dot", "health status", "busy indicator", "状态", "在线" → `add_status_badge_v0`
 - "spinner", "loading spinner", "progress circle", "loader", "加载圈" → `add_spinner_v0`
 - "tooltip", "hover hint", "help tip", "提示浮层" → `add_tooltip_v0`
@@ -273,6 +303,14 @@ PREFER an element tool when the spec says any of:
 - "OTP", "PIN code", "verification code", "2FA code", "6-digit code", "enter code", "验证码", "PIN 码" → `add_otp_input_v0`
 - "attachment", "attached file", "uploaded file", "file item", "file list row", "附件", "已上传文件" → `add_attachment_row_v0` (for upload-in-progress state, compose `add_progress_bar_v0` below)
 - "chat message", "message bubble", "conversation row", "iMessage bubble", "chat UI", "聊天气泡", "消息气泡" → `add_chat_bubble_v0` (side="left" for from-others, side="right" for from-self)
+- "KPI card", "big number card", "metric tile", "stat widget", "featured metric", "关键指标卡", "数据大屏卡片" → `add_stat_card_v0` (distinct from `add_stat_grid_v0` which is multi-cell side-by-side)
+- "Continue with Google", "Sign in with Apple", "social login", "OAuth buttons", "SSO providers", "third-party login", "第三方登录", "社交登录", "OAuth 登录" → `add_social_login_row_v0` (orientation="vertical" for stacked full-width on mobile; orientation="horizontal" for the compact "or sign in with..." icon-only row)
+- "pricing card", "plan card", "SaaS tier", "subscription plan", "pricing tier", "billing card", "价格卡", "套餐卡", "定价卡片" → `add_pricing_card_v0` (set one tile's `emphasis: "featured"` to visually recommend it — auto-gets "Most popular" badge unless `badge` overrides). For a 3-tier pricing section, call this 3× under the same parent section.
+- "slider", "range input", "volume control", "opacity slider", "brightness slider", "filter slider", "滑块", "滑动条", "音量条" → `add_range_slider_v0` (single-handle; set `show_value=true` + `value_suffix="%"` to render the readout). For a dual-handle range (min+max), still fall through to batch_design.
+- "phone input", "phone field", "international phone", "country code input", "+1 (555) ...", "电话号码", "手机号输入", "国际电话" → `add_phone_input_v0` (renders country dial code button + digits input in a 44px row; pass `country_flag` for emoji prefix). For a plain single-line text input without the country prefix, use `add_form_field_v0`.
+- "newsletter signup", "subscribe form", "subscribe to newsletter", "promo code input", "apply discount", "send message input", "chat composer", "search with submit", "订阅", "应用优惠码", "发送消息" → `add_input_with_action_v0` (action_kind="text" for "Subscribe" pill button, action_kind="icon" for chat send arrow). Different from `add_form_field_v0` (no inline button) and `add_search_bar_v0` (no trailing action button).
+- "cookie banner", "cookie consent", "GDPR banner", "CCPA banner", "privacy notice", "cookie disclosure", "cookie 提示", "隐私同意条" → `add_cookie_banner_v0` (set `show_settings_link: true` for fine-grained GDPR consent UX). Caller positions sticky-bottom; the tool emits the banner card itself.
+- "sidebar", "side nav", "sidebar nav", "left rail", "dashboard nav rail", "admin sidebar", "settings sidebar", "docs sidebar", "vertical nav", "侧边栏", "侧边导航", "左侧导航" → `add_sidebar_nav_v0` (desktop persistent rail; pass `title` for a brand row above the items, mark current page with `active: true` on the item). Different from `add_bottom_nav_v0` (mobile bottom tabs) and `add_top_nav_bar_v0` (mobile top header).
 
 STILL use batch_design when:
 
@@ -505,6 +543,50 @@ add_attachment_row_v0({ filename: "sealed.zip", icon: "file-archive", removable:
 
 add_chat_bubble_v0({ message: "Hi! How can I help?", author: "Support", timestamp: "Just now" })  // left (from-others)
 add_chat_bubble_v0({ message: "My order hasn't arrived.", side: "right", timestamp: "2m" })      // right (from-self)
+
+add_stat_card_v0({ label: "Monthly revenue", value: "$12.4k", icon: "trending-up", delta: "+8% vs last week", trend: "up" })
+add_stat_card_v0({ label: "Active users", value: "1,284", icon: "users" })                        // no delta = static snapshot
+
+add_social_login_row_v0({ providers: [{ name: "Google" }, { name: "Apple" }, { name: "Microsoft" }] })  // stacked "Continue with X" buttons
+add_social_login_row_v0({ providers: [{ name: "Google" }, { name: "GitHub" }, { name: "Slack" }], orientation: "horizontal" })  // compact icon-only row
+
+add_pricing_card_v0({ tier: "Starter", price: "0", period: "/month", features: ["3 projects", "Community support"], cta: "Get started" })
+add_pricing_card_v0({ tier: "Pro", price: "29", period: "/month", features: ["Unlimited projects", "Priority support", "Advanced analytics"], emphasis: "featured" })  // highlighted recommended tier
+add_pricing_card_v0({ tier: "Enterprise", price: "Custom", features: ["Dedicated support", "SSO", "SLA"], cta: "Contact sales" })
+
+add_toast_v1({ message: "Changes saved", icon: "check" })                     // default light = v0 parity (dark pill)
+add_toast_v1({ message: "Changes saved", icon: "check", theme: "dark" })      // inverted light pill for dark-surface screens
+add_toast_v1({ message: "Changes saved", theme: "system" })                   // $color-* refs — requires applySemanticPalette(doc) seeded
+
+add_range_slider_v0({ value: 60, label: "Volume", show_value: true, value_suffix: "%" })
+add_range_slider_v0({ value: 128, min: 0, max: 255, label: "Brightness", show_value: true })
+
+add_empty_chart_v1({ icon: "line-chart" })                           // default light = v0 parity
+add_empty_chart_v1({ icon: "pie-chart", theme: "dark" })              // dashboard dark-mode "no data" slot
+add_empty_chart_v1({ icon: "bar-chart-2", theme: "system" })          // $color-* refs — requires applySemanticPalette(doc) seeded
+
+add_phone_input_v0({ label: "Phone number", country_code: "+1", country_flag: "🇺🇸", required: true })
+add_phone_input_v0({ country_code: "+86", country_flag: "🇨🇳", value: "138 0000 0000" })  // populated state
+
+add_input_with_action_v0({ placeholder: "Enter your email", action_label: "Subscribe", leading_icon: "mail" })  // newsletter signup
+add_input_with_action_v0({ placeholder: "Apply discount code", action_label: "Apply" })                          // checkout discount
+add_input_with_action_v0({ placeholder: "Type a message…", action_kind: "icon", action_icon: "send" })          // chat composer
+
+add_cookie_banner_v0({})                                                                                          // default GDPR banner
+add_cookie_banner_v0({ show_settings_link: true })                                                                // with fine-grained consent link
+add_cookie_banner_v0({ title: "Privacy choices", body: "We use cookies for analytics.", accept_label: "Allow", decline_label: "Decline" })
+
+add_sidebar_nav_v0({
+  title: "Acme",
+  items: [
+    { label: "Dashboard", icon: "layout-dashboard", active: true },
+    { label: "Customers", icon: "users" },
+    { label: "Orders",    icon: "shopping-cart" },
+    { label: "Reports",   icon: "bar-chart-3" },
+    { label: "Settings",  icon: "settings" },
+  ],
+})
+add_sidebar_nav_v0({ items: [{ label: "Home", icon: "home", active: true }, { label: "Profile", icon: "user" }] })  // titleless minimal
 ```
 
 ## Composition pattern
@@ -514,6 +596,102 @@ For a dashboard that needs a metric row inside a page:
 1. Build the page structure via `batch_design` (root frame + section container) — note the section's id
 2. Call `add_metric_row_v0({ parent_id: "<section-id>", items: [...] })` to insert the row under that section
 3. Optional: a second `batch_design` U-op to style (fill, theme variables)
+
+## Common compositions (cookbook)
+
+When the user asks for a recognizable screen pattern (login, signup,
+settings, paywall, dashboard tile row, support chat), STACK existing
+element tools under one parent rather than reaching for batch_design.
+The recipes below are by-frequency-of-real-use; each one fits in 4-7
+tool calls.
+
+### Login screen (phone + password + social)
+
+```
+batch_design: foo = I("page", { type: "frame", layout: "vertical", gap: 24, padding: [40, 24] })
+add_heading_v0({ parent_id: "<foo>", content: "Welcome back" })
+add_body_text_v0({ parent_id: "<foo>", content: "Sign in to continue" })
+add_phone_input_v0({ parent_id: "<foo>", label: "Phone number", country_code: "+1", country_flag: "🇺🇸", required: true })
+add_form_field_v0({ parent_id: "<foo>", label: "Password", required: true })
+add_text_button_v0({ parent_id: "<foo>", label: "Sign in" })  // primary CTA
+add_link_v0({ parent_id: "<foo>", label: "Forgot password?" })
+add_divider_v0({ parent_id: "<foo>" })  // "or continue with" — caller adds text via batch_design after
+add_social_login_row_v0({ parent_id: "<foo>", providers: [{ name: "Google" }, { name: "Apple" }] })
+```
+
+### Signup form (email + password + agreement)
+
+```
+add_heading_v0({ parent_id: "<form>", content: "Create your account" })
+add_form_field_v0({ parent_id: "<form>", label: "Email", required: true })
+add_form_field_v0({ parent_id: "<form>", label: "Password", required: true })
+add_form_field_v0({ parent_id: "<form>", label: "Confirm password", required: true })
+add_checkbox_v0({ parent_id: "<form>", label: "I agree to the Terms of Service", checked: false })
+add_text_button_v0({ parent_id: "<form>", label: "Sign up" })
+```
+
+### Settings page (groups of list rows)
+
+```
+add_section_header_v0({ parent_id: "<page>", title: "Account" })
+add_list_row_v0({ parent_id: "<page>", title: "Profile", trailing_icon: "chevron-right" })
+add_list_row_v0({ parent_id: "<page>", title: "Email", trailing_icon: "chevron-right" })
+add_divider_v0({ parent_id: "<page>" })
+add_section_header_v0({ parent_id: "<page>", title: "Notifications" })
+add_list_row_v0({ parent_id: "<page>", title: "Push notifications", trailing_kind: "switch" })
+add_list_row_v0({ parent_id: "<page>", title: "Email digest", trailing_kind: "switch" })
+```
+
+### Pricing section (3 tiers, middle one featured)
+
+```
+batch_design: row = I("page", { type: "frame", layout: "horizontal", gap: 16 })
+add_pricing_card_v0({ parent_id: "<row>", tier: "Starter", price: "0", period: "/month", features: ["3 projects", "Community support"] })
+add_pricing_card_v0({ parent_id: "<row>", tier: "Pro", price: "29", period: "/month", features: ["Unlimited projects", "Priority support", "Advanced analytics"], emphasis: "featured" })
+add_pricing_card_v0({ parent_id: "<row>", tier: "Enterprise", price: "Custom", features: ["Dedicated support", "SSO", "SLA"], cta: "Contact sales" })
+```
+
+### Dashboard KPI strip (4 stat cards in a row)
+
+```
+batch_design: row = I("page", { type: "frame", layout: "horizontal", gap: 16 })
+add_stat_card_v0({ parent_id: "<row>", label: "Revenue", value: "$12.4k", icon: "trending-up", delta: "+8%", trend: "up" })
+add_stat_card_v0({ parent_id: "<row>", label: "Active users", value: "1,284", icon: "users", delta: "+3%", trend: "up" })
+add_stat_card_v0({ parent_id: "<row>", label: "Churn", value: "3.2%", icon: "user-minus", delta: "-0.4%", trend: "down" })
+add_stat_card_v0({ parent_id: "<row>", label: "Sessions", value: "5,471", icon: "activity" })  // no delta
+```
+
+### OTP / 2FA verification screen
+
+```
+add_heading_v0({ parent_id: "<page>", content: "Enter verification code" })
+add_body_text_v0({ parent_id: "<page>", content: "We sent a 6-digit code to +1 (555) 123-4567" })
+add_otp_input_v0({ parent_id: "<page>", length: 6, digits: ["1", "2", "3"], focused_index: 3 })
+add_text_button_v0({ parent_id: "<page>", label: "Verify" })
+add_link_v0({ parent_id: "<page>", label: "Resend code" })
+```
+
+### Support chat thread
+
+```
+add_chat_bubble_v0({ parent_id: "<thread>", message: "Hi! How can I help today?", side: "left", author: "Sarah", timestamp: "Just now" })
+add_chat_bubble_v0({ parent_id: "<thread>", message: "My order hasn't arrived.", side: "right", timestamp: "2m" })
+add_chat_bubble_v0({ parent_id: "<thread>", message: "Sorry to hear! Let me check on that.", side: "left", author: "Sarah", timestamp: "1m" })
+add_attachment_row_v0({ parent_id: "<thread>", filename: "receipt.pdf", size: "240 KB", icon: "file-text" })
+```
+
+### Empty inbox / first-run onboarding
+
+```
+add_empty_state_v0({ parent_id: "<page>", title: "No messages yet", subtitle: "When someone messages you, it'll show up here.", icon: "inbox", cta_label: "Find friends" })
+```
+
+### Composition rules of thumb
+
+- **One parent for one row of siblings.** Don't pass `parent_id` of an unrelated container.
+- **Order matters.** Tools insert as the LAST child of `parent_id`, so call sequence is render order top-to-bottom (vertical) or left-to-right (horizontal).
+- **Don't mix N-tool and batch_design DSL ops in a single call.** They're separate calls — chain them, don't merge.
+- **Style overrides come AFTER structure.** First call the element tools to lay the structure, then a `batch_design` U-op to apply role-targeted fills / typography / variables.
 
 ## Invariants you don't need to think about
 

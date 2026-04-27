@@ -368,4 +368,367 @@ export const ELEMENT_TOOL_DEFINITIONS_EXT_3 = [
       required: ['message'],
     },
   },
+  {
+    name: 'add_stat_card_v0',
+    description:
+      'Big-number stat card — standalone featured-metric tile: label (uppercase muted) + huge 32/700 ' +
+      'value + optional delta line (tone-colored by trend) + optional corner icon. Dashboard KPI / ' +
+      '"your XYZ today" pattern. Distinct from: `add_stat_grid_v0` (multi-cell side-by-side, smaller ' +
+      'per-cell value), `add_metric_comparison_v0` (horizontal labeled KPI with inline trend arrow). ' +
+      'Pick stat_card for "featured single metric"; use the others for compact rows. Use for "KPI card", ' +
+      '"big number card", "metric tile", "stat widget", "关键指标卡", "数据大屏卡片". schemaVersion 1.0',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        schemaVersion: schemaVersionProp,
+        filePath: filePathProp,
+        label: {
+          type: 'string',
+          description: 'Small label above the big number (rendered uppercase)',
+        },
+        value: {
+          type: 'string',
+          description: 'Primary metric string, e.g. "$12.4k" / "1,284" / "98.2%"',
+        },
+        icon: { type: 'string', description: 'Optional lucide icon shown in the top-right corner' },
+        delta: {
+          type: 'string',
+          description: 'Optional delta text below the value (e.g. "+8% vs last week")',
+        },
+        trend: {
+          type: 'string',
+          enum: ['up', 'down', 'flat'],
+          description:
+            'Tone for the delta line. up=emerald, down=red, flat=slate (default). Value is always slate-900 regardless.',
+        },
+        width: { type: 'number', description: 'Card width in px (default 240, min 160)' },
+        corner_radius: { type: 'number', description: 'Corner radius (default 16)' },
+        parent_id: parentIdProp,
+        pageId: pageIdProp,
+      },
+      required: ['label', 'value'],
+    },
+  },
+  {
+    name: 'add_social_login_row_v0',
+    description:
+      'Social-auth provider button row — the "Continue with Google / Apple / Microsoft" pattern ' +
+      'on login / signup screens. Two orientations: "vertical" (default, full-width stacked buttons ' +
+      'with icon + "Continue with {Name}" label) and "horizontal" (compact icon-only square pills ' +
+      'side-by-side). Known provider names (google / apple / microsoft / github / facebook / twitter ' +
+      '/ x / linkedin / discord / slack / email / phone) auto-resolve to lucide icons; override via ' +
+      '`providers[i].icon`. Use for "social login", "Sign in with Google", "OAuth buttons", "SSO row", ' +
+      '"第三方登录", "社交登录". schemaVersion 1.0',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        schemaVersion: schemaVersionProp,
+        filePath: filePathProp,
+        providers: {
+          type: 'array',
+          description:
+            'Provider list, 1-6 items. Each item: { name: string, icon?: string }. Known names auto-map icons.',
+          items: {
+            type: 'object',
+            properties: {
+              name: { type: 'string' },
+              icon: { type: 'string', description: 'Optional lucide icon override' },
+            },
+            required: ['name'],
+          },
+        },
+        orientation: {
+          type: 'string',
+          enum: ['vertical', 'horizontal'],
+          description:
+            '"vertical" (default) = full-width stacked buttons w/ label. "horizontal" = compact icon-only pills.',
+        },
+        width: {
+          type: 'number',
+          description: 'Button width in px (default 320, min 200, vertical only)',
+        },
+        parent_id: parentIdProp,
+        pageId: pageIdProp,
+      },
+      required: ['providers'],
+    },
+  },
+  {
+    name: 'add_pricing_card_v0',
+    description:
+      'SaaS pricing-tier card — the "Pro $29/month" column from pricing tables. Columns: tier name + ' +
+      'optional description, big price (currency + amount + period), feature list with check icons, ' +
+      'and a primary CTA at the bottom. Two emphases: "default" (white bg, slate border, slate CTA) ' +
+      'and "featured" (accent border + CTA, auto-adds "Most popular" badge unless `badge` overrides). ' +
+      'Use for "pricing card", "plan card", "SaaS tier", "subscription plan", "价格卡", "套餐卡". ' +
+      'For a 3-column pricing section: call this 3× with different `tier`/`price`/`emphasis` values under ' +
+      'the same section parent_id. schemaVersion 1.0',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        schemaVersion: schemaVersionProp,
+        filePath: filePathProp,
+        tier: { type: 'string', description: 'Tier name (e.g. "Pro", "Team", "Enterprise")' },
+        price: {
+          type: 'string',
+          description: 'Price amount (number only — currency rendered separately, e.g. "29", "0")',
+        },
+        currency: { type: 'string', description: 'Currency symbol before price (default "$")' },
+        period: {
+          type: 'string',
+          description: 'Billing period after price (e.g. "/month", "/year", "/seat")',
+        },
+        features: {
+          type: 'array',
+          description: 'Feature list, 3-6 items typical. Each rendered with a leading check icon.',
+          items: { type: 'string' },
+        },
+        description: {
+          type: 'string',
+          description: 'Small description beneath the tier name (e.g. "For growing teams")',
+        },
+        badge: {
+          type: 'string',
+          description:
+            'Optional ribbon label (e.g. "Most popular"). Auto-shown on featured if omitted.',
+        },
+        cta: { type: 'string', description: 'Primary CTA label (default "Get started")' },
+        emphasis: {
+          type: 'string',
+          enum: ['default', 'featured'],
+          description: '"default" (slate) or "featured" (accent — highlights the recommended tier)',
+        },
+        width: { type: 'number', description: 'Card width in px (default 280, min 220)' },
+        corner_radius: { type: 'number', description: 'Corner radius (default 16)' },
+        parent_id: parentIdProp,
+        pageId: pageIdProp,
+      },
+      required: ['tier', 'price'],
+    },
+  },
+  {
+    name: 'add_toast_v1',
+    description:
+      'Theme-aware variant of add_toast_v0 — same floating pill notification (fit_content, ' +
+      'cornerRadius=24, optional leading icon + message) with an added `theme` param. ' +
+      'theme="light" (default): byte-parity with v0 (dark pill #111827 + white fg). ' +
+      'theme="dark": inverted contrast pill (#F1F5F9 light pill + #0F172A dark fg) — toasts use ' +
+      'INVERTED contrast so a light pill sits on a dark surface. theme="system": emits ' +
+      '$color-text-primary as bg + $color-surface as fg (inverted swap); render tracks themes.Mode. ' +
+      'REQUIRES `applySemanticPalette(doc)` seeded when theme="system". Use when the spec says ' +
+      '"dark-mode toast", "theme-aware snackbar", "supports light/dark toggle"; stick with ' +
+      'add_toast_v0 for single-theme designs. schemaVersion 1.0',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        schemaVersion: schemaVersionProp,
+        filePath: filePathProp,
+        message: { type: 'string', description: 'Toast message' },
+        icon: { type: 'string', description: 'Optional leading lucide icon' },
+        theme: {
+          type: 'string',
+          enum: ['light', 'dark', 'system'],
+          description:
+            'Theme variant. "light" (default) = v0 parity (dark pill). "dark" = inverted light pill. "system" = $color-* refs, requires applySemanticPalette(doc).',
+        },
+        parent_id: parentIdProp,
+        pageId: pageIdProp,
+      },
+      required: ['message'],
+    },
+  },
+  {
+    name: 'add_range_slider_v0',
+    description:
+      'Single-thumb range slider — the "Volume 60%" / "Filter from N" horizontal control. Visual ' +
+      'static representation (no interaction wiring). Optional label + value readout shown in a row ' +
+      'above the track. Track renders as: filled accent portion (left of thumb) + 20×20 thumb with ' +
+      'accent stroke + remaining slate portion (right of thumb). Value clamps to [min, max]. Use for ' +
+      '"slider", "range input", "volume control", "opacity slider", "brightness slider", "滑块", ' +
+      '"滑动条". schemaVersion 1.0',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        schemaVersion: schemaVersionProp,
+        filePath: filePathProp,
+        value: { type: 'number', description: 'Current value (default mid-point)' },
+        min: { type: 'number', description: 'Min value (default 0)' },
+        max: { type: 'number', description: 'Max value (default 100)' },
+        label: { type: 'string', description: 'Optional label above the track' },
+        show_value: {
+          type: 'boolean',
+          description: 'When true, renders the current value on the right side of the header row',
+        },
+        value_suffix: {
+          type: 'string',
+          description: 'Optional suffix on rendered value (e.g. "%", "px", "°")',
+        },
+        width: { type: 'number', description: 'Track width in px (default 320, min 160)' },
+        parent_id: parentIdProp,
+        pageId: pageIdProp,
+      },
+    },
+  },
+  {
+    name: 'add_empty_chart_v1',
+    description:
+      'Theme-aware variant of add_empty_chart_v0 — same dashed-border "no data yet" tile shape with ' +
+      'an added `theme` param controlling 5 colors (bg, border, icon, title, subtitle). ' +
+      'theme="light" (default): byte-parity with v0 (slate-50 bg, slate-300 dashed border). ' +
+      'theme="dark": hardcoded dark-mode palette (slate-800 bg, slate-600 border, slate-200 title) — ' +
+      'use inside dark-theme dashboards so the empty slot matches surrounding card surfaces. ' +
+      'theme="system": emits $color-surface-2 bg / $color-border stroke / $color-text-muted + ' +
+      '$color-text-primary text refs; render tracks themes.Mode. REQUIRES `applySemanticPalette(doc)` ' +
+      'seeded when theme="system". Use when the spec says "dark-mode empty chart", "empty state in ' +
+      'dark dashboard", "theme-aware no-data placeholder". schemaVersion 1.0',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        schemaVersion: schemaVersionProp,
+        filePath: filePathProp,
+        width: { type: 'number', description: 'Width in px (default 320, min 120)' },
+        height: { type: 'number', description: 'Height in px (default 200, min 100)' },
+        title: { type: 'string', description: 'Headline above subtitle (default "No data yet")' },
+        subtitle: { type: 'string', description: 'Hint beneath title' },
+        icon: {
+          type: 'string',
+          description:
+            'Lucide icon above title (default "bar-chart-2"; "line-chart" / "pie-chart" to match the widget it replaces)',
+        },
+        corner_radius: { type: 'number', description: 'Corner radius (default 12)' },
+        theme: {
+          type: 'string',
+          enum: ['light', 'dark', 'system'],
+          description:
+            'Theme variant. "light" (default) = v0 parity. "dark" = hardcoded dark hex. "system" = $color-* refs; requires applySemanticPalette(doc).',
+        },
+        parent_id: parentIdProp,
+        pageId: pageIdProp,
+      },
+    },
+  },
+  {
+    name: 'add_phone_input_v0',
+    description:
+      'International phone input with leading country-code selector — the "+1 (555) …" pattern from ' +
+      'every modern signup / login screen. Different from add_form_field_v0 (single text input, no ' +
+      'prefix); use this when the spec calls for an international phone field with a country picker. ' +
+      'Country selector renders as a button-shape (no actual menu); caller handles the picker UX as ' +
+      'a separate concern. Set `value` to render the populated state (slate-900 text); omit for ' +
+      'placeholder state (slate-400 text). Set `country_flag` (emoji or abbrev) to add a leading ' +
+      'flag glyph next to the dial code. Use for "phone input", "phone field", "international phone", ' +
+      '"country code input", "电话号码输入", "手机号输入". schemaVersion 1.0',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        schemaVersion: schemaVersionProp,
+        filePath: filePathProp,
+        label: { type: 'string', description: 'Optional label above the input' },
+        country_code: {
+          type: 'string',
+          description: 'Dial code shown in the leading button (default "+1")',
+        },
+        country_flag: {
+          type: 'string',
+          description: 'Optional flag emoji or country abbreviation shown next to the dial code',
+        },
+        placeholder: {
+          type: 'string',
+          description: 'Placeholder for the digits input (default "(555) 555-5555")',
+        },
+        value: {
+          type: 'string',
+          description:
+            'Pre-filled phone digits (without country code). Omit for placeholder state.',
+        },
+        required: {
+          type: 'boolean',
+          description: 'When true, appends " *" to the label',
+        },
+        width: { type: 'number', description: 'Field width in px (default 320, min 240)' },
+        parent_id: parentIdProp,
+        pageId: pageIdProp,
+      },
+    },
+  },
+  {
+    name: 'add_input_with_action_v0',
+    description:
+      'Input field with inline action button on the right — the "Subscribe to newsletter" / ' +
+      '"Apply discount code" / "Send chat message" pattern. Different from add_form_field_v0 ' +
+      '(label-above, no inline button) and add_search_bar_v0 (leading search icon, no trailing ' +
+      'action). Two action variants: action_kind="text" (default, pill button with label like ' +
+      '"Subscribe") or action_kind="icon" (44×44 square icon button — chat send arrow / search ' +
+      'apply). Set `value` to render populated state (slate-900 text); omit for placeholder ' +
+      'state (slate-400). Optional `leading_icon` adds an icon inside the input itself. Use for ' +
+      '"newsletter signup", "apply discount code", "send message", "subscribe form", "promo code", ' +
+      '"订阅输入", "发送消息输入". schemaVersion 1.0',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        schemaVersion: schemaVersionProp,
+        filePath: filePathProp,
+        placeholder: { type: 'string', description: 'Placeholder text (e.g. "Enter email")' },
+        value: {
+          type: 'string',
+          description: 'Pre-filled input value. Omit for placeholder state.',
+        },
+        action_label: {
+          type: 'string',
+          description: 'Button text when action_kind="text" (default "Submit")',
+        },
+        action_icon: {
+          type: 'string',
+          description: 'Lucide icon name when action_kind="icon" (default "arrow-right")',
+        },
+        action_kind: {
+          type: 'string',
+          enum: ['text', 'icon'],
+          description:
+            '"text" (default) = pill button with label. "icon" = 44×44 square icon button.',
+        },
+        leading_icon: {
+          type: 'string',
+          description: 'Optional lucide icon shown inside the input itself (left side)',
+        },
+        width: { type: 'number', description: 'Field width in px (default 400, min 280)' },
+        parent_id: parentIdProp,
+        pageId: pageIdProp,
+      },
+      required: ['placeholder'],
+    },
+  },
+  {
+    name: 'add_cookie_banner_v0',
+    description:
+      'Cookie consent banner — sticky bottom-of-page GDPR/CCPA disclosure with title, body, ' +
+      'accept / decline buttons, and an optional "Cookie settings" link for fine-grained consent. ' +
+      'Caller positions the banner (typically `position: sticky; bottom: 0` on web, or as a layered ' +
+      'bottom child in mockups); the tool emits the banner card itself, not the positioning chrome. ' +
+      'Set `show_settings_link: true` to render the third settings affordance below the buttons. ' +
+      'Use for "cookie banner", "cookie consent", "GDPR banner", "privacy notice", "cookie 提示", ' +
+      '"隐私同意条". schemaVersion 1.0',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        schemaVersion: schemaVersionProp,
+        filePath: filePathProp,
+        title: { type: 'string', description: 'Headline (default "We use cookies")' },
+        body: { type: 'string', description: 'Body / disclosure text' },
+        accept_label: { type: 'string', description: 'Accept button label (default "Accept all")' },
+        decline_label: { type: 'string', description: 'Decline button label (default "Reject")' },
+        show_settings_link: {
+          type: 'boolean',
+          description: 'When true, renders a "Cookie settings" link below the buttons',
+        },
+        settings_label: {
+          type: 'string',
+          description: 'Settings link label (default "Cookie settings")',
+        },
+        width: { type: 'number', description: 'Banner width in px (default 720, min 320)' },
+        parent_id: parentIdProp,
+        pageId: pageIdProp,
+      },
+    },
+  },
 ];

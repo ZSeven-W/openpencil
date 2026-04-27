@@ -3,6 +3,7 @@ export { cjkFontFamily, detectCjkScript, type CjkScript } from './cjk-detect.js'
 export { buildCardRow, type CardRowItem, type CardRowParams } from './card-row.js';
 export { buildMetricRow, type MetricRowItem, type MetricRowParams } from './metric-row.js';
 export { buildBottomNav, type BottomNavItem, type BottomNavParams } from './bottom-nav.js';
+export { buildSidebarNav, type SidebarNavItem, type SidebarNavParams } from './sidebar-nav.js';
 export {
   buildSectionHeader,
   type SectionHeaderAction,
@@ -83,3 +84,24 @@ export { buildUploadDropzone, type UploadDropzoneParams } from './upload-dropzon
 export { buildOtpInput, type OtpInputParams } from './otp-input.js';
 export { buildAttachmentRow, type AttachmentRowParams } from './attachment-row.js';
 export { buildChatBubble, type ChatBubbleParams, type ChatBubbleSide } from './chat-bubble.js';
+export { buildStatCard, type StatCardParams, type StatCardTrend } from './stat-card.js';
+export {
+  buildSocialLoginRow,
+  type SocialLoginRowParams,
+  type SocialLoginProvider,
+} from './social-login-row.js';
+export { buildPricingCard, type PricingCardParams } from './pricing-card.js';
+export { buildToastV1, type ToastV1Params, type ToastV1Theme } from './toast-v1.js';
+export { buildRangeSlider, type RangeSliderParams } from './range-slider.js';
+export {
+  buildEmptyChartV1,
+  type EmptyChartV1Params,
+  type EmptyChartV1Theme,
+} from './empty-chart-v1.js';
+export { buildPhoneInput, type PhoneInputParams } from './phone-input.js';
+export {
+  buildInputWithAction,
+  type InputWithActionParams,
+  type InputWithActionKind,
+} from './input-with-action.js';
+export { buildCookieBanner, type CookieBannerParams } from './cookie-banner.js';

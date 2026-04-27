@@ -82,6 +82,16 @@ import { handleAddUploadDropzoneV0 } from '../tools/add-upload-dropzone-v0';
 import { handleAddOtpInputV0 } from '../tools/add-otp-input-v0';
 import { handleAddAttachmentRowV0 } from '../tools/add-attachment-row-v0';
 import { handleAddChatBubbleV0 } from '../tools/add-chat-bubble-v0';
+import { handleAddStatCardV0 } from '../tools/add-stat-card-v0';
+import { handleAddSocialLoginRowV0 } from '../tools/add-social-login-row-v0';
+import { handleAddPricingCardV0 } from '../tools/add-pricing-card-v0';
+import { handleAddToastV1 } from '../tools/add-toast-v1';
+import { handleAddRangeSliderV0 } from '../tools/add-range-slider-v0';
+import { handleAddEmptyChartV1 } from '../tools/add-empty-chart-v1';
+import { handleAddPhoneInputV0 } from '../tools/add-phone-input-v0';
+import { handleAddInputWithActionV0 } from '../tools/add-input-with-action-v0';
+import { handleAddCookieBannerV0 } from '../tools/add-cookie-banner-v0';
+import { handleAddSidebarNavV0 } from '../tools/add-sidebar-nav-v0';
 import { recordElementToolCall } from '../metrics/element-tool-metrics';
 import { ELEMENT_TOOL_DEFINITIONS_BASE } from './element-tool-defs-base';
 import { ELEMENT_TOOL_DEFINITIONS_EXT } from './element-tool-defs-ext';
@@ -248,6 +258,26 @@ async function dispatchElementToolCall(name: string, a: any): Promise<string> {
       return JSON.stringify(await handleAddAttachmentRowV0(a), null, 2);
     case 'add_chat_bubble_v0':
       return JSON.stringify(await handleAddChatBubbleV0(a), null, 2);
+    case 'add_stat_card_v0':
+      return JSON.stringify(await handleAddStatCardV0(a), null, 2);
+    case 'add_social_login_row_v0':
+      return JSON.stringify(await handleAddSocialLoginRowV0(a), null, 2);
+    case 'add_pricing_card_v0':
+      return JSON.stringify(await handleAddPricingCardV0(a), null, 2);
+    case 'add_toast_v1':
+      return JSON.stringify(await handleAddToastV1(a), null, 2);
+    case 'add_range_slider_v0':
+      return JSON.stringify(await handleAddRangeSliderV0(a), null, 2);
+    case 'add_empty_chart_v1':
+      return JSON.stringify(await handleAddEmptyChartV1(a), null, 2);
+    case 'add_phone_input_v0':
+      return JSON.stringify(await handleAddPhoneInputV0(a), null, 2);
+    case 'add_input_with_action_v0':
+      return JSON.stringify(await handleAddInputWithActionV0(a), null, 2);
+    case 'add_cookie_banner_v0':
+      return JSON.stringify(await handleAddCookieBannerV0(a), null, 2);
+    case 'add_sidebar_nav_v0':
+      return JSON.stringify(await handleAddSidebarNavV0(a), null, 2);
     default:
       return '';
   }

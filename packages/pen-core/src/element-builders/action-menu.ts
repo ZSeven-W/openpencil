@@ -84,10 +84,7 @@ export function buildActionMenu(params: ActionMenuParams): ElementTree {
       layout: 'horizontal',
       alignItems: 'center',
       gap: 10,
-      paddingTop: 8,
-      paddingBottom: 8,
-      paddingLeft: 12,
-      paddingRight: 12,
+      padding: [8, 12],
       children: itemChildren,
     });
   });
@@ -99,8 +96,7 @@ export function buildActionMenu(params: ActionMenuParams): ElementTree {
     width,
     height: 'fit_content',
     layout: 'vertical',
-    paddingTop: 8,
-    paddingBottom: 8,
+    padding: [8, 0],
     cornerRadius: 10,
     fill: [{ type: 'solid', color: '#FFFFFF' }],
     stroke: { thickness: 1, fill: [{ type: 'solid', color: '#E2E8F0' }] },

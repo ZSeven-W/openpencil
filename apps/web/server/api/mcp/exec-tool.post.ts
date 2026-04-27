@@ -38,6 +38,16 @@ import {
   buildOtpInput,
   buildAttachmentRow,
   buildChatBubble,
+  buildStatCard,
+  buildSocialLoginRow,
+  buildPricingCard,
+  buildToastV1,
+  buildRangeSlider,
+  buildEmptyChartV1,
+  buildPhoneInput,
+  buildInputWithAction,
+  buildCookieBanner,
+  buildSidebarNav,
   buildKbd,
   buildLink,
   buildListRow,
@@ -197,6 +207,18 @@ const SERVER_BUILDERS: Record<string, BuilderFn> = {
   add_otp_input_v0: (a) => buildOtpInput(a as Parameters<typeof buildOtpInput>[0]),
   add_attachment_row_v0: (a) => buildAttachmentRow(a as Parameters<typeof buildAttachmentRow>[0]),
   add_chat_bubble_v0: (a) => buildChatBubble(a as Parameters<typeof buildChatBubble>[0]),
+  add_stat_card_v0: (a) => buildStatCard(a as Parameters<typeof buildStatCard>[0]),
+  add_social_login_row_v0: (a) =>
+    buildSocialLoginRow(a as Parameters<typeof buildSocialLoginRow>[0]),
+  add_pricing_card_v0: (a) => buildPricingCard(a as Parameters<typeof buildPricingCard>[0]),
+  add_toast_v1: (a) => buildToastV1(a as Parameters<typeof buildToastV1>[0]),
+  add_range_slider_v0: (a) => buildRangeSlider(a as Parameters<typeof buildRangeSlider>[0]),
+  add_empty_chart_v1: (a) => buildEmptyChartV1(a as Parameters<typeof buildEmptyChartV1>[0]),
+  add_phone_input_v0: (a) => buildPhoneInput(a as Parameters<typeof buildPhoneInput>[0]),
+  add_input_with_action_v0: (a) =>
+    buildInputWithAction(a as Parameters<typeof buildInputWithAction>[0]),
+  add_cookie_banner_v0: (a) => buildCookieBanner(a as Parameters<typeof buildCookieBanner>[0]),
+  add_sidebar_nav_v0: (a) => buildSidebarNav(a as Parameters<typeof buildSidebarNav>[0]),
 };
 
 interface ExecToolBody {
