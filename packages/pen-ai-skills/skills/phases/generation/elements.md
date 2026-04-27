@@ -240,7 +240,35 @@ Filter / selection chips:
 
 72. Single closable tag chip (filter / applied criterion / category, optional × close icon, tone enum) → `add_tag_v0`
 
-73. None match → fall through to `batch_design`
+People / profile:
+
+73. Compact user card (avatar + name + optional role line, horizontal row) → `add_user_card_v0`
+74. Large profile header (centered avatar + name + optional handle/bio) → `add_profile_header_v0`
+
+Side panels & docking:
+
+75. Slide-in drawer shell (full-height side panel with header) → `add_drawer_shell_v0`
+
+Forms (open state) & toolbars:
+
+76. Open-state combobox / autocomplete (input + visible dropdown rows) → `add_combobox_v0`
+77. Desktop toolbar (icon button row with optional dividers) → `add_toolbar_v0`
+
+Doc / inline feedback:
+
+78. Inline doc callout (tinted block with title + body, tone enum) → `add_callout_v0`
+79. Inline status + action ("Comment deleted • Undo") → `add_inline_action_v0`
+
+Sharing / chart annotations:
+
+80. Social share button row (circular icon buttons + labels) → `add_share_row_v0`
+81. Chart legend entry (color marker + label + optional value) → `add_legend_item_v0`
+
+Mail / inbox:
+
+82. Inbox / email list row (sender + subject + preview + unread dot) → `add_inbox_message_v0`
+
+83. None match → fall through to `batch_design`
 
 **Disambiguation**: if you need a ROW of 3 metrics that should NOT scroll (e.g. a stats strip inside a card), use `add_stat_grid_v0`, NOT `add_metric_row_v0`. The grid uses `fill_container` per cell so it never overflows; the metric row uses fixed-px cells + scroll wrapper.
 
@@ -326,6 +354,16 @@ PREFER an element tool when the spec says any of:
 - "stacked avatars", "avatar group", "avatar stack", "team avatars", "5 contributors", "online users", "+N more", "viewers row", "presence indicator", "团队成员", "在线用户", "头像组" → `add_avatar_group_v0` (renders up to `max_visible` ringed avatar circles + a "+N" overflow tile; pen-core flex doesn't allow negative gap so the white ring + 4px gap is the affordance, not literal overlap). Different from `add_avatar_v0` which is a single tile.
 - "data table row", "table row", "table header row", "customer row", "order row", "report row", "transaction row", "users table", "数据表行", "表格行", "表头行" → `add_data_table_row_v0` (desktop pattern; pass `header: true` for the column-header row, `selected: true` to tint a hover/selected body row). For row separators stack `add_divider_v0` between rows. Different from `add_list_row_v0` which is the iOS / mobile leading-icon list cell.
 - "filter chip", "filter tag", "applied filter", "selected criterion", "category pill", "removable tag", "Status: Active ×", "可移除标签", "筛选标签" → `add_tag_v0` (single chip with optional × close icon, default removable=true; pass `tone` for accent / success / warning / error palettes). Different from `add_badge_v0` (read-only static, smaller, no × affordance) and `add_chip_input_v0` (multi-tag INPUT FIELD with caret).
+- "user card", "contact card", "team member tile", "people picker row", "user mini card", "用户卡片", "联系人卡片" → `add_user_card_v0` (compact horizontal row: avatar + name + optional role). Different from `add_comment_v0` (carries body + timestamp) and `add_avatar_v0` (just the disk).
+- "profile header", "profile hero", "about me block", "account header", "user profile page", "个人主页头部" → `add_profile_header_v0` (large centered avatar + display name + optional handle / bio). Different from `add_user_card_v0` (compact horizontal row).
+- "drawer", "side panel", "slide-in panel", "edit drawer", "detail panel", "抽屉", "侧滑面板" → `add_drawer_shell_v0` (full-height drawer with title + close ×; body composed via subsequent calls under its id). Different from `add_modal_shell_v0` (centered card with scrim).
+- "combobox", "autocomplete", "open dropdown", "command palette", "open select", "search with results", "自动补全", "下拉补全" → `add_combobox_v0` (OPEN-state input + dropdown with N suggestion rows; one row optionally `highlighted: true`). Different from `add_select_v0` (closed state) and `add_search_bar_v0` (no suggestion list).
+- "toolbar", "editor toolbar", "formatting toolbar", "kanban actions", "icon button row", "工具栏" → `add_toolbar_v0` (horizontal 36×36 icon buttons + optional vertical dividers). Different from `add_top_nav_bar_v0` (mobile header) and `add_icon_button_v0` (single button).
+- "callout", "tip block", "doc note", "did you know", "info box", "提示框", "信息块" → `add_callout_v0` (tinted block with body + optional title + tone-driven leading icon: info / success / warning / danger / note). Different from `add_alert_v0` (banner with × dismiss) and `add_tooltip_v0` (small dark hover pill).
+- "inline action", "Undo button inline", "Saved • Retry", "comment deleted undo", "inline feedback", "inline action row" → `add_inline_action_v0` (left message + right blue action label, NO floating). Different from `add_toast_v0` (floating) and `add_alert_v0` (banner).
+- "share row", "share to social", "share buttons", "post share", "send via", "分享按钮组" → `add_share_row_v0` (horizontal circular icon buttons each labeled below). Different from `add_social_login_row_v0` (sign-in CTAs).
+- "chart legend", "legend item", "legend entry", "数据图例", "图例条目" → `add_legend_item_v0` (marker + label + optional value). Different from `add_status_badge_v0` (semantic dot + text).
+- "inbox row", "email row", "message list cell", "mail item", "email preview", "邮件条目", "收件箱条目" → `add_inbox_message_v0` (sender + subject + preview + timestamp + unread dot). Different from `add_notification_row_v0` (single title + body) and `add_list_row_v0` (no timestamp).
 
 STILL use batch_design when:
 
@@ -647,6 +685,56 @@ add_data_table_row_v0({
 add_tag_v0({ label: "Status: Active" })                          // default tone, × visible
 add_tag_v0({ label: "Plan: Pro", tone: "accent" })               // accent (blue) tone
 add_tag_v0({ label: "Verified", tone: "success", removable: false })  // read-only success chip
+
+add_user_card_v0({ name: "Sarah Lee", role: "Senior Engineer", initial: "SL" })
+
+add_profile_header_v0({ name: "Sarah Lee", handle: "@sarah", bio: "Designer at Acme. Cat-mom of two.", initial: "SL" })
+
+add_drawer_shell_v0({ title: "Edit project", side: "right", width: 480 })
+
+add_combobox_v0({
+  label: "Country",
+  value: "Sing",
+  options: [
+    { label: "Singapore", highlighted: true },
+    { label: "Sweden" },
+    { label: "Switzerland" },
+  ],
+})
+
+add_toolbar_v0({
+  items: [
+    { icon: "bold", active: true },
+    { icon: "italic" },
+    { icon: "underline", divider_after: true },
+    { icon: "list" },
+    { icon: "list-ordered" },
+  ],
+})
+
+add_callout_v0({ tone: "info", title: "Heads up", body: "This action affects every team member." })
+add_callout_v0({ tone: "warning", body: "Saving will overwrite the current draft." })
+
+add_inline_action_v0({ message: "Comment deleted", action_label: "Undo", icon: "info" })
+
+add_share_row_v0({
+  targets: [
+    { label: "Twitter", icon: "twitter" },
+    { label: "Facebook", icon: "facebook" },
+    { label: "Email", icon: "mail" },
+    { label: "Copy", icon: "link" },
+  ],
+})
+
+add_legend_item_v0({ label: "Revenue", color: "#2563EB", value: "$12,480" })
+
+add_inbox_message_v0({
+  from: "Stripe",
+  subject: "Your weekly summary",
+  preview: "Total volume rose 8.4% week-over-week.",
+  timestamp: "10:42 AM",
+  unread: true,
+})
 ```
 
 ## Composition pattern

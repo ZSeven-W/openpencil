@@ -95,17 +95,29 @@ import { handleAddSidebarNavV0 } from '../tools/add-sidebar-nav-v0';
 import { handleAddAvatarGroupV0 } from '../tools/add-avatar-group-v0';
 import { handleAddDataTableRowV0 } from '../tools/add-data-table-row-v0';
 import { handleAddTagV0 } from '../tools/add-tag-v0';
+import { handleAddUserCardV0 } from '../tools/add-user-card-v0';
+import { handleAddDrawerShellV0 } from '../tools/add-drawer-shell-v0';
+import { handleAddComboboxV0 } from '../tools/add-combobox-v0';
+import { handleAddToolbarV0 } from '../tools/add-toolbar-v0';
+import { handleAddCalloutV0 } from '../tools/add-callout-v0';
+import { handleAddShareRowV0 } from '../tools/add-share-row-v0';
+import { handleAddInlineActionV0 } from '../tools/add-inline-action-v0';
+import { handleAddLegendItemV0 } from '../tools/add-legend-item-v0';
+import { handleAddInboxMessageV0 } from '../tools/add-inbox-message-v0';
+import { handleAddProfileHeaderV0 } from '../tools/add-profile-header-v0';
 import { recordElementToolCall } from '../metrics/element-tool-metrics';
 import { ELEMENT_TOOL_DEFINITIONS_BASE } from './element-tool-defs-base';
 import { ELEMENT_TOOL_DEFINITIONS_EXT } from './element-tool-defs-ext';
 import { ELEMENT_TOOL_DEFINITIONS_EXT_2 } from './element-tool-defs-ext-2';
 import { ELEMENT_TOOL_DEFINITIONS_EXT_3 } from './element-tool-defs-ext-3';
+import { ELEMENT_TOOL_DEFINITIONS_EXT_4 } from './element-tool-defs-ext-4';
 
 export const ELEMENT_TOOL_DEFINITIONS = [
   ...ELEMENT_TOOL_DEFINITIONS_BASE,
   ...ELEMENT_TOOL_DEFINITIONS_EXT,
   ...ELEMENT_TOOL_DEFINITIONS_EXT_2,
   ...ELEMENT_TOOL_DEFINITIONS_EXT_3,
+  ...ELEMENT_TOOL_DEFINITIONS_EXT_4,
 ];
 
 export const ELEMENT_TOOL_NAMES: ReadonlySet<string> = new Set(
@@ -287,6 +299,26 @@ async function dispatchElementToolCall(name: string, a: any): Promise<string> {
       return JSON.stringify(await handleAddDataTableRowV0(a), null, 2);
     case 'add_tag_v0':
       return JSON.stringify(await handleAddTagV0(a), null, 2);
+    case 'add_user_card_v0':
+      return JSON.stringify(await handleAddUserCardV0(a), null, 2);
+    case 'add_drawer_shell_v0':
+      return JSON.stringify(await handleAddDrawerShellV0(a), null, 2);
+    case 'add_combobox_v0':
+      return JSON.stringify(await handleAddComboboxV0(a), null, 2);
+    case 'add_toolbar_v0':
+      return JSON.stringify(await handleAddToolbarV0(a), null, 2);
+    case 'add_callout_v0':
+      return JSON.stringify(await handleAddCalloutV0(a), null, 2);
+    case 'add_share_row_v0':
+      return JSON.stringify(await handleAddShareRowV0(a), null, 2);
+    case 'add_inline_action_v0':
+      return JSON.stringify(await handleAddInlineActionV0(a), null, 2);
+    case 'add_legend_item_v0':
+      return JSON.stringify(await handleAddLegendItemV0(a), null, 2);
+    case 'add_inbox_message_v0':
+      return JSON.stringify(await handleAddInboxMessageV0(a), null, 2);
+    case 'add_profile_header_v0':
+      return JSON.stringify(await handleAddProfileHeaderV0(a), null, 2);
     default:
       return '';
   }

@@ -32,6 +32,16 @@ import {
   buildAvatarGroup,
   buildDataTableRow,
   buildTag,
+  buildUserCard,
+  buildDrawerShell,
+  buildCombobox,
+  buildToolbar,
+  buildCallout,
+  buildShareRow,
+  buildInlineAction,
+  buildLegendItem,
+  buildInboxMessage,
+  buildProfileHeader,
   buildDatePicker,
   buildDivider,
   buildEmptyChart,
@@ -577,6 +587,77 @@ const CASES: BuilderCase[] = [
     toolName: 'add_tag_v0',
     args: { label: 'Status: Active', tone: 'accent' },
     build: (a) => buildTag(a as unknown as Parameters<typeof buildTag>[0]),
+  },
+  {
+    toolName: 'add_user_card_v0',
+    args: { name: 'Sarah Lee', role: 'Senior Engineer', initial: 'SL' },
+    build: (a) => buildUserCard(a as unknown as Parameters<typeof buildUserCard>[0]),
+  },
+  {
+    toolName: 'add_drawer_shell_v0',
+    args: { title: 'Edit project', side: 'right' as const, width: 400 },
+    build: (a) => buildDrawerShell(a as unknown as Parameters<typeof buildDrawerShell>[0]),
+  },
+  {
+    toolName: 'add_combobox_v0',
+    args: {
+      label: 'Country',
+      value: 'Sing',
+      options: [{ label: 'Singapore', highlighted: true }, { label: 'Sweden' }],
+    },
+    build: (a) => buildCombobox(a as unknown as Parameters<typeof buildCombobox>[0]),
+  },
+  {
+    toolName: 'add_toolbar_v0',
+    args: {
+      items: [
+        { icon: 'bold', active: true },
+        { icon: 'italic', divider_after: true },
+        { icon: 'list' },
+      ],
+    },
+    build: (a) => buildToolbar(a as unknown as Parameters<typeof buildToolbar>[0]),
+  },
+  {
+    toolName: 'add_callout_v0',
+    args: { tone: 'info' as const, title: 'Heads up', body: 'Action affects every team member.' },
+    build: (a) => buildCallout(a as unknown as Parameters<typeof buildCallout>[0]),
+  },
+  {
+    toolName: 'add_share_row_v0',
+    args: {
+      targets: [
+        { label: 'Twitter', icon: 'twitter' },
+        { label: 'Email', icon: 'mail' },
+      ],
+    },
+    build: (a) => buildShareRow(a as unknown as Parameters<typeof buildShareRow>[0]),
+  },
+  {
+    toolName: 'add_inline_action_v0',
+    args: { message: 'Comment deleted', action_label: 'Undo', icon: 'info' },
+    build: (a) => buildInlineAction(a as unknown as Parameters<typeof buildInlineAction>[0]),
+  },
+  {
+    toolName: 'add_legend_item_v0',
+    args: { label: 'Revenue', color: '#2563EB', value: '$12,480' },
+    build: (a) => buildLegendItem(a as unknown as Parameters<typeof buildLegendItem>[0]),
+  },
+  {
+    toolName: 'add_inbox_message_v0',
+    args: {
+      from: 'Stripe',
+      subject: 'Your weekly summary',
+      preview: 'Volume rose 8.4% week-over-week.',
+      timestamp: '10:42 AM',
+      unread: true,
+    },
+    build: (a) => buildInboxMessage(a as unknown as Parameters<typeof buildInboxMessage>[0]),
+  },
+  {
+    toolName: 'add_profile_header_v0',
+    args: { name: 'Sarah Lee', handle: '@sarah', bio: 'Designer at Acme.', initial: 'SL' },
+    build: (a) => buildProfileHeader(a as unknown as Parameters<typeof buildProfileHeader>[0]),
   },
 ];
 
