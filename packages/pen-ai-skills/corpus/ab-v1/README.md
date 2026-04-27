@@ -21,8 +21,9 @@ Batches:
 - 2026-04-25 — 9 prompts (social_login_row / pricing_card / stat_card /
   range_slider / phone_input / input_with_action / cookie_banner /
   toast_v1 / empty_chart_v1)
-- 2026-04-27 — 2 prompts (sidebar_nav_v0 — desktop persistent left rail;
-  avatar_group_v0 — stacked presence tile group)
+- 2026-04-27 — 3 prompts (sidebar_nav_v0 — desktop persistent left rail;
+  avatar_group_v0 — stacked presence tile group; data_table_row_v0 —
+  desktop dashboard tabular row)
 
 ab-v0 stays frozen (the A/B v1 results in
 `openpencil-docs/superpowers/notes/2026-04-20-ab-v1-results.md` are
