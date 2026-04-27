@@ -58,6 +58,7 @@ export function buildTag(params: TagParams): ElementTree {
       iconFontFamily: 'lucide',
       width: 14,
       height: 14,
+      fill: [{ type: 'solid', color: tone.fg }],
     });
   }
   return {
