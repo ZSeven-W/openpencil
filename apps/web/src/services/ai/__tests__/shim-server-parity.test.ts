@@ -42,6 +42,7 @@ import {
   buildLegendItem,
   buildInboxMessage,
   buildProfileHeader,
+  buildSettingRow,
   buildDatePicker,
   buildDivider,
   buildEmptyChart,
@@ -658,6 +659,16 @@ const CASES: BuilderCase[] = [
     toolName: 'add_profile_header_v0',
     args: { name: 'Sarah Lee', handle: '@sarah', bio: 'Designer at Acme.', initial: 'SL' },
     build: (a) => buildProfileHeader(a as unknown as Parameters<typeof buildProfileHeader>[0]),
+  },
+  {
+    toolName: 'add_setting_row_v0',
+    args: {
+      title: 'Notifications',
+      subtitle: 'Push, email, in-app',
+      leading_icon: 'bell',
+      trailing: { kind: 'switch', on: true },
+    },
+    build: (a) => buildSettingRow(a as unknown as Parameters<typeof buildSettingRow>[0]),
   },
 ];
 

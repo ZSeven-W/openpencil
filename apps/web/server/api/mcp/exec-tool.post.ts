@@ -61,6 +61,7 @@ import {
   buildLegendItem,
   buildInboxMessage,
   buildProfileHeader,
+  buildSettingRow,
   buildKbd,
   buildLink,
   buildListRow,
@@ -245,6 +246,7 @@ const SERVER_BUILDERS: Record<string, BuilderFn> = {
   add_legend_item_v0: (a) => buildLegendItem(a as Parameters<typeof buildLegendItem>[0]),
   add_inbox_message_v0: (a) => buildInboxMessage(a as Parameters<typeof buildInboxMessage>[0]),
   add_profile_header_v0: (a) => buildProfileHeader(a as Parameters<typeof buildProfileHeader>[0]),
+  add_setting_row_v0: (a) => buildSettingRow(a as Parameters<typeof buildSettingRow>[0]),
 };
 
 interface ExecToolBody {

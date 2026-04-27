@@ -299,4 +299,49 @@ export const ELEMENT_TOOL_DEFINITIONS_EXT_4 = [
       required: ['name'],
     },
   },
+  {
+    name: 'add_setting_row_v0',
+    description:
+      'Settings menu row — leading icon + (title over optional subtitle) + trailing control ' +
+      '(chevron / value text / switch / badge). Distinct from add_list_row_v0 (generic, trailing ' +
+      'is always an icon — no switch/value/badge variants) and add_form_field_v0 (label-above-' +
+      'input pattern for forms, not menus). Use for "settings row", "preferences row", "menu ' +
+      'item with toggle", "设置项", "偏好项". schemaVersion 1.0',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        schemaVersion: schemaVersionProp,
+        filePath: filePathProp,
+        title: { type: 'string', description: 'Title (left, 15/500).' },
+        subtitle: { type: 'string', description: 'Optional second-line text (13/400, muted).' },
+        leading_icon: { type: 'string', description: 'Optional leading lucide icon slug (24×24).' },
+        trailing: {
+          type: 'object',
+          description:
+            'Trailing control. Default: { kind: "chevron" }. Variants: ' +
+            '{ kind: "chevron" } | { kind: "value", value: string } | ' +
+            '{ kind: "switch", on: boolean } | { kind: "badge", value: string }.',
+          properties: {
+            kind: {
+              type: 'string',
+              enum: ['chevron', 'value', 'switch', 'badge'],
+              description: 'Trailing variant.',
+            },
+            value: {
+              type: 'string',
+              description: 'Required for kind="value" and kind="badge".',
+            },
+            on: {
+              type: 'boolean',
+              description: 'Required for kind="switch".',
+            },
+          },
+          required: ['kind'],
+        },
+        parent_id: parentIdProp,
+        pageId: pageIdProp,
+      },
+      required: ['title'],
+    },
+  },
 ];

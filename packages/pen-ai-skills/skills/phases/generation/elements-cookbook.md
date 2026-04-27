@@ -390,4 +390,22 @@ add_inbox_message_v0({
   timestamp: "10:42 AM",
   unread: true,
 })
+
+add_setting_row_v0({
+  title: "Notifications",
+  subtitle: "Push, email, in-app",
+  leading_icon: "bell",
+  trailing: { kind: "switch", on: true },
+})
+
+add_setting_row_v0({
+  title: "Language",
+  leading_icon: "globe",
+  trailing: { kind: "value", value: "English" },
+})
+
+add_setting_row_v0({
+  title: "What's new",
+  trailing: { kind: "badge", value: "New" },
+})
 ```
