@@ -95,8 +95,7 @@ export function buildDatePicker(params: DatePickerParams): ElementTree {
         layout: 'horizontal',
         alignItems: 'center',
         justifyContent: 'space-between',
-        paddingLeft: 12,
-        paddingRight: 12,
+        padding: [0, 12],
         fill: [{ type: 'solid', color: '#FFFFFF' }],
         stroke: { thickness: 1, fill: [{ type: 'solid', color: '#E2E8F0' }] },
         children: [

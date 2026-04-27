@@ -90,8 +90,7 @@ export function buildInputWithAction(params: InputWithActionParams): ElementTree
     layout: 'horizontal',
     alignItems: 'center',
     gap: params.leading_icon ? 8 : 0,
-    paddingLeft: 14,
-    paddingRight: 14,
+    padding: [0, 14],
     fill: [{ type: 'solid', color: '#FFFFFF' }],
     stroke: { thickness: 1, fill: [{ type: 'solid', color: '#CBD5E1' }] },
     children: inputChildren,
@@ -136,8 +135,7 @@ export function buildInputWithAction(params: InputWithActionParams): ElementTree
       layout: 'horizontal',
       alignItems: 'center',
       justifyContent: 'center',
-      paddingLeft: 20,
-      paddingRight: 20,
+      padding: [0, 20],
       fill: [{ type: 'solid', color: '#2563EB' }],
       children: [
         {

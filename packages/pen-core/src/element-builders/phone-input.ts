@@ -105,8 +105,7 @@ export function buildPhoneInput(params: PhoneInputParams): ElementTree {
         layout: 'horizontal',
         alignItems: 'center',
         gap: 6,
-        paddingLeft: 14,
-        paddingRight: 12,
+        padding: [0, 12, 0, 14],
         children: countryChildren,
       },
       {
@@ -125,8 +124,7 @@ export function buildPhoneInput(params: PhoneInputParams): ElementTree {
         height: 'fill_container',
         layout: 'horizontal',
         alignItems: 'center',
-        paddingLeft: 14,
-        paddingRight: 14,
+        padding: [0, 14],
         children: [
           {
             type: 'text',

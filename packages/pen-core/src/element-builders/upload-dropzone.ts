@@ -54,10 +54,7 @@ export function buildUploadDropzone(params: UploadDropzoneParams): ElementTree {
     alignItems: 'center',
     justifyContent: 'center',
     gap: 12,
-    paddingTop: 24,
-    paddingBottom: 24,
-    paddingLeft: 24,
-    paddingRight: 24,
+    padding: 24,
     fill: [{ type: 'solid', color: '#F8FAFC' }],
     stroke: {
       thickness: 1.5,

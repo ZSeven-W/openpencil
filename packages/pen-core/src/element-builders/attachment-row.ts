@@ -112,10 +112,7 @@ export function buildAttachmentRow(params: AttachmentRowParams): ElementTree {
     layout: 'horizontal',
     alignItems: 'center',
     gap: 10,
-    paddingTop: 10,
-    paddingBottom: 10,
-    paddingLeft: 12,
-    paddingRight: 12,
+    padding: [10, 12],
     fill: [{ type: 'solid', color: '#F8FAFC' }],
     children: rowChildren,
   };

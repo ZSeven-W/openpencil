@@ -85,8 +85,7 @@ export function buildPricingCard(params: PricingCardParams): ElementTree {
         cornerRadius: 999,
         layout: 'horizontal',
         alignItems: 'center',
-        paddingLeft: 10,
-        paddingRight: 10,
+        padding: [0, 10],
         fill: [{ type: 'solid', color: isFeatured ? '#EFF6FF' : '#F1F5F9' }],
         children: [
           {
@@ -257,10 +256,7 @@ export function buildPricingCard(params: PricingCardParams): ElementTree {
     cornerRadius,
     layout: 'vertical',
     gap: 20,
-    paddingTop: 24,
-    paddingBottom: 24,
-    paddingLeft: 24,
-    paddingRight: 24,
+    padding: 24,
     fill: [{ type: 'solid', color: '#FFFFFF' }],
     stroke: { thickness: borderThickness, fill: [{ type: 'solid', color: borderColor }] },
     children,
