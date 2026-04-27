@@ -19,6 +19,11 @@ export { buildDivider, type DividerOrientation, type DividerParams } from './div
 export { buildBadge, type BadgeParams } from './badge.js';
 export { buildAvatar, type AvatarParams } from './avatar.js';
 export { buildAvatarGroup, type AvatarGroupItem, type AvatarGroupParams } from './avatar-group.js';
+export {
+  buildDataTableRow,
+  type DataTableRowColumn,
+  type DataTableRowParams,
+} from './data-table-row.js';
 export { buildIconButton, type IconButtonParams } from './icon-button.js';
 export { buildIconLabel, type IconLabelParams } from './icon-label.js';
 export { buildStatGrid, type StatGridItem, type StatGridParams } from './stat-grid.js';

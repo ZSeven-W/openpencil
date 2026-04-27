@@ -265,6 +265,7 @@ export {
   buildCookieBanner,
   buildSidebarNav,
   buildAvatarGroup,
+  buildDataTableRow,
   cjkFontFamily,
   detectCjkScript,
   type ElementTree,
@@ -371,4 +372,6 @@ export {
   type SidebarNavParams,
   type AvatarGroupItem,
   type AvatarGroupParams,
+  type DataTableRowColumn,
+  type DataTableRowParams,
 } from './element-builders/index.js';

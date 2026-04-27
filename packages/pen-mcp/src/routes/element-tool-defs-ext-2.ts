@@ -480,6 +480,52 @@ export const ELEMENT_TOOL_DEFINITIONS_EXT_2 = [
     },
   },
   {
+    name: 'add_data_table_row_v0',
+    description:
+      'Desktop / dashboard data-table row — N evenly-spaced cells laid out horizontally (no ' +
+      'vertical dividers, modern Linear / Stripe styling). Set `header: true` for the column-' +
+      'header row (smaller, bolder, slate-500). Set `selected: true` on a body row to tint it ' +
+      'slate-50. For row separators stack `add_divider_v0` between successive rows. Distinct ' +
+      'from add_list_row_v0 (iOS / mobile leading-icon list cell). Use for "table row", "data ' +
+      'row", "customer row", "order row", "table header", "数据表行", "表格行". ' +
+      'schemaVersion 1.0',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        schemaVersion: schemaVersionProp,
+        filePath: filePathProp,
+        columns: {
+          type: 'array',
+          description:
+            'Cells in column order. Each cell renders as a fill_container frame so all columns ' +
+            'share remaining width evenly.',
+          items: {
+            type: 'object',
+            properties: {
+              content: {
+                type: 'string',
+                description: 'Cell text (e.g. "Sarah Lee", "$1,240", "Active").',
+              },
+            },
+            required: ['content'],
+          },
+        },
+        header: {
+          type: 'boolean',
+          description: 'Render as the table header row (12/600 slate-500, 40px tall).',
+        },
+        selected: {
+          type: 'boolean',
+          description:
+            'Tint a body row slate-50 to mark hover / selected state. Ignored on header.',
+        },
+        parent_id: parentIdProp,
+        pageId: pageIdProp,
+      },
+      required: ['columns'],
+    },
+  },
+  {
     name: 'add_avatar_group_v0',
     description:
       'Stacked avatar tile group — team / collaborator / "+N more" presence indicator. ' +
