@@ -107,8 +107,14 @@ describe('add_tag_v0 — structure', () => {
       await handleAddTagV0({ filePath: fp, label: tone, tone });
       const tag = getRoot(await readDoc(fp));
       expect((tag.fill as Array<{ color: string }>)[0].color).toBe(bg);
-      const label = (tag.children as Record<string, unknown>[])[0];
+      const kids = tag.children as Record<string, unknown>[];
+      const label = kids[0];
       expect((label.fill as Array<{ color: string }>)[0].color).toBe(fg);
+      // close icon must inherit the tone fg or it stays default-black
+      // and clashes with the label color (Codex caught this).
+      const remove = kids[1];
+      expect(remove.role).toBe('tag-remove');
+      expect((remove.fill as Array<{ color: string }>)[0].color).toBe(fg);
       invalidateCache(fp);
       await writeFile(fp, EMPTY_DOC, 'utf-8');
     }
