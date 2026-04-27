@@ -236,7 +236,11 @@ Tabular data:
 
 71. Desktop data-table row (N column-aligned cells in a single horizontal row, header / body / selected variants) → `add_data_table_row_v0`
 
-72. None match → fall through to `batch_design`
+Filter / selection chips:
+
+72. Single closable tag chip (filter / applied criterion / category, optional × close icon, tone enum) → `add_tag_v0`
+
+73. None match → fall through to `batch_design`
 
 **Disambiguation**: if you need a ROW of 3 metrics that should NOT scroll (e.g. a stats strip inside a card), use `add_stat_grid_v0`, NOT `add_metric_row_v0`. The grid uses `fill_container` per cell so it never overflows; the metric row uses fixed-px cells + scroll wrapper.
 
@@ -321,6 +325,7 @@ PREFER an element tool when the spec says any of:
 - "sidebar", "side nav", "sidebar nav", "left rail", "dashboard nav rail", "admin sidebar", "settings sidebar", "docs sidebar", "vertical nav", "侧边栏", "侧边导航", "左侧导航" → `add_sidebar_nav_v0` (desktop persistent rail; pass `title` for a brand row above the items, mark current page with `active: true` on the item). Different from `add_bottom_nav_v0` (mobile bottom tabs) and `add_top_nav_bar_v0` (mobile top header).
 - "stacked avatars", "avatar group", "avatar stack", "team avatars", "5 contributors", "online users", "+N more", "viewers row", "presence indicator", "团队成员", "在线用户", "头像组" → `add_avatar_group_v0` (renders up to `max_visible` ringed avatar circles + a "+N" overflow tile; pen-core flex doesn't allow negative gap so the white ring + 4px gap is the affordance, not literal overlap). Different from `add_avatar_v0` which is a single tile.
 - "data table row", "table row", "table header row", "customer row", "order row", "report row", "transaction row", "users table", "数据表行", "表格行", "表头行" → `add_data_table_row_v0` (desktop pattern; pass `header: true` for the column-header row, `selected: true` to tint a hover/selected body row). For row separators stack `add_divider_v0` between rows. Different from `add_list_row_v0` which is the iOS / mobile leading-icon list cell.
+- "filter chip", "filter tag", "applied filter", "selected criterion", "category pill", "removable tag", "Status: Active ×", "可移除标签", "筛选标签" → `add_tag_v0` (single chip with optional × close icon, default removable=true; pass `tone` for accent / success / warning / error palettes). Different from `add_badge_v0` (read-only static, smaller, no × affordance) and `add_chip_input_v0` (multi-tag INPUT FIELD with caret).
 
 STILL use batch_design when:
 
@@ -638,6 +643,10 @@ add_data_table_row_v0({
     { content: "$680" },
   ],
 })  // tinted hover/selected row
+
+add_tag_v0({ label: "Status: Active" })                          // default tone, × visible
+add_tag_v0({ label: "Plan: Pro", tone: "accent" })               // accent (blue) tone
+add_tag_v0({ label: "Verified", tone: "success", removable: false })  // read-only success chip
 ```
 
 ## Composition pattern
