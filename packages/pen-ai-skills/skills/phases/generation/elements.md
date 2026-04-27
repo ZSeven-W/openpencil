@@ -296,7 +296,7 @@ PREFER an element tool when the spec says any of:
 - "hero headline", "section title", "card title" / 特定字号标题 → `add_heading_v0`
 - "body paragraph", "description text", "intro copy" (包含 CJK 时尤其推荐) → `add_body_text_v0`
 - "icon with label", "menu item (inline)", "breadcrumb segment", "status indicator text" → `add_icon_label_v0`
-- "settings row", "list item", "iOS list cell", "table row with chevron" → `add_list_row_v0`
+- "list item", "iOS list cell", "table row with chevron" → `add_list_row_v0` (settings rows specifically — `add_setting_row_v0`, which has switch / value / badge trailing variants)
 - "search bar", "search input", "filter search", "搜索栏" → `add_search_bar_v0`
 - "form field", "email input", "password field", "labeled input", "required field" → `add_form_field_v0`
 - "textarea", "multi-line input", "notes field", "description box", "bio input", "feedback box", "多行输入", "备注" → `add_textarea_v0`
@@ -417,16 +417,16 @@ add_checkbox_v0({ parent_id: "<form>", label: "I agree to the Terms of Service",
 add_text_button_v0({ parent_id: "<form>", label: "Sign up" })
 ```
 
-### Settings page (groups of list rows)
+### Settings page (groups of setting rows)
 
 ```
 add_section_header_v0({ parent_id: "<page>", title: "Account" })
-add_list_row_v0({ parent_id: "<page>", title: "Profile", trailing_icon: "chevron-right" })
-add_list_row_v0({ parent_id: "<page>", title: "Email", trailing_icon: "chevron-right" })
+add_setting_row_v0({ parent_id: "<page>", title: "Profile", leading_icon: "user" })
+add_setting_row_v0({ parent_id: "<page>", title: "Email", leading_icon: "mail", trailing: { kind: "value", value: "you@acme.com" } })
 add_divider_v0({ parent_id: "<page>" })
 add_section_header_v0({ parent_id: "<page>", title: "Notifications" })
-add_list_row_v0({ parent_id: "<page>", title: "Push notifications", trailing_kind: "switch" })
-add_list_row_v0({ parent_id: "<page>", title: "Email digest", trailing_kind: "switch" })
+add_setting_row_v0({ parent_id: "<page>", title: "Push notifications", leading_icon: "bell", trailing: { kind: "switch", on: true } })
+add_setting_row_v0({ parent_id: "<page>", title: "Email digest", leading_icon: "mail", trailing: { kind: "switch", on: false } })
 ```
 
 ### Pricing section (3 tiers, middle one featured)
