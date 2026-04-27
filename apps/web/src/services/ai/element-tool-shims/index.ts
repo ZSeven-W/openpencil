@@ -66,6 +66,7 @@ import {
   buildInputWithAction,
   buildCookieBanner,
   buildSidebarNav,
+  buildAvatarGroup,
   buildKbd,
   buildLink,
   buildListRow,
@@ -144,6 +145,7 @@ import {
   type InputWithActionParams,
   type CookieBannerParams,
   type SidebarNavParams,
+  type AvatarGroupParams,
   type KbdParams,
   type LinkParams,
   type ListRowParams,
@@ -341,6 +343,7 @@ export const ELEMENT_SHIMS: Record<string, ElementShim> = {
   add_input_with_action_v0: wrap<InputWithActionParams>(buildInputWithAction),
   add_cookie_banner_v0: wrap<CookieBannerParams>(buildCookieBanner),
   add_sidebar_nav_v0: wrap<SidebarNavParams>(buildSidebarNav),
+  add_avatar_group_v0: wrap<AvatarGroupParams>(buildAvatarGroup),
 };
 
 export function getElementShim(name: string): ElementShim | undefined {

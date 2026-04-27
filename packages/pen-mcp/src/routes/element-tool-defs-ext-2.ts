@@ -480,6 +480,55 @@ export const ELEMENT_TOOL_DEFINITIONS_EXT_2 = [
     },
   },
   {
+    name: 'add_avatar_group_v0',
+    description:
+      'Stacked avatar tile group — team / collaborator / "+N more" presence indicator. ' +
+      'Renders up to `max_visible` filled circles (initial optional, fill rotates through a default ' +
+      'palette so distinct items read apart) plus a slate "+N" tile when items overflow. Each ' +
+      'tile gets a 2px white ring so they stay visually separated at the 4px gap (pen-core flex ' +
+      "doesn't allow negative gap, so true overlap isn't possible — the ring is the affordance). " +
+      'Distinct from add_avatar_v0 (single tile). Use for "team avatars", "5 contributors", ' +
+      '"online users", "+N more", "团队成员", "在线用户". schemaVersion 1.0',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        schemaVersion: schemaVersionProp,
+        filePath: filePathProp,
+        items: {
+          type: 'array',
+          description: 'Avatars in render order. Items past max_visible collapse into a "+N" tile.',
+          items: {
+            type: 'object',
+            properties: {
+              initial: {
+                type: 'string',
+                description: 'Centered initial (e.g. "JD"). Omit for an empty colored disk.',
+              },
+              color: {
+                type: 'string',
+                description: 'Optional hex fill. Falls back to a rotating palette per index.',
+              },
+            },
+            required: [],
+          },
+        },
+        size: {
+          type: 'number',
+          description: 'Avatar diameter in px. Default 32. Clamped 24..64.',
+        },
+        max_visible: {
+          type: 'number',
+          description:
+            'Cap on rendered avatars; the rest collapse into a single "+N" tile at the end. ' +
+            'Default 4. Clamped 1..10.',
+        },
+        parent_id: parentIdProp,
+        pageId: pageIdProp,
+      },
+      required: ['items'],
+    },
+  },
+  {
     name: 'add_sidebar_nav_v0',
     description:
       'Persistent vertical sidebar navigation — desktop / dashboard left rail. Stack of icon+' +
