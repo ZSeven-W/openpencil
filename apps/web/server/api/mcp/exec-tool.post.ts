@@ -49,6 +49,7 @@ import {
   buildCookieBanner,
   buildSidebarNav,
   buildAvatarGroup,
+  buildDataTableRow,
   buildKbd,
   buildLink,
   buildListRow,
@@ -221,6 +222,7 @@ const SERVER_BUILDERS: Record<string, BuilderFn> = {
   add_cookie_banner_v0: (a) => buildCookieBanner(a as Parameters<typeof buildCookieBanner>[0]),
   add_sidebar_nav_v0: (a) => buildSidebarNav(a as Parameters<typeof buildSidebarNav>[0]),
   add_avatar_group_v0: (a) => buildAvatarGroup(a as Parameters<typeof buildAvatarGroup>[0]),
+  add_data_table_row_v0: (a) => buildDataTableRow(a as Parameters<typeof buildDataTableRow>[0]),
 };
 
 interface ExecToolBody {

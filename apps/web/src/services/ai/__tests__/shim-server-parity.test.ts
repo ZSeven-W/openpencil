@@ -30,6 +30,7 @@ import {
   buildCookieBanner,
   buildSidebarNav,
   buildAvatarGroup,
+  buildDataTableRow,
   buildDatePicker,
   buildDivider,
   buildEmptyChart,
@@ -557,6 +558,19 @@ const CASES: BuilderCase[] = [
       ],
     },
     build: (a) => buildAvatarGroup(a as unknown as Parameters<typeof buildAvatarGroup>[0]),
+  },
+  {
+    toolName: 'add_data_table_row_v0',
+    args: {
+      columns: [
+        { content: 'Sarah' },
+        { content: 'sarah@acme.com' },
+        { content: 'Active' },
+        { content: '$1,240' },
+      ],
+      selected: true,
+    },
+    build: (a) => buildDataTableRow(a as unknown as Parameters<typeof buildDataTableRow>[0]),
   },
 ];
 
