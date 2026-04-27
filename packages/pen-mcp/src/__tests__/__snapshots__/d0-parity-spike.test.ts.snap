@@ -3,7 +3,7 @@
 exports[`D0 parity spike — additive & gated tool registration > pre-D0 production design tool DEFINITIONS are unchanged (snapshot) > pre-d0-design-tool-definitions 1`] = `
 [
   {
-    "description": "Get design knowledge prompt. Pass \`section\` to retrieve a focused subset instead of the full prompt; the available section names are published in \`inputSchema.section.enum\` (derived at server-start from the implementation registry, so this description never drifts as sections are added). Omit \`section\` for the full prompt. The "style" and "design-md" sections are derived from the active document's design.md so the response never leaks another file's design system.",
+    "description": "Get design knowledge prompt. Pass \`section\` to retrieve a focused subset instead of the full prompt; the accepted section names are the enum on the \`section\` parameter below (derived at server-start from the implementation registry, so this description never drifts as sections are added). Omit \`section\` for the full prompt. The "style" and "design-md" sections are derived from the active document's design.md so the response never leaks another file's design system.",
     "inputSchema": {
       "properties": {
         "filePath": {

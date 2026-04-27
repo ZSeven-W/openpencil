@@ -26,7 +26,7 @@ const CORE_DESIGN_TOOL_DEFINITIONS = [
     name: 'get_design_prompt',
     description:
       'Get design knowledge prompt. Pass `section` to retrieve a focused subset instead of the ' +
-      'full prompt; the available section names are published in `inputSchema.section.enum` ' +
+      'full prompt; the accepted section names are the enum on the `section` parameter below ' +
       '(derived at server-start from the implementation registry, so this description never ' +
       'drifts as sections are added). Omit `section` for the full prompt. The "style" and ' +
       '"design-md" sections are derived from the active document\'s design.md so the response ' +
