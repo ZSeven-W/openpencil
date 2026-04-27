@@ -68,15 +68,24 @@ describe('add_data_table_row_v0 — structure', () => {
     expect(row.gap).toBe(16);
     expect(row.layout).toBe('horizontal');
     expect(row.fill).toBeUndefined();
+    // Overflow contract: row + each cell must clip + text must ride
+    // fill_container with fixed-width growth so long content can't
+    // bleed into the next column. Locking these in the assertion
+    // catches the trap that Codex caught on the first ship.
+    expect(row.clipContent).toBe(true);
     const cells = row.children as Record<string, unknown>[];
     expect(cells.length).toBe(3);
     for (const cell of cells) {
       expect(cell.role).toBe('data-table-cell');
       expect(cell.width).toBe('fill_container');
+      expect(cell.height).toBe('fill_container');
+      expect(cell.clipContent).toBe(true);
       const text = (cell.children as Record<string, unknown>[])[0];
       expect(text.role).toBe('data-table-cell-text');
       expect(text.fontSize).toBe(14);
       expect(text.fontWeight).toBe(400);
+      expect(text.width).toBe('fill_container');
+      expect(text.textGrowth).toBe('fixed-width');
       expect((text.fill as Array<{ color: string }>)[0].color).toBe('#0F172A');
     }
   });
