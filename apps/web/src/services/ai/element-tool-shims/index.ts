@@ -68,6 +68,7 @@ import {
   buildSidebarNav,
   buildAvatarGroup,
   buildDataTableRow,
+  buildTag,
   buildKbd,
   buildLink,
   buildListRow,
@@ -148,6 +149,7 @@ import {
   type SidebarNavParams,
   type AvatarGroupParams,
   type DataTableRowParams,
+  type TagParams,
   type KbdParams,
   type LinkParams,
   type ListRowParams,
@@ -347,6 +349,7 @@ export const ELEMENT_SHIMS: Record<string, ElementShim> = {
   add_sidebar_nav_v0: wrap<SidebarNavParams>(buildSidebarNav),
   add_avatar_group_v0: wrap<AvatarGroupParams>(buildAvatarGroup),
   add_data_table_row_v0: wrap<DataTableRowParams>(buildDataTableRow),
+  add_tag_v0: wrap<TagParams>(buildTag),
 };
 
 export function getElementShim(name: string): ElementShim | undefined {

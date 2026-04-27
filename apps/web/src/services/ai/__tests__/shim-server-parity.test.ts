@@ -31,6 +31,7 @@ import {
   buildSidebarNav,
   buildAvatarGroup,
   buildDataTableRow,
+  buildTag,
   buildDatePicker,
   buildDivider,
   buildEmptyChart,
@@ -571,6 +572,11 @@ const CASES: BuilderCase[] = [
       selected: true,
     },
     build: (a) => buildDataTableRow(a as unknown as Parameters<typeof buildDataTableRow>[0]),
+  },
+  {
+    toolName: 'add_tag_v0',
+    args: { label: 'Status: Active', tone: 'accent' },
+    build: (a) => buildTag(a as unknown as Parameters<typeof buildTag>[0]),
   },
 ];
 

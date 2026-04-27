@@ -88,6 +88,7 @@ const ELEMENT_TOOL_NAMES = [
   'add_sidebar_nav_v0',
   'add_avatar_group_v0',
   'add_data_table_row_v0',
+  'add_tag_v0',
 ];
 
 describe('element tools — v0-MUST contract', () => {

@@ -480,6 +480,36 @@ export const ELEMENT_TOOL_DEFINITIONS_EXT_2 = [
     },
   },
   {
+    name: 'add_tag_v0',
+    description:
+      'Single closable tag — filter / selection / applied-criteria chip. Pill body with a label ' +
+      'and (by default) a trailing × close icon. tone enum picks the color pair: default (slate), ' +
+      'accent (blue), success (green), warning (amber), error (red). Distinct from add_badge_v0 ' +
+      '(read-only static label, no × affordance, smaller font) and add_chip_input_v0 (multi-tag ' +
+      'input FIELD with inline caret). Use for "filter chip", "selected criterion", "applied tag", ' +
+      '"category pill", "标签", "筛选标签", "可移除标签". schemaVersion 1.0',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        schemaVersion: schemaVersionProp,
+        filePath: filePathProp,
+        label: { type: 'string', description: 'Tag text (e.g. "Status: Active", "Plan: Pro").' },
+        removable: {
+          type: 'boolean',
+          description: 'Render the trailing × close icon. Default true.',
+        },
+        tone: {
+          type: 'string',
+          enum: ['default', 'accent', 'success', 'warning', 'error'],
+          description: 'Color tone (bg + fg pair). Default "default" (slate-100 / slate-600).',
+        },
+        parent_id: parentIdProp,
+        pageId: pageIdProp,
+      },
+      required: ['label'],
+    },
+  },
+  {
     name: 'add_data_table_row_v0',
     description:
       'Desktop / dashboard data-table row — N evenly-spaced cells laid out horizontally (no ' +

@@ -94,6 +94,7 @@ import { handleAddCookieBannerV0 } from '../tools/add-cookie-banner-v0';
 import { handleAddSidebarNavV0 } from '../tools/add-sidebar-nav-v0';
 import { handleAddAvatarGroupV0 } from '../tools/add-avatar-group-v0';
 import { handleAddDataTableRowV0 } from '../tools/add-data-table-row-v0';
+import { handleAddTagV0 } from '../tools/add-tag-v0';
 import { recordElementToolCall } from '../metrics/element-tool-metrics';
 import { ELEMENT_TOOL_DEFINITIONS_BASE } from './element-tool-defs-base';
 import { ELEMENT_TOOL_DEFINITIONS_EXT } from './element-tool-defs-ext';
@@ -284,6 +285,8 @@ async function dispatchElementToolCall(name: string, a: any): Promise<string> {
       return JSON.stringify(await handleAddAvatarGroupV0(a), null, 2);
     case 'add_data_table_row_v0':
       return JSON.stringify(await handleAddDataTableRowV0(a), null, 2);
+    case 'add_tag_v0':
+      return JSON.stringify(await handleAddTagV0(a), null, 2);
     default:
       return '';
   }
