@@ -48,10 +48,11 @@ const CORE_DESIGN_TOOL_DEFINITIONS = [
             'guidelines',
             'planning',
             'elements',
+            'elements-cookbook',
             'design-md',
           ],
           description:
-            'Which section of design knowledge to retrieve. Default: all. Use "planning" for layered generation workflow; "elements" for N-tool element tool reference; "design-md" for the active document\'s design system.',
+            'Which section of design knowledge to retrieve. Default: all. Use "planning" for layered generation workflow; "elements" for N-tool element tool decision tree; "elements-cookbook" for the per-tool arg-shape examples that pair with the elements section; "design-md" for the active document\'s design system.',
         },
         filePath: {
           type: 'string',
