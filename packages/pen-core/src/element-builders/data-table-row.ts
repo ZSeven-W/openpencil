@@ -25,6 +25,14 @@ export interface DataTableRowParams {
  *
  * For row separators stack `add_divider_v0` between successive rows;
  * the tool does not emit its own bottom border.
+ *
+ * Overflow contract: long cell content must not bleed into adjacent
+ * columns. Each cell is `fill_container` width / height with
+ * `clipContent: true`, and the text child rides `width=fill_container`
+ * + `textGrowth='fixed-width'` so the layout engine wraps the string
+ * inside the cell bounds and the cell visually clips anything past
+ * the row's fixed height. The row itself also clips so a runaway
+ * cell can't push siblings past the right edge.
  */
 export function buildDataTableRow(params: DataTableRowParams): ElementTree {
   const isHeader = params.header === true;
@@ -44,6 +52,7 @@ export function buildDataTableRow(params: DataTableRowParams): ElementTree {
     padding: [0, 16],
     gap: 16,
     alignItems: 'center',
+    clipContent: true,
     children: params.columns.map((col, i) =>
       buildCell(col, i, isHeader, cellTextSize, cellTextWeight, cellTextColor),
     ),
@@ -69,9 +78,10 @@ function buildCell(
     name: `Cell ${index + 1}`,
     role: isHeader ? 'data-table-header-cell' : 'data-table-cell',
     width: 'fill_container',
-    height: 'fit_content',
+    height: 'fill_container',
     layout: 'horizontal',
     alignItems: 'center',
+    clipContent: true,
     children: [
       {
         type: 'text',
@@ -80,6 +90,8 @@ function buildCell(
         content: col.content,
         fontSize: size,
         fontWeight: weight,
+        width: 'fill_container',
+        textGrowth: 'fixed-width',
         fill: [{ type: 'solid', color }],
       },
     ],
