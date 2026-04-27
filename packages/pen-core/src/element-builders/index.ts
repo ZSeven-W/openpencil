@@ -24,6 +24,7 @@ export {
   type DataTableRowColumn,
   type DataTableRowParams,
 } from './data-table-row.js';
+export { buildTag, type TagParams, type TagTone } from './tag.js';
 export { buildIconButton, type IconButtonParams } from './icon-button.js';
 export { buildIconLabel, type IconLabelParams } from './icon-label.js';
 export { buildStatGrid, type StatGridItem, type StatGridParams } from './stat-grid.js';

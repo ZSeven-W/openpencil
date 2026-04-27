@@ -50,6 +50,7 @@ import {
   buildSidebarNav,
   buildAvatarGroup,
   buildDataTableRow,
+  buildTag,
   buildKbd,
   buildLink,
   buildListRow,
@@ -223,6 +224,7 @@ const SERVER_BUILDERS: Record<string, BuilderFn> = {
   add_sidebar_nav_v0: (a) => buildSidebarNav(a as Parameters<typeof buildSidebarNav>[0]),
   add_avatar_group_v0: (a) => buildAvatarGroup(a as Parameters<typeof buildAvatarGroup>[0]),
   add_data_table_row_v0: (a) => buildDataTableRow(a as Parameters<typeof buildDataTableRow>[0]),
+  add_tag_v0: (a) => buildTag(a as Parameters<typeof buildTag>[0]),
 };
 
 interface ExecToolBody {
