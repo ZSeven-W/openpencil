@@ -21,9 +21,15 @@ Batches:
 - 2026-04-25 — 9 prompts (social_login_row / pricing_card / stat_card /
   range_slider / phone_input / input_with_action / cookie_banner /
   toast_v1 / empty_chart_v1)
-- 2026-04-27 — 4 prompts (sidebar_nav_v0 — desktop persistent left rail;
+- 2026-04-27 — 14 prompts (sidebar_nav_v0 — desktop persistent left rail;
   avatar_group_v0 — stacked presence tile group; data_table_row_v0 —
-  desktop dashboard tabular row; tag_v0 — single closable filter chip)
+  desktop dashboard tabular row; tag_v0 — single closable filter chip;
+  user_card_v0 — compact profile card; drawer_shell_v0 — slide-in side
+  panel; combobox_v0 — open-state autocomplete; toolbar_v0 — desktop
+  icon button toolbar; callout_v0 — inline doc tip block; share_row_v0
+  — social share buttons; inline_action_v0 — inline status + action;
+  legend_item_v0 — chart legend entry; inbox_message_v0 — email list
+  row; profile_header_v0 — large profile hero block)
 
 ab-v0 stays frozen (the A/B v1 results in
 `openpencil-docs/superpowers/notes/2026-04-20-ab-v1-results.md` are
