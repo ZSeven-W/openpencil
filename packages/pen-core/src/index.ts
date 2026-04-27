@@ -277,6 +277,7 @@ export {
   buildLegendItem,
   buildInboxMessage,
   buildProfileHeader,
+  buildSettingRow,
   cjkFontFamily,
   detectCjkScript,
   type ElementTree,
@@ -402,4 +403,6 @@ export {
   type LegendItemParams,
   type InboxMessageParams,
   type ProfileHeaderParams,
+  type SettingRowParams,
+  type SettingRowTrailing,
 } from './element-builders/index.js';
