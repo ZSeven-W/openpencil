@@ -1,22 +1,25 @@
 /**
  * Build the system prompt for each A/B variant.
  *
- * Baseline (B): current OpenPencil design prompt MINUS the elements
- *   section. The model sees schema/layout/text rules + examples and
- *   can only emit `batch_design` DSL.
+ * Baseline (B): current OpenPencil design prompt MINUS both element-
+ *   tool skills (decision tree + cookbook). The model sees schema /
+ *   layout / text rules + examples and can only emit `batch_design`
+ *   DSL.
  *
- * Treatment (T): same baseline PLUS the elements section PLUS the
+ * Treatment (T): same baseline PLUS both element-tool skills PLUS the
  *   `<op_tool>` output-format instruction. The model can either emit
  *   an element-tool call (preferred, schema-narrow) or fall back to
  *   `batch_design` DSL.
  *
- * Implementation: `buildDesignPrompt()` includes the elements section
- * by default (we wired that in last session so external MCP clients
- * default to the full tool doc). We derive B by string-subtracting the
- * elements skill body; T is base + trailing instructions. String
- * subtraction is brittle if elements.md moves, but it's O(minutes) to
- * fix if it does — much less churn than refactoring the prompt
- * builder just for this eval.
+ * Implementation: `buildDesignPrompt()` includes elements + elements-
+ * cookbook by default. We derive B by string-subtracting each skill
+ * body; T is base + trailing instructions. The cookbook lives in a
+ * separate file so neither piece exceeds the 800-line per-file ceiling
+ * — text-only LLMs (no MCP `tools/list`) need both halves, the
+ * decision tree to pick the tool and the cookbook to know its arg
+ * shape. String subtraction is brittle if elements.md / elements-
+ * cookbook.md move, but it's O(minutes) to fix if it does — much less
+ * churn than refactoring the prompt builder just for this eval.
  */
 
 import { getSkillByName } from '@zseven-w/pen-ai-skills';
@@ -69,20 +72,37 @@ export function buildSystemPrompt(variant: 'B' | 'T'): BuiltPrompt {
   if (variant === 'T') {
     return { system: full + '\n\n' + T_TOOL_CALL_INSTRUCTIONS, variant };
   }
-  // Baseline: strip elements content. Exact-match removal keeps the
-  // rest of the prompt byte-identical so any A/B delta isn't
-  // explained by accidental prompt-shape drift between variants.
+  // Baseline: strip BOTH elements skills (decision-tree + cookbook).
+  // The cookbook split landed when elements.md crossed the 800-line
+  // ceiling — both halves carry element-tool guidance that B must not
+  // see, otherwise the baseline leaks tool names + arg shapes and the
+  // A/B delta no longer measures "tools vs no-tools". Exact-match
+  // removal of each skill body keeps the rest of the prompt byte-
+  // identical so any delta isn't explained by accidental shape drift.
   const elementsSkill = getSkillByName('elements');
+  const cookbookSkill = getSkillByName('elements-cookbook');
   if (!elementsSkill) {
     throw new Error(
       'elements skill not found in registry — cannot build baseline prompt without it (would leak elements content into B if left in place)',
     );
   }
-  const withoutElements = full.replace(elementsSkill.content, '').trim();
-  if (withoutElements === full.trim()) {
+  if (!cookbookSkill) {
+    throw new Error(
+      'elements-cookbook skill not found in registry — cannot build baseline prompt without stripping it (would leak the arg-shape examples into B)',
+    );
+  }
+  let stripped = full.replace(elementsSkill.content, '');
+  if (stripped === full) {
     throw new Error(
       'elements content was not present in the full prompt — buildDesignPrompt() may have been refactored; update build-prompt.ts to match',
     );
   }
-  return { system: withoutElements + '\n\n' + B_TOOL_CALL_INSTRUCTIONS, variant };
+  const beforeCookbook = stripped;
+  stripped = stripped.replace(cookbookSkill.content, '');
+  if (stripped === beforeCookbook) {
+    throw new Error(
+      'elements-cookbook content was not present in the full prompt — buildDesignPrompt() may have been refactored; update build-prompt.ts to match',
+    );
+  }
+  return { system: stripped.trim() + '\n\n' + B_TOOL_CALL_INSTRUCTIONS, variant };
 }

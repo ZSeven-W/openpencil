@@ -19,6 +19,7 @@ const SECTION_NAME_MAP: Record<string, string> = {
   cjk: 'cjk-typography',
   examples: 'examples',
   elements: 'elements',
+  'elements-cookbook': 'elements-cookbook',
 };
 
 /** Look up a skill by legacy section key or skill name. */
@@ -237,6 +238,7 @@ type PromptSection =
   | 'guidelines'
   | 'planning'
   | 'elements'
+  | 'elements-cookbook'
   | 'design-md'
   | 'copywriting'
   | 'overflow'
@@ -267,6 +269,7 @@ const SECTION_MAP: Record<PromptSection, () => string> = {
   guidelines: () => DESIGN_GUIDELINES,
   planning: () => PLANNING_GUIDE,
   elements: () => getSkillContent('elements'),
+  'elements-cookbook': () => getSkillContent('elements-cookbook'),
   'design-md': () => 'No design.md loaded in the current document.',
   copywriting: () => getSkillContent('copywriting'),
   overflow: () => getSkillContent('overflow'),
@@ -361,5 +364,7 @@ ${AUTO_REPLACE_RULES}
 
 ${POST_PROCESSING}
 
-${getSkillContent('elements')}`;
+${getSkillContent('elements')}
+
+${getSkillContent('elements-cookbook')}`;
 }
