@@ -79,6 +79,7 @@ import {
   buildLegendItem,
   buildInboxMessage,
   buildProfileHeader,
+  buildSettingRow,
   buildKbd,
   buildLink,
   buildListRow,
@@ -170,6 +171,7 @@ import {
   type LegendItemParams,
   type InboxMessageParams,
   type ProfileHeaderParams,
+  type SettingRowParams,
   type KbdParams,
   type LinkParams,
   type ListRowParams,
@@ -380,6 +382,7 @@ export const ELEMENT_SHIMS: Record<string, ElementShim> = {
   add_legend_item_v0: wrap<LegendItemParams>(buildLegendItem),
   add_inbox_message_v0: wrap<InboxMessageParams>(buildInboxMessage),
   add_profile_header_v0: wrap<ProfileHeaderParams>(buildProfileHeader),
+  add_setting_row_v0: wrap<SettingRowParams>(buildSettingRow),
 };
 
 export function getElementShim(name: string): ElementShim | undefined {

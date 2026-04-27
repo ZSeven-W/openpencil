@@ -268,7 +268,11 @@ Mail / inbox:
 
 82. Inbox / email list row (sender + subject + preview + unread dot) → `add_inbox_message_v0`
 
-83. None match → fall through to `batch_design`
+Settings / preferences:
+
+83. Settings menu row (icon + title + subtitle + trailing chevron / value / switch / badge) → `add_setting_row_v0`
+
+84. None match → fall through to `batch_design`
 
 **Disambiguation**: if you need a ROW of 3 metrics that should NOT scroll (e.g. a stats strip inside a card), use `add_stat_grid_v0`, NOT `add_metric_row_v0`. The grid uses `fill_container` per cell so it never overflows; the metric row uses fixed-px cells + scroll wrapper.
 
@@ -364,6 +368,7 @@ PREFER an element tool when the spec says any of:
 - "share row", "share to social", "share buttons", "post share", "send via", "分享按钮组" → `add_share_row_v0` (horizontal circular icon buttons each labeled below). Different from `add_social_login_row_v0` (sign-in CTAs).
 - "chart legend", "legend item", "legend entry", "数据图例", "图例条目" → `add_legend_item_v0` (marker + label + optional value). Different from `add_status_badge_v0` (semantic dot + text).
 - "inbox row", "email row", "message list cell", "mail item", "email preview", "邮件条目", "收件箱条目" → `add_inbox_message_v0` (sender + subject + preview + timestamp + unread dot). Different from `add_notification_row_v0` (single title + body) and `add_list_row_v0` (no timestamp).
+- "settings row", "preference row", "menu item with toggle", "settings list item", "设置项", "偏好项", "开关行" → `add_setting_row_v0` (icon + title/subtitle + trailing chevron/value/switch/badge). Different from `add_list_row_v0` (trailing always icon, no switch/value/badge variants) and `add_form_field_v0` (label-above-input pattern for forms).
 
 STILL use batch_design when:
 
