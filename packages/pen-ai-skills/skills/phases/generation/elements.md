@@ -232,7 +232,11 @@ Presence / collaboration:
 
 70. Stacked avatar group (team / online users / "+N more" tile, white-ringed circles in a tight horizontal row) → `add_avatar_group_v0`
 
-71. None match → fall through to `batch_design`
+Tabular data:
+
+71. Desktop data-table row (N column-aligned cells in a single horizontal row, header / body / selected variants) → `add_data_table_row_v0`
+
+72. None match → fall through to `batch_design`
 
 **Disambiguation**: if you need a ROW of 3 metrics that should NOT scroll (e.g. a stats strip inside a card), use `add_stat_grid_v0`, NOT `add_metric_row_v0`. The grid uses `fill_container` per cell so it never overflows; the metric row uses fixed-px cells + scroll wrapper.
 
@@ -316,6 +320,7 @@ PREFER an element tool when the spec says any of:
 - "cookie banner", "cookie consent", "GDPR banner", "CCPA banner", "privacy notice", "cookie disclosure", "cookie 提示", "隐私同意条" → `add_cookie_banner_v0` (set `show_settings_link: true` for fine-grained GDPR consent UX). Caller positions sticky-bottom; the tool emits the banner card itself.
 - "sidebar", "side nav", "sidebar nav", "left rail", "dashboard nav rail", "admin sidebar", "settings sidebar", "docs sidebar", "vertical nav", "侧边栏", "侧边导航", "左侧导航" → `add_sidebar_nav_v0` (desktop persistent rail; pass `title` for a brand row above the items, mark current page with `active: true` on the item). Different from `add_bottom_nav_v0` (mobile bottom tabs) and `add_top_nav_bar_v0` (mobile top header).
 - "stacked avatars", "avatar group", "avatar stack", "team avatars", "5 contributors", "online users", "+N more", "viewers row", "presence indicator", "团队成员", "在线用户", "头像组" → `add_avatar_group_v0` (renders up to `max_visible` ringed avatar circles + a "+N" overflow tile; pen-core flex doesn't allow negative gap so the white ring + 4px gap is the affordance, not literal overlap). Different from `add_avatar_v0` which is a single tile.
+- "data table row", "table row", "table header row", "customer row", "order row", "report row", "transaction row", "users table", "数据表行", "表格行", "表头行" → `add_data_table_row_v0` (desktop pattern; pass `header: true` for the column-header row, `selected: true` to tint a hover/selected body row). For row separators stack `add_divider_v0` between rows. Different from `add_list_row_v0` which is the iOS / mobile leading-icon list cell.
 
 STILL use batch_design when:
 
@@ -606,6 +611,33 @@ add_avatar_group_v0({
   max_visible: 4,
 })  // renders 4 ringed circles + "+3" overflow tile
 add_avatar_group_v0({ items: [{ initial: "A" }, { initial: "B" }, { initial: "C" }], size: 24 })  // compact 3-up
+
+add_data_table_row_v0({
+  header: true,
+  columns: [
+    { content: "Customer" },
+    { content: "Email" },
+    { content: "Status" },
+    { content: "Total" },
+  ],
+})
+add_data_table_row_v0({
+  columns: [
+    { content: "Sarah Lee" },
+    { content: "sarah@acme.com" },
+    { content: "Active" },
+    { content: "$1,240" },
+  ],
+})
+add_data_table_row_v0({
+  selected: true,
+  columns: [
+    { content: "Alex Park" },
+    { content: "alex@acme.com" },
+    { content: "Pending" },
+    { content: "$680" },
+  ],
+})  // tinted hover/selected row
 ```
 
 ## Composition pattern
