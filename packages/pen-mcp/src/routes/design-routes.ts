@@ -25,12 +25,12 @@ const CORE_DESIGN_TOOL_DEFINITIONS = [
   {
     name: 'get_design_prompt',
     description:
-      'Get design knowledge prompt. Use "section" to retrieve a focused subset instead of the full prompt. ' +
-      'Sections: schema (PenNode types), layout (flexbox rules), roles (semantic roles), text (typography/CJK/copywriting), ' +
-      "style (visual style policy — reads the active document's design.md when present), icons (icon names), " +
-      'examples (design examples), guidelines (design tips), planning (layered workflow guide), ' +
-      'elements (N-tool element-tool family reference), design-md (raw style policy derived from the active ' +
-      'document\'s design.md, or a "no design.md" notice). Omit section for the full prompt.',
+      'Get design knowledge prompt. Pass `section` to retrieve a focused subset instead of the ' +
+      'full prompt; the available section names are published in `inputSchema.section.enum` ' +
+      '(derived at server-start from the implementation registry, so this description never ' +
+      'drifts as sections are added). Omit `section` for the full prompt. The "style" and ' +
+      '"design-md" sections are derived from the active document\'s design.md so the response ' +
+      "never leaks another file's design system.",
     inputSchema: {
       type: 'object' as const,
       properties: {
