@@ -1,0 +1,27 @@
+id: dashboard-team-presence
+category: dashboard
+difficulty: obvious
+prompt: |
+  Design ONLY a stacked-avatar presence indicator that lives at the
+  top of a dashboard project card showing who is currently working on
+  the project. Render four 32px circular avatar tiles in a tight
+  horizontal row (each circle has a 2px white ring so tiles read
+  as separate even though they sit at a small gap), filled with
+  rotating brand colors and white centered initials:
+    1. JD (blue)
+    2. SK (emerald)
+    3. MN (amber)
+    4. AL (red)
+  After those four tiles append a slate "+3" overflow tile (same 32px
+  circle with the same white ring, slate-100 fill, slate-600 "+3"
+  label) to indicate three more collaborators are not shown. Do NOT
+  render the surrounding dashboard card, project name, or any other
+  chrome — just the avatar group itself.
+expected:
+  must_contain_roles:
+    - avatar-group
+    - avatar-group-item
+    - avatar-group-initial
+    - avatar-group-overflow
+    - avatar-group-overflow-count
+expected_tool_if_any: add_avatar_group_v0
