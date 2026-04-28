@@ -1,0 +1,18 @@
+id: dashboard-team-member-card
+category: dashboard
+difficulty: obvious
+prompt: |
+  Design ONLY a compact user card for a team-member list — a horizontal
+  row with a 48px circular avatar (blue background, white "SL" initial
+  centered, 600 weight) on the left, then a vertical text stack on the
+  right: bold slate-900 15/600 name "Sarah Lee" above muted slate-500
+  13/400 role "Senior Engineer". 12px gap between avatar and stack.
+  Do NOT render any surrounding card chrome, list separator, or other
+  members — just one user card row.
+expected:
+  must_contain_roles:
+    - user-card
+    - user-card-avatar
+    - user-card-name
+    - user-card-role
+expected_tool_if_any: add_user_card_v0

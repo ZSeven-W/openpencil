@@ -45,7 +45,7 @@ describe('callOpenAICompat retry behavior', () => {
   it('returns content on first success without retry', async () => {
     fetchSpy.mockResolvedValueOnce(jsonResponse({ choices: [{ message: { content: 'hello' } }] }));
     const out = await callOpenAICompat(makeArgs({ retries: 1 }));
-    expect(out).toBe('hello');
+    expect(out.content).toBe('hello');
     expect(fetchSpy).toHaveBeenCalledTimes(1);
   });
 
@@ -54,7 +54,7 @@ describe('callOpenAICompat retry behavior', () => {
       .mockResolvedValueOnce(jsonResponse({ choices: [{ message: { content: '' } }] }))
       .mockResolvedValueOnce(jsonResponse({ choices: [{ message: { content: 'recovered' } }] }));
     const out = await callOpenAICompat(makeArgs({ retries: 1 }));
-    expect(out).toBe('recovered');
+    expect(out.content).toBe('recovered');
     expect(fetchSpy).toHaveBeenCalledTimes(2);
   });
 
@@ -63,7 +63,7 @@ describe('callOpenAICompat retry behavior', () => {
       .mockResolvedValueOnce(textResponse('upstream', 503))
       .mockResolvedValueOnce(jsonResponse({ choices: [{ message: { content: 'ok' } }] }));
     const out = await callOpenAICompat(makeArgs({ retries: 1 }));
-    expect(out).toBe('ok');
+    expect(out.content).toBe('ok');
     expect(fetchSpy).toHaveBeenCalledTimes(2);
   });
 
@@ -72,8 +72,25 @@ describe('callOpenAICompat retry behavior', () => {
       .mockResolvedValueOnce(textResponse('rate limit', 429))
       .mockResolvedValueOnce(jsonResponse({ choices: [{ message: { content: 'ok' } }] }));
     const out = await callOpenAICompat(makeArgs({ retries: 1 }));
-    expect(out).toBe('ok');
+    expect(out.content).toBe('ok');
     expect(fetchSpy).toHaveBeenCalledTimes(2);
+  });
+
+  it('plumbs provider usage when present', async () => {
+    fetchSpy.mockResolvedValueOnce(
+      jsonResponse({
+        choices: [{ message: { content: 'hi' } }],
+        usage: { prompt_tokens: 123, completion_tokens: 45, total_tokens: 168 },
+      }),
+    );
+    const out = await callOpenAICompat(makeArgs());
+    expect(out.usage).toEqual({ promptTokens: 123, completionTokens: 45 });
+  });
+
+  it('falls back to 0/0 usage when provider omits the field', async () => {
+    fetchSpy.mockResolvedValueOnce(jsonResponse({ choices: [{ message: { content: 'hi' } }] }));
+    const out = await callOpenAICompat(makeArgs());
+    expect(out.usage).toEqual({ promptTokens: 0, completionTokens: 0 });
   });
 
   it('does not retry on HTTP 401', async () => {
@@ -102,7 +119,7 @@ describe('callOpenAICompat retry behavior', () => {
       .mockResolvedValueOnce(jsonResponse({ choices: [{ message: { content: '' } }] }))
       .mockResolvedValueOnce(jsonResponse({ choices: [{ message: { content: 'final' } }] }));
     const out = await callOpenAICompat(makeArgs({ retries: 2 }));
-    expect(out).toBe('final');
+    expect(out.content).toBe('final');
     expect(fetchSpy).toHaveBeenCalledTimes(3);
   });
 });

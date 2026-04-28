@@ -14,7 +14,13 @@
 import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { parseModelOutput, scoreRun, aggregate, type ScoreRow } from '@zseven-w/pen-ai-skills';
+import {
+  parseModelOutput,
+  scoreRun,
+  aggregate,
+  type ScoreRow,
+  type TokenUsage,
+} from '@zseven-w/pen-ai-skills';
 // Node-only: pulls in `node:fs`, so it's NOT re-exported from the
 // package barrel (which must stay browser-safe for the embedded
 // orchestrator's design-parser). Package.json `exports` only declares
@@ -32,7 +38,7 @@ interface CliArgs {
   models: string[];
   only?: string;
   outDir: string;
-  corpus: 'ab-v0' | 'ab-v1';
+  corpus: 'ab-v0' | 'ab-v1' | 'ab-v3';
 }
 
 function parseArgs(argv: string[]): CliArgs {
@@ -54,8 +60,8 @@ function parseArgs(argv: string[]): CliArgs {
     else if (a === '--out') args.outDir = argv[++i] ?? args.outDir;
     else if (a === '--corpus') {
       const v = argv[++i];
-      if (v !== 'ab-v0' && v !== 'ab-v1') {
-        process.stderr.write(`--corpus must be 'ab-v0' or 'ab-v1', got: ${v}\n`);
+      if (v !== 'ab-v0' && v !== 'ab-v1' && v !== 'ab-v3') {
+        process.stderr.write(`--corpus must be 'ab-v0', 'ab-v1', or 'ab-v3', got: ${v}\n`);
         process.exit(1);
       }
       args.corpus = v;
@@ -74,7 +80,7 @@ function defaultOutDir(): string {
 
 function printUsage(): void {
   process.stderr.write(
-    `Usage: bun scripts/ab-corpus/run.ts [--dry-run] [--models ID,ID,...] [--only prompt-id] [--out DIR] [--corpus ab-v0|ab-v1]\n`,
+    `Usage: bun scripts/ab-corpus/run.ts [--dry-run] [--models ID,ID,...] [--only prompt-id] [--out DIR] [--corpus ab-v0|ab-v1|ab-v3]\n`,
   );
 }
 
@@ -127,13 +133,18 @@ async function main(): Promise<void> {
           userPrompt: prompt.prompt,
         };
         let raw: string;
+        let usage: TokenUsage = { promptTokens: 0, completionTokens: 0 };
         try {
-          raw = args.dryRun ? await stubModelCall(call) : await realModelCall(call);
+          const res = args.dryRun ? await stubModelCall(call) : await realModelCall(call);
+          raw = res.content;
+          usage = res.usage;
         } catch (err) {
           // Network / subprocess failure → treat as garbage so the
           // run still scores (M1=false, routing='garbage' for obvious
           // treatment). Beats aborting a 96-run sweep over one
-          // transient failure.
+          // transient failure. usage stays 0/0 — aggregate skips zero
+          // rows when computing token averages so a flaky cell
+          // doesn't drag the model's average down to ~0.
           raw = `__HARNESS_ERROR__: ${err instanceof Error ? err.message : String(err)}`;
         }
         const parsed = parseModelOutput(raw);
@@ -143,6 +154,7 @@ async function main(): Promise<void> {
           apply: applyToFreshDoc,
           model,
           variant,
+          usage,
         });
         rows.push(row);
         // Append this row to scores.jsonl immediately — durable

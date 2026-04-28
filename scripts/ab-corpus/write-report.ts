@@ -40,6 +40,63 @@ function renderMarkdown(r: Report): string {
     '',
   );
 
+  lines.push(`## Composite routing (treatment arm only)`, '');
+  const hasComposite = r.byModel.some(
+    (m) =>
+      !Number.isNaN(m.m6_multi_tool) || !Number.isNaN(m.m6_fallback) || !Number.isNaN(m.m6_garbage),
+  );
+  if (!hasComposite) {
+    lines.push(
+      '_No `difficulty: composite` prompts in this run — all metrics would be NaN. Add composite yaml fixtures to corpus/ab-v3/ to populate this section._',
+      '',
+    );
+  } else {
+    lines.push('| Model | Multi-tool | Fallback | Garbage |');
+    lines.push('|-------|------------|----------|---------|');
+    for (const m of r.byModel) {
+      lines.push(
+        `| ${m.model} | ${pct(m.m6_multi_tool)} | ${pct(m.m6_fallback)} | ${pct(m.m6_garbage)} |`,
+      );
+    }
+    lines.push(
+      '',
+      '_Composite prompts have no `expected_tool_if_any`. Multi-tool = at least one element-tool call (the target behavior). Fallback = batch_design DSL. Garbage = unparseable._',
+      '',
+    );
+  }
+
+  lines.push(`## Token cost (provider-reported usage)`, '');
+  const hasUsage = r.byModel.some(
+    (m) =>
+      !Number.isNaN(m.avgPromptTokensBaseline) ||
+      !Number.isNaN(m.avgPromptTokensTreatment) ||
+      !Number.isNaN(m.avgCompletionTokensBaseline) ||
+      !Number.isNaN(m.avgCompletionTokensTreatment),
+  );
+  if (!hasUsage) {
+    lines.push(
+      '_No usage data — providers in this run did not surface token counts (or all rows were harness errors)._',
+      '',
+    );
+  } else {
+    lines.push(
+      '| Model | Prompt B | Prompt T | Δ Prompt | Completion B | Completion T | Δ Completion |',
+    );
+    lines.push(
+      '|-------|----------|----------|----------|--------------|--------------|--------------|',
+    );
+    for (const m of r.byModel) {
+      lines.push(
+        `| ${m.model} | ${num(m.avgPromptTokensBaseline)} | ${num(m.avgPromptTokensTreatment)} | ${signedNum(m.avgPromptTokensTreatment, m.avgPromptTokensBaseline)} | ${num(m.avgCompletionTokensBaseline)} | ${num(m.avgCompletionTokensTreatment)} | ${signedNum(m.avgCompletionTokensTreatment, m.avgCompletionTokensBaseline)} |`,
+      );
+    }
+    lines.push(
+      '',
+      "_Mean tokens per call, only counting rows where the provider returned usage. Codex CLI doesn't surface usage so its rows show '—'. Δ = T − B (negative means narrow tools saved tokens, the hypothesis behind A/B v2)._",
+      '',
+    );
+  }
+
   lines.push(`## By category`, '');
   lines.push('| Category | M1 B | M1 T | Δ M1 (pp) |');
   lines.push('|----------|------|------|-----------|');
@@ -74,4 +131,14 @@ function signed(n: number): string {
   if (Number.isNaN(n)) return '—';
   const sign = n > 0 ? '+' : '';
   return `${sign}${n.toFixed(1)}`;
+}
+function num(n: number): string {
+  if (Number.isNaN(n)) return '—';
+  return n.toFixed(0);
+}
+function signedNum(treatment: number, baseline: number): string {
+  if (Number.isNaN(treatment) || Number.isNaN(baseline)) return '—';
+  const d = treatment - baseline;
+  const sign = d > 0 ? '+' : '';
+  return `${sign}${d.toFixed(0)}`;
 }
