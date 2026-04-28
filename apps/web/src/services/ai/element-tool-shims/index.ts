@@ -80,6 +80,7 @@ import {
   buildInboxMessage,
   buildProfileHeader,
   buildSettingRow,
+  buildMemberRow,
   buildKbd,
   buildLink,
   buildListRow,
@@ -172,6 +173,7 @@ import {
   type InboxMessageParams,
   type ProfileHeaderParams,
   type SettingRowParams,
+  type MemberRowParams,
   type KbdParams,
   type LinkParams,
   type ListRowParams,
@@ -383,6 +385,7 @@ export const ELEMENT_SHIMS: Record<string, ElementShim> = {
   add_inbox_message_v0: wrap<InboxMessageParams>(buildInboxMessage),
   add_profile_header_v0: wrap<ProfileHeaderParams>(buildProfileHeader),
   add_setting_row_v0: wrap<SettingRowParams>(buildSettingRow),
+  add_member_row_v0: wrap<MemberRowParams>(buildMemberRow),
 };
 
 export function getElementShim(name: string): ElementShim | undefined {

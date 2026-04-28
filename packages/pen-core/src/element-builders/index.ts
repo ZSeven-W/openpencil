@@ -123,3 +123,4 @@ export {
 } from './input-with-action.js';
 export { buildCookieBanner, type CookieBannerParams } from './cookie-banner.js';
 export { buildSettingRow, type SettingRowParams, type SettingRowTrailing } from './setting-row.js';
+export { buildMemberRow, type MemberRowParams, type MemberRowTrailing } from './member-row.js';

@@ -62,6 +62,7 @@ import {
   buildInboxMessage,
   buildProfileHeader,
   buildSettingRow,
+  buildMemberRow,
   buildKbd,
   buildLink,
   buildListRow,
@@ -247,6 +248,7 @@ const SERVER_BUILDERS: Record<string, BuilderFn> = {
   add_inbox_message_v0: (a) => buildInboxMessage(a as Parameters<typeof buildInboxMessage>[0]),
   add_profile_header_v0: (a) => buildProfileHeader(a as Parameters<typeof buildProfileHeader>[0]),
   add_setting_row_v0: (a) => buildSettingRow(a as Parameters<typeof buildSettingRow>[0]),
+  add_member_row_v0: (a) => buildMemberRow(a as Parameters<typeof buildMemberRow>[0]),
 };
 
 interface ExecToolBody {
