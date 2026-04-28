@@ -533,7 +533,10 @@ export const ELEMENT_TOOL_DEFINITIONS_EXT_4 = [
         filePath: filePathProp,
         number: {
           type: ['string', 'number'],
-          description: 'Step number / index (e.g. 1, "01", "Step 1").',
+          description:
+            'Short step index rendered inside the 36px circle marker. Keep it 1–3 characters ' +
+            '(e.g. 1, "01", "1.1"). Long prose like "Step 1" overflows the marker — put that ' +
+            'in `title` instead.',
         },
         title: { type: 'string', description: 'Step title (16/600).' },
         description: { type: 'string', description: 'Description body (14/400, muted).' },
