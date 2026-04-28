@@ -430,4 +430,64 @@ add_member_row_v0({
   initial: "PP",
   trailing: { kind: "menu" },
 })
+
+add_filter_group_v0({
+  title: "Category",
+  options: [
+    { label: "Books", count: 42, selected: true },
+    { label: "Music", count: 17 },
+    { label: "Movies", count: 9 },
+  ],
+})
+
+add_invite_row_v0({
+  email: "sarah@acme.com",
+  role: "Editor",
+  status: "pending",
+  action_label: "Resend",
+})
+
+add_invite_row_v0({
+  email: "alex@acme.com",
+  role: "Viewer",
+  status: "expired",
+  action_label: "Revoke",
+})
+
+add_activity_log_v0({
+  actor: "Sarah Lee",
+  action: "merged pull request #142",
+  timestamp: "2h ago",
+  icon: "git-merge",
+  tone: "success",
+})
+
+add_activity_log_v0({
+  actor: "Marcus Chen",
+  action: "deleted the staging environment",
+  timestamp: "Yesterday",
+  icon: "trash-2",
+  tone: "danger",
+})
+
+add_event_card_v0({
+  month: "OCT",
+  day: 15,
+  title: "Design review",
+  time: "2:00 PM – 3:00 PM",
+  location: "Conference Room B",
+})
+
+add_step_card_v0({
+  number: 1,
+  title: "Connect your repo",
+  description: "Authorize GitHub so we can read your commits and surface them in your dashboard.",
+  completed: true,
+})
+
+add_step_card_v0({
+  number: 2,
+  title: "Invite teammates",
+  description: "Add your team so they can collaborate on changes.",
+})
 ```

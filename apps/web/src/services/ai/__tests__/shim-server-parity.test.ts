@@ -44,6 +44,11 @@ import {
   buildProfileHeader,
   buildSettingRow,
   buildMemberRow,
+  buildFilterGroup,
+  buildInviteRow,
+  buildActivityLog,
+  buildEventCard,
+  buildStepCard,
   buildDatePicker,
   buildDivider,
   buildEmptyChart,
@@ -680,6 +685,59 @@ const CASES: BuilderCase[] = [
       trailing: { kind: 'role_badge', value: 'Owner' },
     },
     build: (a) => buildMemberRow(a as unknown as Parameters<typeof buildMemberRow>[0]),
+  },
+  {
+    toolName: 'add_filter_group_v0',
+    args: {
+      title: 'Category',
+      options: [
+        { label: 'Books', count: 42, selected: true },
+        { label: 'Music', count: 17 },
+      ],
+    },
+    build: (a) => buildFilterGroup(a as unknown as Parameters<typeof buildFilterGroup>[0]),
+  },
+  {
+    toolName: 'add_invite_row_v0',
+    args: {
+      email: 'sarah@acme.com',
+      role: 'Editor',
+      status: 'pending',
+      action_label: 'Resend',
+    },
+    build: (a) => buildInviteRow(a as unknown as Parameters<typeof buildInviteRow>[0]),
+  },
+  {
+    toolName: 'add_activity_log_v0',
+    args: {
+      actor: 'Sarah Lee',
+      action: 'merged pull request #142',
+      timestamp: '2h ago',
+      icon: 'git-merge',
+      tone: 'success',
+    },
+    build: (a) => buildActivityLog(a as unknown as Parameters<typeof buildActivityLog>[0]),
+  },
+  {
+    toolName: 'add_event_card_v0',
+    args: {
+      month: 'OCT',
+      day: 15,
+      title: 'Design review',
+      time: '2:00 PM – 3:00 PM',
+      location: 'Conference Room B',
+    },
+    build: (a) => buildEventCard(a as unknown as Parameters<typeof buildEventCard>[0]),
+  },
+  {
+    toolName: 'add_step_card_v0',
+    args: {
+      number: 1,
+      title: 'Connect your repo',
+      description: 'Authorize GitHub so we can read your commits.',
+      completed: true,
+    },
+    build: (a) => buildStepCard(a as unknown as Parameters<typeof buildStepCard>[0]),
   },
 ];
 

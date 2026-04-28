@@ -107,6 +107,11 @@ import { handleAddInboxMessageV0 } from '../tools/add-inbox-message-v0';
 import { handleAddProfileHeaderV0 } from '../tools/add-profile-header-v0';
 import { handleAddSettingRowV0 } from '../tools/add-setting-row-v0';
 import { handleAddMemberRowV0 } from '../tools/add-member-row-v0';
+import { handleAddFilterGroupV0 } from '../tools/add-filter-group-v0';
+import { handleAddInviteRowV0 } from '../tools/add-invite-row-v0';
+import { handleAddActivityLogV0 } from '../tools/add-activity-log-v0';
+import { handleAddEventCardV0 } from '../tools/add-event-card-v0';
+import { handleAddStepCardV0 } from '../tools/add-step-card-v0';
 import { recordElementToolCall } from '../metrics/element-tool-metrics';
 import { ELEMENT_TOOL_DEFINITIONS_BASE } from './element-tool-defs-base';
 import { ELEMENT_TOOL_DEFINITIONS_EXT } from './element-tool-defs-ext';
@@ -325,6 +330,16 @@ async function dispatchElementToolCall(name: string, a: any): Promise<string> {
       return JSON.stringify(await handleAddSettingRowV0(a), null, 2);
     case 'add_member_row_v0':
       return JSON.stringify(await handleAddMemberRowV0(a), null, 2);
+    case 'add_filter_group_v0':
+      return JSON.stringify(await handleAddFilterGroupV0(a), null, 2);
+    case 'add_invite_row_v0':
+      return JSON.stringify(await handleAddInviteRowV0(a), null, 2);
+    case 'add_activity_log_v0':
+      return JSON.stringify(await handleAddActivityLogV0(a), null, 2);
+    case 'add_event_card_v0':
+      return JSON.stringify(await handleAddEventCardV0(a), null, 2);
+    case 'add_step_card_v0':
+      return JSON.stringify(await handleAddStepCardV0(a), null, 2);
     default:
       return '';
   }

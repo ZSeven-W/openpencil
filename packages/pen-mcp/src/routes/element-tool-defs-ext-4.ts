@@ -398,4 +398,153 @@ export const ELEMENT_TOOL_DEFINITIONS_EXT_4 = [
       required: ['name'],
     },
   },
+  {
+    name: 'add_filter_group_v0',
+    description:
+      'Sidebar filter group / facet — heading + vertical list of checkbox-style options ' +
+      '(label + optional count). Distinct from add_nav_chip_row_v0 (horizontal scrolling chips), ' +
+      'add_tag_v0 (single applied chip with × close), and add_segmented_control_v0 (mutex pill ' +
+      'tabs). Use for "facet panel", "filter sidebar", "category checklist", "brand filter", ' +
+      '"搜索筛选侧栏". schemaVersion 1.0',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        schemaVersion: schemaVersionProp,
+        filePath: filePathProp,
+        title: { type: 'string', description: 'Heading text (e.g. "Category", "Brand").' },
+        options: {
+          type: 'array',
+          description: 'Option rows. Each: { label: string, count?: number, selected?: boolean }.',
+          items: {
+            type: 'object',
+            properties: {
+              label: { type: 'string' },
+              count: { type: 'number' },
+              selected: { type: 'boolean' },
+            },
+            required: ['label'],
+          },
+        },
+        parent_id: parentIdProp,
+        pageId: pageIdProp,
+      },
+      required: ['title', 'options'],
+    },
+  },
+  {
+    name: 'add_invite_row_v0',
+    description:
+      'Pending invite list row — initial avatar + (email over optional role) + status pill ' +
+      '(pending / expired / accepted) + trailing action label (e.g. "Resend"). Distinct from ' +
+      'add_member_row_v0 (a JOINED member with full name + role badge) and add_list_row_v0 (no ' +
+      'avatar / status / action slots). Use for "pending invites list", "invitations table row", ' +
+      '"team invite row", "邀请列表行", "待接受邀请". schemaVersion 1.0',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        schemaVersion: schemaVersionProp,
+        filePath: filePathProp,
+        email: { type: 'string', description: 'Invitee email.' },
+        role: { type: 'string', description: 'Optional invited role (e.g. "Editor").' },
+        status: {
+          type: 'string',
+          enum: ['pending', 'expired', 'accepted'],
+          description: 'Status pill. Default "pending".',
+        },
+        action_label: {
+          type: 'string',
+          description: 'Trailing action label (e.g. "Resend", "Revoke"). Default "Resend".',
+        },
+        parent_id: parentIdProp,
+        pageId: pageIdProp,
+      },
+      required: ['email'],
+    },
+  },
+  {
+    name: 'add_activity_log_v0',
+    description:
+      'Audit / activity feed entry — optional small tinted icon dot + "<actor> <action>" line ' +
+      '(actor bold) + right-aligned relative timestamp. Stack vertically under a heading to form ' +
+      'a feed. Distinct from add_timeline_v0 (multi-event vertical with connecting line + per-' +
+      'event title + body) and add_notification_row_v0 (title + body, no actor focus). Use for ' +
+      '"audit log row", "activity feed entry", "recent activity item", "审计日志条目", "活动记录". ' +
+      'schemaVersion 1.0',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        schemaVersion: schemaVersionProp,
+        filePath: filePathProp,
+        actor: { type: 'string', description: 'Actor name (rendered bold).' },
+        action: { type: 'string', description: 'Action verb-phrase (plain).' },
+        timestamp: { type: 'string', description: 'Relative time (e.g. "2h ago").' },
+        icon: { type: 'string', description: 'Optional lucide icon slug for the leading dot.' },
+        tone: {
+          type: 'string',
+          enum: ['info', 'success', 'warning', 'danger', 'neutral'],
+          description: 'Icon dot tone. Default "info".',
+        },
+        parent_id: parentIdProp,
+        pageId: pageIdProp,
+      },
+      required: ['actor', 'action', 'timestamp'],
+    },
+  },
+  {
+    name: 'add_event_card_v0',
+    description:
+      'Calendar event tile — left date column (month band + day number) + right text stack ' +
+      '(title + optional time + optional location). Distinct from add_calendar_grid_v0 (full ' +
+      'month grid) and add_card_row_v0 (horizontally scrolling cards with title + subtitle + ' +
+      'image, no date column). Use for "upcoming event", "agenda item", "meeting tile", ' +
+      '"日程卡片", "会议条目". schemaVersion 1.0',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        schemaVersion: schemaVersionProp,
+        filePath: filePathProp,
+        month: { type: 'string', description: 'Short month code (e.g. "OCT", "10月").' },
+        day: { type: ['string', 'number'], description: 'Day-of-month (e.g. "15" or 15).' },
+        title: { type: 'string', description: 'Event title.' },
+        time: { type: 'string', description: 'Optional time string (e.g. "2:00 PM").' },
+        location: { type: 'string', description: 'Optional location string.' },
+        accent: {
+          type: 'string',
+          description: 'Accent color hex for the month band. Default "#2563EB".',
+        },
+        parent_id: parentIdProp,
+        pageId: pageIdProp,
+      },
+      required: ['month', 'day', 'title'],
+    },
+  },
+  {
+    name: 'add_step_card_v0',
+    description:
+      'Onboarding / how-it-works step card — numbered circle (or check when completed) + ' +
+      '(title over description) body. Stack vertically to form an onboarding column. Distinct ' +
+      'from add_stepper_v0 (horizontal progress nav with connectors) and add_faq_item_v0 ' +
+      '(collapsible Q&A). Use for "onboarding step", "how-it-works step", "tutorial step card", ' +
+      '"setup checklist item", "操作步骤卡片", "教程步骤". schemaVersion 1.0',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        schemaVersion: schemaVersionProp,
+        filePath: filePathProp,
+        number: {
+          type: ['string', 'number'],
+          description: 'Step number / index (e.g. 1, "01", "Step 1").',
+        },
+        title: { type: 'string', description: 'Step title (16/600).' },
+        description: { type: 'string', description: 'Description body (14/400, muted).' },
+        completed: {
+          type: 'boolean',
+          description: 'Filled circle + check icon when true. Default false (numbered ring).',
+        },
+        parent_id: parentIdProp,
+        pageId: pageIdProp,
+      },
+      required: ['number', 'title', 'description'],
+    },
+  },
 ];

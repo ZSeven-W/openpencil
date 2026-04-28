@@ -275,8 +275,25 @@ Settings / preferences:
 People / lists:
 
 84. Members / team list row (avatar + name + subtitle + role badge / kebab menu / status dot) → `add_member_row_v0`
+85. Pending invite list row (initial avatar + email/role + status pill + Resend action) → `add_invite_row_v0`
 
-85. None match → fall through to `batch_design`
+Faceted search / filter sidebar:
+
+86. Sidebar filter group (heading + checkbox-style option list with counts) → `add_filter_group_v0`
+
+Audit / activity feed:
+
+87. Activity log entry (actor in bold + action + timestamp + tinted icon dot) → `add_activity_log_v0`
+
+Calendar:
+
+88. Single event card (month/day column + title + time + location) → `add_event_card_v0`
+
+Onboarding:
+
+89. Numbered step card (circle/check + title + description) → `add_step_card_v0`
+
+90. None match → fall through to `batch_design`
 
 **Disambiguation**: if you need a ROW of 3 metrics that should NOT scroll (e.g. a stats strip inside a card), use `add_stat_grid_v0`, NOT `add_metric_row_v0`. The grid uses `fill_container` per cell so it never overflows; the metric row uses fixed-px cells + scroll wrapper.
 
@@ -374,6 +391,11 @@ PREFER an element tool when the spec says any of:
 - "chart legend", "legend item", "legend entry", "数据图例", "图例条目" → `add_legend_item_v0` (marker + label + optional value). Different from `add_status_badge_v0` (semantic dot + text).
 - "inbox row", "email row", "message list cell", "mail item", "email preview", "邮件条目", "收件箱条目" → `add_inbox_message_v0` (sender + subject + preview + timestamp + unread dot). Different from `add_notification_row_v0` (single title + body) and `add_list_row_v0` (no timestamp).
 - "settings row", "preference row", "menu item with toggle", "settings list item", "设置项", "偏好项", "开关行" → `add_setting_row_v0` (icon + title/subtitle + trailing chevron/value/switch/badge). Different from `add_list_row_v0` (trailing always icon, no switch/value/badge variants) and `add_form_field_v0` (label-above-input pattern for forms).
+- "facet panel", "filter sidebar", "category checklist", "brand filter", "applied filters group", "搜索筛选侧栏", "分面筛选", "类目筛选" → `add_filter_group_v0` (heading + vertical checkbox-style option list with optional counts). Different from `add_nav_chip_row_v0` (horizontal scrolling chips), `add_tag_v0` (single applied chip with × close), and `add_segmented_control_v0` (mutex pill tabs).
+- "pending invite", "invitation row", "team invite", "邀请列表行", "待接受邀请", "invitations table row" → `add_invite_row_v0` (initial avatar + email/role + status pill + trailing action). Different from `add_member_row_v0` (a JOINED member, no status pill or action slot) and `add_list_row_v0` (no avatar / status / action).
+- "audit log row", "activity feed entry", "recent activity item", "audit entry", "审计日志条目", "活动记录", "操作日志行" → `add_activity_log_v0` (single line: optional tinted icon dot + "<actor> <action>" + right-aligned timestamp). Different from `add_timeline_v0` (multi-event vertical with connecting line + per-event title + body) and `add_notification_row_v0` (title + body, no actor focus).
+- "event card", "agenda item", "meeting tile", "upcoming event", "calendar event row", "日程卡片", "会议条目", "活动卡片" → `add_event_card_v0` (date column with month band + day number, then title + time + location). Different from `add_calendar_grid_v0` (the full month grid) and `add_card_row_v0` (horizontally scrolling cards with title + subtitle + image, no date column).
+- "onboarding step", "how-it-works step", "tutorial step card", "setup checklist item", "操作步骤卡片", "教程步骤", "新手引导步骤" → `add_step_card_v0` (numbered circle / check + title + description, stacks vertically). Different from `add_stepper_v0` (horizontal progress nav with connectors) and `add_faq_item_v0` (collapsible Q&A header).
 
 STILL use batch_design when:
 
