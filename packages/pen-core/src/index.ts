@@ -278,6 +278,7 @@ export {
   buildInboxMessage,
   buildProfileHeader,
   buildSettingRow,
+  buildMemberRow,
   cjkFontFamily,
   detectCjkScript,
   type ElementTree,
@@ -405,4 +406,6 @@ export {
   type ProfileHeaderParams,
   type SettingRowParams,
   type SettingRowTrailing,
+  type MemberRowParams,
+  type MemberRowTrailing,
 } from './element-builders/index.js';

@@ -106,6 +106,7 @@ import { handleAddLegendItemV0 } from '../tools/add-legend-item-v0';
 import { handleAddInboxMessageV0 } from '../tools/add-inbox-message-v0';
 import { handleAddProfileHeaderV0 } from '../tools/add-profile-header-v0';
 import { handleAddSettingRowV0 } from '../tools/add-setting-row-v0';
+import { handleAddMemberRowV0 } from '../tools/add-member-row-v0';
 import { recordElementToolCall } from '../metrics/element-tool-metrics';
 import { ELEMENT_TOOL_DEFINITIONS_BASE } from './element-tool-defs-base';
 import { ELEMENT_TOOL_DEFINITIONS_EXT } from './element-tool-defs-ext';
@@ -322,6 +323,8 @@ async function dispatchElementToolCall(name: string, a: any): Promise<string> {
       return JSON.stringify(await handleAddProfileHeaderV0(a), null, 2);
     case 'add_setting_row_v0':
       return JSON.stringify(await handleAddSettingRowV0(a), null, 2);
+    case 'add_member_row_v0':
+      return JSON.stringify(await handleAddMemberRowV0(a), null, 2);
     default:
       return '';
   }

@@ -43,6 +43,7 @@ import {
   buildInboxMessage,
   buildProfileHeader,
   buildSettingRow,
+  buildMemberRow,
   buildDatePicker,
   buildDivider,
   buildEmptyChart,
@@ -669,6 +670,16 @@ const CASES: BuilderCase[] = [
       trailing: { kind: 'switch', on: true },
     },
     build: (a) => buildSettingRow(a as unknown as Parameters<typeof buildSettingRow>[0]),
+  },
+  {
+    toolName: 'add_member_row_v0',
+    args: {
+      name: 'Sarah Lee',
+      subtitle: 'sarah@acme.com',
+      initial: 'SL',
+      trailing: { kind: 'role_badge', value: 'Owner' },
+    },
+    build: (a) => buildMemberRow(a as unknown as Parameters<typeof buildMemberRow>[0]),
   },
 ];
 
