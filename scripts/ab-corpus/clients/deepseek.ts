@@ -38,5 +38,10 @@ export async function callDeepSeek(args: CallDeepSeekArgs): Promise<string> {
     temperature: args.temperature,
     maxTokens: args.maxTokens,
     label: 'deepseek',
+    // ab-v2 garbage attribution: 6 of 40 deepseek-v4-pro runs returned
+    // empty content (server-side flakiness, not model output). Same
+    // rationale as ark.ts — one retry recovers the transient ones,
+    // anything more would mostly burn budget on real failures.
+    retries: 1,
   });
 }

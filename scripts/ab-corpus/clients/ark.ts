@@ -42,5 +42,13 @@ export async function callArk(args: CallArkArgs): Promise<string> {
     temperature: args.temperature,
     maxTokens: args.maxTokens,
     label: 'ark',
+    // ab-v2 (2026-04-28) saw kimi-k2.6 garbage rate hit 17.5% — every
+    // failure was Ark returning empty `choices[0].message.content` or
+    // exceeding the 120s wall clock, not a model-quality issue (the
+    // model itself routed to the right element tool 80% of the time
+    // when it did respond). One retry is the minimum that flips most
+    // of those into successes; bumping higher would mostly waste
+    // budget on the genuinely broken minority.
+    retries: 1,
   });
 }
