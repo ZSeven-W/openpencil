@@ -63,6 +63,11 @@ import {
   buildProfileHeader,
   buildSettingRow,
   buildMemberRow,
+  buildFilterGroup,
+  buildInviteRow,
+  buildActivityLog,
+  buildEventCard,
+  buildStepCard,
   buildKbd,
   buildLink,
   buildListRow,
@@ -249,6 +254,11 @@ const SERVER_BUILDERS: Record<string, BuilderFn> = {
   add_profile_header_v0: (a) => buildProfileHeader(a as Parameters<typeof buildProfileHeader>[0]),
   add_setting_row_v0: (a) => buildSettingRow(a as Parameters<typeof buildSettingRow>[0]),
   add_member_row_v0: (a) => buildMemberRow(a as Parameters<typeof buildMemberRow>[0]),
+  add_filter_group_v0: (a) => buildFilterGroup(a as Parameters<typeof buildFilterGroup>[0]),
+  add_invite_row_v0: (a) => buildInviteRow(a as Parameters<typeof buildInviteRow>[0]),
+  add_activity_log_v0: (a) => buildActivityLog(a as Parameters<typeof buildActivityLog>[0]),
+  add_event_card_v0: (a) => buildEventCard(a as Parameters<typeof buildEventCard>[0]),
+  add_step_card_v0: (a) => buildStepCard(a as Parameters<typeof buildStepCard>[0]),
 };
 
 interface ExecToolBody {
