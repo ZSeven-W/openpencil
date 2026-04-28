@@ -48,6 +48,19 @@ export interface CallOpenAICompatArgs {
    * `__HARNESS_ERROR__` garbage run and moves on.
    */
   timeoutMs?: number;
+  /**
+   * Retry attempts on transient errors. Default 0 (no retry). Set to 1
+   * for providers known to flake on empty content / timeout (Ark hosting
+   * GLM-5.1+Kimi-K2.6, DeepSeek api.deepseek.com). MiniMax / Bailian /
+   * Codex don't enable this — their ab-v2 failures were model-quality
+   * (truncation, malformed DSL), where retry burns budget for nothing.
+   *
+   * Retried: empty `choices[0].message.content`, abort/timeout, HTTP 5xx,
+   * HTTP 429. NOT retried: HTTP 4xx other than 429 (auth / bad request).
+   *
+   * Backoff: linear, 250ms × (attempt+1).
+   */
+  retries?: number;
 }
 
 const DEFAULT_TIMEOUT_MS = (() => {
@@ -60,6 +73,30 @@ const DEFAULT_TIMEOUT_MS = (() => {
 })();
 
 export async function callOpenAICompat(args: CallOpenAICompatArgs): Promise<string> {
+  const retries = args.retries ?? 0;
+  const label = args.label ?? 'openai-compat';
+  let lastErr: Error | undefined;
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      return await callOpenAICompatOnce(args);
+    } catch (err) {
+      lastErr = err instanceof Error ? err : new Error(String(err));
+      if (attempt === retries || !isTransientError(lastErr)) {
+        throw lastErr;
+      }
+      console.error(
+        `[${label}] transient error on attempt ${attempt + 1}/${retries + 1}, retrying: ${truncate(
+          lastErr.message,
+          200,
+        )}`,
+      );
+      await sleep(250 * (attempt + 1));
+    }
+  }
+  throw lastErr ?? new Error(`${label}: callOpenAICompat exited loop without result`);
+}
+
+async function callOpenAICompatOnce(args: CallOpenAICompatArgs): Promise<string> {
   const label = args.label ?? 'openai-compat';
   const timeoutMs = args.timeoutMs ?? DEFAULT_TIMEOUT_MS;
   const messages: ChatMessage[] = [
@@ -104,4 +141,24 @@ export async function callOpenAICompat(args: CallOpenAICompatArgs): Promise<stri
     throw new Error(`${label} returned no content in choices[0].message.content`);
   }
   return content;
+}
+
+function isTransientError(err: Error): boolean {
+  const msg = err.message ?? '';
+  if (/returned no content/.test(msg)) return true;
+  if (/exceeded \d+ms/.test(msg)) return true;
+  if (/HTTP 5\d\d:/.test(msg)) return true;
+  if (/HTTP 429:/.test(msg)) return true;
+  if (err.name === 'AbortError') return true;
+  return false;
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
+}
+
+function truncate(s: string, n: number): string {
+  return s.length <= n ? s : `${s.slice(0, n)}…`;
 }
