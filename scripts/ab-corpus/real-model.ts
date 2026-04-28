@@ -16,6 +16,7 @@ import { callMinimax } from './clients/minimax';
 import { callCodex } from './clients/codex-cli';
 import { callBailian } from './clients/bailian';
 import { callArk } from './clients/ark';
+import { callDeepSeek } from './clients/deepseek';
 import { buildSystemPrompt } from './build-prompt';
 import type { ModelCall } from './stub-model';
 
@@ -100,8 +101,20 @@ export async function realModelCall(call: ModelCall): Promise<string> {
       user,
     });
   }
+  // DeepSeek direct (api.deepseek.com, OpenAI-compat). Latest flagship
+  // is `deepseek-v4-pro`; `deepseek-v4-flash` is the lighter variant.
+  // The pre-2026-07-24 ids `deepseek-chat` / `deepseek-reasoner` are
+  // deprecated upstream but routed here too so older corpus runs stay
+  // reproducible until cutoff.
+  if (/^deepseek/i.test(model)) {
+    return callDeepSeek({
+      model: mapDeepSeekId(model),
+      system: built.system,
+      user,
+    });
+  }
   throw new Error(
-    `No live adapter for model "${model}". Supported: minimax-* (MINIMAX_API_KEY), gpt-*/o1/o3/o4 (Codex CLI), glm-5.1 / kimi-k2.6 (ARK_CODING_KEY), glm-5 / kimi-k2.5 (DASHSCOPE_BAILIAN_CODING_KEY).`,
+    `No live adapter for model "${model}". Supported: minimax-* (MINIMAX_API_KEY), gpt-*/o1/o3/o4 (Codex CLI), glm-5.1 / kimi-k2.6 (ARK_CODING_KEY), glm-5 / kimi-k2.5 (DASHSCOPE_BAILIAN_CODING_KEY), deepseek-* (DEEPSEEK_API_KEY).`,
   );
 }
 
@@ -173,5 +186,18 @@ function mapGlmBailianIdInternal(id: string): string {
   // the documented id to avoid silent deprecation.
   const lower = id.toLowerCase();
   if (lower === 'glm-5' || lower === 'glm-4.7' || lower === 'glm-coding') return 'glm-4.7';
+  return id;
+}
+
+function mapDeepSeekId(id: string): string {
+  // DeepSeek's current flagship is `deepseek-v4-pro`. Harness aliases
+  // `deepseek` (bare) and `deepseek-pro` resolve to that. The lighter
+  // `deepseek-v4-flash` and the deprecated `deepseek-chat` /
+  // `deepseek-reasoner` ids pass through verbatim — server still
+  // accepts them until 2026-07-24 sunset per docs.
+  const lower = id.toLowerCase();
+  if (lower === 'deepseek' || lower === 'deepseek-pro' || lower === 'deepseek-v4-pro') {
+    return 'deepseek-v4-pro';
+  }
   return id;
 }
