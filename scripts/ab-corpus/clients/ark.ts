@@ -13,6 +13,7 @@
  * before running `bun scripts/ab-corpus/run.ts --live`.
  */
 
+import type { ChatCallResult } from './openai-compat';
 import { callOpenAICompat } from './openai-compat';
 
 const ARK_BASE_URL = process.env.ARK_BASE_URL ?? 'https://ark.cn-beijing.volces.com/api/coding/v3';
@@ -26,7 +27,7 @@ export interface CallArkArgs {
   maxTokens?: number;
 }
 
-export async function callArk(args: CallArkArgs): Promise<string> {
+export async function callArk(args: CallArkArgs): Promise<ChatCallResult> {
   const apiKey = process.env[ARK_API_KEY_ENV];
   if (!apiKey) {
     throw new Error(

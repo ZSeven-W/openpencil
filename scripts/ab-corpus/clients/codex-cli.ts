@@ -23,6 +23,7 @@ import { spawn } from 'node:child_process';
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import type { ChatCallResult } from './openai-compat';
 
 export interface CallCodexArgs {
   model: string;
@@ -33,7 +34,7 @@ export interface CallCodexArgs {
   timeoutMs?: number;
 }
 
-export async function callCodex(args: CallCodexArgs): Promise<string> {
+export async function callCodex(args: CallCodexArgs): Promise<ChatCallResult> {
   const timeoutMs = args.timeoutMs ?? 5 * 60 * 1000;
   const dir = mkdtempSync(join(tmpdir(), 'ab-codex-'));
   const outPath = join(dir, 'last-message.txt');
@@ -44,7 +45,7 @@ export async function callCodex(args: CallCodexArgs): Promise<string> {
   // part of the task to answer.
   const prompt = `SYSTEM CONTEXT (treat as authoritative system prompt):\n<<<\n${args.system}\n>>>\n\nUSER REQUEST:\n${args.user}`;
   try {
-    return await new Promise<string>((resolve, reject) => {
+    const content = await new Promise<string>((resolve, reject) => {
       const proc = spawn(
         'codex',
         [
@@ -91,6 +92,12 @@ export async function callCodex(args: CallCodexArgs): Promise<string> {
         }
       });
     });
+    // Codex CLI doesn't surface token usage in --output-last-message
+    // mode (the streaming JSONL session log has it, but parsing that
+    // adds fragility for marginal value). Report 0/0 — the harness
+    // aggregator skips zero rows, so codex columns show '—' instead
+    // of looking falsely cheap.
+    return { content, usage: { promptTokens: 0, completionTokens: 0 } };
   } finally {
     try {
       rmSync(dir, { recursive: true, force: true });

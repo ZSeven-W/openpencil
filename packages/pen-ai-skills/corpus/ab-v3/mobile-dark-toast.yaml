@@ -1,0 +1,17 @@
+id: mobile-dark-toast
+category: mobile
+difficulty: obvious
+prompt: |
+  Design ONLY a DARK-THEME toast / snackbar notification. Because
+  this is for a dark-theme app surface, the toast uses INVERTED
+  contrast: a LIGHT pill background (near-white slate) with DARK
+  (near-black) text and icon, rather than the usual dark-pill-on-
+  light-bg pattern. Content: a small check icon on the left, then
+  the message "Changes saved". The toast is a rounded pill, sized
+  to content. Do NOT render a dismiss button, undo link, or
+  surrounding page content — just the toast pill itself.
+expected:
+  must_contain_roles:
+    - toast
+    - toast-message
+expected_tool_if_any: add_toast_v1

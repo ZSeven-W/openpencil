@@ -1,6 +1,6 @@
 import type { PenDocument, PenNode } from '@zseven-w/pen-types';
 import { detectAllIssues } from '../diagnostics/detectors';
-import type { ApplyFn, CorpusPrompt, ParsedOutput, ScoreRow } from './types';
+import type { ApplyFn, CorpusPrompt, ParsedOutput, ScoreRow, TokenUsage } from './types';
 
 /**
  * Walk a PenNode tree and tally `role` occurrences. Roles are optional
@@ -50,8 +50,12 @@ export async function scoreRun(args: {
   apply: ApplyFn;
   model: string;
   variant: 'B' | 'T';
+  /** Provider usage stats for this call. Defaults to 0/0 when the
+   *  caller doesn't have them (Codex CLI, dry-run stub, harness error). */
+  usage?: TokenUsage;
 }): Promise<ScoreRow> {
   const { prompt, parsed, apply, model, variant } = args;
+  const usage = args.usage ?? { promptTokens: 0, completionTokens: 0 };
   const toolName = parsed.kind === 'tool_call' ? parsed.name : '';
   const base = {
     promptId: prompt.id,
@@ -64,6 +68,8 @@ export async function scoreRun(args: {
     expectedToolIfAny: prompt.expected_tool_if_any ?? '',
     routing: classifyRouting(prompt, variant, parsed.kind, toolName),
     rawOutput: parsed.raw,
+    promptTokens: usage.promptTokens,
+    completionTokens: usage.completionTokens,
   };
 
   if (parsed.kind === 'garbage') {
@@ -134,7 +140,21 @@ function classifyRouting(
   toolName: string,
 ): ScoreRow['routing'] {
   if (variant !== 'T') return 'n/a';
-  if (prompt.difficulty !== 'obvious') return 'n/a';
+  if (prompt.difficulty === 'optional') return 'n/a';
+  if (prompt.difficulty === 'composite') {
+    // Composite prompts have no expected_tool_if_any — the question
+    // is "did the model produce a usable output for a multi-component
+    // brief", not "did it pick the right narrow tool". Three buckets:
+    //   - multi-tool: emitted at least one element-tool call (the
+    //                 target behavior — model composed via tools)
+    //   - fallback:   emitted batch_design DSL (acceptable but the
+    //                 path we want to measure separately)
+    //   - garbage:    unparseable
+    if (kind === 'garbage') return 'garbage';
+    if (kind === 'batch_design') return 'fallback';
+    return 'multi-tool';
+  }
+  // difficulty === 'obvious'
   if (kind === 'garbage') return 'garbage';
   if (kind === 'batch_design') return 'fallback';
   // kind === 'tool_call'

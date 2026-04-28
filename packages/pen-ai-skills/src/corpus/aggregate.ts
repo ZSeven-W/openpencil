@@ -50,15 +50,28 @@ function buildModelSummary(model: string, rows: ScoreRow[]): ModelSummary {
   const m1_treatment = rate(treatment, (r) => r.m1_legal);
   const m3_baseline = rate(baseline, (r) => r.m3_success);
   const m3_treatment = rate(treatment, (r) => r.m3_success);
-  // Routing denominator = ALL obvious-treatment runs (routing !== 'n/a').
-  // Garbage is a bucket of its own, not dropped — see the types.ts
-  // ScoreRow.routing JSDoc for why dropping garbage inflates the
-  // right-tool rate when most runs fail to parse.
+  // Obvious-treatment routing breakdown (4 buckets, sum to 1).
   const obviousRouted = treatment.filter((r) => r.difficulty === 'obvious' && r.routing !== 'n/a');
   const m5_right_tool = rate(obviousRouted, (r) => r.routing === 'right-tool');
   const m5_wrong_tool = rate(obviousRouted, (r) => r.routing === 'wrong-tool');
   const m5_fallback = rate(obviousRouted, (r) => r.routing === 'fallback');
   const m5_garbage = rate(obviousRouted, (r) => r.routing === 'garbage');
+  // Composite-treatment routing breakdown (3 buckets, sum to 1). NaN
+  // when this model has no composite-treatment runs at all.
+  const compositeRouted = treatment.filter(
+    (r) => r.difficulty === 'composite' && r.routing !== 'n/a',
+  );
+  const m6_multi_tool = rate(compositeRouted, (r) => r.routing === 'multi-tool');
+  const m6_fallback = rate(compositeRouted, (r) => r.routing === 'fallback');
+  const m6_garbage = rate(compositeRouted, (r) => r.routing === 'garbage');
+  // Token cost averages exclude rows with 0/0 usage. Reasons a row
+  // shows 0/0: Codex CLI doesn't surface usage; harness errors before
+  // the call returned anything; dry-run stub. Treating those as zeros
+  // would falsely deflate averages.
+  const avgPromptTokensBaseline = avgUsage(baseline, (r) => r.promptTokens);
+  const avgPromptTokensTreatment = avgUsage(treatment, (r) => r.promptTokens);
+  const avgCompletionTokensBaseline = avgUsage(baseline, (r) => r.completionTokens);
+  const avgCompletionTokensTreatment = avgUsage(treatment, (r) => r.completionTokens);
   return {
     model,
     m1_baseline,
@@ -71,8 +84,15 @@ function buildModelSummary(model: string, rows: ScoreRow[]): ModelSummary {
     m5_wrong_tool,
     m5_fallback,
     m5_garbage,
+    m6_multi_tool,
+    m6_fallback,
+    m6_garbage,
     runCountBaseline: baseline.length,
     runCountTreatment: treatment.length,
+    avgPromptTokensBaseline,
+    avgPromptTokensTreatment,
+    avgCompletionTokensBaseline,
+    avgCompletionTokensTreatment,
   };
 }
 
@@ -116,6 +136,28 @@ function buildToolUsage(rows: ScoreRow[]): ToolUsage[] {
 function rate<T>(items: T[], pred: (x: T) => boolean): number {
   if (items.length === 0) return Number.NaN;
   return items.filter(pred).length / items.length;
+}
+
+/**
+ * Mean of a numeric field across rows, but only counting rows where
+ * the field is > 0. The "skip zero" rule is what distinguishes
+ * "unknown / not measured" from "actually used zero tokens" — a
+ * harness error or codex CLI run reports 0 tokens used, which would
+ * otherwise dilute the average. If no row has usage data, return NaN
+ * so the report can render '—' instead of a misleading 0.
+ */
+function avgUsage<T>(items: T[], get: (x: T) => number): number {
+  let sum = 0;
+  let n = 0;
+  for (const it of items) {
+    const v = get(it);
+    if (v > 0) {
+      sum += v;
+      n += 1;
+    }
+  }
+  if (n === 0) return Number.NaN;
+  return sum / n;
 }
 
 function delta(baseline: number, treatment: number): number {
