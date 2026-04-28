@@ -408,4 +408,26 @@ add_setting_row_v0({
   title: "What's new",
   trailing: { kind: "badge", value: "New" },
 })
+
+add_member_row_v0({
+  name: "Sarah Lee",
+  subtitle: "sarah@acme.com",
+  initial: "SL",
+  trailing: { kind: "role_badge", value: "Owner" },
+})
+
+add_member_row_v0({
+  name: "Marcus Chen",
+  subtitle: "Designer",
+  initial: "MC",
+  avatar_color: "#10B981",
+  trailing: { kind: "status_dot", tone: "online" },
+})
+
+add_member_row_v0({
+  name: "Priya Patel",
+  subtitle: "priya@acme.com",
+  initial: "PP",
+  trailing: { kind: "menu" },
+})
 ```

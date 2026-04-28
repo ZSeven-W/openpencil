@@ -344,4 +344,58 @@ export const ELEMENT_TOOL_DEFINITIONS_EXT_4 = [
       required: ['title'],
     },
   },
+  {
+    name: 'add_member_row_v0',
+    description:
+      'Team / member list row — circular avatar + (name over optional subtitle) + optional ' +
+      'trailing (role badge / kebab menu / status dot). Distinct from add_user_card_v0 (compact ' +
+      'fit_content tile, no trailing slot — used in lobbies / chip-style picker lists) and ' +
+      'add_list_row_v0 (no avatar slot). Use for "members list", "team page row", "people list", ' +
+      '"sharing dialog row", "团队成员", "成员列表行". schemaVersion 1.0',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        schemaVersion: schemaVersionProp,
+        filePath: filePathProp,
+        name: { type: 'string', description: 'Display name (e.g. "Sarah Lee").' },
+        subtitle: {
+          type: 'string',
+          description:
+            'Optional second line — caller picks email / role / status text (e.g. "sarah@acme.com", "Designer • Owner").',
+        },
+        initial: {
+          type: 'string',
+          description: 'Optional avatar initial (1-2 chars). Defaults to first char of name.',
+        },
+        avatar_color: {
+          type: 'string',
+          description: 'Avatar background hex (e.g. "#3B82F6"). Default "#3B82F6".',
+        },
+        trailing: {
+          type: 'object',
+          description:
+            'Trailing slot. Default: none. Variants: ' +
+            '{ kind: "role_badge", value: string } | { kind: "menu" } | ' +
+            '{ kind: "status_dot", tone?: "online"|"busy"|"away"|"offline" }.',
+          properties: {
+            kind: {
+              type: 'string',
+              enum: ['role_badge', 'menu', 'status_dot'],
+              description: 'Trailing variant.',
+            },
+            value: { type: 'string', description: 'Required for kind="role_badge".' },
+            tone: {
+              type: 'string',
+              enum: ['online', 'busy', 'away', 'offline'],
+              description: 'Optional for kind="status_dot". Default "online".',
+            },
+          },
+          required: ['kind'],
+        },
+        parent_id: parentIdProp,
+        pageId: pageIdProp,
+      },
+      required: ['name'],
+    },
+  },
 ];
