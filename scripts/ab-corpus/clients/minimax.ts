@@ -5,6 +5,7 @@
  * `minimax` for the canonical endpoint list.
  */
 
+import type { ChatCallResult } from './openai-compat';
 import { callOpenAICompat } from './openai-compat';
 
 const MINIMAX_BASE_URL = process.env.MINIMAX_BASE_URL ?? 'https://api.minimax.io/v1';
@@ -18,7 +19,7 @@ export interface CallMinimaxArgs {
   maxTokens?: number;
 }
 
-export async function callMinimax(args: CallMinimaxArgs): Promise<string> {
+export async function callMinimax(args: CallMinimaxArgs): Promise<ChatCallResult> {
   const apiKey = process.env[MINIMAX_API_KEY_ENV];
   if (!apiKey) {
     throw new Error(

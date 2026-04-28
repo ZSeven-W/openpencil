@@ -1,0 +1,20 @@
+id: mobile-chat-message
+category: mobile
+difficulty: obvious
+prompt: |
+  Design ONLY a single chat message bubble from the OTHER person
+  (left-aligned): above the bubble the sender name "Support Agent"
+  in small muted text, then a light slate-100 rounded bubble
+  containing the message "Hi! How can I help you today?", then
+  below the bubble a muted timestamp "Just now". Do NOT include
+  the input field, other messages, avatar image, page background,
+  or app chrome — just the one left-aligned bubble with author
+  label above and timestamp below.
+expected:
+  must_contain_roles:
+    - chat-bubble-left
+    - chat-bubble-surface
+    - chat-bubble-author
+    - chat-bubble-message
+    - chat-bubble-timestamp
+expected_tool_if_any: add_chat_bubble_v0

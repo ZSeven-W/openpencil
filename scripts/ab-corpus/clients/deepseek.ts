@@ -9,6 +9,7 @@
  * Docs: https://api-docs.deepseek.com/zh-cn/
  */
 
+import type { ChatCallResult } from './openai-compat';
 import { callOpenAICompat } from './openai-compat';
 
 const DEEPSEEK_BASE_URL = process.env.DEEPSEEK_BASE_URL ?? 'https://api.deepseek.com';
@@ -22,7 +23,7 @@ export interface CallDeepSeekArgs {
   maxTokens?: number;
 }
 
-export async function callDeepSeek(args: CallDeepSeekArgs): Promise<string> {
+export async function callDeepSeek(args: CallDeepSeekArgs): Promise<ChatCallResult> {
   const apiKey = process.env[DEEPSEEK_API_KEY_ENV];
   if (!apiKey) {
     throw new Error(

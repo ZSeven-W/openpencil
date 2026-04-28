@@ -25,5 +25,6 @@ export type {
   ParsedOutput,
   Report,
   ScoreRow,
+  TokenUsage,
   ToolUsage,
 } from './types';

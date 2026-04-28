@@ -17,6 +17,7 @@
  */
 
 import type { CorpusPrompt } from '@zseven-w/pen-ai-skills';
+import type { ChatCallResult } from './clients/openai-compat';
 
 export interface ModelCall {
   model: string;
@@ -28,14 +29,26 @@ export interface ModelCall {
   userPrompt: string;
 }
 
-export async function stubModelCall(call: ModelCall): Promise<string> {
+export async function stubModelCall(call: ModelCall): Promise<ChatCallResult> {
   const key = `${call.prompt.id}|${call.variant}`;
   const fixture = FIXTURES[key];
-  if (fixture) return fixture;
   // Fallback: treatment-arm on unfixtured prompts simulates a weak
   // model that knew about the tools but picked batch_design anyway
   // (interesting M5 signal); baseline always emits batch_design DSL.
-  return DEFAULT_BATCH_DESIGN;
+  const content = fixture ?? DEFAULT_BATCH_DESIGN;
+  // Synthesize plausible token counts so dry-run reports exercise the
+  // token-cost code path. ~4 chars per token is the canonical OpenAI
+  // tokenizer rule of thumb; we use length/4 for both prompt and
+  // completion. The harness consumer doesn't know it's a stub at this
+  // layer, so producing zeros would skip token aggregation entirely.
+  const promptChars = call.systemPrompt.length + call.userPrompt.length;
+  return {
+    content,
+    usage: {
+      promptTokens: Math.max(1, Math.round(promptChars / 4)),
+      completionTokens: Math.max(1, Math.round(content.length / 4)),
+    },
+  };
 }
 
 // batch_design's DSL parser expects one operation per line. Keep this

@@ -17,6 +17,7 @@ import { callCodex } from './clients/codex-cli';
 import { callBailian } from './clients/bailian';
 import { callArk } from './clients/ark';
 import { callDeepSeek } from './clients/deepseek';
+import type { ChatCallResult } from './clients/openai-compat';
 import { buildSystemPrompt } from './build-prompt';
 import type { ModelCall } from './stub-model';
 
@@ -51,7 +52,7 @@ import type { ModelCall } from './stub-model';
  * alias (say `glm-5.1-legacy`). The default router picks Ark because
  * that's the path we're actively promoting.
  */
-export async function realModelCall(call: ModelCall): Promise<string> {
+export async function realModelCall(call: ModelCall): Promise<ChatCallResult> {
   const built = buildSystemPrompt(call.variant);
   const user = call.prompt.prompt;
   const model = call.model;

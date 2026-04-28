@@ -9,6 +9,7 @@
  * Override via `BAILIAN_BASE_URL` if you need the -intl variant.
  */
 
+import type { ChatCallResult } from './openai-compat';
 import { callOpenAICompat } from './openai-compat';
 
 // User supplied the 百炼 CP (Coding Plan) key, which targets the
@@ -26,7 +27,7 @@ export interface CallBailianArgs {
   maxTokens?: number;
 }
 
-export async function callBailian(args: CallBailianArgs): Promise<string> {
+export async function callBailian(args: CallBailianArgs): Promise<ChatCallResult> {
   const apiKey = process.env[BAILIAN_API_KEY_ENV];
   if (!apiKey) {
     throw new Error(

@@ -270,3 +270,82 @@ describe('scoreRun — routing classification (expected_tool_if_any)', () => {
     expect(row.routing).toBe('n/a');
   });
 });
+
+describe('scoreRun — composite difficulty', () => {
+  const compositePrompt: CorpusPrompt = {
+    ...prompt,
+    difficulty: 'composite',
+    expected_tool_if_any: undefined,
+  };
+
+  it('multi-tool when treatment emits a tool_call (no expected_tool match required)', async () => {
+    const row = await scoreRun({
+      prompt: compositePrompt,
+      parsed: toolParsed,
+      apply: makeApply({ ok: true, doc: baseDoc }),
+      model: 'm',
+      variant: 'T',
+    });
+    expect(row.routing).toBe('multi-tool');
+  });
+
+  it('fallback when treatment emits batch_design DSL', async () => {
+    const row = await scoreRun({
+      prompt: compositePrompt,
+      parsed: okParsed,
+      apply: makeApply({ ok: true, doc: baseDoc }),
+      model: 'm',
+      variant: 'T',
+    });
+    expect(row.routing).toBe('fallback');
+  });
+
+  it('garbage when treatment output unparseable', async () => {
+    const row = await scoreRun({
+      prompt: compositePrompt,
+      parsed: garbageParsed,
+      apply: makeApply({ ok: true, doc: baseDoc }),
+      model: 'm',
+      variant: 'T',
+    });
+    expect(row.routing).toBe('garbage');
+  });
+
+  it('n/a on baseline (routing only meaningful for treatment)', async () => {
+    const row = await scoreRun({
+      prompt: compositePrompt,
+      parsed: toolParsed,
+      apply: makeApply({ ok: true, doc: baseDoc }),
+      model: 'm',
+      variant: 'B',
+    });
+    expect(row.routing).toBe('n/a');
+  });
+});
+
+describe('scoreRun — token usage plumbing', () => {
+  it('writes provided usage to row', async () => {
+    const row = await scoreRun({
+      prompt,
+      parsed: okParsed,
+      apply: makeApply({ ok: true, doc: baseDoc }),
+      model: 'm',
+      variant: 'B',
+      usage: { promptTokens: 1234, completionTokens: 56 },
+    });
+    expect(row.promptTokens).toBe(1234);
+    expect(row.completionTokens).toBe(56);
+  });
+
+  it('defaults to 0/0 when usage omitted', async () => {
+    const row = await scoreRun({
+      prompt,
+      parsed: okParsed,
+      apply: makeApply({ ok: true, doc: baseDoc }),
+      model: 'm',
+      variant: 'B',
+    });
+    expect(row.promptTokens).toBe(0);
+    expect(row.completionTokens).toBe(0);
+  });
+});

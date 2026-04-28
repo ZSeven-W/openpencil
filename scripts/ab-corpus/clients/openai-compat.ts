@@ -10,6 +10,8 @@
  * never aborts a corpus sweep.
  */
 
+import type { TokenUsage } from '@zseven-w/pen-ai-skills';
+
 interface ChatMessage {
   role: 'system' | 'user';
   content: string;
@@ -20,7 +22,26 @@ interface OpenAICompatResponse {
     message?: { content?: string };
     finish_reason?: string;
   }>;
+  usage?: {
+    prompt_tokens?: number;
+    completion_tokens?: number;
+    total_tokens?: number;
+  };
   error?: { message?: string; code?: string };
+}
+
+/**
+ * Standardized provider response carrying the assistant message plus
+ * usage stats. All ab-corpus clients (openai-compat, codex-cli, stub)
+ * normalize to this shape so the harness can plumb token counts into
+ * ScoreRow without per-client special cases. usage = 0/0 means
+ * "provider didn't return usage", not "actually used 0 tokens" —
+ * aggregate.avgUsage skips zero rows so codex-cli columns don't
+ * appear free.
+ */
+export interface ChatCallResult {
+  content: string;
+  usage: TokenUsage;
 }
 
 export interface CallOpenAICompatArgs {
@@ -72,7 +93,7 @@ const DEFAULT_TIMEOUT_MS = (() => {
   return 120_000;
 })();
 
-export async function callOpenAICompat(args: CallOpenAICompatArgs): Promise<string> {
+export async function callOpenAICompat(args: CallOpenAICompatArgs): Promise<ChatCallResult> {
   const retries = args.retries ?? 0;
   const label = args.label ?? 'openai-compat';
   let lastErr: Error | undefined;
@@ -96,7 +117,7 @@ export async function callOpenAICompat(args: CallOpenAICompatArgs): Promise<stri
   throw lastErr ?? new Error(`${label}: callOpenAICompat exited loop without result`);
 }
 
-async function callOpenAICompatOnce(args: CallOpenAICompatArgs): Promise<string> {
+async function callOpenAICompatOnce(args: CallOpenAICompatArgs): Promise<ChatCallResult> {
   const label = args.label ?? 'openai-compat';
   const timeoutMs = args.timeoutMs ?? DEFAULT_TIMEOUT_MS;
   const messages: ChatMessage[] = [
@@ -140,7 +161,14 @@ async function callOpenAICompatOnce(args: CallOpenAICompatArgs): Promise<string>
   if (typeof content !== 'string' || content.length === 0) {
     throw new Error(`${label} returned no content in choices[0].message.content`);
   }
-  return content;
+  return {
+    content,
+    usage: {
+      promptTokens: typeof data.usage?.prompt_tokens === 'number' ? data.usage.prompt_tokens : 0,
+      completionTokens:
+        typeof data.usage?.completion_tokens === 'number' ? data.usage.completion_tokens : 0,
+    },
+  };
 }
 
 function isTransientError(err: Error): boolean {
