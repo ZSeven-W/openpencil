@@ -1,7 +1,13 @@
 import type { ElementTree } from './helpers.js';
 
 export interface StepCardParams {
-  /** Step number / index (e.g. 1, "01", "Step 1"). */
+  /**
+   * Step index — short label rendered inside the 36px marker circle.
+   * Keep it 1–3 characters (e.g. 1, "01", "1.1"). Longer strings like
+   * "Step 1" overflow the circle; put that prose in `title` instead.
+   * Marker has `clipContent: true` as a safety net but the real fix
+   * is to keep this short.
+   */
   number: string | number;
   /** Step title (16/600). */
   title: string;
@@ -40,6 +46,7 @@ export function buildStepCard(params: StepCardParams): ElementTree {
     cornerRadius: 18,
     fill: [{ type: 'solid', color: completed ? ACCENT : RING_BG }],
     stroke: completed ? undefined : { thickness: 2, fill: [{ type: 'solid', color: ACCENT }] },
+    clipContent: true,
     layout: 'horizontal',
     alignItems: 'center',
     justifyContent: 'center',
