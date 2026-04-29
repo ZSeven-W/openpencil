@@ -329,12 +329,13 @@ assert(
   `got: ${String(lightSwitchFill)}`,
 );
 
-// GAP-1: fontWeight not resolved — still a $ref after resolveNodeForCanvas
+// GAP-1 fixed (commit 52f9549b): fontWeight now in resolve.ts text-key list.
+// Verify it stays fixed.
 const fontWeightAfterLight = lightHeading.fontWeight;
-knownGap(
-  'GAP-1: heading.fontWeight not resolved by resolveNodeForCanvas (still a $ref)',
-  `fontWeight after resolve = ${String(fontWeightAfterLight)}; ` +
-    'fix: add "fontWeight" to key list in resolve.ts:281',
+assert(
+  'GAP-1 fixed: heading.fontWeight resolves to number (was $ref before 52f9549b)',
+  typeof fontWeightAfterLight === 'number' && fontWeightAfterLight === 600,
+  `got: ${String(fontWeightAfterLight)} (expected 600 for h2)`,
 );
 
 // The heading still has $type-h2-weight unresolved → refs remain
@@ -450,19 +451,19 @@ const fallbackLightSize = fallbackLightHeading.fontSize;
 console.log(`\nUn-seeded vars count: ${Object.keys(unseededVars).length}`);
 console.log(`Fallback Light heading fill[0].color: ${String(fallbackLightFill)}`);
 console.log(`Fallback Light heading.fontSize: ${String(fallbackLightSize)}`);
-console.log(`(Expected: early exit → $refs remain unresolved due to GAP-2)`);
+console.log(`(Post-52f9549b: empty-vars doc reaches DEFAULT_PALETTE_FALLBACK)`);
 
-// Verify the early-exit behavior: empty vars → node returned unchanged
+// GAP-2 fixed (commit 52f9549b): empty vars no longer early-exits;
+// DEFAULT_PALETTE_FALLBACK fires per spec §5.3 equivalence contract.
 assert(
-  'Un-seeded doc with empty vars returns node unchanged (early-exit confirmed)',
-  fallbackLightFill === '$color-text-primary' && fallbackLightSize === '$type-h2-size',
-  `fill=${String(fallbackLightFill)}, fontSize=${String(fallbackLightSize)}`,
+  'GAP-2 fixed: empty-vars doc resolves color ref via DEFAULT_PALETTE_FALLBACK',
+  fallbackLightFill === '#0F172A',
+  `fill=${String(fallbackLightFill)} (expected #0F172A for $color-text-primary light)`,
 );
-
-knownGap(
-  'GAP-2: DEFAULT_PALETTE_FALLBACK unreachable when doc.variables is {} (resolveNodeForCanvas line 217 early exit)',
-  'Fix: change guard to allow empty-vars path when DEFAULT_PALETTE_FALLBACK has the key, ' +
-    'OR pre-populate createEmptyDocument() vars with palette defaults',
+assert(
+  'GAP-2 fixed: empty-vars doc resolves typography ref via DEFAULT_PALETTE_FALLBACK',
+  typeof fallbackLightSize === 'number' && fallbackLightSize === 20,
+  `fontSize=${String(fallbackLightSize)} (expected 20 for h2)`,
 );
 
 // Demonstrate that fallback DOES work when vars has at least one non-palette entry
