@@ -117,6 +117,16 @@ import {
   buildDividerV1,
   buildBodyTextV1,
   buildIconLabelV1,
+  buildAlertV1,
+  buildBottomNavV1,
+  buildBreadcrumbV1,
+  buildActivityRingV1,
+  buildCarouselDotsV1,
+  buildActionMenuV1,
+  buildAttachmentRowV1,
+  buildCalendarGridV1,
+  buildAvatarGroupV1,
+  buildCalloutV1,
 } from '@zseven-w/pen-core';
 
 export interface BuilderCase {
@@ -776,5 +786,61 @@ export const CASES: BuilderCase[] = [
     toolName: 'add_icon_label_v1',
     args: { icon: 'star', label: 'Favorites', theme: 'light' },
     build: (a) => buildIconLabelV1(a as unknown as Parameters<typeof buildIconLabelV1>[0]),
+  },
+  {
+    toolName: 'add_alert_v1',
+    args: { message: 'This is an alert', theme: 'light' },
+    build: (a) => buildAlertV1(a as unknown as Parameters<typeof buildAlertV1>[0]),
+  },
+  {
+    toolName: 'add_bottom_nav_v1',
+    args: {
+      items: [
+        { title: 'Home', icon: 'home', active: true },
+        { title: 'Search', icon: 'search' },
+      ],
+      theme: 'light',
+    },
+    build: (a) => buildBottomNavV1(a as unknown as Parameters<typeof buildBottomNavV1>[0]),
+  },
+  {
+    toolName: 'add_breadcrumb_v1',
+    args: { items: [{ label: 'Home' }, { label: 'Settings' }], theme: 'light' },
+    build: (a) => buildBreadcrumbV1(a as unknown as Parameters<typeof buildBreadcrumbV1>[0]),
+  },
+  {
+    toolName: 'add_activity_ring_v1',
+    args: { center_text: '72%', theme: 'light' },
+    build: (a) => buildActivityRingV1(a as unknown as Parameters<typeof buildActivityRingV1>[0]),
+  },
+  {
+    toolName: 'add_carousel_dots_v1',
+    args: { total: 5, current: 2, theme: 'light' },
+    build: (a) => buildCarouselDotsV1(a as unknown as Parameters<typeof buildCarouselDotsV1>[0]),
+  },
+  {
+    toolName: 'add_action_menu_v1',
+    args: { items: [{ label: 'Edit' }, { label: 'Delete', destructive: true }], theme: 'light' },
+    build: (a) => buildActionMenuV1(a as unknown as Parameters<typeof buildActionMenuV1>[0]),
+  },
+  {
+    toolName: 'add_attachment_row_v1',
+    args: { filename: 'document.pdf', size: '1.2 MB', theme: 'light' },
+    build: (a) => buildAttachmentRowV1(a as unknown as Parameters<typeof buildAttachmentRowV1>[0]),
+  },
+  {
+    toolName: 'add_calendar_grid_v1',
+    args: { days_in_month: 30, today: 15, theme: 'light' },
+    build: (a) => buildCalendarGridV1(a as unknown as Parameters<typeof buildCalendarGridV1>[0]),
+  },
+  {
+    toolName: 'add_avatar_group_v1',
+    args: { items: [{ initial: 'A' }, { initial: 'B' }], theme: 'light' },
+    build: (a) => buildAvatarGroupV1(a as unknown as Parameters<typeof buildAvatarGroupV1>[0]),
+  },
+  {
+    toolName: 'add_callout_v1',
+    args: { body: 'This is a callout note.', tone: 'info', theme: 'light' },
+    build: (a) => buildCalloutV1(a as unknown as Parameters<typeof buildCalloutV1>[0]),
   },
 ];

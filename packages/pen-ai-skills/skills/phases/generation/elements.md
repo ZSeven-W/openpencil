@@ -62,9 +62,11 @@ Containers and single elements:
 
 5. Section header (big title + optional "See all" action) → `add_section_header_v0`
 6. Bottom tab bar (inline flow, 3-5 nav items) → `add_bottom_nav_v0`
+    6b. Theme-aware variant (accepts `theme` param for API consistency; output identical across themes) → `add_bottom_nav_v1`
 7. Mobile top bar (leading icon + centered title + trailing icon) → `add_top_nav_bar_v0`
 8. Icon-only button (44×44, hit-target safe) → `add_icon_button_v0`
 9. Apple-style progress ring with centered text → `add_activity_ring_v0`
+    9b. Theme-aware variant (accepts `theme` param for API consistency; output identical across themes) → `add_activity_ring_v1`
 
 Atoms (1-2 node building blocks):
 
@@ -108,6 +110,7 @@ State / feedback:
 
 25. Empty state (icon + title + optional subtitle + optional CTA button, centered) → `add_empty_state_v0`
 26. Inline banner / callout (icon + message + optional close x, fill_container) → `add_alert_v0`
+    26b. Theme-aware variant (accepts `theme` param for API consistency; output identical across themes) → `add_alert_v1`
 27. Floating pill notification (dark fit_content pill) → `add_toast_v0`
 28. Linear progress bar (fixed bar_width + value 0-100) → `add_progress_bar_v0`
 
@@ -115,12 +118,14 @@ Floating / nav / wizard:
 
 29. Floating action button (circular 56×56, icon centered) → `add_fab_v0`
 30. Breadcrumb trail with chevron separators (last crumb auto-active) → `add_breadcrumb_v0`
+    30b. Theme-aware variant (accepts `theme` param for API consistency; output identical across themes) → `add_breadcrumb_v1`
 31. Horizontal numbered stepper (circles + fill_container connectors) → `add_stepper_v0`
 
 Ratings & pagination:
 
 32. N-of-M star rating (filled + empty stars using lucide `star`) → `add_rating_stars_v0`
 33. Carousel / slide dots (active becomes elongated pill, inactive circles) → `add_carousel_dots_v0`
+    33b. Theme-aware variant (active=text-primary, inactive=border in dark/system modes) → `add_carousel_dots_v1`
 
 Inline text primitives:
 
@@ -181,6 +186,7 @@ Activity / history:
 Calendars:
 
 42. Month calendar grid (weekday header + 7-col day rows, today/selected tint) → `add_calendar_grid_v0`
+    42b. Theme-aware variant (header text, day numbers, selected/today fills respond to theme) → `add_calendar_grid_v1`
 
 Loading / placeholder:
 
@@ -205,6 +211,7 @@ Chart empty state:
 Menus / floating panels:
 
 56. Action / context menu panel (dropdown list of icon+label rows, destructive variant supported) → `add_action_menu_v0`
+    56b. Theme-aware variant (surface, border, icon, label colors respond to theme) → `add_action_menu_v1`
 
 Dates:
 
@@ -221,6 +228,7 @@ Auth / verification:
 Attachments:
 
 60. File attachment row (type-icon + filename + optional size + remove ×) → `add_attachment_row_v0`
+    60b. Theme-aware variant (surface, text hierarchy, icon colors respond to theme) → `add_attachment_row_v1`
 
 Messaging:
 
@@ -257,6 +265,7 @@ Desktop / dashboard rails:
 Presence / collaboration:
 
 70. Stacked avatar group (team / online users / "+N more" tile, white-ringed circles in a tight horizontal row) → `add_avatar_group_v0`
+    70b. Theme-aware variant (ring, overflow bg/text respond to theme; brand avatar palette stays hardcoded) → `add_avatar_group_v1`
 
 Tabular data:
 
@@ -283,6 +292,7 @@ Forms (open state) & toolbars:
 Doc / inline feedback:
 
 78. Inline doc callout (tinted block with title + body, tone enum) → `add_callout_v0`
+    78b. Theme-aware variant (tone-keyed bg/fg → semantic alert palette in dark/system modes) → `add_callout_v1`
 79. Inline status + action ("Comment deleted • Undo") → `add_inline_action_v0`
 
 Sharing / chart annotations:
