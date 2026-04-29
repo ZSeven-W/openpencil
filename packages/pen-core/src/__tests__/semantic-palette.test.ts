@@ -20,9 +20,9 @@ import {
  */
 
 describe('getSemanticPalette', () => {
-  it('returns 14 original + 8 alert + 6 chart = 28 color variables', () => {
+  it('returns 14 original + 8 alert + 4 extended + 6 chart = 32 color variables', () => {
     const p = getSemanticPalette();
-    expect(Object.keys(p.variables).length).toBe(28);
+    expect(Object.keys(p.variables).length).toBe(32);
   });
 
   it('defines the Mode theme axis with Light + Dark', () => {
@@ -156,7 +156,7 @@ describe('applySemanticPalette', () => {
   it('seeds an empty document with palette + theme axis', () => {
     const doc: PenDocument = createEmptyDocument();
     const out = applySemanticPalette(doc);
-    expect(Object.keys(out.variables ?? {}).length).toBe(28);
+    expect(Object.keys(out.variables ?? {}).length).toBe(32);
     expect(out.themes?.Mode).toEqual(['Light', 'Dark']);
   });
 
@@ -179,7 +179,7 @@ describe('applySemanticPalette', () => {
     expect(out.variables!['color-accent'].value).toBe('#FF0000');
     // All other palette vars still added
     expect(out.variables!['color-surface']).toBeDefined();
-    expect(Object.keys(out.variables!).length).toBe(28);
+    expect(Object.keys(out.variables!).length).toBe(32);
   });
 
   it('user-defined theme axis WINS (does not overwrite existing Mode)', () => {
@@ -206,7 +206,7 @@ describe('applySemanticPalette', () => {
   it('applies cleanly to a doc without variables or themes', () => {
     const doc: PenDocument = { version: '1.0.0', children: [] };
     const out = applySemanticPalette(doc);
-    expect(Object.keys(out.variables!).length).toBe(28);
+    expect(Object.keys(out.variables!).length).toBe(32);
     expect(out.themes!.Mode).toEqual(['Light', 'Dark']);
   });
 });
@@ -399,19 +399,19 @@ describe('chart color tokens (6 single-value)', () => {
   });
 });
 
-describe('palette count after 1.1.5 additions', () => {
-  it('getSemanticPalette() now has 28 variables (14 original + 8 alert + 6 chart)', () => {
+describe('palette count after P1.1.5 + P1.1.6 color additions', () => {
+  it('getSemanticPalette() now has 32 color variables', () => {
     const p = getSemanticPalette();
-    expect(Object.keys(p.variables).length).toBe(28);
+    expect(Object.keys(p.variables).length).toBe(32);
   });
 
-  it('SEMANTIC_PALETTE_NAMES has 28 entries', () => {
-    expect(SEMANTIC_PALETTE_NAMES.length).toBe(28);
+  it('SEMANTIC_PALETTE_NAMES has 32 entries', () => {
+    expect(SEMANTIC_PALETTE_NAMES.length).toBe(32);
   });
 
-  it('applySemanticPalette seeds 28 variables on an empty document', () => {
+  it('applySemanticPalette seeds 32 variables on an empty document', () => {
     const doc: PenDocument = createEmptyDocument();
     const out = applySemanticPalette(doc);
-    expect(Object.keys(out.variables ?? {}).length).toBe(28);
+    expect(Object.keys(out.variables ?? {}).length).toBe(32);
   });
 });
