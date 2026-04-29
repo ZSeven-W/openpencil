@@ -8,6 +8,7 @@
 import type { PenNode } from '@zseven-w/pen-types';
 import type { PenFill, PenStroke, PenEffect } from '@zseven-w/pen-types';
 import type { VariableDefinition, ThemedValue } from '@zseven-w/pen-types';
+import { DEFAULT_PALETTE_FALLBACK } from './default-palette-fallback.js';
 
 type Vars = Record<string, VariableDefinition>;
 type Theme = Record<string, string>;
@@ -62,7 +63,16 @@ export function resolveVariableRef(
   if (!ref.startsWith('$')) return undefined;
   const name = ref.slice(1);
   const def = variables[name];
-  if (!def) return undefined;
+  if (!def) {
+    // P1.6: fall back to DEFAULT_PALETTE_FALLBACK when vars doesn't have the token
+    const fallback = DEFAULT_PALETTE_FALLBACK[name];
+    if (fallback !== undefined) {
+      if (fallback.single !== undefined) return fallback.single;
+      const mode = activeTheme?.Mode ?? 'Light';
+      return mode === 'Dark' ? fallback.dark : fallback.light;
+    }
+    return undefined;
+  }
 
   const val = def.value;
   if (Array.isArray(val)) {
