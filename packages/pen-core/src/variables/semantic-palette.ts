@@ -225,7 +225,10 @@ const PALETTE: Record<string, PaletteEntry> = {
   'type-body-line-height': { single: 1.5, description: 'Body text — line height multiplier' },
   'type-caption-size': { single: 12, description: 'Caption / helper text — font size (px)' },
   'type-caption-weight': { single: 400, description: 'Caption / helper text — font weight' },
-  'type-caption-line-height': { single: 1.4, description: 'Caption / helper text — line height multiplier' },
+  'type-caption-line-height': {
+    single: 1.4,
+    description: 'Caption / helper text — line height multiplier',
+  },
 
   // ── Border radius (3 numeric) ─────────────────────────────────────────────
   'radius-sm': { single: 4, description: 'Border radius small — 4 px (chip, badge, input)' },

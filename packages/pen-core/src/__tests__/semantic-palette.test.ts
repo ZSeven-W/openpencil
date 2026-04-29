@@ -33,8 +33,8 @@ describe('getSemanticPalette', () => {
   it('every light/dark color variable is type="color"', () => {
     const p = getSemanticPalette();
     // All color variables (light/dark or single) must have type "color"
-    const colorVars = Object.entries(p.variables).filter(([, def]) =>
-      (def as VariableDefinition).type === 'color'
+    const colorVars = Object.entries(p.variables).filter(
+      ([, def]) => (def as VariableDefinition).type === 'color',
     );
     expect(colorVars.length).toBeGreaterThanOrEqual(28);
   });
@@ -97,7 +97,10 @@ describe('getSemanticPalette', () => {
         const arr = d.value as ThemedValue[];
         for (const v of arr) {
           expect(typeof v.value).toBe('string');
-          expect((v.value as string).match(hexRe), `${name} ${JSON.stringify(v.theme)}`).toBeTruthy();
+          expect(
+            (v.value as string).match(hexRe),
+            `${name} ${JSON.stringify(v.theme)}`,
+          ).toBeTruthy();
         }
       } else {
         // single-value color
@@ -337,8 +340,7 @@ describe('alert tokens (8 light/dark pairs)', () => {
 
   it('color-warning-text: light=#92400E dark=#FDE68A', () => {
     const p = getSemanticPalette();
-    const arr = (p.variables['color-warning-text'] as VariableDefinition)
-      .value as ThemedValue[];
+    const arr = (p.variables['color-warning-text'] as VariableDefinition).value as ThemedValue[];
     expect(arr[0].value).toBe('#92400E');
     expect(arr[1].value).toBe('#FDE68A');
   });
@@ -421,7 +423,9 @@ describe('palette count snapshot (color additions complete)', () => {
   it('applySemanticPalette seeds all palette variables on an empty document', () => {
     const doc: PenDocument = createEmptyDocument();
     const out = applySemanticPalette(doc);
-    expect(Object.keys(out.variables ?? {}).length).toBe(Object.keys(getSemanticPalette().variables).length);
+    expect(Object.keys(out.variables ?? {}).length).toBe(
+      Object.keys(getSemanticPalette().variables).length,
+    );
   });
 });
 

@@ -95,7 +95,9 @@ function main() {
   }
 
   if (coverRate < 0.95) {
-    console.error(`\n❌ HARD GATE FAILED: semantic cover rate ${(coverRate * 100).toFixed(1)}% < 95%`);
+    console.error(
+      `\n❌ HARD GATE FAILED: semantic cover rate ${(coverRate * 100).toFixed(1)}% < 95%`,
+    );
     console.error('Per spec §7.4, must pause and revisit D2 namespace boundary before P2.');
     process.exit(1);
   }
