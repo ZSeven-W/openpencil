@@ -200,6 +200,97 @@ describe('buildModalShellV1', () => {
     });
   });
 
+  describe('theme=system — full token coverage (P2.2 retrofit)', () => {
+    it("title fontSize is '$type-h2-size' ref in system mode", () => {
+      const t = buildModalShellV1({ title: 'T', theme: 'system' }) as unknown as Frame & {
+        children: Array<{ children: Array<{ fontSize: unknown }> }>;
+      };
+      const card = findByRole(t as unknown as Frame, 'modal-shell-card') as unknown as Frame & {
+        children: Array<{ fontSize: unknown }>;
+      };
+      const title = card.children![0] as unknown as { fontSize: unknown };
+      expect((title as { fontSize: unknown }).fontSize).toBe('$type-h2-size');
+    });
+
+    it("subtitle fontSize is '$type-body-size' ref in system mode", () => {
+      const t = buildModalShellV1({
+        title: 'T',
+        subtitle: 'S',
+        theme: 'system',
+      }) as unknown as Frame;
+      const sub = findByRole(t, 'modal-subtitle') as unknown as { fontSize: unknown };
+      expect(sub.fontSize).toBe('$type-body-size');
+    });
+
+    it("subtitle lineHeight is '$type-body-line-height' ref in system mode", () => {
+      const t = buildModalShellV1({
+        title: 'T',
+        subtitle: 'S',
+        theme: 'system',
+      }) as unknown as Frame;
+      const sub = findByRole(t, 'modal-subtitle') as unknown as { lineHeight: unknown };
+      expect(sub.lineHeight).toBe('$type-body-line-height');
+    });
+
+    it("card gap is '$spacing-3' ref in system mode", () => {
+      const t = buildModalShellV1({ title: 'T', theme: 'system' }) as unknown as Frame;
+      const card = findByRole(t, 'modal-shell-card') as unknown as { gap: unknown };
+      expect(card.gap).toBe('$spacing-3');
+    });
+
+    it("card default padding is '$spacing-5' ref in system mode (no override)", () => {
+      const t = buildModalShellV1({ title: 'T', theme: 'system' }) as unknown as Frame;
+      const card = findByRole(t, 'modal-shell-card') as unknown as { padding: unknown };
+      expect(card.padding).toBe('$spacing-5');
+    });
+
+    it('card explicit card_padding override stays numeric even in system mode', () => {
+      const t = buildModalShellV1({
+        title: 'T',
+        theme: 'system',
+        card_padding: 32,
+      }) as unknown as Frame;
+      const card = findByRole(t, 'modal-shell-card') as unknown as { padding: unknown };
+      expect(card.padding).toBe(32);
+    });
+
+    it('cornerRadius stays 16 hardcoded in system mode (builder-private value)', () => {
+      const t = buildModalShellV1({ title: 'T', theme: 'system' }) as unknown as Frame;
+      const card = findByRole(t, 'modal-shell-card') as unknown as { cornerRadius: unknown };
+      expect(card.cornerRadius).toBe(16);
+    });
+  });
+
+  describe('v0 byte-parity (light mode) — typography/spacing must match v0 hardcoded values', () => {
+    it('title fontSize=20, fontWeight=600 in light mode (h2 values, v0 parity)', () => {
+      const t = buildModalShellV1({ title: 'T' }) as unknown as Frame;
+      const title = findByRole(t, 'modal-title') as unknown as {
+        fontSize: unknown;
+        fontWeight: unknown;
+      };
+      expect(title.fontSize).toBe(20);
+      expect(title.fontWeight).toBe(600);
+    });
+
+    it('subtitle fontSize=14, fontWeight=400, lineHeight=1.5 in light mode (body values, v0 parity)', () => {
+      const t = buildModalShellV1({ title: 'T', subtitle: 'S' }) as unknown as Frame;
+      const sub = findByRole(t, 'modal-subtitle') as unknown as {
+        fontSize: unknown;
+        fontWeight: unknown;
+        lineHeight: unknown;
+      };
+      expect(sub.fontSize).toBe(14);
+      expect(sub.fontWeight).toBe(400);
+      expect(sub.lineHeight).toBe(1.5);
+    });
+
+    it('card gap=12 in light mode (s3 value, v0 parity)', () => {
+      const t = buildModalShellV1({ title: 'T' }) as unknown as Frame;
+      const card = findByRole(t, 'modal-shell-card') as unknown as { gap: unknown };
+      expect(card.gap).toBe(12);
+    });
+  });
+
   describe('param handling consistent with v0', () => {
     it('card_width clamps to min 280', () => {
       const t = buildModalShellV1({ title: 'T', card_width: 100 }) as unknown as Frame & {

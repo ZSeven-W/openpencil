@@ -1,6 +1,7 @@
+import { resolveTheme, type V1Theme } from './resolve-theme.js';
 import type { ElementTree } from './helpers.js';
 
-export type ModalShellV1Theme = 'light' | 'dark' | 'system';
+export type ModalShellV1Theme = V1Theme;
 
 export interface ModalShellV1Params {
   /** Modal dialog title (rendered as heading inside the card). */
@@ -38,40 +39,14 @@ export interface ModalShellV1Params {
   theme?: ModalShellV1Theme;
 }
 
-interface ResolvedColors {
-  cardFill: string;
-  titleFill: string | null;
-  subtitleFill: string;
-}
-
 /**
- * Resolve theme to the concrete color strings the builder emits.
- * Returns either hex literals (light/dark) or `$color-*` refs
- * (system). `titleFill: null` means "don't emit a fill" —
- * match v0 behavior where title was unstyled (picks up the
- * default text color).
+ * In light mode: titleFill=null to match v0 behavior (title had no fill).
+ * In dark/system: titleFill is a concrete color or ref.
  */
-function resolveTheme(theme: ModalShellV1Theme): ResolvedColors {
-  if (theme === 'system') {
-    return {
-      cardFill: '$color-surface',
-      titleFill: '$color-text-primary',
-      subtitleFill: '$color-text-muted',
-    };
-  }
-  if (theme === 'dark') {
-    return {
-      cardFill: '#1E293B', // color-surface Dark
-      titleFill: '#F1F5F9', // color-text-primary Dark
-      subtitleFill: '#94A3B8', // color-text-muted Dark
-    };
-  }
-  // Default: light — byte-parity with v0
-  return {
-    cardFill: '#FFFFFF',
-    titleFill: null, // v0 emitted no fill on the title text
-    subtitleFill: '#64748B',
-  };
+function getTitleFill(theme: ModalShellV1Theme): string | null {
+  if (theme === 'light') return null; // v0 parity: title unstyled
+  const t = resolveTheme(theme);
+  return t.colors.textPrimary;
 }
 
 /**
@@ -89,21 +64,32 @@ function resolveTheme(theme: ModalShellV1Theme): ResolvedColors {
  */
 export function buildModalShellV1(params: ModalShellV1Params): ElementTree {
   const cardWidth = Math.max(280, Math.floor(params.card_width ?? 400));
-  const cardPadding = Math.max(12, Math.floor(params.card_padding ?? 24));
   const scrimOpacity = Math.max(0, Math.min(1, params.scrim_opacity ?? 0.5));
   const theme = params.theme ?? 'light';
-  const colors = resolveTheme(theme);
+  const t = resolveTheme(theme);
+  const titleFill = getTitleFill(theme);
+
+  // Padding: user-supplied override takes priority (as a concrete number);
+  // when absent and in 'system' mode, emit the $spacing-5 ref (24px).
+  // In light/dark mode always use the concrete number (v0 byte-parity for light).
+  const rawPadding = params.card_padding;
+  const cardPadding: number | string =
+    rawPadding !== undefined
+      ? Math.max(12, Math.floor(rawPadding))
+      : theme === 'system'
+        ? (t.spacing.s5 as string)
+        : 24;
 
   const titleNode: ElementTree = {
     type: 'text',
     name: 'Title',
     role: 'modal-title',
     content: params.title,
-    fontSize: 20,
-    fontWeight: 600,
+    fontSize: t.typography.h2Size,
+    fontWeight: t.typography.h2Weight,
   };
-  if (colors.titleFill !== null) {
-    titleNode.fill = [{ type: 'solid', color: colors.titleFill }];
+  if (titleFill !== null) {
+    titleNode.fill = [{ type: 'solid', color: titleFill }];
   }
 
   const cardChildren: ElementTree[] = [titleNode];
@@ -113,10 +99,10 @@ export function buildModalShellV1(params: ModalShellV1Params): ElementTree {
       name: 'Subtitle',
       role: 'modal-subtitle',
       content: params.subtitle,
-      fontSize: 14,
-      fontWeight: 400,
-      lineHeight: 1.5,
-      fill: [{ type: 'solid', color: colors.subtitleFill }],
+      fontSize: t.typography.bodySize,
+      fontWeight: t.typography.bodyWeight,
+      lineHeight: t.typography.bodyLineHeight,
+      fill: [{ type: 'solid', color: t.colors.textMuted }],
     });
   }
 
@@ -140,11 +126,14 @@ export function buildModalShellV1(params: ModalShellV1Params): ElementTree {
         role: 'modal-shell-card',
         width: cardWidth,
         height: 'fit_content',
+        // cornerRadius=16 is a builder-private value not in the token system
+        // (closest token $radius-lg=12 has different semantics). Kept hardcoded
+        // across all themes per spec §3.4 / v0 byte-parity contract.
         cornerRadius: 16,
         padding: cardPadding,
         layout: 'vertical',
-        gap: 12,
-        fill: [{ type: 'solid', color: colors.cardFill }],
+        gap: t.spacing.s3,
+        fill: [{ type: 'solid', color: t.colors.surface }],
         effects: [
           {
             type: 'shadow',
