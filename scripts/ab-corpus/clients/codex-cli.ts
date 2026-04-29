@@ -61,6 +61,13 @@ export async function callCodex(args: CallCodexArgs): Promise<ChatCallResult> {
   const prompt = `SYSTEM CONTEXT (treat as authoritative system prompt):\n<<<\n${args.system}\n>>>\n\nUSER REQUEST:\n${args.user}`;
   try {
     const content = await new Promise<string>((resolve, reject) => {
+      // Pin reasoning effort to `medium` so ab-corpus stays comparable
+      // across model bumps. Codex CLI's per-model default isn't fixed:
+      // gpt-5.4 historically ran ~medium; gpt-5.5 defaults to `xhigh`,
+      // which sent ab-v5 wall time from ~15 min (ab-v4) to a projected
+      // ~13 h. Override via `AB_CORPUS_CODEX_REASONING` if you ever
+      // need to measure full-effort ceiling.
+      const reasoningEffort = process.env.AB_CORPUS_CODEX_REASONING || 'medium';
       const proc = spawn(
         'codex',
         [
@@ -69,6 +76,8 @@ export async function callCodex(args: CallCodexArgs): Promise<ChatCallResult> {
           '--ephemeral',
           '--sandbox',
           'read-only',
+          '-c',
+          `model_reasoning_effort=${reasoningEffort}`,
           '-m',
           args.model,
           '--output-last-message',
