@@ -35,5 +35,10 @@ export async function callMinimax(args: CallMinimaxArgs): Promise<ChatCallResult
     temperature: args.temperature,
     maxTokens: args.maxTokens,
     label: 'minimax',
+    // ab-v3 saw 4 minimax timeouts on 104 runs — all wall-clock aborts,
+    // none were content-quality issues. One retry picks up the
+    // recoverable ones without burning budget on the truncation /
+    // <think> chatter that characterizes minimax model-side failures.
+    retries: 1,
   });
 }

@@ -70,16 +70,20 @@ export interface CallOpenAICompatArgs {
    */
   timeoutMs?: number;
   /**
-   * Retry attempts on transient errors. Default 0 (no retry). Set to 1
+   * Retry attempts on transient errors. Default 0 (no retry). Set to 2
    * for providers known to flake on empty content / timeout (Ark hosting
-   * GLM-5.1+Kimi-K2.6, DeepSeek api.deepseek.com). MiniMax / Bailian /
-   * Codex don't enable this — their ab-v2 failures were model-quality
-   * (truncation, malformed DSL), where retry burns budget for nothing.
+   * GLM-5.1+Kimi-K2.6, DeepSeek api.deepseek.com). 1 is enough for
+   * MiniMax (saw 4 timeouts in 104 ab-v3 runs); Codex / Bailian don't
+   * enable this — their ab-v2 failures were model-quality (truncation,
+   * malformed DSL), where retry burns budget for nothing.
    *
    * Retried: empty `choices[0].message.content`, abort/timeout, HTTP 5xx,
    * HTTP 429. NOT retried: HTTP 4xx other than 429 (auth / bad request).
    *
-   * Backoff: linear, 250ms × (attempt+1).
+   * Backoff: exponential, 250ms × 4^attempt — 250ms before retry 1,
+   * 1000ms before retry 2, 4000ms before retry 3. Linear backoff was
+   * too tight when retries=2 (500ms then 750ms is < a typical Ark
+   * recovery window); exponential gives the provider room to settle.
    */
   retries?: number;
 }
@@ -105,13 +109,14 @@ export async function callOpenAICompat(args: CallOpenAICompatArgs): Promise<Chat
       if (attempt === retries || !isTransientError(lastErr)) {
         throw lastErr;
       }
+      const delayMs = 250 * 4 ** attempt;
       console.error(
-        `[${label}] transient error on attempt ${attempt + 1}/${retries + 1}, retrying: ${truncate(
+        `[${label}] transient error on attempt ${attempt + 1}/${retries + 1}, retrying in ${delayMs}ms: ${truncate(
           lastErr.message,
           200,
         )}`,
       );
-      await sleep(250 * (attempt + 1));
+      await sleep(delayMs);
     }
   }
   throw lastErr ?? new Error(`${label}: callOpenAICompat exited loop without result`);
