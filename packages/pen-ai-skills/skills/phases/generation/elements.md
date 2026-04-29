@@ -55,7 +55,9 @@ Rows (horizontal, in-card or scrolling):
 1. Row of items with title + subtitle + optional icon → `add_card_row_v0` (scroll)
    1b. Theme-aware variant (supports `theme: 'light' | 'dark' | 'system'`) → `add_card_row_v1`
 2. Row of items with small label + big numeric value → `add_metric_row_v0` (scroll)
+   2b. Theme-aware variant (no hardcoded colors; all modes identical — accepts theme for API consistency) → `add_metric_row_v1`
 3. Row of filter chips / category tabs (label + optional icon, active state) → `add_nav_chip_row_v0` (scroll)
+   3b. Theme-aware variant (no hardcoded colors; all modes identical — accepts theme for API consistency) → `add_nav_chip_row_v1`
 4. Non-scrolling 2-5 stats inline (auto-share width) → `add_stat_grid_v0`
 
 Containers and single elements:
@@ -140,6 +142,7 @@ Inline text primitives:
 35. Keyboard shortcut glyph ("⌘ K" / "Ctrl + Shift + P") → `add_kbd_v0`
     35b. Theme-aware variant (key bg → surface2, stroke → border in dark/system) → `add_kbd_v1`
 36. Pricing typography ("$29/month": currency 20/500 + amount 40/700 + period 14/500) → `add_price_v0`
+    36b. Theme-aware variant (no hardcoded colors; all modes identical — accepts theme for API consistency) → `add_price_v1`
 
 Content blocks:
 
@@ -189,10 +192,12 @@ Feedback / loading:
 Analytics / KPIs:
 
 50. KPI cell with trend arrow + change ("$12k ↑ 8%") → `add_metric_comparison_v0`
+    50b. Theme-aware variant (label → textMuted; trend up → success, down → destructive, flat → textMuted) → `add_metric_comparison_v1`
 
 Notifications:
 
 51. Notification list row (icon + title/timestamp header + optional body preview + optional unread dot) → `add_notification_row_v0`
+    51b. Theme-aware variant (timestamp → textSubtle, body → textBody, unread dot → destructive) → `add_notification_row_v1`
 
 Activity / history:
 
@@ -210,6 +215,7 @@ Loading / placeholder:
 Pagination:
 
 52. Pagination bar (numbered pills + prev/next arrows, Google-style ellipses for big ranges) → `add_pagination_v0`
+    52b. Theme-aware variant (arrow/inactive → textBody, ellipsis → textMuted; active pill bg invariant, active text stays white) → `add_pagination_v1`
 
 Collapsible content:
 
@@ -242,6 +248,7 @@ Upload / file intake:
 Auth / verification:
 
 59. OTP / PIN code input (row of N square slots, 4..8 digits; blank / partial / full states) → `add_otp_input_v0`
+    59b. Theme-aware variant (slot bg → surface, borders → border/borderStrong, digit → textPrimary; focused border = accent_color invariant) → `add_otp_input_v1`
 
 Attachments:
 
@@ -264,12 +271,14 @@ Auth / login:
 Pricing / monetization:
 
 64. Pricing plan tier card (SaaS pricing table column: tier name + big price + feature list + CTA; emphasize the recommended tier with `emphasis="featured"`) → `add_pricing_card_v0`
+    64b. Theme-aware variant (card bg → surface, border → border; featured accent/CTA stay brand-invariant; text → textPrimary/textMuted/textBody) → `add_pricing_card_v1`
 
 Input / forms:
 
 65. Range slider (single-thumb horizontal slider showing current value: volume, opacity, brightness, price range) → `add_range_slider_v0`
 
 66. International phone number input with country-code prefix selector → `add_phone_input_v0`
+    66b. Theme-aware variant (field bg → surface, stroke/divider → border, label → textBody, code → textPrimary, chevron → textMuted) → `add_phone_input_v1`
 
 67. Input field with inline action button (newsletter signup, apply discount code, send chat message) → `add_input_with_action_v0`
     67b. Theme-aware variant (input bg → surface, stroke → border, text → textPrimary; button bg → accent (brand-invariant), button text → white in all modes) → `add_input_with_action_v1`
@@ -301,6 +310,7 @@ People / profile:
 
 73. Compact user card (avatar + name + optional role line, horizontal row) → `add_user_card_v0`
 74. Large profile header (centered avatar + name + optional handle/bio) → `add_profile_header_v0`
+    74b. Theme-aware variant (name → textPrimary, handle → textMuted, bio → textBody; avatar bg #3B82F6 + initial white stay brand-invariant) → `add_profile_header_v1`
 
 Side panels & docking:
 
@@ -456,6 +466,16 @@ PREFER an element tool when the spec says any of:
 - "user card", "contact card", "people picker row", "user mini card", "用户卡片", "联系人卡片" → `add_user_card_v0` (compact fit_content tile, no trailing slot — used in lobbies / chip-style lists).
 - "members list", "team page row", "people row", "sharing dialog row", "user list with role", "team member row", "团队成员", "成员列表行" → `add_member_row_v0` (avatar + name + optional subtitle + trailing role badge / kebab menu / status dot).
 - "profile header", "profile hero", "about me block", "account header", "user profile page", "个人主页头部" → `add_profile_header_v0` (large centered avatar + display name + optional handle / bio).
+- "dark profile header", "theme-aware profile page", "暗色个人主页头部" → `add_profile_header_v1` (name → textPrimary, handle → textMuted, bio → textBody; avatar bg #3B82F6 + initial white stay brand-invariant).
+- "dark pagination", "dark-mode page nav", "theme-aware pagination", "暗色分页" → `add_pagination_v1` (arrow/inactive → textBody, ellipsis → textMuted; active pill bg = accent_color invariant, active text stays white).
+- "dark OTP input", "dark 2FA code", "dark PIN input", "theme-aware OTP", "暗色验证码输入" → `add_otp_input_v1` (slot bg → surface, borders → border/borderStrong, digit → textPrimary; focused border = accent_color invariant).
+- "dark phone input", "dark phone field", "theme-aware phone number input", "暗色电话号码输入" → `add_phone_input_v1` (field bg → surface, stroke/divider → border, label → textBody, code → textPrimary, chevron → textMuted).
+- "dark pricing card", "dark SaaS tier", "theme-aware pricing card", "暗色价格卡", "暗色套餐卡" → `add_pricing_card_v1` (card bg → surface, border → border; featured accent border/CTA bg stay brand-invariant; text hierarchy → textPrimary/textMuted/textBody).
+- "dark notification row", "theme-aware notification", "暗色通知行" → `add_notification_row_v1` (timestamp → textSubtle, body → textBody, unread dot → destructive).
+- "dark KPI cell", "dark metric comparison", "theme-aware trend metric", "暗色 KPI 趋势" → `add_metric_comparison_v1` (label → textMuted; up → success, down → destructive, flat → textMuted).
+- "dark metric row", "theme-aware metric tiles", "暗色指标行" → `add_metric_row_v1` (no hardcoded colors in v0; all modes identical — accepts theme for API consistency).
+- "dark nav chips", "theme-aware nav chip row", "暗色导航芯片行" → `add_nav_chip_row_v1` (no hardcoded colors in v0; all modes identical — accepts theme for API consistency).
+- "dark price", "theme-aware price display", "暗色定价" → `add_price_v1` (no hardcoded colors in v0; all modes identical — accepts theme for API consistency).
 - "drawer", "side panel", "slide-in panel", "edit drawer", "detail panel", "抽屉", "侧滑面板" → `add_drawer_shell_v0` (full-height drawer with title + close ×; body composed via subsequent calls under its id).
 - "combobox", "autocomplete", "open dropdown", "command palette", "open select", "search with results", "自动补全", "下拉补全" → `add_combobox_v0` (OPEN-state input + dropdown with N suggestion rows; one row optionally `highlighted: true`).
 - "toolbar", "editor toolbar", "formatting toolbar", "kanban actions", "icon button row", "工具栏" → `add_toolbar_v0` (horizontal 36×36 icon buttons + optional vertical dividers).
