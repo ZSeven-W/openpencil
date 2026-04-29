@@ -471,4 +471,328 @@ export const ELEMENT_TOOL_DEFINITIONS_EXT_5 = [
       required: ['body'],
     },
   },
+  {
+    name: 'add_chart_bars_v1',
+    description:
+      'Theme-aware bar-chart skeleton (v1). theme="light" (default): byte-parity with ' +
+      'add_chart_bars_v0. theme="dark" / "system": bar color maps to chart-1 token. ' +
+      'Bottom-aligned rectangles proportional to max value. No axes / labels. schemaVersion 1.0',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        schemaVersion: schemaVersionProp,
+        filePath: filePathProp,
+        values: {
+          type: 'array',
+          description: 'Numeric values (≥1). Proportional to tallest bar.',
+          items: { type: 'number' },
+        },
+        bar_width: { type: 'number', description: 'Bar width px. Default 24, min 4.' },
+        gap: { type: 'number', description: 'Gap between bars px. Default 12.' },
+        chart_height: { type: 'number', description: 'Chart height px. Default 160, min 40.' },
+        theme: {
+          type: 'string',
+          enum: ['light', 'dark', 'system'],
+          description: 'Theme variant. Default "light".',
+        },
+        parent_id: parentIdProp,
+        pageId: pageIdProp,
+      },
+      required: ['values'],
+    },
+  },
+  {
+    name: 'add_chart_line_v1',
+    description:
+      'Theme-aware line-chart skeleton (v1). theme="light" (default): byte-parity with ' +
+      'add_chart_line_v0. theme="dark" / "system": line/dot color maps to chart-1 token. ' +
+      'Polyline through N data points with optional dots. No axes / labels. schemaVersion 1.0',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        schemaVersion: schemaVersionProp,
+        filePath: filePathProp,
+        values: {
+          type: 'array',
+          description: 'Numeric values (≥1). Y-axis inverted (0 = bottom).',
+          items: { type: 'number' },
+        },
+        point_spacing: { type: 'number', description: 'Width per data point slot px. Default 32.' },
+        chart_height: { type: 'number', description: 'Chart height px. Default 160, min 40.' },
+        dots: { type: 'boolean', description: 'Emit dot ellipses at each point. Default true.' },
+        stroke_color: {
+          type: 'string',
+          description: 'Line color (light mode only). Default #2563EB.',
+        },
+        theme: {
+          type: 'string',
+          enum: ['light', 'dark', 'system'],
+          description: 'Theme variant. Default "light".',
+        },
+        parent_id: parentIdProp,
+        pageId: pageIdProp,
+      },
+      required: ['values'],
+    },
+  },
+  {
+    name: 'add_chart_pie_v1',
+    description:
+      'Theme-aware pie/donut-chart skeleton (v1). theme="light" (default): byte-parity with ' +
+      'add_chart_pie_v0 (v0 default palette). theme="dark" / "system": default palette uses ' +
+      'chart-1..6 tokens. Caller-supplied `colors` always pass through unchanged. schemaVersion 1.0',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        schemaVersion: schemaVersionProp,
+        filePath: filePathProp,
+        values: {
+          type: 'array',
+          description: 'Slice values (≥1, sum > 0). Normalized internally.',
+          items: { type: 'number' },
+        },
+        diameter: { type: 'number', description: 'Pie diameter px. Default 160, min 40.' },
+        colors: {
+          type: 'array',
+          description: 'Optional per-slice hex colors. Falls back to default chart palette.',
+          items: { type: 'string' },
+        },
+        inner_radius_ratio: {
+          type: 'number',
+          description: 'Donut hole size as fraction of outer radius (0..0.9). Default 0.',
+        },
+        theme: {
+          type: 'string',
+          enum: ['light', 'dark', 'system'],
+          description: 'Theme variant. Default "light".',
+        },
+        parent_id: parentIdProp,
+        pageId: pageIdProp,
+      },
+      required: ['values'],
+    },
+  },
+  {
+    name: 'add_chat_bubble_v1',
+    description:
+      'Theme-aware chat bubble (v1). theme="light" (default): byte-parity with add_chat_bubble_v0. ' +
+      'theme="dark" / "system": left-side → surface2 bg + textPrimary text; ' +
+      'right-side (self) → accent bg + white text. schemaVersion 1.0',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        schemaVersion: schemaVersionProp,
+        filePath: filePathProp,
+        message: { type: 'string', description: 'Message body text.' },
+        side: {
+          type: 'string',
+          enum: ['left', 'right'],
+          description: '"left" = from-others (default), "right" = from-self (accent bg).',
+        },
+        author: {
+          type: 'string',
+          description: 'Sender display name. Only rendered on left-side bubbles.',
+        },
+        timestamp: { type: 'string', description: 'Relative time string (e.g. "2m").' },
+        max_width: {
+          type: 'number',
+          description: 'Max bubble width px. Default 280, clamped 160..480.',
+        },
+        accent_color: {
+          type: 'string',
+          description: 'Right-side accent color (light mode only). Default #2563EB.',
+        },
+        theme: {
+          type: 'string',
+          enum: ['light', 'dark', 'system'],
+          description: 'Theme variant. Default "light".',
+        },
+        parent_id: parentIdProp,
+        pageId: pageIdProp,
+      },
+      required: ['message'],
+    },
+  },
+  {
+    name: 'add_checkbox_v1',
+    description:
+      'Theme-aware checkbox + label pair (v1). theme="light" (default): byte-parity with ' +
+      'add_checkbox_v0. theme="dark" / "system": accent fill for checked, border token for unchecked. ' +
+      '20×20 box with cornerRadius=4. schemaVersion 1.0',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        schemaVersion: schemaVersionProp,
+        filePath: filePathProp,
+        label: { type: 'string', description: 'Label text. Required.' },
+        checked: { type: 'boolean', description: 'Checked state. Default false.' },
+        theme: {
+          type: 'string',
+          enum: ['light', 'dark', 'system'],
+          description: 'Theme variant. Default "light".',
+        },
+        parent_id: parentIdProp,
+        pageId: pageIdProp,
+      },
+      required: ['label'],
+    },
+  },
+  {
+    name: 'add_chip_input_v1',
+    description:
+      'Theme-aware chip / tag input (v1). theme="light" (default): byte-parity with ' +
+      'add_chip_input_v0. theme="dark" / "system": chip bg → surface2, field bg → surface, ' +
+      'border → border token, placeholder → textSubtle. schemaVersion 1.0',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        schemaVersion: schemaVersionProp,
+        filePath: filePathProp,
+        label: { type: 'string', description: 'Field label shown above input. Required.' },
+        chips: {
+          type: 'array',
+          description: 'Current chip values. Each becomes a pill with × icon.',
+          items: { type: 'string' },
+        },
+        placeholder: {
+          type: 'string',
+          description: 'Placeholder text after last chip. Default "Add tag…".',
+        },
+        required: {
+          type: 'boolean',
+          description: 'When true, appends " *" to the label.',
+        },
+        theme: {
+          type: 'string',
+          enum: ['light', 'dark', 'system'],
+          description: 'Theme variant. Default "light".',
+        },
+        parent_id: parentIdProp,
+        pageId: pageIdProp,
+      },
+      required: ['label'],
+    },
+  },
+  {
+    name: 'add_code_block_v1',
+    description:
+      'Theme-aware preformatted code block (v1). theme="light" (default): byte-parity with ' +
+      'add_code_block_v0 (gray-100 bg). theme="dark" / "system": bg maps to surface2 token. ' +
+      'fill_container frame with monospace text. schemaVersion 1.0',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        schemaVersion: schemaVersionProp,
+        filePath: filePathProp,
+        code: { type: 'string', description: 'Code content (verbatim, newlines preserved).' },
+        language: { type: 'string', description: 'Language tag for frame name only.' },
+        theme: {
+          type: 'string',
+          enum: ['light', 'dark', 'system'],
+          description: 'Theme variant. Default "light".',
+        },
+        parent_id: parentIdProp,
+        pageId: pageIdProp,
+      },
+      required: ['code'],
+    },
+  },
+  {
+    name: 'add_color_swatch_v1',
+    description:
+      'Theme-aware design-system color swatch (v1). theme="light" (default): byte-parity with ' +
+      'add_color_swatch_v0. All theme modes produce identical trees — swatch color is caller-supplied ' +
+      'and not tokenized. Accepts hex or $variable ref. schemaVersion 1.0',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        schemaVersion: schemaVersionProp,
+        filePath: filePathProp,
+        color: {
+          type: 'string',
+          description: 'Swatch color hex (#2563EB) or $variable ref ($color-primary). Required.',
+        },
+        label: { type: 'string', description: 'Optional label shown below the swatch.' },
+        size: { type: 'number', description: 'Swatch square size px. Default 64, min 16.' },
+        theme: {
+          type: 'string',
+          enum: ['light', 'dark', 'system'],
+          description: 'Theme variant. Default "light". All modes produce identical output.',
+        },
+        parent_id: parentIdProp,
+        pageId: pageIdProp,
+      },
+      required: ['color'],
+    },
+  },
+  {
+    name: 'add_combobox_v1',
+    description:
+      'Theme-aware combobox / autocomplete (v1). theme="light" (default): byte-parity with ' +
+      'add_combobox_v0. theme="dark" / "system": input/dropdown bg → surface, option hover → surface2, ' +
+      'border → border token, focus ring → accent. Open-state input with suggestion list. schemaVersion 1.0',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        schemaVersion: schemaVersionProp,
+        filePath: filePathProp,
+        options: {
+          type: 'array',
+          description: 'Suggestion rows (1+). Each: { label, highlighted? }.',
+          items: {
+            type: 'object',
+            properties: {
+              label: { type: 'string' },
+              highlighted: {
+                type: 'boolean',
+                description: 'When true, renders with surface2 bg.',
+              },
+            },
+            required: ['label'],
+          },
+        },
+        placeholder: { type: 'string', description: 'Placeholder text. Default "Search...".' },
+        value: { type: 'string', description: 'Pre-filled query text.' },
+        label: { type: 'string', description: 'Optional label above the field.' },
+        theme: {
+          type: 'string',
+          enum: ['light', 'dark', 'system'],
+          description: 'Theme variant. Default "light".',
+        },
+        parent_id: parentIdProp,
+        pageId: pageIdProp,
+      },
+      required: ['options'],
+    },
+  },
+  {
+    name: 'add_comment_v1',
+    description:
+      'Theme-aware comment row (v1). theme="light" (default): byte-parity with add_comment_v0. ' +
+      'theme="dark" / "system": avatar bg → surface2, initial text → textBody, timestamp → textMuted. ' +
+      'Circular avatar + (author + timestamp) header + body text. schemaVersion 1.0',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        schemaVersion: schemaVersionProp,
+        filePath: filePathProp,
+        author: { type: 'string', description: 'Author display name. Required.' },
+        body: { type: 'string', description: 'Comment body text. Required.' },
+        timestamp: { type: 'string', description: 'Relative timestamp ("2 hours ago").' },
+        avatar_initial: {
+          type: 'string',
+          description: '1-2 char avatar initial. Absent → blank circle.',
+        },
+        avatar_size: { type: 'number', description: 'Avatar diameter px. Default 40, min 24.' },
+        theme: {
+          type: 'string',
+          enum: ['light', 'dark', 'system'],
+          description: 'Theme variant. Default "light".',
+        },
+        parent_id: parentIdProp,
+        pageId: pageIdProp,
+      },
+      required: ['author', 'body'],
+    },
+  },
 ];

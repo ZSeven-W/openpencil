@@ -109,6 +109,16 @@ const ELEMENT_TOOL_NAMES = [
   'add_calendar_grid_v1',
   'add_avatar_group_v1',
   'add_callout_v1',
+  'add_chart_bars_v1',
+  'add_chart_line_v1',
+  'add_chart_pie_v1',
+  'add_chat_bubble_v1',
+  'add_checkbox_v1',
+  'add_chip_input_v1',
+  'add_code_block_v1',
+  'add_color_swatch_v1',
+  'add_combobox_v1',
+  'add_comment_v1',
 ];
 
 describe('element tools — v0-MUST contract', () => {
