@@ -34,6 +34,16 @@ export async function callArk(args: CallArkArgs): Promise<ChatCallResult> {
       `${ARK_API_KEY_ENV} not set — export it (Volcengine 方舟 CP UUID key) before running with --live`,
     );
   }
+  // Kimi-K2.6 on Ark CP is markedly more brownout-prone than GLM-5.1
+  // — ab-v5 (2026-05-02) cut its T arm garbage rate to 17% from
+  // ab-v2's 42%, but it still contributed 9/14 of the T arm garbage
+  // and ARK's empty-content / 120s-timeout were the only failure
+  // modes. Bump the kimi branch to retries=3 (extra 4000ms backoff
+  // attempt) + timeoutMs=180000 (60s headroom) so slow-but-eventually-
+  // OK responses don't get clipped. GLM-5.1 keeps the existing
+  // retries=2 + 120s defaults — its garbage rate is already <2%,
+  // pushing those would just burn budget on healthy calls.
+  const isKimi = /^kimi/i.test(args.model);
   return callOpenAICompat({
     baseURL: ARK_BASE_URL,
     apiKey,
@@ -43,15 +53,7 @@ export async function callArk(args: CallArkArgs): Promise<ChatCallResult> {
     temperature: args.temperature,
     maxTokens: args.maxTokens,
     label: 'ark',
-    // ab-v2 (2026-04-28) saw kimi-k2.6 garbage rate hit 17.5% — every
-    // failure was Ark returning empty `choices[0].message.content` or
-    // exceeding the 120s wall clock, not a model-quality issue (the
-    // model itself routed to the right element tool 80% of the time
-    // when it did respond). retries=1 left 36 empty + 15 timeout + 4
-    // 429 still leaking through ab-v3 (520 calls); retries=2 with
-    // exponential backoff gives the provider a 1000ms recovery window
-    // before the third attempt, which on Ark's coding tier is usually
-    // enough to clear the upstream brownout.
-    retries: 2,
+    retries: isKimi ? 3 : 2,
+    timeoutMs: isKimi ? 180_000 : undefined,
   });
 }
