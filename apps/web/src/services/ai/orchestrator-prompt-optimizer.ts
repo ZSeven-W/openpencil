@@ -420,32 +420,42 @@ function inferTagsFromPrompt(prompt: string): string[] {
   const lower = prompt.toLowerCase();
 
   // tone
-  if (/dark|暗[色黑]?|cyber|terminal|neon/.test(lower)) tags.push('dark-mode');
+  if (/\b(dark|cyber|terminal|neon)\b|暗[色黑]?/.test(lower)) tags.push('dark-mode');
   else tags.push('light-mode');
 
-  // visual
-  if (/minimal|极简|clean|简洁/.test(lower)) tags.push('minimal');
-  if (/brutal|粗犷/.test(lower)) tags.push('brutalist');
-  if (/elegant|优雅|luxury|奢华/.test(lower)) tags.push('elegant');
-  if (/playful|活泼|fun|趣味/.test(lower)) tags.push('playful');
-  if (/modern|现代/.test(lower)) tags.push('modern');
+  // visual style
+  if (/\b(minimal|clean)\b|极简|简洁/.test(lower)) tags.push('minimal');
+  if (/\bbrutal\b|粗犷/.test(lower)) tags.push('brutalist');
+  if (/\b(elegant|luxury)\b|优雅|奢华/.test(lower)) tags.push('elegant');
+  if (/\b(playful|fun)\b|活泼|趣味/.test(lower)) tags.push('playful');
+  if (/\bmodern\b|现代/.test(lower)) tags.push('modern');
 
-  // industry
-  if (/food|餐|美食|delivery|外卖/.test(lower)) tags.push('warm-tones', 'friendly');
-  if (/finance|金融|fintech/.test(lower)) tags.push('fintech');
-  if (/developer|开发|code|terminal/.test(lower)) tags.push('developer', 'monospace');
-  if (/wellness|健康|health/.test(lower)) tags.push('wellness');
+  // industry — must use word boundaries to avoid substring traps like
+  // "Healthy" matching "health" or "Featured" matching "red". A category
+  // list ("Pizza, Burgers, Asian, Mexican, Healthy, Desserts") in a food
+  // brief would otherwise pollute tags with 'wellness' from the substring
+  // alone, which then lifts a desktop wellness guide above the mobile
+  // food guide via tag-overlap math.
+  if (/\b(food|delivery|restaurant|takeout|cuisine|recipe|meal)\b|餐|美食|外卖/.test(lower)) {
+    tags.push('warm-tones', 'friendly');
+  }
+  if (/\b(finance|fintech|banking|investing)\b|金融/.test(lower)) tags.push('fintech');
+  if (/\b(developer|terminal|coding|programming)\b|开发/.test(lower)) {
+    tags.push('developer', 'monospace');
+  }
+  if (/\b(wellness|fitness|yoga|meditation|mindful)\b|健康/.test(lower)) tags.push('wellness');
 
-  // accent
-  if (/coral|珊瑚|orange|橙/.test(lower)) tags.push('orange-accent');
-  if (/blue|蓝/.test(lower)) tags.push('blue-accent');
-  if (/green|绿/.test(lower)) tags.push('sage-green');
-  if (/gold|金/.test(lower)) tags.push('gold-accent');
-  if (/red|红/.test(lower)) tags.push('red-accent');
+  // accent — keep word boundaries so "Featured"/"ordered"/"polished" don't
+  // pull in spurious accent tags via "red"/"gold"/"green" substrings.
+  if (/\b(coral|orange)\b|珊瑚|橙/.test(lower)) tags.push('orange-accent');
+  if (/\bblue\b|蓝/.test(lower)) tags.push('blue-accent');
+  if (/\bgreen\b|绿/.test(lower)) tags.push('sage-green');
+  if (/\bgold\b|金/.test(lower)) tags.push('gold-accent');
+  if (/\b(red|crimson|scarlet)\b|红/.test(lower)) tags.push('red-accent');
 
   // technique
-  if (/rounded|圆角/.test(lower)) tags.push('rounded');
-  if (/gradient|渐变/.test(lower)) tags.push('gradient');
+  if (/\brounded\b|圆角/.test(lower)) tags.push('rounded');
+  if (/\bgradient\b|渐变/.test(lower)) tags.push('gradient');
 
   return tags.length > 0 ? tags : ['minimal', 'light-mode'];
 }
@@ -461,13 +471,40 @@ function rankStyleGuidesForPrompt(tags: string[], platform: string) {
   });
 }
 
+/**
+ * Industry/domain tags carry a stronger signal than generic visual-style
+ * tags (modern / minimal / rounded). A "food mobile app" brief should land
+ * on a warm-toned mobile guide — even if a webapp catalog entry happens
+ * to share more visual-style tags by coincidence, the industry signal has
+ * to dominate. Style tags broaden the search; industry tags narrow it.
+ */
+const INDUSTRY_TAGS = new Set([
+  'warm-tones', // food / hospitality
+  'wellness', // health / mindfulness
+  'fintech', // finance
+  'developer', // dev tools
+  'monospace', // dev tools (paired with 'developer')
+]);
+
 function styleGuidePromptScore(
   guideTags: string[],
   requestTags: string[],
   platformMatch: boolean,
 ): number {
-  const overlap = requestTags.filter((tag) => guideTags.includes(tag)).length;
-  return overlap * 10 + (platformMatch ? 3 : 0);
+  let score = 0;
+  for (const tag of requestTags) {
+    if (guideTags.includes(tag)) {
+      score += INDUSTRY_TAGS.has(tag) ? 30 : 10;
+    }
+  }
+  // Heavy platform-mismatch penalty: a mobile brief should not be answered
+  // by a desktop/landing-page palette just because that webapp guide
+  // happens to share a few generic style tags. Mobile-only guides have a
+  // markedly different layout / type / spacing rhythm than webapp guides;
+  // the small +3 boost we used to give wasn't enough to push the mobile
+  // candidates ahead of webapp ones with broader tag matches.
+  if (!platformMatch) score -= 30;
+  return score;
 }
 
 function formatGuideMetadataLine(
