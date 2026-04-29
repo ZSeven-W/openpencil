@@ -649,15 +649,13 @@ export class SkiaInteractionManager {
     rootRn.absY = nextRootRect.y;
     rootRn.absW = nextRootRect.w;
     rootRn.absH = nextRootRect.h;
+    // clipStack carries ANCESTOR clips, not this node's own bounds. Resizing
+    // this node doesn't move its ancestors, so the snapshot is still
+    // accurate — restore unchanged. (If this node has `clipContent: true`,
+    // that's a clip it pushes for its CHILDREN, lives in children's
+    // clipStack — not its own.)
     rootRn.clipStack = rootSnapshot.clipStack
-      ? rootSnapshot.clipStack.map((clip) => ({
-          ...this.scalePreviewRect(
-            { x: clip.x, y: clip.y, w: clip.w, h: clip.h },
-            sourceRect,
-            nextRootRect,
-          ),
-          rx: clip.rx * Math.min(scaleX, scaleY),
-        }))
+      ? rootSnapshot.clipStack.map((c) => ({ ...c }))
       : undefined;
 
     for (const [id, snapshot] of previewNodes) {
@@ -674,16 +672,9 @@ export class SkiaInteractionManager {
       rn.absY = scaled.y;
       rn.absW = scaled.w;
       rn.absH = scaled.h;
-      rn.clipStack = snapshot.clipStack
-        ? snapshot.clipStack.map((clip) => ({
-            ...this.scalePreviewRect(
-              { x: clip.x, y: clip.y, w: clip.w, h: clip.h },
-              sourceRect,
-              nextRootRect,
-            ),
-            rx: clip.rx * Math.min(scaleX, scaleY),
-          }))
-        : undefined;
+      // Same as above — preview children's clipStack entries are inherited
+      // from ancestors that aren't moving. Restore unchanged.
+      rn.clipStack = snapshot.clipStack ? snapshot.clipStack.map((c) => ({ ...c })) : undefined;
     }
 
     this.resizeLatestPatch = updates as Partial<PenNode>;
@@ -744,17 +735,9 @@ export class SkiaInteractionManager {
       rn.absY = rotated.y;
       rn.absW = rotated.w;
       rn.absH = rotated.h;
-      rn.clipStack = snapshot.clipStack
-        ? snapshot.clipStack.map((clip) => ({
-            ...this.rotatePreviewRect(
-              { x: clip.x, y: clip.y, w: clip.w, h: clip.h },
-              centerX,
-              centerY,
-              angleDelta,
-            ),
-            rx: clip.rx,
-          }))
-        : undefined;
+      // Rotation only affects the target subtree's bounds; ancestor clips
+      // are unchanged. Restore the snapshot stack unrotated.
+      rn.clipStack = snapshot.clipStack ? snapshot.clipStack.map((c) => ({ ...c })) : undefined;
     }
 
     this.rotateLatestAngle = newAngle;
@@ -908,13 +891,9 @@ export class SkiaInteractionManager {
       if (this.dragAllIds!.has(rn.node.id)) {
         rn.absX += incrDx;
         rn.absY += incrDy;
-        if (rn.clipStack && rn.clipStack.length > 0) {
-          rn.clipStack = rn.clipStack.map((c) => ({
-            ...c,
-            x: c.x + incrDx,
-            y: c.y + incrDy,
-          }));
-        }
+        // Drag only moves this node's bounds — its clipStack entries are
+        // ancestor clips that didn't move. Translating them would make the
+        // visible clip drift away from the actual ancestor on screen.
         rn.node = { ...rn.node, x: rn.absX, y: rn.absY };
       }
     }
