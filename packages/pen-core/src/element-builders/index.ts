@@ -134,3 +134,4 @@ export { buildActivityLog, type ActivityLogParams } from './activity-log.js';
 export { buildEventCard, type EventCardParams } from './event-card.js';
 export { buildStepCard, type StepCardParams } from './step-card.js';
 export { resolveTheme, type V1Theme, type ThemeResolution } from './resolve-theme.js';
+export { buildHeadingV1, type HeadingV1Params } from './heading-v1.js';
