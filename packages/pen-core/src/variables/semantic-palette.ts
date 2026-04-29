@@ -189,6 +189,24 @@ const PALETTE: Record<string, PaletteEntry> = {
     description: 'Danger / error alert text / icon',
   },
 
+  // ── Extended alert/accent shades (4 semantic-but-uncovered hex) ──────────
+  'color-accent-dark': {
+    single: '#1D4ED8',
+    description: 'Darker accent — featured badge text, active pill on white',
+  },
+  'color-info-surface': {
+    single: '#EFF6FF',
+    description: 'Ultra-light info surface — featured pricing card highlight bg',
+  },
+  'color-warning-text-strong': {
+    single: '#B45309',
+    description: 'Stronger warning text — tag "warning" label on light bg',
+  },
+  'color-danger-text-strong': {
+    single: '#B91C1C',
+    description: 'Stronger danger text — tag "error" label on light bg',
+  },
+
   // ── Chart palette (6 single-value colors, no theme axis) ─────────────────
   'color-chart-1': { single: '#3B82F6', description: 'Chart series 1 — blue' },
   'color-chart-2': { single: '#8B5CF6', description: 'Chart series 2 — purple' },
