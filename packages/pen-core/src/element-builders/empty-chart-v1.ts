@@ -1,6 +1,7 @@
+import { resolveTheme, type V1Theme } from './resolve-theme.js';
 import type { ElementTree } from './helpers.js';
 
-export type EmptyChartV1Theme = 'light' | 'dark' | 'system';
+export type EmptyChartV1Theme = V1Theme;
 
 export interface EmptyChartV1Params {
   /** Width in px. Default 320. Min 120. */
@@ -33,15 +34,13 @@ export interface EmptyChartV1Params {
   theme?: EmptyChartV1Theme;
 }
 
-interface ResolvedColors {
+function resolveChartColors(theme: EmptyChartV1Theme): {
   bg: string;
   border: string;
   icon: string;
   title: string;
   subtitle: string;
-}
-
-function resolveTheme(theme: EmptyChartV1Theme): ResolvedColors {
+} {
   if (theme === 'system') {
     return {
       bg: '$color-surface-2',
@@ -54,9 +53,9 @@ function resolveTheme(theme: EmptyChartV1Theme): ResolvedColors {
   if (theme === 'dark') {
     return {
       bg: '#1E293B', // slate-800 — surface-2 Dark
-      border: '#475569', // slate-600 — border Dark
+      border: '#475569', // slate-600 — border Dark (NOTE: dark surface-2 = #334155 but empty-chart uses a different shade)
       icon: '#94A3B8', // slate-400 — text-muted Dark
-      title: '#E2E8F0', // slate-200 — text-primary Dark
+      title: '#E2E8F0', // slate-200
       subtitle: '#94A3B8', // slate-400 — text-muted Dark
     };
   }
@@ -84,12 +83,22 @@ function resolveTheme(theme: EmptyChartV1Theme): ResolvedColors {
 export function buildEmptyChartV1(params: EmptyChartV1Params): ElementTree {
   const width = Math.max(120, Math.floor(params.width ?? 320));
   const height = Math.max(100, Math.floor(params.height ?? 200));
-  const cornerRadius = Math.max(0, Math.floor(params.corner_radius ?? 12));
   const title = params.title ?? 'No data yet';
   const subtitle = params.subtitle ?? 'Data will appear here once tracking begins.';
   const icon = params.icon ?? 'bar-chart-2';
   const theme = params.theme ?? 'light';
-  const c = resolveTheme(theme);
+  const c = resolveChartColors(theme);
+  const t = resolveTheme(theme);
+
+  // cornerRadius: user-supplied override stays concrete; when absent use
+  // $radius-lg (12) in 'system' mode to track the token, else 12 literal.
+  const rawRadius = params.corner_radius;
+  const cornerRadius: number | string =
+    rawRadius !== undefined
+      ? Math.max(0, Math.floor(rawRadius))
+      : theme === 'system'
+        ? (t.radius.lg as string)
+        : 12;
 
   return {
     type: 'frame',
@@ -101,8 +110,8 @@ export function buildEmptyChartV1(params: EmptyChartV1Params): ElementTree {
     layout: 'vertical',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
-    padding: 24,
+    gap: t.spacing.s2,
+    padding: t.spacing.s5,
     fill: [{ type: 'solid', color: c.bg }],
     stroke: {
       thickness: 1,
@@ -125,7 +134,10 @@ export function buildEmptyChartV1(params: EmptyChartV1Params): ElementTree {
         name: 'Title',
         role: 'empty-chart-title',
         content: title,
-        fontSize: 14,
+        fontSize: t.typography.bodySize,
+        // fontWeight=600 is a builder-specific emphasis level (body text styled
+        // like a h3 weight for visual hierarchy). Not a standard body token weight
+        // (400). Kept hardcoded across all themes for v0 byte-parity in light.
         fontWeight: 600,
         fill: [{ type: 'solid', color: c.title }],
       },
@@ -134,8 +146,8 @@ export function buildEmptyChartV1(params: EmptyChartV1Params): ElementTree {
         name: 'Subtitle',
         role: 'empty-chart-subtitle',
         content: subtitle,
-        fontSize: 12,
-        fontWeight: 400,
+        fontSize: t.typography.captionSize,
+        fontWeight: t.typography.captionWeight,
         fill: [{ type: 'solid', color: c.subtitle }],
       },
     ],
