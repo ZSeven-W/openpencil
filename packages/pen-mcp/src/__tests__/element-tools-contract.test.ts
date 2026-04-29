@@ -99,6 +99,16 @@ const ELEMENT_TOOL_NAMES = [
   'add_legend_item_v0',
   'add_inbox_message_v0',
   'add_profile_header_v0',
+  'add_alert_v1',
+  'add_bottom_nav_v1',
+  'add_breadcrumb_v1',
+  'add_activity_ring_v1',
+  'add_carousel_dots_v1',
+  'add_action_menu_v1',
+  'add_attachment_row_v1',
+  'add_calendar_grid_v1',
+  'add_avatar_group_v1',
+  'add_callout_v1',
 ];
 
 describe('element tools — v0-MUST contract', () => {
