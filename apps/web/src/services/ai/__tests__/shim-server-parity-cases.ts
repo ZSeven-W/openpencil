@@ -108,6 +108,10 @@ import {
   buildTooltip,
   buildTopNavBar,
   buildHeadingV1,
+  buildCardRowV1,
+  buildSettingRowV1,
+  buildMemberRowV1,
+  buildActivityLogV1,
 } from '@zseven-w/pen-core';
 
 export interface BuilderCase {
@@ -709,5 +713,38 @@ export const CASES: BuilderCase[] = [
     toolName: 'add_heading_v1',
     args: { content: 'Welcome', level: 'h1' },
     build: (a) => buildHeadingV1(a as unknown as Parameters<typeof buildHeadingV1>[0]),
+  },
+  {
+    toolName: 'add_card_row_v1',
+    args: { items: [{ title: 'Card A', subtitle: 'Sub' }], theme: 'dark' },
+    build: (a) => buildCardRowV1(a as unknown as Parameters<typeof buildCardRowV1>[0]),
+  },
+  {
+    toolName: 'add_setting_row_v1',
+    args: { title: 'Notifications', leading_icon: 'bell', theme: 'dark' },
+    build: (a) => buildSettingRowV1(a as unknown as Parameters<typeof buildSettingRowV1>[0]),
+  },
+  {
+    toolName: 'add_member_row_v1',
+    args: {
+      name: 'Sarah Lee',
+      subtitle: 'sarah@acme.com',
+      initial: 'SL',
+      trailing: { kind: 'role_badge', value: 'Owner' },
+      theme: 'dark',
+    },
+    build: (a) => buildMemberRowV1(a as unknown as Parameters<typeof buildMemberRowV1>[0]),
+  },
+  {
+    toolName: 'add_activity_log_v1',
+    args: {
+      actor: 'Sarah Lee',
+      action: 'merged pull request #142',
+      timestamp: '2h ago',
+      icon: 'git-merge',
+      tone: 'success',
+      theme: 'dark',
+    },
+    build: (a) => buildActivityLogV1(a as unknown as Parameters<typeof buildActivityLogV1>[0]),
   },
 ];

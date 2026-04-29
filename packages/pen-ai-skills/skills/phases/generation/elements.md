@@ -53,6 +53,7 @@ Multi-tool example — a "Notifications" settings section with a header + 4 togg
 Rows (horizontal, in-card or scrolling):
 
 1. Row of items with title + subtitle + optional icon → `add_card_row_v0` (scroll)
+   1b. Theme-aware variant (supports `theme: 'light' | 'dark' | 'system'`) → `add_card_row_v1`
 2. Row of items with small label + big numeric value → `add_metric_row_v0` (scroll)
 3. Row of filter chips / category tabs (label + optional icon, active state) → `add_nav_chip_row_v0` (scroll)
 4. Non-scrolling 2-5 stats inline (auto-share width) → `add_stat_grid_v0`
@@ -291,10 +292,12 @@ Mail / inbox:
 Settings / preferences:
 
 83. Settings menu row (icon + title + subtitle + trailing chevron / value / switch / badge) → `add_setting_row_v0`
+    83b. Theme-aware variant (supports `theme: 'light' | 'dark' | 'system'`) → `add_setting_row_v1`
 
 People / lists:
 
 84. Members / team list row (avatar + name + subtitle + role badge / kebab menu / status dot) → `add_member_row_v0`
+    84b. Theme-aware variant (supports `theme: 'light' | 'dark' | 'system'`) → `add_member_row_v1`
 85. Pending invite list row (initial avatar + email/role + status pill + Resend action) → `add_invite_row_v0`
 
 Faceted search / filter sidebar:
@@ -304,6 +307,7 @@ Faceted search / filter sidebar:
 Audit / activity feed:
 
 87. Activity log entry (actor in bold + action + timestamp + tinted icon dot) → `add_activity_log_v0`
+    87b. Theme-aware variant (supports `theme: 'light' | 'dark' | 'system'`) → `add_activity_log_v1`
 
 Calendar:
 
@@ -336,6 +340,10 @@ PREFER an element tool when the spec says any of:
 - "primary button", "secondary button", "CTA", "submit button" (short label) → `add_text_button_v0`
 - "hero headline", "section title", "card title" / 特定字号标题 → `add_heading_v0`
 - "dark heading", "dark-mode title", "theme-aware heading", "system theme heading", "暗色标题", "主题感知标题" → `add_heading_v1` (accepts `theme: 'light' | 'dark' | 'system'`; use `"system"` when `applySemanticPalette(doc)` is seeded)
+- "dark card row", "dark-mode scrollable cards", "theme-aware card scroll", "暗色卡片行" → `add_card_row_v1` (accepts `theme`; dark surface fill on cards + dark text fills)
+- "dark setting row", "dark-mode settings item", "theme-aware settings row", "暗色设置项" → `add_setting_row_v1` (accepts `theme`; all fills from semantic palette in dark/system)
+- "dark member row", "dark-mode team row", "theme-aware member row", "暗色成员行" → `add_member_row_v1` (accepts `theme`; avatar stays user-supplied color; badge/text use palette tokens)
+- "dark activity log", "dark-mode audit entry", "theme-aware activity feed", "暗色活动记录" → `add_activity_log_v1` (accepts `theme`; tone dot uses alertColors in dark/system)
 - "body paragraph", "description text", "intro copy" (包含 CJK 时尤其推荐) → `add_body_text_v0`
 - "icon with label", "menu item (inline)", "breadcrumb segment", "status indicator text" → `add_icon_label_v0`
 - "list item", "iOS list cell", "table row with chevron" → `add_list_row_v0` (settings rows specifically — `add_setting_row_v0`, which has switch / value / badge trailing variants)
