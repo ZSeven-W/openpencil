@@ -117,12 +117,19 @@ function buildToolUsage(rows: ScoreRow[]): ToolUsage[] {
   const invocations = new Map<string, { total: number; successful: number }>();
   for (const r of rows) {
     if (r.variant !== 'T') continue;
-    if (r.outputKind !== 'tool_call') continue;
-    if (!r.toolName) continue;
-    const cur = invocations.get(r.toolName) ?? { total: 0, successful: 0 };
-    cur.total += 1;
-    if (r.m1_legal) cur.successful += 1;
-    invocations.set(r.toolName, cur);
+    if (r.outputKind !== 'tool_calls') continue;
+    if (r.toolNames.length === 0) continue;
+    // A composite row that emits 6 add_activity_log + 1
+    // add_section_header contributes 6 + 1 = 7 invocations across
+    // two distinct tool keys. Successful is per-row (every tool in
+    // the row inherits the row-level m1_legal verdict — apply is
+    // all-or-nothing in apply.ts).
+    for (const name of r.toolNames) {
+      const cur = invocations.get(name) ?? { total: 0, successful: 0 };
+      cur.total += 1;
+      if (r.m1_legal) cur.successful += 1;
+      invocations.set(name, cur);
+    }
   }
   return [...invocations.entries()]
     .map(([tool, c]) => ({

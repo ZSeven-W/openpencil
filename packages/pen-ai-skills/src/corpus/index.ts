@@ -22,6 +22,7 @@ export type {
   CorpusExpected,
   CorpusPrompt,
   ModelSummary,
+  ParsedOpToolCall,
   ParsedOutput,
   Report,
   ScoreRow,

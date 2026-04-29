@@ -45,9 +45,8 @@ const prompt: CorpusPrompt = {
 
 const okParsed: ParsedOutput = { kind: 'batch_design', dsl: 'root=I(null, {})', raw: '' };
 const toolParsed: ParsedOutput = {
-  kind: 'tool_call',
-  name: 'add_card_row_v0',
-  arguments: {},
+  kind: 'tool_calls',
+  calls: [{ name: 'add_card_row_v0', arguments: {} }],
   raw: '',
 };
 const garbageParsed: ParsedOutput = { kind: 'garbage', reason: 'empty output', raw: '' };
@@ -156,8 +155,8 @@ describe('scoreRun — M1 / M3 gates', () => {
       model: 'm1',
       variant: 'T',
     });
-    expect(row.outputKind).toBe('tool_call');
-    expect(row.toolName).toBe('add_card_row_v0');
+    expect(row.outputKind).toBe('tool_calls');
+    expect(row.toolNames).toEqual(['add_card_row_v0']);
   });
 });
 
@@ -174,11 +173,32 @@ describe('scoreRun — routing classification (expected_tool_if_any)', () => {
     expect(row.expectedToolIfAny).toBe('add_card_row_v0');
   });
 
+  it('right-tool also matches when the expected tool appears alongside extras', async () => {
+    // A model that emits `[expected_tool, extra_tool]` still routed
+    // correctly to the expected tool — the extras are over-production,
+    // not a routing miss. classifyRouting uses Array.includes.
+    const overProduction: ParsedOutput = {
+      kind: 'tool_calls',
+      calls: [
+        { name: 'add_card_row_v0', arguments: {} },
+        { name: 'add_metric_row_v0', arguments: {} },
+      ],
+      raw: '',
+    };
+    const row = await scoreRun({
+      prompt,
+      parsed: overProduction,
+      apply: makeApply({ ok: true, doc: baseDoc }),
+      model: 'm',
+      variant: 'T',
+    });
+    expect(row.routing).toBe('right-tool');
+  });
+
   it('wrong-tool when treatment obvious + tool routed but mis-matched', async () => {
     const wrongTool: ParsedOutput = {
-      kind: 'tool_call',
-      name: 'add_metric_row_v0',
-      arguments: {},
+      kind: 'tool_calls',
+      calls: [{ name: 'add_metric_row_v0', arguments: {} }],
       raw: '',
     };
     const row = await scoreRun({
@@ -189,7 +209,7 @@ describe('scoreRun — routing classification (expected_tool_if_any)', () => {
       variant: 'T',
     });
     expect(row.routing).toBe('wrong-tool');
-    expect(row.toolName).toBe('add_metric_row_v0');
+    expect(row.toolNames).toEqual(['add_metric_row_v0']);
     expect(row.expectedToolIfAny).toBe('add_card_row_v0');
   });
 
@@ -287,6 +307,27 @@ describe('scoreRun — composite difficulty', () => {
       variant: 'T',
     });
     expect(row.routing).toBe('multi-tool');
+  });
+
+  it('toolNames captures every emitted call from a multi-call output', async () => {
+    const multi: ParsedOutput = {
+      kind: 'tool_calls',
+      calls: [
+        { name: 'add_member_row_v0', arguments: {} },
+        { name: 'add_member_row_v0', arguments: {} },
+        { name: 'add_invite_row_v0', arguments: {} },
+      ],
+      raw: '',
+    };
+    const row = await scoreRun({
+      prompt: compositePrompt,
+      parsed: multi,
+      apply: makeApply({ ok: true, doc: baseDoc }),
+      model: 'm',
+      variant: 'T',
+    });
+    expect(row.routing).toBe('multi-tool');
+    expect(row.toolNames).toEqual(['add_member_row_v0', 'add_member_row_v0', 'add_invite_row_v0']);
   });
 
   it('fallback when treatment emits batch_design DSL', async () => {

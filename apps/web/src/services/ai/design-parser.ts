@@ -58,11 +58,15 @@ export type DesignOutputShape =
  */
 export function tryParseElementToolOutput(raw: string): DesignOutputShape | null {
   const parsed = parseModelOutput(raw);
-  if (parsed.kind === 'tool_call') {
+  if (parsed.kind === 'tool_calls' && parsed.calls.length > 0) {
+    // Web's single-shape contract preserves the FIRST element call.
+    // Composite multi-tool outputs are handled by the multi-tag path
+    // (`tryParseAllElementToolOutputs`) below.
+    const first = parsed.calls[0];
     return {
       kind: 'element-tool',
-      name: parsed.name,
-      arguments: parsed.arguments,
+      name: first.name,
+      arguments: first.arguments,
       raw: parsed.raw,
     };
   }

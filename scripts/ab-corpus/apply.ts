@@ -38,15 +38,22 @@ export const applyToFreshDoc: ApplyFn = async (parsed: ParsedOutput): Promise<Ap
   const fp = join(tmpDir, 'doc.op');
   writeFileSync(fp, EMPTY, 'utf-8');
   try {
-    if (parsed.kind === 'tool_call') {
-      if (!ELEMENT_TOOL_NAMES.has(parsed.name)) {
-        return {
-          ok: false,
-          error: `unknown element tool "${parsed.name}"`,
-          doc: null,
-        };
+    if (parsed.kind === 'tool_calls') {
+      // Apply every call into the same fresh doc, in emit order.
+      // Composite prompts route here with N≥2 calls; obvious prompts
+      // typically with N=1. Any single call failing aborts the row
+      // (M1=false) — we don't partially apply.
+      for (let i = 0; i < parsed.calls.length; i += 1) {
+        const call = parsed.calls[i];
+        if (!ELEMENT_TOOL_NAMES.has(call.name)) {
+          return {
+            ok: false,
+            error: `unknown element tool "${call.name}" (call ${i + 1}/${parsed.calls.length})`,
+            doc: null,
+          };
+        }
+        await handleElementToolCall(call.name, { ...call.arguments, filePath: fp });
       }
-      await handleElementToolCall(parsed.name, { ...parsed.arguments, filePath: fp });
     } else {
       const result = await handleBatchDesign({
         operations: parsed.dsl,

@@ -5,10 +5,10 @@ describe('parseModelOutput — tool_call path', () => {
   it('extracts name + arguments from <op_tool> tags', () => {
     const raw = `<op_tool>{"name": "add_card_row_v0", "arguments": {"items": [{"title": "A"}]}}</op_tool>`;
     const out = parseModelOutput(raw);
-    expect(out.kind).toBe('tool_call');
-    if (out.kind !== 'tool_call') throw new Error();
-    expect(out.name).toBe('add_card_row_v0');
-    expect(out.arguments).toEqual({ items: [{ title: 'A' }] });
+    expect(out.kind).toBe('tool_calls');
+    if (out.kind !== 'tool_calls') throw new Error();
+    expect(out.calls[0].name).toBe('add_card_row_v0');
+    expect(out.calls[0].arguments).toEqual({ items: [{ title: 'A' }] });
   });
 
   it('trims whitespace inside tags', () => {
@@ -16,15 +16,15 @@ describe('parseModelOutput — tool_call path', () => {
       {"name": "add_link_v0", "arguments": {"label": "hi"}}
     </op_tool>`;
     const out = parseModelOutput(raw);
-    expect(out.kind).toBe('tool_call');
+    expect(out.kind).toBe('tool_calls');
   });
 
   it('survives chatty prose around the tag', () => {
     const raw = `Sure, here's the tool call:\n<op_tool>{"name":"add_divider_v0","arguments":{}}</op_tool>\nDone!`;
     const out = parseModelOutput(raw);
-    expect(out.kind).toBe('tool_call');
-    if (out.kind !== 'tool_call') throw new Error();
-    expect(out.name).toBe('add_divider_v0');
+    expect(out.kind).toBe('tool_calls');
+    if (out.kind !== 'tool_calls') throw new Error();
+    expect(out.calls[0].name).toBe('add_divider_v0');
   });
 
   it('returns garbage when payload is not valid JSON', () => {
@@ -123,7 +123,7 @@ describe('parseModelOutput — tool_call takes precedence over DSL when both pre
   it('prefers <op_tool> even if DSL-looking text follows it', () => {
     const raw = `<op_tool>{"name":"add_link_v0","arguments":{"label":"x"}}</op_tool>\nroot=I(null, {})`;
     const out = parseModelOutput(raw);
-    expect(out.kind).toBe('tool_call');
+    expect(out.kind).toBe('tool_calls');
   });
 });
 
@@ -137,9 +137,31 @@ describe('parseModelOutput — multi-tag preference (real-world weak-model outpu
       '<op_tool>{"name": "add_nav_chip_row_v0", "arguments": {"items": [{"label":"All"}]}}</op_tool>\n' +
       '<op_tool>{"name": "batch_design", "arguments": {"operations": "U(x,{})"}}</op_tool>';
     const out = parseModelOutput(raw);
-    expect(out.kind).toBe('tool_call');
-    if (out.kind !== 'tool_call') throw new Error();
-    expect(out.name).toBe('add_nav_chip_row_v0');
+    expect(out.kind).toBe('tool_calls');
+    if (out.kind !== 'tool_calls') throw new Error();
+    expect(out.calls[0].name).toBe('add_nav_chip_row_v0');
+  });
+
+  it('surfaces ALL element-tool tags in emit order (composite multi-tool path)', () => {
+    // 3 element tools across 5 tags; the 2 batch_design scaffolds are
+    // dropped because the element-tool path wins precedence.
+    const raw =
+      '<op_tool>{"name":"batch_design","arguments":{"operations":"root=I(null, {})"}}</op_tool>\n' +
+      '<op_tool>{"name":"add_member_row_v0","arguments":{"name":"Sarah"}}</op_tool>\n' +
+      '<op_tool>{"name":"add_member_row_v0","arguments":{"name":"Marcus"}}</op_tool>\n' +
+      '<op_tool>{"name":"batch_design","arguments":{"operations":"U(x,{})"}}</op_tool>\n' +
+      '<op_tool>{"name":"add_invite_row_v0","arguments":{"email":"leon@x.com"}}</op_tool>';
+    const out = parseModelOutput(raw);
+    expect(out.kind).toBe('tool_calls');
+    if (out.kind !== 'tool_calls') throw new Error();
+    expect(out.calls).toHaveLength(3);
+    expect(out.calls.map((c) => c.name)).toEqual([
+      'add_member_row_v0',
+      'add_member_row_v0',
+      'add_invite_row_v0',
+    ]);
+    expect(out.calls[0].arguments).toEqual({ name: 'Sarah' });
+    expect(out.calls[2].arguments).toEqual({ email: 'leon@x.com' });
   });
 
   it('picks first element-tool tag when multiple element tools appear', () => {
@@ -147,9 +169,10 @@ describe('parseModelOutput — multi-tag preference (real-world weak-model outpu
       '<op_tool>{"name":"add_divider_v0","arguments":{}}</op_tool>\n' +
       '<op_tool>{"name":"add_link_v0","arguments":{"label":"x"}}</op_tool>';
     const out = parseModelOutput(raw);
-    expect(out.kind).toBe('tool_call');
-    if (out.kind !== 'tool_call') throw new Error();
-    expect(out.name).toBe('add_divider_v0');
+    expect(out.kind).toBe('tool_calls');
+    if (out.kind !== 'tool_calls') throw new Error();
+    expect(out.calls[0].name).toBe('add_divider_v0');
+    expect(out.calls).toHaveLength(2);
   });
 
   it('falls back to batch_design when only batch_design <op_tool> tags present', () => {
@@ -182,9 +205,9 @@ describe('parseModelOutput — multi-tag preference (real-world weak-model outpu
   it('unknown tool name (not element, not batch_design) → tool_call with that name for scorer to mark wrong-tool', () => {
     const raw = '<op_tool>{"name":"made_up_tool","arguments":{}}</op_tool>';
     const out = parseModelOutput(raw);
-    expect(out.kind).toBe('tool_call');
-    if (out.kind !== 'tool_call') throw new Error();
-    expect(out.name).toBe('made_up_tool');
+    expect(out.kind).toBe('tool_calls');
+    if (out.kind !== 'tool_calls') throw new Error();
+    expect(out.calls[0].name).toBe('made_up_tool');
   });
 });
 
@@ -332,7 +355,7 @@ describe('parseModelOutput — <think> stripping (reasoning-model robustness)', 
       '<think>\nThe user wants X. Let me use Y.\n</think>\n\n' +
       '<op_tool>{"name":"add_link_v0","arguments":{"label":"ok"}}</op_tool>';
     const out = parseModelOutput(raw);
-    expect(out.kind).toBe('tool_call');
+    expect(out.kind).toBe('tool_calls');
   });
 
   it('strips multiple <think> blocks (MiniMax sometimes re-thinks)', () => {
@@ -340,7 +363,7 @@ describe('parseModelOutput — <think> stripping (reasoning-model robustness)', 
       '<think>first</think>\n<think>second</think>\n' +
       '<op_tool>{"name":"add_divider_v0","arguments":{}}</op_tool>';
     const out = parseModelOutput(raw);
-    expect(out.kind).toBe('tool_call');
+    expect(out.kind).toBe('tool_calls');
   });
 
   it('output that is entirely <think> → garbage (after stripping nothing remains)', () => {
