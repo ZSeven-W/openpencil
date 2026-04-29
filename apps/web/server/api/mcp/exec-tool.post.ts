@@ -138,6 +138,16 @@ import {
   buildFaqItemV1,
   buildFilterGroupV1,
   buildFormFieldV1,
+  buildIconButtonV1,
+  buildImagePlaceholderV1,
+  buildInboxMessageV1,
+  buildInlineActionV1,
+  buildInputWithActionV1,
+  buildInviteRowV1,
+  buildKbdV1,
+  buildLegendItemV1,
+  buildLinkV1,
+  buildListRowV1,
   findNodeInTree,
   insertNodeInTree,
   type ElementTree,
@@ -340,6 +350,18 @@ const SERVER_BUILDERS: Record<string, BuilderFn> = {
   add_faq_item_v1: (a) => buildFaqItemV1(a as Parameters<typeof buildFaqItemV1>[0]),
   add_filter_group_v1: (a) => buildFilterGroupV1(a as Parameters<typeof buildFilterGroupV1>[0]),
   add_form_field_v1: (a) => buildFormFieldV1(a as Parameters<typeof buildFormFieldV1>[0]),
+  add_icon_button_v1: (a) => buildIconButtonV1(a as Parameters<typeof buildIconButtonV1>[0]),
+  add_image_placeholder_v1: (a) =>
+    buildImagePlaceholderV1(a as Parameters<typeof buildImagePlaceholderV1>[0]),
+  add_inbox_message_v1: (a) => buildInboxMessageV1(a as Parameters<typeof buildInboxMessageV1>[0]),
+  add_inline_action_v1: (a) => buildInlineActionV1(a as Parameters<typeof buildInlineActionV1>[0]),
+  add_input_with_action_v1: (a) =>
+    buildInputWithActionV1(a as Parameters<typeof buildInputWithActionV1>[0]),
+  add_invite_row_v1: (a) => buildInviteRowV1(a as Parameters<typeof buildInviteRowV1>[0]),
+  add_kbd_v1: (a) => buildKbdV1(a as Parameters<typeof buildKbdV1>[0]),
+  add_legend_item_v1: (a) => buildLegendItemV1(a as Parameters<typeof buildLegendItemV1>[0]),
+  add_link_v1: (a) => buildLinkV1(a as Parameters<typeof buildLinkV1>[0]),
+  add_list_row_v1: (a) => buildListRowV1(a as Parameters<typeof buildListRowV1>[0]),
 };
 
 interface ExecToolBody {

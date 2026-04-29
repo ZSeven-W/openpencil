@@ -152,6 +152,16 @@ import { handleAddFabV1 } from '../tools/add-fab-v1';
 import { handleAddFaqItemV1 } from '../tools/add-faq-item-v1';
 import { handleAddFilterGroupV1 } from '../tools/add-filter-group-v1';
 import { handleAddFormFieldV1 } from '../tools/add-form-field-v1';
+import { handleAddIconButtonV1 } from '../tools/add-icon-button-v1';
+import { handleAddImagePlaceholderV1 } from '../tools/add-image-placeholder-v1';
+import { handleAddInboxMessageV1 } from '../tools/add-inbox-message-v1';
+import { handleAddInlineActionV1 } from '../tools/add-inline-action-v1';
+import { handleAddInputWithActionV1 } from '../tools/add-input-with-action-v1';
+import { handleAddInviteRowV1 } from '../tools/add-invite-row-v1';
+import { handleAddKbdV1 } from '../tools/add-kbd-v1';
+import { handleAddLegendItemV1 } from '../tools/add-legend-item-v1';
+import { handleAddLinkV1 } from '../tools/add-link-v1';
+import { handleAddListRowV1 } from '../tools/add-list-row-v1';
 import { recordElementToolCall } from '../metrics/element-tool-metrics';
 import { ELEMENT_TOOL_DEFINITIONS_BASE } from './element-tool-defs-base';
 import { ELEMENT_TOOL_DEFINITIONS_EXT } from './element-tool-defs-ext';
@@ -464,6 +474,26 @@ async function dispatchElementToolCall(name: string, a: any): Promise<string> {
       return JSON.stringify(await handleAddFilterGroupV1(a), null, 2);
     case 'add_form_field_v1':
       return JSON.stringify(await handleAddFormFieldV1(a), null, 2);
+    case 'add_icon_button_v1':
+      return JSON.stringify(await handleAddIconButtonV1(a), null, 2);
+    case 'add_image_placeholder_v1':
+      return JSON.stringify(await handleAddImagePlaceholderV1(a), null, 2);
+    case 'add_inbox_message_v1':
+      return JSON.stringify(await handleAddInboxMessageV1(a), null, 2);
+    case 'add_inline_action_v1':
+      return JSON.stringify(await handleAddInlineActionV1(a), null, 2);
+    case 'add_input_with_action_v1':
+      return JSON.stringify(await handleAddInputWithActionV1(a), null, 2);
+    case 'add_invite_row_v1':
+      return JSON.stringify(await handleAddInviteRowV1(a), null, 2);
+    case 'add_kbd_v1':
+      return JSON.stringify(await handleAddKbdV1(a), null, 2);
+    case 'add_legend_item_v1':
+      return JSON.stringify(await handleAddLegendItemV1(a), null, 2);
+    case 'add_link_v1':
+      return JSON.stringify(await handleAddLinkV1(a), null, 2);
+    case 'add_list_row_v1':
+      return JSON.stringify(await handleAddListRowV1(a), null, 2);
     default:
       return '';
   }

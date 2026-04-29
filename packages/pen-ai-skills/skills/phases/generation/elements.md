@@ -65,6 +65,7 @@ Containers and single elements:
    6b. Theme-aware variant (accepts `theme` param for API consistency; output identical across themes) → `add_bottom_nav_v1`
 7. Mobile top bar (leading icon + centered title + trailing icon) → `add_top_nav_bar_v0`
 8. Icon-only button (44×44, hit-target safe) → `add_icon_button_v0`
+   8b. Theme-aware variant (accepts `theme` param for API consistency; output identical across themes) → `add_icon_button_v1`
 9. Apple-style progress ring with centered text → `add_activity_ring_v0`
    9b. Theme-aware variant (accepts `theme` param for API consistency; output identical across themes) → `add_activity_ring_v1`
 
@@ -90,6 +91,7 @@ Composition:
 16. Icon + text inline pair (menu items, breadcrumbs, status indicators) → `add_icon_label_v0`
     16b. Theme-aware variant (accepts `theme` param for API consistency; output identical across themes) → `add_icon_label_v1`
 17. iOS/Material list row (leading icon + title/subtitle stack + trailing icon) → `add_list_row_v0`
+    17b. Theme-aware variant (accepts `theme` param for API consistency; output identical across themes) → `add_list_row_v1`
 
 Forms:
 
@@ -134,7 +136,9 @@ Ratings & pagination:
 Inline text primitives:
 
 34. Text link with optional trailing icon ("Learn more →") → `add_link_v0`
+    34b. Theme-aware variant (accepts `theme` param for API consistency; output identical across themes) → `add_link_v1`
 35. Keyboard shortcut glyph ("⌘ K" / "Ctrl + Shift + P") → `add_kbd_v0`
+    35b. Theme-aware variant (key bg → surface2, stroke → border in dark/system) → `add_kbd_v1`
 36. Pricing typography ("$29/month": currency 20/500 + amount 40/700 + period 14/500) → `add_price_v0`
 
 Content blocks:
@@ -160,6 +164,7 @@ Charts / data visualization:
 Media / placeholder:
 
 44. Image placeholder (gray box + centered icon + optional caption — future image slot) → `add_image_placeholder_v0`
+    44c. Theme-aware image placeholder (bg → bgDeep, icon/label → textMuted in dark/system) → `add_image_placeholder_v1`
     44b. Video placeholder (dark box + play icon + optional caption — future video embed) → `add_video_placeholder_v0`
 
 Social / UGC:
@@ -267,6 +272,7 @@ Input / forms:
 66. International phone number input with country-code prefix selector → `add_phone_input_v0`
 
 67. Input field with inline action button (newsletter signup, apply discount code, send chat message) → `add_input_with_action_v0`
+    67b. Theme-aware variant (input bg → surface, stroke → border, text → textPrimary; button bg → accent (brand-invariant), button text → white in all modes) → `add_input_with_action_v1`
 
 Compliance / disclosure:
 
@@ -312,15 +318,18 @@ Doc / inline feedback:
 78. Inline doc callout (tinted block with title + body, tone enum) → `add_callout_v0`
     78b. Theme-aware variant (tone-keyed bg/fg → semantic alert palette in dark/system modes) → `add_callout_v1`
 79. Inline status + action ("Comment deleted • Undo") → `add_inline_action_v0`
+    79b. Theme-aware variant (icon/message → textBody, CTA → accent in dark/system) → `add_inline_action_v1`
 
 Sharing / chart annotations:
 
 80. Social share button row (circular icon buttons + labels) → `add_share_row_v0`
 81. Chart legend entry (color marker + label + optional value) → `add_legend_item_v0`
+    81b. Theme-aware variant (label → textBody, value → textPrimary; marker color kept as-is) → `add_legend_item_v1`
 
 Mail / inbox:
 
 82. Inbox / email list row (sender + subject + preview + unread dot) → `add_inbox_message_v0`
+    82b. Theme-aware variant (primary → textPrimary, timestamp → textSubtle, preview → textMuted, unread dot → accent in dark/system) → `add_inbox_message_v1`
 
 Settings / preferences:
 
@@ -332,6 +341,7 @@ People / lists:
 84. Members / team list row (avatar + name + subtitle + role badge / kebab menu / status dot) → `add_member_row_v0`
     84b. Theme-aware variant (supports `theme: 'light' | 'dark' | 'system'`) → `add_member_row_v1`
 85. Pending invite list row (initial avatar + email/role + status pill + Resend action) → `add_invite_row_v0`
+    85b. Theme-aware variant (avatar bg → surface2, text → textPrimary/textMuted, action → accent; status pills use alertColors in dark/system) → `add_invite_row_v1`
 
 Faceted search / filter sidebar:
 
