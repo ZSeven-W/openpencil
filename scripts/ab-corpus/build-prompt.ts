@@ -43,18 +43,23 @@ const B_TOOL_CALL_INSTRUCTIONS = [
 
 const T_TOOL_CALL_INSTRUCTIONS = [
   '',
-  'OUTPUT FORMAT — EMIT AS TOOL CALL:',
+  'OUTPUT FORMAT — EMIT AS TOOL CALL(S):',
   '',
-  'Respond with one `<op_tool>` tag, nothing else. Choose based on intent:',
+  'Respond with one or more `<op_tool>` tags, nothing else. The harness reads every `<op_tool>` tag in your output, so chain as many as the brief implies. Choose tools based on intent:',
   '',
-  'PRIMARY: when your intent matches an add_*_v0 element tool above, emit:',
+  'PRIMARY (single component): emit one tag for the add_*_v0 element tool that fits.',
   '  <op_tool>{"name": "add_X_v0", "arguments": {...}}</op_tool>',
   '',
-  'FALLBACK: when no element tool fits (heterogeneous layout, composite section, post-hoc styling), emit:',
+  'COMPOSITE (multi-component briefs — settings panel with N rows, team list with N members, audit feed with N entries, onboarding screen with N steps): emit ONE `<op_tool>` per component under the same parent. Tags appear in render order (top-to-bottom for vertical, left-to-right for horizontal).',
+  '  <op_tool>{"name": "add_section_header_v0", "arguments": {"title": "Notifications"}}</op_tool>',
+  '  <op_tool>{"name": "add_setting_row_v0", "arguments": {...}}</op_tool>',
+  '  <op_tool>{"name": "add_setting_row_v0", "arguments": {...}}</op_tool>',
+  '',
+  'FALLBACK: when no element tool fits a given component shape, emit a single batch_design call.',
   '  <op_tool>{"name": "batch_design", "arguments": {"operations": "<DSL_STRING>"}}</op_tool>',
   'The `operations` value is a single string containing the batch_design DSL.',
   '',
-  'Do not combine multiple tags. Do not add prose before or after.',
+  'Do not add prose before, after, or between tags.',
   '',
 ].join('\n');
 
