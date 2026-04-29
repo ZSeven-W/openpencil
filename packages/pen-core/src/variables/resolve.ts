@@ -8,7 +8,6 @@
 import type { PenNode } from '@zseven-w/pen-types';
 import type { PenFill, PenStroke, PenEffect } from '@zseven-w/pen-types';
 import type { VariableDefinition, ThemedValue } from '@zseven-w/pen-types';
-import { DEFAULT_PALETTE_FALLBACK } from './default-palette-fallback.js';
 
 type Vars = Record<string, VariableDefinition>;
 type Theme = Record<string, string>;
@@ -63,16 +62,7 @@ export function resolveVariableRef(
   if (!ref.startsWith('$')) return undefined;
   const name = ref.slice(1);
   const def = variables[name];
-  if (!def) {
-    // P1.6: fall back to DEFAULT_PALETTE_FALLBACK when vars doesn't have the token
-    const fallback = DEFAULT_PALETTE_FALLBACK[name];
-    if (fallback !== undefined) {
-      if (fallback.single !== undefined) return fallback.single;
-      const mode = activeTheme?.Mode ?? 'Light';
-      return mode === 'Dark' ? fallback.dark : fallback.light;
-    }
-    return undefined;
-  }
+  if (!def) return undefined;
 
   const val = def.value;
   if (Array.isArray(val)) {
@@ -214,7 +204,7 @@ function resolveEffectsForCanvas(
  * Returns the same object reference when no variables are present.
  */
 export function resolveNodeForCanvas(node: PenNode, variables: Vars, activeTheme?: Theme): PenNode {
-  if (!variables) variables = {};
+  if (!variables || Object.keys(variables).length === 0) return node;
 
   let changed = false;
   const out: Record<string, unknown> = { ...node };
@@ -270,34 +260,6 @@ export function resolveNodeForCanvas(node: PenNode, variables: Vars, activeTheme
     if (resolved !== effects) {
       out.effects = resolved;
       changed = true;
-    }
-  }
-
-  // Typography numeric refs (text nodes only) — fontSize / lineHeight / letterSpacing
-  // These must be resolved before the layout engine and renderer consume them,
-  // since both paths use `node.fontSize ?? 16` (not type-guarded for strings).
-  if (node.type === 'text') {
-    const n = node as unknown as Record<string, unknown>;
-    for (const key of ['fontSize', 'fontWeight', 'lineHeight', 'letterSpacing'] as const) {
-      if (typeof n[key] === 'string' && isVariableRef(n[key] as string)) {
-        const resolved = resolveNumericRef(n[key] as string, variables, activeTheme);
-        if (resolved !== undefined) {
-          out[key] = resolved;
-          changed = true;
-        }
-      }
-    }
-  }
-
-  // cornerRadius scalar ref (frames, rectangles, etc.)
-  {
-    const n = node as unknown as Record<string, unknown>;
-    if (typeof n.cornerRadius === 'string' && isVariableRef(n.cornerRadius)) {
-      const resolved = resolveNumericRef(n.cornerRadius, variables, activeTheme);
-      if (resolved !== undefined) {
-        out.cornerRadius = resolved;
-        changed = true;
-      }
     }
   }
 

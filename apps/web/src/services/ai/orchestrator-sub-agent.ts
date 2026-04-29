@@ -25,10 +25,7 @@ import {
   buildSubAgentStyleGuideInstruction,
   compactSubAgentSkills,
 } from './orchestrator-sub-agent-compact';
-import { tryParseAllElementToolOutputs } from './design-parser';
-import { dispatchElementToolCalls } from './element-tools-dispatcher';
-import { SUPPORTED_EMBEDDED_ELEMENT_TOOLS } from './element-tool-shims';
-import { needsElementTools, resolveModelProfile } from './model-profiles';
+import { resolveModelProfile } from './model-profiles';
 import {
   expandRootFrameHeight,
   buildVariableContext,
@@ -54,55 +51,6 @@ export interface StreamTimeoutConfig {
   thinkingBudgetTokens?: number;
   effort?: 'low' | 'medium' | 'high' | 'max';
 }
-
-// ---------------------------------------------------------------------------
-// Element-tool output-format contract
-// ---------------------------------------------------------------------------
-//
-// When `needsElementTools(modelProfile)` is true we append this block to
-// the sub-agent's system prompt so the model emits the same `<op_tool>`
-// wrapper measured in the ab-corpus treatment arm (see openpencil-docs
-// superpowers/notes/2026-05-01-ab-v4-results.md — that sweep validated
-// the same Strategy A / Strategy B framing used here, lifting composite
-// multi-tool routing from 0% to 42%).
-//
-// Mirrors scripts/ab-corpus/build-prompt.ts::T_TOOL_CALL_INSTRUCTIONS
-// with one production-specific addition: EMBEDDED COVERAGE. elements.md
-// documents the full add_*_v0 family for external MCP clients that talk
-// to pen-mcp's complete handler set via stdio/HTTP transport. The
-// embedded orchestrator (this file's runtime) can only execute a subset
-// — tools with both a client-side shim (element-tool-shims) AND a
-// matching Nitro SERVER_BUILDERS entry. We surface that list so the
-// model doesn't emit `<op_tool>` for uncovered tools and see them fail
-// through; uncovered components should fall back to Strategy B.
-//
-// design-parser.ts::tryParseAllElementToolOutputs collects EVERY
-// `<op_tool>` tag (element-tool or batch_design) in emit order, and
-// element-tools-dispatcher::dispatchElementToolCalls applies them in
-// one history batch — so the multi-tool path in Strategy A applies
-// every tag the model emits, not just the first one.
-const EMBEDDED_AVAILABLE = SUPPORTED_EMBEDDED_ELEMENT_TOOLS.join(', ');
-const ELEMENT_TOOL_OUTPUT_FORMAT = [
-  '',
-  'OUTPUT FORMAT — EMIT AS TOOL CALL(S):',
-  '',
-  'Respond with one or more `<op_tool>` tags, nothing else. The runtime reads every `<op_tool>` tag in your output, so chain as many as the brief implies. Pick ONE strategy for the whole response — do NOT mix element tools with batch_design in the same output:',
-  '',
-  'STRATEGY A — element tools (preferred): when every component in the brief fits an embedded `add_*_v0` element tool, emit one tag per component, in render order (top-to-bottom for vertical layouts, left-to-right for horizontal). Single-component briefs produce exactly one tag; multi-component briefs (settings panel with N rows, team list with N members, audit feed with N entries, onboarding screen with N step cards) produce N+1 or more.',
-  '  <op_tool>{"name": "add_section_header_v0", "arguments": {"title": "Notifications"}}</op_tool>',
-  '  <op_tool>{"name": "add_setting_row_v0", "arguments": {...}}</op_tool>',
-  '  <op_tool>{"name": "add_setting_row_v0", "arguments": {...}}</op_tool>',
-  '',
-  'EMBEDDED COVERAGE: in THIS runtime only the following element tools can actually execute — other add_*_v0 names in the skill doc will return an unsupported error. Prefer these, and fall back to Strategy B for any component whose tool is not in this list:',
-  `  ${EMBEDDED_AVAILABLE}`,
-  '',
-  'STRATEGY B — batch_design fallback: when the brief includes any component shape that NO embedded element tool covers (heterogeneous custom layout, post-hoc styling, bespoke scaffolding, or an element tool outside the EMBEDDED COVERAGE list above), emit a SINGLE batch_design call covering the WHOLE response. Multiple `<op_tool>` tags carrying batch_design or any mix of batch_design + element tools is not supported — the runtime drops the batch_design half and only the element calls run.',
-  '  <op_tool>{"name": "batch_design", "arguments": {"operations": "<DSL_STRING>"}}</op_tool>',
-  'The `operations` value is a single string containing the batch_design DSL covering every component in the brief.',
-  '',
-  'Do not add prose before, after, or between tags. Do not mix Strategy A and Strategy B in the same output — choose embedded element tools for every component or batch_design for every component.',
-  '',
-].join('\n');
 
 // ---------------------------------------------------------------------------
 // Sub-agent execution (sequential or concurrent)
@@ -382,16 +330,6 @@ async function executeSubAgent(
   }
   const hasDesignMdContent = designMdContent.length > 0;
 
-  // Feature-flagged gate for N-tool element-surface integration.
-  // Only fires when VITE_ENABLE_ELEMENT_TOOLS env var is
-  // truthy AND the model is in the basic/standard tier; full-tier
-  // models stay on the legacy path per A/B v1 ceiling-effect finding
-  // (Kimi K2.5 Δ M1 -12.5pp). Default production state is off, so
-  // this wiring is a no-op until rollout flips the env var.
-  // Plan: openpencil-docs
-  // superpowers/plans/2026-04-21-element-tools-orchestrator-integration.md
-  const elementToolsEnabled = needsElementTools(modelProfile);
-
   const genCtx = resolveSkills('generation', request.prompt, {
     flags: {
       hasVariables: !!variables && Object.keys(variables).length > 0,
@@ -401,13 +339,6 @@ async function executeSubAgent(
       // - no pre-built style guide selected
       // - no usable design.md content (empty raw + empty structured summary)
       noStyleGuideMatch: !plan.selectedStyleGuideContent && !hasDesignMdContent,
-      // hasMcpTools gates `elements.md` auto-loading in the skill
-      // registry. When true, the generation prompt picks up the
-      // 39-tool decision-tree + invariants reference. §3.3 of the
-      // plan teaches the matching `<op_tool>` output format so the
-      // model actually emits tool calls rather than pseudo-call
-      // syntax the legacy parser would reject.
-      hasMcpTools: elementToolsEnabled,
     },
     dynamicContent: hasDesignMdContent ? { designMdContent } : undefined,
     budgetOverride:
@@ -451,27 +382,7 @@ async function executeSubAgent(
     reducedComplexity,
   );
 
-  // When element tools are enabled, the ELEMENT_TOOL_OUTPUT_FORMAT block
-  // (appended below) is the authoritative output-format instruction —
-  // teaching the model to emit `<op_tool>` tags. The jsonl-format /
-  // jsonl-format-simplified skills lead with a CRITICAL directive saying
-  // "Output ONLY ```json … Do NOT use tool calls", which directly conflicts
-  // with `<op_tool>` and confuses weak models (MiniMax / GLM / Kimi):
-  // they anchor on the front-of-prompt CRITICAL and emit raw JSONL,
-  // bypassing every element tool — which defeats the entire point of the
-  // n-tools-per-element design (stability for weak models in the built-in
-  // sub-agent path). Drop those two skills here so ELEMENT_TOOL_OUTPUT_FORMAT
-  // is the only output-format instruction the model sees.
-  if (elementToolsEnabled) {
-    resolvedSkills = resolvedSkills.filter(
-      (s) => s.meta.name !== 'jsonl-format' && s.meta.name !== 'jsonl-format-simplified',
-    );
-  }
-
-  const skillPrompt = resolvedSkills.map((s) => s.content).join('\n\n');
-  const systemPrompt = elementToolsEnabled
-    ? skillPrompt + '\n\n' + ELEMENT_TOOL_OUTPUT_FORMAT
-    : skillPrompt;
+  const systemPrompt = resolvedSkills.map((s) => s.content).join('\n\n');
 
   if (SUB_AGENT_DEBUG_FLAGS.LOG_PROMPT_SIZE) {
     const skillNames = resolvedSkills.map((s) => s.meta.name).join(',');
@@ -522,76 +433,6 @@ async function executeSubAgent(
           nodes: renderer.getInsertedNodes(),
           rawResponse,
           error: chunk.content,
-        };
-      }
-    }
-
-    // Element-tool shape detection + dispatch (Phase 2 M1). When the
-    // feature flag is on and streaming produced no nodes (expected
-    // because weak models emit `<op_tool>` at the end, not incremental
-    // JSON), parse the completed response and hand it to the
-    // dispatcher. Dispatcher wraps everything in one history batch
-    // (startBatch/endBatch) so the full generation becomes a single
-    // undo unit once M2/M3 land the real apply handlers. For M1 the
-    // dispatcher returns `unsupported` — we surface that message to
-    // the UI verbatim (it already names the milestone and the fallback
-    // flag to unset).
-    if (
-      elementToolsEnabled &&
-      renderer.getAppliedIds().size === 0 &&
-      rawResponse.trim().length > 0
-    ) {
-      // The Strategy A prompt now invites the model to chain N tags
-      // (settings panel with 4 toggle rows = 5 op_tool tags etc.), so
-      // we parse ALL element-tool tags and apply them as one history
-      // batch — applying only the first would silently drop the rest
-      // and produce a half-rendered subtask.
-      const elementShapes = tryParseAllElementToolOutputs(rawResponse);
-      if (elementShapes.length > 0) {
-        renderer.finish();
-        // Pass subtask/root parent context so rootless `<op_tool>`
-        // payloads (e.g. `elements.md` examples that omit parent_id)
-        // land inside the generation's target frame, matching the
-        // streaming path. Without this default the dispatcher would
-        // prepend at page root, outside root-frame layout adjustments.
-        const dispatchResult = await dispatchElementToolCalls(elementShapes, {
-          defaultParentId: subtask.parentFrameId ?? plan.rootFrame.id,
-        });
-        const inserted = dispatchResult.insertedNodes;
-        if (inserted.length > 0) {
-          // Keep orchestrator accounting consistent with the store.
-          // Dispatcher already wrote via document-store.addNode (shim)
-          // or applyExternalDocument (HTTP fallback); the renderer
-          // doesn't know about those paths, so its getInsertedNodes()
-          // stays empty and the caller would treat a successful
-          // element-tool apply as "0 nodes produced" (= subtask fail).
-          // Push the inserted count through the same progress surface
-          // the streaming path uses so the UI checklist + aggregate
-          // counters match reality. `partial` status still surfaces
-          // any nodes that DID land — the partial failures show up as
-          // the per-shape `error` summary below.
-          progressEntry.nodeCount += inserted.length;
-          progress.totalNodes += inserted.length;
-          callbacks?.onApplyPartial?.(progress.totalNodes);
-        }
-        progressEntry.status = dispatchResult.status === 'applied' ? 'done' : 'error';
-        emitProgress(plan, progress, callbacks);
-        // Surface failure messages so the user sees which tag(s)
-        // broke. Concatenated since BatchDispatchResult has no single
-        // top-level message — the array stays per-shape for diagnostic
-        // fidelity.
-        const failureMsg =
-          dispatchResult.status === 'applied'
-            ? undefined
-            : dispatchResult.results
-                .filter((r) => r.status !== 'applied')
-                .map((r) => `[${r.toolName}] ${r.message}`)
-                .join('; ') || 'element-tool dispatch produced no nodes';
-        return {
-          subtaskId: subtask.id,
-          nodes: inserted.length > 0 ? inserted : renderer.getInsertedNodes(),
-          rawResponse,
-          error: failureMsg,
         };
       }
     }
@@ -791,16 +632,10 @@ CRITICAL LAYOUT CONSTRAINTS:
   } else if (plan.styleGuide) {
     const sg = plan.styleGuide;
     const p = sg.palette;
-    // The palette below is SEEDED into doc.variables (see
-    // seedDocVariablesFromStyleGuide in orchestrator.ts). Emit `$color-*` refs
-    // in JSONL fills — they resolve to the hex shown in parens at render time.
-    prompt += `\n\nSTYLE GUIDE — these refs are SEEDED into doc.variables; EMIT REFS in your JSONL fills (NOT hex):
-- Background: \`$color-bg-deep\` (resolves to ${p.background})
-- Surface: \`$color-surface\` (${p.surface})
-- Text: \`$color-text-primary\` (${p.text})
-- Secondary: \`$color-text-body\` (${p.secondary})
-- Accent: \`$color-accent\` (${p.accent})
-- Border: \`$color-border\` (${p.border})
+    prompt += `\n\nSTYLE GUIDE (use these consistently):
+- Background: ${p.background}  Surface: ${p.surface}
+- Text: ${p.text}  Secondary: ${p.secondary}
+- Accent: ${p.accent}  Accent2: ${p.accent2}  Border: ${p.border}
 - Heading font: ${sg.fonts.heading}  Body font: ${sg.fonts.body}
 - Aesthetic: ${sg.aesthetic}`;
   }

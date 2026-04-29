@@ -57,7 +57,7 @@ interface RenderNodeSnapshot {
   absY: number;
   absW: number;
   absH: number;
-  clipStack?: { x: number; y: number; w: number; h: number; rx: number }[];
+  clipRect?: { x: number; y: number; w: number; h: number; rx: number };
 }
 
 interface PreviewRect {
@@ -523,9 +523,7 @@ export class SkiaInteractionManager {
         absY: rn.absY,
         absW: rn.absW,
         absH: rn.absH,
-        ...(rn.clipStack && rn.clipStack.length > 0
-          ? { clipStack: rn.clipStack.map((c) => ({ ...c })) }
-          : {}),
+        ...(rn.clipRect ? { clipRect: { ...rn.clipRect } } : {}),
       });
     }
     return snapshots;
@@ -563,48 +561,6 @@ export class SkiaInteractionManager {
       w: rect.w,
       h: rect.h,
     };
-  }
-
-  /**
-   * Compute the axis-aligned bounding box of a rectangle after rotation
-   * around a pivot. Used to project clip rects through a rotation: ClipInfo
-   * is axis-aligned by definition, so the only safe scene-coord
-   * representation of a rotated clip is its (conservative) AABB.
-   * Slightly over-clips along the rotated rect's diagonal but is correct
-   * along its axes — the alternative (rotating just the center, keeping
-   * original w/h) places the clip in the wrong spot under non-zero
-   * rotations.
-   */
-  private rotatedAABB(
-    rect: PreviewRect,
-    centerX: number,
-    centerY: number,
-    angleDeg: number,
-  ): PreviewRect {
-    const rad = (angleDeg * Math.PI) / 180;
-    const cosA = Math.cos(rad);
-    const sinA = Math.sin(rad);
-    const corners = [
-      { x: rect.x, y: rect.y },
-      { x: rect.x + rect.w, y: rect.y },
-      { x: rect.x + rect.w, y: rect.y + rect.h },
-      { x: rect.x, y: rect.y + rect.h },
-    ];
-    let minX = Infinity;
-    let minY = Infinity;
-    let maxX = -Infinity;
-    let maxY = -Infinity;
-    for (const c of corners) {
-      const dx = c.x - centerX;
-      const dy = c.y - centerY;
-      const nx = centerX + dx * cosA - dy * sinA;
-      const ny = centerY + dx * sinA + dy * cosA;
-      if (nx < minX) minX = nx;
-      if (nx > maxX) maxX = nx;
-      if (ny < minY) minY = ny;
-      if (ny > maxY) maxY = ny;
-    }
-    return { x: minX, y: minY, w: maxX - minX, h: maxY - minY };
   }
 
   private ensureResizePreviewNodes(engine: SkiaEngine): Map<string, RenderNodeSnapshot> | null {
@@ -691,21 +647,22 @@ export class SkiaInteractionManager {
     rootRn.absY = nextRootRect.y;
     rootRn.absW = nextRootRect.w;
     rootRn.absH = nextRootRect.h;
-    // clipStack carries ANCESTOR clips, not this node's own bounds. Resizing
-    // this node doesn't move its ancestors, so the snapshot is still
-    // accurate — restore unchanged. (If this node has `clipContent: true`,
-    // that's a clip it pushes for its CHILDREN, lives in children's
-    // clipStack — not its own.)
-    rootRn.clipStack = rootSnapshot.clipStack
-      ? rootSnapshot.clipStack.map((c) => ({ ...c }))
+    rootRn.clipRect = rootSnapshot.clipRect
+      ? {
+          ...this.scalePreviewRect(
+            {
+              x: rootSnapshot.clipRect.x,
+              y: rootSnapshot.clipRect.y,
+              w: rootSnapshot.clipRect.w,
+              h: rootSnapshot.clipRect.h,
+            },
+            sourceRect,
+            nextRootRect,
+          ),
+          rx: rootSnapshot.clipRect.rx * Math.min(scaleX, scaleY),
+        }
       : undefined;
 
-    // Number of clipStack entries above the resize target — these are
-    // ancestor clips of T, which DO NOT move when T resizes. Anything past
-    // this index in a descendant's clipStack was pushed by T or one of T's
-    // descendants (clipContent ancestors INSIDE the resize subtree), and
-    // must scale with the subtree.
-    const ancestorCount = rootSnapshot.clipStack?.length ?? 0;
     for (const [id, snapshot] of previewNodes) {
       if (id === this.resizeNodeId) continue;
       const rn = engine.spatialIndex.get(id);
@@ -720,19 +677,20 @@ export class SkiaInteractionManager {
       rn.absY = scaled.y;
       rn.absW = scaled.w;
       rn.absH = scaled.h;
-      rn.clipStack = snapshot.clipStack
-        ? snapshot.clipStack.map((c, i) =>
-            i < ancestorCount
-              ? { ...c }
-              : {
-                  ...this.scalePreviewRect(
-                    { x: c.x, y: c.y, w: c.w, h: c.h },
-                    sourceRect,
-                    nextRootRect,
-                  ),
-                  rx: c.rx * Math.min(scaleX, scaleY),
-                },
-          )
+      rn.clipRect = snapshot.clipRect
+        ? {
+            ...this.scalePreviewRect(
+              {
+                x: snapshot.clipRect.x,
+                y: snapshot.clipRect.y,
+                w: snapshot.clipRect.w,
+                h: snapshot.clipRect.h,
+              },
+              sourceRect,
+              nextRootRect,
+            ),
+            rx: snapshot.clipRect.rx * Math.min(scaleX, scaleY),
+          }
         : undefined;
     }
 
@@ -768,26 +726,10 @@ export class SkiaInteractionManager {
     rootRn.absY = rootSnapshot.absY;
     rootRn.absW = rootSnapshot.absW;
     rootRn.absH = rootSnapshot.absH;
-    rootRn.clipStack = rootSnapshot.clipStack
-      ? rootSnapshot.clipStack.map((c) => ({ ...c }))
-      : undefined;
+    rootRn.clipRect = rootSnapshot.clipRect ? { ...rootSnapshot.clipRect } : undefined;
 
     const centerX = rootSnapshot.absX + rootSnapshot.absW / 2;
     const centerY = rootSnapshot.absY + rootSnapshot.absH / 2;
-    // Ancestor clips above the rotation target are NOT in the rotated
-    // subtree, so they must stay frozen. Anything past `ancestorCount` in
-    // a descendant's clipStack was pushed by the target or one of its
-    // clipContent descendants — those rotate with the subtree.
-    const ancestorCount = rootSnapshot.clipStack?.length ?? 0;
-    // A rotated rrect remains an rrect (just with w/h swapped at 90°/270°)
-    // whenever the rotation is a right-angle multiple — the AABB of the
-    // rotated corners exactly equals the rotated shape and the rounded
-    // corners survive the projection. Off-axis rotations (e.g. 45°) make
-    // the AABB strictly larger than the rotated rect, and the rounded
-    // corner can't be faithfully encoded as a single rrect anymore — that's
-    // the only case where we must flatten to rx=0.
-    const angleMod90 = ((angleDelta % 90) + 90) % 90;
-    const rotationKeepsRrectShape = angleMod90 < 0.01 || angleMod90 > 89.99;
     for (const [id, snapshot] of previewNodes) {
       if (id === this.rotateNodeId) continue;
       const rn = engine.spatialIndex.get(id);
@@ -808,20 +750,21 @@ export class SkiaInteractionManager {
       rn.absY = rotated.y;
       rn.absW = rotated.w;
       rn.absH = rotated.h;
-      rn.clipStack = snapshot.clipStack
-        ? snapshot.clipStack.map((c, i) =>
-            i < ancestorCount
-              ? { ...c }
-              : {
-                  ...this.rotatedAABB(
-                    { x: c.x, y: c.y, w: c.w, h: c.h },
-                    centerX,
-                    centerY,
-                    angleDelta,
-                  ),
-                  rx: rotationKeepsRrectShape ? c.rx : 0,
-                },
-          )
+      rn.clipRect = snapshot.clipRect
+        ? {
+            ...this.rotatePreviewRect(
+              {
+                x: snapshot.clipRect.x,
+                y: snapshot.clipRect.y,
+                w: snapshot.clipRect.w,
+                h: snapshot.clipRect.h,
+              },
+              centerX,
+              centerY,
+              angleDelta,
+            ),
+            rx: snapshot.clipRect.rx,
+          }
         : undefined;
     }
 
@@ -976,9 +919,13 @@ export class SkiaInteractionManager {
       if (this.dragAllIds!.has(rn.node.id)) {
         rn.absX += incrDx;
         rn.absY += incrDy;
-        // Drag only moves this node's bounds — its clipStack entries are
-        // ancestor clips that didn't move. Translating them would make the
-        // visible clip drift away from the actual ancestor on screen.
+        if (rn.clipRect) {
+          rn.clipRect = {
+            ...rn.clipRect,
+            x: rn.clipRect.x + incrDx,
+            y: rn.clipRect.y + incrDy,
+          };
+        }
         rn.node = { ...rn.node, x: rn.absX, y: rn.absY };
       }
     }

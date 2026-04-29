@@ -1,3 +1,5 @@
+[![MseeP.ai Security Assessment Badge](https://mseep.net/pr/zseven-w-openpencil-badge.png)](https://mseep.ai/app/zseven-w-openpencil)
+
 <p align="center">
   <img src="./apps/desktop/build/icon.png" alt="OpenPencil" width="120" />
 </p>

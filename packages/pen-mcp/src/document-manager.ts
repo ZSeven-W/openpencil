@@ -254,7 +254,7 @@ async function fetchLiveDocument(): Promise<PenDocument> {
 }
 
 /** Push document to the live Electron canvas. Fails silently if unavailable. */
-export async function pushLiveDocument(doc: PenDocument): Promise<void> {
+async function pushLiveDocument(doc: PenDocument): Promise<void> {
   // Fast path: use cached sync URL
   const cachedUrl =
     _cachedSyncUrl && Date.now() - _cachedSyncUrlTime < SYNC_URL_TTL ? _cachedSyncUrl : null;

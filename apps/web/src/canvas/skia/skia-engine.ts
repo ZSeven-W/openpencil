@@ -421,8 +421,7 @@ export class SkiaEngine {
       canvas.scale(dpr, dpr);
       for (const rn of this.renderNodes) {
         if (!rn.node.name) continue;
-        const isRootFrame =
-          rn.node.type === 'frame' && (rn.clipStack === undefined || rn.clipStack.length === 0);
+        const isRootFrame = rn.node.type === 'frame' && !rn.clipRect;
         const isReusable = this.reusableIds.has(rn.node.id);
         const isInstance = this.instanceIds.has(rn.node.id);
         if (!isRootFrame && !isReusable && !isInstance) continue;

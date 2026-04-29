@@ -1,21 +1,15 @@
-import { openDocument, resolveDocPath, saveDocument } from '../document-manager';
+import { openDocument, resolveDocPath } from '../document-manager';
 import {
   parseDesignMd,
   generateDesignMd,
   extractDesignMdFromDocument,
 } from '../utils/design-md-parser';
 import type { DesignMdSpec } from '@zseven-w/pen-types';
+import { setDesignMdForPrompt } from './design-prompt';
 
-/**
- * design.md is now stored on the PenDocument (`doc.designMd`). It travels
- * with `.op`/`.pen` files and lives per-document. These handlers read
- * directly from the opened document and write via `saveDocument`.
- *
- * When `doc.designMd` is absent we auto-extract a spec from the document's
- * variables/typography for display purposes only — extraction is a
- * best-effort reverse inference, NOT persisted back unless the caller
- * explicitly sets it.
- */
+// In MCP context (stdio mode), there's no Zustand store.
+// We keep a module-level cache for the design.md spec.
+let _mcpDesignMd: DesignMdSpec | undefined;
 
 export interface GetDesignMdParams {
   filePath?: string;
@@ -33,47 +27,46 @@ export interface ExportDesignMdParams {
   filePath?: string;
 }
 
-function specHasContent(spec: DesignMdSpec): boolean {
-  return !!(spec.colorPalette?.length || spec.typography?.fontFamily || spec.visualTheme);
-}
-
-/** Read the design.md spec from the document (falls back to extraction). */
+/** Read the design.md spec. */
 export async function handleGetDesignMd(
   params: GetDesignMdParams,
 ): Promise<{ hasDesignMd: boolean; spec?: DesignMdSpec; markdown?: string }> {
-  const filePath = resolveDocPath(params.filePath);
-  const doc = await openDocument(filePath);
-
-  if (doc.designMd) {
+  // Try module cache first
+  if (_mcpDesignMd) {
     return {
       hasDesignMd: true,
-      spec: doc.designMd,
-      markdown: generateDesignMd(doc.designMd),
+      spec: _mcpDesignMd,
+      markdown: generateDesignMd(_mcpDesignMd),
     };
   }
 
-  // Fallback: auto-extract from document variables/typography. Not persisted.
-  const extracted = extractDesignMdFromDocument(doc);
-  if (specHasContent(extracted)) {
-    return {
-      hasDesignMd: true,
-      spec: extracted,
-      markdown: generateDesignMd(extracted),
-    };
+  // Try to auto-extract from document
+  const filePath = resolveDocPath(params.filePath);
+  const doc = await openDocument(filePath);
+  const spec = extractDesignMdFromDocument(doc);
+  const hasContent = !!(
+    spec.colorPalette?.length ||
+    spec.typography?.fontFamily ||
+    spec.visualTheme
+  );
+
+  if (hasContent) {
+    _mcpDesignMd = spec;
+    return { hasDesignMd: true, spec, markdown: generateDesignMd(spec) };
   }
 
   return { hasDesignMd: false };
 }
 
-/** Write design.md into the document (persisted via saveDocument). */
+/** Import design.md content. */
 export async function handleSetDesignMd(
   params: SetDesignMdParams,
 ): Promise<{ success: boolean; spec?: DesignMdSpec }> {
-  const filePath = resolveDocPath(params.filePath);
-  const doc = await openDocument(filePath);
-
   let spec: DesignMdSpec;
+
   if (params.autoExtract) {
+    const filePath = resolveDocPath(params.filePath);
+    const doc = await openDocument(filePath);
     spec = extractDesignMdFromDocument(doc);
   } else if (params.markdown) {
     spec = parseDesignMd(params.markdown);
@@ -81,23 +74,23 @@ export async function handleSetDesignMd(
     return { success: false };
   }
 
-  doc.designMd = spec;
-  await saveDocument(filePath, doc);
+  _mcpDesignMd = spec;
+  setDesignMdForPrompt(spec);
 
   return { success: true, spec };
 }
 
-/** Export design.md as markdown text (reads from doc.designMd first). */
+/** Export design.md as markdown text. */
 export async function handleExportDesignMd(
   params: ExportDesignMdParams,
 ): Promise<{ markdown: string }> {
-  const filePath = resolveDocPath(params.filePath);
-  const doc = await openDocument(filePath);
-
-  if (doc.designMd) {
-    return { markdown: generateDesignMd(doc.designMd) };
+  if (_mcpDesignMd) {
+    return { markdown: generateDesignMd(_mcpDesignMd) };
   }
 
+  // Auto-extract from document
+  const filePath = resolveDocPath(params.filePath);
+  const doc = await openDocument(filePath);
   const spec = extractDesignMdFromDocument(doc);
   return { markdown: generateDesignMd(spec) };
 }

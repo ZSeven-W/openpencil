@@ -1,11 +1,5 @@
 // apps/desktop/git/__tests__/git-ipc.test.ts
-import { describe, it, expect, vi } from 'vitest';
-
-// The `electron` npm package's `index.js` resolves the binary path at import
-// time and throws when its postinstall didn't run (path.txt missing). This
-// file only exercises pure helpers, so we stub electron's ipc surface.
-vi.mock('electron', () => ({ ipcMain: { handle: () => undefined } }));
-
+import { describe, it, expect } from 'vitest';
 import { GitError } from '../error';
 import { serializeGitError, GIT_ERROR_MARKER } from '../ipc-handlers';
 

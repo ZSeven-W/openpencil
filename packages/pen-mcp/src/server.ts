@@ -19,9 +19,6 @@ import {
   DESIGN_TOOL_DEFINITIONS,
   DESIGN_TOOL_NAMES,
   handleDesignToolCall,
-  D0_SPIKE_TOOL_DEFINITIONS,
-  D0_SPIKE_TOOL_NAMES,
-  handleD0SpikeToolCall,
 } from './routes/design-routes';
 import {
   VARIABLE_TOOL_DEFINITIONS,
@@ -54,8 +51,6 @@ const pkg = { name: '@zseven-w/pen-mcp', version: '0.6.0' };
 const DEBUG_ENABLED =
   process.env.OPENPENCIL_DEBUG_TOOLS === '1' || process.argv.includes('--debug');
 
-const D0_SPIKE_ENABLED = process.env.OPENPENCIL_D0_SPIKE === '1';
-
 /**
  * MCP content block types supported by this server's tool handlers.
  * Phase 1 tools all return string (wrapped to a single text block); Phase 2
@@ -77,7 +72,6 @@ const TOOL_DEFINITIONS = [
   ...STYLE_GUIDE_TOOL_DEFINITIONS,
   ...STYLE_OPS_TOOL_DEFINITIONS,
   ...(DEBUG_ENABLED ? DEBUG_TOOL_DEFINITIONS : []),
-  ...(D0_SPIKE_ENABLED ? D0_SPIKE_TOOL_DEFINITIONS : []),
 ];
 
 // --- Tool execution handler ---
@@ -96,7 +90,6 @@ async function handleToolCall(
   if (STYLE_GUIDE_TOOL_NAMES.has(name)) return handleStyleGuideToolCall(name, a);
   if (STYLE_OPS_TOOL_NAMES.has(name)) return handleStyleOpsToolCall(name, a);
   if (DEBUG_ENABLED && DEBUG_TOOL_NAMES.has(name)) return handleDebugToolCall(name, a);
-  if (D0_SPIKE_ENABLED && D0_SPIKE_TOOL_NAMES.has(name)) return handleD0SpikeToolCall(name, a);
   throw new Error(`Unknown tool: ${name}`);
 }
 

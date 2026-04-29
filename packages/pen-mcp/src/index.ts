@@ -39,21 +39,6 @@ export {
   postProcessNode,
 } from './tools/node-crud';
 export { handleBatchDesign } from './tools/batch-design';
-// Pure browser-safe DSL executor. External MCP callers usually want
-// `handleBatchDesign` (server wrapper), but apps/web can import from
-// `./tools/batch-design-dsl` directly via the pure path below to skip
-// the node:fs import chain.
-export {
-  runBatchDesignDsl,
-  type OpResult,
-  type ImageSearchFetcher,
-  type RunBatchDesignDslOptions,
-} from './tools/batch-design-dsl';
-export {
-  ELEMENT_TOOL_NAMES,
-  ELEMENT_TOOL_DEFINITIONS,
-  handleElementToolCall,
-} from './routes/element-tool-defs';
 export { handleDesignSkeleton } from './tools/design-skeleton';
 export { handleDesignContent } from './tools/design-content';
 export { handleDesignRefine } from './tools/design-refine';

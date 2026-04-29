@@ -19,11 +19,10 @@ import type {
   SubAgentResult,
 } from './ai-types';
 import type { DesignMdSpec } from '@/types/design-md';
-import type { VariableDefinition } from '@/types/variables';
 import { streamChat } from './ai-service';
 import { resolveSkills } from '@zseven-w/pen-ai-skills';
 import { styleGuideRegistry } from '@zseven-w/pen-ai-skills/_generated/style-guide-registry';
-import { extractStyleGuideValues, selectStyleGuide } from '@zseven-w/pen-ai-skills/style-guide';
+import { selectStyleGuide } from '@zseven-w/pen-ai-skills/style-guide';
 import {
   getOrchestratorTimeouts,
   prepareDesignPrompt,
@@ -483,136 +482,6 @@ function reorderDashboardMainChildren(plan: OrchestratorPlan, mainParentId: stri
   });
 }
 
-/**
- * Plan-derived v1 token names that this function manages. Keep in sync with
- * the mappings below — these are the keys we (re-)write on every plan run.
- * User-owned variables outside this set (custom names, themed values) are
- * never touched.
- */
-const PLAN_DERIVED_VARIABLE_NAMES = [
-  'color-bg-deep',
-  'color-surface',
-  'color-text-primary',
-  'color-text-body',
-  'color-text-muted',
-  'color-accent',
-  'color-border',
-] as const;
-
-/**
- * Apply a `name → VariableDefinition | undefined` patch to `doc.variables`
- * via a single direct setState — bypasses `store.setVariable` /
- * `store.removeVariable` to AVOID their side effect of walking the node
- * tree (`replaceVariableRefsInTree`) and rewriting any node that uses the
- * affected ref.
- *
- * Why bypass: this orchestrator-level patch is meant to swap the "ambient"
- * palette tokens between briefs / on rollback. It must NOT mutate user
- * nodes that legitimately reference these tokens — those nodes should
- * just resolve through the new palette at render time. Going through
- * `removeVariable` would null-out their refs and silently break colors
- * in pre-existing user content.
- *
- * Pass `undefined` for a name to delete the key.
- */
-function patchDocVariables(patch: Record<string, VariableDefinition | undefined>): void {
-  useDocumentStore.setState((s) => {
-    const current = s.document.variables ?? {};
-    const next: Record<string, VariableDefinition> = { ...current };
-    for (const [name, value] of Object.entries(patch)) {
-      if (value === undefined) {
-        delete next[name];
-      } else {
-        next[name] = value;
-      }
-    }
-    return {
-      document: {
-        ...s.document,
-        variables: Object.keys(next).length > 0 ? next : undefined,
-      },
-      isDirty: true,
-    };
-  });
-}
-
-/**
- * Undo the work of `seedDocVariablesFromStyleGuide` by restoring exactly
- * the 7 plan-derived names to their pre-seed state. Variables outside the
- * plan-derived set are never touched. Uses `patchDocVariables` so existing
- * node refs are not rewritten.
- */
-function rollbackPlanDerivedVariables(
-  snapshot: Record<string, VariableDefinition | undefined>,
-): void {
-  const patch: Record<string, VariableDefinition | undefined> = {};
-  for (const name of PLAN_DERIVED_VARIABLE_NAMES) {
-    patch[name] = snapshot[name];
-  }
-  patchDocVariables(patch);
-}
-
-/**
- * Seed `doc.variables` with the plan's style-guide palette (mapped to v1
- * semantic token names) so sub-agent JSONL output containing `$color-*` refs
- * resolves to the user's chosen palette at render time, not the
- * DEFAULT_PALETTE_FALLBACK blue.
- *
- * Without this, the sub-agent prompt teaches the model to emit
- * `$color-accent` (see `buildSubAgentStyleGuideInstruction` in
- * `orchestrator-sub-agent-compact.ts`) but the renderer would fall back to
- * the default `#2563EB` blue — completely overriding any warm/orange/etc
- * style guide picked by the planner.
- *
- * Always overwrites the plan-derived keys: every brief gets a fresh plan, and
- * the prompt's ref + (hex) instruction must match the resolved palette.
- * design.md flows bypass this function entirely (sub-agent uses designMd
- * policy instead of styleGuide injection). User-set variables outside the
- * plan-derived key set are left untouched.
- *
- * Stale-key guard: also clears any plan-derived key the new palette doesn't
- * carry (e.g. ai-generated `plan.styleGuide` has no `textMuted`, but a prior
- * brief may have seeded one from a catalog guide). Without this, the prior
- * brief's textMuted lingers and refs in this brief resolve to the wrong color.
- */
-export function seedDocVariablesFromStyleGuide(plan: OrchestratorPlan): void {
-  const palette: Record<string, string> = {};
-
-  // Priority: catalog content (designed palette, high confidence) >
-  // AI-generated styleGuide (model often invents an off-domain accent —
-  // empirically MiniMax/GLM gravitate to indigo `#6366F1` regardless of
-  // the warm-food/wellness/etc. catalog snippet they were shown). When the
-  // planner picks a catalog name, trust the catalog's curated palette;
-  // only fall back to the AI palette when no catalog content was attached.
-  if (plan.selectedStyleGuideContent) {
-    const v = extractStyleGuideValues(plan.selectedStyleGuideContent).colors;
-    if (v.background) palette['color-bg-deep'] = v.background;
-    if (v.surface) palette['color-surface'] = v.surface;
-    if (v.textPrimary) palette['color-text-primary'] = v.textPrimary;
-    if (v.textSecondary) palette['color-text-body'] = v.textSecondary;
-    if (v.textMuted) palette['color-text-muted'] = v.textMuted;
-    if (v.accent) palette['color-accent'] = v.accent;
-    if (v.border) palette['color-border'] = v.border;
-  } else if (plan.styleGuide?.palette) {
-    const p = plan.styleGuide.palette;
-    palette['color-bg-deep'] = p.background;
-    palette['color-surface'] = p.surface;
-    palette['color-text-primary'] = p.text;
-    palette['color-text-body'] = p.secondary;
-    palette['color-accent'] = p.accent;
-    palette['color-border'] = p.border;
-  }
-
-  if (Object.keys(palette).length === 0) return;
-
-  const patch: Record<string, VariableDefinition | undefined> = {};
-  for (const name of PLAN_DERIVED_VARIABLE_NAMES) {
-    const next = palette[name];
-    patch[name] = next !== undefined ? { type: 'color', value: next } : undefined;
-  }
-  patchDocVariables(patch);
-}
-
 import { applyAppendContextToPlan } from './orchestrator-append';
 export { applyAppendContextToPlan } from './orchestrator-append';
 export type { AppendPlanResult } from './orchestrator-append';
@@ -997,20 +866,6 @@ export async function executeOrchestration(
       totalNodes: 0,
     };
 
-    // Snapshot plan-derived variables BEFORE seed so we can roll back if
-    // generation fails entirely (no surviving content). Without this, a
-    // failed/aborted brief permanently pollutes the user's doc.variables
-    // with the plan's palette even though no nodes were applied.
-    const variablesBeforeSeed: Record<string, VariableDefinition | undefined> = {};
-    {
-      const existing = useDocumentStore.getState().document.variables ?? {};
-      for (const name of PLAN_DERIVED_VARIABLE_NAMES) {
-        variablesBeforeSeed[name] = existing[name];
-      }
-    }
-
-    seedDocVariablesFromStyleGuide(plan);
-
     let results: SubAgentResult[];
     try {
       results = await executeSubAgents(
@@ -1039,7 +894,6 @@ export async function executeOrchestration(
         }
         return n;
       };
-      let anyContentSurvived = false;
       for (const rn of rootNodes) {
         const live = store.getNodeById(rn.id);
         if (!live) continue;
@@ -1068,16 +922,7 @@ export async function executeOrchestration(
               /* already gone */
             }
           }
-        } else {
-          anyContentSurvived = true;
         }
-      }
-      // Roll back the plan-derived variables only when no content survived.
-      // With partial content the user can still see a salvageable design and
-      // its colors should match the seeded palette; rolling back would flip
-      // every $color-* ref to the default-palette blue.
-      if (!anyContentSurvived) {
-        rollbackPlanDerivedVariables(variablesBeforeSeed);
       }
       // On streaming failure, still close the batch before re-throwing
       if (animated) {
@@ -1118,19 +963,8 @@ export async function executeOrchestration(
       }
 
       const generatedNodeCount = allNodes.length - rootNodes.length;
-      if (generatedNodeCount === 0) {
-        // No sub-agent content was applied — roll back the plan-derived
-        // variables so the user's doc isn't left with a polluted palette
-        // that has no design backing it. Covers two cases:
-        //   1. !aborted: about to throw — rollback before throw so failure
-        //      and empty paths share the same post-state semantics as the
-        //      catch-block rollback above.
-        //   2. aborted: user cancelled before any content landed; without
-        //      rollback the seeded palette persists silently across briefs.
-        rollbackPlanDerivedVariables(variablesBeforeSeed);
-        if (!aborted) {
-          throw new Error('Orchestration produced no nodes beyond root frame');
-        }
+      if (generatedNodeCount === 0 && !aborted) {
+        throw new Error('Orchestration produced no nodes beyond root frame');
       }
 
       // -- Phase 4b: Remove duplicate status bars on mobile --

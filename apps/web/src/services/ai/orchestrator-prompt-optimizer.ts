@@ -420,110 +420,32 @@ function inferTagsFromPrompt(prompt: string): string[] {
   const lower = prompt.toLowerCase();
 
   // tone
-  if (/\b(dark|cyber|terminal|neon)\b|暗[色黑]?/.test(lower)) tags.push('dark-mode');
+  if (/dark|暗[色黑]?|cyber|terminal|neon/.test(lower)) tags.push('dark-mode');
   else tags.push('light-mode');
 
-  // visual style — `\b` keeps the word-boundary fix while inclusive lists
-  // cover derivative forms (modern/modernist, luxury/luxurious,
-  // brutal/brutalist) that earlier substring matches caught by accident.
-  if (/\b(minimal|minimalist|clean)\b|极简|简洁/.test(lower)) tags.push('minimal');
-  if (/\b(brutal|brutalist|brutalism)\b|粗犷/.test(lower)) tags.push('brutalist');
-  if (/\b(elegant|luxury|luxurious)\b|优雅|奢华/.test(lower)) tags.push('elegant');
-  if (/\b(playful|fun|whimsical)\b|活泼|趣味/.test(lower)) tags.push('playful');
-  if (/\b(modern|modernist|contemporary)\b|现代/.test(lower)) tags.push('modern');
+  // visual
+  if (/minimal|极简|clean|简洁/.test(lower)) tags.push('minimal');
+  if (/brutal|粗犷/.test(lower)) tags.push('brutalist');
+  if (/elegant|优雅|luxury|奢华/.test(lower)) tags.push('elegant');
+  if (/playful|活泼|fun|趣味/.test(lower)) tags.push('playful');
+  if (/modern|现代/.test(lower)) tags.push('modern');
 
-  // industry — only KEEP keywords that are DOMAIN-DEFINING (a brief that
-  // mentions them is almost certainly about that industry). Generic UI /
-  // tech words (menu / api / dev / wallet / budget / expense) are
-  // explicitly excluded — they appear in design briefs across every
-  // domain ("settings menu", "API integration", "expense form") and would
-  // force the wrong industry guide. 'code' is the most-defining single
-  // word for a developer brief AND the most-misused (QR code, promo code,
-  // country code) — handled below with a contextual two-word match.
-  if (
-    /\b(food|delivery|restaurant|takeout|cuisine|recipe|meal|diner|dining|eatery|cafe|café)\b|餐|美食|外卖/.test(
-      lower,
-    )
-  ) {
-    tags.push('warm-tones', 'friendly');
-  }
-  if (/\b(finance|fintech|banking|investing|trading|crypto|stocks)\b|金融/.test(lower)) {
-    tags.push('fintech');
-  }
-  // 'wallet' / 'budget' / 'expense' alone are too ambiguous (Apple Wallet
-  // pass, "on a budget", expense form across any domain). Require a
-  // companion finance word so common fintech briefs ("crypto wallet",
-  // "budget tracker", "expense tracker") still match without forcing
-  // fintech onto every UI that mentions a budget.
-  // Wallet phrase triggers: every left-side modifier is unambiguously
-  // financial; right-side patterns 'wallet payment(s)' / 'wallet connect'
-  // are also unambiguous fintech.
-  if (
-    /\b(crypto|digital|payment|hot|cold|hardware|web3)\s+wallet\b|\bwallet\s+(payments?|connect)\b/.test(
-      lower,
-    )
-  ) {
-    tags.push('fintech');
-  }
-  // 'wallet app' on its own usually means a fintech wallet ("design a
-  // wallet app to send money"), but in Apple-Wallet contexts it's the
-  // generic iOS feature for boarding passes, event tickets, gift cards,
-  // membership cards, vaccination cards, and loyalty cards — none of
-  // which are fintech UI. Trigger fintech for 'wallet app' UNLESS the
-  // prompt also mentions an Apple-Wallet-style pass / ticket / card
-  // context (covering the common plural/card variants: coupons,
-  // gift cards, membership cards, punch cards, stamp cards).
-  const APPLE_WALLET_CONTEXT =
-    /\b(pass|passes|boarding|ticket|tickets|ticketing|gift\s+cards?|coupon|coupons|loyalty|membership|punch\s+cards?|stamp\s+cards?|vaccination\s+cards?)\b/;
-  if (/\bwallet\s+app\b/.test(lower) && !APPLE_WALLET_CONTEXT.test(lower)) {
-    tags.push('fintech');
-  }
-  if (/\b(budget|expense)\s+(tracker|app|report|management|manager|tracking)\b/.test(lower)) {
-    tags.push('fintech');
-  }
-  if (/\b(developer|coding|programming|terminal|engineering)\b|开发/.test(lower)) {
-    tags.push('developer', 'monospace');
-  }
-  // 'code' / 'api' / 'dev' alone are too ambiguous (QR code, API
-  // integration in any domain, "dev" as informal abbreviation). Require
-  // an immediate dev-context companion word so common dev briefs ("code
-  // editor", "API console", "dev tools", "developer portal") still match
-  // without forcing developer onto every brief that mentions an API.
-  if (/\bcode\s+(editor|review|repo|repository|completion|snippet|base)\b/.test(lower)) {
-    tags.push('developer', 'monospace');
-  }
-  if (
-    /\bapi\s+(console|platform|portal|docs|documentation|reference|sdk|gateway|playground|key|keys)\b/.test(
-      lower,
-    )
-  ) {
-    tags.push('developer', 'monospace');
-  }
-  if (/\bdev\s+(tool|tools|portal|experience|environment|console|platform)\b/.test(lower)) {
-    tags.push('developer', 'monospace');
-  }
-  if (
-    /\b(wellness|fitness|yoga|meditation|mindful|health|healthy|wellbeing|spa|gym|exercise|workout)\b|健康/.test(
-      lower,
-    )
-  ) {
-    tags.push('wellness');
-  }
+  // industry
+  if (/food|餐|美食|delivery|外卖/.test(lower)) tags.push('warm-tones', 'friendly');
+  if (/finance|金融|fintech/.test(lower)) tags.push('fintech');
+  if (/developer|开发|code|terminal/.test(lower)) tags.push('developer', 'monospace');
+  if (/wellness|健康|health/.test(lower)) tags.push('wellness');
 
-  // accent — keep word boundaries plus exclude generic synonyms that mean
-  // things outside color in everyday English: 'mint' (mint condition),
-  // 'brass' (brass instrument), 'sage' (sage advice), 'amber' (Amber from
-  // *Amber* novels — borderline but deliberately kept as a color since it
-  // appears in palette docs).
-  if (/\b(coral|orange|peach|amber|tangerine)\b|珊瑚|橙/.test(lower)) tags.push('orange-accent');
-  if (/\b(blue|navy|sapphire|cobalt)\b|蓝/.test(lower)) tags.push('blue-accent');
-  if (/\b(green|emerald)\b|绿/.test(lower)) tags.push('sage-green');
-  if (/\b(gold|golden)\b|金/.test(lower)) tags.push('gold-accent');
-  if (/\b(red|crimson|scarlet|ruby)\b|红/.test(lower)) tags.push('red-accent');
+  // accent
+  if (/coral|珊瑚|orange|橙/.test(lower)) tags.push('orange-accent');
+  if (/blue|蓝/.test(lower)) tags.push('blue-accent');
+  if (/green|绿/.test(lower)) tags.push('sage-green');
+  if (/gold|金/.test(lower)) tags.push('gold-accent');
+  if (/red|红/.test(lower)) tags.push('red-accent');
 
   // technique
-  if (/\brounded\b|圆角/.test(lower)) tags.push('rounded');
-  if (/\bgradient\b|渐变/.test(lower)) tags.push('gradient');
+  if (/rounded|圆角/.test(lower)) tags.push('rounded');
+  if (/gradient|渐变/.test(lower)) tags.push('gradient');
 
   return tags.length > 0 ? tags : ['minimal', 'light-mode'];
 }
@@ -539,40 +461,13 @@ function rankStyleGuidesForPrompt(tags: string[], platform: string) {
   });
 }
 
-/**
- * Industry/domain tags carry a stronger signal than generic visual-style
- * tags (modern / minimal / rounded). A "food mobile app" brief should land
- * on a warm-toned mobile guide — even if a webapp catalog entry happens
- * to share more visual-style tags by coincidence, the industry signal has
- * to dominate. Style tags broaden the search; industry tags narrow it.
- */
-const INDUSTRY_TAGS = new Set([
-  'warm-tones', // food / hospitality
-  'wellness', // health / mindfulness
-  'fintech', // finance
-  'developer', // dev tools
-  'monospace', // dev tools (paired with 'developer')
-]);
-
 function styleGuidePromptScore(
   guideTags: string[],
   requestTags: string[],
   platformMatch: boolean,
 ): number {
-  let score = 0;
-  for (const tag of requestTags) {
-    if (guideTags.includes(tag)) {
-      score += INDUSTRY_TAGS.has(tag) ? 30 : 10;
-    }
-  }
-  // Heavy platform-mismatch penalty: a mobile brief should not be answered
-  // by a desktop/landing-page palette just because that webapp guide
-  // happens to share a few generic style tags. Mobile-only guides have a
-  // markedly different layout / type / spacing rhythm than webapp guides;
-  // the small +3 boost we used to give wasn't enough to push the mobile
-  // candidates ahead of webapp ones with broader tag matches.
-  if (!platformMatch) score -= 30;
-  return score;
+  const overlap = requestTags.filter((tag) => guideTags.includes(tag)).length;
+  return overlap * 10 + (platformMatch ? 3 : 0);
 }
 
 function formatGuideMetadataLine(

@@ -312,12 +312,7 @@ describe('SkiaInteractionManager continuous interaction commits', () => {
     expect(useCanvasStore.getState().selection.activeId).toBe('child-1');
   });
 
-  it('drag preview moves the dragged node bounds but leaves ancestor clipStack untouched', () => {
-    // clipStack entries are ANCESTOR clips, not the dragged node's own
-    // bounds. Translating them along with the drag would make the visible
-    // clip rectangle drift on screen even though the actual ancestor frame
-    // hasn't moved. The post-commit re-flatten will compute the new
-    // (and possibly newly-clipped) state.
+  it('moves clip rects together with dragged render nodes', () => {
     const node = {
       id: 'frame-1',
       type: 'frame',
@@ -334,7 +329,7 @@ describe('SkiaInteractionManager continuous interaction commits', () => {
       absY: 60,
       absW: 200,
       absH: 120,
-      clipStack: [{ x: 45, y: 55, w: 210, h: 130, rx: 8 }],
+      clipRect: { x: 45, y: 55, w: 210, h: 130, rx: 8 },
     };
     const engine = createEngineStub([renderNode]);
     const manager = new SkiaInteractionManager(
@@ -352,8 +347,7 @@ describe('SkiaInteractionManager continuous interaction commits', () => {
 
     expect(renderNode.absX).toBe(70);
     expect(renderNode.absY).toBe(75);
-    // clipStack entries (ancestor clips) stay as snapshot
-    expect(renderNode.clipStack).toEqual([{ x: 45, y: 55, w: 210, h: 130, rx: 8 }]);
+    expect(renderNode.clipRect).toMatchObject({ x: 65, y: 70, w: 210, h: 130, rx: 8 });
     expect(engine.rebuildCount).toBeGreaterThan(0);
     expect(engine.dirtyCount).toBeGreaterThan(0);
   });

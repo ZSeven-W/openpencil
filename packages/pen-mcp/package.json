@@ -1,6 +1,6 @@
 {
   "name": "@zseven-w/pen-mcp",
-  "version": "0.8.0",
+  "version": "0.7.5",
   "description": "MCP server, document manager, and tools for OpenPencil",
   "homepage": "https://github.com/ZSeven-W/openpencil/tree/main/packages/pen-mcp",
   "bugs": {
@@ -24,10 +24,6 @@
     ".": {
       "types": "./src/index.ts",
       "import": "./src/index.ts"
-    },
-    "./dsl": {
-      "types": "./src/tools/batch-design-dsl.ts",
-      "import": "./src/tools/batch-design-dsl.ts"
     }
   },
   "scripts": {
