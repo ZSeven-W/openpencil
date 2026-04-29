@@ -20,9 +20,9 @@ import {
  */
 
 describe('getSemanticPalette', () => {
-  it('returns 14 variables', () => {
+  it('returns 14 original + 8 alert + 6 chart = 28 color variables', () => {
     const p = getSemanticPalette();
-    expect(Object.keys(p.variables).length).toBe(14);
+    expect(Object.keys(p.variables).length).toBe(28);
   });
 
   it('defines the Mode theme axis with Light + Dark', () => {
@@ -30,18 +30,21 @@ describe('getSemanticPalette', () => {
     expect(p.themes.Mode).toEqual(['Light', 'Dark']);
   });
 
-  it('every variable is type="color"', () => {
+  it('every light/dark color variable is type="color"', () => {
     const p = getSemanticPalette();
-    for (const [name, def] of Object.entries(p.variables)) {
-      expect((def as VariableDefinition).type, `${name} type`).toBe('color');
-    }
+    // All color variables (light/dark or single) must have type "color"
+    const colorVars = Object.entries(p.variables).filter(([, def]) =>
+      (def as VariableDefinition).type === 'color'
+    );
+    expect(colorVars.length).toBeGreaterThanOrEqual(28);
   });
 
-  it('every variable has ThemedValue[] with exactly light + dark entries', () => {
+  it('light/dark color variables have ThemedValue[] with exactly light + dark entries', () => {
     const p = getSemanticPalette();
+    // Only themed (array-value) variables must have the right shape
     for (const [name, def] of Object.entries(p.variables)) {
       const value = (def as VariableDefinition).value;
-      expect(Array.isArray(value), `${name} value is array`).toBe(true);
+      if (!Array.isArray(value)) continue; // single-value entries are fine
       const arr = value as ThemedValue[];
       expect(arr.length, `${name} has 2 themed values`).toBe(2);
       expect(arr[0].theme).toEqual({ Mode: 'Light' });
@@ -73,23 +76,33 @@ describe('getSemanticPalette', () => {
     }
   });
 
-  it('light and dark values differ for every color (real theme support, not stub)', () => {
+  it('light and dark values differ for every themed color (real theme support, not stub)', () => {
     const p = getSemanticPalette();
     for (const [name, def] of Object.entries(p.variables)) {
-      const values = (def as VariableDefinition).value as ThemedValue[];
+      const value = (def as VariableDefinition).value;
+      if (!Array.isArray(value)) continue; // single-value entries skip
+      const values = value as ThemedValue[];
       expect(values[0].value, `${name} has distinct light vs dark`).not.toBe(values[1].value);
     }
   });
 
-  it('every value is a well-formed hex color', () => {
+  it('every color variable value is a well-formed hex color', () => {
     const p = getSemanticPalette();
     // Accept #RRGGBB (6) or #RRGGBBAA (8 — for scrims with alpha)
     const hexRe = /^#[0-9A-F]{6}([0-9A-F]{2})?$/i;
     for (const [name, def] of Object.entries(p.variables)) {
-      const values = (def as VariableDefinition).value as ThemedValue[];
-      for (const v of values) {
-        expect(typeof v.value).toBe('string');
-        expect((v.value as string).match(hexRe), `${name} ${JSON.stringify(v.theme)}`).toBeTruthy();
+      const d = def as VariableDefinition;
+      if (d.type !== 'color') continue;
+      if (Array.isArray(d.value)) {
+        const arr = d.value as ThemedValue[];
+        for (const v of arr) {
+          expect(typeof v.value).toBe('string');
+          expect((v.value as string).match(hexRe), `${name} ${JSON.stringify(v.theme)}`).toBeTruthy();
+        }
+      } else {
+        // single-value color
+        expect(typeof d.value).toBe('string');
+        expect((d.value as string).match(hexRe), `${name}`).toBeTruthy();
       }
     }
   });
@@ -116,11 +129,11 @@ describe('getSemanticPaletteHex', () => {
     expect(hex['color-accent']).toBe('#60A5FA');
   });
 
-  it('returns all 14 names', () => {
+  it('returns all color token names (omits numeric tokens)', () => {
     const hex = getSemanticPaletteHex();
-    expect(Object.keys(hex).length).toBe(14);
+    // SEMANTIC_PALETTE_NAMES includes all 28 color tokens (no numerics yet at P1.1.5)
     for (const name of SEMANTIC_PALETTE_NAMES) {
-      expect(hex[name]).toBeDefined();
+      expect(hex[name], `${name} should be in hex map`).toBeDefined();
     }
   });
 });
@@ -143,7 +156,7 @@ describe('applySemanticPalette', () => {
   it('seeds an empty document with palette + theme axis', () => {
     const doc: PenDocument = createEmptyDocument();
     const out = applySemanticPalette(doc);
-    expect(Object.keys(out.variables ?? {}).length).toBe(14);
+    expect(Object.keys(out.variables ?? {}).length).toBe(28);
     expect(out.themes?.Mode).toEqual(['Light', 'Dark']);
   });
 
@@ -166,7 +179,7 @@ describe('applySemanticPalette', () => {
     expect(out.variables!['color-accent'].value).toBe('#FF0000');
     // All other palette vars still added
     expect(out.variables!['color-surface']).toBeDefined();
-    expect(Object.keys(out.variables!).length).toBe(14);
+    expect(Object.keys(out.variables!).length).toBe(28);
   });
 
   it('user-defined theme axis WINS (does not overwrite existing Mode)', () => {
@@ -193,7 +206,7 @@ describe('applySemanticPalette', () => {
   it('applies cleanly to a doc without variables or themes', () => {
     const doc: PenDocument = { version: '1.0.0', children: [] };
     const out = applySemanticPalette(doc);
-    expect(Object.keys(out.variables!).length).toBe(14);
+    expect(Object.keys(out.variables!).length).toBe(28);
     expect(out.themes!.Mode).toEqual(['Light', 'Dark']);
   });
 });
@@ -250,11 +263,12 @@ describe('palette resolves through resolveVariableRef', () => {
     expect(hex).toBe('#CAFE00');
   });
 
-  it('every palette variable resolves to its documented light/dark value', () => {
+  it('every color palette variable resolves to its documented light/dark value', () => {
     const p = getSemanticPalette();
     const light = getSemanticPaletteHex('Light');
     const dark = getSemanticPaletteHex('Dark');
-    for (const name of SEMANTIC_PALETTE_NAMES) {
+    // getSemanticPaletteHex omits numeric tokens, only test what's in the hex map
+    for (const name of Object.keys(light)) {
       const lightResolved = resolveVariableRef(`$${name}`, p.variables, { Mode: 'Light' });
       const darkResolved = resolveVariableRef(`$${name}`, p.variables, { Mode: 'Dark' });
       expect(lightResolved, `${name} light`).toBe(light[name]);
@@ -264,11 +278,140 @@ describe('palette resolves through resolveVariableRef', () => {
 });
 
 describe('SEMANTIC_PALETTE_NAMES', () => {
-  it('is readonly 14-length array matching palette keys', () => {
-    expect(SEMANTIC_PALETTE_NAMES.length).toBe(14);
+  it('is readonly array matching all palette keys', () => {
     const p = getSemanticPalette();
+    expect(SEMANTIC_PALETTE_NAMES.length).toBe(Object.keys(p.variables).length);
     for (const name of SEMANTIC_PALETTE_NAMES) {
       expect(p.variables[name]).toBeDefined();
     }
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Task 1.1.5 — Alert + chart color tokens (14 new)
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('alert tokens (8 light/dark pairs)', () => {
+  const ALERT_TOKENS = [
+    'color-info-bg',
+    'color-info-text',
+    'color-success-bg',
+    'color-success-text',
+    'color-warning-bg',
+    'color-warning-text',
+    'color-danger-bg',
+    'color-danger-text',
+  ] as const;
+
+  it('all 8 alert tokens are present in getSemanticPalette()', () => {
+    const p = getSemanticPalette();
+    for (const name of ALERT_TOKENS) {
+      expect(p.variables[name], `missing: ${name}`).toBeDefined();
+    }
+  });
+
+  it('alert tokens are type="color" with light + dark ThemedValue[]', () => {
+    const p = getSemanticPalette();
+    for (const name of ALERT_TOKENS) {
+      const def = p.variables[name] as VariableDefinition;
+      expect(def.type, `${name} type`).toBe('color');
+      const arr = def.value as ThemedValue[];
+      expect(Array.isArray(arr), `${name} value is array`).toBe(true);
+      expect(arr.length, `${name} has 2 themed values`).toBe(2);
+      expect(arr[0].theme).toEqual({ Mode: 'Light' });
+      expect(arr[1].theme).toEqual({ Mode: 'Dark' });
+    }
+  });
+
+  it('color-info-bg: light=#DBEAFE dark=#1E3A8A', () => {
+    const p = getSemanticPalette();
+    const arr = (p.variables['color-info-bg'] as VariableDefinition).value as ThemedValue[];
+    expect(arr[0].value).toBe('#DBEAFE');
+    expect(arr[1].value).toBe('#1E3A8A');
+  });
+
+  it('color-warning-text: light=#92400E dark=#FDE68A', () => {
+    const p = getSemanticPalette();
+    const arr = (p.variables['color-warning-text'] as VariableDefinition)
+      .value as ThemedValue[];
+    expect(arr[0].value).toBe('#92400E');
+    expect(arr[1].value).toBe('#FDE68A');
+  });
+
+  it('color-danger-bg: light=#FEE2E2 dark=#7F1D1D', () => {
+    const p = getSemanticPalette();
+    const arr = (p.variables['color-danger-bg'] as VariableDefinition).value as ThemedValue[];
+    expect(arr[0].value).toBe('#FEE2E2');
+    expect(arr[1].value).toBe('#7F1D1D');
+  });
+});
+
+describe('chart color tokens (6 single-value)', () => {
+  const CHART_TOKENS = [
+    'color-chart-1',
+    'color-chart-2',
+    'color-chart-3',
+    'color-chart-4',
+    'color-chart-5',
+    'color-chart-6',
+  ] as const;
+
+  const CHART_EXPECTED: Record<string, string> = {
+    'color-chart-1': '#3B82F6',
+    'color-chart-2': '#8B5CF6',
+    'color-chart-3': '#EC4899',
+    'color-chart-4': '#14B8A6',
+    'color-chart-5': '#F59E0B',
+    'color-chart-6': '#F97316',
+  };
+
+  it('all 6 chart tokens present in getSemanticPalette()', () => {
+    const p = getSemanticPalette();
+    for (const name of CHART_TOKENS) {
+      expect(p.variables[name], `missing: ${name}`).toBeDefined();
+    }
+  });
+
+  it('chart tokens are type="color" with a plain string value (no theme axis)', () => {
+    const p = getSemanticPalette();
+    for (const name of CHART_TOKENS) {
+      const def = p.variables[name] as VariableDefinition;
+      expect(def.type, `${name} type`).toBe('color');
+      expect(typeof def.value, `${name} value is string`).toBe('string');
+    }
+  });
+
+  it('chart token values match spec', () => {
+    const p = getSemanticPalette();
+    for (const [name, expected] of Object.entries(CHART_EXPECTED)) {
+      const def = p.variables[name] as VariableDefinition;
+      expect(def.value, `${name} value`).toBe(expected);
+    }
+  });
+
+  it('getSemanticPaletteHex includes chart tokens as-is (same for Light and Dark)', () => {
+    const light = getSemanticPaletteHex('Light');
+    const dark = getSemanticPaletteHex('Dark');
+    for (const [name, expected] of Object.entries(CHART_EXPECTED)) {
+      expect(light[name], `${name} light`).toBe(expected);
+      expect(dark[name], `${name} dark`).toBe(expected);
+    }
+  });
+});
+
+describe('palette count after 1.1.5 additions', () => {
+  it('getSemanticPalette() now has 28 variables (14 original + 8 alert + 6 chart)', () => {
+    const p = getSemanticPalette();
+    expect(Object.keys(p.variables).length).toBe(28);
+  });
+
+  it('SEMANTIC_PALETTE_NAMES has 28 entries', () => {
+    expect(SEMANTIC_PALETTE_NAMES.length).toBe(28);
+  });
+
+  it('applySemanticPalette seeds 28 variables on an empty document', () => {
+    const doc: PenDocument = createEmptyDocument();
+    const out = applySemanticPalette(doc);
+    expect(Object.keys(out.variables ?? {}).length).toBe(28);
   });
 });
