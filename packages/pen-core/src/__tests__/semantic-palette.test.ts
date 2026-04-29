@@ -20,9 +20,9 @@ import {
  */
 
 describe('getSemanticPalette', () => {
-  it('returns 32 color + 18 type tokens = 50 total variables', () => {
+  it('total variable count matches SEMANTIC_PALETTE_NAMES length', () => {
     const p = getSemanticPalette();
-    expect(Object.keys(p.variables).length).toBe(50);
+    expect(Object.keys(p.variables).length).toBe(SEMANTIC_PALETTE_NAMES.length);
   });
 
   it('defines the Mode theme axis with Light + Dark', () => {
@@ -161,7 +161,7 @@ describe('applySemanticPalette', () => {
   it('seeds an empty document with palette + theme axis', () => {
     const doc: PenDocument = createEmptyDocument();
     const out = applySemanticPalette(doc);
-    expect(Object.keys(out.variables ?? {}).length).toBe(50);
+    expect(Object.keys(out.variables ?? {}).length).toBe(SEMANTIC_PALETTE_NAMES.length);
     expect(out.themes?.Mode).toEqual(['Light', 'Dark']);
   });
 
@@ -184,7 +184,7 @@ describe('applySemanticPalette', () => {
     expect(out.variables!['color-accent'].value).toBe('#FF0000');
     // All other palette vars still added
     expect(out.variables!['color-surface']).toBeDefined();
-    expect(Object.keys(out.variables!).length).toBe(50);
+    expect(Object.keys(out.variables!).length).toBe(SEMANTIC_PALETTE_NAMES.length);
   });
 
   it('user-defined theme axis WINS (does not overwrite existing Mode)', () => {
@@ -211,7 +211,7 @@ describe('applySemanticPalette', () => {
   it('applies cleanly to a doc without variables or themes', () => {
     const doc: PenDocument = { version: '1.0.0', children: [] };
     const out = applySemanticPalette(doc);
-    expect(Object.keys(out.variables!).length).toBe(50);
+    expect(Object.keys(out.variables!).length).toBe(SEMANTIC_PALETTE_NAMES.length);
     expect(out.themes!.Mode).toEqual(['Light', 'Dark']);
   });
 });
@@ -481,8 +481,35 @@ describe('typography tokens (18 numeric single-value)', () => {
     }
   });
 
-  it('palette total grows to 50 (32 color + 18 type)', () => {
+  it('palette has at least 50 tokens (32 color + 18 type)', () => {
     const p = getSemanticPalette();
-    expect(Object.keys(p.variables).length).toBe(50);
+    expect(Object.keys(p.variables).length).toBeGreaterThanOrEqual(50);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Task 1.3 — Sparse letterSpacing tokens (2)
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('letterSpacing tokens (2 sparse numeric)', () => {
+  it('type-display-letter-spacing present with value -0.5', () => {
+    const p = getSemanticPalette();
+    const def = p.variables['type-display-letter-spacing'] as VariableDefinition;
+    expect(def, 'missing type-display-letter-spacing').toBeDefined();
+    expect(def.type).toBe('number');
+    expect(def.value).toBe(-0.5);
+  });
+
+  it('type-uppercase-label-letter-spacing present with value 1.5', () => {
+    const p = getSemanticPalette();
+    const def = p.variables['type-uppercase-label-letter-spacing'] as VariableDefinition;
+    expect(def, 'missing type-uppercase-label-letter-spacing').toBeDefined();
+    expect(def.type).toBe('number');
+    expect(def.value).toBe(1.5);
+  });
+
+  it('palette total grows to 52 (50 + 2 letterSpacing)', () => {
+    const p = getSemanticPalette();
+    expect(Object.keys(p.variables).length).toBe(52);
   });
 });
