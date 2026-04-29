@@ -54,13 +54,28 @@ export interface SemanticPalette {
 }
 
 /**
- * Raw light/dark value table. Source of truth — both
+ * Entry types for the PALETTE constant.
+ * - `LightDark`: theme-aware color token (light + dark hex pair)
+ * - `SingleColor`: single-value color token without theme axis (e.g. chart palette)
+ * - `SingleNumber`: numeric token without theme axis (typography, spacing, radius)
+ */
+type LightDarkEntry = { light: string; dark: string; description: string };
+type SingleColorEntry = { single: string; description: string };
+type SingleNumberEntry = { single: number; description: string };
+type PaletteEntry = LightDarkEntry | SingleColorEntry | SingleNumberEntry;
+
+function isLightDark(e: PaletteEntry): e is LightDarkEntry {
+  return 'light' in e;
+}
+
+/**
+ * Raw value table. Source of truth — both
  * `getSemanticPalette()` and `getSemanticPaletteHex()` derive from
  * this. Keeping it as a plain object (not a function) makes the
  * palette trivially scanable in code review + reduces the risk of
- * light/dark getting out of sync inside a function body.
+ * values getting out of sync inside a function body.
  */
-const PALETTE: Record<string, { light: string; dark: string; description: string }> = {
+const PALETTE: Record<string, PaletteEntry> = {
   'color-surface': {
     light: '#FFFFFF',
     dark: '#1E293B',
@@ -131,21 +146,87 @@ const PALETTE: Record<string, { light: string; dark: string; description: string
     dark: '#00000099',
     description: 'Modal backdrop',
   },
+
+  // ── Alert tokens (8 light/dark pairs) ────────────────────────────────────
+  'color-info-bg': {
+    light: '#DBEAFE',
+    dark: '#1E3A8A',
+    description: 'Info alert background',
+  },
+  'color-info-text': {
+    light: '#1E40AF',
+    dark: '#BFDBFE',
+    description: 'Info alert text / icon',
+  },
+  'color-success-bg': {
+    light: '#DCFCE7',
+    dark: '#14532D',
+    description: 'Success alert background',
+  },
+  'color-success-text': {
+    light: '#166534',
+    dark: '#BBF7D0',
+    description: 'Success alert text / icon',
+  },
+  'color-warning-bg': {
+    light: '#FEF3C7',
+    dark: '#78350F',
+    description: 'Warning alert background',
+  },
+  'color-warning-text': {
+    light: '#92400E',
+    dark: '#FDE68A',
+    description: 'Warning alert text / icon',
+  },
+  'color-danger-bg': {
+    light: '#FEE2E2',
+    dark: '#7F1D1D',
+    description: 'Danger / error alert background',
+  },
+  'color-danger-text': {
+    light: '#991B1B',
+    dark: '#FECACA',
+    description: 'Danger / error alert text / icon',
+  },
+
+  // ── Chart palette (6 single-value colors, no theme axis) ─────────────────
+  'color-chart-1': { single: '#3B82F6', description: 'Chart series 1 — blue' },
+  'color-chart-2': { single: '#8B5CF6', description: 'Chart series 2 — purple' },
+  'color-chart-3': { single: '#EC4899', description: 'Chart series 3 — pink' },
+  'color-chart-4': { single: '#14B8A6', description: 'Chart series 4 — teal' },
+  'color-chart-5': { single: '#F59E0B', description: 'Chart series 5 — amber' },
+  'color-chart-6': { single: '#F97316', description: 'Chart series 6 — orange' },
 };
 
 export const SEMANTIC_PALETTE_NAMES = Object.keys(PALETTE) as readonly (keyof typeof PALETTE)[];
 
-/** Return the 14-variable palette as a `{themes, variables}` pair. */
+/** Return the full palette as a `{themes, variables}` pair. */
 export function getSemanticPalette(): SemanticPalette {
   const variables: Record<string, VariableDefinition> = {};
-  for (const [name, { light, dark }] of Object.entries(PALETTE)) {
-    variables[name] = {
-      type: 'color',
-      value: [
-        { value: light, theme: { [SEMANTIC_PALETTE_THEME_AXIS]: SEMANTIC_PALETTE_THEME_LIGHT } },
-        { value: dark, theme: { [SEMANTIC_PALETTE_THEME_AXIS]: SEMANTIC_PALETTE_THEME_DARK } },
-      ],
-    };
+  for (const [name, entry] of Object.entries(PALETTE)) {
+    if (isLightDark(entry)) {
+      // Theme-aware color — light + dark ThemedValue array
+      variables[name] = {
+        type: 'color',
+        value: [
+          {
+            value: entry.light,
+            theme: { [SEMANTIC_PALETTE_THEME_AXIS]: SEMANTIC_PALETTE_THEME_LIGHT },
+          },
+          {
+            value: entry.dark,
+            theme: { [SEMANTIC_PALETTE_THEME_AXIS]: SEMANTIC_PALETTE_THEME_DARK },
+          },
+        ],
+      };
+    } else {
+      // Single-value entry — no theme axis
+      const isNum = typeof entry.single === 'number';
+      variables[name] = {
+        type: isNum ? 'number' : 'color',
+        value: entry.single,
+      };
+    }
   }
   return {
     themes: {
@@ -156,16 +237,22 @@ export function getSemanticPalette(): SemanticPalette {
 }
 
 /**
- * Return just the resolved hex values for one mode. Useful when a
- * caller needs a concrete color without carrying a full PenDocument
- * context (e.g. test fixtures, static codegen).
+ * Return just the resolved string/hex values for one mode. For theme-aware
+ * (light/dark) entries the mode is respected. For single-value entries the
+ * same value is returned regardless of mode. Numeric tokens are omitted.
  */
 export function getSemanticPaletteHex(
   mode: SemanticPaletteMode = SEMANTIC_PALETTE_THEME_LIGHT,
 ): Record<string, string> {
   const out: Record<string, string> = {};
   for (const [name, entry] of Object.entries(PALETTE)) {
-    out[name] = mode === SEMANTIC_PALETTE_THEME_DARK ? entry.dark : entry.light;
+    if (isLightDark(entry)) {
+      out[name] = mode === SEMANTIC_PALETTE_THEME_DARK ? entry.dark : entry.light;
+    } else if (typeof entry.single === 'string') {
+      // Single-value color (chart palette) — same for both modes
+      out[name] = entry.single;
+    }
+    // SingleNumberEntry: not a color hex → omit from this map
   }
   return out;
 }
