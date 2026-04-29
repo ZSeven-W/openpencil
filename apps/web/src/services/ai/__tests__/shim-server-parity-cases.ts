@@ -167,6 +167,16 @@ import {
   buildPriceV1,
   buildPricingCardV1,
   buildProfileHeaderV1,
+  buildProgressBarV1,
+  buildQuoteBlockV1,
+  buildRadioV1,
+  buildRangeSliderV1,
+  buildRatingStarsV1,
+  buildSearchBarV1,
+  buildSectionHeaderV1,
+  buildSegmentedControlV1,
+  buildSelectV1,
+  buildShareRowV1,
 } from '@zseven-w/pen-core';
 
 export interface BuilderCase {
@@ -1139,5 +1149,65 @@ export const CASES: BuilderCase[] = [
     toolName: 'add_profile_header_v1',
     args: { name: 'Sarah Lee', handle: '@sarah', bio: 'Product designer', theme: 'light' },
     build: (a) => buildProfileHeaderV1(a as unknown as Parameters<typeof buildProfileHeaderV1>[0]),
+  },
+  {
+    toolName: 'add_progress_bar_v1',
+    args: { value: 60, bar_width: 240, theme: 'light' },
+    build: (a) => buildProgressBarV1(a as unknown as Parameters<typeof buildProgressBarV1>[0]),
+  },
+  {
+    toolName: 'add_quote_block_v1',
+    args: { quote: 'Design is not just what it looks like.', author: 'Steve Jobs', theme: 'light' },
+    build: (a) => buildQuoteBlockV1(a as unknown as Parameters<typeof buildQuoteBlockV1>[0]),
+  },
+  {
+    toolName: 'add_radio_v1',
+    args: { label: 'Option A', selected: true, theme: 'light' },
+    build: (a) => buildRadioV1(a as unknown as Parameters<typeof buildRadioV1>[0]),
+  },
+  {
+    toolName: 'add_range_slider_v1',
+    args: { value: 50, label: 'Volume', show_value: true, value_suffix: '%', theme: 'light' },
+    build: (a) => buildRangeSliderV1(a as unknown as Parameters<typeof buildRangeSliderV1>[0]),
+  },
+  {
+    toolName: 'add_rating_stars_v1',
+    args: { filled: 4, total: 5, theme: 'light' },
+    build: (a) => buildRatingStarsV1(a as unknown as Parameters<typeof buildRatingStarsV1>[0]),
+  },
+  {
+    toolName: 'add_search_bar_v1',
+    args: { placeholder: 'Search...', theme: 'light' },
+    build: (a) => buildSearchBarV1(a as unknown as Parameters<typeof buildSearchBarV1>[0]),
+  },
+  {
+    toolName: 'add_section_header_v1',
+    args: { title: 'Featured', action: { label: 'See all', icon: 'arrow-right' }, theme: 'light' },
+    build: (a) => buildSectionHeaderV1(a as unknown as Parameters<typeof buildSectionHeaderV1>[0]),
+  },
+  {
+    toolName: 'add_segmented_control_v1',
+    args: {
+      items: [{ label: 'Day', active: true }, { label: 'Week' }, { label: 'Month' }],
+      theme: 'light',
+    },
+    build: (a) =>
+      buildSegmentedControlV1(a as unknown as Parameters<typeof buildSegmentedControlV1>[0]),
+  },
+  {
+    toolName: 'add_select_v1',
+    args: { label: 'Country', placeholder: 'Select…', theme: 'light' },
+    build: (a) => buildSelectV1(a as unknown as Parameters<typeof buildSelectV1>[0]),
+  },
+  {
+    toolName: 'add_share_row_v1',
+    args: {
+      targets: [
+        { label: 'Twitter', icon: 'twitter' },
+        { label: 'Copy link', icon: 'link' },
+      ],
+      theme: 'light',
+    },
+    build: (a) => buildShareRowV1(a as unknown as Parameters<typeof buildShareRowV1>[0]),
   },
 ];
