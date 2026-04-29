@@ -177,6 +177,16 @@ import {
   buildSegmentedControlV1,
   buildSelectV1,
   buildShareRowV1,
+  buildSidebarNavV1,
+  buildSkeletonV1,
+  buildSocialLoginRowV1,
+  buildSpinnerV1,
+  buildStatCardV1,
+  buildStatGridV1,
+  buildStatusBadgeV1,
+  buildStepCardV1,
+  buildStepperV1,
+  buildSwitchV1,
 } from '@zseven-w/pen-core';
 
 export interface BuilderCase {
@@ -1209,5 +1219,68 @@ export const CASES: BuilderCase[] = [
       theme: 'light',
     },
     build: (a) => buildShareRowV1(a as unknown as Parameters<typeof buildShareRowV1>[0]),
+  },
+  {
+    toolName: 'add_sidebar_nav_v1',
+    args: {
+      items: [
+        { label: 'Dashboard', icon: 'layout-dashboard', active: true },
+        { label: 'Settings', icon: 'settings' },
+      ],
+      theme: 'light',
+    },
+    build: (a) => buildSidebarNavV1(a as unknown as Parameters<typeof buildSidebarNavV1>[0]),
+  },
+  {
+    toolName: 'add_skeleton_v1',
+    args: { rows: 3, theme: 'light' },
+    build: (a) => buildSkeletonV1(a as unknown as Parameters<typeof buildSkeletonV1>[0]),
+  },
+  {
+    toolName: 'add_social_login_row_v1',
+    args: { providers: [{ name: 'google' }, { name: 'apple' }], theme: 'light' },
+    build: (a) =>
+      buildSocialLoginRowV1(a as unknown as Parameters<typeof buildSocialLoginRowV1>[0]),
+  },
+  {
+    toolName: 'add_spinner_v1',
+    args: { size: 32, theme: 'light' },
+    build: (a) => buildSpinnerV1(a as unknown as Parameters<typeof buildSpinnerV1>[0]),
+  },
+  {
+    toolName: 'add_stat_card_v1',
+    args: { label: 'Revenue', value: '$12.4k', theme: 'light' },
+    build: (a) => buildStatCardV1(a as unknown as Parameters<typeof buildStatCardV1>[0]),
+  },
+  {
+    toolName: 'add_stat_grid_v1',
+    args: {
+      items: [
+        { value: '1,284', label: 'Users' },
+        { value: '$12.4k', label: 'Revenue' },
+      ],
+      theme: 'light',
+    },
+    build: (a) => buildStatGridV1(a as unknown as Parameters<typeof buildStatGridV1>[0]),
+  },
+  {
+    toolName: 'add_status_badge_v1',
+    args: { label: 'Online', tone: 'success', theme: 'light' },
+    build: (a) => buildStatusBadgeV1(a as unknown as Parameters<typeof buildStatusBadgeV1>[0]),
+  },
+  {
+    toolName: 'add_step_card_v1',
+    args: { number: 1, title: 'Create account', description: 'Sign up with email.', theme: 'light' },
+    build: (a) => buildStepCardV1(a as unknown as Parameters<typeof buildStepCardV1>[0]),
+  },
+  {
+    toolName: 'add_stepper_v1',
+    args: { total: 3, current: 1, theme: 'light' },
+    build: (a) => buildStepperV1(a as unknown as Parameters<typeof buildStepperV1>[0]),
+  },
+  {
+    toolName: 'add_switch_v1',
+    args: { active: true, theme: 'light' },
+    build: (a) => buildSwitchV1(a as unknown as Parameters<typeof buildSwitchV1>[0]),
   },
 ];
