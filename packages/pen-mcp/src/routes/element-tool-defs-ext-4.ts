@@ -550,4 +550,41 @@ export const ELEMENT_TOOL_DEFINITIONS_EXT_4 = [
       required: ['number', 'title', 'description'],
     },
   },
+  {
+    name: 'add_heading_v1',
+    description:
+      'Theme-aware typographic heading (v1) — same typography presets as add_heading_v0 with an ' +
+      'additional `theme` param. theme="light" (default): byte-parity with v0 ' +
+      '(display=48/700, h1=32/700, h2=24/600, h3=20/600 + CJK detection). ' +
+      'theme="dark": dark text fill (#F1F5F9) with palette-scale sizes ' +
+      '(display=64, h1=24, h2=20, h3=16 from semantic palette tokens). ' +
+      'theme="system": emits $type-* size/weight/lineHeight refs + $color-text-primary fill ref; ' +
+      'resolves at paint time via doc.variables (requires applySemanticPalette). ' +
+      'CJK detection applies in all modes — script-specific fontFamily is always a concrete string. ' +
+      'Prefer v1 with theme="system" for design-system-aware designs; use v0 for byte-frozen output. ' +
+      'schemaVersion 1.0',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        schemaVersion: schemaVersionProp,
+        filePath: filePathProp,
+        content: { type: 'string', description: 'Heading text' },
+        level: {
+          type: 'string',
+          enum: ['display', 'h1', 'h2', 'h3'],
+          description: 'Typography level. Default: h2.',
+        },
+        theme: {
+          type: 'string',
+          enum: ['light', 'dark', 'system'],
+          description:
+            'Theme variant. "light" (default) = v0 byte-parity. "dark" = dark hex fill. ' +
+            '"system" = emits $type-*/​$color-* refs; requires applySemanticPalette(doc) seeded.',
+        },
+        parent_id: parentIdProp,
+        pageId: pageIdProp,
+      },
+      required: ['content'],
+    },
+  },
 ];

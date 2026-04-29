@@ -75,6 +75,7 @@ Text + button primitives:
 
 13. Padding-based button with text (optional leading icon) → `add_text_button_v0`
 14. Heading with enforced fontSize/lineHeight per level + AUTO CJK script detection (SC/JP/KR) → `add_heading_v0`
+    14b. Theme-aware variant (supports `theme: 'light' | 'dark' | 'system'`) → `add_heading_v1`
 15. Body text (Inter everywhere — CJK gets lineHeight 1.6 + letterSpacing 0, Latin 1.5) → `add_body_text_v0`
 
 Composition:
@@ -334,6 +335,7 @@ PREFER an element tool when the spec says any of:
 - "avatar", "profile picture", "user circle", "initial bubble" → `add_avatar_v0`
 - "primary button", "secondary button", "CTA", "submit button" (short label) → `add_text_button_v0`
 - "hero headline", "section title", "card title" / 特定字号标题 → `add_heading_v0`
+- "dark heading", "dark-mode title", "theme-aware heading", "system theme heading", "暗色标题", "主题感知标题" → `add_heading_v1` (accepts `theme: 'light' | 'dark' | 'system'`; use `"system"` when `applySemanticPalette(doc)` is seeded)
 - "body paragraph", "description text", "intro copy" (包含 CJK 时尤其推荐) → `add_body_text_v0`
 - "icon with label", "menu item (inline)", "breadcrumb segment", "status indicator text" → `add_icon_label_v0`
 - "list item", "iOS list cell", "table row with chevron" → `add_list_row_v0` (settings rows specifically — `add_setting_row_v0`, which has switch / value / badge trailing variants)

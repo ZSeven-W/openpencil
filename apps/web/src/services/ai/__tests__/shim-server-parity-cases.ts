@@ -107,6 +107,7 @@ import {
   buildToastV1,
   buildTooltip,
   buildTopNavBar,
+  buildHeadingV1,
 } from '@zseven-w/pen-core';
 
 export interface BuilderCase {
@@ -703,5 +704,10 @@ export const CASES: BuilderCase[] = [
       completed: true,
     },
     build: (a) => buildStepCard(a as unknown as Parameters<typeof buildStepCard>[0]),
+  },
+  {
+    toolName: 'add_heading_v1',
+    args: { content: 'Welcome', level: 'h1' },
+    build: (a) => buildHeadingV1(a as unknown as Parameters<typeof buildHeadingV1>[0]),
   },
 ];
