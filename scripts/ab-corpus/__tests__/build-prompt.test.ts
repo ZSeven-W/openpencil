@@ -9,16 +9,21 @@ import { buildSystemPrompt } from '../build-prompt';
 // the diet silently no-ops.
 
 const T_MULTI_TOOL_MARKER = 'Respond with one or more `<op_tool>` tags';
-const T_COMPOSITE_MARKER = 'COMPOSITE (multi-component briefs';
+const T_STRATEGY_A_MARKER = 'STRATEGY A — element tools';
+const T_STRATEGY_B_MARKER = 'STRATEGY B — batch_design fallback';
+const T_NO_MIX_MARKER = 'Do not mix Strategy A and Strategy B';
 const B_BATCH_MARKER =
   '<op_tool>{"name": "batch_design", "arguments": {"operations": "<DSL_STRING>"}}</op_tool>';
 // Earlier versions of the T instructions explicitly forbade multi-tool
 // output ("Respond with one tag" / "Do not combine multiple tags");
 // that wording undercut the multi-tool teaching baked into elements.md.
-// Codex stop-time review caught the contradiction — guard against
-// regression by asserting the forbidding text is GONE.
+// A subsequent revision flipped to allow chaining but quietly invited
+// mixed batch_design + element tags per-component, which the corpus
+// parser silently drops. Codex stop-time review caught both. Guard
+// against re-introducing either failure mode.
 const FORBIDDEN_SINGLE_TAG_PHRASE = 'one `<op_tool>` tag, nothing else';
 const FORBIDDEN_NO_COMBINE_PHRASE = 'Do not combine multiple tags';
+const FORBIDDEN_PER_COMPONENT_FALLBACK_PHRASE = 'when no element tool fits a given component shape';
 
 describe('buildSystemPrompt', () => {
   it('T + composite returns the largest prompt (cookbook present)', () => {
@@ -64,11 +69,12 @@ describe('buildSystemPrompt', () => {
     expect(distinct.size).toBe(1);
   });
 
-  it('every T variant carries the multi-tool output-format marker', () => {
+  it('every T variant carries the multi-tool + Strategy A/B output-format markers', () => {
     for (const difficulty of ['obvious', 'optional', 'composite'] as const) {
       const built = buildSystemPrompt('T', { difficulty });
       expect(built.system).toContain(T_MULTI_TOOL_MARKER);
-      expect(built.system).toContain(T_COMPOSITE_MARKER);
+      expect(built.system).toContain(T_STRATEGY_A_MARKER);
+      expect(built.system).toContain(T_STRATEGY_B_MARKER);
     }
   });
 
@@ -80,9 +86,21 @@ describe('buildSystemPrompt', () => {
     }
   });
 
-  it('B variant carries the batch_design marker but not the multi-tool split', () => {
+  it('T variant explicitly forbids mixing Strategy A and Strategy B (parser drops mixed)', () => {
+    for (const difficulty of ['obvious', 'optional', 'composite'] as const) {
+      const built = buildSystemPrompt('T', { difficulty });
+      expect(built.system).toContain(T_NO_MIX_MARKER);
+      // Earlier wording invited per-component fallback ("when no element
+      // tool fits a given component shape") which the parser silently
+      // drops when element calls are also present. Guard the rephrase.
+      expect(built.system).not.toContain(FORBIDDEN_PER_COMPONENT_FALLBACK_PHRASE);
+    }
+  });
+
+  it('B variant carries the batch_design marker but not the Strategy A/B split', () => {
     const built = buildSystemPrompt('B');
     expect(built.system).toContain(B_BATCH_MARKER);
-    expect(built.system).not.toContain(T_COMPOSITE_MARKER);
+    expect(built.system).not.toContain(T_STRATEGY_A_MARKER);
+    expect(built.system).not.toContain(T_STRATEGY_B_MARKER);
   });
 });
