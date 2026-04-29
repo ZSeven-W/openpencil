@@ -438,3 +438,5 @@ OpenPencil 免费开源,开发完全由觉得它好用的人们资助 —— 感
 ## 许可证
 
 [MIT](./LICENSE) — Copyright (c) 2026 ZSeven-W
+
+[![MseeP.ai Security Assessment Badge](https://mseep.net/pr/zseven-w-openpencil-badge.png)](https://mseep.ai/app/zseven-w-openpencil)

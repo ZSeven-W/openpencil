@@ -434,3 +434,5 @@ OpenPencil เป็นซอฟต์แวร์ฟรีและโอเพ
 ## สัญญาอนุญาต
 
 [MIT](./LICENSE) — Copyright (c) 2026 ZSeven-W
+
+[![MseeP.ai Security Assessment Badge](https://mseep.net/pr/zseven-w-openpencil-badge.png)](https://mseep.ai/app/zseven-w-openpencil)
