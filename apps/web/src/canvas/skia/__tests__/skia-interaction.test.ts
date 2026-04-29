@@ -329,7 +329,7 @@ describe('SkiaInteractionManager continuous interaction commits', () => {
       absY: 60,
       absW: 200,
       absH: 120,
-      clipRect: { x: 45, y: 55, w: 210, h: 130, rx: 8 },
+      clipStack: [{ x: 45, y: 55, w: 210, h: 130, rx: 8 }],
     };
     const engine = createEngineStub([renderNode]);
     const manager = new SkiaInteractionManager(
@@ -347,7 +347,7 @@ describe('SkiaInteractionManager continuous interaction commits', () => {
 
     expect(renderNode.absX).toBe(70);
     expect(renderNode.absY).toBe(75);
-    expect(renderNode.clipRect).toMatchObject({ x: 65, y: 70, w: 210, h: 130, rx: 8 });
+    expect(renderNode.clipStack).toEqual([{ x: 65, y: 70, w: 210, h: 130, rx: 8 }]);
     expect(engine.rebuildCount).toBeGreaterThan(0);
     expect(engine.dirtyCount).toBeGreaterThan(0);
   });

@@ -57,7 +57,7 @@ interface RenderNodeSnapshot {
   absY: number;
   absW: number;
   absH: number;
-  clipRect?: { x: number; y: number; w: number; h: number; rx: number };
+  clipStack?: { x: number; y: number; w: number; h: number; rx: number }[];
 }
 
 interface PreviewRect {
@@ -523,7 +523,9 @@ export class SkiaInteractionManager {
         absY: rn.absY,
         absW: rn.absW,
         absH: rn.absH,
-        ...(rn.clipRect ? { clipRect: { ...rn.clipRect } } : {}),
+        ...(rn.clipStack && rn.clipStack.length > 0
+          ? { clipStack: rn.clipStack.map((c) => ({ ...c })) }
+          : {}),
       });
     }
     return snapshots;
@@ -647,20 +649,15 @@ export class SkiaInteractionManager {
     rootRn.absY = nextRootRect.y;
     rootRn.absW = nextRootRect.w;
     rootRn.absH = nextRootRect.h;
-    rootRn.clipRect = rootSnapshot.clipRect
-      ? {
+    rootRn.clipStack = rootSnapshot.clipStack
+      ? rootSnapshot.clipStack.map((clip) => ({
           ...this.scalePreviewRect(
-            {
-              x: rootSnapshot.clipRect.x,
-              y: rootSnapshot.clipRect.y,
-              w: rootSnapshot.clipRect.w,
-              h: rootSnapshot.clipRect.h,
-            },
+            { x: clip.x, y: clip.y, w: clip.w, h: clip.h },
             sourceRect,
             nextRootRect,
           ),
-          rx: rootSnapshot.clipRect.rx * Math.min(scaleX, scaleY),
-        }
+          rx: clip.rx * Math.min(scaleX, scaleY),
+        }))
       : undefined;
 
     for (const [id, snapshot] of previewNodes) {
@@ -677,20 +674,15 @@ export class SkiaInteractionManager {
       rn.absY = scaled.y;
       rn.absW = scaled.w;
       rn.absH = scaled.h;
-      rn.clipRect = snapshot.clipRect
-        ? {
+      rn.clipStack = snapshot.clipStack
+        ? snapshot.clipStack.map((clip) => ({
             ...this.scalePreviewRect(
-              {
-                x: snapshot.clipRect.x,
-                y: snapshot.clipRect.y,
-                w: snapshot.clipRect.w,
-                h: snapshot.clipRect.h,
-              },
+              { x: clip.x, y: clip.y, w: clip.w, h: clip.h },
               sourceRect,
               nextRootRect,
             ),
-            rx: snapshot.clipRect.rx * Math.min(scaleX, scaleY),
-          }
+            rx: clip.rx * Math.min(scaleX, scaleY),
+          }))
         : undefined;
     }
 
@@ -726,7 +718,9 @@ export class SkiaInteractionManager {
     rootRn.absY = rootSnapshot.absY;
     rootRn.absW = rootSnapshot.absW;
     rootRn.absH = rootSnapshot.absH;
-    rootRn.clipRect = rootSnapshot.clipRect ? { ...rootSnapshot.clipRect } : undefined;
+    rootRn.clipStack = rootSnapshot.clipStack
+      ? rootSnapshot.clipStack.map((c) => ({ ...c }))
+      : undefined;
 
     const centerX = rootSnapshot.absX + rootSnapshot.absW / 2;
     const centerY = rootSnapshot.absY + rootSnapshot.absH / 2;
@@ -750,21 +744,16 @@ export class SkiaInteractionManager {
       rn.absY = rotated.y;
       rn.absW = rotated.w;
       rn.absH = rotated.h;
-      rn.clipRect = snapshot.clipRect
-        ? {
+      rn.clipStack = snapshot.clipStack
+        ? snapshot.clipStack.map((clip) => ({
             ...this.rotatePreviewRect(
-              {
-                x: snapshot.clipRect.x,
-                y: snapshot.clipRect.y,
-                w: snapshot.clipRect.w,
-                h: snapshot.clipRect.h,
-              },
+              { x: clip.x, y: clip.y, w: clip.w, h: clip.h },
               centerX,
               centerY,
               angleDelta,
             ),
-            rx: snapshot.clipRect.rx,
-          }
+            rx: clip.rx,
+          }))
         : undefined;
     }
 
@@ -919,12 +908,12 @@ export class SkiaInteractionManager {
       if (this.dragAllIds!.has(rn.node.id)) {
         rn.absX += incrDx;
         rn.absY += incrDy;
-        if (rn.clipRect) {
-          rn.clipRect = {
-            ...rn.clipRect,
-            x: rn.clipRect.x + incrDx,
-            y: rn.clipRect.y + incrDy,
-          };
+        if (rn.clipStack && rn.clipStack.length > 0) {
+          rn.clipStack = rn.clipStack.map((c) => ({
+            ...c,
+            x: c.x + incrDx,
+            y: c.y + incrDy,
+          }));
         }
         rn.node = { ...rn.node, x: rn.absX, y: rn.absY };
       }
