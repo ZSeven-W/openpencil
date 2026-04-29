@@ -510,6 +510,46 @@ describe('letterSpacing tokens (2 sparse numeric)', () => {
 
   it('palette total grows to 52 (50 + 2 letterSpacing)', () => {
     const p = getSemanticPalette();
-    expect(Object.keys(p.variables).length).toBe(52);
+    expect(Object.keys(p.variables).length).toBeGreaterThanOrEqual(52);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Task 1.4 — Spacing tokens (5: spacing-1…5 = 4/8/12/16/24)
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('spacing tokens (5 numeric)', () => {
+  const SPACING: Record<string, number> = {
+    'spacing-1': 4,
+    'spacing-2': 8,
+    'spacing-3': 12,
+    'spacing-4': 16,
+    'spacing-5': 24,
+  };
+
+  it('all 5 spacing tokens present', () => {
+    const p = getSemanticPalette();
+    for (const name of Object.keys(SPACING)) {
+      expect(p.variables[name], `missing: ${name}`).toBeDefined();
+    }
+  });
+
+  it('spacing tokens are type="number"', () => {
+    const p = getSemanticPalette();
+    for (const name of Object.keys(SPACING)) {
+      expect((p.variables[name] as VariableDefinition).type, `${name} type`).toBe('number');
+    }
+  });
+
+  it('spacing token values match spec (4/8/12/16/24)', () => {
+    const p = getSemanticPalette();
+    for (const [name, expected] of Object.entries(SPACING)) {
+      expect((p.variables[name] as VariableDefinition).value, name).toBe(expected);
+    }
+  });
+
+  it('palette total grows to 57 (52 + 5 spacing)', () => {
+    const p = getSemanticPalette();
+    expect(Object.keys(p.variables).length).toBe(57);
   });
 });

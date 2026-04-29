@@ -227,6 +227,13 @@ const PALETTE: Record<string, PaletteEntry> = {
   'type-caption-weight': { single: 400, description: 'Caption / helper text — font weight' },
   'type-caption-line-height': { single: 1.4, description: 'Caption / helper text — line height multiplier' },
 
+  // ── Spacing scale (5 numeric, 4-point base) ──────────────────────────────
+  'spacing-1': { single: 4, description: 'Spacing step 1 — 4 px (xs)' },
+  'spacing-2': { single: 8, description: 'Spacing step 2 — 8 px (sm)' },
+  'spacing-3': { single: 12, description: 'Spacing step 3 — 12 px (md)' },
+  'spacing-4': { single: 16, description: 'Spacing step 4 — 16 px (lg)' },
+  'spacing-5': { single: 24, description: 'Spacing step 5 — 24 px (xl)' },
+
   // ── Sparse letterSpacing (2 numeric) ─────────────────────────────────────
   'type-display-letter-spacing': {
     single: -0.5,
