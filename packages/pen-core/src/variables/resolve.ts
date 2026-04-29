@@ -214,7 +214,7 @@ function resolveEffectsForCanvas(
  * Returns the same object reference when no variables are present.
  */
 export function resolveNodeForCanvas(node: PenNode, variables: Vars, activeTheme?: Theme): PenNode {
-  if (!variables || Object.keys(variables).length === 0) return node;
+  if (!variables) variables = {};
 
   let changed = false;
   const out: Record<string, unknown> = { ...node };
@@ -278,7 +278,7 @@ export function resolveNodeForCanvas(node: PenNode, variables: Vars, activeTheme
   // since both paths use `node.fontSize ?? 16` (not type-guarded for strings).
   if (node.type === 'text') {
     const n = node as unknown as Record<string, unknown>;
-    for (const key of ['fontSize', 'lineHeight', 'letterSpacing'] as const) {
+    for (const key of ['fontSize', 'fontWeight', 'lineHeight', 'letterSpacing'] as const) {
       if (typeof n[key] === 'string' && isVariableRef(n[key] as string)) {
         const resolved = resolveNumericRef(n[key] as string, variables, activeTheme);
         if (resolved !== undefined) {

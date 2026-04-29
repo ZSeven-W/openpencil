@@ -1,5 +1,7 @@
 import { describe, it, expect } from 'vitest';
-import { resolveVariableRef } from '../variables/resolve.js';
+import { resolveVariableRef, resolveNodeForCanvas } from '../variables/resolve.js';
+import { createEmptyDocument } from '../tree-utils.js';
+import type { PenNode } from '@zseven-w/pen-types';
 
 describe('resolver-side fallback (un-seeded doc, P1.6)', () => {
   const emptyVars = {};
@@ -73,5 +75,46 @@ describe('resolver-side fallback (un-seeded doc, P1.6)', () => {
       };
       expect(resolveVariableRef('$color-text-primary', vars, undefined)).toBe('#FF0000');
     });
+  });
+});
+
+describe('GAP fixes — resolveNodeForCanvas covers all numeric refs', () => {
+  it('resolves fontWeight ref via fallback', () => {
+    const doc = createEmptyDocument();
+    const textNode: PenNode = {
+      id: 'h',
+      type: 'text',
+      name: 'H1',
+      content: 'Hello',
+      fontSize: '$type-h1-size' as unknown as number,
+      fontWeight: '$type-h1-weight' as unknown as number,
+      fill: [{ type: 'solid', color: '$color-text-primary' }],
+    };
+    const resolved = resolveNodeForCanvas(
+      textNode,
+      doc.variables ?? {},
+      undefined,
+    ) as unknown as Record<string, unknown>;
+    expect(typeof resolved.fontWeight).toBe('number');
+    expect(resolved.fontWeight).toBe(600);
+  });
+
+  it('resolves refs in empty-vars doc (fallback fires past early-exit)', () => {
+    // createEmptyDocument() returns doc.variables = undefined; passing undefined as vars
+    // exercises the GAP-2 fix (the early-exit was `if (!variables || Object.keys...)`).
+    const textNode: PenNode = {
+      id: 't',
+      type: 'text',
+      name: 'T',
+      content: 'Hi',
+      fill: [{ type: 'solid', color: '$color-text-primary' }],
+    };
+    const resolved = resolveNodeForCanvas(
+      textNode,
+      undefined as unknown as Record<string, import('@zseven-w/pen-types').VariableDefinition>,
+      undefined,
+    ) as unknown as Record<string, unknown>;
+    const fill = (resolved.fill as Array<{ type: string; color: string }>)[0];
+    expect(fill.color).toBe('#0F172A');
   });
 });
