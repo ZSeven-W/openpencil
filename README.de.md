@@ -434,3 +434,5 @@ Danke an **[MrQyun](https://github.com/mrqyun)** — soll dein Name auch hier st
 ## Lizenz
 
 [MIT](./LICENSE) — Copyright (c) 2026 ZSeven-W
+
+[![MseeP.ai Security Assessment Badge](https://mseep.net/pr/zseven-w-openpencil-badge.png)](https://mseep.ai/app/zseven-w-openpencil)
