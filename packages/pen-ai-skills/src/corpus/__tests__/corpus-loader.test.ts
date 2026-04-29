@@ -6,6 +6,7 @@ import { loadCorpus } from '../corpus-loader';
 
 const REPO_CORPUS_DIR = join(__dirname, '..', '..', '..', 'corpus', 'ab-v0');
 const REPO_CORPUS_V1_DIR = join(__dirname, '..', '..', '..', 'corpus', 'ab-v1');
+const REPO_CORPUS_V3_DIR = join(__dirname, '..', '..', '..', 'corpus', 'ab-v3');
 
 let tmp: string;
 
@@ -148,6 +149,56 @@ describe('loadCorpus — v1 supplemental corpus (new tools)', () => {
   });
 });
 
+describe('loadCorpus — v3 corpus (token cost + composite difficulty)', () => {
+  // ab-v3 carries forward the 40 v1 obvious yaml files unchanged so
+  // v1↔v3 overlap stays comparable, then adds 7 new obvious prompts
+  // (tools 91-97: setting_row / member_row / filter_group /
+  // invite_row / activity_log / event_card / step_card) plus 5
+  // composite prompts that exercise the M6 multi-tool/fallback/
+  // garbage routing on multi-element page briefs.
+  it('loads 52 prompts: 47 obvious + 5 composite', () => {
+    const prompts = loadCorpus(REPO_CORPUS_V3_DIR);
+    expect(prompts).toHaveLength(52);
+    const obvious = prompts.filter((p) => p.difficulty === 'obvious');
+    const composite = prompts.filter((p) => p.difficulty === 'composite');
+    expect(obvious).toHaveLength(47);
+    expect(composite).toHaveLength(5);
+  });
+
+  it('every composite prompt omits expected_tool_if_any', () => {
+    const prompts = loadCorpus(REPO_CORPUS_V3_DIR);
+    for (const p of prompts.filter((q) => q.difficulty === 'composite')) {
+      expect(p.expected_tool_if_any, `${p.id} should omit expected_tool_if_any`).toBeUndefined();
+    }
+  });
+
+  it('every composite prompt has must_contain_roles describing the multi-element shape', () => {
+    const prompts = loadCorpus(REPO_CORPUS_V3_DIR);
+    for (const p of prompts.filter((q) => q.difficulty === 'composite')) {
+      expect((p.expected.must_contain_roles ?? []).length).toBeGreaterThan(0);
+    }
+  });
+
+  it('the 7 new obvious prompts cover tools 91-97 (setting_row through step_card)', () => {
+    const prompts = loadCorpus(REPO_CORPUS_V3_DIR);
+    const v3OnlyTools = new Set([
+      'add_setting_row_v0',
+      'add_member_row_v0',
+      'add_filter_group_v0',
+      'add_invite_row_v0',
+      'add_activity_log_v0',
+      'add_event_card_v0',
+      'add_step_card_v0',
+    ]);
+    const covered = new Set(
+      prompts
+        .filter((p) => v3OnlyTools.has(p.expected_tool_if_any ?? ''))
+        .map((p) => p.expected_tool_if_any),
+    );
+    expect(covered).toEqual(v3OnlyTools);
+  });
+});
+
 describe('loadCorpus — validation errors', () => {
   function writeYaml(name: string, body: string): void {
     writeFileSync(join(tmp, name), body, 'utf-8');
@@ -202,6 +253,37 @@ expected: {}
 `,
     );
     expect(() => loadCorpus(tmp)).toThrow(/obvious requires expected_tool_if_any/);
+  });
+
+  it('rejects composite WITH expected_tool_if_any', () => {
+    writeYaml(
+      'bad.yaml',
+      `id: x
+category: mobile
+difficulty: composite
+prompt: hi
+expected: {}
+expected_tool_if_any: add_card_row_v0
+`,
+    );
+    expect(() => loadCorpus(tmp)).toThrow(/composite must NOT specify expected_tool_if_any/);
+  });
+
+  it('accepts composite without expected_tool_if_any', () => {
+    writeYaml(
+      'ok.yaml',
+      `id: x
+category: mobile
+difficulty: composite
+prompt: hi
+expected:
+  must_contain_roles: [card]
+`,
+    );
+    const out = loadCorpus(tmp);
+    expect(out).toHaveLength(1);
+    expect(out[0].difficulty).toBe('composite');
+    expect(out[0].expected_tool_if_any).toBeUndefined();
   });
 
   it('rejects duplicate ids across files', () => {
