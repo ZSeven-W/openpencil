@@ -1,0 +1,24 @@
+id: mobile-onboarding-step
+category: mobile
+difficulty: obvious
+prompt: |
+  Design ONLY one step card from a phone onboarding flow's
+  "How it works" column. The card is ~80px tall, full width on a
+  375-wide screen with 24px horizontal page margin. Left to right:
+    - a 36px circular ring marker on the left containing a single
+      bold number "2" centered inside
+    - a vertical text stack:
+        - title "Connect your bank" (16/600)
+        - description "Link your account in seconds. We use 256-bit
+          encryption to keep your data safe." (14/400, muted)
+  The marker is a numbered ring, NOT a filled check — this step is
+  not yet completed. Do NOT render neighboring steps, a page
+  header, or a "Get started" button — only this single step card.
+expected:
+  must_contain_roles:
+    - step-card
+    - step-card-number
+    - step-card-body
+    - step-card-title
+    - step-card-description
+expected_tool_if_any: add_step_card_v0

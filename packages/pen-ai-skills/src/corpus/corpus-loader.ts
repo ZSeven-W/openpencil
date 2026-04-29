@@ -4,7 +4,7 @@ import { load as loadYaml } from 'js-yaml';
 import type { CorpusPrompt } from './types';
 
 const VALID_CATEGORIES = new Set(['mobile', 'dashboard', 'landing']);
-const VALID_DIFFICULTIES = new Set(['obvious', 'optional']);
+const VALID_DIFFICULTIES = new Set(['obvious', 'optional', 'composite']);
 
 /**
  * Load every *.yaml file in the corpus directory. Validates the schema
@@ -66,6 +66,13 @@ function validateCorpusPrompt(raw: unknown, file: string): CorpusPrompt {
   if (difficulty === 'obvious' && !toolHint) {
     throw new Error(
       `loadCorpus: ${file}: difficulty=obvious requires expected_tool_if_any (used to score M5 routing)`,
+    );
+  }
+  if (difficulty === 'composite' && toolHint) {
+    throw new Error(
+      `loadCorpus: ${file}: difficulty=composite must NOT specify expected_tool_if_any — composite ` +
+        `prompts are multi-tool intents (M6 routing classifies into multi-tool / fallback / garbage). ` +
+        `If a single tool fits the brief, use difficulty=obvious instead.`,
     );
   }
   return {
