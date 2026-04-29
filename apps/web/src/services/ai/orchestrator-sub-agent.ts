@@ -61,43 +61,44 @@ export interface StreamTimeoutConfig {
 //
 // When `needsElementTools(modelProfile)` is true we append this block to
 // the sub-agent's system prompt so the model emits the same `<op_tool>`
-// wrapper measured in the A/B v1 treatment arm (see openpencil-docs
-// superpowers/notes/2026-04-20-ab-v1-results.md). Kept verbatim against
-// scripts/ab-corpus/build-prompt.ts::T_TOOL_CALL_INSTRUCTIONS so the
-// production path reproduces the behavior that cleared the decision gate.
+// wrapper measured in the ab-corpus treatment arm (see openpencil-docs
+// superpowers/notes/2026-05-01-ab-v4-results.md — that sweep validated
+// the same Strategy A / Strategy B framing used here, lifting composite
+// multi-tool routing from 0% to 42%).
 //
-// §3.4 of the integration plan adds a parser that detects these tags
-// BEFORE the legacy JSONL parser so existing flows stay intact when the
-// flag is off or when the model bypasses the wrapper.
-// elements.md documents 42 add_*_v0 tools for external MCP clients
-// that talk to pen-mcp's full handler set via stdio/HTTP transport.
-// The embedded orchestrator (this file's runtime) can only execute
-// a subset — tools with both a client-side shim (element-tool-shims)
-// AND a matching Nitro SERVER_BUILDERS entry. Tell the AI which
-// subset is live so it doesn't emit `<op_tool>` for uncovered tools
-// and see them fail through to error. Uncovered tools should fall
-// back to batch_design (documented FALLBACK branch below).
+// Mirrors scripts/ab-corpus/build-prompt.ts::T_TOOL_CALL_INSTRUCTIONS
+// with one production-specific addition: EMBEDDED COVERAGE. elements.md
+// documents the full add_*_v0 family for external MCP clients that talk
+// to pen-mcp's complete handler set via stdio/HTTP transport. The
+// embedded orchestrator (this file's runtime) can only execute a subset
+// — tools with both a client-side shim (element-tool-shims) AND a
+// matching Nitro SERVER_BUILDERS entry. We surface that list so the
+// model doesn't emit `<op_tool>` for uncovered tools and see them fail
+// through; uncovered components should fall back to Strategy B.
+//
+// design-parser.ts::tryParseElementToolOutput already collects EVERY
+// `<op_tool>` tag in the response into a tool_calls array, so the
+// multi-tool path in Strategy A works end-to-end.
 const EMBEDDED_AVAILABLE = SUPPORTED_EMBEDDED_ELEMENT_TOOLS.join(', ');
 const ELEMENT_TOOL_OUTPUT_FORMAT = [
   '',
-  'OUTPUT FORMAT — EMIT AS TOOL CALL:',
+  'OUTPUT FORMAT — EMIT AS TOOL CALL(S):',
   '',
-  'Respond with one `<op_tool>` tag, nothing else. Choose based on intent:',
+  'Respond with one or more `<op_tool>` tags, nothing else. The runtime reads every `<op_tool>` tag in your output, so chain as many as the brief implies. Pick ONE strategy for the whole response — do NOT mix element tools with batch_design in the same output:',
   '',
-  'PRIMARY: when your intent matches an add_*_v0 element tool, emit:',
-  '  <op_tool>{"name": "add_X_v0", "arguments": {...}}</op_tool>',
+  'STRATEGY A — element tools (preferred): when every component in the brief fits an embedded `add_*_v0` element tool, emit one tag per component, in render order (top-to-bottom for vertical layouts, left-to-right for horizontal). Single-component briefs produce exactly one tag; multi-component briefs (settings panel with N rows, team list with N members, audit feed with N entries, onboarding screen with N step cards) produce N+1 or more.',
+  '  <op_tool>{"name": "add_section_header_v0", "arguments": {"title": "Notifications"}}</op_tool>',
+  '  <op_tool>{"name": "add_setting_row_v0", "arguments": {...}}</op_tool>',
+  '  <op_tool>{"name": "add_setting_row_v0", "arguments": {...}}</op_tool>',
   '',
-  'EMBEDDED COVERAGE: in THIS runtime only the following element tools ',
-  'can actually execute — other add_*_v0 names in the skill doc will ',
-  'return an unsupported error. Prefer these, and fall back to ',
-  'batch_design below for any element not in this list:',
+  'EMBEDDED COVERAGE: in THIS runtime only the following element tools can actually execute — other add_*_v0 names in the skill doc will return an unsupported error. Prefer these, and fall back to Strategy B for any component whose tool is not in this list:',
   `  ${EMBEDDED_AVAILABLE}`,
   '',
-  'FALLBACK: when no listed element tool fits (heterogeneous layout, composite section, post-hoc styling, or intent matches an element tool outside the list above), emit:',
+  'STRATEGY B — batch_design fallback: when the brief includes any component shape that NO embedded element tool covers (heterogeneous custom layout, post-hoc styling, bespoke scaffolding, or an element tool outside the EMBEDDED COVERAGE list above), emit a SINGLE batch_design call covering the WHOLE response. Multiple `<op_tool>` tags carrying batch_design or any mix of batch_design + element tools is not supported — the runtime drops the batch_design half and only the element calls run.',
   '  <op_tool>{"name": "batch_design", "arguments": {"operations": "<DSL_STRING>"}}</op_tool>',
-  'The `operations` value is a single string containing the batch_design DSL.',
+  'The `operations` value is a single string containing the batch_design DSL covering every component in the brief.',
   '',
-  'Do not combine multiple tags. Do not add prose before or after.',
+  'Do not add prose before, after, or between tags. Do not mix Strategy A and Strategy B in the same output — choose embedded element tools for every component or batch_design for every component.',
   '',
 ].join('\n');
 
