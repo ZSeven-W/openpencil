@@ -123,6 +123,47 @@ const FIXTURES: Record<string, string> = {
     '}}',
     '</op_tool>',
   ].join('\n'),
+  // Composite multi-tool fixtures — exercise the new tool_calls list
+  // path end-to-end without burning live API credits. Each value is a
+  // multi-tag raw string the parser will split into multiple element-
+  // tool calls (apply.ts loops over them, byTool tallies per-name).
+  // These are the only stubs that produce >1 op_tool block; obvious
+  // prompts still emit 1 by default.
+  'dashboard-settings-page-composite|T': [
+    '<op_tool>{"name":"add_section_header_v0","arguments":{"title":"Notifications","subtitle":"Choose what you want to be alerted about."}}</op_tool>',
+    '<op_tool>{"name":"add_setting_row_v0","arguments":{"title":"Email digest","subtitle":"Daily summary at 9am","leading_icon":"bell","trailing":{"kind":"switch","on":true}}}</op_tool>',
+    '<op_tool>{"name":"add_setting_row_v0","arguments":{"title":"Push notifications","subtitle":"All channels","leading_icon":"phone","trailing":{"kind":"switch","on":true}}}</op_tool>',
+    '<op_tool>{"name":"add_setting_row_v0","arguments":{"title":"Direct messages","subtitle":"Mentions only","leading_icon":"message-circle","trailing":{"kind":"switch","on":false}}}</op_tool>',
+    '<op_tool>{"name":"add_setting_row_v0","arguments":{"title":"Critical alerts","subtitle":"Always on","leading_icon":"alert-triangle","trailing":{"kind":"switch","on":true}}}</op_tool>',
+  ].join('\n'),
+  'dashboard-team-people-page-composite|T': [
+    '<op_tool>{"name":"add_section_header_v0","arguments":{"title":"Members","subtitle":"5 people"}}</op_tool>',
+    '<op_tool>{"name":"add_member_row_v0","arguments":{"name":"Sarah Lee","subtitle":"sarah@acme.com","initial":"S","trailing":{"kind":"role_badge","value":"Owner"}}}</op_tool>',
+    '<op_tool>{"name":"add_member_row_v0","arguments":{"name":"Marcus Chen","subtitle":"marcus@acme.com","initial":"M","trailing":{"kind":"role_badge","value":"Admin"}}}</op_tool>',
+    '<op_tool>{"name":"add_member_row_v0","arguments":{"name":"Aiko Tanaka","subtitle":"aiko@acme.com","initial":"A","trailing":{"kind":"role_badge","value":"Editor"}}}</op_tool>',
+    '<op_tool>{"name":"add_member_row_v0","arguments":{"name":"Raj Patel","subtitle":"raj@acme.com","initial":"R","trailing":{"kind":"role_badge","value":"Editor"}}}</op_tool>',
+    '<op_tool>{"name":"add_member_row_v0","arguments":{"name":"Jordan Kim","subtitle":"jordan@acme.com","initial":"J","trailing":{"kind":"role_badge","value":"Viewer"}}}</op_tool>',
+    '<op_tool>{"name":"add_invite_row_v0","arguments":{"email":"leon@acme.com","role":"Editor","status":"pending","action_label":"Resend"}}</op_tool>',
+  ].join('\n'),
+  'dashboard-search-filters-composite|T': [
+    '<op_tool>{"name":"add_filter_group_v0","arguments":{"title":"Category","options":[{"label":"Apparel","count":124,"selected":true},{"label":"Footwear","count":86},{"label":"Bags","count":41},{"label":"Accessories","count":67}]}}</op_tool>',
+    '<op_tool>{"name":"add_filter_group_v0","arguments":{"title":"Brand","options":[{"label":"Nike","count":32},{"label":"Adidas","count":28},{"label":"Patagonia","count":15,"selected":true},{"label":"Arc Teryx","count":9}]}}</op_tool>',
+  ].join('\n'),
+  'dashboard-audit-feed-composite|T': [
+    '<op_tool>{"name":"add_section_header_v0","arguments":{"title":"Recent activity","subtitle":"Last 24 hours"}}</op_tool>',
+    '<op_tool>{"name":"add_activity_log_v0","arguments":{"actor":"Sarah Lee","action":"approved the production deploy","timestamp":"2h ago","icon":"check","tone":"success"}}</op_tool>',
+    '<op_tool>{"name":"add_activity_log_v0","arguments":{"actor":"Marcus Chen","action":"uploaded final-mockups.zip","timestamp":"3h ago","icon":"upload","tone":"info"}}</op_tool>',
+    '<op_tool>{"name":"add_activity_log_v0","arguments":{"actor":"Aiko Tanaka","action":"invited jordan@acme.com to the workspace","timestamp":"5h ago","icon":"user-plus","tone":"info"}}</op_tool>',
+    '<op_tool>{"name":"add_activity_log_v0","arguments":{"actor":"System","action":"rate-limited an IP after 50 failed sign-ins","timestamp":"8h ago","icon":"alert-triangle","tone":"warning"}}</op_tool>',
+    '<op_tool>{"name":"add_activity_log_v0","arguments":{"actor":"Raj Patel","action":"updated billing details","timestamp":"yesterday","icon":"settings","tone":"neutral"}}</op_tool>',
+    '<op_tool>{"name":"add_activity_log_v0","arguments":{"actor":"Sarah Lee","action":"deleted archive-2024.zip","timestamp":"yesterday","icon":"trash","tone":"danger"}}</op_tool>',
+  ].join('\n'),
+  'mobile-onboarding-flow-composite|T': [
+    '<op_tool>{"name":"add_step_card_v0","arguments":{"number":1,"title":"Create your account","description":"Use your email and a strong password to sign up. No credit card required."}}</op_tool>',
+    '<op_tool>{"name":"add_step_card_v0","arguments":{"number":2,"title":"Connect your bank","description":"Link your account in seconds. We use 256-bit encryption to keep your data safe."}}</op_tool>',
+    '<op_tool>{"name":"add_step_card_v0","arguments":{"number":3,"title":"Set your goals","description":"Tell us what you want to save for — we will do the rest."}}</op_tool>',
+    '<op_tool>{"name":"add_step_card_v0","arguments":{"number":"4","title":"You are all set","description":"You are ready to use the app. Tap below to continue.","completed":true}}</op_tool>',
+  ].join('\n'),
   // Baseline garbage response (simulates a weak model producing prose)
   'mobile-tabs-demo|B':
     'I can help you design that! Let me create a tabs demo for you with three underline tabs.',
