@@ -658,6 +658,12 @@ export class SkiaInteractionManager {
       ? rootSnapshot.clipStack.map((c) => ({ ...c }))
       : undefined;
 
+    // Number of clipStack entries above the resize target — these are
+    // ancestor clips of T, which DO NOT move when T resizes. Anything past
+    // this index in a descendant's clipStack was pushed by T or one of T's
+    // descendants (clipContent ancestors INSIDE the resize subtree), and
+    // must scale with the subtree.
+    const ancestorCount = rootSnapshot.clipStack?.length ?? 0;
     for (const [id, snapshot] of previewNodes) {
       if (id === this.resizeNodeId) continue;
       const rn = engine.spatialIndex.get(id);
@@ -672,9 +678,20 @@ export class SkiaInteractionManager {
       rn.absY = scaled.y;
       rn.absW = scaled.w;
       rn.absH = scaled.h;
-      // Same as above — preview children's clipStack entries are inherited
-      // from ancestors that aren't moving. Restore unchanged.
-      rn.clipStack = snapshot.clipStack ? snapshot.clipStack.map((c) => ({ ...c })) : undefined;
+      rn.clipStack = snapshot.clipStack
+        ? snapshot.clipStack.map((c, i) =>
+            i < ancestorCount
+              ? { ...c }
+              : {
+                  ...this.scalePreviewRect(
+                    { x: c.x, y: c.y, w: c.w, h: c.h },
+                    sourceRect,
+                    nextRootRect,
+                  ),
+                  rx: c.rx * Math.min(scaleX, scaleY),
+                },
+          )
+        : undefined;
     }
 
     this.resizeLatestPatch = updates as Partial<PenNode>;
@@ -715,6 +732,11 @@ export class SkiaInteractionManager {
 
     const centerX = rootSnapshot.absX + rootSnapshot.absW / 2;
     const centerY = rootSnapshot.absY + rootSnapshot.absH / 2;
+    // Ancestor clips above the rotation target are NOT in the rotated
+    // subtree, so they must stay frozen. Anything past `ancestorCount` in
+    // a descendant's clipStack was pushed by the target or one of its
+    // clipContent descendants — those rotate with the subtree.
+    const ancestorCount = rootSnapshot.clipStack?.length ?? 0;
     for (const [id, snapshot] of previewNodes) {
       if (id === this.rotateNodeId) continue;
       const rn = engine.spatialIndex.get(id);
@@ -735,9 +757,21 @@ export class SkiaInteractionManager {
       rn.absY = rotated.y;
       rn.absW = rotated.w;
       rn.absH = rotated.h;
-      // Rotation only affects the target subtree's bounds; ancestor clips
-      // are unchanged. Restore the snapshot stack unrotated.
-      rn.clipStack = snapshot.clipStack ? snapshot.clipStack.map((c) => ({ ...c })) : undefined;
+      rn.clipStack = snapshot.clipStack
+        ? snapshot.clipStack.map((c, i) =>
+            i < ancestorCount
+              ? { ...c }
+              : {
+                  ...this.rotatePreviewRect(
+                    { x: c.x, y: c.y, w: c.w, h: c.h },
+                    centerX,
+                    centerY,
+                    angleDelta,
+                  ),
+                  rx: c.rx,
+                },
+          )
+        : undefined;
     }
 
     this.rotateLatestAngle = newAngle;
