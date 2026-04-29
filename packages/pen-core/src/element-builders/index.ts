@@ -147,3 +147,8 @@ export {
   type MemberRowV1Trailing,
 } from './member-row-v1.js';
 export { buildActivityLogV1, type ActivityLogV1Params } from './activity-log-v1.js';
+export { buildAvatarV1, type AvatarV1Params } from './avatar-v1.js';
+export { buildBadgeV1, type BadgeV1Params } from './badge-v1.js';
+export { buildDividerV1, type DividerV1Orientation, type DividerV1Params } from './divider-v1.js';
+export { buildBodyTextV1, type BodyTextV1Params } from './body-text-v1.js';
+export { buildIconLabelV1, type IconLabelV1Params } from './icon-label-v1.js';
