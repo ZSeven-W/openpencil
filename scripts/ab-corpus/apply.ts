@@ -41,18 +41,46 @@ export const applyToFreshDoc: ApplyFn = async (parsed: ParsedOutput): Promise<Ap
     if (parsed.kind === 'tool_calls') {
       // Apply every call into the same fresh doc, in emit order.
       // Composite prompts route here with N≥2 calls; obvious prompts
-      // typically with N=1. Any single call failing aborts the row
-      // (M1=false) — we don't partially apply.
+      // typically with N=1. Per-shape try/catch keeps the batch going
+      // past a single bad tag — matches production
+      // (apps/web/src/services/ai/element-tools-dispatcher::dispatchElementToolCalls)
+      // and prevents one invented arg (e.g. an unknown heading level
+      // on tag 12 of 13, seen on gpt-5.4 in ab-v4) from dropping the
+      // other 12 valid tags on the floor. M1 stays strict: any failure
+      // → ok:false; the partial PenDocument is returned so M3 (role
+      // coverage) can still score against whatever did land.
+      const failures: string[] = [];
       for (let i = 0; i < parsed.calls.length; i += 1) {
         const call = parsed.calls[i];
+        const tagLabel = `call ${i + 1}/${parsed.calls.length} (${call.name})`;
         if (!ELEMENT_TOOL_NAMES.has(call.name)) {
-          return {
-            ok: false,
-            error: `unknown element tool "${call.name}" (call ${i + 1}/${parsed.calls.length})`,
-            doc: null,
-          };
+          failures.push(`${tagLabel}: unknown element tool`);
+          continue;
         }
-        await handleElementToolCall(call.name, { ...call.arguments, filePath: fp });
+        try {
+          await handleElementToolCall(call.name, { ...call.arguments, filePath: fp });
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err);
+          failures.push(`${tagLabel}: ${msg}`);
+        }
+      }
+      if (failures.length > 0) {
+        let partialDoc: PenDocument | null = null;
+        try {
+          const candidate = JSON.parse(readFileSync(fp, 'utf-8')) as PenDocument;
+          const topLevel = (candidate.children ??
+            candidate.pages?.[0]?.children ??
+            []) as unknown[];
+          if (topLevel.length > 0) partialDoc = candidate;
+        } catch {
+          // File unreadable or empty (e.g. every tag failed before
+          // the first element-tool wrote anything) — surface null.
+        }
+        return {
+          ok: false,
+          error: `${failures.length}/${parsed.calls.length} tag(s) failed: ${failures.join('; ')}`,
+          doc: partialDoc,
+        };
       }
     } else {
       const result = await handleBatchDesign({
