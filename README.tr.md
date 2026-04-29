@@ -431,8 +431,10 @@ OpenPencil ücretsiz ve açık kaynaklıdır. Geliştirme, onu faydalı bulanlar
  </picture>
 </a>
 
+## Değerlendirmeler
+
+[![MseeP.ai Security Assessment Badge](https://mseep.net/pr/zseven-w-openpencil-badge.png)](https://mseep.ai/app/zseven-w-openpencil)
+
 ## Lisans
 
 [MIT](./LICENSE) — Copyright (c) 2026 ZSeven-W
-
-[![MseeP.ai Security Assessment Badge](https://mseep.net/pr/zseven-w-openpencil-badge.png)](https://mseep.ai/app/zseven-w-openpencil)
