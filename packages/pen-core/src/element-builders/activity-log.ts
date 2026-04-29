@@ -13,6 +13,14 @@ export interface ActivityLogParams {
   tone?: 'info' | 'success' | 'warning' | 'danger' | 'neutral';
 }
 
+const VALID_ACTIVITY_LOG_TONES = new Set<string>([
+  'info',
+  'success',
+  'warning',
+  'danger',
+  'neutral',
+]);
+
 const ACTOR_FG = '#0F172A';
 const ACTION_FG = '#475569';
 const TS_FG = '#94A3B8';
@@ -46,7 +54,13 @@ const TONE_FG: Record<NonNullable<ActivityLogParams['tone']>, string> = {
  * "审计日志条目", "活动记录".
  */
 export function buildActivityLog(params: ActivityLogParams): ElementTree {
-  const tone = params.tone ?? 'info';
+  const requestedTone = (params.tone ?? 'info') as string;
+  if (!VALID_ACTIVITY_LOG_TONES.has(requestedTone)) {
+    throw new Error(
+      `add_activity_log_v0: invalid tone "${requestedTone}"; expected one of: info, success, warning, danger, neutral`,
+    );
+  }
+  const tone = requestedTone as NonNullable<ActivityLogParams['tone']>;
   const rowChildren: ElementTree[] = [];
 
   if (params.icon) {
