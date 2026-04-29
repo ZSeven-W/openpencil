@@ -121,47 +121,73 @@ async function main(): Promise<void> {
   // Truncate on start so a re-run into the same dir overwrites.
   fs.writeFileSync(scoresPath, '', 'utf-8');
 
+  // Per-prompt parallelism: 5 models × 2 variants = 10 calls fan out
+  // concurrently per prompt. Prompts themselves stay sequential so
+  // ARK / Bailian rate-limits aren't hammered by 50× concurrent
+  // dispatch, and the `· prompt.id` progress line still marks one
+  // prompt at a time. Each provider's client is fetch-based (or a
+  // codex subprocess) with no shared mutable state, so concurrent
+  // calls are safe. Cuts wall-clock from sequential 13h → ~1.5h on
+  // ab-v3 (520 runs) since the slowest single call (~120s ARK
+  // timeout) sets the per-prompt floor instead of the per-call one.
+  //
+  // Each finished row appends to scores.jsonl from inside runOne so
+  // a crash mid-batch keeps every completed row durable — buffering
+  // until Promise.all settles would let an ARK 120s timeout hold 9
+  // already-finished rows hostage. fs.appendFileSync is a sync
+  // syscall under Node's single-threaded event loop, so concurrent
+  // runOne completions serialize into non-interleaved writes
+  // automatically (no mutex needed).
+  async function runOne(
+    model: string,
+    variant: 'B' | 'T',
+    prompt: (typeof prompts)[number],
+  ): Promise<ScoreRow> {
+    const call: ModelCall = {
+      model,
+      prompt,
+      variant,
+      systemPrompt: '<resolved in dispatcher>',
+      userPrompt: prompt.prompt,
+    };
+    let raw: string;
+    let usage: TokenUsage = { promptTokens: 0, completionTokens: 0 };
+    try {
+      const res = args.dryRun ? await stubModelCall(call) : await realModelCall(call);
+      raw = res.content;
+      usage = res.usage;
+    } catch (err) {
+      // Network / subprocess failure → treat as garbage so the
+      // run still scores (M1=false, routing='garbage' for obvious
+      // treatment). Beats aborting a 520-run sweep over one
+      // transient failure. usage stays 0/0 — aggregate skips zero
+      // rows when computing token averages so a flaky cell
+      // doesn't drag the model's average down to ~0.
+      raw = `__HARNESS_ERROR__: ${err instanceof Error ? err.message : String(err)}`;
+    }
+    const parsed = parseModelOutput(raw);
+    const row = await scoreRun({
+      prompt,
+      parsed,
+      apply: applyToFreshDoc,
+      model,
+      variant,
+      usage,
+    });
+    fs.appendFileSync(scoresPath, JSON.stringify(row) + '\n', 'utf-8');
+    return row;
+  }
+
   const rows: ScoreRow[] = [];
   for (const prompt of prompts) {
+    const promptCalls: Promise<ScoreRow>[] = [];
     for (const model of args.models) {
       for (const variant of ['B', 'T'] as const) {
-        const call: ModelCall = {
-          model,
-          prompt,
-          variant,
-          systemPrompt: '<resolved in dispatcher>',
-          userPrompt: prompt.prompt,
-        };
-        let raw: string;
-        let usage: TokenUsage = { promptTokens: 0, completionTokens: 0 };
-        try {
-          const res = args.dryRun ? await stubModelCall(call) : await realModelCall(call);
-          raw = res.content;
-          usage = res.usage;
-        } catch (err) {
-          // Network / subprocess failure → treat as garbage so the
-          // run still scores (M1=false, routing='garbage' for obvious
-          // treatment). Beats aborting a 96-run sweep over one
-          // transient failure. usage stays 0/0 — aggregate skips zero
-          // rows when computing token averages so a flaky cell
-          // doesn't drag the model's average down to ~0.
-          raw = `__HARNESS_ERROR__: ${err instanceof Error ? err.message : String(err)}`;
-        }
-        const parsed = parseModelOutput(raw);
-        const row = await scoreRun({
-          prompt,
-          parsed,
-          apply: applyToFreshDoc,
-          model,
-          variant,
-          usage,
-        });
-        rows.push(row);
-        // Append this row to scores.jsonl immediately — durable
-        // partial state for crash recovery.
-        fs.appendFileSync(scoresPath, JSON.stringify(row) + '\n', 'utf-8');
+        promptCalls.push(runOne(model, variant, prompt));
       }
     }
+    const newRows = await Promise.all(promptCalls);
+    rows.push(...newRows);
     process.stderr.write(`  · ${prompt.id}\n`);
   }
 
