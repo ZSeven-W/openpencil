@@ -78,14 +78,15 @@ describe('mock LLM + scorer end-to-end', () => {
   });
 
   describe('mock output shape', () => {
-    it('T variant on obvious prompt → tool_call matching expected_tool_if_any', () => {
+    it('T variant on obvious prompt → tool_calls list whose first entry matches expected_tool_if_any', () => {
       const obvious = CORPUS.filter((p) => p.difficulty === 'obvious');
       expect(obvious.length).toBeGreaterThan(0);
       for (const p of obvious) {
         const parsed = mockLlmParsed({ prompt: p, variant: 'T' });
-        expect(parsed.kind, `${p.id} T → tool_call`).toBe('tool_call');
-        if (parsed.kind === 'tool_call') {
-          expect(parsed.name).toBe(p.expected_tool_if_any);
+        expect(parsed.kind, `${p.id} T → tool_calls`).toBe('tool_calls');
+        if (parsed.kind === 'tool_calls') {
+          expect(parsed.calls).toHaveLength(1);
+          expect(parsed.calls[0].name).toBe(p.expected_tool_if_any);
         }
       }
     });
@@ -163,9 +164,9 @@ describe('mock LLM + scorer end-to-end', () => {
           },
         ],
       });
-      expect(parsed.kind).toBe('tool_call');
-      if (parsed.kind === 'tool_call') {
-        expect(parsed.name).not.toBe(p.expected_tool_if_any);
+      expect(parsed.kind).toBe('tool_calls');
+      if (parsed.kind === 'tool_calls') {
+        expect(parsed.calls[0].name).not.toBe(p.expected_tool_if_any);
       }
     });
 
@@ -182,10 +183,10 @@ describe('mock LLM + scorer end-to-end', () => {
         variant: 'T',
         overrides: [{ promptId: p.id, variant: 'B', raw: '<op_tool>{"name":"x"}</op_tool>' }],
       });
-      expect(bParsed.kind).toBe('tool_call');
-      // T got no override → defaults (tool_call iff obvious else batch_design)
+      expect(bParsed.kind).toBe('tool_calls');
+      // T got no override → defaults (tool_calls iff obvious else batch_design)
       expect(tParsed.kind).toBe(
-        p.difficulty === 'obvious' && p.expected_tool_if_any ? 'tool_call' : 'batch_design',
+        p.difficulty === 'obvious' && p.expected_tool_if_any ? 'tool_calls' : 'batch_design',
       );
     });
   });
@@ -222,9 +223,8 @@ describe('mock LLM + scorer end-to-end', () => {
     it('T + wrong-tool override → routing=wrong-tool', async () => {
       const p = CORPUS.find((c) => c.difficulty === 'obvious')!;
       const parsed: ParsedOutput = {
-        kind: 'tool_call',
-        name: 'add_definitely_wrong_v0',
-        arguments: {},
+        kind: 'tool_calls',
+        calls: [{ name: 'add_definitely_wrong_v0', arguments: {} }],
         raw: '',
       };
       const row = await scoreRun({

@@ -91,23 +91,24 @@ export function mockLlmParsed(args: MockLlmArgs): ParsedOutput {
   // that want to pin a parsed shape use this. Keeps the two sides
   // of the mock decoupled (raw-level vs parsed-level).
   if (raw.startsWith('<op_tool>')) {
-    const m = /<op_tool>\s*([\s\S]*?)\s*<\/op_tool>/.exec(raw);
-    if (m) {
+    // Collect every tag, not just the first — composite-prompt mocks
+    // may emit multi-call raw strings.
+    const tagRe = /<op_tool>\s*([\s\S]*?)\s*<\/op_tool>/g;
+    const calls: { name: string; arguments: Record<string, unknown> }[] = [];
+    for (const m of raw.matchAll(tagRe)) {
       try {
         const parsed = JSON.parse(m[1]) as { name?: string; arguments?: Record<string, unknown> };
         if (parsed.name) {
-          return {
-            kind: 'tool_call',
-            name: parsed.name,
-            arguments: parsed.arguments ?? {},
-            raw,
-          };
+          calls.push({ name: parsed.name, arguments: parsed.arguments ?? {} });
         }
       } catch {
-        // fall through to garbage
+        // skip malformed tag
       }
     }
-    return { kind: 'garbage', reason: 'malformed op_tool block', raw };
+    if (calls.length === 0) {
+      return { kind: 'garbage', reason: 'malformed op_tool block', raw };
+    }
+    return { kind: 'tool_calls', calls, raw };
   }
   if (/^\s*(?:\w+\s*=\s*[ICRMG]\(|[ICRGUDM]\()/.test(raw)) {
     return { kind: 'batch_design', dsl: raw, raw };

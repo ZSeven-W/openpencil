@@ -10,7 +10,7 @@ function row(partial: Partial<ScoreRow>): ScoreRow {
     model: 'm1',
     variant: 'B',
     outputKind: 'batch_design',
-    toolName: '',
+    toolNames: [],
     expectedToolIfAny: '',
     routing: 'n/a',
     m1_legal: true,
@@ -47,24 +47,24 @@ describe('aggregate — per-model summary', () => {
       row({
         difficulty: 'obvious',
         variant: 'T',
-        outputKind: 'tool_call',
-        toolName: 'add_link_v0',
+        outputKind: 'tool_calls',
+        toolNames: ['add_link_v0'],
         expectedToolIfAny: 'add_link_v0',
         routing: 'right-tool',
       }),
       row({
         difficulty: 'obvious',
         variant: 'T',
-        outputKind: 'tool_call',
-        toolName: 'add_link_v0',
+        outputKind: 'tool_calls',
+        toolNames: ['add_link_v0'],
         expectedToolIfAny: 'add_link_v0',
         routing: 'right-tool',
       }),
       row({
         difficulty: 'obvious',
         variant: 'T',
-        outputKind: 'tool_call',
-        toolName: 'add_divider_v0',
+        outputKind: 'tool_calls',
+        toolNames: ['add_divider_v0'],
         expectedToolIfAny: 'add_link_v0',
         routing: 'wrong-tool',
       }),
@@ -106,16 +106,16 @@ describe('aggregate — per-model summary', () => {
       row({
         difficulty: 'obvious',
         variant: 'T',
-        outputKind: 'tool_call',
-        toolName: 'add_link_v0',
+        outputKind: 'tool_calls',
+        toolNames: ['add_link_v0'],
         expectedToolIfAny: 'add_link_v0',
         routing: 'right-tool',
       }),
       row({
         difficulty: 'obvious',
         variant: 'T',
-        outputKind: 'tool_call',
-        toolName: 'add_fab_v0',
+        outputKind: 'tool_calls',
+        toolNames: ['add_fab_v0'],
         expectedToolIfAny: 'add_link_v0',
         routing: 'wrong-tool',
       }),
@@ -178,9 +178,14 @@ describe('aggregate — per-category + per-tool', () => {
 
   it('ranks tools by invocation count, descending', () => {
     const rows: ScoreRow[] = [
-      row({ variant: 'T', outputKind: 'tool_call', toolName: 'add_link_v0', m1_legal: true }),
-      row({ variant: 'T', outputKind: 'tool_call', toolName: 'add_link_v0', m1_legal: false }),
-      row({ variant: 'T', outputKind: 'tool_call', toolName: 'add_divider_v0', m1_legal: true }),
+      row({ variant: 'T', outputKind: 'tool_calls', toolNames: ['add_link_v0'], m1_legal: true }),
+      row({ variant: 'T', outputKind: 'tool_calls', toolNames: ['add_link_v0'], m1_legal: false }),
+      row({
+        variant: 'T',
+        outputKind: 'tool_calls',
+        toolNames: ['add_divider_v0'],
+        m1_legal: true,
+      }),
     ];
     const r = aggregate(rows);
     expect(r.byTool).toHaveLength(2);
@@ -199,11 +204,42 @@ describe('aggregate — per-category + per-tool', () => {
   it('ignores baseline runs in tool usage', () => {
     const rows: ScoreRow[] = [
       row({ variant: 'B', outputKind: 'batch_design' }),
-      row({ variant: 'T', outputKind: 'tool_call', toolName: 'add_fab_v0' }),
+      row({ variant: 'T', outputKind: 'tool_calls', toolNames: ['add_fab_v0'] }),
     ];
     const r = aggregate(rows);
     expect(r.byTool).toHaveLength(1);
     expect(r.byTool[0].tool).toBe('add_fab_v0');
+  });
+
+  it('multi-tool composite row counts EVERY name in toolNames (6× activity_log → 6 invocations)', () => {
+    const rows: ScoreRow[] = [
+      row({
+        variant: 'T',
+        outputKind: 'tool_calls',
+        toolNames: [
+          'add_activity_log_v0',
+          'add_activity_log_v0',
+          'add_activity_log_v0',
+          'add_activity_log_v0',
+          'add_activity_log_v0',
+          'add_activity_log_v0',
+          'add_section_header_v0',
+        ],
+        m1_legal: true,
+      }),
+    ];
+    const r = aggregate(rows);
+    expect(r.byTool).toHaveLength(2);
+    expect(r.byTool[0]).toEqual({
+      tool: 'add_activity_log_v0',
+      invocations: 6,
+      successfulInvocations: 6,
+    });
+    expect(r.byTool[1]).toEqual({
+      tool: 'add_section_header_v0',
+      invocations: 1,
+      successfulInvocations: 1,
+    });
   });
 
   it('totalRuns reflects input length', () => {
@@ -218,15 +254,15 @@ describe('aggregate — composite difficulty', () => {
       row({
         difficulty: 'composite',
         variant: 'T',
-        outputKind: 'tool_call',
-        toolName: 'add_link_v0',
+        outputKind: 'tool_calls',
+        toolNames: ['add_link_v0'],
         routing: 'multi-tool',
       }),
       row({
         difficulty: 'composite',
         variant: 'T',
-        outputKind: 'tool_call',
-        toolName: 'add_card_row_v0',
+        outputKind: 'tool_calls',
+        toolNames: ['add_card_row_v0'],
         routing: 'multi-tool',
       }),
       row({
