@@ -29,13 +29,28 @@ export interface CallCodexArgs {
   model: string;
   system: string;
   user: string;
-  /** Timeout in ms (default 5 minutes — tight since corpus prompts
-   *  don't need long agentic runs; we want single-turn completions). */
+  /**
+   * Timeout in ms. Default 10 minutes — composite ab-v3 prompts plus
+   * Codex's ~20k-token agent framing plus thinking can blow the older
+   * 5-minute cap (saw this on ab-v4 dashboard-search-filters-composite,
+   * where gpt-5.4 was mid-stream when codex SIGKILL'd it). Override via
+   * `AB_CORPUS_CODEX_TIMEOUT_MS` env var if you want to surface
+   * single-call slowness as a hard fail instead of waiting it out.
+   */
   timeoutMs?: number;
 }
 
+const DEFAULT_CODEX_TIMEOUT_MS = (() => {
+  const env = process.env.AB_CORPUS_CODEX_TIMEOUT_MS;
+  if (env && /^\d+$/.test(env)) {
+    const n = Number(env);
+    if (n > 0) return n;
+  }
+  return 10 * 60 * 1000;
+})();
+
 export async function callCodex(args: CallCodexArgs): Promise<ChatCallResult> {
-  const timeoutMs = args.timeoutMs ?? 5 * 60 * 1000;
+  const timeoutMs = args.timeoutMs ?? DEFAULT_CODEX_TIMEOUT_MS;
   const dir = mkdtempSync(join(tmpdir(), 'ab-codex-'));
   const outPath = join(dir, 'last-message.txt');
   // Codex CLI has its own system prompt (coding agent framing) that
