@@ -431,8 +431,10 @@ Obrigado a **[MrQyun](https://github.com/mrqyun)** — quer ver seu nome aqui? *
  </picture>
 </a>
 
+## Avaliações
+
+[![MseeP.ai Security Assessment Badge](https://mseep.net/pr/zseven-w-openpencil-badge.png)](https://mseep.ai/app/zseven-w-openpencil)
+
 ## Licença
 
 [MIT](./LICENSE) — Copyright (c) 2026 ZSeven-W
-
-[![MseeP.ai Security Assessment Badge](https://mseep.net/pr/zseven-w-openpencil-badge.png)](https://mseep.ai/app/zseven-w-openpencil)
