@@ -192,6 +192,17 @@ import { handleAddStatusBadgeV1 } from '../tools/add-status-badge-v1';
 import { handleAddStepCardV1 } from '../tools/add-step-card-v1';
 import { handleAddStepperV1 } from '../tools/add-stepper-v1';
 import { handleAddSwitchV1 } from '../tools/add-switch-v1';
+import { handleAddTabsV1 } from '../tools/add-tabs-v1';
+import { handleAddTagV1 } from '../tools/add-tag-v1';
+import { handleAddTextButtonV1 } from '../tools/add-text-button-v1';
+import { handleAddTextareaV1 } from '../tools/add-textarea-v1';
+import { handleAddTimelineV1 } from '../tools/add-timeline-v1';
+import { handleAddToolbarV1 } from '../tools/add-toolbar-v1';
+import { handleAddTooltipV1 } from '../tools/add-tooltip-v1';
+import { handleAddTopNavBarV1 } from '../tools/add-top-nav-bar-v1';
+import { handleAddUploadDropzoneV1 } from '../tools/add-upload-dropzone-v1';
+import { handleAddUserCardV1 } from '../tools/add-user-card-v1';
+import { handleAddVideoPlaceholderV1 } from '../tools/add-video-placeholder-v1';
 import { recordElementToolCall } from '../metrics/element-tool-metrics';
 import { ELEMENT_TOOL_DEFINITIONS_BASE } from './element-tool-defs-base';
 import { ELEMENT_TOOL_DEFINITIONS_EXT } from './element-tool-defs-ext';
@@ -202,6 +213,7 @@ import { ELEMENT_TOOL_DEFINITIONS_EXT_5 } from './element-tool-defs-ext-5';
 import { ELEMENT_TOOL_DEFINITIONS_EXT_6 } from './element-tool-defs-ext-6';
 import { ELEMENT_TOOL_DEFINITIONS_EXT_7 } from './element-tool-defs-ext-7';
 import { ELEMENT_TOOL_DEFINITIONS_EXT_8 } from './element-tool-defs-ext-8';
+import { ELEMENT_TOOL_DEFINITIONS_EXT_9 } from './element-tool-defs-ext-9';
 
 export const ELEMENT_TOOL_DEFINITIONS = [
   ...ELEMENT_TOOL_DEFINITIONS_BASE,
@@ -213,6 +225,7 @@ export const ELEMENT_TOOL_DEFINITIONS = [
   ...ELEMENT_TOOL_DEFINITIONS_EXT_6,
   ...ELEMENT_TOOL_DEFINITIONS_EXT_7,
   ...ELEMENT_TOOL_DEFINITIONS_EXT_8,
+  ...ELEMENT_TOOL_DEFINITIONS_EXT_9,
 ];
 
 export const ELEMENT_TOOL_NAMES: ReadonlySet<string> = new Set(
@@ -588,6 +601,28 @@ async function dispatchElementToolCall(name: string, a: any): Promise<string> {
       return JSON.stringify(await handleAddStepperV1(a), null, 2);
     case 'add_switch_v1':
       return JSON.stringify(await handleAddSwitchV1(a), null, 2);
+    case 'add_tabs_v1':
+      return JSON.stringify(await handleAddTabsV1(a), null, 2);
+    case 'add_tag_v1':
+      return JSON.stringify(await handleAddTagV1(a), null, 2);
+    case 'add_text_button_v1':
+      return JSON.stringify(await handleAddTextButtonV1(a), null, 2);
+    case 'add_textarea_v1':
+      return JSON.stringify(await handleAddTextareaV1(a), null, 2);
+    case 'add_timeline_v1':
+      return JSON.stringify(await handleAddTimelineV1(a), null, 2);
+    case 'add_toolbar_v1':
+      return JSON.stringify(await handleAddToolbarV1(a), null, 2);
+    case 'add_tooltip_v1':
+      return JSON.stringify(await handleAddTooltipV1(a), null, 2);
+    case 'add_top_nav_bar_v1':
+      return JSON.stringify(await handleAddTopNavBarV1(a), null, 2);
+    case 'add_upload_dropzone_v1':
+      return JSON.stringify(await handleAddUploadDropzoneV1(a), null, 2);
+    case 'add_user_card_v1':
+      return JSON.stringify(await handleAddUserCardV1(a), null, 2);
+    case 'add_video_placeholder_v1':
+      return JSON.stringify(await handleAddVideoPlaceholderV1(a), null, 2);
     default:
       return '';
   }

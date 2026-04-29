@@ -178,6 +178,17 @@ import {
   buildStepCardV1,
   buildStepperV1,
   buildSwitchV1,
+  buildTabsV1,
+  buildTagV1,
+  buildTextButtonV1,
+  buildTextareaV1,
+  buildTimelineV1,
+  buildToolbarV1,
+  buildTooltipV1,
+  buildTopNavBarV1,
+  buildUploadDropzoneV1,
+  buildUserCardV1,
+  buildVideoPlaceholderV1,
   findNodeInTree,
   insertNodeInTree,
   type ElementTree,
@@ -428,6 +439,19 @@ const SERVER_BUILDERS: Record<string, BuilderFn> = {
   add_step_card_v1: (a) => buildStepCardV1(a as Parameters<typeof buildStepCardV1>[0]),
   add_stepper_v1: (a) => buildStepperV1(a as Parameters<typeof buildStepperV1>[0]),
   add_switch_v1: (a) => buildSwitchV1(a as Parameters<typeof buildSwitchV1>[0]),
+  add_tabs_v1: (a) => buildTabsV1(a as Parameters<typeof buildTabsV1>[0]),
+  add_tag_v1: (a) => buildTagV1(a as Parameters<typeof buildTagV1>[0]),
+  add_text_button_v1: (a) => buildTextButtonV1(a as Parameters<typeof buildTextButtonV1>[0]),
+  add_textarea_v1: (a) => buildTextareaV1(a as Parameters<typeof buildTextareaV1>[0]),
+  add_timeline_v1: (a) => buildTimelineV1(a as Parameters<typeof buildTimelineV1>[0]),
+  add_toolbar_v1: (a) => buildToolbarV1(a as Parameters<typeof buildToolbarV1>[0]),
+  add_tooltip_v1: (a) => buildTooltipV1(a as Parameters<typeof buildTooltipV1>[0]),
+  add_top_nav_bar_v1: (a) => buildTopNavBarV1(a as Parameters<typeof buildTopNavBarV1>[0]),
+  add_upload_dropzone_v1: (a) =>
+    buildUploadDropzoneV1(a as Parameters<typeof buildUploadDropzoneV1>[0]),
+  add_user_card_v1: (a) => buildUserCardV1(a as Parameters<typeof buildUserCardV1>[0]),
+  add_video_placeholder_v1: (a) =>
+    buildVideoPlaceholderV1(a as Parameters<typeof buildVideoPlaceholderV1>[0]),
 };
 
 interface ExecToolBody {

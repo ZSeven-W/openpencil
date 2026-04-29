@@ -68,6 +68,7 @@ Containers and single elements:
 6. Bottom tab bar (inline flow, 3-5 nav items) → `add_bottom_nav_v0`
    6b. Theme-aware variant (accepts `theme` param for API consistency; output identical across themes) → `add_bottom_nav_v1`
 7. Mobile top bar (leading icon + centered title + trailing icon) → `add_top_nav_bar_v0`
+   7b. Theme-aware variant (accepts `theme` param for API consistency; output identical — no hardcoded surface colors) → `add_top_nav_bar_v1`
 8. Icon-only button (44×44, hit-target safe) → `add_icon_button_v0`
    8b. Theme-aware variant (accepts `theme` param for API consistency; output identical across themes) → `add_icon_button_v1`
 9. Apple-style progress ring with centered text → `add_activity_ring_v0`
@@ -85,6 +86,7 @@ Atoms (1-2 node building blocks):
 Text + button primitives:
 
 13. Padding-based button with text (optional leading icon) → `add_text_button_v0`
+    13b. Theme-aware variant (accepts `theme` param for API consistency; output identical — no hardcoded surface colors) → `add_text_button_v1`
 14. Heading with enforced fontSize/lineHeight per level + AUTO CJK script detection (SC/JP/KR) → `add_heading_v0`
     14b. Theme-aware variant (supports `theme: 'light' | 'dark' | 'system'`) → `add_heading_v1`
 15. Body text (Inter everywhere — CJK gets lineHeight 1.6 + letterSpacing 0, Latin 1.5) → `add_body_text_v0`
@@ -104,7 +106,8 @@ Forms:
 19. Form field (label + 48px input with optional affordance icons) → `add_form_field_v0`
     19b. Theme-aware variant (accepts `theme` param for API consistency; output identical across themes) → `add_form_field_v1`
     19c. Multi-line textarea (label + N-row input for notes / bio / feedback) → `add_textarea_v0`
-    19c. Dropdown select closed-state (label + 48px input w/ value text + chevron-down) → `add_select_v0`
+    19c-v1. Theme-aware textarea (accepts `theme` param for API consistency; output identical — no hardcoded surface colors) → `add_textarea_v1`
+    19d. Dropdown select closed-state (label + 48px input w/ value text + chevron-down) → `add_select_v0`
     19d. Theme-aware select (placeholder → textSubtle in dark/system) → `add_select_v1`
 
 Controls (toggle / choice / tabs):
@@ -116,6 +119,7 @@ Controls (toggle / choice / tabs):
 22. Radio button + inline label (20×20 ring, dot inside when selected) → `add_radio_v0`
     22b. Theme-aware variant (accent brand-invariant; unselected ring → border in dark/system) → `add_radio_v1`
 23. Horizontal top tabs with underline on active (fontWeight 600 + 2px sibling rectangle underline) → `add_tabs_v0`
+    23b. Theme-aware variant (#2563EB underline is brand accent per §3.4; all modes identical) → `add_tabs_v1`
 24. iOS pill-style segmented control (equal-width segments, active floats white) → `add_segmented_control_v0`
     24b. Theme-aware variant (track → surface2, active seg → surface, labels → textPrimary/textMuted) → `add_segmented_control_v1`
 
@@ -180,6 +184,7 @@ Media / placeholder:
 44. Image placeholder (gray box + centered icon + optional caption — future image slot) → `add_image_placeholder_v0`
     44c. Theme-aware image placeholder (bg → bgDeep, icon/label → textMuted in dark/system) → `add_image_placeholder_v1`
     44b. Video placeholder (dark box + play icon + optional caption — future video embed) → `add_video_placeholder_v0`
+    44b-v1. Theme-aware video placeholder (dark bg/icon/caption are builder-private per §3.4; all modes identical) → `add_video_placeholder_v1`
 
 Social / UGC:
 
@@ -201,6 +206,7 @@ Feedback / loading:
 48. Loading spinner (static ring + 3/4 arc) → `add_spinner_v0`
     48b. Theme-aware variant (track_color/active_color are caller params; accepts theme for API consistency; all modes identical) → `add_spinner_v1`
 49. Tooltip pill (dark pill + white text, hover-hint appearance) → `add_tooltip_v0`
+    49b. Theme-aware variant (dark body #111827 is intentional inverted-contrast per §3.4; all modes identical) → `add_tooltip_v1`
 
 Analytics / KPIs:
 
@@ -215,6 +221,7 @@ Notifications:
 Activity / history:
 
 41. Vertical timeline (dots + fixed 24px connectors + content; no padding/gap) → `add_timeline_v0`
+    41b. Theme-aware variant (#2563EB active dot hardcoded per §3.4; inactive dot/connector → border, subtitle → textMuted) → `add_timeline_v1`
 
 Calendars:
 
@@ -258,6 +265,7 @@ Dates:
 Upload / file intake:
 
 58. File upload dropzone (dashed tile + cloud icon + "Drop files / click to browse") → `add_upload_dropzone_v0`
+    58b. Theme-aware variant (bg → bgDeep, dashed border → border, icon → textMuted, title → textBody, subtitle → textMuted) → `add_upload_dropzone_v1`
 
 Auth / verification:
 
@@ -323,10 +331,12 @@ Tabular data:
 Filter / selection chips:
 
 72. Single closable tag chip (filter / applied criterion / category, optional × close icon, tone enum) → `add_tag_v0`
+    72b. Theme-aware variant (tone bg/fg are status semantic colors per §3.4; all modes identical) → `add_tag_v1`
 
 People / profile:
 
 73. Compact user card (avatar + name + optional role line, horizontal row) → `add_user_card_v0`
+    73b. Theme-aware variant (name → textPrimary, role → textMuted; avatar bg #3B82F6 + initial white stay brand-invariant per §3.4) → `add_user_card_v1`
 74. Large profile header (centered avatar + name + optional handle/bio) → `add_profile_header_v0`
     74b. Theme-aware variant (name → textPrimary, handle → textMuted, bio → textBody; avatar bg #3B82F6 + initial white stay brand-invariant) → `add_profile_header_v1`
 
@@ -340,6 +350,7 @@ Forms (open state) & toolbars:
 76. Open-state combobox / autocomplete (input + visible dropdown rows) → `add_combobox_v0`
     76b. Theme-aware variant (surface/border/surface2 tokens in dark/system) → `add_combobox_v1`
 77. Desktop toolbar (icon button row with optional dividers) → `add_toolbar_v0`
+    77b. Theme-aware variant (surface → surface, border → border, active-bg → surface2, icon fills → textPrimary/textMuted) → `add_toolbar_v1`
 
 Doc / inline feedback:
 
@@ -409,12 +420,14 @@ PREFER an element tool when the spec says any of:
 - "dark section header", "dark-mode section title", "theme-aware section header", "暗色版块标题" → `add_section_header_v1` (no color change; accepts theme for API consistency)
 - "bottom nav", "tab bar", "tabbar", "底部导航" → `add_bottom_nav_v0`
 - "top bar", "app bar", "header with back button", "页面标题栏" → `add_top_nav_bar_v0`
+- "dark top bar", "dark-mode app bar", "theme-aware top nav", "暗色顶部导航栏" → `add_top_nav_bar_v1` (no hardcoded colors; all modes identical — accepts theme for API consistency).
 - "icon-only button", "close button", "menu button" (toolbar-style) → `add_icon_button_v0`
 - "activity ring", "progress ring", "circular progress", "Apple health ring" → `add_activity_ring_v0`
 - "hairline divider", "separator", "row divider", "section separator" → `add_divider_v0`
 - "badge", "pill", "tag", "NEW label", "count bubble" (≤16 Latin / ≤8 CJK chars) → `add_badge_v0`
 - "avatar", "profile picture", "user circle", "initial bubble" → `add_avatar_v0`
 - "primary button", "secondary button", "CTA", "submit button" (short label) → `add_text_button_v0`
+- "dark text button", "dark-mode CTA", "theme-aware text button", "暗色按钮" → `add_text_button_v1` (no hardcoded colors; all modes identical — accepts theme for API consistency).
 - "hero headline", "section title", "card title" / 特定字号标题 → `add_heading_v0`
 - "dark heading", "dark-mode title", "theme-aware heading", "system theme heading", "暗色标题", "主题感知标题" → `add_heading_v1` (accepts `theme: 'light' | 'dark' | 'system'`; use `"system"` when `applySemanticPalette(doc)` is seeded)
 - "dark card row", "dark-mode scrollable cards", "theme-aware card scroll", "暗色卡片行" → `add_card_row_v1` (accepts `theme`; dark surface fill on cards + dark text fills)
@@ -428,6 +441,7 @@ PREFER an element tool when the spec says any of:
 - "dark search bar", "dark-mode search", "theme-aware search bar", "暗色搜索栏" → `add_search_bar_v1` (adds surface2 fill in dark/system so bar is visible on dark bg)
 - "form field", "email input", "password field", "labeled input", "required field" → `add_form_field_v0`
 - "textarea", "multi-line input", "notes field", "description box", "bio input", "feedback box", "多行输入", "备注" → `add_textarea_v0`
+- "dark textarea", "dark-mode notes field", "theme-aware textarea", "暗色多行输入" → `add_textarea_v1` (no hardcoded colors; all modes identical — accepts theme for API consistency).
 - "dropdown", "select", "picker", "combo box", "下拉选择", "选择器" → `add_select_v0`
 - "dark select", "dark-mode dropdown", "theme-aware select", "暗色下拉" → `add_select_v1` (placeholder → textSubtle in dark/system)
 - "skeleton", "loading placeholder", "shimmer", "loading state", "placeholder lines", "骨架屏", "加载中占位" → `add_skeleton_v0`
@@ -436,6 +450,7 @@ PREFER an element tool when the spec says any of:
 - "pie chart", "donut chart", "饼图" → `add_chart_pie_v0`
 - "image placeholder", "photo slot", "upload zone", "hero image area", "cover placeholder", "图片占位" → `add_image_placeholder_v0`
 - "video placeholder", "video slot", "play placeholder", "upcoming video", "视频占位" → `add_video_placeholder_v0`
+- "dark video placeholder", "dark-mode video slot", "theme-aware video placeholder", "暗色视频占位" → `add_video_placeholder_v1` (dark bg/icon/caption are builder-private per §3.4; all modes identical).
 - "comment", "reply", "feedback row", "review row", "评论" → `add_comment_v0`
 - "modal", "dialog", "popup", "confirm dialog", "模态框", "弹窗" → `add_modal_shell_v0`
 - "dark modal", "dark-mode dialog", "theme-aware modal", "system theme modal", "暗色弹窗", "主题感知弹窗" → `add_modal_shell_v1` (accepts `theme` param; use `"system"` when the document has `applySemanticPalette(doc)` seeded)
@@ -446,12 +461,14 @@ PREFER an element tool when the spec says any of:
 - "spinner", "loading spinner", "progress circle", "loader", "加载圈" → `add_spinner_v0`
 - "dark spinner", "dark-mode spinner", "theme-aware spinner", "暗色加载圈" → `add_spinner_v1` (track_color/active_color are caller params; accepts theme for API consistency).
 - "tooltip", "hover hint", "help tip", "提示浮层" → `add_tooltip_v0`
+- "dark tooltip", "dark-mode tooltip", "theme-aware tooltip", "暗色提示浮层" → `add_tooltip_v1` (dark body #111827 is intentional inverted-contrast; all modes identical).
 - "toggle", "switch", "on/off", "开关" → `add_switch_v0`
 - "dark toggle", "dark switch", "theme-aware switch", "暗色开关" → `add_switch_v1` (iOS HIG values kept hardcoded; all modes identical — accepts theme for API consistency).
 - "checkbox", "agreement", "select option", "复选框" → `add_checkbox_v0`
 - "radio", "single choice", "单选" → `add_radio_v0` (stack multiple in a vertical parent)
 - "dark radio", "dark-mode radio button", "theme-aware radio", "暗色单选" → `add_radio_v1` (accent stays brand-invariant; unselected ring → border token)
 - "top tabs", "underline tabs", "secondary nav", "下划线 tab" → `add_tabs_v0`
+- "dark tabs", "dark-mode tabs", "theme-aware tabs", "暗色 tab" → `add_tabs_v1` (#2563EB underline is brand accent per §3.4; all modes identical).
 - "segmented control", "iOS pill tabs", "filter toggle group", "iOS 分段控制" → `add_segmented_control_v0`
 - "dark segmented control", "dark-mode pill tabs", "theme-aware segmented control", "暗色分段控制" → `add_segmented_control_v1` (track → surface2; active seg → surface; labels tokenized)
 - "empty state", "no results", "nothing here yet", "first-run state", "空状态" → `add_empty_state_v0`
@@ -475,6 +492,7 @@ PREFER an element tool when the spec says any of:
 - "color swatch", "palette", "token", "色板" → `add_color_swatch_v0`
 - "bar chart", "histogram skeleton", "weekly steps", "柱状图" → `add_chart_bars_v0`
 - "timeline", "activity history", "vertical stepper", "时间线", "动态" → `add_timeline_v0`
+- "dark timeline", "dark-mode activity history", "theme-aware timeline", "暗色时间线" → `add_timeline_v1` (#2563EB active dot hardcoded per §3.4; inactive dot/connector → border, subtitle → textMuted).
 - "calendar", "date picker grid", "month view", "日历" → `add_calendar_grid_v0`
 - "pagination", "page nav", "page numbers", "prev/next pages", "分页", "分页条" → `add_pagination_v0`
 - "FAQ", "accordion", "collapsible item", "Q&A", "expandable row", "常见问题", "折叠面板" → `add_faq_item_v0`
@@ -483,6 +501,7 @@ PREFER an element tool when the spec says any of:
 - "action menu", "context menu", "dropdown menu", "more menu", "kebab menu", "action sheet", "下拉菜单", "操作菜单" → `add_action_menu_v0`
 - "date picker", "date input", "date field", "due date", "picker closed", "日期选择器", "日期输入" → `add_date_picker_v0` (for the calendar grid shown after clicking, use `add_calendar_grid_v0`)
 - "upload", "drop files here", "drag and drop", "file picker", "dropzone", "upload area", "上传区", "文件拖放" → `add_upload_dropzone_v0` (visually similar to empty-chart but semantically different — pick by intent)
+- "dark upload dropzone", "dark-mode file upload", "theme-aware dropzone", "暗色上传区" → `add_upload_dropzone_v1` (bg → bgDeep, dashed border → border, icon → textMuted, title → textBody, subtitle → textMuted).
 - "OTP", "PIN code", "verification code", "2FA code", "6-digit code", "enter code", "验证码", "PIN 码" → `add_otp_input_v0`
 - "attachment", "attached file", "uploaded file", "file item", "file list row", "附件", "已上传文件" → `add_attachment_row_v0` (for upload-in-progress state, compose `add_progress_bar_v0` below)
 - "chat message", "message bubble", "conversation row", "iMessage bubble", "chat UI", "聊天气泡", "消息气泡" → `add_chat_bubble_v0` (side="left" for from-others, side="right" for from-self)
@@ -501,7 +520,9 @@ PREFER an element tool when the spec says any of:
 - "stacked avatars", "avatar group", "avatar stack", "team avatars", "5 contributors", "online users", "+N more", "viewers row", "presence indicator", "成员头像", "团队头像", "在线用户", "头像组" → `add_avatar_group_v0` (renders up to `max_visible` ringed avatar circles + a "+N" overflow tile; pen-core flex doesn't allow negative gap so the white ring + 4px gap is the affordance, not literal overlap).
 - "data table row", "table row", "table header row", "customer row", "order row", "report row", "transaction row", "users table", "数据表行", "表格行", "表头行" → `add_data_table_row_v0` (desktop pattern; pass `header: true` for the column-header row, `selected: true` to tint a hover/selected body row). For row separators stack `add_divider_v0` between rows.
 - "filter chip", "filter tag", "applied filter", "selected criterion", "category pill", "removable tag", "Status: Active ×", "可移除标签", "筛选标签" → `add_tag_v0` (single chip with optional × close icon, default removable=true; pass `tone` for accent / success / warning / error palettes).
+- "dark tag", "dark-mode filter chip", "theme-aware tag", "暗色标签" → `add_tag_v1` (tone colors are status semantics per §3.4; all modes identical).
 - "user card", "contact card", "people picker row", "user mini card", "用户卡片", "联系人卡片" → `add_user_card_v0` (compact fit_content tile, no trailing slot — used in lobbies / chip-style lists).
+- "dark user card", "dark-mode contact card", "theme-aware user card", "暗色用户卡片" → `add_user_card_v1` (name → textPrimary, role → textMuted; avatar bg #3B82F6 + initial white stay brand-invariant per §3.4).
 - "members list", "team page row", "people row", "sharing dialog row", "user list with role", "team member row", "团队成员", "成员列表行" → `add_member_row_v0` (avatar + name + optional subtitle + trailing role badge / kebab menu / status dot).
 - "profile header", "profile hero", "about me block", "account header", "user profile page", "个人主页头部" → `add_profile_header_v0` (large centered avatar + display name + optional handle / bio).
 - "dark profile header", "theme-aware profile page", "暗色个人主页头部" → `add_profile_header_v1` (name → textPrimary, handle → textMuted, bio → textBody; avatar bg #3B82F6 + initial white stay brand-invariant).
@@ -517,6 +538,7 @@ PREFER an element tool when the spec says any of:
 - "drawer", "side panel", "slide-in panel", "edit drawer", "detail panel", "抽屉", "侧滑面板" → `add_drawer_shell_v0` (full-height drawer with title + close ×; body composed via subsequent calls under its id).
 - "combobox", "autocomplete", "open dropdown", "command palette", "open select", "search with results", "自动补全", "下拉补全" → `add_combobox_v0` (OPEN-state input + dropdown with N suggestion rows; one row optionally `highlighted: true`).
 - "toolbar", "editor toolbar", "formatting toolbar", "kanban actions", "icon button row", "工具栏" → `add_toolbar_v0` (horizontal 36×36 icon buttons + optional vertical dividers).
+- "dark toolbar", "dark-mode editor toolbar", "theme-aware toolbar", "暗色工具栏" → `add_toolbar_v1` (surface, border, active-bg, icon fills tokenized for dark/system).
 - "callout", "tip block", "doc note", "did you know", "info box", "提示框", "信息块" → `add_callout_v0` (tinted block with body + optional title + tone-driven leading icon: info / success / warning / danger / note).
 - "inline action", "Undo button inline", "Saved • Retry", "comment deleted undo", "inline feedback", "inline action row" → `add_inline_action_v0` (left message + right blue action label, NO floating).
 - "share row", "share to social", "share buttons", "post share", "send via", "分享按钮组" → `add_share_row_v0` (horizontal circular icon buttons each labeled below).
