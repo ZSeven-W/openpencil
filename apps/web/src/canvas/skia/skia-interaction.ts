@@ -565,6 +565,48 @@ export class SkiaInteractionManager {
     };
   }
 
+  /**
+   * Compute the axis-aligned bounding box of a rectangle after rotation
+   * around a pivot. Used to project clip rects through a rotation: ClipInfo
+   * is axis-aligned by definition, so the only safe scene-coord
+   * representation of a rotated clip is its (conservative) AABB.
+   * Slightly over-clips along the rotated rect's diagonal but is correct
+   * along its axes — the alternative (rotating just the center, keeping
+   * original w/h) places the clip in the wrong spot under non-zero
+   * rotations.
+   */
+  private rotatedAABB(
+    rect: PreviewRect,
+    centerX: number,
+    centerY: number,
+    angleDeg: number,
+  ): PreviewRect {
+    const rad = (angleDeg * Math.PI) / 180;
+    const cosA = Math.cos(rad);
+    const sinA = Math.sin(rad);
+    const corners = [
+      { x: rect.x, y: rect.y },
+      { x: rect.x + rect.w, y: rect.y },
+      { x: rect.x + rect.w, y: rect.y + rect.h },
+      { x: rect.x, y: rect.y + rect.h },
+    ];
+    let minX = Infinity;
+    let minY = Infinity;
+    let maxX = -Infinity;
+    let maxY = -Infinity;
+    for (const c of corners) {
+      const dx = c.x - centerX;
+      const dy = c.y - centerY;
+      const nx = centerX + dx * cosA - dy * sinA;
+      const ny = centerY + dx * sinA + dy * cosA;
+      if (nx < minX) minX = nx;
+      if (nx > maxX) maxX = nx;
+      if (ny < minY) minY = ny;
+      if (ny > maxY) maxY = ny;
+    }
+    return { x: minX, y: minY, w: maxX - minX, h: maxY - minY };
+  }
+
   private ensureResizePreviewNodes(engine: SkiaEngine): Map<string, RenderNodeSnapshot> | null {
     if (!this.resizeNodeId) return null;
     if (!this.resizePreviewNodes) {
@@ -762,13 +804,17 @@ export class SkiaInteractionManager {
             i < ancestorCount
               ? { ...c }
               : {
-                  ...this.rotatePreviewRect(
+                  ...this.rotatedAABB(
                     { x: c.x, y: c.y, w: c.w, h: c.h },
                     centerX,
                     centerY,
                     angleDelta,
                   ),
-                  rx: c.rx,
+                  // Rotation breaks the axis-aligned rect's semantic shape
+                  // (the AABB of a rotated rrect doesn't match a pure rrect
+                  // anymore), so drop the rounded corner — clip becomes a
+                  // conservative axis-aligned bounding box.
+                  rx: 0,
                 },
           )
         : undefined;
