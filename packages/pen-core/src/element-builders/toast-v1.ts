@@ -1,6 +1,7 @@
+import { resolveTheme, type V1Theme } from './resolve-theme.js';
 import type { ElementTree } from './helpers.js';
 
-export type ToastV1Theme = 'light' | 'dark' | 'system';
+export type ToastV1Theme = V1Theme;
 
 export interface ToastV1Params {
   /** Toast message. Required. */
@@ -25,12 +26,7 @@ export interface ToastV1Params {
   theme?: ToastV1Theme;
 }
 
-interface ResolvedColors {
-  pillFill: string;
-  fgColor: string;
-}
-
-function resolveTheme(theme: ToastV1Theme): ResolvedColors {
+function resolveToastColors(theme: ToastV1Theme): { pillFill: string; fgColor: string } {
   if (theme === 'system') {
     return {
       // Inverted swap: text-primary becomes the bg, surface becomes the fg.
@@ -66,7 +62,8 @@ function resolveTheme(theme: ToastV1Theme): ResolvedColors {
  */
 export function buildToastV1(params: ToastV1Params): ElementTree {
   const theme = params.theme ?? 'light';
-  const colors = resolveTheme(theme);
+  const colors = resolveToastColors(theme);
+  const t = resolveTheme(theme);
 
   const children: ElementTree[] = [];
   if (params.icon) {
@@ -85,7 +82,9 @@ export function buildToastV1(params: ToastV1Params): ElementTree {
     name: 'Message',
     role: 'toast-message',
     content: params.message,
-    fontSize: 14,
+    fontSize: t.typography.bodySize,
+    // fontWeight=500 is toast-specific (medium emphasis) — not in token system
+    // (body=400, h3=600). Keep hardcoded to preserve v0 parity in 'light' mode.
     fontWeight: 500,
     fill: [{ type: 'solid', color: colors.fgColor }],
   });
@@ -95,12 +94,14 @@ export function buildToastV1(params: ToastV1Params): ElementTree {
     name: 'Toast',
     role: 'toast',
     width: 'fit_content',
+    // cornerRadius=24 (pill shape) is builder-private — no token maps to this.
     cornerRadius: 24,
+    // padding=[12,20]: 12 = s3, but 20 is not a token. Keep hardcoded per §3.4.
     padding: [12, 20],
     fill: [{ type: 'solid', color: colors.pillFill }],
     layout: 'horizontal',
     alignItems: 'center',
-    gap: 8,
+    gap: t.spacing.s2,
     children,
   };
 }
