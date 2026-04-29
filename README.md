@@ -500,8 +500,10 @@ Thanks to **[MrQyun](https://github.com/mrqyun)** — want your name here too? *
  </picture>
 </a>
 
+## Assessments
+
+[![MseeP.ai Security Assessment Badge](https://mseep.net/pr/zseven-w-openpencil-badge.png)](https://mseep.ai/app/zseven-w-openpencil)
+
 ## License
 
 [MIT](./LICENSE) — Copyright (c) 2026 ZSeven-W
-
-[![MseeP.ai Security Assessment Badge](https://mseep.net/pr/zseven-w-openpencil-badge.png)](https://mseep.ai/app/zseven-w-openpencil)
