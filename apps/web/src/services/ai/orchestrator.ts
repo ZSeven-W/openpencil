@@ -483,6 +483,22 @@ function reorderDashboardMainChildren(plan: OrchestratorPlan, mainParentId: stri
 }
 
 /**
+ * Plan-derived v1 token names that this function manages. Keep in sync with
+ * the mappings below — these are the keys we (re-)write on every plan run.
+ * User-owned variables outside this set (custom names, themed values) are
+ * never touched.
+ */
+const PLAN_DERIVED_VARIABLE_NAMES = [
+  'color-bg-deep',
+  'color-surface',
+  'color-text-primary',
+  'color-text-body',
+  'color-text-muted',
+  'color-accent',
+  'color-border',
+] as const;
+
+/**
  * Seed `doc.variables` with the plan's style-guide palette (mapped to v1
  * semantic token names) so sub-agent JSONL output containing `$color-*` refs
  * resolves to the user's chosen palette at render time, not the
@@ -494,14 +510,18 @@ function reorderDashboardMainChildren(plan: OrchestratorPlan, mainParentId: stri
  * the default `#2563EB` blue — completely overriding any warm/orange/etc
  * style guide picked by the planner.
  *
- * Skipped when `doc.variables` is already non-empty: respects user-seeded
- * tokens (design.md, custom palette) without overwriting.
+ * Always overwrites the plan-derived keys: every brief gets a fresh plan, and
+ * the prompt's ref + (hex) instruction must match the resolved palette.
+ * design.md flows bypass this function entirely (sub-agent uses designMd
+ * policy instead of styleGuide injection). User-set variables outside the
+ * plan-derived key set are left untouched.
+ *
+ * Stale-key guard: also clears any plan-derived key the new palette doesn't
+ * carry (e.g. ai-generated `plan.styleGuide` has no `textMuted`, but a prior
+ * brief may have seeded one from a catalog guide). Without this, the prior
+ * brief's textMuted lingers and refs in this brief resolve to the wrong color.
  */
 export function seedDocVariablesFromStyleGuide(plan: OrchestratorPlan): void {
-  const store = useDocumentStore.getState();
-  const existing = store.document.variables ?? {};
-  if (Object.keys(existing).length > 0) return;
-
   const palette: Record<string, string> = {};
 
   if (plan.styleGuide?.palette) {
@@ -525,8 +545,16 @@ export function seedDocVariablesFromStyleGuide(plan: OrchestratorPlan): void {
 
   if (Object.keys(palette).length === 0) return;
 
-  for (const [name, value] of Object.entries(palette)) {
-    store.setVariable(name, { type: 'color', value });
+  const store = useDocumentStore.getState();
+  const existing = store.document.variables ?? {};
+
+  for (const name of PLAN_DERIVED_VARIABLE_NAMES) {
+    const next = palette[name];
+    if (next !== undefined) {
+      store.setVariable(name, { type: 'color', value: next });
+    } else if (name in existing) {
+      store.removeVariable(name);
+    }
   }
 }
 
