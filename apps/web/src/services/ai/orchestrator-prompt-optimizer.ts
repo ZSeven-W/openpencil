@@ -468,13 +468,14 @@ function inferTagsFromPrompt(prompt: string): string[] {
   // 'wallet app' on its own usually means a fintech wallet ("design a
   // wallet app to send money"), but in Apple-Wallet contexts it's the
   // generic iOS feature for boarding passes, event tickets, gift cards,
-  // vaccination cards, and loyalty cards — none of which are fintech UI.
-  // Trigger fintech for 'wallet app' UNLESS the prompt also mentions an
-  // Apple-Wallet-style pass/ticket/coupon/loyalty context.
-  if (
-    /\bwallet\s+app\b/.test(lower) &&
-    !/\b(pass|passes|boarding|ticket|tickets|ticketing|gift\s+card|coupon|loyalty)\b/.test(lower)
-  ) {
+  // membership cards, vaccination cards, and loyalty cards — none of
+  // which are fintech UI. Trigger fintech for 'wallet app' UNLESS the
+  // prompt also mentions an Apple-Wallet-style pass / ticket / card
+  // context (covering the common plural/card variants: coupons,
+  // gift cards, membership cards, punch cards, stamp cards).
+  const APPLE_WALLET_CONTEXT =
+    /\b(pass|passes|boarding|ticket|tickets|ticketing|gift\s+cards?|coupon|coupons|loyalty|membership|punch\s+cards?|stamp\s+cards?|vaccination\s+cards?)\b/;
+  if (/\bwallet\s+app\b/.test(lower) && !APPLE_WALLET_CONTEXT.test(lower)) {
     tags.push('fintech');
   }
   if (/\b(budget|expense)\s+(tracker|app|report|management|manager|tracking)\b/.test(lower)) {
