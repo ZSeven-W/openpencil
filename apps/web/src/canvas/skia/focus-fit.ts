@@ -23,7 +23,9 @@ export function getFocusBounds(
   const selectedSet = new Set(selectedIds);
   const selectedNodes = renderNodes.filter((rn) => selectedSet.has(rn.node.id));
   const targetNodes =
-    selectedNodes.length > 0 ? selectedNodes : renderNodes.filter((rn) => !rn.clipRect);
+    selectedNodes.length > 0
+      ? selectedNodes
+      : renderNodes.filter((rn) => rn.clipStack === undefined || rn.clipStack.length === 0);
 
   if (targetNodes.length === 0) return null;
 
