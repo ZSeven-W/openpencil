@@ -450,13 +450,40 @@ function inferTagsFromPrompt(prompt: string): string[] {
   if (/\b(finance|fintech|banking|investing|trading|crypto|stocks)\b|金融/.test(lower)) {
     tags.push('fintech');
   }
+  // 'wallet' / 'budget' / 'expense' alone are too ambiguous (Apple Wallet
+  // pass, "on a budget", expense form across any domain). Require a
+  // companion finance word so common fintech briefs ("crypto wallet",
+  // "budget tracker", "expense tracker") still match without forcing
+  // fintech onto every UI that mentions a budget.
+  if (
+    /\b(crypto|digital|payment|hot|cold|hardware|web3)\s+wallet\b|\bwallet\s+(app|pass|payment|connect)\b/.test(
+      lower,
+    )
+  ) {
+    tags.push('fintech');
+  }
+  if (/\b(budget|expense)\s+(tracker|app|report|management|manager|tracking)\b/.test(lower)) {
+    tags.push('fintech');
+  }
   if (/\b(developer|coding|programming|terminal|engineering)\b|开发/.test(lower)) {
     tags.push('developer', 'monospace');
   }
-  // 'code' alone is too ambiguous (QR code, promo code, area code) to
-  // unconditionally force a developer guide. Require an immediate
-  // dev-context companion word.
+  // 'code' / 'api' / 'dev' alone are too ambiguous (QR code, API
+  // integration in any domain, "dev" as informal abbreviation). Require
+  // an immediate dev-context companion word so common dev briefs ("code
+  // editor", "API console", "dev tools", "developer portal") still match
+  // without forcing developer onto every brief that mentions an API.
   if (/\bcode\s+(editor|review|repo|repository|completion|snippet|base)\b/.test(lower)) {
+    tags.push('developer', 'monospace');
+  }
+  if (
+    /\bapi\s+(console|platform|portal|docs|documentation|reference|sdk|gateway|playground|key|keys)\b/.test(
+      lower,
+    )
+  ) {
+    tags.push('developer', 'monospace');
+  }
+  if (/\bdev\s+(tool|tools|portal|experience|environment|console|platform)\b/.test(lower)) {
     tags.push('developer', 'monospace');
   }
   if (
