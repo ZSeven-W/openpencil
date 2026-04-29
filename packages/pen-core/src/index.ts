@@ -420,4 +420,7 @@ export {
   type ActivityLogParams,
   type EventCardParams,
   type StepCardParams,
+  resolveTheme,
+  type V1Theme,
+  type ThemeResolution,
 } from './element-builders/index.js';
