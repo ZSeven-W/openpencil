@@ -182,6 +182,16 @@ import { handleAddSectionHeaderV1 } from '../tools/add-section-header-v1';
 import { handleAddSegmentedControlV1 } from '../tools/add-segmented-control-v1';
 import { handleAddSelectV1 } from '../tools/add-select-v1';
 import { handleAddShareRowV1 } from '../tools/add-share-row-v1';
+import { handleAddSidebarNavV1 } from '../tools/add-sidebar-nav-v1';
+import { handleAddSkeletonV1 } from '../tools/add-skeleton-v1';
+import { handleAddSocialLoginRowV1 } from '../tools/add-social-login-row-v1';
+import { handleAddSpinnerV1 } from '../tools/add-spinner-v1';
+import { handleAddStatCardV1 } from '../tools/add-stat-card-v1';
+import { handleAddStatGridV1 } from '../tools/add-stat-grid-v1';
+import { handleAddStatusBadgeV1 } from '../tools/add-status-badge-v1';
+import { handleAddStepCardV1 } from '../tools/add-step-card-v1';
+import { handleAddStepperV1 } from '../tools/add-stepper-v1';
+import { handleAddSwitchV1 } from '../tools/add-switch-v1';
 import { recordElementToolCall } from '../metrics/element-tool-metrics';
 import { ELEMENT_TOOL_DEFINITIONS_BASE } from './element-tool-defs-base';
 import { ELEMENT_TOOL_DEFINITIONS_EXT } from './element-tool-defs-ext';
@@ -558,6 +568,26 @@ async function dispatchElementToolCall(name: string, a: any): Promise<string> {
       return JSON.stringify(await handleAddSelectV1(a), null, 2);
     case 'add_share_row_v1':
       return JSON.stringify(await handleAddShareRowV1(a), null, 2);
+    case 'add_sidebar_nav_v1':
+      return JSON.stringify(await handleAddSidebarNavV1(a), null, 2);
+    case 'add_skeleton_v1':
+      return JSON.stringify(await handleAddSkeletonV1(a), null, 2);
+    case 'add_social_login_row_v1':
+      return JSON.stringify(await handleAddSocialLoginRowV1(a), null, 2);
+    case 'add_spinner_v1':
+      return JSON.stringify(await handleAddSpinnerV1(a), null, 2);
+    case 'add_stat_card_v1':
+      return JSON.stringify(await handleAddStatCardV1(a), null, 2);
+    case 'add_stat_grid_v1':
+      return JSON.stringify(await handleAddStatGridV1(a), null, 2);
+    case 'add_status_badge_v1':
+      return JSON.stringify(await handleAddStatusBadgeV1(a), null, 2);
+    case 'add_step_card_v1':
+      return JSON.stringify(await handleAddStepCardV1(a), null, 2);
+    case 'add_stepper_v1':
+      return JSON.stringify(await handleAddStepperV1(a), null, 2);
+    case 'add_switch_v1':
+      return JSON.stringify(await handleAddSwitchV1(a), null, 2);
     default:
       return '';
   }

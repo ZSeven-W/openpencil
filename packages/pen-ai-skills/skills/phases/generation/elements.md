@@ -59,6 +59,7 @@ Rows (horizontal, in-card or scrolling):
 3. Row of filter chips / category tabs (label + optional icon, active state) → `add_nav_chip_row_v0` (scroll)
    3b. Theme-aware variant (no hardcoded colors; all modes identical — accepts theme for API consistency) → `add_nav_chip_row_v1`
 4. Non-scrolling 2-5 stats inline (auto-share width) → `add_stat_grid_v0`
+   4b. Theme-aware variant (no explicit fills in v0; all modes identical — accepts theme for API consistency) → `add_stat_grid_v1`
 
 Containers and single elements:
 
@@ -109,6 +110,7 @@ Forms:
 Controls (toggle / choice / tabs):
 
 20. iOS/Material toggle switch (51×31, thumb floats) → `add_switch_v0`
+    20b. Theme-aware variant (iOS HIG values #34C759/#E5E5EA are builder-private per §3.4; all modes identical) → `add_switch_v1`
 21. Checkbox + inline label (20×20 box, `check` icon inside when checked) → `add_checkbox_v0`
     21b. Theme-aware variant (accent fill checked, border token unchecked) → `add_checkbox_v1`
 22. Radio button + inline label (20×20 ring, dot inside when selected) → `add_radio_v0`
@@ -134,6 +136,7 @@ Floating / nav / wizard:
 30. Breadcrumb trail with chevron separators (last crumb auto-active) → `add_breadcrumb_v0`
     30b. Theme-aware variant (accepts `theme` param for API consistency; output identical across themes) → `add_breadcrumb_v1`
 31. Horizontal numbered stepper (circles + fill_container connectors) → `add_stepper_v0`
+    31b. Theme-aware variant (pending fill → border; pending number → textMuted; accent + done-white stay hardcoded) → `add_stepper_v1`
 
 Ratings & pagination:
 
@@ -191,10 +194,12 @@ Chrome / modals:
 Status / presence:
 
 47. Status badge (small colored dot + short label, "● Online" pattern, tone-enum'd) → `add_status_badge_v0`
+    47b. Theme-aware variant (tone colors are status semantics kept hardcoded; all modes identical) → `add_status_badge_v1`
 
 Feedback / loading:
 
 48. Loading spinner (static ring + 3/4 arc) → `add_spinner_v0`
+    48b. Theme-aware variant (track_color/active_color are caller params; accepts theme for API consistency; all modes identical) → `add_spinner_v1`
 49. Tooltip pill (dark pill + white text, hover-hint appearance) → `add_tooltip_v0`
 
 Analytics / KPIs:
@@ -219,6 +224,7 @@ Calendars:
 Loading / placeholder:
 
 43. Loading skeleton (N gray rectangles, last row ~60% width) → `add_skeleton_v0`
+    43b. Theme-aware variant (row fill → surface2 in dark/system so bars are visible on dark bg) → `add_skeleton_v1`
 
 Pagination:
 
@@ -271,10 +277,12 @@ Messaging:
 Dashboard KPIs:
 
 62. Big-number stat card (standalone metric tile — label + huge value + optional delta/icon) → `add_stat_card_v0`
+    62b. Theme-aware variant (bg → surface; border → border; label → textMuted; icon → textSubtle; value → textPrimary; delta tones stay hardcoded) → `add_stat_card_v1`
 
 Auth / login:
 
 63. Social auth provider buttons ("Continue with Google / Apple / Microsoft", OAuth/SSO row, third-party sign-in) → `add_social_login_row_v0`
+    63b. Theme-aware variant (button bg → surface; border → border; icon → textMuted; label → textPrimary in dark/system) → `add_social_login_row_v1`
 
 Pricing / monetization:
 
@@ -300,6 +308,7 @@ Compliance / disclosure:
 Desktop / dashboard rails:
 
 69. Persistent vertical sidebar (left rail with icon+label rows, optional brand title, active item gets pill bg) → `add_sidebar_nav_v0`
+    69b. Theme-aware variant (bg → surface; title + active label → textPrimary; inactive → textMuted; active item bg → surface2) → `add_sidebar_nav_v1`
 
 Presence / collaboration:
 
@@ -381,6 +390,7 @@ Calendar:
 Onboarding:
 
 89. Numbered step card (circle/check + title + description) → `add_step_card_v0`
+    89b. Theme-aware variant (title → textPrimary; desc → textMuted; incomplete ring bg → surface; accent stays hardcoded) → `add_step_card_v1`
 
 90. None match → fall through to `batch_design`
 
@@ -393,6 +403,7 @@ PREFER an element tool when the spec says any of:
 - "horizontal scrolling cards", "swipeable row", "chip row", "pills" → `add_card_row_v0`
 - "metric tiles", "KPI cards", "dashboard stats" (SCROLLING row) → `add_metric_row_v0`
 - "stats row", "3 metrics side by side", "summary bar" (NON-scrolling grid) → `add_stat_grid_v0`
+- "dark stats grid", "dark-mode stat grid", "theme-aware stat grid", "暗色指标网格" → `add_stat_grid_v1` (no explicit fills; all modes identical — accepts theme for API consistency).
 - "category filter chips", "quick-access shortcuts" → `add_nav_chip_row_v0`
 - "section title with See all / View more" → `add_section_header_v0`
 - "dark section header", "dark-mode section title", "theme-aware section header", "暗色版块标题" → `add_section_header_v1` (no color change; accepts theme for API consistency)
@@ -420,6 +431,7 @@ PREFER an element tool when the spec says any of:
 - "dropdown", "select", "picker", "combo box", "下拉选择", "选择器" → `add_select_v0`
 - "dark select", "dark-mode dropdown", "theme-aware select", "暗色下拉" → `add_select_v1` (placeholder → textSubtle in dark/system)
 - "skeleton", "loading placeholder", "shimmer", "loading state", "placeholder lines", "骨架屏", "加载中占位" → `add_skeleton_v0`
+- "dark skeleton", "dark-mode skeleton", "theme-aware skeleton", "暗色骨架屏" → `add_skeleton_v1` (row fill → surface2 so bars are visible on dark bg).
 - "line chart", "trend chart", "折线图" → `add_chart_line_v0`
 - "pie chart", "donut chart", "饼图" → `add_chart_pie_v0`
 - "image placeholder", "photo slot", "upload zone", "hero image area", "cover placeholder", "图片占位" → `add_image_placeholder_v0`
@@ -430,9 +442,12 @@ PREFER an element tool when the spec says any of:
 - "dark toast", "dark-mode snackbar", "theme-aware toast", "system theme toast", "暗色 toast", "暗色浮层通知" → `add_toast_v1` (accepts `theme` param; toasts use INVERTED contrast — `"dark"` gives a light pill with dark fg. Use `"system"` when `applySemanticPalette(doc)` is seeded)
 - "dark empty chart", "dark-mode no-data placeholder", "theme-aware chart empty state", "暗色空图表", "暗色无数据占位" → `add_empty_chart_v1` (accepts `theme` param; use inside dark-theme dashboards so the empty slot doesn't punch a light rectangle into dark surfaces. Use `"system"` when `applySemanticPalette(doc)` is seeded)
 - "status", "online indicator", "presence dot", "health status", "busy indicator", "状态", "在线" → `add_status_badge_v0`
+- "dark status badge", "dark-mode status indicator", "theme-aware status badge", "暗色状态徽标" → `add_status_badge_v1` (tone colors are status semantics kept hardcoded; all modes identical).
 - "spinner", "loading spinner", "progress circle", "loader", "加载圈" → `add_spinner_v0`
+- "dark spinner", "dark-mode spinner", "theme-aware spinner", "暗色加载圈" → `add_spinner_v1` (track_color/active_color are caller params; accepts theme for API consistency).
 - "tooltip", "hover hint", "help tip", "提示浮层" → `add_tooltip_v0`
 - "toggle", "switch", "on/off", "开关" → `add_switch_v0`
+- "dark toggle", "dark switch", "theme-aware switch", "暗色开关" → `add_switch_v1` (iOS HIG values kept hardcoded; all modes identical — accepts theme for API consistency).
 - "checkbox", "agreement", "select option", "复选框" → `add_checkbox_v0`
 - "radio", "single choice", "单选" → `add_radio_v0` (stack multiple in a vertical parent)
 - "dark radio", "dark-mode radio button", "theme-aware radio", "暗色单选" → `add_radio_v1` (accent stays brand-invariant; unselected ring → border token)
@@ -447,6 +462,7 @@ PREFER an element tool when the spec says any of:
 - "FAB", "floating action button", "compose button", "新建按钮" → `add_fab_v0`
 - "breadcrumb", "nav path", "面包屑" → `add_breadcrumb_v0`
 - "stepper", "progress steps", "wizard nav", "步骤条" → `add_stepper_v0`
+- "dark stepper", "dark-mode stepper", "theme-aware stepper", "暗色步骤条" → `add_stepper_v1` (pending fill → border; pending number → textMuted in dark/system).
 - "rating", "review stars", "评分" → `add_rating_stars_v0`
 - "dark rating", "dark-mode stars", "theme-aware rating", "暗色评分" → `add_rating_stars_v1` (no color change; accepts theme for API consistency)
 - "carousel dots", "slide indicator", "轮播指示" → `add_carousel_dots_v0`
@@ -471,7 +487,9 @@ PREFER an element tool when the spec says any of:
 - "attachment", "attached file", "uploaded file", "file item", "file list row", "附件", "已上传文件" → `add_attachment_row_v0` (for upload-in-progress state, compose `add_progress_bar_v0` below)
 - "chat message", "message bubble", "conversation row", "iMessage bubble", "chat UI", "聊天气泡", "消息气泡" → `add_chat_bubble_v0` (side="left" for from-others, side="right" for from-self)
 - "KPI card", "big number card", "metric tile", "stat widget", "featured metric", "关键指标卡", "数据大屏卡片" → `add_stat_card_v0` (distinct from `add_stat_grid_v0` which is multi-cell side-by-side)
+- "dark stat card", "dark KPI card", "dark-mode metric tile", "暗色指标卡" → `add_stat_card_v1` (bg → surface; border → border; label → textMuted; icon → textSubtle; value → textPrimary in dark/system).
 - "Continue with Google", "Sign in with Apple", "social login", "OAuth buttons", "SSO providers", "third-party login", "第三方登录", "社交登录", "OAuth 登录" → `add_social_login_row_v0` (orientation="vertical" for stacked full-width on mobile; orientation="horizontal" for the compact "or sign in with..." icon-only row)
+- "dark social login", "dark-mode social auth buttons", "theme-aware social login", "暗色第三方登录" → `add_social_login_row_v1` (button bg → surface; border → border; icon → textMuted; label → textPrimary in dark/system).
 - "pricing card", "plan card", "SaaS tier", "subscription plan", "pricing tier", "billing card", "价格卡", "套餐卡", "定价卡片" → `add_pricing_card_v0` (set one tile's `emphasis: "featured"` to visually recommend it — auto-gets "Most popular" badge unless `badge` overrides). For a 3-tier pricing section, call this 3× under the same parent section.
 - "slider", "range input", "volume control", "opacity slider", "brightness slider", "filter slider", "滑块", "滑动条", "音量条" → `add_range_slider_v0` (single-handle; set `show_value=true` + `value_suffix="%"` to render the readout). For a dual-handle range (min+max), still fall through to batch_design.
 - "dark slider", "dark-mode range input", "theme-aware slider", "暗色滑块" → `add_range_slider_v1` (accent invariant; thumb bg → surface; remaining → border; label/value tokenized)
@@ -479,6 +497,7 @@ PREFER an element tool when the spec says any of:
 - "newsletter signup", "subscribe form", "subscribe to newsletter", "promo code input", "apply discount", "send message input", "chat composer", "search with submit", "订阅", "应用优惠码", "发送消息" → `add_input_with_action_v0` (action_kind="text" for "Subscribe" pill button, action_kind="icon" for chat send arrow).
 - "cookie banner", "cookie consent", "GDPR banner", "CCPA banner", "privacy notice", "cookie disclosure", "cookie 提示", "隐私同意条" → `add_cookie_banner_v0` (set `show_settings_link: true` for fine-grained GDPR consent UX). Caller positions sticky-bottom; the tool emits the banner card itself.
 - "sidebar", "side nav", "sidebar nav", "left rail", "dashboard nav rail", "admin sidebar", "settings sidebar", "docs sidebar", "vertical nav", "侧边栏", "侧边导航", "左侧导航" → `add_sidebar_nav_v0` (desktop persistent rail; pass `title` for a brand row above the items, mark current page with `active: true` on the item).
+- "dark sidebar", "dark-mode sidebar nav", "theme-aware sidebar", "暗色侧边栏" → `add_sidebar_nav_v1` (bg → surface; active label → textPrimary; inactive → textMuted; active item bg → surface2 in dark/system).
 - "stacked avatars", "avatar group", "avatar stack", "team avatars", "5 contributors", "online users", "+N more", "viewers row", "presence indicator", "成员头像", "团队头像", "在线用户", "头像组" → `add_avatar_group_v0` (renders up to `max_visible` ringed avatar circles + a "+N" overflow tile; pen-core flex doesn't allow negative gap so the white ring + 4px gap is the affordance, not literal overlap).
 - "data table row", "table row", "table header row", "customer row", "order row", "report row", "transaction row", "users table", "数据表行", "表格行", "表头行" → `add_data_table_row_v0` (desktop pattern; pass `header: true` for the column-header row, `selected: true` to tint a hover/selected body row). For row separators stack `add_divider_v0` between rows.
 - "filter chip", "filter tag", "applied filter", "selected criterion", "category pill", "removable tag", "Status: Active ×", "可移除标签", "筛选标签" → `add_tag_v0` (single chip with optional × close icon, default removable=true; pass `tone` for accent / success / warning / error palettes).
@@ -510,6 +529,7 @@ PREFER an element tool when the spec says any of:
 - "audit log row", "activity feed entry", "recent activity item", "audit entry", "审计日志条目", "活动记录", "操作日志行" → `add_activity_log_v0` (single line: optional tinted icon dot + "<actor> <action>" + right-aligned timestamp).
 - "event card", "agenda item", "meeting tile", "upcoming event", "calendar event row", "日程卡片", "会议条目", "活动卡片" → `add_event_card_v0` (date column with month band + day number, then title + time + location).
 - "onboarding step", "how-it-works step", "tutorial step card", "setup checklist item", "操作步骤卡片", "教程步骤", "新手引导步骤" → `add_step_card_v0` (numbered circle / check + title + description, stacks vertically).
+- "dark step card", "dark-mode onboarding step", "theme-aware step card", "暗色步骤卡片" → `add_step_card_v1` (title → textPrimary; desc → textMuted; ring bg → surface in dark/system).
 
 STILL use batch_design when (emit a SINGLE batch_design for the whole response — do NOT mix with element-tool calls):
 
