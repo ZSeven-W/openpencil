@@ -25,8 +25,8 @@ import {
   buildSubAgentStyleGuideInstruction,
   compactSubAgentSkills,
 } from './orchestrator-sub-agent-compact';
-import { tryParseElementToolOutput } from './design-parser';
-import { dispatchElementToolCall } from './element-tools-dispatcher';
+import { tryParseAllElementToolOutputs } from './design-parser';
+import { dispatchElementToolCalls } from './element-tools-dispatcher';
 import { SUPPORTED_EMBEDDED_ELEMENT_TOOLS } from './element-tool-shims';
 import { needsElementTools, resolveModelProfile } from './model-profiles';
 import {
@@ -76,9 +76,11 @@ export interface StreamTimeoutConfig {
 // model doesn't emit `<op_tool>` for uncovered tools and see them fail
 // through; uncovered components should fall back to Strategy B.
 //
-// design-parser.ts::tryParseElementToolOutput already collects EVERY
-// `<op_tool>` tag in the response into a tool_calls array, so the
-// multi-tool path in Strategy A works end-to-end.
+// design-parser.ts::tryParseAllElementToolOutputs collects EVERY
+// `<op_tool>` tag (element-tool or batch_design) in emit order, and
+// element-tools-dispatcher::dispatchElementToolCalls applies them in
+// one history batch — so the multi-tool path in Strategy A applies
+// every tag the model emits, not just the first one.
 const EMBEDDED_AVAILABLE = SUPPORTED_EMBEDDED_ELEMENT_TOOLS.join(', ');
 const ELEMENT_TOOL_OUTPUT_FORMAT = [
   '',
@@ -522,19 +524,24 @@ async function executeSubAgent(
       renderer.getAppliedIds().size === 0 &&
       rawResponse.trim().length > 0
     ) {
-      const elementShape = tryParseElementToolOutput(rawResponse);
-      if (elementShape !== null) {
+      // The Strategy A prompt now invites the model to chain N tags
+      // (settings panel with 4 toggle rows = 5 op_tool tags etc.), so
+      // we parse ALL element-tool tags and apply them as one history
+      // batch — applying only the first would silently drop the rest
+      // and produce a half-rendered subtask.
+      const elementShapes = tryParseAllElementToolOutputs(rawResponse);
+      if (elementShapes.length > 0) {
         renderer.finish();
         // Pass subtask/root parent context so rootless `<op_tool>`
         // payloads (e.g. `elements.md` examples that omit parent_id)
         // land inside the generation's target frame, matching the
         // streaming path. Without this default the dispatcher would
         // prepend at page root, outside root-frame layout adjustments.
-        const dispatchResult = await dispatchElementToolCall(elementShape, {
+        const dispatchResult = await dispatchElementToolCalls(elementShapes, {
           defaultParentId: subtask.parentFrameId ?? plan.rootFrame.id,
         });
         const inserted = dispatchResult.insertedNodes;
-        if (dispatchResult.status === 'applied' && inserted.length > 0) {
+        if (inserted.length > 0) {
           // Keep orchestrator accounting consistent with the store.
           // Dispatcher already wrote via document-store.addNode (shim)
           // or applyExternalDocument (HTTP fallback); the renderer
@@ -543,18 +550,31 @@ async function executeSubAgent(
           // element-tool apply as "0 nodes produced" (= subtask fail).
           // Push the inserted count through the same progress surface
           // the streaming path uses so the UI checklist + aggregate
-          // counters match reality.
+          // counters match reality. `partial` status still surfaces
+          // any nodes that DID land — the partial failures show up as
+          // the per-shape `error` summary below.
           progressEntry.nodeCount += inserted.length;
           progress.totalNodes += inserted.length;
           callbacks?.onApplyPartial?.(progress.totalNodes);
         }
         progressEntry.status = dispatchResult.status === 'applied' ? 'done' : 'error';
         emitProgress(plan, progress, callbacks);
+        // Surface failure messages so the user sees which tag(s)
+        // broke. Concatenated since BatchDispatchResult has no single
+        // top-level message — the array stays per-shape for diagnostic
+        // fidelity.
+        const failureMsg =
+          dispatchResult.status === 'applied'
+            ? undefined
+            : dispatchResult.results
+                .filter((r) => r.status !== 'applied')
+                .map((r) => `[${r.toolName}] ${r.message}`)
+                .join('; ') || 'element-tool dispatch produced no nodes';
         return {
           subtaskId: subtask.id,
           nodes: inserted.length > 0 ? inserted : renderer.getInsertedNodes(),
           rawResponse,
-          error: dispatchResult.status === 'applied' ? undefined : dispatchResult.message,
+          error: failureMsg,
         };
       }
     }
