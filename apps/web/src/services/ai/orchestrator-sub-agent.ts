@@ -774,10 +774,16 @@ CRITICAL LAYOUT CONSTRAINTS:
   } else if (plan.styleGuide) {
     const sg = plan.styleGuide;
     const p = sg.palette;
-    prompt += `\n\nSTYLE GUIDE (use these consistently):
-- Background: ${p.background}  Surface: ${p.surface}
-- Text: ${p.text}  Secondary: ${p.secondary}
-- Accent: ${p.accent}  Accent2: ${p.accent2}  Border: ${p.border}
+    // The palette below is SEEDED into doc.variables (see
+    // seedDocVariablesFromStyleGuide in orchestrator.ts). Emit `$color-*` refs
+    // in JSONL fills — they resolve to the hex shown in parens at render time.
+    prompt += `\n\nSTYLE GUIDE — these refs are SEEDED into doc.variables; EMIT REFS in your JSONL fills (NOT hex):
+- Background: \`$color-bg-deep\` (resolves to ${p.background})
+- Surface: \`$color-surface\` (${p.surface})
+- Text: \`$color-text-primary\` (${p.text})
+- Secondary: \`$color-text-body\` (${p.secondary})
+- Accent: \`$color-accent\` (${p.accent})
+- Border: \`$color-border\` (${p.border})
 - Heading font: ${sg.fonts.heading}  Body font: ${sg.fonts.body}
 - Aesthetic: ${sg.aesthetic}`;
   }

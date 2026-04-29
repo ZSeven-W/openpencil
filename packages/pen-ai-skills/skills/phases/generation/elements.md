@@ -50,6 +50,8 @@ Multi-tool example — a "Notifications" settings section with a header + 4 togg
 
 ## Theme handling — when to pass `theme: 'system'`
 
+> **This section applies to the MCP tool-call path only** (codex CLI / Claude Code / Cursor calling `add_X_v1` directly). The web-app sub-agent JSONL path forbids tool calls — there, write `$color-*` / `$type-*` / `$spacing-*` / `$radius-*` refs directly in JSONL fills/fontSize/etc. See the **DESIGN SYSTEM TOKENS** section in `jsonl-format.md` for the available token names and when refs vs literals are appropriate.
+
 **Default to `theme: 'system'`** for every v1 tool call. This makes the output respect the user's design system (`doc.variables` / `doc.themes`):
 
 - If user has seeded `applySemanticPalette(doc)` or set custom token values, v1 'system' mode emits `$color-*` / `$type-*` / `$spacing-*` / `$radius-*` refs that resolve to user's design system at paint time.
