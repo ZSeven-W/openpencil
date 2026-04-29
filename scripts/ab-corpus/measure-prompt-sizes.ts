@@ -13,7 +13,11 @@
 
 import { buildSystemPrompt } from './build-prompt';
 
-const cases: Array<{ label: string; variant: 'B' | 'T'; difficulty?: 'obvious' | 'optional' | 'composite' }> = [
+const cases: Array<{
+  label: string;
+  variant: 'B' | 'T';
+  difficulty?: 'obvious' | 'optional' | 'composite';
+}> = [
   { label: 'B (any difficulty)                ', variant: 'B' },
   { label: 'T + difficulty="obvious"          ', variant: 'T', difficulty: 'obvious' },
   { label: 'T + difficulty="optional"         ', variant: 'T', difficulty: 'optional' },
@@ -30,6 +34,10 @@ process.stdout.write(`---------------------+---------+------------------\n`);
 for (const c of cases) {
   const built = buildSystemPrompt(c.variant, c.difficulty ? { difficulty: c.difficulty } : {});
   const len = built.system.length;
-  process.stdout.write(`${c.label} | ${String(len).padStart(7)} | ${String(Math.round(len / 4)).padStart(6)}\n`);
+  process.stdout.write(
+    `${c.label} | ${String(len).padStart(7)} | ${String(Math.round(len / 4)).padStart(6)}\n`,
+  );
 }
-process.stdout.write(`\nObvious-vs-composite savings: ${savings} chars (~${Math.round(savings / 4)} tokens)\n`);
+process.stdout.write(
+  `\nObvious-vs-composite savings: ${savings} chars (~${Math.round(savings / 4)} tokens)\n`,
+);

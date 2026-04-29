@@ -8,9 +8,17 @@ import { buildSystemPrompt } from '../build-prompt';
 // large enough that structural assertions catch any regression where
 // the diet silently no-ops.
 
-const T_PRIMARY_MARKER = 'PRIMARY: when your intent matches an add_*_v0 element tool above';
+const T_MULTI_TOOL_MARKER = 'Respond with one or more `<op_tool>` tags';
+const T_COMPOSITE_MARKER = 'COMPOSITE (multi-component briefs';
 const B_BATCH_MARKER =
   '<op_tool>{"name": "batch_design", "arguments": {"operations": "<DSL_STRING>"}}</op_tool>';
+// Earlier versions of the T instructions explicitly forbade multi-tool
+// output ("Respond with one tag" / "Do not combine multiple tags");
+// that wording undercut the multi-tool teaching baked into elements.md.
+// Codex stop-time review caught the contradiction — guard against
+// regression by asserting the forbidding text is GONE.
+const FORBIDDEN_SINGLE_TAG_PHRASE = 'one `<op_tool>` tag, nothing else';
+const FORBIDDEN_NO_COMBINE_PHRASE = 'Do not combine multiple tags';
 
 describe('buildSystemPrompt', () => {
   it('T + composite returns the largest prompt (cookbook present)', () => {
@@ -56,16 +64,25 @@ describe('buildSystemPrompt', () => {
     expect(distinct.size).toBe(1);
   });
 
-  it('every T variant carries the PRIMARY/FALLBACK output-format marker', () => {
+  it('every T variant carries the multi-tool output-format marker', () => {
     for (const difficulty of ['obvious', 'optional', 'composite'] as const) {
       const built = buildSystemPrompt('T', { difficulty });
-      expect(built.system).toContain(T_PRIMARY_MARKER);
+      expect(built.system).toContain(T_MULTI_TOOL_MARKER);
+      expect(built.system).toContain(T_COMPOSITE_MARKER);
     }
   });
 
-  it('B variant carries the batch_design marker but not the PRIMARY split', () => {
+  it('T variant does NOT forbid multi-tool output (regression guard)', () => {
+    for (const difficulty of ['obvious', 'optional', 'composite'] as const) {
+      const built = buildSystemPrompt('T', { difficulty });
+      expect(built.system).not.toContain(FORBIDDEN_SINGLE_TAG_PHRASE);
+      expect(built.system).not.toContain(FORBIDDEN_NO_COMBINE_PHRASE);
+    }
+  });
+
+  it('B variant carries the batch_design marker but not the multi-tool split', () => {
     const built = buildSystemPrompt('B');
     expect(built.system).toContain(B_BATCH_MARKER);
-    expect(built.system).not.toContain(T_PRIMARY_MARKER);
+    expect(built.system).not.toContain(T_COMPOSITE_MARKER);
   });
 });
