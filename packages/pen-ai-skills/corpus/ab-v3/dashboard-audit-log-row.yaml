@@ -1,0 +1,24 @@
+id: dashboard-audit-log-row
+category: dashboard
+difficulty: obvious
+prompt: |
+  Design ONLY one entry of an audit log feed on an admin "Recent
+  activity" panel. The entry is a single horizontal line, ~32px
+  tall, full width on a 720-wide panel. Left to right:
+    - a small tinted icon dot (8-10px) — a subtle blue circle with
+      a check-mark glyph centered inside it
+    - inline text reading "Sarah Lee" (bold) followed by a plain
+      space + "approved the production deploy"
+    - a right-aligned muted timestamp "2h ago"
+  Do NOT render multiple entries, a section header, the surrounding
+  filters, or a navigation bar — only this single activity-log
+  line.
+expected:
+  must_contain_roles:
+    - activity-log
+    - activity-log-icon-dot
+    - activity-log-icon
+    - activity-log-line
+    - activity-log-body
+    - activity-log-timestamp
+expected_tool_if_any: add_activity_log_v0
