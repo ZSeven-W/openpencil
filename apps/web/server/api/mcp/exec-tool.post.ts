@@ -103,6 +103,11 @@ import {
   buildSettingRowV1,
   buildMemberRowV1,
   buildActivityLogV1,
+  buildAvatarV1,
+  buildBadgeV1,
+  buildDividerV1,
+  buildBodyTextV1,
+  buildIconLabelV1,
   findNodeInTree,
   insertNodeInTree,
   type ElementTree,
@@ -269,6 +274,11 @@ const SERVER_BUILDERS: Record<string, BuilderFn> = {
   add_setting_row_v1: (a) => buildSettingRowV1(a as Parameters<typeof buildSettingRowV1>[0]),
   add_member_row_v1: (a) => buildMemberRowV1(a as Parameters<typeof buildMemberRowV1>[0]),
   add_activity_log_v1: (a) => buildActivityLogV1(a as Parameters<typeof buildActivityLogV1>[0]),
+  add_avatar_v1: (a) => buildAvatarV1(a as Parameters<typeof buildAvatarV1>[0]),
+  add_badge_v1: (a) => buildBadgeV1(a as Parameters<typeof buildBadgeV1>[0]),
+  add_divider_v1: (a) => buildDividerV1(a as Parameters<typeof buildDividerV1>[0]),
+  add_body_text_v1: (a) => buildBodyTextV1(a as Parameters<typeof buildBodyTextV1>[0]),
+  add_icon_label_v1: (a) => buildIconLabelV1(a as Parameters<typeof buildIconLabelV1>[0]),
 };
 
 interface ExecToolBody {

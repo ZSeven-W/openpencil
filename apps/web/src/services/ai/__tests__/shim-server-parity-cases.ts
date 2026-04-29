@@ -112,6 +112,11 @@ import {
   buildSettingRowV1,
   buildMemberRowV1,
   buildActivityLogV1,
+  buildAvatarV1,
+  buildBadgeV1,
+  buildDividerV1,
+  buildBodyTextV1,
+  buildIconLabelV1,
 } from '@zseven-w/pen-core';
 
 export interface BuilderCase {
@@ -746,5 +751,30 @@ export const CASES: BuilderCase[] = [
       theme: 'dark',
     },
     build: (a) => buildActivityLogV1(a as unknown as Parameters<typeof buildActivityLogV1>[0]),
+  },
+  {
+    toolName: 'add_avatar_v1',
+    args: { initial: 'SL', size: 48, theme: 'light' },
+    build: (a) => buildAvatarV1(a as unknown as Parameters<typeof buildAvatarV1>[0]),
+  },
+  {
+    toolName: 'add_badge_v1',
+    args: { label: 'NEW', theme: 'light' },
+    build: (a) => buildBadgeV1(a as unknown as Parameters<typeof buildBadgeV1>[0]),
+  },
+  {
+    toolName: 'add_divider_v1',
+    args: { orientation: 'horizontal', thickness: 1, theme: 'light' },
+    build: (a) => buildDividerV1(a as unknown as Parameters<typeof buildDividerV1>[0]),
+  },
+  {
+    toolName: 'add_body_text_v1',
+    args: { content: 'The quick brown fox jumps over the lazy dog.', theme: 'light' },
+    build: (a) => buildBodyTextV1(a as unknown as Parameters<typeof buildBodyTextV1>[0]),
+  },
+  {
+    toolName: 'add_icon_label_v1',
+    args: { icon: 'star', label: 'Favorites', theme: 'light' },
+    build: (a) => buildIconLabelV1(a as unknown as Parameters<typeof buildIconLabelV1>[0]),
   },
 ];
