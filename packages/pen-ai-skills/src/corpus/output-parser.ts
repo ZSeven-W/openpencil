@@ -9,9 +9,11 @@ import type { ParsedOutput } from './types';
  * `op_tool` (not `tool_call`) avoids confusion with Claude's native
  * tool_use blocks so reference Claude runs stay parseable.
  *
- * Convention intentionally permits one call per output — the plan's
- * "element tool OR batch_design, not both" rule. Multi-call support
- * can come later if the corpus grows composite prompts.
+ * One output may contain multiple tags. ab-v3 introduced
+ * `difficulty: composite` prompts which expect a sequence of element-
+ * tool calls (e.g. 5× add_member_row + 1× add_invite_row for a team
+ * page). The parser collects ALL element-tool tags into
+ * ParsedOutput.tool_calls; apply iterates them in emit order.
  */
 const OP_TOOL_RE_G = /<op_tool>\s*([\s\S]*?)\s*<\/op_tool>/g;
 
@@ -196,12 +198,13 @@ export function parseModelOutput(raw: string): ParsedOutput {
   // encountered a batch_design tag with bad operations.
   let batchDesignUnusableReason: string | null = null;
   if (tags.length > 0) {
-    const elementCall = tags.find((t) => ELEMENT_TOOL_NAME_RE.test(t.name));
-    if (elementCall) {
+    const elementCalls = tags.filter((t) => ELEMENT_TOOL_NAME_RE.test(t.name));
+    if (elementCalls.length > 0) {
+      // Surface ALL element-tool calls in emit order. Composite
+      // prompts produce 2+ here; obvious prompts produce 1.
       return {
-        kind: 'tool_call',
-        name: elementCall.name,
-        arguments: elementCall.arguments,
+        kind: 'tool_calls',
+        calls: elementCalls.map((t) => ({ name: t.name, arguments: t.arguments })),
         raw,
       };
     }
@@ -213,14 +216,12 @@ export function parseModelOutput(raw: string): ParsedOutput {
       // Fall through to DSL-outside-tag detection rather than silently
       // drop the tag.
     } else {
-      // Tag present but with a name that's neither an element tool
-      // nor batch_design — unknown tool call. Keep the first as-is
-      // so the scorer records it as a tool_call (routing='wrong-tool'
-      // for obvious prompts, since it's not the expected tool).
+      // Tags present but none names an element tool or batch_design.
+      // Surface as a single-element tool_calls with the unknown name
+      // — routing classifies as 'wrong-tool' on obvious prompts.
       return {
-        kind: 'tool_call',
-        name: tags[0].name,
-        arguments: tags[0].arguments,
+        kind: 'tool_calls',
+        calls: [{ name: tags[0].name, arguments: tags[0].arguments }],
         raw,
       };
     }

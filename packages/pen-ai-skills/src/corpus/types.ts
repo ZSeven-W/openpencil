@@ -47,16 +47,34 @@ export interface CorpusExpected {
 }
 
 /**
- * Parsed model output. Weak models can emit either an element-tool call
+ * Parsed model output. Weak models can emit either element-tool calls
  * (our treatment-arm simulation) or the legacy `batch_design` DSL; we
  * detect which and surface a tagged union so the harness dispatches
- * correctly. `garbage` captures parse failures — both tags missing or
- * malformed payload.
+ * correctly. `garbage` captures parse failures — no tag and no DSL
+ * detected, or all tags malformed.
+ *
+ * `tool_calls` carries a NON-EMPTY list. Composite-difficulty prompts
+ * are the main reason it's a list — a single composite brief can
+ * legitimately produce many `<op_tool>` blocks (e.g. 5 add_member_row_v0
+ * + 1 add_invite_row_v0 for a team page). Obvious prompts almost always
+ * produce a 1-length list. Apply iterates the list; routing classifies
+ * by whether the list is non-empty (and, on obvious prompts, whether
+ * any call name matches `expected_tool_if_any`).
  */
 export type ParsedOutput =
-  | { kind: 'tool_call'; name: string; arguments: Record<string, unknown>; raw: string }
+  | { kind: 'tool_calls'; calls: ParsedOpToolCall[]; raw: string }
   | { kind: 'batch_design'; dsl: string; raw: string }
   | { kind: 'garbage'; reason: string; raw: string };
+
+/**
+ * One element-tool call extracted from an `<op_tool>` block. Multiple
+ * calls in one ParsedOutput.tool_calls represent the model emitting
+ * multiple tags (composite-prompt territory).
+ */
+export interface ParsedOpToolCall {
+  name: string;
+  arguments: Record<string, unknown>;
+}
 
 /**
  * Abstracted apply-to-document interface. The scorer consumes this; the
@@ -85,8 +103,13 @@ export interface ScoreRow {
   model: string;
   variant: 'B' | 'T';
   outputKind: ParsedOutput['kind'];
-  /** Tool name when outputKind='tool_call', else empty. */
-  toolName: string;
+  /** Element-tool names invoked when outputKind='tool_calls', in emit
+   *  order. Empty array on batch_design / garbage. Length 1 for the
+   *  classic obvious-prompt path; ≥2 when a composite prompt routes to
+   *  multiple tools. aggregate.byTool tallies each name in this list,
+   *  so a composite row that emits 6 add_activity_log_v0 + 1
+   *  add_section_header_v0 contributes 6 + 1 = 7 invocations. */
+  toolNames: string[];
   /** Copied from the prompt so the aggregator can score routing without
    *  re-joining against the corpus. Empty for `difficulty: 'optional'`
    *  (M5 routing is undefined there). */

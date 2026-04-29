@@ -56,7 +56,7 @@ export async function scoreRun(args: {
 }): Promise<ScoreRow> {
   const { prompt, parsed, apply, model, variant } = args;
   const usage = args.usage ?? { promptTokens: 0, completionTokens: 0 };
-  const toolName = parsed.kind === 'tool_call' ? parsed.name : '';
+  const toolNames = parsed.kind === 'tool_calls' ? parsed.calls.map((c) => c.name) : [];
   const base = {
     promptId: prompt.id,
     category: prompt.category,
@@ -64,9 +64,9 @@ export async function scoreRun(args: {
     model,
     variant,
     outputKind: parsed.kind,
-    toolName,
+    toolNames,
     expectedToolIfAny: prompt.expected_tool_if_any ?? '',
-    routing: classifyRouting(prompt, variant, parsed.kind, toolName),
+    routing: classifyRouting(prompt, variant, parsed.kind, toolNames),
     rawOutput: parsed.raw,
     promptTokens: usage.promptTokens,
     completionTokens: usage.completionTokens,
@@ -137,7 +137,7 @@ function classifyRouting(
   prompt: CorpusPrompt,
   variant: 'B' | 'T',
   kind: ParsedOutput['kind'],
-  toolName: string,
+  toolNames: string[],
 ): ScoreRow['routing'] {
   if (variant !== 'T') return 'n/a';
   if (prompt.difficulty === 'optional') return 'n/a';
@@ -157,8 +157,12 @@ function classifyRouting(
   // difficulty === 'obvious'
   if (kind === 'garbage') return 'garbage';
   if (kind === 'batch_design') return 'fallback';
-  // kind === 'tool_call'
-  return toolName === prompt.expected_tool_if_any ? 'right-tool' : 'wrong-tool';
+  // kind === 'tool_calls'. Right-tool when ANY emitted call matches
+  // the expected tool (a model that emits the right tool plus extras
+  // still routed correctly — it just over-produced). Wrong-tool when
+  // none of the emitted calls match.
+  const expected = prompt.expected_tool_if_any ?? '';
+  return toolNames.includes(expected) ? 'right-tool' : 'wrong-tool';
 }
 
 function checkExpectedShape(
