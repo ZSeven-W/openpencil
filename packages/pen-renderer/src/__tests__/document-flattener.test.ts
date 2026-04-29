@@ -305,4 +305,77 @@ describe('flattenToRenderNodes — dimension consistency', () => {
     expect(inner.clipRect!.h).toBe(card.absH);
     expect(inner.clipRect!.rx).toBe(16);
   });
+
+  it('nested clipContent intersects with ancestor clip (overflowing horizontal scroll row)', () => {
+    // Reproduces the food-delivery brief regression: a horizontal scroll row
+    // contains 3 rounded-corner cards (each `clipContent: true`) whose total
+    // width exceeds the row's clip. Without intersect, the third card's
+    // children would clip to the card's own bounds (extending past the row's
+    // right edge) instead of staying inside the visible scroll strip.
+    const root = frame({
+      id: 'root',
+      width: 400,
+      height: 400,
+      children: [
+        frame({
+          id: 'row',
+          width: 'fill_container' as any,
+          height: 200,
+          layout: 'horizontal' as any,
+          gap: 12,
+          clipContent: true,
+          children: [
+            frame({
+              id: 'c1',
+              width: 150,
+              height: 150,
+              cornerRadius: 16,
+              clipContent: true,
+              children: [text('c1-inner', 'Sushi')],
+            }),
+            frame({
+              id: 'c2',
+              width: 150,
+              height: 150,
+              cornerRadius: 16,
+              clipContent: true,
+              children: [text('c2-inner', 'Burger')],
+            }),
+            frame({
+              id: 'c3',
+              width: 150,
+              height: 150,
+              cornerRadius: 16,
+              clipContent: true,
+              children: [text('c3-inner', 'Pizza')],
+            }),
+          ],
+        }),
+      ],
+    });
+
+    const nodes = flattenToRenderNodes([root]);
+    const c3 = nodes.find((rn) => rn.node.id === 'c3')!;
+    const c3inner = nodes.find((rn) => rn.node.id === 'c3-inner')!;
+
+    // Layout sanity: c1 at 0, c2 at 162, c3 at 324; c3 right edge = 474 > 400
+    expect(c3.absX).toBe(324);
+    expect(c3.absW).toBe(150);
+
+    // c3 itself inherits the row's clipRect (rectangular, full row width)
+    expect(c3.clipRect).toBeDefined();
+    expect(c3.clipRect!.x).toBe(0);
+    expect(c3.clipRect!.w).toBe(400);
+
+    // c3-inner's clipRect MUST be intersect(c3 bounds, row clip), not c3 alone
+    // c3 bounds {x:324, w:150} ∩ row clip {x:0, w:400} = {x:324, w:76}
+    // (without intersect, this would be {x:324, w:150} and the inner text
+    // would paint past the row's right edge)
+    expect(c3inner.clipRect).toBeDefined();
+    expect(c3inner.clipRect!.x).toBe(324);
+    expect(c3inner.clipRect!.w).toBe(76);
+    // Shrunk on x-axis → rounded corners would no longer follow both
+    // boundaries faithfully, so intersect drops to rectangular clip.
+    expect(c3inner.clipRect!.rx).toBe(0);
+  });
 });

@@ -149,6 +149,29 @@ function cornerRadiusVal(cr: number | [number, number, number, number] | undefin
   return cr[0];
 }
 
+/**
+ * Intersect two axis-aligned clip rectangles. If `inner` (the new clip we
+ * want to apply) gets cut by `outer` (the ancestor clip we must respect),
+ * drop the rounded corners — a single ClipInfo can only encode one rounded
+ * rect, but the true `(rrect ∩ rect)` whenever the rect cuts inside the
+ * rrect's corner is non-trivial. Rectangular fallback is the safe option.
+ *
+ * `outer.rx` is irrelevant here because `outer` is already in effect from
+ * earlier draws — its rounded shape will continue to clip transparently
+ * via the ambient canvas clip stack at paint time.
+ */
+function intersectClip(inner: ClipInfo, outer: ClipInfo): ClipInfo {
+  const x = Math.max(inner.x, outer.x);
+  const y = Math.max(inner.y, outer.y);
+  const x2 = Math.min(inner.x + inner.w, outer.x + outer.w);
+  const y2 = Math.min(inner.y + inner.h, outer.y + outer.h);
+  const w = Math.max(0, x2 - x);
+  const h = Math.max(0, y2 - y);
+  const innerWasCut = w < inner.w || h < inner.h;
+  const rx = innerWasCut ? 0 : inner.rx;
+  return { x, y, w, h, rx };
+}
+
 export function flattenToRenderNodes(
   nodes: PenNode[],
   offsetX = 0,
@@ -242,14 +265,20 @@ export function flattenToRenderNodes(
         layout && layout !== 'none' ? computeLayoutPositions(resolved, children) : children;
 
       // Clipping — root frames always clip like artboards. Nested containers
-      // clip only when clipContent is enabled.
+      // clip only when clipContent is enabled. When a nested clip is
+      // introduced, intersect it with the inherited ancestor clip — otherwise
+      // a card with `clipContent: true` (e.g. for rounded image masking) would
+      // let its own children paint outside the row that's supposed to clip
+      // the whole horizontal scroll strip, since the card's bounds extend
+      // past the row's right edge in an overflowing row.
       let childClip = clipCtx;
       const isRootFrame = node.type === 'frame' && depth === 0;
       const explicitClip = 'clipContent' in resolved && resolved.clipContent === true;
       if (isRootFrame || explicitClip) {
         const crRaw = 'cornerRadius' in node ? cornerRadiusVal(node.cornerRadius) : 0;
         const cr = Math.min(crRaw, nodeH / 2);
-        childClip = { x: absX, y: absY, w: nodeW, h: nodeH, rx: cr };
+        const own: ClipInfo = { x: absX, y: absY, w: nodeW, h: nodeH, rx: cr };
+        childClip = clipCtx ? intersectClip(own, clipCtx) : own;
       }
 
       const childRNs = flattenToRenderNodes(
