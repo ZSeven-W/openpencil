@@ -432,27 +432,31 @@ function inferTagsFromPrompt(prompt: string): string[] {
   if (/\b(playful|fun|whimsical)\b|活泼|趣味/.test(lower)) tags.push('playful');
   if (/\b(modern|modernist|contemporary)\b|现代/.test(lower)) tags.push('modern');
 
-  // industry — domain keywords are kept ENUMERATED and bounded so we don't
-  // strip exact-keyword signals: e.g. "code editor" still triggers
-  // 'developer' via `\bcode\b`, "design a healthy lifestyle app" still
-  // triggers 'wellness' via `\bhealthy\b`. The key change vs the original
-  // is `\b` boundaries so substrings like "Healthy" inside a food
-  // category list ("…Asian, Mexican, Healthy, Desserts…") still match
-  // wellness, but at least "Featured" no longer matches the 'red' rule
-  // (different keyword family — fixed in accent block below).
+  // industry — only KEEP keywords that are DOMAIN-DEFINING (a brief that
+  // mentions them is almost certainly about that industry). Generic UI /
+  // tech words (menu / api / dev / wallet / budget / expense) are
+  // explicitly excluded — they appear in design briefs across every
+  // domain ("settings menu", "API integration", "expense form") and would
+  // force the wrong industry guide. 'code' is the most-defining single
+  // word for a developer brief AND the most-misused (QR code, promo code,
+  // country code) — handled below with a contextual two-word match.
   if (
-    /\b(food|delivery|restaurant|takeout|cuisine|recipe|meal|menu|diner|kitchen|dining|eatery|cafe|café)\b|餐|美食|外卖/.test(
+    /\b(food|delivery|restaurant|takeout|cuisine|recipe|meal|diner|dining|eatery|cafe|café)\b|餐|美食|外卖/.test(
       lower,
     )
   ) {
     tags.push('warm-tones', 'friendly');
   }
-  if (
-    /\b(finance|fintech|banking|investing|trading|wallet|crypto|budget|expense)\b|金融/.test(lower)
-  ) {
+  if (/\b(finance|fintech|banking|investing|trading|crypto|stocks)\b|金融/.test(lower)) {
     tags.push('fintech');
   }
-  if (/\b(developer|code|coding|programming|terminal|api|engineering|dev)\b|开发/.test(lower)) {
+  if (/\b(developer|coding|programming|terminal|engineering)\b|开发/.test(lower)) {
+    tags.push('developer', 'monospace');
+  }
+  // 'code' alone is too ambiguous (QR code, promo code, area code) to
+  // unconditionally force a developer guide. Require an immediate
+  // dev-context companion word.
+  if (/\bcode\s+(editor|review|repo|repository|completion|snippet|base)\b/.test(lower)) {
     tags.push('developer', 'monospace');
   }
   if (
@@ -463,13 +467,15 @@ function inferTagsFromPrompt(prompt: string): string[] {
     tags.push('wellness');
   }
 
-  // accent — keep word boundaries so substrings like "Featured" / "ordered"
-  // / "polished" / "background" don't pull in spurious accent tags via
-  // "red" / "gold" / "green".
+  // accent — keep word boundaries plus exclude generic synonyms that mean
+  // things outside color in everyday English: 'mint' (mint condition),
+  // 'brass' (brass instrument), 'sage' (sage advice), 'amber' (Amber from
+  // *Amber* novels — borderline but deliberately kept as a color since it
+  // appears in palette docs).
   if (/\b(coral|orange|peach|amber|tangerine)\b|珊瑚|橙/.test(lower)) tags.push('orange-accent');
   if (/\b(blue|navy|sapphire|cobalt)\b|蓝/.test(lower)) tags.push('blue-accent');
-  if (/\b(green|emerald|sage|mint)\b|绿/.test(lower)) tags.push('sage-green');
-  if (/\b(gold|golden|brass)\b|金/.test(lower)) tags.push('gold-accent');
+  if (/\b(green|emerald)\b|绿/.test(lower)) tags.push('sage-green');
+  if (/\b(gold|golden)\b|金/.test(lower)) tags.push('gold-accent');
   if (/\b(red|crimson|scarlet|ruby)\b|红/.test(lower)) tags.push('red-accent');
 
   // technique
