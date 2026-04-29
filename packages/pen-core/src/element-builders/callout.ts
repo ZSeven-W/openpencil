@@ -2,6 +2,8 @@ import type { ElementTree } from './helpers.js';
 
 export type CalloutTone = 'info' | 'success' | 'warning' | 'danger' | 'note';
 
+const VALID_CALLOUT_TONES = new Set<string>(['info', 'success', 'warning', 'danger', 'note']);
+
 export interface CalloutParams {
   /** Body text. Required. */
   body: string;
@@ -33,7 +35,13 @@ const TONES: Record<CalloutTone, ToneSpec> = {
  * onboarding notes, "did you know" panels.
  */
 export function buildCallout(params: CalloutParams): ElementTree {
-  const tone = TONES[params.tone ?? 'note'];
+  const requestedTone = (params.tone ?? 'note') as string;
+  if (!VALID_CALLOUT_TONES.has(requestedTone)) {
+    throw new Error(
+      `add_callout_v0: invalid tone "${requestedTone}"; expected one of: info, success, warning, danger, note`,
+    );
+  }
+  const tone = TONES[requestedTone as CalloutTone];
   const stackChildren: ElementTree[] = [];
   if (params.title) {
     stackChildren.push({

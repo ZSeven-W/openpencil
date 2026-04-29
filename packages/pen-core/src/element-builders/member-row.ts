@@ -26,6 +26,8 @@ const MENU_FG = '#94A3B8';
 
 type StatusTone = 'online' | 'busy' | 'away' | 'offline';
 
+const VALID_STATUS_TONES = new Set<string>(['online', 'busy', 'away', 'offline']);
+
 const STATUS_TONE_FILL: Record<StatusTone, string> = {
   online: '#10B981',
   busy: '#EF4444',
@@ -69,7 +71,13 @@ function buildTrailing(t: MemberRowTrailing): ElementTree {
       fill: [{ type: 'solid', color: MENU_FG }],
     };
   }
-  const tone = t.tone ?? 'online';
+  const requestedTone = (t.tone ?? 'online') as string;
+  if (!VALID_STATUS_TONES.has(requestedTone)) {
+    throw new Error(
+      `add_member_row_v0: invalid trailing.tone "${requestedTone}"; expected one of: online, busy, away, offline`,
+    );
+  }
+  const tone = requestedTone as StatusTone;
   return {
     type: 'frame',
     name: 'Status Dot',
