@@ -103,4 +103,77 @@ describe('buildSystemPrompt', () => {
     expect(built.system).not.toContain(T_STRATEGY_A_MARKER);
     expect(built.system).not.toContain(T_STRATEGY_B_MARKER);
   });
+
+  it('T + category=mobile drops dashboard/landing recipes from cookbook', () => {
+    const mobile = buildSystemPrompt('T', { difficulty: 'composite', category: 'mobile' });
+    // Dashboard-tagged recipe titles should be gone (Team / members list,
+    // Audit / activity feed, KPI strip, Faceted search filter sidebar).
+    expect(mobile.system).not.toContain('### Team / members list');
+    expect(mobile.system).not.toContain('### Audit / activity feed');
+    expect(mobile.system).not.toContain('### Dashboard KPI strip');
+    expect(mobile.system).not.toContain('### Faceted search filter sidebar');
+    // Landing-tagged recipe (Pricing) should be gone.
+    expect(mobile.system).not.toContain('### Pricing section');
+    // Mobile-tagged recipes should remain.
+    expect(mobile.system).toContain('### Onboarding "How it works"');
+    expect(mobile.system).toContain('### Support chat thread');
+  });
+
+  it('T + category=dashboard drops mobile/landing recipes from cookbook', () => {
+    const dashboard = buildSystemPrompt('T', { difficulty: 'composite', category: 'dashboard' });
+    // Mobile-tagged recipes should be gone.
+    expect(dashboard.system).not.toContain('### Onboarding "How it works"');
+    expect(dashboard.system).not.toContain('### Support chat thread');
+    // Landing-tagged recipe should be gone.
+    expect(dashboard.system).not.toContain('### Pricing section');
+    // Dashboard-tagged recipes should remain.
+    expect(dashboard.system).toContain('### Team / members list');
+    expect(dashboard.system).toContain('### Audit / activity feed');
+    expect(dashboard.system).toContain('### Dashboard KPI strip');
+    expect(dashboard.system).toContain('### Faceted search filter sidebar');
+  });
+
+  it('T + category=landing drops mobile/dashboard recipes from cookbook', () => {
+    const landing = buildSystemPrompt('T', { difficulty: 'composite', category: 'landing' });
+    // Mobile-tagged recipes should be gone.
+    expect(landing.system).not.toContain('### Onboarding "How it works"');
+    expect(landing.system).not.toContain('### Support chat thread');
+    // Dashboard-tagged recipes should be gone.
+    expect(landing.system).not.toContain('### Team / members list');
+    expect(landing.system).not.toContain('### Dashboard KPI strip');
+    // Landing-tagged recipe should remain.
+    expect(landing.system).toContain('### Pricing section');
+  });
+
+  it('T + category preserves untagged content (Empty inbox / Login etc. stay general)', () => {
+    // Untagged recipes should be visible regardless of category.
+    for (const category of ['mobile', 'dashboard', 'landing'] as const) {
+      const built = buildSystemPrompt('T', { difficulty: 'composite', category });
+      expect(built.system).toContain('### Empty inbox / first-run onboarding');
+      // Login + Signup are untagged today (cross-domain ambiguity); they
+      // load for every category until we either tag with a comma list
+      // or split them into single-domain variants.
+      expect(built.system).toContain('### Login screen');
+      expect(built.system).toContain('### Signup form');
+    }
+  });
+
+  it('T + category undefined = no filtering (every tagged recipe loads)', () => {
+    const full = buildSystemPrompt('T', { difficulty: 'composite' });
+    expect(full.system).toContain('### Team / members list');
+    expect(full.system).toContain('### Onboarding "How it works"');
+    expect(full.system).toContain('### Pricing section');
+    expect(full.system).toContain('### Empty inbox / first-run onboarding');
+  });
+
+  it('T + category produces a smaller prompt than uncategorized (filter actually fires)', () => {
+    const full = buildSystemPrompt('T', { difficulty: 'composite' }).system.length;
+    for (const category of ['mobile', 'dashboard', 'landing'] as const) {
+      const filtered = buildSystemPrompt('T', { difficulty: 'composite', category }).system.length;
+      expect(filtered).toBeLessThan(full);
+      // Each filter should drop at least 500 chars (loose floor — guards
+      // against the regex silently no-oping, not a tight savings target).
+      expect(full - filtered).toBeGreaterThan(500);
+    }
+  });
 });
