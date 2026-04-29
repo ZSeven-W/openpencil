@@ -37,13 +37,13 @@ Multi-tool example — a "Notifications" settings section with a header + 4 togg
 
 ❌ WRONG — these all crash with `parent_id "X" not found in document` because every id was made up by the model, not handed to you by a prior tool call:
 - `add_activity_log_v0({ parent_id: "entry-1", actor: "Sarah", ... })` — "entry-1" was never created
-- `add_setting_row_v0({ parent_id: "root", label: "Email" })` — page root has no id
+- `add_setting_row_v0({ parent_id: "root", title: "Email" })` — page root has no id
 - `add_member_row_v0({ parent_id: "members-section", name: "Sarah" })` — section-* placeholders are docs, not real ids
 - Same trap for any sequential name you might invent: `card-1` / `item-1` / `row-N` / `<page>` / `panel` / `canvas`
 
 ✅ RIGHT — omit `parent_id` entirely; each call lands at the page root, which is what every full-page composite brief wants:
 - `add_activity_log_v0({ actor: "Sarah", action: "approved deploy", timestamp: "2h ago" })`
-- `add_setting_row_v0({ label: "Email notifications", trailing: { kind: "switch", value: true } })`
+- `add_setting_row_v0({ title: "Email notifications", trailing: { kind: "switch", on: true } })`
 - `add_member_row_v0({ name: "Sarah Lee", subtitle: "Designer" })`
 
 ## Decision tree (per component — pick first match)
