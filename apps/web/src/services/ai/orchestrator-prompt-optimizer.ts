@@ -423,35 +423,54 @@ function inferTagsFromPrompt(prompt: string): string[] {
   if (/\b(dark|cyber|terminal|neon)\b|暗[色黑]?/.test(lower)) tags.push('dark-mode');
   else tags.push('light-mode');
 
-  // visual style
-  if (/\b(minimal|clean)\b|极简|简洁/.test(lower)) tags.push('minimal');
-  if (/\bbrutal\b|粗犷/.test(lower)) tags.push('brutalist');
-  if (/\b(elegant|luxury)\b|优雅|奢华/.test(lower)) tags.push('elegant');
-  if (/\b(playful|fun)\b|活泼|趣味/.test(lower)) tags.push('playful');
-  if (/\bmodern\b|现代/.test(lower)) tags.push('modern');
+  // visual style — `\b` keeps the word-boundary fix while inclusive lists
+  // cover derivative forms (modern/modernist, luxury/luxurious,
+  // brutal/brutalist) that earlier substring matches caught by accident.
+  if (/\b(minimal|minimalist|clean)\b|极简|简洁/.test(lower)) tags.push('minimal');
+  if (/\b(brutal|brutalist|brutalism)\b|粗犷/.test(lower)) tags.push('brutalist');
+  if (/\b(elegant|luxury|luxurious)\b|优雅|奢华/.test(lower)) tags.push('elegant');
+  if (/\b(playful|fun|whimsical)\b|活泼|趣味/.test(lower)) tags.push('playful');
+  if (/\b(modern|modernist|contemporary)\b|现代/.test(lower)) tags.push('modern');
 
-  // industry — must use word boundaries to avoid substring traps like
-  // "Healthy" matching "health" or "Featured" matching "red". A category
-  // list ("Pizza, Burgers, Asian, Mexican, Healthy, Desserts") in a food
-  // brief would otherwise pollute tags with 'wellness' from the substring
-  // alone, which then lifts a desktop wellness guide above the mobile
-  // food guide via tag-overlap math.
-  if (/\b(food|delivery|restaurant|takeout|cuisine|recipe|meal)\b|餐|美食|外卖/.test(lower)) {
+  // industry — domain keywords are kept ENUMERATED and bounded so we don't
+  // strip exact-keyword signals: e.g. "code editor" still triggers
+  // 'developer' via `\bcode\b`, "design a healthy lifestyle app" still
+  // triggers 'wellness' via `\bhealthy\b`. The key change vs the original
+  // is `\b` boundaries so substrings like "Healthy" inside a food
+  // category list ("…Asian, Mexican, Healthy, Desserts…") still match
+  // wellness, but at least "Featured" no longer matches the 'red' rule
+  // (different keyword family — fixed in accent block below).
+  if (
+    /\b(food|delivery|restaurant|takeout|cuisine|recipe|meal|menu|diner|kitchen|dining|eatery|cafe|café)\b|餐|美食|外卖/.test(
+      lower,
+    )
+  ) {
     tags.push('warm-tones', 'friendly');
   }
-  if (/\b(finance|fintech|banking|investing)\b|金融/.test(lower)) tags.push('fintech');
-  if (/\b(developer|terminal|coding|programming)\b|开发/.test(lower)) {
+  if (
+    /\b(finance|fintech|banking|investing|trading|wallet|crypto|budget|expense)\b|金融/.test(lower)
+  ) {
+    tags.push('fintech');
+  }
+  if (/\b(developer|code|coding|programming|terminal|api|engineering|dev)\b|开发/.test(lower)) {
     tags.push('developer', 'monospace');
   }
-  if (/\b(wellness|fitness|yoga|meditation|mindful)\b|健康/.test(lower)) tags.push('wellness');
+  if (
+    /\b(wellness|fitness|yoga|meditation|mindful|health|healthy|wellbeing|spa|gym|exercise|workout)\b|健康/.test(
+      lower,
+    )
+  ) {
+    tags.push('wellness');
+  }
 
-  // accent — keep word boundaries so "Featured"/"ordered"/"polished" don't
-  // pull in spurious accent tags via "red"/"gold"/"green" substrings.
-  if (/\b(coral|orange)\b|珊瑚|橙/.test(lower)) tags.push('orange-accent');
-  if (/\bblue\b|蓝/.test(lower)) tags.push('blue-accent');
-  if (/\bgreen\b|绿/.test(lower)) tags.push('sage-green');
-  if (/\bgold\b|金/.test(lower)) tags.push('gold-accent');
-  if (/\b(red|crimson|scarlet)\b|红/.test(lower)) tags.push('red-accent');
+  // accent — keep word boundaries so substrings like "Featured" / "ordered"
+  // / "polished" / "background" don't pull in spurious accent tags via
+  // "red" / "gold" / "green".
+  if (/\b(coral|orange|peach|amber|tangerine)\b|珊瑚|橙/.test(lower)) tags.push('orange-accent');
+  if (/\b(blue|navy|sapphire|cobalt)\b|蓝/.test(lower)) tags.push('blue-accent');
+  if (/\b(green|emerald|sage|mint)\b|绿/.test(lower)) tags.push('sage-green');
+  if (/\b(gold|golden|brass)\b|金/.test(lower)) tags.push('gold-accent');
+  if (/\b(red|crimson|scarlet|ruby)\b|红/.test(lower)) tags.push('red-accent');
 
   // technique
   if (/\brounded\b|圆角/.test(lower)) tags.push('rounded');
