@@ -74,12 +74,13 @@ platform: mobile
 | Button | 12px |
 `;
 
-  it('summarizes style guide tokens for non-full tiers', () => {
+  it('summarizes style guide tokens for non-full tiers using ref + (hex) form', () => {
     const summary = buildSubAgentStyleGuideInstruction(styleGuide, 'dark-bold-mobile', 'basic');
 
     expect(summary).toContain('VISUAL STYLE GUIDE SUMMARY');
-    expect(summary).toContain('Background: #111111');
-    expect(summary).toContain('Accent: #22C55E');
+    expect(summary).toContain('`$color-bg-deep` (resolves to #111111)');
+    expect(summary).toContain('`$color-accent` (resolves to #22C55E)');
+    expect(summary).toContain('EMIT REFS');
     expect(summary).not.toContain('## Color System');
   });
 });
