@@ -113,6 +113,10 @@ import { handleAddActivityLogV0 } from '../tools/add-activity-log-v0';
 import { handleAddEventCardV0 } from '../tools/add-event-card-v0';
 import { handleAddStepCardV0 } from '../tools/add-step-card-v0';
 import { handleAddHeadingV1 } from '../tools/add-heading-v1';
+import { handleAddCardRowV1 } from '../tools/add-card-row-v1';
+import { handleAddSettingRowV1 } from '../tools/add-setting-row-v1';
+import { handleAddMemberRowV1 } from '../tools/add-member-row-v1';
+import { handleAddActivityLogV1 } from '../tools/add-activity-log-v1';
 import { recordElementToolCall } from '../metrics/element-tool-metrics';
 import { ELEMENT_TOOL_DEFINITIONS_BASE } from './element-tool-defs-base';
 import { ELEMENT_TOOL_DEFINITIONS_EXT } from './element-tool-defs-ext';
@@ -343,6 +347,14 @@ async function dispatchElementToolCall(name: string, a: any): Promise<string> {
       return JSON.stringify(await handleAddStepCardV0(a), null, 2);
     case 'add_heading_v1':
       return JSON.stringify(await handleAddHeadingV1(a), null, 2);
+    case 'add_card_row_v1':
+      return JSON.stringify(await handleAddCardRowV1(a), null, 2);
+    case 'add_setting_row_v1':
+      return JSON.stringify(await handleAddSettingRowV1(a), null, 2);
+    case 'add_member_row_v1':
+      return JSON.stringify(await handleAddMemberRowV1(a), null, 2);
+    case 'add_activity_log_v1':
+      return JSON.stringify(await handleAddActivityLogV1(a), null, 2);
     default:
       return '';
   }

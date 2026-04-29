@@ -551,6 +551,155 @@ export const ELEMENT_TOOL_DEFINITIONS_EXT_4 = [
     },
   },
   {
+    name: 'add_card_row_v1',
+    description:
+      'Theme-aware horizontal scroll row of cards (v1). theme="light" (default): byte-parity ' +
+      'with add_card_row_v0 (no fill attrs on card/text nodes). theme="dark": adds dark surface ' +
+      'fill on each card + dark textPrimary/textMuted fills on title/subtitle. theme="system": ' +
+      'emits $color-surface / $color-text-primary / $color-text-muted refs. ' +
+      'schemaVersion 1.0',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        schemaVersion: schemaVersionProp,
+        filePath: filePathProp,
+        items: {
+          type: 'array',
+          description: 'Card data. Each item: { title, subtitle?, icon? }.',
+          items: {
+            type: 'object',
+            properties: {
+              title: { type: 'string' },
+              subtitle: { type: 'string' },
+              icon: { type: 'string', description: 'Optional lucide icon slug.' },
+            },
+            required: ['title'],
+          },
+        },
+        card_width: { type: 'number', description: 'Card width px. Default 140.' },
+        gap: { type: 'number', description: 'Gap between cards. Default 12.' },
+        theme: {
+          type: 'string',
+          enum: ['light', 'dark', 'system'],
+          description: 'Theme variant. Default "light".',
+        },
+        parent_id: parentIdProp,
+        pageId: pageIdProp,
+      },
+      required: ['items'],
+    },
+  },
+  {
+    name: 'add_setting_row_v1',
+    description:
+      'Theme-aware settings menu row (v1). theme="light" (default): byte-parity with ' +
+      'add_setting_row_v0 (same hex literals for all fills). theme="dark": uses dark palette ' +
+      'for text, accent, and borderStrong fills. theme="system": emits $color-* refs for all ' +
+      'fills. schemaVersion 1.0',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        schemaVersion: schemaVersionProp,
+        filePath: filePathProp,
+        title: { type: 'string', description: 'Title (15/500).' },
+        subtitle: { type: 'string', description: 'Optional second-line text (13/400, muted).' },
+        leading_icon: { type: 'string', description: 'Optional leading lucide icon slug (24×24).' },
+        trailing: {
+          type: 'object',
+          description:
+            'Trailing control. Default: { kind: "chevron" }. Same variants as v0: ' +
+            '{ kind: "chevron" } | { kind: "value", value: string } | ' +
+            '{ kind: "switch", on: boolean } | { kind: "badge", value: string }.',
+          properties: {
+            kind: { type: 'string', enum: ['chevron', 'value', 'switch', 'badge'] },
+            value: { type: 'string' },
+            on: { type: 'boolean' },
+          },
+          required: ['kind'],
+        },
+        theme: {
+          type: 'string',
+          enum: ['light', 'dark', 'system'],
+          description: 'Theme variant. Default "light".',
+        },
+        parent_id: parentIdProp,
+        pageId: pageIdProp,
+      },
+      required: ['title'],
+    },
+  },
+  {
+    name: 'add_member_row_v1',
+    description:
+      'Theme-aware team/member list row (v1). theme="light" (default): byte-parity with ' +
+      'add_member_row_v0 (same hex literals). theme="dark": surface2, textBody, textMuted, ' +
+      'textSubtle fills from dark palette. theme="system": $color-* refs. ' +
+      'schemaVersion 1.0',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        schemaVersion: schemaVersionProp,
+        filePath: filePathProp,
+        name: { type: 'string', description: 'Display name (e.g. "Sarah Lee").' },
+        subtitle: { type: 'string', description: 'Optional second line.' },
+        initial: { type: 'string', description: 'Optional avatar initial (1-2 chars).' },
+        avatar_color: { type: 'string', description: 'Avatar bg hex. Default "#3B82F6".' },
+        trailing: {
+          type: 'object',
+          description:
+            '{ kind: "role_badge", value: string } | { kind: "menu" } | ' +
+            '{ kind: "status_dot", tone?: "online"|"busy"|"away"|"offline" }.',
+          properties: {
+            kind: { type: 'string', enum: ['role_badge', 'menu', 'status_dot'] },
+            value: { type: 'string' },
+            tone: { type: 'string', enum: ['online', 'busy', 'away', 'offline'] },
+          },
+          required: ['kind'],
+        },
+        theme: {
+          type: 'string',
+          enum: ['light', 'dark', 'system'],
+          description: 'Theme variant. Default "light".',
+        },
+        parent_id: parentIdProp,
+        pageId: pageIdProp,
+      },
+      required: ['name'],
+    },
+  },
+  {
+    name: 'add_activity_log_v1',
+    description:
+      'Theme-aware audit/activity feed entry (v1). theme="light" (default): byte-parity with ' +
+      'add_activity_log_v0 (same hex literals). theme="dark": textPrimary/textBody/textSubtle ' +
+      'fills + alertColors for tone dot. theme="system": $color-* / $color-*-bg / $color-*-text ' +
+      'refs for all fills. schemaVersion 1.0',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        schemaVersion: schemaVersionProp,
+        filePath: filePathProp,
+        actor: { type: 'string', description: 'Actor name (rendered bold).' },
+        action: { type: 'string', description: 'Action verb-phrase (plain).' },
+        timestamp: { type: 'string', description: 'Relative time (e.g. "2h ago").' },
+        icon: { type: 'string', description: 'Optional lucide icon slug for the leading dot.' },
+        tone: {
+          type: 'string',
+          enum: ['info', 'success', 'warning', 'danger', 'neutral'],
+          description: 'Icon dot tone. Default "info".',
+        },
+        theme: {
+          type: 'string',
+          enum: ['light', 'dark', 'system'],
+          description: 'Theme variant. Default "light".',
+        },
+        parent_id: parentIdProp,
+        pageId: pageIdProp,
+      },
+      required: ['actor', 'action', 'timestamp'],
+    },
+  },
+  {
     name: 'add_heading_v1',
     description:
       'Theme-aware typographic heading (v1) — same typography presets as add_heading_v0 with an ' +

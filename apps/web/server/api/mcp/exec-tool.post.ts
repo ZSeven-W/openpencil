@@ -99,6 +99,10 @@ import {
   buildToast,
   buildTooltip,
   buildTopNavBar,
+  buildCardRowV1,
+  buildSettingRowV1,
+  buildMemberRowV1,
+  buildActivityLogV1,
   findNodeInTree,
   insertNodeInTree,
   type ElementTree,
@@ -261,6 +265,10 @@ const SERVER_BUILDERS: Record<string, BuilderFn> = {
   add_activity_log_v0: (a) => buildActivityLog(a as Parameters<typeof buildActivityLog>[0]),
   add_event_card_v0: (a) => buildEventCard(a as Parameters<typeof buildEventCard>[0]),
   add_step_card_v0: (a) => buildStepCard(a as Parameters<typeof buildStepCard>[0]),
+  add_card_row_v1: (a) => buildCardRowV1(a as Parameters<typeof buildCardRowV1>[0]),
+  add_setting_row_v1: (a) => buildSettingRowV1(a as Parameters<typeof buildSettingRowV1>[0]),
+  add_member_row_v1: (a) => buildMemberRowV1(a as Parameters<typeof buildMemberRowV1>[0]),
+  add_activity_log_v1: (a) => buildActivityLogV1(a as Parameters<typeof buildActivityLogV1>[0]),
 };
 
 interface ExecToolBody {
