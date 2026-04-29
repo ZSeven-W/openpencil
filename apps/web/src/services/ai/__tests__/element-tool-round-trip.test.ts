@@ -304,4 +304,36 @@ describe('round-trip — multi-tag batch serialization integrity', () => {
       expect(shape.arguments).toEqual(originals[i].args);
     }
   });
+
+  it('drops batch_design tags when element-tool tags coexist (Strategy A precedence)', () => {
+    // Mirrors the "Do not mix Strategy A and Strategy B" rule from
+    // ELEMENT_TOOL_OUTPUT_FORMAT. ab-v4 caught minimax-m2.7 chaining
+    // 3 element-tool tags PLUS 1 batch_design scaffolding tag in the
+    // same response (search-filters composite). Dispatching all four
+    // would smuggle the forbidden mixed strategy through; parser
+    // enforces the rule by dropping the batch_design half whenever
+    // element-tool tags are present.
+    const rawAi =
+      '<op_tool>{"name":"add_section_header_v0","arguments":{"title":"Settings"}}</op_tool>\n' +
+      '<op_tool>{"name":"add_setting_row_v0","arguments":{"title":"Notifications"}}</op_tool>\n' +
+      '<op_tool>{"name":"batch_design","arguments":{"operations":"root=I(null, {\\"type\\":\\"frame\\"})"}}</op_tool>';
+    const shapes = tryParseAllElementToolOutputs(rawAi);
+    expect(shapes).toHaveLength(2);
+    expect(shapes.every((s) => s.kind === 'element-tool')).toBe(true);
+    expect(shapes.some((s) => s.kind === 'batch-design-dsl')).toBe(false);
+  });
+
+  it('keeps batch_design tags when no element-tool tags are present (Strategy B fallback)', () => {
+    // Pure Strategy B: model decided no element tool fit and emitted
+    // a single batch_design covering the whole brief. Parser must
+    // surface the DSL so the dispatcher routes it through the legacy
+    // batch_design path.
+    const rawAi =
+      '<op_tool>{"name":"batch_design","arguments":{"operations":"root=I(null, {\\"type\\":\\"frame\\",\\"name\\":\\"Root\\"})"}}</op_tool>';
+    const shapes = tryParseAllElementToolOutputs(rawAi);
+    expect(shapes).toHaveLength(1);
+    expect(shapes[0].kind).toBe('batch-design-dsl');
+    if (shapes[0].kind !== 'batch-design-dsl') throw new Error('wrong kind');
+    expect(shapes[0].dsl).toContain('root=I(null,');
+  });
 });
