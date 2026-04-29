@@ -157,6 +157,16 @@ import {
   buildLegendItemV1,
   buildLinkV1,
   buildListRowV1,
+  buildMetricComparisonV1,
+  buildMetricRowV1,
+  buildNavChipRowV1,
+  buildNotificationRowV1,
+  buildOtpInputV1,
+  buildPaginationV1,
+  buildPhoneInputV1,
+  buildPriceV1,
+  buildPricingCardV1,
+  buildProfileHeaderV1,
 } from '@zseven-w/pen-core';
 
 export interface BuilderCase {
@@ -1044,5 +1054,90 @@ export const CASES: BuilderCase[] = [
     toolName: 'add_list_row_v1',
     args: { title: 'Settings', subtitle: 'Manage preferences', theme: 'light' },
     build: (a) => buildListRowV1(a as unknown as Parameters<typeof buildListRowV1>[0]),
+  },
+  {
+    toolName: 'add_metric_comparison_v1',
+    args: { label: 'Revenue', value: '$12,480', change: '8%', trend: 'up', theme: 'light' },
+    build: (a) =>
+      buildMetricComparisonV1(a as unknown as Parameters<typeof buildMetricComparisonV1>[0]),
+  },
+  {
+    toolName: 'add_metric_row_v1',
+    args: {
+      items: [
+        { label: 'Steps', value: '8,430' },
+        { label: 'Calories', value: '620' },
+      ],
+      theme: 'light',
+    },
+    build: (a) => buildMetricRowV1(a as unknown as Parameters<typeof buildMetricRowV1>[0]),
+  },
+  {
+    toolName: 'add_nav_chip_row_v1',
+    args: {
+      items: [
+        { label: 'All', active: true },
+        { label: 'Food', icon: 'utensils' },
+        { label: 'Travel', icon: 'plane' },
+      ],
+      theme: 'light',
+    },
+    build: (a) => buildNavChipRowV1(a as unknown as Parameters<typeof buildNavChipRowV1>[0]),
+  },
+  {
+    toolName: 'add_notification_row_v1',
+    args: {
+      title: 'New message',
+      body: 'Sarah replied to your comment.',
+      timestamp: '2h ago',
+      unread: true,
+      theme: 'light',
+    },
+    build: (a) =>
+      buildNotificationRowV1(a as unknown as Parameters<typeof buildNotificationRowV1>[0]),
+  },
+  {
+    toolName: 'add_otp_input_v1',
+    args: { length: 6, digits: ['1', '2', '3'], focused_index: 3, theme: 'light' },
+    build: (a) => buildOtpInputV1(a as unknown as Parameters<typeof buildOtpInputV1>[0]),
+  },
+  {
+    toolName: 'add_pagination_v1',
+    args: { total: 10, current: 5, siblings: 1, theme: 'light' },
+    build: (a) => buildPaginationV1(a as unknown as Parameters<typeof buildPaginationV1>[0]),
+  },
+  {
+    toolName: 'add_phone_input_v1',
+    args: {
+      label: 'Phone number',
+      country_code: '+1',
+      country_flag: '🇺🇸',
+      required: true,
+      theme: 'light',
+    },
+    build: (a) => buildPhoneInputV1(a as unknown as Parameters<typeof buildPhoneInputV1>[0]),
+  },
+  {
+    toolName: 'add_price_v1',
+    args: { amount: '29', currency: '$', period: '/month', theme: 'light' },
+    build: (a) => buildPriceV1(a as unknown as Parameters<typeof buildPriceV1>[0]),
+  },
+  {
+    toolName: 'add_pricing_card_v1',
+    args: {
+      tier: 'Pro',
+      price: '29',
+      currency: '$',
+      period: '/month',
+      features: ['Unlimited projects', 'Priority support'],
+      emphasis: 'featured',
+      theme: 'light',
+    },
+    build: (a) => buildPricingCardV1(a as unknown as Parameters<typeof buildPricingCardV1>[0]),
+  },
+  {
+    toolName: 'add_profile_header_v1',
+    args: { name: 'Sarah Lee', handle: '@sarah', bio: 'Product designer', theme: 'light' },
+    build: (a) => buildProfileHeaderV1(a as unknown as Parameters<typeof buildProfileHeaderV1>[0]),
   },
 ];

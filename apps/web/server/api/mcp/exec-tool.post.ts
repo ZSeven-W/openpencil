@@ -148,6 +148,16 @@ import {
   buildLegendItemV1,
   buildLinkV1,
   buildListRowV1,
+  buildMetricComparisonV1,
+  buildMetricRowV1,
+  buildNavChipRowV1,
+  buildNotificationRowV1,
+  buildOtpInputV1,
+  buildPaginationV1,
+  buildPhoneInputV1,
+  buildPriceV1,
+  buildPricingCardV1,
+  buildProfileHeaderV1,
   findNodeInTree,
   insertNodeInTree,
   type ElementTree,
@@ -362,6 +372,19 @@ const SERVER_BUILDERS: Record<string, BuilderFn> = {
   add_legend_item_v1: (a) => buildLegendItemV1(a as Parameters<typeof buildLegendItemV1>[0]),
   add_link_v1: (a) => buildLinkV1(a as Parameters<typeof buildLinkV1>[0]),
   add_list_row_v1: (a) => buildListRowV1(a as Parameters<typeof buildListRowV1>[0]),
+  add_metric_comparison_v1: (a) =>
+    buildMetricComparisonV1(a as Parameters<typeof buildMetricComparisonV1>[0]),
+  add_metric_row_v1: (a) => buildMetricRowV1(a as Parameters<typeof buildMetricRowV1>[0]),
+  add_nav_chip_row_v1: (a) => buildNavChipRowV1(a as Parameters<typeof buildNavChipRowV1>[0]),
+  add_notification_row_v1: (a) =>
+    buildNotificationRowV1(a as Parameters<typeof buildNotificationRowV1>[0]),
+  add_otp_input_v1: (a) => buildOtpInputV1(a as Parameters<typeof buildOtpInputV1>[0]),
+  add_pagination_v1: (a) => buildPaginationV1(a as Parameters<typeof buildPaginationV1>[0]),
+  add_phone_input_v1: (a) => buildPhoneInputV1(a as Parameters<typeof buildPhoneInputV1>[0]),
+  add_price_v1: (a) => buildPriceV1(a as Parameters<typeof buildPriceV1>[0]),
+  add_pricing_card_v1: (a) => buildPricingCardV1(a as Parameters<typeof buildPricingCardV1>[0]),
+  add_profile_header_v1: (a) =>
+    buildProfileHeaderV1(a as Parameters<typeof buildProfileHeaderV1>[0]),
 };
 
 interface ExecToolBody {

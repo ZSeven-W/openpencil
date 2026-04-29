@@ -162,6 +162,16 @@ import { handleAddKbdV1 } from '../tools/add-kbd-v1';
 import { handleAddLegendItemV1 } from '../tools/add-legend-item-v1';
 import { handleAddLinkV1 } from '../tools/add-link-v1';
 import { handleAddListRowV1 } from '../tools/add-list-row-v1';
+import { handleAddMetricComparisonV1 } from '../tools/add-metric-comparison-v1';
+import { handleAddMetricRowV1 } from '../tools/add-metric-row-v1';
+import { handleAddNavChipRowV1 } from '../tools/add-nav-chip-row-v1';
+import { handleAddNotificationRowV1 } from '../tools/add-notification-row-v1';
+import { handleAddOtpInputV1 } from '../tools/add-otp-input-v1';
+import { handleAddPaginationV1 } from '../tools/add-pagination-v1';
+import { handleAddPhoneInputV1 } from '../tools/add-phone-input-v1';
+import { handleAddPriceV1 } from '../tools/add-price-v1';
+import { handleAddPricingCardV1 } from '../tools/add-pricing-card-v1';
+import { handleAddProfileHeaderV1 } from '../tools/add-profile-header-v1';
 import { recordElementToolCall } from '../metrics/element-tool-metrics';
 import { ELEMENT_TOOL_DEFINITIONS_BASE } from './element-tool-defs-base';
 import { ELEMENT_TOOL_DEFINITIONS_EXT } from './element-tool-defs-ext';
@@ -170,6 +180,7 @@ import { ELEMENT_TOOL_DEFINITIONS_EXT_3 } from './element-tool-defs-ext-3';
 import { ELEMENT_TOOL_DEFINITIONS_EXT_4 } from './element-tool-defs-ext-4';
 import { ELEMENT_TOOL_DEFINITIONS_EXT_5 } from './element-tool-defs-ext-5';
 import { ELEMENT_TOOL_DEFINITIONS_EXT_6 } from './element-tool-defs-ext-6';
+import { ELEMENT_TOOL_DEFINITIONS_EXT_7 } from './element-tool-defs-ext-7';
 
 export const ELEMENT_TOOL_DEFINITIONS = [
   ...ELEMENT_TOOL_DEFINITIONS_BASE,
@@ -179,6 +190,7 @@ export const ELEMENT_TOOL_DEFINITIONS = [
   ...ELEMENT_TOOL_DEFINITIONS_EXT_4,
   ...ELEMENT_TOOL_DEFINITIONS_EXT_5,
   ...ELEMENT_TOOL_DEFINITIONS_EXT_6,
+  ...ELEMENT_TOOL_DEFINITIONS_EXT_7,
 ];
 
 export const ELEMENT_TOOL_NAMES: ReadonlySet<string> = new Set(
@@ -494,6 +506,26 @@ async function dispatchElementToolCall(name: string, a: any): Promise<string> {
       return JSON.stringify(await handleAddLinkV1(a), null, 2);
     case 'add_list_row_v1':
       return JSON.stringify(await handleAddListRowV1(a), null, 2);
+    case 'add_metric_comparison_v1':
+      return JSON.stringify(await handleAddMetricComparisonV1(a), null, 2);
+    case 'add_metric_row_v1':
+      return JSON.stringify(await handleAddMetricRowV1(a), null, 2);
+    case 'add_nav_chip_row_v1':
+      return JSON.stringify(await handleAddNavChipRowV1(a), null, 2);
+    case 'add_notification_row_v1':
+      return JSON.stringify(await handleAddNotificationRowV1(a), null, 2);
+    case 'add_otp_input_v1':
+      return JSON.stringify(await handleAddOtpInputV1(a), null, 2);
+    case 'add_pagination_v1':
+      return JSON.stringify(await handleAddPaginationV1(a), null, 2);
+    case 'add_phone_input_v1':
+      return JSON.stringify(await handleAddPhoneInputV1(a), null, 2);
+    case 'add_price_v1':
+      return JSON.stringify(await handleAddPriceV1(a), null, 2);
+    case 'add_pricing_card_v1':
+      return JSON.stringify(await handleAddPricingCardV1(a), null, 2);
+    case 'add_profile_header_v1':
+      return JSON.stringify(await handleAddProfileHeaderV1(a), null, 2);
     default:
       return '';
   }
