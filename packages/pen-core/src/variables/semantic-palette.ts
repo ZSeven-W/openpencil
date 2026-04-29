@@ -207,6 +207,26 @@ const PALETTE: Record<string, PaletteEntry> = {
     description: 'Stronger danger text — tag "error" label on light bg',
   },
 
+  // ── Typography: size + weight + line-height × 6 roles (18 numeric) ───────
+  'type-display-size': { single: 64, description: 'Display text — font size (px)' },
+  'type-display-weight': { single: 700, description: 'Display text — font weight' },
+  'type-display-line-height': { single: 1.0, description: 'Display text — line height multiplier' },
+  'type-h1-size': { single: 24, description: 'Heading 1 — font size (px)' },
+  'type-h1-weight': { single: 600, description: 'Heading 1 — font weight' },
+  'type-h1-line-height': { single: 1.2, description: 'Heading 1 — line height multiplier' },
+  'type-h2-size': { single: 20, description: 'Heading 2 — font size (px)' },
+  'type-h2-weight': { single: 600, description: 'Heading 2 — font weight' },
+  'type-h2-line-height': { single: 1.25, description: 'Heading 2 — line height multiplier' },
+  'type-h3-size': { single: 16, description: 'Heading 3 — font size (px)' },
+  'type-h3-weight': { single: 600, description: 'Heading 3 — font weight' },
+  'type-h3-line-height': { single: 1.3, description: 'Heading 3 — line height multiplier' },
+  'type-body-size': { single: 14, description: 'Body text — font size (px)' },
+  'type-body-weight': { single: 400, description: 'Body text — font weight' },
+  'type-body-line-height': { single: 1.5, description: 'Body text — line height multiplier' },
+  'type-caption-size': { single: 12, description: 'Caption / helper text — font size (px)' },
+  'type-caption-weight': { single: 400, description: 'Caption / helper text — font weight' },
+  'type-caption-line-height': { single: 1.4, description: 'Caption / helper text — line height multiplier' },
+
   // ── Chart palette (6 single-value colors, no theme axis) ─────────────────
   'color-chart-1': { single: '#3B82F6', description: 'Chart series 1 — blue' },
   'color-chart-2': { single: '#8B5CF6', description: 'Chart series 2 — purple' },
