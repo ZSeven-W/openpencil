@@ -63,6 +63,7 @@ Rows (horizontal, in-card or scrolling):
 Containers and single elements:
 
 5. Section header (big title + optional "See all" action) → `add_section_header_v0`
+   5b. Theme-aware variant (no hardcoded colors; all modes identical — accepts theme for API consistency) → `add_section_header_v1`
 6. Bottom tab bar (inline flow, 3-5 nav items) → `add_bottom_nav_v0`
    6b. Theme-aware variant (accepts `theme` param for API consistency; output identical across themes) → `add_bottom_nav_v1`
 7. Mobile top bar (leading icon + centered title + trailing icon) → `add_top_nav_bar_v0`
@@ -98,10 +99,12 @@ Composition:
 Forms:
 
 18. Search bar (height=44, cornerRadius=22, leading search icon) → `add_search_bar_v0`
+    18b. Theme-aware variant (dark/system adds surface2 fill so bar is visible on dark bg) → `add_search_bar_v1`
 19. Form field (label + 48px input with optional affordance icons) → `add_form_field_v0`
     19b. Theme-aware variant (accepts `theme` param for API consistency; output identical across themes) → `add_form_field_v1`
     19c. Multi-line textarea (label + N-row input for notes / bio / feedback) → `add_textarea_v0`
     19c. Dropdown select closed-state (label + 48px input w/ value text + chevron-down) → `add_select_v0`
+    19d. Theme-aware select (placeholder → textSubtle in dark/system) → `add_select_v1`
 
 Controls (toggle / choice / tabs):
 
@@ -109,8 +112,10 @@ Controls (toggle / choice / tabs):
 21. Checkbox + inline label (20×20 box, `check` icon inside when checked) → `add_checkbox_v0`
     21b. Theme-aware variant (accent fill checked, border token unchecked) → `add_checkbox_v1`
 22. Radio button + inline label (20×20 ring, dot inside when selected) → `add_radio_v0`
+    22b. Theme-aware variant (accent brand-invariant; unselected ring → border in dark/system) → `add_radio_v1`
 23. Horizontal top tabs with underline on active (fontWeight 600 + 2px sibling rectangle underline) → `add_tabs_v0`
 24. iOS pill-style segmented control (equal-width segments, active floats white) → `add_segmented_control_v0`
+    24b. Theme-aware variant (track → surface2, active seg → surface, labels → textPrimary/textMuted) → `add_segmented_control_v1`
 
 State / feedback:
 
@@ -120,6 +125,7 @@ State / feedback:
     26b. Theme-aware variant (accepts `theme` param for API consistency; output identical across themes) → `add_alert_v1`
 27. Floating pill notification (dark fit_content pill) → `add_toast_v0`
 28. Linear progress bar (fixed bar_width + value 0-100) → `add_progress_bar_v0`
+    28b. Theme-aware variant (track → surface2 in dark/system; accent fill brand-invariant) → `add_progress_bar_v1`
 
 Floating / nav / wizard:
 
@@ -132,6 +138,7 @@ Floating / nav / wizard:
 Ratings & pagination:
 
 32. N-of-M star rating (filled + empty stars using lucide `star`) → `add_rating_stars_v0`
+    32b. Theme-aware variant (no explicit colors; all modes identical — accepts theme for API consistency) → `add_rating_stars_v1`
 33. Carousel / slide dots (active becomes elongated pill, inactive circles) → `add_carousel_dots_v0`
     33b. Theme-aware variant (active=text-primary, inactive=border in dark/system modes) → `add_carousel_dots_v1`
 
@@ -147,6 +154,7 @@ Inline text primitives:
 Content blocks:
 
 37. Quoted passage with optional author attribution → `add_quote_block_v0`
+    37b. Theme-aware variant (container bg → surface in dark/system) → `add_quote_block_v1`
 38. Preformatted code block (fill_container, wraps, gray-50 bg) → `add_code_block_v0`
     38b. Theme-aware variant (bg → surface2 in dark/system) → `add_code_block_v1`
 
@@ -276,6 +284,7 @@ Pricing / monetization:
 Input / forms:
 
 65. Range slider (single-thumb horizontal slider showing current value: volume, opacity, brightness, price range) → `add_range_slider_v0`
+    65b. Theme-aware variant (accent brand-invariant; thumb bg → surface; remaining → border; label → textPrimary; value → textMuted) → `add_range_slider_v1`
 
 66. International phone number input with country-code prefix selector → `add_phone_input_v0`
     66b. Theme-aware variant (field bg → surface, stroke/divider → border, label → textBody, code → textPrimary, chevron → textMuted) → `add_phone_input_v1`
@@ -333,6 +342,7 @@ Doc / inline feedback:
 Sharing / chart annotations:
 
 80. Social share button row (circular icon buttons + labels) → `add_share_row_v0`
+    80b. Theme-aware variant (icon btn bg → surface2; icon/label → textMuted in dark/system) → `add_share_row_v1`
 81. Chart legend entry (color marker + label + optional value) → `add_legend_item_v0`
     81b. Theme-aware variant (label → textBody, value → textPrimary; marker color kept as-is) → `add_legend_item_v1`
 
@@ -385,6 +395,7 @@ PREFER an element tool when the spec says any of:
 - "stats row", "3 metrics side by side", "summary bar" (NON-scrolling grid) → `add_stat_grid_v0`
 - "category filter chips", "quick-access shortcuts" → `add_nav_chip_row_v0`
 - "section title with See all / View more" → `add_section_header_v0`
+- "dark section header", "dark-mode section title", "theme-aware section header", "暗色版块标题" → `add_section_header_v1` (no color change; accepts theme for API consistency)
 - "bottom nav", "tab bar", "tabbar", "底部导航" → `add_bottom_nav_v0`
 - "top bar", "app bar", "header with back button", "页面标题栏" → `add_top_nav_bar_v0`
 - "icon-only button", "close button", "menu button" (toolbar-style) → `add_icon_button_v0`
@@ -403,9 +414,11 @@ PREFER an element tool when the spec says any of:
 - "icon with label", "menu item (inline)", "breadcrumb segment", "status indicator text" → `add_icon_label_v0`
 - "list item", "iOS list cell", "table row with chevron" → `add_list_row_v0` (settings rows specifically — `add_setting_row_v0`, which has switch / value / badge trailing variants)
 - "search bar", "search input", "filter search", "搜索栏" → `add_search_bar_v0`
+- "dark search bar", "dark-mode search", "theme-aware search bar", "暗色搜索栏" → `add_search_bar_v1` (adds surface2 fill in dark/system so bar is visible on dark bg)
 - "form field", "email input", "password field", "labeled input", "required field" → `add_form_field_v0`
 - "textarea", "multi-line input", "notes field", "description box", "bio input", "feedback box", "多行输入", "备注" → `add_textarea_v0`
 - "dropdown", "select", "picker", "combo box", "下拉选择", "选择器" → `add_select_v0`
+- "dark select", "dark-mode dropdown", "theme-aware select", "暗色下拉" → `add_select_v1` (placeholder → textSubtle in dark/system)
 - "skeleton", "loading placeholder", "shimmer", "loading state", "placeholder lines", "骨架屏", "加载中占位" → `add_skeleton_v0`
 - "line chart", "trend chart", "折线图" → `add_chart_line_v0`
 - "pie chart", "donut chart", "饼图" → `add_chart_pie_v0`
@@ -422,21 +435,26 @@ PREFER an element tool when the spec says any of:
 - "toggle", "switch", "on/off", "开关" → `add_switch_v0`
 - "checkbox", "agreement", "select option", "复选框" → `add_checkbox_v0`
 - "radio", "single choice", "单选" → `add_radio_v0` (stack multiple in a vertical parent)
+- "dark radio", "dark-mode radio button", "theme-aware radio", "暗色单选" → `add_radio_v1` (accent stays brand-invariant; unselected ring → border token)
 - "top tabs", "underline tabs", "secondary nav", "下划线 tab" → `add_tabs_v0`
 - "segmented control", "iOS pill tabs", "filter toggle group", "iOS 分段控制" → `add_segmented_control_v0`
+- "dark segmented control", "dark-mode pill tabs", "theme-aware segmented control", "暗色分段控制" → `add_segmented_control_v1` (track → surface2; active seg → surface; labels tokenized)
 - "empty state", "no results", "nothing here yet", "first-run state", "空状态" → `add_empty_state_v0`
 - "alert", "callout", "banner", "notification bar", "告知条", "warning banner" → `add_alert_v0`
 - "toast", "snackbar", "popup notification", "轻提示" → `add_toast_v0`
 - "progress bar", "loading bar", "线性进度条", "linear progress" → `add_progress_bar_v0`
+- "dark progress bar", "dark-mode progress", "theme-aware progress bar", "暗色进度条" → `add_progress_bar_v1` (track → surface2; accent brand-invariant)
 - "FAB", "floating action button", "compose button", "新建按钮" → `add_fab_v0`
 - "breadcrumb", "nav path", "面包屑" → `add_breadcrumb_v0`
 - "stepper", "progress steps", "wizard nav", "步骤条" → `add_stepper_v0`
 - "rating", "review stars", "评分" → `add_rating_stars_v0`
+- "dark rating", "dark-mode stars", "theme-aware rating", "暗色评分" → `add_rating_stars_v1` (no color change; accepts theme for API consistency)
 - "carousel dots", "slide indicator", "轮播指示" → `add_carousel_dots_v0`
 - "text link", "learn more", "inline link" → `add_link_v0`
 - "keyboard shortcut", "hotkey", "⌘K", "快捷键" → `add_kbd_v0`
 - "price", "plan cost", "$29/month", "定价" → `add_price_v0`
 - "quote", "testimonial quote", "引言" → `add_quote_block_v0`
+- "dark quote", "dark-mode testimonial", "theme-aware quote block", "暗色引言" → `add_quote_block_v1` (container bg → surface in dark/system)
 - "code snippet", "code block", "代码块" → `add_code_block_v0`
 - "color swatch", "palette", "token", "色板" → `add_color_swatch_v0`
 - "bar chart", "histogram skeleton", "weekly steps", "柱状图" → `add_chart_bars_v0`
@@ -456,6 +474,7 @@ PREFER an element tool when the spec says any of:
 - "Continue with Google", "Sign in with Apple", "social login", "OAuth buttons", "SSO providers", "third-party login", "第三方登录", "社交登录", "OAuth 登录" → `add_social_login_row_v0` (orientation="vertical" for stacked full-width on mobile; orientation="horizontal" for the compact "or sign in with..." icon-only row)
 - "pricing card", "plan card", "SaaS tier", "subscription plan", "pricing tier", "billing card", "价格卡", "套餐卡", "定价卡片" → `add_pricing_card_v0` (set one tile's `emphasis: "featured"` to visually recommend it — auto-gets "Most popular" badge unless `badge` overrides). For a 3-tier pricing section, call this 3× under the same parent section.
 - "slider", "range input", "volume control", "opacity slider", "brightness slider", "filter slider", "滑块", "滑动条", "音量条" → `add_range_slider_v0` (single-handle; set `show_value=true` + `value_suffix="%"` to render the readout). For a dual-handle range (min+max), still fall through to batch_design.
+- "dark slider", "dark-mode range input", "theme-aware slider", "暗色滑块" → `add_range_slider_v1` (accent invariant; thumb bg → surface; remaining → border; label/value tokenized)
 - "phone input", "phone field", "international phone", "country code input", "+1 (555) ...", "电话号码", "手机号输入", "国际电话" → `add_phone_input_v0` (renders country dial code button + digits input in a 44px row; pass `country_flag` for emoji prefix). For a plain single-line text input without the country prefix, use `add_form_field_v0`.
 - "newsletter signup", "subscribe form", "subscribe to newsletter", "promo code input", "apply discount", "send message input", "chat composer", "search with submit", "订阅", "应用优惠码", "发送消息" → `add_input_with_action_v0` (action_kind="text" for "Subscribe" pill button, action_kind="icon" for chat send arrow).
 - "cookie banner", "cookie consent", "GDPR banner", "CCPA banner", "privacy notice", "cookie disclosure", "cookie 提示", "隐私同意条" → `add_cookie_banner_v0` (set `show_settings_link: true` for fine-grained GDPR consent UX). Caller positions sticky-bottom; the tool emits the banner card itself.
@@ -482,6 +501,7 @@ PREFER an element tool when the spec says any of:
 - "callout", "tip block", "doc note", "did you know", "info box", "提示框", "信息块" → `add_callout_v0` (tinted block with body + optional title + tone-driven leading icon: info / success / warning / danger / note).
 - "inline action", "Undo button inline", "Saved • Retry", "comment deleted undo", "inline feedback", "inline action row" → `add_inline_action_v0` (left message + right blue action label, NO floating).
 - "share row", "share to social", "share buttons", "post share", "send via", "分享按钮组" → `add_share_row_v0` (horizontal circular icon buttons each labeled below).
+- "dark share row", "dark-mode share buttons", "theme-aware share row", "暗色分享按钮" → `add_share_row_v1` (icon bg → surface2; icon/label → textMuted in dark/system).
 - "chart legend", "legend item", "legend entry", "数据图例", "图例条目" → `add_legend_item_v0` (marker + label + optional value).
 - "inbox row", "email row", "message list cell", "mail item", "email preview", "邮件条目", "收件箱条目" → `add_inbox_message_v0` (sender + subject + preview + timestamp + unread dot).
 - "settings row", "preference row", "menu item with toggle", "settings list item", "设置项", "偏好项", "开关行" → `add_setting_row_v0` (icon + title/subtitle + trailing chevron/value/switch/badge).
