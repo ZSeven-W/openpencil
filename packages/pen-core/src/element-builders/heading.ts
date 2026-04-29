@@ -3,8 +3,13 @@ import type { ElementTree } from './helpers.js';
 
 export type HeadingLevel = 'display' | 'h1' | 'h2' | 'h3';
 
+const VALID_HEADING_LEVELS = new Set<string>(['display', 'h1', 'h2', 'h3']);
+
 export interface HeadingParams {
   content: string;
+  /** TS compile-time enum. Runtime callers (MCP / harness raw JSON)
+   *  may pass any string; an unknown value throws with a helpful
+   *  message rather than crashing inside the preset lookup. */
   level?: HeadingLevel;
 }
 
@@ -40,7 +45,20 @@ const CJK_BASE: Record<HeadingLevel, Omit<HeadingPreset, 'fontFamily'>> = {
  * no "应拆尽拆" violation (enum controls typography, not structure).
  */
 export function buildHeading(params: HeadingParams): ElementTree {
-  const level = params.level ?? 'h2';
+  const requestedLevel = (params.level ?? 'h2') as string;
+  // ab-v4 caught gpt-5.4 inventing `level: "caption"` on a composite
+  // multi-tool sub-task — the preset lookup returned undefined and the
+  // builder crashed mid-batch with a cryptic
+  // `undefined is not an object (evaluating 'preset.fontSize')`.
+  // Reject the value at the entry boundary so the caller (apply.ts /
+  // dispatch loop) records a clear "invalid level" error per shape
+  // and the surrounding history batch still commits the rest.
+  if (!VALID_HEADING_LEVELS.has(requestedLevel)) {
+    throw new Error(
+      `add_heading_v0: invalid level "${requestedLevel}"; expected one of: display, h1, h2, h3`,
+    );
+  }
+  const level = requestedLevel as HeadingLevel;
   const script = detectCjkScript(params.content);
   const cjkFont = cjkFontFamily(script);
   const preset: HeadingPreset = cjkFont
