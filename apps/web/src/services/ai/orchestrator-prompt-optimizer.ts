@@ -456,12 +456,16 @@ function inferTagsFromPrompt(prompt: string): string[] {
   // "budget tracker", "expense tracker") still match without forcing
   // fintech onto every UI that mentions a budget.
   // Wallet phrase triggers: every left-side modifier is unambiguously
-  // financial. The right-side patterns ("wallet app/payment/connect") are
-  // also financial — but `wallet pass` is deliberately excluded because
-  // it's the generic iOS feature for boarding passes, event tickets,
-  // gift cards, and vaccination cards, none of which are fintech UI.
+  // financial. Right-side patterns are intentionally restricted to
+  // `wallet payment(s)` and `wallet connect`, which are unambiguous
+  // fintech contexts. We deliberately exclude `wallet app` and
+  // `wallet pass`: both occur in Apple Wallet briefs that are about
+  // boarding passes, event tickets, gift cards, vaccination cards, or
+  // generic-iOS pass viewers — those are not fintech UI and shouldn't
+  // route to a fintech style guide. Real fintech briefs almost always
+  // qualify the wallet ("crypto wallet app", "payment wallet flow").
   if (
-    /\b(crypto|digital|payment|hot|cold|hardware|web3)\s+wallet\b|\bwallet\s+(app|payment|connect)\b/.test(
+    /\b(crypto|digital|payment|hot|cold|hardware|web3)\s+wallet\b|\bwallet\s+(payments?|connect)\b/.test(
       lower,
     )
   ) {
