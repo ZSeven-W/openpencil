@@ -133,6 +133,50 @@ describe('scoreRun — M1 / M3 gates', () => {
     expect(row.m3_failure_reason).toMatch(/role counts below minimum/);
   });
 
+  it('partial apply (ok=false but doc populated): M1 false, M3 still scored on what landed', async () => {
+    // ab-corpus's per-shape continuation surfaces a PenDocument even
+    // when one of N composite tags throws. Scorer must run shape
+    // checks against that partial doc — otherwise a model that
+    // nailed 12/13 tags reads identical to one that crashed on tag 1.
+    const row = await scoreRun({
+      prompt,
+      parsed: okParsed,
+      apply: makeApply({
+        ok: false,
+        doc: baseDoc,
+        error: '1/13 tag(s) failed: call 12/13 (add_heading_v0): invalid level "caption"',
+      }),
+      model: 'm1',
+      variant: 'B',
+    });
+    expect(row.m1_legal).toBe(false);
+    expect(row.m3_success).toBe(true);
+    expect(row.m3_failure_reason).toMatch(/partial apply.*caption/);
+    expect(row.applyError).toMatch(/caption/);
+  });
+
+  it('partial apply: M3 fails when shape miss ANYWAY (shape miss wins over partial-apply notice)', async () => {
+    const shapeOnlyPrompt: CorpusPrompt = {
+      ...prompt,
+      expected: { must_contain_roles: ['hero'] },
+    };
+    const row = await scoreRun({
+      prompt: shapeOnlyPrompt,
+      parsed: okParsed,
+      apply: makeApply({
+        ok: false,
+        doc: baseDoc,
+        error: 'tag 5/8 failed',
+      }),
+      model: 'm1',
+      variant: 'B',
+    });
+    expect(row.m1_legal).toBe(false);
+    expect(row.m3_success).toBe(false);
+    // Shape-miss reason wins because it's the structural verdict.
+    expect(row.m3_failure_reason).toMatch(/missing required role.*hero/);
+  });
+
   it('short-circuits to garbage when parse failed', async () => {
     const row = await scoreRun({
       prompt,
