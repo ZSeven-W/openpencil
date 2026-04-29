@@ -407,12 +407,12 @@ describe('chart color tokens (6 single-value)', () => {
 });
 
 describe('palette count snapshot (color additions complete)', () => {
-  it('palette has exactly 32 color-type variables', () => {
+  it('palette has exactly 28 color-type variables (14 base + 8 alert + 6 chart)', () => {
     const p = getSemanticPalette();
     const colorCount = Object.values(p.variables).filter(
       (d) => (d as VariableDefinition).type === 'color',
     ).length;
-    expect(colorCount).toBe(32);
+    expect(colorCount).toBe(28);
   });
 
   it('SEMANTIC_PALETTE_NAMES matches total variable count', () => {
@@ -485,9 +485,9 @@ describe('typography tokens (18 numeric single-value)', () => {
     }
   });
 
-  it('palette has at least 50 tokens (32 color + 18 type)', () => {
+  it('palette has at least 46 tokens (28 color + 18 type)', () => {
     const p = getSemanticPalette();
-    expect(Object.keys(p.variables).length).toBeGreaterThanOrEqual(50);
+    expect(Object.keys(p.variables).length).toBeGreaterThanOrEqual(46);
   });
 });
 
@@ -512,9 +512,9 @@ describe('letterSpacing tokens (2 sparse numeric)', () => {
     expect(def.value).toBe(1.5);
   });
 
-  it('palette total grows to 52 (50 + 2 letterSpacing)', () => {
+  it('palette total grows to 48 (46 + 2 letterSpacing)', () => {
     const p = getSemanticPalette();
-    expect(Object.keys(p.variables).length).toBeGreaterThanOrEqual(52);
+    expect(Object.keys(p.variables).length).toBeGreaterThanOrEqual(48);
   });
 });
 
@@ -552,9 +552,9 @@ describe('spacing tokens (5 numeric)', () => {
     }
   });
 
-  it('palette total grows to 57 (52 + 5 spacing)', () => {
+  it('palette total grows to ≥ 53 (48 base+type+letterSpacing + 5 spacing)', () => {
     const p = getSemanticPalette();
-    expect(Object.keys(p.variables).length).toBeGreaterThanOrEqual(57);
+    expect(Object.keys(p.variables).length).toBeGreaterThanOrEqual(53);
   });
 });
 
@@ -590,9 +590,9 @@ describe('radius tokens (3 numeric)', () => {
     }
   });
 
-  it('palette total is 60 (57 + 3 radius) — all P1 tokens complete', () => {
+  it('palette total is 56 (53 + 3 radius) — all P1 tokens complete', () => {
     const p = getSemanticPalette();
-    expect(Object.keys(p.variables).length).toBe(60);
-    // 32 color + 18 type + 2 letterSpacing + 5 spacing + 3 radius = 60
+    expect(Object.keys(p.variables).length).toBe(56);
+    // 28 color + 18 type + 2 letterSpacing + 5 spacing + 3 radius = 56
   });
 });

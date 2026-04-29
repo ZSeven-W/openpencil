@@ -1,19 +1,28 @@
 import type { PenDocument, VariableDefinition } from '@zseven-w/pen-types';
 
 /**
- * 14-variable semantic palette for theme-aware element tools.
+ * 56-token semantic palette (color + typography + spacing + radius)
+ * for theme-aware element tools.
+ *
+ * Composition (P1 token system):
+ * - 14 base color tokens (surface, border, text, accent, scrim) — light/dark themed
+ * - 8 alert color tokens (info/success/warning/danger × bg/text) — light/dark themed
+ * - 6 chart color tokens (color-chart-1..6) — single-value (no theme axis)
+ * - 18 typography tokens (size + weight + line-height × 6 roles) — numeric
+ * - 2 letterSpacing tokens (display, uppercase-label) — numeric
+ * - 5 spacing tokens (spacing-1..5 = 4/8/12/16/24 px) — numeric
+ * - 3 radius tokens (radius-sm/md/lg = 4/8/12 px) — numeric
  *
  * Inventory rationale lives in
- * `openpencil-docs/superpowers/notes/2026-04-22-dark-theme-defaults-audit.md`.
- * That doc surveys the 30 hex literals in v0 element builders and
- * clusters them into these 14 semantic tokens — enough coverage
- * for every theme-dependent surface, small enough to stay
- * memorable.
+ * `openpencil-docs/superpowers/notes/2026-04-22-dark-theme-defaults-audit.md`
+ * and `2026-05-03-v0-hex-inventory.md`. v0 hex coverage is verified by
+ * `scripts/measure-v0-hex-coverage.ts` — 32 semantic hex (post §3.4
+ * builder-private exclusion), 28 directly covered + 4 covered via merge map
+ * (≤ 5% color drift accepted per spec §3.1 / §7.4).
  *
- * Every variable ships with BOTH light and dark values keyed on
- * a single theme axis `Mode`. Callers who want a single-theme
- * document (no switching) can drop the `themes` field and the
- * resolver will pick the first (light) value.
+ * Theme-aware variables ship with BOTH light and dark values keyed on
+ * a single theme axis `Mode`. Single-value entries (chart, numeric)
+ * carry just the value with no theme axis.
  *
  * This module is PURELY declarative — it does NOT mutate
  * `createEmptyDocument()`'s default output. v0 element tools
@@ -187,24 +196,6 @@ const PALETTE: Record<string, PaletteEntry> = {
     light: '#991B1B',
     dark: '#FECACA',
     description: 'Danger / error alert text / icon',
-  },
-
-  // ── Extended alert/accent shades (4 semantic-but-uncovered hex) ──────────
-  'color-accent-dark': {
-    single: '#1D4ED8',
-    description: 'Darker accent — featured badge text, active pill on white',
-  },
-  'color-info-surface': {
-    single: '#EFF6FF',
-    description: 'Ultra-light info surface — featured pricing card highlight bg',
-  },
-  'color-warning-text-strong': {
-    single: '#B45309',
-    description: 'Stronger warning text — tag "warning" label on light bg',
-  },
-  'color-danger-text-strong': {
-    single: '#B91C1C',
-    description: 'Stronger danger text — tag "error" label on light bg',
   },
 
   // ── Typography: size + weight + line-height × 6 roles (18 numeric) ───────
