@@ -455,8 +455,13 @@ function inferTagsFromPrompt(prompt: string): string[] {
   // companion finance word so common fintech briefs ("crypto wallet",
   // "budget tracker", "expense tracker") still match without forcing
   // fintech onto every UI that mentions a budget.
+  // Wallet phrase triggers: every left-side modifier is unambiguously
+  // financial. The right-side patterns ("wallet app/payment/connect") are
+  // also financial — but `wallet pass` is deliberately excluded because
+  // it's the generic iOS feature for boarding passes, event tickets,
+  // gift cards, and vaccination cards, none of which are fintech UI.
   if (
-    /\b(crypto|digital|payment|hot|cold|hardware|web3)\s+wallet\b|\bwallet\s+(app|pass|payment|connect)\b/.test(
+    /\b(crypto|digital|payment|hot|cold|hardware|web3)\s+wallet\b|\bwallet\s+(app|payment|connect)\b/.test(
       lower,
     )
   ) {
