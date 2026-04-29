@@ -132,6 +132,16 @@ import { handleAddAttachmentRowV1 } from '../tools/add-attachment-row-v1';
 import { handleAddCalendarGridV1 } from '../tools/add-calendar-grid-v1';
 import { handleAddAvatarGroupV1 } from '../tools/add-avatar-group-v1';
 import { handleAddCalloutV1 } from '../tools/add-callout-v1';
+import { handleAddChartBarsV1 } from '../tools/add-chart-bars-v1';
+import { handleAddChartLineV1 } from '../tools/add-chart-line-v1';
+import { handleAddChartPieV1 } from '../tools/add-chart-pie-v1';
+import { handleAddChatBubbleV1 } from '../tools/add-chat-bubble-v1';
+import { handleAddCheckboxV1 } from '../tools/add-checkbox-v1';
+import { handleAddChipInputV1 } from '../tools/add-chip-input-v1';
+import { handleAddCodeBlockV1 } from '../tools/add-code-block-v1';
+import { handleAddColorSwatchV1 } from '../tools/add-color-swatch-v1';
+import { handleAddComboboxV1 } from '../tools/add-combobox-v1';
+import { handleAddCommentV1 } from '../tools/add-comment-v1';
 import { recordElementToolCall } from '../metrics/element-tool-metrics';
 import { ELEMENT_TOOL_DEFINITIONS_BASE } from './element-tool-defs-base';
 import { ELEMENT_TOOL_DEFINITIONS_EXT } from './element-tool-defs-ext';
@@ -402,6 +412,26 @@ async function dispatchElementToolCall(name: string, a: any): Promise<string> {
       return JSON.stringify(await handleAddAvatarGroupV1(a), null, 2);
     case 'add_callout_v1':
       return JSON.stringify(await handleAddCalloutV1(a), null, 2);
+    case 'add_chart_bars_v1':
+      return JSON.stringify(await handleAddChartBarsV1(a), null, 2);
+    case 'add_chart_line_v1':
+      return JSON.stringify(await handleAddChartLineV1(a), null, 2);
+    case 'add_chart_pie_v1':
+      return JSON.stringify(await handleAddChartPieV1(a), null, 2);
+    case 'add_chat_bubble_v1':
+      return JSON.stringify(await handleAddChatBubbleV1(a), null, 2);
+    case 'add_checkbox_v1':
+      return JSON.stringify(await handleAddCheckboxV1(a), null, 2);
+    case 'add_chip_input_v1':
+      return JSON.stringify(await handleAddChipInputV1(a), null, 2);
+    case 'add_code_block_v1':
+      return JSON.stringify(await handleAddCodeBlockV1(a), null, 2);
+    case 'add_color_swatch_v1':
+      return JSON.stringify(await handleAddColorSwatchV1(a), null, 2);
+    case 'add_combobox_v1':
+      return JSON.stringify(await handleAddComboboxV1(a), null, 2);
+    case 'add_comment_v1':
+      return JSON.stringify(await handleAddCommentV1(a), null, 2);
     default:
       return '';
   }
