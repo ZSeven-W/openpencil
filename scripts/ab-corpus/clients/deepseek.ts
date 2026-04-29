@@ -40,9 +40,9 @@ export async function callDeepSeek(args: CallDeepSeekArgs): Promise<ChatCallResu
     maxTokens: args.maxTokens,
     label: 'deepseek',
     // ab-v2 garbage attribution: 6 of 40 deepseek-v4-pro runs returned
-    // empty content (server-side flakiness, not model output). Same
-    // rationale as ark.ts — one retry recovers the transient ones,
-    // anything more would mostly burn budget on real failures.
-    retries: 1,
+    // empty content (server-side flakiness, not model output). retries=1
+    // recovered most but ab-v3 still leaked 6 empty-content errors.
+    // Bumped to 2 alongside ark to share the exponential backoff window.
+    retries: 2,
   });
 }
