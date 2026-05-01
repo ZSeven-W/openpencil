@@ -63,13 +63,52 @@ export interface BuiltPrompt {
   variant: 'B' | 'T';
 }
 
-export function buildSystemPrompt(variant: 'B' | 'T'): BuiltPrompt {
+export interface BuildPromptOpts {
+  /**
+   * Prompt difficulty signal. When variant=T, controls whether the
+   * elements-cookbook (~18kb of arg-shape examples) is included.
+   *
+   * - 'composite', 'optional', or undefined → keep cookbook
+   *   (multi-tool briefs need the chained recipes; safe default for
+   *   free-form callers).
+   * - 'obvious' → strip cookbook. Decision tree + PREFER list still
+   *   teach tool selection; the per-tool minimal-usage examples are
+   *   the cost we trade for ~80% smaller T prompts on single-tool
+   *   prompts. Validated by ab-v4 sweep (Phase 2 of token-diet plan).
+   *
+   * Variant=B is unaffected — baseline always strips both skills so
+   * the A/B comparison still isolates "tools vs no-tools".
+   */
+  difficulty?: 'obvious' | 'optional' | 'composite';
+}
+
+export function buildSystemPrompt(variant: 'B' | 'T', opts: BuildPromptOpts = {}): BuiltPrompt {
   // buildDesignPrompt() already concatenates every section the harness
   // needs — schema, style, examples, DESIGN_TYPE_DETECTION, roles,
   // layout, text rules, guidelines, variables, auto-replace,
   // post-processing, AND elements (appended last session).
   const full = buildDesignPrompt();
   if (variant === 'T') {
+    if (opts.difficulty === 'obvious') {
+      // Save ~18kb by stripping the cookbook on single-tool prompts.
+      // Models still see the decision tree + PREFER list (which is
+      // enough to route to the right tool); they just lose the
+      // copy-paste arg-shape examples. Risk: small dip in arg
+      // compliance on weaker models — measured in ab-v4.
+      const cookbookSkill = getSkillByName('elements-cookbook');
+      if (!cookbookSkill) {
+        throw new Error(
+          'elements-cookbook skill not found in registry — cannot apply obvious-difficulty diet without it',
+        );
+      }
+      const stripped = full.replace(cookbookSkill.content, '');
+      if (stripped === full) {
+        throw new Error(
+          'elements-cookbook content was not present in the full prompt — buildDesignPrompt() may have been refactored; update build-prompt.ts to match',
+        );
+      }
+      return { system: stripped.trim() + '\n\n' + T_TOOL_CALL_INSTRUCTIONS, variant };
+    }
     return { system: full + '\n\n' + T_TOOL_CALL_INSTRUCTIONS, variant };
   }
   // Baseline: strip BOTH elements skills (decision-tree + cookbook).
