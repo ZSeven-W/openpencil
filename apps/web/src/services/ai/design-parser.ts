@@ -78,11 +78,10 @@ export function tryParseElementToolOutput(raw: string): DesignOutputShape | null
 
 /**
  * Parse ALL `<op_tool>` tags in a response into a list of
- * DesignOutputShape. Current prompt in ELEMENT_TOOL_OUTPUT_FORMAT
- * instructs the model to emit exactly one tag, so at runtime this
- * usually returns a 0- or 1-length array. But the plumbing is here
- * for future prompts that allow multi-tool composition (e.g. "emit
- * one add_* per section" — each wrapped separately).
+ * DesignOutputShape. The Strategy A prompt
+ * (`ELEMENT_TOOL_OUTPUT_FORMAT` in orchestrator-sub-agent.ts) tells
+ * the model it can chain N element-tool tags for multi-component
+ * briefs, so this routinely returns 1..N shapes.
  *
  * Order preserved: tags appear in the array in emit order. Element
  * tool names come through as `kind: 'element-tool'`; `batch_design`
@@ -91,12 +90,23 @@ export function tryParseElementToolOutput(raw: string): DesignOutputShape | null
  * classification — we only surface shapes the dispatcher can
  * route).
  *
+ * Strategy A precedence: when ANY element-tool tag is present in the
+ * response, batch_design tags are DROPPED. Mirrors the corpus
+ * output-parser.ts contract and enforces the "Do not mix Strategy A
+ * and Strategy B" rule on the parser side so a non-compliant model
+ * (saw this on minimax-m2.7 in ab-v4) can't smuggle scaffolding
+ * batch_design DSL into the dispatcher alongside element-tool
+ * applies. Pure batch_design responses (Strategy B fallback) keep
+ * working — the drop only fires when element-tool tags coexist with
+ * batch_design tags in the same output.
+ *
  * Does NOT cross-check against the covered shim registry — that's
  * the dispatcher's job (short-circuit with canonical list on miss).
  */
 export function tryParseAllElementToolOutputs(raw: string): DesignOutputShape[] {
   if (typeof raw !== 'string' || raw.trim().length === 0) return [];
-  const shapes: DesignOutputShape[] = [];
+  const elementShapes: DesignOutputShape[] = [];
+  const batchShapes: DesignOutputShape[] = [];
   const tagRe = /<op_tool>\s*([\s\S]*?)\s*<\/op_tool>/g;
   for (const match of raw.matchAll(tagRe)) {
     const body = match[1].trim();
@@ -108,11 +118,16 @@ export function tryParseAllElementToolOutputs(raw: string): DesignOutputShape[] 
           ? (parsed.arguments as Record<string, unknown>)
           : {};
       if (/^add_[a-z_]+_v\d+$/.test(parsed.name)) {
-        shapes.push({ kind: 'element-tool', name: parsed.name, arguments: args, raw: match[0] });
+        elementShapes.push({
+          kind: 'element-tool',
+          name: parsed.name,
+          arguments: args,
+          raw: match[0],
+        });
       } else if (parsed.name === 'batch_design') {
         const dsl = typeof args.operations === 'string' ? args.operations : '';
         if (dsl.length > 0) {
-          shapes.push({ kind: 'batch-design-dsl', dsl, raw: match[0] });
+          batchShapes.push({ kind: 'batch-design-dsl', dsl, raw: match[0] });
         }
       }
       // Unknown name → silently skipped; single-tag path routes as
@@ -124,7 +139,11 @@ export function tryParseAllElementToolOutputs(raw: string): DesignOutputShape[] 
       // are expected to be well-formed (whole prompt effort).
     }
   }
-  return shapes;
+  // Element-tool tags win when both kinds are present — the prompt
+  // forbids mixing, so a mixed output is a rule violation we choose
+  // to silently rectify rather than blow up the whole response.
+  if (elementShapes.length > 0) return elementShapes;
+  return batchShapes;
 }
 
 // ---------------------------------------------------------------------------
