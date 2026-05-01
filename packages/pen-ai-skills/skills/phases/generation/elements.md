@@ -27,9 +27,9 @@ category: base
 
 ELEMENT TOOLS (schema-constrained alternatives to batch_design):
 
-These narrow MCP tools emit well-known structures that batch_design frequently gets wrong on non-Claude models (overflow, wrong role, anti-pattern layout). Each is shape-locked — you pick the tool by matching intent, then supply only content. Visual styling (color, font) stays orthogonal: override via a follow-up batch_design U-op if needed.
+These narrow MCP tools emit well-known structures that batch_design frequently gets wrong on non-Claude models (overflow, wrong role, anti-pattern layout). Each is shape-locked — you pick the tool by matching intent, then supply only content.
 
-**MULTI-TOOL OUTPUT IS THE NORM, NOT THE EXCEPTION.** A brief that names more than one component (a settings panel with 4 toggle rows, a team list with 5 members, a feed with 6 log entries, an onboarding screen with 4 step cards) MUST emit ONE `<op_tool>` block per component. The harness reads every `<op_tool>` tag in your output, so chain as many as the brief implies. Fall back to `batch_design` only when no element tool fits a specific component shape — never as a shortcut to skip the chaining.
+**MULTI-TOOL OUTPUT IS THE NORM, NOT THE EXCEPTION.** A brief that names more than one component (a settings panel with 4 toggle rows, a team list with 5 members, a feed with 6 log entries, an onboarding screen with 4 step cards) MUST emit ONE `<op_tool>` block per component. The harness reads every `<op_tool>` tag in your output, so chain as many as the brief implies. Fall back to `batch_design` only when at least one component in the brief truly needs a custom shape no element tool covers — and then use a SINGLE batch_design for the WHOLE response, never as a per-component fallback mixed with element-tool calls (the harness drops the batch_design half whenever element calls share the response).
 
 Multi-tool example — a "Notifications" settings section with a header + 4 toggle rows is **5 tool calls** (1× `add_section_header_v0` + 4× `add_setting_row_v0`), NOT 1 batch_design.
 
@@ -401,19 +401,11 @@ PREFER an element tool when the spec says any of:
 - "event card", "agenda item", "meeting tile", "upcoming event", "calendar event row", "日程卡片", "会议条目", "活动卡片" → `add_event_card_v0` (date column with month band + day number, then title + time + location). Different from `add_calendar_grid_v0` (the full month grid) and `add_card_row_v0` (horizontally scrolling cards with title + subtitle + image, no date column).
 - "onboarding step", "how-it-works step", "tutorial step card", "setup checklist item", "操作步骤卡片", "教程步骤", "新手引导步骤" → `add_step_card_v0` (numbered circle / check + title + description, stacks vertically). Different from `add_stepper_v0` (horizontal progress nav with connectors) and `add_faq_item_v0` (collapsible Q&A header).
 
-STILL use batch_design when:
+STILL use batch_design when (emit a SINGLE batch_design for the whole response — do NOT mix with element-tool calls):
 
-- The row's items are structurally heterogeneous (can't be uniformly described by a single items[] shape)
-- You need to build a larger composite (e.g. a whole section containing a scroll row + other content — build the section via batch_design, then insert the row via element tool with parent_id)
-- Post-hoc styling: once the element tool has laid the structure, use batch_design U-ops to apply fills, typography, or theme variables
-
-## Composition pattern
-
-For a dashboard that needs a metric row inside a page:
-
-1. Build the page structure via `batch_design` (root frame + section container) — note the section's id
-2. Call `add_metric_row_v0({ parent_id: "<section-id>", items: [...] })` to insert the row under that section
-3. Optional: a second `batch_design` U-op to style (fill, theme variables)
+- The brief's items are structurally heterogeneous (can't be uniformly described by a single items[] shape)
+- The brief needs a custom container or layout that no element tool covers (e.g. a horizontal row of pricing cards with a specific gap, a scroll row + sibling content)
+- The brief asks for unusual styling (custom fills, typography, theme variables) on top of a known structure
 
 ## Common compositions (cookbook)
 
@@ -426,15 +418,14 @@ tool calls.
 ### Login screen (phone + password + social)
 
 ```
-batch_design: foo = I("page", { type: "frame", layout: "vertical", gap: 24, padding: [40, 24] })
-add_heading_v0({ parent_id: "<foo>", content: "Welcome back" })
-add_body_text_v0({ parent_id: "<foo>", content: "Sign in to continue" })
-add_phone_input_v0({ parent_id: "<foo>", label: "Phone number", country_code: "+1", country_flag: "🇺🇸", required: true })
-add_form_field_v0({ parent_id: "<foo>", label: "Password", required: true })
-add_text_button_v0({ parent_id: "<foo>", label: "Sign in" })  // primary CTA
-add_link_v0({ parent_id: "<foo>", label: "Forgot password?" })
-add_divider_v0({ parent_id: "<foo>" })  // "or continue with" — caller adds text via batch_design after
-add_social_login_row_v0({ parent_id: "<foo>", providers: [{ name: "Google" }, { name: "Apple" }] })
+add_heading_v0({ parent_id: "<page>", content: "Welcome back" })
+add_body_text_v0({ parent_id: "<page>", content: "Sign in to continue" })
+add_phone_input_v0({ parent_id: "<page>", label: "Phone number", country_code: "+1", country_flag: "🇺🇸", required: true })
+add_form_field_v0({ parent_id: "<page>", label: "Password", required: true })
+add_text_button_v0({ parent_id: "<page>", label: "Sign in" })
+add_link_v0({ parent_id: "<page>", label: "Forgot password?" })
+add_divider_v0({ parent_id: "<page>" })
+add_social_login_row_v0({ parent_id: "<page>", providers: [{ name: "Google" }, { name: "Apple" }] })
 ```
 
 ### Signup form (email + password + agreement)
@@ -509,20 +500,18 @@ add_step_card_v0({ parent_id: "<page>", number: 4, title: "You're all set", desc
 ### Pricing section (3 tiers, middle one featured)
 
 ```
-batch_design: row = I("page", { type: "frame", layout: "horizontal", gap: 16 })
-add_pricing_card_v0({ parent_id: "<row>", tier: "Starter", price: "0", period: "/month", features: ["3 projects", "Community support"] })
-add_pricing_card_v0({ parent_id: "<row>", tier: "Pro", price: "29", period: "/month", features: ["Unlimited projects", "Priority support", "Advanced analytics"], emphasis: "featured" })
-add_pricing_card_v0({ parent_id: "<row>", tier: "Enterprise", price: "Custom", features: ["Dedicated support", "SSO", "SLA"], cta: "Contact sales" })
+add_pricing_card_v0({ parent_id: "<page>", tier: "Starter", price: "0", period: "/month", features: ["3 projects", "Community support"] })
+add_pricing_card_v0({ parent_id: "<page>", tier: "Pro", price: "29", period: "/month", features: ["Unlimited projects", "Priority support", "Advanced analytics"], emphasis: "featured" })
+add_pricing_card_v0({ parent_id: "<page>", tier: "Enterprise", price: "Custom", features: ["Dedicated support", "SSO", "SLA"], cta: "Contact sales" })
 ```
 
-### Dashboard KPI strip (4 stat cards in a row)
+### Dashboard KPI strip (4 stat cards)
 
 ```
-batch_design: row = I("page", { type: "frame", layout: "horizontal", gap: 16 })
-add_stat_card_v0({ parent_id: "<row>", label: "Revenue", value: "$12.4k", icon: "trending-up", delta: "+8%", trend: "up" })
-add_stat_card_v0({ parent_id: "<row>", label: "Active users", value: "1,284", icon: "users", delta: "+3%", trend: "up" })
-add_stat_card_v0({ parent_id: "<row>", label: "Churn", value: "3.2%", icon: "user-minus", delta: "-0.4%", trend: "down" })
-add_stat_card_v0({ parent_id: "<row>", label: "Sessions", value: "5,471", icon: "activity" })  // no delta
+add_stat_card_v0({ parent_id: "<page>", label: "Revenue", value: "$12.4k", icon: "trending-up", delta: "+8%", trend: "up" })
+add_stat_card_v0({ parent_id: "<page>", label: "Active users", value: "1,284", icon: "users", delta: "+3%", trend: "up" })
+add_stat_card_v0({ parent_id: "<page>", label: "Churn", value: "3.2%", icon: "user-minus", delta: "-0.4%", trend: "down" })
+add_stat_card_v0({ parent_id: "<page>", label: "Sessions", value: "5,471", icon: "activity" })
 ```
 
 ### OTP / 2FA verification screen
@@ -554,8 +543,7 @@ add_empty_state_v0({ parent_id: "<page>", title: "No messages yet", subtitle: "W
 
 - **One parent for one row of siblings.** Don't pass `parent_id` of an unrelated container.
 - **Order matters.** Tools insert as the LAST child of `parent_id`, so call sequence is render order top-to-bottom (vertical) or left-to-right (horizontal).
-- **Don't mix N-tool and batch_design DSL ops in a single call.** They're separate calls — chain them, don't merge.
-- **Style overrides come AFTER structure.** First call the element tools to lay the structure, then a `batch_design` U-op to apply role-targeted fills / typography / variables.
+- **Don't mix element tools and `batch_design` in the same output.** Pick one strategy: chain `add_*_v0` calls (preferred when every component fits an element tool) OR a single `batch_design` covering the whole brief (when at least one component needs a custom shape). The corpus harness drops `batch_design` tags whenever element-tool calls share the response, so a mixed output silently loses its scaffolding.
 
 ## Invariants you don't need to think about
 
