@@ -53,7 +53,10 @@ import type { ModelCall } from './stub-model';
  * that's the path we're actively promoting.
  */
 export async function realModelCall(call: ModelCall): Promise<ChatCallResult> {
-  const built = buildSystemPrompt(call.variant, { difficulty: call.prompt.difficulty });
+  const built = buildSystemPrompt(call.variant, {
+    difficulty: call.prompt.difficulty,
+    category: call.prompt.category,
+  });
   const user = call.prompt.prompt;
   const model = call.model;
 

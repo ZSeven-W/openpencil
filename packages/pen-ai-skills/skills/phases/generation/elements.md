@@ -451,6 +451,8 @@ add_setting_row_v0({ parent_id: "<page>", title: "Push notifications", leading_i
 add_setting_row_v0({ parent_id: "<page>", title: "Email digest", leading_icon: "mail", trailing: { kind: "switch", on: false } })
 ```
 
+<!-- @domain:dashboard -->
+
 ### Team / members list (avatars + pending invitations)
 
 ```
@@ -466,6 +468,10 @@ add_section_header_v0({ parent_id: "<page>", title: "Pending invitations" })
 add_invite_row_v0({ parent_id: "<page>", email: "leon@acme.com", role: "Editor", status: "pending", action_label: "Resend" })
 ```
 
+<!-- /@domain -->
+
+<!-- @domain:dashboard -->
+
 ### Audit / activity feed (N log entries under a header)
 
 ```
@@ -479,12 +485,20 @@ add_activity_log_v0({ parent_id: "<panel>", actor: "Raj Patel", action: "updated
 add_activity_log_v0({ parent_id: "<panel>", actor: "Sarah Lee", action: "deleted archive-2024.zip", timestamp: "yesterday", icon: "trash", tone: "danger" })
 ```
 
+<!-- /@domain -->
+
+<!-- @domain:dashboard -->
+
 ### Faceted search filter sidebar (N filter groups stacked)
 
 ```
 add_filter_group_v0({ parent_id: "<sidebar>", title: "Category", options: [{ label: "Apparel", count: 124, selected: true }, { label: "Footwear", count: 86 }, { label: "Bags", count: 41 }, { label: "Accessories", count: 67 }] })
 add_filter_group_v0({ parent_id: "<sidebar>", title: "Brand", options: [{ label: "Nike", count: 32 }, { label: "Adidas", count: 28 }, { label: "Patagonia", count: 15, selected: true }, { label: "Arc'teryx", count: 9 }] })
 ```
+
+<!-- /@domain -->
+
+<!-- @domain:mobile -->
 
 ### Onboarding "How it works" (N step cards)
 
@@ -497,6 +511,10 @@ add_step_card_v0({ parent_id: "<page>", number: 3, title: "Set your goals", desc
 add_step_card_v0({ parent_id: "<page>", number: 4, title: "You're all set", description: "You're ready to use the app. Tap below to continue.", completed: true })
 ```
 
+<!-- /@domain -->
+
+<!-- @domain:landing -->
+
 ### Pricing section (3 tiers, middle one featured)
 
 ```
@@ -504,6 +522,10 @@ add_pricing_card_v0({ parent_id: "<page>", tier: "Starter", price: "0", period: 
 add_pricing_card_v0({ parent_id: "<page>", tier: "Pro", price: "29", period: "/month", features: ["Unlimited projects", "Priority support", "Advanced analytics"], emphasis: "featured" })
 add_pricing_card_v0({ parent_id: "<page>", tier: "Enterprise", price: "Custom", features: ["Dedicated support", "SSO", "SLA"], cta: "Contact sales" })
 ```
+
+<!-- /@domain -->
+
+<!-- @domain:dashboard -->
 
 ### Dashboard KPI strip (4 stat cards)
 
@@ -513,6 +535,8 @@ add_stat_card_v0({ parent_id: "<page>", label: "Active users", value: "1,284", i
 add_stat_card_v0({ parent_id: "<page>", label: "Churn", value: "3.2%", icon: "user-minus", delta: "-0.4%", trend: "down" })
 add_stat_card_v0({ parent_id: "<page>", label: "Sessions", value: "5,471", icon: "activity" })
 ```
+
+<!-- /@domain -->
 
 ### OTP / 2FA verification screen
 
@@ -524,6 +548,8 @@ add_text_button_v0({ parent_id: "<page>", label: "Verify" })
 add_link_v0({ parent_id: "<page>", label: "Resend code" })
 ```
 
+<!-- @domain:mobile -->
+
 ### Support chat thread
 
 ```
@@ -532,6 +558,8 @@ add_chat_bubble_v0({ parent_id: "<thread>", message: "My order hasn't arrived.",
 add_chat_bubble_v0({ parent_id: "<thread>", message: "Sorry to hear! Let me check on that.", side: "left", author: "Sarah", timestamp: "1m" })
 add_attachment_row_v0({ parent_id: "<thread>", filename: "receipt.pdf", size: "240 KB", icon: "file-text" })
 ```
+
+<!-- /@domain -->
 
 ### Empty inbox / first-run onboarding
 

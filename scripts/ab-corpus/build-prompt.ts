@@ -82,6 +82,51 @@ export interface BuildPromptOpts {
    * the A/B comparison still isolates "tools vs no-tools".
    */
   difficulty?: 'obvious' | 'optional' | 'composite';
+
+  /**
+   * Prompt category signal. When variant=T and the category is one of
+   * the supported domains, strip `<!-- @domain:X -->...<!-- /@domain -->`
+   * blocks in elements.md whose tag doesn't match. Untagged content is
+   * "general" and stays in every variant.
+   *
+   * Saves ~3-5kb per non-matching block. The per-domain annotations
+   * are partial today (only the most obviously domain-specific tools
+   * — bottom_nav / data_table_row / pricing_card etc.); ambiguous ones
+   * stay untagged so the harness fails closed (they always load).
+   *
+   * undefined → all domain blocks load (safe default for free-form
+   * callers and ab-v3-style runs that don't classify by category).
+   */
+  category?: 'mobile' | 'dashboard' | 'landing';
+}
+
+/**
+ * Strips `<!-- @domain:X -->...<!-- /@domain -->` blocks whose tag
+ * doesn't match `keep`. Untagged content is preserved verbatim.
+ *
+ * The inline comment syntax keeps elements.md a single file (no
+ * multi-file splits to maintain per domain) and keeps the diff
+ * surgical — adding a tag is two HTML comments, no structural move.
+ *
+ * Block syntax:
+ *
+ *   <!-- @domain:mobile -->
+ *   ... mobile-only content ...
+ *   <!-- /@domain -->
+ *
+ * Multiple comma-separated tags are accepted (e.g. `mobile,dashboard`)
+ * and a block matches if `keep` appears in the list. This is the
+ * common case for tools like calendar_grid that legitimately span
+ * domains.
+ */
+function stripNonMatchingDomains(text: string, keep: string): string {
+  return text.replace(
+    /<!-- @domain:([a-z,\s]+) -->\s*([\s\S]*?)\s*<!-- \/@domain -->\s*/g,
+    (_, tags: string, body: string) => {
+      const allowed = tags.split(',').map((t) => t.trim());
+      return allowed.includes(keep) ? body : '';
+    },
+  );
 }
 
 export function buildSystemPrompt(variant: 'B' | 'T', opts: BuildPromptOpts = {}): BuiltPrompt {
@@ -91,6 +136,7 @@ export function buildSystemPrompt(variant: 'B' | 'T', opts: BuildPromptOpts = {}
   // post-processing, AND elements (appended last session).
   const full = buildDesignPrompt();
   if (variant === 'T') {
+    let payload = full;
     if (opts.difficulty === 'obvious') {
       // Save ~18kb by stripping the cookbook on single-tool prompts.
       // Models still see the decision tree + PREFER list (which is
@@ -103,15 +149,17 @@ export function buildSystemPrompt(variant: 'B' | 'T', opts: BuildPromptOpts = {}
           'elements-cookbook skill not found in registry — cannot apply obvious-difficulty diet without it',
         );
       }
-      const stripped = full.replace(cookbookSkill.content, '');
-      if (stripped === full) {
+      payload = payload.replace(cookbookSkill.content, '');
+      if (payload === full) {
         throw new Error(
           'elements-cookbook content was not present in the full prompt — buildDesignPrompt() may have been refactored; update build-prompt.ts to match',
         );
       }
-      return { system: stripped.trim() + '\n\n' + T_TOOL_CALL_INSTRUCTIONS, variant };
     }
-    return { system: full + '\n\n' + T_TOOL_CALL_INSTRUCTIONS, variant };
+    if (opts.category) {
+      payload = stripNonMatchingDomains(payload, opts.category);
+    }
+    return { system: payload.trim() + '\n\n' + T_TOOL_CALL_INSTRUCTIONS, variant };
   }
   // Baseline: strip BOTH elements skills (decision-tree + cookbook).
   // The cookbook split landed when elements.md crossed the 800-line
