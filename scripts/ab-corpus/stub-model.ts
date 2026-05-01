@@ -130,14 +130,16 @@ const FIXTURES: Record<string, string> = {
   // These are the only stubs that produce >1 op_tool block; obvious
   // prompts still emit 1 by default.
   'dashboard-settings-page-composite|T': [
-    '<op_tool>{"name":"add_section_header_v0","arguments":{"title":"Notifications","subtitle":"Choose what you want to be alerted about."}}</op_tool>',
+    '<op_tool>{"name":"add_section_header_v0","arguments":{"title":"Notifications"}}</op_tool>',
+    '<op_tool>{"name":"add_body_text_v0","arguments":{"content":"Choose what you want to be alerted about."}}</op_tool>',
     '<op_tool>{"name":"add_setting_row_v0","arguments":{"title":"Email digest","subtitle":"Daily summary at 9am","leading_icon":"bell","trailing":{"kind":"switch","on":true}}}</op_tool>',
     '<op_tool>{"name":"add_setting_row_v0","arguments":{"title":"Push notifications","subtitle":"All channels","leading_icon":"phone","trailing":{"kind":"switch","on":true}}}</op_tool>',
     '<op_tool>{"name":"add_setting_row_v0","arguments":{"title":"Direct messages","subtitle":"Mentions only","leading_icon":"message-circle","trailing":{"kind":"switch","on":false}}}</op_tool>',
     '<op_tool>{"name":"add_setting_row_v0","arguments":{"title":"Critical alerts","subtitle":"Always on","leading_icon":"alert-triangle","trailing":{"kind":"switch","on":true}}}</op_tool>',
   ].join('\n'),
   'dashboard-team-people-page-composite|T': [
-    '<op_tool>{"name":"add_section_header_v0","arguments":{"title":"Members","subtitle":"5 people"}}</op_tool>',
+    '<op_tool>{"name":"add_section_header_v0","arguments":{"title":"Members"}}</op_tool>',
+    '<op_tool>{"name":"add_body_text_v0","arguments":{"content":"5 people"}}</op_tool>',
     '<op_tool>{"name":"add_member_row_v0","arguments":{"name":"Sarah Lee","subtitle":"sarah@acme.com","initial":"S","trailing":{"kind":"role_badge","value":"Owner"}}}</op_tool>',
     '<op_tool>{"name":"add_member_row_v0","arguments":{"name":"Marcus Chen","subtitle":"marcus@acme.com","initial":"M","trailing":{"kind":"role_badge","value":"Admin"}}}</op_tool>',
     '<op_tool>{"name":"add_member_row_v0","arguments":{"name":"Aiko Tanaka","subtitle":"aiko@acme.com","initial":"A","trailing":{"kind":"role_badge","value":"Editor"}}}</op_tool>',
@@ -150,7 +152,8 @@ const FIXTURES: Record<string, string> = {
     '<op_tool>{"name":"add_filter_group_v0","arguments":{"title":"Brand","options":[{"label":"Nike","count":32},{"label":"Adidas","count":28},{"label":"Patagonia","count":15,"selected":true},{"label":"Arc Teryx","count":9}]}}</op_tool>',
   ].join('\n'),
   'dashboard-audit-feed-composite|T': [
-    '<op_tool>{"name":"add_section_header_v0","arguments":{"title":"Recent activity","subtitle":"Last 24 hours"}}</op_tool>',
+    '<op_tool>{"name":"add_section_header_v0","arguments":{"title":"Recent activity"}}</op_tool>',
+    '<op_tool>{"name":"add_body_text_v0","arguments":{"content":"Last 24 hours"}}</op_tool>',
     '<op_tool>{"name":"add_activity_log_v0","arguments":{"actor":"Sarah Lee","action":"approved the production deploy","timestamp":"2h ago","icon":"check","tone":"success"}}</op_tool>',
     '<op_tool>{"name":"add_activity_log_v0","arguments":{"actor":"Marcus Chen","action":"uploaded final-mockups.zip","timestamp":"3h ago","icon":"upload","tone":"info"}}</op_tool>',
     '<op_tool>{"name":"add_activity_log_v0","arguments":{"actor":"Aiko Tanaka","action":"invited jordan@acme.com to the workspace","timestamp":"5h ago","icon":"user-plus","tone":"info"}}</op_tool>',

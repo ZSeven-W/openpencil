@@ -463,7 +463,8 @@ add_setting_row_v0({ parent_id: "<page>", title: "Email digest", leading_icon: "
 ### Team / members list (avatars + pending invitations)
 
 ```
-add_section_header_v0({ parent_id: "<page>", title: "Members", subtitle: "5 people" })
+add_section_header_v0({ parent_id: "<page>", title: "Members" })
+add_body_text_v0({ parent_id: "<page>", content: "5 people" })
 add_member_row_v0({ parent_id: "<page>", name: "Sarah Lee", subtitle: "sarah@acme.com", initial: "S", trailing: { kind: "role_badge", value: "Owner" } })
 add_member_row_v0({ parent_id: "<page>", name: "Marcus Chen", subtitle: "marcus@acme.com", initial: "M", trailing: { kind: "role_badge", value: "Admin" } })
 add_member_row_v0({ parent_id: "<page>", name: "Aiko Tanaka", subtitle: "aiko@acme.com", initial: "A", trailing: { kind: "role_badge", value: "Editor" } })
@@ -477,7 +478,8 @@ add_invite_row_v0({ parent_id: "<page>", email: "leon@acme.com", role: "Editor",
 ### Audit / activity feed (N log entries under a header)
 
 ```
-add_section_header_v0({ parent_id: "<panel>", title: "Recent activity", subtitle: "Last 24 hours" })
+add_section_header_v0({ parent_id: "<panel>", title: "Recent activity" })
+add_body_text_v0({ parent_id: "<panel>", content: "Last 24 hours" })
 add_activity_log_v0({ parent_id: "<panel>", actor: "Sarah Lee", action: "approved the production deploy", timestamp: "2h ago", icon: "check", tone: "success" })
 add_activity_log_v0({ parent_id: "<panel>", actor: "Marcus Chen", action: "uploaded final-mockups.zip", timestamp: "3h ago", icon: "upload", tone: "info" })
 add_activity_log_v0({ parent_id: "<panel>", actor: "Aiko Tanaka", action: "invited jordan@acme.com to the workspace", timestamp: "5h ago", icon: "user-plus", tone: "info" })
@@ -501,7 +503,7 @@ add_body_text_v0({ parent_id: "<page>", content: "Three steps to a smarter walle
 add_step_card_v0({ parent_id: "<page>", number: 1, title: "Create your account", description: "Use your email and a strong password to sign up. No credit card required." })
 add_step_card_v0({ parent_id: "<page>", number: 2, title: "Connect your bank", description: "Link your account in seconds. We use 256-bit encryption to keep your data safe." })
 add_step_card_v0({ parent_id: "<page>", number: 3, title: "Set your goals", description: "Tell us what you want to save for — we'll do the rest." })
-add_step_card_v0({ parent_id: "<page>", title: "You're all set", description: "You're ready to use the app. Tap below to continue.", completed: true })
+add_step_card_v0({ parent_id: "<page>", number: 4, title: "You're all set", description: "You're ready to use the app. Tap below to continue.", completed: true })
 ```
 
 ### Pricing section (3 tiers, middle one featured)
