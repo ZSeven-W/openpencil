@@ -29,7 +29,11 @@ ELEMENT TOOLS (schema-constrained alternatives to batch_design):
 
 These narrow MCP tools emit well-known structures that batch_design frequently gets wrong on non-Claude models (overflow, wrong role, anti-pattern layout). Each is shape-locked — you pick the tool by matching intent, then supply only content. Visual styling (color, font) stays orthogonal: override via a follow-up batch_design U-op if needed.
 
-## Decision tree (pick first match)
+**MULTI-TOOL OUTPUT IS THE NORM, NOT THE EXCEPTION.** A brief that names more than one component (a settings panel with 4 toggle rows, a team list with 5 members, a feed with 6 log entries, an onboarding screen with 4 step cards) MUST emit ONE `<op_tool>` block per component. The harness reads every `<op_tool>` tag in your output, so chain as many as the brief implies. Fall back to `batch_design` only when no element tool fits a specific component shape — never as a shortcut to skip the chaining.
+
+Multi-tool example — a "Notifications" settings section with a header + 4 toggle rows is **5 tool calls** (1× `add_section_header_v0` + 4× `add_setting_row_v0`), NOT 1 batch_design.
+
+## Decision tree (per component — pick first match)
 
 Rows (horizontal, in-card or scrolling):
 
@@ -454,6 +458,50 @@ add_divider_v0({ parent_id: "<page>" })
 add_section_header_v0({ parent_id: "<page>", title: "Notifications" })
 add_setting_row_v0({ parent_id: "<page>", title: "Push notifications", leading_icon: "bell", trailing: { kind: "switch", on: true } })
 add_setting_row_v0({ parent_id: "<page>", title: "Email digest", leading_icon: "mail", trailing: { kind: "switch", on: false } })
+```
+
+### Team / members list (avatars + pending invitations)
+
+```
+add_section_header_v0({ parent_id: "<page>", title: "Members", subtitle: "5 people" })
+add_member_row_v0({ parent_id: "<page>", name: "Sarah Lee", subtitle: "sarah@acme.com", initial: "S", trailing: { kind: "role_badge", value: "Owner" } })
+add_member_row_v0({ parent_id: "<page>", name: "Marcus Chen", subtitle: "marcus@acme.com", initial: "M", trailing: { kind: "role_badge", value: "Admin" } })
+add_member_row_v0({ parent_id: "<page>", name: "Aiko Tanaka", subtitle: "aiko@acme.com", initial: "A", trailing: { kind: "role_badge", value: "Editor" } })
+add_member_row_v0({ parent_id: "<page>", name: "Raj Patel", subtitle: "raj@acme.com", initial: "R", trailing: { kind: "role_badge", value: "Editor" } })
+add_member_row_v0({ parent_id: "<page>", name: "Jordan Kim", subtitle: "jordan@acme.com", initial: "J", trailing: { kind: "role_badge", value: "Viewer" } })
+add_divider_v0({ parent_id: "<page>" })
+add_section_header_v0({ parent_id: "<page>", title: "Pending invitations" })
+add_invite_row_v0({ parent_id: "<page>", email: "leon@acme.com", role: "Editor", status: "pending", action_label: "Resend" })
+```
+
+### Audit / activity feed (N log entries under a header)
+
+```
+add_section_header_v0({ parent_id: "<panel>", title: "Recent activity", subtitle: "Last 24 hours" })
+add_activity_log_v0({ parent_id: "<panel>", actor: "Sarah Lee", action: "approved the production deploy", timestamp: "2h ago", icon: "check", tone: "success" })
+add_activity_log_v0({ parent_id: "<panel>", actor: "Marcus Chen", action: "uploaded final-mockups.zip", timestamp: "3h ago", icon: "upload", tone: "info" })
+add_activity_log_v0({ parent_id: "<panel>", actor: "Aiko Tanaka", action: "invited jordan@acme.com to the workspace", timestamp: "5h ago", icon: "user-plus", tone: "info" })
+add_activity_log_v0({ parent_id: "<panel>", actor: "System", action: "rate-limited an IP after 50 failed sign-ins", timestamp: "8h ago", icon: "alert-triangle", tone: "warning" })
+add_activity_log_v0({ parent_id: "<panel>", actor: "Raj Patel", action: "updated billing details", timestamp: "yesterday", icon: "settings", tone: "neutral" })
+add_activity_log_v0({ parent_id: "<panel>", actor: "Sarah Lee", action: "deleted archive-2024.zip", timestamp: "yesterday", icon: "trash", tone: "danger" })
+```
+
+### Faceted search filter sidebar (N filter groups stacked)
+
+```
+add_filter_group_v0({ parent_id: "<sidebar>", title: "Category", options: [{ label: "Apparel", count: 124, selected: true }, { label: "Footwear", count: 86 }, { label: "Bags", count: 41 }, { label: "Accessories", count: 67 }] })
+add_filter_group_v0({ parent_id: "<sidebar>", title: "Brand", options: [{ label: "Nike", count: 32 }, { label: "Adidas", count: 28 }, { label: "Patagonia", count: 15, selected: true }, { label: "Arc'teryx", count: 9 }] })
+```
+
+### Onboarding "How it works" (N step cards)
+
+```
+add_heading_v0({ parent_id: "<page>", content: "Get started in minutes" })
+add_body_text_v0({ parent_id: "<page>", content: "Three steps to a smarter wallet." })
+add_step_card_v0({ parent_id: "<page>", number: 1, title: "Create your account", description: "Use your email and a strong password to sign up. No credit card required." })
+add_step_card_v0({ parent_id: "<page>", number: 2, title: "Connect your bank", description: "Link your account in seconds. We use 256-bit encryption to keep your data safe." })
+add_step_card_v0({ parent_id: "<page>", number: 3, title: "Set your goals", description: "Tell us what you want to save for — we'll do the rest." })
+add_step_card_v0({ parent_id: "<page>", title: "You're all set", description: "You're ready to use the app. Tap below to continue.", completed: true })
 ```
 
 ### Pricing section (3 tiers, middle one featured)
