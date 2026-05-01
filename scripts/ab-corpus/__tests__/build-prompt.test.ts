@@ -176,4 +176,24 @@ describe('buildSystemPrompt', () => {
       expect(full - filtered).toBeGreaterThan(500);
     }
   });
+
+  it('T + category preserves Markdown structure across adjacent kept blocks (no fence-heading collision)', () => {
+    // Earlier regex consumed surrounding whitespace too greedily, joining
+    // body1's closing ``` directly to body2's heading like ```### Audit...
+    // and breaking both the code fence and the heading rendering. Codex
+    // stop-time review caught it. Guard against re-introducing the
+    // collision by asserting fence-followed-by-heading never appears
+    // anywhere in the output for any (category, difficulty) combo where
+    // the filter could fire.
+    for (const category of ['mobile', 'dashboard', 'landing'] as const) {
+      for (const difficulty of ['obvious', 'composite'] as const) {
+        const built = buildSystemPrompt('T', { difficulty, category });
+        // Closing fence directly followed by a level-3 heading on the
+        // same line is the corruption signature: ``` and ### must be
+        // separated by at least a newline. The buggy regex produced
+        // `\`\`\`### Audit ...` with no separator at all.
+        expect(built.system).not.toMatch(/```###/);
+      }
+    }
+  });
 });

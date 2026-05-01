@@ -108,7 +108,7 @@ export interface BuildPromptOpts {
  * multi-file splits to maintain per domain) and keeps the diff
  * surgical — adding a tag is two HTML comments, no structural move.
  *
- * Block syntax:
+ * Block syntax (each marker on its own line):
  *
  *   <!-- @domain:mobile -->
  *   ... mobile-only content ...
@@ -118,10 +118,17 @@ export interface BuildPromptOpts {
  * and a block matches if `keep` appears in the list. This is the
  * common case for tools like calendar_grid that legitimately span
  * domains.
+ *
+ * Whitespace contract: the regex consumes ONLY the single newlines
+ * adjoining each marker, not surrounding blank lines. That preserves
+ * the blank-line separator between adjacent kept blocks — without
+ * this, the closing ` ``` ` of one recipe would butt up against the
+ * `### ` heading of the next, breaking markdown structure (caught
+ * by Codex stop-time review).
  */
 function stripNonMatchingDomains(text: string, keep: string): string {
   return text.replace(
-    /<!-- @domain:([a-z,\s]+) -->\s*([\s\S]*?)\s*<!-- \/@domain -->\s*/g,
+    /<!-- @domain:([a-z,\s]+) -->\n([\s\S]*?)\n<!-- \/@domain -->/g,
     (_, tags: string, body: string) => {
       const allowed = tags.split(',').map((t) => t.trim());
       return allowed.includes(keep) ? body : '';
