@@ -47,9 +47,11 @@ export async function callArk(args: CallArkArgs): Promise<ChatCallResult> {
     // failure was Ark returning empty `choices[0].message.content` or
     // exceeding the 120s wall clock, not a model-quality issue (the
     // model itself routed to the right element tool 80% of the time
-    // when it did respond). One retry is the minimum that flips most
-    // of those into successes; bumping higher would mostly waste
-    // budget on the genuinely broken minority.
-    retries: 1,
+    // when it did respond). retries=1 left 36 empty + 15 timeout + 4
+    // 429 still leaking through ab-v3 (520 calls); retries=2 with
+    // exponential backoff gives the provider a 1000ms recovery window
+    // before the third attempt, which on Ark's coding tier is usually
+    // enough to clear the upstream brownout.
+    retries: 2,
   });
 }
