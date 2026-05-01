@@ -2,6 +2,8 @@ import type { ElementTree } from './helpers.js';
 
 export type InviteStatus = 'pending' | 'expired' | 'accepted';
 
+const VALID_INVITE_STATUSES = new Set<string>(['pending', 'expired', 'accepted']);
+
 export interface InviteRowParams {
   /** Invitee email (e.g. "sarah@acme.com"). */
   email: string;
@@ -33,7 +35,13 @@ const ACTION_FG = '#2563EB';
  * invite row", "邀请列表行", "待接受邀请".
  */
 export function buildInviteRow(params: InviteRowParams): ElementTree {
-  const status = params.status ?? 'pending';
+  const requestedStatus = (params.status ?? 'pending') as string;
+  if (!VALID_INVITE_STATUSES.has(requestedStatus)) {
+    throw new Error(
+      `add_invite_row_v0: invalid status "${requestedStatus}"; expected one of: pending, expired, accepted`,
+    );
+  }
+  const status = requestedStatus as InviteStatus;
   const tone = STATUS_TONE[status];
   const actionLabel = params.action_label ?? 'Resend';
   const initial = (params.email.charAt(0) ?? '?').toUpperCase();

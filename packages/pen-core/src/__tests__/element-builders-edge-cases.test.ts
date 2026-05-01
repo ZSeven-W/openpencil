@@ -1,16 +1,21 @@
 import { describe, it, expect } from 'vitest';
 import {
+  buildActivityLog,
   buildBadge,
   buildBodyText,
   buildCalendarGrid,
+  buildCallout,
   buildCardRow,
   buildChartBars,
   buildEmptyState,
   buildHeading,
+  buildInviteRow,
   buildKbd,
+  buildMemberRow,
   buildPrice,
   buildRatingStars,
   buildStepper,
+  buildTag,
   buildTimeline,
 } from '../element-builders/index.js';
 
@@ -170,5 +175,99 @@ describe('buildHeading — invalid level rejection', () => {
 
   it('does not throw when level is omitted (defaults to h2)', () => {
     expect(() => buildHeading({ content: 'no level' })).not.toThrow();
+  });
+});
+
+// Same defensive pattern as buildHeading — the MCP tool defs declare
+// tone / status enums, but ab-corpus + production both call these
+// builders with raw JSON args, bypassing schema validation. A model
+// inventing an out-of-enum string used to crash the dispatch with
+// `undefined is not an object`. Each builder now rejects at the entry
+// boundary so the surrounding batch keeps going through the rest.
+describe('buildTag — invalid tone rejection', () => {
+  it('throws for an unknown tone', () => {
+    expect(() => buildTag({ label: 'Active', tone: 'critical' as never })).toThrow(
+      /invalid tone "critical"/,
+    );
+  });
+  it('accepts every valid tone + omitted', () => {
+    for (const tone of ['default', 'accent', 'success', 'warning', 'error'] as const) {
+      expect(() => buildTag({ label: 'x', tone })).not.toThrow();
+    }
+    expect(() => buildTag({ label: 'x' })).not.toThrow();
+  });
+});
+
+describe('buildCallout — invalid tone rejection', () => {
+  it('throws for an unknown tone', () => {
+    expect(() => buildCallout({ body: 'x', tone: 'fancy' as never })).toThrow(
+      /invalid tone "fancy"/,
+    );
+  });
+  it('accepts every valid tone + omitted', () => {
+    for (const tone of ['info', 'success', 'warning', 'danger', 'note'] as const) {
+      expect(() => buildCallout({ body: 'x', tone })).not.toThrow();
+    }
+    expect(() => buildCallout({ body: 'x' })).not.toThrow();
+  });
+});
+
+describe('buildActivityLog — invalid tone rejection', () => {
+  it('throws for an unknown tone', () => {
+    expect(() =>
+      buildActivityLog({
+        actor: 'Sarah',
+        action: 'merged PR',
+        timestamp: '2h ago',
+        tone: 'critical' as never,
+      }),
+    ).toThrow(/invalid tone "critical"/);
+  });
+  it('accepts every valid tone + omitted', () => {
+    const base = { actor: 'a', action: 'b', timestamp: '1m' };
+    for (const tone of ['info', 'success', 'warning', 'danger', 'neutral'] as const) {
+      expect(() => buildActivityLog({ ...base, tone })).not.toThrow();
+    }
+    expect(() => buildActivityLog(base)).not.toThrow();
+  });
+});
+
+describe('buildInviteRow — invalid status rejection', () => {
+  it('throws for an unknown status', () => {
+    expect(() => buildInviteRow({ email: 'a@b.com', status: 'revoked' as never })).toThrow(
+      /invalid status "revoked"/,
+    );
+  });
+  it('accepts every valid status + omitted', () => {
+    for (const status of ['pending', 'expired', 'accepted'] as const) {
+      expect(() => buildInviteRow({ email: 'x@y.com', status })).not.toThrow();
+    }
+    expect(() => buildInviteRow({ email: 'x@y.com' })).not.toThrow();
+  });
+});
+
+describe('buildMemberRow — invalid trailing.tone rejection (status_dot variant)', () => {
+  it('throws when trailing.kind=status_dot has an unknown tone', () => {
+    expect(() =>
+      buildMemberRow({
+        name: 'Sarah',
+        trailing: { kind: 'status_dot', tone: 'unknown' as never },
+      }),
+    ).toThrow(/invalid trailing\.tone "unknown"/);
+  });
+  it('accepts every valid status tone', () => {
+    for (const tone of ['online', 'busy', 'away', 'offline'] as const) {
+      expect(() =>
+        buildMemberRow({ name: 'x', trailing: { kind: 'status_dot', tone } }),
+      ).not.toThrow();
+    }
+    // omitted tone defaults to 'online'
+    expect(() => buildMemberRow({ name: 'x', trailing: { kind: 'status_dot' } })).not.toThrow();
+  });
+  it('does not validate when trailing is role_badge or menu (no tone field)', () => {
+    expect(() =>
+      buildMemberRow({ name: 'x', trailing: { kind: 'role_badge', value: 'Owner' } }),
+    ).not.toThrow();
+    expect(() => buildMemberRow({ name: 'x', trailing: { kind: 'menu' } })).not.toThrow();
   });
 });

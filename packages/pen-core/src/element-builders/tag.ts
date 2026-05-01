@@ -2,6 +2,8 @@ import type { ElementTree } from './helpers.js';
 
 export type TagTone = 'default' | 'accent' | 'success' | 'warning' | 'error';
 
+const VALID_TAG_TONES = new Set<string>(['default', 'accent', 'success', 'warning', 'error']);
+
 export interface TagParams {
   label: string;
   /** Render the trailing × close icon. Default true — that's what makes
@@ -36,7 +38,13 @@ const TONES: Record<TagTone, ToneSpec> = {
  * clicking the ×: "Status: Active ×", "Plan: Pro ×", "Tag: design ×".
  */
 export function buildTag(params: TagParams): ElementTree {
-  const tone = TONES[params.tone ?? 'default'];
+  const requestedTone = (params.tone ?? 'default') as string;
+  if (!VALID_TAG_TONES.has(requestedTone)) {
+    throw new Error(
+      `add_tag_v0: invalid tone "${requestedTone}"; expected one of: default, accent, success, warning, error`,
+    );
+  }
+  const tone = TONES[requestedTone as TagTone];
   const removable = params.removable ?? true;
   const children: ElementTree[] = [
     {
