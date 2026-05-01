@@ -147,3 +147,28 @@ describe('calendar_grid boundary cases', () => {
     expect(hasTodayOrSelected).toBe(false);
   });
 });
+
+describe('buildHeading — invalid level rejection', () => {
+  // ab-v4 (2026-05-01) caught gpt-5.4 inventing `level: "caption"` on a
+  // composite multi-tool sub-task. The preset lookup silently returned
+  // undefined and the next line crashed with the cryptic message
+  // `undefined is not an object (evaluating 'preset.fontSize')`,
+  // failing the WHOLE composite apply mid-batch. Builder now rejects
+  // unknown levels at the entry boundary so the surrounding dispatch
+  // loop captures a clear per-shape error and keeps applying the rest.
+  it('throws with a helpful message when level is not a known enum value', () => {
+    expect(() =>
+      buildHeading({ content: 'Pending invitations', level: 'caption' as never }),
+    ).toThrow(/invalid level "caption"; expected one of: display, h1, h2, h3/);
+  });
+
+  it('does not throw for any of the four valid levels', () => {
+    for (const level of ['display', 'h1', 'h2', 'h3'] as const) {
+      expect(() => buildHeading({ content: 'ok', level })).not.toThrow();
+    }
+  });
+
+  it('does not throw when level is omitted (defaults to h2)', () => {
+    expect(() => buildHeading({ content: 'no level' })).not.toThrow();
+  });
+});
