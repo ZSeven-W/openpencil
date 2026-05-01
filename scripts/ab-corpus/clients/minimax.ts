@@ -33,7 +33,16 @@ export async function callMinimax(args: CallMinimaxArgs): Promise<ChatCallResult
     system: args.system,
     user: args.user,
     temperature: args.temperature,
-    maxTokens: args.maxTokens,
+    // M2.7 emits chain-of-thought inside the same `content` channel
+    // (we strip <think> blocks in output-parser.ts); the openai-compat
+    // default 4096 is fine for obvious prompts but cuts close on
+    // composite multi-tool outputs (12-tag responses + thinking can
+    // approach 3-4k easy). Double the cap defensively — we already pay
+    // for thinking either way, and most replies still come in well
+    // under 1k completion tokens (ab-v4 avg 697), so the bigger cap
+    // costs nothing on the happy path and only matters when the model
+    // would otherwise truncate mid-output.
+    maxTokens: args.maxTokens ?? 8192,
     label: 'minimax',
     // ab-v3 saw 4 minimax timeouts on 104 runs — all wall-clock aborts,
     // none were content-quality issues. One retry picks up the
