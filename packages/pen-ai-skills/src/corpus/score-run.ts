@@ -84,7 +84,15 @@ export async function scoreRun(args: {
   }
 
   const applied = await apply(parsed);
-  if (!applied.ok || !applied.doc) {
+  // Short-circuit only when there's no doc at all to inspect. A partial
+  // doc (apply.ok=false but apply.doc populated — e.g. ab-corpus's
+  // composite batch where tag 12 of 13 threw "invalid heading level"
+  // but tags 1-11 + 13 landed) still goes through the detectors and
+  // shape check below. M1 stays strict (apply.ok must be true for M1 to
+  // pass), but M3 (role coverage) can score whatever did land — a
+  // composite where the model nailed 12/13 tags shouldn't read like a
+  // total miss.
+  if (!applied.doc) {
     return {
       ...base,
       m1_legal: false,
@@ -106,16 +114,29 @@ export async function scoreRun(args: {
     }
   }
 
-  const m1 = errorIssues.length === 0;
+  // M1 = "apply ran cleanly AND no error-severity issues detected".
+  // Both conditions matter: a partial apply has apply.ok=false even
+  // when the resulting doc has no detector errors.
+  const m1 = applied.ok && errorIssues.length === 0;
   const shape = checkExpectedShape(prompt, applied.doc);
+
+  // M3 reason precedence: shape miss wins (it's the structural verdict);
+  // partial-apply notice fills in when shape matched on a partial doc so
+  // the row still surfaces which tag(s) failed.
+  let m3FailureReason = '';
+  if (!shape.ok) {
+    m3FailureReason = shape.reason;
+  } else if (!applied.ok) {
+    m3FailureReason = `partial apply (M3 met by what landed): ${applied.error}`;
+  }
 
   return {
     ...base,
     m1_legal: m1,
-    m3_success: m1 && shape.ok,
-    m3_failure_reason: m1 ? shape.reason : 'M1 failed — skipped shape checks',
+    m3_success: shape.ok,
+    m3_failure_reason: m3FailureReason,
     issues: allIssues,
-    applyError: '',
+    applyError: applied.ok ? '' : applied.error,
   };
 }
 
