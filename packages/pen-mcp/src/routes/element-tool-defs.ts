@@ -112,6 +112,7 @@ import { handleAddInviteRowV0 } from '../tools/add-invite-row-v0';
 import { handleAddActivityLogV0 } from '../tools/add-activity-log-v0';
 import { handleAddEventCardV0 } from '../tools/add-event-card-v0';
 import { handleAddStepCardV0 } from '../tools/add-step-card-v0';
+import { handleAddHeadingV1 } from '../tools/add-heading-v1';
 import { recordElementToolCall } from '../metrics/element-tool-metrics';
 import { ELEMENT_TOOL_DEFINITIONS_BASE } from './element-tool-defs-base';
 import { ELEMENT_TOOL_DEFINITIONS_EXT } from './element-tool-defs-ext';
@@ -340,6 +341,8 @@ async function dispatchElementToolCall(name: string, a: any): Promise<string> {
       return JSON.stringify(await handleAddEventCardV0(a), null, 2);
     case 'add_step_card_v0':
       return JSON.stringify(await handleAddStepCardV0(a), null, 2);
+    case 'add_heading_v1':
+      return JSON.stringify(await handleAddHeadingV1(a), null, 2);
     default:
       return '';
   }

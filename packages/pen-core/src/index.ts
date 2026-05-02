@@ -423,4 +423,6 @@ export {
   resolveTheme,
   type V1Theme,
   type ThemeResolution,
+  buildHeadingV1,
+  type HeadingV1Params,
 } from './element-builders/index.js';
