@@ -227,6 +227,11 @@ const PALETTE: Record<string, PaletteEntry> = {
   'type-caption-weight': { single: 400, description: 'Caption / helper text — font weight' },
   'type-caption-line-height': { single: 1.4, description: 'Caption / helper text — line height multiplier' },
 
+  // ── Border radius (3 numeric) ─────────────────────────────────────────────
+  'radius-sm': { single: 4, description: 'Border radius small — 4 px (chip, badge, input)' },
+  'radius-md': { single: 8, description: 'Border radius medium — 8 px (card, modal, dropdown)' },
+  'radius-lg': { single: 12, description: 'Border radius large — 12 px (sheet, bottom card)' },
+
   // ── Spacing scale (5 numeric, 4-point base) ──────────────────────────────
   'spacing-1': { single: 4, description: 'Spacing step 1 — 4 px (xs)' },
   'spacing-2': { single: 8, description: 'Spacing step 2 — 8 px (sm)' },

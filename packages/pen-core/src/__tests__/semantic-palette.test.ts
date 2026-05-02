@@ -550,6 +550,45 @@ describe('spacing tokens (5 numeric)', () => {
 
   it('palette total grows to 57 (52 + 5 spacing)', () => {
     const p = getSemanticPalette();
-    expect(Object.keys(p.variables).length).toBe(57);
+    expect(Object.keys(p.variables).length).toBeGreaterThanOrEqual(57);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Task 1.5 — Radius tokens (3: sm=4, md=8, lg=12)
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('radius tokens (3 numeric)', () => {
+  const RADIUS: Record<string, number> = {
+    'radius-sm': 4,
+    'radius-md': 8,
+    'radius-lg': 12,
+  };
+
+  it('all 3 radius tokens present', () => {
+    const p = getSemanticPalette();
+    for (const name of Object.keys(RADIUS)) {
+      expect(p.variables[name], `missing: ${name}`).toBeDefined();
+    }
+  });
+
+  it('radius tokens are type="number"', () => {
+    const p = getSemanticPalette();
+    for (const name of Object.keys(RADIUS)) {
+      expect((p.variables[name] as VariableDefinition).type, `${name} type`).toBe('number');
+    }
+  });
+
+  it('radius token values match spec (sm=4, md=8, lg=12)', () => {
+    const p = getSemanticPalette();
+    for (const [name, expected] of Object.entries(RADIUS)) {
+      expect((p.variables[name] as VariableDefinition).value, name).toBe(expected);
+    }
+  });
+
+  it('palette total is 60 (57 + 3 radius) — all P1 tokens complete', () => {
+    const p = getSemanticPalette();
+    expect(Object.keys(p.variables).length).toBe(60);
+    // 32 color + 18 type + 2 letterSpacing + 5 spacing + 3 radius = 60
   });
 });
