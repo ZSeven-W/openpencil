@@ -117,6 +117,10 @@ import {
   buildToast,
   buildTooltip,
   buildTopNavBar,
+  buildCardRowV1,
+  buildSettingRowV1,
+  buildMemberRowV1,
+  buildActivityLogV1,
   type ActionMenuParams,
   type ActivityRingParams,
   type AlertParams,
@@ -186,6 +190,10 @@ import {
   type ActivityLogParams,
   type EventCardParams,
   type StepCardParams,
+  type CardRowV1Params,
+  type SettingRowV1Params,
+  type MemberRowV1Params,
+  type ActivityLogV1Params,
   type KbdParams,
   type LinkParams,
   type ListRowParams,
@@ -404,6 +412,10 @@ export const ELEMENT_SHIMS: Record<string, ElementShim> = {
   add_activity_log_v0: wrap<ActivityLogParams>(buildActivityLog),
   add_event_card_v0: wrap<EventCardParams>(buildEventCard),
   add_step_card_v0: wrap<StepCardParams>(buildStepCard),
+  add_card_row_v1: wrap<CardRowV1Params>(buildCardRowV1),
+  add_setting_row_v1: wrap<SettingRowV1Params>(buildSettingRowV1),
+  add_member_row_v1: wrap<MemberRowV1Params>(buildMemberRowV1),
+  add_activity_log_v1: wrap<ActivityLogV1Params>(buildActivityLogV1),
 };
 
 export function getElementShim(name: string): ElementShim | undefined {
