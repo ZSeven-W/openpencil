@@ -227,6 +227,16 @@ const PALETTE: Record<string, PaletteEntry> = {
   'type-caption-weight': { single: 400, description: 'Caption / helper text — font weight' },
   'type-caption-line-height': { single: 1.4, description: 'Caption / helper text — line height multiplier' },
 
+  // ── Sparse letterSpacing (2 numeric) ─────────────────────────────────────
+  'type-display-letter-spacing': {
+    single: -0.5,
+    description: 'Negative tracking for large display text (px)',
+  },
+  'type-uppercase-label-letter-spacing': {
+    single: 1.5,
+    description: 'Positive tracking for uppercase / overline labels (px)',
+  },
+
   // ── Chart palette (6 single-value colors, no theme axis) ─────────────────
   'color-chart-1': { single: '#3B82F6', description: 'Chart series 1 — blue' },
   'color-chart-2': { single: '#8B5CF6', description: 'Chart series 2 — purple' },
