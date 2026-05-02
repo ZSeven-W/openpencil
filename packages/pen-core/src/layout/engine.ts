@@ -190,8 +190,8 @@ export function getNodeWidth(node: PenNode, parentAvail?: number): number {
         if (intrinsic > 0) return intrinsic;
       }
       if (node.type === 'text') {
-        const fontSize = node.fontSize ?? 16;
-        const letterSpacing = node.letterSpacing ?? 0;
+        const fontSize = typeof node.fontSize === 'number' ? node.fontSize : 16;
+        const letterSpacing = typeof node.letterSpacing === 'number' ? node.letterSpacing : 0;
         const fontWeight = node.fontWeight;
         const content = resolveTextContent(node);
         return Math.max(
@@ -210,8 +210,8 @@ export function getNodeWidth(node: PenNode, parentAvail?: number): number {
     if (fit > 0) return fit;
   }
   if (node.type === 'text') {
-    const fontSize = node.fontSize ?? 16;
-    const letterSpacing = node.letterSpacing ?? 0;
+    const fontSize = typeof node.fontSize === 'number' ? node.fontSize : 16;
+    const letterSpacing = typeof node.letterSpacing === 'number' ? node.letterSpacing : 0;
     const fontWeight = node.fontWeight;
     const content = resolveTextContent(node);
     return Math.max(
@@ -296,8 +296,9 @@ export function computeLayoutPositions(parent: PenNode, children: PenNode[]): Pe
     if (isVertical && ch.type === 'text' && mainSizing[i] !== 'fill') {
       const content = resolveTextContent(ch);
       if (countExplicitTextLines(content) <= 1) {
-        const fontSize = ch.fontSize ?? 16;
-        const lineHeight = ch.lineHeight ?? defaultLineHeight(fontSize);
+        const fontSize = typeof ch.fontSize === 'number' ? ch.fontSize : 16;
+        const lineHeight =
+          typeof ch.lineHeight === 'number' ? ch.lineHeight : defaultLineHeight(fontSize);
         const singleLineH = fontSize * lineHeight;
         const estH = estimateTextHeight(ch, availW);
         if (estH <= singleLineH + 1) {
@@ -347,8 +348,9 @@ export function computeLayoutPositions(parent: PenNode, children: PenNode[]): Pe
 
     let effectiveChildCross = childCross;
     if (align === 'center' && !isVertical && child.type === 'text') {
-      const fontSize = child.fontSize ?? 16;
-      const lineHeight = child.lineHeight ?? defaultLineHeight(fontSize);
+      const fontSize = typeof child.fontSize === 'number' ? child.fontSize : 16;
+      const lineHeight =
+        typeof child.lineHeight === 'number' ? child.lineHeight : defaultLineHeight(fontSize);
       const content = resolveTextContent(child);
       const isSingleLine = countExplicitTextLines(content) <= 1;
       if (isSingleLine) {

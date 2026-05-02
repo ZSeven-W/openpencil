@@ -273,6 +273,34 @@ export function resolveNodeForCanvas(node: PenNode, variables: Vars, activeTheme
     }
   }
 
+  // Typography numeric refs (text nodes only) — fontSize / lineHeight / letterSpacing
+  // These must be resolved before the layout engine and renderer consume them,
+  // since both paths use `node.fontSize ?? 16` (not type-guarded for strings).
+  if (node.type === 'text') {
+    const n = node as unknown as Record<string, unknown>;
+    for (const key of ['fontSize', 'lineHeight', 'letterSpacing'] as const) {
+      if (typeof n[key] === 'string' && isVariableRef(n[key] as string)) {
+        const resolved = resolveNumericRef(n[key] as string, variables, activeTheme);
+        if (resolved !== undefined) {
+          out[key] = resolved;
+          changed = true;
+        }
+      }
+    }
+  }
+
+  // cornerRadius scalar ref (frames, rectangles, etc.)
+  {
+    const n = node as unknown as Record<string, unknown>;
+    if (typeof n.cornerRadius === 'string' && isVariableRef(n.cornerRadius)) {
+      const resolved = resolveNumericRef(n.cornerRadius, variables, activeTheme);
+      if (resolved !== undefined) {
+        out.cornerRadius = resolved;
+        changed = true;
+      }
+    }
+  }
+
   // Text content
   if (node.type === 'text' && typeof node.content === 'string' && isVariableRef(node.content)) {
     const resolved = resolveVariableRef(node.content, variables, activeTheme);
