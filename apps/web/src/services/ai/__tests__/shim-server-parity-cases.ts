@@ -147,6 +147,16 @@ import {
   buildFaqItemV1,
   buildFilterGroupV1,
   buildFormFieldV1,
+  buildIconButtonV1,
+  buildImagePlaceholderV1,
+  buildInboxMessageV1,
+  buildInlineActionV1,
+  buildInputWithActionV1,
+  buildInviteRowV1,
+  buildKbdV1,
+  buildLegendItemV1,
+  buildLinkV1,
+  buildListRowV1,
 } from '@zseven-w/pen-core';
 
 export interface BuilderCase {
@@ -969,5 +979,70 @@ export const CASES: BuilderCase[] = [
     toolName: 'add_form_field_v1',
     args: { label: 'Email', theme: 'light' },
     build: (a) => buildFormFieldV1(a as unknown as Parameters<typeof buildFormFieldV1>[0]),
+  },
+  {
+    toolName: 'add_icon_button_v1',
+    args: { icon: 'search', theme: 'light' },
+    build: (a) => buildIconButtonV1(a as unknown as Parameters<typeof buildIconButtonV1>[0]),
+  },
+  {
+    toolName: 'add_image_placeholder_v1',
+    args: { label: 'Upload photo', theme: 'light' },
+    build: (a) =>
+      buildImagePlaceholderV1(a as unknown as Parameters<typeof buildImagePlaceholderV1>[0]),
+  },
+  {
+    toolName: 'add_inbox_message_v1',
+    args: {
+      from: 'Stripe',
+      subject: 'Your weekly summary',
+      preview: 'Volume rose 8.4% week-over-week.',
+      timestamp: '10:42 AM',
+      unread: true,
+      theme: 'light',
+    },
+    build: (a) => buildInboxMessageV1(a as unknown as Parameters<typeof buildInboxMessageV1>[0]),
+  },
+  {
+    toolName: 'add_inline_action_v1',
+    args: { message: 'Comment deleted', action_label: 'Undo', icon: 'info', theme: 'light' },
+    build: (a) => buildInlineActionV1(a as unknown as Parameters<typeof buildInlineActionV1>[0]),
+  },
+  {
+    toolName: 'add_input_with_action_v1',
+    args: { placeholder: 'Enter email', action_label: 'Subscribe', theme: 'light' },
+    build: (a) =>
+      buildInputWithActionV1(a as unknown as Parameters<typeof buildInputWithActionV1>[0]),
+  },
+  {
+    toolName: 'add_invite_row_v1',
+    args: {
+      email: 'sarah@acme.com',
+      role: 'Editor',
+      status: 'pending',
+      action_label: 'Resend',
+      theme: 'light',
+    },
+    build: (a) => buildInviteRowV1(a as unknown as Parameters<typeof buildInviteRowV1>[0]),
+  },
+  {
+    toolName: 'add_kbd_v1',
+    args: { keys: ['⌘', 'K'], theme: 'light' },
+    build: (a) => buildKbdV1(a as unknown as Parameters<typeof buildKbdV1>[0]),
+  },
+  {
+    toolName: 'add_legend_item_v1',
+    args: { label: 'Revenue', color: '#2563EB', value: '$12,480', theme: 'light' },
+    build: (a) => buildLegendItemV1(a as unknown as Parameters<typeof buildLegendItemV1>[0]),
+  },
+  {
+    toolName: 'add_link_v1',
+    args: { label: 'Learn more', trailing_icon: 'arrow-right', theme: 'light' },
+    build: (a) => buildLinkV1(a as unknown as Parameters<typeof buildLinkV1>[0]),
+  },
+  {
+    toolName: 'add_list_row_v1',
+    args: { title: 'Settings', subtitle: 'Manage preferences', theme: 'light' },
+    build: (a) => buildListRowV1(a as unknown as Parameters<typeof buildListRowV1>[0]),
   },
 ];

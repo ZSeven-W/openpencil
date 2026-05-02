@@ -1,8 +1,10 @@
 // Extension tool definitions — shard 6 of 6 (siblings: base / ext /
 // ext-2 / ext-3 / ext-4 / ext-5). Houses P3 batch-4 v1 tools
 // (cookie_banner, data_table_row, date_picker, drawer_shell, empty_state,
-// event_card, fab, faq_item, filter_group, form_field). Each shard caps
-// at the repo's 800-line ceiling.
+// event_card, fab, faq_item, filter_group, form_field) and P3 batch-5 v1
+// tools (icon_button, image_placeholder, inbox_message, inline_action,
+// input_with_action, invite_row, kbd, legend_item, link, list_row).
+// Each shard caps at the repo's 800-line ceiling.
 //
 // When adding a new tool: pick whichever shard has the fewest tools
 // to keep the split balanced. Run `wc -l` on all shard files before
@@ -352,6 +354,294 @@ export const ELEMENT_TOOL_DEFINITIONS_EXT_6 = [
         pageId: pageIdProp,
       },
       required: ['label'],
+    },
+  },
+  {
+    name: 'add_icon_button_v1',
+    description:
+      'Theme-aware icon-only button (v1). No hardcoded colors in v0; light/dark/system output ' +
+      'identical (byte-parity with v0 in all modes). Accepts theme param for API consistency. ' +
+      '44×44 default (Apple HIG / Material min-hit-target) with flex-centered icon. ' +
+      'schemaVersion 1.0',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        schemaVersion: schemaVersionProp,
+        filePath: filePathProp,
+        icon: { type: 'string', description: 'Lucide icon slug. Required.' },
+        size: { type: 'number', description: 'Frame size in px. Default 44.' },
+        icon_size: { type: 'number', description: 'Icon size in px. Default 24.' },
+        theme: {
+          type: 'string',
+          enum: ['light', 'dark', 'system'],
+          description: 'Theme variant. Default "light".',
+        },
+        parent_id: parentIdProp,
+        pageId: pageIdProp,
+      },
+      required: ['icon'],
+    },
+  },
+  {
+    name: 'add_image_placeholder_v1',
+    description:
+      'Theme-aware image placeholder (v1). theme="light" (default): byte-parity with ' +
+      'add_image_placeholder_v0. theme="dark": bg → bgDeep, icon → textMuted, label → textMuted. ' +
+      'theme="system": $color-* refs. Gray box + centered icon + optional caption. ' +
+      'schemaVersion 1.0',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        schemaVersion: schemaVersionProp,
+        filePath: filePathProp,
+        width: { type: 'number', description: 'Width in px. Default 200. Min 40.' },
+        height: { type: 'number', description: 'Height in px. Default 140. Min 40.' },
+        label: { type: 'string', description: 'Optional caption below the icon.' },
+        icon: { type: 'string', description: 'Lucide icon name. Default "image".' },
+        corner_radius: { type: 'number', description: 'Corner radius. Default 8.' },
+        theme: {
+          type: 'string',
+          enum: ['light', 'dark', 'system'],
+          description: 'Theme variant. Default "light".',
+        },
+        parent_id: parentIdProp,
+        pageId: pageIdProp,
+      },
+      required: [],
+    },
+  },
+  {
+    name: 'add_inbox_message_v1',
+    description:
+      'Theme-aware inbox / email list row (v1). theme="light" (default): byte-parity with ' +
+      'add_inbox_message_v0. theme="dark": primary → textPrimary, timestamp → textSubtle, ' +
+      'preview → textMuted, unread dot → accent. theme="system": $color-* refs. ' +
+      'sender + subject + optional preview + timestamp + optional unread dot. schemaVersion 1.0',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        schemaVersion: schemaVersionProp,
+        filePath: filePathProp,
+        from: { type: 'string', description: 'Sender name. Required.' },
+        subject: { type: 'string', description: 'Email subject line. Required.' },
+        preview: { type: 'string', description: 'Optional body preview text.' },
+        timestamp: { type: 'string', description: 'Time / date label (e.g. "10:42 AM").' },
+        unread: {
+          type: 'boolean',
+          description: 'When true, renders bold typography + unread indicator dot.',
+        },
+        theme: {
+          type: 'string',
+          enum: ['light', 'dark', 'system'],
+          description: 'Theme variant. Default "light".',
+        },
+        parent_id: parentIdProp,
+        pageId: pageIdProp,
+      },
+      required: ['from', 'subject'],
+    },
+  },
+  {
+    name: 'add_inline_action_v1',
+    description:
+      'Theme-aware inline status + action row (v1). theme="light" (default): byte-parity with ' +
+      'add_inline_action_v0. theme="dark": icon/message → textBody, CTA → accent. ' +
+      'theme="system": $color-* refs. Message text left, blue text button right. ' +
+      'Use for "Comment deleted • Undo" — NOT floating toast. schemaVersion 1.0',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        schemaVersion: schemaVersionProp,
+        filePath: filePathProp,
+        message: { type: 'string', description: 'Status / context message. Required.' },
+        action_label: { type: 'string', description: 'Action label (e.g. "Undo"). Required.' },
+        icon: { type: 'string', description: 'Optional leading Lucide icon slug.' },
+        theme: {
+          type: 'string',
+          enum: ['light', 'dark', 'system'],
+          description: 'Theme variant. Default "light".',
+        },
+        parent_id: parentIdProp,
+        pageId: pageIdProp,
+      },
+      required: ['message', 'action_label'],
+    },
+  },
+  {
+    name: 'add_input_with_action_v1',
+    description:
+      'Theme-aware input field with inline action button (v1). theme="light" (default): byte-parity ' +
+      'with add_input_with_action_v0. theme="dark": input bg → surface, stroke → border, ' +
+      'text → textPrimary, placeholder/icon → textMuted; button bg → accent (brand-invariant), ' +
+      'button text/icon → white. theme="system": $color-* refs. ' +
+      'Two action variants: text (pill button with label) or icon (44×44 square). schemaVersion 1.0',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        schemaVersion: schemaVersionProp,
+        filePath: filePathProp,
+        placeholder: { type: 'string', description: 'Placeholder text. Required.' },
+        value: { type: 'string', description: 'Pre-filled input value.' },
+        action_label: { type: 'string', description: 'Button label for action_kind="text".' },
+        action_icon: { type: 'string', description: 'Lucide icon for action_kind="icon".' },
+        action_kind: {
+          type: 'string',
+          enum: ['text', 'icon'],
+          description: 'Action button kind. Default "text".',
+        },
+        leading_icon: { type: 'string', description: 'Leading icon inside the input.' },
+        width: { type: 'number', description: 'Total field width in px. Default 400. Min 280.' },
+        theme: {
+          type: 'string',
+          enum: ['light', 'dark', 'system'],
+          description: 'Theme variant. Default "light".',
+        },
+        parent_id: parentIdProp,
+        pageId: pageIdProp,
+      },
+      required: ['placeholder'],
+    },
+  },
+  {
+    name: 'add_invite_row_v1',
+    description:
+      'Theme-aware pending invite list row (v1). theme="light" (default): byte-parity with ' +
+      'add_invite_row_v0. theme="dark": avatar bg → surface2, text → textPrimary/textMuted, ' +
+      'action → accent; status pills use alertColors (pending→warning, expired→danger, ' +
+      'accepted→success). theme="system": $color-* refs. schemaVersion 1.0',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        schemaVersion: schemaVersionProp,
+        filePath: filePathProp,
+        email: { type: 'string', description: 'Invitee email. Required.' },
+        role: { type: 'string', description: 'Optional invited role (e.g. "Editor").' },
+        status: {
+          type: 'string',
+          enum: ['pending', 'expired', 'accepted'],
+          description: 'Invite status. Default "pending".',
+        },
+        action_label: {
+          type: 'string',
+          description: 'Trailing action label. Default "Resend".',
+        },
+        theme: {
+          type: 'string',
+          enum: ['light', 'dark', 'system'],
+          description: 'Theme variant. Default "light".',
+        },
+        parent_id: parentIdProp,
+        pageId: pageIdProp,
+      },
+      required: ['email'],
+    },
+  },
+  {
+    name: 'add_kbd_v1',
+    description:
+      'Theme-aware keyboard shortcut (v1). theme="light" (default): byte-parity with ' +
+      'add_kbd_v0. theme="dark": key bg → surface2, stroke → border. theme="system": $color-* refs. ' +
+      'Each key becomes a bordered cell; entries joined with separator text. schemaVersion 1.0',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        schemaVersion: schemaVersionProp,
+        filePath: filePathProp,
+        keys: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'Key glyphs (e.g. ["⌘", "K"] or ["Ctrl", "Shift", "P"]). Required.',
+        },
+        separator: { type: 'string', description: 'Separator text between keys. Default "+".' },
+        theme: {
+          type: 'string',
+          enum: ['light', 'dark', 'system'],
+          description: 'Theme variant. Default "light".',
+        },
+        parent_id: parentIdProp,
+        pageId: pageIdProp,
+      },
+      required: ['keys'],
+    },
+  },
+  {
+    name: 'add_legend_item_v1',
+    description:
+      'Theme-aware chart legend entry (v1). theme="light" (default): byte-parity with ' +
+      'add_legend_item_v0. theme="dark": label → textBody, value → textPrimary. ' +
+      'theme="system": $color-* refs. Marker color (caller-supplied) is kept as-is in all modes. ' +
+      'colored marker + label + optional right-aligned value. schemaVersion 1.0',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        schemaVersion: schemaVersionProp,
+        filePath: filePathProp,
+        label: { type: 'string', description: 'Legend label text. Required.' },
+        color: { type: 'string', description: 'Marker fill hex (e.g. "#2563EB"). Required.' },
+        value: { type: 'string', description: 'Optional value shown right of label.' },
+        theme: {
+          type: 'string',
+          enum: ['light', 'dark', 'system'],
+          description: 'Theme variant. Default "light".',
+        },
+        parent_id: parentIdProp,
+        pageId: pageIdProp,
+      },
+      required: ['label', 'color'],
+    },
+  },
+  {
+    name: 'add_link_v1',
+    description:
+      'Theme-aware inline text link (v1). No hardcoded colors in v0; light/dark/system output ' +
+      'identical (byte-parity with v0 in all modes). Accepts theme param for API consistency. ' +
+      'Optional trailing icon ("Learn more →"). schemaVersion 1.0',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        schemaVersion: schemaVersionProp,
+        filePath: filePathProp,
+        label: { type: 'string', description: 'Link text. Required.' },
+        trailing_icon: { type: 'string', description: 'Optional trailing Lucide icon slug.' },
+        theme: {
+          type: 'string',
+          enum: ['light', 'dark', 'system'],
+          description: 'Theme variant. Default "light".',
+        },
+        parent_id: parentIdProp,
+        pageId: pageIdProp,
+      },
+      required: ['label'],
+    },
+  },
+  {
+    name: 'add_list_row_v1',
+    description:
+      'Theme-aware iOS / Material-style list row (v1). No hardcoded colors in v0; light/dark/system ' +
+      'output identical (byte-parity with v0 in all modes). Accepts theme param for API consistency. ' +
+      '[optional leading icon] + [title/subtitle text stack] + [optional trailing icon]. ' +
+      'schemaVersion 1.0',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        schemaVersion: schemaVersionProp,
+        filePath: filePathProp,
+        title: { type: 'string', description: 'Row title text. Required.' },
+        subtitle: { type: 'string', description: 'Optional subtitle text.' },
+        leading_icon: { type: 'string', description: 'Optional leading Lucide icon slug.' },
+        trailing_icon: {
+          type: 'string',
+          description: 'Optional trailing icon (e.g. "chevron-right").',
+        },
+        theme: {
+          type: 'string',
+          enum: ['light', 'dark', 'system'],
+          description: 'Theme variant. Default "light".',
+        },
+        parent_id: parentIdProp,
+        pageId: pageIdProp,
+      },
+      required: ['title'],
     },
   },
 ];
