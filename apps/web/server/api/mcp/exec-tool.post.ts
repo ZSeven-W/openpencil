@@ -158,6 +158,16 @@ import {
   buildPriceV1,
   buildPricingCardV1,
   buildProfileHeaderV1,
+  buildProgressBarV1,
+  buildQuoteBlockV1,
+  buildRadioV1,
+  buildRangeSliderV1,
+  buildRatingStarsV1,
+  buildSearchBarV1,
+  buildSectionHeaderV1,
+  buildSegmentedControlV1,
+  buildSelectV1,
+  buildShareRowV1,
   findNodeInTree,
   insertNodeInTree,
   type ElementTree,
@@ -385,6 +395,18 @@ const SERVER_BUILDERS: Record<string, BuilderFn> = {
   add_pricing_card_v1: (a) => buildPricingCardV1(a as Parameters<typeof buildPricingCardV1>[0]),
   add_profile_header_v1: (a) =>
     buildProfileHeaderV1(a as Parameters<typeof buildProfileHeaderV1>[0]),
+  add_progress_bar_v1: (a) => buildProgressBarV1(a as Parameters<typeof buildProgressBarV1>[0]),
+  add_quote_block_v1: (a) => buildQuoteBlockV1(a as Parameters<typeof buildQuoteBlockV1>[0]),
+  add_radio_v1: (a) => buildRadioV1(a as Parameters<typeof buildRadioV1>[0]),
+  add_range_slider_v1: (a) => buildRangeSliderV1(a as Parameters<typeof buildRangeSliderV1>[0]),
+  add_rating_stars_v1: (a) => buildRatingStarsV1(a as Parameters<typeof buildRatingStarsV1>[0]),
+  add_search_bar_v1: (a) => buildSearchBarV1(a as Parameters<typeof buildSearchBarV1>[0]),
+  add_section_header_v1: (a) =>
+    buildSectionHeaderV1(a as Parameters<typeof buildSectionHeaderV1>[0]),
+  add_segmented_control_v1: (a) =>
+    buildSegmentedControlV1(a as Parameters<typeof buildSegmentedControlV1>[0]),
+  add_select_v1: (a) => buildSelectV1(a as Parameters<typeof buildSelectV1>[0]),
+  add_share_row_v1: (a) => buildShareRowV1(a as Parameters<typeof buildShareRowV1>[0]),
 };
 
 interface ExecToolBody {

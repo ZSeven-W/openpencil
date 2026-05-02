@@ -172,6 +172,16 @@ import { handleAddPhoneInputV1 } from '../tools/add-phone-input-v1';
 import { handleAddPriceV1 } from '../tools/add-price-v1';
 import { handleAddPricingCardV1 } from '../tools/add-pricing-card-v1';
 import { handleAddProfileHeaderV1 } from '../tools/add-profile-header-v1';
+import { handleAddProgressBarV1 } from '../tools/add-progress-bar-v1';
+import { handleAddQuoteBlockV1 } from '../tools/add-quote-block-v1';
+import { handleAddRadioV1 } from '../tools/add-radio-v1';
+import { handleAddRangeSliderV1 } from '../tools/add-range-slider-v1';
+import { handleAddRatingStarsV1 } from '../tools/add-rating-stars-v1';
+import { handleAddSearchBarV1 } from '../tools/add-search-bar-v1';
+import { handleAddSectionHeaderV1 } from '../tools/add-section-header-v1';
+import { handleAddSegmentedControlV1 } from '../tools/add-segmented-control-v1';
+import { handleAddSelectV1 } from '../tools/add-select-v1';
+import { handleAddShareRowV1 } from '../tools/add-share-row-v1';
 import { recordElementToolCall } from '../metrics/element-tool-metrics';
 import { ELEMENT_TOOL_DEFINITIONS_BASE } from './element-tool-defs-base';
 import { ELEMENT_TOOL_DEFINITIONS_EXT } from './element-tool-defs-ext';
@@ -181,6 +191,7 @@ import { ELEMENT_TOOL_DEFINITIONS_EXT_4 } from './element-tool-defs-ext-4';
 import { ELEMENT_TOOL_DEFINITIONS_EXT_5 } from './element-tool-defs-ext-5';
 import { ELEMENT_TOOL_DEFINITIONS_EXT_6 } from './element-tool-defs-ext-6';
 import { ELEMENT_TOOL_DEFINITIONS_EXT_7 } from './element-tool-defs-ext-7';
+import { ELEMENT_TOOL_DEFINITIONS_EXT_8 } from './element-tool-defs-ext-8';
 
 export const ELEMENT_TOOL_DEFINITIONS = [
   ...ELEMENT_TOOL_DEFINITIONS_BASE,
@@ -191,6 +202,7 @@ export const ELEMENT_TOOL_DEFINITIONS = [
   ...ELEMENT_TOOL_DEFINITIONS_EXT_5,
   ...ELEMENT_TOOL_DEFINITIONS_EXT_6,
   ...ELEMENT_TOOL_DEFINITIONS_EXT_7,
+  ...ELEMENT_TOOL_DEFINITIONS_EXT_8,
 ];
 
 export const ELEMENT_TOOL_NAMES: ReadonlySet<string> = new Set(
@@ -526,6 +538,26 @@ async function dispatchElementToolCall(name: string, a: any): Promise<string> {
       return JSON.stringify(await handleAddPricingCardV1(a), null, 2);
     case 'add_profile_header_v1':
       return JSON.stringify(await handleAddProfileHeaderV1(a), null, 2);
+    case 'add_progress_bar_v1':
+      return JSON.stringify(await handleAddProgressBarV1(a), null, 2);
+    case 'add_quote_block_v1':
+      return JSON.stringify(await handleAddQuoteBlockV1(a), null, 2);
+    case 'add_radio_v1':
+      return JSON.stringify(await handleAddRadioV1(a), null, 2);
+    case 'add_range_slider_v1':
+      return JSON.stringify(await handleAddRangeSliderV1(a), null, 2);
+    case 'add_rating_stars_v1':
+      return JSON.stringify(await handleAddRatingStarsV1(a), null, 2);
+    case 'add_search_bar_v1':
+      return JSON.stringify(await handleAddSearchBarV1(a), null, 2);
+    case 'add_section_header_v1':
+      return JSON.stringify(await handleAddSectionHeaderV1(a), null, 2);
+    case 'add_segmented_control_v1':
+      return JSON.stringify(await handleAddSegmentedControlV1(a), null, 2);
+    case 'add_select_v1':
+      return JSON.stringify(await handleAddSelectV1(a), null, 2);
+    case 'add_share_row_v1':
+      return JSON.stringify(await handleAddShareRowV1(a), null, 2);
     default:
       return '';
   }
