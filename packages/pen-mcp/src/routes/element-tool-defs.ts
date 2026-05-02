@@ -117,12 +117,18 @@ import { handleAddCardRowV1 } from '../tools/add-card-row-v1';
 import { handleAddSettingRowV1 } from '../tools/add-setting-row-v1';
 import { handleAddMemberRowV1 } from '../tools/add-member-row-v1';
 import { handleAddActivityLogV1 } from '../tools/add-activity-log-v1';
+import { handleAddAvatarV1 } from '../tools/add-avatar-v1';
+import { handleAddBadgeV1 } from '../tools/add-badge-v1';
+import { handleAddDividerV1 } from '../tools/add-divider-v1';
+import { handleAddBodyTextV1 } from '../tools/add-body-text-v1';
+import { handleAddIconLabelV1 } from '../tools/add-icon-label-v1';
 import { recordElementToolCall } from '../metrics/element-tool-metrics';
 import { ELEMENT_TOOL_DEFINITIONS_BASE } from './element-tool-defs-base';
 import { ELEMENT_TOOL_DEFINITIONS_EXT } from './element-tool-defs-ext';
 import { ELEMENT_TOOL_DEFINITIONS_EXT_2 } from './element-tool-defs-ext-2';
 import { ELEMENT_TOOL_DEFINITIONS_EXT_3 } from './element-tool-defs-ext-3';
 import { ELEMENT_TOOL_DEFINITIONS_EXT_4 } from './element-tool-defs-ext-4';
+import { ELEMENT_TOOL_DEFINITIONS_EXT_5 } from './element-tool-defs-ext-5';
 
 export const ELEMENT_TOOL_DEFINITIONS = [
   ...ELEMENT_TOOL_DEFINITIONS_BASE,
@@ -130,6 +136,7 @@ export const ELEMENT_TOOL_DEFINITIONS = [
   ...ELEMENT_TOOL_DEFINITIONS_EXT_2,
   ...ELEMENT_TOOL_DEFINITIONS_EXT_3,
   ...ELEMENT_TOOL_DEFINITIONS_EXT_4,
+  ...ELEMENT_TOOL_DEFINITIONS_EXT_5,
 ];
 
 export const ELEMENT_TOOL_NAMES: ReadonlySet<string> = new Set(
@@ -355,6 +362,16 @@ async function dispatchElementToolCall(name: string, a: any): Promise<string> {
       return JSON.stringify(await handleAddMemberRowV1(a), null, 2);
     case 'add_activity_log_v1':
       return JSON.stringify(await handleAddActivityLogV1(a), null, 2);
+    case 'add_avatar_v1':
+      return JSON.stringify(await handleAddAvatarV1(a), null, 2);
+    case 'add_badge_v1':
+      return JSON.stringify(await handleAddBadgeV1(a), null, 2);
+    case 'add_divider_v1':
+      return JSON.stringify(await handleAddDividerV1(a), null, 2);
+    case 'add_body_text_v1':
+      return JSON.stringify(await handleAddBodyTextV1(a), null, 2);
+    case 'add_icon_label_v1':
+      return JSON.stringify(await handleAddIconLabelV1(a), null, 2);
     default:
       return '';
   }

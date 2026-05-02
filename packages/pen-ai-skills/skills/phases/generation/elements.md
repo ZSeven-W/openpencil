@@ -69,8 +69,11 @@ Containers and single elements:
 Atoms (1-2 node building blocks):
 
 10. Hairline separator between list rows / sections → `add_divider_v0`
+    10b. Theme-aware variant (accepts `theme` param for API consistency; output identical across themes) → `add_divider_v1`
 11. Short inline pill / tag / "NEW" / "BETA" / count badge → `add_badge_v0`
+    11b. Theme-aware variant (accepts `theme` param for API consistency; output identical across themes) → `add_badge_v1`
 12. Circular avatar (with optional initial / empty for later image fill) → `add_avatar_v0`
+    12b. Theme-aware variant (accepts `theme` param for API consistency; output identical across themes) → `add_avatar_v1`
 
 Text + button primitives:
 
@@ -78,10 +81,12 @@ Text + button primitives:
 14. Heading with enforced fontSize/lineHeight per level + AUTO CJK script detection (SC/JP/KR) → `add_heading_v0`
     14b. Theme-aware variant (supports `theme: 'light' | 'dark' | 'system'`) → `add_heading_v1`
 15. Body text (Inter everywhere — CJK gets lineHeight 1.6 + letterSpacing 0, Latin 1.5) → `add_body_text_v0`
+    15b. Theme-aware variant (accepts `theme` param for API consistency; output identical across themes) → `add_body_text_v1`
 
 Composition:
 
 16. Icon + text inline pair (menu items, breadcrumbs, status indicators) → `add_icon_label_v0`
+    16b. Theme-aware variant (accepts `theme` param for API consistency; output identical across themes) → `add_icon_label_v1`
 17. iOS/Material list row (leading icon + title/subtitle stack + trailing icon) → `add_list_row_v0`
 
 Forms:
