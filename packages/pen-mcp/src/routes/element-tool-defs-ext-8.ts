@@ -1,8 +1,10 @@
 // Extension tool definitions — shard 8 of 8 (siblings: base / ext /
 // ext-2 / ext-3 / ext-4 / ext-5 / ext-6 / ext-7). Houses P3 batch-7 v1 tools
-// (search_bar, segmented_control, select, share_row, range_slider) and
+// (search_bar, segmented_control, select, share_row, range_slider),
 // P3 batch-8 v1 tools (sidebar_nav, skeleton, social_login_row, spinner,
-// stat_card, stat_grid, status_badge, step_card, stepper, switch).
+// stat_card, stat_grid, status_badge, step_card, stepper, switch), and
+// P3 batch-9 v1 tools (tabs, tag, text_button, textarea, timeline,
+// toolbar, tooltip, top_nav_bar, upload_dropzone, user_card, video_placeholder).
 // Each shard caps at the repo's 800-line ceiling.
 //
 // When adding a new tool: pick whichever shard has the fewest tools
@@ -527,4 +529,158 @@ export const ELEMENT_TOOL_DEFINITIONS_EXT_8 = [
       required: [],
     },
   },
+  {
+    name: 'add_tabs_v1',
+    description:
+      'Theme-aware horizontal tabs with underline (v1). theme="light" (default): byte-parity ' +
+      'with add_tabs_v0. All modes identical — #2563EB underline is brand accent (spec §3.4). schemaVersion 1.0',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        schemaVersion: schemaVersionProp,
+        filePath: filePathProp,
+        items: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              label: { type: 'string' },
+              active: { type: 'boolean' },
+            },
+            required: ['label'],
+          },
+          description: 'Tab items. Mark one as active: true for the selected tab.',
+        },
+        theme: {
+          type: 'string',
+          enum: ['light', 'dark', 'system'],
+          description: 'Theme variant. Default "light". All modes identical for this tool.',
+        },
+        parent_id: parentIdProp,
+        pageId: pageIdProp,
+      },
+      required: ['items'],
+    },
+  },
+  {
+    name: 'add_tag_v1',
+    description:
+      'Theme-aware closable filter / selection chip (v1). theme="light" (default): byte-parity ' +
+      'with add_tag_v0. All modes identical — tone bg/fg pairs are status semantic colors (spec §3.4). schemaVersion 1.0',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        schemaVersion: schemaVersionProp,
+        filePath: filePathProp,
+        label: { type: 'string', description: 'Tag label text.' },
+        removable: {
+          type: 'boolean',
+          description: 'Render trailing × icon. Default true.',
+        },
+        tone: {
+          type: 'string',
+          enum: ['default', 'accent', 'success', 'warning', 'error'],
+          description: 'Color tone. Default "default" (slate).',
+        },
+        theme: {
+          type: 'string',
+          enum: ['light', 'dark', 'system'],
+          description: 'Theme variant. Default "light". All modes identical for this tool.',
+        },
+        parent_id: parentIdProp,
+        pageId: pageIdProp,
+      },
+      required: ['label'],
+    },
+  },
+  {
+    name: 'add_text_button_v1',
+    description:
+      'Theme-aware padding-based text button (v1). theme="light" (default): byte-parity ' +
+      'with add_text_button_v0. All modes identical — no hardcoded surface colors. schemaVersion 1.0',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        schemaVersion: schemaVersionProp,
+        filePath: filePathProp,
+        label: { type: 'string', description: 'Button label text.' },
+        leading_icon: {
+          type: 'string',
+          description: 'Optional Lucide icon slug shown before the label.',
+        },
+        theme: {
+          type: 'string',
+          enum: ['light', 'dark', 'system'],
+          description: 'Theme variant. Default "light". All modes identical for this tool.',
+        },
+        parent_id: parentIdProp,
+        pageId: pageIdProp,
+      },
+      required: ['label'],
+    },
+  },
+  {
+    name: 'add_textarea_v1',
+    description:
+      'Theme-aware multi-line text input (v1). theme="light" (default): byte-parity ' +
+      'with add_textarea_v0. All modes identical — no hardcoded surface colors. schemaVersion 1.0',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        schemaVersion: schemaVersionProp,
+        filePath: filePathProp,
+        label: { type: 'string', description: 'Field label.' },
+        placeholder: { type: 'string', description: 'Placeholder text.' },
+        rows: {
+          type: 'number',
+          description: 'Visible rows. Default 4. Clamped [2, 12].',
+        },
+        required: { type: 'boolean', description: 'Append * to label. Default false.' },
+        theme: {
+          type: 'string',
+          enum: ['light', 'dark', 'system'],
+          description: 'Theme variant. Default "light". All modes identical for this tool.',
+        },
+        parent_id: parentIdProp,
+        pageId: pageIdProp,
+      },
+      required: ['label'],
+    },
+  },
+  {
+    name: 'add_timeline_v1',
+    description:
+      'Theme-aware vertical timeline (v1). theme="light" (default): byte-parity ' +
+      'with add_timeline_v0. Active dot #2563EB is hardcoded (spec §3.4). ' +
+      'Inactive dot/connector (border) and subtitle (textMuted) tokenized. schemaVersion 1.0',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        schemaVersion: schemaVersionProp,
+        filePath: filePathProp,
+        items: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              title: { type: 'string' },
+              subtitle: { type: 'string' },
+              active: { type: 'boolean' },
+            },
+            required: ['title'],
+          },
+          description: 'Timeline items (at least 1 required).',
+        },
+        theme: {
+          type: 'string',
+          enum: ['light', 'dark', 'system'],
+          description: 'Theme variant. Default "light".',
+        },
+        parent_id: parentIdProp,
+        pageId: pageIdProp,
+      },
+      required: ['items'],
+    },
+  },
 ];
+// add_toolbar_v1 through add_video_placeholder_v1 → moved to ext-9 to stay under 800-line ceiling.

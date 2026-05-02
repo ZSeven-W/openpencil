@@ -187,6 +187,17 @@ import {
   buildStepCardV1,
   buildStepperV1,
   buildSwitchV1,
+  buildTabsV1,
+  buildTagV1,
+  buildTextButtonV1,
+  buildTextareaV1,
+  buildTimelineV1,
+  buildToolbarV1,
+  buildTooltipV1,
+  buildTopNavBarV1,
+  buildUploadDropzoneV1,
+  buildUserCardV1,
+  buildVideoPlaceholderV1,
 } from '@zseven-w/pen-core';
 
 export interface BuilderCase {
@@ -1270,7 +1281,12 @@ export const CASES: BuilderCase[] = [
   },
   {
     toolName: 'add_step_card_v1',
-    args: { number: 1, title: 'Create account', description: 'Sign up with email.', theme: 'light' },
+    args: {
+      number: 1,
+      title: 'Create account',
+      description: 'Sign up with email.',
+      theme: 'light',
+    },
     build: (a) => buildStepCardV1(a as unknown as Parameters<typeof buildStepCardV1>[0]),
   },
   {
@@ -1282,5 +1298,62 @@ export const CASES: BuilderCase[] = [
     toolName: 'add_switch_v1',
     args: { active: true, theme: 'light' },
     build: (a) => buildSwitchV1(a as unknown as Parameters<typeof buildSwitchV1>[0]),
+  },
+  {
+    toolName: 'add_tabs_v1',
+    args: { items: [{ label: 'Tab 1', active: true }, { label: 'Tab 2' }], theme: 'light' },
+    build: (a) => buildTabsV1(a as unknown as Parameters<typeof buildTabsV1>[0]),
+  },
+  {
+    toolName: 'add_tag_v1',
+    args: { label: 'Design', tone: 'accent', theme: 'light' },
+    build: (a) => buildTagV1(a as unknown as Parameters<typeof buildTagV1>[0]),
+  },
+  {
+    toolName: 'add_text_button_v1',
+    args: { label: 'Save changes', theme: 'light' },
+    build: (a) => buildTextButtonV1(a as unknown as Parameters<typeof buildTextButtonV1>[0]),
+  },
+  {
+    toolName: 'add_textarea_v1',
+    args: { label: 'Notes', rows: 4, theme: 'light' },
+    build: (a) => buildTextareaV1(a as unknown as Parameters<typeof buildTextareaV1>[0]),
+  },
+  {
+    toolName: 'add_timeline_v1',
+    args: { items: [{ title: 'Created', active: true }, { title: 'In progress' }], theme: 'light' },
+    build: (a) => buildTimelineV1(a as unknown as Parameters<typeof buildTimelineV1>[0]),
+  },
+  {
+    toolName: 'add_toolbar_v1',
+    args: { items: [{ icon: 'bold', active: true }, { icon: 'italic' }], theme: 'light' },
+    build: (a) => buildToolbarV1(a as unknown as Parameters<typeof buildToolbarV1>[0]),
+  },
+  {
+    toolName: 'add_tooltip_v1',
+    args: { text: 'More info', position: 'top', theme: 'light' },
+    build: (a) => buildTooltipV1(a as unknown as Parameters<typeof buildTooltipV1>[0]),
+  },
+  {
+    toolName: 'add_top_nav_bar_v1',
+    args: { title: 'Home', theme: 'light' },
+    build: (a) => buildTopNavBarV1(a as unknown as Parameters<typeof buildTopNavBarV1>[0]),
+  },
+  {
+    toolName: 'add_upload_dropzone_v1',
+    args: { theme: 'light' },
+    build: (a) =>
+      buildUploadDropzoneV1(a as unknown as Parameters<typeof buildUploadDropzoneV1>[0]),
+  },
+  {
+    toolName: 'add_user_card_v1',
+    args: { name: 'Sarah Lee', role: 'Designer', initial: 'SL', theme: 'light' },
+    build: (a) => buildUserCardV1(a as unknown as Parameters<typeof buildUserCardV1>[0]),
+  },
+  {
+    toolName: 'add_video_placeholder_v1',
+    args: { label: 'Coming soon', theme: 'light' },
+    build: (a) =>
+      buildVideoPlaceholderV1(a as unknown as Parameters<typeof buildVideoPlaceholderV1>[0]),
   },
 ];
