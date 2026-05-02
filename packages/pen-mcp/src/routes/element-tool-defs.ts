@@ -122,6 +122,16 @@ import { handleAddBadgeV1 } from '../tools/add-badge-v1';
 import { handleAddDividerV1 } from '../tools/add-divider-v1';
 import { handleAddBodyTextV1 } from '../tools/add-body-text-v1';
 import { handleAddIconLabelV1 } from '../tools/add-icon-label-v1';
+import { handleAddAlertV1 } from '../tools/add-alert-v1';
+import { handleAddBottomNavV1 } from '../tools/add-bottom-nav-v1';
+import { handleAddBreadcrumbV1 } from '../tools/add-breadcrumb-v1';
+import { handleAddActivityRingV1 } from '../tools/add-activity-ring-v1';
+import { handleAddCarouselDotsV1 } from '../tools/add-carousel-dots-v1';
+import { handleAddActionMenuV1 } from '../tools/add-action-menu-v1';
+import { handleAddAttachmentRowV1 } from '../tools/add-attachment-row-v1';
+import { handleAddCalendarGridV1 } from '../tools/add-calendar-grid-v1';
+import { handleAddAvatarGroupV1 } from '../tools/add-avatar-group-v1';
+import { handleAddCalloutV1 } from '../tools/add-callout-v1';
 import { recordElementToolCall } from '../metrics/element-tool-metrics';
 import { ELEMENT_TOOL_DEFINITIONS_BASE } from './element-tool-defs-base';
 import { ELEMENT_TOOL_DEFINITIONS_EXT } from './element-tool-defs-ext';
@@ -372,6 +382,26 @@ async function dispatchElementToolCall(name: string, a: any): Promise<string> {
       return JSON.stringify(await handleAddBodyTextV1(a), null, 2);
     case 'add_icon_label_v1':
       return JSON.stringify(await handleAddIconLabelV1(a), null, 2);
+    case 'add_alert_v1':
+      return JSON.stringify(await handleAddAlertV1(a), null, 2);
+    case 'add_bottom_nav_v1':
+      return JSON.stringify(await handleAddBottomNavV1(a), null, 2);
+    case 'add_breadcrumb_v1':
+      return JSON.stringify(await handleAddBreadcrumbV1(a), null, 2);
+    case 'add_activity_ring_v1':
+      return JSON.stringify(await handleAddActivityRingV1(a), null, 2);
+    case 'add_carousel_dots_v1':
+      return JSON.stringify(await handleAddCarouselDotsV1(a), null, 2);
+    case 'add_action_menu_v1':
+      return JSON.stringify(await handleAddActionMenuV1(a), null, 2);
+    case 'add_attachment_row_v1':
+      return JSON.stringify(await handleAddAttachmentRowV1(a), null, 2);
+    case 'add_calendar_grid_v1':
+      return JSON.stringify(await handleAddCalendarGridV1(a), null, 2);
+    case 'add_avatar_group_v1':
+      return JSON.stringify(await handleAddAvatarGroupV1(a), null, 2);
+    case 'add_callout_v1':
+      return JSON.stringify(await handleAddCalloutV1(a), null, 2);
     default:
       return '';
   }
