@@ -20,9 +20,9 @@ import {
  */
 
 describe('getSemanticPalette', () => {
-  it('returns 14 original + 8 alert + 4 extended + 6 chart = 32 color variables', () => {
+  it('returns 32 color + 18 type tokens = 50 total variables', () => {
     const p = getSemanticPalette();
-    expect(Object.keys(p.variables).length).toBe(32);
+    expect(Object.keys(p.variables).length).toBe(50);
   });
 
   it('defines the Mode theme axis with Light + Dark', () => {
@@ -131,9 +131,14 @@ describe('getSemanticPaletteHex', () => {
 
   it('returns all color token names (omits numeric tokens)', () => {
     const hex = getSemanticPaletteHex();
-    // SEMANTIC_PALETTE_NAMES includes all 28 color tokens (no numerics yet at P1.1.5)
-    for (const name of SEMANTIC_PALETTE_NAMES) {
-      expect(hex[name], `${name} should be in hex map`).toBeDefined();
+    const p = getSemanticPalette();
+    // Only color variables should appear in the hex map
+    for (const [name, def] of Object.entries(p.variables)) {
+      if ((def as VariableDefinition).type === 'color') {
+        expect(hex[name], `${name} should be in hex map`).toBeDefined();
+      } else {
+        expect(hex[name], `${name} (numeric) should NOT be in hex map`).toBeUndefined();
+      }
     }
   });
 });
@@ -156,7 +161,7 @@ describe('applySemanticPalette', () => {
   it('seeds an empty document with palette + theme axis', () => {
     const doc: PenDocument = createEmptyDocument();
     const out = applySemanticPalette(doc);
-    expect(Object.keys(out.variables ?? {}).length).toBe(32);
+    expect(Object.keys(out.variables ?? {}).length).toBe(50);
     expect(out.themes?.Mode).toEqual(['Light', 'Dark']);
   });
 
@@ -179,7 +184,7 @@ describe('applySemanticPalette', () => {
     expect(out.variables!['color-accent'].value).toBe('#FF0000');
     // All other palette vars still added
     expect(out.variables!['color-surface']).toBeDefined();
-    expect(Object.keys(out.variables!).length).toBe(32);
+    expect(Object.keys(out.variables!).length).toBe(50);
   });
 
   it('user-defined theme axis WINS (does not overwrite existing Mode)', () => {
@@ -206,7 +211,7 @@ describe('applySemanticPalette', () => {
   it('applies cleanly to a doc without variables or themes', () => {
     const doc: PenDocument = { version: '1.0.0', children: [] };
     const out = applySemanticPalette(doc);
-    expect(Object.keys(out.variables!).length).toBe(32);
+    expect(Object.keys(out.variables!).length).toBe(50);
     expect(out.themes!.Mode).toEqual(['Light', 'Dark']);
   });
 });
@@ -399,19 +404,85 @@ describe('chart color tokens (6 single-value)', () => {
   });
 });
 
-describe('palette count after P1.1.5 + P1.1.6 color additions', () => {
-  it('getSemanticPalette() now has 32 color variables', () => {
+describe('palette count snapshot (color additions complete)', () => {
+  it('palette has exactly 32 color-type variables', () => {
     const p = getSemanticPalette();
-    expect(Object.keys(p.variables).length).toBe(32);
+    const colorCount = Object.values(p.variables).filter(
+      (d) => (d as VariableDefinition).type === 'color',
+    ).length;
+    expect(colorCount).toBe(32);
   });
 
-  it('SEMANTIC_PALETTE_NAMES has 32 entries', () => {
-    expect(SEMANTIC_PALETTE_NAMES.length).toBe(32);
+  it('SEMANTIC_PALETTE_NAMES matches total variable count', () => {
+    const p = getSemanticPalette();
+    expect(SEMANTIC_PALETTE_NAMES.length).toBe(Object.keys(p.variables).length);
   });
 
-  it('applySemanticPalette seeds 32 variables on an empty document', () => {
+  it('applySemanticPalette seeds all palette variables on an empty document', () => {
     const doc: PenDocument = createEmptyDocument();
     const out = applySemanticPalette(doc);
-    expect(Object.keys(out.variables ?? {}).length).toBe(32);
+    expect(Object.keys(out.variables ?? {}).length).toBe(Object.keys(getSemanticPalette().variables).length);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Task 1.2 — Typography tokens: size + weight + line-height × 6 roles (18)
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('typography tokens (18 numeric single-value)', () => {
+  const TYPE_TOKENS: Record<string, number> = {
+    'type-display-size': 64,
+    'type-display-weight': 700,
+    'type-display-line-height': 1.0,
+    'type-h1-size': 24,
+    'type-h1-weight': 600,
+    'type-h1-line-height': 1.2,
+    'type-h2-size': 20,
+    'type-h2-weight': 600,
+    'type-h2-line-height': 1.25,
+    'type-h3-size': 16,
+    'type-h3-weight': 600,
+    'type-h3-line-height': 1.3,
+    'type-body-size': 14,
+    'type-body-weight': 400,
+    'type-body-line-height': 1.5,
+    'type-caption-size': 12,
+    'type-caption-weight': 400,
+    'type-caption-line-height': 1.4,
+  };
+
+  it('all 18 typography tokens present in getSemanticPalette()', () => {
+    const p = getSemanticPalette();
+    for (const name of Object.keys(TYPE_TOKENS)) {
+      expect(p.variables[name], `missing: ${name}`).toBeDefined();
+    }
+  });
+
+  it('typography tokens have type="number"', () => {
+    const p = getSemanticPalette();
+    for (const name of Object.keys(TYPE_TOKENS)) {
+      const def = p.variables[name] as VariableDefinition;
+      expect(def.type, `${name} type`).toBe('number');
+    }
+  });
+
+  it('typography token values match spec', () => {
+    const p = getSemanticPalette();
+    for (const [name, expected] of Object.entries(TYPE_TOKENS)) {
+      const def = p.variables[name] as VariableDefinition;
+      expect(def.value, `${name}`).toBe(expected);
+    }
+  });
+
+  it('typography tokens are NOT included in getSemanticPaletteHex()', () => {
+    const hex = getSemanticPaletteHex('Light');
+    for (const name of Object.keys(TYPE_TOKENS)) {
+      expect(hex[name], `${name} should not appear in hex map`).toBeUndefined();
+    }
+  });
+
+  it('palette total grows to 50 (32 color + 18 type)', () => {
+    const p = getSemanticPalette();
+    expect(Object.keys(p.variables).length).toBe(50);
   });
 });
