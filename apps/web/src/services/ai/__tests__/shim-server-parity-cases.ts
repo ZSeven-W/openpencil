@@ -127,6 +127,16 @@ import {
   buildCalendarGridV1,
   buildAvatarGroupV1,
   buildCalloutV1,
+  buildChartBarsV1,
+  buildChartLineV1,
+  buildChartPieV1,
+  buildChatBubbleV1,
+  buildCheckboxV1,
+  buildChipInputV1,
+  buildCodeBlockV1,
+  buildColorSwatchV1,
+  buildComboboxV1,
+  buildCommentV1,
 } from '@zseven-w/pen-core';
 
 export interface BuilderCase {
@@ -842,5 +852,58 @@ export const CASES: BuilderCase[] = [
     toolName: 'add_callout_v1',
     args: { body: 'This is a callout note.', tone: 'info', theme: 'light' },
     build: (a) => buildCalloutV1(a as unknown as Parameters<typeof buildCalloutV1>[0]),
+  },
+  {
+    toolName: 'add_chart_bars_v1',
+    args: { values: [40, 80, 60], theme: 'light' },
+    build: (a) => buildChartBarsV1(a as unknown as Parameters<typeof buildChartBarsV1>[0]),
+  },
+  {
+    toolName: 'add_chart_line_v1',
+    args: { values: [30, 70, 50, 90], theme: 'light' },
+    build: (a) => buildChartLineV1(a as unknown as Parameters<typeof buildChartLineV1>[0]),
+  },
+  {
+    toolName: 'add_chart_pie_v1',
+    args: { values: [40, 30, 30], theme: 'light' },
+    build: (a) => buildChartPieV1(a as unknown as Parameters<typeof buildChartPieV1>[0]),
+  },
+  {
+    toolName: 'add_chat_bubble_v1',
+    args: { message: 'Hello!', side: 'left', theme: 'light' },
+    build: (a) => buildChatBubbleV1(a as unknown as Parameters<typeof buildChatBubbleV1>[0]),
+  },
+  {
+    toolName: 'add_checkbox_v1',
+    args: { label: 'Accept terms', checked: false, theme: 'light' },
+    build: (a) => buildCheckboxV1(a as unknown as Parameters<typeof buildCheckboxV1>[0]),
+  },
+  {
+    toolName: 'add_chip_input_v1',
+    args: { label: 'Tags', chips: ['react', 'typescript'], theme: 'light' },
+    build: (a) => buildChipInputV1(a as unknown as Parameters<typeof buildChipInputV1>[0]),
+  },
+  {
+    toolName: 'add_code_block_v1',
+    args: { code: 'const x = 1;', language: 'ts', theme: 'light' },
+    build: (a) => buildCodeBlockV1(a as unknown as Parameters<typeof buildCodeBlockV1>[0]),
+  },
+  {
+    toolName: 'add_color_swatch_v1',
+    args: { color: '#2563EB', label: 'Primary', theme: 'light' },
+    build: (a) => buildColorSwatchV1(a as unknown as Parameters<typeof buildColorSwatchV1>[0]),
+  },
+  {
+    toolName: 'add_combobox_v1',
+    args: {
+      options: [{ label: 'Option A' }, { label: 'Option B', highlighted: true }],
+      theme: 'light',
+    },
+    build: (a) => buildComboboxV1(a as unknown as Parameters<typeof buildComboboxV1>[0]),
+  },
+  {
+    toolName: 'add_comment_v1',
+    args: { author: 'Alice', body: 'Great work!', theme: 'light' },
+    build: (a) => buildCommentV1(a as unknown as Parameters<typeof buildCommentV1>[0]),
   },
 ];

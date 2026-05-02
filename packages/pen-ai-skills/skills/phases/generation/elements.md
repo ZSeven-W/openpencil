@@ -62,11 +62,11 @@ Containers and single elements:
 
 5. Section header (big title + optional "See all" action) → `add_section_header_v0`
 6. Bottom tab bar (inline flow, 3-5 nav items) → `add_bottom_nav_v0`
-    6b. Theme-aware variant (accepts `theme` param for API consistency; output identical across themes) → `add_bottom_nav_v1`
+   6b. Theme-aware variant (accepts `theme` param for API consistency; output identical across themes) → `add_bottom_nav_v1`
 7. Mobile top bar (leading icon + centered title + trailing icon) → `add_top_nav_bar_v0`
 8. Icon-only button (44×44, hit-target safe) → `add_icon_button_v0`
 9. Apple-style progress ring with centered text → `add_activity_ring_v0`
-    9b. Theme-aware variant (accepts `theme` param for API consistency; output identical across themes) → `add_activity_ring_v1`
+   9b. Theme-aware variant (accepts `theme` param for API consistency; output identical across themes) → `add_activity_ring_v1`
 
 Atoms (1-2 node building blocks):
 
@@ -102,6 +102,7 @@ Controls (toggle / choice / tabs):
 
 20. iOS/Material toggle switch (51×31, thumb floats) → `add_switch_v0`
 21. Checkbox + inline label (20×20 box, `check` icon inside when checked) → `add_checkbox_v0`
+    21b. Theme-aware variant (accent fill checked, border token unchecked) → `add_checkbox_v1`
 22. Radio button + inline label (20×20 ring, dot inside when selected) → `add_radio_v0`
 23. Horizontal top tabs with underline on active (fontWeight 600 + 2px sibling rectangle underline) → `add_tabs_v0`
 24. iOS pill-style segmented control (equal-width segments, active floats white) → `add_segmented_control_v0`
@@ -137,16 +138,21 @@ Content blocks:
 
 37. Quoted passage with optional author attribution → `add_quote_block_v0`
 38. Preformatted code block (fill_container, wraps, gray-50 bg) → `add_code_block_v0`
+    38b. Theme-aware variant (bg → surface2 in dark/system) → `add_code_block_v1`
 
 Design-system:
 
 39. Color swatch (colored square + optional token label) → `add_color_swatch_v0`
+    39b. Theme-aware variant (same tree; theme param for API consistency) → `add_color_swatch_v1`
 
 Charts / data visualization:
 
 40. Bar-chart skeleton (one rectangle per value, bottom-aligned) → `add_chart_bars_v0`
     40b. Line-chart skeleton (polyline + optional dots) → `add_chart_line_v0`
     40c. Pie-chart skeleton (colored ellipse slices via arc angles) → `add_chart_pie_v0`
+    40d. Theme-aware bar chart (chart-1 token in dark/system) → `add_chart_bars_v1`
+    40e. Theme-aware line chart (chart-1 token in dark/system) → `add_chart_line_v1`
+    40f. Theme-aware pie chart (chart-1..6 tokens in dark/system) → `add_chart_pie_v1`
 
 Media / placeholder:
 
@@ -156,6 +162,7 @@ Media / placeholder:
 Social / UGC:
 
 45. Comment row (circular avatar + author/timestamp header + body) → `add_comment_v0`
+    45b. Theme-aware variant (avatar bg → surface2, timestamp → textMuted in dark/system) → `add_comment_v1`
 
 Chrome / modals:
 
@@ -203,6 +210,7 @@ Collapsible content:
 Tag / multi-value inputs:
 
 54. Chip input / tag input (pills + removable × + inline caret, wrap layout) → `add_chip_input_v0`
+    54b. Theme-aware variant (chip bg → surface2, field bg → surface, placeholder → textSubtle) → `add_chip_input_v1`
 
 Chart empty state:
 
@@ -233,6 +241,7 @@ Attachments:
 Messaging:
 
 61. Chat message bubble (left=from-others slate bg / right=from-self accent bg; optional author + timestamp) → `add_chat_bubble_v0`
+    61b. Theme-aware variant (surface2 bg for left, accent bg for right, textMuted for author/timestamp) → `add_chat_bubble_v1`
 
 Dashboard KPIs:
 
@@ -287,6 +296,7 @@ Side panels & docking:
 Forms (open state) & toolbars:
 
 76. Open-state combobox / autocomplete (input + visible dropdown rows) → `add_combobox_v0`
+    76b. Theme-aware variant (surface/border/surface2 tokens in dark/system) → `add_combobox_v1`
 77. Desktop toolbar (icon button row with optional dividers) → `add_toolbar_v0`
 
 Doc / inline feedback:
