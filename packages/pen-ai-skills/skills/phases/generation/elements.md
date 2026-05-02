@@ -95,7 +95,8 @@ Forms:
 
 18. Search bar (height=44, cornerRadius=22, leading search icon) → `add_search_bar_v0`
 19. Form field (label + 48px input with optional affordance icons) → `add_form_field_v0`
-    19b. Multi-line textarea (label + N-row input for notes / bio / feedback) → `add_textarea_v0`
+    19b. Theme-aware variant (accepts `theme` param for API consistency; output identical across themes) → `add_form_field_v1`
+    19c. Multi-line textarea (label + N-row input for notes / bio / feedback) → `add_textarea_v0`
     19c. Dropdown select closed-state (label + 48px input w/ value text + chevron-down) → `add_select_v0`
 
 Controls (toggle / choice / tabs):
@@ -110,6 +111,7 @@ Controls (toggle / choice / tabs):
 State / feedback:
 
 25. Empty state (icon + title + optional subtitle + optional CTA button, centered) → `add_empty_state_v0`
+    25b. Theme-aware variant (accepts `theme` param for API consistency; output identical across themes) → `add_empty_state_v1`
 26. Inline banner / callout (icon + message + optional close x, fill_container) → `add_alert_v0`
     26b. Theme-aware variant (accepts `theme` param for API consistency; output identical across themes) → `add_alert_v1`
 27. Floating pill notification (dark fit_content pill) → `add_toast_v0`
@@ -118,6 +120,7 @@ State / feedback:
 Floating / nav / wizard:
 
 29. Floating action button (circular 56×56, icon centered) → `add_fab_v0`
+    29b. Theme-aware variant (bg → accent in dark/system; icon always white) → `add_fab_v1`
 30. Breadcrumb trail with chevron separators (last crumb auto-active) → `add_breadcrumb_v0`
     30b. Theme-aware variant (accepts `theme` param for API consistency; output identical across themes) → `add_breadcrumb_v1`
 31. Horizontal numbered stepper (circles + fill_container connectors) → `add_stepper_v0`
@@ -206,6 +209,7 @@ Pagination:
 Collapsible content:
 
 53. FAQ / accordion item (question + chevron; expanded variant shows answer paragraph) → `add_faq_item_v0`
+    53b. Theme-aware variant (chevron/answer → textMuted, divider → border in dark/system) → `add_faq_item_v1`
 
 Tag / multi-value inputs:
 
@@ -224,6 +228,7 @@ Menus / floating panels:
 Dates:
 
 57. Date picker CLOSED state (labeled input + "Jan 15, 2026" + trailing calendar icon) → `add_date_picker_v0`
+    57b. Theme-aware variant (input bg → surface, stroke → border in dark/system) → `add_date_picker_v1`
 
 Upload / file intake:
 
@@ -266,6 +271,7 @@ Input / forms:
 Compliance / disclosure:
 
 68. Cookie consent / GDPR / privacy banner (sticky bottom-of-page disclosure card with accept / decline / settings) → `add_cookie_banner_v0`
+    68b. Theme-aware variant (card bg → surface, title → textPrimary, accept → accent in dark/system) → `add_cookie_banner_v1`
 
 Desktop / dashboard rails:
 
@@ -279,6 +285,7 @@ Presence / collaboration:
 Tabular data:
 
 71. Desktop data-table row (N column-aligned cells in a single horizontal row, header / body / selected variants) → `add_data_table_row_v0`
+    71b. Theme-aware variant (header text → textMuted, body → textPrimary, selected → bgDeep in dark/system) → `add_data_table_row_v1`
 
 Filter / selection chips:
 
@@ -292,6 +299,7 @@ People / profile:
 Side panels & docking:
 
 75. Slide-in drawer shell (full-height side panel with header) → `add_drawer_shell_v0`
+    75b. Theme-aware variant (bg → surface, border → border token, title/icon → semantic tokens in dark/system) → `add_drawer_shell_v1`
 
 Forms (open state) & toolbars:
 
@@ -328,6 +336,7 @@ People / lists:
 Faceted search / filter sidebar:
 
 86. Sidebar filter group (heading + checkbox-style option list with counts) → `add_filter_group_v0`
+    86b. Theme-aware variant (title → textPrimary, label → textBody, box bg/stroke → surface/border in dark/system) → `add_filter_group_v1`
 
 Audit / activity feed:
 
@@ -337,6 +346,7 @@ Audit / activity feed:
 Calendar:
 
 88. Single event card (month/day column + title + time + location) → `add_event_card_v0`
+    88b. Theme-aware variant (card bg/stroke/date column → semantic tokens; accent strip + white text stay brand-invariant) → `add_event_card_v1`
 
 Onboarding:
 

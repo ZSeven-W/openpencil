@@ -142,6 +142,16 @@ import { handleAddCodeBlockV1 } from '../tools/add-code-block-v1';
 import { handleAddColorSwatchV1 } from '../tools/add-color-swatch-v1';
 import { handleAddComboboxV1 } from '../tools/add-combobox-v1';
 import { handleAddCommentV1 } from '../tools/add-comment-v1';
+import { handleAddCookieBannerV1 } from '../tools/add-cookie-banner-v1';
+import { handleAddDataTableRowV1 } from '../tools/add-data-table-row-v1';
+import { handleAddDatePickerV1 } from '../tools/add-date-picker-v1';
+import { handleAddDrawerShellV1 } from '../tools/add-drawer-shell-v1';
+import { handleAddEmptyStateV1 } from '../tools/add-empty-state-v1';
+import { handleAddEventCardV1 } from '../tools/add-event-card-v1';
+import { handleAddFabV1 } from '../tools/add-fab-v1';
+import { handleAddFaqItemV1 } from '../tools/add-faq-item-v1';
+import { handleAddFilterGroupV1 } from '../tools/add-filter-group-v1';
+import { handleAddFormFieldV1 } from '../tools/add-form-field-v1';
 import { recordElementToolCall } from '../metrics/element-tool-metrics';
 import { ELEMENT_TOOL_DEFINITIONS_BASE } from './element-tool-defs-base';
 import { ELEMENT_TOOL_DEFINITIONS_EXT } from './element-tool-defs-ext';
@@ -149,6 +159,7 @@ import { ELEMENT_TOOL_DEFINITIONS_EXT_2 } from './element-tool-defs-ext-2';
 import { ELEMENT_TOOL_DEFINITIONS_EXT_3 } from './element-tool-defs-ext-3';
 import { ELEMENT_TOOL_DEFINITIONS_EXT_4 } from './element-tool-defs-ext-4';
 import { ELEMENT_TOOL_DEFINITIONS_EXT_5 } from './element-tool-defs-ext-5';
+import { ELEMENT_TOOL_DEFINITIONS_EXT_6 } from './element-tool-defs-ext-6';
 
 export const ELEMENT_TOOL_DEFINITIONS = [
   ...ELEMENT_TOOL_DEFINITIONS_BASE,
@@ -157,6 +168,7 @@ export const ELEMENT_TOOL_DEFINITIONS = [
   ...ELEMENT_TOOL_DEFINITIONS_EXT_3,
   ...ELEMENT_TOOL_DEFINITIONS_EXT_4,
   ...ELEMENT_TOOL_DEFINITIONS_EXT_5,
+  ...ELEMENT_TOOL_DEFINITIONS_EXT_6,
 ];
 
 export const ELEMENT_TOOL_NAMES: ReadonlySet<string> = new Set(
@@ -432,6 +444,26 @@ async function dispatchElementToolCall(name: string, a: any): Promise<string> {
       return JSON.stringify(await handleAddComboboxV1(a), null, 2);
     case 'add_comment_v1':
       return JSON.stringify(await handleAddCommentV1(a), null, 2);
+    case 'add_cookie_banner_v1':
+      return JSON.stringify(await handleAddCookieBannerV1(a), null, 2);
+    case 'add_data_table_row_v1':
+      return JSON.stringify(await handleAddDataTableRowV1(a), null, 2);
+    case 'add_date_picker_v1':
+      return JSON.stringify(await handleAddDatePickerV1(a), null, 2);
+    case 'add_drawer_shell_v1':
+      return JSON.stringify(await handleAddDrawerShellV1(a), null, 2);
+    case 'add_empty_state_v1':
+      return JSON.stringify(await handleAddEmptyStateV1(a), null, 2);
+    case 'add_event_card_v1':
+      return JSON.stringify(await handleAddEventCardV1(a), null, 2);
+    case 'add_fab_v1':
+      return JSON.stringify(await handleAddFabV1(a), null, 2);
+    case 'add_faq_item_v1':
+      return JSON.stringify(await handleAddFaqItemV1(a), null, 2);
+    case 'add_filter_group_v1':
+      return JSON.stringify(await handleAddFilterGroupV1(a), null, 2);
+    case 'add_form_field_v1':
+      return JSON.stringify(await handleAddFormFieldV1(a), null, 2);
     default:
       return '';
   }

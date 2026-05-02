@@ -137,6 +137,16 @@ import {
   buildColorSwatchV1,
   buildComboboxV1,
   buildCommentV1,
+  buildCookieBannerV1,
+  buildDataTableRowV1,
+  buildDatePickerV1,
+  buildDrawerShellV1,
+  buildEmptyStateV1,
+  buildEventCardV1,
+  buildFabV1,
+  buildFaqItemV1,
+  buildFilterGroupV1,
+  buildFormFieldV1,
 } from '@zseven-w/pen-core';
 
 export interface BuilderCase {
@@ -905,5 +915,59 @@ export const CASES: BuilderCase[] = [
     toolName: 'add_comment_v1',
     args: { author: 'Alice', body: 'Great work!', theme: 'light' },
     build: (a) => buildCommentV1(a as unknown as Parameters<typeof buildCommentV1>[0]),
+  },
+  {
+    toolName: 'add_cookie_banner_v1',
+    args: { title: 'We use cookies', theme: 'light' },
+    build: (a) => buildCookieBannerV1(a as unknown as Parameters<typeof buildCookieBannerV1>[0]),
+  },
+  {
+    toolName: 'add_data_table_row_v1',
+    args: { columns: [{ content: 'Name' }, { content: 'Status' }], theme: 'light' },
+    build: (a) => buildDataTableRowV1(a as unknown as Parameters<typeof buildDataTableRowV1>[0]),
+  },
+  {
+    toolName: 'add_date_picker_v1',
+    args: { label: 'Start Date', theme: 'light' },
+    build: (a) => buildDatePickerV1(a as unknown as Parameters<typeof buildDatePickerV1>[0]),
+  },
+  {
+    toolName: 'add_drawer_shell_v1',
+    args: { title: 'Edit Profile', theme: 'light' },
+    build: (a) => buildDrawerShellV1(a as unknown as Parameters<typeof buildDrawerShellV1>[0]),
+  },
+  {
+    toolName: 'add_empty_state_v1',
+    args: { title: 'No results found', theme: 'light' },
+    build: (a) => buildEmptyStateV1(a as unknown as Parameters<typeof buildEmptyStateV1>[0]),
+  },
+  {
+    toolName: 'add_event_card_v1',
+    args: { month: 'OCT', day: 15, title: 'Design review', theme: 'light' },
+    build: (a) => buildEventCardV1(a as unknown as Parameters<typeof buildEventCardV1>[0]),
+  },
+  {
+    toolName: 'add_fab_v1',
+    args: { icon: 'plus', theme: 'light' },
+    build: (a) => buildFabV1(a as unknown as Parameters<typeof buildFabV1>[0]),
+  },
+  {
+    toolName: 'add_faq_item_v1',
+    args: { question: 'What is OpenPencil?', theme: 'light' },
+    build: (a) => buildFaqItemV1(a as unknown as Parameters<typeof buildFaqItemV1>[0]),
+  },
+  {
+    toolName: 'add_filter_group_v1',
+    args: {
+      title: 'Category',
+      options: [{ label: 'Design', selected: true }, { label: 'Code' }],
+      theme: 'light',
+    },
+    build: (a) => buildFilterGroupV1(a as unknown as Parameters<typeof buildFilterGroupV1>[0]),
+  },
+  {
+    toolName: 'add_form_field_v1',
+    args: { label: 'Email', theme: 'light' },
+    build: (a) => buildFormFieldV1(a as unknown as Parameters<typeof buildFormFieldV1>[0]),
   },
 ];
