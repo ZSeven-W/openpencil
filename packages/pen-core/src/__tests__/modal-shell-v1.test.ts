@@ -188,16 +188,15 @@ describe('buildModalShellV1', () => {
       expect(resolveColorRef(getFillColor(sub)!, doc.variables!, { Mode: 'Dark' })).toBe('#94A3B8');
     });
 
-    it('WITHOUT palette seeded: refs resolve to undefined (caller is responsible)', () => {
+    it('WITHOUT palette seeded: refs resolve to DEFAULT_PALETTE_FALLBACK values (P1.6)', () => {
       const doc = createEmptyDocument(); // no palette applied
       const tree = buildModalShellV1({ title: 'T', theme: 'system' }) as unknown as Frame;
       const cardFill = getFillColor(findByRole(tree, 'modal-shell-card')!)!;
       const resolved = resolveColorRef(cardFill, doc.variables ?? {}, { Mode: 'Dark' });
-      // The resolver returns undefined when a $ref points nowhere.
-      // This is the "document-setup bug" case the builder
-      // intentionally doesn't guard against (caller's
-      // responsibility per the v1 theme contract).
-      expect(resolved).toBeUndefined();
+      // P1.6: resolver now falls back to DEFAULT_PALETTE_FALLBACK so that
+      // v1 'system' mode on an un-seeded doc is byte-equivalent to v0 hex
+      // output (spec §5.3). $color-surface dark = #1E293B.
+      expect(resolved).toBe('#1E293B');
     });
   });
 
