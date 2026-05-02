@@ -1,6 +1,8 @@
 // Extension tool definitions — shard 8 of 8 (siblings: base / ext /
 // ext-2 / ext-3 / ext-4 / ext-5 / ext-6 / ext-7). Houses P3 batch-7 v1 tools
-// (search_bar, segmented_control, select, share_row, range_slider).
+// (search_bar, segmented_control, select, share_row, range_slider) and
+// P3 batch-8 v1 tools (sidebar_nav, skeleton, social_login_row, spinner,
+// stat_card, stat_grid, status_badge, step_card, stepper, switch).
 // Each shard caps at the repo's 800-line ceiling.
 //
 // When adding a new tool: pick whichever shard has the fewest tools
@@ -183,6 +185,341 @@ export const ELEMENT_TOOL_DEFINITIONS_EXT_8 = [
           type: 'string',
           enum: ['light', 'dark', 'system'],
           description: 'Theme variant. Default "light".',
+        },
+        parent_id: parentIdProp,
+        pageId: pageIdProp,
+      },
+      required: [],
+    },
+  },
+  {
+    name: 'add_sidebar_nav_v1',
+    description:
+      'Theme-aware vertical sidebar navigation (v1). theme="light" (default): byte-parity ' +
+      'with add_sidebar_nav_v0. theme="dark": bg → surface (#1E293B); title + active label ' +
+      '→ textPrimary; inactive label → textMuted; active item bg → surface2. ' +
+      'theme="system": $color-* refs. Desktop dashboard / docs / admin left rail. schemaVersion 1.0',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        schemaVersion: schemaVersionProp,
+        filePath: filePathProp,
+        items: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              label: { type: 'string' },
+              icon: { type: 'string', description: 'Lucide icon slug.' },
+              active: { type: 'boolean', description: 'Marks item as currently selected.' },
+            },
+            required: ['label', 'icon'],
+          },
+          description: 'Navigation items. Required.',
+        },
+        title: { type: 'string', description: 'Optional brand/section title above items.' },
+        width: {
+          type: 'number',
+          description: 'Sidebar width in px. Default 240. Clamped 180..320.',
+        },
+        theme: {
+          type: 'string',
+          enum: ['light', 'dark', 'system'],
+          description: 'Theme variant. Default "light".',
+        },
+        parent_id: parentIdProp,
+        pageId: pageIdProp,
+      },
+      required: ['items'],
+    },
+  },
+  {
+    name: 'add_skeleton_v1',
+    description:
+      'Theme-aware loading skeleton (v1). theme="light" (default): byte-parity with ' +
+      'add_skeleton_v0 (slate-200 rows). theme="dark": row fill → surface2 (#334155) — ' +
+      'visible on dark bg. theme="system": $color-surface-2 ref. Stacked gray bars ' +
+      'mimicking text lines. schemaVersion 1.0',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        schemaVersion: schemaVersionProp,
+        filePath: filePathProp,
+        rows: {
+          type: 'number',
+          description: 'Number of skeleton rows (clamped 1..20). Default 3.',
+        },
+        row_height: {
+          type: 'number',
+          description: 'Row height in px (clamped 4..48). Default 16.',
+        },
+        row_gap: {
+          type: 'number',
+          description: 'Gap between rows in px (clamped 0..32). Default 12.',
+        },
+        last_row_short: {
+          type: 'boolean',
+          description: 'Last row is 60% width (paragraph-end pattern). Default true.',
+        },
+        theme: {
+          type: 'string',
+          enum: ['light', 'dark', 'system'],
+          description: 'Theme variant. Default "light".',
+        },
+        parent_id: parentIdProp,
+        pageId: pageIdProp,
+      },
+      required: [],
+    },
+  },
+  {
+    name: 'add_social_login_row_v1',
+    description:
+      'Theme-aware social-auth provider button row (v1). theme="light" (default): byte-parity ' +
+      'with add_social_login_row_v0. theme="dark": button bg → surface; border → border; ' +
+      'icon fill → textMuted; label → textPrimary. theme="system": $color-* refs. ' +
+      '"Continue with Google / Apple / GitHub" pattern. schemaVersion 1.0',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        schemaVersion: schemaVersionProp,
+        filePath: filePathProp,
+        providers: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              name: { type: 'string', description: 'Provider name (e.g. "google", "apple").' },
+              icon: { type: 'string', description: 'Optional lucide icon override.' },
+            },
+            required: ['name'],
+          },
+          description: 'Providers to render (2-4 recommended, max 6). Required.',
+        },
+        orientation: {
+          type: 'string',
+          enum: ['vertical', 'horizontal'],
+          description: 'Layout orientation. Default "vertical" (stacked full-width buttons).',
+        },
+        width: {
+          type: 'number',
+          description: 'Button width in px (vertical only). Default 320. Min 200.',
+        },
+        theme: {
+          type: 'string',
+          enum: ['light', 'dark', 'system'],
+          description: 'Theme variant. Default "light".',
+        },
+        parent_id: parentIdProp,
+        pageId: pageIdProp,
+      },
+      required: ['providers'],
+    },
+  },
+  {
+    name: 'add_spinner_v1',
+    description:
+      'Theme-aware loading spinner (v1). theme="light" (default): byte-parity with ' +
+      'add_spinner_v0. All theme modes identical — track_color/active_color are caller-' +
+      'overridable params (default #E2E8F0 track, #2563EB arc). Accepts theme for API ' +
+      'consistency. 3/4-sweep arc; static still-frame. schemaVersion 1.0',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        schemaVersion: schemaVersionProp,
+        filePath: filePathProp,
+        size: {
+          type: 'number',
+          description: 'Outer diameter in px (clamped 16..128). Default 32.',
+        },
+        thickness: {
+          type: 'number',
+          description: 'Stroke thickness in px (clamped 1..16). Default 3.',
+        },
+        track_color: { type: 'string', description: 'Static ring color. Default "#E2E8F0".' },
+        active_color: { type: 'string', description: 'Active arc color. Default "#2563EB".' },
+        theme: {
+          type: 'string',
+          enum: ['light', 'dark', 'system'],
+          description: 'Theme variant. Default "light". All modes identical for this tool.',
+        },
+        parent_id: parentIdProp,
+        pageId: pageIdProp,
+      },
+      required: [],
+    },
+  },
+  {
+    name: 'add_stat_card_v1',
+    description:
+      'Theme-aware big-number stat card (v1). theme="light" (default): byte-parity with ' +
+      'add_stat_card_v0. theme="dark": bg → surface; border → border; label → textMuted; ' +
+      'icon → textSubtle; value → textPrimary. Delta tones (success/error/flat) stay ' +
+      'hardcoded — status semantics. theme="system": $color-* refs. schemaVersion 1.0',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        schemaVersion: schemaVersionProp,
+        filePath: filePathProp,
+        label: { type: 'string', description: 'Metric label shown above value. Required.' },
+        value: { type: 'string', description: 'Primary metric value (e.g. "$12.4k"). Required.' },
+        icon: { type: 'string', description: 'Optional lucide icon in header corner.' },
+        delta: { type: 'string', description: 'Optional delta text (e.g. "+8% vs last week").' },
+        trend: {
+          type: 'string',
+          enum: ['up', 'down', 'flat'],
+          description: 'Trend direction for delta tone. Default "flat".',
+        },
+        width: { type: 'number', description: 'Card width in px. Default 240. Min 160.' },
+        corner_radius: { type: 'number', description: 'Corner radius. Default 16.' },
+        theme: {
+          type: 'string',
+          enum: ['light', 'dark', 'system'],
+          description: 'Theme variant. Default "light".',
+        },
+        parent_id: parentIdProp,
+        pageId: pageIdProp,
+      },
+      required: ['label', 'value'],
+    },
+  },
+  {
+    name: 'add_stat_grid_v1',
+    description:
+      'Theme-aware non-scrolling stat grid (v1). theme="light" (default): byte-parity with ' +
+      'add_stat_grid_v0. All modes identical — no explicit fill colors in v0 (text inherits). ' +
+      'Accepts theme for API consistency. 2-5 fill_container cells side-by-side. schemaVersion 1.0',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        schemaVersion: schemaVersionProp,
+        filePath: filePathProp,
+        items: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              value: { type: 'string', description: 'Metric value (e.g. "1,284").' },
+              label: { type: 'string', description: 'Metric label.' },
+              icon: { type: 'string', description: 'Optional lucide icon slug.' },
+            },
+            required: ['value', 'label'],
+          },
+          description: 'Stat items (2-5). Required.',
+        },
+        gap: { type: 'number', description: 'Gap between cells in px. Default 16.' },
+        theme: {
+          type: 'string',
+          enum: ['light', 'dark', 'system'],
+          description: 'Theme variant. Default "light". All modes identical for this tool.',
+        },
+        parent_id: parentIdProp,
+        pageId: pageIdProp,
+      },
+      required: ['items'],
+    },
+  },
+  {
+    name: 'add_status_badge_v1',
+    description:
+      'Theme-aware status indicator pill (v1). theme="light" (default): byte-parity with ' +
+      'add_status_badge_v0. All modes identical — dot colors are status semantics ' +
+      '(success=emerald, warning=amber, error=red, info=blue, neutral=slate), kept ' +
+      'hardcoded. Accepts theme for API consistency. schemaVersion 1.0',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        schemaVersion: schemaVersionProp,
+        filePath: filePathProp,
+        label: { type: 'string', description: 'Status label text. Required.' },
+        tone: {
+          type: 'string',
+          enum: ['success', 'warning', 'error', 'info', 'neutral'],
+          description: 'Status tone. Default "neutral".',
+        },
+        theme: {
+          type: 'string',
+          enum: ['light', 'dark', 'system'],
+          description: 'Theme variant. Default "light". All modes identical for this tool.',
+        },
+        parent_id: parentIdProp,
+        pageId: pageIdProp,
+      },
+      required: ['label'],
+    },
+  },
+  {
+    name: 'add_step_card_v1',
+    description:
+      'Theme-aware onboarding step card (v1). theme="light" (default): byte-parity with ' +
+      'add_step_card_v0. theme="dark": title → textPrimary; description → textMuted; ' +
+      'incomplete circle bg → surface. Accent (#2563EB) and check icon white stay hardcoded. ' +
+      'theme="system": $color-* refs. Numbered circle + title + description. schemaVersion 1.0',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        schemaVersion: schemaVersionProp,
+        filePath: filePathProp,
+        number: {
+          description: 'Step index shown in circle (1-3 chars, e.g. 1, "01"). Required.',
+          oneOf: [{ type: 'string' }, { type: 'number' }],
+        },
+        title: { type: 'string', description: 'Step title. Required.' },
+        description: { type: 'string', description: 'Step description body. Required.' },
+        completed: { type: 'boolean', description: 'Filled accent circle vs ring. Default false.' },
+        theme: {
+          type: 'string',
+          enum: ['light', 'dark', 'system'],
+          description: 'Theme variant. Default "light".',
+        },
+        parent_id: parentIdProp,
+        pageId: pageIdProp,
+      },
+      required: ['number', 'title', 'description'],
+    },
+  },
+  {
+    name: 'add_stepper_v1',
+    description:
+      'Theme-aware horizontal numbered stepper (v1). theme="light" (default): byte-parity ' +
+      'with add_stepper_v0. theme="dark": pending circle fill → border (#334155); pending ' +
+      'number → textMuted; pending connector → border. Accent (#2563EB) and done-state ' +
+      'white stay hardcoded. theme="system": $color-* refs for pending slots. schemaVersion 1.0',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        schemaVersion: schemaVersionProp,
+        filePath: filePathProp,
+        total: { type: 'number', description: 'Total step count. Required.' },
+        current: { type: 'number', description: 'Current active step index (0-based). Default 0.' },
+        theme: {
+          type: 'string',
+          enum: ['light', 'dark', 'system'],
+          description: 'Theme variant. Default "light".',
+        },
+        parent_id: parentIdProp,
+        pageId: pageIdProp,
+      },
+      required: ['total'],
+    },
+  },
+  {
+    name: 'add_switch_v1',
+    description:
+      'Theme-aware iOS/Material toggle switch (v1). theme="light" (default): byte-parity ' +
+      'with add_switch_v0. All modes identical — #34C759 (iOS green active) and #E5E5EA ' +
+      '(iOS gray inactive) are builder-private iOS HIG literals (spec §3.4), not tokenized. ' +
+      '#FFFFFF thumb stays hardcoded. 51×31px, cornerRadius=16. schemaVersion 1.0',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        schemaVersion: schemaVersionProp,
+        filePath: filePathProp,
+        active: { type: 'boolean', description: 'Switch on/off state. Default false.' },
+        theme: {
+          type: 'string',
+          enum: ['light', 'dark', 'system'],
+          description: 'Theme variant. Default "light". All modes identical for this tool.',
         },
         parent_id: parentIdProp,
         pageId: pageIdProp,
