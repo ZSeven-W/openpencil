@@ -133,3 +133,4 @@ export { buildInviteRow, type InviteRowParams, type InviteStatus } from './invit
 export { buildActivityLog, type ActivityLogParams } from './activity-log.js';
 export { buildEventCard, type EventCardParams } from './event-card.js';
 export { buildStepCard, type StepCardParams } from './step-card.js';
+export { resolveTheme, type V1Theme, type ThemeResolution } from './resolve-theme.js';
