@@ -33,7 +33,18 @@ These narrow MCP tools emit well-known structures that batch_design frequently g
 
 Multi-tool example — a "Notifications" settings section with a header + 4 toggle rows is **5 tool calls** (1× `add_section_header_v0` + 4× `add_setting_row_v0`), NOT 1 batch_design.
 
-**`parent_id` is REAL or OMITTED — never invented.** Every `add_*_v0` tool's `parent_id` arg must either (1) be omitted entirely so the new node lands at the page root (the safe default for full-page composite briefs), or (2) name a real existing node id you already received from a prior tool call. The cookbook recipes below use placeholders like `<page>` / `<panel>` / `<sidebar>` as DOCUMENTATION shorthand only — when YOU emit the call in your output, OMIT the parent_id field entirely. Inventing strings (`"page"`, `"canvas"`, `"members-section"`, `"<page>"`) makes the tool reject the call with `parent_id "X" not found in document`.
+**`parent_id` is REAL or OMITTED — never invented.** Every `add_*_v0` tool's `parent_id` arg must either (1) be omitted entirely so the new node lands at the page root (the safe default for full-page composite briefs), or (2) name a real existing node id you already received from a prior tool call. The cookbook recipes below use placeholders like `<page>` / `<panel>` / `<sidebar>` as DOCUMENTATION shorthand only — when YOU emit the call in your output, OMIT the parent_id field entirely.
+
+❌ WRONG — these all crash with `parent_id "X" not found in document` because every id was made up by the model, not handed to you by a prior tool call:
+- `add_activity_log_v0({ parent_id: "entry-1", actor: "Sarah", ... })` — "entry-1" was never created
+- `add_setting_row_v0({ parent_id: "root", label: "Email" })` — page root has no id
+- `add_member_row_v0({ parent_id: "members-section", name: "Sarah" })` — section-* placeholders are docs, not real ids
+- Same trap for any sequential name you might invent: `card-1` / `item-1` / `row-N` / `<page>` / `panel` / `canvas`
+
+✅ RIGHT — omit `parent_id` entirely; each call lands at the page root, which is what every full-page composite brief wants:
+- `add_activity_log_v0({ actor: "Sarah", action: "approved deploy", timestamp: "2h ago" })`
+- `add_setting_row_v0({ label: "Email notifications", trailing: { kind: "switch", value: true } })`
+- `add_member_row_v0({ name: "Sarah Lee", subtitle: "Designer" })`
 
 ## Decision tree (per component — pick first match)
 
