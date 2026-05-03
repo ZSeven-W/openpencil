@@ -1,0 +1,53 @@
+name: Rust check (native)
+
+on:
+  pull_request:
+    paths:
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - 'crates/**'
+      - 'rust-toolchain.toml'
+      - 'rustfmt.toml'
+      - 'deny.toml'
+      - '.github/workflows/rust-check.yml'
+  push:
+    branches: [main, 'feat/rust-ification']
+    paths:
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - 'crates/**'
+      - 'rust-toolchain.toml'
+
+jobs:
+  check:
+    name: ${{ matrix.os }} / 1.82
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, ubuntu-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: "1.82"
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo fmt --all -- --check
+      - run: cargo build --workspace
+      - run: cargo test --workspace
+      - run: cargo clippy --workspace --all-targets -- -D warnings
+
+  deny:
+    name: cargo-deny (native)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: EmbarkStudios/cargo-deny-action@v2  # auto-updates within v2.x; runner cargo at this stage carries cargo-deny 0.18+ which handles modern transitive manifests (Phase 1 Task 1.8 finding)
+        with:
+          command: check
