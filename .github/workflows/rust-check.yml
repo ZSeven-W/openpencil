@@ -20,7 +20,7 @@ on:
 
 jobs:
   check:
-    name: ${{ matrix.os }} / 1.82
+    name: ${{ matrix.os }} / 1.85
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -32,7 +32,7 @@ jobs:
           submodules: recursive
       - uses: dtolnay/rust-toolchain@stable
         with:
-          toolchain: "1.82"
+          toolchain: "1.85"
           components: rustfmt, clippy
       - uses: Swatinem/rust-cache@v2
       - run: cargo fmt --all -- --check
