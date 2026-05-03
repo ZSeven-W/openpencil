@@ -447,8 +447,8 @@ bun run mcp:dev            # Run MCP server from source
 OpenPencil 正在进行全量 Rust 化。当前状态见 `openpencil-docs/superpowers/specs/2026-05-02-rust-ification-kickoff.md`（v7 FROZEN）。
 
 ```bash
-# Install Rust toolchain (rust-toolchain.toml auto-pins 1.82)
-rustup toolchain install 1.82
+# Install Rust toolchain (rust-toolchain.toml auto-pins 1.85)
+rustup toolchain install 1.85
 rustup target add wasm32-unknown-unknown
 
 # build / test / lint
