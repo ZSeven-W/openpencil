@@ -1,0 +1,16 @@
+id: dashboard-category-pie
+category: dashboard
+difficulty: obvious
+prompt: |
+  Design ONLY a pie chart showing budget split across 4 categories
+  with proportional slices: Housing (40%), Food (30%), Transport
+  (20%), Entertainment (10%). 180px diameter, each slice in a
+  different color. Do NOT include legend, title, axis labels, or
+  surrounding dashboard chrome — just the pie chart itself.
+expected:
+  must_contain_roles:
+    - chart-pie
+    - chart-pie-slice
+  min_roles:
+    chart-pie-slice: 4
+expected_tool_if_any: add_chart_pie_v0

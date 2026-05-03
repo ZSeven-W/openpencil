@@ -40,6 +40,14 @@ export function compactSubAgentSkills<T extends { meta: { name: string }; conten
       'mobile-app',
       'icon-catalog',
       'style-defaults',
+      // N-tool element reference — gated by `hasMcpTools` at the
+      // resolveSkills layer (see orchestrator-sub-agent.ts and the
+      // elements.md frontmatter). When the flag is off, the skill
+      // isn't in `skills` to begin with, so keeping it in the
+      // allow-list is a no-op. When the flag is on, we MUST allow
+      // it through or the basic-tier filter below silently drops
+      // the element-tool docs and the feature can't fire.
+      'elements',
     ]);
     next = next.filter((skill) => allowed.has(skill.meta.name));
     if (reducedComplexity) {
@@ -52,6 +60,13 @@ export function compactSubAgentSkills<T extends { meta: { name: string }; conten
         'style-defaults',
         'design-md',
         'variables',
+        // elements.md deliberately OMITTED from the retry-allowed
+        // set. Reduced-complexity retries are the last-ditch
+        // fallback for weak models that already failed once; the
+        // elements skill adds ~17k chars to the prompt and the
+        // retry path wants the smallest possible kernel. When the
+        // first attempt fails in treatment mode, we drop back to
+        // legacy batch_design for the retry.
       ]);
       next = next.filter((skill) => retryAllowed.has(skill.meta.name));
     }

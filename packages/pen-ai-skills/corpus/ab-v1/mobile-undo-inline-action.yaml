@@ -1,0 +1,19 @@
+id: mobile-undo-inline-action
+category: mobile
+difficulty: obvious
+prompt: |
+  Design ONLY an INLINE micro-feedback row (not a floating toast, not a
+  full-width banner alert). Horizontal layout, fit_content sizing,
+  centered alignment, 12px gap between two children:
+    1. message group (icon + text, 6px gap): leading lucide "info" icon
+       (16×16, slate-500) followed by slate-600 13/400 message
+       "Comment deleted"
+    2. blue-600 13/600 action label "Undo" on the right
+  Do NOT render a floating pill background, dismiss × icon, or any
+  surrounding chrome — just the inline action row, no fill.
+expected:
+  must_contain_roles:
+    - inline-action
+    - inline-action-message
+    - inline-action-cta
+expected_tool_if_any: add_inline_action_v0

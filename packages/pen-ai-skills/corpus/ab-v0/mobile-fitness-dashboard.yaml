@@ -1,0 +1,13 @@
+id: mobile-fitness-dashboard
+category: mobile
+difficulty: obvious
+prompt: |
+  Design ONLY a horizontal scrolling row of 3 metric tiles for a
+  fitness tracker: Steps (value "8,432", icon "activity"), Kcal
+  (value "512", icon "flame"), Sleep (value "7h 24m", icon "moon").
+  Each tile shows label + big value + small icon. Do NOT include
+  page background, header, or bottom nav — just the metric row.
+expected:
+  min_roles:
+    metric-tile: 3
+expected_tool_if_any: add_metric_row_v0

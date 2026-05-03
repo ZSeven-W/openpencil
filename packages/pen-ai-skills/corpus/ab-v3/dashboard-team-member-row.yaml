@@ -1,0 +1,26 @@
+id: dashboard-team-member-row
+category: dashboard
+difficulty: obvious
+prompt: |
+  Design ONLY one row of a team-members list (the kind that shows
+  who has access to a workspace). The row is ~64px tall, full width
+  on a 720-wide panel. Left to right:
+    - a 40px circular avatar with a single capital initial "S" on a
+      blue background
+    - a vertical text stack: "Sarah Lee" (16/600) on top,
+      "sarah@acme.com" (13/400, muted) below
+    - a small pill-shaped role badge on the right reading "Owner"
+  No leading icons, no checkboxes, no kebab menu — only avatar +
+  name/email + role badge. Render exactly this one row, not a list
+  or a header.
+expected:
+  must_contain_roles:
+    - member-row
+    - member-row-avatar
+    - member-row-avatar-initial
+    - member-row-text
+    - member-row-name
+    - member-row-subtitle
+    - member-row-badge
+    - member-row-badge-text
+expected_tool_if_any: add_member_row_v0

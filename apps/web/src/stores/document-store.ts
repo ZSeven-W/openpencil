@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import type { PenDocument, PenNode } from '@/types/pen';
 import type { VariableDefinition } from '@/types/variables';
+import type { DesignMdSpec } from '@/types/design-md';
 
 import { normalizePenDocument } from '@/utils/normalize-pen-file';
 import { addRecentFile } from '@/utils/recent-files';
@@ -69,6 +70,9 @@ interface DocumentStoreState {
   renameVariable: (oldName: string, newName: string) => void;
   setThemes: (themes: Record<string, string[]>) => void;
 
+  // Design.md — per-document design system spec (lives inside PenDocument).
+  setDesignMd: (spec: DesignMdSpec | undefined) => void;
+
   // Page management
   addPage: () => string;
   removePage: (pageId: string) => void;
@@ -126,6 +130,15 @@ export const useDocumentStore = create<DocumentStoreState>((set, get) => ({
 
   // --- Page management (extracted to document-store-pages.ts) ---
   ...createPageActions(set, get),
+
+  // --- Design.md (per-document) ---
+  setDesignMd: (spec) => {
+    useHistoryStore.getState().pushState(get().document);
+    set((s) => ({
+      document: { ...s.document, designMd: spec },
+      isDirty: true,
+    }));
+  },
 
   // --- Lifecycle actions (remain inline — small) ---
 

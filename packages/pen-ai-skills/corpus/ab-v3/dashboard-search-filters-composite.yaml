@@ -1,0 +1,31 @@
+id: dashboard-search-filters-composite
+category: dashboard
+difficulty: composite
+prompt: |
+  Design a search results page with a filter sidebar — the kind
+  you'd see on an e-commerce or knowledge-base search. The page
+  is 1024px wide. Contents left-to-right:
+    - left column (240px): a stack of 2 filter groups
+        - "Category" with 4 checkbox options:
+          "Apparel" (124, selected), "Footwear" (86), "Bags" (41),
+          "Accessories" (67)
+        - "Brand" with 4 checkbox options:
+          "Nike" (32), "Adidas" (28), "Patagonia" (15, selected),
+          "Arc'teryx" (9)
+    - right column (remaining width, ~760px): a single search bar
+      at the top showing the current query "running shoes", then a
+      vertical list of 3 product/result rows. Each result row is
+      ~72px tall and contains a small thumbnail placeholder, a
+      title (e.g. "Free Run 5 — Black"), a muted secondary line
+      (e.g. "Nike • Footwear • $120"), and a trailing chevron.
+  Do NOT render breadcrumbs, the global navbar, footer, pagination,
+  or a cart sidebar — only the filter column + result column
+  described above.
+expected:
+  must_contain_roles:
+    - filter-group
+    - filter-group-title
+    - filter-group-option
+    - filter-group-checkbox
+  min_roles:
+    filter-group: 2
