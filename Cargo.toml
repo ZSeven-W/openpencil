@@ -1,0 +1,36 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/openpencil-app",
+    "crates/openpencil-shell-core",
+    "crates/openpencil-shell-web",
+    "crates/openpencil-shell-native",
+    "crates/pen-types",
+    "crates/pen-core",
+    "crates/pen-engine",
+    "crates/pen-codegen",
+    "crates/pen-figma",
+]
+exclude = [
+    "vendor/agent",
+    "node_modules",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.80"
+license = "MIT"
+authors = ["ZSeven-W <fini.yang@gmail.com>"]
+repository = "https://github.com/ZSeven-W/openpencil"
+
+[workspace.dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "1"
+anyhow = "1"
+tracing = "0.1"
+
+# WASM 边界相关（per kickoff §1.2 黑名单 = 不出现在这里）
+# 故意不在 workspace.dependencies 暴露 tokio / reqwest / agent / pen-agent-cli /
+# pen-server / native-tls —— 这些只在 native-only crate 内部用 dev-deps 或 target-specific deps。
