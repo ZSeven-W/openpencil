@@ -1,0 +1,50 @@
+name: WASM bundle check (kickoff §1.2)
+
+on:
+  pull_request:
+    paths:
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - 'crates/**'
+      - 'deny.toml'
+      - '.github/workflows/wasm-bundle-check.yml'
+  push:
+    branches: [main, 'feat/rust-ification']
+
+jobs:
+  wasm32-check:
+    name: cargo check --target wasm32-unknown-unknown
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: "1.82"
+          targets: wasm32-unknown-unknown
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: wasm32-cache
+      - name: Forward — bucket A crates compile on wasm32
+        run: |
+          cargo check --target wasm32-unknown-unknown \
+            -p openpencil-shell-web --no-default-features --features web
+          cargo check --target wasm32-unknown-unknown \
+            -p pen-types -p pen-core -p pen-engine -p pen-codegen -p pen-figma
+
+  wasm32-deny:
+    name: cargo-deny --target wasm32-unknown-unknown check bans
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+      - name: Reverse — blacklisted crates not in wasm bundle
+        uses: EmbarkStudios/cargo-deny-action@v2  # cargo-deny 0.18+ via the action (Phase 1 Task 1.8 finding)
+        with:
+          command: check bans
+          arguments: --target wasm32-unknown-unknown
