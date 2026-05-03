@@ -1,0 +1,26 @@
+[package]
+name = "openpencil-shell-native"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "OpenPencil shell — native (winit + skia-safe + accesskit) backend"
+
+[lib]
+name = "openpencil_shell_native"
+path = "src/lib.rs"
+
+[dependencies]
+openpencil-shell-core = { path = "../openpencil-shell-core" }
+
+# Native-only deps cfg-gated 在 wasm32 之外。这一步关键（解 codex round 2 B1 BLOCK）：
+# 如果不 cfg-gate，cargo 会先 fetch + run skia-safe 的 build.rs（在 wasm32 上构建失败），
+# Step 5 grep `must NOT be compiled for wasm32` 永远命中不到——会被 skia 错误盖过。
+#
+# Phase 1 skeleton 阶段：故意保持 deps 最小，仅声明意图所需的核心 crate（winit）。
+# skia-safe / accesskit / accesskit_winit 等在 Stage F 真正实现 RenderBackend 时再加。
+# 原因：Rust 1.80 toolchain (rust-toolchain.toml) 对 home/hashbrown 等 crate 当前
+# 版本的 edition2024 / MSRV 1.81+ 需求不兼容，加完整依赖会导致下载阶段失败。
+# 详见提交说明 + Phase 1 Gate codex review。
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+winit = { version = "0.30", default-features = false }
