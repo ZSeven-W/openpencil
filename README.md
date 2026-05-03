@@ -442,6 +442,35 @@ bun run cli:compile        # Compile CLI to dist
 bun run mcp:dev            # Run MCP server from source
 ```
 
+### Rust subsystem (Step 0+)
+
+OpenPencil 正在进行全量 Rust 化。当前状态见 `openpencil-docs/superpowers/specs/2026-05-02-rust-ification-kickoff.md`（v7 FROZEN）。
+
+```bash
+# Install Rust toolchain (rust-toolchain.toml auto-pins 1.82)
+rustup toolchain install 1.82
+rustup target add wasm32-unknown-unknown
+
+# build / test / lint
+bun run cargo:check
+bun run cargo:test
+bun run cargo:clippy
+bun run cargo:wasm-check  # kickoff §1.2 wasm32 invariant
+bun run cargo:deny        # cargo-deny (native + wasm32 bans; CI uses cargo-deny-action@v2)
+```
+
+**Crate list (`crates/`):**
+
+| Crate | Category | wasm32 |
+|-------|----------|--------|
+| openpencil-app | Stage F entry placeholder | — |
+| openpencil-shell-{core,web,native} | UI shell（spec §1.2 三 crate） | core/web ✅ / native ❌ (compile_error guard) |
+| pen-types / pen-core / pen-engine / pen-codegen / pen-figma | bucket A logic | ✅ |
+
+**Submodule:** `vendor/agent` → `github.com/ZSeven-W/agent-rs` (cross-product Rust agent runtime).
+
+**Phase boundary:** Step 0 = workspace skeleton only (no feature porting). Real implementation begins at Step 1 (kill-spike) and beyond.
+
 ## Contributing
 
 Contributions are welcome! See [CLAUDE.md](./CLAUDE.md) for architecture details and code style.
