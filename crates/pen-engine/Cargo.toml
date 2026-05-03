@@ -11,5 +11,5 @@ name = "pen_engine"
 path = "src/lib.rs"
 
 [dependencies]
-pen-types = { path = "../pen-types" }
-pen-core = { path = "../pen-core" }
+pen-types = { path = "../pen-types", version = "0.1.0" }
+pen-core = { path = "../pen-core", version = "0.1.0" }
