@@ -1,0 +1,16 @@
+[package]
+name = "pen-core"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "OpenPencil core engine (Action DSL / Signal graph) — bucket A in-WASM"
+
+[lib]
+name = "pen_core"
+path = "src/lib.rs"
+
+[dependencies]
+pen-types = { path = "../pen-types" }
+serde = { workspace = true }
+thiserror = { workspace = true }
