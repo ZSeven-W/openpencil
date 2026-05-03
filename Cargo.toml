@@ -12,7 +12,7 @@ exclude = [
 [workspace.package]
 version = "0.1.0"
 edition = "2021"
-rust-version = "1.80"
+rust-version = "1.82"
 license = "MIT"
 authors = ["ZSeven-W <fini.yang@gmail.com>"]
 repository = "https://github.com/ZSeven-W/openpencil"
