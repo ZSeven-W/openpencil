@@ -1,0 +1,18 @@
+id: dashboard-confirm-modal
+category: dashboard
+difficulty: obvious
+prompt: |
+  Design ONLY the shell of a confirmation modal dialog: full-bleed
+  dimmed backdrop (semi-transparent black) with a centered white
+  card (rounded corners, subtle drop shadow) containing the heading
+  "Delete this project?" and a smaller description below: "This
+  action cannot be undone. All associated files will be permanently
+  removed." Do NOT include action buttons, close icon, or any
+  surrounding page — just the scrim + card with title and subtitle.
+expected:
+  must_contain_roles:
+    - modal-scrim
+    - modal-shell-card
+    - modal-title
+    - modal-subtitle
+expected_tool_if_any: add_modal_shell_v0

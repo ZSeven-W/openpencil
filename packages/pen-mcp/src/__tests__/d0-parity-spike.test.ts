@@ -1,0 +1,170 @@
+/**
+ * D0 Parity Spike — validates the N-tool "additive-only" hypothesis by
+ * adding a minimal `add_section_v0` tool BEHIND an env flag and asserting:
+ *
+ *   1. `add_section_v0` is NOT in default DESIGN_TOOL_DEFINITIONS
+ *      (not exposed to external MCP clients by default)
+ *   2. `add_section_v0` IS in D0_SPIKE_TOOL_DEFINITIONS
+ *      (reachable only when OPENPENCIL_D0_SPIKE=1)
+ *   3. Existing design tools' names and definitions are unchanged
+ *      (snapshot-pinned to detect any drift)
+ *   4. `batch_design` keeps producing identical output on a baseline
+ *      fixture (proves no shared-helper contamination)
+ *   5. `add_section_v0` handler produces expected PenNode via sugar over
+ *      handleBatchDesign
+ *
+ * See spec: openpencil-docs/superpowers/specs/2026-04-19-element-tools-v0.md §D0
+ */
+
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { writeFile, unlink, readFile, mkdir } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import {
+  DESIGN_TOOL_DEFINITIONS,
+  DESIGN_TOOL_NAMES,
+  D0_SPIKE_TOOL_DEFINITIONS,
+  D0_SPIKE_TOOL_NAMES,
+} from '../routes/design-routes';
+import { handleAddSectionV0 } from '../tools/add-section-v0';
+import { handleBatchDesign } from '../tools/batch-design';
+import { invalidateCache } from '../document-manager';
+
+const TMP_DIR = join(tmpdir(), 'openpencil-d0-parity-spike');
+
+const EMPTY_DOC = JSON.stringify({ version: '1.0.0', children: [] });
+
+beforeEach(async () => {
+  await mkdir(TMP_DIR, { recursive: true });
+});
+
+afterEach(async () => {
+  for (const f of ['add-h.op', 'add-v.op', 'batch-baseline.op', 'roundtrip.op']) {
+    try {
+      const fp = join(TMP_DIR, f);
+      invalidateCache(fp);
+      await unlink(fp);
+    } catch {}
+  }
+});
+
+describe('D0 parity spike — additive & gated tool registration', () => {
+  it('add_section_v0 is NOT in default DESIGN_TOOL_DEFINITIONS (not exposed by default)', () => {
+    const names = DESIGN_TOOL_DEFINITIONS.map((t) => t.name);
+    expect(names).not.toContain('add_section_v0');
+  });
+
+  it('add_section_v0 is NOT in default DESIGN_TOOL_NAMES', () => {
+    expect(DESIGN_TOOL_NAMES.has('add_section_v0')).toBe(false);
+  });
+
+  it('add_section_v0 IS in D0_SPIKE_TOOL_DEFINITIONS (reachable when flag set)', () => {
+    const names = D0_SPIKE_TOOL_DEFINITIONS.map((t) => t.name);
+    expect(names).toContain('add_section_v0');
+  });
+
+  it('add_section_v0 IS in D0_SPIKE_TOOL_NAMES', () => {
+    expect(D0_SPIKE_TOOL_NAMES.has('add_section_v0')).toBe(true);
+  });
+
+  it('pre-D0 production design tools still present (no regression)', () => {
+    // These 5 existed when D0 spike validated Sugar route. They must remain
+    // present for any future additive changes. New tools (add_scroll_row_v0
+    // and beyond) may be added, but none of these 5 may disappear.
+    const names = DESIGN_TOOL_DEFINITIONS.map((t) => t.name);
+    for (const preD0 of [
+      'batch_design',
+      'design_content',
+      'design_refine',
+      'design_skeleton',
+      'get_design_prompt',
+    ]) {
+      expect(names).toContain(preD0);
+    }
+  });
+
+  it('pre-D0 production design tool DEFINITIONS are unchanged (snapshot)', () => {
+    // Snapshot only the 5 pre-D0 tools. Any future MVP tool
+    // (add_scroll_row_v0 etc.) is excluded from this snapshot so it keeps
+    // its D0-baseline role: detecting drift in pre-existing tool schemas.
+    const preD0Names = new Set([
+      'batch_design',
+      'design_content',
+      'design_refine',
+      'design_skeleton',
+      'get_design_prompt',
+    ]);
+    const preD0Tools = DESIGN_TOOL_DEFINITIONS.filter((t) => preD0Names.has(t.name));
+    expect(preD0Tools).toMatchSnapshot('pre-d0-design-tool-definitions');
+  });
+});
+
+describe('D0 parity spike — batch_design non-interference', () => {
+  it('batch_design inserts a rectangle (baseline)', async () => {
+    const fp = join(TMP_DIR, 'batch-baseline.op');
+    await writeFile(fp, EMPTY_DOC, 'utf-8');
+
+    const result = await handleBatchDesign({
+      filePath: fp,
+      operations:
+        'rect=I(null, { "type": "rectangle", "x": 0, "y": 0, "width": 100, "height": 50 })',
+      postProcess: false,
+    });
+
+    expect(result.results).toHaveLength(1);
+    expect(result.results[0]).toEqual({ binding: 'rect', nodeId: expect.any(String) });
+    expect(result.nodeCount).toBe(1);
+    expect(result.errors).toBeUndefined();
+  });
+});
+
+describe('D0 parity spike — add_section_v0 behavior', () => {
+  it('inserts a horizontal section frame', async () => {
+    const fp = join(TMP_DIR, 'add-h.op');
+    await writeFile(fp, EMPTY_DOC, 'utf-8');
+
+    const result = await handleAddSectionV0({
+      filePath: fp,
+      title: 'Hero',
+      layout: 'horizontal',
+    });
+
+    expect(result.results).toHaveLength(1);
+    expect(result.results[0].binding).toBe('sec');
+    expect(result.nodeCount).toBe(1);
+    expect(result.errors).toBeUndefined();
+  });
+
+  it('inserts a vertical section frame', async () => {
+    const fp = join(TMP_DIR, 'add-v.op');
+    await writeFile(fp, EMPTY_DOC, 'utf-8');
+
+    const result = await handleAddSectionV0({
+      filePath: fp,
+      title: 'Sidebar',
+      layout: 'vertical',
+    });
+
+    expect(result.results).toHaveLength(1);
+    expect(result.nodeCount).toBe(1);
+  });
+
+  it('persists title as frame.name and layout on disk', async () => {
+    const fp = join(TMP_DIR, 'roundtrip.op');
+    await writeFile(fp, EMPTY_DOC, 'utf-8');
+
+    await handleAddSectionV0({
+      filePath: fp,
+      title: 'Test Section Title',
+      layout: 'horizontal',
+    });
+
+    const raw = await readFile(fp, 'utf-8');
+    const doc = JSON.parse(raw);
+    const root = doc.pages?.[0]?.children?.[0] ?? doc.children?.[0];
+    expect(root).toBeDefined();
+    expect(root.type).toBe('frame');
+    expect(root.name).toBe('Test Section Title');
+    expect(root.layout).toBe('horizontal');
+  });
+});
