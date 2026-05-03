@@ -11,6 +11,6 @@ name = "pen_figma"
 path = "src/lib.rs"
 
 [dependencies]
-pen-types = { path = "../pen-types" }
+pen-types = { path = "../pen-types", version = "0.1.0" }
 serde = { workspace = true }
 serde_json = { workspace = true }

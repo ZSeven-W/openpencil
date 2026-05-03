@@ -11,4 +11,4 @@ name = "pen_codegen"
 path = "src/lib.rs"
 
 [dependencies]
-pen-types = { path = "../pen-types" }
+pen-types = { path = "../pen-types", version = "0.1.0" }
