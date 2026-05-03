@@ -21,7 +21,7 @@ jobs:
           submodules: recursive
       - uses: dtolnay/rust-toolchain@stable
         with:
-          toolchain: "1.82"
+          toolchain: "1.85"
           targets: wasm32-unknown-unknown
       - uses: Swatinem/rust-cache@v2
         with:
