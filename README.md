@@ -153,6 +153,16 @@ scoop install openpencil
 npm install -g @zseven-w/openpencil
 ```
 
+## Cloning（含 Rust 子系统）
+
+```bash
+git clone --recurse-submodules https://github.com/ZSeven-W/openpencil.git
+# Or already cloned:
+git submodule update --init --recursive
+```
+
+`vendor/agent` is the `agent-rs` submodule (cross-product, OP + Zode share); HTTPS URL needs no SSH key.
+
 ## Quick Start (Development)
 
 ```bash
