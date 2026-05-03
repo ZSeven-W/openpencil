@@ -1,0 +1,15 @@
+id: dashboard-revenue-trend
+category: dashboard
+difficulty: obvious
+prompt: |
+  Design ONLY a single KPI cell with trend: small gray label
+  "Revenue" on top, big bold value "$12,480" below, with a green
+  upward-trending arrow and "+8%" next to it (indicating growth).
+  Do NOT include the dashboard card background, surrounding cells,
+  or any other KPIs — just this one metric cell.
+expected:
+  must_contain_roles:
+    - metric-comparison
+    - metric-comparison-value
+    - metric-comparison-change
+expected_tool_if_any: add_metric_comparison_v0

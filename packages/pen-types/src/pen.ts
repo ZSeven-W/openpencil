@@ -1,5 +1,6 @@
 import type { PenFill, PenStroke, PenEffect, StyledTextSegment } from './styles.js';
 import type { VariableDefinition } from './variables.js';
+import type { DesignMdSpec } from './design-md.js';
 
 // --- Page ---
 
@@ -16,6 +17,13 @@ export interface PenDocument {
   name?: string;
   themes?: Record<string, string[]>;
   variables?: Record<string, VariableDefinition>;
+  /**
+   * Design system specification attached to this document. Lives on the
+   * document (not in a side store) so it serializes with `.pen`/`.op`
+   * files and travels between sessions/users without leaking across
+   * documents (see `openpencil-docs/…/plans/2026-04-20-design-md-per-document.md`).
+   */
+  designMd?: DesignMdSpec;
   pages?: PenPage[];
   children: PenNode[];
 }
