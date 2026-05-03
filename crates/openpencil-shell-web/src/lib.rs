@@ -8,5 +8,8 @@ use wasm_bindgen::prelude::*;
 
 #[wasm_bindgen]
 pub fn placeholder() -> String {
-    format!("openpencil-shell-web skeleton ({})", openpencil_shell_core::placeholder())
+    format!(
+        "openpencil-shell-web skeleton ({})",
+        openpencil_shell_core::placeholder()
+    )
 }

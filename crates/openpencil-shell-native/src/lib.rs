@@ -11,7 +11,10 @@ compile_error!(
 );
 
 pub fn placeholder() -> String {
-    format!("openpencil-shell-native skeleton ({})", openpencil_shell_core::placeholder())
+    format!(
+        "openpencil-shell-native skeleton ({})",
+        openpencil_shell_core::placeholder()
+    )
 }
 
 #[cfg(test)]
