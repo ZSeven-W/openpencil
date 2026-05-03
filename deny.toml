@@ -3,6 +3,17 @@
 
 [graph]
 all-features = false
+# 限定到实际发布目标（macOS/Linux/Windows native + wasm32）。
+# 不限定的话 cargo-deny 默认尝试所有 target（含 Android/iOS），
+# 拉进 jni / android-activity 等 edition-2024 deps，在 rustc 1.82 上 cargo metadata 失败。
+targets = [
+    { triple = "x86_64-unknown-linux-gnu" },
+    { triple = "aarch64-unknown-linux-gnu" },
+    { triple = "x86_64-apple-darwin" },
+    { triple = "aarch64-apple-darwin" },
+    { triple = "x86_64-pc-windows-msvc" },
+    { triple = "wasm32-unknown-unknown" },
+]
 
 [licenses]
 allow = [
@@ -27,6 +38,8 @@ ignore = []
 [bans]
 multiple-versions = "warn"
 wildcards = "deny"
+# 允许 workspace 内部 path 依赖不写 version（标准实践，避免每次 bump 都改两处）。
+allow-wildcard-paths = true
 deny = [
     # WASM bundle 黑名单（kickoff spec §1.2 invariant）
     "pen-agent-cli",

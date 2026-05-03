@@ -11,7 +11,7 @@ name = "openpencil_shell_native"
 path = "src/lib.rs"
 
 [dependencies]
-openpencil-shell-core = { path = "../openpencil-shell-core" }
+openpencil-shell-core = { path = "../openpencil-shell-core", version = "0.1.0" }
 
 # Native-only deps cfg-gated 在 wasm32 之外。这一步关键（解 codex round 2 B1 BLOCK）：
 # 如果不 cfg-gate，cargo 会先 fetch + run skia-safe 的 build.rs（在 wasm32 上构建失败），
