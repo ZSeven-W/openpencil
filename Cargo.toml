@@ -1,16 +1,9 @@
 [workspace]
 resolver = "2"
-members = [
-    "crates/openpencil-app",
-    "crates/openpencil-shell-core",
-    "crates/openpencil-shell-web",
-    "crates/openpencil-shell-native",
-    "crates/pen-types",
-    "crates/pen-core",
-    "crates/pen-engine",
-    "crates/pen-codegen",
-    "crates/pen-figma",
-]
+# 用 glob 而非显式列表：Step 0 增量创建 crate 时不需要每次改 members（per implementer
+# Phase 1 batch 2 的 workspace masking 反馈：列出未存在的 crate 会让 `cargo build -p X`
+# 在 resolve 阶段就挂掉）。glob 自动包含 crates/ 下所有 manifest，自然支持增量创建。
+members = ["crates/*"]
 exclude = [
     "vendor/agent",
     "node_modules",
