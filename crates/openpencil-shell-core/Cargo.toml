@@ -1,0 +1,23 @@
+[package]
+name = "openpencil-shell-core"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "OpenPencil shell — retained-mode widget tree, RenderBackend trait, parley + taffy (kickoff spec §1.2)"
+
+[lib]
+name = "openpencil_shell_core"
+path = "src/lib.rs"
+
+[dependencies]
+serde = { workspace = true, optional = true }
+
+# Pinned per Task 0.4 wasm32 feature matrix verdict
+# (notes/2026-05-02-parley-wasm-feature-matrix.md "## 结论" 段)
+parley = { version = "0.2", default-features = false, features = ["std"] }
+taffy = { version = "0.6", default-features = false, features = ["std", "taffy_tree", "flexbox", "grid", "block_layout", "content_size"] }
+
+[features]
+default = []
+serde = ["dep:serde"]
