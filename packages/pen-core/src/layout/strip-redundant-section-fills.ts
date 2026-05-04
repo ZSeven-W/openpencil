@@ -71,6 +71,16 @@ const PROTECTED_ROLES = new Set([
   'metric-card',
   'gallery-item',
   'status-bar',
+  // Navigation surfaces — bottom-tab bars, top app bars, and side nav
+  // chrome carry their own intentional surface fill (often the cream/white
+  // surface tone that visually separates them from the cream root frame).
+  // Without protection the strip pass would erase that fill on light-mode
+  // docs because cream surface (#FFFFFF / #F1F5F9) is in SAFE_LIGHT_HEXES.
+  'navbar',
+  'nav',
+  'tab-bar',
+  'bottom-tab-bar',
+  'top-nav-bar',
 ]);
 
 /**
