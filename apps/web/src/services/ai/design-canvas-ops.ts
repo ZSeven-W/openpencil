@@ -18,6 +18,7 @@ import {
   normalizeTreeLayout,
   unwrapFakePhoneMockups,
   stripRedundantSectionFills,
+  injectMissingNavSurfaceFill,
   normalizeStrokeFillSchema,
 } from '@/canvas/canvas-layout-engine';
 import { forcePageResync } from '@/canvas/canvas-sync-utils';
@@ -716,6 +717,11 @@ export function applyPostStreamingTreeHeuristics(rootNodeId: string): void {
   const parentOfRoot = useDocumentStore.getState().getParentOf(rootNodeId);
   const pageRoot = parentOfRoot && parentOfRoot.type === 'frame' ? parentOfRoot : freshRoot;
   stripRedundantSectionFills(pageRoot);
+  // Add a default surface fill on top-level navigation frames the
+  // sub-agent left transparent — without this the bottom nav floats on
+  // the cream root background with no surface to anchor it. See
+  // packages/pen-core/src/layout/inject-nav-surface-fill.ts for scope.
+  injectMissingNavSurfaceFill(pageRoot);
 
   // Publish point. unwrap, resolveTreeRoles, and normalizeTreeLayout all
   // mutate store-owned nodes in place; resolveTreePostPass mostly goes
