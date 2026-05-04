@@ -341,7 +341,7 @@ function extractAllJsonBlocks(text: string): string[] {
  * Parse JSONL-format response (flat nodes with _parent field) into a tree.
  * Used by extractAndApplyDesign for batch apply of JSONL content.
  */
-function parseJsonlToTree(text: string): PenNode[] | null {
+export function parseJsonlToTree(text: string): PenNode[] | null {
   const { results } = extractStreamingNodes(text, 0);
   if (results.length === 0) return null;
 
