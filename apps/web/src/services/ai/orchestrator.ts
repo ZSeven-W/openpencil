@@ -19,6 +19,7 @@ import type {
   SubAgentResult,
 } from './ai-types';
 import type { DesignMdSpec } from '@/types/design-md';
+import type { VariableDefinition } from '@/types/variables';
 import { streamChat } from './ai-service';
 import { resolveSkills } from '@zseven-w/pen-ai-skills';
 import { styleGuideRegistry } from '@zseven-w/pen-ai-skills/_generated/style-guide-registry';
@@ -942,6 +943,18 @@ export async function executeOrchestration(
       totalNodes: 0,
     };
 
+    // Snapshot plan-derived variables BEFORE seed so we can roll back if
+    // generation fails entirely (no surviving content). Without this, a
+    // failed/aborted brief permanently pollutes the user's doc.variables
+    // with the plan's palette even though no nodes were applied.
+    const variablesBeforeSeed: Record<string, VariableDefinition | undefined> = {};
+    {
+      const existing = useDocumentStore.getState().document.variables ?? {};
+      for (const name of PLAN_DERIVED_VARIABLE_NAMES) {
+        variablesBeforeSeed[name] = existing[name];
+      }
+    }
+
     seedDocVariablesFromStyleGuide(plan);
 
     let results: SubAgentResult[];
@@ -972,6 +985,7 @@ export async function executeOrchestration(
         }
         return n;
       };
+      let anyContentSurvived = false;
       for (const rn of rootNodes) {
         const live = store.getNodeById(rn.id);
         if (!live) continue;
@@ -999,6 +1013,21 @@ export async function executeOrchestration(
             } catch {
               /* already gone */
             }
+          }
+        } else {
+          anyContentSurvived = true;
+        }
+      }
+      // Roll back the plan-derived variables only when no content survived.
+      // With partial content the user can still see a salvageable design and
+      // its colors should match the seeded palette; rolling back would flip
+      // every $color-* ref to the default-palette blue.
+      if (!anyContentSurvived) {
+        for (const [name, prev] of Object.entries(variablesBeforeSeed)) {
+          if (prev === undefined) {
+            store.removeVariable(name);
+          } else {
+            store.setVariable(name, prev);
           }
         }
       }
