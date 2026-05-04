@@ -131,6 +131,8 @@ add_chart_line_v0({ values: [2, 5, 3, 7, 4, 8, 6] })
 add_chart_pie_v0({ values: [40, 30, 20, 10], diameter: 200 })
 add_chart_pie_v0({ values: [1, 1, 1, 1], inner_radius_ratio: 0.5 })  // donut
 add_image_placeholder_v0({ width: 320, height: 200, label: "Upload cover" })
+add_image_placeholder_v0({ width: 320, height: 200, image_search_query: "burger fries" })  // auto-fills with food photo
+add_image_placeholder_v1({ width: 320, height: 200, image_search_query: "modern office", theme: "system" })
 add_video_placeholder_v0({ width: 320, height: 180, label: "Coming soon" })
 add_comment_v0({ author: "Sarah", timestamp: "2h ago", body: "Looks great!", avatar_initial: "S" })
 add_modal_shell_v0({ title: "Confirm delete", subtitle: "This cannot be undone." })

@@ -208,9 +208,9 @@ Charts / data visualization:
 
 Media / placeholder:
 
-44. Image placeholder (gray box + centered icon + optional caption — future image slot) → `add_image_placeholder_v1` (bg → bgDeep, icon/label → textMuted in dark/system)
+44. Image placeholder (gray box + centered icon + optional caption — future image slot) → `add_image_placeholder_v1` (bg → bgDeep, icon/label → textMuted in dark/system). Pass `image_search_query` (2-3 English keywords like "burger fries", "modern office") so the auto-search pass replaces the gray box with a relevant photo; without it the pipeline searches the label or a generic placeholder and lands a random stock image.
     44b. Video placeholder (dark box + play icon + optional caption — future video embed) → `add_video_placeholder_v1` (dark bg/icon/caption are builder-private per §3.4; all modes identical)
-    44c. Byte-frozen image placeholder escape hatch → `add_image_placeholder_v0`
+    44c. Byte-frozen image placeholder escape hatch → `add_image_placeholder_v0` (also accepts `image_search_query`)
     44d. Byte-frozen video placeholder escape hatch → `add_video_placeholder_v0`
 
 Social / UGC:
