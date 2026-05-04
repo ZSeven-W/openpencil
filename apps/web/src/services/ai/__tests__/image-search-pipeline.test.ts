@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import {
   inferAspectRatio,
   isImagePlaceholderFrame,
+  isUnfilledImagePlaceholderFrame,
   collectImageSearchTargets,
 } from '../image-search-pipeline';
 import { useDocumentStore } from '@/stores/document-store';
@@ -61,6 +62,58 @@ describe('isImagePlaceholderFrame', () => {
   it('returns false for null / undefined', () => {
     expect(isImagePlaceholderFrame(undefined)).toBe(false);
     expect(isImagePlaceholderFrame(null)).toBe(false);
+  });
+});
+
+describe('isUnfilledImagePlaceholderFrame', () => {
+  it('returns true for placeholder frame with the default solid gray fill', () => {
+    const frame = {
+      id: 'p',
+      type: 'frame',
+      role: 'image-placeholder',
+      width: 200,
+      height: 140,
+      fill: [{ type: 'solid', color: '#F1F5F9' }],
+      children: [],
+    } as PenNode;
+    expect(isUnfilledImagePlaceholderFrame(frame)).toBe(true);
+  });
+
+  it('returns true when fill is missing or empty', () => {
+    const noFill = {
+      id: 'p',
+      type: 'frame',
+      role: 'image-placeholder',
+      width: 200,
+      height: 140,
+    } as PenNode;
+    const emptyFill = { ...noFill, fill: [] } as PenNode;
+    expect(isUnfilledImagePlaceholderFrame(noFill)).toBe(true);
+    expect(isUnfilledImagePlaceholderFrame(emptyFill)).toBe(true);
+  });
+
+  it('returns false once the placeholder has been filled with an image', () => {
+    const filled = {
+      id: 'p',
+      type: 'frame',
+      role: 'image-placeholder',
+      width: 200,
+      height: 140,
+      fill: [{ type: 'image', url: 'https://cdn/burger.jpg', mode: 'crop' }],
+      children: [],
+    } as PenNode;
+    expect(isUnfilledImagePlaceholderFrame(filled)).toBe(false);
+  });
+
+  it('returns false for non-placeholder frames regardless of fill', () => {
+    const card = {
+      id: 'c',
+      type: 'frame',
+      role: 'card',
+      fill: [{ type: 'solid', color: '#FFFFFF' }],
+      children: [],
+    } as PenNode;
+    expect(isUnfilledImagePlaceholderFrame(card)).toBe(false);
   });
 });
 
@@ -166,5 +219,43 @@ describe('collectImageSearchTargets', () => {
 
   it('returns empty when root id missing', () => {
     expect(collectImageSearchTargets('nonexistent')).toEqual([]);
+  });
+
+  it('does NOT collect placeholder frames that already have an image fill', () => {
+    // A previous scan painted this placeholder; the role stays
+    // (semantic survival) but the fill is now `type:'image'`. A
+    // follow-up scan must NOT re-enqueue it.
+    const filledPlaceholder = {
+      id: 'ph-old',
+      type: 'frame',
+      role: 'image-placeholder',
+      width: 320,
+      height: 200,
+      fill: [{ type: 'image', url: 'https://cdn/saved.jpg', mode: 'crop' }],
+      children: [],
+    } as PenNode;
+    const newPlaceholder = {
+      id: 'ph-new',
+      type: 'frame',
+      role: 'image-placeholder',
+      width: 200,
+      height: 140,
+      fill: [{ type: 'solid', color: '#F1F5F9' }],
+      children: [],
+    } as PenNode;
+    const root = {
+      id: 'root',
+      type: 'frame',
+      width: 360,
+      height: 800,
+      children: [filledPlaceholder, newPlaceholder],
+    } as PenNode;
+    useDocumentStore.setState({
+      document: { children: [root], variables: [], themes: [], pages: [] },
+    } as never);
+
+    const targets = collectImageSearchTargets('root');
+    expect(targets).toHaveLength(1);
+    expect(targets[0].node.id).toBe('ph-new');
   });
 });

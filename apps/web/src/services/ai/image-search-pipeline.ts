@@ -29,6 +29,27 @@ export function isImagePlaceholderFrame(node: PenNode | undefined | null): boole
   return (node as PenNode & { role?: string }).role === 'image-placeholder';
 }
 
+/**
+ * True when the frame is a placeholder AND still carries the gray
+ * solid fill (i.e. has not yet been filled by a previous scan). The
+ * filled-frame flag we leave on the node is the fill itself: once a
+ * scan succeeds it becomes `[{type:'image', url, mode:'crop'}]`. We
+ * INTENTIONALLY don't strip `role: 'image-placeholder'` on fill — the
+ * role is what makes "this frame is meant to hold a photo" semantics
+ * survive into history, codegen, and downstream tooling — but we do
+ * gate every search-pipeline read on the fill check so a future scan
+ * (e.g. from a follow-up generation that resets queuedNodeIds and
+ * re-walks the tree) doesn't re-fetch and replace an already-good photo.
+ */
+export function isUnfilledImagePlaceholderFrame(node: PenNode | undefined | null): boolean {
+  if (!isImagePlaceholderFrame(node)) return false;
+  const fill = (node as PenNode & { fill?: unknown }).fill;
+  if (!Array.isArray(fill) || fill.length === 0) return true;
+  const first = fill[0] as { type?: unknown } | undefined;
+  // Already painted with an image fill = filled, skip.
+  return first?.type !== 'image';
+}
+
 interface ImageSearchTarget {
   node: PenNode;
   kind: 'image' | 'placeholder-frame';
@@ -44,10 +65,14 @@ export function collectImageSearchTargets(rootId: string): ImageSearchTarget[] {
     if (node.type === 'image') {
       if (isPlaceholderSrc((node as ImageNode).src)) targets.push({ node, kind: 'image' });
     } else if (isImagePlaceholderFrame(node)) {
-      targets.push({ node, kind: 'placeholder-frame' });
-      // Don't descend into placeholder children (icon_font + label) — they
-      // get wiped on fill anyway, and treating them as separate targets
-      // would just be wasted work.
+      // Only enqueue if not already painted with an image fill — see
+      // `isUnfilledImagePlaceholderFrame` for the rationale on keeping the
+      // role around after fill. Either way, don't descend into children:
+      // unfilled placeholder children (icon_font + label) get wiped on
+      // fill, and filled placeholders don't have children anymore.
+      if (isUnfilledImagePlaceholderFrame(node)) {
+        targets.push({ node, kind: 'placeholder-frame' });
+      }
       return;
     }
     if ('children' in node && Array.isArray(node.children)) {
@@ -132,7 +157,7 @@ export function enqueueImageForSearch(node: PenNode): void {
   if (node.type === 'image') {
     if (!isPlaceholderSrc((node as ImageNode).src)) return;
     kind = 'image';
-  } else if (isImagePlaceholderFrame(node)) {
+  } else if (isUnfilledImagePlaceholderFrame(node)) {
     kind = 'placeholder-frame';
   } else {
     return;
@@ -184,8 +209,14 @@ async function processQueue(): Promise<void> {
     if (currentNode) {
       if (item.kind === 'image' && currentNode.type === 'image') {
         stillNeedsFill = isPlaceholderSrc((currentNode as ImageNode).src);
-      } else if (item.kind === 'placeholder-frame' && isImagePlaceholderFrame(currentNode)) {
-        stillNeedsFill = true;
+      } else if (item.kind === 'placeholder-frame') {
+        // Strict re-check: the frame must STILL be a placeholder AND not
+        // already filled with an image. Without the fill check, a
+        // follow-up generation that resets `queuedNodeIds` and re-runs
+        // `scanAndFillImages` on the same tree would re-search the
+        // already-good photo and overwrite it with whatever the new
+        // search returns.
+        stillNeedsFill = isUnfilledImagePlaceholderFrame(currentNode);
       }
     }
     if (!stillNeedsFill) {
