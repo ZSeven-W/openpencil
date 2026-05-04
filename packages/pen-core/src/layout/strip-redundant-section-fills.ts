@@ -74,6 +74,29 @@ const PROTECTED_ROLES = new Set([
 ]);
 
 /**
+ * Subset of PROTECTED_ROLES that represent atomic (single-purpose)
+ * components — search bars, buttons, badges, etc. These do NOT normally
+ * compose other atomic components inside them, so when a frame with this
+ * role contains another atomic-role child carrying its own solid fill, the
+ * outer is almost always a sub-agent-misrolled wrapper rather than the
+ * real atom (e.g. search-bar > input). Container components (card,
+ * pricing-card, banner, …) are EXCLUDED from this set: a card legitimately
+ * holds buttons/badges/chips with their own fills, and stripping the
+ * card's fill in that case would erase its intended surface color.
+ */
+const ATOMIC_PROTECTED_ROLES = new Set([
+  'button',
+  'icon-button',
+  'badge',
+  'chip',
+  'tag',
+  'pill',
+  'input',
+  'form-input',
+  'search-bar',
+]);
+
+/**
  * Roles that are considered structural — just a container grouping other
  * nodes. These are candidates for fill stripping when they echo the root
  * background or hedge with a safe-dark fill.
@@ -115,25 +138,31 @@ function isSectionLevelFrame(node: PenNode): boolean {
 }
 
 /**
- * True when a frame's children contain another node that carries either
- * the same component role or a sibling component role with its own solid
- * fill — the parent is then effectively a wrapper around the real atom.
+ * True when a frame is the outer wrapper of a misrolled component pattern:
+ *
+ *   - The OUTER frame's role is an atomic-component role (search-bar,
+ *     button, input, badge, chip, …). Container-component roles (card,
+ *     pricing-card, banner, …) are NEVER treated as wrappers — those
+ *     legitimately hold filled children like buttons / badges / chips.
+ *
+ *   - One of its CHILDREN carries either the same role (nested twin) or
+ *     a different atomic-component role with its own solid fill.
+ *
+ * This pattern only emerges when a sub-agent mislabels a section wrapper
+ * as the inner atom (sub-agent emits Search Bar(role=search-bar) > Search
+ * Input Container(role=input,fill=#FFFFFF)). Real atomic components don't
+ * embed peer atomic components inside themselves.
  */
 function hasNestedFilledComponent(node: PenNode, parentRole: string): boolean {
+  if (!ATOMIC_PROTECTED_ROLES.has(parentRole)) return false;
   if (!('children' in node) || !Array.isArray(node.children)) return false;
   for (const child of node.children) {
     const childRole = (child as PenNode & { role?: string }).role;
     if (!childRole) continue;
-    // Same role nested again ('search-bar' inside 'search-bar') — wrapper.
+    // Same atomic role nested again ('search-bar' inside 'search-bar').
     if (childRole === parentRole) return true;
-    // Component-bearing role with its own fill ('input' / 'card' / 'button'
-    // / 'badge' inside another component) — also a wrapper pattern.
-    if (
-      (PROTECTED_ROLES.has(childRole) || STRUCTURAL_ROLES.has(childRole)) &&
-      getFirstSolidColor(child)
-    ) {
-      return true;
-    }
+    // Different atomic role with its own solid fill (search-bar > input).
+    if (ATOMIC_PROTECTED_ROLES.has(childRole) && getFirstSolidColor(child)) return true;
   }
   return false;
 }
