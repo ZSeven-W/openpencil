@@ -500,6 +500,59 @@ const PLAN_DERIVED_VARIABLE_NAMES = [
 ] as const;
 
 /**
+ * Apply a `name → VariableDefinition | undefined` patch to `doc.variables`
+ * via a single direct setState — bypasses `store.setVariable` /
+ * `store.removeVariable` to AVOID their side effect of walking the node
+ * tree (`replaceVariableRefsInTree`) and rewriting any node that uses the
+ * affected ref.
+ *
+ * Why bypass: this orchestrator-level patch is meant to swap the "ambient"
+ * palette tokens between briefs / on rollback. It must NOT mutate user
+ * nodes that legitimately reference these tokens — those nodes should
+ * just resolve through the new palette at render time. Going through
+ * `removeVariable` would null-out their refs and silently break colors
+ * in pre-existing user content.
+ *
+ * Pass `undefined` for a name to delete the key.
+ */
+function patchDocVariables(patch: Record<string, VariableDefinition | undefined>): void {
+  useDocumentStore.setState((s) => {
+    const current = s.document.variables ?? {};
+    const next: Record<string, VariableDefinition> = { ...current };
+    for (const [name, value] of Object.entries(patch)) {
+      if (value === undefined) {
+        delete next[name];
+      } else {
+        next[name] = value;
+      }
+    }
+    return {
+      document: {
+        ...s.document,
+        variables: Object.keys(next).length > 0 ? next : undefined,
+      },
+      isDirty: true,
+    };
+  });
+}
+
+/**
+ * Undo the work of `seedDocVariablesFromStyleGuide` by restoring exactly
+ * the 7 plan-derived names to their pre-seed state. Variables outside the
+ * plan-derived set are never touched. Uses `patchDocVariables` so existing
+ * node refs are not rewritten.
+ */
+function rollbackPlanDerivedVariables(
+  snapshot: Record<string, VariableDefinition | undefined>,
+): void {
+  const patch: Record<string, VariableDefinition | undefined> = {};
+  for (const name of PLAN_DERIVED_VARIABLE_NAMES) {
+    patch[name] = snapshot[name];
+  }
+  patchDocVariables(patch);
+}
+
+/**
  * Seed `doc.variables` with the plan's style-guide palette (mapped to v1
  * semantic token names) so sub-agent JSONL output containing `$color-*` refs
  * resolves to the user's chosen palette at render time, not the
@@ -546,17 +599,12 @@ export function seedDocVariablesFromStyleGuide(plan: OrchestratorPlan): void {
 
   if (Object.keys(palette).length === 0) return;
 
-  const store = useDocumentStore.getState();
-  const existing = store.document.variables ?? {};
-
+  const patch: Record<string, VariableDefinition | undefined> = {};
   for (const name of PLAN_DERIVED_VARIABLE_NAMES) {
     const next = palette[name];
-    if (next !== undefined) {
-      store.setVariable(name, { type: 'color', value: next });
-    } else if (name in existing) {
-      store.removeVariable(name);
-    }
+    patch[name] = next !== undefined ? { type: 'color', value: next } : undefined;
   }
+  patchDocVariables(patch);
 }
 
 import { applyAppendContextToPlan } from './orchestrator-append';
@@ -1023,13 +1071,7 @@ export async function executeOrchestration(
       // its colors should match the seeded palette; rolling back would flip
       // every $color-* ref to the default-palette blue.
       if (!anyContentSurvived) {
-        for (const [name, prev] of Object.entries(variablesBeforeSeed)) {
-          if (prev === undefined) {
-            store.removeVariable(name);
-          } else {
-            store.setVariable(name, prev);
-          }
-        }
+        rollbackPlanDerivedVariables(variablesBeforeSeed);
       }
       // On streaming failure, still close the batch before re-throwing
       if (animated) {
@@ -1079,14 +1121,7 @@ export async function executeOrchestration(
         //      catch-block rollback above.
         //   2. aborted: user cancelled before any content landed; without
         //      rollback the seeded palette persists silently across briefs.
-        const sStore = useDocumentStore.getState();
-        for (const [name, prev] of Object.entries(variablesBeforeSeed)) {
-          if (prev === undefined) {
-            sStore.removeVariable(name);
-          } else {
-            sStore.setVariable(name, prev);
-          }
-        }
+        rollbackPlanDerivedVariables(variablesBeforeSeed);
         if (!aborted) {
           throw new Error('Orchestration produced no nodes beyond root frame');
         }
