@@ -501,25 +501,47 @@ function applyBatchDesignAsJsonl(jsonl: string, ctx: DispatchContext): DispatchR
       failedIds.push(root.id);
     }
   }
-  if (inserted.length === 0) {
+  // Any failure to land a root is a hard failure — even a single missing
+  // root usually means the defaultParentId is stale, the model emitted a
+  // dangling _parent reference, or the doc state has drifted. Reporting
+  // `applied` for partial inserts would lie to the orchestrator: it
+  // checks `status === 'applied'` to decide whether to skip retry, so a
+  // partial would silently degrade the design without ever exercising
+  // the orchestrator's retry / minimal-skills / batch_design fallback
+  // chain. We still surface the partial-success roots in `insertedNodes`
+  // so the caller can clean them up (or roll back through the history
+  // batch wrapper) instead of leaving orphans.
+  if (failedIds.length > 0) {
+    const failedList = `${failedIds.slice(0, 4).join(', ')}${failedIds.length > 4 ? '…' : ''}`;
+    if (inserted.length === 0) {
+      return {
+        status: 'failed',
+        route: 'batch-design-dsl',
+        toolName: 'batch_design',
+        message:
+          `batch_design.operations parsed as JSONL (${tree.length} root(s)) but none landed — ` +
+          `parent id '${parentId ?? 'page-root'}' may be stale or unresolved. ` +
+          `Failed root ids: ${failedList}`,
+        insertedNodes: [],
+      };
+    }
     return {
       status: 'failed',
       route: 'batch-design-dsl',
       toolName: 'batch_design',
       message:
-        `batch_design.operations parsed as JSONL (${tree.length} root(s)) but none landed — ` +
-        `parent id '${parentId ?? 'page-root'}' may be stale or unresolved. ` +
-        `Failed root ids: ${failedIds.slice(0, 4).join(', ')}${failedIds.length > 4 ? '…' : ''}`,
-      insertedNodes: [],
+        `batch_design.operations partial failure: ${inserted.length}/${tree.length} root(s) ` +
+        `landed, ${failedIds.length} did not (parent id '${parentId ?? 'page-root'}'). ` +
+        `Failed root ids: ${failedList}`,
+      insertedNodes: inserted,
     };
   }
   const totalLive = countDescendants(inserted);
-  const partial = failedIds.length > 0 ? ` (${failedIds.length} root(s) failed to insert)` : '';
   return {
     status: 'applied',
     route: 'batch-design-dsl',
     toolName: 'batch_design',
-    message: `Applied batch_design.operations as JSONL (${inserted.length}/${tree.length} root node(s); ${totalLive} total)${partial}.`,
+    message: `Applied batch_design.operations as JSONL (${tree.length} root node(s); ${totalLive} total).`,
     insertedNodes: inserted,
   };
 }
