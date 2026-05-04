@@ -578,15 +578,13 @@ function rollbackPlanDerivedVariables(
 export function seedDocVariablesFromStyleGuide(plan: OrchestratorPlan): void {
   const palette: Record<string, string> = {};
 
-  if (plan.styleGuide?.palette) {
-    const p = plan.styleGuide.palette;
-    palette['color-bg-deep'] = p.background;
-    palette['color-surface'] = p.surface;
-    palette['color-text-primary'] = p.text;
-    palette['color-text-body'] = p.secondary;
-    palette['color-accent'] = p.accent;
-    palette['color-border'] = p.border;
-  } else if (plan.selectedStyleGuideContent) {
+  // Priority: catalog content (designed palette, high confidence) >
+  // AI-generated styleGuide (model often invents an off-domain accent —
+  // empirically MiniMax/GLM gravitate to indigo `#6366F1` regardless of
+  // the warm-food/wellness/etc. catalog snippet they were shown). When the
+  // planner picks a catalog name, trust the catalog's curated palette;
+  // only fall back to the AI palette when no catalog content was attached.
+  if (plan.selectedStyleGuideContent) {
     const v = extractStyleGuideValues(plan.selectedStyleGuideContent).colors;
     if (v.background) palette['color-bg-deep'] = v.background;
     if (v.surface) palette['color-surface'] = v.surface;
@@ -595,6 +593,14 @@ export function seedDocVariablesFromStyleGuide(plan: OrchestratorPlan): void {
     if (v.textMuted) palette['color-text-muted'] = v.textMuted;
     if (v.accent) palette['color-accent'] = v.accent;
     if (v.border) palette['color-border'] = v.border;
+  } else if (plan.styleGuide?.palette) {
+    const p = plan.styleGuide.palette;
+    palette['color-bg-deep'] = p.background;
+    palette['color-surface'] = p.surface;
+    palette['color-text-primary'] = p.text;
+    palette['color-text-body'] = p.secondary;
+    palette['color-accent'] = p.accent;
+    palette['color-border'] = p.border;
   }
 
   if (Object.keys(palette).length === 0) return;
