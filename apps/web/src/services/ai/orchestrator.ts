@@ -1070,8 +1070,26 @@ export async function executeOrchestration(
       }
 
       const generatedNodeCount = allNodes.length - rootNodes.length;
-      if (generatedNodeCount === 0 && !aborted) {
-        throw new Error('Orchestration produced no nodes beyond root frame');
+      if (generatedNodeCount === 0) {
+        // No sub-agent content was applied — roll back the plan-derived
+        // variables so the user's doc isn't left with a polluted palette
+        // that has no design backing it. Covers two cases:
+        //   1. !aborted: about to throw — rollback before throw so failure
+        //      and empty paths share the same post-state semantics as the
+        //      catch-block rollback above.
+        //   2. aborted: user cancelled before any content landed; without
+        //      rollback the seeded palette persists silently across briefs.
+        const sStore = useDocumentStore.getState();
+        for (const [name, prev] of Object.entries(variablesBeforeSeed)) {
+          if (prev === undefined) {
+            sStore.removeVariable(name);
+          } else {
+            sStore.setVariable(name, prev);
+          }
+        }
+        if (!aborted) {
+          throw new Error('Orchestration produced no nodes beyond root frame');
+        }
       }
 
       // -- Phase 4b: Remove duplicate status bars on mobile --

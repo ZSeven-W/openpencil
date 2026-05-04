@@ -65,9 +65,11 @@ describe('orchestrator abort pattern — structural', () => {
     // The "Orchestration produced no nodes beyond root frame" throw must be
     // gated by `!aborted` — otherwise hitting Stop before any subtask
     // finishes would show the user an error instead of a cleanly-cancelled
-    // state.
+    // state. (The outer `if (generatedNodeCount === 0)` may now also run a
+    // variable-rollback before the throw — the gate just has to live between
+    // the zero-count check and the throw.)
     expect(src).toMatch(
-      /generatedNodeCount === 0 && !aborted[\s\S]{0,80}throw new Error\('Orchestration produced no nodes/,
+      /generatedNodeCount === 0[\s\S]{0,1500}if \(!aborted\)[\s\S]{0,80}throw new Error\('Orchestration produced no nodes/,
     );
   });
 
