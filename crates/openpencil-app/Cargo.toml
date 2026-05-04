@@ -1,0 +1,15 @@
+[package]
+name = "openpencil-app"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "OpenPencil entry point (Step 5 Stage F shell entry placeholder)"
+
+[[bin]]
+name = "openpencil-app"
+path = "src/main.rs"
+
+[features]
+default = []
+shell-native = []

@@ -29,3 +29,10 @@ dist-electron/
 .omx
 .worktrees/
 .omx/
+
+# Rust
+/target
+**/*.rs.bk
+Cargo.lock.merge-conflict
+/crates/*/target
+/vendor/agent/target
