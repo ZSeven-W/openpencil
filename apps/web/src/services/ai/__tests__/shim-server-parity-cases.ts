@@ -167,6 +167,37 @@ import {
   buildPriceV1,
   buildPricingCardV1,
   buildProfileHeaderV1,
+  buildProgressBarV1,
+  buildQuoteBlockV1,
+  buildRadioV1,
+  buildRangeSliderV1,
+  buildRatingStarsV1,
+  buildSearchBarV1,
+  buildSectionHeaderV1,
+  buildSegmentedControlV1,
+  buildSelectV1,
+  buildShareRowV1,
+  buildSidebarNavV1,
+  buildSkeletonV1,
+  buildSocialLoginRowV1,
+  buildSpinnerV1,
+  buildStatCardV1,
+  buildStatGridV1,
+  buildStatusBadgeV1,
+  buildStepCardV1,
+  buildStepperV1,
+  buildSwitchV1,
+  buildTabsV1,
+  buildTagV1,
+  buildTextButtonV1,
+  buildTextareaV1,
+  buildTimelineV1,
+  buildToolbarV1,
+  buildTooltipV1,
+  buildTopNavBarV1,
+  buildUploadDropzoneV1,
+  buildUserCardV1,
+  buildVideoPlaceholderV1,
 } from '@zseven-w/pen-core';
 
 export interface BuilderCase {
@@ -1139,5 +1170,190 @@ export const CASES: BuilderCase[] = [
     toolName: 'add_profile_header_v1',
     args: { name: 'Sarah Lee', handle: '@sarah', bio: 'Product designer', theme: 'light' },
     build: (a) => buildProfileHeaderV1(a as unknown as Parameters<typeof buildProfileHeaderV1>[0]),
+  },
+  {
+    toolName: 'add_progress_bar_v1',
+    args: { value: 60, bar_width: 240, theme: 'light' },
+    build: (a) => buildProgressBarV1(a as unknown as Parameters<typeof buildProgressBarV1>[0]),
+  },
+  {
+    toolName: 'add_quote_block_v1',
+    args: { quote: 'Design is not just what it looks like.', author: 'Steve Jobs', theme: 'light' },
+    build: (a) => buildQuoteBlockV1(a as unknown as Parameters<typeof buildQuoteBlockV1>[0]),
+  },
+  {
+    toolName: 'add_radio_v1',
+    args: { label: 'Option A', selected: true, theme: 'light' },
+    build: (a) => buildRadioV1(a as unknown as Parameters<typeof buildRadioV1>[0]),
+  },
+  {
+    toolName: 'add_range_slider_v1',
+    args: { value: 50, label: 'Volume', show_value: true, value_suffix: '%', theme: 'light' },
+    build: (a) => buildRangeSliderV1(a as unknown as Parameters<typeof buildRangeSliderV1>[0]),
+  },
+  {
+    toolName: 'add_rating_stars_v1',
+    args: { filled: 4, total: 5, theme: 'light' },
+    build: (a) => buildRatingStarsV1(a as unknown as Parameters<typeof buildRatingStarsV1>[0]),
+  },
+  {
+    toolName: 'add_search_bar_v1',
+    args: { placeholder: 'Search...', theme: 'light' },
+    build: (a) => buildSearchBarV1(a as unknown as Parameters<typeof buildSearchBarV1>[0]),
+  },
+  {
+    toolName: 'add_section_header_v1',
+    args: { title: 'Featured', action: { label: 'See all', icon: 'arrow-right' }, theme: 'light' },
+    build: (a) => buildSectionHeaderV1(a as unknown as Parameters<typeof buildSectionHeaderV1>[0]),
+  },
+  {
+    toolName: 'add_segmented_control_v1',
+    args: {
+      items: [{ label: 'Day', active: true }, { label: 'Week' }, { label: 'Month' }],
+      theme: 'light',
+    },
+    build: (a) =>
+      buildSegmentedControlV1(a as unknown as Parameters<typeof buildSegmentedControlV1>[0]),
+  },
+  {
+    toolName: 'add_select_v1',
+    args: { label: 'Country', placeholder: 'Select…', theme: 'light' },
+    build: (a) => buildSelectV1(a as unknown as Parameters<typeof buildSelectV1>[0]),
+  },
+  {
+    toolName: 'add_share_row_v1',
+    args: {
+      targets: [
+        { label: 'Twitter', icon: 'twitter' },
+        { label: 'Copy link', icon: 'link' },
+      ],
+      theme: 'light',
+    },
+    build: (a) => buildShareRowV1(a as unknown as Parameters<typeof buildShareRowV1>[0]),
+  },
+  {
+    toolName: 'add_sidebar_nav_v1',
+    args: {
+      items: [
+        { label: 'Dashboard', icon: 'layout-dashboard', active: true },
+        { label: 'Settings', icon: 'settings' },
+      ],
+      theme: 'light',
+    },
+    build: (a) => buildSidebarNavV1(a as unknown as Parameters<typeof buildSidebarNavV1>[0]),
+  },
+  {
+    toolName: 'add_skeleton_v1',
+    args: { rows: 3, theme: 'light' },
+    build: (a) => buildSkeletonV1(a as unknown as Parameters<typeof buildSkeletonV1>[0]),
+  },
+  {
+    toolName: 'add_social_login_row_v1',
+    args: { providers: [{ name: 'google' }, { name: 'apple' }], theme: 'light' },
+    build: (a) =>
+      buildSocialLoginRowV1(a as unknown as Parameters<typeof buildSocialLoginRowV1>[0]),
+  },
+  {
+    toolName: 'add_spinner_v1',
+    args: { size: 32, theme: 'light' },
+    build: (a) => buildSpinnerV1(a as unknown as Parameters<typeof buildSpinnerV1>[0]),
+  },
+  {
+    toolName: 'add_stat_card_v1',
+    args: { label: 'Revenue', value: '$12.4k', theme: 'light' },
+    build: (a) => buildStatCardV1(a as unknown as Parameters<typeof buildStatCardV1>[0]),
+  },
+  {
+    toolName: 'add_stat_grid_v1',
+    args: {
+      items: [
+        { value: '1,284', label: 'Users' },
+        { value: '$12.4k', label: 'Revenue' },
+      ],
+      theme: 'light',
+    },
+    build: (a) => buildStatGridV1(a as unknown as Parameters<typeof buildStatGridV1>[0]),
+  },
+  {
+    toolName: 'add_status_badge_v1',
+    args: { label: 'Online', tone: 'success', theme: 'light' },
+    build: (a) => buildStatusBadgeV1(a as unknown as Parameters<typeof buildStatusBadgeV1>[0]),
+  },
+  {
+    toolName: 'add_step_card_v1',
+    args: {
+      number: 1,
+      title: 'Create account',
+      description: 'Sign up with email.',
+      theme: 'light',
+    },
+    build: (a) => buildStepCardV1(a as unknown as Parameters<typeof buildStepCardV1>[0]),
+  },
+  {
+    toolName: 'add_stepper_v1',
+    args: { total: 3, current: 1, theme: 'light' },
+    build: (a) => buildStepperV1(a as unknown as Parameters<typeof buildStepperV1>[0]),
+  },
+  {
+    toolName: 'add_switch_v1',
+    args: { active: true, theme: 'light' },
+    build: (a) => buildSwitchV1(a as unknown as Parameters<typeof buildSwitchV1>[0]),
+  },
+  {
+    toolName: 'add_tabs_v1',
+    args: { items: [{ label: 'Tab 1', active: true }, { label: 'Tab 2' }], theme: 'light' },
+    build: (a) => buildTabsV1(a as unknown as Parameters<typeof buildTabsV1>[0]),
+  },
+  {
+    toolName: 'add_tag_v1',
+    args: { label: 'Design', tone: 'accent', theme: 'light' },
+    build: (a) => buildTagV1(a as unknown as Parameters<typeof buildTagV1>[0]),
+  },
+  {
+    toolName: 'add_text_button_v1',
+    args: { label: 'Save changes', theme: 'light' },
+    build: (a) => buildTextButtonV1(a as unknown as Parameters<typeof buildTextButtonV1>[0]),
+  },
+  {
+    toolName: 'add_textarea_v1',
+    args: { label: 'Notes', rows: 4, theme: 'light' },
+    build: (a) => buildTextareaV1(a as unknown as Parameters<typeof buildTextareaV1>[0]),
+  },
+  {
+    toolName: 'add_timeline_v1',
+    args: { items: [{ title: 'Created', active: true }, { title: 'In progress' }], theme: 'light' },
+    build: (a) => buildTimelineV1(a as unknown as Parameters<typeof buildTimelineV1>[0]),
+  },
+  {
+    toolName: 'add_toolbar_v1',
+    args: { items: [{ icon: 'bold', active: true }, { icon: 'italic' }], theme: 'light' },
+    build: (a) => buildToolbarV1(a as unknown as Parameters<typeof buildToolbarV1>[0]),
+  },
+  {
+    toolName: 'add_tooltip_v1',
+    args: { text: 'More info', position: 'top', theme: 'light' },
+    build: (a) => buildTooltipV1(a as unknown as Parameters<typeof buildTooltipV1>[0]),
+  },
+  {
+    toolName: 'add_top_nav_bar_v1',
+    args: { title: 'Home', theme: 'light' },
+    build: (a) => buildTopNavBarV1(a as unknown as Parameters<typeof buildTopNavBarV1>[0]),
+  },
+  {
+    toolName: 'add_upload_dropzone_v1',
+    args: { theme: 'light' },
+    build: (a) =>
+      buildUploadDropzoneV1(a as unknown as Parameters<typeof buildUploadDropzoneV1>[0]),
+  },
+  {
+    toolName: 'add_user_card_v1',
+    args: { name: 'Sarah Lee', role: 'Designer', initial: 'SL', theme: 'light' },
+    build: (a) => buildUserCardV1(a as unknown as Parameters<typeof buildUserCardV1>[0]),
+  },
+  {
+    toolName: 'add_video_placeholder_v1',
+    args: { label: 'Coming soon', theme: 'light' },
+    build: (a) =>
+      buildVideoPlaceholderV1(a as unknown as Parameters<typeof buildVideoPlaceholderV1>[0]),
   },
 ];

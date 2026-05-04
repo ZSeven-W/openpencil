@@ -172,6 +172,37 @@ import { handleAddPhoneInputV1 } from '../tools/add-phone-input-v1';
 import { handleAddPriceV1 } from '../tools/add-price-v1';
 import { handleAddPricingCardV1 } from '../tools/add-pricing-card-v1';
 import { handleAddProfileHeaderV1 } from '../tools/add-profile-header-v1';
+import { handleAddProgressBarV1 } from '../tools/add-progress-bar-v1';
+import { handleAddQuoteBlockV1 } from '../tools/add-quote-block-v1';
+import { handleAddRadioV1 } from '../tools/add-radio-v1';
+import { handleAddRangeSliderV1 } from '../tools/add-range-slider-v1';
+import { handleAddRatingStarsV1 } from '../tools/add-rating-stars-v1';
+import { handleAddSearchBarV1 } from '../tools/add-search-bar-v1';
+import { handleAddSectionHeaderV1 } from '../tools/add-section-header-v1';
+import { handleAddSegmentedControlV1 } from '../tools/add-segmented-control-v1';
+import { handleAddSelectV1 } from '../tools/add-select-v1';
+import { handleAddShareRowV1 } from '../tools/add-share-row-v1';
+import { handleAddSidebarNavV1 } from '../tools/add-sidebar-nav-v1';
+import { handleAddSkeletonV1 } from '../tools/add-skeleton-v1';
+import { handleAddSocialLoginRowV1 } from '../tools/add-social-login-row-v1';
+import { handleAddSpinnerV1 } from '../tools/add-spinner-v1';
+import { handleAddStatCardV1 } from '../tools/add-stat-card-v1';
+import { handleAddStatGridV1 } from '../tools/add-stat-grid-v1';
+import { handleAddStatusBadgeV1 } from '../tools/add-status-badge-v1';
+import { handleAddStepCardV1 } from '../tools/add-step-card-v1';
+import { handleAddStepperV1 } from '../tools/add-stepper-v1';
+import { handleAddSwitchV1 } from '../tools/add-switch-v1';
+import { handleAddTabsV1 } from '../tools/add-tabs-v1';
+import { handleAddTagV1 } from '../tools/add-tag-v1';
+import { handleAddTextButtonV1 } from '../tools/add-text-button-v1';
+import { handleAddTextareaV1 } from '../tools/add-textarea-v1';
+import { handleAddTimelineV1 } from '../tools/add-timeline-v1';
+import { handleAddToolbarV1 } from '../tools/add-toolbar-v1';
+import { handleAddTooltipV1 } from '../tools/add-tooltip-v1';
+import { handleAddTopNavBarV1 } from '../tools/add-top-nav-bar-v1';
+import { handleAddUploadDropzoneV1 } from '../tools/add-upload-dropzone-v1';
+import { handleAddUserCardV1 } from '../tools/add-user-card-v1';
+import { handleAddVideoPlaceholderV1 } from '../tools/add-video-placeholder-v1';
 import { recordElementToolCall } from '../metrics/element-tool-metrics';
 import { ELEMENT_TOOL_DEFINITIONS_BASE } from './element-tool-defs-base';
 import { ELEMENT_TOOL_DEFINITIONS_EXT } from './element-tool-defs-ext';
@@ -181,6 +212,8 @@ import { ELEMENT_TOOL_DEFINITIONS_EXT_4 } from './element-tool-defs-ext-4';
 import { ELEMENT_TOOL_DEFINITIONS_EXT_5 } from './element-tool-defs-ext-5';
 import { ELEMENT_TOOL_DEFINITIONS_EXT_6 } from './element-tool-defs-ext-6';
 import { ELEMENT_TOOL_DEFINITIONS_EXT_7 } from './element-tool-defs-ext-7';
+import { ELEMENT_TOOL_DEFINITIONS_EXT_8 } from './element-tool-defs-ext-8';
+import { ELEMENT_TOOL_DEFINITIONS_EXT_9 } from './element-tool-defs-ext-9';
 
 export const ELEMENT_TOOL_DEFINITIONS = [
   ...ELEMENT_TOOL_DEFINITIONS_BASE,
@@ -191,6 +224,8 @@ export const ELEMENT_TOOL_DEFINITIONS = [
   ...ELEMENT_TOOL_DEFINITIONS_EXT_5,
   ...ELEMENT_TOOL_DEFINITIONS_EXT_6,
   ...ELEMENT_TOOL_DEFINITIONS_EXT_7,
+  ...ELEMENT_TOOL_DEFINITIONS_EXT_8,
+  ...ELEMENT_TOOL_DEFINITIONS_EXT_9,
 ];
 
 export const ELEMENT_TOOL_NAMES: ReadonlySet<string> = new Set(
@@ -526,6 +561,68 @@ async function dispatchElementToolCall(name: string, a: any): Promise<string> {
       return JSON.stringify(await handleAddPricingCardV1(a), null, 2);
     case 'add_profile_header_v1':
       return JSON.stringify(await handleAddProfileHeaderV1(a), null, 2);
+    case 'add_progress_bar_v1':
+      return JSON.stringify(await handleAddProgressBarV1(a), null, 2);
+    case 'add_quote_block_v1':
+      return JSON.stringify(await handleAddQuoteBlockV1(a), null, 2);
+    case 'add_radio_v1':
+      return JSON.stringify(await handleAddRadioV1(a), null, 2);
+    case 'add_range_slider_v1':
+      return JSON.stringify(await handleAddRangeSliderV1(a), null, 2);
+    case 'add_rating_stars_v1':
+      return JSON.stringify(await handleAddRatingStarsV1(a), null, 2);
+    case 'add_search_bar_v1':
+      return JSON.stringify(await handleAddSearchBarV1(a), null, 2);
+    case 'add_section_header_v1':
+      return JSON.stringify(await handleAddSectionHeaderV1(a), null, 2);
+    case 'add_segmented_control_v1':
+      return JSON.stringify(await handleAddSegmentedControlV1(a), null, 2);
+    case 'add_select_v1':
+      return JSON.stringify(await handleAddSelectV1(a), null, 2);
+    case 'add_share_row_v1':
+      return JSON.stringify(await handleAddShareRowV1(a), null, 2);
+    case 'add_sidebar_nav_v1':
+      return JSON.stringify(await handleAddSidebarNavV1(a), null, 2);
+    case 'add_skeleton_v1':
+      return JSON.stringify(await handleAddSkeletonV1(a), null, 2);
+    case 'add_social_login_row_v1':
+      return JSON.stringify(await handleAddSocialLoginRowV1(a), null, 2);
+    case 'add_spinner_v1':
+      return JSON.stringify(await handleAddSpinnerV1(a), null, 2);
+    case 'add_stat_card_v1':
+      return JSON.stringify(await handleAddStatCardV1(a), null, 2);
+    case 'add_stat_grid_v1':
+      return JSON.stringify(await handleAddStatGridV1(a), null, 2);
+    case 'add_status_badge_v1':
+      return JSON.stringify(await handleAddStatusBadgeV1(a), null, 2);
+    case 'add_step_card_v1':
+      return JSON.stringify(await handleAddStepCardV1(a), null, 2);
+    case 'add_stepper_v1':
+      return JSON.stringify(await handleAddStepperV1(a), null, 2);
+    case 'add_switch_v1':
+      return JSON.stringify(await handleAddSwitchV1(a), null, 2);
+    case 'add_tabs_v1':
+      return JSON.stringify(await handleAddTabsV1(a), null, 2);
+    case 'add_tag_v1':
+      return JSON.stringify(await handleAddTagV1(a), null, 2);
+    case 'add_text_button_v1':
+      return JSON.stringify(await handleAddTextButtonV1(a), null, 2);
+    case 'add_textarea_v1':
+      return JSON.stringify(await handleAddTextareaV1(a), null, 2);
+    case 'add_timeline_v1':
+      return JSON.stringify(await handleAddTimelineV1(a), null, 2);
+    case 'add_toolbar_v1':
+      return JSON.stringify(await handleAddToolbarV1(a), null, 2);
+    case 'add_tooltip_v1':
+      return JSON.stringify(await handleAddTooltipV1(a), null, 2);
+    case 'add_top_nav_bar_v1':
+      return JSON.stringify(await handleAddTopNavBarV1(a), null, 2);
+    case 'add_upload_dropzone_v1':
+      return JSON.stringify(await handleAddUploadDropzoneV1(a), null, 2);
+    case 'add_user_card_v1':
+      return JSON.stringify(await handleAddUserCardV1(a), null, 2);
+    case 'add_video_placeholder_v1':
+      return JSON.stringify(await handleAddVideoPlaceholderV1(a), null, 2);
     default:
       return '';
   }

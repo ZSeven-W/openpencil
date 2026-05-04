@@ -12,7 +12,7 @@ import {
   cssFontFamily,
 } from '@zseven-w/pen-core';
 import { wrapLine } from './paint-utils.js';
-import type { RenderNode } from './types.js';
+import type { ClipInfo, RenderNode } from './types.js';
 
 // ---------------------------------------------------------------------------
 // Pre-measure text widths using Canvas 2D (browser fonts)
@@ -124,14 +124,6 @@ export function premeasureTextHeights(nodes: PenNode[]): PenNode[] {
 // Flatten document tree -> absolute-positioned RenderNode list
 // ---------------------------------------------------------------------------
 
-interface ClipInfo {
-  x: number;
-  y: number;
-  w: number;
-  h: number;
-  rx: number;
-}
-
 function sizeToNumber(val: number | string | undefined, fallback: number): number {
   if (typeof val === 'number') return val;
   if (typeof val === 'string') {
@@ -155,7 +147,7 @@ export function flattenToRenderNodes(
   offsetY = 0,
   parentAvailW?: number,
   parentAvailH?: number,
-  clipCtx?: ClipInfo,
+  clipStack: ClipInfo[] = [],
   depth = 0,
 ): RenderNode[] {
   const result: RenderNode[] = [];
@@ -224,7 +216,7 @@ export function flattenToRenderNodes(
       absY,
       absW,
       absH,
-      clipRect: clipCtx,
+      clipStack: clipStack.length > 0 ? clipStack.slice() : undefined,
     });
 
     // Recurse into children
@@ -242,14 +234,19 @@ export function flattenToRenderNodes(
         layout && layout !== 'none' ? computeLayoutPositions(resolved, children) : children;
 
       // Clipping — root frames always clip like artboards. Nested containers
-      // clip only when clipContent is enabled.
-      let childClip = clipCtx;
+      // clip only when clipContent is enabled. Each level pushes its own
+      // ClipInfo onto the stack rather than intersecting into a single
+      // ClipInfo, so each ancestor's rounded corner can be enforced
+      // independently at paint time (a single rrect can't encode `(rrect ∩
+      // rrect)` faithfully when one rect cuts inside the other's corner).
+      let childClipStack = clipStack;
       const isRootFrame = node.type === 'frame' && depth === 0;
       const explicitClip = 'clipContent' in resolved && resolved.clipContent === true;
       if (isRootFrame || explicitClip) {
         const crRaw = 'cornerRadius' in node ? cornerRadiusVal(node.cornerRadius) : 0;
         const cr = Math.min(crRaw, nodeH / 2);
-        childClip = { x: absX, y: absY, w: nodeW, h: nodeH, rx: cr };
+        const own: ClipInfo = { x: absX, y: absY, w: nodeW, h: nodeH, rx: cr };
+        childClipStack = [...clipStack, own];
       }
 
       const childRNs = flattenToRenderNodes(
@@ -258,7 +255,7 @@ export function flattenToRenderNodes(
         absY,
         childAvailW,
         childAvailH,
-        childClip,
+        childClipStack,
         depth + 1,
       );
 

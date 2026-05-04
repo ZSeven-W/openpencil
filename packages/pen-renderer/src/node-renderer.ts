@@ -480,7 +480,7 @@ export class SkiaNodeRenderer {
   // ---------------------------------------------------------------------------
 
   drawNode(canvas: Canvas, rn: RenderNode) {
-    const { node, absX, absY, absW, absH, clipRect } = rn;
+    const { node, absX, absY, absW, absH, clipStack } = rn;
     const ck = this.ck;
     const opacity = typeof node.opacity === 'number' ? node.opacity : 1;
 
@@ -490,27 +490,33 @@ export class SkiaNodeRenderer {
     this.textRenderer.zoom = this.zoom;
     this.textRenderer.devicePixelRatio = this.devicePixelRatio;
 
-    // Apply clipping from parent frame
-    let clipped = false;
-    if (clipRect) {
-      canvas.save();
-      clipped = true;
-      if (clipRect.rx > 0) {
-        canvas.clipRRect(
-          ck.RRectXY(
-            ck.LTRBRect(clipRect.x, clipRect.y, clipRect.x + clipRect.w, clipRect.y + clipRect.h),
-            clipRect.rx,
-            clipRect.rx,
-          ),
-          ck.ClipOp.Intersect,
-          true,
-        );
-      } else {
-        canvas.clipRect(
-          ck.LTRBRect(clipRect.x, clipRect.y, clipRect.x + clipRect.w, clipRect.y + clipRect.h),
-          ck.ClipOp.Intersect,
-          true,
-        );
+    // Apply ancestor-to-self clip stack. Each ancestor with `clipContent: true`
+    // (and the root frame artboard) pushed a ClipInfo onto this stack at
+    // flatten time. Pushing each as a separate canvas.save+clip preserves
+    // every level's rounded corner — a single ClipInfo can't encode the
+    // intersection of two rrects when one cuts inside the other's corner.
+    let clipsPushed = 0;
+    if (clipStack && clipStack.length > 0) {
+      for (const clip of clipStack) {
+        canvas.save();
+        clipsPushed++;
+        if (clip.rx > 0) {
+          canvas.clipRRect(
+            ck.RRectXY(
+              ck.LTRBRect(clip.x, clip.y, clip.x + clip.w, clip.y + clip.h),
+              clip.rx,
+              clip.rx,
+            ),
+            ck.ClipOp.Intersect,
+            true,
+          );
+        } else {
+          canvas.clipRect(
+            ck.LTRBRect(clip.x, clip.y, clip.x + clip.w, clip.y + clip.h),
+            ck.ClipOp.Intersect,
+            true,
+          );
+        }
       }
     }
 
@@ -569,7 +575,7 @@ export class SkiaNodeRenderer {
 
     if (rotation !== 0) canvas.restore();
     if (flipX || flipY) canvas.restore();
-    if (clipped) canvas.restore();
+    for (let i = 0; i < clipsPushed; i++) canvas.restore();
   }
 
   // ---------------------------------------------------------------------------

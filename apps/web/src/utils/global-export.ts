@@ -100,7 +100,7 @@ function renderPageToImage(
     maxX = -Infinity,
     maxY = -Infinity;
   for (const rn of renderNodes) {
-    if (rn.clipRect) continue;
+    if (rn.clipStack && rn.clipStack.length > 0) continue;
     if (rn.absX < minX) minX = rn.absX;
     if (rn.absY < minY) minY = rn.absY;
     if (rn.absX + rn.absW > maxX) maxX = rn.absX + rn.absW;

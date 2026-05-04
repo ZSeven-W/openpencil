@@ -65,7 +65,7 @@ describe('focus fit helpers', () => {
         absY: 60,
         absW: 120,
         absH: 90,
-        clipRect: { x: 0, y: 0, w: 1000, h: 800, rx: 0 },
+        clipStack: [{ x: 0, y: 0, w: 1000, h: 800, rx: 0 }],
       }),
     ];
 

@@ -1,7 +1,9 @@
-// Extension tool definitions — shard 7 of 7 (siblings: base / ext /
-// ext-2 / ext-3 / ext-4 / ext-5 / ext-6). Houses P3 batch-6 v1 tools
+// Extension tool definitions — shard 7 of 8 (siblings: base / ext /
+// ext-2 / ext-3 / ext-4 / ext-5 / ext-6 / ext-8). Houses P3 batch-6 v1 tools
 // (metric_comparison, metric_row, nav_chip_row, notification_row,
-// otp_input, pagination, phone_input, price, pricing_card, profile_header).
+// otp_input, pagination, phone_input, price, pricing_card, profile_header)
+// and P3 batch-7 v1 tools (progress_bar, quote_block, radio, rating_stars,
+// section_header).
 // Each shard caps at the repo's 800-line ceiling.
 //
 // When adding a new tool: pick whichever shard has the fewest tools
@@ -403,6 +405,149 @@ export const ELEMENT_TOOL_DEFINITIONS_EXT_7 = [
         pageId: pageIdProp,
       },
       required: ['name'],
+    },
+  },
+  {
+    name: 'add_progress_bar_v1',
+    description:
+      'Theme-aware linear progress bar (v1). theme="light" (default): byte-parity with ' +
+      'add_progress_bar_v0. theme="dark": track bg → surface2 (#334155); fill stays ' +
+      'brand-invariant accent. theme="system": $color-surface-2 ref for track. ' +
+      'Fixed-pixel track; fill width = value/100 × bar_width. schemaVersion 1.0',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        schemaVersion: schemaVersionProp,
+        filePath: filePathProp,
+        value: {
+          type: 'number',
+          description: 'Progress value 0..100. Default 50.',
+        },
+        bar_width: {
+          type: 'number',
+          description: 'Track width in px. Default 240.',
+        },
+        theme: {
+          type: 'string',
+          enum: ['light', 'dark', 'system'],
+          description: 'Theme variant. Default "light".',
+        },
+        parent_id: parentIdProp,
+        pageId: pageIdProp,
+      },
+      required: [],
+    },
+  },
+  {
+    name: 'add_quote_block_v1',
+    description:
+      'Theme-aware quoted passage block (v1). theme="light" (default): byte-parity with ' +
+      'add_quote_block_v0. theme="dark": container bg → surface (#1E293B). ' +
+      'theme="system": $color-surface ref. Rounded container, quote text + optional ' +
+      'attribution. schemaVersion 1.0',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        schemaVersion: schemaVersionProp,
+        filePath: filePathProp,
+        quote: { type: 'string', description: 'Quote text. Required.' },
+        author: { type: 'string', description: 'Optional attribution (e.g. "Jane Doe").' },
+        theme: {
+          type: 'string',
+          enum: ['light', 'dark', 'system'],
+          description: 'Theme variant. Default "light".',
+        },
+        parent_id: parentIdProp,
+        pageId: pageIdProp,
+      },
+      required: ['quote'],
+    },
+  },
+  {
+    name: 'add_radio_v1',
+    description:
+      'Theme-aware radio button + label (v1). theme="light" (default): byte-parity with ' +
+      'add_radio_v0. theme="dark": accent stays brand-invariant; unselected ring → ' +
+      'border token (#334155). theme="system": $color-border ref for unselected ring. ' +
+      '20×20 outer ring; 10×10 inner dot when selected. schemaVersion 1.0',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        schemaVersion: schemaVersionProp,
+        filePath: filePathProp,
+        label: { type: 'string', description: 'Radio label text. Required.' },
+        selected: { type: 'boolean', description: 'Whether the radio is selected. Default false.' },
+        theme: {
+          type: 'string',
+          enum: ['light', 'dark', 'system'],
+          description: 'Theme variant. Default "light".',
+        },
+        parent_id: parentIdProp,
+        pageId: pageIdProp,
+      },
+      required: ['label'],
+    },
+  },
+  {
+    name: 'add_rating_stars_v1',
+    description:
+      'Theme-aware star rating row (v1). theme="light" (default): byte-parity with ' +
+      'add_rating_stars_v0. theme="dark"/"system": identical (no explicit colors in v0 ' +
+      '— icon_font nodes inherit canvas text color). Accepts theme for API consistency. ' +
+      'star-filled / star-empty roles for downstream color U-ops. schemaVersion 1.0',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        schemaVersion: schemaVersionProp,
+        filePath: filePathProp,
+        filled: {
+          type: 'number',
+          description: 'Number of filled stars. Clamped to [0, total]. Required.',
+        },
+        total: { type: 'number', description: 'Total number of stars. Default 5.' },
+        size: { type: 'number', description: 'Star icon size in px. Default 16.' },
+        theme: {
+          type: 'string',
+          enum: ['light', 'dark', 'system'],
+          description: 'Theme variant. Default "light".',
+        },
+        parent_id: parentIdProp,
+        pageId: pageIdProp,
+      },
+      required: ['filled'],
+    },
+  },
+  {
+    name: 'add_section_header_v1',
+    description:
+      'Theme-aware section header (v1). theme="light" (default): byte-parity with ' +
+      'add_section_header_v0. theme="dark"/"system": identical (no explicit colors in ' +
+      'v0 — text inherits canvas theme color). Accepts theme for API consistency. ' +
+      'Big title on the left + optional trailing action ("See all →"). schemaVersion 1.0',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        schemaVersion: schemaVersionProp,
+        filePath: filePathProp,
+        title: { type: 'string', description: 'Section title text. Required.' },
+        action: {
+          type: 'object',
+          properties: {
+            label: { type: 'string' },
+            icon: { type: 'string' },
+          },
+          required: ['label'],
+          description: 'Optional trailing action (e.g. { label: "See all", icon: "arrow-right" }).',
+        },
+        theme: {
+          type: 'string',
+          enum: ['light', 'dark', 'system'],
+          description: 'Theme variant. Default "light".',
+        },
+        parent_id: parentIdProp,
+        pageId: pageIdProp,
+      },
+      required: ['title'],
     },
   },
 ];
