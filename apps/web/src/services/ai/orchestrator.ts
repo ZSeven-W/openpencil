@@ -22,7 +22,7 @@ import type { DesignMdSpec } from '@/types/design-md';
 import { streamChat } from './ai-service';
 import { resolveSkills } from '@zseven-w/pen-ai-skills';
 import { styleGuideRegistry } from '@zseven-w/pen-ai-skills/_generated/style-guide-registry';
-import { selectStyleGuide } from '@zseven-w/pen-ai-skills/style-guide';
+import { extractStyleGuideValues, selectStyleGuide } from '@zseven-w/pen-ai-skills/style-guide';
 import {
   getOrchestratorTimeouts,
   prepareDesignPrompt,
@@ -482,6 +482,54 @@ function reorderDashboardMainChildren(plan: OrchestratorPlan, mainParentId: stri
   });
 }
 
+/**
+ * Seed `doc.variables` with the plan's style-guide palette (mapped to v1
+ * semantic token names) so sub-agent JSONL output containing `$color-*` refs
+ * resolves to the user's chosen palette at render time, not the
+ * DEFAULT_PALETTE_FALLBACK blue.
+ *
+ * Without this, the sub-agent prompt teaches the model to emit
+ * `$color-accent` (see `buildSubAgentStyleGuideInstruction` in
+ * `orchestrator-sub-agent-compact.ts`) but the renderer would fall back to
+ * the default `#2563EB` blue — completely overriding any warm/orange/etc
+ * style guide picked by the planner.
+ *
+ * Skipped when `doc.variables` is already non-empty: respects user-seeded
+ * tokens (design.md, custom palette) without overwriting.
+ */
+export function seedDocVariablesFromStyleGuide(plan: OrchestratorPlan): void {
+  const store = useDocumentStore.getState();
+  const existing = store.document.variables ?? {};
+  if (Object.keys(existing).length > 0) return;
+
+  const palette: Record<string, string> = {};
+
+  if (plan.styleGuide?.palette) {
+    const p = plan.styleGuide.palette;
+    palette['color-bg-deep'] = p.background;
+    palette['color-surface'] = p.surface;
+    palette['color-text-primary'] = p.text;
+    palette['color-text-body'] = p.secondary;
+    palette['color-accent'] = p.accent;
+    palette['color-border'] = p.border;
+  } else if (plan.selectedStyleGuideContent) {
+    const v = extractStyleGuideValues(plan.selectedStyleGuideContent).colors;
+    if (v.background) palette['color-bg-deep'] = v.background;
+    if (v.surface) palette['color-surface'] = v.surface;
+    if (v.textPrimary) palette['color-text-primary'] = v.textPrimary;
+    if (v.textSecondary) palette['color-text-body'] = v.textSecondary;
+    if (v.textMuted) palette['color-text-muted'] = v.textMuted;
+    if (v.accent) palette['color-accent'] = v.accent;
+    if (v.border) palette['color-border'] = v.border;
+  }
+
+  if (Object.keys(palette).length === 0) return;
+
+  for (const [name, value] of Object.entries(palette)) {
+    store.setVariable(name, { type: 'color', value });
+  }
+}
+
 import { applyAppendContextToPlan } from './orchestrator-append';
 export { applyAppendContextToPlan } from './orchestrator-append';
 export type { AppendPlanResult } from './orchestrator-append';
@@ -865,6 +913,8 @@ export async function executeOrchestration(
       }),
       totalNodes: 0,
     };
+
+    seedDocVariablesFromStyleGuide(plan);
 
     let results: SubAgentResult[];
     try {
