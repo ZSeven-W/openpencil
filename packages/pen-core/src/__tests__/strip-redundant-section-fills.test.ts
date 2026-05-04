@@ -447,6 +447,31 @@ describe('stripRedundantSectionFills', () => {
     expect((voiceBtn as PenNode & { fill?: unknown }).fill).toEqual(solidFill('#F97316'));
   });
 
+  it('keeps a bottom-tab-bar / navbar fill on a cream root (white surface separation)', () => {
+    // Real repro from food-app brief: bottom navigation row carries
+    // fill=#FFFFFF to visually separate it from the cream #FFF8F0 root
+    // background. Earlier the navbar role wasn't in PROTECTED_ROLES, so
+    // the SAFE_LIGHT_HEXES branch stripped the white fill and the nav
+    // disappeared into the page background.
+    const navbar = frame({
+      id: 'bottom-nav',
+      role: 'navbar',
+      fill: solidFill('#FFFFFF'),
+      children: [
+        frame({ id: 'home', role: 'icon-button' }),
+        frame({ id: 'search', role: 'icon-button' }),
+        frame({ id: 'orders', role: 'icon-button' }),
+      ],
+    });
+    const root = frame({
+      id: 'root',
+      fill: solidFill('#FFF8F0'),
+      children: [navbar],
+    });
+    stripRedundantSectionFills(root);
+    expect((navbar as PenNode & { fill?: unknown }).fill).toEqual(solidFill('#FFFFFF'));
+  });
+
   it('keeps a banner fill when it contains a nested card with its own fill', () => {
     // banner > card composition — banner is CONTAINER role, fill is its
     // intentional gradient/accent surface.

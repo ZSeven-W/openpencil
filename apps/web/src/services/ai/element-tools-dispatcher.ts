@@ -42,6 +42,7 @@ import { insertStreamingNode } from './design-canvas-ops';
 // (enforced by `packages/pen-mcp/src/__tests__/batch-design-dsl-browser-safe.test.ts`).
 import { runBatchDesignDsl } from '@zseven-w/pen-mcp/dsl';
 import { getActivePageChildren } from '@zseven-w/pen-core';
+import { scanAndFillImages } from './image-search-pipeline';
 import type { PenNode } from '@/types/pen';
 
 /**
@@ -654,6 +655,18 @@ function applyBatchDesignAsJsonl(jsonl: string, ctx: DispatchContext): DispatchR
     };
   }
   const totalLive = countDescendants(inserted);
+  // Fire-and-forget image scan against the dispatch's parent so empty-src
+  // image placeholders the model just emitted get auto-filled with search
+  // results NOW (subtask-level), not delayed until orchestrator's tail
+  // hook (line ~1219). The orchestrator-level scan still runs and dedups
+  // via `queuedNodeIds`, so this just improves perceived latency without
+  // double-fetching. parentId may be null when inserts went to page root —
+  // skip in that case (the orchestrator-level scan covers it).
+  if (parentId) {
+    scanAndFillImages(parentId).catch(() => {
+      /* fire-and-forget — orchestrator tail hook is the safety net */
+    });
+  }
   return {
     status: 'applied',
     route: 'batch-design-dsl',
