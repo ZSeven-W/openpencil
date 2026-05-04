@@ -394,6 +394,59 @@ describe('stripRedundantSectionFills', () => {
     expect((pricingCard as PenNode & { fill?: unknown }).fill).toEqual(solidFill('#FFFFFF'));
   });
 
+  it('keeps an input fill when it contains a trailing icon-button (clear/reveal)', () => {
+    // Critical counter-case: an `input` is a primary atomic with a fill of
+    // #FFFFFF (a SAFE_LIGHT hedge). It legitimately holds a trailing
+    // icon-button (clear, reveal-password, voice). Wrapper detection must
+    // NOT fire — icon-button is a SECONDARY atomic that doesn't signal
+    // wrapper-ness.
+    const clearButton = frame({
+      id: 'clear-btn',
+      role: 'icon-button',
+      fill: solidFill('#F1F5F9'),
+    });
+    const input = frame({
+      id: 'email-input',
+      name: 'Email Input',
+      role: 'input',
+      fill: solidFill('#FFFFFF'),
+      children: [clearButton],
+    });
+    const root = frame({
+      id: 'root',
+      fill: solidFill('#FFF8F0'),
+      children: [input],
+    });
+    stripRedundantSectionFills(root);
+    expect((input as PenNode & { fill?: unknown }).fill).toEqual(solidFill('#FFFFFF'));
+    expect((clearButton as PenNode & { fill?: unknown }).fill).toEqual(solidFill('#F1F5F9'));
+  });
+
+  it('keeps a search-bar atom fill when it contains a voice/clear button', () => {
+    // The actual atom case: search-bar that owns a voice-search icon-
+    // button (filled accent). icon-button is SECONDARY atomic so the
+    // search-bar is treated as the real atom, not a wrapper.
+    const voiceBtn = frame({
+      id: 'voice-btn',
+      role: 'icon-button',
+      fill: solidFill('#F97316'),
+    });
+    const realSearchBar = frame({
+      id: 'real-search',
+      role: 'search-bar',
+      fill: solidFill('#FFFFFF'),
+      children: [voiceBtn],
+    });
+    const root = frame({
+      id: 'root',
+      fill: solidFill('#FFF8F0'),
+      children: [realSearchBar],
+    });
+    stripRedundantSectionFills(root);
+    expect((realSearchBar as PenNode & { fill?: unknown }).fill).toEqual(solidFill('#FFFFFF'));
+    expect((voiceBtn as PenNode & { fill?: unknown }).fill).toEqual(solidFill('#F97316'));
+  });
+
   it('keeps a banner fill when it contains a nested card with its own fill', () => {
     // banner > card composition — banner is CONTAINER role, fill is its
     // intentional gradient/accent surface.
