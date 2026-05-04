@@ -490,6 +490,40 @@ function applyBatchDesignAsJsonl(jsonl: string, ctx: DispatchContext): DispatchR
   }
   const store = useDocumentStore.getState();
   const parentId = ctx.defaultParentId ?? null;
+
+  // Collect every id the JSONL tree wants to introduce (roots + nested
+  // descendants). `insertNodeInTree` does NOT dedupe — it appends — so a
+  // collision with an existing live node would create two nodes sharing
+  // the same id. `getNodeById` returns the FIRST match (the pre-existing
+  // one) which makes the post-insert verification look successful, and a
+  // later rollback `removeNode(id)` would delete the pre-existing node
+  // instead of the freshly-added duplicate. Detect collisions before
+  // mutating the doc so we can fail cleanly without side effects.
+  const treeIds = new Set<string>();
+  const collectIds = (n: PenNode) => {
+    treeIds.add(n.id);
+    if ('children' in n && Array.isArray((n as PenNode & { children?: PenNode[] }).children)) {
+      for (const child of (n as PenNode & { children: PenNode[] }).children) collectIds(child);
+    }
+  };
+  for (const root of tree) collectIds(root);
+  const collisions: string[] = [];
+  for (const id of treeIds) {
+    if (store.getNodeById(id)) collisions.push(id);
+  }
+  if (collisions.length > 0) {
+    const list = `${collisions.slice(0, 4).join(', ')}${collisions.length > 4 ? '…' : ''}`;
+    return {
+      status: 'failed',
+      route: 'batch-design-dsl',
+      toolName: 'batch_design',
+      message:
+        `batch_design.operations JSONL has ${collisions.length} id collision(s) with existing ` +
+        `doc node(s): ${list}. Refusing to insert — doc state preserved.`,
+      insertedNodes: [],
+    };
+  }
+
   const inserted: PenNode[] = [];
   const failedIds: string[] = [];
   for (const root of tree) {
@@ -515,6 +549,9 @@ function applyBatchDesignAsJsonl(jsonl: string, ctx: DispatchContext): DispatchR
   // history batch nets to zero, and the retry condition fires.
   if (failedIds.length > 0) {
     if (inserted.length > 0) {
+      // Safe: the collision precheck above guaranteed none of these ids
+      // existed in the doc pre-dispatch, so removeNode(id) targets only
+      // nodes this dispatch added.
       const rollbackStore = useDocumentStore.getState();
       for (const node of inserted) {
         try {
