@@ -97,6 +97,23 @@ const ATOMIC_PROTECTED_ROLES = new Set([
 ]);
 
 /**
+ * Subset of ATOMIC_PROTECTED_ROLES that represent PRIMARY atomics —
+ * input-class components that constitute the "main" atom in their own
+ * right. When one of these appears as a CHILD of a different atomic
+ * frame, it's almost certainly a sub-agent misroll (the outer was named
+ * 'search-bar' but is actually a section wrapper around the real
+ * 'input'). Wrapper detection only triggers on this primary set.
+ *
+ * SECONDARY atomic roles (button, icon-button, badge, chip, tag, pill)
+ * are intentionally excluded — they legitimately nest inside primary
+ * atomics as sub-actions or decorations (an input with a clear icon-
+ * button, a search-bar with a voice-search button, an input with a
+ * reveal-password icon-button). Treating those as wrapper signals
+ * would erase the parent atom's intended surface fill.
+ */
+const PRIMARY_ATOMIC_ROLES = new Set(['input', 'form-input', 'search-bar']);
+
+/**
  * Roles that are considered structural — just a container grouping other
  * nodes. These are candidates for fill stripping when they echo the root
  * background or hedge with a safe-dark fill.
@@ -146,12 +163,11 @@ function isSectionLevelFrame(node: PenNode): boolean {
  *     legitimately hold filled children like buttons / badges / chips.
  *
  *   - One of its CHILDREN carries either the same role (nested twin) or
- *     a different atomic-component role with its own solid fill.
- *
- * This pattern only emerges when a sub-agent mislabels a section wrapper
- * as the inner atom (sub-agent emits Search Bar(role=search-bar) > Search
- * Input Container(role=input,fill=#FFFFFF)). Real atomic components don't
- * embed peer atomic components inside themselves.
+ *     a PRIMARY atomic role with its own solid fill (search-bar > input,
+ *     form-input > input). Secondary atomic roles (icon-button / button /
+ *     badge / chip / tag / pill) inside a primary atomic are legitimate
+ *     composition (input + trailing clear button, search-bar + voice
+ *     button) — they do NOT signal a wrapper.
  */
 function hasNestedFilledComponent(node: PenNode, parentRole: string): boolean {
   if (!ATOMIC_PROTECTED_ROLES.has(parentRole)) return false;
@@ -161,8 +177,11 @@ function hasNestedFilledComponent(node: PenNode, parentRole: string): boolean {
     if (!childRole) continue;
     // Same atomic role nested again ('search-bar' inside 'search-bar').
     if (childRole === parentRole) return true;
-    // Different atomic role with its own solid fill (search-bar > input).
-    if (ATOMIC_PROTECTED_ROLES.has(childRole) && getFirstSolidColor(child)) return true;
+    // Different PRIMARY atomic role with its own solid fill
+    // (search-bar > input). Secondary atomics inside a primary atomic
+    // (input > icon-button, search-bar > button) are real composition,
+    // not wrappers — those keep the parent's fill intact.
+    if (PRIMARY_ATOMIC_ROLES.has(childRole) && getFirstSolidColor(child)) return true;
   }
   return false;
 }
