@@ -508,12 +508,21 @@ function applyBatchDesignAsJsonl(jsonl: string, ctx: DispatchContext): DispatchR
   //   2. External: an id in the payload already exists in the live doc.
   const treeIds = new Set<string>();
   const internalDuplicates: string[] = [];
+  // Reference-identity guard against cycles. parseJsonlToTree resolves
+  // `_parent` via a `Map<id, node>` that's overwritten on duplicate ids,
+  // so a JSONL line whose `_parent` equals its own `id` (self-parented
+  // duplicate child) produces `node.children = [node]` — a cyclic graph.
+  // Without this guard `collectIds` would recurse forever and never
+  // surface the duplicate.
+  const visitedRefs = new WeakSet<PenNode>();
   const collectIds = (n: PenNode) => {
+    if (visitedRefs.has(n)) return;
+    visitedRefs.add(n);
     if (treeIds.has(n.id)) {
       internalDuplicates.push(n.id);
-    } else {
-      treeIds.add(n.id);
+      return; // dup already recorded — no need to descend into its subtree
     }
+    treeIds.add(n.id);
     if ('children' in n && Array.isArray((n as PenNode & { children?: PenNode[] }).children)) {
       for (const child of (n as PenNode & { children: PenNode[] }).children) collectIds(child);
     }
