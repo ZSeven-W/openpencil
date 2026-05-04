@@ -339,6 +339,84 @@ describe('stripRedundantSectionFills', () => {
     expect((realSearchBar as PenNode & { fill?: unknown }).fill).toEqual(solidFill('#F1F5F9'));
   });
 
+  it('keeps a card fill when the card legitimately contains a filled button child', () => {
+    // Critical counter-case: a `card` is a CONTAINER role, not atomic. It
+    // legitimately holds buttons/badges/chips with their own fills. The
+    // wrapper-detection must NOT fire for cards — even if the card's fill
+    // is in SAFE_LIGHT, that fill is the card's intended surface color.
+    const ctaButton = frame({
+      id: 'cta',
+      name: 'Order Now',
+      role: 'button',
+      fill: solidFill('#F97316'), // accent-colored CTA inside the card
+    });
+    const card = frame({
+      id: 'restaurant-card',
+      name: 'Restaurant Card',
+      role: 'card',
+      fill: solidFill('#FFFFFF'), // SAFE_LIGHT — would be stripped if card were treated as wrapper
+      children: [ctaButton],
+    });
+    const root = frame({
+      id: 'root',
+      fill: solidFill('#FFF8F0'),
+      children: [card],
+    });
+    stripRedundantSectionFills(root);
+    expect((card as PenNode & { fill?: unknown }).fill).toEqual(solidFill('#FFFFFF'));
+    expect((ctaButton as PenNode & { fill?: unknown }).fill).toEqual(solidFill('#F97316'));
+  });
+
+  it('keeps a pricing-card fill even when it contains badges and buttons with fills', () => {
+    const ribbon = frame({
+      id: 'ribbon',
+      role: 'badge',
+      fill: solidFill('#F97316'),
+    });
+    const cta = frame({
+      id: 'cta',
+      role: 'button',
+      fill: solidFill('#0F172A'),
+    });
+    const pricingCard = frame({
+      id: 'plan',
+      name: 'Pro Plan',
+      role: 'pricing-card',
+      fill: solidFill('#FFFFFF'),
+      children: [ribbon, cta],
+    });
+    const root = frame({
+      id: 'root',
+      fill: solidFill('#F8FAFC'),
+      children: [pricingCard],
+    });
+    stripRedundantSectionFills(root);
+    expect((pricingCard as PenNode & { fill?: unknown }).fill).toEqual(solidFill('#FFFFFF'));
+  });
+
+  it('keeps a banner fill when it contains a nested card with its own fill', () => {
+    // banner > card composition — banner is CONTAINER role, fill is its
+    // intentional gradient/accent surface.
+    const innerCard = frame({
+      id: 'inner-card',
+      role: 'card',
+      fill: solidFill('#FFFFFF'),
+    });
+    const banner = frame({
+      id: 'banner',
+      role: 'banner',
+      fill: solidFill('#F97316'),
+      children: [innerCard],
+    });
+    const root = frame({
+      id: 'root',
+      fill: solidFill('#F8FAFC'),
+      children: [banner],
+    });
+    stripRedundantSectionFills(root);
+    expect((banner as PenNode & { fill?: unknown }).fill).toEqual(solidFill('#F97316'));
+  });
+
   it('reproduces the M2.7 health-tracker case', () => {
     // Direct repro of the actual failure: root #1a1a2e, six section roots
     // all hardcoded #0A0A0A, including one real card. The six section
