@@ -1,0 +1,8 @@
+[build]
+# wasm32 target enabled via rust-toolchain.toml; no override here
+
+[net]
+git-fetch-with-cli = true
+
+[term]
+verbose = false
