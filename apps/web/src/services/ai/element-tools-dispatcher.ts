@@ -499,14 +499,38 @@ function applyBatchDesignAsJsonl(jsonl: string, ctx: DispatchContext): DispatchR
   // later rollback `removeNode(id)` would delete the pre-existing node
   // instead of the freshly-added duplicate. Detect collisions before
   // mutating the doc so we can fail cleanly without side effects.
+  //
+  // Two collision sources to guard:
+  //   1. Internal: the JSONL payload itself contains the same id twice
+  //      (two roots with the same id, a nested child reusing a root id,
+  //      etc) — addNode would append both copies and confuse the verify
+  //      / rollback path the same way as a live-doc collision.
+  //   2. External: an id in the payload already exists in the live doc.
   const treeIds = new Set<string>();
+  const internalDuplicates: string[] = [];
   const collectIds = (n: PenNode) => {
-    treeIds.add(n.id);
+    if (treeIds.has(n.id)) {
+      internalDuplicates.push(n.id);
+    } else {
+      treeIds.add(n.id);
+    }
     if ('children' in n && Array.isArray((n as PenNode & { children?: PenNode[] }).children)) {
       for (const child of (n as PenNode & { children: PenNode[] }).children) collectIds(child);
     }
   };
   for (const root of tree) collectIds(root);
+  if (internalDuplicates.length > 0) {
+    const list = `${internalDuplicates.slice(0, 4).join(', ')}${internalDuplicates.length > 4 ? '…' : ''}`;
+    return {
+      status: 'failed',
+      route: 'batch-design-dsl',
+      toolName: 'batch_design',
+      message:
+        `batch_design.operations JSONL has ${internalDuplicates.length} duplicate id(s) within ` +
+        `the payload itself: ${list}. Refusing to insert — doc state preserved.`,
+      insertedNodes: [],
+    };
+  }
   const collisions: string[] = [];
   for (const id of treeIds) {
     if (store.getNodeById(id)) collisions.push(id);
