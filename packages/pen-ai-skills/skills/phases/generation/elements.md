@@ -10,14 +10,16 @@ category: base
 ---
 
 <!--
-  IMPORTANT: This skill is gated by the `hasMcpTools` flag. It only
-  auto-loads into the generation-phase prompt when the caller declares
-  the AI has live access to MCP element tools (external clients:
-  Claude Code / Codex / Gemini CLI / Cursor). The embedded orchestrator
-  in apps/web emits single-shot JSON and cannot call MCP tools — this
-  skill would be 1500 tokens of dead weight there, so it stays excluded.
+  IMPORTANT: This skill is gated by the `hasMcpTools` flag. It auto-loads
+  into the generation-phase prompt for any caller that declares element-
+  tool access — both external MCP clients (Claude Code / Codex / Gemini
+  CLI / Cursor) AND the apps/web embedded orchestrator when
+  VITE_ENABLE_ELEMENT_TOOLS is on. In the embedded path the model emits
+  `<op_tool>` blocks (parsed by `tryParseAllElementToolOutputs` and
+  dispatched via `element-tools-dispatcher.ts`), giving weak models the
+  same schema-locked surface as external MCP clients.
 
-  External MCP clients still retrieve the content explicitly via
+  External MCP clients can also retrieve this content explicitly via
   get_design_prompt(section='elements'), which bypasses resolveSkills'
   trigger filter (uses getSkillByName for direct lookup).
 
@@ -49,8 +51,6 @@ Multi-tool example — a "Notifications" settings section with a header + 4 togg
 - `add_member_row_v1({ name: "Sarah Lee", subtitle: "Designer", theme: "system" })`
 
 ## Theme handling — when to pass `theme: 'system'`
-
-> **This section applies to the MCP tool-call path only** (codex CLI / Claude Code / Cursor calling `add_X_v1` directly). The web-app sub-agent JSONL path forbids tool calls — there, write `$color-*` / `$type-*` / `$spacing-*` / `$radius-*` refs directly in JSONL fills/fontSize/etc. See the **DESIGN SYSTEM TOKENS** section in `jsonl-format.md` for the available token names and when refs vs literals are appropriate.
 
 **Default to `theme: 'system'`** for every v1 tool call. This makes the output respect the user's design system (`doc.variables` / `doc.themes`):
 
