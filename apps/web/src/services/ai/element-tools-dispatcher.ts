@@ -41,6 +41,7 @@ import { insertStreamingNode } from './design-canvas-ops';
 // this dispatcher actually needs and is kept rigorously browser-safe
 // (enforced by `packages/pen-mcp/src/__tests__/batch-design-dsl-browser-safe.test.ts`).
 import { runBatchDesignDsl } from '@zseven-w/pen-mcp/dsl';
+import { getActivePageChildren } from '@zseven-w/pen-core';
 import type { PenNode } from '@/types/pen';
 
 /**
@@ -570,7 +571,17 @@ function applyBatchDesignAsJsonl(jsonl: string, ctx: DispatchContext): DispatchR
   // Compute the parent's current child count for each insert and pass
   // it as the explicit index so roots land in their generation order.
   const computeAppendIndex = (): number => {
-    if (parentId === null) return useDocumentStore.getState().document.children?.length ?? 0;
+    if (parentId === null) {
+      // `addNode` writes into the ACTIVE PAGE's children (see
+      // document-store-node-actions.ts::_children → getActivePageChildren).
+      // Reading `document.children` directly would only return the legacy
+      // single-page fallback array — on a multi-page doc that's NOT
+      // where the inserts land, so the resulting append index would
+      // disagree with the live child list and either skip past existing
+      // siblings or land out of bounds.
+      const activePageId = useCanvasStore.getState().activePageId;
+      return getActivePageChildren(useDocumentStore.getState().document, activePageId).length;
+    }
     const parentNode = useDocumentStore.getState().getNodeById(parentId);
     if (
       parentNode &&
