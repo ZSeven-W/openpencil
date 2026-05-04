@@ -49,18 +49,33 @@ export function injectMissingNavSurfaceFill(rootFrame: PenNode): boolean {
 }
 
 /**
- * True when the frame already carries ANY valid fill the renderer would
- * paint — solid OR gradient (linear/radial) OR image. We must NOT
- * overwrite a non-solid fill with our default `$color-surface` solid:
- * sub-agents legitimately put `linear_gradient` on top app bars
- * (sunrise hero gradient), `image` on hero / branded nav surfaces, and
- * `radial_gradient` on splash-style entries. Keep their intent.
+ * True when the frame carries a fill the renderer can ACTUALLY paint —
+ * solid with a non-empty color, gradient with stops, or image with a
+ * src. A truthy `type` field alone isn't enough: sub-agents sometimes
+ * emit `[{type:'solid'}]` (missing color), `[{type:'solid',color:''}]`
+ * (empty color), or `[{type:'invalid'}]` (unknown variant). Those
+ * frames render as transparent, so they're effectively unfilled and
+ * the inject pass should still patch them. Conversely, real
+ * `linear_gradient` / `radial_gradient` / `image` fills with the
+ * required fields are intentional and must be preserved.
  */
 function hasAnyFill(fill: PenFill[] | string | undefined): boolean {
   if (!fill) return false;
   if (typeof fill === 'string') return fill.length > 0;
   if (!Array.isArray(fill) || fill.length === 0) return false;
-  // Any first entry with a recognized `type` counts as intentional fill.
-  const first = fill[0];
-  return !!first && typeof (first as { type?: string }).type === 'string';
+  const first = fill[0] as unknown as Record<string, unknown> | undefined;
+  if (!first || typeof first.type !== 'string') return false;
+  switch (first.type) {
+    case 'solid':
+      return typeof first.color === 'string' && first.color.length > 0;
+    case 'linear_gradient':
+    case 'radial_gradient':
+      return Array.isArray(first.stops) && first.stops.length > 0;
+    case 'image':
+      return typeof first.src === 'string' && first.src.length > 0;
+    default:
+      // Unknown fill type — renderer can't paint it, treat as unfilled
+      // so the inject pass adds a default surface.
+      return false;
+  }
 }
