@@ -172,6 +172,65 @@ describe('injectMissingNavSurfaceFill', () => {
     }
   });
 
+  it('treats malformed solid fills (missing/empty color) as unfilled and injects', () => {
+    // Three nav frames each with a different malformed solid:
+    //   - fill: [{type:'solid'}]            (missing color)
+    //   - fill: [{type:'solid', color: ''}] (empty string)
+    //   - fill: [{type:'invalid'}]          (unknown type)
+    // None render visibly; the pass should patch all three.
+    const noColorNav = frame({
+      id: 'nav-1',
+      role: 'navbar',
+      fill: [{ type: 'solid' }] as never,
+    });
+    const emptyColorNav = frame({
+      id: 'nav-2',
+      role: 'tab-bar',
+      fill: [{ type: 'solid', color: '' }] as never,
+    });
+    const unknownTypeNav = frame({
+      id: 'nav-3',
+      role: 'top-app-bar',
+      fill: [{ type: 'mystery' }] as never,
+    });
+    const root = frame({
+      id: 'root',
+      fill: solidFill('#FFF8F0'),
+      children: [noColorNav, emptyColorNav, unknownTypeNav],
+    });
+    const changed = injectMissingNavSurfaceFill(root);
+    expect(changed).toBe(true);
+    for (const navFrame of [noColorNav, emptyColorNav, unknownTypeNav]) {
+      expect((navFrame as PenNode & { fill?: unknown }).fill).toEqual([
+        { type: 'solid', color: '$color-surface' },
+      ]);
+    }
+  });
+
+  it('treats gradient with no stops and image with no src as unfilled', () => {
+    const emptyGradient = frame({
+      id: 'nav-grad',
+      role: 'navbar',
+      fill: [{ type: 'linear_gradient', stops: [] }] as never,
+    });
+    const noSrcImage = frame({
+      id: 'nav-img',
+      role: 'top-app-bar',
+      fill: [{ type: 'image', src: '' }] as never,
+    });
+    const root = frame({
+      id: 'root',
+      fill: solidFill('#FFFFFF'),
+      children: [emptyGradient, noSrcImage],
+    });
+    injectMissingNavSurfaceFill(root);
+    for (const navFrame of [emptyGradient, noSrcImage]) {
+      expect((navFrame as PenNode & { fill?: unknown }).fill).toEqual([
+        { type: 'solid', color: '$color-surface' },
+      ]);
+    }
+  });
+
   it('skips non-frame children and unrelated roles', () => {
     const text = { id: 'h', type: 'text', role: 'heading', content: 'Foo' } as PenNode;
     const sectionWithoutFill = frame({ id: 'sec', role: 'section', children: [] });
