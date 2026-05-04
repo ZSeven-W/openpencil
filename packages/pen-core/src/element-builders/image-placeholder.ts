@@ -20,6 +20,14 @@ export interface ImagePlaceholderParams {
    * placeholder, but `add_avatar_v0` is a cleaner fit for that.
    */
   corner_radius?: number;
+  /**
+   * 2-3 English keywords to search for when the auto-search pass replaces
+   * this placeholder with a real photo (e.g. "burger fries", "modern
+   * office"). Stamped onto the frame as `imageSearchQuery`; consumed by
+   * the web app's `image-search-pipeline`. Without it the pipeline falls
+   * back to `label` then a generic "placeholder" query.
+   */
+  image_search_query?: string;
 }
 
 /**
@@ -72,7 +80,7 @@ export function buildImagePlaceholder(params: ImagePlaceholderParams): ElementTr
     });
   }
 
-  return {
+  const frame: ElementTree = {
     type: 'frame',
     name: 'Image Placeholder',
     role: 'image-placeholder',
@@ -86,4 +94,9 @@ export function buildImagePlaceholder(params: ImagePlaceholderParams): ElementTr
     fill: [{ type: 'solid', color: '#F1F5F9' }],
     children,
   };
+  if (typeof params.image_search_query === 'string' && params.image_search_query.length > 0) {
+    (frame as ElementTree & { imageSearchQuery?: string }).imageSearchQuery =
+      params.image_search_query;
+  }
+  return frame;
 }

@@ -25,6 +25,14 @@ export interface ImagePlaceholderV1Params {
    * - `'system'`: emits `$color-*` refs for all fill fields.
    */
   theme?: V1Theme;
+  /**
+   * 2-3 English keywords to search for when the auto-search pass replaces
+   * this placeholder with a real photo (e.g. "burger fries", "modern
+   * office"). Stamped onto the frame as `imageSearchQuery`; consumed by
+   * the web app's `image-search-pipeline`. Without it the pipeline falls
+   * back to `label` then a generic "placeholder" query.
+   */
+  image_search_query?: string;
 }
 
 /**
@@ -73,7 +81,7 @@ export function buildImagePlaceholderV1(params: ImagePlaceholderV1Params): Eleme
     });
   }
 
-  return {
+  const frame: ElementTree = {
     type: 'frame',
     name: 'Image Placeholder',
     role: 'image-placeholder',
@@ -87,4 +95,9 @@ export function buildImagePlaceholderV1(params: ImagePlaceholderV1Params): Eleme
     fill: [{ type: 'solid', color: frameBg }],
     children,
   };
+  if (typeof params.image_search_query === 'string' && params.image_search_query.length > 0) {
+    (frame as ElementTree & { imageSearchQuery?: string }).imageSearchQuery =
+      params.image_search_query;
+  }
+  return frame;
 }

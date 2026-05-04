@@ -108,4 +108,28 @@ describe('add_image_placeholder_v0', () => {
     );
     expect(await readFile(fp, 'utf-8')).toBe(before);
   });
+
+  it('image_search_query is stamped onto the frame as imageSearchQuery', async () => {
+    const fp = await fresh('a.op');
+    await handleAddImagePlaceholderV0({
+      filePath: fp,
+      image_search_query: 'burger fries',
+    });
+    const ph = getRoot(await readDoc(fp));
+    expect(ph.imageSearchQuery).toBe('burger fries');
+  });
+
+  it('omitting image_search_query leaves the field undefined', async () => {
+    const fp = await fresh('a.op');
+    await handleAddImagePlaceholderV0({ filePath: fp });
+    const ph = getRoot(await readDoc(fp));
+    expect(ph.imageSearchQuery).toBeUndefined();
+  });
+
+  it('empty-string image_search_query is treated as missing', async () => {
+    const fp = await fresh('a.op');
+    await handleAddImagePlaceholderV0({ filePath: fp, image_search_query: '' });
+    const ph = getRoot(await readDoc(fp));
+    expect(ph.imageSearchQuery).toBeUndefined();
+  });
 });
