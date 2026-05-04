@@ -97,10 +97,44 @@ const STRUCTURAL_ROLES = new Set([
 function isSectionLevelFrame(node: PenNode): boolean {
   const role = (node as PenNode & { role?: string }).role;
   if (!role) return true; // unrolled section root
-  if (PROTECTED_ROLES.has(role)) return false;
+  if (PROTECTED_ROLES.has(role)) {
+    // A protected-role frame at section depth that ALSO contains a
+    // descendant of the SAME role (or a stand-alone fill-bearing child
+    // that visibly carries the component's true surface) is almost
+    // certainly a sub-agent-misrolled wrapper, NOT the real atom — e.g.
+    // sub-agent emits Search Bar(role=search-bar) > Search Input
+    // Container(role=input). The outer "search-bar" is just a section
+    // wrapper. Treat as section-level so its hedge fill can be stripped.
+    if (hasNestedFilledComponent(node, role)) return true;
+    return false;
+  }
   if (STRUCTURAL_ROLES.has(role)) return true;
   // Unknown role: be conservative, treat as protected so we don't clobber
   // future role additions.
+  return false;
+}
+
+/**
+ * True when a frame's children contain another node that carries either
+ * the same component role or a sibling component role with its own solid
+ * fill — the parent is then effectively a wrapper around the real atom.
+ */
+function hasNestedFilledComponent(node: PenNode, parentRole: string): boolean {
+  if (!('children' in node) || !Array.isArray(node.children)) return false;
+  for (const child of node.children) {
+    const childRole = (child as PenNode & { role?: string }).role;
+    if (!childRole) continue;
+    // Same role nested again ('search-bar' inside 'search-bar') — wrapper.
+    if (childRole === parentRole) return true;
+    // Component-bearing role with its own fill ('input' / 'card' / 'button'
+    // / 'badge' inside another component) — also a wrapper pattern.
+    if (
+      (PROTECTED_ROLES.has(childRole) || STRUCTURAL_ROLES.has(childRole)) &&
+      getFirstSolidColor(child)
+    ) {
+      return true;
+    }
+  }
   return false;
 }
 

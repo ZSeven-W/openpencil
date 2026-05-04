@@ -287,6 +287,58 @@ describe('stripRedundantSectionFills', () => {
     expect((section as PenNode & { fill?: unknown }).fill).toBeUndefined();
   });
 
+  it('strips a misrolled section wrapper (search-bar role with a nested input child)', () => {
+    // Real repro: MiniMax-M2.7 emits Search Bar(role=search-bar)
+    // > Search Input Container(role=input,fill=$color-surface). The OUTER
+    // wrapper labeled 'search-bar' is actually a section, not the atom —
+    // its safe-light hedge fill should still be stripped because the inner
+    // child carries the real component fill.
+    const innerInput = frame({
+      id: 'search-input',
+      name: 'Search Input Container',
+      role: 'input',
+      fill: solidFill('#FFFFFF'),
+    });
+    const wrapper = frame({
+      id: 'search-bar-wrapper',
+      name: 'Search Bar',
+      role: 'search-bar',
+      fill: solidFill('#F8FAFC'), // a safe-light hedge
+      children: [innerInput],
+    });
+    const root = frame({
+      id: 'root-frame',
+      fill: solidFill('#FFF8F0'),
+      children: [wrapper],
+    });
+    const changed = stripRedundantSectionFills(root);
+    expect(changed).toBe(true);
+    expect((wrapper as PenNode & { fill?: unknown }).fill).toBeUndefined();
+    // Inner input keeps its fill — it's the actual atom.
+    expect((innerInput as PenNode & { fill?: unknown }).fill).toEqual(solidFill('#FFFFFF'));
+  });
+
+  it('preserves a real search-bar atom with no inner-component children (not a wrapper)', () => {
+    // Counter-case: a search bar that is the actual atom (no nested input/
+    // search-bar/etc child) — its fill is intentional and must be kept.
+    const realSearchBar = frame({
+      id: 'real-search',
+      name: 'Search Bar',
+      role: 'search-bar',
+      fill: solidFill('#F1F5F9'),
+      children: [
+        frame({ id: 'icon', type: 'frame' }), // no role / no fill
+      ],
+    });
+    const root = frame({
+      id: 'root',
+      fill: solidFill('#FFFFFF'),
+      children: [realSearchBar],
+    });
+    stripRedundantSectionFills(root);
+    expect((realSearchBar as PenNode & { fill?: unknown }).fill).toEqual(solidFill('#F1F5F9'));
+  });
+
   it('reproduces the M2.7 health-tracker case', () => {
     // Direct repro of the actual failure: root #1a1a2e, six section roots
     // all hardcoded #0A0A0A, including one real card. The six section
