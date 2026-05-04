@@ -184,7 +184,7 @@ export class PenRenderer {
       maxX = -Infinity,
       maxY = -Infinity;
     for (const rn of this.renderNodes) {
-      if (rn.clipRect) continue;
+      if (rn.clipStack && rn.clipStack.length > 0) continue;
       minX = Math.min(minX, rn.absX);
       minY = Math.min(minY, rn.absY);
       maxX = Math.max(maxX, rn.absX + rn.absW);
@@ -330,7 +330,8 @@ export class PenRenderer {
     // Draw frame labels for root frames + reusable + instances
     for (const rn of this.renderNodes) {
       if (!rn.node.name) continue;
-      const isRootFrame = rn.node.type === 'frame' && !rn.clipRect;
+      const isRootFrame =
+        rn.node.type === 'frame' && (rn.clipStack === undefined || rn.clipStack.length === 0);
       const isReusable = this.reusableIds.has(rn.node.id);
       const isInstance = this.instanceIds.has(rn.node.id);
       if (!isRootFrame && !isReusable && !isInstance) continue;
