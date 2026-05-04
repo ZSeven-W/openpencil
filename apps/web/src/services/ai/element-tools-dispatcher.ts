@@ -502,16 +502,28 @@ function applyBatchDesignAsJsonl(jsonl: string, ctx: DispatchContext): DispatchR
     }
   }
   // Any failure to land a root is a hard failure — even a single missing
-  // root usually means the defaultParentId is stale, the model emitted a
-  // dangling _parent reference, or the doc state has drifted. Reporting
-  // `applied` for partial inserts would lie to the orchestrator: it
-  // checks `status === 'applied'` to decide whether to skip retry, so a
-  // partial would silently degrade the design without ever exercising
-  // the orchestrator's retry / minimal-skills / batch_design fallback
-  // chain. We still surface the partial-success roots in `insertedNodes`
-  // so the caller can clean them up (or roll back through the history
-  // batch wrapper) instead of leaving orphans.
+  // root usually means defaultParentId is stale, the model emitted a
+  // dangling _parent reference, or doc state has drifted. Returning
+  // `applied` for partial inserts would lie to the orchestrator (it
+  // checks `status === 'applied'` to decide whether to retry); returning
+  // `failed` with non-empty `insertedNodes` would also bypass retry,
+  // because the caller in orchestrator-sub-agent.ts gates retry on
+  // `result.nodes.length === 0` — the partial inserts get reported as
+  // the subtask's `nodes` and look "non-empty enough" to skip the retry
+  // / minimal-skills fallback chain. Hard-rollback the partial inserts
+  // so the doc returns to its pre-dispatch state, the surrounding
+  // history batch nets to zero, and the retry condition fires.
   if (failedIds.length > 0) {
+    if (inserted.length > 0) {
+      const rollbackStore = useDocumentStore.getState();
+      for (const node of inserted) {
+        try {
+          rollbackStore.removeNode(node.id);
+        } catch {
+          /* already removed by an upstream cleanup — ignore */
+        }
+      }
+    }
     const failedList = `${failedIds.slice(0, 4).join(', ')}${failedIds.length > 4 ? '…' : ''}`;
     if (inserted.length === 0) {
       return {
@@ -532,8 +544,9 @@ function applyBatchDesignAsJsonl(jsonl: string, ctx: DispatchContext): DispatchR
       message:
         `batch_design.operations partial failure: ${inserted.length}/${tree.length} root(s) ` +
         `landed, ${failedIds.length} did not (parent id '${parentId ?? 'page-root'}'). ` +
+        `Rolled back partial inserts so retry can re-run the subtask cleanly. ` +
         `Failed root ids: ${failedList}`,
-      insertedNodes: inserted,
+      insertedNodes: [],
     };
   }
   const totalLive = countDescendants(inserted);
