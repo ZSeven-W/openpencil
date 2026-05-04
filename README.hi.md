@@ -431,6 +431,10 @@ OpenPencil मुफ़्त और ओपन-सोर्स है। इस�
  </picture>
 </a>
 
+## मूल्यांकन
+
+[![MseeP.ai Security Assessment Badge](https://mseep.net/pr/zseven-w-openpencil-badge.png)](https://mseep.ai/app/zseven-w-openpencil)
+
 ## लाइसेंस
 
 [MIT](./LICENSE) — Copyright (c) 2026 ZSeven-W
