@@ -39,7 +39,7 @@ export function injectMissingNavSurfaceFill(rootFrame: PenNode): boolean {
     const role = (child as PenNode & { role?: string }).role;
     if (!role || !NAV_ROLES.has(role)) continue;
     const existing = (child as PenNode & { fill?: PenFill[] | string }).fill;
-    if (hasSolidFill(existing)) continue;
+    if (hasAnyFill(existing)) continue;
     (child as PenNode & { fill?: PenFill[] }).fill = [
       { type: 'solid', color: '$color-surface' } as SolidFill,
     ];
@@ -48,10 +48,19 @@ export function injectMissingNavSurfaceFill(rootFrame: PenNode): boolean {
   return changed;
 }
 
-function hasSolidFill(fill: PenFill[] | string | undefined): boolean {
+/**
+ * True when the frame already carries ANY valid fill the renderer would
+ * paint — solid OR gradient (linear/radial) OR image. We must NOT
+ * overwrite a non-solid fill with our default `$color-surface` solid:
+ * sub-agents legitimately put `linear_gradient` on top app bars
+ * (sunrise hero gradient), `image` on hero / branded nav surfaces, and
+ * `radial_gradient` on splash-style entries. Keep their intent.
+ */
+function hasAnyFill(fill: PenFill[] | string | undefined): boolean {
   if (!fill) return false;
   if (typeof fill === 'string') return fill.length > 0;
   if (!Array.isArray(fill) || fill.length === 0) return false;
+  // Any first entry with a recognized `type` counts as intentional fill.
   const first = fill[0];
-  return first?.type === 'solid' && typeof (first as SolidFill).color === 'string';
+  return !!first && typeof (first as { type?: string }).type === 'string';
 }
