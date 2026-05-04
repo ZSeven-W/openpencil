@@ -779,6 +779,15 @@ export class SkiaInteractionManager {
     // a descendant's clipStack was pushed by the target or one of its
     // clipContent descendants — those rotate with the subtree.
     const ancestorCount = rootSnapshot.clipStack?.length ?? 0;
+    // A rotated rrect remains an rrect (just with w/h swapped at 90°/270°)
+    // whenever the rotation is a right-angle multiple — the AABB of the
+    // rotated corners exactly equals the rotated shape and the rounded
+    // corners survive the projection. Off-axis rotations (e.g. 45°) make
+    // the AABB strictly larger than the rotated rect, and the rounded
+    // corner can't be faithfully encoded as a single rrect anymore — that's
+    // the only case where we must flatten to rx=0.
+    const angleMod90 = ((angleDelta % 90) + 90) % 90;
+    const rotationKeepsRrectShape = angleMod90 < 0.01 || angleMod90 > 89.99;
     for (const [id, snapshot] of previewNodes) {
       if (id === this.rotateNodeId) continue;
       const rn = engine.spatialIndex.get(id);
@@ -810,11 +819,7 @@ export class SkiaInteractionManager {
                     centerY,
                     angleDelta,
                   ),
-                  // Rotation breaks the axis-aligned rect's semantic shape
-                  // (the AABB of a rotated rrect doesn't match a pure rrect
-                  // anymore), so drop the rounded corner — clip becomes a
-                  // conservative axis-aligned bounding box.
-                  rx: 0,
+                  rx: rotationKeepsRrectShape ? c.rx : 0,
                 },
           )
         : undefined;
