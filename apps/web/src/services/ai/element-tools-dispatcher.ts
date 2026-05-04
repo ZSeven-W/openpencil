@@ -25,7 +25,7 @@
  * Plan: openpencil-docs/superpowers/plans/2026-04-21-element-tools-phase2-architecture.md
  */
 
-import type { DesignOutputShape } from './design-parser';
+import { parseJsonlToTree, type DesignOutputShape } from './design-parser';
 import { useDocumentStore } from '@/stores/document-store';
 import { useHistoryStore } from '@/stores/history-store';
 import { useCanvasStore } from '@/stores/canvas-store';
@@ -443,7 +443,80 @@ async function applyElementTool(
  * to the generation root would silently change the AI's intent.
  * Element-tool calls still honor it (via `applyElementToolCall`).
  */
+/**
+ * Detect whether `operations` looks like flat JSONL nodes rather than the
+ * `foo=I("parent",{...})` assignment-based DSL. Weak / mid-tier models
+ * (GPT-5.5 standard tier observed) emit their full design as raw JSONL
+ * but stuff it inside `<op_tool>{name:"batch_design",arguments:{operations}}`
+ * because the ELEMENT_TOOL_OUTPUT_FORMAT prompt teaches `<op_tool>`-only
+ * output but doesn't show DSL syntax. The DSL parser then rejects every
+ * line. Detect this case at dispatch time and route through the JSONL
+ * apply path instead of failing.
+ *
+ * Signature: starts with `{` AND contains JSONL-shape keys (`_parent`
+ * or a `type:"frame|text|…"` field) within the first chunk.
+ */
+function looksLikeJsonl(operations: string): boolean {
+  const trimmed = operations.trim();
+  if (!trimmed.startsWith('{')) return false;
+  return /"_parent"\s*:|"type"\s*:\s*"(frame|text|rectangle|ellipse|icon_font|image|path|line|polygon|group)"/.test(
+    trimmed.slice(0, 800),
+  );
+}
+
+/**
+ * Apply JSONL-shaped operations as flat node tree under the dispatch
+ * context's default parent. Mirrors what raw-JSONL-output sub-agents
+ * produce, but reached via the `<op_tool>{name:"batch_design"}` wrapper
+ * that mid-tier models emit when they don't know the DSL syntax.
+ */
+function applyBatchDesignAsJsonl(jsonl: string, ctx: DispatchContext): DispatchResult {
+  const tree = parseJsonlToTree(jsonl);
+  if (!tree || tree.length === 0) {
+    return {
+      status: 'failed',
+      route: 'batch-design-dsl',
+      toolName: 'batch_design',
+      message:
+        'batch_design.operations parsed as JSONL but produced no nodes (empty/malformed input)',
+      insertedNodes: [],
+    };
+  }
+  const store = useDocumentStore.getState();
+  const parentId = ctx.defaultParentId ?? null;
+  const inserted: PenNode[] = [];
+  for (const root of tree) {
+    store.addNode(parentId, root);
+    inserted.push(root);
+  }
+  return {
+    status: 'applied',
+    route: 'batch-design-dsl',
+    toolName: 'batch_design',
+    message: `Applied batch_design.operations as JSONL (${tree.length} root node(s); ${countDescendants(tree)} total).`,
+    insertedNodes: inserted,
+  };
+}
+
+function countDescendants(nodes: PenNode[]): number {
+  let n = 0;
+  for (const node of nodes) {
+    n += 1;
+    if ('children' in node && Array.isArray(node.children)) {
+      n += countDescendants(node.children as PenNode[]);
+    }
+  }
+  return n;
+}
+
 async function applyBatchDesignDsl(dsl: string, ctx: DispatchContext): Promise<DispatchResult> {
+  // Auto-detect when the model stuffed JSONL into the DSL string field
+  // (mid-tier models ignore the DSL-only contract because the prompt
+  // doesn't show DSL syntax). Re-route to JSONL apply so we don't lose
+  // the entire response to "Cannot parse operation" DSL errors.
+  if (looksLikeJsonl(dsl)) {
+    return applyBatchDesignAsJsonl(dsl, ctx);
+  }
   try {
     const { document } = useDocumentStore.getState();
     const cloned = structuredClone(document) as typeof document;
