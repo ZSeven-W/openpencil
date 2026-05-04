@@ -388,7 +388,9 @@ export const ELEMENT_TOOL_DEFINITIONS_EXT_6 = [
       'Theme-aware image placeholder (v1). theme="light" (default): byte-parity with ' +
       'add_image_placeholder_v0. theme="dark": bg → bgDeep, icon → textMuted, label → textMuted. ' +
       'theme="system": $color-* refs. Gray box + centered icon + optional caption. ' +
-      'schemaVersion 1.0',
+      'When the canvas runs its auto-search pass, an image_search_query (or label) lets ' +
+      'it fetch a relevant photo to replace the gray box; without one it falls back to a ' +
+      'generic stock photo. schemaVersion 1.0',
     inputSchema: {
       type: 'object' as const,
       properties: {
@@ -403,6 +405,14 @@ export const ELEMENT_TOOL_DEFINITIONS_EXT_6 = [
           type: 'string',
           enum: ['light', 'dark', 'system'],
           description: 'Theme variant. Default "light".',
+        },
+        image_search_query: {
+          type: 'string',
+          description:
+            '2-3 English keywords for the auto-search pass to fetch a photo with ' +
+            '(e.g. "burger fries", "modern office workspace", "yoga sunset"). Strongly ' +
+            'recommended for restaurant cards, product photos, hero banners, etc — ' +
+            'without it the pipeline searches for the label or a generic placeholder.',
         },
         parent_id: parentIdProp,
         pageId: pageIdProp,

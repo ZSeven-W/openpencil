@@ -206,7 +206,9 @@ export const ELEMENT_TOOL_DEFINITIONS_EXT_2 = [
       'The "this will be an image later" affordance. Use for "photo slot", "hero image area", ' +
       '"upload zone", "cover placeholder", "图片占位". Separate from G() (which fetches real ' +
       'images via search) — this emits a visual placeholder frame, not an image node. ' +
-      'schemaVersion 1.0',
+      'When the canvas runs its auto-search pass, an image_search_query (or label) lets it ' +
+      'fetch a relevant photo to replace the gray box; without one it falls back to a ' +
+      'generic stock photo. schemaVersion 1.0',
     inputSchema: {
       type: 'object' as const,
       properties: {
@@ -225,6 +227,14 @@ export const ELEMENT_TOOL_DEFINITIONS_EXT_2 = [
         corner_radius: {
           type: 'number',
           description: 'Corner radius (default 8). Use larger for card-style, 0 for sharp.',
+        },
+        image_search_query: {
+          type: 'string',
+          description:
+            '2-3 English keywords for the auto-search pass to fetch a photo with ' +
+            '(e.g. "burger fries", "modern office workspace", "yoga sunset"). Strongly ' +
+            'recommended for restaurant cards, product photos, hero banners, etc — ' +
+            'without it the pipeline searches for the label or a generic placeholder.',
         },
         parent_id: parentIdProp,
         pageId: pageIdProp,
