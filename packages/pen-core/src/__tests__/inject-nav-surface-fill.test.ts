@@ -50,6 +50,82 @@ describe('injectMissingNavSurfaceFill', () => {
     expect((navbar as PenNode & { fill?: unknown }).fill).toEqual(solidFill('#0F172A'));
   });
 
+  it('preserves a linear-gradient nav fill (does not overwrite with solid)', () => {
+    const gradientFill = [
+      {
+        type: 'linear_gradient' as const,
+        stops: [
+          { offset: 0, color: '#F97316' },
+          { offset: 1, color: '#EA580C' },
+        ],
+        angle: 90,
+      },
+    ];
+    const navbar = frame({
+      id: 'top-bar',
+      role: 'top-app-bar',
+      fill: gradientFill as never,
+      children: [],
+    });
+    const root = frame({
+      id: 'root',
+      fill: solidFill('#FFFFFF'),
+      children: [navbar],
+    });
+    const changed = injectMissingNavSurfaceFill(root);
+    expect(changed).toBe(false);
+    expect((navbar as PenNode & { fill?: unknown }).fill).toEqual(gradientFill);
+  });
+
+  it('preserves a radial-gradient nav fill', () => {
+    const radial = [
+      {
+        type: 'radial_gradient' as const,
+        stops: [
+          { offset: 0, color: '#FFFFFF' },
+          { offset: 1, color: '#000000' },
+        ],
+        center: { x: 0.5, y: 0.5 },
+      },
+    ];
+    const navbar = frame({
+      id: 'splash-nav',
+      role: 'navbar',
+      fill: radial as never,
+      children: [],
+    });
+    const root = frame({
+      id: 'root',
+      fill: solidFill('#FFF8F0'),
+      children: [navbar],
+    });
+    injectMissingNavSurfaceFill(root);
+    expect((navbar as PenNode & { fill?: unknown }).fill).toEqual(radial);
+  });
+
+  it('preserves an image nav fill (branded nav surface with photo)', () => {
+    const imageFill = [
+      {
+        type: 'image' as const,
+        src: 'https://example.com/banner.jpg',
+        scaleMode: 'cover',
+      },
+    ];
+    const navbar = frame({
+      id: 'hero-nav',
+      role: 'top-app-bar',
+      fill: imageFill as never,
+      children: [],
+    });
+    const root = frame({
+      id: 'root',
+      fill: solidFill('#FFFFFF'),
+      children: [navbar],
+    });
+    injectMissingNavSurfaceFill(root);
+    expect((navbar as PenNode & { fill?: unknown }).fill).toEqual(imageFill);
+  });
+
   it('does not touch nav frames nested inside cards/sections', () => {
     const nestedNav = frame({
       id: 'inner-nav',
