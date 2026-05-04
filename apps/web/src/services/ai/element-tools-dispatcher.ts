@@ -469,6 +469,12 @@ function looksLikeJsonl(operations: string): boolean {
  * context's default parent. Mirrors what raw-JSONL-output sub-agents
  * produce, but reached via the `<op_tool>{name:"batch_design"}` wrapper
  * that mid-tier models emit when they don't know the DSL syntax.
+ *
+ * Verifies each root via `getNodeById` AFTER the addNode call —
+ * `useDocumentStore.addNode` returns void and falls through silently
+ * (`insertNodeInTree` no-ops) if the parent id can't be resolved (e.g.
+ * `defaultParentId` is stale or empty). Without the post-insert check
+ * we'd report `status: 'applied'` while leaving the doc unchanged.
  */
 function applyBatchDesignAsJsonl(jsonl: string, ctx: DispatchContext): DispatchResult {
   const tree = parseJsonlToTree(jsonl);
@@ -485,15 +491,35 @@ function applyBatchDesignAsJsonl(jsonl: string, ctx: DispatchContext): DispatchR
   const store = useDocumentStore.getState();
   const parentId = ctx.defaultParentId ?? null;
   const inserted: PenNode[] = [];
+  const failedIds: string[] = [];
   for (const root of tree) {
     store.addNode(parentId, root);
-    inserted.push(root);
+    const live = useDocumentStore.getState().getNodeById(root.id);
+    if (live) {
+      inserted.push(live);
+    } else {
+      failedIds.push(root.id);
+    }
   }
+  if (inserted.length === 0) {
+    return {
+      status: 'failed',
+      route: 'batch-design-dsl',
+      toolName: 'batch_design',
+      message:
+        `batch_design.operations parsed as JSONL (${tree.length} root(s)) but none landed — ` +
+        `parent id '${parentId ?? 'page-root'}' may be stale or unresolved. ` +
+        `Failed root ids: ${failedIds.slice(0, 4).join(', ')}${failedIds.length > 4 ? '…' : ''}`,
+      insertedNodes: [],
+    };
+  }
+  const totalLive = countDescendants(inserted);
+  const partial = failedIds.length > 0 ? ` (${failedIds.length} root(s) failed to insert)` : '';
   return {
     status: 'applied',
     route: 'batch-design-dsl',
     toolName: 'batch_design',
-    message: `Applied batch_design.operations as JSONL (${tree.length} root node(s); ${countDescendants(tree)} total).`,
+    message: `Applied batch_design.operations as JSONL (${inserted.length}/${tree.length} root node(s); ${totalLive} total)${partial}.`,
     insertedNodes: inserted,
   };
 }
