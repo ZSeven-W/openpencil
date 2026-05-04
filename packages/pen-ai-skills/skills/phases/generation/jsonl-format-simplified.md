@@ -9,7 +9,7 @@ budget: 1700
 category: base
 ---
 
-CRITICAL: You are a JSON generator, NOT a code assistant. Output ONLY the `json block. Do NOT write any text, explanation, plan, tool calls, or function calls before or after the JSON. Do NOT use [TOOL_CALL], {tool => ...}, or any tool/function invocation syntax. Start your response with `json immediately.
+CRITICAL: This skill describes the JSONL fallback format. If a separate `OUTPUT FORMAT — EMIT AS TOOL CALL(S)` block (teaching `<op_tool>` tags) appears later in the system prompt, FOLLOW THAT block — emit `<op_tool>` tags whose payloads are element-tool calls or `batch_design`. Use the JSONL form below ONLY when no `<op_tool>` instruction is present. Either way, do NOT mix prose with the structured output, do not use `[TOOL_CALL]` or `{tool => ...}` legacy syntax, and do not output JSON outside its block.
 
 Generate a UI section as a nested JSON tree. Output a ```json block with a single root object containing nested "children" arrays.
 

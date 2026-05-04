@@ -451,23 +451,6 @@ async function executeSubAgent(
     reducedComplexity,
   );
 
-  // When element tools are enabled, the ELEMENT_TOOL_OUTPUT_FORMAT block
-  // (appended below) is the authoritative output-format instruction —
-  // teaching the model to emit `<op_tool>` tags. The jsonl-format /
-  // jsonl-format-simplified skills lead with a CRITICAL directive saying
-  // "Output ONLY ```json … Do NOT use tool calls", which directly conflicts
-  // with `<op_tool>` and confuses weak models (MiniMax / GLM / Kimi):
-  // they anchor on the front-of-prompt CRITICAL and emit raw JSONL,
-  // bypassing every element tool — which defeats the entire point of the
-  // n-tools-per-element design (stability for weak models in the built-in
-  // sub-agent path). Drop those two skills here so ELEMENT_TOOL_OUTPUT_FORMAT
-  // is the only output-format instruction the model sees.
-  if (elementToolsEnabled) {
-    resolvedSkills = resolvedSkills.filter(
-      (s) => s.meta.name !== 'jsonl-format' && s.meta.name !== 'jsonl-format-simplified',
-    );
-  }
-
   const skillPrompt = resolvedSkills.map((s) => s.content).join('\n\n');
   const systemPrompt = elementToolsEnabled
     ? skillPrompt + '\n\n' + ELEMENT_TOOL_OUTPUT_FORMAT
