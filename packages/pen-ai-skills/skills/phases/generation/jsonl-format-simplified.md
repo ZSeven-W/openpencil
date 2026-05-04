@@ -9,9 +9,9 @@ budget: 1700
 category: base
 ---
 
-CRITICAL: This skill describes the JSONL fallback format. If a separate `OUTPUT FORMAT — EMIT AS TOOL CALL(S)` block (teaching `<op_tool>` tags) appears later in the system prompt, FOLLOW THAT block — emit `<op_tool>` tags whose payloads are element-tool calls or `batch_design`. Use the JSONL form below ONLY when no `<op_tool>` instruction is present. Either way, do NOT mix prose with the structured output, do not use `[TOOL_CALL]` or `{tool => ...}` legacy syntax, and do not output JSON outside its block.
+CRITICAL — OUTPUT-MODE PRIORITY: If a separate `OUTPUT FORMAT — EMIT AS TOOL CALL(S)` block (teaching `<op_tool>` tags) appears later in the system prompt, FOLLOW THAT block — emit `<op_tool>` tags whose payloads are element-tool calls or `batch_design`. Use the JSONL form (the EXAMPLE block at the bottom of this skill) ONLY when no `<op_tool>` instruction is present. Either way, never use `[TOOL_CALL]` or `{tool => ...}` legacy syntax, and never mix prose with the structured output.
 
-Generate a UI section as a nested JSON tree. Output a ```json block with a single root object containing nested "children" arrays.
+The TYPES / RULES / DESIGN SYSTEM TOKENS sections below describe the underlying PenNode schema and apply to EITHER mode — they tell you the shape of node arguments inside an `<op_tool>` call, and the shape of nodes in raw JSONL.
 
 TYPES:
 frame (width,height,layout,gap,padding,justifyContent,alignItems,cornerRadius,fill,children), rectangle (width,height,cornerRadius,fill), text (content,fontFamily,fontSize,fontWeight,fill,width,textAlign), icon_font (iconFontName,width,height,fill)
@@ -26,7 +26,7 @@ RULES:
 - Text: never set height. Use width="fill_container" for wrapping text.
 - Icons: use icon_font with iconFontName (lucide names: search, bell, user, heart, star, plus, x, check, chevron-right, settings). Sizes: 16/20/24px.
 - Buttons: frame with padding=[12,24] containing a text child.
-- No emoji characters. No markdown. No explanation. No tool calls.
+- No emoji characters. No markdown. No explanation outside the structured output.
 
 DESIGN SYSTEM TOKENS — prefer refs over literals; the renderer resolves them against the user's seeded palette (or a default light palette when un-seeded), so refs are SAFE even on a fresh document.
 
@@ -35,6 +35,10 @@ DESIGN SYSTEM TOKENS — prefer refs over literals; the renderer resolves them a
 - SPACING / RADIUS: `$spacing-{1|2|3|4|5}` = 4/8/12/16/24 px. `$radius-{sm|md|lg}` = 4/8/12 px.
 
 USE refs for standard semantic colors and typography sizes/weights/line-heights that match the scale above. KEEP literal hex / numbers for brand-specific colors not in the palette, off-scale pixel values, and "white text on accent" (`#FFFFFF`).
+
+— JSONL FALLBACK MODE — the section below applies ONLY when there is no `<op_tool>` instruction earlier in the prompt; if `<op_tool>` mode is in effect, ignore the EXAMPLE below and emit `<op_tool>` tags instead.
+
+Generate a UI section as a nested JSON tree. Output a single ```json block with a single root object containing nested "children" arrays.
 
 EXAMPLE:
 
