@@ -559,8 +559,31 @@ function applyBatchDesignAsJsonl(jsonl: string, ctx: DispatchContext): DispatchR
 
   const inserted: PenNode[] = [];
   const failedIds: string[] = [];
+  // `addNode` defaults to `index: 0` (prepend) — see
+  // document-store-node-actions.ts. That default is right for new shapes
+  // a user draws (z-order = topmost), but WRONG for sub-agent generation
+  // where each subtask emits a section that should appear AFTER the
+  // previous subtask's output in vertical document order. Without
+  // explicit appending, every sub-agent run reverses the brief's
+  // section order: the last subtask's output ends up at the top of the
+  // root frame and the first subtask's output gets pushed to the bottom.
+  // Compute the parent's current child count for each insert and pass
+  // it as the explicit index so roots land in their generation order.
+  const computeAppendIndex = (): number => {
+    if (parentId === null) return useDocumentStore.getState().document.children?.length ?? 0;
+    const parentNode = useDocumentStore.getState().getNodeById(parentId);
+    if (
+      parentNode &&
+      'children' in parentNode &&
+      Array.isArray((parentNode as PenNode & { children?: PenNode[] }).children)
+    ) {
+      return (parentNode as PenNode & { children: PenNode[] }).children.length;
+    }
+    return 0;
+  };
   for (const root of tree) {
-    store.addNode(parentId, root);
+    const appendIndex = computeAppendIndex();
+    store.addNode(parentId, root, appendIndex);
     const live = useDocumentStore.getState().getNodeById(root.id);
     if (live) {
       inserted.push(live);
