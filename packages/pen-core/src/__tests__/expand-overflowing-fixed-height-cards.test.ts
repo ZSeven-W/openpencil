@@ -142,6 +142,48 @@ describe('expandOverflowingFixedHeightCards', () => {
     expect((card as PenNode & { height?: unknown }).height).toBe('fit_content');
   });
 
+  it('does NOT touch image-card frames (fixed crop / aspect ratio is intentional)', () => {
+    // image-card exists specifically to lock in a fixed crop or
+    // aspect ratio (a 16:9 photo tile, a 1:1 thumbnail). Even when
+    // its computed natural height exceeds the declared height —
+    // because the card has both an image and a caption that grows
+    // when wrapped — the fixed height IS the intent: that's the
+    // photo's frame. Auto-expanding would silently break the
+    // intended visual proportion. Authors that want an image card
+    // to auto-grow with content should use `role: 'card'`.
+    const imgCard = frame({
+      id: 'img-card',
+      role: 'image-card',
+      width: 300,
+      height: 180, // 16:9 crop
+      layout: 'vertical',
+      padding: 0,
+      gap: 8,
+      children: [
+        // Image child fills the card.
+        frame({
+          id: 'photo',
+          type: 'image',
+          width: 'fill_container',
+          height: 'fill_container',
+        } as Partial<PenNode>),
+        // Long caption that wraps and pushes natural height past 180.
+        text({
+          id: 'caption',
+          content:
+            'A multi-line caption that, when wrapped to the card width, definitely takes more space than the photo crop allows.',
+          fontSize: 14,
+          lineHeight: 1.5,
+          width: 'fill_container',
+        }),
+      ],
+    });
+    const root = frame({ id: 'root', width: 375, children: [imgCard] });
+    const changed = expandOverflowingFixedHeightCards(root);
+    expect(changed).toBe(false);
+    expect((imgCard as PenNode & { height?: unknown }).height).toBe(180);
+  });
+
   it('walks nested cards (overflow on a card inside a section)', () => {
     const innerCard = frame({
       id: 'nested-card',

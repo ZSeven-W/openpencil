@@ -18,9 +18,14 @@ import { fitContentHeight } from './engine.js';
  * making the card taller keeps both behaviors right.
  *
  * Scope:
- *   - Only `role: 'card'` (and the variants in CARD_ROLES). Other
- *     roles legitimately use fixed heights (avatars, icon buttons,
- *     status pills, etc).
+ *   - Only `role: 'card'` (and the text-content variants in
+ *     CARD_ROLES). NOT `image-card` — that role exists precisely
+ *     to lock in a fixed image crop / aspect ratio (a 16:9 photo
+ *     tile, a 1:1 thumbnail). Auto-expanding an image-card would
+ *     silently turn a 300×180 16:9 crop into a fit_content frame
+ *     whose height is whatever fitContentHeight returns, breaking
+ *     the intended visual. Authors that need an image card to
+ *     auto-grow can use `role: 'card'` with an image child.
  *   - Only frames with a numeric `height`. `'fill_container'` /
  *     `'fit_content'` are already auto-sizing — no fix needed.
  *   - Only when the natural content height EXCEEDS the declared
@@ -34,7 +39,7 @@ const CARD_ROLES = new Set([
   'stat-card',
   'pricing-card',
   'feature-card',
-  'image-card',
+  // image-card intentionally excluded — see scope note above.
   'testimonial',
   'event-card',
   'product-card',
