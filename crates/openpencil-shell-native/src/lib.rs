@@ -37,21 +37,9 @@ pub use context::{
     SharedSkiaError, SharedSkiaResult, SurfaceConfig,
 };
 
-/// Skeleton placeholder retained from Task 1 — proves shell-core re-export
-/// chain still links after Task 2 lands. Removed in Task 3 once
-/// `AppShell::run_desktop` becomes the documented entry.
-#[doc(hidden)]
-pub fn placeholder() -> &'static str {
-    let _red = openpencil_shell_core::Color::RED;
-    "openpencil-shell-native skeleton (Task 1+2 wired)"
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn skeleton_links_core() {
-        assert!(placeholder().contains("Task"));
-    }
-}
+// `placeholder()` from Task 1 was removed by Codex Phase A Gate round 1
+// NIT 1 — Task 2's full re-export chain (`SharedSkiaContext`,
+// `NativeBackend`, etc.) already proves the shell-core ↔ shell-native
+// link, and Task 3's `AppShell::run_desktop` will be the canonical
+// entry. Keeping the dead helper just to satisfy a removed link-check
+// is YAGNI.

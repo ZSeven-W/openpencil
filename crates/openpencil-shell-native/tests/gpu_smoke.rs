@@ -194,11 +194,32 @@ mod platform {
     use openpencil_shell_native::SurfaceConfig;
 
     pub fn run() {
+        // BLOCK 2 (Codex Phase A Gate round 1): the previous behaviour
+        // of returning silently on EGL pbuffer setup failure made
+        // acceptance #3 / #4 a false positive on hosted CI without a
+        // working GPU stack. We now distinguish two host classes via
+        // the `STEP1A_REQUIRE_GPU=1` env var:
+        //   - CI runners with EGL/Mesa available set the var; setup
+        //     failure ⇒ panic so the suite goes red.
+        //   - Dev machines / hosted runners without a GPU don't set
+        //     the var; setup failure ⇒ INCONCLUSIVE eprintln + early
+        //     return, mirroring the macOS `catch_unwind` skip path.
+        let require_gpu = std::env::var_os("STEP1A_REQUIRE_GPU")
+            .map(|v| v == "1")
+            .unwrap_or(false);
+
         // 800×600 pbuffer; mesa softpipe handles this without a display.
         let provider = match EglPbufferProvider::new((800, 600)) {
             Ok(p) => p,
             Err(err) => {
-                eprintln!("gpu_smoke: skipping (EGL pbuffer init failed: {err})");
+                let msg = format!("Linux EGL pbuffer setup failed: {err}");
+                if require_gpu {
+                    panic!("gpu_smoke: STEP1A_REQUIRE_GPU=1 but {msg}");
+                }
+                eprintln!(
+                    "⚠ INCONCLUSIVE gpu_smoke: {msg} \
+                     (set STEP1A_REQUIRE_GPU=1 on a real-GPU runner to fail hard)"
+                );
                 return;
             }
         };
@@ -212,7 +233,14 @@ mod platform {
         let mut ctx = match SharedSkiaContext::new(provider, config) {
             Ok(c) => c,
             Err(err) => {
-                eprintln!("gpu_smoke: skipping (SharedSkiaContext::new: {err})");
+                let msg = format!("SharedSkiaContext::new failed: {err}");
+                if require_gpu {
+                    panic!("gpu_smoke: STEP1A_REQUIRE_GPU=1 but {msg}");
+                }
+                eprintln!(
+                    "⚠ INCONCLUSIVE gpu_smoke: {msg} \
+                     (set STEP1A_REQUIRE_GPU=1 on a real-GPU runner to fail hard)"
+                );
                 return;
             }
         };
