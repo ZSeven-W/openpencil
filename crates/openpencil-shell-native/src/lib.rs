@@ -42,21 +42,11 @@ pub mod context;
 pub mod backend;
 #[cfg(any(target_os = "macos", target_os = "linux", target_os = "windows"))]
 pub mod canvas_view_stub;
-// `event` is desktop-only too — the JianPointerMapper imports
-// `jian_core::gesture::*`, which is wasm32-clean but pulls
-// platform-only types (`std::time::Instant`) that mobile cargo check
-// also accepts. We still cfg-gate to spec §5.1.1 (mapper body desktop
-// only; mobile mapper lands in Step 1f and may use a different
-// platform event source).
-#[cfg(any(target_os = "macos", target_os = "linux", target_os = "windows"))]
-pub mod event;
 
 #[cfg(any(target_os = "macos", target_os = "linux", target_os = "windows"))]
 pub use backend::{to_jian_color, to_jian_rect, NativeBackend};
 #[cfg(any(target_os = "macos", target_os = "linux", target_os = "windows"))]
 pub use canvas_view_stub::CanvasViewportStub;
-#[cfg(any(target_os = "macos", target_os = "linux", target_os = "windows"))]
-pub use event::JianPointerMapper;
 
 // Cross-platform re-exports — visible on every (non-wasm) target.
 pub use context::{GlContextProvider, ProviderError, ProviderResult};
