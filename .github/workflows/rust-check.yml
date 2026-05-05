@@ -38,7 +38,9 @@ jobs:
       # Linux GL prerequisites for the P0 probe ignored test step. xvfb gives
       # winit a virtual display; mesa software-rasterizes GL when no GPU is
       # available; libxkbcommon-x11-dev / libwayland-dev are winit's link-time
-      # dependencies on Linux. (No-op on macOS / Windows runners.)
+      # dependencies on Linux; libfreetype-dev / libfontconfig1-dev are
+      # skia-bindings' link-time dependencies on Linux (skia-safe v0.97 links
+      # against the system freetype + fontconfig). (No-op on macOS / Windows.)
       - name: Install Linux GL prereqs (P0 probe gate)
         if: runner.os == 'Linux'
         run: |
@@ -47,7 +49,8 @@ jobs:
             xvfb \
             libgl1-mesa-dri libglu1-mesa libegl1 libgles2 \
             libxkbcommon-dev libxkbcommon-x11-dev \
-            libwayland-dev libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev
+            libwayland-dev libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev \
+            libfreetype-dev libfontconfig1-dev
       - run: cargo fmt --all -- --check
       - run: cargo build --workspace
       - run: cargo test --workspace
