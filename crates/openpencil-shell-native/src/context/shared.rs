@@ -67,6 +67,23 @@ pub struct SharedSkiaContext {
     provider: Option<Box<dyn GlContextProvider>>,
     direct_context: Option<skia_safe::gpu::DirectContext>,
     surface: Option<skia_safe::Surface>,
+    /// glow handle. **Spec mini-patch pending** (Codex Phase A Gate
+    /// round 1 CONCERN 2): spec v19 lines 120-125 + 191 declare a
+    /// non-Optional `Arc<glow::Context>`, but real lifecycle requires
+    /// it to be droppable:
+    ///
+    ///   - `teardown` must release the handle so the loaded function
+    ///     table can be GC'd (deterministic cleanup for the
+    ///     100-iteration RSS test);
+    ///   - `inert_for_lifecycle_test()` produces a context with no
+    ///     GL backing whatsoever — exposing a phantom `Arc` would
+    ///     just hide UB behind a `unimplemented!()` loader closure;
+    ///   - Step 1f Android `on_pause` will need to drop the glow
+    ///     handle alongside the surface (the EGL context behind it
+    ///     becomes invalid the moment the activity backgrounds).
+    ///
+    /// Report back to controller to push v19 → v19.1 making
+    /// `glow_handle` optional in §3.2 / §3.3.
     glow_handle: Option<Arc<glow::Context>>,
     config: SurfaceConfig,
 }
@@ -265,15 +282,24 @@ impl SharedSkiaContext {
 
     /// Test-only constructor producing an inert context — every
     /// `Option<>` field is `None`, so all methods take the "already
-    /// torn down" branch. Used by `tests/teardown_idempotent.rs`,
-    /// `tests/memory_loop.rs` (cheap iteration without spinning up a
-    /// GL stack), and `tests/tracing_spans.rs`.
+    /// torn down" branch. Used by `tests/teardown_idempotent.rs` and
+    /// `tests/tracing_spans.rs` to pin lifecycle invariants on the
+    /// post-teardown shape (the hardest path to get wrong).
+    ///
+    /// **Renamed from `inert_for_test` (Codex Phase A Gate round 1
+    /// BLOCK 3)**: the old name implied "OK for any test", which let
+    /// the 100-iteration RSS sanity test (`tests/memory_loop.rs`)
+    /// pass against an all-`None` context — i.e. measure nothing.
+    /// The new name makes it explicit that this constructor is for
+    /// lifecycle idempotence checks only; tests that need to verify
+    /// resource accounting must build a real context (raster path on
+    /// macOS / Windows, EGL pbuffer on Linux).
     ///
     /// Behind `#[doc(hidden)]` because production callers must go
     /// through `new` / `new_desktop` (those are what allocate the
     /// driver-side handles whose lifecycle we care about).
     #[doc(hidden)]
-    pub fn inert_for_test() -> Self {
+    pub fn inert_for_lifecycle_test() -> Self {
         Self {
             provider: None,
             direct_context: None,

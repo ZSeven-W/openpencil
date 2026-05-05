@@ -1,8 +1,11 @@
 //! Shared test helpers for `openpencil-shell-native`.
 //!
 //! Spec v19 §9 / plan v7 Task 2 Step 16a-16f: this module supplies
-//! - `setup_headless_context()` for tests that don't actually need a
-//!   live GPU surface (teardown idempotence, tracing, RSS sanity);
+//! - `setup_headless_context()` for tests that pin lifecycle
+//!   idempotence on a fully torn-down context (teardown, tracing);
+//! - `RasterCycle` for tests that need real Skia resources (RSS
+//!   sanity loop) without spinning up a GL stack — this is the
+//!   macOS / Windows / no-GPU-Linux memory-loop path;
 //! - `egl_pbuffer::EglPbufferProvider` (Linux only) for the GPU-smoke
 //!   tests, providing an off-screen GL context via Mesa softpipe.
 
@@ -15,8 +18,54 @@ use openpencil_shell_native::SharedSkiaContext;
 /// what's behind the handles — they care that the public API behaves
 /// the same on a torn-down context. Avoids the per-test cost of
 /// spinning up an EGL pbuffer / winit window.
+///
+/// **Do not use for resource-accounting tests** — see
+/// `RasterCycle` below. (Codex Phase A Gate round 1 BLOCK 3.)
 pub fn setup_headless_context() -> SharedSkiaContext {
-    SharedSkiaContext::inert_for_test()
+    SharedSkiaContext::inert_for_lifecycle_test()
+}
+
+/// Real-resource cycle helper for the memory-loop test (Codex Phase A
+/// Gate round 1 BLOCK 3 fix).
+///
+/// Runs `iterations` of `{ build raster Skia surface → paint via
+/// `NativeBackend::fill_rect` → drop the surface }` against a real
+/// `skia_safe::Surface`. This exercises the same Skia allocation
+/// paths (`raster_n32_premul`, `Canvas::draw_rect`) that the GPU
+/// path goes through after `wrap_backend_render_target`, so the RSS
+/// budget assertion measures real driver-side accounting rather than
+/// a phantom no-op.
+///
+/// We intentionally do **not** route through `SharedSkiaContext`
+/// here: that struct's full lifecycle requires a `GlContextProvider`,
+/// and on hosted-CI macOS / Windows runners the only realistic
+/// no-display GL stack is a winit window (which can't run on a
+/// worker thread, see `gpu_smoke.rs`). Raster surfaces are the
+/// largest non-GL allocation we can hammer in a `cargo test`
+/// process; they're enough to flush a leak in the Skia bindings or
+/// our `to_jian_*` translation layer.
+pub fn raster_memory_cycle(iterations: usize, side: i32) {
+    use openpencil_shell_core::{Color, Point2D, Rect};
+    use openpencil_shell_native::NativeBackend;
+
+    let mut backend = NativeBackend::with_dpi(1.0);
+    for _ in 0..iterations {
+        let mut surface = skia_safe::surfaces::raster_n32_premul((side, side))
+            .expect("raster_n32_premul allocated");
+        // Fill a real rectangle to prevent the optimiser from eliding
+        // the surface and to force Skia to actually touch the GPU
+        // (raster) backing memory.
+        backend.fill_rect(
+            surface.canvas(),
+            Rect {
+                origin: Point2D::new(10.0, 10.0),
+                size: Point2D::new((side - 20) as f32, (side - 20) as f32),
+            },
+            Color::RED,
+        );
+        // Surface drops here — Skia must release its raster backing.
+        drop(surface);
+    }
 }
 
 #[cfg(target_os = "linux")]
@@ -45,7 +94,6 @@ pub mod egl_pbuffer {
         context: egl::Context,
         surface: egl::Surface,
         glow: Arc<glow::Context>,
-        size: (u32, u32),
         released: bool,
     }
 
@@ -125,7 +173,6 @@ pub mod egl_pbuffer {
                 context,
                 surface,
                 glow: Arc::new(glow_ctx),
-                size,
                 released: false,
             })
         }
@@ -160,10 +207,6 @@ pub mod egl_pbuffer {
             // Pbuffer can't be resized once created — tests build the
             // surface at the size they need.
             Ok(())
-        }
-
-        fn size(&self) -> (u32, u32) {
-            self.size
         }
 
         fn release(&mut self) -> ProviderResult<()> {
