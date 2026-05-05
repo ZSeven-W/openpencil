@@ -19,6 +19,7 @@ import {
   unwrapFakePhoneMockups,
   stripRedundantSectionFills,
   injectMissingNavSurfaceFill,
+  expandOverflowingFixedHeightCards,
   normalizeStrokeFillSchema,
 } from '@/canvas/canvas-layout-engine';
 import { forcePageResync } from '@/canvas/canvas-sync-utils';
@@ -722,6 +723,16 @@ export function applyPostStreamingTreeHeuristics(rootNodeId: string): void {
   // the cream root background with no surface to anchor it. See
   // packages/pen-core/src/layout/inject-nav-surface-fill.ts for scope.
   injectMissingNavSurfaceFill(pageRoot);
+  // Auto-expand cards whose declared fixed height is smaller than
+  // their content's natural height. Sub-agents emit pixel heights
+  // tuned for one expected layout (e.g. banner card = 165 with
+  // image-on-right) and don't account for text wrapping growing
+  // the content side; combined with `clipContent: true` from the
+  // card role default this clips the bottom row (badge/title/body
+  // /button stacks lose the button). Switching to fit_content
+  // preserves both the rounded-image clip behavior and the
+  // overflowing button.
+  expandOverflowingFixedHeightCards(pageRoot);
 
   // Publish point. unwrap, resolveTreeRoles, and normalizeTreeLayout all
   // mutate store-owned nodes in place; resolveTreePostPass mostly goes

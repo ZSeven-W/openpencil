@@ -15,7 +15,7 @@ PenNode types (the ONLY format you output for designs):
 - ellipse: Props: width, height, fill, stroke, effects
 - text: Props: content, fontFamily, fontSize, fontWeight, fontStyle ('normal'|'italic'), fill, width, height, textAlign, textGrowth ('auto'|'fixed-width'|'fixed-width-height'), lineHeight (multiplier), letterSpacing (px), textAlignVertical ('top'|'middle'|'bottom')
 - path: SVG icon. Props: d (SVG path), width, height, fill, stroke, effects
-- image: Props: width, height, cornerRadius, effects, imageSearchQuery (2-3 English keywords)
+- image: Props: width, height, cornerRadius, effects, imageSearchQuery (2-3 English keywords UNIQUE per image — derive from the surrounding card/dish/title text; reusing one query across multiple images makes every card render the same photo)
 
 All nodes share: id, type, name, role, x, y, rotation, opacity
 Fill = [{ type: "solid", color: "#hex" }] or [{ type: "linear_gradient", angle, stops: [{ offset, color }] }]
