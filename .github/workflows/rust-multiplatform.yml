@@ -156,11 +156,12 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           key: mobile-${{ matrix.target }}
-      # Step 1a kill-spike scope:
-      # - shell-core MUST compile on iOS / Android / WASM (spec §11 mobile invariant 1).
-      # - shell-native is desktop-only until Step 1f wires real EaglProvider /
-      #   AndroidEglProvider impls + sdk linking. Mobile cargo check on shell-native
-      #   is deferred to Step 1f; the spec §11 contract is verified via shell-core
-      #   wasm/ios/android compile + API surface (GlContextProvider trait public,
-      #   on_pause cfg(android) surface.take(), TouchForce in ShellEvent — Phase B).
+      # Step 1a spec §11 mobile invariants verify on iOS / Android cargo check:
+      # - shell-core wasm32/ios/android-clean (no platform deps).
+      # - shell-native compiles on mobile targets with EaglProvider /
+      #   AndroidEglProvider stubs (`unimplemented!("Step 1f")`); desktop GL
+      #   stack (glutin / winit) is target-gated to desktop in Cargo.toml +
+      #   GlutinProvider source is cfg-gated to desktop OS only. Real SDK
+      #   linking and iOS/Android runtime is Step 1f.
       - run: cargo check -p openpencil-shell-core --target ${{ matrix.target }}
+      - run: cargo check -p openpencil-shell-native --target ${{ matrix.target }}
