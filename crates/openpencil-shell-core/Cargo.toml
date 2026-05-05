@@ -15,14 +15,14 @@ serde = { workspace = true, optional = true }
 thiserror = { workspace = true }
 tracing = { workspace = true }
 
-# v19 pivot: glam Vec2 用作 Point2D；bitflags 用于 widget facade 内部 flag。
+# v19 pivot: glam Vec2 used as Point2D; bitflags used for widget facade internal flags.
 glam = { version = "0.29", default-features = false, features = ["std"] }
 bitflags = "2"
 
 # v19 pivot: re-export Jian render/geometry/scene types (spec §5.2 widget-facing facade
 # wraps jian-core; native-only deps live in shell-native, jian-core itself is wasm32-clean).
-# 双写 path + version per spec §12.2 ("path dep with explicit version") —— 防 cargo
-# 在不同 workspace context 下因 version 不一致退化到错版本。
+# Both path + version per spec §12.2 ("path dep with explicit version") — guards against
+# cargo silently picking a wrong version under a different workspace context.
 jian-core = { path = "../../vendor/jian/crates/jian-core", version = "0.0.1" }
 
 [features]
