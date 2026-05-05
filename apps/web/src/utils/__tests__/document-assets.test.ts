@@ -110,6 +110,24 @@ describe('document asset paths', () => {
     expect(isLocalAssetPath('data:image/png;base64,abc')).toBe(false);
   });
 
+  it('treats same-origin server routes as external (no local-asset wrap)', () => {
+    // Regression: the image-search pipeline returns thumbUrls as
+    // `/api/ai/image-proxy?url=...`. Without this carve-out the
+    // resolver wraps that path through the local-asset bridge and
+    // produces a broken double-wrapped URL like
+    // `/api/local-asset?path=%2Fapi%2Fai%2Fimage-proxy%3Furl%3D...`
+    // which 404s because the local-asset handler can't dispatch on
+    // a route that isn't a real file path. `/api/...` and `/_/...`
+    // are runtime endpoints, not file system assets.
+    expect(isLocalAssetPath('/api/ai/image-proxy?url=https%3A%2F%2Fa.com%2Fb.jpg')).toBe(false);
+    expect(isLocalAssetPath('/api/local-asset?path=foo')).toBe(false);
+    expect(isLocalAssetPath('/_/static/icon.svg')).toBe(false);
+    // Non-API absolute paths are still treated as local file paths
+    // — `/assets/hero.png` could legitimately be a unix-style asset
+    // path embedded in a .pen file.
+    expect(isLocalAssetPath('/assets/hero.png')).toBe(true);
+  });
+
   it('bridges local assets through the app origin when running over http', () => {
     const originalWindow = globalThis.window;
     Object.defineProperty(globalThis, 'window', {
