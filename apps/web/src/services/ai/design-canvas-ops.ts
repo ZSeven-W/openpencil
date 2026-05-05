@@ -20,6 +20,7 @@ import {
   stripRedundantSectionFills,
   injectMissingNavSurfaceFill,
   expandOverflowingFixedHeightCards,
+  convertStackedOverlayToAbsolute,
   normalizeStrokeFillSchema,
 } from '@/canvas/canvas-layout-engine';
 import { forcePageResync } from '@/canvas/canvas-sync-utils';
@@ -733,6 +734,13 @@ export function applyPostStreamingTreeHeuristics(rootNodeId: string): void {
   // preserves both the rounded-image clip behavior and the
   // overflowing button.
   expandOverflowingFixedHeightCards(pageRoot);
+  // Detect "layered hero" patterns the model emitted with vertical
+  // layout — image + overlay + content stacked sequentially when the
+  // intent was clearly to layer them. Fixes the M2.7 food-app run
+  // where the hero's overflowing content piled into the next
+  // section. See packages/pen-core/src/layout/convert-stacked-
+  // overlay-to-absolute.ts for the conservative pattern detector.
+  convertStackedOverlayToAbsolute(pageRoot);
 
   // Publish point. unwrap, resolveTreeRoles, and normalizeTreeLayout all
   // mutate store-owned nodes in place; resolveTreePostPass mostly goes
