@@ -30,6 +30,24 @@ fn run_example(arg: &str) {
         return;
     }
 
+    // Mirror Windows §8.2 deferral on the GH-hosted ubuntu-latest runner:
+    // headless GL via Xvfb cannot satisfy `glXCreateWindow` (Xlib returns
+    // GLXBadWindow because Xvfb's GLX visuals don't have GLX_WINDOW_BIT
+    // set) — confirmed by bevy / rust-skia / iced CI which all skip
+    // window-bound GL tests on Linux runners. Local macOS verifies the
+    // functional half (cross-API state + readback). Workspace
+    // `cargo build / test / clippy` already verified the link-time toolchain
+    // works on Linux x86_64 in the same CI job. CI exports
+    // `OPENPENCIL_LINUX_GPU_DEFERRED_NO_RUNNER=1` to opt into this skip;
+    // running the probe locally on a real Linux desktop (with a GLX-capable
+    // X server) leaves the env var unset and exercises the full path.
+    if cfg!(target_os = "linux")
+        && std::env::var_os("OPENPENCIL_LINUX_GPU_DEFERRED_NO_RUNNER").is_some()
+    {
+        eprintln!("LINUX_GPU_DEFERRED_NO_RUNNER: skipping GL probe on Linux CI runner (Xvfb GLX limitation)");
+        return;
+    }
+
     let cargo = std::env::var("CARGO").unwrap_or_else(|_| "cargo".into());
     let mut cmd = Command::new(cargo);
     cmd.args([
