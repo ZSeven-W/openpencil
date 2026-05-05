@@ -74,26 +74,30 @@ export default defineEventHandler(async (event) => {
     return { error: `Host not in allow-list: ${parsed.host}` };
   }
 
+  // Single AbortController + timeout for the entire request lifecycle
+  // (DNS + TLS + headers + body). The earlier version cleared the
+  // timeout in a finally{} right after `await fetch()`, but fetch()
+  // resolves as soon as headers arrive — the body read happens below
+  // in `reader.read()` and was unprotected. An upstream that drip-
+  // feeds bytes (or stops sending mid-stream) would leave the dev
+  // server hanging on `reader.read()` forever. Keep the timeout
+  // armed until the body is fully drained or we bail; clear it in
+  // the outer finally{} so it never leaks regardless of return path.
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 15000);
   try {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 15000);
-    let upstream: Response;
-    try {
-      upstream = await fetch(parsed.toString(), {
-        signal: controller.signal,
-        // Some image hosts (openverse thumbs) gate on Accept; an empty
-        // Accept makes them happiest.
-        headers: { Accept: 'image/*,*/*;q=0.5' },
-      });
-    } finally {
-      clearTimeout(timeoutId);
-    }
+    const upstream = await fetch(parsed.toString(), {
+      signal: controller.signal,
+      // Some image hosts (openverse thumbs) gate on Accept; an empty
+      // Accept makes them happiest.
+      headers: { Accept: 'image/*,*/*;q=0.5' },
+    });
     if (!upstream.ok) {
       setResponseStatus(event, upstream.status);
       return { error: `Upstream returned ${upstream.status}` };
     }
 
-    // Cap upstream body size. The earlier version did
+    // Cap upstream body size. The pre-cap version did
     // `await upstream.arrayBuffer()` which buffers the entire body
     // in memory with no limit — a malicious or accidentally large
     // upstream (Wikimedia Commons originals can be 100MB+) would
@@ -118,7 +122,10 @@ export default defineEventHandler(async (event) => {
 
     // Stream the body and accumulate with a hard cap. Any chunk
     // that pushes total bytes past MAX_BYTES aborts the upstream
-    // fetch and returns 413 — no further bytes are buffered.
+    // fetch and returns 413 — no further bytes are buffered. The
+    // overall AbortController timeout (set above) covers a slow /
+    // stalled body too: if 15 s pass without a complete body the
+    // controller fires and `reader.read()` rejects.
     const reader = upstream.body.getReader();
     const chunks: Uint8Array[] = [];
     let total = 0;
@@ -163,11 +170,18 @@ export default defineEventHandler(async (event) => {
 
     return Buffer.concat(chunks.map((c) => Buffer.from(c.buffer, c.byteOffset, c.byteLength)));
   } catch (err) {
-    setResponseStatus(event, 502);
+    // AbortError raised by the timeout (or by an explicit
+    // controller.abort() inside the body loop) lands here. Report a
+    // 504 for the timeout case so callers can distinguish it from a
+    // generic upstream failure.
+    const isAbort = err instanceof Error && err.name === 'AbortError';
+    setResponseStatus(event, isAbort ? 504 : 502);
     return {
-      error: 'Upstream fetch failed',
+      error: isAbort ? 'Upstream fetch timed out' : 'Upstream fetch failed',
       detail: err instanceof Error ? err.message : String(err),
     };
+  } finally {
+    clearTimeout(timeoutId);
   }
 });
 
