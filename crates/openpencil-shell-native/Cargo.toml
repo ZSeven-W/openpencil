@@ -4,7 +4,7 @@ version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
-description = "OpenPencil shell — native (winit + skia-safe + accesskit) backend"
+description = "OpenPencil shell — native (winit + skia-safe + accesskit) backend, integrating jian-skia + jian-host-desktop sub-pieces (spec v19 §3 / §5.2.1)"
 
 [lib]
 name = "openpencil_shell_native"
@@ -17,17 +17,37 @@ openpencil-shell-core = { path = "../openpencil-shell-core", version = "0.1.0" }
 # 如果不 cfg-gate，cargo 会先 fetch + run skia-safe 的 build.rs（在 wasm32 上构建失败），
 # Step 5 grep `must NOT be compiled for wasm32` 永远命中不到——会被 skia 错误盖过。
 #
-# Phase 1 skeleton 阶段：故意保持 deps 最小，仅声明意图所需的核心 crate（winit）。
-# skia-safe / accesskit / accesskit_winit 等在 Stage F 真正实现 RenderBackend 时再加。
-# 原因：Rust 1.80 toolchain (rust-toolchain.toml) 对 home/hashbrown 等 crate 当前
-# 版本的 edition2024 / MSRV 1.81+ 需求不兼容，加完整依赖会导致下载阶段失败。
-# 详见提交说明 + Phase 1 Gate codex review。
+# v19 pivot (Task 1): 加 P0-pinned GL stack + jian-skia + jian-host-desktop。
+#   - P0 dep-stack pin 来自 P0 probe（plan v7 §Task P0；skia-safe 0.97 + glow 0.17 +
+#     glutin 0.32.3 + glutin-winit 0.5.0 + winit 0.30.13 + raw-window-handle 0.6.2 +
+#     scopeguard 1.2 全在 macOS/Windows/Linux GO）。
+#   - jian-skia (textlayout feature) 提供 SkiaBackend impl + skia textlayout（替代 parley）。
+#   - jian-host-desktop (target-gate desktop only, 不含 `run` feature) 复用 PointerTranslator /
+#     scene::collect_draws_with_state / DesktopHost config helpers；OP 自管 GPU event loop，
+#     不调 jian_host_desktop::run（softbuffer raster present 不需要）。
 #
 # winit features 说明：on Linux 必须显式开 `x11` 和/或 `wayland`，否则
-# `platform_impl/mod.rs` 触发 `compile_error!("The platform you're compiling for is
-# not supported by winit")`. macOS / Windows 各自的 backend 通过 cfg(target_os)
-# 默认启用，不需要 feature flag。Step 1a 只在三大桌面 OS 跑 CI，所以同时打开
-# x11 + wayland 两个 Linux backend 就够。Stage F 真正接 RenderBackend 时会
-# 重新审视（可能加 `serde` / `rwh_06` 等）。
+# `platform_impl/mod.rs` 触发 `compile_error!`. macOS / Windows 各自的 backend 通过
+# cfg(target_os) 默认启用，不需要 feature flag。Step 1a 三大桌面 OS CI 都跑，
+# 所以同时打开 x11 + wayland 两个 Linux backend 就够。
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
-winit = { version = "0.30", default-features = false, features = ["x11", "wayland", "wayland-csd-adwaita", "rwh_06"] }
+skia-safe = { version = "0.97.0", features = ["gl"] }
+glutin = "0.32.3"
+glutin-winit = "0.5.0"
+glow = "0.17.0"
+winit = { version = "0.30.13", default-features = false, features = ["x11", "wayland", "wayland-csd-adwaita", "rwh_06"] }
+raw-window-handle = "0.6.2"
+scopeguard = "1.2"
+
+# Jian path deps —— 双写 path + version per spec §12.2。
+# jian-skia: 提供 SkiaBackend (RenderBackend impl) + skia textlayout (textlayout feature
+# 需要 ICU + harfbuzz, ~15MB；P0.5 已升 skia-safe 0.78→0.97 + 新增 pub draw_on_canvas).
+jian-skia = { path = "../../vendor/jian/crates/jian-skia", version = "0.0.1", features = ["textlayout"] }
+
+# jian-host-desktop: target-gate desktop only (Linux/macOS/Windows)；不进 android/ios
+# metadata（Task 1 Step 26 boundary check 验证）。
+# - default-features = false：Jian 默认 features 含 `run = ["dep:softbuffer"]` 拉
+#   raster present；OP 自管 GPU event loop 不需要 softbuffer。
+# - features = ["textlayout"]：与 jian-skia 对齐文本路径。
+[target.'cfg(any(target_os = "macos", target_os = "linux", target_os = "windows"))'.dependencies]
+jian-host-desktop = { path = "../../vendor/jian/crates/jian-host-desktop", version = "0.0.1", default-features = false, features = ["textlayout"] }

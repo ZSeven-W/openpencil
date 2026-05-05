@@ -4,7 +4,7 @@ version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
-description = "OpenPencil shell — retained-mode widget tree, RenderBackend trait, parley + taffy (kickoff spec §1.2)"
+description = "OpenPencil shell — platform-agnostic widget facade + RenderBackend trait, Jian re-export wrapper (spec v19 §1.2 / §5.2)"
 
 [lib]
 name = "openpencil_shell_core"
@@ -12,11 +12,18 @@ path = "src/lib.rs"
 
 [dependencies]
 serde = { workspace = true, optional = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
 
-# Pinned per Task 0.4 wasm32 feature matrix verdict
-# (notes/2026-05-02-parley-wasm-feature-matrix.md "## 结论" 段)
-parley = { version = "0.2", default-features = false, features = ["std"] }
-taffy = { version = "0.6", default-features = false, features = ["std", "taffy_tree", "flexbox", "grid", "block_layout", "content_size"] }
+# v19 pivot: glam Vec2 用作 Point2D；bitflags 用于 widget facade 内部 flag。
+glam = { version = "0.29", default-features = false, features = ["std"] }
+bitflags = "2"
+
+# v19 pivot: re-export Jian render/geometry/scene types (spec §5.2 widget-facing facade
+# wraps jian-core; native-only deps live in shell-native, jian-core itself is wasm32-clean).
+# 双写 path + version per spec §12.2 ("path dep with explicit version") —— 防 cargo
+# 在不同 workspace context 下因 version 不一致退化到错版本。
+jian-core = { path = "../../vendor/jian/crates/jian-core", version = "0.0.1" }
 
 [features]
 default = []
