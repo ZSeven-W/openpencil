@@ -26,16 +26,43 @@ compile_error!(
      Use openpencil-shell-web for browser builds (spec v19 §1.2)."
 );
 
-pub mod backend;
-pub mod canvas_view_stub;
+// Cross-platform context module: re-exports the `GlContextProvider` trait
+// + `ProviderError` / `ProviderResult` on every (non-wasm) target so spec
+// §11 invariant 2 holds — mobile callers can name the trait. Internal
+// cfg-gates select between `GlutinProvider` (desktop), `EaglProvider` (iOS)
+// and `AndroidEglProvider` (Android), and `SharedSkiaContext` is only
+// compiled in on desktop where the GL + Skia stack is available.
 pub mod context;
 
+// Desktop-only modules — pull `skia_safe` / `jian_skia` / `glutin` types
+// that aren't fetched on iOS / Android (see Cargo.toml target-gated deps).
+// Spec §11 invariants 1 & 3: mobile builds compile shell-native without
+// these modules at all; mobile widget rendering lands in Step 1f.
+#[cfg(any(target_os = "macos", target_os = "linux", target_os = "windows"))]
+pub mod backend;
+#[cfg(any(target_os = "macos", target_os = "linux", target_os = "windows"))]
+pub mod canvas_view_stub;
+
+#[cfg(any(target_os = "macos", target_os = "linux", target_os = "windows"))]
 pub use backend::{to_jian_color, to_jian_rect, NativeBackend};
+#[cfg(any(target_os = "macos", target_os = "linux", target_os = "windows"))]
 pub use canvas_view_stub::CanvasViewportStub;
+
+// Cross-platform re-exports — visible on every (non-wasm) target.
+pub use context::{GlContextProvider, ProviderError, ProviderResult};
+
+// Desktop-only re-exports.
+#[cfg(any(target_os = "macos", target_os = "linux", target_os = "windows"))]
 pub use context::{
-    GlContextProvider, GlutinProvider, ProviderError, ProviderResult, SharedSkiaContext,
-    SharedSkiaError, SharedSkiaResult, SurfaceConfig,
+    GlutinProvider, SharedSkiaContext, SharedSkiaError, SharedSkiaResult, SurfaceConfig,
 };
+
+// Mobile stub re-exports — Step 1f real impls; today they're zero-sized
+// placeholder structs whose `GlContextProvider` impls `unimplemented!()`.
+#[cfg(target_os = "android")]
+pub use context::AndroidEglProvider;
+#[cfg(target_os = "ios")]
+pub use context::EaglProvider;
 
 // `placeholder()` from Task 1 was removed by Codex Phase A Gate round 1
 // NIT 1 — Task 2's full re-export chain (`SharedSkiaContext`,
