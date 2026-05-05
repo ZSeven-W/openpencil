@@ -29,7 +29,17 @@ impl ProviderError {
         Self::Failure(err.to_string())
     }
 
-    pub(crate) fn from_msg(msg: impl Into<String>) -> Self {
+    /// Construct a `ProviderError::Failure` from a free-form message.
+    ///
+    /// `pub` (not `pub(crate)`) so out-of-tree provider implementations
+    /// — notably the Linux EGL pbuffer test helper in
+    /// `tests/common/mod.rs` — can produce typed provider errors with
+    /// the same diagnostic shape as `from_error`. Mobile providers
+    /// landing in Step 1f will rely on this for `unimplemented!()` →
+    /// real-error transitions too. (Codex Phase A Gate round 1
+    /// BLOCK 1: previously `pub(crate)` blocked Linux integration
+    /// test compilation.)
+    pub fn from_msg(msg: impl Into<String>) -> Self {
         Self::Failure(msg.into())
     }
 }
@@ -59,17 +69,29 @@ pub trait GlContextProvider {
 
     /// Resize the underlying surface (window / pbuffer). Called from
     /// `SharedSkiaContext::resize` before the Skia surface is rebuilt.
+    ///
+    /// **Spec mini-patch pending** (Codex Phase A Gate round 1
+    /// CONCERN 1): spec v19 §3.1 names only four trait methods —
+    /// `make_current` / `swap_buffers` / `glow` / `release`. The
+    /// implementation needs `resize` because mobile surface-recreate
+    /// (Step 1f Android `on_resume`) and desktop window resize both
+    /// require the GL surface to be rebuilt before Skia rewraps the
+    /// FBO. Spec patch trail: report back to controller for v19 →
+    /// v19.1 mini-rev. Don't drop without coordinating.
     fn resize(&mut self, width: u32, height: u32) -> ProviderResult<()>;
 
     /// The default framebuffer object id of the presentation surface.
     /// `0` = the GL window default FBO; non-zero = an FBO that Skia
     /// must wrap when constructing its `BackendRenderTarget`.
+    ///
+    /// **Spec mini-patch pending** (Codex Phase A Gate round 1
+    /// CONCERN 1): also a non-spec method. The iOS EAGL provider
+    /// (Step 1f) won't expose FBO 0 for the layer-backed render
+    /// target — it has to thread the actual FBO id through to Skia's
+    /// `wrap_backend_render_target`. Default `0` keeps desktop happy.
     fn default_framebuffer_id(&self) -> u32 {
         0
     }
-
-    /// Surface size in physical pixels.
-    fn size(&self) -> (u32, u32);
 
     /// Cleanup hook invoked by `SharedSkiaContext::teardown` before the
     /// provider is dropped. Intentionally explicit: glutin's `Drop` only
@@ -97,8 +119,6 @@ pub struct GlutinProvider {
     /// reaches both Skia (via `gl::Interface::new_load_with`) and the
     /// chrome stub.
     glow: Arc<glow::Context>,
-    /// Cached size; refreshed on every `resize` call.
-    size: (u32, u32),
 }
 
 impl GlutinProvider {
@@ -188,12 +208,10 @@ impl GlutinProvider {
             })
         };
 
-        let inner = window.inner_size();
         Ok(Self {
             context: Some(context),
             surface: Some(surface),
             glow: Arc::new(glow_ctx),
-            size: (inner.width.max(1), inner.height.max(1)),
         })
     }
 }
@@ -275,12 +293,7 @@ impl GlContextProvider for GlutinProvider {
         let w = NonZeroU32::new(width.max(1)).expect("width clamped to >= 1");
         let h = NonZeroU32::new(height.max(1)).expect("height clamped to >= 1");
         surface.resize(ctx, w, h);
-        self.size = (width, height);
         Ok(())
-    }
-
-    fn size(&self) -> (u32, u32) {
-        self.size
     }
 
     #[tracing::instrument(skip(self))]
@@ -321,9 +334,6 @@ impl GlContextProvider for EaglProvider {
     fn resize(&mut self, _width: u32, _height: u32) -> ProviderResult<()> {
         unimplemented!("Step 1f")
     }
-    fn size(&self) -> (u32, u32) {
-        unimplemented!("Step 1f")
-    }
     fn release(&mut self) -> ProviderResult<()> {
         unimplemented!("Step 1f")
     }
@@ -345,9 +355,6 @@ impl GlContextProvider for AndroidEglProvider {
         unimplemented!("Step 1f")
     }
     fn resize(&mut self, _width: u32, _height: u32) -> ProviderResult<()> {
-        unimplemented!("Step 1f")
-    }
-    fn size(&self) -> (u32, u32) {
         unimplemented!("Step 1f")
     }
     fn release(&mut self) -> ProviderResult<()> {

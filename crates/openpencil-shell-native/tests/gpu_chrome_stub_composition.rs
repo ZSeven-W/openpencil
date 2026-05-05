@@ -47,10 +47,25 @@ mod platform {
     use openpencil_shell_native::SurfaceConfig;
 
     pub fn run() {
+        // BLOCK 2 (Codex Phase A Gate round 1): see `gpu_smoke.rs` for
+        // the full rationale. STEP1A_REQUIRE_GPU=1 ⇒ setup-failure is
+        // a hard panic; otherwise we surface an INCONCLUSIVE marker
+        // so acceptance #2 / #4 don't pass silently on hostless CI.
+        let require_gpu = std::env::var_os("STEP1A_REQUIRE_GPU")
+            .map(|v| v == "1")
+            .unwrap_or(false);
+
         let provider = match EglPbufferProvider::new((800, 600)) {
             Ok(p) => p,
             Err(err) => {
-                eprintln!("gpu_chrome_stub_composition: skipping ({err})");
+                let msg = format!("Linux EGL pbuffer setup failed: {err}");
+                if require_gpu {
+                    panic!("gpu_chrome_stub_composition: STEP1A_REQUIRE_GPU=1 but {msg}");
+                }
+                eprintln!(
+                    "⚠ INCONCLUSIVE gpu_chrome_stub_composition: {msg} \
+                     (set STEP1A_REQUIRE_GPU=1 on a real-GPU runner to fail hard)"
+                );
                 return;
             }
         };
@@ -64,7 +79,14 @@ mod platform {
         let mut ctx = match SharedSkiaContext::new(provider, config) {
             Ok(c) => c,
             Err(err) => {
-                eprintln!("gpu_chrome_stub_composition: skipping ({err})");
+                let msg = format!("SharedSkiaContext::new failed: {err}");
+                if require_gpu {
+                    panic!("gpu_chrome_stub_composition: STEP1A_REQUIRE_GPU=1 but {msg}");
+                }
+                eprintln!(
+                    "⚠ INCONCLUSIVE gpu_chrome_stub_composition: {msg} \
+                     (set STEP1A_REQUIRE_GPU=1 on a real-GPU runner to fail hard)"
+                );
                 return;
             }
         };
