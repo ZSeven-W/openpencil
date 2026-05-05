@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import type { PenNode } from '@zseven-w/pen-types';
 import { expandOverflowingFixedHeightCards } from '../layout/expand-overflowing-fixed-height-cards';
+import { fitContentHeight } from '../layout/engine';
 
 const frame = (props: Partial<PenNode> & { children?: PenNode[] }): PenNode =>
   ({
@@ -144,34 +145,41 @@ describe('expandOverflowingFixedHeightCards', () => {
 
   it('does NOT touch image-card frames (fixed crop / aspect ratio is intentional)', () => {
     // image-card exists specifically to lock in a fixed crop or
-    // aspect ratio (a 16:9 photo tile, a 1:1 thumbnail). Even when
-    // its computed natural height exceeds the declared height —
-    // because the card has both an image and a caption that grows
-    // when wrapped — the fixed height IS the intent: that's the
-    // photo's frame. Auto-expanding would silently break the
-    // intended visual proportion. Authors that want an image card
-    // to auto-grow with content should use `role: 'card'`.
+    // aspect ratio (a 16:9 photo tile, a 1:1 thumbnail). Auto-
+    // expanding it would silently break the intended visual
+    // proportion. Authors that want an image card to auto-grow with
+    // content should use `role: 'card'` instead.
+    //
+    // Test must trigger the bug condition (natural > declared) so
+    // it would FAIL if image-card were back in CARD_ROLES. We use
+    // a small declared height (80px crop) and a multi-paragraph
+    // caption wrapped to a narrow width — the caption alone forces
+    // natural height past 200px, well above the 80 we declared.
+    // Identical structure under `role: 'card'` exercises the
+    // expand path; under `role: 'image-card'` the pass must skip.
+    const longCaption =
+      'This caption deliberately spans many wrapped lines so the natural ' +
+      'content height pushes well past the declared crop. Without the role-based ' +
+      'skip in CARD_ROLES, the expand pass would convert the image-card to ' +
+      'fit_content and break the intended visual proportion.';
     const imgCard = frame({
       id: 'img-card',
       role: 'image-card',
       width: 300,
-      height: 180, // 16:9 crop
+      height: 80, // 1:3.75 crop — wildly smaller than caption text
       layout: 'vertical',
       padding: 0,
       gap: 8,
       children: [
-        // Image child fills the card.
         frame({
           id: 'photo',
           type: 'image',
           width: 'fill_container',
           height: 'fill_container',
         } as Partial<PenNode>),
-        // Long caption that wraps and pushes natural height past 180.
         text({
           id: 'caption',
-          content:
-            'A multi-line caption that, when wrapped to the card width, definitely takes more space than the photo crop allows.',
+          content: longCaption,
           fontSize: 14,
           lineHeight: 1.5,
           width: 'fill_container',
@@ -179,9 +187,49 @@ describe('expandOverflowingFixedHeightCards', () => {
       ],
     });
     const root = frame({ id: 'root', width: 375, children: [imgCard] });
+
+    // Sanity: confirm the test setup actually triggers the bug
+    // condition. Compute natural height the same way the pass does;
+    // it must exceed `declared` for this to be a real regression
+    // test rather than a vacuous pass.
+    const natural = fitContentHeight(imgCard);
+    expect(natural).toBeGreaterThan(80);
+
     const changed = expandOverflowingFixedHeightCards(root);
     expect(changed).toBe(false);
-    expect((imgCard as PenNode & { height?: unknown }).height).toBe(180);
+    expect((imgCard as PenNode & { height?: unknown }).height).toBe(80);
+
+    // And mirror: a `role: 'card'` clone of the same shape DOES get
+    // expanded. Asserting the contrast here makes the role-based
+    // gate the clear difference between pass and fail.
+    const cardClone = frame({
+      id: 'card-clone',
+      role: 'card',
+      width: 300,
+      height: 80,
+      layout: 'vertical',
+      padding: 0,
+      gap: 8,
+      children: [
+        frame({
+          id: 'photo2',
+          type: 'image',
+          width: 'fill_container',
+          height: 'fill_container',
+        } as Partial<PenNode>),
+        text({
+          id: 'caption2',
+          content: longCaption,
+          fontSize: 14,
+          lineHeight: 1.5,
+          width: 'fill_container',
+        }),
+      ],
+    });
+    const cloneRoot = frame({ id: 'r2', width: 375, children: [cardClone] });
+    const cloneChanged = expandOverflowingFixedHeightCards(cloneRoot);
+    expect(cloneChanged).toBe(true);
+    expect((cardClone as PenNode & { height?: unknown }).height).toBe('fit_content');
   });
 
   it('walks nested cards (overflow on a card inside a section)', () => {
