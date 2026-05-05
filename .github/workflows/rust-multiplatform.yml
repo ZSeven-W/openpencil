@@ -92,6 +92,9 @@ jobs:
       - name: Build (host)
         if: matrix.cross == false && matrix.check_only != true
         run: cargo build --workspace --target ${{ matrix.target }} --release
+      - name: Build examples (host, spec §1.2 acceptance #7)
+        if: matrix.cross == false && matrix.check_only != true
+        run: cargo build --examples --workspace --target ${{ matrix.target }} --release
       - name: Check (cross-arch host, e.g. macos-x86_64 from Apple Silicon)
         if: matrix.check_only == true
         run: cargo check --workspace --target ${{ matrix.target }}
