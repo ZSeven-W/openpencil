@@ -75,6 +75,7 @@ export { unwrapFakePhoneMockups } from './layout/unwrap-fake-phone-mockup.js';
 export { stripRedundantSectionFills } from './layout/strip-redundant-section-fills.js';
 export { injectMissingNavSurfaceFill } from './layout/inject-nav-surface-fill.js';
 export { expandOverflowingFixedHeightCards } from './layout/expand-overflowing-fixed-height-cards.js';
+export { convertStackedOverlayToAbsolute } from './layout/convert-stacked-overlay-to-absolute.js';
 export { normalizeStrokeFillSchema } from './normalize/normalize-stroke-fill-schema.js';
 
 // Text measurement
