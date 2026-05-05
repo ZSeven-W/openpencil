@@ -149,7 +149,7 @@ registerRole('nav-link', (_node, _ctx) => ({
 // Interactive roles
 // ---------------------------------------------------------------------------
 
-registerRole('button', (node, ctx) => {
+registerRole('button', (_node, ctx) => {
   if (ctx.parentRole === 'navbar') {
     return {
       padding: [8, 16] as [number, number],
@@ -171,59 +171,6 @@ registerRole('button', (node, ctx) => {
       alignItems: 'center' as const,
       justifyContent: 'center' as const,
       cornerRadius: 10,
-    };
-  }
-  // Bottom-tab style. The model emits `role: 'button'` on every cell
-  // of a `bottom-tab-bar` (icon stacked over label, no horizontal
-  // text). The default text-button `[12, 24]` padding is wildly
-  // wrong here: 12 vertical × 2 = 24, plus a 20px icon, 3px gap,
-  // and ~13px label, totals 60 — way past the 46–56px height the
-  // model usually gives a bottom nav, so layout overflows and the
-  // icon / label crash into each other or get clipped (Image #44
-  // bottom nav).
-  // Detect by parent role (bottom-tab-bar / tab-bar / tab-row are
-  // the cell-stacking nav families) AND a vertical layout the
-  // model already declared. Use tight padding sized for the typical
-  // 56px tab height: 6px vertical, 4px horizontal.
-  const TAB_PARENT_ROLES = new Set(['bottom-tab-bar', 'tab-bar', 'tab-row']);
-  const nodeLayout = (node as unknown as Record<string, unknown>).layout;
-  if (ctx.parentRole && TAB_PARENT_ROLES.has(ctx.parentRole) && nodeLayout === 'vertical') {
-    return {
-      gap: 4,
-      padding: [6, 4] as [number, number],
-      alignItems: 'center' as const,
-      justifyContent: 'center' as const,
-      // No fill default — tabs inherit transparency from the nav
-      // surface (which already has its own fill via the inject
-      // pass). Default text-button cornerRadius would be wrong on
-      // tabs (no visible button shape).
-    };
-  }
-  // Avatar / icon-button shape detector. The model frequently emits
-  // `role: "button"` on a 44×44 (or similar small square) frame whose
-  // single child is a one-character text or an icon — visually an
-  // avatar or icon-action, NOT a text-button. The default `[12, 24]`
-  // padding then collides with the 44px width: 24×2 = 48 horizontal
-  // padding on a 44px frame leaves negative space, the layout engine
-  // clamps, and the avatar's "A" or icon ends up visibly off-center.
-  // When the node has explicit numeric width AND height both ≤ 60 AND
-  // the default `[12,24]` padding would not fit horizontally, skip the
-  // text-button defaults and emit the icon-button shape (no padding,
-  // centering still applies).
-  const nodeRecord = node as unknown as Record<string, unknown>;
-  const w = nodeRecord.width;
-  const h = nodeRecord.height;
-  if (typeof w === 'number' && typeof h === 'number' && w <= 60 && h <= 60 && w < 24 * 2) {
-    return {
-      layout: 'horizontal' as const,
-      gap: 8,
-      alignItems: 'center' as const,
-      justifyContent: 'center' as const,
-      // No `padding` default — the small explicit size is the
-      // signal that the caller wants tight icon-button packing.
-      // No `cornerRadius` default — for square avatars the model
-      // typically supplies cornerRadius=width/2 itself; the
-      // 8px text-button default would silently override that.
     };
   }
   return {

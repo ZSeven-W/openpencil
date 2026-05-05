@@ -1,14 +1,5 @@
 import { defineEventHandler, readBody, setResponseHeaders } from 'h3';
 import type { ImageSearchResult, ImageSearchResponse } from '../../../src/types/image-service';
-import { configureProxyDispatcher } from '../../utils/proxy-dispatcher';
-
-// Route external fetches through HTTPS_PROXY / HTTP_PROXY when set. Node's
-// native fetch ignores those env vars by default, so on machines that
-// require a local proxy (clash / mihomo / corporate gateway) every
-// Openverse + Wikimedia call would silently ECONNREFUSED and the endpoint
-// would return empty results — surfacing as blank image placeholders in
-// the canvas.
-configureProxyDispatcher();
 
 // ---------------------------------------------------------------------------
 // Types
@@ -206,25 +197,11 @@ export function simplifySearchQuery(prompt: string): string {
 // Mapping helpers (exported for testing)
 // ---------------------------------------------------------------------------
 
-/**
- * Wrap an external image URL with the local image-proxy endpoint so
- * the browser-side canvas fetch goes through the dev server (where
- * `EnvHttpProxyAgent` routes outbound HTTPS through the system
- * proxy). Without this wrap the browser tries to reach openverse /
- * wikimedia directly and ECONNREFUSEDs on machines behind a local
- * proxy (clash / mihomo / corporate gateway), so the canvas paints
- * the placeholder visual even though the search-pipeline already
- * found a valid image URL via its server-side fetch.
- */
-function viaImageProxy(externalUrl: string): string {
-  return `/api/ai/image-proxy?url=${encodeURIComponent(externalUrl)}`;
-}
-
 export function mapOpenverseResult(r: OpenverseImageResult): ImageSearchResult {
   return {
     id: r.id,
     url: r.url,
-    thumbUrl: viaImageProxy(r.thumbnail),
+    thumbUrl: r.thumbnail,
     width: r.width,
     height: r.height,
     source: 'openverse',
@@ -241,7 +218,7 @@ export function mapWikimediaPages(pages: Record<string, WikimediaPage>): ImageSe
     results.push({
       id: String(page.pageid),
       url: info.url,
-      thumbUrl: viaImageProxy(info.thumburl ?? info.url),
+      thumbUrl: info.thumburl ?? info.url,
       width: info.width,
       height: info.height,
       source: 'wikimedia',
@@ -369,7 +346,7 @@ export default defineEventHandler(async (event) => {
   const clientSecret = body?.openverseClientSecret;
 
   // Try Openverse first
-  let openverseResults = await fetchFromOpenverse(
+  const openverseResults = await fetchFromOpenverse(
     query,
     count,
     aspectRatio,
@@ -377,55 +354,15 @@ export default defineEventHandler(async (event) => {
     clientSecret,
   );
 
-  // Openverse `[]` (zero results) is its own failure mode, distinct from
-  // null (429 / network). LLMs often emit 3-keyword queries that match
-  // real photos but return zero on Openverse's strict AND-search —
-  // "burger combo fries" gets 0 matches even though "burger fries"
-  // returns 240. Retry with the first two keywords before giving up.
-  // This trades a tiny amount of relevance (the 3rd keyword) for a much
-  // better hit rate on AI-emitted queries; if even the 2-keyword form
-  // returns nothing, fall through to the Wikimedia fallback.
-  if (openverseResults !== null && openverseResults.length === 0) {
-    const words = query.split(/\s+/).filter((w) => w.length > 0);
-    if (words.length > 2) {
-      const truncated = words.slice(0, 2).join(' ');
-      const retryResults = await fetchFromOpenverse(
-        truncated,
-        count,
-        aspectRatio,
-        clientId,
-        clientSecret,
-      );
-      if (retryResults !== null && retryResults.length > 0) {
-        openverseResults = retryResults;
-      }
-    }
-  }
-
-  if (openverseResults !== null && openverseResults.length > 0) {
+  if (openverseResults !== null) {
     return {
       results: openverseResults,
       source: 'openverse',
     } satisfies ImageSearchResponse;
   }
 
-  // Openverse 429-failed OR returned no usable results even after the
-  // 2-keyword retry — fall back to Wikimedia, which has different
-  // coverage and a less strict matching algorithm.
+  // Openverse returned 429 or failed — fall back to Wikimedia
   const wikimediaResults = await fetchFromWikimedia(query, count);
-  if (wikimediaResults.length === 0) {
-    const words = query.split(/\s+/).filter((w) => w.length > 0);
-    if (words.length > 2) {
-      const truncated = words.slice(0, 2).join(' ');
-      const retryResults = await fetchFromWikimedia(truncated, count);
-      if (retryResults.length > 0) {
-        return {
-          results: retryResults,
-          source: 'wikimedia',
-        } satisfies ImageSearchResponse;
-      }
-    }
-  }
   return {
     results: wikimediaResults,
     source: 'wikimedia',
