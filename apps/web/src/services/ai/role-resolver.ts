@@ -815,6 +815,20 @@ export function getFirstSolidColor(node: PenNode): string | undefined {
 // Post-pass helpers
 // ---------------------------------------------------------------------------
 
+/**
+ * Luminance-delta fallback for icon-only buttons. Returns true when
+ * the foreground hex is "too close" to the background hex and should
+ * be replaced. Threshold 0.5 catches dark-on-dark (e.g. slate-900
+ * icon on slate-800 button) while leaving intentional accent icons
+ * on light bg (red dot on white card, delta ≈ 0.7) alone.
+ */
+function needsLuminanceContrastOverride(fgHex: string, bgHex: string): boolean {
+  const fgLum = hexLuminance(fgHex);
+  const bgLum = hexLuminance(bgHex);
+  if (!Number.isFinite(fgLum) || !Number.isFinite(bgLum)) return false;
+  return Math.abs(fgLum - bgLum) < 0.5;
+}
+
 function fixButtonForegroundContrast(parent: FrameNode): void {
   if (parent.role !== 'button' && parent.role !== 'icon-button') return;
   // A transparent button has no background color to compute contrast
@@ -852,6 +866,37 @@ function fixButtonForegroundContrast(parent: FrameNode): void {
 
   if (!('children' in parent) || !Array.isArray(parent.children)) return;
 
+  // PASS 1: find a "reference" foreground color from a sibling text.
+  // Inside a button, text + icon should always paint the SAME color —
+  // they're a unit, not two independent surfaces. The model often
+  // gives the text a correct fill (white on accent, dark on light)
+  // but stamps `icon_font.fill` with a hardcoded dark hex from a
+  // generic default ("icons are dark"), producing white-text-next-to-
+  // dark-icon regressions like the food-app "Order now" CTA.
+  //
+  // Pass 1 reads the resolved hex from any text child's fill; if found
+  // it overrides the contrast-derived fg. This is more accurate than a
+  // luminance-delta heuristic because it captures the model's intent
+  // (whatever color it picked for the label is what it meant for the
+  // foreground) and matches user expectation that the two glyphs read
+  // as a single token.
+  let referenceFgHex: string | null = null;
+  for (const child of parent.children) {
+    if (child.type !== 'text') continue;
+    if (!hasVisibleFill(child)) continue;
+    const tc = getFirstSolidColor(child);
+    if (!tc) continue;
+    const resolved = resolveColorMaybeRef(tc);
+    if (resolved && !resolved.startsWith('$')) {
+      referenceFgHex = resolved;
+      break;
+    }
+  }
+  const finalFgFill: PenFill[] = referenceFgHex
+    ? [{ type: 'solid', color: referenceFgHex }]
+    : fgFill;
+
+  // PASS 2: apply foreground.
   for (const child of parent.children) {
     const rec = child as unknown as Record<string, unknown>;
 
@@ -863,21 +908,37 @@ function fixButtonForegroundContrast(parent: FrameNode): void {
         rec.fill = fgFill;
       }
     } else if (child.type === 'icon_font') {
-      // Icons get the contrast fg even when they already have a fill.
-      // The model defaults `icon_font.fill` to a dark text-color (the
-      // prompt lists `fill` as a property, models reflexively stamp
-      // a dark hex) — but inside an accent-colored button that paints
-      // a dark icon next to a contrast-corrected white text label,
-      // which is the visible regression. ONLY override when the
-      // existing icon fill has poor contrast against the bg; an
-      // intentional brand-color icon on a white button (e.g. a red
-      // notification dot) survives untouched.
+      // Icons should match the sibling text's color. If the icon
+      // already has a fill, override it ONLY when its resolved hex
+      // differs from the reference fg — that catches the dark-icon-
+      // next-to-white-text bug while leaving intentional accent
+      // icons (e.g. a red notification dot whose color matches no
+      // sibling text) untouched.
       if (!hasVisibleFill(child)) {
-        rec.fill = fgFill;
-      } else {
+        rec.fill = finalFgFill;
+        continue;
+      }
+      if (referenceFgHex) {
         const existing = getFirstSolidColor(child);
         const existingHex = existing ? resolveColorMaybeRef(existing) : undefined;
-        if (existingHex && needsContrastOverride(existingHex, bgColor)) {
+        if (
+          existingHex &&
+          !existingHex.startsWith('$') &&
+          existingHex.toLowerCase() !== referenceFgHex.toLowerCase()
+        ) {
+          rec.fill = finalFgFill;
+        }
+      } else {
+        // Icon-only button (no text sibling to copy from). Fall back
+        // to a luminance-based override: when the icon's existing
+        // fill is too close to the bg, swap to the contrast-derived
+        // fg. Threshold 0.5 catches the dark-on-dark case (slate-900
+        // icon on slate-800 button, delta ≈ 0.09) without disturbing
+        // intentional accent icons on light surfaces (red dot on
+        // white card, delta ≈ 0.7).
+        const existing = getFirstSolidColor(child);
+        const existingHex = existing ? resolveColorMaybeRef(existing) : undefined;
+        if (existingHex && needsLuminanceContrastOverride(existingHex, bgColor)) {
           rec.fill = fgFill;
         }
       }
@@ -891,28 +952,12 @@ function fixButtonForegroundContrast(parent: FrameNode): void {
       if (hasVisibleFill(child)) {
         // fill-style icon — already styled, skip
       } else if (hasStroke && !hasStrokeFill) {
-        (child.stroke as unknown as Record<string, unknown>).fill = fgFill;
+        (child.stroke as unknown as Record<string, unknown>).fill = finalFgFill;
       } else if (!hasStroke && !hasVisibleFill(child)) {
-        rec.fill = fgFill;
+        rec.fill = finalFgFill;
       }
     }
   }
-}
-
-/**
- * Return true when a foreground color has poor contrast against a
- * background color and should be replaced by the contrast pass. The
- * threshold (luminance delta < 0.4) catches dark-on-dark and
- * light-on-light pairs while keeping intentional accent icons
- * (e.g. red badge dot on white card, brand-blue icon on white button)
- * untouched. Both inputs must already be hex; ref resolution happens
- * at the caller.
- */
-function needsContrastOverride(fgHex: string, bgHex: string): boolean {
-  const fgLum = hexLuminance(fgHex);
-  const bgLum = hexLuminance(bgHex);
-  if (!Number.isFinite(fgLum) || !Number.isFinite(bgLum)) return false;
-  return Math.abs(fgLum - bgLum) < 0.4;
 }
 
 const SECTION_ROLES = new Set(['section', 'hero', 'cta-section', 'stats-section', 'footer']);
