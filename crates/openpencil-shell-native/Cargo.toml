@@ -37,7 +37,12 @@ skia-safe = { version = "0.97.0", features = ["gl"] }
 glutin = "0.32.3"
 glutin-winit = "0.5.0"
 glow = "0.17.0"
-winit = { version = "0.30.13", default-features = false, features = ["x11", "wayland", "wayland-csd-adwaita", "rwh_06"] }
+winit = { version = "0.30.13", default-features = false, features = [
+  "x11",
+  "wayland",
+  "wayland-csd-adwaita",
+  "rwh_06",
+] }
 raw-window-handle = "0.6.2"
 scopeguard = "1.2"
 
@@ -50,7 +55,9 @@ scopeguard = "1.2"
 #   feature pulls ICU + harfbuzz, ~15MB; P0.5 already bumped skia-safe 0.78→0.97 and
 #   added a public draw_on_canvas).
 jian-core = { path = "../../vendor/jian/crates/jian-core", version = "0.0.1" }
-jian-skia = { path = "../../vendor/jian/crates/jian-skia", version = "0.0.1", features = ["textlayout"] }
+jian-skia = { path = "../../vendor/jian/crates/jian-skia", version = "0.0.1", features = [
+  "textlayout",
+] }
 
 # jian-host-desktop: target-gated desktop only (Linux/macOS/Windows); not pulled into
 # android/ios metadata (verified by Task 1 Step 26 boundary check).
@@ -58,7 +65,9 @@ jian-skia = { path = "../../vendor/jian/crates/jian-skia", version = "0.0.1", fe
 #   for raster present; OP runs its own GPU event loop and doesn't need softbuffer.
 # - features = ["textlayout"]: aligns the text path with jian-skia.
 [target.'cfg(any(target_os = "macos", target_os = "linux", target_os = "windows"))'.dependencies]
-jian-host-desktop = { path = "../../vendor/jian/crates/jian-host-desktop", version = "0.0.1", default-features = false, features = ["textlayout"] }
+jian-host-desktop = { path = "../../vendor/jian/crates/jian-host-desktop", version = "0.0.1", default-features = false, features = [
+  "textlayout",
+] }
 
 # tracing for span instrumentation across SharedSkiaContext / NativeBackend
 # (spec §3.3 / §5.2.1; Task 2 Step 15 dictates per-method spans).

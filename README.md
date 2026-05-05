@@ -461,11 +461,11 @@ bun run cargo:deny        # cargo-deny (native + wasm32 bans; CI uses cargo-deny
 
 **Crate list (`crates/`):**
 
-| Crate | Category | wasm32 |
-|-------|----------|--------|
-| openpencil-app | Stage F entry placeholder | — |
-| openpencil-shell-{core,web,native} | UI shell（spec §1.2 三 crate） | core/web ✅ / native ❌ (compile_error guard) |
-| pen-types / pen-core / pen-engine / pen-codegen / pen-figma | bucket A logic | ✅ |
+| Crate                                                       | Category                       | wasm32                                        |
+| ----------------------------------------------------------- | ------------------------------ | --------------------------------------------- |
+| openpencil-app                                              | Stage F entry placeholder      | —                                             |
+| openpencil-shell-{core,web,native}                          | UI shell（spec §1.2 三 crate） | core/web ✅ / native ❌ (compile_error guard) |
+| pen-types / pen-core / pen-engine / pen-codegen / pen-figma | bucket A logic                 | ✅                                            |
 
 **Submodule:** `vendor/agent` → `github.com/ZSeven-W/agent-rs` (cross-product Rust agent runtime).
 
